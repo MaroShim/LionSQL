@@ -15,7 +15,7 @@ data/
 *.db
 *.log
 *.wt
-WiredTiger*
+data/WiredTiger*
 
 # IDE & OS
 .DS_Store
