@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"sqltiger/pkg/catalog"
@@ -109,6 +110,15 @@ END
 
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("Register proc failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var regResp struct {
+		Name   string `json:"name"`
+		JSCode string `json:"js_code"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&regResp)
+	if !strings.Contains(regResp.JSCode, "function TransferFunds") {
+		t.Fatalf("Expected JSCode in registration response, got: %s", regResp.JSCode)
 	}
 
 	// Execute procedure via JSON HTTP RPC

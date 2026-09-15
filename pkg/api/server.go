@@ -209,10 +209,13 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 		paramDefs[i] = catalog.ParamDef{Name: p.Name, Type: p.Type}
 	}
 
+	jsCode, _ := proc.Transpile(plan)
+
 	procMeta := &catalog.Procedure{
 		Name:   plan.Name,
 		Params: paramDefs,
 		Body:   req.Script,
+		JSCode: jsCode,
 	}
 
 	if err := s.catalog.RegisterProcedure(procMeta); err != nil {
@@ -223,7 +226,8 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"name":    plan.Name,
 		"params":  paramDefs,
-		"message": "Procedure registered and plan cached successfully",
+		"js_code": jsCode,
+		"message": "Procedure registered, transpiled to JavaScript, and cached successfully",
 	})
 }
 

@@ -13,6 +13,7 @@ import (
 
 	"sqltiger/pkg/api"
 	"sqltiger/pkg/catalog"
+	"sqltiger/pkg/proc"
 	"sqltiger/pkg/storage"
 	"sqltiger/pkg/storage/memengine"
 	"sqltiger/pkg/storage/wiredtiger"
@@ -148,6 +149,13 @@ BEGIN
     RETURN 0;
 END;`
 
+	var jsCode string
+	lexer := proc.NewLexer(script)
+	parser := proc.NewParser(lexer)
+	if plan, err := parser.ParseProcedure(); err == nil {
+		jsCode, _ = proc.Transpile(plan)
+	}
+
 	_ = cat.RegisterProcedure(&catalog.Procedure{
 		Name: "TransferFunds",
 		Params: []catalog.ParamDef{
@@ -155,6 +163,7 @@ END;`
 			{Name: "@to", Type: storage.TypeInt},
 			{Name: "@amount", Type: storage.TypeInt},
 		},
-		Body: script,
+		Body:   script,
+		JSCode: jsCode,
 	})
 }

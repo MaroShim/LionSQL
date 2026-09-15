@@ -25,6 +25,7 @@ type Procedure struct {
 	Name       string     `json:"name"`
 	Params     []ParamDef `json:"params"`
 	Body       string     `json:"body"`
+	JSCode     string     `json:"js_code"`
 	CreatedAt  time.Time  `json:"created_at"`
 	UpdatedAt  time.Time  `json:"updated_at"`
 }
