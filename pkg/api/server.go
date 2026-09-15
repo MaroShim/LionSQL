@@ -1,0 +1,331 @@
+package api
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"sqlserver/pkg/catalog"
+	"sqlserver/pkg/proc"
+	"sqlserver/pkg/storage"
+	"sqlserver/pkg/ui"
+)
+
+// Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
+type Server struct {
+	catalog   *catalog.Catalog
+	engine    storage.Engine
+	planCache *proc.PlanCache
+	mux       *http.ServeMux
+}
+
+// NewServer initializes a new Server.
+func NewServer(cat *catalog.Catalog, eng storage.Engine) *Server {
+	s := &Server{
+		catalog:   cat,
+		engine:    eng,
+		planCache: proc.NewPlanCache(),
+		mux:       http.NewServeMux(),
+	}
+	s.routes()
+	return s
+}
+
+// Handler returns the HTTP handler.
+func (s *Server) Handler() http.Handler {
+	return s.mux
+}
+
+func (s *Server) routes() {
+	// Dashboard & Root Redirect
+	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/_/", http.StatusFound)
+			return
+		}
+		http.NotFound(w, r)
+	})
+
+	s.mux.HandleFunc("GET /_/", func(w http.ResponseWriter, r *http.Request) {
+		html, err := ui.IndexHTML()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write(html)
+	})
+
+	// API Health
+	s.mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "1.0.0"})
+	})
+
+	// Seed Sample Data
+	s.mux.HandleFunc("POST /api/seed", s.handleSeed)
+
+	// Tables API
+	s.mux.HandleFunc("GET /api/tables", s.handleListTables)
+	s.mux.HandleFunc("GET /api/tables/{name}/records", s.handleGetRecords)
+
+	// Stored Procedures API
+	s.mux.HandleFunc("GET /api/procs", s.handleListProcs)
+	s.mux.HandleFunc("POST /api/procs", s.handleRegisterProc)
+	s.mux.HandleFunc("POST /api/procs/{name}/exec", s.handleExecProc)
+}
+
+func (s *Server) handleListTables(w http.ResponseWriter, r *http.Request) {
+	tables, err := s.engine.ListTables()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, tables)
+}
+
+func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
+	tableName := r.PathValue("name")
+	session, err := s.engine.NewSession()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer tx.Rollback()
+
+	cursor, err := tx.Scan(tableName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	defer cursor.Close()
+
+	records := make([]map[string]any, 0)
+	for cursor.Next() {
+		rec, err := cursor.Record()
+		if err != nil {
+			continue
+		}
+		row := make(map[string]any)
+		for k, v := range rec {
+			if v.IsNull {
+				row[k] = nil
+			} else {
+				switch v.Type {
+				case storage.TypeInt:
+					row[k] = v.IVal
+				case storage.TypeVarChar:
+					row[k] = v.SVal
+				case storage.TypeFloat:
+					row[k] = v.FVal
+				case storage.TypeBool:
+					row[k] = v.BVal
+				default:
+					row[k] = v.String()
+				}
+			}
+		}
+		records = append(records, row)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"table":   tableName,
+		"records": records,
+	})
+}
+
+func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
+	// 1. Create accounts table if not exists
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "holder", Type: storage.TypeVarChar, Nullable: false},
+			{Name: "balance", Type: storage.TypeInt, Nullable: false},
+		},
+	}
+	_ = s.engine.CreateTable(schema)
+
+	// 2. Insert sample rows
+	session, err := s.engine.NewSession()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	_ = tx.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(1),
+		"holder":  storage.StringValue("Alice"),
+		"balance": storage.IntValue(1000),
+	})
+	_ = tx.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(2),
+		"holder":  storage.StringValue("Bob"),
+		"balance": storage.IntValue(500),
+	})
+	_ = tx.Commit()
+
+	writeJSON(w, http.StatusOK, map[string]string{"message": "Sample accounts table created and seeded successfully!"})
+}
+
+func (s *Server) handleListProcs(w http.ResponseWriter, r *http.Request) {
+	procs := s.catalog.ListProcedures()
+	writeJSON(w, http.StatusOK, procs)
+}
+
+type registerProcReq struct {
+	Script string `json:"script"`
+}
+
+func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
+	var req registerProcReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	plan, err := s.planCache.GetOrCompile(req.Script)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	paramDefs := make([]catalog.ParamDef, len(plan.Params))
+	for i, p := range plan.Params {
+		paramDefs[i] = catalog.ParamDef{Name: p.Name, Type: p.Type}
+	}
+
+	procMeta := &catalog.Procedure{
+		Name:   plan.Name,
+		Params: paramDefs,
+		Body:   req.Script,
+	}
+
+	if err := s.catalog.RegisterProcedure(procMeta); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"name":    plan.Name,
+		"params":  paramDefs,
+		"message": "Procedure registered and plan cached successfully",
+	})
+}
+
+type execProcReq struct {
+	Args map[string]any `json:"args"`
+}
+
+func (s *Server) handleExecProc(w http.ResponseWriter, r *http.Request) {
+	procName := r.PathValue("name")
+
+	plan, found := s.planCache.GetByName(procName)
+	if !found {
+		// Try to compile from catalog
+		procMeta, err := s.catalog.GetProcedure(procName)
+		if err != nil {
+			writeError(w, http.StatusNotFound, fmt.Errorf("procedure %q not found", procName))
+			return
+		}
+		plan, err = s.planCache.GetOrCompile(procMeta.Body)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err)
+			return
+		}
+	}
+
+	var req execProcReq
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	typedArgs := make(map[string]storage.Value)
+	for _, p := range plan.Params {
+		rawVal, exists := req.Args[p.Name]
+		if !exists {
+			// Also check without '@' prefix for convenience
+			rawVal, exists = req.Args[strings.TrimPrefix(p.Name, "@")]
+		}
+		if exists {
+			typedArgs[p.Name] = convertValue(rawVal, p.Type)
+		}
+	}
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer session.Close()
+
+	res, err := proc.Run(plan, typedArgs, session)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("procedure execution error (rolled back): %w", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":     true,
+		"return_code": res.ReturnValue.IVal,
+		"duration_ms": float64(res.Duration.Microseconds()) / 1000.0,
+		"logs":        res.Printed,
+	})
+}
+
+func convertValue(v any, targetType storage.DataType) storage.Value {
+	if v == nil {
+		return storage.NullValue(targetType)
+	}
+	switch targetType {
+	case storage.TypeInt:
+		switch num := v.(type) {
+		case float64:
+			return storage.IntValue(int64(num))
+		case int:
+			return storage.IntValue(int64(num))
+		case int64:
+			return storage.IntValue(num)
+		case string:
+			var i int64
+			fmt.Sscanf(num, "%d", &i)
+			return storage.IntValue(i)
+		}
+	case storage.TypeVarChar:
+		return storage.StringValue(fmt.Sprintf("%v", v))
+	case storage.TypeFloat:
+		switch num := v.(type) {
+		case float64:
+			return storage.FloatValue(num)
+		case int:
+			return storage.FloatValue(float64(num))
+		}
+	case storage.TypeBool:
+		if b, ok := v.(bool); ok {
+			return storage.BoolValue(b)
+		}
+	}
+	return storage.StringValue(fmt.Sprintf("%v", v))
+}
+
+func writeJSON(w http.ResponseWriter, status int, data any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(data)
+}
+
+func writeError(w http.ResponseWriter, status int, err error) {
+	writeJSON(w, status, map[string]string{"error": err.Error()})
+}

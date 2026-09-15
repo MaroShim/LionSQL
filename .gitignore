@@ -1,0 +1,23 @@
+# Binaries
+bin/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test artifacts
+*.out
+*.test
+*.prof
+
+# Data directories
+data/
+*.db
+*.log
+*.wt
+WiredTiger*
+
+# IDE & OS
+.DS_Store
+.idea/
+.vscode/
