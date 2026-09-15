@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"sqlserver/pkg/storage"
+	"sqltiger/pkg/storage"
 )
 
 // TableData stores rows in memory for a single table.

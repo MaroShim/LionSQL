@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlserver/pkg/storage"
-	"sqlserver/pkg/storage/memengine"
+	"sqltiger/pkg/storage"
+	"sqltiger/pkg/storage/memengine"
 )
 
 func setupBank(t *testing.T) (storage.Engine, storage.Session) {

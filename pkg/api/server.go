@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"strings"
 
-	"sqlserver/pkg/catalog"
-	"sqlserver/pkg/proc"
-	"sqlserver/pkg/storage"
-	"sqlserver/pkg/ui"
+	"sqltiger/pkg/catalog"
+	"sqltiger/pkg/proc"
+	"sqltiger/pkg/storage"
+	"sqltiger/pkg/ui"
 )
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.

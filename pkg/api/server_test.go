@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"sqlserver/pkg/catalog"
-	"sqlserver/pkg/storage/memengine"
+	"sqltiger/pkg/catalog"
+	"sqltiger/pkg/storage/memengine"
 )
 
 func setupTestServer() *Server {

@@ -11,11 +11,11 @@ import (
 	"syscall"
 	"time"
 
-	"sqlserver/pkg/api"
-	"sqlserver/pkg/catalog"
-	"sqlserver/pkg/storage"
-	"sqlserver/pkg/storage/memengine"
-	"sqlserver/pkg/storage/wiredtiger"
+	"sqltiger/pkg/api"
+	"sqltiger/pkg/catalog"
+	"sqltiger/pkg/storage"
+	"sqltiger/pkg/storage/memengine"
+	"sqltiger/pkg/storage/wiredtiger"
 )
 
 func main() {
@@ -25,8 +25,8 @@ func main() {
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
 	flag.Parse()
 
-	log.Printf("[SQLServer] Initializing database server...")
-	log.Printf("[SQLServer] Storage backend selected: %s", *engineType)
+	log.Printf("[SqlTiger] Initializing database server...")
+	log.Printf("[SqlTiger] Storage backend selected: %s", *engineType)
 
 	var eng storage.Engine
 	switch *engineType {
@@ -65,7 +65,7 @@ func main() {
 
 	go func() {
 		fmt.Println("------------------------------------------------------------")
-		fmt.Println(" SQLServer - High-Concurrency OLTP & Stored Procedure Server")
+		fmt.Println(" SqlTiger - High-Concurrency OLTP & Stored Procedure Server")
 		fmt.Println("------------------------------------------------------------")
 		fmt.Printf(" [Web Dashboard]  http://%s/_/\n", *httpAddr)
 		fmt.Printf(" [HTTP API]       http://%s/api/health\n", *httpAddr)
