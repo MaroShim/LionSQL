@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -17,10 +18,12 @@ import (
 	"sqltiger/pkg/storage"
 	"sqltiger/pkg/storage/memengine"
 	"sqltiger/pkg/storage/wiredtiger"
+	"sqltiger/pkg/wire"
 )
 
 func main() {
 	httpAddr := flag.String("http", "127.0.0.1:8090", "HTTP service and admin dashboard address")
+	pgAddr := flag.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address")
 	dataDir := flag.String("dir", "data", "Data directory for database files")
 	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
@@ -60,6 +63,12 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 	}
 
+	wireServer := wire.NewServer(*pgAddr, cat, eng)
+	if err := wireServer.Start(); err != nil {
+		log.Fatalf("Failed to start PostgreSQL wire protocol listener: %v", err)
+	}
+	defer wireServer.Close()
+
 	// Graceful shutdown channel
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -70,6 +79,7 @@ func main() {
 		fmt.Println("------------------------------------------------------------")
 		fmt.Printf(" [Web Dashboard]  http://%s/_/\n", *httpAddr)
 		fmt.Printf(" [HTTP API]       http://%s/api/health\n", *httpAddr)
+		fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (DBeaver / psql)\n", strings.Split(*pgAddr, ":")[1])
 		fmt.Printf(" [Data Directory] %s\n", *dataDir)
 		fmt.Printf(" [Storage Engine] %s\n", *engineType)
 		fmt.Println("------------------------------------------------------------")
@@ -81,16 +91,17 @@ func main() {
 	}()
 
 	<-stop
-	log.Println("\n[SQLServer] Initiating graceful shutdown...")
+	log.Println("\n[SqlTiger] Initiating graceful shutdown...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	_ = wireServer.Close()
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("[SQLServer] HTTP server forced shutdown: %v", err)
+		log.Printf("[SqlTiger] HTTP server forced shutdown: %v", err)
 	}
 
-	log.Println("[SQLServer] Server stopped cleanly.")
+	log.Println("[SqlTiger] Server stopped cleanly.")
 }
 
 func seedSampleAccounts(eng storage.Engine) {
