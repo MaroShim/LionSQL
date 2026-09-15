@@ -171,3 +171,37 @@ END
 		}
 	}
 }
+
+func TestAPI_RegisterNativeJSProcedure(t *testing.T) {
+	srv := setupTestServer()
+
+	jsScript := `function AddBonus(params, db) {
+  let accId = params['accId'];
+  let bonus = params['bonus'];
+  let current = db.get('accounts', accId, 'balance');
+  db.update('accounts', accId, { 'balance': current + bonus });
+  return 0;
+}`
+
+	regBody, _ := json.Marshal(map[string]string{"script": jsScript})
+	req := httptest.NewRequest(http.MethodPost, "/api/procs", bytes.NewReader(regBody))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("Register native JS proc failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	var regResp struct {
+		Name   string `json:"name"`
+		JSCode string `json:"js_code"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&regResp)
+	if regResp.Name != "AddBonus" {
+		t.Errorf("Expected proc name AddBonus, got %s", regResp.Name)
+	}
+	if !strings.Contains(regResp.JSCode, "function AddBonus") {
+		t.Errorf("Expected JSCode to contain function AddBonus, got: %s", regResp.JSCode)
+	}
+}
+

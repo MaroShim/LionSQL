@@ -198,21 +198,39 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plan, err := s.planCache.GetOrCompile(req.Script)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
+	trimmed := strings.TrimSpace(req.Script)
+	var procName string
+	var paramDefs []catalog.ParamDef
+	var jsCode string
+
+	if strings.HasPrefix(strings.ToUpper(trimmed), "CREATE ") {
+		plan, err := s.planCache.GetOrCompile(req.Script)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+		procName = plan.Name
+		paramDefs = make([]catalog.ParamDef, len(plan.Params))
+		for i, p := range plan.Params {
+			paramDefs[i] = catalog.ParamDef{Name: p.Name, Type: p.Type}
+		}
+		jsCode, _ = proc.Transpile(plan)
+	} else if strings.HasPrefix(trimmed, "function ") {
+		header := strings.TrimPrefix(trimmed, "function ")
+		idx := strings.Index(header, "(")
+		if idx == -1 {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid JavaScript function syntax"))
+			return
+		}
+		procName = strings.TrimSpace(header[:idx])
+		jsCode = req.Script
+	} else {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("procedure must begin with CREATE PROCEDURE (T-SQL) or function (JavaScript)"))
 		return
 	}
 
-	paramDefs := make([]catalog.ParamDef, len(plan.Params))
-	for i, p := range plan.Params {
-		paramDefs[i] = catalog.ParamDef{Name: p.Name, Type: p.Type}
-	}
-
-	jsCode, _ := proc.Transpile(plan)
-
 	procMeta := &catalog.Procedure{
-		Name:   plan.Name,
+		Name:   procName,
 		Params: paramDefs,
 		Body:   req.Script,
 		JSCode: jsCode,
@@ -224,10 +242,10 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"name":    plan.Name,
+		"name":    procName,
 		"params":  paramDefs,
 		"js_code": jsCode,
-		"message": "Procedure registered, transpiled to JavaScript, and cached successfully",
+		"message": "Procedure registered successfully",
 	})
 }
 
