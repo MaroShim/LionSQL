@@ -14,6 +14,11 @@ func Transpile(proc *CreateProcStmt) (string, error) {
 	// Function header
 	b.WriteString(fmt.Sprintf("function %s(params, db) {\n", proc.Name))
 
+	// System state variables
+	b.WriteString("  let _fetch_status = -1;\n")
+	b.WriteString("  let _row_count = 0;\n")
+	b.WriteString("  let _tran_count = 0;\n\n")
+
 	// Bind parameters from params object
 	for _, p := range proc.Params {
 		rawName := cleanIdent(p.Name)
@@ -146,21 +151,25 @@ func transpileStmt(stmt Statement, indentLevel int) (string, error) {
 	case *TxStmt:
 		switch s.Action {
 		case TxBegin:
-			return fmt.Sprintf("%sdb.beginTransaction();\n", indent), nil
+			return fmt.Sprintf("%s{ db.beginTransaction && db.beginTransaction(); _tran_count++; }\n", indent), nil
 		case TxCommit:
-			return fmt.Sprintf("%sdb.commitTransaction();\n", indent), nil
+			return fmt.Sprintf("%s{ db.commitTransaction && db.commitTransaction(); if (_tran_count > 0) _tran_count--; }\n", indent), nil
 		case TxRollback:
-			return fmt.Sprintf("%sdb.rollbackTransaction();\n", indent), nil
+			return fmt.Sprintf("%s{ db.rollbackTransaction && db.rollbackTransaction(); _tran_count = 0; }\n", indent), nil
 		}
 		return "", nil
 
 	case *SelectIntoStmt:
 		intoVar := cleanIdent(s.IntoVar)
-		pkExpr, err := transpileExpr(s.WhereVal)
-		if err != nil {
-			return "", err
+		if s.WhereVal != nil {
+			pkExpr, err := transpileExpr(s.WhereVal)
+			if err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("%s%s = db.get(%q, %s, %q);\n", indent, intoVar, s.Table, pkExpr, s.Column), nil
 		}
-		return fmt.Sprintf("%s%s = db.get(%q, %s, %q);\n", indent, intoVar, s.Table, pkExpr, s.Column), nil
+		return fmt.Sprintf("%s{ let _rows = db.query(%q); if (_rows && _rows.length > 0) { %s = _rows[0][%q]; } }\n",
+			indent, s.Table, intoVar, s.Column), nil
 
 	case *InsertStmt:
 		pairs := make([]string, len(s.Columns))
@@ -171,7 +180,7 @@ func transpileStmt(stmt Statement, indentLevel int) (string, error) {
 			}
 			pairs[i] = fmt.Sprintf("%q: %s", col, valJS)
 		}
-		return fmt.Sprintf("%sdb.insert(%q, { %s });\n", indent, s.Table, strings.Join(pairs, ", ")), nil
+		return fmt.Sprintf("%s{ db.insert(%q, { %s }); _row_count = 1; }\n", indent, s.Table, strings.Join(pairs, ", ")), nil
 
 	case *UpdateStmt:
 		pkExpr, err := transpileExpr(s.WhereVal)
@@ -206,17 +215,100 @@ func transpileStmt(stmt Statement, indentLevel int) (string, error) {
 			b.WriteString(fmt.Sprintf("%s{\n", indent))
 			b.WriteString(fmt.Sprintf("%s  let _curr = db.get(%q, %s);\n", indent, s.Table, pkExpr))
 			b.WriteString(fmt.Sprintf("%s  db.update(%q, %s, { %s });\n", indent, s.Table, pkExpr, strings.Join(pairs, ", ")))
+			b.WriteString(fmt.Sprintf("%s  _row_count = 1;\n", indent))
 			b.WriteString(fmt.Sprintf("%s}\n", indent))
 			return b.String(), nil
 		}
-		return fmt.Sprintf("%sdb.update(%q, %s, { %s });\n", indent, s.Table, pkExpr, strings.Join(pairs, ", ")), nil
+		return fmt.Sprintf("%s{ db.update(%q, %s, { %s }); _row_count = 1; }\n", indent, s.Table, pkExpr, strings.Join(pairs, ", ")), nil
+
+	case *UpdateWhereStmt:
+		whereJS, err := transpileExprWithScope(s.Where, "row")
+		if err != nil {
+			return "", err
+		}
+
+		pairs := make([]string, len(s.Assignments))
+		for i, a := range s.Assignments {
+			valJS, err := transpileExprWithScope(a.Value, "row")
+			if err != nil {
+				return "", err
+			}
+			pairs[i] = fmt.Sprintf("%q: %s", a.Column, valJS)
+		}
+
+		return fmt.Sprintf("%s_row_count = db.updateWhere(%q, function(row) { return %s; }, function(row) { return { %s }; });\n",
+			indent, s.Table, whereJS, strings.Join(pairs, ", ")), nil
 
 	case *DeleteStmt:
 		pkExpr, err := transpileExpr(s.WhereVal)
 		if err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("%sdb.delete(%q, %s);\n", indent, s.Table, pkExpr), nil
+		return fmt.Sprintf("%s{ db.delete(%q, %s); _row_count = 1; }\n", indent, s.Table, pkExpr), nil
+
+	case *DeleteWhereStmt:
+		whereJS := "true"
+		if s.Where != nil {
+			var err error
+			whereJS, err = transpileExprWithScope(s.Where, "row")
+			if err != nil {
+				return "", err
+			}
+		}
+		return fmt.Sprintf("%s_row_count = db.deleteWhere(%q, function(row) { return %s; });\n",
+			indent, s.Table, whereJS), nil
+
+	case *DeclareCursorStmt:
+		curVar := "_cur_" + cleanIdent(s.Name)
+		whereJS := "true"
+		if s.Where != nil {
+			var err error
+			whereJS, err = transpileExprWithScope(s.Where, "row")
+			if err != nil {
+				return "", err
+			}
+		}
+		colsJSON := make([]string, len(s.Columns))
+		for i, c := range s.Columns {
+			colsJSON[i] = fmt.Sprintf("%q", c)
+		}
+		return fmt.Sprintf("%slet %s = { index: 0, columns: [%s], rows: db.query(%q, function(row) { return %s; }) };\n",
+			indent, curVar, strings.Join(colsJSON, ", "), s.Table, whereJS), nil
+
+	case *OpenCursorStmt:
+		curVar := "_cur_" + cleanIdent(s.Name)
+		return fmt.Sprintf("%sif (%s) { %s.index = 0; }\n", indent, curVar, curVar), nil
+
+	case *FetchNextStmt:
+		curVar := "_cur_" + cleanIdent(s.CursorName)
+		var b strings.Builder
+		b.WriteString(fmt.Sprintf("%sif (%s && %s.index < %s.rows.length) {\n", indent, curVar, curVar, curVar))
+		b.WriteString(fmt.Sprintf("%s  let _r = %s.rows[%s.index++];\n", indent, curVar, curVar))
+		for i, v := range s.IntoVars {
+			vName := cleanIdent(v)
+			b.WriteString(fmt.Sprintf("%s  if (%s.columns && %s.columns[%d]) { %s = _r[%s.columns[%d]]; } else { %s = Object.values(_r)[%d]; }\n",
+				indent, curVar, curVar, i, vName, curVar, i, vName, i))
+		}
+		b.WriteString(fmt.Sprintf("%s  _fetch_status = 0;\n", indent))
+		b.WriteString(fmt.Sprintf("%s} else {\n", indent))
+		b.WriteString(fmt.Sprintf("%s  _fetch_status = -1;\n", indent))
+		b.WriteString(fmt.Sprintf("%s}\n", indent))
+		return b.String(), nil
+
+	case *CloseCursorStmt, *DeallocateCursorStmt:
+		return "", nil
+
+	case *ExecStmt:
+		argStrs := make([]string, len(s.Args))
+		for i, a := range s.Args {
+			js, err := transpileExpr(a)
+			if err != nil {
+				return "", err
+			}
+			argStrs[i] = js
+		}
+		return fmt.Sprintf("%sif (typeof %s === 'function') { %s({ %s }, db); }\n",
+			indent, s.ProcName, s.ProcName, strings.Join(argStrs, ", ")), nil
 
 	default:
 		return "", fmt.Errorf("unsupported statement for JS transpilation: %T", stmt)
@@ -234,6 +326,22 @@ func containsColRef(expr Expr) bool {
 		return containsColRef(e.Expr)
 	case *BinaryExpr:
 		return containsColRef(e.Left) || containsColRef(e.Right)
+	case *InExpr:
+		if containsColRef(e.Expr) {
+			return true
+		}
+		for _, item := range e.List {
+			if containsColRef(item) {
+				return true
+			}
+		}
+		return false
+	case *BetweenExpr:
+		return containsColRef(e.Expr) || containsColRef(e.Low) || containsColRef(e.High)
+	case *LikeExpr:
+		return containsColRef(e.Expr) || containsColRef(e.Pattern)
+	case *IsNullExpr:
+		return containsColRef(e.Expr)
 	case *CaseExpr:
 		for _, w := range e.Whens {
 			if containsColRef(w.Condition) || containsColRef(w.Result) {
@@ -278,13 +386,95 @@ func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 		}
 
 	case *VariableExpr:
-		return cleanIdent(e.Name), nil
+		upper := strings.ToUpper(e.Name)
+		switch upper {
+		case "@@FETCH_STATUS":
+			return "_fetch_status", nil
+		case "@@ROWCOUNT":
+			return "_row_count", nil
+		case "@@TRANCOUNT":
+			return "_tran_count", nil
+		default:
+			return cleanIdent(e.Name), nil
+		}
 
 	case *ColumnRefExpr:
 		if rowScope != "" {
 			return fmt.Sprintf("%s[%q]", rowScope, e.Name), nil
 		}
 		return fmt.Sprintf("row[%q]", e.Name), nil
+
+	case *InExpr:
+		targetJS, err := transpileExprWithScope(e.Expr, rowScope)
+		if err != nil {
+			return "", err
+		}
+		listJS := make([]string, len(e.List))
+		for i, item := range e.List {
+			s, err := transpileExprWithScope(item, rowScope)
+			if err != nil {
+				return "", err
+			}
+			listJS[i] = s
+		}
+		if e.Not {
+			return fmt.Sprintf("(!SQLion.in(%s, [%s]))", targetJS, strings.Join(listJS, ", ")), nil
+		}
+		return fmt.Sprintf("SQLion.in(%s, [%s])", targetJS, strings.Join(listJS, ", ")), nil
+
+	case *BetweenExpr:
+		targetJS, err := transpileExprWithScope(e.Expr, rowScope)
+		if err != nil {
+			return "", err
+		}
+		lowJS, err := transpileExprWithScope(e.Low, rowScope)
+		if err != nil {
+			return "", err
+		}
+		highJS, err := transpileExprWithScope(e.High, rowScope)
+		if err != nil {
+			return "", err
+		}
+		if e.Not {
+			return fmt.Sprintf("(!SQLion.between(%s, %s, %s))", targetJS, lowJS, highJS), nil
+		}
+		return fmt.Sprintf("SQLion.between(%s, %s, %s)", targetJS, lowJS, highJS), nil
+
+	case *LikeExpr:
+		targetJS, err := transpileExprWithScope(e.Expr, rowScope)
+		if err != nil {
+			return "", err
+		}
+		patternJS, err := transpileExprWithScope(e.Pattern, rowScope)
+		if err != nil {
+			return "", err
+		}
+		if e.Not {
+			return fmt.Sprintf("(!SQLion.like(%s, %s))", targetJS, patternJS), nil
+		}
+		return fmt.Sprintf("SQLion.like(%s, %s)", targetJS, patternJS), nil
+
+	case *IsNullExpr:
+		subJS, err := transpileExprWithScope(e.Expr, rowScope)
+		if err != nil {
+			return "", err
+		}
+		if e.Not {
+			return fmt.Sprintf("((%s) !== null && (%s) !== undefined)", subJS, subJS), nil
+		}
+		return fmt.Sprintf("((%s) === null || (%s) === undefined)", subJS, subJS), nil
+
+	case *ScalarSubqueryExpr:
+		whereJS := "true"
+		if e.Where != nil {
+			var err error
+			whereJS, err = transpileExprWithScope(e.Where, "row")
+			if err != nil {
+				return "", err
+			}
+		}
+		return fmt.Sprintf("(function() { let _rows = db.query(%q, function(row) { return %s; }); return _rows.length > 0 ? _rows[0][%q] : null; })()",
+			e.Table, whereJS, e.Column), nil
 
 	case *CaseExpr:
 		elseJS := "null"
@@ -332,6 +522,51 @@ func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 				}
 			}
 			return res, nil
+		case "ABS":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("Math.abs(%s)", aJS), nil
+			}
+		case "ROUND":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("Math.round(%s)", aJS), nil
+			}
+		case "CEILING", "CEIL":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("Math.ceil(%s)", aJS), nil
+			}
+		case "FLOOR":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("Math.floor(%s)", aJS), nil
+			}
+		case "UPPER":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("String(%s).toUpperCase()", aJS), nil
+			}
+		case "LOWER":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("String(%s).toLowerCase()", aJS), nil
+			}
+		case "LTRIM":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("String(%s).replace(/^\\s+/, '')", aJS), nil
+			}
+		case "RTRIM":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("String(%s).replace(/\\s+$/, '')", aJS), nil
+			}
+		case "TRIM":
+			if len(e.Args) >= 1 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("String(%s).trim()", aJS), nil
+			}
 		case "GETDATE", "NOW":
 			return "new Date().toISOString()", nil
 		case "LEN", "LENGTH":

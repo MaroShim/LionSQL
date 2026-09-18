@@ -373,3 +373,173 @@ func (e *FunctionCallExpr) String() string {
 	return fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", "))
 }
 
+// InExpr represents Expr [NOT] IN (Expr1, Expr2, ...)
+type InExpr struct {
+	Expr Expr
+	Not  bool
+	List []Expr
+}
+
+func (e *InExpr) exprNode() {}
+func (e *InExpr) String() string {
+	items := make([]string, len(e.List))
+	for i, item := range e.List {
+		items[i] = item.String()
+	}
+	notStr := ""
+	if e.Not {
+		notStr = "NOT "
+	}
+	return fmt.Sprintf("%s %sIN (%s)", e.Expr.String(), notStr, strings.Join(items, ", "))
+}
+
+// BetweenExpr represents Expr [NOT] BETWEEN Low AND High
+type BetweenExpr struct {
+	Expr Expr
+	Not  bool
+	Low  Expr
+	High Expr
+}
+
+func (e *BetweenExpr) exprNode() {}
+func (e *BetweenExpr) String() string {
+	notStr := ""
+	if e.Not {
+		notStr = "NOT "
+	}
+	return fmt.Sprintf("%s %sBETWEEN %s AND %s", e.Expr.String(), notStr, e.Low.String(), e.High.String())
+}
+
+// LikeExpr represents Expr [NOT] LIKE Pattern
+type LikeExpr struct {
+	Expr    Expr
+	Not     bool
+	Pattern Expr
+}
+
+func (e *LikeExpr) exprNode() {}
+func (e *LikeExpr) String() string {
+	notStr := ""
+	if e.Not {
+		notStr = "NOT "
+	}
+	return fmt.Sprintf("%s %sLIKE %s", e.Expr.String(), notStr, e.Pattern.String())
+}
+
+// IsNullExpr represents Expr IS [NOT] NULL
+type IsNullExpr struct {
+	Expr Expr
+	Not  bool
+}
+
+func (e *IsNullExpr) exprNode() {}
+func (e *IsNullExpr) String() string {
+	if e.Not {
+		return fmt.Sprintf("%s IS NOT NULL", e.Expr.String())
+	}
+	return fmt.Sprintf("%s IS NULL", e.Expr.String())
+}
+
+// ScalarSubqueryExpr represents (SELECT col FROM table WHERE cond)
+type ScalarSubqueryExpr struct {
+	Column string
+	Table  string
+	Where  Expr
+}
+
+func (e *ScalarSubqueryExpr) exprNode() {}
+func (e *ScalarSubqueryExpr) String() string {
+	if e.Where != nil {
+		return fmt.Sprintf("(SELECT %s FROM %s WHERE %s)", e.Column, e.Table, e.Where.String())
+	}
+	return fmt.Sprintf("(SELECT %s FROM %s)", e.Column, e.Table)
+}
+
+// UpdateWhereStmt represents UPDATE table SET col1 = expr1, ... WHERE <arbitrary condition>
+type UpdateWhereStmt struct {
+	Table       string
+	Assignments []UpdateAssignment
+	Where       Expr
+}
+
+func (s *UpdateWhereStmt) stmtNode() {}
+func (s *UpdateWhereStmt) String() string {
+	assigns := make([]string, len(s.Assignments))
+	for i, a := range s.Assignments {
+		assigns[i] = fmt.Sprintf("%s = %s", a.Column, a.Value.String())
+	}
+	if s.Where != nil {
+		return fmt.Sprintf("UPDATE %s SET %s WHERE %s", s.Table, strings.Join(assigns, ", "), s.Where.String())
+	}
+	return fmt.Sprintf("UPDATE %s SET %s", s.Table, strings.Join(assigns, ", "))
+}
+
+// DeleteWhereStmt represents DELETE FROM table WHERE <arbitrary condition>
+type DeleteWhereStmt struct {
+	Table string
+	Where Expr
+}
+
+func (s *DeleteWhereStmt) stmtNode() {}
+func (s *DeleteWhereStmt) String() string {
+	if s.Where != nil {
+		return fmt.Sprintf("DELETE FROM %s WHERE %s", s.Table, s.Where.String())
+	}
+	return fmt.Sprintf("DELETE FROM %s", s.Table)
+}
+
+// DeclareCursorStmt represents DECLARE cur_name CURSOR FOR SELECT cols FROM tbl WHERE cond
+type DeclareCursorStmt struct {
+	Name    string
+	Table   string
+	Columns []string
+	Where   Expr
+}
+
+func (s *DeclareCursorStmt) stmtNode() {}
+func (s *DeclareCursorStmt) String() string {
+	return fmt.Sprintf("DECLARE %s CURSOR FOR SELECT %s FROM %s", s.Name, strings.Join(s.Columns, ", "), s.Table)
+}
+
+// OpenCursorStmt represents OPEN cur_name
+type OpenCursorStmt struct {
+	Name string
+}
+
+func (s *OpenCursorStmt) stmtNode() {}
+func (s *OpenCursorStmt) String() string {
+	return fmt.Sprintf("OPEN %s", s.Name)
+}
+
+// FetchNextStmt represents FETCH NEXT FROM cur_name INTO @var1, @var2...
+type FetchNextStmt struct {
+	CursorName string
+	IntoVars   []string
+}
+
+func (s *FetchNextStmt) stmtNode() {}
+func (s *FetchNextStmt) String() string {
+	return fmt.Sprintf("FETCH NEXT FROM %s INTO %s", s.CursorName, strings.Join(s.IntoVars, ", "))
+}
+
+// CloseCursorStmt represents CLOSE cur_name
+type CloseCursorStmt struct {
+	Name string
+}
+
+func (s *CloseCursorStmt) stmtNode() {}
+func (s *CloseCursorStmt) String() string {
+	return fmt.Sprintf("CLOSE %s", s.Name)
+}
+
+// DeallocateCursorStmt represents DEALLOCATE cur_name
+type DeallocateCursorStmt struct {
+	Name string
+}
+
+func (s *DeallocateCursorStmt) stmtNode() {}
+func (s *DeallocateCursorStmt) String() string {
+	return fmt.Sprintf("DEALLOCATE %s", s.Name)
+}
+
+

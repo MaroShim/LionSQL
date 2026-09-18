@@ -3,6 +3,7 @@ package parser_test
 import (
 	"testing"
 
+	"sqlion/pkg/proc"
 	parser "sqlion/pkg/proc/parser/antlr"
 )
 
@@ -126,5 +127,41 @@ func TestParseTSql_SyntaxError(t *testing.T) {
 	}
 	if len(result.Errors) == 0 {
 		t.Fatalf("expected error listener to record syntax errors")
+	}
+}
+
+func TestBuildProcedure_ANTLRAndTranspile(t *testing.T) {
+	script := `
+CREATE PROCEDURE CalculateBonus
+    @emp_id INT,
+    @rating INT
+AS
+BEGIN
+    DECLARE @bonus INT;
+    SET @bonus = CASE 
+        WHEN @rating >= 5 THEN 1000
+        WHEN @rating >= 3 THEN 500
+        ELSE 100
+    END;
+    UPDATE accounts SET balance = balance + @bonus WHERE id = @emp_id;
+    RETURN @bonus;
+END;
+`
+	plan, err := parser.BuildProcedure(script)
+	if err != nil {
+		t.Fatalf("BuildProcedure failed: %v", err)
+	}
+
+	if plan.Name != "CalculateBonus" {
+		t.Errorf("expected procedure name CalculateBonus, got %s", plan.Name)
+	}
+
+	jsCode, err := proc.Transpile(plan)
+	if err != nil {
+		t.Fatalf("Transpile failed: %v", err)
+	}
+
+	if len(jsCode) == 0 {
+		t.Fatalf("expected non-empty JS code")
 	}
 }

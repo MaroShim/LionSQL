@@ -185,7 +185,10 @@ func (l *Lexer) readIdentifier() string {
 
 func (l *Lexer) readVariable() string {
 	startPos := l.pos
-	l.readChar() // eat '@'
+	l.readChar() // eat first '@'
+	if l.ch == '@' {
+		l.readChar() // eat second '@' for @@FETCH_STATUS etc
+	}
 	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
 		l.readChar()
 	}

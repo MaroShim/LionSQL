@@ -14,7 +14,8 @@ const (
 	precLowest
 	precOr
 	precAnd
-	precEquals      // = != <>
+	precNot
+	precEquals      // = != <> IN BETWEEN LIKE IS
 	precLessGreater // < > <= >=
 	precSum         // + -
 	precProduct     // * /
@@ -24,6 +25,10 @@ const (
 var precedences = map[TokenType]int{
 	TokenOr:       precOr,
 	TokenAnd:      precAnd,
+	TokenIn:       precEquals,
+	TokenBetween:  precEquals,
+	TokenLike:     precEquals,
+	TokenIs:       precEquals,
 	TokenEq:       precEquals,
 	TokenNeq:      precEquals,
 	TokenLt:       precLessGreater,
@@ -177,6 +182,14 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseBlock()
 	case TokenDeclare:
 		return p.parseDeclare()
+	case TokenOpen:
+		return p.parseOpen()
+	case TokenFetch:
+		return p.parseFetch()
+	case TokenClose:
+		return p.parseClose()
+	case TokenDeallocate:
+		return p.parseDeallocate()
 	case TokenSet:
 		return p.parseSet()
 	case TokenIf:
@@ -219,6 +232,70 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return nil, fmt.Errorf("unexpected token in statement: %s at %d:%d",
 			p.curToken.Literal, p.curToken.Line, p.curToken.Col)
 	}
+}
+
+func (p *Parser) parseOpen() (Statement, error) {
+	p.nextToken() // eat OPEN
+	curName := p.curToken.Literal
+	p.nextToken()
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+	return &OpenCursorStmt{Name: curName}, nil
+}
+
+func (p *Parser) parseClose() (Statement, error) {
+	p.nextToken() // eat CLOSE
+	curName := p.curToken.Literal
+	p.nextToken()
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+	return &CloseCursorStmt{Name: curName}, nil
+}
+
+func (p *Parser) parseDeallocate() (Statement, error) {
+	p.nextToken() // eat DEALLOCATE
+	curName := p.curToken.Literal
+	p.nextToken()
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+	return &DeallocateCursorStmt{Name: curName}, nil
+}
+
+func (p *Parser) parseFetch() (Statement, error) {
+	p.nextToken() // eat FETCH
+	if p.curTokenIs(TokenNext) {
+		p.nextToken()
+	}
+	if p.curTokenIs(TokenFrom) {
+		p.nextToken()
+	}
+	curName := p.curToken.Literal
+	p.nextToken()
+
+	if !p.curTokenIs(TokenInto) {
+		return nil, fmt.Errorf("expected INTO in FETCH, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	intoVars := make([]string, 0)
+	for p.curTokenIs(TokenVariable) {
+		intoVars = append(intoVars, p.curToken.Literal)
+		p.nextToken()
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &FetchNextStmt{CursorName: curName, IntoVars: intoVars}, nil
 }
 
 func (p *Parser) parseTryCatch() (Statement, error) {
@@ -352,15 +429,64 @@ func (p *Parser) parseBlock() (Statement, error) {
 
 func (p *Parser) parseDeclare() (Statement, error) {
 	p.nextToken() // eat DECLARE
-	var stmts []Statement
 
-	for {
-		if !p.curTokenIs(TokenVariable) {
-			return nil, fmt.Errorf("expected variable name in DECLARE, got %s", p.curToken.Literal)
+	// Check if this is DECLARE @name / name CURSOR FOR SELECT ...
+	name := p.curToken.Literal
+	p.nextToken()
+
+	if p.curTokenIs(TokenCursor) {
+		p.nextToken() // eat CURSOR
+		if !p.curTokenIs(TokenFor) {
+			return nil, fmt.Errorf("expected FOR after CURSOR, got %s", p.curToken.Literal)
 		}
-		varName := p.curToken.Literal
+		p.nextToken() // eat FOR
+
+		if !p.curTokenIs(TokenSelect) {
+			return nil, fmt.Errorf("expected SELECT in CURSOR FOR, got %s", p.curToken.Literal)
+		}
+		p.nextToken() // eat SELECT
+
+		cols := make([]string, 0)
+		for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenEOF) {
+			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenAsterisk) {
+				cols = append(cols, p.curToken.Literal)
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			}
+		}
+
+		if !p.curTokenIs(TokenFrom) {
+			return nil, fmt.Errorf("expected FROM in cursor query")
+		}
+		p.nextToken() // eat FROM
+
+		tblName := p.curToken.Literal
 		p.nextToken()
 
+		var whereExpr Expr
+		if p.curTokenIs(TokenWhere) {
+			p.nextToken()
+			whereExpr = p.parseExpression(precLowest)
+		}
+
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+
+		return &DeclareCursorStmt{
+			Name:    name,
+			Table:   tblName,
+			Columns: cols,
+			Where:   whereExpr,
+		}, nil
+	}
+
+	// Normal variable declaration
+	var stmts []Statement
+	varName := name
+	for {
 		if !p.curTokenIs(TokenIdent) {
 			return nil, fmt.Errorf("expected data type for %s, got %s", varName, p.curToken.Literal)
 		}
@@ -381,6 +507,11 @@ func (p *Parser) parseDeclare() (Statement, error) {
 		stmts = append(stmts, &DeclareStmt{Name: varName, Type: dt})
 
 		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+			if !p.curTokenIs(TokenVariable) {
+				return nil, fmt.Errorf("expected variable name after comma in DECLARE")
+			}
+			varName = p.curToken.Literal
 			p.nextToken()
 		} else {
 			break
@@ -587,18 +718,14 @@ func (p *Parser) parseSelect() (Statement, error) {
 	var whereVal Expr
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken()
-		if !p.curTokenIs(TokenIdent) {
-			return nil, fmt.Errorf("expected column in WHERE, got %s", p.curToken.Literal)
+		if p.curTokenIs(TokenIdent) && p.peekTokenIs(TokenEq) {
+			whereCol = p.curToken.Literal
+			p.nextToken()
+			p.nextToken() // eat =
+			whereVal = p.parseExpression(precLowest)
+		} else {
+			whereVal = p.parseExpression(precLowest)
 		}
-		whereCol = p.curToken.Literal
-		p.nextToken()
-
-		if !p.curTokenIs(TokenEq) {
-			return nil, fmt.Errorf("expected = in WHERE clause, got %s", p.curToken.Literal)
-		}
-		p.nextToken()
-
-		whereVal = p.parseExpression(precLowest)
 	}
 
 	if p.curTokenIs(TokenSemicolon) {
@@ -718,33 +845,32 @@ func (p *Parser) parseUpdate() (Statement, error) {
 		}
 	}
 
-	var whereCol string
-	var whereVal Expr
+	var whereExpr Expr
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken()
-		if !p.curTokenIs(TokenIdent) {
-			return nil, fmt.Errorf("expected column in UPDATE WHERE, got %s", p.curToken.Literal)
-		}
-		whereCol = p.curToken.Literal
-		p.nextToken()
-
-		if !p.curTokenIs(TokenEq) {
-			return nil, fmt.Errorf("expected = in UPDATE WHERE, got %s", p.curToken.Literal)
-		}
-		p.nextToken()
-
-		whereVal = p.parseExpression(precLowest)
+		whereExpr = p.parseExpression(precLowest)
 	}
 
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
 
-	return &UpdateStmt{
+	// Check if this is simple single-column PK equality
+	if bin, ok := whereExpr.(*BinaryExpr); ok && bin.Op == TokenEq {
+		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol {
+			return &UpdateStmt{
+				Table:       tblName,
+				Assignments: assigns,
+				WhereCol:    colRef.Name,
+				WhereVal:    bin.Right,
+			}, nil
+		}
+	}
+
+	return &UpdateWhereStmt{
 		Table:       tblName,
 		Assignments: assigns,
-		WhereCol:    whereCol,
-		WhereVal:    whereVal,
+		Where:       whereExpr,
 	}, nil
 }
 
@@ -759,32 +885,29 @@ func (p *Parser) parseDelete() (Statement, error) {
 	tblName := p.curToken.Literal
 	p.nextToken()
 
-	var whereCol string
-	var whereVal Expr
+	var whereExpr Expr
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken()
-		if !p.curTokenIs(TokenIdent) {
-			return nil, fmt.Errorf("expected column in DELETE WHERE, got %s", p.curToken.Literal)
-		}
-		whereCol = p.curToken.Literal
-		p.nextToken()
-
-		if !p.curTokenIs(TokenEq) {
-			return nil, fmt.Errorf("expected = in DELETE WHERE, got %s", p.curToken.Literal)
-		}
-		p.nextToken()
-
-		whereVal = p.parseExpression(precLowest)
+		whereExpr = p.parseExpression(precLowest)
 	}
 
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
 
-	return &DeleteStmt{
-		Table:    tblName,
-		WhereCol: whereCol,
-		WhereVal: whereVal,
+	if bin, ok := whereExpr.(*BinaryExpr); ok && bin.Op == TokenEq {
+		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol {
+			return &DeleteStmt{
+				Table:    tblName,
+				WhereCol: colRef.Name,
+				WhereVal: bin.Right,
+			}, nil
+		}
+	}
+
+	return &DeleteWhereStmt{
+		Table: tblName,
+		Where: whereExpr,
 	}, nil
 }
 
@@ -826,13 +949,68 @@ func (p *Parser) parseExpression(precedence int) Expr {
 	leftExp := prefix
 
 	for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenRParen) && precedence < p.curPrecedence() {
-		op := p.curToken.Type
-		p.nextToken()
-		rightExp := p.parseExpression(precedences[op])
-		leftExp = &BinaryExpr{
-			Left:  leftExp,
-			Op:    op,
-			Right: rightExp,
+		switch p.curToken.Type {
+		case TokenIn:
+			p.nextToken() // eat IN
+			if !p.curTokenIs(TokenLParen) {
+				return nil
+			}
+			p.nextToken() // eat (
+			var list []Expr
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				item := p.parseExpression(precLowest)
+				if item != nil {
+					list = append(list, item)
+				}
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				} else {
+					break
+				}
+			}
+			if !p.curTokenIs(TokenRParen) {
+				return nil
+			}
+			p.nextToken() // eat )
+			leftExp = &InExpr{Expr: leftExp, Not: false, List: list}
+
+		case TokenBetween:
+			p.nextToken() // eat BETWEEN
+			low := p.parseExpression(precSum)
+			if !p.curTokenIs(TokenAnd) {
+				return nil
+			}
+			p.nextToken() // eat AND
+			high := p.parseExpression(precSum)
+			leftExp = &BetweenExpr{Expr: leftExp, Not: false, Low: low, High: high}
+
+		case TokenLike:
+			p.nextToken() // eat LIKE
+			pattern := p.parseExpression(precSum)
+			leftExp = &LikeExpr{Expr: leftExp, Not: false, Pattern: pattern}
+
+		case TokenIs:
+			p.nextToken() // eat IS
+			isNot := false
+			if p.curTokenIs(TokenNot) {
+				isNot = true
+				p.nextToken() // eat NOT
+			}
+			if !p.curTokenIs(TokenNull) {
+				return nil
+			}
+			p.nextToken() // eat NULL
+			leftExp = &IsNullExpr{Expr: leftExp, Not: isNot}
+
+		default:
+			op := p.curToken.Type
+			p.nextToken()
+			rightExp := p.parseExpression(precedences[op])
+			leftExp = &BinaryExpr{
+				Left:  leftExp,
+				Op:    op,
+				Right: rightExp,
+			}
 		}
 	}
 
@@ -840,8 +1018,8 @@ func (p *Parser) parseExpression(precedence int) Expr {
 }
 
 func (p *Parser) curPrecedence() int {
-	if p, ok := precedences[p.curToken.Type]; ok {
-		return p
+	if prec, ok := precedences[p.curToken.Type]; ok {
+		return prec
 	}
 	return precLowest
 }
@@ -901,6 +1079,29 @@ func (p *Parser) parsePrefix() Expr {
 		return &UnaryExpr{Op: TokenNot, Expr: right}
 	case TokenLParen:
 		p.nextToken()
+		// Check for scalar subquery (SELECT col FROM tbl WHERE ...)
+		if p.curTokenIs(TokenSelect) {
+			p.nextToken() // eat SELECT
+			col := p.curToken.Literal
+			p.nextToken()
+			if !p.curTokenIs(TokenFrom) {
+				return nil
+			}
+			p.nextToken() // eat FROM
+			tbl := p.curToken.Literal
+			p.nextToken()
+			var where Expr
+			if p.curTokenIs(TokenWhere) {
+				p.nextToken()
+				where = p.parseExpression(precLowest)
+			}
+			if !p.curTokenIs(TokenRParen) {
+				return nil
+			}
+			p.nextToken() // eat )
+			return &ScalarSubqueryExpr{Column: col, Table: tbl, Where: where}
+		}
+
 		exp := p.parseExpression(precLowest)
 		if !p.curTokenIs(TokenRParen) {
 			p.peekError(TokenRParen)

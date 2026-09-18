@@ -41,7 +41,6 @@ END;
 		t.Fatalf("Transpile error: %v", err)
 	}
 
-	// Assert essential JS structures
 	expectedSnippets := []string{
 		"function TransferFunds(params, db) {",
 		"let from = params['from'] !== undefined ? params['from'] : params['@from'];",
@@ -237,6 +236,147 @@ END;
 		"clean_name = ((name !== null && name !== undefined) ? (name) : (\"Anonymous\"));",
 		"grade = (((score >= 90)) ? (\"A\") : ((((score >= 80)) ? (\"B\") : (\"C\"))));",
 		"console.log(grade);",
+	}
+
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(js, snippet) {
+			t.Errorf("Expected JS to contain:\n%s\n\nActual JS:\n%s", snippet, js)
+		}
+	}
+}
+
+func TestTranspile_InBetweenLikeIsNull(t *testing.T) {
+	script := `
+CREATE PROCEDURE FilterUsers
+    @status VARCHAR(20),
+    @val INT,
+    @name VARCHAR(50)
+AS
+BEGIN
+    IF @status IN ('ACTIVE', 'PENDING')
+    BEGIN
+        PRINT 'Valid status';
+    END
+
+    IF @val BETWEEN 10 AND 100
+    BEGIN
+        PRINT 'Within range';
+    END
+
+    IF @name LIKE 'Ali%'
+    BEGIN
+        PRINT 'Matches pattern';
+    END
+
+    IF @name IS NULL
+    BEGIN
+        PRINT 'Name is null';
+    END
+
+    RETURN 0;
+END;
+`
+	lexer := NewLexer(script)
+	parser := NewParser(lexer)
+	plan, err := parser.ParseProcedure()
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	js, err := Transpile(plan)
+	if err != nil {
+		t.Fatalf("Transpile error: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"if (SQLion.in(status, [\"ACTIVE\", \"PENDING\"]))",
+		"if (SQLion.between(val, 10, 100))",
+		"if (SQLion.like(name, \"Ali%\"))",
+		"if (((name) === null || (name) === undefined))",
+	}
+
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(js, snippet) {
+			t.Errorf("Expected JS to contain:\n%s\n\nActual JS:\n%s", snippet, js)
+		}
+	}
+}
+
+func TestTranspile_CursorAndIteration(t *testing.T) {
+	script := `
+CREATE PROCEDURE ProcessAllAccounts
+AS
+BEGIN
+    DECLARE @id INT;
+    DECLARE @balance INT;
+    DECLARE acc_cur CURSOR FOR SELECT id, balance FROM accounts WHERE balance > 0;
+    
+    OPEN acc_cur;
+    FETCH NEXT FROM acc_cur INTO @id, @balance;
+    
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        PRINT @id;
+        FETCH NEXT FROM acc_cur INTO @id, @balance;
+    END
+
+    CLOSE acc_cur;
+    DEALLOCATE acc_cur;
+    RETURN 0;
+END;
+`
+	lexer := NewLexer(script)
+	parser := NewParser(lexer)
+	plan, err := parser.ParseProcedure()
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	js, err := Transpile(plan)
+	if err != nil {
+		t.Fatalf("Transpile error: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"let _cur_acc_cur = { index: 0, columns: [\"id\", \"balance\"], rows: db.query(\"accounts\", function(row) { return (row[\"balance\"] > 0); }) };",
+		"if (_cur_acc_cur) { _cur_acc_cur.index = 0; }",
+		"if (_cur_acc_cur && _cur_acc_cur.index < _cur_acc_cur.rows.length)",
+		"while ((_fetch_status === 0))",
+	}
+
+	for _, snippet := range expectedSnippets {
+		if !strings.Contains(js, snippet) {
+			t.Errorf("Expected JS to contain:\n%s\n\nActual JS:\n%s", snippet, js)
+		}
+	}
+}
+
+func TestTranspile_MultiRowUpdateAndDeleteWhere(t *testing.T) {
+	script := `
+CREATE PROCEDURE MassUpdate
+    @min_bal INT
+AS
+BEGIN
+    UPDATE accounts SET balance = balance + 50 WHERE balance < @min_bal;
+    DELETE FROM accounts WHERE balance <= 0;
+    RETURN 0;
+END;
+`
+	lexer := NewLexer(script)
+	parser := NewParser(lexer)
+	plan, err := parser.ParseProcedure()
+	if err != nil {
+		t.Fatalf("Parse error: %v", err)
+	}
+
+	js, err := Transpile(plan)
+	if err != nil {
+		t.Fatalf("Transpile error: %v", err)
+	}
+
+	expectedSnippets := []string{
+		"db.updateWhere(\"accounts\", function(row) { return (row[\"balance\"] < min_bal); }",
+		"db.deleteWhere(\"accounts\", function(row) { return (row[\"balance\"] <= 0); });",
 	}
 
 	for _, snippet := range expectedSnippets {

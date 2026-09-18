@@ -76,6 +76,17 @@ const (
 	TokenNull
 	TokenBreak
 	TokenContinue
+	TokenIn
+	TokenBetween
+	TokenLike
+	TokenIs
+	TokenCursor
+	TokenOpen
+	TokenFetch
+	TokenNext
+	TokenClose
+	TokenDeallocate
+	TokenFor
 )
 
 var keywords = map[string]TokenType{
@@ -91,6 +102,7 @@ var keywords = map[string]TokenType{
 	"INTO":        TokenInto,
 	"FROM":        TokenFrom,
 	"WHERE":       TokenWhere,
+	"FOR":         TokenFor,
 	"INSERT":      TokenInsert,
 	"VALUES":      TokenValues,
 	"UPDATE":      TokenUpdate,
@@ -121,6 +133,16 @@ var keywords = map[string]TokenType{
 	"NULL":        TokenNull,
 	"BREAK":       TokenBreak,
 	"CONTINUE":    TokenContinue,
+	"IN":          TokenIn,
+	"BETWEEN":     TokenBetween,
+	"LIKE":        TokenLike,
+	"IS":          TokenIs,
+	"CURSOR":      TokenCursor,
+	"OPEN":        TokenOpen,
+	"FETCH":       TokenFetch,
+	"NEXT":        TokenNext,
+	"CLOSE":       TokenClose,
+	"DEALLOCATE":  TokenDeallocate,
 	"TRUE":        TokenBool,
 	"FALSE":       TokenBool,
 }

@@ -1,6 +1,7 @@
 package runtime_test
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -45,6 +46,11 @@ func setupTestDB(t *testing.T) storage.Engine {
 		"id":      storage.IntValue(2),
 		"holder":  storage.StringValue("Bob"),
 		"balance": storage.IntValue(500),
+	})
+	_ = tx.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(3),
+		"holder":  storage.StringValue("Charlie"),
+		"balance": storage.IntValue(200),
 	})
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("Seed commit failed: %v", err)
@@ -224,7 +230,6 @@ func TestGoja_EndToEndTSqlTryCatchAndCase(t *testing.T) {
 	}
 	defer session.Close()
 
-	// T-SQL script using DECLARE, ISNULL, CASE WHEN, and UPDATE with Column References
 	tsqlScript := `
 CREATE PROCEDURE ProcessBonus
     @id INT,
@@ -265,7 +270,6 @@ END;
 
 	executor := runtime.NewExecutor(cache)
 
-	// Execute for Alice (ID 1, balance 1000) with VIP tier -> should get +500 => 1500
 	res, err := executor.Run(prog, "ProcessBonus", map[string]any{
 		"id":   1,
 		"tier": "VIP",
@@ -278,12 +282,220 @@ END;
 		t.Errorf("expected return value 500, got %v", res.ReturnValue)
 	}
 
-	// Verify balance committed to 1500
 	txCheck, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
 	alice, _ := txCheck.Get("accounts", storage.IntValue(1))
 	_ = txCheck.Rollback()
 
 	if alice["balance"].IVal != 1500 {
 		t.Errorf("expected Alice balance 1500, got %d", alice["balance"].IVal)
+	}
+}
+
+func TestGoja_CursorIterationAndBatchProcessing(t *testing.T) {
+	eng := setupTestDB(t)
+	defer eng.Close()
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	// Procedure using cursor to iterate over all accounts and award 10% interest
+	tsqlScript := `
+CREATE PROCEDURE ApplyInterest
+    @rate FLOAT
+AS
+BEGIN
+    DECLARE @id INT;
+    DECLARE @bal INT;
+    DECLARE @total_awarded INT;
+    SET @total_awarded = 0;
+
+    DECLARE acc_cur CURSOR FOR SELECT id, balance FROM accounts WHERE balance > 0;
+    OPEN acc_cur;
+    FETCH NEXT FROM acc_cur INTO @id, @bal;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        DECLARE @interest INT;
+        SET @interest = @bal * 0.1;
+        UPDATE accounts SET balance = balance + @interest WHERE id = @id;
+        SET @total_awarded = @total_awarded + @interest;
+        FETCH NEXT FROM acc_cur INTO @id, @bal;
+    END
+
+    CLOSE acc_cur;
+    DEALLOCATE acc_cur;
+    RETURN @total_awarded;
+END;
+`
+	lexer := proc.NewLexer(tsqlScript)
+	parser := proc.NewParser(lexer)
+	plan, err := parser.ParseProcedure()
+	if err != nil {
+		t.Fatalf("ParseProcedure failed: %v", err)
+	}
+
+	jsCode, err := proc.Transpile(plan)
+	if err != nil {
+		t.Fatalf("Transpile failed: %v", err)
+	}
+
+	cache := runtime.NewPlanCache()
+	prog, err := cache.GetOrCompile(jsCode)
+	if err != nil {
+		t.Fatalf("GetOrCompile failed: %v", err)
+	}
+
+	executor := runtime.NewExecutor(cache)
+
+	res, err := executor.Run(prog, "ApplyInterest", map[string]any{
+		"rate": 0.1,
+	}, session)
+	if err != nil {
+		t.Fatalf("ApplyInterest failed: %v", err)
+	}
+
+	// Alice (1000 -> +100 = 1100), Bob (500 -> +50 = 550), Charlie (200 -> +20 = 220) => Total = 170
+	if fmt.Sprintf("%v", res.ReturnValue) != "170" {
+		t.Errorf("expected total awarded 170, got %v", res.ReturnValue)
+	}
+
+	txCheck, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	alice, _ := txCheck.Get("accounts", storage.IntValue(1))
+	bob, _ := txCheck.Get("accounts", storage.IntValue(2))
+	charlie, _ := txCheck.Get("accounts", storage.IntValue(3))
+	_ = txCheck.Rollback()
+
+	if alice["balance"].IVal != 1100 {
+		t.Errorf("expected Alice 1100, got %d", alice["balance"].IVal)
+	}
+	if bob["balance"].IVal != 550 {
+		t.Errorf("expected Bob 550, got %d", bob["balance"].IVal)
+	}
+	if charlie["balance"].IVal != 220 {
+		t.Errorf("expected Charlie 220, got %d", charlie["balance"].IVal)
+	}
+}
+
+func TestGoja_MultiRowUpdateAndDeleteWhere(t *testing.T) {
+	eng := setupTestDB(t)
+	defer eng.Close()
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	// Procedure doing multi-row update and delete
+	tsqlScript := `
+CREATE PROCEDURE MassRebalance
+    @threshold INT
+AS
+BEGIN
+    UPDATE accounts SET balance = balance + 100 WHERE balance < @threshold;
+    DELETE FROM accounts WHERE balance <= 300;
+    RETURN 0;
+END;
+`
+	lexer := proc.NewLexer(tsqlScript)
+	parser := proc.NewParser(lexer)
+	plan, err := parser.ParseProcedure()
+	if err != nil {
+		t.Fatalf("ParseProcedure failed: %v", err)
+	}
+
+	jsCode, err := proc.Transpile(plan)
+	if err != nil {
+		t.Fatalf("Transpile failed: %v", err)
+	}
+
+	cache := runtime.NewPlanCache()
+	prog, err := cache.GetOrCompile(jsCode)
+	if err != nil {
+		t.Fatalf("GetOrCompile failed: %v", err)
+	}
+
+	executor := runtime.NewExecutor(cache)
+
+	// Threshold = 600: Bob (500 -> 600), Charlie (200 -> 300).
+	// Then DELETE WHERE balance <= 300 deletes Charlie (300).
+	_, err = executor.Run(prog, "MassRebalance", map[string]any{
+		"threshold": 600,
+	}, session)
+	if err != nil {
+		t.Fatalf("MassRebalance failed: %v", err)
+	}
+
+	txCheck, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	alice, _ := txCheck.Get("accounts", storage.IntValue(1))
+	bob, _ := txCheck.Get("accounts", storage.IntValue(2))
+	_, charlieErr := txCheck.Get("accounts", storage.IntValue(3))
+	_ = txCheck.Rollback()
+
+	if alice["balance"].IVal != 1000 {
+		t.Errorf("expected Alice 1000, got %d", alice["balance"].IVal)
+	}
+	if bob["balance"].IVal != 600 {
+		t.Errorf("expected Bob 600, got %d", bob["balance"].IVal)
+	}
+	if !errors.Is(charlieErr, storage.ErrKeyNotFound) {
+		t.Errorf("expected Charlie to be deleted, got error: %v", charlieErr)
+	}
+}
+
+func TestGoja_LikeInBetweenOperators(t *testing.T) {
+	eng := setupTestDB(t)
+	defer eng.Close()
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	tsqlScript := `
+CREATE PROCEDURE ValidateUser
+    @name VARCHAR(50),
+    @val INT
+AS
+BEGIN
+    IF @name LIKE 'Ali%' AND @val BETWEEN 500 AND 1500
+    BEGIN
+        RETURN 1;
+    END
+    RETURN 0;
+END;
+`
+	lexer := proc.NewLexer(tsqlScript)
+	parser := proc.NewParser(lexer)
+	plan, err := parser.ParseProcedure()
+	if err != nil {
+		t.Fatalf("ParseProcedure failed: %v", err)
+	}
+
+	jsCode, err := proc.Transpile(plan)
+	if err != nil {
+		t.Fatalf("Transpile failed: %v", err)
+	}
+
+	cache := runtime.NewPlanCache()
+	prog, err := cache.GetOrCompile(jsCode)
+	if err != nil {
+		t.Fatalf("GetOrCompile failed: %v", err)
+	}
+
+	executor := runtime.NewExecutor(cache)
+
+	res1, _ := executor.Run(prog, "ValidateUser", map[string]any{"name": "Alice", "val": 1000}, session)
+	if fmt.Sprintf("%v", res1.ReturnValue) != "1" {
+		t.Errorf("expected 1, got %v", res1.ReturnValue)
+	}
+
+	res2, _ := executor.Run(prog, "ValidateUser", map[string]any{"name": "Bob", "val": 1000}, session)
+	if fmt.Sprintf("%v", res2.ReturnValue) != "0" {
+		t.Errorf("expected 0, got %v", res2.ReturnValue)
 	}
 }
