@@ -25,7 +25,7 @@ func main() {
 	httpAddr := flag.String("http", "127.0.0.1:8090", "HTTP service and admin dashboard address")
 	pgAddr := flag.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address")
 	dataDir := flag.String("dir", "data", "Data directory for database files")
-	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
+	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
 	flag.Parse()
 
@@ -36,14 +36,21 @@ func main() {
 	switch *engineType {
 	case "wiredtiger":
 		eng = wiredtiger.New()
+		if err := eng.Open(*dataDir); err != nil {
+			log.Printf("[SQLion] Notice: WiredTiger Cgo engine not enabled in this binary (%v)", err)
+			log.Printf("[SQLion] Falling back to embedded ACID storage engine (memengine)")
+			eng = memengine.New()
+			if err := eng.Open(*dataDir); err != nil {
+				log.Fatalf("Failed to open fallback storage engine: %v", err)
+			}
+		}
 	case "memory":
 		eng = memengine.New()
+		if err := eng.Open(*dataDir); err != nil {
+			log.Fatalf("Failed to open storage engine: %v", err)
+		}
 	default:
-		log.Fatalf("Unknown storage engine: %s. Options: memory, wiredtiger", *engineType)
-	}
-
-	if err := eng.Open(*dataDir); err != nil {
-		log.Fatalf("Failed to open storage engine: %v", err)
+		log.Fatalf("Unknown storage engine: %s. Options: wiredtiger, memory", *engineType)
 	}
 	defer eng.Close()
 
