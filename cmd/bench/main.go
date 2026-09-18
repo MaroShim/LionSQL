@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"math/rand"
+	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -13,27 +14,52 @@ import (
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
+	"sqlion/pkg/storage/wiredtiger"
 )
 
 func main() {
 	numAccounts := flag.Int("accounts", 10000, "Number of initial accounts")
 	numWorkers := flag.Int("workers", 100, "Concurrent client workers")
 	totalOps := flag.Int("ops", 50000, "Total number of transfer transactions to execute")
+	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
+	dataDir := flag.String("dir", "data/bench_wt", "Data directory for benchmark storage")
 	flag.Parse()
 
 	fmt.Println("================================================================================")
 	fmt.Println("  SQLion High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Target]         Stored Procedure (T-SQL -> Goja Bytecode Plan Cache -> ACID Tx)\n")
+	fmt.Printf(" [Storage Engine] %s (Dir: %s)\n", *engineType, *dataDir)
 	fmt.Printf(" [Accounts]       %d accounts (Initial balance: 1,000,000 each)\n", *numAccounts)
 	fmt.Printf(" [Concurrency]    %d concurrent workers\n", *numWorkers)
 	fmt.Printf(" [Total Ops]      %d transactions\n", *totalOps)
 	fmt.Println("--------------------------------------------------------------------------------")
 
 	// 1. Initialize Engine & Seed Accounts
-	fmt.Printf("Initializing storage engine and seeding %d accounts... ", *numAccounts)
-	eng := memengine.New()
-	defer eng.Close()
+	fmt.Printf("Initializing %s storage engine and seeding %d accounts... ", *engineType, *numAccounts)
+	var eng storage.Engine
+	switch *engineType {
+	case "wiredtiger":
+		_ = os.RemoveAll(*dataDir)
+		eng = wiredtiger.New()
+		if err := eng.Open(*dataDir); err != nil {
+			fmt.Printf("WiredTiger Open failed (%v), falling back to memengine\n", err)
+			eng = memengine.New()
+			_ = eng.Open("")
+		}
+	case "memory":
+		eng = memengine.New()
+		_ = eng.Open("")
+	default:
+		eng = memengine.New()
+		_ = eng.Open("")
+	}
+	defer func() {
+		eng.Close()
+		if *engineType == "wiredtiger" {
+			_ = os.RemoveAll(*dataDir)
+		}
+	}()
 
 	_ = eng.CreateTable(&storage.TableSchema{
 		Name: "accounts",
