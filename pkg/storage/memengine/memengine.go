@@ -1,7 +1,10 @@
 package memengine
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"sync"
 
@@ -10,17 +13,17 @@ import (
 
 // TableData stores rows in memory for a single table.
 type TableData struct {
-	Schema storage.TableSchema
-	// Rows maps string representation of PK Value to Record
-	Rows map[string]storage.Record
-	Keys []string
+	Schema storage.TableSchema        `json:"schema"`
+	Rows   map[string]storage.Record `json:"rows"`
+	Keys   []string                  `json:"keys"`
 }
 
-// Engine implements storage.Engine in pure Go for memory-backed operation and testing.
+// Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence.
 type Engine struct {
-	mu     sync.RWMutex
-	tables map[string]*TableData
-	closed bool
+	mu      sync.RWMutex
+	dataDir string
+	tables  map[string]*TableData
+	closed  bool
 }
 
 // New creates a new in-memory storage engine.
@@ -33,15 +36,64 @@ func New() *Engine {
 func (e *Engine) Open(dir string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
 	e.closed = false
+	if dir != "" {
+		e.dataDir = filepath.Clean(dir)
+		if err := os.MkdirAll(e.dataDir, 0755); err != nil {
+			return fmt.Errorf("failed to create data directory: %w", err)
+		}
+		e.loadDiskLocked()
+	}
 	return nil
 }
 
 func (e *Engine) Close() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	if e.closed {
+		return nil
+	}
 	e.closed = true
+	if e.dataDir != "" {
+		_ = e.saveDiskLocked()
+	}
 	return nil
+}
+
+func (e *Engine) saveDiskLocked() error {
+	if e.dataDir == "" {
+		return nil
+	}
+	data, err := json.MarshalIndent(e.tables, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	tmpFile := filepath.Join(e.dataDir, "tables.json.tmp")
+	targetFile := filepath.Join(e.dataDir, "tables.json")
+
+	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpFile, targetFile)
+}
+
+func (e *Engine) loadDiskLocked() {
+	if e.dataDir == "" {
+		return
+	}
+	targetFile := filepath.Join(e.dataDir, "tables.json")
+	data, err := os.ReadFile(targetFile)
+	if err != nil {
+		return
+	}
+
+	var loaded map[string]*TableData
+	if err := json.Unmarshal(data, &loaded); err == nil && loaded != nil {
+		e.tables = loaded
+	}
 }
 
 func (e *Engine) CreateTable(schema *storage.TableSchema) error {
@@ -62,6 +114,9 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		Rows:   make(map[string]storage.Record),
 		Keys:   make([]string, 0),
 	}
+	if e.dataDir != "" {
+		_ = e.saveDiskLocked()
+	}
 	return nil
 }
 
@@ -73,6 +128,9 @@ func (e *Engine) DropTable(tableName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 	delete(e.tables, tableName)
+	if e.dataDir != "" {
+		_ = e.saveDiskLocked()
+	}
 	return nil
 }
 
@@ -399,6 +457,10 @@ func (tx *Transaction) Commit() error {
 		case changeDelete:
 			delete(td.Rows, ch.key)
 		}
+	}
+
+	if tx.engine.dataDir != "" {
+		_ = tx.engine.saveDiskLocked()
 	}
 
 	return nil
