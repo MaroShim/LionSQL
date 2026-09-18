@@ -122,6 +122,27 @@ func transpileStmt(stmt Statement, indentLevel int) (string, error) {
 	case *RaiseErrorStmt:
 		return fmt.Sprintf("%sthrow new Error(%q);\n", indent, s.Message), nil
 
+	case *ThrowStmt:
+		return fmt.Sprintf("%sthrow new Error(%q);\n", indent, s.Message), nil
+
+	case *TryCatchStmt:
+		tryJS, err := transpileStmt(s.TryBody, indentLevel+1)
+		if err != nil {
+			return "", err
+		}
+		catchJS, err := transpileStmt(s.CatchBody, indentLevel+1)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%stry {\n%s%s} catch (_err) {\n%s%s}\n",
+			indent, tryJS, indent, catchJS, indent), nil
+
+	case *BreakStmt:
+		return fmt.Sprintf("%sbreak;\n", indent), nil
+
+	case *ContinueStmt:
+		return fmt.Sprintf("%scontinue;\n", indent), nil
+
 	case *TxStmt:
 		switch s.Action {
 		case TxBegin:
@@ -213,6 +234,19 @@ func containsColRef(expr Expr) bool {
 		return containsColRef(e.Expr)
 	case *BinaryExpr:
 		return containsColRef(e.Left) || containsColRef(e.Right)
+	case *CaseExpr:
+		for _, w := range e.Whens {
+			if containsColRef(w.Condition) || containsColRef(w.Result) {
+				return true
+			}
+		}
+		return containsColRef(e.Else)
+	case *FunctionCallExpr:
+		for _, a := range e.Args {
+			if containsColRef(a) {
+				return true
+			}
+		}
 	}
 	return false
 }
@@ -251,6 +285,85 @@ func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 			return fmt.Sprintf("%s[%q]", rowScope, e.Name), nil
 		}
 		return fmt.Sprintf("row[%q]", e.Name), nil
+
+	case *CaseExpr:
+		elseJS := "null"
+		if e.Else != nil {
+			var err error
+			elseJS, err = transpileExprWithScope(e.Else, rowScope)
+			if err != nil {
+				return "", err
+			}
+		}
+		res := elseJS
+		for i := len(e.Whens) - 1; i >= 0; i-- {
+			w := e.Whens[i]
+			condJS, err := transpileExprWithScope(w.Condition, rowScope)
+			if err != nil {
+				return "", err
+			}
+			valJS, err := transpileExprWithScope(w.Result, rowScope)
+			if err != nil {
+				return "", err
+			}
+			res = fmt.Sprintf("((%s) ? (%s) : (%s))", condJS, valJS, res)
+		}
+		return res, nil
+
+	case *FunctionCallExpr:
+		switch strings.ToUpper(e.Name) {
+		case "ISNULL":
+			if len(e.Args) >= 2 {
+				aJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				bJS, _ := transpileExprWithScope(e.Args[1], rowScope)
+				return fmt.Sprintf("((%s !== null && %s !== undefined) ? (%s) : (%s))", aJS, aJS, aJS, bJS), nil
+			}
+		case "COALESCE":
+			if len(e.Args) == 0 {
+				return "null", nil
+			}
+			res := "null"
+			for i := len(e.Args) - 1; i >= 0; i-- {
+				argJS, _ := transpileExprWithScope(e.Args[i], rowScope)
+				if i == len(e.Args)-1 {
+					res = argJS
+				} else {
+					res = fmt.Sprintf("((%s !== null && %s !== undefined) ? (%s) : (%s))", argJS, argJS, argJS, res)
+				}
+			}
+			return res, nil
+		case "GETDATE", "NOW":
+			return "new Date().toISOString()", nil
+		case "LEN", "LENGTH":
+			if len(e.Args) >= 1 {
+				argJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				return fmt.Sprintf("(%s ? String(%s).length : 0)", argJS, argJS), nil
+			}
+		case "SUBSTRING":
+			if len(e.Args) >= 3 {
+				strJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				startJS, _ := transpileExprWithScope(e.Args[1], rowScope)
+				lenJS, _ := transpileExprWithScope(e.Args[2], rowScope)
+				return fmt.Sprintf("(%s ? String(%s).substring((%s) - 1, (%s) - 1 + (%s)) : \"\")", strJS, strJS, startJS, startJS, lenJS), nil
+			}
+		case "REPLACE":
+			if len(e.Args) >= 3 {
+				strJS, _ := transpileExprWithScope(e.Args[0], rowScope)
+				fromJS, _ := transpileExprWithScope(e.Args[1], rowScope)
+				toJS, _ := transpileExprWithScope(e.Args[2], rowScope)
+				return fmt.Sprintf("(%s ? String(%s).split(%s).join(%s) : \"\")", strJS, strJS, fromJS, toJS), nil
+			}
+		}
+
+		argStrs := make([]string, len(e.Args))
+		for i, a := range e.Args {
+			s, err := transpileExprWithScope(a, rowScope)
+			if err != nil {
+				return "", err
+			}
+			argStrs[i] = s
+		}
+		return fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", ")), nil
 
 	case *UnaryExpr:
 		subJS, err := transpileExprWithScope(e.Expr, rowScope)

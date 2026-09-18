@@ -65,6 +65,17 @@ const (
 	TokenAnd
 	TokenOr
 	TokenNot
+	TokenTry
+	TokenCatch
+	TokenCase
+	TokenWhen
+	TokenThen
+	TokenThrow
+	TokenIsNull
+	TokenCoalesce
+	TokenNull
+	TokenBreak
+	TokenContinue
 )
 
 var keywords = map[string]TokenType{
@@ -99,6 +110,17 @@ var keywords = map[string]TokenType{
 	"AND":         TokenAnd,
 	"OR":          TokenOr,
 	"NOT":         TokenNot,
+	"TRY":         TokenTry,
+	"CATCH":       TokenCatch,
+	"CASE":        TokenCase,
+	"WHEN":        TokenWhen,
+	"THEN":        TokenThen,
+	"THROW":       TokenThrow,
+	"ISNULL":      TokenIsNull,
+	"COALESCE":    TokenCoalesce,
+	"NULL":        TokenNull,
+	"BREAK":       TokenBreak,
+	"CONTINUE":    TokenContinue,
 	"TRUE":        TokenBool,
 	"FALSE":       TokenBool,
 }

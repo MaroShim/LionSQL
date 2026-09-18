@@ -1,9 +1,11 @@
 package runtime_test
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 
+	"sqltiger/pkg/proc"
 	"sqltiger/pkg/proc/runtime"
 	"sqltiger/pkg/storage"
 	"sqltiger/pkg/storage/memengine"
@@ -209,5 +211,79 @@ function RegisterUser(params, db) {
 		if rec["balance"].IVal != expectedDeposit {
 			t.Errorf("account %d: expected balance %d, got %d", accID, expectedDeposit, rec["balance"].IVal)
 		}
+	}
+}
+
+func TestGoja_EndToEndTSqlTryCatchAndCase(t *testing.T) {
+	eng := setupTestDB(t)
+	defer eng.Close()
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	// T-SQL script using DECLARE, ISNULL, CASE WHEN, and UPDATE with Column References
+	tsqlScript := `
+CREATE PROCEDURE ProcessBonus
+    @id INT,
+    @tier VARCHAR(10)
+AS
+BEGIN
+    DECLARE @bonus_amount INT;
+    DECLARE @clean_tier VARCHAR(10);
+    SET @clean_tier = ISNULL(@tier, 'STANDARD');
+    SET @bonus_amount = CASE 
+        WHEN @clean_tier = 'VIP' THEN 500
+        WHEN @clean_tier = 'GOLD' THEN 200
+        ELSE 50
+    END;
+
+    UPDATE accounts SET balance = balance + @bonus_amount WHERE id = @id;
+    PRINT 'Bonus applied successfully';
+    RETURN @bonus_amount;
+END;
+`
+	lexer := proc.NewLexer(tsqlScript)
+	parser := proc.NewParser(lexer)
+	plan, err := parser.ParseProcedure()
+	if err != nil {
+		t.Fatalf("ParseProcedure failed: %v", err)
+	}
+
+	jsCode, err := proc.Transpile(plan)
+	if err != nil {
+		t.Fatalf("Transpile failed: %v", err)
+	}
+
+	cache := runtime.NewPlanCache()
+	prog, err := cache.GetOrCompile(jsCode)
+	if err != nil {
+		t.Fatalf("GetOrCompile failed: %v", err)
+	}
+
+	executor := runtime.NewExecutor(cache)
+
+	// Execute for Alice (ID 1, balance 1000) with VIP tier -> should get +500 => 1500
+	res, err := executor.Run(prog, "ProcessBonus", map[string]any{
+		"id":   1,
+		"tier": "VIP",
+	}, session)
+	if err != nil {
+		t.Fatalf("ProcessBonus failed: %v", err)
+	}
+
+	if fmt.Sprintf("%v", res.ReturnValue) != "500" {
+		t.Errorf("expected return value 500, got %v", res.ReturnValue)
+	}
+
+	// Verify balance committed to 1500
+	txCheck, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	alice, _ := txCheck.Get("accounts", storage.IntValue(1))
+	_ = txCheck.Rollback()
+
+	if alice["balance"].IVal != 1500 {
+		t.Errorf("expected Alice balance 1500, got %d", alice["balance"].IVal)
 	}
 }

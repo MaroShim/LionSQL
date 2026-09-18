@@ -115,6 +115,17 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 		params = append(params, ParamDef{Name: paramName, Type: paramType})
 		p.nextToken()
 
+		// Skip optional (length) e.g. VARCHAR(50)
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken()
+			if p.curTokenIs(TokenInt) {
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken()
+			}
+		}
+
 		if p.curTokenIs(TokenComma) {
 			p.nextToken()
 		}
@@ -157,6 +168,9 @@ func parseDataType(s string) storage.DataType {
 func (p *Parser) parseStatement() (Statement, error) {
 	switch p.curToken.Type {
 	case TokenBegin:
+		if p.peekTokenIs(TokenTry) {
+			return p.parseTryCatch()
+		}
 		if p.peekTokenIs(TokenTransaction) || p.peekTokenIs(TokenTran) {
 			return p.parseTx()
 		}
@@ -175,6 +189,20 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parsePrint()
 	case TokenRaiserror:
 		return p.parseRaiserror()
+	case TokenThrow:
+		return p.parseThrow()
+	case TokenBreak:
+		p.nextToken()
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		return &BreakStmt{}, nil
+	case TokenContinue:
+		p.nextToken()
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		return &ContinueStmt{}, nil
 	case TokenCommit, TokenRollback:
 		return p.parseTx()
 	case TokenSelect:
@@ -191,6 +219,110 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return nil, fmt.Errorf("unexpected token in statement: %s at %d:%d",
 			p.curToken.Literal, p.curToken.Line, p.curToken.Col)
 	}
+}
+
+func (p *Parser) parseTryCatch() (Statement, error) {
+	p.nextToken() // eat BEGIN
+	p.nextToken() // eat TRY
+
+	var tryStmts []Statement
+	for !p.curTokenIs(TokenEnd) && !p.curTokenIs(TokenEOF) {
+		stmt, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		if stmt != nil {
+			tryStmts = append(tryStmts, stmt)
+		}
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+	}
+
+	if !p.curTokenIs(TokenEnd) {
+		return nil, fmt.Errorf("expected END TRY, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat END
+	if !p.curTokenIs(TokenTry) {
+		return nil, fmt.Errorf("expected TRY after END, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat TRY
+
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	if !p.curTokenIs(TokenBegin) {
+		return nil, fmt.Errorf("expected BEGIN CATCH, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat BEGIN
+	if !p.curTokenIs(TokenCatch) {
+		return nil, fmt.Errorf("expected CATCH after BEGIN, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat CATCH
+
+	var catchStmts []Statement
+	for !p.curTokenIs(TokenEnd) && !p.curTokenIs(TokenEOF) {
+		stmt, err := p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		if stmt != nil {
+			catchStmts = append(catchStmts, stmt)
+		}
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+	}
+
+	if !p.curTokenIs(TokenEnd) {
+		return nil, fmt.Errorf("expected END CATCH, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat END
+	if !p.curTokenIs(TokenCatch) {
+		return nil, fmt.Errorf("expected CATCH after END, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat CATCH
+
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &TryCatchStmt{
+		TryBody:   &BlockStmt{Statements: tryStmts},
+		CatchBody: &BlockStmt{Statements: catchStmts},
+	}, nil
+}
+
+func (p *Parser) parseThrow() (Statement, error) {
+	p.nextToken() // eat THROW
+	msg := "An error occurred"
+
+	if p.curTokenIs(TokenInt) {
+		p.nextToken() // eat errNum
+		if p.curTokenIs(TokenComma) {
+			p.nextToken() // eat comma
+			if p.curTokenIs(TokenString) {
+				msg = p.curToken.Literal
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+				if p.curTokenIs(TokenInt) {
+					p.nextToken()
+				}
+			}
+		}
+	} else if p.curTokenIs(TokenString) {
+		msg = p.curToken.Literal
+		p.nextToken()
+	}
+
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &ThrowStmt{Message: msg}, nil
 }
 
 func (p *Parser) parseBlock() (Statement, error) {
@@ -220,23 +352,49 @@ func (p *Parser) parseBlock() (Statement, error) {
 
 func (p *Parser) parseDeclare() (Statement, error) {
 	p.nextToken() // eat DECLARE
-	if !p.curTokenIs(TokenVariable) {
-		return nil, fmt.Errorf("expected variable name in DECLARE, got %s", p.curToken.Literal)
-	}
-	varName := p.curToken.Literal
-	p.nextToken()
+	var stmts []Statement
 
-	if !p.curTokenIs(TokenIdent) {
-		return nil, fmt.Errorf("expected data type for %s, got %s", varName, p.curToken.Literal)
+	for {
+		if !p.curTokenIs(TokenVariable) {
+			return nil, fmt.Errorf("expected variable name in DECLARE, got %s", p.curToken.Literal)
+		}
+		varName := p.curToken.Literal
+		p.nextToken()
+
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected data type for %s, got %s", varName, p.curToken.Literal)
+		}
+		dt := parseDataType(p.curToken.Literal)
+		p.nextToken()
+
+		// Skip optional (length) e.g. VARCHAR(50)
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken()
+			if p.curTokenIs(TokenInt) {
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken()
+			}
+		}
+
+		stmts = append(stmts, &DeclareStmt{Name: varName, Type: dt})
+
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
 	}
-	dt := parseDataType(p.curToken.Literal)
-	p.nextToken()
 
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
 
-	return &DeclareStmt{Name: varName, Type: dt}, nil
+	if len(stmts) == 1 {
+		return stmts[0], nil
+	}
+	return &BlockStmt{Statements: stmts}, nil
 }
 
 func (p *Parser) parseSet() (Statement, error) {
@@ -709,14 +867,30 @@ func (p *Parser) parsePrefix() Expr {
 		expr := &LiteralExpr{Val: storage.BoolValue(val)}
 		p.nextToken()
 		return expr
+	case TokenNull:
+		expr := &LiteralExpr{Val: storage.NullValue(storage.TypeUnknown)}
+		p.nextToken()
+		return expr
+	case TokenCase:
+		return p.parseCase()
+	case TokenIsNull, TokenCoalesce:
+		funcName := p.curToken.Literal
+		p.nextToken()
+		if p.curTokenIs(TokenLParen) {
+			return p.parseFunctionCall(funcName)
+		}
+		return &ColumnRefExpr{Name: funcName}
 	case TokenVariable:
 		expr := &VariableExpr{Name: p.curToken.Literal}
 		p.nextToken()
 		return expr
 	case TokenIdent:
-		expr := &ColumnRefExpr{Name: p.curToken.Literal}
+		ident := p.curToken.Literal
 		p.nextToken()
-		return expr
+		if p.curTokenIs(TokenLParen) {
+			return p.parseFunctionCall(ident)
+		}
+		return &ColumnRefExpr{Name: ident}
 	case TokenMinus:
 		p.nextToken()
 		right := p.parseExpression(precPrefix)
@@ -736,5 +910,67 @@ func (p *Parser) parsePrefix() Expr {
 		return exp
 	default:
 		return nil
+	}
+}
+
+func (p *Parser) parseCase() Expr {
+	p.nextToken() // eat CASE
+	var whens []CaseWhen
+
+	for p.curTokenIs(TokenWhen) {
+		p.nextToken() // eat WHEN
+		cond := p.parseExpression(precLowest)
+		if cond == nil || !p.curTokenIs(TokenThen) {
+			return nil
+		}
+		p.nextToken() // eat THEN
+		res := p.parseExpression(precLowest)
+		if res == nil {
+			return nil
+		}
+		whens = append(whens, CaseWhen{Condition: cond, Result: res})
+	}
+
+	var elseExpr Expr
+	if p.curTokenIs(TokenElse) {
+		p.nextToken() // eat ELSE
+		elseExpr = p.parseExpression(precLowest)
+	}
+
+	if !p.curTokenIs(TokenEnd) {
+		return nil
+	}
+	p.nextToken() // eat END
+
+	return &CaseExpr{
+		Whens: whens,
+		Else:  elseExpr,
+	}
+}
+
+func (p *Parser) parseFunctionCall(name string) Expr {
+	p.nextToken() // eat (
+	var args []Expr
+
+	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+		arg := p.parseExpression(precLowest)
+		if arg != nil {
+			args = append(args, arg)
+		}
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	if !p.curTokenIs(TokenRParen) {
+		return nil
+	}
+	p.nextToken() // eat )
+
+	return &FunctionCallExpr{
+		Name: strings.ToUpper(name),
+		Args: args,
 	}
 }

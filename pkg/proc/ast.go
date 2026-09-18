@@ -298,3 +298,78 @@ func (s *ExecStmt) String() string {
 	}
 	return fmt.Sprintf("EXEC %s %s", s.ProcName, strings.Join(argStrs, ", "))
 }
+
+// TryCatchStmt represents BEGIN TRY ... END TRY BEGIN CATCH ... END CATCH
+type TryCatchStmt struct {
+	TryBody   Statement
+	CatchBody Statement
+}
+
+func (s *TryCatchStmt) stmtNode() {}
+func (s *TryCatchStmt) String() string {
+	return fmt.Sprintf("BEGIN TRY\n%s\nEND TRY\nBEGIN CATCH\n%s\nEND CATCH", s.TryBody.String(), s.CatchBody.String())
+}
+
+// ThrowStmt represents THROW 50000, 'msg', 1
+type ThrowStmt struct {
+	Message string
+}
+
+func (s *ThrowStmt) stmtNode() {}
+func (s *ThrowStmt) String() string {
+	return fmt.Sprintf("THROW 50000, %q, 1", s.Message)
+}
+
+// BreakStmt represents BREAK
+type BreakStmt struct{}
+
+func (s *BreakStmt) stmtNode() {}
+func (s *BreakStmt) String() string { return "BREAK" }
+
+// ContinueStmt represents CONTINUE
+type ContinueStmt struct{}
+
+func (s *ContinueStmt) stmtNode() {}
+func (s *ContinueStmt) String() string { return "CONTINUE" }
+
+// CaseWhen represents a single WHEN cond THEN result arm
+type CaseWhen struct {
+	Condition Expr
+	Result    Expr
+}
+
+// CaseExpr represents CASE WHEN ... THEN ... [ELSE ...] END
+type CaseExpr struct {
+	Whens []CaseWhen
+	Else  Expr
+}
+
+func (e *CaseExpr) exprNode() {}
+func (e *CaseExpr) String() string {
+	var b strings.Builder
+	b.WriteString("CASE")
+	for _, w := range e.Whens {
+		b.WriteString(fmt.Sprintf(" WHEN %s THEN %s", w.Condition.String(), w.Result.String()))
+	}
+	if e.Else != nil {
+		b.WriteString(fmt.Sprintf(" ELSE %s", e.Else.String()))
+	}
+	b.WriteString(" END")
+	return b.String()
+}
+
+// FunctionCallExpr represents scalar functions like ISNULL, COALESCE, GETDATE, LEN, SUBSTRING, etc.
+type FunctionCallExpr struct {
+	Name string
+	Args []Expr
+}
+
+func (e *FunctionCallExpr) exprNode() {}
+func (e *FunctionCallExpr) String() string {
+	argStrs := make([]string, len(e.Args))
+	for i, a := range e.Args {
+		argStrs[i] = a.String()
+	}
+	return fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", "))
+}
+
