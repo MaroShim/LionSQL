@@ -27,7 +27,36 @@ func main() {
 	dataDir := flag.String("dir", "data", "Data directory for database files")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
+
+	// Daemon control flags
+	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
+	daemonLongFlag := flag.Bool("daemon", false, "Run SQLion server as background daemon")
+	stopFlag := flag.Bool("stop", false, "Stop running SQLion daemon")
+	statusFlag := flag.Bool("status", false, "Check status of running SQLion daemon")
+	restartFlag := flag.Bool("restart", false, "Restart SQLion daemon")
+	pidFile := flag.String("pidfile", "", "Path to PID file (default: <dir>/sqlion.pid)")
+	logFile := flag.String("logfile", "", "Path to log file (default: <dir>/sqlion.log)")
+	isChildWorker := flag.Bool("is-child-worker", false, "Internal flag for daemon worker child")
+
 	flag.Parse()
+
+	// Handle daemon commands if not running as internal worker
+	if !*isChildWorker {
+		if handleDaemonCommands(
+			*daemonFlag || *daemonLongFlag,
+			*stopFlag,
+			*statusFlag,
+			*restartFlag,
+			*dataDir,
+			*pidFile,
+			*logFile,
+			*httpAddr,
+			*pgAddr,
+			*engineType,
+		) {
+			return
+		}
+	}
 
 	log.Printf("[SQLion] Initializing database server...")
 	log.Printf("[SQLion] Storage backend selected: %s", *engineType)
@@ -100,15 +129,16 @@ func main() {
 	<-stop
 	log.Println("\n[SQLion] Initiating graceful shutdown...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	_ = wireServer.Close()
-	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("[SQLion] HTTP server forced shutdown: %v", err)
-	}
+	_ = httpServer.Shutdown(ctx)
+	_ = httpServer.Close()
+	_ = eng.Close()
 
 	log.Println("[SQLion] Server stopped cleanly.")
+	os.Exit(0)
 }
 
 func seedSampleAccounts(eng storage.Engine) {
