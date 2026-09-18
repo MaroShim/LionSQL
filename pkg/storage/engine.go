@@ -91,7 +91,7 @@ type Value struct {
 }
 
 func IntValue(v int64) Value {
-	return Value{Type: TypeInt, IVal: v}
+	return Value{Type: TypeInt, IVal: v, FVal: float64(v)}
 }
 
 func StringValue(v string) Value {
@@ -99,7 +99,7 @@ func StringValue(v string) Value {
 }
 
 func FloatValue(v float64) Value {
-	return Value{Type: TypeFloat, FVal: v}
+	return Value{Type: TypeFloat, FVal: v, IVal: int64(v)}
 }
 
 func BoolValue(v bool) Value {

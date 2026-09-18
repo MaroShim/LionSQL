@@ -476,7 +476,7 @@ func toStorageValue(v any) storage.Value {
 		return storage.IntValue(int64(val))
 	case float64:
 		if val == float64(int64(val)) {
-			return storage.IntValue(int64(val))
+			return storage.Value{Type: storage.TypeInt, IVal: int64(val), FVal: val}
 		}
 		return storage.FloatValue(val)
 	case string:
