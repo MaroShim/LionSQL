@@ -7,14 +7,15 @@ import (
 )
 
 var (
-	ErrTableNotFound    = errors.New("table not found")
-	ErrTableExists      = errors.New("table already exists")
-	ErrKeyNotFound      = errors.New("key not found")
-	ErrKeyExists        = errors.New("key already exists (primary key constraint)")
-	ErrTxClosed         = errors.New("transaction is already closed")
-	ErrColumnNotFound   = errors.New("column not found")
-	ErrInvalidDataType  = errors.New("invalid data type for column")
-	ErrNotNullViolation = errors.New("not null constraint violation")
+	ErrTableNotFound         = errors.New("table not found")
+	ErrTableExists           = errors.New("table already exists")
+	ErrKeyNotFound           = errors.New("key not found")
+	ErrKeyExists             = errors.New("key already exists (primary key constraint)")
+	ErrTxClosed              = errors.New("transaction is already closed")
+	ErrColumnNotFound        = errors.New("column not found")
+	ErrInvalidDataType       = errors.New("invalid data type for column")
+	ErrNotNullViolation      = errors.New("not null constraint violation")
+	ErrSerializationFailure  = errors.New("serialization failure: concurrent update conflict")
 )
 
 // DataType represents the column data type.

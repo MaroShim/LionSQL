@@ -11,11 +11,12 @@ import (
 	"sqlion/pkg/storage"
 )
 
-// TableData stores rows in memory for a single table.
+// TableData stores rows in memory for a single table with OCC version tracking.
 type TableData struct {
-	Schema storage.TableSchema        `json:"schema"`
-	Rows   map[string]storage.Record `json:"rows"`
-	Keys   []string                  `json:"keys"`
+	Schema   storage.TableSchema        `json:"schema"`
+	Rows     map[string]storage.Record `json:"rows"`
+	Versions map[string]int64           `json:"versions"`
+	Keys     []string                  `json:"keys"`
 }
 
 // Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence.
@@ -93,6 +94,14 @@ func (e *Engine) loadDiskLocked() {
 	var loaded map[string]*TableData
 	if err := json.Unmarshal(data, &loaded); err == nil && loaded != nil {
 		e.tables = loaded
+		for _, td := range e.tables {
+			if td.Versions == nil {
+				td.Versions = make(map[string]int64)
+				for k := range td.Rows {
+					td.Versions[k] = 1
+				}
+			}
+		}
 	}
 }
 
@@ -104,15 +113,15 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableExists, schema.Name)
 	}
 
-	// Validate that primary key exists
 	if _, err := schema.PrimaryKeyColumn(); err != nil {
 		return err
 	}
 
 	e.tables[schema.Name] = &TableData{
-		Schema: *schema,
-		Rows:   make(map[string]storage.Record),
-		Keys:   make([]string, 0),
+		Schema:   *schema,
+		Rows:     make(map[string]storage.Record),
+		Versions: make(map[string]int64),
+		Keys:     make([]string, 0),
 	}
 	if e.dataDir != "" {
 		_ = e.saveDiskLocked()
@@ -183,24 +192,13 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 		return nil, fmt.Errorf("engine is closed")
 	}
 
-	// Create snapshot of tables for transaction isolation
-	snapshot := make(map[string]map[string]storage.Record)
-	for tName, td := range s.engine.tables {
-		tableCopy := make(map[string]storage.Record, len(td.Rows))
-		for k, v := range td.Rows {
-			recCopy := make(storage.Record, len(v))
-			for col, val := range v {
-				recCopy[col] = val
-			}
-			tableCopy[k] = recCopy
-		}
-		snapshot[tName] = tableCopy
-	}
-
 	return &Transaction{
 		engine:   s.engine,
 		opts:     opts,
-		snapshot: snapshot,
+		local:    make(map[string]map[string]storage.Record),
+		baseVers: make(map[string]map[string]int64),
+		deleted:  make(map[string]map[string]bool),
+		changes:  make(map[string]rowChange),
 	}, nil
 }
 
@@ -217,19 +215,22 @@ const (
 )
 
 type rowChange struct {
-	kind  changeType
-	table string
-	key   string
-	rec   storage.Record
+	kind    changeType
+	table   string
+	key     string
+	baseVer int64
+	rec     storage.Record
 }
 
-// Transaction handles ACID mutations with rollback/commit support.
+// Transaction handles copy-on-write delta mutations with zero start overhead, OCC validation, and atomic commit.
 type Transaction struct {
 	mu       sync.Mutex
 	engine   *Engine
 	opts     storage.TxOptions
-	snapshot map[string]map[string]storage.Record
-	changes  []rowChange
+	local    map[string]map[string]storage.Record // tableName -> key -> record
+	baseVers map[string]map[string]int64          // tableName -> key -> baseVersion
+	deleted  map[string]map[string]bool           // tableName -> key -> bool
+	changes  map[string]rowChange                 // "table:key" -> rowChange
 	closed   bool
 }
 
@@ -264,14 +265,21 @@ func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 	}
 
 	pkKey := pkVal.String()
-	tableRows, ok := tx.snapshot[tableName]
-	if !ok {
-		tableRows = make(map[string]storage.Record)
-		tx.snapshot[tableName] = tableRows
-	}
 
-	if _, exists := tableRows[pkKey]; exists {
+	// Check if key exists in local writes or engine
+	if tx.isLocallyDeleted(tableName, pkKey) {
+		// Was deleted locally, so insert is allowed
+	} else if _, inLocal := tx.getLocal(tableName, pkKey); inLocal {
 		return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, tableName)
+	} else {
+		tx.engine.mu.RLock()
+		if td, ok := tx.engine.tables[tableName]; ok {
+			if _, inEngine := td.Rows[pkKey]; inEngine {
+				tx.engine.mu.RUnlock()
+				return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, tableName)
+			}
+		}
+		tx.engine.mu.RUnlock()
 	}
 
 	// Validate columns and types
@@ -289,18 +297,18 @@ func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 		}
 	}
 
-	recCopy := make(storage.Record, len(record))
-	for k, v := range record {
-		recCopy[k] = v
-	}
+	recCopy := cloneRecord(record)
+	tx.putLocal(tableName, pkKey, recCopy, 0)
+	tx.unmarkDeleted(tableName, pkKey)
 
-	tableRows[pkKey] = recCopy
-	tx.changes = append(tx.changes, rowChange{
-		kind:  changeInsert,
-		table: tableName,
-		key:   pkKey,
-		rec:   recCopy,
-	})
+	changeKey := tableName + ":" + pkKey
+	tx.changes[changeKey] = rowChange{
+		kind:    changeInsert,
+		table:   tableName,
+		key:     pkKey,
+		baseVer: 0,
+		rec:     recCopy,
+	}
 
 	return nil
 }
@@ -316,28 +324,30 @@ func (tx *Transaction) Update(tableName string, pk storage.Value, record storage
 		return fmt.Errorf("cannot update in read-only transaction")
 	}
 
-	tableRows, ok := tx.snapshot[tableName]
-	if !ok {
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
-	}
-
 	pkKey := pk.String()
-	existing, exists := tableRows[pkKey]
-	if !exists {
-		return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey)
+	if err != nil {
+		return err
 	}
 
-	// Merge updates into existing record
+	tx.setBaseVer(tableName, pkKey, ver)
+	originalBaseVer := tx.getBaseVer(tableName, pkKey)
+
 	for col, val := range record {
-		existing[col] = val
+		base[col] = val
 	}
 
-	tx.changes = append(tx.changes, rowChange{
-		kind:  changeUpdate,
-		table: tableName,
-		key:   pkKey,
-		rec:   existing,
-	})
+	tx.putLocal(tableName, pkKey, base, originalBaseVer)
+	tx.unmarkDeleted(tableName, pkKey)
+
+	changeKey := tableName + ":" + pkKey
+	tx.changes[changeKey] = rowChange{
+		kind:    changeUpdate,
+		table:   tableName,
+		key:     pkKey,
+		baseVer: originalBaseVer,
+		rec:     base,
+	}
 
 	return nil
 }
@@ -353,22 +363,25 @@ func (tx *Transaction) Delete(tableName string, pk storage.Value) error {
 		return fmt.Errorf("cannot delete in read-only transaction")
 	}
 
-	tableRows, ok := tx.snapshot[tableName]
-	if !ok {
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
-	}
-
 	pkKey := pk.String()
-	if _, exists := tableRows[pkKey]; !exists {
-		return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+	_, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey)
+	if err != nil {
+		return err
 	}
 
-	delete(tableRows, pkKey)
-	tx.changes = append(tx.changes, rowChange{
-		kind:  changeDelete,
-		table: tableName,
-		key:   pkKey,
-	})
+	tx.setBaseVer(tableName, pkKey, ver)
+	originalBaseVer := tx.getBaseVer(tableName, pkKey)
+
+	tx.removeLocal(tableName, pkKey)
+	tx.markDeleted(tableName, pkKey)
+
+	changeKey := tableName + ":" + pkKey
+	tx.changes[changeKey] = rowChange{
+		kind:    changeDelete,
+		table:   tableName,
+		key:     pkKey,
+		baseVer: originalBaseVer,
+	}
 
 	return nil
 }
@@ -381,22 +394,39 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 		return nil, storage.ErrTxClosed
 	}
 
-	tableRows, ok := tx.snapshot[tableName]
-	if !ok {
-		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
-	}
-
 	pkKey := pk.String()
-	rec, exists := tableRows[pkKey]
-	if !exists {
-		return nil, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+	rec, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey)
+	if err == nil {
+		tx.setBaseVer(tableName, pkKey, ver)
+	}
+	return rec, err
+}
+
+func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string) (storage.Record, int64, error) {
+	if tx.isLocallyDeleted(tableName, pkKey) {
+		return nil, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
 	}
 
-	res := make(storage.Record, len(rec))
-	for k, v := range rec {
-		res[k] = v
+	if rec, found := tx.getLocal(tableName, pkKey); found {
+		ver := tx.getBaseVer(tableName, pkKey)
+		return cloneRecord(rec), ver, nil
 	}
-	return res, nil
+
+	tx.engine.mu.RLock()
+	defer tx.engine.mu.RUnlock()
+
+	td, exists := tx.engine.tables[tableName]
+	if !exists {
+		return nil, 0, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	rec, exists := td.Rows[pkKey]
+	if !exists {
+		return nil, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+	}
+
+	ver := td.Versions[pkKey]
+	return cloneRecord(rec), ver, nil
 }
 
 func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
@@ -407,20 +437,38 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 		return nil, storage.ErrTxClosed
 	}
 
-	tableRows, ok := tx.snapshot[tableName]
-	if !ok {
+	tx.engine.mu.RLock()
+	td, exists := tx.engine.tables[tableName]
+	if !exists {
+		tx.engine.mu.RUnlock()
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
-	keys := make([]string, 0, len(tableRows))
-	for k := range tableRows {
+	merged := make(map[string]storage.Record, len(td.Rows))
+	for k, v := range td.Rows {
+		if !tx.isLocallyDeleted(tableName, k) {
+			merged[k] = cloneRecord(v)
+		}
+	}
+	tx.engine.mu.RUnlock()
+
+	if localRows, ok := tx.local[tableName]; ok {
+		for k, v := range localRows {
+			if !tx.isLocallyDeleted(tableName, k) {
+				merged[k] = cloneRecord(v)
+			}
+		}
+	}
+
+	keys := make([]string, 0, len(merged))
+	for k := range merged {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
 	records := make([]storage.Record, len(keys))
 	for i, k := range keys {
-		records[i] = tableRows[k]
+		records[i] = merged[k]
 	}
 
 	return &memCursor{
@@ -442,20 +490,44 @@ func (tx *Transaction) Commit() error {
 		return nil
 	}
 
-	// Apply changes to master tables under engine lock
+	// Apply changes to master tables under engine lock with OCC validation
 	tx.engine.mu.Lock()
 	defer tx.engine.mu.Unlock()
 
+	// 1. Verify OCC version conflicts
+	for _, ch := range tx.changes {
+		td, exists := tx.engine.tables[ch.table]
+		if !exists {
+			continue
+		}
+		curVer := td.Versions[ch.key]
+		if ch.kind == changeInsert {
+			if _, exists := td.Rows[ch.key]; exists {
+				return storage.ErrSerializationFailure
+			}
+		} else {
+			if curVer != ch.baseVer {
+				return storage.ErrSerializationFailure
+			}
+		}
+	}
+
+	// 2. All versions valid: apply changes atomically
 	for _, ch := range tx.changes {
 		td, exists := tx.engine.tables[ch.table]
 		if !exists {
 			continue
 		}
 		switch ch.kind {
-		case changeInsert, changeUpdate:
+		case changeInsert:
 			td.Rows[ch.key] = ch.rec
+			td.Versions[ch.key] = 1
+		case changeUpdate:
+			td.Rows[ch.key] = ch.rec
+			td.Versions[ch.key] = ch.baseVer + 1
 		case changeDelete:
 			delete(td.Rows, ch.key)
+			delete(td.Versions, ch.key)
 		}
 	}
 
@@ -475,8 +547,82 @@ func (tx *Transaction) Rollback() error {
 	}
 	tx.closed = true
 	tx.changes = nil
-	tx.snapshot = nil
+	tx.local = nil
+	tx.baseVers = nil
+	tx.deleted = nil
 	return nil
+}
+
+func (tx *Transaction) getLocal(table, key string) (storage.Record, bool) {
+	if t, ok := tx.local[table]; ok {
+		r, exists := t[key]
+		return r, exists
+	}
+	return nil, false
+}
+
+func (tx *Transaction) getBaseVer(table, key string) int64 {
+	if t, ok := tx.baseVers[table]; ok {
+		return t[key]
+	}
+	return 0
+}
+
+func (tx *Transaction) setBaseVer(table, key string, ver int64) {
+	v, ok := tx.baseVers[table]
+	if !ok {
+		v = make(map[string]int64)
+		tx.baseVers[table] = v
+	}
+	if _, has := v[key]; !has {
+		v[key] = ver
+	}
+}
+
+func (tx *Transaction) putLocal(table, key string, rec storage.Record, baseVer int64) {
+	t, ok := tx.local[table]
+	if !ok {
+		t = make(map[string]storage.Record)
+		tx.local[table] = t
+	}
+	t[key] = rec
+	tx.setBaseVer(table, key, baseVer)
+}
+
+func (tx *Transaction) removeLocal(table, key string) {
+	if t, ok := tx.local[table]; ok {
+		delete(t, key)
+	}
+}
+
+func (tx *Transaction) markDeleted(table, key string) {
+	d, ok := tx.deleted[table]
+	if !ok {
+		d = make(map[string]bool)
+		tx.deleted[table] = d
+	}
+	d[key] = true
+}
+
+func (tx *Transaction) unmarkDeleted(table, key string) {
+	if d, ok := tx.deleted[table]; ok {
+		delete(d, key)
+	}
+}
+
+func (tx *Transaction) isLocallyDeleted(table, key string) bool {
+	if d, ok := tx.deleted[table]; ok {
+		return d[key]
+	}
+	return false
+}
+
+func cloneRecord(r storage.Record) storage.Record {
+	cp := make(storage.Record, len(r))
+	for k, v := range r {
+		cp[k] = v
+	}
+	return cp
 }
 
 type memCursor struct {
