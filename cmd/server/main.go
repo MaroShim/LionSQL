@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"sqltiger/pkg/api"
-	"sqltiger/pkg/catalog"
-	"sqltiger/pkg/proc"
-	"sqltiger/pkg/storage"
-	"sqltiger/pkg/storage/memengine"
-	"sqltiger/pkg/storage/wiredtiger"
-	"sqltiger/pkg/wire"
+	"sqlion/pkg/api"
+	"sqlion/pkg/catalog"
+	"sqlion/pkg/proc"
+	"sqlion/pkg/storage"
+	"sqlion/pkg/storage/memengine"
+	"sqlion/pkg/storage/wiredtiger"
+	"sqlion/pkg/wire"
 )
 
 func main() {
@@ -29,8 +29,8 @@ func main() {
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
 	flag.Parse()
 
-	log.Printf("[SqlTiger] Initializing database server...")
-	log.Printf("[SqlTiger] Storage backend selected: %s", *engineType)
+	log.Printf("[SQLion] Initializing database server...")
+	log.Printf("[SQLion] Storage backend selected: %s", *engineType)
 
 	var eng storage.Engine
 	switch *engineType {
@@ -75,7 +75,7 @@ func main() {
 
 	go func() {
 		fmt.Println("------------------------------------------------------------")
-		fmt.Println(" SqlTiger - High-Concurrency OLTP & Stored Procedure Server")
+		fmt.Println(" SQLion - High-Concurrency OLTP & Stored Procedure Server")
 		fmt.Println("------------------------------------------------------------")
 		fmt.Printf(" [Web Dashboard]  http://%s/_/\n", *httpAddr)
 		fmt.Printf(" [HTTP API]       http://%s/api/health\n", *httpAddr)
@@ -91,17 +91,17 @@ func main() {
 	}()
 
 	<-stop
-	log.Println("\n[SqlTiger] Initiating graceful shutdown...")
+	log.Println("\n[SQLion] Initiating graceful shutdown...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	_ = wireServer.Close()
 	if err := httpServer.Shutdown(ctx); err != nil {
-		log.Printf("[SqlTiger] HTTP server forced shutdown: %v", err)
+		log.Printf("[SQLion] HTTP server forced shutdown: %v", err)
 	}
 
-	log.Println("[SqlTiger] Server stopped cleanly.")
+	log.Println("[SQLion] Server stopped cleanly.")
 }
 
 func seedSampleAccounts(eng storage.Engine) {

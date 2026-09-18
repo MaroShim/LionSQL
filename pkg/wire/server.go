@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"sqltiger/pkg/catalog"
-	"sqltiger/pkg/proc"
-	"sqltiger/pkg/proc/runtime"
-	"sqltiger/pkg/storage"
+	"sqlion/pkg/catalog"
+	"sqlion/pkg/proc"
+	"sqlion/pkg/proc/runtime"
+	"sqlion/pkg/storage"
 )
 
 // Server implements a PostgreSQL Wire Protocol v3 listener.
@@ -115,7 +115,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	if err := WriteAuthOK(conn); err != nil {
 		return
 	}
-	_ = WriteParameterStatus(conn, "server_version", "15.0 (SqlTiger)")
+	_ = WriteParameterStatus(conn, "server_version", "15.0 (SQLion)")
 	_ = WriteParameterStatus(conn, "client_encoding", "UTF8")
 	_ = WriteParameterStatus(conn, "DateStyle", "ISO, MDY")
 	if err := WriteReadyForQuery(conn); err != nil {
@@ -163,7 +163,7 @@ func (s *Server) handleQuery(conn net.Conn, query string) {
 	if strings.Contains(upper, "SELECT VERSION()") || strings.Contains(upper, "VERSION()") {
 		cols := []ColumnMeta{{Name: "version", DataType: 25}}
 		_ = WriteRowDescription(conn, cols)
-		_ = WriteDataRow(conn, []string{"PostgreSQL 15.0 (SqlTiger OLTP & Stored Procedure Server)"})
+		_ = WriteDataRow(conn, []string{"PostgreSQL 15.0 (SQLion OLTP & Stored Procedure Server)"})
 		_ = WriteCommandComplete(conn, "SELECT 1")
 		return
 	}

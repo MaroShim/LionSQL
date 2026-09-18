@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"sqltiger/pkg/catalog"
-	"sqltiger/pkg/storage"
-	"sqltiger/pkg/storage/memengine"
+	"sqlion/pkg/catalog"
+	"sqlion/pkg/storage"
+	"sqlion/pkg/storage/memengine"
 )
 
 func setupTestWireServer(t *testing.T) (*Server, storage.Engine, *catalog.Catalog) {
@@ -108,8 +108,8 @@ func TestWire_HandshakeAndSelectVersion(t *testing.T) {
 		}
 	}
 
-	if !strings.Contains(versionOutput, "SqlTiger") {
-		t.Errorf("Expected version to contain SqlTiger, got: %s", versionOutput)
+	if !strings.Contains(versionOutput, "SQLion") {
+		t.Errorf("Expected version to contain SQLion, got: %s", versionOutput)
 	}
 }
 

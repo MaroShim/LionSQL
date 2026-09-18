@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqltiger/pkg/catalog"
-	"sqltiger/pkg/storage/memengine"
+	"sqlion/pkg/catalog"
+	"sqlion/pkg/storage/memengine"
 )
 
 func setupTestServer() *Server {

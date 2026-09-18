@@ -3,7 +3,7 @@ package memengine
 import (
 	"testing"
 
-	"sqltiger/pkg/storage"
+	"sqlion/pkg/storage"
 )
 
 func createTestSchema() *storage.TableSchema {

@@ -8,7 +8,7 @@ import (
 	"sort"
 	"sync"
 
-	"sqltiger/pkg/storage"
+	"sqlion/pkg/storage"
 )
 
 // TableData stores rows in memory for a single table.

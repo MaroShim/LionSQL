@@ -5,10 +5,10 @@ import (
 	"sync"
 	"testing"
 
-	"sqltiger/pkg/proc"
-	"sqltiger/pkg/proc/runtime"
-	"sqltiger/pkg/storage"
-	"sqltiger/pkg/storage/memengine"
+	"sqlion/pkg/proc"
+	"sqlion/pkg/proc/runtime"
+	"sqlion/pkg/storage"
+	"sqlion/pkg/storage/memengine"
 )
 
 func setupTestDB(t *testing.T) storage.Engine {

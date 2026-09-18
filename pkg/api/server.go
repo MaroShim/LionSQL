@@ -6,11 +6,11 @@ import (
 	"net/http"
 	"strings"
 
-	"sqltiger/pkg/catalog"
-	"sqltiger/pkg/proc"
-	"sqltiger/pkg/proc/runtime"
-	"sqltiger/pkg/storage"
-	"sqltiger/pkg/ui"
+	"sqlion/pkg/catalog"
+	"sqlion/pkg/proc"
+	"sqlion/pkg/proc/runtime"
+	"sqlion/pkg/storage"
+	"sqlion/pkg/ui"
 )
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.

@@ -5,7 +5,7 @@ package wiredtiger
 import (
 	"fmt"
 
-	"sqltiger/pkg/storage"
+	"sqlion/pkg/storage"
 )
 
 // Engine is a stub implementation when WiredTiger is not compiled in.

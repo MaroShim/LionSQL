@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/dop251/goja"
-	"sqltiger/pkg/storage"
+	"sqlion/pkg/storage"
 )
 
 // Bridge creates the JavaScript "db" and "console" APIs bound to an active storage transaction.
