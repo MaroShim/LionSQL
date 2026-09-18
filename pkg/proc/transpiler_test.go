@@ -49,8 +49,8 @@ END;
 		"sender_bal = db.get(\"accounts\", from, \"balance\");",
 		"if ((sender_bal < amount)) {",
 		"throw new Error(\"Insufficient balance\");",
-		"db.update(\"accounts\", from, { \"balance\": (row[\"balance\"] - amount) });",
-		"db.update(\"accounts\", to, { \"balance\": (row[\"balance\"] + amount) });",
+		"db.update(\"accounts\", from, { \"balance\": (_curr[\"balance\"] - amount) });",
+		"db.update(\"accounts\", to, { \"balance\": (_curr[\"balance\"] + amount) });",
 		"console.log(\"Transfer successful\");",
 		"return 0;",
 	}

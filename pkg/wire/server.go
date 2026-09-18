@@ -12,6 +12,7 @@ import (
 
 	"sqltiger/pkg/catalog"
 	"sqltiger/pkg/proc"
+	"sqltiger/pkg/proc/runtime"
 	"sqltiger/pkg/storage"
 )
 
@@ -22,17 +23,20 @@ type Server struct {
 	engine    storage.Engine
 	catalog   *catalog.Catalog
 	planCache *proc.PlanCache
+	executor  *runtime.Executor
 	mu        sync.Mutex
 	closed    bool
 }
 
 // NewServer creates a new PostgreSQL wire protocol server.
 func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
+	cache := runtime.NewPlanCache()
 	return &Server{
 		addr:      addr,
 		catalog:   cat,
 		engine:    eng,
 		planCache: proc.NewPlanCache(),
+		executor:  runtime.NewExecutor(cache),
 	}
 }
 
@@ -195,10 +199,23 @@ func (s *Server) handleExecQuery(conn net.Conn, query string) {
 		return
 	}
 
-	plan, err := s.planCache.GetOrCompile(procMeta.Body)
-	if err != nil {
-		_ = WriteError(conn, fmt.Sprintf("compile error: %v", err))
-		return
+	prog, found := s.executor.Cache().GetByName(procName)
+	if !found {
+		if procMeta.JSCode == "" {
+			plan, err := s.planCache.GetOrCompile(procMeta.Body)
+			if err != nil {
+				_ = WriteError(conn, fmt.Sprintf("compile error: %v", err))
+				return
+			}
+			jsCode, _ := proc.Transpile(plan)
+			procMeta.JSCode = jsCode
+		}
+		prog, err = s.executor.Cache().GetOrCompile(procMeta.JSCode)
+		if err != nil {
+			_ = WriteError(conn, fmt.Sprintf("bytecode error: %v", err))
+			return
+		}
+		s.executor.Cache().PutByName(procName, prog)
 	}
 
 	session, err := s.engine.NewSession()
@@ -209,20 +226,22 @@ func (s *Server) handleExecQuery(conn net.Conn, query string) {
 	defer session.Close()
 
 	// Extract positional arguments if provided
-	args := make(map[string]storage.Value)
+	args := make(map[string]any)
 	argTokens := fields[2:]
-	for i, param := range plan.Params {
+	for i, param := range procMeta.Params {
 		if i < len(argTokens) {
 			raw := strings.Trim(argTokens[i], ",; '")
 			if num, err := strconv.ParseInt(raw, 10, 64); err == nil {
-				args[param.Name] = storage.IntValue(num)
+				args[param.Name] = num
+				args[strings.TrimPrefix(param.Name, "@")] = num
 			} else {
-				args[param.Name] = storage.StringValue(raw)
+				args[param.Name] = raw
+				args[strings.TrimPrefix(param.Name, "@")] = raw
 			}
 		}
 	}
 
-	res, err := proc.Run(plan, args, session)
+	res, err := s.executor.Run(prog, procName, args, session)
 	if err != nil {
 		_ = WriteError(conn, fmt.Sprintf("execution failed (rolled back): %v", err))
 		return
@@ -230,12 +249,12 @@ func (s *Server) handleExecQuery(conn net.Conn, query string) {
 
 	// Return logs and return code as a result row
 	cols := []ColumnMeta{
-		{Name: "return_code", DataType: 20},
+		{Name: "return_code", DataType: 25},
 		{Name: "duration_us", DataType: 20},
 	}
 	_ = WriteRowDescription(conn, cols)
 	_ = WriteDataRow(conn, []string{
-		fmt.Sprintf("%d", res.ReturnValue.IVal),
+		fmt.Sprintf("%v", res.ReturnValue),
 		fmt.Sprintf("%d", res.Duration.Microseconds()),
 	})
 	_ = WriteCommandComplete(conn, "EXEC 1")

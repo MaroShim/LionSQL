@@ -157,13 +157,36 @@ func transpileStmt(stmt Statement, indentLevel int) (string, error) {
 		if err != nil {
 			return "", err
 		}
+
+		hasColRef := false
+		for _, a := range s.Assignments {
+			if containsColRef(a.Value) {
+				hasColRef = true
+				break
+			}
+		}
+
+		rowScope := ""
+		if hasColRef {
+			rowScope = "_curr"
+		}
+
 		pairs := make([]string, len(s.Assignments))
 		for i, a := range s.Assignments {
-			valJS, err := transpileExpr(a.Value)
+			valJS, err := transpileExprWithScope(a.Value, rowScope)
 			if err != nil {
 				return "", err
 			}
 			pairs[i] = fmt.Sprintf("%q: %s", a.Column, valJS)
+		}
+
+		if hasColRef {
+			var b strings.Builder
+			b.WriteString(fmt.Sprintf("%s{\n", indent))
+			b.WriteString(fmt.Sprintf("%s  let _curr = db.get(%q, %s);\n", indent, s.Table, pkExpr))
+			b.WriteString(fmt.Sprintf("%s  db.update(%q, %s, { %s });\n", indent, s.Table, pkExpr, strings.Join(pairs, ", ")))
+			b.WriteString(fmt.Sprintf("%s}\n", indent))
+			return b.String(), nil
 		}
 		return fmt.Sprintf("%sdb.update(%q, %s, { %s });\n", indent, s.Table, pkExpr, strings.Join(pairs, ", ")), nil
 
@@ -179,7 +202,26 @@ func transpileStmt(stmt Statement, indentLevel int) (string, error) {
 	}
 }
 
+func containsColRef(expr Expr) bool {
+	if expr == nil {
+		return false
+	}
+	switch e := expr.(type) {
+	case *ColumnRefExpr:
+		return true
+	case *UnaryExpr:
+		return containsColRef(e.Expr)
+	case *BinaryExpr:
+		return containsColRef(e.Left) || containsColRef(e.Right)
+	}
+	return false
+}
+
 func transpileExpr(expr Expr) (string, error) {
+	return transpileExprWithScope(expr, "row")
+}
+
+func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 	if expr == nil {
 		return "null", nil
 	}
@@ -205,11 +247,13 @@ func transpileExpr(expr Expr) (string, error) {
 		return cleanIdent(e.Name), nil
 
 	case *ColumnRefExpr:
-		// In JS context, column references resolve from row scope or variable
+		if rowScope != "" {
+			return fmt.Sprintf("%s[%q]", rowScope, e.Name), nil
+		}
 		return fmt.Sprintf("row[%q]", e.Name), nil
 
 	case *UnaryExpr:
-		subJS, err := transpileExpr(e.Expr)
+		subJS, err := transpileExprWithScope(e.Expr, rowScope)
 		if err != nil {
 			return "", err
 		}
@@ -223,11 +267,11 @@ func transpileExpr(expr Expr) (string, error) {
 		}
 
 	case *BinaryExpr:
-		leftJS, err := transpileExpr(e.Left)
+		leftJS, err := transpileExprWithScope(e.Left, rowScope)
 		if err != nil {
 			return "", err
 		}
-		rightJS, err := transpileExpr(e.Right)
+		rightJS, err := transpileExprWithScope(e.Right, rowScope)
 		if err != nil {
 			return "", err
 		}

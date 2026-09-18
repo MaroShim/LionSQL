@@ -8,6 +8,7 @@ import (
 
 	"sqltiger/pkg/catalog"
 	"sqltiger/pkg/proc"
+	"sqltiger/pkg/proc/runtime"
 	"sqltiger/pkg/storage"
 	"sqltiger/pkg/ui"
 )
@@ -17,15 +18,18 @@ type Server struct {
 	catalog   *catalog.Catalog
 	engine    storage.Engine
 	planCache *proc.PlanCache
+	executor  *runtime.Executor
 	mux       *http.ServeMux
 }
 
 // NewServer initializes a new Server.
 func NewServer(cat *catalog.Catalog, eng storage.Engine) *Server {
+	cache := runtime.NewPlanCache()
 	s := &Server{
 		catalog:   cat,
 		engine:    eng,
 		planCache: proc.NewPlanCache(),
+		executor:  runtime.NewExecutor(cache),
 		mux:       http.NewServeMux(),
 	}
 	s.routes()
@@ -236,6 +240,13 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 		JSCode: jsCode,
 	}
 
+	prog, err := s.executor.Cache().GetOrCompile(jsCode)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("bytecode compilation error: %w", err))
+		return
+	}
+	s.executor.Cache().PutByName(procName, prog)
+
 	if err := s.catalog.RegisterProcedure(procMeta); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
@@ -245,7 +256,7 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 		"name":    procName,
 		"params":  paramDefs,
 		"js_code": jsCode,
-		"message": "Procedure registered successfully",
+		"message": "Procedure registered and bytecode compiled successfully",
 	})
 }
 
@@ -256,7 +267,7 @@ type execProcReq struct {
 func (s *Server) handleExecProc(w http.ResponseWriter, r *http.Request) {
 	procName := r.PathValue("name")
 
-	plan, found := s.planCache.GetByName(procName)
+	prog, found := s.executor.Cache().GetByName(procName)
 	if !found {
 		// Try to compile from catalog
 		procMeta, err := s.catalog.GetProcedure(procName)
@@ -264,26 +275,34 @@ func (s *Server) handleExecProc(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, fmt.Errorf("procedure %q not found", procName))
 			return
 		}
-		plan, err = s.planCache.GetOrCompile(procMeta.Body)
+		if procMeta.JSCode == "" {
+			plan, err := s.planCache.GetOrCompile(procMeta.Body)
+			if err != nil {
+				writeError(w, http.StatusInternalServerError, err)
+				return
+			}
+			jsCode, _ := proc.Transpile(plan)
+			procMeta.JSCode = jsCode
+		}
+		prog, err = s.executor.Cache().GetOrCompile(procMeta.JSCode)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return
 		}
+		s.executor.Cache().PutByName(procName, prog)
 	}
 
 	var req execProcReq
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	if req.Args == nil {
+		req.Args = make(map[string]any)
+	}
 
-	typedArgs := make(map[string]storage.Value)
-	for _, p := range plan.Params {
-		rawVal, exists := req.Args[p.Name]
-		if !exists {
-			// Also check without '@' prefix for convenience
-			rawVal, exists = req.Args[strings.TrimPrefix(p.Name, "@")]
-		}
-		if exists {
-			typedArgs[p.Name] = convertValue(rawVal, p.Type)
-		}
+	// Normalize arguments so both "@arg" and "arg" work seamlessly
+	normalizedArgs := make(map[string]any)
+	for k, v := range req.Args {
+		normalizedArgs[k] = v
+		normalizedArgs[strings.TrimPrefix(k, "@")] = v
 	}
 
 	session, err := s.engine.NewSession()
@@ -293,17 +312,17 @@ func (s *Server) handleExecProc(w http.ResponseWriter, r *http.Request) {
 	}
 	defer session.Close()
 
-	res, err := proc.Run(plan, typedArgs, session)
+	res, err := s.executor.Run(prog, procName, normalizedArgs, session)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("procedure execution error (rolled back): %w", err))
+		writeError(w, http.StatusBadRequest, err)
 		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":     true,
-		"return_code": res.ReturnValue.IVal,
+		"return_code": res.ReturnValue,
 		"duration_ms": float64(res.Duration.Microseconds()) / 1000.0,
-		"logs":        res.Printed,
+		"logs":        res.Logs,
 	})
 }
 
