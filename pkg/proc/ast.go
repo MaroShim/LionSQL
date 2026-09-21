@@ -30,7 +30,12 @@ type LiteralExpr struct {
 }
 
 func (e *LiteralExpr) exprNode()      {}
-func (e *LiteralExpr) String() string { return e.Val.String() }
+func (e *LiteralExpr) String() string {
+	if e.Val.Type == storage.TypeVarChar && !e.Val.IsNull {
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(e.Val.SVal, "'", "''"))
+	}
+	return e.Val.String()
+}
 
 // VariableExpr represents a variable reference (@var).
 type VariableExpr struct {
@@ -57,7 +62,15 @@ type BinaryExpr struct {
 
 func (e *BinaryExpr) exprNode() {}
 func (e *BinaryExpr) String() string {
-	return fmt.Sprintf("(%s %v %s)", e.Left.String(), e.Op, e.Right.String())
+	leftStr := ""
+	if e.Left != nil {
+		leftStr = e.Left.String()
+	}
+	rightStr := ""
+	if e.Right != nil {
+		rightStr = e.Right.String()
+	}
+	return fmt.Sprintf("%s %s %s", leftStr, e.Op.String(), rightStr)
 }
 
 // UnaryExpr represents unary operations (NOT, -).
@@ -68,7 +81,10 @@ type UnaryExpr struct {
 
 func (e *UnaryExpr) exprNode() {}
 func (e *UnaryExpr) String() string {
-	return fmt.Sprintf("%v(%s)", e.Op, e.Expr.String())
+	if e.Expr != nil {
+		return fmt.Sprintf("%s %s", e.Op.String(), e.Expr.String())
+	}
+	return e.Op.String()
 }
 
 // CreateProcStmt represents CREATE PROCEDURE ... AS BEGIN ... END
@@ -567,6 +583,244 @@ type DeallocateCursorStmt struct {
 func (s *DeallocateCursorStmt) stmtNode() {}
 func (s *DeallocateCursorStmt) String() string {
 	return fmt.Sprintf("DEALLOCATE %s", s.Name)
+}
+
+// Projection represents a projected expression in a SELECT query.
+type Projection struct {
+	Expr  Expr
+	Alias string
+}
+
+func (p Projection) String() string {
+	if p.Alias != "" {
+		return fmt.Sprintf("%s AS %s", p.Expr.String(), p.Alias)
+	}
+	return p.Expr.String()
+}
+
+// TableRef represents a referenced table or TVF call.
+type TableRef struct {
+	Name    string
+	Alias   string
+	IsTVF   bool
+	TVFArgs []Expr
+}
+
+func (t TableRef) String() string {
+	var s string
+	if t.IsTVF {
+		var args []string
+		for _, a := range t.TVFArgs {
+			args = append(args, a.String())
+		}
+		s = fmt.Sprintf("%s(%s)", t.Name, strings.Join(args, ", "))
+	} else {
+		s = t.Name
+	}
+	if t.Alias != "" && t.Alias != t.Name {
+		s = fmt.Sprintf("%s AS %s", s, t.Alias)
+	}
+	return s
+}
+
+// JoinClause represents an INNER/LEFT JOIN clause.
+type JoinClause struct {
+	Type  string // "INNER" or "LEFT"
+	Table TableRef
+	On    Expr
+}
+
+func (j JoinClause) String() string {
+	return fmt.Sprintf("%s JOIN %s ON %s", j.Type, j.Table.String(), j.On.String())
+}
+
+// OrderByItem represents an ORDER BY term.
+type OrderByItem struct {
+	Expr Expr
+	Desc bool
+}
+
+func (o OrderByItem) String() string {
+	if o.Desc {
+		return fmt.Sprintf("%s DESC", o.Expr.String())
+	}
+	return fmt.Sprintf("%s ASC", o.Expr.String())
+}
+
+// CTEClause represents a Common Table Expression.
+type CTEClause struct {
+	Name     string
+	Query    *GeneralSelectStmt
+	InnerSQL string
+}
+
+func (c CTEClause) String() string {
+	return fmt.Sprintf("%s AS (%s)", c.Name, c.InnerSQL)
+}
+
+// GeneralSelectStmt represents a complete interactive SELECT statement.
+type GeneralSelectStmt struct {
+	CTEs        []CTEClause
+	Projections []Projection
+	From        TableRef
+	Joins       []JoinClause
+	Where       Expr
+	GroupBy     []Expr
+	Having      Expr
+	OrderBy     []OrderByItem
+	Limit       int64
+	IsExplain   bool
+	IsAnalyze   bool
+	RawSQL      string
+}
+
+func (s *GeneralSelectStmt) stmtNode() {}
+func (s *GeneralSelectStmt) String() string {
+	var b strings.Builder
+	if s.IsExplain {
+		if s.IsAnalyze {
+			b.WriteString("EXPLAIN ANALYZE ")
+		} else {
+			b.WriteString("EXPLAIN ")
+		}
+	}
+	if len(s.CTEs) > 0 {
+		b.WriteString("WITH ")
+		var cteStrs []string
+		for _, c := range s.CTEs {
+			cteStrs = append(cteStrs, c.String())
+		}
+		b.WriteString(strings.Join(cteStrs, ", "))
+		b.WriteString(" ")
+	}
+	b.WriteString("SELECT ")
+	var projStrs []string
+	for _, p := range s.Projections {
+		projStrs = append(projStrs, p.String())
+	}
+	b.WriteString(strings.Join(projStrs, ", "))
+	if s.From.Name != "" {
+		b.WriteString(" FROM ")
+		b.WriteString(s.From.String())
+	}
+	for _, j := range s.Joins {
+		b.WriteString(" ")
+		b.WriteString(j.String())
+	}
+	if s.Where != nil {
+		b.WriteString(" WHERE ")
+		b.WriteString(s.Where.String())
+	}
+	if len(s.GroupBy) > 0 {
+		b.WriteString(" GROUP BY ")
+		var gbStrs []string
+		for _, g := range s.GroupBy {
+			gbStrs = append(gbStrs, g.String())
+		}
+		b.WriteString(strings.Join(gbStrs, ", "))
+	}
+	if s.Having != nil {
+		b.WriteString(" HAVING ")
+		b.WriteString(s.Having.String())
+	}
+	if len(s.OrderBy) > 0 {
+		b.WriteString(" ORDER BY ")
+		var obStrs []string
+		for _, o := range s.OrderBy {
+			obStrs = append(obStrs, o.String())
+		}
+		b.WriteString(strings.Join(obStrs, ", "))
+	}
+	if s.Limit >= 0 {
+		b.WriteString(fmt.Sprintf(" LIMIT %d", s.Limit))
+	}
+	return b.String()
+}
+
+// ColumnDef defines a table column in DDL.
+type ColumnDef struct {
+	Name       string
+	Type       storage.DataType
+	PrimaryKey bool
+	Nullable   bool
+}
+
+// CreateTableStmt represents CREATE TABLE ...
+type CreateTableStmt struct {
+	Name        string
+	IfNotExists bool
+	Columns     []ColumnDef
+}
+
+func (s *CreateTableStmt) stmtNode() {}
+func (s *CreateTableStmt) String() string {
+	return fmt.Sprintf("CREATE TABLE %s", s.Name)
+}
+
+// CreateIndexStmt represents CREATE [UNIQUE] INDEX ... ON table (cols...)
+type CreateIndexStmt struct {
+	Name    string
+	Table   string
+	Columns []string
+	Unique  bool
+}
+
+func (s *CreateIndexStmt) stmtNode() {}
+func (s *CreateIndexStmt) String() string {
+	u := ""
+	if s.Unique {
+		u = "UNIQUE "
+	}
+	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)", u, s.Name, s.Table, strings.Join(s.Columns, ", "))
+}
+
+// DropTableStmt represents DROP TABLE [IF EXISTS] table
+type DropTableStmt struct {
+	Name     string
+	IfExists bool
+}
+
+func (s *DropTableStmt) stmtNode() {}
+func (s *DropTableStmt) String() string {
+	return fmt.Sprintf("DROP TABLE %s", s.Name)
+}
+
+// DropIndexStmt represents DROP INDEX index [ON table]
+type DropIndexStmt struct {
+	Name     string
+	Table    string
+	IfExists bool
+}
+
+func (s *DropIndexStmt) stmtNode() {}
+func (s *DropIndexStmt) String() string {
+	return fmt.Sprintf("DROP INDEX %s", s.Name)
+}
+
+// ExistsExpr represents [NOT] EXISTS (SELECT ...)
+type ExistsExpr struct {
+	Query *GeneralSelectStmt
+	Not   bool
+}
+
+func (e *ExistsExpr) exprNode() {}
+func (e *ExistsExpr) String() string {
+	if e.Not {
+		return fmt.Sprintf("NOT EXISTS (%s)", e.Query.String())
+	}
+	return fmt.Sprintf("EXISTS (%s)", e.Query.String())
+}
+
+// GeneralInsertStmt represents INSERT INTO table (cols) VALUES (tuples...)
+type GeneralInsertStmt struct {
+	Table   string
+	Columns []string
+	Tuples  [][]Expr
+}
+
+func (s *GeneralInsertStmt) stmtNode() {}
+func (s *GeneralInsertStmt) String() string {
+	return fmt.Sprintf("INSERT INTO %s (%s) VALUES ...", s.Table, strings.Join(s.Columns, ", "))
 }
 
 

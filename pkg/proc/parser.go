@@ -62,6 +62,11 @@ func (p *Parser) nextToken() {
 	p.peekToken = p.l.NextToken()
 }
 
+// ParseExpr parses an expression starting at lowest precedence.
+func (p *Parser) ParseExpr() Expr {
+	return p.parseExpression(precLowest)
+}
+
 func (p *Parser) curTokenIs(t TokenType) bool {
 	return p.curToken.Type == t
 }
@@ -393,11 +398,11 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 }
 
 func cleanSchemaPrefix(name string) string {
-	parts := strings.Split(name, ".")
-	if len(parts) > 1 {
-		return parts[len(parts)-1]
+	s := strings.Trim(name, "[]\"'`")
+	if strings.HasPrefix(strings.ToLower(s), "dbo.") {
+		s = s[4:]
 	}
-	return strings.Trim(name, "[]")
+	return strings.Trim(s, "[]\"'`")
 }
 
 func parseDataType(s string) storage.DataType {
@@ -1305,6 +1310,35 @@ func (p *Parser) parsePrefix() Expr {
 			return p.parseFunctionCall(funcName)
 		}
 		return &ColumnRefExpr{Name: funcName}
+	case TokenAsterisk:
+		p.nextToken()
+		return &ColumnRefExpr{Name: "*"}
+	case TokenCount, TokenSum, TokenAvg, TokenMin, TokenMax:
+		funcName := p.curToken.Literal
+		p.nextToken()
+		if p.curTokenIs(TokenLParen) {
+			return p.parseFunctionCall(funcName)
+		}
+		return &ColumnRefExpr{Name: funcName}
+	case TokenExists:
+		p.nextToken() // eat EXISTS
+		if !p.curTokenIs(TokenLParen) {
+			return nil
+		}
+		p.nextToken() // eat (
+		if !p.curTokenIs(TokenSelect) {
+			return nil
+		}
+		p.nextToken() // eat SELECT
+		sel, err := p.parseGeneralSelect()
+		if err != nil {
+			return nil
+		}
+		if !p.curTokenIs(TokenRParen) {
+			return nil
+		}
+		p.nextToken() // eat )
+		return &ExistsExpr{Query: sel, Not: false}
 	case TokenVariable:
 		expr := &VariableExpr{Name: p.curToken.Literal}
 		p.nextToken()
@@ -1321,7 +1355,27 @@ func (p *Parser) parsePrefix() Expr {
 		right := p.parseExpression(precPrefix)
 		return &UnaryExpr{Op: TokenMinus, Expr: right}
 	case TokenNot:
-		p.nextToken()
+		p.nextToken() // eat NOT
+		if p.curTokenIs(TokenExists) {
+			p.nextToken() // eat EXISTS
+			if !p.curTokenIs(TokenLParen) {
+				return nil
+			}
+			p.nextToken() // eat (
+			if !p.curTokenIs(TokenSelect) {
+				return nil
+			}
+			p.nextToken() // eat SELECT
+			sel, err := p.parseGeneralSelect()
+			if err != nil {
+				return nil
+			}
+			if !p.curTokenIs(TokenRParen) {
+				return nil
+			}
+			p.nextToken() // eat )
+			return &ExistsExpr{Query: sel, Not: true}
+		}
 		right := p.parseExpression(precPrefix)
 		return &UnaryExpr{Op: TokenNot, Expr: right}
 	case TokenLParen:
@@ -1422,3 +1476,690 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 		Args: args,
 	}
 }
+
+// ParseSQL parses a single interactive or procedural SQL statement into an AST Statement.
+func ParseSQL(sql string) (Statement, error) {
+	p := NewParser(NewLexer(sql))
+	return p.ParseSQLStatement()
+}
+
+// ParseSQLStatement parses any DQL, DML, DDL, or procedural statement.
+func (p *Parser) ParseSQLStatement() (Statement, error) {
+	switch p.curToken.Type {
+	case TokenExplain:
+		p.nextToken() // eat EXPLAIN
+		isAnalyze := false
+		if p.curTokenIs(TokenAnalyze) {
+			isAnalyze = true
+			p.nextToken()
+		}
+		var inner Statement
+		var err error
+		if p.curTokenIs(TokenWith) {
+			inner, err = p.parseWith()
+		} else if p.curTokenIs(TokenSelect) {
+			p.nextToken()
+			inner, err = p.parseGeneralSelect()
+		} else {
+			return nil, fmt.Errorf("expected SELECT or WITH after EXPLAIN")
+		}
+		if err != nil {
+			return nil, err
+		}
+		if sel, ok := inner.(*GeneralSelectStmt); ok {
+			sel.IsExplain = true
+			sel.IsAnalyze = isAnalyze
+			return sel, nil
+		}
+		return inner, nil
+
+	case TokenWith:
+		return p.parseWith()
+
+	case TokenSelect:
+		p.nextToken() // eat SELECT
+		return p.parseGeneralSelect()
+
+	case TokenInsert:
+		return p.parseGeneralInsert()
+
+	case TokenUpdate:
+		return p.parseUpdate()
+
+	case TokenDelete:
+		return p.parseDelete()
+
+	case TokenCreate:
+		if p.peekTokenIs(TokenTable) {
+			return p.parseCreateTable()
+		}
+		if p.peekTokenIs(TokenIndex) || p.peekTokenIs(TokenUnique) {
+			return p.parseCreateIndex()
+		}
+		if p.peekTokenIs(TokenProcedure) || p.peekTokenIs(TokenProc) {
+			return p.ParseProcedure()
+		}
+		if p.peekTokenIs(TokenFunction) {
+			return p.ParseFunction()
+		}
+		if p.peekTokenIs(TokenTrigger) {
+			return p.ParseTrigger()
+		}
+		return nil, fmt.Errorf("unsupported CREATE statement: %s", p.peekToken.Literal)
+
+	case TokenDrop:
+		p.nextToken() // eat DROP
+		if p.curTokenIs(TokenTable) {
+			return p.parseDropTable()
+		}
+		if p.curTokenIs(TokenIndex) {
+			return p.parseDropIndex()
+		}
+		return nil, fmt.Errorf("unsupported DROP statement: %s", p.curToken.Literal)
+
+	case TokenBegin:
+		if p.peekTokenIs(TokenTry) {
+			return p.parseTryCatch()
+		}
+		if p.peekTokenIs(TokenTransaction) || p.peekTokenIs(TokenTran) || p.peekTokenIs(TokenEOF) || p.peekTokenIs(TokenSemicolon) {
+			return p.parseTx()
+		}
+		return p.parseBlock()
+
+	case TokenCommit, TokenRollback:
+		return p.parseTx()
+
+	case TokenSet:
+		return p.parseSet()
+
+	case TokenExec:
+		return p.parseExec()
+
+	default:
+		return nil, fmt.Errorf("unexpected token at statement start: %s", p.curToken.Literal)
+	}
+}
+
+func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
+	stmt := &GeneralSelectStmt{Limit: -1}
+
+	// 1. Projections
+	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) {
+		expr := p.parseExpression(precLowest)
+		if expr == nil {
+			return nil, fmt.Errorf("expected projection expression, got %s", p.curToken.Literal)
+		}
+		alias := ""
+		if p.curTokenIs(TokenAs) {
+			p.nextToken() // eat AS
+			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenString) {
+				alias = cleanSchemaPrefix(p.curToken.Literal)
+				p.nextToken()
+			}
+		} else if p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenGroup) && !p.curTokenIs(TokenHaving) && !p.curTokenIs(TokenOrder) && !p.curTokenIs(TokenLimit) && !p.curTokenIs(TokenJoin) && !p.curTokenIs(TokenInner) && !p.curTokenIs(TokenLeft) {
+			alias = cleanSchemaPrefix(p.curToken.Literal)
+			p.nextToken()
+		}
+
+		stmt.Projections = append(stmt.Projections, Projection{Expr: expr, Alias: alias})
+
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	// 2. FROM clause
+	if p.curTokenIs(TokenFrom) {
+		p.nextToken() // eat FROM
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected table name after FROM, got %s", p.curToken.Literal)
+		}
+		tblName := cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+
+		var tvfArgs []Expr
+		isTVF := false
+		if p.curTokenIs(TokenLParen) {
+			isTVF = true
+			p.nextToken() // eat (
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				arg := p.parseExpression(precLowest)
+				if arg != nil {
+					tvfArgs = append(tvfArgs, arg)
+				}
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				} else {
+					break
+				}
+			}
+			if !p.curTokenIs(TokenRParen) {
+				return nil, fmt.Errorf("expected ) closing TVF arguments")
+			}
+			p.nextToken() // eat )
+		}
+
+		alias := tblName
+		if p.curTokenIs(TokenAs) {
+			p.nextToken() // eat AS
+			if p.curTokenIs(TokenIdent) {
+				alias = cleanSchemaPrefix(p.curToken.Literal)
+				p.nextToken()
+			}
+		} else if p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenGroup) && !p.curTokenIs(TokenHaving) && !p.curTokenIs(TokenOrder) && !p.curTokenIs(TokenLimit) && !p.curTokenIs(TokenJoin) && !p.curTokenIs(TokenInner) && !p.curTokenIs(TokenLeft) && !p.curTokenIs(TokenOn) {
+			alias = cleanSchemaPrefix(p.curToken.Literal)
+			p.nextToken()
+		}
+
+		stmt.From = TableRef{Name: tblName, Alias: alias, IsTVF: isTVF, TVFArgs: tvfArgs}
+	}
+
+	// 3. JOIN clauses
+	for p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) {
+		joinType := "INNER"
+		if p.curTokenIs(TokenLeft) {
+			joinType = "LEFT"
+			p.nextToken() // eat LEFT
+			if p.curTokenIs(TokenOuter) {
+				p.nextToken() // eat OUTER
+			}
+		} else if p.curTokenIs(TokenInner) {
+			p.nextToken() // eat INNER
+		}
+
+		if !p.curTokenIs(TokenJoin) {
+			return nil, fmt.Errorf("expected JOIN, got %s", p.curToken.Literal)
+		}
+		p.nextToken() // eat JOIN
+
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected table name in JOIN, got %s", p.curToken.Literal)
+		}
+		jTbl := cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+
+		jAlias := jTbl
+		if p.curTokenIs(TokenAs) {
+			p.nextToken()
+			if p.curTokenIs(TokenIdent) {
+				jAlias = cleanSchemaPrefix(p.curToken.Literal)
+				p.nextToken()
+			}
+		} else if p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenOn) {
+			jAlias = cleanSchemaPrefix(p.curToken.Literal)
+			p.nextToken()
+		}
+
+		if !p.curTokenIs(TokenOn) {
+			return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
+		}
+		p.nextToken() // eat ON
+
+		onExpr := p.parseExpression(precLowest)
+		stmt.Joins = append(stmt.Joins, JoinClause{
+			Type:  joinType,
+			Table: TableRef{Name: jTbl, Alias: jAlias},
+			On:    onExpr,
+		})
+	}
+
+	// 4. WHERE clause
+	if p.curTokenIs(TokenWhere) {
+		p.nextToken() // eat WHERE
+		stmt.Where = p.parseExpression(precLowest)
+	}
+
+	// 5. GROUP BY clause
+	if p.curTokenIs(TokenGroup) {
+		p.nextToken() // eat GROUP
+		if !p.curTokenIs(TokenBy) {
+			return nil, fmt.Errorf("expected BY after GROUP, got %s", p.curToken.Literal)
+		}
+		p.nextToken() // eat BY
+		for {
+			gExpr := p.parseExpression(precLowest)
+			if gExpr != nil {
+				stmt.GroupBy = append(stmt.GroupBy, gExpr)
+			}
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			} else {
+				break
+			}
+		}
+	}
+
+	// 6. HAVING clause
+	if p.curTokenIs(TokenHaving) {
+		p.nextToken() // eat HAVING
+		stmt.Having = p.parseExpression(precLowest)
+	}
+
+	// 7. ORDER BY clause
+	if p.curTokenIs(TokenOrder) {
+		p.nextToken() // eat ORDER
+		if !p.curTokenIs(TokenBy) {
+			return nil, fmt.Errorf("expected BY after ORDER, got %s", p.curToken.Literal)
+		}
+		p.nextToken() // eat BY
+		for {
+			oExpr := p.parseExpression(precLowest)
+			desc := false
+			if p.curTokenIs(TokenDesc) {
+				desc = true
+				p.nextToken()
+			} else if p.curTokenIs(TokenAsc) {
+				p.nextToken()
+			}
+			if oExpr != nil {
+				stmt.OrderBy = append(stmt.OrderBy, OrderByItem{Expr: oExpr, Desc: desc})
+			}
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			} else {
+				break
+			}
+		}
+	}
+
+	// 8. LIMIT clause
+	if p.curTokenIs(TokenLimit) {
+		p.nextToken() // eat LIMIT
+		if p.curTokenIs(TokenInt) {
+			n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
+			stmt.Limit = n
+			p.nextToken()
+		}
+	}
+
+	return stmt, nil
+}
+
+func (p *Parser) parseGeneralInsert() (Statement, error) {
+	p.nextToken() // eat INSERT
+	if p.curTokenIs(TokenInto) {
+		p.nextToken()
+	}
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected table name in INSERT, got %s", p.curToken.Literal)
+	}
+	tblName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	var cols []string
+	if p.curTokenIs(TokenLParen) {
+		p.nextToken()
+		for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+			if !p.curTokenIs(TokenIdent) {
+				return nil, fmt.Errorf("expected column name in INSERT, got %s", p.curToken.Literal)
+			}
+			cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
+			p.nextToken()
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			}
+		}
+		if !p.curTokenIs(TokenRParen) {
+			return nil, fmt.Errorf("expected ) closing columns in INSERT")
+		}
+		p.nextToken()
+	}
+
+	if !p.curTokenIs(TokenValues) {
+		return nil, fmt.Errorf("expected VALUES in INSERT, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	var tuples [][]Expr
+	for p.curTokenIs(TokenLParen) {
+		p.nextToken() // eat (
+		var vals []Expr
+		for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+			expr := p.parseExpression(precLowest)
+			if expr == nil {
+				return nil, fmt.Errorf("expected value expression in INSERT tuple")
+			}
+			vals = append(vals, expr)
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			}
+		}
+		if !p.curTokenIs(TokenRParen) {
+			return nil, fmt.Errorf("expected ) closing VALUES tuple")
+		}
+		p.nextToken() // eat )
+		tuples = append(tuples, vals)
+
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &GeneralInsertStmt{
+		Table:   tblName,
+		Columns: cols,
+		Tuples:  tuples,
+	}, nil
+}
+
+func (p *Parser) parseCreateTable() (*CreateTableStmt, error) {
+	p.nextToken() // eat CREATE
+	if !p.curTokenIs(TokenTable) {
+		return nil, fmt.Errorf("expected TABLE after CREATE")
+	}
+	p.nextToken()
+
+	ifNotExists := false
+	if p.curTokenIs(TokenIf) {
+		p.nextToken()
+		if !p.curTokenIs(TokenNot) {
+			return nil, fmt.Errorf("expected NOT after IF in CREATE TABLE")
+		}
+		p.nextToken()
+		if !p.curTokenIs(TokenExists) {
+			return nil, fmt.Errorf("expected EXISTS after NOT in CREATE TABLE")
+		}
+		p.nextToken()
+		ifNotExists = true
+	}
+
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected table name, got %s", p.curToken.Literal)
+	}
+	tableName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	if !p.curTokenIs(TokenLParen) {
+		return nil, fmt.Errorf("expected ( in CREATE TABLE")
+	}
+	p.nextToken()
+
+	var cols []ColumnDef
+	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenIdent) {
+			ident := p.curToken.Literal
+			upper := strings.ToUpper(ident)
+			if upper == "PRIMARY" || upper == "CONSTRAINT" {
+				p.nextToken()
+				if strings.ToUpper(p.curToken.Literal) == "KEY" {
+					p.nextToken()
+				}
+				if p.curTokenIs(TokenLParen) {
+					p.nextToken()
+					pkCol := cleanSchemaPrefix(p.curToken.Literal)
+					p.nextToken()
+					if p.curTokenIs(TokenRParen) {
+						p.nextToken()
+					}
+					for i := range cols {
+						if strings.EqualFold(cols[i].Name, pkCol) {
+							cols[i].PrimaryKey = true
+						}
+					}
+				}
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				}
+				continue
+			}
+
+			colName := cleanSchemaPrefix(ident)
+			p.nextToken()
+
+			dt := parseDataType(p.curToken.Literal)
+			p.nextToken()
+
+			// Skip optional length e.g. VARCHAR(255)
+			if p.curTokenIs(TokenLParen) {
+				p.nextToken()
+				if p.curTokenIs(TokenInt) {
+					p.nextToken()
+				}
+				if p.curTokenIs(TokenRParen) {
+					p.nextToken()
+				}
+			}
+
+			isPK := false
+			isNotNull := false
+
+			for p.curTokenIs(TokenIdent) || p.curTokenIs(TokenNot) || p.curTokenIs(TokenNull) {
+				tUpper := strings.ToUpper(p.curToken.Literal)
+				if tUpper == "PRIMARY" {
+					p.nextToken()
+					if strings.ToUpper(p.curToken.Literal) == "KEY" {
+						p.nextToken()
+					}
+					isPK = true
+					isNotNull = true
+				} else if p.curTokenIs(TokenNot) {
+					p.nextToken()
+					if p.curTokenIs(TokenNull) {
+						p.nextToken()
+						isNotNull = true
+					}
+				} else {
+					p.nextToken()
+				}
+			}
+
+			cols = append(cols, ColumnDef{
+				Name:       colName,
+				Type:       dt,
+				PrimaryKey: isPK,
+				Nullable:   !isNotNull,
+			})
+		}
+
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	if p.curTokenIs(TokenRParen) {
+		p.nextToken()
+	}
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &CreateTableStmt{
+		Name:        tableName,
+		IfNotExists: ifNotExists,
+		Columns:     cols,
+	}, nil
+}
+
+func (p *Parser) parseCreateIndex() (*CreateIndexStmt, error) {
+	p.nextToken() // eat CREATE
+	isUnique := false
+	if p.curTokenIs(TokenUnique) {
+		isUnique = true
+		p.nextToken()
+	}
+	if !p.curTokenIs(TokenIndex) {
+		return nil, fmt.Errorf("expected INDEX after CREATE [UNIQUE]")
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected index name")
+	}
+	idxName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	if !p.curTokenIs(TokenOn) {
+		return nil, fmt.Errorf("expected ON after index name")
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected table name in CREATE INDEX")
+	}
+	tblName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	if !p.curTokenIs(TokenLParen) {
+		return nil, fmt.Errorf("expected ( in CREATE INDEX")
+	}
+	p.nextToken()
+
+	var cols []string
+	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenIdent) {
+			cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
+			p.nextToken()
+		}
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+	if p.curTokenIs(TokenRParen) {
+		p.nextToken()
+	}
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &CreateIndexStmt{
+		Name:    idxName,
+		Table:   tblName,
+		Columns: cols,
+		Unique:  isUnique,
+	}, nil
+}
+
+func (p *Parser) parseDropTable() (*DropTableStmt, error) {
+	p.nextToken() // eat TABLE
+	ifExists := false
+	if p.curTokenIs(TokenIf) {
+		p.nextToken()
+		if p.curTokenIs(TokenExists) {
+			ifExists = true
+			p.nextToken()
+		}
+	}
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected table name in DROP TABLE")
+	}
+	tblName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &DropTableStmt{
+		Name:     tblName,
+		IfExists: ifExists,
+	}, nil
+}
+
+func (p *Parser) parseDropIndex() (*DropIndexStmt, error) {
+	p.nextToken() // eat INDEX
+	ifExists := false
+	if p.curTokenIs(TokenIf) {
+		p.nextToken()
+		if p.curTokenIs(TokenExists) {
+			ifExists = true
+			p.nextToken()
+		}
+	}
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected index name in DROP INDEX")
+	}
+	idxName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	tblName := ""
+	if p.curTokenIs(TokenOn) {
+		p.nextToken()
+		if p.curTokenIs(TokenIdent) {
+			tblName = cleanSchemaPrefix(p.curToken.Literal)
+			p.nextToken()
+		}
+	}
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+
+	return &DropIndexStmt{
+		Name:     idxName,
+		Table:    tblName,
+		IfExists: ifExists,
+	}, nil
+}
+
+func (p *Parser) parseWith() (*GeneralSelectStmt, error) {
+	p.nextToken() // eat WITH
+	var ctes []CTEClause
+
+	for {
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected CTE name after WITH, got %s", p.curToken.Literal)
+		}
+		cteName := cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+
+		if !p.curTokenIs(TokenAs) {
+			return nil, fmt.Errorf("expected AS after CTE name, got %s", p.curToken.Literal)
+		}
+		p.nextToken()
+
+		if !p.curTokenIs(TokenLParen) {
+			return nil, fmt.Errorf("expected ( after AS in CTE")
+		}
+		p.nextToken() // eat (
+
+		if !p.curTokenIs(TokenSelect) {
+			return nil, fmt.Errorf("expected SELECT inside CTE")
+		}
+		p.nextToken() // eat SELECT
+
+		innerSelect, err := p.parseGeneralSelect()
+		if err != nil {
+			return nil, err
+		}
+
+		if !p.curTokenIs(TokenRParen) {
+			return nil, fmt.Errorf("expected ) closing CTE")
+		}
+		p.nextToken() // eat )
+
+		ctes = append(ctes, CTEClause{
+			Name:     cteName,
+			Query:    innerSelect,
+			InnerSQL: innerSelect.String(),
+		})
+
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	if !p.curTokenIs(TokenSelect) {
+		return nil, fmt.Errorf("expected main SELECT after CTEs, got %s", p.curToken.Literal)
+	}
+	p.nextToken() // eat SELECT
+
+	mainSelect, err := p.parseGeneralSelect()
+	if err != nil {
+		return nil, err
+	}
+	mainSelect.CTEs = ctes
+	return mainSelect, nil
+}
+

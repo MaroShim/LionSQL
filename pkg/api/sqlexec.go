@@ -1216,7 +1216,10 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	}
 
 	// 2. Scan and filter rows
-	rows := make([]map[string]any, 0)
+	type fullRow struct {
+		row map[string]any
+	}
+	var scannedRows []fullRow
 	for cursor.Next() {
 		rec, err := cursor.Record()
 		if err != nil {
@@ -1227,25 +1230,24 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 			continue
 		}
 
-		row := make(map[string]any)
-		for _, col := range selectedCols {
-			if v, ok := rec[col]; ok {
-				row[col] = formatStorageValue(v)
-			} else {
-				row[col] = nil
-			}
+		rMap := make(map[string]any)
+		for _, col := range schema.Columns {
+			rMap[col.Name] = formatStorageValue(rec[col.Name])
 		}
-		rows = append(rows, row)
+		for k, v := range rec {
+			rMap[k] = formatStorageValue(v)
+		}
+		scannedRows = append(scannedRows, fullRow{row: rMap})
 	}
 
 	// 3. Apply ORDER BY if present
-	if orderByClause != "" && len(rows) > 0 {
+	if orderByClause != "" && len(scannedRows) > 0 {
 		orderParts := strings.Fields(orderByClause)
 		orderCol := cleanIdentifier(orderParts[0])
 		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
-		sort.Slice(rows, func(i, j int) bool {
-			v1 := fmt.Sprintf("%v", rows[i][orderCol])
-			v2 := fmt.Sprintf("%v", rows[j][orderCol])
+		sort.Slice(scannedRows, func(i, j int) bool {
+			v1 := fmt.Sprintf("%v", scannedRows[i].row[orderCol])
+			v2 := fmt.Sprintf("%v", scannedRows[j].row[orderCol])
 			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
 				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
 					if desc {
@@ -1262,8 +1264,22 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	}
 
 	// 4. Apply LIMIT if present
-	if limitCount >= 0 && len(rows) > limitCount {
-		rows = rows[:limitCount]
+	if limitCount >= 0 && len(scannedRows) > limitCount {
+		scannedRows = scannedRows[:limitCount]
+	}
+
+	// 5. Final projection down to selectedCols
+	rows := make([]map[string]any, 0, len(scannedRows))
+	for _, sr := range scannedRows {
+		row := make(map[string]any)
+		for _, col := range selectedCols {
+			if v, ok := sr.row[col]; ok {
+				row[col] = v
+			} else {
+				row[col] = nil
+			}
+		}
+		rows = append(rows, row)
 	}
 
 	return &QueryResult{
@@ -2787,38 +2803,6 @@ func splitLogicalConditions(whereStr string, op string) []string {
 	return parts
 }
 
-func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
-	whereStr = strings.TrimSpace(whereStr)
-	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
-		return true
-	}
-	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
-		return false
-	}
-
-	orParts := splitLogicalConditions(whereStr, " OR ")
-	if len(orParts) > 1 {
-		for _, part := range orParts {
-			if evaluateWhereCondition(rec, part) {
-				return true
-			}
-		}
-		return false
-	}
-
-	andParts := splitLogicalConditions(whereStr, " AND ")
-	if len(andParts) > 1 {
-		for _, part := range andParts {
-			if !evaluateWhereCondition(rec, part) {
-				return false
-			}
-		}
-		return true
-	}
-
-	return evaluateSingleCondition(rec, whereStr)
-}
-
 func parseValueToType(s string, t storage.DataType) storage.Value {
 	s = strings.TrimSpace(s)
 	if strings.EqualFold(s, "NULL") {
@@ -2846,112 +2830,20 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 	return storage.StringValue(s)
 }
 
-func evaluateSingleCondition(rec storage.Record, whereStr string) bool {
+func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 	whereStr = strings.TrimSpace(whereStr)
-	if strings.HasPrefix(whereStr, "(") && strings.HasSuffix(whereStr, ")") {
-		inner := strings.TrimSpace(whereStr[1 : len(whereStr)-1])
-		if !strings.Contains(inner, "(") && !strings.Contains(inner, ")") {
-			whereStr = inner
-		}
+	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
+		return true
+	}
+	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
+		return false
 	}
 
-	inRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)
-	if m := inRe.FindStringSubmatch(whereStr); len(m) == 4 {
-		colName := cleanIdentifier(m[1])
-		isNot := strings.TrimSpace(m[2]) != ""
-		valList := m[3]
-		val, ok := rec[colName]
-		if !ok {
-			if idx := strings.Index(colName, "."); idx != -1 {
-				val, ok = rec[colName[idx+1:]]
-			}
-		}
-		if !ok || val.IsNull {
-			return false
-		}
-		strVal := fmt.Sprintf("%v", formatStorageValue(val))
-		found := false
-		for _, rawItem := range strings.Split(valList, ",") {
-			item := strings.Trim(strings.TrimSpace(rawItem), "'\"")
-			if strings.EqualFold(strVal, item) {
-				found = true
-				break
-			}
-		}
-		if isNot {
-			return !found
-		}
-		return found
+	rMap := make(map[string]any, len(rec))
+	for k, v := range rec {
+		rMap[k] = formatStorageValue(v)
 	}
-
-	ops := []string{"!=", "<>", "<=", ">=", "=", "<", ">", " LIKE "}
-	for _, op := range ops {
-		idx := strings.Index(strings.ToUpper(whereStr), op)
-		if idx != -1 {
-			leftCol := cleanIdentifier(whereStr[:idx])
-			rightVal := strings.TrimSpace(whereStr[idx+len(op):])
-			rightVal = strings.Trim(rightVal, "';\"")
-
-			if leftCol == "1" && rightVal == "1" && op == "=" {
-				return true
-			}
-			if leftCol == "1" && rightVal == "0" && op == "=" {
-				return false
-			}
-
-			val, ok := rec[leftCol]
-			if !ok {
-				if dotIdx := strings.Index(leftCol, "."); dotIdx != -1 {
-					val, ok = rec[leftCol[dotIdx+1:]]
-				}
-			}
-			if !ok {
-				return false
-			}
-
-			strVal := fmt.Sprintf("%v", formatStorageValue(val))
-			switch strings.TrimSpace(op) {
-			case "=":
-				return strings.EqualFold(strVal, rightVal)
-			case "!=", "<>":
-				return !strings.EqualFold(strVal, rightVal)
-			case ">":
-				n1, err1 := strconv.ParseFloat(strVal, 64)
-				n2, err2 := strconv.ParseFloat(rightVal, 64)
-				if err1 == nil && err2 == nil {
-					return n1 > n2
-				}
-				return strVal > rightVal
-			case ">=":
-				n1, err1 := strconv.ParseFloat(strVal, 64)
-				n2, err2 := strconv.ParseFloat(rightVal, 64)
-				if err1 == nil && err2 == nil {
-					return n1 >= n2
-				}
-				return strVal >= rightVal
-			case "<":
-				n1, err1 := strconv.ParseFloat(strVal, 64)
-				n2, err2 := strconv.ParseFloat(rightVal, 64)
-				if err1 == nil && err2 == nil {
-					return n1 < n2
-				}
-				return strVal < rightVal
-			case "<=":
-				n1, err1 := strconv.ParseFloat(strVal, 64)
-				n2, err2 := strconv.ParseFloat(rightVal, 64)
-				if err1 == nil && err2 == nil {
-					return n1 <= n2
-				}
-				return strVal <= rightVal
-			case "LIKE":
-				pat := strings.ReplaceAll(regexp.QuoteMeta(rightVal), "%", ".*")
-				pat = strings.ReplaceAll(pat, "_", ".")
-				matched, _ := regexp.MatchString("(?i)^"+pat+"$", strVal)
-				return matched
-			}
-		}
-	}
-	return true
+	return evaluateWhereConditionMap(rMap, whereStr)
 }
 
 func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
@@ -2961,6 +2853,12 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 	}
 	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
 		return false
+	}
+
+	p := proc.NewParser(proc.NewLexer(whereStr))
+	expr := p.ParseExpr()
+	if expr != nil && len(p.Errors()) == 0 {
+		return proc.EvalBoolExpr(expr, rec, nil)
 	}
 
 	orParts := splitLogicalConditions(whereStr, " OR ")

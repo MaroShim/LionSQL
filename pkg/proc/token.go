@@ -94,6 +94,32 @@ const (
 	TokenAfter
 	TokenInstead
 	TokenOf
+	TokenWith
+	TokenJoin
+	TokenInner
+	TokenLeft
+	TokenRight
+	TokenOuter
+	TokenCross
+	TokenGroup
+	TokenBy
+	TokenHaving
+	TokenOrder
+	TokenAsc
+	TokenDesc
+	TokenLimit
+	TokenTable
+	TokenIndex
+	TokenUnique
+	TokenDrop
+	TokenExplain
+	TokenAnalyze
+	TokenExists
+	TokenCount
+	TokenSum
+	TokenAvg
+	TokenMin
+	TokenMax
 )
 
 var keywords = map[string]TokenType{
@@ -159,6 +185,86 @@ var keywords = map[string]TokenType{
 	"DEALLOCATE":  TokenDeallocate,
 	"TRUE":        TokenBool,
 	"FALSE":       TokenBool,
+	"WITH":        TokenWith,
+	"JOIN":        TokenJoin,
+	"INNER":       TokenInner,
+	"LEFT":        TokenLeft,
+	"RIGHT":       TokenRight,
+	"OUTER":       TokenOuter,
+	"CROSS":       TokenCross,
+	"GROUP":       TokenGroup,
+	"BY":          TokenBy,
+	"HAVING":      TokenHaving,
+	"ORDER":       TokenOrder,
+	"ASC":         TokenAsc,
+	"DESC":        TokenDesc,
+	"LIMIT":       TokenLimit,
+	"TABLE":       TokenTable,
+	"INDEX":       TokenIndex,
+	"UNIQUE":      TokenUnique,
+	"DROP":        TokenDrop,
+	"EXPLAIN":     TokenExplain,
+	"ANALYZE":     TokenAnalyze,
+	"EXISTS":      TokenExists,
+	"COUNT":       TokenCount,
+	"SUM":         TokenSum,
+	"AVG":         TokenAvg,
+	"MIN":         TokenMin,
+	"MAX":         TokenMax,
+}
+
+func (t TokenType) String() string {
+	switch t {
+	case TokenAssign, TokenEq:
+		return "="
+	case TokenNeq:
+		return "!="
+	case TokenLt:
+		return "<"
+	case TokenLte:
+		return "<="
+	case TokenGt:
+		return ">"
+	case TokenGte:
+		return ">="
+	case TokenPlus:
+		return "+"
+	case TokenMinus:
+		return "-"
+	case TokenAsterisk:
+		return "*"
+	case TokenSlash:
+		return "/"
+	case TokenComma:
+		return ","
+	case TokenSemicolon:
+		return ";"
+	case TokenLParen:
+		return "("
+	case TokenRParen:
+		return ")"
+	case TokenAnd:
+		return "AND"
+	case TokenOr:
+		return "OR"
+	case TokenNot:
+		return "NOT"
+	case TokenIn:
+		return "IN"
+	case TokenBetween:
+		return "BETWEEN"
+	case TokenLike:
+		return "LIKE"
+	case TokenIs:
+		return "IS"
+	default:
+		for k, v := range keywords {
+			if v == t {
+				return k
+			}
+		}
+		return fmt.Sprintf("Token(%d)", int(t))
+	}
 }
 
 // Token represents a lexical token.
@@ -172,3 +278,4 @@ type Token struct {
 func (t Token) String() string {
 	return fmt.Sprintf("[%v: %q at %d:%d]", t.Type, t.Literal, t.Line, t.Col)
 }
+

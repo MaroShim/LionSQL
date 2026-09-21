@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
 
@@ -85,6 +86,7 @@ type QueryInfo struct {
 	LimitCount    int64
 	HasAggregates bool
 	IsAnalyze     bool
+	AST           *proc.GeneralSelectStmt
 }
 
 // Planner constructs and optimizes execution plans for SQL queries.
@@ -95,9 +97,111 @@ func NewPlanner() *Planner {
 	return &Planner{}
 }
 
+// FromAST converts a GeneralSelectStmt AST into a QueryInfo for cost-based planning.
+func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
+	if stmt == nil {
+		return nil
+	}
+
+	var ctes []CTEInfo
+	for _, c := range stmt.CTEs {
+		ctes = append(ctes, CTEInfo{
+			Name:     c.Name,
+			InnerSQL: c.InnerSQL,
+		})
+	}
+
+	var projections []string
+	hasAgg := false
+	for _, p := range stmt.Projections {
+		pStr := p.String()
+		projections = append(projections, pStr)
+		pUpper := strings.ToUpper(pStr)
+		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
+			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
+			strings.Contains(pUpper, "MAX(") {
+			hasAgg = true
+		}
+	}
+
+	var joinInfo *JoinInfo
+	if len(stmt.Joins) > 0 {
+		j := stmt.Joins[0]
+		leftKey := ""
+		rightKey := ""
+		if bin, ok := j.On.(*proc.BinaryExpr); ok && bin.Op == proc.TokenEq {
+			leftKey = bin.Left.String()
+			rightKey = bin.Right.String()
+		} else if j.On != nil {
+			leftKey = j.On.String()
+		}
+		joinInfo = &JoinInfo{
+			Type:     j.Type,
+			Table:    j.Table.Name,
+			Alias:    j.Table.Alias,
+			LeftKey:  leftKey,
+			RightKey: rightKey,
+		}
+	}
+
+	whereClause := ""
+	if stmt.Where != nil {
+		whereClause = stmt.Where.String()
+	}
+
+	var groupByCols []string
+	for _, g := range stmt.GroupBy {
+		groupByCols = append(groupByCols, g.String())
+	}
+	if len(groupByCols) > 0 {
+		hasAgg = true
+	}
+
+	havingClause := ""
+	if stmt.Having != nil {
+		havingClause = stmt.Having.String()
+		hasAgg = true
+	}
+
+	var orderByClause string
+	if len(stmt.OrderBy) > 0 {
+		var obStrs []string
+		for _, o := range stmt.OrderBy {
+			obStrs = append(obStrs, o.String())
+		}
+		orderByClause = strings.Join(obStrs, ", ")
+	}
+
+	return &QueryInfo{
+		RawQuery:      stmt.RawSQL,
+		CTEs:          ctes,
+		TableName:     stmt.From.Name,
+		TableAlias:    stmt.From.Alias,
+		Join:          joinInfo,
+		Projections:   projections,
+		WhereClause:   whereClause,
+		GroupByCols:   groupByCols,
+		HavingClause:  havingClause,
+		OrderByClause: orderByClause,
+		LimitCount:    stmt.Limit,
+		HasAggregates: hasAgg,
+		IsAnalyze:     stmt.IsAnalyze,
+		AST:           stmt,
+	}
+}
+
 // ParseSelect parses a SELECT statement (including CTEs) into QueryInfo.
 func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// Try AST-based parsing first
+	if parsedStmt, err := proc.ParseSQL(cleaned); err == nil {
+		if sel, ok := parsedStmt.(*proc.GeneralSelectStmt); ok {
+			qInfo := FromAST(sel)
+			qInfo.RawQuery = query
+			return qInfo, nil
+		}
+	}
 
 	isAnalyze := false
 	upper := strings.ToUpper(cleaned)
