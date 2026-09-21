@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"sqlion/pkg/storage"
 )
@@ -92,26 +94,49 @@ func (idx *IndexData) ScanRange(low, high *storage.Value) []string {
 
 // TableData stores rows in memory for a single table with OCC version tracking and secondary indexes.
 type TableData struct {
-	Schema   storage.TableSchema   `json:"schema"`
+	Schema   storage.TableSchema       `json:"schema"`
 	Rows     map[string]storage.Record `json:"rows"`
-	Versions map[string]int64       `json:"versions"`
-	Keys     []string              `json:"keys"`
-	Indexes  map[string]*IndexData `json:"indexes,omitempty"`
+	Versions map[string]int64          `json:"versions"`
+	Keys     []string                  `json:"keys"`
+	Indexes  map[string]*IndexData     `json:"indexes,omitempty"`
 }
 
-// Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence.
+// Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence and WAL (AOF) logging.
 type Engine struct {
-	mu      sync.RWMutex
-	dataDir string
-	tables  map[string]*TableData
-	closed  bool
+	mu           sync.RWMutex
+	dataDir      string
+	tables       map[string]*TableData
+	wal          *WALWriter
+	fsyncPolicy  FsyncPolicy
+	nextLSN      atomic.Int64
+	aofThreshold int64 // Size threshold in bytes to trigger AOF rewrite compaction
+	closed       bool
 }
 
 // New creates a new in-memory storage engine.
 func New() *Engine {
 	return &Engine{
-		tables: make(map[string]*TableData),
+		tables:       make(map[string]*TableData),
+		fsyncPolicy:  FsyncEverySec,
+		aofThreshold: 10 * 1024 * 1024, // 10MB default compaction threshold
 	}
+}
+
+// SetFsyncPolicy sets the disk synchronization policy for WAL/AOF.
+func (e *Engine) SetFsyncPolicy(policy FsyncPolicy) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.fsyncPolicy = policy
+	if e.wal != nil {
+		e.wal.policy = policy
+	}
+}
+
+// SetAOFThreshold sets the byte threshold for automatic AOF rewrite compaction.
+func (e *Engine) SetAOFThreshold(bytes int64) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.aofThreshold = bytes
 }
 
 func (e *Engine) Open(dir string) error {
@@ -124,7 +149,161 @@ func (e *Engine) Open(dir string) error {
 		if err := os.MkdirAll(e.dataDir, 0755); err != nil {
 			return fmt.Errorf("failed to create data directory: %w", err)
 		}
+
+		// 1. Load baseline snapshot (RDB) if present
 		e.loadDiskLocked()
+
+		// 2. Replay subsequent AOF log records if present
+		aofPath := filepath.Join(e.dataDir, "wal.aof")
+		maxLSN, err := ReplayWAL(aofPath, func(rec WALRecord) error {
+			return e.applyWALRecordLocked(rec)
+		})
+		if err != nil {
+			return fmt.Errorf("WAL replay error: %w", err)
+		}
+		e.nextLSN.Store(maxLSN)
+
+		// 3. Open WAL writer for future append-only logging
+		walWriter, err := NewWALWriter(aofPath, e.fsyncPolicy)
+		if err != nil {
+			return fmt.Errorf("failed to initialize WAL writer: %w", err)
+		}
+		e.wal = walWriter
+
+		// If AOF is already larger than threshold on startup, compact it
+		if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
+			_ = e.rewriteAOFLocked()
+		}
+	}
+	return nil
+}
+
+func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
+	for _, op := range rec.Ops {
+		switch op.Type {
+		case OpCreateTable:
+			if op.Schema == nil {
+				continue
+			}
+			e.tables[op.Schema.Name] = &TableData{
+				Schema:   *op.Schema,
+				Rows:     make(map[string]storage.Record),
+				Versions: make(map[string]int64),
+				Keys:     make([]string, 0),
+				Indexes:  make(map[string]*IndexData),
+			}
+		case OpDropTable:
+			delete(e.tables, op.Table)
+		case OpCreateIndex:
+			if op.IndexSchema == nil {
+				continue
+			}
+			td, exists := e.tables[op.IndexSchema.TableName]
+			if !exists {
+				continue
+			}
+			idxData := &IndexData{
+				Schema:  *op.IndexSchema,
+				Entries: make([]IndexEntry, 0),
+			}
+			for pk, rowRec := range td.Rows {
+				keyVal := extractIndexKey(rowRec, op.IndexSchema.Columns)
+				_ = idxData.Insert(keyVal, pk)
+			}
+			if td.Indexes == nil {
+				td.Indexes = make(map[string]*IndexData)
+			}
+			td.Indexes[op.IndexSchema.Name] = idxData
+			_, _, idxFound := td.Schema.FindIndex(op.IndexSchema.Name)
+			if !idxFound {
+				td.Schema.Indexes = append(td.Schema.Indexes, *op.IndexSchema)
+			}
+		case OpDropIndex:
+			td, exists := e.tables[op.Table]
+			if !exists {
+				continue
+			}
+			delete(td.Indexes, op.IndexName)
+			_, idxPos, idxFound := td.Schema.FindIndex(op.IndexName)
+			if idxFound {
+				td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
+			}
+		case OpInsert:
+			td, exists := e.tables[op.Table]
+			if !exists {
+				continue
+			}
+			if _, hasKey := td.Rows[op.Key]; !hasKey {
+				td.Keys = append(td.Keys, op.Key)
+			}
+			td.Rows[op.Key] = op.Record
+			td.Versions[op.Key] = 1
+			for _, idxData := range td.Indexes {
+				newKey := extractIndexKey(op.Record, idxData.Schema.Columns)
+				_ = idxData.Insert(newKey, op.Key)
+			}
+		case OpUpdate:
+			td, exists := e.tables[op.Table]
+			if !exists {
+				continue
+			}
+			oldRec, hadOld := td.Rows[op.Key]
+			if !hadOld {
+				td.Keys = append(td.Keys, op.Key)
+			}
+			td.Rows[op.Key] = op.Record
+			td.Versions[op.Key] = op.BaseVer + 1
+			for _, idxData := range td.Indexes {
+				if hadOld {
+					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+					idxData.Delete(oldKey, op.Key)
+				}
+				newKey := extractIndexKey(op.Record, idxData.Schema.Columns)
+				_ = idxData.Insert(newKey, op.Key)
+			}
+		case OpDelete:
+			td, exists := e.tables[op.Table]
+			if !exists {
+				continue
+			}
+			oldRec, hadOld := td.Rows[op.Key]
+			delete(td.Rows, op.Key)
+			delete(td.Versions, op.Key)
+			for i, k := range td.Keys {
+				if k == op.Key {
+					td.Keys = append(td.Keys[:i], td.Keys[i+1:]...)
+					break
+				}
+			}
+			if hadOld {
+				for _, idxData := range td.Indexes {
+					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+					idxData.Delete(oldKey, op.Key)
+				}
+			}
+		}
+	}
+	return nil
+}
+
+// RewriteAOF generates a fresh snapshot (tables.json) and truncates the AOF log file.
+func (e *Engine) RewriteAOF() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.rewriteAOFLocked()
+}
+
+func (e *Engine) rewriteAOFLocked() error {
+	if e.dataDir == "" || e.wal == nil {
+		return nil
+	}
+	// 1. Atomically save full current in-memory snapshot
+	if err := e.saveDiskLocked(); err != nil {
+		return fmt.Errorf("AOF rewrite snapshot error: %w", err)
+	}
+	// 2. Truncate AOF log file
+	if err := e.wal.Truncate(); err != nil {
+		return fmt.Errorf("AOF truncate error: %w", err)
 	}
 	return nil
 }
@@ -137,10 +316,19 @@ func (e *Engine) Close() error {
 		return nil
 	}
 	e.closed = true
+
+	var saveErr, walErr error
 	if e.dataDir != "" {
-		_ = e.saveDiskLocked()
+		saveErr = e.saveDiskLocked()
 	}
-	return nil
+	if e.wal != nil {
+		walErr = e.wal.Close()
+		e.wal = nil
+	}
+	if saveErr != nil {
+		return saveErr
+	}
+	return walErr
 }
 
 func (e *Engine) saveDiskLocked() error {
@@ -207,8 +395,17 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		Keys:     make([]string, 0),
 		Indexes:  make(map[string]*IndexData),
 	}
-	if e.dataDir != "" {
-		_ = e.saveDiskLocked()
+
+	if e.wal != nil {
+		_ = e.wal.Append(WALRecord{
+			LSN:       e.nextLSN.Add(1),
+			Timestamp: time.Now().UnixNano(),
+			Ops: []WALOp{{
+				Type:   OpCreateTable,
+				Table:  schema.Name,
+				Schema: schema,
+			}},
+		})
 	}
 	return nil
 }
@@ -252,8 +449,16 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	td.Indexes[index.Name] = idxData
 	td.Schema.Indexes = append(td.Schema.Indexes, *index)
 
-	if e.dataDir != "" {
-		_ = e.saveDiskLocked()
+	if e.wal != nil {
+		_ = e.wal.Append(WALRecord{
+			LSN:       e.nextLSN.Add(1),
+			Timestamp: time.Now().UnixNano(),
+			Ops: []WALOp{{
+				Type:        OpCreateIndex,
+				Table:       index.TableName,
+				IndexSchema: index,
+			}},
+		})
 	}
 	return nil
 }
@@ -275,8 +480,16 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	delete(td.Indexes, indexName)
 	td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 
-	if e.dataDir != "" {
-		_ = e.saveDiskLocked()
+	if e.wal != nil {
+		_ = e.wal.Append(WALRecord{
+			LSN:       e.nextLSN.Add(1),
+			Timestamp: time.Now().UnixNano(),
+			Ops: []WALOp{{
+				Type:      OpDropIndex,
+				Table:     tableName,
+				IndexName: indexName,
+			}},
+		})
 	}
 	return nil
 }
@@ -314,8 +527,15 @@ func (e *Engine) DropTable(tableName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 	delete(e.tables, tableName)
-	if e.dataDir != "" {
-		_ = e.saveDiskLocked()
+	if e.wal != nil {
+		_ = e.wal.Append(WALRecord{
+			LSN:       e.nextLSN.Add(1),
+			Timestamp: time.Now().UnixNano(),
+			Ops: []WALOp{{
+				Type:  OpDropTable,
+				Table: tableName,
+			}},
+		})
 	}
 	return nil
 }
@@ -864,8 +1084,36 @@ func (tx *Transaction) Commit() error {
 		}
 	}
 
-	if tx.engine.dataDir != "" {
-		_ = tx.engine.saveDiskLocked()
+	// 3. Append atomic WAL record to AOF log if enabled
+	if tx.engine.wal != nil && len(tx.changes) > 0 {
+		ops := make([]WALOp, 0, len(tx.changes))
+		for _, ch := range tx.changes {
+			var opType WALOpType
+			switch ch.kind {
+			case changeInsert:
+				opType = OpInsert
+			case changeUpdate:
+				opType = OpUpdate
+			case changeDelete:
+				opType = OpDelete
+			}
+			ops = append(ops, WALOp{
+				Type:    opType,
+				Table:   ch.table,
+				Key:     ch.key,
+				Record:  ch.rec,
+				BaseVer: ch.baseVer,
+			})
+		}
+		_ = tx.engine.wal.Append(WALRecord{
+			LSN:       tx.engine.nextLSN.Add(1),
+			Timestamp: time.Now().UnixNano(),
+			Ops:       ops,
+		})
+
+		if tx.engine.aofThreshold > 0 && tx.engine.wal.Size() > tx.engine.aofThreshold {
+			_ = tx.engine.rewriteAOFLocked()
+		}
 	}
 
 	return nil
