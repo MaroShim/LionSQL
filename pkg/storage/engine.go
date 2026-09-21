@@ -7,15 +7,18 @@ import (
 )
 
 var (
-	ErrTableNotFound         = errors.New("table not found")
-	ErrTableExists           = errors.New("table already exists")
-	ErrKeyNotFound           = errors.New("key not found")
-	ErrKeyExists             = errors.New("key already exists (primary key constraint)")
-	ErrTxClosed              = errors.New("transaction is already closed")
-	ErrColumnNotFound        = errors.New("column not found")
-	ErrInvalidDataType       = errors.New("invalid data type for column")
-	ErrNotNullViolation      = errors.New("not null constraint violation")
-	ErrSerializationFailure  = errors.New("serialization failure: concurrent update conflict")
+	ErrTableNotFound        = errors.New("table not found")
+	ErrTableExists          = errors.New("table already exists")
+	ErrIndexNotFound        = errors.New("index not found")
+	ErrIndexExists          = errors.New("index already exists")
+	ErrUniqueViolation      = errors.New("unique constraint violation on index")
+	ErrKeyNotFound          = errors.New("key not found")
+	ErrKeyExists            = errors.New("key already exists (primary key constraint)")
+	ErrTxClosed             = errors.New("transaction is already closed")
+	ErrColumnNotFound       = errors.New("column not found")
+	ErrInvalidDataType      = errors.New("invalid data type for column")
+	ErrNotNullViolation     = errors.New("not null constraint violation")
+	ErrSerializationFailure = errors.New("serialization failure: concurrent update conflict")
 )
 
 // DataType represents the column data type.
@@ -55,10 +58,19 @@ type Column struct {
 	Nullable   bool     `json:"nullable"`
 }
 
+// IndexSchema defines metadata for a secondary index.
+type IndexSchema struct {
+	Name      string   `json:"name"`
+	TableName string   `json:"table_name"`
+	Columns   []string `json:"columns"`
+	Unique    bool     `json:"unique"`
+}
+
 // TableSchema defines a table structure.
 type TableSchema struct {
-	Name    string   `json:"name"`
-	Columns []Column `json:"columns"`
+	Name    string        `json:"name"`
+	Columns []Column      `json:"columns"`
+	Indexes []IndexSchema `json:"indexes,omitempty"`
 }
 
 func (s *TableSchema) PrimaryKeyColumn() (*Column, error) {
@@ -77,6 +89,26 @@ func (s *TableSchema) FindColumn(name string) (*Column, int, bool) {
 		}
 	}
 	return nil, -1, false
+}
+
+func (s *TableSchema) FindIndex(name string) (*IndexSchema, int, bool) {
+	for i := range s.Indexes {
+		if s.Indexes[i].Name == name {
+			return &s.Indexes[i], i, true
+		}
+	}
+	return nil, -1, false
+}
+
+func (s *TableSchema) FindIndexByColumn(colName string) (*IndexSchema, bool) {
+	for i := range s.Indexes {
+		for _, col := range s.Indexes[i].Columns {
+			if col == colName {
+				return &s.Indexes[i], true
+			}
+		}
+	}
+	return nil, false
 }
 
 // Value represents a typed field value.
@@ -157,6 +189,59 @@ func (v Value) Equal(other Value) bool {
 	}
 }
 
+// Compare returns -1 if v < other, 0 if v == other, 1 if v > other.
+// NULL is considered smaller than any non-NULL value.
+func (v Value) Compare(other Value) int {
+	if v.IsNull && other.IsNull {
+		return 0
+	}
+	if v.IsNull {
+		return -1
+	}
+	if other.IsNull {
+		return 1
+	}
+	switch v.Type {
+	case TypeInt:
+		if v.IVal < other.IVal {
+			return -1
+		} else if v.IVal > other.IVal {
+			return 1
+		}
+		return 0
+	case TypeVarChar:
+		if v.SVal < other.SVal {
+			return -1
+		} else if v.SVal > other.SVal {
+			return 1
+		}
+		return 0
+	case TypeFloat:
+		if v.FVal < other.FVal {
+			return -1
+		} else if v.FVal > other.FVal {
+			return 1
+		}
+		return 0
+	case TypeBool:
+		if !v.BVal && other.BVal {
+			return -1
+		} else if v.BVal && !other.BVal {
+			return 1
+		}
+		return 0
+	case TypeDateTime:
+		if v.TVal.Before(other.TVal) {
+			return -1
+		} else if v.TVal.After(other.TVal) {
+			return 1
+		}
+		return 0
+	default:
+		return 0
+	}
+}
+
 // Record is a mapping from column name to Value.
 type Record map[string]Value
 
@@ -179,6 +264,7 @@ type Transaction interface {
 	Delete(tableName string, pk Value) error
 	Get(tableName string, pk Value) (Record, error)
 	Scan(tableName string) (Cursor, error)
+	IndexScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	Commit() error
 	Rollback() error
 }
@@ -198,4 +284,6 @@ type Engine interface {
 	DropTable(tableName string) error
 	GetTable(tableName string) (*TableSchema, error)
 	ListTables() ([]*TableSchema, error)
+	CreateIndex(index *IndexSchema) error
+	DropIndex(tableName, indexName string) error
 }

@@ -43,3 +43,11 @@ func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
 func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 	return nil, fmt.Errorf("wiredtiger storage engine not enabled")
 }
+
+func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
+	return fmt.Errorf("wiredtiger storage engine not enabled")
+}
+
+func (e *Engine) DropIndex(tableName, indexName string) error {
+	return fmt.Errorf("wiredtiger storage engine not enabled")
+}

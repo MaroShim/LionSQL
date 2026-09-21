@@ -271,6 +271,41 @@ func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 	return res, nil
 }
 
+func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	t, exists := e.tables[index.TableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, index.TableName)
+	}
+
+	if _, _, exists := t.FindIndex(index.Name); exists {
+		return fmt.Errorf("%w: %s", storage.ErrIndexExists, index.Name)
+	}
+
+	t.Indexes = append(t.Indexes, *index)
+	return e.saveCatalog()
+}
+
+func (e *Engine) DropIndex(tableName, indexName string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	t, exists := e.tables[tableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	_, idxPos, exists := t.FindIndex(indexName)
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrIndexNotFound, indexName)
+	}
+
+	t.Indexes = append(t.Indexes[:idxPos], t.Indexes[idxPos+1:]...)
+	return e.saveCatalog()
+}
+
 func (e *Engine) NewSession() (storage.Session, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
@@ -528,6 +563,10 @@ func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
 	return &WTCursor{
 		cur: cur,
 	}, nil
+}
+
+func (tx *WTTx) IndexScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	return tx.Scan(tableName)
 }
 
 func (tx *WTTx) Commit() error {

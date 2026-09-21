@@ -11,12 +11,92 @@ import (
 	"sqlion/pkg/storage"
 )
 
-// TableData stores rows in memory for a single table with OCC version tracking.
+// IndexEntry represents a sorted key entry in a secondary index.
+type IndexEntry struct {
+	Key storage.Value `json:"key"`
+	PKs []string      `json:"pks"`
+}
+
+// IndexData holds sorted entries for a secondary index.
+type IndexData struct {
+	Schema  storage.IndexSchema `json:"schema"`
+	Entries []IndexEntry        `json:"entries"`
+}
+
+func (idx *IndexData) Insert(key storage.Value, pk string) error {
+	pos := sort.Search(len(idx.Entries), func(i int) bool {
+		return idx.Entries[i].Key.Compare(key) >= 0
+	})
+	if pos < len(idx.Entries) && idx.Entries[pos].Key.Equal(key) {
+		if idx.Schema.Unique && len(idx.Entries[pos].PKs) > 0 {
+			for _, p := range idx.Entries[pos].PKs {
+				if p == pk {
+					return nil
+				}
+			}
+			return fmt.Errorf("%w: duplicate key %q in index %q", storage.ErrUniqueViolation, key.String(), idx.Schema.Name)
+		}
+		for _, p := range idx.Entries[pos].PKs {
+			if p == pk {
+				return nil
+			}
+		}
+		idx.Entries[pos].PKs = append(idx.Entries[pos].PKs, pk)
+		return nil
+	}
+	entry := IndexEntry{
+		Key: key,
+		PKs: []string{pk},
+	}
+	idx.Entries = append(idx.Entries, IndexEntry{})
+	copy(idx.Entries[pos+1:], idx.Entries[pos:])
+	idx.Entries[pos] = entry
+	return nil
+}
+
+func (idx *IndexData) Delete(key storage.Value, pk string) {
+	pos := sort.Search(len(idx.Entries), func(i int) bool {
+		return idx.Entries[i].Key.Compare(key) >= 0
+	})
+	if pos < len(idx.Entries) && idx.Entries[pos].Key.Equal(key) {
+		filtered := make([]string, 0, len(idx.Entries[pos].PKs))
+		for _, p := range idx.Entries[pos].PKs {
+			if p != pk {
+				filtered = append(filtered, p)
+			}
+		}
+		if len(filtered) == 0 {
+			idx.Entries = append(idx.Entries[:pos], idx.Entries[pos+1:]...)
+		} else {
+			idx.Entries[pos].PKs = filtered
+		}
+	}
+}
+
+func (idx *IndexData) ScanRange(low, high *storage.Value) []string {
+	var result []string
+	start := 0
+	if low != nil {
+		start = sort.Search(len(idx.Entries), func(i int) bool {
+			return idx.Entries[i].Key.Compare(*low) >= 0
+		})
+	}
+	for i := start; i < len(idx.Entries); i++ {
+		if high != nil && idx.Entries[i].Key.Compare(*high) > 0 {
+			break
+		}
+		result = append(result, idx.Entries[i].PKs...)
+	}
+	return result
+}
+
+// TableData stores rows in memory for a single table with OCC version tracking and secondary indexes.
 type TableData struct {
-	Schema   storage.TableSchema        `json:"schema"`
+	Schema   storage.TableSchema   `json:"schema"`
 	Rows     map[string]storage.Record `json:"rows"`
-	Versions map[string]int64           `json:"versions"`
-	Keys     []string                  `json:"keys"`
+	Versions map[string]int64       `json:"versions"`
+	Keys     []string              `json:"keys"`
+	Indexes  map[string]*IndexData `json:"indexes,omitempty"`
 }
 
 // Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence.
@@ -101,6 +181,9 @@ func (e *Engine) loadDiskLocked() {
 					td.Versions[k] = 1
 				}
 			}
+			if td.Indexes == nil {
+				td.Indexes = make(map[string]*IndexData)
+			}
 		}
 	}
 }
@@ -122,11 +205,105 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		Rows:     make(map[string]storage.Record),
 		Versions: make(map[string]int64),
 		Keys:     make([]string, 0),
+		Indexes:  make(map[string]*IndexData),
 	}
 	if e.dataDir != "" {
 		_ = e.saveDiskLocked()
 	}
 	return nil
+}
+
+func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	td, exists := e.tables[index.TableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, index.TableName)
+	}
+
+	if _, _, exists := td.Schema.FindIndex(index.Name); exists {
+		return fmt.Errorf("%w: %s", storage.ErrIndexExists, index.Name)
+	}
+
+	// Validate columns
+	for _, colName := range index.Columns {
+		if _, _, found := td.Schema.FindColumn(colName); !found {
+			return fmt.Errorf("%w: %s on table %s", storage.ErrColumnNotFound, colName, index.TableName)
+		}
+	}
+
+	idxData := &IndexData{
+		Schema:  *index,
+		Entries: make([]IndexEntry, 0),
+	}
+
+	// Populate index from existing rows
+	for pk, rec := range td.Rows {
+		keyVal := extractIndexKey(rec, index.Columns)
+		if err := idxData.Insert(keyVal, pk); err != nil {
+			return err
+		}
+	}
+
+	if td.Indexes == nil {
+		td.Indexes = make(map[string]*IndexData)
+	}
+	td.Indexes[index.Name] = idxData
+	td.Schema.Indexes = append(td.Schema.Indexes, *index)
+
+	if e.dataDir != "" {
+		_ = e.saveDiskLocked()
+	}
+	return nil
+}
+
+func (e *Engine) DropIndex(tableName, indexName string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	td, exists := e.tables[tableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	_, idxPos, exists := td.Schema.FindIndex(indexName)
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrIndexNotFound, indexName)
+	}
+
+	delete(td.Indexes, indexName)
+	td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
+
+	if e.dataDir != "" {
+		_ = e.saveDiskLocked()
+	}
+	return nil
+}
+
+func extractIndexKey(rec storage.Record, cols []string) storage.Value {
+	if len(cols) == 0 {
+		return storage.NullValue(storage.TypeUnknown)
+	}
+	if len(cols) == 1 {
+		if v, ok := rec[cols[0]]; ok {
+			return v
+		}
+		return storage.NullValue(storage.TypeUnknown)
+	}
+	// Composite key formatted as string
+	var str string
+	for i, c := range cols {
+		if i > 0 {
+			str += "\x00"
+		}
+		if v, ok := rec[c]; ok {
+			str += v.String()
+		} else {
+			str += "NULL"
+		}
+	}
+	return storage.StringValue(str)
 }
 
 func (e *Engine) DropTable(tableName string) error {
@@ -280,6 +457,40 @@ func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 			}
 		}
 		tx.engine.mu.RUnlock()
+	}
+
+	// Validate unique index constraints
+	tx.engine.mu.RLock()
+	if td, ok := tx.engine.tables[tableName]; ok {
+		for _, idxData := range td.Indexes {
+			if idxData.Schema.Unique {
+				keyVal := extractIndexKey(record, idxData.Schema.Columns)
+				existing := idxData.ScanRange(&keyVal, &keyVal)
+				for _, epk := range existing {
+					if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+						tx.engine.mu.RUnlock()
+						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+					}
+				}
+			}
+		}
+	}
+	tx.engine.mu.RUnlock()
+
+	if localRows, ok := tx.local[tableName]; ok {
+		for epk, locRec := range localRows {
+			if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+				for _, idx := range schema.Indexes {
+					if idx.Unique {
+						keyVal := extractIndexKey(record, idx.Columns)
+						locVal := extractIndexKey(locRec, idx.Columns)
+						if keyVal.Equal(locVal) {
+							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	// Validate columns and types
@@ -485,6 +696,77 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 	}, nil
 }
 
+func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return nil, storage.ErrTxClosed
+	}
+
+	tx.engine.mu.RLock()
+	td, exists := tx.engine.tables[tableName]
+	if !exists {
+		tx.engine.mu.RUnlock()
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	idxData, exists := td.Indexes[indexName]
+	if !exists {
+		tx.engine.mu.RUnlock()
+		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
+	}
+
+	candidatePKs := idxData.ScanRange(low, high)
+	tx.engine.mu.RUnlock()
+
+	var records []storage.Record
+	seen := make(map[string]bool)
+
+	for _, pk := range candidatePKs {
+		if seen[pk] {
+			continue
+		}
+		seen[pk] = true
+
+		if tx.isLocallyDeleted(tableName, pk) {
+			continue
+		}
+
+		if locRec, inLocal := tx.getLocal(tableName, pk); inLocal {
+			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
+			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+				records = append(records, cloneRecord(locRec))
+			}
+			continue
+		}
+
+		tx.engine.mu.RLock()
+		if rec, exists := td.Rows[pk]; exists {
+			records = append(records, cloneRecord(rec))
+		}
+		tx.engine.mu.RUnlock()
+	}
+
+	if localRows, ok := tx.local[tableName]; ok {
+		for pk, locRec := range localRows {
+			if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
+				continue
+			}
+			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
+			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+				records = append(records, cloneRecord(locRec))
+				seen[pk] = true
+			}
+		}
+	}
+
+	return &memCursor{
+		records: records,
+		idx:     -1,
+	}, nil
+}
+
 func (tx *Transaction) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -498,11 +780,10 @@ func (tx *Transaction) Commit() error {
 		return nil
 	}
 
-	// Apply changes to master tables under engine lock with OCC validation
 	tx.engine.mu.Lock()
 	defer tx.engine.mu.Unlock()
 
-	// 1. Verify OCC version conflicts
+	// 1. Verify OCC version conflicts and unique constraints
 	for _, ch := range tx.changes {
 		td, exists := tx.engine.tables[ch.table]
 		if !exists {
@@ -513,29 +794,73 @@ func (tx *Transaction) Commit() error {
 			if _, exists := td.Rows[ch.key]; exists {
 				return storage.ErrSerializationFailure
 			}
+			for _, idxData := range td.Indexes {
+				if idxData.Schema.Unique {
+					keyVal := extractIndexKey(ch.rec, idxData.Schema.Columns)
+					existing := idxData.ScanRange(&keyVal, &keyVal)
+					for _, epk := range existing {
+						if epk != ch.key {
+							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+						}
+					}
+				}
+			}
 		} else {
 			if curVer != ch.baseVer {
 				return storage.ErrSerializationFailure
 			}
+			if ch.kind == changeUpdate {
+				for _, idxData := range td.Indexes {
+					if idxData.Schema.Unique {
+						keyVal := extractIndexKey(ch.rec, idxData.Schema.Columns)
+						existing := idxData.ScanRange(&keyVal, &keyVal)
+						for _, epk := range existing {
+							if epk != ch.key {
+								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+							}
+						}
+					}
+				}
+			}
 		}
 	}
 
-	// 2. All versions valid: apply changes atomically
+	// 2. Apply changes and update secondary indexes atomically
 	for _, ch := range tx.changes {
 		td, exists := tx.engine.tables[ch.table]
 		if !exists {
 			continue
 		}
+		oldRec, hadOld := td.Rows[ch.key]
+
 		switch ch.kind {
 		case changeInsert:
 			td.Rows[ch.key] = ch.rec
 			td.Versions[ch.key] = 1
+			for _, idxData := range td.Indexes {
+				newKey := extractIndexKey(ch.rec, idxData.Schema.Columns)
+				_ = idxData.Insert(newKey, ch.key)
+			}
 		case changeUpdate:
 			td.Rows[ch.key] = ch.rec
 			td.Versions[ch.key] = ch.baseVer + 1
+			for _, idxData := range td.Indexes {
+				if hadOld {
+					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+					idxData.Delete(oldKey, ch.key)
+				}
+				newKey := extractIndexKey(ch.rec, idxData.Schema.Columns)
+				_ = idxData.Insert(newKey, ch.key)
+			}
 		case changeDelete:
 			delete(td.Rows, ch.key)
 			delete(td.Versions, ch.key)
+			if hadOld {
+				for _, idxData := range td.Indexes {
+					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+					idxData.Delete(oldKey, ch.key)
+				}
+			}
 		}
 	}
 

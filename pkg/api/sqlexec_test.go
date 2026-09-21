@@ -131,3 +131,41 @@ END;`
 		t.Fatalf("expected balances 70 and 80, got: %+v", selRes.Rows)
 	}
 }
+
+func TestSQLExecutor_CreateIndexAndScan(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, _ = server.ExecuteSQL(`CREATE TABLE members (id INT PRIMARY KEY, username VARCHAR(50), score INT);`)
+	_, _ = server.ExecuteSQL(`INSERT INTO members (id, username, score) VALUES (1, 'alice', 95), (2, 'bob', 80), (3, 'charlie', 95);`)
+
+	// 1. CREATE UNIQUE INDEX
+	res, err := server.ExecuteSQL(`CREATE UNIQUE INDEX idx_members_username ON members (username);`)
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE UNIQUE INDEX failed: %v", err)
+	}
+
+	// 2. CREATE NON-UNIQUE INDEX
+	res, err = server.ExecuteSQL(`CREATE INDEX idx_members_score ON members (score);`)
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE INDEX failed: %v", err)
+	}
+
+	// 3. Query using index
+	res, err = server.ExecuteSQL(`SELECT * FROM members WHERE username = 'alice';`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with indexed username failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["username"] != "alice" {
+		t.Fatalf("expected 1 row for alice, got %+v", res.Rows)
+	}
+
+	// 4. DROP INDEX
+	res, err = server.ExecuteSQL(`DROP INDEX idx_members_score ON members;`)
+	if err != nil || !res.Success {
+		t.Fatalf("DROP INDEX failed: %v", err)
+	}
+}

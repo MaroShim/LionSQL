@@ -57,9 +57,19 @@ func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 		return s.execCreateTable(trimmed, start)
 	}
 
+	// 3.1 DDL: CREATE INDEX
+	if strings.HasPrefix(upper, "CREATE INDEX") || strings.HasPrefix(upper, "CREATE UNIQUE INDEX") {
+		return s.execCreateIndex(trimmed, start)
+	}
+
 	// 4. DDL: DROP TABLE
 	if strings.HasPrefix(upper, "DROP TABLE") {
 		return s.execDropTable(trimmed, start)
+	}
+
+	// 4.1 DDL: DROP INDEX
+	if strings.HasPrefix(upper, "DROP INDEX") {
+		return s.execDropIndex(trimmed, start)
 	}
 
 	// 5. DML: INSERT INTO
@@ -214,6 +224,97 @@ func (s *Server) execDropTable(query string, start time.Time) (*QueryResult, err
 	}, nil
 }
 
+func (s *Server) execCreateIndex(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	re := regexp.MustCompile(`(?is)^CREATE\s+(UNIQUE\s+)?INDEX\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
+	matches := re.FindStringSubmatch(cleaned)
+	if len(matches) < 5 {
+		return nil, fmt.Errorf("invalid CREATE INDEX syntax: expected CREATE [UNIQUE] INDEX <name> ON <table> (<cols>)")
+	}
+
+	isUnique := strings.TrimSpace(matches[1]) != ""
+	indexName := cleanIdentifier(matches[2])
+	tableName := cleanIdentifier(matches[3])
+	colsRaw := matches[4]
+
+	var cols []string
+	for _, c := range strings.Split(colsRaw, ",") {
+		cTrimmed := cleanIdentifier(strings.TrimSpace(c))
+		if cTrimmed != "" {
+			cols = append(cols, cTrimmed)
+		}
+	}
+
+	if len(cols) == 0 {
+		return nil, fmt.Errorf("no columns specified for index %q", indexName)
+	}
+
+	idxSchema := &storage.IndexSchema{
+		Name:      indexName,
+		TableName: tableName,
+		Columns:   cols,
+		Unique:    isUnique,
+	}
+
+	if err := s.engine.CreateIndex(idxSchema); err != nil {
+		return nil, err
+	}
+
+	msg := fmt.Sprintf("Index %q created successfully on table %q.", indexName, tableName)
+	if isUnique {
+		msg = fmt.Sprintf("Unique index %q created successfully on table %q.", indexName, tableName)
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "CREATE INDEX",
+		Messages:   []string{msg},
+		DurationUS: time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDropIndex(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	re := regexp.MustCompile(`(?is)^DROP\s+INDEX\s+([^\s]+)(?:\s+ON\s+([^\s]+))?$`)
+	matches := re.FindStringSubmatch(cleaned)
+	if len(matches) < 2 {
+		return nil, fmt.Errorf("invalid DROP INDEX syntax: expected DROP INDEX <name> [ON <table>]")
+	}
+
+	indexName := cleanIdentifier(matches[1])
+	tableName := ""
+	if len(matches) > 2 {
+		tableName = cleanIdentifier(matches[2])
+	}
+
+	if tableName == "" {
+		tables, err := s.engine.ListTables()
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range tables {
+			if _, _, found := t.FindIndex(indexName); found {
+				tableName = t.Name
+				break
+			}
+		}
+		if tableName == "" {
+			return nil, fmt.Errorf("index %q not found on any table", indexName)
+		}
+	}
+
+	if err := s.engine.DropIndex(tableName, indexName); err != nil {
+		return nil, err
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "DROP INDEX",
+		Messages:   []string{fmt.Sprintf("Index %q dropped successfully from table %q.", indexName, tableName)},
+		DurationUS: time.Since(start).Microseconds(),
+	}, nil
+}
+
 func (s *Server) execInsert(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?\s*VALUES\s*(.*)$`)
@@ -341,9 +442,32 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 	}
 	defer tx.Rollback()
 
-	cursor, err := tx.Scan(tableName)
-	if err != nil {
-		return nil, fmt.Errorf("scan error on %s: %w", tableName, err)
+	var cursor storage.Cursor
+	usedIndex := false
+
+	if whereClause != "" {
+		eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_]+)\s*=\s*(.+)$`)
+		if m := eqRe.FindStringSubmatch(whereClause); len(m) == 3 {
+			colName := cleanIdentifier(m[1])
+			if idx, found := schema.FindIndexByColumn(colName); found {
+				valStr := strings.Trim(strings.TrimSpace(m[2]), "'\"")
+				if colMeta, _, colFound := schema.FindColumn(colName); colFound && colMeta != nil {
+					parsedVal := parseValueToType(valStr, colMeta.Type)
+					if cur, err := tx.IndexScan(tableName, idx.Name, &parsedVal, &parsedVal); err == nil {
+						cursor = cur
+						usedIndex = true
+					}
+				}
+			}
+		}
+	}
+
+	if !usedIndex {
+		cur, err := tx.Scan(tableName)
+		if err != nil {
+			return nil, fmt.Errorf("scan error on %s: %w", tableName, err)
+		}
+		cursor = cur
 	}
 	defer cursor.Close()
 
@@ -1034,4 +1158,31 @@ func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 		}
 	}
 	return true
+}
+
+func parseValueToType(s string, t storage.DataType) storage.Value {
+	s = strings.TrimSpace(s)
+	if strings.EqualFold(s, "NULL") {
+		return storage.NullValue(t)
+	}
+	s = strings.Trim(s, "'\"")
+	switch t {
+	case storage.TypeInt:
+		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return storage.IntValue(n)
+		}
+	case storage.TypeFloat:
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return storage.FloatValue(f)
+		}
+	case storage.TypeBool:
+		if b, err := strconv.ParseBool(s); err == nil {
+			return storage.BoolValue(b)
+		}
+	case storage.TypeDateTime:
+		if tVal, err := time.Parse(time.RFC3339, s); err == nil {
+			return storage.DateTimeValue(tVal)
+		}
+	}
+	return storage.StringValue(s)
 }
