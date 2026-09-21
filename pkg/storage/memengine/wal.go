@@ -2,8 +2,10 @@ package memengine
 
 import (
 	"bufio"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -39,25 +41,25 @@ const (
 
 // WALOp represents a single atomic row or DDL mutation.
 type WALOp struct {
-	Type        WALOpType            `json:"type"`
-	Table       string               `json:"table"`
-	Key         string               `json:"key,omitempty"`
-	Record      storage.Record       `json:"record,omitempty"`
-	BaseVer     int64                `json:"base_ver,omitempty"`
-	Schema      *storage.TableSchema `json:"schema,omitempty"`
-	IndexSchema *storage.IndexSchema `json:"index_schema,omitempty"`
-	IndexName   string               `json:"index_name,omitempty"`
+	Type        WALOpType            `json:"type" msgpack:"type"`
+	Table       string               `json:"table" msgpack:"table"`
+	Key         string               `json:"key,omitempty" msgpack:"key,omitempty"`
+	Record      storage.Record       `json:"record,omitempty" msgpack:"record,omitempty"`
+	BaseVer     int64                `json:"base_ver,omitempty" msgpack:"base_ver,omitempty"`
+	Schema      *storage.TableSchema `json:"schema,omitempty" msgpack:"schema,omitempty"`
+	IndexSchema *storage.IndexSchema `json:"index_schema,omitempty" msgpack:"index_schema,omitempty"`
+	IndexName   string               `json:"index_name,omitempty" msgpack:"index_name,omitempty"`
 }
 
 // WALRecord represents a committed transaction batch in the AOF log.
 type WALRecord struct {
-	LSN       int64   `json:"lsn"`
-	TxID      int64   `json:"tx_id"`
-	Timestamp int64   `json:"ts"`
-	Ops       []WALOp `json:"ops"`
+	LSN       int64   `json:"lsn" msgpack:"lsn"`
+	TxID      int64   `json:"tx_id" msgpack:"tx_id"`
+	Timestamp int64   `json:"ts" msgpack:"ts"`
+	Ops       []WALOp `json:"ops" msgpack:"ops"`
 }
 
-// WALWriter handles thread-safe append-only logging with configurable fsync policies.
+// WALWriter handles thread-safe append-only logging with configurable fsync policies and MessagePack binary frames.
 type WALWriter struct {
 	mu         sync.Mutex
 	file       *os.File
@@ -120,13 +122,15 @@ func (w *WALWriter) startPeriodicSync() {
 	}
 }
 
-// Append writes a single WAL record to the append-only log.
+// Append writes a binary MessagePack length-prefixed frame to the WAL file.
 func (w *WALWriter) Append(rec WALRecord) error {
-	data, err := json.Marshal(rec)
+	payload, err := MarshalMsgPack(rec)
 	if err != nil {
-		return fmt.Errorf("failed to marshal WAL record: %w", err)
+		return fmt.Errorf("failed to marshal MessagePack WAL record: %w", err)
 	}
-	data = append(data, '\n')
+
+	var header [4]byte
+	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -135,11 +139,16 @@ func (w *WALWriter) Append(rec WALRecord) error {
 		return fmt.Errorf("WAL writer is closed")
 	}
 
-	n, err := w.file.Write(data)
+	// Write length prefix (4 bytes) followed by MessagePack payload
+	n1, err := w.file.Write(header[:])
 	if err != nil {
-		return fmt.Errorf("failed to write to WAL: %w", err)
+		return fmt.Errorf("failed to write WAL header: %w", err)
 	}
-	w.bytesTotal += int64(n)
+	n2, err := w.file.Write(payload)
+	if err != nil {
+		return fmt.Errorf("failed to write WAL payload: %w", err)
+	}
+	w.bytesTotal += int64(n1 + n2)
 
 	if w.policy == FsyncAlways {
 		if err := w.file.Sync(); err != nil {
@@ -211,8 +220,8 @@ func (w *WALWriter) Close() error {
 	return err
 }
 
-// ReplayWAL reads an existing AOF file sequentially and applies all records via applyFn.
-// Returns the maximum LSN encountered in the log.
+// ReplayWAL reads an existing AOF file and applies all records via applyFn.
+// Supports both high-speed binary MessagePack frames and legacy JSON line fallback.
 func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 	cleanPath := filepath.Clean(path)
 	file, err := os.Open(cleanPath)
@@ -224,37 +233,85 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	// Allow up to 16MB per transaction batch
-	buf := make([]byte, 64*1024)
-	scanner.Buffer(buf, 16*1024*1024)
+	stat, err := file.Stat()
+	if err != nil || stat.Size() == 0 {
+		return 0, nil
+	}
+
+	// Probe first byte to determine format
+	var firstByte [1]byte
+	if _, err := file.Read(firstByte[:]); err != nil {
+		return 0, err
+	}
+	_, _ = file.Seek(0, io.SeekStart)
 
 	var maxLSN int64
-	lineNum := 0
 
-	for scanner.Scan() {
-		lineNum++
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	if firstByte[0] == '{' {
+		// Legacy JSON lines fallback
+		scanner := bufio.NewScanner(file)
+		buf := make([]byte, 64*1024)
+		scanner.Buffer(buf, 16*1024*1024)
+		lineNum := 0
+
+		for scanner.Scan() {
+			lineNum++
+			line := scanner.Bytes()
+			if len(line) == 0 {
+				continue
+			}
+
+			var rec WALRecord
+			if err := json.Unmarshal(line, &rec); err != nil {
+				return maxLSN, fmt.Errorf("corrupted JSON WAL entry at line %d: %w", lineNum, err)
+			}
+			if rec.LSN > maxLSN {
+				maxLSN = rec.LSN
+			}
+			if err := applyFn(rec); err != nil {
+				return maxLSN, fmt.Errorf("failed to apply WAL record (LSN=%d, line=%d): %w", rec.LSN, lineNum, err)
+			}
+		}
+		return maxLSN, scanner.Err()
+	}
+
+	// Binary MessagePack length-prefixed frames
+	reader := bufio.NewReaderSize(file, 64*1024)
+	frameIdx := 0
+
+	for {
+		var lenBuf [4]byte
+		_, err := io.ReadFull(reader, lenBuf[:])
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			break
+		}
+		if err != nil {
+			return maxLSN, fmt.Errorf("error reading WAL frame header: %w", err)
+		}
+
+		frameLen := binary.BigEndian.Uint32(lenBuf[:])
+		if frameLen == 0 || frameLen > 64*1024*1024 { // Cap at 64MB per tx batch
+			return maxLSN, fmt.Errorf("invalid WAL frame length %d at frame %d", frameLen, frameIdx)
+		}
+
+		payload := make([]byte, frameLen)
+		if _, err := io.ReadFull(reader, payload); err != nil {
+			return maxLSN, fmt.Errorf("truncated WAL frame payload at frame %d: %w", frameIdx, err)
 		}
 
 		var rec WALRecord
-		if err := json.Unmarshal(line, &rec); err != nil {
-			return maxLSN, fmt.Errorf("corrupted WAL entry at line %d in %s: %w", lineNum, cleanPath, err)
+		if err := UnmarshalMsgPack(payload, &rec); err != nil {
+			return maxLSN, fmt.Errorf("failed to decode MessagePack WAL frame %d: %w", frameIdx, err)
 		}
 
+		frameIdx++
 		if rec.LSN > maxLSN {
 			maxLSN = rec.LSN
 		}
 
 		if err := applyFn(rec); err != nil {
-			return maxLSN, fmt.Errorf("failed to apply WAL record (LSN=%d, line=%d): %w", rec.LSN, lineNum, err)
+			return maxLSN, fmt.Errorf("failed to apply MessagePack WAL record (LSN=%d, frame=%d): %w", rec.LSN, frameIdx, err)
 		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return maxLSN, fmt.Errorf("error reading WAL file: %w", err)
 	}
 
 	return maxLSN, nil

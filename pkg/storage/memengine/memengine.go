@@ -335,13 +335,13 @@ func (e *Engine) saveDiskLocked() error {
 	if e.dataDir == "" {
 		return nil
 	}
-	data, err := json.MarshalIndent(e.tables, "", "  ")
+	data, err := MarshalMsgPack(e.tables)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to encode tables to MessagePack: %w", err)
 	}
 
-	tmpFile := filepath.Join(e.dataDir, "tables.json.tmp")
-	targetFile := filepath.Join(e.dataDir, "tables.json")
+	tmpFile := filepath.Join(e.dataDir, "tables.mpk.tmp")
+	targetFile := filepath.Join(e.dataDir, "tables.mpk")
 
 	if err := os.WriteFile(tmpFile, data, 0644); err != nil {
 		return err
@@ -353,25 +353,48 @@ func (e *Engine) loadDiskLocked() {
 	if e.dataDir == "" {
 		return
 	}
-	targetFile := filepath.Join(e.dataDir, "tables.json")
-	data, err := os.ReadFile(targetFile)
-	if err != nil {
-		return
-	}
 
-	var loaded map[string]*TableData
-	if err := json.Unmarshal(data, &loaded); err == nil && loaded != nil {
-		e.tables = loaded
-		for _, td := range e.tables {
-			if td.Versions == nil {
-				td.Versions = make(map[string]int64)
-				for k := range td.Rows {
-					td.Versions[k] = 1
+	// 1. Try standard MessagePack binary snapshot (tables.mpk)
+	mpkFile := filepath.Join(e.dataDir, "tables.mpk")
+	if data, err := os.ReadFile(mpkFile); err == nil && len(data) > 0 {
+		var loaded map[string]*TableData
+		if err := UnmarshalMsgPack(data, &loaded); err == nil && loaded != nil {
+			e.tables = loaded
+			for _, td := range e.tables {
+				if td.Versions == nil {
+					td.Versions = make(map[string]int64)
+					for k := range td.Rows {
+						td.Versions[k] = 1
+					}
+				}
+				if td.Indexes == nil {
+					td.Indexes = make(map[string]*IndexData)
 				}
 			}
-			if td.Indexes == nil {
-				td.Indexes = make(map[string]*IndexData)
+			return
+		}
+	}
+
+	// 2. Fallback to legacy JSON snapshot (tables.json) with auto-migration
+	jsonFile := filepath.Join(e.dataDir, "tables.json")
+	if data, err := os.ReadFile(jsonFile); err == nil && len(data) > 0 {
+		var loaded map[string]*TableData
+		if err := json.Unmarshal(data, &loaded); err == nil && loaded != nil {
+			e.tables = loaded
+			for _, td := range e.tables {
+				if td.Versions == nil {
+					td.Versions = make(map[string]int64)
+					for k := range td.Rows {
+						td.Versions[k] = 1
+					}
+				}
+				if td.Indexes == nil {
+					td.Indexes = make(map[string]*IndexData)
+				}
 			}
+			// Migrate automatically to MessagePack format
+			_ = e.saveDiskLocked()
+			_ = os.Remove(jsonFile)
 		}
 	}
 }
