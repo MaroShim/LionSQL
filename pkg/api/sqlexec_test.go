@@ -582,3 +582,119 @@ func TestSQLExecutor_Subqueries_Scalar_In_Exists(t *testing.T) {
 		t.Fatalf("expected 2 emps above avg salary, got %d: %+v", len(res.Rows), res.Rows)
 	}
 }
+
+func TestSQLExecutor_SessionTransactions_CommitAndRollback(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, err := server.ExecuteSQL(`CREATE TABLE bank_accounts (id INT PRIMARY KEY, owner VARCHAR(50), balance INT);`)
+	if err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+
+	// 1. Transaction Commit
+	sessA := "session-A"
+	_, err = server.ExecuteSessionSQL(sessA, `BEGIN TRANSACTION;`)
+	if err != nil {
+		t.Fatalf("BEGIN failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sessA, `INSERT INTO bank_accounts (id, owner, balance) VALUES (1, 'Alice', 1000);`)
+	if err != nil {
+		t.Fatalf("INSERT in tx failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sessA, `UPDATE bank_accounts SET balance = 1200 WHERE id = 1;`)
+	if err != nil {
+		t.Fatalf("UPDATE in tx failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sessA, `COMMIT;`)
+	if err != nil {
+		t.Fatalf("COMMIT failed: %v", err)
+	}
+
+	// Verify committed row
+	res, err := server.ExecuteSQL(`SELECT balance FROM bank_accounts WHERE id = 1;`)
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["balance"] != int64(1200) {
+		t.Fatalf("expected balance 1200, got: %+v", res)
+	}
+
+	// 2. Transaction Rollback
+	sessB := "session-B"
+	_, err = server.ExecuteSessionSQL(sessB, `BEGIN;`)
+	if err != nil {
+		t.Fatalf("BEGIN failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sessB, `INSERT INTO bank_accounts (id, owner, balance) VALUES (2, 'Bob', 500);`)
+	if err != nil {
+		t.Fatalf("INSERT in tx failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sessB, `ROLLBACK;`)
+	if err != nil {
+		t.Fatalf("ROLLBACK failed: %v", err)
+	}
+
+	// Verify row 2 does not exist
+	res, err = server.ExecuteSQL(`SELECT id FROM bank_accounts WHERE id = 2;`)
+	if err != nil || len(res.Rows) != 0 {
+		t.Fatalf("expected 0 rows after rollback, got: %+v", res)
+	}
+}
+
+func TestSQLExecutor_SessionVariables(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, _ = server.ExecuteSQL(`CREATE TABLE members (id INT PRIMARY KEY, name VARCHAR(50), tier VARCHAR(20), points INT);`)
+	_, _ = server.ExecuteSQL(`INSERT INTO members (id, name, tier, points) VALUES 
+		(1, 'Alice', 'gold', 500),
+		(2, 'Bob', 'silver', 200),
+		(3, 'Charlie', 'gold', 800);`)
+
+	sess1 := "sess-user-1"
+	// 1. SET and SELECT variable
+	_, err := server.ExecuteSessionSQL(sess1, `SET @min_pts = 300;`)
+	if err != nil {
+		t.Fatalf("SET variable failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sess1, `SET @target_tier = 'gold';`)
+	if err != nil {
+		t.Fatalf("SET variable failed: %v", err)
+	}
+
+	varRes, err := server.ExecuteSessionSQL(sess1, `SELECT @target_tier AS active_tier;`)
+	if err != nil || len(varRes.Rows) != 1 || varRes.Rows[0]["active_tier"] != "gold" {
+		t.Fatalf("SELECT @var failed: %+v, err: %v", varRes, err)
+	}
+
+	// 2. Query with substituted session variables
+	querySQL := `SELECT name, points FROM members WHERE tier = @target_tier AND points >= @min_pts ORDER BY id ASC;`
+	res, err := server.ExecuteSessionSQL(sess1, querySQL)
+	if err != nil || !res.Success {
+		t.Fatalf("query with session variables failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 gold members with >= 300 points, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["name"] != "Alice" || res.Rows[1]["name"] != "Charlie" {
+		t.Errorf("unexpected rows: %+v", res.Rows)
+	}
+
+	// 3. Multi-statement script execution with semicolon
+	scriptSQL := `
+		SET @bonus = 50;
+		UPDATE members SET points = 550 WHERE id = 1;
+		SELECT points FROM members WHERE id = 1;
+	`
+	scriptRes, err := server.ExecuteSessionSQL(sess1, scriptSQL)
+	if err != nil || !scriptRes.Success {
+		t.Fatalf("script execution failed: %v", err)
+	}
+	if len(scriptRes.Rows) != 1 || scriptRes.Rows[0]["points"] != int64(550) {
+		t.Fatalf("unexpected script result: %+v", scriptRes)
+	}
+}

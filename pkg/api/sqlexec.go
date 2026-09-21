@@ -28,8 +28,142 @@ type QueryResult struct {
 	Error        string           `json:"error,omitempty"`
 }
 
-// ExecuteSQL parses and runs one or more SQL statements against the engine and catalog.
+func parseSessionVarValue(s string) any {
+	s = strings.TrimSpace(s)
+	if strings.EqualFold(s, "NULL") {
+		return nil
+	}
+	if strings.EqualFold(s, "TRUE") {
+		return true
+	}
+	if strings.EqualFold(s, "FALSE") {
+		return false
+	}
+	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
+		return s[1 : len(s)-1]
+	}
+	if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") && len(s) >= 2 {
+		return s[1 : len(s)-1]
+	}
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return n
+	}
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+	return s
+}
+
+func isIdentChar(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '@' || ch == '#'
+}
+
+func splitStatements(query string) []string {
+	var stmts []string
+	var cur strings.Builder
+	inQuote := false
+	quoteChar := byte(0)
+	blockDepth := 0
+	isProcOrFunc := false
+
+	checkProc := func(s string) bool {
+		sUpper := strings.ToUpper(strings.TrimSpace(s))
+		return strings.HasPrefix(sUpper, "CREATE PROCEDURE") ||
+			strings.HasPrefix(sUpper, "CREATE OR ALTER PROCEDURE") ||
+			strings.HasPrefix(sUpper, "ALTER PROCEDURE") ||
+			strings.HasPrefix(sUpper, "CREATE FUNCTION") ||
+			strings.HasPrefix(sUpper, "CREATE OR ALTER FUNCTION") ||
+			strings.HasPrefix(sUpper, "ALTER FUNCTION") ||
+			strings.HasPrefix(sUpper, "CREATE TRIGGER") ||
+			strings.HasPrefix(sUpper, "CREATE OR ALTER TRIGGER") ||
+			strings.HasPrefix(sUpper, "ALTER TRIGGER")
+	}
+
+	for i := 0; i < len(query); i++ {
+		ch := query[i]
+		if inQuote {
+			if ch == quoteChar && (i == 0 || query[i-1] != '\\') {
+				inQuote = false
+			}
+			cur.WriteByte(ch)
+		} else {
+			if ch == '\'' || ch == '"' {
+				inQuote = true
+				quoteChar = ch
+				cur.WriteByte(ch)
+			} else {
+				if !isProcOrFunc && checkProc(cur.String()) {
+					isProcOrFunc = true
+				}
+
+				if isProcOrFunc {
+					if (i == 0 || !isIdentChar(query[i-1])) && i+5 <= len(query) && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == len(query) || !isIdentChar(query[i+5])) {
+						blockDepth++
+					} else if (i == 0 || !isIdentChar(query[i-1])) && i+4 <= len(query) && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == len(query) || !isIdentChar(query[i+4])) {
+						blockDepth++
+					} else if (i == 0 || !isIdentChar(query[i-1])) && i+3 <= len(query) && strings.EqualFold(query[i:i+3], "END") && (i+3 == len(query) || !isIdentChar(query[i+3])) {
+						if blockDepth > 0 {
+							blockDepth--
+						}
+					}
+				}
+
+				if ch == ';' {
+					if isProcOrFunc && blockDepth > 0 {
+						cur.WriteByte(ch)
+					} else {
+						stmt := strings.TrimSpace(cur.String())
+						if stmt != "" {
+							stmts = append(stmts, stmt)
+						}
+						cur.Reset()
+						isProcOrFunc = false
+						blockDepth = 0
+					}
+				} else {
+					cur.WriteByte(ch)
+				}
+			}
+		}
+	}
+	if cur.Len() > 0 {
+		stmt := strings.TrimSpace(cur.String())
+		if stmt != "" {
+			stmts = append(stmts, stmt)
+		}
+	}
+	return stmts
+}
+
+// ExecuteSQL parses and runs one or more SQL statements against the engine and catalog on the default session.
 func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
+	return s.ExecuteSessionSQL("default", query)
+}
+
+// ExecuteSessionSQL runs SQL statements within a specific client session context.
+func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult, error) {
+	cs, err := s.GetOrCreateSession(sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	stmts := splitStatements(query)
+	if len(stmts) == 0 {
+		return &QueryResult{Success: true, Command: "EMPTY"}, nil
+	}
+
+	var lastRes *QueryResult
+	for _, stmt := range stmts {
+		res, err := s.execSingleStatement(cs, stmt)
+		if err != nil {
+			return res, err
+		}
+		lastRes = res
+	}
+	return lastRes, nil
+}
+
+func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryResult, error) {
 	start := time.Now()
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
@@ -38,7 +172,124 @@ func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 
 	upper := strings.ToUpper(trimmed)
 
-	// 0. Query Execution Plan: EXPLAIN [ANALYZE]
+	// 0. Interactive Transactions: BEGIN / COMMIT / ROLLBACK
+	if strings.HasPrefix(upper, "BEGIN TRANSACTION") || strings.HasPrefix(upper, "BEGIN TRAN") || upper == "BEGIN" || strings.HasPrefix(upper, "START TRANSACTION") {
+		cs.mu.Lock()
+		defer cs.mu.Unlock()
+		if cs.Tx != nil {
+			return nil, fmt.Errorf("transaction already active on session %s", cs.ID)
+		}
+		tx, err := cs.Session.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to start transaction: %w", err)
+		}
+		cs.Tx = tx
+		return &QueryResult{
+			Success:    true,
+			Command:    "BEGIN",
+			Messages:   []string{"Transaction started."},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	if strings.HasPrefix(upper, "COMMIT TRANSACTION") || strings.HasPrefix(upper, "COMMIT TRAN") || upper == "COMMIT" {
+		cs.mu.Lock()
+		defer cs.mu.Unlock()
+		if cs.Tx == nil {
+			return nil, fmt.Errorf("no active transaction to commit on session %s", cs.ID)
+		}
+		err := cs.Tx.Commit()
+		cs.Tx = nil
+		if err != nil {
+			return nil, fmt.Errorf("commit error: %w", err)
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "COMMIT",
+			Messages:   []string{"Transaction committed."},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	if strings.HasPrefix(upper, "ROLLBACK TRANSACTION") || strings.HasPrefix(upper, "ROLLBACK TRAN") || upper == "ROLLBACK" {
+		cs.mu.Lock()
+		defer cs.mu.Unlock()
+		if cs.Tx == nil {
+			return nil, fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
+		}
+		err := cs.Tx.Rollback()
+		cs.Tx = nil
+		if err != nil {
+			return nil, fmt.Errorf("rollback error: %w", err)
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "ROLLBACK",
+			Messages:   []string{"Transaction rolled back."},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 0.1 Session Variables: SET @var = expr / SET @var := expr
+	setRe := regexp.MustCompile(`(?is)^SET\s+@([a-zA-Z0-9_]+)\s*(?::=|=)\s*(.*)$`)
+	if m := setRe.FindStringSubmatch(trimmed); len(m) == 3 {
+		cs.mu.Lock()
+		defer cs.mu.Unlock()
+		varName := m[1]
+		expr := strings.TrimSpace(m[2])
+		expr = strings.TrimRight(expr, ";")
+		for k, v := range cs.Vars {
+			expr = strings.ReplaceAll(expr, k, fmt.Sprintf("%v", v))
+		}
+		val := parseSessionVarValue(expr)
+		cs.Vars["@"+varName] = val
+		return &QueryResult{
+			Success:    true,
+			Command:    "SET",
+			Messages:   []string{fmt.Sprintf("Variable @%s set to %v.", varName, val)},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 0.2 Query Session Variable: SELECT @var [AS alias]
+	selectVarRe := regexp.MustCompile(`(?is)^SELECT\s+(@[a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
+	if m := selectVarRe.FindStringSubmatch(trimmed); len(m) >= 2 {
+		varName := m[1]
+		colHeader := varName
+		if len(m) > 2 && m[2] != "" {
+			colHeader = m[2]
+		}
+		cs.mu.Lock()
+		val := cs.Vars[varName]
+		cs.mu.Unlock()
+		return &QueryResult{
+			Success:      true,
+			Command:      "SELECT",
+			Columns:      []string{colHeader},
+			Rows:         []map[string]any{{colHeader: val, varName: val}},
+			RowsAffected: 1,
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 0.3 Substitute session variables in SQL query if present
+	cs.mu.Lock()
+	if len(cs.Vars) > 0 {
+		for k, v := range cs.Vars {
+			if strings.Contains(trimmed, k) {
+				varRep := fmt.Sprintf("'%v'", v)
+				switch v.(type) {
+				case int, int64, float64, bool:
+					varRep = fmt.Sprintf("%v", v)
+				}
+				trimmed = strings.ReplaceAll(trimmed, k, varRep)
+			}
+		}
+		upper = strings.ToUpper(trimmed)
+	}
+	cs.mu.Unlock()
+
+	// 0.4 Query Execution Plan: EXPLAIN [ANALYZE]
 	if strings.HasPrefix(upper, "EXPLAIN") {
 		return s.execExplain(trimmed, start)
 	}
@@ -81,7 +332,7 @@ func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 
 	// 5. DML: INSERT INTO
 	if strings.HasPrefix(upper, "INSERT INTO") || strings.HasPrefix(upper, "INSERT ") {
-		return s.execInsert(trimmed, start)
+		return s.execInsert(trimmed, start, cs)
 	}
 
 	// 6. DQL: WITH (Common Table Expressions) / SELECT
@@ -89,17 +340,17 @@ func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 		return s.execCTE(trimmed, start)
 	}
 	if strings.HasPrefix(upper, "SELECT") {
-		return s.execSelect(trimmed, start)
+		return s.execSelect(trimmed, start, cs)
 	}
 
 	// 7. DML: UPDATE
 	if strings.HasPrefix(upper, "UPDATE ") {
-		return s.execUpdate(trimmed, start)
+		return s.execUpdate(trimmed, start, cs)
 	}
 
 	// 8. DML: DELETE
 	if strings.HasPrefix(upper, "DELETE FROM") || strings.HasPrefix(upper, "DELETE ") {
-		return s.execDelete(trimmed, start)
+		return s.execDelete(trimmed, start, cs)
 	}
 
 	return &QueryResult{
@@ -325,7 +576,7 @@ func (s *Server) execDropIndex(query string, start time.Time) (*QueryResult, err
 	}, nil
 }
 
-func (s *Server) execInsert(query string, start time.Time) (*QueryResult, error) {
+func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?\s*VALUES\s*(.*)$`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -358,22 +609,33 @@ func (s *Server) execInsert(query string, start time.Time) (*QueryResult, error)
 		return nil, fmt.Errorf("no values supplied in INSERT statement")
 	}
 
-	session, err := s.engine.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
+	var tx storage.Transaction
+	var isEphemeral bool
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+		isEphemeral = false
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
 
-	tx, err := session.BeginTx(storage.TxOptions{})
-	if err != nil {
-		return nil, err
+		t, err := session.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		isEphemeral = true
 	}
 
 	insertedCount := int64(0)
 	for _, tupleStr := range tupleStrings {
 		vals := splitValues(tupleStr)
 		if len(vals) != len(targetCols) {
-			_ = tx.Rollback()
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
 			return nil, fmt.Errorf("column count mismatch: expected %d values, got %d in tuple (%s)", len(targetCols), len(vals), tupleStr)
 		}
 
@@ -389,14 +651,18 @@ func (s *Server) execInsert(query string, start time.Time) (*QueryResult, error)
 		}
 
 		if err := tx.Insert(tableName, rec); err != nil {
-			_ = tx.Rollback()
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
 			return nil, fmt.Errorf("insert row error: %w", err)
 		}
 		insertedCount++
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("transaction commit error: %w", err)
+	if isEphemeral {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("transaction commit error: %w", err)
+		}
 	}
 
 	return &QueryResult{
@@ -498,7 +764,7 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 		} else if strings.HasPrefix(upper, "EXPLAIN ") {
 			selectSQL = strings.TrimSpace(query[8:])
 		}
-		res, execErr := s.execSelect(selectSQL, execStart)
+		res, execErr := s.execSelect(selectSQL, execStart, nil)
 		if execErr == nil && res != nil {
 			planTree.ActualRows = int64(len(res.Rows))
 			planTree.ActualDurationUS = res.DurationUS
@@ -709,7 +975,7 @@ func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
 	}
 
 	if len(qInfo.CTEs) == 0 {
-		return s.execSelect(query, start)
+		return s.execSelect(query, start, nil)
 	}
 
 	var tempTableNames []string
@@ -794,13 +1060,13 @@ func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
 	return s.ExecuteSQL(mainSQL)
 }
 
-func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error) {
+func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	p := planner.NewPlanner()
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil && qInfo.Join != nil {
-		joinRes, err := s.execJoin(qInfo, start)
+		joinRes, err := s.execJoin(qInfo, start, cs)
 		if err != nil {
 			return nil, err
 		}
@@ -858,7 +1124,7 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 					innerSQL = strings.ReplaceAll(innerSQL, strings.TrimPrefix(p.Name, "@"), argVals[i])
 				}
 			}
-			return s.execSelect(innerSQL, start)
+			return s.execSelect(innerSQL, start, cs)
 		}
 	}
 
@@ -867,17 +1133,23 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
 	}
 
-	session, err := s.engine.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
+	var tx storage.Transaction
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
 
-	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, err
+		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		defer tx.Rollback()
 	}
-	defer tx.Rollback()
 
 	var cursor storage.Cursor
 	usedIndex := false
@@ -1323,7 +1595,7 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 	}, nil
 }
 
-func (s *Server) execJoin(qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
+func (s *Server) execJoin(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	if qInfo.WhereClause != "" {
 		if resolved, err := s.resolveSubqueries(qInfo.WhereClause); err == nil {
 			qInfo.WhereClause = resolved
@@ -1337,13 +1609,13 @@ func (s *Server) execJoin(qInfo *planner.QueryInfo, start time.Time) (*QueryResu
 			rightCol = rightCol[idx+1:]
 		}
 		if idxMeta, found := rightSchema.FindIndexByColumn(rightCol); found {
-			return s.execNestedLoopJoin(qInfo, start, idxMeta)
+			return s.execNestedLoopJoin(qInfo, start, idxMeta, cs)
 		}
 	}
-	return s.execHashJoin(qInfo, start)
+	return s.execHashJoin(qInfo, start, cs)
 }
 
-func (s *Server) execNestedLoopJoin(qInfo *planner.QueryInfo, start time.Time, rightIdx *storage.IndexSchema) (*QueryResult, error) {
+func (s *Server) execNestedLoopJoin(qInfo *planner.QueryInfo, start time.Time, rightIdx *storage.IndexSchema, cs *ClientSession) (*QueryResult, error) {
 	leftTable := cleanIdentifier(qInfo.TableName)
 	rightTable := cleanIdentifier(qInfo.Join.Table)
 
@@ -1356,17 +1628,23 @@ func (s *Server) execNestedLoopJoin(qInfo *planner.QueryInfo, start time.Time, r
 		return nil, fmt.Errorf("right table %q not found: %w", rightTable, err)
 	}
 
-	session, err := s.engine.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
+	var tx storage.Transaction
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
 
-	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, err
+		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		defer tx.Rollback()
 	}
-	defer tx.Rollback()
 
 	leftCol := cleanIdentifier(qInfo.Join.LeftKey)
 	if idx := strings.Index(leftCol, "."); idx != -1 {
@@ -1581,7 +1859,7 @@ func (s *Server) execNestedLoopJoin(qInfo *planner.QueryInfo, start time.Time, r
 	}, nil
 }
 
-func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
+func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	leftTable := cleanIdentifier(qInfo.TableName)
 	rightTable := cleanIdentifier(qInfo.Join.Table)
 
@@ -1594,17 +1872,23 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time) (*Query
 		return nil, fmt.Errorf("right table %q not found: %w", rightTable, err)
 	}
 
-	session, err := s.engine.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
+	var tx storage.Transaction
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
 
-	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, err
+		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		defer tx.Rollback()
 	}
-	defer tx.Rollback()
 
 	// Extract join columns (strip dot prefix if present)
 	leftCol := cleanIdentifier(qInfo.Join.LeftKey)
@@ -1837,7 +2121,7 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time) (*Query
 	}, nil
 }
 
-func (s *Server) execUpdate(query string, start time.Time) (*QueryResult, error) {
+func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -1857,20 +2141,31 @@ func (s *Server) execUpdate(query string, start time.Time) (*QueryResult, error)
 		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
 	}
 
-	session, err := s.engine.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
+	var tx storage.Transaction
+	var isEphemeral bool
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+		isEphemeral = false
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
 
-	tx, err := session.BeginTx(storage.TxOptions{})
-	if err != nil {
-		return nil, err
+		t, err := session.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		isEphemeral = true
 	}
 
 	cursor, err := tx.Scan(tableName)
 	if err != nil {
-		_ = tx.Rollback()
+		if isEphemeral {
+			_ = tx.Rollback()
+		}
 		return nil, err
 	}
 	defer cursor.Close()
@@ -1927,14 +2222,18 @@ func (s *Server) execUpdate(query string, start time.Time) (*QueryResult, error)
 	updatedCount := int64(0)
 	for _, item := range toUpdate {
 		if err := tx.Update(tableName, item.pk, item.rec); err != nil {
-			_ = tx.Rollback()
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
 			return nil, fmt.Errorf("update row error: %w", err)
 		}
 		updatedCount++
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit error: %w", err)
+	if isEphemeral {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit error: %w", err)
+		}
 	}
 
 	return &QueryResult{
@@ -1946,7 +2245,7 @@ func (s *Server) execUpdate(query string, start time.Time) (*QueryResult, error)
 	}, nil
 }
 
-func (s *Server) execDelete(query string, start time.Time) (*QueryResult, error) {
+func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^DELETE\s+FROM\s+([^\s;]+)(?:\s+WHERE\s+(.*))?$`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -1960,20 +2259,31 @@ func (s *Server) execDelete(query string, start time.Time) (*QueryResult, error)
 		whereClause = strings.TrimSpace(matches[2])
 	}
 
-	session, err := s.engine.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
+	var tx storage.Transaction
+	var isEphemeral bool
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+		isEphemeral = false
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
 
-	tx, err := session.BeginTx(storage.TxOptions{})
-	if err != nil {
-		return nil, err
+		t, err := session.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		isEphemeral = true
 	}
 
 	cursor, err := tx.Scan(tableName)
 	if err != nil {
-		_ = tx.Rollback()
+		if isEphemeral {
+			_ = tx.Rollback()
+		}
 		return nil, err
 	}
 	defer cursor.Close()
@@ -2006,14 +2316,18 @@ func (s *Server) execDelete(query string, start time.Time) (*QueryResult, error)
 	deletedCount := int64(0)
 	for _, pk := range toDelete {
 		if err := tx.Delete(tableName, pk); err != nil {
-			_ = tx.Rollback()
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
 			return nil, fmt.Errorf("delete error: %w", err)
 		}
 		deletedCount++
 	}
 
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit error: %w", err)
+	if isEphemeral {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit error: %w", err)
+		}
 	}
 
 	return &QueryResult{
@@ -2423,14 +2737,122 @@ func formatStorageValue(v storage.Value) any {
 	}
 }
 
+func splitLogicalConditions(whereStr string, op string) []string {
+	var parts []string
+	var cur strings.Builder
+	inQuote := false
+	quoteChar := byte(0)
+	parenDepth := 0
+	opLen := len(op)
+	upper := strings.ToUpper(whereStr)
+
+	for i := 0; i < len(whereStr); i++ {
+		ch := whereStr[i]
+		if inQuote {
+			if ch == quoteChar && (i == 0 || whereStr[i-1] != '\\') {
+				inQuote = false
+			}
+			cur.WriteByte(ch)
+		} else {
+			if ch == '\'' || ch == '"' {
+				inQuote = true
+				quoteChar = ch
+				cur.WriteByte(ch)
+			} else if ch == '(' {
+				parenDepth++
+				cur.WriteByte(ch)
+			} else if ch == ')' {
+				if parenDepth > 0 {
+					parenDepth--
+				}
+				cur.WriteByte(ch)
+			} else if parenDepth == 0 && i+opLen <= len(whereStr) && upper[i:i+opLen] == op {
+				part := strings.TrimSpace(cur.String())
+				if part != "" {
+					parts = append(parts, part)
+				}
+				cur.Reset()
+				i += opLen - 1
+			} else {
+				cur.WriteByte(ch)
+			}
+		}
+	}
+	if cur.Len() > 0 {
+		part := strings.TrimSpace(cur.String())
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
+}
+
 func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
-	// Simple predicate evaluator: col = val, col > val, col < val, col != val, col LIKE 'pattern', col [NOT] IN (...)
 	whereStr = strings.TrimSpace(whereStr)
 	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
 		return true
 	}
 	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
 		return false
+	}
+
+	orParts := splitLogicalConditions(whereStr, " OR ")
+	if len(orParts) > 1 {
+		for _, part := range orParts {
+			if evaluateWhereCondition(rec, part) {
+				return true
+			}
+		}
+		return false
+	}
+
+	andParts := splitLogicalConditions(whereStr, " AND ")
+	if len(andParts) > 1 {
+		for _, part := range andParts {
+			if !evaluateWhereCondition(rec, part) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return evaluateSingleCondition(rec, whereStr)
+}
+
+func parseValueToType(s string, t storage.DataType) storage.Value {
+	s = strings.TrimSpace(s)
+	if strings.EqualFold(s, "NULL") {
+		return storage.NullValue(t)
+	}
+	s = strings.Trim(s, "'\"")
+	switch t {
+	case storage.TypeInt:
+		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return storage.IntValue(n)
+		}
+	case storage.TypeFloat:
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return storage.FloatValue(f)
+		}
+	case storage.TypeBool:
+		if b, err := strconv.ParseBool(s); err == nil {
+			return storage.BoolValue(b)
+		}
+	case storage.TypeDateTime:
+		if tVal, err := time.Parse(time.RFC3339, s); err == nil {
+			return storage.DateTimeValue(tVal)
+		}
+	}
+	return storage.StringValue(s)
+}
+
+func evaluateSingleCondition(rec storage.Record, whereStr string) bool {
+	whereStr = strings.TrimSpace(whereStr)
+	if strings.HasPrefix(whereStr, "(") && strings.HasSuffix(whereStr, ")") {
+		inner := strings.TrimSpace(whereStr[1 : len(whereStr)-1])
+		if !strings.Contains(inner, "(") && !strings.Contains(inner, ")") {
+			whereStr = inner
+		}
 	}
 
 	inRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)
@@ -2470,7 +2892,19 @@ func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 			rightVal := strings.TrimSpace(whereStr[idx+len(op):])
 			rightVal = strings.Trim(rightVal, "';\"")
 
+			if leftCol == "1" && rightVal == "1" && op == "=" {
+				return true
+			}
+			if leftCol == "1" && rightVal == "0" && op == "=" {
+				return false
+			}
+
 			val, ok := rec[leftCol]
+			if !ok {
+				if dotIdx := strings.Index(leftCol, "."); dotIdx != -1 {
+					val, ok = rec[leftCol[dotIdx+1:]]
+				}
+			}
 			if !ok {
 				return false
 			}
@@ -2520,33 +2954,6 @@ func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 	return true
 }
 
-func parseValueToType(s string, t storage.DataType) storage.Value {
-	s = strings.TrimSpace(s)
-	if strings.EqualFold(s, "NULL") {
-		return storage.NullValue(t)
-	}
-	s = strings.Trim(s, "'\"")
-	switch t {
-	case storage.TypeInt:
-		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-			return storage.IntValue(n)
-		}
-	case storage.TypeFloat:
-		if f, err := strconv.ParseFloat(s, 64); err == nil {
-			return storage.FloatValue(f)
-		}
-	case storage.TypeBool:
-		if b, err := strconv.ParseBool(s); err == nil {
-			return storage.BoolValue(b)
-		}
-	case storage.TypeDateTime:
-		if tVal, err := time.Parse(time.RFC3339, s); err == nil {
-			return storage.DateTimeValue(tVal)
-		}
-	}
-	return storage.StringValue(s)
-}
-
 func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 	whereStr = strings.TrimSpace(whereStr)
 	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
@@ -2554,6 +2961,38 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 	}
 	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
 		return false
+	}
+
+	orParts := splitLogicalConditions(whereStr, " OR ")
+	if len(orParts) > 1 {
+		for _, part := range orParts {
+			if evaluateWhereConditionMap(rec, part) {
+				return true
+			}
+		}
+		return false
+	}
+
+	andParts := splitLogicalConditions(whereStr, " AND ")
+	if len(andParts) > 1 {
+		for _, part := range andParts {
+			if !evaluateWhereConditionMap(rec, part) {
+				return false
+			}
+		}
+		return true
+	}
+
+	return evaluateSingleConditionMap(rec, whereStr)
+}
+
+func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
+	whereStr = strings.TrimSpace(whereStr)
+	if strings.HasPrefix(whereStr, "(") && strings.HasSuffix(whereStr, ")") {
+		inner := strings.TrimSpace(whereStr[1 : len(whereStr)-1])
+		if !strings.Contains(inner, "(") && !strings.Contains(inner, ")") {
+			whereStr = inner
+		}
 	}
 
 	inRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)

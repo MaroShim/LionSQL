@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/proc"
@@ -13,6 +14,15 @@ import (
 	"sqlion/pkg/ui"
 )
 
+// ClientSession maintains interactive connection state: open transaction, session variables.
+type ClientSession struct {
+	ID      string
+	Session storage.Session
+	Tx      storage.Transaction
+	Vars    map[string]any
+	mu      sync.Mutex
+}
+
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
 type Server struct {
 	catalog   *catalog.Catalog
@@ -20,6 +30,8 @@ type Server struct {
 	planCache *proc.PlanCache
 	executor  *runtime.Executor
 	mux       *http.ServeMux
+	sessions  map[string]*ClientSession
+	sessMu    sync.RWMutex
 }
 
 // NewServer initializes a new Server.
@@ -31,9 +43,35 @@ func NewServer(cat *catalog.Catalog, eng storage.Engine) *Server {
 		planCache: proc.NewPlanCache(),
 		executor:  runtime.NewExecutor(cache),
 		mux:       http.NewServeMux(),
+		sessions:  make(map[string]*ClientSession),
 	}
 	s.routes()
 	return s
+}
+
+// GetOrCreateSession returns or registers a persistent client session.
+func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
+	if id == "" {
+		id = "default"
+	}
+	s.sessMu.Lock()
+	defer s.sessMu.Unlock()
+
+	if cs, exists := s.sessions[id]; exists {
+		return cs, nil
+	}
+
+	sess, err := s.engine.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	cs := &ClientSession{
+		ID:      id,
+		Session: sess,
+		Vars:    make(map[string]any),
+	}
+	s.sessions[id] = cs
+	return cs, nil
 }
 
 // Handler returns the HTTP handler.
