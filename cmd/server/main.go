@@ -24,7 +24,7 @@ import (
 func main() {
 	httpAddr := flag.String("http", "127.0.0.1:8090", "HTTP service and admin dashboard address")
 	pgAddr := flag.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address")
-	dataDir := flag.String("dir", "data", "Data directory for database files")
+	dataDir := flag.String("dir", "data", "Data directory for database files (default: data)")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
 
@@ -39,6 +39,10 @@ func main() {
 	isChildWorker := flag.Bool("is-child-worker", false, "Internal flag for daemon worker child")
 
 	flag.Parse()
+
+	if strings.TrimSpace(*dataDir) == "" {
+		*dataDir = "data"
+	}
 
 	// Handle daemon commands if not running as internal worker
 	if !*isChildWorker {
