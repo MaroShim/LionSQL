@@ -263,6 +263,8 @@
           </div>
         </div>
         <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" style="background: #3b82f6; color: white;" onclick="explainQuery(false)">Explain Plan</button>
+          <button class="btn btn-secondary" style="background: #d97706; color: white;" onclick="explainQuery(true)">Explain Analyze</button>
           <button class="btn" style="background: var(--success);" onclick="executeSQLQuery()">Run Query</button>
         </div>
       </div>
@@ -273,6 +275,8 @@
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('create')">CREATE TABLE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('insert')">INSERT</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('select')">SELECT *</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('explain')">EXPLAIN</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('explain_analyze')">EXPLAIN ANALYZE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('update')">UPDATE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('delete')">DELETE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('exec')">EXEC Procedure</button>
@@ -494,6 +498,12 @@ END;</textarea>
         case 'select':
           editor.value = "SELECT id, balance, branch FROM accounts WHERE balance >= 1000 ORDER BY id ASC LIMIT 50;";
           break;
+        case 'explain':
+          editor.value = "EXPLAIN SELECT id, balance, branch FROM accounts WHERE balance >= 1000 ORDER BY id ASC LIMIT 50;";
+          break;
+        case 'explain_analyze':
+          editor.value = "EXPLAIN ANALYZE SELECT id, balance, branch FROM accounts WHERE balance >= 1000 ORDER BY id ASC LIMIT 50;";
+          break;
         case 'update':
           editor.value = "UPDATE accounts SET balance = balance + 500 WHERE id = 101;";
           break;
@@ -510,6 +520,31 @@ END;</textarea>
     function clearSQLQuery() {
       document.getElementById('sql-query-input').value = '';
       document.getElementById('sql-query-input').focus();
+    }
+
+    async function explainQuery(analyze) {
+      const editor = document.getElementById('sql-query-input');
+      let sql = editor.value.trim();
+      if (!sql) return;
+
+      const upper = sql.toUpperCase();
+      if (analyze) {
+        if (!upper.startsWith('EXPLAIN ANALYZE')) {
+          if (upper.startsWith('EXPLAIN')) {
+            sql = 'EXPLAIN ANALYZE ' + sql.substring(7).trim();
+          } else {
+            sql = 'EXPLAIN ANALYZE ' + sql;
+          }
+        }
+      } else {
+        if (!upper.startsWith('EXPLAIN')) {
+          sql = 'EXPLAIN ' + sql;
+        } else if (upper.startsWith('EXPLAIN ANALYZE')) {
+          sql = 'EXPLAIN ' + sql.substring(15).trim();
+        }
+      }
+      editor.value = sql;
+      executeSQLQuery();
     }
 
     async function executeSQLQuery() {
@@ -550,7 +585,9 @@ END;</textarea>
           bannerEl.style.border = '1px solid #10b981';
           
           let statusText = 'Query executed successfully.';
-          if (out.rows_affected !== undefined && out.rows_affected >= 0 && (!out.columns || out.columns.length === 0)) {
+          if (out.command === 'EXPLAIN') {
+            statusText = `Execution plan generated (${durationMs}ms).`;
+          } else if (out.rows_affected !== undefined && out.rows_affected >= 0 && (!out.columns || out.columns.length === 0)) {
             statusText = `Query OK, ${out.rows_affected} row(s) affected (${durationMs}ms).`;
           } else if (out.rows) {
             statusText = `${out.rows.length} row(s) retrieved in ${durationMs}ms.`;
@@ -558,22 +595,37 @@ END;</textarea>
           bannerEl.innerText = statusText;
           metaEl.innerText = `Done in ${durationMs}ms`;
 
-          // Render Table if columns exist
+          // Render Table or Plan Tree if columns exist
           if (out.columns && out.columns.length > 0) {
-            let thead = '<tr>' + out.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
-            let tbody = '';
-            if (out.rows && out.rows.length > 0) {
-              tbody = out.rows.map(r => {
-                return '<tr>' + out.columns.map(c => {
-                  const val = r[c];
-                  if (val === null || val === undefined) return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
-                  return `<td>${val}</td>`;
-                }).join('') + '</tr>';
-              }).join('');
+            if (out.columns.length === 1 && out.columns[0] === 'QUERY PLAN') {
+              let planHtml = '<thead><tr><th>Query Execution Plan Tree</th></tr></thead><tbody><tr><td><pre style="margin:0; font-family:monospace; color:#38bdf8; line-height:1.6; background:transparent; border:none; padding:4px 0;">';
+              planHtml += out.rows.map(r => {
+                let line = (r['QUERY PLAN'] || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                line = line.replace(/(Index Scan)/g, '<span style="color:#a7f3d0; font-weight:bold;">$1</span>');
+                line = line.replace(/(Seq Scan)/g, '<span style="color:#fde68a; font-weight:bold;">$1</span>');
+                line = line.replace(/(Sort|Limit|Filter|Projection)/g, '<span style="color:#c084fc; font-weight:bold;">$1</span>');
+                line = line.replace(/(cost=[^ ]+)/g, '<span style="color:#94a3b8;">$1</span>');
+                line = line.replace(/(actual time=[^ ]+)/g, '<span style="color:#fdba74; font-weight:bold;">$1</span>');
+                return line;
+              }).join('\n');
+              planHtml += '</pre></td></tr></tbody>';
+              tableEl.innerHTML = planHtml;
             } else {
-              tbody = `<tr><td colspan="${out.columns.length}" style="text-align:center; color:var(--text-muted); font-style:italic;">Empty result set (0 rows)</td></tr>`;
+              let thead = '<tr>' + out.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+              let tbody = '';
+              if (out.rows && out.rows.length > 0) {
+                tbody = out.rows.map(r => {
+                  return '<tr>' + out.columns.map(c => {
+                    const val = r[c];
+                    if (val === null || val === undefined) return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
+                    return `<td>${val}</td>`;
+                  }).join('') + '</tr>';
+                }).join('');
+              } else {
+                tbody = `<tr><td colspan="${out.columns.length}" style="text-align:center; color:var(--text-muted); font-style:italic;">Empty result set (0 rows)</td></tr>`;
+              }
+              tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
             }
-            tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
           } else {
             tableEl.innerHTML = '<thead><tr><th>Execution Status</th></tr></thead><tbody><tr><td>' + statusText + '</td></tr></tbody>';
           }

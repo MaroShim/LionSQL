@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"strings"
 	"testing"
 
 	"sqlion/pkg/api"
@@ -244,3 +245,58 @@ func TestSQLExecutor_TableValuedFunction(t *testing.T) {
 		t.Errorf("unexpected rows returned from TVF: %+v", res.Rows)
 	}
 }
+
+func TestSQLExecutor_ExplainAndExplainAnalyze(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, _ = server.ExecuteSQL(`CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), score INT);`)
+	_, _ = server.ExecuteSQL(`CREATE INDEX idx_users_score ON users(score);`)
+	_, _ = server.ExecuteSQL(`INSERT INTO users (id, name, score) VALUES (1, 'Alice', 95), (2, 'Bob', 80), (3, 'Charlie', 60);`)
+
+	// 1. EXPLAIN SELECT with Seq Scan
+	res, err := server.ExecuteSQL(`EXPLAIN SELECT id, name FROM users WHERE name = 'Alice';`)
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN SELECT failed: %v", err)
+	}
+	if len(res.Rows) == 0 || res.Columns[0] != "QUERY PLAN" {
+		t.Fatalf("unexpected EXPLAIN result structure: %+v", res)
+	}
+	planText := ""
+	for _, r := range res.Rows {
+		planText += r["QUERY PLAN"].(string) + "\n"
+	}
+	if !strings.Contains(planText, "Seq Scan on users") {
+		t.Errorf("expected Seq Scan in EXPLAIN text, got:\n%s", planText)
+	}
+
+	// 2. EXPLAIN SELECT with Index Scan
+	res, err = server.ExecuteSQL(`EXPLAIN SELECT id, name FROM users WHERE score = 95;`)
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN index scan failed: %v", err)
+	}
+	planText = ""
+	for _, r := range res.Rows {
+		planText += r["QUERY PLAN"].(string) + "\n"
+	}
+	if !strings.Contains(planText, "Index Scan using idx_users_score on users") {
+		t.Errorf("expected Index Scan in EXPLAIN text, got:\n%s", planText)
+	}
+
+	// 3. EXPLAIN ANALYZE SELECT
+	res, err = server.ExecuteSQL(`EXPLAIN ANALYZE SELECT id, name FROM users ORDER BY score DESC LIMIT 2;`)
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN ANALYZE failed: %v", err)
+	}
+	planText = ""
+	for _, r := range res.Rows {
+		planText += r["QUERY PLAN"].(string) + "\n"
+	}
+	if !strings.Contains(planText, "Limit") || !strings.Contains(planText, "Sort") || !strings.Contains(planText, "actual time=") {
+		t.Errorf("expected Limit, Sort and actual metrics in EXPLAIN ANALYZE text, got:\n%s", planText)
+	}
+}
+

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
@@ -35,6 +36,11 @@ func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 	}
 
 	upper := strings.ToUpper(trimmed)
+
+	// 0. Query Execution Plan: EXPLAIN [ANALYZE]
+	if strings.HasPrefix(upper, "EXPLAIN") {
+		return s.execExplain(trimmed, start)
+	}
 
 	// 1. Procedural DDL: CREATE PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
 	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") {
@@ -395,6 +401,118 @@ func (s *Server) execInsert(query string, start time.Time) (*QueryResult, error)
 		RowsAffected: insertedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows inserted into %q", insertedCount, tableName)},
+	}, nil
+}
+
+func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error) {
+	p := planner.NewPlanner()
+	qInfo, err := p.ParseSelect(query)
+	if err != nil {
+		return nil, fmt.Errorf("EXPLAIN parse error: %w", err)
+	}
+
+	rawTable := qInfo.TableName
+	tableName := cleanIdentifier(rawTable)
+
+	// Check if Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
+	tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
+	if m := tvfCallRe.FindStringSubmatch(rawTable); len(m) == 3 {
+		tvfName := cleanIdentifier(m[1])
+		argsRaw := m[2]
+		fnMeta, err := s.catalog.GetFunction(tvfName)
+		if err == nil && fnMeta != nil && fnMeta.IsTableValued {
+			var argVals []string
+			if strings.TrimSpace(argsRaw) != "" {
+				for _, arg := range strings.Split(argsRaw, ",") {
+					argVals = append(argVals, strings.TrimSpace(arg))
+				}
+			}
+			innerSQL := fnMeta.Body
+			for i, p := range fnMeta.Params {
+				if i < len(argVals) {
+					innerSQL = strings.ReplaceAll(innerSQL, p.Name, argVals[i])
+					innerSQL = strings.ReplaceAll(innerSQL, strings.TrimPrefix(p.Name, "@"), argVals[i])
+				}
+			}
+			prefix := "EXPLAIN "
+			if qInfo.IsAnalyze {
+				prefix = "EXPLAIN ANALYZE "
+			}
+			return s.execExplain(prefix+innerSQL, start)
+		}
+	}
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+	}
+
+	var totalRows int64 = 0
+	session, err := s.engine.NewSession()
+	if err == nil {
+		defer session.Close()
+		tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err == nil {
+			defer tx.Rollback()
+			if cur, err := tx.Scan(tableName); err == nil {
+				defer cur.Close()
+				for cur.Next() {
+					totalRows++
+				}
+			}
+		}
+	}
+
+	planTree := p.BuildPlan(qInfo, schema, totalRows)
+
+	if qInfo.IsAnalyze {
+		// Execute query to collect actual metrics
+		execStart := time.Now()
+		selectSQL := query
+		upper := strings.ToUpper(strings.TrimSpace(query))
+		if strings.HasPrefix(upper, "EXPLAIN ANALYZE ") {
+			selectSQL = strings.TrimSpace(query[16:])
+		} else if strings.HasPrefix(upper, "EXPLAIN ") {
+			selectSQL = strings.TrimSpace(query[8:])
+		}
+		res, execErr := s.execSelect(selectSQL, execStart)
+		if execErr == nil && res != nil {
+			planTree.ActualRows = int64(len(res.Rows))
+			planTree.ActualDurationUS = res.DurationUS
+
+			// Recursively populate actual rows / durations down the tree
+			var populateActuals func(node *planner.PlanNode)
+			populateActuals = func(node *planner.PlanNode) {
+				if node == nil {
+					return
+				}
+				if node.ActualRows == 0 && len(res.Rows) > 0 {
+					node.ActualRows = int64(len(res.Rows))
+					node.ActualDurationUS = res.DurationUS
+				}
+				for _, child := range node.Children {
+					populateActuals(child)
+				}
+			}
+			populateActuals(planTree)
+		}
+	}
+
+	lines := planner.FormatPlanText(planTree, qInfo.IsAnalyze)
+	rows := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		rows = append(rows, map[string]any{
+			"QUERY PLAN": line,
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "EXPLAIN",
+		Columns:      []string{"QUERY PLAN"},
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
 
