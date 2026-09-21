@@ -168,13 +168,13 @@
       <span class="badge">OLTP + SP</span>
     </div>
     <nav>
-      <button class="nav-btn active" onclick="switchView('tables')">
-        <span>Tables & Records</span>
-        <span id="nav-tables-count">0</span>
-      </button>
-      <button class="nav-btn" onclick="switchView('query')">
+      <button class="nav-btn active" onclick="switchView('query')">
         <span>SQL Query Studio</span>
         <span class="badge" style="background:#047857; color:#6ee7b7;">SQL</span>
+      </button>
+      <button class="nav-btn" onclick="switchView('tables')">
+        <span>Tables & Records</span>
+        <span id="nav-tables-count">0</span>
       </button>
       <button class="nav-btn" onclick="switchView('procedures')">
         <span>Stored Procedures</span>
@@ -188,8 +188,67 @@
   </aside>
 
   <main>
+    <!-- View: SQL Query Studio -->
+    <div id="view-query">
+      <div class="header-bar">
+        <div>
+          <h2>SQL Query Studio</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Execute standard SQL queries (DDL, DML, DQL) and T-SQL statements directly. Shortcut: <kbd style="background:#334155; padding:2px 5px; border-radius:3px;">Ctrl</kbd>+<kbd style="background:#334155; padding:2px 5px; border-radius:3px;">Enter</kbd>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" style="background: #3b82f6; color: white;" onclick="explainQuery(false)">Explain Plan</button>
+          <button class="btn btn-secondary" style="background: #d97706; color: white;" onclick="explainQuery(true)">Explain Analyze</button>
+          <button class="btn" style="background: var(--success);" onclick="executeSQLQuery()">Run Query</button>
+        </div>
+      </div>
+
+      <!-- Quick SQL Templates -->
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; align-items: center;">
+        <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Templates:</span>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('create')">CREATE TABLE</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('insert')">INSERT</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('select')">SELECT *</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('groupby')">GROUP BY</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('explain')">EXPLAIN</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('explain_analyze')">EXPLAIN ANALYZE</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('update')">UPDATE</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('delete')">DELETE</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('exec')">EXEC Procedure</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; margin-left: auto;" onclick="clearSQLQuery()">Clear</button>
+      </div>
+
+      <!-- Editor Card -->
+      <div class="card" style="margin-top: 12px; padding: 15px;">
+        <textarea id="sql-query-input" spellcheck="false" placeholder="-- Enter SQL statements here (e.g. SELECT * FROM accounts;)" style="min-height: 140px; margin-bottom: 0;">SELECT * FROM accounts LIMIT 50;</textarea>
+      </div>
+
+      <!-- Query Results -->
+      <div class="card" style="margin-top: 15px; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 id="query-result-title" style="font-size: 1rem; color: var(--text);">Query Result</h3>
+          <span id="query-result-meta" style="font-size: 0.8rem; color: var(--text-muted);">Ready</span>
+        </div>
+
+        <div id="query-status-banner" style="display: none; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 12px;"></div>
+
+        <div style="overflow-x: auto; max-height: 400px;">
+          <table id="query-result-table">
+            <thead><tr><th>No active query execution</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div id="query-messages-section" style="display: none; margin-top: 15px;">
+          <h4 style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">Output Messages:</h4>
+          <pre id="query-messages-box" class="console-box" style="max-height: 120px;"></pre>
+        </div>
+      </div>
+    </div>
+
     <!-- View: Tables -->
-    <div id="view-tables">
+    <div id="view-tables" style="display: none;">
       <div class="header-bar">
         <div>
           <h2>Tables & Schema Studio</h2>
@@ -250,65 +309,6 @@
 
         <h4 style="font-size: 0.85rem; margin-top: 20px; margin-bottom: 8px; color: var(--text-muted);">Auto-Generated DDL Definition:</h4>
         <pre id="schema-ddl-box" class="console-box" style="color: #a5f3fc; max-height: 180px;">-- DDL preview will appear here</pre>
-      </div>
-    </div>
-
-    <!-- View: SQL Query Studio -->
-    <div id="view-query" style="display: none;">
-      <div class="header-bar">
-        <div>
-          <h2>SQL Query Studio</h2>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
-            Execute standard SQL queries (DDL, DML, DQL) and T-SQL statements directly. Shortcut: <kbd style="background:#334155; padding:2px 5px; border-radius:3px;">Ctrl</kbd>+<kbd style="background:#334155; padding:2px 5px; border-radius:3px;">Enter</kbd>
-          </div>
-        </div>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn btn-secondary" style="background: #3b82f6; color: white;" onclick="explainQuery(false)">Explain Plan</button>
-          <button class="btn btn-secondary" style="background: #d97706; color: white;" onclick="explainQuery(true)">Explain Analyze</button>
-          <button class="btn" style="background: var(--success);" onclick="executeSQLQuery()">Run Query</button>
-        </div>
-      </div>
-
-      <!-- Quick SQL Templates -->
-      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; align-items: center;">
-        <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Templates:</span>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('create')">CREATE TABLE</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('insert')">INSERT</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('select')">SELECT *</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('groupby')">GROUP BY</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('explain')">EXPLAIN</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('explain_analyze')">EXPLAIN ANALYZE</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('update')">UPDATE</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('delete')">DELETE</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('exec')">EXEC Procedure</button>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; margin-left: auto;" onclick="clearSQLQuery()">Clear</button>
-      </div>
-
-      <!-- Editor Card -->
-      <div class="card" style="margin-top: 12px; padding: 15px;">
-        <textarea id="sql-query-input" spellcheck="false" placeholder="-- Enter SQL statements here (e.g. SELECT * FROM accounts;)" style="min-height: 140px; margin-bottom: 0;">SELECT * FROM accounts LIMIT 50;</textarea>
-      </div>
-
-      <!-- Query Results -->
-      <div class="card" style="margin-top: 15px; padding: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h3 id="query-result-title" style="font-size: 1rem; color: var(--text);">Query Result</h3>
-          <span id="query-result-meta" style="font-size: 0.8rem; color: var(--text-muted);">Ready</span>
-        </div>
-
-        <div id="query-status-banner" style="display: none; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 12px;"></div>
-
-        <div style="overflow-x: auto; max-height: 400px;">
-          <table id="query-result-table">
-            <thead><tr><th>No active query execution</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-        <div id="query-messages-section" style="display: none; margin-top: 15px;">
-          <h4 style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">Output Messages:</h4>
-          <pre id="query-messages-box" class="console-box" style="max-height: 120px;"></pre>
-        </div>
       </div>
     </div>
 
@@ -374,12 +374,13 @@ END;</textarea>
 
     function switchView(view) {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-      const views = ['tables', 'query', 'procedures'];
+      const views = ['query', 'tables', 'procedures'];
       views.forEach((v, idx) => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
         if (v === view) {
-          document.querySelectorAll('.nav-btn')[idx].classList.add('active');
+          const btn = document.querySelectorAll('.nav-btn')[idx];
+          if (btn) btn.classList.add('active');
         }
       });
 
@@ -388,7 +389,8 @@ END;</textarea>
       } else if (view === 'procedures') {
         loadProcedures();
       } else if (view === 'query') {
-        document.getElementById('sql-query-input').focus();
+        const input = document.getElementById('sql-query-input');
+        if (input) input.focus();
       }
     }
 
