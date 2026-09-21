@@ -222,5 +222,44 @@ func TestPlanner_AggregateAndGroupBy(t *testing.T) {
 	}
 }
 
+func TestPlanner_CTE(t *testing.T) {
+	p := planner.NewPlanner()
+
+	cteSQL := `WITH HighEarners AS (
+		SELECT id, name, salary FROM employees WHERE salary >= 100000
+	)
+	SELECT name, salary FROM HighEarners ORDER BY salary DESC;`
+
+	q, err := p.ParseSelect(cteSQL)
+	if err != nil {
+		t.Fatalf("ParseSelect with CTE failed: %v", err)
+	}
+	if len(q.CTEs) != 1 || q.CTEs[0].Name != "HighEarners" {
+		t.Fatalf("unexpected CTE parsed: %+v", q.CTEs)
+	}
+
+	schema := &storage.TableSchema{
+		Name: "HighEarners",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+			{Name: "salary", Type: storage.TypeInt},
+		},
+	}
+
+	plan := p.BuildPlan(q, schema, 20)
+	if plan == nil {
+		t.Fatal("expected non-nil plan")
+	}
+
+	lines := planner.FormatPlanText(plan, false)
+	fullText := strings.Join(lines, "\n")
+
+	if !strings.Contains(fullText, "CTE Scan") || !strings.Contains(fullText, "Materialize (CTE: HighEarners)") {
+		t.Errorf("expected CTE Scan and Materialize in plan text, got:\n%s", fullText)
+	}
+}
+
+
 
 

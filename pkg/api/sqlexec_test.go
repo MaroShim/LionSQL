@@ -470,6 +470,115 @@ func TestSQLExecutor_GroupByAndHaving(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_CTE_Basic(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
 
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
 
+	_, _ = server.ExecuteSQL(`CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), role VARCHAR(50), dept_id INT);`)
+	_, _ = server.ExecuteSQL(`INSERT INTO users (id, name, role, dept_id) VALUES 
+		(1, 'Alice', 'admin', 10),
+		(2, 'Bob', 'dev', 10),
+		(3, 'Charlie', 'admin', 20),
+		(4, 'Dave', 'designer', 20);`)
 
+	// 1. Single CTE
+	cteSQL := `WITH admin_users AS (
+		SELECT id, name FROM users WHERE role = 'admin'
+	)
+	SELECT name FROM admin_users ORDER BY id ASC;`
+
+	res, err := server.ExecuteSQL(cteSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("CTE execution failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 admin users, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["name"] != "Alice" || res.Rows[1]["name"] != "Charlie" {
+		t.Errorf("unexpected CTE rows: %+v", res.Rows)
+	}
+
+	// 2. Multiple CTEs joined
+	multiCteSQL := `WITH admins AS (
+		SELECT id, name, dept_id FROM users WHERE role = 'admin'
+	), devs AS (
+		SELECT id, name, dept_id FROM users WHERE role = 'dev'
+	)
+	SELECT a.name AS admin_name, d.name AS dev_name 
+	FROM admins a 
+	JOIN devs d ON a.dept_id = d.dept_id;`
+
+	res, err = server.ExecuteSQL(multiCteSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("Multiple CTE execution failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 joined CTE row, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["admin_name"] != "Alice" || res.Rows[0]["dev_name"] != "Bob" {
+		t.Errorf("unexpected multi-CTE row: %+v", res.Rows)
+	}
+}
+
+func TestSQLExecutor_Subqueries_Scalar_In_Exists(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, _ = server.ExecuteSQL(`CREATE TABLE depts (id INT PRIMARY KEY, name VARCHAR(50));`)
+	_, _ = server.ExecuteSQL(`CREATE TABLE emps (id INT PRIMARY KEY, name VARCHAR(50), dept_id INT, salary INT);`)
+
+	_, _ = server.ExecuteSQL(`INSERT INTO depts (id, name) VALUES (1, 'Engineering'), (2, 'Sales'), (3, 'Marketing');`)
+	_, _ = server.ExecuteSQL(`INSERT INTO emps (id, name, dept_id, salary) VALUES 
+		(101, 'Alice', 1, 95000),
+		(102, 'Bob', 1, 85000),
+		(103, 'Charlie', 2, 70000);`)
+
+	// 1. WHERE IN (SELECT ...)
+	inSubquerySQL := `SELECT name FROM emps WHERE dept_id IN (SELECT id FROM depts WHERE name = 'Engineering') ORDER BY id ASC;`
+	res, err := server.ExecuteSQL(inSubquerySQL)
+	if err != nil || !res.Success {
+		t.Fatalf("WHERE IN subquery failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 emps in Engineering, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["name"] != "Alice" || res.Rows[1]["name"] != "Bob" {
+		t.Errorf("unexpected rows for IN subquery: %+v", res.Rows)
+	}
+
+	// 2. WHERE EXISTS (SELECT ...)
+	existsSQL := `SELECT name FROM depts WHERE EXISTS (SELECT 1 FROM emps WHERE dept_id = 1) ORDER BY id ASC;`
+	res, err = server.ExecuteSQL(existsSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("WHERE EXISTS subquery failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 depts because dept 1 has emps, got %d: %+v", len(res.Rows), res.Rows)
+	}
+
+	notExistsSQL := `SELECT name FROM depts WHERE NOT EXISTS (SELECT 1 FROM emps WHERE dept_id = 999);`
+	res, err = server.ExecuteSQL(notExistsSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("WHERE NOT EXISTS subquery failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 depts because dept 999 does not exist, got %d", len(res.Rows))
+	}
+
+	// 3. Scalar Subquery in WHERE: WHERE salary > (SELECT AVG(salary) FROM emps)
+	scalarSQL := `SELECT name, salary FROM emps WHERE salary > (SELECT AVG(salary) FROM emps);`
+	res, err = server.ExecuteSQL(scalarSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("Scalar subquery failed: %v", err)
+	}
+	// Avg is (95000+85000+70000)/3 = 83333. Alice (95000) and Bob (85000) are > 83333.
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 emps above avg salary, got %d: %+v", len(res.Rows), res.Rows)
+	}
+}

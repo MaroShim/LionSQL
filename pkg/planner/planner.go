@@ -25,7 +25,15 @@ const (
 	NodeHash        NodeType = "Hash"
 	NodeNestedLoop  NodeType = "Nested Loop"
 	NodeAggregate   NodeType = "Aggregate"
+	NodeCTE         NodeType = "CTE Scan"
+	NodeMaterialize NodeType = "Materialize"
 )
+
+// CTEInfo contains metadata for a Common Table Expression.
+type CTEInfo struct {
+	Name     string
+	InnerSQL string
+}
 
 // JoinInfo contains metadata for a multi-table JOIN operation.
 type JoinInfo struct {
@@ -53,6 +61,7 @@ type PlanNode struct {
 	JoinType         string      `json:"join_type,omitempty"`
 	HashCond         string      `json:"hash_cond,omitempty"`
 	JoinCond         string      `json:"join_cond,omitempty"`
+	CTEName          string      `json:"cte_name,omitempty"`
 	StartupCost      float64     `json:"startup_cost"`
 	TotalCost        float64     `json:"total_cost"`
 	EstimatedRows    int64       `json:"estimated_rows"`
@@ -64,6 +73,7 @@ type PlanNode struct {
 // QueryInfo represents the structured parts of a parsed SELECT query.
 type QueryInfo struct {
 	RawQuery      string
+	CTEs          []CTEInfo
 	TableName     string
 	TableAlias    string
 	Join          *JoinInfo
@@ -85,7 +95,7 @@ func NewPlanner() *Planner {
 	return &Planner{}
 }
 
-// ParseSelect parses a SELECT statement into QueryInfo.
+// ParseSelect parses a SELECT statement (including CTEs) into QueryInfo.
 func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
@@ -98,10 +108,12 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		cleaned = strings.TrimSpace(cleaned[8:])
 	}
 
+	ctes, mainSQL := parseCTEs(cleaned)
+
 	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
-	matches := selectRe.FindStringSubmatch(cleaned)
+	matches := selectRe.FindStringSubmatch(mainSQL)
 	if len(matches) < 3 {
-		return nil, fmt.Errorf("invalid SELECT statement for planning: %q", cleaned)
+		return nil, fmt.Errorf("invalid SELECT statement for planning: %q", mainSQL)
 	}
 
 	projStr := strings.TrimSpace(matches[1])
@@ -169,6 +181,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 
 	return &QueryInfo{
 		RawQuery:      query,
+		CTEs:          ctes,
 		TableName:     baseTable,
 		TableAlias:    baseAlias,
 		Join:          joinInfo,
@@ -181,6 +194,64 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		HasAggregates: hasAgg,
 		IsAnalyze:     isAnalyze,
 	}, nil
+}
+
+func parseCTEs(query string) ([]CTEInfo, string) {
+	trimmed := strings.TrimSpace(query)
+	upper := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(upper, "WITH ") {
+		return nil, trimmed
+	}
+
+	cur := trimmed[5:]
+	var ctes []CTEInfo
+
+	for {
+		cur = strings.TrimSpace(cur)
+		asIdx := strings.Index(strings.ToUpper(cur), " AS")
+		if asIdx == -1 {
+			break
+		}
+		cteName := strings.Trim(strings.TrimSpace(cur[:asIdx]), "\"`[]")
+		afterAs := strings.TrimSpace(cur[asIdx+3:])
+		if !strings.HasPrefix(afterAs, "(") {
+			break
+		}
+
+		depth := 0
+		closeIdx := -1
+		for i := 0; i < len(afterAs); i++ {
+			if afterAs[i] == '(' {
+				depth++
+			} else if afterAs[i] == ')' {
+				depth--
+				if depth == 0 {
+					closeIdx = i
+					break
+				}
+			}
+		}
+
+		if closeIdx == -1 {
+			break
+		}
+
+		innerSQL := strings.TrimSpace(afterAs[1:closeIdx])
+		ctes = append(ctes, CTEInfo{
+			Name:     cteName,
+			InnerSQL: innerSQL,
+		})
+
+		remaining := strings.TrimSpace(afterAs[closeIdx+1:])
+		if strings.HasPrefix(remaining, ",") {
+			cur = strings.TrimSpace(remaining[1:])
+			continue
+		} else {
+			return ctes, remaining
+		}
+	}
+
+	return nil, trimmed
 }
 
 func splitProjections(s string) []string {
@@ -264,7 +335,7 @@ func (p *Planner) BuildPlan(q *QueryInfo, schema *storage.TableSchema, totalRows
 	return p.BuildJoinPlan(q, schema, totalRows, nil, 0)
 }
 
-// BuildJoinPlan produces an optimized PlanNode tree considering joins, aggregation, and grouping.
+// BuildJoinPlan produces an optimized PlanNode tree considering joins, aggregation, grouping, and CTEs.
 func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, totalRows int64, rightSchema *storage.TableSchema, rightRows int64) *PlanNode {
 	if totalRows < 0 {
 		totalRows = 0
@@ -342,7 +413,6 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 			rightCol = rightCol[idx+1:]
 		}
 
-		// Check if inner table has an index on the join key
 		var innerIndex *storage.IndexSchema
 		if rightSchema != nil {
 			if idx, found := rightSchema.FindIndexByColumn(rightCol); found {
@@ -524,6 +594,31 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 		currentNode = limitNode
 	}
 
+	// Wrap in CTE nodes if CTEs are present
+	if len(q.CTEs) > 0 {
+		var cteChildren []*PlanNode
+		for _, cte := range q.CTEs {
+			matNode := &PlanNode{
+				Type:          NodeMaterialize,
+				CTEName:       cte.Name,
+				StartupCost:   0.5,
+				TotalCost:     2.0,
+				EstimatedRows: 10,
+			}
+			cteChildren = append(cteChildren, matNode)
+		}
+		cteChildren = append(cteChildren, currentNode)
+
+		cteRoot := &PlanNode{
+			Type:          NodeCTE,
+			StartupCost:   currentNode.StartupCost + float64(len(q.CTEs))*0.5,
+			TotalCost:     currentNode.TotalCost + float64(len(q.CTEs))*2.0,
+			EstimatedRows: currentNode.EstimatedRows,
+			Children:      cteChildren,
+		}
+		currentNode = cteRoot
+	}
+
 	return currentNode
 }
 
@@ -548,6 +643,10 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 	sb.WriteString(string(node.Type))
 
 	switch node.Type {
+	case NodeMaterialize:
+		if node.CTEName != "" {
+			sb.WriteString(fmt.Sprintf(" (CTE: %s)", node.CTEName))
+		}
 	case NodeAggregate:
 		if len(node.GroupKeys) > 0 {
 			sb.WriteString(fmt.Sprintf(" (Group By: %s)", strings.Join(node.GroupKeys, ", ")))

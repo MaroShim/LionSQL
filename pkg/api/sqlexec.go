@@ -84,7 +84,10 @@ func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 		return s.execInsert(trimmed, start)
 	}
 
-	// 6. DQL: SELECT
+	// 6. DQL: WITH (Common Table Expressions) / SELECT
+	if strings.HasPrefix(upper, "WITH ") {
+		return s.execCTE(trimmed, start)
+	}
 	if strings.HasPrefix(upper, "SELECT") {
 		return s.execSelect(trimmed, start)
 	}
@@ -536,6 +539,261 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 	}, nil
 }
 
+func findSubquery(s string, prefixPattern *regexp.Regexp) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
+	loc := prefixPattern.FindStringSubmatchIndex(s)
+	if loc == nil {
+		return 0, 0, "", "", false
+	}
+	openParenIdx := -1
+	for i := loc[0]; i < len(s); i++ {
+		if s[i] == '(' {
+			openParenIdx = i
+			break
+		}
+	}
+	if openParenIdx == -1 {
+		return 0, 0, "", "", false
+	}
+
+	depth := 0
+	closeParenIdx := -1
+	for i := openParenIdx; i < len(s); i++ {
+		if s[i] == '(' {
+			depth++
+		} else if s[i] == ')' {
+			depth--
+			if depth == 0 {
+				closeParenIdx = i
+				break
+			}
+		}
+	}
+	if closeParenIdx == -1 {
+		return 0, 0, "", "", false
+	}
+
+	inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
+	return loc[0], closeParenIdx + 1, s[loc[0]:openParenIdx], inner, true
+}
+
+func (s *Server) resolveSubqueries(whereClause string) (string, error) {
+	if whereClause == "" {
+		return "", nil
+	}
+
+	result := whereClause
+
+	// 1. [NOT] EXISTS (SELECT ...)
+	existsRe := regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*SELECT\b`)
+	for {
+		mStart, mEnd, prefix, innerSQL, found := findSubquery(result, existsRe)
+		if !found {
+			break
+		}
+		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		innerRes, err := s.ExecuteSQL(innerSQL)
+		hasRows := err == nil && innerRes != nil && len(innerRes.Rows) > 0
+		replacement := "1=0"
+		if isNot {
+			if !hasRows {
+				replacement = "1=1"
+			}
+		} else {
+			if hasRows {
+				replacement = "1=1"
+			}
+		}
+		result = result[:mStart] + replacement + result[mEnd:]
+	}
+
+	// 2. [NOT] IN (SELECT ...) -> [NOT] IN (val1, val2, ...)
+	inSelectRe := regexp.MustCompile(`(?is)\b([a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*SELECT\b`)
+	for {
+		mStart, mEnd, prefix, innerSQL, found := findSubquery(result, inSelectRe)
+		if !found {
+			break
+		}
+		tokens := strings.Fields(prefix)
+		colName := cleanIdentifier(tokens[0])
+		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		innerRes, err := s.ExecuteSQL(innerSQL)
+		hasRows := err == nil && innerRes != nil && len(innerRes.Rows) > 0
+		replacement := "1=0"
+		if isNot {
+			if !hasRows {
+				replacement = "1=1"
+			} else {
+				var vals []string
+				for _, r := range innerRes.Rows {
+					if len(innerRes.Columns) > 0 {
+						colKey := innerRes.Columns[0]
+						if v, ok := r[colKey]; ok {
+							vals = append(vals, fmt.Sprintf("'%v'", v))
+							continue
+						}
+					}
+					for _, v := range r {
+						vals = append(vals, fmt.Sprintf("'%v'", v))
+						break
+					}
+				}
+				if len(vals) > 0 {
+					replacement = fmt.Sprintf("%s NOT IN (%s)", colName, strings.Join(vals, ", "))
+				}
+			}
+		} else {
+			if hasRows {
+				var vals []string
+				for _, r := range innerRes.Rows {
+					if len(innerRes.Columns) > 0 {
+						colKey := innerRes.Columns[0]
+						if v, ok := r[colKey]; ok {
+							vals = append(vals, fmt.Sprintf("'%v'", v))
+							continue
+						}
+					}
+					for _, v := range r {
+						vals = append(vals, fmt.Sprintf("'%v'", v))
+						break
+					}
+				}
+				if len(vals) > 0 {
+					replacement = fmt.Sprintf("%s IN (%s)", colName, strings.Join(vals, ", "))
+				}
+			}
+		}
+		result = result[:mStart] + replacement + result[mEnd:]
+	}
+
+	// 3. Scalar Subquery in comparisons: e.g. > (SELECT ...), = (SELECT ...)
+	scalarRe := regexp.MustCompile(`(?is)\(\s*SELECT\b`)
+	for {
+		mStart, mEnd, _, innerSQL, found := findSubquery(result, scalarRe)
+		if !found {
+			break
+		}
+		innerRes, err := s.ExecuteSQL(innerSQL)
+		replacement := "NULL"
+		if err == nil && innerRes != nil && len(innerRes.Rows) > 0 {
+			r := innerRes.Rows[0]
+			var foundVal any
+			if len(innerRes.Columns) > 0 {
+				colKey := innerRes.Columns[0]
+				if v, ok := r[colKey]; ok && v != nil {
+					foundVal = v
+				}
+			}
+			if foundVal == nil {
+				for _, v := range r {
+					if v != nil {
+						foundVal = v
+						break
+					}
+				}
+			}
+			if foundVal != nil {
+				replacement = fmt.Sprintf("'%v'", foundVal)
+			}
+		}
+		result = result[:mStart] + replacement + result[mEnd:]
+	}
+
+	return result, nil
+}
+
+func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
+	p := planner.NewPlanner()
+	qInfo, err := p.ParseSelect(query)
+	if err != nil {
+		return nil, fmt.Errorf("parse CTE error: %w", err)
+	}
+
+	if len(qInfo.CTEs) == 0 {
+		return s.execSelect(query, start)
+	}
+
+	var tempTableNames []string
+	defer func() {
+		for _, t := range tempTableNames {
+			_, _ = s.ExecuteSQL(fmt.Sprintf("DROP TABLE %s;", t))
+		}
+	}()
+
+	mainSQL := query
+	upper := strings.ToUpper(query)
+	if strings.HasPrefix(upper, "WITH ") {
+		depth := 0
+		mainSelectIdx := -1
+		for i := 0; i < len(query); i++ {
+			if query[i] == '(' {
+				depth++
+			} else if query[i] == ')' {
+				depth--
+			} else if depth == 0 && strings.HasPrefix(strings.ToUpper(query[i:]), "SELECT") {
+				mainSelectIdx = i
+				break
+			}
+		}
+		if mainSelectIdx != -1 {
+			mainSQL = strings.TrimSpace(query[mainSelectIdx:])
+		}
+	}
+
+	for _, cte := range qInfo.CTEs {
+		// 1. Run CTE inner SQL
+		res, err := s.ExecuteSQL(cte.InnerSQL)
+		if err != nil {
+			return nil, fmt.Errorf("CTE %q execution error: %w", cte.Name, err)
+		}
+
+		// 2. Materialize into #temp table
+		tempName := fmt.Sprintf("#__cte_%s", cte.Name)
+		tempTableNames = append(tempTableNames, tempName)
+
+		if len(res.Columns) == 0 {
+			continue
+		}
+
+		var colDefs []string
+		for i, col := range res.Columns {
+			pk := ""
+			if i == 0 {
+				pk = " PRIMARY KEY"
+			}
+			colDefs = append(colDefs, fmt.Sprintf("%s VARCHAR(255)%s", col, pk))
+		}
+		createSQL := fmt.Sprintf("CREATE TABLE %s (%s);", tempName, strings.Join(colDefs, ", "))
+		if _, err := s.ExecuteSQL(createSQL); err != nil {
+			return nil, fmt.Errorf("materialize CTE %q table error: %w", cte.Name, err)
+		}
+
+		if len(res.Rows) > 0 {
+			var insertCols = res.Columns
+			for _, row := range res.Rows {
+				var valStrs []string
+				for _, col := range insertCols {
+					v := row[col]
+					if v == nil {
+						valStrs = append(valStrs, "NULL")
+					} else {
+						valStrs = append(valStrs, fmt.Sprintf("'%v'", v))
+					}
+				}
+				insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, strings.Join(insertCols, ", "), strings.Join(valStrs, ", "))
+				if _, err := s.ExecuteSQL(insSQL); err != nil {
+					return nil, fmt.Errorf("materialize CTE insert error: %w", err)
+				}
+			}
+		}
+
+		// Rewrite occurrences of cte.Name in mainSQL with tempName
+		cteWordRe := regexp.MustCompile(`\b` + regexp.QuoteMeta(cte.Name) + `\b`)
+		mainSQL = cteWordRe.ReplaceAllString(mainSQL, tempName)
+	}
+
+	return s.ExecuteSQL(mainSQL)
+}
+
 func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
@@ -565,6 +823,9 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 	whereClause := ""
 	if len(matches) > 3 {
 		whereClause = strings.TrimSpace(matches[3])
+		if resolved, err := s.resolveSubqueries(whereClause); err == nil {
+			whereClause = resolved
+		}
 	}
 	orderByClause := ""
 	if len(matches) > 6 {
@@ -1063,6 +1324,11 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 }
 
 func (s *Server) execJoin(qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
+	if qInfo.WhereClause != "" {
+		if resolved, err := s.resolveSubqueries(qInfo.WhereClause); err == nil {
+			qInfo.WhereClause = resolved
+		}
+	}
 	rightTable := cleanIdentifier(qInfo.Join.Table)
 	rightSchema, err := s.engine.GetTable(rightTable)
 	if err == nil && rightSchema != nil {
@@ -1107,20 +1373,46 @@ func (s *Server) execNestedLoopJoin(qInfo *planner.QueryInfo, start time.Time, r
 		leftCol = leftCol[idx+1:]
 	}
 
+	type projField struct {
+		expr  string
+		alias string
+	}
+	var projFields []projField
 	var selectedCols []string
 	isSelectAll := len(qInfo.Projections) == 0 || (len(qInfo.Projections) == 1 && qInfo.Projections[0] == "*")
 	if isSelectAll {
 		for _, col := range leftSchema.Columns {
+			projFields = append(projFields, projField{expr: col.Name, alias: col.Name})
 			selectedCols = append(selectedCols, col.Name)
 		}
 		for _, col := range rightSchema.Columns {
+			projFields = append(projFields, projField{expr: col.Name, alias: col.Name})
 			selectedCols = append(selectedCols, col.Name)
 		}
 	} else {
 		for _, p := range qInfo.Projections {
-			pTrimmed := cleanIdentifier(strings.TrimSpace(p))
-			if pTrimmed != "" {
-				selectedCols = append(selectedCols, pTrimmed)
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			asIdx := strings.Index(strings.ToUpper(p), " AS ")
+			if asIdx != -1 {
+				expr := cleanIdentifier(strings.TrimSpace(p[:asIdx]))
+				alias := cleanIdentifier(strings.TrimSpace(p[asIdx+4:]))
+				projFields = append(projFields, projField{expr: expr, alias: alias})
+				selectedCols = append(selectedCols, alias)
+			} else {
+				fields := strings.Fields(p)
+				if len(fields) == 2 {
+					expr := cleanIdentifier(fields[0])
+					alias := cleanIdentifier(fields[1])
+					projFields = append(projFields, projField{expr: expr, alias: alias})
+					selectedCols = append(selectedCols, alias)
+				} else {
+					col := cleanIdentifier(p)
+					projFields = append(projFields, projField{expr: col, alias: col})
+					selectedCols = append(selectedCols, col)
+				}
 			}
 		}
 	}
@@ -1185,22 +1477,23 @@ func (s *Server) execNestedLoopJoin(qInfo *planner.QueryInfo, start time.Time, r
 					}
 
 					row := make(map[string]any)
-					for _, col := range selectedCols {
+					for _, pf := range projFields {
 						var val any
-						if v, ok := combined[col]; ok {
+						if v, ok := combined[pf.expr]; ok {
 							val = v
 						} else {
-							bare := col
-							if idx := strings.Index(col, "."); idx != -1 {
-								bare = col[idx+1:]
+							bare := pf.expr
+							if idx := strings.Index(pf.expr, "."); idx != -1 {
+								bare = pf.expr[idx+1:]
 							}
 							if v, ok := combined[bare]; ok {
 								val = v
 							}
 						}
-						row[col] = val
-						if dotIdx := strings.Index(col, "."); dotIdx != -1 {
-							row[col[dotIdx+1:]] = val
+						row[pf.alias] = val
+						row[pf.expr] = val
+						if dotIdx := strings.Index(pf.expr, "."); dotIdx != -1 {
+							row[pf.expr[dotIdx+1:]] = val
 						}
 					}
 					joinedRows = append(joinedRows, row)
@@ -1227,22 +1520,23 @@ func (s *Server) execNestedLoopJoin(qInfo *planner.QueryInfo, start time.Time, r
 			}
 
 			row := make(map[string]any)
-			for _, col := range selectedCols {
+			for _, pf := range projFields {
 				var val any
-				if v, ok := combined[col]; ok {
+				if v, ok := combined[pf.expr]; ok {
 					val = v
 				} else {
-					bare := col
-					if idx := strings.Index(col, "."); idx != -1 {
-						bare = col[idx+1:]
+					bare := pf.expr
+					if idx := strings.Index(pf.expr, "."); idx != -1 {
+						bare = pf.expr[idx+1:]
 					}
 					if v, ok := combined[bare]; ok {
 						val = v
 					}
 				}
-				row[col] = val
-				if dotIdx := strings.Index(col, "."); dotIdx != -1 {
-					row[col[dotIdx+1:]] = val
+				row[pf.alias] = val
+				row[pf.expr] = val
+				if dotIdx := strings.Index(pf.expr, "."); dotIdx != -1 {
+					row[pf.expr[dotIdx+1:]] = val
 				}
 			}
 			joinedRows = append(joinedRows, row)
@@ -1360,20 +1654,46 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time) (*Query
 	}
 	defer lCur.Close()
 
+	type projField struct {
+		expr  string
+		alias string
+	}
+	var projFields []projField
 	var selectedCols []string
 	isSelectAll := len(qInfo.Projections) == 0 || (len(qInfo.Projections) == 1 && qInfo.Projections[0] == "*")
 	if isSelectAll {
 		for _, col := range leftSchema.Columns {
+			projFields = append(projFields, projField{expr: col.Name, alias: col.Name})
 			selectedCols = append(selectedCols, col.Name)
 		}
 		for _, col := range rightSchema.Columns {
+			projFields = append(projFields, projField{expr: col.Name, alias: col.Name})
 			selectedCols = append(selectedCols, col.Name)
 		}
 	} else {
 		for _, p := range qInfo.Projections {
-			pTrimmed := cleanIdentifier(strings.TrimSpace(p))
-			if pTrimmed != "" {
-				selectedCols = append(selectedCols, pTrimmed)
+			p = strings.TrimSpace(p)
+			if p == "" {
+				continue
+			}
+			asIdx := strings.Index(strings.ToUpper(p), " AS ")
+			if asIdx != -1 {
+				expr := cleanIdentifier(strings.TrimSpace(p[:asIdx]))
+				alias := cleanIdentifier(strings.TrimSpace(p[asIdx+4:]))
+				projFields = append(projFields, projField{expr: expr, alias: alias})
+				selectedCols = append(selectedCols, alias)
+			} else {
+				fields := strings.Fields(p)
+				if len(fields) == 2 {
+					expr := cleanIdentifier(fields[0])
+					alias := cleanIdentifier(fields[1])
+					projFields = append(projFields, projField{expr: expr, alias: alias})
+					selectedCols = append(selectedCols, alias)
+				} else {
+					col := cleanIdentifier(p)
+					projFields = append(projFields, projField{expr: col, alias: col})
+					selectedCols = append(selectedCols, col)
+				}
 			}
 		}
 	}
@@ -1417,22 +1737,23 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time) (*Query
 				}
 
 				row := make(map[string]any)
-				for _, col := range selectedCols {
+				for _, pf := range projFields {
 					var val any
-					if v, ok := combined[col]; ok {
+					if v, ok := combined[pf.expr]; ok {
 						val = v
 					} else {
-						bare := col
-						if idx := strings.Index(col, "."); idx != -1 {
-							bare = col[idx+1:]
+						bare := pf.expr
+						if idx := strings.Index(pf.expr, "."); idx != -1 {
+							bare = pf.expr[idx+1:]
 						}
 						if v, ok := combined[bare]; ok {
 							val = v
 						}
 					}
-					row[col] = val
-					if dotIdx := strings.Index(col, "."); dotIdx != -1 {
-						row[col[dotIdx+1:]] = val
+					row[pf.alias] = val
+					row[pf.expr] = val
+					if dotIdx := strings.Index(pf.expr, "."); dotIdx != -1 {
+						row[pf.expr[dotIdx+1:]] = val
 					}
 				}
 				joinedRows = append(joinedRows, row)
@@ -1455,22 +1776,23 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time) (*Query
 			}
 
 			row := make(map[string]any)
-			for _, col := range selectedCols {
+			for _, pf := range projFields {
 				var val any
-				if v, ok := combined[col]; ok {
+				if v, ok := combined[pf.expr]; ok {
 					val = v
 				} else {
-					bare := col
-					if idx := strings.Index(col, "."); idx != -1 {
-						bare = col[idx+1:]
+					bare := pf.expr
+					if idx := strings.Index(pf.expr, "."); idx != -1 {
+						bare = pf.expr[idx+1:]
 					}
 					if v, ok := combined[bare]; ok {
 						val = v
 					}
 				}
-				row[col] = val
-				if dotIdx := strings.Index(col, "."); dotIdx != -1 {
-					row[col[dotIdx+1:]] = val
+				row[pf.alias] = val
+				row[pf.expr] = val
+				if dotIdx := strings.Index(pf.expr, "."); dotIdx != -1 {
+					row[pf.expr[dotIdx+1:]] = val
 				}
 			}
 			joinedRows = append(joinedRows, row)
@@ -2102,10 +2424,42 @@ func formatStorageValue(v storage.Value) any {
 }
 
 func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
-	// Simple predicate evaluator: col = val, col > val, col < val, col != val, col LIKE 'pattern'
+	// Simple predicate evaluator: col = val, col > val, col < val, col != val, col LIKE 'pattern', col [NOT] IN (...)
 	whereStr = strings.TrimSpace(whereStr)
-	if whereStr == "" {
+	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
 		return true
+	}
+	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
+		return false
+	}
+
+	inRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)
+	if m := inRe.FindStringSubmatch(whereStr); len(m) == 4 {
+		colName := cleanIdentifier(m[1])
+		isNot := strings.TrimSpace(m[2]) != ""
+		valList := m[3]
+		val, ok := rec[colName]
+		if !ok {
+			if idx := strings.Index(colName, "."); idx != -1 {
+				val, ok = rec[colName[idx+1:]]
+			}
+		}
+		if !ok || val.IsNull {
+			return false
+		}
+		strVal := fmt.Sprintf("%v", formatStorageValue(val))
+		found := false
+		for _, rawItem := range strings.Split(valList, ",") {
+			item := strings.Trim(strings.TrimSpace(rawItem), "'\"")
+			if strings.EqualFold(strVal, item) {
+				found = true
+				break
+			}
+		}
+		if isNot {
+			return !found
+		}
+		return found
 	}
 
 	ops := []string{"!=", "<>", "<=", ">=", "=", "<", ">", " LIKE "}
@@ -2195,8 +2549,40 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 
 func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 	whereStr = strings.TrimSpace(whereStr)
-	if whereStr == "" {
+	if whereStr == "" || whereStr == "1=1" || whereStr == "1 = 1" || strings.EqualFold(whereStr, "NOT 1=0") || strings.EqualFold(whereStr, "NOT 1 = 0") {
 		return true
+	}
+	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
+		return false
+	}
+
+	inRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)
+	if m := inRe.FindStringSubmatch(whereStr); len(m) == 4 {
+		colName := cleanIdentifier(m[1])
+		isNot := strings.TrimSpace(m[2]) != ""
+		valList := m[3]
+		val, ok := rec[colName]
+		if !ok {
+			if idx := strings.Index(colName, "."); idx != -1 {
+				val, ok = rec[colName[idx+1:]]
+			}
+		}
+		if !ok || val == nil {
+			return false
+		}
+		strVal := fmt.Sprintf("%v", val)
+		found := false
+		for _, rawItem := range strings.Split(valList, ",") {
+			item := strings.Trim(strings.TrimSpace(rawItem), "'\"")
+			if strings.EqualFold(strVal, item) {
+				found = true
+				break
+			}
+		}
+		if isNot {
+			return !found
+		}
+		return found
 	}
 
 	ops := []string{"!=", "<>", "<=", ">=", "=", "<", ">", " LIKE "}
@@ -2206,6 +2592,13 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 			leftCol := cleanIdentifier(whereStr[:idx])
 			rightVal := strings.TrimSpace(whereStr[idx+len(op):])
 			rightVal = strings.Trim(rightVal, "';\"")
+
+			if leftCol == "1" && rightVal == "1" && op == "=" {
+				return true
+			}
+			if leftCol == "1" && rightVal == "0" && op == "=" {
+				return false
+			}
 
 			val, ok := rec[leftCol]
 			if !ok {
