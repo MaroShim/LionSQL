@@ -24,6 +24,7 @@ const (
 	NodeHashJoin    NodeType = "Hash Join"
 	NodeHash        NodeType = "Hash"
 	NodeNestedLoop  NodeType = "Nested Loop"
+	NodeAggregate   NodeType = "Aggregate"
 )
 
 // JoinInfo contains metadata for a multi-table JOIN operation.
@@ -47,6 +48,8 @@ type PlanNode struct {
 	SortOrder        string      `json:"sort_order,omitempty"`
 	LimitCount       int64       `json:"limit_count,omitempty"`
 	Projections      []string    `json:"projections,omitempty"`
+	GroupKeys        []string    `json:"group_keys,omitempty"`
+	HavingCond       string      `json:"having_cond,omitempty"`
 	JoinType         string      `json:"join_type,omitempty"`
 	HashCond         string      `json:"hash_cond,omitempty"`
 	JoinCond         string      `json:"join_cond,omitempty"`
@@ -66,8 +69,11 @@ type QueryInfo struct {
 	Join          *JoinInfo
 	Projections   []string
 	WhereClause   string
+	GroupByCols   []string
+	HavingClause  string
 	OrderByClause string
 	LimitCount    int64
+	HasAggregates bool
 	IsAnalyze     bool
 }
 
@@ -92,7 +98,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		cleaned = strings.TrimSpace(cleaned[8:])
 	}
 
-	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
+	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
 	matches := selectRe.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
 		return nil, fmt.Errorf("invalid SELECT statement for planning: %q", cleaned)
@@ -104,13 +110,21 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	if len(matches) > 3 {
 		whereClause = strings.TrimSpace(matches[3])
 	}
-	orderByClause := ""
+	groupByStr := ""
 	if len(matches) > 4 {
-		orderByClause = strings.TrimSpace(matches[4])
+		groupByStr = strings.TrimSpace(matches[4])
+	}
+	havingClause := ""
+	if len(matches) > 5 {
+		havingClause = strings.TrimSpace(matches[5])
+	}
+	orderByClause := ""
+	if len(matches) > 6 {
+		orderByClause = strings.TrimSpace(matches[6])
 	}
 	limitCount := int64(-1)
-	if len(matches) > 5 && matches[5] != "" {
-		if n, err := strconv.ParseInt(matches[5], 10, 64); err == nil {
+	if len(matches) > 7 && matches[7] != "" {
+		if n, err := strconv.ParseInt(matches[7], 10, 64); err == nil {
 			limitCount = n
 		}
 	}
@@ -124,11 +138,32 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	if projStr == "*" || projStr == "" {
 		projections = []string{"*"}
 	} else {
-		for _, col := range strings.Split(projStr, ",") {
+		for _, col := range splitProjections(projStr) {
 			c := strings.TrimSpace(col)
 			if c != "" {
 				projections = append(projections, c)
 			}
+		}
+	}
+
+	var groupByCols []string
+	if groupByStr != "" {
+		for _, col := range strings.Split(groupByStr, ",") {
+			c := strings.TrimSpace(col)
+			if c != "" {
+				groupByCols = append(groupByCols, c)
+			}
+		}
+	}
+
+	hasAgg := len(groupByCols) > 0 || havingClause != ""
+	for _, proj := range projections {
+		pUpper := strings.ToUpper(proj)
+		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
+			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
+			strings.Contains(pUpper, "MAX(") {
+			hasAgg = true
+			break
 		}
 	}
 
@@ -139,10 +174,38 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		Join:          joinInfo,
 		Projections:   projections,
 		WhereClause:   whereClause,
+		GroupByCols:   groupByCols,
+		HavingClause:  havingClause,
 		OrderByClause: orderByClause,
 		LimitCount:    limitCount,
+		HasAggregates: hasAgg,
 		IsAnalyze:     isAnalyze,
 	}, nil
+}
+
+func splitProjections(s string) []string {
+	var result []string
+	var cur strings.Builder
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '(' {
+			depth++
+		} else if ch == ')' && depth > 0 {
+			depth--
+		}
+
+		if ch == ',' && depth == 0 {
+			result = append(result, strings.TrimSpace(cur.String()))
+			cur.Reset()
+		} else {
+			cur.WriteByte(ch)
+		}
+	}
+	if cur.Len() > 0 {
+		result = append(result, strings.TrimSpace(cur.String()))
+	}
+	return result
 }
 
 func parseFromAndJoin(fromClause string) (string, string, *JoinInfo, error) {
@@ -201,7 +264,7 @@ func (p *Planner) BuildPlan(q *QueryInfo, schema *storage.TableSchema, totalRows
 	return p.BuildJoinPlan(q, schema, totalRows, nil, 0)
 }
 
-// BuildJoinPlan produces an optimized PlanNode tree considering joins and multiple tables.
+// BuildJoinPlan produces an optimized PlanNode tree considering joins, aggregation, and grouping.
 func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, totalRows int64, rightSchema *storage.TableSchema, rightRows int64) *PlanNode {
 	if totalRows < 0 {
 		totalRows = 0
@@ -359,7 +422,7 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 		}
 	}
 
-	// Filter Node
+	// Filter Node (WHERE)
 	if q.WhereClause != "" && !usedIndex {
 		filterEstRows := int64(math.Ceil(float64(currentNode.EstimatedRows) * 0.33))
 		if filterEstRows < 1 {
@@ -376,6 +439,29 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 			Children:      []*PlanNode{currentNode},
 		}
 		currentNode = filterNode
+	}
+
+	// Aggregate / GROUP BY Node
+	if q.HasAggregates {
+		aggEstRows := int64(1)
+		if len(q.GroupByCols) > 0 {
+			aggEstRows = int64(math.Ceil(float64(currentNode.EstimatedRows) * 0.2))
+			if aggEstRows < 1 {
+				aggEstRows = 1
+			}
+		}
+
+		aggCost := currentNode.TotalCost + float64(currentNode.EstimatedRows)*0.005
+		aggNode := &PlanNode{
+			Type:          NodeAggregate,
+			GroupKeys:     q.GroupByCols,
+			HavingCond:    q.HavingClause,
+			StartupCost:   currentNode.TotalCost,
+			TotalCost:     aggCost,
+			EstimatedRows: aggEstRows,
+			Children:      []*PlanNode{currentNode},
+		}
+		currentNode = aggNode
 	}
 
 	// Order By -> Sort Node
@@ -462,6 +548,13 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 	sb.WriteString(string(node.Type))
 
 	switch node.Type {
+	case NodeAggregate:
+		if len(node.GroupKeys) > 0 {
+			sb.WriteString(fmt.Sprintf(" (Group By: %s)", strings.Join(node.GroupKeys, ", ")))
+		}
+		if node.HavingCond != "" {
+			sb.WriteString(fmt.Sprintf(" (Having: %s)", node.HavingCond))
+		}
 	case NodeNestedLoop:
 		if node.JoinType == "LEFT" {
 			sb.WriteString(" (Left)")

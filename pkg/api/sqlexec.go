@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -541,11 +542,18 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 	p := planner.NewPlanner()
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil && qInfo.Join != nil {
-		return s.execJoin(qInfo, start)
+		joinRes, err := s.execJoin(qInfo, start)
+		if err != nil {
+			return nil, err
+		}
+		if qInfo.HasAggregates {
+			return s.execAggregate(joinRes.Rows, qInfo, start)
+		}
+		return joinRes, nil
 	}
 
 	// Parse projection, table, WHERE, ORDER BY, LIMIT
-	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+([^\s,;]+)(?:\s+WHERE\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
+	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+([^\s,;]+)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
 	matches := selectRe.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
 		return nil, fmt.Errorf("invalid or unsupported SELECT syntax")
@@ -559,12 +567,12 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 		whereClause = strings.TrimSpace(matches[3])
 	}
 	orderByClause := ""
-	if len(matches) > 4 {
-		orderByClause = strings.TrimSpace(matches[4])
+	if len(matches) > 6 {
+		orderByClause = strings.TrimSpace(matches[6])
 	}
 	limitCount := -1
-	if len(matches) > 5 && matches[5] != "" {
-		if n, err := strconv.Atoi(matches[5]); err == nil {
+	if len(matches) > 7 && matches[7] != "" {
+		if n, err := strconv.Atoi(matches[7]); err == nil {
 			limitCount = n
 		}
 	}
@@ -639,6 +647,25 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 	}
 	defer cursor.Close()
 
+	if qInfo != nil && qInfo.HasAggregates {
+		rawRows := make([]map[string]any, 0)
+		for cursor.Next() {
+			rec, err := cursor.Record()
+			if err != nil {
+				break
+			}
+			if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {
+				continue
+			}
+			rMap := make(map[string]any)
+			for _, col := range schema.Columns {
+				rMap[col.Name] = formatStorageValue(rec[col.Name])
+			}
+			rawRows = append(rawRows, rMap)
+		}
+		return s.execAggregate(rawRows, qInfo, start)
+	}
+
 	// 1. Determine columns
 	var selectedCols []string
 	isSelectAll := projStr == "*" || projStr == ""
@@ -712,6 +739,325 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 		Columns:      selectedCols,
 		Rows:         rows,
 		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+type aggItem struct {
+	RawStr   string
+	Alias    string
+	FuncType string // "COUNT", "SUM", "AVG", "MIN", "MAX", "NONE"
+	ArgCol   string
+}
+
+func parseAggItem(proj string) aggItem {
+	proj = strings.TrimSpace(proj)
+	alias := ""
+	rawExpr := proj
+	if idx := strings.Index(strings.ToUpper(proj), " AS "); idx != -1 {
+		rawExpr = strings.TrimSpace(proj[:idx])
+		alias = cleanIdentifier(strings.TrimSpace(proj[idx+4:]))
+	} else if tokens := strings.Fields(proj); len(tokens) == 2 && !strings.Contains(tokens[1], "(") {
+		rawExpr = strings.TrimSpace(tokens[0])
+		alias = cleanIdentifier(tokens[1])
+	}
+
+	upper := strings.ToUpper(rawExpr)
+	var funcType, argCol string
+	if strings.HasPrefix(upper, "COUNT(") && strings.HasSuffix(upper, ")") {
+		funcType = "COUNT"
+		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[6 : len(rawExpr)-1]))
+	} else if strings.HasPrefix(upper, "SUM(") && strings.HasSuffix(upper, ")") {
+		funcType = "SUM"
+		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[4 : len(rawExpr)-1]))
+	} else if strings.HasPrefix(upper, "AVG(") && strings.HasSuffix(upper, ")") {
+		funcType = "AVG"
+		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[4 : len(rawExpr)-1]))
+	} else if strings.HasPrefix(upper, "MIN(") && strings.HasSuffix(upper, ")") {
+		funcType = "MIN"
+		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[4 : len(rawExpr)-1]))
+	} else if strings.HasPrefix(upper, "MAX(") && strings.HasSuffix(upper, ")") {
+		funcType = "MAX"
+		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[4 : len(rawExpr)-1]))
+	} else {
+		funcType = "NONE"
+		argCol = cleanIdentifier(rawExpr)
+	}
+
+	return aggItem{
+		RawStr:   rawExpr,
+		Alias:    alias,
+		FuncType: funcType,
+		ArgCol:   argCol,
+	}
+}
+
+func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
+	// 1. Parse projections into aggItems
+	var items []aggItem
+	var colHeaders []string
+	for _, p := range qInfo.Projections {
+		item := parseAggItem(p)
+		items = append(items, item)
+		header := item.Alias
+		if header == "" {
+			header = item.RawStr
+		}
+		colHeaders = append(colHeaders, header)
+	}
+
+	// 2. Grouping
+	type groupBucket struct {
+		keys map[string]any
+		rows []map[string]any
+	}
+
+	var groupOrder []string
+	groups := make(map[string]*groupBucket)
+
+	if len(qInfo.GroupByCols) == 0 {
+		groupOrder = append(groupOrder, "")
+		groups[""] = &groupBucket{
+			keys: make(map[string]any),
+			rows: rows,
+		}
+	} else {
+		for _, r := range rows {
+			var keyParts []string
+			keyMap := make(map[string]any)
+			for _, gCol := range qInfo.GroupByCols {
+				gClean := cleanIdentifier(gCol)
+				var v any
+				if val, ok := r[gClean]; ok {
+					v = val
+				} else {
+					bare := gClean
+					if idx := strings.Index(gClean, "."); idx != -1 {
+						bare = gClean[idx+1:]
+					}
+					v = r[bare]
+				}
+				keyParts = append(keyParts, fmt.Sprintf("%v", v))
+				keyMap[gClean] = v
+				if idx := strings.Index(gClean, "."); idx != -1 {
+					keyMap[gClean[idx+1:]] = v
+				}
+			}
+			compositeKey := strings.Join(keyParts, "|")
+			if _, exists := groups[compositeKey]; !exists {
+				groups[compositeKey] = &groupBucket{
+					keys: keyMap,
+					rows: make([]map[string]any, 0),
+				}
+				groupOrder = append(groupOrder, compositeKey)
+			}
+			groups[compositeKey].rows = append(groups[compositeKey].rows, r)
+		}
+	}
+
+	// 3. Compute Aggregates per bucket
+	var aggRows []map[string]any
+
+	for _, gKey := range groupOrder {
+		bucket := groups[gKey]
+		aggRow := make(map[string]any)
+		for k, v := range bucket.keys {
+			aggRow[k] = v
+		}
+
+		for _, item := range items {
+			var val any
+			switch item.FuncType {
+			case "COUNT":
+				if item.ArgCol == "*" || item.ArgCol == "" {
+					val = int64(len(bucket.rows))
+				} else {
+					var count int64 = 0
+					for _, r := range bucket.rows {
+						v := r[item.ArgCol]
+						if v == nil {
+							if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
+								v = r[item.ArgCol[dotIdx+1:]]
+							}
+						}
+						if v != nil {
+							count++
+						}
+					}
+					val = count
+				}
+			case "SUM":
+				var sum float64 = 0
+				hasVal := false
+				for _, r := range bucket.rows {
+					v := r[item.ArgCol]
+					if v == nil {
+						if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
+							v = r[item.ArgCol[dotIdx+1:]]
+						}
+					}
+					if v != nil {
+						if n, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
+							sum += n
+							hasVal = true
+						}
+					}
+				}
+				if hasVal {
+					if sum == math.Trunc(sum) {
+						val = int64(sum)
+					} else {
+						val = sum
+					}
+				} else {
+					val = nil
+				}
+			case "AVG":
+				var sum float64 = 0
+				var count int64 = 0
+				for _, r := range bucket.rows {
+					v := r[item.ArgCol]
+					if v == nil {
+						if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
+							v = r[item.ArgCol[dotIdx+1:]]
+						}
+					}
+					if v != nil {
+						if n, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
+							sum += n
+							count++
+						}
+					}
+				}
+				if count > 0 {
+					val = sum / float64(count)
+				} else {
+					val = nil
+				}
+			case "MIN":
+				var minVal *float64
+				for _, r := range bucket.rows {
+					v := r[item.ArgCol]
+					if v == nil {
+						if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
+							v = r[item.ArgCol[dotIdx+1:]]
+						}
+					}
+					if v != nil {
+						if n, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
+							if minVal == nil || n < *minVal {
+								nCopy := n
+								minVal = &nCopy
+							}
+						}
+					}
+				}
+				if minVal != nil {
+					if *minVal == math.Trunc(*minVal) {
+						val = int64(*minVal)
+					} else {
+						val = *minVal
+					}
+				} else {
+					val = nil
+				}
+			case "MAX":
+				var maxVal *float64
+				for _, r := range bucket.rows {
+					v := r[item.ArgCol]
+					if v == nil {
+						if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
+							v = r[item.ArgCol[dotIdx+1:]]
+						}
+					}
+					if v != nil {
+						if n, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
+							if maxVal == nil || n > *maxVal {
+								nCopy := n
+								maxVal = &nCopy
+							}
+						}
+					}
+				}
+				if maxVal != nil {
+					if *maxVal == math.Trunc(*maxVal) {
+						val = int64(*maxVal)
+					} else {
+						val = *maxVal
+					}
+				} else {
+					val = nil
+				}
+			default:
+				if v, ok := bucket.keys[item.ArgCol]; ok {
+					val = v
+				} else if len(bucket.rows) > 0 {
+					val = bucket.rows[0][item.ArgCol]
+				}
+			}
+
+			header := item.Alias
+			if header == "" {
+				header = item.RawStr
+			}
+			aggRow[header] = val
+			aggRow[item.RawStr] = val
+			if item.Alias != "" {
+				aggRow[item.Alias] = val
+			}
+			if item.FuncType != "NONE" {
+				aggRow[strings.ToLower(item.RawStr)] = val
+				aggRow[strings.ToUpper(item.RawStr)] = val
+			}
+		}
+
+		// 4. Evaluate HAVING clause
+		if qInfo.HavingClause != "" && !evaluateWhereConditionMap(aggRow, qInfo.HavingClause) {
+			continue
+		}
+
+		// Construct final projected row matching colHeaders
+		finalRow := make(map[string]any)
+		for _, h := range colHeaders {
+			finalRow[h] = aggRow[h]
+		}
+		aggRows = append(aggRows, finalRow)
+	}
+
+	// 5. Apply ORDER BY
+	if qInfo.OrderByClause != "" && len(aggRows) > 0 {
+		orderParts := strings.Fields(qInfo.OrderByClause)
+		orderCol := cleanIdentifier(orderParts[0])
+		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
+		sort.Slice(aggRows, func(i, j int) bool {
+			v1 := fmt.Sprintf("%v", aggRows[i][orderCol])
+			v2 := fmt.Sprintf("%v", aggRows[j][orderCol])
+			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
+				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
+					if desc {
+						return n1 > n2
+					}
+					return n1 < n2
+				}
+			}
+			if desc {
+				return v1 > v2
+			}
+			return v1 < v2
+		})
+	}
+
+	// 6. Apply LIMIT
+	if qInfo.LimitCount >= 0 && int64(len(aggRows)) > qInfo.LimitCount {
+		aggRows = aggRows[:qInfo.LimitCount]
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      colHeaders,
+		Rows:         aggRows,
+		RowsAffected: int64(len(aggRows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }

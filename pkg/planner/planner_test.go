@@ -185,4 +185,42 @@ func TestPlanner_IndexNestedLoopJoin(t *testing.T) {
 	}
 }
 
+func TestPlanner_AggregateAndGroupBy(t *testing.T) {
+	p := planner.NewPlanner()
+
+	q, err := p.ParseSelect("SELECT branch, COUNT(*), SUM(balance), AVG(balance) FROM accounts WHERE balance > 100 GROUP BY branch HAVING SUM(balance) >= 5000 ORDER BY SUM(balance) DESC")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	if !q.HasAggregates {
+		t.Errorf("expected HasAggregates to be true")
+	}
+	if len(q.GroupByCols) != 1 || q.GroupByCols[0] != "branch" {
+		t.Errorf("unexpected GroupByCols: %v", q.GroupByCols)
+	}
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "branch", Type: storage.TypeVarChar},
+			{Name: "balance", Type: storage.TypeFloat},
+		},
+	}
+
+	plan := p.BuildPlan(q, schema, 1000)
+	if plan == nil {
+		t.Fatal("expected non-nil plan")
+	}
+
+	lines := planner.FormatPlanText(plan, false)
+	fullText := strings.Join(lines, "\n")
+
+	if !strings.Contains(fullText, "Aggregate (Group By: branch)") || !strings.Contains(fullText, "Having: SUM(balance) >= 5000") {
+		t.Errorf("expected Aggregate with Group By and Having in plan text, got:\n%s", fullText)
+	}
+}
+
+
 

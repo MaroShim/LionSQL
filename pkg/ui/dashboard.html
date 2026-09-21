@@ -275,6 +275,7 @@
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('create')">CREATE TABLE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('insert')">INSERT</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('select')">SELECT *</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('groupby')">GROUP BY</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('explain')">EXPLAIN</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('explain_analyze')">EXPLAIN ANALYZE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('update')">UPDATE</button>
@@ -497,6 +498,9 @@ END;</textarea>
           break;
         case 'select':
           editor.value = "SELECT id, balance, branch FROM accounts WHERE balance >= 1000 ORDER BY id ASC LIMIT 50;";
+          break;
+        case 'groupby':
+          editor.value = "SELECT branch, COUNT(*) AS total_accs, SUM(balance) AS total_bal, AVG(balance) AS avg_bal\nFROM accounts\nGROUP BY branch\nHAVING SUM(balance) >= 1000\nORDER BY total_bal DESC;";
           break;
         case 'explain':
           editor.value = "EXPLAIN SELECT id, balance, branch FROM accounts WHERE balance >= 1000 ORDER BY id ASC LIMIT 50;";

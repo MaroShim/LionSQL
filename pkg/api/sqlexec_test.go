@@ -403,5 +403,73 @@ func TestSQLExecutor_IndexNestedLoopJoin(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_GroupByAndHaving(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, _ = server.ExecuteSQL(`CREATE TABLE employees (id INT PRIMARY KEY, department VARCHAR(50), salary INT);`)
+	_, _ = server.ExecuteSQL(`INSERT INTO employees (id, department, salary) VALUES 
+		(1, 'Engineering', 90000),
+		(2, 'Engineering', 110000),
+		(3, 'Engineering', 80000),
+		(4, 'HR', 55000),
+		(5, 'HR', 65000),
+		(6, 'Sales', 70000);`)
+
+	// 1. GROUP BY with COUNT, SUM, AVG, MIN, MAX
+	groupSQL := `SELECT department, COUNT(*) AS emp_count, SUM(salary) AS total_salary, AVG(salary) AS avg_salary, MIN(salary) AS min_sal, MAX(salary) AS max_sal 
+		FROM employees 
+		GROUP BY department 
+		ORDER BY total_salary DESC;`
+	res, err := server.ExecuteSQL(groupSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("GROUP BY failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 department groups, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	// Engineering should be first with total 280000
+	engRow := res.Rows[0]
+	if engRow["department"] != "Engineering" || engRow["emp_count"] != int64(3) || engRow["total_salary"] != int64(280000) {
+		t.Errorf("unexpected Engineering aggregate row: %+v", engRow)
+	}
+
+	// 2. GROUP BY with HAVING filter
+	havingSQL := `SELECT department, COUNT(*) AS emp_count, SUM(salary) AS total_salary 
+		FROM employees 
+		GROUP BY department 
+		HAVING COUNT(*) >= 2 
+		ORDER BY emp_count DESC;`
+	res, err = server.ExecuteSQL(havingSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("GROUP BY HAVING failed: %v", err)
+	}
+	// Only Engineering (3) and HR (2) have >= 2 employees
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 groups passing HAVING, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["department"] != "Engineering" || res.Rows[1]["department"] != "HR" {
+		t.Errorf("unexpected HAVING filtered rows: %+v", res.Rows)
+	}
+
+	// 3. Global Aggregation without GROUP BY
+	globalSQL := `SELECT COUNT(*) AS total_emps, SUM(salary) AS all_salaries, AVG(salary) AS mean_sal FROM employees;`
+	res, err = server.ExecuteSQL(globalSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("Global Aggregation failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 global aggregate row, got %d", len(res.Rows))
+	}
+	gRow := res.Rows[0]
+	if gRow["total_emps"] != int64(6) || gRow["all_salaries"] != int64(470000) {
+		t.Errorf("unexpected global aggregate row: %+v", gRow)
+	}
+}
+
+
 
 
