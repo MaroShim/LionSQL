@@ -66,12 +66,7 @@ func main() {
 	case "wiredtiger":
 		eng = wiredtiger.New()
 		if err := eng.Open(*dataDir); err != nil {
-			log.Printf("[SQLion] Notice: WiredTiger Cgo engine not enabled in this binary (%v)", err)
-			log.Printf("[SQLion] Falling back to embedded ACID storage engine (memengine)")
-			eng = memengine.New()
-			if err := eng.Open(*dataDir); err != nil {
-				log.Fatalf("Failed to open fallback storage engine: %v", err)
-			}
+			log.Fatalf("[SQLion] Failed to open WiredTiger storage engine: %v. If you wish to use the in-memory engine, specify --engine=memory explicitly.", err)
 		}
 	case "memory":
 		eng = memengine.New()

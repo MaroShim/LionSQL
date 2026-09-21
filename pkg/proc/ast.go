@@ -78,6 +78,33 @@ type CreateProcStmt struct {
 	Body   Statement
 }
 
+// CreateFunctionStmt represents CREATE FUNCTION dbo.Name (@param type) RETURNS type AS BEGIN ... END
+type CreateFunctionStmt struct {
+	Name       string
+	Params     []ParamDef
+	ReturnType storage.DataType
+	Body       Statement
+}
+
+func (s *CreateFunctionStmt) stmtNode() {}
+func (s *CreateFunctionStmt) String() string {
+	return fmt.Sprintf("CREATE FUNCTION %s RETURNS %v AS\n%s", s.Name, s.ReturnType, s.Body.String())
+}
+
+// CreateTriggerStmt represents CREATE TRIGGER name ON table AFTER/INSTEAD OF INSERT, UPDATE, DELETE AS BEGIN ... END
+type CreateTriggerStmt struct {
+	Name   string
+	Table  string
+	Timing string   // "AFTER", "INSTEAD OF"
+	Events []string // "INSERT", "UPDATE", "DELETE"
+	Body   Statement
+}
+
+func (s *CreateTriggerStmt) stmtNode() {}
+func (s *CreateTriggerStmt) String() string {
+	return fmt.Sprintf("CREATE TRIGGER %s ON %s %s %s AS\n%s", s.Name, s.Table, s.Timing, strings.Join(s.Events, ", "), s.Body.String())
+}
+
 // ParamDef defines a procedure parameter.
 type ParamDef struct {
 	Name string

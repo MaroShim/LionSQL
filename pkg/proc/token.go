@@ -87,12 +87,26 @@ const (
 	TokenClose
 	TokenDeallocate
 	TokenFor
+	TokenFunction
+	TokenReturns
+	TokenTrigger
+	TokenOn
+	TokenAfter
+	TokenInstead
+	TokenOf
 )
 
 var keywords = map[string]TokenType{
 	"CREATE":      TokenCreate,
 	"PROCEDURE":   TokenProcedure,
 	"PROC":        TokenProc,
+	"FUNCTION":    TokenFunction,
+	"RETURNS":     TokenReturns,
+	"TRIGGER":     TokenTrigger,
+	"ON":          TokenOn,
+	"AFTER":       TokenAfter,
+	"INSTEAD":     TokenInstead,
+	"OF":          TokenOf,
 	"AS":          TokenAs,
 	"BEGIN":       TokenBegin,
 	"END":         TokenEnd,

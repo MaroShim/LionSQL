@@ -12,18 +12,18 @@ func Transpile(proc *CreateProcStmt) (string, error) {
 	var b strings.Builder
 
 	// Function header
-	b.WriteString(fmt.Sprintf("function %s(params, db) {\n", proc.Name))
+	b.WriteString(fmt.Sprintf("function %s(params, db) {\n", cleanIdent(proc.Name)))
 
 	// System state variables
 	b.WriteString("  let _fetch_status = -1;\n")
 	b.WriteString("  let _row_count = 0;\n")
 	b.WriteString("  let _tran_count = 0;\n\n")
 
-	// Bind parameters from params object
-	for _, p := range proc.Params {
+	// Bind parameters from params object or positional arguments
+	for i, p := range proc.Params {
 		rawName := cleanIdent(p.Name)
-		b.WriteString(fmt.Sprintf("  let %s = params['%s'] !== undefined ? params['%s'] : params['@%s'];\n",
-			rawName, rawName, rawName, rawName))
+		b.WriteString(fmt.Sprintf("  let %s = (params && typeof params === 'object') ? (params['%s'] !== undefined ? params['%s'] : params['@%s']) : arguments[%d];\n",
+			rawName, rawName, rawName, rawName, i))
 	}
 	if len(proc.Params) > 0 {
 		b.WriteString("\n")
@@ -39,6 +39,92 @@ func Transpile(proc *CreateProcStmt) (string, error) {
 	if !strings.HasSuffix(strings.TrimSpace(bodyJS), "return 0;") &&
 		!strings.HasSuffix(strings.TrimSpace(bodyJS), "return;") {
 		b.WriteString("\n  return 0;\n")
+	}
+	b.WriteString("}\n")
+
+	return b.String(), nil
+}
+
+// TranspileFunction converts a parsed T-SQL UDF AST into standard JavaScript code.
+func TranspileFunction(fn *CreateFunctionStmt) (string, error) {
+	var b strings.Builder
+
+	// Function header
+	b.WriteString(fmt.Sprintf("function %s(params, db) {\n", cleanIdent(fn.Name)))
+
+	// System state variables
+	b.WriteString("  let _fetch_status = -1;\n")
+	b.WriteString("  let _row_count = 0;\n")
+	b.WriteString("  let _tran_count = 0;\n\n")
+
+	// Bind parameters supporting both object map and positional arguments
+	for i, p := range fn.Params {
+		rawName := cleanIdent(p.Name)
+		b.WriteString(fmt.Sprintf("  let %s = (params && typeof params === 'object' && !Array.isArray(params)) ? (params['%s'] !== undefined ? params['%s'] : params['@%s']) : arguments[%d];\n",
+			rawName, rawName, rawName, rawName, i))
+	}
+	if len(fn.Params) > 0 {
+		b.WriteString("\n")
+	}
+
+	// Transpile body
+	bodyJS, err := transpileStmt(fn.Body, 1)
+	if err != nil {
+		return "", err
+	}
+	b.WriteString(bodyJS)
+
+	if !strings.HasSuffix(strings.TrimSpace(bodyJS), "return 0;") &&
+		!strings.HasSuffix(strings.TrimSpace(bodyJS), "return;") {
+		b.WriteString("\n  return 0;\n")
+	}
+	b.WriteString("}\n")
+
+	fnIdent := cleanIdent(fn.Name)
+	upperName := strings.ToUpper(fnIdent)
+	lowerName := strings.ToLower(fnIdent)
+	if upperName != fnIdent {
+		b.WriteString(fmt.Sprintf("var %s = %s;\n", upperName, fnIdent))
+	}
+	if lowerName != fnIdent && lowerName != upperName {
+		b.WriteString(fmt.Sprintf("var %s = %s;\n", lowerName, fnIdent))
+	}
+
+	return b.String(), nil
+}
+
+// TranspileTrigger converts a parsed T-SQL Trigger AST into standard JavaScript code.
+func TranspileTrigger(trg *CreateTriggerStmt) (string, error) {
+	var b strings.Builder
+
+	// Function header taking inserted, deleted, and db context
+	b.WriteString(fmt.Sprintf("function %s(inserted, deleted, db) {\n", cleanIdent(trg.Name)))
+
+	// System state variables
+	b.WriteString("  let _fetch_status = -1;\n")
+	b.WriteString("  let _row_count = 0;\n")
+	b.WriteString("  let _tran_count = 0;\n\n")
+
+	// Register transient inserted and deleted tables in db context
+	b.WriteString("  if (db && db._setTransientTable) {\n")
+	b.WriteString("    db._setTransientTable('inserted', inserted || []);\n")
+	b.WriteString("    db._setTransientTable('deleted', deleted || []);\n")
+	b.WriteString("  }\n\n")
+
+	// Transpile body
+	bodyJS, err := transpileStmt(trg.Body, 1)
+	if err != nil {
+		return "", err
+	}
+	b.WriteString(bodyJS)
+
+	b.WriteString("\n  if (db && db._clearTransientTables) {\n")
+	b.WriteString("    db._clearTransientTables();\n")
+	b.WriteString("  }\n")
+
+	if !strings.HasSuffix(strings.TrimSpace(bodyJS), "return 0;") &&
+		!strings.HasSuffix(strings.TrimSpace(bodyJS), "return;") {
+		b.WriteString("  return 0;\n")
 	}
 	b.WriteString("}\n")
 
@@ -399,10 +485,11 @@ func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 		}
 
 	case *ColumnRefExpr:
+		col := cleanColumnName(e.Name)
 		if rowScope != "" {
-			return fmt.Sprintf("%s[%q]", rowScope, e.Name), nil
+			return fmt.Sprintf("%s[%q]", rowScope, col), nil
 		}
-		return fmt.Sprintf("row[%q]", e.Name), nil
+		return fmt.Sprintf("row[%q]", col), nil
 
 	case *InExpr:
 		targetJS, err := transpileExprWithScope(e.Expr, rowScope)
@@ -598,7 +685,7 @@ func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 			}
 			argStrs[i] = s
 		}
-		return fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", ")), nil
+		return fmt.Sprintf("%s(%s)", cleanIdent(e.Name), strings.Join(argStrs, ", ")), nil
 
 	case *UnaryExpr:
 		subJS, err := transpileExprWithScope(e.Expr, rowScope)
@@ -609,9 +696,9 @@ func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 		case TokenMinus:
 			return fmt.Sprintf("(-%s)", subJS), nil
 		case TokenNot:
-			return fmt.Sprintf("(!%s)", subJS), nil
+			return fmt.Sprintf("!(%s)", subJS), nil
 		default:
-			return "", fmt.Errorf("unsupported unary operator: %v", e.Op)
+			return fmt.Sprintf("(%s)", subJS), nil
 		}
 
 	case *BinaryExpr:
@@ -661,5 +748,18 @@ func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 }
 
 func cleanIdent(name string) string {
-	return strings.TrimPrefix(name, "@")
+	name = strings.TrimPrefix(name, "@")
+	name = strings.Trim(name, "[]\"'`")
+	if strings.HasPrefix(strings.ToLower(name), "dbo.") {
+		name = name[4:]
+	}
+	name = strings.Trim(name, "[]\"'`")
+	return name
 }
+
+func cleanColumnName(name string) string {
+	parts := strings.Split(name, ".")
+	last := parts[len(parts)-1]
+	return strings.Trim(last, "[]\"'`")
+}
+

@@ -292,8 +292,16 @@ func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 			continue
 		}
 		if val.Type != col.Type {
-			return fmt.Errorf("%w: column %q expects %s, got %s",
-				storage.ErrInvalidDataType, col.Name, col.Type, val.Type)
+			if col.Type == storage.TypeFloat && val.Type == storage.TypeInt {
+				val = storage.FloatValue(float64(val.IVal))
+				record[col.Name] = val
+			} else if col.Type == storage.TypeInt && val.Type == storage.TypeFloat && val.FVal == float64(int64(val.FVal)) {
+				val = storage.IntValue(int64(val.FVal))
+				record[col.Name] = val
+			} else {
+				return fmt.Errorf("%w: column %q expects %s, got %s",
+					storage.ErrInvalidDataType, col.Name, col.Type, val.Type)
+			}
 		}
 	}
 

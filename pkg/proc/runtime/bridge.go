@@ -9,24 +9,35 @@ import (
 	"sqlion/pkg/storage"
 )
 
+// TriggerHandler is a callback invoked when DML operations occur.
+type TriggerHandler func(tableName string, event string, inserted []map[string]any, deleted []map[string]any) error
+
 // Bridge creates the JavaScript "db", "console", and "SQLion" APIs bound to an active storage transaction.
 type Bridge struct {
-	tx       storage.Transaction
-	logs     []string
-	executor *Executor
+	tx              storage.Transaction
+	logs            []string
+	executor        *Executor
+	transientTables map[string][]map[string]any
+	triggerHandler  TriggerHandler
 }
 
 // NewBridge creates a new bridge for the given transaction.
 func NewBridge(tx storage.Transaction) *Bridge {
 	return &Bridge{
-		tx:   tx,
-		logs: make([]string, 0),
+		tx:              tx,
+		logs:            make([]string, 0),
+		transientTables: make(map[string][]map[string]any),
 	}
 }
 
 // SetExecutor links an Executor for nested procedure invocation.
 func (b *Bridge) SetExecutor(exec *Executor) {
 	b.executor = exec
+}
+
+// SetTriggerHandler links a trigger handler callback.
+func (b *Bridge) SetTriggerHandler(h TriggerHandler) {
+	b.triggerHandler = h
 }
 
 // Logs returns the collected console.log messages.
@@ -38,6 +49,33 @@ func (b *Bridge) Logs() []string {
 func (b *Bridge) Bind(vm *goja.Runtime) error {
 	dbObj := vm.NewObject()
 
+	// db._setTransientTable(name, rows)
+	_ = dbObj.Set("_setTransientTable", func(call goja.FunctionCall) goja.Value {
+		if len(call.Arguments) < 2 {
+			return goja.Undefined()
+		}
+		name := strings.ToLower(call.Arguments[0].String())
+		val := call.Arguments[1].Export()
+		var rows []map[string]any
+		if arr, ok := val.([]any); ok {
+			for _, item := range arr {
+				if m, ok := item.(map[string]any); ok {
+					rows = append(rows, m)
+				}
+			}
+		} else if arr, ok := val.([]map[string]any); ok {
+			rows = arr
+		}
+		b.transientTables[name] = rows
+		return goja.Undefined()
+	})
+
+	// db._clearTransientTables()
+	_ = dbObj.Set("_clearTransientTables", func(call goja.FunctionCall) goja.Value {
+		b.transientTables = make(map[string][]map[string]any)
+		return goja.Undefined()
+	})
+
 	// db.get(tableName, pk, [columnName])
 	_ = dbObj.Set("get", func(call goja.FunctionCall) goja.Value {
 		if len(call.Arguments) < 2 {
@@ -45,6 +83,43 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 		}
 
 		tableName := call.Arguments[0].String()
+		lowerName := strings.ToLower(tableName)
+
+		if rows, isTransient := b.transientTables[lowerName]; isTransient {
+			pkVal := call.Arguments[1].Export()
+			var found map[string]any
+			for _, r := range rows {
+				if idVal, hasID := r["id"]; hasID {
+					if fmt.Sprintf("%v", idVal) == fmt.Sprintf("%v", pkVal) {
+						found = r
+						break
+					}
+				} else {
+					found = r
+					break
+				}
+			}
+			if found == nil && len(rows) > 0 {
+				found = rows[0]
+			}
+			if found == nil {
+				return goja.Null()
+			}
+			if len(call.Arguments) >= 3 && !goja.IsNull(call.Arguments[2]) && !goja.IsUndefined(call.Arguments[2]) {
+				colName := call.Arguments[2].String()
+				val, exists := found[colName]
+				if !exists {
+					return goja.Null()
+				}
+				return vm.ToValue(val)
+			}
+			rowObj := vm.NewObject()
+			for k, v := range found {
+				_ = rowObj.Set(k, v)
+			}
+			return rowObj
+		}
+
 		pkVal := toStorageValue(call.Arguments[1].Export())
 
 		rec, err := b.tx.Get(tableName, pkVal)
@@ -82,6 +157,11 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 			panic(vm.ToValue("db.update third argument must be an object of column updates"))
 		}
 
+		var oldRec storage.Record
+		if b.triggerHandler != nil && !isTransientTable(tableName) {
+			oldRec, _ = b.tx.Get(tableName, pkVal)
+		}
+
 		rec := make(storage.Record)
 		for k, v := range updatesExport {
 			rec[k] = toStorageValue(v)
@@ -89,6 +169,21 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 
 		if err := b.tx.Update(tableName, pkVal, rec); err != nil {
 			panic(vm.ToValue(fmt.Sprintf("db.update error on %s: %v", tableName, err)))
+		}
+
+		if b.triggerHandler != nil && !isTransientTable(tableName) && oldRec != nil {
+			oldRow := make(map[string]any)
+			newRow := make(map[string]any)
+			for k, v := range oldRec {
+				oldRow[k] = valToAny(v)
+				newRow[k] = valToAny(v)
+			}
+			for k, v := range updatesExport {
+				newRow[k] = v
+			}
+			if err := b.triggerHandler(tableName, "UPDATE", []map[string]any{newRow}, []map[string]any{oldRow}); err != nil {
+				panic(vm.ToValue(fmt.Sprintf("trigger error on %s UPDATE: %v", tableName, err)))
+			}
 		}
 
 		return vm.ToValue(true)
@@ -115,6 +210,8 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 		type updateItem struct {
 			pk      storage.Value
 			updates storage.Record
+			oldRow  map[string]any
+			newRow  map[string]any
 		}
 		toUpdate := make([]updateItem, 0)
 
@@ -124,8 +221,11 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 				break
 			}
 			rowObj := vm.NewObject()
+			oldRowMap := make(map[string]any)
 			for k, v := range rec {
-				_ = rowObj.Set(k, valToAny(v))
+				anyVal := valToAny(v)
+				_ = rowObj.Set(k, anyVal)
+				oldRowMap[k] = anyVal
 			}
 
 			condVal, err := filterFn(goja.Null(), rowObj)
@@ -136,7 +236,6 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 			if condVal.ToBoolean() {
 				pkVal, hasPk := rec["id"]
 				if !hasPk {
-					// Pick first column as fallback PK
 					for _, v := range rec {
 						pkVal = v
 						hasPk = true
@@ -145,6 +244,11 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 				}
 
 				recUpdates := make(storage.Record)
+				newRowMap := make(map[string]any)
+				for k, v := range oldRowMap {
+					newRowMap[k] = v
+				}
+
 				if updateFn, isFn := goja.AssertFunction(call.Arguments[2]); isFn {
 					res, err := updateFn(goja.Null(), rowObj)
 					if err != nil {
@@ -153,24 +257,41 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 					if m, ok := res.Export().(map[string]any); ok {
 						for k, v := range m {
 							recUpdates[k] = toStorageValue(v)
+							newRowMap[k] = v
 						}
 					}
 				} else if m, ok := call.Arguments[2].Export().(map[string]any); ok {
 					for k, v := range m {
 						recUpdates[k] = toStorageValue(v)
+						newRowMap[k] = v
 					}
 				}
 
 				if hasPk {
-					toUpdate = append(toUpdate, updateItem{pk: pkVal, updates: recUpdates})
+					toUpdate = append(toUpdate, updateItem{
+						pk:      pkVal,
+						updates: recUpdates,
+						oldRow:  oldRowMap,
+						newRow:  newRowMap,
+					})
 				}
 			}
 		}
 
 		updatedCount := int64(0)
+		var oldRows []map[string]any
+		var newRows []map[string]any
 		for _, item := range toUpdate {
 			if err := b.tx.Update(tableName, item.pk, item.updates); err == nil {
 				updatedCount++
+				oldRows = append(oldRows, item.oldRow)
+				newRows = append(newRows, item.newRow)
+			}
+		}
+
+		if b.triggerHandler != nil && !isTransientTable(tableName) && len(newRows) > 0 {
+			if err := b.triggerHandler(tableName, "UPDATE", newRows, oldRows); err != nil {
+				panic(vm.ToValue(fmt.Sprintf("trigger error on %s UPDATE: %v", tableName, err)))
 			}
 		}
 
@@ -195,15 +316,22 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 		}
 		defer cursor.Close()
 
-		toDelete := make([]storage.Value, 0)
+		type delItem struct {
+			pk  storage.Value
+			row map[string]any
+		}
+		toDelete := make([]delItem, 0)
 		for cursor.Next() {
 			rec, err := cursor.Record()
 			if err != nil {
 				break
 			}
 			rowObj := vm.NewObject()
+			rowMap := make(map[string]any)
 			for k, v := range rec {
-				_ = rowObj.Set(k, valToAny(v))
+				anyVal := valToAny(v)
+				_ = rowObj.Set(k, anyVal)
+				rowMap[k] = anyVal
 			}
 
 			condVal, err := filterFn(goja.Null(), rowObj)
@@ -221,15 +349,23 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 					}
 				}
 				if hasPk {
-					toDelete = append(toDelete, pkVal)
+					toDelete = append(toDelete, delItem{pk: pkVal, row: rowMap})
 				}
 			}
 		}
 
 		deletedCount := int64(0)
-		for _, pk := range toDelete {
-			if err := b.tx.Delete(tableName, pk); err == nil {
+		var deletedRows []map[string]any
+		for _, item := range toDelete {
+			if err := b.tx.Delete(tableName, item.pk); err == nil {
 				deletedCount++
+				deletedRows = append(deletedRows, item.row)
+			}
+		}
+
+		if b.triggerHandler != nil && !isTransientTable(tableName) && len(deletedRows) > 0 {
+			if err := b.triggerHandler(tableName, "DELETE", nil, deletedRows); err != nil {
+				panic(vm.ToValue(fmt.Sprintf("trigger error on %s DELETE: %v", tableName, err)))
 			}
 		}
 
@@ -257,6 +393,16 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 			panic(vm.ToValue(fmt.Sprintf("db.insert error on %s: %v", tableName, err)))
 		}
 
+		if b.triggerHandler != nil && !isTransientTable(tableName) {
+			rowCopy := make(map[string]any)
+			for k, v := range rowExport {
+				rowCopy[k] = v
+			}
+			if err := b.triggerHandler(tableName, "INSERT", []map[string]any{rowCopy}, nil); err != nil {
+				panic(vm.ToValue(fmt.Sprintf("trigger error on %s INSERT: %v", tableName, err)))
+			}
+		}
+
 		return vm.ToValue(true)
 	})
 
@@ -269,8 +415,23 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 		tableName := call.Arguments[0].String()
 		pkVal := toStorageValue(call.Arguments[1].Export())
 
+		var oldRec storage.Record
+		if b.triggerHandler != nil && !isTransientTable(tableName) {
+			oldRec, _ = b.tx.Get(tableName, pkVal)
+		}
+
 		if err := b.tx.Delete(tableName, pkVal); err != nil {
 			panic(vm.ToValue(fmt.Sprintf("db.delete error on %s: %v", tableName, err)))
+		}
+
+		if b.triggerHandler != nil && !isTransientTable(tableName) && oldRec != nil {
+			oldRow := make(map[string]any)
+			for k, v := range oldRec {
+				oldRow[k] = valToAny(v)
+			}
+			if err := b.triggerHandler(tableName, "DELETE", nil, []map[string]any{oldRow}); err != nil {
+				panic(vm.ToValue(fmt.Sprintf("trigger error on %s DELETE: %v", tableName, err)))
+			}
 		}
 
 		return vm.ToValue(true)
@@ -283,16 +444,36 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 		}
 
 		tableName := call.Arguments[0].String()
-		cursor, err := b.tx.Scan(tableName)
-		if err != nil {
-			panic(vm.ToValue(fmt.Sprintf("db.query error on %s: %v", tableName, err)))
-		}
-		defer cursor.Close()
+		lowerName := strings.ToLower(tableName)
 
 		var filterFn goja.Callable
 		if len(call.Arguments) >= 2 && !goja.IsNull(call.Arguments[1]) && !goja.IsUndefined(call.Arguments[1]) {
 			filterFn, _ = goja.AssertFunction(call.Arguments[1])
 		}
+
+		if rows, isTransient := b.transientTables[lowerName]; isTransient {
+			resRows := make([]map[string]any, 0, len(rows))
+			for _, r := range rows {
+				if filterFn != nil {
+					rowObj := vm.NewObject()
+					for k, v := range r {
+						_ = rowObj.Set(k, v)
+					}
+					res, err := filterFn(goja.Null(), rowObj)
+					if err != nil || !res.ToBoolean() {
+						continue
+					}
+				}
+				resRows = append(resRows, r)
+			}
+			return vm.ToValue(resRows)
+		}
+
+		cursor, err := b.tx.Scan(tableName)
+		if err != nil {
+			panic(vm.ToValue(fmt.Sprintf("db.query error on %s: %v", tableName, err)))
+		}
+		defer cursor.Close()
 
 		rows := make([]map[string]any, 0)
 		for cursor.Next() {
@@ -328,16 +509,37 @@ func (b *Bridge) Bind(vm *goja.Runtime) error {
 			panic(vm.ToValue("db.count requires (tableName)"))
 		}
 		tableName := call.Arguments[0].String()
-		cursor, err := b.tx.Scan(tableName)
-		if err != nil {
-			panic(vm.ToValue(fmt.Sprintf("db.count error on %s: %v", tableName, err)))
-		}
-		defer cursor.Close()
+		lowerName := strings.ToLower(tableName)
 
 		var filterFn goja.Callable
 		if len(call.Arguments) >= 2 && !goja.IsNull(call.Arguments[1]) && !goja.IsUndefined(call.Arguments[1]) {
 			filterFn, _ = goja.AssertFunction(call.Arguments[1])
 		}
+
+		if rows, isTransient := b.transientTables[lowerName]; isTransient {
+			cnt := int64(0)
+			for _, r := range rows {
+				if filterFn != nil {
+					rowObj := vm.NewObject()
+					for k, v := range r {
+						_ = rowObj.Set(k, v)
+					}
+					res, err := filterFn(goja.Null(), rowObj)
+					if err == nil && res.ToBoolean() {
+						cnt++
+					}
+				} else {
+					cnt++
+				}
+			}
+			return vm.ToValue(cnt)
+		}
+
+		cursor, err := b.tx.Scan(tableName)
+		if err != nil {
+			panic(vm.ToValue(fmt.Sprintf("db.count error on %s: %v", tableName, err)))
+		}
+		defer cursor.Close()
 
 		cnt := int64(0)
 		for cursor.Next() {
@@ -487,3 +689,9 @@ func toStorageValue(v any) storage.Value {
 		return storage.StringValue(fmt.Sprintf("%v", v))
 	}
 }
+
+func isTransientTable(name string) bool {
+	lower := strings.ToLower(name)
+	return lower == "inserted" || lower == "deleted"
+}
+

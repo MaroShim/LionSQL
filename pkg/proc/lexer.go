@@ -108,6 +108,12 @@ func (l *Lexer) NextToken() Token {
 		tok.Line = tokLine
 		tok.Col = tokCol
 		return tok
+	case '[':
+		tok.Type = TokenIdent
+		tok.Literal = l.readBracketedIdentifier()
+		tok.Line = tokLine
+		tok.Col = tokCol
+		return tok
 	case '@':
 		tok.Type = TokenVariable
 		tok.Literal = l.readVariable()
@@ -175,10 +181,42 @@ func (l *Lexer) skipWhitespaceAndComments() {
 	}
 }
 
+func (l *Lexer) readBracketedIdentifier() string {
+	startPos := l.pos
+	l.readChar() // skip '['
+	for l.ch != ']' && l.ch != 0 {
+		l.readChar()
+	}
+	if l.ch == ']' {
+		l.readChar() // skip ']'
+	}
+	// Check if chained with . e.g. [dbo].[sp_name]
+	if l.ch == '.' && (l.peekChar() == '[' || isLetter(l.peekChar())) {
+		l.readChar() // eat '.'
+		if l.ch == '[' {
+			l.readBracketedIdentifier()
+		} else {
+			l.readIdentifier()
+		}
+	}
+	return l.input[startPos:l.pos]
+}
+
 func (l *Lexer) readIdentifier() string {
 	startPos := l.pos
 	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
 		l.readChar()
+	}
+	// Check if dot-qualified schema identifier e.g. dbo.sp_name
+	if l.ch == '.' && (isLetter(l.peekChar()) || l.peekChar() == '[') {
+		l.readChar() // eat '.'
+		if l.ch == '[' {
+			l.readBracketedIdentifier()
+		} else {
+			for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
+				l.readChar()
+			}
+		}
 	}
 	return l.input[startPos:l.pos]
 }

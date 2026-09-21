@@ -43,16 +43,15 @@ func main() {
 		_ = os.RemoveAll(*dataDir)
 		eng = wiredtiger.New()
 		if err := eng.Open(*dataDir); err != nil {
-			fmt.Printf("WiredTiger Open failed (%v), falling back to memengine\n", err)
-			eng = memengine.New()
-			_ = eng.Open("")
+			fmt.Printf("Failed to open WiredTiger storage engine: %v. Specify -engine=memory to benchmark in-memory.\n", err)
+			os.Exit(1)
 		}
 	case "memory":
 		eng = memengine.New()
 		_ = eng.Open("")
 	default:
-		eng = memengine.New()
-		_ = eng.Open("")
+		fmt.Printf("Unknown storage engine: %s. Options: wiredtiger, memory\n", *engineType)
+		os.Exit(1)
 	}
 	defer func() {
 		eng.Close()

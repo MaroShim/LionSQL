@@ -43,7 +43,7 @@ END;
 
 	expectedSnippets := []string{
 		"function TransferFunds(params, db) {",
-		"let from = params['from'] !== undefined ? params['from'] : params['@from'];",
+		"let from = (params && typeof params === 'object') ? (params['from'] !== undefined ? params['from'] : params['@from']) : arguments[0];",
 		"let sender_bal = null;",
 		"sender_bal = db.get(\"accounts\", from, \"balance\");",
 		"if ((sender_bal < amount)) {",

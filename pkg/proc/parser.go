@@ -89,6 +89,47 @@ func (p *Parser) Errors() []string {
 	return p.errors
 }
 
+// Parse parses a CREATE PROCEDURE script.
+func Parse(sql string) (*CreateProcStmt, error) {
+	p := NewParser(NewLexer(sql))
+	return p.ParseProcedure()
+}
+
+// ParseFunction parses a CREATE FUNCTION script.
+func ParseFunction(sql string) (*CreateFunctionStmt, error) {
+	p := NewParser(NewLexer(sql))
+	return p.ParseFunction()
+}
+
+// ParseTrigger parses a CREATE TRIGGER script.
+func ParseTrigger(sql string) (*CreateTriggerStmt, error) {
+	p := NewParser(NewLexer(sql))
+	return p.ParseTrigger()
+}
+
+// ParseScript parses any CREATE PROCEDURE, CREATE FUNCTION, or CREATE TRIGGER script.
+func ParseScript(sql string) (Node, error) {
+	p := NewParser(NewLexer(sql))
+	return p.ParseScript()
+}
+
+// ParseScript parses any CREATE PROCEDURE, CREATE FUNCTION, or CREATE TRIGGER script.
+func (p *Parser) ParseScript() (Node, error) {
+	if !p.curTokenIs(TokenCreate) {
+		return nil, fmt.Errorf("expected CREATE, got %s", p.curToken.Literal)
+	}
+	switch p.peekToken.Type {
+	case TokenProcedure, TokenProc:
+		return p.ParseProcedure()
+	case TokenFunction:
+		return p.ParseFunction()
+	case TokenTrigger:
+		return p.ParseTrigger()
+	default:
+		return nil, fmt.Errorf("expected PROCEDURE, FUNCTION, or TRIGGER after CREATE, got %s", p.peekToken.Literal)
+	}
+}
+
 // ParseProcedure parses a full CREATE PROCEDURE script.
 func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 	if !p.curTokenIs(TokenCreate) {
@@ -104,10 +145,16 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected procedure name, got %s", p.curToken.Literal)
 	}
-	procName := p.curToken.Literal
+	procName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
 	params := make([]ParamDef, 0)
+	hasParen := false
+	if p.curTokenIs(TokenLParen) {
+		hasParen = true
+		p.nextToken()
+	}
+
 	// Parse parameter list if any (starts with @)
 	for p.curTokenIs(TokenVariable) {
 		paramName := p.curToken.Literal
@@ -136,6 +183,13 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 		}
 	}
 
+	if hasParen {
+		if !p.curTokenIs(TokenRParen) {
+			return nil, fmt.Errorf("expected ) after procedure parameters, got %s", p.curToken.Literal)
+		}
+		p.nextToken()
+	}
+
 	if !p.curTokenIs(TokenAs) {
 		return nil, fmt.Errorf("expected AS, got %s", p.curToken.Literal)
 	}
@@ -151,6 +205,199 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 		Params: params,
 		Body:   body,
 	}, nil
+}
+
+// ParseFunction parses a full CREATE FUNCTION script.
+func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
+	if !p.curTokenIs(TokenCreate) {
+		return nil, fmt.Errorf("expected CREATE, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(TokenFunction) {
+		return nil, fmt.Errorf("expected FUNCTION, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected function name, got %s", p.curToken.Literal)
+	}
+	funcName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	params := make([]ParamDef, 0)
+	hasParen := false
+	if p.curTokenIs(TokenLParen) {
+		hasParen = true
+		p.nextToken()
+	}
+
+	for p.curTokenIs(TokenVariable) {
+		paramName := p.curToken.Literal
+		p.nextToken()
+
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected type for parameter %s, got %s", paramName, p.curToken.Literal)
+		}
+		paramType := parseDataType(p.curToken.Literal)
+		params = append(params, ParamDef{Name: paramName, Type: paramType})
+		p.nextToken()
+
+		// Skip optional (length) e.g. VARCHAR(50)
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken()
+			if p.curTokenIs(TokenInt) {
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken()
+			}
+		}
+
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		}
+	}
+
+	if hasParen {
+		if !p.curTokenIs(TokenRParen) {
+			return nil, fmt.Errorf("expected ) after function parameters, got %s", p.curToken.Literal)
+		}
+		p.nextToken()
+	}
+
+	if !p.curTokenIs(TokenReturns) {
+		return nil, fmt.Errorf("expected RETURNS, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected return data type after RETURNS, got %s", p.curToken.Literal)
+	}
+	retType := parseDataType(p.curToken.Literal)
+	p.nextToken()
+
+	// Skip optional (length) e.g. VARCHAR(50)
+	if p.curTokenIs(TokenLParen) {
+		p.nextToken()
+		if p.curTokenIs(TokenInt) {
+			p.nextToken()
+		}
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken()
+		}
+	}
+
+	if !p.curTokenIs(TokenAs) {
+		return nil, fmt.Errorf("expected AS, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	body, err := p.parseStatement()
+	if err != nil {
+		return nil, err
+	}
+
+	return &CreateFunctionStmt{
+		Name:       funcName,
+		Params:     params,
+		ReturnType: retType,
+		Body:       body,
+	}, nil
+}
+
+// ParseTrigger parses a full CREATE TRIGGER script.
+func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
+	if !p.curTokenIs(TokenCreate) {
+		return nil, fmt.Errorf("expected CREATE, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(TokenTrigger) {
+		return nil, fmt.Errorf("expected TRIGGER, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected trigger name, got %s", p.curToken.Literal)
+	}
+	trgName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	if !p.curTokenIs(TokenOn) {
+		return nil, fmt.Errorf("expected ON after trigger name, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected table name in ON clause, got %s", p.curToken.Literal)
+	}
+	tableName := cleanSchemaPrefix(p.curToken.Literal)
+	p.nextToken()
+
+	timing := "AFTER"
+	if p.curTokenIs(TokenAfter) {
+		timing = "AFTER"
+		p.nextToken()
+	} else if p.curTokenIs(TokenInstead) {
+		p.nextToken()
+		if !p.curTokenIs(TokenOf) {
+			return nil, fmt.Errorf("expected OF after INSTEAD, got %s", p.curToken.Literal)
+		}
+		timing = "INSTEAD OF"
+		p.nextToken()
+	}
+
+	events := make([]string, 0)
+	for {
+		switch p.curToken.Type {
+		case TokenInsert:
+			events = append(events, "INSERT")
+			p.nextToken()
+		case TokenUpdate:
+			events = append(events, "UPDATE")
+			p.nextToken()
+		case TokenDelete:
+			events = append(events, "DELETE")
+			p.nextToken()
+		}
+
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+
+	if len(events) == 0 {
+		return nil, fmt.Errorf("expected at least one event (INSERT, UPDATE, DELETE) in trigger")
+	}
+
+	if !p.curTokenIs(TokenAs) {
+		return nil, fmt.Errorf("expected AS in trigger, got %s", p.curToken.Literal)
+	}
+	p.nextToken()
+
+	body, err := p.parseStatement()
+	if err != nil {
+		return nil, err
+	}
+
+	return &CreateTriggerStmt{
+		Name:   trgName,
+		Table:  tableName,
+		Timing: timing,
+		Events: events,
+		Body:   body,
+	}, nil
+}
+
+func cleanSchemaPrefix(name string) string {
+	parts := strings.Split(name, ".")
+	if len(parts) > 1 {
+		return parts[len(parts)-1]
+	}
+	return strings.Trim(name, "[]")
 }
 
 func parseDataType(s string) storage.DataType {
@@ -1171,7 +1418,7 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 	p.nextToken() // eat )
 
 	return &FunctionCallExpr{
-		Name: strings.ToUpper(name),
+		Name: name,
 		Args: args,
 	}
 }
