@@ -69,6 +69,9 @@ func (s *Server) routes() {
 	// Seed Sample Data
 	s.mux.HandleFunc("POST /api/seed", s.handleSeed)
 
+	// SQL Query Execution API
+	s.mux.HandleFunc("POST /api/sql", s.handleExecuteSQL)
+
 	// Tables API
 	s.mux.HandleFunc("GET /api/tables", s.handleListTables)
 	s.mux.HandleFunc("GET /api/tables/{name}/records", s.handleGetRecords)
@@ -77,6 +80,33 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/procs", s.handleListProcs)
 	s.mux.HandleFunc("POST /api/procs", s.handleRegisterProc)
 	s.mux.HandleFunc("POST /api/procs/{name}/exec", s.handleExecProc)
+}
+
+type execSQLReq struct {
+	Query string `json:"query"`
+}
+
+func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
+	var req execSQLReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	result, err := s.ExecuteSQL(req.Query)
+	if err != nil {
+		if result != nil {
+			writeJSON(w, http.StatusOK, result)
+			return
+		}
+		writeJSON(w, http.StatusOK, &QueryResult{
+			Success: false,
+			Error:   err.Error(),
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handleListTables(w http.ResponseWriter, r *http.Request) {

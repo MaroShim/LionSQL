@@ -172,13 +172,17 @@
         <span>Tables & Records</span>
         <span id="nav-tables-count">0</span>
       </button>
+      <button class="nav-btn" onclick="switchView('query')">
+        <span>SQL Query Studio</span>
+        <span class="badge" style="background:#047857; color:#6ee7b7;">SQL</span>
+      </button>
       <button class="nav-btn" onclick="switchView('procedures')">
         <span>Stored Procedures</span>
         <span id="nav-procs-count">0</span>
       </button>
     </nav>
     <div style="padding: 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border);">
-      Engine: <span id="engine-type" style="color: #60a5fa;">Memory (Pure Go)</span><br>
+      Engine: <span id="engine-type" style="color: #60a5fa;">Active Engine</span><br>
       PocketBase Style Single Binary
     </div>
   </aside>
@@ -205,6 +209,60 @@
             <thead><tr><th>No records loaded</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- View: SQL Query Studio -->
+    <div id="view-query" style="display: none;">
+      <div class="header-bar">
+        <div>
+          <h2>SQL Query Studio</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Execute standard SQL queries (DDL, DML, DQL) and T-SQL statements directly. Shortcut: <kbd style="background:#334155; padding:2px 5px; border-radius:3px;">Ctrl</kbd>+<kbd style="background:#334155; padding:2px 5px; border-radius:3px;">Enter</kbd>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn" style="background: var(--success);" onclick="executeSQLQuery()">Run Query</button>
+        </div>
+      </div>
+
+      <!-- Quick SQL Templates -->
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; align-items: center;">
+        <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Templates:</span>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('create')">CREATE TABLE</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('insert')">INSERT</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('select')">SELECT *</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('update')">UPDATE</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('delete')">DELETE</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('exec')">EXEC Procedure</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; margin-left: auto;" onclick="clearSQLQuery()">Clear</button>
+      </div>
+
+      <!-- Editor Card -->
+      <div class="card" style="margin-top: 12px; padding: 15px;">
+        <textarea id="sql-query-input" spellcheck="false" placeholder="-- Enter SQL statements here (e.g. SELECT * FROM accounts;)" style="min-height: 140px; margin-bottom: 0;">SELECT * FROM accounts LIMIT 50;</textarea>
+      </div>
+
+      <!-- Query Results -->
+      <div class="card" style="margin-top: 15px; padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 id="query-result-title" style="font-size: 1rem; color: var(--text);">Query Result</h3>
+          <span id="query-result-meta" style="font-size: 0.8rem; color: var(--text-muted);">Ready</span>
+        </div>
+
+        <div id="query-status-banner" style="display: none; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 12px;"></div>
+
+        <div style="overflow-x: auto; max-height: 400px;">
+          <table id="query-result-table">
+            <thead><tr><th>No active query execution</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div id="query-messages-section" style="display: none; margin-top: 15px;">
+          <h4 style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 6px;">Output Messages:</h4>
+          <pre id="query-messages-box" class="console-box" style="max-height: 120px;"></pre>
         </div>
       </div>
     </div>
@@ -269,16 +327,155 @@ END;</textarea>
 
     function switchView(view) {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      const views = ['tables', 'query', 'procedures'];
+      views.forEach((v, idx) => {
+        const el = document.getElementById('view-' + v);
+        if (el) el.style.display = (v === view) ? 'block' : 'none';
+        if (v === view) {
+          document.querySelectorAll('.nav-btn')[idx].classList.add('active');
+        }
+      });
+
       if (view === 'tables') {
-        document.getElementById('view-tables').style.display = 'block';
-        document.getElementById('view-procedures').style.display = 'none';
-        document.querySelectorAll('.nav-btn')[0].classList.add('active');
         loadTables();
-      } else {
-        document.getElementById('view-tables').style.display = 'none';
-        document.getElementById('view-procedures').style.display = 'block';
-        document.querySelectorAll('.nav-btn')[1].classList.add('active');
+      } else if (view === 'procedures') {
         loadProcedures();
+      } else if (view === 'query') {
+        document.getElementById('sql-query-input').focus();
+      }
+    }
+
+    // Tab key support in SQL editor
+    document.getElementById('sql-query-input').addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        executeSQLQuery();
+        return;
+      }
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        const start = this.selectionStart;
+        const end = this.selectionEnd;
+        this.value = this.value.substring(0, start) + '    ' + this.value.substring(end);
+        this.selectionStart = this.selectionEnd = start + 4;
+      }
+    });
+
+    function setTemplate(type) {
+      const editor = document.getElementById('sql-query-input');
+      switch (type) {
+        case 'create':
+          editor.value = "CREATE TABLE users (\n    id INT PRIMARY KEY,\n    name VARCHAR(50),\n    balance INT\n);";
+          break;
+        case 'insert':
+          editor.value = "INSERT INTO accounts (id, balance, branch) VALUES (101, 5000, 'Seoul');\nINSERT INTO accounts (id, balance, branch) VALUES (102, 3000, 'Busan');";
+          break;
+        case 'select':
+          editor.value = "SELECT id, balance, branch FROM accounts WHERE balance >= 1000 ORDER BY id ASC LIMIT 50;";
+          break;
+        case 'update':
+          editor.value = "UPDATE accounts SET balance = balance + 500 WHERE id = 101;";
+          break;
+        case 'delete':
+          editor.value = "DELETE FROM accounts WHERE id = 102;";
+          break;
+        case 'exec':
+          editor.value = "EXEC TransferFunds @from = 1, @to = 2, @amount = 100;";
+          break;
+      }
+      editor.focus();
+    }
+
+    function clearSQLQuery() {
+      document.getElementById('sql-query-input').value = '';
+      document.getElementById('sql-query-input').focus();
+    }
+
+    async function executeSQLQuery() {
+      const sql = document.getElementById('sql-query-input').value.trim();
+      if (!sql) return;
+
+      const metaEl = document.getElementById('query-result-meta');
+      const bannerEl = document.getElementById('query-status-banner');
+      const tableEl = document.getElementById('query-result-table');
+      const msgSec = document.getElementById('query-messages-section');
+      const msgBox = document.getElementById('query-messages-box');
+
+      metaEl.innerText = 'Executing...';
+      bannerEl.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/sql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: sql })
+        });
+        const out = await res.json();
+
+        const durationMs = (out.duration_us / 1000).toFixed(2);
+
+        if (out.error) {
+          bannerEl.style.display = 'block';
+          bannerEl.style.background = '#7f1d1d';
+          bannerEl.style.color = '#fca5a5';
+          bannerEl.style.border = '1px solid #ef4444';
+          bannerEl.innerText = 'Error: ' + out.error;
+          metaEl.innerText = `Failed in ${durationMs}ms`;
+          tableEl.innerHTML = '<thead><tr><th>Error</th></tr></thead><tbody><tr><td>' + out.error + '</td></tr></tbody>';
+        } else {
+          bannerEl.style.display = 'block';
+          bannerEl.style.background = '#064e3b';
+          bannerEl.style.color = '#6ee7b7';
+          bannerEl.style.border = '1px solid #10b981';
+          
+          let statusText = 'Query executed successfully.';
+          if (out.rows_affected !== undefined && out.rows_affected >= 0 && (!out.columns || out.columns.length === 0)) {
+            statusText = `Query OK, ${out.rows_affected} row(s) affected (${durationMs}ms).`;
+          } else if (out.rows) {
+            statusText = `${out.rows.length} row(s) retrieved in ${durationMs}ms.`;
+          }
+          bannerEl.innerText = statusText;
+          metaEl.innerText = `Done in ${durationMs}ms`;
+
+          // Render Table if columns exist
+          if (out.columns && out.columns.length > 0) {
+            let thead = '<tr>' + out.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+            let tbody = '';
+            if (out.rows && out.rows.length > 0) {
+              tbody = out.rows.map(r => {
+                return '<tr>' + out.columns.map(c => {
+                  const val = r[c];
+                  if (val === null || val === undefined) return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
+                  return `<td>${val}</td>`;
+                }).join('') + '</tr>';
+              }).join('');
+            } else {
+              tbody = `<tr><td colspan="${out.columns.length}" style="text-align:center; color:var(--text-muted); font-style:italic;">Empty result set (0 rows)</td></tr>`;
+            }
+            tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
+          } else {
+            tableEl.innerHTML = '<thead><tr><th>Execution Status</th></tr></thead><tbody><tr><td>' + statusText + '</td></tr></tbody>';
+          }
+
+          // Refresh tables list if DDL/DML might have affected schema
+          loadTables();
+        }
+
+        // Messages box
+        if (out.messages && out.messages.length > 0) {
+          msgSec.style.display = 'block';
+          msgBox.innerText = out.messages.join('\n');
+        } else {
+          msgSec.style.display = 'none';
+        }
+
+      } catch (err) {
+        metaEl.innerText = 'Network error';
+        bannerEl.style.display = 'block';
+        bannerEl.style.background = '#7f1d1d';
+        bannerEl.style.color = '#fca5a5';
+        bannerEl.style.border = '1px solid #ef4444';
+        bannerEl.innerText = 'Failed to execute: ' + err;
       }
     }
 
@@ -287,6 +484,7 @@ END;</textarea>
         const res = await fetch('/api/tables');
         const data = await res.json();
         const sel = document.getElementById('table-select');
+        const prevVal = sel.value;
         sel.innerHTML = '<option value="">-- Select Table --</option>';
         document.getElementById('nav-tables-count').innerText = data.length;
         data.forEach(t => {
@@ -296,8 +494,14 @@ END;</textarea>
           sel.appendChild(opt);
         });
         if (data.length > 0) {
-          sel.value = data[0].name;
+          if (prevVal && data.some(t => t.name === prevVal)) {
+            sel.value = prevVal;
+          } else {
+            sel.value = data[0].name;
+          }
           loadRecords();
+        } else {
+          document.getElementById('records-table').innerHTML = '<thead><tr><th>No tables found</th></tr></thead><tbody></tbody>';
         }
       } catch (err) {
         console.error(err);
@@ -312,14 +516,14 @@ END;</textarea>
         const res = await fetch(`/api/tables/${tbl}/records`);
         const data = await res.json();
         const tableEl = document.getElementById('records-table');
-        if (data.records.length === 0) {
+        if (!data.records || data.records.length === 0) {
           tableEl.innerHTML = '<thead><tr><th>No records found in ' + tbl + '</th></tr></thead><tbody></tbody>';
           return;
         }
         const cols = Object.keys(data.records[0]);
         let thead = '<tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr>';
         let tbody = data.records.map(r => {
-          return '<tr>' + cols.map(c => `<td>${r[c] !== undefined ? r[c] : 'NULL'}</td>`).join('') + '</tr>';
+          return '<tr>' + cols.map(c => `<td>${r[c] !== undefined ? r[c] : '<span style="color:var(--text-muted); font-style:italic;">NULL</span>'}</td>`).join('');
         }).join('');
         tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
       } catch (err) {
@@ -358,12 +562,14 @@ END;</textarea>
         jsBox.innerText = '// No JavaScript transpilation available';
       }
 
-      proc.params.forEach(param => {
-        const div = document.createElement('div');
-        div.innerHTML = `<label style="font-size:0.8rem; color:var(--text-muted);">${param.name}:</label>
-                         <input type="text" id="input-${param.name}" placeholder="Value for ${param.name}" />`;
-        container.appendChild(div);
-      });
+      if (proc && proc.params) {
+        proc.params.forEach(param => {
+          const div = document.createElement('div');
+          div.innerHTML = `<label style="font-size:0.8rem; color:var(--text-muted);">${param.name}:</label>
+                           <input type="text" id="input-${param.name}" placeholder="Value for ${param.name}" />`;
+          container.appendChild(div);
+        });
+      }
     }
 
     async function registerProcedure() {
