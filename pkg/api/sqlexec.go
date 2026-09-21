@@ -409,7 +409,8 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 	}
 
 	projStr := strings.TrimSpace(matches[1])
-	tableName := cleanIdentifier(matches[2])
+	rawTable := strings.TrimSpace(matches[2])
+	tableName := cleanIdentifier(rawTable)
 	whereClause := ""
 	if len(matches) > 3 {
 		whereClause = strings.TrimSpace(matches[3])
@@ -422,6 +423,30 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 	if len(matches) > 5 && matches[5] != "" {
 		if n, err := strconv.Atoi(matches[5]); err == nil {
 			limitCount = n
+		}
+	}
+
+	// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
+	tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
+	if m := tvfCallRe.FindStringSubmatch(rawTable); len(m) == 3 {
+		tvfName := cleanIdentifier(m[1])
+		argsRaw := m[2]
+		fnMeta, err := s.catalog.GetFunction(tvfName)
+		if err == nil && fnMeta != nil && fnMeta.IsTableValued {
+			var argVals []string
+			if strings.TrimSpace(argsRaw) != "" {
+				for _, arg := range strings.Split(argsRaw, ",") {
+					argVals = append(argVals, strings.TrimSpace(arg))
+				}
+			}
+			innerSQL := fnMeta.Body
+			for i, p := range fnMeta.Params {
+				if i < len(argVals) {
+					innerSQL = strings.ReplaceAll(innerSQL, p.Name, argVals[i])
+					innerSQL = strings.ReplaceAll(innerSQL, strings.TrimPrefix(p.Name, "@"), argVals[i])
+				}
+			}
+			return s.execSelect(innerSQL, start)
 		}
 	}
 
@@ -778,6 +803,45 @@ func (s *Server) execCreateProcedure(query string, start time.Time) (*QueryResul
 }
 
 func (s *Server) execCreateFunction(query string, start time.Time) (*QueryResult, error) {
+	// 1. Check if Table-Valued Function (TVF): CREATE FUNCTION ... RETURNS TABLE AS RETURN ( ... )
+	tvfRe := regexp.MustCompile(`(?is)^CREATE\s+FUNCTION\s+([^\s(]+)\s*\((.*?)\)\s*RETURNS\s+TABLE\s+AS\s+RETURN\s*\(\s*(SELECT\s+.*)\s*\)\s*;?$`)
+	if m := tvfRe.FindStringSubmatch(strings.TrimSpace(query)); len(m) == 4 {
+		fnName := cleanIdentifier(m[1])
+		rawParams := m[2]
+		innerQuery := strings.TrimSpace(m[3])
+
+		var params []catalog.ParamDef
+		if strings.TrimSpace(rawParams) != "" {
+			for _, p := range strings.Split(rawParams, ",") {
+				pParts := strings.Fields(strings.TrimSpace(p))
+				if len(pParts) >= 2 {
+					pName := pParts[0]
+					pType := parseSQLDataType(pParts[1])
+					params = append(params, catalog.ParamDef{Name: pName, Type: pType})
+				}
+			}
+		}
+
+		fnMeta := &catalog.Function{
+			Name:          fnName,
+			Params:        params,
+			IsTableValued: true,
+			Body:          innerQuery,
+			CreatedAt:     time.Now(),
+		}
+
+		if err := s.catalog.RegisterFunction(fnMeta); err != nil {
+			return nil, fmt.Errorf("catalog register TVF error: %w", err)
+		}
+
+		return &QueryResult{
+			Success:    true,
+			Command:    "CREATE FUNCTION",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Table-valued function %q registered successfully", fnName)},
+		}, nil
+	}
+
 	fnStmt, err := proc.ParseFunction(query)
 	if err != nil {
 		return nil, fmt.Errorf("parse function error: %w", err)

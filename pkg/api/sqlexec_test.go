@@ -169,3 +169,78 @@ func TestSQLExecutor_CreateIndexAndScan(t *testing.T) {
 		t.Fatalf("DROP INDEX failed: %v", err)
 	}
 }
+
+func TestSQLExecutor_TemporaryTables(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// 1. CREATE TABLE #temp_summary
+	res, err := server.ExecuteSQL(`CREATE TABLE #temp_summary (
+		id INT PRIMARY KEY,
+		metric VARCHAR(50),
+		total INT
+	);`)
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE TABLE #temp_summary failed: %v", err)
+	}
+
+	// 2. INSERT INTO #temp_summary
+	res, err = server.ExecuteSQL(`INSERT INTO #temp_summary (id, metric, total) VALUES (1, 'tps', 75000), (2, 'latency', 12);`)
+	if err != nil || !res.Success || res.RowsAffected != 2 {
+		t.Fatalf("INSERT into #temp_summary failed: %v", err)
+	}
+
+	// 3. SELECT * FROM #temp_summary
+	res, err = server.ExecuteSQL(`SELECT * FROM #temp_summary WHERE total > 50;`)
+	if err != nil || !res.Success || len(res.Rows) != 1 {
+		t.Fatalf("SELECT from #temp_summary failed: %v (rows: %+v)", err, res.Rows)
+	}
+	if res.Rows[0]["metric"] != "tps" {
+		t.Errorf("expected tps row, got: %+v", res.Rows[0])
+	}
+
+	// 4. DROP TABLE #temp_summary
+	res, err = server.ExecuteSQL(`DROP TABLE #temp_summary;`)
+	if err != nil || !res.Success {
+		t.Fatalf("DROP TABLE #temp_summary failed: %v", err)
+	}
+}
+
+func TestSQLExecutor_TableValuedFunction(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, _ = server.ExecuteSQL(`CREATE TABLE bank_accounts (id INT PRIMARY KEY, holder VARCHAR(50), balance INT);`)
+	_, _ = server.ExecuteSQL(`INSERT INTO bank_accounts (id, holder, balance) VALUES (1, 'Alice', 5000), (2, 'Bob', 1200), (3, 'Charlie', 300);`)
+
+	// 1. Register Inline TVF
+	tvfSQL := `CREATE FUNCTION GetHighBalanceAccounts(@min_bal INT)
+	RETURNS TABLE
+	AS
+	RETURN (
+		SELECT id, holder, balance FROM bank_accounts WHERE balance >= @min_bal ORDER BY id ASC
+	);`
+	res, err := server.ExecuteSQL(tvfSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE FUNCTION (TVF) failed: %v", err)
+	}
+
+	// 2. Query from TVF: SELECT * FROM GetHighBalanceAccounts(1000)
+	querySQL := `SELECT * FROM GetHighBalanceAccounts(1000);`
+	res, err = server.ExecuteSQL(querySQL)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT from TVF failed: %v (res: %+v)", err, res)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 accounts with balance >= 1000, got %d (rows: %+v)", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["holder"] != "Alice" || res.Rows[1]["holder"] != "Bob" {
+		t.Errorf("unexpected rows returned from TVF: %+v", res.Rows)
+	}
+}

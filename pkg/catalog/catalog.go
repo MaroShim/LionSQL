@@ -32,15 +32,17 @@ type Procedure struct {
 	UpdatedAt time.Time  `json:"updated_at"`
 }
 
-// Function represents a registered User-Defined Function (UDF).
+// Function represents a registered User-Defined Function (UDF) or Table-Valued Function (TVF).
 type Function struct {
-	Name       string           `json:"name"`
-	Params     []ParamDef       `json:"params"`
-	ReturnType storage.DataType `json:"return_type"`
-	Body       string           `json:"body"`
-	JSCode     string           `json:"js_code"`
-	CreatedAt  time.Time        `json:"created_at"`
-	UpdatedAt  time.Time        `json:"updated_at"`
+	Name          string           `json:"name"`
+	Params        []ParamDef       `json:"params"`
+	ReturnType    storage.DataType `json:"return_type"`
+	IsTableValued bool             `json:"is_table_valued"`
+	TableColumns  []storage.Column `json:"table_columns,omitempty"`
+	Body          string           `json:"body"`
+	JSCode        string           `json:"js_code"`
+	CreatedAt     time.Time        `json:"created_at"`
+	UpdatedAt     time.Time        `json:"updated_at"`
 }
 
 // Trigger represents an event-driven table trigger.
