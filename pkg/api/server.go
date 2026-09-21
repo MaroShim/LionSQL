@@ -344,18 +344,15 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 		for i, p := range plan.Params {
 			paramDefs[i] = catalog.ParamDef{Name: p.Name, Type: p.Type}
 		}
-		jsCode, _ = proc.Transpile(plan)
-	} else if strings.HasPrefix(trimmed, "function ") {
-		header := strings.TrimPrefix(trimmed, "function ")
-		idx := strings.Index(header, "(")
-		if idx == -1 {
-			writeError(w, http.StatusBadRequest, fmt.Errorf("invalid JavaScript function syntax"))
+		prog, compErr := proc.CompileProcedure(plan)
+		if compErr != nil {
+			writeError(w, http.StatusBadRequest, compErr)
 			return
 		}
-		procName = strings.TrimSpace(header[:idx])
-		jsCode = req.Script
+		jsCode = prog.Disassemble()
+		s.executor.Cache().PutByName(procName, prog)
 	} else {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("procedure must begin with CREATE PROCEDURE (T-SQL) or function (JavaScript)"))
+		writeError(w, http.StatusBadRequest, fmt.Errorf("procedure must begin with CREATE PROCEDURE (T-SQL)"))
 		return
 	}
 
@@ -365,13 +362,6 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 		Body:   req.Script,
 		JSCode: jsCode,
 	}
-
-	prog, err := s.executor.Cache().GetOrCompile(jsCode)
-	if err != nil {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("bytecode compilation error: %w", err))
-		return
-	}
-	s.executor.Cache().PutByName(procName, prog)
 
 	if err := s.catalog.RegisterProcedure(procMeta); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -401,16 +391,7 @@ func (s *Server) handleExecProc(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusNotFound, fmt.Errorf("procedure %q not found", procName))
 			return
 		}
-		if procMeta.JSCode == "" {
-			plan, err := s.planCache.GetOrCompile(procMeta.Body)
-			if err != nil {
-				writeError(w, http.StatusInternalServerError, err)
-				return
-			}
-			jsCode, _ := proc.Transpile(plan)
-			procMeta.JSCode = jsCode
-		}
-		prog, err = s.executor.Cache().GetOrCompile(procMeta.JSCode)
+		prog, err = s.executor.Cache().GetOrCompile(procMeta.Body)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err)
 			return

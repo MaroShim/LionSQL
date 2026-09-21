@@ -59,7 +59,7 @@ func setupTestDB(t *testing.T) storage.Engine {
 	return eng
 }
 
-func TestGoja_BankingTransferSuccessAndRollback(t *testing.T) {
+func TestVM_BankingTransferSuccessAndRollback(t *testing.T) {
 	eng := setupTestDB(t)
 	defer eng.Close()
 
@@ -69,26 +69,33 @@ func TestGoja_BankingTransferSuccessAndRollback(t *testing.T) {
 	}
 	defer session.Close()
 
-	jsCode := `
-function TransferFunds(params, db) {
-	console.log("Starting transfer:", params.from_id, "->", params.to_id, "amount:", params.amount);
-	let fromBal = db.get("accounts", params.from_id, "balance");
-	if (fromBal < params.amount) {
-		throw new Error("Insufficient funds: balance is " + fromBal + ", required " + params.amount);
-	}
-	db.update("accounts", params.from_id, { balance: fromBal - params.amount });
-	let toBal = db.get("accounts", params.to_id, "balance");
-	db.update("accounts", params.to_id, { balance: toBal + params.amount });
-	console.log("Transfer complete");
-	return "OK";
-}
+	tsqlCode := `
+CREATE PROCEDURE TransferFunds
+    @from_id INT,
+    @to_id INT,
+    @amount INT
+AS
+BEGIN
+    PRINT 'Starting transfer';
+    DECLARE @fromBal INT;
+    SELECT balance INTO @fromBal FROM accounts WHERE id = @from_id;
+    IF @fromBal < @amount
+    BEGIN
+        THROW 'Insufficient funds';
+    END
+    UPDATE accounts SET balance = balance - @amount WHERE id = @from_id;
+    UPDATE accounts SET balance = balance + @amount WHERE id = @to_id;
+    PRINT 'Transfer complete';
+    RETURN 'OK';
+END;
 `
-	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
+	prog, err := proc.Compile(tsqlCode)
 	if err != nil {
-		t.Fatalf("GetOrCompile failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
+	cache := runtime.NewPlanCache()
+	cache.PutByName("TransferFunds", prog)
 	executor := runtime.NewExecutor(cache)
 
 	// 1. Success case: Transfer $300 from Alice (1) to Bob (2)
@@ -145,27 +152,30 @@ function TransferFunds(params, db) {
 	}
 }
 
-func TestGoja_ConcurrentExecutionRaceFree(t *testing.T) {
+func TestVM_ConcurrentExecutionRaceFree(t *testing.T) {
 	eng := setupTestDB(t)
 	defer eng.Close()
 
-	jsCode := `
-function RegisterUser(params, db) {
-	db.insert("accounts", {
-		id: params.id,
-		holder: params.name,
-		balance: params.initial_deposit
-	});
-	let row = db.get("accounts", params.id);
-	return row.balance;
-}
+	tsqlCode := `
+CREATE PROCEDURE RegisterUser
+    @id INT,
+    @name VARCHAR(50),
+    @initial_deposit INT
+AS
+BEGIN
+    INSERT INTO accounts (id, holder, balance) VALUES (@id, @name, @initial_deposit);
+    DECLARE @bal INT;
+    SELECT balance INTO @bal FROM accounts WHERE id = @id;
+    RETURN @bal;
+END;
 `
-	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
+	prog, err := proc.Compile(tsqlCode)
 	if err != nil {
-		t.Fatalf("GetOrCompile failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
+	cache := runtime.NewPlanCache()
+	cache.PutByName("RegisterUser", prog)
 	executor := runtime.NewExecutor(cache)
 
 	var wg sync.WaitGroup
@@ -220,7 +230,7 @@ function RegisterUser(params, db) {
 	}
 }
 
-func TestGoja_EndToEndTSqlTryCatchAndCase(t *testing.T) {
+func TestVM_EndToEndTSqlTryCatchAndCase(t *testing.T) {
 	eng := setupTestDB(t)
 	defer eng.Close()
 
@@ -250,24 +260,13 @@ BEGIN
     RETURN @bonus_amount;
 END;
 `
-	lexer := proc.NewLexer(tsqlScript)
-	parser := proc.NewParser(lexer)
-	plan, err := parser.ParseProcedure()
+	prog, err := proc.Compile(tsqlScript)
 	if err != nil {
-		t.Fatalf("ParseProcedure failed: %v", err)
-	}
-
-	jsCode, err := proc.Transpile(plan)
-	if err != nil {
-		t.Fatalf("Transpile failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
-	if err != nil {
-		t.Fatalf("GetOrCompile failed: %v", err)
-	}
-
+	cache.PutByName("ProcessBonus", prog)
 	executor := runtime.NewExecutor(cache)
 
 	res, err := executor.Run(prog, "ProcessBonus", map[string]any{
@@ -291,7 +290,7 @@ END;
 	}
 }
 
-func TestGoja_CursorIterationAndBatchProcessing(t *testing.T) {
+func TestVM_CursorIterationAndBatchProcessing(t *testing.T) {
 	eng := setupTestDB(t)
 	defer eng.Close()
 
@@ -301,7 +300,6 @@ func TestGoja_CursorIterationAndBatchProcessing(t *testing.T) {
 	}
 	defer session.Close()
 
-	// Procedure using cursor to iterate over all accounts and award 10% interest
 	tsqlScript := `
 CREATE PROCEDURE ApplyInterest
     @rate FLOAT
@@ -330,24 +328,13 @@ BEGIN
     RETURN @total_awarded;
 END;
 `
-	lexer := proc.NewLexer(tsqlScript)
-	parser := proc.NewParser(lexer)
-	plan, err := parser.ParseProcedure()
+	prog, err := proc.Compile(tsqlScript)
 	if err != nil {
-		t.Fatalf("ParseProcedure failed: %v", err)
-	}
-
-	jsCode, err := proc.Transpile(plan)
-	if err != nil {
-		t.Fatalf("Transpile failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
-	if err != nil {
-		t.Fatalf("GetOrCompile failed: %v", err)
-	}
-
+	cache.PutByName("ApplyInterest", prog)
 	executor := runtime.NewExecutor(cache)
 
 	res, err := executor.Run(prog, "ApplyInterest", map[string]any{
@@ -357,7 +344,6 @@ END;
 		t.Fatalf("ApplyInterest failed: %v", err)
 	}
 
-	// Alice (1000 -> +100 = 1100), Bob (500 -> +50 = 550), Charlie (200 -> +20 = 220) => Total = 170
 	if fmt.Sprintf("%v", res.ReturnValue) != "170" {
 		t.Errorf("expected total awarded 170, got %v", res.ReturnValue)
 	}
@@ -379,7 +365,7 @@ END;
 	}
 }
 
-func TestGoja_MultiRowUpdateAndDeleteWhere(t *testing.T) {
+func TestVM_MultiRowUpdateAndDeleteWhere(t *testing.T) {
 	eng := setupTestDB(t)
 	defer eng.Close()
 
@@ -389,7 +375,6 @@ func TestGoja_MultiRowUpdateAndDeleteWhere(t *testing.T) {
 	}
 	defer session.Close()
 
-	// Procedure doing multi-row update and delete
 	tsqlScript := `
 CREATE PROCEDURE MassRebalance
     @threshold INT
@@ -400,28 +385,15 @@ BEGIN
     RETURN 0;
 END;
 `
-	lexer := proc.NewLexer(tsqlScript)
-	parser := proc.NewParser(lexer)
-	plan, err := parser.ParseProcedure()
+	prog, err := proc.Compile(tsqlScript)
 	if err != nil {
-		t.Fatalf("ParseProcedure failed: %v", err)
-	}
-
-	jsCode, err := proc.Transpile(plan)
-	if err != nil {
-		t.Fatalf("Transpile failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
-	if err != nil {
-		t.Fatalf("GetOrCompile failed: %v", err)
-	}
-
+	cache.PutByName("MassRebalance", prog)
 	executor := runtime.NewExecutor(cache)
 
-	// Threshold = 600: Bob (500 -> 600), Charlie (200 -> 300).
-	// Then DELETE WHERE balance <= 300 deletes Charlie (300).
 	_, err = executor.Run(prog, "MassRebalance", map[string]any{
 		"threshold": 600,
 	}, session)
@@ -446,7 +418,7 @@ END;
 	}
 }
 
-func TestGoja_LikeInBetweenOperators(t *testing.T) {
+func TestVM_LikeInBetweenOperators(t *testing.T) {
 	eng := setupTestDB(t)
 	defer eng.Close()
 
@@ -469,24 +441,13 @@ BEGIN
     RETURN 0;
 END;
 `
-	lexer := proc.NewLexer(tsqlScript)
-	parser := proc.NewParser(lexer)
-	plan, err := parser.ParseProcedure()
+	prog, err := proc.Compile(tsqlScript)
 	if err != nil {
-		t.Fatalf("ParseProcedure failed: %v", err)
-	}
-
-	jsCode, err := proc.Transpile(plan)
-	if err != nil {
-		t.Fatalf("Transpile failed: %v", err)
+		t.Fatalf("Compile failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
-	if err != nil {
-		t.Fatalf("GetOrCompile failed: %v", err)
-	}
-
+	cache.PutByName("ValidateUser", prog)
 	executor := runtime.NewExecutor(cache)
 
 	res1, _ := executor.Run(prog, "ValidateUser", map[string]any{"name": "Alice", "val": 1000}, session)

@@ -32,17 +32,12 @@ END
 		t.Fatalf("ParseFunction failed: %v", err)
 	}
 
-	fnJS, err := proc.TranspileFunction(fnStmt)
+	fnProg, err := proc.CompileFunction(fnStmt)
 	if err != nil {
-		t.Fatalf("TranspileFunction failed: %v", err)
+		t.Fatalf("CompileFunction failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	fnProg, err := cache.GetOrCompile(fnJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile UDF failed: %v", err)
-	}
-
 	executor := runtime.NewExecutor(cache)
 	executor.RegisterUDF(fnStmt.Name, fnProg)
 
@@ -63,15 +58,12 @@ END
 		t.Fatalf("Parse Stored Procedure failed: %v", err)
 	}
 
-	procJS, err := proc.Transpile(procStmt)
+	procProg, err := proc.CompileProcedure(procStmt)
 	if err != nil {
-		t.Fatalf("Transpile Stored Procedure failed: %v", err)
+		t.Fatalf("CompileProcedure failed: %v", err)
 	}
 
-	procProg, err := cache.GetOrCompile(procJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile Procedure failed: %v", err)
-	}
+	cache.PutByName(procStmt.Name, procProg)
 
 	// 3. Execute Procedure with ambient transaction
 	res, err := executor.Run(procProg, procStmt.Name, map[string]any{
@@ -115,17 +107,13 @@ END
 		t.Fatalf("ParseFunction failed: %v", err)
 	}
 
-	fnJS, err := proc.TranspileFunction(fnStmt)
+	fnProg, err := proc.CompileFunction(fnStmt)
 	if err != nil {
-		t.Fatalf("TranspileFunction failed: %v", err)
+		t.Fatalf("CompileFunction failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	fnProg, err := cache.GetOrCompile(fnJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile UDF failed: %v", err)
-	}
-
+	cache.PutByName(fnStmt.Name, fnProg)
 	executor := runtime.NewExecutor(cache)
 
 	testCases := []struct {
@@ -186,17 +174,13 @@ END
 		t.Fatalf("ParseFunction failed: %v", err)
 	}
 
-	fnJS, err := proc.TranspileFunction(fnStmt)
+	fnProg, err := proc.CompileFunction(fnStmt)
 	if err != nil {
-		t.Fatalf("TranspileFunction failed: %v", err)
+		t.Fatalf("CompileFunction failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	fnProg, err := cache.GetOrCompile(fnJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile failed: %v", err)
-	}
-
+	cache.PutByName(fnStmt.Name, fnProg)
 	executor := runtime.NewExecutor(cache)
 
 	res, err := executor.Run(fnProg, fnStmt.Name, map[string]any{

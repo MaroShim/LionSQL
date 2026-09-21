@@ -200,7 +200,9 @@ END;`
 	lexer := proc.NewLexer(script)
 	parser := proc.NewParser(lexer)
 	if plan, err := parser.ParseProcedure(); err == nil {
-		jsCode, _ = proc.Transpile(plan)
+		if prog, err := proc.CompileProcedure(plan); err == nil {
+			jsCode = prog.Disassemble()
+		}
 	}
 
 	_ = cat.RegisterProcedure(&catalog.Procedure{

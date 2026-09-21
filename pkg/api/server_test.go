@@ -117,8 +117,8 @@ END
 		JSCode string `json:"js_code"`
 	}
 	_ = json.NewDecoder(rec.Body).Decode(&regResp)
-	if !strings.Contains(regResp.JSCode, "function TransferFunds") {
-		t.Fatalf("Expected JSCode in registration response, got: %s", regResp.JSCode)
+	if !strings.Contains(regResp.JSCode, "TransferFunds") || !strings.Contains(regResp.JSCode, "Instructions") {
+		t.Fatalf("Expected bytecode disassembly in registration response, got: %s", regResp.JSCode)
 	}
 
 	// Execute procedure via JSON HTTP RPC
@@ -172,24 +172,25 @@ END
 	}
 }
 
-func TestAPI_RegisterNativeJSProcedure(t *testing.T) {
+func TestAPI_RegisterTSqlProcedureWithCalculations(t *testing.T) {
 	srv := setupTestServer()
 
-	jsScript := `function AddBonus(params, db) {
-  let accId = params['accId'];
-  let bonus = params['bonus'];
-  let current = db.get('accounts', accId, 'balance');
-  db.update('accounts', accId, { 'balance': current + bonus });
-  return 0;
-}`
+	tsqlScript := `CREATE PROCEDURE AddBonus
+    @accId INT,
+    @bonus INT
+AS
+BEGIN
+    UPDATE accounts SET balance = balance + @bonus WHERE id = @accId;
+    RETURN 0;
+END;`
 
-	regBody, _ := json.Marshal(map[string]string{"script": jsScript})
+	regBody, _ := json.Marshal(map[string]string{"script": tsqlScript})
 	req := httptest.NewRequest(http.MethodPost, "/api/procs", bytes.NewReader(regBody))
 	rec := httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusCreated {
-		t.Fatalf("Register native JS proc failed: %d (%s)", rec.Code, rec.Body.String())
+		t.Fatalf("Register procedure failed: %d (%s)", rec.Code, rec.Body.String())
 	}
 
 	var regResp struct {
@@ -200,8 +201,8 @@ func TestAPI_RegisterNativeJSProcedure(t *testing.T) {
 	if regResp.Name != "AddBonus" {
 		t.Errorf("Expected proc name AddBonus, got %s", regResp.Name)
 	}
-	if !strings.Contains(regResp.JSCode, "function AddBonus") {
-		t.Errorf("Expected JSCode to contain function AddBonus, got: %s", regResp.JSCode)
+	if !strings.Contains(regResp.JSCode, "AddBonus") || !strings.Contains(regResp.JSCode, "UPDATE") {
+		t.Errorf("Expected disassembly to contain AddBonus and UPDATE, got: %s", regResp.JSCode)
 	}
 }
 

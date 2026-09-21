@@ -114,16 +114,13 @@ END;
 		panic(fmt.Sprintf("ParseProcedure failed: %v", err))
 	}
 
-	jsCode, err := proc.Transpile(plan)
+	prog, err := proc.CompileProcedure(plan)
 	if err != nil {
-		panic(fmt.Sprintf("Transpile failed: %v", err))
+		panic(fmt.Sprintf("CompileProcedure failed: %v", err))
 	}
 
 	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
-	if err != nil {
-		panic(fmt.Sprintf("GetOrCompile failed: %v", err))
-	}
+	cache.PutByName(plan.Name, prog)
 
 	executor := runtime.NewExecutor(cache)
 

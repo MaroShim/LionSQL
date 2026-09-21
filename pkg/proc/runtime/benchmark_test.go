@@ -67,16 +67,13 @@ END;
 		b.Fatalf("Parse error: %v", err)
 	}
 
-	jsCode, err := proc.Transpile(plan)
+	prog, err := proc.CompileProcedure(plan)
 	if err != nil {
-		b.Fatalf("Transpile error: %v", err)
+		b.Fatalf("Compile error: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
-	if err != nil {
-		b.Fatalf("GetOrCompile error: %v", err)
-	}
+	cache.PutByName(plan.Name, prog)
 
 	executor := runtime.NewExecutor(cache)
 

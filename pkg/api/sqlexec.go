@@ -2361,9 +2361,9 @@ func (s *Server) execCreateProcedure(query string, start time.Time) (*QueryResul
 		return nil, fmt.Errorf("parse procedure error: %w", err)
 	}
 
-	jsCode, err := proc.Transpile(plan)
+	prog, err := proc.CompileProcedure(plan)
 	if err != nil {
-		return nil, fmt.Errorf("transpile error: %w", err)
+		return nil, fmt.Errorf("bytecode compilation error: %w", err)
 	}
 
 	params := make([]catalog.ParamDef, len(plan.Params))
@@ -2374,7 +2374,7 @@ func (s *Server) execCreateProcedure(query string, start time.Time) (*QueryResul
 	procMeta := &catalog.Procedure{
 		Name:      plan.Name,
 		Body:      query,
-		JSCode:    jsCode,
+		JSCode:    prog.Disassemble(),
 		Params:    params,
 		CreatedAt: time.Now(),
 	}
@@ -2383,10 +2383,7 @@ func (s *Server) execCreateProcedure(query string, start time.Time) (*QueryResul
 		return nil, fmt.Errorf("catalog error: %w", err)
 	}
 
-	prog, err := s.executor.Cache().GetOrCompile(jsCode)
-	if err == nil {
-		s.executor.Cache().PutByName(plan.Name, prog)
-	}
+	s.executor.Cache().PutByName(plan.Name, prog)
 
 	return &QueryResult{
 		Success:    true,
@@ -2441,9 +2438,9 @@ func (s *Server) execCreateFunction(query string, start time.Time) (*QueryResult
 		return nil, fmt.Errorf("parse function error: %w", err)
 	}
 
-	jsCode, err := proc.TranspileFunction(fnStmt)
+	prog, err := proc.CompileFunction(fnStmt)
 	if err != nil {
-		return nil, fmt.Errorf("transpile function error: %w", err)
+		return nil, fmt.Errorf("compile function error: %w", err)
 	}
 
 	params := make([]catalog.ParamDef, len(fnStmt.Params))
@@ -2455,7 +2452,7 @@ func (s *Server) execCreateFunction(query string, start time.Time) (*QueryResult
 		Name:       fnStmt.Name,
 		ReturnType: fnStmt.ReturnType,
 		Body:       query,
-		JSCode:     jsCode,
+		JSCode:     prog.Disassemble(),
 		Params:     params,
 		CreatedAt:  time.Now(),
 	}
@@ -2464,10 +2461,7 @@ func (s *Server) execCreateFunction(query string, start time.Time) (*QueryResult
 		return nil, fmt.Errorf("catalog register function error: %w", err)
 	}
 
-	prog, err := s.executor.Cache().GetOrCompile(jsCode)
-	if err == nil {
-		s.executor.RegisterUDF(fnStmt.Name, prog)
-	}
+	s.executor.RegisterUDF(fnStmt.Name, prog)
 
 	return &QueryResult{
 		Success:    true,
@@ -2483,9 +2477,9 @@ func (s *Server) execCreateTrigger(query string, start time.Time) (*QueryResult,
 		return nil, fmt.Errorf("parse trigger error: %w", err)
 	}
 
-	jsCode, err := proc.TranspileTrigger(trgStmt)
+	prog, err := proc.CompileTrigger(trgStmt)
 	if err != nil {
-		return nil, fmt.Errorf("transpile trigger error: %w", err)
+		return nil, fmt.Errorf("compile trigger error: %w", err)
 	}
 
 	trgMeta := &catalog.Trigger{
@@ -2494,7 +2488,7 @@ func (s *Server) execCreateTrigger(query string, start time.Time) (*QueryResult,
 		Timing:    trgStmt.Timing,
 		Events:    trgStmt.Events,
 		Body:      query,
-		JSCode:    jsCode,
+		JSCode:    prog.Disassemble(),
 		CreatedAt: time.Now(),
 	}
 
@@ -2502,11 +2496,8 @@ func (s *Server) execCreateTrigger(query string, start time.Time) (*QueryResult,
 		return nil, fmt.Errorf("catalog register trigger error: %w", err)
 	}
 
-	prog, err := s.executor.Cache().GetOrCompile(jsCode)
-	if err == nil {
-		for _, ev := range trgStmt.Events {
-			s.executor.RegisterTrigger(trgStmt.Name, trgStmt.Table, ev, prog)
-		}
+	for _, ev := range trgStmt.Events {
+		s.executor.RegisterTrigger(trgStmt.Name, trgStmt.Table, ev, prog)
 	}
 
 	return &QueryResult{
@@ -2531,7 +2522,7 @@ func (s *Server) execProcedureCall(query string, start time.Time) (*QueryResult,
 
 	prog, found := s.executor.Cache().GetByName(procName)
 	if !found {
-		prog, err = s.executor.Cache().GetOrCompile(procMeta.JSCode)
+		prog, err = s.executor.Cache().GetOrCompile(procMeta.Body)
 		if err != nil {
 			return nil, fmt.Errorf("bytecode compilation failed: %w", err)
 		}

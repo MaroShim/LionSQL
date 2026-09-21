@@ -72,17 +72,12 @@ END
 		t.Fatalf("ParseTrigger failed: %v", err)
 	}
 
-	trgJS, err := proc.TranspileTrigger(trgStmt)
+	trgProg, err := proc.CompileTrigger(trgStmt)
 	if err != nil {
-		t.Fatalf("TranspileTrigger failed: %v", err)
+		t.Fatalf("CompileTrigger failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	trgProg, err := cache.GetOrCompile(trgJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile Trigger failed: %v", err)
-	}
-
 	executor := runtime.NewExecutor(cache)
 	executor.RegisterTrigger(trgStmt.Name, trgStmt.Table, trgStmt.Events[0], trgProg)
 
@@ -103,15 +98,12 @@ END
 		t.Fatalf("Parse Stored Procedure failed: %v", err)
 	}
 
-	procJS, err := proc.Transpile(procStmt)
+	procProg, err := proc.CompileProcedure(procStmt)
 	if err != nil {
-		t.Fatalf("Transpile Stored Procedure failed: %v", err)
+		t.Fatalf("CompileProcedure failed: %v", err)
 	}
 
-	procProg, err := cache.GetOrCompile(procJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile Procedure failed: %v", err)
-	}
+	cache.PutByName(procStmt.Name, procProg)
 
 	// 3. Execute procedure
 	_, err = executor.Run(procProg, procStmt.Name, map[string]any{
@@ -196,17 +188,12 @@ END
 		t.Fatalf("ParseTrigger failed: %v", err)
 	}
 
-	trgJS, err := proc.TranspileTrigger(trgStmt)
+	trgProg, err := proc.CompileTrigger(trgStmt)
 	if err != nil {
-		t.Fatalf("TranspileTrigger failed: %v", err)
+		t.Fatalf("CompileTrigger failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	trgProg, err := cache.GetOrCompile(trgJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile Trigger failed: %v", err)
-	}
-
 	executor := runtime.NewExecutor(cache)
 	executor.RegisterTrigger(trgStmt.Name, trgStmt.Table, trgStmt.Events[0], trgProg)
 
@@ -226,15 +213,12 @@ END
 		t.Fatalf("Parse Stored Procedure failed: %v", err)
 	}
 
-	procJS, err := proc.Transpile(procStmt)
+	procProg, err := proc.CompileProcedure(procStmt)
 	if err != nil {
-		t.Fatalf("Transpile Stored Procedure failed: %v", err)
+		t.Fatalf("CompileProcedure failed: %v", err)
 	}
 
-	procProg, err := cache.GetOrCompile(procJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile Procedure failed: %v", err)
-	}
+	cache.PutByName(procStmt.Name, procProg)
 
 	// 3. Execute update: 200.0 -> 350.0 (delta: +150.0)
 	_, err = executor.Run(procProg, procStmt.Name, map[string]any{
@@ -285,7 +269,7 @@ BEGIN
     SET @Amt = (SELECT amount FROM inserted);
     IF @Amt > 1000
     BEGIN
-        THROW 50000, 'Order amount exceeds credit limit', 1;
+        THROW 'Order amount exceeds credit limit';
     END
 END
 `
@@ -294,17 +278,12 @@ END
 		t.Fatalf("ParseTrigger failed: %v", err)
 	}
 
-	trgJS, err := proc.TranspileTrigger(trgStmt)
+	trgProg, err := proc.CompileTrigger(trgStmt)
 	if err != nil {
-		t.Fatalf("TranspileTrigger failed: %v", err)
+		t.Fatalf("CompileTrigger failed: %v", err)
 	}
 
 	cache := runtime.NewPlanCache()
-	trgProg, err := cache.GetOrCompile(trgJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile Trigger failed: %v", err)
-	}
-
 	executor := runtime.NewExecutor(cache)
 	executor.RegisterTrigger(trgStmt.Name, trgStmt.Table, trgStmt.Events[0], trgProg)
 
@@ -325,15 +304,12 @@ END
 		t.Fatalf("Parse Stored Procedure failed: %v", err)
 	}
 
-	procJS, err := proc.Transpile(procStmt)
+	procProg, err := proc.CompileProcedure(procStmt)
 	if err != nil {
-		t.Fatalf("Transpile Stored Procedure failed: %v", err)
+		t.Fatalf("CompileProcedure failed: %v", err)
 	}
 
-	procProg, err := cache.GetOrCompile(procJS)
-	if err != nil {
-		t.Fatalf("GetOrCompile Procedure failed: %v", err)
-	}
+	cache.PutByName(procStmt.Name, procProg)
 
 	// 3. Attempt inserting order with amount = 5000 (must be rejected by trigger)
 	_, err = executor.Run(procProg, procStmt.Name, map[string]any{

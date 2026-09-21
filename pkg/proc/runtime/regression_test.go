@@ -77,23 +77,13 @@ func setupRegressionDB(t *testing.T) storage.Engine {
 
 // Helper to compile and run a procedure through the Pratt parser
 func runProc(t *testing.T, eng storage.Engine, tsql string, procName string, params map[string]any) (*runtime.ExecutionResult, error) {
-	lexer := proc.NewLexer(tsql)
-	parser := proc.NewParser(lexer)
-	plan, err := parser.ParseProcedure()
-	if err != nil {
-		return nil, fmt.Errorf("parser error: %w", err)
-	}
-
-	jsCode, err := proc.Transpile(plan)
-	if err != nil {
-		return nil, fmt.Errorf("transpiler error: %w", err)
-	}
-
-	cache := runtime.NewPlanCache()
-	prog, err := cache.GetOrCompile(jsCode)
+	prog, err := proc.Compile(tsql)
 	if err != nil {
 		return nil, fmt.Errorf("compile error: %w", err)
 	}
+
+	cache := runtime.NewPlanCache()
+	cache.PutByName(procName, prog)
 
 	session, err := eng.NewSession()
 	if err != nil {
@@ -683,21 +673,18 @@ END;
 	if antlrErr != nil {
 		t.Fatalf("ANTLR BuildProcedure error: %v", antlrErr)
 	}
-	antlrJS, transpileErr := proc.Transpile(antlrPlan)
-	if transpileErr != nil {
-		t.Fatalf("ANTLR Transpile error: %v", transpileErr)
+	antlrProg, compErr := proc.CompileProcedure(antlrPlan)
+	if compErr != nil {
+		t.Fatalf("ANTLR CompileProcedure error: %v", compErr)
 	}
 
 	cache := runtime.NewPlanCache()
-	prog, compErr := cache.GetOrCompile(antlrJS)
-	if compErr != nil {
-		t.Fatalf("ANTLR GetOrCompile error: %v", compErr)
-	}
+	cache.PutByName("CalculateVIPDiscounts", antlrProg)
 
 	session, _ := eng.NewSession()
 	defer session.Close()
 	executor := runtime.NewExecutor(cache)
-	resAntlr, err := executor.Run(prog, "CalculateVIPDiscounts", map[string]any{
+	resAntlr, err := executor.Run(antlrProg, "CalculateVIPDiscounts", map[string]any{
 		"min_balance": 500,
 		"rate":        0.05,
 	}, session)

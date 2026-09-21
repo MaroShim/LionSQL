@@ -4,11 +4,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/dop251/goja"
+	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
 
@@ -24,32 +27,32 @@ type TriggerEntry struct {
 	Name      string
 	TableName string
 	Event     string // "INSERT", "UPDATE", "DELETE"
-	Program   *goja.Program
+	Program   *proc.Program
 }
 
 // UDFEntry holds metadata and precompiled bytecode for a user-defined function.
 type UDFEntry struct {
 	Name    string
-	Program *goja.Program
+	Program *proc.Program
 }
 
-// PlanCache stores precompiled Goja bytecode programs for zero-recompile execution.
+// PlanCache stores precompiled native T-SQL bytecode programs for zero-recompile execution.
 type PlanCache struct {
 	mu       sync.RWMutex
-	programs map[string]*goja.Program
-	byName   map[string]*goja.Program
+	programs map[string]*proc.Program
+	byName   map[string]*proc.Program
 }
 
-// NewPlanCache creates an execution plan cache for Goja bytecode programs.
+// NewPlanCache creates an execution plan cache for bytecode programs.
 func NewPlanCache() *PlanCache {
 	return &PlanCache{
-		programs: make(map[string]*goja.Program),
-		byName:   make(map[string]*goja.Program),
+		programs: make(map[string]*proc.Program),
+		byName:   make(map[string]*proc.Program),
 	}
 }
 
-// GetOrCompile retrieves a cached bytecode program or compiles and caches the JS script.
-func (c *PlanCache) GetOrCompile(script string) (*goja.Program, error) {
+// GetOrCompile retrieves a cached bytecode program or compiles and caches the T-SQL script.
+func (c *PlanCache) GetOrCompile(script string) (*proc.Program, error) {
 	h := hashScript(script)
 
 	c.mu.RLock()
@@ -59,27 +62,28 @@ func (c *PlanCache) GetOrCompile(script string) (*goja.Program, error) {
 	}
 	c.mu.RUnlock()
 
-	prog, err := goja.Compile("", script, true)
+	prog, err := proc.Compile(script)
 	if err != nil {
 		return nil, fmt.Errorf("bytecode compilation error: %w", err)
 	}
 
 	c.mu.Lock()
 	c.programs[h] = prog
+	c.byName[cleanSymbol(prog.Name)] = prog
 	c.mu.Unlock()
 
 	return prog, nil
 }
 
 // PutByName stores a compiled bytecode program indexed by procedure or function name.
-func (c *PlanCache) PutByName(name string, prog *goja.Program) {
+func (c *PlanCache) PutByName(name string, prog *proc.Program) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.byName[cleanSymbol(name)] = prog
 }
 
 // GetByName retrieves a compiled bytecode program by procedure or function name.
-func (c *PlanCache) GetByName(name string) (*goja.Program, bool) {
+func (c *PlanCache) GetByName(name string) (*proc.Program, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	prog, ok := c.byName[cleanSymbol(name)]
@@ -92,6 +96,7 @@ type Executor struct {
 	mu       sync.RWMutex
 	udfs     map[string]*UDFEntry
 	triggers map[string]map[string][]*TriggerEntry // table (lower) -> event (upper) -> entries
+	regPool  sync.Pool
 }
 
 // NewExecutor creates a procedure and trigger executor.
@@ -103,6 +108,12 @@ func NewExecutor(cache *PlanCache) *Executor {
 		cache:    cache,
 		udfs:     make(map[string]*UDFEntry),
 		triggers: make(map[string]map[string][]*TriggerEntry),
+		regPool: sync.Pool{
+			New: func() any {
+				r := make([]storage.Value, 64)
+				return &r
+			},
+		},
 	}
 }
 
@@ -112,7 +123,7 @@ func (e *Executor) Cache() *PlanCache {
 }
 
 // RegisterUDF registers a user-defined function for preloading into execution runtimes.
-func (e *Executor) RegisterUDF(name string, prog *goja.Program) {
+func (e *Executor) RegisterUDF(name string, prog *proc.Program) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	sym := cleanSymbol(name)
@@ -123,7 +134,7 @@ func (e *Executor) RegisterUDF(name string, prog *goja.Program) {
 }
 
 // RegisterTrigger registers a trigger for the specified table and event.
-func (e *Executor) RegisterTrigger(name string, tableName string, event string, prog *goja.Program) {
+func (e *Executor) RegisterTrigger(name string, tableName string, event string, prog *proc.Program) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -174,8 +185,32 @@ func (e *Executor) GetTriggers(tableName string, event string) []*TriggerEntry {
 	return nil
 }
 
+// VMFrame maintains the execution context for a bytecode invocation.
+type VMFrame struct {
+	executor        *Executor
+	tx              storage.Transaction
+	prog            *proc.Program
+	regs            []storage.Value
+	vars            map[string]storage.Value
+	cursors         map[string]*cursorState
+	transientTables map[string][]map[string]any
+	catchStack      []int
+	logs            []string
+	rowCount        int64
+	fetchStatus     int
+}
+
+type cursorState struct {
+	name      string
+	table     string
+	columns   []string
+	whereExpr proc.Expr
+	rows      []storage.Record
+	idx       int
+}
+
 // Run executes a precompiled bytecode program with ambient transaction semantics.
-func (e *Executor) Run(prog *goja.Program, procName string, params map[string]any, session storage.Session) (*ExecutionResult, error) {
+func (e *Executor) Run(prog *proc.Program, procName string, params map[string]any, session storage.Session) (*ExecutionResult, error) {
 	start := time.Now()
 
 	tx, err := session.BeginTx(storage.TxOptions{})
@@ -183,104 +218,1231 @@ func (e *Executor) Run(prog *goja.Program, procName string, params map[string]an
 		return nil, fmt.Errorf("failed to begin ambient transaction: %w", err)
 	}
 
-	vm := goja.New()
-	bridge := NewBridge(tx)
-	bridge.SetExecutor(e)
+	frame := e.newFrame(prog, tx)
+	defer e.releaseFrame(frame)
 
-	// Attach trigger execution hook
-	bridge.SetTriggerHandler(func(tableName string, event string, inserted []map[string]any, deleted []map[string]any) error {
-		trgs := e.GetTriggers(tableName, event)
-		if len(trgs) == 0 {
-			return nil
-		}
-		for _, trg := range trgs {
-			if _, err := vm.RunProgram(trg.Program); err != nil {
-				return fmt.Errorf("failed to load trigger %s: %w", trg.Name, err)
-			}
-			fnVal := vm.Get(trg.Name)
-			if fnVal == nil || goja.IsUndefined(fnVal) {
-				return fmt.Errorf("trigger function %s not found in VM scope", trg.Name)
-			}
-			fn, ok := goja.AssertFunction(fnVal)
-			if !ok {
-				return fmt.Errorf("trigger symbol %s is not callable", trg.Name)
-			}
-			insVal := vm.ToValue(inserted)
-			delVal := vm.ToValue(deleted)
-			dbVal := vm.Get("db")
-			if _, err := fn(goja.Null(), insVal, delVal, dbVal); err != nil {
-				return fmt.Errorf("trigger %s error: %w", trg.Name, err)
-			}
-		}
-		return nil
-	})
-
-	if err := bridge.Bind(vm); err != nil {
-		_ = tx.Rollback()
-		return nil, fmt.Errorf("failed to bind storage bridge: %w", err)
-	}
-
-	// 1. Preload registered UDF programs
-	e.mu.RLock()
-	for _, udf := range e.udfs {
-		if _, err := vm.RunProgram(udf.Program); err != nil {
-			e.mu.RUnlock()
-			_ = tx.Rollback()
-			return nil, fmt.Errorf("failed to load UDF %s: %w", udf.Name, err)
-		}
-	}
-	e.mu.RUnlock()
-
-	// 2. Run the bytecode to define the target function in the VM scope
-	_, runErr := vm.RunProgram(prog)
-	if runErr != nil {
-		_ = tx.Rollback()
-		return nil, fmt.Errorf("runtime error loading program: %w", runErr)
-	}
-
-	// 3. Retrieve target procedure or function
-	cleanName := cleanSymbol(procName)
-	fnVal := vm.Get(cleanName)
-	if fnVal == nil || goja.IsUndefined(fnVal) {
-		_ = tx.Rollback()
-		return nil, fmt.Errorf("function %q not found in compiled scope", cleanName)
-	}
-
-	callable, ok := goja.AssertFunction(fnVal)
-	if !ok {
-		_ = tx.Rollback()
-		return nil, fmt.Errorf("symbol %q is not callable", cleanName)
-	}
-
-	// 4. Prepare parameters
-	paramsObj := vm.NewObject()
+	// Bind parameters
 	for k, v := range params {
-		_ = paramsObj.Set(cleanSymbol(k), v)
+		clean := cleanSymbol(k)
+		stVal := toStorageValue(v)
+		frame.vars[clean] = stVal
+		frame.vars[strings.ToLower(clean)] = stVal
 	}
-	dbObj := vm.Get("db")
 
-	// 5. Call procedure / function: procName(params, db)
-	retVal, callErr := callable(goja.Null(), paramsObj, dbObj)
-	if callErr != nil {
+	retVal, err := frame.Execute(0)
+	if err != nil {
 		_ = tx.Rollback()
-		return nil, fmt.Errorf("execution error (rolled back): %w", callErr)
+		return nil, fmt.Errorf("execution error (rolled back): %w", err)
 	}
 
-	// 6. Commit transaction on clean return
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("failed to commit ambient transaction: %w", err)
 	}
 
-	var exportRet any
-	if retVal != nil && !goja.IsUndefined(retVal) && !goja.IsNull(retVal) {
-		exportRet = retVal.Export()
-	}
-
 	return &ExecutionResult{
-		ReturnValue: exportRet,
-		Logs:        bridge.Logs(),
+		ReturnValue: retVal,
+		Logs:        frame.logs,
 		Duration:    time.Since(start),
 	}, nil
+}
+
+// RunInTx executes a program within an existing transaction context.
+func (e *Executor) RunInTx(prog *proc.Program, params map[string]any, tx storage.Transaction, transientTables map[string][]map[string]any) (any, []string, error) {
+	frame := e.newFrame(prog, tx)
+	defer e.releaseFrame(frame)
+
+	if transientTables != nil {
+		for k, v := range transientTables {
+			frame.transientTables[k] = v
+		}
+	}
+
+	for k, v := range params {
+		clean := cleanSymbol(k)
+		stVal := toStorageValue(v)
+		frame.vars[clean] = stVal
+		frame.vars[strings.ToLower(clean)] = stVal
+	}
+
+	retVal, err := frame.Execute(0)
+	return retVal, frame.logs, err
+}
+
+func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame {
+	numRegs := int(prog.NumRegisters) + 16
+	if numRegs < 64 {
+		numRegs = 64
+	}
+
+	regPtr := e.regPool.Get().(*[]storage.Value)
+	if len(*regPtr) < numRegs {
+		*regPtr = make([]storage.Value, numRegs)
+	}
+	regs := (*regPtr)[:numRegs]
+	for i := range regs {
+		regs[i] = storage.NullValue(storage.TypeUnknown)
+	}
+
+	return &VMFrame{
+		executor:        e,
+		tx:              tx,
+		prog:            prog,
+		regs:            regs,
+		vars:            make(map[string]storage.Value),
+		cursors:         make(map[string]*cursorState),
+		transientTables: make(map[string][]map[string]any),
+		catchStack:      make([]int, 0),
+		logs:            make([]string, 0),
+		fetchStatus:     -1,
+	}
+}
+
+func (e *Executor) releaseFrame(frame *VMFrame) {
+	r := frame.regs
+	e.regPool.Put(&r)
+}
+
+// Execute runs the VM instruction loop starting at startPC.
+func (f *VMFrame) Execute(startPC int) (any, error) {
+	instructions := f.prog.Instructions
+	pc := startPC
+
+	for pc < len(instructions) {
+		inst := instructions[pc]
+		pc++
+
+		switch inst.Op {
+		case proc.OpHalt:
+			return nil, nil
+
+		case proc.OpReturn:
+			if inst.A >= 0 && int(inst.A) < len(f.regs) {
+				return valToAny(f.regs[inst.A]), nil
+			}
+			return nil, nil
+
+		case proc.OpLoadConst:
+			if int(inst.B) < len(f.prog.Constants) {
+				f.regs[inst.A] = f.prog.Constants[inst.B]
+			}
+
+		case proc.OpLoadVar:
+			varName := inst.Data.(string)
+			f.regs[inst.A] = f.getVar(varName)
+
+		case proc.OpStoreVar:
+			varName := inst.Data.(string)
+			f.setVar(varName, f.regs[inst.A])
+
+		case proc.OpCopy:
+			f.regs[inst.A] = f.regs[inst.B]
+
+		case proc.OpJump:
+			pc = int(inst.B)
+
+		case proc.OpJumpIfFalse:
+			if !isTruthy(f.regs[inst.A]) {
+				pc = int(inst.B)
+			}
+
+		case proc.OpJumpIfTrue:
+			if isTruthy(f.regs[inst.A]) {
+				pc = int(inst.B)
+			}
+
+		case proc.OpPushCatch:
+			f.catchStack = append(f.catchStack, int(inst.B))
+
+		case proc.OpPopCatch:
+			if len(f.catchStack) > 0 {
+				f.catchStack = f.catchStack[:len(f.catchStack)-1]
+			}
+
+		case proc.OpThrow, proc.OpRaiserror:
+			msg := fmt.Sprintf("%v", inst.Data)
+			if len(f.catchStack) > 0 {
+				catchPC := f.catchStack[len(f.catchStack)-1]
+				f.catchStack = f.catchStack[:len(f.catchStack)-1]
+				pc = catchPC
+				continue
+			}
+			return nil, fmt.Errorf("%s", msg)
+
+		case proc.OpPrint:
+			v := f.regs[inst.A]
+			f.logs = append(f.logs, valToString(v))
+
+		case proc.OpAdd:
+			f.regs[inst.A] = storageAdd(f.regs[inst.B], f.regs[inst.C])
+
+		case proc.OpSub:
+			f.regs[inst.A] = storageSub(f.regs[inst.B], f.regs[inst.C])
+
+		case proc.OpMul:
+			f.regs[inst.A] = storageMul(f.regs[inst.B], f.regs[inst.C])
+
+		case proc.OpDiv:
+			res, err := storageDiv(f.regs[inst.B], f.regs[inst.C])
+			if err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, err
+			}
+			f.regs[inst.A] = res
+
+		case proc.OpNeg:
+			f.regs[inst.A] = storageNeg(f.regs[inst.B])
+
+		case proc.OpNot:
+			f.regs[inst.A] = storage.BoolValue(!isTruthy(f.regs[inst.B]))
+
+		case proc.OpEq:
+			if inst.Data == "AND" {
+				f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) && isTruthy(f.regs[inst.C]))
+			} else if inst.Data == "OR" {
+				f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) || isTruthy(f.regs[inst.C]))
+			} else {
+				f.regs[inst.A] = storage.BoolValue(storageEq(f.regs[inst.B], f.regs[inst.C]))
+			}
+
+		case proc.OpNeq:
+			f.regs[inst.A] = storage.BoolValue(!storageEq(f.regs[inst.B], f.regs[inst.C]))
+
+		case proc.OpLt:
+			f.regs[inst.A] = storage.BoolValue(storageLt(f.regs[inst.B], f.regs[inst.C]))
+
+		case proc.OpLte:
+			f.regs[inst.A] = storage.BoolValue(storageLte(f.regs[inst.B], f.regs[inst.C]))
+
+		case proc.OpGt:
+			f.regs[inst.A] = storage.BoolValue(storageGt(f.regs[inst.B], f.regs[inst.C]))
+
+		case proc.OpGte:
+			f.regs[inst.A] = storage.BoolValue(storageGte(f.regs[inst.B], f.regs[inst.C]))
+
+		case proc.OpLike:
+			str := valToString(f.regs[inst.B])
+			pat := valToString(f.regs[inst.C])
+			matched := matchLike(str, pat)
+			if not, ok := inst.Data.(bool); ok && not {
+				matched = !matched
+			}
+			f.regs[inst.A] = storage.BoolValue(matched)
+
+		case proc.OpBetween:
+			v := f.regs[inst.B]
+			low := f.regs[inst.C]
+			meta := inst.Data.(struct {
+				HighReg int32
+				Not     bool
+			})
+			high := f.regs[meta.HighReg]
+			inRange := storageGte(v, low) && storageLte(v, high)
+			if meta.Not {
+				inRange = !inRange
+			}
+			f.regs[inst.A] = storage.BoolValue(inRange)
+
+		case proc.OpIn:
+			val := f.regs[inst.B]
+			callData := inst.Data.(*proc.CallData)
+			found := false
+			for _, regIdx := range callData.ArgRegs {
+				if int(regIdx) < len(f.regs) && storageEq(val, f.regs[regIdx]) {
+					found = true
+					break
+				}
+			}
+			f.regs[inst.A] = storage.BoolValue(found)
+
+		case proc.OpIsNull:
+			f.regs[inst.A] = storage.BoolValue(f.regs[inst.B].IsNull)
+
+		case proc.OpIsNotNull:
+			f.regs[inst.A] = storage.BoolValue(!f.regs[inst.B].IsNull)
+
+		case proc.OpTxBegin:
+			// Ambient transaction active
+
+		case proc.OpTxCommit:
+			if err := f.tx.Commit(); err != nil {
+				return nil, err
+			}
+
+		case proc.OpTxRollback:
+			if err := f.tx.Rollback(); err != nil {
+				return nil, err
+			}
+
+		case proc.OpInsert:
+			data := inst.Data.(*proc.DMLData)
+			rec := make(storage.Record)
+			rowMap := make(map[string]any)
+			evalCtx := f.buildRowEvalMap(nil)
+
+			for i, col := range data.Columns {
+				if i < len(data.ValExprs) {
+					vAny, _ := proc.EvalRowExpr(data.ValExprs[i], evalCtx, nil)
+					stVal := toStorageValue(vAny)
+					rec[col] = stVal
+					rowMap[col] = valToAny(stVal)
+				}
+			}
+
+			if err := f.tx.Insert(data.Table, rec); err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, fmt.Errorf("insert error on %s: %w", data.Table, err)
+			}
+			f.rowCount = 1
+			if err := f.fireTriggers(data.Table, "INSERT", []map[string]any{rowMap}, nil); err != nil {
+				return nil, err
+			}
+
+		case proc.OpUpdate:
+			data := inst.Data.(*proc.DMLData)
+			evalCtx := f.buildRowEvalMap(nil)
+			pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+			pkVal := toStorageValue(pkAny)
+
+			var oldRec storage.Record
+			if !isTransientTable(data.Table) {
+				oldRec, _ = f.tx.Get(data.Table, pkVal)
+			}
+
+			rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
+			rec := make(storage.Record)
+			for _, a := range data.Assignments {
+				valAny, _ := proc.EvalRowExpr(a.Value, rowCtx, nil)
+				rec[a.Column] = toStorageValue(valAny)
+			}
+
+			if err := f.tx.Update(data.Table, pkVal, rec); err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, fmt.Errorf("update error on %s: %w", data.Table, err)
+			}
+			f.rowCount = 1
+
+			if oldRec != nil {
+				oldRow := recordToMap(oldRec)
+				newRow := recordToMap(oldRec)
+				for k, v := range rec {
+					newRow[k] = valToAny(v)
+				}
+				if err := f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRow}, []map[string]any{oldRow}); err != nil {
+					return nil, err
+				}
+			}
+
+		case proc.OpUpdateWhere:
+			data := inst.Data.(*proc.DMLData)
+			cnt, err := f.execUpdateWhere(data)
+			if err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, err
+			}
+			f.rowCount = cnt
+
+		case proc.OpDelete:
+			data := inst.Data.(*proc.DMLData)
+			evalCtx := f.buildRowEvalMap(nil)
+			pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+			pkVal := toStorageValue(pkAny)
+
+			var oldRec storage.Record
+			if !isTransientTable(data.Table) {
+				oldRec, _ = f.tx.Get(data.Table, pkVal)
+			}
+
+			if err := f.tx.Delete(data.Table, pkVal); err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, fmt.Errorf("delete error on %s: %w", data.Table, err)
+			}
+			f.rowCount = 1
+
+			if oldRec != nil {
+				oldRow := recordToMap(oldRec)
+				if err := f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{oldRow}); err != nil {
+					return nil, err
+				}
+			}
+
+		case proc.OpDeleteWhere:
+			data := inst.Data.(*proc.DMLData)
+			cnt, err := f.execDeleteWhere(data)
+			if err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, err
+			}
+			f.rowCount = cnt
+
+		case proc.OpSelectInto:
+			data := inst.Data.(*proc.SelectIntoData)
+			val, err := f.execSelectInto(data)
+			if err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, err
+			}
+			if data.IntoVar != "" {
+				f.setVar(data.IntoVar, val)
+			}
+			if inst.A >= 0 && int(inst.A) < len(f.regs) {
+				f.regs[inst.A] = val
+			}
+
+		case proc.OpCursorOpen:
+			switch data := inst.Data.(type) {
+			case *proc.CursorData:
+				f.cursors[cleanSymbol(data.Name)] = &cursorState{
+					name:      cleanSymbol(data.Name),
+					table:     data.Table,
+					columns:   data.Columns,
+					whereExpr: data.WhereExpr,
+					idx:       0,
+				}
+			case string:
+				curName := cleanSymbol(data)
+				if cur, exists := f.cursors[curName]; exists {
+					rows, err := f.scanCursorRows(cur.table, cur.whereExpr)
+					if err != nil {
+						return nil, err
+					}
+					cur.rows = rows
+					cur.idx = 0
+				}
+			}
+
+		case proc.OpCursorFetch:
+			data := inst.Data.(*proc.CursorData)
+			curName := cleanSymbol(data.Name)
+			cur, exists := f.cursors[curName]
+			if !exists || cur.idx >= len(cur.rows) {
+				f.fetchStatus = -1
+			} else {
+				row := cur.rows[cur.idx]
+				cur.idx++
+				f.fetchStatus = 0
+				for i, varName := range data.IntoVars {
+					if i < len(cur.columns) {
+						col := cur.columns[i]
+						if v, ok := row[col]; ok {
+							f.setVar(varName, v)
+						} else {
+							f.setVar(varName, storage.NullValue(storage.TypeUnknown))
+						}
+					}
+				}
+			}
+
+		case proc.OpCursorClose:
+			curName := cleanSymbol(inst.Data.(string))
+			if cur, exists := f.cursors[curName]; exists {
+				cur.idx = len(cur.rows)
+			}
+
+		case proc.OpCursorDealloc:
+			curName := cleanSymbol(inst.Data.(string))
+			delete(f.cursors, curName)
+
+		case proc.OpCallBuiltin:
+			callData := inst.Data.(*proc.CallData)
+			var args []storage.Value
+			for _, regIdx := range callData.ArgRegs {
+				if int(regIdx) < len(f.regs) {
+					args = append(args, f.regs[regIdx])
+				}
+			}
+			f.regs[inst.A] = f.evalBuiltin(callData.Name, args)
+
+		case proc.OpCallUDF:
+			callData := inst.Data.(*proc.CallData)
+			res, err := f.callUDF(callData.Name, callData.ArgRegs)
+			if err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, err
+			}
+			f.regs[inst.A] = res
+
+		case proc.OpCallProc:
+			callData := inst.Data.(*proc.CallData)
+			if err := f.callProc(callData.Name, callData.ArgRegs); err != nil {
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, err
+			}
+		}
+	}
+
+	return nil, nil
+}
+
+func (f *VMFrame) getVar(name string) storage.Value {
+	clean := cleanSymbol(name)
+	if strings.EqualFold(name, "@@ROWCOUNT") || strings.EqualFold(clean, "ROWCOUNT") || strings.EqualFold(clean, "@ROWCOUNT") {
+		return storage.IntValue(f.rowCount)
+	}
+	if strings.EqualFold(name, "@@FETCH_STATUS") || strings.EqualFold(clean, "FETCH_STATUS") || strings.EqualFold(clean, "@FETCH_STATUS") {
+		return storage.IntValue(int64(f.fetchStatus))
+	}
+
+	if v, ok := f.vars[clean]; ok {
+		return v
+	}
+	if v, ok := f.vars[strings.ToLower(clean)]; ok {
+		return v
+	}
+	return storage.NullValue(storage.TypeUnknown)
+}
+
+func (f *VMFrame) setVar(name string, val storage.Value) {
+	clean := cleanSymbol(name)
+	f.vars[clean] = val
+	f.vars[strings.ToLower(clean)] = val
+}
+
+func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[string]any) error {
+	if isTransientTable(tableName) {
+		return nil
+	}
+	trgs := f.executor.GetTriggers(tableName, event)
+	if len(trgs) == 0 {
+		return nil
+	}
+
+	transients := map[string][]map[string]any{
+		"inserted": inserted,
+		"deleted":  deleted,
+	}
+
+	for _, trg := range trgs {
+		_, logs, err := f.executor.RunInTx(trg.Program, nil, f.tx, transients)
+		if len(logs) > 0 {
+			f.logs = append(f.logs, logs...)
+		}
+		if err != nil {
+			return fmt.Errorf("trigger %s error: %w", trg.Name, err)
+		}
+	}
+	return nil
+}
+
+func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
+	cursor, err := f.tx.Scan(data.Table)
+	if err != nil {
+		return 0, fmt.Errorf("updateWhere scan error on %s: %w", data.Table, err)
+	}
+	defer cursor.Close()
+
+	type updateItem struct {
+		pk      storage.Value
+		updates storage.Record
+		oldRow  map[string]any
+		newRow  map[string]any
+	}
+	var toUpdate []updateItem
+
+	for cursor.Next() {
+		rec, err := cursor.Record()
+		if err != nil {
+			break
+		}
+		rowMap := recordToMap(rec)
+
+		if data.WhereExpr != nil {
+			rowContext := f.buildRowEvalMap(rowMap)
+			if !proc.EvalBoolExpr(data.WhereExpr, rowContext, nil) {
+				continue
+			}
+		}
+
+		pkVal, hasPk := rec["id"]
+		if !hasPk {
+			for _, v := range rec {
+				pkVal = v
+				hasPk = true
+				break
+			}
+		}
+
+		recUpdates := make(storage.Record)
+		newRowMap := make(map[string]any)
+		for k, v := range rowMap {
+			newRowMap[k] = v
+		}
+
+		for _, assign := range data.Assignments {
+			rowContext := f.buildRowEvalMap(rowMap)
+			val, err := proc.EvalRowExpr(assign.Value, rowContext, nil)
+			if err == nil {
+				stVal := toStorageValue(val)
+				recUpdates[assign.Column] = stVal
+				newRowMap[assign.Column] = valToAny(stVal)
+			}
+		}
+
+		if hasPk {
+			toUpdate = append(toUpdate, updateItem{
+				pk:      pkVal,
+				updates: recUpdates,
+				oldRow:  rowMap,
+				newRow:  newRowMap,
+			})
+		}
+	}
+
+	updatedCount := int64(0)
+	var oldRows []map[string]any
+	var newRows []map[string]any
+	for _, item := range toUpdate {
+		if err := f.tx.Update(data.Table, item.pk, item.updates); err == nil {
+			updatedCount++
+			oldRows = append(oldRows, item.oldRow)
+			newRows = append(newRows, item.newRow)
+		}
+	}
+
+	if len(newRows) > 0 {
+		_ = f.fireTriggers(data.Table, "UPDATE", newRows, oldRows)
+	}
+	return updatedCount, nil
+}
+
+func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
+	cursor, err := f.tx.Scan(data.Table)
+	if err != nil {
+		return 0, fmt.Errorf("deleteWhere scan error on %s: %w", data.Table, err)
+	}
+	defer cursor.Close()
+
+	type delItem struct {
+		pk  storage.Value
+		row map[string]any
+	}
+	var toDelete []delItem
+
+	for cursor.Next() {
+		rec, err := cursor.Record()
+		if err != nil {
+			break
+		}
+		rowMap := recordToMap(rec)
+
+		if data.WhereExpr != nil {
+			rowContext := f.buildRowEvalMap(rowMap)
+			if !proc.EvalBoolExpr(data.WhereExpr, rowContext, nil) {
+				continue
+			}
+		}
+
+		pkVal, hasPk := rec["id"]
+		if !hasPk {
+			for _, v := range rec {
+				pkVal = v
+				hasPk = true
+				break
+			}
+		}
+		if hasPk {
+			toDelete = append(toDelete, delItem{pk: pkVal, row: rowMap})
+		}
+	}
+
+	deletedCount := int64(0)
+	var deletedRows []map[string]any
+	for _, item := range toDelete {
+		if err := f.tx.Delete(data.Table, item.pk); err == nil {
+			deletedCount++
+			deletedRows = append(deletedRows, item.row)
+		}
+	}
+
+	if len(deletedRows) > 0 {
+		_ = f.fireTriggers(data.Table, "DELETE", nil, deletedRows)
+	}
+	return deletedCount, nil
+}
+
+func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, error) {
+	lowerTable := strings.ToLower(data.Table)
+
+	if rows, isTransient := f.transientTables[lowerTable]; isTransient {
+		for _, r := range rows {
+			if data.WhereVal != nil {
+				rowContext := f.buildRowEvalMap(r)
+				if !proc.EvalBoolExpr(data.WhereVal, rowContext, nil) {
+					continue
+				}
+			}
+			if val, ok := r[data.Column]; ok {
+				return toStorageValue(val), nil
+			}
+			for k, v := range r {
+				if strings.EqualFold(k, data.Column) {
+					return toStorageValue(v), nil
+				}
+			}
+		}
+		return storage.NullValue(storage.TypeUnknown), nil
+	}
+
+	evalCtx := f.buildRowEvalMap(nil)
+
+	if data.WhereCol != "" && data.WhereVal != nil && strings.EqualFold(data.WhereCol, "id") {
+		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+		pkVal := toStorageValue(pkAny)
+		rec, err := f.tx.Get(data.Table, pkVal)
+		if err == nil {
+			if v, ok := rec[data.Column]; ok {
+				return v, nil
+			}
+			for k, v := range rec {
+				if strings.EqualFold(k, data.Column) {
+					return v, nil
+				}
+			}
+		}
+		return storage.NullValue(storage.TypeUnknown), nil
+	}
+
+	cursor, err := f.tx.Scan(data.Table)
+	if err != nil {
+		return storage.NullValue(storage.TypeUnknown), err
+	}
+	defer cursor.Close()
+
+	for cursor.Next() {
+		rec, err := cursor.Record()
+		if err != nil {
+			break
+		}
+		rowMap := recordToMap(rec)
+
+		if data.WhereVal != nil {
+			rowContext := f.buildRowEvalMap(rowMap)
+			if !proc.EvalBoolExpr(data.WhereVal, rowContext, nil) {
+				continue
+			}
+		}
+
+		if v, ok := rec[data.Column]; ok {
+			return v, nil
+		}
+		for k, v := range rec {
+			if strings.EqualFold(k, data.Column) {
+				return v, nil
+			}
+		}
+	}
+	return storage.NullValue(storage.TypeUnknown), nil
+}
+
+func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr) ([]storage.Record, error) {
+	cursor, err := f.tx.Scan(tableName)
+	if err != nil {
+		return nil, err
+	}
+	defer cursor.Close()
+
+	var result []storage.Record
+	for cursor.Next() {
+		rec, err := cursor.Record()
+		if err != nil {
+			break
+		}
+		if whereExpr != nil {
+			rowContext := f.buildRowEvalMap(recordToMap(rec))
+			if !proc.EvalBoolExpr(whereExpr, rowContext, nil) {
+				continue
+			}
+		}
+		cp := make(storage.Record)
+		for k, v := range rec {
+			cp[k] = v
+		}
+		result = append(result, cp)
+	}
+	return result, nil
+}
+
+func (f *VMFrame) buildRowEvalMap(row map[string]any) map[string]any {
+	ctx := make(map[string]any)
+	for k, v := range f.vars {
+		anyVal := valToAny(v)
+		ctx["@"+k] = anyVal
+		ctx["@"+strings.ToLower(k)] = anyVal
+		ctx[k] = anyVal
+		ctx[strings.ToLower(k)] = anyVal
+	}
+	if row != nil {
+		for k, v := range row {
+			ctx[k] = v
+			ctx[strings.ToLower(k)] = v
+		}
+	}
+	return ctx
+}
+
+func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error) {
+	f.executor.mu.RLock()
+	udf, ok := f.executor.udfs[cleanSymbol(fnName)]
+	f.executor.mu.RUnlock()
+
+	if !ok {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("UDF %s not found", fnName)
+	}
+
+	params := make(map[string]any)
+	for i, p := range udf.Program.Params {
+		if i < len(argRegs) {
+			regIdx := argRegs[i]
+			if int(regIdx) < len(f.regs) {
+				params[p.Name] = valToAny(f.regs[regIdx])
+			}
+		}
+	}
+
+	retVal, logs, err := f.executor.RunInTx(udf.Program, params, f.tx, f.transientTables)
+	if len(logs) > 0 {
+		f.logs = append(f.logs, logs...)
+	}
+	if err != nil {
+		return storage.NullValue(storage.TypeUnknown), err
+	}
+	return toStorageValue(retVal), nil
+}
+
+func (f *VMFrame) callProc(procName string, argRegs []int32) error {
+	prog, found := f.executor.Cache().GetByName(procName)
+	if !found {
+		return fmt.Errorf("procedure %s not found", procName)
+	}
+
+	params := make(map[string]any)
+	for i, p := range prog.Params {
+		if i < len(argRegs) {
+			regIdx := argRegs[i]
+			if int(regIdx) < len(f.regs) {
+				params[p.Name] = valToAny(f.regs[regIdx])
+			}
+		}
+	}
+
+	retVal, logs, err := f.executor.RunInTx(prog, params, f.tx, f.transientTables)
+	if len(logs) > 0 {
+		f.logs = append(f.logs, logs...)
+	}
+	_ = retVal
+	return err
+}
+
+func (f *VMFrame) evalBuiltin(name string, args []storage.Value) storage.Value {
+	upper := strings.ToUpper(cleanSymbol(name))
+	switch upper {
+	case "ISNULL", "COALESCE":
+		for _, a := range args {
+			if !a.IsNull {
+				return a
+			}
+		}
+		return storage.NullValue(storage.TypeUnknown)
+
+	case "LEN", "LENGTH":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.IntValue(0)
+		}
+		return storage.IntValue(int64(len(valToString(args[0]))))
+
+	case "UPPER":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.StringValue("")
+		}
+		return storage.StringValue(strings.ToUpper(valToString(args[0])))
+
+	case "LOWER":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.StringValue("")
+		}
+		return storage.StringValue(strings.ToLower(valToString(args[0])))
+
+	case "TRIM":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.StringValue("")
+		}
+		return storage.StringValue(strings.TrimSpace(valToString(args[0])))
+
+	case "SUBSTRING":
+		if len(args) < 3 {
+			return storage.StringValue("")
+		}
+		str := valToString(args[0])
+		start := int(args[1].IVal) - 1 // T-SQL is 1-indexed
+		length := int(args[2].IVal)
+		if start < 0 {
+			start = 0
+		}
+		if start >= len(str) {
+			return storage.StringValue("")
+		}
+		end := start + length
+		if end > len(str) {
+			end = len(str)
+		}
+		return storage.StringValue(str[start:end])
+
+	case "REPLACE":
+		if len(args) < 3 {
+			return storage.StringValue("")
+		}
+		str := valToString(args[0])
+		oldSub := valToString(args[1])
+		newSub := valToString(args[2])
+		return storage.StringValue(strings.ReplaceAll(str, oldSub, newSub))
+
+	case "ABS":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Abs(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "ROUND":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Round(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "CEILING", "CEIL":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Ceil(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "FLOOR":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Floor(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "GETDATE", "NOW":
+		return storage.StringValue(time.Now().Format("2006-01-02 15:04:05"))
+
+	default:
+		if len(args) > 0 {
+			return args[0]
+		}
+		return storage.NullValue(storage.TypeUnknown)
+	}
+}
+
+// Storage arithmetic & comparison helpers
+
+func storageAdd(a, b storage.Value) storage.Value {
+	if a.IsNull || b.IsNull {
+		if !a.IsNull {
+			return a
+		}
+		return b
+	}
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if ok1 && ok2 {
+		sum := n1 + n2
+		if sum == math.Trunc(sum) {
+			return storage.IntValue(int64(sum))
+		}
+		return storage.FloatValue(sum)
+	}
+	return storage.StringValue(valToString(a) + valToString(b))
+}
+
+func storageSub(a, b storage.Value) storage.Value {
+	n1, _ := toFloatNum(a)
+	n2, _ := toFloatNum(b)
+	diff := n1 - n2
+	if diff == math.Trunc(diff) {
+		return storage.IntValue(int64(diff))
+	}
+	return storage.FloatValue(diff)
+}
+
+func storageMul(a, b storage.Value) storage.Value {
+	n1, _ := toFloatNum(a)
+	n2, _ := toFloatNum(b)
+	prod := n1 * n2
+	if prod == math.Trunc(prod) {
+		return storage.IntValue(int64(prod))
+	}
+	return storage.FloatValue(prod)
+}
+
+func storageDiv(a, b storage.Value) (storage.Value, error) {
+	n1, _ := toFloatNum(a)
+	n2, _ := toFloatNum(b)
+	if n2 == 0 {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("division by zero")
+	}
+	div := n1 / n2
+	if div == math.Trunc(div) {
+		return storage.IntValue(int64(div)), nil
+	}
+	return storage.FloatValue(div), nil
+}
+
+func storageNeg(a storage.Value) storage.Value {
+	if n, ok := toFloatNum(a); ok {
+		neg := -n
+		if neg == math.Trunc(neg) {
+			return storage.IntValue(int64(neg))
+		}
+		return storage.FloatValue(neg)
+	}
+	return a
+}
+
+func storageEq(a, b storage.Value) bool {
+	if a.IsNull && b.IsNull {
+		return true
+	}
+	if a.IsNull || b.IsNull {
+		return false
+	}
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if ok1 && ok2 {
+		return n1 == n2
+	}
+	return strings.EqualFold(valToString(a), valToString(b))
+}
+
+func storageLt(a, b storage.Value) bool {
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if ok1 && ok2 {
+		return n1 < n2
+	}
+	return valToString(a) < valToString(b)
+}
+
+func storageLte(a, b storage.Value) bool {
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if ok1 && ok2 {
+		return n1 <= n2
+	}
+	return valToString(a) <= valToString(b)
+}
+
+func storageGt(a, b storage.Value) bool {
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if ok1 && ok2 {
+		return n1 > n2
+	}
+	return valToString(a) > valToString(b)
+}
+
+func storageGte(a, b storage.Value) bool {
+	n1, ok1 := toFloatNum(a)
+	n2, ok2 := toFloatNum(b)
+	if ok1 && ok2 {
+		return n1 >= n2
+	}
+	return valToString(a) >= valToString(b)
+}
+
+func toFloatNum(v storage.Value) (float64, bool) {
+	if v.IsNull {
+		return 0, false
+	}
+	switch v.Type {
+	case storage.TypeInt:
+		return float64(v.IVal), true
+	case storage.TypeFloat:
+		return v.FVal, true
+	case storage.TypeBool:
+		if v.BVal {
+			return 1, true
+		}
+		return 0, true
+	case storage.TypeVarChar:
+		if f, err := strconv.ParseFloat(v.SVal, 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
+func isTruthy(v storage.Value) bool {
+	if v.IsNull {
+		return false
+	}
+	switch v.Type {
+	case storage.TypeBool:
+		return v.BVal
+	case storage.TypeInt:
+		return v.IVal != 0
+	case storage.TypeFloat:
+		return v.FVal != 0
+	case storage.TypeVarChar:
+		return len(v.SVal) > 0 && !strings.EqualFold(v.SVal, "false") && v.SVal != "0"
+	default:
+		return true
+	}
+}
+
+func valToString(v storage.Value) string {
+	if v.IsNull {
+		return "NULL"
+	}
+	switch v.Type {
+	case storage.TypeInt:
+		return strconv.FormatInt(v.IVal, 10)
+	case storage.TypeFloat:
+		return strconv.FormatFloat(v.FVal, 'f', -1, 64)
+	case storage.TypeBool:
+		return strconv.FormatBool(v.BVal)
+	case storage.TypeDateTime:
+		return v.TVal.Format("2006-01-02 15:04:05")
+	default:
+		return v.SVal
+	}
+}
+
+func valToAny(v storage.Value) any {
+	if v.IsNull {
+		return nil
+	}
+	switch v.Type {
+	case storage.TypeInt:
+		return v.IVal
+	case storage.TypeFloat:
+		return v.FVal
+	case storage.TypeBool:
+		return v.BVal
+	case storage.TypeDateTime:
+		return v.TVal
+	default:
+		return v.SVal
+	}
+}
+
+func toStorageValue(v any) storage.Value {
+	if v == nil {
+		return storage.NullValue(storage.TypeUnknown)
+	}
+	switch val := v.(type) {
+	case storage.Value:
+		return val
+	case int64:
+		return storage.IntValue(val)
+	case int:
+		return storage.IntValue(int64(val))
+	case float64:
+		if val == math.Trunc(val) {
+			return storage.Value{Type: storage.TypeInt, IVal: int64(val), FVal: val}
+		}
+		return storage.FloatValue(val)
+	case string:
+		return storage.StringValue(val)
+	case bool:
+		return storage.BoolValue(val)
+	default:
+		return storage.StringValue(fmt.Sprintf("%v", v))
+	}
+}
+
+func recordToMap(rec storage.Record) map[string]any {
+	if rec == nil {
+		return nil
+	}
+	m := make(map[string]any, len(rec))
+	for k, v := range rec {
+		m[k] = valToAny(v)
+	}
+	return m
+}
+
+func matchLike(str, pattern string) bool {
+	var b strings.Builder
+	b.WriteString("(?i)^")
+	for i := 0; i < len(pattern); i++ {
+		c := pattern[i]
+		switch c {
+		case '%':
+			b.WriteString(".*")
+		case '_':
+			b.WriteString(".")
+		case '.', '+', '?', '^', '$', '(', ')', '[', ']', '{', '}', '|', '\\':
+			b.WriteString("\\")
+			b.WriteByte(c)
+		default:
+			b.WriteByte(c)
+		}
+	}
+	b.WriteString("$")
+	re, err := regexp.Compile(b.String())
+	if err != nil {
+		return strings.EqualFold(str, pattern)
+	}
+	return re.MatchString(str)
+}
+
+func isTransientTable(name string) bool {
+	lower := strings.ToLower(name)
+	return lower == "inserted" || lower == "deleted"
 }
 
 func hashScript(s string) string {
@@ -289,6 +1451,10 @@ func hashScript(s string) string {
 }
 
 func cleanSymbol(name string) string {
+	name = strings.TrimSpace(name)
+	if strings.HasPrefix(name, "@@") {
+		return name
+	}
 	name = strings.TrimPrefix(name, "@")
 	name = strings.Trim(name, "[]\"'`")
 	if strings.HasPrefix(strings.ToLower(name), "dbo.") {
