@@ -7,14 +7,64 @@ import (
 
 // PostgreSQL Wire Protocol v3 backend message types
 const (
-	MsgAuth            byte = 'R'
-	MsgParameterStatus byte = 'S'
-	MsgReadyForQuery   byte = 'Z'
-	MsgRowDescription  byte = 'T'
-	MsgDataRow         byte = 'D'
-	MsgCommandComplete byte = 'C'
-	MsgErrorResponse   byte = 'E'
+	MsgAuth                 byte = 'R'
+	MsgParameterStatus      byte = 'S'
+	MsgReadyForQuery        byte = 'Z'
+	MsgRowDescription       byte = 'T'
+	MsgDataRow              byte = 'D'
+	MsgCommandComplete      byte = 'C'
+	MsgErrorResponse        byte = 'E'
+	MsgParseComplete        byte = '1'
+	MsgBindComplete         byte = '2'
+	MsgCloseComplete        byte = '3'
+	MsgNoData               byte = 'n'
+	MsgParameterDescription byte = 't'
 )
+
+// WriteParseComplete sends ParseComplete ('1') message.
+func WriteParseComplete(w io.Writer) error {
+	buf := []byte{MsgParseComplete, 0, 0, 0, 4}
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteBindComplete sends BindComplete ('2') message.
+func WriteBindComplete(w io.Writer) error {
+	buf := []byte{MsgBindComplete, 0, 0, 0, 4}
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteCloseComplete sends CloseComplete ('3') message.
+func WriteCloseComplete(w io.Writer) error {
+	buf := []byte{MsgCloseComplete, 0, 0, 0, 4}
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteNoData sends NoData ('n') message.
+func WriteNoData(w io.Writer) error {
+	buf := []byte{MsgNoData, 0, 0, 0, 4}
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteParameterDescription sends ParameterDescription ('t') with parameter OIDs.
+func WriteParameterDescription(w io.Writer, oids []int32) error {
+	payloadLen := 4 + 2 + len(oids)*4
+	buf := make([]byte, 1+payloadLen)
+	buf[0] = MsgParameterDescription
+	binary.BigEndian.PutUint32(buf[1:5], uint32(payloadLen))
+	binary.BigEndian.PutUint16(buf[5:7], uint16(len(oids)))
+
+	offset := 7
+	for _, oid := range oids {
+		binary.BigEndian.PutUint32(buf[offset:], uint32(oid))
+		offset += 4
+	}
+	_, err := w.Write(buf)
+	return err
+}
 
 // WriteAuthOK sends AuthenticationOk message.
 func WriteAuthOK(w io.Writer) error {

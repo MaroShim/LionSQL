@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/proc/runtime"
@@ -22,6 +23,7 @@ type Server struct {
 	listener  net.Listener
 	engine    storage.Engine
 	catalog   *catalog.Catalog
+	apiServer *api.Server
 	planCache *proc.PlanCache
 	executor  *runtime.Executor
 	mu        sync.Mutex
@@ -35,6 +37,7 @@ func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
 		addr:      addr,
 		catalog:   cat,
 		engine:    eng,
+		apiServer: api.NewServer(cat, eng),
 		planCache: proc.NewPlanCache(),
 		executor:  runtime.NewExecutor(cache),
 	}
@@ -82,6 +85,18 @@ func (s *Server) acceptLoop() {
 	}
 }
 
+type PreparedStatement struct {
+	Name       string
+	Query      string
+	ParamTypes []int32
+}
+
+type Portal struct {
+	Name      string
+	Statement *PreparedStatement
+	Params    []string
+}
+
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
@@ -118,9 +133,14 @@ func (s *Server) handleConnection(conn net.Conn) {
 	_ = WriteParameterStatus(conn, "server_version", "15.0 (SQLion)")
 	_ = WriteParameterStatus(conn, "client_encoding", "UTF8")
 	_ = WriteParameterStatus(conn, "DateStyle", "ISO, MDY")
+	_ = WriteParameterStatus(conn, "standard_conforming_strings", "on")
+	_ = WriteParameterStatus(conn, "TimeZone", "UTC")
 	if err := WriteReadyForQuery(conn); err != nil {
 		return
 	}
+
+	statements := make(map[string]*PreparedStatement)
+	portals := make(map[string]*Portal)
 
 	// 3. Message Loop
 	for {
@@ -143,193 +163,300 @@ func (s *Server) handleConnection(conn net.Conn) {
 		switch msgType {
 		case 'Q': // Simple Query
 			query := string(bytes.TrimRight(payload, "\x00"))
-			s.handleQuery(conn, query)
+			s.handleSimpleQuery(conn, query)
+
+		case 'P': // Parse
+			s.handleParse(conn, payload, statements)
+
+		case 'B': // Bind
+			s.handleBind(conn, payload, statements, portals)
+
+		case 'D': // Describe
+			s.handleDescribe(conn, payload, statements, portals)
+
+		case 'E': // Execute
+			s.handleExecute(conn, payload, portals)
+
+		case 'S': // Sync
+			_ = WriteReadyForQuery(conn)
+
+		case 'C': // Close
+			s.handleClose(conn, payload, statements, portals)
+
+		case 'H': // Flush
+			// No-op
+
 		case 'X': // Terminate
 			return
+
 		default:
-			// Ignore unsupported packets and stay ready
+			// Stay ready
 			_ = WriteReadyForQuery(conn)
 		}
 	}
 }
 
-func (s *Server) handleQuery(conn net.Conn, query string) {
+func (s *Server) handleSimpleQuery(conn net.Conn, query string) {
+	defer WriteReadyForQuery(conn)
+	s.runAndWriteQuery(conn, query, true)
+}
+
+func (s *Server) handleParse(conn net.Conn, payload []byte, statements map[string]*PreparedStatement) {
+	r := bytes.NewReader(payload)
+	stmtName, _ := readCString(r)
+	queryStr, _ := readCString(r)
+
+	var numParamTypes int16
+	_ = binary.Read(r, binary.BigEndian, &numParamTypes)
+
+	paramTypes := make([]int32, numParamTypes)
+	for i := 0; i < int(numParamTypes); i++ {
+		_ = binary.Read(r, binary.BigEndian, &paramTypes[i])
+	}
+
+	statements[stmtName] = &PreparedStatement{
+		Name:       stmtName,
+		Query:      queryStr,
+		ParamTypes: paramTypes,
+	}
+
+	_ = WriteParseComplete(conn)
+}
+
+func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
+	r := bytes.NewReader(payload)
+	portalName, _ := readCString(r)
+	stmtName, _ := readCString(r)
+
+	stmt, exists := statements[stmtName]
+	if !exists {
+		_ = WriteError(conn, fmt.Sprintf("prepared statement %q does not exist", stmtName))
+		return
+	}
+
+	var numFormats int16
+	_ = binary.Read(r, binary.BigEndian, &numFormats)
+	formats := make([]int16, numFormats)
+	for i := 0; i < int(numFormats); i++ {
+		_ = binary.Read(r, binary.BigEndian, &formats[i])
+	}
+
+	var numParams int16
+	_ = binary.Read(r, binary.BigEndian, &numParams)
+	paramVals := make([]string, numParams)
+
+	for i := 0; i < int(numParams); i++ {
+		var paramLen int32
+		_ = binary.Read(r, binary.BigEndian, &paramLen)
+		if paramLen == -1 {
+			paramVals[i] = "NULL"
+		} else {
+			valBytes := make([]byte, paramLen)
+			_, _ = io.ReadFull(r, valBytes)
+			paramVals[i] = string(valBytes)
+		}
+	}
+
+	portals[portalName] = &Portal{
+		Name:      portalName,
+		Statement: stmt,
+		Params:    paramVals,
+	}
+
+	_ = WriteBindComplete(conn)
+}
+
+func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
+	if len(payload) < 2 {
+		_ = WriteNoData(conn)
+		return
+	}
+
+	targetType := payload[0]
+	targetName := string(bytes.TrimRight(payload[1:], "\x00"))
+
+	if targetType == 'S' {
+		stmt, exists := statements[targetName]
+		if !exists {
+			_ = WriteError(conn, fmt.Sprintf("prepared statement %q does not exist", targetName))
+			return
+		}
+		_ = WriteParameterDescription(conn, stmt.ParamTypes)
+		s.writeSchemaDescription(conn, stmt.Query)
+	} else if targetType == 'P' {
+		portal, exists := portals[targetName]
+		if !exists {
+			_ = WriteError(conn, fmt.Sprintf("portal %q does not exist", targetName))
+			return
+		}
+		s.writeSchemaDescription(conn, portal.Statement.Query)
+	} else {
+		_ = WriteNoData(conn)
+	}
+}
+
+func (s *Server) writeSchemaDescription(conn net.Conn, query string) {
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	if strings.Contains(upper, "SELECT") && strings.Contains(upper, "FROM") {
+		parts := strings.Split(upper, "FROM")
+		if len(parts) >= 2 {
+			tblField := strings.Fields(parts[1])
+			if len(tblField) > 0 {
+				tblName := strings.Trim(tblField[0], ";, ")
+				tbl, err := s.engine.GetTable(tblName)
+				if err != nil {
+					tbl, err = s.engine.GetTable(strings.ToLower(tblName))
+				}
+				if err != nil {
+					// Search all tables
+					tables, _ := s.engine.ListTables()
+					for _, t := range tables {
+						if strings.EqualFold(t.Name, tblName) {
+							tbl = t
+							err = nil
+							break
+						}
+					}
+				}
+				if err == nil && tbl != nil {
+					cols := make([]ColumnMeta, len(tbl.Columns))
+					for i, c := range tbl.Columns {
+						cols[i] = ColumnMeta{
+							Name:     c.Name,
+							DataType: typeToPgOID(c.Type),
+						}
+					}
+					_ = WriteRowDescription(conn, cols)
+					return
+				}
+			}
+		}
+	}
+	_ = WriteNoData(conn)
+}
+
+func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string]*Portal) {
+	r := bytes.NewReader(payload)
+	portalName, _ := readCString(r)
+
+	portal, exists := portals[portalName]
+	if !exists {
+		_ = WriteError(conn, fmt.Sprintf("portal %q does not exist", portalName))
+		return
+	}
+
+	substitutedSQL := substituteParams(portal.Statement.Query, portal.Params)
+	s.runAndWriteQuery(conn, substitutedSQL, false)
+}
+
+func (s *Server) handleClose(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
+	if len(payload) >= 2 {
+		targetType := payload[0]
+		targetName := string(bytes.TrimRight(payload[1:], "\x00"))
+		if targetType == 'S' {
+			delete(statements, targetName)
+		} else if targetType == 'P' {
+			delete(portals, targetName)
+		}
+	}
+	_ = WriteCloseComplete(conn)
+}
+
+func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool) {
 	trimmed := strings.TrimSpace(query)
 	upper := strings.ToUpper(trimmed)
 
-	defer WriteReadyForQuery(conn)
-
-	// Version check query
-	if strings.Contains(upper, "SELECT VERSION()") || strings.Contains(upper, "VERSION()") {
+	// Builtin pg check
+	if strings.Contains(upper, "VERSION()") {
 		cols := []ColumnMeta{{Name: "version", DataType: 25}}
-		_ = WriteRowDescription(conn, cols)
+		if writeRowDesc {
+			_ = WriteRowDescription(conn, cols)
+		}
 		_ = WriteDataRow(conn, []string{"PostgreSQL 15.0 (SQLion OLTP & Stored Procedure Server)"})
 		_ = WriteCommandComplete(conn, "SELECT 1")
 		return
 	}
 
-	// EXEC / CALL Stored Procedure: e.g. EXEC TransferFunds @from=1, @to=2, @amount=300
-	if strings.HasPrefix(upper, "EXEC ") || strings.HasPrefix(upper, "CALL ") {
-		s.handleExecQuery(conn, trimmed)
+	res, err := s.apiServer.ExecuteSQL(trimmed)
+	if err != nil {
+		_ = WriteError(conn, err.Error())
 		return
 	}
 
-	// SELECT query: e.g. SELECT * FROM accounts
-	if strings.HasPrefix(upper, "SELECT") && strings.Contains(upper, "FROM") {
-		s.handleSelectQuery(conn, trimmed)
+	if len(res.Columns) > 0 {
+		if writeRowDesc {
+			cols := make([]ColumnMeta, len(res.Columns))
+			for i, c := range res.Columns {
+				cols[i] = ColumnMeta{Name: c, DataType: 25}
+			}
+			_ = WriteRowDescription(conn, cols)
+		}
+
+		for _, row := range res.Rows {
+			vals := make([]string, len(res.Columns))
+			for i, colName := range res.Columns {
+				if v, ok := row[colName]; ok && v != nil {
+					vals[i] = fmt.Sprintf("%v", v)
+				} else {
+					vals[i] = ""
+				}
+			}
+			_ = WriteDataRow(conn, vals)
+		}
+		_ = WriteCommandComplete(conn, fmt.Sprintf("SELECT %d", len(res.Rows)))
 		return
 	}
 
-	// Default fallback
-	_ = WriteCommandComplete(conn, "OK")
+	cmd := res.Command
+	if cmd == "" {
+		cmd = "OK"
+	}
+	_ = WriteCommandComplete(conn, fmt.Sprintf("%s %d", cmd, res.RowsAffected))
 }
 
-func (s *Server) handleExecQuery(conn net.Conn, query string) {
-	// e.g. EXEC TransferFunds 1, 2, 300
-	fields := strings.Fields(query)
-	if len(fields) < 2 {
-		_ = WriteError(conn, "invalid EXEC syntax")
-		return
-	}
-
-	procName := fields[1]
-	procMeta, err := s.catalog.GetProcedure(procName)
-	if err != nil {
-		_ = WriteError(conn, fmt.Sprintf("procedure %s not found", procName))
-		return
-	}
-
-	prog, found := s.executor.Cache().GetByName(procName)
-	if !found {
-		if procMeta.JSCode == "" {
-			plan, err := s.planCache.GetOrCompile(procMeta.Body)
-			if err != nil {
-				_ = WriteError(conn, fmt.Sprintf("compile error: %v", err))
-				return
-			}
-			jsCode, _ := proc.Transpile(plan)
-			procMeta.JSCode = jsCode
-		}
-		prog, err = s.executor.Cache().GetOrCompile(procMeta.JSCode)
-		if err != nil {
-			_ = WriteError(conn, fmt.Sprintf("bytecode error: %v", err))
-			return
-		}
-		s.executor.Cache().PutByName(procName, prog)
-	}
-
-	session, err := s.engine.NewSession()
-	if err != nil {
-		_ = WriteError(conn, err.Error())
-		return
-	}
-	defer session.Close()
-
-	// Extract positional arguments if provided
-	args := make(map[string]any)
-	argTokens := fields[2:]
-	for i, param := range procMeta.Params {
-		if i < len(argTokens) {
-			raw := strings.Trim(argTokens[i], ",; '")
-			if num, err := strconv.ParseInt(raw, 10, 64); err == nil {
-				args[param.Name] = num
-				args[strings.TrimPrefix(param.Name, "@")] = num
-			} else {
-				args[param.Name] = raw
-				args[strings.TrimPrefix(param.Name, "@")] = raw
-			}
+func substituteParams(sql string, params []string) string {
+	res := sql
+	for i := len(params); i >= 1; i-- {
+		placeholder := fmt.Sprintf("$%d", i)
+		val := params[i-1]
+		if _, err := strconv.ParseFloat(val, 64); err == nil {
+			res = strings.ReplaceAll(res, placeholder, val)
+		} else if strings.EqualFold(val, "true") || strings.EqualFold(val, "false") || strings.EqualFold(val, "null") {
+			res = strings.ReplaceAll(res, placeholder, val)
+		} else {
+			escaped := strings.ReplaceAll(val, "'", "''")
+			res = strings.ReplaceAll(res, placeholder, fmt.Sprintf("'%s'", escaped))
 		}
 	}
-
-	res, err := s.executor.Run(prog, procName, args, session)
-	if err != nil {
-		_ = WriteError(conn, fmt.Sprintf("execution failed (rolled back): %v", err))
-		return
-	}
-
-	// Return logs and return code as a result row
-	cols := []ColumnMeta{
-		{Name: "return_code", DataType: 25},
-		{Name: "duration_us", DataType: 20},
-	}
-	_ = WriteRowDescription(conn, cols)
-	_ = WriteDataRow(conn, []string{
-		fmt.Sprintf("%v", res.ReturnValue),
-		fmt.Sprintf("%d", res.Duration.Microseconds()),
-	})
-	_ = WriteCommandComplete(conn, "EXEC 1")
+	return res
 }
 
-func (s *Server) handleSelectQuery(conn net.Conn, query string) {
-	// Parse simple table name from SELECT ... FROM <table_name>
-	parts := strings.Split(strings.ToUpper(query), "FROM")
-	if len(parts) < 2 {
-		_ = WriteError(conn, "unsupported SELECT query")
-		return
+func typeToPgOID(t storage.DataType) int32 {
+	switch t {
+	case storage.TypeInt:
+		return 23 // INT4
+	case storage.TypeFloat:
+		return 701 // FLOAT8
+	case storage.TypeBool:
+		return 16 // BOOL
+	case storage.TypeDateTime:
+		return 1114 // TIMESTAMP
+	default:
+		return 1043 // VARCHAR
 	}
+}
 
-	afterFrom := strings.Fields(parts[1])
-	if len(afterFrom) == 0 {
-		_ = WriteError(conn, "missing table name in SELECT")
-		return
-	}
-	tableName := strings.Trim(afterFrom[0], ";, ")
-
-	tbl, err := s.engine.GetTable(tableName)
-	if err != nil {
-		tbl, err = s.engine.GetTable(strings.ToLower(tableName))
+func readCString(r *bytes.Reader) (string, error) {
+	var buf []byte
+	for {
+		b, err := r.ReadByte()
 		if err != nil {
-			_ = WriteError(conn, fmt.Sprintf("table %s not found", tableName))
-			return
+			return string(buf), err
 		}
-	}
-	tableName = tbl.Name
-
-	session, err := s.engine.NewSession()
-	if err != nil {
-		_ = WriteError(conn, err.Error())
-		return
-	}
-	defer session.Close()
-
-	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
-	if err != nil {
-		_ = WriteError(conn, err.Error())
-		return
-	}
-	defer tx.Rollback()
-
-	cursor, err := tx.Scan(tableName)
-	if err != nil {
-		_ = WriteError(conn, err.Error())
-		return
-	}
-	defer cursor.Close()
-
-	cols := make([]ColumnMeta, len(tbl.Columns))
-	for i, c := range tbl.Columns {
-		cols[i] = ColumnMeta{Name: c.Name, DataType: 25}
-	}
-	_ = WriteRowDescription(conn, cols)
-
-	rowCount := 0
-	for cursor.Next() {
-		rec, err := cursor.Record()
-		if err != nil {
-			continue
+		if b == 0 {
+			break
 		}
-		vals := make([]string, len(tbl.Columns))
-		for i, c := range tbl.Columns {
-			v, exists := rec[c.Name]
-			if !exists || v.IsNull {
-				vals[i] = ""
-			} else {
-				vals[i] = v.String()
-			}
-		}
-		_ = WriteDataRow(conn, vals)
-		rowCount++
+		buf = append(buf, b)
 	}
-
-	_ = WriteCommandComplete(conn, fmt.Sprintf("SELECT %d", rowCount))
+	return string(buf), nil
 }
