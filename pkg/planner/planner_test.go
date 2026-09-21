@@ -125,3 +125,64 @@ func TestPlanner_AnalyzeOutput(t *testing.T) {
 		t.Errorf("expected actual time formatting in plan text, got:\n%s", fullText)
 	}
 }
+
+func TestPlanner_HashJoin(t *testing.T) {
+	p := planner.NewPlanner()
+
+	q, err := p.ParseSelect("SELECT u.id, u.name, a.balance FROM users u INNER JOIN accounts a ON u.id = a.user_id WHERE a.balance > 500 ORDER BY a.balance DESC LIMIT 10")
+	if err != nil {
+		t.Fatalf("ParseSelect with JOIN failed: %v", err)
+	}
+
+	if q.Join == nil {
+		t.Fatal("expected JoinInfo to be parsed")
+	}
+	if q.Join.Type != "INNER" || q.Join.Table != "accounts" || q.Join.Alias != "a" {
+		t.Errorf("unexpected JoinInfo: %+v", q.Join)
+	}
+
+	schemaUsers := &storage.TableSchema{Name: "users", Columns: []storage.Column{{Name: "id", Type: storage.TypeInt}}}
+	schemaAccounts := &storage.TableSchema{Name: "accounts", Columns: []storage.Column{{Name: "user_id", Type: storage.TypeInt}}}
+
+	plan := p.BuildJoinPlan(q, schemaUsers, 100, schemaAccounts, 200)
+	if plan == nil {
+		t.Fatal("expected non-nil join plan")
+	}
+
+	lines := planner.FormatPlanText(plan, false)
+	fullText := strings.Join(lines, "\n")
+
+	if !strings.Contains(fullText, "Hash Join") || !strings.Contains(fullText, "Hash") || !strings.Contains(fullText, "on accounts a") {
+		t.Errorf("expected Hash Join structure in plan text, got:\n%s", fullText)
+	}
+}
+
+func TestPlanner_IndexNestedLoopJoin(t *testing.T) {
+	p := planner.NewPlanner()
+
+	q, err := p.ParseSelect("SELECT u.id, a.amount FROM users u JOIN orders a ON u.id = a.user_id")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	schemaUsers := &storage.TableSchema{Name: "users", Columns: []storage.Column{{Name: "id", Type: storage.TypeInt}}}
+	schemaOrders := &storage.TableSchema{
+		Name:    "orders",
+		Columns: []storage.Column{{Name: "id", Type: storage.TypeInt}, {Name: "user_id", Type: storage.TypeInt}},
+		Indexes: []storage.IndexSchema{{Name: "idx_orders_user_id", Columns: []string{"user_id"}}},
+	}
+
+	plan := p.BuildJoinPlan(q, schemaUsers, 50, schemaOrders, 500)
+	if plan == nil {
+		t.Fatal("expected non-nil join plan")
+	}
+
+	lines := planner.FormatPlanText(plan, false)
+	fullText := strings.Join(lines, "\n")
+
+	if !strings.Contains(fullText, "Nested Loop") || !strings.Contains(fullText, "Index Scan using idx_orders_user_id on orders") {
+		t.Errorf("expected Nested Loop Join with Index Scan in plan text, got:\n%s", fullText)
+	}
+}
+
+

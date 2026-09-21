@@ -463,7 +463,26 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 		}
 	}
 
-	planTree := p.BuildPlan(qInfo, schema, totalRows)
+	var planTree *planner.PlanNode
+	if qInfo.Join != nil {
+		rTable := cleanIdentifier(qInfo.Join.Table)
+		rSchema, _ := s.engine.GetTable(rTable)
+		var rRows int64 = 0
+		if session != nil {
+			if rTx, err := session.BeginTx(storage.TxOptions{ReadOnly: true}); err == nil {
+				defer rTx.Rollback()
+				if rCur, err := rTx.Scan(rTable); err == nil {
+					defer rCur.Close()
+					for rCur.Next() {
+						rRows++
+					}
+				}
+			}
+		}
+		planTree = p.BuildJoinPlan(qInfo, schema, totalRows, rSchema, rRows)
+	} else {
+		planTree = p.BuildPlan(qInfo, schema, totalRows)
+	}
 
 	if qInfo.IsAnalyze {
 		// Execute query to collect actual metrics
@@ -518,6 +537,12 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 
 func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	p := planner.NewPlanner()
+	qInfo, parseErr := p.ParseSelect(cleaned)
+	if parseErr == nil && qInfo != nil && qInfo.Join != nil {
+		return s.execJoin(qInfo, start)
+	}
 
 	// Parse projection, table, WHERE, ORDER BY, LIMIT
 	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+([^\s,;]+)(?:\s+WHERE\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
@@ -687,6 +712,459 @@ func (s *Server) execSelect(query string, start time.Time) (*QueryResult, error)
 		Columns:      selectedCols,
 		Rows:         rows,
 		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execJoin(qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
+	rightTable := cleanIdentifier(qInfo.Join.Table)
+	rightSchema, err := s.engine.GetTable(rightTable)
+	if err == nil && rightSchema != nil {
+		rightCol := cleanIdentifier(qInfo.Join.RightKey)
+		if idx := strings.Index(rightCol, "."); idx != -1 {
+			rightCol = rightCol[idx+1:]
+		}
+		if idxMeta, found := rightSchema.FindIndexByColumn(rightCol); found {
+			return s.execNestedLoopJoin(qInfo, start, idxMeta)
+		}
+	}
+	return s.execHashJoin(qInfo, start)
+}
+
+func (s *Server) execNestedLoopJoin(qInfo *planner.QueryInfo, start time.Time, rightIdx *storage.IndexSchema) (*QueryResult, error) {
+	leftTable := cleanIdentifier(qInfo.TableName)
+	rightTable := cleanIdentifier(qInfo.Join.Table)
+
+	leftSchema, err := s.engine.GetTable(leftTable)
+	if err != nil {
+		return nil, fmt.Errorf("left table %q not found: %w", leftTable, err)
+	}
+	rightSchema, err := s.engine.GetTable(rightTable)
+	if err != nil {
+		return nil, fmt.Errorf("right table %q not found: %w", rightTable, err)
+	}
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	leftCol := cleanIdentifier(qInfo.Join.LeftKey)
+	if idx := strings.Index(leftCol, "."); idx != -1 {
+		leftCol = leftCol[idx+1:]
+	}
+
+	var selectedCols []string
+	isSelectAll := len(qInfo.Projections) == 0 || (len(qInfo.Projections) == 1 && qInfo.Projections[0] == "*")
+	if isSelectAll {
+		for _, col := range leftSchema.Columns {
+			selectedCols = append(selectedCols, col.Name)
+		}
+		for _, col := range rightSchema.Columns {
+			selectedCols = append(selectedCols, col.Name)
+		}
+	} else {
+		for _, p := range qInfo.Projections {
+			pTrimmed := cleanIdentifier(strings.TrimSpace(p))
+			if pTrimmed != "" {
+				selectedCols = append(selectedCols, pTrimmed)
+			}
+		}
+	}
+
+	// Outer Scan on leftTable
+	lCur, err := tx.Scan(leftTable)
+	if err != nil {
+		return nil, fmt.Errorf("scan error on %s: %w", leftTable, err)
+	}
+	defer lCur.Close()
+
+	var joinedRows []map[string]any
+
+	for lCur.Next() {
+		lRec, err := lCur.Record()
+		if err != nil {
+			break
+		}
+		lMap := make(map[string]any)
+		for _, col := range leftSchema.Columns {
+			v := formatStorageValue(lRec[col.Name])
+			lMap[col.Name] = v
+			lMap[leftTable+"."+col.Name] = v
+			if qInfo.TableAlias != "" {
+				lMap[qInfo.TableAlias+"."+col.Name] = v
+			}
+		}
+
+		leftVal, ok := lRec[leftCol]
+		matchedCount := 0
+
+		if ok && !leftVal.IsNull {
+			// Inner Index Scan on rightTable
+			rIdxCur, err := tx.IndexScan(rightTable, rightIdx.Name, &leftVal, &leftVal)
+			if err == nil {
+				for rIdxCur.Next() {
+					rRec, err := rIdxCur.Record()
+					if err != nil {
+						break
+					}
+					matchedCount++
+					rMap := make(map[string]any)
+					for _, col := range rightSchema.Columns {
+						v := formatStorageValue(rRec[col.Name])
+						rMap[col.Name] = v
+						rMap[rightTable+"."+col.Name] = v
+						if qInfo.Join.Alias != "" {
+							rMap[qInfo.Join.Alias+"."+col.Name] = v
+						}
+					}
+
+					combined := make(map[string]any)
+					for k, v := range lMap {
+						combined[k] = v
+					}
+					for k, v := range rMap {
+						combined[k] = v
+					}
+
+					if qInfo.WhereClause != "" && !evaluateWhereConditionMap(combined, qInfo.WhereClause) {
+						continue
+					}
+
+					row := make(map[string]any)
+					for _, col := range selectedCols {
+						var val any
+						if v, ok := combined[col]; ok {
+							val = v
+						} else {
+							bare := col
+							if idx := strings.Index(col, "."); idx != -1 {
+								bare = col[idx+1:]
+							}
+							if v, ok := combined[bare]; ok {
+								val = v
+							}
+						}
+						row[col] = val
+						if dotIdx := strings.Index(col, "."); dotIdx != -1 {
+							row[col[dotIdx+1:]] = val
+						}
+					}
+					joinedRows = append(joinedRows, row)
+				}
+				_ = rIdxCur.Close()
+			}
+		}
+
+		if matchedCount == 0 && qInfo.Join.Type == "LEFT" {
+			combined := make(map[string]any)
+			for k, v := range lMap {
+				combined[k] = v
+			}
+			for _, col := range rightSchema.Columns {
+				combined[col.Name] = nil
+				combined[rightTable+"."+col.Name] = nil
+				if qInfo.Join.Alias != "" {
+					combined[qInfo.Join.Alias+"."+col.Name] = nil
+				}
+			}
+
+			if qInfo.WhereClause != "" && !evaluateWhereConditionMap(combined, qInfo.WhereClause) {
+				continue
+			}
+
+			row := make(map[string]any)
+			for _, col := range selectedCols {
+				var val any
+				if v, ok := combined[col]; ok {
+					val = v
+				} else {
+					bare := col
+					if idx := strings.Index(col, "."); idx != -1 {
+						bare = col[idx+1:]
+					}
+					if v, ok := combined[bare]; ok {
+						val = v
+					}
+				}
+				row[col] = val
+				if dotIdx := strings.Index(col, "."); dotIdx != -1 {
+					row[col[dotIdx+1:]] = val
+				}
+			}
+			joinedRows = append(joinedRows, row)
+		}
+	}
+
+	// Apply ORDER BY
+	if qInfo.OrderByClause != "" && len(joinedRows) > 0 {
+		orderParts := strings.Fields(qInfo.OrderByClause)
+		orderCol := cleanIdentifier(orderParts[0])
+		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
+		sort.Slice(joinedRows, func(i, j int) bool {
+			v1 := fmt.Sprintf("%v", joinedRows[i][orderCol])
+			v2 := fmt.Sprintf("%v", joinedRows[j][orderCol])
+			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
+				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
+					if desc {
+						return n1 > n2
+					}
+					return n1 < n2
+				}
+			}
+			if desc {
+				return v1 > v2
+			}
+			return v1 < v2
+		})
+	}
+
+	// Apply LIMIT
+	if qInfo.LimitCount >= 0 && int64(len(joinedRows)) > qInfo.LimitCount {
+		joinedRows = joinedRows[:qInfo.LimitCount]
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      selectedCols,
+		Rows:         joinedRows,
+		RowsAffected: int64(len(joinedRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
+	leftTable := cleanIdentifier(qInfo.TableName)
+	rightTable := cleanIdentifier(qInfo.Join.Table)
+
+	leftSchema, err := s.engine.GetTable(leftTable)
+	if err != nil {
+		return nil, fmt.Errorf("left table %q not found: %w", leftTable, err)
+	}
+	rightSchema, err := s.engine.GetTable(rightTable)
+	if err != nil {
+		return nil, fmt.Errorf("right table %q not found: %w", rightTable, err)
+	}
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		return nil, err
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// Extract join columns (strip dot prefix if present)
+	leftCol := cleanIdentifier(qInfo.Join.LeftKey)
+	if idx := strings.Index(leftCol, "."); idx != -1 {
+		leftCol = leftCol[idx+1:]
+	}
+	rightCol := cleanIdentifier(qInfo.Join.RightKey)
+	if idx := strings.Index(rightCol, "."); idx != -1 {
+		rightCol = rightCol[idx+1:]
+	}
+
+	// 1. Build Phase: scan right table into hash map
+	rCur, err := tx.Scan(rightTable)
+	if err != nil {
+		return nil, fmt.Errorf("scan error on %s: %w", rightTable, err)
+	}
+	defer rCur.Close()
+
+	hashTable := make(map[string][]map[string]any)
+	for rCur.Next() {
+		rRec, err := rCur.Record()
+		if err != nil {
+			break
+		}
+		val, ok := rRec[rightCol]
+		if !ok || val.IsNull {
+			continue
+		}
+		key := fmt.Sprintf("%v", formatStorageValue(val))
+
+		rMap := make(map[string]any)
+		for _, col := range rightSchema.Columns {
+			v := formatStorageValue(rRec[col.Name])
+			rMap[col.Name] = v
+			rMap[rightTable+"."+col.Name] = v
+			if qInfo.Join.Alias != "" {
+				rMap[qInfo.Join.Alias+"."+col.Name] = v
+			}
+		}
+		hashTable[key] = append(hashTable[key], rMap)
+	}
+
+	// 2. Probe Phase: scan left table and probe hash map
+	lCur, err := tx.Scan(leftTable)
+	if err != nil {
+		return nil, fmt.Errorf("scan error on %s: %w", leftTable, err)
+	}
+	defer lCur.Close()
+
+	var selectedCols []string
+	isSelectAll := len(qInfo.Projections) == 0 || (len(qInfo.Projections) == 1 && qInfo.Projections[0] == "*")
+	if isSelectAll {
+		for _, col := range leftSchema.Columns {
+			selectedCols = append(selectedCols, col.Name)
+		}
+		for _, col := range rightSchema.Columns {
+			selectedCols = append(selectedCols, col.Name)
+		}
+	} else {
+		for _, p := range qInfo.Projections {
+			pTrimmed := cleanIdentifier(strings.TrimSpace(p))
+			if pTrimmed != "" {
+				selectedCols = append(selectedCols, pTrimmed)
+			}
+		}
+	}
+
+	var joinedRows []map[string]any
+
+	for lCur.Next() {
+		lRec, err := lCur.Record()
+		if err != nil {
+			break
+		}
+		lMap := make(map[string]any)
+		for _, col := range leftSchema.Columns {
+			v := formatStorageValue(lRec[col.Name])
+			lMap[col.Name] = v
+			lMap[leftTable+"."+col.Name] = v
+			if qInfo.TableAlias != "" {
+				lMap[qInfo.TableAlias+"."+col.Name] = v
+			}
+		}
+
+		val, ok := lRec[leftCol]
+		var matchedRows []map[string]any
+		if ok && !val.IsNull {
+			key := fmt.Sprintf("%v", formatStorageValue(val))
+			matchedRows = hashTable[key]
+		}
+
+		if len(matchedRows) > 0 {
+			for _, rMap := range matchedRows {
+				combined := make(map[string]any)
+				for k, v := range lMap {
+					combined[k] = v
+				}
+				for k, v := range rMap {
+					combined[k] = v
+				}
+
+				if qInfo.WhereClause != "" && !evaluateWhereConditionMap(combined, qInfo.WhereClause) {
+					continue
+				}
+
+				row := make(map[string]any)
+				for _, col := range selectedCols {
+					var val any
+					if v, ok := combined[col]; ok {
+						val = v
+					} else {
+						bare := col
+						if idx := strings.Index(col, "."); idx != -1 {
+							bare = col[idx+1:]
+						}
+						if v, ok := combined[bare]; ok {
+							val = v
+						}
+					}
+					row[col] = val
+					if dotIdx := strings.Index(col, "."); dotIdx != -1 {
+						row[col[dotIdx+1:]] = val
+					}
+				}
+				joinedRows = append(joinedRows, row)
+			}
+		} else if qInfo.Join.Type == "LEFT" {
+			combined := make(map[string]any)
+			for k, v := range lMap {
+				combined[k] = v
+			}
+			for _, col := range rightSchema.Columns {
+				combined[col.Name] = nil
+				combined[rightTable+"."+col.Name] = nil
+				if qInfo.Join.Alias != "" {
+					combined[qInfo.Join.Alias+"."+col.Name] = nil
+				}
+			}
+
+			if qInfo.WhereClause != "" && !evaluateWhereConditionMap(combined, qInfo.WhereClause) {
+				continue
+			}
+
+			row := make(map[string]any)
+			for _, col := range selectedCols {
+				var val any
+				if v, ok := combined[col]; ok {
+					val = v
+				} else {
+					bare := col
+					if idx := strings.Index(col, "."); idx != -1 {
+						bare = col[idx+1:]
+					}
+					if v, ok := combined[bare]; ok {
+						val = v
+					}
+				}
+				row[col] = val
+				if dotIdx := strings.Index(col, "."); dotIdx != -1 {
+					row[col[dotIdx+1:]] = val
+				}
+			}
+			joinedRows = append(joinedRows, row)
+		}
+	}
+
+	// 3. Apply ORDER BY
+	if qInfo.OrderByClause != "" && len(joinedRows) > 0 {
+		orderParts := strings.Fields(qInfo.OrderByClause)
+		orderCol := cleanIdentifier(orderParts[0])
+		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
+		sort.Slice(joinedRows, func(i, j int) bool {
+			v1 := fmt.Sprintf("%v", joinedRows[i][orderCol])
+			v2 := fmt.Sprintf("%v", joinedRows[j][orderCol])
+			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
+				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
+					if desc {
+						return n1 > n2
+					}
+					return n1 < n2
+				}
+			}
+			if desc {
+				return v1 > v2
+			}
+			return v1 < v2
+		})
+	}
+
+	// 4. Apply LIMIT
+	if qInfo.LimitCount >= 0 && int64(len(joinedRows)) > qInfo.LimitCount {
+		joinedRows = joinedRows[:qInfo.LimitCount]
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      selectedCols,
+		Rows:         joinedRows,
+		RowsAffected: int64(len(joinedRows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
@@ -1368,3 +1846,73 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 	}
 	return storage.StringValue(s)
 }
+
+func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
+	whereStr = strings.TrimSpace(whereStr)
+	if whereStr == "" {
+		return true
+	}
+
+	ops := []string{"!=", "<>", "<=", ">=", "=", "<", ">", " LIKE "}
+	for _, op := range ops {
+		idx := strings.Index(strings.ToUpper(whereStr), op)
+		if idx != -1 {
+			leftCol := cleanIdentifier(whereStr[:idx])
+			rightVal := strings.TrimSpace(whereStr[idx+len(op):])
+			rightVal = strings.Trim(rightVal, "';\"")
+
+			val, ok := rec[leftCol]
+			if !ok {
+				if dotIdx := strings.Index(leftCol, "."); dotIdx != -1 {
+					val, ok = rec[leftCol[dotIdx+1:]]
+				}
+			}
+			if !ok {
+				return false
+			}
+
+			strVal := fmt.Sprintf("%v", val)
+			switch strings.TrimSpace(op) {
+			case "=":
+				return strings.EqualFold(strVal, rightVal)
+			case "!=", "<>":
+				return !strings.EqualFold(strVal, rightVal)
+			case ">":
+				n1, err1 := strconv.ParseFloat(strVal, 64)
+				n2, err2 := strconv.ParseFloat(rightVal, 64)
+				if err1 == nil && err2 == nil {
+					return n1 > n2
+				}
+				return strVal > rightVal
+			case ">=":
+				n1, err1 := strconv.ParseFloat(strVal, 64)
+				n2, err2 := strconv.ParseFloat(rightVal, 64)
+				if err1 == nil && err2 == nil {
+					return n1 >= n2
+				}
+				return strVal >= rightVal
+			case "<":
+				n1, err1 := strconv.ParseFloat(strVal, 64)
+				n2, err2 := strconv.ParseFloat(rightVal, 64)
+				if err1 == nil && err2 == nil {
+					return n1 < n2
+				}
+				return strVal < rightVal
+			case "<=":
+				n1, err1 := strconv.ParseFloat(strVal, 64)
+				n2, err2 := strconv.ParseFloat(rightVal, 64)
+				if err1 == nil && err2 == nil {
+					return n1 <= n2
+				}
+				return strVal <= rightVal
+			case "LIKE":
+				pat := strings.ReplaceAll(regexp.QuoteMeta(rightVal), "%", ".*")
+				pat = strings.ReplaceAll(pat, "_", ".")
+				matched, _ := regexp.MatchString("(?i)^"+pat+"$", strVal)
+				return matched
+			}
+		}
+	}
+	return true
+}
+

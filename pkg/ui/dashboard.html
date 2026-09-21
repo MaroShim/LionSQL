@@ -601,9 +601,11 @@ END;</textarea>
               let planHtml = '<thead><tr><th>Query Execution Plan Tree</th></tr></thead><tbody><tr><td><pre style="margin:0; font-family:monospace; color:#38bdf8; line-height:1.6; background:transparent; border:none; padding:4px 0;">';
               planHtml += out.rows.map(r => {
                 let line = (r['QUERY PLAN'] || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                line = line.replace(/(Nested Loop)/g, '<span style="color:#f472b6; font-weight:bold;">$1</span>');
+                line = line.replace(/(Hash Join)/g, '<span style="color:#38bdf8; font-weight:bold;">$1</span>');
                 line = line.replace(/(Index Scan)/g, '<span style="color:#a7f3d0; font-weight:bold;">$1</span>');
                 line = line.replace(/(Seq Scan)/g, '<span style="color:#fde68a; font-weight:bold;">$1</span>');
-                line = line.replace(/(Sort|Limit|Filter|Projection)/g, '<span style="color:#c084fc; font-weight:bold;">$1</span>');
+                line = line.replace(/(Sort|Limit|Filter|Projection|Hash)/g, '<span style="color:#c084fc; font-weight:bold;">$1</span>');
                 line = line.replace(/(cost=[^ ]+)/g, '<span style="color:#94a3b8;">$1</span>');
                 line = line.replace(/(actual time=[^ ]+)/g, '<span style="color:#fdba74; font-weight:bold;">$1</span>');
                 return line;

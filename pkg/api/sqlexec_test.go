@@ -300,3 +300,108 @@ func TestSQLExecutor_ExplainAndExplainAnalyze(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_HashJoin_InnerAndLeft(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// Create tables
+	_, _ = server.ExecuteSQL(`CREATE TABLE customers (id INT PRIMARY KEY, name VARCHAR(50), city VARCHAR(50));`)
+	_, _ = server.ExecuteSQL(`CREATE TABLE orders (id INT PRIMARY KEY, cust_id INT, amount INT);`)
+
+	_, _ = server.ExecuteSQL(`INSERT INTO customers (id, name, city) VALUES (1, 'Alice', 'Seoul'), (2, 'Bob', 'Busan'), (3, 'Charlie', 'Incheon');`)
+	_, _ = server.ExecuteSQL(`INSERT INTO orders (id, cust_id, amount) VALUES (101, 1, 500), (102, 1, 300), (103, 2, 700);`)
+
+	// 1. INNER JOIN
+	innerSQL := `SELECT c.name, o.amount FROM customers c INNER JOIN orders o ON c.id = o.cust_id WHERE o.amount >= 500 ORDER BY o.amount DESC;`
+	res, err := server.ExecuteSQL(innerSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("INNER JOIN failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 joined rows, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["name"] != "Bob" || res.Rows[0]["amount"] != int64(700) {
+		t.Errorf("expected Bob with 700 first, got: %+v", res.Rows[0])
+	}
+	if res.Rows[1]["name"] != "Alice" || res.Rows[1]["amount"] != int64(500) {
+		t.Errorf("expected Alice with 500 second, got: %+v", res.Rows[1])
+	}
+
+	// 2. LEFT JOIN
+	leftSQL := `SELECT c.name, o.amount FROM customers c LEFT JOIN orders o ON c.id = o.cust_id ORDER BY c.id ASC;`
+	res, err = server.ExecuteSQL(leftSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("LEFT JOIN failed: %v", err)
+	}
+	// Alice has 2 orders, Bob has 1 order, Charlie has 0 orders -> total 4 rows
+	if len(res.Rows) != 4 {
+		t.Fatalf("expected 4 left joined rows, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	charlieRow := res.Rows[3]
+	if charlieRow["name"] != "Charlie" || charlieRow["amount"] != nil {
+		t.Errorf("expected Charlie with NULL amount, got: %+v", charlieRow)
+	}
+
+	// 3. EXPLAIN Hash Join
+	explainSQL := `EXPLAIN SELECT c.name, o.amount FROM customers c INNER JOIN orders o ON c.id = o.cust_id;`
+	res, err = server.ExecuteSQL(explainSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN Hash Join failed: %v", err)
+	}
+	planText := ""
+	for _, r := range res.Rows {
+		planText += r["QUERY PLAN"].(string) + "\n"
+	}
+	if !strings.Contains(planText, "Hash Join") || !strings.Contains(planText, "Hash") {
+		t.Errorf("expected Hash Join in plan, got:\n%s", planText)
+	}
+}
+
+func TestSQLExecutor_IndexNestedLoopJoin(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// Create tables and index on orders(cust_id)
+	_, _ = server.ExecuteSQL(`CREATE TABLE customers (id INT PRIMARY KEY, name VARCHAR(50));`)
+	_, _ = server.ExecuteSQL(`CREATE TABLE orders (id INT PRIMARY KEY, cust_id INT, item VARCHAR(50));`)
+	_, _ = server.ExecuteSQL(`CREATE INDEX idx_orders_cust ON orders(cust_id);`)
+
+	_, _ = server.ExecuteSQL(`INSERT INTO customers (id, name) VALUES (1, 'Alice'), (2, 'Bob'), (3, 'Charlie');`)
+	_, _ = server.ExecuteSQL(`INSERT INTO orders (id, cust_id, item) VALUES (101, 1, 'Book'), (102, 1, 'Pen'), (103, 2, 'Laptop');`)
+
+	// 1. EXPLAIN shows Nested Loop
+	explainSQL := `EXPLAIN SELECT c.name, o.item FROM customers c JOIN orders o ON c.id = o.cust_id;`
+	res, err := server.ExecuteSQL(explainSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN failed: %v", err)
+	}
+	planText := ""
+	for _, r := range res.Rows {
+		planText += r["QUERY PLAN"].(string) + "\n"
+	}
+	if !strings.Contains(planText, "Nested Loop") || !strings.Contains(planText, "Index Scan using idx_orders_cust on orders") {
+		t.Errorf("expected Nested Loop with Index Scan in plan, got:\n%s", planText)
+	}
+
+	// 2. Execute Nested Loop Join
+	querySQL := `SELECT c.name, o.item FROM customers c JOIN orders o ON c.id = o.cust_id ORDER BY o.id ASC;`
+	res, err = server.ExecuteSQL(querySQL)
+	if err != nil || !res.Success {
+		t.Fatalf("Nested Loop Join query failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 joined rows, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["item"] != "Book" || res.Rows[1]["item"] != "Pen" || res.Rows[2]["item"] != "Laptop" {
+		t.Errorf("unexpected rows returned: %+v", res.Rows)
+	}
+}
+
+
+

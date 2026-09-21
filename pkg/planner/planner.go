@@ -15,18 +15,31 @@ import (
 type NodeType string
 
 const (
-	NodeTableScan  NodeType = "Seq Scan"
-	NodeIndexScan  NodeType = "Index Scan"
-	NodeFilter     NodeType = "Filter"
-	NodeSort       NodeType = "Sort"
-	NodeProjection NodeType = "Projection"
-	NodeLimit      NodeType = "Limit"
+	NodeTableScan   NodeType = "Seq Scan"
+	NodeIndexScan   NodeType = "Index Scan"
+	NodeFilter      NodeType = "Filter"
+	NodeSort        NodeType = "Sort"
+	NodeProjection  NodeType = "Projection"
+	NodeLimit       NodeType = "Limit"
+	NodeHashJoin    NodeType = "Hash Join"
+	NodeHash        NodeType = "Hash"
+	NodeNestedLoop  NodeType = "Nested Loop"
 )
+
+// JoinInfo contains metadata for a multi-table JOIN operation.
+type JoinInfo struct {
+	Type     string // "INNER" or "LEFT"
+	Table    string
+	Alias    string
+	LeftKey  string
+	RightKey string
+}
 
 // PlanNode represents a single step in a query execution plan tree.
 type PlanNode struct {
 	Type             NodeType    `json:"type"`
 	Relation         string      `json:"relation,omitempty"`
+	Alias            string      `json:"alias,omitempty"`
 	IndexName        string      `json:"index_name,omitempty"`
 	IndexCond        string      `json:"index_cond,omitempty"`
 	FilterCond       string      `json:"filter_cond,omitempty"`
@@ -34,6 +47,9 @@ type PlanNode struct {
 	SortOrder        string      `json:"sort_order,omitempty"`
 	LimitCount       int64       `json:"limit_count,omitempty"`
 	Projections      []string    `json:"projections,omitempty"`
+	JoinType         string      `json:"join_type,omitempty"`
+	HashCond         string      `json:"hash_cond,omitempty"`
+	JoinCond         string      `json:"join_cond,omitempty"`
 	StartupCost      float64     `json:"startup_cost"`
 	TotalCost        float64     `json:"total_cost"`
 	EstimatedRows    int64       `json:"estimated_rows"`
@@ -46,6 +62,8 @@ type PlanNode struct {
 type QueryInfo struct {
 	RawQuery      string
 	TableName     string
+	TableAlias    string
+	Join          *JoinInfo
 	Projections   []string
 	WhereClause   string
 	OrderByClause string
@@ -74,14 +92,14 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		cleaned = strings.TrimSpace(cleaned[8:])
 	}
 
-	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+([^\s,;]+)(?:\s+WHERE\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
+	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
 	matches := selectRe.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
 		return nil, fmt.Errorf("invalid SELECT statement for planning: %q", cleaned)
 	}
 
 	projStr := strings.TrimSpace(matches[1])
-	rawTable := strings.TrimSpace(matches[2])
+	fromClause := strings.TrimSpace(matches[2])
 	whereClause := ""
 	if len(matches) > 3 {
 		whereClause = strings.TrimSpace(matches[3])
@@ -95,6 +113,11 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		if n, err := strconv.ParseInt(matches[5], 10, 64); err == nil {
 			limitCount = n
 		}
+	}
+
+	baseTable, baseAlias, joinInfo, err := parseFromAndJoin(fromClause)
+	if err != nil {
+		return nil, err
 	}
 
 	var projections []string
@@ -111,7 +134,9 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 
 	return &QueryInfo{
 		RawQuery:      query,
-		TableName:     rawTable,
+		TableName:     baseTable,
+		TableAlias:    baseAlias,
+		Join:          joinInfo,
 		Projections:   projections,
 		WhereClause:   whereClause,
 		OrderByClause: orderByClause,
@@ -120,8 +145,64 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	}, nil
 }
 
+func parseFromAndJoin(fromClause string) (string, string, *JoinInfo, error) {
+	// Check for JOIN: [INNER | LEFT [OUTER]] JOIN
+	joinRe := regexp.MustCompile(`(?is)^(.*?)\s+(?:(INNER|LEFT(?:\s+OUTER)?)\s+)?JOIN\s+([^\s]+)(?:\s+([a-zA-Z0-9_]+))?\s+ON\s+([^\s=]+)\s*=\s*([^\s=;]+)$`)
+	if m := joinRe.FindStringSubmatch(fromClause); len(m) == 7 {
+		leftPart := strings.TrimSpace(m[1])
+		joinTypeUpper := strings.ToUpper(strings.TrimSpace(m[2]))
+		rightTable := strings.TrimSpace(m[3])
+		rightAlias := strings.TrimSpace(m[4])
+		leftKey := strings.TrimSpace(m[5])
+		rightKey := strings.TrimSpace(m[6])
+
+		jType := "INNER"
+		if strings.HasPrefix(joinTypeUpper, "LEFT") {
+			jType = "LEFT"
+		}
+
+		baseTable, baseAlias := parseTableAndAlias(leftPart)
+		if rightAlias == "" {
+			rightAlias = rightTable
+		}
+
+		return baseTable, baseAlias, &JoinInfo{
+			Type:     jType,
+			Table:    rightTable,
+			Alias:    rightAlias,
+			LeftKey:  leftKey,
+			RightKey: rightKey,
+		}, nil
+	}
+
+	baseTable, baseAlias := parseTableAndAlias(fromClause)
+	return baseTable, baseAlias, nil, nil
+}
+
+func parseTableAndAlias(str string) (string, string) {
+	tokens := strings.Fields(strings.TrimSpace(str))
+	if len(tokens) == 0 {
+		return "", ""
+	}
+	if len(tokens) == 1 {
+		return tokens[0], tokens[0]
+	}
+	if len(tokens) == 2 {
+		return tokens[0], tokens[1]
+	}
+	if len(tokens) == 3 && strings.EqualFold(tokens[1], "AS") {
+		return tokens[0], tokens[2]
+	}
+	return tokens[0], tokens[1]
+}
+
 // BuildPlan produces an optimized PlanNode tree for the given query and schema.
 func (p *Planner) BuildPlan(q *QueryInfo, schema *storage.TableSchema, totalRows int64) *PlanNode {
+	return p.BuildJoinPlan(q, schema, totalRows, nil, 0)
+}
+
+// BuildJoinPlan produces an optimized PlanNode tree considering joins and multiple tables.
+func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, totalRows int64, rightSchema *storage.TableSchema, rightRows int64) *PlanNode {
 	if totalRows < 0 {
 		totalRows = 0
 	}
@@ -133,11 +214,15 @@ func (p *Planner) BuildPlan(q *QueryInfo, schema *storage.TableSchema, totalRows
 	var scanNode *PlanNode
 	usedIndex := false
 
-	// Check if WHERE condition matches an existing index
-	if q.WhereClause != "" && schema != nil {
-		eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_]+)\s*=\s*(.+)$`)
+	// Check if WHERE condition matches an existing index on primary table
+	if q.WhereClause != "" && schema != nil && q.Join == nil {
+		eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
 		if m := eqRe.FindStringSubmatch(q.WhereClause); len(m) == 3 {
-			colName := m[1]
+			rawCol := m[1]
+			if idxDot := strings.Index(rawCol, "."); idxDot != -1 {
+				rawCol = rawCol[idxDot+1:]
+			}
+			colName := rawCol
 			if idx, found := schema.FindIndexByColumn(colName); found {
 				usedIndex = true
 				estRows := int64(1)
@@ -154,6 +239,7 @@ func (p *Planner) BuildPlan(q *QueryInfo, schema *storage.TableSchema, totalRows
 				scanNode = &PlanNode{
 					Type:          NodeIndexScan,
 					Relation:      q.TableName,
+					Alias:         q.TableAlias,
 					IndexName:     idx.Name,
 					IndexCond:     fmt.Sprintf("(%s = %s)", colName, strings.TrimSpace(m[2])),
 					StartupCost:   startupCost,
@@ -172,15 +258,108 @@ func (p *Planner) BuildPlan(q *QueryInfo, schema *storage.TableSchema, totalRows
 		scanNode = &PlanNode{
 			Type:          NodeTableScan,
 			Relation:      q.TableName,
+			Alias:         q.TableAlias,
 			StartupCost:   startupCost,
 			TotalCost:     totalCost,
 			EstimatedRows: estimatedTotal,
 		}
 	}
 
-	currentNode := scanNode
+	var currentNode *PlanNode = scanNode
 
-	// If table scan with where clause (or index scan with additional filter), wrap in Filter
+	// If JOIN is present, choose between Index Nested Loop Join and Hash Join
+	if q.Join != nil {
+		rRows := rightRows
+		if rRows <= 0 {
+			rRows = 1
+		}
+
+		rightCol := q.Join.RightKey
+		if idx := strings.Index(rightCol, "."); idx != -1 {
+			rightCol = rightCol[idx+1:]
+		}
+
+		// Check if inner table has an index on the join key
+		var innerIndex *storage.IndexSchema
+		if rightSchema != nil {
+			if idx, found := rightSchema.FindIndexByColumn(rightCol); found {
+				innerIndex = idx
+			}
+		}
+
+		joinEstRows := estimatedTotal
+		if q.Join.Type == "INNER" {
+			joinEstRows = int64(math.Min(float64(estimatedTotal), float64(rRows)))
+			if joinEstRows < 1 {
+				joinEstRows = 1
+			}
+		}
+
+		if innerIndex != nil {
+			// Strategy: Index Nested Loop Join
+			innerScanNode := &PlanNode{
+				Type:          NodeIndexScan,
+				Relation:      q.Join.Table,
+				Alias:         q.Join.Alias,
+				IndexName:     innerIndex.Name,
+				IndexCond:     fmt.Sprintf("(%s = %s)", innerIndex.Columns[0], q.Join.LeftKey),
+				StartupCost:   0.25,
+				TotalCost:     0.35,
+				EstimatedRows: 1,
+			}
+
+			nlStartupCost := scanNode.StartupCost + 0.25
+			nlTotalCost := scanNode.TotalCost + float64(estimatedTotal)*0.06
+
+			nlNode := &PlanNode{
+				Type:          NodeNestedLoop,
+				JoinType:      q.Join.Type,
+				JoinCond:      fmt.Sprintf("(%s = %s)", q.Join.LeftKey, q.Join.RightKey),
+				StartupCost:   nlStartupCost,
+				TotalCost:     nlTotalCost,
+				EstimatedRows: joinEstRows,
+				Children:      []*PlanNode{scanNode, innerScanNode},
+			}
+			currentNode = nlNode
+		} else {
+			// Strategy: Hash Join
+			rScanCost := float64(rRows)*0.01 + 1.0
+			rScanNode := &PlanNode{
+				Type:          NodeTableScan,
+				Relation:      q.Join.Table,
+				Alias:         q.Join.Alias,
+				StartupCost:   0.0,
+				TotalCost:     rScanCost,
+				EstimatedRows: rRows,
+			}
+
+			hashStartupCost := rScanCost
+			hashTotalCost := rScanCost + float64(rRows)*0.01
+			hashNode := &PlanNode{
+				Type:          NodeHash,
+				StartupCost:   hashStartupCost,
+				TotalCost:     hashTotalCost,
+				EstimatedRows: rRows,
+				Children:      []*PlanNode{rScanNode},
+			}
+
+			joinStartupCost := hashTotalCost
+			joinTotalCost := joinStartupCost + scanNode.TotalCost + float64(estimatedTotal)*0.005
+
+			hashJoinNode := &PlanNode{
+				Type:          NodeHashJoin,
+				JoinType:      q.Join.Type,
+				HashCond:      fmt.Sprintf("(%s = %s)", q.Join.LeftKey, q.Join.RightKey),
+				StartupCost:   joinStartupCost,
+				TotalCost:     joinTotalCost,
+				EstimatedRows: joinEstRows,
+				Children:      []*PlanNode{scanNode, hashNode},
+			}
+			currentNode = hashJoinNode
+		}
+	}
+
+	// Filter Node
 	if q.WhereClause != "" && !usedIndex {
 		filterEstRows := int64(math.Ceil(float64(currentNode.EstimatedRows) * 0.33))
 		if filterEstRows < 1 {
@@ -283,10 +462,32 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 	sb.WriteString(string(node.Type))
 
 	switch node.Type {
+	case NodeNestedLoop:
+		if node.JoinType == "LEFT" {
+			sb.WriteString(" (Left)")
+		}
+		if node.JoinCond != "" {
+			sb.WriteString(fmt.Sprintf(" (join_cond=%s)", node.JoinCond))
+		}
+	case NodeHashJoin:
+		if node.JoinType == "LEFT" {
+			sb.WriteString(" (Left)")
+		}
+		if node.HashCond != "" {
+			sb.WriteString(fmt.Sprintf(" (hash_cond=%s)", node.HashCond))
+		}
+	case NodeHash:
+		// Hash intermediate node
 	case NodeTableScan:
 		sb.WriteString(fmt.Sprintf(" on %s", node.Relation))
+		if node.Alias != "" && node.Alias != node.Relation {
+			sb.WriteString(fmt.Sprintf(" %s", node.Alias))
+		}
 	case NodeIndexScan:
 		sb.WriteString(fmt.Sprintf(" using %s on %s", node.IndexName, node.Relation))
+		if node.Alias != "" && node.Alias != node.Relation {
+			sb.WriteString(fmt.Sprintf(" %s", node.Alias))
+		}
 	case NodeSort:
 		sb.WriteString(fmt.Sprintf(" (sort_key=%s %s)", node.SortKey, node.SortOrder))
 	case NodeLimit:
