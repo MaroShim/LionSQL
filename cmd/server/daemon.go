@@ -23,6 +23,7 @@ func handleDaemonCommands(
 	logFile string,
 	httpAddr string,
 	pgAddr string,
+	tdsAddr string,
 	engineType string,
 ) bool {
 	if pidFile == "" {
@@ -34,7 +35,7 @@ func handleDaemonCommands(
 
 	// 1. Status Command
 	if statusFlag {
-		checkDaemonStatus(pidFile, logFile, httpAddr, pgAddr)
+		checkDaemonStatus(pidFile, logFile, httpAddr, pgAddr, tdsAddr)
 		return true
 	}
 
@@ -49,13 +50,13 @@ func handleDaemonCommands(
 		fmt.Println("[SQLion] Restarting daemon...")
 		stopDaemon(pidFile)
 		time.Sleep(500 * time.Millisecond)
-		startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, engineType)
+		startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType)
 		return true
 	}
 
 	// 4. Start Daemon Command
 	if daemonFlag {
-		startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, engineType)
+		startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType)
 		return true
 	}
 
@@ -86,7 +87,7 @@ func isProcessAlive(pid int) bool {
 	return false
 }
 
-func checkDaemonStatus(pidFile, logFile, httpAddr, pgAddr string) {
+func checkDaemonStatus(pidFile, logFile, httpAddr, pgAddr, tdsAddr string) {
 	pid, err := readPidFile(pidFile)
 	if err != nil || !isProcessAlive(pid) {
 		if err == nil {
@@ -105,6 +106,7 @@ func checkDaemonStatus(pidFile, logFile, httpAddr, pgAddr string) {
 	fmt.Printf(" Log File:    %s\n", logFile)
 	fmt.Printf(" Web UI:      http://%s/_/\n", httpAddr)
 	fmt.Printf(" Postgres:    psql -h 127.0.0.1 -p %s\n", strings.Split(pgAddr, ":")[1])
+	fmt.Printf(" TDS / MSSQL: sqlcmd -S 127.0.0.1,%s\n", strings.Split(tdsAddr, ":")[1])
 	fmt.Println("============================================================")
 }
 
@@ -156,7 +158,7 @@ func stopDaemon(pidFile string) {
 	fmt.Printf("[SQLion] Daemon (PID %d) stopped successfully.\n", pid)
 }
 
-func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, engineType string) {
+func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineType string) {
 	// Check if already running
 	if pid, err := readPidFile(pidFile); err == nil && isProcessAlive(pid) {
 		fmt.Printf("[SQLion] Daemon is already running with PID %d.\n", pid)
@@ -228,6 +230,7 @@ func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, engineType string)
 	fmt.Printf(" PID File:         %s\n", pidFile)
 	fmt.Printf(" Web Admin UI:     http://%s/_/\n", httpAddr)
 	fmt.Printf(" PostgreSQL Wire:  psql -h 127.0.0.1 -p %s\n", strings.Split(pgAddr, ":")[1])
+	fmt.Printf(" TDS / MSSQL:      sqlcmd -S 127.0.0.1,%s\n", strings.Split(tdsAddr, ":")[1])
 	fmt.Println("------------------------------------------------------------")
 	fmt.Println(" Commands:")
 	fmt.Println("   Check status:   ./bin/server -status")

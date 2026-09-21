@@ -19,11 +19,13 @@ import (
 	"sqlion/pkg/storage/memengine"
 	"sqlion/pkg/storage/wiredtiger"
 	"sqlion/pkg/wire"
+	"sqlion/pkg/wire/tds"
 )
 
 func main() {
 	httpAddr := flag.String("http", "127.0.0.1:8090", "HTTP service and admin dashboard address")
 	pgAddr := flag.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address")
+	tdsAddr := flag.String("tds", "127.0.0.1:1433", "TDS (MSSQL) wire protocol listen address")
 	dataDir := flag.String("dir", "data", "Data directory for database files (default: data)")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
@@ -56,6 +58,7 @@ func main() {
 			*logFile,
 			*httpAddr,
 			*pgAddr,
+			*tdsAddr,
 			*engineType,
 		) {
 			return
@@ -104,6 +107,12 @@ func main() {
 	}
 	defer wireServer.Close()
 
+	tdsServer := tds.NewServer(*tdsAddr, cat, eng)
+	if err := tdsServer.Start(); err != nil {
+		log.Fatalf("Failed to start TDS wire protocol listener: %v", err)
+	}
+	defer tdsServer.Close()
+
 	// Graceful shutdown channel
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
@@ -115,6 +124,7 @@ func main() {
 		fmt.Printf(" [Web Dashboard]  http://%s/_/\n", *httpAddr)
 		fmt.Printf(" [HTTP API]       http://%s/api/health\n", *httpAddr)
 		fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (DBeaver / psql)\n", strings.Split(*pgAddr, ":")[1])
+		fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (DBeaver / Azure Data Studio / pymssql)\n", strings.Split(*tdsAddr, ":")[1])
 		fmt.Printf(" [Data Directory] %s\n", *dataDir)
 		fmt.Printf(" [Storage Engine] %s\n", *engineType)
 		fmt.Println("------------------------------------------------------------")
@@ -131,6 +141,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
+	_ = tdsServer.Close()
 	_ = wireServer.Close()
 	_ = httpServer.Shutdown(ctx)
 	_ = httpServer.Close()
