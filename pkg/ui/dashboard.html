@@ -191,25 +191,65 @@
     <!-- View: Tables -->
     <div id="view-tables">
       <div class="header-bar">
-        <h2>Tables & Data Records</h2>
-        <button class="btn" onclick="seedSampleData()">Seed Sample Accounts Table</button>
+        <div>
+          <h2>Tables & Schema Studio</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Inspect table schema structures, column constraints, DDL definitions, and live records.</div>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" onclick="openInQueryStudio()">Query in Studio</button>
+          <button class="btn" onclick="seedSampleData()">Seed Sample Accounts</button>
+        </div>
       </div>
 
-      <div style="margin-top: 20px; display: flex; gap: 15px;">
-        <select id="table-select" style="max-width: 300px;" onchange="loadRecords()">
+      <div style="margin-top: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+        <select id="table-select" style="max-width: 280px; margin-bottom: 0;" onchange="loadCurrentTable()">
           <option value="">-- Select Table --</option>
         </select>
         <button class="btn btn-secondary" onclick="loadTables()">Refresh</button>
+
+        <div style="display: flex; gap: 6px; margin-left: auto;">
+          <button id="btn-sub-records" class="btn" onclick="switchTableSubView('records')">Data Records</button>
+          <button id="btn-sub-schema" class="btn btn-secondary" onclick="switchTableSubView('schema')">Schema & DDL</button>
+        </div>
       </div>
 
-      <div class="card" style="margin-top: 15px;">
-        <h3 id="current-table-title" style="font-size: 1.1rem; color: var(--text-muted);">Records</h3>
-        <div style="overflow-x: auto;">
+      <!-- Subview: Data Records -->
+      <div id="subview-records" class="card" style="margin-top: 15px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <h3 id="current-table-title" style="font-size: 1.1rem; color: var(--text);">Records</h3>
+          <span id="records-count-badge" style="font-size: 0.8rem; color: var(--text-muted);">0 records</span>
+        </div>
+        <div style="overflow-x: auto; max-height: 500px;">
           <table id="records-table">
             <thead><tr><th>No records loaded</th></tr></thead>
             <tbody></tbody>
           </table>
         </div>
+      </div>
+
+      <!-- Subview: Schema & DDL -->
+      <div id="subview-schema" class="card" style="margin-top: 15px; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h3 id="schema-table-title" style="font-size: 1.1rem; color: var(--text);">Schema Structure</h3>
+          <span id="schema-columns-count" style="font-size: 0.8rem; color: var(--text-muted);">0 columns</span>
+        </div>
+        <div style="overflow-x: auto;">
+          <table id="schema-columns-table">
+            <thead>
+              <tr>
+                <th style="width: 50px;">#</th>
+                <th>Column Name</th>
+                <th>Data Type</th>
+                <th>Key Constraint</th>
+                <th>Nullability</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <h4 style="font-size: 0.85rem; margin-top: 20px; margin-bottom: 8px; color: var(--text-muted);">Auto-Generated DDL Definition:</h4>
+        <pre id="schema-ddl-box" class="console-box" style="color: #a5f3fc; max-height: 180px;">-- DDL preview will appear here</pre>
       </div>
     </div>
 
@@ -324,6 +364,8 @@ END;</textarea>
 
   <script>
     let proceduresList = [];
+    let tablesList = [];
+    let currentTableSubView = 'records';
 
     function switchView(view) {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -342,6 +384,85 @@ END;</textarea>
         loadProcedures();
       } else if (view === 'query') {
         document.getElementById('sql-query-input').focus();
+      }
+    }
+
+    function switchTableSubView(subView) {
+      currentTableSubView = subView;
+      const recBtn = document.getElementById('btn-sub-records');
+      const schBtn = document.getElementById('btn-sub-schema');
+      const recCard = document.getElementById('subview-records');
+      const schCard = document.getElementById('subview-schema');
+
+      if (subView === 'records') {
+        recBtn.className = 'btn';
+        schBtn.className = 'btn btn-secondary';
+        recCard.style.display = 'block';
+        schCard.style.display = 'none';
+        loadRecords();
+      } else {
+        recBtn.className = 'btn btn-secondary';
+        schBtn.className = 'btn';
+        recCard.style.display = 'none';
+        schCard.style.display = 'block';
+        renderTableSchema();
+      }
+    }
+
+    function openInQueryStudio() {
+      const tbl = document.getElementById('table-select').value;
+      if (tbl) {
+        document.getElementById('sql-query-input').value = `SELECT * FROM ${tbl} LIMIT 50;`;
+      }
+      switchView('query');
+    }
+
+    function loadCurrentTable() {
+      loadRecords();
+      renderTableSchema();
+    }
+
+    function renderTableSchema() {
+      const tblName = document.getElementById('table-select').value;
+      if (!tblName) return;
+      const t = tablesList.find(item => item.name === tblName);
+      if (!t) return;
+
+      document.getElementById('schema-table-title').innerText = 'Table Schema: ' + tblName;
+      document.getElementById('schema-columns-count').innerText = `${t.columns.length} column(s)`;
+
+      const tbody = document.querySelector('#schema-columns-table tbody');
+      if (!t.columns || t.columns.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No columns defined</td></tr>';
+        return;
+      }
+
+      let rowsHtml = '';
+      t.columns.forEach((col, idx) => {
+        const pkBadge = col.primary_key 
+          ? '<span style="background:#854d0e; color:#fef08a; font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:700;">PRIMARY KEY</span>' 
+          : '<span style="color:var(--text-muted); font-size:0.8rem;">-</span>';
+        const nullBadge = col.nullable 
+          ? '<span style="color:#94a3b8; font-size:0.8rem;">Nullable</span>' 
+          : '<span style="background:#1e3a8a; color:#93c5fd; font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:600;">NOT NULL</span>';
+        const typeBadge = `<span style="background:#0f172a; border:1px solid #334155; color:#38bdf8; font-family:monospace; font-size:0.8rem; padding:2px 6px; border-radius:4px;">${col.type}</span>`;
+
+        rowsHtml += `<tr>
+          <td style="color:var(--text-muted); font-size:0.8rem;">${idx + 1}</td>
+          <td style="font-weight:600; color:#f8fafc;">${col.name}</td>
+          <td>${typeBadge}</td>
+          <td>${pkBadge}</td>
+          <td>${nullBadge}</td>
+        </tr>`;
+      });
+      tbody.innerHTML = rowsHtml;
+
+      // DDL preview
+      const ddlBox = document.getElementById('schema-ddl-box');
+      if (t.ddl) {
+        ddlBox.innerText = t.ddl;
+      } else {
+        ddlBox.innerText = `-- No DDL available for ${tblName}`;
       }
     }
 
@@ -483,6 +604,7 @@ END;</textarea>
       try {
         const res = await fetch('/api/tables');
         const data = await res.json();
+        tablesList = data;
         const sel = document.getElementById('table-select');
         const prevVal = sel.value;
         sel.innerHTML = '<option value="">-- Select Table --</option>';
@@ -499,9 +621,11 @@ END;</textarea>
           } else {
             sel.value = data[0].name;
           }
-          loadRecords();
+          loadCurrentTable();
         } else {
           document.getElementById('records-table').innerHTML = '<thead><tr><th>No tables found</th></tr></thead><tbody></tbody>';
+          document.querySelector('#schema-columns-table tbody').innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No tables found</td></tr>';
+          document.getElementById('schema-ddl-box').innerText = '-- No tables created';
         }
       } catch (err) {
         console.error(err);
@@ -516,10 +640,13 @@ END;</textarea>
         const res = await fetch(`/api/tables/${tbl}/records`);
         const data = await res.json();
         const tableEl = document.getElementById('records-table');
+        const countBadge = document.getElementById('records-count-badge');
         if (!data.records || data.records.length === 0) {
           tableEl.innerHTML = '<thead><tr><th>No records found in ' + tbl + '</th></tr></thead><tbody></tbody>';
+          if (countBadge) countBadge.innerText = '0 records';
           return;
         }
+        if (countBadge) countBadge.innerText = `${data.records.length} record(s)`;
         const cols = Object.keys(data.records[0]);
         let thead = '<tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr>';
         let tbody = data.records.map(r => {

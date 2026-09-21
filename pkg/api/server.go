@@ -74,6 +74,7 @@ func (s *Server) routes() {
 
 	// Tables API
 	s.mux.HandleFunc("GET /api/tables", s.handleListTables)
+	s.mux.HandleFunc("GET /api/tables/{name}/schema", s.handleGetTableSchema)
 	s.mux.HandleFunc("GET /api/tables/{name}/records", s.handleGetRecords)
 
 	// Stored Procedures API
@@ -109,13 +110,70 @@ func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+type ColumnDTO struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	PrimaryKey bool   `json:"primary_key"`
+	Nullable   bool   `json:"nullable"`
+}
+
+type TableSchemaDTO struct {
+	Name    string      `json:"name"`
+	Columns []ColumnDTO `json:"columns"`
+	DDL     string      `json:"ddl"`
+}
+
+func toTableDTO(t *storage.TableSchema) TableSchemaDTO {
+	if t == nil {
+		return TableSchemaDTO{}
+	}
+	cols := make([]ColumnDTO, len(t.Columns))
+	var colDefs []string
+	for i, c := range t.Columns {
+		typeName := c.Type.String()
+		cols[i] = ColumnDTO{
+			Name:       c.Name,
+			Type:       typeName,
+			PrimaryKey: c.PrimaryKey,
+			Nullable:   c.Nullable,
+		}
+		def := fmt.Sprintf("    %s %s", c.Name, typeName)
+		if c.PrimaryKey {
+			def += " PRIMARY KEY"
+		} else if !c.Nullable {
+			def += " NOT NULL"
+		}
+		colDefs = append(colDefs, def)
+	}
+	ddl := fmt.Sprintf("CREATE TABLE %s (\n%s\n);", t.Name, strings.Join(colDefs, ",\n"))
+	return TableSchemaDTO{
+		Name:    t.Name,
+		Columns: cols,
+		DDL:     ddl,
+	}
+}
+
 func (s *Server) handleListTables(w http.ResponseWriter, r *http.Request) {
 	tables, err := s.engine.ListTables()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, tables)
+	dtos := make([]TableSchemaDTO, len(tables))
+	for i, t := range tables {
+		dtos[i] = toTableDTO(t)
+	}
+	writeJSON(w, http.StatusOK, dtos)
+}
+
+func (s *Server) handleGetTableSchema(w http.ResponseWriter, r *http.Request) {
+	tableName := r.PathValue("name")
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toTableDTO(schema))
 }
 
 func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
