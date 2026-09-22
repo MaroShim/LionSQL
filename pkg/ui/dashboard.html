@@ -463,6 +463,7 @@
             <span style="font-size: 0.75rem; color: var(--text-muted);">Double-click any cell to edit inline (Enter to save, Esc to cancel)</span>
           </div>
           <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem; background: #312e81; color: #c7d2fe; border-color: #4f46e5;" onclick="openAPIPreviewModal()">&lt;/&gt; API Preview</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('csv')">Export CSV</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('json')">Export JSON</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="openImportCSVModal()">Import CSV</button>
@@ -746,6 +747,48 @@ END;</textarea>
       <div style="display: flex; gap: 10px; margin-top: 20px;">
         <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeImportCSVModal()">Cancel</button>
         <button id="btn-submit-import" type="button" class="btn" style="flex: 1; background: var(--success);" disabled onclick="submitCSVImport()">Bulk Insert Records</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Developer API Preview Modal Overlay -->
+  <div id="api-preview-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 720px; width: 92%;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 1.15rem; font-weight: 700; color: #818cf8;">Developer API Preview</h3>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Ready-to-use code snippets for integrating with SQLion REST API.</div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeAPIPreviewModal()">✕</button>
+      </div>
+
+      <!-- Endpoint Selector Tabs -->
+      <div style="display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap;">
+        <button id="api-ep-list" class="btn btn-secondary active-lang" style="padding: 5px 10px; font-size: 0.78rem;" onclick="selectPreviewEndpoint('list')">GET /api/tables/{name}/records</button>
+        <button id="api-ep-get" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.78rem;" onclick="selectPreviewEndpoint('get')">GET /api/tables/{name}/records/{id}</button>
+        <button id="api-ep-create" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.78rem;" onclick="selectPreviewEndpoint('create')">POST /api/tables/{name}/records</button>
+        <button id="api-ep-sql" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.78rem;" onclick="selectPreviewEndpoint('sql')">POST /api/query (T-SQL)</button>
+      </div>
+
+      <!-- Language Selector Tabs -->
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+        <div style="display: flex; gap: 6px;">
+          <button id="api-lang-curl" class="btn btn-secondary active-lang" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('curl')">cURL</button>
+          <button id="api-lang-js" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('js')">JavaScript</button>
+          <button id="api-lang-python" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('python')">Python</button>
+          <button id="api-lang-go" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('go')">Go</button>
+        </div>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="copyAPISnippet()">📋 Copy Code</button>
+      </div>
+
+      <!-- Snippet Code Box -->
+      <div style="position: relative;">
+        <pre id="api-code-snippet" style="background: #090d16; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: monospace; font-size: 0.8rem; color: #e2e8f0; overflow-x: auto; max-height: 280px; white-space: pre-wrap; line-height: 1.4;"></pre>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
+        <span style="font-size: 0.75rem; color: #64748b;">API Key: <code id="api-preview-key-hint" style="color: #93c5fd;">SQLION_API_KEY</code> (Bearer token)</span>
+        <button type="button" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="closeAPIPreviewModal()">Close</button>
       </div>
     </div>
   </div>
@@ -2305,6 +2348,127 @@ END;</textarea>
             }
           };
         } catch (_) {}
+      }
+    }
+
+    // --- Developer API Preview Modal & Code Generator ---
+    let previewEndpoint = 'list';
+    let previewLang = 'curl';
+
+    function openAPIPreviewModal() {
+      const modal = document.getElementById('api-preview-modal');
+      if (modal) {
+        modal.style.display = 'flex';
+        renderAPICodeSnippet();
+      }
+    }
+
+    function closeAPIPreviewModal() {
+      const modal = document.getElementById('api-preview-modal');
+      if (modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    function selectPreviewEndpoint(ep) {
+      previewEndpoint = ep;
+      ['list', 'get', 'create', 'sql'].forEach(k => {
+        const btn = document.getElementById(`api-ep-${k}`);
+        if (btn) {
+          if (k === ep) {
+            btn.style.background = '#3b82f6';
+            btn.style.color = '#fff';
+            btn.style.fontWeight = '600';
+          } else {
+            btn.style.background = '#334155';
+            btn.style.color = 'var(--text)';
+            btn.style.fontWeight = 'normal';
+          }
+        }
+      });
+      renderAPICodeSnippet();
+    }
+
+    function selectPreviewLang(lang) {
+      previewLang = lang;
+      ['curl', 'js', 'python', 'go'].forEach(k => {
+        const btn = document.getElementById(`api-lang-${k}`);
+        if (btn) {
+          if (k === lang) {
+            btn.style.background = '#4f46e5';
+            btn.style.color = '#fff';
+            btn.style.fontWeight = '600';
+          } else {
+            btn.style.background = '#334155';
+            btn.style.color = 'var(--text)';
+            btn.style.fontWeight = 'normal';
+          }
+        }
+      });
+      renderAPICodeSnippet();
+    }
+
+    function renderAPICodeSnippet() {
+      const currentTable = document.getElementById('table-select')?.value || 'users';
+      const host = window.location.origin || 'http://localhost:8090';
+      const codeEl = document.getElementById('api-code-snippet');
+      if (!codeEl) return;
+
+      let code = '';
+
+      if (previewLang === 'curl') {
+        if (previewEndpoint === 'list') {
+          code = `# 1. List records with pagination and search\ncurl -X GET "${host}/api/tables/${currentTable}/records?page=1&limit=30" \\\n  -H "Authorization: Bearer <API_KEY>"`;
+        } else if (previewEndpoint === 'get') {
+          code = `# 2. Get single record by primary key (ID: 1)\ncurl -X GET "${host}/api/tables/${currentTable}/records/1" \\\n  -H "Authorization: Bearer <API_KEY>"`;
+        } else if (previewEndpoint === 'create') {
+          code = `# 3. Insert record into ${currentTable}\ncurl -X POST "${host}/api/tables/${currentTable}/records" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"name": "Alice", "email": "alice@example.com"}'`;
+        } else if (previewEndpoint === 'sql') {
+          code = `# 4. Execute direct T-SQL query via REST\ncurl -X POST "${host}/api/query" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"sql": "SELECT * FROM ${currentTable} WHERE id = 1"}'`;
+        }
+      } else if (previewLang === 'js') {
+        if (previewEndpoint === 'list') {
+          code = `// List records\nconst response = await fetch("${host}/api/tables/${currentTable}/records?page=1&limit=30", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst result = await response.json();\nconsole.log(result.records);`;
+        } else if (previewEndpoint === 'get') {
+          code = `// Get single record\nconst response = await fetch("${host}/api/tables/${currentTable}/records/1", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst record = await response.json();\nconsole.log(record);`;
+        } else if (previewEndpoint === 'create') {
+          code = `// Insert record\nconst response = await fetch("${host}/api/tables/${currentTable}/records", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ name: "Alice", email: "alice@example.com" })\n});\nconst result = await response.json();\nconsole.log(result);`;
+        } else if (previewEndpoint === 'sql') {
+          code = `// Execute T-SQL query\nconst response = await fetch("${host}/api/query", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ sql: "SELECT * FROM ${currentTable}" })\n});\nconst data = await response.json();\nconsole.log(data);`;
+        }
+      } else if (previewLang === 'python') {
+        if (previewEndpoint === 'list') {
+          code = `import requests\n\nurl = "${host}/api/tables/${currentTable}/records"\nheaders = {"Authorization": "Bearer <API_KEY>"}\nparams = {"page": 1, "limit": 30}\n\nres = requests.get(url, headers=headers, params=params)\nprint(res.json())`;
+        } else if (previewEndpoint === 'get') {
+          code = `import requests\n\nurl = "${host}/api/tables/${currentTable}/records/1"\nheaders = {"Authorization": "Bearer <API_KEY>"}\n\nres = requests.get(url, headers=headers)\nprint(res.json())`;
+        } else if (previewEndpoint === 'create') {
+          code = `import requests\n\nurl = "${host}/api/tables/${currentTable}/records"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = {"name": "Alice", "email": "alice@example.com"}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
+        } else if (previewEndpoint === 'sql') {
+          code = `import requests\n\nurl = "${host}/api/query"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = {"sql": "SELECT * FROM ${currentTable}"}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
+        }
+      } else if (previewLang === 'go') {
+        if (previewEndpoint === 'list') {
+          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/tables/${currentTable}/records", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+        } else if (previewEndpoint === 'get') {
+          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/tables/${currentTable}/records/1", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+        } else if (previewEndpoint === 'create') {
+          code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`{"name":"Alice","email":"alice@example.com"}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/tables/${currentTable}/records", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+        } else if (previewEndpoint === 'sql') {
+          code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`{"sql":"SELECT * FROM ${currentTable}"}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/query", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+        }
+      }
+
+      codeEl.textContent = code;
+    }
+
+    function copyAPISnippet() {
+      const codeEl = document.getElementById('api-code-snippet');
+      if (codeEl) {
+        navigator.clipboard.writeText(codeEl.textContent).then(() => {
+          showToast('Code snippet copied to clipboard');
+        }).catch(() => {
+          showToast('Failed to copy code snippet', true);
+        });
       }
     }
 
