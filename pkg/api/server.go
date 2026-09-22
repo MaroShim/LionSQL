@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -469,6 +471,34 @@ func (s *Server) handleGetTableSchema(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 	tableName := r.PathValue("name")
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+
+	// Parse query parameters
+	page := 1
+	if pStr := r.URL.Query().Get("page"); pStr != "" {
+		if p, err := strconv.Atoi(pStr); err == nil && p >= 1 {
+			page = p
+		}
+	}
+
+	perPage := 30
+	if ppStr := r.URL.Query().Get("perPage"); ppStr != "" {
+		if pp, err := strconv.Atoi(ppStr); err == nil && pp > 0 {
+			if pp > 500 {
+				pp = 500
+			}
+			perPage = pp
+		}
+	}
+
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
+	sortParam := strings.TrimSpace(r.URL.Query().Get("sort"))
+
 	session, err := s.engine.NewSession()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -518,9 +548,144 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 		records = append(records, row)
 	}
 
+	// Filter if search keyword is provided
+	if search != "" {
+		searchLower := strings.ToLower(search)
+		filtered := make([]map[string]any, 0, len(records))
+		for _, r := range records {
+			matched := false
+			for _, v := range r {
+				if v == nil {
+					continue
+				}
+				str := fmt.Sprint(v)
+				if strings.Contains(strings.ToLower(str), searchLower) {
+					matched = true
+					break
+				}
+			}
+			if matched {
+				filtered = append(filtered, r)
+			}
+		}
+		records = filtered
+	}
+
+	// Sort if sort parameter is provided
+	if sortParam != "" {
+		sortCol := sortParam
+		isDesc := false
+		if strings.HasPrefix(sortCol, "-") {
+			isDesc = true
+			sortCol = strings.TrimPrefix(sortCol, "-")
+		} else if strings.HasPrefix(sortCol, "+") {
+			sortCol = strings.TrimPrefix(sortCol, "+")
+		}
+
+		var targetCol *storage.Column
+		if schema != nil {
+			for i := range schema.Columns {
+				if strings.EqualFold(schema.Columns[i].Name, sortCol) {
+					targetCol = &schema.Columns[i]
+					sortCol = schema.Columns[i].Name
+					break
+				}
+			}
+		}
+
+		if targetCol != nil {
+			sort.SliceStable(records, func(i, j int) bool {
+				vi, hasI := records[i][sortCol]
+				vj, hasJ := records[j][sortCol]
+				if !hasI || vi == nil {
+					return !isDesc
+				}
+				if !hasJ || vj == nil {
+					return isDesc
+				}
+
+				var less bool
+				switch targetCol.Type {
+				case storage.TypeInt:
+					var iVal, jVal int64
+					switch v := vi.(type) {
+					case int64:
+						iVal = v
+					case int:
+						iVal = int64(v)
+					case float64:
+						iVal = int64(v)
+					}
+					switch v := vj.(type) {
+					case int64:
+						jVal = v
+					case int:
+						jVal = int64(v)
+					case float64:
+						jVal = int64(v)
+					}
+					less = iVal < jVal
+				case storage.TypeFloat:
+					var iVal, jVal float64
+					switch v := vi.(type) {
+					case float64:
+						iVal = v
+					case int64:
+						iVal = float64(v)
+					case int:
+						iVal = float64(v)
+					}
+					switch v := vj.(type) {
+					case float64:
+						jVal = v
+					case int64:
+						jVal = float64(v)
+					case int:
+						jVal = float64(v)
+					}
+					less = iVal < jVal
+				case storage.TypeBool:
+					bi, _ := vi.(bool)
+					bj, _ := vj.(bool)
+					less = !bi && bj
+				default:
+					less = strings.ToLower(fmt.Sprint(vi)) < strings.ToLower(fmt.Sprint(vj))
+				}
+
+				if isDesc {
+					return !less
+				}
+				return less
+			})
+		}
+	}
+
+	// Pagination
+	totalItems := len(records)
+	totalPages := 0
+	if totalItems > 0 {
+		totalPages = (totalItems + perPage - 1) / perPage
+	}
+
+	var pagedRecords []map[string]any
+	start := (page - 1) * perPage
+	if start < totalItems {
+		end := start + perPage
+		if end > totalItems {
+			end = totalItems
+		}
+		pagedRecords = records[start:end]
+	} else {
+		pagedRecords = make([]map[string]any, 0)
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
-		"table":   tableName,
-		"records": records,
+		"table":      tableName,
+		"page":       page,
+		"perPage":    perPage,
+		"totalItems": totalItems,
+		"totalPages": totalPages,
+		"records":    pagedRecords,
 	})
 }
 

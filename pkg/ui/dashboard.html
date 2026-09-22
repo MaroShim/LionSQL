@@ -253,6 +253,21 @@
     .record-row:hover {
       background: rgba(255, 255, 255, 0.03);
     }
+    .sortable-th {
+      cursor: pointer;
+      user-select: none;
+      transition: background 0.15s;
+    }
+    .sortable-th:hover {
+      background: #1e293b !important;
+      color: #fff !important;
+    }
+    .sort-icon {
+      font-size: 0.7rem;
+      margin-left: 5px;
+      color: #38bdf8;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -395,11 +410,40 @@
             <button id="btn-add-row" class="btn" style="background: var(--success); padding: 6px 14px; font-size: 0.8rem;" onclick="openCreateRecordModal()">+ Add Row</button>
           </div>
         </div>
+
+        <!-- Controls Bar: Search & Per-Page -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; gap: 12px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 8px; flex: 1; max-width: 380px;">
+            <input type="text" id="records-search-input" placeholder="Search / filter across fields..." oninput="onSearchInput(this.value)" style="margin: 0; padding: 6px 12px; font-size: 0.85rem;" />
+            <button id="records-search-clear" class="btn btn-secondary" style="display: none; padding: 6px 10px; font-size: 0.8rem;" onclick="clearSearch()">✕</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-muted); margin-left: auto;">
+            <span>Per page:</span>
+            <select id="records-perpage-select" onchange="changePerPage(this.value)" style="width: 75px; margin: 0; padding: 4px 8px; font-size: 0.8rem;">
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="30" selected>30</option>
+              <option value="50">50</option>
+              <option value="100">100</option>
+            </select>
+          </div>
+        </div>
+
         <div style="overflow-x: auto; max-height: 520px;">
           <table id="records-table">
             <thead><tr><th>No records loaded</th></tr></thead>
             <tbody></tbody>
           </table>
+        </div>
+
+        <!-- Pagination Footer -->
+        <div id="records-pagination-bar" style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 0.85rem; color: var(--text-muted); flex-wrap: wrap; gap: 10px;">
+          <div id="records-range-text">Showing 0 - 0 of 0 records</div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <button id="btn-page-prev" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.8rem;" onclick="goToPrevPage()">◀ Prev</button>
+            <span id="records-page-indicator" style="font-weight: 600; color: var(--text);">Page 1 of 1</span>
+            <button id="btn-page-next" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.8rem;" onclick="goToNextPage()">Next ▶</button>
+          </div>
         </div>
       </div>
 
@@ -725,6 +769,13 @@ END;</textarea>
     }
 
     function loadCurrentTable() {
+      recordsCurrentPage = 1;
+      recordsSearchQuery = '';
+      recordsSortColumn = '';
+      const searchInp = document.getElementById('records-search-input');
+      if (searchInp) searchInp.value = '';
+      const clearBtn = document.getElementById('records-search-clear');
+      if (clearBtn) clearBtn.style.display = 'none';
       loadRecords();
       renderTableSchema();
     }
@@ -1089,6 +1140,73 @@ END;</textarea>
       }
     }
 
+    // --- Pagination, Search & Sorting State ---
+    let recordsCurrentPage = 1;
+    let recordsPerPage = 30;
+    let recordsTotalItems = 0;
+    let recordsTotalPages = 1;
+    let recordsSearchQuery = '';
+    let recordsSortColumn = '';
+    let searchDebounceTimer = null;
+
+    function onSearchInput(val) {
+      const clearBtn = document.getElementById('records-search-clear');
+      if (clearBtn) {
+        clearBtn.style.display = val.trim() ? 'inline-block' : 'none';
+      }
+      if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+      searchDebounceTimer = setTimeout(() => {
+        recordsSearchQuery = val.trim();
+        recordsCurrentPage = 1;
+        loadRecords();
+      }, 250);
+    }
+
+    function clearSearch() {
+      const input = document.getElementById('records-search-input');
+      if (input) input.value = '';
+      const clearBtn = document.getElementById('records-search-clear');
+      if (clearBtn) clearBtn.style.display = 'none';
+      recordsSearchQuery = '';
+      recordsCurrentPage = 1;
+      loadRecords();
+    }
+
+    function changePerPage(val) {
+      recordsPerPage = parseInt(val, 10) || 30;
+      recordsCurrentPage = 1;
+      loadRecords();
+    }
+
+    function goToPrevPage() {
+      if (recordsCurrentPage > 1) {
+        recordsCurrentPage--;
+        loadRecords();
+      }
+    }
+
+    function goToNextPage() {
+      if (recordsCurrentPage < recordsTotalPages) {
+        recordsCurrentPage++;
+        loadRecords();
+      }
+    }
+
+    function toggleSort(colName) {
+      if (recordsSortColumn === colName) {
+        // Switch to DESC
+        recordsSortColumn = '-' + colName;
+      } else if (recordsSortColumn === '-' + colName) {
+        // Reset sort
+        recordsSortColumn = '';
+      } else {
+        // Switch to ASC
+        recordsSortColumn = colName;
+      }
+      recordsCurrentPage = 1;
+      loadRecords();
+    }
+
     async function loadRecords() {
       const tbl = document.getElementById('table-select').value;
       if (!tbl) return;
@@ -1106,15 +1224,41 @@ END;</textarea>
         else if (schemaCols.length > 0) pkColName = schemaCols[0].name;
       }
 
+      const queryParams = new URLSearchParams({
+        page: recordsCurrentPage,
+        perPage: recordsPerPage
+      });
+      if (recordsSortColumn) queryParams.set('sort', recordsSortColumn);
+      if (recordsSearchQuery) queryParams.set('search', recordsSearchQuery);
+
       try {
-        const res = await authFetch(`/api/tables/${tbl}/records`);
+        const res = await authFetch(`/api/tables/${tbl}/records?` + queryParams.toString());
         if (!res.ok) return;
         const data = await res.json();
         const tableEl = document.getElementById('records-table');
         const countBadge = document.getElementById('records-count-badge');
 
         const records = data.records || [];
-        if (countBadge) countBadge.innerText = `${records.length} record(s)`;
+        recordsTotalItems = data.totalItems !== undefined ? data.totalItems : records.length;
+        recordsTotalPages = data.totalPages !== undefined ? data.totalPages : 1;
+        recordsCurrentPage = data.page !== undefined ? data.page : 1;
+
+        if (countBadge) countBadge.innerText = `${recordsTotalItems} record(s)`;
+
+        // Update pagination footer bar
+        const startIdx = recordsTotalItems === 0 ? 0 : (recordsCurrentPage - 1) * recordsPerPage + 1;
+        const endIdx = Math.min(recordsCurrentPage * recordsPerPage, recordsTotalItems);
+        const rangeText = document.getElementById('records-range-text');
+        if (rangeText) rangeText.innerText = `Showing ${startIdx} - ${endIdx} of ${recordsTotalItems} records`;
+
+        const pageIndicator = document.getElementById('records-page-indicator');
+        if (pageIndicator) pageIndicator.innerText = `Page ${recordsCurrentPage} of ${recordsTotalPages || 1}`;
+
+        const prevBtn = document.getElementById('btn-page-prev');
+        if (prevBtn) prevBtn.disabled = (recordsCurrentPage <= 1);
+
+        const nextBtn = document.getElementById('btn-page-next');
+        if (nextBtn) nextBtn.disabled = (recordsCurrentPage >= recordsTotalPages);
 
         // Determine column list
         let cols = [];
@@ -1129,7 +1273,7 @@ END;</textarea>
           return;
         }
 
-        // Header with master checkbox and column type tags
+        // Header with master checkbox and clickable column type tags & sort icons
         let thead = '<tr>';
         thead += '<th style="width: 36px; text-align: center;"><input type="checkbox" id="select-all-records" onchange="toggleSelectAllRecords(this)"></th>';
         cols.forEach(c => {
@@ -1138,16 +1282,23 @@ END;</textarea>
           if (colDef) {
             tagHtml = `<span class="col-header-tag ${colDef.primary_key ? 'col-pk-tag' : ''}">${colDef.type}</span>`;
           }
-          thead += `<th>${escapeHtml(c)}${tagHtml}</th>`;
+          let sortIcon = '';
+          if (recordsSortColumn === c) {
+            sortIcon = '<span class="sort-icon">▲</span>';
+          } else if (recordsSortColumn === '-' + c) {
+            sortIcon = '<span class="sort-icon">▼</span>';
+          }
+          thead += `<th class="sortable-th" onclick="toggleSort('${escapeHtml(c)}')" title="Click to sort by ${escapeHtml(c)}">${escapeHtml(c)}${tagHtml}${sortIcon}</th>`;
         });
         thead += '</tr>';
 
         // Body
         let tbody = '';
         if (records.length === 0) {
-          tbody = `<tr><td colspan="${cols.length + 1}" style="text-align:center; padding: 24px; color:var(--text-muted);">
-            No records found in <strong>${escapeHtml(tbl)}</strong>. Click <strong>+ Add Row</strong> above to insert data.
-          </td></tr>`;
+          const emptyMsg = recordsSearchQuery 
+            ? `No records found matching "<strong>${escapeHtml(recordsSearchQuery)}</strong>".`
+            : `No records found in <strong>${escapeHtml(tbl)}</strong>. Click <strong>+ Add Row</strong> above to insert data.`;
+          tbody = `<tr><td colspan="${cols.length + 1}" style="text-align:center; padding: 24px; color:var(--text-muted);">${emptyMsg}</td></tr>`;
         } else {
           tbody = records.map(r => {
             const pkVal = r[pkColName] !== undefined && r[pkColName] !== null ? r[pkColName] : '';

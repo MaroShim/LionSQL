@@ -1410,6 +1410,11 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 	for _, gKey := range groupOrder {
 		bucket := groups[gKey]
 		aggRow := make(map[string]any)
+		if len(bucket.rows) > 0 {
+			for k, v := range bucket.rows[0] {
+				aggRow[k] = v
+			}
+		}
 		for k, v := range bucket.keys {
 			aggRow[k] = v
 		}
@@ -1565,24 +1570,32 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 			continue
 		}
 
-		// Construct final projected row matching colHeaders
-		finalRow := make(map[string]any)
-		for _, h := range colHeaders {
-			finalRow[h] = aggRow[h]
-		}
-		aggRows = append(aggRows, finalRow)
+		// Collect aggregated row
+		aggRows = append(aggRows, aggRow)
 	}
 
 	// 5. Apply ORDER BY
 	if qInfo.OrderByClause != "" && len(aggRows) > 0 {
 		orderParts := strings.Fields(qInfo.OrderByClause)
 		orderCol := cleanIdentifier(orderParts[0])
+		bareCol := orderCol
+		if idx := strings.Index(bareCol, "."); idx != -1 {
+			bareCol = bareCol[idx+1:]
+		}
 		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
-		sort.Slice(aggRows, func(i, j int) bool {
-			v1 := fmt.Sprintf("%v", aggRows[i][orderCol])
-			v2 := fmt.Sprintf("%v", aggRows[j][orderCol])
-			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
-				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
+		sort.SliceStable(aggRows, func(i, j int) bool {
+			v1, ok1 := aggRows[i][orderCol]
+			if !ok1 || v1 == nil {
+				v1 = aggRows[i][bareCol]
+			}
+			v2, ok2 := aggRows[j][orderCol]
+			if !ok2 || v2 == nil {
+				v2 = aggRows[j][bareCol]
+			}
+			s1 := fmt.Sprintf("%v", v1)
+			s2 := fmt.Sprintf("%v", v2)
+			if n1, err1 := strconv.ParseFloat(s1, 64); err1 == nil {
+				if n2, err2 := strconv.ParseFloat(s2, 64); err2 == nil {
 					if desc {
 						return n1 > n2
 					}
@@ -1590,9 +1603,9 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 				}
 			}
 			if desc {
-				return v1 > v2
+				return s1 > s2
 			}
-			return v1 < v2
+			return s1 < s2
 		})
 	}
 
@@ -1601,12 +1614,22 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 		aggRows = aggRows[:qInfo.LimitCount]
 	}
 
+	// 7. Project final rows strictly to colHeaders
+	finalRows := make([]map[string]any, len(aggRows))
+	for i, r := range aggRows {
+		fr := make(map[string]any, len(colHeaders))
+		for _, h := range colHeaders {
+			fr[h] = r[h]
+		}
+		finalRows[i] = fr
+	}
+
 	return &QueryResult{
 		Success:      true,
 		Command:      "SELECT",
 		Columns:      colHeaders,
-		Rows:         aggRows,
-		RowsAffected: int64(len(aggRows)),
+		Rows:         finalRows,
+		RowsAffected: int64(len(finalRows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }

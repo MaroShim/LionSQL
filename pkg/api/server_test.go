@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -514,4 +515,138 @@ func TestAPI_TableAndRecordCRUD(t *testing.T) {
 		t.Fatalf("Drop table failed: %d (%s)", rec.Code, rec.Body.String())
 	}
 }
+
+func TestAPI_RecordsSearchSortPagination(t *testing.T) {
+	srv := setupTestServer()
+
+	// 1. Create table 'items'
+	tablePayload, _ := json.Marshal(map[string]any{
+		"name": "items",
+		"columns": []map[string]any{
+			{"name": "id", "type": "INT", "primary_key": true, "nullable": false},
+			{"name": "title", "type": "VARCHAR", "primary_key": false, "nullable": false},
+			{"name": "priority", "type": "INT", "primary_key": false, "nullable": false},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/tables", bytes.NewReader(tablePayload))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("Create table failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// 2. Insert 5 records
+	testItems := []struct {
+		id       int
+		title    string
+		priority int
+	}{
+		{1, "Apple Pie", 30},
+		{2, "Banana Bread", 10},
+		{3, "Cherry Tart", 50},
+		{4, "Date Cake", 20},
+		{5, "Egg Custard", 40},
+	}
+
+	for _, item := range testItems {
+		payload, _ := json.Marshal(map[string]any{
+			"id":       item.id,
+			"title":    item.title,
+			"priority": item.priority,
+		})
+		req = httptest.NewRequest(http.MethodPost, "/api/tables/items/records", bytes.NewReader(payload))
+		rec = httptest.NewRecorder()
+		srv.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("Insert record %d failed: %d (%s)", item.id, rec.Code, rec.Body.String())
+		}
+	}
+
+	// 3. Test Search
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/items/records?search=Pie", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Search failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+	var searchResp struct {
+		TotalItems int              `json:"totalItems"`
+		Records    []map[string]any `json:"records"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&searchResp)
+	if searchResp.TotalItems != 1 || len(searchResp.Records) != 1 {
+		t.Fatalf("Expected 1 match for 'Pie', got %d", searchResp.TotalItems)
+	}
+	if searchResp.Records[0]["title"] != "Apple Pie" {
+		t.Fatalf("Expected title 'Apple Pie', got %v", searchResp.Records[0]["title"])
+	}
+
+	// 4. Test Sorting ASC
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/items/records?sort=priority", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	var sortAscResp struct {
+		Records []map[string]any `json:"records"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&sortAscResp)
+	if len(sortAscResp.Records) != 5 {
+		t.Fatalf("Expected 5 records, got %d", len(sortAscResp.Records))
+	}
+	// First item should have priority 10 (Banana Bread)
+	if fmt.Sprint(sortAscResp.Records[0]["priority"]) != "10" {
+		t.Fatalf("Expected lowest priority 10 first, got %v", sortAscResp.Records[0]["priority"])
+	}
+	// Last item should have priority 50 (Cherry Tart)
+	if fmt.Sprint(sortAscResp.Records[4]["priority"]) != "50" {
+		t.Fatalf("Expected highest priority 50 last, got %v", sortAscResp.Records[4]["priority"])
+	}
+
+	// 5. Test Sorting DESC
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/items/records?sort=-priority", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	var sortDescResp struct {
+		Records []map[string]any `json:"records"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&sortDescResp)
+	// First item should have priority 50 (Cherry Tart)
+	if fmt.Sprint(sortDescResp.Records[0]["priority"]) != "50" {
+		t.Fatalf("Expected highest priority 50 first, got %v", sortDescResp.Records[0]["priority"])
+	}
+
+	// 6. Test Pagination
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/items/records?page=1&perPage=2&sort=id", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	var pageResp struct {
+		Page       int              `json:"page"`
+		PerPage    int              `json:"perPage"`
+		TotalItems int              `json:"totalItems"`
+		TotalPages int              `json:"totalPages"`
+		Records    []map[string]any `json:"records"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&pageResp)
+	if pageResp.Page != 1 || pageResp.PerPage != 2 || pageResp.TotalItems != 5 || pageResp.TotalPages != 3 {
+		t.Fatalf("Pagination metadata mismatch: %+v", pageResp)
+	}
+	if len(pageResp.Records) != 2 {
+		t.Fatalf("Expected 2 records on page 1, got %d", len(pageResp.Records))
+	}
+	if fmt.Sprint(pageResp.Records[0]["id"]) != "1" || fmt.Sprint(pageResp.Records[1]["id"]) != "2" {
+		t.Fatalf("Page 1 should contain items 1 and 2, got %v and %v", pageResp.Records[0]["id"], pageResp.Records[1]["id"])
+	}
+
+	// Page 3 should contain only item 5
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/items/records?page=3&perPage=2&sort=id", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	_ = json.NewDecoder(rec.Body).Decode(&pageResp)
+	if len(pageResp.Records) != 1 {
+		t.Fatalf("Expected 1 record on page 3, got %d", len(pageResp.Records))
+	}
+	if fmt.Sprint(pageResp.Records[0]["id"]) != "5" {
+		t.Fatalf("Page 3 should contain item 5, got %v", pageResp.Records[0]["id"])
+	}
+}
+
 
