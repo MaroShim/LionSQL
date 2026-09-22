@@ -137,33 +137,37 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/auth/refresh", s.handleAuthRefresh)
 	s.mux.HandleFunc("POST /api/auth/logout", s.handleAuthLogout)
 
+	// API Keys Management Endpoints (Superuser only)
+	s.mux.HandleFunc("GET /api/keys", s.wrapSuperuser(s.handleListAPIKeys))
+	s.mux.HandleFunc("POST /api/keys", s.wrapSuperuser(s.handleCreateAPIKey))
+	s.mux.HandleFunc("DELETE /api/keys/{id}", s.wrapSuperuser(s.handleRevokeAPIKey))
+
 	// Seed Sample Data
-	s.mux.HandleFunc("POST /api/seed", s.wrapAuth(s.handleSeed))
+	s.mux.HandleFunc("POST /api/seed", s.wrapAuth(s.handleSeed, false, ""))
 
 	// SQL Query Execution API
-	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL))
+	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL, false, ""))
 
 	// Tables API
-	s.mux.HandleFunc("GET /api/tables", s.wrapAuth(s.handleListTables))
-	s.mux.HandleFunc("GET /api/tables/{name}/schema", s.wrapAuth(s.handleGetTableSchema))
-	s.mux.HandleFunc("GET /api/tables/{name}/records", s.wrapAuth(s.handleGetRecords))
+	s.mux.HandleFunc("GET /api/tables", s.wrapAuth(s.handleListTables, false, ""))
+	s.mux.HandleFunc("GET /api/tables/{name}/schema", s.wrapTableAuth(s.handleGetTableSchema, false))
+	s.mux.HandleFunc("GET /api/tables/{name}/records", s.wrapTableAuth(s.handleGetRecords, false))
 
 	// Stored Procedures API
-	s.mux.HandleFunc("GET /api/procs", s.wrapAuth(s.handleListProcs))
-	s.mux.HandleFunc("POST /api/procs", s.wrapAuth(s.handleRegisterProc))
-	s.mux.HandleFunc("POST /api/procs/{name}/exec", s.wrapAuth(s.handleExecProc))
+	s.mux.HandleFunc("GET /api/procs", s.wrapAuth(s.handleListProcs, false, ""))
+	s.mux.HandleFunc("POST /api/procs", s.wrapAuth(s.handleRegisterProc, true, ""))
+	s.mux.HandleFunc("POST /api/procs/{name}/exec", s.wrapAuth(s.handleExecProc, false, ""))
 }
 
-func (s *Server) wrapAuth(next http.HandlerFunc) http.HandlerFunc {
+func (s *Server) wrapSuperuser(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.enableAuth {
 			next(w, r)
 			return
 		}
-
 		authHeader := r.Header.Get("Authorization")
 		if !strings.HasPrefix(authHeader, "Bearer ") {
-			writeError(w, http.StatusUnauthorized, fmt.Errorf("missing or invalid authorization header"))
+			writeError(w, http.StatusUnauthorized, fmt.Errorf("superuser authorization required"))
 			return
 		}
 		token := strings.TrimPrefix(authHeader, "Bearer ")
@@ -174,6 +178,99 @@ func (s *Server) wrapAuth(next http.HandlerFunc) http.HandlerFunc {
 		}
 		next(w, r)
 	}
+}
+
+func (s *Server) wrapTableAuth(next http.HandlerFunc, isWrite bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tableName := r.PathValue("name")
+		s.wrapAuth(next, isWrite, tableName)(w, r)
+	}
+}
+
+func (s *Server) wrapAuth(next http.HandlerFunc, isWrite bool, tableName string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.enableAuth {
+			next(w, r)
+			return
+		}
+
+		// 1. Check API Key header: X-API-Key or Authorization: ApiKey <key>
+		apiKey := r.Header.Get("X-API-Key")
+		authHeader := r.Header.Get("Authorization")
+		if apiKey == "" && strings.HasPrefix(authHeader, "ApiKey ") {
+			apiKey = strings.TrimPrefix(authHeader, "ApiKey ")
+		}
+
+		if apiKey != "" {
+			keyObj, err := s.auth.ValidateAPIKey(apiKey)
+			if err != nil {
+				writeError(w, http.StatusUnauthorized, fmt.Errorf("invalid api key: %w", err))
+				return
+			}
+			if tableName != "" {
+				if err := keyObj.CheckTableAccess(tableName, isWrite); err != nil {
+					writeError(w, http.StatusForbidden, err)
+					return
+				}
+			} else if isWrite && keyObj.Role == auth.RoleReadOnly {
+				writeError(w, http.StatusForbidden, fmt.Errorf("read-only API key cannot perform write operations"))
+				return
+			}
+			next(w, r)
+			return
+		}
+
+		// 2. Check Bearer JWT token (Superuser)
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			writeError(w, http.StatusUnauthorized, fmt.Errorf("missing or invalid authorization header (expected Bearer <token> or X-API-Key)"))
+			return
+		}
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		_, err := s.auth.ValidateToken(token)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, fmt.Errorf("unauthorized: %w", err))
+			return
+		}
+		next(w, r)
+	}
+}
+
+type createAPIKeyReq struct {
+	Name          string          `json:"name"`
+	Role          auth.APIKeyRole `json:"role"`
+	AllowedTables []string        `json:"allowed_tables"`
+}
+
+func (s *Server) handleListAPIKeys(w http.ResponseWriter, r *http.Request) {
+	keys := s.auth.ListAPIKeys()
+	writeJSON(w, http.StatusOK, keys)
+}
+
+func (s *Server) handleCreateAPIKey(w http.ResponseWriter, r *http.Request) {
+	var req createAPIKeyReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.Name == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("api key name is required"))
+		return
+	}
+	keyObj, err := s.auth.CreateAPIKey(req.Name, req.Role, req.AllowedTables)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, keyObj)
+}
+
+func (s *Server) handleRevokeAPIKey(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := s.auth.RevokeAPIKey(id); err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "api key revoked"})
 }
 
 type authLoginReq struct {

@@ -323,3 +323,108 @@ func TestAPI_AuthWorkflow(t *testing.T) {
 	}
 }
 
+func TestAPI_APIKeysWorkflow(t *testing.T) {
+	srv := setupTestServer()
+	srv.SetEnableAuth(true)
+
+	// 1. Login as Superuser
+	loginPayload, _ := json.Marshal(map[string]string{
+		"email":    "admin@sqlion.local",
+		"password": "1234567890",
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	var loginResp struct {
+		Token string `json:"token"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&loginResp)
+	superToken := loginResp.Token
+
+	// Seed tables with superuser token
+	req = httptest.NewRequest(http.MethodPost, "/api/seed", nil)
+	req.Header.Set("Authorization", "Bearer "+superToken)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Seed failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 2. Superuser creates a Read-Only API Key restricted to "accounts"
+	keyReq, _ := json.Marshal(map[string]any{
+		"name":           "frontend-widget",
+		"role":           "read_only",
+		"allowed_tables": []string{"accounts"},
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/keys", bytes.NewReader(keyReq))
+	req.Header.Set("Authorization", "Bearer "+superToken)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("Create API key failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	var createdKey struct {
+		ID  string `json:"id"`
+		Key string `json:"key"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&createdKey)
+	if createdKey.Key == "" || !strings.HasPrefix(createdKey.Key, "sqlion_") {
+		t.Fatalf("Expected valid plaintext key, got: %s", createdKey.Key)
+	}
+
+	// 3. Unauthorized API Key request fails
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/accounts/records", nil)
+	req.Header.Set("X-API-Key", "sqlion_invalidsecretkey12345")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 for invalid api key, got %d", rec.Code)
+	}
+
+	// 4. Valid API Key reads permitted table
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/accounts/records", nil)
+	req.Header.Set("X-API-Key", createdKey.Key)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for permitted table read, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 5. Valid API Key denied on non-permitted table
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/unpermitted_table/records", nil)
+	req.Header.Set("X-API-Key", createdKey.Key)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("Expected 403 Forbidden for non-allowed table, got %d", rec.Code)
+	}
+
+	// 6. Valid API Key with Authorization: ApiKey <key> header
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/accounts/schema", nil)
+	req.Header.Set("Authorization", "ApiKey "+createdKey.Key)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK with ApiKey auth header, got %d", rec.Code)
+	}
+
+	// 7. Revoke API Key
+	req = httptest.NewRequest(http.MethodDelete, "/api/keys/"+createdKey.ID, nil)
+	req.Header.Set("Authorization", "Bearer "+superToken)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for key revocation, got %d", rec.Code)
+	}
+
+	// 8. Key no longer works
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/accounts/records", nil)
+	req.Header.Set("X-API-Key", createdKey.Key)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 after key revocation, got %d", rec.Code)
+	}
+}
+

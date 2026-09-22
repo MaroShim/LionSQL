@@ -21,7 +21,28 @@ var (
 	ErrTokenRevoked       = errors.New("token has been revoked")
 	ErrUserNotFound       = errors.New("superuser not found")
 	ErrUserExists         = errors.New("superuser already exists")
+	ErrInvalidAPIKey      = errors.New("invalid or expired api key")
+	ErrPermissionDenied   = errors.New("permission denied: action not permitted for this api key")
 )
+
+// APIKeyRole defines permissions for an API key.
+type APIKeyRole string
+
+const (
+	RoleAdmin    APIKeyRole = "admin"     // Full read/write/DDL access
+	RoleReadOnly APIKeyRole = "read_only" // Only SELECT queries allowed
+)
+
+// APIKey represents a machine-to-machine access key.
+type APIKey struct {
+	ID            string     `json:"id"`
+	Name          string     `json:"name"`
+	Key           string     `json:"key,omitempty"` // Plaintext secret returned only upon creation
+	HashedKey     string     `json:"-"`
+	Role          APIKeyRole `json:"role"`           // "admin" or "read_only"
+	AllowedTables []string   `json:"allowed_tables"` // nil or empty means all tables allowed
+	CreatedAt     time.Time  `json:"created_at"`
+}
 
 // Superuser represents an administrative account modeled after PocketBase v0.25+.
 type Superuser struct {
@@ -48,12 +69,14 @@ type Config struct {
 	TokenDuration time.Duration
 }
 
-// AuthService manages superuser authentication, password verification, and JWT lifecycles.
+// AuthService manages superuser authentication, password verification, JWT lifecycles, and API Keys.
 type AuthService struct {
 	secret        []byte
 	tokenDuration time.Duration
 	users         map[string]*Superuser // keyed by normalized email
 	usersByID     map[string]*Superuser
+	apiKeys       map[string]*APIKey // keyed by hashed key
+	apiKeysByID   map[string]*APIKey // keyed by ID
 	mu            sync.RWMutex
 }
 
@@ -73,6 +96,8 @@ func NewAuthService(cfg Config) *AuthService {
 		tokenDuration: dur,
 		users:         make(map[string]*Superuser),
 		usersByID:     make(map[string]*Superuser),
+		apiKeys:       make(map[string]*APIKey),
+		apiKeysByID:   make(map[string]*APIKey),
 	}
 }
 
@@ -294,4 +319,115 @@ func (s *AuthService) GetUserByID(id string) (*Superuser, error) {
 		return nil, ErrUserNotFound
 	}
 	return u, nil
+}
+
+// CreateAPIKey generates a new API key with the given name, role, and allowed tables.
+// The plaintext key (`sqlion_...`) is returned in key.Key only once.
+func (s *AuthService) CreateAPIKey(name string, role APIKeyRole, allowedTables []string) (*APIKey, error) {
+	if role == "" {
+		role = RoleReadOnly
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	rawSecret := generateRandomKey(24)
+	plaintextKey := "sqlion_" + rawSecret
+	hashedKey := hashSecret(plaintextKey)
+
+	var normTables []string
+	for _, t := range allowedTables {
+		tClean := strings.TrimSpace(strings.ToLower(t))
+		if tClean != "" {
+			normTables = append(normTables, tClean)
+		}
+	}
+
+	keyObj := &APIKey{
+		ID:            generateRandomKey(8),
+		Name:          name,
+		Key:           plaintextKey,
+		HashedKey:     hashedKey,
+		Role:          role,
+		AllowedTables: normTables,
+		CreatedAt:     time.Now().UTC(),
+	}
+
+	s.apiKeys[hashedKey] = keyObj
+	s.apiKeysByID[keyObj.ID] = keyObj
+
+	return keyObj, nil
+}
+
+// ValidateAPIKey checks plaintext API key and returns the APIKey entity.
+func (s *AuthService) ValidateAPIKey(plaintextKey string) (*APIKey, error) {
+	if !strings.HasPrefix(plaintextKey, "sqlion_") {
+		return nil, ErrInvalidAPIKey
+	}
+	hashedKey := hashSecret(plaintextKey)
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	keyObj, exists := s.apiKeys[hashedKey]
+	if !exists {
+		return nil, ErrInvalidAPIKey
+	}
+	return keyObj, nil
+}
+
+// RevokeAPIKey deletes an API key by its ID.
+func (s *AuthService) RevokeAPIKey(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	keyObj, exists := s.apiKeysByID[id]
+	if !exists {
+		return errors.New("api key not found")
+	}
+
+	delete(s.apiKeys, keyObj.HashedKey)
+	delete(s.apiKeysByID, id)
+	return nil
+}
+
+// ListAPIKeys returns all active API keys without secret keys.
+func (s *AuthService) ListAPIKeys() []*APIKey {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	res := make([]*APIKey, 0, len(s.apiKeysByID))
+	for _, k := range s.apiKeysByID {
+		res = append(res, &APIKey{
+			ID:            k.ID,
+			Name:          k.Name,
+			Role:          k.Role,
+			AllowedTables: k.AllowedTables,
+			CreatedAt:     k.CreatedAt,
+		})
+	}
+	return res
+}
+
+// CheckTableAccess verifies whether an API key has permission to access a specific table.
+func (k *APIKey) CheckTableAccess(table string, isWrite bool) error {
+	if k == nil {
+		return nil
+	}
+	if isWrite && k.Role == RoleReadOnly {
+		return fmt.Errorf("%w: read-only API key cannot perform write operations", ErrPermissionDenied)
+	}
+	if len(k.AllowedTables) == 0 {
+		return nil // Access to all tables permitted
+	}
+	normTable := strings.ToLower(strings.TrimSpace(table))
+	for _, allowed := range k.AllowedTables {
+		if allowed == "*" || allowed == normTable {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: table %q not in allowed tables list", ErrPermissionDenied, table)
+}
+
+func hashSecret(secret string) string {
+	h := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(h[:])
 }

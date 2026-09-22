@@ -159,6 +159,44 @@
       overflow-y: auto;
     }
     .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    /* Auth Modal & API Keys Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.85);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .modal-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 100%;
+      max-width: 420px;
+      padding: 30px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
+    }
+    .user-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #0f172a;
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+    }
+    .role-badge {
+      font-size: 0.7rem;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .role-admin { background: #1e3a8a; color: #93c5fd; }
+    .role-readonly { background: #064e3b; color: #6ee7b7; }
   </style>
 </head>
 <body>
@@ -180,10 +218,20 @@
         <span>Stored Procedures</span>
         <span id="nav-procs-count">0</span>
       </button>
+      <button class="nav-btn" onclick="switchView('apikeys')">
+        <span>API Keys & Security</span>
+        <span class="badge" style="background:#4338ca; color:#c7d2fe;">AUTH</span>
+      </button>
     </nav>
     <div style="padding: 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border);">
+      <div id="auth-status-box" style="margin-bottom: 8px;">
+        <span style="color:#94a3b8;">User:</span> <span id="current-user-email" style="color:#6ee7b7; font-weight:600;">admin@sqlion.local</span>
+      </div>
       Engine: <span id="engine-type" style="color: #60a5fa;">Active Engine</span><br>
       PocketBase Style Single Binary
+      <div style="margin-top: 8px;">
+        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.7rem; width: 100%;" onclick="logout()">Sign Out</button>
+      </div>
     </div>
   </aside>
 
@@ -365,7 +413,99 @@ END;</textarea>
         </div>
       </div>
     </div>
+
+    <!-- View: API Keys & Security -->
+    <div id="view-apikeys" style="display: none;">
+      <div class="header-bar">
+        <div>
+          <h2>API Keys & Security</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Issue granular API keys for frontend apps (read-only table scopes) and backend microservices.
+          </div>
+        </div>
+        <button class="btn" style="background: var(--primary);" onclick="openCreateKeyModal()">+ Create API Key</button>
+      </div>
+
+      <!-- Created Key Banner Alert -->
+      <div id="key-created-alert" style="display: none; background: #064e3b; border: 1px solid #10b981; border-radius: 8px; padding: 15px; margin-top: 20px;">
+        <div style="font-size: 0.9rem; font-weight: 700; color: #6ee7b7; margin-bottom: 6px;">New API Key Generated!</div>
+        <div style="font-size: 0.8rem; color: #a7f3d0; margin-bottom: 8px;">Copy this secret key now. It will not be shown again:</div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="created-key-token" readonly style="margin: 0; background: #022c22; color: #34d399; font-family: monospace; font-size: 0.9rem;" />
+          <button class="btn" onclick="copyCreatedKey()">Copy</button>
+        </div>
+      </div>
+
+      <!-- Keys Table -->
+      <div class="card" style="margin-top: 20px; padding: 20px;">
+        <h3 style="font-size: 1rem; margin-bottom: 12px;">Active API Keys</h3>
+        <table id="keys-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Allowed Tables</th>
+              <th>Created At</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="keys-table-body">
+            <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading API keys...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </main>
+
+  <!-- Login Modal Overlay -->
+  <div id="login-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+        <div style="background: var(--primary); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">S</div>
+        <div>
+          <h2 style="font-size: 1.2rem; font-weight: 700;">SQLion Studio Login</h2>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Superuser Authentication</div>
+        </div>
+      </div>
+      <div id="login-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <form onsubmit="handleLoginSubmit(event)">
+        <label style="font-size: 0.8rem; color: var(--text-muted);">Administrator Email:</label>
+        <input type="email" id="login-email" value="admin@sqlion.local" required placeholder="admin@sqlion.local" autocomplete="username" />
+        
+        <label style="font-size: 0.8rem; color: var(--text-muted);">Password:</label>
+        <input type="password" id="login-password" value="1234567890" required placeholder="Password" autocomplete="current-password" />
+        
+        <button type="submit" class="btn" style="width: 100%; margin-top: 10px; padding: 10px; font-size: 0.9rem;">Sign In</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create API Key Modal Overlay -->
+  <div id="create-key-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <h3 style="font-size: 1.1rem; margin-bottom: 15px;">Create API Key</h3>
+      <div id="create-key-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <form onsubmit="handleCreateKeySubmit(event)">
+        <label style="font-size: 0.8rem; color: var(--text-muted);">Key Name / Description:</label>
+        <input type="text" id="key-name-input" required placeholder="e.g. mobile-app, payment-service" />
+
+        <label style="font-size: 0.8rem; color: var(--text-muted);">Access Role:</label>
+        <select id="key-role-select">
+          <option value="read_only">Read-Only (SELECT only)</option>
+          <option value="admin">Admin (Full Read / Write / DDL)</option>
+        </select>
+
+        <label style="font-size: 0.8rem; color: var(--text-muted);">Allowed Tables (Comma separated, empty for all):</label>
+        <input type="text" id="key-tables-input" placeholder="e.g. accounts, customers (or leave blank)" />
+
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeCreateKeyModal()">Cancel</button>
+          <button type="submit" class="btn" style="flex: 1;">Generate Key</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script>
     let proceduresList = [];
@@ -374,7 +514,7 @@ END;</textarea>
 
     function switchView(view) {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-      const views = ['query', 'tables', 'procedures'];
+      const views = ['query', 'tables', 'procedures', 'apikeys'];
       views.forEach((v, idx) => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
@@ -388,10 +528,29 @@ END;</textarea>
         loadTables();
       } else if (view === 'procedures') {
         loadProcedures();
+      } else if (view === 'apikeys') {
+        loadAPIKeys();
       } else if (view === 'query') {
         const input = document.getElementById('sql-query-input');
         if (input) input.focus();
       }
+    }
+
+    // Helper: authenticated fetch wrapper with automatic JWT header and 401 interceptor
+    async function authFetch(url, options = {}) {
+      const token = localStorage.getItem('sqlion_auth_token');
+      const headers = Object.assign({}, options.headers || {});
+      if (token) {
+        headers['Authorization'] = 'Bearer ' + token;
+      }
+      options.headers = headers;
+
+      const res = await fetch(url, options);
+      if (res.status === 401 && !url.includes('/api/auth/login')) {
+        // Token expired or invalid: prompt login modal
+        showLoginModal();
+      }
+      return res;
     }
 
     function switchTableSubView(subView) {
@@ -567,7 +726,7 @@ END;</textarea>
       bannerEl.style.display = 'none';
 
       try {
-        const res = await fetch('/api/sql', {
+        const res = await authFetch('/api/sql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: sql })
@@ -599,41 +758,26 @@ END;</textarea>
             statusText = `${out.rows.length} row(s) retrieved in ${durationMs}ms.`;
           }
           bannerEl.innerText = statusText;
-          metaEl.innerText = `Done in ${durationMs}ms`;
+          metaEl.innerText = `OK (${durationMs}ms)`;
 
-          // Render Table or Plan Tree if columns exist
+          // Render result table
           if (out.columns && out.columns.length > 0) {
-            if (out.columns.length === 1 && out.columns[0] === 'QUERY PLAN') {
-              let planHtml = '<thead><tr><th>Query Execution Plan Tree</th></tr></thead><tbody><tr><td><pre style="margin:0; font-family:monospace; color:#38bdf8; line-height:1.6; background:transparent; border:none; padding:4px 0;">';
-              planHtml += out.rows.map(r => {
-                let line = (r['QUERY PLAN'] || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                line = line.replace(/(Nested Loop)/g, '<span style="color:#f472b6; font-weight:bold;">$1</span>');
-                line = line.replace(/(Hash Join)/g, '<span style="color:#38bdf8; font-weight:bold;">$1</span>');
-                line = line.replace(/(Index Scan)/g, '<span style="color:#a7f3d0; font-weight:bold;">$1</span>');
-                line = line.replace(/(Seq Scan)/g, '<span style="color:#fde68a; font-weight:bold;">$1</span>');
-                line = line.replace(/(Sort|Limit|Filter|Projection|Hash)/g, '<span style="color:#c084fc; font-weight:bold;">$1</span>');
-                line = line.replace(/(cost=[^ ]+)/g, '<span style="color:#94a3b8;">$1</span>');
-                line = line.replace(/(actual time=[^ ]+)/g, '<span style="color:#fdba74; font-weight:bold;">$1</span>');
-                return line;
-              }).join('\n');
-              planHtml += '</pre></td></tr></tbody>';
-              tableEl.innerHTML = planHtml;
+            let thead = '<tr>' + out.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+            let tbody = '';
+            if (out.rows && out.rows.length > 0) {
+              tbody = out.rows.map(r => {
+                return '<tr>' + out.columns.map(c => {
+                  const val = r[c];
+                  if (val === null || val === undefined) {
+                    return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
+                  }
+                  return `<td>${val}</td>`;
+                }).join('') + '</tr>';
+              }).join('');
             } else {
-              let thead = '<tr>' + out.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
-              let tbody = '';
-              if (out.rows && out.rows.length > 0) {
-                tbody = out.rows.map(r => {
-                  return '<tr>' + out.columns.map(c => {
-                    const val = r[c];
-                    if (val === null || val === undefined) return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
-                    return `<td>${val}</td>`;
-                  }).join('') + '</tr>';
-                }).join('');
-              } else {
-                tbody = `<tr><td colspan="${out.columns.length}" style="text-align:center; color:var(--text-muted); font-style:italic;">Empty result set (0 rows)</td></tr>`;
-              }
-              tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
+              tbody = `<tr><td colspan="${out.columns.length}" style="text-align:center; color:var(--text-muted); font-style:italic;">Empty result set (0 rows)</td></tr>`;
             }
+            tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
           } else {
             tableEl.innerHTML = '<thead><tr><th>Execution Status</th></tr></thead><tbody><tr><td>' + statusText + '</td></tr></tbody>';
           }
@@ -662,7 +806,8 @@ END;</textarea>
 
     async function loadTables() {
       try {
-        const res = await fetch('/api/tables');
+        const res = await authFetch('/api/tables');
+        if (!res.ok) return;
         const data = await res.json();
         tablesList = data;
         const sel = document.getElementById('table-select');
@@ -697,7 +842,8 @@ END;</textarea>
       if (!tbl) return;
       document.getElementById('current-table-title').innerText = 'Table: ' + tbl;
       try {
-        const res = await fetch(`/api/tables/${tbl}/records`);
+        const res = await authFetch(`/api/tables/${tbl}/records`);
+        if (!res.ok) return;
         const data = await res.json();
         const tableEl = document.getElementById('records-table');
         const countBadge = document.getElementById('records-count-badge');
@@ -720,7 +866,8 @@ END;</textarea>
 
     async function loadProcedures() {
       try {
-        const res = await fetch('/api/procs');
+        const res = await authFetch('/api/procs');
+        if (!res.ok) return;
         proceduresList = await res.json();
         document.getElementById('nav-procs-count').innerText = proceduresList.length;
         const sel = document.getElementById('proc-select');
@@ -740,13 +887,18 @@ END;</textarea>
     function renderParamInputs() {
       const name = document.getElementById('proc-select').value;
       const container = document.getElementById('proc-params-container');
-      container.innerHTML = '';
-      const proc = proceduresList.find(p => p.name === name);
       const jsBox = document.getElementById('proc-js-preview');
+      container.innerHTML = '';
+      if (!name) {
+        jsBox.innerText = '// Select a procedure above';
+        return;
+      }
+
+      const proc = proceduresList.find(p => p.name === name);
       if (proc && proc.js_code) {
         jsBox.innerText = proc.js_code;
       } else {
-        jsBox.innerText = '// No JavaScript transpilation available';
+        jsBox.innerText = '// No bytecode representation';
       }
 
       if (proc && proc.params) {
@@ -762,7 +914,7 @@ END;</textarea>
     async function registerProcedure() {
       const sql = document.getElementById('proc-sql-input').value;
       try {
-        const res = await fetch('/api/procs', {
+        const res = await authFetch('/api/procs', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ script: sql })
@@ -795,7 +947,7 @@ END;</textarea>
       outBox.innerText = `Executing procedure '${name}'...`;
 
       try {
-        const res = await fetch(`/api/procs/${name}/exec`, {
+        const res = await authFetch(`/api/procs/${name}/exec`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ args: args })
@@ -809,7 +961,7 @@ END;</textarea>
 
     async function seedSampleData() {
       try {
-        const res = await fetch('/api/seed', { method: 'POST' });
+        const res = await authFetch('/api/seed', { method: 'POST' });
         const out = await res.json();
         alert(out.message || 'Sample seeded!');
         loadTables();
@@ -818,7 +970,209 @@ END;</textarea>
       }
     }
 
+    // --- Authentication & Session Management ---
+    function showLoginModal() {
+      document.getElementById('login-modal').style.display = 'flex';
+    }
+
+    function hideLoginModal() {
+      document.getElementById('login-modal').style.display = 'none';
+      document.getElementById('login-error').style.display = 'none';
+    }
+
+    async function handleLoginSubmit(e) {
+      e.preventDefault();
+      const email = document.getElementById('login-email').value;
+      const password = document.getElementById('login-password').value;
+      const errBox = document.getElementById('login-error');
+      errBox.style.display = 'none';
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (res.ok && data.token) {
+          localStorage.setItem('sqlion_auth_token', data.token);
+          localStorage.setItem('sqlion_auth_email', data.record.email);
+          updateUserDisplay(data.record.email);
+          hideLoginModal();
+          loadTables();
+          loadProcedures();
+        } else {
+          errBox.style.display = 'block';
+          errBox.innerText = data.error || 'Login failed';
+        }
+      } catch (err) {
+        errBox.style.display = 'block';
+        errBox.innerText = 'Network error: ' + err;
+      }
+    }
+
+    async function logout() {
+      const token = localStorage.getItem('sqlion_auth_token');
+      if (token) {
+        try {
+          await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+        } catch (_) {}
+      }
+      localStorage.removeItem('sqlion_auth_token');
+      localStorage.removeItem('sqlion_auth_email');
+      updateUserDisplay(null);
+      showLoginModal();
+    }
+
+    function updateUserDisplay(email) {
+      const emailEl = document.getElementById('current-user-email');
+      if (email) {
+        emailEl.innerText = email;
+      } else {
+        emailEl.innerText = 'Not authenticated';
+      }
+    }
+
+    async function checkAuthSession() {
+      const token = localStorage.getItem('sqlion_auth_token');
+      if (!token) {
+        // Check if server enforces auth by pinging /api/tables
+        try {
+          const res = await fetch('/api/tables');
+          if (res.status === 401) {
+            showLoginModal();
+            return;
+          }
+        } catch (_) {}
+      } else {
+        try {
+          const res = await fetch('/api/auth/me', {
+            headers: { 'Authorization': 'Bearer ' + token }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            updateUserDisplay(data.email);
+            return;
+          }
+        } catch (_) {}
+      }
+    }
+
+    // --- API Keys Management ---
+    async function loadAPIKeys() {
+      const tbody = document.getElementById('keys-table-body');
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading API keys...</td></tr>';
+      try {
+        const res = await authFetch('/api/keys');
+        if (!res.ok) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#fca5a5;">Requires Superuser authentication</td></tr>';
+          return;
+        }
+        const keys = await res.json();
+        if (!keys || keys.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">No API keys generated yet. Click "+ Create API Key" to issue one.</td></tr>';
+          return;
+        }
+        let html = '';
+        keys.forEach(k => {
+          const roleClass = (k.role === 'admin') ? 'role-badge role-admin' : 'role-badge role-readonly';
+          const tables = (k.allowed_tables && k.allowed_tables.length > 0) ? k.allowed_tables.join(', ') : '<span style="color:#6ee7b7; font-weight:600;">* (All tables)</span>';
+          const dateStr = new Date(k.created_at).toLocaleString();
+          html += `<tr>
+            <td style="font-family:monospace; color:#94a3b8; font-size:0.8rem;">${k.id}</td>
+            <td style="font-weight:600; color:#f8fafc;">${k.name}</td>
+            <td><span class="${roleClass}">${k.role.toUpperCase()}</span></td>
+            <td style="font-family:monospace; font-size:0.8rem;">${tables}</td>
+            <td style="font-size:0.8rem; color:var(--text-muted);">${dateStr}</td>
+            <td style="text-align: right;">
+              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; background:#7f1d1d; color:#fca5a5;" onclick="revokeAPIKey('${k.id}')">Revoke</button>
+            </td>
+          </tr>`;
+        });
+        tbody.innerHTML = html;
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#fca5a5;">Error: ${err}</td></tr>`;
+      }
+    }
+
+    function openCreateKeyModal() {
+      document.getElementById('create-key-modal').style.display = 'flex';
+      document.getElementById('key-name-input').value = '';
+      document.getElementById('key-tables-input').value = '';
+      document.getElementById('create-key-error').style.display = 'none';
+      document.getElementById('key-name-input').focus();
+    }
+
+    function closeCreateKeyModal() {
+      document.getElementById('create-key-modal').style.display = 'none';
+    }
+
+    async function handleCreateKeySubmit(e) {
+      e.preventDefault();
+      const name = document.getElementById('key-name-input').value.trim();
+      const role = document.getElementById('key-role-select').value;
+      const tablesRaw = document.getElementById('key-tables-input').value.trim();
+      const errBox = document.getElementById('create-key-error');
+      errBox.style.display = 'none';
+
+      let allowedTables = null;
+      if (tablesRaw) {
+        allowedTables = tablesRaw.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      }
+
+      try {
+        const res = await authFetch('/api/keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, role, allowed_tables: allowedTables })
+        });
+        const data = await res.json();
+        if (res.ok && data.key) {
+          closeCreateKeyModal();
+          // Display secret key alert
+          const alertBox = document.getElementById('key-created-alert');
+          alertBox.style.display = 'block';
+          document.getElementById('created-key-token').value = data.key;
+          loadAPIKeys();
+        } else {
+          errBox.style.display = 'block';
+          errBox.innerText = data.error || 'Failed to create key';
+        }
+      } catch (err) {
+        errBox.style.display = 'block';
+        errBox.innerText = 'Network error: ' + err;
+      }
+    }
+
+    function copyCreatedKey() {
+      const input = document.getElementById('created-key-token');
+      input.select();
+      document.execCommand('copy');
+      alert('API Key copied to clipboard!');
+    }
+
+    async function revokeAPIKey(id) {
+      if (!confirm(`Are you sure you want to revoke API Key ${id}? Any application using it will immediately be blocked.`)) {
+        return;
+      }
+      try {
+        const res = await authFetch(`/api/keys/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadAPIKeys();
+        } else {
+          const data = await res.json();
+          alert('Error: ' + data.error);
+        }
+      } catch (err) {
+        alert('Network error: ' + err);
+      }
+    }
+
     // Init
+    checkAuthSession();
     loadTables();
     loadProcedures();
   </script>

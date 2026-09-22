@@ -114,3 +114,65 @@ func TestAuth_TokenExpiration(t *testing.T) {
 		t.Fatalf("Expected ErrInvalidToken for expired token, got %v", err)
 	}
 }
+
+func TestAuth_APIKeys(t *testing.T) {
+	svc := NewAuthService(Config{})
+
+	// 1. Create read-only key for accounts table
+	keyObj, err := svc.CreateAPIKey("frontend-app", RoleReadOnly, []string{"accounts"})
+	if err != nil {
+		t.Fatalf("CreateAPIKey failed: %v", err)
+	}
+	if !strings.HasPrefix(keyObj.Key, "sqlion_") {
+		t.Fatalf("Expected sqlion_ prefix in key, got %s", keyObj.Key)
+	}
+
+	// 2. Validate API key
+	validated, err := svc.ValidateAPIKey(keyObj.Key)
+	if err != nil {
+		t.Fatalf("ValidateAPIKey failed: %v", err)
+	}
+	if validated.ID != keyObj.ID {
+		t.Fatalf("ID mismatch in validated key")
+	}
+
+	// 3. Test permissions
+	if err := validated.CheckTableAccess("accounts", false); err != nil {
+		t.Fatalf("Expected read access to accounts allowed, got: %v", err)
+	}
+	if err := validated.CheckTableAccess("accounts", true); err == nil {
+		t.Fatalf("Expected write access to accounts rejected for read-only key")
+	}
+	if err := validated.CheckTableAccess("users", false); err == nil {
+		t.Fatalf("Expected read access to unlisted table users rejected")
+	}
+
+	// 4. Create admin key with wildcard access
+	adminKey, err := svc.CreateAPIKey("backend-service", RoleAdmin, nil)
+	if err != nil {
+		t.Fatalf("Create admin key failed: %v", err)
+	}
+	if err := adminKey.CheckTableAccess("anything", true); err != nil {
+		t.Fatalf("Expected admin write access allowed to all tables, got: %v", err)
+	}
+
+	// 5. List keys
+	keys := svc.ListAPIKeys()
+	if len(keys) != 2 {
+		t.Fatalf("Expected 2 keys in list, got %d", len(keys))
+	}
+	for _, k := range keys {
+		if k.Key != "" {
+			t.Fatalf("Listed key must not reveal plaintext secret")
+		}
+	}
+
+	// 6. Revoke key
+	err = svc.RevokeAPIKey(keyObj.ID)
+	if err != nil {
+		t.Fatalf("RevokeAPIKey failed: %v", err)
+	}
+	if _, err := svc.ValidateAPIKey(keyObj.Key); err != ErrInvalidAPIKey {
+		t.Fatalf("Expected ErrInvalidAPIKey after revocation, got %v", err)
+	}
+}
