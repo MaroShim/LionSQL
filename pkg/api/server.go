@@ -38,6 +38,7 @@ type Server struct {
 	executor   *runtime.Executor
 	auth       *auth.AuthService
 	enableAuth bool
+	broker     *RealtimeBroker
 	mux        *http.ServeMux
 	sessions   map[string]*ClientSession
 	sessMu     sync.RWMutex
@@ -64,11 +65,17 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		executor:   runtime.NewExecutor(cache),
 		auth:       authSvc,
 		enableAuth: enableAuth,
+		broker:     NewRealtimeBroker(),
 		mux:        http.NewServeMux(),
 		sessions:   make(map[string]*ClientSession),
 	}
 	s.routes()
 	return s
+}
+
+// Broker returns the active realtime pub/sub broker.
+func (s *Server) Broker() *RealtimeBroker {
+	return s.broker
 }
 
 // AuthService returns the underlying authentication service.
@@ -135,6 +142,9 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "1.0.0"})
 	})
+
+	// Realtime SSE Change Stream (PocketBase-style Live Event Stream)
+	s.mux.HandleFunc("GET /api/realtime", s.handleRealtimeStream)
 
 	// Auth Endpoints (PocketBase compatible)
 	s.mux.HandleFunc("POST /api/auth/login", s.handleAuthLogin)
@@ -886,6 +896,12 @@ func (s *Server) handleImportTable(w http.ResponseWriter, r *http.Request) {
 				writeError(w, http.StatusInternalServerError, err)
 				return
 			}
+			if s.broker != nil {
+				s.broker.Broadcast(RealtimeEvent{
+					Action: ActionImport,
+					Table:  tableName,
+				})
+			}
 			writeJSON(w, http.StatusOK, map[string]any{"imported": imported, "table": tableName})
 			return
 		}
@@ -992,6 +1008,13 @@ func (s *Server) handleImportTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.broker != nil {
+		s.broker.Broadcast(RealtimeEvent{
+			Action: ActionImport,
+			Table:  tableName,
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"imported": imported,
 		"table":    tableName,
@@ -1075,6 +1098,10 @@ func (s *Server) handleCreateTable(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.broker != nil {
+		s.broker.Broadcast(RealtimeEvent{Action: ActionCreateTable, Table: tableName})
+	}
+
 	writeJSON(w, http.StatusCreated, toTableDTO(schema))
 }
 
@@ -1083,6 +1110,9 @@ func (s *Server) handleDropTable(w http.ResponseWriter, r *http.Request) {
 	if err := s.engine.DropTable(tableName); err != nil {
 		writeError(w, http.StatusNotFound, err)
 		return
+	}
+	if s.broker != nil {
+		s.broker.Broadcast(RealtimeEvent{Action: ActionDropTable, Table: tableName})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "table dropped"})
 }
@@ -1148,6 +1178,14 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		} else {
 			respRow[k] = v.String()
 		}
+	}
+
+	if s.broker != nil {
+		s.broker.Broadcast(RealtimeEvent{
+			Action: ActionCreate,
+			Table:  tableName,
+			Record: respRow,
+		})
 	}
 
 	writeJSON(w, http.StatusCreated, respRow)
@@ -1223,6 +1261,16 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 			respRow[k] = v.String()
 		}
 	}
+
+	if s.broker != nil {
+		s.broker.Broadcast(RealtimeEvent{
+			Action: ActionUpdate,
+			Table:  tableName,
+			ID:     pkStr,
+			Record: respRow,
+		})
+	}
+
 	writeJSON(w, http.StatusOK, respRow)
 }
 
@@ -1266,6 +1314,14 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(); err != nil {
 		writeError(w, http.StatusInternalServerError, err)
 		return
+	}
+
+	if s.broker != nil {
+		s.broker.Broadcast(RealtimeEvent{
+			Action: ActionDelete,
+			Table:  tableName,
+			ID:     pkStr,
+		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "record deleted"})

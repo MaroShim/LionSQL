@@ -275,6 +275,9 @@
     <div class="logo">
       <span>SQLion</span>
       <span class="badge">OLTP + SP</span>
+      <span id="realtime-badge" style="margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:0.65rem; color:#6ee7b7; background:#064e3b; padding:2px 6px; border-radius:9999px; border:1px solid #10b981;">
+        <span style="width:5px; height:5px; border-radius:50%; background:#10b981;"></span> Live
+      </span>
     </div>
     <div id="auth-status-box" style="padding: 12px 16px; border-bottom: 1px solid var(--border); background: #162032;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
@@ -2256,11 +2259,61 @@ END;</textarea>
       }
     }
 
+    // --- Realtime SSE Live Stream ---
+    let realtimeEventSource = null;
+
+    function initRealtime() {
+      if (window.EventSource) {
+        try {
+          if (realtimeEventSource) {
+            realtimeEventSource.close();
+          }
+          realtimeEventSource = new EventSource('/api/realtime');
+          
+          realtimeEventSource.addEventListener('connected', () => {
+            const badge = document.getElementById('realtime-badge');
+            if (badge) {
+              badge.style.display = 'inline-flex';
+              badge.style.borderColor = '#10b981';
+              badge.style.color = '#6ee7b7';
+              badge.style.background = '#064e3b';
+              badge.title = 'Realtime SSE connected';
+            }
+          });
+
+          realtimeEventSource.addEventListener('record_change', (e) => {
+            try {
+              const ev = JSON.parse(e.data);
+              const currentTable = document.getElementById('table-select').value;
+              
+              if (ev.action === 'create_table' || ev.action === 'drop_table') {
+                loadTables();
+                showToast(`[Realtime] Table list updated (${ev.action})`);
+              } else if (ev.table && ev.table === currentTable) {
+                loadRecords();
+                showToast(`[Realtime] Updated "${ev.table}" (${ev.action})`);
+              }
+            } catch (_) {}
+          });
+
+          realtimeEventSource.onerror = () => {
+            const badge = document.getElementById('realtime-badge');
+            if (badge) {
+              badge.style.borderColor = '#64748b';
+              badge.style.color = '#94a3b8';
+              badge.style.background = '#1e293b';
+            }
+          };
+        } catch (_) {}
+      }
+    }
+
     // Init
     checkAuthSession();
     loadAPIKeys();
     loadTables();
     loadProcedures();
+    initRealtime();
   </script>
 </body>
 </html>
