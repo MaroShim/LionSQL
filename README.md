@@ -379,8 +379,12 @@ SQLion provides comprehensive documentation covering system architecture, operat
 - **[HTTP REST API & Realtime SSE Specification](doc/API_REFERENCE.md)**: OpenAPI-style endpoint documentation and JavaScript EventSource examples.
 - **[Production Deployment & Operations Runbook](doc/OPERATIONS.md)**: Systemd services, Docker deployment, disaster recovery, and security hardening.
 - **[Performance Tuning & Benchmark Guide](doc/BENCHMARK.md)**: High-concurrency banking benchmark harness, TPS measurement, and memory tuning.
+- **[Database Migration Guide](doc/MIGRATION.md)**: Procedures for migrating from PostgreSQL, MSSQL, SQLite, and MySQL.
+- **[Security Policy & Threat Model](doc/SECURITY.md)**: RBAC access control, SQL injection immunity, and vulnerability disclosure.
+- **[Engineering Roadmap & Milestones](doc/ROADMAP.md)**: Near-term and long-term milestones (Raft replication, vector search).
 - **[Troubleshooting, Error Diagnostics & FAQ](doc/TROUBLESHOOTING.md)**: Port conflicts, serialization conflicts, slow query tuning, and client driver setup.
 - **[Contributing & Development Guide](CONTRIBUTING.md)**: Engineering standards, 3-stage verification pipeline, and pull request checklist.
+- **[Changelog & Release Notes](CHANGELOG.md)**: Semantic versioning history and release notes.
 
 ---
 
@@ -406,4 +410,4 @@ SQLion strictly adheres to a **3-Stage Verification Pipeline** for every change:
 
 ## License
 
-SQLion is open-source software licensed under the MIT License.
+SQLion is free open-source software licensed under the **GNU General Public License v2 or v3** (GPL-2.0 / GPL-3.0). See [LICENSE](LICENSE) for details.
