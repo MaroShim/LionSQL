@@ -206,3 +206,120 @@ END;`
 	}
 }
 
+func TestAPI_AuthWorkflow(t *testing.T) {
+	srv := setupTestServer()
+	srv.SetEnableAuth(true)
+
+	// 1. Unauthorized request should fail with 401
+	req := httptest.NewRequest(http.MethodGet, "/api/tables", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 Unauthorized, got %d", rec.Code)
+	}
+
+	// 2. Health check remains open without token
+	req = httptest.NewRequest(http.MethodGet, "/api/health", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for health, got %d", rec.Code)
+	}
+
+	// 3. Login with wrong password should fail with 401
+	badLoginPayload, _ := json.Marshal(map[string]string{
+		"email":    "admin@sqlion.local",
+		"password": "wrongpassword",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(badLoginPayload))
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 Unauthorized for bad password, got %d", rec.Code)
+	}
+
+	// 4. Login with default credentials
+	loginPayload, _ := json.Marshal(map[string]string{
+		"email":    "admin@sqlion.local",
+		"password": "1234567890",
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for valid login, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	var loginResp struct {
+		Token  string         `json:"token"`
+		Record map[string]any `json:"record"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&loginResp)
+	if loginResp.Token == "" {
+		t.Fatalf("Expected non-empty token")
+	}
+	if loginResp.Record["email"] != "admin@sqlion.local" {
+		t.Fatalf("Expected email admin@sqlion.local, got %v", loginResp.Record["email"])
+	}
+
+	// 5. Access protected endpoint with Bearer token
+	req = httptest.NewRequest(http.MethodGet, "/api/tables", nil)
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK with Bearer token, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 6. Check /api/auth/me
+	req = httptest.NewRequest(http.MethodGet, "/api/auth/me", nil)
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for /api/auth/me, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 7. Refresh token
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/refresh", nil)
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for refresh, got %d: %s", rec.Code, rec.Body.String())
+	}
+	var refreshResp struct {
+		Token string `json:"token"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&refreshResp)
+	if refreshResp.Token == "" {
+		t.Fatalf("Expected fresh token")
+	}
+
+	// 8. Logout (Revoke All Sessions)
+	req = httptest.NewRequest(http.MethodPost, "/api/auth/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+refreshResp.Token)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected 200 OK for logout, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 9. Now both previous tokens must be rejected
+	req = httptest.NewRequest(http.MethodGet, "/api/tables", nil)
+	req.Header.Set("Authorization", "Bearer "+loginResp.Token)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 after logout, got %d", rec.Code)
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/tables", nil)
+	req.Header.Set("Authorization", "Bearer "+refreshResp.Token)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401 after logout for refreshed token, got %d", rec.Code)
+	}
+}
+

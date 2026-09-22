@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
@@ -26,28 +27,53 @@ type ClientSession struct {
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
 type Server struct {
-	catalog   *catalog.Catalog
-	engine    storage.Engine
-	planCache *proc.PlanCache
-	executor  *runtime.Executor
-	mux       *http.ServeMux
-	sessions  map[string]*ClientSession
-	sessMu    sync.RWMutex
+	catalog    *catalog.Catalog
+	engine     storage.Engine
+	planCache  *proc.PlanCache
+	executor   *runtime.Executor
+	auth       *auth.AuthService
+	enableAuth bool
+	mux        *http.ServeMux
+	sessions   map[string]*ClientSession
+	sessMu     sync.RWMutex
 }
 
-// NewServer initializes a new Server.
+// NewServer initializes a new Server with default in-memory auth service.
 func NewServer(cat *catalog.Catalog, eng storage.Engine) *Server {
+	authSvc := auth.NewAuthService(auth.Config{})
+	_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "1234567890")
+	return NewServerWithAuth(cat, eng, authSvc, false)
+}
+
+// NewServerWithAuth initializes a Server with explicit auth service and enforcement option.
+func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.AuthService, enableAuth bool) *Server {
+	if authSvc == nil {
+		authSvc = auth.NewAuthService(auth.Config{})
+		_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "1234567890")
+	}
 	cache := runtime.NewPlanCache()
 	s := &Server{
-		catalog:   cat,
-		engine:    eng,
-		planCache: proc.NewPlanCache(),
-		executor:  runtime.NewExecutor(cache),
-		mux:       http.NewServeMux(),
-		sessions:  make(map[string]*ClientSession),
+		catalog:    cat,
+		engine:     eng,
+		planCache:  proc.NewPlanCache(),
+		executor:   runtime.NewExecutor(cache),
+		auth:       authSvc,
+		enableAuth: enableAuth,
+		mux:        http.NewServeMux(),
+		sessions:   make(map[string]*ClientSession),
 	}
 	s.routes()
 	return s
+}
+
+// AuthService returns the underlying authentication service.
+func (s *Server) AuthService() *auth.AuthService {
+	return s.auth
+}
+
+// SetEnableAuth toggles authentication enforcement for protected API routes.
+func (s *Server) SetEnableAuth(enable bool) {
+	s.enableAuth = enable
 }
 
 // GetOrCreateSession returns or registers a persistent client session.
@@ -105,21 +131,144 @@ func (s *Server) routes() {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "1.0.0"})
 	})
 
+	// Auth Endpoints (PocketBase compatible)
+	s.mux.HandleFunc("POST /api/auth/login", s.handleAuthLogin)
+	s.mux.HandleFunc("GET /api/auth/me", s.handleAuthMe)
+	s.mux.HandleFunc("POST /api/auth/refresh", s.handleAuthRefresh)
+	s.mux.HandleFunc("POST /api/auth/logout", s.handleAuthLogout)
+
 	// Seed Sample Data
-	s.mux.HandleFunc("POST /api/seed", s.handleSeed)
+	s.mux.HandleFunc("POST /api/seed", s.wrapAuth(s.handleSeed))
 
 	// SQL Query Execution API
-	s.mux.HandleFunc("POST /api/sql", s.handleExecuteSQL)
+	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL))
 
 	// Tables API
-	s.mux.HandleFunc("GET /api/tables", s.handleListTables)
-	s.mux.HandleFunc("GET /api/tables/{name}/schema", s.handleGetTableSchema)
-	s.mux.HandleFunc("GET /api/tables/{name}/records", s.handleGetRecords)
+	s.mux.HandleFunc("GET /api/tables", s.wrapAuth(s.handleListTables))
+	s.mux.HandleFunc("GET /api/tables/{name}/schema", s.wrapAuth(s.handleGetTableSchema))
+	s.mux.HandleFunc("GET /api/tables/{name}/records", s.wrapAuth(s.handleGetRecords))
 
 	// Stored Procedures API
-	s.mux.HandleFunc("GET /api/procs", s.handleListProcs)
-	s.mux.HandleFunc("POST /api/procs", s.handleRegisterProc)
-	s.mux.HandleFunc("POST /api/procs/{name}/exec", s.handleExecProc)
+	s.mux.HandleFunc("GET /api/procs", s.wrapAuth(s.handleListProcs))
+	s.mux.HandleFunc("POST /api/procs", s.wrapAuth(s.handleRegisterProc))
+	s.mux.HandleFunc("POST /api/procs/{name}/exec", s.wrapAuth(s.handleExecProc))
+}
+
+func (s *Server) wrapAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if !s.enableAuth {
+			next(w, r)
+			return
+		}
+
+		authHeader := r.Header.Get("Authorization")
+		if !strings.HasPrefix(authHeader, "Bearer ") {
+			writeError(w, http.StatusUnauthorized, fmt.Errorf("missing or invalid authorization header"))
+			return
+		}
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		_, err := s.auth.ValidateToken(token)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, fmt.Errorf("unauthorized: %w", err))
+			return
+		}
+		next(w, r)
+	}
+}
+
+type authLoginReq struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	var req authLoginReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	u, token, err := s.auth.Authenticate(req.Email, req.Password)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token": token,
+		"record": map[string]any{
+			"id":         u.ID,
+			"email":      u.Email,
+			"created_at": u.CreatedAt,
+		},
+	})
+}
+
+func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		writeError(w, http.StatusUnauthorized, fmt.Errorf("missing or invalid authorization header"))
+		return
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	u, err := s.auth.ValidateToken(token)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id":         u.ID,
+		"email":      u.Email,
+		"created_at": u.CreatedAt,
+	})
+}
+
+func (s *Server) handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		writeError(w, http.StatusUnauthorized, fmt.Errorf("missing or invalid authorization header"))
+		return
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	u, freshToken, err := s.auth.RefreshToken(token)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token": freshToken,
+		"record": map[string]any{
+			"id":         u.ID,
+			"email":      u.Email,
+			"created_at": u.CreatedAt,
+		},
+	})
+}
+
+func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	authHeader := r.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		writeError(w, http.StatusUnauthorized, fmt.Errorf("missing or invalid authorization header"))
+		return
+	}
+	token := strings.TrimPrefix(authHeader, "Bearer ")
+	u, err := s.auth.ValidateToken(token)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, err)
+		return
+	}
+
+	if err := s.auth.RevokeAllTokens(u.ID); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "all sessions revoked successfully",
+	})
 }
 
 type execSQLReq struct {

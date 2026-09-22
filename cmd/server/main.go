@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"sqlion/pkg/api"
+	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
@@ -30,6 +31,9 @@ func main() {
 	dataDir := flag.String("dir", "data", "Data directory for database files (default: data)")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
+	adminEmail := flag.String("admin-email", "admin@sqlion.local", "Default superuser email")
+	adminPass := flag.String("admin-pass", "1234567890", "Default superuser password")
+	enableAuth := flag.Bool("auth", false, "Enforce JWT authentication on protected REST endpoints")
 
 	// Daemon control flags
 	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
@@ -94,7 +98,10 @@ func main() {
 		seedSampleProcedure(cat)
 	}
 
-	server := api.NewServer(cat, eng)
+	authSvc := auth.NewAuthService(auth.Config{})
+	_, _ = authSvc.EnsureDefaultSuperuser(*adminEmail, *adminPass)
+
+	server := api.NewServerWithAuth(cat, eng, authSvc, *enableAuth)
 	httpServer := &http.Server{
 		Addr:         *httpAddr,
 		Handler:      server.Handler(),
@@ -124,6 +131,7 @@ func main() {
 		fmt.Println("------------------------------------------------------------")
 		fmt.Printf(" [Web Dashboard]  http://%s/_/\n", *httpAddr)
 		fmt.Printf(" [HTTP API]       http://%s/api/health\n", *httpAddr)
+		fmt.Printf(" [Superuser Auth] %s (JWT Auth: %v)\n", *adminEmail, *enableAuth)
 		fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (DBeaver / psql)\n", strings.Split(*pgAddr, ":")[1])
 		fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (DBeaver / Azure Data Studio / pymssql)\n", strings.Split(*tdsAddr, ":")[1])
 		fmt.Printf(" [Data Directory] %s\n", *dataDir)

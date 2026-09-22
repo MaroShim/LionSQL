@@ -2037,6 +2037,9 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time, cs *Cli
 				}
 
 				row := make(map[string]any)
+				for k, v := range combined {
+					row[k] = v
+				}
 				for _, pf := range projFields {
 					var val any
 					if v, ok := combined[pf.expr]; ok {
@@ -2104,9 +2107,21 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time, cs *Cli
 		orderParts := strings.Fields(qInfo.OrderByClause)
 		orderCol := cleanIdentifier(orderParts[0])
 		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
+		bareCol := orderCol
+		if dotIdx := strings.Index(orderCol, "."); dotIdx != -1 {
+			bareCol = orderCol[dotIdx+1:]
+		}
 		sort.Slice(joinedRows, func(i, j int) bool {
-			v1 := fmt.Sprintf("%v", joinedRows[i][orderCol])
-			v2 := fmt.Sprintf("%v", joinedRows[j][orderCol])
+			val1, ok1 := joinedRows[i][orderCol]
+			if !ok1 {
+				val1 = joinedRows[i][bareCol]
+			}
+			val2, ok2 := joinedRows[j][orderCol]
+			if !ok2 {
+				val2 = joinedRows[j][bareCol]
+			}
+			v1 := fmt.Sprintf("%v", val1)
+			v2 := fmt.Sprintf("%v", val2)
 			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
 				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
 					if desc {
