@@ -428,3 +428,90 @@ func TestAPI_APIKeysWorkflow(t *testing.T) {
 	}
 }
 
+func TestAPI_TableAndRecordCRUD(t *testing.T) {
+	srv := setupTestServer()
+
+	// 1. Create table via POST /api/tables
+	tblPayload, _ := json.Marshal(map[string]any{
+		"name": "products",
+		"columns": []map[string]any{
+			{"name": "id", "type": "INT", "primary_key": true},
+			{"name": "title", "type": "VARCHAR", "nullable": false},
+			{"name": "price", "type": "FLOAT", "nullable": false},
+			{"name": "active", "type": "BOOL", "nullable": true},
+		},
+	})
+	req := httptest.NewRequest(http.MethodPost, "/api/tables", bytes.NewReader(tblPayload))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("Create table failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// 2. Insert record via POST /api/tables/products/records
+	rowPayload, _ := json.Marshal(map[string]any{
+		"id":     101,
+		"title":  "Mechanical Keyboard",
+		"price":  149.99,
+		"active": true,
+	})
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/records", bytes.NewReader(rowPayload))
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("Create record failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// 3. Update record via PATCH /api/tables/products/records/101
+	updatePayload, _ := json.Marshal(map[string]any{
+		"price": 129.99,
+		"title": "Pro Mechanical Keyboard",
+	})
+	req = httptest.NewRequest(http.MethodPatch, "/api/tables/products/records/101", bytes.NewReader(updatePayload))
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Update record failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// 4. Verify updated record
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	var recsResp struct {
+		Records []map[string]any `json:"records"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&recsResp)
+	if len(recsResp.Records) != 1 {
+		t.Fatalf("Expected 1 record, got %d", len(recsResp.Records))
+	}
+	if recsResp.Records[0]["title"] != "Pro Mechanical Keyboard" {
+		t.Fatalf("Expected updated title, got: %v", recsResp.Records[0]["title"])
+	}
+
+	// 5. Delete record via DELETE /api/tables/products/records/101
+	req = httptest.NewRequest(http.MethodDelete, "/api/tables/products/records/101", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Delete record failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// Verify table empty
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	_ = json.NewDecoder(rec.Body).Decode(&recsResp)
+	if len(recsResp.Records) != 0 {
+		t.Fatalf("Expected 0 records after delete, got %d", len(recsResp.Records))
+	}
+
+	// 6. Drop table via DELETE /api/tables/products
+	req = httptest.NewRequest(http.MethodDelete, "/api/tables/products", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Drop table failed: %d (%s)", rec.Code, rec.Body.String())
+	}
+}
+

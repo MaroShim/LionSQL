@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
@@ -148,10 +149,15 @@ func (s *Server) routes() {
 	// SQL Query Execution API
 	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL, false, ""))
 
-	// Tables API
+	// Tables API (PocketBase-style Collections & Records CRUD)
 	s.mux.HandleFunc("GET /api/tables", s.wrapAuth(s.handleListTables, false, ""))
+	s.mux.HandleFunc("POST /api/tables", s.wrapSuperuser(s.handleCreateTable))
+	s.mux.HandleFunc("DELETE /api/tables/{name}", s.wrapSuperuser(s.handleDropTable))
 	s.mux.HandleFunc("GET /api/tables/{name}/schema", s.wrapTableAuth(s.handleGetTableSchema, false))
 	s.mux.HandleFunc("GET /api/tables/{name}/records", s.wrapTableAuth(s.handleGetRecords, false))
+	s.mux.HandleFunc("POST /api/tables/{name}/records", s.wrapTableAuth(s.handleCreateRecord, true))
+	s.mux.HandleFunc("PATCH /api/tables/{name}/records/{pk}", s.wrapTableAuth(s.handleUpdateRecord, true))
+	s.mux.HandleFunc("DELETE /api/tables/{name}/records/{pk}", s.wrapTableAuth(s.handleDeleteRecord, true))
 
 	// Stored Procedures API
 	s.mux.HandleFunc("GET /api/procs", s.wrapAuth(s.handleListProcs, false, ""))
@@ -516,6 +522,279 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 		"table":   tableName,
 		"records": records,
 	})
+}
+
+type createTableReq struct {
+	Name    string             `json:"name"`
+	Columns []createColumnItem `json:"columns"`
+}
+
+type createColumnItem struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"` // INT, VARCHAR, FLOAT, BOOL, DATETIME
+	PrimaryKey bool   `json:"primary_key"`
+	Nullable   bool   `json:"nullable"`
+}
+
+func (s *Server) handleCreateTable(w http.ResponseWriter, r *http.Request) {
+	var req createTableReq
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	tableName := strings.TrimSpace(req.Name)
+	if tableName == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("table name is required"))
+		return
+	}
+	if len(req.Columns) == 0 {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("at least one column is required"))
+		return
+	}
+
+	cols := make([]storage.Column, len(req.Columns))
+	hasPK := false
+	for i, c := range req.Columns {
+		colName := strings.TrimSpace(c.Name)
+		if colName == "" {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("column name cannot be empty"))
+			return
+		}
+		var dt storage.DataType
+		switch strings.ToUpper(strings.TrimSpace(c.Type)) {
+		case "INT", "INTEGER", "BIGINT":
+			dt = storage.TypeInt
+		case "VARCHAR", "TEXT", "STRING":
+			dt = storage.TypeVarChar
+		case "FLOAT", "DOUBLE", "REAL", "NUMERIC":
+			dt = storage.TypeFloat
+		case "BOOL", "BOOLEAN":
+			dt = storage.TypeBool
+		case "DATETIME", "TIMESTAMP":
+			dt = storage.TypeDateTime
+		default:
+			dt = storage.TypeVarChar
+		}
+		if c.PrimaryKey {
+			hasPK = true
+		}
+		cols[i] = storage.Column{
+			Name:       colName,
+			Type:       dt,
+			PrimaryKey: c.PrimaryKey,
+			Nullable:   c.Nullable,
+		}
+	}
+
+	if !hasPK {
+		// Default to first column as PK if none specified
+		cols[0].PrimaryKey = true
+	}
+
+	schema := &storage.TableSchema{
+		Name:    tableName,
+		Columns: cols,
+	}
+
+	if err := s.engine.CreateTable(schema); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, toTableDTO(schema))
+}
+
+func (s *Server) handleDropTable(w http.ResponseWriter, r *http.Request) {
+	tableName := r.PathValue("name")
+	if err := s.engine.DropTable(tableName); err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "table dropped"})
+}
+
+func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
+	tableName := r.PathValue("name")
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+
+	var raw map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: false})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer tx.Rollback()
+
+	rec := make(storage.Record)
+	for _, col := range schema.Columns {
+		v, exists := raw[col.Name]
+		if !exists || v == nil {
+			if col.PrimaryKey {
+				// Auto-generate numeric ID if not provided
+				v = time.Now().UnixNano() / int64(time.Millisecond)
+			} else if !col.Nullable {
+				writeError(w, http.StatusBadRequest, fmt.Errorf("field %q cannot be null", col.Name))
+				return
+			}
+		}
+		rec[col.Name] = convertValue(v, col.Type)
+	}
+
+	if err := tx.Insert(tableName, rec); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	// Format created record
+	respRow := make(map[string]any)
+	for k, v := range rec {
+		if v.IsNull {
+			respRow[k] = nil
+		} else {
+			respRow[k] = v.String()
+		}
+	}
+
+	writeJSON(w, http.StatusCreated, respRow)
+}
+
+func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
+	tableName := r.PathValue("name")
+	pkStr := r.PathValue("pk")
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+
+	pkCol, err := schema.PrimaryKeyColumn()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	pkVal := convertValue(pkStr, pkCol.Type)
+
+	var updates map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&updates); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: false})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer tx.Rollback()
+
+	existing, err := tx.Get(tableName, pkVal)
+	if err != nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("record with pk %s not found: %w", pkStr, err))
+		return
+	}
+
+	for k, v := range updates {
+		col, _, found := schema.FindColumn(k)
+		if !found {
+			continue
+		}
+		existing[k] = convertValue(v, col.Type)
+	}
+
+	if err := tx.Update(tableName, pkVal, existing); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	respRow := make(map[string]any)
+	for k, v := range existing {
+		if v.IsNull {
+			respRow[k] = nil
+		} else {
+			respRow[k] = v.String()
+		}
+	}
+	writeJSON(w, http.StatusOK, respRow)
+}
+
+func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
+	tableName := r.PathValue("name")
+	pkStr := r.PathValue("pk")
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+
+	pkCol, err := schema.PrimaryKeyColumn()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	pkVal := convertValue(pkStr, pkCol.Type)
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: false})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer tx.Rollback()
+
+	if err := tx.Delete(tableName, pkVal); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "record deleted"})
 }
 
 func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {

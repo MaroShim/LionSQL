@@ -197,6 +197,62 @@
     }
     .role-admin { background: #1e3a8a; color: #93c5fd; }
     .role-readonly { background: #064e3b; color: #6ee7b7; }
+
+    /* Spreadsheet Inline Editing & PocketBase Aesthetics */
+    .editable-cell {
+      position: relative;
+      cursor: cell;
+      transition: background 0.15s;
+    }
+    .editable-cell:hover {
+      background: rgba(59, 130, 246, 0.12) !important;
+      outline: 1px dashed var(--primary);
+    }
+    .cell-input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 4px 8px;
+      margin: 0;
+      background: #090d16;
+      border: 1px solid var(--primary);
+      border-radius: 4px;
+      color: #fff;
+      font-family: inherit;
+      font-size: 0.85rem;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+    }
+    .cell-flash-success {
+      animation: cell-flash 1s ease-out;
+    }
+    @keyframes cell-flash {
+      0% { background-color: rgba(16, 185, 129, 0.45); }
+      100% { background-color: transparent; }
+    }
+    .col-header-tag {
+      font-size: 0.65rem;
+      padding: 1px 5px;
+      border-radius: 3px;
+      background: #334155;
+      color: #94a3b8;
+      font-family: monospace;
+      font-weight: 500;
+      margin-left: 6px;
+    }
+    .col-pk-tag {
+      background: #854d0e;
+      color: #fef08a;
+      font-weight: 700;
+    }
+    .modal-card-lg {
+      max-width: 680px;
+    }
+    .row-selected {
+      background: rgba(59, 130, 246, 0.16) !important;
+    }
+    .record-row:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
   </style>
 </head>
 <body>
@@ -299,20 +355,24 @@
     <div id="view-tables" style="display: none;">
       <div class="header-bar">
         <div>
-          <h2>Tables & Schema Studio</h2>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Inspect table schema structures, column constraints, DDL definitions, and live records.</div>
+          <h2>Tables & Records Studio</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            PocketBase-style interactive data management, spreadsheet inline editing, and schema builder.
+          </div>
         </div>
         <div style="display: flex; gap: 8px;">
+          <button class="btn" style="background: var(--primary);" onclick="openCreateTableModal()">+ New Table</button>
           <button class="btn btn-secondary" onclick="openInQueryStudio()">Query in Studio</button>
-          <button class="btn" onclick="seedSampleData()">Seed Sample Accounts</button>
+          <button class="btn btn-secondary" onclick="seedSampleData()">Seed Sample Data</button>
         </div>
       </div>
 
-      <div style="margin-top: 20px; display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
-        <select id="table-select" style="max-width: 280px; margin-bottom: 0;" onchange="loadCurrentTable()">
+      <div style="margin-top: 20px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+        <select id="table-select" style="max-width: 260px; margin-bottom: 0;" onchange="loadCurrentTable()">
           <option value="">-- Select Table --</option>
         </select>
         <button class="btn btn-secondary" onclick="loadTables()">Refresh</button>
+        <button id="btn-drop-table" class="btn btn-secondary" style="background: #450a0a; color: #fca5a5; border-color: #991b1b;" onclick="dropCurrentTable()">Drop Table</button>
 
         <div style="display: flex; gap: 6px; margin-left: auto;">
           <button id="btn-sub-records" class="btn" onclick="switchTableSubView('records')">Data Records</button>
@@ -322,11 +382,20 @@
 
       <!-- Subview: Data Records -->
       <div id="subview-records" class="card" style="margin-top: 15px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-          <h3 id="current-table-title" style="font-size: 1.1rem; color: var(--text);">Records</h3>
-          <span id="records-count-badge" style="font-size: 0.8rem; color: var(--text-muted);">0 records</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <h3 id="current-table-title" style="font-size: 1.1rem; color: var(--text);">Records</h3>
+            <span id="records-count-badge" style="font-size: 0.8rem; color: var(--text-muted); background: #0f172a; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);">0 records</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Double-click any cell to edit inline (Enter to save, Esc to cancel)</span>
+          </div>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <button id="btn-batch-delete" class="btn" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 6px 12px; font-size: 0.8rem;" onclick="deleteSelectedRecords()">
+              Delete Selected (<span id="selected-count">0</span>)
+            </button>
+            <button id="btn-add-row" class="btn" style="background: var(--success); padding: 6px 14px; font-size: 0.8rem;" onclick="openCreateRecordModal()">+ Add Row</button>
+          </div>
         </div>
-        <div style="overflow-x: auto; max-height: 500px;">
+        <div style="overflow-x: auto; max-height: 520px;">
           <table id="records-table">
             <thead><tr><th>No records loaded</th></tr></thead>
             <tbody></tbody>
@@ -506,6 +575,78 @@ END;</textarea>
       </form>
     </div>
   </div>
+
+  <!-- Create Table (GUI Builder) Modal Overlay -->
+  <div id="create-table-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card modal-card-lg">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 1.15rem; font-weight: 700;">New Table (GUI Schema Builder)</h3>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Define columns, types, and constraints interactively.</div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeCreateTableModal()">✕</button>
+      </div>
+      <div id="create-table-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <form onsubmit="handleCreateTableSubmit(event)">
+        <div style="margin-bottom: 16px;">
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Table Name:</label>
+          <input type="text" id="new-table-name" required placeholder="e.g. products, customers, orders" style="margin-top: 4px; margin-bottom: 4px;" />
+        </div>
+
+        <div style="margin-bottom: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Columns / Fields:</label>
+            <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="addColumnBuilderRow()">+ Add Field</button>
+          </div>
+          <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: #0c1220;">
+            <table style="width: 100%; margin-top: 0; font-size: 0.8rem;">
+              <thead>
+                <tr>
+                  <th style="padding: 6px 8px;">Column Name</th>
+                  <th style="padding: 6px 8px; width: 140px;">Type</th>
+                  <th style="padding: 6px 8px; width: 50px; text-align: center;">PK</th>
+                  <th style="padding: 6px 8px; width: 70px; text-align: center;">Not Null</th>
+                  <th style="padding: 6px 8px; width: 40px; text-align: center;"></th>
+                </tr>
+              </thead>
+              <tbody id="table-builder-columns-tbody">
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeCreateTableModal()">Cancel</button>
+          <button type="submit" class="btn" style="flex: 1; background: var(--success);">Create Table</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Create Record (+ Add Row) Modal Overlay -->
+  <div id="create-record-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card modal-card-lg">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h3 id="create-record-title" style="font-size: 1.15rem; font-weight: 700;">Add New Record</h3>
+          <div id="create-record-subtitle" style="font-size: 0.75rem; color: var(--text-muted);">Insert row into table.</div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeCreateRecordModal()">✕</button>
+      </div>
+      <div id="create-record-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <form onsubmit="handleCreateRecordSubmit(event)">
+        <div id="create-record-fields-container" style="max-height: 360px; overflow-y: auto; padding-right: 4px;">
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 20px;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeCreateRecordModal()">Cancel</button>
+          <button type="submit" class="btn" style="flex: 1; background: var(--success);">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Floating Toast Notification -->
+  <div id="toast" style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; display: none; z-index: 10000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); border: 1px solid var(--border);"></div>
 
   <script>
     let proceduresList = [];
@@ -804,7 +945,115 @@ END;</textarea>
       }
     }
 
-    async function loadTables() {
+    // --- Helper Utilities & Notifications ---
+    function escapeHtml(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    let toastTimeout = null;
+    function showToast(msg, isError = false) {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.innerText = msg;
+      toast.style.background = isError ? '#7f1d1d' : '#064e3b';
+      toast.style.color = isError ? '#fca5a5' : '#6ee7b7';
+      toast.style.borderColor = isError ? '#ef4444' : '#10b981';
+      toast.style.display = 'block';
+      if (toastTimeout) clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.style.display = 'none';
+      }, 3200);
+    }
+
+    // --- Table Management & Selection State ---
+    let selectedRecordPks = new Set();
+
+    function updateBatchDeleteUI() {
+      const btn = document.getElementById('btn-batch-delete');
+      const countSpan = document.getElementById('selected-count');
+      if (!btn || !countSpan) return;
+      if (selectedRecordPks.size > 0) {
+        btn.style.display = 'inline-block';
+        countSpan.innerText = selectedRecordPks.size;
+      } else {
+        btn.style.display = 'none';
+      }
+    }
+
+    function toggleSelectAllRecords(master) {
+      const checkboxes = document.querySelectorAll('.rec-check');
+      checkboxes.forEach(cb => {
+        cb.checked = master.checked;
+        const pk = cb.dataset.pk;
+        const tr = cb.closest('tr');
+        if (master.checked) {
+          selectedRecordPks.add(pk);
+          if (tr) tr.classList.add('row-selected');
+        } else {
+          selectedRecordPks.delete(pk);
+          if (tr) tr.classList.remove('row-selected');
+        }
+      });
+      updateBatchDeleteUI();
+    }
+
+    function toggleRowSelection(cb) {
+      const pk = cb.dataset.pk;
+      const tr = cb.closest('tr');
+      if (cb.checked) {
+        selectedRecordPks.add(pk);
+        if (tr) tr.classList.add('row-selected');
+      } else {
+        selectedRecordPks.delete(pk);
+        if (tr) tr.classList.remove('row-selected');
+      }
+      const master = document.getElementById('select-all-records');
+      const allChecks = document.querySelectorAll('.rec-check');
+      if (master && allChecks.length > 0) {
+        master.checked = Array.from(allChecks).every(c => c.checked);
+      }
+      updateBatchDeleteUI();
+    }
+
+    async function deleteSelectedRecords() {
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl || selectedRecordPks.size === 0) return;
+      if (!confirm(`Are you sure you want to delete ${selectedRecordPks.size} selected record(s) from table '${tbl}'?`)) {
+        return;
+      }
+
+      const pks = Array.from(selectedRecordPks);
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const pk of pks) {
+        try {
+          const res = await authFetch(`/api/tables/${tbl}/records/${encodeURIComponent(pk)}`, {
+            method: 'DELETE'
+          });
+          if (res.ok) {
+            successCount++;
+          } else {
+            failCount++;
+          }
+        } catch (_) {
+          failCount++;
+        }
+      }
+
+      selectedRecordPks.clear();
+      updateBatchDeleteUI();
+      showToast(`Deleted ${successCount} record(s)${failCount > 0 ? `, ${failCount} failed` : ''}`, failCount > 0);
+      loadRecords();
+    }
+
+    async function loadTables(selectTableName) {
       try {
         const res = await authFetch('/api/tables');
         if (!res.ok) return;
@@ -820,8 +1069,11 @@ END;</textarea>
           opt.innerText = t.name;
           sel.appendChild(opt);
         });
+
         if (data.length > 0) {
-          if (prevVal && data.some(t => t.name === prevVal)) {
+          if (selectTableName && data.some(t => t.name === selectTableName)) {
+            sel.value = selectTableName;
+          } else if (prevVal && data.some(t => t.name === prevVal)) {
             sel.value = prevVal;
           } else {
             sel.value = data[0].name;
@@ -841,26 +1093,419 @@ END;</textarea>
       const tbl = document.getElementById('table-select').value;
       if (!tbl) return;
       document.getElementById('current-table-title').innerText = 'Table: ' + tbl;
+      selectedRecordPks.clear();
+      updateBatchDeleteUI();
+
+      const tableSchema = tablesList.find(t => t.name === tbl);
+      let pkColName = 'id';
+      let schemaCols = [];
+      if (tableSchema && tableSchema.columns) {
+        schemaCols = tableSchema.columns;
+        const pkCol = schemaCols.find(c => c.primary_key);
+        if (pkCol) pkColName = pkCol.name;
+        else if (schemaCols.length > 0) pkColName = schemaCols[0].name;
+      }
+
       try {
         const res = await authFetch(`/api/tables/${tbl}/records`);
         if (!res.ok) return;
         const data = await res.json();
         const tableEl = document.getElementById('records-table');
         const countBadge = document.getElementById('records-count-badge');
-        if (!data.records || data.records.length === 0) {
-          tableEl.innerHTML = '<thead><tr><th>No records found in ' + tbl + '</th></tr></thead><tbody></tbody>';
-          if (countBadge) countBadge.innerText = '0 records';
+
+        const records = data.records || [];
+        if (countBadge) countBadge.innerText = `${records.length} record(s)`;
+
+        // Determine column list
+        let cols = [];
+        if (schemaCols.length > 0) {
+          cols = schemaCols.map(c => c.name);
+        } else if (records.length > 0) {
+          cols = Object.keys(records[0]);
+        }
+
+        if (cols.length === 0) {
+          tableEl.innerHTML = '<thead><tr><th>No columns defined</th></tr></thead><tbody></tbody>';
           return;
         }
-        if (countBadge) countBadge.innerText = `${data.records.length} record(s)`;
-        const cols = Object.keys(data.records[0]);
-        let thead = '<tr>' + cols.map(c => `<th>${c}</th>`).join('') + '</tr>';
-        let tbody = data.records.map(r => {
-          return '<tr>' + cols.map(c => `<td>${r[c] !== undefined ? r[c] : '<span style="color:var(--text-muted); font-style:italic;">NULL</span>'}</td>`).join('');
-        }).join('');
+
+        // Header with master checkbox and column type tags
+        let thead = '<tr>';
+        thead += '<th style="width: 36px; text-align: center;"><input type="checkbox" id="select-all-records" onchange="toggleSelectAllRecords(this)"></th>';
+        cols.forEach(c => {
+          const colDef = schemaCols.find(sc => sc.name === c);
+          let tagHtml = '';
+          if (colDef) {
+            tagHtml = `<span class="col-header-tag ${colDef.primary_key ? 'col-pk-tag' : ''}">${colDef.type}</span>`;
+          }
+          thead += `<th>${escapeHtml(c)}${tagHtml}</th>`;
+        });
+        thead += '</tr>';
+
+        // Body
+        let tbody = '';
+        if (records.length === 0) {
+          tbody = `<tr><td colspan="${cols.length + 1}" style="text-align:center; padding: 24px; color:var(--text-muted);">
+            No records found in <strong>${escapeHtml(tbl)}</strong>. Click <strong>+ Add Row</strong> above to insert data.
+          </td></tr>`;
+        } else {
+          tbody = records.map(r => {
+            const pkVal = r[pkColName] !== undefined && r[pkColName] !== null ? r[pkColName] : '';
+            let rowHtml = `<tr class="record-row" data-pk="${escapeHtml(pkVal)}">`;
+            rowHtml += `<td style="text-align: center;"><input type="checkbox" class="rec-check" data-pk="${escapeHtml(pkVal)}" onchange="toggleRowSelection(this)"></td>`;
+
+            cols.forEach(c => {
+              const val = r[c];
+              const isPK = (c === pkColName);
+              const valStr = (val === null || val === undefined) ? '' : String(val);
+              const displayHtml = (val === null || val === undefined)
+                ? '<span style="color:var(--text-muted); font-style:italic;">NULL</span>'
+                : (isPK ? `<span style="color:#fef08a; font-weight:600;">${escapeHtml(valStr)}</span>` : escapeHtml(valStr));
+
+              if (isPK) {
+                rowHtml += `<td title="Primary Key (Read-Only)">${displayHtml}</td>`;
+              } else {
+                rowHtml += `<td class="editable-cell" data-pk="${escapeHtml(pkVal)}" data-col="${escapeHtml(c)}" data-val="${escapeHtml(valStr)}" title="Double-click to edit" ondblclick="startInlineEdit(this)">${displayHtml}</td>`;
+              }
+            });
+
+            rowHtml += '</tr>';
+            return rowHtml;
+          }).join('');
+        }
+
         tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
       } catch (err) {
         console.error(err);
+      }
+    }
+
+    // --- Spreadsheet Inline Editing ---
+    function startInlineEdit(td) {
+      if (td.classList.contains('editing')) return;
+      td.classList.add('editing');
+
+      const pk = td.dataset.pk;
+      const col = td.dataset.col;
+      const currentVal = td.dataset.val || '';
+
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.className = 'cell-input';
+      input.value = currentVal;
+      input.spellcheck = false;
+
+      let committed = false;
+
+      const commit = (shouldSave) => {
+        if (committed) return;
+        committed = true;
+        finishInlineEdit(td, input.value, currentVal, shouldSave);
+      };
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          commit(true);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          commit(false);
+        }
+      });
+
+      input.addEventListener('blur', () => {
+        commit(true);
+      });
+
+      td.innerHTML = '';
+      td.appendChild(input);
+      input.focus();
+      input.select();
+    }
+
+    async function finishInlineEdit(td, newVal, oldVal, shouldSave) {
+      td.classList.remove('editing');
+      const pk = td.dataset.pk;
+      const col = td.dataset.col;
+      const tbl = document.getElementById('table-select').value;
+
+      if (!shouldSave || newVal === oldVal) {
+        td.innerHTML = (oldVal === '') ? '<span style="color:var(--text-muted); font-style:italic;">NULL</span>' : escapeHtml(oldVal);
+        return;
+      }
+
+      // Optimistic display
+      td.innerText = newVal;
+
+      try {
+        const tableSchema = tablesList.find(t => t.name === tbl);
+        const colDef = tableSchema ? tableSchema.columns.find(c => c.name === col) : null;
+        let convertedVal = newVal;
+        if (colDef) {
+          if (colDef.type === 'INT') convertedVal = parseInt(newVal, 10);
+          else if (colDef.type === 'FLOAT') convertedVal = parseFloat(newVal);
+          else if (colDef.type === 'BOOL') convertedVal = (newVal.toLowerCase() === 'true' || newVal === '1');
+        }
+
+        const res = await authFetch(`/api/tables/${tbl}/records/${encodeURIComponent(pk)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ [col]: convertedVal })
+        });
+
+        if (res.ok) {
+          td.dataset.val = newVal;
+          td.innerHTML = (newVal === '') ? '<span style="color:var(--text-muted); font-style:italic;">NULL</span>' : escapeHtml(newVal);
+          td.classList.add('cell-flash-success');
+          setTimeout(() => td.classList.remove('cell-flash-success'), 1000);
+          showToast(`Field '${col}' updated successfully`);
+        } else {
+          const data = await res.json();
+          td.innerHTML = (oldVal === '') ? '<span style="color:var(--text-muted); font-style:italic;">NULL</span>' : escapeHtml(oldVal);
+          showToast(`Update failed: ${data.error || 'unknown error'}`, true);
+        }
+      } catch (err) {
+        td.innerHTML = (oldVal === '') ? '<span style="color:var(--text-muted); font-style:italic;">NULL</span>' : escapeHtml(oldVal);
+        showToast(`Network error: ${err}`, true);
+      }
+    }
+
+    // --- GUI Table Builder Modal Logic ---
+    function openCreateTableModal() {
+      document.getElementById('create-table-modal').style.display = 'flex';
+      document.getElementById('new-table-name').value = '';
+      document.getElementById('create-table-error').style.display = 'none';
+
+      const tbody = document.getElementById('table-builder-columns-tbody');
+      tbody.innerHTML = '';
+      addColumnBuilderRow('id', 'INT', true, true);
+      addColumnBuilderRow('name', 'VARCHAR', false, false);
+      document.getElementById('new-table-name').focus();
+    }
+
+    function closeCreateTableModal() {
+      document.getElementById('create-table-modal').style.display = 'none';
+    }
+
+    function addColumnBuilderRow(name = '', type = 'VARCHAR', isPk = false, isNotNull = false) {
+      const tbody = document.getElementById('table-builder-columns-tbody');
+      const tr = document.createElement('tr');
+      tr.className = 'table-builder-row';
+
+      const types = ['VARCHAR', 'INT', 'FLOAT', 'BOOL', 'DATETIME'];
+      const typeOptions = types.map(t => `<option value="${t}" ${t === type ? 'selected' : ''}>${t}</option>`).join('');
+
+      tr.innerHTML = `
+        <td style="padding: 4px 6px;">
+          <input type="text" class="builder-col-name" value="${escapeHtml(name)}" placeholder="field_name" required style="margin: 0; padding: 6px; font-size: 0.8rem;" />
+        </td>
+        <td style="padding: 4px 6px;">
+          <select class="builder-col-type" style="margin: 0; padding: 6px; font-size: 0.8rem;">
+            ${typeOptions}
+          </select>
+        </td>
+        <td style="padding: 4px 6px; text-align: center;">
+          <input type="checkbox" class="builder-col-pk" ${isPk ? 'checked' : ''} style="margin: 0; width: 16px; height: 16px; accent-color: var(--primary);" />
+        </td>
+        <td style="padding: 4px 6px; text-align: center;">
+          <input type="checkbox" class="builder-col-notnull" ${isNotNull ? 'checked' : ''} style="margin: 0; width: 16px; height: 16px; accent-color: var(--primary);" />
+        </td>
+        <td style="padding: 4px 6px; text-align: center;">
+          <button type="button" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.75rem; background: #450a0a; color: #fca5a5;" onclick="this.closest('tr').remove()">✕</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    }
+
+    async function handleCreateTableSubmit(e) {
+      e.preventDefault();
+      const name = document.getElementById('new-table-name').value.trim();
+      const errBox = document.getElementById('create-table-error');
+      errBox.style.display = 'none';
+
+      if (!name) {
+        errBox.innerText = 'Table name is required';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      const rows = document.querySelectorAll('.table-builder-row');
+      if (rows.length === 0) {
+        errBox.innerText = 'At least one column is required';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      const columns = [];
+      rows.forEach(tr => {
+        const colName = tr.querySelector('.builder-col-name').value.trim();
+        const colType = tr.querySelector('.builder-col-type').value;
+        const isPk = tr.querySelector('.builder-col-pk').checked;
+        const isNotNull = tr.querySelector('.builder-col-notnull').checked;
+        if (colName) {
+          columns.push({
+            name: colName,
+            type: colType,
+            primary_key: isPk,
+            nullable: !isNotNull
+          });
+        }
+      });
+
+      if (columns.length === 0) {
+        errBox.innerText = 'At least one column with a valid name is required';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      try {
+        const res = await authFetch('/api/tables', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, columns })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          closeCreateTableModal();
+          showToast(`Table '${name}' created successfully!`);
+          await loadTables(name);
+        } else {
+          errBox.innerText = data.error || 'Failed to create table';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error: ' + err;
+        errBox.style.display = 'block';
+      }
+    }
+
+    async function dropCurrentTable() {
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl) {
+        alert('Please select a table to drop.');
+        return;
+      }
+      if (!confirm(`Are you sure you want to permanently DROP table '${tbl}'?\nAll data in this table will be erased!`)) {
+        return;
+      }
+
+      try {
+        const res = await authFetch(`/api/tables/${tbl}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast(`Table '${tbl}' dropped successfully!`);
+          loadTables();
+        } else {
+          const data = await res.json();
+          showToast(`Error dropping table: ${data.error || 'unknown error'}`, true);
+        }
+      } catch (err) {
+        showToast(`Network error: ${err}`, true);
+      }
+    }
+
+    // --- Add New Record (+ Add Row) Modal Logic ---
+    function openCreateRecordModal() {
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl) {
+        alert('Please select a table first');
+        return;
+      }
+      const tableSchema = tablesList.find(t => t.name === tbl);
+      if (!tableSchema) return;
+
+      document.getElementById('create-record-title').innerText = `Add New Record to '${tbl}'`;
+      document.getElementById('create-record-error').style.display = 'none';
+
+      const container = document.getElementById('create-record-fields-container');
+      container.innerHTML = '';
+
+      tableSchema.columns.forEach(col => {
+        const div = document.createElement('div');
+        div.style.marginBottom = '12px';
+
+        const isPK = col.primary_key;
+        const pkBadge = isPK ? ' <span class="col-header-tag col-pk-tag">PRIMARY KEY</span>' : '';
+        const reqBadge = (!col.nullable && !isPK) ? ' <span style="color:#ef4444; font-size:0.75rem;">* Required</span>' : '';
+        const label = `<label style="font-size:0.8rem; color:var(--text-muted); font-weight:600; display:block; margin-bottom:4px;">
+          ${escapeHtml(col.name)} <span class="col-header-tag">${col.type}</span>${pkBadge}${reqBadge}
+        </label>`;
+
+        let inputHtml = '';
+        if (col.type === 'BOOL') {
+          inputHtml = `<div style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="field-${col.name}" class="record-input" data-type="BOOL" style="width:18px; height:18px; margin:0;" />
+            <span style="font-size:0.85rem; color:var(--text);">True</span>
+          </div>`;
+        } else if (col.type === 'INT') {
+          const placeholder = isPK ? 'Leave empty to auto-generate' : `Integer value for ${col.name}`;
+          inputHtml = `<input type="number" id="field-${col.name}" class="record-input" data-type="INT" placeholder="${placeholder}" ${!col.nullable && !isPK ? 'required' : ''} style="margin-bottom:0;" />`;
+        } else if (col.type === 'FLOAT') {
+          inputHtml = `<input type="number" step="any" id="field-${col.name}" class="record-input" data-type="FLOAT" placeholder="Float value for ${col.name}" ${!col.nullable ? 'required' : ''} style="margin-bottom:0;" />`;
+        } else {
+          const placeholder = isPK ? 'Leave empty to auto-generate' : `Value for ${col.name}`;
+          inputHtml = `<input type="text" id="field-${col.name}" class="record-input" data-type="VARCHAR" placeholder="${placeholder}" ${!col.nullable && !isPK ? 'required' : ''} style="margin-bottom:0;" />`;
+        }
+
+        div.innerHTML = label + inputHtml;
+        container.appendChild(div);
+      });
+
+      document.getElementById('create-record-modal').style.display = 'flex';
+    }
+
+    function closeCreateRecordModal() {
+      document.getElementById('create-record-modal').style.display = 'none';
+    }
+
+    async function handleCreateRecordSubmit(e) {
+      e.preventDefault();
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl) return;
+
+      const errBox = document.getElementById('create-record-error');
+      errBox.style.display = 'none';
+
+      const inputs = document.querySelectorAll('.record-input');
+      const record = {};
+
+      inputs.forEach(inp => {
+        const colName = inp.id.replace('field-', '');
+        const colType = inp.dataset.type;
+
+        if (colType === 'BOOL') {
+          record[colName] = inp.checked;
+        } else {
+          const val = inp.value.trim();
+          if (val !== '') {
+            if (colType === 'INT') {
+              record[colName] = parseInt(val, 10);
+            } else if (colType === 'FLOAT') {
+              record[colName] = parseFloat(val);
+            } else {
+              record[colName] = val;
+            }
+          }
+        }
+      });
+
+      try {
+        const res = await authFetch(`/api/tables/${tbl}/records`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          closeCreateRecordModal();
+          showToast('Record added successfully!');
+          loadRecords();
+        } else {
+          errBox.innerText = data.error || 'Failed to add record';
+          errBox.style.display = 'block';
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error: ' + err;
+        errBox.style.display = 'block';
       }
     }
 
