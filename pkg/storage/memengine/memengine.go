@@ -411,13 +411,20 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		return err
 	}
 
-	e.tables[schema.Name] = &TableData{
+	td := &TableData{
 		Schema:   *schema,
 		Rows:     make(map[string]storage.Record),
 		Versions: make(map[string]int64),
 		Keys:     make([]string, 0),
 		Indexes:  make(map[string]*IndexData),
 	}
+	for _, idx := range schema.Indexes {
+		td.Indexes[idx.Name] = &IndexData{
+			Schema:  idx,
+			Entries: make([]IndexEntry, 0),
+		}
+	}
+	e.tables[schema.Name] = td
 
 	if e.wal != nil {
 		_ = e.wal.Append(WALRecord{

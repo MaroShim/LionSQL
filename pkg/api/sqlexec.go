@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
 	"sort"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/execution"
 	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
@@ -859,7 +861,7 @@ func (s *Server) resolveSubqueries(whereClause string) (string, error) {
 	result := whereClause
 
 	// 1. [NOT] EXISTS (SELECT ...)
-	existsRe := regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*SELECT\b`)
+	existsRe := regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*\(?\s*SELECT\b`)
 	for {
 		mStart, mEnd, prefix, innerSQL, found := findSubquery(result, existsRe)
 		if !found {
@@ -882,7 +884,7 @@ func (s *Server) resolveSubqueries(whereClause string) (string, error) {
 	}
 
 	// 2. [NOT] IN (SELECT ...) -> [NOT] IN (val1, val2, ...)
-	inSelectRe := regexp.MustCompile(`(?is)\b([a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*SELECT\b`)
+	inSelectRe := regexp.MustCompile(`(?is)\b([a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*\(?\s*SELECT\b`)
 	for {
 		mStart, mEnd, prefix, innerSQL, found := findSubquery(result, inSelectRe)
 		if !found {
@@ -1069,20 +1071,137 @@ func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
 	return s.ExecuteSQL(mainSQL)
 }
 
-func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if qInfo.WhereClause != "" {
+		if resolved, err := s.resolveSubqueries(qInfo.WhereClause); err == nil {
+			qInfo.WhereClause = resolved
+		}
+	}
 
-	p := planner.NewPlanner()
-	qInfo, parseErr := p.ParseSelect(cleaned)
-	if parseErr == nil && qInfo != nil && qInfo.Join != nil {
-		joinRes, err := s.execJoin(qInfo, start, cs)
+	leftTable := cleanIdentifier(qInfo.TableName)
+	leftSchema, err := s.engine.GetTable(leftTable)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", leftTable, err)
+	}
+
+	var rightSchema *storage.TableSchema
+	if qInfo.Join != nil {
+		rightTable := cleanIdentifier(qInfo.Join.Table)
+		rSchema, err := s.engine.GetTable(rightTable)
+		if err != nil {
+			return nil, fmt.Errorf("table %q not found: %w", rightTable, err)
+		}
+		rightSchema = rSchema
+	}
+
+	var tx storage.Transaction
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+	} else {
+		session, err := s.engine.NewSession()
 		if err != nil {
 			return nil, err
 		}
-		if qInfo.HasAggregates {
-			return s.execAggregate(joinRes.Rows, qInfo, start)
+		defer session.Close()
+
+		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, err
 		}
-		return joinRes, nil
+		tx = t
+		defer tx.Rollback()
+	}
+
+	p := planner.NewPlanner()
+	plan := p.BuildJoinPlan(qInfo, leftSchema, 100, rightSchema, 100)
+
+	exec, err := execution.BuildExecutor(plan, tx, s.engine.GetTable)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build volcano executor: %w", err)
+	}
+
+	ctx := context.Background()
+	if err := exec.Open(ctx); err != nil {
+		return nil, fmt.Errorf("volcano execution open error: %w", err)
+	}
+	defer exec.Close()
+
+	var rows []map[string]any
+	for {
+		tuple, err := exec.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, map[string]any(tuple))
+	}
+
+	cols := exec.Schema()
+	if len(cols) == 0 && len(rows) > 0 {
+		for k := range rows[0] {
+			cols = append(cols, k)
+		}
+		sort.Strings(cols)
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      cols,
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	if resolved, err := s.resolveSubqueries(cleaned); err == nil {
+		cleaned = resolved
+	}
+
+	p := planner.NewPlanner()
+	qInfo, parseErr := p.ParseSelect(cleaned)
+	if parseErr == nil && qInfo != nil {
+		rawTable := qInfo.TableName
+		tableName := cleanIdentifier(rawTable)
+
+		// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
+		tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
+		if m := tvfCallRe.FindStringSubmatch(rawTable); len(m) == 3 {
+			tvfName := cleanIdentifier(m[1])
+			argsRaw := m[2]
+			fnMeta, err := s.catalog.GetFunction(tvfName)
+			if err == nil && fnMeta != nil && fnMeta.IsTableValued {
+				var argVals []string
+				if strings.TrimSpace(argsRaw) != "" {
+					for _, arg := range strings.Split(argsRaw, ",") {
+						argVals = append(argVals, strings.TrimSpace(arg))
+					}
+				}
+				innerSQL := fnMeta.Body
+				for i, p := range fnMeta.Params {
+					if i < len(argVals) {
+						innerSQL = strings.ReplaceAll(innerSQL, p.Name, argVals[i])
+						innerSQL = strings.ReplaceAll(innerSQL, strings.TrimPrefix(p.Name, "@"), argVals[i])
+					}
+				}
+				return s.execSelect(innerSQL, start, cs)
+			}
+		}
+
+		// Intercept Virtual System Catalog Views (sys.* and information_schema.*)
+		if s.isVirtualCatalogTable(tableName) {
+			return s.execVirtualCatalogSelect(tableName, strings.Join(qInfo.Projections, ", "), qInfo.WhereClause, qInfo.OrderByClause, int(qInfo.LimitCount), start)
+		}
+
+		// Execute via Volcano Pipelined Query Execution Engine
+		if res, err := s.execVolcanoSelect(qInfo, start, cs); err == nil {
+			return res, nil
+		}
 	}
 
 	// Parse projection, table, WHERE, ORDER BY, LIMIT

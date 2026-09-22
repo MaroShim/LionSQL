@@ -629,6 +629,7 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 		aggNode := &PlanNode{
 			Type:          NodeAggregate,
 			GroupKeys:     q.GroupByCols,
+			Projections:   q.Projections,
 			HavingCond:    q.HavingClause,
 			StartupCost:   currentNode.TotalCost,
 			TotalCost:     aggCost,
