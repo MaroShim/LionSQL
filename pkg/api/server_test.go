@@ -649,4 +649,99 @@ func TestAPI_RecordsSearchSortPagination(t *testing.T) {
 	}
 }
 
+func TestAPI_TableExportAndImport(t *testing.T) {
+	srv := setupTestServer()
+
+	// 1. Seed accounts
+	req := httptest.NewRequest(http.MethodPost, "/api/seed", nil)
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Seed failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 2. Test CSV Export
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/accounts/export?format=csv", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Export CSV failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+	csvBody := rec.Body.String()
+	if !strings.Contains(csvBody, "id,holder,balance") || !strings.Contains(csvBody, "Alice") {
+		t.Fatalf("Unexpected CSV export output:\n%s", csvBody)
+	}
+
+	// 3. Test JSON Export
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/accounts/export?format=json", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Export JSON failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+	var jsonExport []map[string]any
+	if err := json.NewDecoder(rec.Body).Decode(&jsonExport); err != nil || len(jsonExport) != 2 {
+		t.Fatalf("Unexpected JSON export output: %+v (err=%v)", jsonExport, err)
+	}
+
+	// 4. Create new table for import
+	createPayload := `{"name":"products","columns":[{"name":"id","type":"INT","primary_key":true},{"name":"title","type":"VARCHAR","nullable":false},{"name":"price","type":"FLOAT","nullable":false}]}`
+	req = httptest.NewRequest(http.MethodPost, "/api/tables", strings.NewReader(createPayload))
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("Create table failed: %s", rec.Body.String())
+	}
+
+	// 5. Test CSV Import
+	csvData := `id,title,price
+101,Mechanical Keyboard,129.50
+102,Wireless Mouse,49.99
+103,4K Monitor,399.00`
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/import", strings.NewReader(csvData))
+	req.Header.Set("Content-Type", "text/csv")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Import CSV failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+	var importResp map[string]any
+	_ = json.NewDecoder(rec.Body).Decode(&importResp)
+	if fmt.Sprint(importResp["imported"]) != "3" {
+		t.Fatalf("Expected 3 imported records, got %v", importResp)
+	}
+
+	// Verify imported records
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	var recordsResp struct {
+		TotalItems int              `json:"totalItems"`
+		Records    []map[string]any `json:"records"`
+	}
+	_ = json.NewDecoder(rec.Body).Decode(&recordsResp)
+	if recordsResp.TotalItems != 3 {
+		t.Fatalf("Expected 3 products in database, got %d", recordsResp.TotalItems)
+	}
+
+	// 6. Test JSON Batch Import
+	jsonBatch := `[{"id": 104, "title": "USB-C Hub", "price": 29.95}]`
+	req = httptest.NewRequest(http.MethodPost, "/api/tables/products/import", strings.NewReader(jsonBatch))
+	req.Header.Set("Content-Type", "application/json")
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Import JSON failed with code %d: %s", rec.Code, rec.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/api/tables/products/records", nil)
+	rec = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	_ = json.NewDecoder(rec.Body).Decode(&recordsResp)
+	if recordsResp.TotalItems != 4 {
+		t.Fatalf("Expected 4 products after batch JSON import, got %d", recordsResp.TotalItems)
+	}
+}
+
+
 

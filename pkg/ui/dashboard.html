@@ -395,9 +395,15 @@
 
       <!-- Query Results -->
       <div class="card" style="margin-top: 15px; padding: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <h3 id="query-result-title" style="font-size: 1rem; color: var(--text);">Query Result</h3>
-          <span id="query-result-meta" style="font-size: 0.8rem; color: var(--text-muted);">Ready</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h3 id="query-result-title" style="font-size: 1rem; color: var(--text);">Query Result</h3>
+            <span id="query-result-meta" style="font-size: 0.8rem; color: var(--text-muted);">Ready</span>
+          </div>
+          <div id="query-export-actions" style="display: none; gap: 6px;">
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="exportQueryResult('csv')">Export CSV</button>
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="exportQueryResult('json')">Export JSON</button>
+          </div>
         </div>
 
         <div id="query-status-banner" style="display: none; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 12px;"></div>
@@ -453,7 +459,10 @@
             <span id="records-count-badge" style="font-size: 0.8rem; color: var(--text-muted); background: #0f172a; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);">0 records</span>
             <span style="font-size: 0.75rem; color: var(--text-muted);">Double-click any cell to edit inline (Enter to save, Esc to cancel)</span>
           </div>
-          <div style="display: flex; gap: 8px; align-items: center;">
+          <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('csv')">Export CSV</button>
+            <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('json')">Export JSON</button>
+            <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="openImportCSVModal()">Import CSV</button>
             <button id="btn-batch-delete" class="btn" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 6px 12px; font-size: 0.8rem;" onclick="deleteSelectedRecords()">
               Delete Selected (<span id="selected-count">0</span>)
             </button>
@@ -697,6 +706,47 @@ END;</textarea>
     </div>
   </div>
 
+  <!-- Import CSV Modal Overlay -->
+  <div id="import-csv-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card modal-card-lg">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 1.15rem; font-weight: 700;">Import CSV to Table</h3>
+          <div id="import-modal-subtitle" style="font-size: 0.75rem; color: var(--text-muted);">Bulk insert records in a single ACID transaction.</div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeImportCSVModal()">✕</button>
+      </div>
+      <div id="import-csv-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      
+      <!-- Drag & Drop Zone -->
+      <div id="csv-drop-zone" style="border: 2px dashed #475569; border-radius: 8px; padding: 30px; text-align: center; background: #0c1220; cursor: pointer; transition: all 0.2s;" onclick="document.getElementById('csv-file-input').click()" ondragover="handleCSVDragOver(event)" ondragleave="handleCSVDragLeave(event)" ondrop="handleCSVFileDrop(event)">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">📥</div>
+        <div style="font-size: 0.95rem; font-weight: 600; color: #94a3b8;">Drop CSV file here or click to browse</div>
+        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">Supports comma-separated UTF-8 (.csv) with header row</div>
+        <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display: none;" onchange="handleCSVFileSelected(event)" />
+      </div>
+
+      <!-- Preview Section -->
+      <div id="csv-preview-section" style="display: none; margin-top: 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+          <div style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">File Preview: <span id="csv-file-name" style="color: #60a5fa;"></span> (<span id="csv-row-count"></span> rows)</div>
+          <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.7rem;" onclick="resetCSVImport()">Change File</button>
+        </div>
+        <div style="max-height: 180px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: #090d16;">
+          <table id="csv-preview-table" style="font-size: 0.75rem; margin-top: 0;">
+            <thead><tr id="csv-preview-thead"></tr></thead>
+            <tbody id="csv-preview-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeImportCSVModal()">Cancel</button>
+        <button id="btn-submit-import" type="button" class="btn" style="flex: 1; background: var(--success);" disabled onclick="submitCSVImport()">Bulk Insert Records</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Floating Toast Notification -->
   <div id="toast" style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; display: none; z-index: 10000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); border: 1px solid var(--border);"></div>
 
@@ -937,7 +987,10 @@ END;</textarea>
 
         const durationMs = (out.duration_us / 1000).toFixed(2);
 
+        const exportActions = document.getElementById('query-export-actions');
         if (out.error) {
+          lastQueryResult = null;
+          if (exportActions) exportActions.style.display = 'none';
           bannerEl.style.display = 'block';
           bannerEl.style.background = '#7f1d1d';
           bannerEl.style.color = '#fca5a5';
@@ -946,6 +999,8 @@ END;</textarea>
           metaEl.innerText = `Failed in ${durationMs}ms`;
           tableEl.innerHTML = '<thead><tr><th>Error</th></tr></thead><tbody><tr><td>' + out.error + '</td></tr></tbody>';
         } else {
+          lastQueryResult = out;
+          if (exportActions) exportActions.style.display = (out.columns && out.columns.length > 0) ? 'flex' : 'none';
           bannerEl.style.display = 'block';
           bannerEl.style.background = '#064e3b';
           bannerEl.style.color = '#6ee7b7';
@@ -1030,6 +1085,221 @@ END;</textarea>
       toastTimeout = setTimeout(() => {
         toast.style.display = 'none';
       }, 3200);
+    }
+
+    // --- Data Export & Import Handlers ---
+    let lastQueryResult = null;
+
+    function downloadBlob(blob, filename) {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }
+
+    function exportQueryResult(format) {
+      if (!lastQueryResult || !lastQueryResult.columns || !lastQueryResult.rows) {
+        showToast('No query result data to export', true);
+        return;
+      }
+      const filename = `query_result_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_')}.${format}`;
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(lastQueryResult.rows, null, 2)], { type: 'application/json' });
+        downloadBlob(blob, filename);
+      } else {
+        const cols = lastQueryResult.columns;
+        const csvRows = [cols.join(',')];
+        lastQueryResult.rows.forEach(r => {
+          const line = cols.map(c => {
+            const val = r[c];
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/"/g, '""');
+            return `"${str}"`;
+          }).join(',');
+          csvRows.push(line);
+        });
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        downloadBlob(blob, filename);
+      }
+      showToast(`Exported ${lastQueryResult.rows.length} rows as ${format.toUpperCase()}`);
+    }
+
+    async function exportCurrentTable(format) {
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl) {
+        showToast('Please select a table to export', true);
+        return;
+      }
+      try {
+        const res = await authFetch(`/api/tables/${tbl}/export?format=${format}`);
+        if (!res.ok) {
+          const err = await res.json();
+          showToast('Export failed: ' + (err.error || res.statusText), true);
+          return;
+        }
+        const blob = await res.blob();
+        downloadBlob(blob, `${tbl}.${format}`);
+        showToast(`Exported table "${tbl}" as ${format.toUpperCase()}`);
+      } catch (err) {
+        showToast('Export network error: ' + err, true);
+      }
+    }
+
+    let currentCSVImportFile = null;
+    let currentCSVImportContent = null;
+
+    function openImportCSVModal() {
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl) {
+        showToast('Please select a table to import records into', true);
+        return;
+      }
+      document.getElementById('import-modal-subtitle').innerText = `Bulk insert records into table "${tbl}" in a single ACID transaction.`;
+      resetCSVImport();
+      document.getElementById('import-csv-error').style.display = 'none';
+      document.getElementById('import-csv-modal').style.display = 'flex';
+    }
+
+    function closeImportCSVModal() {
+      document.getElementById('import-csv-modal').style.display = 'none';
+    }
+
+    function resetCSVImport() {
+      currentCSVImportFile = null;
+      currentCSVImportContent = null;
+      document.getElementById('csv-file-input').value = '';
+      document.getElementById('csv-drop-zone').style.display = 'block';
+      document.getElementById('csv-preview-section').style.display = 'none';
+      document.getElementById('btn-submit-import').disabled = true;
+      document.getElementById('import-csv-error').style.display = 'none';
+    }
+
+    function handleCSVDragOver(e) {
+      e.preventDefault();
+      document.getElementById('csv-drop-zone').style.borderColor = '#3b82f6';
+      document.getElementById('csv-drop-zone').style.background = '#1e293b';
+    }
+
+    function handleCSVDragLeave(e) {
+      e.preventDefault();
+      document.getElementById('csv-drop-zone').style.borderColor = '#475569';
+      document.getElementById('csv-drop-zone').style.background = '#0c1220';
+    }
+
+    function handleCSVFileDrop(e) {
+      e.preventDefault();
+      handleCSVDragLeave(e);
+      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        processCSVFile(e.dataTransfer.files[0]);
+      }
+    }
+
+    function handleCSVFileSelected(e) {
+      if (e.target.files && e.target.files.length > 0) {
+        processCSVFile(e.target.files[0]);
+      }
+    }
+
+    function processCSVFile(file) {
+      if (!file.name.toLowerCase().endsWith('.csv') && file.type !== 'text/csv') {
+        const errEl = document.getElementById('import-csv-error');
+        errEl.innerText = 'Please select a valid .csv file.';
+        errEl.style.display = 'block';
+        return;
+      }
+      currentCSVImportFile = file;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        currentCSVImportContent = evt.target.result;
+        previewCSVData(file.name, currentCSVImportContent);
+      };
+      reader.readAsText(file);
+    }
+
+    function previewCSVData(filename, content) {
+      const lines = content.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+      if (lines.length < 2) {
+        const errEl = document.getElementById('import-csv-error');
+        errEl.innerText = 'CSV file must contain at least a header row and 1 data row.';
+        errEl.style.display = 'block';
+        return;
+      }
+      document.getElementById('import-csv-error').style.display = 'none';
+      document.getElementById('csv-file-name').innerText = filename;
+      document.getElementById('csv-row-count').innerText = lines.length - 1;
+
+      function parseCSVLine(line) {
+        const res = [];
+        let cur = '';
+        let inQuote = false;
+        for (let i = 0; i < line.length; i++) {
+          const ch = line[i];
+          if (ch === '"') {
+            if (inQuote && line[i+1] === '"') { cur += '"'; i++; }
+            else { inQuote = !inQuote; }
+          } else if (ch === ',' && !inQuote) {
+            res.push(cur.trim());
+            cur = '';
+          } else {
+            cur += ch;
+          }
+        }
+        res.push(cur.trim());
+        return res;
+      }
+
+      const headers = parseCSVLine(lines[0]);
+      const thead = headers.map(h => `<th style="padding: 4px 8px;">${escapeHtml(h)}</th>`).join('');
+      document.getElementById('csv-preview-thead').innerHTML = thead;
+
+      const previewRows = lines.slice(1, 4);
+      const tbody = previewRows.map(row => {
+        const cols = parseCSVLine(row);
+        return '<tr>' + headers.map((_, i) => `<td style="padding: 4px 8px;">${escapeHtml(cols[i] || '')}</td>`).join('') + '</tr>';
+      }).join('');
+      document.getElementById('csv-preview-tbody').innerHTML = tbody;
+
+      document.getElementById('csv-drop-zone').style.display = 'none';
+      document.getElementById('csv-preview-section').style.display = 'block';
+      document.getElementById('btn-submit-import').disabled = false;
+    }
+
+    async function submitCSVImport() {
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl || !currentCSVImportContent) return;
+
+      const errEl = document.getElementById('import-csv-error');
+      const submitBtn = document.getElementById('btn-submit-import');
+      errEl.style.display = 'none';
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Importing...';
+
+      try {
+        const res = await authFetch(`/api/tables/${tbl}/import`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/csv' },
+          body: currentCSVImportContent
+        });
+        const data = await res.json();
+        if (res.ok) {
+          closeImportCSVModal();
+          showToast(`Successfully imported ${data.imported} records into "${tbl}"!`);
+          loadRecords();
+        } else {
+          errEl.innerText = data.error || 'Import failed.';
+          errEl.style.display = 'block';
+        }
+      } catch (err) {
+        errEl.innerText = 'Network error: ' + err;
+        errEl.style.display = 'block';
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Bulk Insert Records';
+      }
     }
 
     // --- Table Management & Selection State ---
