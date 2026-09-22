@@ -1128,6 +1128,11 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 		}
 	}
 
+	// Intercept Virtual System Catalog Views (sys.* and information_schema.*)
+	if s.isVirtualCatalogTable(tableName) {
+		return s.execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause, limitCount, start)
+	}
+
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
 		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
@@ -2605,6 +2610,178 @@ func (s *Server) execProcedureCall(query string, start time.Time) (*QueryResult,
 		RowsAffected: 1,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     messages,
+	}, nil
+}
+
+// --- Virtual System Catalog Views (sys.* and information_schema.*) ---
+
+func (s *Server) isVirtualCatalogTable(tableName string) bool {
+	lower := strings.ToLower(cleanIdentifier(tableName))
+	switch lower {
+	case "sys.tables", "systables", "sys_tables",
+		"sys.columns", "syscolumns", "sys_columns",
+		"sys.indexes", "sysindexes", "sys_indexes",
+		"sys.databases", "sysdatabases", "sys_databases",
+		"sys.procedures", "sysprocedures", "sys_procedures",
+		"information_schema.tables",
+		"information_schema.columns",
+		"information_schema.schemata",
+		"information_schema.routines":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause string, limitCount int, start time.Time) (*QueryResult, error) {
+	norm := strings.ToLower(cleanIdentifier(tableName))
+	norm = strings.TrimPrefix(norm, "dbo.")
+
+	var columns []string
+	var allRows []map[string]any
+
+	tables, _ := s.engine.ListTables()
+
+	switch norm {
+	case "sys.tables", "systables", "sys_tables", "information_schema.tables":
+		columns = []string{"table_name", "table_type", "table_schema", "column_count", "create_date"}
+		for _, t := range tables {
+			allRows = append(allRows, map[string]any{
+				"table_name":   t.Name,
+				"table_type":   "BASE TABLE",
+				"table_schema": "dbo",
+				"column_count": len(t.Columns),
+				"create_date":  "2026-01-01T00:00:00Z",
+			})
+		}
+
+	case "sys.columns", "syscolumns", "sys_columns", "information_schema.columns":
+		columns = []string{"table_name", "column_name", "data_type", "is_nullable", "is_primary_key", "ordinal_position"}
+		for _, t := range tables {
+			for i, c := range t.Columns {
+				nullableStr := "YES"
+				if !c.Nullable {
+					nullableStr = "NO"
+				}
+				allRows = append(allRows, map[string]any{
+					"table_name":       t.Name,
+					"column_name":      c.Name,
+					"data_type":        c.Type.String(),
+					"is_nullable":      nullableStr,
+					"is_primary_key":   c.PrimaryKey,
+					"ordinal_position": i + 1,
+				})
+			}
+		}
+
+	case "sys.indexes", "sysindexes", "sys_indexes":
+		columns = []string{"table_name", "index_name", "is_unique", "columns"}
+		for _, t := range tables {
+			for _, idx := range t.Indexes {
+				allRows = append(allRows, map[string]any{
+					"table_name": t.Name,
+					"index_name": idx.Name,
+					"is_unique":  idx.Unique,
+					"columns":    strings.Join(idx.Columns, ", "),
+				})
+			}
+		}
+
+	case "sys.databases", "sysdatabases", "sys_databases", "information_schema.schemata":
+		columns = []string{"name", "database_id", "create_date", "state_desc"}
+		allRows = append(allRows, map[string]any{
+			"name":        "sqlion",
+			"database_id": 1,
+			"create_date": "2026-01-01T00:00:00Z",
+			"state_desc":  "ONLINE",
+		})
+
+	case "sys.procedures", "sysprocedures", "sys_procedures", "information_schema.routines":
+		columns = []string{"routine_name", "routine_type", "routine_schema", "created_date"}
+		if s.catalog != nil {
+			for _, p := range s.catalog.ListProcedures() {
+				allRows = append(allRows, map[string]any{
+					"routine_name":   p.Name,
+					"routine_type":   "PROCEDURE",
+					"routine_schema": "dbo",
+					"created_date":   p.CreatedAt.Format(time.RFC3339),
+				})
+			}
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported virtual system table: %s", tableName)
+	}
+
+	// Filter rows by whereClause
+	var filteredRows []map[string]any
+	for _, r := range allRows {
+		if whereClause == "" || evaluateWhereConditionMap(r, whereClause) {
+			filteredRows = append(filteredRows, r)
+		}
+	}
+
+	// Order by
+	if orderByClause != "" && len(filteredRows) > 0 {
+		orderParts := strings.Fields(orderByClause)
+		orderCol := cleanIdentifier(orderParts[0])
+		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
+		sort.Slice(filteredRows, func(i, j int) bool {
+			v1 := fmt.Sprintf("%v", filteredRows[i][orderCol])
+			v2 := fmt.Sprintf("%v", filteredRows[j][orderCol])
+			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
+				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
+					if desc {
+						return n1 > n2
+					}
+					return n1 < n2
+				}
+			}
+			if desc {
+				return v1 > v2
+			}
+			return v1 < v2
+		})
+	}
+
+	// Limit
+	if limitCount >= 0 && len(filteredRows) > limitCount {
+		filteredRows = filteredRows[:limitCount]
+	}
+
+	// Projection
+	var selectedCols []string
+	if projStr == "*" || projStr == "" {
+		selectedCols = columns
+	} else {
+		for _, c := range strings.Split(projStr, ",") {
+			cTrimmed := cleanIdentifier(strings.TrimSpace(c))
+			if cTrimmed != "" {
+				selectedCols = append(selectedCols, cTrimmed)
+			}
+		}
+	}
+
+	finalRows := make([]map[string]any, 0, len(filteredRows))
+	for _, fr := range filteredRows {
+		row := make(map[string]any, len(selectedCols))
+		for _, col := range selectedCols {
+			if v, ok := fr[col]; ok {
+				row[col] = v
+			} else {
+				row[col] = nil
+			}
+		}
+		finalRows = append(finalRows, row)
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      selectedCols,
+		Rows:         finalRows,
+		RowsAffected: int64(len(finalRows)),
+		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
 

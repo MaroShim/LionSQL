@@ -698,3 +698,74 @@ func TestSQLExecutor_SessionVariables(t *testing.T) {
 		t.Fatalf("unexpected script result: %+v", scriptRes)
 	}
 }
+
+func TestSQLExecutor_VirtualCatalogViews(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// Create test tables and procedures
+	_, _ = server.ExecuteSQL(`CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50) NOT NULL, age INT);`)
+	_, _ = server.ExecuteSQL(`CREATE TABLE orders (order_id INT PRIMARY KEY, user_id INT, amount FLOAT);`)
+	_, _ = server.ExecuteSQL(`CREATE INDEX idx_user_name ON users (name);`)
+
+	// 1. Query sys.tables
+	res, err := server.ExecuteSQL(`SELECT table_name, column_count FROM sys.tables ORDER BY table_name ASC;`)
+	if err != nil || !res.Success {
+		t.Fatalf("query sys.tables failed: %v", err)
+	}
+	if len(res.Rows) < 2 {
+		t.Fatalf("expected at least 2 tables in sys.tables, got %d", len(res.Rows))
+	}
+	foundUsers := false
+	for _, r := range res.Rows {
+		if r["table_name"] == "users" {
+			foundUsers = true
+		}
+	}
+	if !foundUsers {
+		t.Errorf("users table not found in sys.tables")
+	}
+
+	// 2. Query information_schema.tables with WHERE
+	res, err = server.ExecuteSQL(`SELECT table_name, table_type FROM information_schema.tables WHERE table_name = 'orders';`)
+	if err != nil || !res.Success {
+		t.Fatalf("query information_schema.tables failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["table_name"] != "orders" {
+		t.Fatalf("unexpected information_schema.tables result: %+v", res.Rows)
+	}
+
+	// 3. Query sys.columns
+	res, err = server.ExecuteSQL(`SELECT column_name, data_type, is_nullable FROM sys.columns WHERE table_name = 'users' ORDER BY ordinal_position ASC;`)
+	if err != nil || !res.Success {
+		t.Fatalf("query sys.columns failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 columns for users table, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if res.Rows[0]["column_name"] != "id" || res.Rows[1]["column_name"] != "name" {
+		t.Errorf("unexpected columns: %+v", res.Rows)
+	}
+
+	// 4. Query sys.indexes
+	res, err = server.ExecuteSQL(`SELECT index_name, table_name FROM sys.indexes WHERE table_name = 'users';`)
+	if err != nil || !res.Success {
+		t.Fatalf("query sys.indexes failed: %v", err)
+	}
+	if len(res.Rows) < 1 || res.Rows[0]["index_name"] != "idx_user_name" {
+		t.Fatalf("expected idx_user_name in sys.indexes, got: %+v", res.Rows)
+	}
+
+	// 5. Query sys.databases
+	res, err = server.ExecuteSQL(`SELECT name, database_id, state_desc FROM sys.databases;`)
+	if err != nil || !res.Success {
+		t.Fatalf("query sys.databases failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["name"] != "sqlion" {
+		t.Fatalf("unexpected sys.databases: %+v", res.Rows)
+	}
+}
+
