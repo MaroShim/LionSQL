@@ -34,6 +34,8 @@ func main() {
 	adminEmail := flag.String("admin-email", "admin@sqlion.local", "Default superuser email")
 	adminPass := flag.String("admin-pass", "1234567890", "Default superuser password")
 	enableAuth := flag.Bool("auth", false, "Enforce JWT authentication on protected REST endpoints")
+	maxWorkers := flag.Int("max-workers", 0, "Max concurrent query execution workers (default: NumCPU * 4)")
+	maxIdleSessions := flag.Int("max-idle-sessions", 64, "Max idle storage sessions to retain in pool")
 
 	// Daemon control flags
 	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
@@ -102,6 +104,17 @@ func main() {
 	_, _ = authSvc.EnsureDefaultSuperuser(*adminEmail, *adminPass)
 
 	server := api.NewServerWithAuth(cat, eng, authSvc, *enableAuth)
+	if *maxWorkers > 0 || *maxIdleSessions > 0 {
+		poolCfg := api.DefaultPoolConfig()
+		if *maxWorkers > 0 {
+			poolCfg.MaxWorkers = *maxWorkers
+		}
+		if *maxIdleSessions > 0 {
+			poolCfg.MaxIdleSessions = *maxIdleSessions
+		}
+		server.SetPoolConfig(poolCfg)
+	}
+
 	httpServer := &http.Server{
 		Addr:         *httpAddr,
 		Handler:      server.Handler(),
@@ -136,6 +149,8 @@ func main() {
 		fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (DBeaver / Azure Data Studio / pymssql)\n", strings.Split(*tdsAddr, ":")[1])
 		fmt.Printf(" [Data Directory] %s\n", *dataDir)
 		fmt.Printf(" [Storage Engine] %s\n", *engineType)
+		stats := server.Pool().Stats()
+		fmt.Printf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", stats.MaxWorkers, stats.MaxIdleSessions)
 		fmt.Println("------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")
 

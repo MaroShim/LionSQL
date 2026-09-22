@@ -39,6 +39,7 @@ type Server struct {
 	auth       *auth.AuthService
 	enableAuth bool
 	broker     *RealtimeBroker
+	pool       *SessionPool
 	mux        *http.ServeMux
 	sessions   map[string]*ClientSession
 	sessMu     sync.RWMutex
@@ -58,6 +59,7 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "1234567890")
 	}
 	cache := runtime.NewPlanCache()
+	pool := NewSessionPool(eng, DefaultPoolConfig())
 	s := &Server{
 		catalog:    cat,
 		engine:     eng,
@@ -66,11 +68,25 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		auth:       authSvc,
 		enableAuth: enableAuth,
 		broker:     NewRealtimeBroker(),
+		pool:       pool,
 		mux:        http.NewServeMux(),
 		sessions:   make(map[string]*ClientSession),
 	}
 	s.routes()
 	return s
+}
+
+// Pool returns the underlying goroutine connection & session pool.
+func (s *Server) Pool() *SessionPool {
+	return s.pool
+}
+
+// SetPoolConfig updates the connection pool configuration.
+func (s *Server) SetPoolConfig(cfg PoolConfig) {
+	if s.pool != nil {
+		_ = s.pool.Close()
+	}
+	s.pool = NewSessionPool(s.engine, cfg)
 }
 
 // Broker returns the active realtime pub/sub broker.
@@ -100,10 +116,17 @@ func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
 		return cs, nil
 	}
 
-	sess, err := s.engine.NewSession()
+	var sess storage.Session
+	var err error
+	if s.pool != nil {
+		sess, err = s.pool.AcquireSession()
+	} else {
+		sess, err = s.engine.NewSession()
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	cs := &ClientSession{
 		ID:      id,
 		Session: sess,
@@ -111,6 +134,38 @@ func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
 	}
 	s.sessions[id] = cs
 	return cs, nil
+}
+
+// CloseSession gracefully closes and unregisters a client session, returning the underlying session to the pool.
+func (s *Server) CloseSession(id string) {
+	if id == "" || id == "default" {
+		return
+	}
+	s.sessMu.Lock()
+	cs, exists := s.sessions[id]
+	if exists {
+		delete(s.sessions, id)
+	}
+	s.sessMu.Unlock()
+
+	if exists && cs != nil {
+		cs.mu.Lock()
+		if cs.Tx != nil {
+			_ = cs.Tx.Rollback()
+			cs.Tx = nil
+		}
+		storageSess := cs.Session
+		cs.Session = nil
+		cs.mu.Unlock()
+
+		if storageSess != nil {
+			if s.pool != nil {
+				s.pool.ReleaseSession(storageSess)
+			} else {
+				_ = storageSess.Close()
+			}
+		}
+	}
 }
 
 // Handler returns the HTTP handler.
@@ -141,6 +196,15 @@ func (s *Server) routes() {
 	// API Health
 	s.mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "1.0.0"})
+	})
+
+	// Connection Pool & Worker Metrics (Built-in Connection Pooler)
+	s.mux.HandleFunc("GET /api/pool/stats", func(w http.ResponseWriter, r *http.Request) {
+		if s.pool != nil {
+			writeJSON(w, http.StatusOK, s.pool.Stats())
+		} else {
+			writeJSON(w, http.StatusOK, map[string]string{"status": "pool_disabled"})
+		}
 	})
 
 	// Realtime SSE Change Stream (PocketBase-style Live Event Stream)

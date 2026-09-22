@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"strings"
+	"sync"
 	"testing"
 
 	"sqlion/pkg/catalog"
@@ -322,3 +323,89 @@ func TestWire_ExtendedQueryProtocol(t *testing.T) {
 		t.Fatalf("Expected CloseComplete ('3'), got %c", header[0])
 	}
 }
+
+func TestWire_ConcurrentConnectionMultiplexing(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+
+	const numClients = 30
+	var wg sync.WaitGroup
+	wg.Add(numClients)
+
+	for i := 0; i < numClients; i++ {
+		go func(clientID int) {
+			defer wg.Done()
+
+			clientConn, serverConn := net.Pipe()
+			defer clientConn.Close()
+			defer serverConn.Close()
+
+			go srv.handleConnection(serverConn)
+
+			// 1. Startup message
+			startupBuf := make([]byte, 8)
+			binary.BigEndian.PutUint32(startupBuf[:4], 8)
+			binary.BigEndian.PutUint32(startupBuf[4:8], 196608) // 3.0
+			if _, err := clientConn.Write(startupBuf); err != nil {
+				t.Errorf("client %d failed write startup: %v", clientID, err)
+				return
+			}
+
+			// Read until ReadyForQuery ('Z')
+			header := make([]byte, 5)
+			for {
+				if _, err := io.ReadFull(clientConn, header); err != nil {
+					t.Errorf("client %d handshake read header failed: %v", clientID, err)
+					return
+				}
+				msgLen := binary.BigEndian.Uint32(header[1:5])
+				payload := make([]byte, msgLen-4)
+				if _, err := io.ReadFull(clientConn, payload); err != nil {
+					t.Errorf("client %d handshake read payload failed: %v", clientID, err)
+					return
+				}
+				if header[0] == MsgReadyForQuery {
+					break
+				}
+			}
+
+			// 2. Execute query
+			query := "SELECT * FROM accounts;\x00"
+			queryBuf := make([]byte, 1+4+len(query))
+			queryBuf[0] = 'Q'
+			binary.BigEndian.PutUint32(queryBuf[1:5], uint32(4+len(query)))
+			copy(queryBuf[5:], query)
+
+			if _, err := clientConn.Write(queryBuf); err != nil {
+				t.Errorf("client %d send query failed: %v", clientID, err)
+				return
+			}
+
+			gotComplete := false
+			for {
+				if _, err := io.ReadFull(clientConn, header); err != nil {
+					t.Errorf("client %d query response read failed: %v", clientID, err)
+					return
+				}
+				msgLen := binary.BigEndian.Uint32(header[1:5])
+				payload := make([]byte, msgLen-4)
+				if _, err := io.ReadFull(clientConn, payload); err != nil {
+					t.Errorf("client %d payload read failed: %v", clientID, err)
+					return
+				}
+				if header[0] == MsgCommandComplete {
+					gotComplete = true
+				}
+				if header[0] == MsgReadyForQuery {
+					break
+				}
+			}
+
+			if !gotComplete {
+				t.Errorf("client %d did not receive CommandComplete", clientID)
+			}
+		}(i)
+	}
+
+	wg.Wait()
+}
+

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
@@ -19,15 +20,16 @@ import (
 
 // Server implements a PostgreSQL Wire Protocol v3 listener.
 type Server struct {
-	addr      string
-	listener  net.Listener
-	engine    storage.Engine
-	catalog   *catalog.Catalog
-	apiServer *api.Server
-	planCache *proc.PlanCache
-	executor  *runtime.Executor
-	mu        sync.Mutex
-	closed    bool
+	addr        string
+	listener    net.Listener
+	engine      storage.Engine
+	catalog     *catalog.Catalog
+	apiServer   *api.Server
+	planCache   *proc.PlanCache
+	executor    *runtime.Executor
+	connCounter uint64
+	mu          sync.Mutex
+	closed      bool
 }
 
 // NewServer creates a new PostgreSQL wire protocol server.
@@ -100,6 +102,10 @@ type Portal struct {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
+	connID := atomic.AddUint64(&s.connCounter, 1)
+	sessID := fmt.Sprintf("pg-%d", connID)
+	defer s.apiServer.CloseSession(sessID)
+
 	// 1. Initial Handshake: SSL or Startup
 	buf := make([]byte, 8)
 	if _, err := io.ReadFull(conn, buf); err != nil {
@@ -163,7 +169,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		switch msgType {
 		case 'Q': // Simple Query
 			query := string(bytes.TrimRight(payload, "\x00"))
-			s.handleSimpleQuery(conn, query)
+			s.handleSimpleQuery(conn, query, sessID)
 
 		case 'P': // Parse
 			s.handleParse(conn, payload, statements)
@@ -175,7 +181,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			s.handleDescribe(conn, payload, statements, portals)
 
 		case 'E': // Execute
-			s.handleExecute(conn, payload, portals)
+			s.handleExecute(conn, payload, portals, sessID)
 
 		case 'S': // Sync
 			_ = WriteReadyForQuery(conn)
@@ -196,9 +202,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 }
 
-func (s *Server) handleSimpleQuery(conn net.Conn, query string) {
+func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 	defer WriteReadyForQuery(conn)
-	s.runAndWriteQuery(conn, query, true)
+	s.runAndWriteQuery(conn, query, true, sessID)
 }
 
 func (s *Server) handleParse(conn net.Conn, payload []byte, statements map[string]*PreparedStatement) {
@@ -335,7 +341,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string) {
 	_ = WriteNoData(conn)
 }
 
-func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string]*Portal) {
+func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string]*Portal, sessID string) {
 	r := bytes.NewReader(payload)
 	portalName, _ := readCString(r)
 
@@ -346,7 +352,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 	}
 
 	substitutedSQL := substituteParams(portal.Statement.Query, portal.Params)
-	s.runAndWriteQuery(conn, substitutedSQL, false)
+	s.runAndWriteQuery(conn, substitutedSQL, false, sessID)
 }
 
 func (s *Server) handleClose(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
@@ -362,7 +368,7 @@ func (s *Server) handleClose(conn net.Conn, payload []byte, statements map[strin
 	_ = WriteCloseComplete(conn)
 }
 
-func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool) {
+func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool, sessID string) {
 	trimmed := strings.TrimSpace(query)
 	upper := strings.ToUpper(trimmed)
 
@@ -377,7 +383,10 @@ func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool
 		return
 	}
 
-	res, err := s.apiServer.ExecuteSQL(trimmed)
+	if sessID == "" {
+		sessID = "default"
+	}
+	res, err := s.apiServer.ExecuteSessionSQL(sessID, trimmed)
 	if err != nil {
 		_ = WriteError(conn, err.Error())
 		return

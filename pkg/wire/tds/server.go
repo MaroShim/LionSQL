@@ -131,6 +131,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		Database:   "master",
 		PacketSize: DefaultPacketSize,
 	}
+	defer s.apiServer.CloseSession(sess.SessionID)
 
 	for {
 		pkt, err := ReadPacket(conn)
