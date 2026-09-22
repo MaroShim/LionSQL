@@ -3,9 +3,32 @@ package proc
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"sqlion/pkg/storage"
 )
+
+// ProcedureFallbackParser represents a pluggable parser invoked when the primary Pratt parser fails.
+type ProcedureFallbackParser func(script string) (*CreateProcStmt, error)
+
+var (
+	procFallbackMu     sync.RWMutex
+	procFallbackParser ProcedureFallbackParser
+)
+
+// RegisterProcedureFallback registers a fallback procedure parser (such as ANTLR).
+func RegisterProcedureFallback(p ProcedureFallbackParser) {
+	procFallbackMu.Lock()
+	defer procFallbackMu.Unlock()
+	procFallbackParser = p
+}
+
+// GetProcedureFallback returns the registered fallback parser, if any.
+func GetProcedureFallback() ProcedureFallbackParser {
+	procFallbackMu.RLock()
+	defer procFallbackMu.RUnlock()
+	return procFallbackParser
+}
 
 // Compiler compiles AST nodes into executable bytecode Programs.
 type Compiler struct {
@@ -43,6 +66,15 @@ func Compile(sql string) (*Program, error) {
 		parser := NewParser(lexer)
 		stmt, err := parser.ParseProcedure()
 		if err != nil {
+			if fb := GetProcedureFallback(); fb != nil {
+				fbStmt, fbErr := fb(sql)
+				if fbErr == nil && fbStmt != nil {
+					return CompileProcedure(fbStmt)
+				}
+				if fbErr != nil {
+					return nil, fmt.Errorf("fallback error: %w", fbErr)
+				}
+			}
 			return nil, err
 		}
 		return CompileProcedure(stmt)

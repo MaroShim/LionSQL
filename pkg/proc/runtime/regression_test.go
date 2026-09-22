@@ -700,3 +700,66 @@ END;
 		t.Errorf("ANTLR expected 75, got %v", resAntlr.ReturnValue)
 	}
 }
+
+func TestRegression_AntlrFallbackRuntimeExecution(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "balance", Type: storage.TypeInt},
+		},
+	}
+	_ = eng.CreateTable(schema)
+
+	session, _ := eng.NewSession()
+	tx, _ := session.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("accounts", storage.Record{"id": storage.IntValue(1), "balance": storage.IntValue(1000)})
+	_ = tx.Commit()
+	session.Close()
+
+	// T-SQL with schema prefix and WITH RECOMPILE option that Pratt parser cannot parse
+	tsql := `
+CREATE PROCEDURE dbo.AwardLoyaltyBonus
+    @acc_id INT,
+    @bonus INT
+WITH RECOMPILE
+AS
+BEGIN
+    UPDATE accounts SET balance = balance + @bonus WHERE id = @acc_id;
+    RETURN 0;
+END;
+`
+	cache := runtime.NewPlanCache()
+	prog, err := cache.GetOrCompile(tsql)
+	if err != nil {
+		t.Fatalf("PlanCache GetOrCompile with ANTLR fallback failed: %v", err)
+	}
+
+	execSession, _ := eng.NewSession()
+	defer execSession.Close()
+	executor := runtime.NewExecutor(cache)
+
+	res, err := executor.Run(prog, "AwardLoyaltyBonus", map[string]any{
+		"acc_id": 1,
+		"bonus":  250,
+	}, execSession)
+	if err != nil {
+		t.Fatalf("Executor failed to run ANTLR-compiled procedure: %v", err)
+	}
+	if fmt.Sprintf("%v", res.ReturnValue) != "0" {
+		t.Errorf("expected return value 0, got %v", res.ReturnValue)
+	}
+
+	// Verify balance is 1250
+	checkTx, _ := execSession.BeginTx(storage.TxOptions{ReadOnly: true})
+	rec, err := checkTx.Get("accounts", storage.IntValue(1))
+	checkTx.Rollback()
+	if err != nil || rec["balance"].IVal != 1250 {
+		t.Errorf("expected balance 1250, got %v (err: %v)", rec["balance"], err)
+	}
+}
+

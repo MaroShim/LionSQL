@@ -9,6 +9,7 @@ import (
 
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/proc"
+	_ "sqlion/pkg/proc/parser/antlr"
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/ui"

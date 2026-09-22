@@ -422,6 +422,11 @@ func parseDataType(s string) storage.DataType {
 	}
 }
 
+// ParseStatement parses a single statement from the current token position.
+func (p *Parser) ParseStatement() (Statement, error) {
+	return p.parseStatement()
+}
+
 func (p *Parser) parseStatement() (Statement, error) {
 	switch p.curToken.Type {
 	case TokenBegin:

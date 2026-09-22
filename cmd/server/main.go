@@ -15,6 +15,7 @@ import (
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/proc"
+	_ "sqlion/pkg/proc/parser/antlr"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
 	"sqlion/pkg/storage/wiredtiger"

@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
@@ -8,14 +9,19 @@ import (
 	"sqlion/pkg/storage"
 )
 
+func init() {
+	proc.RegisterProcedureFallback(BuildProcedure)
+}
+
 // ASTBuilder traverses an ANTLR T-SQL CST and builds SQLion's executable AST.
 type ASTBuilder struct {
 	BaseTSqlParserVisitor
+	script string
 }
 
 // NewASTBuilder creates a new ASTBuilder.
-func NewASTBuilder() *ASTBuilder {
-	return &ASTBuilder{}
+func NewASTBuilder(script string) *ASTBuilder {
+	return &ASTBuilder{script: script}
 }
 
 // BuildProcedure parses a CREATE PROCEDURE T-SQL script using ANTLR and builds a CreateProcStmt AST.
@@ -30,13 +36,17 @@ func BuildProcedure(script string) (*proc.CreateProcStmt, error) {
 	lexer := proc.NewLexer(script)
 	parser := proc.NewParser(lexer)
 	plan, err := parser.ParseProcedure()
-	if err != nil {
+	if err != nil || plan == nil || plan.Body == nil {
 		// If native parser fails, fallback to visitor builder
-		builder := NewASTBuilder()
-		if node, ok := builder.Visit(res.Tree).(*proc.CreateProcStmt); ok && node != nil {
+		builder := NewASTBuilder(script)
+		val := builder.Visit(res.Tree)
+		if node, ok := val.(*proc.CreateProcStmt); ok && node != nil && node.Body != nil {
 			return node, nil
 		}
-		return nil, err
+		if err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("ANTLR fallback failed to build procedure AST from script")
 	}
 
 	return plan, nil
@@ -81,6 +91,10 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 	var procName string
 	if ctx.Func_proc_name_schema() != nil {
 		procName = ctx.Func_proc_name_schema().GetText()
+		if idx := strings.LastIndex(procName, "."); idx >= 0 {
+			procName = procName[idx+1:]
+		}
+		procName = strings.Trim(procName, "[]")
 	}
 
 	params := make([]proc.ParamDef, 0)
@@ -93,9 +107,42 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 		params = append(params, proc.ParamDef{Name: pName, Type: pType})
 	}
 
+	var stmts []proc.Statement
+	clauses := ctx.AllSql_clauses()
+	for _, clause := range clauses {
+		startTok := clause.GetStart()
+		stopTok := clause.GetStop()
+		if startTok == nil || stopTok == nil {
+			continue
+		}
+		var clauseText string
+		startIdx := startTok.GetStart()
+		stopIdx := stopTok.GetStop() + 1
+		if b.script != "" && startIdx >= 0 && stopIdx <= len(b.script) && startIdx < stopIdx {
+			clauseText = strings.TrimSpace(b.script[startIdx:stopIdx])
+		}
+		if clauseText == "" || clauseText == ";" {
+			continue
+		}
+		cLexer := proc.NewLexer(clauseText)
+		cParser := proc.NewParser(cLexer)
+		s, sErr := cParser.ParseStatement()
+		if sErr == nil && s != nil {
+			stmts = append(stmts, s)
+		}
+	}
+
+	var body proc.Statement
+	if len(stmts) == 1 {
+		body = stmts[0]
+	} else if len(stmts) > 1 {
+		body = &proc.BlockStmt{Statements: stmts}
+	}
+
 	return &proc.CreateProcStmt{
 		Name:   procName,
 		Params: params,
+		Body:   body,
 	}
 }
 

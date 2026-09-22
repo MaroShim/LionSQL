@@ -36,6 +36,14 @@ func (c *PlanCache) GetOrCompile(script string) (*CreateProcStmt, error) {
 	parser := NewParser(lexer)
 	plan, err := parser.ParseProcedure()
 	if err != nil {
+		if fb := GetProcedureFallback(); fb != nil {
+			if fbPlan, fbErr := fb(script); fbErr == nil && fbPlan != nil {
+				plan = fbPlan
+				err = nil
+			}
+		}
+	}
+	if err != nil {
 		return nil, fmt.Errorf("compile error: %w", err)
 	}
 
