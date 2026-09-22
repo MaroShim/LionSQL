@@ -366,17 +366,21 @@ SQLion exposes a complete PocketBase-style REST API on `:8090`:
 
 SQLion provides comprehensive documentation covering system architecture, operational runbooks, internal engine specifications, and API guides:
 
-### Core Architecture & Technical Internals
+### Core Architecture & Internals Specifications
 - **[System Architecture Specification](doc/ARCHITECTURE.md)**: Exhaustive technical specification covering Volcano iterators, dual-parser decoupling, and storage backends.
 - **[Architecture Decision Records (ADRs)](doc/ADR.md)**: Historical log of 14 foundational architectural decisions (ADR-001 through ADR-014).
 - **[VDBE Bytecode Virtual Machine Internals](doc/INTERNALS_VDBE.md)**: Register allocation, opcode instruction set architecture (ISA), and procedural execution.
 - **[Storage Engine Mechanics (WiredTiger & Memory OCC)](doc/INTERNALS_STORAGE.md)**: Lock-free B+Trees, hazard pointers, OCC validation, and AOF log compaction.
 - **[Cost-Based Optimizer & Volcano Pipeline Internals](doc/INTERNALS_CBO_VOLCANO.md)**: Equi-depth histograms, physical cost formulas, and external merge sort.
 - **[Multi-Wire Protocol Internals](doc/INTERNALS_WIRE_PROTOCOLS.md)**: Binary framing for PostgreSQL v3, TDS 7.x/8.0, and goroutine connection pooler.
+- **[Virtual System Catalog & Data Dictionary](doc/DATA_DICTIONARY.md)**: System views (`sys.*`, `information_schema.*`), data types, and tool compatibility.
+- **[High Availability & Disaster Recovery](doc/HIGH_AVAILABILITY.md)**: Multi-node replication topology, Raft consensus clustering, failover, and recovery SLAs.
+- **[Extension & Driver Development Guide](doc/EXTENSIONS.md)**: Pluggable storage engines, fallback parsers, wire protocol drivers, and sandbox safety.
 
 ### User Guides & Operations
 - **[T-SQL & SQL Syntax Reference Guide](doc/TSQL_REFERENCE.md)**: Complete language reference for procedures, triggers, UDFs, TVFs, and queries.
 - **[HTTP REST API & Realtime SSE Specification](doc/API_REFERENCE.md)**: OpenAPI-style endpoint documentation and JavaScript EventSource examples.
+- **[Observability, Metrics & Telemetry Guide](doc/METRICS.md)**: Prometheus time-series metrics, health probes, alerting rules, and Grafana integration.
 - **[Production Deployment & Operations Runbook](doc/OPERATIONS.md)**: Systemd services, Docker deployment, disaster recovery, and security hardening.
 - **[Performance Tuning & Benchmark Guide](doc/BENCHMARK.md)**: High-concurrency banking benchmark harness, TPS measurement, and memory tuning.
 - **[Database Migration Guide](doc/MIGRATION.md)**: Procedures for migrating from PostgreSQL, MSSQL, SQLite, and MySQL.
@@ -384,6 +388,7 @@ SQLion provides comprehensive documentation covering system architecture, operat
 - **[Engineering Roadmap & Milestones](doc/ROADMAP.md)**: Near-term and long-term milestones (Raft replication, vector search).
 - **[Troubleshooting, Error Diagnostics & FAQ](doc/TROUBLESHOOTING.md)**: Port conflicts, serialization conflicts, slow query tuning, and client driver setup.
 - **[Contributing & Development Guide](CONTRIBUTING.md)**: Engineering standards, 3-stage verification pipeline, and pull request checklist.
+- **[Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md)**: Standards, pledge, enforcement responsibilities, and guidelines.
 - **[Changelog & Release Notes](CHANGELOG.md)**: Semantic versioning history and release notes.
 
 ---
