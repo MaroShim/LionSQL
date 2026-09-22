@@ -19,6 +19,11 @@ const (
 	MsgCloseComplete        byte = '3'
 	MsgNoData               byte = 'n'
 	MsgParameterDescription byte = 't'
+	MsgCopyInResponse       byte = 'G'
+	MsgCopyOutResponse      byte = 'H'
+	MsgCopyData             byte = 'd'
+	MsgCopyDone             byte = 'c'
+	MsgCopyFail             byte = 'f'
 )
 
 // WriteParseComplete sends ParseComplete ('1') message.
@@ -207,6 +212,58 @@ func WriteError(w io.Writer, message string) error {
 
 	buf[idx] = 0 // terminating zero
 
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteCopyInResponse sends CopyInResponse ('G') message.
+func WriteCopyInResponse(w io.Writer, numCols int, format byte) error {
+	payloadLen := 4 + 1 + 2 + numCols*2
+	buf := make([]byte, 1+payloadLen)
+	buf[0] = MsgCopyInResponse
+	binary.BigEndian.PutUint32(buf[1:5], uint32(payloadLen))
+	buf[5] = format
+	binary.BigEndian.PutUint16(buf[6:8], uint16(numCols))
+	offset := 8
+	for i := 0; i < numCols; i++ {
+		binary.BigEndian.PutUint16(buf[offset:offset+2], uint16(format))
+		offset += 2
+	}
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteCopyOutResponse sends CopyOutResponse ('H') message.
+func WriteCopyOutResponse(w io.Writer, numCols int, format byte) error {
+	payloadLen := 4 + 1 + 2 + numCols*2
+	buf := make([]byte, 1+payloadLen)
+	buf[0] = MsgCopyOutResponse
+	binary.BigEndian.PutUint32(buf[1:5], uint32(payloadLen))
+	buf[5] = format
+	binary.BigEndian.PutUint16(buf[6:8], uint16(numCols))
+	offset := 8
+	for i := 0; i < numCols; i++ {
+		binary.BigEndian.PutUint16(buf[offset:offset+2], uint16(format))
+		offset += 2
+	}
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteCopyData sends a CopyData ('d') chunk.
+func WriteCopyData(w io.Writer, data []byte) error {
+	payloadLen := 4 + len(data)
+	buf := make([]byte, 1+payloadLen)
+	buf[0] = MsgCopyData
+	binary.BigEndian.PutUint32(buf[1:5], uint32(payloadLen))
+	copy(buf[5:], data)
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteCopyDone sends a CopyDone ('c') message.
+func WriteCopyDone(w io.Writer) error {
+	buf := []byte{MsgCopyDone, 0, 0, 0, 4}
 	_, err := w.Write(buf)
 	return err
 }

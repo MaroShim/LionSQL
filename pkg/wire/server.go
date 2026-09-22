@@ -169,7 +169,12 @@ func (s *Server) handleConnection(conn net.Conn) {
 		switch msgType {
 		case 'Q': // Simple Query
 			query := string(bytes.TrimRight(payload, "\x00"))
-			s.handleSimpleQuery(conn, query, sessID)
+			trimmed := strings.TrimSpace(query)
+			if strings.HasPrefix(strings.ToUpper(trimmed), "COPY ") {
+				s.handleCopy(conn, trimmed, sessID)
+			} else {
+				s.handleSimpleQuery(conn, query, sessID)
+			}
 
 		case 'P': // Parse
 			s.handleParse(conn, payload, statements)
