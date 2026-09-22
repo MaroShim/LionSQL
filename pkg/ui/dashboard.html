@@ -310,6 +310,15 @@
         <span id="nav-procs-count">0</span>
       </button>
     </nav>
+    <div style="padding: 12px 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
+      <button class="btn btn-secondary" style="width: 100%; font-size: 0.75rem; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="downloadDatabaseBackup()">
+        <span>Snapshot Backup (.tar.gz)</span>
+      </button>
+      <button class="btn btn-secondary" style="width: 100%; font-size: 0.75rem; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="triggerRestoreBackup()">
+        <span>Restore Backup</span>
+      </button>
+      <input type="file" id="backup-file-input" accept=".tar.gz,.tgz" style="display: none;" onchange="handleBackupFileUpload(event)" />
+    </div>
     <div style="padding: 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border);">
       Engine: <span id="engine-type" style="color: #60a5fa;">Active Engine</span><br>
       PocketBase Style Single Binary
@@ -1351,6 +1360,48 @@ END;</textarea>
         showToast(`Exported table "${tbl}" as ${format.toUpperCase()}`);
       } catch (err) {
         showToast('Export network error: ' + err, true);
+      }
+    }
+
+    function downloadDatabaseBackup() {
+      showToast('Preparing snapshot backup download...');
+      window.location.href = '/api/backup?download=1';
+    }
+
+    function triggerRestoreBackup() {
+      const input = document.getElementById('backup-file-input');
+      if (input) input.click();
+    }
+
+    async function handleBackupFileUpload(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+      if (!confirm(`Restore database from "${file.name}"? Existing tables with identical names will be overwritten.`)) {
+        event.target.value = '';
+        return;
+      }
+      showToast(`Uploading and restoring "${file.name}"...`);
+      const formData = new FormData();
+      formData.append('backup', file);
+      try {
+        const res = await authFetch('/api/restore', {
+          method: 'POST',
+          body: formData,
+        });
+        const data = await res.json();
+        if (res.ok) {
+          const tCount = data.result?.tables_restored || 0;
+          const rCount = data.result?.records_restored || 0;
+          showToast(`Snapshot restored successfully: ${tCount} tables, ${rCount} records!`);
+          await loadTables();
+          await loadProcedures();
+        } else {
+          showToast(`Restore failed: ${data.error || res.statusText}`, true);
+        }
+      } catch (err) {
+        showToast(`Restore error: ${err.message}`, true);
+      } finally {
+        event.target.value = '';
       }
     }
 

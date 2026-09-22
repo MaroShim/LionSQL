@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"sqlion/pkg/auth"
+	"sqlion/pkg/backup"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
@@ -261,6 +262,11 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/procs", s.wrapAuth(s.handleListProcs, false, ""))
 	s.mux.HandleFunc("POST /api/procs", s.wrapAuth(s.handleRegisterProc, true, ""))
 	s.mux.HandleFunc("POST /api/procs/{name}/exec", s.wrapAuth(s.handleExecProc, false, ""))
+
+	// Online Snapshot Hot Backup & Restore API
+	s.mux.HandleFunc("POST /api/backup", s.wrapAuth(s.handleBackup, true, ""))
+	s.mux.HandleFunc("GET /api/backup", s.wrapAuth(s.handleBackup, false, ""))
+	s.mux.HandleFunc("POST /api/restore", s.wrapSuperuser(s.handleRestore))
 }
 
 func (s *Server) wrapSuperuser(next http.HandlerFunc) http.HandlerFunc {
@@ -1635,6 +1641,120 @@ func convertValue(v any, targetType storage.DataType) storage.Value {
 		}
 	}
 	return storage.StringValue(fmt.Sprintf("%v", v))
+}
+
+func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
+	// If GET, or download parameter requested, stream backup directly
+	if r.Method == http.MethodGet || r.URL.Query().Get("download") == "true" || r.URL.Query().Get("download") == "1" {
+		filename := fmt.Sprintf("sqlion-backup-%s.tar.gz", time.Now().Format("20060102-150405"))
+		w.Header().Set("Content-Type", "application/gzip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		_, _ = backup.CreateBackup(w, s.engine, s.catalog)
+		return
+	}
+
+	// For POST, parse JSON body to see if a specific server target path is provided
+	var req struct {
+		Target string `json:"target"`
+	}
+	if strings.Contains(r.Header.Get("Content-Type"), "application/json") && r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	if strings.TrimSpace(req.Target) == "" {
+		filename := fmt.Sprintf("sqlion-backup-%s.tar.gz", time.Now().Format("20060102-150405"))
+		w.Header().Set("Content-Type", "application/gzip")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		_, _ = backup.CreateBackup(w, s.engine, s.catalog)
+		return
+	}
+
+	manifest, err := backup.CreateBackupFile(req.Target, s.engine, s.catalog)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("backup failed: %w", err))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "success",
+		"target":   req.Target,
+		"manifest": manifest,
+	})
+}
+
+func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
+	opts := backup.DefaultRestoreOptions()
+
+	// 1. Multipart form file upload
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		if err := r.ParseMultipartForm(256 * 1024 * 1024); err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("failed to parse multipart form: %w", err))
+			return
+		}
+		file, _, err := r.FormFile("backup")
+		if err != nil {
+			file, _, err = r.FormFile("file")
+		}
+		if err != nil {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("missing backup archive file (field 'backup' or 'file')"))
+			return
+		}
+		defer file.Close()
+
+		res, err := backup.RestoreBackup(file, s.engine, s.catalog, opts)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("restore failed: %w", err))
+			return
+		}
+
+		if s.broker != nil {
+			s.broker.Broadcast(RealtimeEvent{
+				Action: ActionCreate,
+				Table:  "*",
+			})
+		}
+
+		writeJSON(w, http.StatusOK, map[string]any{
+			"status": "success",
+			"result": res,
+		})
+		return
+	}
+
+	// 2. JSON request referencing server file path
+	var req struct {
+		Source       string `json:"source"`
+		DropExisting *bool  `json:"drop_existing"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("invalid json request: %w", err))
+		return
+	}
+	if strings.TrimSpace(req.Source) == "" {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("source file path is required"))
+		return
+	}
+	if req.DropExisting != nil {
+		opts.DropExisting = *req.DropExisting
+	}
+
+	res, err := backup.RestoreBackupFile(req.Source, s.engine, s.catalog, opts)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("restore failed: %w", err))
+		return
+	}
+
+	if s.broker != nil {
+		s.broker.Broadcast(RealtimeEvent{
+			Action: ActionCreate,
+			Table:  "*",
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status": "success",
+		"result": res,
+	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

@@ -14,6 +14,7 @@ import (
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/auth"
+	"sqlion/pkg/backup"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
@@ -38,6 +39,8 @@ func main() {
 	maxWorkers := flag.Int("max-workers", 0, "Max concurrent query execution workers (default: NumCPU * 4)")
 	maxIdleSessions := flag.Int("max-idle-sessions", 64, "Max idle storage sessions to retain in pool")
 	workMemStr := flag.String("work-mem", "64MB", "Default memory budget per query operator (e.g. 64MB, 128MB)")
+	backupTarget := flag.String("backup", "", "Perform live point-in-time snapshot backup to target archive and exit")
+	restoreSource := flag.String("restore", "", "Restore database from backup archive and exit")
 
 	// Daemon control flags
 	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
@@ -95,6 +98,30 @@ func main() {
 	defer eng.Close()
 
 	cat := catalog.New(eng)
+
+	// Standalone CLI Backup Operation
+	if *backupTarget != "" {
+		log.Printf("[SQLion] Initiating online snapshot backup to %s...", *backupTarget)
+		manifest, err := backup.CreateBackupFile(*backupTarget, eng, cat)
+		if err != nil {
+			log.Fatalf("[SQLion] Backup failed: %v", err)
+		}
+		log.Printf("[SQLion] Backup successfully completed: %d tables, %d total records, %d procedures saved to %s",
+			manifest.TablesCount, manifest.TotalRecords, manifest.ProceduresCount, *backupTarget)
+		return
+	}
+
+	// Standalone CLI Restore Operation
+	if *restoreSource != "" {
+		log.Printf("[SQLion] Initiating database restore from %s...", *restoreSource)
+		res, err := backup.RestoreBackupFile(*restoreSource, eng, cat, backup.DefaultRestoreOptions())
+		if err != nil {
+			log.Fatalf("[SQLion] Restore failed: %v", err)
+		}
+		log.Printf("[SQLion] Restore successfully completed: %d tables, %d records, %d procedures restored in %v",
+			res.TablesRestored, res.RecordsRestored, res.ProceduresRestored, res.Duration)
+		return
+	}
 
 	// Auto-seed if requested
 	if *autoSeed {
