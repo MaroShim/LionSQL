@@ -14,6 +14,7 @@ import (
 
 	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
 	"sqlion/pkg/proc/runtime"
@@ -32,17 +33,18 @@ type ClientSession struct {
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
 type Server struct {
-	catalog    *catalog.Catalog
-	engine     storage.Engine
-	planCache  *proc.PlanCache
-	executor   *runtime.Executor
-	auth       *auth.AuthService
-	enableAuth bool
-	broker     *RealtimeBroker
-	pool       *SessionPool
-	mux        *http.ServeMux
-	sessions   map[string]*ClientSession
-	sessMu     sync.RWMutex
+	catalog        *catalog.Catalog
+	engine         storage.Engine
+	planCache      *proc.PlanCache
+	executor       *runtime.Executor
+	auth           *auth.AuthService
+	enableAuth     bool
+	broker         *RealtimeBroker
+	pool           *SessionPool
+	mux            *http.ServeMux
+	sessions       map[string]*ClientSession
+	sessMu         sync.RWMutex
+	defaultWorkMem int64
 }
 
 // NewServer initializes a new Server with default in-memory auth service.
@@ -61,19 +63,35 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 	cache := runtime.NewPlanCache()
 	pool := NewSessionPool(eng, DefaultPoolConfig())
 	s := &Server{
-		catalog:    cat,
-		engine:     eng,
-		planCache:  proc.NewPlanCache(),
-		executor:   runtime.NewExecutor(cache),
-		auth:       authSvc,
-		enableAuth: enableAuth,
-		broker:     NewRealtimeBroker(),
-		pool:       pool,
-		mux:        http.NewServeMux(),
-		sessions:   make(map[string]*ClientSession),
+		catalog:        cat,
+		engine:         eng,
+		planCache:      proc.NewPlanCache(),
+		executor:       runtime.NewExecutor(cache),
+		auth:           authSvc,
+		enableAuth:     enableAuth,
+		broker:         NewRealtimeBroker(),
+		pool:           pool,
+		mux:            http.NewServeMux(),
+		sessions:       make(map[string]*ClientSession),
+		defaultWorkMem: execution.DefaultWorkMem,
 	}
 	s.routes()
 	return s
+}
+
+// SetDefaultWorkMem updates the server-wide default work_mem limit.
+func (s *Server) SetDefaultWorkMem(bytes int64) {
+	if bytes > 0 {
+		s.defaultWorkMem = bytes
+	}
+}
+
+// DefaultWorkMem returns the server-wide default work_mem limit.
+func (s *Server) DefaultWorkMem() int64 {
+	if s.defaultWorkMem <= 0 {
+		return execution.DefaultWorkMem
+	}
+	return s.defaultWorkMem
 }
 
 // Pool returns the underlying goroutine connection & session pool.

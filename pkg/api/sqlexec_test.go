@@ -850,3 +850,71 @@ func TestSQLExecutor_AnalyzeTableAndStats(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_WorkMemGovernorAndSpill(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// 1. Check default work_mem
+	res, err := server.ExecuteSessionSQL("sess1", `SHOW work_mem;`)
+	if err != nil || !res.Success {
+		t.Fatalf("SHOW work_mem failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["work_mem"] != "64MB" {
+		t.Errorf("expected default 64MB, got: %+v", res.Rows)
+	}
+
+	// 2. Set work_mem on sess1
+	res, err = server.ExecuteSessionSQL("sess1", `SET work_mem = '128MB';`)
+	if err != nil || !res.Success {
+		t.Fatalf("SET work_mem failed: %v", err)
+	}
+
+	// Verify on sess1
+	res, err = server.ExecuteSessionSQL("sess1", `SHOW work_mem;`)
+	if err != nil || !res.Success || res.Rows[0]["work_mem"] != "128MB" {
+		t.Fatalf("expected 128MB on sess1, got: %+v", res.Rows)
+	}
+
+	// Verify session isolation: sess2 should still see default 64MB
+	res, err = server.ExecuteSessionSQL("sess2", `SHOW work_mem;`)
+	if err != nil || !res.Success || res.Rows[0]["work_mem"] != "64MB" {
+		t.Fatalf("expected 64MB on sess2, got: %+v", res.Rows)
+	}
+
+	// 3. Test query with tight work_mem forcing spill to disk
+	_, _ = server.ExecuteSQL(`CREATE TABLE logs (id INT PRIMARY KEY, score INT, msg VARCHAR(100));`)
+	for i := 1; i <= 100; i++ {
+		val := (i * 17) % 50
+		_, _ = server.ExecuteSQL(fmt.Sprintf("INSERT INTO logs (id, score, msg) VALUES (%d, %d, 'log-message-%d');", i, val, i))
+	}
+
+	// Set tight work_mem on sess1 to trigger External Merge Sort
+	_, err = server.ExecuteSessionSQL("sess1", `SET work_mem = '2kB';`)
+	if err != nil {
+		t.Fatalf("SET 2kB failed: %v", err)
+	}
+
+	res, err = server.ExecuteSessionSQL("sess1", `SELECT id, score, msg FROM logs ORDER BY score ASC, id ASC;`)
+	if err != nil || !res.Success {
+		t.Fatalf("ORDER BY query failed under tight work_mem: %v", err)
+	}
+	if len(res.Rows) != 100 {
+		t.Fatalf("expected 100 rows, got %d", len(res.Rows))
+	}
+
+	// Verify ordering correctness
+	for i := 1; i < len(res.Rows); i++ {
+		sPrev := res.Rows[i-1]["score"]
+		sCur := res.Rows[i]["score"]
+		var vPrev, vCur int64
+		fmt.Sscanf(fmt.Sprintf("%v", sPrev), "%d", &vPrev)
+		fmt.Sscanf(fmt.Sprintf("%v", sCur), "%d", &vCur)
+		if vCur < vPrev {
+			t.Fatalf("ordering violated at row %d: %d < %d", i, vCur, vPrev)
+		}
+	}
+}
+

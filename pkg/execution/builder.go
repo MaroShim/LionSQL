@@ -12,8 +12,13 @@ import (
 // TableGetter fetches TableSchema by table name.
 type TableGetter func(name string) (*storage.TableSchema, error)
 
-// BuildExecutor recursively compiles a planner.PlanNode physical plan tree into an executable Volcano Iterator.
+// BuildExecutor recursively compiles a planner.PlanNode physical plan tree into an executable Volcano Iterator using default options.
 func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable TableGetter) (Iterator, error) {
+	return BuildExecutorWithOptions(plan, tx, getTable, DefaultExecutorOptions())
+}
+
+// BuildExecutorWithOptions compiles a planner.PlanNode physical plan tree into an executable Volcano Iterator with custom memory limits.
+func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, getTable TableGetter, opts ExecutorOptions) (Iterator, error) {
 	if plan == nil {
 		return nil, fmt.Errorf("cannot build executor: plan is nil")
 	}
@@ -39,7 +44,7 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("filter node has no children")
 		}
-		child, err := BuildExecutor(plan.Children[0], tx, getTable)
+		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -49,7 +54,7 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("projection node has no children")
 		}
-		child, err := BuildExecutor(plan.Children[0], tx, getTable)
+		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -59,7 +64,7 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("limit node has no children")
 		}
-		child, err := BuildExecutor(plan.Children[0], tx, getTable)
+		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -69,7 +74,7 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("sort node has no children")
 		}
-		child, err := BuildExecutor(plan.Children[0], tx, getTable)
+		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -77,13 +82,20 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 		if plan.SortOrder != "" {
 			orderClause += " " + plan.SortOrder
 		}
-		return NewSortIterator(child, orderClause), nil
+		sIter := NewSortIterator(child, orderClause)
+		if opts.WorkMem > 0 {
+			sIter.SetWorkMem(opts.WorkMem)
+		}
+		if opts.TempDir != "" {
+			sIter.SetTempDir(opts.TempDir)
+		}
+		return sIter, nil
 
 	case planner.NodeAggregate:
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("aggregate node has no children")
 		}
-		child, err := BuildExecutor(plan.Children[0], tx, getTable)
+		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -93,7 +105,7 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 		if len(plan.Children) < 2 {
 			return nil, fmt.Errorf("hash join requires at least 2 children")
 		}
-		leftIter, err := BuildExecutor(plan.Children[0], tx, getTable)
+		leftIter, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
 		if err != nil {
 			return nil, err
 		}
@@ -101,9 +113,9 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 		// Second child may be NodeHash, whose child is the inner scan
 		var rightIter Iterator
 		if plan.Children[1].Type == planner.NodeHash && len(plan.Children[1].Children) > 0 {
-			rightIter, err = BuildExecutor(plan.Children[1].Children[0], tx, getTable)
+			rightIter, err = BuildExecutorWithOptions(plan.Children[1].Children[0], tx, getTable, opts)
 		} else {
-			rightIter, err = BuildExecutor(plan.Children[1], tx, getTable)
+			rightIter, err = BuildExecutorWithOptions(plan.Children[1], tx, getTable, opts)
 		}
 		if err != nil {
 			return nil, err
@@ -114,13 +126,17 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 			leftKey, rightKey = parseJoinCond(plan.JoinCond)
 		}
 
-		return NewHashJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey), nil
+		hIter := NewHashJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
+		if opts.WorkMem > 0 {
+			hIter.SetWorkMem(opts.WorkMem)
+		}
+		return hIter, nil
 
 	case planner.NodeNestedLoop:
 		if len(plan.Children) < 2 {
 			return nil, fmt.Errorf("nested loop join requires at least 2 children")
 		}
-		outerIter, err := BuildExecutor(plan.Children[0], tx, getTable)
+		outerIter, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
 		if err != nil {
 			return nil, err
 		}

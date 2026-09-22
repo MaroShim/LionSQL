@@ -15,6 +15,7 @@ import (
 	"sqlion/pkg/api"
 	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
 	"sqlion/pkg/storage"
@@ -36,6 +37,7 @@ func main() {
 	enableAuth := flag.Bool("auth", false, "Enforce JWT authentication on protected REST endpoints")
 	maxWorkers := flag.Int("max-workers", 0, "Max concurrent query execution workers (default: NumCPU * 4)")
 	maxIdleSessions := flag.Int("max-idle-sessions", 64, "Max idle storage sessions to retain in pool")
+	workMemStr := flag.String("work-mem", "64MB", "Default memory budget per query operator (e.g. 64MB, 128MB)")
 
 	// Daemon control flags
 	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
@@ -115,6 +117,12 @@ func main() {
 		server.SetPoolConfig(poolCfg)
 	}
 
+	if *workMemStr != "" {
+		if bytes, err := execution.ParseMemSize(*workMemStr); err == nil && bytes > 0 {
+			server.SetDefaultWorkMem(bytes)
+		}
+	}
+
 	httpServer := &http.Server{
 		Addr:         *httpAddr,
 		Handler:      server.Handler(),
@@ -151,6 +159,7 @@ func main() {
 		fmt.Printf(" [Storage Engine] %s\n", *engineType)
 		stats := server.Pool().Stats()
 		fmt.Printf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", stats.MaxWorkers, stats.MaxIdleSessions)
+		fmt.Printf(" [Memory Governor] work_mem: %s (External Merge Sort spill-to-disk enabled)\n", execution.FormatMemSize(server.DefaultWorkMem()))
 		fmt.Println("------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")
 

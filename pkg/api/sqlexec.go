@@ -241,6 +241,103 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
+	// 0.05 Standard Configuration Parameters: SET [SESSION] param [= | TO] value
+	setConfigRe := regexp.MustCompile(`(?is)^SET\s+(?:SESSION\s+)?([a-zA-Z0-9_]+)\s*(?:TO|=)\s*(.*)$`)
+	if m := setConfigRe.FindStringSubmatch(trimmed); len(m) == 3 && !strings.HasPrefix(m[1], "@") {
+		param := strings.ToLower(m[1])
+		valStr := strings.Trim(strings.TrimSpace(m[2]), "';\"")
+		if param == "work_mem" {
+			bytes, err := execution.ParseMemSize(valStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid value for work_mem %q: %w", valStr, err)
+			}
+			cs.mu.Lock()
+			cs.Vars["work_mem"] = bytes
+			cs.mu.Unlock()
+			return &QueryResult{
+				Success:    true,
+				Command:    "SET",
+				Messages:   []string{fmt.Sprintf("SET: work_mem set to %s (%d bytes).", execution.FormatMemSize(bytes), bytes)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+		cs.mu.Lock()
+		cs.Vars[param] = valStr
+		cs.mu.Unlock()
+		return &QueryResult{
+			Success:    true,
+			Command:    "SET",
+			Messages:   []string{fmt.Sprintf("SET: %s set to %s.", param, valStr)},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 0.06 SHOW <parameter>
+	showRe := regexp.MustCompile(`(?is)^SHOW\s+([a-zA-Z0-9_]+)\s*;?$`)
+	if m := showRe.FindStringSubmatch(trimmed); len(m) == 2 {
+		param := strings.ToLower(m[1])
+		cs.mu.Lock()
+		val, exists := cs.Vars[param]
+		cs.mu.Unlock()
+		valStr := ""
+		if exists {
+			if param == "work_mem" {
+				if b, ok := val.(int64); ok {
+					valStr = execution.FormatMemSize(b)
+				} else {
+					valStr = fmt.Sprintf("%v", val)
+				}
+			} else {
+				valStr = fmt.Sprintf("%v", val)
+			}
+		} else if param == "work_mem" {
+			valStr = execution.FormatMemSize(s.DefaultWorkMem())
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "SHOW",
+			Columns:      []string{param},
+			Rows:         []map[string]any{{param: valStr}},
+			RowsAffected: 1,
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 0.07 System variable query: SELECT @@var [AS alias]
+	selectSysVarRe := regexp.MustCompile(`(?is)^SELECT\s+@@([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
+	if m := selectSysVarRe.FindStringSubmatch(trimmed); len(m) >= 2 {
+		varName := strings.ToLower(m[1])
+		colHeader := "@@" + varName
+		if len(m) > 2 && m[2] != "" {
+			colHeader = m[2]
+		}
+		cs.mu.Lock()
+		val, exists := cs.Vars[varName]
+		cs.mu.Unlock()
+		valStr := ""
+		if exists {
+			if varName == "work_mem" {
+				if b, ok := val.(int64); ok {
+					valStr = execution.FormatMemSize(b)
+				} else {
+					valStr = fmt.Sprintf("%v", val)
+				}
+			} else {
+				valStr = fmt.Sprintf("%v", val)
+			}
+		} else if varName == "work_mem" {
+			valStr = execution.FormatMemSize(s.DefaultWorkMem())
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "SELECT",
+			Columns:      []string{colHeader},
+			Rows:         []map[string]any{{colHeader: valStr}},
+			RowsAffected: 1,
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
 	// 0.1 Session Variables: SET @var = expr / SET @var := expr
 	setRe := regexp.MustCompile(`(?is)^SET\s+@([a-zA-Z0-9_]+)\s*(?::=|=)\s*(.*)$`)
 	if m := setRe.FindStringSubmatch(trimmed); len(m) == 3 {
@@ -1261,7 +1358,28 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 	}
 	plan := p.BuildJoinPlanWithStats(qInfo, leftSchema, leftStats, rightSchema, rightStats)
 
-	exec, err := execution.BuildExecutor(plan, tx, s.engine.GetTable)
+	opts := execution.DefaultExecutorOptions()
+	if s.defaultWorkMem > 0 {
+		opts.WorkMem = s.defaultWorkMem
+	}
+	if cs != nil {
+		cs.mu.Lock()
+		if wmVal, ok := cs.Vars["work_mem"]; ok {
+			switch v := wmVal.(type) {
+			case int64:
+				opts.WorkMem = v
+			case int:
+				opts.WorkMem = int64(v)
+			case string:
+				if b, err := execution.ParseMemSize(v); err == nil {
+					opts.WorkMem = b
+				}
+			}
+		}
+		cs.mu.Unlock()
+	}
+
+	exec, err := execution.BuildExecutorWithOptions(plan, tx, s.engine.GetTable, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build volcano executor: %w", err)
 	}

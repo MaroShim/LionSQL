@@ -23,6 +23,8 @@ type HashJoinIterator struct {
 	currentMatches []Tuple
 	matchIdx       int
 	emittedAny     bool
+	workMem        int64
+	buildMemory    int64
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -38,7 +40,20 @@ func NewHashJoinIterator(left, right Iterator, joinType, leftKey, rightKey strin
 		leftKey:   strings.TrimSpace(leftKey),
 		rightKey:  strings.TrimSpace(rightKey),
 		hashTable: make(map[string][]Tuple),
+		workMem:   DefaultWorkMem,
 	}
+}
+
+// SetWorkMem sets the maximum memory budget for the hash table.
+func (h *HashJoinIterator) SetWorkMem(bytes int64) {
+	if bytes > 0 {
+		h.workMem = bytes
+	}
+}
+
+// BuildMemory returns the bytes used by the hash table.
+func (h *HashJoinIterator) BuildMemory() int64 {
+	return h.buildMemory
 }
 
 func (h *HashJoinIterator) Open(ctx context.Context) error {
@@ -52,6 +67,7 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	}
 
 	h.hashTable = make(map[string][]Tuple)
+	h.buildMemory = 0
 	for {
 		select {
 		case <-ctx.Done():
@@ -67,6 +83,8 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 			_ = h.right.Close()
 			return fmt.Errorf("hash join build read error: %w", err)
 		}
+
+		h.buildMemory += EstimateTupleSize(tuple)
 
 		keyVal, found := lookupVal(tuple, h.rightKey)
 		if !found || keyVal == nil {

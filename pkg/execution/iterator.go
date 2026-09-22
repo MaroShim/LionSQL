@@ -101,31 +101,19 @@ func CompareValues(a, b any) int {
 		return 1
 	}
 
+	// Universal numeric comparison if both values can be represented as float64
+	if fA, okA := toFloat64(a); okA {
+		if fB, okB := toFloat64(b); okB {
+			if fA < fB {
+				return -1
+			} else if fA > fB {
+				return 1
+			}
+			return 0
+		}
+	}
+
 	switch va := a.(type) {
-	case int64:
-		vb, ok := toInt64(b)
-		if !ok {
-			return strings.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
-		}
-		if va < vb {
-			return -1
-		} else if va > vb {
-			return 1
-		}
-		return 0
-	case int:
-		return CompareValues(int64(va), b)
-	case float64:
-		vb, ok := toFloat64(b)
-		if !ok {
-			return strings.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
-		}
-		if va < vb {
-			return -1
-		} else if va > vb {
-			return 1
-		}
-		return 0
 	case string:
 		vb := fmt.Sprintf("%v", b)
 		return strings.Compare(va, vb)
@@ -165,6 +153,16 @@ func toInt64(v any) (int64, bool) {
 	case float64:
 		return int64(n), true
 	default:
+		if num, ok := v.(interface{ Int64() (int64, error) }); ok {
+			if i, err := num.Int64(); err == nil {
+				return i, true
+			}
+		}
+		if num, ok := v.(interface{ Float64() (float64, error) }); ok {
+			if f, err := num.Float64(); err == nil {
+				return int64(f), true
+			}
+		}
 		return 0, false
 	}
 }
@@ -178,6 +176,11 @@ func toFloat64(v any) (float64, bool) {
 	case int:
 		return float64(n), true
 	default:
+		if num, ok := v.(interface{ Float64() (float64, error) }); ok {
+			if f, err := num.Float64(); err == nil {
+				return f, true
+			}
+		}
 		return 0, false
 	}
 }
