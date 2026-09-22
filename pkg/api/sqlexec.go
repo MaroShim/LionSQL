@@ -305,6 +305,11 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		return s.execExplain(trimmed, start)
 	}
 
+	// 0.5 CBO Statistics Collection: ANALYZE [TABLE] [table_name]
+	if strings.HasPrefix(upper, "ANALYZE") && !strings.HasPrefix(upper, "ANALYZE SELECT") {
+		return s.execAnalyze(trimmed, start)
+	}
+
 	// 1. Procedural DDL: CREATE PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
 	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") {
 		return s.execCreateProcedure(trimmed, start)
@@ -728,41 +733,59 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
 	}
 
+	var leftStats *planner.TableStats
+	if s.catalog != nil {
+		leftStats, _ = s.catalog.GetTableStats(tableName)
+	}
+
 	var totalRows int64 = 0
-	session, err := s.engine.NewSession()
-	if err == nil {
-		defer session.Close()
-		tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	if leftStats != nil && leftStats.RowCount > 0 {
+		totalRows = leftStats.RowCount
+	} else {
+		session, err := s.engine.NewSession()
 		if err == nil {
-			defer tx.Rollback()
-			if cur, err := tx.Scan(tableName); err == nil {
-				defer cur.Close()
-				for cur.Next() {
-					totalRows++
+			defer session.Close()
+			tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+			if err == nil {
+				defer tx.Rollback()
+				if cur, err := tx.Scan(tableName); err == nil {
+					defer cur.Close()
+					for cur.Next() {
+						totalRows++
+					}
 				}
 			}
 		}
+		leftStats = planner.NewTableStats(tableName, totalRows)
 	}
 
 	var planTree *planner.PlanNode
 	if qInfo.Join != nil {
 		rTable := cleanIdentifier(qInfo.Join.Table)
 		rSchema, _ := s.engine.GetTable(rTable)
-		var rRows int64 = 0
-		if session != nil {
-			if rTx, err := session.BeginTx(storage.TxOptions{ReadOnly: true}); err == nil {
-				defer rTx.Rollback()
-				if rCur, err := rTx.Scan(rTable); err == nil {
-					defer rCur.Close()
-					for rCur.Next() {
-						rRows++
+		var rightStats *planner.TableStats
+		if s.catalog != nil {
+			rightStats, _ = s.catalog.GetTableStats(rTable)
+		}
+		if rightStats == nil {
+			var rRows int64 = 0
+			if session, err := s.engine.NewSession(); err == nil {
+				defer session.Close()
+				if rTx, err := session.BeginTx(storage.TxOptions{ReadOnly: true}); err == nil {
+					defer rTx.Rollback()
+					if rCur, err := rTx.Scan(rTable); err == nil {
+						defer rCur.Close()
+						for rCur.Next() {
+							rRows++
+						}
 					}
 				}
 			}
+			rightStats = planner.NewTableStats(rTable, rRows)
 		}
-		planTree = p.BuildJoinPlan(qInfo, schema, totalRows, rSchema, rRows)
+		planTree = p.BuildJoinPlanWithStats(qInfo, schema, leftStats, rSchema, rightStats)
 	} else {
-		planTree = p.BuildPlan(qInfo, schema, totalRows)
+		planTree = p.BuildJoinPlanWithStats(qInfo, schema, leftStats, nil, nil)
 	}
 
 	if qInfo.IsAnalyze {
@@ -851,6 +874,121 @@ func findSubquery(s string, prefixPattern *regexp.Regexp) (matchStart int, match
 
 	inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
 	return loc[0], closeParenIdx + 1, s[loc[0]:openParenIdx], inner, true
+}
+
+func (s *Server) execAnalyze(query string, start time.Time) (*QueryResult, error) {
+	parts := strings.Fields(strings.TrimSpace(query))
+
+	var targetTable string
+	if len(parts) >= 2 {
+		if strings.EqualFold(parts[1], "TABLE") {
+			if len(parts) >= 3 {
+				targetTable = cleanIdentifier(strings.Trim(parts[2], ";"))
+			}
+		} else {
+			targetTable = cleanIdentifier(strings.Trim(parts[1], ";"))
+		}
+	}
+
+	var tablesToAnalyze []string
+	if targetTable != "" {
+		actualTable := targetTable
+		if _, err := s.engine.GetTable(targetTable); err != nil {
+			if all, listErr := s.engine.ListTables(); listErr == nil {
+				for _, t := range all {
+					if strings.EqualFold(t.Name, targetTable) {
+						actualTable = t.Name
+						break
+					}
+				}
+			}
+		}
+		tablesToAnalyze = append(tablesToAnalyze, actualTable)
+	} else {
+		all, err := s.engine.ListTables()
+		if err != nil {
+			return nil, fmt.Errorf("ANALYZE failed to list tables: %w", err)
+		}
+		for _, t := range all {
+			tablesToAnalyze = append(tablesToAnalyze, t.Name)
+		}
+	}
+
+	if len(tablesToAnalyze) == 0 {
+		return &QueryResult{
+			Success:    true,
+			Command:    "ANALYZE",
+			Messages:   []string{"No tables found to analyze."},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("ANALYZE session error: %w", err)
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("ANALYZE transaction error: %w", err)
+	}
+	defer tx.Rollback()
+
+	var messages []string
+	for _, tbl := range tablesToAnalyze {
+		schema, err := s.engine.GetTable(tbl)
+		if err != nil {
+			return nil, fmt.Errorf("table %q not found: %w", tbl, err)
+		}
+
+		cursor, err := tx.Scan(tbl)
+		if err != nil {
+			return nil, fmt.Errorf("ANALYZE scan error on %q: %w", tbl, err)
+		}
+
+		colVals := make(map[string][]storage.Value)
+		nullCounts := make(map[string]int64)
+		for _, c := range schema.Columns {
+			colVals[c.Name] = make([]storage.Value, 0)
+		}
+
+		var rowCount int64 = 0
+		for cursor.Next() {
+			rec, err := cursor.Record()
+			if err != nil {
+				break
+			}
+			rowCount++
+			for _, c := range schema.Columns {
+				v, ok := rec[c.Name]
+				if !ok || v.IsNull {
+					nullCounts[c.Name]++
+				} else {
+					colVals[c.Name] = append(colVals[c.Name], v)
+				}
+			}
+		}
+		_ = cursor.Close()
+
+		ts := planner.NewTableStats(tbl, rowCount)
+		for _, c := range schema.Columns {
+			ts.Columns[c.Name] = planner.BuildColumnStats(c.Name, c.Type, colVals[c.Name], nullCounts[c.Name], rowCount)
+		}
+
+		if s.catalog != nil {
+			s.catalog.SetTableStats(tbl, ts)
+		}
+		messages = append(messages, fmt.Sprintf("Table %q analyzed successfully (%d rows, %d columns).", tbl, rowCount, len(schema.Columns)))
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "ANALYZE",
+		Messages:     messages,
+		RowsAffected: int64(len(tablesToAnalyze)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
 }
 
 func (s *Server) resolveSubqueries(whereClause string) (string, error) {
@@ -1113,7 +1251,15 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 	}
 
 	p := planner.NewPlanner()
-	plan := p.BuildJoinPlan(qInfo, leftSchema, 100, rightSchema, 100)
+	var leftStats *planner.TableStats
+	var rightStats *planner.TableStats
+	if s.catalog != nil {
+		leftStats, _ = s.catalog.GetTableStats(leftTable)
+		if rightSchema != nil && qInfo.Join != nil {
+			rightStats, _ = s.catalog.GetTableStats(cleanIdentifier(qInfo.Join.Table))
+		}
+	}
+	plan := p.BuildJoinPlanWithStats(qInfo, leftSchema, leftStats, rightSchema, rightStats)
 
 	exec, err := execution.BuildExecutor(plan, tx, s.engine.GetTable)
 	if err != nil {
@@ -2769,6 +2915,8 @@ func (s *Server) isVirtualCatalogTable(tableName string) bool {
 		"sys.indexes", "sysindexes", "sys_indexes",
 		"sys.databases", "sysdatabases", "sys_databases",
 		"sys.procedures", "sysprocedures", "sys_procedures",
+		"sys.table_stats", "systablestats", "sys_table_stats",
+		"sys.column_stats", "syscolumnstats", "sys_column_stats",
 		"information_schema.tables",
 		"information_schema.columns",
 		"information_schema.schemata",
@@ -2852,6 +3000,45 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 					"routine_schema": "dbo",
 					"created_date":   p.CreatedAt.Format(time.RFC3339),
 				})
+			}
+		}
+
+	case "sys.table_stats", "systablestats", "sys_table_stats":
+		columns = []string{"table_name", "row_count", "page_count", "last_analyzed"}
+		if s.catalog != nil {
+			for _, st := range s.catalog.ListTableStats() {
+				allRows = append(allRows, map[string]any{
+					"table_name":    st.TableName,
+					"row_count":     st.RowCount,
+					"page_count":    st.PageCount,
+					"last_analyzed": st.AnalyzedAt.Format(time.RFC3339),
+				})
+			}
+		}
+
+	case "sys.column_stats", "syscolumnstats", "sys_column_stats":
+		columns = []string{"table_name", "column_name", "null_count", "distinct_count", "min_value", "max_value", "histogram_buckets"}
+		if s.catalog != nil {
+			for _, st := range s.catalog.ListTableStats() {
+				for _, col := range st.Columns {
+					minStr := ""
+					if !col.MinVal.IsNull {
+						minStr = col.MinVal.String()
+					}
+					maxStr := ""
+					if !col.MaxVal.IsNull {
+						maxStr = col.MaxVal.String()
+					}
+					allRows = append(allRows, map[string]any{
+						"table_name":        st.TableName,
+						"column_name":       col.Name,
+						"null_count":        col.NullCount,
+						"distinct_count":    col.DistinctCount,
+						"min_value":         minStr,
+						"max_value":         maxStr,
+						"histogram_buckets": len(col.Histogram),
+					})
+				}
 			}
 		}
 

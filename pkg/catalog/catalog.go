@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"sqlion/pkg/planner"
 	"sqlion/pkg/storage"
 )
 
@@ -57,13 +58,14 @@ type Trigger struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-// Catalog manages database schemas, stored procedures, functions, and triggers.
+// Catalog manages database schemas, stored procedures, functions, triggers, and CBO statistics.
 type Catalog struct {
 	mu         sync.RWMutex
 	engine     storage.Engine
 	procedures map[string]*Procedure
 	functions  map[string]*Function
 	triggers   map[string]*Trigger
+	tableStats map[string]*planner.TableStats
 }
 
 // New creates a Catalog instance attached to a storage engine.
@@ -73,6 +75,7 @@ func New(eng storage.Engine) *Catalog {
 		procedures: make(map[string]*Procedure),
 		functions:  make(map[string]*Function),
 		triggers:   make(map[string]*Trigger),
+		tableStats: make(map[string]*planner.TableStats),
 	}
 }
 
@@ -260,3 +263,30 @@ func (c *Catalog) DropTrigger(name string) error {
 	delete(c.triggers, name)
 	return nil
 }
+
+// SetTableStats stores or updates CBO statistics for a table.
+func (c *Catalog) SetTableStats(tableName string, stats *planner.TableStats) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.tableStats[tableName] = stats
+}
+
+// GetTableStats retrieves CBO statistics for a table.
+func (c *Catalog) GetTableStats(tableName string) (*planner.TableStats, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	stats, found := c.tableStats[tableName]
+	return stats, found
+}
+
+// ListTableStats returns all cached table statistics.
+func (c *Catalog) ListTableStats() map[string]*planner.TableStats {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	res := make(map[string]*planner.TableStats, len(c.tableStats))
+	for k, v := range c.tableStats {
+		res[k] = v
+	}
+	return res
+}
+

@@ -441,48 +441,77 @@ func (p *Planner) BuildPlan(q *QueryInfo, schema *storage.TableSchema, totalRows
 
 // BuildJoinPlan produces an optimized PlanNode tree considering joins, aggregation, grouping, and CTEs.
 func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, totalRows int64, rightSchema *storage.TableSchema, rightRows int64) *PlanNode {
-	if totalRows < 0 {
-		totalRows = 0
+	var leftStats *TableStats
+	if totalRows > 0 {
+		leftStats = NewTableStats(q.TableName, totalRows)
 	}
-	estimatedTotal := totalRows
-	if estimatedTotal == 0 {
-		estimatedTotal = 1 // baseline default for cost estimation
+	var rightStats *TableStats
+	if rightRows > 0 && q.Join != nil {
+		rightStats = NewTableStats(q.Join.Table, rightRows)
 	}
+	return p.BuildJoinPlanWithStats(q, schema, leftStats, rightSchema, rightStats)
+}
+
+func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSchema, leftStats *TableStats, rightSchema *storage.TableSchema, rightStats *TableStats) *PlanNode {
+	estimatedTotal := int64(100)
+	if leftStats != nil && leftStats.RowCount > 0 {
+		estimatedTotal = leftStats.RowCount
+	}
+
+	seqPages := float64(estimatedTotal) / float64(RowsPerPageDefault)
+	if seqPages < 1 {
+		seqPages = 1
+	}
+	tableScanTotalCost := seqPages*SeqPageCost + float64(estimatedTotal)*CPUTupleCost
 
 	var scanNode *PlanNode
 	usedIndex := false
 
 	// Check if WHERE condition matches an existing index on primary table
 	if q.WhereClause != "" && schema != nil && q.Join == nil {
-		eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
-		if m := eqRe.FindStringSubmatch(q.WhereClause); len(m) == 3 {
+		eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(=|<|<=|>|>=|!=|<>)\s*(.+)$`)
+		if m := eqRe.FindStringSubmatch(q.WhereClause); len(m) == 4 {
 			rawCol := m[1]
 			if idxDot := strings.Index(rawCol, "."); idxDot != -1 {
 				rawCol = rawCol[idxDot+1:]
 			}
 			colName := rawCol
+			op := m[2]
+			valStr := strings.TrimSpace(m[3])
+
 			if idx, found := schema.FindIndexByColumn(colName); found {
-				usedIndex = true
-				estRows := int64(1)
-				if !idx.Unique {
-					estRows = int64(math.Ceil(float64(estimatedTotal) * 0.1))
-					if estRows < 1 {
-						estRows = 1
-					}
+				sel := 0.1
+				if idx.Unique && (op == "=" || op == "==") {
+					sel = 1.0 / float64(estimatedTotal)
+				} else if leftStats != nil {
+					sel = leftStats.EstimateSelectivity(colName, op, valStr)
+				}
+
+				estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
+				if estRows < 1 {
+					estRows = 1
 				}
 
 				startupCost := 0.25
-				totalCost := startupCost + float64(estRows)*0.05 + 0.1
+				indexPagesCost := (float64(estRows) / float64(RowsPerPageDefault)) * RandomPageCost
+				if indexPagesCost < 0.05 {
+					indexPagesCost = 0.05
+				}
+				indexScanCost := startupCost + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
 
-				scanNode = &PlanNode{
-					Type:          NodeIndexScan,
-					Relation:      q.TableName,
-					Alias:         q.TableAlias,
-					IndexName:     idx.Name,
-					IndexCond:     fmt.Sprintf("(%s = %s)", colName, strings.TrimSpace(m[2])),
-					StartupCost:   startupCost,
-					TotalCost:     totalCost,
-					EstimatedRows: estRows,
+				// CBO Decision: Choose IndexScan only if its estimated cost is lower than TableScan
+				if indexScanCost < tableScanTotalCost {
+					usedIndex = true
+					scanNode = &PlanNode{
+						Type:          NodeIndexScan,
+						Relation:      q.TableName,
+						Alias:         q.TableAlias,
+						IndexName:     idx.Name,
+						IndexCond:     fmt.Sprintf("(%s %s %s)", colName, op, valStr),
+						StartupCost:   startupCost,
+						TotalCost:     indexScanCost,
+						EstimatedRows: estRows,
+					}
 				}
 			}
 		}
@@ -490,27 +519,30 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 
 	if !usedIndex {
 		// Table Scan (Sequential Scan)
-		startupCost := 0.0
-		totalCost := float64(estimatedTotal)*0.01 + 1.0
-
 		scanNode = &PlanNode{
 			Type:          NodeTableScan,
 			Relation:      q.TableName,
 			Alias:         q.TableAlias,
-			StartupCost:   startupCost,
-			TotalCost:     totalCost,
+			StartupCost:   0.0,
+			TotalCost:     tableScanTotalCost,
 			EstimatedRows: estimatedTotal,
 		}
 	}
 
 	var currentNode *PlanNode = scanNode
 
-	// If JOIN is present, choose between Index Nested Loop Join and Hash Join
+	// If JOIN is present, cost comparison between Index Nested Loop Join and Hash Join
 	if q.Join != nil {
-		rRows := rightRows
-		if rRows <= 0 {
-			rRows = 1
+		rRows := int64(100)
+		if rightStats != nil && rightStats.RowCount > 0 {
+			rRows = rightStats.RowCount
 		}
+
+		rPages := float64(rRows) / float64(RowsPerPageDefault)
+		if rPages < 1 {
+			rPages = 1
+		}
+		rScanCost := rPages*SeqPageCost + float64(rRows)*CPUTupleCost
 
 		rightCol := q.Join.RightKey
 		if idx := strings.Index(rightCol, "."); idx != -1 {
@@ -532,8 +564,20 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 			}
 		}
 
+		// Calculate Hash Join Cost
+		hashBuildCost := rScanCost + float64(rRows)*CPUTupleCost
+		hashProbeCost := scanNode.TotalCost + float64(estimatedTotal)*CPUOperatorCost
+		hashJoinTotalCost := hashBuildCost + hashProbeCost
+
+		// Calculate Index Nested Loop Join Cost
+		nlTotalCost := math.MaxFloat64
 		if innerIndex != nil {
-			// Strategy: Index Nested Loop Join
+			innerProbeCost := float64(estimatedTotal) * (CPUIndexTupleCost + CPUTupleCost + 0.045)
+			nlTotalCost = scanNode.TotalCost + 0.25 + innerProbeCost
+		}
+
+		// CBO Decision: Compare Hash Join vs Index Nested Loop Join
+		if innerIndex != nil && nlTotalCost < hashJoinTotalCost {
 			innerScanNode := &PlanNode{
 				Type:          NodeIndexScan,
 				Relation:      q.Join.Table,
@@ -545,22 +589,18 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 				EstimatedRows: 1,
 			}
 
-			nlStartupCost := scanNode.StartupCost + 0.25
-			nlTotalCost := scanNode.TotalCost + float64(estimatedTotal)*0.06
-
 			nlNode := &PlanNode{
 				Type:          NodeNestedLoop,
 				JoinType:      q.Join.Type,
 				JoinCond:      fmt.Sprintf("(%s = %s)", q.Join.LeftKey, q.Join.RightKey),
-				StartupCost:   nlStartupCost,
+				StartupCost:   scanNode.StartupCost + 0.25,
 				TotalCost:     nlTotalCost,
 				EstimatedRows: joinEstRows,
 				Children:      []*PlanNode{scanNode, innerScanNode},
 			}
 			currentNode = nlNode
 		} else {
-			// Strategy: Hash Join
-			rScanCost := float64(rRows)*0.01 + 1.0
+			// Hash Join Strategy
 			rScanNode := &PlanNode{
 				Type:          NodeTableScan,
 				Relation:      q.Join.Table,
@@ -570,25 +610,20 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 				EstimatedRows: rRows,
 			}
 
-			hashStartupCost := rScanCost
-			hashTotalCost := rScanCost + float64(rRows)*0.01
 			hashNode := &PlanNode{
 				Type:          NodeHash,
-				StartupCost:   hashStartupCost,
-				TotalCost:     hashTotalCost,
+				StartupCost:   rScanCost,
+				TotalCost:     hashBuildCost,
 				EstimatedRows: rRows,
 				Children:      []*PlanNode{rScanNode},
 			}
-
-			joinStartupCost := hashTotalCost
-			joinTotalCost := joinStartupCost + scanNode.TotalCost + float64(estimatedTotal)*0.005
 
 			hashJoinNode := &PlanNode{
 				Type:          NodeHashJoin,
 				JoinType:      q.Join.Type,
 				HashCond:      fmt.Sprintf("(%s = %s)", q.Join.LeftKey, q.Join.RightKey),
-				StartupCost:   joinStartupCost,
-				TotalCost:     joinTotalCost,
+				StartupCost:   hashBuildCost,
+				TotalCost:     hashJoinTotalCost,
 				EstimatedRows: joinEstRows,
 				Children:      []*PlanNode{scanNode, hashNode},
 			}
@@ -598,11 +633,23 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 
 	// Filter Node (WHERE)
 	if q.WhereClause != "" && !usedIndex {
-		filterEstRows := int64(math.Ceil(float64(currentNode.EstimatedRows) * 0.33))
+		sel := 0.33
+		if leftStats != nil {
+			eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(=|<|<=|>|>=|!=|<>)\s*(.+)$`)
+			if m := eqRe.FindStringSubmatch(q.WhereClause); len(m) == 4 {
+				col := m[1]
+				if idx := strings.Index(col, "."); idx != -1 {
+					col = col[idx+1:]
+				}
+				sel = leftStats.EstimateSelectivity(col, m[2], strings.TrimSpace(m[3]))
+			}
+		}
+
+		filterEstRows := int64(math.Ceil(float64(currentNode.EstimatedRows) * sel))
 		if filterEstRows < 1 {
 			filterEstRows = 1
 		}
-		filterCost := currentNode.TotalCost + float64(currentNode.EstimatedRows)*0.0025
+		filterCost := currentNode.TotalCost + float64(currentNode.EstimatedRows)*CPUOperatorCost
 
 		filterNode := &PlanNode{
 			Type:          NodeFilter,

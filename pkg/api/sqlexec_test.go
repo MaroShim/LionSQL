@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -766,6 +767,86 @@ func TestSQLExecutor_VirtualCatalogViews(t *testing.T) {
 	}
 	if len(res.Rows) != 1 || res.Rows[0]["name"] != "sqlion" {
 		t.Fatalf("unexpected sys.databases: %+v", res.Rows)
+	}
+}
+
+func TestSQLExecutor_AnalyzeTableAndStats(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// Create table and insert data
+	_, err := server.ExecuteSQL(`CREATE TABLE items (id INT PRIMARY KEY, category VARCHAR(20), price FLOAT);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	for i := 1; i <= 20; i++ {
+		catStr := "books"
+		if i > 10 {
+			catStr = "electronics"
+		}
+		price := float64(i * 10)
+		_, err = server.ExecuteSQL(fmt.Sprintf("INSERT INTO items (id, category, price) VALUES (%d, '%s', %f);", i, catStr, price))
+		if err != nil {
+			t.Fatalf("INSERT row %d failed: %v", i, err)
+		}
+	}
+
+	// 1. Run ANALYZE TABLE items
+	res, err := server.ExecuteSQL(`ANALYZE TABLE items;`)
+	if err != nil || !res.Success {
+		t.Fatalf("ANALYZE TABLE items failed: %v", err)
+	}
+	if len(res.Messages) == 0 {
+		t.Fatalf("expected message in ANALYZE result")
+	}
+
+	// 2. Query sys.table_stats
+	res, err = server.ExecuteSQL(`SELECT table_name, row_count FROM sys.table_stats WHERE table_name = 'items';`)
+	if err != nil || !res.Success {
+		t.Fatalf("query sys.table_stats failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row in sys.table_stats, got %d", len(res.Rows))
+	}
+	if res.Rows[0]["row_count"] != int64(20) {
+		t.Errorf("expected row_count 20, got %v", res.Rows[0]["row_count"])
+	}
+
+	// 3. Query sys.column_stats
+	res, err = server.ExecuteSQL(`SELECT table_name, column_name, distinct_count, histogram_buckets FROM sys.column_stats WHERE table_name = 'items' AND column_name = 'category';`)
+	if err != nil || !res.Success {
+		t.Fatalf("query sys.column_stats failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row in sys.column_stats, got %d", len(res.Rows))
+	}
+	if res.Rows[0]["distinct_count"] != int64(2) {
+		t.Errorf("expected distinct_count 2 for category, got %v", res.Rows[0]["distinct_count"])
+	}
+	if buckets, ok := res.Rows[0]["histogram_buckets"].(int); !ok || buckets <= 0 {
+		t.Errorf("expected histogram_buckets > 0, got %v", res.Rows[0]["histogram_buckets"])
+	}
+
+	// 4. Verify EXPLAIN leverages stats
+	res, err = server.ExecuteSQL(`EXPLAIN SELECT * FROM items WHERE category = 'books';`)
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN failed: %v", err)
+	}
+	if len(res.Rows) == 0 {
+		t.Fatalf("expected rows from EXPLAIN")
+	}
+
+	// 5. Verify Volcano query execution uses stats without error
+	res, err = server.ExecuteSQL(`SELECT id, category, price FROM items WHERE price > 150.0 ORDER BY id ASC;`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+	if len(res.Rows) != 5 {
+		t.Errorf("expected 5 rows for price > 150, got %d", len(res.Rows))
 	}
 }
 
