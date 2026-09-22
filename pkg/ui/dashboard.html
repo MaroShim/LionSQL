@@ -393,7 +393,27 @@
 
       <!-- Editor Card -->
       <div class="card" style="margin-top: 12px; padding: 15px;">
-        <textarea id="sql-query-input" spellcheck="false" placeholder="-- Enter SQL statements here (e.g. SELECT * FROM accounts;)" style="min-height: 140px; margin-bottom: 0;">SELECT * FROM accounts LIMIT 50;</textarea>
+        <textarea id="sql-query-input" spellcheck="false" placeholder="-- Enter SQL statements here (e.g. SELECT * FROM accounts;)" style="min-height: 140px; margin-bottom: 8px;">SELECT * FROM accounts LIMIT 50;</textarea>
+        
+        <!-- History & Favorites Controls -->
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 0.8rem; padding-top: 6px; border-top: 1px solid var(--border);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: var(--text-muted); font-weight: 600;">History:</span>
+            <select id="sql-history-select" style="width: auto; margin: 0; padding: 4px 8px; font-size: 0.78rem;" onchange="onSelectSQLHistory(this.value)">
+              <option value="">-- Recent Queries (0) --</option>
+            </select>
+            <button type="button" class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem;" title="Clear Query History" onclick="clearSQLHistory()">Clear History</button>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="color: var(--text-muted); font-weight: 600;">Favorites:</span>
+            <select id="sql-favorites-select" style="width: auto; margin: 0; padding: 4px 8px; font-size: 0.78rem;" onchange="onSelectSQLFavorite(this.value)">
+              <option value="">-- Saved Snippets (0) --</option>
+            </select>
+            <button type="button" class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem; background: #065f46; color: #a7f3d0;" title="Save current query as favorite" onclick="saveSQLFavorite()">★ Save Favorite</button>
+            <button type="button" class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem;" title="Delete selected favorite" onclick="deleteSQLFavorite()">Delete</button>
+          </div>
+        </div>
       </div>
 
       <!-- Query Results -->
@@ -1085,8 +1105,8 @@ END;</textarea>
             tableEl.innerHTML = '<thead><tr><th>Execution Status</th></tr></thead><tbody><tr><td>' + statusText + '</td></tr></tbody>';
           }
 
-          // Refresh tables list if DDL/DML might have affected schema
-          loadTables();
+          // Record in query history
+          addSQLHistory(sql, !out.error, durationMs, (out.rows ? out.rows.length : (out.rows_affected || 0)));
         }
 
         // Messages box
@@ -1104,6 +1124,145 @@ END;</textarea>
         bannerEl.style.color = '#fca5a5';
         bannerEl.style.border = '1px solid #ef4444';
         bannerEl.innerText = 'Failed to execute: ' + err;
+      }
+    }
+
+    // --- SQL Query History & Favorites ---
+    const SQL_HISTORY_KEY = 'sqlion_query_history_v1';
+    const SQL_FAVORITES_KEY = 'sqlion_query_favorites_v1';
+
+    function loadSQLHistory() {
+      try {
+        const raw = localStorage.getItem(SQL_HISTORY_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function saveSQLHistory(list) {
+      try {
+        localStorage.setItem(SQL_HISTORY_KEY, JSON.stringify(list.slice(0, 50)));
+      } catch (_) {}
+    }
+
+    function addSQLHistory(sql, success, durationMs, rowCount) {
+      const list = loadSQLHistory();
+      // Remove duplicate if same query at head
+      const filtered = list.filter(item => item.sql.trim() !== sql.trim());
+      filtered.unshift({
+        sql: sql.trim(),
+        success: !!success,
+        duration: durationMs,
+        rows: rowCount,
+        time: new Date().toLocaleTimeString()
+      });
+      saveSQLHistory(filtered);
+      renderSQLHistoryDropdown();
+    }
+
+    function renderSQLHistoryDropdown() {
+      const sel = document.getElementById('sql-history-select');
+      if (!sel) return;
+      const list = loadSQLHistory();
+      sel.innerHTML = `<option value="">-- Recent Queries (${list.length}) --</option>`;
+      list.forEach((item, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        const preview = item.sql.length > 40 ? item.sql.substring(0, 37) + '...' : item.sql;
+        opt.innerText = `[${item.time}] ${preview.replace(/[\r\n]+/g, ' ')}`;
+        sel.appendChild(opt);
+      });
+    }
+
+    function onSelectSQLHistory(idx) {
+      if (idx === '' || idx === undefined) return;
+      const list = loadSQLHistory();
+      const item = list[parseInt(idx, 10)];
+      if (item && item.sql) {
+        document.getElementById('sql-query-input').value = item.sql;
+        document.getElementById('sql-query-input').focus();
+      }
+      document.getElementById('sql-history-select').value = '';
+    }
+
+    function clearSQLHistory() {
+      if (confirm('Clear all SQL query history?')) {
+        localStorage.removeItem(SQL_HISTORY_KEY);
+        renderSQLHistoryDropdown();
+        showToast('Query history cleared');
+      }
+    }
+
+    function loadSQLFavorites() {
+      try {
+        const raw = localStorage.getItem(SQL_FAVORITES_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function saveSQLFavoritesToStorage(list) {
+      try {
+        localStorage.setItem(SQL_FAVORITES_KEY, JSON.stringify(list));
+      } catch (_) {}
+    }
+
+    function renderSQLFavoritesDropdown() {
+      const sel = document.getElementById('sql-favorites-select');
+      if (!sel) return;
+      const list = loadSQLFavorites();
+      sel.innerHTML = `<option value="">-- Saved Snippets (${list.length}) --</option>`;
+      list.forEach((item, idx) => {
+        const opt = document.createElement('option');
+        opt.value = idx;
+        opt.innerText = `★ ${item.name}`;
+        sel.appendChild(opt);
+      });
+    }
+
+    function onSelectSQLFavorite(idx) {
+      if (idx === '' || idx === undefined) return;
+      const list = loadSQLFavorites();
+      const item = list[parseInt(idx, 10)];
+      if (item && item.sql) {
+        document.getElementById('sql-query-input').value = item.sql;
+        document.getElementById('sql-query-input').focus();
+      }
+    }
+
+    function saveSQLFavorite() {
+      const sql = document.getElementById('sql-query-input').value.trim();
+      if (!sql) {
+        alert('Cannot save an empty query snippet.');
+        return;
+      }
+      const name = prompt('Enter a name for this favorite query snippet:', sql.substring(0, 30));
+      if (!name || !name.trim()) return;
+
+      const list = loadSQLFavorites();
+      list.push({ name: name.trim(), sql: sql });
+      saveSQLFavoritesToStorage(list);
+      renderSQLFavoritesDropdown();
+      showToast(`Saved snippet "${name.trim()}"`);
+    }
+
+    function deleteSQLFavorite() {
+      const sel = document.getElementById('sql-favorites-select');
+      const idx = sel.value;
+      if (idx === '' || idx === undefined) {
+        alert('Please select a saved snippet to delete.');
+        return;
+      }
+      const list = loadSQLFavorites();
+      const item = list[parseInt(idx, 10)];
+      if (!item) return;
+      if (confirm(`Delete snippet "${item.name}"?`)) {
+        list.splice(parseInt(idx, 10), 1);
+        saveSQLFavoritesToStorage(list);
+        renderSQLFavoritesDropdown();
+        showToast('Favorite snippet deleted');
       }
     }
 
@@ -2478,6 +2637,8 @@ END;</textarea>
     loadTables();
     loadProcedures();
     initRealtime();
+    renderSQLHistoryDropdown();
+    renderSQLFavoritesDropdown();
   </script>
 </body>
 </html>
