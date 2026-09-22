@@ -1,0 +1,147 @@
+# SQLion Performance Tuning & Benchmark Guide
+
+This document outlines the benchmark methodology, workload profiles, command-line arguments, and tuning recommendations for SQLion under high-concurrency OLTP workloads.
+
+---
+
+## 1. Built-in Benchmark Architecture (`cmd/bench`)
+
+SQLion includes a native, high-concurrency benchmarking tool (`cmd/bench/main.go`) that simulates heavy banking transfer transactions (`TransferFunds` stored procedure) executing across parallel worker goroutines.
+
+```
+                  +----------------------------------------------+
+                  |         Benchmark Harness (cmd/bench)        |
+                  +----------------------------------------------+
+                                         │
+                    ┌────────────────────┼────────────────────┐
+                    ▼                    ▼                    ▼
+             [Worker 1 (goroutine)] [Worker 2] ... [Worker N (goroutine)]
+                    │                    │                    │
+                    └────────────────────┼────────────────────┘
+                                         │
+                                         ▼
+                  +----------------------------------------------+
+                  |  Precompiled Plan Cache (Bytecode Program)   |
+                  +----------------------------------------------+
+                                         │
+                                         ▼
+                  +----------------------------------------------+
+                  |    Ambient ACID Storage Transactions         |
+                  |  - Read sender balance                       |
+                  |  - Validate fund availability                |
+                  |  - Debit sender & Credit receiver            |
+                  |  - Commit transaction                        |
+                  +----------------------------------------------+
+                                         │
+                                         ▼
+                  +----------------------------------------------+
+                  | ACID Balance Invariant Integrity Validation  |
+                  | Total Initial Assets == Total Final Assets   |
+                  +----------------------------------------------+
+```
+
+### Invariant Verification
+Upon benchmark completion, the harness audits all accounts and asserts that **total system wealth is conserved to the exact cent**:
+$$\sum \text{Initial Balances} \equiv \sum \text{Final Balances}$$
+Any lost updates, phantom writes, or dirty reads immediately trigger an ACID violation error.
+
+---
+
+## 2. Running Benchmarks
+
+### 2.1. Building the Benchmark Binary
+
+```bash
+# Compile benchmark binary with WiredTiger Cgo bindings
+go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
+
+# Compile pure-Go benchmark binary
+go build -buildvcs=false -o bin/bench ./cmd/bench
+```
+
+### 2.2. Command-Line Arguments
+
+| Flag | Default | Description |
+|---|---|---|
+| `-engine` | `wiredtiger` | Storage engine backend (`wiredtiger` or `memory`) |
+| `-accounts` | `10000` | Number of initialized customer accounts |
+| `-workers` | `100` | Number of concurrent client worker goroutines |
+| `-ops` | `50000` | Total number of transfer transactions to complete |
+| `-dir` | `data/bench_wt` | Storage directory for WiredTiger disk files |
+
+### 2.3. Example Executions
+
+#### Benchmarking WiredTiger (Default Production Disk Engine)
+```bash
+./bin/bench -engine=wiredtiger -accounts=10000 -workers=100 -ops=50000
+```
+
+Sample output:
+```
+================================================================================
+  SQLion High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)
+================================================================================
+ [Target]         Stored Procedure (T-SQL -> Bytecode Plan Cache -> ACID Tx)
+ [Storage Engine] wiredtiger (Dir: data/bench_wt)
+ [Accounts]       10000 accounts (Initial balance: 1,000,000 each)
+ [Concurrency]    100 concurrent workers
+ [Total Ops]      50000 transactions
+--------------------------------------------------------------------------------
+Executing transactions across 100 concurrent workers...
+Benchmark completed in 3.42s.
+
+--------------------------------------------------------------------------------
+ Benchmark Results & Latency Distribution
+--------------------------------------------------------------------------------
+ [Throughput]     14,619 TPS (Transactions Per Second)
+ [Total Ops]      50,000 committed
+ [Latency P50]    3.21 ms
+ [Latency P95]    7.84 ms
+ [Latency P99]    12.45 ms
+ [Min / Max]      0.82 ms / 24.11 ms
+--------------------------------------------------------------------------------
+ACID Integrity Audit: Initial 10,000,000,000 == Final 10,000,000,000 (PASSED)
+```
+
+#### Benchmarking Pure-Go In-Memory OCC Engine
+```bash
+./bin/bench -engine=memory -accounts=10000 -workers=100 -ops=50000
+```
+
+---
+
+## 3. Performance Tuning Dimensions
+
+### 3.1. Query Memory Governor (`work_mem`) Tuning
+
+SQLion's relational engine enforces memory caps per operator (`ORDER BY`, `GROUP BY`, `HashJoin`):
+- **Default Budget**: `64MB` (`-work-mem=64MB`).
+- **Low Memory Environments (< 2GB RAM)**:
+  Set `-work-mem=16MB` to allow high concurrency without risking process OOM.
+- **Analytical / Reporting Workloads (Large Joins & Sorts)**:
+  Set `SET work_mem = '256MB'` within reporting sessions to keep multi-million row sorts entirely in RAM and bypass external merge sort disk spills.
+
+### 3.2. Connection Pooler & Worker Sizing
+
+SQLion's internal pooler multiplexes client connections onto worker goroutines:
+- **`-max-workers`**:
+  - Default: `NumCPU * 4`.
+  - For compute-heavy or CPU-bound stored procedures, set `-max-workers=NumCPU * 2`.
+  - For I/O-bound disk workloads on NVMe drives, increase to `NumCPU * 8`.
+- **`-max-idle-sessions`**:
+  - Default: `64`.
+  - Determines how many pre-warmed storage sessions are held in `sync.Pool`.
+  - In high-throughput microservice environments, increase to `128` or `256` to eliminate session allocation overhead.
+
+### 3.3. In-Memory Engine AOF Fsync Policies
+
+For the `memory` engine, disk persistence behavior is configurable:
+1. `FsyncEverySec` (Default): Background goroutine fsyncs the write-ahead log every 1 second. Maximum data loss on sudden power halt is bounded to 1 second. Provides peak throughput (> 50,000 TPS).
+2. `FsyncAlways`: Every committed transaction issues synchronous `fsync()`. Guarantees zero data loss at the expense of disk I/O latency (~2,000 - 5,000 TPS depending on disk hardware).
+3. `FsyncNone`: OS manages write buffer flushing. Highest throughput, lowest durability.
+
+### 3.4. Dual-Parser Plan Cache Optimization
+
+SQLion caches parsed ASTs and compiled VDBE bytecode programs:
+- Parameterized queries (`SELECT * FROM accounts WHERE id = @id` or `$1`) avoid parser and compiler re-evaluation.
+- Prepared statements (`'P'` Parse over PostgreSQL wire protocol) are stored per connection in `statements` map and execute with sub-microsecond latency.
