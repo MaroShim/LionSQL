@@ -276,39 +276,89 @@
       <span>SQLion</span>
       <span class="badge">OLTP + SP</span>
     </div>
+    <div id="auth-status-box" style="padding: 12px 16px; border-bottom: 1px solid var(--border); background: #162032;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
+          <div style="width: 26px; height: 26px; border-radius: 6px; background: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; color: #fff; flex-shrink: 0;">A</div>
+          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            <div id="current-user-email" style="color: #6ee7b7; font-weight: 600; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">admin@sqlion.local</div>
+            <div style="font-size: 0.68rem; color: var(--text-muted);">Superuser</div>
+          </div>
+        </div>
+        <span class="badge" style="background:#047857; color:#6ee7b7; font-size:0.65rem;">Active</span>
+      </div>
+      <button id="auth-action-btn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem; width: 100%;" onclick="logout()">Sign Out</button>
+    </div>
     <nav>
-      <button class="nav-btn active" onclick="switchView('query')">
+      <button class="nav-btn active" data-view="apikeys" onclick="switchView('apikeys')">
+        <span>Auth & API Keys</span>
+        <span class="badge" style="background:#4338ca; color:#c7d2fe;">AUTH</span>
+      </button>
+      <button class="nav-btn" data-view="query" onclick="switchView('query')">
         <span>SQL Query Studio</span>
         <span class="badge" style="background:#047857; color:#6ee7b7;">SQL</span>
       </button>
-      <button class="nav-btn" onclick="switchView('tables')">
+      <button class="nav-btn" data-view="tables" onclick="switchView('tables')">
         <span>Tables & Records</span>
         <span id="nav-tables-count">0</span>
       </button>
-      <button class="nav-btn" onclick="switchView('procedures')">
+      <button class="nav-btn" data-view="procedures" onclick="switchView('procedures')">
         <span>Stored Procedures</span>
         <span id="nav-procs-count">0</span>
       </button>
-      <button class="nav-btn" onclick="switchView('apikeys')">
-        <span>API Keys & Security</span>
-        <span class="badge" style="background:#4338ca; color:#c7d2fe;">AUTH</span>
-      </button>
     </nav>
     <div style="padding: 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border);">
-      <div id="auth-status-box" style="margin-bottom: 8px;">
-        <span style="color:#94a3b8;">User:</span> <span id="current-user-email" style="color:#6ee7b7; font-weight:600;">admin@sqlion.local</span>
-      </div>
       Engine: <span id="engine-type" style="color: #60a5fa;">Active Engine</span><br>
       PocketBase Style Single Binary
-      <div style="margin-top: 8px;">
-        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.7rem; width: 100%;" onclick="logout()">Sign Out</button>
-      </div>
     </div>
   </aside>
 
   <main>
+    <!-- View: Auth & API Keys -->
+    <div id="view-apikeys">
+      <div class="header-bar">
+        <div>
+          <h2>Authentication & API Keys</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Issue granular API keys for frontend apps (read-only table scopes) and backend microservices.
+          </div>
+        </div>
+        <button class="btn" style="background: var(--primary);" onclick="openCreateKeyModal()">+ Create API Key</button>
+      </div>
+
+      <!-- Created Key Banner Alert -->
+      <div id="key-created-alert" style="display: none; background: #064e3b; border: 1px solid #10b981; border-radius: 8px; padding: 15px; margin-top: 20px;">
+        <div style="font-size: 0.9rem; font-weight: 700; color: #6ee7b7; margin-bottom: 6px;">New API Key Generated!</div>
+        <div style="font-size: 0.8rem; color: #a7f3d0; margin-bottom: 8px;">Copy this secret key now. It will not be shown again:</div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input type="text" id="created-key-token" readonly style="margin: 0; background: #022c22; color: #34d399; font-family: monospace; font-size: 0.9rem;" />
+          <button class="btn" onclick="copyCreatedKey()">Copy</button>
+        </div>
+      </div>
+
+      <!-- Keys Table -->
+      <div class="card" style="margin-top: 20px; padding: 20px;">
+        <h3 style="font-size: 1rem; margin-bottom: 12px;">Active API Keys</h3>
+        <table id="keys-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Role</th>
+              <th>Allowed Tables</th>
+              <th>Created At</th>
+              <th style="text-align: right;">Action</th>
+            </tr>
+          </thead>
+          <tbody id="keys-table-body">
+            <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading API keys...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- View: SQL Query Studio -->
-    <div id="view-query">
+    <div id="view-query" style="display: none;">
       <div class="header-bar">
         <div>
           <h2>SQL Query Studio</h2>
@@ -527,48 +577,6 @@ END;</textarea>
       </div>
     </div>
 
-    <!-- View: API Keys & Security -->
-    <div id="view-apikeys" style="display: none;">
-      <div class="header-bar">
-        <div>
-          <h2>API Keys & Security</h2>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
-            Issue granular API keys for frontend apps (read-only table scopes) and backend microservices.
-          </div>
-        </div>
-        <button class="btn" style="background: var(--primary);" onclick="openCreateKeyModal()">+ Create API Key</button>
-      </div>
-
-      <!-- Created Key Banner Alert -->
-      <div id="key-created-alert" style="display: none; background: #064e3b; border: 1px solid #10b981; border-radius: 8px; padding: 15px; margin-top: 20px;">
-        <div style="font-size: 0.9rem; font-weight: 700; color: #6ee7b7; margin-bottom: 6px;">New API Key Generated!</div>
-        <div style="font-size: 0.8rem; color: #a7f3d0; margin-bottom: 8px;">Copy this secret key now. It will not be shown again:</div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <input type="text" id="created-key-token" readonly style="margin: 0; background: #022c22; color: #34d399; font-family: monospace; font-size: 0.9rem;" />
-          <button class="btn" onclick="copyCreatedKey()">Copy</button>
-        </div>
-      </div>
-
-      <!-- Keys Table -->
-      <div class="card" style="margin-top: 20px; padding: 20px;">
-        <h3 style="font-size: 1rem; margin-bottom: 12px;">Active API Keys</h3>
-        <table id="keys-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Name</th>
-              <th>Role</th>
-              <th>Allowed Tables</th>
-              <th>Created At</th>
-              <th style="text-align: right;">Action</th>
-            </tr>
-          </thead>
-          <tbody id="keys-table-body">
-            <tr><td colspan="6" style="text-align:center; color:var(--text-muted);">Loading API keys...</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
   </main>
 
   <!-- Login Modal Overlay -->
@@ -698,15 +706,17 @@ END;</textarea>
     let currentTableSubView = 'records';
 
     function switchView(view) {
-      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-      const views = ['query', 'tables', 'procedures', 'apikeys'];
-      views.forEach((v, idx) => {
+      document.querySelectorAll('.nav-btn').forEach(b => {
+        if (b.getAttribute('data-view') === view) {
+          b.classList.add('active');
+        } else {
+          b.classList.remove('active');
+        }
+      });
+      const views = ['apikeys', 'query', 'tables', 'procedures'];
+      views.forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
-        if (v === view) {
-          const btn = document.querySelectorAll('.nav-btn')[idx];
-          if (btn) btn.classList.add('active');
-        }
       });
 
       if (view === 'tables') {
@@ -1825,10 +1835,19 @@ END;</textarea>
 
     function updateUserDisplay(email) {
       const emailEl = document.getElementById('current-user-email');
+      const authBtn = document.getElementById('auth-action-btn');
       if (email) {
-        emailEl.innerText = email;
+        if (emailEl) emailEl.innerText = email;
+        if (authBtn) {
+          authBtn.innerText = 'Sign Out';
+          authBtn.onclick = logout;
+        }
       } else {
-        emailEl.innerText = 'Not authenticated';
+        if (emailEl) emailEl.innerText = 'Not authenticated';
+        if (authBtn) {
+          authBtn.innerText = 'Sign In';
+          authBtn.onclick = showLoginModal;
+        }
       }
     }
 
@@ -1969,6 +1988,7 @@ END;</textarea>
 
     // Init
     checkAuthSession();
+    loadAPIKeys();
     loadTables();
     loadProcedures();
   </script>
