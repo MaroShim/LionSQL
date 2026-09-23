@@ -7,20 +7,20 @@ This document charts the development milestones, architectural priorities, and f
 ## 1. Milestones Overview
 
 ```
-[ Phase 1: v1.0.0 ] ───> [ Phase 2: v1.x High Availability ] ───> [ Phase 3: v2.0 Distributed Engine ]
-- Core OLTP Engine       - Raft 3-Node Consensus                  - Pluggable Pebble / Columnar
-- Dual Wire Protocols    - In-Memory B+Tree                       - AI Vector Embeddings (HNSW)
-- Dual Storage Backends  - Background MVCC Vacuum                 - Distributed Query Sharding
+[ Phase 1: v0.5.0 ] ───> [ Phase 2: v0.6.0 - v0.8.0 ] ───> [ Phase 3: v1.0.0+ Distributed & AI ]
+- Core OLTP Engine       - Pure-Go Concurrent B+Tree              - AI Vector Embeddings (HNSW)
+- Dual Wire Protocols    - Background MVCC Vacuum                 - Distributed Query Sharding
+- Dual Storage Backends  - Raft 3-Node Consensus                  - Pluggable Pebble / Columnar
 - VDBE Bytecode VM       - Zero-Copy Cursor Iteration             - Change Data Capture (CDC)
 - CBO & Volcano Engine   - Automated TLS / ACME                   - Full-Text Search (BM25)
 - Online Hot Backup
 - COPY Protocol
-(COMPLETED)              (IN PROGRESS)                            (PLANNED)
+(COMPLETED)              (NEXT)                                   (PLANNED)
 ```
 
 ---
 
-## 2. Phase 1: Core Foundation & Feature Complete (v1.0.0 - Completed)
+## 2. Phase 1: Core Foundation & Feature Complete (v0.5.0 - Completed)
 
 - [x] **Single-Binary Standalone Executable**: Embedded Web Management Studio (`/_/`), REST API, wire protocol servers.
 - [x] **Dual Wire Protocol Listeners**: PostgreSQL v3 on port `5433` and Microsoft SQL Server TDS 7.x/8.0 on port `1433`.
@@ -36,7 +36,7 @@ This document charts the development milestones, architectural priorities, and f
 
 ---
 
-## 3. Phase 2: High Availability & Storage Performance (v1.1.0 - v1.3.0)
+## 3. Phase 2: High Availability & Storage Performance (v0.6.0 - v0.8.0)
 
 ### 3.1. Distributed Raft Consensus Replication
 - Implement a 3-node Raft consensus cluster using HashiCorp Serf and Raft.
