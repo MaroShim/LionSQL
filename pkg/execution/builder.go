@@ -101,6 +101,16 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		}
 		return NewAggregateIterator(child, plan.GroupKeys, plan.Projections, plan.HavingCond), nil
 
+	case planner.NodeWindow:
+		if len(plan.Children) == 0 {
+			return nil, fmt.Errorf("window node has no children")
+		}
+		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
+		if err != nil {
+			return nil, err
+		}
+		return NewWindowIterator(child, plan.WindowDefs), nil
+
 	case planner.NodeHashJoin:
 		if len(plan.Children) < 2 {
 			return nil, fmt.Errorf("hash join requires at least 2 children")

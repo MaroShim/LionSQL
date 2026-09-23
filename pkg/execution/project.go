@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"strings"
+
+	"sqlion/pkg/planner"
 )
 
 type projField struct {
@@ -35,6 +37,16 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 		item = strings.TrimSpace(item)
 		if item == "*" {
 			p.isSelectAll = true
+			continue
+		}
+
+		if w, ok := planner.ParseWindowDef(item); ok {
+			alias := w.Alias
+			if alias == "" {
+				alias = strings.ToLower(w.Function)
+			}
+			p.fields = append(p.fields, projField{expr: w.RawExpr, alias: alias})
+			p.schema = append(p.schema, alias)
 			continue
 		}
 

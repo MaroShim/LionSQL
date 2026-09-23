@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **ANSI/ISO SQL & T-SQL Window Functions Engine (`pkg/planner`, `pkg/execution`, `pkg/api`)**:
+  - Full relational window functions support integrated into Volcano execution pipeline: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`, and partition-level window aggregates (`SUM`, `AVG`, `MIN`, `MAX`, `COUNT`).
+  - Full syntax compatibility with `OVER ([PARTITION BY col1, col2, ...] [ORDER BY col [ASC|DESC], ...])` and projection aliases (`AS rn`).
+  - Physical `WindowIterator` operator with partition grouping, multi-key in-partition sorting, tie-aware ranking, forward/backward offset peeking, and zero-allocation $O(1)$ `ColumnIndexMap` expansion.
+  - Seamless execution inside Common Table Expressions (CTEs) and subqueries.
+  - Comprehensive unit and integration test suite (`pkg/api/window_test.go`).
 - **Foreign Key Constraints & Referential Integrity Cascading Engine (`pkg/storage`, `pkg/storage/memengine`, `pkg/api`)**:
   - Full relational referential integrity support with table-level, named, and column-inline `FOREIGN KEY ... REFERENCES ... [ON DELETE <action>] [ON UPDATE <action>]` syntax in `CREATE TABLE`.
   - Referential actions supported: `CASCADE`, `SET NULL`, `RESTRICT`, and `NO ACTION` across parent deletions and updates.

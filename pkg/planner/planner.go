@@ -28,7 +28,24 @@ const (
 	NodeAggregate   NodeType = "Aggregate"
 	NodeCTE         NodeType = "CTE Scan"
 	NodeMaterialize NodeType = "Materialize"
+	NodeWindow      NodeType = "Window"
 )
+
+// SortKeyDef defines a column and sort direction for ordering.
+type SortKeyDef struct {
+	Column    string `json:"column"`
+	Direction string `json:"direction"` // "ASC" or "DESC"
+}
+
+// WindowDef defines a window function specification (function, args, partition by, order by, alias).
+type WindowDef struct {
+	Function      string       `json:"function"`
+	Args          []string     `json:"args,omitempty"`
+	PartitionKeys []string     `json:"partition_keys,omitempty"`
+	OrderByKeys   []SortKeyDef `json:"order_by_keys,omitempty"`
+	Alias         string       `json:"alias,omitempty"`
+	RawExpr       string       `json:"raw_expr,omitempty"`
+}
 
 // CTEInfo contains metadata for a Common Table Expression.
 type CTEInfo struct {
@@ -59,6 +76,7 @@ type PlanNode struct {
 	Projections      []string    `json:"projections,omitempty"`
 	GroupKeys        []string    `json:"group_keys,omitempty"`
 	HavingCond       string      `json:"having_cond,omitempty"`
+	WindowDefs       []WindowDef `json:"window_defs,omitempty"`
 	JoinType         string      `json:"join_type,omitempty"`
 	HashCond         string      `json:"hash_cond,omitempty"`
 	JoinCond         string      `json:"join_cond,omitempty"`
@@ -79,6 +97,7 @@ type QueryInfo struct {
 	TableAlias    string
 	Join          *JoinInfo
 	Projections   []string
+	WindowDefs    []WindowDef
 	WhereClause   string
 	GroupByCols   []string
 	HavingClause  string
@@ -117,10 +136,20 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		pStr := p.String()
 		projections = append(projections, pStr)
 		pUpper := strings.ToUpper(pStr)
+		if strings.Contains(pUpper, "OVER") {
+			continue
+		}
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
 			strings.Contains(pUpper, "MAX(") {
 			hasAgg = true
+		}
+	}
+
+	var winDefs []WindowDef
+	for _, proj := range projections {
+		if w, ok := ParseWindowDef(proj); ok {
+			winDefs = append(winDefs, *w)
 		}
 	}
 
@@ -179,6 +208,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		TableAlias:    stmt.From.Alias,
 		Join:          joinInfo,
 		Projections:   projections,
+		WindowDefs:    winDefs,
 		WhereClause:   whereClause,
 		GroupByCols:   groupByCols,
 		HavingClause:  havingClause,
@@ -194,12 +224,14 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
-	// Try AST-based parsing first
-	if parsedStmt, err := proc.ParseSQL(cleaned); err == nil {
-		if sel, ok := parsedStmt.(*proc.GeneralSelectStmt); ok {
-			qInfo := FromAST(sel)
-			qInfo.RawQuery = query
-			return qInfo, nil
+	// Try AST-based parsing first (only if not containing window function OVER)
+	if !strings.Contains(strings.ToUpper(cleaned), " OVER ") && !strings.Contains(strings.ToUpper(cleaned), " OVER(") {
+		if parsedStmt, err := proc.ParseSQL(cleaned); err == nil {
+			if sel, ok := parsedStmt.(*proc.GeneralSelectStmt); ok {
+				qInfo := FromAST(sel)
+				qInfo.RawQuery = query
+				return qInfo, nil
+			}
 		}
 	}
 
@@ -275,11 +307,21 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	hasAgg := len(groupByCols) > 0 || havingClause != ""
 	for _, proj := range projections {
 		pUpper := strings.ToUpper(proj)
+		if strings.Contains(pUpper, "OVER") {
+			continue
+		}
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
 			strings.Contains(pUpper, "MAX(") {
 			hasAgg = true
 			break
+		}
+	}
+
+	var winDefs []WindowDef
+	for _, proj := range projections {
+		if w, ok := ParseWindowDef(proj); ok {
+			winDefs = append(winDefs, *w)
 		}
 	}
 
@@ -290,6 +332,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		TableAlias:    baseAlias,
 		Join:          joinInfo,
 		Projections:   projections,
+		WindowDefs:    winDefs,
 		WhereClause:   whereClause,
 		GroupByCols:   groupByCols,
 		HavingClause:  havingClause,
@@ -686,6 +729,29 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 		currentNode = aggNode
 	}
 
+	// Window Functions Node
+	var winDefs []WindowDef
+	if len(q.WindowDefs) > 0 {
+		winDefs = q.WindowDefs
+	} else {
+		for _, proj := range q.Projections {
+			if w, ok := ParseWindowDef(proj); ok {
+				winDefs = append(winDefs, *w)
+			}
+		}
+	}
+	if len(winDefs) > 0 {
+		winNode := &PlanNode{
+			Type:          NodeWindow,
+			WindowDefs:    winDefs,
+			StartupCost:   currentNode.TotalCost,
+			TotalCost:     currentNode.TotalCost + float64(currentNode.EstimatedRows)*0.01,
+			EstimatedRows: currentNode.EstimatedRows,
+			Children:      []*PlanNode{currentNode},
+		}
+		currentNode = winNode
+	}
+
 	// Order By -> Sort Node
 	if q.OrderByClause != "" {
 		sortParts := strings.Fields(q.OrderByClause)
@@ -840,6 +906,8 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 		sb.WriteString(fmt.Sprintf(" (columns=[%s])", strings.Join(node.Projections, ", ")))
 	case NodeFilter:
 		sb.WriteString(fmt.Sprintf(" (%s)", node.FilterCond))
+	case NodeWindow:
+		sb.WriteString(" (Window Functions)")
 	}
 
 	sb.WriteString(fmt.Sprintf(" (cost=%.2f..%.2f rows=%d)", node.StartupCost, node.TotalCost, node.EstimatedRows))
@@ -874,4 +942,130 @@ func FormatPlanJSON(node *PlanNode) (string, error) {
 		return "", err
 	}
 	return string(bytes), nil
+}
+
+// ParseWindowDef extracts a WindowDef from a projection item like "ROW_NUMBER() OVER (...) AS rn".
+func ParseWindowDef(item string) (*WindowDef, bool) {
+	trimmed := strings.TrimSpace(item)
+	upper := strings.ToUpper(trimmed)
+	overIdx := strings.Index(upper, "OVER")
+	if overIdx == -1 {
+		return nil, false
+	}
+
+	afterOver := strings.TrimSpace(trimmed[overIdx+4:])
+	if !strings.HasPrefix(afterOver, "(") {
+		return nil, false
+	}
+
+	depth := 0
+	closeParenIdx := -1
+	for i := 0; i < len(afterOver); i++ {
+		if afterOver[i] == '(' {
+			depth++
+		} else if afterOver[i] == ')' {
+			depth--
+			if depth == 0 {
+				closeParenIdx = i
+				break
+			}
+		}
+	}
+	if closeParenIdx == -1 {
+		return nil, false
+	}
+
+	overContent := strings.TrimSpace(afterOver[1:closeParenIdx])
+	trailing := strings.TrimSpace(afterOver[closeParenIdx+1:])
+
+	funcPart := strings.TrimSpace(trimmed[:overIdx])
+	fnOpenParen := strings.Index(funcPart, "(")
+	fnCloseParen := strings.LastIndex(funcPart, ")")
+	if fnOpenParen == -1 || fnCloseParen == -1 || fnCloseParen < fnOpenParen {
+		return nil, false
+	}
+
+	fnName := strings.ToUpper(strings.TrimSpace(funcPart[:fnOpenParen]))
+	rawArgs := strings.TrimSpace(funcPart[fnOpenParen+1 : fnCloseParen])
+
+	var args []string
+	if rawArgs != "" {
+		for _, arg := range strings.Split(rawArgs, ",") {
+			a := strings.Trim(strings.TrimSpace(arg), "\"`[]'")
+			if a != "" {
+				args = append(args, a)
+			}
+		}
+	}
+
+	alias := ""
+	if trailing != "" {
+		aliasUpper := strings.ToUpper(trailing)
+		if strings.HasPrefix(aliasUpper, "AS ") {
+			alias = strings.Trim(strings.TrimSpace(trailing[3:]), "\"`[]")
+		} else {
+			alias = strings.Trim(strings.TrimSpace(trailing), "\"`[]")
+		}
+	}
+
+	rawExpr := trimmed
+	if alias != "" && trailing != "" {
+		rawExpr = strings.TrimSpace(trimmed[:overIdx+4]) + " (" + overContent + ")"
+	}
+
+	w := &WindowDef{
+		Function: fnName,
+		Args:     args,
+		Alias:    alias,
+		RawExpr:  rawExpr,
+	}
+
+	overContentUpper := strings.ToUpper(overContent)
+	partIdx := strings.Index(overContentUpper, "PARTITION BY")
+	orderIdx := strings.Index(overContentUpper, "ORDER BY")
+
+	partStr := ""
+	orderStr := ""
+
+	if partIdx != -1 && orderIdx != -1 {
+		if partIdx < orderIdx {
+			partStr = strings.TrimSpace(overContent[partIdx+12 : orderIdx])
+			orderStr = strings.TrimSpace(overContent[orderIdx+8:])
+		} else {
+			orderStr = strings.TrimSpace(overContent[orderIdx+8 : partIdx])
+			partStr = strings.TrimSpace(overContent[partIdx+12:])
+		}
+	} else if partIdx != -1 {
+		partStr = strings.TrimSpace(overContent[partIdx+12:])
+	} else if orderIdx != -1 {
+		orderStr = strings.TrimSpace(overContent[orderIdx+8:])
+	}
+
+	if partStr != "" {
+		for _, p := range strings.Split(partStr, ",") {
+			col := strings.Trim(strings.TrimSpace(p), "\"`[]")
+			if col != "" {
+				w.PartitionKeys = append(w.PartitionKeys, col)
+			}
+		}
+	}
+
+	if orderStr != "" {
+		for _, o := range strings.Split(orderStr, ",") {
+			fields := strings.Fields(strings.TrimSpace(o))
+			if len(fields) > 0 {
+				col := strings.Trim(fields[0], "\"`[]")
+				dir := "ASC"
+				if len(fields) > 1 && strings.EqualFold(fields[1], "DESC") {
+					dir = "DESC"
+				}
+				w.OrderByKeys = append(w.OrderByKeys, SortKeyDef{
+					Column:    col,
+					Direction: dir,
+				})
+			}
+		}
+	}
+
+	return w, true
 }
