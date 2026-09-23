@@ -18,6 +18,11 @@ import (
 	"sqlion/pkg/storage"
 )
 
+type pgActiveConn struct {
+	sessID    string
+	secretKey uint32
+}
+
 // Server implements a PostgreSQL Wire Protocol v3 listener.
 type Server struct {
 	addr        string
@@ -28,6 +33,7 @@ type Server struct {
 	planCache   *proc.PlanCache
 	executor    *runtime.Executor
 	connCounter uint64
+	activeConns map[uint32]*pgActiveConn
 	mu          sync.Mutex
 	closed      bool
 }
@@ -36,12 +42,13 @@ type Server struct {
 func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
 	cache := runtime.NewPlanCache()
 	return &Server{
-		addr:      addr,
-		catalog:   cat,
-		engine:    eng,
-		apiServer: api.NewServer(cat, eng),
-		planCache: proc.NewPlanCache(),
-		executor:  runtime.NewExecutor(cache),
+		addr:        addr,
+		catalog:     cat,
+		engine:      eng,
+		apiServer:   api.NewServer(cat, eng),
+		planCache:   proc.NewPlanCache(),
+		executor:    runtime.NewExecutor(cache),
+		activeConns: make(map[uint32]*pgActiveConn),
 	}
 }
 
@@ -106,13 +113,36 @@ func (s *Server) handleConnection(conn net.Conn) {
 	sessID := fmt.Sprintf("pg-%d", connID)
 	defer s.apiServer.CloseSession(sessID)
 
-	// 1. Initial Handshake: SSL or Startup
+	// 1. Initial Handshake: SSL or Cancel or Startup
 	buf := make([]byte, 8)
 	if _, err := io.ReadFull(conn, buf); err != nil {
 		return
 	}
 
 	code := binary.BigEndian.Uint32(buf[4:8])
+	if code == 80877102 {
+		// CancelRequest (length=16, code=80877102, PID=4B, SecretKey=4B)
+		cancelBuf := make([]byte, 8)
+		if _, err := io.ReadFull(conn, cancelBuf); err != nil {
+			return
+		}
+		targetPID := binary.BigEndian.Uint32(cancelBuf[:4])
+		targetKey := binary.BigEndian.Uint32(cancelBuf[4:8])
+
+		s.mu.Lock()
+		active, exists := s.activeConns[targetPID]
+		var targetSessID string
+		if exists && active.secretKey == targetKey {
+			targetSessID = active.sessID
+		}
+		s.mu.Unlock()
+
+		if targetSessID != "" {
+			s.apiServer.CloseSession(targetSessID)
+		}
+		return
+	}
+
 	if code == 80877103 {
 		// SSLRequest: Reply 'N' (no SSL)
 		if _, err := conn.Write([]byte{'N'}); err != nil {
@@ -120,6 +150,28 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 		// Read actual startup message: 4 bytes length + 4 bytes protocol version
 		if _, err := io.ReadFull(conn, buf); err != nil {
+			return
+		}
+		code = binary.BigEndian.Uint32(buf[4:8])
+		if code == 80877102 {
+			cancelBuf := make([]byte, 8)
+			if _, err := io.ReadFull(conn, cancelBuf); err != nil {
+				return
+			}
+			targetPID := binary.BigEndian.Uint32(cancelBuf[:4])
+			targetKey := binary.BigEndian.Uint32(cancelBuf[4:8])
+
+			s.mu.Lock()
+			active, exists := s.activeConns[targetPID]
+			var targetSessID string
+			if exists && active.secretKey == targetKey {
+				targetSessID = active.sessID
+			}
+			s.mu.Unlock()
+
+			if targetSessID != "" {
+				s.apiServer.CloseSession(targetSessID)
+			}
 			return
 		}
 	}
@@ -132,13 +184,33 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 	}
 
-	// 2. Send Auth OK & Server Parameters
+	pid := uint32(connID)
+	secretKey := uint32(connID*10007 + 42)
+	s.mu.Lock()
+	s.activeConns[pid] = &pgActiveConn{sessID: sessID, secretKey: secretKey}
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.activeConns, pid)
+		s.mu.Unlock()
+	}()
+
+	// 2. Send Auth OK, BackendKeyData & Server Parameters
 	if err := WriteAuthOK(conn); err != nil {
 		return
 	}
+	if err := WriteBackendKeyData(conn, pid, secretKey); err != nil {
+		return
+	}
 	_ = WriteParameterStatus(conn, "server_version", "15.0 (SQLion)")
+	_ = WriteParameterStatus(conn, "server_encoding", "UTF8")
 	_ = WriteParameterStatus(conn, "client_encoding", "UTF8")
+	_ = WriteParameterStatus(conn, "application_name", "")
+	_ = WriteParameterStatus(conn, "is_superuser", "on")
+	_ = WriteParameterStatus(conn, "session_authorization", "postgres")
+	_ = WriteParameterStatus(conn, "integer_datetimes", "on")
 	_ = WriteParameterStatus(conn, "DateStyle", "ISO, MDY")
+	_ = WriteParameterStatus(conn, "IntervalStyle", "postgres")
 	_ = WriteParameterStatus(conn, "standard_conforming_strings", "on")
 	_ = WriteParameterStatus(conn, "TimeZone", "UTC")
 	if err := WriteReadyForQuery(conn); err != nil {

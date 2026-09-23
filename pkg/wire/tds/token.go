@@ -244,6 +244,56 @@ func BuildDone(tokenType byte, status uint16, curCmd uint16, rowCount uint64) []
 	return buf.Bytes()
 }
 
+// BuildDoneProc builds a DONEPROC token (0xFE) indicating stored procedure or RPC completion.
+func BuildDoneProc(status uint16, curCmd uint16, rowCount uint64) []byte {
+	return BuildDone(TokenDoneProc, status, curCmd, rowCount)
+}
+
+// BuildReturnStatus builds a RETURNSTATUS token (0x79) with 4-byte LE return value.
+func BuildReturnStatus(val int32) []byte {
+	buf := make([]byte, 5)
+	buf[0] = TokenReturnStatus
+	binary.LittleEndian.PutUint32(buf[1:5], uint32(val))
+	return buf
+}
+
+
+// BuildReturnValueInt builds a RETURNVALUE token (0xAC) for integer output parameters (such as statement @handle).
+func BuildReturnValueInt(paramOrdinal uint16, paramName string, val int32) []byte {
+	var payload bytes.Buffer
+
+	// ParamOrdinal: uint16 LE
+	_ = binary.Write(&payload, binary.LittleEndian, paramOrdinal)
+
+	// ParamName: B_VARCHAR (1 byte char length + UTF-16LE characters)
+	if paramName != "" {
+		payload.WriteByte(byte(len(paramName)))
+		payload.Write(EncodeUTF16LE(paramName))
+	} else {
+		payload.WriteByte(0)
+	}
+
+	// StatusFlags (1B): 0x01 = Output parameter
+	payload.WriteByte(0x01)
+
+	// UserType (4B LE): 0
+	_ = binary.Write(&payload, binary.LittleEndian, uint32(0))
+
+	// Flags (2B LE): 0
+	_ = binary.Write(&payload, binary.LittleEndian, uint16(0))
+
+	// TypeInfo: TypeInt4 (0x38), fixed length 4 bytes
+	payload.WriteByte(TypeInt4)
+
+	// Value: int32 LE
+	_ = binary.Write(&payload, binary.LittleEndian, val)
+
+	var buf bytes.Buffer
+	buf.WriteByte(TokenReturnValue)
+	buf.Write(payload.Bytes())
+	return buf.Bytes()
+}
+
 // BuildError builds an ERROR token (0xAA).
 func BuildError(number int32, state byte, class byte, msg, serverName, procName string, lineNum int32) []byte {
 	var payload bytes.Buffer

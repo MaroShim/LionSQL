@@ -409,3 +409,96 @@ func TestWire_ConcurrentConnectionMultiplexing(t *testing.T) {
 	wg.Wait()
 }
 
+func TestWire_BackendKeyDataAndCancelRequest(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+
+	// 1. Establish regular client connection
+	c1Client, c1Server := net.Pipe()
+	defer c1Client.Close()
+	defer c1Server.Close()
+
+	go srv.handleConnection(c1Server)
+
+	// Send StartupMessage
+	startup := make([]byte, 8)
+	binary.BigEndian.PutUint32(startup[:4], 8)
+	binary.BigEndian.PutUint32(startup[4:8], 196608) // 3.0
+	if _, err := c1Client.Write(startup); err != nil {
+		t.Fatalf("Failed to write startup: %v", err)
+	}
+
+	var gotBackendKeyData bool
+	var pid, secretKey uint32
+	params := make(map[string]string)
+
+	header := make([]byte, 5)
+	for {
+		if _, err := io.ReadFull(c1Client, header); err != nil {
+			t.Fatalf("Failed to read header: %v", err)
+		}
+		msgType := header[0]
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		if _, err := io.ReadFull(c1Client, payload); err != nil {
+			t.Fatalf("Failed to read payload: %v", err)
+		}
+
+		if msgType == MsgBackendKeyData {
+			gotBackendKeyData = true
+			pid = binary.BigEndian.Uint32(payload[:4])
+			secretKey = binary.BigEndian.Uint32(payload[4:8])
+		} else if msgType == MsgParameterStatus {
+			parts := strings.Split(string(payload), "\x00")
+			if len(parts) >= 2 {
+				params[parts[0]] = parts[1]
+			}
+		} else if msgType == MsgReadyForQuery {
+			break
+		}
+	}
+
+	if !gotBackendKeyData {
+		t.Fatalf("Expected MsgBackendKeyData ('K'), but did not receive it")
+	}
+	if pid == 0 || secretKey == 0 {
+		t.Fatalf("Invalid pid=%d or secretKey=%d", pid, secretKey)
+	}
+
+	// Verify parameter status suite
+	expectedParams := []string{
+		"server_version", "server_encoding", "client_encoding",
+		"is_superuser", "session_authorization", "integer_datetimes",
+		"DateStyle", "IntervalStyle", "standard_conforming_strings", "TimeZone",
+	}
+	for _, k := range expectedParams {
+		if _, ok := params[k]; !ok {
+			t.Errorf("Missing expected ParameterStatus: %s", k)
+		}
+	}
+
+	// 2. Send CancelRequest on a separate connection
+	cancelClient, cancelServer := net.Pipe()
+	defer cancelClient.Close()
+	defer cancelServer.Close()
+
+	go srv.handleConnection(cancelServer)
+
+	cancelBuf := make([]byte, 16)
+	binary.BigEndian.PutUint32(cancelBuf[0:4], 16)
+	binary.BigEndian.PutUint32(cancelBuf[4:8], 80877102) // CancelRequest code
+	binary.BigEndian.PutUint32(cancelBuf[8:12], pid)
+	binary.BigEndian.PutUint32(cancelBuf[12:16], secretKey)
+
+	if _, err := cancelClient.Write(cancelBuf); err != nil {
+		t.Fatalf("Failed to write cancel request: %v", err)
+	}
+
+	// The server must process cancellation and immediately close the connection with EOF
+	readBuf := make([]byte, 1)
+	n, err := cancelClient.Read(readBuf)
+	if err != io.EOF && n != 0 {
+		t.Errorf("Expected EOF from CancelRequest connection, got n=%d, err=%v", n, err)
+	}
+}
+
+

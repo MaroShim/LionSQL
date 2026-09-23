@@ -24,7 +24,19 @@ const (
 	MsgCopyData             byte = 'd'
 	MsgCopyDone             byte = 'c'
 	MsgCopyFail             byte = 'f'
+	MsgBackendKeyData       byte = 'K'
 )
+
+// WriteBackendKeyData sends BackendKeyData ('K') with process ID and cancellation secret key.
+func WriteBackendKeyData(w io.Writer, pid, secretKey uint32) error {
+	buf := make([]byte, 13)
+	buf[0] = MsgBackendKeyData
+	binary.BigEndian.PutUint32(buf[1:5], 12)
+	binary.BigEndian.PutUint32(buf[5:9], pid)
+	binary.BigEndian.PutUint32(buf[9:13], secretKey)
+	_, err := w.Write(buf)
+	return err
+}
 
 // WriteParseComplete sends ParseComplete ('1') message.
 func WriteParseComplete(w io.Writer) error {

@@ -338,6 +338,44 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
+	// 0.08 T-SQL DECLARE variables: DECLARE @var [type] [= expr], ...
+	if strings.HasPrefix(upper, "DECLARE ") {
+		rawDecls := strings.TrimSpace(trimmed[len("DECLARE "):])
+		parts := strings.Split(rawDecls, ",")
+		cs.mu.Lock()
+		for _, p := range parts {
+			p = strings.TrimSpace(strings.TrimRight(p, ";"))
+			if !strings.HasPrefix(p, "@") {
+				continue
+			}
+			eqParts := strings.SplitN(p, "=", 2)
+			varHeader := strings.TrimSpace(eqParts[0])
+			varFields := strings.Fields(varHeader)
+			if len(varFields) == 0 {
+				continue
+			}
+			varName := varFields[0]
+			if !strings.HasPrefix(varName, "@") {
+				varName = "@" + varName
+			}
+			var val any = nil
+			if len(eqParts) == 2 {
+				expr := strings.TrimSpace(eqParts[1])
+				for k, v := range cs.Vars {
+					expr = strings.ReplaceAll(expr, k, fmt.Sprintf("%v", v))
+				}
+				val = parseSessionVarValue(expr)
+			}
+			cs.Vars[varName] = val
+		}
+		cs.mu.Unlock()
+		return &QueryResult{
+			Success:    true,
+			Command:    "DECLARE",
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
 	// 0.1 Session Variables: SET @var = expr / SET @var := expr
 	setRe := regexp.MustCompile(`(?is)^SET\s+@([a-zA-Z0-9_]+)\s*(?::=|=)\s*(.*)$`)
 	if m := setRe.FindStringSubmatch(trimmed); len(m) == 3 {

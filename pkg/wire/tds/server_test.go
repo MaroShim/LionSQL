@@ -356,3 +356,169 @@ func TestTDS_PacketFraming(t *testing.T) {
 		t.Fatalf("reassembled payload does not match original payload")
 	}
 }
+
+func sendRPC(t *testing.T, conn net.Conn, procID uint16, optionFlags uint16, paramsPayload []byte) []byte {
+	t.Helper()
+	var rpcBuf bytes.Buffer
+
+	_ = binary.Write(&rpcBuf, binary.LittleEndian, uint16(0xFFFF))
+	_ = binary.Write(&rpcBuf, binary.LittleEndian, procID)
+	_ = binary.Write(&rpcBuf, binary.LittleEndian, optionFlags)
+	rpcBuf.Write(paramsPayload)
+
+	if err := WritePacket(conn, PacketRPC, 1, rpcBuf.Bytes()); err != nil {
+		t.Fatalf("failed to send RPC packet: %v", err)
+	}
+
+	resp, err := ReadPacket(conn)
+	if err != nil {
+		t.Fatalf("failed to read RPC response: %v", err)
+	}
+	return resp.Payload
+}
+
+func buildNVarCharParam(name string, isOutput bool, val string) []byte {
+	var buf bytes.Buffer
+	if name != "" {
+		buf.WriteByte(byte(len(name)))
+		buf.Write(EncodeUTF16LE(name))
+	} else {
+		buf.WriteByte(0)
+	}
+	if isOutput {
+		buf.WriteByte(0x01)
+	} else {
+		buf.WriteByte(0x00)
+	}
+	buf.WriteByte(TypeNVarChar)
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(4000))
+	buf.Write([]byte{0x09, 0x04, 0xD0, 0x00, 0x34})
+	u16 := EncodeUTF16LE(val)
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(len(u16)))
+	buf.Write(u16)
+	return buf.Bytes()
+}
+
+func buildIntParam(name string, isOutput bool, val int32) []byte {
+	var buf bytes.Buffer
+	if name != "" {
+		buf.WriteByte(byte(len(name)))
+		buf.Write(EncodeUTF16LE(name))
+	} else {
+		buf.WriteByte(0)
+	}
+	if isOutput {
+		buf.WriteByte(0x01)
+	} else {
+		buf.WriteByte(0x00)
+	}
+	buf.WriteByte(TypeInt4)
+	_ = binary.Write(&buf, binary.LittleEndian, val)
+	return buf.Bytes()
+}
+
+func TestTDS_PreparedStatementRPC(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// Create test table
+	_ = sendSQLBatch(t, conn, `CREATE TABLE items (id INT PRIMARY KEY, name VARCHAR(50));`)
+
+	// 1. sp_prepare (ProcID 11): Prepare INSERT statement
+	var prepParams bytes.Buffer
+	prepParams.Write(buildIntParam("@handle", true, 0))
+	prepParams.Write(buildNVarCharParam("@params", false, "@p1 INT, @p2 VARCHAR(50)"))
+	prepParams.Write(buildNVarCharParam("@stmt", false, "INSERT INTO items (id, name) VALUES (@p1, @p2);"))
+
+	respPrep := sendRPC(t, conn, 11, 0, prepParams.Bytes())
+	if !bytes.Contains(respPrep, []byte{TokenReturnValue}) {
+		t.Fatalf("sp_prepare: expected TokenReturnValue (0xAC) for @handle")
+	}
+	if !bytes.Contains(respPrep, []byte{TokenDoneProc}) {
+		t.Fatalf("sp_prepare: expected TokenDoneProc (0xFE)")
+	}
+
+	// Extract the handle from ReturnValue payload
+	rvIdx := bytes.Index(respPrep, []byte{TokenReturnValue})
+	// ReturnValue format: TokenReturnValue(1B) + Ordinal(2B) + BVarChar Name + Status(1B) + UserType(4B) + Flags(2B) + Type(1B: 0x38) + Int4(4B)
+	// After @handle (len=7 -> 1+14=15 bytes), status(1), usertype(4), flags(2), type(1), val(4)
+	valOffset := rvIdx + 1 + 2 + 1 + 14 + 1 + 4 + 2 + 1
+	var handle int32 = 1
+	if len(respPrep) >= valOffset+4 {
+		handle = int32(binary.LittleEndian.Uint32(respPrep[valOffset : valOffset+4]))
+	}
+
+	// 2. sp_execute (ProcID 12): Execute with handle and values
+	var execParams bytes.Buffer
+	execParams.Write(buildIntParam("@handle", false, handle))
+	execParams.Write(buildIntParam("@p1", false, 101))
+	execParams.Write(buildNVarCharParam("@p2", false, "Gadget"))
+
+	respExec := sendRPC(t, conn, 12, 0, execParams.Bytes())
+	if !bytes.Contains(respExec, []byte{TokenDoneProc}) {
+		t.Fatalf("sp_execute: expected TokenDoneProc (0xFE)")
+	}
+
+	// Verify insertion
+	selResp := sendSQLBatch(t, conn, "SELECT name FROM items WHERE id = 101;")
+	if !bytes.Contains(selResp, []byte{TokenRow}) {
+		t.Fatalf("sp_execute: inserted record not found")
+	}
+
+	// 3. sp_prepexec (ProcID 13): Prepare and execute in one round-trip
+	var prepexecParams bytes.Buffer
+	prepexecParams.Write(buildIntParam("@handle", true, 0))
+	prepexecParams.Write(buildNVarCharParam("@params", false, "@id INT"))
+	prepexecParams.Write(buildNVarCharParam("@stmt", false, "SELECT id, name FROM items WHERE id = @id;"))
+	prepexecParams.Write(buildIntParam("@id", false, 101))
+
+	respPrepExec := sendRPC(t, conn, 13, 0, prepexecParams.Bytes())
+	if !bytes.Contains(respPrepExec, []byte{TokenColMetaData}) {
+		t.Fatalf("sp_prepexec: expected TokenColMetaData (0x81)")
+	}
+	if !bytes.Contains(respPrepExec, []byte{TokenRow}) {
+		t.Fatalf("sp_prepexec: expected TokenRow (0xD1)")
+	}
+	if !bytes.Contains(respPrepExec, []byte{TokenReturnValue}) {
+		t.Fatalf("sp_prepexec: expected TokenReturnValue (0xAC) for new handle")
+	}
+	if !bytes.Contains(respPrepExec, []byte{TokenDoneProc}) {
+		t.Fatalf("sp_prepexec: expected TokenDoneProc (0xFE)")
+	}
+
+	// 4. Parameterized sp_executesql (ProcID 10)
+	var execSqlParams bytes.Buffer
+	execSqlParams.Write(buildNVarCharParam("@stmt", false, "SELECT name FROM items WHERE id = @p1;"))
+	execSqlParams.Write(buildNVarCharParam("@params", false, "@p1 INT"))
+	execSqlParams.Write(buildIntParam("@p1", false, 101))
+
+	respExecSql := sendRPC(t, conn, 10, 0, execSqlParams.Bytes())
+	if !bytes.Contains(respExecSql, []byte{TokenRow}) {
+		t.Fatalf("sp_executesql: expected TokenRow (0xD1)")
+	}
+	if !bytes.Contains(respExecSql, []byte{TokenDoneProc}) {
+		t.Fatalf("sp_executesql: expected TokenDoneProc (0xFE)")
+	}
+
+	// 5. sp_unprepare (ProcID 15): Unprepare handle
+	var unprepParams bytes.Buffer
+	unprepParams.Write(buildIntParam("@handle", false, handle))
+
+	respUnprep := sendRPC(t, conn, 15, 0, unprepParams.Bytes())
+	if !bytes.Contains(respUnprep, []byte{TokenDoneProc}) {
+		t.Fatalf("sp_unprepare: expected TokenDoneProc (0xFE)")
+	}
+
+	// 6. Verify subsequent sp_execute on deleted handle returns error 8179
+	var invalidExecParams bytes.Buffer
+	invalidExecParams.Write(buildIntParam("@handle", false, handle))
+	invalidExecParams.Write(buildIntParam("@p1", false, 999))
+	invalidExecParams.Write(buildNVarCharParam("@p2", false, "Ghost"))
+
+	respInvalid := sendRPC(t, conn, 12, 0, invalidExecParams.Bytes())
+	if !bytes.Contains(respInvalid, []byte{TokenError}) {
+		t.Fatalf("sp_execute on unprepared handle: expected TokenError (0xAA)")
+	}
+}
+

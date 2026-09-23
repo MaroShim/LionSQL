@@ -23,6 +23,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Mathematical & logical functions: `POWER`, `SQRT`, `SIGN`, `PI`, `IIF`, `CHOOSE`.
   - System functions & global metadata: `NEWID()` (RFC 4122 UUID v4), `SCOPE_IDENTITY()`, `@@TRANCOUNT`, `@@SPID`, `@@ERROR`, `@@SERVERNAME`, `@@VERSION`.
   - Native parser support for keyword-colliding function calls (`LEFT`, `RIGHT`) and bare datepart identifiers (`day`, `month`, `year`).
+- **Microsoft SQL Server TDS RPC Prepared Statement Pipeline (`pkg/wire/tds`)**:
+  - Full RPC routing and lifecycle for `sp_prepare` (ProcID 11), `sp_execute` (ProcID 12), `sp_prepexec` (ProcID 13), `sp_unprepare` (ProcID 15), and parameterized `sp_executesql` (ProcID 10).
+  - Accurate token framing: `TokenReturnValue` (0xAC) for statement `@handle`, `TokenReturnStatus` (0x79), and `TokenDoneProc` (0xFE).
+  - Robust parameter deserializer supporting `INT`, `BIGINT`, `SMALLINT`, `TINYINT`, `BIT`, `FLOAT`, `REAL`, `VARCHAR`, `NVARCHAR`, `VARBINARY`, and Partially Length-Prefixed (`VARCHAR(MAX)` / `NVARCHAR(MAX)` PLP).
+  - Out-of-quotes lexical parameter binding and `?` ODBC/JDBC placeholder replacement.
+- **PostgreSQL Driver Protocol Hardening & Cancellation (`pkg/wire`)**:
+  - `BackendKeyData` ('K') handshake message emitting backend process ID and secret key.
+  - Complete `ParameterStatus` response suite (`server_version`, `server_encoding`, `client_encoding`, `application_name`, `is_superuser`, `session_authorization`, `integer_datetimes`, `DateStyle`, `IntervalStyle`, `standard_conforming_strings`, `TimeZone`).
+  - Safe, non-blocking `CancelRequest` (code `80877102`) handling to abort executing client sessions.
+- **T-SQL Variable Declaration Extension (`pkg/api/sqlexec.go`)**:
+  - Multi-variable `DECLARE @var [type] [= expr]` statement support in script and session execution.
 
 ---
 
