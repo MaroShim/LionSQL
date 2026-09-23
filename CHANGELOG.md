@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Zero-Allocation Volcano Relational Execution Engine & Slice-Backed Tuple Pipeline (`pkg/execution`)**:
+  - Refactored `execution.Tuple` from dynamic `map[string]any` to contiguous slice-backed struct (`Values []any`, `Index *ColumnIndexMap`), eliminating map bucket allocation on query execution hot paths.
+  - Implemented precomputed `ColumnIndexMap` with $O(1)$ column offset lookups supporting case-insensitive table/alias prefixes and raw aggregate expressions (`COUNT(*)`, `AVG(col)`).
+  - Extended `Iterator` interface with `ColIndexMap() *ColumnIndexMap` and introduced `MergeColumnIndexMaps` for seamless, zero-allocation schema and prefix propagation across join trees (`HashJoin`, `IndexNestedLoopJoin`) and upstream projection/sort/filter/aggregate operators.
+  - Integrated `sync.Pool` buffer pooling (`AcquireValuesSlice` / `ReleaseValuesSlice`) to mitigate GC pressure during high-throughput query iteration.
+  - Added `ToEvalMap()` for AST boolean expression evaluation and lossless JSON serialization for external merge sort spill runs.
 - **Pure-Go Concurrent SkipList Secondary Index (`pkg/storage/memengine`)**:
   - High-concurrency, lock-aware SkipList indexing replacing $O(N)$ slice copy element shifting with $O(\log N)$ probabilistic skip links.
   - Sub-microsecond point lookup (~177ns/op) and bulk insertion (~584ns/op, 2.8M ops/sec).

@@ -20,7 +20,11 @@ type mockIterator struct {
 	calls  int
 }
 
-func newMockIterator(schema []string, tuples ...execution.Tuple) *mockIterator {
+func newMockIterator(schema []string, rows ...map[string]any) *mockIterator {
+	tuples := make([]execution.Tuple, len(rows))
+	for i, r := range rows {
+		tuples[i] = execution.NewTupleFromMap(r, schema)
+	}
 	return &mockIterator{schema: schema, tuples: tuples}
 }
 
@@ -32,7 +36,7 @@ func (m *mockIterator) Open(ctx context.Context) error {
 func (m *mockIterator) Next(ctx context.Context) (execution.Tuple, error) {
 	m.calls++
 	if m.idx >= len(m.tuples) {
-		return nil, io.EOF
+		return execution.Tuple{}, io.EOF
 	}
 	t := m.tuples[m.idx]
 	m.idx++
@@ -47,14 +51,21 @@ func (m *mockIterator) Schema() []string {
 	return m.schema
 }
 
+func (m *mockIterator) ColIndexMap() *execution.ColumnIndexMap {
+	if len(m.tuples) > 0 && m.tuples[0].Index != nil {
+		return m.tuples[0].Index
+	}
+	return execution.NewColumnIndexMapFromCols(m.schema)
+}
+
 func TestLimitIterator_ShortCircuit(t *testing.T) {
 	ctx := context.Background()
 	mock := newMockIterator([]string{"id", "val"},
-		execution.Tuple{"id": int64(1), "val": "a"},
-		execution.Tuple{"id": int64(2), "val": "b"},
-		execution.Tuple{"id": int64(3), "val": "c"},
-		execution.Tuple{"id": int64(4), "val": "d"},
-		execution.Tuple{"id": int64(5), "val": "e"},
+		map[string]any{"id": int64(1), "val": "a"},
+		map[string]any{"id": int64(2), "val": "b"},
+		map[string]any{"id": int64(3), "val": "c"},
+		map[string]any{"id": int64(4), "val": "d"},
+		map[string]any{"id": int64(5), "val": "e"},
 	)
 
 	limitIter := execution.NewLimitIterator(mock, 2, 0)
@@ -78,7 +89,7 @@ func TestLimitIterator_ShortCircuit(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	if rows[0]["id"] != int64(1) || rows[1]["id"] != int64(2) {
+	if rows[0].Get("id") != int64(1) || rows[1].Get("id") != int64(2) {
 		t.Fatalf("unexpected rows: %v", rows)
 	}
 
@@ -91,10 +102,10 @@ func TestLimitIterator_ShortCircuit(t *testing.T) {
 func TestFilterIterator(t *testing.T) {
 	ctx := context.Background()
 	mock := newMockIterator([]string{"id", "age", "city"},
-		execution.Tuple{"id": int64(1), "age": int64(25), "city": "Seoul"},
-		execution.Tuple{"id": int64(2), "age": int64(17), "city": "Busan"},
-		execution.Tuple{"id": int64(3), "age": int64(35), "city": "Seoul"},
-		execution.Tuple{"id": int64(4), "age": int64(40), "city": "Incheon"},
+		map[string]any{"id": int64(1), "age": int64(25), "city": "Seoul"},
+		map[string]any{"id": int64(2), "age": int64(17), "city": "Busan"},
+		map[string]any{"id": int64(3), "age": int64(35), "city": "Seoul"},
+		map[string]any{"id": int64(4), "age": int64(40), "city": "Incheon"},
 	)
 
 	filter := execution.NewFilterIterator(mock, "age >= 25 AND city = 'Seoul'")
@@ -118,7 +129,7 @@ func TestFilterIterator(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("expected 2 rows, got %d", len(rows))
 	}
-	if rows[0]["id"] != int64(1) || rows[1]["id"] != int64(3) {
+	if rows[0].Get("id") != int64(1) || rows[1].Get("id") != int64(3) {
 		t.Fatalf("unexpected filtered rows: %v", rows)
 	}
 }
@@ -126,9 +137,9 @@ func TestFilterIterator(t *testing.T) {
 func TestSortIterator(t *testing.T) {
 	ctx := context.Background()
 	mock := newMockIterator([]string{"name", "score"},
-		execution.Tuple{"name": "Charlie", "score": int64(80)},
-		execution.Tuple{"name": "Alice", "score": int64(95)},
-		execution.Tuple{"name": "Bob", "score": int64(80)},
+		map[string]any{"name": "Charlie", "score": int64(80)},
+		map[string]any{"name": "Alice", "score": int64(95)},
+		map[string]any{"name": "Bob", "score": int64(80)},
 	)
 
 	sortIter := execution.NewSortIterator(mock, "score DESC, name ASC")
@@ -146,7 +157,7 @@ func TestSortIterator(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Next error: %v", err)
 		}
-		names = append(names, fmt.Sprintf("%v", tuple["name"]))
+		names = append(names, fmt.Sprintf("%v", tuple.Get("name")))
 	}
 
 	expected := []string{"Alice", "Bob", "Charlie"}
@@ -160,7 +171,7 @@ func TestSortIterator(t *testing.T) {
 func TestProjectionIterator(t *testing.T) {
 	ctx := context.Background()
 	mock := newMockIterator([]string{"id", "first_name", "last_name"},
-		execution.Tuple{"id": int64(1), "first_name": "John", "last_name": "Doe"},
+		map[string]any{"id": int64(1), "first_name": "John", "last_name": "Doe"},
 	)
 
 	proj := execution.NewProjectionIterator(mock, []string{"id", "first_name AS name"})
@@ -174,10 +185,10 @@ func TestProjectionIterator(t *testing.T) {
 		t.Fatalf("Next error: %v", err)
 	}
 
-	if tuple["id"] != int64(1) || tuple["name"] != "John" {
+	if tuple.Get("id") != int64(1) || tuple.Get("name") != "John" {
 		t.Fatalf("unexpected projection: %v", tuple)
 	}
-	if _, exists := tuple["last_name"]; exists {
+	if _, exists := tuple.GetOK("last_name"); exists {
 		t.Fatalf("last_name should not be in projection")
 	}
 }
@@ -185,14 +196,14 @@ func TestProjectionIterator(t *testing.T) {
 func TestHashJoinIterator(t *testing.T) {
 	ctx := context.Background()
 	users := newMockIterator([]string{"u.id", "u.name"},
-		execution.Tuple{"u.id": int64(1), "u.name": "Alice"},
-		execution.Tuple{"u.id": int64(2), "u.name": "Bob"},
-		execution.Tuple{"u.id": int64(3), "u.name": "Carol"},
+		map[string]any{"u.id": int64(1), "u.name": "Alice"},
+		map[string]any{"u.id": int64(2), "u.name": "Bob"},
+		map[string]any{"u.id": int64(3), "u.name": "Carol"},
 	)
 	orders := newMockIterator([]string{"o.id", "o.user_id", "o.item"},
-		execution.Tuple{"o.id": int64(101), "o.user_id": int64(1), "o.item": "Laptop"},
-		execution.Tuple{"o.id": int64(102), "o.user_id": int64(1), "o.item": "Mouse"},
-		execution.Tuple{"o.id": int64(103), "o.user_id": int64(2), "o.item": "Monitor"},
+		map[string]any{"o.id": int64(101), "o.user_id": int64(1), "o.item": "Laptop"},
+		map[string]any{"o.id": int64(102), "o.user_id": int64(1), "o.item": "Mouse"},
+		map[string]any{"o.id": int64(103), "o.user_id": int64(2), "o.item": "Monitor"},
 	)
 
 	// INNER JOIN users ON u.id = o.user_id
@@ -223,11 +234,11 @@ func TestHashJoinIterator(t *testing.T) {
 func TestAggregateIterator(t *testing.T) {
 	ctx := context.Background()
 	mock := newMockIterator([]string{"dept", "salary"},
-		execution.Tuple{"dept": "Engineering", "salary": int64(100)},
-		execution.Tuple{"dept": "Engineering", "salary": int64(120)},
-		execution.Tuple{"dept": "Sales", "salary": int64(80)},
-		execution.Tuple{"dept": "Sales", "salary": int64(90)},
-		execution.Tuple{"dept": "HR", "salary": int64(70)},
+		map[string]any{"dept": "Engineering", "salary": int64(100)},
+		map[string]any{"dept": "Engineering", "salary": int64(120)},
+		map[string]any{"dept": "Sales", "salary": int64(80)},
+		map[string]any{"dept": "Sales", "salary": int64(90)},
+		map[string]any{"dept": "HR", "salary": int64(70)},
 	)
 
 	agg := execution.NewAggregateIterator(mock, []string{"dept"}, []string{"dept", "COUNT(*) AS cnt", "AVG(salary) AS avg_sal"}, "cnt >= 2")
@@ -334,7 +345,7 @@ func TestEndToEnd_VolcanoWithMemEngine(t *testing.T) {
 	if len(result) != 2 {
 		t.Fatalf("expected 2 rows from limit, got %d", len(result))
 	}
-	if result[0]["name"] == nil || result[0]["price"] == nil {
+	if result[0].Get("name") == nil || result[0].Get("price") == nil {
 		t.Fatalf("expected projected name and price, got %v", result[0])
 	}
 }

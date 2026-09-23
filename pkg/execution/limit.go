@@ -42,31 +42,31 @@ func (l *LimitIterator) Next(ctx context.Context) (Tuple, error) {
 	for l.skipped < l.offset {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return Tuple{}, ctx.Err()
 		default:
 		}
 
 		_, err := l.child.Next(ctx)
 		if err != nil {
-			return nil, err
+			return Tuple{}, err
 		}
 		l.skipped++
 	}
 
 	// Short-circuit if limit reached
 	if l.limit >= 0 && l.emitted >= l.limit {
-		return nil, io.EOF
+		return Tuple{}, io.EOF
 	}
 
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return Tuple{}, ctx.Err()
 	default:
 	}
 
 	tuple, err := l.child.Next(ctx)
 	if err != nil {
-		return nil, err
+		return Tuple{}, err
 	}
 
 	l.emitted++
@@ -83,6 +83,13 @@ func (l *LimitIterator) Close() error {
 func (l *LimitIterator) Schema() []string {
 	if l.child != nil {
 		return l.child.Schema()
+	}
+	return nil
+}
+
+func (l *LimitIterator) ColIndexMap() *ColumnIndexMap {
+	if l.child != nil {
+		return l.child.ColIndexMap()
 	}
 	return nil
 }

@@ -17,6 +17,7 @@ type ProjectionIterator struct {
 	fields      []projField
 	isSelectAll bool
 	schema      []string
+	colIndexMap *ColumnIndexMap
 }
 
 // NewProjectionIterator creates a new projection operator.
@@ -69,47 +70,36 @@ func (p *ProjectionIterator) Open(ctx context.Context) error {
 	if p.child == nil {
 		return fmt.Errorf("projection: child iterator is nil")
 	}
-	return p.child.Open(ctx)
+	if err := p.child.Open(ctx); err != nil {
+		return err
+	}
+	p.colIndexMap = NewColumnIndexMapFromCols(p.Schema())
+	return nil
 }
 
 func (p *ProjectionIterator) Next(ctx context.Context) (Tuple, error) {
 	tuple, err := p.child.Next(ctx)
 	if err != nil {
-		return nil, err
+		return Tuple{}, err
 	}
 
 	if p.isSelectAll && len(p.fields) == 0 {
-		if p.child != nil {
-			s := p.child.Schema()
-			if len(s) > 0 {
-				filtered := make(Tuple, len(s))
-				for _, col := range s {
-					if v, ok := lookupVal(tuple, col); ok {
-						filtered[col] = v
-					} else {
-						filtered[col] = nil
-					}
-				}
-				return filtered, nil
-			}
-		}
 		return tuple, nil
 	}
 
-	out := make(Tuple, len(p.fields))
-	for _, f := range p.fields {
+	vals := make([]any, len(p.fields))
+	for i, f := range p.fields {
 		val, found := lookupVal(tuple, f.expr)
 		if !found {
-			val, found = lookupVal(tuple, f.alias)
+			val, _ = lookupVal(tuple, f.alias)
 		}
-		if found {
-			out[f.alias] = val
-		} else {
-			out[f.alias] = nil
-		}
+		vals[i] = val
 	}
 
-	return out, nil
+	return Tuple{
+		Values: vals,
+		Index:  p.colIndexMap,
+	}, nil
 }
 
 func (p *ProjectionIterator) Close() error {
@@ -124,4 +114,14 @@ func (p *ProjectionIterator) Schema() []string {
 		return p.child.Schema()
 	}
 	return p.schema
+}
+
+func (p *ProjectionIterator) ColIndexMap() *ColumnIndexMap {
+	if p.isSelectAll && len(p.fields) == 0 && p.child != nil {
+		return p.child.ColIndexMap()
+	}
+	if p.colIndexMap == nil {
+		p.colIndexMap = NewColumnIndexMapFromCols(p.Schema())
+	}
+	return p.colIndexMap
 }

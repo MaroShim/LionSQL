@@ -27,15 +27,14 @@ func DefaultExecutorOptions() ExecutorOptions {
 
 // EstimateTupleSize estimates the heap memory footprint of a single Tuple in bytes.
 func EstimateTupleSize(t Tuple) int64 {
-	if t == nil {
+	if t.IsNil() {
 		return 0
 	}
-	// Base map header overhead (~64 bytes)
-	size := int64(64)
-	for k, v := range t {
-		// Key string + map hash bucket pointer overhead (~16 bytes)
-		size += int64(len(k)) + 16
-
+	// Base slice header (24 bytes) + Index pointer (8 bytes) = 32 bytes
+	size := int64(32)
+	for _, v := range t.Values {
+		// Interface{} overhead (16 bytes)
+		size += 16
 		if v == nil {
 			continue
 		}

@@ -1437,7 +1437,7 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 		if err != nil {
 			return nil, err
 		}
-		rows = append(rows, map[string]any(tuple))
+		rows = append(rows, tuple.ToMap())
 	}
 
 	cols := exec.Schema()

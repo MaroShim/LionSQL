@@ -10,11 +10,12 @@ import (
 
 // SeqScanIterator scans a table sequentially row-by-row directly from a storage.Cursor.
 type SeqScanIterator struct {
-	tx        storage.Transaction
-	tableName string
-	alias     string
-	schema    *storage.TableSchema
-	cursor    storage.Cursor
+	tx          storage.Transaction
+	tableName   string
+	alias       string
+	schema      *storage.TableSchema
+	colIndexMap *ColumnIndexMap
+	cursor      storage.Cursor
 }
 
 // NewSeqScanIterator creates a new sequential scan iterator.
@@ -23,10 +24,11 @@ func NewSeqScanIterator(tx storage.Transaction, tableName, alias string, schema 
 		alias = tableName
 	}
 	return &SeqScanIterator{
-		tx:        tx,
-		tableName: tableName,
-		alias:     alias,
-		schema:    schema,
+		tx:          tx,
+		tableName:   tableName,
+		alias:       alias,
+		schema:      schema,
+		colIndexMap: NewColumnIndexMap(schema, alias),
 	}
 }
 
@@ -34,6 +36,7 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 	if s.tx == nil {
 		return fmt.Errorf("seq scan: transaction is nil")
 	}
+	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
 	cur, err := s.tx.Scan(s.tableName)
 	if err != nil {
 		return fmt.Errorf("seq scan on %q: %w", s.tableName, err)
@@ -44,24 +47,24 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 
 func (s *SeqScanIterator) Next(ctx context.Context) (Tuple, error) {
 	if s.cursor == nil {
-		return nil, io.EOF
+		return Tuple{}, io.EOF
 	}
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return Tuple{}, ctx.Err()
 	default:
 	}
 
 	if !s.cursor.Next() {
-		return nil, io.EOF
+		return Tuple{}, io.EOF
 	}
 
 	rec, err := s.cursor.Record()
 	if err != nil {
-		return nil, err
+		return Tuple{}, err
 	}
 
-	return FormatRecord(rec, s.schema, s.alias), nil
+	return FormatRecord(rec, s.schema, s.alias, s.colIndexMap), nil
 }
 
 func (s *SeqScanIterator) Close() error {
@@ -84,16 +87,24 @@ func (s *SeqScanIterator) Schema() []string {
 	return cols
 }
 
+func (s *SeqScanIterator) ColIndexMap() *ColumnIndexMap {
+	if s.colIndexMap == nil {
+		s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
+	}
+	return s.colIndexMap
+}
+
 // IndexScanIterator scans a table using a secondary index range.
 type IndexScanIterator struct {
-	tx        storage.Transaction
-	tableName string
-	alias     string
-	indexName string
-	low       *storage.Value
-	high      *storage.Value
-	schema    *storage.TableSchema
-	cursor    storage.Cursor
+	tx          storage.Transaction
+	tableName   string
+	alias       string
+	indexName   string
+	low         *storage.Value
+	high        *storage.Value
+	schema      *storage.TableSchema
+	colIndexMap *ColumnIndexMap
+	cursor      storage.Cursor
 }
 
 // NewIndexScanIterator creates a new index scan iterator.
@@ -102,13 +113,14 @@ func NewIndexScanIterator(tx storage.Transaction, tableName, alias, indexName st
 		alias = tableName
 	}
 	return &IndexScanIterator{
-		tx:        tx,
-		tableName: tableName,
-		alias:     alias,
-		indexName: indexName,
-		low:       low,
-		high:      high,
-		schema:    schema,
+		tx:          tx,
+		tableName:   tableName,
+		alias:       alias,
+		indexName:   indexName,
+		low:         low,
+		high:        high,
+		schema:      schema,
+		colIndexMap: NewColumnIndexMap(schema, alias),
 	}
 }
 
@@ -116,6 +128,7 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 	if s.tx == nil {
 		return fmt.Errorf("index scan: transaction is nil")
 	}
+	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
 	cur, err := s.tx.IndexScan(s.tableName, s.indexName, s.low, s.high)
 	if err != nil {
 		return fmt.Errorf("index scan %q on %q: %w", s.indexName, s.tableName, err)
@@ -126,24 +139,24 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 
 func (s *IndexScanIterator) Next(ctx context.Context) (Tuple, error) {
 	if s.cursor == nil {
-		return nil, io.EOF
+		return Tuple{}, io.EOF
 	}
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return Tuple{}, ctx.Err()
 	default:
 	}
 
 	if !s.cursor.Next() {
-		return nil, io.EOF
+		return Tuple{}, io.EOF
 	}
 
 	rec, err := s.cursor.Record()
 	if err != nil {
-		return nil, err
+		return Tuple{}, err
 	}
 
-	return FormatRecord(rec, s.schema, s.alias), nil
+	return FormatRecord(rec, s.schema, s.alias, s.colIndexMap), nil
 }
 
 func (s *IndexScanIterator) Close() error {
@@ -164,4 +177,11 @@ func (s *IndexScanIterator) Schema() []string {
 		cols[i] = c.Name
 	}
 	return cols
+}
+
+func (s *IndexScanIterator) ColIndexMap() *ColumnIndexMap {
+	if s.colIndexMap == nil {
+		s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
+	}
+	return s.colIndexMap
 }

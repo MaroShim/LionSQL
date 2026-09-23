@@ -14,6 +14,7 @@ import (
 
 type mockTupleIterator struct {
 	tuples []execution.Tuple
+	schema []string
 	idx    int
 }
 
@@ -24,7 +25,7 @@ func (m *mockTupleIterator) Open(ctx context.Context) error {
 
 func (m *mockTupleIterator) Next(ctx context.Context) (execution.Tuple, error) {
 	if m.idx >= len(m.tuples) {
-		return nil, io.EOF
+		return execution.Tuple{}, io.EOF
 	}
 	t := m.tuples[m.idx]
 	m.idx++
@@ -36,15 +37,27 @@ func (m *mockTupleIterator) Close() error {
 }
 
 func (m *mockTupleIterator) Schema() []string {
+	if len(m.schema) > 0 {
+		return m.schema
+	}
 	return []string{"id", "val", "category"}
 }
 
+func (m *mockTupleIterator) ColIndexMap() *execution.ColumnIndexMap {
+	if len(m.tuples) > 0 && m.tuples[0].Index != nil {
+		return m.tuples[0].Index
+	}
+	return execution.NewColumnIndexMapFromCols(m.Schema())
+}
+
 func TestSortIterator_InMemoryFastPath(t *testing.T) {
+	schema := []string{"id", "val", "category"}
 	mock := &mockTupleIterator{
+		schema: schema,
 		tuples: []execution.Tuple{
-			{"id": int64(3), "val": 30.0},
-			{"id": int64(1), "val": 10.0},
-			{"id": int64(2), "val": 20.0},
+			execution.NewTupleFromMap(map[string]any{"id": int64(3), "val": 30.0}, schema),
+			execution.NewTupleFromMap(map[string]any{"id": int64(1), "val": 10.0}, schema),
+			execution.NewTupleFromMap(map[string]any{"id": int64(2), "val": 20.0}, schema),
 		},
 	}
 
@@ -73,7 +86,7 @@ func TestSortIterator_InMemoryFastPath(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Next error: %v", err)
 		}
-		results = append(results, tuple["id"].(int64))
+		results = append(results, tuple.Get("id").(int64))
 	}
 
 	if len(results) != 3 || results[0] != 1 || results[1] != 2 || results[2] != 3 {
@@ -91,16 +104,17 @@ func TestSortIterator_ExternalMergeSortSpill(t *testing.T) {
 	// Generate 1,000 randomized tuples
 	r := rand.New(rand.NewSource(42))
 	nTuples := 1000
+	schema := []string{"id", "val", "category"}
 	tuples := make([]execution.Tuple, nTuples)
 	for i := 0; i < nTuples; i++ {
-		tuples[i] = execution.Tuple{
+		tuples[i] = execution.NewTupleFromMap(map[string]any{
 			"id":       int64(i + 1),
 			"val":      float64(r.Intn(10000)),
 			"category": fmt.Sprintf("cat-%d", r.Intn(5)),
-		}
+		}, schema)
 	}
 
-	mock := &mockTupleIterator{tuples: tuples}
+	mock := &mockTupleIterator{schema: schema, tuples: tuples}
 
 	// Order by val ASC, id ASC with a tight 4KB work_mem to force multiple disk spills
 	sortIter := execution.NewSortIterator(mock, "val ASC, id ASC")
@@ -129,7 +143,7 @@ func TestSortIterator_ExternalMergeSortSpill(t *testing.T) {
 			t.Fatalf("Next error during external merge: %v", err)
 		}
 		var val float64
-		switch v := tuple["val"].(type) {
+		switch v := tuple.Get("val").(type) {
 		case float64:
 			val = v
 		case int64:
@@ -175,15 +189,16 @@ func TestSortIterator_DescendingSortSpill(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	nTuples := 500
+	descSchema := []string{"id", "val"}
 	tuples := make([]execution.Tuple, nTuples)
 	for i := 0; i < nTuples; i++ {
-		tuples[i] = execution.Tuple{
+		tuples[i] = execution.NewTupleFromMap(map[string]any{
 			"id":  int64(i + 1),
 			"val": int64((i*37 + 13) % 1000),
-		}
+		}, descSchema)
 	}
 
-	mock := &mockTupleIterator{tuples: tuples}
+	mock := &mockTupleIterator{schema: descSchema, tuples: tuples}
 	sortIter := execution.NewSortIterator(mock, "val DESC")
 	sortIter.SetWorkMem(2 * 1024) // 2KB tight limit
 	sortIter.SetTempDir(tempDir)
@@ -204,7 +219,7 @@ func TestSortIterator_DescendingSortSpill(t *testing.T) {
 			t.Fatalf("Next error: %v", err)
 		}
 		var val int64
-		switch v := tuple["val"].(type) {
+		switch v := tuple.Get("val").(type) {
 		case int64:
 			val = v
 		default:

@@ -46,6 +46,7 @@ type AggregateIterator struct {
 	tuples      []Tuple
 	idx         int
 	schema      []string
+	colIndexMap *ColumnIndexMap
 }
 
 // NewAggregateIterator creates a new Aggregate operator.
@@ -122,6 +123,28 @@ func (a *AggregateIterator) parseFields() {
 		a.fields = append(a.fields, aggField{isLiteral: true, argCol: p, alias: alias, rawExpr: p})
 		a.schema = append(a.schema, alias)
 	}
+
+	colMap := &ColumnIndexMap{
+		indices: make(map[string]int, len(a.fields)*4),
+		cols:    a.schema,
+	}
+	for fIdx, f := range a.fields {
+		colMap.indices[f.alias] = fIdx
+		colMap.indices[strings.ToLower(f.alias)] = fIdx
+		colMap.indices[strings.ToUpper(f.alias)] = fIdx
+		if f.rawExpr != "" {
+			colMap.indices[f.rawExpr] = fIdx
+			colMap.indices[strings.ToLower(f.rawExpr)] = fIdx
+			colMap.indices[strings.ToUpper(f.rawExpr)] = fIdx
+		}
+		if f.argCol != "" {
+			if _, exists := colMap.indices[f.argCol]; !exists {
+				colMap.indices[f.argCol] = fIdx
+				colMap.indices[strings.ToLower(f.argCol)] = fIdx
+			}
+		}
+	}
+	a.colIndexMap = colMap
 }
 
 func (a *AggregateIterator) Open(ctx context.Context) error {
@@ -132,6 +155,9 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		return err
 	}
 
+	if a.colIndexMap == nil {
+		a.colIndexMap = NewColumnIndexMapFromCols(a.Schema())
+	}
 	a.tuples = nil
 	a.idx = 0
 
@@ -219,14 +245,15 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 
 	// If no rows returned and no GROUP BY (global aggregation: e.g. SELECT COUNT(*) FROM empty)
 	if !hasRows && len(a.groupKeys) == 0 {
-		emptyTuple := make(Tuple, len(a.fields))
-		for _, f := range a.fields {
+		vals := make([]any, len(a.fields))
+		for fIdx, f := range a.fields {
 			if f.isStar || f.fnType == aggCount {
-				emptyTuple[f.alias] = int64(0)
+				vals[fIdx] = int64(0)
 			} else {
-				emptyTuple[f.alias] = nil
+				vals[fIdx] = nil
 			}
 		}
+		emptyTuple := Tuple{Values: vals, Index: a.colIndexMap}
 		if a.havingCond == "" || EvalConditionTuple(emptyTuple, a.havingCond) {
 			a.tuples = append(a.tuples, emptyTuple)
 		}
@@ -236,17 +263,12 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 	// Materialize groups into result tuples
 	for _, gk := range groupOrder {
 		acc := groups[gk]
-		row := make(Tuple, len(a.fields))
+		vals := make([]any, len(a.fields))
 
 		for fIdx, f := range a.fields {
 			if f.isLiteral {
 				v, _ := lookupVal(acc.groupTuple, f.argCol)
-				row[f.alias] = v
-				row[strings.ToLower(f.alias)] = v
-				if f.argCol != "" {
-					row[f.argCol] = v
-					row[strings.ToLower(f.argCol)] = v
-				}
+				vals[fIdx] = v
 				continue
 			}
 
@@ -282,14 +304,10 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 				val = acc.maxs[fIdx]
 			}
 
-			row[f.alias] = val
-			row[strings.ToLower(f.alias)] = val
-			if f.rawExpr != "" {
-				row[f.rawExpr] = val
-				row[strings.ToLower(f.rawExpr)] = val
-			}
+			vals[fIdx] = val
 		}
 
+		row := Tuple{Values: vals, Index: a.colIndexMap}
 		if a.havingCond == "" || EvalConditionTuple(row, a.havingCond) {
 			a.tuples = append(a.tuples, row)
 		}
@@ -301,12 +319,12 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 func (a *AggregateIterator) Next(ctx context.Context) (Tuple, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return Tuple{}, ctx.Err()
 	default:
 	}
 
 	if a.idx >= len(a.tuples) {
-		return nil, io.EOF
+		return Tuple{}, io.EOF
 	}
 
 	t := a.tuples[a.idx]
@@ -325,4 +343,8 @@ func (a *AggregateIterator) Close() error {
 
 func (a *AggregateIterator) Schema() []string {
 	return a.schema
+}
+
+func (a *AggregateIterator) ColIndexMap() *ColumnIndexMap {
+	return a.colIndexMap
 }

@@ -25,6 +25,7 @@ type HashJoinIterator struct {
 	emittedAny     bool
 	workMem        int64
 	buildMemory    int64
+	colIndexMap    *ColumnIndexMap
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -100,7 +101,8 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		return fmt.Errorf("hash join probe open error: %w", err)
 	}
 
-	h.currentProbe = nil
+	h.colIndexMap = MergeColumnIndexMaps(h.left.ColIndexMap(), h.right.ColIndexMap())
+	h.currentProbe = Tuple{}
 	h.currentMatches = nil
 	h.matchIdx = 0
 	h.emittedAny = false
@@ -111,22 +113,22 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return Tuple{}, ctx.Err()
 		default:
 		}
 
 		// If current probe tuple has pending matches, emit next match
-		if h.currentProbe != nil && h.matchIdx < len(h.currentMatches) {
+		if !h.currentProbe.IsNil() && h.matchIdx < len(h.currentMatches) {
 			matchTuple := h.currentMatches[h.matchIdx]
 			h.matchIdx++
 			h.emittedAny = true
-			return mergeTuples(h.currentProbe, matchTuple), nil
+			return mergeTuples(h.currentProbe, matchTuple, h.colIndexMap), nil
 		}
 
 		// Pull next probe tuple from outer relation
 		probeTuple, err := h.left.Next(ctx)
 		if err != nil {
-			return nil, err // propagates io.EOF or context error
+			return Tuple{}, err // propagates io.EOF or context error
 		}
 
 		h.currentProbe = probeTuple
@@ -142,21 +144,21 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 				matchTuple := h.currentMatches[h.matchIdx]
 				h.matchIdx++
 				h.emittedAny = true
-				return mergeTuples(h.currentProbe, matchTuple), nil
+				return mergeTuples(h.currentProbe, matchTuple, h.colIndexMap), nil
 			}
 		}
 
 		// If LEFT JOIN and no matches, emit probe tuple with NULLs
 		if (h.joinType == "LEFT" || strings.HasPrefix(h.joinType, "LEFT")) && !h.emittedAny {
-			h.currentProbe = nil
-			return mergeTuplesWithNulls(probeTuple, h.right.Schema()), nil
+			h.currentProbe = Tuple{}
+			return mergeTuplesWithNulls(probeTuple, len(h.right.Schema()), h.colIndexMap), nil
 		}
 	}
 }
 
 func (h *HashJoinIterator) Close() error {
 	h.hashTable = nil
-	h.currentProbe = nil
+	h.currentProbe = Tuple{}
 	h.currentMatches = nil
 	if h.left != nil {
 		return h.left.Close()
@@ -165,6 +167,9 @@ func (h *HashJoinIterator) Close() error {
 }
 
 func (h *HashJoinIterator) Schema() []string {
+	if h.colIndexMap != nil {
+		return h.colIndexMap.Columns()
+	}
 	var s []string
 	if h.left != nil {
 		s = append(s, h.left.Schema()...)
@@ -175,19 +180,28 @@ func (h *HashJoinIterator) Schema() []string {
 	return s
 }
 
+func (h *HashJoinIterator) ColIndexMap() *ColumnIndexMap {
+	if h.colIndexMap == nil && h.left != nil && h.right != nil {
+		h.colIndexMap = MergeColumnIndexMaps(h.left.ColIndexMap(), h.right.ColIndexMap())
+	}
+	return h.colIndexMap
+}
+
 // IndexNestedLoopJoinIterator executes a nested loop join by using an index on the inner table.
 type IndexNestedLoopJoinIterator struct {
-	outer        Iterator
-	tx           storage.Transaction
-	innerTable   string
-	innerAlias   string
-	innerIndex   *storage.IndexSchema
-	innerSchema  *storage.TableSchema
-	leftKey      string
-	joinType     string
-	currentOuter Tuple
-	innerCursor  storage.Cursor
-	hasMatch     bool
+	outer           Iterator
+	tx              storage.Transaction
+	innerTable      string
+	innerAlias      string
+	innerIndex      *storage.IndexSchema
+	innerSchema     *storage.TableSchema
+	leftKey         string
+	joinType        string
+	currentOuter    Tuple
+	innerCursor     storage.Cursor
+	hasMatch        bool
+	colIndexMap     *ColumnIndexMap
+	innerColIndexMap *ColumnIndexMap
 }
 
 // NewIndexNestedLoopJoinIterator creates a new Index Nested Loop Join operator.
@@ -218,7 +232,13 @@ func (n *IndexNestedLoopJoinIterator) Open(ctx context.Context) error {
 	if err := n.outer.Open(ctx); err != nil {
 		return err
 	}
-	n.currentOuter = nil
+	n.innerColIndexMap = NewColumnIndexMap(n.innerSchema, n.innerAlias)
+	var outerMap *ColumnIndexMap
+	if n.outer != nil {
+		outerMap = n.outer.ColIndexMap()
+	}
+	n.colIndexMap = MergeColumnIndexMaps(outerMap, n.innerColIndexMap)
+	n.currentOuter = Tuple{}
 	n.innerCursor = nil
 	n.hasMatch = false
 	return nil
@@ -228,7 +248,7 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return Tuple{}, ctx.Err()
 		default:
 		}
 
@@ -237,8 +257,8 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 				rec, err := n.innerCursor.Record()
 				if err == nil {
 					n.hasMatch = true
-					innerTuple := FormatRecord(rec, n.innerSchema, n.innerAlias)
-					return mergeTuples(n.currentOuter, innerTuple), nil
+					innerTuple := FormatRecord(rec, n.innerSchema, n.innerAlias, n.innerColIndexMap)
+					return mergeTuples(n.currentOuter, innerTuple, n.colIndexMap), nil
 				}
 			}
 			// Inner cursor exhausted
@@ -246,18 +266,18 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 			n.innerCursor = nil
 
 			// If LEFT JOIN and had no match for this outer tuple
-			if (n.joinType == "LEFT" || strings.HasPrefix(n.joinType, "LEFT")) && !n.hasMatch && n.currentOuter != nil {
-				out := mergeTuplesWithNulls(n.currentOuter, n.innerSchemaColumns())
-				n.currentOuter = nil
+			if (n.joinType == "LEFT" || strings.HasPrefix(n.joinType, "LEFT")) && !n.hasMatch && !n.currentOuter.IsNil() {
+				out := mergeTuplesWithNulls(n.currentOuter, len(n.innerSchemaColumns()), n.colIndexMap)
+				n.currentOuter = Tuple{}
 				return out, nil
 			}
-			n.currentOuter = nil
+			n.currentOuter = Tuple{}
 		}
 
 		// Pull next outer tuple
 		outerTuple, err := n.outer.Next(ctx)
 		if err != nil {
-			return nil, err // io.EOF or context cancellation
+			return Tuple{}, err // io.EOF or context cancellation
 		}
 
 		n.currentOuter = outerTuple
@@ -266,8 +286,8 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		keyVal, found := lookupVal(outerTuple, n.leftKey)
 		if !found || keyVal == nil {
 			if n.joinType == "LEFT" || strings.HasPrefix(n.joinType, "LEFT") {
-				n.currentOuter = nil
-				return mergeTuplesWithNulls(outerTuple, n.innerSchemaColumns()), nil
+				n.currentOuter = Tuple{}
+				return mergeTuplesWithNulls(outerTuple, len(n.innerSchemaColumns()), n.colIndexMap), nil
 			}
 			continue
 		}
@@ -276,7 +296,7 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		stVal := toStorageValFromAny(keyVal)
 		cur, err := n.tx.IndexScan(n.innerTable, n.innerIndex.Name, &stVal, &stVal)
 		if err != nil {
-			return nil, err
+			return Tuple{}, err
 		}
 		n.innerCursor = cur
 	}
@@ -294,12 +314,27 @@ func (n *IndexNestedLoopJoinIterator) Close() error {
 }
 
 func (n *IndexNestedLoopJoinIterator) Schema() []string {
+	if n.colIndexMap != nil {
+		return n.colIndexMap.Columns()
+	}
 	var s []string
 	if n.outer != nil {
 		s = append(s, n.outer.Schema()...)
 	}
 	s = append(s, n.innerSchemaColumns()...)
 	return s
+}
+
+func (n *IndexNestedLoopJoinIterator) ColIndexMap() *ColumnIndexMap {
+	if n.colIndexMap == nil {
+		n.innerColIndexMap = NewColumnIndexMap(n.innerSchema, n.innerAlias)
+		var outerMap *ColumnIndexMap
+		if n.outer != nil {
+			outerMap = n.outer.ColIndexMap()
+		}
+		n.colIndexMap = MergeColumnIndexMaps(outerMap, n.innerColIndexMap)
+	}
+	return n.colIndexMap
 }
 
 func (n *IndexNestedLoopJoinIterator) innerSchemaColumns() []string {
@@ -313,26 +348,23 @@ func (n *IndexNestedLoopJoinIterator) innerSchemaColumns() []string {
 	return cols
 }
 
-func mergeTuples(left, right Tuple) Tuple {
-	res := make(Tuple, len(left)+len(right))
-	for k, v := range left {
-		res[k] = v
+func mergeTuples(left, right Tuple, combinedIndex *ColumnIndexMap) Tuple {
+	vals := make([]any, len(left.Values)+len(right.Values))
+	copy(vals, left.Values)
+	copy(vals[len(left.Values):], right.Values)
+	return Tuple{
+		Values: vals,
+		Index:  combinedIndex,
 	}
-	for k, v := range right {
-		res[k] = v
-	}
-	return res
 }
 
-func mergeTuplesWithNulls(left Tuple, rightCols []string) Tuple {
-	res := make(Tuple, len(left)+len(rightCols))
-	for k, v := range left {
-		res[k] = v
+func mergeTuplesWithNulls(left Tuple, rightColsCount int, combinedIndex *ColumnIndexMap) Tuple {
+	vals := make([]any, len(left.Values)+rightColsCount)
+	copy(vals, left.Values)
+	return Tuple{
+		Values: vals,
+		Index:  combinedIndex,
 	}
-	for _, c := range rightCols {
-		res[c] = nil
-	}
-	return res
 }
 
 func toStorageValFromAny(v any) storage.Value {

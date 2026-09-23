@@ -278,14 +278,14 @@ func (s *SortIterator) Open(ctx context.Context) error {
 func (s *SortIterator) Next(ctx context.Context) (Tuple, error) {
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return Tuple{}, ctx.Err()
 	default:
 	}
 
 	// In-memory reading
 	if len(s.runFiles) == 0 {
 		if s.idx >= len(s.tuples) {
-			return nil, io.EOF
+			return Tuple{}, io.EOF
 		}
 		t := s.tuples[s.idx]
 		s.idx++
@@ -294,7 +294,7 @@ func (s *SortIterator) Next(ctx context.Context) (Tuple, error) {
 
 	// External merge reading via Min-Heap
 	if s.mHeap == nil || s.mHeap.Len() == 0 {
-		return nil, io.EOF
+		return Tuple{}, io.EOF
 	}
 
 	top := heap.Pop(s.mHeap).(heapItem)
@@ -335,6 +335,13 @@ func (s *SortIterator) Close() error {
 func (s *SortIterator) Schema() []string {
 	if s.child != nil {
 		return s.child.Schema()
+	}
+	return nil
+}
+
+func (s *SortIterator) ColIndexMap() *ColumnIndexMap {
+	if s.child != nil {
+		return s.child.ColIndexMap()
 	}
 	return nil
 }

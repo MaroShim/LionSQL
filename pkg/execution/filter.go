@@ -45,13 +45,13 @@ func (f *FilterIterator) Next(ctx context.Context) (Tuple, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return Tuple{}, ctx.Err()
 		default:
 		}
 
 		tuple, err := f.child.Next(ctx)
 		if err != nil {
-			return nil, err // propagates io.EOF or errors
+			return Tuple{}, err // propagates io.EOF or errors
 		}
 
 		if f.condition == "" || f.evaluate(tuple) {
@@ -74,6 +74,13 @@ func (f *FilterIterator) Schema() []string {
 	return nil
 }
 
+func (f *FilterIterator) ColIndexMap() *ColumnIndexMap {
+	if f.child != nil {
+		return f.child.ColIndexMap()
+	}
+	return nil
+}
+
 func (f *FilterIterator) evaluate(t Tuple) bool {
 	if f.condition == "" || f.condition == "1=1" || f.condition == "1 = 1" || strings.EqualFold(f.condition, "NOT 1=0") {
 		return true
@@ -83,7 +90,7 @@ func (f *FilterIterator) evaluate(t Tuple) bool {
 	}
 
 	if f.hasParsed && f.parsed != nil {
-		return proc.EvalBoolExpr(f.parsed, t, nil)
+		return proc.EvalBoolExpr(f.parsed, t.ToEvalMap(), nil)
 	}
 
 	return EvalConditionTuple(t, f.condition)
@@ -103,7 +110,7 @@ func EvalConditionTuple(t Tuple, cond string) bool {
 	p := proc.NewParser(proc.NewLexer(cond))
 	expr := p.ParseExpr()
 	if expr != nil && len(p.Errors()) == 0 {
-		return proc.EvalBoolExpr(expr, t, nil)
+		return proc.EvalBoolExpr(expr, t.ToEvalMap(), nil)
 	}
 
 	orParts := splitLogicalParts(cond, " OR ")
@@ -227,22 +234,7 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 
 func lookupVal(t Tuple, col string) (any, bool) {
 	col = strings.Trim(col, "\"`[]")
-	if v, ok := t[col]; ok {
-		return v, true
-	}
-	if v, ok := t[strings.ToLower(col)]; ok {
-		return v, true
-	}
-	if dotIdx := strings.Index(col, "."); dotIdx != -1 {
-		bare := col[dotIdx+1:]
-		if v, ok := t[bare]; ok {
-			return v, true
-		}
-		if v, ok := t[strings.ToLower(bare)]; ok {
-			return v, true
-		}
-	}
-	return nil, false
+	return t.GetOK(col)
 }
 
 func parseLiteralValue(s string) any {

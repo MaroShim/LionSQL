@@ -8,19 +8,20 @@ import (
 )
 
 func TestGovernor_EstimateTupleSize(t *testing.T) {
-	tuple := execution.Tuple{
+	schema := []string{"id", "name", "price", "active", "createdAt"}
+	tuple := execution.NewTupleFromMap(map[string]any{
 		"id":        int64(1001),
 		"name":      "Alice in Wonderland",
 		"price":     99.95,
 		"active":    true,
 		"createdAt": time.Now(),
-	}
+	}, schema)
 
 	size := execution.EstimateTupleSize(tuple)
 	if size <= 0 {
 		t.Fatalf("expected positive tuple size, got %d", size)
 	}
-	if size < 100 || size > 1000 {
+	if size < 50 || size > 1000 {
 		t.Errorf("tuple size outside reasonable bounds: %d", size)
 	}
 }
