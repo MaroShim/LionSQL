@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Pure-Go Concurrent SkipList Secondary Index (`pkg/storage/memengine`)**:
+  - High-concurrency, lock-aware SkipList indexing replacing $O(N)$ slice copy element shifting with $O(\log N)$ probabilistic skip links.
+  - Sub-microsecond point lookup (~177ns/op) and bulk insertion (~584ns/op, 2.8M ops/sec).
+  - Unbounded and bounded range scans (`ScanRange`) via Level-0 forward pointer iteration.
+  - Seamless snapshot checkpoint serialization (`ToEntries` / `FromEntries`) preserving MessagePack and JSON backward compatibility.
+
 ---
 
 ## [0.5.0] - 2026-09-23

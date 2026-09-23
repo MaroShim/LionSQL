@@ -19,77 +19,40 @@ type IndexEntry struct {
 	PKs []string      `json:"pks"`
 }
 
-// IndexData holds sorted entries for a secondary index.
+// IndexData holds sorted entries for a secondary index using a concurrent SkipList.
 type IndexData struct {
 	Schema  storage.IndexSchema `json:"schema"`
-	Entries []IndexEntry        `json:"entries"`
+	Entries []IndexEntry        `json:"entries,omitempty"` // For JSON/MessagePack persistence
+	sl      *SkipList           `json:"-"`
+}
+
+func (idx *IndexData) getSkipList() *SkipList {
+	if idx.sl == nil {
+		idx.sl = NewSkipList(idx.Schema.Unique)
+		if len(idx.Entries) > 0 {
+			_ = idx.sl.FromEntries(idx.Entries)
+		}
+	}
+	return idx.sl
 }
 
 func (idx *IndexData) Insert(key storage.Value, pk string) error {
-	pos := sort.Search(len(idx.Entries), func(i int) bool {
-		return idx.Entries[i].Key.Compare(key) >= 0
-	})
-	if pos < len(idx.Entries) && idx.Entries[pos].Key.Equal(key) {
-		if idx.Schema.Unique && len(idx.Entries[pos].PKs) > 0 {
-			for _, p := range idx.Entries[pos].PKs {
-				if p == pk {
-					return nil
-				}
-			}
-			return fmt.Errorf("%w: duplicate key %q in index %q", storage.ErrUniqueViolation, key.String(), idx.Schema.Name)
-		}
-		for _, p := range idx.Entries[pos].PKs {
-			if p == pk {
-				return nil
-			}
-		}
-		idx.Entries[pos].PKs = append(idx.Entries[pos].PKs, pk)
-		return nil
-	}
-	entry := IndexEntry{
-		Key: key,
-		PKs: []string{pk},
-	}
-	idx.Entries = append(idx.Entries, IndexEntry{})
-	copy(idx.Entries[pos+1:], idx.Entries[pos:])
-	idx.Entries[pos] = entry
-	return nil
+	return idx.getSkipList().Insert(key, pk)
 }
 
 func (idx *IndexData) Delete(key storage.Value, pk string) {
-	pos := sort.Search(len(idx.Entries), func(i int) bool {
-		return idx.Entries[i].Key.Compare(key) >= 0
-	})
-	if pos < len(idx.Entries) && idx.Entries[pos].Key.Equal(key) {
-		filtered := make([]string, 0, len(idx.Entries[pos].PKs))
-		for _, p := range idx.Entries[pos].PKs {
-			if p != pk {
-				filtered = append(filtered, p)
-			}
-		}
-		if len(filtered) == 0 {
-			idx.Entries = append(idx.Entries[:pos], idx.Entries[pos+1:]...)
-		} else {
-			idx.Entries[pos].PKs = filtered
-		}
-	}
+	idx.getSkipList().Delete(key, pk)
 }
 
 func (idx *IndexData) ScanRange(low, high *storage.Value) []string {
-	var result []string
-	start := 0
-	if low != nil {
-		start = sort.Search(len(idx.Entries), func(i int) bool {
-			return idx.Entries[i].Key.Compare(*low) >= 0
-		})
+	return idx.getSkipList().ScanRange(low, high)
+}
+
+// SyncEntries exports the in-memory SkipList into the Entries slice for disk snapshot persistence.
+func (idx *IndexData) SyncEntries() {
+	if idx.sl != nil {
+		idx.Entries = idx.sl.ToEntries()
 	}
-	for i := start; i < len(idx.Entries); i++ {
-		if high != nil && idx.Entries[i].Key.Compare(*high) > 0 {
-			break
-		}
-		result = append(result, idx.Entries[i].PKs...)
-	}
-	return result
 }
 
 // TableData stores rows in memory for a single table with OCC version tracking and secondary indexes.
@@ -335,6 +298,11 @@ func (e *Engine) saveDiskLocked() error {
 	if e.dataDir == "" {
 		return nil
 	}
+	for _, td := range e.tables {
+		for _, idx := range td.Indexes {
+			idx.SyncEntries()
+		}
+	}
 	data, err := MarshalMsgPack(e.tables)
 	if err != nil {
 		return fmt.Errorf("failed to encode tables to MessagePack: %w", err)
@@ -370,6 +338,9 @@ func (e *Engine) loadDiskLocked() {
 				if td.Indexes == nil {
 					td.Indexes = make(map[string]*IndexData)
 				}
+				for _, idx := range td.Indexes {
+					idx.getSkipList()
+				}
 			}
 			return
 		}
@@ -390,6 +361,9 @@ func (e *Engine) loadDiskLocked() {
 				}
 				if td.Indexes == nil {
 					td.Indexes = make(map[string]*IndexData)
+				}
+				for _, idx := range td.Indexes {
+					idx.getSkipList()
 				}
 			}
 			// Migrate automatically to MessagePack format
