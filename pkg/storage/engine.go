@@ -3,6 +3,7 @@ package storage
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -18,6 +19,8 @@ var (
 	ErrColumnNotFound       = errors.New("column not found")
 	ErrInvalidDataType      = errors.New("invalid data type for column")
 	ErrNotNullViolation     = errors.New("not null constraint violation")
+	ErrForeignKeyViolation  = errors.New("foreign key constraint violation")
+	ErrDependentObjectsExist = errors.New("cannot drop table because other objects depend on it")
 	ErrSerializationFailure = errors.New("serialization failure: concurrent update conflict")
 )
 
@@ -66,11 +69,75 @@ type IndexSchema struct {
 	Unique    bool     `json:"unique"`
 }
 
+// ForeignKeyAction defines the referential action when parent key is deleted or updated.
+type ForeignKeyAction int
+
+const (
+	ActionNoAction ForeignKeyAction = iota
+	ActionRestrict
+	ActionCascade
+	ActionSetNull
+	ActionSetDefault
+)
+
+func (a ForeignKeyAction) String() string {
+	switch a {
+	case ActionCascade:
+		return "CASCADE"
+	case ActionSetNull:
+		return "SET NULL"
+	case ActionSetDefault:
+		return "SET DEFAULT"
+	case ActionRestrict:
+		return "RESTRICT"
+	default:
+		return "NO ACTION"
+	}
+}
+
+// ParseForeignKeyAction converts action string ("CASCADE", "SET NULL", "RESTRICT", "NO ACTION") to enum.
+func ParseForeignKeyAction(s string) ForeignKeyAction {
+	upper := strings.ToUpper(strings.TrimSpace(s))
+	switch upper {
+	case "CASCADE":
+		return ActionCascade
+	case "SET NULL":
+		return ActionSetNull
+	case "SET DEFAULT":
+		return ActionSetDefault
+	case "RESTRICT":
+		return ActionRestrict
+	default:
+		return ActionNoAction
+	}
+}
+
+// ForeignKeySchema defines a foreign key constraint linking child columns to parent table columns.
+type ForeignKeySchema struct {
+	Name          string           `json:"name"`
+	ChildTable    string           `json:"child_table"`
+	ChildColumns  []string         `json:"child_columns"`
+	ParentTable   string           `json:"parent_table"`
+	ParentColumns []string         `json:"parent_columns"`
+	OnDelete      ForeignKeyAction `json:"on_delete"`
+	OnUpdate      ForeignKeyAction `json:"on_update"`
+}
+
 // TableSchema defines a table structure.
 type TableSchema struct {
-	Name    string        `json:"name"`
-	Columns []Column      `json:"columns"`
-	Indexes []IndexSchema `json:"indexes,omitempty"`
+	Name        string             `json:"name"`
+	Columns     []Column           `json:"columns"`
+	Indexes     []IndexSchema      `json:"indexes,omitempty"`
+	ForeignKeys []ForeignKeySchema `json:"foreign_keys,omitempty"`
+}
+
+func (s *TableSchema) FindForeignKey(name string) (*ForeignKeySchema, int, bool) {
+	for i := range s.ForeignKeys {
+		if strings.EqualFold(s.ForeignKeys[i].Name, name) {
+			return &s.ForeignKeys[i], i, true
+		}
+	}
+	return nil, -1, false
 }
 
 func (s *TableSchema) PrimaryKeyColumn() (*Column, error) {

@@ -539,8 +539,8 @@ func (s *Server) execCreateTable(query string, start time.Time) (*QueryResult, e
 		}
 
 		cUpper := strings.ToUpper(cDefTrimmed)
-		if strings.HasPrefix(cUpper, "PRIMARY KEY") || strings.HasPrefix(cUpper, "CONSTRAINT") {
-			// e.g. PRIMARY KEY (id)
+		if strings.HasPrefix(cUpper, "PRIMARY KEY") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "PRIMARY KEY")) {
+			// e.g. PRIMARY KEY (id) or CONSTRAINT pk_foo PRIMARY KEY (id)
 			if idx := strings.Index(cDefTrimmed, "("); idx != -1 {
 				pkCol := cleanIdentifier(strings.Trim(cDefTrimmed[idx:], "() "))
 				for i := range schema.Columns {
@@ -548,6 +548,14 @@ func (s *Server) execCreateTable(query string, start time.Time) (*QueryResult, e
 						schema.Columns[i].PrimaryKey = true
 					}
 				}
+			}
+			continue
+		}
+
+		if strings.HasPrefix(cUpper, "FOREIGN KEY") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "FOREIGN KEY")) {
+			if fk, ok := parseForeignKeyClause(cDefTrimmed, "", ""); ok {
+				fk.ChildTable = tableName
+				schema.ForeignKeys = append(schema.ForeignKeys, *fk)
 			}
 			continue
 		}
@@ -573,6 +581,13 @@ func (s *Server) execCreateTable(query string, start time.Time) (*QueryResult, e
 			PrimaryKey: isPK,
 			Nullable:   !isNotNull,
 		})
+
+		if strings.Contains(cUpper, "REFERENCES") {
+			if fk, ok := parseForeignKeyClause(cDefTrimmed, colName, ""); ok {
+				fk.ChildTable = tableName
+				schema.ForeignKeys = append(schema.ForeignKeys, *fk)
+			}
+		}
 	}
 
 	// Default first column as PK if none marked
@@ -3330,6 +3345,78 @@ func splitColumnDefs(s string) []string {
 		defs = append(defs, strings.TrimSpace(cur.String()))
 	}
 	return defs
+}
+
+func parseForeignKeyClause(def string, defaultChildCol string, defaultName string) (*storage.ForeignKeySchema, bool) {
+	defTrimmed := strings.TrimSpace(def)
+	upper := strings.ToUpper(defTrimmed)
+	if !strings.Contains(upper, "REFERENCES") {
+		return nil, false
+	}
+
+	fk := storage.ForeignKeySchema{
+		Name:     defaultName,
+		OnDelete: storage.ActionNoAction,
+		OnUpdate: storage.ActionNoAction,
+	}
+
+	reOnDelete := regexp.MustCompile(`(?i)\bON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
+	if m := reOnDelete.FindStringSubmatch(defTrimmed); len(m) > 1 {
+		fk.OnDelete = storage.ParseForeignKeyAction(m[1])
+	}
+
+	reOnUpdate := regexp.MustCompile(`(?i)\bON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
+	if m := reOnUpdate.FindStringSubmatch(defTrimmed); len(m) > 1 {
+		fk.OnUpdate = storage.ParseForeignKeyAction(m[1])
+	}
+
+	reTableFK := regexp.MustCompile(`(?i)(?:CONSTRAINT\s+([^\s(]+)\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
+	if m := reTableFK.FindStringSubmatch(defTrimmed); len(m) > 0 {
+		if m[1] != "" {
+			fk.Name = cleanIdentifier(m[1])
+		}
+		rawChildCols := strings.Split(m[2], ",")
+		for _, c := range rawChildCols {
+			if col := cleanIdentifier(c); col != "" {
+				fk.ChildColumns = append(fk.ChildColumns, col)
+			}
+		}
+		fk.ParentTable = cleanIdentifier(m[3])
+		if len(m) > 4 && strings.TrimSpace(m[4]) != "" {
+			rawParentCols := strings.Split(m[4], ",")
+			for _, c := range rawParentCols {
+				if col := cleanIdentifier(c); col != "" {
+					fk.ParentColumns = append(fk.ParentColumns, col)
+				}
+			}
+		}
+		if fk.Name == "" && len(fk.ChildColumns) > 0 {
+			fk.Name = fmt.Sprintf("fk_%s_%s", fk.ParentTable, fk.ChildColumns[0])
+		}
+		return &fk, true
+	}
+
+	reInlineFK := regexp.MustCompile(`(?i)\bREFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
+	if m := reInlineFK.FindStringSubmatch(defTrimmed); len(m) > 0 {
+		fk.ParentTable = cleanIdentifier(m[1])
+		if len(m) > 2 && strings.TrimSpace(m[2]) != "" {
+			rawParentCols := strings.Split(m[2], ",")
+			for _, c := range rawParentCols {
+				if col := cleanIdentifier(c); col != "" {
+					fk.ParentColumns = append(fk.ParentColumns, col)
+				}
+			}
+		}
+		if defaultChildCol != "" {
+			fk.ChildColumns = []string{defaultChildCol}
+		}
+		if fk.Name == "" && defaultChildCol != "" {
+			fk.Name = fmt.Sprintf("fk_%s_%s", fk.ParentTable, defaultChildCol)
+		}
+		return &fk, true
+	}
+
+	return nil, false
 }
 
 func parseValueTuples(s string) []string {

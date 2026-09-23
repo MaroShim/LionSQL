@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Foreign Key Constraints & Referential Integrity Cascading Engine (`pkg/storage`, `pkg/storage/memengine`, `pkg/api`)**:
+  - Full relational referential integrity support with table-level, named, and column-inline `FOREIGN KEY ... REFERENCES ... [ON DELETE <action>] [ON UPDATE <action>]` syntax in `CREATE TABLE`.
+  - Referential actions supported: `CASCADE`, `SET NULL`, `RESTRICT`, and `NO ACTION` across parent deletions and updates.
+  - ANSI SQL MATCH SIMPLE compliant NULL-handling for composite and single foreign keys.
+  - Dependency protection in `DROP TABLE` preventing accidental dropping of tables referenced by active foreign key constraints with `ErrDependentObjectsExist`.
+  - Re-keying OCC mutations on parent primary key updates with bounded recursion depth (<= 16) preventing cyclic deadlock or stack overflow.
+  - Comprehensive unit and integration test coverage (`pkg/api/foreign_key_test.go`).
 - **Zero-Allocation Volcano Relational Execution Engine & Slice-Backed Tuple Pipeline (`pkg/execution`)**:
   - Refactored `execution.Tuple` from dynamic `map[string]any` to contiguous slice-backed struct (`Values []any`, `Index *ColumnIndexMap`), eliminating map bucket allocation on query execution hot paths.
   - Implemented precomputed `ColumnIndexMap` with $O(1)$ column offset lookups supporting case-insensitive table/alias prefixes and raw aggregate expressions (`COUNT(*)`, `AVG(col)`).
