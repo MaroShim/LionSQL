@@ -3,6 +3,29 @@
 All notable changes to SQLion are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Comprehensive Documentation Suite & Architecture Specifications**:
+  - `doc/DATA_DICTIONARY.md`: Virtual system catalog views (`sys.tables`, `sys.columns`, `sys.indexes`, `sys.databases`, `sys.procedures`, `information_schema.*`) and CBO statistics views (`sys.table_stats`, `sys.column_stats`).
+  - `doc/HIGH_AVAILABILITY.md`: Multi-node replication topology, Raft consensus clustering, automatic leader election, and disaster recovery SLAs.
+  - `doc/EXTENSIONS.md`: Pluggable storage engine SPI (`storage.Engine`), procedure fallback parser registration, and wire protocol drivers.
+  - `doc/METRICS.md`: Prometheus OpenMetrics telemetry dictionary, `/api/pool/stats`, `/api/health` probes, and Grafana alerting templates.
+  - `doc/TSQL_REFERENCE.md`: Complete T-SQL procedural language, expressions, window functions, and catalog views reference.
+  - `doc/API_REFERENCE.md`: OpenAPI-style HTTP REST endpoints, API key authentication, and realtime SSE specifications.
+  - `doc/OPERATIONS.md`: Production deployment, systemd configuration, Docker orchestration, and backup procedures.
+  - `doc/BENCHMARK.md`: High-concurrency OLTP banking benchmark suite, TPS measurement, and memory governor tuning.
+  - `doc/SECURITY.md`: RBAC access control, SQL injection defense, secret management, and vulnerability disclosure policy.
+  - `doc/MIGRATION.md`: Step-by-step migration runbooks from PostgreSQL, Microsoft SQL Server, SQLite, and MySQL.
+  - `doc/ROADMAP.md`: Near-term and long-term architectural roadmap (Raft clustering, vector search, distributed CBO).
+  - `doc/TROUBLESHOOTING.md`: Port binding conflicts, OCC serialization conflicts, slow query tuning, and FAQ.
+  - `doc/INTERNALS_VDBE.md`, `doc/INTERNALS_STORAGE.md`, `doc/INTERNALS_CBO_VOLCANO.md`, `doc/INTERNALS_WIRE_PROTOCOLS.md`: Low-level subsystem internal architecture specifications.
+  - `CODE_OF_CONDUCT.md`: Contributor Covenant v2.1 code of conduct.
+  - `LICENSE`: Official GNU General Public License v2 / v3 dual licensing terms.
+
+### Changed
+- Standardized project and workspace path naming to `SQLion` across all architectural specifications and repository references.
+
 ---
 
 ## [1.0.0] - 2026-09-22
