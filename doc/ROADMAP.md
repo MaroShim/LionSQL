@@ -8,11 +8,11 @@ This document charts the development milestones, architectural priorities, and f
 
 ```
 [ Phase 1: v0.5.0 ] ───> [ Phase 2: v0.6.0 - v0.8.0 ] ───> [ Phase 3: v1.0.0+ Distributed & AI ]
-- Core OLTP Engine       - Pure-Go Concurrent B+Tree              - AI Vector Embeddings (HNSW)
-- Dual Wire Protocols    - Background MVCC Vacuum                 - Distributed Query Sharding
+- Core OLTP Engine       - Concurrent SkipList Index              - AI Vector Embeddings (HNSW)
+- Dual Wire Protocols    - Zero-Copy Cursor Iteration             - Distributed Query Sharding
 - Dual Storage Backends  - Raft 3-Node Consensus                  - Pluggable Pebble / Columnar
-- VDBE Bytecode VM       - Zero-Copy Cursor Iteration             - Change Data Capture (CDC)
-- CBO & Volcano Engine   - Automated TLS / ACME                   - Full-Text Search (BM25)
+- VDBE Bytecode VM       - Automated TLS / ACME                   - Change Data Capture (CDC)
+- CBO & Volcano Engine                                            - Full-Text Search (BM25)
 - Online Hot Backup
 - COPY Protocol
 (COMPLETED)              (NEXT)                                   (PLANNED)
@@ -43,18 +43,14 @@ This document charts the development milestones, architectural priorities, and f
 - Synchronous log replication with automated leader election and transparent client failover.
 - Read-scaling across follower nodes.
 
-### 3.2. Pure-Go In-Memory Concurrent B+Tree
-- Replace sorted `IndexEntry` slices in `memengine` with a lock-free concurrent in-memory B+Tree.
-- Reduce index mutation overhead from $O(N)$ memory copies to $O(\log N)$ tree leaf modifications.
+### 3.2. Pure-Go In-Memory Concurrent SkipList Secondary Index
+- Replaced sorted `IndexEntry` slices in `memengine` with a lock-aware concurrent in-memory SkipList.
+- Reduced index mutation overhead from $O(N)$ memory copies to $O(\log N)$ probabilistic skip links (~186ns lookups, 2.8M inserts/sec).
 
-### 3.3. Background MVCC Vacuum Cleaner
-- Automated background goroutine sweeping dead row versions and reclaiming memory slots.
-- Adaptive pacing to prevent vacuum I/O from contending with active OLTP transactions.
+### 3.3. Zero-Copy Cursor Iteration
+- Stream direct immutable memory record views in `storage.Cursor` during `Scan()` and `IndexScan()`, bypassing intermediate `storage.Record` map allocations (reducing scan allocations by 99%).
 
-### 3.4. Zero-Copy Cursor Iteration
-- Enhance `storage.Cursor` to support zero-copy buffer views directly from engine memory slots, bypassing intermediate `storage.Record` map allocations.
-
-### 3.5. Automated TLS / ACME Integration
+### 3.4. Automated TLS / ACME Integration
 - Built-in Let's Encrypt TLS certificate provisioning directly inside the binary, eliminating reverse proxies for small deployments.
 
 ---
