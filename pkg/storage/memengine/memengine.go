@@ -1335,7 +1335,7 @@ func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string) (storag
 
 	if rec, found := tx.getLocal(tableName, pkKey); found {
 		ver := tx.getBaseVer(tableName, pkKey)
-		return rec, ver, nil
+		return cloneRecord(rec), ver, nil
 	}
 
 	tx.engine.mu.RLock()
@@ -1352,7 +1352,7 @@ func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string) (storag
 	}
 
 	ver := td.Versions[pkKey]
-	return rec, ver, nil
+	return cloneRecord(rec), ver, nil
 }
 
 func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
