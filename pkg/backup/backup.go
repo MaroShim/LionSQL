@@ -67,7 +67,7 @@ func CreateBackup(w io.Writer, eng storage.Engine, cat *catalog.Catalog) (*Manif
 	defer os.RemoveAll(tmpDir)
 
 	manifest := &Manifest{
-		Version:      "1.0.0",
+		Version:      "0.3.0",
 		CreatedAt:    startTime,
 		TablesCount:  len(tables),
 		Tables:       make([]TableSummary, 0, len(tables)),

@@ -298,7 +298,7 @@ Captures a consistent, live point-in-time snapshot of the database without acqui
       "status": "success",
       "target": "backups/prod-snapshot.tar.gz",
       "manifest": {
-        "version": "1.0.0",
+        "version": "0.3.0",
         "created_at": "2026-09-22T04:30:00Z",
         "tables_count": 3,
         "total_records": 15000,
@@ -345,7 +345,7 @@ Verifies server health and version.
 ```json
 {
   "status": "ok",
-  "version": "1.0.0"
+  "version": "0.3.0"
 }
 ```
 

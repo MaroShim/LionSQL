@@ -214,7 +214,7 @@ func (s *Server) routes() {
 
 	// API Health
 	s.mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "1.0.0"})
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "0.3.0"})
 	})
 
 	// Connection Pool & Worker Metrics (Built-in Connection Pooler)
