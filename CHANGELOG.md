@@ -13,6 +13,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Sub-microsecond point lookup (~177ns/op) and bulk insertion (~584ns/op, 2.8M ops/sec).
   - Unbounded and bounded range scans (`ScanRange`) via Level-0 forward pointer iteration.
   - Seamless snapshot checkpoint serialization (`ToEntries` / `FromEntries`) preserving MessagePack and JSON backward compatibility.
+- **Background MVCC Vacuum Cleaner (`pkg/storage/memengine/vacuum.go`)**:
+  - Asynchronous background worker calculating active transaction read watermark ($\min(\text{activeTx.StartTime})$) and purging obsolete tombstones and dead row versions.
+  - Telemetry tracking with `VacuumStats` (`Runs`, `PurgedTombstones`, `ReclaimedRecords`, `LastDurationUS`).
+  - Manual on-demand sweep API (`Engine.Vacuum()`) and background ticker pacing.
+- **Zero-Copy Cursor Tuple Iterator (`pkg/storage/memengine/memengine.go`)**:
+  - Eliminated eager full-table clone allocations (`cloneRecord`) during `Scan()` and `IndexScan()`, switching to direct immutable record memory views.
+  - Reduced per-row memory allocations to zero on table scan hot paths, cutting GC pressure and query latency.
 
 ---
 
