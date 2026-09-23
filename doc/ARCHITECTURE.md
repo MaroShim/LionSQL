@@ -340,7 +340,7 @@ SQLion embeds a PocketBase-style administration dashboard (`pkg/ui/dashboard.htm
 ## 3. Directory Layout & Module Structure
 
 ```
-/Users/maro/Projects/sql/
+/Users/maro/Projects/SQLion/
 ├── bin/                       # Compiled binaries (server, bench)
 ├── cmd/
 │   ├── server/                # Server entry point, CLI flags, daemon control
