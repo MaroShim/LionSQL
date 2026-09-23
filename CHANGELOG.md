@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **PostgreSQL Wire Protocol SSL/TLS Encryption & Handshake (`pkg/wire`, `cmd/server`)**:
+  - Implemented full PostgreSQL Wire v3 SSL/TLS encryption handshake (`SSLRequest` code `80877103` and `GSSENCRequest` code `80877104`).
+  - Added support for both loaded X.509 certificate pairs (`--tls-cert`, `--tls-key`) and zero-config self-signed certificate generation (`pkg/wire/tls.go`).
+  - Configurable strict encryption enforcement (`--require-ssl`) returning standard PostgreSQL FATAL ErrorResponse (`28000`) for unencrypted connections.
+  - Seamless socket upgrade from plaintext to TLS stream with full protocol support (AuthenticationOk, ParameterStatuses, simple queries, extended queries, COPY).
+  - Comprehensive unit and integration test suite (`pkg/wire/tls_test.go`).
 - **JSON & JSONB Data Types with Extraction Operators (`pkg/storage`, `pkg/proc`, `pkg/execution`, `pkg/planner`, `pkg/api`)**:
   - Full ANSI/PostgreSQL/MSSQL compatible `JSON` and `JSONB` data type support (`storage.TypeJSON = 6`) with schema validation and syntax enforcement.
   - PostgreSQL extraction operators `->` (extract element as JSON string) and `->>` (extract element as unquoted text) with multi-level path chaining (e.g. `data -> 'user' ->> 'name'`).

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"log"
@@ -39,6 +40,10 @@ func main() {
 	maxWorkers := flag.Int("max-workers", 0, "Max concurrent query execution workers (default: NumCPU * 4)")
 	maxIdleSessions := flag.Int("max-idle-sessions", 64, "Max idle storage sessions to retain in pool")
 	workMemStr := flag.String("work-mem", "64MB", "Default memory budget per query operator (e.g. 64MB, 128MB)")
+	enableTLS := flag.Bool("tls", false, "Enable SSL/TLS encrypted connections for PostgreSQL wire")
+	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
+	tlsKey := flag.String("tls-key", "", "Path to TLS private key file")
+	requireSSL := flag.Bool("require-ssl", false, "Require SSL/TLS for PostgreSQL wire connections")
 	backupTarget := flag.String("backup", "", "Perform live point-in-time snapshot backup to target archive and exit")
 	restoreSource := flag.String("restore", "", "Restore database from backup archive and exit")
 
@@ -158,6 +163,26 @@ func main() {
 	}
 
 	wireServer := wire.NewServer(*pgAddr, cat, eng)
+	if *enableTLS || *tlsCert != "" || *requireSSL {
+		var tlsConfig *tls.Config
+		if *tlsCert != "" && *tlsKey != "" {
+			cfg, err := wire.LoadTLSConfig(*tlsCert, *tlsKey)
+			if err != nil {
+				log.Fatalf("[SQLion] Failed to load TLS certificate and key: %v", err)
+			}
+			tlsConfig = cfg
+		} else {
+			log.Printf("[SQLion] Generating self-signed TLS certificate for localhost...")
+			cfg, err := wire.NewSelfSignedTLSConfig()
+			if err != nil {
+				log.Fatalf("[SQLion] Failed to generate self-signed TLS certificate: %v", err)
+			}
+			tlsConfig = cfg
+		}
+		wireServer.SetTLSConfig(tlsConfig)
+		wireServer.SetRequireSSL(*requireSSL)
+		log.Printf("[SQLion] PostgreSQL Wire SSL/TLS enabled (Require SSL: %v)", *requireSSL)
+	}
 	if err := wireServer.Start(); err != nil {
 		log.Fatalf("Failed to start PostgreSQL wire protocol listener: %v", err)
 	}

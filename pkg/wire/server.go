@@ -2,6 +2,7 @@ package wire
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -34,6 +35,8 @@ type Server struct {
 	executor    *runtime.Executor
 	connCounter uint64
 	activeConns map[uint32]*pgActiveConn
+	tlsConfig   *tls.Config
+	requireSSL  bool
 	mu          sync.Mutex
 	closed      bool
 }
@@ -50,6 +53,27 @@ func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
 		executor:    runtime.NewExecutor(cache),
 		activeConns: make(map[uint32]*pgActiveConn),
 	}
+}
+
+// SetTLSConfig sets the TLS configuration for encrypted SSL connections.
+func (s *Server) SetTLSConfig(cfg *tls.Config) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tlsConfig = cfg
+}
+
+// SetRequireSSL specifies whether plaintext connections should be rejected when SSL is enabled.
+func (s *Server) SetRequireSSL(require bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.requireSSL = require
+}
+
+// TLSConfig returns the current TLS configuration.
+func (s *Server) TLSConfig() *tls.Config {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tlsConfig
 }
 
 // Start begins listening on the configured TCP address.
@@ -113,7 +137,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	sessID := fmt.Sprintf("pg-%d", connID)
 	defer s.apiServer.CloseSession(sessID)
 
-	// 1. Initial Handshake: SSL or Cancel or Startup
+	// 1. Initial Handshake: SSL or GSSENC or Cancel or Startup
 	buf := make([]byte, 8)
 	if _, err := io.ReadFull(conn, buf); err != nil {
 		return
@@ -143,11 +167,39 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 
-	if code == 80877103 {
-		// SSLRequest: Reply 'N' (no SSL)
+	// GSSENCRequest: 80877104 -> Reply 'N' (no GSS encryption)
+	if code == 80877104 {
 		if _, err := conn.Write([]byte{'N'}); err != nil {
 			return
 		}
+		if _, err := io.ReadFull(conn, buf); err != nil {
+			return
+		}
+		code = binary.BigEndian.Uint32(buf[4:8])
+	}
+
+	if code == 80877103 {
+		s.mu.Lock()
+		tlsCfg := s.tlsConfig
+		s.mu.Unlock()
+
+		if tlsCfg != nil {
+			// Acknowledge SSL upgrade: Reply 'S'
+			if _, err := conn.Write([]byte{'S'}); err != nil {
+				return
+			}
+			tlsConn := tls.Server(conn, tlsCfg)
+			if err := tlsConn.Handshake(); err != nil {
+				return
+			}
+			conn = tlsConn
+		} else {
+			// SSLRequest: Reply 'N' (no SSL)
+			if _, err := conn.Write([]byte{'N'}); err != nil {
+				return
+			}
+		}
+
 		// Read actual startup message: 4 bytes length + 4 bytes protocol version
 		if _, err := io.ReadFull(conn, buf); err != nil {
 			return
@@ -172,6 +224,15 @@ func (s *Server) handleConnection(conn net.Conn) {
 			if targetSessID != "" {
 				s.apiServer.CloseSession(targetSessID)
 			}
+			return
+		}
+	} else {
+		s.mu.Lock()
+		reqSSL := s.requireSSL && s.tlsConfig != nil
+		s.mu.Unlock()
+
+		if reqSSL {
+			_ = WriteError(conn, "SSL is required to connect to this server")
 			return
 		}
 	}

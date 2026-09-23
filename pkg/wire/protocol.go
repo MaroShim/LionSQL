@@ -25,6 +25,7 @@ const (
 	MsgCopyDone             byte = 'c'
 	MsgCopyFail             byte = 'f'
 	MsgBackendKeyData       byte = 'K'
+	MsgSimpleQuery          byte = 'Q'
 )
 
 // WriteBackendKeyData sends BackendKeyData ('K') with process ID and cancellation secret key.
