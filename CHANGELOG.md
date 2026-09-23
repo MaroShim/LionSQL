@@ -16,6 +16,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Zero-Copy Cursor Tuple Iterator (`pkg/storage/memengine/memengine.go`)**:
   - Eliminated eager full-table clone allocations (`cloneRecord`) during `Scan()` and `IndexScan()`, switching to direct immutable record memory views.
   - Reduced per-row memory allocations to zero on table scan hot paths, cutting GC pressure and query latency.
+- **T-SQL Built-in Function Library & VDBE System Variables (`pkg/proc/builtins.go`)**:
+  - Centralized single-source-of-truth scalar function evaluator shared identically across VDBE Bytecode VM and Volcano relational expressions.
+  - Date & Time functions: `DATEDIFF`, `DATEADD`, `DATEPART`, `YEAR`, `MONTH`, `DAY`, `GETDATE`, `NOW`, `GETUTCDATE`, `SYSDATETIME`.
+  - String manipulation functions: `CONCAT`, `LEFT`, `RIGHT`, `CHARINDEX`, `LTRIM`, `RTRIM`, `REVERSE`, `SPACE`, `REPLICATE`.
+  - Mathematical & logical functions: `POWER`, `SQRT`, `SIGN`, `PI`, `IIF`, `CHOOSE`.
+  - System functions & global metadata: `NEWID()` (RFC 4122 UUID v4), `SCOPE_IDENTITY()`, `@@TRANCOUNT`, `@@SPID`, `@@ERROR`, `@@SERVERNAME`, `@@VERSION`.
+  - Native parser support for keyword-colliding function calls (`LEFT`, `RIGHT`) and bare datepart identifiers (`day`, `month`, `year`).
 
 ---
 

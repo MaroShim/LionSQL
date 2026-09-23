@@ -415,69 +415,56 @@ func evalRowFunction(name string, args []Expr, row map[string]any, execSubquery 
 		}
 	}
 
-	upper := strings.ToUpper(name)
-	switch upper {
-	case "ISNULL", "COALESCE":
-		for _, arg := range args {
-			val, err := EvalRowExpr(arg, row, execSubquery)
-			if err == nil && val != nil {
-				return val, nil
-			}
+	stArgs := make([]storage.Value, len(args))
+	for i, a := range args {
+		v, err := EvalRowExpr(a, row, execSubquery)
+		if err != nil {
+			return nil, err
 		}
+		stArgs[i] = anyToStorageVal(v)
+	}
+
+	res := EvalBuiltin(name, stArgs)
+	if res.IsNull {
 		return nil, nil
-
-	case "LEN", "LENGTH":
-		if len(args) == 0 {
-			return int64(0), nil
-		}
-		val, err := EvalRowExpr(args[0], row, execSubquery)
-		if err != nil || val == nil {
-			return int64(0), nil
-		}
-		return int64(len(fmt.Sprintf("%v", val))), nil
-
-	case "UPPER":
-		if len(args) == 0 {
-			return "", nil
-		}
-		val, err := EvalRowExpr(args[0], row, execSubquery)
-		if err != nil || val == nil {
-			return "", nil
-		}
-		return strings.ToUpper(fmt.Sprintf("%v", val)), nil
-
-	case "LOWER":
-		if len(args) == 0 {
-			return "", nil
-		}
-		val, err := EvalRowExpr(args[0], row, execSubquery)
-		if err != nil || val == nil {
-			return "", nil
-		}
-		return strings.ToLower(fmt.Sprintf("%v", val)), nil
-
-	case "GETDATE", "NOW":
-		return time.Now().Format("2006-01-02 15:04:05"), nil
-
-	case "ABS":
-		if len(args) == 0 {
-			return nil, nil
-		}
-		val, err := EvalRowExpr(args[0], row, execSubquery)
-		if err != nil || val == nil {
-			return nil, nil
-		}
-		if n, ok := toFloat(val); ok {
-			return math.Abs(n), nil
-		}
-		return nil, nil
-
+	}
+	switch res.Type {
+	case storage.TypeInt:
+		return res.IVal, nil
+	case storage.TypeFloat:
+		return res.FVal, nil
+	case storage.TypeBool:
+		return res.BVal, nil
+	case storage.TypeDateTime:
+		return res.TVal, nil
 	default:
-		// Default to evaluating first arg if present
-		if len(args) > 0 {
-			return EvalRowExpr(args[0], row, execSubquery)
-		}
-		return nil, nil
+		return res.SVal, nil
+	}
+}
+
+func anyToStorageVal(v any) storage.Value {
+	if v == nil {
+		return storage.NullValue(storage.TypeUnknown)
+	}
+	switch val := v.(type) {
+	case storage.Value:
+		return val
+	case int64:
+		return storage.IntValue(val)
+	case int:
+		return storage.IntValue(int64(val))
+	case float64:
+		return storage.FloatValue(val)
+	case float32:
+		return storage.FloatValue(float64(val))
+	case bool:
+		return storage.BoolValue(val)
+	case string:
+		return storage.StringValue(val)
+	case time.Time:
+		return storage.DateTimeValue(val)
+	default:
+		return storage.StringValue(fmt.Sprintf("%v", val))
 	}
 }
 

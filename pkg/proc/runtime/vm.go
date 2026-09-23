@@ -198,6 +198,9 @@ type VMFrame struct {
 	logs            []string
 	rowCount        int64
 	fetchStatus     int
+	tranCount       int
+	lastIdentity    int64
+	lastError       int
 }
 
 type cursorState struct {
@@ -328,7 +331,11 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 
 		case proc.OpLoadVar:
 			varName := inst.Data.(string)
-			f.regs[inst.A] = f.getVar(varName)
+			v, found := f.getVar(varName)
+			if !found {
+				v = storage.StringValue(varName)
+			}
+			f.regs[inst.A] = v
 
 		case proc.OpStoreVar:
 			varName := inst.Data.(string)
@@ -466,14 +473,20 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			f.regs[inst.A] = storage.BoolValue(!f.regs[inst.B].IsNull)
 
 		case proc.OpTxBegin:
-			// Ambient transaction active
+			f.tranCount++
 
 		case proc.OpTxCommit:
+			if f.tranCount > 0 {
+				f.tranCount--
+			}
 			if err := f.tx.Commit(); err != nil {
 				return nil, err
 			}
 
 		case proc.OpTxRollback:
+			if f.tranCount > 0 {
+				f.tranCount--
+			}
 			if err := f.tx.Rollback(); err != nil {
 				return nil, err
 			}
@@ -490,6 +503,9 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 					stVal := toStorageValue(vAny)
 					rec[col] = stVal
 					rowMap[col] = valToAny(stVal)
+					if (strings.EqualFold(col, "id") || strings.HasSuffix(strings.ToLower(col), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
+						f.lastIdentity = stVal.IVal
+					}
 				}
 			}
 
@@ -685,7 +701,15 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 					args = append(args, f.regs[regIdx])
 				}
 			}
-			f.regs[inst.A] = f.evalBuiltin(callData.Name, args)
+			if strings.EqualFold(callData.Name, "SCOPE_IDENTITY") {
+				if f.lastIdentity > 0 {
+					f.regs[inst.A] = storage.IntValue(f.lastIdentity)
+				} else {
+					f.regs[inst.A] = storage.NullValue(storage.TypeInt)
+				}
+			} else {
+				f.regs[inst.A] = proc.EvalBuiltin(callData.Name, args)
+			}
 
 		case proc.OpCallUDF:
 			callData := inst.Data.(*proc.CallData)
@@ -718,22 +742,43 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 	return nil, nil
 }
 
-func (f *VMFrame) getVar(name string) storage.Value {
+func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 	clean := cleanSymbol(name)
 	if strings.EqualFold(name, "@@ROWCOUNT") || strings.EqualFold(clean, "ROWCOUNT") || strings.EqualFold(clean, "@ROWCOUNT") {
-		return storage.IntValue(f.rowCount)
+		return storage.IntValue(f.rowCount), true
 	}
 	if strings.EqualFold(name, "@@FETCH_STATUS") || strings.EqualFold(clean, "FETCH_STATUS") || strings.EqualFold(clean, "@FETCH_STATUS") {
-		return storage.IntValue(int64(f.fetchStatus))
+		return storage.IntValue(int64(f.fetchStatus)), true
+	}
+	if strings.EqualFold(name, "@@TRANCOUNT") || strings.EqualFold(clean, "TRANCOUNT") || strings.EqualFold(clean, "@TRANCOUNT") {
+		return storage.IntValue(int64(f.tranCount)), true
+	}
+	if strings.EqualFold(name, "@@SPID") || strings.EqualFold(clean, "SPID") || strings.EqualFold(clean, "@SPID") {
+		return storage.IntValue(50), true
+	}
+	if strings.EqualFold(name, "@@ERROR") || strings.EqualFold(clean, "ERROR") || strings.EqualFold(clean, "@ERROR") {
+		return storage.IntValue(int64(f.lastError)), true
+	}
+	if strings.EqualFold(name, "@@SERVERNAME") || strings.EqualFold(clean, "SERVERNAME") || strings.EqualFold(clean, "@SERVERNAME") {
+		return storage.StringValue("SQLION"), true
+	}
+	if strings.EqualFold(name, "@@VERSION") || strings.EqualFold(clean, "VERSION") || strings.EqualFold(clean, "@VERSION") {
+		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine"), true
+	}
+	if strings.EqualFold(name, "SCOPE_IDENTITY") || strings.EqualFold(clean, "SCOPE_IDENTITY") {
+		if f.lastIdentity > 0 {
+			return storage.IntValue(f.lastIdentity), true
+		}
+		return storage.NullValue(storage.TypeInt), true
 	}
 
 	if v, ok := f.vars[clean]; ok {
-		return v
+		return v, true
 	}
 	if v, ok := f.vars[strings.ToLower(clean)]; ok {
-		return v
+		return v, true
 	}
-	return storage.NullValue(storage.TypeUnknown)
+	return storage.NullValue(storage.TypeUnknown), false
 }
 
 func (f *VMFrame) setVar(name string, val storage.Value) {
@@ -1075,116 +1120,6 @@ func (f *VMFrame) callProc(procName string, argRegs []int32) error {
 	}
 	_ = retVal
 	return err
-}
-
-func (f *VMFrame) evalBuiltin(name string, args []storage.Value) storage.Value {
-	upper := strings.ToUpper(cleanSymbol(name))
-	switch upper {
-	case "ISNULL", "COALESCE":
-		for _, a := range args {
-			if !a.IsNull {
-				return a
-			}
-		}
-		return storage.NullValue(storage.TypeUnknown)
-
-	case "LEN", "LENGTH":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.IntValue(0)
-		}
-		return storage.IntValue(int64(len(valToString(args[0]))))
-
-	case "UPPER":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
-		}
-		return storage.StringValue(strings.ToUpper(valToString(args[0])))
-
-	case "LOWER":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
-		}
-		return storage.StringValue(strings.ToLower(valToString(args[0])))
-
-	case "TRIM":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
-		}
-		return storage.StringValue(strings.TrimSpace(valToString(args[0])))
-
-	case "SUBSTRING":
-		if len(args) < 3 {
-			return storage.StringValue("")
-		}
-		str := valToString(args[0])
-		start := int(args[1].IVal) - 1 // T-SQL is 1-indexed
-		length := int(args[2].IVal)
-		if start < 0 {
-			start = 0
-		}
-		if start >= len(str) {
-			return storage.StringValue("")
-		}
-		end := start + length
-		if end > len(str) {
-			end = len(str)
-		}
-		return storage.StringValue(str[start:end])
-
-	case "REPLACE":
-		if len(args) < 3 {
-			return storage.StringValue("")
-		}
-		str := valToString(args[0])
-		oldSub := valToString(args[1])
-		newSub := valToString(args[2])
-		return storage.StringValue(strings.ReplaceAll(str, oldSub, newSub))
-
-	case "ABS":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.NullValue(storage.TypeFloat)
-		}
-		if n, ok := toFloatNum(args[0]); ok {
-			return storage.FloatValue(math.Abs(n))
-		}
-		return storage.NullValue(storage.TypeFloat)
-
-	case "ROUND":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.NullValue(storage.TypeFloat)
-		}
-		if n, ok := toFloatNum(args[0]); ok {
-			return storage.FloatValue(math.Round(n))
-		}
-		return storage.NullValue(storage.TypeFloat)
-
-	case "CEILING", "CEIL":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.NullValue(storage.TypeFloat)
-		}
-		if n, ok := toFloatNum(args[0]); ok {
-			return storage.FloatValue(math.Ceil(n))
-		}
-		return storage.NullValue(storage.TypeFloat)
-
-	case "FLOOR":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.NullValue(storage.TypeFloat)
-		}
-		if n, ok := toFloatNum(args[0]); ok {
-			return storage.FloatValue(math.Floor(n))
-		}
-		return storage.NullValue(storage.TypeFloat)
-
-	case "GETDATE", "NOW":
-		return storage.StringValue(time.Now().Format("2006-01-02 15:04:05"))
-
-	default:
-		if len(args) > 0 {
-			return args[0]
-		}
-		return storage.NullValue(storage.TypeUnknown)
-	}
 }
 
 // Storage arithmetic & comparison helpers

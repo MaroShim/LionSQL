@@ -701,13 +701,7 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 }
 
 func isBuiltinFunction(name string) bool {
-	switch strings.ToUpper(cleanVarName(name)) {
-	case "ISNULL", "COALESCE", "UPPER", "LOWER", "TRIM", "LEN", "LENGTH",
-		"SUBSTRING", "REPLACE", "ABS", "ROUND", "CEILING", "FLOOR", "GETDATE", "NOW":
-		return true
-	default:
-		return false
-	}
+	return IsBuiltinFunction(name)
 }
 
 func cleanVarName(name string) string {

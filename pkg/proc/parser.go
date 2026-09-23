@@ -1318,7 +1318,7 @@ func (p *Parser) parsePrefix() Expr {
 	case TokenAsterisk:
 		p.nextToken()
 		return &ColumnRefExpr{Name: "*"}
-	case TokenCount, TokenSum, TokenAvg, TokenMin, TokenMax:
+	case TokenCount, TokenSum, TokenAvg, TokenMin, TokenMax, TokenLeft, TokenRight:
 		funcName := p.curToken.Literal
 		p.nextToken()
 		if p.curTokenIs(TokenLParen) {
