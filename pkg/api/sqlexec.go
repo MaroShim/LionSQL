@@ -1650,18 +1650,43 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	}
 
 	// 1. Determine columns
+	type fallbackProjItem struct {
+		expr   string
+		alias  string
+		parsed proc.Expr
+	}
+	var projItems []fallbackProjItem
 	var selectedCols []string
 	isSelectAll := projStr == "*" || projStr == ""
 	if isSelectAll {
 		for _, col := range schema.Columns {
 			selectedCols = append(selectedCols, col.Name)
+			projItems = append(projItems, fallbackProjItem{expr: col.Name, alias: col.Name})
 		}
 	} else {
-		for _, c := range strings.Split(projStr, ",") {
-			cTrimmed := cleanIdentifier(strings.TrimSpace(c))
-			if cTrimmed != "" {
-				selectedCols = append(selectedCols, cTrimmed)
+		for _, c := range planner.SplitProjections(projStr) {
+			cTrimmed := strings.TrimSpace(c)
+			if cTrimmed == "" {
+				continue
 			}
+			aliasIdx := strings.Index(strings.ToUpper(cTrimmed), " AS ")
+			var expr, alias string
+			if aliasIdx != -1 {
+				expr = strings.TrimSpace(cTrimmed[:aliasIdx])
+				alias = cleanIdentifier(strings.TrimSpace(cTrimmed[aliasIdx+4:]))
+			} else {
+				expr = cTrimmed
+				alias = cleanIdentifier(cTrimmed)
+			}
+			selectedCols = append(selectedCols, alias)
+			item := fallbackProjItem{expr: expr, alias: alias}
+			if strings.Contains(expr, "->") || strings.Contains(expr, "(") {
+				p := proc.NewParser(proc.NewLexer(expr))
+				if ast := p.ParseExpr(); ast != nil && len(p.Errors()) == 0 {
+					item.parsed = ast
+				}
+			}
+			projItems = append(projItems, item)
 		}
 	}
 
@@ -1722,11 +1747,19 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	rows := make([]map[string]any, 0, len(scannedRows))
 	for _, sr := range scannedRows {
 		row := make(map[string]any)
-		for _, col := range selectedCols {
-			if v, ok := sr.row[col]; ok {
-				row[col] = v
+		for _, pi := range projItems {
+			if pi.parsed != nil {
+				if v, err := proc.EvalRowExpr(pi.parsed, sr.row, nil); err == nil {
+					row[pi.alias] = v
+					continue
+				}
+			}
+			if v, ok := sr.row[pi.alias]; ok {
+				row[pi.alias] = v
+			} else if v, ok := sr.row[pi.expr]; ok {
+				row[pi.alias] = v
 			} else {
-				row[col] = nil
+				row[pi.alias] = nil
 			}
 		}
 		rows = append(rows, row)
@@ -3310,6 +3343,8 @@ func parseSQLDataType(s string) storage.DataType {
 		return storage.TypeBool
 	case "DATETIME", "TIMESTAMP", "DATE", "TIME":
 		return storage.TypeDateTime
+	case "JSON", "JSONB":
+		return storage.TypeJSON
 	default:
 		return storage.TypeVarChar
 	}
@@ -3489,10 +3524,15 @@ func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
 	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
 		strVal := s[1 : len(s)-1]
 		strVal = strings.ReplaceAll(strVal, "''", "'")
+		if targetType == storage.TypeJSON {
+			return storage.JSONValue(strVal)
+		}
 		return storage.StringValue(strVal)
 	}
 
 	switch targetType {
+	case storage.TypeJSON:
+		return storage.JSONValue(s)
 	case storage.TypeInt:
 		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
 			return storage.IntValue(i)
@@ -3522,7 +3562,7 @@ func formatStorageValue(v storage.Value) any {
 	switch v.Type {
 	case storage.TypeInt:
 		return v.IVal
-	case storage.TypeVarChar:
+	case storage.TypeVarChar, storage.TypeJSON:
 		return v.SVal
 	case storage.TypeFloat:
 		return v.FVal

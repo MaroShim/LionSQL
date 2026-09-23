@@ -6,11 +6,13 @@ import (
 	"strings"
 
 	"sqlion/pkg/planner"
+	"sqlion/pkg/proc"
 )
 
 type projField struct {
-	expr  string
-	alias string
+	expr   string
+	alias  string
+	parsed proc.Expr
 }
 
 // ProjectionIterator evaluates projected expressions and renames columns.
@@ -31,6 +33,18 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 	if len(projections) == 0 || (len(projections) == 1 && (projections[0] == "*" || projections[0] == "")) {
 		p.isSelectAll = true
 		return p
+	}
+
+	addField := func(expr, alias string) {
+		f := projField{expr: expr, alias: alias}
+		if strings.Contains(expr, "->") || strings.Contains(expr, "(") {
+			parser := proc.NewParser(proc.NewLexer(expr))
+			if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
+				f.parsed = ast
+			}
+		}
+		p.fields = append(p.fields, f)
+		p.schema = append(p.schema, alias)
 	}
 
 	for _, item := range projections {
@@ -55,13 +69,11 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 		if aliasIdx != -1 {
 			expr := strings.TrimSpace(item[:aliasIdx])
 			alias := strings.Trim(strings.TrimSpace(item[aliasIdx+4:]), "\"`[]")
-			p.fields = append(p.fields, projField{expr: expr, alias: alias})
-			p.schema = append(p.schema, alias)
+			addField(expr, alias)
 		} else {
 			parts := strings.Fields(item)
-			if len(parts) == 2 && !strings.Contains(parts[0], "(") {
-				p.fields = append(p.fields, projField{expr: parts[0], alias: strings.Trim(parts[1], "\"`[]")})
-				p.schema = append(p.schema, strings.Trim(parts[1], "\"`[]"))
+			if len(parts) == 2 && !strings.Contains(parts[0], "(") && !strings.Contains(parts[0], "-") {
+				addField(parts[0], strings.Trim(parts[1], "\"`[]"))
 			} else {
 				// Bare expression / column name
 				alias := item
@@ -69,8 +81,7 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 					alias = alias[dotIdx+1:]
 				}
 				alias = strings.Trim(alias, "\"`[]")
-				p.fields = append(p.fields, projField{expr: item, alias: alias})
-				p.schema = append(p.schema, alias)
+				addField(item, alias)
 			}
 		}
 	}
@@ -101,6 +112,20 @@ func (p *ProjectionIterator) Next(ctx context.Context) (Tuple, error) {
 
 	vals := make([]any, len(p.fields))
 	for i, f := range p.fields {
+		if val, ok := tuple.GetOK(f.alias); ok {
+			vals[i] = val
+			continue
+		}
+		if val, ok := tuple.GetOK(f.expr); ok {
+			vals[i] = val
+			continue
+		}
+		if f.parsed != nil {
+			if res, err := proc.EvalRowExpr(f.parsed, tuple.ToEvalMap(), nil); err == nil {
+				vals[i] = res
+				continue
+			}
+		}
 		val, found := lookupVal(tuple, f.expr)
 		if !found {
 			val, _ = lookupVal(tuple, f.alias)

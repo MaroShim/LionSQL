@@ -391,6 +391,50 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 			return div, nil
 		}
 		return nil, fmt.Errorf("cannot divide non-numeric values")
+
+	case TokenJSONExtract:
+		if left == nil {
+			return nil, nil
+		}
+		docStr := fmt.Sprintf("%v", left)
+		var res string
+		var ok bool
+		switch r := right.(type) {
+		case int:
+			res, ok = storage.ExtractJSON(docStr, r)
+		case int64:
+			res, ok = storage.ExtractJSON(docStr, int(r))
+		case float64:
+			res, ok = storage.ExtractJSON(docStr, int(r))
+		default:
+			res, ok = storage.ExtractJSON(docStr, fmt.Sprintf("%v", right))
+		}
+		if !ok {
+			return nil, nil
+		}
+		return res, nil
+
+	case TokenJSONExtractText:
+		if left == nil {
+			return nil, nil
+		}
+		docStr := fmt.Sprintf("%v", left)
+		var res string
+		var ok bool
+		switch r := right.(type) {
+		case int:
+			res, ok = storage.ExtractJSONText(docStr, r)
+		case int64:
+			res, ok = storage.ExtractJSONText(docStr, int(r))
+		case float64:
+			res, ok = storage.ExtractJSONText(docStr, int(r))
+		default:
+			res, ok = storage.ExtractJSONText(docStr, fmt.Sprintf("%v", right))
+		}
+		if !ok {
+			return nil, nil
+		}
+		return res, nil
 	}
 
 	return nil, fmt.Errorf("unsupported binary operator %v", op)

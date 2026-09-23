@@ -286,7 +286,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	if projStr == "*" || projStr == "" {
 		projections = []string{"*"}
 	} else {
-		for _, col := range splitProjections(projStr) {
+		for _, col := range SplitProjections(projStr) {
 			c := strings.TrimSpace(col)
 			if c != "" {
 				projections = append(projections, c)
@@ -401,7 +401,8 @@ func parseCTEs(query string) ([]CTEInfo, string) {
 	return nil, trimmed
 }
 
-func splitProjections(s string) []string {
+// SplitProjections splits projection list while respecting nested parentheses.
+func SplitProjections(s string) []string {
 	var result []string
 	var cur strings.Builder
 	depth := 0

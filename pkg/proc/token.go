@@ -33,6 +33,8 @@ const (
 	TokenSemicolon // ;
 	TokenLParen    // (
 	TokenRParen    // )
+	TokenJSONExtract     // ->
+	TokenJSONExtractText // ->>
 
 	// Keywords
 	TokenCreate
@@ -257,6 +259,10 @@ func (t TokenType) String() string {
 		return "LIKE"
 	case TokenIs:
 		return "IS"
+	case TokenJSONExtract:
+		return "->"
+	case TokenJSONExtractText:
+		return "->>"
 	default:
 		for k, v := range keywords {
 			if v == t {

@@ -61,7 +61,17 @@ func (l *Lexer) NextToken() Token {
 	case '+':
 		tok = Token{Type: TokenPlus, Literal: "+", Line: tokLine, Col: tokCol}
 	case '-':
-		tok = Token{Type: TokenMinus, Literal: "-", Line: tokLine, Col: tokCol}
+		if l.peekChar() == '>' {
+			l.readChar()
+			if l.peekChar() == '>' {
+				l.readChar()
+				tok = Token{Type: TokenJSONExtractText, Literal: "->>", Line: tokLine, Col: tokCol}
+			} else {
+				tok = Token{Type: TokenJSONExtract, Literal: "->", Line: tokLine, Col: tokCol}
+			}
+		} else {
+			tok = Token{Type: TokenMinus, Literal: "-", Line: tokLine, Col: tokCol}
+		}
 	case '*':
 		tok = Token{Type: TokenAsterisk, Literal: "*", Line: tokLine, Col: tokCol}
 	case '/':

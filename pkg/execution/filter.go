@@ -234,7 +234,29 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 
 func lookupVal(t Tuple, col string) (any, bool) {
 	col = strings.Trim(col, "\"`[]")
-	return t.GetOK(col)
+	if v, ok := t.GetOK(col); ok {
+		return v, true
+	}
+	// Bare column if table prefix present (e.g. u.data -> data)
+	if dotIdx := strings.Index(col, "."); dotIdx != -1 {
+		bare := col[dotIdx+1:]
+		if v, ok := t.GetOK(bare); ok {
+			return v, true
+		}
+	}
+
+	// If column contains operators (e.g. ->, ->>) or functions (e.g. JSON_VALUE)
+	if strings.Contains(col, "->") || strings.Contains(col, "(") {
+		p := proc.NewParser(proc.NewLexer(col))
+		expr := p.ParseExpr()
+		if expr != nil && len(p.Errors()) == 0 {
+			res, err := proc.EvalRowExpr(expr, t.ToEvalMap(), nil)
+			if err == nil {
+				return res, true
+			}
+		}
+	}
+	return nil, false
 }
 
 func parseLiteralValue(s string) any {

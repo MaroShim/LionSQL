@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **JSON & JSONB Data Types with Extraction Operators (`pkg/storage`, `pkg/proc`, `pkg/execution`, `pkg/planner`, `pkg/api`)**:
+  - Full ANSI/PostgreSQL/MSSQL compatible `JSON` and `JSONB` data type support (`storage.TypeJSON = 6`) with schema validation and syntax enforcement.
+  - PostgreSQL extraction operators `->` (extract element as JSON string) and `->>` (extract element as unquoted text) with multi-level path chaining (e.g. `data -> 'user' ->> 'name'`).
+  - Standard scalar and document extraction functions: `JSON_VALUE(doc, path)` (scalar extraction) and `JSON_QUERY(doc, path)` (object/array extraction) with support for standard dot-notation and array index paths (`$.user.scores[0]`).
+  - Native Pratt parser and AST integration (`TokenJSONExtract`, `TokenJSONExtractText`) with tight operator precedence, enabling expressions in `SELECT` projections, `WHERE` / `HAVING` filters, `ORDER BY`, and stored procedures.
+  - Pre-parsed AST caching in Volcano `ProjectionIterator` and `FilterIterator` for high-throughput zero-reparsing query evaluation.
+  - Dedicated storage and API integration test suites (`pkg/storage/json_test.go`, `pkg/api/json_test.go`).
 - **ANSI/ISO SQL & T-SQL Window Functions Engine (`pkg/planner`, `pkg/execution`, `pkg/api`)**:
   - Full relational window functions support integrated into Volcano execution pipeline: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`, and partition-level window aggregates (`SUM`, `AVG`, `MIN`, `MAX`, `COUNT`).
   - Full syntax compatibility with `OVER ([PARTITION BY col1, col2, ...] [ORDER BY col [ASC|DESC], ...])` and projection aliases (`AS rn`).

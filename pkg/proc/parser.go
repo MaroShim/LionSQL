@@ -19,26 +19,29 @@ const (
 	precLessGreater // < > <= >=
 	precSum         // + -
 	precProduct     // * /
+	precJSON        // -> ->>
 	precPrefix      // -X, NOT X
 )
 
 var precedences = map[TokenType]int{
-	TokenOr:       precOr,
-	TokenAnd:      precAnd,
-	TokenIn:       precEquals,
-	TokenBetween:  precEquals,
-	TokenLike:     precEquals,
-	TokenIs:       precEquals,
-	TokenEq:       precEquals,
-	TokenNeq:      precEquals,
-	TokenLt:       precLessGreater,
-	TokenLte:      precLessGreater,
-	TokenGt:       precLessGreater,
-	TokenGte:      precLessGreater,
-	TokenPlus:     precSum,
-	TokenMinus:    precSum,
-	TokenAsterisk: precProduct,
-	TokenSlash:    precProduct,
+	TokenOr:              precOr,
+	TokenAnd:             precAnd,
+	TokenIn:              precEquals,
+	TokenBetween:         precEquals,
+	TokenLike:            precEquals,
+	TokenIs:              precEquals,
+	TokenEq:              precEquals,
+	TokenNeq:             precEquals,
+	TokenLt:              precLessGreater,
+	TokenLte:             precLessGreater,
+	TokenGt:              precLessGreater,
+	TokenGte:             precLessGreater,
+	TokenPlus:            precSum,
+	TokenMinus:           precSum,
+	TokenAsterisk:        precProduct,
+	TokenSlash:           precProduct,
+	TokenJSONExtract:     precJSON,
+	TokenJSONExtractText: precJSON,
 }
 
 // Parser parses T-SQL tokens into an AST.

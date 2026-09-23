@@ -398,7 +398,45 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		return storage.NullValue(storage.TypeUnknown)
 
 	// ----------------------------------------------------
-	// 5. System Functions & Metadata
+	// 5. JSON Functions
+	// ----------------------------------------------------
+	case "JSON_VALUE":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		doc := valToString(args[0])
+		path := valToString(args[1])
+		val, ok := storage.JSONValueByPath(doc, path)
+		if !ok || val == nil {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		switch v := val.(type) {
+		case string:
+			return storage.StringValue(v)
+		case int64:
+			return storage.IntValue(v)
+		case float64:
+			return storage.FloatValue(v)
+		case bool:
+			return storage.BoolValue(v)
+		default:
+			return storage.StringValue(fmt.Sprintf("%v", v))
+		}
+
+	case "JSON_QUERY":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeJSON)
+		}
+		doc := valToString(args[0])
+		path := valToString(args[1])
+		val, ok := storage.JSONQueryByPath(doc, path)
+		if !ok || val == "" {
+			return storage.NullValue(storage.TypeJSON)
+		}
+		return storage.JSONValue(val)
+
+	// ----------------------------------------------------
+	// 6. System Functions & Metadata
 	// ----------------------------------------------------
 	case "NEWID":
 		return storage.StringValue(generateUUIDv4())
@@ -420,6 +458,7 @@ func IsBuiltinFunction(name string) bool {
 		"LEFT", "RIGHT", "SUBSTRING", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE",
 		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SIGN", "PI",
 		"ISNULL", "COALESCE", "IIF", "CHOOSE",
+		"JSON_VALUE", "JSON_QUERY",
 		"NEWID", "SCOPE_IDENTITY":
 		return true
 	default:
@@ -440,7 +479,7 @@ func valToString(v storage.Value) string {
 		return ""
 	}
 	switch v.Type {
-	case storage.TypeVarChar:
+	case storage.TypeVarChar, storage.TypeJSON:
 		return v.SVal
 	case storage.TypeInt:
 		return strconv.FormatInt(v.IVal, 10)

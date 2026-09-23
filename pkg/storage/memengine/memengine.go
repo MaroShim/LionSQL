@@ -770,9 +770,19 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 			} else if col.Type == storage.TypeInt && val.Type == storage.TypeFloat && val.FVal == float64(int64(val.FVal)) {
 				val = storage.IntValue(int64(val.FVal))
 				record[col.Name] = val
+			} else if col.Type == storage.TypeJSON && (val.Type == storage.TypeVarChar || val.Type == storage.TypeJSON) {
+				if !storage.IsValidJSON(val.SVal) {
+					return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
+				}
+				val = storage.JSONValue(val.SVal)
+				record[col.Name] = val
 			} else {
 				return fmt.Errorf("%w: column %q expects %s, got %s",
 					storage.ErrInvalidDataType, col.Name, col.Type, val.Type)
+			}
+		} else if col.Type == storage.TypeJSON {
+			if !storage.IsValidJSON(val.SVal) {
+				return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
 			}
 		}
 	}
@@ -855,9 +865,19 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 			} else if col.Type == storage.TypeInt && val.Type == storage.TypeFloat && val.FVal == float64(int64(val.FVal)) {
 				val = storage.IntValue(int64(val.FVal))
 				updated[col.Name] = val
+			} else if col.Type == storage.TypeJSON && (val.Type == storage.TypeVarChar || val.Type == storage.TypeJSON) {
+				if !storage.IsValidJSON(val.SVal) {
+					return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
+				}
+				val = storage.JSONValue(val.SVal)
+				updated[col.Name] = val
 			} else {
 				return fmt.Errorf("%w: column %q expects %s, got %s",
 					storage.ErrInvalidDataType, col.Name, col.Type, val.Type)
+			}
+		} else if col.Type == storage.TypeJSON {
+			if !storage.IsValidJSON(val.SVal) {
+				return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
 			}
 		}
 	}

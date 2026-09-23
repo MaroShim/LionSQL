@@ -22,6 +22,7 @@ var (
 	ErrForeignKeyViolation  = errors.New("foreign key constraint violation")
 	ErrDependentObjectsExist = errors.New("cannot drop table because other objects depend on it")
 	ErrSerializationFailure = errors.New("serialization failure: concurrent update conflict")
+	ErrInvalidJSON          = errors.New("invalid JSON syntax")
 )
 
 // DataType represents the column data type.
@@ -34,6 +35,7 @@ const (
 	TypeFloat
 	TypeBool
 	TypeDateTime
+	TypeJSON
 )
 
 func (t DataType) String() string {
@@ -48,6 +50,8 @@ func (t DataType) String() string {
 		return "BOOL"
 	case TypeDateTime:
 		return "DATETIME"
+	case TypeJSON:
+		return "JSON"
 	default:
 		return "UNKNOWN"
 	}
@@ -209,6 +213,10 @@ func DateTimeValue(v time.Time) Value {
 	return Value{Type: TypeDateTime, TVal: v}
 }
 
+func JSONValue(v string) Value {
+	return Value{Type: TypeJSON, SVal: v}
+}
+
 func NullValue(t DataType) Value {
 	return Value{Type: t, IsNull: true}
 }
@@ -220,7 +228,7 @@ func (v Value) String() string {
 	switch v.Type {
 	case TypeInt:
 		return fmt.Sprintf("%d", v.IVal)
-	case TypeVarChar:
+	case TypeVarChar, TypeJSON:
 		return v.SVal
 	case TypeFloat:
 		return fmt.Sprintf("%f", v.FVal)
@@ -243,10 +251,10 @@ func (v Value) Equal(other Value) bool {
 	switch v.Type {
 	case TypeInt:
 		return v.IVal == other.IVal
-	case TypeVarChar:
+	case TypeVarChar, TypeJSON:
 		return v.SVal == other.SVal
 	case TypeFloat:
-		return v.FVal == other.FVal
+		return fmt.Sprintf("%f", v.FVal) == fmt.Sprintf("%f", other.FVal)
 	case TypeBool:
 		return v.BVal == other.BVal
 	case TypeDateTime:
@@ -276,7 +284,7 @@ func (v Value) Compare(other Value) int {
 			return 1
 		}
 		return 0
-	case TypeVarChar:
+	case TypeVarChar, TypeJSON:
 		if v.SVal < other.SVal {
 			return -1
 		} else if v.SVal > other.SVal {
