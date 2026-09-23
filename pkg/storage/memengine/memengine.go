@@ -57,12 +57,11 @@ func (idx *IndexData) SyncEntries() {
 
 // TableData stores rows in memory for a single table with OCC version tracking and secondary indexes.
 type TableData struct {
-	Schema     storage.TableSchema       `json:"schema"`
-	Rows       map[string]storage.Record `json:"rows"`
-	Versions   map[string]int64          `json:"versions"`
-	Keys       []string                  `json:"keys"`
-	Indexes    map[string]*IndexData     `json:"indexes,omitempty"`
-	Tombstones map[string]int64          `json:"tombstones,omitempty"`
+	Schema   storage.TableSchema       `json:"schema"`
+	Rows     map[string]storage.Record `json:"rows"`
+	Versions map[string]int64          `json:"versions"`
+	Keys     []string                  `json:"keys"`
+	Indexes  map[string]*IndexData     `json:"indexes,omitempty"`
 }
 
 // Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence and WAL (AOF) logging.
@@ -75,22 +74,15 @@ type Engine struct {
 	nextLSN      atomic.Int64
 	aofThreshold int64 // Size threshold in bytes to trigger AOF rewrite compaction
 	closed       bool
-	activeTxMu   sync.RWMutex
-	activeTx     map[uint64]int64 // txID -> startTimestamp
-	nextTxID     atomic.Uint64
-	vacuum       *VacuumCleaner
 }
 
 // New creates a new in-memory storage engine.
 func New() *Engine {
-	e := &Engine{
+	return &Engine{
 		tables:       make(map[string]*TableData),
-		activeTx:     make(map[uint64]int64),
 		fsyncPolicy:  FsyncEverySec,
 		aofThreshold: 10 * 1024 * 1024, // 10MB default compaction threshold
 	}
-	e.vacuum = NewVacuumCleaner(e, 500*time.Millisecond)
-	return e
 }
 
 // SetFsyncPolicy sets the disk synchronization policy for WAL/AOF.
@@ -145,9 +137,6 @@ func (e *Engine) Open(dir string) error {
 		if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
 			_ = e.rewriteAOFLocked()
 		}
-	}
-	if e.vacuum != nil {
-		e.vacuum.Start()
 	}
 	return nil
 }
@@ -283,10 +272,6 @@ func (e *Engine) rewriteAOFLocked() error {
 }
 
 func (e *Engine) Close() error {
-	if e.vacuum != nil {
-		e.vacuum.Stop()
-	}
-
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -307,49 +292,6 @@ func (e *Engine) Close() error {
 		return saveErr
 	}
 	return walErr
-}
-
-func (e *Engine) registerTx(txID uint64, startTime int64) {
-	e.activeTxMu.Lock()
-	defer e.activeTxMu.Unlock()
-	e.activeTx[txID] = startTime
-}
-
-func (e *Engine) deregisterTx(txID uint64) {
-	e.activeTxMu.Lock()
-	defer e.activeTxMu.Unlock()
-	delete(e.activeTx, txID)
-}
-
-func (e *Engine) getOldestActiveTxTime() int64 {
-	e.activeTxMu.RLock()
-	defer e.activeTxMu.RUnlock()
-	if len(e.activeTx) == 0 {
-		return time.Now().UnixNano()
-	}
-	oldest := int64(1<<63 - 1)
-	for _, t := range e.activeTx {
-		if t < oldest {
-			oldest = t
-		}
-	}
-	return oldest
-}
-
-// Vacuum triggers an immediate sweep across all tables to reclaim expired tombstones.
-func (e *Engine) Vacuum() (VacuumStats, error) {
-	if e.vacuum != nil {
-		return e.vacuum.Vacuum()
-	}
-	return VacuumStats{}, nil
-}
-
-// VacuumStats returns the current telemetry statistics of the vacuum cleaner.
-func (e *Engine) VacuumStats() VacuumStats {
-	if e.vacuum != nil {
-		return e.vacuum.Stats()
-	}
-	return VacuumStats{}
 }
 
 func (e *Engine) saveDiskLocked() error {
@@ -651,11 +593,7 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 		return nil, fmt.Errorf("engine is closed")
 	}
 
-	txID := s.engine.nextTxID.Add(1)
-	s.engine.registerTx(txID, time.Now().UnixNano())
-
 	return &Transaction{
-		id:       txID,
 		engine:   s.engine,
 		opts:     opts,
 		local:    make(map[string]map[string]storage.Record),
@@ -687,7 +625,6 @@ type rowChange struct {
 
 // Transaction handles copy-on-write delta mutations with zero start overhead, OCC validation, and atomic commit.
 type Transaction struct {
-	id       uint64
 	mu       sync.Mutex
 	engine   *Engine
 	opts     storage.TxOptions
@@ -1064,7 +1001,6 @@ func (tx *Transaction) Commit() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
-	defer tx.engine.deregisterTx(tx.id)
 
 	if tx.opts.ReadOnly || len(tx.changes) == 0 {
 		return nil
@@ -1134,10 +1070,6 @@ func (tx *Transaction) Commit() error {
 		case changeUpdate:
 			td.Rows[ch.key] = ch.rec
 			td.Versions[ch.key] = ch.baseVer + 1
-			if td.Tombstones == nil {
-				td.Tombstones = make(map[string]int64)
-			}
-			td.Tombstones[ch.key+"#v#"+fmt.Sprint(ch.baseVer)] = time.Now().UnixNano()
 			for _, idxData := range td.Indexes {
 				if hadOld {
 					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
@@ -1149,10 +1081,6 @@ func (tx *Transaction) Commit() error {
 		case changeDelete:
 			delete(td.Rows, ch.key)
 			delete(td.Versions, ch.key)
-			if td.Tombstones == nil {
-				td.Tombstones = make(map[string]int64)
-			}
-			td.Tombstones[ch.key] = time.Now().UnixNano()
 			if hadOld {
 				for _, idxData := range td.Indexes {
 					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
@@ -1205,7 +1133,6 @@ func (tx *Transaction) Rollback() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
-	defer tx.engine.deregisterTx(tx.id)
 	tx.changes = nil
 	tx.local = nil
 	tx.baseVers = nil

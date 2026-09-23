@@ -203,3 +203,119 @@ func TestMemEngine_DiskPersistenceAcrossRestarts(t *testing.T) {
 		t.Errorf("recovered unexpected record data: %+v", rec)
 	}
 }
+
+func TestMemCursor_ZeroCopyScanCorrectness(t *testing.T) {
+	eng := New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "score", Type: storage.TypeInt, Nullable: false},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_score", TableName: "users", Columns: []string{"score"}},
+		},
+	}
+	_ = eng.CreateTable(schema)
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	for i := 1; i <= 100; i++ {
+		_ = tx.Insert("users", storage.Record{
+			"id":    storage.IntValue(int64(i)),
+			"score": storage.IntValue(int64(i * 10)),
+		})
+	}
+	_ = tx.Commit()
+
+	// Sequential Scan
+	txRead, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer txRead.Rollback()
+
+	cur, err := txRead.Scan("users")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	defer cur.Close()
+
+	count := 0
+	for cur.Next() {
+		r, err := cur.Record()
+		if err != nil {
+			t.Fatalf("Record() error: %v", err)
+		}
+		if r == nil {
+			t.Fatalf("Record() returned nil")
+		}
+		count++
+	}
+	if count != 100 {
+		t.Fatalf("Expected 100 records from Scan, got %d", count)
+	}
+
+	// Index Scan
+	low := storage.IntValue(200)
+	high := storage.IntValue(400)
+	idxCur, err := txRead.IndexScan("users", "idx_score", &low, &high)
+	if err != nil {
+		t.Fatalf("IndexScan failed: %v", err)
+	}
+	defer idxCur.Close()
+
+	idxCount := 0
+	for idxCur.Next() {
+		r, _ := idxCur.Record()
+		score := r["score"].IVal
+		if score < 200 || score > 400 {
+			t.Errorf("Score out of range: %d", score)
+		}
+		idxCount++
+	}
+	if idxCount != 21 {
+		t.Fatalf("Expected 21 records in index range [200, 400], got %d", idxCount)
+	}
+}
+
+func BenchmarkMemCursor_Scan(b *testing.B) {
+	eng := New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "bench_scan",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeInt, Nullable: false},
+		},
+	}
+	_ = eng.CreateTable(schema)
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	for i := 1; i <= 1000; i++ {
+		_ = tx.Insert("bench_scan", storage.Record{
+			"id":  storage.IntValue(int64(i)),
+			"val": storage.IntValue(int64(i * 2)),
+		})
+	}
+	_ = tx.Commit()
+
+	txRead, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer txRead.Rollback()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		cur, _ := txRead.Scan("bench_scan")
+		for cur.Next() {
+			_, _ = cur.Record()
+		}
+		_ = cur.Close()
+	}
+}
