@@ -49,7 +49,7 @@ Used by Kubernetes probes, AWS ALB/ELB health checks, and HAProxy keepalive chec
 ```json
 {
   "status": "ok",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "storage_engine": "wiredtiger",
   "uptime_seconds": 86420,
   "cluster_state": "leader"
