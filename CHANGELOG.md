@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Cooperative Query Cancellation & Execution Interruption (`pkg/proc/runtime`, `pkg/api`, `pkg/wire`)**:
+  - Implemented cooperative cancellation via `context.Context` (`QueryCtx` and `CancelFunc`) tracked on `ClientSession`, returning standard `"canceling statement due to user request"` error on cancel.
+  - Added non-blocking cancellation check (`f.ctx.Done()`) in VDBE virtual machine instruction loop (`VMFrame.Execute`), instantly aborting long-running procedural loops, and added `ExecuteInTxContext` and `RunContext` on `proc.Executor`.
+  - Integrated `QueryCtx` into Volcano execution engine (`execVolcanoSelect`, `execSetOpSelect`, and `execVDBESelect`), terminating active iterators without data corruption.
+  - Implemented T-SQL `KILL <spid> [WITH STATUSONLY]` statement execution, terminating target session queries by SPID.
+  - Implemented PostgreSQL cancellation functions `SELECT pg_cancel_backend(<pid>)` and `SELECT pg_terminate_backend(<pid>)`, with dynamic PID resolution via `pg_backend_pid()` and `@@SPID`.
+  - Extended PostgreSQL wire protocol server to handle `CancelRequest` (code 80877102) gracefully, canceling in-flight statement execution while keeping the client TCP connection alive.
+  - Added REST HTTP management endpoints: `POST /api/query/cancel` (canceling by `session_id` or `spid`) and `GET /api/queries/active` (listing running queries with SPID, start time, and cancel status).
+  - Added hermetic, race-free integration test suite (`pkg/api/query_cancel_test.go`) verifying query cancellation across context, KILL, PostgreSQL functions, and HTTP endpoints deterministically.
 - **Relational Set Operations Planning & Execution: `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` / `MINUS` (`pkg/execution`, `pkg/planner`, `pkg/api`)**:
   - Implemented Volcano-style `SetOpIterator` (`pkg/execution/setop.go`) supporting ANSI SQL set operations: `UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT` (including Oracle/PostgreSQL `MINUS` alias).
   - Implemented zero-allocation streaming pipeline for `UNION ALL`, pulling tuples sequentially from left and right iterators without buffering.

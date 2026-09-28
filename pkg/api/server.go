@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -23,15 +24,21 @@ import (
 	"sqlion/pkg/ui"
 )
 
-// ClientSession maintains interactive connection state: open transaction, session variables.
+// ClientSession maintains interactive connection state: open transaction, session variables, and query cancellation context.
 type ClientSession struct {
-	ID         string
-	Session    storage.Session
-	Tx         storage.Transaction
-	Vars       map[string]any
-	TableVars  map[string]string // @table_var -> physical table name
-	TempTables []string          // session-scoped #temp_tables
-	mu         sync.Mutex
+	ID              string
+	SPID            int
+	Session         storage.Session
+	Tx              storage.Transaction
+	Vars            map[string]any
+	TableVars       map[string]string // @table_var -> physical table name
+	TempTables      []string          // session-scoped #temp_tables
+	QueryCtx        context.Context
+	CancelFunc      context.CancelFunc
+	RunningQuery    string
+	QueryStartTime  time.Time
+	CancelRequested bool
+	mu              sync.Mutex
 }
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
@@ -50,6 +57,7 @@ type Server struct {
 	globalTempCreators map[string]string // lowercase table name -> creatorSessionID
 	globalTempMu       sync.RWMutex
 	defaultWorkMem     int64
+	spidCounter        int
 }
 
 // NewServer initializes a new Server with default in-memory auth service.
@@ -152,8 +160,14 @@ func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
 		return nil, err
 	}
 
+	if s.spidCounter < 50 {
+		s.spidCounter = 50
+	}
+	s.spidCounter++
+
 	cs := &ClientSession{
 		ID:        id,
+		SPID:      s.spidCounter,
 		Session:   sess,
 		Vars:      make(map[string]any),
 		TableVars: make(map[string]string),
@@ -201,6 +215,10 @@ func (s *Server) CloseSession(id string) {
 		}
 		cs.TempTables = nil
 
+		if cs.CancelFunc != nil {
+			cs.CancelRequested = true
+			cs.CancelFunc()
+		}
 		if cs.Tx != nil {
 			_ = cs.Tx.Rollback()
 			cs.Tx = nil
@@ -218,6 +236,89 @@ func (s *Server) CloseSession(id string) {
 		}
 	}
 }
+
+// ActiveQueryInfo represents snapshot metadata of an in-flight query.
+type ActiveQueryInfo struct {
+	SessionID  string    `json:"session_id"`
+	SPID       int       `json:"spid"`
+	Query      string    `json:"query"`
+	StartTime  time.Time `json:"start_time"`
+	DurationUS int64     `json:"duration_us"`
+}
+
+// CancelSessionQuery triggers cooperative cancellation for the currently active statement on sessionID.
+// Returns true if an active query was found and cancellation was signaled.
+func (s *Server) CancelSessionQuery(sessionID string) bool {
+	s.sessMu.RLock()
+	cs, exists := s.sessions[sessionID]
+	s.sessMu.RUnlock()
+
+	if !exists || cs == nil {
+		return false
+	}
+
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	if cs.CancelFunc != nil {
+		cs.CancelRequested = true
+		cs.CancelFunc()
+		return true
+	}
+	return false
+}
+
+// CancelQueryBySPID cancels the active query executing on the connection identified by spid.
+// Returns true if an active query was found and canceled.
+func (s *Server) CancelQueryBySPID(spid int) bool {
+	s.sessMu.RLock()
+	var targetCS *ClientSession
+	for _, cs := range s.sessions {
+		if cs.SPID == spid {
+			targetCS = cs
+			break
+		}
+	}
+	s.sessMu.RUnlock()
+
+	if targetCS == nil {
+		return false
+	}
+
+	targetCS.mu.Lock()
+	defer targetCS.mu.Unlock()
+
+	if targetCS.CancelFunc != nil {
+		targetCS.CancelRequested = true
+		targetCS.CancelFunc()
+		return true
+	}
+	return false
+}
+
+// GetActiveQueries returns a snapshot list of all currently executing queries across all sessions.
+func (s *Server) GetActiveQueries() []ActiveQueryInfo {
+	s.sessMu.RLock()
+	defer s.sessMu.RUnlock()
+
+	now := time.Now()
+	var active []ActiveQueryInfo
+	for _, cs := range s.sessions {
+		cs.mu.Lock()
+		if cs.RunningQuery != "" && cs.CancelFunc != nil {
+			active = append(active, ActiveQueryInfo{
+				SessionID:  cs.ID,
+				SPID:       cs.SPID,
+				Query:      cs.RunningQuery,
+				StartTime:  cs.QueryStartTime,
+				DurationUS: now.Sub(cs.QueryStartTime).Microseconds(),
+			})
+		}
+		cs.mu.Unlock()
+	}
+	return active
+}
+
 
 // Handler returns the HTTP handler.
 func (s *Server) Handler() http.Handler {
@@ -285,6 +386,8 @@ func (s *Server) routes() {
 
 	// SQL Query Execution API
 	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL, false, ""))
+	s.mux.HandleFunc("POST /api/query/cancel", s.handleQueryCancel)
+	s.mux.HandleFunc("GET /api/queries/active", s.handleListActiveQueries)
 
 	// Tables API (PocketBase-style Collections & Records CRUD)
 	s.mux.HandleFunc("GET /api/tables", s.wrapAuth(s.handleListTables, false, ""))
@@ -543,6 +646,42 @@ func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleQueryCancel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method Not Allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		SessionID string `json:"session_id"`
+		SPID      int    `json:"spid"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	canceled := false
+	if req.SessionID != "" {
+		canceled = s.CancelSessionQuery(req.SessionID)
+	} else if req.SPID > 0 {
+		canceled = s.CancelQueryBySPID(req.SPID)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":  true,
+		"canceled": canceled,
+	})
+}
+
+func (s *Server) handleListActiveQueries(w http.ResponseWriter, r *http.Request) {
+	active := s.GetActiveQueries()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"queries": active,
+		"total":   len(active),
+	})
 }
 
 type ColumnDTO struct {

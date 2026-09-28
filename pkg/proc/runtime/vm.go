@@ -226,6 +226,7 @@ type VMFrame struct {
 	tranCount       int
 	lastIdentity    int64
 	lastError       int
+	ctx             context.Context
 }
 
 type cursorState struct {
@@ -239,6 +240,11 @@ type cursorState struct {
 
 // Run executes a precompiled bytecode program with ambient transaction semantics.
 func (e *Executor) Run(prog *proc.Program, procName string, params map[string]any, session storage.Session) (*ExecutionResult, error) {
+	return e.RunContext(context.Background(), prog, procName, params, session)
+}
+
+// RunContext executes a precompiled bytecode program with ambient transaction and cancellation semantics.
+func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName string, params map[string]any, session storage.Session) (*ExecutionResult, error) {
 	start := time.Now()
 
 	tx, err := session.BeginTx(storage.TxOptions{})
@@ -247,6 +253,7 @@ func (e *Executor) Run(prog *proc.Program, procName string, params map[string]an
 	}
 
 	frame := e.newFrame(prog, tx)
+	frame.ctx = ctx
 	defer e.releaseFrame(frame)
 
 	// Bind parameters
@@ -302,8 +309,14 @@ func (e *Executor) RunInTx(prog *proc.Program, params map[string]any, tx storage
 
 // ExecuteInTx executes a program within an existing transaction context and returns an ExecutionResult with Rows and Columns.
 func (e *Executor) ExecuteInTx(prog *proc.Program, params map[string]any, tx storage.Transaction, transientTables map[string][]map[string]any) (*ExecutionResult, error) {
+	return e.ExecuteInTxContext(context.Background(), prog, params, tx, transientTables)
+}
+
+// ExecuteInTxContext executes a program within an existing transaction and cancellation context.
+func (e *Executor) ExecuteInTxContext(ctx context.Context, prog *proc.Program, params map[string]any, tx storage.Transaction, transientTables map[string][]map[string]any) (*ExecutionResult, error) {
 	start := time.Now()
 	frame := e.newFrame(prog, tx)
+	frame.ctx = ctx
 	defer e.releaseFrame(frame)
 
 	if transientTables != nil {
@@ -375,6 +388,13 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 	pc := startPC
 
 	for pc < len(instructions) {
+		if f.ctx != nil {
+			select {
+			case <-f.ctx.Done():
+				return nil, f.ctx.Err()
+			default:
+			}
+		}
 		inst := instructions[pc]
 		pc++
 

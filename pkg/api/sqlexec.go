@@ -143,11 +143,11 @@ func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 	return s.ExecuteSessionSQL("default", query)
 }
 
-// ExecuteSessionSQL runs SQL statements within a specific client session context.
-func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult, error) {
+// ExecuteSessionSQLContext runs SQL statements within a specific client session and cancellation context.
+func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (*QueryResult, error) {
 	// Acquire worker slot from built-in connection pool to prevent thread thrashing
 	if s.pool != nil {
-		if err := s.pool.AcquireWorker(context.Background()); err != nil {
+		if err := s.pool.AcquireWorker(ctx); err != nil {
 			return nil, err
 		}
 		defer s.pool.ReleaseWorker()
@@ -158,6 +158,25 @@ func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult
 		return nil, err
 	}
 
+	queryCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	cs.mu.Lock()
+	cs.QueryCtx = queryCtx
+	cs.CancelFunc = cancel
+	cs.RunningQuery = query
+	cs.QueryStartTime = time.Now()
+	cs.CancelRequested = false
+	cs.mu.Unlock()
+
+	defer func() {
+		cs.mu.Lock()
+		cs.QueryCtx = nil
+		cs.CancelFunc = nil
+		cs.RunningQuery = ""
+		cs.mu.Unlock()
+	}()
+
 	stmts := splitStatements(query)
 	if len(stmts) == 0 {
 		return &QueryResult{Success: true, Command: "EMPTY"}, nil
@@ -165,12 +184,21 @@ func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult
 
 	var lastRes *QueryResult
 	for _, stmt := range stmts {
+		select {
+		case <-queryCtx.Done():
+			return nil, fmt.Errorf("canceling statement due to user request")
+		default:
+		}
+
 		res, err := s.execSingleStatement(cs, stmt)
 		if err != nil {
 			if cs != nil {
 				cs.mu.Lock()
 				cs.Vars["error"] = int64(50000)
 				cs.mu.Unlock()
+			}
+			if errors.Is(err, context.Canceled) || (queryCtx.Err() != nil && errors.Is(queryCtx.Err(), context.Canceled)) {
+				return nil, fmt.Errorf("canceling statement due to user request")
 			}
 			return res, err
 		}
@@ -182,6 +210,11 @@ func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult
 		lastRes = res
 	}
 	return lastRes, nil
+}
+
+// ExecuteSessionSQL runs SQL statements within a specific client session context.
+func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult, error) {
+	return s.ExecuteSessionSQLContext(context.Background(), sessionID, query)
 }
 
 func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryResult, error) {
@@ -205,6 +238,23 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 			upper = strings.ToUpper(trimmed)
 		}
 		cs.mu.Unlock()
+	}
+
+	// Process Management: KILL <spid> [WITH STATUSONLY]
+	killRe := regexp.MustCompile(`(?is)^KILL\s+(\d+)(?:\s+WITH\s+STATUSONLY)?$`)
+	if m := killRe.FindStringSubmatch(trimmed); len(m) == 2 {
+		spid, _ := strconv.Atoi(m[1])
+		canceled := s.CancelQueryBySPID(spid)
+		msg := "Command(s) completed successfully."
+		if !canceled {
+			msg = fmt.Sprintf("SPID %d was not active or already finished.", spid)
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "KILL",
+			Messages:   []string{msg},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	// 0. Interactive Transactions: BEGIN / COMMIT / ROLLBACK
@@ -684,7 +734,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 
 	// 2. Procedure Invocation: EXEC / CALL / sp_*
 	if strings.HasPrefix(upper, "EXEC ") || strings.HasPrefix(upper, "EXECUTE ") || strings.HasPrefix(upper, "CALL ") || strings.HasPrefix(upper, "SP_") {
-		return s.execProcedureCall(trimmed, start)
+		return s.execProcedureCall(trimmed, start, cs)
 	}
 
 	// 3. DDL: CREATE TABLE
@@ -1915,7 +1965,13 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 	}
 
 	ctx := context.Background()
+	if cs != nil && cs.QueryCtx != nil {
+		ctx = cs.QueryCtx
+	}
 	if err := exec.Open(ctx); err != nil {
+		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
+			return nil, fmt.Errorf("canceling statement due to user request")
+		}
 		return nil, fmt.Errorf("volcano execution open error: %w", err)
 	}
 	defer exec.Close()
@@ -1927,6 +1983,9 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 			break
 		}
 		if err != nil {
+			if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
+				return nil, fmt.Errorf("canceling statement due to user request")
+			}
 			return nil, err
 		}
 		rows = append(rows, tuple.ToMap())
@@ -2061,6 +2120,9 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	case "SCHEMA_NAME()", "SCHEMA_NAME":
 		return "dbo", "schema_name"
 	case "PG_BACKEND_PID()", "PG_BACKEND_PID":
+		if cs != nil && cs.SPID > 0 {
+			return int64(cs.SPID), "pg_backend_pid"
+		}
 		return int64(1), "pg_backend_pid"
 	case "PG_IS_IN_RECOVERY()", "PG_IS_IN_RECOVERY":
 		return false, "pg_is_in_recovery"
@@ -2071,6 +2133,9 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	case "@@VERSION":
 		return "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine", "@@version"
 	case "@@SPID":
+		if cs != nil && cs.SPID > 0 {
+			return int64(cs.SPID), "@@spid"
+		}
 		return int64(51), "@@spid"
 	case "@@TRANCOUNT":
 		if cs != nil && cs.Tx != nil {
@@ -2125,6 +2190,37 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 			}
 		}
 		return "", trimmed
+	}
+
+	// pg_cancel_backend(pid)
+	if strings.HasPrefix(upper, "PG_CANCEL_BACKEND(") && strings.HasSuffix(upper, ")") {
+		arg := strings.TrimSpace(trimmed[len("PG_CANCEL_BACKEND(") : len(trimmed)-1])
+		if pid, err := strconv.Atoi(arg); err == nil {
+			return s.CancelQueryBySPID(pid), "pg_cancel_backend"
+		}
+		return false, "pg_cancel_backend"
+	}
+
+	// pg_terminate_backend(pid)
+	if strings.HasPrefix(upper, "PG_TERMINATE_BACKEND(") && strings.HasSuffix(upper, ")") {
+		arg := strings.TrimSpace(trimmed[len("PG_TERMINATE_BACKEND(") : len(trimmed)-1])
+		if pid, err := strconv.Atoi(arg); err == nil {
+			canceled := s.CancelQueryBySPID(pid)
+			s.sessMu.RLock()
+			var targetID string
+			for _, sess := range s.sessions {
+				if sess.SPID == pid {
+					targetID = sess.ID
+					break
+				}
+			}
+			s.sessMu.RUnlock()
+			if targetID != "" {
+				s.CloseSession(targetID)
+			}
+			return canceled || targetID != "", "pg_terminate_backend"
+		}
+		return false, "pg_terminate_backend"
 	}
 
 	// Session variable @var
@@ -2520,8 +2616,15 @@ func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *Clien
 		cs.mu.Unlock()
 	}
 
-	execRes, err := s.executor.ExecuteInTx(prog, params, tx, nil)
+	ctx := context.Background()
+	if cs != nil && cs.QueryCtx != nil {
+		ctx = cs.QueryCtx
+	}
+	execRes, err := s.executor.ExecuteInTxContext(ctx, prog, params, tx, nil)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
+			return nil, fmt.Errorf("canceling statement due to user request")
+		}
 		return nil, err
 	}
 
@@ -2655,7 +2758,13 @@ func (s *Server) execSetOpSelect(setQuery *planner.SetOpQuery, start time.Time, 
 
 	// 5. Open and materialize results
 	ctx := context.Background()
+	if cs != nil && cs.QueryCtx != nil {
+		ctx = cs.QueryCtx
+	}
 	if err := currIter.Open(ctx); err != nil {
+		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
+			return nil, fmt.Errorf("canceling statement due to user request")
+		}
 		return nil, fmt.Errorf("set operation execution open error: %w", err)
 	}
 	defer currIter.Close()
@@ -2667,6 +2776,9 @@ func (s *Server) execSetOpSelect(setQuery *planner.SetOpQuery, start time.Time, 
 			break
 		}
 		if err != nil {
+			if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
+				return nil, fmt.Errorf("canceling statement due to user request")
+			}
 			return nil, fmt.Errorf("set operation iterator error: %w", err)
 		}
 		finalRows = append(finalRows, tuple.ToMap())
@@ -4862,7 +4974,7 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 	return nil, fmt.Errorf("unrecognized system stored procedure: %s", procLower)
 }
 
-func (s *Server) execProcedureCall(query string, start time.Time) (*QueryResult, error) {
+func (s *Server) execProcedureCall(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	procName, args := parseProcArgs(query)
 	if procName == "" {
 		return nil, fmt.Errorf("invalid EXEC syntax")
@@ -4908,8 +5020,16 @@ func (s *Server) execProcedureCall(query string, start time.Time) (*QueryResult,
 		}
 	}
 
-	res, err := s.executor.Run(prog, procName, argMap, session)
+	ctx := context.Background()
+	if cs != nil && cs.QueryCtx != nil {
+		ctx = cs.QueryCtx
+	}
+
+	res, err := s.executor.RunContext(ctx, prog, procName, argMap, session)
 	if err != nil {
+		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
+			return nil, fmt.Errorf("canceling statement due to user request")
+		}
 		return nil, fmt.Errorf("procedure execution error: %w", err)
 	}
 
