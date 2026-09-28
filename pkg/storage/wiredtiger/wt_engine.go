@@ -86,12 +86,29 @@ static void go_wt_cursor_set_val(WT_CURSOR *cursor, const char *val) {
     cursor->set_value(cursor, val);
 }
 
+static void go_wt_cursor_set_val_raw(WT_CURSOR *cursor, const void *data, size_t size) {
+    WT_ITEM item;
+    item.data = data;
+    item.size = size;
+    cursor->set_value(cursor, &item);
+}
+
 static int go_wt_cursor_get_key(WT_CURSOR *cursor, const char **keyp) {
     return cursor->get_key(cursor, keyp);
 }
 
 static int go_wt_cursor_get_val(WT_CURSOR *cursor, const char **valp) {
     return cursor->get_value(cursor, valp);
+}
+
+static int go_wt_cursor_get_val_raw(WT_CURSOR *cursor, const void **datap, size_t *sizep) {
+    WT_ITEM item;
+    int ret = cursor->get_value(cursor, &item);
+    if (ret == 0) {
+        *datap = item.data;
+        *sizep = item.size;
+    }
+    return ret;
 }
 */
 import "C"
@@ -102,6 +119,8 @@ import (
 	"path/filepath"
 	"sync"
 	"unsafe"
+
+	"github.com/vmihailenco/msgpack/v5"
 
 	"sqlion/pkg/storage"
 )
@@ -218,7 +237,7 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	uri := C.CString(fmt.Sprintf("table:%s", schema.Name))
 	defer C.free(unsafe.Pointer(uri))
 
-	config := C.CString("key_format=S,value_format=S")
+	config := C.CString("key_format=S,value_format=u")
 	defer C.free(unsafe.Pointer(config))
 
 	ret := C.go_wt_session_create(sess, uri, config)
@@ -442,7 +461,7 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 	}
 
 	pkStr := pkVal.String()
-	recJSON, err := json.Marshal(record)
+	recBytes, err := msgpack.Marshal(record)
 	if err != nil {
 		return err
 	}
@@ -455,11 +474,13 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 
 	cKey := C.CString(pkStr)
 	defer C.free(unsafe.Pointer(cKey))
-	cVal := C.CString(string(recJSON))
-	defer C.free(unsafe.Pointer(cVal))
 
 	C.go_wt_cursor_set_key(cur, cKey)
-	C.go_wt_cursor_set_val(cur, cVal)
+	var pData unsafe.Pointer
+	if len(recBytes) > 0 {
+		pData = unsafe.Pointer(&recBytes[0])
+	}
+	C.go_wt_cursor_set_val_raw(cur, pData, C.size_t(len(recBytes)))
 
 	if ret := C.go_wt_cursor_insert(cur); ret != 0 {
 		return fmt.Errorf("cursor_insert failed with code %d", ret)
@@ -485,7 +506,7 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 		existing[col] = val
 	}
 
-	recJSON, err := json.Marshal(existing)
+	recBytes, err := msgpack.Marshal(existing)
 	if err != nil {
 		return err
 	}
@@ -498,11 +519,13 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 
 	cKey := C.CString(pk.String())
 	defer C.free(unsafe.Pointer(cKey))
-	cVal := C.CString(string(recJSON))
-	defer C.free(unsafe.Pointer(cVal))
 
 	C.go_wt_cursor_set_key(cur, cKey)
-	C.go_wt_cursor_set_val(cur, cVal)
+	var pData unsafe.Pointer
+	if len(recBytes) > 0 {
+		pData = unsafe.Pointer(&recBytes[0])
+	}
+	C.go_wt_cursor_set_val_raw(cur, pData, C.size_t(len(recBytes)))
 
 	if ret := C.go_wt_cursor_update(cur); ret != 0 {
 		return fmt.Errorf("cursor_update failed with code %d", ret)
@@ -561,17 +584,13 @@ func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, e
 		return nil, storage.ErrKeyNotFound
 	}
 
-	var cVal *C.char
-	if ret := C.go_wt_cursor_get_val(cur, &cVal); ret != 0 || cVal == nil {
+	var pData unsafe.Pointer
+	var sz C.size_t
+	if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret != 0 || pData == nil {
 		return nil, fmt.Errorf("cursor_get_value failed")
 	}
 
-	var rec storage.Record
-	if err := json.Unmarshal([]byte(C.GoString(cVal)), &rec); err != nil {
-		return nil, fmt.Errorf("record unmarshal error: %w", err)
-	}
-
-	return rec, nil
+	return decodeRecord(C.GoBytes(pData, C.int(sz)))
 }
 
 func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
@@ -653,16 +672,24 @@ func (c *WTCursor) Record() (storage.Record, error) {
 		return nil, fmt.Errorf("cursor closed")
 	}
 
-	var cVal *C.char
-	if ret := C.go_wt_cursor_get_val(c.cur, &cVal); ret != 0 || cVal == nil {
-		return nil, fmt.Errorf("cursor_get_val failed: %d", ret)
+	var pData unsafe.Pointer
+	var sz C.size_t
+	if ret := C.go_wt_cursor_get_val_raw(c.cur, &pData, &sz); ret != 0 || pData == nil {
+		return nil, fmt.Errorf("cursor_get_val_raw failed: %d", ret)
 	}
 
+	return decodeRecord(C.GoBytes(pData, C.int(sz)))
+}
+
+func decodeRecord(data []byte) (storage.Record, error) {
 	var rec storage.Record
-	if err := json.Unmarshal([]byte(C.GoString(cVal)), &rec); err != nil {
-		return nil, err
+	if err := msgpack.Unmarshal(data, &rec); err == nil {
+		return rec, nil
 	}
-	return rec, nil
+	if err := json.Unmarshal(data, &rec); err == nil {
+		return rec, nil
+	}
+	return nil, fmt.Errorf("failed to decode record bytes")
 }
 
 func (c *WTCursor) Close() error {
