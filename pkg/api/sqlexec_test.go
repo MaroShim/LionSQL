@@ -1533,6 +1533,92 @@ func TestSQLExecutor_TableVariables(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_SelectInto(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	sessID := "sess_select_into"
+
+	// 1. Create source table and insert seed data
+	_, err := server.ExecuteSessionSQL(sessID, `CREATE TABLE employees (
+		id INT PRIMARY KEY,
+		name VARCHAR(50),
+		dept VARCHAR(50),
+		salary FLOAT
+	);`)
+	if err != nil {
+		t.Fatalf("failed creating employees: %v", err)
+	}
+
+	_, err = server.ExecuteSessionSQL(sessID, `INSERT INTO employees VALUES
+		(1, 'Alice', 'Engineering', 95000.0),
+		(2, 'Bob', 'HR', 65000.0),
+		(3, 'Charlie', 'Engineering', 105000.0),
+		(4, 'Diana', 'Marketing', 75000.0);`)
+	if err != nil {
+		t.Fatalf("failed inserting employees: %v", err)
+	}
+
+	// 2. SELECT ... INTO #temp_eng FROM employees WHERE dept = 'Engineering'
+	res, err := server.ExecuteSessionSQL(sessID, "SELECT id, name, salary INTO #temp_eng FROM employees WHERE dept = 'Engineering';")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT INTO temp table failed: %v", err)
+	}
+	if res.RowsAffected != 2 {
+		t.Fatalf("expected 2 rows affected, got %d", res.RowsAffected)
+	}
+
+	// 3. Query from #temp_eng
+	selRes, err := server.ExecuteSessionSQL(sessID, "SELECT * FROM #temp_eng ORDER BY id ASC;")
+	if err != nil || !selRes.Success {
+		t.Fatalf("SELECT from #temp_eng failed: %v", err)
+	}
+	if len(selRes.Rows) != 2 {
+		t.Fatalf("expected 2 rows in #temp_eng, got %d", len(selRes.Rows))
+	}
+	if selRes.Rows[0]["name"] != "Alice" || selRes.Rows[1]["name"] != "Charlie" {
+		t.Fatalf("unexpected data in #temp_eng: %+v", selRes.Rows)
+	}
+
+	// 4. Duplicate SELECT INTO should fail because target table already exists
+	_, err = server.ExecuteSessionSQL(sessID, "SELECT id, name INTO #temp_eng FROM employees;")
+	if err == nil {
+		t.Fatalf("expected error creating existing table via SELECT INTO, got nil")
+	}
+
+	// 5. SELECT ... INTO permanent table
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT * INTO backup_employees FROM employees;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT INTO permanent table failed: %v", err)
+	}
+	if res.RowsAffected != 4 {
+		t.Fatalf("expected 4 rows affected, got %d", res.RowsAffected)
+	}
+
+	selBkp, err := server.ExecuteSessionSQL(sessID, "SELECT COUNT(*) AS total FROM backup_employees;")
+	if err != nil || len(selBkp.Rows) != 1 || fmt.Sprintf("%v", selBkp.Rows[0]["total"]) != "4" {
+		t.Fatalf("unexpected backup count: %+v", selBkp)
+	}
+
+	// 6. SELECT ... INTO ##global_temp
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT id, name INTO ##global_eng FROM employees WHERE id = 1;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT INTO global temp failed: %v", err)
+	}
+	resGlobal, err := server.ExecuteSessionSQL("other_sess", "SELECT name FROM ##global_eng;")
+	if err != nil || len(resGlobal.Rows) != 1 || resGlobal.Rows[0]["name"] != "Alice" {
+		t.Fatalf("failed reading global temp table from other session: %+v", resGlobal)
+	}
+
+	// 7. Verify session cleanup of #temp_eng
+	server.CloseSession(sessID)
+	_, err = server.ExecuteSessionSQL(sessID, "SELECT * FROM #temp_eng;")
+	if err == nil {
+		t.Fatalf("expected error querying dropped #temp_eng after session close, got nil")
+	}
+}
+
+
 
 
 

@@ -853,6 +853,12 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 		}
 		s.globalTempCreators[tableName] = creatorID
 		s.globalTempMu.Unlock()
+	} else if strings.HasPrefix(tableName, "#") {
+		if cs != nil {
+			cs.mu.Lock()
+			cs.TempTables = append(cs.TempTables, tableName)
+			cs.mu.Unlock()
+		}
 	}
 
 	return &QueryResult{
@@ -2098,11 +2104,239 @@ func (s *Server) execScalarSelect(query string, start time.Time, cs *ClientSessi
 	}, nil
 }
 
+func (s *Server) execSelectInto(targetTable, projections, fromClause string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	// 1. Check if target table already exists
+	if _, err := s.engine.GetTable(targetTable); err == nil {
+		return nil, fmt.Errorf("table %q already exists", targetTable)
+	}
+
+	// 2. Execute underlying SELECT query to retrieve columns and rows
+	selectSQL := fmt.Sprintf("SELECT %s FROM %s", projections, fromClause)
+	selRes, err := s.execSelect(selectSQL, start, cs)
+	if err != nil {
+		return nil, err
+	}
+	if !selRes.Success {
+		return selRes, nil
+	}
+
+	// 3. Inspect source table schema if available for exact data types
+	var srcSchema *storage.TableSchema
+	fromFields := strings.Fields(fromClause)
+	if len(fromFields) > 0 {
+		srcTableName := cleanIdentifier(fromFields[0])
+		if sch, err := s.engine.GetTable(srcTableName); err == nil {
+			srcSchema = sch
+		}
+	}
+
+	// 4. Construct target table schema
+	schema := &storage.TableSchema{
+		Name:    targetTable,
+		Columns: make([]storage.Column, 0, len(selRes.Columns)),
+	}
+
+	// Determine PK candidate
+	pkColName := ""
+	if srcSchema != nil {
+		if srcPK, err := srcSchema.PrimaryKeyColumn(); err == nil && srcPK != nil {
+			for _, col := range selRes.Columns {
+				if strings.EqualFold(col, srcPK.Name) {
+					pkColName = col
+					break
+				}
+			}
+		}
+	}
+
+	// Check if pkColName is unique among rows
+	if pkColName != "" && len(selRes.Rows) > 0 {
+		seen := make(map[string]bool)
+		for _, row := range selRes.Rows {
+			valKey := fmt.Sprintf("%v", row[pkColName])
+			if seen[valKey] {
+				pkColName = "" // duplicate found
+				break
+			}
+			seen[valKey] = true
+		}
+	}
+
+	// If no unique PK found from source, check if any projected column is completely unique
+	if pkColName == "" && len(selRes.Rows) > 0 {
+		for _, col := range selRes.Columns {
+			unique := true
+			seen := make(map[string]bool)
+			for _, row := range selRes.Rows {
+				v := row[col]
+				if v == nil {
+					unique = false
+					break
+				}
+				valKey := fmt.Sprintf("%v", v)
+				if seen[valKey] {
+					unique = false
+					break
+				}
+				seen[valKey] = true
+			}
+			if unique {
+				pkColName = col
+				break
+			}
+		}
+	}
+
+	needSyntheticPK := false
+	if pkColName == "" {
+		if len(selRes.Rows) == 0 {
+			if len(selRes.Columns) > 0 {
+				pkColName = selRes.Columns[0]
+			} else {
+				needSyntheticPK = true
+			}
+		} else {
+			needSyntheticPK = true
+		}
+	}
+
+	if needSyntheticPK {
+		schema.Columns = append(schema.Columns, storage.Column{
+			Name:       "_row_id",
+			Type:       storage.TypeInt,
+			PrimaryKey: true,
+			Nullable:   false,
+		})
+	}
+
+	for _, colName := range selRes.Columns {
+		colType := storage.TypeVarChar
+		if srcSchema != nil {
+			if c, _, found := srcSchema.FindColumn(colName); found {
+				colType = c.Type
+			}
+		}
+		if colType == storage.TypeVarChar && len(selRes.Rows) > 0 {
+			for _, row := range selRes.Rows {
+				if v, ok := row[colName]; ok && v != nil {
+					switch v.(type) {
+					case int, int64:
+						colType = storage.TypeInt
+					case float64:
+						colType = storage.TypeFloat
+					case bool:
+						colType = storage.TypeBool
+					}
+					break
+				}
+			}
+		}
+
+		schema.Columns = append(schema.Columns, storage.Column{
+			Name:       colName,
+			Type:       colType,
+			PrimaryKey: strings.EqualFold(colName, pkColName),
+			Nullable:   true,
+		})
+	}
+
+	// 5. Create table in engine
+	if err := s.engine.CreateTable(schema); err != nil {
+		return nil, fmt.Errorf("failed to create table %q: %w", targetTable, err)
+	}
+
+	// Register temp tables
+	if strings.HasPrefix(targetTable, "##") {
+		s.globalTempMu.Lock()
+		if s.globalTempCreators == nil {
+			s.globalTempCreators = make(map[string]string)
+		}
+		creatorID := "default"
+		if cs != nil && cs.ID != "" {
+			creatorID = cs.ID
+		}
+		s.globalTempCreators[targetTable] = creatorID
+		s.globalTempMu.Unlock()
+	} else if strings.HasPrefix(targetTable, "#") {
+		if cs != nil {
+			cs.mu.Lock()
+			cs.TempTables = append(cs.TempTables, targetTable)
+			cs.mu.Unlock()
+		}
+	}
+
+	// 6. Insert rows if any
+	if len(selRes.Rows) > 0 {
+		var tx storage.Transaction
+		var isEphemeral bool
+		if cs != nil && cs.Tx != nil {
+			tx = cs.Tx
+			isEphemeral = false
+		} else {
+			session, err := s.engine.NewSession()
+			if err != nil {
+				return nil, err
+			}
+			defer session.Close()
+
+			t, err := session.BeginTx(storage.TxOptions{})
+			if err != nil {
+				return nil, err
+			}
+			tx = t
+			isEphemeral = true
+		}
+
+		for idx, row := range selRes.Rows {
+			rec := make(storage.Record, len(schema.Columns))
+			if needSyntheticPK {
+				rec["_row_id"] = storage.IntValue(int64(idx + 1))
+			}
+			for _, col := range schema.Columns {
+				if col.Name == "_row_id" {
+					continue
+				}
+				val := row[col.Name]
+				rec[col.Name] = convertValue(val, col.Type)
+			}
+			if err := tx.Insert(targetTable, rec); err != nil {
+				if isEphemeral {
+					_ = tx.Rollback()
+				}
+				return nil, fmt.Errorf("failed inserting row into %q: %w", targetTable, err)
+			}
+		}
+
+		if isEphemeral {
+			if err := tx.Commit(); err != nil {
+				return nil, fmt.Errorf("transaction commit error: %w", err)
+			}
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT INTO",
+		RowsAffected: int64(len(selRes.Rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+		Messages:     []string{fmt.Sprintf("(%d rows affected)", len(selRes.Rows))},
+	}, nil
+}
+
 func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	if resolved, err := s.resolveSubqueries(cleaned); err == nil {
 		cleaned = resolved
+	}
+
+	// 0. SELECT ... INTO <target_table> FROM ...
+	selectIntoRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+INTO\s+([^\s,;]+)\s+FROM\s+(.*)$`)
+	if m := selectIntoRe.FindStringSubmatch(cleaned); len(m) == 4 {
+		projections := strings.TrimSpace(m[1])
+		targetTable := cleanIdentifier(m[2])
+		fromClause := strings.TrimSpace(m[3])
+		return s.execSelectInto(targetTable, projections, fromClause, start, cs)
 	}
 
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION

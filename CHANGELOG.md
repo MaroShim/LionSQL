@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **T-SQL `SELECT ... INTO #temp_table / table` Engine (`pkg/api`)**:
+  - Implemented dynamic table creation and population via `SELECT <projections> INTO <target_table> FROM <source> [WHERE ...]`.
+  - Added intelligent column type and primary key inference from source schemas and evaluated expression result sets.
+  - Supported local temporary tables (`#table`), global temporary tables (`##table`), and permanent tables.
+  - Integrated session-scoped lifecycle tracking for `#temp` tables with automatic teardown on `CloseSession`.
+  - Added comprehensive test coverage in `pkg/api/sqlexec_test.go` (`TestSQLExecutor_SelectInto`).
 - **T-SQL Table Variables `DECLARE @table TABLE (...)` Engine (`pkg/api`)**:
   - Implemented session-scoped table variable declaration syntax `DECLARE @var TABLE (colDef, ...)`.
   - Added physical storage binding via isolated session-namespaced tables (`__tv_<sessionID>_<var>`).

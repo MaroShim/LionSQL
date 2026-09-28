@@ -25,12 +25,13 @@ import (
 
 // ClientSession maintains interactive connection state: open transaction, session variables.
 type ClientSession struct {
-	ID        string
-	Session   storage.Session
-	Tx        storage.Transaction
-	Vars      map[string]any
-	TableVars map[string]string // @table_var -> physical table name
-	mu        sync.Mutex
+	ID         string
+	Session    storage.Session
+	Tx         storage.Transaction
+	Vars       map[string]any
+	TableVars  map[string]string // @table_var -> physical table name
+	TempTables []string          // session-scoped #temp_tables
+	mu         sync.Mutex
 }
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
@@ -193,6 +194,11 @@ func (s *Server) CloseSession(id string) {
 			_ = s.engine.DropTable(physTable)
 		}
 		cs.TableVars = nil
+
+		for _, tempTbl := range cs.TempTables {
+			_ = s.engine.DropTable(tempTbl)
+		}
+		cs.TempTables = nil
 
 		if cs.Tx != nil {
 			_ = cs.Tx.Rollback()
