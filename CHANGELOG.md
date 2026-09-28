@@ -49,8 +49,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **TPC-C Standard OLTP Benchmark Driver (`cmd/tpcc`, `pkg/storage/memengine`)**:
   - Implemented in-tree TPC-C benchmark suite modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`).
   - Implemented standard TPC-C workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level).
-  - High-precision metric measurement: official **tpmC** (New-Order Transactions Per Minute), overall **TPS** (Transactions Per Second), and latency distribution percentiles (Min, Avg, p50, p90, p95, p99, Max).
-  - Multi-engine verification: achieves **742,669 tpmC (31,888 TPS)** on In-Memory OCC and **310,426 tpmC (12,319 TPS)** on WiredTiger B+Tree MVCC.
+  - Added configurable retry policy with exponential backoff and jitter (`-max-retries=3`) recovering from serialization and MVCC write-write lock contention.
+  - High-precision metric measurement: official **tpmC** (New-Order Transactions Per Minute), overall **TPS** (Transactions Per Second), retry recovery statistics, and latency distribution percentiles (Min, Avg, p50, p90, p95, p99, Max).
+  - Multi-engine verification with retries: achieves **802,542 tpmC (30,168 TPS)** on In-Memory OCC and **370,641 tpmC (12,460 TPS)** on WiredTiger B+Tree MVCC with 91.5% New-Order commit rate.
   - Hardened OCC record isolation in `memengine` to return cloned records on `tx.Get()` preventing concurrent map iteration/mutation data races.
 - **PostgreSQL Wire Protocol SSL/TLS Encryption & Handshake (`pkg/wire`, `cmd/server`)**:
   - Implemented full PostgreSQL Wire v3 SSL/TLS encryption handshake (`SSLRequest` code `80877103` and `GSSENCRequest` code `80877104`).

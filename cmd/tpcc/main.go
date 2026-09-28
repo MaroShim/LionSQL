@@ -22,16 +22,20 @@ type txStats struct {
 	count     atomic.Int64
 	success   atomic.Int64
 	abort     atomic.Int64
+	retries   atomic.Int64
 	latencies []time.Duration
 	mu        sync.Mutex
 }
 
-func (s *txStats) record(d time.Duration, ok bool) {
+func (s *txStats) record(d time.Duration, ok bool, retryCount int) {
 	s.count.Add(1)
 	if ok {
 		s.success.Add(1)
 	} else {
 		s.abort.Add(1)
+	}
+	if retryCount > 0 {
+		s.retries.Add(int64(retryCount))
 	}
 	s.mu.Lock()
 	if len(s.latencies) < 100000 {
@@ -48,6 +52,7 @@ func main() {
 	dataDir := flag.String("dir", "data/tpcc_wt", "Data directory for WiredTiger backend")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
+	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries with exponential backoff on serialization conflict")
 	flag.Parse()
 
 	fmt.Println("================================================================================")
@@ -148,24 +153,34 @@ func main() {
 				switch {
 				case roll < 45:
 					// New-Order Transaction (45%)
-					ok := execNewOrder(sess, rng, wID, dID, cID, *numItems)
-					statsNewOrder.record(time.Since(t0), ok)
+					ok, r := execWithRetry(*maxRetries, rng, func() bool {
+						return execNewOrder(sess, rng, wID, dID, cID, *numItems)
+					})
+					statsNewOrder.record(time.Since(t0), ok, r)
 				case roll < 88:
 					// Payment Transaction (43%)
-					ok := execPayment(sess, rng, wID, dID, cID)
-					statsPayment.record(time.Since(t0), ok)
+					ok, r := execWithRetry(*maxRetries, rng, func() bool {
+						return execPayment(sess, rng, wID, dID, cID)
+					})
+					statsPayment.record(time.Since(t0), ok, r)
 				case roll < 92:
 					// Order-Status Transaction (4%)
-					ok := execOrderStatus(sess, wID, dID, cID)
-					statsOrderStatus.record(time.Since(t0), ok)
+					ok, r := execWithRetry(*maxRetries, rng, func() bool {
+						return execOrderStatus(sess, wID, dID, cID)
+					})
+					statsOrderStatus.record(time.Since(t0), ok, r)
 				case roll < 96:
 					// Delivery Transaction (4%)
-					ok := execDelivery(sess, wID)
-					statsDelivery.record(time.Since(t0), ok)
+					ok, r := execWithRetry(*maxRetries, rng, func() bool {
+						return execDelivery(sess, wID)
+					})
+					statsDelivery.record(time.Since(t0), ok, r)
 				default:
 					// Stock-Level Transaction (4%)
-					ok := execStockLevel(sess, rng, wID, dID, *numItems)
-					statsStockLevel.record(time.Since(t0), ok)
+					ok, r := execWithRetry(*maxRetries, rng, func() bool {
+						return execStockLevel(sess, rng, wID, dID, *numItems)
+					})
+					statsStockLevel.record(time.Since(t0), ok, r)
 				}
 			}
 		}(w)
@@ -606,6 +621,22 @@ func execStockLevel(sess storage.Session, rng *rand.Rand, wID, dID, totalItems i
 	return tx.Commit() == nil
 }
 
+// execWithRetry attempts to execute a transaction up to maxRetries times upon serialization/lock conflict.
+func execWithRetry(maxRetries int, rng *rand.Rand, fn func() bool) (bool, int) {
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if fn() {
+			return true, attempt
+		}
+		if attempt < maxRetries {
+			// Exponential backoff with random jitter to resolve write-write lock contention
+			jitter := time.Duration(100+rng.Intn(200)) * time.Microsecond
+			backoff := jitter * (1 << attempt)
+			time.Sleep(backoff)
+		}
+	}
+	return false, maxRetries
+}
+
 func printTPCCReport(elapsed time.Duration, no, pay, osStat, del, sl *txStats) {
 	elapsedSec := elapsed.Seconds()
 	if elapsedSec <= 0 {
@@ -621,6 +652,7 @@ func printTPCCReport(elapsed time.Duration, no, pay, osStat, del, sl *txStats) {
 	totalCompleted := noSuccess + paySuccess + osSuccess + delSuccess + slSuccess
 	totalAttempts := no.count.Load() + pay.count.Load() + osStat.count.Load() + del.count.Load() + sl.count.Load()
 	totalAborts := no.abort.Load() + pay.abort.Load() + osStat.abort.Load() + del.abort.Load() + sl.abort.Load()
+	totalRetries := no.retries.Load() + pay.retries.Load() + osStat.retries.Load() + del.retries.Load() + sl.retries.Load()
 
 	tpmC := float64(noSuccess) * 60.0 / elapsedSec
 	totalTPS := float64(totalCompleted) / elapsedSec
@@ -629,19 +661,19 @@ func printTPCCReport(elapsed time.Duration, no, pay, osStat, del, sl *txStats) {
 	fmt.Println("  SQLion TPC-C Benchmark Executive Summary")
 	fmt.Println("================================================================================")
 	fmt.Printf(" Execution Time:     %v\n", elapsed.Round(time.Millisecond))
-	fmt.Printf(" Total Transactions: %d completed (%d attempted, %d conflicts/retries)\n", totalCompleted, totalAttempts, totalAborts)
+	fmt.Printf(" Total Transactions: %d completed (%d attempted, %d retried, %d final aborts)\n", totalCompleted, totalAttempts, totalRetries, totalAborts)
 	fmt.Printf(" Official Metric:    tpmC = %.2f (New-Order Transactions Per Minute)\n", tpmC)
 	fmt.Printf(" Overall Throughput: TPS  = %.2f (Total Transactions Per Second)\n", totalTPS)
-	fmt.Println("--------------------------------------------------------------------------------")
-	fmt.Printf(" %-15s | %10s | %10s | %8s | %10s | %10s\n", "Transaction", "Attempted", "Committed", "Aborts", "Avg Latency", "p95 Latency")
-	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Println("-----------------------------------------------------------------------------------------")
+	fmt.Printf(" %-15s | %10s | %10s | %8s | %8s | %10s | %10s\n", "Transaction", "Attempted", "Committed", "Retries", "Aborts", "Avg Latency", "p95 Latency")
+	fmt.Println("-----------------------------------------------------------------------------------------")
 
 	printTxLine("New-Order", no)
 	printTxLine("Payment", pay)
 	printTxLine("Order-Status", osStat)
 	printTxLine("Delivery", del)
 	printTxLine("Stock-Level", sl)
-	fmt.Println("================================================================================")
+	fmt.Println("=========================================================================================")
 }
 
 func printTxLine(name string, s *txStats) {
@@ -665,6 +697,6 @@ func printTxLine(name string, s *txStats) {
 		p95Str = fmt.Sprintf("%.2fms", float64(p95.Microseconds())/1000.0)
 	}
 
-	fmt.Printf(" %-15s | %10d | %10d | %8d | %10s | %10s\n",
-		name, s.count.Load(), s.success.Load(), s.abort.Load(), avgStr, p95Str)
+	fmt.Printf(" %-15s | %10d | %10d | %8d | %8d | %10s | %10s\n",
+		name, s.count.Load(), s.success.Load(), s.retries.Load(), s.abort.Load(), avgStr, p95Str)
 }
