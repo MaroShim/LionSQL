@@ -241,47 +241,149 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
-	// 0.05 Standard Configuration Parameters: SET [SESSION] param [= | TO] value
-	setConfigRe := regexp.MustCompile(`(?is)^SET\s+(?:SESSION\s+)?([a-zA-Z0-9_]+)\s*(?:TO|=)\s*(.*)$`)
-	if m := setConfigRe.FindStringSubmatch(trimmed); len(m) == 3 && !strings.HasPrefix(m[1], "@") {
-		param := strings.ToLower(m[1])
-		valStr := strings.Trim(strings.TrimSpace(m[2]), "';\"")
-		if param == "work_mem" {
-			bytes, err := execution.ParseMemSize(valStr)
-			if err != nil {
-				return nil, fmt.Errorf("invalid value for work_mem %q: %w", valStr, err)
-			}
-			cs.mu.Lock()
-			cs.Vars["work_mem"] = bytes
-			cs.mu.Unlock()
-			return &QueryResult{
-				Success:    true,
-				Command:    "SET",
-				Messages:   []string{fmt.Sprintf("SET: work_mem set to %s (%d bytes).", execution.FormatMemSize(bytes), bytes)},
-				DurationUS: time.Since(start).Microseconds(),
-			}, nil
-		}
-		cs.mu.Lock()
-		cs.Vars[param] = valStr
-		cs.mu.Unlock()
+	// 0.045 Connection Pool Reset: DISCARD ALL / RESET ALL / DEALLOCATE ALL / UNLISTEN *
+	if strings.HasPrefix(upper, "DISCARD ") || upper == "RESET ALL" || strings.HasPrefix(upper, "DEALLOCATE ALL") || strings.HasPrefix(upper, "UNLISTEN ") {
 		return &QueryResult{
 			Success:    true,
-			Command:    "SET",
-			Messages:   []string{fmt.Sprintf("SET: %s set to %s.", param, valStr)},
+			Command:    "RESET",
 			DurationUS: time.Since(start).Microseconds(),
 		}, nil
 	}
 
+	// 0.046 T-SQL & Standard Configuration Parameters: SET
+	if strings.HasPrefix(upper, "SET ") && !strings.HasPrefix(trimmed, "SET @") {
+		rest := strings.TrimSpace(trimmed[4:])
+		upperRest := strings.ToUpper(rest)
+
+		// A. SET TRANSACTION ISOLATION LEVEL <level>
+		if strings.HasPrefix(upperRest, "TRANSACTION ISOLATION LEVEL ") {
+			level := strings.TrimSpace(rest[len("TRANSACTION ISOLATION LEVEL "):])
+			cs.mu.Lock()
+			cs.Vars["transaction_isolation"] = strings.ToLower(level)
+			cs.mu.Unlock()
+			return &QueryResult{
+				Success:    true,
+				Command:    "SET",
+				Messages:   []string{fmt.Sprintf("Transaction isolation level set to %s.", level)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+
+		// B. SET TRANSACTION READ ONLY / READ WRITE
+		if strings.HasPrefix(upperRest, "TRANSACTION READ ") {
+			mode := strings.TrimSpace(rest[len("TRANSACTION READ "):])
+			cs.mu.Lock()
+			cs.Vars["transaction_read_only"] = strings.EqualFold(mode, "ONLY")
+			cs.mu.Unlock()
+			return &QueryResult{
+				Success:    true,
+				Command:    "SET",
+				Messages:   []string{fmt.Sprintf("Transaction access mode set to READ %s.", mode)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+
+		// C. SET TIME ZONE <tz>
+		if strings.HasPrefix(upperRest, "TIME ZONE ") || strings.HasPrefix(upperRest, "TIMEZONE ") {
+			idx := strings.Index(rest, " ")
+			if strings.HasPrefix(upperRest, "TIME ZONE ") {
+				idx = len("TIME ZONE ")
+			}
+			tz := strings.Trim(strings.TrimSpace(rest[idx:]), "=';\" ")
+			cs.mu.Lock()
+			cs.Vars["timezone"] = tz
+			cs.mu.Unlock()
+			return &QueryResult{
+				Success:    true,
+				Command:    "SET",
+				Messages:   []string{fmt.Sprintf("Time zone set to %s.", tz)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+
+		// D. SET NAMES <enc>
+		if strings.HasPrefix(upperRest, "NAMES ") {
+			enc := strings.Trim(strings.TrimSpace(rest[len("NAMES "):]), "=';\" ")
+			cs.mu.Lock()
+			cs.Vars["client_encoding"] = enc
+			cs.mu.Unlock()
+			return &QueryResult{
+				Success:    true,
+				Command:    "SET",
+				Messages:   []string{fmt.Sprintf("Client encoding set to %s.", enc)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+
+		// E. SET <option> ON / OFF / <val> (e.g. SET NOCOUNT ON, SET ANSI_NULLS ON, SET LOCK_TIMEOUT 10000)
+		setParts := strings.Fields(rest)
+		if len(setParts) >= 2 && !strings.Contains(setParts[0], "=") && setParts[1] != "=" && !strings.EqualFold(setParts[1], "TO") {
+			optName := strings.ToLower(cleanIdentifier(setParts[0]))
+			optVal := strings.Trim(strings.Join(setParts[1:], " "), "';\"")
+			cs.mu.Lock()
+			if strings.EqualFold(optVal, "ON") {
+				cs.Vars[optName] = true
+			} else if strings.EqualFold(optVal, "OFF") {
+				cs.Vars[optName] = false
+			} else {
+				cs.Vars[optName] = optVal
+			}
+			cs.mu.Unlock()
+			return &QueryResult{
+				Success:    true,
+				Command:    "SET",
+				Messages:   []string{fmt.Sprintf("SET %s %s.", optName, optVal)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+
+		// F. Standard SET [SESSION] param [= | TO] value
+		setConfigRe := regexp.MustCompile(`(?is)^(?:SESSION\s+)?([a-zA-Z0-9_]+)\s*(?:TO|=)\s*(.*)$`)
+		if m := setConfigRe.FindStringSubmatch(rest); len(m) == 3 {
+			param := strings.ToLower(cleanIdentifier(m[1]))
+			valStr := strings.Trim(strings.TrimSpace(m[2]), "';\"")
+			if param == "work_mem" {
+				bytes, err := execution.ParseMemSize(valStr)
+				if err != nil {
+					return nil, fmt.Errorf("invalid value for work_mem %q: %w", valStr, err)
+				}
+				cs.mu.Lock()
+				cs.Vars["work_mem"] = bytes
+				cs.mu.Unlock()
+				return &QueryResult{
+					Success:    true,
+					Command:    "SET",
+					Messages:   []string{fmt.Sprintf("SET: work_mem set to %s (%d bytes).", execution.FormatMemSize(bytes), bytes)},
+					DurationUS: time.Since(start).Microseconds(),
+				}, nil
+			}
+			cs.mu.Lock()
+			cs.Vars[param] = valStr
+			cs.mu.Unlock()
+			return &QueryResult{
+				Success:    true,
+				Command:    "SET",
+				Messages:   []string{fmt.Sprintf("SET: %s set to %s.", param, valStr)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+	}
+
 	// 0.06 SHOW <parameter>
-	showRe := regexp.MustCompile(`(?is)^SHOW\s+([a-zA-Z0-9_]+)\s*;?$`)
+	showRe := regexp.MustCompile(`(?is)^SHOW\s+(.*?)\s*;?$`)
 	if m := showRe.FindStringSubmatch(trimmed); len(m) == 2 {
-		param := strings.ToLower(m[1])
+		param := strings.ToLower(strings.TrimSpace(m[1]))
+		paramNorm := strings.ReplaceAll(param, " ", "_")
 		cs.mu.Lock()
-		val, exists := cs.Vars[param]
+		val, exists := cs.Vars[paramNorm]
+		if !exists {
+			val, exists = cs.Vars[param]
+		}
 		cs.mu.Unlock()
+
 		valStr := ""
 		if exists {
-			if param == "work_mem" {
+			if paramNorm == "work_mem" {
 				if b, ok := val.(int64); ok {
 					valStr = execution.FormatMemSize(b)
 				} else {
@@ -290,9 +392,31 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 			} else {
 				valStr = fmt.Sprintf("%v", val)
 			}
-		} else if param == "work_mem" {
-			valStr = execution.FormatMemSize(s.DefaultWorkMem())
+		} else {
+			switch paramNorm {
+			case "work_mem":
+				valStr = execution.FormatMemSize(s.DefaultWorkMem())
+			case "search_path":
+				valStr = `"$user", public`
+			case "transaction_isolation", "default_transaction_isolation", "transaction_isolation_level":
+				valStr = "read committed"
+			case "server_version":
+				valStr = "15.0 (SQLion)"
+			case "server_encoding", "client_encoding":
+				valStr = "UTF8"
+			case "timezone", "time_zone":
+				valStr = "UTC"
+			case "standard_conforming_strings":
+				valStr = "on"
+			case "integer_datetimes":
+				valStr = "on"
+			case "max_connections":
+				valStr = "100"
+			default:
+				valStr = "off"
+			}
 		}
+
 		return &QueryResult{
 			Success:      true,
 			Command:      "SHOW",
@@ -1473,11 +1597,297 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 	}, nil
 }
 
+func hasFromClause(query string) bool {
+	upper := strings.ToUpper(query)
+	inSingleQuote := false
+	inDoubleQuote := false
+	parenDepth := 0
+
+	for i := 0; i < len(upper); i++ {
+		ch := upper[i]
+		if ch == '\'' && !inDoubleQuote {
+			inSingleQuote = !inSingleQuote
+			continue
+		}
+		if ch == '"' && !inSingleQuote {
+			inDoubleQuote = !inDoubleQuote
+			continue
+		}
+		if inSingleQuote || inDoubleQuote {
+			continue
+		}
+		if ch == '(' {
+			parenDepth++
+			continue
+		}
+		if ch == ')' {
+			if parenDepth > 0 {
+				parenDepth--
+			}
+			continue
+		}
+		if parenDepth == 0 {
+			if i+4 <= len(upper) && upper[i:i+4] == "FROM" {
+				before := i == 0 || !isIdentChar(upper[i-1])
+				after := i+4 == len(upper) || !isIdentChar(upper[i+4])
+				if before && after {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func splitScalarProjections(s string) []string {
+	var res []string
+	var cur strings.Builder
+	inSingleQuote := false
+	inDoubleQuote := false
+	parenDepth := 0
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '\'' && !inDoubleQuote {
+			inSingleQuote = !inSingleQuote
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == '"' && !inSingleQuote {
+			inDoubleQuote = !inDoubleQuote
+			cur.WriteByte(ch)
+			continue
+		}
+		if inSingleQuote || inDoubleQuote {
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == '(' {
+			parenDepth++
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == ')' {
+			if parenDepth > 0 {
+				parenDepth--
+			}
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == ',' && parenDepth == 0 {
+			res = append(res, strings.TrimSpace(cur.String()))
+			cur.Reset()
+			continue
+		}
+		cur.WriteByte(ch)
+	}
+	if cur.Len() > 0 {
+		res = append(res, strings.TrimSpace(cur.String()))
+	}
+	return res
+}
+
+func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
+	trimmed := strings.TrimSpace(expr)
+	upper := strings.ToUpper(trimmed)
+
+	// Builtin system / database functions
+	switch upper {
+	case "CURRENT_DATABASE()", "CURRENT_DATABASE":
+		return "sqlion", "current_database"
+	case "CURRENT_SCHEMA()", "CURRENT_SCHEMA":
+		return "dbo", "current_schema"
+	case "CURRENT_SCHEMAS(TRUE)", "CURRENT_SCHEMAS(FALSE)", "CURRENT_SCHEMAS":
+		return "{dbo,public}", "current_schemas"
+	case "CURRENT_USER", "USER", "SESSION_USER":
+		return "postgres", "current_user"
+	case "VERSION()":
+		return "PostgreSQL 15.0 (SQLion OLTP & Stored Procedure Server)", "version"
+	case "DB_NAME()", "DB_NAME":
+		return "sqlion", "db_name"
+	case "SCHEMA_NAME()", "SCHEMA_NAME":
+		return "dbo", "schema_name"
+	case "PG_BACKEND_PID()", "PG_BACKEND_PID":
+		return int64(1), "pg_backend_pid"
+	case "PG_IS_IN_RECOVERY()", "PG_IS_IN_RECOVERY":
+		return false, "pg_is_in_recovery"
+	case "PG_TRIGGER_DEPTH()", "PG_TRIGGER_DEPTH":
+		return int64(0), "pg_trigger_depth"
+	case "NOW()", "GETDATE()", "CURRENT_TIMESTAMP":
+		return time.Now().Format("2006-01-02 15:04:05"), "now"
+	case "@@VERSION":
+		return "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine", "@@version"
+	case "@@SPID":
+		return int64(51), "@@spid"
+	case "@@TRANCOUNT":
+		if cs != nil && cs.Tx != nil {
+			return int64(1), "@@trancount"
+		}
+		return int64(0), "@@trancount"
+	case "@@ROWCOUNT":
+		return int64(0), "@@rowcount"
+	case "@@SERVERNAME", "@@SERVICENAME":
+		return "SQLION", "@@servername"
+	case "@@OPTIONS":
+		return int64(5432), "@@options"
+	}
+
+	// System variable @@var
+	if strings.HasPrefix(upper, "@@") {
+		varName := strings.ToLower(trimmed[2:])
+		if cs != nil {
+			cs.mu.Lock()
+			v, exists := cs.Vars[varName]
+			cs.mu.Unlock()
+			if exists {
+				return v, trimmed
+			}
+		}
+		return "", trimmed
+	}
+
+	// Session variable @var
+	if strings.HasPrefix(trimmed, "@") {
+		if cs != nil {
+			cs.mu.Lock()
+			v, exists := cs.Vars[trimmed]
+			if !exists {
+				v = cs.Vars[strings.TrimPrefix(trimmed, "@")]
+			}
+			cs.mu.Unlock()
+			if v != nil {
+				return v, trimmed
+			}
+		}
+		return nil, trimmed
+	}
+
+	// String literal
+	if (strings.HasPrefix(trimmed, "'") && strings.HasSuffix(trimmed, "'")) ||
+		(strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"")) {
+		unquoted := trimmed[1 : len(trimmed)-1]
+		return unquoted, "?column?"
+	}
+
+	// Integer literal
+	if n, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		return n, trimmed
+	}
+
+	// Float literal
+	if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		return f, trimmed
+	}
+
+	// Boolean literal
+	if strings.EqualFold(trimmed, "TRUE") {
+		return true, "bool"
+	}
+	if strings.EqualFold(trimmed, "FALSE") {
+		return false, "bool"
+	}
+	if strings.EqualFold(trimmed, "NULL") {
+		return nil, "?column?"
+	}
+
+	// Try evaluating expression with proc Parser and EvalRowExpr
+	p := proc.NewParser(proc.NewLexer(trimmed))
+	astExpr := p.ParseExpr()
+	if astExpr != nil && len(p.Errors()) == 0 {
+		var varRow map[string]any
+		if cs != nil {
+			cs.mu.Lock()
+			if len(cs.Vars) > 0 {
+				varRow = make(map[string]any, len(cs.Vars))
+				for k, v := range cs.Vars {
+					varRow[k] = v
+				}
+			}
+			cs.mu.Unlock()
+		}
+		if res, err := proc.EvalRowExpr(astExpr, varRow, nil); err == nil && res != nil {
+			return res, trimmed
+		}
+	}
+
+	return trimmed, trimmed
+}
+
+func (s *Server) execScalarSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	upper := strings.ToUpper(cleaned)
+	if !strings.HasPrefix(upper, "SELECT") {
+		return nil, fmt.Errorf("invalid SELECT statement")
+	}
+
+	rawList := strings.TrimSpace(cleaned[6:])
+	projItems := splitScalarProjections(rawList)
+	if len(projItems) == 0 {
+		return nil, fmt.Errorf("no projections specified in SELECT")
+	}
+
+	var columns []string
+	row := make(map[string]any, len(projItems))
+
+	asRe := regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
+
+	for i, item := range projItems {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+
+		exprStr := item
+		alias := ""
+
+		if m := asRe.FindStringSubmatch(item); len(m) == 3 {
+			exprStr = strings.TrimSpace(m[1])
+			alias = cleanIdentifier(m[2])
+		} else {
+			fields := strings.Fields(item)
+			if len(fields) == 2 && !strings.Contains(fields[1], "(") && !strings.Contains(fields[1], ")") {
+				exprStr = fields[0]
+				alias = cleanIdentifier(fields[1])
+			}
+		}
+
+		val, defAlias := s.evalScalarExpr(exprStr, cs)
+		if alias == "" {
+			alias = defAlias
+		}
+		if alias == "" {
+			alias = fmt.Sprintf("col_%d", i+1)
+		}
+
+		colKey := alias
+		if _, exists := row[colKey]; exists {
+			colKey = fmt.Sprintf("%s_%d", alias, i+1)
+		}
+
+		columns = append(columns, colKey)
+		row[colKey] = val
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         []map[string]any{row},
+		RowsAffected: 1,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
 func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	if resolved, err := s.resolveSubqueries(cleaned); err == nil {
 		cleaned = resolved
+	}
+
+	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
+	if !hasFromClause(cleaned) {
+		return s.execScalarSelect(cleaned, start, cs)
 	}
 
 	p := planner.NewPlanner()
@@ -1525,6 +1935,9 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+([^\s,;]+)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
 	matches := selectRe.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
+		if !hasFromClause(cleaned) {
+			return s.execScalarSelect(cleaned, start, cs)
+		}
 		return nil, fmt.Errorf("invalid or unsupported SELECT syntax")
 	}
 
@@ -3121,10 +3534,25 @@ func (s *Server) isVirtualCatalogTable(tableName string) bool {
 		"sys.procedures", "sysprocedures", "sys_procedures",
 		"sys.table_stats", "systablestats", "sys_table_stats",
 		"sys.column_stats", "syscolumnstats", "sys_column_stats",
+		"sys.schemas", "sysschemas", "sys_schemas",
+		"sys.objects", "sysobjects", "sys_objects",
+		"sys.views", "sysviews", "sys_views",
+		"sys.types", "systypes", "sys_types",
 		"information_schema.tables",
 		"information_schema.columns",
 		"information_schema.schemata",
-		"information_schema.routines":
+		"information_schema.routines",
+		"pg_catalog.pg_database", "pg_database",
+		"pg_catalog.pg_namespace", "pg_namespace",
+		"pg_catalog.pg_tables", "pg_tables",
+		"pg_catalog.pg_class", "pg_class",
+		"pg_catalog.pg_type", "pg_type",
+		"pg_catalog.pg_attribute", "pg_attribute",
+		"pg_catalog.pg_roles", "pg_roles", "pg_user", "pg_catalog.pg_user",
+		"pg_catalog.pg_am", "pg_am",
+		"pg_catalog.pg_index", "pg_index",
+		"pg_catalog.pg_settings", "pg_settings",
+		"pg_catalog.pg_description", "pg_description":
 		return true
 	default:
 		return false
@@ -3142,10 +3570,13 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 
 	switch norm {
 	case "sys.tables", "systables", "sys_tables", "information_schema.tables":
-		columns = []string{"table_name", "table_type", "table_schema", "column_count", "create_date"}
-		for _, t := range tables {
+		columns = []string{"table_name", "name", "object_id", "schema_id", "table_type", "table_schema", "column_count", "create_date"}
+		for i, t := range tables {
 			allRows = append(allRows, map[string]any{
 				"table_name":   t.Name,
+				"name":         t.Name,
+				"object_id":    1000 + i,
+				"schema_id":    1,
 				"table_type":   "BASE TABLE",
 				"table_schema": "dbo",
 				"column_count": len(t.Columns),
@@ -3154,8 +3585,8 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 		}
 
 	case "sys.columns", "syscolumns", "sys_columns", "information_schema.columns":
-		columns = []string{"table_name", "column_name", "data_type", "is_nullable", "is_primary_key", "ordinal_position"}
-		for _, t := range tables {
+		columns = []string{"table_name", "column_name", "name", "object_id", "column_id", "data_type", "is_nullable", "is_primary_key", "ordinal_position", "max_length", "precision", "scale"}
+		for tIdx, t := range tables {
 			for i, c := range t.Columns {
 				nullableStr := "YES"
 				if !c.Nullable {
@@ -3164,10 +3595,16 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 				allRows = append(allRows, map[string]any{
 					"table_name":       t.Name,
 					"column_name":      c.Name,
+					"name":             c.Name,
+					"object_id":        1000 + tIdx,
+					"column_id":        i + 1,
 					"data_type":        c.Type.String(),
 					"is_nullable":      nullableStr,
 					"is_primary_key":   c.PrimaryKey,
 					"ordinal_position": i + 1,
+					"max_length":       255,
+					"precision":        10,
+					"scale":            0,
 				})
 			}
 		}
@@ -3186,9 +3623,10 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 		}
 
 	case "sys.databases", "sysdatabases", "sys_databases", "information_schema.schemata":
-		columns = []string{"name", "database_id", "create_date", "state_desc"}
+		columns = []string{"name", "schema_name", "database_id", "create_date", "state_desc"}
 		allRows = append(allRows, map[string]any{
 			"name":        "sqlion",
+			"schema_name": "sqlion",
 			"database_id": 1,
 			"create_date": "2026-01-01T00:00:00Z",
 			"state_desc":  "ONLINE",
@@ -3246,6 +3684,162 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 			}
 		}
 
+	case "pg_catalog.pg_database", "pg_database":
+		columns = []string{"datname", "oid", "encoding", "datcollate", "datctype", "datistemplate", "datallowconn"}
+		allRows = append(allRows, map[string]any{
+			"datname":       "sqlion",
+			"oid":           1,
+			"encoding":      6,
+			"datcollate":    "en_US.utf8",
+			"datctype":      "en_US.utf8",
+			"datistemplate": false,
+			"datallowconn":  true,
+		})
+
+	case "pg_catalog.pg_namespace", "pg_namespace":
+		columns = []string{"nspname", "oid", "nspowner"}
+		allRows = append(allRows,
+			map[string]any{"nspname": "public", "oid": 2200, "nspowner": 10},
+			map[string]any{"nspname": "dbo", "oid": 1, "nspowner": 10},
+			map[string]any{"nspname": "pg_catalog", "oid": 11, "nspowner": 10},
+			map[string]any{"nspname": "information_schema", "oid": 12, "nspowner": 10},
+		)
+
+	case "pg_catalog.pg_tables", "pg_tables":
+		columns = []string{"schemaname", "tablename", "tableowner", "tablespace", "hasindexes", "hasrules", "hastriggers"}
+		for _, t := range tables {
+			allRows = append(allRows, map[string]any{
+				"schemaname":  "dbo",
+				"tablename":   t.Name,
+				"tableowner":  "postgres",
+				"tablespace":  "",
+				"hasindexes":  len(t.Indexes) > 0,
+				"hasrules":    false,
+				"hastriggers": false,
+			})
+		}
+
+	case "pg_catalog.pg_class", "pg_class":
+		columns = []string{"relname", "oid", "relnamespace", "reltype", "relowner", "relam", "relkind", "relispartition"}
+		for i, t := range tables {
+			allRows = append(allRows, map[string]any{
+				"relname":        t.Name,
+				"oid":            1000 + i,
+				"relnamespace":   1,
+				"reltype":        0,
+				"relowner":       10,
+				"relam":          0,
+				"relkind":        "r",
+				"relispartition": false,
+			})
+		}
+
+	case "pg_catalog.pg_type", "pg_type":
+		columns = []string{"typname", "oid", "typnamespace", "typlen", "typtype"}
+		typesList := []struct {
+			name string
+			oid  int
+			len  int
+		}{
+			{"int4", 23, 4},
+			{"int8", 20, 8},
+			{"varchar", 1043, -1},
+			{"text", 25, -1},
+			{"bool", 16, 1},
+			{"float8", 701, 8},
+			{"json", 114, -1},
+			{"jsonb", 3802, -1},
+			{"timestamp", 1114, 8},
+		}
+		for _, ty := range typesList {
+			allRows = append(allRows, map[string]any{
+				"typname":      ty.name,
+				"oid":          ty.oid,
+				"typnamespace": 11,
+				"typlen":       ty.len,
+				"typtype":      "b",
+			})
+		}
+
+	case "pg_catalog.pg_attribute", "pg_attribute":
+		columns = []string{"attrelid", "attname", "atttypid", "attnum", "attnotnull", "attisdropped"}
+		for tIdx, t := range tables {
+			for cIdx, c := range t.Columns {
+				allRows = append(allRows, map[string]any{
+					"attrelid":     1000 + tIdx,
+					"attname":      c.Name,
+					"atttypid":     23,
+					"attnum":       cIdx + 1,
+					"attnotnull":   !c.Nullable,
+					"attisdropped": false,
+				})
+			}
+		}
+
+	case "pg_catalog.pg_roles", "pg_roles", "pg_catalog.pg_user", "pg_user":
+		columns = []string{"rolname", "oid", "rolsuper", "rolinherit", "usename"}
+		allRows = append(allRows, map[string]any{
+			"rolname":    "postgres",
+			"oid":        10,
+			"rolsuper":   true,
+			"rolinherit": true,
+			"usename":    "postgres",
+		})
+
+	case "pg_catalog.pg_am", "pg_am":
+		columns = []string{"amname", "oid", "amtype"}
+		allRows = append(allRows,
+			map[string]any{"amname": "btree", "oid": 403, "amtype": "i"},
+			map[string]any{"amname": "hash", "oid": 405, "amtype": "i"},
+		)
+
+	case "pg_catalog.pg_settings", "pg_settings":
+		columns = []string{"name", "setting", "category", "short_desc"}
+		allRows = append(allRows,
+			map[string]any{"name": "server_version", "setting": "15.0 (SQLion)", "category": "Preset Options", "short_desc": "Shows the server version."},
+			map[string]any{"name": "client_encoding", "setting": "UTF8", "category": "Client Connection Defaults", "short_desc": "Sets the client's character set encoding."},
+		)
+
+	case "pg_catalog.pg_index", "pg_index", "pg_catalog.pg_description", "pg_description":
+		columns = []string{"objoid", "classoid", "objsubid", "description"}
+
+	case "sys.schemas", "sysschemas", "sys_schemas":
+		columns = []string{"name", "schema_id", "principal_id"}
+		allRows = append(allRows,
+			map[string]any{"name": "dbo", "schema_id": 1, "principal_id": 1},
+			map[string]any{"name": "guest", "schema_id": 2, "principal_id": 2},
+			map[string]any{"name": "sys", "schema_id": 3, "principal_id": 3},
+			map[string]any{"name": "information_schema", "schema_id": 4, "principal_id": 4},
+		)
+
+	case "sys.objects", "sysobjects", "sys_objects":
+		columns = []string{"name", "object_id", "principal_id", "schema_id", "type", "type_desc", "create_date", "modify_date"}
+		for i, t := range tables {
+			allRows = append(allRows, map[string]any{
+				"name":         t.Name,
+				"object_id":    1000 + i,
+				"principal_id": nil,
+				"schema_id":    1,
+				"type":         "U",
+				"type_desc":    "USER_TABLE",
+				"create_date":  "2026-01-01T00:00:00Z",
+				"modify_date":  "2026-01-01T00:00:00Z",
+			})
+		}
+
+	case "sys.views", "sysviews", "sys_views":
+		columns = []string{"name", "object_id", "schema_id"}
+
+	case "sys.types", "systypes", "sys_types":
+		columns = []string{"name", "system_type_id", "user_type_id", "schema_id", "max_length", "precision", "scale", "is_nullable"}
+		allRows = append(allRows,
+			map[string]any{"name": "int", "system_type_id": 56, "user_type_id": 56, "schema_id": 4, "max_length": 4, "precision": 10, "scale": 0, "is_nullable": true},
+			map[string]any{"name": "varchar", "system_type_id": 167, "user_type_id": 167, "schema_id": 4, "max_length": 8000, "precision": 0, "scale": 0, "is_nullable": true},
+			map[string]any{"name": "float", "system_type_id": 62, "user_type_id": 62, "schema_id": 4, "max_length": 8, "precision": 53, "scale": 0, "is_nullable": true},
+			map[string]any{"name": "bit", "system_type_id": 104, "user_type_id": 104, "schema_id": 4, "max_length": 1, "precision": 1, "scale": 0, "is_nullable": true},
+			map[string]any{"name": "datetime", "system_type_id": 61, "user_type_id": 61, "schema_id": 4, "max_length": 8, "precision": 23, "scale": 3, "is_nullable": true},
+		)
+
 	default:
 		return nil, fmt.Errorf("unsupported virtual system table: %s", tableName)
 	}
@@ -3288,14 +3882,42 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 
 	// Projection
 	var selectedCols []string
+	colSourceMap := make(map[string]string)
 	if projStr == "*" || projStr == "" {
 		selectedCols = columns
+		for _, col := range columns {
+			colSourceMap[col] = col
+		}
 	} else {
 		for _, c := range strings.Split(projStr, ",") {
-			cTrimmed := cleanIdentifier(strings.TrimSpace(c))
-			if cTrimmed != "" {
-				selectedCols = append(selectedCols, cTrimmed)
+			cTrimmed := strings.TrimSpace(c)
+			if cTrimmed == "" {
+				continue
 			}
+			alias := ""
+			colExpr := cTrimmed
+			// Check for AS
+			asRe := regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
+			if m := asRe.FindStringSubmatch(cTrimmed); len(m) == 3 {
+				colExpr = strings.TrimSpace(m[1])
+				alias = cleanIdentifier(m[2])
+			} else {
+				fields := strings.Fields(cTrimmed)
+				if len(fields) == 2 && !strings.Contains(fields[1], "(") {
+					colExpr = fields[0]
+					alias = cleanIdentifier(fields[1])
+				}
+			}
+			rawCol := strings.ToLower(cleanIdentifier(colExpr))
+			if strings.Contains(rawCol, ".") {
+				rawCol = rawCol[strings.LastIndex(rawCol, ".")+1:]
+			}
+			outName := alias
+			if outName == "" {
+				outName = rawCol
+			}
+			selectedCols = append(selectedCols, outName)
+			colSourceMap[outName] = rawCol
 		}
 	}
 
@@ -3303,7 +3925,13 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 	for _, fr := range filteredRows {
 		row := make(map[string]any, len(selectedCols))
 		for _, col := range selectedCols {
-			if v, ok := fr[col]; ok {
+			src := colSourceMap[col]
+			if src == "" {
+				src = col
+			}
+			if v, ok := fr[src]; ok {
+				row[col] = v
+			} else if v, ok := fr[strings.ToLower(col)]; ok {
 				row[col] = v
 			} else {
 				row[col] = nil
@@ -3326,11 +3954,18 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 
 func cleanIdentifier(s string) string {
 	s = strings.TrimSpace(s)
-	s = strings.Trim(s, "[]\"'`")
-	if strings.HasPrefix(strings.ToLower(s), "dbo.") {
-		s = s[4:]
+	parts := strings.Split(s, ".")
+	for i, p := range parts {
+		parts[i] = strings.Trim(strings.TrimSpace(p), "[]\"'`")
 	}
-	return strings.Trim(s, "[]\"'`")
+	cleaned := strings.Join(parts, ".")
+	lower := strings.ToLower(cleaned)
+	if strings.HasPrefix(lower, "dbo.") {
+		cleaned = cleaned[4:]
+	} else if strings.HasPrefix(lower, "public.") {
+		cleaned = cleaned[7:]
+	}
+	return cleaned
 }
 
 func parseSQLDataType(s string) storage.DataType {

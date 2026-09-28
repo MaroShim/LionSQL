@@ -918,3 +918,132 @@ func TestSQLExecutor_WorkMemGovernorAndSpill(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// 1. Table-less scalar SELECT
+	res, err := server.ExecuteSQL("SELECT 1;")
+	if err != nil || !res.Success || len(res.Rows) != 1 {
+		t.Fatalf("SELECT 1 failed: %v", err)
+	}
+
+	res, err = server.ExecuteSQL("SELECT 1 AS num, current_database() AS db, current_schema() AS schema, version() AS ver;")
+	if err != nil || !res.Success {
+		t.Fatalf("scalar functions SELECT failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["num"]) != "1" {
+		t.Fatalf("expected num=1, got %v", res.Rows[0]["num"])
+	}
+	if res.Rows[0]["db"] != "sqlion" {
+		t.Fatalf("expected db=sqlion, got %v", res.Rows[0]["db"])
+	}
+	if res.Rows[0]["schema"] != "dbo" {
+		t.Fatalf("expected schema=dbo, got %v", res.Rows[0]["schema"])
+	}
+
+	// 2. MSSQL system variables in scalar SELECT
+	res, err = server.ExecuteSQL("SELECT @@VERSION AS ver, @@SPID AS spid, @@TRANCOUNT AS tc, @@ROWCOUNT AS rc;")
+	if err != nil || !res.Success {
+		t.Fatalf("MSSQL scalar variables SELECT failed: %v", err)
+	}
+	if !strings.Contains(fmt.Sprintf("%v", res.Rows[0]["ver"]), "Microsoft SQL Server") {
+		t.Fatalf("expected MSSQL @@VERSION, got %v", res.Rows[0]["ver"])
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["spid"]) != "51" {
+		t.Fatalf("expected @@SPID=51, got %v", res.Rows[0]["spid"])
+	}
+
+	// 3. SET options
+	setQueries := []string{
+		"SET NOCOUNT ON;",
+		"SET ANSI_NULLS ON;",
+		"SET QUOTED_IDENTIFIER ON;",
+		"SET IMPLICIT_TRANSACTIONS OFF;",
+		"SET TRANSACTION ISOLATION LEVEL READ COMMITTED;",
+		"SET TIME ZONE 'UTC';",
+		"SET NAMES 'utf8mb4';",
+		"SET extra_float_digits = 3;",
+		"DISCARD ALL;",
+		"RESET ALL;",
+	}
+	for _, q := range setQueries {
+		res, err = server.ExecuteSessionSQL("sess1", q)
+		if err != nil || !res.Success {
+			t.Fatalf("SET query %q failed: %v", q, err)
+		}
+	}
+
+	// 4. SHOW parameters
+	showQueries := []struct {
+		query    string
+		col      string
+		expected string
+	}{
+		{"SHOW search_path;", "search_path", `"$user", public`},
+		{"SHOW transaction_isolation;", "transaction_isolation", "read committed"},
+		{"SHOW timezone;", "timezone", "UTC"},
+		{"SHOW server_version;", "server_version", "15.0 (SQLion)"},
+		{"SHOW max_connections;", "max_connections", "100"},
+	}
+	for _, sq := range showQueries {
+		res, err = server.ExecuteSessionSQL("sess1", sq.query)
+		if err != nil || !res.Success {
+			t.Fatalf("SHOW query %q failed: %v", sq.query, err)
+		}
+		if fmt.Sprintf("%v", res.Rows[0][sq.col]) != sq.expected {
+			t.Fatalf("query %q: expected %s, got %v", sq.query, sq.expected, res.Rows[0][sq.col])
+		}
+	}
+
+	// 5. Create a table to verify virtual catalog views
+	_, _ = server.ExecuteSQL("CREATE TABLE products (id INT PRIMARY KEY, title VARCHAR(50), price FLOAT);")
+
+	// 6. pg_catalog views
+	res, err = server.ExecuteSQL("SELECT datname, oid FROM pg_catalog.pg_database;")
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["datname"] != "sqlion" {
+		t.Fatalf("pg_database query failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	res, err = server.ExecuteSQL("SELECT nspname FROM pg_catalog.pg_namespace;")
+	if err != nil || !res.Success || len(res.Rows) < 4 {
+		t.Fatalf("pg_namespace query failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	res, err = server.ExecuteSQL("SELECT tablename FROM pg_catalog.pg_tables WHERE tablename = 'products';")
+	if err != nil || !res.Success || len(res.Rows) != 1 {
+		t.Fatalf("pg_tables query failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	res, err = server.ExecuteSQL("SELECT relname FROM pg_catalog.pg_class WHERE relname = 'products';")
+	if err != nil || !res.Success || len(res.Rows) != 1 {
+		t.Fatalf("pg_class query failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	// 7. sys views
+	res, err = server.ExecuteSQL("SELECT name FROM sys.schemas WHERE name = 'dbo';")
+	if err != nil || !res.Success || len(res.Rows) != 1 {
+		t.Fatalf("sys.schemas query failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	res, err = server.ExecuteSQL("SELECT name, type_desc FROM sys.objects WHERE name = 'products';")
+	if err != nil || !res.Success || len(res.Rows) != 1 {
+		t.Fatalf("sys.objects query failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	// 8. Bracketed and quoted schema table queries
+	res, err = server.ExecuteSQL("SELECT * FROM [sys].[tables];")
+	if err != nil || !res.Success || len(res.Rows) < 1 {
+		t.Fatalf("bracketed sys.tables query failed: %v", err)
+	}
+
+	res, err = server.ExecuteSQL("SELECT * FROM \"pg_catalog\".\"pg_tables\";")
+	if err != nil || !res.Success || len(res.Rows) < 1 {
+		t.Fatalf("quoted pg_tables query failed: %v", err)
+	}
+}
+
+

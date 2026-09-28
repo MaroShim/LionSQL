@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **DBeaver & Beekeeper Studio GUI Client Introspection Compatibility (`pkg/api`)**:
+  - Implemented table-less scalar `SELECT` evaluation for session functions and literal expressions (`SELECT 1`, `current_database()`, `current_schema()`, `version()`, `now()`, `pg_backend_pid()`, `@@VERSION`, `@@SPID`, `@@TRANCOUNT`, `@@ROWCOUNT`).
+  - Added support for comprehensive T-SQL and PostgreSQL session configuration options in `SET` (`SET NOCOUNT ON`, `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`, `SET TRANSACTION ISOLATION LEVEL ...`, `SET TIME ZONE ...`, `SET NAMES ...`, `SET extra_float_digits ...`).
+  - Added multi-word and system parameters to `SHOW` (`SHOW search_path`, `SHOW transaction_isolation`, `SHOW timezone`, `SHOW server_version`, `SHOW max_connections`).
+  - Added connection pool lifecycle commands (`DISCARD ALL`, `RESET ALL`, `DEALLOCATE ALL`, `UNLISTEN *`).
+  - Added virtual catalog views for PostgreSQL inspection (`pg_catalog.pg_database`, `pg_catalog.pg_namespace`, `pg_catalog.pg_tables`, `pg_catalog.pg_class`, `pg_catalog.pg_type`, `pg_catalog.pg_attribute`, `pg_catalog.pg_roles`, `pg_catalog.pg_am`, `pg_catalog.pg_settings`).
+  - Added virtual catalog views for SQL Server inspection (`sys.schemas`, `sys.objects`, `sys.views`, `sys.types`), with enhanced column aliases and bracketed/quoted schema normalization (`[dbo].[accounts]`, `[sys].[tables]`, `"pg_catalog"."pg_tables"`).
 - **TPC-C Standard OLTP Benchmark Driver (`cmd/tpcc`, `pkg/storage/memengine`)**:
   - Implemented in-tree TPC-C benchmark suite modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`).
   - Implemented standard TPC-C workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level).
