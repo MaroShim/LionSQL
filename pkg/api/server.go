@@ -25,11 +25,12 @@ import (
 
 // ClientSession maintains interactive connection state: open transaction, session variables.
 type ClientSession struct {
-	ID      string
-	Session storage.Session
-	Tx      storage.Transaction
-	Vars    map[string]any
-	mu      sync.Mutex
+	ID        string
+	Session   storage.Session
+	Tx        storage.Transaction
+	Vars      map[string]any
+	TableVars map[string]string // @table_var -> physical table name
+	mu        sync.Mutex
 }
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
@@ -150,9 +151,10 @@ func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
 	}
 
 	cs := &ClientSession{
-		ID:      id,
-		Session: sess,
-		Vars:    make(map[string]any),
+		ID:        id,
+		Session:   sess,
+		Vars:      make(map[string]any),
+		TableVars: make(map[string]string),
 	}
 	s.sessions[id] = cs
 	return cs, nil
@@ -187,6 +189,11 @@ func (s *Server) CloseSession(id string) {
 
 	if exists && cs != nil {
 		cs.mu.Lock()
+		for _, physTable := range cs.TableVars {
+			_ = s.engine.DropTable(physTable)
+		}
+		cs.TableVars = nil
+
 		if cs.Tx != nil {
 			_ = cs.Tx.Rollback()
 			cs.Tx = nil

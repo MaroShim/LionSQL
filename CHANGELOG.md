@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **T-SQL Table Variables `DECLARE @table TABLE (...)` Engine (`pkg/api`)**:
+  - Implemented session-scoped table variable declaration syntax `DECLARE @var TABLE (colDef, ...)`.
+  - Added physical storage binding via isolated session-namespaced tables (`__tv_<sessionID>_<var>`).
+  - Integrated dynamic query rewriter substituting `@var` references across `INSERT`, `SELECT`, `UPDATE`, `DELETE`, and `JOIN` clauses.
+  - Implemented automatic lifecycle cleanup on `CloseSession`, dropping all associated physical tables from the storage engine.
+  - Added comprehensive multi-session isolation unit tests in `pkg/api/sqlexec_test.go` (`TestSQLExecutor_TableVariables`).
 - **Wire Protocols: `TCP_NODELAY` & Socket Keep-Alive Optimization (`pkg/wire`, `pkg/wire/tds`)**:
   - Explicitly enabled `SetNoDelay(true)` across PostgreSQL Wire Protocol v3 and Microsoft SQL Server TDS 7.x/8.0 listeners, disabling Nagle's algorithm and eliminating up to 40ms delayed-ACK packet latency.
   - Enabled active TCP keep-alive with 30-second interval probe lifecycle preventing stale socket accumulation.

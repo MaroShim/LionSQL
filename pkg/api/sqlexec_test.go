@@ -1448,6 +1448,92 @@ func TestSQLExecutor_DBCCCommands(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_TableVariables(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	sessA := "session_a"
+	sessB := "session_b"
+
+	// 1. Declare table variable in Session A
+	declA := "DECLARE @users TABLE (id INT PRIMARY KEY, name VARCHAR(50), balance FLOAT);"
+	res, err := server.ExecuteSessionSQL(sessA, declA)
+	if err != nil || !res.Success {
+		t.Fatalf("failed to declare table variable in Session A: %v", err)
+	}
+
+	// 2. Insert into @users in Session A
+	insA := "INSERT INTO @users VALUES (1, 'Alice', 100.5), (2, 'Bob', 250.0);"
+	res, err = server.ExecuteSessionSQL(sessA, insA)
+	if err != nil || !res.Success {
+		t.Fatalf("failed to insert into @users: %v", err)
+	}
+
+	// 3. Select from @users
+	selA := "SELECT id, name, balance FROM @users WHERE id = 1;"
+	res, err = server.ExecuteSessionSQL(sessA, selA)
+	if err != nil || !res.Success {
+		t.Fatalf("failed to select from @users: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["name"] != "Alice" {
+		t.Fatalf("unexpected select result from @users: %+v", res.Rows)
+	}
+
+	// 4. Update @users
+	updA := "UPDATE @users SET balance = 150.0 WHERE id = 1;"
+	res, err = server.ExecuteSessionSQL(sessA, updA)
+	if err != nil || !res.Success {
+		t.Fatalf("failed to update @users: %v", err)
+	}
+
+	// 5. Delete from @users
+	delA := "DELETE FROM @users WHERE id = 2;"
+	res, err = server.ExecuteSessionSQL(sessA, delA)
+	if err != nil || !res.Success {
+		t.Fatalf("failed to delete from @users: %v", err)
+	}
+
+	// 6. Verify row count
+	res, err = server.ExecuteSessionSQL(sessA, "SELECT COUNT(*) AS total FROM @users;")
+	if err != nil || !res.Success {
+		t.Fatalf("failed to count @users: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["total"]) != "1" {
+		t.Fatalf("expected count 1, got %+v", res.Rows)
+	}
+
+	// 7. Multi-session isolation: Session B declares @users with different schema
+	declB := "DECLARE @users TABLE (id INT PRIMARY KEY, score INT);"
+	res, err = server.ExecuteSessionSQL(sessB, declB)
+	if err != nil || !res.Success {
+		t.Fatalf("failed to declare table variable in Session B: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sessB, "INSERT INTO @users VALUES (1, 999);")
+	if err != nil {
+		t.Fatalf("failed to insert in Session B: %v", err)
+	}
+
+	resB, err := server.ExecuteSessionSQL(sessB, "SELECT score FROM @users WHERE id = 1;")
+	if err != nil || len(resB.Rows) != 1 || fmt.Sprintf("%v", resB.Rows[0]["score"]) != "999" {
+		t.Fatalf("unexpected Session B result: %+v", resB.Rows)
+	}
+
+	// Session A remains unaffected
+	resA, err := server.ExecuteSessionSQL(sessA, "SELECT name FROM @users WHERE id = 1;")
+	if err != nil || len(resA.Rows) != 1 || resA.Rows[0]["name"] != "Alice" {
+		t.Fatalf("Session A corrupted by Session B: %+v", resA.Rows)
+	}
+
+	// 8. Close session and verify cleanup
+	server.CloseSession(sessA)
+	_, err = server.ExecuteSessionSQL(sessA, "SELECT * FROM @users;")
+	// Since session was closed and table dropped, @users is now undefined
+	if err == nil {
+		t.Fatalf("expected error querying dropped table variable, got success")
+	}
+}
+
+
 
 
 

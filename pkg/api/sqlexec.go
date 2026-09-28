@@ -193,6 +193,20 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 
 	upper := strings.ToUpper(trimmed)
 
+	// Rewrite table variables (@table -> physical table)
+	tblVarDeclRe := regexp.MustCompile(`(?is)^DECLARE\s+@[a-zA-Z0-9_]+\s+TABLE\b`)
+	if cs != nil {
+		cs.mu.Lock()
+		if len(cs.TableVars) > 0 && !tblVarDeclRe.MatchString(trimmed) {
+			for varName, physTable := range cs.TableVars {
+				pattern := `(?i)@` + regexp.QuoteMeta(strings.TrimPrefix(varName, "@")) + `\b`
+				trimmed = regexp.MustCompile(pattern).ReplaceAllString(trimmed, physTable)
+			}
+			upper = strings.ToUpper(trimmed)
+		}
+		cs.mu.Unlock()
+	}
+
 	// 0. Interactive Transactions: BEGIN / COMMIT / ROLLBACK
 	if strings.HasPrefix(upper, "BEGIN TRANSACTION") || strings.HasPrefix(upper, "BEGIN TRAN") || upper == "BEGIN" || strings.HasPrefix(upper, "START TRANSACTION") {
 		cs.mu.Lock()
@@ -504,8 +518,49 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
-	// 0.08 T-SQL DECLARE variables: DECLARE @var [type] [= expr], ...
+	// 0.08 T-SQL DECLARE variables: DECLARE @var [type] [= expr], ... or DECLARE @table TABLE (...)
 	if strings.HasPrefix(upper, "DECLARE ") {
+		tblVarRe := regexp.MustCompile(`(?is)^DECLARE\s+(@[a-zA-Z0-9_]+)\s+TABLE\s*\((.*)\)\s*;?$`)
+		if m := tblVarRe.FindStringSubmatch(trimmed); len(m) >= 3 {
+			varName := strings.ToLower(m[1])
+			if !strings.HasPrefix(varName, "@") {
+				varName = "@" + varName
+			}
+			colDefs := m[2]
+			sessID := "default"
+			if cs != nil && cs.ID != "" {
+				sessID = cs.ID
+			}
+			physTable := fmt.Sprintf("__tv_%s_%s", sessID, strings.TrimPrefix(varName, "@"))
+
+			// Clean up previous table if any
+			_ = s.engine.DropTable(physTable)
+
+			createSQL := fmt.Sprintf("CREATE TABLE %s (%s)", physTable, colDefs)
+			res, err := s.execCreateTable(createSQL, start, cs)
+			if err != nil {
+				return nil, err
+			}
+			if !res.Success {
+				return res, nil
+			}
+
+			if cs != nil {
+				cs.mu.Lock()
+				if cs.TableVars == nil {
+					cs.TableVars = make(map[string]string)
+				}
+				cs.TableVars[varName] = physTable
+				cs.mu.Unlock()
+			}
+
+			return &QueryResult{
+				Success:    true,
+				Command:    "DECLARE",
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+
 		rawDecls := strings.TrimSpace(trimmed[len("DECLARE "):])
 		parts := strings.Split(rawDecls, ",")
 		cs.mu.Lock()
