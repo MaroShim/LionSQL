@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.6.0] - 2026-09-28
+## [0.7.0] - 2026-09-28
 
 ### Added
 - **VDBE Secondary Index Opcode `OpIndexScan` & Search Optimization (`pkg/proc`, `pkg/proc/runtime`)**:
@@ -130,6 +130,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added connection pool lifecycle commands (`DISCARD ALL`, `RESET ALL`, `DEALLOCATE ALL`, `UNLISTEN *`).
   - Added virtual catalog views for PostgreSQL inspection (`pg_catalog.pg_database`, `pg_catalog.pg_namespace`, `pg_catalog.pg_tables`, `pg_catalog.pg_class`, `pg_catalog.pg_type`, `pg_catalog.pg_attribute`, `pg_catalog.pg_roles`, `pg_catalog.pg_am`, `pg_catalog.pg_settings`).
   - Added virtual catalog views for SQL Server inspection (`sys.schemas`, `sys.objects`, `sys.views`, `sys.types`), with enhanced column aliases and bracketed/quoted schema normalization (`[dbo].[accounts]`, `[sys].[tables]`, `"pg_catalog"."pg_tables"`).
+---
+
+## [0.6.0] - 2026-09-23
+
+### Added
 - **TPC-C Standard OLTP Benchmark Driver (`cmd/tpcc`, `pkg/storage/memengine`)**:
   - Implemented in-tree TPC-C benchmark suite modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`).
   - Implemented standard TPC-C workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level).
