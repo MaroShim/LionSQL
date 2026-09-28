@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Extended `/api/health` HTTP endpoint to report the active storage engine backend type in JSON.
   - Updated Web Management Studio (`pkg/ui/dashboard.html`) to dynamically fetch and display the active storage engine in the sidebar footer.
 
+### Fixed
+- **WiredTiger Legacy Table Format Compatibility & SIGBUS Crash Defense (`pkg/storage/wiredtiger`)**:
+  - Fixed a critical `SIGBUS` memory fault occurring during table scans and record retrievals when reading tables created with `value_format=S` (JSON string).
+  - Dynamically detected cursor value format (`value_format=S` vs `value_format=u`), appropriately passing `const char**` with `strlen()` for string format and `WT_ITEM` for binary raw item format.
+  - Implemented `serializeRecord` to safely null-terminate JSON payloads on legacy tables while using MessagePack on raw byte tables.
+
 ## [0.7.0] - 2026-09-28
 
 ### Added

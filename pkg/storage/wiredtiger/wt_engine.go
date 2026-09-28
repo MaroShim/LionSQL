@@ -90,11 +90,23 @@ static void go_wt_cursor_set_val(WT_CURSOR *cursor, const char *val) {
     cursor->set_value(cursor, val);
 }
 
+static int go_wt_cursor_is_format_string(WT_CURSOR *cursor) {
+    if (cursor != NULL && cursor->value_format != NULL && strcmp(cursor->value_format, "S") == 0) {
+        return 1;
+    }
+    return 0;
+}
+
 static void go_wt_cursor_set_val_raw(WT_CURSOR *cursor, const void *data, size_t size) {
-    WT_ITEM item;
-    item.data = data;
-    item.size = size;
-    cursor->set_value(cursor, &item);
+    if (cursor != NULL && cursor->value_format != NULL && strcmp(cursor->value_format, "S") == 0) {
+        cursor->set_value(cursor, (const char *)data);
+    } else {
+        WT_ITEM item;
+        memset(&item, 0, sizeof(item));
+        item.data = data;
+        item.size = size;
+        cursor->set_value(cursor, &item);
+    }
 }
 
 static int go_wt_cursor_get_key(WT_CURSOR *cursor, const char **keyp) {
@@ -106,13 +118,30 @@ static int go_wt_cursor_get_val(WT_CURSOR *cursor, const char **valp) {
 }
 
 static int go_wt_cursor_get_val_raw(WT_CURSOR *cursor, const void **datap, size_t *sizep) {
-    WT_ITEM item;
-    int ret = cursor->get_value(cursor, &item);
-    if (ret == 0) {
-        *datap = item.data;
-        *sizep = item.size;
+    if (cursor != NULL && cursor->value_format != NULL && strcmp(cursor->value_format, "S") == 0) {
+        const char *str = NULL;
+        int ret = cursor->get_value(cursor, &str);
+        if (ret == 0 && str != NULL) {
+            *datap = (const void *)str;
+            *sizep = strlen(str);
+        } else {
+            *datap = NULL;
+            *sizep = 0;
+        }
+        return ret;
+    } else {
+        WT_ITEM item;
+        memset(&item, 0, sizeof(item));
+        int ret = cursor->get_value(cursor, &item);
+        if (ret == 0) {
+            *datap = item.data;
+            *sizep = item.size;
+        } else {
+            *datap = NULL;
+            *sizep = 0;
+        }
+        return ret;
     }
-    return ret;
 }
 */
 import "C"
@@ -483,6 +512,17 @@ type WTTx struct {
 	closed bool
 }
 
+func serializeRecord(cur *C.WT_CURSOR, record storage.Record) ([]byte, error) {
+	if C.go_wt_cursor_is_format_string(cur) != 0 {
+		b, err := json.Marshal(record)
+		if err != nil {
+			return nil, err
+		}
+		return append(b, 0), nil
+	}
+	return msgpack.Marshal(record)
+}
+
 func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -507,16 +547,16 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 	}
 
 	pkStr := pkVal.String()
-	recBytes, err := msgpack.Marshal(record)
-	if err != nil {
-		return err
-	}
-
 	cur, err := tx.sess.getCursor(tableName)
 	if err != nil {
 		return err
 	}
 	defer C.go_wt_cursor_reset(cur)
+
+	recBytes, err := serializeRecord(cur, record)
+	if err != nil {
+		return err
+	}
 
 	cKey := C.CString(pkStr)
 	defer C.free(unsafe.Pointer(cKey))
@@ -552,16 +592,16 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 		existing[col] = val
 	}
 
-	recBytes, err := msgpack.Marshal(existing)
-	if err != nil {
-		return err
-	}
-
 	cur, err := tx.sess.getCursor(tableName)
 	if err != nil {
 		return err
 	}
 	defer C.go_wt_cursor_reset(cur)
+
+	recBytes, err := serializeRecord(cur, existing)
+	if err != nil {
+		return err
+	}
 
 	cKey := C.CString(pk.String())
 	defer C.free(unsafe.Pointer(cKey))
