@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **VDBE Secondary Index Opcode `OpIndexScan` & Search Optimization (`pkg/proc`, `pkg/proc/runtime`)**:
+  - Introduced `OpIndexScan` opcode in `pkg/proc/bytecode.go` with `IndexScanData` metadata struct for secondary index point and range scans.
+  - Implemented `OpIndexScan` in `pkg/proc/runtime/vm.go` leveraging `storage.Transaction.IndexScan` to scan records within bounds.
+  - Implemented dynamic secondary index matching (`findMatchingIndex`) optimizing `scanCursorRows`, `execUpdateWhere`, and `execDeleteWhere` to automatically scan via secondary index when filter conditions match, avoiding full table scans.
+  - Added unit test coverage in `pkg/proc/runtime/runtime_test.go` (`TestVM_OpIndexScan`).
+- **Web Management Studio: Visual VDBE Bytecode Disassembler Viewer (`pkg/ui`)**:
+  - Added dedicated "Explain Bytecode" toolbar action and quick template in SQL Query Studio (:8090).
+  - Implemented rich visual VDBE assembly viewer with colorized syntax highlighting for opcodes, control flow jumps, registers, and operands.
+  - Added program metadata badge and one-click clipboard copying for bytecode disassembly listings.
 - **VDBE Engine Unification for Standalone DML (`pkg/proc`, `pkg/proc/runtime`, `pkg/api`, `pkg/wire`)**:
   - Unified standalone interactive `INSERT`, `UPDATE`, and `DELETE` queries to execute directly on the VDBE Virtual Machine (`proc.CompileStatement` ➔ `s.executor.ExecuteInTx`), achieving 100% single-engine execution parity across all DQL, DML, stored procedures, and triggers.
   - Added `CompileStatement` in `pkg/proc/compiler.go` and `GeneralInsertStmt` compiler support for single and multi-tuple `VALUES` clauses.

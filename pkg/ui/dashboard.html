@@ -379,6 +379,7 @@
           </div>
         </div>
         <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary" style="background: #7c3aed; color: white;" onclick="explainBytecode()">Explain Bytecode</button>
           <button class="btn btn-secondary" style="background: #3b82f6; color: white;" onclick="explainQuery(false)">Explain Plan</button>
           <button class="btn btn-secondary" style="background: #d97706; color: white;" onclick="explainQuery(true)">Explain Analyze</button>
           <button class="btn" style="background: var(--success);" onclick="executeSQLQuery()">Run Query</button>
@@ -388,6 +389,7 @@
       <!-- Quick SQL Templates -->
       <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; align-items: center;">
         <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Templates:</span>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; background: #2e1065; color: #c4b5fd; border-color: #6d28d9;" onclick="setTemplate('explain_bytecode')">EXPLAIN BYTECODE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('create')">CREATE TABLE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('insert')">INSERT</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('select')">SELECT *</button>
@@ -440,7 +442,19 @@
 
         <div id="query-status-banner" style="display: none; padding: 10px 14px; border-radius: 6px; font-size: 0.85rem; margin-bottom: 12px;"></div>
 
-        <div style="overflow-x: auto; max-height: 400px;">
+        <!-- Dedicated VDBE Disassembler Container -->
+        <div id="vdbe-disassembler-view" style="display: none; margin-bottom: 12px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 0.8rem; font-weight: 700; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.05em;">VDBE Bytecode Disassembly</span>
+              <span id="vdbe-program-badge" style="font-size: 0.72rem; background: #2e1065; color: #c4b5fd; padding: 2px 8px; border-radius: 4px; border: 1px solid #6d28d9;"></span>
+            </div>
+            <button class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.72rem;" onclick="copyBytecodeToClipboard()">Copy Disassembly</button>
+          </div>
+          <div id="vdbe-assembly-listing" style="background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 14px; font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.82rem; line-height: 1.6; overflow-x: auto; max-height: 480px; white-space: pre; color: #e2e8f0;"></div>
+        </div>
+
+        <div id="query-result-table-container" style="overflow-x: auto; max-height: 400px;">
           <table id="query-result-table">
             <thead><tr><th>No active query execution</th></tr></thead>
             <tbody></tbody>
@@ -978,6 +992,9 @@ END;</textarea>
     function setTemplate(type) {
       const editor = document.getElementById('sql-query-input');
       switch (type) {
+        case 'explain_bytecode':
+          editor.value = "EXPLAIN BYTECODE SELECT id, balance, branch FROM accounts WHERE balance >= 1000 ORDER BY id ASC LIMIT 50;";
+          break;
         case 'create':
           editor.value = "CREATE TABLE users (\n    id INT PRIMARY KEY,\n    name VARCHAR(50),\n    balance INT\n);";
           break;
@@ -1012,6 +1029,90 @@ END;</textarea>
     function clearSQLQuery() {
       document.getElementById('sql-query-input').value = '';
       document.getElementById('sql-query-input').focus();
+    }
+
+    async function explainBytecode() {
+      const editor = document.getElementById('sql-query-input');
+      let sql = editor.value.trim();
+      if (!sql) return;
+
+      const upper = sql.toUpperCase();
+      if (!upper.startsWith('EXPLAIN BYTECODE')) {
+        if (upper.startsWith('EXPLAIN ANALYZE')) {
+          sql = 'EXPLAIN BYTECODE ' + sql.substring(15).trim();
+        } else if (upper.startsWith('EXPLAIN')) {
+          sql = 'EXPLAIN BYTECODE ' + sql.substring(7).trim();
+        } else {
+          sql = 'EXPLAIN BYTECODE ' + sql;
+        }
+      }
+      editor.value = sql;
+      executeSQLQuery();
+    }
+
+    function copyBytecodeToClipboard() {
+      const listing = document.getElementById('vdbe-assembly-listing');
+      if (!listing) return;
+      const text = listing.innerText;
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('Bytecode copied to clipboard');
+      }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('Bytecode copied to clipboard');
+      });
+    }
+
+    function formatVDBEAssembly(lines) {
+      let html = '';
+      const opcodes = [
+        'HALT','RETURN','LOAD_CONST','LOAD_VAR','STORE_VAR','COPY',
+        'JUMP','JUMP_IF_FALSE','JUMP_IF_TRUE','PUSH_CATCH','POP_CATCH','THROW','RAISERROR','PRINT',
+        'ADD','SUB','MUL','DIV','NEG','NOT','EQ','NEQ','LT','LTE','GT','GTE','LIKE','BETWEEN','IN','IS_NULL','IS_NOT_NULL',
+        'TX_BEGIN','TX_COMMIT','TX_ROLLBACK',
+        'GET','SCAN','INSERT','UPDATE','DELETE','UPDATE_WHERE','DELETE_WHERE','SELECT_INTO',
+        'CURSOR_OPEN','CURSOR_FETCH','CURSOR_CLOSE','CURSOR_DEALLOC',
+        'CALL_BUILTIN','CALL_PROC','CALL_UDF',
+        'SET_TRANSIENT','CLEAR_TRANSIENTS',
+        'REL_QUERY','INDEX_SCAN'
+      ];
+
+      for (const rawLine of lines) {
+        const line = String(rawLine).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        if (line.startsWith('=== Program:')) {
+          html += `<div style="color:#38bdf8; font-weight:700; font-size:0.95rem; border-bottom:1px solid #334155; padding-bottom:4px; margin-bottom:4px;">${line}</div>`;
+        } else if (line.startsWith('Registers:')) {
+          html += `<div style="color:#94a3b8; font-size:0.8rem; margin-bottom:6px;">${line}</div>`;
+        } else if (line.startsWith('--- Constants ---') || line.startsWith('--- Instructions ---')) {
+          html += `<div style="color:#f59e0b; font-weight:600; text-transform:uppercase; margin-top:8px; margin-bottom:4px; letter-spacing:0.04em;">${line}</div>`;
+        } else if (line.trim().startsWith('[')) {
+          html += `<div style="color:#a3e635; padding-left:12px;">${line}</div>`;
+        } else {
+          let formatted = line;
+          formatted = formatted.replace(/^(\s*)(\d{4}:)/, '$1<span style="color:#64748b;">$2</span>');
+          for (const op of opcodes) {
+            const re = new RegExp(`\\b(${op})\\b`);
+            if (re.test(formatted)) {
+              let opColor = '#c084fc';
+              if (['JUMP','JUMP_IF_FALSE','JUMP_IF_TRUE','RETURN','HALT'].includes(op)) opColor = '#f43f5e';
+              else if (['REL_QUERY','INDEX_SCAN','SCAN','GET'].includes(op)) opColor = '#38bdf8';
+              else if (['INSERT','UPDATE','DELETE','UPDATE_WHERE','DELETE_WHERE','SELECT_INTO'].includes(op)) opColor = '#34d399';
+              else if (['TX_BEGIN','TX_COMMIT','TX_ROLLBACK'].includes(op)) opColor = '#fbbf24';
+              formatted = formatted.replace(re, `<span style="color:${opColor}; font-weight:700;">$1</span>`);
+              break;
+            }
+          }
+          formatted = formatted.replace(/([ABC]:-?\d+)/g, '<span style="color:#fb923c;">$1</span>');
+          formatted = formatted.replace(/(;.*)$/, '<span style="color:#6ee7b7; font-style:italic;">$1</span>');
+          html += `<div style="padding-left:12px;">${formatted}</div>`;
+        }
+      }
+      return html;
     }
 
     async function explainQuery(analyze) {
@@ -1063,9 +1164,14 @@ END;</textarea>
         const durationMs = (out.duration_us / 1000).toFixed(2);
 
         const exportActions = document.getElementById('query-export-actions');
+        const vdbeView = document.getElementById('vdbe-disassembler-view');
+        const tableContainer = document.getElementById('query-result-table-container');
+
         if (out.error) {
           lastQueryResult = null;
           if (exportActions) exportActions.style.display = 'none';
+          if (vdbeView) vdbeView.style.display = 'none';
+          if (tableContainer) tableContainer.style.display = 'block';
           bannerEl.style.display = 'block';
           bannerEl.style.background = '#7f1d1d';
           bannerEl.style.color = '#fca5a5';
@@ -1081,8 +1187,11 @@ END;</textarea>
           bannerEl.style.color = '#6ee7b7';
           bannerEl.style.border = '1px solid #10b981';
           
+          const isBytecode = (out.command === 'EXPLAIN BYTECODE') || (out.columns && out.columns.length === 1 && out.columns[0] === 'Bytecode');
           let statusText = 'Query executed successfully.';
-          if (out.command === 'EXPLAIN') {
+          if (isBytecode) {
+            statusText = `VDBE Bytecode disassembled (${durationMs}ms).`;
+          } else if (out.command === 'EXPLAIN') {
             statusText = `Execution plan generated (${durationMs}ms).`;
           } else if (out.rows_affected !== undefined && out.rows_affected >= 0 && (!out.columns || out.columns.length === 0)) {
             statusText = `Query OK, ${out.rows_affected} row(s) affected (${durationMs}ms).`;
@@ -1092,26 +1201,43 @@ END;</textarea>
           bannerEl.innerText = statusText;
           metaEl.innerText = `OK (${durationMs}ms)`;
 
-          // Render result table
-          if (out.columns && out.columns.length > 0) {
-            let thead = '<tr>' + out.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
-            let tbody = '';
-            if (out.rows && out.rows.length > 0) {
-              tbody = out.rows.map(r => {
-                return '<tr>' + out.columns.map(c => {
-                  const val = r[c];
-                  if (val === null || val === undefined) {
-                    return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
-                  }
-                  return `<td>${val}</td>`;
-                }).join('') + '</tr>';
-              }).join('');
-            } else {
-              tbody = `<tr><td colspan="${out.columns.length}" style="text-align:center; color:var(--text-muted); font-style:italic;">Empty result set (0 rows)</td></tr>`;
+          // VDBE Disassembly View vs Table View
+          if (isBytecode && out.rows && out.rows.length > 0) {
+            const rawLines = out.rows.map(r => r.Bytecode || '');
+            const badgeEl = document.getElementById('vdbe-program-badge');
+            if (badgeEl && out.messages && out.messages.length > 0) {
+              badgeEl.innerText = out.messages[0];
+            } else if (badgeEl) {
+              badgeEl.innerText = 'VDBE Program';
             }
-            tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
+            document.getElementById('vdbe-assembly-listing').innerHTML = formatVDBEAssembly(rawLines);
+            if (vdbeView) vdbeView.style.display = 'block';
+            if (tableContainer) tableContainer.style.display = 'none';
           } else {
-            tableEl.innerHTML = '<thead><tr><th>Execution Status</th></tr></thead><tbody><tr><td>' + statusText + '</td></tr></tbody>';
+            if (vdbeView) vdbeView.style.display = 'none';
+            if (tableContainer) tableContainer.style.display = 'block';
+
+            // Render result table
+            if (out.columns && out.columns.length > 0) {
+              let thead = '<tr>' + out.columns.map(c => `<th>${c}</th>`).join('') + '</tr>';
+              let tbody = '';
+              if (out.rows && out.rows.length > 0) {
+                tbody = out.rows.map(r => {
+                  return '<tr>' + out.columns.map(c => {
+                    const val = r[c];
+                    if (val === null || val === undefined) {
+                      return '<td style="color:var(--text-muted); font-style:italic;">NULL</td>';
+                    }
+                    return `<td>${val}</td>`;
+                  }).join('') + '</tr>';
+                }).join('');
+              } else {
+                tbody = `<tr><td colspan="${out.columns.length}" style="text-align:center; color:var(--text-muted); font-style:italic;">Empty result set (0 rows)</td></tr>`;
+              }
+              tableEl.innerHTML = `<thead>${thead}</thead><tbody>${tbody}</tbody>`;
+            } else {
+              tableEl.innerHTML = '<thead><tr><th>Execution Status</th></tr></thead><tbody><tr><td>' + statusText + '</td></tr></tbody>';
+            }
           }
 
           // Record in query history

@@ -78,6 +78,9 @@ const (
 
 	// Relational Query Execution (Volcano Engine Integration)
 	OpRelQuery
+
+	// Secondary Index Range & Point Scan
+	OpIndexScan
 )
 
 func (op OpCode) String() string {
@@ -186,6 +189,8 @@ func (op OpCode) String() string {
 		return "CLEAR_TRANSIENTS"
 	case OpRelQuery:
 		return "REL_QUERY"
+	case OpIndexScan:
+		return "INDEX_SCAN"
 	default:
 		return fmt.Sprintf("OP_%d", op)
 	}
@@ -251,6 +256,24 @@ func (d *RelQueryData) String() string {
 		return fmt.Sprintf("SQL:%q INTO @%s", d.SQL, d.IntoVar)
 	}
 	return fmt.Sprintf("SQL:%q", d.SQL)
+}
+
+// IndexScanData holds metadata for secondary index scan operations.
+type IndexScanData struct {
+	Table       string
+	IndexName   string
+	LowVal      Expr
+	HighVal     Expr
+	WhereExpr   Expr
+	Projections []string
+	IntoVar     string
+}
+
+func (d *IndexScanData) String() string {
+	if d == nil {
+		return ""
+	}
+	return fmt.Sprintf("Table:%s Index:%s", d.Table, d.IndexName)
 }
 
 // Program represents a compiled, executable T-SQL bytecode program.

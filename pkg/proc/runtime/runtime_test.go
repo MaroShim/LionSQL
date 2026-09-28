@@ -542,3 +542,140 @@ func TestVM_OpRelQueryWithJoin(t *testing.T) {
 		t.Fatalf("expected 2 joined rows, got %d: %v", len(res.Rows), res.Rows)
 	}
 }
+
+func TestVM_OpIndexScan(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	err := eng.CreateTable(&storage.TableSchema{
+		Name: "employees",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "dept", Type: storage.TypeVarChar},
+			{Name: "salary", Type: storage.TypeInt},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTable employees failed: %v", err)
+	}
+
+	err = eng.CreateIndex(&storage.IndexSchema{
+		Name:      "idx_emp_dept",
+		TableName: "employees",
+		Columns:   []string{"dept"},
+	})
+	if err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	tx, _ := session.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("employees", storage.Record{"id": storage.IntValue(1), "dept": storage.StringValue("HR"), "salary": storage.IntValue(4000)})
+	_ = tx.Insert("employees", storage.Record{"id": storage.IntValue(2), "dept": storage.StringValue("IT"), "salary": storage.IntValue(7000)})
+	_ = tx.Insert("employees", storage.Record{"id": storage.IntValue(3), "dept": storage.StringValue("IT"), "salary": storage.IntValue(8500)})
+	_ = tx.Insert("employees", storage.Record{"id": storage.IntValue(4), "dept": storage.StringValue("MKT"), "salary": storage.IntValue(5000)})
+	_ = tx.Commit()
+
+	executor := runtime.NewExecutor(runtime.NewPlanCache())
+	executor.SetTableGetter(eng.GetTable)
+
+	// 1. Test direct OpIndexScan execution
+	prog := &proc.Program{
+		Name: "TestIndexScan",
+		Type: "QUERY",
+		Instructions: []proc.Instruction{
+			{
+				Op: proc.OpIndexScan,
+				Data: &proc.IndexScanData{
+					Table:       "employees",
+					IndexName:   "idx_emp_dept",
+					LowVal:      &proc.LiteralExpr{Val: storage.StringValue("IT")},
+					HighVal:     &proc.LiteralExpr{Val: storage.StringValue("IT")},
+					Projections: []string{"id", "dept", "salary"},
+				},
+			},
+			{Op: proc.OpReturn, A: -1},
+		},
+		NumRegisters: 4,
+	}
+
+	res, err := executor.Run(prog, "TestIndexScan", nil, session)
+	if err != nil {
+		t.Fatalf("OpIndexScan failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 IT rows from OpIndexScan, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	for _, r := range res.Rows {
+		if fmt.Sprintf("%v", r["dept"]) != "IT" {
+			t.Errorf("expected dept IT, got %v", r["dept"])
+		}
+	}
+
+	// 2. Test OpUpdateWhere utilizing index scan
+	updateProg := &proc.Program{
+		Name: "TestIndexUpdate",
+		Type: "PROCEDURE",
+		Instructions: []proc.Instruction{
+			{
+				Op: proc.OpUpdateWhere,
+				Data: &proc.DMLData{
+					Table: "employees",
+					Assignments: []proc.UpdateAssignment{
+						{Column: "salary", Value: &proc.LiteralExpr{Val: storage.IntValue(9999)}},
+					},
+					WhereExpr: &proc.BinaryExpr{
+						Left:  &proc.ColumnRefExpr{Name: "dept"},
+						Op:    proc.TokenEq,
+						Right: &proc.LiteralExpr{Val: storage.StringValue("IT")},
+					},
+				},
+			},
+			{Op: proc.OpReturn, A: -1},
+		},
+		NumRegisters: 4,
+	}
+
+	updateRes, err := executor.Run(updateProg, "TestIndexUpdate", nil, session)
+	if err != nil {
+		t.Fatalf("OpUpdateWhere with index failed: %v", err)
+	}
+	if updateRes.RowsAffected != 2 {
+		t.Fatalf("expected 2 rows updated, got %d", updateRes.RowsAffected)
+	}
+
+	// 3. Test OpDeleteWhere utilizing index scan
+	deleteProg := &proc.Program{
+		Name: "TestIndexDelete",
+		Type: "PROCEDURE",
+		Instructions: []proc.Instruction{
+			{
+				Op: proc.OpDeleteWhere,
+				Data: &proc.DMLData{
+					Table: "employees",
+					WhereExpr: &proc.BinaryExpr{
+						Left:  &proc.ColumnRefExpr{Name: "dept"},
+						Op:    proc.TokenEq,
+						Right: &proc.LiteralExpr{Val: storage.StringValue("IT")},
+					},
+				},
+			},
+			{Op: proc.OpReturn, A: -1},
+		},
+		NumRegisters: 4,
+	}
+
+	deleteRes, err := executor.Run(deleteProg, "TestIndexDelete", nil, session)
+	if err != nil {
+		t.Fatalf("OpDeleteWhere with index failed: %v", err)
+	}
+	if deleteRes.RowsAffected != 2 {
+		t.Fatalf("expected 2 rows deleted, got %d", deleteRes.RowsAffected)
+	}
+}
+

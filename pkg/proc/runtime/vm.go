@@ -882,6 +882,89 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			if inst.A >= 0 && int(inst.A) < len(f.regs) {
 				f.regs[inst.A] = storage.IntValue(int64(len(rows)))
 			}
+
+		case proc.OpIndexScan:
+			data := inst.Data.(*proc.IndexScanData)
+			evalCtx := f.buildRowEvalMap(nil)
+
+			var lowVal *storage.Value
+			if data.LowVal != nil {
+				vAny, _ := proc.EvalRowExpr(data.LowVal, evalCtx, nil)
+				sv := toStorageValue(vAny)
+				lowVal = &sv
+			}
+
+			var highVal *storage.Value
+			if data.HighVal != nil {
+				vAny, _ := proc.EvalRowExpr(data.HighVal, evalCtx, nil)
+				sv := toStorageValue(vAny)
+				highVal = &sv
+			}
+
+			cursor, err := f.tx.IndexScan(data.Table, data.IndexName, lowVal, highVal)
+			if err != nil {
+				f.lastError = 50000
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, fmt.Errorf("OpIndexScan on %s (%s) error: %w", data.Table, data.IndexName, err)
+			}
+			defer cursor.Close()
+
+			var rows []map[string]any
+			var cols []string
+			if len(data.Projections) > 0 {
+				cols = data.Projections
+			}
+
+			for cursor.Next() {
+				rec, err := cursor.Record()
+				if err != nil {
+					break
+				}
+				rowMap := recordToMap(rec)
+
+				if data.WhereExpr != nil {
+					rowContext := f.buildRowEvalMap(rowMap)
+					if !proc.EvalBoolExpr(data.WhereExpr, rowContext, nil) {
+						continue
+					}
+				}
+
+				if len(cols) == 0 {
+					for k := range rec {
+						cols = append(cols, k)
+					}
+					sort.Strings(cols)
+				}
+
+				outRow := make(map[string]any, len(cols))
+				for _, c := range cols {
+					if v, ok := rowMap[c]; ok {
+						outRow[c] = v
+					} else {
+						outRow[c] = nil
+					}
+				}
+				rows = append(rows, outRow)
+			}
+
+			f.rows = rows
+			f.columns = cols
+			f.rowCount = int64(len(rows))
+
+			if data.IntoVar != "" && len(rows) > 0 {
+				for _, v := range rows[0] {
+					f.setVar(data.IntoVar, toStorageValue(v))
+					break
+				}
+			}
+			if inst.A >= 0 && int(inst.A) < len(f.regs) {
+				f.regs[inst.A] = storage.IntValue(int64(len(rows)))
+			}
 		}
 	}
 
@@ -1045,9 +1128,32 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 }
 
 func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
-	cursor, err := f.tx.Scan(data.Table)
-	if err != nil {
-		return 0, fmt.Errorf("updateWhere scan error on %s: %w", data.Table, err)
+	var cursor storage.Cursor
+	var err error
+
+	if idxName, lowExpr, highExpr, ok := f.findMatchingIndex(data.Table, data.WhereExpr); ok {
+		evalCtx := f.buildRowEvalMap(nil)
+		var lowVal, highVal *storage.Value
+		if lowExpr != nil {
+			if v, evalErr := proc.EvalRowExpr(lowExpr, evalCtx, nil); evalErr == nil {
+				sv := toStorageValue(v)
+				lowVal = &sv
+			}
+		}
+		if highExpr != nil {
+			if v, evalErr := proc.EvalRowExpr(highExpr, evalCtx, nil); evalErr == nil {
+				sv := toStorageValue(v)
+				highVal = &sv
+			}
+		}
+		cursor, err = f.tx.IndexScan(data.Table, idxName, lowVal, highVal)
+	}
+
+	if cursor == nil || err != nil {
+		cursor, err = f.tx.Scan(data.Table)
+		if err != nil {
+			return 0, fmt.Errorf("updateWhere scan error on %s: %w", data.Table, err)
+		}
 	}
 	defer cursor.Close()
 
@@ -1145,9 +1251,32 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 }
 
 func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
-	cursor, err := f.tx.Scan(data.Table)
-	if err != nil {
-		return 0, fmt.Errorf("deleteWhere scan error on %s: %w", data.Table, err)
+	var cursor storage.Cursor
+	var err error
+
+	if idxName, lowExpr, highExpr, ok := f.findMatchingIndex(data.Table, data.WhereExpr); ok {
+		evalCtx := f.buildRowEvalMap(nil)
+		var lowVal, highVal *storage.Value
+		if lowExpr != nil {
+			if v, evalErr := proc.EvalRowExpr(lowExpr, evalCtx, nil); evalErr == nil {
+				sv := toStorageValue(v)
+				lowVal = &sv
+			}
+		}
+		if highExpr != nil {
+			if v, evalErr := proc.EvalRowExpr(highExpr, evalCtx, nil); evalErr == nil {
+				sv := toStorageValue(v)
+				highVal = &sv
+			}
+		}
+		cursor, err = f.tx.IndexScan(data.Table, idxName, lowVal, highVal)
+	}
+
+	if cursor == nil || err != nil {
+		cursor, err = f.tx.Scan(data.Table)
+		if err != nil {
+			return 0, fmt.Errorf("deleteWhere scan error on %s: %w", data.Table, err)
+		}
 	}
 	defer cursor.Close()
 
@@ -1292,10 +1421,80 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 	return storage.NullValue(storage.TypeUnknown), nil
 }
 
+func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (string, proc.Expr, proc.Expr, bool) {
+	if whereExpr == nil {
+		return "", nil, nil, false
+	}
+	tg := f.executor.getTableGetter()
+	if tg == nil {
+		return "", nil, nil, false
+	}
+	schema, err := tg(tableName)
+	if err != nil || schema == nil || len(schema.Indexes) == 0 {
+		return "", nil, nil, false
+	}
+
+	switch e := whereExpr.(type) {
+	case *proc.BinaryExpr:
+		if e.Op == proc.TokenEq {
+			var colName string
+			var valExpr proc.Expr
+			if leftCol, ok := e.Left.(*proc.ColumnRefExpr); ok {
+				colName = cleanSymbol(leftCol.Name)
+				valExpr = e.Right
+			} else if rightCol, ok := e.Right.(*proc.ColumnRefExpr); ok {
+				colName = cleanSymbol(rightCol.Name)
+				valExpr = e.Left
+			}
+			if colName != "" && valExpr != nil {
+				for _, idx := range schema.Indexes {
+					if len(idx.Columns) > 0 && strings.EqualFold(idx.Columns[0], colName) {
+						return idx.Name, valExpr, valExpr, true
+					}
+				}
+			}
+		}
+	case *proc.BetweenExpr:
+		if colRef, ok := e.Expr.(*proc.ColumnRefExpr); ok {
+			colName := cleanSymbol(colRef.Name)
+			for _, idx := range schema.Indexes {
+				if len(idx.Columns) > 0 && strings.EqualFold(idx.Columns[0], colName) {
+					return idx.Name, e.Low, e.High, true
+				}
+			}
+		}
+	}
+
+	return "", nil, nil, false
+}
+
 func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr) ([]storage.Record, error) {
-	cursor, err := f.tx.Scan(tableName)
-	if err != nil {
-		return nil, err
+	var cursor storage.Cursor
+	var err error
+
+	if idxName, lowExpr, highExpr, ok := f.findMatchingIndex(tableName, whereExpr); ok {
+		evalCtx := f.buildRowEvalMap(nil)
+		var lowVal, highVal *storage.Value
+		if lowExpr != nil {
+			if v, evalErr := proc.EvalRowExpr(lowExpr, evalCtx, nil); evalErr == nil {
+				sv := toStorageValue(v)
+				lowVal = &sv
+			}
+		}
+		if highExpr != nil {
+			if v, evalErr := proc.EvalRowExpr(highExpr, evalCtx, nil); evalErr == nil {
+				sv := toStorageValue(v)
+				highVal = &sv
+			}
+		}
+		cursor, err = f.tx.IndexScan(tableName, idxName, lowVal, highVal)
+	}
+
+	if cursor == nil || err != nil {
+		cursor, err = f.tx.Scan(tableName)
+		if err != nil {
+			return nil, err
+		}
 	}
 	defer cursor.Close()
 
