@@ -26,6 +26,7 @@ const (
 var precedences = map[TokenType]int{
 	TokenOr:              precOr,
 	TokenAnd:             precAnd,
+	TokenNot:             precEquals,
 	TokenIn:              precEquals,
 	TokenBetween:         precEquals,
 	TokenLike:            precEquals,
@@ -1240,6 +1241,19 @@ func (p *Parser) parseExpression(precedence int) Expr {
 				return nil
 			}
 			p.nextToken() // eat (
+			if p.curTokenIs(TokenSelect) {
+				p.nextToken() // eat SELECT
+				sel, err := p.parseGeneralSelect()
+				if err != nil {
+					return nil
+				}
+				if !p.curTokenIs(TokenRParen) {
+					return nil
+				}
+				p.nextToken() // eat )
+				leftExp = &InExpr{Expr: leftExp, Not: false, Query: sel}
+				break
+			}
 			var list []Expr
 			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 				item := p.parseExpression(precLowest)
@@ -1257,6 +1271,53 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			}
 			p.nextToken() // eat )
 			leftExp = &InExpr{Expr: leftExp, Not: false, List: list}
+
+		case TokenNot:
+			p.nextToken() // eat NOT
+			if p.curTokenIs(TokenIn) {
+				p.nextToken() // eat IN
+				if !p.curTokenIs(TokenLParen) {
+					return nil
+				}
+				p.nextToken() // eat (
+				if p.curTokenIs(TokenSelect) {
+					p.nextToken() // eat SELECT
+					sel, err := p.parseGeneralSelect()
+					if err != nil {
+						return nil
+					}
+					if !p.curTokenIs(TokenRParen) {
+						return nil
+					}
+					p.nextToken() // eat )
+					leftExp = &InExpr{Expr: leftExp, Not: true, Query: sel}
+					break
+				}
+				var list []Expr
+				for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+					item := p.parseExpression(precLowest)
+					if item != nil {
+						list = append(list, item)
+					}
+					if p.curTokenIs(TokenComma) {
+						p.nextToken()
+					} else {
+						break
+					}
+				}
+				if !p.curTokenIs(TokenRParen) {
+					return nil
+				}
+				p.nextToken() // eat )
+				leftExp = &InExpr{Expr: leftExp, Not: true, List: list}
+				break
+			}
+			rightExp := p.parseExpression(precedences[TokenNot])
+			leftExp = &BinaryExpr{
+				Left:  leftExp,
+				Op:    TokenNot,
+				Right: rightExp,
+			}
 
 		case TokenBetween:
 			p.nextToken() // eat BETWEEN
@@ -1412,27 +1473,23 @@ func (p *Parser) parsePrefix() Expr {
 		return &UnaryExpr{Op: TokenNot, Expr: right}
 	case TokenLParen:
 		p.nextToken()
-		// Check for scalar subquery (SELECT col FROM tbl WHERE ...)
+		// Check for scalar subquery (SELECT ...)
 		if p.curTokenIs(TokenSelect) {
 			p.nextToken() // eat SELECT
-			col := p.curToken.Literal
-			p.nextToken()
-			if !p.curTokenIs(TokenFrom) {
-				return nil
+			sel, err := p.parseGeneralSelect()
+			if err == nil && sel != nil && p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+				sub := &ScalarSubqueryExpr{
+					Query: sel,
+					Table: sel.From.Name,
+					Where: sel.Where,
+				}
+				if len(sel.Projections) > 0 {
+					sub.Column = sel.Projections[0].String()
+				}
+				return sub
 			}
-			p.nextToken() // eat FROM
-			tbl := p.curToken.Literal
-			p.nextToken()
-			var where Expr
-			if p.curTokenIs(TokenWhere) {
-				p.nextToken()
-				where = p.parseExpression(precLowest)
-			}
-			if !p.curTokenIs(TokenRParen) {
-				return nil
-			}
-			p.nextToken() // eat )
-			return &ScalarSubqueryExpr{Column: col, Table: tbl, Where: where}
+			return nil
 		}
 
 		exp := p.parseExpression(precLowest)

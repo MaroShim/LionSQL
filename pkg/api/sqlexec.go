@@ -1324,6 +1324,10 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 	if err != nil {
 		return nil, fmt.Errorf("EXPLAIN parse error: %w", err)
 	}
+	_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
+		_, err := s.engine.GetTable(cleanIdentifier(tbl))
+		return err == nil
+	})
 
 	rawTable := qInfo.TableName
 	tableName := cleanIdentifier(rawTable)
@@ -1497,12 +1501,20 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 }
 
 func findSubquery(s string, prefixPattern *regexp.Regexp) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
-	loc := prefixPattern.FindStringSubmatchIndex(s)
+	return findSubqueryFrom(s, prefixPattern, 0)
+}
+
+func findSubqueryFrom(s string, prefixPattern *regexp.Regexp, startOffset int) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
+	if startOffset >= len(s) {
+		return 0, 0, "", "", false
+	}
+	loc := prefixPattern.FindStringSubmatchIndex(s[startOffset:])
 	if loc == nil {
 		return 0, 0, "", "", false
 	}
+	actualStart := loc[0] + startOffset
 	openParenIdx := -1
-	for i := loc[0]; i < len(s); i++ {
+	for i := actualStart; i < len(s); i++ {
 		if s[i] == '(' {
 			openParenIdx = i
 			break
@@ -1530,7 +1542,7 @@ func findSubquery(s string, prefixPattern *regexp.Regexp) (matchStart int, match
 	}
 
 	inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
-	return loc[0], closeParenIdx + 1, s[loc[0]:openParenIdx], inner, true
+	return actualStart, closeParenIdx + 1, s[actualStart:openParenIdx], inner, true
 }
 
 func (s *Server) execAnalyze(query string, start time.Time) (*QueryResult, error) {
@@ -1657,14 +1669,20 @@ func (s *Server) resolveSubqueries(whereClause string) (string, error) {
 
 	// 1. [NOT] EXISTS (SELECT ...)
 	existsRe := regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*\(?\s*SELECT\b`)
+	offset := 0
 	for {
-		mStart, mEnd, prefix, innerSQL, found := findSubquery(result, existsRe)
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, existsRe, offset)
 		if !found {
 			break
 		}
-		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
 		innerRes, err := s.ExecuteSQL(innerSQL)
-		hasRows := err == nil && innerRes != nil && len(innerRes.Rows) > 0
+		if err != nil {
+			// If inner query failed (e.g. contains outer reference), skip so planner can decorrelate
+			offset = mEnd
+			continue
+		}
+		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		hasRows := len(innerRes.Rows) > 0
 		replacement := "1=0"
 		if isNot {
 			if !hasRows {
@@ -1676,12 +1694,14 @@ func (s *Server) resolveSubqueries(whereClause string) (string, error) {
 			}
 		}
 		result = result[:mStart] + replacement + result[mEnd:]
+		offset = mStart + len(replacement)
 	}
 
 	// 2. [NOT] IN (SELECT ...) -> [NOT] IN (val1, val2, ...)
 	inSelectRe := regexp.MustCompile(`(?is)\b([a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*\(?\s*SELECT\b`)
+	offset = 0
 	for {
-		mStart, mEnd, prefix, innerSQL, found := findSubquery(result, inSelectRe)
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, inSelectRe, offset)
 		if !found {
 			break
 		}
@@ -1689,7 +1709,11 @@ func (s *Server) resolveSubqueries(whereClause string) (string, error) {
 		colName := cleanIdentifier(tokens[0])
 		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
 		innerRes, err := s.ExecuteSQL(innerSQL)
-		hasRows := err == nil && innerRes != nil && len(innerRes.Rows) > 0
+		if err != nil {
+			offset = mEnd
+			continue
+		}
+		hasRows := len(innerRes.Rows) > 0
 		replacement := "1=0"
 		if isNot {
 			if !hasRows {
@@ -1720,12 +1744,12 @@ func (s *Server) resolveSubqueries(whereClause string) (string, error) {
 					if len(innerRes.Columns) > 0 {
 						colKey := innerRes.Columns[0]
 						if v, ok := r[colKey]; ok {
-							vals = append(vals, fmt.Sprintf("'%v'", v))
+							vals = append(vals, formatSubqueryVal(v))
 							continue
 						}
 					}
 					for _, v := range r {
-						vals = append(vals, fmt.Sprintf("'%v'", v))
+						vals = append(vals, formatSubqueryVal(v))
 						break
 					}
 				}
@@ -1735,18 +1759,24 @@ func (s *Server) resolveSubqueries(whereClause string) (string, error) {
 			}
 		}
 		result = result[:mStart] + replacement + result[mEnd:]
+		offset = mStart + len(replacement)
 	}
 
 	// 3. Scalar Subquery in comparisons: e.g. > (SELECT ...), = (SELECT ...)
 	scalarRe := regexp.MustCompile(`(?is)\(\s*SELECT\b`)
+	offset = 0
 	for {
-		mStart, mEnd, _, innerSQL, found := findSubquery(result, scalarRe)
+		mStart, mEnd, _, innerSQL, found := findSubqueryFrom(result, scalarRe, offset)
 		if !found {
 			break
 		}
 		innerRes, err := s.ExecuteSQL(innerSQL)
+		if err != nil {
+			offset = mEnd
+			continue
+		}
 		replacement := "NULL"
-		if err == nil && innerRes != nil && len(innerRes.Rows) > 0 {
+		if len(innerRes.Rows) > 0 {
 			r := innerRes.Rows[0]
 			var foundVal any
 			if len(innerRes.Columns) > 0 {
@@ -1764,13 +1794,44 @@ func (s *Server) resolveSubqueries(whereClause string) (string, error) {
 				}
 			}
 			if foundVal != nil {
-				replacement = fmt.Sprintf("'%v'", foundVal)
+				replacement = formatSubqueryVal(foundVal)
 			}
 		}
 		result = result[:mStart] + replacement + result[mEnd:]
+		offset = mStart + len(replacement)
 	}
 
 	return result, nil
+}
+
+func formatSubqueryVal(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", val)
+	case float32, float64:
+		return fmt.Sprintf("%v", val)
+	case bool:
+		if val {
+			return "1"
+		}
+		return "0"
+	case storage.Decimal:
+		return val.String()
+	case string:
+		if _, err := strconv.ParseFloat(val, 64); err == nil {
+			return val
+		}
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "''"))
+	default:
+		str := fmt.Sprintf("%v", val)
+		if _, err := strconv.ParseFloat(str, 64); err == nil {
+			return str
+		}
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(str, "'", "''"))
+	}
 }
 
 func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
@@ -1867,6 +1928,12 @@ func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
 }
 
 func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	p := planner.NewPlanner()
+	_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
+		_, err := s.engine.GetTable(cleanIdentifier(tbl))
+		return err == nil
+	})
+
 	if qInfo.WhereClause != "" {
 		if resolved, err := s.resolveSubqueries(qInfo.WhereClause); err == nil {
 			qInfo.WhereClause = resolved
@@ -1919,7 +1986,6 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 		defer tx.Rollback()
 	}
 
-	p := planner.NewPlanner()
 	var leftStats *planner.TableStats
 	rightStats := make(map[string]*planner.TableStats)
 	if s.catalog != nil {
@@ -2845,10 +2911,6 @@ func (s *Server) execSetOpExplain(setQuery *planner.SetOpQuery, analyze bool, st
 func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
-	if resolved, err := s.resolveSubqueries(cleaned); err == nil {
-		cleaned = resolved
-	}
-
 	// 0. Set Operations: UNION [ALL], INTERSECT, EXCEPT / MINUS
 	if setQuery, ok := planner.FindTopLevelSetOps(cleaned); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
 		return s.execSetOpSelect(setQuery, start, cs)
@@ -2871,6 +2933,11 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	p := planner.NewPlanner()
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil {
+		_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
+			_, err := s.engine.GetTable(cleanIdentifier(tbl))
+			return err == nil
+		})
+
 		rawTable := qInfo.TableName
 		tableName := cleanIdentifier(rawTable)
 
@@ -2901,6 +2968,23 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 		// Intercept Virtual System Catalog Views (sys.* and information_schema.*)
 		if s.isVirtualCatalogTable(tableName) {
 			return s.execVirtualCatalogSelect(tableName, strings.Join(qInfo.Projections, ", "), qInfo.WhereClause, qInfo.OrderByClause, int(qInfo.LimitCount), start)
+		}
+
+		// If query has joins (including subqueries decorrelated into joins), execute via Volcano CBO Engine
+		if len(qInfo.Joins) > 0 || qInfo.Join != nil {
+			return s.execVolcanoSelect(qInfo, start, cs)
+		}
+
+		rawWhere := qInfo.WhereClause
+		if qInfo.WhereClause != "" {
+			if resolved, err := s.resolveSubqueries(qInfo.WhereClause); err == nil {
+				qInfo.WhereClause = resolved
+			}
+		}
+
+		// If query has subqueries in WHERE, execute via Volcano
+		if strings.Contains(strings.ToUpper(rawWhere), "EXISTS") || strings.Contains(strings.ToUpper(rawWhere), "SELECT") {
+			return s.execVolcanoSelect(qInfo, start, cs)
 		}
 
 		// Execute via unified VDBE Virtual Machine Engine (Primary Fast-Path)

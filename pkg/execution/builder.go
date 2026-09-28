@@ -169,7 +169,11 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		}
 
 		if innerIdx != nil {
-			return NewIndexNestedLoopJoinIterator(outerIter, tx, innerPlan.Relation, innerPlan.Alias, innerIdx, innerSchema, leftKey, plan.JoinType), nil
+			nIter := NewIndexNestedLoopJoinIterator(outerIter, tx, innerPlan.Relation, innerPlan.Alias, innerIdx, innerSchema, leftKey, plan.JoinType)
+			if innerPlan.FilterCond != "" {
+				nIter.SetFilter(innerPlan.FilterCond)
+			}
+			return nIter, nil
 		}
 
 		// Fallback to Hash Join if inner index is absent

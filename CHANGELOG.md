@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Correlated Subquery Decorrelation & Semi/Anti-Join Optimization (`pkg/planner`, `pkg/execution`, `pkg/proc`, `pkg/api`)**:
+  - Implemented automatic query decorrelation in `pkg/planner/decorrelate.go` converting correlated `WHERE EXISTS (SELECT ...)`, `WHERE NOT EXISTS (SELECT ...)`, `WHERE col IN (SELECT ...)`, and `WHERE col NOT IN (SELECT ...)` subqueries into relational `SEMI` and `ANTI` joins.
+  - Implemented paren-aware, string-literal-safe SQL clause splitter (`splitSelectClauses`), preventing subquery `FROM` and `WHERE` clauses from polluting outer query planning.
+  - Extended Volcano `HashJoinIterator` (`pkg/execution/join.go`) to support `SEMI` join (emitting outer tuple on first inner hash match and skipping duplicates) and `ANTI` join (emitting outer tuple only when no inner match exists), projecting only the outer schema.
+  - Extended Volcano `IndexNestedLoopJoinIterator` (`pkg/execution/join.go`) to support `SEMI` and `ANTI` joins with inner index scans and attached filter predicates (`FilterCond`).
+  - Extended Cost-Based Optimizer (`BuildMultiJoinPlanWithStats` in `pkg/planner/planner.go`) with cost modeling and row estimation for `SEMI` and `ANTI` joins.
+  - Extended Pratt parser (`pkg/proc/parser.go`) and AST (`pkg/proc/ast.go`) to parse full `GeneralSelectStmt` for scalar subqueries and `IN (SELECT ...)`.
+  - Added type-aware scalar and IN-list value formatting (`formatSubqueryVal` in `pkg/api/sqlexec.go`), preventing quoted numeric literals from breaking type comparisons.
+  - Added comprehensive test suites across `pkg/planner/decorrelate_test.go` and `pkg/api/subquery_test.go` verifying correlated `EXISTS`, `NOT EXISTS`, `IN`, `NOT IN`, scalar subqueries, and `EXPLAIN` verification of `SEMI` join plans.
 - **Cooperative Query Cancellation & Execution Interruption (`pkg/proc/runtime`, `pkg/api`, `pkg/wire`)**:
   - Implemented cooperative cancellation via `context.Context` (`QueryCtx` and `CancelFunc`) tracked on `ClientSession`, returning standard `"canceling statement due to user request"` error on cancel.
   - Added non-blocking cancellation check (`f.ctx.Done()`) in VDBE virtual machine instruction loop (`VMFrame.Execute`), instantly aborting long-running procedural loops, and added `ExecuteInTxContext` and `RunContext` on `proc.Executor`.

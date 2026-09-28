@@ -57,11 +57,12 @@ type CTEInfo struct {
 
 // JoinInfo contains metadata for a multi-table JOIN operation.
 type JoinInfo struct {
-	Type     string // "INNER" or "LEFT"
+	Type     string // "INNER", "LEFT", "SEMI", "ANTI"
 	Table    string
 	Alias    string
 	LeftKey  string
 	RightKey string
+	Filter   string // Optional filter condition on the joined table
 }
 
 // PlanNode represents a single step in a query execution plan tree.
@@ -265,34 +266,41 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 
 	ctes, mainSQL := parseCTEs(cleaned)
 
-	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
-	matches := selectRe.FindStringSubmatch(mainSQL)
-	if len(matches) < 3 {
-		return nil, fmt.Errorf("invalid SELECT statement for planning: %q", mainSQL)
-	}
+	var projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause string
+	var limitCount int64 = -1
 
-	projStr := strings.TrimSpace(matches[1])
-	fromClause := strings.TrimSpace(matches[2])
-	whereClause := ""
-	if len(matches) > 3 {
-		whereClause = strings.TrimSpace(matches[3])
-	}
-	groupByStr := ""
-	if len(matches) > 4 {
-		groupByStr = strings.TrimSpace(matches[4])
-	}
-	havingClause := ""
-	if len(matches) > 5 {
-		havingClause = strings.TrimSpace(matches[5])
-	}
-	orderByClause := ""
-	if len(matches) > 6 {
-		orderByClause = strings.TrimSpace(matches[6])
-	}
-	limitCount := int64(-1)
-	if len(matches) > 7 && matches[7] != "" {
-		if n, err := strconv.ParseInt(matches[7], 10, 64); err == nil {
-			limitCount = n
+	if pStr, fClause, wClause, gStr, hClause, oClause, lCount, ok := splitSelectClauses(mainSQL); ok {
+		projStr = pStr
+		fromClause = fClause
+		whereClause = wClause
+		groupByStr = gStr
+		havingClause = hClause
+		orderByClause = oClause
+		limitCount = lCount
+	} else {
+		selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
+		matches := selectRe.FindStringSubmatch(mainSQL)
+		if len(matches) < 3 {
+			return nil, fmt.Errorf("invalid SELECT statement for planning: %q", mainSQL)
+		}
+		projStr = strings.TrimSpace(matches[1])
+		fromClause = strings.TrimSpace(matches[2])
+		if len(matches) > 3 {
+			whereClause = strings.TrimSpace(matches[3])
+		}
+		if len(matches) > 4 {
+			groupByStr = strings.TrimSpace(matches[4])
+		}
+		if len(matches) > 5 {
+			havingClause = strings.TrimSpace(matches[5])
+		}
+		if len(matches) > 6 {
+			orderByClause = strings.TrimSpace(matches[6])
+		}
+		if len(matches) > 7 && matches[7] != "" {
+			if n, err := strconv.ParseInt(matches[7], 10, 64); err == nil {
+				limitCount = n
+			}
 		}
 	}
 
@@ -783,11 +791,13 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		}
 
 		joinEstRows := currentEstimatedRows
-		if join.Type == "INNER" {
+		if join.Type == "INNER" || join.Type == "SEMI" {
 			joinEstRows = int64(math.Min(float64(currentEstimatedRows), float64(rRows)))
 			if joinEstRows < 1 {
 				joinEstRows = 1
 			}
+		} else if join.Type == "ANTI" {
+			joinEstRows = int64(math.Max(1, float64(currentEstimatedRows)*0.5))
 		}
 
 		// Calculate Hash Join Cost
@@ -810,6 +820,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				Alias:         rAlias,
 				IndexName:     innerIndex.Name,
 				IndexCond:     fmt.Sprintf("(%s = %s)", innerIndex.Columns[0], leftKey),
+				FilterCond:    join.Filter,
 				StartupCost:   0.25,
 				TotalCost:     0.35,
 				EstimatedRows: 1,
@@ -827,13 +838,26 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			currentNode = nlNode
 		} else {
 			// Hash Join Strategy
-			rScanNode := &PlanNode{
+			var rScanNode *PlanNode
+			baseScan := &PlanNode{
 				Type:          NodeTableScan,
 				Relation:      join.Table,
 				Alias:         rAlias,
 				StartupCost:   0.0,
 				TotalCost:     rScanCost,
 				EstimatedRows: rRows,
+			}
+			if join.Filter != "" {
+				rScanNode = &PlanNode{
+					Type:          NodeFilter,
+					FilterCond:    join.Filter,
+					StartupCost:   0.0,
+					TotalCost:     rScanCost + float64(rRows)*CPUTupleCost,
+					EstimatedRows: int64(math.Max(1, float64(rRows)*0.5)),
+					Children:      []*PlanNode{baseScan},
+				}
+			} else {
+				rScanNode = baseScan
 			}
 
 			hashNode := &PlanNode{

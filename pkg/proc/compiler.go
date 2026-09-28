@@ -830,11 +830,21 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		return r, nil
 
 	case *ScalarSubqueryExpr:
+		col := e.Column
+		tbl := e.Table
+		whereVal := e.Where
+		if e.Query != nil {
+			if len(e.Query.Projections) > 0 {
+				col = e.Query.Projections[0].String()
+			}
+			tbl = e.Query.From.Name
+			whereVal = e.Query.Where
+		}
 		r := c.allocReg()
 		c.emit(OpSelectInto, r, 0, 0, &SelectIntoData{
-			Column:   e.Column,
-			Table:    e.Table,
-			WhereVal: e.Where,
+			Column:   col,
+			Table:    tbl,
+			WhereVal: whereVal,
 		})
 		return r, nil
 

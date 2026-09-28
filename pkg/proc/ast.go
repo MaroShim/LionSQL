@@ -432,22 +432,26 @@ func (e *FunctionCallExpr) String() string {
 	return fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", "))
 }
 
-// InExpr represents Expr [NOT] IN (Expr1, Expr2, ...)
+// InExpr represents Expr [NOT] IN (Expr1, Expr2, ...) or Expr [NOT] IN (SELECT ...)
 type InExpr struct {
-	Expr Expr
-	Not  bool
-	List []Expr
+	Expr  Expr
+	Not   bool
+	List  []Expr
+	Query *GeneralSelectStmt
 }
 
 func (e *InExpr) exprNode() {}
 func (e *InExpr) String() string {
-	items := make([]string, len(e.List))
-	for i, item := range e.List {
-		items[i] = item.String()
-	}
 	notStr := ""
 	if e.Not {
 		notStr = "NOT "
+	}
+	if e.Query != nil {
+		return fmt.Sprintf("%s %sIN (%s)", e.Expr.String(), notStr, e.Query.String())
+	}
+	items := make([]string, len(e.List))
+	for i, item := range e.List {
+		items[i] = item.String()
 	}
 	return fmt.Sprintf("%s %sIN (%s)", e.Expr.String(), notStr, strings.Join(items, ", "))
 }
@@ -504,10 +508,14 @@ type ScalarSubqueryExpr struct {
 	Column string
 	Table  string
 	Where  Expr
+	Query  *GeneralSelectStmt
 }
 
 func (e *ScalarSubqueryExpr) exprNode() {}
 func (e *ScalarSubqueryExpr) String() string {
+	if e.Query != nil {
+		return fmt.Sprintf("(%s)", e.Query.String())
+	}
 	if e.Where != nil {
 		return fmt.Sprintf("(SELECT %s FROM %s WHERE %s)", e.Column, e.Table, e.Where.String())
 	}

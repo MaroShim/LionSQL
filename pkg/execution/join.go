@@ -127,7 +127,11 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		return fmt.Errorf("hash join probe open error: %w", err)
 	}
 
-	h.colIndexMap = MergeColumnIndexMaps(h.left.ColIndexMap(), h.right.ColIndexMap())
+	if h.joinType == "SEMI" || h.joinType == "ANTI" {
+		h.colIndexMap = h.left.ColIndexMap()
+	} else {
+		h.colIndexMap = MergeColumnIndexMaps(h.left.ColIndexMap(), h.right.ColIndexMap())
+	}
 	h.currentProbe = Tuple{}
 	h.currentMatches = nil
 	h.matchIdx = 0
@@ -143,12 +147,14 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		default:
 		}
 
-		// If current probe tuple has pending matches, emit next match
-		if !h.currentProbe.IsNil() && h.matchIdx < len(h.currentMatches) {
-			matchTuple := h.currentMatches[h.matchIdx]
-			h.matchIdx++
-			h.emittedAny = true
-			return mergeTuples(h.currentProbe, matchTuple, h.colIndexMap), nil
+		// If current probe tuple has pending matches, emit next match (only for standard joins)
+		if h.joinType != "SEMI" && h.joinType != "ANTI" {
+			if !h.currentProbe.IsNil() && h.matchIdx < len(h.currentMatches) {
+				matchTuple := h.currentMatches[h.matchIdx]
+				h.matchIdx++
+				h.emittedAny = true
+				return mergeTuples(h.currentProbe, matchTuple, h.colIndexMap), nil
+			}
 		}
 
 		// Pull next probe tuple from outer relation
@@ -163,15 +169,36 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		h.emittedAny = false
 
 		keyVal, found := lookupVal(probeTuple, h.leftKey)
+		hasMatch := false
 		if found && keyVal != nil {
 			kStr := fmt.Sprintf("%v", keyVal)
 			if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
+				hasMatch = true
 				h.currentMatches = matches
-				matchTuple := h.currentMatches[h.matchIdx]
-				h.matchIdx++
-				h.emittedAny = true
-				return mergeTuples(h.currentProbe, matchTuple, h.colIndexMap), nil
 			}
+		}
+
+		if h.joinType == "SEMI" {
+			if hasMatch {
+				h.currentProbe = Tuple{}
+				return probeTuple, nil
+			}
+			continue
+		}
+
+		if h.joinType == "ANTI" {
+			if !hasMatch {
+				h.currentProbe = Tuple{}
+				return probeTuple, nil
+			}
+			continue
+		}
+
+		if hasMatch {
+			matchTuple := h.currentMatches[h.matchIdx]
+			h.matchIdx++
+			h.emittedAny = true
+			return mergeTuples(h.currentProbe, matchTuple, h.colIndexMap), nil
 		}
 
 		// If LEFT JOIN and no matches, emit probe tuple with NULLs
@@ -193,6 +220,12 @@ func (h *HashJoinIterator) Close() error {
 }
 
 func (h *HashJoinIterator) Schema() []string {
+	if h.joinType == "SEMI" || h.joinType == "ANTI" {
+		if h.left != nil {
+			return h.left.Schema()
+		}
+		return nil
+	}
 	if h.colIndexMap != nil {
 		return h.colIndexMap.Columns()
 	}
@@ -207,6 +240,12 @@ func (h *HashJoinIterator) Schema() []string {
 }
 
 func (h *HashJoinIterator) ColIndexMap() *ColumnIndexMap {
+	if h.joinType == "SEMI" || h.joinType == "ANTI" {
+		if h.left != nil {
+			return h.left.ColIndexMap()
+		}
+		return nil
+	}
 	if h.colIndexMap == nil && h.left != nil && h.right != nil {
 		h.colIndexMap = MergeColumnIndexMaps(h.left.ColIndexMap(), h.right.ColIndexMap())
 	}
@@ -215,18 +254,19 @@ func (h *HashJoinIterator) ColIndexMap() *ColumnIndexMap {
 
 // IndexNestedLoopJoinIterator executes a nested loop join by using an index on the inner table.
 type IndexNestedLoopJoinIterator struct {
-	outer           Iterator
-	tx              storage.Transaction
-	innerTable      string
-	innerAlias      string
-	innerIndex      *storage.IndexSchema
-	innerSchema     *storage.TableSchema
-	leftKey         string
-	joinType        string
-	currentOuter    Tuple
-	innerCursor     storage.Cursor
-	hasMatch        bool
-	colIndexMap     *ColumnIndexMap
+	outer            Iterator
+	tx               storage.Transaction
+	innerTable       string
+	innerAlias       string
+	innerIndex       *storage.IndexSchema
+	innerSchema      *storage.TableSchema
+	leftKey          string
+	joinType         string
+	filterCond       string
+	currentOuter     Tuple
+	innerCursor      storage.Cursor
+	hasMatch         bool
+	colIndexMap      *ColumnIndexMap
 	innerColIndexMap *ColumnIndexMap
 }
 
@@ -251,6 +291,11 @@ func NewIndexNestedLoopJoinIterator(outer Iterator, tx storage.Transaction, inne
 	}
 }
 
+// SetFilter sets an optional filter condition evaluated on inner tuples.
+func (n *IndexNestedLoopJoinIterator) SetFilter(cond string) {
+	n.filterCond = strings.TrimSpace(cond)
+}
+
 func (n *IndexNestedLoopJoinIterator) Open(ctx context.Context) error {
 	if n.outer == nil {
 		return fmt.Errorf("index nested loop join: outer iterator is nil")
@@ -263,7 +308,11 @@ func (n *IndexNestedLoopJoinIterator) Open(ctx context.Context) error {
 	if n.outer != nil {
 		outerMap = n.outer.ColIndexMap()
 	}
-	n.colIndexMap = MergeColumnIndexMaps(outerMap, n.innerColIndexMap)
+	if n.joinType == "SEMI" || n.joinType == "ANTI" {
+		n.colIndexMap = outerMap
+	} else {
+		n.colIndexMap = MergeColumnIndexMaps(outerMap, n.innerColIndexMap)
+	}
 	n.currentOuter = Tuple{}
 	n.innerCursor = nil
 	n.hasMatch = false
@@ -279,17 +328,47 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		}
 
 		if n.innerCursor != nil {
-			if n.innerCursor.Next() {
+			for n.innerCursor.Next() {
 				rec, err := n.innerCursor.Record()
-				if err == nil {
-					n.hasMatch = true
-					innerTuple := FormatRecord(rec, n.innerSchema, n.innerAlias, n.innerColIndexMap)
-					return mergeTuples(n.currentOuter, innerTuple, n.colIndexMap), nil
+				if err != nil {
+					break
 				}
+				innerTuple := FormatRecord(rec, n.innerSchema, n.innerAlias, n.innerColIndexMap)
+				if n.filterCond != "" && !EvalConditionTuple(innerTuple, n.filterCond) {
+					continue
+				}
+
+				n.hasMatch = true
+				if n.joinType == "SEMI" {
+					_ = n.innerCursor.Close()
+					n.innerCursor = nil
+					out := n.currentOuter
+					n.currentOuter = Tuple{}
+					return out, nil
+				}
+				if n.joinType == "ANTI" {
+					_ = n.innerCursor.Close()
+					n.innerCursor = nil
+					n.currentOuter = Tuple{}
+					break
+				}
+				return mergeTuples(n.currentOuter, innerTuple, n.colIndexMap), nil
 			}
-			// Inner cursor exhausted
-			_ = n.innerCursor.Close()
-			n.innerCursor = nil
+
+			if n.innerCursor != nil {
+				_ = n.innerCursor.Close()
+				n.innerCursor = nil
+			}
+
+			if n.joinType == "ANTI" {
+				if !n.hasMatch && !n.currentOuter.IsNil() {
+					out := n.currentOuter
+					n.currentOuter = Tuple{}
+					return out, nil
+				}
+				n.currentOuter = Tuple{}
+				continue
+			}
 
 			// If LEFT JOIN and had no match for this outer tuple
 			if (n.joinType == "LEFT" || strings.HasPrefix(n.joinType, "LEFT")) && !n.hasMatch && !n.currentOuter.IsNil() {
@@ -311,6 +390,10 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 
 		keyVal, found := lookupVal(outerTuple, n.leftKey)
 		if !found || keyVal == nil {
+			if n.joinType == "ANTI" {
+				n.currentOuter = Tuple{}
+				return outerTuple, nil
+			}
 			if n.joinType == "LEFT" || strings.HasPrefix(n.joinType, "LEFT") {
 				n.currentOuter = Tuple{}
 				return mergeTuplesWithNulls(outerTuple, len(n.innerSchemaColumns()), n.colIndexMap), nil
@@ -340,6 +423,12 @@ func (n *IndexNestedLoopJoinIterator) Close() error {
 }
 
 func (n *IndexNestedLoopJoinIterator) Schema() []string {
+	if n.joinType == "SEMI" || n.joinType == "ANTI" {
+		if n.outer != nil {
+			return n.outer.Schema()
+		}
+		return nil
+	}
 	if n.colIndexMap != nil {
 		return n.colIndexMap.Columns()
 	}
@@ -352,6 +441,12 @@ func (n *IndexNestedLoopJoinIterator) Schema() []string {
 }
 
 func (n *IndexNestedLoopJoinIterator) ColIndexMap() *ColumnIndexMap {
+	if n.joinType == "SEMI" || n.joinType == "ANTI" {
+		if n.outer != nil {
+			return n.outer.ColIndexMap()
+		}
+		return nil
+	}
 	if n.colIndexMap == nil {
 		n.innerColIndexMap = NewColumnIndexMap(n.innerSchema, n.innerAlias)
 		var outerMap *ColumnIndexMap
