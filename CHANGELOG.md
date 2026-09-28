@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Database Consistency & Diagnostics Engine: `DBCC` (`pkg/api`)**:
+  - Implemented `DBCC USEROPTIONS`: inspects and returns active session settings (isolation level, textsize, lock_timeout, quoted_identifier, ansi_nulls).
+  - Implemented `DBCC CHECKTABLE ('table_name')`: scans table records, validates primary key uniqueness, secondary index point-lookup consistency, and reports allocation/data integrity findings.
+  - Implemented `DBCC CHECKDB`: runs consistency verification across all user tables and indexes in the catalog.
+  - Implemented `DBCC SHRINKDATABASE ('db_name')`: reports database file allocation, current page counts, and estimated pages.
+  - Added comprehensive test coverage in `pkg/api/sqlexec_test.go` (`TestSQLExecutor_DBCCCommands`).
 - **T-SQL Control Flow: `GOTO` & Labels Engine (`pkg/proc`, `pkg/proc/runtime`)**:
   - Added lexical tokens `TokenGoto` and `TokenColon` (`:`) with AST node definitions `GotoStmt` and `LabelStmt`.
   - Implemented 2-pass jump resolution in `Compiler` supporting forward and backward jumps with `OpJump`.

@@ -1359,6 +1359,96 @@ func TestSQLExecutor_GlobalTemporaryTables(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_DBCCCommands(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+	sessID := "dbcc_sess"
+
+	// Setup a sample table
+	_, err := server.ExecuteSessionSQL(sessID, "CREATE TABLE inventory (id INT PRIMARY KEY, name VARCHAR(50), qty INT);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE inventory failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sessID, "INSERT INTO inventory (id, name, qty) VALUES (1, 'Widget', 10), (2, 'Gadget', 25);")
+	if err != nil {
+		t.Fatalf("INSERT into inventory failed: %v", err)
+	}
+
+	// 1. DBCC USEROPTIONS
+	res, err := server.ExecuteSessionSQL(sessID, "DBCC USEROPTIONS;")
+	if err != nil || !res.Success {
+		t.Fatalf("DBCC USEROPTIONS failed: %v", err)
+	}
+	if len(res.Rows) < 5 {
+		t.Fatalf("expected at least 5 useroptions, got %d", len(res.Rows))
+	}
+	foundIsolation := false
+	for _, r := range res.Rows {
+		if r["Set Option"] == "isolation level" {
+			foundIsolation = true
+			if r["Value"] != "read committed" {
+				t.Errorf("expected default read committed, got %v", r["Value"])
+			}
+		}
+	}
+	if !foundIsolation {
+		t.Errorf("isolation level not found in DBCC USEROPTIONS")
+	}
+
+	// Change isolation level and re-check DBCC USEROPTIONS
+	_, _ = server.ExecuteSessionSQL(sessID, "SET TRANSACTION ISOLATION LEVEL SERIALIZABLE;")
+	res, _ = server.ExecuteSessionSQL(sessID, "DBCC USEROPTIONS;")
+	for _, r := range res.Rows {
+		if r["Set Option"] == "isolation level" && r["Value"] != "serializable" {
+			t.Errorf("expected updated serializable, got %v", r["Value"])
+		}
+	}
+
+	// 2. DBCC CHECKTABLE ('inventory')
+	res, err = server.ExecuteSessionSQL(sessID, "DBCC CHECKTABLE ('inventory');")
+	if err != nil || !res.Success {
+		t.Fatalf("DBCC CHECKTABLE failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["Table"] != "inventory" || fmt.Sprintf("%v", res.Rows[0]["Rows"]) != "2" {
+		t.Fatalf("unexpected DBCC CHECKTABLE results: %+v", res.Rows)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["ConsistencyErrors"]) != "0" {
+		t.Fatalf("expected 0 consistency errors, got: %+v", res.Rows[0])
+	}
+
+	// Test non-existent table in CHECKTABLE
+	_, err = server.ExecuteSessionSQL(sessID, "DBCC CHECKTABLE ('non_existent');")
+	if err == nil {
+		t.Fatalf("expected error for non_existent table in CHECKTABLE, got nil")
+	}
+
+	// 3. DBCC CHECKDB
+	res, err = server.ExecuteSessionSQL(sessID, "DBCC CHECKDB;")
+	if err != nil || !res.Success {
+		t.Fatalf("DBCC CHECKDB failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["Database"] != "sqlion" {
+		t.Fatalf("unexpected DBCC CHECKDB results: %+v", res.Rows)
+	}
+	msgJoined := strings.Join(res.Messages, " ")
+	if !strings.Contains(msgJoined, "CHECKDB found 0 allocation errors and 0 consistency errors") {
+		t.Fatalf("missing expected CHECKDB message in: %s", msgJoined)
+	}
+
+	// 4. DBCC SHRINKDATABASE
+	res, err = server.ExecuteSessionSQL(sessID, "DBCC SHRINKDATABASE (sqlion);")
+	if err != nil || !res.Success {
+		t.Fatalf("DBCC SHRINKDATABASE failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["DbId"] != int64(1) {
+		t.Fatalf("unexpected DBCC SHRINKDATABASE results: %+v", res.Rows)
+	}
+}
+
+
 
 
 

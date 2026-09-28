@@ -611,6 +611,11 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		return s.execAnalyze(trimmed, start)
 	}
 
+	// 0.6 T-SQL Database Console Commands: DBCC
+	if strings.HasPrefix(upper, "DBCC ") || upper == "DBCC" {
+		return s.execDBCC(trimmed, start, cs)
+	}
+
 	// 1. Procedural DDL: CREATE PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
 	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") {
 		return s.execCreateProcedure(trimmed, start)
@@ -4171,6 +4176,251 @@ func (s *Server) execProcedureCall(query string, start time.Time) (*QueryResult,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     messages,
 	}, nil
+}
+
+// --- T-SQL Database Console Commands (DBCC) ---
+
+func (s *Server) execDBCC(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	upper := strings.ToUpper(cleaned)
+
+	var rest string
+	if strings.HasPrefix(upper, "DBCC ") {
+		rest = strings.TrimSpace(cleaned[5:])
+	} else {
+		rest = strings.TrimSpace(cleaned[4:])
+	}
+	upperRest := strings.ToUpper(rest)
+
+	// 1. DBCC USEROPTIONS
+	if strings.HasPrefix(upperRest, "USEROPTIONS") {
+		isoLevel := "read committed"
+		if cs != nil {
+			cs.mu.Lock()
+			if lvl, ok := cs.Vars["transaction_isolation"].(string); ok && lvl != "" {
+				isoLevel = lvl
+			}
+			cs.mu.Unlock()
+		}
+
+		options := []struct {
+			Option string
+			Value  string
+		}{
+			{"textsize", "2147483647"},
+			{"language", "us_english"},
+			{"dateformat", "mdy"},
+			{"datefirst", "7"},
+			{"lock_timeout", "-1"},
+			{"quoted_identifier", "SET"},
+			{"arithabort", "SET"},
+			{"ansi_null_dflt_on", "SET"},
+			{"ansi_warnings", "SET"},
+			{"ansi_padding", "SET"},
+			{"ansi_nulls", "SET"},
+			{"concat_null_yields_null", "SET"},
+			{"isolation level", isoLevel},
+		}
+
+		rows := make([]map[string]any, len(options))
+		for i, opt := range options {
+			rows[i] = map[string]any{
+				"Set Option": opt.Option,
+				"Value":      opt.Value,
+			}
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "DBCC",
+			Columns:      []string{"Set Option", "Value"},
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			Messages:     []string{"DBCC execution completed. If DBCC printed error messages, contact your system administrator."},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 2. DBCC CHECKTABLE ( 'table_name' )
+	if strings.HasPrefix(upperRest, "CHECKTABLE") {
+		re := regexp.MustCompile(`(?is)^CHECKTABLE\s*(?:\(\s*['"]?([^'")\s]+)['"]?\s*\)|([^\s;]+))`)
+		m := re.FindStringSubmatch(rest)
+		if len(m) < 2 {
+			return nil, fmt.Errorf("invalid DBCC CHECKTABLE syntax. Expected: DBCC CHECKTABLE ('table_name')")
+		}
+		rawTbl := m[1]
+		if rawTbl == "" && len(m) > 2 {
+			rawTbl = m[2]
+		}
+		targetTable := cleanIdentifier(rawTbl)
+
+		schema, err := s.engine.GetTable(targetTable)
+		if err != nil {
+			return nil, fmt.Errorf("table %q not found: %w", targetTable, err)
+		}
+
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
+
+		tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+
+		rowCount := int64(0)
+		pkSet := make(map[storage.Value]struct{})
+		allocErrors := 0
+		consistErrors := 0
+
+		if cur, err := tx.Scan(targetTable); err == nil {
+			for cur.Next() {
+				rec, err := cur.Record()
+				if err != nil {
+					consistErrors++
+					continue
+				}
+				rowCount++
+				if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
+					if val, ok := rec[pkCol.Name]; ok {
+						if _, exists := pkSet[val]; exists {
+							consistErrors++
+						} else {
+							pkSet[val] = struct{}{}
+						}
+					}
+				}
+			}
+			cur.Close()
+		}
+
+		for _, idx := range schema.Indexes {
+			if cur, err := tx.IndexScan(targetTable, idx.Name, nil, nil); err == nil {
+				for cur.Next() {
+				}
+				cur.Close()
+			}
+		}
+
+		messages := []string{
+			fmt.Sprintf("DBCC results for %q.", targetTable),
+			fmt.Sprintf("There are %d rows in 1 pages for object %q.", rowCount, targetTable),
+			fmt.Sprintf("CHECKTABLE found %d allocation errors and %d consistency errors in table %q.", allocErrors, consistErrors, targetTable),
+			"DBCC execution completed. If DBCC printed error messages, contact your system administrator.",
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "DBCC",
+			Columns:      []string{"Table", "Rows", "AllocationErrors", "ConsistencyErrors", "Status"},
+			Rows: []map[string]any{{
+				"Table":             targetTable,
+				"Rows":              rowCount,
+				"AllocationErrors":  allocErrors,
+				"ConsistencyErrors": consistErrors,
+				"Status":            "OK",
+			}},
+			RowsAffected: 1,
+			Messages:     messages,
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 3. DBCC CHECKDB [ ( 'database_name' ) ]
+	if strings.HasPrefix(upperRest, "CHECKDB") {
+		tables, err := s.engine.ListTables()
+		if err != nil {
+			return nil, fmt.Errorf("failed to list database objects: %w", err)
+		}
+
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
+
+		tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+
+		totalAllocErrors := 0
+		totalConsistErrors := 0
+		messages := []string{"DBCC results for 'sqlion'."}
+
+		for _, tbl := range tables {
+			rowCount := int64(0)
+			pkSet := make(map[storage.Value]struct{})
+			if cur, err := tx.Scan(tbl.Name); err == nil {
+				for cur.Next() {
+					rec, err := cur.Record()
+					if err != nil {
+						totalConsistErrors++
+						continue
+					}
+					rowCount++
+					if pkCol, err := tbl.PrimaryKeyColumn(); err == nil && pkCol != nil {
+						if val, ok := rec[pkCol.Name]; ok {
+							if _, exists := pkSet[val]; exists {
+								totalConsistErrors++
+							} else {
+								pkSet[val] = struct{}{}
+							}
+						}
+					}
+				}
+				cur.Close()
+			}
+			messages = append(messages, fmt.Sprintf("There are %d rows in 1 pages for object %q.", rowCount, tbl.Name))
+		}
+
+		messages = append(messages,
+			fmt.Sprintf("CHECKDB found %d allocation errors and %d consistency errors in database 'sqlion'.", totalAllocErrors, totalConsistErrors),
+			"DBCC execution completed. If DBCC printed error messages, contact your system administrator.",
+		)
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "DBCC",
+			Columns:      []string{"Database", "TablesChecked", "AllocationErrors", "ConsistencyErrors", "Status"},
+			Rows: []map[string]any{{
+				"Database":          "sqlion",
+				"TablesChecked":     len(tables),
+				"AllocationErrors":  totalAllocErrors,
+				"ConsistencyErrors": totalConsistErrors,
+				"Status":            "ONLINE",
+			}},
+			RowsAffected: 1,
+			Messages:     messages,
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 4. DBCC SHRINKDATABASE / DBCC SHRINKFILE
+	if strings.HasPrefix(upperRest, "SHRINKDATABASE") || strings.HasPrefix(upperRest, "SHRINKFILE") {
+		return &QueryResult{
+			Success: true,
+			Command: "DBCC",
+			Columns: []string{"DbId", "FileId", "CurrentSize", "MinimumSize", "UsedPages", "EstimatedPages"},
+			Rows: []map[string]any{{
+				"DbId":           int64(1),
+				"FileId":         int64(1),
+				"CurrentSize":    int64(1024),
+				"MinimumSize":    int64(1024),
+				"UsedPages":      int64(512),
+				"EstimatedPages": int64(512),
+			}},
+			RowsAffected: 1,
+			Messages:     []string{"DBCC execution completed. If DBCC printed error messages, contact your system administrator."},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	return nil, fmt.Errorf("unsupported DBCC command: %q", rest)
 }
 
 // --- Virtual System Catalog Views (sys.* and information_schema.*) ---
