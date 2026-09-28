@@ -118,10 +118,12 @@ type Instruction struct {
 |---|---|---|
 | `OpOpenRead` | `P1=cursor_id, P4=table` | Opens a read-only table cursor on table `P4`. |
 | `OpOpenWrite` | `P1=cursor_id, P4=table` | Opens a read-write table handle on table `P4`. |
+| `OpIndexScan` | `P1=cursor_id, P4=table` | Scans records matching point or range predicates using secondary index (`IndexScanData`). |
 | `OpColumn` | `P1=cursor_id, P2=dst, P4=col`| Extracts column `P4` from current cursor row into `R[P2]`. |
-| `OpInsert` | `P1=cursor_id, P2=rec_reg` | Inserts record map in `R[rec_reg]` into table. |
+| `OpInsert` | `P1=cursor_id, P2=rec_reg` | Inserts record map in `R[rec_reg]` into table with schema validation & identity tracking. |
 | `OpUpdate` | `P1=cursor_id, P2=pk, P3=rec` | Updates record with primary key `R[pk]` using record in `R[rec]`. |
 | `OpDelete` | `P1=cursor_id, P2=pk` | Deletes record with primary key `R[pk]`. |
+| `OpRelQuery` | `P4=sql` | Dispatches relational query with bound parameters to Volcano execution engine (`RelQueryData`). |
 | `OpCommit` | - | Commits the active ambient transaction. |
 | `OpRollback` | - | Rolls back the active ambient transaction. |
 
@@ -189,3 +191,52 @@ VDBE execution operates within an ambient transaction context (`storage.Transact
 1. **Implicit Transactions**: A procedure execution automatically begins an ambient transaction if one is not already open on the client session.
 2. **Atomic Rollback on Uncaught Error**: If `OpRaiseError` executes outside a `TRY...CATCH` block, the VM automatically aborts and issues `tx.Rollback()`.
 3. **Trigger Chaining**: When an `OpInsert`, `OpUpdate`, or `OpDelete` fires a trigger, the child trigger's bytecode executes inside the exact same ambient transaction, sharing isolation guarantees.
+
+---
+
+## 6. Single-Engine Interactive DQL & DML Unification
+
+SQLion enforces a single execution engine architecture where both procedural scripts and standalone interactive queries execute directly on the VDBE:
+
+```
+[Interactive SELECT / INSERT / UPDATE / DELETE]
+                      │
+                      ▼
+   [proc.CompileQuery / proc.CompileStatement]
+                      │
+                      ▼
+            [*proc.Program Bytecode]
+                      │
+                      ▼
+       [runtime.Executor.ExecuteInTx(tx, ...)]
+                      │
+                      ▼
+         [ExecutionResult: Rows, Columns,
+          RowsAffected, LastIdentity]
+```
+
+- **Interactive DQL (`SELECT`)**:
+  Compiled via `proc.CompileQuery(sql)` into a bytecode program containing `OpInit ➔ OpRelQuery ➔ OpHalt`. `OpRelQuery` executes the Volcano pipeline in `pkg/execution`, streaming tuples while preserving transaction snapshot visibility.
+- **Interactive DML (`INSERT`, `UPDATE`, `DELETE`)**:
+  Compiled via `proc.CompileStatement(stmt)` into programs executing `OpOpenWrite`, `OpInsert`, `OpUpdate`, or `OpDelete`. Mutations evaluate identity columns (`@@IDENTITY`), enforce constraints, and populate `RowsAffected` for wire protocol completion tokens.
+
+---
+
+## 7. Prepared Statement Bytecode Caching across Wire Protocols
+
+To eliminate lexical parsing overhead on high-frequency queries, SQLion caches compiled `*proc.Program` bytecode directly inside session state:
+
+1. **PostgreSQL Wire Protocol v3 (`pkg/wire`)**:
+   - During `Parse` ('P'), the SQL statement is compiled into `*proc.Program` via `proc.CompileQuery` or `proc.CompileStatement` and stored in `sess.statements[name]`.
+   - During `Execute` ('E'), the precompiled bytecode is executed directly via `s.executor.Run`, completely bypassing query parsing and string substitution.
+2. **Microsoft SQL Server TDS 7.x/8.0 (`pkg/wire/tds`)**:
+   - `sp_prepare` / `sp_prepexec` (RPC IDs 11 and 13) compile parameterized T-SQL into `*proc.Program` and register it in `conn.prepStmts[handle]`.
+   - `sp_execute` (RPC ID 12) executes the cached bytecode directly with zero parsing overhead.
+
+---
+
+## 8. Web Management Studio Visual Bytecode Disassembler
+
+SQLion includes an integrated VDBE Bytecode Disassembler accessible via SQL Query Studio (`http://localhost:8090/_/`):
+- **`EXPLAIN BYTECODE <sql>`**: Returns a disassembled tabular listing of instructions (`Addr`, `Opcode`, `P1`, `P2`, `P3`, `P4`, `Comment`).
+- **Interactive Web Studio**: Features a dedicated "Explain Bytecode" action with syntax highlighting for opcodes, control flow jumps, register allocations, and one-click clipboard copying.

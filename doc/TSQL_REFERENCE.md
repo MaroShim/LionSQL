@@ -15,6 +15,7 @@ SQLion supports the following core SQL and T-SQL primitive types:
 | `FLOAT` | `DOUBLE`, `FLOAT8`, `REAL` | IEEE 754 64-bit float | `3.14159`, `-0.05` | Yes |
 | `BOOL` | `BOOLEAN`, `BIT` | 1-byte boolean flag | `TRUE`, `FALSE`, `1`, `0` | Yes |
 | `DATETIME` | `TIMESTAMP` | RFC3339 UTC timestamp | `'2026-09-22T12:00:00Z'` | Yes |
+| `JSON` | `JSONB` | JSON binary representation (`storage.TypeJSON = 6`) | `'{"user":"Alice","score":95}'` | Yes |
 
 ### NULL Semantics
 - `NULL` represents an absent or unknown value.
@@ -26,41 +27,72 @@ SQLion supports the following core SQL and T-SQL primitive types:
 
 ## 2. Data Definition Language (DDL)
 
-### 2.1. Creating Tables
+### 2.1. Creating Tables & Constraints
 
 ```sql
-CREATE TABLE accounts (
+CREATE TABLE departments (
     id INT PRIMARY KEY,
-    holder VARCHAR NOT NULL,
-    balance INT NOT NULL,
-    tier VARCHAR,
-    created_at DATETIME NOT NULL
+    name VARCHAR NOT NULL
+);
+
+CREATE TABLE employees (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    dept_id INT NOT NULL,
+    name VARCHAR NOT NULL,
+    metadata JSON,
+    created_at DATETIME NOT NULL,
+    FOREIGN KEY (dept_id) REFERENCES departments(id) 
+        ON DELETE CASCADE ON UPDATE CASCADE
 );
 ```
 
-- Each table must define exactly one column as the `PRIMARY KEY`.
-- `NOT NULL` enforces non-null constraints upon row insertion and update.
+- **Primary Key**: Exactly one primary key column per table.
+- **Identity Column**: `IDENTITY(seed, increment)` or `AUTO_INCREMENT` auto-generates monotonic integers.
+- **Foreign Keys**: `FOREIGN KEY ... REFERENCES ... [ON DELETE <action>] [ON UPDATE <action>]` supports `CASCADE`, `SET NULL`, `RESTRICT`, and `NO ACTION`.
 
 ### 2.2. Dropping Tables
 
 ```sql
-DROP TABLE accounts;
-DROP TABLE IF EXISTS accounts;
+DROP TABLE employees;
+DROP TABLE IF EXISTS employees;
 ```
 
-### 2.3. Secondary Indexes
+### 2.3. Truncating Tables
+
+```sql
+TRUNCATE TABLE employees;
+```
+- Fast $O(1)$ reset of table records, row versions, and secondary indexes while preserving table schema and foreign key definitions.
+
+### 2.4. Temporary Tables (`#temp` and `##global_temp`)
+
+```sql
+-- Session-local temporary table (isolated per connection, automatically dropped on disconnect)
+CREATE TABLE #temp_scores (
+    user_id INT PRIMARY KEY,
+    score INT
+);
+
+-- Global temporary table (shared across concurrent sessions, dropped when creator disconnects)
+CREATE TABLE ##global_config (
+    key VARCHAR PRIMARY KEY,
+    val VARCHAR
+);
+```
+
+### 2.5. Secondary Indexes
 
 SQLion supports unique and non-unique secondary indexes on single or multiple columns:
 
 ```sql
 -- Create non-unique secondary index
-CREATE INDEX idx_accounts_holder ON accounts (holder);
+CREATE INDEX idx_employees_dept ON employees (dept_id);
 
 -- Create unique secondary index
-CREATE UNIQUE INDEX idx_accounts_holder_unique ON accounts (holder);
+CREATE UNIQUE INDEX idx_departments_name ON departments (name);
 
 -- Drop secondary index
-DROP INDEX idx_accounts_holder ON accounts;
+DROP INDEX idx_employees_dept ON employees;
 ```
 
 ---
@@ -103,6 +135,37 @@ DELETE FROM accounts WHERE id = 3;
 
 -- Delete all rows
 DELETE FROM accounts;
+```
+
+### 3.4. SELECT ... INTO
+
+Creates and populates a new permanent or temporary table from a query result:
+
+```sql
+-- Populate session-scoped local temporary table
+SELECT id, holder, balance INTO #vip_accounts 
+FROM accounts 
+WHERE balance >= 1000;
+
+-- Populate permanent table
+SELECT id, holder, tier INTO accounts_backup 
+FROM accounts;
+```
+
+### 3.5. Table Variables (`DECLARE @table TABLE`)
+
+Declares an in-memory session-isolated table variable:
+
+```sql
+DECLARE @cart TABLE (
+    item_id INT PRIMARY KEY,
+    quantity INT NOT NULL,
+    price FLOAT NOT NULL
+);
+
+INSERT INTO @cart VALUES (101, 2, 29.99), (102, 1, 15.50);
+
+SELECT item_id, quantity * price AS total FROM @cart;
 ```
 
 ---
@@ -174,6 +237,33 @@ GROUP BY h.holder;
 SELECT holder, balance
 FROM accounts
 WHERE id IN (SELECT user_id FROM orders WHERE amount > 500);
+```
+
+### 4.6. Window Functions
+
+SQLion supports ANSI/ISO SQL and T-SQL window ranking and offset functions via physical `WindowIterator`:
+
+```sql
+SELECT id, dept_id, salary,
+       ROW_NUMBER() OVER (PARTITION BY dept_id ORDER BY salary DESC) AS rank_in_dept,
+       RANK() OVER (ORDER BY salary DESC) AS overall_rank,
+       DENSE_RANK() OVER (ORDER BY salary DESC) AS dense_rank,
+       LAG(salary, 1) OVER (PARTITION BY dept_id ORDER BY salary) AS prev_salary,
+       LEAD(salary, 1) OVER (PARTITION BY dept_id ORDER BY salary) AS next_salary
+FROM employees;
+```
+
+### 4.7. JSON & JSONB Extraction Operators and Functions
+
+```sql
+-- PostgreSQL arrow extraction operators
+SELECT metadata -> 'profile' ->> 'email' AS email FROM employees;
+
+-- ANSI/T-SQL JSON extraction functions
+SELECT JSON_VALUE(metadata, '$.profile.name') AS full_name,
+       JSON_QUERY(metadata, '$.skills') AS skills_array
+FROM employees
+WHERE JSON_VALUE(metadata, '$.profile.city') = 'Seoul';
 ```
 
 ---
@@ -297,6 +387,30 @@ BEGIN
 END;
 ```
 
+### 5.6. Flow Control: `GOTO` & Labels
+
+SQLion supports unconditional forward and backward jumps via `GOTO`:
+
+```sql
+CREATE PROCEDURE ProcessQueue
+AS
+BEGIN
+    DECLARE @retries INT = 0;
+
+RetryPoint:
+    IF @retries > 3
+        GOTO AbortPoint;
+
+    -- Attempt processing operation...
+    SET @retries = @retries + 1;
+    GOTO RetryPoint;
+
+AbortPoint:
+    PRINT 'Max retries exceeded';
+    RETURN -1;
+END;
+```
+
 ---
 
 ## 6. User-Defined Functions (UDF)
@@ -391,14 +505,83 @@ WHERE a.balance > 500
 GROUP BY a.holder;
 ```
 
-### 8.3. Session Configuration Variables
+### 8.3. `EXPLAIN BYTECODE`
+
+Disassembles any SQL query (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) or procedure into its compiled VDBE bytecode instruction stream:
 
 ```sql
--- View active work_mem
+EXPLAIN BYTECODE
+SELECT id, holder FROM accounts WHERE balance > 1000;
+```
+
+### 8.4. Session Configuration Variables
+
+```sql
+-- View active session settings
 SHOW work_mem;
+SHOW search_path;
+SHOW transaction_isolation;
 SELECT @@work_mem;
 
--- Modify session work_mem
+-- Modify session settings
 SET work_mem = '128MB';
-SET SESSION work_mem = '32MB';
+SET NOCOUNT ON;
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+SET IDENTITY_INSERT accounts ON;
 ```
+
+---
+
+## 9. Database Diagnostics & System Stored Procedures
+
+### 9.1. DBCC Commands
+
+- **`DBCC USEROPTIONS`**: Returns active session isolation levels, text size, and ANSI settings.
+- **`DBCC CHECKTABLE ('table_name')`**: Scans table rows, asserts primary key uniqueness, and validates secondary index point-lookup integrity.
+- **`DBCC CHECKDB`**: Executes consistency checks across all user tables and indexes in the catalog.
+- **`DBCC SHRINKDATABASE ('db_name')`**: Reports page allocations and file sizes.
+
+### 9.2. Administrative Stored Procedures
+
+SQLion provides native implementations of Microsoft SQL Server administrative procedures:
+
+- **`sp_help ['object_name']`**: Introspects table schema, columns, nullable status, and primary/secondary indexes.
+- **`sp_spaceused ['object_name']`**: Reports table row counts, data storage footprint, and index allocations.
+- **`sp_who` / `sp_who2`**: Monitors active client connections, session IDs (`spid`), and current executing status.
+- **`sp_lock`**: Inspects active table read and write locks across transactions.
+- **`sp_rename 'old_name', 'new_name' [, 'COLUMN']`**: Renames a table or column atomically with schema catalog synchronization.
+
+---
+
+## 10. Built-in Scalar Functions
+
+### 10.1. String Functions
+- `STUFF(string, start, length, new_string)`: Deletes `length` characters from `start` (1-based) and inserts `new_string`.
+- `CHARINDEX(substring, string [, start_location])`: Locates 1-based character position.
+- `REPLACE(string, old_string, new_string)`: Case-insensitive replacement.
+- `REVERSE(string)`: Reverses multi-byte UTF-8 string.
+- `CONCAT(str1, str2, ...)`: Null-safe string concatenation.
+- `LEFT(string, n)` / `RIGHT(string, n)`: Extracts leading or trailing `n` runes.
+- `LTRIM(string)` / `RTRIM(string)`: Trims leading or trailing whitespace.
+
+### 10.2. Date & Time Functions
+- `GETDATE()` / `NOW()` / `SYSDATETIME()`: Current UTC timestamp.
+- `DATEADD(datepart, number, date)`: Adds interval (`year`, `month`, `day`, `hour`, `minute`, `second`).
+- `DATEDIFF(datepart, startdate, enddate)`: Difference in units between two dates.
+- `YEAR(date)` / `MONTH(date)` / `DAY(date)`: Integer date component extraction.
+
+### 10.3. Mathematical & Logical Functions
+- `POWER(base, exp)`, `SQRT(val)`, `SIGN(val)`, `PI()`
+- `IIF(condition, true_val, false_val)`: Inline conditional expression.
+- `CHOOSE(index, val1, val2, ...)`: 1-based element selection.
+
+### 10.4. System Metadata & Variables
+- `NEWID()`: Generates RFC 4122 UUID v4.
+- `SCOPE_IDENTITY()` / `@@IDENTITY`: Last generated identity value within current scope.
+- `@@ROWCOUNT`: Number of rows affected by previous DML or query.
+- `@@ERROR`: Returns `0` on success or non-zero error code.
+- `@@SPID`: Current connection session ID.
+- `@@TRANCOUNT`: Active transaction nesting depth.
+- `@@VERSION`: SQLion build version, engine type, and OS platform.

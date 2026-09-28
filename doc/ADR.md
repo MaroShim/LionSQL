@@ -20,6 +20,8 @@ This document records the critical architectural decisions made throughout the d
 - [ADR-012: PostgreSQL Bulk Copy Streaming Protocol (`COPY FROM / TO`)](#adr-012-postgresql-bulk-copy-streaming-protocol-copy-from--to)
 - [ADR-013: Embedded Web Management Studio & PocketBase-Style Developer Experience](#adr-013-embedded-web-management-studio--pocketbase-style-developer-experience)
 - [ADR-014: 3-Stage Verification Pipeline (Build ➔ Test `-race` ➔ Commit) & Flake-Free Hermeticity](#adr-014-3-stage-verification-pipeline-build--test--race--commit--flake-free-hermeticity)
+- [ADR-015: Single-Engine VDBE Unification for Interactive Queries (DQL & DML)](#adr-015-single-engine-vdbe-unification-for-interactive-queries-dql--dml)
+- [ADR-016: Zero-Parse Prepared Statement VDBE Bytecode Caching across Wire Protocols](#adr-016-zero-parse-prepared-statement-vdbe-bytecode-caching-across-wire-protocols)
 
 ---
 
@@ -401,3 +403,53 @@ Formally mandate the **3-Stage Verification Pipeline** across all code changes:
 ### Consequences
 - **Positive**: Zero flaky tests, zero data races, high engineering confidence, and clean git provenance.
 - **Negative**: Slower test execution due to thread sanitizer (`-race`) overhead.
+
+---
+
+## ADR-015: Single-Engine VDBE Unification for Interactive Queries (DQL & DML)
+
+### Status
+Accepted
+
+### Context
+Historically, SQLion maintained dual execution pathways:
+1. Procedural logic (`CREATE PROCEDURE`, triggers, UDFs) executed on the register-based VDBE Virtual Machine (`pkg/proc/runtime`).
+2. Interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) executed through ad-hoc engine routines (`execSelect`, `execInsert`, `execUpdate`, `execDelete` in `pkg/api/sqlexec.go`).
+
+This architectural split caused code duplication, inconsistent transaction semantics, disjoint performance characteristics, and prevented universal query inspection via bytecode disassembly.
+
+### Decision
+Unify all interactive DQL and DML execution onto the exact same native VDBE Virtual Machine:
+1. `proc.CompileQuery(sql)`: Compiles `SELECT` statements into a linear bytecode program featuring `OpRelQuery`, bridging the VDBE directly with Volcano iterator pipelines (`pkg/execution`).
+2. `proc.CompileStatement(stmt)`: Compiles standalone `INSERT`, `UPDATE`, and `DELETE` AST nodes into VDBE bytecode programs executing `OpOpenWrite`, `OpInsert`, `OpUpdate`, and `OpDelete`.
+3. `runtime.Executor.ExecuteInTx(tx, program, ...)`: Executes precompiled bytecode programs inside ambient transactions on active sessions.
+4. `EXPLAIN BYTECODE <sql>`: Provides full disassembly visibility for any relational query or procedural block.
+
+### Consequences
+- **Positive**: Single Source of Truth (SSOT). Eliminates fragmented execution pathways. Guarantees 100% semantic and transactional parity between queries executed inside stored procedures and queries run interactively. Enables uniform bytecode profiling and optimization.
+- **Negative**: Adds a negligible compilation step for interactive queries, completely mitigated by LRU plan caching.
+- **Compliance**: Adheres to Golden Rule 15 (KISS & Deletion-First), Golden Rule 16 (Avoid Duplicate Boilerplate), and Golden Rule 22 (Modular Interface Abstraction).
+
+---
+
+## ADR-016: Zero-Parse Prepared Statement VDBE Bytecode Caching across Wire Protocols
+
+### Status
+Accepted
+
+### Context
+In high-throughput microservice architectures, clients frequently issue parameterized queries through prepared statement protocols (PostgreSQL Extended Query `'P'` / `'E'` and MSSQL TDS `sp_prepare` / `sp_execute`). Re-parsing SQL text and performing string placeholder substitutions on every execution introduces severe CPU bottleneck and GC pressure.
+
+### Decision
+Precompile prepared queries directly into VDBE bytecode programs (`*proc.Program`) during statement preparation:
+1. **PostgreSQL Wire v3 (`pkg/wire`)**:
+   During `Parse`, compile `$1, $2, ...` queries via `proc.CompileQuery` / `proc.CompileStatement` and cache the `*proc.Program` in `sess.statements[name]`.
+   During `Execute`, bind parameters to registers and invoke `s.executor.Run` directly.
+2. **MSSQL TDS 7.x/8.0 (`pkg/wire/tds`)**:
+   During `sp_prepare` / `sp_prepexec`, compile `@p1, @p2, ...` queries and register the program in `conn.prepStmts[handle]`.
+   During `sp_execute`, execute the cached bytecode program directly.
+
+### Consequences
+- **Positive**: Zero-parse query execution hot path. Slashes per-query latency and memory allocations. Completely decouples query compilation from execution.
+- **Negative**: Session memory holds compiled programs (bounded by Golden Rule 29 via session lifecycle cleanup).
+- **Compliance**: Adheres to Golden Rule 30 (Zero-Allocation Hot Paths) and Golden Rule 31 (Responsive Latency Budget).

@@ -37,20 +37,19 @@ SQLion is an enterprise-grade, high-concurrency embedded OLTP database engine wr
 |   | Plan Cache: LRU Thread-Safe AST & Bytecode Program Cache                                        |   |
 +---+-------------------------------------------------------------------------------------------------+---+
                                                |
-                     +-------------------------+-------------------------+
-                     |                                                   |
-                     v                                                   v
-+-----------------------------------------+   +-----------------------------------------------------------+
-| Relational Execution Engine (Volcano)   |   | Procedural Execution Engine (Native VDBE Bytecode VM)     |
-| (pkg/execution)                         |   | (pkg/proc/runtime)                                        |
-|  - Composable Iterators:                |   |  - SQLite-style Register-Based Bytecode VM                |
-|    SeqScan, IndexScan, Filter, Project, |   |  - sync.Pool Register Reuse & Ambient ACID Transactions   |
-|    HashJoin, IndexNestedLoopJoin,       |   |  - T-SQL Stored Procedures, Triggers, UDFs, TVFs          |
-|    GroupBy, CTE WITH Expressions        |   |  - Cursors, TRY...CATCH, RAISERROR, Dynamic Flow Control  |
-|  - Memory Governor & Spill-to-Disk:     |   +-----------------------------------------------------------+
-|    work_mem limits, N-way Min-Heap      |
-|    External Merge Sort                  |
-+-----------------------------------------+
+                                               v
++---------------------------------------------------------------------------------------------------------+
+|                  Unified Execution Layer: Native VDBE Bytecode Virtual Machine (pkg/proc/runtime)       |
+|   - Single-Engine Parity: Interactive DQL & DML (SELECT, INSERT, UPDATE, DELETE) & Procedures/Triggers  |
+|   - Zero-Parse Prepared Statement Bytecode Caching across PostgreSQL Wire and Microsoft TDS             |
+|   - sync.Pool Register Allocator, Ambient ACID Transaction Binding, and Opcode Dispatcher               |
+|                                                                                                         |
+|         ┌───────────────────────────────────────────────────┬──────────────────────────────────┐        |
+|         ▼                                                   ▼                                  ▼        |
+|   [Volcano Query Pipeline (OpRelQuery)]        [Secondary Index Scan (OpIndexScan)]  [Direct DML Ops]   |
+|   - Composable Iterators (HashJoin, etc.)      - SkipList & B+Tree Range Iteration   - OpInsert/Update  |
+|   - work_mem Memory Governor & External Sort   - Automatic Predicate Index Matching  - OpDelete         |
++---------------------------------------------------------------------------------------------------------+
                                                |
                                                v
 +---------------------------------------------------------------------------------------------------------+
@@ -175,40 +174,53 @@ type Iterator interface {
 
 ---
 
-### 2.4. Native VDBE Bytecode Virtual Machine
+### 2.4. Native VDBE Bytecode Virtual Machine & Single-Engine Execution
 
-T-SQL stored procedures, triggers, and UDFs are compiled into linear bytecode instructions executed by a register-based VM:
+SQLion unifies all procedural logic and interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) on the exact same register-based VDBE Virtual Machine:
 
 ```
-[T-SQL Stored Procedure]
-        │
-        ▼
-[Bytecode Compiler (pkg/proc/compiler.go)]
-        │
-        ▼
-[Bytecode Program (Opcode Stream)]
-  00: OpInit           reg: 0
-  01: OpOpenRead       table: "accounts"
-  02: OpColumn         col: "balance", reg: 1
-  03: OpLt             reg: 1, val: 500, jump: 07
-  04: OpUpdate         table: "accounts", reg: 1
-  05: OpCommit
-  06: OpHalt           code: 0
-  07: OpRaiseError     msg: "Insufficient funds"
-  08: OpRollback
-  09: OpHalt           code: -1
-        │
-        ▼
-[Virtual Machine (pkg/proc/runtime/vm.go)]
-  - Evaluates opcodes sequentially with program counter (IP)
-  - Uses sync.Pool for register array recycling
-  - Manages ambient storage transactions across sub-procedure calls
+[Interactive SQL / T-SQL Script / Prepared Stmt]
+                       │
+                       ▼
+   [Bytecode Compiler (pkg/proc/compiler.go)]
+   - CompileQuery: SELECT queries ➔ OpRelQuery
+   - CompileStatement: INSERT/UPDATE/DELETE ➔ OpInsert/Update/Delete
+   - CompileProcedure: Stored procedures, triggers, UDFs
+                       │
+                       ▼
+        [Bytecode Program (Opcode Stream)]
+   00: OpInit           reg: 0
+   01: OpOpenRead       table: "accounts"
+   02: OpIndexScan      table: "accounts", idx: "idx_holder", val: "Alice"
+   03: OpColumn         col: "balance", reg: 1
+   04: OpLt             reg: 1, val: 500, jump: 08
+   05: OpUpdate         table: "accounts", reg: 1
+   06: OpCommit
+   07: OpHalt           code: 0
+   08: OpRaiseError     msg: "Insufficient funds"
+   09: OpRollback
+   10: OpHalt           code: -1
+                       │
+                       ▼
+      [Virtual Machine (pkg/proc/runtime/vm.go)]
+   - Evaluates opcodes sequentially with program counter (IP)
+   - Zero-allocation sync.Pool register array recycling
+   - Executes within existing session transactions via s.executor.ExecuteInTx
+   - Connects Volcano iterator engine via OpRelQuery for joins & aggregations
+   - Zero-parse execution for prepared statements cached in PGWire & TDS
 ```
 
-#### Virtual Delta Tables for Triggers:
-When executing `AFTER` or `INSTEAD OF` triggers on `INSERT`, `UPDATE`, or `DELETE`, the VM materializes ephemeral virtual delta tables:
-- `INSERTED`: Contains newly proposed rows.
-- `DELETED`: Contains superseded or removed rows.
+#### Key Capabilities:
+1. **Interactive DQL & DML Unification**:
+   - `SELECT` queries compile into single-instruction programs (`OpRelQuery`) executing the Volcano physical query pipeline while binding ambient transaction and session parameters.
+   - `INSERT`, `UPDATE`, and `DELETE` compile into `OpInsert`, `OpUpdate`, and `OpDelete` with schema validation, identity column tracking, and row affected reporting.
+2. **Prepared Statement Bytecode Caching**:
+   - Both PostgreSQL Wire Protocol (`Parse`) and Microsoft TDS (`sp_prepare`) precompile parameterized queries into `*proc.Program` instances.
+   - `Execute` and `sp_execute` invoke `s.executor.Run(program, ...)` directly, eliminating repeated lexical parsing and AST construction.
+3. **Secondary Index Opcode `OpIndexScan`**:
+   - Scans records through B+Tree or SkipList secondary indexes, avoiding full table scans when filter predicates match indexed columns.
+4. **Virtual Delta Tables for Triggers**:
+   - Materializes ephemeral virtual delta tables (`INSERTED` and `DELETED`) during trigger execution.
 
 ---
 

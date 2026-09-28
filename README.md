@@ -38,14 +38,21 @@ SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micro
                     | (Native Pratt + ANTLR4 Fallback + CBO)   |
                     +------------------------------------------+
                                          │
+                                         ▼
+                    +------------------------------------------+
+                    |     Unified Native VDBE Bytecode VM      |
+                    |  - Interactive DQL & DML (SELECT, DML)   |
+                    |  - T-SQL Procedures, Triggers, UDFs, TVFs|
+                    |  - sync.Pool Registers & Ambient Tx      |
                     +--------------------+---------------------+
-                    │                                          │
-                    ▼                                          ▼
-     [Volcano Relational Engine]               [Native VDBE Bytecode VM]
-     (Hash Join, Index Scan,                   (T-SQL Procedures, Triggers,
-      work_mem External Sort)                   UDFs, Virtual Delta Tables)
-                    │                                          │
-                    +--------------------+---------------------+
+                                         │
+                    ┌────────────────────┴────────────────────┐
+                    ▼                                         ▼
+     [Volcano Relational Pipeline]             [Index & Direct Storage Ops]
+     (Hash Join, work_mem External Sort,        (OpIndexScan SkipList/B+Tree,
+      Aggregates, OpRelQuery Iteration)          OpInsert, OpUpdate, OpDelete)
+                    │                                         │
+                    └────────────────────┬────────────────────┘
                                          │
                                          ▼
                     +------------------------------------------+
@@ -60,23 +67,30 @@ SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micro
 
 - **Single Standalone Executable**: Ships as a single static binary embedding the database kernel, wire protocol servers, HTTP API, and web management studio via Go `embed.FS`. No runtime dependencies, JVM, or Node.js required.
 - **Concurrent Dual Wire Protocols**:
-  - **PostgreSQL v3 Protocol (Port 5433)**: Compatible with `psql`, DBeaver, GORM, Prisma, asyncpg, and pgx. Supports Extended Query Protocol (`Parse`, `Bind`, `Execute`, `Sync`).
-  - **Microsoft SQL Server TDS 7.x/8.0 Protocol (Port 1433)**: Compatible with `sqlcmd`, SQL Server Management Studio (SSMS), Azure Data Studio, and `pymssql`.
+  - **PostgreSQL v3 Protocol (Port 5433)**: Compatible with `psql`, DBeaver, GORM, Prisma, asyncpg, and pgx. Supports SSL/TLS encryption and Extended Query Protocol (`Parse`, `Bind`, `Execute`, `Sync`).
+  - **Microsoft SQL Server TDS 7.x/8.0 Protocol (Port 1433)**: Compatible with `sqlcmd`, SQL Server Management Studio (SSMS), Azure Data Studio, and `pymssql`. Supports RPC prepared statement pipeline (`sp_prepare`, `sp_execute`, `sp_prepexec`).
+- **Single-Engine VDBE Virtual Machine Unification**:
+  - Standalone interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and stored procedures execute on the exact same register-based VDBE Virtual Machine (`proc.CompileQuery`, `proc.CompileStatement` ➔ `s.executor.ExecuteInTx`).
+  - Eliminates separate execution engines and unifies relational execution (`OpRelQuery`), secondary index scans (`OpIndexScan`), and DML mutations (`OpInsert`, `OpUpdate`, `OpDelete`) on a single VM.
+  - Complete `EXPLAIN BYTECODE <sql>` disassembly inspection for all queries and procedures.
+- **Prepared Statement VDBE Bytecode Caching**:
+  - Both PGWire and TDS listeners compile parameterized queries (`$1`, `$2` and `@p1`, `@p2`) directly into VDBE `*proc.Program` bytecode during preparation.
+  - Subsequent executions run precompiled bytecode directly, completely bypassing query re-parsing and string manipulation.
 - **Embedded Web Management Studio (Port 8090)**: Instant, zero-install web dashboard served at `http://localhost:8090/_/`:
   - Spreadsheet-style table viewer with inline cell editing, pagination, and multi-column sorting.
-  - Interactive SQL Query Studio with execution history, query bookmarks, and `EXPLAIN ANALYZE` visualizer.
+  - Interactive SQL Query Studio with execution history, query bookmarks, `EXPLAIN ANALYZE` visualizer, and **Visual VDBE Bytecode Disassembler**.
   - Realtime Server-Sent Events (SSE) live synchronizing browser tables with concurrent background mutations.
   - Granular API Key and Superuser JWT authentication management.
 - **Enterprise T-SQL Procedural Engine**:
   - Full support for `CREATE PROCEDURE`, `CREATE FUNCTION` (scalar and table-valued), and `CREATE TRIGGER` (`AFTER`, `INSTEAD OF`).
   - Virtual delta tables (`INSERTED` and `DELETED`) for trigger execution.
-  - Control flow: `IF...ELSE`, `WHILE`, `TRY...CATCH`, `PRINT`, `RAISERROR`, local variables (`@var`), and cursors.
-  - SQLite VDBE-style native bytecode compiler and virtual machine with `sync.Pool` register reuse.
+  - Control flow: `IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO` & labels, `PRINT`, `RAISERROR`, local variables (`@var`), and cursors.
+  - Rich T-SQL extensions: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB with extraction operators (`->`, `->>`, `JSON_VALUE`), Foreign Keys with cascading actions, table variables (`DECLARE @table TABLE`), `TRUNCATE TABLE`, `SELECT ... INTO`, and `DBCC` diagnostics.
 - **Dual-Parser Architecture with Automatic Fallback**:
   - **Primary Fast-Path**: Zero-allocation Native Pratt parser achieving sub-microsecond parsing for high-frequency queries.
   - **Secondary Full-Spec Fallback**: Official Microsoft T-SQL ANTLR4 grammar parser invoked automatically on advanced syntax (bracket escapes, `WITH RECOMPILE`, vendor options).
 - **Volcano Relational Engine & Memory Governor**:
-  - Composable iterator execution: `SeqScan`, `IndexScan`, `Filter`, `Project`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `CTE WITH`.
+  - Composable iterator execution: `SeqScan`, `IndexScan`, `Filter`, `Project`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `WindowIterator`, `CTE WITH`.
   - **`work_mem` Memory Governor**: Prevents out-of-memory (OOM) crashes by automatically spilling sorted chunks to disk and performing an N-way Min-Heap streaming external merge sort.
 - **Cost-Based Optimizer (CBO)**:
   - `ANALYZE TABLE <name>` statistics collection: row counts, distinct values (`NDV`), null counts, and 64-bucket equi-depth histograms.
@@ -87,12 +101,9 @@ SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micro
 - **Online Non-Blocking Snapshot Hot Backup**:
   - Live, point-in-time `.tar.gz` database backups captured via read-only snapshot transactions without blocking writers or interrupting active OLTP traffic.
   - Accessible via CLI (`-backup`, `-restore`), REST API (`/api/backup`, `/api/restore`), and Web Studio UI.
-- **PostgreSQL High-Speed Bulk Copy Protocol**:
-  - Native wire protocol implementation of `COPY <table> FROM STDIN` and `COPY <table> TO STDOUT`.
-  - 100% compatible with `psql \copy` and `pg_dump` for high-throughput batch data ingestion.
-- **Dual Storage Backends**:
-  - **WiredTiger (Default)**: Cgo-backed lock-free B+Tree with hazard pointers, MVCC snapshot isolation, and disk checkpointing.
-  - **Memory Engine (`memory`)**: Pure-Go engine with Optimistic Concurrency Control (OCC), row versioning, and hybrid MessagePack snapshots + AOF append-only log compaction.
+- **High-Performance Storage Backends & TPC-C Benchmark**:
+  - **In-Memory OCC Engine**: Fine-grained table-level striped locking, pure-Go concurrent SkipList secondary indexes, and zero-copy cursor iteration delivering **1,251,489 tpmC** and **43,832 TPS** on the standard TPC-C benchmark.
+  - **WiredTiger (Default)**: Cgo-backed lock-free B+Tree with hazard pointers, MessagePack binary record codec, and cursor caching delivering **507,456 tpmC**.
 
 ---
 
