@@ -31,6 +31,7 @@ const (
 	TokenSlash     // /
 	TokenComma     // ,
 	TokenSemicolon // ;
+	TokenColon     // :
 	TokenLParen    // (
 	TokenRParen    // )
 	TokenJSONExtract     // ->
@@ -122,9 +123,11 @@ const (
 	TokenAvg
 	TokenMin
 	TokenMax
+	TokenGoto
 )
 
 var keywords = map[string]TokenType{
+	"GOTO":        TokenGoto,
 	"CREATE":      TokenCreate,
 	"PROCEDURE":   TokenProcedure,
 	"PROC":        TokenProc,
@@ -241,6 +244,8 @@ func (t TokenType) String() string {
 		return ","
 	case TokenSemicolon:
 		return ";"
+	case TokenColon:
+		return ":"
 	case TokenLParen:
 		return "("
 	case TokenRParen:

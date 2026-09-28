@@ -488,10 +488,34 @@ func (p *Parser) parseStatement() (Statement, error) {
 		return p.parseDelete()
 	case TokenExec:
 		return p.parseExec()
+	case TokenGoto:
+		return p.parseGoto()
+	case TokenIdent:
+		if p.peekTokenIs(TokenColon) {
+			label := p.curToken.Literal
+			p.nextToken() // move to ':'
+			p.nextToken() // eat ':'
+			return &LabelStmt{Label: label}, nil
+		}
+		return nil, fmt.Errorf("unexpected token in statement: %s at %d:%d",
+			p.curToken.Literal, p.curToken.Line, p.curToken.Col)
 	default:
 		return nil, fmt.Errorf("unexpected token in statement: %s at %d:%d",
 			p.curToken.Literal, p.curToken.Line, p.curToken.Col)
 	}
+}
+
+func (p *Parser) parseGoto() (Statement, error) {
+	p.nextToken() // eat GOTO
+	if !p.curTokenIs(TokenIdent) {
+		return nil, fmt.Errorf("expected label name after GOTO, got %s at %d:%d", p.curToken.Literal, p.curToken.Line, p.curToken.Col)
+	}
+	label := p.curToken.Literal
+	p.nextToken()
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
+	return &GotoStmt{Label: label}, nil
 }
 
 func (p *Parser) parseOpen() (Statement, error) {

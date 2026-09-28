@@ -30,15 +30,22 @@ func GetProcedureFallback() ProcedureFallbackParser {
 	return procFallbackParser
 }
 
+type gotoFixup struct {
+	pc    int
+	label string
+}
+
 // Compiler compiles AST nodes into executable bytecode Programs.
 type Compiler struct {
-	prog          *Program
-	regCounter    int32
-	maxRegisters  int32
-	constMap      map[string]int32
-	varNames      map[string]bool
-	loopBreaks    [][]int
-	loopContinues [][]int
+	prog            *Program
+	regCounter      int32
+	maxRegisters    int32
+	constMap        map[string]int32
+	varNames        map[string]bool
+	loopBreaks      [][]int
+	loopContinues   [][]int
+	labels          map[string]int
+	unresolvedGotos []gotoFixup
 }
 
 // NewCompiler creates a new Compiler instance.
@@ -49,10 +56,12 @@ func NewCompiler() *Compiler {
 			Constants:    make([]storage.Value, 0),
 			VarNames:     make([]string, 0),
 		},
-		constMap:      make(map[string]int32),
-		varNames:      make(map[string]bool),
-		loopBreaks:    make([][]int, 0),
-		loopContinues: make([][]int, 0),
+		constMap:        make(map[string]int32),
+		varNames:        make(map[string]bool),
+		loopBreaks:      make([][]int, 0),
+		loopContinues:   make([][]int, 0),
+		labels:          make(map[string]int),
+		unresolvedGotos: make([]gotoFixup, 0),
 	}
 }
 
@@ -120,6 +129,9 @@ func CompileProcedure(stmt *CreateProcStmt) (*Program, error) {
 	if err := c.compileStatement(stmt.Body); err != nil {
 		return nil, err
 	}
+	if err := c.resolveGotos(); err != nil {
+		return nil, err
+	}
 
 	c.emit(OpReturn, -1, 0, 0, nil)
 	c.prog.NumRegisters = c.maxRegisters
@@ -141,6 +153,9 @@ func CompileFunction(stmt *CreateFunctionStmt) (*Program, error) {
 	if err := c.compileStatement(stmt.Body); err != nil {
 		return nil, err
 	}
+	if err := c.resolveGotos(); err != nil {
+		return nil, err
+	}
 
 	c.emit(OpReturn, -1, 0, 0, nil)
 	c.prog.NumRegisters = c.maxRegisters
@@ -156,6 +171,9 @@ func CompileTrigger(stmt *CreateTriggerStmt) (*Program, error) {
 	c.prog.Events = stmt.Events
 
 	if err := c.compileStatement(stmt.Body); err != nil {
+		return nil, err
+	}
+	if err := c.resolveGotos(); err != nil {
 		return nil, err
 	}
 
@@ -466,9 +484,42 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		c.freeReg(int32(len(argRegs)))
 		return nil
 
+	case *LabelStmt:
+		labelKey := strings.ToLower(s.Label)
+		if _, exists := c.labels[labelKey]; exists {
+			return fmt.Errorf("duplicate label %q", s.Label)
+		}
+		c.labels[labelKey] = c.currentPC()
+		return nil
+
+	case *GotoStmt:
+		labelKey := strings.ToLower(s.Label)
+		if targetPC, exists := c.labels[labelKey]; exists {
+			c.emit(OpJump, 0, int32(targetPC), 0, nil)
+		} else {
+			jmpIdx := c.emit(OpJump, 0, 0, 0, nil)
+			c.unresolvedGotos = append(c.unresolvedGotos, gotoFixup{
+				pc:    jmpIdx,
+				label: s.Label,
+			})
+		}
+		return nil
+
 	default:
 		return fmt.Errorf("unsupported statement type: %T", stmt)
 	}
+}
+
+func (c *Compiler) resolveGotos() error {
+	for _, fix := range c.unresolvedGotos {
+		labelKey := strings.ToLower(fix.label)
+		targetPC, ok := c.labels[labelKey]
+		if !ok {
+			return fmt.Errorf("label %q is not defined", fix.label)
+		}
+		c.prog.Instructions[fix.pc].B = int32(targetPC)
+	}
+	return nil
 }
 
 func (c *Compiler) compileExpr(expr Expr) (int32, error) {

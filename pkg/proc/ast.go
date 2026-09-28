@@ -375,6 +375,22 @@ type ContinueStmt struct{}
 func (s *ContinueStmt) stmtNode() {}
 func (s *ContinueStmt) String() string { return "CONTINUE" }
 
+// GotoStmt represents GOTO <label>
+type GotoStmt struct {
+	Label string
+}
+
+func (s *GotoStmt) stmtNode() {}
+func (s *GotoStmt) String() string { return fmt.Sprintf("GOTO %s", s.Label) }
+
+// LabelStmt represents a label definition (<label>:)
+type LabelStmt struct {
+	Label string
+}
+
+func (s *LabelStmt) stmtNode() {}
+func (s *LabelStmt) String() string { return fmt.Sprintf("%s:", s.Label) }
+
 // CaseWhen represents a single WHEN cond THEN result arm
 type CaseWhen struct {
 	Condition Expr

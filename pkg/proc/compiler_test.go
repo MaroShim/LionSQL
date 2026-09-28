@@ -130,3 +130,66 @@ END;
 	}
 }
 
+func TestCompiler_GotoAndLabels(t *testing.T) {
+	tsql := `
+CREATE PROCEDURE CalculateBonusWithGoto
+    @score INT
+AS
+BEGIN
+    DECLARE @bonus INT;
+    SET @bonus = 100;
+
+    IF @score > 90
+        GOTO top_tier;
+
+    SET @bonus = 200;
+    GOTO finalize;
+
+top_tier:
+    SET @bonus = 1000;
+
+finalize:
+    RETURN @bonus;
+END;
+`
+	prog, err := proc.Compile(tsql)
+	if err != nil {
+		t.Fatalf("Compile with GOTO failed: %v", err)
+	}
+
+	dis := prog.Disassemble()
+	if !strings.Contains(dis, "JUMP") {
+		t.Errorf("expected JUMP opcode in disassembly, got:\n%s", dis)
+	}
+
+	// Test undefined label failure
+	badSQL := `
+CREATE PROCEDURE BadGotoProc
+AS
+BEGIN
+    GOTO non_existent_label;
+END;
+`
+	_, err = proc.Compile(badSQL)
+	if err == nil || !strings.Contains(err.Error(), "not defined") {
+		t.Fatalf("expected undefined label error, got: %v", err)
+	}
+
+	// Test duplicate label failure
+	dupSQL := `
+CREATE PROCEDURE DupLabelProc
+AS
+BEGIN
+my_label:
+    PRINT 'first';
+my_label:
+    PRINT 'second';
+END;
+`
+	_, err = proc.Compile(dupSQL)
+	if err == nil || !strings.Contains(err.Error(), "duplicate label") {
+		t.Fatalf("expected duplicate label error, got: %v", err)
+	}
+}
+
+

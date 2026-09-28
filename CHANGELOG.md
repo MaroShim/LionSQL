@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **T-SQL Control Flow: `GOTO` & Labels Engine (`pkg/proc`, `pkg/proc/runtime`)**:
+  - Added lexical tokens `TokenGoto` and `TokenColon` (`:`) with AST node definitions `GotoStmt` and `LabelStmt`.
+  - Implemented 2-pass jump resolution in `Compiler` supporting forward and backward jumps with `OpJump`.
+  - Added compile-time validation detecting undefined target labels and rejecting duplicate label definitions.
+  - Added comprehensive bytecode compilation and VM execution regression tests in `pkg/proc/compiler_test.go` and `pkg/proc/runtime/regression_test.go`.
 - **T-SQL Global Temporary Tables `##` Engine (`pkg/api`)**:
   - Implemented cross-session global temporary tables prefixed with `##` (`CREATE TABLE ##table (...)`).
   - Added shared table access, mutations, and query planning across multiple concurrent client sessions with case-insensitive naming parity.

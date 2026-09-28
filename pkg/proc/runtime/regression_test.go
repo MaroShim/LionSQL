@@ -763,3 +763,95 @@ END;
 	}
 }
 
+func TestRegression_GotoBranchingAndLoop(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	// 1. Forward GOTO branching
+	procSQL := `
+CREATE PROCEDURE dbo.ComputeDiscountWithGoto
+    @amount INT
+AS
+BEGIN
+    DECLARE @discount INT;
+    SET @discount = 0;
+
+    IF @amount > 500
+        GOTO high_spender;
+
+    SET @discount = 10;
+    GOTO exit_proc;
+
+high_spender:
+    SET @discount = 50;
+
+exit_proc:
+    RETURN @discount;
+END;
+`
+	prog, err := cache.GetOrCompile(procSQL)
+	if err != nil {
+		t.Fatalf("compile failed: %v", err)
+	}
+
+	// Test case 1: amount = 100 -> discount = 10
+	res1, err := executor.Run(prog, "ComputeDiscountWithGoto", map[string]any{"amount": 100}, session)
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res1.ReturnValue) != "10" {
+		t.Errorf("expected 10, got %v", res1.ReturnValue)
+	}
+
+	// Test case 2: amount = 1000 -> jumps to high_spender, discount = 50
+	res2, err := executor.Run(prog, "ComputeDiscountWithGoto", map[string]any{"amount": 1000}, session)
+	if err != nil {
+		t.Fatalf("Run failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res2.ReturnValue) != "50" {
+		t.Errorf("expected 50, got %v", res2.ReturnValue)
+	}
+
+	// 2. Backward GOTO loop: calculate sum(1..5) = 15
+	loopProcSQL := `
+CREATE PROCEDURE dbo.CalculateSumLoop
+AS
+BEGIN
+    DECLARE @i INT;
+    DECLARE @total INT;
+    SET @i = 1;
+    SET @total = 0;
+
+loop_head:
+    SET @total = @total + @i;
+    SET @i = @i + 1;
+    IF @i <= 5
+        GOTO loop_head;
+
+    RETURN @total;
+END;
+`
+	loopProg, err := cache.GetOrCompile(loopProcSQL)
+	if err != nil {
+		t.Fatalf("compile loop proc failed: %v", err)
+	}
+
+	resLoop, err := executor.Run(loopProg, "CalculateSumLoop", nil, session)
+	if err != nil {
+		t.Fatalf("Run loop failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resLoop.ReturnValue) != "15" {
+		t.Errorf("expected sum 15, got %v", resLoop.ReturnValue)
+	}
+}
+
+
