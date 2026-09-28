@@ -54,6 +54,10 @@ static int go_wt_cursor_close(WT_CURSOR *cursor) {
     return cursor->close(cursor);
 }
 
+static int go_wt_cursor_reset(WT_CURSOR *cursor) {
+    return cursor->reset(cursor);
+}
+
 static int go_wt_cursor_next(WT_CURSOR *cursor) {
     return cursor->next(cursor);
 }
@@ -327,10 +331,11 @@ func (e *Engine) NewSession() (storage.Session, error) {
 
 // WTSession represents an active client connection to WiredTiger.
 type WTSession struct {
-	engine *Engine
-	sess   *C.WT_SESSION
-	mu     sync.Mutex
-	closed bool
+	engine  *Engine
+	sess    *C.WT_SESSION
+	mu      sync.Mutex
+	closed  bool
+	cursors map[string]*C.WT_CURSOR
 }
 
 func (s *WTSession) Close() error {
@@ -341,12 +346,49 @@ func (s *WTSession) Close() error {
 		return nil
 	}
 	s.closed = true
+
+	for _, cur := range s.cursors {
+		C.go_wt_cursor_close(cur)
+	}
+	s.cursors = nil
+
 	ret := C.go_wt_session_close(s.sess)
 	s.sess = nil
 	if ret != 0 {
 		return fmt.Errorf("session_close failed: code %d", ret)
 	}
 	return nil
+}
+
+func (s *WTSession) getCursor(tableName string) (*C.WT_CURSOR, error) {
+	if s.closed || s.sess == nil {
+		return nil, fmt.Errorf("session is closed")
+	}
+	uri := "table:" + tableName
+	if cur, ok := s.cursors[uri]; ok {
+		C.go_wt_cursor_reset(cur)
+		return cur, nil
+	}
+
+	cURI := C.CString(uri)
+	defer C.free(unsafe.Pointer(cURI))
+
+	var cur *C.WT_CURSOR
+	if ret := C.go_wt_open_cursor(s.sess, cURI, &cur); ret != 0 {
+		return nil, fmt.Errorf("open_cursor failed: %d", ret)
+	}
+
+	if s.cursors == nil {
+		s.cursors = make(map[string]*C.WT_CURSOR)
+	}
+	s.cursors[uri] = cur
+	return cur, nil
+}
+
+func (s *WTSession) resetCursors() {
+	for _, cur := range s.cursors {
+		C.go_wt_cursor_reset(cur)
+	}
 }
 
 func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
@@ -405,14 +447,11 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 		return err
 	}
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
-	defer C.free(unsafe.Pointer(uri))
-
-	var cur *C.WT_CURSOR
-	if ret := C.go_wt_open_cursor(tx.sess.sess, uri, &cur); ret != 0 {
-		return fmt.Errorf("open_cursor failed: %d", ret)
+	cur, err := tx.sess.getCursor(tableName)
+	if err != nil {
+		return err
 	}
-	defer C.go_wt_cursor_close(cur)
+	defer C.go_wt_cursor_reset(cur)
 
 	cKey := C.CString(pkStr)
 	defer C.free(unsafe.Pointer(cKey))
@@ -451,14 +490,11 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 		return err
 	}
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
-	defer C.free(unsafe.Pointer(uri))
-
-	var cur *C.WT_CURSOR
-	if ret := C.go_wt_open_cursor(tx.sess.sess, uri, &cur); ret != 0 {
-		return fmt.Errorf("open_cursor failed: %d", ret)
+	cur, err := tx.sess.getCursor(tableName)
+	if err != nil {
+		return err
 	}
-	defer C.go_wt_cursor_close(cur)
+	defer C.go_wt_cursor_reset(cur)
 
 	cKey := C.CString(pk.String())
 	defer C.free(unsafe.Pointer(cKey))
@@ -483,14 +519,11 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 		return storage.ErrTxClosed
 	}
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
-	defer C.free(unsafe.Pointer(uri))
-
-	var cur *C.WT_CURSOR
-	if ret := C.go_wt_open_cursor(tx.sess.sess, uri, &cur); ret != 0 {
-		return fmt.Errorf("open_cursor failed: %d", ret)
+	cur, err := tx.sess.getCursor(tableName)
+	if err != nil {
+		return err
 	}
-	defer C.go_wt_cursor_close(cur)
+	defer C.go_wt_cursor_reset(cur)
 
 	cKey := C.CString(pk.String())
 	defer C.free(unsafe.Pointer(cKey))
@@ -514,14 +547,11 @@ func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, e
 		return nil, storage.ErrTxClosed
 	}
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
-	defer C.free(unsafe.Pointer(uri))
-
-	var cur *C.WT_CURSOR
-	if ret := C.go_wt_open_cursor(tx.sess.sess, uri, &cur); ret != 0 {
-		return nil, fmt.Errorf("open_cursor failed: %d", ret)
+	cur, err := tx.sess.getCursor(tableName)
+	if err != nil {
+		return nil, err
 	}
-	defer C.go_wt_cursor_close(cur)
+	defer C.go_wt_cursor_reset(cur)
 
 	cKey := C.CString(pk.String())
 	defer C.free(unsafe.Pointer(cKey))
@@ -578,6 +608,8 @@ func (tx *WTTx) Commit() error {
 	}
 	tx.closed = true
 
+	tx.sess.resetCursors()
+
 	ret := C.go_wt_session_commit(tx.sess.sess, nil)
 	if ret != 0 {
 		return fmt.Errorf("commit_transaction failed with code %d", ret)
@@ -593,6 +625,8 @@ func (tx *WTTx) Rollback() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+
+	tx.sess.resetCursors()
 
 	ret := C.go_wt_session_rollback(tx.sess.sess, nil)
 	if ret != 0 {
