@@ -104,6 +104,12 @@ func (s *Server) acceptLoop() {
 			continue
 		}
 
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			_ = tcpConn.SetNoDelay(true)
+			_ = tcpConn.SetKeepAlive(true)
+			_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
+		}
+
 		s.wg.Add(1)
 		go func(c net.Conn) {
 			defer s.wg.Done()

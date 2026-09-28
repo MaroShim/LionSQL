@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Wire Protocols: `TCP_NODELAY` & Socket Keep-Alive Optimization (`pkg/wire`, `pkg/wire/tds`)**:
+  - Explicitly enabled `SetNoDelay(true)` across PostgreSQL Wire Protocol v3 and Microsoft SQL Server TDS 7.x/8.0 listeners, disabling Nagle's algorithm and eliminating up to 40ms delayed-ACK packet latency.
+  - Enabled active TCP keep-alive with 30-second interval probe lifecycle preventing stale socket accumulation.
 - **In-Memory OCC Engine: Fine-Grained Table-Level Striped Locking (`pkg/storage/memengine`)**:
   - Replaced single coarse-grained engine mutex in `Commit()` with per-table read/write mutexes (`TableData.mu`).
   - Implemented deadlock-free canonical lock acquisition (sorted table names) allowing concurrent transactions modifying disjoint tables to commit in parallel.

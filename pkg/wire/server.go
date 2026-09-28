@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
@@ -113,6 +114,11 @@ func (s *Server) acceptLoop() {
 				return
 			}
 			continue
+		}
+		if tcpConn, ok := conn.(*net.TCPConn); ok {
+			_ = tcpConn.SetNoDelay(true)
+			_ = tcpConn.SetKeepAlive(true)
+			_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
 		}
 		go s.handleConnection(conn)
 	}
