@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **In-Memory OCC Engine: `cloneRecord` & Heap Allocation Optimization (`pkg/storage/memengine`)**:
+  - Eliminated redundant double map cloning on row updates by retrieving unallocated snapshots in `getRecordAndVerUnderLock(tableName, pk, false)` and sizing updated maps in a single allocation.
+  - Eliminated map cloning on `deleteLocked` for foreign key cascade checks.
+  - Reused transaction-local staged records directly without defensive copies when re-read in the same transaction.
+  - Elevated In-Memory TPC-C performance from 802k to **892,975 tpmC (+11.3%)** and **33,480 TPS (+11.0%)** while slashing sub-millisecond row latency (0.93ms New-Order, 0.36ms Payment).
 - **WiredTiger Engine: High-Performance Binary Record Codec (`pkg/storage/wiredtiger`)**:
   - Replaced reflection-based `json.Marshal` and `json.Unmarshal` with MessagePack binary serialization and direct CGO raw pointer passing (`WT_ITEM`, `value_format=u`).
   - Implemented zero-allocation `C.go_wt_cursor_set_val_raw` and `C.go_wt_cursor_get_val_raw`, eliminating string conversion and libc `malloc`/`free` on record writes.

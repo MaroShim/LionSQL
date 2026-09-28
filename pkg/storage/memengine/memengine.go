@@ -830,7 +830,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 	}
 
 	pkKey := pk.String()
-	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey)
+	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, false)
 	if err != nil {
 		return err
 	}
@@ -844,7 +844,10 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 	schema := td.Schema
 	tx.engine.mu.RUnlock()
 
-	updated := cloneRecord(base)
+	updated := make(storage.Record, len(base))
+	for col, val := range base {
+		updated[col] = val
+	}
 	for col, val := range record {
 		updated[col] = val
 	}
@@ -1035,7 +1038,7 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 	}
 
 	pkKey := pk.String()
-	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey)
+	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, false)
 	if err != nil {
 		return err
 	}
@@ -1321,21 +1324,21 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 	}
 
 	pkKey := pk.String()
-	rec, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey)
+	rec, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, true)
 	if err == nil {
 		tx.setBaseVer(tableName, pkKey, ver)
 	}
 	return rec, err
 }
 
-func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string) (storage.Record, int64, error) {
+func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string, clone bool) (storage.Record, int64, error) {
 	if tx.isLocallyDeleted(tableName, pkKey) {
 		return nil, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
 	}
 
 	if rec, found := tx.getLocal(tableName, pkKey); found {
 		ver := tx.getBaseVer(tableName, pkKey)
-		return cloneRecord(rec), ver, nil
+		return rec, ver, nil
 	}
 
 	tx.engine.mu.RLock()
@@ -1352,7 +1355,10 @@ func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string) (storag
 	}
 
 	ver := td.Versions[pkKey]
-	return cloneRecord(rec), ver, nil
+	if clone {
+		return cloneRecord(rec), ver, nil
+	}
+	return rec, ver, nil
 }
 
 func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
