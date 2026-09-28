@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **In-Memory OCC Engine: Fine-Grained Table-Level Striped Locking (`pkg/storage/memengine`)**:
+  - Replaced single coarse-grained engine mutex in `Commit()` with per-table read/write mutexes (`TableData.mu`).
+  - Implemented deadlock-free canonical lock acquisition (sorted table names) allowing concurrent transactions modifying disjoint tables to commit in parallel.
+  - Slashed read blocking during commit phases across `getRecordAndVerUnderLock`, `Scan`, and `IndexScan`.
+  - Skyrocketed In-Memory TPC-C performance from 892k to **1,251,489 tpmC (+40.1%)** and **43,832 TPS (+30.9%)**, with New-Order commit success rate reaching **99.8%** and average latency plummeting to **0.20ms**.
 - **In-Memory OCC Engine: `cloneRecord` & Heap Allocation Optimization (`pkg/storage/memengine`)**:
   - Eliminated redundant double map cloning on row updates by retrieving unallocated snapshots in `getRecordAndVerUnderLock(tableName, pk, false)` and sizing updated maps in a single allocation.
   - Eliminated map cloning on `deleteLocked` for foreign key cascade checks.

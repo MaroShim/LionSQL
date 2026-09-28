@@ -58,6 +58,7 @@ func (idx *IndexData) SyncEntries() {
 
 // TableData stores rows in memory for a single table with OCC version tracking and secondary indexes.
 type TableData struct {
+	mu       sync.RWMutex
 	Schema   storage.TableSchema       `json:"schema"`
 	Rows     map[string]storage.Record `json:"rows"`
 	Versions map[string]int64          `json:"versions"`
@@ -712,7 +713,10 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	} else {
 		tx.engine.mu.RLock()
 		if td, ok := tx.engine.tables[tableName]; ok {
-			if _, inEngine := td.Rows[pkKey]; inEngine {
+			td.mu.RLock()
+			_, inEngine := td.Rows[pkKey]
+			td.mu.RUnlock()
+			if inEngine {
 				tx.engine.mu.RUnlock()
 				return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, tableName)
 			}
@@ -723,18 +727,21 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	// Validate unique index constraints
 	tx.engine.mu.RLock()
 	if td, ok := tx.engine.tables[tableName]; ok {
+		td.mu.RLock()
 		for _, idxData := range td.Indexes {
 			if idxData.Schema.Unique {
 				keyVal := extractIndexKey(record, idxData.Schema.Columns)
 				existing := idxData.ScanRange(&keyVal, &keyVal)
 				for _, epk := range existing {
 					if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+						td.mu.RUnlock()
 						tx.engine.mu.RUnlock()
 						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
 					}
 				}
 			}
 		}
+		td.mu.RUnlock()
 	}
 	tx.engine.mu.RUnlock()
 
@@ -1188,7 +1195,9 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		}
 		tx.engine.mu.RLock()
 		if pTd, ok := tx.engine.tables[fk.ParentTable]; ok {
+			pTd.mu.RLock()
 			_, inEngine := pTd.Rows[parentKey]
+			pTd.mu.RUnlock()
 			tx.engine.mu.RUnlock()
 			return inEngine, nil
 		}
@@ -1196,6 +1205,7 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		return false, nil
 	}
 
+	parentTd.mu.RLock()
 	for pkStr, rec := range parentTd.Rows {
 		if tx.isLocallyDeleted(fk.ParentTable, pkStr) {
 			continue
@@ -1204,10 +1214,12 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 			continue
 		}
 		if recordMatchesFK(rec, parentCols, childVals) {
+			parentTd.mu.RUnlock()
 			tx.engine.mu.RUnlock()
 			return true, nil
 		}
 	}
+	parentTd.mu.RUnlock()
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[fk.ParentTable]; ok {
@@ -1258,7 +1270,7 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 	}
 
 	var matchingPKs []storage.Value
-
+	childTd.mu.RLock()
 	for pkStr, rec := range childTd.Rows {
 		if tx.isLocallyDeleted(childTable, pkStr) {
 			continue
@@ -1270,6 +1282,7 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 			matchingPKs = append(matchingPKs, rec[childPkCol.Name])
 		}
 	}
+	childTd.mu.RUnlock()
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[childTable]; ok {
@@ -1342,19 +1355,21 @@ func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string, clone b
 	}
 
 	tx.engine.mu.RLock()
-	defer tx.engine.mu.RUnlock()
-
 	td, exists := tx.engine.tables[tableName]
 	if !exists {
+		tx.engine.mu.RUnlock()
 		return nil, 0, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
-
+	td.mu.RLock()
 	rec, exists := td.Rows[pkKey]
+	ver := td.Versions[pkKey]
+	td.mu.RUnlock()
+	tx.engine.mu.RUnlock()
+
 	if !exists {
 		return nil, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
 	}
 
-	ver := td.Versions[pkKey]
 	if clone {
 		return cloneRecord(rec), ver, nil
 	}
@@ -1376,13 +1391,14 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
-	// Zero-Copy Direct View: build merged map referencing rows directly without cloneRecord
+	td.mu.RLock()
 	merged := make(map[string]storage.Record, len(td.Rows))
 	for k, v := range td.Rows {
 		if !tx.isLocallyDeleted(tableName, k) {
 			merged[k] = v
 		}
 	}
+	td.mu.RUnlock()
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[tableName]; ok {
@@ -1455,11 +1471,12 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 			continue
 		}
 
-		tx.engine.mu.RLock()
-		if rec, exists := td.Rows[pk]; exists {
+		td.mu.RLock()
+		rec, exists := td.Rows[pk]
+		td.mu.RUnlock()
+		if exists {
 			records = append(records, rec)
 		}
-		tx.engine.mu.RUnlock()
 	}
 
 	if localRows, ok := tx.local[tableName]; ok {
@@ -1494,8 +1511,35 @@ func (tx *Transaction) Commit() error {
 		return nil
 	}
 
-	tx.engine.mu.Lock()
-	defer tx.engine.mu.Unlock()
+	// 1. Collect distinct table names affected by this transaction
+	tableSet := make(map[string]struct{})
+	for _, ch := range tx.changes {
+		tableSet[ch.table] = struct{}{}
+	}
+	tableNames := make([]string, 0, len(tableSet))
+	for name := range tableSet {
+		tableNames = append(tableNames, name)
+	}
+	sort.Strings(tableNames) // Strict Lock Hierarchy to prevent deadlocks (Rule 10)
+
+	// 2. Acquire shared read lock on engine catalog to resolve table pointers
+	tx.engine.mu.RLock()
+	defer tx.engine.mu.RUnlock()
+
+	// 3. Acquire exclusive lock on each affected table in sorted canonical order
+	affectedTables := make([]*TableData, 0, len(tableNames))
+	for _, name := range tableNames {
+		td, exists := tx.engine.tables[name]
+		if exists {
+			td.mu.Lock()
+			affectedTables = append(affectedTables, td)
+		}
+	}
+	defer func() {
+		for i := len(affectedTables) - 1; i >= 0; i-- {
+			affectedTables[i].mu.Unlock()
+		}
+	}()
 
 	// 1. Verify OCC version conflicts and unique constraints
 	for _, ch := range tx.changes {
