@@ -49,6 +49,10 @@ func (idx *IndexData) ScanRange(low, high *storage.Value) []string {
 	return idx.getSkipList().ScanRange(low, high)
 }
 
+func (idx *IndexData) ScanRangeEntries(low, high *storage.Value) []SkipListEntry {
+	return idx.getSkipList().ScanRangeEntries(low, high)
+}
+
 // SyncEntries exports the in-memory SkipList into the Entries slice for disk snapshot persistence.
 func (idx *IndexData) SyncEntries() {
 	if idx.sl != nil {
@@ -1537,6 +1541,105 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		if exists {
 			records = append(records, rec)
 		}
+	}
+
+	if localRows, ok := tx.local[tableName]; ok {
+		for pk, locRec := range localRows {
+			if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
+				continue
+			}
+			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
+			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+				records = append(records, locRec)
+				seen[pk] = true
+			}
+		}
+	}
+
+	return &memCursor{
+		records: records,
+		idx:     -1,
+	}, nil
+}
+
+func parsePKValue(s string, dt storage.DataType) storage.Value {
+	switch dt {
+	case storage.TypeInt:
+		var n int64
+		_, _ = fmt.Sscanf(s, "%d", &n)
+		return storage.IntValue(n)
+	case storage.TypeFloat:
+		var f float64
+		_, _ = fmt.Sscanf(s, "%f", &f)
+		return storage.FloatValue(f)
+	case storage.TypeBool:
+		return storage.BoolValue(strings.EqualFold(s, "true") || s == "1")
+	case storage.TypeDateTime:
+		if t, err := time.Parse(time.RFC3339, s); err == nil {
+			return storage.DateTimeValue(t)
+		}
+		return storage.StringValue(s)
+	default:
+		return storage.StringValue(s)
+	}
+}
+
+func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return nil, storage.ErrTxClosed
+	}
+
+	tx.engine.mu.RLock()
+	td, exists := tx.engine.tables[tableName]
+	if !exists {
+		tx.engine.mu.RUnlock()
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	idxData, exists := td.Indexes[indexName]
+	if !exists {
+		tx.engine.mu.RUnlock()
+		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
+	}
+
+	pkCol, _ := td.Schema.PrimaryKeyColumn()
+	candidateEntries := idxData.ScanRangeEntries(low, high)
+	tx.engine.mu.RUnlock()
+
+	var records []storage.Record
+	seen := make(map[string]bool)
+
+	for _, entry := range candidateEntries {
+		pk := entry.PK
+		if seen[pk] {
+			continue
+		}
+		seen[pk] = true
+
+		if tx.isLocallyDeleted(tableName, pk) {
+			continue
+		}
+
+		if locRec, inLocal := tx.getLocal(tableName, pk); inLocal {
+			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
+			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+				records = append(records, locRec)
+			}
+			continue
+		}
+
+		// Fast-path: Construct record directly from index key and PK without table row lookup
+		rec := make(storage.Record, 2)
+		if len(idxData.Schema.Columns) > 0 {
+			rec[idxData.Schema.Columns[0]] = entry.Key
+		}
+		if pkCol != nil {
+			rec[pkCol.Name] = parsePKValue(pk, pkCol.Type)
+		}
+		records = append(records, rec)
 	}
 
 	if localRows, ok := tx.local[tableName]; ok {

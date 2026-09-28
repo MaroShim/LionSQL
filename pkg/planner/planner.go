@@ -16,9 +16,10 @@ import (
 type NodeType string
 
 const (
-	NodeTableScan   NodeType = "Seq Scan"
-	NodeIndexScan   NodeType = "Index Scan"
-	NodeFilter      NodeType = "Filter"
+	NodeTableScan     NodeType = "Seq Scan"
+	NodeIndexScan     NodeType = "Index Scan"
+	NodeIndexOnlyScan NodeType = "Index Only Scan"
+	NodeFilter        NodeType = "Filter"
 	NodeSort        NodeType = "Sort"
 	NodeProjection  NodeType = "Projection"
 	NodeLimit       NodeType = "Limit"
@@ -541,13 +542,64 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 				if indexPagesCost < 0.05 {
 					indexPagesCost = 0.05
 				}
-				indexScanCost := startupCost + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
+
+				// Check covering index eligibility (Index-Only Scan)
+				isCovering := false
+				if len(q.Projections) > 0 {
+					hasStar := false
+					for _, p := range q.Projections {
+						trimmed := strings.TrimSpace(p)
+						if trimmed == "*" || strings.HasSuffix(trimmed, ".*") {
+							hasStar = true
+							break
+						}
+					}
+
+					if !hasStar {
+						coveredCols := make(map[string]bool)
+						for _, c := range idx.Columns {
+							coveredCols[strings.ToLower(c)] = true
+						}
+						if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
+							coveredCols[strings.ToLower(pkCol.Name)] = true
+						}
+
+						allCovered := true
+						for _, p := range q.Projections {
+							clean := strings.ToLower(strings.TrimSpace(p))
+							if clean == "count(*)" || clean == "count(1)" {
+								continue
+							}
+							if dotIdx := strings.Index(clean, "."); dotIdx != -1 {
+								clean = clean[dotIdx+1:]
+							}
+							if asIdx := strings.Index(clean, " as "); asIdx != -1 {
+								clean = strings.TrimSpace(clean[:asIdx])
+							}
+							if !coveredCols[clean] {
+								allCovered = false
+								break
+							}
+						}
+						isCovering = allCovered
+					}
+				}
+
+				nodeType := NodeIndexScan
+				var indexScanCost float64
+				if isCovering {
+					nodeType = NodeIndexOnlyScan
+					// Index-Only Scan eliminates table heap page fetches and tuple CPU cost
+					indexScanCost = startupCost + float64(estRows)*CPUIndexTupleCost + indexPagesCost*0.6
+				} else {
+					indexScanCost = startupCost + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
+				}
 
 				// CBO Decision: Choose IndexScan only if its estimated cost is lower than TableScan
 				if indexScanCost < tableScanTotalCost {
 					usedIndex = true
 					scanNode = &PlanNode{
-						Type:          NodeIndexScan,
+						Type:          nodeType,
 						Relation:      q.TableName,
 						Alias:         q.TableAlias,
 						IndexName:     idx.Name,
@@ -894,7 +946,7 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 		if node.Alias != "" && node.Alias != node.Relation {
 			sb.WriteString(fmt.Sprintf(" %s", node.Alias))
 		}
-	case NodeIndexScan:
+	case NodeIndexScan, NodeIndexOnlyScan:
 		sb.WriteString(fmt.Sprintf(" using %s on %s", node.IndexName, node.Relation))
 		if node.Alias != "" && node.Alias != node.Relation {
 			sb.WriteString(fmt.Sprintf(" %s", node.Alias))

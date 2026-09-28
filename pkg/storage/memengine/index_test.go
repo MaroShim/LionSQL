@@ -113,6 +113,34 @@ func TestSecondaryIndex_LifecycleAndUniqueConstraint(t *testing.T) {
 		t.Fatalf("Expected 1 row for exact match, got %d", count)
 	}
 
+	// 5.1. Test IndexOnlyScan: returns index keys and PK without accessing main table rows
+	curOnly, err := tx3.IndexOnlyScan("customers", "idx_cust_email", &keyVal, &keyVal)
+	if err != nil {
+		t.Fatalf("IndexOnlyScan failed: %v", err)
+	}
+	defer curOnly.Close()
+
+	onlyCount := 0
+	for curOnly.Next() {
+		rec, err := curOnly.Record()
+		if err != nil {
+			t.Fatalf("IndexOnlyScan Record error: %v", err)
+		}
+		if rec["id"].IVal != 2 {
+			t.Errorf("Expected id=2 for bob@example.com, got %v", rec["id"].IVal)
+		}
+		if rec["email"].SVal != "bob@example.com" {
+			t.Errorf("Expected email=bob@example.com, got %v", rec["email"].SVal)
+		}
+		if _, hasName := rec["name"]; hasName {
+			t.Errorf("Expected name to NOT be present in index-only record, got %v", rec["name"])
+		}
+		onlyCount++
+	}
+	if onlyCount != 1 {
+		t.Fatalf("Expected 1 row for index-only match, got %d", onlyCount)
+	}
+
 	// 6. Test IndexScan Range on Age Index [25, 30]
 	lowAge := storage.IntValue(25)
 	highAge := storage.IntValue(30)

@@ -31,14 +31,16 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		}
 		return NewSeqScanIterator(tx, plan.Relation, plan.Alias, schema), nil
 
-	case planner.NodeIndexScan:
+	case planner.NodeIndexScan, planner.NodeIndexOnlyScan:
 		schema, err := getTable(plan.Relation)
 		if err != nil {
 			return nil, fmt.Errorf("index scan schema lookup failed for %q: %w", plan.Relation, err)
 		}
 
 		low, high := parseIndexCond(plan.IndexCond, schema)
-		return NewIndexScanIterator(tx, plan.Relation, plan.Alias, plan.IndexName, low, high, schema), nil
+		it := NewIndexScanIterator(tx, plan.Relation, plan.Alias, plan.IndexName, low, high, schema)
+		it.IndexOnly = (plan.Type == planner.NodeIndexOnlyScan)
+		return it, nil
 
 	case planner.NodeFilter:
 		if len(plan.Children) == 0 {

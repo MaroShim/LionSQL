@@ -349,3 +349,91 @@ func TestEndToEnd_VolcanoWithMemEngine(t *testing.T) {
 		t.Fatalf("expected projected name and price, got %v", result[0])
 	}
 }
+
+func TestExecutor_IndexOnlyScan(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+			{Name: "bio", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:    "idx_users_email",
+				Columns: []string{"email"},
+				Unique:  true,
+			},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable error: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("users", storage.Record{
+		"id":    storage.IntValue(1),
+		"email": storage.StringValue("alice@example.com"),
+		"bio":   storage.StringValue("Alice bio notes"),
+	})
+	_ = tx.Insert("users", storage.Record{
+		"id":    storage.IntValue(2),
+		"email": storage.StringValue("bob@example.com"),
+		"bio":   storage.StringValue("Bob bio notes"),
+	})
+	_ = tx.Commit()
+
+	// Build Index-Only Scan plan for "SELECT id, email FROM users WHERE email = 'bob@example.com'"
+	p := planner.NewPlanner()
+	q, err := p.ParseSelect("SELECT id, email FROM users WHERE email = 'bob@example.com'")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan := p.BuildPlan(q, schema, 2)
+	if plan == nil {
+		t.Fatal("expected non-nil plan")
+	}
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	exec, err := execution.BuildExecutor(plan, readTx, eng.GetTable)
+	if err != nil {
+		t.Fatalf("BuildExecutor error: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := exec.Open(ctx); err != nil {
+		t.Fatalf("Executor Open failed: %v", err)
+	}
+	defer exec.Close()
+
+	var result []execution.Tuple
+	for {
+		tuple, err := exec.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Executor Next error: %v", err)
+		}
+		result = append(result, tuple)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 row from index-only scan, got %d", len(result))
+	}
+	if result[0].Get("email") != "bob@example.com" {
+		t.Fatalf("expected email bob@example.com, got %v", result[0].Get("email"))
+	}
+	if result[0].Get("id") != int64(2) {
+		t.Fatalf("expected id 2, got %v", result[0].Get("id"))
+	}
+}

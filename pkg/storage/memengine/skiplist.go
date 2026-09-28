@@ -221,6 +221,44 @@ func (sl *SkipList) ScanRange(low, high *storage.Value) []string {
 	return result
 }
 
+// SkipListEntry represents a key-PK pair from the index.
+type SkipListEntry struct {
+	Key storage.Value
+	PK  string
+}
+
+// ScanRangeEntries returns all (Key, PK) pairs whose indexed keys fall within [low, high] inclusive.
+func (sl *SkipList) ScanRangeEntries(low, high *storage.Value) []SkipListEntry {
+	sl.mu.RLock()
+	defer sl.mu.RUnlock()
+
+	var result []SkipListEntry
+	curr := sl.head
+
+	if low != nil {
+		for i := sl.level - 1; i >= 0; i-- {
+			for curr.forward[i] != nil && curr.forward[i].Key.Compare(*low) < 0 {
+				curr = curr.forward[i]
+			}
+		}
+		curr = curr.forward[0]
+	} else {
+		curr = curr.forward[0]
+	}
+
+	for curr != nil {
+		if high != nil && curr.Key.Compare(*high) > 0 {
+			break
+		}
+		for _, pk := range curr.PKs {
+			result = append(result, SkipListEntry{Key: curr.Key, PK: pk})
+		}
+		curr = curr.forward[0]
+	}
+
+	return result
+}
+
 // Len returns the number of distinct keys in the SkipList.
 func (sl *SkipList) Len() int {
 	sl.mu.RLock()

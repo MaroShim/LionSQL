@@ -901,7 +901,13 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 				highVal = &sv
 			}
 
-			cursor, err := f.tx.IndexScan(data.Table, data.IndexName, lowVal, highVal)
+			var cursor storage.Cursor
+			var err error
+			if data.IndexOnly {
+				cursor, err = f.tx.IndexOnlyScan(data.Table, data.IndexName, lowVal, highVal)
+			} else {
+				cursor, err = f.tx.IndexScan(data.Table, data.IndexName, lowVal, highVal)
+			}
 			if err != nil {
 				f.lastError = 50000
 				if len(f.catchStack) > 0 {

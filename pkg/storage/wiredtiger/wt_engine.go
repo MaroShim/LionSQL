@@ -704,6 +704,10 @@ func (tx *WTTx) IndexScan(tableName string, indexName string, low, high *storage
 	return tx.Scan(tableName)
 }
 
+func (tx *WTTx) IndexOnlyScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	return tx.IndexScan(tableName, indexName, low, high)
+}
+
 func (tx *WTTx) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()

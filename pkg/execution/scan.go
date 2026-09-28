@@ -105,6 +105,7 @@ type IndexScanIterator struct {
 	schema      *storage.TableSchema
 	colIndexMap *ColumnIndexMap
 	cursor      storage.Cursor
+	IndexOnly   bool
 }
 
 // NewIndexScanIterator creates a new index scan iterator.
@@ -129,7 +130,13 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 		return fmt.Errorf("index scan: transaction is nil")
 	}
 	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
-	cur, err := s.tx.IndexScan(s.tableName, s.indexName, s.low, s.high)
+	var cur storage.Cursor
+	var err error
+	if s.IndexOnly {
+		cur, err = s.tx.IndexOnlyScan(s.tableName, s.indexName, s.low, s.high)
+	} else {
+		cur, err = s.tx.IndexScan(s.tableName, s.indexName, s.low, s.high)
+	}
 	if err != nil {
 		return fmt.Errorf("index scan %q on %q: %w", s.indexName, s.tableName, err)
 	}

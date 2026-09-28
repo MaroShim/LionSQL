@@ -96,6 +96,62 @@ func TestPlanner_IndexScan(t *testing.T) {
 	}
 }
 
+func TestPlanner_IndexOnlyScan(t *testing.T) {
+	p := planner.NewPlanner()
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+			{Name: "balance", Type: storage.TypeFloat},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:    "idx_accounts_email",
+				Columns: []string{"email"},
+				Unique:  true,
+			},
+		},
+	}
+
+	// 1. Projection with only indexed column (email) -> Index Only Scan
+	q1, err := p.ParseSelect("EXPLAIN SELECT email FROM accounts WHERE email = 'alice@example.com'")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan1 := p.BuildPlan(q1, schema, 1000)
+	lines1 := planner.FormatPlanText(plan1, false)
+	fullText1 := strings.Join(lines1, "\n")
+	if !strings.Contains(fullText1, "Index Only Scan using idx_accounts_email on accounts") {
+		t.Errorf("expected Index Only Scan in plan text, got:\n%s", fullText1)
+	}
+
+	// 2. Projection with primary key and indexed column (id, email) -> Index Only Scan
+	q2, err := p.ParseSelect("EXPLAIN SELECT id, email FROM accounts WHERE email = 'alice@example.com'")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan2 := p.BuildPlan(q2, schema, 1000)
+	lines2 := planner.FormatPlanText(plan2, false)
+	fullText2 := strings.Join(lines2, "\n")
+	if !strings.Contains(fullText2, "Index Only Scan using idx_accounts_email on accounts") {
+		t.Errorf("expected Index Only Scan in plan text, got:\n%s", fullText2)
+	}
+
+	// 3. Projection with unindexed column (balance) -> Regular Index Scan
+	q3, err := p.ParseSelect("EXPLAIN SELECT id, balance FROM accounts WHERE email = 'alice@example.com'")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan3 := p.BuildPlan(q3, schema, 1000)
+	lines3 := planner.FormatPlanText(plan3, false)
+	fullText3 := strings.Join(lines3, "\n")
+	if !strings.Contains(fullText3, "Index Scan using idx_accounts_email on accounts") {
+		t.Errorf("expected Index Scan in plan text, got:\n%s", fullText3)
+	}
+}
+
 func TestPlanner_AnalyzeOutput(t *testing.T) {
 	p := planner.NewPlanner()
 

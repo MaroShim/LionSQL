@@ -267,6 +267,7 @@ type IndexScanData struct {
 	WhereExpr   Expr
 	Projections []string
 	IntoVar     string
+	IndexOnly   bool
 }
 
 func (d *IndexScanData) String() string {

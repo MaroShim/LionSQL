@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Covering Index Scan (Index-Only Scan) Optimization (`pkg/planner`, `pkg/execution`, `pkg/storage`, `pkg/proc/runtime`)**:
+  - Implemented `NodeIndexOnlyScan` in Cost-Based Optimizer (`pkg/planner/planner.go`), detecting when all projected and filtered columns are covered by secondary index keys and table primary keys.
+  - Adjusted CBO cost model for index-only scans, eliminating table heap page I/O (`RandomPageCost`) and tuple CPU evaluation overhead.
+  - Added `IndexOnlyScan` to `storage.Transaction` interface, `memengine`, and `wiredtiger`.
+  - Implemented zero-heap-read `IndexOnlyScan` in `memengine` using `SkipList.ScanRangeEntries()`, building projection records directly from index keys and primary keys without touching main table rows or acquiring table read locks.
+  - Updated Volcano `IndexScanIterator` and `BuildExecutor` to execute index-only scans.
+  - Dispatched `IndexOnlyScan` in VDBE `OpIndexScan` when `IndexScanData.IndexOnly` is set.
+  - Added comprehensive unit and end-to-end tests across `planner_test.go`, `index_test.go`, and `execution_test.go`.
 - **Dynamic Storage Engine Detection & Display in Web Studio (`pkg/storage`, `pkg/api`, `pkg/ui`)**:
   - Added `Type() string` contract to `storage.Engine` interface, returning the active storage engine backend name (`WiredTiger` or `In-Memory OCC`).
   - Implemented `Type()` across `memengine` and `wiredtiger` (including build stubs).
@@ -19,6 +27,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Intercepted storage lock collisions (`Resource busy`, `code 16`) to display a clear, user-friendly diagnostic message rather than dumping raw Cgo fcntl lock errors.
 
 ### Fixed
+- **Pre-Flight TCP Port Collision Detection & Bind Crash Defense (`cmd/server`)**:
+  - Implemented `checkPortAvailable` pre-flight network checks across HTTP (`:8090`), PGWire (`:5433`), and TDS (`:1433`) listeners before initializing storage backends.
+  - Intercepted port collision errors (`bind: address already in use`) across different working directories (CWD), displaying actionable user guidance (`./bin/server -status`, `-stop`, `-restart`) and exiting cleanly without dumping raw unhandled stack traces or half-initializing storage engines.
 - **WiredTiger Legacy Table Format Compatibility & SIGBUS Crash Defense (`pkg/storage/wiredtiger`)**:
   - Fixed a critical `SIGBUS` memory fault occurring during table scans and record retrievals when reading tables created with `value_format=S` (JSON string).
   - Dynamically detected cursor value format (`value_format=S` vs `value_format=u`), appropriately passing `const char**` with `strlen()` for string format and `WT_ITEM` for binary raw item format.

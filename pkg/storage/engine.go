@@ -341,6 +341,7 @@ type Transaction interface {
 	Get(tableName string, pk Value) (Record, error)
 	Scan(tableName string) (Cursor, error)
 	IndexScan(tableName string, indexName string, low, high *Value) (Cursor, error)
+	IndexOnlyScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	Commit() error
 	Rollback() error
 }
