@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **T-SQL Global Temporary Tables `##` Engine (`pkg/api`)**:
+  - Implemented cross-session global temporary tables prefixed with `##` (`CREATE TABLE ##table (...)`).
+  - Added shared table access, mutations, and query planning across multiple concurrent client sessions with case-insensitive naming parity.
+  - Implemented session lifecycle garbage collection in `CloseSession`, automatically dropping global temporary tables when their creator session disconnects.
+  - Supported explicit `DROP TABLE ##table` and integration with `sp_help` and catalog introspection.
+  - Added comprehensive multi-session concurrency tests in `pkg/api/sqlexec_test.go`.
 - **T-SQL `@@ERROR` Status Tracking & `SET IDENTITY_INSERT` Engine (`pkg/storage`, `pkg/api`, `pkg/proc/runtime`)**:
   - Added session-level `@@ERROR` tracking that resets to 0 on successful statements and sets to 50000 on execution or DML errors.
   - Implemented `Identity` column metadata in `storage.Column` and support for `IDENTITY(seed, incr)` and `AUTO_INCREMENT` in `CREATE TABLE`.

@@ -43,9 +43,11 @@ type Server struct {
 	broker         *RealtimeBroker
 	pool           *SessionPool
 	mux            *http.ServeMux
-	sessions       map[string]*ClientSession
-	sessMu         sync.RWMutex
-	defaultWorkMem int64
+	sessions           map[string]*ClientSession
+	sessMu             sync.RWMutex
+	globalTempCreators map[string]string // lowercase table name -> creatorSessionID
+	globalTempMu       sync.RWMutex
+	defaultWorkMem     int64
 }
 
 // NewServer initializes a new Server with default in-memory auth service.
@@ -73,8 +75,9 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		broker:         NewRealtimeBroker(),
 		pool:           pool,
 		mux:            http.NewServeMux(),
-		sessions:       make(map[string]*ClientSession),
-		defaultWorkMem: execution.DefaultWorkMem,
+		sessions:           make(map[string]*ClientSession),
+		globalTempCreators: make(map[string]string),
+		defaultWorkMem:     execution.DefaultWorkMem,
 	}
 	s.routes()
 	return s
@@ -166,6 +169,21 @@ func (s *Server) CloseSession(id string) {
 		delete(s.sessions, id)
 	}
 	s.sessMu.Unlock()
+
+	// Clean up any global temporary tables created by this session
+	s.globalTempMu.Lock()
+	var toDrop []string
+	for tbl, creatorID := range s.globalTempCreators {
+		if creatorID == id {
+			toDrop = append(toDrop, tbl)
+			delete(s.globalTempCreators, tbl)
+		}
+	}
+	s.globalTempMu.Unlock()
+
+	for _, tbl := range toDrop {
+		_ = s.engine.DropTable(tbl)
+	}
 
 	if exists && cs != nil {
 		cs.mu.Lock()

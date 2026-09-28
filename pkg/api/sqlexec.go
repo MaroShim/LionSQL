@@ -629,7 +629,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 
 	// 3. DDL: CREATE TABLE
 	if strings.HasPrefix(upper, "CREATE TABLE") {
-		return s.execCreateTable(trimmed, start)
+		return s.execCreateTable(trimmed, start, cs)
 	}
 
 	// 3.1 DDL: CREATE INDEX
@@ -677,7 +677,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	}, fmt.Errorf("unsupported SQL statement")
 }
 
-func (s *Server) execCreateTable(query string, start time.Time) (*QueryResult, error) {
+func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\((.*)\)$`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -782,6 +782,19 @@ func (s *Server) execCreateTable(query string, start time.Time) (*QueryResult, e
 		return nil, err
 	}
 
+	if strings.HasPrefix(tableName, "##") {
+		s.globalTempMu.Lock()
+		if s.globalTempCreators == nil {
+			s.globalTempCreators = make(map[string]string)
+		}
+		creatorID := "default"
+		if cs != nil && cs.ID != "" {
+			creatorID = cs.ID
+		}
+		s.globalTempCreators[tableName] = creatorID
+		s.globalTempMu.Unlock()
+	}
+
 	return &QueryResult{
 		Success:    true,
 		Command:    "CREATE TABLE",
@@ -809,6 +822,12 @@ func (s *Server) execDropTable(query string, start time.Time) (*QueryResult, err
 			}, nil
 		}
 		return nil, err
+	}
+
+	if strings.HasPrefix(tableName, "##") {
+		s.globalTempMu.Lock()
+		delete(s.globalTempCreators, tableName)
+		s.globalTempMu.Unlock()
 	}
 
 	return &QueryResult{
@@ -4596,6 +4615,9 @@ func cleanIdentifier(s string) string {
 		cleaned = cleaned[4:]
 	} else if strings.HasPrefix(lower, "public.") {
 		cleaned = cleaned[7:]
+	}
+	if strings.HasPrefix(cleaned, "##") {
+		cleaned = strings.ToLower(cleaned)
 	}
 	return cleaned
 }

@@ -1273,6 +1273,93 @@ func TestSQLExecutor_ErrorAndIdentityInsert(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_GlobalTemporaryTables(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	sess1 := "session_alpha"
+	sess2 := "session_beta"
+
+	// 1. Session 1 creates a global temporary table
+	_, err := server.ExecuteSessionSQL(sess1, `CREATE TABLE ##shared_accounts (
+		id INT PRIMARY KEY,
+		owner VARCHAR(50) NOT NULL,
+		balance FLOAT NOT NULL
+	);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE ##shared_accounts failed: %v", err)
+	}
+
+	// 2. Session 1 inserts a row
+	res, err := server.ExecuteSessionSQL(sess1, "INSERT INTO ##shared_accounts (id, owner, balance) VALUES (1, 'Alice', 1000.0);")
+	if err != nil || !res.Success {
+		t.Fatalf("INSERT into ##shared_accounts from sess1 failed: %v", err)
+	}
+
+	// 3. Session 2 queries and sees Session 1's global temporary table
+	res, err = server.ExecuteSessionSQL(sess2, "SELECT id, owner, balance FROM ##shared_accounts WHERE id = 1;")
+	if err != nil || !res.Success || len(res.Rows) != 1 {
+		t.Fatalf("SELECT from ##shared_accounts on sess2 failed: %v, rows: %+v", err, res.Rows)
+	}
+	if res.Rows[0]["owner"] != "Alice" || fmt.Sprintf("%v", res.Rows[0]["balance"]) != "1000" {
+		t.Fatalf("unexpected row from sess2: %+v", res.Rows[0])
+	}
+
+	// 4. Session 2 inserts a row
+	res, err = server.ExecuteSessionSQL(sess2, "INSERT INTO ##shared_accounts (id, owner, balance) VALUES (2, 'Bob', 2500.0);")
+	if err != nil || !res.Success {
+		t.Fatalf("INSERT into ##shared_accounts from sess2 failed: %v", err)
+	}
+
+	// 5. Session 1 sees Bob's row and verifies case-insensitivity (##SHARED_ACCOUNTS)
+	res, err = server.ExecuteSessionSQL(sess1, "SELECT id, owner FROM ##SHARED_ACCOUNTS ORDER BY id ASC;")
+	if err != nil || !res.Success || len(res.Rows) != 2 {
+		t.Fatalf("SELECT case-insensitive ##SHARED_ACCOUNTS failed: %v, rows: %+v", err, res.Rows)
+	}
+	if res.Rows[1]["owner"] != "Bob" {
+		t.Fatalf("expected Bob in second row, got: %+v", res.Rows[1])
+	}
+
+	// 6. Session 2 updates a row
+	res, err = server.ExecuteSessionSQL(sess2, "UPDATE ##shared_accounts SET balance = 1200.0 WHERE id = 1;")
+	if err != nil || !res.Success || res.RowsAffected != 1 {
+		t.Fatalf("UPDATE ##shared_accounts from sess2 failed: %v", err)
+	}
+
+	// 7. Introspection via sp_help
+	res, err = server.ExecuteSessionSQL(sess2, "EXEC sp_help '##shared_accounts';")
+	if err != nil || !res.Success || len(res.Rows) != 3 {
+		t.Fatalf("sp_help on ##shared_accounts failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	// 8. Session 1 disconnects / closes -> should automatically drop ##shared_accounts
+	server.CloseSession(sess1)
+
+	// 9. Session 2 now querying ##shared_accounts should fail with table not found
+	_, err = server.ExecuteSessionSQL(sess2, "SELECT * FROM ##shared_accounts;")
+	if err == nil {
+		t.Fatalf("expected error querying ##shared_accounts after creator session closed, got nil")
+	}
+
+	// 10. Explicit DROP TABLE on global temporary table
+	_, err = server.ExecuteSessionSQL(sess2, "CREATE TABLE ##temp_to_drop (id INT PRIMARY KEY);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE ##temp_to_drop failed: %v", err)
+	}
+	res, err = server.ExecuteSessionSQL(sess2, "DROP TABLE ##temp_to_drop;")
+	if err != nil || !res.Success {
+		t.Fatalf("DROP TABLE ##temp_to_drop failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sess2, "SELECT * FROM ##temp_to_drop;")
+	if err == nil {
+		t.Fatalf("expected table not found after DROP TABLE, got nil")
+	}
+}
+
+
 
 
 
