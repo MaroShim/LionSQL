@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"fmt"
 	"testing"
 
 	"sqlion/pkg/storage"
@@ -319,3 +320,95 @@ func BenchmarkMemCursor_Scan(b *testing.B) {
 		_ = cur.Close()
 	}
 }
+
+func TestEngine_TruncateTable(t *testing.T) {
+	tmpDir := t.TempDir()
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+
+	schema := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+
+	// Insert 5 rows
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	for i := 1; i <= 5; i++ {
+		_ = tx.Insert("items", storage.Record{
+			"id":   storage.IntValue(int64(i)),
+			"name": storage.StringValue(fmt.Sprintf("Item_%d", i)),
+		})
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("failed to commit: %v", err)
+	}
+
+	// Truncate table
+	if err := eng.TruncateTable("items"); err != nil {
+		t.Fatalf("TruncateTable failed: %v", err)
+	}
+
+	// Verify table is empty
+	tx2, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	cur, _ := tx2.Scan("items")
+	count := 0
+	for cur.Next() {
+		count++
+	}
+	cur.Close()
+	tx2.Rollback()
+
+	if count != 0 {
+		t.Fatalf("expected 0 rows after truncate, got %d", count)
+	}
+
+	// Insert 1 row after truncate
+	tx3, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx3.Insert("items", storage.Record{
+		"id":   storage.IntValue(100),
+		"name": storage.StringValue("Item_100"),
+	})
+	_ = tx3.Commit()
+
+	sess.Close()
+	eng.Close()
+
+	// Reopen engine and verify WAL replay preserved truncate and subsequent insert
+	eng2 := New()
+	if err := eng2.Open(tmpDir); err != nil {
+		t.Fatalf("failed to reopen engine: %v", err)
+	}
+	defer eng2.Close()
+
+	sess2, _ := eng2.NewSession()
+	defer sess2.Close()
+
+	tx4, _ := sess2.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer tx4.Rollback()
+
+	rec, err := tx4.Get("items", storage.IntValue(100))
+	if err != nil || rec["name"].SVal != "Item_100" {
+		t.Fatalf("failed retrieving record after WAL recovery: %v, rec: %+v", err, rec)
+	}
+
+	// Old records should not exist
+	for i := 1; i <= 5; i++ {
+		if _, err := tx4.Get("items", storage.IntValue(int64(i))); err == nil {
+			t.Fatalf("old record id=%d still exists after truncate WAL replay", i)
+		}
+	}
+}
+

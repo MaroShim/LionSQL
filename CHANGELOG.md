@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Storage & DDL: `TRUNCATE TABLE <table>` Engine (`pkg/storage`, `pkg/storage/memengine`, `pkg/storage/wiredtiger`, `pkg/api`)**:
+  - Added `TruncateTable(tableName string) error` method across `storage.Engine` interface, `memengine`, and `wiredtiger`.
+  - Implemented instant O(1) in-memory record, version, and index resets in `memengine` with foreign key dependency safeguards.
+  - Added WAL logging and recovery replay for `OpTruncateTable` guaranteeing durability across server restarts.
+  - Implemented native `WT_SESSION::truncate` in WiredTiger with automatic drop & recreate fallback for tables and secondary indexes.
+  - Added comprehensive test coverage in `pkg/storage/memengine/memengine_test.go` and `pkg/api/sqlexec_test.go` (`TestSQLExecutor_TruncateTable`).
 - **T-SQL `SELECT ... INTO #temp_table / table` Engine (`pkg/api`)**:
   - Implemented dynamic table creation and population via `SELECT <projections> INTO <target_table> FROM <source> [WHERE ...]`.
   - Added intelligent column type and primary key inference from source schemas and evaluated expression result sets.

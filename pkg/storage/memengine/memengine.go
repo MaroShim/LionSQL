@@ -159,6 +159,16 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 		case OpDropTable:
 			delete(e.tables, op.Table)
+		case OpTruncateTable:
+			if td, exists := e.tables[op.Table]; exists {
+				td.Rows = make(map[string]storage.Record)
+				td.Versions = make(map[string]int64)
+				td.Keys = make([]string, 0)
+				for _, idx := range td.Indexes {
+					idx.sl = NewSkipList(idx.Schema.Unique)
+					idx.Entries = nil
+				}
+			}
 		case OpCreateIndex:
 			if op.IndexSchema == nil {
 				continue
@@ -571,6 +581,51 @@ func (e *Engine) DropTable(tableName string) error {
 			Timestamp: time.Now().UnixNano(),
 			Ops: []WALOp{{
 				Type:  OpDropTable,
+				Table: tableName,
+			}},
+		})
+	}
+	return nil
+}
+
+func (e *Engine) TruncateTable(tableName string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	td, exists := e.tables[tableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	// Verify no other table has a foreign key referencing this table
+	for otherName, otherTd := range e.tables {
+		if strings.EqualFold(otherName, tableName) {
+			continue
+		}
+		for _, fk := range otherTd.Schema.ForeignKeys {
+			if strings.EqualFold(fk.ParentTable, tableName) {
+				return fmt.Errorf("%w: cannot truncate table %q because it is referenced by foreign key %q on table %q",
+					storage.ErrDependentObjectsExist, tableName, fk.Name, otherName)
+			}
+		}
+	}
+
+	td.mu.Lock()
+	td.Rows = make(map[string]storage.Record)
+	td.Versions = make(map[string]int64)
+	td.Keys = make([]string, 0)
+	for _, idx := range td.Indexes {
+		idx.sl = NewSkipList(idx.Schema.Unique)
+		idx.Entries = nil
+	}
+	td.mu.Unlock()
+
+	if e.wal != nil {
+		_ = e.wal.Append(WALRecord{
+			LSN:       e.nextLSN.Add(1),
+			Timestamp: time.Now().UnixNano(),
+			Ops: []WALOp{{
+				Type:  OpTruncateTable,
 				Table: tableName,
 			}},
 		})

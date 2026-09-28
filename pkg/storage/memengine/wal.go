@@ -34,9 +34,10 @@ const (
 	OpDropTable   WALOpType = "DROP_TABLE"
 	OpCreateIndex WALOpType = "CREATE_INDEX"
 	OpDropIndex   WALOpType = "DROP_INDEX"
-	OpInsert      WALOpType = "INSERT"
-	OpUpdate      WALOpType = "UPDATE"
-	OpDelete      WALOpType = "DELETE"
+	OpInsert        WALOpType = "INSERT"
+	OpUpdate        WALOpType = "UPDATE"
+	OpDelete        WALOpType = "DELETE"
+	OpTruncateTable WALOpType = "TRUNCATE_TABLE"
 )
 
 // WALOp represents a single atomic row or DDL mutation.

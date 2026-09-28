@@ -707,6 +707,11 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		return s.execDropIndex(trimmed, start)
 	}
 
+	// 4.2 DDL/DML: TRUNCATE TABLE
+	if strings.HasPrefix(upper, "TRUNCATE TABLE") || strings.HasPrefix(upper, "TRUNCATE ") {
+		return s.execTruncateTable(trimmed, start)
+	}
+
 	// 5. DML: INSERT INTO
 	if strings.HasPrefix(upper, "INSERT INTO") || strings.HasPrefix(upper, "INSERT ") {
 		return s.execInsert(trimmed, start, cs)
@@ -901,6 +906,27 @@ func (s *Server) execDropTable(query string, start time.Time) (*QueryResult, err
 		Command:    "DROP TABLE",
 		DurationUS: time.Since(start).Microseconds(),
 		Messages:   []string{fmt.Sprintf("Table %q dropped successfully", tableName)},
+	}, nil
+}
+
+func (s *Server) execTruncateTable(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	re := regexp.MustCompile(`(?is)^TRUNCATE\s+(?:TABLE\s+)?([^\s;]+)`)
+	matches := re.FindStringSubmatch(cleaned)
+	if len(matches) < 2 {
+		return nil, fmt.Errorf("invalid TRUNCATE TABLE syntax")
+	}
+
+	tableName := cleanIdentifier(matches[1])
+	if err := s.engine.TruncateTable(tableName); err != nil {
+		return nil, err
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "TRUNCATE TABLE",
+		DurationUS: time.Since(start).Microseconds(),
+		Messages:   []string{fmt.Sprintf("Table %q truncated successfully", tableName)},
 	}, nil
 }
 

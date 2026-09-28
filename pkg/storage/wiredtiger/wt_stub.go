@@ -51,3 +51,7 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 func (e *Engine) DropIndex(tableName, indexName string) error {
 	return fmt.Errorf("wiredtiger storage engine not enabled")
 }
+
+func (e *Engine) TruncateTable(tableName string) error {
+	return fmt.Errorf("wiredtiger storage engine not enabled")
+}

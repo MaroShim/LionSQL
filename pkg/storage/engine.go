@@ -362,4 +362,5 @@ type Engine interface {
 	ListTables() ([]*TableSchema, error)
 	CreateIndex(index *IndexSchema) error
 	DropIndex(tableName, indexName string) error
+	TruncateTable(tableName string) error
 }

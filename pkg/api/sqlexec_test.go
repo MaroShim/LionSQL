@@ -1618,6 +1618,108 @@ func TestSQLExecutor_SelectInto(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_TruncateTable(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	sessID := "sess_truncate"
+
+	// 1. Setup table with secondary index
+	_, err := server.ExecuteSessionSQL(sessID, `CREATE TABLE products (
+		id INT PRIMARY KEY,
+		name VARCHAR(50),
+		price FLOAT
+	);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE products failed: %v", err)
+	}
+
+	_, err = server.ExecuteSessionSQL(sessID, `CREATE INDEX idx_prod_name ON products (name);`)
+	if err != nil {
+		t.Fatalf("CREATE INDEX failed: %v", err)
+	}
+
+	_, err = server.ExecuteSessionSQL(sessID, `INSERT INTO products VALUES
+		(1, 'Laptop', 1200.0),
+		(2, 'Phone', 800.0),
+		(3, 'Tablet', 400.0);`)
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	res, err := server.ExecuteSessionSQL(sessID, "SELECT COUNT(*) AS total FROM products;")
+	if err != nil || fmt.Sprintf("%v", res.Rows[0]["total"]) != "3" {
+		t.Fatalf("expected 3 rows before truncate, got: %+v", res)
+	}
+
+	// 2. TRUNCATE TABLE products
+	truncRes, err := server.ExecuteSessionSQL(sessID, "TRUNCATE TABLE products;")
+	if err != nil || !truncRes.Success {
+		t.Fatalf("TRUNCATE TABLE products failed: %v", err)
+	}
+
+	// 3. Verify table is empty
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT COUNT(*) AS total FROM products;")
+	if err != nil || fmt.Sprintf("%v", res.Rows[0]["total"]) != "0" {
+		t.Fatalf("expected 0 rows after truncate, got: %+v", res)
+	}
+
+	// 4. Verify index is empty
+	idxRes, err := server.ExecuteSessionSQL(sessID, "SELECT * FROM products WHERE name = 'Laptop';")
+	if err != nil || len(idxRes.Rows) != 0 {
+		t.Fatalf("expected empty index lookup after truncate, got: %+v", idxRes.Rows)
+	}
+
+	// 5. Re-insert after truncate (verifies primary key and index reuse without collision)
+	_, err = server.ExecuteSessionSQL(sessID, "INSERT INTO products VALUES (1, 'New Laptop', 1500.0);")
+	if err != nil {
+		t.Fatalf("failed inserting after truncate: %v", err)
+	}
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT name, price FROM products WHERE id = 1;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["name"] != "New Laptop" {
+		t.Fatalf("unexpected row after re-insert: %+v", res.Rows)
+	}
+
+	// 6. Foreign key protection: cannot truncate table referenced by foreign key
+	_, err = server.ExecuteSessionSQL(sessID, `CREATE TABLE categories (
+		cat_id INT PRIMARY KEY,
+		cat_name VARCHAR(50)
+	);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE categories failed: %v", err)
+	}
+
+	_, err = server.ExecuteSessionSQL(sessID, `CREATE TABLE items (
+		item_id INT PRIMARY KEY,
+		cat_id INT,
+		FOREIGN KEY (cat_id) REFERENCES categories (cat_id)
+	);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE items with FK failed: %v", err)
+	}
+
+	// Attempt to truncate categories (referenced by items)
+	_, err = server.ExecuteSessionSQL(sessID, "TRUNCATE TABLE categories;")
+	if err == nil {
+		t.Fatalf("expected error truncating table referenced by FK, got nil")
+	}
+
+	// 7. Truncate temporary table
+	_, err = server.ExecuteSessionSQL(sessID, "SELECT * INTO #temp_prod FROM products;")
+	if err != nil {
+		t.Fatalf("SELECT INTO #temp_prod failed: %v", err)
+	}
+	res, err = server.ExecuteSessionSQL(sessID, "TRUNCATE TABLE #temp_prod;")
+	if err != nil || !res.Success {
+		t.Fatalf("TRUNCATE TABLE #temp_prod failed: %v", err)
+	}
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT COUNT(*) AS total FROM #temp_prod;")
+	if err != nil || fmt.Sprintf("%v", res.Rows[0]["total"]) != "0" {
+		t.Fatalf("expected 0 rows in truncated temp table, got: %+v", res)
+	}
+}
+
+
 
 
 

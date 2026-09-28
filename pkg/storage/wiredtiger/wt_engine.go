@@ -34,6 +34,10 @@ static int go_wt_session_drop(WT_SESSION *session, const char *name) {
     return session->drop(session, name, NULL);
 }
 
+static int go_wt_session_truncate(WT_SESSION *session, const char *name) {
+    return session->truncate(session, name, NULL, NULL, NULL);
+}
+
 static int go_wt_session_begin(WT_SESSION *session, const char *config) {
     return session->begin_transaction(session, config);
 }
@@ -270,6 +274,43 @@ func (e *Engine) DropTable(tableName string) error {
 
 	delete(e.tables, tableName)
 	return e.saveCatalog()
+}
+
+func (e *Engine) TruncateTable(tableName string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	schema, exists := e.tables[tableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
+		return fmt.Errorf("open_session failed: code %d", ret)
+	}
+	defer C.go_wt_session_close(sess)
+
+	uri := C.CString(fmt.Sprintf("table:%s", tableName))
+	defer C.free(unsafe.Pointer(uri))
+
+	if ret := C.go_wt_session_truncate(sess, uri); ret != 0 {
+		// Fallback: drop and recreate table
+		C.go_wt_session_drop(sess, uri)
+		config := C.CString("key_format=S,value_format=u")
+		defer C.free(unsafe.Pointer(config))
+		if ret := C.go_wt_session_create(sess, uri, config); ret != 0 {
+			return fmt.Errorf("recreate table failed: code %d", ret)
+		}
+	}
+
+	for _, idx := range schema.Indexes {
+		idxURI := C.CString(fmt.Sprintf("index:%s:%s", tableName, idx.Name))
+		_ = C.go_wt_session_truncate(sess, idxURI)
+		C.free(unsafe.Pointer(idxURI))
+	}
+
+	return nil
 }
 
 func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
