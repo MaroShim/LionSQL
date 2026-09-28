@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **VDBE Engine Unification for Interactive Queries (`pkg/api`, `pkg/proc/runtime`)**:
+  - Unified the interactive SELECT query execution path (`ExecuteSQL`) to compile and dispatch directly through the VDBE Virtual Machine (`proc.CompileQuery` ➔ `s.executor.ExecuteInTx`), achieving 100% single-engine execution parity across stored procedures and relational queries.
+  - Added `ExecuteInTx` method to `runtime.Executor` to execute precompiled bytecode programs within existing session transactions while returning relational `Rows` and `Columns`.
+  - Retained multi-tier fallback ensuring zero regressions across all edge cases.
 - **Wire Protocols: Prepared Statement VDBE Bytecode Caching across PGWire & TDS (`pkg/wire`, `pkg/wire/tds`)**:
   - Implemented zero-parse query execution fast-path for prepared statements across PostgreSQL Wire Protocol v3 (`pkg/wire`) and Microsoft SQL Server TDS 7.x/8.0 (`pkg/wire/tds`).
   - Precompiled parameterized queries (`$1`, `$2` and `@p1`, `@p2`) into VDBE `*proc.Program` bytecode during `Parse` (PGWire) and `sp_prepare` / `sp_prepexec` (TDS).

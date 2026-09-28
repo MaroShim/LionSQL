@@ -2375,6 +2375,58 @@ func (s *Server) execSelectInto(targetTable, projections, fromClause string, sta
 	}, nil
 }
 
+func (s *Server) execVDBESelect(cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	prog, err := proc.CompileQuery(cleaned)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx storage.Transaction
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
+
+		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		defer tx.Rollback()
+	}
+
+	var params map[string]any
+	if cs != nil {
+		cs.mu.Lock()
+		if len(cs.Vars) > 0 {
+			params = make(map[string]any, len(cs.Vars))
+			for k, v := range cs.Vars {
+				params[k] = v
+			}
+		}
+		cs.mu.Unlock()
+	}
+
+	execRes, err := s.executor.ExecuteInTx(prog, params, tx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      execRes.Columns,
+		Rows:         execRes.Rows,
+		RowsAffected: int64(len(execRes.Rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+		Messages:     execRes.Logs,
+	}, nil
+}
+
 func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
@@ -2431,7 +2483,12 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 			return s.execVirtualCatalogSelect(tableName, strings.Join(qInfo.Projections, ", "), qInfo.WhereClause, qInfo.OrderByClause, int(qInfo.LimitCount), start)
 		}
 
-		// Execute via Volcano Pipelined Query Execution Engine
+		// Execute via unified VDBE Virtual Machine Engine (Primary Fast-Path)
+		if res, err := s.execVDBESelect(cleaned, start, cs); err == nil {
+			return res, nil
+		}
+
+		// Secondary Fallback: Direct Volcano execution
 		if res, err := s.execVolcanoSelect(qInfo, start, cs); err == nil {
 			return res, nil
 		}

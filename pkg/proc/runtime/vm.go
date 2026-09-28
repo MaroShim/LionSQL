@@ -296,6 +296,39 @@ func (e *Executor) RunInTx(prog *proc.Program, params map[string]any, tx storage
 	return retVal, frame.logs, err
 }
 
+// ExecuteInTx executes a program within an existing transaction context and returns an ExecutionResult with Rows and Columns.
+func (e *Executor) ExecuteInTx(prog *proc.Program, params map[string]any, tx storage.Transaction, transientTables map[string][]map[string]any) (*ExecutionResult, error) {
+	start := time.Now()
+	frame := e.newFrame(prog, tx)
+	defer e.releaseFrame(frame)
+
+	if transientTables != nil {
+		for k, v := range transientTables {
+			frame.transientTables[k] = v
+		}
+	}
+
+	for k, v := range params {
+		clean := cleanSymbol(k)
+		stVal := toStorageValue(v)
+		frame.vars[clean] = stVal
+		frame.vars[strings.ToLower(clean)] = stVal
+	}
+
+	retVal, err := frame.Execute(0)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ExecutionResult{
+		ReturnValue: retVal,
+		Logs:        frame.logs,
+		Duration:    time.Since(start),
+		Rows:        frame.rows,
+		Columns:     frame.columns,
+	}, nil
+}
+
 func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame {
 	numRegs := int(prog.NumRegisters) + 16
 	if numRegs < 64 {
