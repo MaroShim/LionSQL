@@ -366,6 +366,7 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			}
 
 		case proc.OpThrow, proc.OpRaiserror:
+			f.lastError = 50000
 			msg := fmt.Sprintf("%v", inst.Data)
 			if len(f.catchStack) > 0 {
 				catchPC := f.catchStack[len(f.catchStack)-1]
@@ -510,6 +511,7 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			}
 
 			if err := f.tx.Insert(data.Table, rec); err != nil {
+				f.lastError = 50000
 				if len(f.catchStack) > 0 {
 					catchPC := f.catchStack[len(f.catchStack)-1]
 					f.catchStack = f.catchStack[:len(f.catchStack)-1]
@@ -542,6 +544,7 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			}
 
 			if err := f.tx.Update(data.Table, pkVal, rec); err != nil {
+				f.lastError = 50000
 				if len(f.catchStack) > 0 {
 					catchPC := f.catchStack[len(f.catchStack)-1]
 					f.catchStack = f.catchStack[:len(f.catchStack)-1]
@@ -567,6 +570,7 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			data := inst.Data.(*proc.DMLData)
 			cnt, err := f.execUpdateWhere(data)
 			if err != nil {
+				f.lastError = 50000
 				if len(f.catchStack) > 0 {
 					catchPC := f.catchStack[len(f.catchStack)-1]
 					f.catchStack = f.catchStack[:len(f.catchStack)-1]
@@ -589,6 +593,7 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			}
 
 			if err := f.tx.Delete(data.Table, pkVal); err != nil {
+				f.lastError = 50000
 				if len(f.catchStack) > 0 {
 					catchPC := f.catchStack[len(f.catchStack)-1]
 					f.catchStack = f.catchStack[:len(f.catchStack)-1]
@@ -756,7 +761,7 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 	if strings.EqualFold(name, "@@SPID") || strings.EqualFold(clean, "SPID") || strings.EqualFold(clean, "@SPID") {
 		return storage.IntValue(50), true
 	}
-	if strings.EqualFold(name, "@@ERROR") || strings.EqualFold(clean, "ERROR") || strings.EqualFold(clean, "@ERROR") {
+	if strings.EqualFold(name, "@@ERROR") || strings.EqualFold(clean, "ERROR") || strings.EqualFold(clean, "@ERROR") || strings.EqualFold(name, "ERROR_NUMBER()") || strings.EqualFold(clean, "ERROR_NUMBER") {
 		return storage.IntValue(int64(f.lastError)), true
 	}
 	if strings.EqualFold(name, "@@SERVERNAME") || strings.EqualFold(clean, "SERVERNAME") || strings.EqualFold(clean, "@SERVERNAME") {
@@ -765,7 +770,7 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 	if strings.EqualFold(name, "@@VERSION") || strings.EqualFold(clean, "VERSION") || strings.EqualFold(clean, "@VERSION") {
 		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine"), true
 	}
-	if strings.EqualFold(name, "SCOPE_IDENTITY") || strings.EqualFold(clean, "SCOPE_IDENTITY") {
+	if strings.EqualFold(name, "@@IDENTITY") || strings.EqualFold(clean, "IDENTITY") || strings.EqualFold(clean, "@IDENTITY") || strings.EqualFold(name, "SCOPE_IDENTITY") || strings.EqualFold(clean, "SCOPE_IDENTITY") {
 		if f.lastIdentity > 0 {
 			return storage.IntValue(f.lastIdentity), true
 		}

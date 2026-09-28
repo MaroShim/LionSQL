@@ -1126,5 +1126,153 @@ func TestSQLExecutor_BuiltinSystemStoredProcedures(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_ErrorAndIdentityInsert(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+	sessID := "test_identity_sess"
+
+	// 1. Initial @@ERROR should be 0
+	res, err := server.ExecuteSessionSQL(sessID, "SELECT @@ERROR;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT @@ERROR failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["@@error"]) != "0" {
+		t.Fatalf("expected @@ERROR=0, got: %+v", res.Rows[0])
+	}
+
+	// 2. Erroneous statement should set @@ERROR to 50000
+	_, err = server.ExecuteSessionSQL(sessID, "SELECT * FROM non_existent_table_xyz;")
+	if err == nil {
+		t.Fatalf("expected error from non-existent table, got nil")
+	}
+
+	// Immediate next query should see @@ERROR = 50000
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT @@ERROR;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT @@ERROR after error failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["@@error"]) != "50000" {
+		t.Fatalf("expected @@ERROR=50000, got: %+v", res.Rows[0])
+	}
+
+	// And subsequent query should see @@ERROR reset to 0
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT @@ERROR;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT @@ERROR reset failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["@@error"]) != "0" {
+		t.Fatalf("expected @@ERROR reset to 0, got: %+v", res.Rows[0])
+	}
+
+	// 3. Create table with IDENTITY column
+	_, err = server.ExecuteSessionSQL(sessID, `CREATE TABLE employees (
+		id INT IDENTITY(1,1) PRIMARY KEY,
+		name VARCHAR(50) NOT NULL
+	);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE with IDENTITY failed: %v", err)
+	}
+
+	// 4. Auto-increment insert
+	res, err = server.ExecuteSessionSQL(sessID, "INSERT INTO employees (name) VALUES ('Alice');")
+	if err != nil || !res.Success {
+		t.Fatalf("INSERT into identity table failed: %v", err)
+	}
+
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT @@IDENTITY, SCOPE_IDENTITY();")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT @@IDENTITY failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["@@identity"]) != "1" {
+		t.Fatalf("expected @@IDENTITY=1, got: %+v", res.Rows[0])
+	}
+
+	// Insert multi-row
+	res, err = server.ExecuteSessionSQL(sessID, "INSERT INTO employees (name) VALUES ('Bob'), ('Charlie');")
+	if err != nil || !res.Success {
+		t.Fatalf("multi-row insert failed: %v", err)
+	}
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT @@IDENTITY;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT @@IDENTITY failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["@@identity"]) != "3" {
+		t.Fatalf("expected @@IDENTITY=3, got: %+v", res.Rows[0])
+	}
+
+	// 5. Explicit insert with IDENTITY_INSERT OFF should fail
+	_, err = server.ExecuteSessionSQL(sessID, "INSERT INTO employees (id, name) VALUES (99, 'Dave');")
+	if err == nil {
+		t.Fatalf("expected error inserting explicit value when IDENTITY_INSERT is OFF, got nil")
+	}
+	if !strings.Contains(err.Error(), "IDENTITY_INSERT is set to OFF") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+
+	// Verify @@ERROR is 50000
+	res, _ = server.ExecuteSessionSQL(sessID, "SELECT @@ERROR;")
+	if fmt.Sprintf("%v", res.Rows[0]["@@error"]) != "50000" {
+		t.Fatalf("expected @@ERROR=50000 after failed insert, got: %+v", res.Rows[0])
+	}
+
+	// 6. Turn SET IDENTITY_INSERT ON
+	res, err = server.ExecuteSessionSQL(sessID, "SET IDENTITY_INSERT employees ON;")
+	if err != nil || !res.Success {
+		t.Fatalf("SET IDENTITY_INSERT ON failed: %v", err)
+	}
+
+	// Now explicit insert succeeds
+	res, err = server.ExecuteSessionSQL(sessID, "INSERT INTO employees (id, name) VALUES (100, 'Dave');")
+	if err != nil || !res.Success {
+		t.Fatalf("explicit insert with IDENTITY_INSERT ON failed: %v", err)
+	}
+	res, _ = server.ExecuteSessionSQL(sessID, "SELECT @@IDENTITY;")
+	if fmt.Sprintf("%v", res.Rows[0]["@@identity"]) != "100" {
+		t.Fatalf("expected @@IDENTITY=100, got: %+v", res.Rows[0])
+	}
+
+	// 7. Turn SET IDENTITY_INSERT OFF
+	res, err = server.ExecuteSessionSQL(sessID, "SET IDENTITY_INSERT employees OFF;")
+	if err != nil || !res.Success {
+		t.Fatalf("SET IDENTITY_INSERT OFF failed: %v", err)
+	}
+
+	// Next auto-increment should start after watermark (101)
+	res, err = server.ExecuteSessionSQL(sessID, "INSERT INTO employees (name) VALUES ('Eve');")
+	if err != nil || !res.Success {
+		t.Fatalf("insert after watermark failed: %v", err)
+	}
+	res, _ = server.ExecuteSessionSQL(sessID, "SELECT @@IDENTITY;")
+	if fmt.Sprintf("%v", res.Rows[0]["@@identity"]) != "101" {
+		t.Fatalf("expected @@IDENTITY=101, got: %+v", res.Rows[0])
+	}
+
+	// Verify all rows in employees
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT id, name FROM employees ORDER BY id ASC;")
+	if err != nil || !res.Success || len(res.Rows) != 5 {
+		t.Fatalf("SELECT all employees failed: %v, rows: %+v", err, res.Rows)
+	}
+	expectedIDs := []string{"1", "2", "3", "100", "101"}
+	for i, exp := range expectedIDs {
+		if fmt.Sprintf("%v", res.Rows[i]["id"]) != exp {
+			t.Fatalf("row %d expected id %s, got: %+v", i, exp, res.Rows[i])
+		}
+	}
+
+	// 8. Error validations: Cannot enable IDENTITY_INSERT on table without identity
+	_, err = server.ExecuteSessionSQL(sessID, "CREATE TABLE plain (x INT PRIMARY KEY);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE plain failed: %v", err)
+	}
+	_, err = server.ExecuteSessionSQL(sessID, "SET IDENTITY_INSERT plain ON;")
+	if err == nil || !strings.Contains(err.Error(), "does not have the identity property") {
+		t.Fatalf("expected identity property error, got: %v", err)
+	}
+}
+
+
 
 

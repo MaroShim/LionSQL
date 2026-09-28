@@ -167,7 +167,17 @@ func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult
 	for _, stmt := range stmts {
 		res, err := s.execSingleStatement(cs, stmt)
 		if err != nil {
+			if cs != nil {
+				cs.mu.Lock()
+				cs.Vars["error"] = int64(50000)
+				cs.mu.Unlock()
+			}
 			return res, err
+		}
+		if cs != nil {
+			cs.mu.Lock()
+			cs.Vars["error"] = int64(0)
+			cs.mu.Unlock()
 		}
 		lastRes = res
 	}
@@ -315,6 +325,54 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 			}, nil
 		}
 
+		// E0. SET IDENTITY_INSERT [schema.]table ON|OFF
+		if strings.HasPrefix(strings.ToUpper(rest), "IDENTITY_INSERT") {
+			parts := strings.Fields(rest)
+			if len(parts) >= 3 {
+				targetTable := cleanIdentifier(parts[1])
+				state := strings.ToUpper(strings.Trim(parts[2], ";'\""))
+				if state != "ON" && state != "OFF" {
+					return nil, fmt.Errorf("syntax error: SET IDENTITY_INSERT requires ON or OFF")
+				}
+
+				schema, err := s.engine.GetTable(targetTable)
+				if err != nil {
+					return nil, fmt.Errorf("table %q not found: %w", targetTable, err)
+				}
+				hasIdentity := false
+				for _, c := range schema.Columns {
+					if c.Identity {
+						hasIdentity = true
+						break
+					}
+				}
+				if !hasIdentity {
+					return nil, fmt.Errorf("table %q does not have the identity property. Cannot use SET IDENTITY_INSERT", targetTable)
+				}
+
+				if cs != nil {
+					cs.mu.Lock()
+					if state == "ON" {
+						if cur, ok := cs.Vars["identity_insert_table"].(string); ok && cur != "" && !strings.EqualFold(cur, targetTable) {
+							cs.mu.Unlock()
+							return nil, fmt.Errorf("cannot SET IDENTITY_INSERT ON for table %q when IDENTITY_INSERT is already ON for table %q", targetTable, cur)
+						}
+						cs.Vars["identity_insert_table"] = strings.ToLower(targetTable)
+					} else {
+						delete(cs.Vars, "identity_insert_table")
+					}
+					cs.mu.Unlock()
+				}
+
+				return &QueryResult{
+					Success:    true,
+					Command:    "SET",
+					Messages:   []string{fmt.Sprintf("SET IDENTITY_INSERT for %q is %s.", targetTable, state)},
+					DurationUS: time.Since(start).Microseconds(),
+				}, nil
+			}
+		}
+
 		// E. SET <option> ON / OFF / <val> (e.g. SET NOCOUNT ON, SET ANSI_NULLS ON, SET LOCK_TIMEOUT 10000)
 		setParts := strings.Fields(rest)
 		if len(setParts) >= 2 && !strings.Contains(setParts[0], "=") && setParts[1] != "=" && !strings.EqualFold(setParts[1], "TO") {
@@ -435,28 +493,12 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		if len(m) > 2 && m[2] != "" {
 			colHeader = m[2]
 		}
-		cs.mu.Lock()
-		val, exists := cs.Vars[varName]
-		cs.mu.Unlock()
-		valStr := ""
-		if exists {
-			if varName == "work_mem" {
-				if b, ok := val.(int64); ok {
-					valStr = execution.FormatMemSize(b)
-				} else {
-					valStr = fmt.Sprintf("%v", val)
-				}
-			} else {
-				valStr = fmt.Sprintf("%v", val)
-			}
-		} else if varName == "work_mem" {
-			valStr = execution.FormatMemSize(s.DefaultWorkMem())
-		}
+		val, _ := s.evalScalarExpr("@@"+varName, cs)
 		return &QueryResult{
 			Success:      true,
 			Command:      "SELECT",
 			Columns:      []string{colHeader},
-			Rows:         []map[string]any{{colHeader: valStr}},
+			Rows:         []map[string]any{{colHeader: val}},
 			RowsAffected: 1,
 			DurationUS:   time.Since(start).Microseconds(),
 		}, nil
@@ -698,12 +740,14 @@ func (s *Server) execCreateTable(query string, start time.Time) (*QueryResult, e
 		dataType := parseSQLDataType(rawType)
 		isPK := strings.Contains(cUpper, "PRIMARY KEY")
 		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK
+		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT")
 
 		schema.Columns = append(schema.Columns, storage.Column{
 			Name:       colName,
 			Type:       dataType,
 			PrimaryKey: isPK,
 			Nullable:   !isNotNull,
+			Identity:   isIdentity,
 		})
 
 		if strings.Contains(cUpper, "REFERENCES") {
@@ -883,14 +927,54 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
 	}
 
+	var identityCol *storage.Column
+	for i := range schema.Columns {
+		if schema.Columns[i].Identity {
+			identityCol = &schema.Columns[i]
+			break
+		}
+	}
+
+	identityInsertAllowed := false
+	if cs != nil {
+		cs.mu.Lock()
+		if cur, ok := cs.Vars["identity_insert_table"].(string); ok {
+			if strings.EqualFold(cur, tableName) {
+				identityInsertAllowed = true
+			}
+		}
+		cs.mu.Unlock()
+	}
+
 	var targetCols []string
 	if rawCols != "" {
 		for _, c := range strings.Split(rawCols, ",") {
 			targetCols = append(targetCols, cleanIdentifier(c))
 		}
 	} else {
-		for _, c := range schema.Columns {
-			targetCols = append(targetCols, c.Name)
+		if identityCol != nil && !identityInsertAllowed {
+			for _, c := range schema.Columns {
+				if !c.Identity {
+					targetCols = append(targetCols, c.Name)
+				}
+			}
+		} else {
+			for _, c := range schema.Columns {
+				targetCols = append(targetCols, c.Name)
+			}
+		}
+	}
+
+	hasIdentityInTarget := false
+	if identityCol != nil {
+		for _, c := range targetCols {
+			if strings.EqualFold(c, identityCol.Name) {
+				hasIdentityInTarget = true
+				break
+			}
+		}
+		if hasIdentityInTarget && !identityInsertAllowed {
+			return nil, fmt.Errorf("Cannot insert explicit value for identity column in table %q when IDENTITY_INSERT is set to OFF", tableName)
 		}
 	}
 
@@ -919,6 +1003,20 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 		isEphemeral = true
 	}
 
+	var maxID int64 = 0
+	if identityCol != nil {
+		if cur, err := tx.Scan(tableName); err == nil {
+			for cur.Next() {
+				if r, err := cur.Record(); err == nil {
+					if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+						maxID = v.IVal
+					}
+				}
+			}
+			cur.Close()
+		}
+	}
+
 	insertedCount := int64(0)
 	for _, tupleStr := range tupleStrings {
 		vals := splitValues(tupleStr)
@@ -937,6 +1035,29 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 				rec[colName] = parseLiteralValue(valStr, storage.TypeVarChar)
 			} else {
 				rec[colName] = parseLiteralValue(valStr, colSchema.Type)
+			}
+		}
+
+		if identityCol != nil {
+			if !hasIdentityInTarget {
+				maxID++
+				rec[identityCol.Name] = storage.IntValue(maxID)
+				if cs != nil {
+					cs.mu.Lock()
+					cs.Vars["identity"] = maxID
+					cs.mu.Unlock()
+				}
+			} else {
+				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
+					if cs != nil {
+						cs.mu.Lock()
+						cs.Vars["identity"] = v.IVal
+						cs.mu.Unlock()
+					}
+					if v.IVal > maxID {
+						maxID = v.IVal
+					}
+				}
 			}
 		}
 
@@ -1730,6 +1851,26 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		return "SQLION", "@@servername"
 	case "@@OPTIONS":
 		return int64(5432), "@@options"
+	case "@@ERROR", "ERROR_NUMBER()", "ERROR_NUMBER":
+		if cs != nil {
+			cs.mu.Lock()
+			val, ok := cs.Vars["error"]
+			cs.mu.Unlock()
+			if ok && val != nil {
+				return val, "@@error"
+			}
+		}
+		return int64(0), "@@error"
+	case "@@IDENTITY", "SCOPE_IDENTITY()", "SCOPE_IDENTITY":
+		if cs != nil {
+			cs.mu.Lock()
+			val, ok := cs.Vars["identity"]
+			cs.mu.Unlock()
+			if ok && val != nil {
+				return val, "@@identity"
+			}
+		}
+		return nil, "@@identity"
 	}
 
 	// System variable @@var
@@ -4461,7 +4602,7 @@ func cleanIdentifier(s string) string {
 
 func parseSQLDataType(s string) storage.DataType {
 	switch strings.ToUpper(s) {
-	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT":
+	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "IDENTITY":
 		return storage.TypeInt
 	case "FLOAT", "DOUBLE", "REAL", "NUMERIC", "DECIMAL", "MONEY":
 		return storage.TypeFloat

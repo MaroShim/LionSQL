@@ -63,6 +63,7 @@ type Column struct {
 	Type       DataType `json:"type"`
 	PrimaryKey bool     `json:"primary_key"`
 	Nullable   bool     `json:"nullable"`
+	Identity   bool     `json:"identity,omitempty"`
 }
 
 // IndexSchema defines metadata for a secondary index.

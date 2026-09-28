@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **T-SQL `@@ERROR` Status Tracking & `SET IDENTITY_INSERT` Engine (`pkg/storage`, `pkg/api`, `pkg/proc/runtime`)**:
+  - Added session-level `@@ERROR` tracking that resets to 0 on successful statements and sets to 50000 on execution or DML errors.
+  - Implemented `Identity` column metadata in `storage.Column` and support for `IDENTITY(seed, incr)` and `AUTO_INCREMENT` in `CREATE TABLE`.
+  - Implemented `SET IDENTITY_INSERT [schema.]table ON|OFF` session controls with validation against non-identity tables and single-table session mutual exclusion.
+  - Added identity insertion enforcement in `INSERT INTO`, auto-generating monotonic IDs and updating watermark on explicit inserts.
+  - Added evaluation support for `@@IDENTITY`, `SCOPE_IDENTITY()`, and `ERROR_NUMBER()`.
+  - Added comprehensive unit and regression tests in `pkg/api/sqlexec_test.go`.
 - **Built-in System Stored Procedures (`pkg/api`)**:
   - Implemented core administrative stored procedures: `sp_help`, `sp_spaceused`, `sp_who`, `sp_who2`, `sp_lock`, and `sp_rename`.
   - Added object and column detail introspection in `sp_help [object_name]`.
