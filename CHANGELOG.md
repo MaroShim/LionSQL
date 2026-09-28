@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Prometheus Metrics (`/metrics`) & Slow Query Logging (`pkg/api`)**:
+  - Implemented lock-free atomic `MetricsCollector` (`pkg/api/metrics.go`) tracking high-frequency server diagnostics, including uptime, active connections, query counts by command type (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, etc.), query error counts, cumulative query duration, slow query counts, transaction commit/rollback counts, and total table counts.
+  - Implemented standard Prometheus text exposition format (version 0.0.4) on `GET /metrics`.
+  - Implemented bounded circular in-memory `SlowQueryLogger` (`pkg/api/slow_query.go`) with configurable threshold (`DefaultSlowQueryThreshold = 50ms`, capped at 200 entries) capturing query text, execution duration (microsecond & millisecond precision), timestamp, rows affected, session ID, and error messages.
+  - Added REST management endpoints: `GET /api/slow-queries` (retrieving recent slow queries with limit support), `POST /api/slow-queries/threshold` (dynamically adjusting the slow query threshold), and `DELETE /api/slow-queries` (clearing recorded entries).
+  - Added comprehensive unit, integration, and race-free concurrency test suite (`pkg/api/metrics_test.go`).
 - **Correlated Subquery Decorrelation & Semi/Anti-Join Optimization (`pkg/planner`, `pkg/execution`, `pkg/proc`, `pkg/api`)**:
   - Implemented automatic query decorrelation in `pkg/planner/decorrelate.go` converting correlated `WHERE EXISTS (SELECT ...)`, `WHERE NOT EXISTS (SELECT ...)`, `WHERE col IN (SELECT ...)`, and `WHERE col NOT IN (SELECT ...)` subqueries into relational `SEMI` and `ANTI` joins.
   - Implemented paren-aware, string-literal-safe SQL clause splitter (`splitSelectClauses`), preventing subquery `FROM` and `WHERE` clauses from polluting outer query planning.

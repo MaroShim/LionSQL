@@ -58,6 +58,9 @@ type Server struct {
 	globalTempMu       sync.RWMutex
 	defaultWorkMem     int64
 	spidCounter        int
+	metrics            *MetricsCollector
+	slowQueries        *SlowQueryLogger
+	startTime          time.Time
 }
 
 // NewServer initializes a new Server with default in-memory auth service.
@@ -76,18 +79,21 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 	cache := runtime.NewPlanCache()
 	pool := NewSessionPool(eng, DefaultPoolConfig())
 	s := &Server{
-		catalog:        cat,
-		engine:         eng,
-		planCache:      proc.NewPlanCache(),
-		executor:       runtime.NewExecutor(cache),
-		auth:           authSvc,
-		enableAuth:     enableAuth,
-		broker:         NewRealtimeBroker(),
-		pool:           pool,
-		mux:            http.NewServeMux(),
+		catalog:            cat,
+		engine:             eng,
+		planCache:          proc.NewPlanCache(),
+		executor:           runtime.NewExecutor(cache),
+		auth:               authSvc,
+		enableAuth:         enableAuth,
+		broker:             NewRealtimeBroker(),
+		pool:               pool,
+		mux:                http.NewServeMux(),
 		sessions:           make(map[string]*ClientSession),
 		globalTempCreators: make(map[string]string),
 		defaultWorkMem:     execution.DefaultWorkMem,
+		metrics:            NewMetricsCollector(),
+		slowQueries:        NewSlowQueryLogger(DefaultSlowQueryThreshold),
+		startTime:          time.Now(),
 	}
 	s.executor.SetTableGetter(eng.GetTable)
 	s.routes()
@@ -135,6 +141,23 @@ func (s *Server) AuthService() *auth.AuthService {
 // SetEnableAuth toggles authentication enforcement for protected API routes.
 func (s *Server) SetEnableAuth(enable bool) {
 	s.enableAuth = enable
+}
+
+// Metrics returns the Prometheus metrics collector instance.
+func (s *Server) Metrics() *MetricsCollector {
+	return s.metrics
+}
+
+// SlowQueries returns the slow query logger instance.
+func (s *Server) SlowQueries() *SlowQueryLogger {
+	return s.slowQueries
+}
+
+// SetSlowQueryThreshold sets the minimum duration for a query to be recorded as slow.
+func (s *Server) SetSlowQueryThreshold(d time.Duration) {
+	if s.slowQueries != nil {
+		s.slowQueries.SetThreshold(d)
+	}
 }
 
 // GetOrCreateSession returns or registers a persistent client session.
@@ -325,6 +348,11 @@ func (s *Server) Handler() http.Handler {
 	return s.mux
 }
 
+// ServeHTTP implements http.Handler for direct HTTP serving.
+func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mux.ServeHTTP(w, r)
+}
+
 func (s *Server) routes() {
 	// Dashboard & Root Redirect
 	s.mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
@@ -388,6 +416,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL, false, ""))
 	s.mux.HandleFunc("POST /api/query/cancel", s.handleQueryCancel)
 	s.mux.HandleFunc("GET /api/queries/active", s.handleListActiveQueries)
+
+	// Prometheus Metrics & Observability API
+	s.mux.HandleFunc("GET /metrics", s.handleMetrics)
+
+	// Slow Queries Management API
+	s.mux.HandleFunc("GET /api/slow-queries", s.handleGetSlowQueries)
+	s.mux.HandleFunc("POST /api/slow-queries/threshold", s.handleSetSlowQueryThreshold)
+	s.mux.HandleFunc("DELETE /api/slow-queries", s.handleClearSlowQueries)
 
 	// Tables API (PocketBase-style Collections & Records CRUD)
 	s.mux.HandleFunc("GET /api/tables", s.wrapAuth(s.handleListTables, false, ""))
@@ -681,6 +717,69 @@ func (s *Server) handleListActiveQueries(w http.ResponseWriter, r *http.Request)
 		"success": true,
 		"queries": active,
 		"total":   len(active),
+	})
+}
+
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
+	if s.metrics == nil {
+		http.Error(w, "metrics collector not initialized", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte(s.metrics.FormatPrometheus(s)))
+}
+
+func (s *Server) handleGetSlowQueries(w http.ResponseWriter, r *http.Request) {
+	if s.slowQueries == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"threshold_ms": 0.0,
+			"count":        0,
+			"entries":      []SlowQueryEntry{},
+		})
+		return
+	}
+	limit := 50
+	if lStr := r.URL.Query().Get("limit"); lStr != "" {
+		if n, err := strconv.Atoi(lStr); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	entries := s.slowQueries.GetEntries(limit)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"threshold_ms": float64(s.slowQueries.Threshold().Microseconds()) / 1000.0,
+		"count":        len(entries),
+		"entries":      entries,
+	})
+}
+
+func (s *Server) handleSetSlowQueryThreshold(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ThresholdMS float64 `json:"threshold_ms"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if req.ThresholdMS <= 0 {
+		writeError(w, http.StatusBadRequest, fmt.Errorf("threshold_ms must be greater than 0"))
+		return
+	}
+	d := time.Duration(req.ThresholdMS * float64(time.Millisecond))
+	s.SetSlowQueryThreshold(d)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":      true,
+		"threshold_ms": req.ThresholdMS,
+	})
+}
+
+func (s *Server) handleClearSlowQueries(w http.ResponseWriter, r *http.Request) {
+	if s.slowQueries != nil {
+		s.slowQueries.Clear()
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "slow queries cleared",
 	})
 }
 

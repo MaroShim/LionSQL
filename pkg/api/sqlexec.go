@@ -158,6 +158,7 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 		return nil, err
 	}
 
+	overallStart := time.Now()
 	queryCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -165,11 +166,39 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 	cs.QueryCtx = queryCtx
 	cs.CancelFunc = cancel
 	cs.RunningQuery = query
-	cs.QueryStartTime = time.Now()
+	cs.QueryStartTime = overallStart
 	cs.CancelRequested = false
 	cs.mu.Unlock()
 
+	stmts := splitStatements(query)
+	var lastRes *QueryResult
+	var execErr error
+
 	defer func() {
+		dur := time.Since(overallStart)
+		cmd := "UNKNOWN"
+		rowsAffected := int64(0)
+		isErr := (execErr != nil) || (lastRes != nil && !lastRes.Success)
+		if lastRes != nil {
+			if lastRes.Command != "" {
+				cmd = lastRes.Command
+			}
+			rowsAffected = lastRes.RowsAffected
+		} else if len(stmts) > 0 {
+			fields := strings.Fields(stmts[0])
+			if len(fields) > 0 {
+				cmd = strings.ToUpper(fields[0])
+			}
+		}
+
+		isSlow := false
+		if s.slowQueries != nil {
+			isSlow = s.slowQueries.Record(sessionID, query, dur, rowsAffected, execErr)
+		}
+		if s.metrics != nil {
+			s.metrics.RecordQuery(cmd, dur, isErr, isSlow)
+		}
+
 		cs.mu.Lock()
 		cs.QueryCtx = nil
 		cs.CancelFunc = nil
@@ -177,16 +206,16 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 		cs.mu.Unlock()
 	}()
 
-	stmts := splitStatements(query)
 	if len(stmts) == 0 {
-		return &QueryResult{Success: true, Command: "EMPTY"}, nil
+		lastRes = &QueryResult{Success: true, Command: "EMPTY"}
+		return lastRes, nil
 	}
 
-	var lastRes *QueryResult
 	for _, stmt := range stmts {
 		select {
 		case <-queryCtx.Done():
-			return nil, fmt.Errorf("canceling statement due to user request")
+			execErr = fmt.Errorf("canceling statement due to user request")
+			return nil, execErr
 		default:
 		}
 
@@ -198,8 +227,11 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 				cs.mu.Unlock()
 			}
 			if errors.Is(err, context.Canceled) || (queryCtx.Err() != nil && errors.Is(queryCtx.Err(), context.Canceled)) {
-				return nil, fmt.Errorf("canceling statement due to user request")
+				execErr = fmt.Errorf("canceling statement due to user request")
+				return nil, execErr
 			}
+			execErr = err
+			lastRes = res
 			return res, err
 		}
 		if cs != nil {
@@ -288,6 +320,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		if err != nil {
 			return nil, fmt.Errorf("commit error: %w", err)
 		}
+		if s.metrics != nil {
+			s.metrics.RecordTransaction("commit")
+		}
 		return &QueryResult{
 			Success:    true,
 			Command:    "COMMIT",
@@ -306,6 +341,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		cs.Tx = nil
 		if err != nil {
 			return nil, fmt.Errorf("rollback error: %w", err)
+		}
+		if s.metrics != nil {
+			s.metrics.RecordTransaction("rollback")
 		}
 		return &QueryResult{
 			Success:    true,
