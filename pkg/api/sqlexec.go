@@ -1257,6 +1257,18 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 		}, nil
 	}
 
+	innerExplainSQL := query
+	isAnalyze := false
+	if strings.HasPrefix(upper, "EXPLAIN ANALYZE ") {
+		innerExplainSQL = strings.TrimSpace(query[len("EXPLAIN ANALYZE "):])
+		isAnalyze = true
+	} else if strings.HasPrefix(upper, "EXPLAIN ") {
+		innerExplainSQL = strings.TrimSpace(query[len("EXPLAIN "):])
+	}
+	if setQuery, ok := planner.FindTopLevelSetOps(innerExplainSQL); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
+		return s.execSetOpExplain(setQuery, isAnalyze, start)
+	}
+
 	p := planner.NewPlanner()
 	qInfo, err := p.ParseSelect(query)
 	if err != nil {
@@ -2597,11 +2609,137 @@ func (s *Server) execVDBESelect(cleaned string, start time.Time, cs *ClientSessi
 	}, nil
 }
 
+func (s *Server) execSetOpSelect(setQuery *planner.SetOpQuery, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	if len(setQuery.Segments) < 2 {
+		return nil, fmt.Errorf("set operator requires at least 2 query branches")
+	}
+
+	// 1. Execute branch 0
+	firstRes, err := s.execSelect(setQuery.Segments[0].Query, start, cs)
+	if err != nil {
+		return nil, fmt.Errorf("set operation initial query failed: %w", err)
+	}
+	outCols := firstRes.Columns
+	var currIter execution.Iterator = execution.NewSliceIterator(firstRes.Rows, outCols)
+
+	// 2. Chained execution of subsequent branches
+	for i := 1; i < len(setQuery.Segments); i++ {
+		seg := setQuery.Segments[i]
+		nextRes, err := s.execSelect(seg.Query, start, cs)
+		if err != nil {
+			return nil, fmt.Errorf("set operation branch %d (%s) failed: %w", i, seg.Op, err)
+		}
+		if len(nextRes.Columns) != len(outCols) {
+			return nil, fmt.Errorf("all queries combined using %s must have an equal number of expressions (%d != %d)",
+				seg.Op, len(outCols), len(nextRes.Columns))
+		}
+
+		rightIter := execution.NewSliceIterator(nextRes.Rows, nextRes.Columns)
+		setOpType, err := execution.ParseSetOpType(seg.Op)
+		if err != nil {
+			return nil, err
+		}
+
+		currIter = execution.NewSetOpIterator(currIter, rightIter, setOpType)
+	}
+
+	// 3. Trailing ORDER BY across entire set operation result
+	if setQuery.OrderBy != "" {
+		currIter = execution.NewSortIterator(currIter, setQuery.OrderBy)
+	}
+
+	// 4. Trailing LIMIT across entire set operation result
+	if setQuery.Limit >= 0 {
+		currIter = execution.NewLimitIterator(currIter, setQuery.Limit, 0)
+	}
+
+	// 5. Open and materialize results
+	ctx := context.Background()
+	if err := currIter.Open(ctx); err != nil {
+		return nil, fmt.Errorf("set operation execution open error: %w", err)
+	}
+	defer currIter.Close()
+
+	var finalRows []map[string]any
+	for {
+		tuple, err := currIter.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("set operation iterator error: %w", err)
+		}
+		finalRows = append(finalRows, tuple.ToMap())
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      outCols,
+		Rows:         finalRows,
+		RowsAffected: int64(len(finalRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execSetOpExplain(setQuery *planner.SetOpQuery, analyze bool, start time.Time) (*QueryResult, error) {
+	p := planner.NewPlanner()
+	plan, err := p.BuildSetOpPlan(setQuery, func(subSQL string) (*planner.PlanNode, error) {
+		qInfo, err := p.ParseSelect(subSQL)
+		if err != nil {
+			return &planner.PlanNode{
+				Type:          planner.NodeTableScan,
+				Relation:      cleanIdentifier(subSQL),
+				TotalCost:     10.0,
+				EstimatedRows: 10,
+			}, nil
+		}
+		tblName := cleanIdentifier(qInfo.TableName)
+		schema, err := s.engine.GetTable(tblName)
+		if err != nil {
+			return &planner.PlanNode{
+				Type:          planner.NodeTableScan,
+				Relation:      tblName,
+				TotalCost:     10.0,
+				EstimatedRows: 10,
+			}, nil
+		}
+		var stats *planner.TableStats
+		if s.catalog != nil {
+			stats, _ = s.catalog.GetTableStats(tblName)
+		}
+		return p.BuildJoinPlanWithStats(qInfo, schema, stats, nil, nil), nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("set operation explain plan error: %w", err)
+	}
+
+	lines := planner.FormatPlanText(plan, analyze)
+	rows := make([]map[string]any, len(lines))
+	for i, l := range lines {
+		rows[i] = map[string]any{"QUERY PLAN": l}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "EXPLAIN",
+		Columns:      []string{"QUERY PLAN"},
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
 func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	if resolved, err := s.resolveSubqueries(cleaned); err == nil {
 		cleaned = resolved
+	}
+
+	// 0. Set Operations: UNION [ALL], INTERSECT, EXCEPT / MINUS
+	if setQuery, ok := planner.FindTopLevelSetOps(cleaned); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
+		return s.execSetOpSelect(setQuery, start, cs)
 	}
 
 	// 0. SELECT ... INTO <target_table> FROM ...

@@ -30,6 +30,7 @@ const (
 	NodeCTE         NodeType = "CTE Scan"
 	NodeMaterialize NodeType = "Materialize"
 	NodeWindow      NodeType = "Window"
+	NodeSetOp       NodeType = "SetOp"
 )
 
 // SortKeyDef defines a column and sort direction for ordering.
@@ -82,6 +83,7 @@ type PlanNode struct {
 	HashCond         string      `json:"hash_cond,omitempty"`
 	JoinCond         string      `json:"join_cond,omitempty"`
 	CTEName          string      `json:"cte_name,omitempty"`
+	SetOp            string      `json:"set_op,omitempty"`
 	StartupCost      float64     `json:"startup_cost"`
 	TotalCost        float64     `json:"total_cost"`
 	EstimatedRows    int64       `json:"estimated_rows"`
@@ -1091,6 +1093,8 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 		sb.WriteString(fmt.Sprintf(" (%s)", node.FilterCond))
 	case NodeWindow:
 		sb.WriteString(" (Window Functions)")
+	case NodeSetOp:
+		sb.WriteString(fmt.Sprintf(" (%s)", node.SetOp))
 	}
 
 	sb.WriteString(fmt.Sprintf(" (cost=%.2f..%.2f rows=%d)", node.StartupCost, node.TotalCost, node.EstimatedRows))

@@ -2084,4 +2084,145 @@ func TestSQLExecutor_DecimalAndFixedPoint(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_SetOperations(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// 1. Setup sample tables
+	_, err := server.ExecuteSQL("CREATE TABLE north_emp (id INT PRIMARY KEY, name VARCHAR(50), dept VARCHAR(50));")
+	if err != nil {
+		t.Fatalf("CREATE north_emp failed: %v", err)
+	}
+	_, err = server.ExecuteSQL("CREATE TABLE south_emp (id INT PRIMARY KEY, name VARCHAR(50), dept VARCHAR(50));")
+	if err != nil {
+		t.Fatalf("CREATE south_emp failed: %v", err)
+	}
+
+	_, _ = server.ExecuteSQL("INSERT INTO north_emp VALUES (1, 'Alice', 'Engineering'), (2, 'Bob', 'HR'), (3, 'Charlie', 'Finance');")
+	_, _ = server.ExecuteSQL("INSERT INTO south_emp VALUES (2, 'Bob', 'HR'), (4, 'David', 'Marketing'), (5, 'Eve', 'Engineering');")
+
+	// 2. UNION ALL: 3 + 3 = 6 rows (preserves duplicates: 'Bob', 'HR' appears twice)
+	uAllRes, err := server.ExecuteSQL("SELECT id, name, dept FROM north_emp UNION ALL SELECT id, name, dept FROM south_emp;")
+	if err != nil || !uAllRes.Success {
+		t.Fatalf("UNION ALL failed: %v", err)
+	}
+	if len(uAllRes.Rows) != 6 {
+		t.Fatalf("expected 6 rows for UNION ALL, got %d (%v)", len(uAllRes.Rows), uAllRes.Rows)
+	}
+
+	// 3. UNION (DISTINCT): removes duplicate 'Bob', 'HR' -> 5 rows (1, 2, 3, 4, 5)
+	uRes, err := server.ExecuteSQL("SELECT id, name, dept FROM north_emp UNION SELECT id, name, dept FROM south_emp;")
+	if err != nil || !uRes.Success {
+		t.Fatalf("UNION failed: %v", err)
+	}
+	if len(uRes.Rows) != 5 {
+		t.Fatalf("expected 5 distinct rows for UNION, got %d (%v)", len(uRes.Rows), uRes.Rows)
+	}
+
+	// 4. INTERSECT: common employee between north and south -> 1 row ('Bob')
+	intRes, err := server.ExecuteSQL("SELECT id, name, dept FROM north_emp INTERSECT SELECT id, name, dept FROM south_emp;")
+	if err != nil || !intRes.Success {
+		t.Fatalf("INTERSECT failed: %v", err)
+	}
+	if len(intRes.Rows) != 1 {
+		t.Fatalf("expected 1 intersecting row, got %d (%v)", len(intRes.Rows), intRes.Rows)
+	}
+	if intRes.Rows[0]["name"] != "Bob" {
+		t.Errorf("expected intersecting employee 'Bob', got %v", intRes.Rows[0]["name"])
+	}
+
+	// 5. EXCEPT: north_emp minus south_emp -> 2 rows ('Alice', 'Charlie')
+	excRes, err := server.ExecuteSQL("SELECT id, name, dept FROM north_emp EXCEPT SELECT id, name, dept FROM south_emp;")
+	if err != nil || !excRes.Success {
+		t.Fatalf("EXCEPT failed: %v", err)
+	}
+	if len(excRes.Rows) != 2 {
+		t.Fatalf("expected 2 rows for EXCEPT, got %d (%v)", len(excRes.Rows), excRes.Rows)
+	}
+
+	// 6. Trailing ORDER BY and LIMIT across entire set operation result
+	ordLimRes, err := server.ExecuteSQL("SELECT id, name FROM north_emp UNION ALL SELECT id, name FROM south_emp ORDER BY id DESC LIMIT 3;")
+	if err != nil || !ordLimRes.Success {
+		t.Fatalf("UNION ALL with ORDER BY and LIMIT failed: %v", err)
+	}
+	if len(ordLimRes.Rows) != 3 {
+		t.Fatalf("expected 3 rows for ORDER BY LIMIT, got %d", len(ordLimRes.Rows))
+	}
+	if fmt.Sprintf("%v", ordLimRes.Rows[0]["id"]) != "5" {
+		t.Errorf("expected highest id '5' first, got %v", ordLimRes.Rows[0]["id"])
+	}
+
+	// 7. Scalar table-less set operations
+	scalarSetRes, err := server.ExecuteSQL("SELECT 10 AS code, 'OK' AS msg UNION ALL SELECT 20 AS code, 'WARN' AS msg;")
+	if err != nil || !scalarSetRes.Success {
+		t.Fatalf("scalar UNION ALL failed: %v", err)
+	}
+	if len(scalarSetRes.Rows) != 2 {
+		t.Fatalf("expected 2 scalar rows, got %d", len(scalarSetRes.Rows))
+	}
+	if fmt.Sprintf("%v", scalarSetRes.Rows[0]["code"]) != "10" || fmt.Sprintf("%v", scalarSetRes.Rows[1]["code"]) != "20" {
+		t.Errorf("scalar rows mismatch: %v", scalarSetRes.Rows)
+	}
+
+	// 8. Schema mismatch validation
+	_, err = server.ExecuteSQL("SELECT id FROM north_emp UNION SELECT id, name FROM south_emp;")
+	if err == nil {
+		t.Fatalf("expected error on mismatched column count in UNION, got nil")
+	}
+
+	// 9. EXPLAIN set operation query plan
+	expRes, err := server.ExecuteSQL("EXPLAIN SELECT id, name FROM north_emp UNION ALL SELECT id, name FROM south_emp;")
+	if err != nil || !expRes.Success {
+		t.Fatalf("EXPLAIN set operation failed: %v", err)
+	}
+	foundSetOpPlan := false
+	for _, r := range expRes.Rows {
+		planLine := fmt.Sprintf("%v", r["QUERY PLAN"])
+		if strings.Contains(planLine, "SetOp (UNION ALL)") {
+			foundSetOpPlan = true
+			break
+		}
+	}
+	if !foundSetOpPlan {
+		t.Errorf("expected 'SetOp (UNION ALL)' in EXPLAIN output, got: %v", expRes.Rows)
+	}
+
+	// 10. MINUS keyword alias for EXCEPT
+	minusRes, err := server.ExecuteSQL("SELECT id, name FROM north_emp MINUS SELECT id, name FROM south_emp;")
+	if err != nil || !minusRes.Success {
+		t.Fatalf("MINUS query failed: %v", err)
+	}
+	if len(minusRes.Rows) != 2 {
+		t.Fatalf("expected 2 rows from MINUS, got %d", len(minusRes.Rows))
+	}
+
+	// 11. Chained 3-way set operation: (north UNION south) EXCEPT (employees where dept='HR')
+	chainedRes, err := server.ExecuteSQL("SELECT id, name FROM north_emp UNION SELECT id, name FROM south_emp EXCEPT SELECT id, name FROM north_emp WHERE dept = 'HR';")
+	if err != nil || !chainedRes.Success {
+		t.Fatalf("chained set operation failed: %v", err)
+	}
+	// Total 5 distinct employees (1,2,3,4,5), excluding HR employee Bob (2) -> 4 rows (1, 3, 4, 5)
+	if len(chainedRes.Rows) != 4 {
+		t.Fatalf("expected 4 rows from chained set op, got %d (%v)", len(chainedRes.Rows), chainedRes.Rows)
+	}
+	for _, r := range chainedRes.Rows {
+		if fmt.Sprintf("%v", r["id"]) == "2" {
+			t.Errorf("expected HR employee id 2 to be excluded, but was present: %v", r)
+		}
+	}
+
+	// 12. Set operation with WHERE filters in branches
+	whereSetRes, err := server.ExecuteSQL("SELECT id, name FROM north_emp WHERE dept = 'Engineering' UNION ALL SELECT id, name FROM south_emp WHERE dept = 'Engineering';")
+	if err != nil || !whereSetRes.Success {
+		t.Fatalf("set operation with WHERE filters failed: %v", err)
+	}
+	// Alice (1) + Eve (5) -> 2 rows
+	if len(whereSetRes.Rows) != 2 {
+		t.Fatalf("expected 2 engineering employees, got %d (%v)", len(whereSetRes.Rows), whereSetRes.Rows)
+	}
+}
+
+
 

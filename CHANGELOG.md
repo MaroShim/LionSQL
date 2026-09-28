@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Relational Set Operations Planning & Execution: `UNION`, `UNION ALL`, `INTERSECT`, `EXCEPT` / `MINUS` (`pkg/execution`, `pkg/planner`, `pkg/api`)**:
+  - Implemented Volcano-style `SetOpIterator` (`pkg/execution/setop.go`) supporting ANSI SQL set operations: `UNION`, `UNION ALL`, `INTERSECT`, and `EXCEPT` (including Oracle/PostgreSQL `MINUS` alias).
+  - Implemented zero-allocation streaming pipeline for `UNION ALL`, pulling tuples sequentially from left and right iterators without buffering.
+  - Implemented type-safe row encoding and deduplication hash set for `UNION`, `INTERSECT`, and `EXCEPT`, ensuring distinct set semantics.
+  - Added `SliceIterator` in `pkg/execution/setop.go` for seamless integration of subqueries, scalar selects, and materialized results into Volcano execution pipelines.
+  - Added `NodeSetOp` (`"SetOp"`) to `planner.NodeType` and `SetOp` field to `planner.PlanNode`.
+  - Implemented robust top-level set operation scanner `FindTopLevelSetOps` (`pkg/planner/setop.go`), ignoring keywords inside parentheses or string literals, and isolating trailing `ORDER BY` and `LIMIT` clauses.
+  - Implemented `BuildSetOpPlan` in `pkg/planner/setop.go`, creating left-deep SetOp plan trees with cost estimation and outer sort/limit wrapping.
+  - Integrated `NodeSetOp` into Volcano physical plan compiler `BuildExecutorWithOptions` (`pkg/execution/builder.go`).
+  - Extended `execSelect` and `execExplain` (`pkg/api/sqlexec.go`) to execute set queries via Volcano iterators and format set operation EXPLAIN plan trees.
+  - Added comprehensive test suites across `pkg/execution/setop_test.go`, `pkg/planner/setop_test.go`, and `pkg/api/sqlexec_test.go`.
 - **Exact Fixed-Point `DECIMAL`, `NUMERIC`, `MONEY` Data Types (`pkg/storage`, `pkg/api`, `pkg/execution`, `pkg/wire`)**:
   - Implemented exact fixed-point `storage.Decimal` struct backed by arbitrary-precision `math/big.Int` with integer scale, providing zero-drift arithmetic (`Add`, `Sub`, `Mul`, `Div` with half-up rounding), scale alignment, and exact comparisons (`Cmp`, `Equal`).
   - Added `storage.TypeDecimal` (`DataType = 7`) to storage engine and value system, with `Precision` and `Scale` metadata in `storage.Column`.

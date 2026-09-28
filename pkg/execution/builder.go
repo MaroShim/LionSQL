@@ -177,6 +177,27 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		_, rightKey := parseJoinCond(plan.JoinCond)
 		return NewHashJoinIterator(outerIter, innerScan, plan.JoinType, leftKey, rightKey), nil
 
+	case planner.NodeSetOp:
+		if len(plan.Children) < 2 {
+			return nil, fmt.Errorf("set operator requires at least 2 children")
+		}
+		leftIter, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
+		if err != nil {
+			return nil, err
+		}
+		rightIter, err := BuildExecutorWithOptions(plan.Children[1], tx, getTable, opts)
+		if err != nil {
+			_ = leftIter.Close()
+			return nil, err
+		}
+		setOpType, err := ParseSetOpType(plan.SetOp)
+		if err != nil {
+			_ = leftIter.Close()
+			_ = rightIter.Close()
+			return nil, err
+		}
+		return NewSetOpIterator(leftIter, rightIter, setOpType), nil
+
 	default:
 		return nil, fmt.Errorf("unsupported plan node type: %s", plan.Type)
 	}
