@@ -316,6 +316,111 @@ func TestPlanner_CTE(t *testing.T) {
 	}
 }
 
+func TestPlanner_MultiTableChainedJoins(t *testing.T) {
+	p := planner.NewPlanner()
 
+	// 1. Parsing a 3-table chained join query
+	sql3 := `SELECT u.name, o.amount, p.status FROM users u JOIN orders o ON u.id = o.user_id JOIN payments p ON o.id = p.order_id WHERE u.name = 'Alice'`
+	q3, err := p.ParseSelect(sql3)
+	if err != nil {
+		t.Fatalf("ParseSelect failed for 3-table join: %v", err)
+	}
 
+	if q3.TableName != "users" || q3.TableAlias != "u" {
+		t.Errorf("expected primary table users u, got %s %s", q3.TableName, q3.TableAlias)
+	}
+	if len(q3.Joins) != 2 {
+		t.Fatalf("expected 2 joins in Joins slice, got %d", len(q3.Joins))
+	}
+	if q3.Joins[0].Table != "orders" || q3.Joins[0].Alias != "o" || q3.Joins[0].LeftKey != "u.id" || q3.Joins[0].RightKey != "o.user_id" {
+		t.Errorf("unexpected join 0: %+v", q3.Joins[0])
+	}
+	if q3.Joins[1].Table != "payments" || q3.Joins[1].Alias != "p" || q3.Joins[1].LeftKey != "o.id" || q3.Joins[1].RightKey != "p.order_id" {
+		t.Errorf("unexpected join 1: %+v", q3.Joins[1])
+	}
 
+	// 2. Parsing a 4-table chained join with mixed INNER and LEFT joins
+	sql4 := `SELECT * FROM t1 JOIN t2 ON t1.id = t2.t1_id LEFT JOIN t3 ON t2.id = t3.t2_id JOIN t4 ON t3.id = t4.t3_id`
+	q4, err := p.ParseSelect(sql4)
+	if err != nil {
+		t.Fatalf("ParseSelect failed for 4-table join: %v", err)
+	}
+	if len(q4.Joins) != 3 {
+		t.Fatalf("expected 3 joins in Joins slice, got %d", len(q4.Joins))
+	}
+	if q4.Joins[0].Type != "INNER" || q4.Joins[1].Type != "LEFT" || q4.Joins[2].Type != "INNER" {
+		t.Errorf("unexpected join types: %s, %s, %s", q4.Joins[0].Type, q4.Joins[1].Type, q4.Joins[2].Type)
+	}
+
+	// 3. CBO Join Planning: verify left-deep tree with mixed Hash Join and Index Nested Loop Join
+	userSchema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	orderSchema := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+			{Name: "amount", Type: storage.TypeFloat},
+		},
+	}
+	// Payments has an index on order_id -> should favor Index Nested Loop Join
+	paymentSchema := &storage.TableSchema{
+		Name: "payments",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "order_id", Type: storage.TypeInt},
+			{Name: "status", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:    "idx_payments_order_id",
+				Columns: []string{"order_id"},
+				Unique:  false,
+			},
+		},
+	}
+
+	userStats := planner.NewTableStats("users", 100)
+	orderStats := planner.NewTableStats("orders", 500)
+	paymentStats := planner.NewTableStats("payments", 1000)
+
+	rSchemas := map[string]*storage.TableSchema{
+		"orders":   orderSchema,
+		"o":        orderSchema,
+		"payments": paymentSchema,
+		"p":        paymentSchema,
+	}
+	rStats := map[string]*planner.TableStats{
+		"orders":   orderStats,
+		"o":        orderStats,
+		"payments": paymentStats,
+		"p":        paymentStats,
+	}
+
+	plan := p.BuildMultiJoinPlanWithStats(q3, userSchema, userStats, rSchemas, rStats)
+	if plan == nil {
+		t.Fatal("expected non-nil multi-join plan")
+	}
+
+	lines := planner.FormatPlanText(plan, false)
+	fullPlanText := strings.Join(lines, "\n")
+
+	// Plan should have Filter, then Nested Loop (payments), then Hash Join (orders)
+	if !strings.Contains(fullPlanText, "Filter (u.name = 'Alice')") {
+		t.Errorf("expected Filter in plan, got:\n%s", fullPlanText)
+	}
+	if !strings.Contains(fullPlanText, "Nested Loop") {
+		t.Errorf("expected Nested Loop in plan for payments with index, got:\n%s", fullPlanText)
+	}
+	if !strings.Contains(fullPlanText, "Hash Join") {
+		t.Errorf("expected Hash Join in plan for orders, got:\n%s", fullPlanText)
+	}
+	if !strings.Contains(fullPlanText, "Index Scan using idx_payments_order_id on payments") {
+		t.Errorf("expected Index Scan on payments, got:\n%s", fullPlanText)
+	}
+}

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Multi-Table Chained Joins Planning & Execution (`pkg/planner`, `pkg/execution`, `pkg/api`, `pkg/proc/runtime`)**:
+  - Extended `planner.QueryInfo` with `Joins []*JoinInfo` and implemented chained join extraction in AST walker (`FromAST`) and SQL parser fallback (`parseFromAndJoins`), parsing arbitrary sequences of chained `JOIN ... ON ...` clauses with aliases.
+  - Implemented left-deep join tree generator `BuildMultiJoinPlanWithStats` in `pkg/planner/planner.go`, evaluating Cost-Based Optimization (CBO) decisions (Hash Join vs Index Nested Loop Join) at each join stage based on table cardinality and secondary index availability.
+  - Maintained 100% backward compatibility with `BuildJoinPlanWithStats` and `BuildJoinPlan` delegating to `BuildMultiJoinPlanWithStats`.
+  - Added key orientation defensive normalization in Volcano `HashJoinIterator.Open()` (`pkg/execution/join.go`), automatically swapping join keys if the right child schema contains `leftKey` and not `rightKey`.
+  - Extended `execVolcanoSelect` and `buildPlanForQuery` (`pkg/api/sqlexec.go`) to resolve schemas and catalog statistics for all joined relations in multi-join queries.
+  - Extended VDBE execution VM `execRelQuery` (`pkg/proc/runtime/vm.go`) to resolve all joined table schemas and execute multi-join queries via Volcano execution iterators.
+  - Added comprehensive unit and end-to-end tests across `planner_test.go`, `execution_test.go`, `sqlexec_test.go`, and `runtime_test.go` verifying 3-table and 4-table chained joins (INNER, LEFT, and mixed).
 - **Microsoft SQL Server TDS 7.x/8.0 Wire Protocol SSL/TLS Encryption (`pkg/wire/tds`, `cmd/server`)**:
   - Implemented PRELOGIN encryption negotiation supporting `EncryptOff (0x00)`, `EncryptOn (0x01)`, `EncryptNotSup (0x02)`, and `EncryptReq (0x03)`.
   - Added `ParsePrelogin` parsing option headers and payloads defensively to extract client encryption requirements.

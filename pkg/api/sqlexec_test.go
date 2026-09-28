@@ -1916,3 +1916,74 @@ func TestSQLExecutor_VBDEDML(t *testing.T) {
 		t.Errorf("expected remaining product id 12, got %v", res.Rows[1]["id"])
 	}
 }
+
+func TestSQLExecutor_MultiTableChainedJoins(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// 1. Setup tables
+	_, err := server.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50));")
+	if err != nil {
+		t.Fatalf("CREATE users failed: %v", err)
+	}
+	_, err = server.ExecuteSQL("CREATE TABLE orders (id INT PRIMARY KEY, user_id INT, amount FLOAT);")
+	if err != nil {
+		t.Fatalf("CREATE orders failed: %v", err)
+	}
+	_, err = server.ExecuteSQL("CREATE TABLE items (id INT PRIMARY KEY, order_id INT, product VARCHAR(50));")
+	if err != nil {
+		t.Fatalf("CREATE items failed: %v", err)
+	}
+
+	// 2. Insert records
+	_, _ = server.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice'), (2, 'Bob');")
+	_, _ = server.ExecuteSQL("INSERT INTO orders VALUES (101, 1, 50.0), (102, 1, 150.0), (103, 2, 20.0);")
+	_, _ = server.ExecuteSQL("INSERT INTO items VALUES (1001, 101, 'Book'), (1002, 101, 'Pen'), (1003, 102, 'Laptop');")
+
+	// 3. EXPLAIN 3-table chained join
+	explainSQL := "EXPLAIN SELECT u.name, o.amount, i.product FROM users u JOIN orders o ON u.id = o.user_id JOIN items i ON o.id = i.order_id;"
+	expRes, err := server.ExecuteSQL(explainSQL)
+	if err != nil || !expRes.Success {
+		t.Fatalf("EXPLAIN multi-join failed: %v", err)
+	}
+	if len(expRes.Rows) == 0 {
+		t.Fatalf("expected EXPLAIN output rows, got 0")
+	}
+
+	// 4. Execute INNER JOIN chain
+	innerSQL := "SELECT u.name, o.amount, i.product FROM users u JOIN orders o ON u.id = o.user_id JOIN items i ON o.id = i.order_id ORDER BY i.product;"
+	res, err := server.ExecuteSQL(innerSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("ExecuteSQL multi-join failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 rows from inner join, got %d: %+v", len(res.Rows), res.Rows)
+	}
+
+	// 5. Execute mixed INNER + LEFT JOIN chain
+	leftSQL := "SELECT u.name, o.amount, i.product FROM users u JOIN orders o ON u.id = o.user_id LEFT JOIN items i ON o.id = i.order_id;"
+	resLeft, err := server.ExecuteSQL(leftSQL)
+	if err != nil || !resLeft.Success {
+		t.Fatalf("ExecuteSQL multi-left-join failed: %v", err)
+	}
+	if len(resLeft.Rows) != 4 {
+		t.Fatalf("expected 4 rows from multi-join with LEFT, got %d: %+v", len(resLeft.Rows), resLeft.Rows)
+	}
+
+	foundBob := false
+	for _, row := range resLeft.Rows {
+		if fmt.Sprintf("%v", row["name"]) == "Bob" {
+			foundBob = true
+			if row["product"] != nil && row["product"] != "" {
+				t.Errorf("expected Bob's product to be NULL, got %v", row["product"])
+			}
+		}
+	}
+	if !foundBob {
+		t.Errorf("expected to find Bob in LEFT JOIN results")
+	}
+}
+

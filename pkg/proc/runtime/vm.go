@@ -1015,17 +1015,29 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		return nil, nil, fmt.Errorf("table %q not found: %w", leftTable, err)
 	}
 
-	var rightSchema *storage.TableSchema
-	if qInfo.Join != nil {
-		rightTable := cleanSymbol(qInfo.Join.Table)
+	rightSchemas := make(map[string]*storage.TableSchema)
+	var joins []*planner.JoinInfo
+	if len(qInfo.Joins) > 0 {
+		joins = qInfo.Joins
+	} else if qInfo.Join != nil {
+		joins = []*planner.JoinInfo{qInfo.Join}
+	}
+
+	for _, j := range joins {
+		rightTable := cleanSymbol(j.Table)
 		rSchema, err := getTable(rightTable)
 		if err != nil {
 			return nil, nil, fmt.Errorf("joined table %q not found: %w", rightTable, err)
 		}
-		rightSchema = rSchema
+		rightSchemas[j.Table] = rSchema
+		rightSchemas[rightTable] = rSchema
+		if j.Alias != "" {
+			rightSchemas[j.Alias] = rSchema
+			rightSchemas[cleanSymbol(j.Alias)] = rSchema
+		}
 	}
 
-	plan := p.BuildJoinPlan(qInfo, leftSchema, 0, rightSchema, 0)
+	plan := p.BuildMultiJoinPlanWithStats(qInfo, leftSchema, nil, rightSchemas, nil)
 
 	opts := execution.DefaultExecutorOptions()
 	exec, err := execution.BuildExecutorWithOptions(plan, f.tx, getTable, opts)

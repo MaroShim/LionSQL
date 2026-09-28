@@ -62,6 +62,32 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		return fmt.Errorf("hash join: child iterators cannot be nil")
 	}
 
+	// Defensive check: verify key orientation between left and right iterators.
+	// If right relation contains leftKey but does NOT contain rightKey, swap them.
+	if rMap := h.right.ColIndexMap(); rMap != nil {
+		rightCol := h.rightKey
+		if idx := strings.Index(rightCol, "."); idx != -1 {
+			rightCol = rightCol[idx+1:]
+		}
+		leftCol := h.leftKey
+		if idx := strings.Index(leftCol, "."); idx != -1 {
+			leftCol = leftCol[idx+1:]
+		}
+
+		_, hasRight := rMap.Index(h.rightKey)
+		if !hasRight {
+			_, hasRight = rMap.Index(rightCol)
+		}
+		_, hasLeft := rMap.Index(h.leftKey)
+		if !hasLeft {
+			_, hasLeft = rMap.Index(leftCol)
+		}
+
+		if hasLeft && !hasRight {
+			h.leftKey, h.rightKey = h.rightKey, h.leftKey
+		}
+	}
+
 	// 1. Build phase: drain right child into hash table
 	if err := h.right.Open(ctx); err != nil {
 		return fmt.Errorf("hash join build open error: %w", err)

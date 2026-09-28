@@ -1299,32 +1299,61 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 	}
 
 	var planTree *planner.PlanNode
-	if qInfo.Join != nil {
-		rTable := cleanIdentifier(qInfo.Join.Table)
-		rSchema, _ := s.engine.GetTable(rTable)
-		var rightStats *planner.TableStats
-		if s.catalog != nil {
-			rightStats, _ = s.catalog.GetTableStats(rTable)
-		}
-		if rightStats == nil {
-			var rRows int64 = 0
-			if session, err := s.engine.NewSession(); err == nil {
-				defer session.Close()
-				if rTx, err := session.BeginTx(storage.TxOptions{ReadOnly: true}); err == nil {
-					defer rTx.Rollback()
-					if rCur, err := rTx.Scan(rTable); err == nil {
-						defer rCur.Close()
-						for rCur.Next() {
-							rRows++
-						}
-					}
+	var joins []*planner.JoinInfo
+	if len(qInfo.Joins) > 0 {
+		joins = qInfo.Joins
+	} else if qInfo.Join != nil {
+		joins = []*planner.JoinInfo{qInfo.Join}
+	}
+
+	if len(joins) > 0 {
+		rightSchemas := make(map[string]*storage.TableSchema)
+		rightStats := make(map[string]*planner.TableStats)
+		for _, j := range joins {
+			rTable := cleanIdentifier(j.Table)
+			rSchema, _ := s.engine.GetTable(rTable)
+			if rSchema != nil {
+				rightSchemas[j.Table] = rSchema
+				rightSchemas[rTable] = rSchema
+				if j.Alias != "" {
+					rightSchemas[j.Alias] = rSchema
+					rightSchemas[cleanIdentifier(j.Alias)] = rSchema
 				}
 			}
-			rightStats = planner.NewTableStats(rTable, rRows)
+			var rStat *planner.TableStats
+			if s.catalog != nil {
+				rStat, _ = s.catalog.GetTableStats(rTable)
+			}
+			if rStat == nil {
+				var rRows int64 = 0
+				if session, err := s.engine.NewSession(); err == nil {
+					func() {
+						defer session.Close()
+						if rTx, err := session.BeginTx(storage.TxOptions{ReadOnly: true}); err == nil {
+							defer rTx.Rollback()
+							if rCur, err := rTx.Scan(rTable); err == nil {
+								defer rCur.Close()
+								for rCur.Next() {
+									rRows++
+								}
+							}
+						}
+					}()
+				}
+				rStat = planner.NewTableStats(rTable, rRows)
+			}
+			if rStat != nil {
+				rightStats[j.Table] = rStat
+				rightStats[rTable] = rStat
+				if j.Alias != "" {
+					rightStats[j.Alias] = rStat
+					rightStats[cleanIdentifier(j.Alias)] = rStat
+				}
+			}
 		}
-		planTree = p.BuildJoinPlanWithStats(qInfo, schema, leftStats, rSchema, rightStats)
+		planTree = p.BuildMultiJoinPlanWithStats(qInfo, schema, leftStats, rightSchemas, rightStats)
 	} else {
-		planTree = p.BuildJoinPlanWithStats(qInfo, schema, leftStats, nil, nil)
+		planTree = p.BuildMultiJoinPlanWithStats(qInfo, schema, leftStats, nil, nil)
 	}
 
 	if qInfo.IsAnalyze {
@@ -1761,14 +1790,26 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 		return nil, fmt.Errorf("table %q not found: %w", leftTable, err)
 	}
 
-	var rightSchema *storage.TableSchema
-	if qInfo.Join != nil {
-		rightTable := cleanIdentifier(qInfo.Join.Table)
+	rightSchemas := make(map[string]*storage.TableSchema)
+	var joins []*planner.JoinInfo
+	if len(qInfo.Joins) > 0 {
+		joins = qInfo.Joins
+	} else if qInfo.Join != nil {
+		joins = []*planner.JoinInfo{qInfo.Join}
+	}
+
+	for _, j := range joins {
+		rightTable := cleanIdentifier(j.Table)
 		rSchema, err := s.engine.GetTable(rightTable)
 		if err != nil {
 			return nil, fmt.Errorf("table %q not found: %w", rightTable, err)
 		}
-		rightSchema = rSchema
+		rightSchemas[j.Table] = rSchema
+		rightSchemas[rightTable] = rSchema
+		if j.Alias != "" {
+			rightSchemas[j.Alias] = rSchema
+			rightSchemas[cleanIdentifier(j.Alias)] = rSchema
+		}
 	}
 
 	var tx storage.Transaction
@@ -1791,14 +1832,22 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 
 	p := planner.NewPlanner()
 	var leftStats *planner.TableStats
-	var rightStats *planner.TableStats
+	rightStats := make(map[string]*planner.TableStats)
 	if s.catalog != nil {
 		leftStats, _ = s.catalog.GetTableStats(leftTable)
-		if rightSchema != nil && qInfo.Join != nil {
-			rightStats, _ = s.catalog.GetTableStats(cleanIdentifier(qInfo.Join.Table))
+		for _, j := range joins {
+			rTable := cleanIdentifier(j.Table)
+			if st, ok := s.catalog.GetTableStats(rTable); ok && st != nil {
+				rightStats[j.Table] = st
+				rightStats[rTable] = st
+				if j.Alias != "" {
+					rightStats[j.Alias] = st
+					rightStats[cleanIdentifier(j.Alias)] = st
+				}
+			}
 		}
 	}
-	plan := p.BuildJoinPlanWithStats(qInfo, leftSchema, leftStats, rightSchema, rightStats)
+	plan := p.BuildMultiJoinPlanWithStats(qInfo, leftSchema, leftStats, rightSchemas, rightStats)
 
 	opts := execution.DefaultExecutorOptions()
 	if s.defaultWorkMem > 0 {

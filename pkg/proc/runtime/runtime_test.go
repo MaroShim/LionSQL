@@ -543,6 +543,71 @@ func TestVM_OpRelQueryWithJoin(t *testing.T) {
 	}
 }
 
+func TestVM_OpRelQueryMultiTableChainedJoins(t *testing.T) {
+	eng := setupTestDB(t)
+	err := eng.CreateTable(&storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "account_id", Type: storage.TypeInt},
+			{Name: "amount", Type: storage.TypeFloat},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTable orders failed: %v", err)
+	}
+
+	err = eng.CreateTable(&storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "order_id", Type: storage.TypeInt},
+			{Name: "product", Type: storage.TypeVarChar},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTable items failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	tx, _ := session.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(101), "account_id": storage.IntValue(1), "amount": storage.FloatValue(99.9)})
+	_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(102), "account_id": storage.IntValue(2), "amount": storage.FloatValue(149.5)})
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(1001), "order_id": storage.IntValue(101), "product": storage.StringValue("Keyboard")})
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(1002), "order_id": storage.IntValue(102), "product": storage.StringValue("Monitor")})
+	_ = tx.Commit()
+
+	query := `SELECT accounts.holder, orders.amount, items.product FROM accounts JOIN orders ON accounts.id = orders.account_id JOIN items ON orders.id = items.order_id ORDER BY items.product ASC`
+	prog, err := proc.Compile(query)
+	if err != nil {
+		t.Fatalf("Compile multi-join query failed: %v", err)
+	}
+
+	executor := runtime.NewExecutor(runtime.NewPlanCache())
+	executor.SetTableGetter(eng.GetTable)
+
+	res, err := executor.Run(prog, "MultiJoinQuery", nil, session)
+	if err != nil {
+		t.Fatalf("executor.Run multi-join query failed: %v", err)
+	}
+
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 joined rows, got %d: %v", len(res.Rows), res.Rows)
+	}
+
+	if fmt.Sprintf("%v", res.Rows[0]["product"]) != "Keyboard" || fmt.Sprintf("%v", res.Rows[0]["holder"]) != "Alice" {
+		t.Errorf("unexpected first row: %v", res.Rows[0])
+	}
+	if fmt.Sprintf("%v", res.Rows[1]["product"]) != "Monitor" || fmt.Sprintf("%v", res.Rows[1]["holder"]) != "Bob" {
+		t.Errorf("unexpected second row: %v", res.Rows[1])
+	}
+}
+
 func TestVM_OpIndexScan(t *testing.T) {
 	eng := memengine.New()
 	defer eng.Close()

@@ -437,3 +437,160 @@ func TestExecutor_IndexOnlyScan(t *testing.T) {
 		t.Fatalf("expected id 2, got %v", result[0].Get("id"))
 	}
 }
+
+func TestExecutor_MultiTableChainedJoins(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	usersSchema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	ordersSchema := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+			{Name: "amount", Type: storage.TypeFloat},
+		},
+	}
+	itemsSchema := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "order_id", Type: storage.TypeInt},
+			{Name: "product", Type: storage.TypeVarChar},
+		},
+	}
+
+	if err := eng.CreateTable(usersSchema); err != nil {
+		t.Fatalf("CreateTable users failed: %v", err)
+	}
+	if err := eng.CreateTable(ordersSchema); err != nil {
+		t.Fatalf("CreateTable orders failed: %v", err)
+	}
+	if err := eng.CreateTable(itemsSchema); err != nil {
+		t.Fatalf("CreateTable items failed: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("users", storage.Record{"id": storage.IntValue(1), "name": storage.StringValue("Alice")})
+	_ = tx.Insert("users", storage.Record{"id": storage.IntValue(2), "name": storage.StringValue("Bob")})
+
+	_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(101), "user_id": storage.IntValue(1), "amount": storage.FloatValue(50.0)})
+	_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(102), "user_id": storage.IntValue(1), "amount": storage.FloatValue(150.0)})
+	_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(103), "user_id": storage.IntValue(2), "amount": storage.FloatValue(20.0)})
+
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(1001), "order_id": storage.IntValue(101), "product": storage.StringValue("Book")})
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(1002), "order_id": storage.IntValue(101), "product": storage.StringValue("Pen")})
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(1003), "order_id": storage.IntValue(102), "product": storage.StringValue("Laptop")})
+	_ = tx.Commit()
+
+	// 1. Test INNER JOIN chain
+	p := planner.NewPlanner()
+	qInner, err := p.ParseSelect("SELECT users.name, orders.amount, items.product FROM users JOIN orders ON users.id = orders.user_id JOIN items ON orders.id = items.order_id")
+	if err != nil {
+		t.Fatalf("ParseSelect INNER failed: %v", err)
+	}
+
+	rSchemas := map[string]*storage.TableSchema{
+		"orders": ordersSchema,
+		"items":  itemsSchema,
+	}
+	planInner := p.BuildMultiJoinPlanWithStats(qInner, usersSchema, nil, rSchemas, nil)
+	if planInner == nil {
+		t.Fatal("expected non-nil planInner")
+	}
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	execInner, err := execution.BuildExecutor(planInner, readTx, eng.GetTable)
+	if err != nil {
+		t.Fatalf("BuildExecutor INNER error: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := execInner.Open(ctx); err != nil {
+		t.Fatalf("execInner Open failed: %v", err)
+	}
+	defer execInner.Close()
+
+	var innerRows []execution.Tuple
+	for {
+		tup, err := execInner.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("execInner Next error: %v", err)
+		}
+		innerRows = append(innerRows, tup)
+	}
+
+	// Should produce 3 rows (Book, Pen, Laptop)
+	if len(innerRows) != 3 {
+		t.Fatalf("expected 3 inner join rows, got %d", len(innerRows))
+	}
+
+	// 2. Test mixed INNER + LEFT JOIN chain: Bob's order 103 should appear with NULL items.product
+	qLeft, err := p.ParseSelect("SELECT users.name, orders.amount, items.product FROM users JOIN orders ON users.id = orders.user_id LEFT JOIN items ON orders.id = items.order_id")
+	if err != nil {
+		t.Fatalf("ParseSelect LEFT failed: %v", err)
+	}
+
+	planLeft := p.BuildMultiJoinPlanWithStats(qLeft, usersSchema, nil, rSchemas, nil)
+	if planLeft == nil {
+		t.Fatal("expected non-nil planLeft")
+	}
+
+	readTx2, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx2.Rollback()
+
+	execLeft, err := execution.BuildExecutor(planLeft, readTx2, eng.GetTable)
+	if err != nil {
+		t.Fatalf("BuildExecutor LEFT error: %v", err)
+	}
+
+	if err := execLeft.Open(ctx); err != nil {
+		t.Fatalf("execLeft Open failed: %v", err)
+	}
+	defer execLeft.Close()
+
+	var leftRows []execution.Tuple
+	for {
+		tup, err := execLeft.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("execLeft Next error: %v", err)
+		}
+		leftRows = append(leftRows, tup)
+	}
+
+	// Should produce 4 rows: 3 items for Alice, and 1 for Bob with NULL product
+	if len(leftRows) != 4 {
+		t.Fatalf("expected 4 left join rows, got %d", len(leftRows))
+	}
+
+	foundBobNull := false
+	for _, row := range leftRows {
+		name := row.Get("name")
+		product := row.Get("product")
+		if name == "Bob" && product == nil {
+			foundBobNull = true
+		}
+	}
+	if !foundBobNull {
+		t.Errorf("expected to find Bob with NULL product in LEFT JOIN result")
+	}
+}
+

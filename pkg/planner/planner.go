@@ -97,6 +97,7 @@ type QueryInfo struct {
 	TableName     string
 	TableAlias    string
 	Join          *JoinInfo
+	Joins         []*JoinInfo
 	Projections   []string
 	WindowDefs    []WindowDef
 	WhereClause   string
@@ -115,6 +116,11 @@ type Planner struct{}
 // NewPlanner creates a new query planner instance.
 func NewPlanner() *Planner {
 	return &Planner{}
+}
+
+func cleanIdent(s string) string {
+	s = strings.TrimSpace(s)
+	return strings.Trim(s, "\"`[]")
 }
 
 // FromAST converts a GeneralSelectStmt AST into a QueryInfo for cost-based planning.
@@ -154,9 +160,8 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		}
 	}
 
-	var joinInfo *JoinInfo
-	if len(stmt.Joins) > 0 {
-		j := stmt.Joins[0]
+	var joins []*JoinInfo
+	for _, j := range stmt.Joins {
 		leftKey := ""
 		rightKey := ""
 		if bin, ok := j.On.(*proc.BinaryExpr); ok && bin.Op == proc.TokenEq {
@@ -165,13 +170,23 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		} else if j.On != nil {
 			leftKey = j.On.String()
 		}
-		joinInfo = &JoinInfo{
-			Type:     j.Type,
-			Table:    j.Table.Name,
-			Alias:    j.Table.Alias,
-			LeftKey:  leftKey,
-			RightKey: rightKey,
+		rTable := cleanIdent(j.Table.Name)
+		rAlias := cleanIdent(j.Table.Alias)
+		if rAlias == "" {
+			rAlias = rTable
 		}
+		joins = append(joins, &JoinInfo{
+			Type:     j.Type,
+			Table:    rTable,
+			Alias:    rAlias,
+			LeftKey:  cleanIdent(leftKey),
+			RightKey: cleanIdent(rightKey),
+		})
+	}
+
+	var joinInfo *JoinInfo
+	if len(joins) > 0 {
+		joinInfo = joins[0]
 	}
 
 	whereClause := ""
@@ -208,6 +223,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		TableName:     stmt.From.Name,
 		TableAlias:    stmt.From.Alias,
 		Join:          joinInfo,
+		Joins:         joins,
 		Projections:   projections,
 		WindowDefs:    winDefs,
 		WhereClause:   whereClause,
@@ -278,9 +294,13 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		}
 	}
 
-	baseTable, baseAlias, joinInfo, err := parseFromAndJoin(fromClause)
+	baseTable, baseAlias, joins, err := parseFromAndJoins(fromClause)
 	if err != nil {
 		return nil, err
+	}
+	var joinInfo *JoinInfo
+	if len(joins) > 0 {
+		joinInfo = joins[0]
 	}
 
 	var projections []string
@@ -332,6 +352,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		TableName:     baseTable,
 		TableAlias:    baseAlias,
 		Join:          joinInfo,
+		Joins:         joins,
 		Projections:   projections,
 		WindowDefs:    winDefs,
 		WhereClause:   whereClause,
@@ -428,38 +449,67 @@ func SplitProjections(s string) []string {
 	return result
 }
 
-func parseFromAndJoin(fromClause string) (string, string, *JoinInfo, error) {
-	// Check for JOIN: [INNER | LEFT [OUTER]] JOIN
-	joinRe := regexp.MustCompile(`(?is)^(.*?)\s+(?:(INNER|LEFT(?:\s+OUTER)?)\s+)?JOIN\s+([^\s]+)(?:\s+([a-zA-Z0-9_]+))?\s+ON\s+([^\s=]+)\s*=\s*([^\s=;]+)$`)
-	if m := joinRe.FindStringSubmatch(fromClause); len(m) == 7 {
-		leftPart := strings.TrimSpace(m[1])
-		joinTypeUpper := strings.ToUpper(strings.TrimSpace(m[2]))
-		rightTable := strings.TrimSpace(m[3])
-		rightAlias := strings.TrimSpace(m[4])
-		leftKey := strings.TrimSpace(m[5])
-		rightKey := strings.TrimSpace(m[6])
+// parseFromAndJoins parses the FROM clause and extracts the base table and any number of chained JOINs.
+func parseFromAndJoins(fromClause string) (string, string, []*JoinInfo, error) {
+	joinPattern := regexp.MustCompile(`(?is)(?:(INNER|LEFT(?:\s+OUTER)?)\s+)?JOIN\s+([^\s]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s+ON\s+([^\s=]+)\s*=\s*([^\s=;]+)`)
+	matches := joinPattern.FindAllStringSubmatchIndex(fromClause, -1)
+	if len(matches) == 0 {
+		baseTable, baseAlias := parseTableAndAlias(fromClause)
+		return baseTable, baseAlias, nil, nil
+	}
 
-		jType := "INNER"
-		if strings.HasPrefix(joinTypeUpper, "LEFT") {
-			jType = "LEFT"
+	// Base table is before the first JOIN
+	firstJoinStart := matches[0][0]
+	basePart := strings.TrimSpace(fromClause[:firstJoinStart])
+	baseTable, baseAlias := parseTableAndAlias(basePart)
+
+	var joins []*JoinInfo
+	for _, m := range matches {
+		var joinType, rightTable, rightAlias, leftKey, rightKey string
+		if m[2] != -1 && m[3] != -1 {
+			joinType = fromClause[m[2]:m[3]]
+		}
+		if m[4] != -1 && m[5] != -1 {
+			rightTable = fromClause[m[4]:m[5]]
+		}
+		if m[6] != -1 && m[7] != -1 {
+			rightAlias = fromClause[m[6]:m[7]]
+		}
+		if m[8] != -1 && m[9] != -1 {
+			leftKey = fromClause[m[8]:m[9]]
+		}
+		if m[10] != -1 && m[11] != -1 {
+			rightKey = fromClause[m[10]:m[11]]
 		}
 
-		baseTable, baseAlias := parseTableAndAlias(leftPart)
-		if rightAlias == "" {
+		jType := "INNER"
+		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(joinType)), "LEFT") {
+			jType = "LEFT"
+		}
+		rightTable = cleanIdent(rightTable)
+		rightAlias = cleanIdent(rightAlias)
+		if rightAlias == "" || strings.EqualFold(rightAlias, "ON") {
 			rightAlias = rightTable
 		}
 
-		return baseTable, baseAlias, &JoinInfo{
+		joins = append(joins, &JoinInfo{
 			Type:     jType,
 			Table:    rightTable,
 			Alias:    rightAlias,
-			LeftKey:  leftKey,
-			RightKey: rightKey,
-		}, nil
+			LeftKey:  cleanIdent(leftKey),
+			RightKey: cleanIdent(rightKey),
+		})
 	}
 
-	baseTable, baseAlias := parseTableAndAlias(fromClause)
-	return baseTable, baseAlias, nil, nil
+	return baseTable, baseAlias, joins, nil
+}
+
+func parseFromAndJoin(fromClause string) (string, string, *JoinInfo, error) {
+	baseTable, baseAlias, joins, err := parseFromAndJoins(fromClause)
+	if err != nil || len(joins) == 0 {
+		return baseTable, baseAlias, nil, err
+	}
+	return baseTable, baseAlias, joins[0], nil
 }
 
 func parseTableAndAlias(str string) (string, string) {
@@ -498,6 +548,32 @@ func (p *Planner) BuildJoinPlan(q *QueryInfo, schema *storage.TableSchema, total
 }
 
 func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSchema, leftStats *TableStats, rightSchema *storage.TableSchema, rightStats *TableStats) *PlanNode {
+	rSchemas := make(map[string]*storage.TableSchema)
+	rStats := make(map[string]*TableStats)
+	if q.Join != nil {
+		tbl := cleanIdent(q.Join.Table)
+		if rightSchema != nil {
+			rSchemas[q.Join.Table] = rightSchema
+			rSchemas[tbl] = rightSchema
+			if q.Join.Alias != "" {
+				rSchemas[q.Join.Alias] = rightSchema
+				rSchemas[cleanIdent(q.Join.Alias)] = rightSchema
+			}
+		}
+		if rightStats != nil {
+			rStats[q.Join.Table] = rightStats
+			rStats[tbl] = rightStats
+			if q.Join.Alias != "" {
+				rStats[q.Join.Alias] = rightStats
+				rStats[cleanIdent(q.Join.Alias)] = rightStats
+			}
+		}
+	}
+	return p.BuildMultiJoinPlanWithStats(q, schema, leftStats, rSchemas, rStats)
+}
+
+// BuildMultiJoinPlanWithStats produces an optimized PlanNode tree supporting single or chained multi-table joins.
+func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.TableSchema, leftStats *TableStats, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats) *PlanNode {
 	estimatedTotal := int64(100)
 	if leftStats != nil && leftStats.RowCount > 0 {
 		estimatedTotal = leftStats.RowCount
@@ -512,8 +588,9 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 	var scanNode *PlanNode
 	usedIndex := false
 
-	// Check if WHERE condition matches an existing index on primary table
-	if q.WhereClause != "" && schema != nil && q.Join == nil {
+	// Check if WHERE condition matches an existing index on primary table (only if single-table scan)
+	hasJoins := (q.Join != nil) || (len(q.Joins) > 0)
+	if q.WhereClause != "" && schema != nil && !hasJoins {
 		eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(=|<|<=|>|>=|!=|<>)\s*(.+)$`)
 		if m := eqRe.FindStringSubmatch(q.WhereClause); len(m) == 4 {
 			rawCol := m[1]
@@ -547,8 +624,8 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 				isCovering := false
 				if len(q.Projections) > 0 {
 					hasStar := false
-					for _, p := range q.Projections {
-						trimmed := strings.TrimSpace(p)
+					for _, proj := range q.Projections {
+						trimmed := strings.TrimSpace(proj)
 						if trimmed == "*" || strings.HasSuffix(trimmed, ".*") {
 							hasStar = true
 							break
@@ -565,8 +642,8 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 						}
 
 						allCovered := true
-						for _, p := range q.Projections {
-							clean := strings.ToLower(strings.TrimSpace(p))
+						for _, proj := range q.Projections {
+							clean := strings.ToLower(strings.TrimSpace(proj))
 							if clean == "count(*)" || clean == "count(1)" {
 								continue
 							}
@@ -626,12 +703,52 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 	}
 
 	var currentNode *PlanNode = scanNode
+	currentEstimatedRows := scanNode.EstimatedRows
 
-	// If JOIN is present, cost comparison between Index Nested Loop Join and Hash Join
-	if q.Join != nil {
+	// Process all chained joins in query order
+	var joinList []*JoinInfo
+	if len(q.Joins) > 0 {
+		joinList = q.Joins
+	} else if q.Join != nil {
+		joinList = []*JoinInfo{q.Join}
+	}
+
+	for _, join := range joinList {
+		rTable := cleanIdent(join.Table)
+		rAlias := cleanIdent(join.Alias)
+		if rAlias == "" {
+			rAlias = rTable
+		}
+
+		var rSchema *storage.TableSchema
+		if rightSchemas != nil {
+			if s, ok := rightSchemas[join.Table]; ok && s != nil {
+				rSchema = s
+			} else if s, ok := rightSchemas[rTable]; ok && s != nil {
+				rSchema = s
+			} else if s, ok := rightSchemas[join.Alias]; ok && s != nil {
+				rSchema = s
+			} else if s, ok := rightSchemas[rAlias]; ok && s != nil {
+				rSchema = s
+			}
+		}
+
+		var rStat *TableStats
+		if rightStats != nil {
+			if st, ok := rightStats[join.Table]; ok && st != nil {
+				rStat = st
+			} else if st, ok := rightStats[rTable]; ok && st != nil {
+				rStat = st
+			} else if st, ok := rightStats[join.Alias]; ok && st != nil {
+				rStat = st
+			} else if st, ok := rightStats[rAlias]; ok && st != nil {
+				rStat = st
+			}
+		}
+
 		rRows := int64(100)
-		if rightStats != nil && rightStats.RowCount > 0 {
-			rRows = rightStats.RowCount
+		if rStat != nil && rStat.RowCount > 0 {
+			rRows = rStat.RowCount
 		}
 
 		rPages := float64(rRows) / float64(RowsPerPageDefault)
@@ -640,21 +757,32 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 		}
 		rScanCost := rPages*SeqPageCost + float64(rRows)*CPUTupleCost
 
-		rightCol := q.Join.RightKey
+		leftKey := join.LeftKey
+		rightKey := join.RightKey
+		rightCol := rightKey
 		if idx := strings.Index(rightCol, "."); idx != -1 {
 			rightCol = rightCol[idx+1:]
 		}
 
 		var innerIndex *storage.IndexSchema
-		if rightSchema != nil {
-			if idx, found := rightSchema.FindIndexByColumn(rightCol); found {
+		if rSchema != nil {
+			if idx, found := rSchema.FindIndexByColumn(rightCol); found {
 				innerIndex = idx
+			} else {
+				leftCol := leftKey
+				if idx := strings.Index(leftCol, "."); idx != -1 {
+					leftCol = leftCol[idx+1:]
+				}
+				if idx, found := rSchema.FindIndexByColumn(leftCol); found {
+					innerIndex = idx
+					leftKey, rightKey = rightKey, leftKey
+				}
 			}
 		}
 
-		joinEstRows := estimatedTotal
-		if q.Join.Type == "INNER" {
-			joinEstRows = int64(math.Min(float64(estimatedTotal), float64(rRows)))
+		joinEstRows := currentEstimatedRows
+		if join.Type == "INNER" {
+			joinEstRows = int64(math.Min(float64(currentEstimatedRows), float64(rRows)))
 			if joinEstRows < 1 {
 				joinEstRows = 1
 			}
@@ -662,24 +790,24 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 
 		// Calculate Hash Join Cost
 		hashBuildCost := rScanCost + float64(rRows)*CPUTupleCost
-		hashProbeCost := scanNode.TotalCost + float64(estimatedTotal)*CPUOperatorCost
+		hashProbeCost := currentNode.TotalCost + float64(currentEstimatedRows)*CPUOperatorCost
 		hashJoinTotalCost := hashBuildCost + hashProbeCost
 
 		// Calculate Index Nested Loop Join Cost
 		nlTotalCost := math.MaxFloat64
 		if innerIndex != nil {
-			innerProbeCost := float64(estimatedTotal) * (CPUIndexTupleCost + CPUTupleCost + 0.045)
-			nlTotalCost = scanNode.TotalCost + 0.25 + innerProbeCost
+			innerProbeCost := float64(currentEstimatedRows) * (CPUIndexTupleCost + CPUTupleCost + 0.045)
+			nlTotalCost = currentNode.TotalCost + 0.25 + innerProbeCost
 		}
 
 		// CBO Decision: Compare Hash Join vs Index Nested Loop Join
 		if innerIndex != nil && nlTotalCost < hashJoinTotalCost {
 			innerScanNode := &PlanNode{
 				Type:          NodeIndexScan,
-				Relation:      q.Join.Table,
-				Alias:         q.Join.Alias,
+				Relation:      join.Table,
+				Alias:         rAlias,
 				IndexName:     innerIndex.Name,
-				IndexCond:     fmt.Sprintf("(%s = %s)", innerIndex.Columns[0], q.Join.LeftKey),
+				IndexCond:     fmt.Sprintf("(%s = %s)", innerIndex.Columns[0], leftKey),
 				StartupCost:   0.25,
 				TotalCost:     0.35,
 				EstimatedRows: 1,
@@ -687,20 +815,20 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 
 			nlNode := &PlanNode{
 				Type:          NodeNestedLoop,
-				JoinType:      q.Join.Type,
-				JoinCond:      fmt.Sprintf("(%s = %s)", q.Join.LeftKey, q.Join.RightKey),
-				StartupCost:   scanNode.StartupCost + 0.25,
+				JoinType:      join.Type,
+				JoinCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
+				StartupCost:   currentNode.StartupCost + 0.25,
 				TotalCost:     nlTotalCost,
 				EstimatedRows: joinEstRows,
-				Children:      []*PlanNode{scanNode, innerScanNode},
+				Children:      []*PlanNode{currentNode, innerScanNode},
 			}
 			currentNode = nlNode
 		} else {
 			// Hash Join Strategy
 			rScanNode := &PlanNode{
 				Type:          NodeTableScan,
-				Relation:      q.Join.Table,
-				Alias:         q.Join.Alias,
+				Relation:      join.Table,
+				Alias:         rAlias,
 				StartupCost:   0.0,
 				TotalCost:     rScanCost,
 				EstimatedRows: rRows,
@@ -716,15 +844,17 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 
 			hashJoinNode := &PlanNode{
 				Type:          NodeHashJoin,
-				JoinType:      q.Join.Type,
-				HashCond:      fmt.Sprintf("(%s = %s)", q.Join.LeftKey, q.Join.RightKey),
+				JoinType:      join.Type,
+				HashCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
 				StartupCost:   hashBuildCost,
 				TotalCost:     hashJoinTotalCost,
 				EstimatedRows: joinEstRows,
-				Children:      []*PlanNode{scanNode, hashNode},
+				Children:      []*PlanNode{currentNode, hashNode},
 			}
 			currentNode = hashJoinNode
 		}
+
+		currentEstimatedRows = joinEstRows
 	}
 
 	// Filter Node (WHERE)
