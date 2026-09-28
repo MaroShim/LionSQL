@@ -105,6 +105,10 @@ func Compile(sql string) (*Program, error) {
 		return CompileTrigger(stmt)
 	}
 
+	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
+		return CompileQuery(sql)
+	}
+
 	// Fallback to procedure parser
 	lexer := NewLexer(sql)
 	parser := NewParser(lexer)
@@ -113,6 +117,36 @@ func Compile(sql string) (*Program, error) {
 		return nil, err
 	}
 	return CompileProcedure(stmt)
+}
+
+// CompileQuery compiles an interactive / standalone SELECT or relational query into a VDBE Program containing OpRelQuery.
+func CompileQuery(sql string) (*Program, error) {
+	trimmed := strings.TrimSpace(sql)
+	c := NewCompiler()
+	c.prog.Name = "INTERACTIVE_QUERY"
+	c.prog.Type = "QUERY"
+	c.prog.QuerySQL = trimmed
+
+	// Attempt to parse via native parser if possible
+	p := NewParser(NewLexer(trimmed))
+	stmt, err := p.parseGeneralSelect()
+	if err == nil && stmt != nil {
+		if stmt.RawSQL == "" {
+			stmt.RawSQL = trimmed
+		}
+		if err := c.compileStatement(stmt); err != nil {
+			return nil, err
+		}
+	} else {
+		// Emit OpRelQuery with raw SQL for unparsed or complex relational statements
+		c.emit(OpRelQuery, 0, 0, 0, &RelQueryData{
+			SQL: trimmed,
+		})
+	}
+
+	c.emit(OpReturn, -1, 0, 0, nil)
+	c.prog.NumRegisters = c.maxRegisters
+	return c.prog, nil
 }
 
 // CompileProcedure compiles a CreateProcStmt into a Program.
@@ -503,6 +537,26 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 				label: s.Label,
 			})
 		}
+		return nil
+
+	case *GeneralSelectStmt:
+		sql := s.RawSQL
+		if sql == "" {
+			sql = s.String()
+		}
+		if c.prog.QuerySQL == "" {
+			c.prog.QuerySQL = sql
+		}
+		var projNames []string
+		for _, p := range s.Projections {
+			if p.Alias != "" {
+				projNames = append(projNames, p.Alias)
+			}
+		}
+		c.emit(OpRelQuery, 0, 0, 0, &RelQueryData{
+			SQL:         sql,
+			Projections: projNames,
+		})
 		return nil
 
 	default:

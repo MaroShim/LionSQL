@@ -1760,6 +1760,43 @@ func TestSQLExecutor_BuiltinFunctions(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_ExplainBytecode(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	query := "EXPLAIN BYTECODE SELECT id, name FROM users WHERE id > 10"
+	res, err := server.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("ExecuteSQL EXPLAIN BYTECODE failed: %v", err)
+	}
+
+	if !res.Success {
+		t.Fatalf("expected success, got false")
+	}
+	if len(res.Columns) != 1 || res.Columns[0] != "Bytecode" {
+		t.Fatalf("expected Column 'Bytecode', got %v", res.Columns)
+	}
+	if len(res.Rows) == 0 {
+		t.Fatalf("expected bytecode rows, got empty")
+	}
+
+	foundRelQuery := false
+	for _, row := range res.Rows {
+		line := fmt.Sprintf("%v", row["Bytecode"])
+		if strings.Contains(line, "REL_QUERY") {
+			foundRelQuery = true
+			break
+		}
+	}
+	if !foundRelQuery {
+		t.Errorf("expected REL_QUERY opcode in bytecode disassembly, rows: %+v", res.Rows)
+	}
+}
+
+
 
 
 

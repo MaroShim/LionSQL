@@ -1,25 +1,32 @@
 package runtime
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"math"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"sqlion/pkg/execution"
+	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
 
-// ExecutionResult captures the output and metrics of a procedure or function execution.
+// ExecutionResult captures the output and metrics of a procedure, function, or query execution.
 type ExecutionResult struct {
 	ReturnValue any
 	Logs        []string
 	Duration    time.Duration
+	Rows        []map[string]any // Relational result tuples for OpRelQuery
+	Columns     []string         // Result projection column names
 }
 
 // TriggerEntry holds metadata and precompiled bytecode for a trigger.
@@ -92,11 +99,12 @@ func (c *PlanCache) GetByName(name string) (*proc.Program, bool) {
 
 // Executor manages execution of compiled stored procedures, functions, and triggers within ambient ACID transactions.
 type Executor struct {
-	cache    *PlanCache
-	mu       sync.RWMutex
-	udfs     map[string]*UDFEntry
-	triggers map[string]map[string][]*TriggerEntry // table (lower) -> event (upper) -> entries
-	regPool  sync.Pool
+	cache       *PlanCache
+	mu          sync.RWMutex
+	udfs        map[string]*UDFEntry
+	triggers    map[string]map[string][]*TriggerEntry // table (lower) -> event (upper) -> entries
+	regPool     sync.Pool
+	tableGetter execution.TableGetter
 }
 
 // NewExecutor creates a procedure and trigger executor.
@@ -115,6 +123,19 @@ func NewExecutor(cache *PlanCache) *Executor {
 			},
 		},
 	}
+}
+
+// SetTableGetter configures the schema lookup function for relational queries.
+func (e *Executor) SetTableGetter(tg execution.TableGetter) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.tableGetter = tg
+}
+
+func (e *Executor) getTableGetter() execution.TableGetter {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.tableGetter
 }
 
 // Cache returns the underlying bytecode PlanCache.
@@ -196,6 +217,8 @@ type VMFrame struct {
 	transientTables map[string][]map[string]any
 	catchStack      []int
 	logs            []string
+	rows            []map[string]any
+	columns         []string
 	rowCount        int64
 	fetchStatus     int
 	tranCount       int
@@ -246,6 +269,8 @@ func (e *Executor) Run(prog *proc.Program, procName string, params map[string]an
 		ReturnValue: retVal,
 		Logs:        frame.logs,
 		Duration:    time.Since(start),
+		Rows:        frame.rows,
+		Columns:     frame.columns,
 	}, nil
 }
 
@@ -741,10 +766,137 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 				}
 				return nil, err
 			}
+
+		case proc.OpRelQuery:
+			var queryData *proc.RelQueryData
+			if data, ok := inst.Data.(*proc.RelQueryData); ok {
+				queryData = data
+			}
+			sql := ""
+			if queryData != nil {
+				sql = queryData.SQL
+			}
+			if sql == "" {
+				sql = f.prog.QuerySQL
+			}
+			if sql == "" {
+				return nil, fmt.Errorf("OpRelQuery: empty query SQL")
+			}
+
+			rows, cols, err := f.execRelQuery(sql, queryData)
+			if err != nil {
+				f.lastError = 50000
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, err
+			}
+
+			f.rows = rows
+			f.columns = cols
+			f.rowCount = int64(len(rows))
+
+			if queryData != nil && queryData.IntoVar != "" && len(rows) > 0 {
+				for _, v := range rows[0] {
+					f.setVar(queryData.IntoVar, toStorageValue(v))
+					break
+				}
+			}
+			if inst.A >= 0 && int(inst.A) < len(f.regs) {
+				f.regs[inst.A] = storage.IntValue(int64(len(rows)))
+			}
 		}
 	}
 
 	return nil, nil
+}
+
+func (f *VMFrame) bindWhereVariables(where string) string {
+	if where == "" || len(f.vars) == 0 {
+		return where
+	}
+	res := where
+	for k, v := range f.vars {
+		varName := "@" + strings.TrimPrefix(k, "@")
+		valStr := v.String()
+		if v.Type == storage.TypeVarChar {
+			valStr = "'" + strings.ReplaceAll(v.SVal, "'", "''") + "'"
+		}
+		res = strings.ReplaceAll(res, varName, valStr)
+	}
+	return res
+}
+
+func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, error) {
+	p := planner.NewPlanner()
+	qInfo, err := p.ParseSelect(sql)
+	if err != nil {
+		return nil, nil, fmt.Errorf("planner parse error in OpRelQuery: %w", err)
+	}
+
+	if qInfo.WhereClause != "" {
+		qInfo.WhereClause = f.bindWhereVariables(qInfo.WhereClause)
+	}
+
+	getTable := f.executor.getTableGetter()
+	if getTable == nil {
+		return nil, nil, fmt.Errorf("no table getter configured for relational queries")
+	}
+
+	leftTable := cleanSymbol(qInfo.TableName)
+	leftSchema, err := getTable(leftTable)
+	if err != nil {
+		return nil, nil, fmt.Errorf("table %q not found: %w", leftTable, err)
+	}
+
+	var rightSchema *storage.TableSchema
+	if qInfo.Join != nil {
+		rightTable := cleanSymbol(qInfo.Join.Table)
+		rSchema, err := getTable(rightTable)
+		if err != nil {
+			return nil, nil, fmt.Errorf("joined table %q not found: %w", rightTable, err)
+		}
+		rightSchema = rSchema
+	}
+
+	plan := p.BuildJoinPlan(qInfo, leftSchema, 0, rightSchema, 0)
+
+	opts := execution.DefaultExecutorOptions()
+	exec, err := execution.BuildExecutorWithOptions(plan, f.tx, getTable, opts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build volcano executor: %w", err)
+	}
+
+	ctx := context.Background()
+	if err := exec.Open(ctx); err != nil {
+		return nil, nil, fmt.Errorf("volcano execution open error: %w", err)
+	}
+	defer exec.Close()
+
+	var rows []map[string]any
+	for {
+		tuple, err := exec.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		rows = append(rows, tuple.ToMap())
+	}
+
+	cols := exec.Schema()
+	if len(cols) == 0 && len(rows) > 0 {
+		for k := range rows[0] {
+			cols = append(cols, k)
+		}
+		sort.Strings(cols)
+	}
+
+	return rows, cols, nil
 }
 
 func (f *VMFrame) getVar(name string) (storage.Value, bool) {

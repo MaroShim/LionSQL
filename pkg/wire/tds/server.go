@@ -38,13 +38,17 @@ type Server struct {
 // NewServer creates a new TDS wire protocol server.
 func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
 	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+	if eng != nil {
+		executor.SetTableGetter(eng.GetTable)
+	}
 	return &Server{
 		addr:        addr,
 		catalog:     cat,
 		engine:      eng,
 		apiServer:   api.NewServer(cat, eng),
 		planCache:   proc.NewPlanCache(),
-		executor:    runtime.NewExecutor(cache),
+		executor:    executor,
 		spidCounter: 50, // Standard MSSQL user SPIDs begin at 51
 	}
 }

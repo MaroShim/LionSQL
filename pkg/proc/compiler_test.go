@@ -192,4 +192,25 @@ END;
 	}
 }
 
+func TestCompiler_RelQueryBytecode(t *testing.T) {
+	sql := `SELECT id, name, balance FROM accounts WHERE balance > 100 ORDER BY balance DESC LIMIT 10`
+	prog, err := proc.Compile(sql)
+	if err != nil {
+		t.Fatalf("Compile query failed: %v", err)
+	}
+
+	if prog.Type != "QUERY" {
+		t.Errorf("expected type QUERY, got %s", prog.Type)
+	}
+	if prog.QuerySQL == "" {
+		t.Errorf("expected non-empty QuerySQL")
+	}
+
+	dis := prog.Disassemble()
+	if !strings.Contains(dis, "REL_QUERY") {
+		t.Errorf("disassembly missing REL_QUERY opcode:\n%s", dis)
+	}
+}
+
+
 

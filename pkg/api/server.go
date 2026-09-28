@@ -81,6 +81,7 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		globalTempCreators: make(map[string]string),
 		defaultWorkMem:     execution.DefaultWorkMem,
 	}
+	s.executor.SetTableGetter(eng.GetTable)
 	s.routes()
 	return s
 }

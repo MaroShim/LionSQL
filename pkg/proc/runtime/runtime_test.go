@@ -460,3 +460,85 @@ END;
 		t.Errorf("expected 0, got %v", res2.ReturnValue)
 	}
 }
+
+func TestVM_OpRelQueryVolcanoExecution(t *testing.T) {
+	eng := setupTestDB(t)
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	query := `SELECT id, holder, balance FROM accounts WHERE balance >= 500 ORDER BY balance DESC`
+	prog, err := proc.Compile(query)
+	if err != nil {
+		t.Fatalf("Compile query failed: %v", err)
+	}
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+	executor.SetTableGetter(eng.GetTable)
+
+	res, err := executor.Run(prog, "Query", nil, session)
+	if err != nil {
+		t.Fatalf("executor.Run failed: %v", err)
+	}
+
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d: %v", len(res.Rows), res.Rows)
+	}
+
+	first := res.Rows[0]
+	if fmt.Sprintf("%v", first["holder"]) != "Alice" || fmt.Sprintf("%v", first["balance"]) != "1000" {
+		t.Errorf("expected Alice 1000 as first row, got %v", first)
+	}
+
+	second := res.Rows[1]
+	if fmt.Sprintf("%v", second["holder"]) != "Bob" || fmt.Sprintf("%v", second["balance"]) != "500" {
+		t.Errorf("expected Bob 500 as second row, got %v", second)
+	}
+}
+
+func TestVM_OpRelQueryWithJoin(t *testing.T) {
+	eng := setupTestDB(t)
+	err := eng.CreateTable(&storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "account_id", Type: storage.TypeInt},
+			{Name: "amount", Type: storage.TypeFloat},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateTable orders failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	tx, _ := session.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(101), "account_id": storage.IntValue(1), "amount": storage.FloatValue(99.9)})
+	_ = tx.Insert("orders", storage.Record{"id": storage.IntValue(102), "account_id": storage.IntValue(2), "amount": storage.FloatValue(149.5)})
+	_ = tx.Commit()
+
+	query := `SELECT accounts.holder, orders.amount FROM accounts JOIN orders ON accounts.id = orders.account_id ORDER BY orders.amount DESC`
+	prog, err := proc.Compile(query)
+	if err != nil {
+		t.Fatalf("Compile join query failed: %v", err)
+	}
+
+	executor := runtime.NewExecutor(runtime.NewPlanCache())
+	executor.SetTableGetter(eng.GetTable)
+
+	res, err := executor.Run(prog, "JoinQuery", nil, session)
+	if err != nil {
+		t.Fatalf("executor.Run join query failed: %v", err)
+	}
+
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 joined rows, got %d: %v", len(res.Rows), res.Rows)
+	}
+}

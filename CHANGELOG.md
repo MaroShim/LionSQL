@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **VDBE Relational Query Opcode `OpRelQuery` & Volcano Engine Integration (`pkg/proc`, `pkg/proc/runtime`, `pkg/api`, `pkg/wire`)**:
+  - Introduced `OpRelQuery` opcode in `pkg/proc/bytecode.go` with `RelQueryData` metadata struct and `Program.QuerySQL` field.
+  - Extended bytecode compiler (`pkg/proc/compiler.go`) to compile interactive SELECT statements into VDBE bytecode programs via `CompileQuery` and `compileStatement`.
+  - Implemented `OpRelQuery` execution in `pkg/proc/runtime/vm.go` connecting VDBE with the Volcano pipelined iterator engine (`pkg/execution`) for relational queries and joins.
+  - Added parameter and variable binding (`bindWhereVariables`) for relational query execution inside stored procedures and ambient transactions.
+  - Wired `TableGetter` schema resolution across `api.Server`, PostgreSQL Wire Protocol v3 (`pkg/wire`), and Microsoft TDS (`pkg/wire/tds`) executors.
+  - Implemented `EXPLAIN BYTECODE <sql>` syntax in `pkg/api/sqlexec.go` returning disassembled VDBE instruction listings.
+  - Added comprehensive unit and integration test coverage across `compiler_test.go`, `runtime_test.go`, and `sqlexec_test.go`.
 - **T-SQL Built-in Functions Expansion (`pkg/proc`, `pkg/api`)**:
   - Implemented `STUFF(string, start, length, new_string)` string manipulation function adhering to Microsoft T-SQL 1-based indexing and boundary rules.
   - Expanded `CHARINDEX(sub, target [, start])`, `REPLACE(str, old, new)`, and `REVERSE(str)` with multi-byte rune awareness.

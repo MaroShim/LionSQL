@@ -75,6 +75,9 @@ const (
 	// Transient / Trigger tables
 	OpSetTransientTable
 	OpClearTransientTables
+
+	// Relational Query Execution (Volcano Engine Integration)
+	OpRelQuery
 )
 
 func (op OpCode) String() string {
@@ -181,6 +184,8 @@ func (op OpCode) String() string {
 		return "SET_TRANSIENT"
 	case OpClearTransientTables:
 		return "CLEAR_TRANSIENTS"
+	case OpRelQuery:
+		return "REL_QUERY"
 	default:
 		return fmt.Sprintf("OP_%d", op)
 	}
@@ -230,10 +235,28 @@ type CursorData struct {
 	IntoVars  []string
 }
 
+// RelQueryData holds metadata for relational query execution via Volcano engine.
+type RelQueryData struct {
+	SQL         string
+	IntoVar     string
+	DestReg     int32
+	Projections []string
+}
+
+func (d *RelQueryData) String() string {
+	if d == nil {
+		return ""
+	}
+	if d.IntoVar != "" {
+		return fmt.Sprintf("SQL:%q INTO @%s", d.SQL, d.IntoVar)
+	}
+	return fmt.Sprintf("SQL:%q", d.SQL)
+}
+
 // Program represents a compiled, executable T-SQL bytecode program.
 type Program struct {
 	Name         string
-	Type         string // "PROCEDURE", "FUNCTION", "TRIGGER"
+	Type         string // "PROCEDURE", "FUNCTION", "TRIGGER", "QUERY"
 	Params       []ParamDef
 	ReturnType   storage.DataType
 	Table        string   // For triggers
@@ -242,6 +265,7 @@ type Program struct {
 	Constants    []storage.Value
 	VarNames     []string
 	NumRegisters int32
+	QuerySQL     string // Optional raw query SQL for ad-hoc / relational query programs
 }
 
 // Disassemble produces a human-readable assembly listing of the bytecode program.

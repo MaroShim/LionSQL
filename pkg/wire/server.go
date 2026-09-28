@@ -45,13 +45,17 @@ type Server struct {
 // NewServer creates a new PostgreSQL wire protocol server.
 func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
 	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+	if eng != nil {
+		executor.SetTableGetter(eng.GetTable)
+	}
 	return &Server{
 		addr:        addr,
 		catalog:     cat,
 		engine:      eng,
 		apiServer:   api.NewServer(cat, eng),
 		planCache:   proc.NewPlanCache(),
-		executor:    runtime.NewExecutor(cache),
+		executor:    executor,
 		activeConns: make(map[uint32]*pgActiveConn),
 	}
 }

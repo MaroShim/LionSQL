@@ -1197,6 +1197,32 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 }
 
 func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error) {
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	if strings.HasPrefix(upper, "EXPLAIN BYTECODE ") {
+		innerSQL := strings.TrimSpace(query[len("EXPLAIN BYTECODE "):])
+		prog, err := proc.Compile(innerSQL)
+		if err != nil {
+			return nil, fmt.Errorf("EXPLAIN BYTECODE compilation error: %w", err)
+		}
+		dis := prog.Disassemble()
+		lines := strings.Split(strings.TrimRight(dis, "\n"), "\n")
+		var rows []map[string]any
+		for _, line := range lines {
+			rows = append(rows, map[string]any{
+				"Bytecode": line,
+			})
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXPLAIN BYTECODE",
+			Columns:      []string{"Bytecode"},
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+			Messages:     []string{fmt.Sprintf("VDBE Program: %s (%s)", prog.Name, prog.Type)},
+		}, nil
+	}
+
 	p := planner.NewPlanner()
 	qInfo, err := p.ParseSelect(query)
 	if err != nil {
