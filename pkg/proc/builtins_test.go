@@ -202,3 +202,64 @@ func TestBuiltin_UUID(t *testing.T) {
 		t.Errorf("Expected version 4, got %c in %s", parts[2][0], u1.SVal)
 	}
 }
+
+func TestBuiltin_StringAndDateExpansion(t *testing.T) {
+	// 1. STUFF
+	res := EvalBuiltin("STUFF", []storage.Value{
+		storage.StringValue("abcdef"),
+		storage.IntValue(2),
+		storage.IntValue(3),
+		storage.StringValue("ijklmn"),
+	})
+	if res.SVal != "aijklmnef" {
+		t.Errorf("STUFF failed: expected 'aijklmnef', got %q", res.SVal)
+	}
+
+	// 2. CHARINDEX
+	ci := EvalBuiltin("CHARINDEX", []storage.Value{
+		storage.StringValue("SQL"),
+		storage.StringValue("Hello SQLion"),
+	})
+	if ci.IVal != 7 {
+		t.Errorf("CHARINDEX failed: expected 7, got %d", ci.IVal)
+	}
+
+	// 3. REPLACE
+	rep := EvalBuiltin("REPLACE", []storage.Value{
+		storage.StringValue("foo bar foo"),
+		storage.StringValue("foo"),
+		storage.StringValue("baz"),
+	})
+	if rep.SVal != "baz bar baz" {
+		t.Errorf("REPLACE failed: expected 'baz bar baz', got %q", rep.SVal)
+	}
+
+	// 4. REVERSE
+	rev := EvalBuiltin("REVERSE", []storage.Value{
+		storage.StringValue("Database"),
+	})
+	if rev.SVal != "esabataD" {
+		t.Errorf("REVERSE failed: expected 'esabataD', got %q", rev.SVal)
+	}
+
+	// 5. DATEADD
+	da := EvalBuiltin("DATEADD", []storage.Value{
+		storage.StringValue("day"),
+		storage.IntValue(10),
+		storage.StringValue("2026-01-01 00:00:00"),
+	})
+	if da.SVal != "2026-01-11 00:00:00" {
+		t.Errorf("DATEADD failed: expected '2026-01-11 00:00:00', got %q", da.SVal)
+	}
+
+	// 6. DATEDIFF
+	dd := EvalBuiltin("DATEDIFF", []storage.Value{
+		storage.StringValue("day"),
+		storage.StringValue("2026-01-01"),
+		storage.StringValue("2026-01-15"),
+	})
+	if dd.IVal != 14 {
+		t.Errorf("DATEDIFF failed: expected 14, got %d", dd.IVal)
+	}
+}
+

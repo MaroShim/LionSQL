@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **T-SQL Built-in Functions Expansion (`pkg/proc`, `pkg/api`)**:
+  - Implemented `STUFF(string, start, length, new_string)` string manipulation function adhering to Microsoft T-SQL 1-based indexing and boundary rules.
+  - Expanded `CHARINDEX(sub, target [, start])`, `REPLACE(str, old, new)`, and `REVERSE(str)` with multi-byte rune awareness.
+  - Enhanced `DATEADD(part, n, date)` and `DATEDIFF(part, start, end)` to support unquoted datepart identifiers (`day`, `month`, `year`, `hour`, etc.) matching native SQL Server syntax.
+  - Added unit and SQL integration test coverage in `pkg/proc/builtins_test.go` and `pkg/api/sqlexec_test.go` (`TestSQLExecutor_BuiltinFunctions`).
 - **Storage & DDL: `TRUNCATE TABLE <table>` Engine (`pkg/storage`, `pkg/storage/memengine`, `pkg/storage/wiredtiger`, `pkg/api`)**:
   - Added `TruncateTable(tableName string) error` method across `storage.Engine` interface, `memengine`, and `wiredtiger`.
   - Implemented instant O(1) in-memory record, version, and index resets in `memengine` with foreign key dependency safeguards.

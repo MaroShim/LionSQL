@@ -1719,6 +1719,48 @@ func TestSQLExecutor_TruncateTable(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_BuiltinFunctions(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	// 1. STUFF
+	res, err := server.ExecuteSQL("SELECT STUFF('abcdef', 2, 3, 'xyz') AS result;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["result"] != "axyzef" {
+		t.Fatalf("STUFF failed: %+v, err: %v", res, err)
+	}
+
+	// 2. CHARINDEX
+	res, err = server.ExecuteSQL("SELECT CHARINDEX('server', 'SQL server 2000') AS idx;")
+	if err != nil || len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["idx"]) != "5" {
+		t.Fatalf("CHARINDEX failed: %+v, err: %v", res, err)
+	}
+
+	// 3. REPLACE
+	res, err = server.ExecuteSQL("SELECT REPLACE('abcdef', 'cd', 'XX') AS rep;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["rep"] != "abXXef" {
+		t.Fatalf("REPLACE failed: %+v, err: %v", res, err)
+	}
+
+	// 4. REVERSE
+	res, err = server.ExecuteSQL("SELECT REVERSE('Turbo') AS rev;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["rev"] != "obruT" {
+		t.Fatalf("REVERSE failed: %+v, err: %v", res, err)
+	}
+
+	// 5. DATEADD with unquoted datepart
+	res, err = server.ExecuteSQL("SELECT DATEADD(day, 7, '2026-03-01 12:00:00') AS dt;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["dt"] != "2026-03-08 12:00:00" {
+		t.Fatalf("DATEADD failed: %+v, err: %v", res, err)
+	}
+
+	// 6. DATEDIFF with unquoted datepart
+	res, err = server.ExecuteSQL("SELECT DATEDIFF(day, '2026-01-01', '2026-01-20') AS diff;")
+	if err != nil || len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["diff"]) != "19" {
+		t.Fatalf("DATEDIFF failed: %+v, err: %v", res, err)
+	}
+}
+
+
 
 
 

@@ -99,6 +99,10 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		n := args[1].IVal
 		if args[1].Type == storage.TypeFloat {
 			n = int64(args[1].FVal)
+		} else if args[1].Type == storage.TypeVarChar {
+			if parsedN, err := strconv.ParseInt(strings.TrimSpace(args[1].SVal), 10, 64); err == nil {
+				n = parsedN
+			}
 		}
 		t, ok := parseDateValue(args[2])
 		if !ok {
@@ -248,6 +252,37 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		runeOffset := len([]rune(subSlice[:idx]))
 		return storage.IntValue(int64(start + runeOffset))
+
+	case "STUFF":
+		if len(args) < 4 || args[0].IsNull || args[1].IsNull || args[2].IsNull || args[3].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		runes := []rune(valToString(args[0]))
+		start := int(args[1].IVal)
+		if args[1].Type == storage.TypeFloat {
+			start = int(args[1].FVal)
+		}
+		length := int(args[2].IVal)
+		if args[2].Type == storage.TypeFloat {
+			length = int(args[2].FVal)
+		}
+		replacement := valToString(args[3])
+
+		if start < 1 || start > len(runes)+1 || length < 0 {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+
+		deleteStart := start - 1
+		deleteEnd := deleteStart + length
+		if deleteEnd > len(runes) {
+			deleteEnd = len(runes)
+		}
+
+		var b strings.Builder
+		b.WriteString(string(runes[:deleteStart]))
+		b.WriteString(replacement)
+		b.WriteString(string(runes[deleteEnd:]))
+		return storage.StringValue(b.String())
 
 	case "SPACE":
 		if len(args) == 0 || args[0].IsNull || args[0].IVal <= 0 {

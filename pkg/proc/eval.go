@@ -465,6 +465,11 @@ func evalRowFunction(name string, args []Expr, row map[string]any, execSubquery 
 		if err != nil {
 			return nil, err
 		}
+		if v == nil && a != nil {
+			if colRef, ok := a.(*ColumnRefExpr); ok {
+				v = colRef.Name
+			}
+		}
 		stArgs[i] = anyToStorageVal(v)
 	}
 
