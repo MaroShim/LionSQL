@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -105,6 +106,37 @@ func main() {
 				_ = os.Remove(resolvedPidFile)
 			}
 		}()
+
+		// Pre-flight port collision verification for server mode
+		if *backupTarget == "" && *restoreSource == "" {
+			if err := checkPortAvailable(*httpAddr); err != nil {
+				fmt.Printf("\n[SQLion] Error: HTTP port conflict (%s): %v\n", *httpAddr, err)
+				fmt.Println("         Another SQLion server or service is already listening on this port.")
+				fmt.Println("         To view status:  ./bin/server -status")
+				fmt.Println("         To stop daemon:  ./bin/server -stop")
+				fmt.Println("         To restart:      ./bin/server -restart")
+				fmt.Println()
+				os.Exit(1)
+			}
+			if err := checkPortAvailable(*pgAddr); err != nil {
+				fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", *pgAddr, err)
+				fmt.Println("         Another SQLion server or service is already listening on this port.")
+				fmt.Println("         To view status:  ./bin/server -status")
+				fmt.Println("         To stop daemon:  ./bin/server -stop")
+				fmt.Println("         To restart:      ./bin/server -restart")
+				fmt.Println()
+				os.Exit(1)
+			}
+			if err := checkPortAvailable(*tdsAddr); err != nil {
+				fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", *tdsAddr, err)
+				fmt.Println("         Another SQLion server or service is already listening on this port.")
+				fmt.Println("         To view status:  ./bin/server -status")
+				fmt.Println("         To stop daemon:  ./bin/server -stop")
+				fmt.Println("         To restart:      ./bin/server -restart")
+				fmt.Println()
+				os.Exit(1)
+			}
+		}
 	}
 
 	log.Printf("[SQLion] Initializing database server...")
@@ -215,12 +247,24 @@ func main() {
 		log.Printf("[SQLion] PostgreSQL Wire SSL/TLS enabled (Require SSL: %v)", *requireSSL)
 	}
 	if err := wireServer.Start(); err != nil {
+		if strings.Contains(err.Error(), "address already in use") {
+			fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", *pgAddr, err)
+			fmt.Println("         Another SQLion server or service is already listening on this port.")
+			fmt.Println()
+			os.Exit(1)
+		}
 		log.Fatalf("Failed to start PostgreSQL wire protocol listener: %v", err)
 	}
 	defer wireServer.Close()
 
 	tdsServer := tds.NewServer(*tdsAddr, cat, eng)
 	if err := tdsServer.Start(); err != nil {
+		if strings.Contains(err.Error(), "address already in use") {
+			fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", *tdsAddr, err)
+			fmt.Println("         Another SQLion server or service is already listening on this port.")
+			fmt.Println()
+			os.Exit(1)
+		}
 		log.Fatalf("Failed to start TDS wire protocol listener: %v", err)
 	}
 	defer tdsServer.Close()
@@ -247,6 +291,10 @@ func main() {
 		fmt.Println("Press Ctrl+C to stop server")
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			if strings.Contains(err.Error(), "address already in use") {
+				fmt.Printf("\n[SQLion] Error: HTTP service port conflict (%s): %v\n\n", *httpAddr, err)
+				os.Exit(1)
+			}
 			log.Fatalf("HTTP server failure: %v", err)
 		}
 	}()
@@ -346,4 +394,13 @@ END;`
 		Body:   script,
 		JSCode: jsCode,
 	})
+}
+
+func checkPortAvailable(addr string) error {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return err
+	}
+	_ = ln.Close()
+	return nil
 }
