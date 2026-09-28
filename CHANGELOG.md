@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Microsoft SQL Server TDS 7.x/8.0 Wire Protocol SSL/TLS Encryption (`pkg/wire/tds`, `cmd/server`)**:
+  - Implemented PRELOGIN encryption negotiation supporting `EncryptOff (0x00)`, `EncryptOn (0x01)`, `EncryptNotSup (0x02)`, and `EncryptReq (0x03)`.
+  - Added `ParsePrelogin` parsing option headers and payloads defensively to extract client encryption requirements.
+  - Implemented `TDSHandshakeConn` adapter encapsulating and decapsulating TLS handshake records within TDS `PacketPrelogin` (`0x12`) frames during TDS 7.x negotiation.
+  - Implemented TDS 8.0 direct TLS handshake detection by inspecting the initial TLS record header byte (`0x16`).
+  - Added `SetTLSConfig`, `SetRequireSSL`, `TLSConfig`, and `RequireSSL` methods to TDS `Server`.
+  - Extended `cmd/server/main.go` to configure TLS encryption and `-require-ssl` enforcement symmetrically across both PostgreSQL and TDS wire protocols.
+  - Added hermetic in-memory integration test suite (`pkg/wire/tds/tls_test.go`) covering TDS 7.x TLS handshake, TDS 8.0 direct TLS, `requireSSL` plaintext rejection, and concurrent encrypted connections under `-race`.
 - **Covering Index Scan (Index-Only Scan) Optimization (`pkg/planner`, `pkg/execution`, `pkg/storage`, `pkg/proc/runtime`)**:
   - Implemented `NodeIndexOnlyScan` in Cost-Based Optimizer (`pkg/planner/planner.go`), detecting when all projected and filtered columns are covered by secondary index keys and table primary keys.
   - Adjusted CBO cost model for index-only scans, eliminating table heap page I/O (`RandomPageCost`) and tuple CPU evaluation overhead.

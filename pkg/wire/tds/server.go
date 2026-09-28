@@ -2,6 +2,7 @@ package tds
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -30,6 +31,8 @@ type Server struct {
 	planCache   *proc.PlanCache
 	executor    *runtime.Executor
 	spidCounter uint32
+	tlsConfig   *tls.Config
+	requireSSL  bool
 	mu          sync.Mutex
 	closed      bool
 	wg          sync.WaitGroup
@@ -92,6 +95,34 @@ func (s *Server) Close() error {
 
 	s.wg.Wait()
 	return err
+}
+
+// SetTLSConfig sets the TLS configuration for encrypted SSL/TLS connections.
+func (s *Server) SetTLSConfig(cfg *tls.Config) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tlsConfig = cfg
+}
+
+// SetRequireSSL specifies whether unencrypted connections should be rejected when TLS is enabled.
+func (s *Server) SetRequireSSL(require bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.requireSSL = require
+}
+
+// TLSConfig returns the current TLS configuration.
+func (s *Server) TLSConfig() *tls.Config {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.tlsConfig
+}
+
+// RequireSSL returns whether SSL/TLS is strictly required.
+func (s *Server) RequireSSL() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.requireSSL
 }
 
 func (s *Server) acceptLoop() {
@@ -162,6 +193,33 @@ type ConnectionSession struct {
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
+	s.mu.Lock()
+	tlsCfg := s.tlsConfig
+	s.mu.Unlock()
+
+	// 1. Detect direct TLS (TDS 8.0) vs TDS 7.x prelogin
+	var firstByte [1]byte
+	if _, err := io.ReadFull(conn, firstByte[:]); err != nil {
+		return
+	}
+
+	conn = &bufferedConn{
+		Conn: conn,
+		r:    io.MultiReader(bytes.NewReader(firstByte[:]), conn),
+	}
+
+	if firstByte[0] == 0x16 {
+		// TDS 8.0: Direct TLS Handshake
+		if tlsCfg == nil {
+			return
+		}
+		tlsConn := tls.Server(conn, tlsCfg)
+		if err := tlsConn.Handshake(); err != nil {
+			return
+		}
+		conn = tlsConn
+	}
+
 	spid := uint16(atomic.AddUint32(&s.spidCounter, 1))
 	sess := &ConnectionSession{
 		SPID:       spid,
@@ -180,7 +238,11 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		switch pkt.Type {
 		case PacketPrelogin:
-			s.handlePrelogin(conn, pkt, sess)
+			var err error
+			conn, err = s.handlePrelogin(conn, pkt, sess)
+			if err != nil {
+				return
+			}
 
 		case PacketLogin7:
 			s.handleLogin7(conn, pkt, sess)
@@ -202,10 +264,77 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 }
 
-func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
-	// Respond with PRELOGIN options: Version, Encryption (EncryptNotSup), MARS (0)
-	respPayload := BuildPreloginResponse(EncryptNotSup)
-	_ = WritePacket(conn, PacketTabular, sess.SPID, respPayload)
+func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSession) (net.Conn, error) {
+	s.mu.Lock()
+	tlsCfg := s.tlsConfig
+	requireSSL := s.requireSSL
+	s.mu.Unlock()
+
+	// If connection is already wrapped with TLS (e.g. TDS 8.0 direct TLS)
+	if _, isTLS := conn.(*tls.Conn); isTLS {
+		respPayload := BuildPreloginResponse(EncryptOn)
+		if err := WritePacket(conn, PacketTabular, sess.SPID, respPayload); err != nil {
+			return nil, err
+		}
+		return conn, nil
+	}
+
+	opts := ParsePrelogin(pkt.Payload)
+	clientEncrypt := EncryptNotSup
+	if enc, ok := opts[PreloginOptionEncryption]; ok && len(enc) > 0 {
+		clientEncrypt = enc[0]
+	}
+
+	var serverEncrypt byte
+	shouldDoTLS := false
+
+	if tlsCfg == nil {
+		if requireSSL || clientEncrypt == EncryptReq {
+			return nil, fmt.Errorf("encryption required but server does not support TLS")
+		}
+		serverEncrypt = EncryptNotSup
+	} else {
+		// Server has TLS enabled
+		if requireSSL {
+			if clientEncrypt == EncryptNotSup {
+				return nil, fmt.Errorf("server requires SSL but client does not support encryption")
+			}
+			serverEncrypt = EncryptReq
+			shouldDoTLS = true
+		} else {
+			switch clientEncrypt {
+			case EncryptOn, EncryptReq:
+				serverEncrypt = EncryptOn
+				shouldDoTLS = true
+			case EncryptOff:
+				// Negotiate encryption to protect credentials and connection
+				serverEncrypt = EncryptOn
+				shouldDoTLS = true
+			default:
+				// EncryptNotSup
+				serverEncrypt = EncryptNotSup
+			}
+		}
+	}
+
+	// 1. Respond with PRELOGIN options: Version, Encryption, MARS
+	respPayload := BuildPreloginResponse(serverEncrypt)
+	if err := WritePacket(conn, PacketTabular, sess.SPID, respPayload); err != nil {
+		return nil, err
+	}
+
+	// 2. Perform TDS 7.x TLS Handshake if encryption was negotiated
+	if shouldDoTLS {
+		handshakeConn := NewTDSHandshakeConn(conn, sess.SPID)
+		tlsConn := tls.Server(handshakeConn, tlsCfg)
+		if err := tlsConn.Handshake(); err != nil {
+			return nil, fmt.Errorf("TDS TLS handshake failed: %w", err)
+		}
+		handshakeConn.FinishHandshake()
+		conn = tlsConn
+	}
+
+	return conn, nil
 }
 
 func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSession) {

@@ -168,6 +168,39 @@ func BuildPreloginResponse(encryptSupport byte) []byte {
 	return buf.Bytes()
 }
 
+// ParsePrelogin parses options from a PRELOGIN payload into a map of option types to raw bytes.
+func ParsePrelogin(payload []byte) map[byte][]byte {
+	options := make(map[byte][]byte)
+	idx := 0
+	type optHeader struct {
+		optType byte
+		offset  uint16
+		length  uint16
+	}
+	var headers []optHeader
+	for idx < len(payload) {
+		optType := payload[idx]
+		if optType == PreloginOptionTerminator {
+			break
+		}
+		if idx+5 > len(payload) {
+			break
+		}
+		offset := binary.BigEndian.Uint16(payload[idx+1 : idx+3])
+		length := binary.BigEndian.Uint16(payload[idx+3 : idx+5])
+		headers = append(headers, optHeader{optType: optType, offset: offset, length: length})
+		idx += 5
+	}
+	for _, h := range headers {
+		start := int(h.offset)
+		end := start + int(h.length)
+		if start >= 0 && end <= len(payload) && start <= end {
+			options[h.optType] = payload[start:end]
+		}
+	}
+	return options
+}
+
 // BuildLoginAck builds a LOGINACK token (0xAD) byte slice.
 func BuildLoginAck(progName string, major, minor byte, build uint16) []byte {
 	var buf bytes.Buffer

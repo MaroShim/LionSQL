@@ -43,10 +43,10 @@ func main() {
 	maxWorkers := flag.Int("max-workers", 0, "Max concurrent query execution workers (default: NumCPU * 4)")
 	maxIdleSessions := flag.Int("max-idle-sessions", 64, "Max idle storage sessions to retain in pool")
 	workMemStr := flag.String("work-mem", "64MB", "Default memory budget per query operator (e.g. 64MB, 128MB)")
-	enableTLS := flag.Bool("tls", false, "Enable SSL/TLS encrypted connections for PostgreSQL wire")
+	enableTLS := flag.Bool("tls", false, "Enable SSL/TLS encrypted connections for PostgreSQL and TDS wire protocols")
 	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKey := flag.String("tls-key", "", "Path to TLS private key file")
-	requireSSL := flag.Bool("require-ssl", false, "Require SSL/TLS for PostgreSQL wire connections")
+	requireSSL := flag.Bool("require-ssl", false, "Require SSL/TLS for PostgreSQL and TDS wire connections")
 	backupTarget := flag.String("backup", "", "Perform live point-in-time snapshot backup to target archive and exit")
 	restoreSource := flag.String("restore", "", "Restore database from backup archive and exit")
 
@@ -226,6 +226,7 @@ func main() {
 	}
 
 	wireServer := wire.NewServer(*pgAddr, cat, eng)
+	tdsServer := tds.NewServer(*tdsAddr, cat, eng)
 	if *enableTLS || *tlsCert != "" || *requireSSL {
 		var tlsConfig *tls.Config
 		if *tlsCert != "" && *tlsKey != "" {
@@ -244,7 +245,10 @@ func main() {
 		}
 		wireServer.SetTLSConfig(tlsConfig)
 		wireServer.SetRequireSSL(*requireSSL)
+		tdsServer.SetTLSConfig(tlsConfig)
+		tdsServer.SetRequireSSL(*requireSSL)
 		log.Printf("[SQLion] PostgreSQL Wire SSL/TLS enabled (Require SSL: %v)", *requireSSL)
+		log.Printf("[SQLion] TDS (MSSQL) Wire SSL/TLS enabled (Require SSL: %v)", *requireSSL)
 	}
 	if err := wireServer.Start(); err != nil {
 		if strings.Contains(err.Error(), "address already in use") {
@@ -257,7 +261,6 @@ func main() {
 	}
 	defer wireServer.Close()
 
-	tdsServer := tds.NewServer(*tdsAddr, cat, eng)
 	if err := tdsServer.Start(); err != nil {
 		if strings.Contains(err.Error(), "address already in use") {
 			fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", *tdsAddr, err)
