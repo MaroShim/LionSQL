@@ -1655,6 +1655,24 @@ func convertValue(v any, targetType storage.DataType) storage.Value {
 			f, _ := strconv.ParseFloat(num, 64)
 			return storage.FloatValue(f)
 		}
+	case storage.TypeDecimal:
+		switch num := v.(type) {
+		case storage.Decimal:
+			return storage.DecimalValueFromDecimal(num)
+		case float64:
+			return storage.DecimalValueFromDecimal(storage.NewDecimalFromFloat(num, 4))
+		case int:
+			return storage.DecimalValueFromDecimal(storage.NewDecimalFromInt(int64(num), 0))
+		case int64:
+			return storage.DecimalValueFromDecimal(storage.NewDecimalFromInt(num, 0))
+		case string:
+			if num == "" {
+				return storage.NullValue(targetType)
+			}
+			return storage.DecimalValue(num)
+		default:
+			return storage.DecimalValue(fmt.Sprintf("%v", v))
+		}
 	case storage.TypeBool:
 		switch b := v.(type) {
 		case bool:

@@ -7,6 +7,8 @@ import (
 	"math"
 	"regexp"
 	"strings"
+
+	"sqlion/pkg/storage"
 )
 
 type aggFuncType int
@@ -32,6 +34,8 @@ type groupAccumulator struct {
 	groupTuple Tuple
 	counts     map[int]int64
 	sums       map[int]float64
+	decSums    map[int]storage.Decimal
+	isDecimal  map[int]bool
 	mins       map[int]any
 	maxs       map[int]any
 }
@@ -198,6 +202,8 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 				groupTuple: tuple,
 				counts:     make(map[int]int64),
 				sums:       make(map[int]float64),
+				decSums:    make(map[int]storage.Decimal),
+				isDecimal:  make(map[int]bool),
 				mins:       make(map[int]any),
 				maxs:       make(map[int]any),
 			}
@@ -224,12 +230,26 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 			case aggCount:
 				acc.counts[fIdx]++
 			case aggSum:
-				fVal, _ := toFloat64(val)
-				acc.sums[fIdx] += fVal
+				if isDecValue(val) {
+					dec, _ := tryDecimal(val)
+					acc.isDecimal[fIdx] = true
+					cur := acc.decSums[fIdx]
+					acc.decSums[fIdx] = cur.Add(dec)
+				} else {
+					fVal, _ := toFloat64(val)
+					acc.sums[fIdx] += fVal
+				}
 				acc.counts[fIdx]++
 			case aggAvg:
-				fVal, _ := toFloat64(val)
-				acc.sums[fIdx] += fVal
+				if isDecValue(val) {
+					dec, _ := tryDecimal(val)
+					acc.isDecimal[fIdx] = true
+					cur := acc.decSums[fIdx]
+					acc.decSums[fIdx] = cur.Add(dec)
+				} else {
+					fVal, _ := toFloat64(val)
+					acc.sums[fIdx] += fVal
+				}
 				acc.counts[fIdx]++
 			case aggMin:
 				if cur, ok := acc.mins[fIdx]; !ok || CompareValues(val, cur) < 0 {
@@ -279,6 +299,8 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 			case aggSum:
 				if acc.counts[fIdx] == 0 {
 					val = nil
+				} else if acc.isDecimal[fIdx] {
+					val = acc.decSums[fIdx].String()
 				} else {
 					s := acc.sums[fIdx]
 					if s == math.Trunc(s) {
@@ -290,6 +312,13 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 			case aggAvg:
 				if acc.counts[fIdx] == 0 {
 					val = nil
+				} else if acc.isDecimal[fIdx] {
+					countDec := storage.NewDecimalFromInt(acc.counts[fIdx], 0)
+					if quo, err := acc.decSums[fIdx].Div(countDec, 4); err == nil {
+						val = quo.String()
+					} else {
+						val = acc.decSums[fIdx].String()
+					}
 				} else {
 					avg := acc.sums[fIdx] / float64(acc.counts[fIdx])
 					if avg == math.Trunc(avg) {

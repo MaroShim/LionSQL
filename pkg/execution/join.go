@@ -404,6 +404,8 @@ func toStorageValFromAny(v any) storage.Value {
 		return storage.IntValue(int64(val))
 	case float64:
 		return storage.FloatValue(val)
+	case storage.Decimal:
+		return storage.DecimalValueFromDecimal(val)
 	case string:
 		return storage.StringValue(val)
 	case bool:

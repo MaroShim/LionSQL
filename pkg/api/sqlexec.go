@@ -803,6 +803,31 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 		}
 
 		dataType := parseSQLDataType(rawType)
+		precision := 0
+		scale := 0
+		if dataType == storage.TypeDecimal {
+			precision = 18
+			scale = 2
+			if rawType == "MONEY" {
+				precision = 19
+				scale = 4
+			} else {
+				decRe := regexp.MustCompile(`(?i)\b(?:DECIMAL|NUMERIC)\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\)`)
+				if m := decRe.FindStringSubmatch(cDefTrimmed); len(m) > 1 {
+					if p, err := strconv.Atoi(m[1]); err == nil {
+						precision = p
+					}
+					if len(m) > 2 && m[2] != "" {
+						if sc, err := strconv.Atoi(m[2]); err == nil {
+							scale = sc
+						}
+					} else {
+						scale = 0
+					}
+				}
+			}
+		}
+
 		isPK := strings.Contains(cUpper, "PRIMARY KEY")
 		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK
 		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT")
@@ -813,6 +838,8 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 			PrimaryKey: isPK,
 			Nullable:   !isNotNull,
 			Identity:   isIdentity,
+			Precision:  precision,
+			Scale:      scale,
 		})
 
 		if strings.Contains(cUpper, "REFERENCES") {
@@ -3044,6 +3071,8 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 				}
 			case "SUM":
 				var sum float64 = 0
+				var decSum storage.Decimal
+				isDec := false
 				hasVal := false
 				for _, r := range bucket.rows {
 					v := r[item.ArgCol]
@@ -3053,14 +3082,23 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 						}
 					}
 					if v != nil {
-						if n, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
+						strVal := fmt.Sprintf("%v", v)
+						if strings.Contains(strVal, ".") {
+							isDec = true
+						}
+						if d, err := storage.ParseDecimal(strVal); err == nil {
+							decSum = decSum.Add(d)
+							hasVal = true
+						} else if n, err := strconv.ParseFloat(strVal, 64); err == nil {
 							sum += n
 							hasVal = true
 						}
 					}
 				}
 				if hasVal {
-					if sum == math.Trunc(sum) {
+					if isDec {
+						val = decSum.String()
+					} else if sum == math.Trunc(sum) {
 						val = int64(sum)
 					} else {
 						val = sum
@@ -3070,6 +3108,8 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 				}
 			case "AVG":
 				var sum float64 = 0
+				var decSum storage.Decimal
+				isDec := false
 				var count int64 = 0
 				for _, r := range bucket.rows {
 					v := r[item.ArgCol]
@@ -3079,14 +3119,35 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 						}
 					}
 					if v != nil {
-						if n, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
+						strVal := fmt.Sprintf("%v", v)
+						if strings.Contains(strVal, ".") {
+							isDec = true
+						}
+						if d, err := storage.ParseDecimal(strVal); err == nil {
+							decSum = decSum.Add(d)
+							count++
+						} else if n, err := strconv.ParseFloat(strVal, 64); err == nil {
 							sum += n
 							count++
 						}
 					}
 				}
 				if count > 0 {
-					val = sum / float64(count)
+					if isDec {
+						cDec := storage.NewDecimalFromInt(count, 0)
+						if q, err := decSum.Div(cDec, 4); err == nil {
+							val = q.String()
+						} else {
+							val = decSum.String()
+						}
+					} else {
+						avg := sum / float64(count)
+						if avg == math.Trunc(avg) {
+							val = int64(avg)
+						} else {
+							val = avg
+						}
+					}
 				} else {
 					val = nil
 				}
@@ -5427,8 +5488,10 @@ func parseSQLDataType(s string) storage.DataType {
 	switch strings.ToUpper(s) {
 	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "IDENTITY":
 		return storage.TypeInt
-	case "FLOAT", "DOUBLE", "REAL", "NUMERIC", "DECIMAL", "MONEY":
+	case "FLOAT", "DOUBLE", "REAL":
 		return storage.TypeFloat
+	case "NUMERIC", "DECIMAL", "MONEY":
+		return storage.TypeDecimal
 	case "BOOL", "BOOLEAN", "BIT":
 		return storage.TypeBool
 	case "DATETIME", "TIMESTAMP", "DATE", "TIME":
@@ -5634,6 +5697,8 @@ func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
 			return storage.FloatValue(f)
 		}
+	case storage.TypeDecimal:
+		return storage.DecimalValue(s)
 	case storage.TypeBool:
 		if strings.EqualFold(s, "TRUE") || s == "1" {
 			return storage.BoolValue(true)
@@ -5656,6 +5721,8 @@ func formatStorageValue(v storage.Value) any {
 		return v.SVal
 	case storage.TypeFloat:
 		return v.FVal
+	case storage.TypeDecimal:
+		return v.Decimal().String()
 	case storage.TypeBool:
 		return v.BVal
 	case storage.TypeDateTime:
@@ -5730,6 +5797,8 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 		if f, err := strconv.ParseFloat(s, 64); err == nil {
 			return storage.FloatValue(f)
 		}
+	case storage.TypeDecimal:
+		return storage.DecimalValue(s)
 	case storage.TypeBool:
 		if b, err := strconv.ParseBool(s); err == nil {
 			return storage.BoolValue(b)

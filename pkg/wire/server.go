@@ -664,6 +664,8 @@ func typeToPgOID(t storage.DataType) int32 {
 		return 23 // INT4
 	case storage.TypeFloat:
 		return 701 // FLOAT8
+	case storage.TypeDecimal:
+		return 1700 // NUMERIC
 	case storage.TypeBool:
 		return 16 // BOOL
 	case storage.TypeDateTime:

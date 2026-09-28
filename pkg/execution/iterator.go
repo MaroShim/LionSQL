@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -137,7 +138,11 @@ func (t Tuple) ToMap() map[string]any {
 	res := make(map[string]any, len(t.Index.cols))
 	for i, col := range t.Index.cols {
 		if i < len(t.Values) {
-			res[col] = t.Values[i]
+			v := t.Values[i]
+			if dec, ok := v.(storage.Decimal); ok {
+				v = dec.String()
+			}
+			res[col] = v
 		}
 	}
 	return res
@@ -151,7 +156,11 @@ func (t Tuple) ToEvalMap() map[string]any {
 	res := make(map[string]any, len(t.Index.indices))
 	for k, idx := range t.Index.indices {
 		if idx >= 0 && idx < len(t.Values) {
-			res[k] = t.Values[idx]
+			v := t.Values[idx]
+			if dec, ok := v.(storage.Decimal); ok {
+				v = dec.String()
+			}
+			res[k] = v
 		}
 	}
 	return res
@@ -325,6 +334,8 @@ func formatStorageVal(v storage.Value) any {
 		return v.SVal
 	case storage.TypeFloat:
 		return v.FVal
+	case storage.TypeDecimal:
+		return v.Decimal()
 	case storage.TypeBool:
 		return v.BVal
 	case storage.TypeDateTime:
@@ -346,6 +357,15 @@ func CompareValues(a, b any) int {
 	}
 	if b == nil {
 		return 1
+	}
+
+	// Exact Decimal comparison if either value is storage.Decimal
+	if isDecValue(a) || isDecValue(b) {
+		if decA, okA := tryDecimal(a); okA {
+			if decB, okB := tryDecimal(b); okB {
+				return decA.Cmp(decB)
+			}
+		}
 	}
 
 	// Universal numeric comparison if both values can be represented as float64
@@ -422,6 +442,11 @@ func toFloat64(v any) (float64, bool) {
 		return float64(n), true
 	case int:
 		return float64(n), true
+	case string:
+		if f, err := strconv.ParseFloat(n, 64); err == nil {
+			return f, true
+		}
+		return 0, false
 	default:
 		if num, ok := v.(interface{ Float64() (float64, error) }); ok {
 			if f, err := num.Float64(); err == nil {
@@ -431,3 +456,41 @@ func toFloat64(v any) (float64, bool) {
 		return 0, false
 	}
 }
+
+func isDecValue(v any) bool {
+	if v == nil {
+		return false
+	}
+	switch n := v.(type) {
+	case storage.Decimal:
+		return true
+	case storage.Value:
+		return n.Type == storage.TypeDecimal
+	default:
+		return false
+	}
+}
+
+func tryDecimal(v any) (storage.Decimal, bool) {
+	if v == nil {
+		return storage.ZeroDecimal(0), false
+	}
+	switch n := v.(type) {
+	case storage.Decimal:
+		return n, true
+	case storage.Value:
+		return n.Decimal(), true
+	case int64:
+		return storage.NewDecimalFromInt(n, 0), true
+	case int:
+		return storage.NewDecimalFromInt(int64(n), 0), true
+	case float64:
+		return storage.NewDecimalFromFloat(n, 4), true
+	case string:
+		if d, err := storage.ParseDecimal(n); err == nil {
+			return d, true
+		}
+	}
+	return storage.ZeroDecimal(0), false
+}
+

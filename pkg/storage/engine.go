@@ -36,6 +36,7 @@ const (
 	TypeBool
 	TypeDateTime
 	TypeJSON
+	TypeDecimal
 )
 
 func (t DataType) String() string {
@@ -52,6 +53,8 @@ func (t DataType) String() string {
 		return "DATETIME"
 	case TypeJSON:
 		return "JSON"
+	case TypeDecimal:
+		return "DECIMAL"
 	default:
 		return "UNKNOWN"
 	}
@@ -64,6 +67,8 @@ type Column struct {
 	PrimaryKey bool     `json:"primary_key"`
 	Nullable   bool     `json:"nullable"`
 	Identity   bool     `json:"identity,omitempty"`
+	Precision  int      `json:"precision,omitempty"`
+	Scale      int      `json:"scale,omitempty"`
 }
 
 // IndexSchema defines metadata for a secondary index.
@@ -192,10 +197,11 @@ type Value struct {
 	FVal   float64
 	BVal   bool
 	TVal   time.Time
+	DVal   Decimal
 }
 
 func IntValue(v int64) Value {
-	return Value{Type: TypeInt, IVal: v, FVal: float64(v)}
+	return Value{Type: TypeInt, IVal: v, FVal: float64(v), DVal: NewDecimalFromInt(v, 0)}
 }
 
 func StringValue(v string) Value {
@@ -203,7 +209,7 @@ func StringValue(v string) Value {
 }
 
 func FloatValue(v float64) Value {
-	return Value{Type: TypeFloat, FVal: v, IVal: int64(v)}
+	return Value{Type: TypeFloat, FVal: v, IVal: int64(v), DVal: NewDecimalFromFloat(v, 4)}
 }
 
 func BoolValue(v bool) Value {
@@ -218,8 +224,59 @@ func JSONValue(v string) Value {
 	return Value{Type: TypeJSON, SVal: v}
 }
 
+func DecimalValue(s string) Value {
+	dec, err := ParseDecimal(s)
+	if err != nil {
+		dec = ZeroDecimal(2)
+	}
+	return Value{
+		Type: TypeDecimal,
+		SVal: dec.String(),
+		DVal: dec,
+		FVal: dec.Float64(),
+		IVal: dec.Int64(),
+	}
+}
+
+func DecimalValueFromDecimal(d Decimal) Value {
+	return Value{
+		Type: TypeDecimal,
+		SVal: d.String(),
+		DVal: d,
+		FVal: d.Float64(),
+		IVal: d.Int64(),
+	}
+}
+
 func NullValue(t DataType) Value {
 	return Value{Type: t, IsNull: true}
+}
+
+func (v Value) Decimal() Decimal {
+	if v.Type == TypeDecimal {
+		if v.DVal.value != nil {
+			return v.DVal
+		}
+		if v.SVal != "" {
+			d, err := ParseDecimal(v.SVal)
+			if err == nil {
+				return d
+			}
+		}
+		return ZeroDecimal(2)
+	}
+	if v.Type == TypeInt {
+		return NewDecimalFromInt(v.IVal, 0)
+	}
+	if v.Type == TypeFloat {
+		return NewDecimalFromFloat(v.FVal, 4)
+	}
+	if v.SVal != "" {
+		if d, err := ParseDecimal(v.SVal); err == nil {
+			return d
+		}
+	}
+	return ZeroDecimal(0)
 }
 
 func (v Value) String() string {
@@ -233,6 +290,14 @@ func (v Value) String() string {
 		return v.SVal
 	case TypeFloat:
 		return fmt.Sprintf("%f", v.FVal)
+	case TypeDecimal:
+		if v.DVal.value != nil {
+			return v.DVal.String()
+		}
+		if v.SVal != "" {
+			return v.SVal
+		}
+		return "0"
 	case TypeBool:
 		return fmt.Sprintf("%t", v.BVal)
 	case TypeDateTime:
@@ -246,7 +311,15 @@ func (v Value) Equal(other Value) bool {
 	if v.IsNull && other.IsNull {
 		return true
 	}
-	if v.IsNull != other.IsNull || v.Type != other.Type {
+	if v.IsNull != other.IsNull {
+		return false
+	}
+	if v.Type == TypeDecimal || other.Type == TypeDecimal {
+		d1 := v.Decimal()
+		d2 := other.Decimal()
+		return d1.Equal(d2)
+	}
+	if v.Type != other.Type {
 		return false
 	}
 	switch v.Type {
@@ -276,6 +349,11 @@ func (v Value) Compare(other Value) int {
 	}
 	if other.IsNull {
 		return 1
+	}
+	if v.Type == TypeDecimal || other.Type == TypeDecimal {
+		d1 := v.Decimal()
+		d2 := other.Decimal()
+		return d1.Cmp(d2)
 	}
 	switch v.Type {
 	case TypeInt:

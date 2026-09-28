@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Exact Fixed-Point `DECIMAL`, `NUMERIC`, `MONEY` Data Types (`pkg/storage`, `pkg/api`, `pkg/execution`, `pkg/wire`)**:
+  - Implemented exact fixed-point `storage.Decimal` struct backed by arbitrary-precision `math/big.Int` with integer scale, providing zero-drift arithmetic (`Add`, `Sub`, `Mul`, `Div` with half-up rounding), scale alignment, and exact comparisons (`Cmp`, `Equal`).
+  - Added `storage.TypeDecimal` (`DataType = 7`) to storage engine and value system, with `Precision` and `Scale` metadata in `storage.Column`.
+  - Added `DecimalValue`, `DecimalValueFromDecimal`, and `(v Value) Decimal()` to `storage.Value`, updating value comparisons and equality to operate directly on `storage.Decimal`.
+  - Added `DECIMAL(precision, scale)`, `NUMERIC(precision, scale)`, and `MONEY` (default precision 19, scale 4) data type parsing to `execCreateTable` in `pkg/api/sqlexec.go`.
+  - Extended in-memory OCC storage engine (`memengine`) insert and update record validation to convert and rescale fixed-point values defensively, and updated primary key parsing for decimal PK columns.
+  - Extended Volcano execution engine (`AggregateIterator`, `formatStorageVal`, `CompareValues`, `tryDecimal`) to accumulate exact decimal sums and averages (`SUM(decimal_col)`, `AVG(decimal_col)`), eliminating IEEE-754 binary floating-point round-off errors (`0.10 + 0.20 + 100.55 = 100.85`).
+  - Extended fallback query aggregation in `pkg/api/sqlexec.go:execAggregate` to preserve exact decimal precision.
+  - Mapped `storage.TypeDecimal` to PostgreSQL wire protocol OID 1700 (`NUMERIC`).
+  - Added comprehensive unit and end-to-end tests in `pkg/storage/decimal_test.go` and `pkg/api/sqlexec_test.go` (`TestSQLExecutor_DecimalAndFixedPoint`).
 - **Multi-Table Chained Joins Planning & Execution (`pkg/planner`, `pkg/execution`, `pkg/api`, `pkg/proc/runtime`)**:
   - Extended `planner.QueryInfo` with `Joins []*JoinInfo` and implemented chained join extraction in AST walker (`FromAST`) and SQL parser fallback (`parseFromAndJoins`), parsing arbitrary sequences of chained `JOIN ... ON ...` clauses with aliases.
   - Implemented left-deep join tree generator `BuildMultiJoinPlanWithStats` in `pkg/planner/planner.go`, evaluating Cost-Based Optimization (CBO) decisions (Hash Join vs Index Nested Loop Join) at each join stage based on table cardinality and secondary index availability.

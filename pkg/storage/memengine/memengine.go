@@ -841,6 +841,12 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 			} else if col.Type == storage.TypeInt && val.Type == storage.TypeFloat && val.FVal == float64(int64(val.FVal)) {
 				val = storage.IntValue(int64(val.FVal))
 				record[col.Name] = val
+			} else if col.Type == storage.TypeDecimal && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat || val.Type == storage.TypeVarChar) {
+				val = storage.DecimalValue(val.String())
+				if col.Scale > 0 {
+					val = storage.DecimalValueFromDecimal(val.DVal.Rescale(int32(col.Scale)))
+				}
+				record[col.Name] = val
 			} else if col.Type == storage.TypeJSON && (val.Type == storage.TypeVarChar || val.Type == storage.TypeJSON) {
 				if !storage.IsValidJSON(val.SVal) {
 					return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
@@ -851,6 +857,9 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 				return fmt.Errorf("%w: column %q expects %s, got %s",
 					storage.ErrInvalidDataType, col.Name, col.Type, val.Type)
 			}
+		} else if col.Type == storage.TypeDecimal && col.Scale > 0 {
+			val = storage.DecimalValueFromDecimal(val.DVal.Rescale(int32(col.Scale)))
+			record[col.Name] = val
 		} else if col.Type == storage.TypeJSON {
 			if !storage.IsValidJSON(val.SVal) {
 				return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
@@ -939,6 +948,12 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 			} else if col.Type == storage.TypeInt && val.Type == storage.TypeFloat && val.FVal == float64(int64(val.FVal)) {
 				val = storage.IntValue(int64(val.FVal))
 				updated[col.Name] = val
+			} else if col.Type == storage.TypeDecimal && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat || val.Type == storage.TypeVarChar) {
+				val = storage.DecimalValue(val.String())
+				if col.Scale > 0 {
+					val = storage.DecimalValueFromDecimal(val.DVal.Rescale(int32(col.Scale)))
+				}
+				updated[col.Name] = val
 			} else if col.Type == storage.TypeJSON && (val.Type == storage.TypeVarChar || val.Type == storage.TypeJSON) {
 				if !storage.IsValidJSON(val.SVal) {
 					return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
@@ -949,6 +964,9 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 				return fmt.Errorf("%w: column %q expects %s, got %s",
 					storage.ErrInvalidDataType, col.Name, col.Type, val.Type)
 			}
+		} else if col.Type == storage.TypeDecimal && col.Scale > 0 {
+			val = storage.DecimalValueFromDecimal(val.DVal.Rescale(int32(col.Scale)))
+			updated[col.Name] = val
 		} else if col.Type == storage.TypeJSON {
 			if !storage.IsValidJSON(val.SVal) {
 				return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
@@ -1572,6 +1590,8 @@ func parsePKValue(s string, dt storage.DataType) storage.Value {
 		var f float64
 		_, _ = fmt.Sscanf(s, "%f", &f)
 		return storage.FloatValue(f)
+	case storage.TypeDecimal:
+		return storage.DecimalValue(s)
 	case storage.TypeBool:
 		return storage.BoolValue(strings.EqualFold(s, "true") || s == "1")
 	case storage.TypeDateTime:

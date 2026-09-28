@@ -7,6 +7,7 @@ import (
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
 )
 
@@ -1986,4 +1987,101 @@ func TestSQLExecutor_MultiTableChainedJoins(t *testing.T) {
 		t.Errorf("expected to find Bob in LEFT JOIN results")
 	}
 }
+
+func TestSQLExecutor_DecimalAndFixedPoint(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// 1. CREATE TABLE with DECIMAL(10, 2), NUMERIC(18, 4), and MONEY
+	createSQL := `CREATE TABLE ledger (
+		id INT PRIMARY KEY,
+		amount DECIMAL(10, 2) NOT NULL,
+		balance NUMERIC(18, 4) NOT NULL,
+		fee MONEY
+	);`
+	res, err := server.ExecuteSQL(createSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE TABLE with DECIMAL failed: %v", err)
+	}
+
+	tbl, err := eng.GetTable("ledger")
+	if err != nil {
+		t.Fatalf("GetTable ledger failed: %v", err)
+	}
+	if len(tbl.Columns) != 4 {
+		t.Fatalf("expected 4 columns, got %d", len(tbl.Columns))
+	}
+	if tbl.Columns[1].Type != storage.TypeDecimal || tbl.Columns[1].Precision != 10 || tbl.Columns[1].Scale != 2 {
+		t.Errorf("unexpected column 1: %+v", tbl.Columns[1])
+	}
+	if tbl.Columns[2].Type != storage.TypeDecimal || tbl.Columns[2].Precision != 18 || tbl.Columns[2].Scale != 4 {
+		t.Errorf("unexpected column 2: %+v", tbl.Columns[2])
+	}
+	if tbl.Columns[3].Type != storage.TypeDecimal || tbl.Columns[3].Scale != 4 {
+		t.Errorf("unexpected column 3: %+v", tbl.Columns[3])
+	}
+
+	// 2. Insert records testing financial precision (0.10, 0.20)
+	_, err = server.ExecuteSQL("INSERT INTO ledger (id, amount, balance, fee) VALUES (1, 0.10, 1000.1234, 1.25);")
+	if err != nil {
+		t.Fatalf("INSERT row 1 failed: %v", err)
+	}
+	_, err = server.ExecuteSQL("INSERT INTO ledger (id, amount, balance, fee) VALUES (2, 0.20, 2000.5678, 2.50);")
+	if err != nil {
+		t.Fatalf("INSERT row 2 failed: %v", err)
+	}
+	_, err = server.ExecuteSQL("INSERT INTO ledger (id, amount, balance, fee) VALUES (3, 100.55, 3000.0000, 5.00);")
+	if err != nil {
+		t.Fatalf("INSERT row 3 failed: %v", err)
+	}
+
+	// 3. Exact Query & Filter: WHERE amount = 0.20
+	qRes, err := server.ExecuteSQL("SELECT id, amount, balance FROM ledger WHERE amount = 0.20;")
+	if err != nil || !qRes.Success {
+		t.Fatalf("SELECT with decimal filter failed: %v", err)
+	}
+	if len(qRes.Rows) != 1 {
+		t.Fatalf("expected 1 row matching amount = 0.20, got %d", len(qRes.Rows))
+	}
+	if fmt.Sprintf("%v", qRes.Rows[0]["amount"]) != "0.20" {
+		t.Errorf("expected amount '0.20', got %v", qRes.Rows[0]["amount"])
+	}
+
+	// 4. Exact SUM aggregate: 0.10 + 0.20 + 100.55 = 100.85 (No IEEE-754 precision drift!)
+	sumRes, err := server.ExecuteSQL("SELECT SUM(amount) AS total_amount FROM ledger;")
+	if err != nil || !sumRes.Success {
+		t.Fatalf("SUM query failed: %v", err)
+	}
+	if len(sumRes.Rows) != 1 {
+		t.Fatalf("expected 1 row from SUM, got %d", len(sumRes.Rows))
+	}
+	if fmt.Sprintf("%v", sumRes.Rows[0]["total_amount"]) != "100.85" {
+		t.Errorf("expected exact sum '100.85', got %v", sumRes.Rows[0]["total_amount"])
+	}
+
+	// 5. MIN and MAX aggregates
+	minMaxRes, err := server.ExecuteSQL("SELECT MIN(amount) AS min_amt, MAX(amount) AS max_amt FROM ledger;")
+	if err != nil || !minMaxRes.Success {
+		t.Fatalf("MIN/MAX query failed: %v", err)
+	}
+	if fmt.Sprintf("%v", minMaxRes.Rows[0]["min_amt"]) != "0.10" {
+		t.Errorf("expected min_amt '0.10', got %v", minMaxRes.Rows[0]["min_amt"])
+	}
+	if fmt.Sprintf("%v", minMaxRes.Rows[0]["max_amt"]) != "100.55" {
+		t.Errorf("expected max_amt '100.55', got %v", minMaxRes.Rows[0]["max_amt"])
+	}
+
+	// 6. Range query: WHERE amount > 0.15
+	rangeRes, err := server.ExecuteSQL("SELECT id, amount FROM ledger WHERE amount > 0.15;")
+	if err != nil || !rangeRes.Success {
+		t.Fatalf("range query failed: %v", err)
+	}
+	if len(rangeRes.Rows) != 2 {
+		t.Fatalf("expected 2 rows > 0.15, got %d", len(rangeRes.Rows))
+	}
+}
+
 
