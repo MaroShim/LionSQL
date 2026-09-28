@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -63,6 +65,11 @@ func main() {
 		*dataDir = "data"
 	}
 
+	resolvedPidFile := *pidFile
+	if resolvedPidFile == "" {
+		resolvedPidFile = filepath.Join(*dataDir, "sqlion.pid")
+	}
+
 	// Handle daemon commands if not running as internal worker
 	if !*isChildWorker {
 		if handleDaemonCommands(
@@ -80,6 +87,24 @@ func main() {
 		) {
 			return
 		}
+
+		// Prevent multiple server instances from running concurrently on the same data directory
+		if existingPid, err := readPidFile(resolvedPidFile); err == nil && isProcessAlive(existingPid) && existingPid != os.Getpid() {
+			fmt.Printf("\n[SQLion] Error: Another SQLion server instance (PID %d) is already running for data directory '%s'.\n", existingPid, *dataDir)
+			fmt.Println("         To view status:  ./bin/server -status")
+			fmt.Println("         To stop daemon:  ./bin/server -stop")
+			fmt.Println("         To restart:      ./bin/server -restart")
+			fmt.Println()
+			os.Exit(1)
+		}
+
+		// Record PID for this foreground process
+		_ = os.WriteFile(filepath.Clean(resolvedPidFile), []byte(strconv.Itoa(os.Getpid())), 0644)
+		defer func() {
+			if curPid, err := readPidFile(resolvedPidFile); err == nil && curPid == os.Getpid() {
+				_ = os.Remove(resolvedPidFile)
+			}
+		}()
 	}
 
 	log.Printf("[SQLion] Initializing database server...")
@@ -90,6 +115,12 @@ func main() {
 	case "wiredtiger":
 		eng = wiredtiger.New()
 		if err := eng.Open(*dataDir); err != nil {
+			if strings.Contains(err.Error(), "Resource busy") || strings.Contains(err.Error(), "already being managed") {
+				fmt.Printf("\n[SQLion] Error: Database directory '%s' is locked by another running process.\n", *dataDir)
+				fmt.Println("         Please stop the existing SQLion instance before starting a new one.")
+				fmt.Println()
+				os.Exit(1)
+			}
 			log.Fatalf("[SQLion] Failed to open WiredTiger storage engine: %v. If you wish to use the in-memory engine, specify --engine=memory explicitly.", err)
 		}
 	case "memory":
@@ -231,6 +262,10 @@ func main() {
 	_ = httpServer.Shutdown(ctx)
 	_ = httpServer.Close()
 	_ = eng.Close()
+
+	if curPid, err := readPidFile(resolvedPidFile); err == nil && curPid == os.Getpid() {
+		_ = os.Remove(resolvedPidFile)
+	}
 
 	log.Println("[SQLion] Server stopped cleanly.")
 	os.Exit(0)

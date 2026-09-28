@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented `Type()` across `memengine` and `wiredtiger` (including build stubs).
   - Extended `/api/health` HTTP endpoint to report the active storage engine backend type in JSON.
   - Updated Web Management Studio (`pkg/ui/dashboard.html`) to dynamically fetch and display the active storage engine in the sidebar footer.
+- **Single-Instance Server Guard & Duplicate Process Prevention (`cmd/server`)**:
+  - Implemented pre-flight PID verification preventing duplicate server instances from launching on the same data directory.
+  - Automatically registered and cleaned up PID file for foreground processes, preventing lock contention with background daemons.
+  - Intercepted storage lock collisions (`Resource busy`, `code 16`) to display a clear, user-friendly diagnostic message rather than dumping raw Cgo fcntl lock errors.
 
 ### Fixed
 - **WiredTiger Legacy Table Format Compatibility & SIGBUS Crash Defense (`pkg/storage/wiredtiger`)**:
