@@ -22,11 +22,13 @@ import (
 
 // ExecutionResult captures the output and metrics of a procedure, function, or query execution.
 type ExecutionResult struct {
-	ReturnValue any
-	Logs        []string
-	Duration    time.Duration
-	Rows        []map[string]any // Relational result tuples for OpRelQuery
-	Columns     []string         // Result projection column names
+	ReturnValue  any
+	Logs         []string
+	Duration     time.Duration
+	Rows         []map[string]any // Relational result tuples for OpRelQuery
+	Columns      []string         // Result projection column names
+	RowsAffected int64
+	LastIdentity int64
 }
 
 // TriggerEntry holds metadata and precompiled bytecode for a trigger.
@@ -266,11 +268,13 @@ func (e *Executor) Run(prog *proc.Program, procName string, params map[string]an
 	}
 
 	return &ExecutionResult{
-		ReturnValue: retVal,
-		Logs:        frame.logs,
-		Duration:    time.Since(start),
-		Rows:        frame.rows,
-		Columns:     frame.columns,
+		ReturnValue:  retVal,
+		Logs:         frame.logs,
+		Duration:     time.Since(start),
+		Rows:         frame.rows,
+		Columns:      frame.columns,
+		RowsAffected: frame.rowCount,
+		LastIdentity: frame.lastIdentity,
 	}, nil
 }
 
@@ -321,11 +325,13 @@ func (e *Executor) ExecuteInTx(prog *proc.Program, params map[string]any, tx sto
 	}
 
 	return &ExecutionResult{
-		ReturnValue: retVal,
-		Logs:        frame.logs,
-		Duration:    time.Since(start),
-		Rows:        frame.rows,
-		Columns:     frame.columns,
+		ReturnValue:  retVal,
+		Logs:         frame.logs,
+		Duration:     time.Since(start),
+		Rows:         frame.rows,
+		Columns:      frame.columns,
+		RowsAffected: frame.rowCount,
+		LastIdentity: frame.lastIdentity,
 	}, nil
 }
 
@@ -556,7 +562,42 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			rowMap := make(map[string]any)
 			evalCtx := f.buildRowEvalMap(nil)
 
-			for i, col := range data.Columns {
+			cols := data.Columns
+			if tg := f.executor.getTableGetter(); tg != nil {
+				if schema, err := tg(data.Table); err == nil && schema != nil {
+					var identityCol *storage.Column
+					for idx := range schema.Columns {
+						if schema.Columns[idx].Identity {
+							identityCol = &schema.Columns[idx]
+							break
+						}
+					}
+
+					identityInsertAllowed := false
+					if val, ok := f.vars["identity_insert_table"]; ok && val.Type == storage.TypeVarChar {
+						if strings.EqualFold(val.SVal, data.Table) {
+							identityInsertAllowed = true
+						}
+					}
+
+					if len(cols) == 0 {
+						for _, c := range schema.Columns {
+							if c.Identity && !identityInsertAllowed {
+								continue
+							}
+							cols = append(cols, c.Name)
+						}
+					} else if identityCol != nil && !identityInsertAllowed {
+						for _, c := range cols {
+							if strings.EqualFold(c, identityCol.Name) {
+								return nil, fmt.Errorf("Cannot insert explicit value for identity column in table %q when IDENTITY_INSERT is set to OFF", data.Table)
+							}
+						}
+					}
+				}
+			}
+
+			for i, col := range cols {
 				if i < len(data.ValExprs) {
 					vAny, _ := proc.EvalRowExpr(data.ValExprs[i], evalCtx, nil)
 					stVal := toStorageValue(vAny)
@@ -578,7 +619,7 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 				}
 				return nil, fmt.Errorf("insert error on %s: %w", data.Table, err)
 			}
-			f.rowCount = 1
+			f.rowCount++
 			if err := f.fireTriggers(data.Table, "INSERT", []map[string]any{rowMap}, nil); err != nil {
 				return nil, err
 			}
@@ -1032,12 +1073,31 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			}
 		}
 
-		pkVal, hasPk := rec["id"]
+		var pkVal storage.Value
+		var hasPk bool
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(data.Table); err == nil && schema != nil {
+				for _, c := range schema.Columns {
+					if c.PrimaryKey {
+						if v, ok := rec[c.Name]; ok {
+							pkVal = v
+							hasPk = true
+							break
+						}
+					}
+				}
+			}
+		}
 		if !hasPk {
-			for _, v := range rec {
+			if v, ok := rec["id"]; ok {
 				pkVal = v
 				hasPk = true
-				break
+			} else {
+				for _, v := range rec {
+					pkVal = v
+					hasPk = true
+					break
+				}
 			}
 		}
 
@@ -1111,12 +1171,31 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 			}
 		}
 
-		pkVal, hasPk := rec["id"]
+		var pkVal storage.Value
+		var hasPk bool
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(data.Table); err == nil && schema != nil {
+				for _, c := range schema.Columns {
+					if c.PrimaryKey {
+						if v, ok := rec[c.Name]; ok {
+							pkVal = v
+							hasPk = true
+							break
+						}
+					}
+				}
+			}
+		}
 		if !hasPk {
-			for _, v := range rec {
+			if v, ok := rec["id"]; ok {
 				pkVal = v
 				hasPk = true
-				break
+			} else {
+				for _, v := range rec {
+					pkVal = v
+					hasPk = true
+					break
+				}
 			}
 		}
 		if hasPk {

@@ -68,6 +68,17 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			if v, ok := row[e.Name]; ok {
 				return v, nil
 			}
+			lower := strings.ToLower(e.Name)
+			if v, ok := row[lower]; ok {
+				return v, nil
+			}
+			bare := strings.TrimPrefix(lower, "@")
+			if v, ok := row[bare]; ok {
+				return v, nil
+			}
+			if v, ok := row["@"+bare]; ok {
+				return v, nil
+			}
 		}
 		return e.Name, nil
 

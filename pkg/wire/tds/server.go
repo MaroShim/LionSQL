@@ -564,8 +564,11 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
-		buf.Write(BuildReturnStatus(0))
-		buf.Write(BuildDoneProc(DoneFinal|DoneCount, 0xC1, uint64(len(res.Rows))))
+		rowCount := uint64(len(res.Rows))
+		if rowCount == 0 && res.RowsAffected > 0 {
+			rowCount = uint64(res.RowsAffected)
+		}
+		buf.Write(BuildDoneProc(DoneFinal|DoneCount, 0xC1, rowCount))
 	}
 
 	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())

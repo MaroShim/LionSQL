@@ -566,7 +566,11 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 		_ = WriteCommandComplete(conn, fmt.Sprintf("SELECT %d", len(res.Rows)))
 		return
 	}
-	_ = WriteCommandComplete(conn, fmt.Sprintf("OK %d", len(res.Rows)))
+	rowsCount := int64(len(res.Rows))
+	if rowsCount == 0 && res.RowsAffected > 0 {
+		rowsCount = res.RowsAffected
+	}
+	_ = WriteCommandComplete(conn, fmt.Sprintf("OK %d", rowsCount))
 }
 
 func (s *Server) handleClose(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {

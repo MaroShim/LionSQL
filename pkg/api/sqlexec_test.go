@@ -1796,13 +1796,123 @@ func TestSQLExecutor_ExplainBytecode(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_VBDEDML(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
 
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+	sessID := "vdbe_dml_sess"
 
+	// 1. Setup table
+	_, err := server.ExecuteSessionSQL(sessID, "CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR(50), price INT);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE products failed: %v", err)
+	}
 
+	// 2. EXPLAIN BYTECODE for DML
+	res, err := server.ExecuteSessionSQL(sessID, "EXPLAIN BYTECODE INSERT INTO products (id, name, price) VALUES (1, 'Widget', 100);")
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN BYTECODE INSERT failed: %v", err)
+	}
+	foundInsertOp := false
+	for _, row := range res.Rows {
+		if strings.Contains(fmt.Sprintf("%v", row["Bytecode"]), "INSERT") {
+			foundInsertOp = true
+			break
+		}
+	}
+	if !foundInsertOp {
+		t.Errorf("expected INSERT opcode in bytecode, got %+v", res.Rows)
+	}
 
+	res, err = server.ExecuteSessionSQL(sessID, "EXPLAIN BYTECODE UPDATE products SET price = 200 WHERE id = 1;")
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN BYTECODE UPDATE failed: %v", err)
+	}
+	foundUpdateOp := false
+	for _, row := range res.Rows {
+		if strings.Contains(fmt.Sprintf("%v", row["Bytecode"]), "UPDATE") {
+			foundUpdateOp = true
+			break
+		}
+	}
+	if !foundUpdateOp {
+		t.Errorf("expected UPDATE opcode in bytecode, got %+v", res.Rows)
+	}
 
+	res, err = server.ExecuteSessionSQL(sessID, "EXPLAIN BYTECODE DELETE FROM products WHERE id = 1;")
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN BYTECODE DELETE failed: %v", err)
+	}
+	foundDeleteOp := false
+	for _, row := range res.Rows {
+		if strings.Contains(fmt.Sprintf("%v", row["Bytecode"]), "DELETE") {
+			foundDeleteOp = true
+			break
+		}
+	}
+	if !foundDeleteOp {
+		t.Errorf("expected DELETE opcode in bytecode, got %+v", res.Rows)
+	}
 
+	// 3. Execute single INSERT via VDBE
+	res, err = server.ExecuteSessionSQL(sessID, "INSERT INTO products (id, name, price) VALUES (10, 'Alpha', 500);")
+	if err != nil || !res.Success {
+		t.Fatalf("VDBE INSERT failed: %v", err)
+	}
+	if res.RowsAffected != 1 {
+		t.Errorf("expected 1 row affected, got %d", res.RowsAffected)
+	}
 
+	// Check @@ROWCOUNT
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT @@ROWCOUNT AS rc;")
+	if err != nil || !res.Success || len(res.Rows) == 0 {
+		t.Fatalf("SELECT @@ROWCOUNT failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["rc"]) != "1" {
+		t.Errorf("expected @@ROWCOUNT = 1, got %v", res.Rows[0]["rc"])
+	}
 
+	// 4. Multi-row INSERT via VDBE
+	res, err = server.ExecuteSessionSQL(sessID, "INSERT INTO products (id, name, price) VALUES (11, 'Beta', 600), (12, 'Gamma', 700);")
+	if err != nil || !res.Success {
+		t.Fatalf("VDBE Multi-row INSERT failed: %v", err)
+	}
+	if res.RowsAffected != 2 {
+		t.Errorf("expected 2 rows affected, got %d", res.RowsAffected)
+	}
 
+	// 5. UPDATE via VDBE
+	res, err = server.ExecuteSessionSQL(sessID, "UPDATE products SET price = 550 WHERE id = 10;")
+	if err != nil || !res.Success {
+		t.Fatalf("VDBE UPDATE failed: %v", err)
+	}
+	if res.RowsAffected != 1 {
+		t.Errorf("expected 1 row affected on UPDATE, got %d", res.RowsAffected)
+	}
 
+	// 6. DELETE via VDBE
+	res, err = server.ExecuteSessionSQL(sessID, "DELETE FROM products WHERE id = 11;")
+	if err != nil || !res.Success {
+		t.Fatalf("VDBE DELETE failed: %v", err)
+	}
+	if res.RowsAffected != 1 {
+		t.Errorf("expected 1 row affected on DELETE, got %d", res.RowsAffected)
+	}
+
+	// 7. Verify remaining rows
+	res, err = server.ExecuteSessionSQL(sessID, "SELECT id, name, price FROM products ORDER BY id;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT products failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 remaining products, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["price"]) != "550" {
+		t.Errorf("expected updated price 550 for id 10, got %v", res.Rows[0]["price"])
+	}
+	if fmt.Sprintf("%v", res.Rows[1]["id"]) != "12" {
+		t.Errorf("expected remaining product id 12, got %v", res.Rows[1]["id"])
+	}
+}

@@ -1023,6 +1023,13 @@ func (s *Server) execDropIndex(query string, start time.Time) (*QueryResult, err
 
 func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution
+	if res, err := s.execVBDEDML("INSERT", cleaned, start, cs); err == nil {
+		return res, nil
+	} else if strings.Contains(err.Error(), "IDENTITY_INSERT") {
+		return nil, err
+	}
 	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?\s*VALUES\s*(.*)$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 4 {
@@ -1983,6 +1990,14 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		}
 		return int64(0), "@@trancount"
 	case "@@ROWCOUNT":
+		if cs != nil {
+			cs.mu.Lock()
+			val, ok := cs.Vars["rowcount"]
+			cs.mu.Unlock()
+			if ok && val != nil {
+				return val, "@@rowcount"
+			}
+		}
 		return int64(0), "@@rowcount"
 	case "@@SERVERNAME", "@@SERVICENAME":
 		return "SQLION", "@@servername"
@@ -2372,6 +2387,85 @@ func (s *Server) execSelectInto(targetTable, projections, fromClause string, sta
 		RowsAffected: int64(len(selRes.Rows)),
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("(%d rows affected)", len(selRes.Rows))},
+	}, nil
+}
+
+func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	prog, err := proc.CompileStatement(cleaned)
+	if err != nil {
+		return nil, err
+	}
+
+	var tx storage.Transaction
+	var isEphemeral bool
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
+
+		t, err := session.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		isEphemeral = true
+		defer func() {
+			if isEphemeral && tx != nil {
+				_ = tx.Rollback()
+			}
+		}()
+	}
+
+	var params map[string]any
+	if cs != nil {
+		cs.mu.Lock()
+		if len(cs.Vars) > 0 {
+			params = make(map[string]any, len(cs.Vars))
+			for k, v := range cs.Vars {
+				params[k] = v
+			}
+		}
+		cs.mu.Unlock()
+	}
+
+	execRes, err := s.executor.ExecuteInTx(prog, params, tx, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if isEphemeral {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("failed to commit transaction: %w", err)
+		}
+		tx = nil
+	}
+
+	if cs != nil {
+		cs.mu.Lock()
+		if execRes.LastIdentity > 0 {
+			cs.Vars["identity"] = execRes.LastIdentity
+			cs.Vars["@@identity"] = execRes.LastIdentity
+		}
+		cs.Vars["rowcount"] = execRes.RowsAffected
+		cs.Vars["@@rowcount"] = execRes.RowsAffected
+		cs.mu.Unlock()
+	}
+
+	msg := fmt.Sprintf("(%d rows affected)", execRes.RowsAffected)
+	if len(execRes.Logs) > 0 {
+		msg = strings.Join(execRes.Logs, "\n")
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      command,
+		RowsAffected: execRes.RowsAffected,
+		DurationUS:   time.Since(start).Microseconds(),
+		Messages:     []string{msg},
 	}, nil
 }
 
@@ -3654,6 +3748,11 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time, cs *Cli
 
 func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution
+	if res, err := s.execVBDEDML("UPDATE", cleaned, start, cs); err == nil {
+		return res, nil
+	}
 	re := regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
@@ -3778,6 +3877,11 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 
 func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution
+	if res, err := s.execVBDEDML("DELETE", cleaned, start, cs); err == nil {
+		return res, nil
+	}
 	re := regexp.MustCompile(`(?is)^DELETE\s+FROM\s+([^\s;]+)(?:\s+WHERE\s+(.*))?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 2 {

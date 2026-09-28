@@ -109,6 +109,10 @@ func Compile(sql string) (*Program, error) {
 		return CompileQuery(sql)
 	}
 
+	if strings.HasPrefix(upper, "INSERT") || strings.HasPrefix(upper, "UPDATE") || strings.HasPrefix(upper, "DELETE") {
+		return CompileStatement(sql)
+	}
+
 	// Fallback to procedure parser
 	lexer := NewLexer(sql)
 	parser := NewParser(lexer)
@@ -117,6 +121,30 @@ func Compile(sql string) (*Program, error) {
 		return nil, err
 	}
 	return CompileProcedure(stmt)
+}
+
+// CompileStatement compiles an interactive / standalone DML or SQL statement into a VDBE Program.
+func CompileStatement(sql string) (*Program, error) {
+	trimmed := strings.TrimSpace(sql)
+	c := NewCompiler()
+	c.prog.Name = "INTERACTIVE_DML"
+	c.prog.Type = "DML"
+	c.prog.QuerySQL = trimmed
+
+	p := NewParser(NewLexer(trimmed))
+	stmt, err := p.ParseSQLStatement()
+	if err != nil {
+		return nil, err
+	}
+	if err := c.compileStatement(stmt); err != nil {
+		return nil, err
+	}
+	if err := c.resolveGotos(); err != nil {
+		return nil, err
+	}
+	c.emit(OpReturn, -1, 0, 0, nil)
+	c.prog.NumRegisters = c.maxRegisters
+	return c.prog, nil
 }
 
 // CompileQuery compiles an interactive / standalone SELECT or relational query into a VDBE Program containing OpRelQuery.
@@ -426,6 +454,16 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			Columns:  s.Columns,
 			ValExprs: s.Values,
 		})
+		return nil
+
+	case *GeneralInsertStmt:
+		for _, tuple := range s.Tuples {
+			c.emit(OpInsert, 0, 0, 0, &DMLData{
+				Table:    s.Table,
+				Columns:  s.Columns,
+				ValExprs: tuple,
+			})
+		}
 		return nil
 
 	case *UpdateStmt:

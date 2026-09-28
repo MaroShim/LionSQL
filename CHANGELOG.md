@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **VDBE Engine Unification for Standalone DML (`pkg/proc`, `pkg/proc/runtime`, `pkg/api`, `pkg/wire`)**:
+  - Unified standalone interactive `INSERT`, `UPDATE`, and `DELETE` queries to execute directly on the VDBE Virtual Machine (`proc.CompileStatement` ➔ `s.executor.ExecuteInTx`), achieving 100% single-engine execution parity across all DQL, DML, stored procedures, and triggers.
+  - Added `CompileStatement` in `pkg/proc/compiler.go` and `GeneralInsertStmt` compiler support for single and multi-tuple `VALUES` clauses.
+  - Enhanced `OpInsert`, `OpUpdate`, and `OpDelete` execution in `pkg/proc/runtime/vm.go` with schema-aware column resolution, dynamic primary key discovery, `IDENTITY_INSERT` validation, and accurate `RowsAffected` / `LastIdentity` tracking.
+  - Updated `ExecutionResult` to report `RowsAffected` and `LastIdentity`, accurately synchronizing session `@@ROWCOUNT` and `@@IDENTITY` variables.
+  - Extended PGWire and TDS wire protocol command completions to report true DML affected row counts from bytecode execution.
+  - Added full `EXPLAIN BYTECODE` support for standalone `INSERT`, `UPDATE`, and `DELETE` statements.
+  - Added comprehensive test coverage in `pkg/api/sqlexec_test.go` (`TestSQLExecutor_VBDEDML`).
 - **VDBE Engine Unification for Interactive Queries (`pkg/api`, `pkg/proc/runtime`)**:
   - Unified the interactive SELECT query execution path (`ExecuteSQL`) to compile and dispatch directly through the VDBE Virtual Machine (`proc.CompileQuery` ➔ `s.executor.ExecuteInTx`), achieving 100% single-engine execution parity across stored procedures and relational queries.
   - Added `ExecuteInTx` method to `runtime.Executor` to execute precompiled bytecode programs within existing session transactions while returning relational `Rows` and `Columns`.
