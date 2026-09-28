@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Built-in System Stored Procedures (`pkg/api`)**:
+  - Implemented core administrative stored procedures: `sp_help`, `sp_spaceused`, `sp_who`, `sp_who2`, `sp_lock`, and `sp_rename`.
+  - Added object and column detail introspection in `sp_help [object_name]`.
+  - Added database and table row count/storage space usage reporting in `sp_spaceused [object_name]`.
+  - Added active connection and transaction monitor in `sp_who` / `sp_who2`, and lock status inspection in `sp_lock`.
+  - Added atomic table and column renaming utility with schema and data migration in `sp_rename 'old_name', 'new_name' [, 'COLUMN']`.
+  - Direct execution support with or without `EXEC` prefix (`EXEC sp_help` and `sp_help`).
 - **DBeaver & Beekeeper Studio GUI Client Introspection Compatibility (`pkg/api`)**:
   - Implemented table-less scalar `SELECT` evaluation for session functions and literal expressions (`SELECT 1`, `current_database()`, `current_schema()`, `version()`, `now()`, `pg_backend_pid()`, `@@VERSION`, `@@SPID`, `@@TRANCOUNT`, `@@ROWCOUNT`).
   - Added support for comprehensive T-SQL and PostgreSQL session configuration options in `SET` (`SET NOCOUNT ON`, `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`, `SET TRANSACTION ISOLATION LEVEL ...`, `SET TIME ZONE ...`, `SET NAMES ...`, `SET extra_float_digits ...`).

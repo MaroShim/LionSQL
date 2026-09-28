@@ -1046,4 +1046,85 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_BuiltinSystemStoredProcedures(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// Create test table
+	_, _ = server.ExecuteSQL("CREATE TABLE inventory (id INT PRIMARY KEY, sku VARCHAR(50), qty INT);")
+	_, _ = server.ExecuteSQL("INSERT INTO inventory (id, sku, qty) VALUES (1, 'SKU-A', 100), (2, 'SKU-B', 200);")
+
+	// 1. sp_help without arguments
+	res, err := server.ExecuteSQL("EXEC sp_help;")
+	if err != nil || !res.Success || len(res.Rows) < 1 {
+		t.Fatalf("EXEC sp_help failed: %v", err)
+	}
+
+	// 2. sp_help with table name
+	res, err = server.ExecuteSQL("EXEC sp_help inventory;")
+	if err != nil || !res.Success || len(res.Rows) != 3 {
+		t.Fatalf("EXEC sp_help inventory failed: %v, rows: %+v", err, res.Rows)
+	}
+	if res.Rows[0]["Column_name"] != "id" || res.Rows[0]["PrimaryKey"] != true {
+		t.Fatalf("unexpected sp_help column detail: %+v", res.Rows[0])
+	}
+
+	// 3. sp_spaceused (database and table)
+	res, err = server.ExecuteSQL("EXEC sp_spaceused;")
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["database_name"] != "sqlion" {
+		t.Fatalf("EXEC sp_spaceused failed: %v", err)
+	}
+
+	res, err = server.ExecuteSQL("EXEC sp_spaceused inventory;")
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["rows"] != "2" {
+		t.Fatalf("EXEC sp_spaceused inventory failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	// 4. sp_who
+	res, err = server.ExecuteSQL("EXEC sp_who;")
+	if err != nil || !res.Success || len(res.Rows) < 1 {
+		t.Fatalf("EXEC sp_who failed: %v", err)
+	}
+
+	// 5. sp_lock
+	res, err = server.ExecuteSQL("EXEC sp_lock;")
+	if err != nil || !res.Success || len(res.Rows) < 1 {
+		t.Fatalf("EXEC sp_lock failed: %v", err)
+	}
+
+	// 6. sp_rename column: inventory.sku -> item_code
+	res, err = server.ExecuteSQL("EXEC sp_rename 'inventory.sku', 'item_code', 'COLUMN';")
+	if err != nil || !res.Success {
+		t.Fatalf("EXEC sp_rename column failed: %v", err)
+	}
+
+	// Verify column rename succeeded
+	res, err = server.ExecuteSQL("SELECT id, item_code, qty FROM inventory WHERE id = 1;")
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["item_code"] != "SKU-A" {
+		t.Fatalf("query after column rename failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	// 7. sp_rename table: inventory -> stock_items
+	res, err = server.ExecuteSQL("EXEC sp_rename 'inventory', 'stock_items';")
+	if err != nil || !res.Success {
+		t.Fatalf("EXEC sp_rename table failed: %v", err)
+	}
+
+	// Verify table rename succeeded
+	res, err = server.ExecuteSQL("SELECT id, item_code, qty FROM stock_items WHERE id = 2;")
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["item_code"] != "SKU-B" {
+		t.Fatalf("query after table rename failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	// 8. Direct invocation without EXEC: sp_help stock_items
+	res, err = server.ExecuteSQL("sp_help stock_items;")
+	if err != nil || !res.Success || len(res.Rows) != 3 {
+		t.Fatalf("direct sp_help stock_items failed: %v", err)
+	}
+}
+
+
 
