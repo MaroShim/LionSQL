@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Wire Protocols: Prepared Statement VDBE Bytecode Caching across PGWire & TDS (`pkg/wire`, `pkg/wire/tds`)**:
+  - Implemented zero-parse query execution fast-path for prepared statements across PostgreSQL Wire Protocol v3 (`pkg/wire`) and Microsoft SQL Server TDS 7.x/8.0 (`pkg/wire/tds`).
+  - Precompiled parameterized queries (`$1`, `$2` and `@p1`, `@p2`) into VDBE `*proc.Program` bytecode during `Parse` (PGWire) and `sp_prepare` / `sp_prepexec` (TDS).
+  - Executed cached bytecode programs directly via `runtime.Executor.Run` during `Execute` (PGWire) and `sp_execute` (TDS), completely bypassing runtime SQL re-parsing and string substitutions.
+  - Added unit and protocol test coverage in `pkg/wire/server_test.go` (`TestWire_CompileQueryToProgram`) and `pkg/wire/tds/server_test.go` (`TestTDS_PreparedStatement_BytecodeProgram`).
 - **VDBE Relational Query Opcode `OpRelQuery` & Volcano Engine Integration (`pkg/proc`, `pkg/proc/runtime`, `pkg/api`, `pkg/wire`)**:
   - Introduced `OpRelQuery` opcode in `pkg/proc/bytecode.go` with `RelQueryData` metadata struct and `Program.QuerySQL` field.
   - Extended bytecode compiler (`pkg/proc/compiler.go`) to compile interactive SELECT statements into VDBE bytecode programs via `CompileQuery` and `compileStatement`.

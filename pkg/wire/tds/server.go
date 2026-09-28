@@ -124,9 +124,10 @@ func (s *Server) acceptLoop() {
 
 // TdsPreparedStatement stores metadata for a prepared TDS statement.
 type TdsPreparedStatement struct {
-	Handle int32
-	Params string
-	Query  string
+	Handle  int32
+	Params  string
+	Query   string
+	Program *proc.Program
 }
 
 // RPCParam describes a parameter passed in an RPC call.
@@ -377,11 +378,15 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 	sess.prepMu.Lock()
 	sess.prepCounter++
 	handle := sess.prepCounter
-	sess.prepared[handle] = &TdsPreparedStatement{
+	prep := &TdsPreparedStatement{
 		Handle: handle,
 		Params: paramsDecl,
 		Query:  stmt,
 	}
+	if prog, err := proc.Compile(stmt); err == nil && prog != nil {
+		prep.Program = prog
+	}
+	sess.prepared[handle] = prep
 	sess.prepMu.Unlock()
 
 	var buf bytes.Buffer
@@ -413,6 +418,31 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 	var boundParams []RPCParam
 	if len(rpc.Params) > 1 {
 		boundParams = rpc.Params[1:]
+	}
+
+	// Fast-path: Execute via precompiled VDBE bytecode Program if available
+	if prep.Program != nil {
+		paramMap := make(map[string]any, len(boundParams)*2)
+		for i, p := range boundParams {
+			if p.Name != "" {
+				cleanName := strings.TrimPrefix(p.Name, "@")
+				paramMap[cleanName] = p.Value
+				paramMap["@"+cleanName] = p.Value
+			}
+			pIdx := i + 1
+			paramMap[fmt.Sprintf("p%d", pIdx)] = p.Value
+			paramMap[fmt.Sprintf("@p%d", pIdx)] = p.Value
+		}
+
+		session, err := s.engine.NewSession()
+		if err == nil {
+			defer session.Close()
+			res, err := s.executor.Run(prep.Program, "TdsPrepared", paramMap, session)
+			if err == nil {
+				s.respondExecutionResult(conn, res, sess, nil)
+				return
+			}
+		}
 	}
 
 	execSQL := s.buildBoundSQL(prep.Query, prep.Params, boundParams)
@@ -447,11 +477,15 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 	sess.prepMu.Lock()
 	sess.prepCounter++
 	handle := sess.prepCounter
-	sess.prepared[handle] = &TdsPreparedStatement{
+	prep := &TdsPreparedStatement{
 		Handle: handle,
 		Params: paramsDecl,
 		Query:  stmt,
 	}
+	if prog, err := proc.Compile(stmt); err == nil && prog != nil {
+		prep.Program = prog
+	}
+	sess.prepared[handle] = prep
 	sess.prepMu.Unlock()
 
 	var boundParams []RPCParam
@@ -459,10 +493,82 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 		boundParams = rpc.Params[3:]
 	}
 
+	// Fast-path: Execute via precompiled VDBE bytecode Program if available
+	if prep.Program != nil {
+		paramMap := make(map[string]any, len(boundParams)*2)
+		for i, p := range boundParams {
+			if p.Name != "" {
+				cleanName := strings.TrimPrefix(p.Name, "@")
+				paramMap[cleanName] = p.Value
+				paramMap["@"+cleanName] = p.Value
+			}
+			pIdx := i + 1
+			paramMap[fmt.Sprintf("p%d", pIdx)] = p.Value
+			paramMap[fmt.Sprintf("@p%d", pIdx)] = p.Value
+		}
+
+		session, err := s.engine.NewSession()
+		if err == nil {
+			defer session.Close()
+			res, err := s.executor.Run(prep.Program, "TdsPrepared", paramMap, session)
+			if err == nil {
+				s.respondExecutionResult(conn, res, sess, func(buf *bytes.Buffer) {
+					buf.Write(BuildReturnValueInt(1, "@handle", handle))
+				})
+				return
+			}
+		}
+	}
+
 	execSQL := s.buildBoundSQL(stmt, paramsDecl, boundParams)
 	s.executeRPCAndRespond(conn, execSQL, sess, func(buf *bytes.Buffer) {
 		buf.Write(BuildReturnValueInt(1, "@handle", handle))
 	})
+}
+
+func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionResult, sess *ConnectionSession, extraTokens func(buf *bytes.Buffer)) {
+	var buf bytes.Buffer
+
+	for _, msg := range res.Logs {
+		buf.Write(BuildInfo(0, 1, 10, msg, "SQLION", "", 1))
+	}
+
+	if len(res.Columns) > 0 {
+		qr := &api.QueryResult{
+			Columns: res.Columns,
+			Rows:    res.Rows,
+			Success: true,
+		}
+		cols := s.inferColumnInfos(qr)
+		buf.Write(BuildColMetaData(cols))
+
+		for _, row := range res.Rows {
+			rowVals := make([]any, len(res.Columns))
+			for i, colName := range res.Columns {
+				if v, ok := row[colName]; ok {
+					rowVals[i] = v
+				} else {
+					rowVals[i] = nil
+				}
+			}
+			buf.Write(BuildRow(cols, rowVals))
+		}
+
+		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows))))
+		if extraTokens != nil {
+			extraTokens(&buf)
+		}
+		buf.Write(BuildReturnStatus(0))
+		buf.Write(BuildDoneProc(DoneFinal, 0xC1, uint64(len(res.Rows))))
+	} else {
+		if extraTokens != nil {
+			extraTokens(&buf)
+		}
+		buf.Write(BuildReturnStatus(0))
+		buf.Write(BuildDoneProc(DoneFinal|DoneCount, 0xC1, uint64(len(res.Rows))))
+	}
+
+	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 }
 
 func (s *Server) handleRPCUnprepare(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession) {

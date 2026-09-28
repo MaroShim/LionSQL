@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -132,6 +133,7 @@ type PreparedStatement struct {
 	Name       string
 	Query      string
 	ParamTypes []int32
+	Program    *proc.Program
 }
 
 type Portal struct {
@@ -355,6 +357,13 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 	s.runAndWriteQuery(conn, query, true, sessID)
 }
 
+var pgParamRe = regexp.MustCompile(`\$(\d+)`)
+
+func (s *Server) compileQueryToProgram(query string) (*proc.Program, error) {
+	translated := pgParamRe.ReplaceAllString(query, "@p$1")
+	return proc.Compile(translated)
+}
+
 func (s *Server) handleParse(conn net.Conn, payload []byte, statements map[string]*PreparedStatement) {
 	r := bytes.NewReader(payload)
 	stmtName, _ := readCString(r)
@@ -368,11 +377,17 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements map[strin
 		_ = binary.Read(r, binary.BigEndian, &paramTypes[i])
 	}
 
-	statements[stmtName] = &PreparedStatement{
+	prep := &PreparedStatement{
 		Name:       stmtName,
 		Query:      queryStr,
 		ParamTypes: paramTypes,
 	}
+
+	if prog, err := s.compileQueryToProgram(queryStr); err == nil && prog != nil {
+		prep.Program = prog
+	}
+
+	statements[stmtName] = prep
 
 	_ = WriteParseComplete(conn)
 }
@@ -499,8 +514,59 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 		return
 	}
 
+	if sessID == "" {
+		sessID = "default"
+	}
+
+	// Fast-path: Execute via precompiled VDBE bytecode Program if available
+	if portal.Statement != nil && portal.Statement.Program != nil {
+		paramMap := make(map[string]any, len(portal.Params)*3)
+		for i, paramVal := range portal.Params {
+			pIdx := i + 1
+			paramMap[fmt.Sprintf("p%d", pIdx)] = paramVal
+			paramMap[fmt.Sprintf("@p%d", pIdx)] = paramVal
+			paramMap[fmt.Sprintf("$%d", pIdx)] = paramVal
+		}
+
+		session, err := s.engine.NewSession()
+		if err == nil {
+			defer session.Close()
+			res, err := s.executor.Run(portal.Statement.Program, "PreparedStatement", paramMap, session)
+			if err == nil {
+				s.writeExecutionResult(conn, res)
+				return
+			}
+		}
+	}
+
+	// Fallback to text substitution
 	substitutedSQL := substituteParams(portal.Statement.Query, portal.Params)
 	s.runAndWriteQuery(conn, substitutedSQL, false, sessID)
+}
+
+func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResult) {
+	if len(res.Columns) > 0 {
+		cols := make([]ColumnMeta, len(res.Columns))
+		for i, c := range res.Columns {
+			cols[i] = ColumnMeta{Name: c, DataType: 25}
+		}
+		_ = WriteRowDescription(conn, cols)
+
+		for _, row := range res.Rows {
+			vals := make([]string, len(res.Columns))
+			for i, colName := range res.Columns {
+				if v, ok := row[colName]; ok && v != nil {
+					vals[i] = fmt.Sprintf("%v", v)
+				} else {
+					vals[i] = ""
+				}
+			}
+			_ = WriteDataRow(conn, vals)
+		}
+		_ = WriteCommandComplete(conn, fmt.Sprintf("SELECT %d", len(res.Rows)))
+		return
+	}
+	_ = WriteCommandComplete(conn, fmt.Sprintf("OK %d", len(res.Rows)))
 }
 
 func (s *Server) handleClose(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {

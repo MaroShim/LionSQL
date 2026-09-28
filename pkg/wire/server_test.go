@@ -501,4 +501,23 @@ func TestWire_BackendKeyDataAndCancelRequest(t *testing.T) {
 	}
 }
 
+func TestWire_CompileQueryToProgram(t *testing.T) {
+	server, eng, _ := setupTestWireServer(t)
+	defer eng.Close()
+	defer server.Close()
+
+	prog, err := server.compileQueryToProgram("SELECT id, holder FROM accounts WHERE id = $1")
+	if err != nil {
+		t.Fatalf("compileQueryToProgram failed: %v", err)
+	}
+	if prog == nil {
+		t.Fatalf("expected non-nil program")
+	}
+	dis := prog.Disassemble()
+	if !strings.Contains(dis, "REL_QUERY") {
+		t.Fatalf("expected REL_QUERY opcode in program, got:\n%s", dis)
+	}
+}
+
+
 

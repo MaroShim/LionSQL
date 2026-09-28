@@ -522,3 +522,50 @@ func TestTDS_PreparedStatementRPC(t *testing.T) {
 	}
 }
 
+func TestTDS_PreparedStatement_BytecodeProgram(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	_ = sendSQLBatch(t, conn, "CREATE TABLE items (id INT PRIMARY KEY, name VARCHAR(100));")
+	_ = sendSQLBatch(t, conn, "INSERT INTO items (id, name) VALUES (101, 'Mechanical Keyboard');")
+
+	// 1. Prepare a SELECT statement via sp_prepare (ProcID 11)
+	var prepParams bytes.Buffer
+	prepParams.Write(buildIntParam("@handle", true, 0))
+	prepParams.Write(buildNVarCharParam("@params", false, "@id INT"))
+	prepParams.Write(buildNVarCharParam("@stmt", false, "SELECT id, name FROM items WHERE id = @id;"))
+
+	respPrep := sendRPC(t, conn, 11, 0, prepParams.Bytes())
+	if !bytes.Contains(respPrep, []byte{TokenReturnValue}) {
+		t.Fatalf("sp_prepare: expected TokenReturnValue (0xAC)")
+	}
+
+	rvIdx := bytes.Index(respPrep, []byte{TokenReturnValue})
+	if rvIdx < 0 {
+		t.Fatalf("sp_prepare: cannot find TokenReturnValue")
+	}
+	valOffset := rvIdx + 1 + 2 + 1 + 14 + 1 + 4 + 2 + 1
+	var handle int32 = 1
+	if len(respPrep) >= valOffset+4 {
+		handle = int32(binary.LittleEndian.Uint32(respPrep[valOffset : valOffset+4]))
+	}
+
+	// 2. Execute via sp_execute (ProcID 12)
+	var execParams bytes.Buffer
+	execParams.Write(buildIntParam("@handle", false, handle))
+	execParams.Write(buildIntParam("@id", false, 101))
+
+	respExec := sendRPC(t, conn, 12, 0, execParams.Bytes())
+	if !bytes.Contains(respExec, []byte{TokenColMetaData}) {
+		t.Fatalf("sp_execute: expected TokenColMetaData (0x81)")
+	}
+	if !bytes.Contains(respExec, []byte{TokenRow}) {
+		t.Fatalf("sp_execute: expected TokenRow (0xD1)")
+	}
+	if !bytes.Contains(respExec, []byte{TokenDoneProc}) {
+		t.Fatalf("sp_execute: expected TokenDoneProc (0xFE)")
+	}
+}
+
+
