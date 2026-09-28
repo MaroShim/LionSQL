@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.6.0] - 2026-09-28
+
 ### Added
 - **VDBE Secondary Index Opcode `OpIndexScan` & Search Optimization (`pkg/proc`, `pkg/proc/runtime`)**:
   - Introduced `OpIndexScan` opcode in `pkg/proc/bytecode.go` with `IndexScanData` metadata struct for secondary index point and range scans.
