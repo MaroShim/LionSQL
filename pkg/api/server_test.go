@@ -31,6 +31,13 @@ func TestAPI_HealthAndSeed(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("Health check failed with code %d: %s", rec.Code, rec.Body.String())
 	}
+	var healthResp map[string]string
+	if err := json.Unmarshal(rec.Body.Bytes(), &healthResp); err != nil {
+		t.Fatalf("Failed to decode health check response: %v", err)
+	}
+	if healthResp["engine"] != "In-Memory OCC" {
+		t.Fatalf("Expected engine 'In-Memory OCC', got '%s'", healthResp["engine"])
+	}
 
 	// 2. Seed data
 	req = httptest.NewRequest(http.MethodPost, "/api/seed", nil)

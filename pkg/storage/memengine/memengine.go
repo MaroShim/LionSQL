@@ -87,6 +87,11 @@ func New() *Engine {
 	}
 }
 
+// Type returns the human-readable storage engine backend name.
+func (e *Engine) Type() string {
+	return "In-Memory OCC"
+}
+
 // SetFsyncPolicy sets the disk synchronization policy for WAL/AOF.
 func (e *Engine) SetFsyncPolicy(policy FsyncPolicy) {
 	e.mu.Lock()

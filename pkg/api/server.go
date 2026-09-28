@@ -246,7 +246,15 @@ func (s *Server) routes() {
 
 	// API Health
 	s.mux.HandleFunc("GET /api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "version": "0.7.0"})
+		engineType := "In-Memory OCC"
+		if s.engine != nil {
+			engineType = s.engine.Type()
+		}
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status":  "ok",
+			"version": "0.7.0",
+			"engine":  engineType,
+		})
 	})
 
 	// Connection Pool & Worker Metrics (Built-in Connection Pooler)

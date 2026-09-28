@@ -353,6 +353,7 @@ type Session interface {
 
 // Engine is the top-level contract for the database storage layer.
 type Engine interface {
+	Type() string
 	Open(dir string) error
 	Close() error
 	NewSession() (Session, error)

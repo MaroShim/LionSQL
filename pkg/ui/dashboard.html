@@ -320,7 +320,7 @@
       <input type="file" id="backup-file-input" accept=".tar.gz,.tgz" style="display: none;" onchange="handleBackupFileUpload(event)" />
     </div>
     <div style="padding: 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border);">
-      Engine: <span id="engine-type" style="color: #60a5fa;">Active Engine</span><br>
+      Engine: <span id="engine-type" style="color: #60a5fa; font-weight: 600;">Detecting...</span><br>
       PocketBase Style Single Binary
     </div>
   </aside>
@@ -2808,7 +2808,23 @@ END;</textarea>
       }
     }
 
+    async function loadEngineInfo() {
+      try {
+        const res = await fetch('/api/health');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.engine) {
+            const el = document.getElementById('engine-type');
+            if (el) el.textContent = data.engine;
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load engine info:', err);
+      }
+    }
+
     // Init
+    loadEngineInfo();
     checkAuthSession();
     loadAPIKeys();
     loadTables();

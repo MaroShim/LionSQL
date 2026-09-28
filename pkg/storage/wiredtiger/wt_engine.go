@@ -145,6 +145,11 @@ func New() *Engine {
 	}
 }
 
+// Type returns the human-readable storage engine backend name.
+func (e *Engine) Type() string {
+	return "WiredTiger"
+}
+
 func (e *Engine) Open(dir string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()

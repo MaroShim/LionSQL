@@ -16,6 +16,10 @@ func New() *Engine {
 	return &Engine{}
 }
 
+func (e *Engine) Type() string {
+	return "WiredTiger"
+}
+
 func (e *Engine) Open(dir string) error {
 	return fmt.Errorf("wiredtiger storage engine not enabled in this build; build with '-tags wiredtiger'")
 }
