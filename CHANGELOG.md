@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Query Optimizer Predicate Pushdown (`pkg/planner`, `pkg/execution`, `pkg/api`)**:
+  - Implemented conjunct extraction and table attribution analysis (`pkg/planner/pushdown.go`), partitioning complex `WHERE` conditions by table and join eligibility while distinguishing qualified and unqualified column identifiers.
+  - Pushed down single-table filter predicates to primary and joined table scan iterators before join operations, reducing the number of candidate tuples streamed into `HashJoinIterator` and `IndexNestedLoopJoinIterator`.
+  - Enabled secondary index matching (`NodeIndexScan` and `NodeIndexOnlyScan`) for primary tables within multi-table JOIN queries whenever pushed-down predicates reference an indexed column, eliminating full table scans.
+  - Maintained SQL standards-compliant outer join semantics by safely evaluating non-null-rejecting outer table predicates post-join rather than pushing them down into nullable join branches.
+  - Enhanced `pkg/execution/builder.go` to evaluate attached `FilterCond` conditions on `NodeIndexScan` and `NodeIndexOnlyScan` via `FilterIterator`.
+  - Added unit test suite in `pkg/planner/pushdown_test.go` and integration test suite in `pkg/api/pushdown_test.go`.
 - **Query Optimizer Constant Folding & Boolean Simplification (`pkg/proc`, `pkg/planner`, `pkg/execution`, `pkg/api`)**:
   - Implemented AST constant folding engine (`pkg/proc/fold.go`) evaluating compile-time literal arithmetic (`3000 * 12` -> `36000`), string operations, comparisons (`10 > 5` -> `true`), null checks (`IS NULL` / `IS NOT NULL`), and deterministic built-in scalar functions (`UPPER`, `LOWER`, `LEN`, `ABS`, `CONCAT`, etc.) ahead of execution.
   - Implemented logical boolean simplifications (`true AND X` -> `X`, `false AND X` -> `false`, `false OR X` -> `X`, `true OR X` -> `true`, double negation `NOT (NOT X)` -> `X`), eliminating redundant evaluation branches.

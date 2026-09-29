@@ -40,6 +40,9 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		low, high := parseIndexCond(plan.IndexCond, schema)
 		it := NewIndexScanIterator(tx, plan.Relation, plan.Alias, plan.IndexName, low, high, schema)
 		it.IndexOnly = (plan.Type == planner.NodeIndexOnlyScan)
+		if plan.FilterCond != "" {
+			return NewFilterIterator(it, plan.FilterCond), nil
+		}
 		return it, nil
 
 	case planner.NodeFilter:

@@ -126,6 +126,13 @@ func cleanIdent(s string) string {
 	return strings.Trim(s, "\"`[]")
 }
 
+func splitASTAndExpr(expr proc.Expr) []proc.Expr {
+	if bin, ok := expr.(*proc.BinaryExpr); ok && bin.Op == proc.TokenAnd {
+		return append(splitASTAndExpr(bin.Left), splitASTAndExpr(bin.Right)...)
+	}
+	return []proc.Expr{expr}
+}
+
 // FromAST converts a GeneralSelectStmt AST into a QueryInfo for cost-based planning.
 func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 	if stmt == nil {
@@ -167,16 +174,26 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 	for _, j := range stmt.Joins {
 		leftKey := ""
 		rightKey := ""
-		if bin, ok := j.On.(*proc.BinaryExpr); ok && bin.Op == proc.TokenEq {
-			leftKey = bin.Left.String()
-			rightKey = bin.Right.String()
-		} else if j.On != nil {
-			leftKey = j.On.String()
+		var onFilters []string
+		if j.On != nil {
+			onParts := splitASTAndExpr(j.On)
+			for _, part := range onParts {
+				if bin, ok := part.(*proc.BinaryExpr); ok && bin.Op == proc.TokenEq && leftKey == "" {
+					leftKey = bin.Left.String()
+					rightKey = bin.Right.String()
+				} else {
+					onFilters = append(onFilters, part.String())
+				}
+			}
 		}
 		rTable := cleanIdent(j.Table.Name)
 		rAlias := cleanIdent(j.Table.Alias)
 		if rAlias == "" {
 			rAlias = rTable
+		}
+		filterCond := ""
+		if len(onFilters) > 0 {
+			filterCond = strings.Join(onFilters, " AND ")
 		}
 		joins = append(joins, &JoinInfo{
 			Type:     j.Type,
@@ -184,6 +201,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 			Alias:    rAlias,
 			LeftKey:  cleanIdent(leftKey),
 			RightKey: cleanIdent(rightKey),
+			Filter:   filterCond,
 		})
 	}
 
@@ -605,111 +623,148 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	tableScanTotalCost := seqPages*SeqPageCost + float64(estimatedTotal)*CPUTupleCost
 
 	var scanNode *PlanNode
-	usedIndex := false
 
-	// Check if WHERE condition matches an existing index on primary table (only if single-table scan)
-	hasJoins := (q.Join != nil) || (len(q.Joins) > 0)
-	if q.WhereClause != "" && schema != nil && !hasJoins {
-		eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(=|<|<=|>|>=|!=|<>)\s*(.+)$`)
-		if m := eqRe.FindStringSubmatch(q.WhereClause); len(m) == 4 {
-			rawCol := m[1]
-			if idxDot := strings.Index(rawCol, "."); idxDot != -1 {
-				rawCol = rawCol[idxDot+1:]
-			}
-			colName := rawCol
-			op := m[2]
-			valStr := strings.TrimSpace(m[3])
+	// Analyze predicate pushdown across primary and joined relations
+	pushdownRes := PushDownPredicates(q, schema, rightSchemas)
 
-			if idx, found := schema.FindIndexByColumn(colName); found {
-				sel := 0.1
-				if idx.Unique && (op == "=" || op == "==") {
-					sel = 1.0 / float64(estimatedTotal)
-				} else if leftStats != nil {
-					sel = leftStats.EstimateSelectivity(colName, op, valStr)
+	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(=|<|<=|>|>=|!=|<>)\s*(.+)$`)
+
+	var chosenIndex *storage.IndexSchema
+	var chosenCond string
+	var chosenCol, chosenOp, chosenVal string
+	var chosenEstRows int64
+	var chosenCost float64
+	var chosenCovering bool
+
+	if schema != nil && len(pushdownRes.PrimaryConds) > 0 {
+		for _, cond := range pushdownRes.PrimaryConds {
+			if m := eqRe.FindStringSubmatch(cond); len(m) == 4 {
+				rawCol := m[1]
+				if idxDot := strings.Index(rawCol, "."); idxDot != -1 {
+					rawCol = rawCol[idxDot+1:]
 				}
+				colName := cleanIdent(rawCol)
+				op := m[2]
+				valStr := strings.TrimSpace(m[3])
 
-				estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
-				if estRows < 1 {
-					estRows = 1
-				}
-
-				startupCost := 0.25
-				indexPagesCost := (float64(estRows) / float64(RowsPerPageDefault)) * RandomPageCost
-				if indexPagesCost < 0.05 {
-					indexPagesCost = 0.05
-				}
-
-				// Check covering index eligibility (Index-Only Scan)
-				isCovering := false
-				if len(q.Projections) > 0 {
-					hasStar := false
-					for _, proj := range q.Projections {
-						trimmed := strings.TrimSpace(proj)
-						if trimmed == "*" || strings.HasSuffix(trimmed, ".*") {
-							hasStar = true
-							break
-						}
+				if idx, found := schema.FindIndexByColumn(colName); found {
+					sel := 0.1
+					if idx.Unique && (op == "=" || op == "==") {
+						sel = 1.0 / float64(estimatedTotal)
+					} else if leftStats != nil {
+						sel = leftStats.EstimateSelectivity(colName, op, valStr)
 					}
 
-					if !hasStar {
-						coveredCols := make(map[string]bool)
-						for _, c := range idx.Columns {
-							coveredCols[strings.ToLower(c)] = true
-						}
-						if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
-							coveredCols[strings.ToLower(pkCol.Name)] = true
-						}
+					estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
+					if estRows < 1 {
+						estRows = 1
+					}
 
-						allCovered := true
+					startupCost := 0.25
+					indexPagesCost := (float64(estRows) / float64(RowsPerPageDefault)) * RandomPageCost
+					if indexPagesCost < 0.05 {
+						indexPagesCost = 0.05
+					}
+
+					// Check covering index eligibility (Index-Only Scan)
+					isCovering := false
+					if len(q.Projections) > 0 {
+						hasStar := false
 						for _, proj := range q.Projections {
-							clean := strings.ToLower(strings.TrimSpace(proj))
-							if clean == "count(*)" || clean == "count(1)" {
-								continue
-							}
-							if dotIdx := strings.Index(clean, "."); dotIdx != -1 {
-								clean = clean[dotIdx+1:]
-							}
-							if asIdx := strings.Index(clean, " as "); asIdx != -1 {
-								clean = strings.TrimSpace(clean[:asIdx])
-							}
-							if !coveredCols[clean] {
-								allCovered = false
+							trimmed := strings.TrimSpace(proj)
+							if trimmed == "*" || strings.HasSuffix(trimmed, ".*") {
+								hasStar = true
 								break
 							}
 						}
-						isCovering = allCovered
+
+						if !hasStar {
+							coveredCols := make(map[string]bool)
+							for _, c := range idx.Columns {
+								coveredCols[strings.ToLower(c)] = true
+							}
+							if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
+								coveredCols[strings.ToLower(pkCol.Name)] = true
+							}
+
+							allCovered := true
+							for _, proj := range q.Projections {
+								clean := strings.ToLower(strings.TrimSpace(proj))
+								if clean == "count(*)" || clean == "count(1)" {
+									continue
+								}
+								if dotIdx := strings.Index(clean, "."); dotIdx != -1 {
+									clean = clean[dotIdx+1:]
+								}
+								if asIdx := strings.Index(clean, " as "); asIdx != -1 {
+									clean = strings.TrimSpace(clean[:asIdx])
+								}
+								if !coveredCols[clean] {
+									allCovered = false
+									break
+								}
+							}
+							isCovering = allCovered
+						}
 					}
-				}
 
-				nodeType := NodeIndexScan
-				var indexScanCost float64
-				if isCovering {
-					nodeType = NodeIndexOnlyScan
-					// Index-Only Scan eliminates table heap page fetches and tuple CPU cost
-					indexScanCost = startupCost + float64(estRows)*CPUIndexTupleCost + indexPagesCost*0.6
-				} else {
-					indexScanCost = startupCost + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
-				}
+					var indexScanCost float64
+					if isCovering {
+						indexScanCost = startupCost + float64(estRows)*CPUIndexTupleCost + indexPagesCost*0.6
+					} else {
+						indexScanCost = startupCost + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
+					}
 
-				// CBO Decision: Choose IndexScan only if its estimated cost is lower than TableScan
-				if indexScanCost < tableScanTotalCost {
-					usedIndex = true
-					scanNode = &PlanNode{
-						Type:          nodeType,
-						Relation:      q.TableName,
-						Alias:         q.TableAlias,
-						IndexName:     idx.Name,
-						IndexCond:     fmt.Sprintf("(%s %s %s)", colName, op, valStr),
-						StartupCost:   startupCost,
-						TotalCost:     indexScanCost,
-						EstimatedRows: estRows,
+					if indexScanCost < tableScanTotalCost && (chosenIndex == nil || indexScanCost < chosenCost) {
+						chosenIndex = idx
+						chosenCond = cond
+						chosenCol = colName
+						chosenOp = op
+						chosenVal = valStr
+						chosenEstRows = estRows
+						chosenCost = indexScanCost
+						chosenCovering = isCovering
 					}
 				}
 			}
 		}
 	}
 
-	if !usedIndex {
+	if chosenIndex != nil {
+		nodeType := NodeIndexScan
+		if chosenCovering {
+			nodeType = NodeIndexOnlyScan
+		}
+		scanNode = &PlanNode{
+			Type:          nodeType,
+			Relation:      q.TableName,
+			Alias:         q.TableAlias,
+			IndexName:     chosenIndex.Name,
+			IndexCond:     fmt.Sprintf("(%s %s %s)", chosenCol, chosenOp, chosenVal),
+			StartupCost:   0.25,
+			TotalCost:     chosenCost,
+			EstimatedRows: chosenEstRows,
+		}
+
+		var remainingPrimary []string
+		for _, c := range pushdownRes.PrimaryConds {
+			if c != chosenCond {
+				remainingPrimary = append(remainingPrimary, c)
+			}
+		}
+		if len(remainingPrimary) > 0 {
+			filterCond := strings.Join(remainingPrimary, " AND ")
+			filterCost := chosenCost + float64(chosenEstRows)*CPUOperatorCost
+			scanNode = &PlanNode{
+				Type:          NodeFilter,
+				FilterCond:    filterCond,
+				StartupCost:   0.25,
+				TotalCost:     filterCost,
+				EstimatedRows: int64(math.Max(1, float64(chosenEstRows)*0.5)),
+				Children:      []*PlanNode{scanNode},
+			}
+		}
+	} else {
 		// Table Scan (Sequential Scan)
 		scanNode = &PlanNode{
 			Type:          NodeTableScan,
@@ -718,6 +773,32 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			StartupCost:   0.0,
 			TotalCost:     tableScanTotalCost,
 			EstimatedRows: estimatedTotal,
+		}
+
+		if len(pushdownRes.PrimaryConds) > 0 {
+			sel := 0.33
+			if leftStats != nil && len(pushdownRes.PrimaryConds) == 1 {
+				if m := eqRe.FindStringSubmatch(pushdownRes.PrimaryConds[0]); len(m) == 4 {
+					rawCol := m[1]
+					if idx := strings.Index(rawCol, "."); idx != -1 {
+						rawCol = rawCol[idx+1:]
+					}
+					sel = leftStats.EstimateSelectivity(rawCol, m[2], strings.TrimSpace(m[3]))
+				}
+			}
+			filterEstRows := int64(math.Ceil(float64(estimatedTotal) * sel))
+			if filterEstRows < 1 {
+				filterEstRows = 1
+			}
+			filterCost := tableScanTotalCost + float64(estimatedTotal)*CPUOperatorCost
+			scanNode = &PlanNode{
+				Type:          NodeFilter,
+				FilterCond:    strings.Join(pushdownRes.PrimaryConds, " AND "),
+				StartupCost:   0.0,
+				TotalCost:     filterCost,
+				EstimatedRows: filterEstRows,
+				Children:      []*PlanNode{scanNode},
+			}
 		}
 	}
 
@@ -732,7 +813,15 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		joinList = []*JoinInfo{q.Join}
 	}
 
-	for _, join := range joinList {
+	for idx, join := range joinList {
+		if pushed, ok := pushdownRes.JoinConds[idx]; ok && len(pushed) > 0 {
+			pStr := strings.Join(pushed, " AND ")
+			if join.Filter != "" {
+				join.Filter = "(" + join.Filter + ") AND (" + pStr + ")"
+			} else {
+				join.Filter = pStr
+			}
+		}
 		rTable := cleanIdent(join.Table)
 		rAlias := cleanIdent(join.Alias)
 		if rAlias == "" {
@@ -892,12 +981,13 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		currentEstimatedRows = joinEstRows
 	}
 
-	// Filter Node (WHERE)
-	if q.WhereClause != "" && !usedIndex {
+	// Filter Node (WHERE) for remaining cross-table or outer-join conditions
+	if len(pushdownRes.RemainingConds) > 0 {
+		remWhere := strings.Join(pushdownRes.RemainingConds, " AND ")
 		sel := 0.33
-		if leftStats != nil {
+		if leftStats != nil && len(pushdownRes.RemainingConds) == 1 {
 			eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(=|<|<=|>|>=|!=|<>)\s*(.+)$`)
-			if m := eqRe.FindStringSubmatch(q.WhereClause); len(m) == 4 {
+			if m := eqRe.FindStringSubmatch(remWhere); len(m) == 4 {
 				col := m[1]
 				if idx := strings.Index(col, "."); idx != -1 {
 					col = col[idx+1:]
@@ -914,7 +1004,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 		filterNode := &PlanNode{
 			Type:          NodeFilter,
-			FilterCond:    q.WhereClause,
+			FilterCond:    remWhere,
 			StartupCost:   currentNode.StartupCost,
 			TotalCost:     filterCost,
 			EstimatedRows: filterEstRows,
