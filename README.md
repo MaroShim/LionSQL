@@ -19,11 +19,12 @@ SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micro
         ┌────────────────────────────────┼────────────────────────────────┐
         │                                │                                │
         ▼                                ▼                                ▼
-[Postgres Wire v3]             [MSSQL TDS 7.x/8.0]             [Embedded Web Studio]
+[Postgres Wire v3]             [MSSQL TDS 7.x/8.0]             [Web Studio & BaaS API]
   Port :5433                      Port :1433                      Port :8090 /_/
  (psql, DBeaver,                  (sqlcmd, SSMS,                  (Browser Dashboard,
-  GORM, Prisma)                    Azure Data Studio)              REST API, Realtime SSE)
-        │                                │                                │
+  GORM, Prisma)                    Azure Data Studio)              REST API, Realtime SSE,
+        │                                │                         Webhooks, RLS, Cron,
+        │                                │                         Mailer, JS/TS SDK)
         └────────────────────────────────┼────────────────────────────────┘
                                          │
                                          ▼
@@ -66,6 +67,24 @@ SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micro
 ## Key Features
 
 - **Single Standalone Executable**: Ships as a single static binary embedding the database kernel, wire protocol servers, HTTP API, and web management studio via Go `embed.FS`. No runtime dependencies, JVM, or Node.js required.
+- **Auto-Generated RESTful Records CRUD API**:
+  - Instant zero-code REST endpoints (`/api/records/:table`) for all database tables upon creation.
+  - Advanced URL query filter engine (`filter=(balance>500 && status='active') || country='US'`), multi-column sorting (`sort=-id,balance`), pagination, and schema-aware JSON typing.
+- **Official Universal JavaScript & TypeScript Client SDK**:
+  - PocketBase-compatible client (`sqlion.js`, `sqlion.d.ts`) served directly by the standalone executable (`GET /sdk/sqlion.js`).
+  - Supports Web Browsers, Node.js (v18+), Bun, Deno, and Edge runtimes with collection CRUD, query builders, and typed models.
+- **Declarative Row-Level Security (RLS)**:
+  - Table-level access control rules (`list`, `view`, `create`, `update`, `delete`) with dynamic `@auth.id`, `@auth.role`, `@auth.email`, `@auth.tenant_id` context token substitution.
+  - Automatically injects `list_rule` conditions into queries (`(list_rule) && (client_filter)`), preventing unauthorized data leakage.
+- **Asynchronous Webhook Dispatch Engine**:
+  - Dispatches committed database mutations (`create`, `update`, `delete`, `import`) to external URLs via non-blocking worker pools and buffered channels.
+  - Includes HMAC-SHA256 payload integrity signatures, exponential backoff retries (up to 3 attempts), and a 200-entry delivery audit log.
+- **Embedded Cron Jobs Scheduler**:
+  - Non-blocking scheduler automating recurring SQL queries and T-SQL stored procedures using standard 5-field cron syntax (`min hour dom month dow`).
+  - Live execution tracking with ms-precision duration and error logging.
+- **Embedded SMTP Mailer & Transactional Email Templates**:
+  - Pure-Go SMTP client with TLS/STARTTLS support and password masking.
+  - Built-in HTML templates for `welcome`, `password_reset`, and `verification` workflows.
 - **Concurrent Dual Wire Protocols**:
   - **PostgreSQL v3 Protocol (Port 5433)**: Compatible with `psql`, DBeaver, GORM, Prisma, asyncpg, and pgx. Supports SSL/TLS encryption and Extended Query Protocol (`Parse`, `Bind`, `Execute`, `Sync`).
   - **Microsoft SQL Server TDS 7.x/8.0 Protocol (Port 1433)**: Compatible with `sqlcmd`, SQL Server Management Studio (SSMS), Azure Data Studio, and `pymssql`. Supports RPC prepared statement pipeline (`sp_prepare`, `sp_execute`, `sp_prepexec`).
@@ -81,6 +100,7 @@ SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micro
   - Interactive SQL Query Studio with execution history, query bookmarks, `EXPLAIN ANALYZE` visualizer, and **Visual VDBE Bytecode Disassembler**.
   - Realtime Server-Sent Events (SSE) live synchronizing browser tables with concurrent background mutations.
   - Granular API Key and Superuser JWT authentication management.
+  - Dedicated Webhooks, Cron Jobs, Mailer Settings, and Client SDK tabs.
 - **Enterprise T-SQL Procedural Engine**:
   - Full support for `CREATE PROCEDURE`, `CREATE FUNCTION` (scalar and table-valued), and `CREATE TRIGGER` (`AFTER`, `INSTEAD OF`).
   - Virtual delta tables (`INSERTED` and `DELETED`) for trigger execution.
@@ -250,6 +270,29 @@ func main() {
 }
 ```
 
+### JavaScript / TypeScript (Official Client SDK)
+
+```javascript
+import SQLion from './sdk/sqlion.js';
+
+const client = new SQLion('http://127.0.0.1:8090', { auth: 'YOUR_API_KEY' });
+
+// 1. Query records with declarative filtering & sorting
+const res = await client.collection('accounts').getList(1, 20, {
+  filter: 'balance > 500',
+  sort: '-balance'
+});
+console.log(res.items);
+
+// 2. Real-time Live SSE change stream
+const unsubscribe = client.collection('accounts').subscribe((event) => {
+  console.log('Account mutated:', event.action, event.record);
+});
+
+// 3. Execute T-SQL Stored Procedure
+await client.exec('TransferFunds', { from: 1, to: 2, amount: 50 });
+```
+
 ### Python (`psycopg2` / `SQLAlchemy`)
 
 ```python
@@ -376,6 +419,16 @@ SQLion exposes a complete PocketBase-style REST API on `:8090`:
 ## Documentation Suite
 
 SQLion provides comprehensive documentation covering system architecture, operational runbooks, internal engine specifications, and API guides:
+
+### [Master Technical Documentation Directory (doc/README.md)](doc/README.md)
+Start here for a complete subject-based directory of all architectural blueprints, internals, and guides.
+
+### Backend-as-a-Service (BaaS) & Developer APIs
+- **[Official JavaScript & TypeScript SDK Guide](doc/SDK.md)**: Universal zero-dependency client library for Web, Node.js, Bun, and Deno.
+- **[Auto-Generated RESTful CRUD API](doc/AUTO_REST_API.md)**: Zero-code `/api/records/:table` endpoints with rich boolean filter expressions.
+- **[Webhooks & Row-Level Security (RLS)](doc/WEBHOOKS_AND_RLS.md)**: Non-blocking mutation webhooks with HMAC signatures and declarative `@auth` access rules.
+- **[Cron Jobs Scheduler & SMTP Mailer](doc/CRON_AND_MAILER.md)**: Embedded 5-field cron automation and transactional HTML email dispatching.
+- **[HTTP REST API & Realtime SSE Specification](doc/API_REFERENCE.md)**: OpenAPI-style endpoint documentation and JavaScript EventSource examples.
 
 ### Core Architecture & Internals Specifications
 - **[System Architecture Specification](doc/ARCHITECTURE.md)**: Exhaustive technical specification covering Volcano iterators, dual-parser decoupling, and storage backends.
