@@ -139,6 +139,19 @@ func (s *Server) AuthService() *auth.AuthService {
 	return s.auth
 }
 
+// Executor returns the underlying runtime VM executor.
+func (s *Server) Executor() *runtime.Executor {
+	return s.executor
+}
+
+// BytecodePlanCache returns the executor's bytecode plan cache.
+func (s *Server) BytecodePlanCache() *runtime.PlanCache {
+	if s.executor != nil {
+		return s.executor.Cache()
+	}
+	return nil
+}
+
 // SetEnableAuth toggles authentication enforcement for protected API routes.
 func (s *Server) SetEnableAuth(enable bool) {
 	s.enableAuth = enable

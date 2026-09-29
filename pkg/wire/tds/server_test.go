@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage/memengine"
 )
 
@@ -565,6 +566,62 @@ func TestTDS_PreparedStatement_BytecodeProgram(t *testing.T) {
 	}
 	if !bytes.Contains(respExec, []byte{TokenDoneProc}) {
 		t.Fatalf("sp_execute: expected TokenDoneProc (0xFE)")
+	}
+}
+
+func TestTDS_PlanCacheSharing(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+
+	sharedCache := runtime.NewPlanCache()
+	srv1 := NewServerWithCache("127.0.0.1:0", cat, eng, sharedCache)
+	srv2 := NewServer("127.0.0.1:0", cat, eng)
+	srv2.SetBytecodePlanCache(sharedCache)
+
+	if srv1.BytecodePlanCache() != sharedCache {
+		t.Fatalf("srv1 BytecodePlanCache does not match sharedCache")
+	}
+	if srv2.BytecodePlanCache() != sharedCache {
+		t.Fatalf("srv2 BytecodePlanCache does not match sharedCache")
+	}
+
+	conn1 := connectClient(t, srv1)
+	performHandshake(t, conn1)
+	conn2 := connectClient(t, srv2)
+	performHandshake(t, conn2)
+
+	_ = sendSQLBatch(t, conn1, "CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR(100));")
+	_ = sendSQLBatch(t, conn1, "INSERT INTO products (id, name) VALUES (1, 'Widget');")
+
+	stmt := "SELECT id, name FROM products WHERE id = @id;"
+
+	// 1. Prepare on srv1
+	var prepParams1 bytes.Buffer
+	prepParams1.Write(buildIntParam("@handle", true, 0))
+	prepParams1.Write(buildNVarCharParam("@params", false, "@id INT"))
+	prepParams1.Write(buildNVarCharParam("@stmt", false, stmt))
+	resp1 := sendRPC(t, conn1, 11, 0, prepParams1.Bytes())
+	if !bytes.Contains(resp1, []byte{TokenReturnValue}) {
+		t.Fatalf("sp_prepare srv1: expected TokenReturnValue")
+	}
+
+	// 2. Prepare identical query on srv2
+	var prepParams2 bytes.Buffer
+	prepParams2.Write(buildIntParam("@handle", true, 0))
+	prepParams2.Write(buildNVarCharParam("@params", false, "@id INT"))
+	prepParams2.Write(buildNVarCharParam("@stmt", false, stmt))
+	resp2 := sendRPC(t, conn2, 11, 0, prepParams2.Bytes())
+	if !bytes.Contains(resp2, []byte{TokenReturnValue}) {
+		t.Fatalf("sp_prepare srv2: expected TokenReturnValue")
+	}
+
+	// Verify that shared PlanCache contains the compiled script
+	cachedProg, err := sharedCache.GetOrCompile(stmt)
+	if err != nil {
+		t.Fatalf("sharedCache.GetOrCompile failed: %v", err)
+	}
+	if cachedProg == nil {
+		t.Fatalf("expected non-nil cached program in shared plan cache")
 	}
 }
 

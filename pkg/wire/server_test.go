@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
 )
@@ -506,16 +507,58 @@ func TestWire_CompileQueryToProgram(t *testing.T) {
 	defer eng.Close()
 	defer server.Close()
 
-	prog, err := server.compileQueryToProgram("SELECT id, holder FROM accounts WHERE id = $1")
+	prog1, err := server.compileQueryToProgram("SELECT id, holder FROM accounts WHERE id = $1")
 	if err != nil {
 		t.Fatalf("compileQueryToProgram failed: %v", err)
 	}
-	if prog == nil {
+	if prog1 == nil {
 		t.Fatalf("expected non-nil program")
 	}
-	dis := prog.Disassemble()
+	dis := prog1.Disassemble()
 	if !strings.Contains(dis, "REL_QUERY") {
 		t.Fatalf("expected REL_QUERY opcode in program, got:\n%s", dis)
+	}
+
+	// Repeated call must return identical cached program pointer
+	prog2, err := server.compileQueryToProgram("SELECT id, holder FROM accounts WHERE id = $1")
+	if err != nil {
+		t.Fatalf("second compileQueryToProgram failed: %v", err)
+	}
+	if prog1 != prog2 {
+		t.Fatalf("expected identical *proc.Program pointer from PlanCache, got different instances (%p vs %p)", prog1, prog2)
+	}
+}
+
+func TestWire_PlanCacheSharing(t *testing.T) {
+	server1, eng, cat := setupTestWireServer(t)
+	defer eng.Close()
+	defer server1.Close()
+
+	sharedCache := runtime.NewPlanCache()
+	server1.SetBytecodePlanCache(sharedCache)
+	server2 := NewServerWithCache("127.0.0.1:0", cat, eng, sharedCache)
+	defer server2.Close()
+
+	if server1.BytecodePlanCache() != sharedCache {
+		t.Fatalf("server1 BytecodePlanCache does not match sharedCache")
+	}
+	if server2.BytecodePlanCache() != sharedCache {
+		t.Fatalf("server2 BytecodePlanCache does not match sharedCache")
+	}
+
+	query := "SELECT id, holder FROM accounts WHERE id = $1"
+	p1, err := server1.compileQueryToProgram(query)
+	if err != nil {
+		t.Fatalf("server1 compile failed: %v", err)
+	}
+
+	p2, err := server2.compileQueryToProgram(query)
+	if err != nil {
+		t.Fatalf("server2 compile failed: %v", err)
+	}
+
+	if p1 != p2 {
+		t.Fatalf("expected cross-server plan cache hit (%p == %p)", p1, p2)
 	}
 }
 

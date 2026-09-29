@@ -225,8 +225,9 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 	}
 
-	wireServer := wire.NewServer(*pgAddr, cat, eng)
-	tdsServer := tds.NewServer(*tdsAddr, cat, eng)
+	sharedCache := server.BytecodePlanCache()
+	wireServer := wire.NewServerWithCache(*pgAddr, cat, eng, sharedCache)
+	tdsServer := tds.NewServerWithCache(*tdsAddr, cat, eng, sharedCache)
 	if *enableTLS || *tlsCert != "" || *requireSSL {
 		var tlsConfig *tls.Config
 		if *tlsCert != "" && *tlsKey != "" {

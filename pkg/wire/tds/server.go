@@ -29,6 +29,7 @@ type Server struct {
 	catalog     *catalog.Catalog
 	apiServer   *api.Server
 	planCache   *proc.PlanCache
+	byteCache   *runtime.PlanCache
 	executor    *runtime.Executor
 	spidCounter uint32
 	tlsConfig   *tls.Config
@@ -40,7 +41,14 @@ type Server struct {
 
 // NewServer creates a new TDS wire protocol server.
 func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
-	cache := runtime.NewPlanCache()
+	return NewServerWithCache(addr, cat, eng, runtime.NewPlanCache())
+}
+
+// NewServerWithCache creates a new TDS wire protocol server with an existing bytecode PlanCache.
+func NewServerWithCache(addr string, cat *catalog.Catalog, eng storage.Engine, cache *runtime.PlanCache) *Server {
+	if cache == nil {
+		cache = runtime.NewPlanCache()
+	}
 	executor := runtime.NewExecutor(cache)
 	if eng != nil {
 		executor.SetTableGetter(eng.GetTable)
@@ -51,9 +59,37 @@ func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
 		engine:      eng,
 		apiServer:   api.NewServer(cat, eng),
 		planCache:   proc.NewPlanCache(),
+		byteCache:   cache,
 		executor:    executor,
 		spidCounter: 50, // Standard MSSQL user SPIDs begin at 51
 	}
+}
+
+// SetBytecodePlanCache sets or replaces the bytecode plan cache and updates the executor.
+func (s *Server) SetBytecodePlanCache(cache *runtime.PlanCache) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cache == nil {
+		cache = runtime.NewPlanCache()
+	}
+	s.byteCache = cache
+	s.executor = runtime.NewExecutor(cache)
+	if s.engine != nil {
+		s.executor.SetTableGetter(s.engine.GetTable)
+	}
+}
+
+// BytecodePlanCache returns the active bytecode plan cache.
+func (s *Server) BytecodePlanCache() *runtime.PlanCache {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.byteCache != nil {
+		return s.byteCache
+	}
+	if s.executor != nil {
+		return s.executor.Cache()
+	}
+	return nil
 }
 
 // Start begins listening on the configured TCP address.
@@ -512,8 +548,14 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 		Params: paramsDecl,
 		Query:  stmt,
 	}
-	if prog, err := proc.Compile(stmt); err == nil && prog != nil {
-		prep.Program = prog
+	if stmt != "" {
+		if cache := s.BytecodePlanCache(); cache != nil {
+			if prog, err := cache.GetOrCompile(stmt); err == nil && prog != nil {
+				prep.Program = prog
+			}
+		} else if prog, err := proc.Compile(stmt); err == nil && prog != nil {
+			prep.Program = prog
+		}
 	}
 	sess.prepared[handle] = prep
 	sess.prepMu.Unlock()
@@ -611,8 +653,14 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 		Params: paramsDecl,
 		Query:  stmt,
 	}
-	if prog, err := proc.Compile(stmt); err == nil && prog != nil {
-		prep.Program = prog
+	if stmt != "" {
+		if cache := s.BytecodePlanCache(); cache != nil {
+			if prog, err := cache.GetOrCompile(stmt); err == nil && prog != nil {
+				prep.Program = prog
+			}
+		} else if prog, err := proc.Compile(stmt); err == nil && prog != nil {
+			prep.Program = prog
+		}
 	}
 	sess.prepared[handle] = prep
 	sess.prepMu.Unlock()

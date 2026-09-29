@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Global Bytecode PlanCache Integration for PGWire & TDS Extended Query Protocols (`pkg/wire`, `pkg/wire/tds`, `pkg/api`, `cmd/server`)**:
+  - Integrated PostgreSQL Wire Protocol (`pkg/wire/server.go`) Extended Query Protocol (`Parse`, `Bind`, `Execute`) with `*runtime.PlanCache`, converting parameter placeholders (`$1`, `$2` -> `@p1`, `@p2`) and executing compiled VDBE bytecode programs via thread-safe plan cache lookup (`GetOrCompile`) instead of recompiling per request.
+  - Connected Microsoft SQL Server TDS 7.x/8.0 Protocol (`pkg/wire/tds/server.go`) RPC Prepare routines (`sp_prepare`, `sp_prepexec`) to `*runtime.PlanCache` for instant zero-recompile reuse of precompiled bytecode across sessions and client connections.
+  - Unified bytecode plan caching across server boundaries by exposing `BytecodePlanCache()` on `api.Server` and injecting the shared plan cache into `wire.Server` and `tds.Server` in `cmd/server/main.go` via `NewServerWithCache` and `SetBytecodePlanCache`.
+  - Added unit test suites verifying sub-microsecond PlanCache hits for identical queries and cross-server PlanCache sharing in `pkg/wire/server_test.go` (`TestWire_CompileQueryToProgram`, `TestWire_PlanCacheSharing`) and `pkg/wire/tds/server_test.go` (`TestTDS_PlanCacheSharing`).
 - **Auto-Generated RESTful Records CRUD API (`pkg/api`, `pkg/ui`)**:
   - Implemented automatic, zero-code RESTful endpoints for database tables: `GET /api/records/:table` (list/filter/sort/pagination), `GET /api/records/:table/:id` (single record lookup), `POST /api/records/:table` (create record), `PATCH /api/records/:table/:id` and `PUT /api/records/:table/:id` (update record), and `DELETE /api/records/:table/:id` (delete record).
   - Implemented comprehensive URL query filter engine (`pkg/api/records_filter.go`) supporting comparison operators (`>`, `<`, `>=`, `<=`, `=`, `!=`, `<>`), string containment (`~`, `!~`), SQL pattern matching (`LIKE`), null checks (`IS NULL`, `IS NOT NULL`), logical combinators (`&&`, `||`, `,`, `AND`, `OR`), and nested parentheses `(...)`.

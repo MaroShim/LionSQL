@@ -34,6 +34,7 @@ type Server struct {
 	catalog     *catalog.Catalog
 	apiServer   *api.Server
 	planCache   *proc.PlanCache
+	byteCache   *runtime.PlanCache
 	executor    *runtime.Executor
 	connCounter uint64
 	activeConns map[uint32]*pgActiveConn
@@ -45,7 +46,14 @@ type Server struct {
 
 // NewServer creates a new PostgreSQL wire protocol server.
 func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
-	cache := runtime.NewPlanCache()
+	return NewServerWithCache(addr, cat, eng, runtime.NewPlanCache())
+}
+
+// NewServerWithCache creates a new PostgreSQL wire protocol server with an existing bytecode PlanCache.
+func NewServerWithCache(addr string, cat *catalog.Catalog, eng storage.Engine, cache *runtime.PlanCache) *Server {
+	if cache == nil {
+		cache = runtime.NewPlanCache()
+	}
 	executor := runtime.NewExecutor(cache)
 	if eng != nil {
 		executor.SetTableGetter(eng.GetTable)
@@ -56,9 +64,37 @@ func NewServer(addr string, cat *catalog.Catalog, eng storage.Engine) *Server {
 		engine:      eng,
 		apiServer:   api.NewServer(cat, eng),
 		planCache:   proc.NewPlanCache(),
+		byteCache:   cache,
 		executor:    executor,
 		activeConns: make(map[uint32]*pgActiveConn),
 	}
+}
+
+// SetBytecodePlanCache sets or replaces the bytecode plan cache and updates the executor.
+func (s *Server) SetBytecodePlanCache(cache *runtime.PlanCache) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if cache == nil {
+		cache = runtime.NewPlanCache()
+	}
+	s.byteCache = cache
+	s.executor = runtime.NewExecutor(cache)
+	if s.engine != nil {
+		s.executor.SetTableGetter(s.engine.GetTable)
+	}
+}
+
+// BytecodePlanCache returns the active bytecode plan cache.
+func (s *Server) BytecodePlanCache() *runtime.PlanCache {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.byteCache != nil {
+		return s.byteCache
+	}
+	if s.executor != nil {
+		return s.executor.Cache()
+	}
+	return nil
 }
 
 // SetTLSConfig sets the TLS configuration for encrypted SSL connections.
@@ -361,6 +397,9 @@ var pgParamRe = regexp.MustCompile(`\$(\d+)`)
 
 func (s *Server) compileQueryToProgram(query string) (*proc.Program, error) {
 	translated := pgParamRe.ReplaceAllString(query, "@p$1")
+	if cache := s.BytecodePlanCache(); cache != nil {
+		return cache.GetOrCompile(translated)
+	}
 	return proc.Compile(translated)
 }
 
