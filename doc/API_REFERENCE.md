@@ -123,63 +123,88 @@ Drops the specified table and its secondary indexes.
 
 ---
 
-### 2.2. Records CRUD
+### 2.2. Records CRUD (Auto-Generated RESTful Endpoints)
 
-#### `GET /api/tables/{name}/records`
-Fetches records with built-in pagination, column sorting, and multi-field search.
+SQLion automatically exposes standard RESTful CRUD endpoints for every table. For detailed documentation on filtering operators, nested expressions, and client SDK integration, see [Auto-Generated RESTful API Guide](AUTO_REST_API.md).
+
+#### `GET /api/records/:table` (or `/api/tables/:name/records`)
+Fetches records with built-in query filtering, multi-column sorting, pagination, and full-text search.
 
 - **Query Parameters**:
+  - `filter`: Rich boolean filter expression (e.g. `balance>500 && status='active'`, `status=active,balance<=800`, `name~'smith'`).
   - `page`: Page number (1-indexed, default `1`).
-  - `perPage`: Items per page (default `30`, max `500`).
-  - `sort`: Column name to sort by (e.g. `balance` or `-balance` for descending).
-  - `search`: Substring search across all text/numeric columns.
+  - `limit` (or `perPage`): Items per page (default `30`, max `500`).
+  - `sort`: Column(s) to sort by (e.g. `-id`, `balance`, `-created_at,balance`).
+  - `search`: Case-insensitive substring search across all columns.
+  - Column parameter shorthands (e.g. `?status=active&balance>500`).
 - **Response `200 OK`**:
   ```json
   {
-    "table": "accounts",
+    "table": "customers",
     "page": 1,
-    "perPage": 30,
-    "totalItems": 100,
-    "totalPages": 4,
+    "limit": 20,
+    "perPage": 20,
+    "totalItems": 3,
+    "totalPages": 1,
     "records": [
-      {
-        "id": "1",
-        "holder": "Alice",
-        "balance": "1000"
-      },
-      {
-        "id": "2",
-        "holder": "Bob",
-        "balance": "500"
-      }
-    ]
+      { "id": 5, "name": "Evan", "balance": 600, "status": "active" },
+      { "id": 3, "name": "Charlie", "balance": 800, "status": "active" },
+      { "id": 1, "name": "Alice", "balance": 1000.5, "status": "active" }
+    ],
+    "items": [ ... ]
   }
   ```
 
-#### `POST /api/tables/{name}/records`
-Inserts a single record. Broadcasts `ActionCreate` event via Realtime SSE.
+#### `GET /api/records/:table/:id` (or `/api/tables/:name/records/:pk`)
+Retrieves a single record by primary key value.
+- **Response `200 OK`**:
+  ```json
+  {
+    "id": 1,
+    "name": "Alice",
+    "balance": 1000.5,
+    "status": "active"
+  }
+  ```
+
+#### `POST /api/records/:table` (or `/api/tables/:name/records`)
+Inserts a single record. Auto-generates snowflake/timestamp ID if PK is omitted. Broadcasts `ActionCreate` event via Realtime SSE.
 
 - **Request Body**:
   ```json
   {
-    "id": 101,
-    "holder": "David",
-    "balance": 1500
+    "name": "Alice",
+    "balance": 1000.5,
+    "status": "active"
   }
   ```
+- **Response `201 Created`**: The created record object.
 
-#### `PATCH /api/tables/{name}/records/{pk}`
+#### `PATCH /api/records/:table/:id` (or `/api/tables/:name/records/:pk`)
+Partially updates an existing record by primary key value. Broadcasts `ActionUpdate` event.
+
+- **Request Body**:
+  ```json
+  {
+    "balance": 1250.0
+  }
+  ```
+- **Response `200 OK`**: The updated record object.
+
+#### `PUT /api/records/:table/:id` (or `/api/tables/:name/records/:pk`)
 Updates an existing record by primary key value. Broadcasts `ActionUpdate` event.
 
-- **Request Body**:
+#### `DELETE /api/records/:table/:id` (or `/api/tables/:name/records/:pk`)
+Deletes an existing record by primary key value. Broadcasts `ActionDelete` event.
+
+- **Response `200 OK`**:
   ```json
   {
-    "balance": 1750
+    "success": true,
+    "message": "record deleted",
+    "id": "1"
   }
   ```
-
-#### `DELETE /api/tables/{name}/records/{pk}`
-Deletes an existing record by primary key value. Broadcasts `ActionDelete` event.
 
 ---
 
