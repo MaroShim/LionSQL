@@ -3,6 +3,7 @@ package catalog
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,9 +12,11 @@ import (
 )
 
 var (
-	ErrProcExists     = errors.New("stored procedure already exists")
-	ErrProcNotFound   = errors.New("stored procedure not found")
-	ErrFuncNotFound   = errors.New("user defined function not found")
+	ErrProcExists      = errors.New("stored procedure already exists")
+	ErrProcNotFound    = errors.New("stored procedure not found")
+	ErrFuncExists      = errors.New("user defined function already exists")
+	ErrFuncNotFound    = errors.New("user defined function not found")
+	ErrTriggerExists   = errors.New("trigger already exists")
 	ErrTriggerNotFound = errors.New("trigger not found")
 )
 
@@ -84,29 +87,75 @@ func (c *Catalog) Engine() storage.Engine {
 	return c.engine
 }
 
-// RegisterProcedure saves or updates a stored procedure in the catalog.
+func cleanCatalogIdent(name string) string {
+	s := strings.Trim(strings.TrimSpace(name), "[]\"'`")
+	if strings.HasPrefix(strings.ToLower(s), "dbo.") {
+		s = s[4:]
+	}
+	return strings.Trim(s, "[]\"'`")
+}
+
+// RegisterProcedure saves or updates a stored procedure in the catalog (upsert semantics).
 func (c *Catalog) RegisterProcedure(proc *Procedure) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	key := strings.ToLower(cleanCatalogIdent(proc.Name))
 	now := time.Now()
-	if existing, exists := c.procedures[proc.Name]; exists {
+	if existing, exists := c.procedures[key]; exists {
 		proc.CreatedAt = existing.CreatedAt
 		proc.UpdatedAt = now
 	} else {
 		proc.CreatedAt = now
 		proc.UpdatedAt = now
 	}
-	c.procedures[proc.Name] = proc
+	c.procedures[key] = proc
 	return nil
 }
 
-// GetProcedure retrieves a stored procedure by name.
+// CreateProcedure registers a new stored procedure in the catalog.
+// If a procedure with the same name (case-insensitive) already exists, it returns ErrProcExists.
+func (c *Catalog) CreateProcedure(proc *Procedure) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := strings.ToLower(cleanCatalogIdent(proc.Name))
+	if _, exists := c.procedures[key]; exists {
+		return fmt.Errorf("%w: %s", ErrProcExists, proc.Name)
+	}
+
+	now := time.Now()
+	proc.CreatedAt = now
+	proc.UpdatedAt = now
+	c.procedures[key] = proc
+	return nil
+}
+
+// AlterProcedure updates an existing stored procedure in the catalog.
+// If the procedure does not exist, it returns ErrProcNotFound.
+func (c *Catalog) AlterProcedure(proc *Procedure) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := strings.ToLower(cleanCatalogIdent(proc.Name))
+	existing, exists := c.procedures[key]
+	if !exists {
+		return fmt.Errorf("%w: %s", ErrProcNotFound, proc.Name)
+	}
+
+	proc.CreatedAt = existing.CreatedAt
+	proc.UpdatedAt = time.Now()
+	c.procedures[key] = proc
+	return nil
+}
+
+// GetProcedure retrieves a stored procedure by name (case-insensitive).
 func (c *Catalog) GetProcedure(name string) (*Procedure, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	proc, exists := c.procedures[name]
+	key := strings.ToLower(cleanCatalogIdent(name))
+	proc, exists := c.procedures[key]
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", ErrProcNotFound, name)
 	}
@@ -127,15 +176,16 @@ func (c *Catalog) ListProcedures() []*Procedure {
 	return result
 }
 
-// DropProcedure removes a procedure.
+// DropProcedure removes a procedure (case-insensitive).
 func (c *Catalog) DropProcedure(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if _, exists := c.procedures[name]; !exists {
+	key := strings.ToLower(cleanCatalogIdent(name))
+	if _, exists := c.procedures[key]; !exists {
 		return fmt.Errorf("%w: %s", ErrProcNotFound, name)
 	}
-	delete(c.procedures, name)
+	delete(c.procedures, key)
 	return nil
 }
 
@@ -144,15 +194,50 @@ func (c *Catalog) RegisterFunction(fn *Function) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	key := strings.ToLower(cleanCatalogIdent(fn.Name))
 	now := time.Now()
-	if existing, exists := c.functions[fn.Name]; exists {
+	if existing, exists := c.functions[key]; exists {
 		fn.CreatedAt = existing.CreatedAt
 		fn.UpdatedAt = now
 	} else {
 		fn.CreatedAt = now
 		fn.UpdatedAt = now
 	}
-	c.functions[fn.Name] = fn
+	c.functions[key] = fn
+	return nil
+}
+
+// CreateFunction registers a new UDF in the catalog, returning ErrFuncExists if duplicate.
+func (c *Catalog) CreateFunction(fn *Function) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := strings.ToLower(cleanCatalogIdent(fn.Name))
+	if _, exists := c.functions[key]; exists {
+		return fmt.Errorf("%w: %s", ErrFuncExists, fn.Name)
+	}
+
+	now := time.Now()
+	fn.CreatedAt = now
+	fn.UpdatedAt = now
+	c.functions[key] = fn
+	return nil
+}
+
+// AlterFunction updates an existing UDF in the catalog.
+func (c *Catalog) AlterFunction(fn *Function) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := strings.ToLower(cleanCatalogIdent(fn.Name))
+	existing, exists := c.functions[key]
+	if !exists {
+		return fmt.Errorf("%w: %s", ErrFuncNotFound, fn.Name)
+	}
+
+	fn.CreatedAt = existing.CreatedAt
+	fn.UpdatedAt = time.Now()
+	c.functions[key] = fn
 	return nil
 }
 
@@ -161,7 +246,8 @@ func (c *Catalog) GetFunction(name string) (*Function, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	fn, exists := c.functions[name]
+	key := strings.ToLower(cleanCatalogIdent(name))
+	fn, exists := c.functions[key]
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", ErrFuncNotFound, name)
 	}
@@ -187,10 +273,11 @@ func (c *Catalog) DropFunction(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if _, exists := c.functions[name]; !exists {
+	key := strings.ToLower(cleanCatalogIdent(name))
+	if _, exists := c.functions[key]; !exists {
 		return fmt.Errorf("%w: %s", ErrFuncNotFound, name)
 	}
-	delete(c.functions, name)
+	delete(c.functions, key)
 	return nil
 }
 
@@ -199,15 +286,50 @@ func (c *Catalog) RegisterTrigger(trg *Trigger) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	key := strings.ToLower(cleanCatalogIdent(trg.Name))
 	now := time.Now()
-	if existing, exists := c.triggers[trg.Name]; exists {
+	if existing, exists := c.triggers[key]; exists {
 		trg.CreatedAt = existing.CreatedAt
 		trg.UpdatedAt = now
 	} else {
 		trg.CreatedAt = now
 		trg.UpdatedAt = now
 	}
-	c.triggers[trg.Name] = trg
+	c.triggers[key] = trg
+	return nil
+}
+
+// CreateTrigger registers a new trigger in the catalog, returning ErrTriggerExists if duplicate.
+func (c *Catalog) CreateTrigger(trg *Trigger) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := strings.ToLower(cleanCatalogIdent(trg.Name))
+	if _, exists := c.triggers[key]; exists {
+		return fmt.Errorf("%w: %s", ErrTriggerExists, trg.Name)
+	}
+
+	now := time.Now()
+	trg.CreatedAt = now
+	trg.UpdatedAt = now
+	c.triggers[key] = trg
+	return nil
+}
+
+// AlterTrigger updates an existing trigger in the catalog.
+func (c *Catalog) AlterTrigger(trg *Trigger) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	key := strings.ToLower(cleanCatalogIdent(trg.Name))
+	existing, exists := c.triggers[key]
+	if !exists {
+		return fmt.Errorf("%w: %s", ErrTriggerNotFound, trg.Name)
+	}
+
+	trg.CreatedAt = existing.CreatedAt
+	trg.UpdatedAt = time.Now()
+	c.triggers[key] = trg
 	return nil
 }
 
@@ -216,7 +338,8 @@ func (c *Catalog) GetTrigger(name string) (*Trigger, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	trg, exists := c.triggers[name]
+	key := strings.ToLower(cleanCatalogIdent(name))
+	trg, exists := c.triggers[key]
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", ErrTriggerNotFound, name)
 	}
@@ -243,8 +366,9 @@ func (c *Catalog) GetTableTriggers(tableName string) []*Trigger {
 	defer c.mu.RUnlock()
 
 	result := make([]*Trigger, 0)
+	cleanTbl := strings.ToLower(cleanCatalogIdent(tableName))
 	for _, t := range c.triggers {
-		if t.Table == tableName {
+		if strings.ToLower(cleanCatalogIdent(t.Table)) == cleanTbl {
 			cp := *t
 			result = append(result, &cp)
 		}
@@ -257,10 +381,11 @@ func (c *Catalog) DropTrigger(name string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if _, exists := c.triggers[name]; !exists {
+	key := strings.ToLower(cleanCatalogIdent(name))
+	if _, exists := c.triggers[key]; !exists {
 		return fmt.Errorf("%w: %s", ErrTriggerNotFound, name)
 	}
-	delete(c.triggers, name)
+	delete(c.triggers, key)
 	return nil
 }
 

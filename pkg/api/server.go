@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1751,17 +1752,22 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	trimmed := strings.TrimSpace(req.Script)
+	upper := strings.ToUpper(trimmed)
 	var procName string
 	var paramDefs []catalog.ParamDef
 	var jsCode string
+	var orAlter bool
+	var isAlter bool
 
-	if strings.HasPrefix(strings.ToUpper(trimmed), "CREATE ") {
+	if strings.HasPrefix(upper, "CREATE ") || strings.HasPrefix(upper, "ALTER ") {
 		plan, err := s.planCache.GetOrCompile(req.Script)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 		procName = plan.Name
+		orAlter = plan.OrAlter
+		isAlter = plan.IsAlter
 		paramDefs = make([]catalog.ParamDef, len(plan.Params))
 		for i, p := range plan.Params {
 			paramDefs[i] = catalog.ParamDef{Name: p.Name, Type: p.Type}
@@ -1774,7 +1780,7 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 		jsCode = prog.Disassemble()
 		s.executor.Cache().PutByName(procName, prog)
 	} else {
-		writeError(w, http.StatusBadRequest, fmt.Errorf("procedure must begin with CREATE PROCEDURE (T-SQL)"))
+		writeError(w, http.StatusBadRequest, fmt.Errorf("procedure must begin with CREATE PROCEDURE, ALTER PROCEDURE, or CREATE OR ALTER PROCEDURE (T-SQL)"))
 		return
 	}
 
@@ -1785,16 +1791,38 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 		JSCode: jsCode,
 	}
 
-	if err := s.catalog.RegisterProcedure(procMeta); err != nil {
-		writeError(w, http.StatusInternalServerError, err)
+	var regErr error
+	if isAlter {
+		regErr = s.catalog.AlterProcedure(procMeta)
+	} else if orAlter {
+		regErr = s.catalog.RegisterProcedure(procMeta)
+	} else {
+		regErr = s.catalog.CreateProcedure(procMeta)
+	}
+
+	if regErr != nil {
+		if errors.Is(regErr, catalog.ErrProcExists) {
+			writeError(w, http.StatusConflict, fmt.Errorf("procedure %q already exists. Use 'CREATE OR ALTER PROCEDURE' or 'ALTER PROCEDURE' to replace it", procName))
+			return
+		}
+		if errors.Is(regErr, catalog.ErrProcNotFound) {
+			writeError(w, http.StatusNotFound, fmt.Errorf("cannot alter procedure %q because it does not exist", procName))
+			return
+		}
+		writeError(w, http.StatusInternalServerError, regErr)
 		return
+	}
+
+	msg := fmt.Sprintf("Procedure %q registered and bytecode compiled successfully", procName)
+	if isAlter || orAlter {
+		msg = fmt.Sprintf("Procedure %q altered and bytecode compiled successfully", procName)
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"name":    procName,
 		"params":  paramDefs,
 		"js_code": jsCode,
-		"message": "Procedure registered and bytecode compiled successfully",
+		"message": msg,
 	})
 }
 

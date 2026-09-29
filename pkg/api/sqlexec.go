@@ -759,14 +759,16 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		return s.execDBCC(trimmed, start, cs)
 	}
 
-	// 1. Procedural DDL: CREATE PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
-	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") {
+	// 1. Procedural DDL: CREATE PROCEDURE / ALTER PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
+	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") ||
+		strings.HasPrefix(upper, "CREATE OR ALTER PROCEDURE") || strings.HasPrefix(upper, "CREATE OR ALTER PROC") ||
+		strings.HasPrefix(upper, "ALTER PROCEDURE") || strings.HasPrefix(upper, "ALTER PROC") {
 		return s.execCreateProcedure(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "CREATE FUNCTION") {
+	if strings.HasPrefix(upper, "CREATE FUNCTION") || strings.HasPrefix(upper, "CREATE OR ALTER FUNCTION") || strings.HasPrefix(upper, "ALTER FUNCTION") {
 		return s.execCreateFunction(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "CREATE TRIGGER") {
+	if strings.HasPrefix(upper, "CREATE TRIGGER") || strings.HasPrefix(upper, "CREATE OR ALTER TRIGGER") || strings.HasPrefix(upper, "ALTER TRIGGER") {
 		return s.execCreateTrigger(trimmed, start)
 	}
 
@@ -4480,17 +4482,39 @@ func (s *Server) execCreateProcedure(query string, start time.Time) (*QueryResul
 		CreatedAt: time.Now(),
 	}
 
-	if err := s.catalog.RegisterProcedure(procMeta); err != nil {
-		return nil, fmt.Errorf("catalog error: %w", err)
+	var regErr error
+	if plan.IsAlter {
+		regErr = s.catalog.AlterProcedure(procMeta)
+	} else if plan.OrAlter {
+		regErr = s.catalog.RegisterProcedure(procMeta)
+	} else {
+		regErr = s.catalog.CreateProcedure(procMeta)
+	}
+
+	if regErr != nil {
+		if errors.Is(regErr, catalog.ErrProcExists) {
+			return nil, fmt.Errorf("there is already an object named %q in the database (use CREATE OR ALTER PROCEDURE to replace)", plan.Name)
+		}
+		if errors.Is(regErr, catalog.ErrProcNotFound) {
+			return nil, fmt.Errorf("cannot alter procedure %q because it does not exist", plan.Name)
+		}
+		return nil, fmt.Errorf("catalog error: %w", regErr)
 	}
 
 	s.executor.Cache().PutByName(plan.Name, prog)
 
+	cmd := "CREATE PROCEDURE"
+	msg := fmt.Sprintf("Procedure %q registered and bytecode compiled successfully", plan.Name)
+	if plan.IsAlter {
+		cmd = "ALTER PROCEDURE"
+		msg = fmt.Sprintf("Procedure %q altered successfully", plan.Name)
+	}
+
 	return &QueryResult{
 		Success:    true,
-		Command:    "CREATE PROCEDURE",
+		Command:    cmd,
 		DurationUS: time.Since(start).Microseconds(),
-		Messages:   []string{fmt.Sprintf("Procedure %q registered and bytecode compiled successfully", plan.Name)},
+		Messages:   []string{msg},
 	}, nil
 }
 

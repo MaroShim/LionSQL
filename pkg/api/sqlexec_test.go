@@ -133,6 +133,38 @@ END;`
 	if selRes.Rows[0]["balance"] != int64(70) || selRes.Rows[1]["balance"] != int64(80) {
 		t.Fatalf("expected balances 70 and 80, got: %+v", selRes.Rows)
 	}
+
+	// 4. Duplicate CREATE PROCEDURE fails with duplicate object error
+	_, dupErr := server.ExecuteSQL(procSQL)
+	if dupErr == nil {
+		t.Fatalf("expected error on duplicate CREATE PROCEDURE, got nil")
+	}
+	if !strings.Contains(dupErr.Error(), "already an object named") {
+		t.Errorf("expected duplicate object error message, got: %v", dupErr)
+	}
+
+	// 5. CREATE OR ALTER PROCEDURE succeeds and replaces definition
+	orAlterSQL := `
+CREATE OR ALTER PROCEDURE TransferCoins
+    @from INT,
+    @to INT,
+    @amt INT
+AS
+BEGIN
+    UPDATE wallets SET balance = balance - @amt WHERE id = @from;
+    UPDATE wallets SET balance = balance + @amt WHERE id = @to;
+    RETURN 1;
+END;`
+	alterRes, err := server.ExecuteSQL(orAlterSQL)
+	if err != nil || !alterRes.Success {
+		t.Fatalf("CREATE OR ALTER PROCEDURE failed: %v", err)
+	}
+
+	// 6. ALTER PROCEDURE on non-existent proc fails
+	_, missingErr := server.ExecuteSQL(`ALTER PROCEDURE NonExistentProc AS BEGIN RETURN 0; END;`)
+	if missingErr == nil {
+		t.Fatalf("expected error on ALTER non-existent procedure, got nil")
+	}
 }
 
 func TestSQLExecutor_CreateIndexAndScan(t *testing.T) {

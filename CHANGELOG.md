@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Stored Procedure Duplicate Name Verification & `ALTER / CREATE OR ALTER` Support (`pkg/catalog`, `pkg/proc`, `pkg/api`)**:
+  - Implemented strict duplicate object verification in `catalog.Catalog` (`CreateProcedure`, `CreateFunction`, `CreateTrigger`) returning `catalog.ErrProcExists` / HTTP 409 Conflict when a procedure with the same name already exists.
+  - Added case-insensitive identifier normalization and indexing (`cleanCatalogIdent` and lowercase keying) in `catalog.Catalog`, eliminating accidental duplicate registrations caused by casing variations (e.g. `TransferFunds` vs `transferfunds`).
+  - Extended T-SQL parser and AST (`pkg/proc/token.go`, `pkg/proc/ast.go`, `pkg/proc/parser.go`) to support `ALTER PROCEDURE` and `CREATE OR ALTER PROCEDURE` (SQL Server 2016+ standard).
+  - Updated Web Studio / REST API (`POST /api/procs`) and SQL executor (`execCreateProcedure` in `pkg/api/sqlexec.go`) to reject duplicate `CREATE PROCEDURE` calls with HTTP 409 Conflict and clear user guidance to use `CREATE OR ALTER PROCEDURE` or `ALTER PROCEDURE`.
+  - Added comprehensive test suites across `pkg/catalog/catalog_test.go`, `pkg/api/server_test.go`, and `pkg/api/sqlexec_test.go`.
 - **Query Optimizer Predicate Pushdown (`pkg/planner`, `pkg/execution`, `pkg/api`)**:
   - Implemented conjunct extraction and table attribution analysis (`pkg/planner/pushdown.go`), partitioning complex `WHERE` conditions by table and join eligibility while distinguishing qualified and unqualified column identifiers.
   - Pushed down single-table filter predicates to primary and joined table scan iterators before join operations, reducing the number of candidate tuples streamed into `HashJoinIterator` and `IndexNestedLoopJoinIterator`.

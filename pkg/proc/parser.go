@@ -124,27 +124,58 @@ func ParseScript(sql string) (Node, error) {
 
 // ParseScript parses any CREATE PROCEDURE, CREATE FUNCTION, or CREATE TRIGGER script.
 func (p *Parser) ParseScript() (Node, error) {
-	if !p.curTokenIs(TokenCreate) {
-		return nil, fmt.Errorf("expected CREATE, got %s", p.curToken.Literal)
+	if p.curTokenIs(TokenCreate) {
+		if p.peekTokenIs(TokenOr) {
+			return p.ParseProcedure()
+		}
+		switch p.peekToken.Type {
+		case TokenProcedure, TokenProc:
+			return p.ParseProcedure()
+		case TokenFunction:
+			return p.ParseFunction()
+		case TokenTrigger:
+			return p.ParseTrigger()
+		default:
+			return nil, fmt.Errorf("expected PROCEDURE, FUNCTION, or TRIGGER after CREATE, got %s", p.peekToken.Literal)
+		}
+	} else if p.curTokenIs(TokenAlter) {
+		switch p.peekToken.Type {
+		case TokenProcedure, TokenProc:
+			return p.ParseProcedure()
+		case TokenFunction:
+			return p.ParseFunction()
+		case TokenTrigger:
+			return p.ParseTrigger()
+		default:
+			return nil, fmt.Errorf("expected PROCEDURE, FUNCTION, or TRIGGER after ALTER, got %s", p.peekToken.Literal)
+		}
 	}
-	switch p.peekToken.Type {
-	case TokenProcedure, TokenProc:
-		return p.ParseProcedure()
-	case TokenFunction:
-		return p.ParseFunction()
-	case TokenTrigger:
-		return p.ParseTrigger()
-	default:
-		return nil, fmt.Errorf("expected PROCEDURE, FUNCTION, or TRIGGER after CREATE, got %s", p.peekToken.Literal)
-	}
+	return nil, fmt.Errorf("expected CREATE or ALTER, got %s", p.curToken.Literal)
 }
 
 // ParseProcedure parses a full CREATE PROCEDURE script.
 func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
-	if !p.curTokenIs(TokenCreate) {
-		return nil, fmt.Errorf("expected CREATE, got %s", p.curToken.Literal)
+	isAlter := false
+	isOrAlter := false
+
+	if p.curTokenIs(TokenCreate) {
+		p.nextToken()
+		// Check for CREATE OR ALTER
+		if p.curTokenIs(TokenOr) {
+			p.nextToken()
+			if p.curTokenIs(TokenAlter) {
+				isOrAlter = true
+				p.nextToken()
+			} else {
+				return nil, fmt.Errorf("expected ALTER after CREATE OR, got %s", p.curToken.Literal)
+			}
+		}
+	} else if p.curTokenIs(TokenAlter) {
+		isAlter = true
+		p.nextToken()
+	} else {
+		return nil, fmt.Errorf("expected CREATE or ALTER, got %s", p.curToken.Literal)
 	}
-	p.nextToken()
 
 	if !p.curTokenIs(TokenProcedure) && !p.curTokenIs(TokenProc) {
 		return nil, fmt.Errorf("expected PROCEDURE or PROC, got %s", p.curToken.Literal)
@@ -210,9 +241,11 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 	}
 
 	return &CreateProcStmt{
-		Name:   procName,
-		Params: params,
-		Body:   body,
+		Name:    procName,
+		Params:  params,
+		Body:    body,
+		OrAlter: isOrAlter,
+		IsAlter: isAlter,
 	}, nil
 }
 

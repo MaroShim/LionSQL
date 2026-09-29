@@ -89,9 +89,11 @@ func (e *UnaryExpr) String() string {
 
 // CreateProcStmt represents CREATE PROCEDURE ... AS BEGIN ... END
 type CreateProcStmt struct {
-	Name   string
-	Params []ParamDef
-	Body   Statement
+	Name    string
+	Params  []ParamDef
+	Body    Statement
+	OrAlter bool
+	IsAlter bool
 }
 
 // CreateFunctionStmt represents CREATE FUNCTION dbo.Name (@param type) RETURNS type AS BEGIN ... END

@@ -750,5 +750,113 @@ func TestAPI_TableExportAndImport(t *testing.T) {
 	}
 }
 
+func TestAPI_ProcedureDuplicateRejection(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	srv := NewServer(cat, eng)
+
+	scriptCreate := `CREATE PROCEDURE TransferCoins
+    @from INT,
+    @to INT,
+    @amount INT
+AS
+BEGIN
+    RETURN 0;
+END;`
+
+	// 1. Initial creation succeeds with 201
+	body, _ := json.Marshal(map[string]string{"script": scriptCreate})
+	req := httptest.NewRequest(http.MethodPost, "/api/procs", bytes.NewReader(body))
+	rec := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on first creation, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 2. Second creation with exact same name fails with 409 Conflict
+	req2 := httptest.NewRequest(http.MethodPost, "/api/procs", bytes.NewReader(body))
+	rec2 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec2, req2)
+	if rec2.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on duplicate creation, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+	if !strings.Contains(rec2.Body.String(), "already exists") {
+		t.Errorf("expected 'already exists' in response, got: %s", rec2.Body.String())
+	}
+
+	// 3. Second creation with different case (transfercoins) also fails with 409 Conflict
+	scriptCase := `CREATE PROCEDURE transfercoins
+    @from INT,
+    @to INT
+AS
+BEGIN
+    RETURN 0;
+END;`
+	bodyCase, _ := json.Marshal(map[string]string{"script": scriptCase})
+	reqCase := httptest.NewRequest(http.MethodPost, "/api/procs", bytes.NewReader(bodyCase))
+	recCase := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recCase, reqCase)
+	if recCase.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on case-different duplicate creation, got %d: %s", recCase.Code, recCase.Body.String())
+	}
+
+	// 4. CREATE OR ALTER succeeds with 201
+	scriptOrAlter := `CREATE OR ALTER PROCEDURE TransferCoins
+    @from INT,
+    @to INT,
+    @amount INT
+AS
+BEGIN
+    PRINT 'Altered';
+    RETURN 1;
+END;`
+	bodyOrAlter, _ := json.Marshal(map[string]string{"script": scriptOrAlter})
+	reqOrAlter := httptest.NewRequest(http.MethodPost, "/api/procs", bytes.NewReader(bodyOrAlter))
+	recOrAlter := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recOrAlter, reqOrAlter)
+	if recOrAlter.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on CREATE OR ALTER, got %d: %s", recOrAlter.Code, recOrAlter.Body.String())
+	}
+
+	// 5. ALTER PROCEDURE succeeds with 201
+	scriptAlter := `ALTER PROCEDURE TransferCoins
+    @from INT,
+    @to INT,
+    @amount INT
+AS
+BEGIN
+    PRINT 'Altered again';
+    RETURN 2;
+END;`
+	bodyAlter, _ := json.Marshal(map[string]string{"script": scriptAlter})
+	reqAlter := httptest.NewRequest(http.MethodPost, "/api/procs", bytes.NewReader(bodyAlter))
+	recAlter := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recAlter, reqAlter)
+	if recAlter.Code != http.StatusCreated {
+		t.Fatalf("expected 201 on ALTER PROCEDURE, got %d: %s", recAlter.Code, recAlter.Body.String())
+	}
+
+	// 6. ALTER PROCEDURE on non-existent proc fails with 404 Not Found
+	scriptMissing := `ALTER PROCEDURE NonExistentProc AS BEGIN RETURN 0; END;`
+	bodyMissing, _ := json.Marshal(map[string]string{"script": scriptMissing})
+	reqMissing := httptest.NewRequest(http.MethodPost, "/api/procs", bytes.NewReader(bodyMissing))
+	recMissing := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recMissing, reqMissing)
+	if recMissing.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 on ALTER non-existent, got %d: %s", recMissing.Code, recMissing.Body.String())
+	}
+
+	// 7. List procedures should have exactly 1 procedure (TransferCoins)
+	reqList := httptest.NewRequest(http.MethodGet, "/api/procs", nil)
+	recList := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recList, reqList)
+	var list []map[string]any
+	_ = json.NewDecoder(recList.Body).Decode(&list)
+	if len(list) != 1 {
+		t.Fatalf("expected 1 procedure in list, got %d: %+v", len(list), list)
+	}
+}
+
+
 
 

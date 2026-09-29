@@ -39,6 +39,7 @@ const (
 
 	// Keywords
 	TokenCreate
+	TokenAlter
 	TokenProcedure
 	TokenProc
 	TokenAs
@@ -129,6 +130,7 @@ const (
 var keywords = map[string]TokenType{
 	"GOTO":        TokenGoto,
 	"CREATE":      TokenCreate,
+	"ALTER":       TokenAlter,
 	"PROCEDURE":   TokenProcedure,
 	"PROC":        TokenProc,
 	"FUNCTION":    TokenFunction,
