@@ -53,6 +53,8 @@ type Server struct {
 	broker         *RealtimeBroker
 	webhooks       *WebhookDispatcher
 	rls            *RLSManager
+	crons          *CronScheduler
+	mailer         *Mailer
 	pool           *SessionPool
 	mux            *http.ServeMux
 	sessions           map[string]*ClientSession
@@ -84,6 +86,7 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 	broker := NewRealtimeBroker()
 	webhooks := NewWebhookDispatcher()
 	webhooks.StartBrokerListener(broker)
+	mailer := NewMailer(SMTPConfig{})
 	s := &Server{
 		catalog:            cat,
 		engine:             eng,
@@ -94,6 +97,7 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		broker:             broker,
 		webhooks:           webhooks,
 		rls:                NewRLSManager(),
+		mailer:             mailer,
 		pool:               pool,
 		mux:                http.NewServeMux(),
 		sessions:           make(map[string]*ClientSession),
@@ -104,6 +108,21 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		startTime:          time.Now(),
 	}
 	s.executor.SetTableGetter(eng.GetTable)
+
+	// Wire internal CronScheduler with ambient SQL & Procedure execution
+	s.crons = NewCronScheduler(func(ctx context.Context, cmdType, cmd string) error {
+		query := cmd
+		if cmdType == "procedure" {
+			trimmed := strings.TrimSpace(cmd)
+			if !strings.HasPrefix(strings.ToUpper(trimmed), "EXEC") {
+				query = "EXEC " + trimmed
+			}
+		}
+		_, err := s.ExecuteSessionSQLContext(ctx, "cron", query)
+		return err
+	})
+	s.crons.Start(context.Background())
+
 	s.routes()
 	return s
 }
@@ -167,6 +186,16 @@ func (s *Server) Webhooks() *WebhookDispatcher {
 // RLS returns the declarative Row-Level Security manager.
 func (s *Server) RLS() *RLSManager {
 	return s.rls
+}
+
+// Crons returns the embedded cron recurring scheduler.
+func (s *Server) Crons() *CronScheduler {
+	return s.crons
+}
+
+// Mailer returns the embedded SMTP mailer engine.
+func (s *Server) Mailer() *Mailer {
+	return s.mailer
 }
 
 // SetEnableAuth toggles authentication enforcement for protected API routes.
@@ -503,6 +532,25 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/tables/{name}/rules", s.wrapAuth(s.handleGetTableRules, false, ""))
 	s.mux.HandleFunc("PUT /api/tables/{name}/rules", s.wrapSuperuser(s.handleSetTableRules))
 	s.mux.HandleFunc("DELETE /api/tables/{name}/rules", s.wrapSuperuser(s.handleDeleteTableRules))
+
+	// Cron Jobs Recurring Scheduler API
+	s.mux.HandleFunc("GET /api/crons", s.wrapSuperuser(s.handleListCrons))
+	s.mux.HandleFunc("POST /api/crons", s.wrapSuperuser(s.handleCreateCron))
+	s.mux.HandleFunc("PUT /api/crons/{id}", s.wrapSuperuser(s.handleUpdateCron))
+	s.mux.HandleFunc("DELETE /api/crons/{id}", s.wrapSuperuser(s.handleDeleteCron))
+	s.mux.HandleFunc("POST /api/crons/{id}/run", s.wrapSuperuser(s.handleRunCronNow))
+
+	// Mailer & SMTP Settings API
+	s.mux.HandleFunc("GET /api/settings/mail", s.wrapSuperuser(s.handleGetMailSettings))
+	s.mux.HandleFunc("PUT /api/settings/mail", s.wrapSuperuser(s.handleUpdateMailSettings))
+	s.mux.HandleFunc("POST /api/settings/mail/test", s.wrapSuperuser(s.handleTestMail))
+	s.mux.HandleFunc("GET /api/mail/logs", s.wrapSuperuser(s.handleGetMailLogs))
+	s.mux.HandleFunc("DELETE /api/mail/logs", s.wrapSuperuser(s.handleDeleteMailLogs))
+	s.mux.HandleFunc("POST /api/auth/request-password-reset", s.handleRequestPasswordReset)
+
+	// Official Client SDK Static Distribution
+	s.mux.HandleFunc("GET /sdk/sqlion.js", s.handleServeSDKJS)
+	s.mux.HandleFunc("GET /sdk/sqlion.d.ts", s.handleServeSDKDTS)
 }
 
 func (s *Server) wrapSuperuser(next http.HandlerFunc) http.HandlerFunc {

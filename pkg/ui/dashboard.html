@@ -313,6 +313,18 @@
         <span>Webhooks</span>
         <span id="nav-webhooks-count">0</span>
       </button>
+      <button class="nav-btn" data-view="crons" onclick="switchView('crons')">
+        <span>Cron Jobs</span>
+        <span id="nav-crons-count">0</span>
+      </button>
+      <button class="nav-btn" data-view="mail" onclick="switchView('mail')">
+        <span>Settings / Mail</span>
+        <span class="badge" style="background:#854d0e; color:#fef08a; font-size:0.65rem;">SMTP</span>
+      </button>
+      <button class="nav-btn" data-view="sdk" onclick="switchView('sdk')">
+        <span>Client SDK</span>
+        <span class="badge" style="background:#0284c7; color:#bae6fd; font-size:0.65rem;">JS/TS</span>
+      </button>
     </nav>
     <div style="padding: 12px 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
       <button class="btn btn-secondary" style="width: 100%; font-size: 0.75rem; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="downloadDatabaseBackup()">
@@ -792,7 +804,263 @@ END;</textarea>
       </div>
     </div>
 
+    <!-- View: Cron Jobs -->
+    <div id="view-crons" style="display: none;">
+      <div class="header-bar">
+        <div>
+          <h2>Cron Jobs & Scheduled Tasks</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Automate recurring SQL queries, data cleanup, and T-SQL stored procedures using standard 5-field cron schedules.
+          </div>
+        </div>
+        <button class="btn" style="background: var(--primary);" onclick="openCreateCronModal()">+ Register Cron Job</button>
+      </div>
+
+      <div class="card" style="margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="font-size: 1rem;">Scheduled Jobs (<span id="crons-count">0</span>)</h3>
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="loadCrons()">Refresh</button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Job Name / ID</th>
+                <th>Schedule (Cron)</th>
+                <th>Type</th>
+                <th>Command / Procedure</th>
+                <th>Status</th>
+                <th>Last Execution</th>
+                <th style="width: 140px; text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="crons-tbody">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading scheduled jobs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- View: Mail Settings -->
+    <div id="view-mail" style="display: none;">
+      <div class="header-bar">
+        <div>
+          <h2>Mailer & SMTP Settings</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Configure outbound SMTP server for transactional emails, password resets, and automated notification triggers.
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top: 20px;">
+        <!-- SMTP Config Form Card -->
+        <div class="card">
+          <h3 style="font-size: 1rem; margin-bottom: 14px;">SMTP Server Configuration</h3>
+          <form onsubmit="handleSaveMailSettings(event)">
+            <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+              <div style="flex: 2;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">SMTP Host:</label>
+                <input type="text" id="mail-host" placeholder="smtp.mailgun.org or smtp.gmail.com" style="margin-top: 4px;" />
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Port:</label>
+                <input type="number" id="mail-port" value="587" style="margin-top: 4px;" />
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+              <div style="flex: 1;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Username:</label>
+                <input type="text" id="mail-username" placeholder="postmaster@yourdomain.com" style="margin-top: 4px;" />
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Password:</label>
+                <input type="password" id="mail-password" placeholder="Leave empty to keep existing" style="margin-top: 4px;" />
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; margin-bottom: 14px;">
+              <div style="flex: 1;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">From Email:</label>
+                <input type="email" id="mail-from-email" placeholder="no-reply@yourdomain.com" style="margin-top: 4px;" />
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">From Name:</label>
+                <input type="text" id="mail-from-name" placeholder="SQLion Notifications" style="margin-top: 4px;" />
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 18px; font-size: 0.85rem;">
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="mail-tls" checked /> Use TLS / Direct SSL
+              </label>
+              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                <input type="checkbox" id="mail-enabled" /> Enable Mailer Service
+              </label>
+            </div>
+
+            <button type="submit" class="btn" style="background: var(--primary); width: 100%;">Save Mail Settings</button>
+          </form>
+        </div>
+
+        <!-- Test Email Dispatch Card -->
+        <div class="card">
+          <h3 style="font-size: 1rem; margin-bottom: 14px;">Send Test Email</h3>
+          <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">
+            Verify your SMTP connection by sending an immediate transactional test message using SQLion's built-in welcome template.
+          </p>
+          <div style="margin-bottom: 12px;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Destination Email:</label>
+            <input type="email" id="mail-test-to" placeholder="your-email@example.com" style="margin-top: 4px;" />
+          </div>
+          <button class="btn" style="background: var(--success); width: 100%;" onclick="sendTestEmail()">Send Test Ping</button>
+        </div>
+      </div>
+
+      <!-- Outbox Delivery Logs -->
+      <div class="card" style="margin-top: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div>
+            <h3 style="font-size: 1rem;">Recent Email Deliveries (Audit Log)</h3>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Inspection ring buffer of outgoing email deliveries and SMTP server responses.</div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="loadMailLogs()">Refresh Log</button>
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; color: #f87171;" onclick="clearMailLogs()">Clear Log</button>
+          </div>
+        </div>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Log ID</th>
+                <th>Recipient (To)</th>
+                <th>Subject</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="mail-logs-tbody">
+              <tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">No email dispatches recorded yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- View: Client SDK -->
+    <div id="view-sdk" style="display: none;">
+      <div class="header-bar">
+        <div>
+          <h2>Official JavaScript & TypeScript Client SDK</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Universal PocketBase-compatible client for Web Browsers, Node.js, Bun, Deno, and Edge functions.
+          </div>
+        </div>
+        <a href="/sdk/sqlion.js" download="sqlion.js" class="btn" style="background: #0284c7;">Download sqlion.js (v0.7.0)</a>
+      </div>
+
+      <div class="card" style="margin-top: 20px;">
+        <h3 style="font-size: 1rem; margin-bottom: 12px; color: #93c5fd;">1. Quick Installation & CDN Inclusion</h3>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
+          Load the SDK directly from your running SQLion server without npm dependencies:
+        </p>
+        <pre class="console-box" style="color: #6ee7b7; padding: 12px; font-size: 0.82rem;">&lt;script src="/sdk/sqlion.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  const client = new SQLion('http://127.0.0.1:8090', { auth: 'YOUR_API_KEY' });
+&lt;/script&gt;</pre>
+      </div>
+
+      <div class="card" style="margin-top: 15px;">
+        <h3 style="font-size: 1rem; margin-bottom: 12px; color: #c4b5fd;">2. Core API Usage Examples</h3>
+        <div class="grid-2">
+          <div>
+            <h4 style="font-size: 0.85rem; color: #fde047; margin-bottom: 6px;">Records CRUD & Filtering</h4>
+            <pre class="console-box" style="color: #e2e8f0; font-size: 0.78rem; line-height: 1.5; padding: 10px;">// 1. Paginated & Filtered Query
+const res = await client.collection('customers').getList(1, 20, {
+  filter: 'balance > 500 && status = "active"',
+  sort: '-created_at'
+});
+console.log(res.items, res.totalItems);
+
+// 2. Insert new record
+const newRow = await client.collection('customers').create({
+  name: 'Alice',
+  balance: 1500
+});
+
+// 3. Update & Delete
+await client.collection('customers').update(newRow.id, { balance: 2000 });
+await client.collection('customers').delete(newRow.id);</pre>
+          </div>
+          <div>
+            <h4 style="font-size: 0.85rem; color: #6ee7b7; margin-bottom: 6px;">Realtime Live SSE & T-SQL Procedures</h4>
+            <pre class="console-box" style="color: #e2e8f0; font-size: 0.78rem; line-height: 1.5; padding: 10px;">// 1. Subscribe to Live Record Changes
+const unsubscribe = client.collection('customers').subscribe((e) => {
+  console.log('Live Event:', e.action, e.record);
+});
+
+// Unsubscribe when component unmounts
+// unsubscribe();
+
+// 2. Execute T-SQL Stored Procedure
+const procRes = await client.exec('TransferFunds', {
+  from: 1,
+  to: 2,
+  amount: 50
+});</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+
   </main>
+
+  <!-- Create Cron Job Modal Overlay -->
+  <div id="create-cron-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 1.15rem; font-weight: 700;">Register New Cron Job</h3>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Recurring SQL query or Stored Procedure execution.</div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeCreateCronModal()">✕</button>
+      </div>
+      <div id="create-cron-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <form onsubmit="handleCreateCronSubmit(event)">
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Job Name:</label>
+        <input type="text" id="cron-name" required placeholder="e.g. Nightly Log Purge" style="margin-top: 4px; margin-bottom: 12px;" />
+
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Cron Schedule (5 Fields: min hour dom month dow):</label>
+        <input type="text" id="cron-schedule" required placeholder="e.g. */5 * * * * or 0 2 * * *" value="0 2 * * *" style="margin-top: 4px; margin-bottom: 8px; font-family: monospace;" />
+        <div style="font-size: 0.72rem; color: var(--text-muted); margin-bottom: 12px;">
+          Common presets: <code>*/5 * * * *</code> (every 5 min), <code>0 * * * *</code> (every hour), <code>0 0 * * *</code> (midnight daily).
+        </div>
+
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Command Type:</label>
+        <select id="cron-cmd-type" style="margin-top: 4px; margin-bottom: 12px;">
+          <option value="sql">SQL Statement</option>
+          <option value="procedure">Stored Procedure</option>
+        </select>
+
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Command / Procedure Body:</label>
+        <textarea id="cron-command" required placeholder="e.g. DELETE FROM audit_logs WHERE created_at < NOW() - 86400 or CleanupOldSessions" style="margin-top: 4px; margin-bottom: 14px; min-height: 80px; font-family: monospace;"></textarea>
+
+        <div style="margin-bottom: 18px;">
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer;">
+            <input type="checkbox" id="cron-enabled" checked /> Enable this job immediately
+          </label>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeCreateCronModal()">Cancel</button>
+          <button type="submit" class="btn" style="flex: 1; background: var(--primary);">Save Cron Job</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Create Webhook Modal Overlay -->
   <div id="create-webhook-modal" class="modal-overlay" style="display: none;">
@@ -1053,7 +1321,7 @@ END;</textarea>
           b.classList.remove('active');
         }
       });
-      const views = ['apikeys', 'query', 'tables', 'procedures', 'webhooks'];
+      const views = ['apikeys', 'query', 'tables', 'procedures', 'webhooks', 'crons', 'mail', 'sdk'];
       views.forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
@@ -1068,6 +1336,11 @@ END;</textarea>
       } else if (view === 'webhooks') {
         loadWebhooks();
         loadWebhookDeliveries();
+      } else if (view === 'crons') {
+        loadCrons();
+      } else if (view === 'mail') {
+        loadMailSettings();
+        loadMailLogs();
       } else if (view === 'query') {
         const input = document.getElementById('sql-query-input');
         if (input) input.focus();
@@ -3354,6 +3627,266 @@ END;</textarea>
       }
     }
 
+    // ----------------------------------------------------
+    // Cron Jobs & Scheduler Functions
+    // ----------------------------------------------------
+    async function loadCrons() {
+      try {
+        const res = await authFetch('/api/crons');
+        if (res.ok) {
+          const data = await res.json();
+          const items = data.items || [];
+          const countBadge = document.getElementById('crons-count');
+          const navBadge = document.getElementById('nav-crons-count');
+          if (countBadge) countBadge.innerText = items.length;
+          if (navBadge) navBadge.innerText = items.length;
+          renderCrons(items);
+        }
+      } catch (err) {
+        console.error('Failed to load crons:', err);
+      }
+    }
+
+    function renderCrons(items) {
+      const tbody = document.getElementById('crons-tbody');
+      if (!tbody) return;
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">No cron jobs configured yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.map(job => {
+        let statusBadge = '<span class="badge" style="background:#374151; color:#9ca3af;">Pending</span>';
+        if (job.last_status === 'success') {
+          statusBadge = '<span class="badge" style="background:#064e3b; color:#6ee7b7;">Success</span>';
+        } else if (job.last_status === 'error') {
+          statusBadge = `<span class="badge" style="background:#7f1d1d; color:#fca5a5;" title="${escapeHtml(job.last_error || '')}">Error</span>`;
+        }
+
+        const typeBadge = job.command_type === 'procedure' ?
+          '<span class="badge" style="background:#4c1d95; color:#c4b5fd;">PROCEDURE</span>' :
+          '<span class="badge" style="background:#1e293b; color:#93c5fd;">SQL</span>';
+
+        const lastRunStr = job.last_run ? new Date(job.last_run).toLocaleTimeString() + ` (${job.last_duration_ms}ms)` : 'Never';
+
+        return `<tr>
+          <td>
+            <div style="font-weight:600; color:var(--text);">${escapeHtml(job.name)}</div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-family:monospace;">${escapeHtml(job.id)}</div>
+          </td>
+          <td><code style="color:#f59e0b; background:#1e293b; padding:2px 6px; border-radius:4px;">${escapeHtml(job.schedule)}</code></td>
+          <td>${typeBadge}</td>
+          <td><div style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:monospace; font-size:0.78rem;" title="${escapeHtml(job.command)}">${escapeHtml(job.command)}</div></td>
+          <td>${statusBadge}</td>
+          <td style="font-size:0.75rem; color:var(--text-muted);">${lastRunStr}</td>
+          <td style="text-align:right;">
+            <button class="btn btn-secondary" style="padding:3px 8px; font-size:0.72rem; margin-right:4px;" onclick="runCronNow('${escapeHtml(job.id)}')">⚡ Run Now</button>
+            <button class="btn btn-secondary" style="padding:3px 8px; font-size:0.72rem; color:#f87171;" onclick="deleteCron('${escapeHtml(job.id)}')">Delete</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function openCreateCronModal() {
+      const modal = document.getElementById('create-cron-modal');
+      const errEl = document.getElementById('create-cron-error');
+      if (errEl) errEl.style.display = 'none';
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeCreateCronModal() {
+      const modal = document.getElementById('create-cron-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function handleCreateCronSubmit(e) {
+      e.preventDefault();
+      const name = document.getElementById('cron-name').value.trim();
+      const schedule = document.getElementById('cron-schedule').value.trim();
+      const command_type = document.getElementById('cron-cmd-type').value;
+      const command = document.getElementById('cron-command').value.trim();
+      const enabled = document.getElementById('cron-enabled').checked;
+
+      try {
+        const res = await authFetch('/api/crons', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, schedule, command_type, command, enabled })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || ('Server returned ' + res.status));
+        }
+        closeCreateCronModal();
+        showToast('Cron job registered successfully!');
+        loadCrons();
+      } catch (err) {
+        const errEl = document.getElementById('create-cron-error');
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.style.display = 'block';
+        }
+      }
+    }
+
+    async function runCronNow(id) {
+      try {
+        showToast('Executing cron job...');
+        const res = await authFetch(`/api/crons/${id}/run`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Job finished successfully (${data.duration_ms}ms)`);
+        } else {
+          showToast(`Job failed: ${data.last_error || 'Execution error'}`, true);
+        }
+        loadCrons();
+      } catch (err) {
+        showToast('Execution error: ' + err.message, true);
+      }
+    }
+
+    async function deleteCron(id) {
+      if (!confirm('Delete this scheduled cron job?')) return;
+      try {
+        const res = await authFetch(`/api/crons/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast('Cron job removed');
+          loadCrons();
+        } else {
+          showToast('Failed to delete cron job', true);
+        }
+      } catch (err) {
+        showToast('Error deleting cron job: ' + err.message, true);
+      }
+    }
+
+    // ----------------------------------------------------
+    // Mailer & SMTP Functions
+    // ----------------------------------------------------
+    async function loadMailSettings() {
+      try {
+        const res = await authFetch('/api/settings/mail');
+        if (res.ok) {
+          const cfg = await res.json();
+          document.getElementById('mail-host').value = cfg.host || '';
+          document.getElementById('mail-port').value = cfg.port || 587;
+          document.getElementById('mail-username').value = cfg.username || '';
+          document.getElementById('mail-password').value = '';
+          document.getElementById('mail-from-email').value = cfg.from_email || '';
+          document.getElementById('mail-from-name').value = cfg.from_name || '';
+          document.getElementById('mail-tls').checked = Boolean(cfg.tls);
+          document.getElementById('mail-enabled').checked = Boolean(cfg.enabled);
+        }
+      } catch (err) {
+        console.error('Failed to load mail settings:', err);
+      }
+    }
+
+    async function handleSaveMailSettings(e) {
+      e.preventDefault();
+      const host = document.getElementById('mail-host').value.trim();
+      const port = parseInt(document.getElementById('mail-port').value, 10) || 587;
+      const username = document.getElementById('mail-username').value.trim();
+      const password = document.getElementById('mail-password').value;
+      const from_email = document.getElementById('mail-from-email').value.trim();
+      const from_name = document.getElementById('mail-from-name').value.trim();
+      const tls = document.getElementById('mail-tls').checked;
+      const enabled = document.getElementById('mail-enabled').checked;
+
+      try {
+        const res = await authFetch('/api/settings/mail', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ host, port, username, password, from_email, from_name, tls, enabled })
+        });
+        if (res.ok) {
+          showToast('Mail settings saved successfully!');
+          loadMailSettings();
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          showToast('Failed to save mail settings: ' + (errData.error || res.statusText), true);
+        }
+      } catch (err) {
+        showToast('Error saving mail settings: ' + err.message, true);
+      }
+    }
+
+    async function sendTestEmail() {
+      const to = document.getElementById('mail-test-to').value.trim();
+      if (!to) {
+        showToast('Please enter a destination email address', true);
+        return;
+      }
+
+      try {
+        showToast('Dispatching test message...');
+        const res = await authFetch('/api/settings/mail/test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ to })
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(data.message || 'Test email dispatched successfully!');
+        } else {
+          showToast('Delivery failed: ' + (data.error || 'Server error'), true);
+        }
+        loadMailLogs();
+      } catch (err) {
+        showToast('Failed to send test email: ' + err.message, true);
+      }
+    }
+
+    async function loadMailLogs() {
+      try {
+        const res = await authFetch('/api/mail/logs?limit=50');
+        if (res.ok) {
+          const data = await res.json();
+          renderMailLogs(data.items || []);
+        }
+      } catch (err) {
+        console.error('Failed to load mail logs:', err);
+      }
+    }
+
+    function renderMailLogs(items) {
+      const tbody = document.getElementById('mail-logs-tbody');
+      if (!tbody) return;
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: var(--text-muted); padding: 30px;">No email dispatches recorded yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.map(l => {
+        const statusBadge = l.success ?
+          '<span class="badge" style="background:#064e3b; color:#6ee7b7;">Sent</span>' :
+          `<span class="badge" style="background:#7f1d1d; color:#fca5a5;" title="${escapeHtml(l.error || '')}">Failed</span>`;
+        const dateStr = new Date(l.timestamp).toLocaleTimeString();
+
+        return `<tr>
+          <td style="font-family:monospace; font-size:0.75rem; color:var(--text-muted);">${escapeHtml(l.id)}</td>
+          <td><code style="color:#93c5fd;">${escapeHtml(l.to)}</code></td>
+          <td>${escapeHtml(l.subject)}</td>
+          <td>${statusBadge}</td>
+          <td style="font-size:0.75rem; color:var(--text-muted);">${l.duration_ms}ms</td>
+          <td style="font-size:0.75rem; color:var(--text-muted);">${dateStr}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function clearMailLogs() {
+      if (!confirm('Clear all outgoing email delivery history?')) return;
+      try {
+        const res = await authFetch('/api/mail/logs', { method: 'DELETE' });
+        if (res.ok) {
+          showToast('Delivery log cleared');
+          loadMailLogs();
+        }
+      } catch (err) {
+        showToast('Error clearing logs: ' + err.message, true);
+      }
+    }
+
     // Init
     loadEngineInfo();
     checkAuthSession();
@@ -3361,6 +3894,8 @@ END;</textarea>
     loadTables();
     loadProcedures();
     loadWebhooks();
+    loadCrons();
+    loadMailSettings();
     initRealtime();
     renderSQLHistoryDropdown();
     renderSQLFavoritesDropdown();

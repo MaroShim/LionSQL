@@ -479,3 +479,89 @@ Saves or updates RLS rules for a table.
 ### 8.5. `DELETE /api/tables/:name/rules`
 Clears all RLS rules for a table, restoring unrestricted public access.
 
+---
+
+## 9. Cron Jobs & Recurring Scheduler
+
+SQLion features an embedded, non-blocking Cron Scheduler supporting standard 5-field cron syntax (`min hour dom month dow`).
+
+### 9.1. `GET /api/crons`
+Lists all registered cron jobs.
+
+### 9.2. `POST /api/crons`
+Registers a new cron job.
+- **Request Body**:
+  ```json
+  {
+    "name": "Nightly Log Purge",
+    "schedule": "0 2 * * *",
+    "command_type": "sql",
+    "command": "DELETE FROM logs WHERE created_at < NOW() - 86400",
+    "enabled": true
+  }
+  ```
+
+### 9.3. `PUT /api/crons/:id`
+Updates an existing cron job schedule or command.
+
+### 9.4. `DELETE /api/crons/:id`
+Removes a cron job.
+
+### 9.5. `POST /api/crons/:id/run`
+Triggers an immediate one-off execution of a job.
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "last_status": "success",
+    "duration_ms": 12
+  }
+  ```
+
+---
+
+## 10. Mailer & SMTP Settings
+
+Transactional outbound email delivery with TLS and built-in HTML templates.
+
+### 10.1. `GET /api/settings/mail`
+Fetches current SMTP server settings with passwords masked.
+
+### 10.2. `PUT /api/settings/mail`
+Configures SMTP server credentials and sender profiles.
+- **Request Body**:
+  ```json
+  {
+    "host": "smtp.mailgun.org",
+    "port": 587,
+    "username": "postmaster@domain.com",
+    "password": "secret-password",
+    "from_email": "alerts@domain.com",
+    "from_name": "Domain Alerts",
+    "tls": true,
+    "enabled": true
+  }
+  ```
+
+### 10.3. `POST /api/settings/mail/test`
+Dispatches an immediate test email to verify SMTP configuration.
+
+### 10.4. `GET /api/mail/logs`
+Returns the recent email delivery ring buffer log.
+
+### 10.5. `DELETE /api/mail/logs`
+Clears delivery log records.
+
+### 10.6. `POST /api/auth/request-password-reset`
+Dispatches a password reset link to the specified email address using the `password_reset` template.
+
+---
+
+## 11. Client SDK Static Distribution
+
+SQLion hosts the official client library directly for zero-dependency browser integration.
+
+- `GET /sdk/sqlion.js`: Universal JavaScript Client SDK bundle (`Content-Type: application/javascript`)
+- `GET /sdk/sqlion.d.ts`: TypeScript Declaration definitions (`Content-Type: text/typescript`)
+
+

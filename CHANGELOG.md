@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Official Universal JavaScript & TypeScript Client SDK (`sdk/sqlion.js`, `sdk/sqlion.d.ts`, `pkg/api/sdk.go`)**:
+  - Implemented zero-dependency, PocketBase-compatible client library for Web Browsers, Node.js (v18+), Bun, Deno, and Edge environments.
+  - Provided `client.collection(table)` services with full CRUD methods (`getList`, `getFullList`, `getOne`, `create`, `update`, `replace`, `delete`) and automatic URL query filter building.
+  - Implemented real-time Server-Sent Events (SSE) subscriptions via `client.collection(table).subscribe(callback)` with automatic reconnection and topic dispatching.
+  - Added native T-SQL stored procedure execution (`client.exec(proc, params)`) and arbitrary SQL querying (`client.query(sql)`).
+  - Included full TypeScript definitions (`sdk/sqlion.d.ts`) supporting generic record typing (`client.collection<Customer>('customers')`).
+  - Embedded static distribution into standalone binary and exposed via `GET /sdk/sqlion.js` and `GET /sdk/sqlion.d.ts`.
+- **Embedded Cron Jobs Scheduler (`pkg/api/cron.go`, `pkg/api/cron_handlers.go`, `pkg/ui`)**:
+  - Implemented embedded, non-blocking `CronScheduler` supporting standard 5-field cron syntax (`min hour dom month dow`, step syntax `*/N`, ranges, and lists).
+  - Automated recurring background execution of arbitrary SQL queries and T-SQL stored procedures inside isolated ambient database sessions.
+  - Tracked execution audit history, including last run timestamp, execution latency in milliseconds, success/error status, and error diagnostics.
+  - Exposed RESTful management APIs: `GET /api/crons`, `POST /api/crons`, `PUT /api/crons/:id`, `DELETE /api/crons/:id`, and `POST /api/crons/:id/run` (manual trigger).
+  - Added dedicated Web Studio dashboard tab for registering cron jobs, executing one-click manual test runs, and inspecting live job status.
+  - Added comprehensive test suite in `pkg/api/cron_test.go`.
+- **Embedded SMTP Mailer & Transactional Email Templates (`pkg/api/mailer.go`, `pkg/api/mailer_handlers.go`, `pkg/ui`)**:
+  - Implemented lightweight SMTP client using Go standard library `net/smtp` with TLS/STARTTLS support and password masking.
+  - Built-in customizable HTML transactional email templates for `welcome`, `password_reset`, and `verification` workflows.
+  - Implemented thread-safe in-memory email delivery audit ring buffer (capped at 100 entries).
+  - Exposed RESTful management APIs: `GET /api/settings/mail`, `PUT /api/settings/mail`, `POST /api/settings/mail/test`, `GET /api/mail/logs`, `DELETE /api/mail/logs`, and `POST /api/auth/request-password-reset`.
+  - Added Web Studio dashboard view for SMTP credential configuration, test email dispatches, and delivery audit log inspection.
+  - Added comprehensive test suite in `pkg/api/mailer_test.go`.
 - **Asynchronous Webhook Dispatch Engine (`pkg/api`, `pkg/ui`)**:
   - Implemented asynchronous, non-blocking `WebhookDispatcher` (`pkg/api/webhook.go`) with dedicated goroutine worker pool (4 workers), bounded event channel queue (capacity 1024), and exponential backoff retry policy (up to 3 retries: 1s, 2s, 4s).
   - Added cryptographic payload integrity verification via HMAC-SHA256 signatures transmitted in the `X-SQLion-Signature: sha256=<hex>` request header.
