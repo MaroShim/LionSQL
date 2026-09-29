@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Refactored
+- **Monolithic SQL Execution Engine Decomposition (`pkg/api`)**:
+  - Decomposed the 6,379-line monolith `pkg/api/sqlexec.go` into 5 high-cohesion, domain-specific modules without altering public interfaces or runtime semantics:
+    - `pkg/api/sqlexec.go` (848 lines): Core session orchestrator, transaction lifecycle management, and statement dispatchers.
+    - `pkg/api/sqlexec_ddl.go` (618 lines): Schema management (`CREATE`/`DROP`/`TRUNCATE TABLE`, `CREATE`/`DROP INDEX`, `CREATE PROCEDURE`/`FUNCTION`/`TRIGGER`) and DDL definition parsers.
+    - `pkg/api/sqlexec_dml.go` (3,706 lines): Query execution engine (`INSERT`, `EXPLAIN [ANALYZE]`, CTEs, Volcano execution, scalar evaluation, VDBE fast-path, set operations, joins, aggregations, `UPDATE`, `DELETE`, and where predicate evaluation).
+    - `pkg/api/sqlexec_procs.go` (573 lines): T-SQL procedure invocation, parameter binding, and built-in system stored procedures (`sp_who`, `sp_help`, `sp_spaceused`, `sp_tables`, `sp_columns`, etc.).
+    - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
+
 ### Added
 - **Official Universal JavaScript & TypeScript Client SDK (`sdk/sqlion.js`, `sdk/sqlion.d.ts`, `pkg/api/sdk.go`)**:
   - Implemented zero-dependency, PocketBase-compatible client library for Web Browsers, Node.js (v18+), Bun, Deno, and Edge environments.
