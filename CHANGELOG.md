@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Asynchronous Webhook Dispatch Engine (`pkg/api`, `pkg/ui`)**:
+  - Implemented asynchronous, non-blocking `WebhookDispatcher` (`pkg/api/webhook.go`) with dedicated goroutine worker pool (4 workers), bounded event channel queue (capacity 1024), and exponential backoff retry policy (up to 3 retries: 1s, 2s, 4s).
+  - Added cryptographic payload integrity verification via HMAC-SHA256 signatures transmitted in the `X-SQLion-Signature: sha256=<hex>` request header.
+  - Implemented thread-safe, in-memory delivery audit ring buffer (capped at 200 entries) recording delivery attempt count, HTTP response status code, round-trip latency in milliseconds, and execution timestamps.
+  - Integrated with `RealtimeBroker`, automatically fanning out database mutation events (`create`, `update`, `delete`, `import`) to matching webhooks across all database tables or specific table scopes.
+  - Exposed RESTful management endpoints (`pkg/api/webhook_handlers.go`): `GET /api/webhooks`, `POST /api/webhooks`, `DELETE /api/webhooks/:id`, `POST /api/webhooks/:id/test` (instant test ping delivery), `GET /api/webhooks/deliveries`, and `DELETE /api/webhooks/deliveries`.
+  - Added Web Studio UI dashboard tab for managing webhooks, triggering interactive test pings, inspecting live delivery status logs, and clearing delivery history.
+  - Added comprehensive test suite in `pkg/api/webhook_test.go` covering CRUD, HMAC-SHA256 signature verification, exponential backoff retries, and automatic triggers on REST mutations.
+- **Declarative Row-Level Security (RLS) Engine (`pkg/api`, `pkg/ui`)**:
+  - Implemented declarative, PocketBase-style Row-Level Security engine (`pkg/api/rls.go`) configuring granular access control rules per table for `list`, `view`, `create`, `update`, and `delete` operations.
+  - Added dynamic authentication context token substitution supporting `@auth.id`, `@auth.role`, `@auth.email`, and `@auth.tenant_id` resolved from JWT claims, API keys, or security request headers (`X-User-ID`, `X-Tenant-ID`).
+  - Integrated `list_rule` filtering into `handleGetRecords` (`GET /api/records/:table` and `/api/tables/:table/records`) via forced conjunctive query rewriting: `(list_rule) && (client_filter)`, preventing unauthorized client bypasses.
+  - Enforced strict authorization checks on single record fetches (`view_rule`), record insertions (`create_rule`), record updates (`update_rule`), and deletions (`delete_rule`), returning HTTP 403 Forbidden with clear error diagnostics upon authorization failure.
+  - Exposed RESTful table security management endpoints (`pkg/api/rls_handlers.go`): `GET /api/tables/:name/rules`, `PUT /api/tables/:name/rules`, and `DELETE /api/tables/:name/rules`.
+  - Added Web Studio UI subview in Tables & Records Studio for interactive RLS rule editing, including one-click presets for *Owner Only*, *Admin Only*, *Public Read / Auth Write*, and *Multi-Tenant Isolation*.
+  - Added comprehensive test suite in `pkg/api/rls_test.go` verifying token substitution, multi-user row isolation, spoofing prevention, ownership enforcement, and rule management APIs.
 - **Global Bytecode PlanCache Integration for PGWire & TDS Extended Query Protocols (`pkg/wire`, `pkg/wire/tds`, `pkg/api`, `cmd/server`)**:
   - Integrated PostgreSQL Wire Protocol (`pkg/wire/server.go`) Extended Query Protocol (`Parse`, `Bind`, `Execute`) with `*runtime.PlanCache`, converting parameter placeholders (`$1`, `$2` -> `@p1`, `@p2`) and executing compiled VDBE bytecode programs via thread-safe plan cache lookup (`GetOrCompile`) instead of recompiling per request.
   - Connected Microsoft SQL Server TDS 7.x/8.0 Protocol (`pkg/wire/tds/server.go`) RPC Prepare routines (`sp_prepare`, `sp_prepexec`) to `*runtime.PlanCache` for instant zero-recompile reuse of precompiled bytecode across sessions and client connections.

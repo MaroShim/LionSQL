@@ -51,6 +51,8 @@ type Server struct {
 	auth           *auth.AuthService
 	enableAuth     bool
 	broker         *RealtimeBroker
+	webhooks       *WebhookDispatcher
+	rls            *RLSManager
 	pool           *SessionPool
 	mux            *http.ServeMux
 	sessions           map[string]*ClientSession
@@ -79,6 +81,9 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 	}
 	cache := runtime.NewPlanCache()
 	pool := NewSessionPool(eng, DefaultPoolConfig())
+	broker := NewRealtimeBroker()
+	webhooks := NewWebhookDispatcher()
+	webhooks.StartBrokerListener(broker)
 	s := &Server{
 		catalog:            cat,
 		engine:             eng,
@@ -86,7 +91,9 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		executor:           runtime.NewExecutor(cache),
 		auth:               authSvc,
 		enableAuth:         enableAuth,
-		broker:             NewRealtimeBroker(),
+		broker:             broker,
+		webhooks:           webhooks,
+		rls:                NewRLSManager(),
 		pool:               pool,
 		mux:                http.NewServeMux(),
 		sessions:           make(map[string]*ClientSession),
@@ -150,6 +157,16 @@ func (s *Server) BytecodePlanCache() *runtime.PlanCache {
 		return s.executor.Cache()
 	}
 	return nil
+}
+
+// Webhooks returns the active webhook dispatch engine.
+func (s *Server) Webhooks() *WebhookDispatcher {
+	return s.webhooks
+}
+
+// RLS returns the declarative Row-Level Security manager.
+func (s *Server) RLS() *RLSManager {
+	return s.rls
 }
 
 // SetEnableAuth toggles authentication enforcement for protected API routes.
@@ -470,6 +487,22 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/backup", s.wrapAuth(s.handleBackup, true, ""))
 	s.mux.HandleFunc("GET /api/backup", s.wrapAuth(s.handleBackup, false, ""))
 	s.mux.HandleFunc("POST /api/restore", s.wrapSuperuser(s.handleRestore))
+
+	// Webhooks Management & Notification Dispatch API
+	s.mux.HandleFunc("GET /api/webhooks", s.wrapSuperuser(s.handleListWebhooks))
+	s.mux.HandleFunc("POST /api/webhooks", s.wrapSuperuser(s.handleCreateWebhook))
+	s.mux.HandleFunc("GET /api/webhooks/deliveries", s.wrapSuperuser(s.handleListWebhookDeliveries))
+	s.mux.HandleFunc("DELETE /api/webhooks/deliveries", s.wrapSuperuser(s.handleClearWebhookDeliveries))
+	s.mux.HandleFunc("GET /api/webhooks/{id}", s.wrapSuperuser(s.handleGetWebhook))
+	s.mux.HandleFunc("PATCH /api/webhooks/{id}", s.wrapSuperuser(s.handleUpdateWebhook))
+	s.mux.HandleFunc("PUT /api/webhooks/{id}", s.wrapSuperuser(s.handleUpdateWebhook))
+	s.mux.HandleFunc("DELETE /api/webhooks/{id}", s.wrapSuperuser(s.handleDeleteWebhook))
+	s.mux.HandleFunc("POST /api/webhooks/{id}/test", s.wrapSuperuser(s.handleTestWebhook))
+
+	// Row-Level Security (RLS) Rules Management API
+	s.mux.HandleFunc("GET /api/tables/{name}/rules", s.wrapAuth(s.handleGetTableRules, false, ""))
+	s.mux.HandleFunc("PUT /api/tables/{name}/rules", s.wrapSuperuser(s.handleSetTableRules))
+	s.mux.HandleFunc("DELETE /api/tables/{name}/rules", s.wrapSuperuser(s.handleDeleteTableRules))
 }
 
 func (s *Server) wrapSuperuser(next http.HandlerFunc) http.HandlerFunc {
@@ -982,6 +1015,29 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enforce declarative Row-Level Security (ListRule)
+	if s.rls != nil {
+		authCtx := s.extractAuthContext(r)
+		rawFilter := r.URL.Query().Get("filter")
+		effectiveFilter, rlsErr := s.rls.ApplyListRule(tableName, rawFilter, authCtx)
+		if rlsErr != nil {
+			writeError(w, http.StatusForbidden, rlsErr)
+			return
+		}
+		if effectiveFilter != rawFilter {
+			rlsExpr, err := ParseFilter(effectiveFilter)
+			if err != nil {
+				writeError(w, http.StatusBadRequest, fmt.Errorf("rls filter parse error: %w", err))
+				return
+			}
+			if filterExpr == nil {
+				filterExpr = rlsExpr
+			} else {
+				filterExpr = &AndFilter{Exprs: []FilterExpr{rlsExpr, filterExpr}}
+			}
+		}
+	}
+
 	session, err := s.engine.NewSession()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -1237,7 +1293,16 @@ func (s *Server) handleGetSingleRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, recordToJSONMap(rec, schema))
+	respRow := recordToJSONMap(rec, schema)
+	if s.rls != nil {
+		authCtx := s.extractAuthContext(r)
+		if allowed, err := s.rls.CanView(tableName, respRow, authCtx); !allowed {
+			writeError(w, http.StatusForbidden, fmt.Errorf("access denied by row-level security rule: %w", err))
+			return
+		}
+	}
+
+	writeJSON(w, http.StatusOK, respRow)
 }
 
 func (s *Server) handleExportTable(w http.ResponseWriter, r *http.Request) {
@@ -1710,6 +1775,15 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		rec[col.Name] = convertValue(v, col.Type)
 	}
 
+	candidateRow := recordToJSONMap(rec, schema)
+	if s.rls != nil {
+		authCtx := s.extractAuthContext(r)
+		if allowed, err := s.rls.CanCreate(tableName, candidateRow, authCtx); !allowed {
+			writeError(w, http.StatusForbidden, fmt.Errorf("create denied by row-level security rule: %w", err))
+			return
+		}
+	}
+
 	if err := tx.Insert(tableName, rec); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -1777,6 +1851,15 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.rls != nil {
+		authCtx := s.extractAuthContext(r)
+		existingJSON := recordToJSONMap(existing, schema)
+		if allowed, err := s.rls.CanUpdate(tableName, existingJSON, updates, authCtx); !allowed {
+			writeError(w, http.StatusForbidden, fmt.Errorf("update denied by row-level security rule: %w", err))
+			return
+		}
+	}
+
 	for k, v := range updates {
 		col, _, found := schema.FindColumn(k)
 		if !found {
@@ -1841,9 +1924,19 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	if _, err := tx.Get(tableName, pkVal); err != nil {
+	existing, err := tx.Get(tableName, pkVal)
+	if err != nil {
 		writeError(w, http.StatusNotFound, fmt.Errorf("record with id %s not found: %w", pkStr, err))
 		return
+	}
+
+	if s.rls != nil {
+		authCtx := s.extractAuthContext(r)
+		existingJSON := recordToJSONMap(existing, schema)
+		if allowed, err := s.rls.CanDelete(tableName, existingJSON, authCtx); !allowed {
+			writeError(w, http.StatusForbidden, fmt.Errorf("delete denied by row-level security rule: %w", err))
+			return
+		}
 	}
 
 	if err := tx.Delete(tableName, pkVal); err != nil {

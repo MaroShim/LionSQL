@@ -309,6 +309,10 @@
         <span>Stored Procedures</span>
         <span id="nav-procs-count">0</span>
       </button>
+      <button class="nav-btn" data-view="webhooks" onclick="switchView('webhooks')">
+        <span>Webhooks</span>
+        <span id="nav-webhooks-count">0</span>
+      </button>
     </nav>
     <div style="padding: 12px 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
       <button class="btn btn-secondary" style="width: 100%; font-size: 0.75rem; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="downloadDatabaseBackup()">
@@ -494,6 +498,7 @@
         <div style="display: flex; gap: 6px; margin-left: auto;">
           <button id="btn-sub-records" class="btn" onclick="switchTableSubView('records')">Data Records</button>
           <button id="btn-sub-schema" class="btn btn-secondary" onclick="switchTableSubView('schema')">Schema & DDL</button>
+          <button id="btn-sub-rls" class="btn btn-secondary" onclick="switchTableSubView('rls')">Security Rules (RLS)</button>
         </div>
       </div>
 
@@ -577,6 +582,89 @@
         <h4 style="font-size: 0.85rem; margin-top: 20px; margin-bottom: 8px; color: var(--text-muted);">Auto-Generated DDL Definition:</h4>
         <pre id="schema-ddl-box" class="console-box" style="color: #a5f3fc; max-height: 180px;">-- DDL preview will appear here</pre>
       </div>
+
+      <!-- Subview: Security Rules (RLS) -->
+      <div id="subview-rls" class="card" style="margin-top: 15px; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3 id="rls-table-title" style="font-size: 1.1rem; color: var(--text);">Row-Level Security (RLS) Rules</h3>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+              Declarative access control filters for REST API endpoints. Leave empty for public access.
+            </div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" style="font-size: 0.8rem; color: #f87171;" onclick="resetTableRules()">Clear Rules (Public)</button>
+            <button class="btn" style="background: var(--success); font-size: 0.8rem;" onclick="saveTableRules()">Save Rules</button>
+          </div>
+        </div>
+
+        <!-- Presets -->
+        <div style="background: #0f172a; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
+          <div style="font-size: 0.8rem; font-weight: 600; color: #93c5fd; margin-bottom: 8px;">Quick Security Presets:</div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 8px;" onclick="applyRlsPreset('owner_only')">Owner Only (@auth.id)</button>
+            <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 8px;" onclick="applyRlsPreset('admin_only')">Admin Only (@auth.role = 'admin')</button>
+            <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 8px;" onclick="applyRlsPreset('public_read_auth_write')">Public Read / Auth Write</button>
+            <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 8px;" onclick="applyRlsPreset('tenant_isolation')">Multi-Tenant (@auth.tenant_id)</button>
+          </div>
+        </div>
+
+        <form id="rls-rules-form" onsubmit="event.preventDefault(); saveTableRules();">
+          <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <label style="font-size: 0.82rem; font-weight: 600; color: #6ee7b7;">List Rule (GET /api/tables/:name)</label>
+                <span style="font-size: 0.72rem; color: var(--text-muted);">Injected as WHERE filter into query</span>
+              </div>
+              <input type="text" id="rls-rule-list" placeholder="e.g. owner_id = @auth.id || @auth.role = 'admin'" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <label style="font-size: 0.82rem; font-weight: 600; color: #93c5fd;">View Rule (GET /api/tables/:name/:id)</label>
+                <span style="font-size: 0.72rem; color: var(--text-muted);">Evaluated against target record</span>
+              </div>
+              <input type="text" id="rls-rule-view" placeholder="e.g. is_public = 1 || owner_id = @auth.id" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <label style="font-size: 0.82rem; font-weight: 600; color: #fde047;">Create Rule (POST /api/tables/:name)</label>
+                <span style="font-size: 0.72rem; color: var(--text-muted);">Evaluated on incoming payload</span>
+              </div>
+              <input type="text" id="rls-rule-create" placeholder="e.g. @auth.id != '' &amp;&amp; owner_id = @auth.id" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <label style="font-size: 0.82rem; font-weight: 600; color: #fb923c;">Update Rule (PATCH /api/tables/:name/:id)</label>
+                <span style="font-size: 0.72rem; color: var(--text-muted);">Evaluated against existing record before update</span>
+              </div>
+              <input type="text" id="rls-rule-update" placeholder="e.g. owner_id = @auth.id || @auth.role = 'admin'" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
+            </div>
+
+            <div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                <label style="font-size: 0.82rem; font-weight: 600; color: #f87171;">Delete Rule (DELETE /api/tables/:name/:id)</label>
+                <span style="font-size: 0.72rem; color: var(--text-muted);">Evaluated against existing record before deletion</span>
+              </div>
+              <input type="text" id="rls-rule-delete" placeholder="e.g. owner_id = @auth.id || @auth.role = 'admin'" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
+            </div>
+          </div>
+        </form>
+
+        <!-- Help Token Reference -->
+        <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted); line-height: 1.6;">
+          <strong style="color: var(--text);">Available Auth Variables:</strong>
+          <span style="margin-left: 6px;"><code style="color:#6ee7b7;">@auth.id</code> (User ID)</span>,
+          <span style="margin-left: 6px;"><code style="color:#93c5fd;">@auth.role</code> (Role e.g. 'admin')</span>,
+          <span style="margin-left: 6px;"><code style="color:#fde047;">@auth.email</code> (Email address)</span>,
+          <span style="margin-left: 6px;"><code style="color:#c084fc;">@auth.tenant_id</code> (Tenant ID)</span>.
+          <br>
+          <em>Operators supported: <code>=</code>, <code>!=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&amp;&amp;</code>, <code>||</code>.</em>
+        </div>
+      </div>
+    </div>
     </div>
 
     <!-- View: Procedures -->
@@ -628,12 +716,125 @@ END;</textarea>
           <pre id="proc-js-preview" class="console-box" style="margin-top: 8px; color: #a5f3fc; max-height: 180px;">// JavaScript preview will appear here</pre>
 
           <h4 style="font-size: 0.85rem; margin-top: 15px; color: var(--text-muted);">Execution Result & Logs:</h4>
-          <div id="console-output" class="console-box" style="margin-top: 8px;">Ready.</div>
+        <div id="console-output" class="console-box" style="margin-top: 8px;">Ready.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View: Webhooks & Outbox Event Dispatcher -->
+    <div id="view-webhooks" style="display: none;">
+      <div class="header-bar">
+        <div>
+          <h2>Webhooks & Event Dispatcher</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Forward committed database mutations (create, update, delete) to external HTTP endpoints, Slack, or microservices with HMAC-SHA256 signatures.
+          </div>
+        </div>
+        <button class="btn" style="background: var(--primary);" onclick="openCreateWebhookModal()">+ Register Webhook</button>
+      </div>
+
+      <!-- Webhooks Table -->
+      <div class="card" style="margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="font-size: 1rem;">Registered Webhooks (<span id="webhooks-count">0</span>)</h3>
+          <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="loadWebhooks()">Refresh</button>
+        </div>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Name / ID</th>
+                <th>Target Table</th>
+                <th>Events</th>
+                <th>Target URL</th>
+                <th>HMAC Secret</th>
+                <th>Status</th>
+                <th style="width: 150px; text-align: right;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="webhooks-tbody">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading webhooks...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Recent Deliveries Table -->
+      <div class="card" style="margin-top: 25px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <div>
+            <h3 style="font-size: 1rem;">Recent Webhook Deliveries (Outbox Log)</h3>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">Inspect delivery status, HTTP response codes, and roundtrip latency.</div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="loadWebhookDeliveries()">Refresh Log</button>
+            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; color: #f87171;" onclick="clearWebhookDeliveries()">Clear History</button>
+          </div>
+        </div>
+        <div style="overflow-x: auto;">
+          <table>
+            <thead>
+              <tr>
+                <th>Delivery ID</th>
+                <th>Webhook Name</th>
+                <th>Event</th>
+                <th>Table</th>
+                <th>HTTP Status</th>
+                <th>Duration</th>
+                <th>Timestamp</th>
+              </tr>
+            </thead>
+            <tbody id="webhook-deliveries-tbody">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">No webhook deliveries recorded yet.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
 
   </main>
+
+  <!-- Create Webhook Modal Overlay -->
+  <div id="create-webhook-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 1.15rem; font-weight: 700;">Register New Webhook</h3>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Stream mutation events to external HTTP endpoints.</div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeCreateWebhookModal()">✕</button>
+      </div>
+      <div id="create-webhook-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <form onsubmit="handleCreateWebhookSubmit(event)">
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Webhook Name:</label>
+        <input type="text" id="webhook-name" required placeholder="e.g. Slack Orders Notification" style="margin-top: 4px; margin-bottom: 12px;" />
+
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Target Table:</label>
+        <select id="webhook-table-select" style="margin-top: 4px; margin-bottom: 12px;">
+          <option value="*">* (All Tables)</option>
+        </select>
+
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Trigger Events:</label>
+        <div style="display: flex; gap: 12px; margin-top: 4px; margin-bottom: 12px; font-size: 0.82rem;">
+          <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="wh-evt-create" checked /> create</label>
+          <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="wh-evt-update" checked /> update</label>
+          <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="wh-evt-delete" checked /> delete</label>
+          <label style="display: flex; align-items: center; gap: 4px;"><input type="checkbox" id="wh-evt-import" /> import</label>
+        </div>
+
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Target URL (HTTP / HTTPS):</label>
+        <input type="url" id="webhook-url" required placeholder="https://hooks.slack.com/... or https://api.mycompany.com/webhook" style="margin-top: 4px; margin-bottom: 12px;" />
+
+        <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">HMAC-SHA256 Secret (Optional):</label>
+        <input type="text" id="webhook-secret" placeholder="Optional secret for X-SQLion-Signature header" style="margin-top: 4px; margin-bottom: 20px; font-family: monospace;" />
+
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeCreateWebhookModal()">Cancel</button>
+          <button type="submit" class="btn" style="flex: 1; background: var(--primary);">Save Webhook</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Login Modal Overlay -->
   <div id="login-modal" class="modal-overlay" style="display: none;">
@@ -852,7 +1053,7 @@ END;</textarea>
           b.classList.remove('active');
         }
       });
-      const views = ['apikeys', 'query', 'tables', 'procedures'];
+      const views = ['apikeys', 'query', 'tables', 'procedures', 'webhooks'];
       views.forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
@@ -864,6 +1065,9 @@ END;</textarea>
         loadProcedures();
       } else if (view === 'apikeys') {
         loadAPIKeys();
+      } else if (view === 'webhooks') {
+        loadWebhooks();
+        loadWebhookDeliveries();
       } else if (view === 'query') {
         const input = document.getElementById('sql-query-input');
         if (input) input.focus();
@@ -891,21 +1095,30 @@ END;</textarea>
       currentTableSubView = subView;
       const recBtn = document.getElementById('btn-sub-records');
       const schBtn = document.getElementById('btn-sub-schema');
+      const rlsBtn = document.getElementById('btn-sub-rls');
       const recCard = document.getElementById('subview-records');
       const schCard = document.getElementById('subview-schema');
+      const rlsCard = document.getElementById('subview-rls');
+
+      if (recBtn) recBtn.className = 'btn btn-secondary';
+      if (schBtn) schBtn.className = 'btn btn-secondary';
+      if (rlsBtn) rlsBtn.className = 'btn btn-secondary';
+      if (recCard) recCard.style.display = 'none';
+      if (schCard) schCard.style.display = 'none';
+      if (rlsCard) rlsCard.style.display = 'none';
 
       if (subView === 'records') {
-        recBtn.className = 'btn';
-        schBtn.className = 'btn btn-secondary';
-        recCard.style.display = 'block';
-        schCard.style.display = 'none';
+        if (recBtn) recBtn.className = 'btn';
+        if (recCard) recCard.style.display = 'block';
         loadRecords();
-      } else {
-        recBtn.className = 'btn btn-secondary';
-        schBtn.className = 'btn';
-        recCard.style.display = 'none';
-        schCard.style.display = 'block';
+      } else if (subView === 'schema') {
+        if (schBtn) schBtn.className = 'btn';
+        if (schCard) schCard.style.display = 'block';
         renderTableSchema();
+      } else if (subView === 'rls') {
+        if (rlsBtn) rlsBtn.className = 'btn';
+        if (rlsCard) rlsCard.style.display = 'block';
+        loadTableRules();
       }
     }
 
@@ -925,8 +1138,127 @@ END;</textarea>
       if (searchInp) searchInp.value = '';
       const clearBtn = document.getElementById('records-search-clear');
       if (clearBtn) clearBtn.style.display = 'none';
-      loadRecords();
-      renderTableSchema();
+
+      if (currentTableSubView === 'rls') {
+        loadTableRules();
+      } else if (currentTableSubView === 'schema') {
+        renderTableSchema();
+      } else {
+        loadRecords();
+      }
+    }
+
+    async function loadTableRules() {
+      const tblName = document.getElementById('table-select').value;
+      const titleEl = document.getElementById('rls-table-title');
+      if (!tblName) {
+        if (titleEl) titleEl.innerText = 'Row-Level Security (RLS) Rules (No Table Selected)';
+        return;
+      }
+      if (titleEl) titleEl.innerText = `Row-Level Security (RLS) Rules: ${tblName}`;
+
+      try {
+        const res = await authFetch(`/api/tables/${encodeURIComponent(tblName)}/rules`);
+        if (res.ok) {
+          const rules = await res.json();
+          document.getElementById('rls-rule-list').value = rules.list_rule || '';
+          document.getElementById('rls-rule-view').value = rules.view_rule || '';
+          document.getElementById('rls-rule-create').value = rules.create_rule || '';
+          document.getElementById('rls-rule-update').value = rules.update_rule || '';
+          document.getElementById('rls-rule-delete').value = rules.delete_rule || '';
+        } else {
+          document.getElementById('rls-rule-list').value = '';
+          document.getElementById('rls-rule-view').value = '';
+          document.getElementById('rls-rule-create').value = '';
+          document.getElementById('rls-rule-update').value = '';
+          document.getElementById('rls-rule-delete').value = '';
+        }
+      } catch (err) {
+        console.error('Failed to load table RLS rules:', err);
+      }
+    }
+
+    async function saveTableRules() {
+      const tblName = document.getElementById('table-select').value;
+      if (!tblName) {
+        showToast('Please select a table first', true);
+        return;
+      }
+
+      const body = {
+        list_rule: document.getElementById('rls-rule-list').value.trim(),
+        view_rule: document.getElementById('rls-rule-view').value.trim(),
+        create_rule: document.getElementById('rls-rule-create').value.trim(),
+        update_rule: document.getElementById('rls-rule-update').value.trim(),
+        delete_rule: document.getElementById('rls-rule-delete').value.trim()
+      };
+
+      try {
+        const res = await authFetch(`/api/tables/${encodeURIComponent(tblName)}/rules`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        if (res.ok) {
+          showToast(`RLS rules saved for table '${tblName}'!`);
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          showToast(`Failed to save rules: ${errData.error || res.statusText}`, true);
+        }
+      } catch (err) {
+        showToast('Error saving RLS rules: ' + err.message, true);
+      }
+    }
+
+    async function resetTableRules() {
+      const tblName = document.getElementById('table-select').value;
+      if (!tblName) return;
+      if (!confirm(`Clear all RLS rules for table '${tblName}'? The table will become publicly accessible.`)) return;
+
+      try {
+        const res = await authFetch(`/api/tables/${encodeURIComponent(tblName)}/rules`, { method: 'DELETE' });
+        if (res.ok) {
+          document.getElementById('rls-rule-list').value = '';
+          document.getElementById('rls-rule-view').value = '';
+          document.getElementById('rls-rule-create').value = '';
+          document.getElementById('rls-rule-update').value = '';
+          document.getElementById('rls-rule-delete').value = '';
+          showToast(`RLS rules cleared for table '${tblName}' (public access restored)`);
+        } else {
+          showToast('Failed to reset rules', true);
+        }
+      } catch (err) {
+        showToast('Error clearing rules: ' + err.message, true);
+      }
+    }
+
+    function applyRlsPreset(preset) {
+      if (preset === 'owner_only') {
+        document.getElementById('rls-rule-list').value = "owner_id = @auth.id || @auth.role = 'admin'";
+        document.getElementById('rls-rule-view').value = "owner_id = @auth.id || @auth.role = 'admin'";
+        document.getElementById('rls-rule-create').value = "@auth.id != '' && owner_id = @auth.id";
+        document.getElementById('rls-rule-update').value = "owner_id = @auth.id || @auth.role = 'admin'";
+        document.getElementById('rls-rule-delete').value = "owner_id = @auth.id || @auth.role = 'admin'";
+      } else if (preset === 'admin_only') {
+        document.getElementById('rls-rule-list').value = "@auth.role = 'admin'";
+        document.getElementById('rls-rule-view').value = "@auth.role = 'admin'";
+        document.getElementById('rls-rule-create').value = "@auth.role = 'admin'";
+        document.getElementById('rls-rule-update').value = "@auth.role = 'admin'";
+        document.getElementById('rls-rule-delete').value = "@auth.role = 'admin'";
+      } else if (preset === 'public_read_auth_write') {
+        document.getElementById('rls-rule-list').value = "";
+        document.getElementById('rls-rule-view').value = "";
+        document.getElementById('rls-rule-create').value = "@auth.id != ''";
+        document.getElementById('rls-rule-update').value = "owner_id = @auth.id || @auth.role = 'admin'";
+        document.getElementById('rls-rule-delete').value = "owner_id = @auth.id || @auth.role = 'admin'";
+      } else if (preset === 'tenant_isolation') {
+        document.getElementById('rls-rule-list').value = "tenant_id = @auth.tenant_id";
+        document.getElementById('rls-rule-view').value = "tenant_id = @auth.tenant_id";
+        document.getElementById('rls-rule-create').value = "tenant_id = @auth.tenant_id";
+        document.getElementById('rls-rule-update').value = "tenant_id = @auth.tenant_id";
+        document.getElementById('rls-rule-delete').value = "tenant_id = @auth.tenant_id";
+      }
+      showToast('Preset applied! Click "Save Rules" to commit changes.');
     }
 
     function renderTableSchema() {
@@ -2823,12 +3155,212 @@ END;</textarea>
       }
     }
 
+    let webhooksList = [];
+
+    async function loadWebhooks() {
+      try {
+        const res = await authFetch('/api/webhooks');
+        if (res.ok) {
+          const data = await res.json();
+          webhooksList = data.items || [];
+          renderWebhooks(webhooksList);
+          const badge = document.getElementById('nav-webhooks-count');
+          if (badge) badge.textContent = webhooksList.length;
+          const countEl = document.getElementById('webhooks-count');
+          if (countEl) countEl.textContent = webhooksList.length;
+        }
+      } catch (err) {
+        console.error('Failed to load webhooks:', err);
+      }
+    }
+
+    function renderWebhooks(items) {
+      const tbody = document.getElementById('webhooks-tbody');
+      if (!tbody) return;
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">No webhooks registered yet. Click "+ Register Webhook" to create one.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.map(wh => {
+        const evts = (wh.events || []).map(e => `<span class="badge" style="background:#1e293b; color:#93c5fd; margin-right:4px;">${escapeHtml(e)}</span>`).join('');
+        const statusBadge = wh.enabled ? 
+          '<span class="badge" style="background:#064e3b; color:#6ee7b7;">Active</span>' : 
+          '<span class="badge" style="background:#374151; color:#9ca3af;">Disabled</span>';
+        const hmacBadge = wh.secret ? 
+          '<span class="badge" style="background:#4c1d95; color:#c4b5fd;">HMAC-SHA256</span>' : 
+          '<span style="color:var(--text-muted); font-size:0.75rem;">None</span>';
+
+        return `<tr>
+          <td>
+            <div style="font-weight:600; color:var(--text);">${escapeHtml(wh.name)}</div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-family:monospace;">${escapeHtml(wh.id)}</div>
+          </td>
+          <td><code style="color:#f59e0b;">${escapeHtml(wh.table)}</code></td>
+          <td>${evts}</td>
+          <td><div style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:monospace; font-size:0.78rem;" title="${escapeHtml(wh.url)}">${escapeHtml(wh.url)}</div></td>
+          <td>${hmacBadge}</td>
+          <td>${statusBadge}</td>
+          <td style="text-align:right;">
+            <button class="btn btn-secondary" style="padding:3px 8px; font-size:0.72rem; margin-right:4px;" onclick="testWebhook('${escapeHtml(wh.id)}')">⚡ Test</button>
+            <button class="btn btn-secondary" style="padding:3px 8px; font-size:0.72rem; color:#f87171;" onclick="deleteWebhook('${escapeHtml(wh.id)}')">Delete</button>
+          </td>
+        </tr>`;
+      }).join('');
+    }
+
+    function openCreateWebhookModal() {
+      const modal = document.getElementById('create-webhook-modal');
+      const errEl = document.getElementById('create-webhook-error');
+      if (errEl) errEl.style.display = 'none';
+
+      const select = document.getElementById('webhook-table-select');
+      if (select) {
+        select.innerHTML = '<option value="*">* (All Tables)</option>' + 
+          tablesList.map(t => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join('');
+      }
+
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closeCreateWebhookModal() {
+      const modal = document.getElementById('create-webhook-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function handleCreateWebhookSubmit(e) {
+      e.preventDefault();
+      const name = document.getElementById('webhook-name').value.trim();
+      const table = document.getElementById('webhook-table-select').value;
+      const url = document.getElementById('webhook-url').value.trim();
+      const secret = document.getElementById('webhook-secret').value.trim();
+
+      const events = [];
+      if (document.getElementById('wh-evt-create').checked) events.push('create');
+      if (document.getElementById('wh-evt-update').checked) events.push('update');
+      if (document.getElementById('wh-evt-delete').checked) events.push('delete');
+      if (document.getElementById('wh-evt-import').checked) events.push('import');
+
+      if (events.length === 0) {
+        const errEl = document.getElementById('create-webhook-error');
+        if (errEl) {
+          errEl.textContent = 'Please select at least one trigger event.';
+          errEl.style.display = 'block';
+        }
+        return;
+      }
+
+      try {
+        const res = await authFetch('/api/webhooks', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, table, events, url, secret, enabled: true })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || ('Server returned ' + res.status));
+        }
+        closeCreateWebhookModal();
+        showToast('Webhook registered successfully!');
+        loadWebhooks();
+      } catch (err) {
+        const errEl = document.getElementById('create-webhook-error');
+        if (errEl) {
+          errEl.textContent = err.message;
+          errEl.style.display = 'block';
+        }
+      }
+    }
+
+    async function testWebhook(id) {
+      try {
+        showToast('Sending test ping notification...');
+        const res = await authFetch(`/api/webhooks/${id}/test`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          showToast(`Test ping successful! HTTP ${data.status_code} (${data.duration_ms}ms)`);
+        } else {
+          showToast(`Test ping returned status ${data.status_code || 'error'}: ${data.error || 'Failed'}`, true);
+        }
+        loadWebhookDeliveries();
+      } catch (err) {
+        showToast('Test ping failed: ' + err.message, true);
+      }
+    }
+
+    async function deleteWebhook(id) {
+      if (!confirm('Are you sure you want to delete this webhook?')) return;
+      try {
+        const res = await authFetch(`/api/webhooks/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          showToast('Webhook deleted');
+          loadWebhooks();
+        } else {
+          showToast('Failed to delete webhook', true);
+        }
+      } catch (err) {
+        showToast('Error deleting webhook: ' + err.message, true);
+      }
+    }
+
+    async function loadWebhookDeliveries() {
+      try {
+        const res = await authFetch('/api/webhooks/deliveries?limit=50');
+        if (res.ok) {
+          const data = await res.json();
+          renderWebhookDeliveries(data.items || []);
+        }
+      } catch (err) {
+        console.error('Failed to load webhook deliveries:', err);
+      }
+    }
+
+    function renderWebhookDeliveries(items) {
+      const tbody = document.getElementById('webhook-deliveries-tbody');
+      if (!tbody) return;
+      if (!items || items.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">No webhook deliveries recorded yet.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = items.map(del => {
+        const statusBadge = del.success ? 
+          `<span class="badge" style="background:#064e3b; color:#6ee7b7;">HTTP ${del.status_code}</span>` : 
+          `<span class="badge" style="background:#7f1d1d; color:#fca5a5;">HTTP ${del.status_code || 'ERR'}</span>`;
+        const dateStr = new Date(del.timestamp).toLocaleTimeString();
+
+        return `<tr>
+          <td style="font-family:monospace; font-size:0.75rem; color:var(--text-muted);">${escapeHtml(del.id)}</td>
+          <td><span style="font-weight:600;">${escapeHtml(del.webhook_name || del.webhook_id)}</span></td>
+          <td><span class="badge" style="background:#1e293b; color:#93c5fd;">${escapeHtml(del.event)}</span></td>
+          <td><code>${escapeHtml(del.table)}</code></td>
+          <td>${statusBadge}</td>
+          <td style="font-size:0.75rem; color:var(--text-muted);">${del.duration_ms}ms (att: ${del.attempt_count})</td>
+          <td style="font-size:0.75rem; color:var(--text-muted);">${dateStr}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    async function clearWebhookDeliveries() {
+      if (!confirm('Clear all webhook delivery history?')) return;
+      try {
+        const res = await authFetch('/api/webhooks/deliveries', { method: 'DELETE' });
+        if (res.ok) {
+          showToast('Delivery log cleared');
+          loadWebhookDeliveries();
+        }
+      } catch (err) {
+        showToast('Failed to clear delivery log: ' + err.message, true);
+      }
+    }
+
     // Init
     loadEngineInfo();
     checkAuthSession();
     loadAPIKeys();
     loadTables();
     loadProcedures();
+    loadWebhooks();
     initRealtime();
     renderSQLHistoryDropdown();
     renderSQLFavoritesDropdown();

@@ -385,3 +385,97 @@ Monitors internal goroutine connection pooler and worker status.
   "queued_requests": 0
 }
 ```
+
+---
+
+## 7. Webhook Dispatch Engine
+
+SQLion features an embedded, asynchronous Webhook Dispatch Engine. Whenever records are created, updated, deleted, or imported via REST or T-SQL, configured webhooks receive asynchronous HTTP `POST` notifications with exponential backoff retries and HMAC-SHA256 signature verification.
+
+### 7.1. `GET /api/webhooks`
+Lists all registered webhooks.
+
+### 7.2. `POST /api/webhooks`
+Registers a new webhook endpoint.
+- **Request Body**:
+  ```json
+  {
+    "name": "Audit Service",
+    "table": "customers",
+    "events": ["create", "update", "delete"],
+    "url": "https://api.example.com/webhooks/customers",
+    "secret": "my-hmac-secret-key",
+    "enabled": true
+  }
+  ```
+- **Response `201 Created`**: Returns registered `Webhook` object with generated UUID.
+
+### 7.3. `DELETE /api/webhooks/:id`
+Deletes a registered webhook by ID.
+
+### 7.4. `POST /api/webhooks/:id/test`
+Triggers an immediate test ping delivery to the webhook URL.
+- **Response `200 OK`**:
+  ```json
+  {
+    "success": true,
+    "status_code": 200,
+    "duration_ms": 14,
+    "attempt_count": 1
+  }
+  ```
+
+### 7.5. `GET /api/webhooks/deliveries?limit=50`
+Fetches recent webhook delivery logs from the in-memory ring buffer (up to 200 entries).
+
+### 7.6. `DELETE /api/webhooks/deliveries`
+Clears the in-memory delivery history ring buffer.
+
+### 7.7. HMAC Signature Verification
+If a `secret` is configured, outgoing webhooks include a signature header:
+```http
+X-SQLion-Signature: sha256=<hex_hmac_sha256(secret, payload)>
+X-SQLion-Event: create
+X-SQLion-Delivery: <delivery_uuid>
+```
+
+---
+
+## 8. Declarative Row-Level Security (RLS)
+
+SQLion provides declarative, PocketBase-style Row-Level Security rules configured per table. Rules control `list`, `view`, `create`, `update`, and `delete` operations on REST endpoints (`/api/records/:table` and `/api/tables/:table/records`).
+
+### 8.1. Rule Types & Execution
+- **`list_rule`**: Conjoined as an automatic WHERE filter into all list queries. If empty, public access is allowed. If set to an impossible condition (e.g. `false`), list queries return empty results.
+- **`view_rule`**: Evaluated against the fetched record. Returns `403 Forbidden` if evaluation fails.
+- **`create_rule`**: Evaluated against the incoming record fields.
+- **`update_rule`**: Evaluated against the existing record before applying updates.
+- **`delete_rule`**: Evaluated against the existing record before deletion.
+
+### 8.2. Dynamic Auth Variable Substitution
+Expressions can reference client authentication claims:
+- `@auth.id`: Authenticated user ID (from JWT claim `id` / `sub`, or API key user ID).
+- `@auth.role`: Authenticated user role (`admin`, `user`, etc.).
+- `@auth.email`: Authenticated user email.
+- `@auth.tenant_id`: Authenticated tenant identifier (from JWT claim or `X-Tenant-ID` header).
+
+### 8.3. `GET /api/tables/:name/rules`
+Fetches the current RLS rule set for a table.
+- **Response `200 OK`**:
+  ```json
+  {
+    "table": "customers",
+    "list_rule": "owner_id = @auth.id || @auth.role = 'admin'",
+    "view_rule": "owner_id = @auth.id || @auth.role = 'admin'",
+    "create_rule": "@auth.id != '' && owner_id = @auth.id",
+    "update_rule": "owner_id = @auth.id || @auth.role = 'admin'",
+    "delete_rule": "owner_id = @auth.id || @auth.role = 'admin'"
+  }
+  ```
+
+### 8.4. `PUT /api/tables/:name/rules`
+Saves or updates RLS rules for a table.
+
+### 8.5. `DELETE /api/tables/:name/rules`
+Clears all RLS rules for a table, restoring unrestricted public access.
+
