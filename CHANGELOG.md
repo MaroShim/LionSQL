@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Query Optimizer Constant Folding & Boolean Simplification (`pkg/proc`, `pkg/planner`, `pkg/execution`, `pkg/api`)**:
+  - Implemented AST constant folding engine (`pkg/proc/fold.go`) evaluating compile-time literal arithmetic (`3000 * 12` -> `36000`), string operations, comparisons (`10 > 5` -> `true`), null checks (`IS NULL` / `IS NOT NULL`), and deterministic built-in scalar functions (`UPPER`, `LOWER`, `LEN`, `ABS`, `CONCAT`, etc.) ahead of execution.
+  - Implemented logical boolean simplifications (`true AND X` -> `X`, `false AND X` -> `false`, `false OR X` -> `X`, `true OR X` -> `true`, double negation `NOT (NOT X)` -> `X`), eliminating redundant evaluation branches.
+  - Preserved non-deterministic functions (`GETDATE()`, `NOW()`, `RAND()`, `NEWID()`, `UUID()`) from compile-time folding.
+  - Integrated constant folding into Cost-Based Optimizer (`pkg/planner/planner.go`) in `FromAST` and `ParseSelect`, exposing folded literal predicates to secondary index scanning and CBO selectivity estimation.
+  - Integrated constant folding into Volcano `FilterIterator` (`pkg/execution/filter.go`), short-circuiting tautological conditions (`1=1`, `true`) and unsatisfiable conditions (`1=0`, `false`) in \(O(1)\).
+  - Added unit test suite in `pkg/proc/fold_test.go` and end-to-end integration test suite in `pkg/api/constant_folding_test.go`.
 - **Prometheus Metrics (`/metrics`) & Slow Query Logging (`pkg/api`)**:
   - Implemented lock-free atomic `MetricsCollector` (`pkg/api/metrics.go`) tracking high-frequency server diagnostics, including uptime, active connections, query counts by command type (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, etc.), query error counts, cumulative query duration, slow query counts, transaction commit/rollback counts, and total table counts.
   - Implemented standard Prometheus text exposition format (version 0.0.4) on `GET /metrics`.

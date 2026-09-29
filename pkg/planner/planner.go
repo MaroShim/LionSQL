@@ -194,6 +194,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 
 	whereClause := ""
 	if stmt.Where != nil {
+		stmt.Where = proc.FoldConstants(stmt.Where)
 		whereClause = stmt.Where.String()
 	}
 
@@ -301,6 +302,14 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 			if n, err := strconv.ParseInt(matches[7], 10, 64); err == nil {
 				limitCount = n
 			}
+		}
+	}
+
+	if whereClause != "" {
+		pExpr := proc.NewParser(proc.NewLexer(whereClause)).ParseExpr()
+		if pExpr != nil {
+			folded := proc.FoldConstants(pExpr)
+			whereClause = folded.String()
 		}
 	}
 

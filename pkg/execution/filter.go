@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"sqlion/pkg/proc"
+	"sqlion/pkg/storage"
 )
 
 // FilterIterator evaluates a filter condition (WHERE or HAVING) over tuples streamed from a child iterator.
@@ -27,8 +28,17 @@ func NewFilterIterator(child Iterator, condition string) *FilterIterator {
 		p := proc.NewParser(proc.NewLexer(f.condition))
 		expr := p.ParseExpr()
 		if expr != nil && len(p.Errors()) == 0 {
-			f.parsed = expr
+			f.parsed = proc.FoldConstants(expr)
 			f.hasParsed = true
+			if lit, ok := f.parsed.(*proc.LiteralExpr); ok {
+				if lit.Val.Type == storage.TypeBool {
+					if lit.Val.BVal {
+						f.condition = "1=1"
+					} else {
+						f.condition = "1=0"
+					}
+				}
+			}
 		}
 	}
 	return f
@@ -82,10 +92,10 @@ func (f *FilterIterator) ColIndexMap() *ColumnIndexMap {
 }
 
 func (f *FilterIterator) evaluate(t Tuple) bool {
-	if f.condition == "" || f.condition == "1=1" || f.condition == "1 = 1" || strings.EqualFold(f.condition, "NOT 1=0") {
+	if f.condition == "" || f.condition == "1=1" || f.condition == "1 = 1" || strings.EqualFold(f.condition, "NOT 1=0") || strings.EqualFold(f.condition, "true") {
 		return true
 	}
-	if f.condition == "1=0" || f.condition == "1 = 0" || strings.EqualFold(f.condition, "NOT 1=1") {
+	if f.condition == "1=0" || f.condition == "1 = 0" || strings.EqualFold(f.condition, "NOT 1=1") || strings.EqualFold(f.condition, "false") {
 		return false
 	}
 
