@@ -2754,43 +2754,43 @@ END;</textarea>
 
       if (previewLang === 'curl') {
         if (previewEndpoint === 'list') {
-          code = `# 1. List records with pagination and search\ncurl -X GET "${host}/api/tables/${currentTable}/records?page=1&limit=30" \\\n  -H "Authorization: Bearer <API_KEY>"`;
+          code = `# 1. List records with pagination, sort & filter\ncurl -X GET "${host}/api/records/${currentTable}?filter=balance>500&sort=-id&page=1&limit=20" \\\n  -H "Authorization: Bearer <API_KEY>"`;
         } else if (previewEndpoint === 'get') {
-          code = `# 2. Get single record by primary key (ID: 1)\ncurl -X GET "${host}/api/tables/${currentTable}/records/1" \\\n  -H "Authorization: Bearer <API_KEY>"`;
+          code = `# 2. Get single record by primary key (ID: 1)\ncurl -X GET "${host}/api/records/${currentTable}/1" \\\n  -H "Authorization: Bearer <API_KEY>"`;
         } else if (previewEndpoint === 'create') {
-          code = `# 3. Insert record into ${currentTable}\ncurl -X POST "${host}/api/tables/${currentTable}/records" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"name": "Alice", "email": "alice@example.com"}'`;
+          code = `# 3. Insert record into ${currentTable}\ncurl -X POST "${host}/api/records/${currentTable}" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"name": "Alice", "balance": 1000}'`;
         } else if (previewEndpoint === 'sql') {
-          code = `# 4. Execute direct T-SQL query via REST\ncurl -X POST "${host}/api/query" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"sql": "SELECT * FROM ${currentTable} WHERE id = 1"}'`;
+          code = `# 4. Execute direct T-SQL query via REST\ncurl -X POST "${host}/api/sql" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"sql": "SELECT * FROM ${currentTable} WHERE id = 1"}'`;
         }
       } else if (previewLang === 'js') {
         if (previewEndpoint === 'list') {
-          code = `// List records\nconst response = await fetch("${host}/api/tables/${currentTable}/records?page=1&limit=30", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst result = await response.json();\nconsole.log(result.records);`;
+          code = `// List records with filter, sort & pagination\nconst response = await fetch("${host}/api/records/${currentTable}?filter=balance>500&sort=-id&page=1&limit=20", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst result = await response.json();\nconsole.log(result.records);`;
         } else if (previewEndpoint === 'get') {
-          code = `// Get single record\nconst response = await fetch("${host}/api/tables/${currentTable}/records/1", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst record = await response.json();\nconsole.log(record);`;
+          code = `// Get single record\nconst response = await fetch("${host}/api/records/${currentTable}/1", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst record = await response.json();\nconsole.log(record);`;
         } else if (previewEndpoint === 'create') {
-          code = `// Insert record\nconst response = await fetch("${host}/api/tables/${currentTable}/records", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ name: "Alice", email: "alice@example.com" })\n});\nconst result = await response.json();\nconsole.log(result);`;
+          code = `// Insert record\nconst response = await fetch("${host}/api/records/${currentTable}", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ name: "Alice", balance: 1000 })\n});\nconst result = await response.json();\nconsole.log(result);`;
         } else if (previewEndpoint === 'sql') {
-          code = `// Execute T-SQL query\nconst response = await fetch("${host}/api/query", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ sql: "SELECT * FROM ${currentTable}" })\n});\nconst data = await response.json();\nconsole.log(data);`;
+          code = `// Execute T-SQL query\nconst response = await fetch("${host}/api/sql", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ sql: "SELECT * FROM ${currentTable}" })\n});\nconst data = await response.json();\nconsole.log(data);`;
         }
       } else if (previewLang === 'python') {
         if (previewEndpoint === 'list') {
-          code = `import requests\n\nurl = "${host}/api/tables/${currentTable}/records"\nheaders = {"Authorization": "Bearer <API_KEY>"}\nparams = {"page": 1, "limit": 30}\n\nres = requests.get(url, headers=headers, params=params)\nprint(res.json())`;
+          code = `import requests\n\nurl = "${host}/api/records/${currentTable}"\nheaders = {"Authorization": "Bearer <API_KEY>"}\nparams = {"filter": "balance>500", "sort": "-id", "page": 1, "limit": 20}\n\nres = requests.get(url, headers=headers, params=params)\nprint(res.json())`;
         } else if (previewEndpoint === 'get') {
-          code = `import requests\n\nurl = "${host}/api/tables/${currentTable}/records/1"\nheaders = {"Authorization": "Bearer <API_KEY>"}\n\nres = requests.get(url, headers=headers)\nprint(res.json())`;
+          code = `import requests\n\nurl = "${host}/api/records/${currentTable}/1"\nheaders = {"Authorization": "Bearer <API_KEY>"}\n\nres = requests.get(url, headers=headers)\nprint(res.json())`;
         } else if (previewEndpoint === 'create') {
-          code = `import requests\n\nurl = "${host}/api/tables/${currentTable}/records"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = {"name": "Alice", "email": "alice@example.com"}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
+          code = `import requests\n\nurl = "${host}/api/records/${currentTable}"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = {"name": "Alice", "balance": 1000}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
         } else if (previewEndpoint === 'sql') {
-          code = `import requests\n\nurl = "${host}/api/query"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = {"sql": "SELECT * FROM ${currentTable}"}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
+          code = `import requests\n\nurl = "${host}/api/sql"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = {"sql": "SELECT * FROM ${currentTable}"}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
         }
       } else if (previewLang === 'go') {
         if (previewEndpoint === 'list') {
-          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/tables/${currentTable}/records", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/records/${currentTable}?filter=balance>500&sort=-id&page=1&limit=20", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
         } else if (previewEndpoint === 'get') {
-          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/tables/${currentTable}/records/1", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/records/${currentTable}/1", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
         } else if (previewEndpoint === 'create') {
-          code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`{"name":"Alice","email":"alice@example.com"}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/tables/${currentTable}/records", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+          code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`{"name":"Alice","balance":1000}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/records/${currentTable}", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
         } else if (previewEndpoint === 'sql') {
-          code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`{"sql":"SELECT * FROM ${currentTable}"}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/query", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+          code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`{"sql":"SELECT * FROM ${currentTable}"}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/sql", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
         }
       }
 

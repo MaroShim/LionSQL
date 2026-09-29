@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Auto-Generated RESTful Records CRUD API (`pkg/api`, `pkg/ui`)**:
+  - Implemented automatic, zero-code RESTful endpoints for database tables: `GET /api/records/:table` (list/filter/sort/pagination), `GET /api/records/:table/:id` (single record lookup), `POST /api/records/:table` (create record), `PATCH /api/records/:table/:id` and `PUT /api/records/:table/:id` (update record), and `DELETE /api/records/:table/:id` (delete record).
+  - Implemented comprehensive URL query filter engine (`pkg/api/records_filter.go`) supporting comparison operators (`>`, `<`, `>=`, `<=`, `=`, `!=`, `<>`), string containment (`~`, `!~`), SQL pattern matching (`LIKE`), null checks (`IS NULL`, `IS NOT NULL`), logical combinators (`&&`, `||`, `,`, `AND`, `OR`), and nested parentheses `(...)`.
+  - Added support for multi-column sorting (`sort=-id,balance` or `sort=-balance`), pagination (`page=1&limit=20` and `perPage`), and query parameter shorthand filters.
+  - Formatted JSON responses with native data types (numbers, booleans, strings, nulls) matching table schemas and providing both `records`/`items` and `perPage`/`limit` for out-of-the-box frontend compatibility (React, Vue, Flutter, iOS, Android).
+  - Integrated table-level API key role authentication (`read_only`, `read_write`, `admin`) and real-time SSE broadcast triggers across create, update, and delete actions.
+  - Updated Web Studio developer API modal code snippets (cURL, JavaScript, Python, Go) to directly showcase the `/api/records/:table` endpoints.
+  - Added test suites in `pkg/api/records_filter_test.go` and `pkg/api/records_api_test.go`.
 - **Stored Procedure Duplicate Name Verification & `ALTER / CREATE OR ALTER` Support (`pkg/catalog`, `pkg/proc`, `pkg/api`)**:
   - Implemented strict duplicate object verification in `catalog.Catalog` (`CreateProcedure`, `CreateFunction`, `CreateTrigger`) returning `catalog.ErrProcExists` / HTTP 409 Conflict when a procedure with the same name already exists.
   - Added case-insensitive identifier normalization and indexing (`cleanCatalogIdent` and lowercase keying) in `catalog.Catalog`, eliminating accidental duplicate registrations caused by casing variations (e.g. `TransferFunds` vs `transferfunds`).

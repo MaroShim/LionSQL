@@ -432,11 +432,21 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/tables/{name}", s.wrapSuperuser(s.handleDropTable))
 	s.mux.HandleFunc("GET /api/tables/{name}/schema", s.wrapTableAuth(s.handleGetTableSchema, false))
 	s.mux.HandleFunc("GET /api/tables/{name}/records", s.wrapTableAuth(s.handleGetRecords, false))
+	s.mux.HandleFunc("GET /api/tables/{name}/records/{pk}", s.wrapTableAuth(s.handleGetSingleRecord, false))
 	s.mux.HandleFunc("POST /api/tables/{name}/records", s.wrapTableAuth(s.handleCreateRecord, true))
 	s.mux.HandleFunc("PATCH /api/tables/{name}/records/{pk}", s.wrapTableAuth(s.handleUpdateRecord, true))
+	s.mux.HandleFunc("PUT /api/tables/{name}/records/{pk}", s.wrapTableAuth(s.handleUpdateRecord, true))
 	s.mux.HandleFunc("DELETE /api/tables/{name}/records/{pk}", s.wrapTableAuth(s.handleDeleteRecord, true))
 	s.mux.HandleFunc("GET /api/tables/{name}/export", s.wrapTableAuth(s.handleExportTable, false))
 	s.mux.HandleFunc("POST /api/tables/{name}/import", s.wrapTableAuth(s.handleImportTable, true))
+
+	// Auto-Generated RESTful Records CRUD API (Direct Frontend & SDK Integration)
+	s.mux.HandleFunc("GET /api/records/{table}", s.wrapTableAuth(s.handleGetRecords, false))
+	s.mux.HandleFunc("GET /api/records/{table}/{id}", s.wrapTableAuth(s.handleGetSingleRecord, false))
+	s.mux.HandleFunc("POST /api/records/{table}", s.wrapTableAuth(s.handleCreateRecord, true))
+	s.mux.HandleFunc("PATCH /api/records/{table}/{id}", s.wrapTableAuth(s.handleUpdateRecord, true))
+	s.mux.HandleFunc("PUT /api/records/{table}/{id}", s.wrapTableAuth(s.handleUpdateRecord, true))
+	s.mux.HandleFunc("DELETE /api/records/{table}/{id}", s.wrapTableAuth(s.handleDeleteRecord, true))
 
 	// Stored Procedures API
 	s.mux.HandleFunc("GET /api/procs", s.wrapAuth(s.handleListProcs, false, ""))
@@ -472,7 +482,7 @@ func (s *Server) wrapSuperuser(next http.HandlerFunc) http.HandlerFunc {
 
 func (s *Server) wrapTableAuth(next http.HandlerFunc, isWrite bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tableName := r.PathValue("name")
+		tableName := getTableName(r)
 		s.wrapAuth(next, isWrite, tableName)(w, r)
 	}
 }
@@ -827,6 +837,68 @@ func toTableDTO(t *storage.TableSchema) TableSchemaDTO {
 	}
 }
 
+func getTableName(r *http.Request) string {
+	if t := r.PathValue("table"); t != "" {
+		return t
+	}
+	return r.PathValue("name")
+}
+
+func getRecordPK(r *http.Request) string {
+	if id := r.PathValue("id"); id != "" {
+		return id
+	}
+	return r.PathValue("pk")
+}
+
+func recordToJSONMap(rec storage.Record, schema *storage.TableSchema) map[string]any {
+	row := make(map[string]any, len(rec))
+	if schema != nil {
+		for _, col := range schema.Columns {
+			v, exists := rec[col.Name]
+			if !exists || v.IsNull {
+				row[col.Name] = nil
+				continue
+			}
+			switch v.Type {
+			case storage.TypeInt:
+				row[col.Name] = v.IVal
+			case storage.TypeFloat:
+				row[col.Name] = v.FVal
+			case storage.TypeBool:
+				row[col.Name] = v.BVal
+			case storage.TypeDecimal:
+				f, err := strconv.ParseFloat(v.String(), 64)
+				if err == nil {
+					row[col.Name] = f
+				} else {
+					row[col.Name] = v.String()
+				}
+			default:
+				row[col.Name] = v.SVal
+			}
+		}
+		return row
+	}
+	for k, v := range rec {
+		if v.IsNull {
+			row[k] = nil
+		} else {
+			switch v.Type {
+			case storage.TypeInt:
+				row[k] = v.IVal
+			case storage.TypeFloat:
+				row[k] = v.FVal
+			case storage.TypeBool:
+				row[k] = v.BVal
+			default:
+				row[k] = v.String()
+			}
+		}
+	}
+	return row
+}
+
 func (s *Server) handleListTables(w http.ResponseWriter, r *http.Request) {
 	tables, err := s.engine.ListTables()
 	if err != nil {
@@ -841,7 +913,7 @@ func (s *Server) handleListTables(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetTableSchema(w http.ResponseWriter, r *http.Request) {
-	tableName := r.PathValue("name")
+	tableName := getTableName(r)
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err)
@@ -851,7 +923,7 @@ func (s *Server) handleGetTableSchema(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
-	tableName := r.PathValue("name")
+	tableName := getTableName(r)
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
@@ -870,15 +942,26 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 	perPage := 30
 	if ppStr := r.URL.Query().Get("perPage"); ppStr != "" {
 		if pp, err := strconv.Atoi(ppStr); err == nil && pp > 0 {
-			if pp > 500 {
-				pp = 500
-			}
 			perPage = pp
 		}
+	} else if lStr := r.URL.Query().Get("limit"); lStr != "" {
+		if l, err := strconv.Atoi(lStr); err == nil && l > 0 {
+			perPage = l
+		}
+	}
+	if perPage > 500 {
+		perPage = 500
 	}
 
 	search := strings.TrimSpace(r.URL.Query().Get("search"))
 	sortParam := strings.TrimSpace(r.URL.Query().Get("sort"))
+
+	// Parse filter expression (both ?filter=... and individual column params)
+	filterExpr, err := ParseQueryParamsFilter(r.URL.Query(), schema)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 
 	session, err := s.engine.NewSession()
 	if err != nil {
@@ -907,35 +990,13 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		row := make(map[string]any)
-		for k, v := range rec {
-			if v.IsNull {
-				row[k] = nil
-			} else {
-				switch v.Type {
-				case storage.TypeInt:
-					row[k] = v.IVal
-				case storage.TypeVarChar:
-					row[k] = v.SVal
-				case storage.TypeFloat:
-					row[k] = v.FVal
-				case storage.TypeBool:
-					row[k] = v.BVal
-				default:
-					row[k] = v.String()
-				}
-			}
-		}
-		records = append(records, row)
-	}
+		row := recordToJSONMap(rec, schema)
 
-	// Filter if search keyword is provided
-	if search != "" {
-		searchLower := strings.ToLower(search)
-		filtered := make([]map[string]any, 0, len(records))
-		for _, r := range records {
+		// Search filter
+		if search != "" {
+			searchLower := strings.ToLower(search)
 			matched := false
-			for _, v := range r {
+			for _, v := range row {
 				if v == nil {
 					continue
 				}
@@ -945,98 +1006,145 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
-			if matched {
-				filtered = append(filtered, r)
+			if !matched {
+				continue
 			}
 		}
-		records = filtered
+
+		// Filter expression
+		if filterExpr != nil {
+			if !filterExpr.Matches(row, schema) {
+				continue
+			}
+		}
+
+		records = append(records, row)
 	}
 
-	// Sort if sort parameter is provided
+	// Sort if sort parameter is provided (supports multi-column sort like sort=-id,name or sort=-balance)
 	if sortParam != "" {
-		sortCol := sortParam
-		isDesc := false
-		if strings.HasPrefix(sortCol, "-") {
-			isDesc = true
-			sortCol = strings.TrimPrefix(sortCol, "-")
-		} else if strings.HasPrefix(sortCol, "+") {
-			sortCol = strings.TrimPrefix(sortCol, "+")
+		type sortItem struct {
+			col    string
+			isDesc bool
+			cType  storage.DataType
 		}
+		var sortItems []sortItem
+		for _, part := range strings.Split(sortParam, ",") {
+			part = strings.TrimSpace(part)
+			if part == "" {
+				continue
+			}
+			isDesc := false
+			colName := part
+			if strings.HasPrefix(colName, "-") {
+				isDesc = true
+				colName = strings.TrimPrefix(colName, "-")
+			} else if strings.HasPrefix(colName, "+") {
+				colName = strings.TrimPrefix(colName, "+")
+			}
+			colName = strings.TrimSpace(colName)
 
-		var targetCol *storage.Column
-		if schema != nil {
-			for i := range schema.Columns {
-				if strings.EqualFold(schema.Columns[i].Name, sortCol) {
-					targetCol = &schema.Columns[i]
-					sortCol = schema.Columns[i].Name
-					break
+			var dt storage.DataType = storage.TypeVarChar
+			if schema != nil {
+				if col, _, found := schema.FindColumn(colName); found {
+					colName = col.Name
+					dt = col.Type
 				}
 			}
+			sortItems = append(sortItems, sortItem{col: colName, isDesc: isDesc, cType: dt})
 		}
 
-		if targetCol != nil {
+		if len(sortItems) > 0 {
 			sort.SliceStable(records, func(i, j int) bool {
-				vi, hasI := records[i][sortCol]
-				vj, hasJ := records[j][sortCol]
-				if !hasI || vi == nil {
-					return !isDesc
-				}
-				if !hasJ || vj == nil {
-					return isDesc
-				}
+				for _, item := range sortItems {
+					vi, hasI := records[i][item.col]
+					vj, hasJ := records[j][item.col]
+					if !hasI || vi == nil {
+						if !hasJ || vj == nil {
+							continue
+						}
+						return !item.isDesc
+					}
+					if !hasJ || vj == nil {
+						return item.isDesc
+					}
 
-				var less bool
-				switch targetCol.Type {
-				case storage.TypeInt:
-					var iVal, jVal int64
-					switch v := vi.(type) {
-					case int64:
-						iVal = v
-					case int:
-						iVal = int64(v)
-					case float64:
-						iVal = int64(v)
+					var less bool
+					var equal bool
+					switch item.cType {
+					case storage.TypeInt:
+						var iVal, jVal int64
+						switch v := vi.(type) {
+						case int64:
+							iVal = v
+						case int:
+							iVal = int64(v)
+						case float64:
+							iVal = int64(v)
+						}
+						switch v := vj.(type) {
+						case int64:
+							jVal = v
+						case int:
+							jVal = int64(v)
+						case float64:
+							jVal = int64(v)
+						}
+						if iVal == jVal {
+							equal = true
+						} else {
+							less = iVal < jVal
+						}
+					case storage.TypeFloat, storage.TypeDecimal:
+						var iVal, jVal float64
+						switch v := vi.(type) {
+						case float64:
+							iVal = v
+						case int64:
+							iVal = float64(v)
+						case int:
+							iVal = float64(v)
+						}
+						switch v := vj.(type) {
+						case float64:
+							jVal = v
+						case int64:
+							jVal = float64(v)
+						case int:
+							jVal = float64(v)
+						}
+						if iVal == jVal {
+							equal = true
+						} else {
+							less = iVal < jVal
+						}
+					case storage.TypeBool:
+						bi, _ := vi.(bool)
+						bj, _ := vj.(bool)
+						if bi == bj {
+							equal = true
+						} else {
+							less = !bi && bj
+						}
+					default:
+						si := strings.ToLower(fmt.Sprint(vi))
+						sj := strings.ToLower(fmt.Sprint(vj))
+						if si == sj {
+							equal = true
+						} else {
+							less = si < sj
+						}
 					}
-					switch v := vj.(type) {
-					case int64:
-						jVal = v
-					case int:
-						jVal = int64(v)
-					case float64:
-						jVal = int64(v)
-					}
-					less = iVal < jVal
-				case storage.TypeFloat:
-					var iVal, jVal float64
-					switch v := vi.(type) {
-					case float64:
-						iVal = v
-					case int64:
-						iVal = float64(v)
-					case int:
-						iVal = float64(v)
-					}
-					switch v := vj.(type) {
-					case float64:
-						jVal = v
-					case int64:
-						jVal = float64(v)
-					case int:
-						jVal = float64(v)
-					}
-					less = iVal < jVal
-				case storage.TypeBool:
-					bi, _ := vi.(bool)
-					bj, _ := vj.(bool)
-					less = !bi && bj
-				default:
-					less = strings.ToLower(fmt.Sprint(vi)) < strings.ToLower(fmt.Sprint(vj))
-				}
 
-				if isDesc {
-					return !less
+					if equal {
+						continue
+					}
+					if item.isDesc {
+						return !less
+					}
+					return less
 				}
-				return less
+				return false
 			})
 		}
 	}
@@ -1064,10 +1172,53 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 		"table":      tableName,
 		"page":       page,
 		"perPage":    perPage,
+		"limit":      perPage,
 		"totalItems": totalItems,
 		"totalPages": totalPages,
 		"records":    pagedRecords,
+		"items":      pagedRecords,
 	})
+}
+
+func (s *Server) handleGetSingleRecord(w http.ResponseWriter, r *http.Request) {
+	tableName := getTableName(r)
+	pkStr := getRecordPK(r)
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		writeError(w, http.StatusNotFound, err)
+		return
+	}
+
+	pkCol, err := schema.PrimaryKeyColumn()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	pkVal := convertValue(pkStr, pkCol.Type)
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	defer tx.Rollback()
+
+	rec, err := tx.Get(tableName, pkVal)
+	if err != nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("record with id %q not found", pkStr))
+		return
+	}
+
+	writeJSON(w, http.StatusOK, recordToJSONMap(rec, schema))
 }
 
 func (s *Server) handleExportTable(w http.ResponseWriter, r *http.Request) {
@@ -1485,7 +1636,7 @@ func (s *Server) handleDropTable(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
-	tableName := r.PathValue("name")
+	tableName := getTableName(r)
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
 		writeError(w, http.StatusNotFound, err)
@@ -1515,10 +1666,23 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 	rec := make(storage.Record)
 	for _, col := range schema.Columns {
 		v, exists := raw[col.Name]
+		if !exists {
+			for k, rawVal := range raw {
+				if strings.EqualFold(k, col.Name) {
+					v = rawVal
+					exists = true
+					break
+				}
+			}
+		}
 		if !exists || v == nil {
 			if col.PrimaryKey {
-				// Auto-generate numeric ID if not provided
-				v = time.Now().UnixNano() / int64(time.Millisecond)
+				// Auto-generate numeric or string ID if not provided
+				if col.Type == storage.TypeInt {
+					v = time.Now().UnixNano() / int64(time.Millisecond)
+				} else if col.Type == storage.TypeVarChar {
+					v = fmt.Sprintf("%d", time.Now().UnixNano())
+				}
 			} else if !col.Nullable {
 				writeError(w, http.StatusBadRequest, fmt.Errorf("field %q cannot be null", col.Name))
 				return
@@ -1537,15 +1701,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Format created record
-	respRow := make(map[string]any)
-	for k, v := range rec {
-		if v.IsNull {
-			respRow[k] = nil
-		} else {
-			respRow[k] = v.String()
-		}
-	}
+	respRow := recordToJSONMap(rec, schema)
 
 	if s.broker != nil {
 		s.broker.Broadcast(RealtimeEvent{
@@ -1559,8 +1715,8 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
-	tableName := r.PathValue("name")
-	pkStr := r.PathValue("pk")
+	tableName := getTableName(r)
+	pkStr := getRecordPK(r)
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
@@ -1598,7 +1754,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 
 	existing, err := tx.Get(tableName, pkVal)
 	if err != nil {
-		writeError(w, http.StatusNotFound, fmt.Errorf("record with pk %s not found: %w", pkStr, err))
+		writeError(w, http.StatusNotFound, fmt.Errorf("record with id %s not found: %w", pkStr, err))
 		return
 	}
 
@@ -1607,7 +1763,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		if !found {
 			continue
 		}
-		existing[k] = convertValue(v, col.Type)
+		existing[col.Name] = convertValue(v, col.Type)
 	}
 
 	if err := tx.Update(tableName, pkVal, existing); err != nil {
@@ -1620,14 +1776,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respRow := make(map[string]any)
-	for k, v := range existing {
-		if v.IsNull {
-			respRow[k] = nil
-		} else {
-			respRow[k] = v.String()
-		}
-	}
+	respRow := recordToJSONMap(existing, schema)
 
 	if s.broker != nil {
 		s.broker.Broadcast(RealtimeEvent{
@@ -1642,8 +1791,8 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
-	tableName := r.PathValue("name")
-	pkStr := r.PathValue("pk")
+	tableName := getTableName(r)
+	pkStr := getRecordPK(r)
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
@@ -1673,6 +1822,11 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
+	if _, err := tx.Get(tableName, pkVal); err != nil {
+		writeError(w, http.StatusNotFound, fmt.Errorf("record with id %s not found: %w", pkStr, err))
+		return
+	}
+
 	if err := tx.Delete(tableName, pkVal); err != nil {
 		writeError(w, http.StatusBadRequest, err)
 		return
@@ -1691,7 +1845,7 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "record deleted"})
+	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "record deleted", "id": pkStr})
 }
 
 func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
