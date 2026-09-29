@@ -240,11 +240,14 @@ const (
 	TxBegin TxAction = iota
 	TxCommit
 	TxRollback
+	TxSavepoint
+	TxRollbackTo
 )
 
-// TxStmt represents BEGIN TRAN, COMMIT TRAN, ROLLBACK TRAN
+// TxStmt represents BEGIN TRAN, COMMIT TRAN, ROLLBACK TRAN, SAVE TRAN, ROLLBACK TRAN <sp>
 type TxStmt struct {
 	Action TxAction
+	Name   string
 }
 
 func (s *TxStmt) stmtNode() {}
@@ -256,6 +259,10 @@ func (s *TxStmt) String() string {
 		return "COMMIT TRANSACTION"
 	case TxRollback:
 		return "ROLLBACK TRANSACTION"
+	case TxSavepoint:
+		return "SAVE TRANSACTION " + s.Name
+	case TxRollbackTo:
+		return "ROLLBACK TRANSACTION " + s.Name
 	default:
 		return "TX"
 	}

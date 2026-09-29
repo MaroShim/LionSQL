@@ -510,7 +510,7 @@ func (p *Parser) parseStatement() (Statement, error) {
 			p.nextToken()
 		}
 		return &ContinueStmt{}, nil
-	case TokenCommit, TokenRollback:
+	case TokenCommit, TokenRollback, TokenSave, TokenSavepoint:
 		return p.parseTx()
 	case TokenSelect:
 		return p.parseSelect()
@@ -978,6 +978,21 @@ func (p *Parser) parseTx() (Statement, error) {
 			p.nextToken()
 		}
 		return &TxStmt{Action: TxBegin}, nil
+	case TokenSave, TokenSavepoint:
+		isSavepointKw := p.curTokenIs(TokenSavepoint)
+		p.nextToken() // eat SAVE / SAVEPOINT
+		if !isSavepointKw && (p.curTokenIs(TokenTran) || p.curTokenIs(TokenTransaction)) {
+			p.nextToken() // eat TRAN / TRANSACTION
+		}
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected savepoint name, got %s", p.curToken.Literal)
+		}
+		spName := p.curToken.Literal
+		p.nextToken()
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		return &TxStmt{Action: TxSavepoint, Name: spName}, nil
 	case TokenCommit:
 		p.nextToken() // eat COMMIT
 		if p.curTokenIs(TokenTran) || p.curTokenIs(TokenTransaction) {
@@ -992,8 +1007,16 @@ func (p *Parser) parseTx() (Statement, error) {
 		if p.curTokenIs(TokenTran) || p.curTokenIs(TokenTransaction) {
 			p.nextToken()
 		}
+		var spName string
+		if p.curTokenIs(TokenIdent) {
+			spName = p.curToken.Literal
+			p.nextToken()
+		}
 		if p.curTokenIs(TokenSemicolon) {
 			p.nextToken()
+		}
+		if spName != "" && !strings.EqualFold(spName, "WORK") {
+			return &TxStmt{Action: TxRollbackTo, Name: spName}, nil
 		}
 		return &TxStmt{Action: TxRollback}, nil
 	default:
@@ -1703,7 +1726,7 @@ func (p *Parser) ParseSQLStatement() (Statement, error) {
 		}
 		return p.parseBlock()
 
-	case TokenCommit, TokenRollback:
+	case TokenCommit, TokenRollback, TokenSave, TokenSavepoint:
 		return p.parseTx()
 
 	case TokenSet:

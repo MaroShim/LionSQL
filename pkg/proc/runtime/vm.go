@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -270,7 +271,7 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 		return nil, fmt.Errorf("execution error (rolled back): %w", err)
 	}
 
-	if err := tx.Commit(); err != nil {
+	if err := tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
 		return nil, fmt.Errorf("failed to commit ambient transaction: %w", err)
 	}
 
@@ -573,6 +574,18 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 				f.tranCount--
 			}
 			if err := f.tx.Rollback(); err != nil {
+				return nil, err
+			}
+
+		case proc.OpTxSavepoint:
+			spName, _ := inst.Data.(string)
+			if err := f.tx.Savepoint(spName); err != nil {
+				return nil, err
+			}
+
+		case proc.OpTxRollbackTo:
+			spName, _ := inst.Data.(string)
+			if err := f.tx.RollbackTo(spName); err != nil {
 				return nil, err
 			}
 

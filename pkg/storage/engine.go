@@ -23,6 +23,7 @@ var (
 	ErrDependentObjectsExist = errors.New("cannot drop table because other objects depend on it")
 	ErrSerializationFailure = errors.New("serialization failure: concurrent update conflict")
 	ErrInvalidJSON          = errors.New("invalid JSON syntax")
+	ErrSavepointNotFound    = errors.New("savepoint not found")
 )
 
 // DataType represents the column data type.
@@ -422,6 +423,8 @@ type Transaction interface {
 	IndexOnlyScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	Commit() error
 	Rollback() error
+	Savepoint(name string) error
+	RollbackTo(name string) error
 }
 
 // Session represents an active connection/session.

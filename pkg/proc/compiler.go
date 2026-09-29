@@ -445,6 +445,10 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			c.emit(OpTxCommit, 0, 0, 0, nil)
 		case TxRollback:
 			c.emit(OpTxRollback, 0, 0, 0, nil)
+		case TxSavepoint:
+			c.emit(OpTxSavepoint, 0, 0, 0, s.Name)
+		case TxRollbackTo:
+			c.emit(OpTxRollbackTo, 0, 0, 0, s.Name)
 		}
 		return nil
 

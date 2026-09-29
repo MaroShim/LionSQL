@@ -325,12 +325,74 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
-	if strings.HasPrefix(upper, "ROLLBACK TRANSACTION") || strings.HasPrefix(upper, "ROLLBACK TRAN") || upper == "ROLLBACK" {
+	if strings.HasPrefix(upper, "SAVE TRANSACTION ") || strings.HasPrefix(upper, "SAVE TRAN ") || strings.HasPrefix(upper, "SAVEPOINT ") {
+		cs.mu.Lock()
+		defer cs.mu.Unlock()
+		if cs.Tx == nil {
+			return nil, fmt.Errorf("no active transaction to create savepoint on session %s", cs.ID)
+		}
+		var namePart string
+		if strings.HasPrefix(upper, "SAVE TRANSACTION ") {
+			namePart = trimmed[len("SAVE TRANSACTION "):]
+		} else if strings.HasPrefix(upper, "SAVE TRAN ") {
+			namePart = trimmed[len("SAVE TRAN "):]
+		} else {
+			namePart = trimmed[len("SAVEPOINT "):]
+		}
+		spName := cleanSavepointName(namePart)
+		if spName == "" {
+			return nil, fmt.Errorf("syntax error: savepoint name required")
+		}
+		if err := cs.Tx.Savepoint(spName); err != nil {
+			return nil, fmt.Errorf("savepoint error: %w", err)
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "SAVEPOINT",
+			Messages:   []string{fmt.Sprintf("Savepoint %s created.", spName)},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	if strings.HasPrefix(upper, "ROLLBACK") {
 		cs.mu.Lock()
 		defer cs.mu.Unlock()
 		if cs.Tx == nil {
 			return nil, fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
 		}
+
+		var spName string
+		if strings.HasPrefix(upper, "ROLLBACK WORK TO SAVEPOINT ") {
+			spName = cleanSavepointName(trimmed[len("ROLLBACK WORK TO SAVEPOINT "):])
+		} else if strings.HasPrefix(upper, "ROLLBACK TO SAVEPOINT ") {
+			spName = cleanSavepointName(trimmed[len("ROLLBACK TO SAVEPOINT "):])
+		} else if strings.HasPrefix(upper, "ROLLBACK TO ") {
+			spName = cleanSavepointName(trimmed[len("ROLLBACK TO "):])
+		} else if strings.HasPrefix(upper, "ROLLBACK TRANSACTION ") {
+			rem := cleanSavepointName(trimmed[len("ROLLBACK TRANSACTION "):])
+			if rem != "" && !strings.EqualFold(rem, "WORK") {
+				spName = rem
+			}
+		} else if strings.HasPrefix(upper, "ROLLBACK TRAN ") {
+			rem := cleanSavepointName(trimmed[len("ROLLBACK TRAN "):])
+			if rem != "" && !strings.EqualFold(rem, "WORK") {
+				spName = rem
+			}
+		}
+
+		if spName != "" {
+			err := cs.Tx.RollbackTo(spName)
+			if err != nil {
+				return nil, fmt.Errorf("rollback to savepoint error: %w", err)
+			}
+			return &QueryResult{
+				Success:    true,
+				Command:    "ROLLBACK",
+				Messages:   []string{fmt.Sprintf("Rolled back to savepoint %s.", spName)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
+
 		err := cs.Tx.Rollback()
 		cs.Tx = nil
 		if err != nil {
@@ -845,4 +907,13 @@ func cleanIdentifier(s string) string {
 		cleaned = strings.ToLower(cleaned)
 	}
 	return cleaned
+}
+
+// cleanSavepointName strips delimiters, semicolon, quotes, and brackets from savepoint names.
+func cleanSavepointName(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimRight(raw, ";")
+	raw = strings.TrimSpace(raw)
+	raw = strings.Trim(raw, "[]\"'`")
+	return strings.TrimSpace(raw)
 }

@@ -50,6 +50,8 @@ const (
 	OpTxBegin
 	OpTxCommit
 	OpTxRollback
+	OpTxSavepoint
+	OpTxRollbackTo
 
 	// Storage & DML Operations
 	OpGet
@@ -154,6 +156,10 @@ func (op OpCode) String() string {
 		return "TX_COMMIT"
 	case OpTxRollback:
 		return "TX_ROLLBACK"
+	case OpTxSavepoint:
+		return "TX_SAVEPOINT"
+	case OpTxRollbackTo:
+		return "TX_ROLLBACK_TO"
 	case OpGet:
 		return "GET"
 	case OpScan:

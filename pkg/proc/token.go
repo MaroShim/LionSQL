@@ -125,9 +125,13 @@ const (
 	TokenMin
 	TokenMax
 	TokenGoto
+	TokenSave
+	TokenSavepoint
 )
 
 var keywords = map[string]TokenType{
+	"SAVE":        TokenSave,
+	"SAVEPOINT":   TokenSavepoint,
 	"GOTO":        TokenGoto,
 	"CREATE":      TokenCreate,
 	"ALTER":       TokenAlter,

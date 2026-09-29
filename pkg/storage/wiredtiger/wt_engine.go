@@ -150,6 +150,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -504,12 +505,29 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 	}, nil
 }
 
+type wtUndoKind int
+
+const (
+	wtUndoDelete wtUndoKind = iota
+	wtUndoPut
+)
+
+type wtUndoOp struct {
+	table  string
+	pk     storage.Value
+	kind   wtUndoKind
+	oldRec storage.Record
+}
+
 // WTTx manages ACID mutations in WiredTiger.
 type WTTx struct {
-	sess   *WTSession
-	opts   storage.TxOptions
-	mu     sync.Mutex
-	closed bool
+	sess       *WTSession
+	opts       storage.TxOptions
+	mu         sync.Mutex
+	closed     bool
+	undoLog    []wtUndoOp
+	savepoints map[string]int
+	spNames    []string
 }
 
 func serializeRecord(cur *C.WT_CURSOR, record storage.Record) ([]byte, error) {
@@ -572,6 +590,12 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 		return fmt.Errorf("cursor_insert failed with code %d", ret)
 	}
 
+	tx.undoLog = append(tx.undoLog, wtUndoOp{
+		table: tableName,
+		pk:    pkVal,
+		kind:  wtUndoDelete,
+	})
+
 	return nil
 }
 
@@ -587,6 +611,7 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	if err != nil {
 		return err
 	}
+	oldRec := cloneRecord(existing)
 
 	for col, val := range record {
 		existing[col] = val
@@ -617,6 +642,13 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 		return fmt.Errorf("cursor_update failed with code %d", ret)
 	}
 
+	tx.undoLog = append(tx.undoLog, wtUndoOp{
+		table:  tableName,
+		pk:     pk,
+		kind:   wtUndoPut,
+		oldRec: oldRec,
+	})
+
 	return nil
 }
 
@@ -626,6 +658,11 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 
 	if tx.closed {
 		return storage.ErrTxClosed
+	}
+
+	var oldRec storage.Record
+	if existing, err := tx.getLocked(tableName, pk); err == nil {
+		oldRec = cloneRecord(existing)
 	}
 
 	cur, err := tx.sess.getCursor(tableName)
@@ -640,6 +677,15 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 	C.go_wt_cursor_set_key(cur, cKey)
 	if ret := C.go_wt_cursor_remove(cur); ret != 0 {
 		return fmt.Errorf("cursor_remove failed with code %d", ret)
+	}
+
+	if oldRec != nil {
+		tx.undoLog = append(tx.undoLog, wtUndoOp{
+			table:  tableName,
+			pk:     pk,
+			kind:   wtUndoPut,
+			oldRec: oldRec,
+		})
 	}
 
 	return nil
@@ -716,6 +762,9 @@ func (tx *WTTx) Commit() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	tx.undoLog = nil
+	tx.savepoints = nil
+	tx.spNames = nil
 
 	tx.sess.resetCursors()
 
@@ -734,6 +783,9 @@ func (tx *WTTx) Rollback() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	tx.undoLog = nil
+	tx.savepoints = nil
+	tx.spNames = nil
 
 	tx.sess.resetCursors()
 
@@ -741,6 +793,128 @@ func (tx *WTTx) Rollback() error {
 	if ret != 0 {
 		return fmt.Errorf("rollback_transaction failed with code %d", ret)
 	}
+	return nil
+}
+
+func (tx *WTTx) Savepoint(name string) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+
+	normName := strings.ToLower(strings.TrimSpace(name))
+	if normName == "" {
+		return fmt.Errorf("savepoint name cannot be empty")
+	}
+
+	if tx.savepoints == nil {
+		tx.savepoints = make(map[string]int)
+	}
+
+	found := false
+	for _, n := range tx.spNames {
+		if n == normName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		tx.spNames = append(tx.spNames, normName)
+	}
+	tx.savepoints[normName] = len(tx.undoLog)
+	return nil
+}
+
+func (tx *WTTx) RollbackTo(name string) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+
+	normName := strings.ToLower(strings.TrimSpace(name))
+	targetLen, exists := tx.savepoints[normName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrSavepointNotFound, name)
+	}
+
+	// Undo operations in reverse order down to targetLen
+	for i := len(tx.undoLog) - 1; i >= targetLen; i-- {
+		op := tx.undoLog[i]
+		switch op.kind {
+		case wtUndoDelete:
+			_ = tx.deleteLocked(op.table, op.pk)
+		case wtUndoPut:
+			if op.oldRec != nil {
+				_ = tx.putLocked(op.table, op.pk, op.oldRec)
+			}
+		}
+	}
+	tx.undoLog = tx.undoLog[:targetLen]
+
+	// Invalidate subsequent savepoints defined after this savepoint
+	idx := -1
+	for i, n := range tx.spNames {
+		if n == normName {
+			idx = i
+			break
+		}
+	}
+	if idx >= 0 {
+		for i := idx + 1; i < len(tx.spNames); i++ {
+			delete(tx.savepoints, tx.spNames[i])
+		}
+		tx.spNames = tx.spNames[:idx+1]
+	}
+
+	return nil
+}
+
+func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Record) error {
+	cur, err := tx.sess.getCursor(tableName)
+	if err != nil {
+		return err
+	}
+	defer C.go_wt_cursor_reset(cur)
+
+	recBytes, err := serializeRecord(cur, record)
+	if err != nil {
+		return err
+	}
+
+	cKey := C.CString(pk.String())
+	defer C.free(unsafe.Pointer(cKey))
+
+	C.go_wt_cursor_set_key(cur, cKey)
+	var pData unsafe.Pointer
+	if len(recBytes) > 0 {
+		pData = unsafe.Pointer(&recBytes[0])
+	}
+	C.go_wt_cursor_set_val_raw(cur, pData, C.size_t(len(recBytes)))
+
+	if ret := C.go_wt_cursor_update(cur); ret != 0 {
+		if ret := C.go_wt_cursor_insert(cur); ret != 0 {
+			return fmt.Errorf("cursor put failed with code %d", ret)
+		}
+	}
+	return nil
+}
+
+func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
+	cur, err := tx.sess.getCursor(tableName)
+	if err != nil {
+		return err
+	}
+	defer C.go_wt_cursor_reset(cur)
+
+	cKey := C.CString(pk.String())
+	defer C.free(unsafe.Pointer(cKey))
+
+	C.go_wt_cursor_set_key(cur, cKey)
+	_ = C.go_wt_cursor_remove(cur)
 	return nil
 }
 
@@ -790,4 +964,15 @@ func (c *WTCursor) Close() error {
 	C.go_wt_cursor_close(c.cur)
 	c.cur = nil
 	return nil
+}
+
+func cloneRecord(r storage.Record) storage.Record {
+	if r == nil {
+		return nil
+	}
+	cp := make(storage.Record, len(r))
+	for k, v := range r {
+		cp[k] = v
+	}
+	return cp
 }

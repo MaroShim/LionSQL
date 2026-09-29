@@ -694,10 +694,11 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 	return &Transaction{
 		engine:   s.engine,
 		opts:     opts,
-		local:    make(map[string]map[string]storage.Record),
-		baseVers: make(map[string]map[string]int64),
-		deleted:  make(map[string]map[string]bool),
-		changes:  make(map[string]rowChange),
+		local:      make(map[string]map[string]storage.Record),
+		baseVers:   make(map[string]map[string]int64),
+		deleted:    make(map[string]map[string]bool),
+		changes:    make(map[string]rowChange),
+		savepoints: make(map[string]savepointState),
 	}, nil
 }
 
@@ -721,16 +722,25 @@ type rowChange struct {
 	rec     storage.Record
 }
 
+type savepointState struct {
+	local    map[string]map[string]storage.Record
+	baseVers map[string]map[string]int64
+	deleted  map[string]map[string]bool
+	changes  map[string]rowChange
+}
+
 // Transaction handles copy-on-write delta mutations with zero start overhead, OCC validation, and atomic commit.
 type Transaction struct {
-	mu       sync.Mutex
-	engine   *Engine
-	opts     storage.TxOptions
-	local    map[string]map[string]storage.Record // tableName -> key -> record
-	baseVers map[string]map[string]int64          // tableName -> key -> baseVersion
-	deleted  map[string]map[string]bool           // tableName -> key -> bool
-	changes  map[string]rowChange                 // "table:key" -> rowChange
-	closed   bool
+	mu         sync.Mutex
+	engine     *Engine
+	opts       storage.TxOptions
+	local      map[string]map[string]storage.Record // tableName -> key -> record
+	baseVers   map[string]map[string]int64          // tableName -> key -> baseVersion
+	deleted    map[string]map[string]bool           // tableName -> key -> bool
+	changes    map[string]rowChange                 // "table:key" -> rowChange
+	savepoints map[string]savepointState
+	spNames    []string
+	closed     bool
 }
 
 func (tx *Transaction) Insert(tableName string, record storage.Record) error {
@@ -1837,6 +1847,8 @@ func (tx *Transaction) Commit() error {
 		}
 	}
 
+	tx.savepoints = nil
+	tx.spNames = nil
 	return nil
 }
 
@@ -1852,7 +1864,133 @@ func (tx *Transaction) Rollback() error {
 	tx.local = nil
 	tx.baseVers = nil
 	tx.deleted = nil
+	tx.savepoints = nil
+	tx.spNames = nil
 	return nil
+}
+
+func (tx *Transaction) Savepoint(name string) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+
+	normName := strings.ToLower(strings.TrimSpace(name))
+	if normName == "" {
+		return fmt.Errorf("savepoint name cannot be empty")
+	}
+
+	if tx.savepoints == nil {
+		tx.savepoints = make(map[string]savepointState)
+	}
+
+	state := savepointState{
+		local:    cloneLocalMap(tx.local),
+		baseVers: cloneBaseVersMap(tx.baseVers),
+		deleted:  cloneDeletedMap(tx.deleted),
+		changes:  cloneChangesMap(tx.changes),
+	}
+
+	found := false
+	for _, n := range tx.spNames {
+		if n == normName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		tx.spNames = append(tx.spNames, normName)
+	}
+	tx.savepoints[normName] = state
+	return nil
+}
+
+func (tx *Transaction) RollbackTo(name string) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+
+	normName := strings.ToLower(strings.TrimSpace(name))
+	state, exists := tx.savepoints[normName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrSavepointNotFound, name)
+	}
+
+	// Restore snapshot state
+	tx.local = cloneLocalMap(state.local)
+	tx.baseVers = cloneBaseVersMap(state.baseVers)
+	tx.deleted = cloneDeletedMap(state.deleted)
+	tx.changes = cloneChangesMap(state.changes)
+
+	// Invalidate subsequent savepoints defined after this savepoint
+	idx := -1
+	for i, n := range tx.spNames {
+		if n == normName {
+			idx = i
+			break
+		}
+	}
+	if idx >= 0 {
+		for i := idx + 1; i < len(tx.spNames); i++ {
+			delete(tx.savepoints, tx.spNames[i])
+		}
+		tx.spNames = tx.spNames[:idx+1]
+	}
+
+	return nil
+}
+
+func cloneLocalMap(m map[string]map[string]storage.Record) map[string]map[string]storage.Record {
+	res := make(map[string]map[string]storage.Record, len(m))
+	for tbl, rows := range m {
+		tblMap := make(map[string]storage.Record, len(rows))
+		for k, rec := range rows {
+			tblMap[k] = cloneRecord(rec)
+		}
+		res[tbl] = tblMap
+	}
+	return res
+}
+
+func cloneBaseVersMap(m map[string]map[string]int64) map[string]map[string]int64 {
+	res := make(map[string]map[string]int64, len(m))
+	for tbl, rows := range m {
+		tblMap := make(map[string]int64, len(rows))
+		for k, v := range rows {
+			tblMap[k] = v
+		}
+		res[tbl] = tblMap
+	}
+	return res
+}
+
+func cloneDeletedMap(m map[string]map[string]bool) map[string]map[string]bool {
+	res := make(map[string]map[string]bool, len(m))
+	for tbl, rows := range m {
+		tblMap := make(map[string]bool, len(rows))
+		for k, v := range rows {
+			tblMap[k] = v
+		}
+		res[tbl] = tblMap
+	}
+	return res
+}
+
+func cloneChangesMap(m map[string]rowChange) map[string]rowChange {
+	res := make(map[string]rowChange, len(m))
+	for k, ch := range m {
+		chCopy := ch
+		if ch.rec != nil {
+			chCopy.rec = cloneRecord(ch.rec)
+		}
+		res[k] = chCopy
+	}
+	return res
 }
 
 func (tx *Transaction) getLocal(table, key string) (storage.Record, bool) {

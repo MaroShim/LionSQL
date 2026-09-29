@@ -242,6 +242,10 @@ func transpileStmt(stmt Statement, indentLevel int) (string, error) {
 			return fmt.Sprintf("%s{ db.commitTransaction && db.commitTransaction(); if (_tran_count > 0) _tran_count--; }\n", indent), nil
 		case TxRollback:
 			return fmt.Sprintf("%s{ db.rollbackTransaction && db.rollbackTransaction(); _tran_count = 0; }\n", indent), nil
+		case TxSavepoint:
+			return fmt.Sprintf("%s{ db.savepoint && db.savepoint(%q); }\n", indent, s.Name), nil
+		case TxRollbackTo:
+			return fmt.Sprintf("%s{ db.rollbackTo && db.rollbackTo(%q); }\n", indent, s.Name), nil
 		}
 		return "", nil
 

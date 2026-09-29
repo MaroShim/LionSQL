@@ -179,6 +179,10 @@ func evalStmt(stmt Statement, ctx *ExecutionContext) error {
 		case TxRollback:
 			_ = ctx.Tx.Rollback()
 			return errors.New("transaction rolled back explicitly")
+		case TxSavepoint:
+			return ctx.Tx.Savepoint(s.Name)
+		case TxRollbackTo:
+			return ctx.Tx.RollbackTo(s.Name)
 		}
 		return nil
 

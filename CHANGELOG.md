@@ -17,6 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Transaction Savepoints & Partial Rollback (`pkg/storage`, `pkg/api`, `pkg/proc`)**:
+  - Added `Savepoint(name string) error` and `RollbackTo(name string) error` to core `storage.Transaction` interface.
+  - Implemented copy-on-write snapshot delta savepoints in `pkg/storage/memengine` with full stack invalidation and state restoration.
+  - Implemented reverse undo-log record unwinding in `pkg/storage/wiredtiger` for precise partial rollback without aborting the parent transaction.
+  - Added text dispatchers in `pkg/api/sqlexec.go` for `SAVE TRANSACTION <name>`, `SAVE TRAN <name>`, `SAVEPOINT <name>`, and `ROLLBACK TRANSACTION <name>`, `ROLLBACK TRAN <name>`, `ROLLBACK TO SAVEPOINT <name>`.
+  - Extended procedural lexer, parser, AST, compiler, and VDBE virtual machine with `OpTxSavepoint` and `OpTxRollbackTo` to support nested savepoints inside T-SQL stored procedures.
+  - Added comprehensive verification test suite in `pkg/api/savepoint_test.go`.
 - **Dynamic SQL Execution Engine & `sp_executesql` Text Dispatcher (`pkg/api`, `pkg/proc`)**:
   - Implemented T-SQL dynamic query execution supporting `EXEC ('...')`, `EXEC (N'...')`, and session variable evaluations `EXEC (@sqlVar)`.
   - Added native `sp_executesql` text dispatcher in `pkg/api/sqlexec_procs.go` supporting Unicode literals (`N'...'`), parameter declarations (`@params`), and named (`@id = 1`) or positional parameter bindings.
