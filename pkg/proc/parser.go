@@ -1231,6 +1231,21 @@ func (p *Parser) parseDelete() (Statement, error) {
 
 func (p *Parser) parseExec() (Statement, error) {
 	p.nextToken() // eat EXEC
+	if p.curTokenIs(TokenLParen) {
+		p.nextToken() // eat '('
+		expr := p.parseExpression(precLowest)
+		if expr == nil {
+			return nil, fmt.Errorf("expected expression in dynamic EXEC")
+		}
+		if !p.curTokenIs(TokenRParen) {
+			return nil, fmt.Errorf("expected ')' after dynamic EXEC expression, got %s", p.curToken.Literal)
+		}
+		p.nextToken() // eat ')'
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		return &DynamicExecStmt{Expr: expr}, nil
+	}
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected procedure name in EXEC, got %s", p.curToken.Literal)
 	}

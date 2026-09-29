@@ -4,12 +4,30 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"sqlion/pkg/storage"
 )
+
+// unwrapSQLString removes SQL quote delimiters and unescapes double single-quotes.
+func unwrapSQLString(s string) string {
+	s = strings.TrimSpace(s)
+	if (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'")) && strings.HasSuffix(s, "'") && len(s) >= 3 {
+		inner := s[2 : len(s)-1]
+		return strings.ReplaceAll(inner, "''", "'")
+	}
+	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
+		inner := s[1 : len(s)-1]
+		return strings.ReplaceAll(inner, "''", "'")
+	}
+	if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") && len(s) >= 2 {
+		return s[1 : len(s)-1]
+	}
+	return s
+}
 
 func parseProcArgs(raw string) (string, []string) {
 	raw = strings.TrimSpace(raw)
@@ -20,6 +38,18 @@ func parseProcArgs(raw string) (string, []string) {
 		raw = strings.TrimSpace(raw[7:])
 	} else if strings.HasPrefix(upper, "CALL ") {
 		raw = strings.TrimSpace(raw[4:])
+	} else if strings.HasPrefix(upper, "EXEC(") {
+		raw = strings.TrimSpace(raw[4:])
+		raw = "(" + raw
+	} else if strings.HasPrefix(upper, "EXECUTE(") {
+		raw = strings.TrimSpace(raw[7:])
+		raw = "(" + raw
+	}
+
+	// Dynamic SQL invocation: EXEC ('SELECT ...') or EXEC (@sqlVar)
+	if strings.HasPrefix(raw, "(") && strings.HasSuffix(raw, ")") {
+		inner := strings.TrimSpace(raw[1 : len(raw)-1])
+		return "", []string{inner}
 	}
 
 	idx := strings.IndexAny(raw, " \t,(")
@@ -29,7 +59,10 @@ func parseProcArgs(raw string) (string, []string) {
 
 	procName := cleanIdentifier(raw[:idx])
 	rem := strings.TrimSpace(raw[idx:])
-	rem = strings.Trim(rem, "();")
+	if strings.HasPrefix(rem, "(") && strings.HasSuffix(rem, ")") {
+		rem = strings.TrimSpace(rem[1 : len(rem)-1])
+	}
+	rem = strings.TrimRight(rem, ";")
 
 	if rem == "" {
 		return procName, nil
@@ -42,34 +75,56 @@ func parseProcArgs(raw string) (string, []string) {
 
 	for i := 0; i < len(rem); i++ {
 		ch := rem[i]
-		if (ch == '\'' || ch == '"') && !inQuote {
-			inQuote = true
-			quoteChar = ch
-			continue
+		if !inQuote {
+			if ch == '\'' || ch == '"' {
+				inQuote = true
+				quoteChar = ch
+				cur.WriteByte(ch)
+				continue
+			}
+			if (ch == 'N' || ch == 'n') && i+1 < len(rem) && rem[i+1] == '\'' {
+				inQuote = true
+				quoteChar = '\''
+				cur.WriteByte(ch)
+				cur.WriteByte('\'')
+				i++
+				continue
+			}
+			if ch == ',' {
+				args = append(args, strings.TrimSpace(cur.String()))
+				cur.Reset()
+				continue
+			}
+			cur.WriteByte(ch)
+		} else {
+			if ch == quoteChar {
+				if i+1 < len(rem) && rem[i+1] == quoteChar {
+					cur.WriteByte(ch)
+					cur.WriteByte(ch)
+					i++
+					continue
+				}
+				inQuote = false
+				cur.WriteByte(ch)
+				continue
+			}
+			cur.WriteByte(ch)
 		}
-		if inQuote && ch == quoteChar {
-			inQuote = false
-			continue
-		}
-		if !inQuote && ch == ',' {
-			args = append(args, strings.TrimSpace(cur.String()))
-			cur.Reset()
-			continue
-		}
-		cur.WriteByte(ch)
 	}
 	if cur.Len() > 0 {
 		args = append(args, strings.TrimSpace(cur.String()))
-	}
-
-	for i, a := range args {
-		args[i] = strings.Trim(a, "'\"[]`")
 	}
 
 	return procName, args
 }
 
 func (s *Server) execBuiltinSystemProc(procLower string, args []string, start time.Time) (*QueryResult, error) {
+	cleanArgs := make([]string, len(args))
+	for i, a := range args {
+		cleanArgs[i] = unwrapSQLString(a)
+	}
+	args = cleanArgs
+
 	switch procLower {
 	case "sp_help":
 		if len(args) == 0 {
@@ -500,12 +555,25 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 
 func (s *Server) execProcedureCall(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	procName, args := parseProcArgs(query)
+
+	ctx := context.Background()
+	if cs != nil && cs.QueryCtx != nil {
+		ctx = cs.QueryCtx
+	}
+
+	// 1. Dynamic SQL execution: EXEC ('SELECT ...') or EXEC (@sqlVar)
+	if procName == "" && len(args) > 0 {
+		return s.execDynamicStringExec(args, start, cs, ctx)
+	}
+
 	if procName == "" {
 		return nil, fmt.Errorf("invalid EXEC syntax")
 	}
 
 	procLower := strings.ToLower(procName)
 	switch procLower {
+	case "sp_executesql":
+		return s.execSpExecuteSQL(args, start, cs, ctx)
 	case "sp_help", "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename":
 		return s.execBuiltinSystemProc(procLower, args, start)
 	}
@@ -533,7 +601,7 @@ func (s *Server) execProcedureCall(query string, start time.Time, cs *ClientSess
 	argMap := make(map[string]any)
 	for i, param := range procMeta.Params {
 		if i < len(args) {
-			raw := args[i]
+			raw := unwrapSQLString(args[i])
 			if num, err := strconv.ParseInt(raw, 10, 64); err == nil {
 				argMap[param.Name] = num
 			} else if f, err := strconv.ParseFloat(raw, 64); err == nil {
@@ -542,11 +610,6 @@ func (s *Server) execProcedureCall(query string, start time.Time, cs *ClientSess
 				argMap[param.Name] = raw
 			}
 		}
-	}
-
-	ctx := context.Background()
-	if cs != nil && cs.QueryCtx != nil {
-		ctx = cs.QueryCtx
 	}
 
 	res, err := s.executor.RunContext(ctx, prog, procName, argMap, session)
@@ -571,3 +634,231 @@ func (s *Server) execProcedureCall(query string, start time.Time, cs *ClientSess
 		Messages:     messages,
 	}, nil
 }
+
+func (s *Server) execDynamicStringExec(args []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
+	var sqlParts []string
+	for _, arg := range args {
+		arg = strings.TrimSpace(arg)
+		if strings.HasPrefix(arg, "@") && cs != nil {
+			val := ""
+			cs.mu.Lock()
+			varName := strings.ToLower(arg)
+			if v, ok := cs.Vars[varName]; ok && v != nil {
+				val = fmt.Sprintf("%v", v)
+			}
+			cs.mu.Unlock()
+			sqlParts = append(sqlParts, val)
+		} else {
+			sqlParts = append(sqlParts, unwrapSQLString(arg))
+		}
+	}
+	dynamicSQL := strings.TrimSpace(strings.Join(sqlParts, " "))
+	if dynamicSQL == "" {
+		return &QueryResult{Success: true, Command: "EXEC", DurationUS: time.Since(start).Microseconds()}, nil
+	}
+
+	if cs != nil {
+		return s.ExecuteSessionSQLContext(ctx, cs.ID, dynamicSQL)
+	}
+	return s.ExecuteSQL(dynamicSQL)
+}
+
+func (s *Server) execSpExecuteSQL(args []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("sp_executesql requires at least 1 parameter (@stmt)")
+	}
+
+	stmt := unwrapSQLString(args[0])
+	if strings.HasPrefix(args[0], "@") && cs != nil {
+		cs.mu.Lock()
+		if v, ok := cs.Vars[strings.ToLower(args[0])]; ok && v != nil {
+			stmt = fmt.Sprintf("%v", v)
+		}
+		cs.mu.Unlock()
+	}
+
+	stmt = strings.TrimSpace(stmt)
+	if stmt == "" {
+		return &QueryResult{Success: true, Command: "EXEC", DurationUS: time.Since(start).Microseconds()}, nil
+	}
+
+	var paramsDecl string
+	var boundArgs []string
+
+	if len(args) > 1 {
+		pDecl := unwrapSQLString(args[1])
+		if strings.HasPrefix(args[1], "@") && cs != nil {
+			cs.mu.Lock()
+			if v, ok := cs.Vars[strings.ToLower(args[1])]; ok && v != nil {
+				pDecl = fmt.Sprintf("%v", v)
+			}
+			cs.mu.Unlock()
+		}
+		paramsDecl = pDecl
+		if len(args) > 2 {
+			boundArgs = args[2:]
+		}
+	}
+
+	boundSQL := buildSpExecuteSQL(stmt, paramsDecl, boundArgs, cs)
+
+	var res *QueryResult
+	var err error
+	if cs != nil {
+		res, err = s.ExecuteSessionSQLContext(ctx, cs.ID, boundSQL)
+	} else {
+		res, err = s.ExecuteSQL(boundSQL)
+	}
+	if err != nil {
+		return nil, err
+	}
+	if res != nil {
+		res.DurationUS = time.Since(start).Microseconds()
+	}
+	return res, nil
+}
+
+type spParamDecl struct {
+	Name string
+	Type string
+}
+
+func parseSpParamDeclarations(declStr string) []spParamDecl {
+	declStr = strings.TrimSpace(declStr)
+	if declStr == "" {
+		return nil
+	}
+	parts := strings.Split(declStr, ",")
+	var decls []spParamDecl
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		tokens := strings.Fields(p)
+		if len(tokens) >= 1 {
+			name := tokens[0]
+			tp := ""
+			if len(tokens) >= 2 {
+				tp = tokens[1]
+			}
+			decls = append(decls, spParamDecl{
+				Name: name,
+				Type: tp,
+			})
+		}
+	}
+	return decls
+}
+
+func formatBoundArgValue(rawVal string, cs *ClientSession) string {
+	rawVal = strings.TrimSpace(rawVal)
+	if strings.HasPrefix(rawVal, "@") && cs != nil {
+		cs.mu.Lock()
+		v, ok := cs.Vars[strings.ToLower(rawVal)]
+		cs.mu.Unlock()
+		if ok {
+			if v == nil {
+				return "NULL"
+			}
+			switch val := v.(type) {
+			case string:
+				return "'" + strings.ReplaceAll(val, "'", "''") + "'"
+			case bool:
+				if val {
+					return "1"
+				}
+				return "0"
+			case int, int64, int32, float64, float32:
+				return fmt.Sprintf("%v", val)
+			default:
+				return fmt.Sprintf("%v", val)
+			}
+		}
+	}
+
+	if (strings.HasPrefix(rawVal, "N'") || strings.HasPrefix(rawVal, "n'")) && strings.HasSuffix(rawVal, "'") && len(rawVal) >= 3 {
+		inner := rawVal[2 : len(rawVal)-1]
+		return "'" + inner + "'"
+	}
+	return rawVal
+}
+
+func buildSpExecuteSQL(stmt string, paramsDecl string, boundArgs []string, cs *ClientSession) string {
+	stmt = strings.TrimSpace(stmt)
+	if len(boundArgs) == 0 && strings.TrimSpace(paramsDecl) == "" {
+		return stmt
+	}
+
+	decls := parseSpParamDeclarations(paramsDecl)
+	usedArgs := make(map[int]bool)
+
+	// 1. Process named parameter assignments: @param = val
+	for aIdx, arg := range boundArgs {
+		if idx := strings.Index(arg, "="); idx != -1 {
+			pName := strings.TrimSpace(arg[:idx])
+			pValStr := formatBoundArgValue(arg[idx+1:], cs)
+			stmt = substituteParamOutsideQuotes(stmt, pName, pValStr)
+			usedArgs[aIdx] = true
+		}
+	}
+
+	// 2. Process positional parameters based on paramsDecl
+	for i, decl := range decls {
+		if i < len(boundArgs) && !usedArgs[i] {
+			pValStr := formatBoundArgValue(boundArgs[i], cs)
+			stmt = substituteParamOutsideQuotes(stmt, decl.Name, pValStr)
+			usedArgs[i] = true
+		}
+	}
+
+	return stmt
+}
+
+func substituteParamOutsideQuotes(query string, paramName string, formattedVal string) string {
+	if !strings.HasPrefix(paramName, "@") {
+		paramName = "@" + paramName
+	}
+	re := regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(paramName) + `\b`)
+
+	var b strings.Builder
+	inString := false
+	var quoteChar rune
+	runes := []rune(query)
+
+	for i := 0; i < len(runes); {
+		ch := runes[i]
+		if inString {
+			b.WriteRune(ch)
+			if ch == quoteChar {
+				if i+1 < len(runes) && runes[i+1] == quoteChar {
+					b.WriteRune(runes[i+1])
+					i += 2
+					continue
+				}
+				inString = false
+			}
+			i++
+		} else {
+			if ch == '\'' || ch == '"' {
+				inString = true
+				quoteChar = ch
+				b.WriteRune(ch)
+				i++
+			} else if ch == '@' {
+				remainder := string(runes[i:])
+				loc := re.FindStringIndex(remainder)
+				if len(loc) == 2 && loc[0] == 0 {
+					b.WriteString(formattedVal)
+					matchedRunes := len([]rune(remainder[:loc[1]]))
+					i += matchedRunes
+				} else {
+					b.WriteRune(ch)
+					i++
+				}
+			} else {
+				b.WriteRune(ch)
+				i++
+			}
+		}
+	}
+	return b.String()
+}
+

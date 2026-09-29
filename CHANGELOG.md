@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Dynamic SQL Execution Engine & `sp_executesql` Text Dispatcher (`pkg/api`, `pkg/proc`)**:
+  - Implemented T-SQL dynamic query execution supporting `EXEC ('...')`, `EXEC (N'...')`, and session variable evaluations `EXEC (@sqlVar)`.
+  - Added native `sp_executesql` text dispatcher in `pkg/api/sqlexec_procs.go` supporting Unicode literals (`N'...'`), parameter declarations (`@params`), and named (`@id = 1`) or positional parameter bindings.
+  - Extended Pratt parser (`pkg/proc/parser.go`), AST (`pkg/proc/ast.go`), bytecode compiler (`pkg/proc/compiler.go`), and VDBE runtime VM (`pkg/proc/runtime/vm.go`) with `OpExecDynamic` to execute dynamic SQL inside stored procedure bodies.
+  - Added comprehensive test suite in `pkg/api/dynamic_sql_test.go`.
 - **Official Universal JavaScript & TypeScript Client SDK (`sdk/sqlion.js`, `sdk/sqlion.d.ts`, `pkg/api/sdk.go`)**:
   - Implemented zero-dependency, PocketBase-compatible client library for Web Browsers, Node.js (v18+), Bun, Deno, and Edge environments.
   - Provided `client.collection(table)` services with full CRUD methods (`getList`, `getFullList`, `getOne`, `create`, `update`, `replace`, `delete`) and automatic URL query filter building.

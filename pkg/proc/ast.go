@@ -344,6 +344,16 @@ func (s *ExecStmt) String() string {
 	return fmt.Sprintf("EXEC %s %s", s.ProcName, strings.Join(argStrs, ", "))
 }
 
+// DynamicExecStmt represents dynamic SQL execution: EXEC ( string_expression )
+type DynamicExecStmt struct {
+	Expr Expr
+}
+
+func (s *DynamicExecStmt) stmtNode() {}
+func (s *DynamicExecStmt) String() string {
+	return fmt.Sprintf("EXEC (%s)", s.Expr.String())
+}
+
 // TryCatchStmt represents BEGIN TRY ... END TRY BEGIN CATCH ... END CATCH
 type TryCatchStmt struct {
 	TryBody   Statement

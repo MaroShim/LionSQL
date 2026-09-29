@@ -396,6 +396,13 @@ func transpileStmt(stmt Statement, indentLevel int) (string, error) {
 		return fmt.Sprintf("%sif (typeof %s === 'function') { %s({ %s }, db); }\n",
 			indent, s.ProcName, s.ProcName, strings.Join(argStrs, ", ")), nil
 
+	case *DynamicExecStmt:
+		js, err := transpileExpr(s.Expr)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%sdb.exec(%s);\n", indent, js), nil
+
 	default:
 		return "", fmt.Errorf("unsupported statement for JS transpilation: %T", stmt)
 	}

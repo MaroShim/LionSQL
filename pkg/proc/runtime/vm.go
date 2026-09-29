@@ -861,6 +861,54 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 				return nil, err
 			}
 
+		case proc.OpExecDynamic:
+			val := f.regs[inst.A]
+			sqlStr := val.String()
+			if val.Type == storage.TypeVarChar {
+				sqlStr = val.SVal
+			}
+			sqlStr = strings.TrimSpace(sqlStr)
+			if sqlStr == "" {
+				continue
+			}
+
+			prog, err := f.executor.Cache().GetOrCompile(sqlStr)
+			if err != nil {
+				prog, err = proc.Compile(sqlStr)
+				if err != nil {
+					f.lastError = 50000
+					if len(f.catchStack) > 0 {
+						catchPC := f.catchStack[len(f.catchStack)-1]
+						f.catchStack = f.catchStack[:len(f.catchStack)-1]
+						pc = catchPC
+						continue
+					}
+					return nil, fmt.Errorf("dynamic SQL compile error: %w", err)
+				}
+			}
+
+			res, err := f.executor.ExecuteInTx(prog, nil, f.tx, f.transientTables)
+			if err != nil {
+				f.lastError = 50000
+				if len(f.catchStack) > 0 {
+					catchPC := f.catchStack[len(f.catchStack)-1]
+					f.catchStack = f.catchStack[:len(f.catchStack)-1]
+					pc = catchPC
+					continue
+				}
+				return nil, fmt.Errorf("dynamic SQL execution error: %w", err)
+			}
+			if res != nil {
+				if len(res.Logs) > 0 {
+					f.logs = append(f.logs, res.Logs...)
+				}
+				if len(res.Rows) > 0 {
+					f.rows = res.Rows
+					f.columns = res.Columns
+					f.rowCount = int64(len(res.Rows))
+				}
+			}
+
 		case proc.OpRelQuery:
 			var queryData *proc.RelQueryData
 			if data, ok := inst.Data.(*proc.RelQueryData); ok {
@@ -1605,6 +1653,10 @@ func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error)
 }
 
 func (f *VMFrame) callProc(procName string, argRegs []int32) error {
+	if strings.EqualFold(procName, "sp_executesql") {
+		return f.callSpExecuteSql(argRegs)
+	}
+
 	prog, found := f.executor.Cache().GetByName(procName)
 	if !found {
 		return fmt.Errorf("procedure %s not found", procName)
@@ -1626,6 +1678,61 @@ func (f *VMFrame) callProc(procName string, argRegs []int32) error {
 	}
 	_ = retVal
 	return err
+}
+
+func (f *VMFrame) callSpExecuteSql(argRegs []int32) error {
+	if len(argRegs) == 0 {
+		return fmt.Errorf("sp_executesql requires at least 1 parameter (@stmt)")
+	}
+	regIdx := argRegs[0]
+	if int(regIdx) >= len(f.regs) {
+		return fmt.Errorf("invalid register for sp_executesql statement")
+	}
+	val := f.regs[regIdx]
+	stmt := val.String()
+	if val.Type == storage.TypeVarChar {
+		stmt = val.SVal
+	}
+	stmt = strings.TrimSpace(stmt)
+	if stmt == "" {
+		return nil
+	}
+
+	prog, err := f.executor.Cache().GetOrCompile(stmt)
+	if err != nil {
+		prog, err = proc.Compile(stmt)
+		if err != nil {
+			return fmt.Errorf("sp_executesql compile error: %w", err)
+		}
+	}
+
+	paramMap := make(map[string]any)
+	if len(argRegs) > 2 {
+		for i, reg := range argRegs[2:] {
+			if int(reg) < len(f.regs) {
+				pVal := valToAny(f.regs[reg])
+				pIdx := i + 1
+				paramMap[fmt.Sprintf("p%d", pIdx)] = pVal
+				paramMap[fmt.Sprintf("@p%d", pIdx)] = pVal
+			}
+		}
+	}
+
+	res, err := f.executor.ExecuteInTx(prog, paramMap, f.tx, f.transientTables)
+	if err != nil {
+		return err
+	}
+	if res != nil {
+		if len(res.Logs) > 0 {
+			f.logs = append(f.logs, res.Logs...)
+		}
+		if len(res.Rows) > 0 {
+			f.rows = res.Rows
+			f.columns = res.Columns
+			f.rowCount = int64(len(res.Rows))
+		}
+	}
+	return nil
 }
 
 // Storage arithmetic & comparison helpers

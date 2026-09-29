@@ -71,6 +71,7 @@ const (
 	OpCallBuiltin
 	OpCallProc
 	OpCallUDF
+	OpExecDynamic
 
 	// Transient / Trigger tables
 	OpSetTransientTable
@@ -183,6 +184,8 @@ func (op OpCode) String() string {
 		return "CALL_PROC"
 	case OpCallUDF:
 		return "CALL_UDF"
+	case OpExecDynamic:
+		return "EXEC_DYNAMIC"
 	case OpSetTransientTable:
 		return "SET_TRANSIENT"
 	case OpClearTransientTables:

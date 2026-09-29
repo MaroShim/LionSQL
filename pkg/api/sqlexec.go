@@ -767,7 +767,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	}
 
 	// 2. Procedure Invocation: EXEC / CALL / sp_*
-	if strings.HasPrefix(upper, "EXEC ") || strings.HasPrefix(upper, "EXECUTE ") || strings.HasPrefix(upper, "CALL ") || strings.HasPrefix(upper, "SP_") {
+	if strings.HasPrefix(upper, "EXEC ") || strings.HasPrefix(upper, "EXECUTE ") || strings.HasPrefix(upper, "EXEC(") || strings.HasPrefix(upper, "EXECUTE(") || strings.HasPrefix(upper, "CALL ") || strings.HasPrefix(upper, "SP_") {
 		return s.execProcedureCall(trimmed, start, cs)
 	}
 

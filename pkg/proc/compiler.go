@@ -556,6 +556,15 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		c.freeReg(int32(len(argRegs)))
 		return nil
 
+	case *DynamicExecStmt:
+		reg, err := c.compileExpr(s.Expr)
+		if err != nil {
+			return err
+		}
+		c.emit(OpExecDynamic, reg, 0, 0, nil)
+		c.freeReg(1)
+		return nil
+
 	case *LabelStmt:
 		labelKey := strings.ToLower(s.Label)
 		if _, exists := c.labels[labelKey]; exists {
