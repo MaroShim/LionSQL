@@ -323,7 +323,7 @@ func main() {
 }
 
 func seedSampleAccounts(eng storage.Engine) {
-	schema := &storage.TableSchema{
+	accountsSchema := &storage.TableSchema{
 		Name: "accounts",
 		Columns: []storage.Column{
 			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
@@ -331,7 +331,18 @@ func seedSampleAccounts(eng storage.Engine) {
 			{Name: "balance", Type: storage.TypeInt, Nullable: false},
 		},
 	}
-	_ = eng.CreateTable(schema)
+	_ = eng.CreateTable(accountsSchema)
+
+	customersSchema := &storage.TableSchema{
+		Name: "customers",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar, Nullable: false},
+			{Name: "balance", Type: storage.TypeFloat, Nullable: false},
+			{Name: "status", Type: storage.TypeVarChar, Nullable: false},
+		},
+	}
+	_ = eng.CreateTable(customersSchema)
 
 	session, err := eng.NewSession()
 	if err != nil {
@@ -353,6 +364,38 @@ func seedSampleAccounts(eng storage.Engine) {
 		"holder":  storage.StringValue("Bob"),
 		"balance": storage.IntValue(500),
 	})
+
+	_ = tx.Insert("customers", storage.Record{
+		"id":      storage.IntValue(1),
+		"name":    storage.StringValue("Alice"),
+		"balance": storage.FloatValue(1000.5),
+		"status":  storage.StringValue("active"),
+	})
+	_ = tx.Insert("customers", storage.Record{
+		"id":      storage.IntValue(2),
+		"name":    storage.StringValue("Bob"),
+		"balance": storage.FloatValue(450.0),
+		"status":  storage.StringValue("pending"),
+	})
+	_ = tx.Insert("customers", storage.Record{
+		"id":      storage.IntValue(3),
+		"name":    storage.StringValue("Charlie"),
+		"balance": storage.FloatValue(800.0),
+		"status":  storage.StringValue("active"),
+	})
+	_ = tx.Insert("customers", storage.Record{
+		"id":      storage.IntValue(4),
+		"name":    storage.StringValue("Diana"),
+		"balance": storage.FloatValue(200.0),
+		"status":  storage.StringValue("inactive"),
+	})
+	_ = tx.Insert("customers", storage.Record{
+		"id":      storage.IntValue(5),
+		"name":    storage.StringValue("Evan"),
+		"balance": storage.FloatValue(600.0),
+		"status":  storage.StringValue("active"),
+	})
+
 	_ = tx.Commit()
 }
 
