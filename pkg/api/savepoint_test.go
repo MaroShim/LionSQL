@@ -295,3 +295,43 @@ END;`)
 		t.Fatalf("expected row (10, 100), got: %+v", res.Rows)
 	}
 }
+
+func TestSavepoint_Release(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	sessID := "sess_sp_release"
+
+	_, err := server.ExecuteSessionSQL(sessID, `CREATE TABLE release_test (id INT PRIMARY KEY, val VARCHAR(50));`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, _ = server.ExecuteSessionSQL(sessID, "BEGIN TRANSACTION;")
+	_, _ = server.ExecuteSessionSQL(sessID, "INSERT INTO release_test VALUES (1, 'Initial');")
+	_, _ = server.ExecuteSessionSQL(sessID, "SAVE TRANSACTION sp_rel;")
+	_, _ = server.ExecuteSessionSQL(sessID, "INSERT INTO release_test VALUES (2, 'Second');")
+
+	// Release savepoint
+	relRes, err := server.ExecuteSessionSQL(sessID, "RELEASE SAVEPOINT sp_rel;")
+	if err != nil || !relRes.Success {
+		t.Fatalf("RELEASE SAVEPOINT failed: %v", err)
+	}
+
+	// Attempting to rollback to released savepoint should now error
+	_, err = server.ExecuteSessionSQL(sessID, "ROLLBACK TRANSACTION sp_rel;")
+	if err == nil {
+		t.Fatalf("expected rollback to released savepoint to fail")
+	}
+
+	// Commit should preserve both rows
+	_, err = server.ExecuteSessionSQL(sessID, "COMMIT TRANSACTION;")
+	if err != nil {
+		t.Fatalf("COMMIT failed: %v", err)
+	}
+
+	selRes, err := server.ExecuteSessionSQL(sessID, "SELECT * FROM release_test ORDER BY id;")
+	if err != nil || len(selRes.Rows) != 2 {
+		t.Fatalf("expected 2 committed rows, got %d", len(selRes.Rows))
+	}
+}

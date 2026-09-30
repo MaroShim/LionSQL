@@ -451,6 +451,7 @@ type Transaction interface {
 	Rollback() error
 	Savepoint(name string) error
 	RollbackTo(name string) error
+	ReleaseSavepoint(name string) error
 }
 
 // Session represents an active connection/session.

@@ -873,6 +873,36 @@ func (tx *WTTx) RollbackTo(name string) error {
 	return nil
 }
 
+func (tx *WTTx) ReleaseSavepoint(name string) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+
+	normName := strings.ToLower(strings.TrimSpace(name))
+	if _, exists := tx.savepoints[normName]; !exists {
+		return fmt.Errorf("%w: %s", storage.ErrSavepointNotFound, name)
+	}
+
+	idx := -1
+	for i, n := range tx.spNames {
+		if n == normName {
+			idx = i
+			break
+		}
+	}
+	if idx >= 0 {
+		for i := idx; i < len(tx.spNames); i++ {
+			delete(tx.savepoints, tx.spNames[i])
+		}
+		tx.spNames = tx.spNames[:idx]
+	}
+
+	return nil
+}
+
 func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Record) error {
 	cur, err := tx.sess.getCursor(tableName)
 	if err != nil {

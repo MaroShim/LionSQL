@@ -24,6 +24,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Transaction Savepoints & Partial Rollback (`pkg/storage`, `pkg/api`)**:
+  - Implemented multi-transaction savepoint support via `SAVE TRANSACTION <name>`, `SAVE TRAN <name>`, and `SAVEPOINT <name>`.
+  - Implemented partial rollback to savepoints via `ROLLBACK TRANSACTION <name>`, `ROLLBACK TRAN <name>`, and `ROLLBACK TO [SAVEPOINT] <name>`.
+  - Implemented ANSI SQL / PostgreSQL standard `RELEASE SAVEPOINT <name>` (and `RELEASE <name>`) across In-Memory OCC (`memengine`) and WiredTiger (`wt_engine`) storage engines.
+  - Added `ReleaseSavepoint` contract to `storage.Transaction` interface.
+  - Expanded test suite in `pkg/api/savepoint_test.go` covering basic, nested, error cases, stored procedures, and savepoint releases with 100% pass rate.
 - **DML OUTPUT Clause Support (`pkg/proc`, `pkg/api`)**:
   - Implemented T-SQL `OUTPUT` clause for `INSERT`, `UPDATE`, and `DELETE` statements (`OUTPUT INSERTED.*`, `OUTPUT DELETED.*`, explicit column projections, and aliases).
   - Added `TokenOutput` token and AST extensions (`OutputCols []string` in `InsertStmt`, `UpdateStmt`, `DeleteStmt`).

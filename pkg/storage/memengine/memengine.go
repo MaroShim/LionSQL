@@ -1965,6 +1965,36 @@ func (tx *Transaction) RollbackTo(name string) error {
 	return nil
 }
 
+func (tx *Transaction) ReleaseSavepoint(name string) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+
+	normName := strings.ToLower(strings.TrimSpace(name))
+	if _, exists := tx.savepoints[normName]; !exists {
+		return fmt.Errorf("%w: %s", storage.ErrSavepointNotFound, name)
+	}
+
+	idx := -1
+	for i, n := range tx.spNames {
+		if n == normName {
+			idx = i
+			break
+		}
+	}
+	if idx >= 0 {
+		for i := idx; i < len(tx.spNames); i++ {
+			delete(tx.savepoints, tx.spNames[i])
+		}
+		tx.spNames = tx.spNames[:idx]
+	}
+
+	return nil
+}
+
 func cloneLocalMap(m map[string]map[string]storage.Record) map[string]map[string]storage.Record {
 	res := make(map[string]map[string]storage.Record, len(m))
 	for tbl, rows := range m {

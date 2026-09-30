@@ -437,6 +437,33 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
+	if strings.HasPrefix(upper, "RELEASE SAVEPOINT ") || strings.HasPrefix(upper, "RELEASE ") {
+		cs.mu.Lock()
+		defer cs.mu.Unlock()
+		if cs.Tx == nil {
+			return nil, fmt.Errorf("no active transaction to release savepoint on session %s", cs.ID)
+		}
+		var namePart string
+		if strings.HasPrefix(upper, "RELEASE SAVEPOINT ") {
+			namePart = trimmed[len("RELEASE SAVEPOINT "):]
+		} else {
+			namePart = trimmed[len("RELEASE "):]
+		}
+		spName := cleanSavepointName(namePart)
+		if spName == "" {
+			return nil, fmt.Errorf("syntax error: savepoint name required")
+		}
+		if err := cs.Tx.ReleaseSavepoint(spName); err != nil {
+			return nil, fmt.Errorf("release savepoint error: %w", err)
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "RELEASE",
+			Messages:   []string{fmt.Sprintf("Savepoint %s released.", spName)},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
 	if strings.HasPrefix(upper, "ROLLBACK") {
 		cs.mu.Lock()
 		defer cs.mu.Unlock()
