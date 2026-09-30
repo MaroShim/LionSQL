@@ -283,11 +283,12 @@ func (s *SelectIntoStmt) String() string {
 		s.Column, s.IntoVar, s.Table, s.WhereCol, s.WhereVal.String())
 }
 
-// InsertStmt represents INSERT INTO table (cols...) VALUES (exprs...)
+// InsertStmt represents INSERT INTO table (cols...) [OUTPUT ...] VALUES (exprs...)
 type InsertStmt struct {
-	Table   string
-	Columns []string
-	Values  []Expr
+	Table      string
+	Columns    []string
+	Values     []Expr
+	OutputCols []string
 }
 
 func (s *InsertStmt) stmtNode() {}
@@ -306,12 +307,13 @@ type UpdateAssignment struct {
 	Value  Expr
 }
 
-// UpdateStmt represents UPDATE table SET col1 = expr1, ... WHERE pk_col = expr
+// UpdateStmt represents UPDATE table SET col1 = expr1, ... [OUTPUT ...] WHERE pk_col = expr
 type UpdateStmt struct {
 	Table       string
 	Assignments []UpdateAssignment
 	WhereCol    string
 	WhereVal    Expr
+	OutputCols  []string
 }
 
 func (s *UpdateStmt) stmtNode() {}
@@ -324,11 +326,12 @@ func (s *UpdateStmt) String() string {
 		s.Table, strings.Join(assigns, ", "), s.WhereCol, s.WhereVal.String())
 }
 
-// DeleteStmt represents DELETE FROM table WHERE pk_col = expr
+// DeleteStmt represents DELETE FROM table [OUTPUT ...] WHERE pk_col = expr
 type DeleteStmt struct {
-	Table    string
-	WhereCol string
-	WhereVal Expr
+	Table      string
+	WhereCol   string
+	WhereVal   Expr
+	OutputCols []string
 }
 
 func (s *DeleteStmt) stmtNode() {}

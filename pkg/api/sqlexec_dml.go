@@ -30,21 +30,26 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 		}
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution
-	if res, err := s.execVBDEDML("INSERT", cleaned, start, cs); err == nil {
-		return res, nil
-	} else if strings.Contains(err.Error(), "IDENTITY_INSERT") {
-		return nil, err
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause present)
+	hasOutput := strings.Contains(strings.ToUpper(cleaned), " OUTPUT ")
+	if !hasOutput {
+		if res, err := s.execVBDEDML("INSERT", cleaned, start, cs); err == nil {
+			return res, nil
+		} else if strings.Contains(err.Error(), "IDENTITY_INSERT") {
+			return nil, err
+		}
 	}
-	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?\s*VALUES\s*(.*)$`)
+
+	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+VALUES\s*(.*)$`)
 	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 4 {
+	if len(matches) < 5 {
 		return nil, fmt.Errorf("invalid INSERT INTO syntax")
 	}
 
 	tableName := cleanIdentifier(matches[1])
 	rawCols := matches[2]
-	rawValues := matches[3]
+	rawOutput := strings.TrimSpace(matches[3])
+	rawValues := matches[4]
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
@@ -141,6 +146,13 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 		}
 	}
 
+	var outputProjs []outputProj
+	if rawOutput != "" {
+		outputProjs = parseOutputClause(rawOutput)
+	}
+	var outputRows []map[string]any
+	var outputCols []string
+
 	insertedCount := int64(0)
 	for _, tupleStr := range tupleStrings {
 		vals := splitValues(tupleStr)
@@ -191,6 +203,12 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 			}
 			return nil, fmt.Errorf("insert row error: %w", err)
 		}
+
+		if len(outputProjs) > 0 {
+			outRow, cols := evaluateOutputRow(outputProjs, nil, rec, schema)
+			outputRows = append(outputRows, outRow)
+			outputCols = cols
+		}
 		insertedCount++
 	}
 
@@ -203,6 +221,8 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 	return &QueryResult{
 		Success:      true,
 		Command:      "INSERT",
+		Columns:      outputCols,
+		Rows:         outputRows,
 		RowsAffected: insertedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows inserted into %q", insertedCount, tableName)},
@@ -3217,11 +3237,14 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 		}
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution
-	if res, err := s.execVBDEDML("UPDATE", cleaned, start, cs); err == nil {
-		return res, nil
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause present)
+	hasOutput := strings.Contains(strings.ToUpper(cleaned), " OUTPUT ")
+	if !hasOutput {
+		if res, err := s.execVBDEDML("UPDATE", cleaned, start, cs); err == nil {
+			return res, nil
+		}
 	}
-	re := regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$`)
+	re := regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
 		return nil, fmt.Errorf("invalid UPDATE syntax")
@@ -3229,9 +3252,13 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 
 	tableName := cleanIdentifier(matches[1])
 	setClause := matches[2]
+	rawOutput := ""
 	whereClause := ""
 	if len(matches) > 3 {
-		whereClause = strings.TrimSpace(matches[3])
+		rawOutput = strings.TrimSpace(matches[3])
+	}
+	if len(matches) > 4 {
+		whereClause = strings.TrimSpace(matches[4])
 	}
 
 	schema, err := s.engine.GetTable(tableName)
@@ -3278,8 +3305,9 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 	}
 
 	type updateEntry struct {
-		pk  storage.Value
-		rec storage.Record
+		pk   storage.Value
+		rec  storage.Record
+		orig storage.Record
 	}
 	toUpdate := make([]updateEntry, 0)
 
@@ -3309,13 +3337,24 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 			if found {
 				targetType = colSchema.Type
 			}
-			recUpdates[colName] = parseLiteralValue(exprStr, targetType)
+			recUpdates[colName] = evalUpdateExpr(exprStr, rec, targetType)
 		}
 
 		if hasPK {
-			toUpdate = append(toUpdate, updateEntry{pk: pkVal, rec: recUpdates})
+			origClone := make(storage.Record, len(rec))
+			for k, v := range rec {
+				origClone[k] = v
+			}
+			toUpdate = append(toUpdate, updateEntry{pk: pkVal, rec: recUpdates, orig: origClone})
 		}
 	}
+
+	var outputProjs []outputProj
+	if rawOutput != "" {
+		outputProjs = parseOutputClause(rawOutput)
+	}
+	var outputRows []map[string]any
+	var outputCols []string
 
 	updatedCount := int64(0)
 	for _, item := range toUpdate {
@@ -3324,6 +3363,19 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 				_ = tx.Rollback()
 			}
 			return nil, fmt.Errorf("update row error: %w", err)
+		}
+
+		if len(outputProjs) > 0 {
+			newRec := make(storage.Record, len(item.orig))
+			for k, v := range item.orig {
+				newRec[k] = v
+			}
+			for k, v := range item.rec {
+				newRec[k] = v
+			}
+			outRow, cols := evaluateOutputRow(outputProjs, item.orig, newRec, schema)
+			outputRows = append(outputRows, outRow)
+			outputCols = cols
 		}
 		updatedCount++
 	}
@@ -3337,6 +3389,8 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 	return &QueryResult{
 		Success:      true,
 		Command:      "UPDATE",
+		Columns:      outputCols,
+		Rows:         outputRows,
 		RowsAffected: updatedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows updated in %q", updatedCount, tableName)},
@@ -3354,20 +3408,32 @@ func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*
 		}
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution
-	if res, err := s.execVBDEDML("DELETE", cleaned, start, cs); err == nil {
-		return res, nil
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause present)
+	hasOutput := strings.Contains(strings.ToUpper(cleaned), " OUTPUT ")
+	if !hasOutput {
+		if res, err := s.execVBDEDML("DELETE", cleaned, start, cs); err == nil {
+			return res, nil
+		}
 	}
-	re := regexp.MustCompile(`(?is)^DELETE\s+FROM\s+([^\s;]+)(?:\s+WHERE\s+(.*))?$`)
+	re := regexp.MustCompile(`(?is)^DELETE\s+(?:FROM\s+)?([^\s;]+)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 2 {
 		return nil, fmt.Errorf("invalid DELETE syntax")
 	}
 
 	tableName := cleanIdentifier(matches[1])
+	rawOutput := ""
 	whereClause := ""
 	if len(matches) > 2 {
-		whereClause = strings.TrimSpace(matches[2])
+		rawOutput = strings.TrimSpace(matches[2])
+	}
+	if len(matches) > 3 {
+		whereClause = strings.TrimSpace(matches[3])
+	}
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
 	}
 
 	var tx storage.Transaction
@@ -3399,7 +3465,11 @@ func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*
 	}
 	defer cursor.Close()
 
-	toDelete := make([]storage.Value, 0)
+	type deleteEntry struct {
+		pk   storage.Value
+		orig storage.Record
+	}
+	toDelete := make([]deleteEntry, 0)
 	for cursor.Next() {
 		rec, err := cursor.Record()
 		if err != nil {
@@ -3420,17 +3490,34 @@ func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*
 		}
 
 		if hasPK {
-			toDelete = append(toDelete, pkVal)
+			origClone := make(storage.Record, len(rec))
+			for k, v := range rec {
+				origClone[k] = v
+			}
+			toDelete = append(toDelete, deleteEntry{pk: pkVal, orig: origClone})
 		}
 	}
 
+	var outputProjs []outputProj
+	if rawOutput != "" {
+		outputProjs = parseOutputClause(rawOutput)
+	}
+	var outputRows []map[string]any
+	var outputCols []string
+
 	deletedCount := int64(0)
-	for _, pk := range toDelete {
-		if err := tx.Delete(tableName, pk); err != nil {
+	for _, item := range toDelete {
+		if err := tx.Delete(tableName, item.pk); err != nil {
 			if isEphemeral {
 				_ = tx.Rollback()
 			}
 			return nil, fmt.Errorf("delete error: %w", err)
+		}
+
+		if len(outputProjs) > 0 {
+			outRow, cols := evaluateOutputRow(outputProjs, item.orig, nil, schema)
+			outputRows = append(outputRows, outRow)
+			outputCols = cols
 		}
 		deletedCount++
 	}
@@ -3444,6 +3531,8 @@ func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*
 	return &QueryResult{
 		Success:      true,
 		Command:      "DELETE",
+		Columns:      outputCols,
+		Rows:         outputRows,
 		RowsAffected: deletedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows deleted from %q", deletedCount, tableName)},
@@ -4081,4 +4170,140 @@ func (s *Server) execIndexSelect(qInfo *planner.QueryInfo, tableName string, sta
 		RowsAffected: int64(len(rows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, true
+}
+
+type outputProj struct {
+	alias  string
+	source string // "INSERTED", "DELETED", or ""
+	column string
+}
+
+func parseOutputClause(raw string) []outputProj {
+	parts := splitScalarProjections(raw)
+	var projs []outputProj
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		alias := ""
+		expr := p
+		upper := strings.ToUpper(p)
+		if idx := strings.Index(upper, " AS "); idx != -1 {
+			expr = strings.TrimSpace(p[:idx])
+			alias = cleanIdentifier(p[idx+4:])
+		}
+		source := ""
+		col := expr
+		if dot := strings.Index(expr, "."); dot != -1 {
+			prefix := strings.ToUpper(cleanIdentifier(expr[:dot]))
+			if prefix == "INSERTED" || prefix == "DELETED" {
+				source = prefix
+				col = cleanIdentifier(expr[dot+1:])
+			}
+		} else {
+			col = cleanIdentifier(col)
+		}
+		if alias == "" {
+			alias = col
+		}
+		projs = append(projs, outputProj{
+			alias:  alias,
+			source: source,
+			column: col,
+		})
+	}
+	return projs
+}
+
+func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema *storage.TableSchema) (map[string]any, []string) {
+	row := make(map[string]any)
+	var cols []string
+
+	for _, p := range projs {
+		if p.column == "*" {
+			targetRec := newRec
+			if p.source == "DELETED" {
+				targetRec = oldRec
+			}
+			if schema != nil {
+				for _, c := range schema.Columns {
+					cols = append(cols, c.Name)
+					if targetRec != nil {
+						row[c.Name] = formatStorageValue(targetRec[c.Name])
+					} else {
+						row[c.Name] = nil
+					}
+				}
+			}
+			continue
+		}
+
+		var val any = nil
+		targetRec := newRec
+		if p.source == "DELETED" {
+			targetRec = oldRec
+		} else if p.source == "" && newRec == nil && oldRec != nil {
+			targetRec = oldRec
+		}
+
+		if targetRec != nil {
+			if sv, ok := targetRec[p.column]; ok {
+				val = formatStorageValue(sv)
+			}
+		}
+		row[p.alias] = val
+		cols = append(cols, p.alias)
+	}
+	return row, cols
+}
+
+func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataType) storage.Value {
+	arithRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_]+)\s*([\+\-\*\/])\s*([0-9\.]+)\s*$`)
+	if m := arithRe.FindStringSubmatch(exprStr); len(m) == 4 {
+		colName := cleanIdentifier(m[1])
+		op := m[2]
+		numStr := m[3]
+
+		if curVal, ok := rec[colName]; ok && !curVal.IsNull {
+			switch targetType {
+			case storage.TypeInt:
+				curInt := curVal.IVal
+				delta, err := strconv.ParseInt(numStr, 10, 64)
+				if err == nil {
+					switch op {
+					case "+":
+						return storage.IntValue(curInt + delta)
+					case "-":
+						return storage.IntValue(curInt - delta)
+					case "*":
+						return storage.IntValue(curInt * delta)
+					case "/":
+						if delta != 0 {
+							return storage.IntValue(curInt / delta)
+						}
+					}
+				}
+			case storage.TypeFloat:
+				curFloat := curVal.FVal
+				delta, err := strconv.ParseFloat(numStr, 64)
+				if err == nil {
+					switch op {
+					case "+":
+						return storage.FloatValue(curFloat + delta)
+					case "-":
+						return storage.FloatValue(curFloat - delta)
+					case "*":
+						return storage.FloatValue(curFloat * delta)
+					case "/":
+						if delta != 0 {
+							return storage.FloatValue(curFloat / delta)
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return parseLiteralValue(exprStr, targetType)
 }

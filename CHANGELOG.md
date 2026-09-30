@@ -24,6 +24,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **DML OUTPUT Clause Support (`pkg/proc`, `pkg/api`)**:
+  - Implemented T-SQL `OUTPUT` clause for `INSERT`, `UPDATE`, and `DELETE` statements (`OUTPUT INSERTED.*`, `OUTPUT DELETED.*`, explicit column projections, and aliases).
+  - Added `TokenOutput` token and AST extensions (`OutputCols []string` in `InsertStmt`, `UpdateStmt`, `DeleteStmt`).
+  - Implemented `parseOutputClause()` and `evaluateOutputRow()` to project before/after row states into client query result sets (`QueryResult.Columns` and `QueryResult.Rows`).
+  - Added arithmetic expression evaluation (`evalUpdateExpr`) in `UPDATE` statements (e.g., `SET price = price + 10`).
+  - Added comprehensive integration test suite in `pkg/api/output_clause_test.go` covering single-row, multi-row, DELETED/INSERTED aliases, and wildcard projections across INSERT, UPDATE, and DELETE.
+- **Native T-SQL VDBE Bytecode TPC-C Benchmark Driver (`cmd/tpcc_vdbe`)**:
+  - Implemented standalone TPC-C benchmark binary (`cmd/tpcc_vdbe/main.go`) modeling all 9 TPC-C relational tables and transactions as precompiled Microsoft T-SQL stored procedures (`TPCC_NewOrderHeader`, `TPCC_NewOrderLine`, `TPCC_Payment`, `TPCC_OrderStatus`, `TPCC_Delivery`, `TPCC_StockLevel`).
+  - Precompiles all T-SQL procedures into VDBE bytecode (`*proc.Program`), registers them into `runtime.PlanCache`, and executes concurrent client worker transactions strictly through the virtual machine runtime (`executor.Run`) with zero AST/graph scan overhead.
+  - Supports both In-Memory OCC and WiredTiger storage engines, producing real-time tpmC, TPS, P50/P95/P99 latency distribution, and serialization conflict statistics.
 - **RBAC Authorization & Permission Engine (`pkg/auth`, `pkg/api`)**:
   - Implemented SQL Server / ANSI SQL role-based access control with `Login`, `User`, `Privilege` (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALL`), and `GrantType` (`GRANT`, `DENY`).
   - Added support for `CREATE LOGIN <name> WITH PASSWORD = '...'`, `ALTER LOGIN <name> WITH PASSWORD = '...'`, and `DROP LOGIN [IF EXISTS] <name>`.
