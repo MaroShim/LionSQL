@@ -24,6 +24,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **RBAC Authorization & Permission Engine (`pkg/auth`, `pkg/api`)**:
+  - Implemented SQL Server / ANSI SQL role-based access control with `Login`, `User`, `Privilege` (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALL`), and `GrantType` (`GRANT`, `DENY`).
+  - Added support for `CREATE LOGIN <name> WITH PASSWORD = '...'`, `ALTER LOGIN <name> WITH PASSWORD = '...'`, and `DROP LOGIN [IF EXISTS] <name>`.
+  - Added support for `CREATE USER <name> [FOR LOGIN <login>]` and `DROP USER [IF EXISTS] <name>`.
+  - Added support for `GRANT <privilege> ON [TABLE] <tbl> TO <user>`, `REVOKE <privilege> ON [TABLE] <tbl> FROM <user>`, and `DENY <privilege> ON [TABLE] <tbl> TO <user>` with explicit DENY taking precedence.
+  - Implemented execution context switching via `SETUSER '<user>'` / `SETUSER` (revert) and `EXECUTE AS USER = '<user>'` / `REVERT`.
+  - Integrated `checkTableAccess()` across all DML operations (`SELECT`, `INSERT`, `UPDATE`, `DELETE`), ensuring unprivileged principals are prevented from accessing unauthorized relations.
+  - Built-in administrator bypass for `sa`, `admin`, and `dbo` principals.
+  - Added unit test suite in `pkg/auth/rbac_test.go` and full end-to-end integration test suite in `pkg/api/rbac_test.go`.
 - **Session Query Timeout & Automatic Timeout Interrupt (`pkg/api`)**:
   - Implemented automatic query timeout enforcement in `ExecuteSessionSQLContext` (`pkg/api/sqlexec.go`) supporting session configuration variables `SET QUERY_TIMEOUT = <ms>` (and `SET statement_timeout = '<duration>'`).
   - Added HTTP REST API timeout support in `POST /api/sql`: accepts JSON field `timeout_ms`, HTTP request header `X-Query-Timeout`, and query parameter `?timeout_ms=<ms>`.

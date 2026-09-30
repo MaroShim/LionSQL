@@ -919,6 +919,35 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		return s.execDropView(trimmed, start)
 	}
 
+	// 1.6 RBAC DCL / Security: LOGIN, USER, GRANT, REVOKE, DENY, SETUSER, EXECUTE AS USER, REVERT
+	if strings.HasPrefix(upper, "CREATE LOGIN ") {
+		return s.execCreateLogin(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "ALTER LOGIN ") {
+		return s.execAlterLogin(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "DROP LOGIN ") {
+		return s.execDropLogin(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "CREATE USER ") {
+		return s.execCreateUser(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "DROP USER ") {
+		return s.execDropUser(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "GRANT ") {
+		return s.execGrant(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "REVOKE ") {
+		return s.execRevoke(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "DENY ") {
+		return s.execDeny(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "SETUSER") || strings.HasPrefix(upper, "EXECUTE AS USER") || strings.HasPrefix(upper, "EXEC AS USER") || upper == "REVERT" || upper == "REVERT;" {
+		return s.execSetUser(trimmed, start, cs)
+	}
+
 	// 2. Procedure Invocation: EXEC / CALL / sp_*
 	if strings.HasPrefix(upper, "EXEC ") || strings.HasPrefix(upper, "EXECUTE ") || strings.HasPrefix(upper, "EXEC(") || strings.HasPrefix(upper, "EXECUTE(") || strings.HasPrefix(upper, "CALL ") || strings.HasPrefix(upper, "SP_") {
 		return s.execProcedureCall(trimmed, start, cs)

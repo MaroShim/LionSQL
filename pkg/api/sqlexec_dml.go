@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"sqlion/pkg/auth"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
@@ -20,6 +21,14 @@ import (
 
 func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// RBAC Permission Check
+	insRe := regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)`)
+	if m := insRe.FindStringSubmatch(cleaned); len(m) >= 2 {
+		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivInsert); err != nil {
+			return nil, err
+		}
+	}
 
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution
 	if res, err := s.execVBDEDML("INSERT", cleaned, start, cs); err == nil {
@@ -1902,6 +1911,21 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 			return s.execVirtualCatalogSelect(tableName, strings.Join(qInfo.Projections, ", "), qInfo.WhereClause, qInfo.OrderByClause, int(qInfo.LimitCount), start)
 		}
 
+		// RBAC Permission Check for primary table and joined relations
+		if err := s.checkTableAccess(cs, tableName, auth.PrivSelect); err != nil {
+			return nil, err
+		}
+		for _, j := range qInfo.Joins {
+			if err := s.checkTableAccess(cs, j.Table, auth.PrivSelect); err != nil {
+				return nil, err
+			}
+		}
+		if qInfo.Join != nil {
+			if err := s.checkTableAccess(cs, qInfo.Join.Table, auth.PrivSelect); err != nil {
+				return nil, err
+			}
+		}
+
 		// If query has joins (including subqueries decorrelated into joins), execute via Volcano CBO Engine
 		if len(qInfo.Joins) > 0 || qInfo.Join != nil {
 			return s.execVolcanoSelect(qInfo, start, cs)
@@ -2005,6 +2029,11 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	// Intercept Virtual System Catalog Views (sys.* and information_schema.*)
 	if s.isVirtualCatalogTable(tableName) {
 		return s.execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause, limitCount, start)
+	}
+
+	// RBAC Permission Check
+	if err := s.checkTableAccess(cs, tableName, auth.PrivSelect); err != nil {
+		return nil, err
 	}
 
 	schema, err := s.engine.GetTable(tableName)
@@ -3180,6 +3209,14 @@ func (s *Server) execHashJoin(qInfo *planner.QueryInfo, start time.Time, cs *Cli
 func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
+	// RBAC Permission Check
+	updRe := regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)`)
+	if m := updRe.FindStringSubmatch(cleaned); len(m) >= 2 {
+		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivUpdate); err != nil {
+			return nil, err
+		}
+	}
+
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution
 	if res, err := s.execVBDEDML("UPDATE", cleaned, start, cs); err == nil {
 		return res, nil
@@ -3308,6 +3345,14 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 
 func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// RBAC Permission Check
+	delRe := regexp.MustCompile(`(?is)^DELETE(?:\s+FROM)?\s+([^\s;]+)`)
+	if m := delRe.FindStringSubmatch(cleaned); len(m) >= 2 {
+		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivDelete); err != nil {
+			return nil, err
+		}
+	}
 
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution
 	if res, err := s.execVBDEDML("DELETE", cleaned, start, cs); err == nil {

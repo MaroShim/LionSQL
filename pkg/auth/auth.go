@@ -77,6 +77,9 @@ type AuthService struct {
 	usersByID     map[string]*Superuser
 	apiKeys       map[string]*APIKey // keyed by hashed key
 	apiKeysByID   map[string]*APIKey // keyed by ID
+	logins        map[string]*Login  // keyed by normalized login name
+	dbUsers       map[string]*User   // keyed by normalized database user name
+	grants        map[string]map[string]map[Privilege]GrantType // user -> table -> priv -> allow/deny
 	mu            sync.RWMutex
 }
 
@@ -91,14 +94,26 @@ func NewAuthService(cfg Config) *AuthService {
 	if dur <= 0 {
 		dur = 14 * 24 * time.Hour // Default 14 days (matching PocketBase standard)
 	}
-	return &AuthService{
+	svc := &AuthService{
 		secret:        secret,
 		tokenDuration: dur,
 		users:         make(map[string]*Superuser),
 		usersByID:     make(map[string]*Superuser),
 		apiKeys:       make(map[string]*APIKey),
 		apiKeysByID:   make(map[string]*APIKey),
+		logins:        make(map[string]*Login),
+		dbUsers:       make(map[string]*User),
+		grants:        make(map[string]map[string]map[Privilege]GrantType),
 	}
+
+	// Initialize standard built-in administrative principals
+	now := time.Now().UTC()
+	svc.logins["sa"] = &Login{Name: "sa", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
+	svc.logins["admin"] = &Login{Name: "admin", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
+	svc.dbUsers["dbo"] = &User{Name: "dbo", LoginName: "sa", Roles: []string{"db_owner"}, CreatedAt: now, UpdatedAt: now}
+	svc.dbUsers["guest"] = &User{Name: "guest", LoginName: "guest", Roles: []string{"public"}, CreatedAt: now, UpdatedAt: now}
+
+	return svc
 }
 
 // HashPassword generates a salted SHA256 password hash: salt:hash.
