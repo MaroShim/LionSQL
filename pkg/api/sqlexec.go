@@ -189,6 +189,9 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 		if s.slowQueries != nil {
 			isSlow = s.slowQueries.Record(sessionID, query, dur, rowsAffected, execErr)
 		}
+		if s.generalLog != nil {
+			s.generalLog.Record(sessionID, query, dur, rowsAffected, execErr)
+		}
 		if s.metrics != nil {
 			s.metrics.RecordQuery(cmd, dur, isErr, isSlow)
 		}

@@ -49,6 +49,9 @@ func main() {
 	requireSSL := flag.Bool("require-ssl", false, "Require SSL/TLS for PostgreSQL and TDS wire connections")
 	backupTarget := flag.String("backup", "", "Perform live point-in-time snapshot backup to target archive and exit")
 	restoreSource := flag.String("restore", "", "Restore database from backup archive and exit")
+	slowLog := flag.String("slow-log", "", "Path to slow query log file (e.g. data/slow_query.log, pass 'true' for default)")
+	slowThreshold := flag.Float64("slow-threshold-ms", 50.0, "Threshold in milliseconds to record slow queries (default: 50ms)")
+	generalLog := flag.String("general-log", "", "Enable general query logging (e.g. data/general.log, pass 'true' for default)")
 
 	// Daemon control flags
 	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
@@ -218,6 +221,34 @@ func main() {
 		}
 	}
 
+	if *slowThreshold > 0 {
+		server.SetSlowQueryThreshold(time.Duration(*slowThreshold * float64(time.Millisecond)))
+	}
+	if *slowLog != "" {
+		slowLogPath := *slowLog
+		if slowLogPath == "true" || slowLogPath == "1" {
+			slowLogPath = filepath.Join(*dataDir, "slow_query.log")
+		}
+		if err := server.SetSlowQueryLogFile(slowLogPath); err != nil {
+			log.Printf("[SQLion] Warning: Failed to enable slow query log file: %v", err)
+		} else {
+			log.Printf("[SQLion] Slow query log file enabled: %s (threshold: %.1fms)", slowLogPath, *slowThreshold)
+		}
+	}
+
+	if *generalLog != "" {
+		genLogPath := *generalLog
+		if genLogPath == "true" || genLogPath == "1" {
+			genLogPath = filepath.Join(*dataDir, "general.log")
+		}
+		server.SetGeneralLogEnabled(true)
+		if err := server.SetGeneralLogFile(genLogPath); err != nil {
+			log.Printf("[SQLion] Warning: Failed to enable general query log file: %v", err)
+		} else {
+			log.Printf("[SQLion] General query log file enabled: %s", genLogPath)
+		}
+	}
+
 	httpServer := &http.Server{
 		Addr:         *httpAddr,
 		Handler:      server.Handler(),
@@ -291,6 +322,16 @@ func main() {
 		stats := server.Pool().Stats()
 		fmt.Printf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", stats.MaxWorkers, stats.MaxIdleSessions)
 		fmt.Printf(" [Memory Governor] work_mem: %s (External Merge Sort spill-to-disk enabled)\n", execution.FormatMemSize(server.DefaultWorkMem()))
+		if server.SlowQueries().LogFilePath() != "" {
+			fmt.Printf(" [Slow Query Log] %s (Threshold: %v)\n", server.SlowQueries().LogFilePath(), server.SlowQueries().Threshold())
+		}
+		if server.GeneralLog().IsEnabled() {
+			genPath := server.GeneralLog().LogFilePath()
+			if genPath == "" {
+				genPath = "in-memory only"
+			}
+			fmt.Printf(" [General Log]    %s (Enabled: true)\n", genPath)
+		}
 		fmt.Println("------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")
 
@@ -313,6 +354,7 @@ func main() {
 	_ = wireServer.Close()
 	_ = httpServer.Shutdown(ctx)
 	_ = httpServer.Close()
+	_ = server.Close()
 	_ = eng.Close()
 
 	if curPid, err := readPidFile(resolvedPidFile); err == nil && curPid == os.Getpid() {

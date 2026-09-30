@@ -65,6 +65,7 @@ type Server struct {
 	spidCounter        int
 	metrics            *MetricsCollector
 	slowQueries        *SlowQueryLogger
+	generalLog         *GeneralLogger
 	startTime          time.Time
 }
 
@@ -105,6 +106,7 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		defaultWorkMem:     execution.DefaultWorkMem,
 		metrics:            NewMetricsCollector(),
 		slowQueries:        NewSlowQueryLogger(DefaultSlowQueryThreshold),
+		generalLog:         NewGeneralLogger(false),
 		startTime:          time.Now(),
 	}
 	s.executor.SetTableGetter(eng.GetTable)
@@ -218,6 +220,58 @@ func (s *Server) SetSlowQueryThreshold(d time.Duration) {
 	if s.slowQueries != nil {
 		s.slowQueries.SetThreshold(d)
 	}
+}
+
+// SetSlowQueryLogFile configures disk file output for the slow query log.
+func (s *Server) SetSlowQueryLogFile(filePath string) error {
+	if s.slowQueries != nil {
+		return s.slowQueries.SetLogFile(filePath)
+	}
+	return nil
+}
+
+// GeneralLog returns the general query logger instance.
+func (s *Server) GeneralLog() *GeneralLogger {
+	return s.generalLog
+}
+
+// SetGeneralLogEnabled toggles general query logging.
+func (s *Server) SetGeneralLogEnabled(enabled bool) {
+	if s.generalLog != nil {
+		s.generalLog.SetEnabled(enabled)
+	}
+}
+
+// SetGeneralLogFile configures disk file output for the general query log.
+func (s *Server) SetGeneralLogFile(filePath string) error {
+	if s.generalLog != nil {
+		return s.generalLog.SetLogFile(filePath)
+	}
+	return nil
+}
+
+// Close gracefully flushes and closes server log writers and session pools.
+func (s *Server) Close() error {
+	var errs []error
+	if s.slowQueries != nil {
+		if err := s.slowQueries.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if s.generalLog != nil {
+		if err := s.generalLog.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if s.pool != nil {
+		if err := s.pool.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("errors closing server: %v", errs)
+	}
+	return nil
 }
 
 // GetOrCreateSession returns or registers a persistent client session.
@@ -483,7 +537,14 @@ func (s *Server) routes() {
 	// Slow Queries Management API
 	s.mux.HandleFunc("GET /api/slow-queries", s.handleGetSlowQueries)
 	s.mux.HandleFunc("POST /api/slow-queries/threshold", s.handleSetSlowQueryThreshold)
+	s.mux.HandleFunc("POST /api/slow-queries/logfile", s.handleSetSlowQueryLogFile)
 	s.mux.HandleFunc("DELETE /api/slow-queries", s.handleClearSlowQueries)
+
+	// General Queries Log API
+	s.mux.HandleFunc("GET /api/general-queries", s.handleGetGeneralQueries)
+	s.mux.HandleFunc("POST /api/general-queries/toggle", s.handleToggleGeneralLog)
+	s.mux.HandleFunc("POST /api/general-queries/logfile", s.handleSetGeneralLogFile)
+	s.mux.HandleFunc("DELETE /api/general-queries", s.handleClearGeneralQueries)
 
 	// Tables API (PocketBase-style Collections & Records CRUD)
 	s.mux.HandleFunc("GET /api/tables", s.wrapAuth(s.handleListTables, false, ""))
@@ -860,6 +921,7 @@ func (s *Server) handleGetSlowQueries(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"threshold_ms": float64(s.slowQueries.Threshold().Microseconds()) / 1000.0,
 		"count":        len(entries),
+		"log_file":     s.slowQueries.LogFilePath(),
 		"entries":      entries,
 	})
 }
@@ -884,6 +946,24 @@ func (s *Server) handleSetSlowQueryThreshold(w http.ResponseWriter, r *http.Requ
 	})
 }
 
+func (s *Server) handleSetSlowQueryLogFile(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		FilePath string `json:"file_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.SetSlowQueryLogFile(req.FilePath); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":   true,
+		"file_path": s.slowQueries.LogFilePath(),
+	})
+}
+
 func (s *Server) handleClearSlowQueries(w http.ResponseWriter, r *http.Request) {
 	if s.slowQueries != nil {
 		s.slowQueries.Clear()
@@ -891,6 +971,74 @@ func (s *Server) handleClearSlowQueries(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
 		"message": "slow queries cleared",
+	})
+}
+
+func (s *Server) handleGetGeneralQueries(w http.ResponseWriter, r *http.Request) {
+	if s.generalLog == nil {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"enabled":  false,
+			"count":    0,
+			"log_file": "",
+			"entries":  []GeneralLogEntry{},
+		})
+		return
+	}
+	limit := 50
+	if lStr := r.URL.Query().Get("limit"); lStr != "" {
+		if n, err := strconv.Atoi(lStr); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	entries := s.generalLog.GetEntries(limit)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"enabled":  s.generalLog.IsEnabled(),
+		"count":    len(entries),
+		"log_file": s.generalLog.LogFilePath(),
+		"entries":  entries,
+	})
+}
+
+func (s *Server) handleToggleGeneralLog(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	s.SetGeneralLogEnabled(req.Enabled)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"enabled": req.Enabled,
+	})
+}
+
+func (s *Server) handleSetGeneralLogFile(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		FilePath string `json:"file_path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.SetGeneralLogFile(req.FilePath); err != nil {
+		writeError(w, http.StatusInternalServerError, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":   true,
+		"file_path": s.generalLog.LogFilePath(),
+	})
+}
+
+func (s *Server) handleClearGeneralQueries(w http.ResponseWriter, r *http.Request) {
+	if s.generalLog != nil {
+		s.generalLog.Clear()
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "general query log cleared",
 	})
 }
 

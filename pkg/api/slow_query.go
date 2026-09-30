@@ -25,13 +25,14 @@ const (
 	MaxSlowQueryCapacity = 200
 )
 
-// SlowQueryLogger provides bounded in-memory circular history for slow queries.
+// SlowQueryLogger provides bounded in-memory circular history for slow queries and optional rotating disk log output.
 type SlowQueryLogger struct {
 	mu          sync.RWMutex
 	threshold   atomic.Int64 // nanoseconds
 	idCounter   atomic.Int64
 	entries     []SlowQueryEntry
 	maxCapacity int
+	writer      *RotatingLogWriter
 }
 
 // NewSlowQueryLogger creates a bounded SlowQueryLogger.
@@ -45,6 +46,38 @@ func NewSlowQueryLogger(threshold time.Duration) *SlowQueryLogger {
 	}
 	l.threshold.Store(threshold.Nanoseconds())
 	return l
+}
+
+// SetLogFile sets or updates the rotating log file for slow queries.
+func (l *SlowQueryLogger) SetLogFile(filePath string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.writer != nil {
+		_ = l.writer.Close()
+		l.writer = nil
+	}
+
+	if filePath == "" {
+		return nil
+	}
+
+	w, err := NewRotatingLogWriter(filePath, DefaultMaxLogFileSize)
+	if err != nil {
+		return err
+	}
+	l.writer = w
+	return nil
+}
+
+// LogFilePath returns the configured log file path, or empty string if disabled.
+func (l *SlowQueryLogger) LogFilePath() string {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	if l.writer != nil {
+		return l.writer.FilePath()
+	}
+	return ""
 }
 
 // Threshold returns the current slow query threshold duration.
@@ -81,13 +114,17 @@ func (l *SlowQueryLogger) Record(sessionID, query string, duration time.Duration
 	}
 
 	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	if len(l.entries) >= l.maxCapacity {
 		// Evict oldest entry (sliding ring buffer)
 		l.entries = l.entries[1:]
 	}
 	l.entries = append(l.entries, entry)
+	w := l.writer
+	l.mu.Unlock()
+
+	if w != nil {
+		_ = w.WriteLine(entry)
+	}
 	return true
 }
 
@@ -116,4 +153,16 @@ func (l *SlowQueryLogger) Clear() {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.entries = l.entries[:0]
+}
+
+// Close gracefully flushes and closes disk log files.
+func (l *SlowQueryLogger) Close() error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.writer != nil {
+		err := l.writer.Close()
+		l.writer = nil
+		return err
+	}
+	return nil
 }

@@ -17,6 +17,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Slow Query JSON Log File Persistence & General Query Log Engine (`pkg/api`, `cmd/server`)**:
+  - Implemented `RotatingLogWriter` (`pkg/api/rotating_logger.go`) providing thread-safe append-only file persistence with bounded size caps (default 5MB) and automatic log rotation (`.1` backup) complying with Rule 40 and Rule 5.
+  - Enhanced `SlowQueryLogger` (`pkg/api/slow_query.go`) with JSON Lines file output (`SetLogFile`), supporting structured JSON logging (`id`, `query`, `duration_ms`, `rows_affected`, `session_id`, `error`, `timestamp`).
+  - Added new `GeneralLogger` (`pkg/api/general_log.go`) component capturing all executed queries in a bounded in-memory circular history buffer and optional rotating JSON Lines disk file output.
+  - Integrated both loggers with `ExecuteSessionSQLContext` in `pkg/api/sqlexec.go` for zero-overhead, deferred query diagnostics.
+  - Added RESTful management endpoints: `POST /api/slow-queries/logfile`, `GET /api/general-queries`, `POST /api/general-queries/toggle`, `POST /api/general-queries/logfile`, and `DELETE /api/general-queries`.
+  - Added CLI flags to `cmd/server/main.go`: `--slow-log`, `--slow-threshold-ms`, and `--general-log`.
+  - Added unit test suite in `pkg/api/log_test.go` verifying file output, size-based rotation, endpoint handling, and race-free concurrent recording.
 - **T-SQL & ANSI SQL `MERGE INTO` Execution Engine (`pkg/api/sqlexec_merge.go`, `pkg/api/sqlexec.go`)**:
   - Implemented full-spec `MERGE INTO <target> USING <source> ON <condition>` query engine supporting table sources, inline `(VALUES ...)` sources, and `(SELECT ...)` subqueries.
   - Added support for multiple ordered `WHEN MATCHED [AND <cond>] THEN UPDATE / DELETE` clauses.
