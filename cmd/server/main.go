@@ -20,6 +20,7 @@ import (
 	"sqlion/pkg/auth"
 	"sqlion/pkg/backup"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/config"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
@@ -52,6 +53,8 @@ func main() {
 	slowLog := flag.String("slow-log", "", "Path to slow query log file (e.g. data/slow_query.log, pass 'true' for default)")
 	slowThreshold := flag.Float64("slow-threshold-ms", 50.0, "Threshold in milliseconds to record slow queries (default: 50ms)")
 	generalLog := flag.String("general-log", "", "Enable general query logging (e.g. data/general.log, pass 'true' for default)")
+	configPath := flag.String("config", "", "Path to JSON configuration file (default: auto-detect ./sqlion.json or <dir>/sqlion.json)")
+	initConfig := flag.String("init-config", "", "Generate a default sqlion.json configuration file at specified path (or ./sqlion.json) and exit")
 
 	// Daemon control flags
 	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
@@ -65,13 +68,126 @@ func main() {
 
 	flag.Parse()
 
-	if strings.TrimSpace(*dataDir) == "" {
-		*dataDir = "data"
+	// 1. Standalone Config Generator (--init-config)
+	if *initConfig != "" {
+		targetPath := *initConfig
+		if targetPath == "true" || targetPath == "1" {
+			targetPath = "sqlion.json"
+		}
+		if err := config.WriteToFileAtomic(config.DefaultConfig(), targetPath); err != nil {
+			log.Fatalf("[SQLion] Failed to initialize config file: %v", err)
+		}
+		fmt.Printf("\n[SQLion] Default configuration generated successfully: %s\n\n", targetPath)
+		return
 	}
 
-	resolvedPidFile := *pidFile
+	// 2. Load Configuration (Auto-Discovery: explicit > ./sqlion.json > <dir>/sqlion.json > Built-in Defaults)
+	cfg, loadedConfigPath, err := config.AutoDiscoverConfig(*configPath, *dataDir)
+	if err != nil {
+		log.Fatalf("[SQLion] Configuration error: %v", err)
+	}
+
+	// 3. Apply CLI Argument Overrides (Deterministic Hierarchy: CLI Flags > JSON Config > Built-in Defaults)
+	visited := make(map[string]bool)
+	flag.Visit(func(f *flag.Flag) {
+		visited[f.Name] = true
+	})
+
+	if visited["http"] {
+		cfg.Network.HTTPAddr = *httpAddr
+	}
+	if visited["pg"] {
+		cfg.Network.PGAddr = *pgAddr
+	}
+	if visited["tds"] {
+		cfg.Network.TDSAddr = *tdsAddr
+	}
+	if visited["dir"] {
+		cfg.Server.DataDir = *dataDir
+	}
+	if visited["engine"] {
+		cfg.Server.Engine = *engineType
+	}
+	if visited["seed"] {
+		cfg.Server.AutoSeed = *autoSeed
+	}
+	if visited["admin-email"] {
+		cfg.Auth.AdminEmail = *adminEmail
+	}
+	if visited["admin-pass"] {
+		cfg.Auth.AdminPass = *adminPass
+	}
+	if visited["auth"] {
+		cfg.Auth.Enabled = *enableAuth
+	}
+	if visited["max-workers"] {
+		cfg.Resources.MaxWorkers = *maxWorkers
+	}
+	if visited["max-idle-sessions"] {
+		cfg.Resources.MaxIdleSessions = *maxIdleSessions
+	}
+	if visited["work-mem"] {
+		cfg.Resources.WorkMem = *workMemStr
+	}
+	if visited["tls"] {
+		cfg.Network.TLS.Enabled = *enableTLS
+	}
+	if visited["tls-cert"] {
+		cfg.Network.TLS.CertFile = *tlsCert
+	}
+	if visited["tls-key"] {
+		cfg.Network.TLS.KeyFile = *tlsKey
+	}
+	if visited["require-ssl"] {
+		cfg.Network.TLS.RequireSSL = *requireSSL
+	}
+	if visited["pidfile"] {
+		cfg.Server.PIDFile = *pidFile
+	}
+	if visited["logfile"] {
+		cfg.Server.LogFile = *logFile
+	}
+	if visited["slow-threshold-ms"] {
+		cfg.Logging.SlowQuery.ThresholdMS = *slowThreshold
+	}
+	if visited["slow-log"] {
+		if *slowLog == "true" || *slowLog == "1" {
+			cfg.Logging.SlowQuery.Enabled = true
+			if cfg.Logging.SlowQuery.File == "" {
+				cfg.Logging.SlowQuery.File = filepath.Join(cfg.Server.DataDir, "slow_query.log")
+			}
+		} else if *slowLog == "false" || *slowLog == "0" {
+			cfg.Logging.SlowQuery.Enabled = false
+		} else {
+			cfg.Logging.SlowQuery.Enabled = true
+			cfg.Logging.SlowQuery.File = *slowLog
+		}
+	}
+	if visited["general-log"] {
+		if *generalLog == "true" || *generalLog == "1" {
+			cfg.Logging.GeneralQuery.Enabled = true
+			if cfg.Logging.GeneralQuery.File == "" {
+				cfg.Logging.GeneralQuery.File = filepath.Join(cfg.Server.DataDir, "general.log")
+			}
+		} else if *generalLog == "false" || *generalLog == "0" {
+			cfg.Logging.GeneralQuery.Enabled = false
+		} else {
+			cfg.Logging.GeneralQuery.Enabled = true
+			cfg.Logging.GeneralQuery.File = *generalLog
+		}
+	}
+
+	if strings.TrimSpace(cfg.Server.DataDir) == "" {
+		cfg.Server.DataDir = "data"
+	}
+
+	resolvedPidFile := cfg.Server.PIDFile
 	if resolvedPidFile == "" {
-		resolvedPidFile = filepath.Join(*dataDir, "sqlion.pid")
+		resolvedPidFile = filepath.Join(cfg.Server.DataDir, "sqlion.pid")
+	}
+	resolvedLogFile := cfg.Server.LogFile
+	if resolvedLogFile == "" {
+		resolvedLogFile = filepath.Join(cfg.Server.DataDir, "sqlion.log")
 	}
 
 	// Handle daemon commands if not running as internal worker
@@ -81,20 +197,20 @@ func main() {
 			*stopFlag,
 			*statusFlag,
 			*restartFlag,
-			*dataDir,
-			*pidFile,
-			*logFile,
-			*httpAddr,
-			*pgAddr,
-			*tdsAddr,
-			*engineType,
+			cfg.Server.DataDir,
+			resolvedPidFile,
+			resolvedLogFile,
+			cfg.Network.HTTPAddr,
+			cfg.Network.PGAddr,
+			cfg.Network.TDSAddr,
+			cfg.Server.Engine,
 		) {
 			return
 		}
 
 		// Prevent multiple server instances from running concurrently on the same data directory
 		if existingPid, err := readPidFile(resolvedPidFile); err == nil && isProcessAlive(existingPid) && existingPid != os.Getpid() {
-			fmt.Printf("\n[SQLion] Error: Another SQLion server instance (PID %d) is already running for data directory '%s'.\n", existingPid, *dataDir)
+			fmt.Printf("\n[SQLion] Error: Another SQLion server instance (PID %d) is already running for data directory '%s'.\n", existingPid, cfg.Server.DataDir)
 			fmt.Println("         To view status:  ./bin/server -status")
 			fmt.Println("         To stop daemon:  ./bin/server -stop")
 			fmt.Println("         To restart:      ./bin/server -restart")
@@ -112,8 +228,8 @@ func main() {
 
 		// Pre-flight port collision verification for server mode
 		if *backupTarget == "" && *restoreSource == "" {
-			if err := checkPortAvailable(*httpAddr); err != nil {
-				fmt.Printf("\n[SQLion] Error: HTTP port conflict (%s): %v\n", *httpAddr, err)
+			if err := checkPortAvailable(cfg.Network.HTTPAddr); err != nil {
+				fmt.Printf("\n[SQLion] Error: HTTP port conflict (%s): %v\n", cfg.Network.HTTPAddr, err)
 				fmt.Println("         Another SQLion server or service is already listening on this port.")
 				fmt.Println("         To view status:  ./bin/server -status")
 				fmt.Println("         To stop daemon:  ./bin/server -stop")
@@ -121,8 +237,8 @@ func main() {
 				fmt.Println()
 				os.Exit(1)
 			}
-			if err := checkPortAvailable(*pgAddr); err != nil {
-				fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", *pgAddr, err)
+			if err := checkPortAvailable(cfg.Network.PGAddr); err != nil {
+				fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", cfg.Network.PGAddr, err)
 				fmt.Println("         Another SQLion server or service is already listening on this port.")
 				fmt.Println("         To view status:  ./bin/server -status")
 				fmt.Println("         To stop daemon:  ./bin/server -stop")
@@ -130,8 +246,8 @@ func main() {
 				fmt.Println()
 				os.Exit(1)
 			}
-			if err := checkPortAvailable(*tdsAddr); err != nil {
-				fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", *tdsAddr, err)
+			if err := checkPortAvailable(cfg.Network.TDSAddr); err != nil {
+				fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", cfg.Network.TDSAddr, err)
 				fmt.Println("         Another SQLion server or service is already listening on this port.")
 				fmt.Println("         To view status:  ./bin/server -status")
 				fmt.Println("         To stop daemon:  ./bin/server -stop")
@@ -143,15 +259,15 @@ func main() {
 	}
 
 	log.Printf("[SQLion] Initializing database server...")
-	log.Printf("[SQLion] Storage backend selected: %s", *engineType)
+	log.Printf("[SQLion] Storage backend selected: %s", cfg.Server.Engine)
 
 	var eng storage.Engine
-	switch *engineType {
+	switch cfg.Server.Engine {
 	case "wiredtiger":
 		eng = wiredtiger.New()
-		if err := eng.Open(*dataDir); err != nil {
+		if err := eng.Open(cfg.Server.DataDir); err != nil {
 			if strings.Contains(err.Error(), "Resource busy") || strings.Contains(err.Error(), "already being managed") {
-				fmt.Printf("\n[SQLion] Error: Database directory '%s' is locked by another running process.\n", *dataDir)
+				fmt.Printf("\n[SQLion] Error: Database directory '%s' is locked by another running process.\n", cfg.Server.DataDir)
 				fmt.Println("         Please stop the existing SQLion instance before starting a new one.")
 				fmt.Println()
 				os.Exit(1)
@@ -160,11 +276,11 @@ func main() {
 		}
 	case "memory":
 		eng = memengine.New()
-		if err := eng.Open(*dataDir); err != nil {
+		if err := eng.Open(cfg.Server.DataDir); err != nil {
 			log.Fatalf("Failed to open storage engine: %v", err)
 		}
 	default:
-		log.Fatalf("Unknown storage engine: %s. Options: wiredtiger, memory", *engineType)
+		log.Fatalf("Unknown storage engine: %s. Options: wiredtiger, memory", cfg.Server.Engine)
 	}
 	defer eng.Close()
 
@@ -195,96 +311,90 @@ func main() {
 	}
 
 	// Auto-seed if requested
-	if *autoSeed {
+	if cfg.Server.AutoSeed {
 		seedSampleAccounts(eng)
 		seedSampleProcedure(cat)
 	}
 
 	authSvc := auth.NewAuthService(auth.Config{})
-	_, _ = authSvc.EnsureDefaultSuperuser(*adminEmail, *adminPass)
+	_, _ = authSvc.EnsureDefaultSuperuser(cfg.Auth.AdminEmail, cfg.Auth.AdminPass)
 
-	server := api.NewServerWithAuth(cat, eng, authSvc, *enableAuth)
-	if *maxWorkers > 0 || *maxIdleSessions > 0 {
+	server := api.NewServerWithAuth(cat, eng, authSvc, cfg.Auth.Enabled)
+	if cfg.Resources.MaxWorkers > 0 || cfg.Resources.MaxIdleSessions > 0 {
 		poolCfg := api.DefaultPoolConfig()
-		if *maxWorkers > 0 {
-			poolCfg.MaxWorkers = *maxWorkers
+		if cfg.Resources.MaxWorkers > 0 {
+			poolCfg.MaxWorkers = cfg.Resources.MaxWorkers
 		}
-		if *maxIdleSessions > 0 {
-			poolCfg.MaxIdleSessions = *maxIdleSessions
+		if cfg.Resources.MaxIdleSessions > 0 {
+			poolCfg.MaxIdleSessions = cfg.Resources.MaxIdleSessions
 		}
 		server.SetPoolConfig(poolCfg)
 	}
 
-	if *workMemStr != "" {
-		if bytes, err := execution.ParseMemSize(*workMemStr); err == nil && bytes > 0 {
+	if cfg.Resources.WorkMem != "" {
+		if bytes, err := execution.ParseMemSize(cfg.Resources.WorkMem); err == nil && bytes > 0 {
 			server.SetDefaultWorkMem(bytes)
 		}
 	}
 
-	if *slowThreshold > 0 {
-		server.SetSlowQueryThreshold(time.Duration(*slowThreshold * float64(time.Millisecond)))
+	if cfg.Logging.SlowQuery.ThresholdMS > 0 {
+		server.SetSlowQueryThreshold(time.Duration(cfg.Logging.SlowQuery.ThresholdMS * float64(time.Millisecond)))
 	}
-	if *slowLog != "" {
-		slowLogPath := *slowLog
-		if slowLogPath == "true" || slowLogPath == "1" {
-			slowLogPath = filepath.Join(*dataDir, "slow_query.log")
-		}
-		if err := server.SetSlowQueryLogFile(slowLogPath); err != nil {
+	if cfg.Logging.SlowQuery.Enabled && cfg.Logging.SlowQuery.File != "" {
+		if err := server.SetSlowQueryLogFile(cfg.Logging.SlowQuery.File); err != nil {
 			log.Printf("[SQLion] Warning: Failed to enable slow query log file: %v", err)
 		} else {
-			log.Printf("[SQLion] Slow query log file enabled: %s (threshold: %.1fms)", slowLogPath, *slowThreshold)
+			log.Printf("[SQLion] Slow query log file enabled: %s (threshold: %.1fms)", cfg.Logging.SlowQuery.File, cfg.Logging.SlowQuery.ThresholdMS)
 		}
 	}
 
-	if *generalLog != "" {
-		genLogPath := *generalLog
-		if genLogPath == "true" || genLogPath == "1" {
-			genLogPath = filepath.Join(*dataDir, "general.log")
-		}
+	if cfg.Logging.GeneralQuery.Enabled {
 		server.SetGeneralLogEnabled(true)
-		if err := server.SetGeneralLogFile(genLogPath); err != nil {
-			log.Printf("[SQLion] Warning: Failed to enable general query log file: %v", err)
-		} else {
-			log.Printf("[SQLion] General query log file enabled: %s", genLogPath)
+		if cfg.Logging.GeneralQuery.File != "" {
+			if err := server.SetGeneralLogFile(cfg.Logging.GeneralQuery.File); err != nil {
+				log.Printf("[SQLion] Warning: Failed to enable general query log file: %v", err)
+			} else {
+				log.Printf("[SQLion] General query log file enabled: %s", cfg.Logging.GeneralQuery.File)
+			}
 		}
 	}
 
 	httpServer := &http.Server{
-		Addr:         *httpAddr,
+		Addr:         cfg.Network.HTTPAddr,
 		Handler:      server.Handler(),
 		ReadTimeout:  15 * time.Second,
 		WriteTimeout: 15 * time.Second,
 	}
 
 	sharedCache := server.BytecodePlanCache()
-	wireServer := wire.NewServerWithCache(*pgAddr, cat, eng, sharedCache)
-	tdsServer := tds.NewServerWithCache(*tdsAddr, cat, eng, sharedCache)
-	if *enableTLS || *tlsCert != "" || *requireSSL {
+	wireServer := wire.NewServerWithCache(cfg.Network.PGAddr, cat, eng, sharedCache)
+	tdsServer := tds.NewServerWithCache(cfg.Network.TDSAddr, cat, eng, sharedCache)
+	if cfg.Network.TLS.Enabled || cfg.Network.TLS.CertFile != "" || cfg.Network.TLS.RequireSSL {
 		var tlsConfig *tls.Config
-		if *tlsCert != "" && *tlsKey != "" {
-			cfg, err := wire.LoadTLSConfig(*tlsCert, *tlsKey)
+		if cfg.Network.TLS.CertFile != "" && cfg.Network.TLS.KeyFile != "" {
+			tlsCfg, err := wire.LoadTLSConfig(cfg.Network.TLS.CertFile, cfg.Network.TLS.KeyFile)
 			if err != nil {
 				log.Fatalf("[SQLion] Failed to load TLS certificate and key: %v", err)
 			}
-			tlsConfig = cfg
+			tlsConfig = tlsCfg
 		} else {
 			log.Printf("[SQLion] Generating self-signed TLS certificate for localhost...")
-			cfg, err := wire.NewSelfSignedTLSConfig()
+			tlsCfg, err := wire.NewSelfSignedTLSConfig()
 			if err != nil {
 				log.Fatalf("[SQLion] Failed to generate self-signed TLS certificate: %v", err)
 			}
-			tlsConfig = cfg
+			tlsConfig = tlsCfg
 		}
 		wireServer.SetTLSConfig(tlsConfig)
-		wireServer.SetRequireSSL(*requireSSL)
+		wireServer.SetRequireSSL(cfg.Network.TLS.RequireSSL)
 		tdsServer.SetTLSConfig(tlsConfig)
-		tdsServer.SetRequireSSL(*requireSSL)
-		log.Printf("[SQLion] PostgreSQL Wire SSL/TLS enabled (Require SSL: %v)", *requireSSL)
-		log.Printf("[SQLion] TDS (MSSQL) Wire SSL/TLS enabled (Require SSL: %v)", *requireSSL)
+		tdsServer.SetRequireSSL(cfg.Network.TLS.RequireSSL)
+		log.Printf("[SQLion] PostgreSQL Wire SSL/TLS enabled (Require SSL: %v)", cfg.Network.TLS.RequireSSL)
+		log.Printf("[SQLion] TDS (MSSQL) Wire SSL/TLS enabled (Require SSL: %v)", cfg.Network.TLS.RequireSSL)
 	}
 	if err := wireServer.Start(); err != nil {
 		if strings.Contains(err.Error(), "address already in use") {
-			fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", *pgAddr, err)
+			fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", cfg.Network.PGAddr, err)
 			fmt.Println("         Another SQLion server or service is already listening on this port.")
 			fmt.Println()
 			os.Exit(1)
@@ -295,7 +405,7 @@ func main() {
 
 	if err := tdsServer.Start(); err != nil {
 		if strings.Contains(err.Error(), "address already in use") {
-			fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", *tdsAddr, err)
+			fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", cfg.Network.TDSAddr, err)
 			fmt.Println("         Another SQLion server or service is already listening on this port.")
 			fmt.Println()
 			os.Exit(1)
@@ -312,13 +422,18 @@ func main() {
 		fmt.Println("------------------------------------------------------------")
 		fmt.Println(" SQLion - High-Concurrency OLTP & Stored Procedure Server")
 		fmt.Println("------------------------------------------------------------")
-		fmt.Printf(" [Web Dashboard]  http://%s/_/\n", *httpAddr)
-		fmt.Printf(" [HTTP API]       http://%s/api/health\n", *httpAddr)
-		fmt.Printf(" [Superuser Auth] %s (JWT Auth: %v)\n", *adminEmail, *enableAuth)
-		fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (DBeaver / psql)\n", strings.Split(*pgAddr, ":")[1])
-		fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (DBeaver / Azure Data Studio / pymssql)\n", strings.Split(*tdsAddr, ":")[1])
-		fmt.Printf(" [Data Directory] %s\n", *dataDir)
-		fmt.Printf(" [Storage Engine] %s\n", *engineType)
+		if loadedConfigPath != "" {
+			fmt.Printf(" [Configuration]  %s (JSON Config File)\n", loadedConfigPath)
+		} else {
+			fmt.Println(" [Configuration]  Zero-Config (Built-in Defaults)")
+		}
+		fmt.Printf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr)
+		fmt.Printf(" [HTTP API]       http://%s/api/health\n", cfg.Network.HTTPAddr)
+		fmt.Printf(" [Superuser Auth] %s (JWT Auth: %v)\n", cfg.Auth.AdminEmail, cfg.Auth.Enabled)
+		fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (DBeaver / psql)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
+		fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (DBeaver / Azure Data Studio / pymssql)\n", strings.Split(cfg.Network.TDSAddr, ":")[1])
+		fmt.Printf(" [Data Directory] %s\n", cfg.Server.DataDir)
+		fmt.Printf(" [Storage Engine] %s\n", cfg.Server.Engine)
 		stats := server.Pool().Stats()
 		fmt.Printf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", stats.MaxWorkers, stats.MaxIdleSessions)
 		fmt.Printf(" [Memory Governor] work_mem: %s (External Merge Sort spill-to-disk enabled)\n", execution.FormatMemSize(server.DefaultWorkMem()))
@@ -337,7 +452,7 @@ func main() {
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			if strings.Contains(err.Error(), "address already in use") {
-				fmt.Printf("\n[SQLion] Error: HTTP service port conflict (%s): %v\n\n", *httpAddr, err)
+				fmt.Printf("\n[SQLion] Error: HTTP service port conflict (%s): %v\n\n", cfg.Network.HTTPAddr, err)
 				os.Exit(1)
 			}
 			log.Fatalf("HTTP server failure: %v", err)

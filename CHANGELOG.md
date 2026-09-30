@@ -17,6 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Unified JSON Configuration & Deterministic Precedence Hierarchy (`pkg/config`, `cmd/server`)**:
+  - Implemented `pkg/config` defining structured, hierarchical configuration schema (`Server`, `Network`, `Auth`, `Resources`, `Logging`) with production-ready zero-config defaults (`DefaultConfig()`).
+  - Added atomic config persistence via swap files and atomic rename (`WriteToFileAtomic`) complying with Rule 1 and Rule 89.
+  - Implemented auto-discovery mechanism (`AutoDiscoverConfig`): explicit path > `./sqlion.json` > `<dir>/sqlion.json` > Built-in Defaults (Rule 82, 87).
+  - Enforced deterministic configuration precedence hierarchy (`flag.Visit`): CLI Arguments > JSON Config File > Built-in Defaults (Rule 88).
+  - Added CLI flags `--config <path>` to specify custom config files and `--init-config [path]` to generate formatted `sqlion.json` template.
+  - Added comprehensive unit tests in `pkg/config/config_test.go` covering defaults, partial overlays, atomic writes, and discovery paths.
 - **Slow Query JSON Log File Persistence & General Query Log Engine (`pkg/api`, `cmd/server`)**:
   - Implemented `RotatingLogWriter` (`pkg/api/rotating_logger.go`) providing thread-safe append-only file persistence with bounded size caps (default 5MB) and automatic log rotation (`.1` backup) complying with Rule 40 and Rule 5.
   - Enhanced `SlowQueryLogger` (`pkg/api/slow_query.go`) with JSON Lines file output (`SetLogFile`), supporting structured JSON logging (`id`, `query`, `duration_ms`, `rows_affected`, `session_id`, `error`, `timestamp`).
