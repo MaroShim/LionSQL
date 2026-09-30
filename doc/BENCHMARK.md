@@ -133,6 +133,21 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc ./cmd/tpcc
 | **Average Latency** | **0.20 ms** | **1.82 ms** |
 | **P95 Latency** | **0.48 ms** | **4.25 ms** |
 
+### 2.5. Native T-SQL VDBE Bytecode TPC-C Benchmark (`cmd/tpcc_vdbe`)
+
+SQLion also provides a full-stack T-SQL Stored Procedure TPC-C benchmark (`cmd/tpcc_vdbe/main.go`). Unlike `cmd/tpcc` which tests direct storage engine transaction APIs, `cmd/tpcc_vdbe` models all TPC-C operations as compiled Microsoft T-SQL stored procedures (`TPCC_NewOrderHeader`, `TPCC_NewOrderLine`, `TPCC_Payment`, `TPCC_OrderStatus`, `TPCC_Delivery`, `TPCC_StockLevel`) precompiled into VDBE bytecode (`*proc.Program`), cached in `PlanCache`, and executed on the virtual machine (`executor.Run`).
+
+```bash
+# Build TPC-C VDBE benchmark binary
+go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+
+# Run T-SQL VDBE Bytecode Benchmark on In-Memory OCC Engine
+./bin/tpcc_vdbe -engine=memory -warehouses=2 -workers=20 -duration=15s
+
+# Run T-SQL VDBE Bytecode Benchmark on WiredTiger Engine
+./bin/tpcc_vdbe -engine=wiredtiger -warehouses=2 -workers=20 -duration=15s
+```
+
 ---
 
 ## 3. Performance Tuning Dimensions
