@@ -1484,37 +1484,41 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 	}
 
 	td.mu.RLock()
-	merged := make(map[string]storage.Record, len(td.Rows))
-	for k, v := range td.Rows {
+	keys := make([]string, 0, len(td.Rows)+len(tx.local[tableName]))
+	for k := range td.Rows {
 		if !tx.isLocallyDeleted(tableName, k) {
-			merged[k] = v
+			keys = append(keys, k)
 		}
 	}
 	td.mu.RUnlock()
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[tableName]; ok {
-		for k, v := range localRows {
+		for k := range localRows {
 			if !tx.isLocallyDeleted(tableName, k) {
-				merged[k] = v
+				keys = append(keys, k)
 			}
 		}
 	}
 
-	keys := make([]string, 0, len(merged))
-	for k := range merged {
-		keys = append(keys, k)
-	}
 	sort.Strings(keys)
-
-	records := make([]storage.Record, len(keys))
-	for i, k := range keys {
-		records[i] = merged[k]
+	if len(keys) > 1 {
+		w := 1
+		for r := 1; r < len(keys); r++ {
+			if keys[r] != keys[w-1] {
+				keys[w] = keys[r]
+				w++
+			}
+		}
+		keys = keys[:w]
 	}
 
 	return &memCursor{
-		records: records,
-		idx:     -1,
+		tx:        tx,
+		tableName: tableName,
+		td:        td,
+		keys:      keys,
+		idx:       -1,
 	}, nil
 }
 
@@ -1542,8 +1546,8 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 	candidatePKs := idxData.ScanRange(low, high)
 	tx.engine.mu.RUnlock()
 
-	var records []storage.Record
-	seen := make(map[string]bool)
+	pks := make([]string, 0, len(candidatePKs))
+	seen := make(map[string]bool, len(candidatePKs))
 
 	for _, pk := range candidatePKs {
 		if seen[pk] {
@@ -1558,17 +1562,12 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		if locRec, inLocal := tx.getLocal(tableName, pk); inLocal {
 			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-				records = append(records, locRec)
+				pks = append(pks, pk)
 			}
 			continue
 		}
 
-		td.mu.RLock()
-		rec, exists := td.Rows[pk]
-		td.mu.RUnlock()
-		if exists {
-			records = append(records, rec)
-		}
+		pks = append(pks, pk)
 	}
 
 	if localRows, ok := tx.local[tableName]; ok {
@@ -1578,15 +1577,18 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 			}
 			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-				records = append(records, locRec)
+				pks = append(pks, pk)
 				seen[pk] = true
 			}
 		}
 	}
 
 	return &memCursor{
-		records: records,
-		idx:     -1,
+		tx:        tx,
+		tableName: tableName,
+		td:        td,
+		keys:      pks,
+		idx:       -1,
 	}, nil
 }
 
@@ -1639,8 +1641,9 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 	candidateEntries := idxData.ScanRangeEntries(low, high)
 	tx.engine.mu.RUnlock()
 
-	var records []storage.Record
-	seen := make(map[string]bool)
+	pks := make([]string, 0, len(candidateEntries))
+	keyMap := make(map[string]storage.Value, len(candidateEntries))
+	seen := make(map[string]bool, len(candidateEntries))
 
 	for _, entry := range candidateEntries {
 		pk := entry.PK
@@ -1656,20 +1659,13 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 		if locRec, inLocal := tx.getLocal(tableName, pk); inLocal {
 			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-				records = append(records, locRec)
+				pks = append(pks, pk)
 			}
 			continue
 		}
 
-		// Fast-path: Construct record directly from index key and PK without table row lookup
-		rec := make(storage.Record, 2)
-		if len(idxData.Schema.Columns) > 0 {
-			rec[idxData.Schema.Columns[0]] = entry.Key
-		}
-		if pkCol != nil {
-			rec[pkCol.Name] = parsePKValue(pk, pkCol.Type)
-		}
-		records = append(records, rec)
+		pks = append(pks, pk)
+		keyMap[pk] = entry.Key
 	}
 
 	if localRows, ok := tx.local[tableName]; ok {
@@ -1679,15 +1675,39 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 			}
 			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-				records = append(records, locRec)
+				pks = append(pks, pk)
 				seen[pk] = true
 			}
 		}
 	}
 
+	var colName string
+	if len(idxData.Schema.Columns) > 0 {
+		colName = idxData.Schema.Columns[0]
+	}
+
+	resolver := func(pk string) (storage.Record, bool) {
+		keyVal, ok := keyMap[pk]
+		if !ok {
+			return nil, false
+		}
+		rec := make(storage.Record, 2)
+		if colName != "" {
+			rec[colName] = keyVal
+		}
+		if pkCol != nil {
+			rec[pkCol.Name] = parsePKValue(pk, pkCol.Type)
+		}
+		return rec, true
+	}
+
 	return &memCursor{
-		records: records,
-		idx:     -1,
+		tx:        tx,
+		tableName: tableName,
+		td:        td,
+		keys:      pks,
+		idx:       -1,
+		resolver:  resolver,
 	}, nil
 }
 
@@ -2066,23 +2086,73 @@ func cloneRecord(r storage.Record) storage.Record {
 }
 
 type memCursor struct {
-	records []storage.Record
-	idx     int
+	tx        *Transaction
+	tableName string
+	td        *TableData
+	keys      []string
+	idx       int
+	curRec    storage.Record
+	closed    bool
+	resolver  func(pk string) (storage.Record, bool)
 }
 
 func (c *memCursor) Next() bool {
-	c.idx++
-	return c.idx < len(c.records)
+	if c.closed {
+		return false
+	}
+	for {
+		c.idx++
+		if c.idx >= len(c.keys) {
+			c.curRec = nil
+			return false
+		}
+		pk := c.keys[c.idx]
+		if c.tx != nil {
+			c.tx.mu.Lock()
+			isDel := c.tx.isLocallyDeleted(c.tableName, pk)
+			locRec, inLocal := c.tx.getLocal(c.tableName, pk)
+			c.tx.mu.Unlock()
+			if isDel {
+				continue
+			}
+			if inLocal {
+				c.curRec = locRec
+				return true
+			}
+		}
+		if c.resolver != nil {
+			if rec, ok := c.resolver(pk); ok {
+				c.curRec = rec
+				return true
+			}
+			continue
+		}
+		if c.td != nil {
+			c.td.mu.RLock()
+			rec, exists := c.td.Rows[pk]
+			c.td.mu.RUnlock()
+			if exists {
+				c.curRec = rec
+				return true
+			}
+		}
+	}
 }
 
 func (c *memCursor) Record() (storage.Record, error) {
-	if c.idx < 0 || c.idx >= len(c.records) {
-		return nil, fmt.Errorf("cursor out of range")
+	if c.closed || c.curRec == nil {
+		return nil, fmt.Errorf("cursor out of range or closed")
 	}
-	return c.records[c.idx], nil
+	return c.curRec, nil
 }
 
 func (c *memCursor) Close() error {
-	c.records = nil
+	c.closed = true
+	c.keys = nil
+	c.curRec = nil
+	c.resolver = nil
+	c.tx = nil
+	c.td = nil
 	return nil
 }
+

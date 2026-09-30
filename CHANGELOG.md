@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Performance
+- **Zero-Copy Streaming Cursor (`pkg/storage/memengine`)**:
+  - Eliminated full-table row materialization bottlenecks in `Scan`, `IndexScan`, and `IndexOnlyScan`.
+  - Replaced intermediate `merged := make(map[string]storage.Record)` map and `records := make([]storage.Record, len(keys))` slice allocations with a streaming cursor (`memCursor`) that retains sorted primary keys and resolves records lazily on demand during `Next()`.
+  - Added on-demand record synthesis via `resolver` closure for `IndexOnlyScan` to eliminate pre-allocation of covering index records.
+  - Achieved ~80% reduction in memory allocations (from 79,216 B/op down to 16,480 B/op) and 75% fewer allocations (from 8 down to 2 allocs/op) in full-scan benchmarks (`BenchmarkMemCursor_Scan`).
+
 ### Refactored
 - **Monolithic SQL Execution Engine Decomposition (`pkg/api`)**:
   - Decomposed the 6,379-line monolith `pkg/api/sqlexec.go` into 5 high-cohesion, domain-specific modules without altering public interfaces or runtime semantics:
