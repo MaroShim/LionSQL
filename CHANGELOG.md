@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **T-SQL & ANSI SQL `MERGE INTO` Execution Engine (`pkg/api/sqlexec_merge.go`, `pkg/api/sqlexec.go`)**:
+  - Implemented full-spec `MERGE INTO <target> USING <source> ON <condition>` query engine supporting table sources, inline `(VALUES ...)` sources, and `(SELECT ...)` subqueries.
+  - Added support for multiple ordered `WHEN MATCHED [AND <cond>] THEN UPDATE / DELETE` clauses.
+  - Added support for `WHEN NOT MATCHED [BY TARGET] [AND <cond>] THEN INSERT` and `WHEN NOT MATCHED BY SOURCE [AND <cond>] THEN UPDATE / DELETE` clauses.
+  - Integrated with transaction context for atomic execution, `@@ROWCOUNT` reflection, and storage abstraction across In-Memory OCC and WiredTiger.
+  - Added comprehensive verification test suite in `pkg/api/merge_test.go`.
 - **Transaction Savepoints & Partial Rollback (`pkg/storage`, `pkg/api`, `pkg/proc`)**:
   - Added `Savepoint(name string) error` and `RollbackTo(name string) error` to core `storage.Transaction` interface.
   - Implemented copy-on-write snapshot delta savepoints in `pkg/storage/memengine` with full stack invalidation and state restoration.

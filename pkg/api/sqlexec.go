@@ -881,6 +881,11 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		return s.execDelete(trimmed, start, cs)
 	}
 
+	// 9. DML: MERGE INTO
+	if strings.HasPrefix(upper, "MERGE INTO") || strings.HasPrefix(upper, "MERGE ") {
+		return s.execMerge(trimmed, start, cs)
+	}
+
 	return &QueryResult{
 		Success:    false,
 		Error:      fmt.Sprintf("unrecognized or unsupported SQL statement: %q", trimmed),
