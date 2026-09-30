@@ -824,8 +824,10 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 type execSQLReq struct {
-	Query string `json:"query"`
-	SQL   string `json:"sql"`
+	Query     string `json:"query"`
+	SQL       string `json:"sql"`
+	SessionID string `json:"session_id"`
+	TimeoutMS int64  `json:"timeout_ms"`
 }
 
 func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
@@ -840,7 +842,32 @@ func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
 		sqlStr = req.SQL
 	}
 
-	result, err := s.ExecuteSQL(sqlStr)
+	sessID := req.SessionID
+	if sessID == "" {
+		sessID = "default"
+	}
+
+	reqCtx := r.Context()
+	timeoutDur := time.Duration(0)
+	if req.TimeoutMS > 0 {
+		timeoutDur = time.Duration(req.TimeoutMS) * time.Millisecond
+	} else if h := r.Header.Get("X-Query-Timeout"); h != "" {
+		if d, err := parseTimeoutDuration(h); err == nil && d > 0 {
+			timeoutDur = d
+		}
+	} else if q := r.URL.Query().Get("timeout_ms"); q != "" {
+		if ms, err := strconv.ParseInt(q, 10, 64); err == nil && ms > 0 {
+			timeoutDur = time.Duration(ms) * time.Millisecond
+		}
+	}
+
+	if timeoutDur > 0 {
+		var cancel context.CancelFunc
+		reqCtx, cancel = context.WithTimeout(reqCtx, timeoutDur)
+		defer cancel()
+	}
+
+	result, err := s.ExecuteSessionSQLContext(reqCtx, sessID, sqlStr)
 	if err != nil {
 		if result != nil {
 			writeJSON(w, http.StatusOK, result)

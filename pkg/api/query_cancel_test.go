@@ -276,3 +276,150 @@ func TestQueryCancel_HTTPEndpoints(t *testing.T) {
 		t.Errorf("expected cancellation message, got: %v", queryErr)
 	}
 }
+
+func TestQueryTimeout_SessionQueryTimeout(t *testing.T) {
+	server, cleanup := setupTestServerWithLoopProc(t)
+	defer cleanup()
+
+	// 1. Configure session query timeout to 100ms
+	setRes, err := server.ExecuteSessionSQL("timeout-sess", "SET QUERY_TIMEOUT = 100;")
+	if err != nil || !setRes.Success {
+		t.Fatalf("SET QUERY_TIMEOUT failed: %v", err)
+	}
+
+	start := time.Now()
+	_, err = server.ExecuteSessionSQL("timeout-sess", "EXEC InfiniteSpin;")
+	dur := time.Since(start)
+
+	if err == nil {
+		t.Fatalf("expected query to timeout, but succeeded")
+	}
+	if !strings.Contains(err.Error(), "canceling statement due to statement timeout") {
+		t.Fatalf("expected statement timeout error, got: %v", err)
+	}
+	if dur > 2*time.Second {
+		t.Fatalf("query took too long to timeout: %v", dur)
+	}
+}
+
+func TestQueryTimeout_StatementTimeout(t *testing.T) {
+	server, cleanup := setupTestServerWithLoopProc(t)
+	defer cleanup()
+
+	// 2. Configure statement_timeout to '80ms'
+	setRes, err := server.ExecuteSessionSQL("pg-timeout-sess", "SET statement_timeout = '80ms';")
+	if err != nil || !setRes.Success {
+		t.Fatalf("SET statement_timeout failed: %v", err)
+	}
+
+	start := time.Now()
+	_, err = server.ExecuteSessionSQL("pg-timeout-sess", "EXEC InfiniteSpin;")
+	dur := time.Since(start)
+
+	if err == nil {
+		t.Fatalf("expected query to timeout, but succeeded")
+	}
+	if !strings.Contains(err.Error(), "canceling statement due to statement timeout") {
+		t.Fatalf("expected statement timeout error, got: %v", err)
+	}
+	if dur > 2*time.Second {
+		t.Fatalf("query took too long to timeout: %v", dur)
+	}
+}
+
+func TestQueryTimeout_DisableZero(t *testing.T) {
+	server, cleanup := setupTestServerWithLoopProc(t)
+	defer cleanup()
+
+	sessID := "disable-sess"
+	_, err := server.ExecuteSessionSQL(sessID, "SET QUERY_TIMEOUT = 100;")
+	if err != nil {
+		t.Fatalf("set timeout failed: %v", err)
+	}
+
+	// Disable timeout
+	_, err = server.ExecuteSessionSQL(sessID, "SET QUERY_TIMEOUT = 0;")
+	if err != nil {
+		t.Fatalf("disable timeout failed: %v", err)
+	}
+
+	// Fast query should execute cleanly
+	res, err := server.ExecuteSessionSQL(sessID, "SELECT 1 AS num;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+}
+
+func TestQueryTimeout_HTTPPayload(t *testing.T) {
+	server, cleanup := setupTestServerWithLoopProc(t)
+	defer cleanup()
+
+	bodyJSON := `{"query": "EXEC InfiniteSpin;", "timeout_ms": 100}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sql", bytes.NewBufferString(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	start := time.Now()
+	server.Handler().ServeHTTP(rec, req)
+	dur := time.Since(start)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response failed: %v", err)
+	}
+
+	if resp.Success {
+		t.Fatalf("expected query to fail due to timeout, got success")
+	}
+	if !strings.Contains(resp.Error, "canceling statement due to statement timeout") {
+		t.Fatalf("expected timeout error message, got: %q", resp.Error)
+	}
+	if dur > 2*time.Second {
+		t.Fatalf("HTTP query took too long to timeout: %v", dur)
+	}
+}
+
+func TestQueryTimeout_HTTPHeader(t *testing.T) {
+	server, cleanup := setupTestServerWithLoopProc(t)
+	defer cleanup()
+
+	bodyJSON := `{"query": "EXEC InfiniteSpin;"}`
+	req := httptest.NewRequest(http.MethodPost, "/api/sql", bytes.NewBufferString(bodyJSON))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Query-Timeout", "100ms")
+	rec := httptest.NewRecorder()
+
+	start := time.Now()
+	server.Handler().ServeHTTP(rec, req)
+	dur := time.Since(start)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rec.Code)
+	}
+
+	var resp struct {
+		Success bool   `json:"success"`
+		Error   string `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response failed: %v", err)
+	}
+
+	if resp.Success {
+		t.Fatalf("expected query to fail due to timeout, got success")
+	}
+	if !strings.Contains(resp.Error, "canceling statement due to statement timeout") {
+		t.Fatalf("expected timeout error message, got: %q", resp.Error)
+	}
+	if dur > 2*time.Second {
+		t.Fatalf("HTTP query took too long to timeout: %v", dur)
+	}
+}
+

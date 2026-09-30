@@ -132,6 +132,71 @@ func splitStatements(query string) []string {
 	return stmts
 }
 
+// parseTimeoutDuration parses duration strings with units (ms, s, m) or plain integers as milliseconds.
+func parseTimeoutDuration(s string) (time.Duration, error) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "0" {
+		return 0, nil
+	}
+	if d, err := time.ParseDuration(s); err == nil {
+		if d < 0 {
+			return 0, nil
+		}
+		return d, nil
+	}
+	if ms, err := strconv.ParseInt(s, 10, 64); err == nil {
+		if ms <= 0 {
+			return 0, nil
+		}
+		return time.Duration(ms) * time.Millisecond, nil
+	}
+	return 0, fmt.Errorf("invalid timeout duration: %s", s)
+}
+
+// getQueryTimeout returns the configured query timeout duration for this session, or 0 if disabled.
+func (cs *ClientSession) getQueryTimeout() time.Duration {
+	if cs == nil {
+		return 0
+	}
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+
+	var raw any
+	if v, ok := cs.Vars["query_timeout"]; ok && v != nil {
+		raw = v
+	} else if v, ok := cs.Vars["statement_timeout"]; ok && v != nil {
+		raw = v
+	}
+	if raw == nil {
+		return 0
+	}
+
+	switch val := raw.(type) {
+	case int:
+		if val > 0 {
+			return time.Duration(val) * time.Millisecond
+		}
+	case int64:
+		if val > 0 {
+			return time.Duration(val) * time.Millisecond
+		}
+	case float64:
+		if val > 0 {
+			return time.Duration(val) * time.Millisecond
+		}
+	case string:
+		d, err := parseTimeoutDuration(val)
+		if err == nil && d > 0 {
+			return d
+		}
+	case time.Duration:
+		if val > 0 {
+			return val
+		}
+	}
+	return 0
+}
+
 // ExecuteSQL parses and runs one or more SQL statements against the engine and catalog on the default session.
 func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 	return s.ExecuteSessionSQL("default", query)
@@ -153,7 +218,14 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 	}
 
 	overallStart := time.Now()
-	queryCtx, cancel := context.WithCancel(ctx)
+	var queryCtx context.Context
+	var cancel context.CancelFunc
+
+	if timeout := cs.getQueryTimeout(); timeout > 0 {
+		queryCtx, cancel = context.WithTimeout(ctx, timeout)
+	} else {
+		queryCtx, cancel = context.WithCancel(ctx)
+	}
 	defer cancel()
 
 	cs.mu.Lock()
@@ -211,7 +283,11 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 	for _, stmt := range stmts {
 		select {
 		case <-queryCtx.Done():
-			execErr = fmt.Errorf("canceling statement due to user request")
+			if errors.Is(queryCtx.Err(), context.DeadlineExceeded) {
+				execErr = fmt.Errorf("canceling statement due to statement timeout")
+			} else {
+				execErr = fmt.Errorf("canceling statement due to user request")
+			}
 			return nil, execErr
 		default:
 		}
@@ -222,6 +298,10 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 				cs.mu.Lock()
 				cs.Vars["error"] = int64(50000)
 				cs.mu.Unlock()
+			}
+			if errors.Is(err, context.DeadlineExceeded) || (queryCtx.Err() != nil && errors.Is(queryCtx.Err(), context.DeadlineExceeded)) {
+				execErr = fmt.Errorf("canceling statement due to statement timeout")
+				return nil, execErr
 			}
 			if errors.Is(err, context.Canceled) || (queryCtx.Err() != nil && errors.Is(queryCtx.Err(), context.Canceled)) {
 				execErr = fmt.Errorf("canceling statement due to user request")

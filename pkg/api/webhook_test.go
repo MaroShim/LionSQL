@@ -181,7 +181,15 @@ func TestWebhook_DispatchDeliveryAndHMAC(t *testing.T) {
 	}
 
 	// 4. Verify Delivery Log
-	dels := d.Deliveries(10)
+	var dels []*WebhookDelivery
+	deadline := time.Now().Add(1 * time.Second)
+	for time.Now().Before(deadline) {
+		dels = d.Deliveries(10)
+		if len(dels) == 1 {
+			break
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
 	if len(dels) != 1 {
 		t.Fatalf("expected 1 delivery record, got %d", len(dels))
 	}

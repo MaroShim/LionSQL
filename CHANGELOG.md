@@ -24,6 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Session Query Timeout & Automatic Timeout Interrupt (`pkg/api`)**:
+  - Implemented automatic query timeout enforcement in `ExecuteSessionSQLContext` (`pkg/api/sqlexec.go`) supporting session configuration variables `SET QUERY_TIMEOUT = <ms>` (and `SET statement_timeout = '<duration>'`).
+  - Added HTTP REST API timeout support in `POST /api/sql`: accepts JSON field `timeout_ms`, HTTP request header `X-Query-Timeout`, and query parameter `?timeout_ms=<ms>`.
+  - Propagates `context.WithTimeout` automatically across Volcano execution operators and VDBE VM instruction loops, terminating long-running queries gracefully with `canceling statement due to statement timeout` (Rule 34).
+  - Added unit test suite in `pkg/api/query_cancel_test.go` covering session timeouts, timeout disabling via 0, statement_timeout aliases, and HTTP payload/header timeouts.
 - **Multi-Table Chained Joins & CBO Join Tree Optimization (`pkg/planner`, `pkg/api`)**:
   - Implemented Cost-Based Join Reordering in `BuildMultiJoinPlanWithStats` (`pkg/planner/planner.go`) for chained multi-table queries (3+ tables).
   - Evaluates all valid permutations of contiguous INNER joins, filtering out disconnected cartesian products via `checkAndOrientJoinKeys` and automatic left/right key orientation.
