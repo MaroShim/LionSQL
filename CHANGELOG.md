@@ -23,6 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for `WHEN NOT MATCHED [BY TARGET] [AND <cond>] THEN INSERT` and `WHEN NOT MATCHED BY SOURCE [AND <cond>] THEN UPDATE / DELETE` clauses.
   - Integrated with transaction context for atomic execution, `@@ROWCOUNT` reflection, and storage abstraction across In-Memory OCC and WiredTiger.
   - Added comprehensive verification test suite in `pkg/api/merge_test.go`.
+- **`SELECT DISTINCT` Deduplication (`pkg/proc`, `pkg/planner`, `pkg/api`)**:
+  - Added `TokenDistinct` keyword token and registered `"DISTINCT"` in the primary Pratt parser's keyword map (`pkg/proc/token.go`).
+  - Extended `GeneralSelectStmt` AST node with `Distinct bool` field; `parseGeneralSelect()` detects and sets the flag on `TokenDistinct` (`pkg/proc/ast.go`, `pkg/proc/parser.go`).
+  - Propagated `Distinct bool` through `planner.QueryInfo`; `FromAST()` and `ParseSelect()` both carry the flag (`pkg/planner/planner.go`).
+  - Implemented `deduplicateRows()` helper using sorted-key serialization with `\x00` separators and `storage.Value.IsNull` aware NULL normalization (`pkg/api/sqlexec_dml.go`).
+  - Applied deduplication at three execution paths: Volcano engine (post row-collection), VDBE fast-path result (pre-return in `execSelect`).
+  - Added `pkg/api/distinct_test.go` with 5 sub-test cases: single-column, multi-column, WHERE filter, non-distinct baseline, and NULL deduplication.
 - **Transaction Savepoints & Partial Rollback (`pkg/storage`, `pkg/api`, `pkg/proc`)**:
   - Added `Savepoint(name string) error` and `RollbackTo(name string) error` to core `storage.Transaction` interface.
   - Implemented copy-on-write snapshot delta savepoints in `pkg/storage/memengine` with full stack invalidation and state restoration.

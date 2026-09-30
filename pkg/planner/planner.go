@@ -109,6 +109,7 @@ type QueryInfo struct {
 	OrderByClause string
 	LimitCount    int64
 	HasAggregates bool
+	Distinct      bool
 	IsAnalyze     bool
 	AST           *proc.GeneralSelectStmt
 }
@@ -254,6 +255,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		OrderByClause: orderByClause,
 		LimitCount:    stmt.Limit,
 		HasAggregates: hasAgg,
+		Distinct:      stmt.Distinct,
 		IsAnalyze:     stmt.IsAnalyze,
 		AST:           stmt,
 	}
@@ -340,6 +342,12 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		joinInfo = joins[0]
 	}
 
+	isDistinct := false
+	if strings.HasPrefix(strings.ToUpper(projStr), "DISTINCT ") {
+		isDistinct = true
+		projStr = strings.TrimSpace(projStr[9:])
+	}
+
 	var projections []string
 	if projStr == "*" || projStr == "" {
 		projections = []string{"*"}
@@ -398,6 +406,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		OrderByClause: orderByClause,
 		LimitCount:    limitCount,
 		HasAggregates: hasAgg,
+		Distinct:      isDistinct,
 		IsAnalyze:     isAnalyze,
 	}, nil
 }

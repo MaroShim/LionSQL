@@ -1743,6 +1743,11 @@ func (p *Parser) ParseSQLStatement() (Statement, error) {
 func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	stmt := &GeneralSelectStmt{Limit: -1}
 
+	if p.curTokenIs(TokenDistinct) {
+		stmt.Distinct = true
+		p.nextToken() // eat DISTINCT
+	}
+
 	// 1. Projections
 	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) {
 		expr := p.parseExpression(precLowest)

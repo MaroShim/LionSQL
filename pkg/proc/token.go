@@ -127,9 +127,11 @@ const (
 	TokenGoto
 	TokenSave
 	TokenSavepoint
+	TokenDistinct
 )
 
 var keywords = map[string]TokenType{
+	"DISTINCT":    TokenDistinct,
 	"SAVE":        TokenSave,
 	"SAVEPOINT":   TokenSavepoint,
 	"GOTO":        TokenGoto,

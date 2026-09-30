@@ -977,6 +977,10 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 		rows = append(rows, tuple.ToMap())
 	}
 
+	if qInfo.Distinct {
+		rows = deduplicateRows(rows)
+	}
+
 	cols := exec.Schema()
 	if len(cols) == 0 && len(rows) > 0 {
 		for k := range rows[0] {
@@ -1909,6 +1913,10 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 
 		// Execute via unified VDBE Virtual Machine Engine (Primary Fast-Path)
 		if res, err := s.execVDBESelect(cleaned, start, cs); err == nil {
+			if qInfo.Distinct {
+				res.Rows = deduplicateRows(res.Rows)
+				res.RowsAffected = int64(len(res.Rows))
+			}
 			return res, nil
 		}
 
@@ -3703,4 +3711,42 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		}
 	}
 	return true
+}
+
+// deduplicateRows removes duplicate rows from a result set for SELECT DISTINCT.
+// Rows are compared by serializing all column key-value pairs in sorted key order.
+func deduplicateRows(rows []map[string]any) []map[string]any {
+	if len(rows) == 0 {
+		return rows
+	}
+	seen := make(map[string]struct{}, len(rows))
+	out := make([]map[string]any, 0, len(rows))
+	var buf strings.Builder
+	for _, row := range rows {
+		// Collect and sort keys for deterministic ordering
+		keys := make([]string, 0, len(row))
+		for k := range row {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		buf.Reset()
+		for _, k := range keys {
+			buf.WriteString(k)
+			buf.WriteByte('=')
+			v := row[k]
+			if sv, ok := v.(storage.Value); ok && sv.IsNull {
+				buf.WriteString("NULL")
+			} else {
+				fmt.Fprintf(&buf, "%v", v)
+			}
+			buf.WriteByte('\x00')
+		}
+		key := buf.String()
+		if _, dup := seen[key]; !dup {
+			seen[key] = struct{}{}
+			out = append(out, row)
+		}
+	}
+	return out
 }

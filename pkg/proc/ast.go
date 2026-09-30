@@ -712,6 +712,7 @@ type GeneralSelectStmt struct {
 	Having      Expr
 	OrderBy     []OrderByItem
 	Limit       int64
+	Distinct    bool
 	IsExplain   bool
 	IsAnalyze   bool
 	RawSQL      string
@@ -737,6 +738,9 @@ func (s *GeneralSelectStmt) String() string {
 		b.WriteString(" ")
 	}
 	b.WriteString("SELECT ")
+	if s.Distinct {
+		b.WriteString("DISTINCT ")
+	}
 	var projStrs []string
 	for _, p := range s.Projections {
 		projStrs = append(projStrs, p.String())
