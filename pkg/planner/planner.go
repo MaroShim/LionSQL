@@ -868,7 +868,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	var currentNode *PlanNode = scanNode
 	currentEstimatedRows := scanNode.EstimatedRows
 
-	// Process all chained joins in query order
+	// Process all chained joins with CBO Join Order Optimization
 	var joinList []*JoinInfo
 	if len(q.Joins) > 0 {
 		joinList = q.Joins
@@ -876,6 +876,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		joinList = []*JoinInfo{q.Join}
 	}
 
+	// Step 1: Pre-attach pushed down join filters
 	for idx, join := range joinList {
 		if pushed, ok := pushdownRes.JoinConds[idx]; ok && len(pushed) > 0 {
 			pStr := strings.Join(pushed, " AND ")
@@ -885,164 +886,116 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				join.Filter = pStr
 			}
 		}
-		rTable := cleanIdent(join.Table)
-		rAlias := cleanIdent(join.Alias)
-		if rAlias == "" {
-			rAlias = rTable
-		}
-
-		var rSchema *storage.TableSchema
-		if rightSchemas != nil {
-			if s, ok := rightSchemas[join.Table]; ok && s != nil {
-				rSchema = s
-			} else if s, ok := rightSchemas[rTable]; ok && s != nil {
-				rSchema = s
-			} else if s, ok := rightSchemas[join.Alias]; ok && s != nil {
-				rSchema = s
-			} else if s, ok := rightSchemas[rAlias]; ok && s != nil {
-				rSchema = s
-			}
-		}
-
-		var rStat *TableStats
-		if rightStats != nil {
-			if st, ok := rightStats[join.Table]; ok && st != nil {
-				rStat = st
-			} else if st, ok := rightStats[rTable]; ok && st != nil {
-				rStat = st
-			} else if st, ok := rightStats[join.Alias]; ok && st != nil {
-				rStat = st
-			} else if st, ok := rightStats[rAlias]; ok && st != nil {
-				rStat = st
-			}
-		}
-
-		rRows := int64(100)
-		if rStat != nil && rStat.RowCount > 0 {
-			rRows = rStat.RowCount
-		}
-
-		rPages := float64(rRows) / float64(RowsPerPageDefault)
-		if rPages < 1 {
-			rPages = 1
-		}
-		rScanCost := rPages*SeqPageCost + float64(rRows)*CPUTupleCost
-
-		leftKey := join.LeftKey
-		rightKey := join.RightKey
-		rightCol := rightKey
-		if idx := strings.Index(rightCol, "."); idx != -1 {
-			rightCol = rightCol[idx+1:]
-		}
-
-		var innerIndex *storage.IndexSchema
-		if rSchema != nil {
-			if idx, found := rSchema.FindIndexByColumn(rightCol); found {
-				innerIndex = idx
-			} else {
-				leftCol := leftKey
-				if idx := strings.Index(leftCol, "."); idx != -1 {
-					leftCol = leftCol[idx+1:]
-				}
-				if idx, found := rSchema.FindIndexByColumn(leftCol); found {
-					innerIndex = idx
-					leftKey, rightKey = rightKey, leftKey
-				}
-			}
-		}
-
-		joinEstRows := currentEstimatedRows
-		if join.Type == "INNER" || join.Type == "SEMI" {
-			joinEstRows = int64(math.Min(float64(currentEstimatedRows), float64(rRows)))
-			if joinEstRows < 1 {
-				joinEstRows = 1
-			}
-		} else if join.Type == "ANTI" {
-			joinEstRows = int64(math.Max(1, float64(currentEstimatedRows)*0.5))
-		}
-
-		// Calculate Hash Join Cost
-		hashBuildCost := rScanCost + float64(rRows)*CPUTupleCost
-		hashProbeCost := currentNode.TotalCost + float64(currentEstimatedRows)*CPUOperatorCost
-		hashJoinTotalCost := hashBuildCost + hashProbeCost
-
-		// Calculate Index Nested Loop Join Cost
-		nlTotalCost := math.MaxFloat64
-		if innerIndex != nil {
-			innerProbeCost := float64(currentEstimatedRows) * (CPUIndexTupleCost + CPUTupleCost + 0.045)
-			nlTotalCost = currentNode.TotalCost + 0.25 + innerProbeCost
-		}
-
-		// CBO Decision: Compare Hash Join vs Index Nested Loop Join
-		if innerIndex != nil && nlTotalCost < hashJoinTotalCost {
-			innerScanNode := &PlanNode{
-				Type:          NodeIndexScan,
-				Relation:      join.Table,
-				Alias:         rAlias,
-				IndexName:     innerIndex.Name,
-				IndexCond:     fmt.Sprintf("(%s = %s)", innerIndex.Columns[0], leftKey),
-				FilterCond:    join.Filter,
-				StartupCost:   0.25,
-				TotalCost:     0.35,
-				EstimatedRows: 1,
-			}
-
-			nlNode := &PlanNode{
-				Type:          NodeNestedLoop,
-				JoinType:      join.Type,
-				JoinCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
-				StartupCost:   currentNode.StartupCost + 0.25,
-				TotalCost:     nlTotalCost,
-				EstimatedRows: joinEstRows,
-				Children:      []*PlanNode{currentNode, innerScanNode},
-			}
-			currentNode = nlNode
-		} else {
-			// Hash Join Strategy
-			var rScanNode *PlanNode
-			baseScan := &PlanNode{
-				Type:          NodeTableScan,
-				Relation:      join.Table,
-				Alias:         rAlias,
-				StartupCost:   0.0,
-				TotalCost:     rScanCost,
-				EstimatedRows: rRows,
-			}
-			if join.Filter != "" {
-				rScanNode = &PlanNode{
-					Type:          NodeFilter,
-					FilterCond:    join.Filter,
-					StartupCost:   0.0,
-					TotalCost:     rScanCost + float64(rRows)*CPUTupleCost,
-					EstimatedRows: int64(math.Max(1, float64(rRows)*0.5)),
-					Children:      []*PlanNode{baseScan},
-				}
-			} else {
-				rScanNode = baseScan
-			}
-
-			hashNode := &PlanNode{
-				Type:          NodeHash,
-				StartupCost:   rScanCost,
-				TotalCost:     hashBuildCost,
-				EstimatedRows: rRows,
-				Children:      []*PlanNode{rScanNode},
-			}
-
-			hashJoinNode := &PlanNode{
-				Type:          NodeHashJoin,
-				JoinType:      join.Type,
-				HashCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
-				StartupCost:   hashBuildCost,
-				TotalCost:     hashJoinTotalCost,
-				EstimatedRows: joinEstRows,
-				Children:      []*PlanNode{currentNode, hashNode},
-			}
-			currentNode = hashJoinNode
-		}
-
-		currentEstimatedRows = joinEstRows
 	}
+
+	availableTables := make(map[string]bool)
+	availableTables[strings.ToLower(cleanIdent(q.TableName))] = true
+	if q.TableAlias != "" {
+		availableTables[strings.ToLower(cleanIdent(q.TableAlias))] = true
+	}
+
+	// Step 2: Traverse and optimize join sequence (grouping contiguous INNER joins for reordering)
+	i := 0
+	for i < len(joinList) {
+		if joinList[i].Type != "INNER" {
+			// Non-inner join (e.g., LEFT OUTER JOIN): maintain sequence to preserve NULL-extension semantics
+			join := joinList[i]
+			currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats)
+			availableTables[strings.ToLower(cleanIdent(join.Table))] = true
+			if join.Alias != "" {
+				availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
+			}
+			i++
+			continue
+		}
+
+		// Collect contiguous slice of INNER joins
+		j := i
+		for j < len(joinList) && joinList[j].Type == "INNER" {
+			j++
+		}
+		innerBlock := joinList[i:j]
+
+		if len(innerBlock) <= 1 {
+			join := innerBlock[0]
+			currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats)
+			availableTables[strings.ToLower(cleanIdent(join.Table))] = true
+			if join.Alias != "" {
+				availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
+			}
+		} else {
+			// CBO Cost-Based Join Reordering: evaluate valid permutations for minimum TotalCost
+			perms := permuteJoins(innerBlock)
+			var bestNode *PlanNode
+			var bestEstRows int64
+			bestCost := math.MaxFloat64
+			var bestTables map[string]bool
+
+			for _, perm := range perms {
+				curAvail := make(map[string]bool, len(availableTables)+len(perm)*2)
+				for k, v := range availableTables {
+					curAvail[k] = v
+				}
+
+				valid := true
+				tempNode := currentNode
+				tempEstRows := currentEstimatedRows
+
+				for _, candidate := range perm {
+					var rSchema *storage.TableSchema
+					rTbl := cleanIdent(candidate.Table)
+					rAls := cleanIdent(candidate.Alias)
+					if rightSchemas != nil {
+						if s, ok := rightSchemas[candidate.Table]; ok {
+							rSchema = s
+						} else if s, ok := rightSchemas[rTbl]; ok {
+							rSchema = s
+						} else if s, ok := rightSchemas[candidate.Alias]; ok {
+							rSchema = s
+						} else if s, ok := rightSchemas[rAls]; ok {
+							rSchema = s
+						}
+					}
+
+					oriented, ok := checkAndOrientJoinKeys(candidate, curAvail, rSchema)
+					if !ok {
+						valid = false
+						break
+					}
+					tempNode, tempEstRows = buildSingleJoinNode(tempNode, tempEstRows, oriented, rightSchemas, rightStats)
+					curAvail[strings.ToLower(cleanIdent(candidate.Table))] = true
+					if candidate.Alias != "" {
+						curAvail[strings.ToLower(cleanIdent(candidate.Alias))] = true
+					}
+				}
+
+				if valid && (bestNode == nil || tempNode.TotalCost < bestCost) {
+					bestCost = tempNode.TotalCost
+					bestNode = tempNode
+					bestEstRows = tempEstRows
+					bestTables = curAvail
+				}
+			}
+
+			if bestNode != nil {
+				currentNode = bestNode
+				currentEstimatedRows = bestEstRows
+				availableTables = bestTables
+			} else {
+				// Fallback to original order
+				for _, join := range innerBlock {
+					currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats)
+					availableTables[strings.ToLower(cleanIdent(join.Table))] = true
+					if join.Alias != "" {
+						availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
+					}
+				}
+			}
+		}
+
+		i = j
+	}
+
 
 	// Filter Node (WHERE) for remaining cross-table or outer-join conditions
 	if len(pushdownRes.RemainingConds) > 0 {
@@ -1441,4 +1394,242 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 	}
 
 	return w, true
+}
+
+func extractTableQualifier(key string) string {
+	if dot := strings.Index(key, "."); dot != -1 {
+		return strings.ToLower(cleanIdent(key[:dot]))
+	}
+	return ""
+}
+
+func extractColumnName(key string) string {
+	if dot := strings.Index(key, "."); dot != -1 {
+		return cleanIdent(key[dot+1:])
+	}
+	return cleanIdent(key)
+}
+
+func checkAndOrientJoinKeys(j *JoinInfo, availableTables map[string]bool, rSchema *storage.TableSchema) (*JoinInfo, bool) {
+	candTbl := strings.ToLower(cleanIdent(j.Table))
+	candAlias := strings.ToLower(cleanIdent(j.Alias))
+
+	tblL := extractTableQualifier(j.LeftKey)
+	tblR := extractTableQualifier(j.RightKey)
+
+	// Case 1: LeftKey belongs to an available (outer) table, RightKey belongs to the candidate (inner) table
+	if tblL != "" && tblR != "" {
+		if availableTables[tblL] && (tblR == candTbl || tblR == candAlias) {
+			copyJ := *j
+			return &copyJ, true
+		}
+		// Case 2: RightKey belongs to an available (outer) table, LeftKey belongs to candidate (inner) table -> Swap
+		if availableTables[tblR] && (tblL == candTbl || tblL == candAlias) {
+			copyJ := *j
+			copyJ.LeftKey = j.RightKey
+			copyJ.RightKey = j.LeftKey
+			return &copyJ, true
+		}
+		// Neither is connected directly
+		return nil, false
+	}
+
+	// Fallback for unqualified keys: check column presence in rSchema
+	colL := extractColumnName(j.LeftKey)
+	colR := extractColumnName(j.RightKey)
+
+	if rSchema != nil {
+		_, _, foundR := rSchema.FindColumn(colR)
+		_, _, foundL := rSchema.FindColumn(colL)
+		if foundR && !foundL {
+			copyJ := *j
+			return &copyJ, true
+		}
+		if foundL && !foundR {
+			copyJ := *j
+			copyJ.LeftKey = j.RightKey
+			copyJ.RightKey = j.LeftKey
+			return &copyJ, true
+		}
+	}
+
+	// Default fallback: preserve as is
+	copyJ := *j
+	return &copyJ, true
+}
+
+func permuteJoins(joins []*JoinInfo) [][]*JoinInfo {
+	if len(joins) <= 1 {
+		return [][]*JoinInfo{joins}
+	}
+	var res [][]*JoinInfo
+	for i, j := range joins {
+		rest := make([]*JoinInfo, 0, len(joins)-1)
+		rest = append(rest, joins[:i]...)
+		rest = append(rest, joins[i+1:]...)
+		for _, p := range permuteJoins(rest) {
+			perm := append([]*JoinInfo{j}, p...)
+			res = append(res, perm)
+		}
+	}
+	return res
+}
+
+func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join *JoinInfo, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats) (*PlanNode, int64) {
+	rTable := cleanIdent(join.Table)
+	rAlias := cleanIdent(join.Alias)
+	if rAlias == "" {
+		rAlias = rTable
+	}
+
+	var rSchema *storage.TableSchema
+	if rightSchemas != nil {
+		if s, ok := rightSchemas[join.Table]; ok && s != nil {
+			rSchema = s
+		} else if s, ok := rightSchemas[rTable]; ok && s != nil {
+			rSchema = s
+		} else if s, ok := rightSchemas[join.Alias]; ok && s != nil {
+			rSchema = s
+		} else if s, ok := rightSchemas[rAlias]; ok && s != nil {
+			rSchema = s
+		}
+	}
+
+	var rStat *TableStats
+	if rightStats != nil {
+		if st, ok := rightStats[join.Table]; ok && st != nil {
+			rStat = st
+		} else if st, ok := rightStats[rTable]; ok && st != nil {
+			rStat = st
+		} else if st, ok := rightStats[join.Alias]; ok && st != nil {
+			rStat = st
+		} else if st, ok := rightStats[rAlias]; ok && st != nil {
+			rStat = st
+		}
+	}
+
+	rRows := int64(100)
+	if rStat != nil && rStat.RowCount > 0 {
+		rRows = rStat.RowCount
+	}
+
+	rPages := float64(rRows) / float64(RowsPerPageDefault)
+	if rPages < 1 {
+		rPages = 1
+	}
+	rScanCost := rPages*SeqPageCost + float64(rRows)*CPUTupleCost
+
+	leftKey := join.LeftKey
+	rightKey := join.RightKey
+	rightCol := rightKey
+	if idx := strings.Index(rightCol, "."); idx != -1 {
+		rightCol = rightCol[idx+1:]
+	}
+
+	var innerIndex *storage.IndexSchema
+	if rSchema != nil {
+		if idx, found := rSchema.FindIndexByColumn(rightCol); found {
+			innerIndex = idx
+		} else {
+			leftCol := leftKey
+			if idx := strings.Index(leftCol, "."); idx != -1 {
+				leftCol = leftCol[idx+1:]
+			}
+			if idx, found := rSchema.FindIndexByColumn(leftCol); found {
+				innerIndex = idx
+				leftKey, rightKey = rightKey, leftKey
+			}
+		}
+	}
+
+	joinEstRows := currentEstimatedRows
+	if join.Type == "INNER" || join.Type == "SEMI" {
+		joinEstRows = int64(math.Min(float64(currentEstimatedRows), float64(rRows)))
+		if joinEstRows < 1 {
+			joinEstRows = 1
+		}
+	} else if join.Type == "ANTI" {
+		joinEstRows = int64(math.Max(1, float64(currentEstimatedRows)*0.5))
+	}
+
+	// Calculate Hash Join Cost
+	hashBuildCost := rScanCost + float64(rRows)*CPUTupleCost
+	hashProbeCost := currentNode.TotalCost + float64(currentEstimatedRows)*CPUOperatorCost
+	hashJoinTotalCost := hashBuildCost + hashProbeCost
+
+	// Calculate Index Nested Loop Join Cost
+	nlTotalCost := math.MaxFloat64
+	if innerIndex != nil {
+		innerProbeCost := float64(currentEstimatedRows) * (CPUIndexTupleCost + CPUTupleCost + 0.045)
+		nlTotalCost = currentNode.TotalCost + 0.25 + innerProbeCost
+	}
+
+	var nextNode *PlanNode
+	// CBO Decision: Compare Hash Join vs Index Nested Loop Join
+	if innerIndex != nil && nlTotalCost < hashJoinTotalCost {
+		innerScanNode := &PlanNode{
+			Type:          NodeIndexScan,
+			Relation:      join.Table,
+			Alias:         rAlias,
+			IndexName:     innerIndex.Name,
+			IndexCond:     fmt.Sprintf("(%s = %s)", innerIndex.Columns[0], leftKey),
+			FilterCond:    join.Filter,
+			StartupCost:   0.25,
+			TotalCost:     0.35,
+			EstimatedRows: 1,
+		}
+
+		nextNode = &PlanNode{
+			Type:          NodeNestedLoop,
+			JoinType:      join.Type,
+			JoinCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
+			StartupCost:   currentNode.StartupCost + 0.25,
+			TotalCost:     nlTotalCost,
+			EstimatedRows: joinEstRows,
+			Children:      []*PlanNode{currentNode, innerScanNode},
+		}
+	} else {
+		// Hash Join Strategy
+		var rScanNode *PlanNode
+		baseScan := &PlanNode{
+			Type:          NodeTableScan,
+			Relation:      join.Table,
+			Alias:         rAlias,
+			StartupCost:   0.0,
+			TotalCost:     rScanCost,
+			EstimatedRows: rRows,
+		}
+		if join.Filter != "" {
+			rScanNode = &PlanNode{
+				Type:          NodeFilter,
+				FilterCond:    join.Filter,
+				StartupCost:   0.0,
+				TotalCost:     rScanCost + float64(rRows)*CPUTupleCost,
+				EstimatedRows: int64(math.Max(1, float64(rRows)*0.5)),
+				Children:      []*PlanNode{baseScan},
+			}
+		} else {
+			rScanNode = baseScan
+		}
+
+		hashNode := &PlanNode{
+			Type:          NodeHash,
+			StartupCost:   rScanCost,
+			TotalCost:     hashBuildCost,
+			EstimatedRows: rRows,
+			Children:      []*PlanNode{rScanNode},
+		}
+
+		nextNode = &PlanNode{
+			Type:          NodeHashJoin,
+			JoinType:      join.Type,
+			HashCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
+			StartupCost:   hashBuildCost,
+			TotalCost:     hashJoinTotalCost,
+			EstimatedRows: joinEstRows,
+			Children:      []*PlanNode{currentNode, hashNode},
+		}
+	}
+
+	return nextNode, joinEstRows
 }
