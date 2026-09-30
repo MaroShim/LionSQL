@@ -616,3 +616,83 @@ func parseForeignKeyClause(def string, defaultChildCol string, defaultName strin
 
 	return nil, false
 }
+
+// execCreateView handles CREATE [OR REPLACE] VIEW name AS <select>.
+func (s *Server) execCreateView(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// Pattern: CREATE [OR REPLACE] VIEW [IF NOT EXISTS] <name> AS <select>
+	re := regexp.MustCompile(`(?is)^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s+AS\s+(.+)$`)
+	m := re.FindStringSubmatch(cleaned)
+	if len(m) < 3 {
+		return nil, fmt.Errorf("invalid CREATE VIEW syntax")
+	}
+
+	viewName := cleanIdentifier(m[1])
+	selectQuery := strings.TrimSpace(m[2])
+
+	orReplace := regexp.MustCompile(`(?i)^CREATE\s+OR\s+REPLACE\s+VIEW`).MatchString(cleaned)
+	ifNotExists := regexp.MustCompile(`(?i)VIEW\s+IF\s+NOT\s+EXISTS`).MatchString(cleaned)
+
+	view := &catalog.View{
+		Name:  viewName,
+		Query: selectQuery,
+	}
+
+	if orReplace {
+		s.catalog.CreateOrReplaceView(view)
+	} else {
+		if err := s.catalog.CreateView(view); err != nil {
+			if ifNotExists {
+				// Silently succeed when IF NOT EXISTS is specified
+				return &QueryResult{
+					Success:      true,
+					Command:      "CREATE VIEW",
+					RowsAffected: 0,
+					DurationUS:   time.Since(start).Microseconds(),
+				}, nil
+			}
+			return nil, err
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "CREATE VIEW",
+		RowsAffected: 0,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+// execDropView handles DROP VIEW [IF EXISTS] <name>.
+func (s *Server) execDropView(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	re := regexp.MustCompile(`(?is)^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(.+)$`)
+	m := re.FindStringSubmatch(cleaned)
+	if len(m) < 2 {
+		return nil, fmt.Errorf("invalid DROP VIEW syntax")
+	}
+
+	ifExists := regexp.MustCompile(`(?i)^DROP\s+VIEW\s+IF\s+EXISTS`).MatchString(cleaned)
+	viewName := cleanIdentifier(strings.TrimSpace(m[1]))
+
+	if err := s.catalog.DropView(viewName); err != nil {
+		if ifExists {
+			return &QueryResult{
+				Success:      true,
+				Command:      "DROP VIEW",
+				RowsAffected: 0,
+				DurationUS:   time.Since(start).Microseconds(),
+			}, nil
+		}
+		return nil, err
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "DROP VIEW",
+		RowsAffected: 0,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}

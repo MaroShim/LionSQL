@@ -23,6 +23,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for `WHEN NOT MATCHED [BY TARGET] [AND <cond>] THEN INSERT` and `WHEN NOT MATCHED BY SOURCE [AND <cond>] THEN UPDATE / DELETE` clauses.
   - Integrated with transaction context for atomic execution, `@@ROWCOUNT` reflection, and storage abstraction across In-Memory OCC and WiredTiger.
   - Added comprehensive verification test suite in `pkg/api/merge_test.go`.
+- **`CREATE VIEW` / `DROP VIEW` DDL Support (`pkg/catalog`, `pkg/api`)**:
+  - Added `catalog.View` struct (`Name`, `Query`, `CreatedAt`, `UpdatedAt`) with sentinel errors `ErrViewExists` / `ErrViewNotFound` in `pkg/catalog/catalog.go`.
+  - Implemented `CreateView`, `CreateOrReplaceView`, `GetView`, `DropView`, `ListViews` CRUD methods with mutex-safe access.
+  - Added `execCreateView` supporting `CREATE VIEW`, `CREATE OR REPLACE VIEW`, and `CREATE VIEW IF NOT EXISTS` syntaxes.
+  - Added `execDropView` supporting `DROP VIEW` and `DROP VIEW IF EXISTS` syntaxes.
+  - Added dispatcher routes in `pkg/api/sqlexec.go` for `CREATE VIEW` / `CREATE OR REPLACE VIEW` / `DROP VIEW`.
+  - Implemented transparent view expansion via `rewriteViewsAsCTE()`: any `SELECT` referencing a registered view is automatically prepended with a `WITH <viewname> AS (<view body>)` CTE clause before execution. This leverages the existing CTE engine for full query pushdown (WHERE, ORDER BY, GROUP BY, aggregations).
+  - Added `pkg/api/view_test.go` with 7 sub-test cases: basic select, additional WHERE, CREATE OR REPLACE, DROP, IF NOT EXISTS variants, and aggregation views.
 - **`SELECT DISTINCT` Deduplication (`pkg/proc`, `pkg/planner`, `pkg/api`)**:
   - Added `TokenDistinct` keyword token and registered `"DISTINCT"` in the primary Pratt parser's keyword map (`pkg/proc/token.go`).
   - Extended `GeneralSelectStmt` AST node with `Distinct bool` field; `parseGeneralSelect()` detects and sets the flag on `TokenDistinct` (`pkg/proc/ast.go`, `pkg/proc/parser.go`).

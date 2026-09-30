@@ -18,6 +18,8 @@ var (
 	ErrFuncNotFound    = errors.New("user defined function not found")
 	ErrTriggerExists   = errors.New("trigger already exists")
 	ErrTriggerNotFound = errors.New("trigger not found")
+	ErrViewExists      = errors.New("view already exists")
+	ErrViewNotFound    = errors.New("view not found")
 )
 
 // ParamDef defines a parameter for a stored procedure or function.
@@ -61,6 +63,14 @@ type Trigger struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// View represents a named SQL view backed by a SELECT query.
+type View struct {
+	Name      string    `json:"name"`
+	Query     string    `json:"query"` // the SELECT body of the view
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 // Catalog manages database schemas, stored procedures, functions, triggers, and CBO statistics.
 type Catalog struct {
 	mu         sync.RWMutex
@@ -68,6 +78,7 @@ type Catalog struct {
 	procedures map[string]*Procedure
 	functions  map[string]*Function
 	triggers   map[string]*Trigger
+	views      map[string]*View
 	tableStats map[string]*planner.TableStats
 }
 
@@ -78,6 +89,7 @@ func New(eng storage.Engine) *Catalog {
 		procedures: make(map[string]*Procedure),
 		functions:  make(map[string]*Function),
 		triggers:   make(map[string]*Trigger),
+		views:      make(map[string]*View),
 		tableStats: make(map[string]*planner.TableStats),
 	}
 }
@@ -415,3 +427,67 @@ func (c *Catalog) ListTableStats() map[string]*planner.TableStats {
 	return res
 }
 
+// CreateView registers a new view. Returns ErrViewExists if a view with that name already exists.
+func (c *Catalog) CreateView(v *View) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := strings.ToLower(cleanCatalogIdent(v.Name))
+	if _, exists := c.views[key]; exists {
+		return fmt.Errorf("%w: %s", ErrViewExists, v.Name)
+	}
+	now := time.Now()
+	v.CreatedAt = now
+	v.UpdatedAt = now
+	c.views[key] = v
+	return nil
+}
+
+// CreateOrReplaceView registers a new view or replaces an existing one.
+func (c *Catalog) CreateOrReplaceView(v *View) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := strings.ToLower(cleanCatalogIdent(v.Name))
+	now := time.Now()
+	if existing, exists := c.views[key]; exists {
+		v.CreatedAt = existing.CreatedAt
+	} else {
+		v.CreatedAt = now
+	}
+	v.UpdatedAt = now
+	c.views[key] = v
+}
+
+// GetView retrieves a view by name.
+func (c *Catalog) GetView(name string) (*View, error) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	key := strings.ToLower(cleanCatalogIdent(name))
+	v, exists := c.views[key]
+	if !exists {
+		return nil, fmt.Errorf("%w: %s", ErrViewNotFound, name)
+	}
+	return v, nil
+}
+
+// DropView removes a view by name. Returns ErrViewNotFound if not registered.
+func (c *Catalog) DropView(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := strings.ToLower(cleanCatalogIdent(name))
+	if _, exists := c.views[key]; !exists {
+		return fmt.Errorf("%w: %s", ErrViewNotFound, name)
+	}
+	delete(c.views, key)
+	return nil
+}
+
+// ListViews returns all registered views.
+func (c *Catalog) ListViews() []*View {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	result := make([]*View, 0, len(c.views))
+	for _, v := range c.views {
+		result = append(result, v)
+	}
+	return result
+}

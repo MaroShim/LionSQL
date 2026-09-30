@@ -1835,6 +1835,14 @@ func (s *Server) execSetOpExplain(setQuery *planner.SetOpQuery, analyze bool, st
 func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
+	// -1. View expansion: if FROM clause references a known view, rewrite as a CTE.
+	//     e.g. SELECT name FROM v_engineers WHERE salary > 85000
+	//     becomes WITH v_engineers AS (SELECT id, name, salary FROM employees WHERE dept='Engineering')
+	//             SELECT name FROM v_engineers WHERE salary > 85000
+	if cteQuery, ok := s.rewriteViewsAsCTE(cleaned); ok {
+		return s.execCTE(cteQuery, start)
+	}
+
 	// 0. Set Operations: UNION [ALL], INTERSECT, EXCEPT / MINUS
 	if setQuery, ok := planner.FindTopLevelSetOps(cleaned); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
 		return s.execSetOpSelect(setQuery, start, cs)
@@ -3749,4 +3757,37 @@ func deduplicateRows(rows []map[string]any) []map[string]any {
 		}
 	}
 	return out
+}
+
+// rewriteViewsAsCTE detects view references in a SELECT query and rewrites the query as a CTE.
+// For example:
+//   SELECT name FROM v_eng WHERE salary > 80000
+//   -> WITH v_eng AS (SELECT ... FROM employees WHERE dept='Engineering')
+//      SELECT name FROM v_eng WHERE salary > 80000
+//
+// Multiple views are accumulated into a single WITH clause.
+// Returns the rewritten query and true if at least one view was found.
+func (s *Server) rewriteViewsAsCTE(query string) (string, bool) {
+	views := s.catalog.ListViews()
+	if len(views) == 0 {
+		return query, false
+	}
+
+	// Collect all views referenced in this query (word-boundary match against view names).
+	var cteParts []string
+	for _, v := range views {
+		esc := regexp.QuoteMeta(v.Name)
+		// Match the view name as a standalone identifier (not inside quotes or parens).
+		re := regexp.MustCompile(`(?i)\b` + esc + `\b`)
+		if re.MatchString(query) {
+			cteParts = append(cteParts, fmt.Sprintf("%s AS (%s)", v.Name, v.Query))
+		}
+	}
+
+	if len(cteParts) == 0 {
+		return query, false
+	}
+
+	rewritten := "WITH " + strings.Join(cteParts, ", ") + " " + query
+	return rewritten, true
 }

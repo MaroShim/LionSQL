@@ -828,6 +828,14 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		return s.execCreateTrigger(trimmed, start)
 	}
 
+	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / DROP VIEW
+	if strings.HasPrefix(upper, "CREATE VIEW") || strings.HasPrefix(upper, "CREATE OR REPLACE VIEW") {
+		return s.execCreateView(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "DROP VIEW") {
+		return s.execDropView(trimmed, start)
+	}
+
 	// 2. Procedure Invocation: EXEC / CALL / sp_*
 	if strings.HasPrefix(upper, "EXEC ") || strings.HasPrefix(upper, "EXECUTE ") || strings.HasPrefix(upper, "EXEC(") || strings.HasPrefix(upper, "EXECUTE(") || strings.HasPrefix(upper, "CALL ") || strings.HasPrefix(upper, "SP_") {
 		return s.execProcedureCall(trimmed, start, cs)
