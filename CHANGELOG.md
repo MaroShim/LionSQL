@@ -17,8 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Multi-Table Chained Joins & CBO Join Tree Optimization (`pkg/planner`, `pkg/api`)**:
+  - Implemented Cost-Based Join Reordering in `BuildMultiJoinPlanWithStats` (`pkg/planner/planner.go`) for chained multi-table queries (3+ tables).
+  - Evaluates all valid permutations of contiguous INNER joins, filtering out disconnected cartesian products via `checkAndOrientJoinKeys` and automatic left/right key orientation.
+  - Computes TotalCost for each candidate left-deep join tree (Hash Join vs Index Nested Loop Join) to select the execution order that minimizes intermediate cardinality and probe costs.
+  - Added unit test suite in `pkg/planner/cbo_join_test.go` verifying that smaller tables and indexed relations are prioritized in join ordering.
+  - Added end-to-end integration test suite in `pkg/api/cbo_join_test.go` verifying 3-table and 4-table chained joins (`customers` -> `orders` -> `order_items` -> `products`) with projection, WHERE filters, and EXPLAIN validation.
 - **Composite Index Multi-Column Prefix Scan**: Added FindBestCompositeIndex, execIndexSelect, parseEqualityConditions, buildCompositePrefixKey for AND-predicate composite index prefix scans in pkg/storage, pkg/planner, pkg/api. Fires before VDBE for equality-only WHERE clauses. Tested with 7 sub-tests in composite_index_test.go.
-- **Composite Index Multi-Column Prefix Scan (, , )**: Added , , ,  for AND-predicate composite index prefix scans. Fires before VDBE for equality-only WHERE clauses; tested with 7 sub-tests in .
 - **Unified JSON Configuration & Deterministic Precedence Hierarchy (`pkg/config`, `cmd/server`)**:
   - Implemented `pkg/config` defining structured, hierarchical configuration schema (`Server`, `Network`, `Auth`, `Resources`, `Logging`) with production-ready zero-config defaults (`DefaultConfig()`).
   - Added atomic config persistence via swap files and atomic rename (`WriteToFileAtomic`) complying with Rule 1 and Rule 89.
