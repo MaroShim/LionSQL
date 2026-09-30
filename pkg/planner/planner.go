@@ -646,6 +646,56 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	var chosenCovering bool
 
 	if schema != nil && len(pushdownRes.PrimaryConds) > 0 {
+		// --- Composite index prefix match ---
+		// Collect all equality conditions from pushed-down predicates.
+		eqColSet := make(map[string]bool)
+		eqColVals := make(map[string]string)
+		onlyEqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
+		for _, cond := range pushdownRes.PrimaryConds {
+			if m := onlyEqRe.FindStringSubmatch(cond); len(m) == 3 {
+				rawCol := m[1]
+				if dot := strings.Index(rawCol, "."); dot != -1 {
+					rawCol = rawCol[dot+1:]
+				}
+				col := strings.ToLower(cleanIdent(rawCol))
+				val := strings.TrimSpace(m[2])
+				eqColSet[col] = true
+				eqColVals[col] = val
+			}
+		}
+		if len(eqColSet) >= 2 {
+			if compIdx, prefixLen := schema.FindBestCompositeIndex(eqColSet); compIdx != nil && prefixLen >= 2 {
+				sel := math.Pow(0.1, float64(prefixLen))
+				estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
+				if estRows < 1 {
+					estRows = 1
+				}
+				indexPagesCost := (float64(estRows) / float64(RowsPerPageDefault)) * RandomPageCost
+				if indexPagesCost < 0.05 {
+					indexPagesCost = 0.05
+				}
+				compCost := 0.25 + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
+				if compCost < tableScanTotalCost {
+					// Compose a representative condition label for the plan node.
+					var condParts []string
+					for _, col := range compIdx.Columns[:prefixLen] {
+						if v, ok := eqColVals[strings.ToLower(col)]; ok {
+							condParts = append(condParts, fmt.Sprintf("%s = %s", col, v))
+						}
+					}
+					chosenIndex = compIdx
+					chosenCond = strings.Join(condParts, " AND ")
+					chosenCol = strings.Join(compIdx.Columns[:prefixLen], ",")
+					chosenOp = "="
+					chosenVal = ""
+					chosenEstRows = estRows
+					chosenCost = compCost
+					chosenCovering = false
+				}
+			}
+		}
+
+		// --- Single-column index match (fallback) ---
 		for _, cond := range pushdownRes.PrimaryConds {
 			if m := eqRe.FindStringSubmatch(cond); len(m) == 4 {
 				rawCol := m[1]
@@ -657,6 +707,10 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				valStr := strings.TrimSpace(m[3])
 
 				if idx, found := schema.FindIndexByColumn(colName); found {
+					// Skip if a composite index covering more columns is already chosen.
+					if chosenIndex != nil && len(chosenIndex.Columns) > 1 {
+						continue
+					}
 					sel := 0.1
 					if idx.Unique && (op == "=" || op == "==") {
 						sel = 1.0 / float64(estimatedTotal)

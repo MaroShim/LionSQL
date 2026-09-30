@@ -1919,6 +1919,19 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 			return s.execVolcanoSelect(qInfo, start, cs)
 		}
 
+		// Composite / single-column index-accelerated SELECT path.
+		// Try this before VDBE so that equality conditions on indexed columns
+		// benefit from prefix scans even for single-column composite indexes.
+		if qInfo.WhereClause != "" && !qInfo.HasAggregates && len(qInfo.GroupByCols) == 0 {
+			if res, ok := s.execIndexSelect(qInfo, tableName, start, cs); ok {
+				if qInfo.Distinct {
+					res.Rows = deduplicateRows(res.Rows)
+					res.RowsAffected = int64(len(res.Rows))
+				}
+				return res, nil
+			}
+		}
+
 		// Execute via unified VDBE Virtual Machine Engine (Primary Fast-Path)
 		if res, err := s.execVDBESelect(cleaned, start, cs); err == nil {
 			if qInfo.Distinct {
@@ -2021,17 +2034,55 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	usedIndex := false
 
 	if whereClause != "" {
-		eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_]+)\s*=\s*(.+)$`)
-		if m := eqRe.FindStringSubmatch(whereClause); len(m) == 3 {
-			colName := cleanIdentifier(m[1])
-			if idx, found := schema.FindIndexByColumn(colName); found {
-				valStr := strings.Trim(strings.TrimSpace(m[2]), "'\"")
-				if colMeta, _, colFound := schema.FindColumn(colName); colFound && colMeta != nil {
-					parsedVal := parseValueToType(valStr, colMeta.Type)
-					if cur, err := tx.IndexScan(tableName, idx.Name, &parsedVal, &parsedVal); err == nil {
-						cursor = cur
-						usedIndex = true
+		// Parse all equality conditions from the WHERE clause (AND-separated).
+		// Collect col -> val pairs for composite index prefix matching.
+		eqColVals := parseEqualityConditions(whereClause)
+
+		if len(eqColVals) > 0 {
+			eqColSet := make(map[string]bool, len(eqColVals))
+			for col := range eqColVals {
+				eqColSet[strings.ToLower(col)] = true
+			}
+
+			// Try composite multi-column prefix first, then fall back to single-column.
+			if idx, prefixLen := schema.FindBestCompositeIndex(eqColSet); idx != nil && prefixLen > 0 {
+				var lowVal, highVal storage.Value
+				if len(idx.Columns) == 1 {
+					// True single-column index: use exact typed value for point lookup.
+					colName := idx.Columns[0]
+					if colMeta, _, colFound := schema.FindColumn(colName); colFound && colMeta != nil {
+						valStr := eqColVals[strings.ToLower(colName)]
+						parsed := parseValueToType(valStr, colMeta.Type)
+						lowVal = parsed
+						highVal = parsed
+					} else {
+						lowVal = storage.StringValue(eqColVals[strings.ToLower(colName)])
+						highVal = lowVal
 					}
+				} else {
+					// Composite index: build NUL-separated prefix key range.
+					// e.g. dept='Engineering' on (dept,level) → scan ["Engineering\x00", "Engineering\x00\xff...]
+					prefixKey := buildCompositePrefixKey(idx.Columns[:prefixLen], eqColVals, schema)
+					lowVal = storage.StringValue(prefixKey)
+					highVal = storage.StringValue(prefixKey + "\xff\xff\xff\xff")
+				}
+				if cur, err := tx.IndexScan(tableName, idx.Name, &lowVal, &highVal); err == nil {
+					cursor = cur
+					usedIndex = true
+				}
+			} else if len(eqColVals) == 1 {
+				// Fallback: single equality, original path.
+				for col, val := range eqColVals {
+					if idx, found := schema.FindIndexByColumn(col); found {
+						if colMeta, _, colFound := schema.FindColumn(col); colFound && colMeta != nil {
+							parsed := parseValueToType(val, colMeta.Type)
+							if cur, err := tx.IndexScan(tableName, idx.Name, &parsed, &parsed); err == nil {
+								cursor = cur
+								usedIndex = true
+							}
+						}
+					}
+					break
 				}
 			}
 		}
@@ -3790,4 +3841,199 @@ func (s *Server) rewriteViewsAsCTE(query string) (string, bool) {
 
 	rewritten := "WITH " + strings.Join(cteParts, ", ") + " " + query
 	return rewritten, true
+}
+
+// parseEqualityConditions parses AND-separated equality conditions (col = val) from a WHERE clause.
+// Returns a map of lowercase column name -> raw value string (without surrounding quotes).
+// Non-equality conditions (!=, <, >, LIKE, IN, etc.) are ignored.
+func parseEqualityConditions(where string) map[string]string {
+	result := make(map[string]string)
+	// Split on AND (case-insensitive), skipping parenthesized groups.
+	parts := splitOnAnd(where)
+	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*=\s*(.+?)\s*$`)
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if m := eqRe.FindStringSubmatch(part); len(m) == 3 {
+			rawCol := m[1]
+			// Strip table qualifier (tbl.col -> col)
+			if dot := strings.LastIndex(rawCol, "."); dot != -1 {
+				rawCol = rawCol[dot+1:]
+			}
+			val := strings.Trim(strings.TrimSpace(m[2]), "'\"")
+			result[strings.ToLower(rawCol)] = val
+		}
+	}
+	return result
+}
+
+// splitOnAnd splits a WHERE clause on top-level AND keywords,
+// respecting parentheses depth so subexpressions are not split.
+func splitOnAnd(where string) []string {
+	var parts []string
+	depth := 0
+	start := 0
+	upper := strings.ToUpper(where)
+	for i := 0; i < len(upper); i++ {
+		switch upper[i] {
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		}
+		if depth == 0 && i+4 <= len(upper) && upper[i:i+4] == " AND" &&
+			(i+4 == len(upper) || upper[i+4] == ' ' || upper[i+4] == '(') {
+			parts = append(parts, strings.TrimSpace(where[start:i]))
+			i += 4
+			start = i
+		}
+	}
+	parts = append(parts, strings.TrimSpace(where[start:]))
+	return parts
+}
+
+// buildCompositePrefixKey builds a \x00-separated composite key string from the
+// prefix columns of a composite index given an equality-condition value map.
+// The value lookup is case-insensitive on column names.
+func buildCompositePrefixKey(cols []string, eqColVals map[string]string, schema *storage.TableSchema) string {
+	var parts []string
+	for _, col := range cols {
+		val, ok := eqColVals[strings.ToLower(col)]
+		if !ok {
+			break
+		}
+		// Format the value the same way extractIndexKey does (String() of storage.Value).
+		colMeta, _, found := schema.FindColumn(col)
+		if found && colMeta != nil {
+			sv := parseValueToType(val, colMeta.Type)
+			parts = append(parts, sv.String())
+		} else {
+			parts = append(parts, val)
+		}
+	}
+	return strings.Join(parts, "\x00")
+}
+
+// execIndexSelect attempts to execute a simple SELECT using a composite or single-column index scan.
+// It is called before the VDBE path when the WHERE clause contains only equality conditions
+// that match a known index on the target table.
+// Returns (result, true) on success, (nil, false) if no suitable index exists or the scan fails.
+func (s *Server) execIndexSelect(qInfo *planner.QueryInfo, tableName string, start time.Time, cs *ClientSession) (*QueryResult, bool) {
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		return nil, false
+	}
+	if len(schema.Indexes) == 0 {
+		return nil, false
+	}
+
+	whereClause := qInfo.WhereClause
+	eqColVals := parseEqualityConditions(whereClause)
+	if len(eqColVals) == 0 {
+		return nil, false
+	}
+
+	eqColSet := make(map[string]bool, len(eqColVals))
+	for col := range eqColVals {
+		eqColSet[col] = true
+	}
+
+	idx, prefixLen := schema.FindBestCompositeIndex(eqColSet)
+	if idx == nil || prefixLen == 0 {
+		return nil, false
+	}
+
+	// Build scan bounds.
+	var lowVal, highVal storage.Value
+	if len(idx.Columns) == 1 {
+		// Pure single-column index: exact typed value.
+		colName := idx.Columns[0]
+		colMeta, _, colFound := schema.FindColumn(colName)
+		if !colFound || colMeta == nil {
+			return nil, false
+		}
+		parsed := parseValueToType(eqColVals[strings.ToLower(colName)], colMeta.Type)
+		lowVal = parsed
+		highVal = parsed
+	} else {
+		// Composite index: NUL-separated prefix key range.
+		prefixKey := buildCompositePrefixKey(idx.Columns[:prefixLen], eqColVals, schema)
+		lowVal = storage.StringValue(prefixKey)
+		highVal = storage.StringValue(prefixKey + "\xff\xff\xff\xff")
+	}
+
+	// Acquire transaction.
+	var tx storage.Transaction
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, false
+		}
+		defer session.Close()
+		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			return nil, false
+		}
+		tx = t
+		defer tx.Rollback()
+	}
+
+	cursor, err := tx.IndexScan(tableName, idx.Name, &lowVal, &highVal)
+	if err != nil {
+		return nil, false
+	}
+	defer cursor.Close()
+
+	// Determine projection columns.
+	projections := qInfo.Projections
+	isSelectAll := len(projections) == 0 || (len(projections) == 1 && (projections[0] == "*" || projections[0] == ""))
+	var selectedCols []string
+	if isSelectAll {
+		for _, col := range schema.Columns {
+			selectedCols = append(selectedCols, col.Name)
+		}
+	} else {
+		for _, p := range projections {
+			selectedCols = append(selectedCols, cleanIdentifier(strings.TrimSpace(p)))
+		}
+	}
+
+	var rows []map[string]any
+	for cursor.Next() {
+		rec, err := cursor.Record()
+		if err != nil {
+			break
+		}
+		// Post-filter: apply full WHERE clause to handle non-indexed conditions.
+		if !evaluateWhereCondition(rec, whereClause) {
+			continue
+		}
+		row := make(map[string]any, len(selectedCols))
+		for _, col := range selectedCols {
+			row[col] = formatStorageValue(rec[col])
+		}
+		rows = append(rows, row)
+	}
+
+	// If ORDER BY is present, fall through to VDBE/Volcano which handles ordering.
+	// The index path only accelerates equality-only queries without ordering requirements.
+	if qInfo.OrderByClause != "" {
+		return nil, false
+	}
+	// Apply LIMIT if present.
+	if qInfo.LimitCount > 0 && int(qInfo.LimitCount) < len(rows) {
+		rows = rows[:qInfo.LimitCount]
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      selectedCols,
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, true
 }

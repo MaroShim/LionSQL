@@ -181,12 +181,38 @@ func (s *TableSchema) FindIndex(name string) (*IndexSchema, int, bool) {
 func (s *TableSchema) FindIndexByColumn(colName string) (*IndexSchema, bool) {
 	for i := range s.Indexes {
 		for _, col := range s.Indexes[i].Columns {
-			if col == colName {
+			if strings.EqualFold(col, colName) {
 				return &s.Indexes[i], true
 			}
 		}
 	}
 	return nil, false
+}
+
+// FindBestCompositeIndex finds the index that has the longest leading-column prefix
+// fully covered by the provided equality-condition column set.
+// It returns the chosen index and the prefix length (number of leading columns matched).
+// For example, given index (dept, year, salary) and eqCols={dept, year},
+// it returns the index and prefixLen=2.
+func (s *TableSchema) FindBestCompositeIndex(eqCols map[string]bool) (*IndexSchema, int) {
+	var best *IndexSchema
+	bestPrefixLen := 0
+	for i := range s.Indexes {
+		idx := &s.Indexes[i]
+		prefixLen := 0
+		for _, col := range idx.Columns {
+			if eqCols[strings.ToLower(col)] {
+				prefixLen++
+			} else {
+				break
+			}
+		}
+		if prefixLen > bestPrefixLen || (prefixLen == bestPrefixLen && prefixLen > 0 && (best == nil || len(idx.Columns) < len(best.Columns))) {
+			best = idx
+			bestPrefixLen = prefixLen
+		}
+	}
+	return best, bestPrefixLen
 }
 
 // Value represents a typed field value.

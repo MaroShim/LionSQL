@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Composite Index Multi-Column Prefix Scan**: Added FindBestCompositeIndex, execIndexSelect, parseEqualityConditions, buildCompositePrefixKey for AND-predicate composite index prefix scans in pkg/storage, pkg/planner, pkg/api. Fires before VDBE for equality-only WHERE clauses. Tested with 7 sub-tests in composite_index_test.go.
+- **Composite Index Multi-Column Prefix Scan (, , )**: Added , , ,  for AND-predicate composite index prefix scans. Fires before VDBE for equality-only WHERE clauses; tested with 7 sub-tests in .
 - **Unified JSON Configuration & Deterministic Precedence Hierarchy (`pkg/config`, `cmd/server`)**:
   - Implemented `pkg/config` defining structured, hierarchical configuration schema (`Server`, `Network`, `Auth`, `Resources`, `Logging`) with production-ready zero-config defaults (`DefaultConfig()`).
   - Added atomic config persistence via swap files and atomic rename (`WriteToFileAtomic`) complying with Rule 1 and Rule 89.
