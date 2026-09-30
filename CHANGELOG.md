@@ -24,6 +24,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Prometheus `/metrics` Observability & Plan Cache Statistics (`pkg/api`, `pkg/proc`)**:
+  - Enhanced Prometheus `/metrics` endpoint with runtime Go metrics: `sqlion_memory_alloc_bytes`, `sqlion_memory_sys_bytes`, `sqlion_memory_heap_alloc_bytes`, and `sqlion_goroutines`.
+  - Added atomic execution plan cache hit/miss tracking (`sqlion_plan_cache_hits_total`, `sqlion_plan_cache_misses_total`) in `PlanCache` (`pkg/proc/cache.go`).
+  - Added test coverage in `pkg/api/metrics_test.go` verifying the exposition of all system and plan cache metrics.
 - **Transaction Savepoints & Partial Rollback (`pkg/storage`, `pkg/api`)**:
   - Implemented multi-transaction savepoint support via `SAVE TRANSACTION <name>`, `SAVE TRAN <name>`, and `SAVEPOINT <name>`.
   - Implemented partial rollback to savepoints via `ROLLBACK TRANSACTION <name>`, `ROLLBACK TRAN <name>`, and `ROLLBACK TO [SAVEPOINT] <name>`.

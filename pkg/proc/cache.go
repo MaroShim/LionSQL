@@ -5,12 +5,15 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 // PlanCache caches parsed stored procedure ASTs to avoid recompilation overhead.
 type PlanCache struct {
-	mu    sync.RWMutex
-	plans map[string]*CreateProcStmt
+	mu     sync.RWMutex
+	plans  map[string]*CreateProcStmt
+	hits   atomic.Int64
+	misses atomic.Int64
 }
 
 // NewPlanCache creates an execution plan cache.
@@ -27,9 +30,11 @@ func (c *PlanCache) GetOrCompile(script string) (*CreateProcStmt, error) {
 	c.mu.RLock()
 	if plan, exists := c.plans[hash]; exists {
 		c.mu.RUnlock()
+		c.hits.Add(1)
 		return plan, nil
 	}
 	c.mu.RUnlock()
+	c.misses.Add(1)
 
 	// Parse procedure
 	lexer := NewLexer(script)
@@ -61,7 +66,17 @@ func (c *PlanCache) GetByName(name string) (*CreateProcStmt, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	p, ok := c.plans[name]
+	if ok {
+		c.hits.Add(1)
+	} else {
+		c.misses.Add(1)
+	}
 	return p, ok
+}
+
+// Stats returns cumulative plan cache hits and misses.
+func (c *PlanCache) Stats() (hits, misses int64) {
+	return c.hits.Load(), c.misses.Load()
 }
 
 // PutByName caches a procedure AST by its name.

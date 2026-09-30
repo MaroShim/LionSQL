@@ -659,6 +659,27 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 
 		case proc.OpUpdate:
 			data := inst.Data.(*proc.DMLData)
+			if data.WhereCol != "" && !f.isPKCol(data.Table, data.WhereCol) {
+				data.WhereExpr = &proc.BinaryExpr{
+					Left:  &proc.ColumnRefExpr{Name: data.WhereCol},
+					Op:    proc.TokenEq,
+					Right: data.WhereVal,
+				}
+				cnt, err := f.execUpdateWhere(data)
+				if err != nil {
+					f.lastError = 50000
+					if len(f.catchStack) > 0 {
+						catchPC := f.catchStack[len(f.catchStack)-1]
+						f.catchStack = f.catchStack[:len(f.catchStack)-1]
+						pc = catchPC
+						continue
+					}
+					return nil, err
+				}
+				f.rowCount = cnt
+				continue
+			}
+
 			evalCtx := f.buildRowEvalMap(nil)
 			pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
 			pkVal := toStorageValue(pkAny)
@@ -715,6 +736,26 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 
 		case proc.OpDelete:
 			data := inst.Data.(*proc.DMLData)
+			if data.WhereCol != "" && !f.isPKCol(data.Table, data.WhereCol) {
+				data.WhereExpr = &proc.BinaryExpr{
+					Left:  &proc.ColumnRefExpr{Name: data.WhereCol},
+					Op:    proc.TokenEq,
+					Right: data.WhereVal,
+				}
+				cnt, err := f.execDeleteWhere(data)
+				if err != nil {
+					if len(f.catchStack) > 0 {
+						catchPC := f.catchStack[len(f.catchStack)-1]
+						f.catchStack = f.catchStack[:len(f.catchStack)-1]
+						pc = catchPC
+						continue
+					}
+					return nil, err
+				}
+				f.rowCount = cnt
+				continue
+			}
+
 			evalCtx := f.buildRowEvalMap(nil)
 			pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
 			pkVal := toStorageValue(pkAny)
@@ -1471,21 +1512,33 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 
 	evalCtx := f.buildRowEvalMap(nil)
 
-	if data.WhereCol != "" && data.WhereVal != nil && strings.EqualFold(data.WhereCol, "id") {
+	if data.WhereCol != "" && data.WhereVal != nil {
 		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
-		rec, err := f.tx.Get(data.Table, pkVal)
-		if err == nil {
-			if v, ok := rec[data.Column]; ok {
-				return v, nil
-			}
-			for k, v := range rec {
-				if strings.EqualFold(k, data.Column) {
-					return v, nil
+		if rec, err := f.tx.Get(data.Table, pkVal); err == nil {
+			colMatches := false
+			if v, ok := rec[data.WhereCol]; ok {
+				colMatches = (v.Compare(pkVal) == 0)
+			} else {
+				for k, v := range rec {
+					if strings.EqualFold(k, data.WhereCol) {
+						colMatches = (v.Compare(pkVal) == 0)
+						break
+					}
 				}
 			}
+			if colMatches {
+				if v, ok := rec[data.Column]; ok {
+					return v, nil
+				}
+				for k, v := range rec {
+					if strings.EqualFold(k, data.Column) {
+						return v, nil
+					}
+				}
+				return storage.NullValue(storage.TypeUnknown), nil
+			}
 		}
-		return storage.NullValue(storage.TypeUnknown), nil
 	}
 
 	cursor, err := f.tx.Scan(data.Table)

@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -126,7 +127,35 @@ func (m *MetricsCollector) FormatPrometheus(s *Server) string {
 	}
 	b.WriteString("# HELP sqlion_tables_total Total number of user tables in the database engine.\n")
 	b.WriteString("# TYPE sqlion_tables_total gauge\n")
-	b.WriteString(fmt.Sprintf("sqlion_tables_total %d\n", tblCount))
+	b.WriteString(fmt.Sprintf("sqlion_tables_total %d\n\n", tblCount))
+
+	// 9. Plan Cache Hit/Miss
+	var hits, misses int64
+	if s.planCache != nil {
+		hits, misses = s.planCache.Stats()
+	}
+	b.WriteString("# HELP sqlion_plan_cache_hits_total Total number of stored procedure execution plan cache hits.\n")
+	b.WriteString("# TYPE sqlion_plan_cache_hits_total counter\n")
+	b.WriteString(fmt.Sprintf("sqlion_plan_cache_hits_total %d\n", hits))
+	b.WriteString("# HELP sqlion_plan_cache_misses_total Total number of stored procedure execution plan cache misses.\n")
+	b.WriteString("# TYPE sqlion_plan_cache_misses_total counter\n")
+	b.WriteString(fmt.Sprintf("sqlion_plan_cache_misses_total %d\n\n", misses))
+
+	// 10. Memory and Goroutine statistics
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	b.WriteString("# HELP sqlion_memory_alloc_bytes Bytes of allocated heap objects currently in use.\n")
+	b.WriteString("# TYPE sqlion_memory_alloc_bytes gauge\n")
+	b.WriteString(fmt.Sprintf("sqlion_memory_alloc_bytes %d\n", mem.Alloc))
+	b.WriteString("# HELP sqlion_memory_sys_bytes Total bytes of memory obtained from the OS.\n")
+	b.WriteString("# TYPE sqlion_memory_sys_bytes gauge\n")
+	b.WriteString(fmt.Sprintf("sqlion_memory_sys_bytes %d\n", mem.Sys))
+	b.WriteString("# HELP sqlion_memory_heap_alloc_bytes Bytes of allocated heap memory.\n")
+	b.WriteString("# TYPE sqlion_memory_heap_alloc_bytes gauge\n")
+	b.WriteString(fmt.Sprintf("sqlion_memory_heap_alloc_bytes %d\n", mem.HeapAlloc))
+	b.WriteString("# HELP sqlion_goroutines Number of currently running Go routines.\n")
+	b.WriteString("# TYPE sqlion_goroutines gauge\n")
+	b.WriteString(fmt.Sprintf("sqlion_goroutines %d\n", runtime.NumGoroutine()))
 
 	return b.String()
 }

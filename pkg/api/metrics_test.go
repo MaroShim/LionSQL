@@ -72,6 +72,11 @@ func TestMetrics_PrometheusExposition(t *testing.T) {
 		"sqlion_transactions_total{type=\"commit\"}",
 		"sqlion_transactions_total{type=\"rollback\"}",
 		"sqlion_tables_total 1",
+		"sqlion_plan_cache_hits_total",
+		"sqlion_plan_cache_misses_total",
+		"sqlion_memory_alloc_bytes",
+		"sqlion_memory_sys_bytes",
+		"sqlion_goroutines",
 	}
 
 	for _, m := range requiredMetrics {
