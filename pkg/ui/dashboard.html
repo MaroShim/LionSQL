@@ -114,6 +114,17 @@
       color: var(--text);
     }
     .btn-secondary:hover { background: #475569; }
+    .btn-api-preview {
+      background: #6366f1;
+      color: #ffffff;
+      border: 1px solid #818cf8;
+      font-weight: 600;
+    }
+    .btn-api-preview:hover {
+      background: #4f46e5;
+      border-color: #a5b4fc;
+      box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+    }
     table {
       width: 100%;
       border-collapse: collapse;
@@ -293,16 +304,8 @@
       <button id="auth-action-btn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem; width: 100%;" onclick="logout()">Sign Out</button>
     </div>
     <nav>
-      <button class="nav-btn active" data-view="apikeys" onclick="switchView('apikeys')">
-        <span>Auth & API Keys</span>
-        <span class="badge" style="background:#4338ca; color:#c7d2fe;">AUTH</span>
-      </button>
-      <button class="nav-btn" data-view="query" onclick="switchView('query')">
-        <span>SQL Query Studio</span>
-        <span class="badge" style="background:#047857; color:#6ee7b7;">SQL</span>
-      </button>
-      <button class="nav-btn" data-view="tables" onclick="switchView('tables')">
-        <span>Tables & Records</span>
+      <button class="nav-btn active" data-view="tables" onclick="switchView('tables')">
+        <span>Table & Record</span>
         <span id="nav-tables-count">0</span>
       </button>
       <button class="nav-btn" data-view="procedures" onclick="switchView('procedures')">
@@ -310,20 +313,28 @@
         <span id="nav-procs-count">0</span>
       </button>
       <button class="nav-btn" data-view="webhooks" onclick="switchView('webhooks')">
-        <span>Webhooks</span>
+        <span>Web Hooks</span>
         <span id="nav-webhooks-count">0</span>
       </button>
       <button class="nav-btn" data-view="crons" onclick="switchView('crons')">
         <span>Cron Jobs</span>
         <span id="nav-crons-count">0</span>
       </button>
-      <button class="nav-btn" data-view="mail" onclick="switchView('mail')">
-        <span>Settings / Mail</span>
-        <span class="badge" style="background:#854d0e; color:#fef08a; font-size:0.65rem;">SMTP</span>
+      <button class="nav-btn" data-view="query" onclick="switchView('query')">
+        <span>SQL Query Studio</span>
+        <span class="badge" style="background:#047857; color:#6ee7b7;">SQL</span>
+      </button>
+      <button class="nav-btn" data-view="apikeys" onclick="switchView('apikeys')">
+        <span>Auth & API Keys</span>
+        <span class="badge" style="background:#4338ca; color:#c7d2fe;">AUTH</span>
       </button>
       <button class="nav-btn" data-view="sdk" onclick="switchView('sdk')">
         <span>Client SDK</span>
         <span class="badge" style="background:#0284c7; color:#bae6fd; font-size:0.65rem;">JS/TS</span>
+      </button>
+      <button class="nav-btn" data-view="mail" onclick="switchView('mail')">
+        <span>Settings / Mail</span>
+        <span class="badge" style="background:#854d0e; color:#fef08a; font-size:0.65rem;">SMTP</span>
       </button>
     </nav>
     <div style="padding: 12px 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
@@ -336,14 +347,13 @@
       <input type="file" id="backup-file-input" accept=".tar.gz,.tgz" style="display: none;" onchange="handleBackupFileUpload(event)" />
     </div>
     <div style="padding: 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border);">
-      Engine: <span id="engine-type" style="color: #60a5fa; font-weight: 600;">Detecting...</span><br>
-      PocketBase Style Single Binary
+      Engine: <span id="engine-type" style="color: #60a5fa; font-weight: 600;">Detecting...</span>
     </div>
   </aside>
 
   <main>
     <!-- View: Auth & API Keys -->
-    <div id="view-apikeys">
+    <div id="view-apikeys" style="display: none;">
       <div class="header-bar">
         <div>
           <h2>Authentication & API Keys</h2>
@@ -485,7 +495,7 @@
     </div>
 
     <!-- View: Tables -->
-    <div id="view-tables" style="display: none;">
+    <div id="view-tables">
       <div class="header-bar">
         <div>
           <h2>Tables & Records Studio</h2>
@@ -523,7 +533,7 @@
             <span style="font-size: 0.75rem; color: var(--text-muted);">Double-click any cell to edit inline (Enter to save, Esc to cancel)</span>
           </div>
           <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-            <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem; background: #312e81; color: #c7d2fe; border-color: #4f46e5;" onclick="openAPIPreviewModal()">&lt;/&gt; API Preview</button>
+            <button class="btn btn-api-preview" style="padding: 6px 12px; font-size: 0.8rem;" onclick="openAPIPreviewModal()">&lt;/&gt; API Preview</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('csv')">Export CSV</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('json')">Export JSON</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="openImportCSVModal()">Import CSV</button>
@@ -724,8 +734,8 @@ END;</textarea>
             Execute (Ambient ACID Transaction)
           </button>
 
-          <h4 style="font-size: 0.85rem; margin-top: 15px; color: var(--text-muted);">Transpiled JavaScript (Executed by Bytecode Engine):</h4>
-          <pre id="proc-js-preview" class="console-box" style="margin-top: 8px; color: #a5f3fc; max-height: 180px;">// JavaScript preview will appear here</pre>
+          <h4 style="font-size: 0.85rem; margin-top: 15px; color: var(--text-muted);">Compiled VDBE Bytecode (Executed by Virtual Machine):</h4>
+          <pre id="proc-js-preview" class="console-box" style="margin-top: 8px; color: #a5f3fc; max-height: 180px;">// Bytecode disassembly will appear here</pre>
 
           <h4 style="font-size: 0.85rem; margin-top: 15px; color: var(--text-muted);">Execution Result & Logs:</h4>
         <div id="console-output" class="console-box" style="margin-top: 8px;">Ready.</div>
