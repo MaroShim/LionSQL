@@ -76,7 +76,23 @@ SQLion adopts **Instance-Level Isolation (Process / Container per Database)** as
 
 ---
 
-## 4. Engineering Guidelines & Development Pipeline
+## 4. Core Architectural Invariant: Transaction Isolation & Concurrency Model
+
+SQLion defines **Non-Blocking Snapshot Isolation / Read Committed with Optimistic/Hazard Concurrency Control** as its canonical transaction processing invariant across both storage engines:
+
+1. **Architectural Principles**:
+   - **Non-Blocking Reads (Readers Never Block Writers, Writers Never Block Readers)**: Both backends completely eliminate traditional 2PL (Two-Phase Locking) read locks. Queries always read from consistent snapshots without acquiring shared locks.
+   - **Private Workspace Isolation**: All mutation operations (INSERT, UPDATE, DELETE) are buffered inside transaction-private workspaces until commit, guaranteeing zero dirty reads and zero uncommitted leakage.
+   - **Storage Engine Concurrency Profiles**:
+     - **In-Memory OCC (`pkg/storage/memengine`)**: Pure OCC (Optimistic Concurrency Control) using per-record monotonic integer versions (`Version uint64`). Concurrency conflicts are validated atomically at the commit phase (`Commit()`), triggering immediate fail-fast rollback on write-write skew (`ErrWriteConflict`).
+     - **WiredTiger MVCC (`pkg/storage/wiredtiger`)**: Disk-based MVCC B+Tree with hazard pointers and transaction timestamps. Concurrent conflicting writes on identical keys are detected during write/commit operations (`WT_ROLLBACK`).
+2. **Permanent Specification Invariant**:
+   - **Standard Isolation Level**: Canonical Snapshot / Read Committed semantics are enforced across all wire protocols (PGWire, TDS, HTTP).
+   - **Pessimistic Read Locks (`READ UNCOMMITTED`, Heavy Distributed 2PL, SSI Graph Tracking)**: Explicitly **Spec Out / Deferred**. Advanced isolation levels that introduce false abort penalties, serializable dependency graphs, or dirty read compromises are excluded in favor of high-throughput non-blocking OLTP execution.
+
+---
+
+## 5. Engineering Guidelines & Development Pipeline
 
 ### 3-Stage Verification Pipeline (Build ➔ Test ➔ Commit)
 All modifications, refactoring, and feature additions must strictly pass the following 3 stages before committing:

@@ -17,6 +17,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Formally codified instance-level isolation (Process / Container per Database) in `GEMINI.md` as a permanent core architectural invariant.
   - Specified out `USE <dbname>` catalog multiplexing in favor of physical process/container separation, guaranteeing zero-shared blast radius, independent CPU/RAM/descriptor limits, crash resilience, and eliminating cross-database catalog lock contention.
 
+- **Architectural Invariant: Transaction Isolation & Concurrency Model**:
+  - Formally codified canonical Non-Blocking Snapshot Isolation / Read Committed with Optimistic/Hazard Concurrency Control in `GEMINI.md`.
+  - Readers never block writers and writers never block readers, eliminating traditional 2PL shared read locks.
+  - Formally specified out/deferred complex SSI dependency graphs and `READ UNCOMMITTED` levels in favor of high-throughput non-blocking OLTP execution.
+
 ### Performance
 - **VDBE Bytecode Engine Primary Key O(1) Fast-Path Optimization (`pkg/proc/runtime/vm.go`, `pkg/proc/parser.go`, `cmd/tpcc_vdbe`)**:
   - Replaced hardcoded `"id"` column checks in `execSelectInto`, `OpUpdate`, and `OpDelete` with dynamic primary key metadata resolution via `isPKCol` and `extractSimpleEq`.
