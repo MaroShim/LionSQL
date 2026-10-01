@@ -14,20 +14,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented an O(1) point lookup fast-path using `f.tx.Get(table, pkVal)` in `execSelectInto`, `execUpdateWhere`, and `execDeleteWhere`, eliminating table-wide full scans on non-`id` primary key lookups (`w_id`, `d_key`, `c_key`, `s_key`, `no_key`).
   - Configured `executor.SetTableGetter(eng.GetTable)` in `cmd/tpcc_vdbe` to enable runtime schema awareness.
   - Boosted standalone TPC-C VDBE bytecode benchmark throughput from 93.7 TPS (2,519 tpmC) to **16,823.03 TPS (453,336.42 tpmC)** (180x speedup), reaching 51.5% of raw hand-written compiled Go storage API performance.
-- **Zero-Copy Streaming Cursor (`pkg/storage/memengine`)**:
-  - Eliminated full-table row materialization bottlenecks in `Scan`, `IndexScan`, and `IndexOnlyScan`.
-  - Replaced intermediate `merged := make(map[string]storage.Record)` map and `records := make([]storage.Record, len(keys))` slice allocations with a streaming cursor (`memCursor`) that retains sorted primary keys and resolves records lazily on demand during `Next()`.
-  - Added on-demand record synthesis via `resolver` closure for `IndexOnlyScan` to eliminate pre-allocation of covering index records.
-  - Achieved ~80% reduction in memory allocations (from 79,216 B/op down to 16,480 B/op) and 75% fewer allocations (from 8 down to 2 allocs/op) in full-scan benchmarks (`BenchmarkMemCursor_Scan`).
-
-### Refactored
-- **Monolithic SQL Execution Engine Decomposition (`pkg/api`)**:
-  - Decomposed the 6,379-line monolith `pkg/api/sqlexec.go` into 5 high-cohesion, domain-specific modules without altering public interfaces or runtime semantics:
-    - `pkg/api/sqlexec.go` (848 lines): Core session orchestrator, transaction lifecycle management, and statement dispatchers.
-    - `pkg/api/sqlexec_ddl.go` (618 lines): Schema management (`CREATE`/`DROP`/`TRUNCATE TABLE`, `CREATE`/`DROP INDEX`, `CREATE PROCEDURE`/`FUNCTION`/`TRIGGER`) and DDL definition parsers.
-    - `pkg/api/sqlexec_dml.go` (3,706 lines): Query execution engine (`INSERT`, `EXPLAIN [ANALYZE]`, CTEs, Volcano execution, scalar evaluation, VDBE fast-path, set operations, joins, aggregations, `UPDATE`, `DELETE`, and where predicate evaluation).
-    - `pkg/api/sqlexec_procs.go` (573 lines): T-SQL procedure invocation, parameter binding, and built-in system stored procedures (`sp_who`, `sp_help`, `sp_spaceused`, `sp_tables`, `sp_columns`, etc.).
-    - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
 - **Dynamic SQL Execution & `sp_executesql` Engine (`pkg/api`)**:
@@ -55,6 +41,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Validates dual-parser architecture (Primary Pratt fast-path & Secondary ANTLR fallback) and VDBE bytecode compiler/VM execution.
   - Verifies TLS cryptography (dynamic self-signed certificate generation / keypair validity) and authentication hashing subsystem.
   - Added unit test suite in `cmd/server/doctor_test.go` verifying 100% test pass rate with 0 failures.
+
+## [0.9.0] - 2026-09-30
+
+### Performance
+- **Zero-Copy Streaming Cursor (`pkg/storage/memengine`)**:
+  - Eliminated full-table row materialization bottlenecks in `Scan`, `IndexScan`, and `IndexOnlyScan`.
+  - Replaced intermediate `merged := make(map[string]storage.Record)` map and `records := make([]storage.Record, len(keys))` slice allocations with a streaming cursor (`memCursor`) that retains sorted primary keys and resolves records lazily on demand during `Next()`.
+  - Added on-demand record synthesis via `resolver` closure for `IndexOnlyScan` to eliminate pre-allocation of covering index records.
+  - Achieved ~80% reduction in memory allocations (from 79,216 B/op down to 16,480 B/op) and 75% fewer allocations (from 8 down to 2 allocs/op) in full-scan benchmarks (`BenchmarkMemCursor_Scan`).
+
+### Added
 - **Prometheus `/metrics` Observability & Plan Cache Statistics (`pkg/api`, `pkg/proc`)**:
   - Enhanced Prometheus `/metrics` endpoint with runtime Go metrics: `sqlion_memory_alloc_bytes`, `sqlion_memory_sys_bytes`, `sqlion_memory_heap_alloc_bytes`, and `sqlion_goroutines`.
   - Added atomic execution plan cache hit/miss tracking (`sqlion_plan_cache_hits_total`, `sqlion_plan_cache_misses_total`) in `PlanCache` (`pkg/proc/cache.go`).
@@ -139,6 +136,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added text dispatchers in `pkg/api/sqlexec.go` for `SAVE TRANSACTION <name>`, `SAVE TRAN <name>`, `SAVEPOINT <name>`, and `ROLLBACK TRANSACTION <name>`, `ROLLBACK TRAN <name>`, `ROLLBACK TO SAVEPOINT <name>`.
   - Extended procedural lexer, parser, AST, compiler, and VDBE virtual machine with `OpTxSavepoint` and `OpTxRollbackTo` to support nested savepoints inside T-SQL stored procedures.
   - Added comprehensive verification test suite in `pkg/api/savepoint_test.go`.
+## [0.8.0] - 2026-09-29
+
+### Refactored
+- **Monolithic SQL Execution Engine Decomposition (`pkg/api`)**:
+  - Decomposed the 6,379-line monolith `pkg/api/sqlexec.go` into 5 high-cohesion, domain-specific modules without altering public interfaces or runtime semantics:
+    - `pkg/api/sqlexec.go` (848 lines): Core session orchestrator, transaction lifecycle management, and statement dispatchers.
+    - `pkg/api/sqlexec_ddl.go` (618 lines): Schema management (`CREATE`/`DROP`/`TRUNCATE TABLE`, `CREATE`/`DROP INDEX`, `CREATE PROCEDURE`/`FUNCTION`/`TRIGGER`) and DDL definition parsers.
+    - `pkg/api/sqlexec_dml.go` (3,706 lines): Query execution engine (`INSERT`, `EXPLAIN [ANALYZE]`, CTEs, Volcano execution, scalar evaluation, VDBE fast-path, set operations, joins, aggregations, `UPDATE`, `DELETE`, and where predicate evaluation).
+    - `pkg/api/sqlexec_procs.go` (573 lines): T-SQL procedure invocation, parameter binding, and built-in system stored procedures (`sp_who`, `sp_help`, `sp_spaceused`, `sp_tables`, `sp_columns`, etc.).
+    - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
+
+### Added
 - **Dynamic SQL Execution Engine & `sp_executesql` Text Dispatcher (`pkg/api`, `pkg/proc`)**:
   - Implemented T-SQL dynamic query execution supporting `EXEC ('...')`, `EXEC (N'...')`, and session variable evaluations `EXEC (@sqlVar)`.
   - Added native `sp_executesql` text dispatcher in `pkg/api/sqlexec_procs.go` supporting Unicode literals (`N'...'`), parameter declarations (`@params`), and named (`@id = 1`) or positional parameter bindings.
@@ -214,6 +223,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Integrated constant folding into Cost-Based Optimizer (`pkg/planner/planner.go`) in `FromAST` and `ParseSelect`, exposing folded literal predicates to secondary index scanning and CBO selectivity estimation.
   - Integrated constant folding into Volcano `FilterIterator` (`pkg/execution/filter.go`), short-circuiting tautological conditions (`1=1`, `true`) and unsatisfiable conditions (`1=0`, `false`) in \(O(1)\).
   - Added unit test suite in `pkg/proc/fold_test.go` and end-to-end integration test suite in `pkg/api/constant_folding_test.go`.
+
+## [0.7.0] - 2026-09-28
+
+### Added
 - **Prometheus Metrics (`/metrics`) & Slow Query Logging (`pkg/api`)**:
   - Implemented lock-free atomic `MetricsCollector` (`pkg/api/metrics.go`) tracking high-frequency server diagnostics, including uptime, active connections, query counts by command type (`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `CREATE TABLE`, etc.), query error counts, cumulative query duration, slow query counts, transaction commit/rollback counts, and total table counts.
   - Implemented standard Prometheus text exposition format (version 0.0.4) on `GET /metrics`.
@@ -292,19 +305,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented pre-flight PID verification preventing duplicate server instances from launching on the same data directory.
   - Automatically registered and cleaned up PID file for foreground processes, preventing lock contention with background daemons.
   - Intercepted storage lock collisions (`Resource busy`, `code 16`) to display a clear, user-friendly diagnostic message rather than dumping raw Cgo fcntl lock errors.
-
-### Fixed
-- **Pre-Flight TCP Port Collision Detection & Bind Crash Defense (`cmd/server`)**:
-  - Implemented `checkPortAvailable` pre-flight network checks across HTTP (`:8090`), PGWire (`:5433`), and TDS (`:1433`) listeners before initializing storage backends.
-  - Intercepted port collision errors (`bind: address already in use`) across different working directories (CWD), displaying actionable user guidance (`./bin/server -status`, `-stop`, `-restart`) and exiting cleanly without dumping raw unhandled stack traces or half-initializing storage engines.
-- **WiredTiger Legacy Table Format Compatibility & SIGBUS Crash Defense (`pkg/storage/wiredtiger`)**:
-  - Fixed a critical `SIGBUS` memory fault occurring during table scans and record retrievals when reading tables created with `value_format=S` (JSON string).
-  - Dynamically detected cursor value format (`value_format=S` vs `value_format=u`), appropriately passing `const char**` with `strlen()` for string format and `WT_ITEM` for binary raw item format.
-  - Implemented `serializeRecord` to safely null-terminate JSON payloads on legacy tables while using MessagePack on raw byte tables.
-
-## [0.7.0] - 2026-09-28
-
-### Added
 - **VDBE Secondary Index Opcode `OpIndexScan` & Search Optimization (`pkg/proc`, `pkg/proc/runtime`)**:
   - Introduced `OpIndexScan` opcode in `pkg/proc/bytecode.go` with `IndexScanData` metadata struct for secondary index point and range scans.
   - Implemented `OpIndexScan` in `pkg/proc/runtime/vm.go` leveraging `storage.Transaction.IndexScan` to scan records within bounds.
