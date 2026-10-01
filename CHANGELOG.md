@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Comprehensive `pg_catalog` & `information_schema` Virtual Views for PostgreSQL GUI Tools and ORM Compatibility (`pkg/api/sqlexec_pgcatalog.go`, `pkg/api/sqlexec_dbcc.go`, `pkg/wire`)**:
+  - Implemented virtual system views in `pg_catalog` (`pg_database`, `pg_namespace`, `pg_class`, `pg_type`, `pg_attribute`, `pg_constraint`, `pg_index`, `pg_roles`, `pg_user`, `pg_am`, `pg_settings`, `pg_stat_user_tables`, `pg_stat_user_indexes`, `pg_statio_user_tables`, `pg_locks`, `pg_stat_activity`, `pg_proc`, `pg_views`, and related stubs) with deterministic OIDs and canonical PostgreSQL data type mappings.
+  - Implemented virtual views in `information_schema` (`tables`, `columns`, `schemata`, `routines`, `table_constraints`, `key_column_usage`, `referential_constraints`, `constraint_column_usage`, `views`, and role grants).
+  - Accurately generates PRIMARY KEY (`contype='p'`), UNIQUE (`contype='u'`), and FOREIGN KEY (`contype='f'`) constraints to render schema relationship diagrams in GUI tools.
+  - Enables out-of-the-box metadata introspection, schema navigation, and query execution for GUI tools (DBeaver, DataGrip, psql, pgAdmin) and ORM reflection engines (SQLAlchemy, Hibernate, GORM).
+  - Extracted shared `buildVirtualCatalogResult` helper for unified projection, WHERE filtering, ORDER BY sorting, and LIMIT trimming.
+  - Added end-to-end integration tests in `pkg/api/pgcatalog_test.go` and `pkg/wire/server_test.go`.
+
 ## [0.10.0] - 2026-10-01
 
 ### Changed

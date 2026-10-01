@@ -562,5 +562,85 @@ func TestWire_PlanCacheSharing(t *testing.T) {
 	}
 }
 
+func TestWire_PgCatalogAndInformationSchema(t *testing.T) {
+	srv, eng, _ := setupTestWireServer(t)
+	defer eng.Close()
+	defer srv.Close()
 
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
 
+	go srv.handleConnection(serverConn)
+
+	// Startup
+	startupBuf := make([]byte, 8)
+	binary.BigEndian.PutUint32(startupBuf[:4], 8)
+	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
+	_, _ = clientConn.Write(startupBuf)
+
+	// Wait for Ready
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+		if header[0] == MsgReadyForQuery {
+			break
+		}
+	}
+
+	// 1. Query pg_catalog.pg_class
+	q := "SELECT relname FROM pg_catalog.pg_class WHERE relname = 'accounts'\x00"
+	qBuf := make([]byte, 1+4+len(q))
+	qBuf[0] = 'Q'
+	binary.BigEndian.PutUint32(qBuf[1:5], uint32(4+len(q)))
+	copy(qBuf[5:], q)
+	_, _ = clientConn.Write(qBuf)
+
+	foundRow := false
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+		if header[0] == MsgDataRow {
+			foundRow = true
+		}
+		if header[0] == MsgReadyForQuery {
+			break
+		}
+	}
+	if !foundRow {
+		t.Fatalf("expected to receive DataRow for pg_class query")
+	}
+
+	// 2. Query information_schema.columns
+	q2 := "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'accounts'\x00"
+	q2Buf := make([]byte, 1+4+len(q2))
+	q2Buf[0] = 'Q'
+	binary.BigEndian.PutUint32(q2Buf[1:5], uint32(4+len(q2)))
+	copy(q2Buf[5:], q2)
+	_, _ = clientConn.Write(q2Buf)
+
+	rowCount := 0
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+		if header[0] == MsgDataRow {
+			rowCount++
+		}
+		if header[0] == MsgReadyForQuery {
+			break
+		}
+	}
+	// accounts has 3 columns: id, holder, balance
+	if rowCount != 3 {
+		t.Fatalf("expected 3 rows from information_schema.columns, got %d", rowCount)
+	}
+}
