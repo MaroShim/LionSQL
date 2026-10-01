@@ -285,10 +285,60 @@ func (s *Server) handleConnection(conn net.Conn) {
 		}
 	}
 
+	var startupPayload []byte
 	startupLen := binary.BigEndian.Uint32(buf[:4])
 	if startupLen > 8 {
-		payload := make([]byte, startupLen-8)
-		if _, err := io.ReadFull(conn, payload); err != nil {
+		startupPayload = make([]byte, startupLen-8)
+		if _, err := io.ReadFull(conn, startupPayload); err != nil {
+			return
+		}
+	}
+
+	startupParams := parseStartupParams(startupPayload)
+	username := startupParams["user"]
+	if username == "" {
+		username = "postgres"
+	}
+
+	// 2. Authentication Handshake
+	authSvc := s.apiServer.AuthService()
+	needsPassword := false
+	if authSvc != nil {
+		if s.apiServer.IsAuthEnabled() {
+			needsPassword = true
+		} else if login, err := authSvc.GetLogin(username); err == nil && login != nil && login.PasswordHash != "" {
+			needsPassword = true
+		}
+	}
+
+	if needsPassword {
+		// Request cleartext password from client
+		if err := WriteAuthCleartextPassword(conn); err != nil {
+			return
+		}
+
+		// Read client's PasswordMessage: 1 byte msgType ('p') + 4 bytes msgLen + password payload
+		pwHeader := make([]byte, 5)
+		if _, err := io.ReadFull(conn, pwHeader); err != nil {
+			return
+		}
+		if pwHeader[0] != 'p' {
+			_ = WriteErrorWithCode(conn, fmt.Sprintf("expected password response, got %q", string(pwHeader[0])), "08P01")
+			return
+		}
+		pwLen := binary.BigEndian.Uint32(pwHeader[1:5])
+		if pwLen < 4 {
+			return
+		}
+		pwPayload := make([]byte, pwLen-4)
+		if _, err := io.ReadFull(conn, pwPayload); err != nil {
+			return
+		}
+		clientPassword := string(bytes.TrimRight(pwPayload, "\x00"))
+
+		// Authenticate login
+		if _, err := authSvc.AuthenticateLogin(username, clientPassword); err != nil {
+			_ = WriteErrorWithCode(conn, fmt.Sprintf("password authentication failed for user %q", username), "28P01")
 			return
 		}
 	}
@@ -304,19 +354,23 @@ func (s *Server) handleConnection(conn net.Conn) {
 		s.mu.Unlock()
 	}()
 
-	// 2. Send Auth OK, BackendKeyData & Server Parameters
+	// Send Auth OK, BackendKeyData & Server Parameters
 	if err := WriteAuthOK(conn); err != nil {
 		return
 	}
 	if err := WriteBackendKeyData(conn, pid, secretKey); err != nil {
 		return
 	}
+
+	// Bind authenticated user to session
+	s.apiServer.SetSessionUser(sessID, username)
+
 	_ = WriteParameterStatus(conn, "server_version", "15.0 (SQLion)")
 	_ = WriteParameterStatus(conn, "server_encoding", "UTF8")
 	_ = WriteParameterStatus(conn, "client_encoding", "UTF8")
-	_ = WriteParameterStatus(conn, "application_name", "")
+	_ = WriteParameterStatus(conn, "application_name", startupParams["application_name"])
 	_ = WriteParameterStatus(conn, "is_superuser", "on")
-	_ = WriteParameterStatus(conn, "session_authorization", "postgres")
+	_ = WriteParameterStatus(conn, "session_authorization", username)
 	_ = WriteParameterStatus(conn, "integer_datetimes", "on")
 	_ = WriteParameterStatus(conn, "DateStyle", "ISO, MDY")
 	_ = WriteParameterStatus(conn, "IntervalStyle", "postgres")
@@ -771,4 +825,24 @@ func inferPgOID(v any) int32 {
 	default:
 		return 25 // text
 	}
+}
+
+func parseStartupParams(payload []byte) map[string]string {
+	params := make(map[string]string)
+	if len(payload) == 0 {
+		return params
+	}
+	r := bytes.NewReader(payload)
+	for {
+		key, err := readCString(r)
+		if err != nil || key == "" {
+			break
+		}
+		val, err := readCString(r)
+		if err != nil {
+			break
+		}
+		params[key] = val
+	}
+	return params
 }

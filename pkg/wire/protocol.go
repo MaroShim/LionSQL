@@ -95,6 +95,27 @@ func WriteAuthOK(w io.Writer) error {
 	return err
 }
 
+// WriteAuthCleartextPassword sends AuthenticationCleartextPassword message (code 3).
+func WriteAuthCleartextPassword(w io.Writer) error {
+	buf := make([]byte, 9)
+	buf[0] = MsgAuth
+	binary.BigEndian.PutUint32(buf[1:5], 8)
+	binary.BigEndian.PutUint32(buf[5:9], 3) // CleartextPassword
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteAuthMD5Password sends AuthenticationMD5Password message (code 5) with a 4-byte random salt.
+func WriteAuthMD5Password(w io.Writer, salt [4]byte) error {
+	buf := make([]byte, 13)
+	buf[0] = MsgAuth
+	binary.BigEndian.PutUint32(buf[1:5], 12)
+	binary.BigEndian.PutUint32(buf[5:9], 5) // MD5Password
+	copy(buf[9:13], salt[:])
+	_, err := w.Write(buf)
+	return err
+}
+
 // WriteParameterStatus sends a ParameterStatus key-value pair.
 func WriteParameterStatus(w io.Writer, key, val string) error {
 	payloadLen := 4 + len(key) + 1 + len(val) + 1

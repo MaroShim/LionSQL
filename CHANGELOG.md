@@ -23,6 +23,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added runtime column data type OID inference (`inferPgOID`) for Simple Query and Extended Query `RowDescription` packets.
   - Added full test coverage in `pkg/wire/server_test.go` (`TestWire_TransactionStatusAndSQLState`).
 
+- **PostgreSQL Wire Protocol Password Authentication Handshake (`pkg/wire`, `pkg/auth`, `pkg/api`)**:
+  - Implemented PostgreSQL v3 StartupMessage parameter parsing (`parseStartupParams`) for `user`, `database`, and `application_name`.
+  - Added `AuthenticationCleartextPassword` (`'R'` code 3) and `AuthenticationMD5Password` (`'R'` code 5) protocol messages.
+  - Integrated with `pkg/auth` RBAC server login verification (`AuthenticateLogin`), automatically challenging passwords for secured users and rejecting invalid credentials with SQLSTATE `28P01`.
+  - Seamlessly bound authenticated username directly to `ClientSession.User` (`SetSessionUser`) for downstream RBAC table permission enforcement.
+  - Added comprehensive integration tests in `pkg/wire/server_test.go` (`TestWire_PasswordAuthentication`).
+
 ## [0.10.0] - 2026-10-01
 
 ### Changed

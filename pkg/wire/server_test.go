@@ -763,3 +763,148 @@ func TestWire_TransactionStatusAndSQLState(t *testing.T) {
 		t.Fatalf("expected status 'I' after COMMIT, got %c", status)
 	}
 }
+
+func TestWire_PasswordAuthentication(t *testing.T) {
+	srv, eng, cat := setupTestWireServer(t)
+	defer eng.Close()
+	defer srv.Close()
+
+	// Register login with password in auth service
+	authSvc := srv.apiServer.AuthService()
+	_, err := authSvc.CreateLogin("alice", "mypassword123")
+	if err != nil {
+		t.Fatalf("failed to create login: %v", err)
+	}
+
+	// Helper to build StartupMessage with parameters
+	buildStartup := func(params map[string]string) []byte {
+		var payload []byte
+		for k, v := range params {
+			payload = append(payload, []byte(k)...)
+			payload = append(payload, 0)
+			payload = append(payload, []byte(v)...)
+			payload = append(payload, 0)
+		}
+		payload = append(payload, 0) // terminating zero
+		msgLen := 4 + 4 + len(payload)
+		buf := make([]byte, msgLen)
+		binary.BigEndian.PutUint32(buf[:4], uint32(msgLen))
+		binary.BigEndian.PutUint32(buf[4:8], 196608) // 3.0
+		copy(buf[8:], payload)
+		return buf
+	}
+
+	// Subtest 1: Successful Password Authentication
+	t.Run("Success", func(t *testing.T) {
+		clientConn, serverConn := net.Pipe()
+		defer clientConn.Close()
+		defer serverConn.Close()
+
+		go srv.handleConnection(serverConn)
+
+		// Send Startup with user: alice
+		startup := buildStartup(map[string]string{"user": "alice", "database": "sqlion"})
+		if _, err := clientConn.Write(startup); err != nil {
+			t.Fatalf("failed to send startup: %v", err)
+		}
+
+		// Read Auth Request: expect MsgAuth ('R') code 3 (CleartextPassword)
+		header := make([]byte, 5)
+		if _, err := io.ReadFull(clientConn, header); err != nil {
+			t.Fatalf("failed to read auth request header: %v", err)
+		}
+		if header[0] != MsgAuth {
+			t.Fatalf("expected MsgAuth 'R', got %c", header[0])
+		}
+		authPayload := make([]byte, 4)
+		if _, err := io.ReadFull(clientConn, authPayload); err != nil {
+			t.Fatalf("failed to read auth code: %v", err)
+		}
+		authCode := binary.BigEndian.Uint32(authPayload)
+		if authCode != 3 {
+			t.Fatalf("expected CleartextPassword code 3, got %d", authCode)
+		}
+
+		// Send PasswordMessage ('p') with correct password
+		pwMsg := "mypassword123\x00"
+		pwBuf := make([]byte, 1+4+len(pwMsg))
+		pwBuf[0] = 'p'
+		binary.BigEndian.PutUint32(pwBuf[1:5], uint32(4+len(pwMsg)))
+		copy(pwBuf[5:], pwMsg)
+		if _, err := clientConn.Write(pwBuf); err != nil {
+			t.Fatalf("failed to send password: %v", err)
+		}
+
+		// Read AuthOK ('R' code 0)
+		if _, err := io.ReadFull(clientConn, header); err != nil {
+			t.Fatalf("failed to read auth ok header: %v", err)
+		}
+		if header[0] != MsgAuth {
+			t.Fatalf("expected MsgAuth 'R' for AuthOK, got %c", header[0])
+		}
+		if _, err := io.ReadFull(clientConn, authPayload); err != nil {
+			t.Fatalf("failed to read auth ok code: %v", err)
+		}
+		if binary.BigEndian.Uint32(authPayload) != 0 {
+			t.Fatalf("expected AuthOK code 0, got %d", binary.BigEndian.Uint32(authPayload))
+		}
+
+		// Drain until ReadyForQuery ('Z')
+		for {
+			h := make([]byte, 5)
+			if _, err := io.ReadFull(clientConn, h); err != nil {
+				t.Fatalf("failed to drain until ready: %v", err)
+			}
+			msgLen := binary.BigEndian.Uint32(h[1:5])
+			p := make([]byte, msgLen-4)
+			if _, err := io.ReadFull(clientConn, p); err != nil {
+				t.Fatalf("failed to read payload: %v", err)
+			}
+			if h[0] == MsgReadyForQuery {
+				break
+			}
+		}
+	})
+
+	// Subtest 2: Failed Password Authentication
+	t.Run("Failure", func(t *testing.T) {
+		clientConn, serverConn := net.Pipe()
+		defer clientConn.Close()
+		defer serverConn.Close()
+
+		go srv.handleConnection(serverConn)
+
+		// Send Startup with user: alice
+		startup := buildStartup(map[string]string{"user": "alice", "database": "sqlion"})
+		_, _ = clientConn.Write(startup)
+
+		// Read Auth Request (code 3)
+		header := make([]byte, 9)
+		_, _ = io.ReadFull(clientConn, header)
+
+		// Send wrong password
+		pwMsg := "wrong_password\x00"
+		pwBuf := make([]byte, 1+4+len(pwMsg))
+		pwBuf[0] = 'p'
+		binary.BigEndian.PutUint32(pwBuf[1:5], uint32(4+len(pwMsg)))
+		copy(pwBuf[5:], pwMsg)
+		_, _ = clientConn.Write(pwBuf)
+
+		// Expect ErrorResponse ('E') with SQLSTATE '28P01'
+		errHeader := make([]byte, 5)
+		if _, err := io.ReadFull(clientConn, errHeader); err != nil {
+			t.Fatalf("failed to read error header: %v", err)
+		}
+		if errHeader[0] != MsgErrorResponse {
+			t.Fatalf("expected MsgErrorResponse 'E', got %c", errHeader[0])
+		}
+		errLen := binary.BigEndian.Uint32(errHeader[1:5])
+		errPayload := make([]byte, errLen-4)
+		_, _ = io.ReadFull(clientConn, errPayload)
+		if !strings.Contains(string(errPayload), "28P01") {
+			t.Fatalf("expected 28P01 in error response, got %q", string(errPayload))
+		}
+	})
+
+	_ = cat
+}

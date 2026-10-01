@@ -170,6 +170,11 @@ func (s *Server) AuthService() *auth.AuthService {
 	return s.auth
 }
 
+// IsAuthEnabled reports whether RBAC authentication and permission checks are enforced.
+func (s *Server) IsAuthEnabled() bool {
+	return s.enableAuth
+}
+
 // Executor returns the underlying runtime VM executor.
 func (s *Server) Executor() *runtime.Executor {
 	return s.executor
@@ -402,6 +407,22 @@ func (s *Server) GetSessionTxStatus(id string) byte {
 		return 'E'
 	}
 	return 'T'
+}
+
+// SetSessionUser updates the active user principal on an interactive session.
+func (s *Server) SetSessionUser(id, user string) {
+	if id == "" || id == "default" {
+		return
+	}
+	s.sessMu.RLock()
+	cs, exists := s.sessions[id]
+	s.sessMu.RUnlock()
+	if exists && cs != nil {
+		cs.mu.Lock()
+		cs.User = user
+		cs.OriginalUser = user
+		cs.mu.Unlock()
+	}
 }
 
 // ActiveQueryInfo represents snapshot metadata of an in-flight query.
