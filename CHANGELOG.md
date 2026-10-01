@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- **Open Source Licensing: Transition to GNU Affero General Public License v3 (AGPL-3.0-or-later)**:
+  - Updated project license from GPL-2.0/GPL-3.0 to GNU Affero General Public License v3 (`AGPL-3.0-or-later`) across `LICENSE` and `README.md`.
+  - Added copyleft network interaction clause protecting network server deployment, wire protocols (:5433, :1433, :8090), and hosted DBaaS services against proprietary cloud free-riding.
+  - Formally documented dual-licensing path for enterprise deployments and proprietary software embedding.
+
 ### Performance
 - **VDBE Bytecode Engine Primary Key O(1) Fast-Path Optimization (`pkg/proc/runtime/vm.go`, `pkg/proc/parser.go`, `cmd/tpcc_vdbe`)**:
   - Replaced hardcoded `"id"` column checks in `execSelectInto`, `OpUpdate`, and `OpDelete` with dynamic primary key metadata resolution via `isPKCol` and `extractSimpleEq`.
