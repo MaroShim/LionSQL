@@ -1,0 +1,229 @@
+package api_test
+
+import (
+	"testing"
+)
+
+func TestPivot_BasicSum(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	stmts := []string{
+		"CREATE TABLE quarterly_sales (id INT PRIMARY KEY, year INT, quarter VARCHAR(10), amount INT)",
+		"INSERT INTO quarterly_sales VALUES (1, 2023, 'Q1', 100)",
+		"INSERT INTO quarterly_sales VALUES (2, 2023, 'Q2', 150)",
+		"INSERT INTO quarterly_sales VALUES (3, 2023, 'Q3', 200)",
+		"INSERT INTO quarterly_sales VALUES (4, 2023, 'Q4', 250)",
+		"INSERT INTO quarterly_sales VALUES (5, 2024, 'Q1', 120)",
+		"INSERT INTO quarterly_sales VALUES (6, 2024, 'Q2', 180)",
+		"INSERT INTO quarterly_sales VALUES (7, 2024, 'Q3', 220)",
+		"INSERT INTO quarterly_sales VALUES (8, 2024, 'Q4', 300)",
+	}
+	for _, stmt := range stmts {
+		if _, err := server.ExecuteSQL(stmt); err != nil {
+			t.Fatalf("setup failed (%q): %v", stmt, err)
+		}
+	}
+
+	query := `
+		SELECT year, [Q1], [Q2], [Q3], [Q4]
+		FROM (
+			SELECT year, quarter, amount FROM quarterly_sales
+		) AS src
+		PIVOT (
+			SUM(amount)
+			FOR quarter IN ([Q1], [Q2], [Q3], [Q4])
+		) AS pvt
+		ORDER BY year ASC;
+	`
+	res, err := server.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("PIVOT query failed: %v", err)
+	}
+
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d: %v", len(res.Rows), res.Rows)
+	}
+
+	// 2023 row
+	row2023 := res.Rows[0]
+	if row2023["Q1"] != int64(100) || row2023["Q2"] != int64(150) || row2023["Q3"] != int64(200) || row2023["Q4"] != int64(250) {
+		t.Errorf("2023 unexpected row values: %v", row2023)
+	}
+
+	// 2024 row
+	row2024 := res.Rows[1]
+	if row2024["Q1"] != int64(120) || row2024["Q2"] != int64(180) || row2024["Q3"] != int64(220) || row2024["Q4"] != int64(300) {
+		t.Errorf("2024 unexpected row values: %v", row2024)
+	}
+}
+
+func TestPivot_CountAndDirectTable(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	stmts := []string{
+		"CREATE TABLE emp_dept (id INT PRIMARY KEY, dept VARCHAR(30), level VARCHAR(10))",
+		"INSERT INTO emp_dept VALUES (1, 'Engineering', 'Junior')",
+		"INSERT INTO emp_dept VALUES (2, 'Engineering', 'Junior')",
+		"INSERT INTO emp_dept VALUES (3, 'Engineering', 'Senior')",
+		"INSERT INTO emp_dept VALUES (4, 'Marketing',   'Junior')",
+		"INSERT INTO emp_dept VALUES (5, 'Marketing',   'Senior')",
+		"INSERT INTO emp_dept VALUES (6, 'Marketing',   'Senior')",
+		"INSERT INTO emp_dept VALUES (7, 'HR',          'Junior')",
+	}
+	for _, stmt := range stmts {
+		if _, err := server.ExecuteSQL(stmt); err != nil {
+			t.Fatalf("setup failed (%q): %v", stmt, err)
+		}
+	}
+
+	// Direct table source without derived subquery
+	query := `
+		SELECT dept, [Junior], [Senior]
+		FROM emp_dept
+		PIVOT (
+			COUNT(id)
+			FOR level IN ([Junior], [Senior])
+		) AS pvt
+		ORDER BY dept ASC;
+	`
+	res, err := server.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("PIVOT query failed: %v", err)
+	}
+
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 departments, got %d: %v", len(res.Rows), res.Rows)
+	}
+
+	// Map of dept -> Junior, Senior counts
+	deptMap := make(map[string]map[string]int)
+	for _, r := range res.Rows {
+		d := r["dept"].(string)
+		deptMap[d] = map[string]int{
+			"Junior": 0,
+			"Senior": 0,
+		}
+		if r["Junior"] != nil {
+			deptMap[d]["Junior"] = r["Junior"].(int)
+		}
+		if r["Senior"] != nil {
+			deptMap[d]["Senior"] = r["Senior"].(int)
+		}
+	}
+
+	if deptMap["Engineering"]["Junior"] != 2 || deptMap["Engineering"]["Senior"] != 1 {
+		t.Errorf("Engineering counts mismatch: %v", deptMap["Engineering"])
+	}
+	if deptMap["Marketing"]["Junior"] != 1 || deptMap["Marketing"]["Senior"] != 2 {
+		t.Errorf("Marketing counts mismatch: %v", deptMap["Marketing"])
+	}
+	if deptMap["HR"]["Junior"] != 1 || deptMap["HR"]["Senior"] != 0 {
+		t.Errorf("HR counts mismatch: %v", deptMap["HR"])
+	}
+}
+
+func TestPivot_AliasesAndWhereAndOrder(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	stmts := []string{
+		"CREATE TABLE product_metrics (id INT PRIMARY KEY, region VARCHAR(20), metric_type VARCHAR(20), score INT)",
+		"INSERT INTO product_metrics VALUES (1, 'North', 'Speed',   90)",
+		"INSERT INTO product_metrics VALUES (2, 'North', 'Quality', 85)",
+		"INSERT INTO product_metrics VALUES (3, 'South', 'Speed',   70)",
+		"INSERT INTO product_metrics VALUES (4, 'South', 'Quality', 95)",
+		"INSERT INTO product_metrics VALUES (5, 'East',  'Speed',   60)",
+		"INSERT INTO product_metrics VALUES (6, 'East',  'Quality', 65)",
+	}
+	for _, stmt := range stmts {
+		if _, err := server.ExecuteSQL(stmt); err != nil {
+			t.Fatalf("setup failed (%q): %v", stmt, err)
+		}
+	}
+
+	// Using aliases in outer SELECT and WHERE filter
+	query := `
+		SELECT region, [Speed] AS SpeedScore, [Quality] AS QualityScore
+		FROM (
+			SELECT region, metric_type, score FROM product_metrics
+		) src
+		PIVOT (
+			AVG(score)
+			FOR metric_type IN ([Speed], [Quality])
+		) pvt
+		WHERE [Speed] >= 70
+		ORDER BY region DESC;
+	`
+	res, err := server.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("PIVOT query failed: %v", err)
+	}
+
+	// Only North (90) and South (70) should match Speed >= 70
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d: %v", len(res.Rows), res.Rows)
+	}
+
+	// Check columns
+	expectedCols := []string{"region", "SpeedScore", "QualityScore"}
+	for i, c := range res.Columns {
+		if c != expectedCols[i] {
+			t.Errorf("column %d: expected %s, got %s", i, expectedCols[i], c)
+		}
+	}
+
+	// Verify DESC order: South then North
+	if res.Rows[0]["region"] != "South" || res.Rows[1]["region"] != "North" {
+		t.Errorf("unexpected region order: %v, %v", res.Rows[0]["region"], res.Rows[1]["region"])
+	}
+}
+
+func TestPivot_MinMaxAggregates(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	stmts := []string{
+		"CREATE TABLE vendor_orders (id INT PRIMARY KEY, vendor_id INT, cat VARCHAR(20), price INT)",
+		"INSERT INTO vendor_orders VALUES (1, 101, 'Hardware', 500)",
+		"INSERT INTO vendor_orders VALUES (2, 101, 'Hardware', 300)",
+		"INSERT INTO vendor_orders VALUES (3, 101, 'Software', 200)",
+		"INSERT INTO vendor_orders VALUES (4, 102, 'Hardware', 700)",
+		"INSERT INTO vendor_orders VALUES (5, 102, 'Software', 400)",
+	}
+	for _, stmt := range stmts {
+		if _, err := server.ExecuteSQL(stmt); err != nil {
+			t.Fatalf("setup failed (%q): %v", stmt, err)
+		}
+	}
+
+	query := `
+		SELECT vendor_id, [Hardware], [Software]
+		FROM (
+			SELECT vendor_id, cat, price FROM vendor_orders
+		) src
+		PIVOT (
+			MAX(price)
+			FOR cat IN ([Hardware], [Software])
+		) pvt
+		ORDER BY vendor_id ASC;
+	`
+	res, err := server.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("PIVOT MAX failed: %v", err)
+	}
+
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(res.Rows))
+	}
+
+	// Vendor 101: Hardware MAX is 500, Software MAX is 200
+	if res.Rows[0]["Hardware"] != int64(500) || res.Rows[0]["Software"] != int64(200) {
+		t.Errorf("Vendor 101 values mismatch: %v", res.Rows[0])
+	}
+	// Vendor 102: Hardware MAX is 700, Software MAX is 400
+	if res.Rows[1]["Hardware"] != int64(700) || res.Rows[1]["Software"] != int64(400) {
+		t.Errorf("Vendor 102 values mismatch: %v", res.Rows[1])
+	}
+}

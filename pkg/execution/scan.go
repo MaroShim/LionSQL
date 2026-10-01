@@ -106,6 +106,7 @@ type IndexScanIterator struct {
 	colIndexMap *ColumnIndexMap
 	cursor      storage.Cursor
 	IndexOnly   bool
+	Desc        bool
 }
 
 // NewIndexScanIterator creates a new index scan iterator.
@@ -132,7 +133,9 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
 	var cur storage.Cursor
 	var err error
-	if s.IndexOnly {
+	if s.Desc {
+		cur, err = s.tx.IndexScanDesc(s.tableName, s.indexName, s.low, s.high)
+	} else if s.IndexOnly {
 		cur, err = s.tx.IndexOnlyScan(s.tableName, s.indexName, s.low, s.high)
 	} else {
 		cur, err = s.tx.IndexScan(s.tableName, s.indexName, s.low, s.high)

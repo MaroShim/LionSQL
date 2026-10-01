@@ -22,6 +22,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Boosted standalone TPC-C VDBE bytecode benchmark throughput from 93.7 TPS (2,519 tpmC) to **16,823.03 TPS (453,336.42 tpmC)** (180x speedup), reaching 51.5% of raw hand-written compiled Go storage API performance.
 
 ### Added
+- **Composite Index Multi-Column Range Search & Descending Scan (`pkg/storage`, `pkg/execution`, `pkg/api`)**:
+  - Implemented order-preserving key encoding `storage.EncodeIndexKeyPart` ensuring strict byte-level monotonic ordering for numeric (`int64`, `float64`), temporal (`date`, `time`, `datetime`), and textual composite index columns.
+  - Implemented multi-column composite index range scanning (`findIndexAndBounds`, `parseWhereConditions`) combining leading equality predicates (`a = ?`) with range bounds (`b >= ?`, `b > ?`, `b <= ?`, `b < ?`, `b BETWEEN ? AND ?`) on the subsequent indexed column.
+  - Added `IndexScanDesc` method to `storage.Transaction`, `memengine.Transaction`, and `wiredtiger.WTTx` for reverse cursor iteration.
+  - Added `Desc` option to `IndexScanIterator` and optimized `execSelect` to bypass in-memory sorting passes when `ORDER BY ... DESC` matches index order.
+  - Added comprehensive unit tests in `pkg/api/composite_index_test.go` verifying prefix equality, range bounds, and descending scans.
+
+- **T-SQL PIVOT Clause Engine (`pkg/api`)**:
+  - Implemented native Microsoft T-SQL `PIVOT` operator parser (`hasPivot`, `parsePivotQuery`) supporting direct table sources and derived subqueries (`(SELECT ...) AS src PIVOT (...) AS pvt`).
+  - Implemented cross-tabulation and aggregation execution pipeline (`execPivotSelect`) supporting `SUM`, `COUNT`, `AVG`, `MIN`, and `MAX` aggregate functions across dynamic column value targets (`FOR col IN ([val1], [val2], ...)`).
+  - Supported bracket column identifiers (`[Q1]`, `[Junior]`), outer projection aliases (`[Q1] AS FirstQuarter`), outer `WHERE` predicate filtering on pivoted columns, and outer `ORDER BY` sorting.
+  - Added dedicated test suite in `pkg/api/pivot_test.go` covering `SUM`, `COUNT`, `AVG`, `MIN`, `MAX`, derived subqueries, table sources, aliases, and filtering.
+
 - **Native VDBE Bytecode Direct Execution for Scalar & Point Queries (`pkg/proc`, `pkg/api`)**:
   - Implemented `OpResultRow` opcode in `pkg/proc/bytecode.go` and `pkg/proc/runtime/vm.go` to directly evaluate and emit rows for table-less scalar / constant SELECT queries (`SELECT 1 + 1`, `SELECT GETDATE()`, etc.) bypassing Volcano relational planner and execution trees.
   - Implemented `OpPointSelect` opcode for single-table Primary Key point lookups (`WHERE pk = ?`) executing directly via O(1) `tx.Get()` storage lookups and register projection.

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"sqlion/pkg/auth"
 	"sqlion/pkg/execution"
@@ -1875,6 +1876,11 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	// 0. Set Operations: UNION [ALL], INTERSECT, EXCEPT / MINUS
 	if setQuery, ok := planner.FindTopLevelSetOps(cleaned); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
 		return s.execSetOpSelect(setQuery, start, cs)
+	}
+
+	// 0. PIVOT: SELECT ... FROM ... PIVOT (...) ...
+	if hasPivot(cleaned) {
+		return s.execPivotSelect(cleaned, start, cs)
 	}
 
 	// 0. SELECT ... INTO <target_table> FROM ...
@@ -4079,21 +4085,250 @@ func buildCompositePrefixKey(cols []string, eqColVals map[string]string, schema 
 		if !ok {
 			break
 		}
-		// Format the value the same way extractIndexKey does (String() of storage.Value).
+		// Format the value using storage.EncodeIndexKeyPart for consistent composite key encoding.
 		colMeta, _, found := schema.FindColumn(col)
 		if found && colMeta != nil {
 			sv := parseValueToType(val, colMeta.Type)
-			parts = append(parts, sv.String())
+			parts = append(parts, storage.EncodeIndexKeyPart(sv))
 		} else {
-			parts = append(parts, val)
+			parts = append(parts, storage.EncodeIndexKeyPart(storage.StringValue(val)))
 		}
 	}
 	return strings.Join(parts, "\x00")
 }
 
+type indexRangeCond struct {
+	hasMin bool
+	minVal string
+	hasMax bool
+	maxVal string
+}
+
+func parseWhereConditions(where string) (map[string]string, map[string]*indexRangeCond) {
+	eqs := make(map[string]string)
+	ranges := make(map[string]*indexRangeCond)
+	parts := splitOnAnd(where)
+
+	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*=\s*(.+?)\s*$`)
+	gteRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*>=\s*(.+?)\s*$`)
+	gtRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*>\s*(.+?)\s*$`)
+	lteRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*<=\s*(.+?)\s*$`)
+	ltRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*<\s*(.+?)\s*$`)
+	betweenRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s+BETWEEN\s+(.+?)\s+AND\s+(.+?)\s*$`)
+
+	cleanCol := func(s string) string {
+		raw := strings.TrimSpace(s)
+		if dot := strings.LastIndex(raw, "."); dot != -1 {
+			raw = raw[dot+1:]
+		}
+		return strings.ToLower(cleanIdentifier(raw))
+	}
+	cleanVal := func(s string) string {
+		return strings.Trim(strings.TrimSpace(s), "'\"")
+	}
+
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if m := eqRe.FindStringSubmatch(part); len(m) == 3 {
+			col := cleanCol(m[1])
+			eqs[col] = cleanVal(m[2])
+		} else if m := betweenRe.FindStringSubmatch(part); len(m) == 4 {
+			col := cleanCol(m[1])
+			r, ok := ranges[col]
+			if !ok {
+				r = &indexRangeCond{}
+				ranges[col] = r
+			}
+			r.hasMin = true
+			r.minVal = cleanVal(m[2])
+			r.hasMax = true
+			r.maxVal = cleanVal(m[3])
+		} else if m := gteRe.FindStringSubmatch(part); len(m) == 3 {
+			col := cleanCol(m[1])
+			r, ok := ranges[col]
+			if !ok {
+				r = &indexRangeCond{}
+				ranges[col] = r
+			}
+			r.hasMin = true
+			r.minVal = cleanVal(m[2])
+		} else if m := gtRe.FindStringSubmatch(part); len(m) == 3 {
+			col := cleanCol(m[1])
+			r, ok := ranges[col]
+			if !ok {
+				r = &indexRangeCond{}
+				ranges[col] = r
+			}
+			r.hasMin = true
+			r.minVal = cleanVal(m[2])
+		} else if m := lteRe.FindStringSubmatch(part); len(m) == 3 {
+			col := cleanCol(m[1])
+			r, ok := ranges[col]
+			if !ok {
+				r = &indexRangeCond{}
+				ranges[col] = r
+			}
+			r.hasMax = true
+			r.maxVal = cleanVal(m[2])
+		} else if m := ltRe.FindStringSubmatch(part); len(m) == 3 {
+			col := cleanCol(m[1])
+			r, ok := ranges[col]
+			if !ok {
+				r = &indexRangeCond{}
+				ranges[col] = r
+			}
+			r.hasMax = true
+			r.maxVal = cleanVal(m[2])
+		}
+	}
+	return eqs, ranges
+}
+
+func (s *Server) findIndexAndBounds(schema *storage.TableSchema, whereClause string) (*storage.IndexSchema, *storage.Value, *storage.Value, bool) {
+	if schema == nil || len(schema.Indexes) == 0 || whereClause == "" {
+		return nil, nil, nil, false
+	}
+	eqColVals, rangeCols := parseWhereConditions(whereClause)
+	eqColSet := make(map[string]bool, len(eqColVals))
+	for col := range eqColVals {
+		eqColSet[col] = true
+	}
+
+	// 1. Try composite index first
+	idx, prefixLen := schema.FindBestCompositeIndex(eqColSet)
+	if idx != nil && len(idx.Columns) > 1 {
+		if prefixLen > 0 {
+			prefixKey := buildCompositePrefixKey(idx.Columns[:prefixLen], eqColVals, schema)
+			// Check if next column has a range condition
+			if prefixLen < len(idx.Columns) {
+				nextCol := strings.ToLower(idx.Columns[prefixLen])
+				if r, ok := rangeCols[nextCol]; ok && r != nil {
+					nextMeta, _, found := schema.FindColumn(nextCol)
+					if found && nextMeta != nil {
+						lowStr := prefixKey
+						highStr := prefixKey + "\xff\xff\xff\xff"
+						if r.hasMin {
+							encMin := storage.EncodeIndexKeyPart(parseValueToType(r.minVal, nextMeta.Type))
+							lowStr = prefixKey + "\x00" + encMin
+						}
+						if r.hasMax {
+							encMax := storage.EncodeIndexKeyPart(parseValueToType(r.maxVal, nextMeta.Type))
+							highStr = prefixKey + "\x00" + encMax + "\xff\xff\xff\xff"
+						}
+						lowVal := storage.StringValue(lowStr)
+						highVal := storage.StringValue(highStr)
+						return idx, &lowVal, &highVal, true
+					}
+				}
+			}
+			// Pure prefix match on composite index
+			lowVal := storage.StringValue(prefixKey)
+			highVal := storage.StringValue(prefixKey + "\xff\xff\xff\xff")
+			return idx, &lowVal, &highVal, true
+		}
+	}
+
+	// 2. Try single-column index
+	for i := range schema.Indexes {
+		candIdx := &schema.Indexes[i]
+		if len(candIdx.Columns) != 1 {
+			continue
+		}
+		colName := strings.ToLower(candIdx.Columns[0])
+		colMeta, _, found := schema.FindColumn(colName)
+		if !found || colMeta == nil {
+			continue
+		}
+		// Check equality
+		if valStr, ok := eqColVals[colName]; ok {
+			parsed := parseValueToType(valStr, colMeta.Type)
+			return candIdx, &parsed, &parsed, true
+		}
+		// Check range
+		if r, ok := rangeCols[colName]; ok && r != nil {
+			var lowVal, highVal *storage.Value
+			if r.hasMin {
+				v := parseValueToType(r.minVal, colMeta.Type)
+				lowVal = &v
+			}
+			if r.hasMax {
+				v := parseValueToType(r.maxVal, colMeta.Type)
+				highVal = &v
+			}
+			return candIdx, lowVal, highVal, true
+		}
+	}
+
+	return nil, nil, nil, false
+}
+
+func isIndexDescendingOrder(orderByClause string, idx *storage.IndexSchema, eqColVals map[string]string) bool {
+	if orderByClause == "" || idx == nil {
+		return false
+	}
+	items := strings.Split(orderByClause, ",")
+	if len(items) == 0 {
+		return false
+	}
+	first := strings.TrimSpace(items[0])
+	parts := strings.Fields(first)
+	if len(parts) < 2 {
+		return false
+	}
+	col := strings.ToLower(cleanIdentifier(parts[0]))
+	dir := strings.ToUpper(parts[1])
+	if dir != "DESC" {
+		return false
+	}
+	for _, idxCol := range idx.Columns {
+		idxColLower := strings.ToLower(idxCol)
+		if eqColVals != nil && eqColVals[idxColLower] != "" {
+			continue // fixed by equality condition
+		}
+		if col == idxColLower {
+			return true
+		}
+		break
+	}
+	return false
+}
+
+func isIndexAscendingOrder(orderByClause string, idx *storage.IndexSchema, eqColVals map[string]string) bool {
+	if orderByClause == "" || idx == nil {
+		return false
+	}
+	items := strings.Split(orderByClause, ",")
+	if len(items) == 0 {
+		return false
+	}
+	first := strings.TrimSpace(items[0])
+	parts := strings.Fields(first)
+	if len(parts) == 0 {
+		return false
+	}
+	col := strings.ToLower(cleanIdentifier(parts[0]))
+	dir := "ASC"
+	if len(parts) > 1 {
+		dir = strings.ToUpper(parts[1])
+	}
+	if dir != "ASC" {
+		return false
+	}
+	for _, idxCol := range idx.Columns {
+		idxColLower := strings.ToLower(idxCol)
+		if eqColVals != nil && eqColVals[idxColLower] != "" {
+			continue // fixed by equality condition
+		}
+		if col == idxColLower {
+			return true
+		}
+		break
+	}
+	return false
+}
+
 // execIndexSelect attempts to execute a simple SELECT using a composite or single-column index scan.
-// It is called before the VDBE path when the WHERE clause contains only equality conditions
-// that match a known index on the target table.
+// It is called before the VDBE path when the WHERE clause matches a known index on the target table.
 // Returns (result, true) on success, (nil, false) if no suitable index exists or the scan fails.
 func (s *Server) execIndexSelect(qInfo *planner.QueryInfo, tableName string, start time.Time, cs *ClientSession) (*QueryResult, bool) {
 	schema, err := s.engine.GetTable(tableName)
@@ -4105,38 +4340,9 @@ func (s *Server) execIndexSelect(qInfo *planner.QueryInfo, tableName string, sta
 	}
 
 	whereClause := qInfo.WhereClause
-	eqColVals := parseEqualityConditions(whereClause)
-	if len(eqColVals) == 0 {
+	idx, lowVal, highVal, ok := s.findIndexAndBounds(schema, whereClause)
+	if !ok {
 		return nil, false
-	}
-
-	eqColSet := make(map[string]bool, len(eqColVals))
-	for col := range eqColVals {
-		eqColSet[col] = true
-	}
-
-	idx, prefixLen := schema.FindBestCompositeIndex(eqColSet)
-	if idx == nil || prefixLen == 0 {
-		return nil, false
-	}
-
-	// Build scan bounds.
-	var lowVal, highVal storage.Value
-	if len(idx.Columns) == 1 {
-		// Pure single-column index: exact typed value.
-		colName := idx.Columns[0]
-		colMeta, _, colFound := schema.FindColumn(colName)
-		if !colFound || colMeta == nil {
-			return nil, false
-		}
-		parsed := parseValueToType(eqColVals[strings.ToLower(colName)], colMeta.Type)
-		lowVal = parsed
-		highVal = parsed
-	} else {
-		// Composite index: NUL-separated prefix key range.
-		prefixKey := buildCompositePrefixKey(idx.Columns[:prefixLen], eqColVals, schema)
-		lowVal = storage.StringValue(prefixKey)
-		highVal = storage.StringValue(prefixKey + "\xff\xff\xff\xff")
 	}
 
 	// Acquire transaction.
@@ -4157,7 +4363,16 @@ func (s *Server) execIndexSelect(qInfo *planner.QueryInfo, tableName string, sta
 		defer tx.Rollback()
 	}
 
-	cursor, err := tx.IndexScan(tableName, idx.Name, &lowVal, &highVal)
+	eqColVals, _ := parseWhereConditions(whereClause)
+	descScan := isIndexDescendingOrder(qInfo.OrderByClause, idx, eqColVals)
+	ascScan := isIndexAscendingOrder(qInfo.OrderByClause, idx, eqColVals)
+
+	var cursor storage.Cursor
+	if descScan {
+		cursor, err = tx.IndexScanDesc(tableName, idx.Name, lowVal, highVal)
+	} else {
+		cursor, err = tx.IndexScan(tableName, idx.Name, lowVal, highVal)
+	}
 	if err != nil {
 		return nil, false
 	}
@@ -4194,11 +4409,11 @@ func (s *Server) execIndexSelect(qInfo *planner.QueryInfo, tableName string, sta
 		rows = append(rows, row)
 	}
 
-	// If ORDER BY is present, fall through to VDBE/Volcano which handles ordering.
-	// The index path only accelerates equality-only queries without ordering requirements.
-	if qInfo.OrderByClause != "" {
+	// If ORDER BY is present and not satisfied by index scan, fall back to general execution.
+	if qInfo.OrderByClause != "" && !descScan && !ascScan {
 		return nil, false
 	}
+
 	// Apply LIMIT if present.
 	if qInfo.LimitCount > 0 && int(qInfo.LimitCount) < len(rows) {
 		rows = rows[:qInfo.LimitCount]
@@ -4348,4 +4563,633 @@ func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 	}
 
 	return parseLiteralValue(exprStr, targetType)
+}
+
+// -----------------------------------------------------------------------------
+// PIVOT Execution Engine
+// -----------------------------------------------------------------------------
+
+func hasPivot(query string) bool {
+	return regexp.MustCompile(`(?i)\bPIVOT\s*\(`).MatchString(query)
+}
+
+type pivotParsedQuery struct {
+	OuterProjections string
+	SourceQuery      string
+	AggFunc          string
+	AggCol           string
+	PivotCol         string
+	PivotValues      []string
+	PivotAlias       string
+	WhereClause      string
+	OrderByClause    string
+}
+
+func parsePivotQuery(query string) (*pivotParsedQuery, error) {
+	trimmed := strings.TrimSpace(query)
+	upper := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(upper, "SELECT") {
+		return nil, fmt.Errorf("PIVOT query must start with SELECT")
+	}
+
+	re := regexp.MustCompile(`(?i)\bPIVOT\s*\(`)
+	loc := re.FindStringIndex(trimmed)
+	if loc == nil {
+		return nil, fmt.Errorf("no PIVOT clause found")
+	}
+	pivotIdx := loc[0]
+
+	// Find top-level FROM keyword between SELECT and pivotIdx
+	depth := 0
+	fromIdx := -1
+	fromStart := -1
+
+	for i := 0; i < pivotIdx; i++ {
+		if trimmed[i] == '(' {
+			depth++
+		} else if trimmed[i] == ')' {
+			if depth > 0 {
+				depth--
+			}
+		} else if depth == 0 && i+4 <= pivotIdx && strings.EqualFold(trimmed[i:i+4], "FROM") {
+			beforeOK := i == 0 || unicode.IsSpace(rune(trimmed[i-1]))
+			afterOK := i+4 == pivotIdx || unicode.IsSpace(rune(trimmed[i+4])) || trimmed[i+4] == '('
+			if beforeOK && afterOK {
+				fromStart = i
+				fromIdx = i + 4
+				break
+			}
+		}
+	}
+	if fromIdx == -1 {
+		return nil, fmt.Errorf("invalid PIVOT syntax: missing FROM clause")
+	}
+
+	selectEnd := 6 // len("SELECT")
+	for selectEnd < fromStart && unicode.IsSpace(rune(trimmed[selectEnd])) {
+		selectEnd++
+	}
+	outerProjs := strings.TrimSpace(trimmed[selectEnd:fromStart])
+	sourcePart := strings.TrimSpace(trimmed[fromIdx:pivotIdx])
+
+	// Source can be a subquery `(SELECT ...) [AS] alias` or a table name `tbl [AS] alias`
+	var sourceSQL string
+	if strings.HasPrefix(sourcePart, "(") {
+		depth = 0
+		closeParen := -1
+		for i, ch := range sourcePart {
+			if ch == '(' {
+				depth++
+			} else if ch == ')' {
+				depth--
+				if depth == 0 {
+					closeParen = i
+					break
+				}
+			}
+		}
+		if closeParen != -1 {
+			sourceSQL = strings.TrimSpace(sourcePart[1:closeParen])
+		} else {
+			return nil, fmt.Errorf("invalid PIVOT syntax: unmatched parenthesis in source query")
+		}
+	} else {
+		fields := strings.Fields(sourcePart)
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("invalid PIVOT syntax: empty source table")
+		}
+		sourceSQL = "SELECT * FROM " + fields[0]
+	}
+
+	// Find matching closing parenthesis for PIVOT (...)
+	openParen := strings.Index(trimmed[pivotIdx:], "(")
+	if openParen == -1 {
+		return nil, fmt.Errorf("malformed PIVOT syntax: missing opening parenthesis")
+	}
+	openParen += pivotIdx
+
+	depth = 0
+	closeParen := -1
+	for i := openParen; i < len(trimmed); i++ {
+		if trimmed[i] == '(' {
+			depth++
+		} else if trimmed[i] == ')' {
+			depth--
+			if depth == 0 {
+				closeParen = i
+				break
+			}
+		}
+	}
+	if closeParen == -1 {
+		return nil, fmt.Errorf("malformed PIVOT syntax: missing closing parenthesis")
+	}
+
+	pivotBody := strings.TrimSpace(trimmed[openParen+1 : closeParen])
+	afterPivot := strings.TrimSpace(trimmed[closeParen+1:])
+
+	// Parse pivot body: <agg_func>(<agg_col>) FOR <pivot_col> IN (<pivot_vals>)
+	pivotBodyRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_]+)\s*\((.*?)\)\s+FOR\s+([a-zA-Z0-9_#\[\].]+)\s+IN\s*\((.*?)\)\s*$`)
+	m := pivotBodyRe.FindStringSubmatch(pivotBody)
+	if len(m) != 5 {
+		return nil, fmt.Errorf("malformed PIVOT clause: %s", pivotBody)
+	}
+
+	aggFunc := strings.ToUpper(strings.TrimSpace(m[1]))
+	aggCol := cleanIdentifier(strings.TrimSpace(m[2]))
+	pivotCol := cleanIdentifier(strings.TrimSpace(m[3]))
+	rawPivotVals := strings.TrimSpace(m[4])
+
+	var pivotValues []string
+	for _, val := range strings.Split(rawPivotVals, ",") {
+		cleanVal := cleanIdentifier(strings.Trim(strings.TrimSpace(val), "'\""))
+		if cleanVal != "" {
+			pivotValues = append(pivotValues, cleanVal)
+		}
+	}
+
+	// Parse afterPivot: [AS] <alias> [WHERE <where>] [ORDER BY <order>]
+	var orderByClause, whereClause, pivotAlias string
+	orderRe := regexp.MustCompile(`(?is)\s+ORDER\s+BY\s+(.*)$`)
+	if mOrder := orderRe.FindStringSubmatch(afterPivot); len(mOrder) == 2 {
+		orderByClause = strings.TrimSpace(mOrder[1])
+		afterPivot = afterPivot[:len(afterPivot)-len(mOrder[0])]
+	}
+	whereRe := regexp.MustCompile(`(?is)\s+WHERE\s+(.*)$`)
+	if mWhere := whereRe.FindStringSubmatch(afterPivot); len(mWhere) == 2 {
+		whereClause = strings.TrimSpace(mWhere[1])
+		afterPivot = afterPivot[:len(afterPivot)-len(mWhere[0])]
+	}
+	pivotAlias = cleanIdentifier(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(afterPivot), "AS ")))
+
+	return &pivotParsedQuery{
+		OuterProjections: outerProjs,
+		SourceQuery:      sourceSQL,
+		AggFunc:          aggFunc,
+		AggCol:           aggCol,
+		PivotCol:         pivotCol,
+		PivotValues:      pivotValues,
+		PivotAlias:       pivotAlias,
+		WhereClause:      whereClause,
+		OrderByClause:    orderByClause,
+	}, nil
+}
+
+func (s *Server) execPivotSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	pvt, err := parsePivotQuery(query)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Execute source query
+	srcRes, err := s.execSelect(pvt.SourceQuery, start, cs)
+	if err != nil {
+		return nil, fmt.Errorf("pivot source query error: %w", err)
+	}
+
+	// 2. Identify grouping columns
+	aggColClean := cleanIdentifier(pvt.AggCol)
+	pivotColClean := cleanIdentifier(pvt.PivotCol)
+
+	var actualAggCol, actualPivotCol string
+	var groupCols []string
+
+	for _, col := range srcRes.Columns {
+		colClean := cleanIdentifier(col)
+		if strings.EqualFold(colClean, aggColClean) {
+			actualAggCol = col
+		} else if strings.EqualFold(colClean, pivotColClean) {
+			actualPivotCol = col
+		} else {
+			groupCols = append(groupCols, col)
+		}
+	}
+	if actualPivotCol == "" {
+		for _, col := range srcRes.Columns {
+			if strings.EqualFold(cleanIdentifier(col), pivotColClean) {
+				actualPivotCol = col
+				break
+			}
+		}
+	}
+	if actualAggCol == "" && pvt.AggCol != "*" {
+		for _, col := range srcRes.Columns {
+			if strings.EqualFold(cleanIdentifier(col), aggColClean) {
+				actualAggCol = col
+				break
+			}
+		}
+	}
+
+	// 3. Accumulate data per group
+	type pivotAccumulator struct {
+		groupVals   map[string]any
+		valuesByCol map[string][]any
+	}
+	var groupOrder []string
+	groups := make(map[string]*pivotAccumulator)
+
+	for _, row := range srcRes.Rows {
+		var keyParts []string
+		groupVals := make(map[string]any)
+		for _, gCol := range groupCols {
+			v := row[gCol]
+			keyParts = append(keyParts, fmt.Sprintf("%v", v))
+			groupVals[gCol] = v
+		}
+		gKey := strings.Join(keyParts, "\x00")
+		acc, exists := groups[gKey]
+		if !exists {
+			acc = &pivotAccumulator{
+				groupVals:   groupVals,
+				valuesByCol: make(map[string][]any),
+			}
+			groups[gKey] = acc
+			groupOrder = append(groupOrder, gKey)
+		}
+
+		rowPVal := cleanIdentifier(fmt.Sprintf("%v", row[actualPivotCol]))
+		for _, targetVal := range pvt.PivotValues {
+			if strings.EqualFold(cleanIdentifier(targetVal), rowPVal) {
+				var aggVal any = nil
+				if actualAggCol != "" && pvt.AggCol != "*" {
+					aggVal = row[actualAggCol]
+				} else {
+					aggVal = 1
+				}
+				acc.valuesByCol[targetVal] = append(acc.valuesByCol[targetVal], aggVal)
+				break
+			}
+		}
+	}
+
+	// 4. Compute aggregates for each group
+	var computedRows []map[string]any
+	for _, gKey := range groupOrder {
+		acc := groups[gKey]
+		rowMap := make(map[string]any)
+		for k, v := range acc.groupVals {
+			rowMap[k] = v
+			rowMap[strings.ToLower(k)] = v
+		}
+
+		for _, targetVal := range pvt.PivotValues {
+			vals := acc.valuesByCol[targetVal]
+			var aggResult any = nil
+			if len(vals) > 0 {
+				switch strings.ToUpper(pvt.AggFunc) {
+				case "SUM":
+					var sum float64
+					hasVal := false
+					for _, v := range vals {
+						if v != nil {
+							sum += anyToFloat(v)
+							hasVal = true
+						}
+					}
+					if hasVal {
+						if sum == float64(int64(sum)) {
+							aggResult = int64(sum)
+						} else {
+							aggResult = sum
+						}
+					}
+				case "COUNT":
+					count := 0
+					for _, v := range vals {
+						if v != nil {
+							count++
+						}
+					}
+					aggResult = count
+				case "AVG":
+					var sum float64
+					count := 0
+					for _, v := range vals {
+						if v != nil {
+							sum += anyToFloat(v)
+							count++
+						}
+					}
+					if count > 0 {
+						aggResult = sum / float64(count)
+					}
+				case "MIN":
+					var minVal any = nil
+					for _, v := range vals {
+						if v != nil {
+							if minVal == nil || compareAny(v, minVal) < 0 {
+								minVal = v
+							}
+						}
+					}
+					aggResult = minVal
+				case "MAX":
+					var maxVal any = nil
+					for _, v := range vals {
+						if v != nil {
+							if maxVal == nil || compareAny(v, maxVal) > 0 {
+								maxVal = v
+							}
+						}
+					}
+					aggResult = maxVal
+				}
+			}
+			rowMap[targetVal] = aggResult
+			rowMap["["+targetVal+"]"] = aggResult
+			rowMap[strings.ToLower(targetVal)] = aggResult
+			rowMap["["+strings.ToLower(targetVal)+"]"] = aggResult
+		}
+		computedRows = append(computedRows, rowMap)
+	}
+
+	// 5. Apply outer WHERE filter if present
+	if pvt.WhereClause != "" {
+		var filteredRows []map[string]any
+		for _, row := range computedRows {
+			if s.evalSimpleRowWhere(row, pvt.WhereClause) {
+				filteredRows = append(filteredRows, row)
+			}
+		}
+		computedRows = filteredRows
+	}
+
+	// 6. Project columns
+	var finalCols []string
+	type projColDef struct {
+		expr  string
+		alias string
+	}
+	var projDefs []projColDef
+
+	if pvt.OuterProjections == "*" || pvt.OuterProjections == "" {
+		for _, gCol := range groupCols {
+			finalCols = append(finalCols, gCol)
+			projDefs = append(projDefs, projColDef{expr: gCol, alias: gCol})
+		}
+		for _, pVal := range pvt.PivotValues {
+			finalCols = append(finalCols, pVal)
+			projDefs = append(projDefs, projColDef{expr: pVal, alias: pVal})
+		}
+	} else {
+		for _, item := range planner.SplitProjections(pvt.OuterProjections) {
+			itemTrimmed := strings.TrimSpace(item)
+			if itemTrimmed == "" {
+				continue
+			}
+			asIdx := strings.Index(strings.ToUpper(itemTrimmed), " AS ")
+			var expr, alias string
+			if asIdx != -1 {
+				expr = strings.TrimSpace(itemTrimmed[:asIdx])
+				alias = cleanIdentifier(strings.TrimSpace(itemTrimmed[asIdx+4:]))
+			} else {
+				expr = itemTrimmed
+				alias = cleanIdentifier(itemTrimmed)
+			}
+			finalCols = append(finalCols, alias)
+			projDefs = append(projDefs, projColDef{expr: expr, alias: alias})
+		}
+	}
+
+	var projectedRows []map[string]any
+	for _, row := range computedRows {
+		outRow := make(map[string]any, len(finalCols))
+		for _, pDef := range projDefs {
+			val := s.evalPivotExpr(row, pDef.expr)
+			outRow[pDef.alias] = val
+		}
+		projectedRows = append(projectedRows, outRow)
+	}
+
+	// 7. Apply ORDER BY if present
+	if pvt.OrderByClause != "" && len(projectedRows) > 0 {
+		orderParts := strings.Fields(pvt.OrderByClause)
+		orderCol := cleanIdentifier(orderParts[0])
+		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
+		sort.Slice(projectedRows, func(i, j int) bool {
+			v1 := projectedRows[i][orderCol]
+			v2 := projectedRows[j][orderCol]
+			if v1 == nil && v2 != nil {
+				return desc
+			}
+			if v1 != nil && v2 == nil {
+				return !desc
+			}
+			if v1 == nil && v2 == nil {
+				return false
+			}
+			f1, err1 := strconv.ParseFloat(fmt.Sprintf("%v", v1), 64)
+			f2, err2 := strconv.ParseFloat(fmt.Sprintf("%v", v2), 64)
+			if err1 == nil && err2 == nil {
+				if desc {
+					return f1 > f2
+				}
+				return f1 < f2
+			}
+			s1 := fmt.Sprintf("%v", v1)
+			s2 := fmt.Sprintf("%v", v2)
+			if desc {
+				return s1 > s2
+			}
+			return s1 < s2
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      finalCols,
+		Rows:         projectedRows,
+		RowsAffected: int64(len(projectedRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) evalSimpleRowWhere(row map[string]any, where string) bool {
+	if where == "" {
+		return true
+	}
+	parts := splitOnAnd(where)
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		condRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_#\[\].]+)\s*(=|!=|<>|>=|<=|>|<)\s*(.+?)\s*$`)
+		m := condRe.FindStringSubmatch(part)
+		if len(m) != 4 {
+			continue
+		}
+		rawCol := cleanIdentifier(m[1])
+		op := m[2]
+		targetStr := strings.Trim(strings.TrimSpace(m[3]), "'\"")
+
+		val, exists := row[rawCol]
+		if !exists {
+			val = row[strings.ToLower(rawCol)]
+		}
+		if val == nil {
+			return false
+		}
+		valStr := fmt.Sprintf("%v", val)
+		f1, err1 := strconv.ParseFloat(valStr, 64)
+		f2, err2 := strconv.ParseFloat(targetStr, 64)
+		if err1 == nil && err2 == nil {
+			switch op {
+			case "=", "==":
+				if f1 != f2 {
+					return false
+				}
+			case "!=", "<>":
+				if f1 == f2 {
+					return false
+				}
+			case ">":
+				if !(f1 > f2) {
+					return false
+				}
+			case ">=":
+				if !(f1 >= f2) {
+					return false
+				}
+			case "<":
+				if !(f1 < f2) {
+					return false
+				}
+			case "<=":
+				if !(f1 <= f2) {
+					return false
+				}
+			}
+		} else {
+			switch op {
+			case "=", "==":
+				if !strings.EqualFold(valStr, targetStr) {
+					return false
+				}
+			case "!=", "<>":
+				if strings.EqualFold(valStr, targetStr) {
+					return false
+				}
+			case ">":
+				if !(valStr > targetStr) {
+					return false
+				}
+			case ">=":
+				if !(valStr >= targetStr) {
+					return false
+				}
+			case "<":
+				if !(valStr < targetStr) {
+					return false
+				}
+			case "<=":
+				if !(valStr <= targetStr) {
+					return false
+				}
+			}
+		}
+	}
+	return true
+}
+
+func (s *Server) evalPivotExpr(row map[string]any, expr string) any {
+	exprTrim := strings.TrimSpace(expr)
+	clean := cleanIdentifier(exprTrim)
+	if v, ok := row[clean]; ok {
+		return v
+	}
+	if v, ok := row[exprTrim]; ok {
+		return v
+	}
+	if v, ok := row[strings.ToLower(clean)]; ok {
+		return v
+	}
+	for _, op := range []string{"+", "-", "*", "/"} {
+		if strings.Contains(exprTrim, op) {
+			idx := strings.Index(exprTrim, op)
+			left := strings.TrimSpace(exprTrim[:idx])
+			right := strings.TrimSpace(exprTrim[idx+1:])
+			vLeft := s.evalPivotExpr(row, left)
+			vRight := s.evalPivotExpr(row, right)
+			if vLeft != nil && vRight != nil {
+				f1 := anyToFloat(vLeft)
+				f2 := anyToFloat(vRight)
+				switch op {
+				case "+":
+					res := f1 + f2
+					if res == float64(int64(res)) {
+						return int64(res)
+					}
+					return res
+				case "-":
+					res := f1 - f2
+					if res == float64(int64(res)) {
+						return int64(res)
+					}
+					return res
+				case "*":
+					res := f1 * f2
+					if res == float64(int64(res)) {
+						return int64(res)
+					}
+					return res
+				case "/":
+					if f2 != 0 {
+						return f1 / f2
+					}
+				}
+			}
+		}
+	}
+	return nil
+}
+
+func anyToFloat(v any) float64 {
+	if v == nil {
+		return 0
+	}
+	switch val := v.(type) {
+	case int:
+		return float64(val)
+	case int64:
+		return float64(val)
+	case int32:
+		return float64(val)
+	case float64:
+		return val
+	case float32:
+		return float64(val)
+	case string:
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f
+		}
+	case storage.Value:
+		if val.Type == storage.TypeInt {
+			return float64(val.IVal)
+		}
+		if val.Type == storage.TypeFloat {
+			return val.FVal
+		}
+		if val.Type == storage.TypeDecimal {
+			return val.DVal.Float64()
+		}
+	}
+	return 0
+}
+
+func compareAny(a, b any) int {
+	f1 := anyToFloat(a)
+	f2 := anyToFloat(b)
+	if f1 < f2 {
+		return -1
+	} else if f1 > f2 {
+		return 1
+	}
+	s1 := fmt.Sprintf("%v", a)
+	s2 := fmt.Sprintf("%v", b)
+	if s1 < s2 {
+		return -1
+	} else if s1 > s2 {
+		return 1
+	}
+	return 0
 }

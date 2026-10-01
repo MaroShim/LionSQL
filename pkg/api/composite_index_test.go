@@ -118,3 +118,136 @@ func TestCompositeIndex_ThreeColumn(t *testing.T) {
 		}
 	})
 }
+
+func TestCompositeIndex_RangeScan(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	stmts := []string{
+		"CREATE TABLE emp_range (id INT PRIMARY KEY, dept VARCHAR(30), level INT, salary INT)",
+		"CREATE INDEX idx_dept_lvl ON emp_range (dept, level)",
+		"INSERT INTO emp_range VALUES (1, 'Engineering', 1, 60000)",
+		"INSERT INTO emp_range VALUES (2, 'Engineering', 2, 70000)",
+		"INSERT INTO emp_range VALUES (3, 'Engineering', 3, 80000)",
+		"INSERT INTO emp_range VALUES (4, 'Engineering', 4, 90000)",
+		"INSERT INTO emp_range VALUES (5, 'Engineering', 5, 100000)",
+		"INSERT INTO emp_range VALUES (6, 'Marketing',   2, 72000)",
+		"INSERT INTO emp_range VALUES (7, 'Marketing',   4, 92000)",
+	}
+	for _, stmt := range stmts {
+		if _, err := server.ExecuteSQL(stmt); err != nil {
+			t.Fatalf("setup failed (%q): %v", stmt, err)
+		}
+	}
+
+	t.Run("prefix eq and range gte (level >= 3)", func(t *testing.T) {
+		res, err := server.ExecuteSQL("SELECT id, level FROM emp_range WHERE dept = 'Engineering' AND level >= 3")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(res.Rows) != 3 {
+			t.Fatalf("expected 3 rows (level 3, 4, 5), got %d: %v", len(res.Rows), res.Rows)
+		}
+	})
+
+	t.Run("prefix eq and range gt (level > 3)", func(t *testing.T) {
+		res, err := server.ExecuteSQL("SELECT id, level FROM emp_range WHERE dept = 'Engineering' AND level > 3")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(res.Rows) != 2 {
+			t.Fatalf("expected 2 rows (level 4, 5), got %d: %v", len(res.Rows), res.Rows)
+		}
+	})
+
+	t.Run("prefix eq and range lte (level <= 2)", func(t *testing.T) {
+		res, err := server.ExecuteSQL("SELECT id, level FROM emp_range WHERE dept = 'Engineering' AND level <= 2")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(res.Rows) != 2 {
+			t.Fatalf("expected 2 rows (level 1, 2), got %d: %v", len(res.Rows), res.Rows)
+		}
+	})
+
+	t.Run("prefix eq and between (level BETWEEN 2 AND 4)", func(t *testing.T) {
+		res, err := server.ExecuteSQL("SELECT id, level FROM emp_range WHERE dept = 'Engineering' AND level BETWEEN 2 AND 4")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(res.Rows) != 3 {
+			t.Fatalf("expected 3 rows (level 2, 3, 4), got %d: %v", len(res.Rows), res.Rows)
+		}
+	})
+}
+
+func TestCompositeIndex_DescendingScan(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	stmts := []string{
+		"CREATE TABLE emp_desc (id INT PRIMARY KEY, dept VARCHAR(30), level INT, salary INT)",
+		"CREATE INDEX idx_dept_lvl_desc ON emp_desc (dept, level)",
+		"INSERT INTO emp_desc VALUES (1, 'Engineering', 1, 60000)",
+		"INSERT INTO emp_desc VALUES (2, 'Engineering', 2, 70000)",
+		"INSERT INTO emp_desc VALUES (3, 'Engineering', 3, 80000)",
+		"INSERT INTO emp_desc VALUES (4, 'Engineering', 4, 90000)",
+		"INSERT INTO emp_desc VALUES (5, 'Engineering', 5, 100000)",
+	}
+	for _, stmt := range stmts {
+		if _, err := server.ExecuteSQL(stmt); err != nil {
+			t.Fatalf("setup failed (%q): %v", stmt, err)
+		}
+	}
+
+	t.Run("order by level DESC with fixed prefix", func(t *testing.T) {
+		res, err := server.ExecuteSQL("SELECT id, level FROM emp_desc WHERE dept = 'Engineering' ORDER BY level DESC")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(res.Rows) != 5 {
+			t.Fatalf("expected 5 rows, got %d", len(res.Rows))
+		}
+		// Verify strict descending order
+		expectedLevels := []int64{5, 4, 3, 2, 1}
+		for i, row := range res.Rows {
+			lvl := row["level"]
+			switch v := lvl.(type) {
+			case int64:
+				if v != expectedLevels[i] {
+					t.Errorf("row %d: expected level %d, got %d", i, expectedLevels[i], v)
+				}
+			case float64:
+				if int64(v) != expectedLevels[i] {
+					t.Errorf("row %d: expected level %d, got %v", i, expectedLevels[i], v)
+				}
+			default:
+				t.Errorf("row %d: unexpected level type %T (%v)", i, lvl, lvl)
+			}
+		}
+	})
+
+	t.Run("order by level DESC combined with range condition (level BETWEEN 2 AND 4)", func(t *testing.T) {
+		res, err := server.ExecuteSQL("SELECT id, level FROM emp_desc WHERE dept = 'Engineering' AND level BETWEEN 2 AND 4 ORDER BY level DESC")
+		if err != nil {
+			t.Fatalf("query failed: %v", err)
+		}
+		if len(res.Rows) != 3 {
+			t.Fatalf("expected 3 rows, got %d", len(res.Rows))
+		}
+		expectedLevels := []int64{4, 3, 2}
+		for i, row := range res.Rows {
+			lvl := row["level"]
+			switch v := lvl.(type) {
+			case int64:
+				if v != expectedLevels[i] {
+					t.Errorf("row %d: expected level %d, got %d", i, expectedLevels[i], v)
+				}
+			case float64:
+				if int64(v) != expectedLevels[i] {
+					t.Errorf("row %d: expected level %d, got %v", i, expectedLevels[i], v)
+				}
+			}
+		}
+	})
+}

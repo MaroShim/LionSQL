@@ -561,7 +561,7 @@ func extractIndexKey(rec storage.Record, cols []string) storage.Value {
 			str += "\x00"
 		}
 		if v, ok := rec[c]; ok {
-			str += v.String()
+			str += storage.EncodeIndexKeyPart(v)
 		} else {
 			str += "NULL"
 		}
@@ -1621,6 +1621,25 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		keys:      pks,
 		idx:       -1,
 	}, nil
+}
+
+// IndexScanDesc scans the secondary index in descending order.
+func (tx *Transaction) IndexScanDesc(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
+	cur, err := tx.IndexScan(tableName, indexName, low, high)
+	if err != nil {
+		return nil, err
+	}
+	mCur, ok := cur.(*memCursor)
+	if !ok {
+		return cur, nil
+	}
+	n := len(mCur.keys)
+	revKeys := make([]string, n)
+	for i, pk := range mCur.keys {
+		revKeys[n-1-i] = pk
+	}
+	mCur.keys = revKeys
+	return mCur, nil
 }
 
 // ParsePKValue parses a string-encoded primary key back into a storage.Value.

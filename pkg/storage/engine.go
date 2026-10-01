@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -298,6 +299,33 @@ func NullValue(t DataType) Value {
 	return Value{Type: t, IsNull: true}
 }
 
+// EncodeIndexKeyPart encodes a Value into an order-preserving string for composite index keys.
+func EncodeIndexKeyPart(v Value) string {
+	if v.IsNull {
+		return "\x00NULL"
+	}
+	switch v.Type {
+	case TypeInt:
+		// Order-preserving 16-hex digit encoding for signed 64-bit int.
+		// XORing with 1<<63 maps MinInt64..MaxInt64 monotonically to 0..MaxUint64.
+		return fmt.Sprintf("%016x", uint64(v.IVal)^0x8000000000000000)
+	case TypeFloat:
+		bits := math.Float64bits(v.FVal)
+		if (bits & 0x8000000000000000) != 0 {
+			bits = ^bits
+		} else {
+			bits ^= 0x8000000000000000
+		}
+		return fmt.Sprintf("%016x", bits)
+	case TypeDateTime:
+		return v.TVal.UTC().Format("2006-01-02T15:04:05.000000000Z")
+	case TypeDate, TypeTime:
+		return v.SVal
+	default:
+		return v.String()
+	}
+}
+
 func (v Value) Decimal() Decimal {
 	if v.Type == TypeDecimal {
 		if v.DVal.value != nil {
@@ -491,6 +519,7 @@ type Transaction interface {
 	Scan(tableName string) (Cursor, error)
 	IndexScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	IndexOnlyScan(tableName string, indexName string, low, high *Value) (Cursor, error)
+	IndexScanDesc(tableName string, indexName string, low, high *Value) (Cursor, error)
 	Commit() error
 	Rollback() error
 	Savepoint(name string) error
