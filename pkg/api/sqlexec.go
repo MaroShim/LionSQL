@@ -409,19 +409,11 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
-	if strings.HasPrefix(upper, "SAVE TRANSACTION ") || strings.HasPrefix(upper, "SAVE TRAN ") || strings.HasPrefix(upper, "SAVEPOINT ") {
+	if namePart, ok := trimAnyPrefix(upper, trimmed, "SAVE TRANSACTION ", "SAVE TRAN ", "SAVEPOINT "); ok {
 		cs.mu.Lock()
 		defer cs.mu.Unlock()
 		if cs.Tx == nil {
 			return nil, fmt.Errorf("no active transaction to create savepoint on session %s", cs.ID)
-		}
-		var namePart string
-		if strings.HasPrefix(upper, "SAVE TRANSACTION ") {
-			namePart = trimmed[len("SAVE TRANSACTION "):]
-		} else if strings.HasPrefix(upper, "SAVE TRAN ") {
-			namePart = trimmed[len("SAVE TRAN "):]
-		} else {
-			namePart = trimmed[len("SAVEPOINT "):]
 		}
 		spName := cleanSavepointName(namePart)
 		if spName == "" {
@@ -438,17 +430,11 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
-	if strings.HasPrefix(upper, "RELEASE SAVEPOINT ") || strings.HasPrefix(upper, "RELEASE ") {
+	if namePart, ok := trimAnyPrefix(upper, trimmed, "RELEASE SAVEPOINT ", "RELEASE "); ok {
 		cs.mu.Lock()
 		defer cs.mu.Unlock()
 		if cs.Tx == nil {
 			return nil, fmt.Errorf("no active transaction to release savepoint on session %s", cs.ID)
-		}
-		var namePart string
-		if strings.HasPrefix(upper, "RELEASE SAVEPOINT ") {
-			namePart = trimmed[len("RELEASE SAVEPOINT "):]
-		} else {
-			namePart = trimmed[len("RELEASE "):]
 		}
 		spName := cleanSavepointName(namePart)
 		if spName == "" {
@@ -473,19 +459,10 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}
 
 		var spName string
-		if strings.HasPrefix(upper, "ROLLBACK WORK TO SAVEPOINT ") {
-			spName = cleanSavepointName(trimmed[len("ROLLBACK WORK TO SAVEPOINT "):])
-		} else if strings.HasPrefix(upper, "ROLLBACK TO SAVEPOINT ") {
-			spName = cleanSavepointName(trimmed[len("ROLLBACK TO SAVEPOINT "):])
-		} else if strings.HasPrefix(upper, "ROLLBACK TO ") {
-			spName = cleanSavepointName(trimmed[len("ROLLBACK TO "):])
-		} else if strings.HasPrefix(upper, "ROLLBACK TRANSACTION ") {
-			rem := cleanSavepointName(trimmed[len("ROLLBACK TRANSACTION "):])
-			if rem != "" && !strings.EqualFold(rem, "WORK") {
-				spName = rem
-			}
-		} else if strings.HasPrefix(upper, "ROLLBACK TRAN ") {
-			rem := cleanSavepointName(trimmed[len("ROLLBACK TRAN "):])
+		if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK WORK TO SAVEPOINT ", "ROLLBACK TO SAVEPOINT ", "ROLLBACK TO "); ok {
+			spName = cleanSavepointName(rest)
+		} else if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK TRANSACTION ", "ROLLBACK TRAN "); ok {
+			rem := cleanSavepointName(rest)
 			if rem != "" && !strings.EqualFold(rem, "WORK") {
 				spName = rem
 			}
@@ -1076,4 +1053,14 @@ func cleanSavepointName(raw string) string {
 	raw = strings.TrimSpace(raw)
 	raw = strings.Trim(raw, "[]\"'`")
 	return strings.TrimSpace(raw)
+}
+
+// trimAnyPrefix returns original sliced past the first matching prefix matched case-insensitively against upper.
+func trimAnyPrefix(upper, original string, prefixes ...string) (string, bool) {
+	for _, p := range prefixes {
+		if strings.HasPrefix(upper, p) {
+			return original[len(p):], true
+		}
+	}
+	return "", false
 }

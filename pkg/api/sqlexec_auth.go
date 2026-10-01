@@ -9,6 +9,19 @@ import (
 	"sqlion/pkg/auth"
 )
 
+var (
+	reCreateLogin = regexp.MustCompile(`(?is)^CREATE\s+LOGIN\s+([^\s]+)\s+WITH\s+PASSWORD\s*=\s*['"](.*?)['"]`)
+	reAlterLogin  = regexp.MustCompile(`(?is)^ALTER\s+LOGIN\s+([^\s]+)\s+WITH\s+PASSWORD\s*=\s*['"](.*?)['"]`)
+	reDropLogin   = regexp.MustCompile(`(?is)^DROP\s+LOGIN\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
+	reCreateUser  = regexp.MustCompile(`(?is)^CREATE\s+USER\s+([^\s]+)(?:\s+FOR\s+LOGIN\s+([^\s;]+))?(?:\s+WITH\s+PASSWORD\s*=\s*['"](.*?)['"])?`)
+	reDropUser    = regexp.MustCompile(`(?is)^DROP\s+USER\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
+	reGrant       = regexp.MustCompile(`(?is)^GRANT\s+(.+?)\s+ON\s+(?:TABLE\s+)?([^\s]+)\s+TO\s+([^\s;]+)`)
+	reRevoke      = regexp.MustCompile(`(?is)^REVOKE\s+(.+?)\s+ON\s+(?:TABLE\s+)?([^\s]+)\s+FROM\s+([^\s;]+)`)
+	reDeny        = regexp.MustCompile(`(?is)^DENY\s+(.+?)\s+ON\s+(?:TABLE\s+)?([^\s]+)\s+TO\s+([^\s;]+)`)
+	reSetUser     = regexp.MustCompile(`(?is)^SETUSER\s+['"](.*?)['"]`)
+	reExecAs      = regexp.MustCompile(`(?is)^EXEC(?:UTE)?\s+AS\s+USER\s*=\s*['"](.*?)['"]`)
+)
+
 // checkTableAccess checks whether the current session user has permission to access a relation.
 func (s *Server) checkTableAccess(cs *ClientSession, table string, priv auth.Privilege) error {
 	if s.auth == nil {
@@ -41,8 +54,7 @@ func (s *Server) checkTableAccess(cs *ClientSession, table string, priv auth.Pri
 
 // execCreateLogin handles CREATE LOGIN <name> WITH PASSWORD = '<password>'.
 func (s *Server) execCreateLogin(query string, start time.Time) (*QueryResult, error) {
-	re := regexp.MustCompile(`(?is)^CREATE\s+LOGIN\s+([^\s]+)\s+WITH\s+PASSWORD\s*=\s*['"](.*?)['"]`)
-	m := re.FindStringSubmatch(query)
+	m := reCreateLogin.FindStringSubmatch(query)
 	if len(m) < 3 {
 		return nil, fmt.Errorf("invalid syntax: expected CREATE LOGIN <login_name> WITH PASSWORD = '<password>'")
 	}
@@ -65,8 +77,7 @@ func (s *Server) execCreateLogin(query string, start time.Time) (*QueryResult, e
 
 // execAlterLogin handles ALTER LOGIN <name> WITH PASSWORD = '<password>'.
 func (s *Server) execAlterLogin(query string, start time.Time) (*QueryResult, error) {
-	re := regexp.MustCompile(`(?is)^ALTER\s+LOGIN\s+([^\s]+)\s+WITH\s+PASSWORD\s*=\s*['"](.*?)['"]`)
-	m := re.FindStringSubmatch(query)
+	m := reAlterLogin.FindStringSubmatch(query)
 	if len(m) < 3 {
 		return nil, fmt.Errorf("invalid syntax: expected ALTER LOGIN <login_name> WITH PASSWORD = '<password>'")
 	}
@@ -89,8 +100,7 @@ func (s *Server) execAlterLogin(query string, start time.Time) (*QueryResult, er
 
 // execDropLogin handles DROP LOGIN [IF EXISTS] <name>.
 func (s *Server) execDropLogin(query string, start time.Time) (*QueryResult, error) {
-	re := regexp.MustCompile(`(?is)^DROP\s+LOGIN\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
-	m := re.FindStringSubmatch(query)
+	m := reDropLogin.FindStringSubmatch(query)
 	if len(m) < 2 {
 		return nil, fmt.Errorf("invalid syntax: expected DROP LOGIN [IF EXISTS] <login_name>")
 	}
@@ -122,8 +132,7 @@ func (s *Server) execDropLogin(query string, start time.Time) (*QueryResult, err
 
 // execCreateUser handles CREATE USER <name> [FOR LOGIN <login>] [WITH PASSWORD = '<password>'].
 func (s *Server) execCreateUser(query string, start time.Time) (*QueryResult, error) {
-	re := regexp.MustCompile(`(?is)^CREATE\s+USER\s+([^\s]+)(?:\s+FOR\s+LOGIN\s+([^\s;]+))?(?:\s+WITH\s+PASSWORD\s*=\s*['"](.*?)['"])?`)
-	m := re.FindStringSubmatch(query)
+	m := reCreateUser.FindStringSubmatch(query)
 	if len(m) < 2 {
 		return nil, fmt.Errorf("invalid syntax: expected CREATE USER <user_name> [FOR LOGIN <login_name>]")
 	}
@@ -161,8 +170,7 @@ func (s *Server) execCreateUser(query string, start time.Time) (*QueryResult, er
 
 // execDropUser handles DROP USER [IF EXISTS] <name>.
 func (s *Server) execDropUser(query string, start time.Time) (*QueryResult, error) {
-	re := regexp.MustCompile(`(?is)^DROP\s+USER\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
-	m := re.FindStringSubmatch(query)
+	m := reDropUser.FindStringSubmatch(query)
 	if len(m) < 2 {
 		return nil, fmt.Errorf("invalid syntax: expected DROP USER [IF EXISTS] <user_name>")
 	}
@@ -194,8 +202,7 @@ func (s *Server) execDropUser(query string, start time.Time) (*QueryResult, erro
 
 // execGrant handles GRANT <permission> ON [TABLE] <table_name> TO <user_name>.
 func (s *Server) execGrant(query string, start time.Time) (*QueryResult, error) {
-	re := regexp.MustCompile(`(?is)^GRANT\s+(.+?)\s+ON\s+(?:TABLE\s+)?([^\s]+)\s+TO\s+([^\s;]+)`)
-	m := re.FindStringSubmatch(query)
+	m := reGrant.FindStringSubmatch(query)
 	if len(m) < 4 {
 		return nil, fmt.Errorf("invalid syntax: expected GRANT <privilege> ON [TABLE] <table_name> TO <user_name>")
 	}
@@ -224,8 +231,7 @@ func (s *Server) execGrant(query string, start time.Time) (*QueryResult, error) 
 
 // execRevoke handles REVOKE <permission> ON [TABLE] <table_name> FROM <user_name>.
 func (s *Server) execRevoke(query string, start time.Time) (*QueryResult, error) {
-	re := regexp.MustCompile(`(?is)^REVOKE\s+(.+?)\s+ON\s+(?:TABLE\s+)?([^\s]+)\s+FROM\s+([^\s;]+)`)
-	m := re.FindStringSubmatch(query)
+	m := reRevoke.FindStringSubmatch(query)
 	if len(m) < 4 {
 		return nil, fmt.Errorf("invalid syntax: expected REVOKE <privilege> ON [TABLE] <table_name> FROM <user_name>")
 	}
@@ -254,8 +260,7 @@ func (s *Server) execRevoke(query string, start time.Time) (*QueryResult, error)
 
 // execDeny handles DENY <permission> ON [TABLE] <table_name> TO <user_name>.
 func (s *Server) execDeny(query string, start time.Time) (*QueryResult, error) {
-	re := regexp.MustCompile(`(?is)^DENY\s+(.+?)\s+ON\s+(?:TABLE\s+)?([^\s]+)\s+TO\s+([^\s;]+)`)
-	m := re.FindStringSubmatch(query)
+	m := reDeny.FindStringSubmatch(query)
 	if len(m) < 4 {
 		return nil, fmt.Errorf("invalid syntax: expected DENY <privilege> ON [TABLE] <table_name> TO <user_name>")
 	}
@@ -309,7 +314,6 @@ func (s *Server) execSetUser(query string, start time.Time, cs *ClientSession) (
 	}
 
 	// SETUSER '<name>'
-	reSetUser := regexp.MustCompile(`(?is)^SETUSER\s+['"](.*?)['"]`)
 	if m := reSetUser.FindStringSubmatch(query); len(m) >= 2 {
 		targetUser := cleanIdentifier(m[1])
 		if _, err := s.auth.GetUser(targetUser); err != nil && targetUser != "dbo" && targetUser != "guest" && targetUser != "sa" {
@@ -328,7 +332,6 @@ func (s *Server) execSetUser(query string, start time.Time, cs *ClientSession) (
 	}
 
 	// EXECUTE AS USER = '<name>'
-	reExecAs := regexp.MustCompile(`(?is)^EXEC(?:UTE)?\s+AS\s+USER\s*=\s*['"](.*?)['"]`)
 	if m := reExecAs.FindStringSubmatch(query); len(m) >= 2 {
 		targetUser := cleanIdentifier(m[1])
 		if _, err := s.auth.GetUser(targetUser); err != nil && targetUser != "dbo" && targetUser != "guest" && targetUser != "sa" {

@@ -62,8 +62,9 @@ func main() {
 	doctorFlag := flag.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
 
 	// Daemon control flags
-	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
-	daemonLongFlag := flag.Bool("daemon", false, "Run SQLion server as background daemon")
+	var daemon bool
+	flag.BoolVar(&daemon, "d", false, "Run SQLion server as background daemon")
+	flag.BoolVar(&daemon, "daemon", false, "Run SQLion server as background daemon")
 	stopFlag := flag.Bool("stop", false, "Stop running SQLion daemon")
 	statusFlag := flag.Bool("status", false, "Check status of running SQLion daemon")
 	restartFlag := flag.Bool("restart", false, "Restart SQLion daemon")
@@ -156,34 +157,10 @@ func main() {
 		cfg.Logging.SlowQuery.ThresholdMS = *slowThreshold
 	}
 	if visited["slow-log"] {
-		switch *slowLog {
-		case "false", "0", "":
-			cfg.Logging.SlowQuery.Enabled = false
-			cfg.Logging.SlowQuery.File = ""
-		case "true", "1":
-			cfg.Logging.SlowQuery.Enabled = true
-			if cfg.Logging.SlowQuery.File == "" {
-				cfg.Logging.SlowQuery.File = filepath.Join(cfg.Server.DataDir, "slow_query.log")
-			}
-		default:
-			cfg.Logging.SlowQuery.Enabled = true
-			cfg.Logging.SlowQuery.File = *slowLog
-		}
+		cfg.Logging.SlowQuery.File = resolveLogFilePath(*slowLog, "slow_query.log", cfg.Server.DataDir)
 	}
 	if visited["general-log"] {
-		switch *generalLog {
-		case "false", "0", "":
-			cfg.Logging.GeneralQuery.Enabled = false
-			cfg.Logging.GeneralQuery.File = ""
-		case "true", "1":
-			cfg.Logging.GeneralQuery.Enabled = true
-			if cfg.Logging.GeneralQuery.File == "" {
-				cfg.Logging.GeneralQuery.File = filepath.Join(cfg.Server.DataDir, "general.log")
-			}
-		default:
-			cfg.Logging.GeneralQuery.Enabled = true
-			cfg.Logging.GeneralQuery.File = *generalLog
-		}
+		cfg.Logging.GeneralQuery.File = resolveLogFilePath(*generalLog, "general.log", cfg.Server.DataDir)
 	}
 
 	if strings.TrimSpace(cfg.Server.DataDir) == "" {
@@ -210,7 +187,7 @@ func main() {
 	// Handle daemon commands if not running as internal worker
 	if !*isChildWorker {
 		if handleDaemonCommands(
-			*daemonFlag || *daemonLongFlag,
+			daemon,
 			*stopFlag,
 			*statusFlag,
 			*restartFlag,
@@ -420,7 +397,7 @@ func main() {
 	if cfg.Logging.SlowQuery.ThresholdMS > 0 {
 		server.SetSlowQueryThreshold(time.Duration(cfg.Logging.SlowQuery.ThresholdMS * float64(time.Millisecond)))
 	}
-	if cfg.Logging.SlowQuery.IsEnabled() && cfg.Logging.SlowQuery.File != "" {
+	if cfg.Logging.SlowQuery.IsEnabled() {
 		if err := server.SetSlowQueryLogFile(cfg.Logging.SlowQuery.File); err != nil {
 			log.Printf("[SQLion] Warning: Failed to enable slow query log file: %v", err)
 		} else {
@@ -430,12 +407,10 @@ func main() {
 
 	if cfg.Logging.GeneralQuery.IsEnabled() {
 		server.SetGeneralLogEnabled(true)
-		if cfg.Logging.GeneralQuery.File != "" {
-			if err := server.SetGeneralLogFile(cfg.Logging.GeneralQuery.File); err != nil {
-				log.Printf("[SQLion] Warning: Failed to enable general query log file: %v", err)
-			} else {
-				log.Printf("[SQLion] General query log file enabled: %s", cfg.Logging.GeneralQuery.File)
-			}
+		if err := server.SetGeneralLogFile(cfg.Logging.GeneralQuery.File); err != nil {
+			log.Printf("[SQLion] Warning: Failed to enable general query log file: %v", err)
+		} else {
+			log.Printf("[SQLion] General query log file enabled: %s", cfg.Logging.GeneralQuery.File)
 		}
 	}
 
@@ -731,4 +706,15 @@ func checkPortAvailable(addr string) error {
 	}
 	_ = ln.Close()
 	return nil
+}
+
+func resolveLogFilePath(flagVal, defaultName, dataDir string) string {
+	switch flagVal {
+	case "false", "0", "":
+		return ""
+	case "true", "1":
+		return filepath.Join(dataDir, defaultName)
+	default:
+		return flagVal
+	}
 }

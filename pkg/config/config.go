@@ -69,25 +69,23 @@ type ResourcesConfig struct {
 
 // SlowQueryLogConfig defines criteria and destination for slow queries.
 type SlowQueryLogConfig struct {
-	Enabled     bool    `json:"enabled"`
 	File        string  `json:"file,omitempty"`
 	ThresholdMS float64 `json:"threshold_ms"`
 }
 
-// IsEnabled returns true if explicitly enabled or if a non-empty log file is configured.
+// IsEnabled returns true if a non-empty log file is configured.
 func (s SlowQueryLogConfig) IsEnabled() bool {
-	return s.Enabled || strings.TrimSpace(s.File) != ""
+	return strings.TrimSpace(s.File) != ""
 }
 
 // GeneralQueryLogConfig defines full query auditing destination.
 type GeneralQueryLogConfig struct {
-	Enabled bool   `json:"enabled"`
-	File    string `json:"file,omitempty"`
+	File string `json:"file,omitempty"`
 }
 
-// IsEnabled returns true if explicitly enabled or if a non-empty log file is configured.
+// IsEnabled returns true if a non-empty log file is configured.
 func (g GeneralQueryLogConfig) IsEnabled() bool {
-	return g.Enabled || strings.TrimSpace(g.File) != ""
+	return strings.TrimSpace(g.File) != ""
 }
 
 // LoggingConfig aggregates diagnostic and query log policies.
@@ -134,13 +132,11 @@ func DefaultConfig() *Config {
 		},
 		Logging: LoggingConfig{
 			SlowQuery: SlowQueryLogConfig{
-				Enabled:     false,
-				File:        "data/slow_query.log",
+				File:        "",
 				ThresholdMS: 50.0,
 			},
 			GeneralQuery: GeneralQueryLogConfig{
-				Enabled: false,
-				File:    "data/general.log",
+				File: "",
 			},
 		},
 	}

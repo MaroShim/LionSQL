@@ -36,8 +36,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Replaced hardcoded `"id"` column checks in `execSelectInto`, `OpUpdate`, and `OpDelete` with dynamic primary key metadata resolution via `isPKCol` and `extractSimpleEq`.
   - Generalized single-column equality predicate parsing in `parseUpdate` and `parseDelete` so any column equality emits targeted `UpdateStmt` and `DeleteStmt` ASTs.
   - Implemented an O(1) point lookup fast-path using `f.tx.Get(table, pkVal)` in `execSelectInto`, `execUpdateWhere`, and `execDeleteWhere`, eliminating table-wide full scans on non-`id` primary key lookups (`w_id`, `d_key`, `c_key`, `s_key`, `no_key`).
-  - Configured `executor.SetTableGetter(eng.GetTable)` in `cmd/tpcc_vdbe` to enable runtime schema awareness.
-  - Boosted standalone TPC-C VDBE bytecode benchmark throughput from 93.7 TPS (2,519 tpmC) to **16,823.03 TPS (453,336.42 tpmC)** (180x speedup), reaching 51.5% of raw hand-written compiled Go storage API performance.
+### Refactored
+- **Codebase Simplification & Deletion-First Cleanups (Rules 15, 16, 30)**:
+  - **Daemon CLI Aliasing (`cmd/server/main.go`)**: Bound both `-d` and `-daemon` flags directly to a single `var daemon bool` variable via `flag.BoolVar`, removing duplicate flag pointers and compound boolean checks.
+  - **Transaction & Savepoint Slicing Consolidation (`pkg/api/sqlexec.go`)**: Introduced `trimAnyPrefix` helper to unify prefix matching and slicing across `SAVEPOINT`, `RELEASE`, and `ROLLBACK`, eliminating redundant substring slicing loops.
+  - **Query Log Configuration Alignment (`pkg/config/config.go`, `cmd/server/main.go`)**: Removed redundant `Enabled` boolean flags from `SlowQueryLogConfig` and `GeneralQueryLogConfig`, standardizing on empty path `""` as canonical disabled state. Deduplicated CLI resolution with `resolveLogFilePath`.
+  - **Doctor Health Check Socket Safety (`cmd/server/doctor.go`)**: Checked for empty listener addresses before probing TCP ports, preventing unintended ephemeral socket allocations for disabled services.
+  - **Zero-Allocation Hot Path Precompilation (`pkg/api/sqlexec_auth.go`)**: Hoisted function-level `regexp.MustCompile` invocations into static package-level variables for authentication DDL/DCL execution.
 
 ### Added
 - **Multi-Protocol Listener Granular Opt-Out (`pkg/config`, `cmd/server`)**:

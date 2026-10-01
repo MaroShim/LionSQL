@@ -158,6 +158,10 @@ func (d *Doctor) checkNetworkPorts() {
 	}
 
 	for _, p := range ports {
+		if strings.TrimSpace(p.addr) == "" {
+			d.addResult(cat, p.name, "(disabled)", "OK", nil)
+			continue
+		}
 		l, err := net.Listen("tcp", p.addr)
 		if err == nil {
 			_ = l.Close()
