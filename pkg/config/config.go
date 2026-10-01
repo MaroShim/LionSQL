@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ServerConfig defines server storage and process parameters.
@@ -30,6 +31,21 @@ type NetworkConfig struct {
 	PGAddr   string    `json:"pg_addr"`
 	TDSAddr  string    `json:"tds_addr"`
 	TLS      TLSConfig `json:"tls"`
+}
+
+// IsHTTPEnabled returns true if HTTPAddr is configured and non-empty.
+func (n NetworkConfig) IsHTTPEnabled() bool {
+	return strings.TrimSpace(n.HTTPAddr) != ""
+}
+
+// IsPGEnabled returns true if PGAddr is configured and non-empty.
+func (n NetworkConfig) IsPGEnabled() bool {
+	return strings.TrimSpace(n.PGAddr) != ""
+}
+
+// IsTDSEnabled returns true if TDSAddr is configured and non-empty.
+func (n NetworkConfig) IsTDSEnabled() bool {
+	return strings.TrimSpace(n.TDSAddr) != ""
 }
 
 // AuthConfig defines administrative authentication and credential settings.

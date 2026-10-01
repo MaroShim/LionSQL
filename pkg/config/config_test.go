@@ -131,3 +131,54 @@ func TestAutoDiscoverConfig(t *testing.T) {
 		t.Errorf("auto-discovery from dataDir failed: path=%s, engine=%s, err=%v", path, cfg.Server.Engine, err)
 	}
 }
+
+func TestNetworkConfig_OptOut(t *testing.T) {
+	// 1. Default config: all 3 enabled
+	cfg := config.DefaultConfig()
+	if !cfg.Network.IsHTTPEnabled() || !cfg.Network.IsPGEnabled() || !cfg.Network.IsTDSEnabled() {
+		t.Fatalf("expected all listeners enabled by default")
+	}
+
+	// 2. Opt-out via empty address string (e.g. -pg="" or "pg_addr": "")
+	cfg.Network.PGAddr = ""
+	if cfg.Network.IsPGEnabled() {
+		t.Errorf("expected PG to be disabled when pg_addr is empty")
+	}
+	if !cfg.Network.IsHTTPEnabled() || !cfg.Network.IsTDSEnabled() {
+		t.Errorf("expected other listeners to remain enabled")
+	}
+
+	// 3. Opt-out via empty addresses in JSON file
+	tmpDir, err := os.MkdirTemp("", "sqlion_optout_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	jsonPath := filepath.Join(tmpDir, "sqlion.json")
+	customJSON := `{
+		"network": {
+			"http_addr": "",
+			"pg_addr": "",
+			"tds_addr": ""
+		}
+	}`
+	if err := os.WriteFile(jsonPath, []byte(customJSON), 0644); err != nil {
+		t.Fatalf("write customJSON failed: %v", err)
+	}
+
+	loaded, err := config.LoadFromFile(jsonPath)
+	if err != nil {
+		t.Fatalf("LoadFromFile failed: %v", err)
+	}
+	if loaded.Network.IsHTTPEnabled() {
+		t.Errorf("expected HTTP to be disabled when http_addr is empty")
+	}
+	if loaded.Network.IsPGEnabled() {
+		t.Errorf("expected PG to be disabled when pg_addr is empty")
+	}
+	if loaded.Network.IsTDSEnabled() {
+		t.Errorf("expected TDS to be disabled when tds_addr is empty")
+	}
+}
+

@@ -40,6 +40,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Boosted standalone TPC-C VDBE bytecode benchmark throughput from 93.7 TPS (2,519 tpmC) to **16,823.03 TPS (453,336.42 tpmC)** (180x speedup), reaching 51.5% of raw hand-written compiled Go storage API performance.
 
 ### Added
+- **Multi-Protocol Listener Granular Opt-Out (`pkg/config`, `cmd/server`)**:
+  - Implemented clean, zero-redundancy listener opt-out for PostgreSQL (`:5433`), TDS (`:1433`), and HTTP (`:8090`) following the Deletion-First / KISS rule.
+  - Eliminated ad-hoc boolean flags by establishing a single universal convention: providing an empty address string (`""`) disables that listener across both CLI flags (`-pg=""`, `-tds=""`, `-http=""`) and JSON configuration (`"pg_addr": ""`).
+  - Allowed running in specialized modes: pure REST/Web-only (both wire protocols disabled), headless DB-only (HTTP disabled), or single-protocol standalone with zero port conflicts.
+  - Added unit test coverage in `pkg/config/config_test.go` (`TestNetworkConfig_OptOut`).
+
 - **T-SQL `FOR JSON` Clause Engine (`FOR JSON PATH`, `AUTO`) (`pkg/api`)**:
   - Implemented native Microsoft T-SQL `FOR JSON PATH` and `FOR JSON AUTO` query clauses returning query results formatted directly as standard JSON strings.
   - Supported standard T-SQL JSON options:

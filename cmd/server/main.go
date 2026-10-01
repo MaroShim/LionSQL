@@ -32,9 +32,9 @@ import (
 )
 
 func main() {
-	httpAddr := flag.String("http", "127.0.0.1:8090", "HTTP service and admin dashboard address")
-	pgAddr := flag.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address")
-	tdsAddr := flag.String("tds", "127.0.0.1:1433", "TDS (MSSQL) wire protocol listen address")
+	httpAddr := flag.String("http", "127.0.0.1:8090", "HTTP service address (set to empty to disable)")
+	pgAddr := flag.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address (set to empty to disable)")
+	tdsAddr := flag.String("tds", "127.0.0.1:1433", "TDS (MSSQL) wire protocol listen address (set to empty to disable)")
 	dataDir := flag.String("dir", "data", "Data directory for database files (default: data)")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
@@ -241,32 +241,38 @@ func main() {
 
 		// Pre-flight port collision verification for server mode
 		if *backupTarget == "" && *restoreSource == "" {
-			if err := checkPortAvailable(cfg.Network.HTTPAddr); err != nil {
-				fmt.Printf("\n[SQLion] Error: HTTP port conflict (%s): %v\n", cfg.Network.HTTPAddr, err)
-				fmt.Println("         Another SQLion server or service is already listening on this port.")
-				fmt.Println("         To view status:  ./bin/server -status")
-				fmt.Println("         To stop daemon:  ./bin/server -stop")
-				fmt.Println("         To restart:      ./bin/server -restart")
-				fmt.Println()
-				os.Exit(1)
+			if cfg.Network.IsHTTPEnabled() {
+				if err := checkPortAvailable(cfg.Network.HTTPAddr); err != nil {
+					fmt.Printf("\n[SQLion] Error: HTTP port conflict (%s): %v\n", cfg.Network.HTTPAddr, err)
+					fmt.Println("         Another SQLion server or service is already listening on this port.")
+					fmt.Println("         To view status:  ./bin/server -status")
+					fmt.Println("         To stop daemon:  ./bin/server -stop")
+					fmt.Println("         To restart:      ./bin/server -restart")
+					fmt.Println()
+					os.Exit(1)
+				}
 			}
-			if err := checkPortAvailable(cfg.Network.PGAddr); err != nil {
-				fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", cfg.Network.PGAddr, err)
-				fmt.Println("         Another SQLion server or service is already listening on this port.")
-				fmt.Println("         To view status:  ./bin/server -status")
-				fmt.Println("         To stop daemon:  ./bin/server -stop")
-				fmt.Println("         To restart:      ./bin/server -restart")
-				fmt.Println()
-				os.Exit(1)
+			if cfg.Network.IsPGEnabled() {
+				if err := checkPortAvailable(cfg.Network.PGAddr); err != nil {
+					fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", cfg.Network.PGAddr, err)
+					fmt.Println("         Another SQLion server or service is already listening on this port.")
+					fmt.Println("         To view status:  ./bin/server -status")
+					fmt.Println("         To stop daemon:  ./bin/server -stop")
+					fmt.Println("         To restart:      ./bin/server -restart")
+					fmt.Println()
+					os.Exit(1)
+				}
 			}
-			if err := checkPortAvailable(cfg.Network.TDSAddr); err != nil {
-				fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", cfg.Network.TDSAddr, err)
-				fmt.Println("         Another SQLion server or service is already listening on this port.")
-				fmt.Println("         To view status:  ./bin/server -status")
-				fmt.Println("         To stop daemon:  ./bin/server -stop")
-				fmt.Println("         To restart:      ./bin/server -restart")
-				fmt.Println()
-				os.Exit(1)
+			if cfg.Network.IsTDSEnabled() {
+				if err := checkPortAvailable(cfg.Network.TDSAddr); err != nil {
+					fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", cfg.Network.TDSAddr, err)
+					fmt.Println("         Another SQLion server or service is already listening on this port.")
+					fmt.Println("         To view status:  ./bin/server -status")
+					fmt.Println("         To stop daemon:  ./bin/server -stop")
+					fmt.Println("         To restart:      ./bin/server -restart")
+					fmt.Println()
+					os.Exit(1)
+				}
 			}
 		}
 	}
@@ -429,17 +435,31 @@ func main() {
 		}
 	}
 
-	httpServer := &http.Server{
-		Addr:         cfg.Network.HTTPAddr,
-		Handler:      server.Handler(),
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 15 * time.Second,
+	var httpServer *http.Server
+	if cfg.Network.IsHTTPEnabled() {
+		httpServer = &http.Server{
+			Addr:         cfg.Network.HTTPAddr,
+			Handler:      server.Handler(),
+			ReadTimeout:  15 * time.Second,
+			WriteTimeout: 15 * time.Second,
+		}
 	}
 
 	sharedCache := server.BytecodePlanCache()
-	wireServer := wire.NewServerWithCache(cfg.Network.PGAddr, cat, eng, sharedCache)
-	tdsServer := tds.NewServerWithCache(cfg.Network.TDSAddr, cat, eng, sharedCache)
-	if cfg.Network.TLS.Enabled || cfg.Network.TLS.CertFile != "" || cfg.Network.TLS.RequireSSL {
+	var wireServer *wire.Server
+	var tdsServer *tds.Server
+
+	pgEnabled := cfg.Network.IsPGEnabled()
+	tdsEnabled := cfg.Network.IsTDSEnabled()
+
+	if pgEnabled {
+		wireServer = wire.NewServerWithCache(cfg.Network.PGAddr, cat, eng, sharedCache)
+	}
+	if tdsEnabled {
+		tdsServer = tds.NewServerWithCache(cfg.Network.TDSAddr, cat, eng, sharedCache)
+	}
+
+	if (pgEnabled || tdsEnabled) && (cfg.Network.TLS.Enabled || cfg.Network.TLS.CertFile != "" || cfg.Network.TLS.RequireSSL) {
 		var tlsConfig *tls.Config
 		if cfg.Network.TLS.CertFile != "" && cfg.Network.TLS.KeyFile != "" {
 			tlsCfg, err := wire.LoadTLSConfig(cfg.Network.TLS.CertFile, cfg.Network.TLS.KeyFile)
@@ -455,34 +475,43 @@ func main() {
 			}
 			tlsConfig = tlsCfg
 		}
-		wireServer.SetTLSConfig(tlsConfig)
-		wireServer.SetRequireSSL(cfg.Network.TLS.RequireSSL)
-		tdsServer.SetTLSConfig(tlsConfig)
-		tdsServer.SetRequireSSL(cfg.Network.TLS.RequireSSL)
-		log.Printf("[SQLion] PostgreSQL Wire SSL/TLS enabled (Require SSL: %v)", cfg.Network.TLS.RequireSSL)
-		log.Printf("[SQLion] TDS (MSSQL) Wire SSL/TLS enabled (Require SSL: %v)", cfg.Network.TLS.RequireSSL)
-	}
-	if err := wireServer.Start(); err != nil {
-		if strings.Contains(err.Error(), "address already in use") {
-			fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", cfg.Network.PGAddr, err)
-			fmt.Println("         Another SQLion server or service is already listening on this port.")
-			fmt.Println()
-			os.Exit(1)
+		if wireServer != nil {
+			wireServer.SetTLSConfig(tlsConfig)
+			wireServer.SetRequireSSL(cfg.Network.TLS.RequireSSL)
+			log.Printf("[SQLion] PostgreSQL Wire SSL/TLS enabled (Require SSL: %v)", cfg.Network.TLS.RequireSSL)
 		}
-		log.Fatalf("Failed to start PostgreSQL wire protocol listener: %v", err)
+		if tdsServer != nil {
+			tdsServer.SetTLSConfig(tlsConfig)
+			tdsServer.SetRequireSSL(cfg.Network.TLS.RequireSSL)
+			log.Printf("[SQLion] TDS (MSSQL) Wire SSL/TLS enabled (Require SSL: %v)", cfg.Network.TLS.RequireSSL)
+		}
 	}
-	defer wireServer.Close()
 
-	if err := tdsServer.Start(); err != nil {
-		if strings.Contains(err.Error(), "address already in use") {
-			fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", cfg.Network.TDSAddr, err)
-			fmt.Println("         Another SQLion server or service is already listening on this port.")
-			fmt.Println()
-			os.Exit(1)
+	if wireServer != nil {
+		if err := wireServer.Start(); err != nil {
+			if strings.Contains(err.Error(), "address already in use") {
+				fmt.Printf("\n[SQLion] Error: PostgreSQL wire port conflict (%s): %v\n", cfg.Network.PGAddr, err)
+				fmt.Println("         Another SQLion server or service is already listening on this port.")
+				fmt.Println()
+				os.Exit(1)
+			}
+			log.Fatalf("Failed to start PostgreSQL wire protocol listener: %v", err)
 		}
-		log.Fatalf("Failed to start TDS wire protocol listener: %v", err)
+		defer wireServer.Close()
 	}
-	defer tdsServer.Close()
+
+	if tdsServer != nil {
+		if err := tdsServer.Start(); err != nil {
+			if strings.Contains(err.Error(), "address already in use") {
+				fmt.Printf("\n[SQLion] Error: TDS/MSSQL wire port conflict (%s): %v\n", cfg.Network.TDSAddr, err)
+				fmt.Println("         Another SQLion server or service is already listening on this port.")
+				fmt.Println()
+				os.Exit(1)
+			}
+			log.Fatalf("Failed to start TDS wire protocol listener: %v", err)
+		}
+		defer tdsServer.Close()
+	}
 
 	// Graceful shutdown channel
 	stop := make(chan os.Signal, 1)
@@ -497,11 +526,24 @@ func main() {
 		} else {
 			fmt.Println(" [Configuration]  Zero-Config (Built-in Defaults)")
 		}
-		fmt.Printf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr)
-		fmt.Printf(" [HTTP API]       http://%s/api/health\n", cfg.Network.HTTPAddr)
+		if httpServer != nil && strings.Contains(cfg.Network.HTTPAddr, ":") {
+			fmt.Printf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr)
+			fmt.Printf(" [HTTP API]       http://%s/api/health\n", cfg.Network.HTTPAddr)
+		} else {
+			fmt.Println(" [Web Dashboard]  Disabled (opted out)")
+			fmt.Println(" [HTTP API]       Disabled (opted out)")
+		}
 		fmt.Printf(" [Superuser Auth] %s (JWT Auth: %v)\n", cfg.Auth.AdminEmail, cfg.Auth.Enabled)
-		fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (DBeaver / psql)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
-		fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (DBeaver / Azure Data Studio / pymssql)\n", strings.Split(cfg.Network.TDSAddr, ":")[1])
+		if wireServer != nil && strings.Contains(cfg.Network.PGAddr, ":") {
+			fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (DBeaver / psql)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
+		} else {
+			fmt.Println(" [Postgres Wire]  Disabled (opted out)")
+		}
+		if tdsServer != nil && strings.Contains(cfg.Network.TDSAddr, ":") {
+			fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (DBeaver / Azure Data Studio / pymssql)\n", strings.Split(cfg.Network.TDSAddr, ":")[1])
+		} else {
+			fmt.Println(" [TDS / MSSQL]    Disabled (opted out)")
+		}
 		fmt.Printf(" [Data Directory] %s\n", cfg.Server.DataDir)
 		fmt.Printf(" [Storage Engine] %s\n", cfg.Server.Engine)
 		stats := server.Pool().Stats()
@@ -520,12 +562,14 @@ func main() {
 		fmt.Println("------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")
 
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			if strings.Contains(err.Error(), "address already in use") {
-				fmt.Printf("\n[SQLion] Error: HTTP service port conflict (%s): %v\n\n", cfg.Network.HTTPAddr, err)
-				os.Exit(1)
+		if httpServer != nil {
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				if strings.Contains(err.Error(), "address already in use") {
+					fmt.Printf("\n[SQLion] Error: HTTP service port conflict (%s): %v\n\n", cfg.Network.HTTPAddr, err)
+					os.Exit(1)
+				}
+				log.Fatalf("HTTP server failure: %v", err)
 			}
-			log.Fatalf("HTTP server failure: %v", err)
 		}
 	}()
 
@@ -535,10 +579,16 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	_ = tdsServer.Close()
-	_ = wireServer.Close()
-	_ = httpServer.Shutdown(ctx)
-	_ = httpServer.Close()
+	if tdsServer != nil {
+		_ = tdsServer.Close()
+	}
+	if wireServer != nil {
+		_ = wireServer.Close()
+	}
+	if httpServer != nil {
+		_ = httpServer.Shutdown(ctx)
+		_ = httpServer.Close()
+	}
 	_ = server.Close()
 	_ = eng.Close()
 
