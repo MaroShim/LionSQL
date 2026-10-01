@@ -248,75 +248,230 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 		targetCol = winDef.Args[0]
 	}
 
-	switch fn {
-	case "COUNT":
-		cnt := int64(len(indices))
-		for _, rowIdx := range indices {
-			winValues[rowIdx] = cnt
+	frame := winDef.Frame
+	if frame == nil && len(winDef.OrderByKeys) > 0 {
+		// ANSI SQL default with ORDER BY: ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+		frame = &planner.WindowFrame{
+			Start: planner.FrameBound{Type: planner.FrameUnboundedPreceding},
+			End:   planner.FrameBound{Type: planner.FrameCurrentRow},
 		}
-	case "SUM":
-		sum := float64(0)
-		hasVal := false
-		for _, rowIdx := range indices {
-			if v := w.rows[rowIdx].Get(targetCol); v != nil {
-				if f, ok := toFloat64(v); ok {
-					sum += f
-					hasVal = true
+	}
+
+	if frame == nil {
+		// Fast-path: Entire partition computation (no frame / no ORDER BY)
+		switch fn {
+		case "COUNT":
+			cnt := int64(0)
+			for _, rowIdx := range indices {
+				if targetCol == "" || targetCol == "*" || w.rows[rowIdx].Get(targetCol) != nil {
+					cnt++
 				}
 			}
+			for _, rowIdx := range indices {
+				winValues[rowIdx] = cnt
+			}
+		case "SUM":
+			sum := float64(0)
+			hasVal := false
+			for _, rowIdx := range indices {
+				if v := w.rows[rowIdx].Get(targetCol); v != nil {
+					if f, ok := toFloat64(v); ok {
+						sum += f
+						hasVal = true
+					}
+				}
+			}
+			for _, rowIdx := range indices {
+				if hasVal {
+					winValues[rowIdx] = sum
+				} else {
+					winValues[rowIdx] = nil
+				}
+			}
+		case "AVG":
+			sum := float64(0)
+			count := 0
+			for _, rowIdx := range indices {
+				if v := w.rows[rowIdx].Get(targetCol); v != nil {
+					if f, ok := toFloat64(v); ok {
+						sum += f
+						count++
+					}
+				}
+			}
+			var avg any = nil
+			if count > 0 {
+				avg = sum / float64(count)
+			}
+			for _, rowIdx := range indices {
+				winValues[rowIdx] = avg
+			}
+		case "MIN":
+			var minVal any = nil
+			for _, rowIdx := range indices {
+				v := w.rows[rowIdx].Get(targetCol)
+				if v != nil {
+					if minVal == nil || compareAny(v, minVal) < 0 {
+						minVal = v
+					}
+				}
+			}
+			for _, rowIdx := range indices {
+				winValues[rowIdx] = minVal
+			}
+		case "MAX":
+			var maxVal any = nil
+			for _, rowIdx := range indices {
+				v := w.rows[rowIdx].Get(targetCol)
+				if v != nil {
+					if maxVal == nil || compareAny(v, maxVal) > 0 {
+						maxVal = v
+					}
+				}
+			}
+			for _, rowIdx := range indices {
+				winValues[rowIdx] = maxVal
+			}
 		}
-		for _, rowIdx := range indices {
+		return
+	}
+
+	// Frame-based sliding window computation
+	total := len(indices)
+	for i := 0; i < total; i++ {
+		rowIdx := indices[i]
+		startK, endK := getFrameBounds(frame, i, total)
+		if endK < startK {
+			if fn == "COUNT" {
+				winValues[rowIdx] = int64(0)
+			} else {
+				winValues[rowIdx] = nil
+			}
+			continue
+		}
+
+		switch fn {
+		case "COUNT":
+			cnt := int64(0)
+			for k := startK; k <= endK; k++ {
+				kRowIdx := indices[k]
+				if targetCol == "" || targetCol == "*" || w.rows[kRowIdx].Get(targetCol) != nil {
+					cnt++
+				}
+			}
+			winValues[rowIdx] = cnt
+
+		case "SUM":
+			sum := float64(0)
+			hasVal := false
+			for k := startK; k <= endK; k++ {
+				kRowIdx := indices[k]
+				if v := w.rows[kRowIdx].Get(targetCol); v != nil {
+					if f, ok := toFloat64(v); ok {
+						sum += f
+						hasVal = true
+					}
+				}
+			}
 			if hasVal {
 				winValues[rowIdx] = sum
 			} else {
 				winValues[rowIdx] = nil
 			}
-		}
-	case "AVG":
-		sum := float64(0)
-		count := 0
-		for _, rowIdx := range indices {
-			if v := w.rows[rowIdx].Get(targetCol); v != nil {
-				if f, ok := toFloat64(v); ok {
-					sum += f
-					count++
+
+		case "AVG":
+			sum := float64(0)
+			count := 0
+			for k := startK; k <= endK; k++ {
+				kRowIdx := indices[k]
+				if v := w.rows[kRowIdx].Get(targetCol); v != nil {
+					if f, ok := toFloat64(v); ok {
+						sum += f
+						count++
+					}
 				}
 			}
-		}
-		var avg any = nil
-		if count > 0 {
-			avg = sum / float64(count)
-		}
-		for _, rowIdx := range indices {
-			winValues[rowIdx] = avg
-		}
-	case "MIN":
-		var minVal any = nil
-		for _, rowIdx := range indices {
-			v := w.rows[rowIdx].Get(targetCol)
-			if v != nil {
-				if minVal == nil || compareAny(v, minVal) < 0 {
-					minVal = v
+			if count > 0 {
+				winValues[rowIdx] = sum / float64(count)
+			} else {
+				winValues[rowIdx] = nil
+			}
+
+		case "MIN":
+			var minVal any = nil
+			for k := startK; k <= endK; k++ {
+				kRowIdx := indices[k]
+				v := w.rows[kRowIdx].Get(targetCol)
+				if v != nil {
+					if minVal == nil || compareAny(v, minVal) < 0 {
+						minVal = v
+					}
 				}
 			}
-		}
-		for _, rowIdx := range indices {
 			winValues[rowIdx] = minVal
-		}
-	case "MAX":
-		var maxVal any = nil
-		for _, rowIdx := range indices {
-			v := w.rows[rowIdx].Get(targetCol)
-			if v != nil {
-				if maxVal == nil || compareAny(v, maxVal) > 0 {
-					maxVal = v
+
+		case "MAX":
+			var maxVal any = nil
+			for k := startK; k <= endK; k++ {
+				kRowIdx := indices[k]
+				v := w.rows[kRowIdx].Get(targetCol)
+				if v != nil {
+					if maxVal == nil || compareAny(v, maxVal) > 0 {
+						maxVal = v
+					}
 				}
 			}
-		}
-		for _, rowIdx := range indices {
 			winValues[rowIdx] = maxVal
 		}
 	}
+}
+
+func getFrameBounds(frame *planner.WindowFrame, i, total int) (int, int) {
+	if frame == nil {
+		return 0, total - 1
+	}
+
+	startIdx := 0
+	switch frame.Start.Type {
+	case planner.FrameUnboundedPreceding:
+		startIdx = 0
+	case planner.FramePreceding:
+		startIdx = i - frame.Start.Offset
+		if startIdx < 0 {
+			startIdx = 0
+		}
+	case planner.FrameCurrentRow:
+		startIdx = i
+	case planner.FrameFollowing:
+		startIdx = i + frame.Start.Offset
+		if startIdx >= total {
+			startIdx = total
+		}
+	case planner.FrameUnboundedFollowing:
+		startIdx = total - 1
+	}
+
+	endIdx := total - 1
+	switch frame.End.Type {
+	case planner.FrameCurrentRow:
+		endIdx = i
+	case planner.FrameUnboundedFollowing:
+		endIdx = total - 1
+	case planner.FrameFollowing:
+		endIdx = i + frame.End.Offset
+		if endIdx >= total {
+			endIdx = total - 1
+		}
+	case planner.FramePreceding:
+		endIdx = i - frame.End.Offset
+		if endIdx < 0 {
+			endIdx = -1
+		}
+	case planner.FrameUnboundedPreceding:
+		endIdx = 0
+	}
+
+	return startIdx, endIdx
 }
 
 func sameSortKeys(t1, t2 Tuple, orderKeys []planner.SortKeyDef) bool {

@@ -1,6 +1,8 @@
 package api_test
 
 import (
+	"fmt"
+	"strconv"
 	"testing"
 )
 
@@ -345,5 +347,90 @@ func TestWindow_InCTE(t *testing.T) {
 	}
 	if topStaff["Sales"] != "Dave" {
 		t.Fatalf("expected Dave as top Sales, got %s", topStaff["Sales"])
+	}
+}
+
+func TestWindow_Frames_RunningTotalAndMovingAvg(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	_, err := server.ExecuteSQL(`CREATE TABLE daily_sales (day_num INT, amount FLOAT);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, err = server.ExecuteSQL(`INSERT INTO daily_sales VALUES
+		(1, 100.0),
+		(2, 200.0),
+		(3, 300.0),
+		(4, 400.0);`)
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// 1. Running Total with explicit ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+	q1 := `SELECT day_num, amount,
+		SUM(amount) OVER (ORDER BY day_num ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total
+		FROM daily_sales;`
+	res1, err := server.ExecuteSQL(q1)
+	if err != nil || !res1.Success {
+		t.Fatalf("Running total query failed: %v", err)
+	}
+	if len(res1.Rows) != 4 {
+		t.Fatalf("expected 4 rows, got %d", len(res1.Rows))
+	}
+	expectedTotals := []float64{100.0, 300.0, 600.0, 1000.0}
+	for i, exp := range expectedTotals {
+		got, _ := strconv.ParseFloat(fmt.Sprintf("%v", res1.Rows[i]["running_total"]), 64)
+		if got != exp {
+			t.Errorf("row %d: expected running total %f, got %f", i, exp, got)
+		}
+	}
+
+	// 2. Running Total with shorthand ROWS UNBOUNDED PRECEDING
+	q2 := `SELECT day_num, amount,
+		SUM(amount) OVER (ORDER BY day_num ASC ROWS UNBOUNDED PRECEDING) AS running_total
+		FROM daily_sales;`
+	res2, err := server.ExecuteSQL(q2)
+	if err != nil || !res2.Success {
+		t.Fatalf("Shorthand running total query failed: %v", err)
+	}
+	for i, exp := range expectedTotals {
+		got, _ := strconv.ParseFloat(fmt.Sprintf("%v", res2.Rows[i]["running_total"]), 64)
+		if got != exp {
+			t.Errorf("shorthand row %d: expected running total %f, got %f", i, exp, got)
+		}
+	}
+
+	// 3. Centered Moving Average: ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING
+	q3 := `SELECT day_num, amount,
+		AVG(amount) OVER (ORDER BY day_num ASC ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING) AS moving_avg
+		FROM daily_sales;`
+	res3, err := server.ExecuteSQL(q3)
+	if err != nil || !res3.Success {
+		t.Fatalf("Moving avg query failed: %v", err)
+	}
+	expectedAvgs := []float64{150.0, 200.0, 300.0, 350.0}
+	for i, exp := range expectedAvgs {
+		got, _ := strconv.ParseFloat(fmt.Sprintf("%v", res3.Rows[i]["moving_avg"]), 64)
+		if got != exp {
+			t.Errorf("row %d: expected moving avg %f, got %f", i, exp, got)
+		}
+	}
+
+	// 4. Moving Sum: ROWS BETWEEN 1 PRECEDING AND CURRENT ROW
+	q4 := `SELECT day_num, amount,
+		SUM(amount) OVER (ORDER BY day_num ASC ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS moving_sum
+		FROM daily_sales;`
+	res4, err := server.ExecuteSQL(q4)
+	if err != nil || !res4.Success {
+		t.Fatalf("Moving sum query failed: %v", err)
+	}
+	expectedSums := []float64{100.0, 300.0, 500.0, 700.0}
+	for i, exp := range expectedSums {
+		got, _ := strconv.ParseFloat(fmt.Sprintf("%v", res4.Rows[i]["moving_sum"]), 64)
+		if got != exp {
+			t.Errorf("row %d: expected moving sum %f, got %f", i, exp, got)
+		}
 	}
 }

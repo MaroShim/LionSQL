@@ -45,6 +45,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - **Zero-Allocation Hot Path Precompilation (`pkg/api/sqlexec_auth.go`)**: Hoisted function-level `regexp.MustCompile` invocations into static package-level variables for authentication DDL/DCL execution.
 
 ### Added
+- **Window Frame Specification (`ROWS BETWEEN ... PRECEDING / FOLLOWING`) (`pkg/planner`, `pkg/execution`, `pkg/api`)**:
+  - Implemented ANSI SQL / T-SQL window frame specifications: `ROWS BETWEEN <start> AND <end>` and shorthand forms (`ROWS <bound> PRECEDING`).
+  - Supported frame bounds: `UNBOUNDED PRECEDING`, `N PRECEDING`, `CURRENT ROW`, `N FOLLOWING`, and `UNBOUNDED FOLLOWING`.
+  - Added sliding window frame aggregation for `COUNT`, `SUM`, `AVG`, `MIN`, and `MAX` in the window execution engine.
+  - Defaults to cumulative running total (`ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`) when `ORDER BY` is specified without an explicit frame clause.
+  - Added dedicated test suite in `pkg/api/window_test.go` (`TestWindow_Frames_RunningTotalAndMovingAvg`) covering running totals, centered moving averages, and moving sums.
 - **Real-Time Time-Bucket Analytics Engine (`DATETRUNC`, `DATE_BUCKET`) (`pkg/proc`, `pkg/execution`, `pkg/api`)**:
   - Implemented T-SQL 2022 and ANSI SQL `DATETRUNC(datepart, date)` and `DATE_TRUNC(datepart, date)` for date truncation (`year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`).
   - Implemented T-SQL `DATE_BUCKET(datepart, width, date [, origin])` for custom time-bucket aggregations (e.g. 5-minute, 15-minute, 2-hour intervals) aligned to clock boundaries.

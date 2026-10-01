@@ -39,12 +39,36 @@ type SortKeyDef struct {
 	Direction string `json:"direction"` // "ASC" or "DESC"
 }
 
-// WindowDef defines a window function specification (function, args, partition by, order by, alias).
+// FrameBoundType defines the boundary of a window frame.
+type FrameBoundType int
+
+const (
+	FrameUnboundedPreceding FrameBoundType = iota
+	FramePreceding
+	FrameCurrentRow
+	FrameFollowing
+	FrameUnboundedFollowing
+)
+
+// FrameBound defines a single frame boundary.
+type FrameBound struct {
+	Type   FrameBoundType `json:"type"`
+	Offset int            `json:"offset,omitempty"`
+}
+
+// WindowFrame defines a window frame specification (e.g. ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING).
+type WindowFrame struct {
+	Start FrameBound `json:"start"`
+	End   FrameBound `json:"end"`
+}
+
+// WindowDef defines a window function specification (function, args, partition by, order by, alias, frame).
 type WindowDef struct {
 	Function      string       `json:"function"`
 	Args          []string     `json:"args,omitempty"`
 	PartitionKeys []string     `json:"partition_keys,omitempty"`
 	OrderByKeys   []SortKeyDef `json:"order_by_keys,omitempty"`
+	Frame         *WindowFrame `json:"frame,omitempty"`
 	Alias         string       `json:"alias,omitempty"`
 	RawExpr       string       `json:"raw_expr,omitempty"`
 }
@@ -1347,6 +1371,25 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 	}
 
 	overContentUpper := strings.ToUpper(overContent)
+	frameIdx := -1
+	if idx := strings.Index(overContentUpper, "ROWS "); idx != -1 {
+		frameIdx = idx
+	} else if idx := strings.Index(overContentUpper, "RANGE "); idx != -1 {
+		frameIdx = idx
+	}
+
+	frameStr := ""
+	cleanOverContent := overContent
+	if frameIdx != -1 {
+		frameStr = strings.TrimSpace(overContent[frameIdx:])
+		cleanOverContent = strings.TrimSpace(overContent[:frameIdx])
+		overContentUpper = strings.ToUpper(cleanOverContent)
+	}
+
+	if frameStr != "" {
+		w.Frame = parseWindowFrame(frameStr)
+	}
+
 	partIdx := strings.Index(overContentUpper, "PARTITION BY")
 	orderIdx := strings.Index(overContentUpper, "ORDER BY")
 
@@ -1355,16 +1398,16 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 
 	if partIdx != -1 && orderIdx != -1 {
 		if partIdx < orderIdx {
-			partStr = strings.TrimSpace(overContent[partIdx+12 : orderIdx])
-			orderStr = strings.TrimSpace(overContent[orderIdx+8:])
+			partStr = strings.TrimSpace(cleanOverContent[partIdx+12 : orderIdx])
+			orderStr = strings.TrimSpace(cleanOverContent[orderIdx+8:])
 		} else {
-			orderStr = strings.TrimSpace(overContent[orderIdx+8 : partIdx])
-			partStr = strings.TrimSpace(overContent[partIdx+12:])
+			orderStr = strings.TrimSpace(cleanOverContent[orderIdx+8 : partIdx])
+			partStr = strings.TrimSpace(cleanOverContent[partIdx+12:])
 		}
 	} else if partIdx != -1 {
-		partStr = strings.TrimSpace(overContent[partIdx+12:])
+		partStr = strings.TrimSpace(cleanOverContent[partIdx+12:])
 	} else if orderIdx != -1 {
-		orderStr = strings.TrimSpace(overContent[orderIdx+8:])
+		orderStr = strings.TrimSpace(cleanOverContent[orderIdx+8:])
 	}
 
 	if partStr != "" {
@@ -1394,6 +1437,72 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 	}
 
 	return w, true
+}
+
+func parseWindowFrame(frameStr string) *WindowFrame {
+	s := strings.TrimSpace(frameStr)
+	sUpper := strings.ToUpper(s)
+	if strings.HasPrefix(sUpper, "ROWS ") {
+		s = strings.TrimSpace(s[5:])
+		sUpper = strings.TrimSpace(sUpper[5:])
+	} else if strings.HasPrefix(sUpper, "RANGE ") {
+		s = strings.TrimSpace(s[6:])
+		sUpper = strings.TrimSpace(sUpper[6:])
+	} else {
+		return nil
+	}
+
+	if strings.HasPrefix(sUpper, "BETWEEN ") {
+		rest := strings.TrimSpace(s[8:])
+		andIdx := strings.Index(strings.ToUpper(rest), " AND ")
+		if andIdx == -1 {
+			return nil
+		}
+		startStr := strings.TrimSpace(rest[:andIdx])
+		endStr := strings.TrimSpace(rest[andIdx+5:])
+		startBound, ok1 := parseFrameBound(startStr)
+		endBound, ok2 := parseFrameBound(endStr)
+		if !ok1 || !ok2 {
+			return nil
+		}
+		return &WindowFrame{Start: startBound, End: endBound}
+	}
+
+	// Shorthand: e.g. ROWS UNBOUNDED PRECEDING, ROWS 5 PRECEDING, ROWS CURRENT ROW
+	startBound, ok := parseFrameBound(s)
+	if !ok {
+		return nil
+	}
+	return &WindowFrame{
+		Start: startBound,
+		End:   FrameBound{Type: FrameCurrentRow},
+	}
+}
+
+func parseFrameBound(bStr string) (FrameBound, bool) {
+	upper := strings.ToUpper(strings.TrimSpace(bStr))
+	if upper == "UNBOUNDED PRECEDING" {
+		return FrameBound{Type: FrameUnboundedPreceding}, true
+	}
+	if upper == "UNBOUNDED FOLLOWING" {
+		return FrameBound{Type: FrameUnboundedFollowing}, true
+	}
+	if upper == "CURRENT ROW" {
+		return FrameBound{Type: FrameCurrentRow}, true
+	}
+	if strings.HasSuffix(upper, " PRECEDING") {
+		numStr := strings.TrimSpace(upper[:len(upper)-len(" PRECEDING")])
+		if n, err := strconv.Atoi(numStr); err == nil && n >= 0 {
+			return FrameBound{Type: FramePreceding, Offset: n}, true
+		}
+	}
+	if strings.HasSuffix(upper, " FOLLOWING") {
+		numStr := strings.TrimSpace(upper[:len(upper)-len(" FOLLOWING")])
+		if n, err := strconv.Atoi(numStr); err == nil && n >= 0 {
+			return FrameBound{Type: FrameFollowing, Offset: n}, true
+		}
+	}
+	return FrameBound{}, false
 }
 
 func extractTableQualifier(key string) string {
