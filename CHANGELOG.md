@@ -40,6 +40,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Boosted standalone TPC-C VDBE bytecode benchmark throughput from 93.7 TPS (2,519 tpmC) to **16,823.03 TPS (453,336.42 tpmC)** (180x speedup), reaching 51.5% of raw hand-written compiled Go storage API performance.
 
 ### Added
+- **T-SQL `FOR JSON` Clause Engine (`FOR JSON PATH`, `AUTO`) (`pkg/api`)**:
+  - Implemented native Microsoft T-SQL `FOR JSON PATH` and `FOR JSON AUTO` query clauses returning query results formatted directly as standard JSON strings.
+  - Supported standard T-SQL JSON options:
+    - `WITHOUT_ARRAY_WRAPPER`: Emits single un-enclosed JSON objects without square bracket array wrappers.
+    - `ROOT('root_name')`: Wraps top-level JSON elements in a named parent object.
+    - `INCLUDE_NULL_VALUES`: Preserves null keys in serialized JSON outputs instead of omitting them.
+    - Dot notation nesting: `col AS [parent.child]` automatically creates nested JSON object hierarchies (`{"parent": {"child": ...}}`).
+  - Standard column header identifier: Emits MSSQL standard `JSON_F52E2B61-18A1-11d1-B105-00805F49916B` single-row JSON string output.
+  - Added dedicated test suite in `pkg/api/for_json_test.go` covering basic path arrays, without array wrapper, root elements, and dot-notation nested objects.
+
 - **REST API Raw JSON Array Output Format (`POST /api/sql?format=array`) (`pkg/api`)**:
   - Implemented configurable JSON output formatting on `POST /api/sql` supporting both query parameter (`?format=array|records|raw`) and request body (`{"format": "array"}`).
   - Preserved the production-standard metadata envelope (`{ "success": true, "columns": [...], "rows": [...], "rows_affected": ... }`) as the default representation to guarantee robust error handling and DML observability.

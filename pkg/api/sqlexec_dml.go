@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1864,6 +1865,11 @@ func (s *Server) execSetOpExplain(setQuery *planner.SetOpQuery, analyze bool, st
 
 func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// -1. T-SQL FOR JSON clause: SELECT ... FOR JSON PATH / AUTO [,...]
+	if hasForJSON(cleaned) {
+		return s.execForJSONSelect(cleaned, start, cs)
+	}
 
 	// -1. View expansion: if FROM clause references a known view, rewrite as a CTE.
 	//     e.g. SELECT name FROM v_engineers WHERE salary > 85000
@@ -5540,4 +5546,169 @@ func (s *Server) execUnpivotSelect(query string, start time.Time, cs *ClientSess
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
+
+// -----------------------------------------------------------------------------
+// T-SQL FOR JSON Clause Engine (PATH, AUTO, WITHOUT_ARRAY_WRAPPER, ROOT, INCLUDE_NULL_VALUES)
+// -----------------------------------------------------------------------------
+
+func hasForJSON(query string) bool {
+	return regexp.MustCompile(`(?i)\bFOR\s+JSON\s+(PATH|AUTO)\b`).MatchString(query)
+}
+
+type forJSONOptions struct {
+	BaseQuery           string
+	Mode                string // "PATH" or "AUTO"
+	WithoutArrayWrapper bool
+	RootName            string
+	IncludeNullValues   bool
+}
+
+func parseForJSONQuery(query string) (*forJSONOptions, error) {
+	re := regexp.MustCompile(`(?i)\bFOR\s+JSON\s+(PATH|AUTO)(.*)$`)
+	loc := re.FindStringSubmatchIndex(query)
+	if loc == nil {
+		return nil, fmt.Errorf("no FOR JSON clause found")
+	}
+
+	baseQuery := strings.TrimSpace(query[:loc[0]])
+	mode := strings.ToUpper(query[loc[2]:loc[3]])
+	rawOptions := ""
+	if len(loc) >= 6 && loc[4] != -1 {
+		rawOptions = strings.TrimSpace(query[loc[4]:loc[5]])
+	}
+
+	opts := &forJSONOptions{
+		BaseQuery: baseQuery,
+		Mode:      mode,
+	}
+
+	if rawOptions != "" {
+		// Split options by comma
+		optParts := strings.Split(rawOptions, ",")
+		for _, part := range optParts {
+			p := strings.TrimSpace(part)
+			pUpper := strings.ToUpper(p)
+			if pUpper == "WITHOUT_ARRAY_WRAPPER" {
+				opts.WithoutArrayWrapper = true
+			} else if pUpper == "INCLUDE_NULL_VALUES" {
+				opts.IncludeNullValues = true
+			} else if strings.HasPrefix(pUpper, "ROOT") {
+				// ROOT or ROOT('name')
+				rootRe := regexp.MustCompile(`(?i)^ROOT(?:\s*\(\s*['"]?([^'"]+)['"]?\s*\))?`)
+				if m := rootRe.FindStringSubmatch(p); len(m) >= 2 && m[1] != "" {
+					opts.RootName = m[1]
+				} else {
+					opts.RootName = "root"
+				}
+			}
+		}
+	}
+
+	return opts, nil
+}
+
+func (s *Server) execForJSONSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	opts, err := parseForJSONQuery(query)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Execute the underlying base SELECT query
+	baseRes, err := s.execSelect(opts.BaseQuery, start, cs)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Build JSON structures from rows
+	jsonObjects := make([]any, 0, len(baseRes.Rows))
+
+	for _, row := range baseRes.Rows {
+		obj := make(map[string]any)
+		for _, col := range baseRes.Columns {
+			val := row[col]
+			if val == nil && !opts.IncludeNullValues {
+				continue
+			}
+
+			// Support nested dot notation: e.g. "department.name" -> {"department": {"name": ...}}
+			cleanCol := cleanIdentifier(col)
+			if strings.Contains(cleanCol, ".") {
+				dotParts := strings.Split(cleanCol, ".")
+				cur := obj
+				for i := 0; i < len(dotParts)-1; i++ {
+					subKey := dotParts[i]
+					subMap, ok := cur[subKey].(map[string]any)
+					if !ok {
+						subMap = make(map[string]any)
+						cur[subKey] = subMap
+					}
+					cur = subMap
+				}
+				cur[dotParts[len(dotParts)-1]] = val
+			} else {
+				obj[cleanCol] = val
+			}
+		}
+		jsonObjects = append(jsonObjects, obj)
+	}
+
+	// 3. Apply ROOT and WITHOUT_ARRAY_WRAPPER options
+	var finalJSON any
+	if opts.WithoutArrayWrapper {
+		if len(jsonObjects) == 1 {
+			finalJSON = jsonObjects[0]
+		} else if len(jsonObjects) == 0 {
+			finalJSON = nil
+		} else {
+			// In T-SQL, WITHOUT_ARRAY_WRAPPER concatenates raw JSON objects: {"a":1},{"b":2}
+			var sb strings.Builder
+			for i, obj := range jsonObjects {
+				b, _ := json.Marshal(obj)
+				if i > 0 {
+					sb.WriteString(",")
+				}
+				sb.Write(b)
+			}
+			return &QueryResult{
+				Success:      true,
+				Command:      "SELECT",
+				Columns:      []string{"JSON_F52E2B61-18A1-11d1-B105-00805F49916B"},
+				Rows:         []map[string]any{{"JSON_F52E2B61-18A1-11d1-B105-00805F49916B": sb.String()}},
+				RowsAffected: 1,
+				DurationUS:   time.Since(start).Microseconds(),
+			}, nil
+		}
+	} else {
+		finalJSON = jsonObjects
+	}
+
+	if opts.RootName != "" {
+		rootMap := make(map[string]any)
+		rootMap[opts.RootName] = finalJSON
+		finalJSON = rootMap
+	}
+
+	var jsonBytes []byte
+	if finalJSON != nil {
+		jsonBytes, err = json.Marshal(finalJSON)
+		if err != nil {
+			return nil, fmt.Errorf("failed to format JSON: %w", err)
+		}
+	} else {
+		jsonBytes = []byte("null")
+	}
+
+	jsonString := string(jsonBytes)
+	colName := "JSON_F52E2B61-18A1-11d1-B105-00805F49916B" // Standard Microsoft SQL Server FOR JSON column name
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      []string{colName},
+		Rows:         []map[string]any{{colName: jsonString}},
+		RowsAffected: 1,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
 
