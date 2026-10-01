@@ -101,20 +101,21 @@ type PlanNode struct {
 	SortOrder        string      `json:"sort_order,omitempty"`
 	LimitCount       int64       `json:"limit_count,omitempty"`
 	Projections      []string    `json:"projections,omitempty"`
-	GroupKeys        []string    `json:"group_keys,omitempty"`
-	HavingCond       string      `json:"having_cond,omitempty"`
-	WindowDefs       []WindowDef `json:"window_defs,omitempty"`
-	JoinType         string      `json:"join_type,omitempty"`
-	HashCond         string      `json:"hash_cond,omitempty"`
-	JoinCond         string      `json:"join_cond,omitempty"`
-	CTEName          string      `json:"cte_name,omitempty"`
-	SetOp            string      `json:"set_op,omitempty"`
-	StartupCost      float64     `json:"startup_cost"`
-	TotalCost        float64     `json:"total_cost"`
-	EstimatedRows    int64       `json:"estimated_rows"`
-	ActualRows       int64       `json:"actual_rows,omitempty"`
-	ActualDurationUS int64       `json:"actual_duration_us,omitempty"`
-	Children         []*PlanNode `json:"children,omitempty"`
+	GroupKeys        []string             `json:"group_keys,omitempty"`
+	GroupByModifier  proc.GroupByModifier `json:"group_by_modifier,omitempty"`
+	HavingCond       string               `json:"having_cond,omitempty"`
+	WindowDefs       []WindowDef          `json:"window_defs,omitempty"`
+	JoinType         string               `json:"join_type,omitempty"`
+	HashCond         string               `json:"hash_cond,omitempty"`
+	JoinCond         string               `json:"join_cond,omitempty"`
+	CTEName          string               `json:"cte_name,omitempty"`
+	SetOp            string               `json:"set_op,omitempty"`
+	StartupCost      float64              `json:"startup_cost"`
+	TotalCost        float64              `json:"total_cost"`
+	EstimatedRows    int64                `json:"estimated_rows"`
+	ActualRows       int64                `json:"actual_rows,omitempty"`
+	ActualDurationUS int64                `json:"actual_duration_us,omitempty"`
+	Children         []*PlanNode          `json:"children,omitempty"`
 }
 
 // QueryInfo represents the structured parts of a parsed SELECT query.
@@ -129,6 +130,7 @@ type QueryInfo struct {
 	WindowDefs    []WindowDef
 	WhereClause   string
 	GroupByCols   []string
+	GroupByMod    proc.GroupByModifier
 	HavingClause  string
 	OrderByClause string
 	LimitCount    int64
@@ -275,6 +277,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		WindowDefs:    winDefs,
 		WhereClause:   whereClause,
 		GroupByCols:   groupByCols,
+		GroupByMod:    stmt.GroupByMod,
 		HavingClause:  havingClause,
 		OrderByClause: orderByClause,
 		LimitCount:    stmt.Limit,
@@ -385,11 +388,56 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	}
 
 	var groupByCols []string
+	groupByMod := proc.GroupByNormal
 	if groupByStr != "" {
-		for _, col := range strings.Split(groupByStr, ",") {
-			c := strings.TrimSpace(col)
-			if c != "" {
-				groupByCols = append(groupByCols, c)
+		gTrim := strings.TrimSpace(groupByStr)
+		gUpper := strings.ToUpper(gTrim)
+		if strings.HasPrefix(gUpper, "ROLLUP") {
+			groupByMod = proc.GroupByRollup
+			inner := strings.TrimSpace(gTrim[6:])
+			inner = strings.TrimPrefix(inner, "(")
+			inner = strings.TrimSuffix(inner, ")")
+			for _, col := range strings.Split(inner, ",") {
+				c := strings.TrimSpace(col)
+				if c != "" {
+					groupByCols = append(groupByCols, c)
+				}
+			}
+		} else if strings.HasPrefix(gUpper, "CUBE") {
+			groupByMod = proc.GroupByCube
+			inner := strings.TrimSpace(gTrim[4:])
+			inner = strings.TrimPrefix(inner, "(")
+			inner = strings.TrimSuffix(inner, ")")
+			for _, col := range strings.Split(inner, ",") {
+				c := strings.TrimSpace(col)
+				if c != "" {
+					groupByCols = append(groupByCols, c)
+				}
+			}
+		} else if strings.HasSuffix(gUpper, "WITH ROLLUP") {
+			groupByMod = proc.GroupByRollup
+			inner := strings.TrimSpace(gTrim[:len(gTrim)-11])
+			for _, col := range strings.Split(inner, ",") {
+				c := strings.TrimSpace(col)
+				if c != "" {
+					groupByCols = append(groupByCols, c)
+				}
+			}
+		} else if strings.HasSuffix(gUpper, "WITH CUBE") {
+			groupByMod = proc.GroupByCube
+			inner := strings.TrimSpace(gTrim[:len(gTrim)-9])
+			for _, col := range strings.Split(inner, ",") {
+				c := strings.TrimSpace(col)
+				if c != "" {
+					groupByCols = append(groupByCols, c)
+				}
+			}
+		} else {
+			for _, col := range strings.Split(groupByStr, ",") {
+				c := strings.TrimSpace(col)
+				if c != "" {
+					groupByCols = append(groupByCols, c)
+				}
 			}
 		}
 	}
@@ -402,7 +450,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		}
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
-			strings.Contains(pUpper, "MAX(") {
+			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") {
 			hasAgg = true
 			break
 		}
@@ -426,6 +474,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		WindowDefs:    winDefs,
 		WhereClause:   whereClause,
 		GroupByCols:   groupByCols,
+		GroupByMod:    groupByMod,
 		HavingClause:  havingClause,
 		OrderByClause: orderByClause,
 		LimitCount:    limitCount,
@@ -1065,14 +1114,15 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 		aggCost := currentNode.TotalCost + float64(currentNode.EstimatedRows)*0.005
 		aggNode := &PlanNode{
-			Type:          NodeAggregate,
-			GroupKeys:     q.GroupByCols,
-			Projections:   q.Projections,
-			HavingCond:    q.HavingClause,
-			StartupCost:   currentNode.TotalCost,
-			TotalCost:     aggCost,
-			EstimatedRows: aggEstRows,
-			Children:      []*PlanNode{currentNode},
+			Type:            NodeAggregate,
+			GroupKeys:       q.GroupByCols,
+			GroupByModifier: q.GroupByMod,
+			Projections:     q.Projections,
+			HavingCond:      q.HavingClause,
+			StartupCost:     currentNode.TotalCost,
+			TotalCost:       aggCost,
+			EstimatedRows:   aggEstRows,
+			Children:        []*PlanNode{currentNode},
 		}
 		currentNode = aggNode
 	}
@@ -1215,7 +1265,14 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 		}
 	case NodeAggregate:
 		if len(node.GroupKeys) > 0 {
-			sb.WriteString(fmt.Sprintf(" (Group By: %s)", strings.Join(node.GroupKeys, ", ")))
+			switch node.GroupByModifier {
+			case proc.GroupByRollup:
+				sb.WriteString(fmt.Sprintf(" (Group By: ROLLUP(%s))", strings.Join(node.GroupKeys, ", ")))
+			case proc.GroupByCube:
+				sb.WriteString(fmt.Sprintf(" (Group By: CUBE(%s))", strings.Join(node.GroupKeys, ", ")))
+			default:
+				sb.WriteString(fmt.Sprintf(" (Group By: %s)", strings.Join(node.GroupKeys, ", ")))
+			}
 		}
 		if node.HavingCond != "" {
 			sb.WriteString(fmt.Sprintf(" (Having: %s)", node.HavingCond))

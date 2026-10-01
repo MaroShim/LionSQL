@@ -6,8 +6,11 @@ import (
 	"io"
 	"math"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
+	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
 
@@ -19,6 +22,7 @@ const (
 	aggAvg
 	aggMin
 	aggMax
+	aggGrouping
 )
 
 type aggField struct {
@@ -32,6 +36,7 @@ type aggField struct {
 
 type groupAccumulator struct {
 	groupTuple Tuple
+	groupMask  uint32
 	counts     map[int]int64
 	sums       map[int]float64
 	decSums    map[int]storage.Decimal
@@ -44,6 +49,7 @@ type groupAccumulator struct {
 type AggregateIterator struct {
 	child       Iterator
 	groupKeys   []string
+	groupByMod  proc.GroupByModifier
 	projections []string
 	havingCond  string
 	fields      []aggField
@@ -55,9 +61,15 @@ type AggregateIterator struct {
 
 // NewAggregateIterator creates a new Aggregate operator.
 func NewAggregateIterator(child Iterator, groupKeys, projections []string, havingCond string) *AggregateIterator {
+	return NewAggregateIteratorWithModifier(child, groupKeys, proc.GroupByNormal, projections, havingCond)
+}
+
+// NewAggregateIteratorWithModifier creates a new Aggregate operator with ROLLUP / CUBE modifier.
+func NewAggregateIteratorWithModifier(child Iterator, groupKeys []string, mod proc.GroupByModifier, projections []string, havingCond string) *AggregateIterator {
 	a := &AggregateIterator{
 		child:       child,
 		groupKeys:   groupKeys,
+		groupByMod:  mod,
 		projections: projections,
 		havingCond:  strings.TrimSpace(havingCond),
 	}
@@ -65,9 +77,25 @@ func NewAggregateIterator(child Iterator, groupKeys, projections []string, havin
 	return a
 }
 
+func matchColName(a, b string) bool {
+	a = strings.Trim(strings.TrimSpace(a), "\"`[]")
+	b = strings.Trim(strings.TrimSpace(b), "\"`[]")
+	if strings.EqualFold(a, b) {
+		return true
+	}
+	if dot := strings.LastIndex(a, "."); dot != -1 {
+		a = a[dot+1:]
+	}
+	if dot := strings.LastIndex(b, "."); dot != -1 {
+		b = b[dot+1:]
+	}
+	return strings.EqualFold(a, b)
+}
+
 func (a *AggregateIterator) parseFields() {
 	countStarRe := regexp.MustCompile(`(?i)^\s*COUNT\s*\(\s*\*\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
 	aggCallRe := regexp.MustCompile(`(?i)^\s*(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*(?:DISTINCT\s+)?([^\)]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+	groupingRe := regexp.MustCompile(`(?i)^\s*GROUPING\s*\(\s*([^\)]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
 
 	for _, p := range a.projections {
 		p = strings.TrimSpace(p)
@@ -109,6 +137,18 @@ func (a *AggregateIterator) parseFields() {
 			}
 
 			a.fields = append(a.fields, aggField{fnType: fnType, argCol: arg, alias: alias, rawExpr: rawCall})
+			a.schema = append(a.schema, alias)
+			continue
+		}
+
+		if m := groupingRe.FindStringSubmatch(p); len(m) == 3 {
+			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
+			alias := m[2]
+			if alias == "" {
+				alias = fmt.Sprintf("grouping_%s", arg)
+			}
+			rawCall := fmt.Sprintf("GROUPING(%s)", arg)
+			a.fields = append(a.fields, aggField{fnType: aggGrouping, argCol: arg, alias: alias, rawExpr: rawCall})
 			a.schema = append(a.schema, alias)
 			continue
 		}
@@ -168,6 +208,35 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 	groups := make(map[string]*groupAccumulator)
 	var groupOrder []string
 
+	nKeys := len(a.groupKeys)
+	if nKeys > 31 {
+		nKeys = 31
+	}
+	var masks []uint32
+	if nKeys == 0 {
+		masks = []uint32{0}
+	} else {
+		switch a.groupByMod {
+		case proc.GroupByRollup:
+			masks = make([]uint32, nKeys+1)
+			for lvl := nKeys; lvl >= 0; lvl-- {
+				if lvl == 0 {
+					masks[nKeys-lvl] = 0
+				} else {
+					masks[nKeys-lvl] = (uint32(1) << lvl) - 1
+				}
+			}
+		case proc.GroupByCube:
+			totalComb := 1 << nKeys
+			masks = make([]uint32, totalComb)
+			for m := 0; m < totalComb; m++ {
+				masks[m] = uint32(m)
+			}
+		default:
+			masks = []uint32{(uint32(1) << nKeys) - 1}
+		}
+	}
+
 	hasRows := false
 	for {
 		select {
@@ -185,79 +254,83 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		}
 		hasRows = true
 
-		// Build group key
-		var gk strings.Builder
-		for i, k := range a.groupKeys {
-			if i > 0 {
+		for _, mask := range masks {
+			var gk strings.Builder
+			gk.WriteString(strconv.FormatUint(uint64(mask), 10))
+			gk.WriteByte('\x01')
+			for i, k := range a.groupKeys {
+				if (mask & (1 << i)) != 0 {
+					val, _ := lookupVal(tuple, k)
+					gk.WriteString(fmt.Sprintf("%v", val))
+				}
 				gk.WriteByte('\x00')
 			}
-			val, _ := lookupVal(tuple, k)
-			gk.WriteString(fmt.Sprintf("%v", val))
-		}
-		groupKeyStr := gk.String()
+			groupKeyStr := gk.String()
 
-		acc, exists := groups[groupKeyStr]
-		if !exists {
-			acc = &groupAccumulator{
-				groupTuple: tuple,
-				counts:     make(map[int]int64),
-				sums:       make(map[int]float64),
-				decSums:    make(map[int]storage.Decimal),
-				isDecimal:  make(map[int]bool),
-				mins:       make(map[int]any),
-				maxs:       make(map[int]any),
-			}
-			groups[groupKeyStr] = acc
-			groupOrder = append(groupOrder, groupKeyStr)
-		}
-
-		// Accumulate
-		for fIdx, f := range a.fields {
-			if f.isLiteral {
-				continue
-			}
-			if f.isStar {
-				acc.counts[fIdx]++
-				continue
-			}
-
-			val, ok := lookupVal(tuple, f.argCol)
-			if !ok || val == nil {
-				continue
-			}
-
-			switch f.fnType {
-			case aggCount:
-				acc.counts[fIdx]++
-			case aggSum:
-				if isDecValue(val) {
-					dec, _ := tryDecimal(val)
-					acc.isDecimal[fIdx] = true
-					cur := acc.decSums[fIdx]
-					acc.decSums[fIdx] = cur.Add(dec)
-				} else {
-					fVal, _ := toFloat64(val)
-					acc.sums[fIdx] += fVal
+			acc, exists := groups[groupKeyStr]
+			if !exists {
+				acc = &groupAccumulator{
+					groupTuple: tuple,
+					groupMask:  mask,
+					counts:     make(map[int]int64),
+					sums:       make(map[int]float64),
+					decSums:    make(map[int]storage.Decimal),
+					isDecimal:  make(map[int]bool),
+					mins:       make(map[int]any),
+					maxs:       make(map[int]any),
 				}
-				acc.counts[fIdx]++
-			case aggAvg:
-				if isDecValue(val) {
-					dec, _ := tryDecimal(val)
-					acc.isDecimal[fIdx] = true
-					cur := acc.decSums[fIdx]
-					acc.decSums[fIdx] = cur.Add(dec)
-				} else {
-					fVal, _ := toFloat64(val)
-					acc.sums[fIdx] += fVal
+				groups[groupKeyStr] = acc
+				groupOrder = append(groupOrder, groupKeyStr)
+			}
+
+			// Accumulate into acc
+			for fIdx, f := range a.fields {
+				if f.isLiteral || f.fnType == aggGrouping {
+					continue
 				}
-				acc.counts[fIdx]++
-			case aggMin:
-				if cur, ok := acc.mins[fIdx]; !ok || CompareValues(val, cur) < 0 {
-					acc.mins[fIdx] = val
+				if f.isStar {
+					acc.counts[fIdx]++
+					continue
 				}
-			case aggMax:
-				if cur, ok := acc.maxs[fIdx]; !ok || CompareValues(val, cur) > 0 {
-					acc.maxs[fIdx] = val
+
+				val, ok := lookupVal(tuple, f.argCol)
+				if !ok || val == nil {
+					continue
+				}
+
+				switch f.fnType {
+				case aggCount:
+					acc.counts[fIdx]++
+				case aggSum:
+					if isDecValue(val) {
+						dec, _ := tryDecimal(val)
+						acc.isDecimal[fIdx] = true
+						cur := acc.decSums[fIdx]
+						acc.decSums[fIdx] = cur.Add(dec)
+					} else {
+						fVal, _ := toFloat64(val)
+						acc.sums[fIdx] += fVal
+					}
+					acc.counts[fIdx]++
+				case aggAvg:
+					if isDecValue(val) {
+						dec, _ := tryDecimal(val)
+						acc.isDecimal[fIdx] = true
+						cur := acc.decSums[fIdx]
+						acc.decSums[fIdx] = cur.Add(dec)
+					} else {
+						fVal, _ := toFloat64(val)
+						acc.sums[fIdx] += fVal
+					}
+					acc.counts[fIdx]++
+				case aggMin:
+					if cur, ok := acc.mins[fIdx]; !ok || CompareValues(val, cur) < 0 {
+						acc.mins[fIdx] = val
+					}
+				case aggMax:
+					if cur, ok := acc.maxs[fIdx]; !ok || CompareValues(val, cur) > 0 {
+						acc.maxs[fIdx] = val
+					}
 				}
 			}
 		}
@@ -280,6 +353,28 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		return nil
 	}
 
+	if a.groupByMod != proc.GroupByNormal && nKeys > 0 {
+		sort.SliceStable(groupOrder, func(i, j int) bool {
+			accA := groups[groupOrder[i]]
+			accB := groups[groupOrder[j]]
+			for k := 0; k < nKeys; k++ {
+				actA := (accA.groupMask & (1 << k)) != 0
+				actB := (accB.groupMask & (1 << k)) != 0
+				if actA && actB {
+					valA, _ := lookupVal(accA.groupTuple, a.groupKeys[k])
+					valB, _ := lookupVal(accB.groupTuple, a.groupKeys[k])
+					c := CompareValues(valA, valB)
+					if c != 0 {
+						return c < 0
+					}
+				} else if actA != actB {
+					return actA
+				}
+			}
+			return accA.groupMask > accB.groupMask
+		})
+	}
+
 	// Materialize groups into result tuples
 	for _, gk := range groupOrder {
 		acc := groups[gk]
@@ -287,8 +382,43 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 
 		for fIdx, f := range a.fields {
 			if f.isLiteral {
-				v, _ := lookupVal(acc.groupTuple, f.argCol)
-				vals[fIdx] = v
+				isGroupCol := false
+				var colVal any
+				for kIdx, k := range a.groupKeys {
+					if matchColName(k, f.argCol) {
+						isGroupCol = true
+						if (acc.groupMask & (1 << kIdx)) != 0 {
+							colVal, _ = lookupVal(acc.groupTuple, f.argCol)
+						} else {
+							colVal = nil
+						}
+						break
+					}
+				}
+				if isGroupCol {
+					vals[fIdx] = colVal
+				} else {
+					v, _ := lookupVal(acc.groupTuple, f.argCol)
+					vals[fIdx] = v
+				}
+				continue
+			}
+
+			if f.fnType == aggGrouping {
+				isAggregated := true
+				for kIdx, k := range a.groupKeys {
+					if matchColName(k, f.argCol) {
+						if (acc.groupMask & (1 << kIdx)) != 0 {
+							isAggregated = false
+						}
+						break
+					}
+				}
+				if isAggregated {
+					vals[fIdx] = int64(1)
+				} else {
+					vals[fIdx] = int64(0)
+				}
 				continue
 			}
 

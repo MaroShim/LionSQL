@@ -129,9 +129,13 @@ const (
 	TokenSavepoint
 	TokenDistinct
 	TokenOutput
+	TokenRollup
+	TokenCube
 )
 
 var keywords = map[string]TokenType{
+	"ROLLUP":      TokenRollup,
+	"CUBE":        TokenCube,
 	"OUTPUT":      TokenOutput,
 	"DISTINCT":    TokenDistinct,
 	"SAVE":        TokenSave,

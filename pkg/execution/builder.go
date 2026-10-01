@@ -104,7 +104,7 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if err != nil {
 			return nil, err
 		}
-		return NewAggregateIterator(child, plan.GroupKeys, plan.Projections, plan.HavingCond), nil
+		return NewAggregateIteratorWithModifier(child, plan.GroupKeys, plan.GroupByModifier, plan.Projections, plan.HavingCond), nil
 
 	case planner.NodeWindow:
 		if len(plan.Children) == 0 {

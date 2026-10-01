@@ -1891,15 +1891,67 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			return nil, fmt.Errorf("expected BY after GROUP, got %s", p.curToken.Literal)
 		}
 		p.nextToken() // eat BY
-		for {
-			gExpr := p.parseExpression(precLowest)
-			if gExpr != nil {
-				stmt.GroupBy = append(stmt.GroupBy, gExpr)
+		if p.curTokenIs(TokenRollup) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ROLLUP")) {
+			stmt.GroupByMod = GroupByRollup
+			p.nextToken() // eat ROLLUP
+			if p.curTokenIs(TokenLParen) {
+				p.nextToken() // eat (
+				for {
+					gExpr := p.parseExpression(precLowest)
+					if gExpr != nil {
+						stmt.GroupBy = append(stmt.GroupBy, gExpr)
+					}
+					if p.curTokenIs(TokenComma) {
+						p.nextToken()
+					} else {
+						break
+					}
+				}
+				if p.curTokenIs(TokenRParen) {
+					p.nextToken() // eat )
+				}
 			}
-			if p.curTokenIs(TokenComma) {
-				p.nextToken()
-			} else {
-				break
+		} else if p.curTokenIs(TokenCube) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "CUBE")) {
+			stmt.GroupByMod = GroupByCube
+			p.nextToken() // eat CUBE
+			if p.curTokenIs(TokenLParen) {
+				p.nextToken() // eat (
+				for {
+					gExpr := p.parseExpression(precLowest)
+					if gExpr != nil {
+						stmt.GroupBy = append(stmt.GroupBy, gExpr)
+					}
+					if p.curTokenIs(TokenComma) {
+						p.nextToken()
+					} else {
+						break
+					}
+				}
+				if p.curTokenIs(TokenRParen) {
+					p.nextToken() // eat )
+				}
+			}
+		} else {
+			for {
+				gExpr := p.parseExpression(precLowest)
+				if gExpr != nil {
+					stmt.GroupBy = append(stmt.GroupBy, gExpr)
+				}
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				} else {
+					break
+				}
+			}
+			if p.curTokenIs(TokenWith) {
+				p.nextToken() // eat WITH
+				if p.curTokenIs(TokenRollup) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ROLLUP")) {
+					stmt.GroupByMod = GroupByRollup
+					p.nextToken()
+				} else if p.curTokenIs(TokenCube) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "CUBE")) {
+					stmt.GroupByMod = GroupByCube
+					p.nextToken()
+				}
 			}
 		}
 	}

@@ -704,6 +704,15 @@ func (c CTEClause) String() string {
 	return fmt.Sprintf("%s AS (%s)", c.Name, c.InnerSQL)
 }
 
+// GroupByModifier defines the subtotal / grand total grouping modifier.
+type GroupByModifier int
+
+const (
+	GroupByNormal GroupByModifier = iota
+	GroupByRollup
+	GroupByCube
+)
+
 // GeneralSelectStmt represents a complete interactive SELECT statement.
 type GeneralSelectStmt struct {
 	CTEs        []CTEClause
@@ -712,6 +721,7 @@ type GeneralSelectStmt struct {
 	Joins       []JoinClause
 	Where       Expr
 	GroupBy     []Expr
+	GroupByMod  GroupByModifier
 	Having      Expr
 	OrderBy     []OrderByItem
 	Limit       int64
@@ -767,7 +777,15 @@ func (s *GeneralSelectStmt) String() string {
 		for _, g := range s.GroupBy {
 			gbStrs = append(gbStrs, g.String())
 		}
-		b.WriteString(strings.Join(gbStrs, ", "))
+		inner := strings.Join(gbStrs, ", ")
+		switch s.GroupByMod {
+		case GroupByRollup:
+			b.WriteString(fmt.Sprintf("ROLLUP(%s)", inner))
+		case GroupByCube:
+			b.WriteString(fmt.Sprintf("CUBE(%s)", inner))
+		default:
+			b.WriteString(inner)
+		}
 	}
 	if s.Having != nil {
 		b.WriteString(" HAVING ")

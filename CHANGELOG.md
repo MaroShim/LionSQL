@@ -45,6 +45,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - **Zero-Allocation Hot Path Precompilation (`pkg/api/sqlexec_auth.go`)**: Hoisted function-level `regexp.MustCompile` invocations into static package-level variables for authentication DDL/DCL execution.
 
 ### Added
+- **Subtotal & Grand Total Aggregation Engine (`GROUP BY ROLLUP`, `CUBE`, `GROUPING()`) (`pkg/proc`, `pkg/planner`, `pkg/execution`, `pkg/api`)**:
+  - Implemented ANSI SQL / T-SQL `GROUP BY ROLLUP(...)` and `GROUP BY CUBE(...)` single-pass multi-grouping aggregation engine.
+  - Supported T-SQL syntax forms: `GROUP BY ROLLUP(...)` / `GROUP BY CUBE(...)` and trailing `GROUP BY ... WITH ROLLUP` / `GROUP BY ... WITH CUBE`.
+  - Added bitmask-driven single-pass accumulator mapping: generates $N+1$ hierarchical levels for `ROLLUP` and $2^N$ combinatorial grouping sets for `CUBE` without redundant table rescans.
+  - Implemented standard `GROUPING(col)` aggregate function returning `1` for rolled-up/subtotal NULL dimensions and `0` for regular groupings.
+  - Implemented deterministic hierarchical subtotal sorting so subtotals appear naturally grouped under parent dimensions followed by grand totals.
+  - Integrated `HAVING` filters across all subtotals and grand totals.
+  - Added dedicated integration test suite in `pkg/api/rollup_cube_test.go` covering single-column and multi-column ROLLUP, CUBE cross-tabulation, WITH ROLLUP syntax, and HAVING filters.
 - **Window Frame Specification (`ROWS BETWEEN ... PRECEDING / FOLLOWING`) (`pkg/planner`, `pkg/execution`, `pkg/api`)**:
   - Implemented ANSI SQL / T-SQL window frame specifications: `ROWS BETWEEN <start> AND <end>` and shorthand forms (`ROWS <bound> PRECEDING`).
   - Supported frame bounds: `UNBOUNDED PRECEDING`, `N PRECEDING`, `CURRENT ROW`, `N FOLLOWING`, and `UNBOUNDED FOLLOWING`.
