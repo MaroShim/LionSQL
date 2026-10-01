@@ -38,6 +38,7 @@ const (
 	OpUpdate        WALOpType = "UPDATE"
 	OpDelete        WALOpType = "DELETE"
 	OpTruncateTable WALOpType = "TRUNCATE_TABLE"
+	OpDropPartition WALOpType = "DROP_PARTITION"
 )
 
 // WALOp represents a single atomic row or DDL mutation.

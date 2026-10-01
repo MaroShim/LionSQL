@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
@@ -15,14 +16,40 @@ import (
 
 func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	re := regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\((.*)\)$`)
-	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 3 {
+	prefixRe := regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\(`)
+	prefixLoc := prefixRe.FindStringSubmatchIndex(cleaned)
+	if prefixLoc == nil {
 		return nil, fmt.Errorf("invalid CREATE TABLE syntax")
 	}
 
-	tableName := cleanIdentifier(matches[1])
-	colsDef := matches[2]
+	tableName := cleanIdentifier(cleaned[prefixLoc[2]:prefixLoc[3]])
+	openParenIdx := prefixLoc[1] - 1 // the opening '('
+
+	depth := 0
+	closeParenIdx := -1
+	for i := openParenIdx; i < len(cleaned); i++ {
+		if cleaned[i] == '(' {
+			depth++
+		} else if cleaned[i] == ')' {
+			depth--
+			if depth == 0 {
+				closeParenIdx = i
+				break
+			}
+		}
+	}
+	if closeParenIdx == -1 {
+		return nil, fmt.Errorf("invalid CREATE TABLE syntax: unbalanced parentheses")
+	}
+
+	colsDef := cleaned[openParenIdx+1 : closeParenIdx]
+	remainder := strings.TrimSpace(cleaned[closeParenIdx+1:])
+
+	rawPartition := ""
+	partRe := regexp.MustCompile(`(?is)^PARTITION\s+BY\s+(.+)$`)
+	if m := partRe.FindStringSubmatch(remainder); len(m) == 2 {
+		rawPartition = strings.TrimSpace(m[1])
+	}
 
 	colDefs := splitColumnDefs(colsDef)
 	if len(colDefs) == 0 {
@@ -131,6 +158,34 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 	}
 	if !hasPK && len(schema.Columns) > 0 {
 		schema.Columns[0].PrimaryKey = true
+	}
+
+	if rawPartition != "" {
+		funcRe := regexp.MustCompile(`(?i)^([a-zA-Z0-9_]+)\s*\(\s*([a-zA-Z0-9_\[\]"]+)\s*\)$`)
+		fn := "COLUMN"
+		col := rawPartition
+		if m := funcRe.FindStringSubmatch(rawPartition); len(m) == 3 {
+			fn = strings.ToUpper(m[1])
+			col = m[2]
+		}
+		col = cleanIdentifier(col)
+
+		colFound := false
+		for _, c := range schema.Columns {
+			if strings.EqualFold(c.Name, col) {
+				colFound = true
+				break
+			}
+		}
+		if !colFound {
+			return nil, fmt.Errorf("partition column %q not found in table %q", col, tableName)
+		}
+
+		schema.Partition = &storage.PartitionDef{
+			Expr:   rawPartition,
+			Column: col,
+			Func:   fn,
+		}
 	}
 
 	if err := s.engine.CreateTable(schema); err != nil {
@@ -701,6 +756,60 @@ func (s *Server) execDropView(query string, start time.Time) (*QueryResult, erro
 		Success:      true,
 		Command:      "DROP VIEW",
 		RowsAffected: 0,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execAlterTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// 1. ALTER TABLE <table> DROP PARTITION '<part>' (or without quotes)
+	dropPartRe := regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+([^\s]+)\s+DROP\s+PARTITION\s+['"]?([^'";\s]+)['"]?\s*$`)
+	if m := dropPartRe.FindStringSubmatch(cleaned); len(m) == 3 {
+		tableName := cleanIdentifier(m[1])
+		partitionName := strings.TrimSpace(m[2])
+
+		// RBAC Check
+		if err := s.checkTableAccess(cs, tableName, auth.PrivDelete); err != nil {
+			return nil, err
+		}
+
+		if err := s.engine.DropPartition(tableName, partitionName); err != nil {
+			return nil, err
+		}
+
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Partition %q dropped from table %q", partitionName, tableName)},
+		}, nil
+	}
+
+	return nil, fmt.Errorf("unrecognized or unsupported ALTER TABLE statement: %q", query)
+}
+
+func (s *Server) execShowPartitions(tableName string, start time.Time) (*QueryResult, error) {
+	parts, err := s.engine.GetPartitions(tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	rows := make([]map[string]any, 0, len(parts))
+	for _, p := range parts {
+		rows = append(rows, map[string]any{
+			"partition": p.Name,
+			"table":     tableName,
+			"row_count": p.RowCount,
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SHOW PARTITIONS",
+		Columns:      []string{"partition", "table", "row_count"},
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }

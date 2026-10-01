@@ -18,6 +18,7 @@ import (
 	"sqlion/pkg/backup"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/execution"
+	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
 	"sqlion/pkg/proc/runtime"
@@ -145,6 +146,23 @@ func (s *Server) DefaultWorkMem() int64 {
 		return execution.DefaultWorkMem
 	}
 	return s.defaultWorkMem
+}
+
+func (s *Server) newPlanner() *planner.Planner {
+	p := planner.NewPlanner()
+	p.PartitionGetter = func(table string) []string {
+		if s.engine != nil {
+			if parts, err := s.engine.GetPartitions(table); err == nil {
+				names := make([]string, len(parts))
+				for i, pt := range parts {
+					names[i] = pt.Name
+				}
+				return names
+			}
+		}
+		return nil
+	}
+	return p
 }
 
 // Pool returns the underlying goroutine connection & session pool.

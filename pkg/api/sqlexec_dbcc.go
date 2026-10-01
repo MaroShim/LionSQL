@@ -384,7 +384,8 @@ func (s *Server) isVirtualCatalogTable(tableName string) bool {
 		"sys.schemas", "sysschemas", "sys_schemas",
 		"sys.objects", "sysobjects", "sys_objects",
 		"sys.views", "sysviews", "sys_views",
-		"sys.types", "systypes", "sys_types":
+		"sys.types", "systypes", "sys_types",
+		"sys.partitions", "system.partitions", "syspartitions", "sys_partitions":
 		return true
 	default:
 		return false
@@ -565,6 +566,21 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 			map[string]any{"name": "bit", "system_type_id": 104, "user_type_id": 104, "schema_id": 4, "max_length": 1, "precision": 1, "scale": 0, "is_nullable": true},
 			map[string]any{"name": "datetime", "system_type_id": 61, "user_type_id": 61, "schema_id": 4, "max_length": 8, "precision": 23, "scale": 3, "is_nullable": true},
 		)
+	case "sys.partitions", "system.partitions", "syspartitions", "sys_partitions":
+		columns = []string{"table_name", "partition", "row_count"}
+		for _, t := range tables {
+			if t.IsPartitioned() {
+				if parts, err := s.engine.GetPartitions(t.Name); err == nil {
+					for _, p := range parts {
+						allRows = append(allRows, map[string]any{
+							"table_name": t.Name,
+							"partition":  p.Name,
+							"row_count":  p.RowCount,
+						})
+					}
+				}
+			}
+		}
 
 	default:
 		return nil, fmt.Errorf("unsupported virtual system table: %s", tableName)

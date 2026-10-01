@@ -150,6 +150,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"unsafe"
@@ -346,6 +347,105 @@ func (e *Engine) TruncateTable(tableName string) error {
 	}
 
 	return nil
+}
+
+func (e *Engine) DropPartition(tableName, partitionName string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	tbl, exists := e.tables[tableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	if !tbl.IsPartitioned() {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotPartitioned, tableName)
+	}
+
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
+		return fmt.Errorf("open_session failed: %d", ret)
+	}
+	defer C.go_wt_session_close(sess)
+
+	uri := C.CString(fmt.Sprintf("table:%s", tableName))
+	defer C.free(unsafe.Pointer(uri))
+
+	var cur *C.WT_CURSOR
+	if ret := C.go_wt_open_cursor(sess, uri, &cur); ret != 0 {
+		return fmt.Errorf("open_cursor failed: %d", ret)
+	}
+	defer C.go_wt_cursor_close(cur)
+
+	matched := 0
+	for C.go_wt_cursor_next(cur) == 0 {
+		var pData unsafe.Pointer
+		var sz C.size_t
+		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
+			rec, err := decodeRecord(C.GoBytes(pData, C.int(sz)))
+			if err == nil {
+				pKey, err := tbl.ComputePartitionKey(rec)
+				if err == nil && pKey == partitionName {
+					C.go_wt_cursor_remove(cur)
+					matched++
+				}
+			}
+		}
+	}
+	if matched == 0 {
+		return fmt.Errorf("%w: partition %q in table %q", storage.ErrPartitionNotFound, partitionName, tableName)
+	}
+	return nil
+}
+
+func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error) {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	tbl, exists := e.tables[tableName]
+	if !exists {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	if !tbl.IsPartitioned() {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotPartitioned, tableName)
+	}
+
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
+		return nil, fmt.Errorf("open_session failed: %d", ret)
+	}
+	defer C.go_wt_session_close(sess)
+
+	uri := C.CString(fmt.Sprintf("table:%s", tableName))
+	defer C.free(unsafe.Pointer(uri))
+
+	var cur *C.WT_CURSOR
+	if ret := C.go_wt_open_cursor(sess, uri, &cur); ret != 0 {
+		return nil, fmt.Errorf("open_cursor failed: %d", ret)
+	}
+	defer C.go_wt_cursor_close(cur)
+
+	partCounts := make(map[string]int64)
+	for C.go_wt_cursor_next(cur) == 0 {
+		var pData unsafe.Pointer
+		var sz C.size_t
+		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
+			rec, err := decodeRecord(C.GoBytes(pData, C.int(sz)))
+			if err == nil {
+				if pKey, err := tbl.ComputePartitionKey(rec); err == nil {
+					partCounts[pKey]++
+				}
+			}
+		}
+	}
+
+	res := make([]storage.PartitionInfo, 0, len(partCounts))
+	for name, cnt := range partCounts {
+		res = append(res, storage.PartitionInfo{Name: name, RowCount: cnt})
+	}
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Name < res[j].Name
+	})
+	return res, nil
 }
 
 func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
@@ -744,6 +844,10 @@ func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
 	return &WTCursor{
 		cur: cur,
 	}, nil
+}
+
+func (tx *WTTx) ScanPartitions(tableName string, partitions []string) (storage.Cursor, error) {
+	return tx.Scan(tableName)
 }
 
 func (tx *WTTx) IndexScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {

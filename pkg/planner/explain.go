@@ -118,6 +118,7 @@ type PostgresPlanNode struct {
 	ActualTotalTime   *float64            `json:"Actual Total Time,omitempty"`
 	ActualRows        *int64              `json:"Actual Rows,omitempty"`
 	ActualLoops       *int64              `json:"Actual Loops,omitempty"`
+	Partitions        []string            `json:"Partitions,omitempty"`
 	Plans             []PostgresPlanNode  `json:"Plans,omitempty"`
 }
 
@@ -150,6 +151,7 @@ func toPostgresPlanNode(node *PlanNode, analyze bool) PostgresPlanNode {
 		StartupCost:  node.StartupCost,
 		TotalCost:    node.TotalCost,
 		PlanRows:     node.EstimatedRows,
+		Partitions:   node.Partitions,
 	}
 
 	if node.SortKey != "" {

@@ -37,6 +37,7 @@ type TableStats struct {
 	RowCount    int64                   `json:"row_count"`
 	PageCount   int64                   `json:"page_count"`
 	Columns     map[string]*ColumnStats `json:"columns"`
+	Partitions  []string                `json:"partitions,omitempty"`
 	AnalyzedAt  time.Time               `json:"analyzed_at"`
 }
 

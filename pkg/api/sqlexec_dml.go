@@ -279,7 +279,7 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 		return s.execSetOpExplain(setQuery, opts.Analyze, start)
 	}
 
-	p := planner.NewPlanner()
+	p := s.newPlanner()
 	qInfo, err := p.ParseSelect(innerExplainSQL)
 	if err != nil {
 		return nil, fmt.Errorf("EXPLAIN parse error: %w", err)
@@ -472,7 +472,7 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 
 func (s *Server) execDMLExplain(dmlSQL string, opts planner.ExplainOptions, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(strings.TrimSpace(dmlSQL))
-	p := planner.NewPlanner()
+	p := s.newPlanner()
 
 	var dmlType, tableName, whereCond string
 	if strings.HasPrefix(upper, "INSERT ") {
@@ -874,7 +874,7 @@ func formatSubqueryVal(v any) string {
 }
 
 func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
-	p := planner.NewPlanner()
+	p := s.newPlanner()
 	qInfo, err := p.ParseSelect(query)
 	if err != nil {
 		return nil, fmt.Errorf("parse CTE error: %w", err)
@@ -967,7 +967,7 @@ func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
 }
 
 func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	p := planner.NewPlanner()
+	p := s.newPlanner()
 	_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
 		_, err := s.engine.GetTable(cleanIdentifier(tbl))
 		return err == nil
@@ -1904,7 +1904,7 @@ func (s *Server) execSetOpSelect(setQuery *planner.SetOpQuery, start time.Time, 
 }
 
 func (s *Server) execSetOpExplain(setQuery *planner.SetOpQuery, analyze bool, start time.Time) (*QueryResult, error) {
-	p := planner.NewPlanner()
+	p := s.newPlanner()
 	plan, err := p.BuildSetOpPlan(setQuery, func(subSQL string) (*planner.PlanNode, error) {
 		qInfo, err := p.ParseSelect(subSQL)
 		if err != nil {
@@ -2002,7 +2002,7 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 		return s.execScalarSelect(cleaned, start, cs)
 	}
 
-	p := planner.NewPlanner()
+	p := s.newPlanner()
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil {
 		_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {

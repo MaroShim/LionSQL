@@ -116,6 +116,7 @@ type PlanNode struct {
 	EstimatedRows    int64                `json:"estimated_rows"`
 	ActualRows       int64                `json:"actual_rows,omitempty"`
 	ActualDurationUS int64                `json:"actual_duration_us,omitempty"`
+	Partitions       []string             `json:"partitions,omitempty"`
 	Children         []*PlanNode          `json:"children,omitempty"`
 }
 
@@ -142,7 +143,9 @@ type QueryInfo struct {
 }
 
 // Planner constructs and optimizes execution plans for SQL queries.
-type Planner struct{}
+type Planner struct {
+	PartitionGetter func(table string) []string
+}
 
 // NewPlanner creates a new query planner instance.
 func NewPlanner() *Planner {
@@ -903,6 +906,17 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		}
 	} else {
 		// Table Scan (Sequential Scan)
+		var prunedParts []string
+		if schema != nil && schema.IsPartitioned() {
+			var avail []string
+			if p.PartitionGetter != nil {
+				avail = p.PartitionGetter(q.TableName)
+			} else if leftStats != nil && len(leftStats.Partitions) > 0 {
+				avail = leftStats.Partitions
+			}
+			prunedParts = PrunePartitions(schema, pushdownRes.PrimaryConds, avail)
+		}
+
 		scanNode = &PlanNode{
 			Type:          NodeTableScan,
 			Relation:      q.TableName,
@@ -910,6 +924,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			StartupCost:   0.0,
 			TotalCost:     tableScanTotalCost,
 			EstimatedRows: estimatedTotal,
+			Partitions:    prunedParts,
 		}
 
 		if len(pushdownRes.PrimaryConds) > 0 {
@@ -1298,6 +1313,9 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 		sb.WriteString(fmt.Sprintf(" on %s", node.Relation))
 		if node.Alias != "" && node.Alias != node.Relation {
 			sb.WriteString(fmt.Sprintf(" %s", node.Alias))
+		}
+		if len(node.Partitions) > 0 {
+			sb.WriteString(fmt.Sprintf(" (Partitions: [%s])", strings.Join(node.Partitions, ", ")))
 		}
 	case NodeIndexScan, NodeIndexOnlyScan:
 		sb.WriteString(fmt.Sprintf(" using %s on %s", node.IndexName, node.Relation))

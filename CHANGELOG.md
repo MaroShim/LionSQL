@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **ClickHouse-Style Auto Rolling Range Partitioning & O(1) Fast Drop Partition (`pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/api`)**:
+  - Implemented intuitive ClickHouse-style range table partitioning via `CREATE TABLE ... PARTITION BY { toYYYYMM(col) | MONTH(col) | toYYYYMMDD(col) | DAY(col) | toYYYY(col) | YEAR(col) | col }`.
+  - Added Auto Rolling partition management: partitions are created and tracked dynamically upon row insertion without requiring cumbersome manual partition scheme pre-creation.
+  - Implemented $O(1)$ fast partition dropping via `ALTER TABLE <table_name> DROP PARTITION '<partition_id>'` (e.g. `ALTER TABLE logs DROP PARTITION '202609'`), instantly purging rows and cleaning secondary indexes.
+  - Added Cost-Based Optimizer partition pruning (`PrunePartitions` in `pkg/planner/pruning.go`) that evaluates equality, range (`<`, `<=`, `>`, `>=`), `BETWEEN`, and `IN` predicates on partition columns, skipping non-matching partitions with zero row comparisons.
+  - Integrated partition metrics and pruning feedback into `EXPLAIN` text and PostgreSQL `EXPLAIN (FORMAT JSON)` for graphical GUI tools.
+  - Added partition introspection via `SHOW PARTITIONS [FROM] <table_name>` and virtual system catalog views `system.partitions` / `sys.partitions`.
+  - Supported persistence across disk snapshots (`tables.mpk`) and atomic crash recovery via WAL/AOF (`OpDropPartition`).
+  - Added comprehensive test suites in `pkg/api/partition_test.go` and `pkg/planner/pruning_test.go`.
+
 - **Comprehensive `pg_catalog` & `information_schema` Virtual Views for PostgreSQL GUI Tools and ORM Compatibility (`pkg/api/sqlexec_pgcatalog.go`, `pkg/api/sqlexec_dbcc.go`, `pkg/wire`)**:
   - Implemented virtual system views in `pg_catalog` (`pg_database`, `pg_namespace`, `pg_class`, `pg_type`, `pg_attribute`, `pg_constraint`, `pg_index`, `pg_roles`, `pg_user`, `pg_am`, `pg_settings`, `pg_stat_user_tables`, `pg_stat_user_indexes`, `pg_statio_user_tables`, `pg_locks`, `pg_stat_activity`, `pg_proc`, `pg_views`, and related stubs) with deterministic OIDs and canonical PostgreSQL data type mappings.
   - Implemented virtual views in `information_schema` (`tables`, `columns`, `schemata`, `routines`, `table_constraints`, `key_column_usage`, `referential_constraints`, `constraint_column_usage`, `views`, and role grants).

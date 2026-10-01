@@ -29,6 +29,9 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if err != nil {
 			return nil, fmt.Errorf("table scan schema lookup failed for %q: %w", plan.Relation, err)
 		}
+		if len(plan.Partitions) > 0 {
+			return NewSeqScanIteratorWithPartitions(tx, plan.Relation, plan.Alias, schema, plan.Partitions), nil
+		}
 		return NewSeqScanIterator(tx, plan.Relation, plan.Alias, schema), nil
 
 	case planner.NodeIndexScan, planner.NodeIndexOnlyScan:

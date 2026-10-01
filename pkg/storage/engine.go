@@ -26,6 +26,8 @@ var (
 	ErrSerializationFailure = errors.New("serialization failure: concurrent update conflict")
 	ErrInvalidJSON          = errors.New("invalid JSON syntax")
 	ErrSavepointNotFound    = errors.New("savepoint not found")
+	ErrPartitionNotFound    = errors.New("partition not found")
+	ErrTableNotPartitioned  = errors.New("table is not partitioned")
 )
 
 // DataType represents the column data type.
@@ -148,12 +150,120 @@ type ForeignKeySchema struct {
 	OnUpdate      ForeignKeyAction `json:"on_update"`
 }
 
+// PartitionDef defines the partitioning strategy for a table (Alternative A: ClickHouse-style Auto Rolling Range Partitioning).
+type PartitionDef struct {
+	Expr   string `json:"expr"`   // e.g. "toYYYYMM(created_at)" or "MONTH(created_at)"
+	Column string `json:"column"` // e.g. "created_at"
+	Func   string `json:"func"`   // "TOYYYYMM", "MONTH", "TOYYYYMMDD", "DAY", "TOYYYY", "YEAR", "COLUMN"
+}
+
+// PartitionInfo describes partition metadata and row metrics.
+type PartitionInfo struct {
+	Name     string `json:"name"`
+	RowCount int64  `json:"row_count"`
+}
+
 // TableSchema defines a table structure.
 type TableSchema struct {
 	Name        string             `json:"name"`
 	Columns     []Column           `json:"columns"`
 	Indexes     []IndexSchema      `json:"indexes,omitempty"`
 	ForeignKeys []ForeignKeySchema `json:"foreign_keys,omitempty"`
+	Partition   *PartitionDef      `json:"partition,omitempty"`
+}
+
+func (s *TableSchema) IsPartitioned() bool {
+	return s != nil && s.Partition != nil && s.Partition.Column != ""
+}
+
+func (s *TableSchema) ComputePartitionKey(rec Record) (string, error) {
+	if !s.IsPartitioned() {
+		return "", nil
+	}
+	val, ok := rec[s.Partition.Column]
+	if !ok || val.IsNull {
+		return "null", nil
+	}
+	return s.ComputePartitionKeyFromValue(val)
+}
+
+func (s *TableSchema) ComputePartitionKeyFromValue(val Value) (string, error) {
+	if !s.IsPartitioned() {
+		return "", nil
+	}
+	if val.IsNull {
+		return "null", nil
+	}
+
+	fn := strings.ToUpper(s.Partition.Func)
+	switch fn {
+	case "TOYYYYMM", "MONTH":
+		t, err := parseTimeFromValue(val)
+		if err != nil {
+			return "", err
+		}
+		return t.Format("200601"), nil
+
+	case "TOYYYYMMDD", "DAY":
+		t, err := parseTimeFromValue(val)
+		if err != nil {
+			return "", err
+		}
+		return t.Format("20060102"), nil
+
+	case "TOYYYY", "YEAR", "TOYEAR":
+		t, err := parseTimeFromValue(val)
+		if err != nil {
+			return "", err
+		}
+		return t.Format("2006"), nil
+
+	case "COLUMN":
+		return val.String(), nil
+
+	default:
+		return val.String(), nil
+	}
+}
+
+func parseTimeFromValue(val Value) (time.Time, error) {
+	switch val.Type {
+	case TypeDateTime:
+		return val.TVal, nil
+	case TypeDate:
+		t, err := time.Parse("2006-01-02", val.SVal)
+		if err != nil {
+			return time.Time{}, err
+		}
+		return t, nil
+	case TypeVarChar:
+		str := strings.TrimSpace(val.SVal)
+		layouts := []string{
+			"2006-01-02 15:04:05",
+			"2006-01-02 15:04:05.000000",
+			"2006-01-02T15:04:05",
+			"2006-01-02T15:04:05Z07:00",
+			time.RFC3339,
+			"2006-01-02",
+			"2006/01/02",
+			"20060102",
+		}
+		for _, layout := range layouts {
+			if t, err := time.Parse(layout, str); err == nil {
+				return t, nil
+			}
+		}
+		return time.Time{}, fmt.Errorf("cannot parse %q as date/time", str)
+	case TypeInt:
+		if val.IVal >= 10000000 && val.IVal <= 99999999 {
+			if t, err := time.Parse("20060102", fmt.Sprintf("%d", val.IVal)); err == nil {
+				return t, nil
+			}
+		}
+		return time.Unix(val.IVal, 0), nil
+	default:
+		return time.Time{}, fmt.Errorf("unsupported type %s for partition date calculation", val.Type)
+	}
 }
 
 func (s *TableSchema) FindForeignKey(name string) (*ForeignKeySchema, int, bool) {
@@ -517,6 +627,7 @@ type Transaction interface {
 	Delete(tableName string, pk Value) error
 	Get(tableName string, pk Value) (Record, error)
 	Scan(tableName string) (Cursor, error)
+	ScanPartitions(tableName string, partitions []string) (Cursor, error)
 	IndexScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	IndexOnlyScan(tableName string, indexName string, low, high *Value) (Cursor, error)
 	IndexScanDesc(tableName string, indexName string, low, high *Value) (Cursor, error)
@@ -546,4 +657,7 @@ type Engine interface {
 	CreateIndex(index *IndexSchema) error
 	DropIndex(tableName, indexName string) error
 	TruncateTable(tableName string) error
+	DropPartition(tableName, partitionName string) error
+	GetPartitions(tableName string) ([]PartitionInfo, error)
 }
+

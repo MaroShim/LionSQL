@@ -690,6 +690,12 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}
 	}
 
+	// 0.05 SHOW PARTITIONS [FROM] <table>
+	showPartsRe := regexp.MustCompile(`(?is)^SHOW\s+PARTITIONS(?:\s+FROM)?\s+([^\s;]+)\s*;?$`)
+	if m := showPartsRe.FindStringSubmatch(trimmed); len(m) == 2 {
+		return s.execShowPartitions(cleanIdentifier(m[1]), start)
+	}
+
 	// 0.06 SHOW <parameter>
 	showRe := regexp.MustCompile(`(?is)^SHOW\s+(.*?)\s*;?$`)
 	if m := showRe.FindStringSubmatch(trimmed); len(m) == 2 {
@@ -1005,6 +1011,11 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	// 4.2 DDL/DML: TRUNCATE TABLE
 	if strings.HasPrefix(upper, "TRUNCATE TABLE") || strings.HasPrefix(upper, "TRUNCATE ") {
 		return s.execTruncateTable(trimmed, start)
+	}
+
+	// 4.3 DDL: ALTER TABLE
+	if strings.HasPrefix(upper, "ALTER TABLE") {
+		return s.execAlterTable(trimmed, start, cs)
 	}
 
 	// 5. DML: INSERT INTO

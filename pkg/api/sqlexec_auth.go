@@ -30,6 +30,7 @@ func (s *Server) checkTableAccess(cs *ClientSession, table string, priv auth.Pri
 	cleanTbl := cleanIdentifier(table)
 	// Virtual system catalog views or temporary tables bypass custom table grants
 	if strings.HasPrefix(strings.ToLower(cleanTbl), "sys.") ||
+		strings.HasPrefix(strings.ToLower(cleanTbl), "system.") ||
 		strings.HasPrefix(strings.ToLower(cleanTbl), "information_schema.") ||
 		strings.HasPrefix(cleanTbl, "#") {
 		return nil

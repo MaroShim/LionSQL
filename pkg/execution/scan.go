@@ -16,10 +16,16 @@ type SeqScanIterator struct {
 	schema      *storage.TableSchema
 	colIndexMap *ColumnIndexMap
 	cursor      storage.Cursor
+	partitions  []string
 }
 
 // NewSeqScanIterator creates a new sequential scan iterator.
 func NewSeqScanIterator(tx storage.Transaction, tableName, alias string, schema *storage.TableSchema) *SeqScanIterator {
+	return NewSeqScanIteratorWithPartitions(tx, tableName, alias, schema, nil)
+}
+
+// NewSeqScanIteratorWithPartitions creates a sequential scan iterator restricted to specific partitions.
+func NewSeqScanIteratorWithPartitions(tx storage.Transaction, tableName, alias string, schema *storage.TableSchema, partitions []string) *SeqScanIterator {
 	if alias == "" {
 		alias = tableName
 	}
@@ -29,6 +35,7 @@ func NewSeqScanIterator(tx storage.Transaction, tableName, alias string, schema 
 		alias:       alias,
 		schema:      schema,
 		colIndexMap: NewColumnIndexMap(schema, alias),
+		partitions:  partitions,
 	}
 }
 
@@ -37,7 +44,13 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 		return fmt.Errorf("seq scan: transaction is nil")
 	}
 	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
-	cur, err := s.tx.Scan(s.tableName)
+	var cur storage.Cursor
+	var err error
+	if len(s.partitions) > 0 {
+		cur, err = s.tx.ScanPartitions(s.tableName, s.partitions)
+	} else {
+		cur, err = s.tx.Scan(s.tableName)
+	}
 	if err != nil {
 		return fmt.Errorf("seq scan on %q: %w", s.tableName, err)
 	}

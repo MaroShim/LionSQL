@@ -189,6 +189,33 @@ func TimeValueFromAny(v Value) Value {
 	return TimeValueFromString(v.String())
 }
 
+// DateTimeValueFromAny converts an existing storage.Value to TypeDateTime.
+func DateTimeValueFromAny(v Value) (Value, error) {
+	if v.IsNull {
+		return NullValue(TypeDateTime), nil
+	}
+	if v.Type == TypeDateTime {
+		return v, nil
+	}
+	str := strings.Trim(strings.TrimSpace(v.String()), "'\"")
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04:05.000000",
+		"2006-01-02 15:04:05.000",
+		"2006-01-02T15:04:05",
+		"2006-01-02T15:04:05Z07:00",
+		time.RFC3339,
+		"2006-01-02",
+		"2006/01/02",
+	}
+	for _, l := range layouts {
+		if t, err := time.Parse(l, str); err == nil {
+			return DateTimeValue(t), nil
+		}
+	}
+	return NullValue(TypeDateTime), fmt.Errorf("cannot parse %q as DATETIME", str)
+}
+
 // CompareExtendedValues compares non-standard types (UUID, Binary, Date, Time).
 func CompareExtendedValues(v, other Value) int {
 	switch v.Type {
