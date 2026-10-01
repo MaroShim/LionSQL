@@ -1196,9 +1196,9 @@ func (p *Parser) parseUpdate() (Statement, error) {
 		p.nextToken()
 	}
 
-	// Check if this is simple single-column PK equality
+	// Check if this is simple single-column equality
 	if bin, ok := whereExpr.(*BinaryExpr); ok && bin.Op == TokenEq {
-		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol && strings.EqualFold(colRef.Name, "id") {
+		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol {
 			return &UpdateStmt{
 				Table:       tblName,
 				Assignments: assigns,
@@ -1237,7 +1237,7 @@ func (p *Parser) parseDelete() (Statement, error) {
 	}
 
 	if bin, ok := whereExpr.(*BinaryExpr); ok && bin.Op == TokenEq {
-		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol && strings.EqualFold(colRef.Name, "id") {
+		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol {
 			return &DeleteStmt{
 				Table:    tblName,
 				WhereCol: colRef.Name,

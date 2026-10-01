@@ -1268,6 +1268,33 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 }
 
 func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
+	if colName, valExpr, ok := extractSimpleEq(data.WhereExpr); ok && f.isPKCol(data.Table, colName) {
+		evalCtx := f.buildRowEvalMap(nil)
+		pkAny, _ := proc.EvalRowExpr(valExpr, evalCtx, nil)
+		pkVal := toStorageValue(pkAny)
+		oldRec, err := f.tx.Get(data.Table, pkVal)
+		if err == nil && oldRec != nil {
+			rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
+			recUpdates := make(storage.Record)
+			newRowMap := make(map[string]any)
+			for k, v := range recordToMap(oldRec) {
+				newRowMap[k] = v
+			}
+			for _, a := range data.Assignments {
+				vAny, _ := proc.EvalRowExpr(a.Value, rowCtx, nil)
+				stVal := toStorageValue(vAny)
+				recUpdates[a.Column] = stVal
+				newRowMap[a.Column] = valToAny(stVal)
+			}
+			if err := f.tx.Update(data.Table, pkVal, recUpdates); err != nil {
+				return 0, fmt.Errorf("update error on %s: %w", data.Table, err)
+			}
+			_ = f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRowMap}, []map[string]any{recordToMap(oldRec)})
+			return 1, nil
+		}
+		return 0, nil
+	}
+
 	var cursor storage.Cursor
 	var err error
 
@@ -1391,6 +1418,21 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 }
 
 func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
+	if colName, valExpr, ok := extractSimpleEq(data.WhereExpr); ok && f.isPKCol(data.Table, colName) {
+		evalCtx := f.buildRowEvalMap(nil)
+		pkAny, _ := proc.EvalRowExpr(valExpr, evalCtx, nil)
+		pkVal := toStorageValue(pkAny)
+		oldRec, err := f.tx.Get(data.Table, pkVal)
+		if err == nil && oldRec != nil {
+			if err := f.tx.Delete(data.Table, pkVal); err != nil {
+				return 0, fmt.Errorf("delete error on %s: %w", data.Table, err)
+			}
+			_ = f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{recordToMap(oldRec)})
+			return 1, nil
+		}
+		return 0, nil
+	}
+
 	var cursor storage.Cursor
 	var err error
 
@@ -1515,19 +1557,8 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 	if data.WhereCol != "" && data.WhereVal != nil {
 		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
-		if rec, err := f.tx.Get(data.Table, pkVal); err == nil {
-			colMatches := false
-			if v, ok := rec[data.WhereCol]; ok {
-				colMatches = (v.Compare(pkVal) == 0)
-			} else {
-				for k, v := range rec {
-					if strings.EqualFold(k, data.WhereCol) {
-						colMatches = (v.Compare(pkVal) == 0)
-						break
-					}
-				}
-			}
-			if colMatches {
+		if f.isPKCol(data.Table, data.WhereCol) {
+			if rec, err := f.tx.Get(data.Table, pkVal); err == nil && rec != nil {
 				if v, ok := rec[data.Column]; ok {
 					return v, nil
 				}
@@ -1536,8 +1567,8 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 						return v, nil
 					}
 				}
-				return storage.NullValue(storage.TypeUnknown), nil
 			}
+			return storage.NullValue(storage.TypeUnknown), nil
 		}
 	}
 
@@ -1571,6 +1602,34 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 		}
 	}
 	return storage.NullValue(storage.TypeUnknown), nil
+}
+
+func extractSimpleEq(expr proc.Expr) (string, proc.Expr, bool) {
+	if expr == nil {
+		return "", nil, false
+	}
+	if bin, ok := expr.(*proc.BinaryExpr); ok && bin.Op == proc.TokenEq {
+		if colRef, ok := bin.Left.(*proc.ColumnRefExpr); ok {
+			return cleanSymbol(colRef.Name), bin.Right, true
+		} else if colRef, ok := bin.Right.(*proc.ColumnRefExpr); ok {
+			return cleanSymbol(colRef.Name), bin.Left, true
+		}
+	}
+	return "", nil, false
+}
+
+func (f *VMFrame) isPKCol(tableName, colName string) bool {
+	clean := cleanSymbol(colName)
+	if tg := f.executor.getTableGetter(); tg != nil {
+		if schema, err := tg(tableName); err == nil && schema != nil {
+			for _, c := range schema.Columns {
+				if c.PrimaryKey {
+					return strings.EqualFold(c.Name, clean)
+				}
+			}
+		}
+	}
+	return strings.EqualFold(clean, "id")
 }
 
 func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (string, proc.Expr, proc.Expr, bool) {

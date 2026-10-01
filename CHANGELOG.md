@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Performance
+- **VDBE Bytecode Engine Primary Key O(1) Fast-Path Optimization (`pkg/proc/runtime/vm.go`, `pkg/proc/parser.go`, `cmd/tpcc_vdbe`)**:
+  - Replaced hardcoded `"id"` column checks in `execSelectInto`, `OpUpdate`, and `OpDelete` with dynamic primary key metadata resolution via `isPKCol` and `extractSimpleEq`.
+  - Generalized single-column equality predicate parsing in `parseUpdate` and `parseDelete` so any column equality emits targeted `UpdateStmt` and `DeleteStmt` ASTs.
+  - Implemented an O(1) point lookup fast-path using `f.tx.Get(table, pkVal)` in `execSelectInto`, `execUpdateWhere`, and `execDeleteWhere`, eliminating table-wide full scans on non-`id` primary key lookups (`w_id`, `d_key`, `c_key`, `s_key`, `no_key`).
+  - Configured `executor.SetTableGetter(eng.GetTable)` in `cmd/tpcc_vdbe` to enable runtime schema awareness.
+  - Boosted standalone TPC-C VDBE bytecode benchmark throughput from 93.7 TPS (2,519 tpmC) to **16,823.03 TPS (453,336.42 tpmC)** (180x speedup), reaching 51.5% of raw hand-written compiled Go storage API performance.
 - **Zero-Copy Streaming Cursor (`pkg/storage/memengine`)**:
   - Eliminated full-table row materialization bottlenecks in `Scan`, `IndexScan`, and `IndexOnlyScan`.
   - Replaced intermediate `merged := make(map[string]storage.Record)` map and `records := make([]storage.Record, len(keys))` slice allocations with a streaming cursor (`memCursor`) that retains sorted primary keys and resolves records lazily on demand during `Next()`.

@@ -112,6 +112,7 @@ func main() {
 	fmt.Println("Done. (PlanCache ready)")
 
 	executor := runtime.NewExecutor(cache)
+	executor.SetTableGetter(eng.GetTable)
 
 	// 5. Run Concurrent Benchmark
 	ctx, cancel := context.WithTimeout(context.Background(), *durationFlag)
