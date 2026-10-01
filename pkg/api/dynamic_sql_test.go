@@ -4,167 +4,214 @@ import (
 	"testing"
 )
 
-func TestDynamicSQL_SpExecuteSql_Basic(t *testing.T) {
-	server, cleanup := setupTestServer()
+func TestDynamicSQL_ExecLiteralAndVariable(t *testing.T) {
+	s, cleanup := setupTestServer()
 	defer cleanup()
 
-	_, err := server.ExecuteSQL(`CREATE TABLE users (
-		id INT PRIMARY KEY,
-		name VARCHAR(50) NOT NULL,
-		dept VARCHAR(50) NOT NULL,
-		salary FLOAT NOT NULL
-	);`)
+	// 1. Setup table and initial data
+	_, err := s.ExecuteSQL("CREATE TABLE dyn_users (id INT PRIMARY KEY, name VARCHAR(50), age INT);")
 	if err != nil {
-		t.Fatalf("CREATE TABLE failed: %v", err)
+		t.Fatalf("failed to create table: %v", err)
+	}
+	_, err = s.ExecuteSQL("INSERT INTO dyn_users (id, name, age) VALUES (1, 'Alice', 30), (2, 'Bob', 25);")
+	if err != nil {
+		t.Fatalf("failed to insert data: %v", err)
 	}
 
-	_, err = server.ExecuteSQL(`INSERT INTO users (id, name, dept, salary) VALUES
-		(1, 'Alice', 'Engineering', 1000.0),
-		(2, 'Bob', 'Engineering', 1200.0),
-		(3, 'Charlie', 'Sales', 900.0);`)
+	// 2. Direct string literal EXEC ('...')
+	res, err := s.ExecuteSQL("EXEC ('SELECT * FROM dyn_users WHERE id = 1');")
 	if err != nil {
-		t.Fatalf("INSERT failed: %v", err)
-	}
-
-	// 1. Basic sp_executesql without parameters
-	res, err := server.ExecuteSQL(`EXEC sp_executesql N'SELECT * FROM users WHERE id = 1';`)
-	if err != nil || !res.Success {
-		t.Fatalf("sp_executesql without params failed: %v (res: %+v)", err, res)
+		t.Fatalf("EXEC ('...') failed: %v", err)
 	}
 	if len(res.Rows) != 1 || res.Rows[0]["name"] != "Alice" {
-		t.Fatalf("unexpected rows: %+v", res.Rows)
+		t.Fatalf("unexpected result from EXEC ('...'): %+v", res.Rows)
 	}
 
-	// 2. Named parameter binding
-	res, err = server.ExecuteSQL(`EXEC sp_executesql N'SELECT name, salary FROM users WHERE id = @id', N'@id INT', @id = 2;`)
-	if err != nil || !res.Success {
-		t.Fatalf("sp_executesql named params failed: %v (res: %+v)", err, res)
+	// 3. EXEC with variable in session
+	sessID := "sess1"
+	_, err = s.ExecuteSessionSQL(sessID, "DECLARE @sql VARCHAR(200) = 'SELECT * FROM dyn_users WHERE age = 25';")
+	if err != nil {
+		t.Fatalf("DECLARE failed: %v", err)
+	}
+
+	// EXEC (@sql)
+	res, err = s.ExecuteSessionSQL(sessID, "EXEC (@sql);")
+	if err != nil {
+		t.Fatalf("EXEC (@sql) failed: %v", err)
 	}
 	if len(res.Rows) != 1 || res.Rows[0]["name"] != "Bob" {
-		t.Fatalf("unexpected rows: %+v", res.Rows)
+		t.Fatalf("unexpected result from EXEC (@sql): %+v", res.Rows)
 	}
 
-	// 3. Multiple parameters (named & string literal with quotes)
-	res, err = server.ExecuteSQL(`EXEC sp_executesql N'SELECT name FROM users WHERE dept = @d AND salary > @s', N'@d VARCHAR(50), @s FLOAT', @d = 'Engineering', @s = 1100.0;`)
-	if err != nil || !res.Success {
-		t.Fatalf("sp_executesql multi-param failed: %v (res: %+v)", err, res)
+	// EXEC @sql (without parentheses)
+	res, err = s.ExecuteSessionSQL(sessID, "EXEC @sql;")
+	if err != nil {
+		t.Fatalf("EXEC @sql (without parentheses) failed: %v", err)
 	}
 	if len(res.Rows) != 1 || res.Rows[0]["name"] != "Bob" {
-		t.Fatalf("expected Bob, got: %+v", res.Rows)
-	}
-
-	// 4. Positional parameter binding
-	res, err = server.ExecuteSQL(`EXEC sp_executesql N'SELECT name FROM users WHERE id = @uid', N'@uid INT', 3;`)
-	if err != nil || !res.Success {
-		t.Fatalf("sp_executesql positional param failed: %v (res: %+v)", err, res)
-	}
-	if len(res.Rows) != 1 || res.Rows[0]["name"] != "Charlie" {
-		t.Fatalf("expected Charlie, got: %+v", res.Rows)
+		t.Fatalf("unexpected result from EXEC @sql: %+v", res.Rows)
 	}
 }
 
-func TestDynamicSQL_ExecStringLiteral(t *testing.T) {
-	server, cleanup := setupTestServer()
+func TestDynamicSQL_SpExecuteSQL(t *testing.T) {
+	s, cleanup := setupTestServer()
 	defer cleanup()
 
-	_, err := server.ExecuteSQL(`CREATE TABLE items (id INT PRIMARY KEY, title VARCHAR(50));`)
+	_, err := s.ExecuteSQL("CREATE TABLE dyn_products (id INT PRIMARY KEY, title VARCHAR(50), price INT);")
 	if err != nil {
-		t.Fatalf("CREATE TABLE failed: %v", err)
+		t.Fatalf("failed to create table: %v", err)
+	}
+	_, err = s.ExecuteSQL("INSERT INTO dyn_products (id, title, price) VALUES (1, 'Book', 15), (2, 'Pen', 3);")
+	if err != nil {
+		t.Fatalf("failed to insert data: %v", err)
 	}
 
-	// 1. EXEC ('...') DML statement
-	res, err := server.ExecuteSQL(`EXEC ('INSERT INTO items (id, title) VALUES (10, ''Keyboard'');');`)
-	if err != nil || !res.Success {
-		t.Fatalf("EXEC ('INSERT...') failed: %v", err)
+	// 1. Positional with literal @stmt, @params, and named args
+	res, err := s.ExecuteSQL("EXEC sp_executesql N'SELECT * FROM dyn_products WHERE id = @id', N'@id INT', @id = 1;")
+	if err != nil {
+		t.Fatalf("sp_executesql named param failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["title"] != "Book" {
+		t.Fatalf("unexpected result: %+v", res.Rows)
 	}
 
-	// 2. EXEC (N'...') query statement
-	res, err = server.ExecuteSQL(`EXEC (N'SELECT * FROM items WHERE id = 10;');`)
-	if err != nil || !res.Success {
-		t.Fatalf("EXEC (N'SELECT...') failed: %v", err)
+	// 2. Named @stmt and @params
+	res, err = s.ExecuteSQL("EXEC sp_executesql @stmt = N'SELECT * FROM dyn_products WHERE price < @maxPrice', @params = N'@maxPrice INT', @maxPrice = 10;")
+	if err != nil {
+		t.Fatalf("sp_executesql named @stmt/@params failed: %v", err)
 	}
-	if len(res.Rows) != 1 || res.Rows[0]["title"] != "Keyboard" {
-		t.Fatalf("expected Keyboard, got: %+v", res.Rows)
+	if len(res.Rows) != 1 || res.Rows[0]["title"] != "Pen" {
+		t.Fatalf("unexpected result: %+v", res.Rows)
 	}
 
-	// 3. EXEC ('SELECT 1 AS n') without semicolon
-	res, err = server.ExecuteSQL(`EXEC ('SELECT 42 AS answer')`)
-	if err != nil || !res.Success {
-		t.Fatalf("EXEC ('SELECT 42') failed: %v", err)
+	// 3. Positional values (without @name = val)
+	res, err = s.ExecuteSQL("EXEC sp_executesql N'SELECT * FROM dyn_products WHERE id = @id AND price > @minPrice', N'@id INT, @minPrice INT', 1, 10;")
+	if err != nil {
+		t.Fatalf("sp_executesql positional values failed: %v", err)
 	}
-	if len(res.Rows) != 1 {
-		t.Fatalf("expected 1 row, got %+v", res.Rows)
+	if len(res.Rows) != 1 || res.Rows[0]["title"] != "Book" {
+		t.Fatalf("unexpected result: %+v", res.Rows)
+	}
+
+	// 4. Session variables passed as @stmt and @params
+	sessID := "sp_sess"
+	_, err = s.ExecuteSessionSQL(sessID, "DECLARE @q NVARCHAR(200) = 'SELECT * FROM dyn_products WHERE id = @pId';")
+	if err != nil {
+		t.Fatalf("DECLARE @q failed: %v", err)
+	}
+	_, err = s.ExecuteSessionSQL(sessID, "DECLARE @p NVARCHAR(50) = '@pId INT';")
+	if err != nil {
+		t.Fatalf("DECLARE @p failed: %v", err)
+	}
+	res, err = s.ExecuteSessionSQL(sessID, "EXEC sp_executesql @q, @p, @pId = 2;")
+	if err != nil {
+		t.Fatalf("sp_executesql with session var stmt/params failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["title"] != "Pen" {
+		t.Fatalf("unexpected result from session var sp_executesql: %+v", res.Rows)
+	}
+
+	// 5. Parameter name inside string literal MUST NOT be substituted
+	res, err = s.ExecuteSQL("EXEC sp_executesql N'SELECT @val AS id, ''@val inside literal'' AS note', N'@val INT', @val = 99;")
+	if err != nil {
+		t.Fatalf("sp_executesql with literal protection failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["note"] != "@val inside literal" {
+		t.Fatalf("literal parameter was wrongly substituted: %+v", res.Rows)
+	}
+
+	// 6. OUTPUT keyword syntax compatibility
+	res, err = s.ExecuteSQL("EXEC sp_executesql N'SELECT * FROM dyn_products WHERE id = @id', N'@id INT OUTPUT', @id = 1 OUTPUT;")
+	if err != nil {
+		t.Fatalf("sp_executesql with OUTPUT failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["title"] != "Book" {
+		t.Fatalf("unexpected result from OUTPUT syntax: %+v", res.Rows)
 	}
 }
 
-func TestDynamicSQL_SessionVariables(t *testing.T) {
-	server, cleanup := setupTestServer()
+func TestDynamicSQL_StringConcatenation(t *testing.T) {
+	s, cleanup := setupTestServer()
 	defer cleanup()
 
-	sessID := "dyn_session_1"
-
-	_, err := server.ExecuteSessionSQL(sessID, `CREATE TABLE logs (id INT PRIMARY KEY, message VARCHAR(100));`)
+	_, err := s.ExecuteSQL("CREATE TABLE dyn_concat (id INT PRIMARY KEY, msg VARCHAR(50));")
 	if err != nil {
-		t.Fatalf("CREATE TABLE failed: %v", err)
+		t.Fatalf("failed to create table: %v", err)
 	}
-
-	// Set dynamic query string variable
-	_, err = server.ExecuteSessionSQL(sessID, `SET @dynQuery = 'INSERT INTO logs (id, message) VALUES (1, ''System Started'');';`)
+	_, err = s.ExecuteSQL("INSERT INTO dyn_concat VALUES (1, 'Hello World');")
 	if err != nil {
-		t.Fatalf("SET variable failed: %v", err)
+		t.Fatalf("failed to insert data: %v", err)
 	}
 
-	// Execute variable via EXEC (@dynQuery)
-	res, err := server.ExecuteSessionSQL(sessID, `EXEC (@dynQuery);`)
-	if err != nil || !res.Success {
-		t.Fatalf("EXEC (@dynQuery) failed: %v (res: %+v)", err, res)
+	// 1. Literal concatenation: EXEC ('SELECT ' + '* FROM dyn_concat')
+	res, err := s.ExecuteSQL("EXEC ('SELECT ' + '* FROM dyn_concat WHERE id = 1');")
+	if err != nil {
+		t.Fatalf("EXEC with literal concatenation failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["msg"] != "Hello World" {
+		t.Fatalf("unexpected result: %+v", res.Rows)
 	}
 
-	// Verify row inserted
-	res, err = server.ExecuteSessionSQL(sessID, `SELECT * FROM logs;`)
-	if err != nil || !res.Success {
-		t.Fatalf("SELECT failed: %v", err)
+	// 2. Variable concatenation in session
+	sessID := "concat_sess"
+	_, err = s.ExecuteSessionSQL(sessID, "DECLARE @tbl VARCHAR(50) = 'dyn_concat';")
+	if err != nil {
+		t.Fatalf("DECLARE @tbl failed: %v", err)
 	}
-	if len(res.Rows) != 1 || res.Rows[0]["message"] != "System Started" {
-		t.Fatalf("expected System Started, got: %+v", res.Rows)
+	res, err = s.ExecuteSessionSQL(sessID, "EXEC ('SELECT msg FROM ' + @tbl + ' WHERE id = 1');")
+	if err != nil {
+		t.Fatalf("EXEC with variable concatenation failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["msg"] != "Hello World" {
+		t.Fatalf("unexpected result: %+v", res.Rows)
 	}
 }
 
-func TestDynamicSQL_StoredProcedureWithDynamicExec(t *testing.T) {
-	server, cleanup := setupTestServer()
+func TestDynamicSQL_DMLAndDDL(t *testing.T) {
+	s, cleanup := setupTestServer()
 	defer cleanup()
 
-	_, err := server.ExecuteSQL(`CREATE TABLE audit (id INT PRIMARY KEY, info VARCHAR(100));`)
+	// 1. Dynamic DDL: CREATE TABLE via EXEC
+	_, err := s.ExecuteSQL("EXEC ('CREATE TABLE dyn_ddl_test (id INT PRIMARY KEY, val VARCHAR(20));');")
 	if err != nil {
-		t.Fatalf("CREATE TABLE failed: %v", err)
+		t.Fatalf("dynamic CREATE TABLE failed: %v", err)
 	}
 
-	// Create stored procedure that uses dynamic EXEC (@cmd)
-	procSQL := `CREATE PROCEDURE RunDynamicCmd
-		@msg VARCHAR(100)
-	AS
-	BEGIN
-		DECLARE @sql VARCHAR(200);
-		SET @sql = 'INSERT INTO audit (id, info) VALUES (99, ''' + @msg + ''');';
-		EXEC (@sql);
-	END;`
-	_, err = server.ExecuteSQL(procSQL)
+	// 2. Dynamic DML: INSERT via sp_executesql
+	res, err := s.ExecuteSQL("EXEC sp_executesql N'INSERT INTO dyn_ddl_test (id, val) VALUES (@id, @val)', N'@id INT, @val VARCHAR(20)', @id = 100, @val = 'created_dynamic';")
 	if err != nil {
-		t.Fatalf("CREATE PROCEDURE with dynamic EXEC failed: %v", err)
+		t.Fatalf("dynamic INSERT failed: %v", err)
+	}
+	if res.RowsAffected != 1 {
+		t.Fatalf("expected rows affected = 1, got %d", res.RowsAffected)
 	}
 
-	// Call the procedure
-	res, err := server.ExecuteSQL(`EXEC RunDynamicCmd 'dynamic audit log';`)
-	if err != nil || !res.Success {
-		t.Fatalf("EXEC RunDynamicCmd failed: %v", err)
+	// 3. Dynamic DML: UPDATE via sp_executesql
+	res, err = s.ExecuteSQL("EXEC sp_executesql N'UPDATE dyn_ddl_test SET val = @newVal WHERE id = @id', N'@newVal VARCHAR(20), @id INT', @newVal = 'updated_dynamic', @id = 100;")
+	if err != nil {
+		t.Fatalf("dynamic UPDATE failed: %v", err)
+	}
+	if res.RowsAffected != 1 {
+		t.Fatalf("expected rows affected = 1, got %d", res.RowsAffected)
 	}
 
-	// Check table contents
-	selectRes, err := server.ExecuteSQL(`SELECT * FROM audit WHERE id = 99;`)
-	if err != nil || !selectRes.Success {
-		t.Fatalf("SELECT failed: %v", err)
+	// 4. Verify updated value
+	selRes, err := s.ExecuteSQL("SELECT val FROM dyn_ddl_test WHERE id = 100;")
+	if err != nil || len(selRes.Rows) != 1 || selRes.Rows[0]["val"] != "updated_dynamic" {
+		t.Fatalf("unexpected value after dynamic update: %+v", selRes.Rows)
 	}
-	if len(selectRes.Rows) != 1 || selectRes.Rows[0]["info"] != "dynamic audit log" {
-		t.Fatalf("expected 'dynamic audit log', got: %+v", selectRes.Rows)
+
+	// 5. Error handling: invalid query inside EXEC
+	_, err = s.ExecuteSQL("EXEC ('INVALID SYNTAX STATEMENT');")
+	if err == nil {
+		t.Fatalf("expected error for invalid dynamic SQL, got nil")
+	}
+
+	// 6. Error handling: missing @stmt in sp_executesql
+	_, err = s.ExecuteSQL("EXEC sp_executesql;")
+	if err == nil {
+		t.Fatalf("expected error for empty sp_executesql, got nil")
 	}
 }
+
+

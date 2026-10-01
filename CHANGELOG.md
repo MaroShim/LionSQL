@@ -30,6 +30,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Dynamic SQL Execution & `sp_executesql` Engine (`pkg/api`)**:
+  - Implemented dynamic SQL statement execution supporting direct string literals (`EXEC ('SELECT ...')`), session variable references (`EXEC (@sql)`, `EXEC @sql`), and string concatenation expressions with `+` (`EXEC ('SELECT ' + @col + ' FROM ' + @tbl)`).
+  - Implemented full Microsoft T-SQL `sp_executesql` parameterization engine with support for positional and named parameters (`@stmt = N'...', @params = N'...', @id = 1`), `OUTPUT` parameter syntax, and safe session variable binding.
+  - Hardened parameter and session variable substitution with word boundary detection (`\b`), quotation insulation, and length-descending sorting to prevent partial-token collisions.
+  - Added comprehensive test suite in `pkg/api/dynamic_sql_test.go` covering literal execution, variable binding, `sp_executesql` parameterization, quote protection, string concatenation, and dynamic DDL/DML.
 - **Extended Data Types Support (UUID, VARBINARY, DATE, TIME) (`pkg/storage`, `pkg/api`, `pkg/proc`, `pkg/wire`)**:
   - Extended core storage engine type system (`pkg/storage/engine.go`) with `TypeUUID`, `TypeBinary`, `TypeDate`, and `TypeTime`.
   - Maintained Go map key comparability invariant on `storage.Value` by storing binary representations in `BinVal string` and exposing bytes via `.Bytes() []byte`.

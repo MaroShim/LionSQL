@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -896,15 +897,22 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	// 0.3 Substitute session variables in SQL query if present
 	cs.mu.Lock()
 	if len(cs.Vars) > 0 {
-		for k, v := range cs.Vars {
-			if strings.Contains(trimmed, k) {
-				varRep := fmt.Sprintf("'%v'", v)
-				switch v.(type) {
-				case int, int64, float64, bool:
-					varRep = fmt.Sprintf("%v", v)
-				}
-				trimmed = strings.ReplaceAll(trimmed, k, varRep)
+		keys := make([]string, 0, len(cs.Vars))
+		for k := range cs.Vars {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return len(keys[i]) > len(keys[j])
+		})
+
+		for _, k := range keys {
+			v := cs.Vars[k]
+			varRep := fmt.Sprintf("'%v'", v)
+			switch v.(type) {
+			case int, int64, int32, float64, float32, bool:
+				varRep = fmt.Sprintf("%v", v)
 			}
+			trimmed = substituteParamOutsideQuotes(trimmed, k, varRep)
 		}
 		upper = strings.ToUpper(trimmed)
 	}
