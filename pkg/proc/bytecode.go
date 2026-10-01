@@ -84,10 +84,18 @@ const (
 
 	// Secondary Index Range & Point Scan
 	OpIndexScan
+
+	// Scalar / Point Query Direct Result Generation
+	OpResultRow
+	OpPointSelect
 )
 
 func (op OpCode) String() string {
 	switch op {
+	case OpResultRow:
+		return "RESULT_ROW"
+	case OpPointSelect:
+		return "POINT_SELECT"
 	case OpHalt:
 		return "HALT"
 	case OpReturn:
@@ -284,6 +292,36 @@ func (d *IndexScanData) String() string {
 		return ""
 	}
 	return fmt.Sprintf("Table:%s Index:%s", d.Table, d.IndexName)
+}
+
+// ResultRowData holds metadata for emitting a scalar / calculated row directly from registers.
+type ResultRowData struct {
+	Columns  []string
+	StartReg int32
+	Count    int32
+}
+
+func (d *ResultRowData) String() string {
+	if d == nil {
+		return ""
+	}
+	return fmt.Sprintf("Cols:%v Regs:[%d..%d]", d.Columns, d.StartReg, d.StartReg+d.Count-1)
+}
+
+// PointSelectData holds metadata for single-table primary key or point lookups.
+type PointSelectData struct {
+	Table       string
+	WhereCol    string
+	WhereVal    Expr
+	Projections []Projection
+	Limit       int64
+}
+
+func (d *PointSelectData) String() string {
+	if d == nil {
+		return ""
+	}
+	return fmt.Sprintf("Table:%s Where:%s=%v Projections:%d", d.Table, d.WhereCol, d.WhereVal, len(d.Projections))
 }
 
 // Program represents a compiled, executable T-SQL bytecode program.

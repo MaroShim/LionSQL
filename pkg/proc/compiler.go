@@ -157,7 +157,19 @@ func CompileQuery(sql string) (*Program, error) {
 
 	// Attempt to parse via native parser if possible
 	p := NewParser(NewLexer(trimmed))
-	stmt, err := p.parseGeneralSelect()
+	var stmt *GeneralSelectStmt
+	var err error
+	if p.curTokenIs(TokenSelect) {
+		p.nextToken() // eat SELECT
+		stmt, err = p.parseGeneralSelect()
+	} else {
+		var s Statement
+		s, err = p.ParseSQLStatement()
+		if sel, ok := s.(*GeneralSelectStmt); ok {
+			stmt = sel
+		}
+	}
+
 	if err == nil && stmt != nil {
 		if stmt.RawSQL == "" {
 			stmt.RawSQL = trimmed
@@ -591,6 +603,54 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *GeneralSelectStmt:
+		// 1. Scalar SELECT without FROM (e.g. SELECT 1 + 1 AS res, 'hello' AS msg, GETDATE())
+		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain {
+			var colNames []string
+			var startReg int32 = -1
+			count := int32(len(s.Projections))
+
+			for i, p := range s.Projections {
+				reg, err := c.compileExpr(p.Expr)
+				if err != nil {
+					return err
+				}
+				if i == 0 {
+					startReg = reg
+				}
+				name := p.Alias
+				if name == "" {
+					if colRef, ok := p.Expr.(*ColumnRefExpr); ok {
+						name = colRef.Name
+					} else {
+						name = p.Expr.String()
+					}
+				}
+				colNames = append(colNames, name)
+			}
+
+			c.emit(OpResultRow, startReg, count, 0, &ResultRowData{
+				Columns:  colNames,
+				StartReg: startReg,
+				Count:    count,
+			})
+			return nil
+		}
+
+		// 2. Single-table Point Query (WHERE col = val without joins/groups/aggregates/distinct)
+		if s.From.Name != "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !hasAggregates(s.Projections) && s.Where != nil && !s.Distinct && !s.IsExplain {
+			if whereCol, whereVal, ok := ExtractSimpleEq(s.Where); ok {
+				c.emit(OpPointSelect, 0, 0, 0, &PointSelectData{
+					Table:       s.From.Name,
+					WhereCol:    whereCol,
+					WhereVal:    whereVal,
+					Projections: s.Projections,
+					Limit:       s.Limit,
+				})
+				return nil
+			}
+		}
+
+		// 3. Fallback to Volcano relational execution engine
 		sql := s.RawSQL
 		if sql == "" {
 			sql = s.String()
@@ -613,6 +673,33 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 	default:
 		return fmt.Errorf("unsupported statement type: %T", stmt)
 	}
+}
+
+// ExtractSimpleEq extracts a single column equality predicate (e.g. col = val or val = col).
+func ExtractSimpleEq(expr Expr) (string, Expr, bool) {
+	if expr == nil {
+		return "", nil, false
+	}
+	if bin, ok := expr.(*BinaryExpr); ok && bin.Op == TokenEq {
+		if colRef, ok := bin.Left.(*ColumnRefExpr); ok {
+			return cleanVarName(colRef.Name), bin.Right, true
+		} else if colRef, ok := bin.Right.(*ColumnRefExpr); ok {
+			return cleanVarName(colRef.Name), bin.Left, true
+		}
+	}
+	return "", nil, false
+}
+
+func hasAggregates(projections []Projection) bool {
+	for _, p := range projections {
+		pUpper := strings.ToUpper(p.Expr.String())
+		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
+			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
+			strings.Contains(pUpper, "MAX(") {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Compiler) resolveGotos() error {

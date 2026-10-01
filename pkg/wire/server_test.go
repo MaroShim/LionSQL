@@ -515,8 +515,8 @@ func TestWire_CompileQueryToProgram(t *testing.T) {
 		t.Fatalf("expected non-nil program")
 	}
 	dis := prog1.Disassemble()
-	if !strings.Contains(dis, "REL_QUERY") {
-		t.Fatalf("expected REL_QUERY opcode in program, got:\n%s", dis)
+	if !strings.Contains(dis, "POINT_SELECT") && !strings.Contains(dis, "REL_QUERY") {
+		t.Fatalf("expected POINT_SELECT or REL_QUERY opcode in program, got:\n%s", dis)
 	}
 
 	// Repeated call must return identical cached program pointer

@@ -16,6 +16,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Boosted standalone TPC-C VDBE bytecode benchmark throughput from 93.7 TPS (2,519 tpmC) to **16,823.03 TPS (453,336.42 tpmC)** (180x speedup), reaching 51.5% of raw hand-written compiled Go storage API performance.
 
 ### Added
+- **Native VDBE Bytecode Direct Execution for Scalar & Point Queries (`pkg/proc`, `pkg/api`)**:
+  - Implemented `OpResultRow` opcode in `pkg/proc/bytecode.go` and `pkg/proc/runtime/vm.go` to directly evaluate and emit rows for table-less scalar / constant SELECT queries (`SELECT 1 + 1`, `SELECT GETDATE()`, etc.) bypassing Volcano relational planner and execution trees.
+  - Implemented `OpPointSelect` opcode for single-table Primary Key point lookups (`WHERE pk = ?`) executing directly via O(1) `tx.Get()` storage lookups and register projection.
+  - Added primary key constraint verification (`isPKCol`) to ensure non-PK equality predicates safely delegate to relational execution (`OpRelQuery`) preserving multi-row correctness.
+  - Routed table-less scalar queries from `api.execSelect` directly to VDBE bytecode execution (`execVDBESelect`), maintaining session variable isolation (`@@SPID`, `@@IDENTITY`).
+  - Added comprehensive test suite in `pkg/api/vdbe_select_test.go` verifying scalar expressions, functions, aliases, session variable bindings, and bytecode disassemblies.
+
 - **Dynamic SQL Execution & `sp_executesql` Engine (`pkg/api`)**:
   - Implemented dynamic SQL statement execution supporting direct string literals (`EXEC ('SELECT ...')`), session variable references (`EXEC (@sql)`, `EXEC @sql`), and string concatenation expressions with `+` (`EXEC ('SELECT ' + @col + ' FROM ' + @tbl)`).
   - Implemented full Microsoft T-SQL `sp_executesql` parameterization engine with support for positional and named parameters (`@stmt = N'...', @params = N'...', @id = 1`), `OUTPUT` parameter syntax, and safe session variable binding.

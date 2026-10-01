@@ -1093,6 +1093,115 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			if inst.A >= 0 && int(inst.A) < len(f.regs) {
 				f.regs[inst.A] = storage.IntValue(int64(len(rows)))
 			}
+
+		case proc.OpResultRow:
+			data := inst.Data.(*proc.ResultRowData)
+			row := make(map[string]any, data.Count)
+			cols := make([]string, len(data.Columns))
+			copy(cols, data.Columns)
+
+			for i := int32(0); i < data.Count; i++ {
+				regIdx := data.StartReg + i
+				var val any
+				if int(regIdx) < len(f.regs) {
+					val = valToAny(f.regs[regIdx])
+				}
+				colName := fmt.Sprintf("col%d", i+1)
+				if int(i) < len(data.Columns) && data.Columns[i] != "" {
+					colName = data.Columns[i]
+				}
+				row[colName] = val
+			}
+
+			f.rows = append(f.rows, row)
+			f.columns = cols
+			f.rowCount = int64(len(f.rows))
+
+		case proc.OpPointSelect:
+			data := inst.Data.(*proc.PointSelectData)
+			evalCtx := f.buildRowEvalMap(nil)
+
+			vAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+			pkVal := toStorageValue(vAny)
+
+			tableName := cleanSymbol(data.Table)
+
+			// Point select is strictly an O(1) fast-path for Primary Key lookups.
+			// If WhereCol is not the primary key, delegate to relational engine to guarantee multi-row correctness.
+			if !f.isPKCol(tableName, data.WhereCol) {
+				sql := f.prog.QuerySQL
+				if sql == "" {
+					sql = fmt.Sprintf("SELECT * FROM %s WHERE %s = %v", data.Table, data.WhereCol, pkVal.String())
+				}
+				rows, cols, err := f.execRelQuery(sql, nil)
+				if err != nil {
+					return nil, err
+				}
+				f.rows = rows
+				f.columns = cols
+				f.rowCount = int64(len(rows))
+				continue
+			}
+
+			var rowMap map[string]any
+			rec, err := f.tx.Get(tableName, pkVal)
+			if err == nil && rec != nil {
+				rowMap = recordToMap(rec)
+			}
+
+			var rows []map[string]any
+			var cols []string
+
+			isStar := len(data.Projections) == 1 && (data.Projections[0].Expr.String() == "*" || data.Projections[0].Alias == "*")
+
+			if rowMap != nil {
+				outRow := make(map[string]any)
+				rowCtx := f.buildRowEvalMap(rowMap)
+
+				if isStar {
+					for k := range rowMap {
+						cols = append(cols, k)
+					}
+					sort.Strings(cols)
+					for _, c := range cols {
+						outRow[c] = rowMap[c]
+					}
+				} else {
+					for _, p := range data.Projections {
+						colName := p.Alias
+						if colName == "" {
+							if colRef, ok := p.Expr.(*proc.ColumnRefExpr); ok {
+								colName = colRef.Name
+							} else {
+								colName = p.Expr.String()
+							}
+						}
+						cols = append(cols, colName)
+
+						vAny, _ := proc.EvalRowExpr(p.Expr, rowCtx, nil)
+						outRow[colName] = vAny
+					}
+				}
+				rows = append(rows, outRow)
+			} else {
+				if !isStar {
+					for _, p := range data.Projections {
+						colName := p.Alias
+						if colName == "" {
+							if colRef, ok := p.Expr.(*proc.ColumnRefExpr); ok {
+								colName = colRef.Name
+							} else {
+								colName = p.Expr.String()
+							}
+						}
+						cols = append(cols, colName)
+					}
+				}
+			}
+
+			f.rows = rows
+			f.columns = cols
+			f.rowCount = int64(len(rows))
 		}
 	}
 
