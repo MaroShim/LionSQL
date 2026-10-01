@@ -45,6 +45,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - **Zero-Allocation Hot Path Precompilation (`pkg/api/sqlexec_auth.go`)**: Hoisted function-level `regexp.MustCompile` invocations into static package-level variables for authentication DDL/DCL execution.
 
 ### Added
+- **Real-Time Time-Bucket Analytics Engine (`DATETRUNC`, `DATE_BUCKET`) (`pkg/proc`, `pkg/execution`, `pkg/api`)**:
+  - Implemented T-SQL 2022 and ANSI SQL `DATETRUNC(datepart, date)` and `DATE_TRUNC(datepart, date)` for date truncation (`year`, `quarter`, `month`, `week`, `day`, `hour`, `minute`, `second`, `millisecond`).
+  - Implemented T-SQL `DATE_BUCKET(datepart, width, date [, origin])` for custom time-bucket aggregations (e.g. 5-minute, 15-minute, 2-hour intervals) aligned to clock boundaries.
+  - Enabled pushdown time-bucket streaming aggregation in `GROUP BY DATE_BUCKET(minute, 5, timestamp)` with zero unnecessary string allocations.
+  - Added unit test coverage in `pkg/proc/builtins_test.go` and query integration tests in `pkg/api/sqlexec_test.go` (`TestSQLExecutor_TimeBucketGrouping`).
 - **Multi-Protocol Listener Granular Opt-Out (`pkg/config`, `cmd/server`)**:
   - Implemented clean, zero-redundancy listener opt-out for PostgreSQL (`:5433`), TDS (`:1433`), and HTTP (`:8090`) following the Deletion-First / KISS rule.
   - Eliminated ad-hoc boolean flags by establishing a single universal convention: providing an empty address string (`""`) disables that listener across both CLI flags (`-pg=""`, `-tds=""`, `-http=""`) and JSON configuration (`"pg_addr": ""`).

@@ -111,6 +111,46 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		res := evalDateAdd(part, n, t)
 		return storage.StringValue(res.Format("2006-01-02 15:04:05"))
 
+	case "DATETRUNC", "DATE_TRUNC":
+		if len(args) < 2 || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		part := normalizeDatePart(valToString(args[0]))
+		t, ok := parseDateValue(args[1])
+		if !ok {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		res := evalDateTrunc(part, t)
+		return storage.StringValue(res.Format("2006-01-02 15:04:05"))
+
+	case "DATE_BUCKET", "DATEBUCKET":
+		if len(args) < 3 || args[2].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		part := normalizeDatePart(valToString(args[0]))
+		width := args[1].IVal
+		if args[1].Type == storage.TypeFloat {
+			width = int64(args[1].FVal)
+		} else if args[1].Type == storage.TypeVarChar {
+			if w, err := strconv.ParseInt(strings.TrimSpace(args[1].SVal), 10, 64); err == nil {
+				width = w
+			}
+		}
+		t, ok := parseDateValue(args[2])
+		if !ok {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		var origin time.Time
+		hasOrigin := false
+		if len(args) >= 4 && !args[3].IsNull {
+			if o, ok := parseDateValue(args[3]); ok {
+				origin = o
+				hasOrigin = true
+			}
+		}
+		res := evalDateBucket(part, width, t, origin, hasOrigin)
+		return storage.StringValue(res.Format("2006-01-02 15:04:05"))
+
 	// ----------------------------------------------------
 	// 2. String Functions
 	// ----------------------------------------------------
@@ -489,6 +529,7 @@ func IsBuiltinFunction(name string) bool {
 	switch strings.ToUpper(cleanBuiltinName(name)) {
 	case "GETDATE", "NOW", "GETUTCDATE", "SYSDATETIME",
 		"YEAR", "MONTH", "DAY", "DATEPART", "DATEDIFF", "DATEADD",
+		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
 		"CONCAT", "LEN", "LENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
 		"LEFT", "RIGHT", "SUBSTRING", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE",
 		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SIGN", "PI",
@@ -701,6 +742,149 @@ func evalDateAdd(part string, n int64, t time.Time) time.Time {
 		return t.Add(time.Duration(n) * time.Millisecond)
 	default:
 		return t
+	}
+}
+
+func evalDateTrunc(part string, t time.Time) time.Time {
+	switch part {
+	case "year":
+		return time.Date(t.Year(), 1, 1, 0, 0, 0, 0, t.Location())
+	case "quarter":
+		qMonth := time.Month(((int(t.Month())-1)/3)*3 + 1)
+		return time.Date(t.Year(), qMonth, 1, 0, 0, 0, 0, t.Location())
+	case "month":
+		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, t.Location())
+	case "week":
+		weekday := int(t.Weekday())
+		truncatedDay := t.AddDate(0, 0, -weekday)
+		return time.Date(truncatedDay.Year(), truncatedDay.Month(), truncatedDay.Day(), 0, 0, 0, 0, t.Location())
+	case "day":
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+	case "hour":
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
+	case "minute":
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), 0, 0, t.Location())
+	case "second":
+		return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, t.Location())
+	case "millisecond":
+		return t.Truncate(time.Millisecond)
+	default:
+		return t
+	}
+}
+
+func evalDateBucket(part string, width int64, t time.Time, origin time.Time, hasOrigin bool) time.Time {
+	if width <= 0 {
+		width = 1
+	}
+
+	if !hasOrigin {
+		switch part {
+		case "second":
+			secsFromMidnight := int64(t.Hour()*3600 + t.Minute()*60 + t.Second())
+			bucketSec := (secsFromMidnight / width) * width
+			dayStart := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+			return dayStart.Add(time.Duration(bucketSec) * time.Second)
+		case "minute":
+			bucketWidthSec := width * 60
+			secsFromMidnight := int64(t.Hour()*3600 + t.Minute()*60 + t.Second())
+			bucketSec := (secsFromMidnight / bucketWidthSec) * bucketWidthSec
+			dayStart := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+			return dayStart.Add(time.Duration(bucketSec) * time.Second)
+		case "hour":
+			bucketWidthSec := width * 3600
+			secsFromMidnight := int64(t.Hour()*3600 + t.Minute()*60 + t.Second())
+			bucketSec := (secsFromMidnight / bucketWidthSec) * bucketWidthSec
+			dayStart := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
+			return dayStart.Add(time.Duration(bucketSec) * time.Second)
+		case "day":
+			diffDays := int64(t.YearDay() - 1)
+			bucketDay := (diffDays / width) * width
+			yearStart := time.Date(t.Year(), 1, 1, 0, 0, 0, 0, t.Location())
+			return yearStart.AddDate(0, 0, int(bucketDay))
+		case "week":
+			weekday := int(t.Weekday())
+			return time.Date(t.Year(), t.Month(), t.Day()-weekday, 0, 0, 0, 0, t.Location())
+		case "month":
+			m := int64(t.Month() - 1)
+			bucketM := (m / width) * width
+			return time.Date(t.Year(), time.Month(bucketM+1), 1, 0, 0, 0, 0, t.Location())
+		case "year":
+			diffYears := int64(t.Year())
+			bucketY := (diffYears / width) * width
+			return time.Date(int(bucketY), 1, 1, 0, 0, 0, 0, t.Location())
+		default:
+			return evalDateTrunc(part, t)
+		}
+	}
+
+	// Custom origin provided: align relative to custom origin
+	switch part {
+	case "year":
+		diff := int64(t.Year() - origin.Year())
+		bucketIdx := diff / width
+		if diff < 0 && diff%width != 0 {
+			bucketIdx--
+		}
+		return time.Date(origin.Year()+int(bucketIdx*width), origin.Month(), origin.Day(), origin.Hour(), origin.Minute(), origin.Second(), 0, t.Location())
+	case "quarter":
+		q1 := int64((origin.Year() * 4) + int((origin.Month()-1)/3))
+		q2 := int64((t.Year() * 4) + int((t.Month()-1)/3))
+		diff := q2 - q1
+		bucketIdx := diff / width
+		if diff < 0 && diff%width != 0 {
+			bucketIdx--
+		}
+		return origin.AddDate(0, int(bucketIdx*width*3), 0)
+	case "month":
+		diff := int64((t.Year()-origin.Year())*12 + int(t.Month()-origin.Month()))
+		bucketIdx := diff / width
+		if diff < 0 && diff%width != 0 {
+			bucketIdx--
+		}
+		totalMonths := bucketIdx * width
+		return origin.AddDate(0, int(totalMonths), 0)
+	case "week":
+		diffSec := int64(t.Sub(origin).Seconds())
+		bucketWidthSec := width * (7 * 24 * 3600)
+		bucketIdx := diffSec / bucketWidthSec
+		if diffSec < 0 && diffSec%bucketWidthSec != 0 {
+			bucketIdx--
+		}
+		return origin.Add(time.Duration(bucketIdx*bucketWidthSec) * time.Second)
+	case "day":
+		diffSec := int64(t.Sub(origin).Seconds())
+		bucketWidthSec := width * (24 * 3600)
+		bucketIdx := diffSec / bucketWidthSec
+		if diffSec < 0 && diffSec%bucketWidthSec != 0 {
+			bucketIdx--
+		}
+		return origin.Add(time.Duration(bucketIdx*bucketWidthSec) * time.Second)
+	case "hour":
+		diffSec := int64(t.Sub(origin).Seconds())
+		bucketWidthSec := width * 3600
+		bucketIdx := diffSec / bucketWidthSec
+		if diffSec < 0 && diffSec%bucketWidthSec != 0 {
+			bucketIdx--
+		}
+		return origin.Add(time.Duration(bucketIdx*bucketWidthSec) * time.Second)
+	case "minute":
+		diffSec := int64(t.Sub(origin).Seconds())
+		bucketWidthSec := width * 60
+		bucketIdx := diffSec / bucketWidthSec
+		if diffSec < 0 && diffSec%bucketWidthSec != 0 {
+			bucketIdx--
+		}
+		return origin.Add(time.Duration(bucketIdx*bucketWidthSec) * time.Second)
+	case "second":
+		diffSec := int64(t.Sub(origin).Seconds())
+		bucketIdx := diffSec / width
+		if diffSec < 0 && diffSec%width != 0 {
+			bucketIdx--
+		}
+		return origin.Add(time.Duration(bucketIdx*width) * time.Second)
+	default:
+		return evalDateTrunc(part, t)
 	}
 }
 

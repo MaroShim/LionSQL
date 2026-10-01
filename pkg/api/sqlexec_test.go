@@ -1791,6 +1791,18 @@ func TestSQLExecutor_BuiltinFunctions(t *testing.T) {
 	if err != nil || len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["diff"]) != "19" {
 		t.Fatalf("DATEDIFF failed: %+v, err: %v", res, err)
 	}
+
+	// 7. DATETRUNC with unquoted datepart
+	res, err = server.ExecuteSQL("SELECT DATETRUNC(hour, '2026-09-23 15:37:45') AS trunc_hr;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["trunc_hr"] != "2026-09-23 15:00:00" {
+		t.Fatalf("DATETRUNC failed: %+v, err: %v", res, err)
+	}
+
+	// 8. DATE_BUCKET with unquoted datepart
+	res, err = server.ExecuteSQL("SELECT DATE_BUCKET(minute, 5, '2026-09-23 15:37:45') AS bucket;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["bucket"] != "2026-09-23 15:35:00" {
+		t.Fatalf("DATE_BUCKET failed: %+v, err: %v", res, err)
+	}
 }
 
 func TestSQLExecutor_ExplainBytecode(t *testing.T) {
@@ -2253,6 +2265,59 @@ func TestSQLExecutor_SetOperations(t *testing.T) {
 	// Alice (1) + Eve (5) -> 2 rows
 	if len(whereSetRes.Rows) != 2 {
 		t.Fatalf("expected 2 engineering employees, got %d (%v)", len(whereSetRes.Rows), whereSetRes.Rows)
+	}
+}
+
+func TestSQLExecutor_TimeBucketGrouping(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// Create test events table
+	_, err := server.ExecuteSQL("CREATE TABLE log_events (id INT, created_at VARCHAR(30), duration INT);")
+	if err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+
+	// Insert events spanning across 5-minute buckets
+	// Bucket 1 (10:00:00 - 10:04:59) -> 2 rows
+	// Bucket 2 (10:05:00 - 10:09:59) -> 1 row
+	// Bucket 3 (10:10:00 - 10:14:59) -> 1 row
+	inserts := []string{
+		"INSERT INTO log_events VALUES (1, '2026-10-01 10:01:15', 50);",
+		"INSERT INTO log_events VALUES (2, '2026-10-01 10:03:45', 150);",
+		"INSERT INTO log_events VALUES (3, '2026-10-01 10:07:20', 200);",
+		"INSERT INTO log_events VALUES (4, '2026-10-01 10:12:00', 300);",
+	}
+	for _, ins := range inserts {
+		if _, err := server.ExecuteSQL(ins); err != nil {
+			t.Fatalf("failed to insert: %v", err)
+		}
+	}
+
+	// 1. Group By DATE_BUCKET(minute, 5, created_at)
+	query := `SELECT DATE_BUCKET(minute, 5, created_at) AS time_bucket, COUNT(*) AS cnt, SUM(duration) AS total_duration FROM log_events GROUP BY DATE_BUCKET(minute, 5, created_at) ORDER BY time_bucket;`
+	res, err := server.ExecuteSQL(query)
+	if err != nil || !res.Success {
+		t.Fatalf("time-bucket group query failed: %v", err)
+	}
+
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 time buckets, got %d (%+v)", len(res.Rows), res.Rows)
+	}
+
+	// Verify bucket 1
+	if res.Rows[0]["time_bucket"] != "2026-10-01 10:00:00" || fmt.Sprintf("%v", res.Rows[0]["cnt"]) != "2" {
+		t.Errorf("bucket 1 mismatch: got %+v", res.Rows[0])
+	}
+	// Verify bucket 2
+	if res.Rows[1]["time_bucket"] != "2026-10-01 10:05:00" || fmt.Sprintf("%v", res.Rows[1]["cnt"]) != "1" {
+		t.Errorf("bucket 2 mismatch: got %+v", res.Rows[1])
+	}
+	// Verify bucket 3
+	if res.Rows[2]["time_bucket"] != "2026-10-01 10:10:00" || fmt.Sprintf("%v", res.Rows[2]["cnt"]) != "1" {
+		t.Errorf("bucket 3 mismatch: got %+v", res.Rows[2])
 	}
 }
 

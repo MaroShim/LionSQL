@@ -263,3 +263,57 @@ func TestBuiltin_StringAndDateExpansion(t *testing.T) {
 	}
 }
 
+func TestBuiltin_DateTruncAndBucket(t *testing.T) {
+	ts := storage.StringValue("2026-09-23 15:37:45")
+
+	testsTrunc := []struct {
+		part     string
+		expected string
+	}{
+		{"year", "2026-01-01 00:00:00"},
+		{"quarter", "2026-07-01 00:00:00"},
+		{"month", "2026-09-01 00:00:00"},
+		{"day", "2026-09-23 00:00:00"},
+		{"hour", "2026-09-23 15:00:00"},
+		{"minute", "2026-09-23 15:37:00"},
+		{"second", "2026-09-23 15:37:45"},
+	}
+
+	for _, tt := range testsTrunc {
+		res := EvalBuiltin("DATETRUNC", []storage.Value{storage.StringValue(tt.part), ts})
+		if res.SVal != tt.expected {
+			t.Errorf("DATETRUNC(%s) = %q, expected %q", tt.part, res.SVal, tt.expected)
+		}
+	}
+
+	// 5-minute bucket: 15:37:45 falls into 15:35:00
+	b5 := EvalBuiltin("DATE_BUCKET", []storage.Value{
+		storage.StringValue("minute"),
+		storage.IntValue(5),
+		ts,
+	})
+	if b5.SVal != "2026-09-23 15:35:00" {
+		t.Errorf("DATE_BUCKET(minute, 5) = %q, expected '2026-09-23 15:35:00'", b5.SVal)
+	}
+
+	// 15-minute bucket: 15:37:45 falls into 15:30:00
+	b15 := EvalBuiltin("DATE_BUCKET", []storage.Value{
+		storage.StringValue("minute"),
+		storage.IntValue(15),
+		ts,
+	})
+	if b15.SVal != "2026-09-23 15:30:00" {
+		t.Errorf("DATE_BUCKET(minute, 15) = %q, expected '2026-09-23 15:30:00'", b15.SVal)
+	}
+
+	// 2-hour bucket: 15:37:45 falls into 14:00:00
+	b2h := EvalBuiltin("DATE_BUCKET", []storage.Value{
+		storage.StringValue("hour"),
+		storage.IntValue(2),
+		ts,
+	})
+	if b2h.SVal != "2026-09-23 14:00:00" {
+		t.Errorf("DATE_BUCKET(hour, 2) = %q, expected '2026-09-23 14:00:00'", b2h.SVal)
+	}
+}
+
