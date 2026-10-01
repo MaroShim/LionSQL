@@ -227,3 +227,93 @@ func TestPivot_MinMaxAggregates(t *testing.T) {
 		t.Errorf("Vendor 102 values mismatch: %v", res.Rows[1])
 	}
 }
+
+func TestUnpivot_Basic(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	stmts := []string{
+		"CREATE TABLE wide_sales (id INT PRIMARY KEY, year INT, Q1 INT, Q2 INT, Q3 INT, Q4 INT)",
+		"INSERT INTO wide_sales VALUES (1, 2023, 100, 150, 200, 250)",
+		"INSERT INTO wide_sales VALUES (2, 2024, 120, 180, 220, 300)",
+	}
+	for _, stmt := range stmts {
+		if _, err := server.ExecuteSQL(stmt); err != nil {
+			t.Fatalf("setup failed (%q): %v", stmt, err)
+		}
+	}
+
+	query := `
+		SELECT year, quarter, amount
+		FROM wide_sales
+		UNPIVOT (
+			amount FOR quarter IN (Q1, Q2, Q3, Q4)
+		) AS unpvt
+		ORDER BY year ASC, quarter ASC;
+	`
+	res, err := server.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("UNPIVOT query failed: %v", err)
+	}
+
+	if len(res.Rows) != 8 {
+		t.Fatalf("expected 8 unpivoted rows, got %d: %v", len(res.Rows), res.Rows)
+	}
+
+	// Verify first row: 2023, Q1, 100
+	r0 := res.Rows[0]
+	if r0["year"] != int64(2023) || r0["quarter"] != "Q1" || r0["amount"] != int64(100) {
+		t.Errorf("row 0 mismatch: %v", r0)
+	}
+
+	// Verify last row: 2024, Q4, 300
+	r7 := res.Rows[7]
+	if r7["year"] != int64(2024) || r7["quarter"] != "Q4" || r7["amount"] != int64(300) {
+		t.Errorf("row 7 mismatch: %v", r7)
+	}
+}
+
+func TestUnpivot_WithSubqueryAndBracketSyntax(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	stmts := []string{
+		"CREATE TABLE customer_scores (cust_id INT PRIMARY KEY, [Math] INT, [English] INT, [Science] INT)",
+		"INSERT INTO customer_scores VALUES (101, 95, 88, 92)",
+		"INSERT INTO customer_scores VALUES (102, 70, 85, 80)",
+	}
+	for _, stmt := range stmts {
+		if _, err := server.ExecuteSQL(stmt); err != nil {
+			t.Fatalf("setup failed (%q): %v", stmt, err)
+		}
+	}
+
+	query := `
+		SELECT cust_id, Subject, Score
+		FROM (
+			SELECT cust_id, [Math], [English], [Science] FROM customer_scores
+		) AS src
+		UNPIVOT (
+			Score FOR Subject IN ([Math], [English], [Science])
+		) AS unpvt
+		WHERE Score >= 85
+		ORDER BY Score DESC;
+	`
+	res, err := server.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("UNPIVOT with subquery and brackets failed: %v", err)
+	}
+
+	// Scores >= 85: 95 (Math, 101), 92 (Science, 101), 88 (English, 101), 85 (English, 102) -> 4 rows
+	if len(res.Rows) != 4 {
+		t.Fatalf("expected 4 filtered rows, got %d: %v", len(res.Rows), res.Rows)
+	}
+
+	if res.Rows[0]["Score"] != int64(95) {
+		t.Errorf("expected highest score 95, got %v", res.Rows[0]["Score"])
+	}
+	if res.Rows[3]["Score"] != int64(85) {
+		t.Errorf("expected lowest matching score 85, got %v", res.Rows[3]["Score"])
+	}
+}
+

@@ -1883,6 +1883,11 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 		return s.execPivotSelect(cleaned, start, cs)
 	}
 
+	// 0. UNPIVOT: SELECT ... FROM ... UNPIVOT (...) ...
+	if hasUnpivot(cleaned) {
+		return s.execUnpivotSelect(cleaned, start, cs)
+	}
+
 	// 0. SELECT ... INTO <target_table> FROM ...
 	selectIntoRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+INTO\s+([^\s,;]+)\s+FROM\s+(.*)$`)
 	if m := selectIntoRe.FindStringSubmatch(cleaned); len(m) == 4 {
@@ -5193,3 +5198,346 @@ func compareAny(a, b any) int {
 	}
 	return 0
 }
+
+// -----------------------------------------------------------------------------
+// UNPIVOT Operator Engine
+// -----------------------------------------------------------------------------
+
+func hasUnpivot(query string) bool {
+	return regexp.MustCompile(`(?i)\bUNPIVOT\s*\(`).MatchString(query)
+}
+
+type unpivotParsedQuery struct {
+	OuterProjections string
+	SourceQuery      string
+	ValueCol         string
+	NameCol          string
+	UnpivotColumns   []string
+	UnpivotAlias     string
+	WhereClause      string
+	OrderByClause    string
+}
+
+func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
+	trimmed := strings.TrimSpace(query)
+	upper := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(upper, "SELECT") {
+		return nil, fmt.Errorf("UNPIVOT query must start with SELECT")
+	}
+
+	re := regexp.MustCompile(`(?i)\bUNPIVOT\s*\(`)
+	loc := re.FindStringIndex(trimmed)
+	if loc == nil {
+		return nil, fmt.Errorf("no UNPIVOT clause found")
+	}
+	unpivotIdx := loc[0]
+
+	// Find top-level FROM keyword between SELECT and unpivotIdx
+	depth := 0
+	fromIdx := -1
+	fromStart := -1
+
+	for i := 0; i < unpivotIdx; i++ {
+		if trimmed[i] == '(' {
+			depth++
+		} else if trimmed[i] == ')' {
+			if depth > 0 {
+				depth--
+			}
+		} else if depth == 0 && i+4 <= unpivotIdx && strings.EqualFold(trimmed[i:i+4], "FROM") {
+			beforeOK := i == 0 || unicode.IsSpace(rune(trimmed[i-1]))
+			afterOK := i+4 == unpivotIdx || unicode.IsSpace(rune(trimmed[i+4])) || trimmed[i+4] == '('
+			if beforeOK && afterOK {
+				fromStart = i
+				fromIdx = i + 4
+				break
+			}
+		}
+	}
+	if fromIdx == -1 {
+		return nil, fmt.Errorf("invalid UNPIVOT syntax: missing FROM clause")
+	}
+
+	selectEnd := 6 // len("SELECT")
+	for selectEnd < fromStart && unicode.IsSpace(rune(trimmed[selectEnd])) {
+		selectEnd++
+	}
+	outerProjs := strings.TrimSpace(trimmed[selectEnd:fromStart])
+	sourcePart := strings.TrimSpace(trimmed[fromIdx:unpivotIdx])
+
+	var sourceSQL string
+	if strings.HasPrefix(sourcePart, "(") {
+		depth = 0
+		closeParen := -1
+		for i, ch := range sourcePart {
+			if ch == '(' {
+				depth++
+			} else if ch == ')' {
+				depth--
+				if depth == 0 {
+					closeParen = i
+					break
+				}
+			}
+		}
+		if closeParen != -1 {
+			sourceSQL = strings.TrimSpace(sourcePart[1:closeParen])
+		} else {
+			return nil, fmt.Errorf("invalid UNPIVOT syntax: unmatched parenthesis in source query")
+		}
+	} else {
+		fields := strings.Fields(sourcePart)
+		if len(fields) == 0 {
+			return nil, fmt.Errorf("invalid UNPIVOT syntax: empty source table")
+		}
+		sourceSQL = "SELECT * FROM " + fields[0]
+	}
+
+	openParen := strings.Index(trimmed[unpivotIdx:], "(")
+	if openParen == -1 {
+		return nil, fmt.Errorf("malformed UNPIVOT syntax: missing opening parenthesis")
+	}
+	openParen += unpivotIdx
+
+	depth = 0
+	closeParen := -1
+	for i := openParen; i < len(trimmed); i++ {
+		if trimmed[i] == '(' {
+			depth++
+		} else if trimmed[i] == ')' {
+			depth--
+			if depth == 0 {
+				closeParen = i
+				break
+			}
+		}
+	}
+	if closeParen == -1 {
+		return nil, fmt.Errorf("malformed UNPIVOT syntax: missing closing parenthesis")
+	}
+
+	unpivotBody := strings.TrimSpace(trimmed[openParen+1 : closeParen])
+	afterUnpivot := strings.TrimSpace(trimmed[closeParen+1:])
+
+	// Parse unpivot body: <val_col> FOR <name_col> IN (<cols>)
+	unpivotBodyRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_#\[\].]+)\s+FOR\s+([a-zA-Z0-9_#\[\].]+)\s+IN\s*\((.*?)\)\s*$`)
+	m := unpivotBodyRe.FindStringSubmatch(unpivotBody)
+	if len(m) != 4 {
+		return nil, fmt.Errorf("malformed UNPIVOT clause: %s", unpivotBody)
+	}
+
+	valCol := cleanIdentifier(strings.TrimSpace(m[1]))
+	nameCol := cleanIdentifier(strings.TrimSpace(m[2]))
+	rawCols := strings.TrimSpace(m[3])
+
+	var unpivotCols []string
+	for _, col := range strings.Split(rawCols, ",") {
+		cleanCol := cleanIdentifier(strings.Trim(strings.TrimSpace(col), "'\""))
+		if cleanCol != "" {
+			unpivotCols = append(unpivotCols, cleanCol)
+		}
+	}
+
+	var orderByClause, whereClause, unpivotAlias string
+	orderRe := regexp.MustCompile(`(?is)\s+ORDER\s+BY\s+(.*)$`)
+	if mOrder := orderRe.FindStringSubmatch(afterUnpivot); len(mOrder) == 2 {
+		orderByClause = strings.TrimSpace(mOrder[1])
+		afterUnpivot = afterUnpivot[:len(afterUnpivot)-len(mOrder[0])]
+	}
+	whereRe := regexp.MustCompile(`(?is)\s+WHERE\s+(.*)$`)
+	if mWhere := whereRe.FindStringSubmatch(afterUnpivot); len(mWhere) == 2 {
+		whereClause = strings.TrimSpace(mWhere[1])
+		afterUnpivot = afterUnpivot[:len(afterUnpivot)-len(mWhere[0])]
+	}
+	unpivotAlias = cleanIdentifier(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(afterUnpivot), "AS ")))
+
+	return &unpivotParsedQuery{
+		OuterProjections: outerProjs,
+		SourceQuery:      sourceSQL,
+		ValueCol:         valCol,
+		NameCol:          nameCol,
+		UnpivotColumns:   unpivotCols,
+		UnpivotAlias:     unpivotAlias,
+		WhereClause:      whereClause,
+		OrderByClause:    orderByClause,
+	}, nil
+}
+
+func (s *Server) execUnpivotSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	unpvt, err := parseUnpivotQuery(query)
+	if err != nil {
+		return nil, err
+	}
+
+	// 1. Execute source query
+	srcRes, err := s.execSelect(unpvt.SourceQuery, start, cs)
+	if err != nil {
+		return nil, fmt.Errorf("unpivot source query error: %w", err)
+	}
+
+	// 2. Identify unpivot columns and remaining preserved columns
+	unpvtColsSet := make(map[string]bool)
+	for _, col := range unpvt.UnpivotColumns {
+		unpvtColsSet[strings.ToLower(col)] = true
+	}
+
+	var preservedCols []string
+	for _, col := range srcRes.Columns {
+		if !unpvtColsSet[strings.ToLower(cleanIdentifier(col))] {
+			preservedCols = append(preservedCols, col)
+		}
+	}
+
+	// Helper to find column in row
+	findValInRow := func(row map[string]any, colName string) (any, bool) {
+		clean := cleanIdentifier(colName)
+		if v, ok := row[clean]; ok {
+			return v, true
+		}
+		if v, ok := row[colName]; ok {
+			return v, true
+		}
+		if v, ok := row[strings.ToLower(clean)]; ok {
+			return v, true
+		}
+		for k, v := range row {
+			if strings.EqualFold(cleanIdentifier(k), clean) {
+				return v, true
+			}
+		}
+		return nil, false
+	}
+
+	// 3. Unpivot rows (transform columns to rows, ignoring NULL values per T-SQL spec)
+	var generatedRows []map[string]any
+	for _, row := range srcRes.Rows {
+		for _, colName := range unpvt.UnpivotColumns {
+			val, found := findValInRow(row, colName)
+			if !found || val == nil {
+				continue
+			}
+
+			newRow := make(map[string]any)
+			for _, pCol := range preservedCols {
+				if v, ok := row[pCol]; ok {
+					newRow[pCol] = v
+					newRow[cleanIdentifier(pCol)] = v
+					newRow[strings.ToLower(cleanIdentifier(pCol))] = v
+				}
+			}
+
+			// Assign NameCol and ValueCol
+			newRow[unpvt.NameCol] = colName
+			newRow[strings.ToLower(unpvt.NameCol)] = colName
+			newRow["["+unpvt.NameCol+"]"] = colName
+
+			newRow[unpvt.ValueCol] = val
+			newRow[strings.ToLower(unpvt.ValueCol)] = val
+			newRow["["+unpvt.ValueCol+"]"] = val
+
+			generatedRows = append(generatedRows, newRow)
+		}
+	}
+
+	// 4. Apply outer WHERE filter if present
+	if unpvt.WhereClause != "" {
+		var filteredRows []map[string]any
+		for _, row := range generatedRows {
+			if s.evalSimpleRowWhere(row, unpvt.WhereClause) {
+				filteredRows = append(filteredRows, row)
+			}
+		}
+		generatedRows = filteredRows
+	}
+
+	// 5. Project columns
+	var finalCols []string
+	type projColDef struct {
+		expr  string
+		alias string
+	}
+	var projDefs []projColDef
+
+	if unpvt.OuterProjections == "*" || unpvt.OuterProjections == "" {
+		for _, pCol := range preservedCols {
+			finalCols = append(finalCols, pCol)
+			projDefs = append(projDefs, projColDef{expr: pCol, alias: pCol})
+		}
+		finalCols = append(finalCols, unpvt.NameCol)
+		projDefs = append(projDefs, projColDef{expr: unpvt.NameCol, alias: unpvt.NameCol})
+		finalCols = append(finalCols, unpvt.ValueCol)
+		projDefs = append(projDefs, projColDef{expr: unpvt.ValueCol, alias: unpvt.ValueCol})
+	} else {
+		for _, item := range planner.SplitProjections(unpvt.OuterProjections) {
+			itemTrimmed := strings.TrimSpace(item)
+			if itemTrimmed == "" {
+				continue
+			}
+			asIdx := strings.Index(strings.ToUpper(itemTrimmed), " AS ")
+			var expr, alias string
+			if asIdx != -1 {
+				expr = strings.TrimSpace(itemTrimmed[:asIdx])
+				alias = cleanIdentifier(strings.TrimSpace(itemTrimmed[asIdx+4:]))
+			} else {
+				expr = itemTrimmed
+				alias = cleanIdentifier(itemTrimmed)
+			}
+			finalCols = append(finalCols, alias)
+			projDefs = append(projDefs, projColDef{expr: expr, alias: alias})
+		}
+	}
+
+	var projectedRows []map[string]any
+	for _, row := range generatedRows {
+		outRow := make(map[string]any, len(finalCols))
+		for _, pDef := range projDefs {
+			val := s.evalPivotExpr(row, pDef.expr)
+			outRow[pDef.alias] = val
+		}
+		projectedRows = append(projectedRows, outRow)
+	}
+
+	// 6. Apply ORDER BY if present
+	if unpvt.OrderByClause != "" && len(projectedRows) > 0 {
+		orderParts := strings.Fields(unpvt.OrderByClause)
+		orderCol := cleanIdentifier(orderParts[0])
+		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
+		sort.Slice(projectedRows, func(i, j int) bool {
+			v1 := projectedRows[i][orderCol]
+			v2 := projectedRows[j][orderCol]
+			if v1 == nil && v2 != nil {
+				return desc
+			}
+			if v1 != nil && v2 == nil {
+				return !desc
+			}
+			if v1 == nil && v2 == nil {
+				return false
+			}
+			f1, err1 := strconv.ParseFloat(fmt.Sprintf("%v", v1), 64)
+			f2, err2 := strconv.ParseFloat(fmt.Sprintf("%v", v2), 64)
+			if err1 == nil && err2 == nil {
+				if desc {
+					return f1 > f2
+				}
+				return f1 < f2
+			}
+			s1 := fmt.Sprintf("%v", v1)
+			s2 := fmt.Sprintf("%v", v2)
+			if desc {
+				return s1 > s2
+			}
+			return s1 < s2
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      finalCols,
+		Rows:         projectedRows,
+		RowsAffected: int64(len(projectedRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+

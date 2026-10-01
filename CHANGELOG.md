@@ -35,6 +35,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Supported bracket column identifiers (`[Q1]`, `[Junior]`), outer projection aliases (`[Q1] AS FirstQuarter`), outer `WHERE` predicate filtering on pivoted columns, and outer `ORDER BY` sorting.
   - Added dedicated test suite in `pkg/api/pivot_test.go` covering `SUM`, `COUNT`, `AVG`, `MIN`, `MAX`, derived subqueries, table sources, aliases, and filtering.
 
+- **T-SQL UNPIVOT Clause Engine (`pkg/api`)**:
+  - Implemented native Microsoft T-SQL `UNPIVOT` operator parser (`hasUnpivot`, `parseUnpivotQuery`) supporting direct table sources and derived subqueries (`(SELECT ...) AS src UNPIVOT (...) AS unpvt`).
+  - Implemented reverse-pivoting execution pipeline (`execUnpivotSelect`) transforming wide column structures into normalized name-value row pairs (`<val_col> FOR <name_col> IN (<col1>, <col2>, ...)`).
+  - Preserved non-unpivoted columns per row, skipped NULL values according to T-SQL relational semantics, and handled bracket escapes (`[Math]`, `[English]`).
+  - Supported outer projection expressions/aliases, outer `WHERE` filtering on unpivoted columns, and outer `ORDER BY` sorting.
+  - Added comprehensive test coverage in `pkg/api/pivot_test.go` (`TestUnpivot_Basic`, `TestUnpivot_WithSubqueryAndBracketSyntax`).
+
 - **Native VDBE Bytecode Direct Execution for Scalar & Point Queries (`pkg/proc`, `pkg/api`)**:
   - Implemented `OpResultRow` opcode in `pkg/proc/bytecode.go` and `pkg/proc/runtime/vm.go` to directly evaluate and emit rows for table-less scalar / constant SELECT queries (`SELECT 1 + 1`, `SELECT GETDATE()`, etc.) bypassing Volcano relational planner and execution trees.
   - Implemented `OpPointSelect` opcode for single-table Primary Key point lookups (`WHERE pk = ?`) executing directly via O(1) `tx.Get()` storage lookups and register projection.
