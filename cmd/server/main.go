@@ -50,6 +50,10 @@ func main() {
 	requireSSL := flag.Bool("require-ssl", false, "Require SSL/TLS for PostgreSQL and TDS wire connections")
 	backupTarget := flag.String("backup", "", "Perform live point-in-time snapshot backup to target archive and exit")
 	restoreSource := flag.String("restore", "", "Restore database from backup archive and exit")
+	walArchiveDir := flag.String("wal-archive", "", "Path to WAL archive directory for continuous archiving and PITR")
+	restoreTimeStr := flag.String("restore-time", "", "Target timestamp for Point-In-Time Recovery (RFC3339 or 'YYYY-MM-DD HH:MM:SS')")
+	restoreLSN := flag.Int64("restore-lsn", 0, "Target Log Sequence Number (LSN) for Point-In-Time Recovery")
+	archiveWalFile := flag.String("archive-wal", "", "Archive a specific WAL file into the WAL archive directory and exit")
 	slowLog := flag.String("slow-log", "", "Path to slow query log file (e.g. data/slow_query.log, pass 'true' for default)")
 	slowThreshold := flag.Float64("slow-threshold-ms", 50.0, "Threshold in milliseconds to record slow queries (default: 50ms)")
 	generalLog := flag.String("general-log", "", "Enable general query logging (e.g. data/general.log, pass 'true' for default)")
@@ -307,8 +311,65 @@ func main() {
 		return
 	}
 
-	// Standalone CLI Restore Operation
-	if *restoreSource != "" {
+	// Standalone CLI WAL Segment Archiving Operation
+	if *archiveWalFile != "" {
+		archiveDir := *walArchiveDir
+		if archiveDir == "" {
+			archiveDir = filepath.Join(cfg.Server.DataDir, "wal_archive")
+		}
+		archiver, err := backup.NewWALArchiver(archiveDir)
+		if err != nil {
+			log.Fatalf("[SQLion] Failed to initialize WAL archiver: %v", err)
+		}
+		seg, err := archiver.ArchiveSegment(*archiveWalFile)
+		if err != nil {
+			log.Fatalf("[SQLion] Failed to archive WAL segment: %v", err)
+		}
+		log.Printf("[SQLion] WAL segment archived successfully: %s (LSN %d-%d, %d records)",
+			seg.Filename, seg.MinLSN, seg.MaxLSN, seg.RecordCount)
+		return
+	}
+
+	// Standalone CLI Restore / PITR Operation
+	if *restoreSource != "" || *restoreTimeStr != "" || *restoreLSN > 0 {
+		archiveDir := *walArchiveDir
+		if archiveDir == "" {
+			archiveDir = filepath.Join(cfg.Server.DataDir, "wal_archive")
+		}
+
+		var targetTime time.Time
+		if *restoreTimeStr != "" {
+			var parseErr error
+			for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02T15:04:05", "2006-01-02"} {
+				if t, err := time.Parse(layout, *restoreTimeStr); err == nil {
+					targetTime = t.UTC()
+					parseErr = nil
+					break
+				} else {
+					parseErr = err
+				}
+			}
+			if parseErr != nil {
+				log.Fatalf("[SQLion] Invalid --restore-time format %q: %v", *restoreTimeStr, parseErr)
+			}
+		}
+
+		if !targetTime.IsZero() || *restoreLSN > 0 {
+			log.Printf("[SQLion] Initiating Point-In-Time Recovery (PITR)... (target_time: %v, target_lsn: %d)", targetTime, *restoreLSN)
+			pitrOpts := backup.PITROptions{
+				RestoreOptions: backup.DefaultRestoreOptions(),
+				TargetTime:     targetTime,
+				TargetLSN:      *restoreLSN,
+			}
+			res, err := backup.RestorePITR(*restoreSource, archiveDir, eng, cat, pitrOpts)
+			if err != nil {
+				log.Fatalf("[SQLion] PITR restoration failed: %v", err)
+			}
+			log.Printf("[SQLion] PITR restoration successfully completed: %d WAL segments replayed, %d records applied, final LSN: %d, final time: %v (duration: %v)",
+				res.ArchivedSegmentsParsed, res.WALRecordsReplayed, res.FinalLSN, res.FinalTimestamp, res.Duration)
+			return
+		}
+
 		log.Printf("[SQLion] Initiating database restore from %s...", *restoreSource)
 		res, err := backup.RestoreBackupFile(*restoreSource, eng, cat, backup.DefaultRestoreOptions())
 		if err != nil {

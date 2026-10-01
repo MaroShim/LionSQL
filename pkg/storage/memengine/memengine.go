@@ -152,6 +152,13 @@ func (e *Engine) Open(dir string) error {
 	return nil
 }
 
+// ApplyWALRecord applies a single committed WAL record directly to the in-memory engine.
+func (e *Engine) ApplyWALRecord(rec WALRecord) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.applyWALRecordLocked(rec)
+}
+
 func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 	for _, op := range rec.Ops {
 		switch op.Type {
@@ -1592,7 +1599,8 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 	}, nil
 }
 
-func parsePKValue(s string, dt storage.DataType) storage.Value {
+// ParsePKValue parses a string-encoded primary key back into a storage.Value.
+func ParsePKValue(s string, dt storage.DataType) storage.Value {
 	switch dt {
 	case storage.TypeInt:
 		var n int64
@@ -1696,7 +1704,7 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 			rec[colName] = keyVal
 		}
 		if pkCol != nil {
-			rec[pkCol.Name] = parsePKValue(pk, pkCol.Type)
+			rec[pkCol.Name] = ParsePKValue(pk, pkCol.Type)
 		}
 		return rec, true
 	}

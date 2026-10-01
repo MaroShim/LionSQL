@@ -30,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Continuous WAL Archiving & Point-In-Time Recovery (PITR) (`pkg/backup`, `cmd/server`)**:
+  - Implemented continuous WAL archiver (`pkg/backup/wal_archive.go`) managing rotation, boundary detection (`MinLSN`, `MaxLSN`, timestamps), and atomic persistence to `wal_archive/` repository.
+  - Implemented Point-In-Time Recovery engine (`pkg/backup/pitr.go`) restoring baseline snapshot archives and incrementally replaying committed transactions up to specific target timestamps or LSNs.
+  - Exported thread-safe `ApplyWALRecord` and `ParsePKValue` in `pkg/storage/memengine` with cross-engine fallback supporting both In-Memory OCC and WiredTiger storage engines.
+  - Added CLI flags `--wal-archive`, `--restore-time`, `--restore-lsn`, and `--archive-wal` in `cmd/server/main.go` for automated DR operations and disaster recovery pipelines.
+  - Added comprehensive test suite in `pkg/backup/pitr_test.go` covering WAL segment rotation, manifest tracking, timestamp-based recovery, and LSN-targeted recovery.
 - **Self-Diagnostic Health Verification CLI (`--doctor`) (`cmd/server`)**:
   - Implemented standalone system health diagnostic command `--doctor` complying with Rule 28.
   - Verifies host environment (OS, Arch, Go version, logical CPUs, memory footprint), filesystem permissions (atomic R/W probe, path normalization, latency), and network port bindings (HTTP, PostgreSQL, TDS).
