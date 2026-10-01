@@ -22,6 +22,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Readers never block writers and writers never block readers, eliminating traditional 2PL shared read locks.
   - Formally specified out/deferred complex SSI dependency graphs and `READ UNCOMMITTED` levels in favor of high-throughput non-blocking OLTP execution.
 
+- **Architectural Invariant: Self-Contained Single Binary (Zero-External-Dependency)**:
+  - Formally codified full-stack self-containment in `GEMINI.md`: core DB, PGWire/TDS wire protocols, REST API, embedded Web Studio, pooler, cron, mailer run entirely from a single static Go binary.
+  - Explicitly specified out external distributed orchestrators/brokers (ZooKeeper, etcd, Consul, Kafka, RabbitMQ) from the database kernel.
+
+- **Architectural Invariant: Scale-Up Primacy & WAL Replication Topology**:
+  - Formally codified vertical scale-up hardware saturation and 1-Writer Multi-Reader (Primary-Replica) WAL streaming topology in `GEMINI.md`.
+  - Eliminated distributed 2PC write penalties to preserve sub-microsecond single-node transaction speed (16,000+ TPS).
+  - Explicitly specified out distributed multi-master sharding in favor of high-availability WAL replication and failover promotion.
+
 ### Performance
 - **VDBE Bytecode Engine Primary Key O(1) Fast-Path Optimization (`pkg/proc/runtime/vm.go`, `pkg/proc/parser.go`, `cmd/tpcc_vdbe`)**:
   - Replaced hardcoded `"id"` column checks in `execSelectInto`, `OpUpdate`, and `OpDelete` with dynamic primary key metadata resolution via `isPKCol` and `extractSimpleEq`.

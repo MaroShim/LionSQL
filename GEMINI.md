@@ -92,7 +92,36 @@ SQLion defines **Non-Blocking Snapshot Isolation / Read Committed with Optimisti
 
 ---
 
-## 5. Engineering Guidelines & Development Pipeline
+## 5. Core Architectural Invariant: Self-Contained Single Binary (Zero-External-Dependency)
+
+SQLion is architected as an **Autonomous, Zero-External-Dependency Standalone Static Executable**:
+
+1. **Architectural Principles**:
+   - **Full-Stack Self-Containment**: Database kernel, multi-protocol wire listeners (PGWire :5433, TDS :1433), HTTP/REST engine (:8090), embedded Web Studio (`embed.FS`), Goroutine connection pooler, cron job scheduler, and SMTP mailer run out of a single static binary.
+   - **Zero Operational Scaffolding**: Eliminates external sidecars or daemons (No PgBouncer, No Redis cache layer, No external web server like Nginx, No OS crontab dependencies).
+2. **Permanent Specification Invariant**:
+   - **External Distributed Coordinators**: ZooKeeper, etcd, Consul, or external message brokers (Kafka, RabbitMQ) are explicitly **Spec Out** from the core database kernel.
+   - **Deployment Simplicity**: A fully operational database node requires nothing more than copying the single executable and running it against a target directory (`--data-dir`).
+
+---
+
+## 6. Core Architectural Invariant: Scale-Up Primacy & WAL Replication Topology
+
+SQLion prioritizes **Vertical Scale-Up Hardware Saturation** and **1-Writer Multi-Reader Asynchronous/Semi-Synchronous WAL Replication** over complex distributed multi-master sharding:
+
+1. **Architectural Principles**:
+   - **Single-Node Hardware Saturation**: Focuses engineering effort on maximizing multi-core CPU concurrency, lock-free data structures (Concurrent SkipList, Hazard Pointers), NVMe I/O efficiency, and sub-microsecond VDBE bytecode execution on a single host.
+   - **Zero Distributed Consensus Penalty on Writes**: Eliminates distributed 2PC (Two-Phase Commit) network round-trip latency on write paths, preserving raw single-node transaction throughput (16,000+ TPS).
+2. **Standard High-Availability & Read-Scale Topology (1-Writer Multi-Reader)**:
+   - **Primary Node (Single Writer)**: Serves all write mutations (INSERT, UPDATE, DELETE), enforces OCC/MVCC validation, generates canonical WAL/AOF log streams, and handles read queries.
+   - **Replica Nodes (Multi-Reader)**: Continuously stream and replay WAL records from the Primary via LSN tracking, providing scale-out read capacity (SELECT) without lock contention.
+   - **Failover Promotion**: High availability is achieved by promoting the most up-to-date LSN Replica to Primary upon primary failure, rather than complex runtime distributed consensus.
+3. **Permanent Specification Invariant**:
+   - **Multi-Master Distributed Sharding & 2PC Graphs**: Explicitly **Spec Out / Deferred**. Core engine complexity remains bounded to single-node ACID execution and linear WAL log stream shipping.
+
+---
+
+## 7. Engineering Guidelines & Development Pipeline
 
 ### 3-Stage Verification Pipeline (Build ➔ Test ➔ Commit)
 All modifications, refactoring, and feature additions must strictly pass the following 3 stages before committing:
