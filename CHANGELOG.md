@@ -24,6 +24,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Self-Diagnostic Health Verification CLI (`--doctor`) (`cmd/server`)**:
+  - Implemented standalone system health diagnostic command `--doctor` complying with Rule 28.
+  - Verifies host environment (OS, Arch, Go version, logical CPUs, memory footprint), filesystem permissions (atomic R/W probe, path normalization, latency), and network port bindings (HTTP, PostgreSQL, TDS).
+  - Validates storage engines integrity across In-Memory OCC (DDL, transaction commit/rollback) and WiredTiger B+Tree (CGo build tag, ACID write/read).
+  - Validates dual-parser architecture (Primary Pratt fast-path & Secondary ANTLR fallback) and VDBE bytecode compiler/VM execution.
+  - Verifies TLS cryptography (dynamic self-signed certificate generation / keypair validity) and authentication hashing subsystem.
+  - Added unit test suite in `cmd/server/doctor_test.go` verifying 100% test pass rate with 0 failures.
 - **Prometheus `/metrics` Observability & Plan Cache Statistics (`pkg/api`, `pkg/proc`)**:
   - Enhanced Prometheus `/metrics` endpoint with runtime Go metrics: `sqlion_memory_alloc_bytes`, `sqlion_memory_sys_bytes`, `sqlion_memory_heap_alloc_bytes`, and `sqlion_goroutines`.
   - Added atomic execution plan cache hit/miss tracking (`sqlion_plan_cache_hits_total`, `sqlion_plan_cache_misses_total`) in `PlanCache` (`pkg/proc/cache.go`).

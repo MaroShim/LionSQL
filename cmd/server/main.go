@@ -55,6 +55,7 @@ func main() {
 	generalLog := flag.String("general-log", "", "Enable general query logging (e.g. data/general.log, pass 'true' for default)")
 	configPath := flag.String("config", "", "Path to JSON configuration file (default: auto-detect ./sqlion.json or <dir>/sqlion.json)")
 	initConfig := flag.String("init-config", "", "Generate a default sqlion.json configuration file at specified path (or ./sqlion.json) and exit")
+	doctorFlag := flag.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
 
 	// Daemon control flags
 	daemonFlag := flag.Bool("d", false, "Run SQLion server as background daemon")
@@ -188,6 +189,14 @@ func main() {
 	resolvedLogFile := cfg.Server.LogFile
 	if resolvedLogFile == "" {
 		resolvedLogFile = filepath.Join(cfg.Server.DataDir, "sqlion.log")
+	}
+
+	// 4. Standalone Self-Diagnostic Health Verification (--doctor)
+	if *doctorFlag {
+		if err := RunDoctor(cfg); err != nil {
+			os.Exit(1)
+		}
+		return
 	}
 
 	// Handle daemon commands if not running as internal worker
