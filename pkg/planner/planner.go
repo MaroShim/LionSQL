@@ -31,6 +31,7 @@ const (
 	NodeMaterialize NodeType = "Materialize"
 	NodeWindow      NodeType = "Window"
 	NodeSetOp       NodeType = "SetOp"
+	NodeModifyTable NodeType = "ModifyTable"
 )
 
 // SortKeyDef defines a column and sort direction for ordering.
@@ -1315,6 +1316,10 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 		sb.WriteString(" (Window Functions)")
 	case NodeSetOp:
 		sb.WriteString(fmt.Sprintf(" (%s)", node.SetOp))
+	case NodeModifyTable:
+		if node.Relation != "" {
+			sb.WriteString(fmt.Sprintf(" on %s", node.Relation))
+		}
 	}
 
 	sb.WriteString(fmt.Sprintf(" (cost=%.2f..%.2f rows=%d)", node.StartupCost, node.TotalCost, node.EstimatedRows))

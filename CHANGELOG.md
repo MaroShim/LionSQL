@@ -30,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Seamlessly bound authenticated username directly to `ClientSession.User` (`SetSessionUser`) for downstream RBAC table permission enforcement.
   - Added comprehensive integration tests in `pkg/wire/server_test.go` (`TestWire_PasswordAuthentication`).
 
+- **Query Plan Visualizer & PostgreSQL Standard `EXPLAIN (FORMAT JSON)` Support (`pkg/planner/explain.go`, `pkg/api/sqlexec_dml.go`)**:
+  - Implemented standard PostgreSQL `EXPLAIN [ ( option [, ...] ) ]` parser (`ParseExplainOptions`) supporting `ANALYZE`, `VERBOSE`, `COSTS`, `BUFFERS`, and `FORMAT {TEXT | JSON | YAML | XML}`.
+  - Implemented canonical PostgreSQL `EXPLAIN (FORMAT JSON)` serializer (`FormatPostgresPlanJSON`) enabling full graphical visual plan tree rendering in GUI tools (DBeaver, DataGrip, pgAdmin).
+  - Added DML statement EXPLAIN support (`EXPLAIN INSERT`, `EXPLAIN UPDATE`, `EXPLAIN DELETE`) with `NodeModifyTable` plan trees and primary key index scan resolution.
+  - Added unit and regression tests in `pkg/api/explain_test.go`.
+
 ## [0.10.0] - 2026-10-01
 
 ### Changed
