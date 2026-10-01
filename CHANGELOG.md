@@ -13,6 +13,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added copyleft network interaction clause protecting network server deployment, wire protocols (:5433, :1433, :8090), and hosted DBaaS services against proprietary cloud free-riding.
   - Formally documented dual-licensing path for enterprise deployments and proprietary software embedding.
 
+- **Architectural Invariant: Database Isolation Strategy (Instance-Based Isolation)**:
+  - Formally codified instance-level isolation (Process / Container per Database) in `GEMINI.md` as a permanent core architectural invariant.
+  - Specified out `USE <dbname>` catalog multiplexing in favor of physical process/container separation, guaranteeing zero-shared blast radius, independent CPU/RAM/descriptor limits, crash resilience, and eliminating cross-database catalog lock contention.
+
 ### Performance
 - **VDBE Bytecode Engine Primary Key O(1) Fast-Path Optimization (`pkg/proc/runtime/vm.go`, `pkg/proc/parser.go`, `cmd/tpcc_vdbe`)**:
   - Replaced hardcoded `"id"` column checks in `execSelectInto`, `OpUpdate`, and `OpDelete` with dynamic primary key metadata resolution via `isPKCol` and `extractSimpleEq`.

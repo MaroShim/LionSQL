@@ -61,7 +61,22 @@ SQLion enforces a **Dual-Parser Architecture** to simultaneously achieve sub-mic
 
 ---
 
-## 3. Engineering Guidelines & Development Pipeline
+## 3. Core Architectural Invariant: Database Isolation Strategy (Instance-Based Isolation)
+
+SQLion adopts **Instance-Level Isolation (Process / Container per Database)** as a core architectural invariant, rather than multi-database catalog multiplexing (`USE <dbname>`) inside a single process:
+
+1. **Architectural Rationale**:
+   - **Fault & Resource Isolation**: Prevents runaway queries, memory leaks, or file descriptor saturation in one database from impacting others.
+   - **Security & Blast Radius**: Eliminates cross-database data leaks and ensures strict physical isolation of data files, WAL/AOF logs, TDE encryption keys, and network listening ports.
+   - **Independent Lifecycle**: Enables independent scaling, upgrading, point-in-time recovery (PITR), and restarts per database.
+   - **KISS & Zero Redundant Complexity**: Eliminates cross-database catalog locking, session database context switching overhead, and distributed lock contention in the database kernel.
+2. **Permanent Specification Invariant**:
+   - **`USE <dbname>` Syntax**: Explicitly **Spec Out**. Each SQLion process serves exactly one isolated database catalog per data directory (`--data-dir`).
+   - **Multi-Tenant Deployment Standard**: Multi-tenancy and multiple databases are deployed via lightweight SQLion standalone processes/containers with dedicated ports and directories (`--port`, `--data-dir`).
+
+---
+
+## 4. Engineering Guidelines & Development Pipeline
 
 ### 3-Stage Verification Pipeline (Build ➔ Test ➔ Commit)
 All modifications, refactoring, and feature additions must strictly pass the following 3 stages before committing:
