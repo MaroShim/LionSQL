@@ -30,6 +30,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - `pkg/api/sqlexec_dbcc.go` (685 lines): Database console commands (`DBCC CHECKDB`, `DBCC DROPCLEANBUFFERS`, `DBCC USEROPTIONS`) and virtual system catalog engine (`INFORMATION_SCHEMA`, `sys.*`).
 
 ### Added
+- **Extended Data Types Support (UUID, VARBINARY, DATE, TIME) (`pkg/storage`, `pkg/api`, `pkg/proc`, `pkg/wire`)**:
+  - Extended core storage engine type system (`pkg/storage/engine.go`) with `TypeUUID`, `TypeBinary`, `TypeDate`, and `TypeTime`.
+  - Maintained Go map key comparability invariant on `storage.Value` by storing binary representations in `BinVal string` and exposing bytes via `.Bytes() []byte`.
+  - Added dedicated type parsing, serialization, and normalized comparisons in `pkg/storage/types_extended.go`.
+  - Updated DDL/DML parsers (`pkg/api/sqlexec_ddl.go`, `pkg/api/sqlexec_dml.go`) and procedure parsers (`pkg/proc/parser.go`, `pkg/proc/parser/antlr/ast_builder.go`) for `UUID`/`UNIQUEIDENTIFIER`, `VARBINARY`/`BYTEA`/`BLOB`, `DATE`, and `TIME`.
+  - Configured PostgreSQL wire protocol type OID mappings (`pkg/wire/server.go`) for `DATE` (1082), `TIME` (1083), `UUID` (2950), and `BYTEA` (17).
+  - Added full test coverage in `pkg/storage/types_extended_test.go` and end-to-end DDL/DML verification in `pkg/api/extended_types_test.go`.
 - **Continuous WAL Archiving & Point-In-Time Recovery (PITR) (`pkg/backup`, `cmd/server`)**:
   - Implemented continuous WAL archiver (`pkg/backup/wal_archive.go`) managing rotation, boundary detection (`MinLSN`, `MaxLSN`, timestamps), and atomic persistence to `wal_archive/` repository.
   - Implemented Point-In-Time Recovery engine (`pkg/backup/pitr.go`) restoring baseline snapshot archives and incrementally replaying committed transactions up to specific target timestamps or LSNs.

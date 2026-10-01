@@ -870,6 +870,18 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 				}
 				val = storage.JSONValue(val.SVal)
 				record[col.Name] = val
+			} else if col.Type == storage.TypeUUID && (val.Type == storage.TypeVarChar || val.Type == storage.TypeUUID) {
+				val = storage.UUIDValue(val.SVal)
+				record[col.Name] = val
+			} else if col.Type == storage.TypeBinary && (val.Type == storage.TypeVarChar || val.Type == storage.TypeBinary) {
+				val = storage.BinaryValueFromString(val.String())
+				record[col.Name] = val
+			} else if col.Type == storage.TypeDate && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDateTime || val.Type == storage.TypeDate) {
+				val = storage.DateValueFromAny(val)
+				record[col.Name] = val
+			} else if col.Type == storage.TypeTime && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDateTime || val.Type == storage.TypeTime) {
+				val = storage.TimeValueFromAny(val)
+				record[col.Name] = val
 			} else {
 				return fmt.Errorf("%w: column %q expects %s, got %s",
 					storage.ErrInvalidDataType, col.Name, col.Type, val.Type)
@@ -976,6 +988,18 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 					return fmt.Errorf("%w: column %q has invalid JSON syntax", storage.ErrInvalidJSON, col.Name)
 				}
 				val = storage.JSONValue(val.SVal)
+				updated[col.Name] = val
+			} else if col.Type == storage.TypeUUID && (val.Type == storage.TypeVarChar || val.Type == storage.TypeUUID) {
+				val = storage.UUIDValue(val.SVal)
+				updated[col.Name] = val
+			} else if col.Type == storage.TypeBinary && (val.Type == storage.TypeVarChar || val.Type == storage.TypeBinary) {
+				val = storage.BinaryValueFromString(val.String())
+				updated[col.Name] = val
+			} else if col.Type == storage.TypeDate && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDateTime || val.Type == storage.TypeDate) {
+				val = storage.DateValueFromAny(val)
+				updated[col.Name] = val
+			} else if col.Type == storage.TypeTime && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDateTime || val.Type == storage.TypeTime) {
+				val = storage.TimeValueFromAny(val)
 				updated[col.Name] = val
 			} else {
 				return fmt.Errorf("%w: column %q expects %s, got %s",
@@ -1619,6 +1643,14 @@ func ParsePKValue(s string, dt storage.DataType) storage.Value {
 			return storage.DateTimeValue(t)
 		}
 		return storage.StringValue(s)
+	case storage.TypeDate:
+		return storage.DateValueFromString(s)
+	case storage.TypeTime:
+		return storage.TimeValueFromString(s)
+	case storage.TypeUUID:
+		return storage.UUIDValue(s)
+	case storage.TypeBinary:
+		return storage.BinaryValueFromString(s)
 	default:
 		return storage.StringValue(s)
 	}

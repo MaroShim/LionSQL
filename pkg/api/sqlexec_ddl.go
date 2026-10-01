@@ -504,8 +504,16 @@ func parseSQLDataType(s string) storage.DataType {
 		return storage.TypeDecimal
 	case "BOOL", "BOOLEAN", "BIT":
 		return storage.TypeBool
-	case "DATETIME", "TIMESTAMP", "DATE", "TIME":
+	case "DATETIME", "TIMESTAMP", "DATETIME2", "SMALLDATETIME":
 		return storage.TypeDateTime
+	case "DATE":
+		return storage.TypeDate
+	case "TIME":
+		return storage.TypeTime
+	case "UUID", "UNIQUEIDENTIFIER", "GUID":
+		return storage.TypeUUID
+	case "VARBINARY", "BINARY", "BYTEA", "BLOB", "IMAGE":
+		return storage.TypeBinary
 	case "JSON", "JSONB":
 		return storage.TypeJSON
 	default:

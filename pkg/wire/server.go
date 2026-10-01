@@ -709,6 +709,14 @@ func typeToPgOID(t storage.DataType) int32 {
 		return 16 // BOOL
 	case storage.TypeDateTime:
 		return 1114 // TIMESTAMP
+	case storage.TypeDate:
+		return 1082 // DATE
+	case storage.TypeTime:
+		return 1083 // TIME
+	case storage.TypeUUID:
+		return 2950 // UUID
+	case storage.TypeBinary:
+		return 17 // BYTEA
 	default:
 		return 1043 // VARCHAR
 	}

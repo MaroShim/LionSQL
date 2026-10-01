@@ -454,6 +454,14 @@ func parseDataType(s string) storage.DataType {
 		return storage.TypeBool
 	case "DATETIME", "TIMESTAMP":
 		return storage.TypeDateTime
+	case "DATE":
+		return storage.TypeDate
+	case "TIME":
+		return storage.TypeTime
+	case "UUID", "UNIQUEIDENTIFIER":
+		return storage.TypeUUID
+	case "VARBINARY", "BINARY", "BYTEA":
+		return storage.TypeBinary
 	default:
 		return storage.TypeVarChar
 	}

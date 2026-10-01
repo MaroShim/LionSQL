@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -38,6 +39,10 @@ const (
 	TypeDateTime
 	TypeJSON
 	TypeDecimal
+	TypeUUID
+	TypeBinary
+	TypeDate
+	TypeTime
 )
 
 func (t DataType) String() string {
@@ -56,6 +61,14 @@ func (t DataType) String() string {
 		return "JSON"
 	case TypeDecimal:
 		return "DECIMAL"
+	case TypeUUID:
+		return "UUID"
+	case TypeBinary:
+		return "VARBINARY"
+	case TypeDate:
+		return "DATE"
+	case TypeTime:
+		return "TIME"
 	default:
 		return "UNKNOWN"
 	}
@@ -225,6 +238,12 @@ type Value struct {
 	BVal   bool
 	TVal   time.Time
 	DVal   Decimal
+	BinVal string
+}
+
+// Bytes returns the raw byte slice for TypeBinary values.
+func (v Value) Bytes() []byte {
+	return []byte(v.BinVal)
 }
 
 func IntValue(v int64) Value {
@@ -329,6 +348,20 @@ func (v Value) String() string {
 		return fmt.Sprintf("%t", v.BVal)
 	case TypeDateTime:
 		return v.TVal.Format(time.RFC3339)
+	case TypeDate:
+		return v.TVal.Format("2006-01-02")
+	case TypeTime:
+		return v.TVal.Format("15:04:05")
+	case TypeUUID:
+		return v.SVal
+	case TypeBinary:
+		if len(v.BinVal) > 0 {
+			return "0x" + hex.EncodeToString([]byte(v.BinVal))
+		}
+		if v.SVal != "" {
+			return v.SVal
+		}
+		return "0x"
 	default:
 		return "UNKNOWN"
 	}
@@ -360,6 +393,14 @@ func (v Value) Equal(other Value) bool {
 		return v.BVal == other.BVal
 	case TypeDateTime:
 		return v.TVal.Equal(other.TVal)
+	case TypeDate:
+		return v.TVal.Equal(other.TVal)
+	case TypeTime:
+		return v.IVal == other.IVal || v.TVal.Equal(other.TVal)
+	case TypeUUID:
+		return strings.EqualFold(v.SVal, other.SVal)
+	case TypeBinary:
+		return v.BinVal == other.BinVal
 	default:
 		return false
 	}
@@ -381,6 +422,9 @@ func (v Value) Compare(other Value) int {
 		d1 := v.Decimal()
 		d2 := other.Decimal()
 		return d1.Cmp(d2)
+	}
+	if v.Type == TypeUUID || v.Type == TypeBinary || v.Type == TypeDate || v.Type == TypeTime {
+		return CompareExtendedValues(v, other)
 	}
 	switch v.Type {
 	case TypeInt:

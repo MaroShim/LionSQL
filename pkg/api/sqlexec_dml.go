@@ -3613,12 +3613,32 @@ func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
 		if targetType == storage.TypeJSON {
 			return storage.JSONValue(strVal)
 		}
+		if targetType == storage.TypeUUID {
+			return storage.UUIDValue(strVal)
+		}
+		if targetType == storage.TypeDate {
+			return storage.DateValueFromString(strVal)
+		}
+		if targetType == storage.TypeTime {
+			return storage.TimeValueFromString(strVal)
+		}
+		if targetType == storage.TypeBinary {
+			return storage.BinaryValueFromString(strVal)
+		}
 		return storage.StringValue(strVal)
 	}
 
 	switch targetType {
 	case storage.TypeJSON:
 		return storage.JSONValue(s)
+	case storage.TypeUUID:
+		return storage.UUIDValue(s)
+	case storage.TypeBinary:
+		return storage.BinaryValueFromString(s)
+	case storage.TypeDate:
+		return storage.DateValueFromString(s)
+	case storage.TypeTime:
+		return storage.TimeValueFromString(s)
 	case storage.TypeInt:
 		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
 			return storage.IntValue(i)
@@ -3660,6 +3680,14 @@ func formatStorageValue(v storage.Value) any {
 		return v.BVal
 	case storage.TypeDateTime:
 		return v.TVal
+	case storage.TypeDate:
+		return v.String()
+	case storage.TypeTime:
+		return v.String()
+	case storage.TypeUUID:
+		return v.SVal
+	case storage.TypeBinary:
+		return v.String()
 	default:
 		return v.String()
 	}
@@ -3740,6 +3768,14 @@ func parseValueToType(s string, t storage.DataType) storage.Value {
 		if tVal, err := time.Parse(time.RFC3339, s); err == nil {
 			return storage.DateTimeValue(tVal)
 		}
+	case storage.TypeDate:
+		return storage.DateValueFromString(s)
+	case storage.TypeTime:
+		return storage.TimeValueFromString(s)
+	case storage.TypeUUID:
+		return storage.UUIDValue(s)
+	case storage.TypeBinary:
+		return storage.BinaryValueFromString(s)
 	}
 	return storage.StringValue(s)
 }
