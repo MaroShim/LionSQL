@@ -25,6 +25,11 @@ type TLSConfig struct {
 	KeyFile    string `json:"key_file,omitempty"`
 }
 
+// IsEnabled returns true if TLS is explicitly enabled, required, or certificates are configured.
+func (t TLSConfig) IsEnabled() bool {
+	return t.Enabled || t.RequireSSL || strings.TrimSpace(t.CertFile) != ""
+}
+
 // NetworkConfig defines listener endpoints and protocols.
 type NetworkConfig struct {
 	HTTPAddr string    `json:"http_addr"`
@@ -69,10 +74,20 @@ type SlowQueryLogConfig struct {
 	ThresholdMS float64 `json:"threshold_ms"`
 }
 
+// IsEnabled returns true if explicitly enabled or if a non-empty log file is configured.
+func (s SlowQueryLogConfig) IsEnabled() bool {
+	return s.Enabled || strings.TrimSpace(s.File) != ""
+}
+
 // GeneralQueryLogConfig defines full query auditing destination.
 type GeneralQueryLogConfig struct {
 	Enabled bool   `json:"enabled"`
 	File    string `json:"file,omitempty"`
+}
+
+// IsEnabled returns true if explicitly enabled or if a non-empty log file is configured.
+func (g GeneralQueryLogConfig) IsEnabled() bool {
+	return g.Enabled || strings.TrimSpace(g.File) != ""
 }
 
 // LoggingConfig aggregates diagnostic and query log policies.

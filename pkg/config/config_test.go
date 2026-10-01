@@ -182,3 +182,40 @@ func TestNetworkConfig_OptOut(t *testing.T) {
 	}
 }
 
+func TestTLSAndLogging_IsEnabled(t *testing.T) {
+	// TLSConfig
+	tls1 := config.TLSConfig{}
+	if tls1.IsEnabled() {
+		t.Errorf("expected empty TLSConfig to be disabled")
+	}
+	tls2 := config.TLSConfig{CertFile: "server.crt"}
+	if !tls2.IsEnabled() {
+		t.Errorf("expected TLSConfig with CertFile to be enabled")
+	}
+	tls3 := config.TLSConfig{RequireSSL: true}
+	if !tls3.IsEnabled() {
+		t.Errorf("expected TLSConfig with RequireSSL to be enabled")
+	}
+
+	// SlowQueryLogConfig
+	slow1 := config.SlowQueryLogConfig{}
+	if slow1.IsEnabled() {
+		t.Errorf("expected empty SlowQueryLogConfig to be disabled")
+	}
+	slow2 := config.SlowQueryLogConfig{File: "slow.log"}
+	if !slow2.IsEnabled() {
+		t.Errorf("expected SlowQueryLogConfig with File to be enabled")
+	}
+
+	// GeneralQueryLogConfig
+	gen1 := config.GeneralQueryLogConfig{}
+	if gen1.IsEnabled() {
+		t.Errorf("expected empty GeneralQueryLogConfig to be disabled")
+	}
+	gen2 := config.GeneralQueryLogConfig{File: "general.log"}
+	if !gen2.IsEnabled() {
+		t.Errorf("expected GeneralQueryLogConfig with File to be enabled")
+	}
+}
+
+

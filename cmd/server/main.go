@@ -156,27 +156,31 @@ func main() {
 		cfg.Logging.SlowQuery.ThresholdMS = *slowThreshold
 	}
 	if visited["slow-log"] {
-		if *slowLog == "true" || *slowLog == "1" {
+		switch *slowLog {
+		case "false", "0", "":
+			cfg.Logging.SlowQuery.Enabled = false
+			cfg.Logging.SlowQuery.File = ""
+		case "true", "1":
 			cfg.Logging.SlowQuery.Enabled = true
 			if cfg.Logging.SlowQuery.File == "" {
 				cfg.Logging.SlowQuery.File = filepath.Join(cfg.Server.DataDir, "slow_query.log")
 			}
-		} else if *slowLog == "false" || *slowLog == "0" {
-			cfg.Logging.SlowQuery.Enabled = false
-		} else {
+		default:
 			cfg.Logging.SlowQuery.Enabled = true
 			cfg.Logging.SlowQuery.File = *slowLog
 		}
 	}
 	if visited["general-log"] {
-		if *generalLog == "true" || *generalLog == "1" {
+		switch *generalLog {
+		case "false", "0", "":
+			cfg.Logging.GeneralQuery.Enabled = false
+			cfg.Logging.GeneralQuery.File = ""
+		case "true", "1":
 			cfg.Logging.GeneralQuery.Enabled = true
 			if cfg.Logging.GeneralQuery.File == "" {
 				cfg.Logging.GeneralQuery.File = filepath.Join(cfg.Server.DataDir, "general.log")
 			}
-		} else if *generalLog == "false" || *generalLog == "0" {
-			cfg.Logging.GeneralQuery.Enabled = false
-		} else {
+		default:
 			cfg.Logging.GeneralQuery.Enabled = true
 			cfg.Logging.GeneralQuery.File = *generalLog
 		}
@@ -416,7 +420,7 @@ func main() {
 	if cfg.Logging.SlowQuery.ThresholdMS > 0 {
 		server.SetSlowQueryThreshold(time.Duration(cfg.Logging.SlowQuery.ThresholdMS * float64(time.Millisecond)))
 	}
-	if cfg.Logging.SlowQuery.Enabled && cfg.Logging.SlowQuery.File != "" {
+	if cfg.Logging.SlowQuery.IsEnabled() && cfg.Logging.SlowQuery.File != "" {
 		if err := server.SetSlowQueryLogFile(cfg.Logging.SlowQuery.File); err != nil {
 			log.Printf("[SQLion] Warning: Failed to enable slow query log file: %v", err)
 		} else {
@@ -424,7 +428,7 @@ func main() {
 		}
 	}
 
-	if cfg.Logging.GeneralQuery.Enabled {
+	if cfg.Logging.GeneralQuery.IsEnabled() {
 		server.SetGeneralLogEnabled(true)
 		if cfg.Logging.GeneralQuery.File != "" {
 			if err := server.SetGeneralLogFile(cfg.Logging.GeneralQuery.File); err != nil {
@@ -459,7 +463,7 @@ func main() {
 		tdsServer = tds.NewServerWithCache(cfg.Network.TDSAddr, cat, eng, sharedCache)
 	}
 
-	if (pgEnabled || tdsEnabled) && (cfg.Network.TLS.Enabled || cfg.Network.TLS.CertFile != "" || cfg.Network.TLS.RequireSSL) {
+	if (pgEnabled || tdsEnabled) && cfg.Network.TLS.IsEnabled() {
 		var tlsConfig *tls.Config
 		if cfg.Network.TLS.CertFile != "" && cfg.Network.TLS.KeyFile != "" {
 			tlsCfg, err := wire.LoadTLSConfig(cfg.Network.TLS.CertFile, cfg.Network.TLS.KeyFile)
