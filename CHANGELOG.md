@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-01
+
 ### Changed
 - **Open Source Licensing: Transition to GNU Affero General Public License v3 (AGPL-3.0-or-later)**:
   - Updated project license from GPL-2.0/GPL-3.0 to GNU Affero General Public License v3 (`AGPL-3.0-or-later`) across `LICENSE` and `README.md`.
