@@ -219,7 +219,11 @@ Executes raw SQL or T-SQL statements directly.
     "sql": "SELECT holder, balance FROM accounts WHERE balance > 600 ORDER BY balance DESC;"
   }
   ```
-- **Response `200 OK`**:
+- **Query Parameters / Body Options**:
+  - `format`: Response representation format (`envelope` (default), `array`, `raw`, `records`).
+    - `POST /api/sql`: Standard envelope including `columns`, `rows`, `rows_affected`, and duration.
+    - `POST /api/sql?format=array` (or body `{"format": "records"}`): Returns a pure JSON record array (`[ {"holder": "David", ...}, ... ]`) directly without outer metadata wrapper for effortless frontend/microservice consumption.
+- **Default Response `200 OK` (Envelope)**:
   ```json
   {
     "command": "SELECT",
@@ -231,6 +235,13 @@ Executes raw SQL or T-SQL statements directly.
     "rows_affected": 2,
     "duration_ms": 0.42
   }
+  ```
+- **Array Response `200 OK` (`?format=array`)**:
+  ```json
+  [
+    {"holder": "David", "balance": 1750},
+    {"holder": "Alice", "balance": 1000}
+  ]
   ```
 
 ---

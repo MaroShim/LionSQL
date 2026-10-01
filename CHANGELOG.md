@@ -40,6 +40,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Boosted standalone TPC-C VDBE bytecode benchmark throughput from 93.7 TPS (2,519 tpmC) to **16,823.03 TPS (453,336.42 tpmC)** (180x speedup), reaching 51.5% of raw hand-written compiled Go storage API performance.
 
 ### Added
+- **REST API Raw JSON Array Output Format (`POST /api/sql?format=array`) (`pkg/api`)**:
+  - Implemented configurable JSON output formatting on `POST /api/sql` supporting both query parameter (`?format=array|records|raw`) and request body (`{"format": "array"}`).
+  - Preserved the production-standard metadata envelope (`{ "success": true, "columns": [...], "rows": [...], "rows_affected": ... }`) as the default representation to guarantee robust error handling and DML observability.
+  - Enabled clients to directly receive a pure JSON record array (`[ { ... }, { ... } ]`) bypassing outer wrappers for effortless frontend (`res.map()`) and microservice pipeline integration.
+  - Added unit test coverage in `pkg/api/server_test.go` (`TestAPI_ExecuteSQL_FormatArray`) and updated `doc/API_REFERENCE.md`.
+
 - **Composite Index Multi-Column Range Search & Descending Scan (`pkg/storage`, `pkg/execution`, `pkg/api`)**:
   - Implemented order-preserving key encoding `storage.EncodeIndexKeyPart` ensuring strict byte-level monotonic ordering for numeric (`int64`, `float64`), temporal (`date`, `time`, `datetime`), and textual composite index columns.
   - Implemented multi-column composite index range scanning (`findIndexAndBounds`, `parseWhereConditions`) combining leading equality predicates (`a = ?`) with range bounds (`b >= ?`, `b > ?`, `b <= ?`, `b < ?`, `b BETWEEN ? AND ?`) on the subsequent indexed column.

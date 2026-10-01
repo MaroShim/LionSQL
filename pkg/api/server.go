@@ -832,6 +832,7 @@ type execSQLReq struct {
 	SQL       string `json:"sql"`
 	SessionID string `json:"session_id"`
 	TimeoutMS int64  `json:"timeout_ms"`
+	Format    string `json:"format"` // "envelope" (default), "array", "raw", "records"
 }
 
 func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
@@ -881,6 +882,22 @@ func (s *Server) handleExecuteSQL(w http.ResponseWriter, r *http.Request) {
 			Success: false,
 			Error:   err.Error(),
 		})
+		return
+	}
+
+	// Format resolution: query parameter takes precedence over request body
+	format := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("format")))
+	if format == "" {
+		format = strings.ToLower(strings.TrimSpace(req.Format))
+	}
+
+	// If client requested pure array format, return only the rows array: [ { ... }, { ... } ]
+	if format == "array" || format == "raw" || format == "records" {
+		rows := result.Rows
+		if rows == nil {
+			rows = []map[string]any{}
+		}
+		writeJSON(w, http.StatusOK, rows)
 		return
 	}
 

@@ -857,6 +857,77 @@ END;`
 	}
 }
 
+func TestAPI_ExecuteSQL_FormatArray(t *testing.T) {
+	srv := setupTestServer()
+
+	// Seed data
+	reqSeed := httptest.NewRequest(http.MethodPost, "/api/seed", nil)
+	recSeed := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recSeed, reqSeed)
+	if recSeed.Code != http.StatusOK {
+		t.Fatalf("seed failed: %s", recSeed.Body.String())
+	}
+
+	query := "SELECT id, holder, balance FROM accounts ORDER BY id ASC"
+
+	// 1. Default envelope format
+	bodyDefault, _ := json.Marshal(map[string]string{"sql": query})
+	req1 := httptest.NewRequest(http.MethodPost, "/api/sql", bytes.NewReader(bodyDefault))
+	rec1 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec1, req1)
+
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("default format request failed: %s", rec1.Body.String())
+	}
+	var envResp QueryResult
+	if err := json.Unmarshal(rec1.Body.Bytes(), &envResp); err != nil {
+		t.Fatalf("failed to unmarshal envelope response: %v", err)
+	}
+	if !envResp.Success || len(envResp.Columns) != 3 || len(envResp.Rows) != 2 {
+		t.Fatalf("unexpected envelope response: %+v", envResp)
+	}
+
+	// 2. format=array via query parameter (?format=array)
+	req2 := httptest.NewRequest(http.MethodPost, "/api/sql?format=array", bytes.NewReader(bodyDefault))
+	rec2 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusOK {
+		t.Fatalf("format=array query param failed: %s", rec2.Body.String())
+	}
+	var arrResp1 []map[string]any
+	if err := json.Unmarshal(rec2.Body.Bytes(), &arrResp1); err != nil {
+		t.Fatalf("failed to unmarshal raw array response: %v, body: %s", err, rec2.Body.String())
+	}
+	if len(arrResp1) != 2 {
+		t.Fatalf("expected 2 items in raw array, got %d", len(arrResp1))
+	}
+	if arrResp1[0]["holder"] != "Alice" || arrResp1[1]["holder"] != "Bob" {
+		t.Errorf("unexpected rows content: %+v", arrResp1)
+	}
+
+	// 3. format="records" via request body
+	bodyRecords, _ := json.Marshal(map[string]string{
+		"sql":    query,
+		"format": "records",
+	})
+	req3 := httptest.NewRequest(http.MethodPost, "/api/sql", bytes.NewReader(bodyRecords))
+	rec3 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec3, req3)
+
+	if rec3.Code != http.StatusOK {
+		t.Fatalf("format=records body failed: %s", rec3.Body.String())
+	}
+	var arrResp2 []map[string]any
+	if err := json.Unmarshal(rec3.Body.Bytes(), &arrResp2); err != nil {
+		t.Fatalf("failed to unmarshal raw array response from body option: %v", err)
+	}
+	if len(arrResp2) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(arrResp2))
+	}
+}
+
+
 
 
 
