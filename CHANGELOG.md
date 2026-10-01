@@ -16,6 +16,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Extracted shared `buildVirtualCatalogResult` helper for unified projection, WHERE filtering, ORDER BY sorting, and LIMIT trimming.
   - Added end-to-end integration tests in `pkg/api/pgcatalog_test.go` and `pkg/wire/server_test.go`.
 
+- **PGWire Transaction Status ('I'/'T'/'E') & Standard SQLSTATE Error Protocol (`pkg/wire`, `pkg/api`)**:
+  - Implemented dynamic `ReadyForQuery` transaction status synchronization: emits `'I'` (Idle outside transaction), `'T'` (In active transaction block), and `'E'` (In aborted transaction block).
+  - Enforced PostgreSQL transaction abort semantics on PGWire sessions: commands within an aborted transaction are rejected with `25P02` until explicit `ROLLBACK` is issued.
+  - Enhanced `WriteErrorWithCode` with standard PostgreSQL SQLSTATE codes (`42P01`, `42601`, `42501`, `25P02`, `23505`, `57014`, `XX000`).
+  - Added runtime column data type OID inference (`inferPgOID`) for Simple Query and Extended Query `RowDescription` packets.
+  - Added full test coverage in `pkg/wire/server_test.go` (`TestWire_TransactionStatusAndSQLState`).
+
 ## [0.10.0] - 2026-10-01
 
 ### Changed

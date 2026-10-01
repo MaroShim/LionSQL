@@ -293,11 +293,25 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 		default:
 		}
 
+		// In PostgreSQL mode (sessions prefixed with "pg-"), if transaction has failed, reject all commands except ROLLBACK
+		if cs != nil && strings.HasPrefix(cs.ID, "pg-") {
+			cs.mu.Lock()
+			failed := cs.TxFailed
+			cs.mu.Unlock()
+			if failed && !isRollbackOrResetQuery(stmt) {
+				execErr = fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
+				return nil, execErr
+			}
+		}
+
 		res, err := s.execSingleStatement(cs, stmt)
 		if err != nil {
 			if cs != nil {
 				cs.mu.Lock()
 				cs.Vars["error"] = int64(50000)
+				if cs.Tx != nil && strings.HasPrefix(cs.ID, "pg-") {
+					cs.TxFailed = true
+				}
 				cs.mu.Unlock()
 			}
 			if errors.Is(err, context.DeadlineExceeded) || (queryCtx.Err() != nil && errors.Is(queryCtx.Err(), context.DeadlineExceeded)) {
@@ -379,6 +393,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 			return nil, fmt.Errorf("failed to start transaction: %w", err)
 		}
 		cs.Tx = tx
+		cs.TxFailed = false
 		return &QueryResult{
 			Success:    true,
 			Command:    "BEGIN",
@@ -395,6 +410,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}
 		err := cs.Tx.Commit()
 		cs.Tx = nil
+		cs.TxFailed = false
 		if err != nil {
 			return nil, fmt.Errorf("commit error: %w", err)
 		}
@@ -483,6 +499,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 
 		err := cs.Tx.Rollback()
 		cs.Tx = nil
+		cs.TxFailed = false
 		if err != nil {
 			return nil, fmt.Errorf("rollback error: %w", err)
 		}
@@ -1063,4 +1080,14 @@ func trimAnyPrefix(upper, original string, prefixes ...string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// isRollbackOrResetQuery reports whether query is a transaction rollback or session reset command.
+func isRollbackOrResetQuery(q string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(q))
+	return strings.HasPrefix(upper, "ROLLBACK") ||
+		strings.HasPrefix(upper, "DISCARD") ||
+		strings.HasPrefix(upper, "RESET") ||
+		strings.HasPrefix(upper, "DEALLOCATE") ||
+		strings.HasPrefix(upper, "UNLISTEN")
 }

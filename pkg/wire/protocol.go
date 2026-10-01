@@ -3,6 +3,7 @@ package wire
 import (
 	"encoding/binary"
 	"io"
+	"strings"
 )
 
 // PostgreSQL Wire Protocol v3 backend message types
@@ -114,11 +115,22 @@ func WriteParameterStatus(w io.Writer, key, val string) error {
 	return err
 }
 
-// WriteReadyForQuery sends ReadyForQuery status ('I' idle).
-func WriteReadyForQuery(w io.Writer) error {
-	buf := []byte{MsgReadyForQuery, 0, 0, 0, 5, 'I'}
+// WriteReadyForQueryStatus sends ReadyForQuery message with explicit transaction status:
+// 'I' = Idle (outside transaction)
+// 'T' = In active transaction block
+// 'E' = In failed transaction block
+func WriteReadyForQueryStatus(w io.Writer, status byte) error {
+	if status != 'I' && status != 'T' && status != 'E' {
+		status = 'I'
+	}
+	buf := []byte{MsgReadyForQuery, 0, 0, 0, 5, status}
 	_, err := w.Write(buf)
 	return err
+}
+
+// WriteReadyForQuery sends ReadyForQuery status ('I' idle).
+func WriteReadyForQuery(w io.Writer) error {
+	return WriteReadyForQueryStatus(w, 'I')
 }
 
 // ColumnMeta holds metadata for a row column in RowDescription.
@@ -200,10 +212,13 @@ func WriteCommandComplete(w io.Writer, tag string) error {
 	return err
 }
 
-// WriteError sends an ErrorResponse.
-func WriteError(w io.Writer, message string) error {
-	// S: Severity (ERROR), M: Message
-	payloadLen := 4 + 1 + 5 + 1 + 1 + len(message) + 1 + 1
+// WriteErrorWithCode sends an ErrorResponse with Severity ('S'), SQLSTATE Code ('C'), and Message ('M').
+func WriteErrorWithCode(w io.Writer, message string, code string) error {
+	if code == "" {
+		code = "XX000" // internal_error
+	}
+	// S: Severity (ERROR\0) + C: Code (code\0) + M: Message (message\0) + null terminator
+	payloadLen := 4 + 1 + 5 + 1 + 1 + len(code) + 1 + 1 + len(message) + 1 + 1
 	buf := make([]byte, 1+payloadLen)
 	buf[0] = MsgErrorResponse
 	binary.BigEndian.PutUint32(buf[1:5], uint32(payloadLen))
@@ -213,6 +228,13 @@ func WriteError(w io.Writer, message string) error {
 	idx++
 	copy(buf[idx:], "ERROR")
 	idx += 5
+	buf[idx] = 0
+	idx++
+
+	buf[idx] = 'C'
+	idx++
+	copy(buf[idx:], code)
+	idx += len(code)
 	buf[idx] = 0
 	idx++
 
@@ -227,6 +249,26 @@ func WriteError(w io.Writer, message string) error {
 
 	_, err := w.Write(buf)
 	return err
+}
+
+// WriteError sends an ErrorResponse with automatic standard PostgreSQL SQLSTATE code.
+func WriteError(w io.Writer, message string) error {
+	code := "XX000"
+	upper := strings.ToUpper(message)
+	if strings.Contains(upper, "NOT FOUND") || strings.Contains(upper, "DOES NOT EXIST") {
+		code = "42P01" // undefined_table / undefined_relation
+	} else if strings.Contains(upper, "SYNTAX") {
+		code = "42601" // syntax_error
+	} else if strings.Contains(upper, "PERMISSION DENIED") {
+		code = "42501" // insufficient_privilege
+	} else if strings.Contains(upper, "CURRENT TRANSACTION IS ABORTED") {
+		code = "25P02" // in_failed_sql_transaction
+	} else if strings.Contains(upper, "TIMEOUT") {
+		code = "57014" // query_canceled
+	} else if strings.Contains(upper, "DUPLICATE") || strings.Contains(upper, "UNIQUE") {
+		code = "23505" // unique_violation
+	}
+	return WriteErrorWithCode(w, message, code)
 }
 
 // WriteCopyInResponse sends CopyInResponse ('G') message.

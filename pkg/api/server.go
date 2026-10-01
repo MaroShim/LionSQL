@@ -31,6 +31,7 @@ type ClientSession struct {
 	SPID            int
 	Session         storage.Session
 	Tx              storage.Transaction
+	TxFailed        bool              // whether current transaction encountered an error ('E' in PGWire)
 	Vars            map[string]any
 	TableVars       map[string]string // @table_var -> physical table name
 	TempTables      []string          // session-scoped #temp_tables
@@ -376,6 +377,31 @@ func (s *Server) CloseSession(id string) {
 			}
 		}
 	}
+}
+
+// GetSessionTxStatus returns PostgreSQL transaction status byte:
+// 'I' = Idle (outside transaction)
+// 'T' = In active transaction block
+// 'E' = In failed transaction block
+func (s *Server) GetSessionTxStatus(id string) byte {
+	if id == "" || id == "default" {
+		return 'I'
+	}
+	s.sessMu.RLock()
+	cs, exists := s.sessions[id]
+	s.sessMu.RUnlock()
+	if !exists || cs == nil {
+		return 'I'
+	}
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if cs.Tx == nil {
+		return 'I'
+	}
+	if cs.TxFailed {
+		return 'E'
+	}
+	return 'T'
 }
 
 // ActiveQueryInfo represents snapshot metadata of an in-flight query.

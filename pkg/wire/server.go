@@ -370,7 +370,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			s.handleExecute(conn, payload, portals, sessID)
 
 		case 'S': // Sync
-			_ = WriteReadyForQuery(conn)
+			_ = WriteReadyForQueryStatus(conn, s.apiServer.GetSessionTxStatus(sessID))
 
 		case 'C': // Close
 			s.handleClose(conn, payload, statements, portals)
@@ -383,13 +383,15 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		default:
 			// Stay ready
-			_ = WriteReadyForQuery(conn)
+			_ = WriteReadyForQueryStatus(conn, s.apiServer.GetSessionTxStatus(sessID))
 		}
 	}
 }
 
 func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
-	defer WriteReadyForQuery(conn)
+	defer func() {
+		_ = WriteReadyForQueryStatus(conn, s.apiServer.GetSessionTxStatus(sessID))
+	}()
 	s.runAndWriteQuery(conn, query, true, sessID)
 }
 
@@ -587,7 +589,13 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 	if len(res.Columns) > 0 {
 		cols := make([]ColumnMeta, len(res.Columns))
 		for i, c := range res.Columns {
-			cols[i] = ColumnMeta{Name: c, DataType: 25}
+			var oid int32 = 25
+			if len(res.Rows) > 0 {
+				if val, ok := res.Rows[0][c]; ok && val != nil {
+					oid = inferPgOID(val)
+				}
+			}
+			cols[i] = ColumnMeta{Name: c, DataType: oid}
 		}
 		_ = WriteRowDescription(conn, cols)
 
@@ -653,7 +661,13 @@ func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool
 		if writeRowDesc {
 			cols := make([]ColumnMeta, len(res.Columns))
 			for i, c := range res.Columns {
-				cols[i] = ColumnMeta{Name: c, DataType: 25}
+				var oid int32 = 25
+				if len(res.Rows) > 0 {
+					if val, ok := res.Rows[0][c]; ok && val != nil {
+						oid = inferPgOID(val)
+					}
+				}
+				cols[i] = ColumnMeta{Name: c, DataType: oid}
 			}
 			_ = WriteRowDescription(conn, cols)
 		}
@@ -735,4 +749,26 @@ func readCString(r *bytes.Reader) (string, error) {
 		buf = append(buf, b)
 	}
 	return string(buf), nil
+}
+
+func inferPgOID(v any) int32 {
+	if v == nil {
+		return 25 // text
+	}
+	switch v.(type) {
+	case int, int32:
+		return 23 // int4
+	case int64:
+		return 20 // int8
+	case float32, float64:
+		return 701 // float8
+	case bool:
+		return 16 // bool
+	case time.Time:
+		return 1114 // timestamp
+	case []byte:
+		return 17 // bytea
+	default:
+		return 25 // text
+	}
 }

@@ -644,3 +644,122 @@ func TestWire_PgCatalogAndInformationSchema(t *testing.T) {
 		t.Fatalf("expected 3 rows from information_schema.columns, got %d", rowCount)
 	}
 }
+
+func TestWire_TransactionStatusAndSQLState(t *testing.T) {
+	srv, eng, _ := setupTestWireServer(t)
+	defer eng.Close()
+	defer srv.Close()
+
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	go srv.handleConnection(serverConn)
+
+	// Startup
+	startupBuf := make([]byte, 8)
+	binary.BigEndian.PutUint32(startupBuf[:4], 8)
+	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
+	_, _ = clientConn.Write(startupBuf)
+
+	// Helper to send query and receive ready status byte
+	sendQuery := func(sql string) (byte, []byte, error) {
+		q := sql + "\x00"
+		qBuf := make([]byte, 1+4+len(q))
+		qBuf[0] = 'Q'
+		binary.BigEndian.PutUint32(qBuf[1:5], uint32(4+len(q)))
+		copy(qBuf[5:], q)
+		if _, err := clientConn.Write(qBuf); err != nil {
+			return 0, nil, err
+		}
+
+		var lastStatus byte
+		var lastErrorPayload []byte
+		for {
+			header := make([]byte, 5)
+			if _, err := io.ReadFull(clientConn, header); err != nil {
+				return 0, nil, err
+			}
+			msgType := header[0]
+			msgLen := binary.BigEndian.Uint32(header[1:5])
+			payload := make([]byte, msgLen-4)
+			if _, err := io.ReadFull(clientConn, payload); err != nil {
+				return 0, nil, err
+			}
+			if msgType == MsgErrorResponse {
+				lastErrorPayload = payload
+			}
+			if msgType == MsgReadyForQuery {
+				lastStatus = payload[0]
+				break
+			}
+		}
+		return lastStatus, lastErrorPayload, nil
+	}
+
+	// Wait for initial ReadyForQuery
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+		if header[0] == MsgReadyForQuery {
+			if payload[0] != 'I' {
+				t.Fatalf("expected initial status 'I', got %c", payload[0])
+			}
+			break
+		}
+	}
+
+	// 1. Send BEGIN -> status should become 'T' (in transaction)
+	status, _, err := sendQuery("BEGIN")
+	if err != nil {
+		t.Fatalf("failed to send BEGIN: %v", err)
+	}
+	if status != 'T' {
+		t.Fatalf("expected status 'T' after BEGIN, got %c", status)
+	}
+
+	// 2. Send query with error inside transaction -> status should become 'E' (failed transaction)
+	status, errPayload, err := sendQuery("SELECT * FROM non_existing_table_xyz")
+	if err != nil {
+		t.Fatalf("failed to send erroneous query: %v", err)
+	}
+	if status != 'E' {
+		t.Fatalf("expected status 'E' after error in transaction, got %c", status)
+	}
+	// Verify ErrorResponse contains SQLSTATE '42P01' (undefined_table)
+	errStr := string(errPayload)
+	if !strings.Contains(errStr, "42P01") {
+		t.Fatalf("expected ErrorResponse to contain SQLSTATE 42P01, got %q", errStr)
+	}
+
+	// 3. Send command in aborted transaction -> should be rejected and stay 'E'
+	status, _, err = sendQuery("SELECT 1")
+	if err != nil {
+		t.Fatalf("failed to send query in aborted tx: %v", err)
+	}
+	if status != 'E' {
+		t.Fatalf("expected status to stay 'E', got %c", status)
+	}
+
+	// 4. Send ROLLBACK -> transaction terminates, status should return to 'I' (idle)
+	status, _, err = sendQuery("ROLLBACK")
+	if err != nil {
+		t.Fatalf("failed to send ROLLBACK: %v", err)
+	}
+	if status != 'I' {
+		t.Fatalf("expected status 'I' after ROLLBACK, got %c", status)
+	}
+
+	// 5. Test COMMIT flow: BEGIN -> query -> COMMIT -> status 'I'
+	status, _, _ = sendQuery("BEGIN")
+	if status != 'T' {
+		t.Fatalf("expected status 'T' after second BEGIN, got %c", status)
+	}
+	status, _, _ = sendQuery("COMMIT")
+	if status != 'I' {
+		t.Fatalf("expected status 'I' after COMMIT, got %c", status)
+	}
+}
