@@ -7,15 +7,15 @@ This document charts the development milestones, current implementation status, 
 ## 1. Milestones Overview
 
 ```
-[ Phase 1: Core Engine Foundation (v0.5.0) ] ───> [ Phase 2: Storage & Engine Hardening (v0.8.0) ] ───> [ Phase 3: Distributed & AI Horizons (v1.0+) ]
-- Dual Wire Protocols (PGWire + TDS)          - Zero-Copy Streaming Cursor (memengine)             - AI Vector Embeddings (HNSW & IVF-Flat)
-- Dual Storage (WiredTiger + In-Memory OCC)    - Pure-Go Persistent Storage (Pebble / bbolt)        - 3-Node Distributed Raft Consensus
-- Dual Parser (Native Pratt + ANTLR4 Fallback) - Background MVCC Vacuum / Version GC                - Real-Time CDC Streaming (Kafka / NATS)
-- VDBE Virtual Machine & PlanCache Sharing     - Interactive Query -> VDBE Full Unification         - Columnar Storage Format (OLAP Acceleration)
-- Volcano Relational Engine & Window Functions - Multi-Join DP / Genetic Query Optimizer           - Full-Text Search Engine (BM25)
-- CBO Histograms, Pushdown, Constant Folding   - Transaction Savepoints (SAVEPOINT / ROLLBACK)
-- Online Hot Backup & COPY Streaming
-(COMPLETED - 100%)                             (IN PROGRESS / NEXT)                                 (PLANNED)
+[ Phase 1: Core Engine Foundation (v0.5.0) ] ───> [ Phase 2: Storage, Replication & HA (v0.11.0) ] ─> [ Phase 3: Analytics & Horizons (v1.0+) ]
+- Dual Wire Protocols (PGWire + TDS)          - 1-Writer Multi-Reader WAL Replication (HA)          - Shared Memory Arrow IPC Snapshots (DuckDB)
+- Dual Storage (WiredTiger + In-Memory OCC)    - Transaction Savepoints (SAVEPOINT / ROLLBACK)       - AI Vector Embeddings (HNSW & IVF-Flat)
+- Dual Parser (Native Pratt + ANTLR4 Fallback) - VDBE PlanCache & OpRelQuery Physical Caching        - 3-Node Distributed Raft Consensus
+- VDBE Virtual Machine & PlanCache Sharing     - Zero-Copy Streaming Cursor (memengine)             - Real-Time CDC Streaming (Kafka / NATS)
+- Volcano Relational Engine & Window Functions - Pure-Go Persistent Storage (Pebble / bbolt)        - Full-Text Search Engine (BM25)
+- CBO Histograms, Pushdown, Constant Folding   - Background MVCC Vacuum / Version GC
+- Online Hot Backup & COPY Streaming           - Multi-Join DP / Genetic Query Optimizer
+(COMPLETED - 100%)                             (COMPLETED & ACTIVE)                                 (PLANNED)
 ```
 
 ---
@@ -106,10 +106,16 @@ This document charts the development milestones, current implementation status, 
   - CockroachDB의 고성능 LSM-Tree 엔진인 Pebble 또는 순수 Go B+Tree인 bbolt를 `storage.Engine` 인터페이스 뒤로 래핑하여 제3의 스토리지 엔진 옵션(`-engine=pebble`)으로 추가.
 - **기대 효과**: 외부 C 라이브러리 없이 완벽한 단일 바이너리(`CGO_ENABLED=0`) 크로스 플랫폼 배포 실현.
 
-#### 2.3. 열 지향(Columnar / Arrow) 인메모리 스토리지 포맷
-- **현황**: 모든 테이블 데이터가 행 지향(Row-Oriented) `map[string]Value` 또는 `Record` 구조로 저장됨.
-- **과제**: 대규모 집계 및 컬럼 프로젝션이 잦은 테이블을 위한 컬럼 패킹 스토리지 옵션 제공.
-- **기대 효과**: OLAP 분석 쿼리에서 불필요한 컬럼의 메모리 I/O 회피 및 캐시 지역성(Cache Locality) 극대화.
+#### 2.3. 공유 메모리(Shared Memory / mmap) 기반 Apache Arrow 컬럼 스냅샷 및 Zero-Copy OLAP 연동
+- **현황**: SQLion의 모든 테이블은 행 지향(Row-Oriented) 구조로 OLTP 초고속 처리에 최적화되어 있으나, 대용량 집계(`COUNT/SUM/AVG/GROUP BY`) 및 분석 쿼리 시 행 단위 역직렬화 오버헤드가 발생함.
+- **과제**:
+  - 특정 시점의 테이블 데이터를 Apache Arrow IPC RecordBatch 컬럼 포맷으로 직렬화하여 POSIX 공유 메모리(`/dev/shm` 또는 `mmap` 임시 파일)에 기록하는 스냅샷 파이프라인 구축 (`SNAPSHOT TABLE <t> TO ARROW_SHM <name>`).
+  - 외부 분석 프로세스(DuckDB, Python Polars, Pandas, DataFusion)가 네트워크 복사나 디스크 I/O 없이 Zero-Copy 커널 페이지 맵핑으로 즉시 고속 벡터화 분석을 수행할 수 있도록 파일 디스크립터(FD) 및 메모리 경로 전달 인터페이스 제공.
+  - 무결함 격리(Zero Blast Radius): 무거운 분석 쿼리가 메모리를 소진하거나 비정상 종료되어도 SQLion의 OLTP 핵심 엔진(쓰기 트랜잭션)은 100% 무중단 독립 운영.
+  - 스냅샷 수명 주기 관리(TTL 및 자동 `unlink`/`munmap`)를 통한 공유 메모리 누수 방지.
+- **기대 효과**:
+  - SQLion 엔진 내부를 복잡한 컬럼 스토어로 개조하지 않고도(KISS 원칙 준수), DuckDB 등 현존 최강의 오픈소스 벡터화 분석 생태계를 0ms 지연시간으로 완전 통합.
+  - 네트워크 대역폭 및 디스크 I/O 비용 0(Zero)의 분리형 HTAP(Decoupled Hybrid Transactional/Analytical Processing) 실현.
 
 ---
 
