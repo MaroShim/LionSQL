@@ -120,6 +120,37 @@ type PlanNode struct {
 	Children         []*PlanNode          `json:"children,omitempty"`
 }
 
+// Clone creates a deep copy of the PlanNode execution plan tree.
+func (n *PlanNode) Clone() *PlanNode {
+	if n == nil {
+		return nil
+	}
+	cp := *n
+	if len(n.Projections) > 0 {
+		cp.Projections = make([]string, len(n.Projections))
+		copy(cp.Projections, n.Projections)
+	}
+	if len(n.GroupKeys) > 0 {
+		cp.GroupKeys = make([]string, len(n.GroupKeys))
+		copy(cp.GroupKeys, n.GroupKeys)
+	}
+	if len(n.WindowDefs) > 0 {
+		cp.WindowDefs = make([]WindowDef, len(n.WindowDefs))
+		copy(cp.WindowDefs, n.WindowDefs)
+	}
+	if len(n.Partitions) > 0 {
+		cp.Partitions = make([]string, len(n.Partitions))
+		copy(cp.Partitions, n.Partitions)
+	}
+	if len(n.Children) > 0 {
+		cp.Children = make([]*PlanNode, len(n.Children))
+		for i, child := range n.Children {
+			cp.Children[i] = child.Clone()
+		}
+	}
+	return &cp
+}
+
 // QueryInfo represents the structured parts of a parsed SELECT query.
 type QueryInfo struct {
 	RawQuery      string

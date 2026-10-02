@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **VDBE Physical Execution PlanNode Caching (`pkg/planner`, `pkg/proc`, `pkg/proc/runtime`)**:
+  - Added `PlanNode.Clone()` deep copy method in `pkg/planner/planner.go` to clone Volcano physical execution plan trees including projections, group keys, window definitions, and child plan nodes.
+  - Implemented immutable `CachedPlan` caching on `RelQueryData` within `VMFrame.execRelQuery`, bypassing full CBO join planning and stats estimation on repeated invariant queries without where clauses.
+  - Added thread-safe `mu sync.RWMutex` with `GetCachedQueryInfo`, `SetCachedQueryInfo`, `GetCachedPlan`, and `SetCachedPlan` accessors on `proc.RelQueryData` to ensure race-free concurrent execution across parallel worker threads.
+
+- **Wire Protocol Zero-Allocation Buffer Pooling (`pkg/wire`, `pkg/wire/tds`)**:
+  - Integrated `packetBufferPool = sync.Pool` with 4KB preallocated buffers for PostgreSQL Wire Protocol (`WriteDataRow`), eliminating per-row heap allocations during high-concurrency result streaming.
+  - Added `tdsRowBufferPool = sync.Pool` for TDS token row serialization (`BuildRow`), reusing `bytes.Buffer` instances and passing buffer pointers directly to `binary.Write`.
+
+- **Storage Value Integer Fast-Path Optimization (`pkg/storage`)**:
+  - Implemented non-null integer fast-paths in `storage.Value.Equal` and `storage.Value.Compare` (`TypeInt`), bypassing type dispatch, null checks, and decimal conversions for high-frequency point lookups and SkipList index operations.
+  - Optimized `storage.Value.String()` to use `strconv.FormatInt` and `strconv.FormatBool`, replacing `fmt.Sprintf` reflection overhead on hot formatting paths.
+
 ## [0.11.0] - 2026-10-02
 
 ### Added

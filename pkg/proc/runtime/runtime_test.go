@@ -510,7 +510,7 @@ func TestVM_OpRelQueryVolcanoExecution(t *testing.T) {
 	foundCache := false
 	for _, inst := range prog.Instructions {
 		if inst.Op == proc.OpRelQuery {
-			if qData, ok := inst.Data.(*proc.RelQueryData); ok && qData.CachedQueryInfo != nil {
+			if qData, ok := inst.Data.(*proc.RelQueryData); ok && qData.GetCachedQueryInfo() != nil {
 				foundCache = true
 				break
 			}

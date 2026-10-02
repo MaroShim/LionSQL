@@ -7,6 +7,7 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -445,9 +446,21 @@ func BuildColMetaData(cols []ColumnInfo) []byte {
 	return buf.Bytes()
 }
 
+var tdsRowBufferPool = sync.Pool{
+	New: func() any {
+		return bytes.NewBuffer(make([]byte, 0, 1024))
+	},
+}
+
 // BuildRow builds a ROW token (0xD1) for a row of values matching cols.
 func BuildRow(cols []ColumnInfo, values []any) []byte {
-	var buf bytes.Buffer
+	buf := tdsRowBufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer func() {
+		if buf.Cap() <= 65536 {
+			tdsRowBufferPool.Put(buf)
+		}
+	}()
 	buf.WriteByte(TokenRow)
 
 	for i, col := range cols {
@@ -461,9 +474,9 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN:
 				buf.WriteByte(0) // Length 0 indicates NULL
 			case TypeNVarChar, TypeVarChar:
-				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF)) // 0xFFFF indicates NULL
+				_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF)) // 0xFFFF indicates NULL
 			default:
-				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
+				_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF))
 			}
 			continue
 		}
@@ -476,19 +489,19 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 				buf.WriteByte(byte(intVal))
 			} else if col.Size == 2 {
 				buf.WriteByte(2)
-				_ = binary.Write(&buf, binary.LittleEndian, int16(intVal))
+				_ = binary.Write(buf, binary.LittleEndian, int16(intVal))
 			} else if col.Size == 4 {
 				buf.WriteByte(4)
-				_ = binary.Write(&buf, binary.LittleEndian, int32(intVal))
+				_ = binary.Write(buf, binary.LittleEndian, int32(intVal))
 			} else {
 				buf.WriteByte(8)
-				_ = binary.Write(&buf, binary.LittleEndian, intVal)
+				_ = binary.Write(buf, binary.LittleEndian, intVal)
 			}
 
 		case TypeFltN:
 			fltVal := toFloat64(val)
 			buf.WriteByte(8)
-			_ = binary.Write(&buf, binary.LittleEndian, fltVal)
+			_ = binary.Write(buf, binary.LittleEndian, fltVal)
 
 		case TypeBitN:
 			bitVal := toBool(val)
@@ -504,29 +517,31 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 			t := toTime(val)
 			days, ticks := encodeDateTime(t)
 			buf.WriteByte(8)
-			_ = binary.Write(&buf, binary.LittleEndian, days)
-			_ = binary.Write(&buf, binary.LittleEndian, ticks)
+			_ = binary.Write(buf, binary.LittleEndian, days)
+			_ = binary.Write(buf, binary.LittleEndian, ticks)
 
 		case TypeNVarChar:
 			strVal := fmt.Sprintf("%v", val)
 			u16 := EncodeUTF16LE(strVal)
-			_ = binary.Write(&buf, binary.LittleEndian, uint16(len(u16)))
+			_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
 			buf.Write(u16)
 
 		case TypeVarChar:
 			strVal := fmt.Sprintf("%v", val)
-			_ = binary.Write(&buf, binary.LittleEndian, uint16(len(strVal)))
+			_ = binary.Write(buf, binary.LittleEndian, uint16(len(strVal)))
 			buf.WriteString(strVal)
 
 		default:
 			strVal := fmt.Sprintf("%v", val)
 			u16 := EncodeUTF16LE(strVal)
-			_ = binary.Write(&buf, binary.LittleEndian, uint16(len(u16)))
+			_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
 			buf.Write(u16)
 		}
 	}
 
-	return buf.Bytes()
+	res := make([]byte, buf.Len())
+	copy(res, buf.Bytes())
+	return res
 }
 
 func toInt64(v any) int64 {

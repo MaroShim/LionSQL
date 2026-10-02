@@ -1274,8 +1274,8 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, error) {
 	p := planner.NewPlanner()
 	var qInfo *planner.QueryInfo
-	if queryData != nil && queryData.CachedQueryInfo != nil {
-		if cached, ok := queryData.CachedQueryInfo.(*planner.QueryInfo); ok {
+	if queryData != nil {
+		if cached, ok := queryData.GetCachedQueryInfo().(*planner.QueryInfo); ok && cached != nil {
 			qInfo = cached.Clone()
 		}
 	}
@@ -1285,7 +1285,7 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 			return nil, nil, fmt.Errorf("planner parse error in OpRelQuery: %w", err)
 		}
 		if queryData != nil {
-			queryData.CachedQueryInfo = parsed.Clone()
+			queryData.SetCachedQueryInfo(parsed.Clone())
 		}
 		qInfo = parsed
 	}
@@ -1327,7 +1327,20 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		}
 	}
 
-	plan := p.BuildMultiJoinPlanWithStats(qInfo, leftSchema, nil, rightSchemas, nil)
+	var plan *planner.PlanNode
+	// If query has no variable where clause or variable was already bound, check CachedPlan
+	if queryData != nil && qInfo.WhereClause == "" {
+		if cachedPlan, ok := queryData.GetCachedPlan().(*planner.PlanNode); ok && cachedPlan != nil {
+			plan = cachedPlan.Clone()
+		}
+	}
+
+	if plan == nil {
+		plan = p.BuildMultiJoinPlanWithStats(qInfo, leftSchema, nil, rightSchemas, nil)
+		if queryData != nil && qInfo.WhereClause == "" {
+			queryData.SetCachedPlan(plan.Clone())
+		}
+	}
 
 	opts := execution.DefaultExecutorOptions()
 	exec, err := execution.BuildExecutorWithOptions(plan, f.tx, getTable, opts)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -523,7 +524,7 @@ func (v Value) String() string {
 	}
 	switch v.Type {
 	case TypeInt:
-		return fmt.Sprintf("%d", v.IVal)
+		return strconv.FormatInt(v.IVal, 10)
 	case TypeVarChar, TypeJSON:
 		return v.SVal
 	case TypeFloat:
@@ -537,7 +538,7 @@ func (v Value) String() string {
 		}
 		return "0"
 	case TypeBool:
-		return fmt.Sprintf("%t", v.BVal)
+		return strconv.FormatBool(v.BVal)
 	case TypeDateTime:
 		return v.TVal.Format(time.RFC3339)
 	case TypeDate:
@@ -560,6 +561,11 @@ func (v Value) String() string {
 }
 
 func (v Value) Equal(other Value) bool {
+	// Fast-path: non-null integer equality (highest frequency in point lookups)
+	if v.Type == TypeInt && other.Type == TypeInt && !v.IsNull && !other.IsNull {
+		return v.IVal == other.IVal
+	}
+
 	if v.IsNull && other.IsNull {
 		return true
 	}
@@ -601,6 +607,16 @@ func (v Value) Equal(other Value) bool {
 // Compare returns -1 if v < other, 0 if v == other, 1 if v > other.
 // NULL is considered smaller than any non-NULL value.
 func (v Value) Compare(other Value) int {
+	// Fast-path: non-null integer comparison (highest frequency in OLTP indexes)
+	if v.Type == TypeInt && other.Type == TypeInt && !v.IsNull && !other.IsNull {
+		if v.IVal < other.IVal {
+			return -1
+		} else if v.IVal > other.IVal {
+			return 1
+		}
+		return 0
+	}
+
 	if v.IsNull && other.IsNull {
 		return 0
 	}

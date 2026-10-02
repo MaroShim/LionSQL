@@ -3,6 +3,7 @@ package proc
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"sqlion/pkg/storage"
 )
@@ -259,12 +260,49 @@ type CursorData struct {
 
 // RelQueryData holds metadata for relational query execution via Volcano engine.
 type RelQueryData struct {
+	mu              sync.RWMutex
 	SQL             string
 	IntoVar         string
 	DestReg         int32
 	Projections     []string
 	CachedQueryInfo any // *planner.QueryInfo cached for zero-reparse execution
 	CachedPlan      any // *planner.PlanNode cached for zero-replan execution
+}
+
+func (d *RelQueryData) GetCachedQueryInfo() any {
+	if d == nil {
+		return nil
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.CachedQueryInfo
+}
+
+func (d *RelQueryData) SetCachedQueryInfo(v any) {
+	if d == nil {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.CachedQueryInfo = v
+}
+
+func (d *RelQueryData) GetCachedPlan() any {
+	if d == nil {
+		return nil
+	}
+	d.mu.RLock()
+	defer d.mu.RUnlock()
+	return d.CachedPlan
+}
+
+func (d *RelQueryData) SetCachedPlan(v any) {
+	if d == nil {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.CachedPlan = v
 }
 
 func (d *RelQueryData) String() string {

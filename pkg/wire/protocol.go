@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 	"strings"
+	"sync"
 )
 
 // PostgreSQL Wire Protocol v3 backend message types
@@ -197,14 +198,29 @@ func WriteRowDescription(w io.Writer, cols []ColumnMeta) error {
 	return err
 }
 
-// WriteDataRow sends a single DataRow with string values.
+var packetBufferPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 4096)
+		return &b
+	},
+}
+
+// WriteDataRow sends a single DataRow with string values, reusing pooled byte buffers.
 func WriteDataRow(w io.Writer, values []string) error {
 	payloadLen := 4 + 2
 	for _, v := range values {
 		payloadLen += 4 + len(v)
 	}
 
-	buf := make([]byte, 1+payloadLen)
+	totalLen := 1 + payloadLen
+	bp := packetBufferPool.Get().(*[]byte)
+	var buf []byte
+	if cap(*bp) >= totalLen {
+		buf = (*bp)[:totalLen]
+	} else {
+		buf = make([]byte, totalLen)
+	}
+
 	buf[0] = MsgDataRow
 	binary.BigEndian.PutUint32(buf[1:5], uint32(payloadLen))
 	binary.BigEndian.PutUint16(buf[5:7], uint16(len(values)))
@@ -218,6 +234,10 @@ func WriteDataRow(w io.Writer, values []string) error {
 	}
 
 	_, err := w.Write(buf)
+	if cap(buf) <= 65536 {
+		*bp = buf[:0]
+		packetBufferPool.Put(bp)
+	}
 	return err
 }
 
