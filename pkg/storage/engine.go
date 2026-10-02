@@ -418,7 +418,26 @@ func EncodeIndexKeyPart(v Value) string {
 	case TypeInt:
 		// Order-preserving 16-hex digit encoding for signed 64-bit int.
 		// XORing with 1<<63 maps MinInt64..MaxInt64 monotonically to 0..MaxUint64.
-		return fmt.Sprintf("%016x", uint64(v.IVal)^0x8000000000000000)
+		u := uint64(v.IVal) ^ 0x8000000000000000
+		var b [16]byte
+		const hexDigits = "0123456789abcdef"
+		b[0] = hexDigits[u>>60&0xf]
+		b[1] = hexDigits[u>>56&0xf]
+		b[2] = hexDigits[u>>52&0xf]
+		b[3] = hexDigits[u>>48&0xf]
+		b[4] = hexDigits[u>>44&0xf]
+		b[5] = hexDigits[u>>40&0xf]
+		b[6] = hexDigits[u>>36&0xf]
+		b[7] = hexDigits[u>>32&0xf]
+		b[8] = hexDigits[u>>28&0xf]
+		b[9] = hexDigits[u>>24&0xf]
+		b[10] = hexDigits[u>>20&0xf]
+		b[11] = hexDigits[u>>16&0xf]
+		b[12] = hexDigits[u>>12&0xf]
+		b[13] = hexDigits[u>>8&0xf]
+		b[14] = hexDigits[u>>4&0xf]
+		b[15] = hexDigits[u&0xf]
+		return string(b[:])
 	case TypeFloat:
 		bits := math.Float64bits(v.FVal)
 		if (bits & 0x8000000000000000) != 0 {
@@ -426,7 +445,25 @@ func EncodeIndexKeyPart(v Value) string {
 		} else {
 			bits ^= 0x8000000000000000
 		}
-		return fmt.Sprintf("%016x", bits)
+		var b [16]byte
+		const hexDigits = "0123456789abcdef"
+		b[0] = hexDigits[bits>>60&0xf]
+		b[1] = hexDigits[bits>>56&0xf]
+		b[2] = hexDigits[bits>>52&0xf]
+		b[3] = hexDigits[bits>>48&0xf]
+		b[4] = hexDigits[bits>>44&0xf]
+		b[5] = hexDigits[bits>>40&0xf]
+		b[6] = hexDigits[bits>>36&0xf]
+		b[7] = hexDigits[bits>>32&0xf]
+		b[8] = hexDigits[bits>>28&0xf]
+		b[9] = hexDigits[bits>>24&0xf]
+		b[10] = hexDigits[bits>>20&0xf]
+		b[11] = hexDigits[bits>>16&0xf]
+		b[12] = hexDigits[bits>>12&0xf]
+		b[13] = hexDigits[bits>>8&0xf]
+		b[14] = hexDigits[bits>>4&0xf]
+		b[15] = hexDigits[bits&0xf]
+		return string(b[:])
 	case TypeDateTime:
 		return v.TVal.UTC().Format("2006-01-02T15:04:05.000000000Z")
 	case TypeDate, TypeTime:

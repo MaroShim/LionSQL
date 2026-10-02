@@ -650,18 +650,18 @@ func extractIndexKey(rec storage.Record, cols []string) storage.Value {
 		return storage.NullValue(storage.TypeUnknown)
 	}
 	// Composite key formatted as string
-	var str string
+	var sb strings.Builder
 	for i, c := range cols {
 		if i > 0 {
-			str += "\x00"
+			sb.WriteByte(0)
 		}
 		if v, ok := rec[c]; ok {
-			str += storage.EncodeIndexKeyPart(v)
+			sb.WriteString(storage.EncodeIndexKeyPart(v))
 		} else {
-			str += "NULL"
+			sb.WriteString("NULL")
 		}
 	}
-	return storage.StringValue(str)
+	return storage.StringValue(sb.String())
 }
 
 func (e *Engine) DropTable(tableName string) error {

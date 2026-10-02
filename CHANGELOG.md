@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **High-Performance Compact MessagePack Codec & Index Key Encoding Acceleration (`pkg/storage`, `pkg/storage/memengine`)**:
+  - Implemented custom MessagePack `CustomEncoder` and `CustomDecoder` for `storage.Value` (`pkg/storage/value_codec.go`): encodes values into a compact 2-element array `[DataType, Payload]`, slashing serialized `Value` footprint from 89 bytes down to 3 bytes (96.6% reduction) and 3-column record footprint from 279 bytes to 35 bytes (87.5% reduction).
+  - Maintained 100% backward compatibility with legacy map-based `tables.mpk` snapshots and WAL logs via automatic `msgpcode` format detection.
+  - Accelerated composite index key encoding (`EncodeIndexKeyPart`) by replacing reflection-based `fmt.Sprintf("%016x")` with unrolled bit-shift hex formatting, boosting throughput by 5.1x (72ns -> 14ns per op).
+  - Optimized composite index extraction (`extractIndexKey`) in `memengine` using `strings.Builder` to eliminate intermediate string allocations.
+  - Added comprehensive round-trip tests and benchmarks across all data types in `pkg/storage/codec_test.go`.
+
 - **ClickHouse-Style Auto Rolling Range Partitioning & O(1) Fast Drop Partition (`pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/api`)**:
   - Implemented intuitive ClickHouse-style range table partitioning via `CREATE TABLE ... PARTITION BY { toYYYYMM(col) | MONTH(col) | toYYYYMMDD(col) | DAY(col) | toYYYY(col) | YEAR(col) | col }`.
   - Added Auto Rolling partition management: partitions are created and tracked dynamically upon row insertion without requiring cumbersome manual partition scheme pre-creation.
