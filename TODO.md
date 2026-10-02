@@ -25,6 +25,11 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - 대형 테이블 분석 시 컬럼별 NDV, Min/Max, 등빈도 히스토그램 수집을 `sync.WaitGroup` 멀티코어 병렬화.
 - [ ] **`CREATE INDEX` 백그라운드 병렬 정렬 및 벌크 로딩 (`pkg/catalog`, `pkg/storage`)**
   - 대용량 데이터에서 보조 인덱스 생성 시 데이터를 N개 청크로 분할하여 병렬 정렬 후 B+Tree/SkipList 벌크 삽입.
+- [ ] **Go 네이티브 스칼라 함수 등록 SPI (In-Process Go UDF) (`pkg/proc`)**
+  - SQLion을 라이브러리로 임베딩하는 개발자를 위해 `proc.RegisterScalarFunction(name, fn)` Go API 제공. 제로 오버헤드 나노초 단위 직결 호출.
+- [ ] **WebAssembly (Wasm) 런타임 기반 동적 UDF 샌드박스 (`pkg/extension`, `wazero`)**
+  - 독립 서버 환경에서 `CREATE FUNCTION <name> AS WASM '<path.wasm>'` DDL 지원.
+  - CGO 없는 순수 Go `wazero` 런타임 탑재, 메모리 샌드박싱(Golden Rule 26)을 통한 크래시/패닉 격리 및 크로스 플랫폼 호환.
 
 ---
 

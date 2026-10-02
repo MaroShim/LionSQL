@@ -144,7 +144,49 @@ Every wire listener follows a unified connection lifecycle:
 
 ---
 
-## 5. Extension Sandboxing & Safety Guidelines
+## 5. User-Defined Functions (UDF) Extension SPI: Dual-Track Architecture
+
+SQLion defines a complementary dual-track extension model for custom user functions, catering to both in-process application developers and standalone database deployments:
+
+```
+                            [ User-Defined Functions (UDF) ]
+                                          │
+                  ┌───────────────────────┴───────────────────────┐
+                  ▼                                               ▼
+     [ Track 1: Go Native In-Process SPI ]           [ Track 2: WebAssembly (Wasm) Sandbox ]
+     - Target: Go Embedded Library Users             - Target: Standalone Database Deployments
+     - Binding: proc.RegisterScalarFunction(...)    - Binding: CREATE FUNCTION ... AS WASM
+     - Overhead: Zero (Direct Function Call)         - Security: Pure-Go Memory Sandboxing (wazero)
+     - Cross-Platform: Windows, Mac, Linux           - Isolation: Golden Rule 26 Panic Recovery
+```
+
+### 5.1. Track 1: Go Native Function Registration SPI (`pkg/proc`)
+For developers embedding SQLion directly inside Go applications or microservices:
+```go
+// Register a high-performance Go function directly into the SQL engine
+proc.RegisterScalarFunction("CUSTOM_HASH", func(args []storage.Value) storage.Value {
+    if len(args) == 0 || args[0].IsNull {
+        return storage.NullValue(storage.TypeVarChar)
+    }
+    return storage.StringValue(myFastHash(args[0].SVal))
+})
+```
+- **Performance**: Zero serialization penalty; executes with native Go call speed (< 5ns per invocation).
+- **Type Safety**: Operates directly on typed `storage.Value` primitives.
+- **Portability**: Pure Go; compiles cleanly on Windows, macOS, and Linux without Cgo dependencies.
+
+### 5.2. Track 2: WebAssembly (Wasm) Dynamic Sandboxed UDFs (`pkg/extension`)
+For standalone database deployments where operators need to dynamically load custom functions without recompiling or restarting the SQLion server binary:
+```sql
+CREATE FUNCTION compute_risk_score AS WASM 'plugins/risk_model.wasm';
+```
+- **Zero-CGO Pure-Go Runtime**: Powered by [wazero](https://wazero.io/), maintaining SQLion's single static binary invariant.
+- **Multi-Language Authoring**: Users can author plugins in Go (TinyGo), Rust, C, or Zig, compiling to standard WebAssembly.
+- **Strict Fault Isolation**: Executes within an isolated virtual memory sandbox. Unhandled panics or memory violations are trapped cleanly (Golden Rule 26), ensuring zero crash impact on the core database kernel.
+
+---
+
+## 6. Extension Sandboxing & Safety Guidelines
 
 In accordance with SQLion Engineering Guidelines:
 - **Panic Recovery (Rule 26)**: All extension entrypoints and callbacks must be wrapped in `defer func() { if r := recover(); r != nil { ... } }()` panic interceptors to prevent third-party crashes from terminating the database engine.
