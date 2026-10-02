@@ -497,6 +497,28 @@ func TestVM_OpRelQueryVolcanoExecution(t *testing.T) {
 	if fmt.Sprintf("%v", second["holder"]) != "Bob" || fmt.Sprintf("%v", second["balance"]) != "500" {
 		t.Errorf("expected Bob 500 as second row, got %v", second)
 	}
+
+	// Verify plan caching on repeat execution
+	res2, err := executor.Run(prog, "Query", nil, session)
+	if err != nil {
+		t.Fatalf("second executor.Run failed: %v", err)
+	}
+	if len(res2.Rows) != 2 {
+		t.Fatalf("expected 2 rows on cached run, got %d", len(res2.Rows))
+	}
+
+	foundCache := false
+	for _, inst := range prog.Instructions {
+		if inst.Op == proc.OpRelQuery {
+			if qData, ok := inst.Data.(*proc.RelQueryData); ok && qData.CachedQueryInfo != nil {
+				foundCache = true
+				break
+			}
+		}
+	}
+	if !foundCache {
+		t.Errorf("expected OpRelQuery to have CachedQueryInfo populated after run")
+	}
 }
 
 func TestVM_OpRelQueryWithJoin(t *testing.T) {

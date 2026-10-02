@@ -142,6 +142,15 @@ type QueryInfo struct {
 	AST           *proc.GeneralSelectStmt
 }
 
+// Clone creates a shallow copy of QueryInfo so variable substitution can safely modify WhereClause.
+func (q *QueryInfo) Clone() *QueryInfo {
+	if q == nil {
+		return nil
+	}
+	cp := *q
+	return &cp
+}
+
 // Planner constructs and optimizes execution plans for SQL queries.
 type Planner struct {
 	PartitionGetter func(table string) []string

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"sqlion/pkg/execution"
+	"sqlion/pkg/replication"
 	"sqlion/pkg/storage"
 )
 
@@ -392,9 +393,15 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
 			opts.ReadOnly = true
 		}
+		if s.IsReadOnly() {
+			opts.ReadOnly = true
+		}
 		if strings.Contains(upper, "READ ONLY") {
 			opts.ReadOnly = true
 		} else if strings.Contains(upper, "READ WRITE") {
+			if s.IsReadOnly() {
+				return nil, fmt.Errorf("cannot start read-write transaction on read-only replica: %w", replication.ErrReadOnlyReplica)
+			}
 			opts.ReadOnly = false
 		}
 		tx, err := cs.Session.BeginTx(opts)
@@ -954,20 +961,35 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") ||
 		strings.HasPrefix(upper, "CREATE OR ALTER PROCEDURE") || strings.HasPrefix(upper, "CREATE OR ALTER PROC") ||
 		strings.HasPrefix(upper, "ALTER PROCEDURE") || strings.HasPrefix(upper, "ALTER PROC") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execCreateProcedure(trimmed, start)
 	}
 	if strings.HasPrefix(upper, "CREATE FUNCTION") || strings.HasPrefix(upper, "CREATE OR ALTER FUNCTION") || strings.HasPrefix(upper, "ALTER FUNCTION") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execCreateFunction(trimmed, start)
 	}
 	if strings.HasPrefix(upper, "CREATE TRIGGER") || strings.HasPrefix(upper, "CREATE OR ALTER TRIGGER") || strings.HasPrefix(upper, "ALTER TRIGGER") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execCreateTrigger(trimmed, start)
 	}
 
 	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / DROP VIEW
 	if strings.HasPrefix(upper, "CREATE VIEW") || strings.HasPrefix(upper, "CREATE OR REPLACE VIEW") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execCreateView(trimmed, start)
 	}
 	if strings.HasPrefix(upper, "DROP VIEW") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execDropView(trimmed, start)
 	}
 
@@ -1007,37 +1029,58 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 
 	// 3. DDL: CREATE TABLE
 	if strings.HasPrefix(upper, "CREATE TABLE") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execCreateTable(trimmed, start, cs)
 	}
 
 	// 3.1 DDL: CREATE INDEX
 	if strings.HasPrefix(upper, "CREATE INDEX") || strings.HasPrefix(upper, "CREATE UNIQUE INDEX") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execCreateIndex(trimmed, start)
 	}
 
 	// 4. DDL: DROP TABLE
 	if strings.HasPrefix(upper, "DROP TABLE") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execDropTable(trimmed, start)
 	}
 
 	// 4.1 DDL: DROP INDEX
 	if strings.HasPrefix(upper, "DROP INDEX") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execDropIndex(trimmed, start)
 	}
 
 	// 4.2 DDL/DML: TRUNCATE TABLE
 	if strings.HasPrefix(upper, "TRUNCATE TABLE") || strings.HasPrefix(upper, "TRUNCATE ") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execTruncateTable(trimmed, start)
 	}
 
 	// 4.3 DDL: ALTER TABLE
 	if strings.HasPrefix(upper, "ALTER TABLE") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execAlterTable(trimmed, start, cs)
 	}
 
 	// 5. DML: INSERT INTO / UPSERT
 	if strings.HasPrefix(upper, "INSERT INTO") || strings.HasPrefix(upper, "INSERT ") ||
 		strings.HasPrefix(upper, "UPSERT INTO") || strings.HasPrefix(upper, "UPSERT ") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execInsert(trimmed, start, cs)
 	}
 
@@ -1051,16 +1094,25 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 
 	// 7. DML: UPDATE
 	if strings.HasPrefix(upper, "UPDATE ") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execUpdate(trimmed, start, cs)
 	}
 
 	// 8. DML: DELETE
 	if strings.HasPrefix(upper, "DELETE FROM") || strings.HasPrefix(upper, "DELETE ") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execDelete(trimmed, start, cs)
 	}
 
 	// 9. DML: MERGE INTO
 	if strings.HasPrefix(upper, "MERGE INTO") || strings.HasPrefix(upper, "MERGE ") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
 		return s.execMerge(trimmed, start, cs)
 	}
 
@@ -1119,4 +1171,12 @@ func isRollbackOrResetQuery(q string) bool {
 		strings.HasPrefix(upper, "RESET") ||
 		strings.HasPrefix(upper, "DEALLOCATE") ||
 		strings.HasPrefix(upper, "UNLISTEN")
+}
+
+// checkWriteAllowed ensures that write operations (DDL/DML) cannot be executed on read-only secondary replicas.
+func (s *Server) checkWriteAllowed() error {
+	if s.IsReadOnly() {
+		return fmt.Errorf("cannot execute write operation on read-only replica: %w", replication.ErrReadOnlyReplica)
+	}
+	return nil
 }

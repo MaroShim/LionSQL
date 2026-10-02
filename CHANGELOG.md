@@ -7,6 +7,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- **1-Writer Multi-Reader WAL Replication & High-Availability Server Integration (`cmd/server`, `pkg/replication`, `pkg/api`, `pkg/config`)**:
+  - Integrated the availability group replication manager into the SQLion standalone server, supporting 1-writer primary nodes and multi-reader secondary replicas.
+  - Added CLI flags `--replica-of <primary_url>` and `--node-id <id>` with corresponding configuration hierarchy mappings in `sqlion.json`.
+  - Exposed HTTP endpoints `/api/replication/stream`, `/api/replication/status`, `/api/replication/ack`, `/api/replication/promote`, and `/api/replication/demote`.
+  - Enforced strict read-only invariants across all wire protocols and REST endpoints for secondary replicas (`IsReadOnly()` write rejection with `ErrReadOnlyReplica`), guarding DDL (`CREATE/ALTER/DROP/TRUNCATE`), DML (`INSERT/UPDATE/DELETE/MERGE`), and interactive `BEGIN TRANSACTION READ WRITE`.
+  - Implemented seamless failover promotion (`Promote()`), instantly transitioning a replica into an active primary node capable of accepting writes.
+  - Added end-to-end integration test `TestReplication_ServerIntegration` in `pkg/api/replication_integration_test.go`.
+
+- **VDBE `OpRelQuery` Plan Caching & 0-Allocation Row Streaming (`pkg/proc`, `pkg/proc/runtime`, `pkg/execution`)**:
+  - Implemented AST and QueryInfo plan caching directly in `proc.RelQueryData`, allowing repeated relational queries in stored procedures and loops to execute with zero SQL re-parsing overhead.
+  - Added `QueryInfo.Clone()` to safely reuse cached relational parse structures while permitting parameter and session variable binding.
+  - Added `Tuple.ToRow(schema)` to convert Volcano execution tuples into ordered `storage.Row` structs without allocating intermediate `map[string]any` per row.
+  - Added unit test coverage in `pkg/proc/runtime/runtime_test.go` and `pkg/execution/execution_test.go`.
+
 - **Parameterized Plan Cache & SQL Prepared Statements (`pkg/api`, `pkg/proc/runtime`)**:
   - Implemented SQL-level prepared statements: `PREPARE <name> [ (types) ] AS <stmt>`, `PREPARE <name> FROM '<stmt>'` (with string literals or session variables), `EXECUTE <name> [ (args) | USING @vars ]`, and `DEALLOCATE [PREPARE] <name>` / `DEALLOCATE ALL`.
   - Added quote- and comment-aware placeholder normalizer rewriting `$1, $2, ...` and `?` positional parameters into internal VDBE bytecode variables (`@p1, @p2, ...`) without corrupting string literals or comments.

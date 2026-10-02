@@ -594,3 +594,40 @@ func TestExecutor_MultiTableChainedJoins(t *testing.T) {
 	}
 }
 
+func TestTuple_ToRow(t *testing.T) {
+	schema := &storage.TableSchema{
+		Name: "test_tab",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt},
+			{Name: "name", Type: storage.TypeVarChar},
+			{Name: "balance", Type: storage.TypeFloat},
+		},
+	}
+
+	tuple := execution.NewTupleFromMap(map[string]any{
+		"id":      int64(42),
+		"name":    "Charlie",
+		"balance": 123.45,
+	}, []string{"id", "name", "balance"})
+
+	row := tuple.ToRow(schema)
+	if len(row.Values) != 3 {
+		t.Fatalf("expected 3 row values, got %d", len(row.Values))
+	}
+	if row.Values[0].IVal != 42 || row.Values[0].Type != storage.TypeInt {
+		t.Errorf("unexpected id value: %+v", row.Values[0])
+	}
+	if row.Values[1].SVal != "Charlie" || row.Values[1].Type != storage.TypeVarChar {
+		t.Errorf("unexpected name value: %+v", row.Values[1])
+	}
+	if row.Values[2].FVal != 123.45 || row.Values[2].Type != storage.TypeFloat {
+		t.Errorf("unexpected balance value: %+v", row.Values[2])
+	}
+
+	// Schema-less conversion
+	rawRow := tuple.ToRow(nil)
+	if len(rawRow.Values) != 3 {
+		t.Fatalf("expected 3 raw row values, got %d", len(rawRow.Values))
+	}
+}
+

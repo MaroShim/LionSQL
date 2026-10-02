@@ -148,6 +148,52 @@ func (t Tuple) ToMap() map[string]any {
 	return res
 }
 
+// ToRow converts the slice-backed Tuple to a storage.Row according to column order or schema.
+func (t Tuple) ToRow(schema *storage.TableSchema) storage.Row {
+	if schema != nil {
+		vals := make([]storage.Value, len(schema.Columns))
+		for i, col := range schema.Columns {
+			if v, ok := t.GetOK(col.Name); ok {
+				vals[i] = anyToStorageValue(v, col.Type)
+			} else {
+				vals[i] = storage.NullValue(col.Type)
+			}
+		}
+		return storage.Row{Values: vals}
+	}
+	vals := make([]storage.Value, len(t.Values))
+	for i, v := range t.Values {
+		vals[i] = anyToStorageValue(v, storage.TypeUnknown)
+	}
+	return storage.Row{Values: vals}
+}
+
+func anyToStorageValue(v any, defaultType storage.DataType) storage.Value {
+	if v == nil {
+		return storage.NullValue(defaultType)
+	}
+	switch val := v.(type) {
+	case storage.Value:
+		return val
+	case int64:
+		return storage.IntValue(val)
+	case int:
+		return storage.IntValue(int64(val))
+	case float64:
+		return storage.FloatValue(val)
+	case string:
+		return storage.StringValue(val)
+	case bool:
+		return storage.BoolValue(val)
+	case time.Time:
+		return storage.DateTimeValue(val)
+	case storage.Decimal:
+		return storage.DecimalValueFromDecimal(val)
+	default:
+		return storage.StringValue(fmt.Sprintf("%v", v))
+	}
+}
+
 // ToEvalMap returns a map of all column names, aliases, table prefixes, and expressions for AST evaluation.
 func (t Tuple) ToEvalMap() map[string]any {
 	if t.Index == nil {

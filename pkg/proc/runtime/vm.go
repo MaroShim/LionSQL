@@ -1273,9 +1273,21 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 
 func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, error) {
 	p := planner.NewPlanner()
-	qInfo, err := p.ParseSelect(sql)
-	if err != nil {
-		return nil, nil, fmt.Errorf("planner parse error in OpRelQuery: %w", err)
+	var qInfo *planner.QueryInfo
+	if queryData != nil && queryData.CachedQueryInfo != nil {
+		if cached, ok := queryData.CachedQueryInfo.(*planner.QueryInfo); ok {
+			qInfo = cached.Clone()
+		}
+	}
+	if qInfo == nil {
+		parsed, err := p.ParseSelect(sql)
+		if err != nil {
+			return nil, nil, fmt.Errorf("planner parse error in OpRelQuery: %w", err)
+		}
+		if queryData != nil {
+			queryData.CachedQueryInfo = parsed.Clone()
+		}
+		qInfo = parsed
 	}
 
 	if qInfo.WhereClause != "" {

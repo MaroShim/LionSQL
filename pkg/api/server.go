@@ -22,6 +22,7 @@ import (
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
 	"sqlion/pkg/proc/runtime"
+	"sqlion/pkg/replication"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/ui"
 )
@@ -91,6 +92,7 @@ type Server struct {
 	metrics            *MetricsCollector
 	slowQueries        *SlowQueryLogger
 	generalLog         *GeneralLogger
+	replication        *replication.Manager
 	startTime          time.Time
 }
 
@@ -245,6 +247,27 @@ func (s *Server) Crons() *CronScheduler {
 // Mailer returns the embedded SMTP mailer engine.
 func (s *Server) Mailer() *Mailer {
 	return s.mailer
+}
+
+// Replication returns the availability group replication manager, or nil if not configured.
+func (s *Server) Replication() *replication.Manager {
+	return s.replication
+}
+
+// SetReplicationManager configures the availability group replication manager and mounts replication endpoints.
+func (s *Server) SetReplicationManager(rm *replication.Manager) {
+	s.replication = rm
+	if rm != nil {
+		rm.RegisterRoutes(s.mux)
+	}
+}
+
+// IsReadOnly reports whether this server node is currently operating as a read-only secondary replica.
+func (s *Server) IsReadOnly() bool {
+	if s.replication != nil {
+		return s.replication.IsReadOnly()
+	}
+	return false
 }
 
 // SetEnableAuth toggles authentication enforcement for protected API routes.

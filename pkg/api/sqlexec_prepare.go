@@ -185,6 +185,13 @@ func (s *Server) execPreparedStatement(prep *PreparedStatement, rawArgs []string
 		return nil, fmt.Errorf("invalid prepared statement")
 	}
 
+	cmdType := strings.ToUpper(prep.Program.Type)
+	if cmdType == "INSERT" || cmdType == "UPDATE" || cmdType == "DELETE" || cmdType == "MERGE" || cmdType == "UPSERT" {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
+	}
+
 	// 1. Process USING syntax if present
 	args := make([]string, 0, len(rawArgs))
 	for _, a := range rawArgs {

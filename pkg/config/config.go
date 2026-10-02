@@ -95,13 +95,23 @@ type LoggingConfig struct {
 	GeneralQuery GeneralQueryLogConfig `json:"general_query"`
 }
 
+// ReplicationConfig defines 1-Writer Multi-Reader HA availability group parameters.
+type ReplicationConfig struct {
+	Enabled    bool   `json:"enabled"`
+	Role       string `json:"role"`                  // "PRIMARY" or "REPLICA"
+	PrimaryURL string `json:"primary_url,omitempty"` // e.g. "http://127.0.0.1:8090"
+	NodeID     string `json:"node_id,omitempty"`
+	HistoryCap int    `json:"history_cap,omitempty"`
+}
+
 // Config represents the unified, hierarchical configuration for SQLion.
 type Config struct {
-	Server    ServerConfig    `json:"server"`
-	Network   NetworkConfig   `json:"network"`
-	Auth      AuthConfig      `json:"auth"`
-	Resources ResourcesConfig `json:"resources"`
-	Logging   LoggingConfig   `json:"logging"`
+	Server      ServerConfig      `json:"server"`
+	Network     NetworkConfig     `json:"network"`
+	Auth        AuthConfig        `json:"auth"`
+	Resources   ResourcesConfig   `json:"resources"`
+	Logging     LoggingConfig     `json:"logging"`
+	Replication ReplicationConfig `json:"replication"`
 }
 
 // DefaultConfig returns the production-ready zero-config baseline.
@@ -111,6 +121,11 @@ func DefaultConfig() *Config {
 			DataDir:  "data",
 			Engine:   "wiredtiger",
 			AutoSeed: true,
+		},
+		Replication: ReplicationConfig{
+			Enabled:    true,
+			Role:       "PRIMARY",
+			HistoryCap: 10000,
 		},
 		Network: NetworkConfig{
 			HTTPAddr: "127.0.0.1:8090",

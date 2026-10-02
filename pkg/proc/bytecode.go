@@ -259,10 +259,12 @@ type CursorData struct {
 
 // RelQueryData holds metadata for relational query execution via Volcano engine.
 type RelQueryData struct {
-	SQL         string
-	IntoVar     string
-	DestReg     int32
-	Projections []string
+	SQL             string
+	IntoVar         string
+	DestReg         int32
+	Projections     []string
+	CachedQueryInfo any // *planner.QueryInfo cached for zero-reparse execution
+	CachedPlan      any // *planner.PlanNode cached for zero-replan execution
 }
 
 func (d *RelQueryData) String() string {

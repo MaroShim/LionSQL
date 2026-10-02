@@ -24,6 +24,7 @@ import (
 	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
+	"sqlion/pkg/replication"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
 	"sqlion/pkg/storage/wiredtiger"
@@ -59,6 +60,8 @@ func main() {
 	slowLog := flag.String("slow-log", "", "Path to slow query log file (e.g. data/slow_query.log, pass 'true' for default)")
 	slowThreshold := flag.Float64("slow-threshold-ms", 50.0, "Threshold in milliseconds to record slow queries (default: 50ms)")
 	generalLog := flag.String("general-log", "", "Enable general query logging (e.g. data/general.log, pass 'true' for default)")
+	replicaOf := flag.String("replica-of", "", "Primary server HTTP URL to replicate from (e.g. http://127.0.0.1:8090)")
+	nodeID := flag.String("node-id", "", "Unique replication node identifier")
 	configPath := flag.String("config", "", "Path to JSON configuration file (default: auto-detect ./sqlion.json or <dir>/sqlion.json)")
 	initConfig := flag.String("init-config", "", "Generate a default sqlion.json configuration file at specified path (or ./sqlion.json) and exit")
 	doctorFlag := flag.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
@@ -166,6 +169,16 @@ func main() {
 	}
 	if visited["general-log"] {
 		cfg.Logging.GeneralQuery.File = resolveLogFilePath(*generalLog, "general.log", cfg.Server.DataDir)
+	}
+	if visited["replica-of"] {
+		cfg.Replication.PrimaryURL = *replicaOf
+		if *replicaOf != "" {
+			cfg.Replication.Role = "REPLICA"
+			cfg.Replication.Enabled = true
+		}
+	}
+	if visited["node-id"] {
+		cfg.Replication.NodeID = *nodeID
 	}
 
 	if strings.TrimSpace(cfg.Server.DataDir) == "" {
@@ -429,6 +442,29 @@ func main() {
 		}
 	}
 
+	var repMgr *replication.Manager
+	if cfg.Replication.Enabled {
+		role := replication.Role(strings.ToUpper(cfg.Replication.Role))
+		if role == "" {
+			role = replication.RolePrimary
+		}
+		var err error
+		repMgr, err = replication.NewManager(replication.Config{
+			NodeID:     cfg.Replication.NodeID,
+			Role:       role,
+			PrimaryURL: cfg.Replication.PrimaryURL,
+			HistoryCap: cfg.Replication.HistoryCap,
+			Engine:     eng,
+		})
+		if err != nil {
+			log.Fatalf("[SQLion] Failed to initialize replication manager: %v", err)
+		}
+		server.SetReplicationManager(repMgr)
+		if err := repMgr.Start(context.Background()); err != nil {
+			log.Fatalf("[SQLion] Failed to start replication: %v", err)
+		}
+	}
+
 	var httpServer *http.Server
 	if cfg.Network.IsHTTPEnabled() {
 		httpServer = &http.Server{
@@ -553,6 +589,9 @@ func main() {
 			}
 			fmt.Printf(" [General Log]    %s (Enabled: true)\n", genPath)
 		}
+		if repMgr != nil {
+			fmt.Printf(" [Replication]    Role: %s, Node: %s (HistoryCap: %d)\n", repMgr.Role(), cfg.Replication.NodeID, cfg.Replication.HistoryCap)
+		}
 		fmt.Println("------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")
 
@@ -573,6 +612,9 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
+	if repMgr != nil {
+		_ = repMgr.Close()
+	}
 	if tdsServer != nil {
 		_ = tdsServer.Close()
 	}
