@@ -1,0 +1,749 @@
+package api
+
+import (
+	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
+	"time"
+
+	"sqlion/pkg/planner"
+	"sqlion/pkg/proc"
+	"sqlion/pkg/storage"
+)
+
+func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error) {
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	if strings.HasPrefix(upper, "EXPLAIN BYTECODE ") {
+		innerSQL := strings.TrimSpace(query[len("EXPLAIN BYTECODE "):])
+		prog, err := proc.Compile(innerSQL)
+		if err != nil {
+			return nil, fmt.Errorf("EXPLAIN BYTECODE compilation error: %w", err)
+		}
+		dis := prog.Disassemble()
+		lines := strings.Split(strings.TrimRight(dis, "\n"), "\n")
+		var rows []map[string]any
+		for _, line := range lines {
+			rows = append(rows, map[string]any{
+				"Bytecode": line,
+			})
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXPLAIN BYTECODE",
+			Columns:      []string{"Bytecode"},
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+			Messages:     []string{fmt.Sprintf("VDBE Program: %s (%s)", prog.Name, prog.Type)},
+		}, nil
+	}
+
+	opts, innerExplainSQL, err := planner.ParseExplainOptions(query)
+	if err != nil {
+		opts = planner.ExplainOptions{Costs: true, Format: planner.FormatText}
+		innerExplainSQL = query
+		if strings.HasPrefix(upper, "EXPLAIN ANALYZE ") {
+			innerExplainSQL = strings.TrimSpace(query[len("EXPLAIN ANALYZE "):])
+			opts.Analyze = true
+		} else if strings.HasPrefix(upper, "EXPLAIN ") {
+			innerExplainSQL = strings.TrimSpace(query[len("EXPLAIN "):])
+		}
+	}
+
+	innerUpper := strings.ToUpper(strings.TrimSpace(innerExplainSQL))
+	if strings.HasPrefix(innerUpper, "INSERT ") || strings.HasPrefix(innerUpper, "UPDATE ") || strings.HasPrefix(innerUpper, "DELETE ") {
+		return s.execDMLExplain(innerExplainSQL, opts, start)
+	}
+
+	if setQuery, ok := planner.FindTopLevelSetOps(innerExplainSQL); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
+		return s.execSetOpExplain(setQuery, opts.Analyze, start)
+	}
+
+	p := s.newPlanner()
+	qInfo, err := p.ParseSelect(innerExplainSQL)
+	if err != nil {
+		return nil, fmt.Errorf("EXPLAIN parse error: %w", err)
+	}
+	qInfo.IsAnalyze = opts.Analyze
+	_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
+		_, err := s.engine.GetTable(cleanIdentifier(tbl))
+		return err == nil
+	})
+
+	rawTable := qInfo.TableName
+	tableName := cleanIdentifier(rawTable)
+
+	// Check if Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
+	tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
+	if m := tvfCallRe.FindStringSubmatch(rawTable); len(m) == 3 {
+		tvfName := cleanIdentifier(m[1])
+		argsRaw := m[2]
+		fnMeta, err := s.catalog.GetFunction(tvfName)
+		if err == nil && fnMeta != nil && fnMeta.IsTableValued {
+			var argVals []string
+			if strings.TrimSpace(argsRaw) != "" {
+				for _, arg := range strings.Split(argsRaw, ",") {
+					argVals = append(argVals, strings.TrimSpace(arg))
+				}
+			}
+			innerSQL := fnMeta.Body
+			for i, p := range fnMeta.Params {
+				if i < len(argVals) {
+					innerSQL = strings.ReplaceAll(innerSQL, p.Name, argVals[i])
+					innerSQL = strings.ReplaceAll(innerSQL, strings.TrimPrefix(p.Name, "@"), argVals[i])
+				}
+			}
+			prefix := "EXPLAIN "
+			if qInfo.IsAnalyze {
+				prefix = "EXPLAIN ANALYZE "
+			}
+			return s.execExplain(prefix+innerSQL, start)
+		}
+	}
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+	}
+
+	var leftStats *planner.TableStats
+	if s.catalog != nil {
+		leftStats, _ = s.catalog.GetTableStats(tableName)
+	}
+
+	var totalRows int64 = 0
+	if leftStats != nil && leftStats.RowCount > 0 {
+		totalRows = leftStats.RowCount
+	} else {
+		session, err := s.engine.NewSession()
+		if err == nil {
+			defer session.Close()
+			tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+			if err == nil {
+				defer tx.Rollback()
+				if cur, err := tx.Scan(tableName); err == nil {
+					defer cur.Close()
+					for cur.Next() {
+						totalRows++
+					}
+				}
+			}
+		}
+		leftStats = planner.NewTableStats(tableName, totalRows)
+	}
+
+	var planTree *planner.PlanNode
+	var joins []*planner.JoinInfo
+	if len(qInfo.Joins) > 0 {
+		joins = qInfo.Joins
+	} else if qInfo.Join != nil {
+		joins = []*planner.JoinInfo{qInfo.Join}
+	}
+
+	if len(joins) > 0 {
+		rightSchemas := make(map[string]*storage.TableSchema)
+		rightStats := make(map[string]*planner.TableStats)
+		for _, j := range joins {
+			rTable := cleanIdentifier(j.Table)
+			rSchema, _ := s.engine.GetTable(rTable)
+			if rSchema != nil {
+				rightSchemas[j.Table] = rSchema
+				rightSchemas[rTable] = rSchema
+				if j.Alias != "" {
+					rightSchemas[j.Alias] = rSchema
+					rightSchemas[cleanIdentifier(j.Alias)] = rSchema
+				}
+			}
+			var rStat *planner.TableStats
+			if s.catalog != nil {
+				rStat, _ = s.catalog.GetTableStats(rTable)
+			}
+			if rStat == nil {
+				var rRows int64 = 0
+				if session, err := s.engine.NewSession(); err == nil {
+					func() {
+						defer session.Close()
+						if rTx, err := session.BeginTx(storage.TxOptions{ReadOnly: true}); err == nil {
+							defer rTx.Rollback()
+							if rCur, err := rTx.Scan(rTable); err == nil {
+								defer rCur.Close()
+								for rCur.Next() {
+									rRows++
+								}
+							}
+						}
+					}()
+				}
+				rStat = planner.NewTableStats(rTable, rRows)
+			}
+			if rStat != nil {
+				rightStats[j.Table] = rStat
+				rightStats[rTable] = rStat
+				if j.Alias != "" {
+					rightStats[j.Alias] = rStat
+					rightStats[cleanIdentifier(j.Alias)] = rStat
+				}
+			}
+		}
+		planTree = p.BuildMultiJoinPlanWithStats(qInfo, schema, leftStats, rightSchemas, rightStats)
+	} else {
+		planTree = p.BuildMultiJoinPlanWithStats(qInfo, schema, leftStats, nil, nil)
+	}
+
+	if qInfo.IsAnalyze {
+		// Execute query to collect actual metrics
+		execStart := time.Now()
+		selectSQL := innerExplainSQL
+		res, execErr := s.execSelect(selectSQL, execStart, nil)
+		if execErr == nil && res != nil {
+			planTree.ActualRows = int64(len(res.Rows))
+			planTree.ActualDurationUS = res.DurationUS
+
+			// Recursively populate actual rows / durations down the tree
+			var populateActuals func(node *planner.PlanNode)
+			populateActuals = func(node *planner.PlanNode) {
+				if node == nil {
+					return
+				}
+				if node.ActualRows == 0 && len(res.Rows) > 0 {
+					node.ActualRows = int64(len(res.Rows))
+					node.ActualDurationUS = res.DurationUS
+				}
+				for _, child := range node.Children {
+					populateActuals(child)
+				}
+			}
+			populateActuals(planTree)
+		}
+	}
+
+	if opts.Format == planner.FormatJSON {
+		jsonStr, err := planner.FormatPostgresPlanJSON(planTree, qInfo.IsAnalyze)
+		if err != nil {
+			return nil, err
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXPLAIN",
+			Columns:      []string{"QUERY PLAN"},
+			Rows:         []map[string]any{{"QUERY PLAN": jsonStr}},
+			RowsAffected: 1,
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	lines := planner.FormatPlanText(planTree, qInfo.IsAnalyze)
+	rows := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		rows = append(rows, map[string]any{
+			"QUERY PLAN": line,
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "EXPLAIN",
+		Columns:      []string{"QUERY PLAN"},
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDMLExplain(dmlSQL string, opts planner.ExplainOptions, start time.Time) (*QueryResult, error) {
+	upper := strings.ToUpper(strings.TrimSpace(dmlSQL))
+	p := s.newPlanner()
+
+	var dmlType, tableName, whereCond string
+	if strings.HasPrefix(upper, "INSERT ") {
+		dmlType = "INSERT"
+		re := regexp.MustCompile(`(?i)^INSERT\s+INTO\s+([^\s(]+)`)
+		if m := re.FindStringSubmatch(dmlSQL); len(m) > 1 {
+			tableName = cleanIdentifier(m[1])
+		}
+	} else if strings.HasPrefix(upper, "UPDATE ") {
+		dmlType = "UPDATE"
+		re := regexp.MustCompile(`(?i)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$`)
+		if m := re.FindStringSubmatch(dmlSQL); len(m) > 1 {
+			tableName = cleanIdentifier(m[1])
+			if len(m) > 3 {
+				whereCond = strings.TrimSpace(m[3])
+			}
+		}
+	} else if strings.HasPrefix(upper, "DELETE ") {
+		dmlType = "DELETE"
+		re := regexp.MustCompile(`(?i)^DELETE\s+(?:FROM\s+)?([^\s]+)(?:\s+WHERE\s+(.*))?$`)
+		if m := re.FindStringSubmatch(dmlSQL); len(m) > 1 {
+			tableName = cleanIdentifier(m[1])
+			if len(m) > 2 {
+				whereCond = strings.TrimSpace(m[2])
+			}
+		}
+	}
+
+	schema, _ := s.engine.GetTable(tableName)
+	var stats *planner.TableStats
+	if s.catalog != nil && tableName != "" {
+		stats, _ = s.catalog.GetTableStats(tableName)
+	}
+
+	planTree := p.BuildDMLPlanNode(dmlType, tableName, whereCond, schema, stats, 1)
+
+	if opts.Format == planner.FormatJSON {
+		jsonStr, err := planner.FormatPostgresPlanJSON(planTree, opts.Analyze)
+		if err != nil {
+			return nil, err
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXPLAIN",
+			Columns:      []string{"QUERY PLAN"},
+			Rows:         []map[string]any{{"QUERY PLAN": jsonStr}},
+			RowsAffected: 1,
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	lines := planner.FormatPlanText(planTree, opts.Analyze)
+	rows := make([]map[string]any, 0, len(lines))
+	for _, line := range lines {
+		rows = append(rows, map[string]any{"QUERY PLAN": line})
+	}
+	return &QueryResult{
+		Success:      true,
+		Command:      "EXPLAIN",
+		Columns:      []string{"QUERY PLAN"},
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func findSubquery(s string, prefixPattern *regexp.Regexp) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
+	return findSubqueryFrom(s, prefixPattern, 0)
+}
+
+func findSubqueryFrom(s string, prefixPattern *regexp.Regexp, startOffset int) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
+	if startOffset >= len(s) {
+		return 0, 0, "", "", false
+	}
+	loc := prefixPattern.FindStringSubmatchIndex(s[startOffset:])
+	if loc == nil {
+		return 0, 0, "", "", false
+	}
+	actualStart := loc[0] + startOffset
+	openParenIdx := -1
+	for i := actualStart; i < len(s); i++ {
+		if s[i] == '(' {
+			openParenIdx = i
+			break
+		}
+	}
+	if openParenIdx == -1 {
+		return 0, 0, "", "", false
+	}
+
+	depth := 0
+	closeParenIdx := -1
+	for i := openParenIdx; i < len(s); i++ {
+		if s[i] == '(' {
+			depth++
+		} else if s[i] == ')' {
+			depth--
+			if depth == 0 {
+				closeParenIdx = i
+				break
+			}
+		}
+	}
+	if closeParenIdx == -1 {
+		return 0, 0, "", "", false
+	}
+
+	inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
+	return actualStart, closeParenIdx + 1, s[actualStart:openParenIdx], inner, true
+}
+
+func (s *Server) execAnalyze(query string, start time.Time) (*QueryResult, error) {
+	parts := strings.Fields(strings.TrimSpace(query))
+
+	var targetTable string
+	if len(parts) >= 2 {
+		if strings.EqualFold(parts[1], "TABLE") {
+			if len(parts) >= 3 {
+				targetTable = cleanIdentifier(strings.Trim(parts[2], ";"))
+			}
+		} else {
+			targetTable = cleanIdentifier(strings.Trim(parts[1], ";"))
+		}
+	}
+
+	var tablesToAnalyze []string
+	if targetTable != "" {
+		actualTable := targetTable
+		if _, err := s.engine.GetTable(targetTable); err != nil {
+			if all, listErr := s.engine.ListTables(); listErr == nil {
+				for _, t := range all {
+					if strings.EqualFold(t.Name, targetTable) {
+						actualTable = t.Name
+						break
+					}
+				}
+			}
+		}
+		tablesToAnalyze = append(tablesToAnalyze, actualTable)
+	} else {
+		all, err := s.engine.ListTables()
+		if err != nil {
+			return nil, fmt.Errorf("ANALYZE failed to list tables: %w", err)
+		}
+		for _, t := range all {
+			tablesToAnalyze = append(tablesToAnalyze, t.Name)
+		}
+	}
+
+	if len(tablesToAnalyze) == 0 {
+		return &QueryResult{
+			Success:    true,
+			Command:    "ANALYZE",
+			Messages:   []string{"No tables found to analyze."},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	session, err := s.engine.NewSession()
+	if err != nil {
+		return nil, fmt.Errorf("ANALYZE session error: %w", err)
+	}
+	defer session.Close()
+
+	tx, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		return nil, fmt.Errorf("ANALYZE transaction error: %w", err)
+	}
+	defer tx.Rollback()
+
+	var messages []string
+	for _, tbl := range tablesToAnalyze {
+		schema, err := s.engine.GetTable(tbl)
+		if err != nil {
+			return nil, fmt.Errorf("table %q not found: %w", tbl, err)
+		}
+
+		cursor, err := tx.Scan(tbl)
+		if err != nil {
+			return nil, fmt.Errorf("ANALYZE scan error on %q: %w", tbl, err)
+		}
+
+		colVals := make(map[string][]storage.Value)
+		nullCounts := make(map[string]int64)
+		for _, c := range schema.Columns {
+			colVals[c.Name] = make([]storage.Value, 0)
+		}
+
+		var rowCount int64 = 0
+		for cursor.Next() {
+			rec, err := cursor.Record()
+			if err != nil {
+				break
+			}
+			rowCount++
+			for _, c := range schema.Columns {
+				v, ok := rec[c.Name]
+				if !ok || v.IsNull {
+					nullCounts[c.Name]++
+				} else {
+					colVals[c.Name] = append(colVals[c.Name], v)
+				}
+			}
+		}
+		_ = cursor.Close()
+
+		ts := planner.NewTableStats(tbl, rowCount)
+		for _, c := range schema.Columns {
+			ts.Columns[c.Name] = planner.BuildColumnStats(c.Name, c.Type, colVals[c.Name], nullCounts[c.Name], rowCount)
+		}
+
+		if s.catalog != nil {
+			s.catalog.SetTableStats(tbl, ts)
+		}
+		messages = append(messages, fmt.Sprintf("Table %q analyzed successfully (%d rows, %d columns).", tbl, rowCount, len(schema.Columns)))
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "ANALYZE",
+		Messages:     messages,
+		RowsAffected: int64(len(tablesToAnalyze)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) resolveSubqueries(whereClause string) (string, error) {
+	if whereClause == "" {
+		return "", nil
+	}
+
+	result := whereClause
+
+	// 1. [NOT] EXISTS (SELECT ...)
+	existsRe := regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*\(?\s*SELECT\b`)
+	offset := 0
+	for {
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, existsRe, offset)
+		if !found {
+			break
+		}
+		innerRes, err := s.ExecuteSQL(innerSQL)
+		if err != nil {
+			// If inner query failed (e.g. contains outer reference), skip so planner can decorrelate
+			offset = mEnd
+			continue
+		}
+		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		hasRows := len(innerRes.Rows) > 0
+		replacement := "1=0"
+		if isNot {
+			if !hasRows {
+				replacement = "1=1"
+			}
+		} else {
+			if hasRows {
+				replacement = "1=1"
+			}
+		}
+		result = result[:mStart] + replacement + result[mEnd:]
+		offset = mStart + len(replacement)
+	}
+
+	// 2. [NOT] IN (SELECT ...) -> [NOT] IN (val1, val2, ...)
+	inSelectRe := regexp.MustCompile(`(?is)\b([a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*\(?\s*SELECT\b`)
+	offset = 0
+	for {
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, inSelectRe, offset)
+		if !found {
+			break
+		}
+		tokens := strings.Fields(prefix)
+		colName := cleanIdentifier(tokens[0])
+		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		innerRes, err := s.ExecuteSQL(innerSQL)
+		if err != nil {
+			offset = mEnd
+			continue
+		}
+		hasRows := len(innerRes.Rows) > 0
+		replacement := "1=0"
+		if isNot {
+			if !hasRows {
+				replacement = "1=1"
+			} else {
+				var vals []string
+				for _, r := range innerRes.Rows {
+					if len(innerRes.Columns) > 0 {
+						colKey := innerRes.Columns[0]
+						if v, ok := r[colKey]; ok {
+							vals = append(vals, fmt.Sprintf("'%v'", v))
+							continue
+						}
+					}
+					for _, v := range r {
+						vals = append(vals, fmt.Sprintf("'%v'", v))
+						break
+					}
+				}
+				if len(vals) > 0 {
+					replacement = fmt.Sprintf("%s NOT IN (%s)", colName, strings.Join(vals, ", "))
+				}
+			}
+		} else {
+			if hasRows {
+				var vals []string
+				for _, r := range innerRes.Rows {
+					if len(innerRes.Columns) > 0 {
+						colKey := innerRes.Columns[0]
+						if v, ok := r[colKey]; ok {
+							vals = append(vals, formatSubqueryVal(v))
+							continue
+						}
+					}
+					for _, v := range r {
+						vals = append(vals, formatSubqueryVal(v))
+						break
+					}
+				}
+				if len(vals) > 0 {
+					replacement = fmt.Sprintf("%s IN (%s)", colName, strings.Join(vals, ", "))
+				}
+			}
+		}
+		result = result[:mStart] + replacement + result[mEnd:]
+		offset = mStart + len(replacement)
+	}
+
+	// 3. Scalar Subquery in comparisons: e.g. > (SELECT ...), = (SELECT ...)
+	scalarRe := regexp.MustCompile(`(?is)\(\s*SELECT\b`)
+	offset = 0
+	for {
+		mStart, mEnd, _, innerSQL, found := findSubqueryFrom(result, scalarRe, offset)
+		if !found {
+			break
+		}
+		innerRes, err := s.ExecuteSQL(innerSQL)
+		if err != nil {
+			offset = mEnd
+			continue
+		}
+		replacement := "NULL"
+		if len(innerRes.Rows) > 0 {
+			r := innerRes.Rows[0]
+			var foundVal any
+			if len(innerRes.Columns) > 0 {
+				colKey := innerRes.Columns[0]
+				if v, ok := r[colKey]; ok && v != nil {
+					foundVal = v
+				}
+			}
+			if foundVal == nil {
+				for _, v := range r {
+					if v != nil {
+						foundVal = v
+						break
+					}
+				}
+			}
+			if foundVal != nil {
+				replacement = formatSubqueryVal(foundVal)
+			}
+		}
+		result = result[:mStart] + replacement + result[mEnd:]
+		offset = mStart + len(replacement)
+	}
+
+	return result, nil
+}
+
+func formatSubqueryVal(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", val)
+	case float32, float64:
+		return fmt.Sprintf("%v", val)
+	case bool:
+		if val {
+			return "1"
+		}
+		return "0"
+	case storage.Decimal:
+		return val.String()
+	case string:
+		if _, err := strconv.ParseFloat(val, 64); err == nil {
+			return val
+		}
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(val, "'", "''"))
+	default:
+		str := fmt.Sprintf("%v", val)
+		if _, err := strconv.ParseFloat(str, 64); err == nil {
+			return str
+		}
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(str, "'", "''"))
+	}
+}
+
+func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
+	p := s.newPlanner()
+	qInfo, err := p.ParseSelect(query)
+	if err != nil {
+		return nil, fmt.Errorf("parse CTE error: %w", err)
+	}
+
+	if len(qInfo.CTEs) == 0 {
+		return s.execSelect(query, start, nil)
+	}
+
+	var tempTableNames []string
+	defer func() {
+		for _, t := range tempTableNames {
+			_, _ = s.ExecuteSQL(fmt.Sprintf("DROP TABLE %s;", t))
+		}
+	}()
+
+	mainSQL := query
+	upper := strings.ToUpper(query)
+	if strings.HasPrefix(upper, "WITH ") {
+		depth := 0
+		mainSelectIdx := -1
+		for i := 0; i < len(query); i++ {
+			if query[i] == '(' {
+				depth++
+			} else if query[i] == ')' {
+				depth--
+			} else if depth == 0 && strings.HasPrefix(strings.ToUpper(query[i:]), "SELECT") {
+				mainSelectIdx = i
+				break
+			}
+		}
+		if mainSelectIdx != -1 {
+			mainSQL = strings.TrimSpace(query[mainSelectIdx:])
+		}
+	}
+
+	for _, cte := range qInfo.CTEs {
+		// 1. Run CTE inner SQL
+		res, err := s.ExecuteSQL(cte.InnerSQL)
+		if err != nil {
+			return nil, fmt.Errorf("CTE %q execution error: %w", cte.Name, err)
+		}
+
+		// 2. Materialize into #temp table
+		tempName := fmt.Sprintf("#__cte_%s", cte.Name)
+		tempTableNames = append(tempTableNames, tempName)
+
+		if len(res.Columns) == 0 {
+			continue
+		}
+
+		var colDefs []string
+		for i, col := range res.Columns {
+			pk := ""
+			if i == 0 {
+				pk = " PRIMARY KEY"
+			}
+			colDefs = append(colDefs, fmt.Sprintf("%s VARCHAR(255)%s", col, pk))
+		}
+		createSQL := fmt.Sprintf("CREATE TABLE %s (%s);", tempName, strings.Join(colDefs, ", "))
+		if _, err := s.ExecuteSQL(createSQL); err != nil {
+			return nil, fmt.Errorf("materialize CTE %q table error: %w", cte.Name, err)
+		}
+
+		if len(res.Rows) > 0 {
+			var insertCols = res.Columns
+			for _, row := range res.Rows {
+				var valStrs []string
+				for _, col := range insertCols {
+					v := row[col]
+					if v == nil {
+						valStrs = append(valStrs, "NULL")
+					} else {
+						valStrs = append(valStrs, fmt.Sprintf("'%v'", v))
+					}
+				}
+				insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, strings.Join(insertCols, ", "), strings.Join(valStrs, ", "))
+				if _, err := s.ExecuteSQL(insSQL); err != nil {
+					return nil, fmt.Errorf("materialize CTE insert error: %w", err)
+				}
+			}
+		}
+
+		// Rewrite occurrences of cte.Name in mainSQL with tempName
+		cteWordRe := regexp.MustCompile(`\b` + regexp.QuoteMeta(cte.Name) + `\b`)
+		mainSQL = cteWordRe.ReplaceAllString(mainSQL, tempName)
+	}
+
+	return s.ExecuteSQL(mainSQL)
+}
+

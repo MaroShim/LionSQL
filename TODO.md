@@ -39,3 +39,15 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - 행 단위 `Next()` 호출 오버헤드를 줄이기 위해 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍.
 - [ ] **WiredTiger 세션 및 커서 풀링 최적화 (`pkg/storage/wiredtiger`)**
   - 고빈도 트랜잭션 경로에서 Cgo 커서 오픈/클로즈 오버헤드를 줄이기 위한 스레드 로컬 커서 재사용 고도화.
+
+---
+
+## 4. Next Week Architecture & Engine Refactoring Backlog (차주 핵심 리팩토링)
+
+- [ ] **VDBE 바이트코드 디스패처 모듈화 (`pkg/proc/runtime/vm.go`)**
+  - `VMFrame.Execute` 내 824라인 거대 `switch op.Code` 블록을 기능군별 private 헬퍼 메서드로 분리 (`execFlowOp`, `execStorageOp`, `execRelOp`, `execYieldOp`).
+  - 인라이닝과 무결성을 유지하면서 함수 순환 복잡도(Cyclomatic Complexity) 완화 및 프로파일링 스택 추적성 개선.
+- [ ] **아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
+  - `pkg/api`에 집중되어 있는 15,000+ 라인의 SQL 실행 오케스트레이션 로직을 `pkg/engine` 또는 `pkg/coordinator` 코어 레이어로 승격.
+  - `pkg/api`(HTTP REST/Studio), `pkg/wire`(PGWire), `pkg/wire/tds`(TDS) 세 어댑터가 동등하게 코어 엔진 인터페이스를 호출하도록 단방향 클린 아키텍처 확립.
+

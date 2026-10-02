@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented non-null integer fast-paths in `storage.Value.Equal` and `storage.Value.Compare` (`TypeInt`), bypassing type dispatch, null checks, and decimal conversions for high-frequency point lookups and SkipList index operations.
   - Optimized `storage.Value.String()` to use `strconv.FormatInt` and `strconv.FormatBool`, replacing `fmt.Sprintf` reflection overhead on hot formatting paths.
 
+### Changed
+- **Monolithic File Decomposition & Dead Code Elimination (`pkg/api`, `pkg/storage/memengine`)**:
+  - Pruned 540 lines of dead legacy join execution code (`execJoin`, `execNestedLoopJoin`, `execHashJoin`) from `pkg/api/sqlexec_dml.go`.
+  - Decomposed `pkg/api/sqlexec_dml.go` into domain files: `sqlexec_select.go` (SELECT & aggregation), `sqlexec_pivot.go` (PIVOT, UNPIVOT, FOR JSON), `sqlexec_explain.go` (EXPLAIN, ANALYZE, CTE), and `sqlexec_eval.go` (expression & condition evaluation), keeping pure INSERT/UPDATE/DELETE in `sqlexec_dml.go`.
+  - Decomposed `pkg/storage/memengine/memengine.go` into `table_data.go` (striped locks & shards), `persistence.go` (WAL/AOF compaction & recovery), `ddl.go` (table/index DDL), `tx.go` (transactions & workspace mutations), and `memengine.go` (lifecycle & options).
+  - Decomposed `pkg/api/server.go` into dedicated handler modules: `handlers_auth.go`, `handlers_admin.go`, `handlers_tables.go`, `handlers_records.go`, `handlers_import_export.go`, and `handlers_procs.go`.
+
 ### Documentation
 - **Architecture & Operational Documentation Audit (`README.md`, `doc/*`)**:
   - Added ADR-017 (1-Writer Multi-Reader High-Availability Replication Topology) and ADR-018 (Dual-Track UDF Architecture: Native Go In-Process SPI & WebAssembly Sandbox) in `doc/ADR.md`.
