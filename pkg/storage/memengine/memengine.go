@@ -1085,6 +1085,7 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 		baseVers:          make(map[string]map[string]int64),
 		deleted:           make(map[string]map[string]bool),
 		changes:           make(map[string]rowChange),
+		tableCache:        make(map[string]*TableData),
 		savepoints:        make(map[string]savepointState),
 	}, nil
 }
@@ -1130,6 +1131,7 @@ type Transaction struct {
 	baseVers          map[string]map[string]int64       // tableName -> key -> baseVersion
 	deleted           map[string]map[string]bool        // tableName -> key -> bool
 	changes           map[string]rowChange              // "table:key" -> rowChange
+	tableCache        map[string]*TableData             // Cached table metadata pointers per transaction
 	savepoints        map[string]savepointState
 	spNames           []string
 	closed            bool
@@ -1163,6 +1165,21 @@ func (tx *Transaction) CommitTimestamp() int64 {
 	return tx.commitTimestamp
 }
 
+// getTableLocked retrieves a *TableData, caching it per-transaction to avoid engine.mu RLock contention.
+func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
+	if td, cached := tx.tableCache[tableName]; cached {
+		return td, nil
+	}
+	tx.engine.mu.RLock()
+	td, exists := tx.engine.tables[tableName]
+	tx.engine.mu.RUnlock()
+	if !exists {
+		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	tx.tableCache[tableName] = td
+	return td, nil
+}
+
 func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -1188,28 +1205,22 @@ func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 		return storage.ErrReadOnlyTransaction
 	}
 
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
 	}
 	schema := td.Schema
-	tx.engine.mu.RUnlock()
 
 	rec := schema.RowToRecord(row)
 	return tx.insertLocked(tableName, rec)
 }
 
 func (tx *Transaction) insertLocked(tableName string, record storage.Record) error {
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
 	}
 	schema := td.Schema
-	tx.engine.mu.RUnlock()
 
 	pkCol, err := schema.PrimaryKeyColumn()
 	if err != nil {
@@ -1229,36 +1240,26 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	} else if _, inLocal := tx.getLocal(tableName, pkKey); inLocal {
 		return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, tableName)
 	} else {
-		tx.engine.mu.RLock()
-		if td, ok := tx.engine.tables[tableName]; ok {
-			if td.hasKey(pkKey) {
-				tx.engine.mu.RUnlock()
-				return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, tableName)
-			}
+		if td.hasKey(pkKey) {
+			return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, tableName)
 		}
-		tx.engine.mu.RUnlock()
 	}
 
 	// Validate unique index constraints
-	tx.engine.mu.RLock()
-	if td, ok := tx.engine.tables[tableName]; ok {
-		td.mu.RLock()
-		for _, idxData := range td.Indexes {
-			if idxData.Schema.Unique {
-				keyVal := extractIndexKey(record, idxData.Schema.Columns)
-				existing := idxData.ScanRange(&keyVal, &keyVal)
-				for _, epk := range existing {
-					if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
-						td.mu.RUnlock()
-						tx.engine.mu.RUnlock()
-						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
-					}
+	td.mu.RLock()
+	for _, idxData := range td.Indexes {
+		if idxData.Schema.Unique {
+			keyVal := extractIndexKey(record, idxData.Schema.Columns)
+			existing := idxData.ScanRange(&keyVal, &keyVal)
+			for _, epk := range existing {
+				if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+					td.mu.RUnlock()
+					return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
 				}
 			}
 		}
-		td.mu.RUnlock()
 	}
-	tx.engine.mu.RUnlock()
+	td.mu.RUnlock()
 
 	if localRows, ok := tx.local[tableName]; ok {
 		for epk, locRow := range localRows {
@@ -1387,14 +1388,11 @@ func (tx *Transaction) UpdateRow(tableName string, pk storage.Value, row storage
 		return storage.ErrReadOnlyTransaction
 	}
 
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
 	}
 	schema := td.Schema
-	tx.engine.mu.RUnlock()
 
 	rec := schema.RowToRecord(row)
 	return tx.updateLocked(tableName, pk, rec, 0)
@@ -1411,14 +1409,11 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		return err
 	}
 
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
 	}
 	schema := td.Schema
-	tx.engine.mu.RUnlock()
 
 	updated := make(storage.Record, len(base))
 	for col, val := range base {
@@ -1650,11 +1645,8 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 		return err
 	}
 
-	tx.engine.mu.RLock()
-	_, parentExists := tx.engine.tables[tableName]
-	if !parentExists {
-		tx.engine.mu.RUnlock()
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	if _, err := tx.getTableLocked(tableName); err != nil {
+		return err
 	}
 
 	// Find all child tables that have a foreign key referencing tableName
@@ -1663,6 +1655,7 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 		fk         storage.ForeignKeySchema
 	}
 	var childRefs []childRef
+	tx.engine.mu.RLock()
 	for childName, td := range tx.engine.tables {
 		for _, fk := range td.Schema.ForeignKeys {
 			if strings.EqualFold(fk.ParentTable, tableName) {
@@ -1975,14 +1968,11 @@ func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool
 		return row, ver, nil
 	}
 
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return storage.Row{}, 0, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return storage.Row{}, 0, err
 	}
 	row, ver, exists := td.getRowAndVer(pkKey)
-	tx.engine.mu.RUnlock()
 
 	if !exists {
 		return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
@@ -1999,14 +1989,11 @@ func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string, clone b
 	if err != nil {
 		return nil, 0, err
 	}
-	tx.engine.mu.RLock()
-	td, ok := tx.engine.tables[tableName]
-	var schema storage.TableSchema
-	if ok {
-		schema = td.Schema
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return nil, 0, err
 	}
-	tx.engine.mu.RUnlock()
-	rec := schema.RowToRecord(row)
+	rec := td.Schema.RowToRecord(row)
 	return rec, ver, nil
 }
 
