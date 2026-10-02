@@ -152,3 +152,11 @@ All modifications, refactoring, and feature additions must strictly pass the fol
    - Conventional Commits format (`feat(...)`, `fix(...)`, `refactor(...)`, etc.).
    - Strictly avoid decorative emojis in commit messages, comments, and code.
 
+---
+
+## 9. Developer & AI Handover Context Notes (`notes/`)
+When working across different development environments or initiating a new AI agent session, refer to the `notes/` directory for historical design discussions, negative knowledge (spec-out rationales), engineering landmines, and upcoming refactoring plans:
+- [`notes/ENGINEERING_CONTEXT.md`](notes/ENGINEERING_CONTEXT.md): Architectural invariants, why alternatives were spec'd out, and collaboration principles.
+- [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): Circular import immunity, wiredtiger build tags, sandbox network handling, Decimal JSON serialization, and VDBE transaction coupling.
+- [`notes/REFACTORING_AND_ROADMAP.md`](notes/REFACTORING_AND_ROADMAP.md): Monolithic file decomposition history, next week priorities (VDBE dispatcher modularization, SQL coordinator package separation), and CBO optimization backlog.
+

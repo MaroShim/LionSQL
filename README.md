@@ -464,6 +464,7 @@ Start here for a complete subject-based directory of all architectural blueprint
 - **[Security Policy & Threat Model](doc/SECURITY.md)**: RBAC access control, SQL injection immunity, and vulnerability disclosure.
 - **[Engineering Roadmap & Milestones](doc/ROADMAP.md)**: Versioned milestones across 5 phases (HA replication, DuckDB/Arrow zero-copy snapshots, vector search).
 - **[Actionable Engineering Backlog (TODO.md)](TODO.md)**: Immediate, daily task backlog and prioritized operational execution tracker.
+- **[Developer & AI Handover Context Notes](notes/README.md)**: Shared brain, engineering invariants, why alternatives were spec'd out, fragile landmines, and upcoming refactoring context.
 - **[Troubleshooting, Error Diagnostics & FAQ](doc/TROUBLESHOOTING.md)**: Port conflicts, serialization conflicts, slow query tuning, and client driver setup.
 - **[Contributing & Development Guide](CONTRIBUTING.md)**: Engineering standards, 3-stage verification pipeline, and pull request checklist.
 - **[Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md)**: Standards, pledge, enforcement responsibilities, and guidelines.

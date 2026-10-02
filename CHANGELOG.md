@@ -45,6 +45,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Decomposed `pkg/api/server.go` into dedicated handler modules: `handlers_auth.go`, `handlers_admin.go`, `handlers_tables.go`, `handlers_records.go`, `handlers_import_export.go`, and `handlers_procs.go`.
 
 ### Documentation
+- **Developer & AI Handover Context Knowledge Base (`notes/`)**:
+  - Established persistent `notes/` directory as an engineering context handover mechanism across development machines and AI pair programming sessions.
+  - Authored `notes/README.md`, `notes/ENGINEERING_CONTEXT.md` (core architectural invariants, spec-out rationales, collaboration principles), `notes/PITFALLS_AND_TRICKS.md` (circular imports, build tags, sandbox networking, Decimal JSON roundtrips, transaction coupling), and `notes/REFACTORING_AND_ROADMAP.md` (decomposition history, next week priorities, CBO status).
+  - Linked `notes/` reference in `GEMINI.md` and `README.md`.
+
 - **Architecture & Operational Documentation Audit (`README.md`, `doc/*`)**:
   - Added ADR-017 (1-Writer Multi-Reader High-Availability Replication Topology) and ADR-018 (Dual-Track UDF Architecture: Native Go In-Process SPI & WebAssembly Sandbox) in `doc/ADR.md`.
   - Added Section 12 for WAL replication endpoints (`/api/replication/stream`, `/api/replication/status`, `/api/replication/ack`, `/api/replication/promote`, `/api/replication/demote`) in `doc/API_REFERENCE.md`.
