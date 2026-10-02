@@ -158,6 +158,7 @@ import (
 	"unsafe"
 
 	"sqlion/pkg/storage"
+	"sqlion/pkg/storage/memengine"
 )
 
 // Engine implements storage.Engine via the WiredTiger C API.
@@ -167,6 +168,7 @@ type Engine struct {
 	homeDir string
 	tables  map[string]*storage.TableSchema
 	nextLSN atomic.Int64
+	walHook func(rec memengine.WALRecord)
 	closed  bool
 }
 
@@ -185,6 +187,29 @@ func (e *Engine) Type() string {
 // CurrentLSN returns the latest assigned Log Sequence Number.
 func (e *Engine) CurrentLSN() int64 {
 	return e.nextLSN.Load()
+}
+
+// SetWALHook registers a callback that is synchronously invoked whenever a transaction commits or DDL executes.
+func (e *Engine) SetWALHook(fn func(rec memengine.WALRecord)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.walHook = fn
+}
+
+// recordWALLocked writes a WAL record, invokes the registered walHook, and returns the assigned WALRecord.
+func (e *Engine) recordWALLocked(ops []memengine.WALOp) memengine.WALRecord {
+	if len(ops) == 0 {
+		return memengine.WALRecord{}
+	}
+	rec := memengine.WALRecord{
+		LSN:       e.nextLSN.Add(1),
+		Timestamp: time.Now().UnixNano(),
+		Ops:       ops,
+	}
+	if e.walHook != nil {
+		e.walHook(rec)
+	}
+	return rec
 }
 
 func (e *Engine) Open(dir string) error {
@@ -292,7 +317,15 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	}
 
 	e.tables[schema.Name] = schema
-	return e.saveCatalog()
+	if err := e.saveCatalog(); err != nil {
+		return err
+	}
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:   memengine.OpCreateTable,
+		Table:  schema.Name,
+		Schema: schema,
+	}})
+	return nil
 }
 
 func (e *Engine) DropTable(tableName string) error {
@@ -315,7 +348,14 @@ func (e *Engine) DropTable(tableName string) error {
 	C.go_wt_session_drop(sess, uri)
 
 	delete(e.tables, tableName)
-	return e.saveCatalog()
+	if err := e.saveCatalog(); err != nil {
+		return err
+	}
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:  memengine.OpDropTable,
+		Table: tableName,
+	}})
+	return nil
 }
 
 func (e *Engine) TruncateTable(tableName string) error {
@@ -365,7 +405,10 @@ func (e *Engine) TruncateTable(tableName string) error {
 		C.free(unsafe.Pointer(idxURI))
 	}
 
-	e.nextLSN.Add(1)
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:  memengine.OpTruncateTable,
+		Table: tableName,
+	}})
 	return nil
 }
 
@@ -414,6 +457,12 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	if matched == 0 {
 		return fmt.Errorf("%w: partition %q in table %q", storage.ErrPartitionNotFound, partitionName, tableName)
 	}
+
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:  memengine.OpDropPartition,
+		Table: tableName,
+		Key:   partitionName,
+	}})
 	return nil
 }
 
@@ -504,7 +553,15 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	}
 
 	t.Indexes = append(t.Indexes, *index)
-	return e.saveCatalog()
+	if err := e.saveCatalog(); err != nil {
+		return err
+	}
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:        memengine.OpCreateIndex,
+		Table:       index.TableName,
+		IndexSchema: index,
+	}})
+	return nil
 }
 
 func (e *Engine) DropIndex(tableName, indexName string) error {
@@ -522,7 +579,15 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	}
 
 	t.Indexes = append(t.Indexes[:idxPos], t.Indexes[idxPos+1:]...)
-	return e.saveCatalog()
+	if err := e.saveCatalog(); err != nil {
+		return err
+	}
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:      memengine.OpDropIndex,
+		Table:     tableName,
+		IndexName: indexName,
+	}})
+	return nil
 }
 
 func (e *Engine) NewSession() (storage.Session, error) {
@@ -663,6 +728,8 @@ type WTTx struct {
 	undoLog           []wtUndoOp
 	savepoints        map[string]int
 	spNames           []string
+	walOps            []memengine.WALOp
+	spWALIndices      map[string]int
 }
 
 // SnapshotLSN returns the snapshot LSN bound at transaction start.
@@ -769,6 +836,12 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 		pk:    pkVal,
 		kind:  wtUndoDelete,
 	})
+	tx.walOps = append(tx.walOps, memengine.WALOp{
+		Type:  memengine.OpInsert,
+		Table: tableName,
+		Key:   pkStr,
+		Data:  recBytes,
+	})
 
 	return nil
 }
@@ -838,6 +911,14 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 		kind:    wtUndoPut,
 		oldData: oldData,
 	})
+	recCopy := make([]byte, len(recBytes))
+	copy(recCopy, recBytes)
+	tx.walOps = append(tx.walOps, memengine.WALOp{
+		Type:  memengine.OpUpdate,
+		Table: tableName,
+		Key:   pk.String(),
+		Data:  recCopy,
+	})
 
 	return nil
 }
@@ -886,6 +967,11 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 			oldData: oldData,
 		})
 	}
+	tx.walOps = append(tx.walOps, memengine.WALOp{
+		Type:  memengine.OpDelete,
+		Table: tableName,
+		Key:   pk.String(),
+	})
 
 	return nil
 }
@@ -1015,6 +1101,9 @@ func (tx *WTTx) Commit() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	walOps := tx.walOps
+	tx.walOps = nil
+	tx.spWALIndices = nil
 	tx.undoLog = nil
 	tx.savepoints = nil
 	tx.spNames = nil
@@ -1026,8 +1115,16 @@ func (tx *WTTx) Commit() error {
 		return fmt.Errorf("commit_transaction failed with code %d", ret)
 	}
 
-	tx.commitLSN = tx.sess.engine.nextLSN.Add(1)
-	tx.commitTimestamp = time.Now().UnixNano()
+	if len(walOps) > 0 {
+		tx.sess.engine.mu.Lock()
+		rec := tx.sess.engine.recordWALLocked(walOps)
+		tx.sess.engine.mu.Unlock()
+		tx.commitLSN = rec.LSN
+		tx.commitTimestamp = rec.Timestamp
+	} else {
+		tx.commitLSN = tx.snapshotLSN
+		tx.commitTimestamp = time.Now().UnixNano()
+	}
 	return nil
 }
 
@@ -1039,6 +1136,8 @@ func (tx *WTTx) Rollback() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	tx.walOps = nil
+	tx.spWALIndices = nil
 	tx.undoLog = nil
 	tx.savepoints = nil
 	tx.spNames = nil
@@ -1068,6 +1167,9 @@ func (tx *WTTx) Savepoint(name string) error {
 	if tx.savepoints == nil {
 		tx.savepoints = make(map[string]int)
 	}
+	if tx.spWALIndices == nil {
+		tx.spWALIndices = make(map[string]int)
+	}
 
 	found := false
 	for _, n := range tx.spNames {
@@ -1080,6 +1182,7 @@ func (tx *WTTx) Savepoint(name string) error {
 		tx.spNames = append(tx.spNames, normName)
 	}
 	tx.savepoints[normName] = len(tx.undoLog)
+	tx.spWALIndices[normName] = len(tx.walOps)
 	return nil
 }
 
@@ -1111,6 +1214,11 @@ func (tx *WTTx) RollbackTo(name string) error {
 	}
 	tx.undoLog = tx.undoLog[:targetLen]
 
+	targetWAL, hasWAL := tx.spWALIndices[normName]
+	if hasWAL && targetWAL >= 0 && targetWAL <= len(tx.walOps) {
+		tx.walOps = tx.walOps[:targetWAL]
+	}
+
 	// Invalidate subsequent savepoints defined after this savepoint
 	idx := -1
 	for i, n := range tx.spNames {
@@ -1122,6 +1230,7 @@ func (tx *WTTx) RollbackTo(name string) error {
 	if idx >= 0 {
 		for i := idx + 1; i < len(tx.spNames); i++ {
 			delete(tx.savepoints, tx.spNames[i])
+			delete(tx.spWALIndices, tx.spNames[i])
 		}
 		tx.spNames = tx.spNames[:idx+1]
 	}
@@ -1152,6 +1261,7 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 	if idx >= 0 {
 		for i := idx; i < len(tx.spNames); i++ {
 			delete(tx.savepoints, tx.spNames[i])
+			delete(tx.spWALIndices, tx.spNames[i])
 		}
 		tx.spNames = tx.spNames[:idx]
 	}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"sqlion/pkg/storage"
+	"sqlion/pkg/storage/memengine"
 )
 
 // Engine is a stub implementation when WiredTiger is not compiled in.
@@ -31,6 +32,8 @@ func (e *Engine) Close() error {
 func (e *Engine) CurrentLSN() int64 {
 	return 0
 }
+
+func (e *Engine) SetWALHook(fn func(rec memengine.WALRecord)) {}
 
 func (e *Engine) NewSession() (storage.Session, error) {
 	return nil, fmt.Errorf("wiredtiger storage engine not enabled")
