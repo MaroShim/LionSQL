@@ -21,6 +21,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Standardized In-Memory OCC engine snapshot persistence strictly on `tables.mpk` (MessagePack metadata container) and OLTP row records on schema-ordered contiguous `Row` representations.
 
 ### Added
+- **Zero-Allocation UndoLog Optimization & Purge of Legacy Record Cloning (`pkg/storage/wiredtiger`)**:
+  - Refactored `wtUndoOp` in `pkg/storage/wiredtiger/wt_engine.go` to store raw binary tuple bytes (`oldData []byte`) instead of cloned `map[string]Value` records.
+  - Implemented `getRawBytesLocked` and `putRawBytesLocked` to achieve zero-copy savepoint rollbacks (`RollbackTo`) directly at the WiredTiger cursor level.
+  - Purged redundant `cloneRecord` allocation helper to eliminate GC overhead on high-frequency `UPDATE` and `DELETE` paths.
+
 - **Wire Protocol Session Read-Only Transaction Option Binding (`pkg/api`)**:
   - Bound session-scoped `transaction_read_only` variable and `SET TRANSACTION READ ONLY` directly into interactive and autocommit `BeginTx` transaction options.
   - Added `IsReadOnly()` and `TxOptions()` helper methods to `ClientSession` to ensure read-only transactions are strictly enforced down to the storage engine level.

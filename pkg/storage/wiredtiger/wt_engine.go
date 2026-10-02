@@ -630,10 +630,10 @@ const (
 )
 
 type wtUndoOp struct {
-	table  string
-	pk     storage.Value
-	kind   wtUndoKind
-	oldRec storage.Record
+	table   string
+	pk      storage.Value
+	kind    wtUndoKind
+	oldData []byte
 }
 
 // WTTx manages ACID mutations in WiredTiger.
@@ -770,11 +770,11 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 		return storage.ErrReadOnlyTransaction
 	}
 
+	oldData, _ := tx.getRawBytesLocked(tableName, pk)
 	existing, err := tx.getLocked(tableName, pk)
 	if err != nil {
 		return err
 	}
-	oldRec := cloneRecord(existing)
 
 	for col, val := range record {
 		existing[col] = val
@@ -810,10 +810,10 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	}
 
 	tx.undoLog = append(tx.undoLog, wtUndoOp{
-		table:  tableName,
-		pk:     pk,
-		kind:   wtUndoPut,
-		oldRec: oldRec,
+		table:   tableName,
+		pk:      pk,
+		kind:    wtUndoPut,
+		oldData: oldData,
 	})
 
 	return nil
@@ -830,10 +830,7 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 		return storage.ErrReadOnlyTransaction
 	}
 
-	var oldRec storage.Record
-	if existing, err := tx.getLocked(tableName, pk); err == nil {
-		oldRec = cloneRecord(existing)
-	}
+	oldData, _ := tx.getRawBytesLocked(tableName, pk)
 
 	cur, err := tx.sess.getCursor(tableName)
 	if err != nil {
@@ -849,12 +846,12 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 		return fmt.Errorf("cursor_remove failed with code %d", ret)
 	}
 
-	if oldRec != nil {
+	if len(oldData) > 0 {
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
-			table:  tableName,
-			pk:     pk,
-			kind:   wtUndoPut,
-			oldRec: oldRec,
+			table:   tableName,
+			pk:      pk,
+			kind:    wtUndoPut,
+			oldData: oldData,
 		})
 	}
 
@@ -873,7 +870,7 @@ func (tx *WTTx) GetRow(tableName string, pk storage.Value) (storage.Row, error) 
 	return tx.getRowLocked(tableName, pk)
 }
 
-func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, error) {
+func (tx *WTTx) getRawBytesLocked(tableName string, pk storage.Value) ([]byte, error) {
 	if tx.closed {
 		return nil, storage.ErrTxClosed
 	}
@@ -898,8 +895,16 @@ func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, e
 		return nil, fmt.Errorf("cursor_get_value failed")
 	}
 
+	return C.GoBytes(pData, C.int(sz)), nil
+}
+
+func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, error) {
+	rawBytes, err := tx.getRawBytesLocked(tableName, pk)
+	if err != nil {
+		return nil, err
+	}
 	tbl, _ := tx.sess.engine.GetTable(tableName)
-	return decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
+	return decodeRecord(tbl, rawBytes)
 }
 
 func (tx *WTTx) getRowLocked(tableName string, pk storage.Value) (storage.Row, error) {
@@ -1067,8 +1072,8 @@ func (tx *WTTx) RollbackTo(name string) error {
 		case wtUndoDelete:
 			_ = tx.deleteLocked(op.table, op.pk)
 		case wtUndoPut:
-			if op.oldRec != nil {
-				_ = tx.putLocked(op.table, op.pk, op.oldRec)
+			if len(op.oldData) > 0 {
+				_ = tx.putRawBytesLocked(op.table, op.pk, op.oldData)
 			}
 		}
 	}
@@ -1122,21 +1127,12 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 	return nil
 }
 
-func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Record) error {
+func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes []byte) error {
 	cur, err := tx.sess.getCursor(tableName)
 	if err != nil {
 		return err
 	}
 	defer C.go_wt_cursor_reset(cur)
-
-	tbl, _ := tx.sess.engine.GetTable(tableName)
-	bufPtr := storage.GetTupleBuffer()
-	defer storage.PutTupleBuffer(bufPtr)
-
-	recBytes, err := serializeRecordToBuffer(cur, tbl, record, *bufPtr)
-	if err != nil {
-		return err
-	}
 
 	cKey := C.CString(pk.String())
 	defer C.free(unsafe.Pointer(cKey))
@@ -1154,6 +1150,25 @@ func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Rec
 		}
 	}
 	return nil
+}
+
+func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Record) error {
+	cur, err := tx.sess.getCursor(tableName)
+	if err != nil {
+		return err
+	}
+	defer C.go_wt_cursor_reset(cur)
+
+	tbl, _ := tx.sess.engine.GetTable(tableName)
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	recBytes, err := serializeRecordToBuffer(cur, tbl, record, *bufPtr)
+	if err != nil {
+		return err
+	}
+
+	return tx.putRawBytesLocked(tableName, pk, recBytes)
 }
 
 func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
@@ -1235,15 +1250,4 @@ func (c *WTCursor) Close() error {
 	C.go_wt_cursor_close(c.cur)
 	c.cur = nil
 	return nil
-}
-
-func cloneRecord(r storage.Record) storage.Record {
-	if r == nil {
-		return nil
-	}
-	cp := make(storage.Record, len(r))
-	for k, v := range r {
-		cp[k] = v
-	}
-	return cp
 }
