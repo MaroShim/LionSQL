@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- **PostgreSQL-Style `INSERT ... ON CONFLICT` & CockroachDB-Style `UPSERT INTO` Syntax (`pkg/api`)**:
+  - Implemented PostgreSQL-compatible `INSERT ... ON CONFLICT (target_col) DO NOTHING` and `ON CONFLICT DO NOTHING` to gracefully ignore unique/primary key conflicts.
+  - Implemented `INSERT ... ON CONFLICT (target_col) DO UPDATE SET col = expr, ... [WHERE condition]` with full support for proposed values via `EXCLUDED.<col>` (and `excluded.<col>`) and existing row values via `<table_name>.<col>` or `<col>`.
+  - Implemented `ON CONFLICT ON CONSTRAINT <constraint_name> DO ...` constraint target support.
+  - Added native CockroachDB-style `UPSERT INTO <table_name> (...) VALUES (...)` shorthand updating non-primary-key columns on key conflicts.
+  - Enhanced value tuple parser (`parseValueTuples`) with depth and quote tracking to reliably handle nested parentheses and functions in value expressions.
+  - Added comprehensive test suite in `pkg/api/upsert_test.go` covering `DO NOTHING`, `DO UPDATE`, conditional updates via `WHERE`, multi-row batch inserts with intra-batch conflicts, and `UPSERT` shorthand.
+
 - **In-Engine Exact & Streaming Quantile Analytics: `PERCENTILE_CONT`, `PERCENTILE_DISC`, `APPROX_PERCENTILE`, and `MEDIAN` (`pkg/execution`, `pkg/proc`, `pkg/planner`, `pkg/api`)**:
   - Implemented continuous percentile `PERCENTILE_CONT` (linear interpolation) and discrete percentile `PERCENTILE_DISC` supporting both ANSI `WITHIN GROUP (ORDER BY ...)` and 2-argument standard syntax.
   - Introduced streaming approximate percentile operator `APPROX_PERCENTILE` powered by the T-Digest clustering algorithm, achieving high tail accuracy (P90, P95, P99) with bounded $O(1)$ memory ($< 4\text{ KB}$ per group).

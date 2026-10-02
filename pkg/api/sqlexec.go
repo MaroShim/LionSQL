@@ -1027,8 +1027,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		return s.execAlterTable(trimmed, start, cs)
 	}
 
-	// 5. DML: INSERT INTO
-	if strings.HasPrefix(upper, "INSERT INTO") || strings.HasPrefix(upper, "INSERT ") {
+	// 5. DML: INSERT INTO / UPSERT
+	if strings.HasPrefix(upper, "INSERT INTO") || strings.HasPrefix(upper, "INSERT ") ||
+		strings.HasPrefix(upper, "UPSERT INTO") || strings.HasPrefix(upper, "UPSERT ") {
 		return s.execInsert(trimmed, start, cs)
 	}
 

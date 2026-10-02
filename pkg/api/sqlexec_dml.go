@@ -21,20 +21,241 @@ import (
 	"sqlion/pkg/storage"
 )
 
+type onConflictAction int
+
+const (
+	conflictActionNone onConflictAction = iota
+	conflictActionDoNothing
+	conflictActionDoUpdate
+)
+
+type onConflictAssignment struct {
+	column string
+	expr   string
+}
+
+type onConflictClause struct {
+	action      onConflictAction
+	targetCols  []string
+	assignments []onConflictAssignment
+	whereCond   string
+}
+
+func findOnConflictIndex(s string) int {
+	inString := false
+	var quoteChar byte
+	depth := 0
+	upper := strings.ToUpper(s)
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if inString {
+			if c == quoteChar {
+				if i+1 < len(s) && s[i+1] == quoteChar {
+					i++
+					continue
+				}
+				inString = false
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			inString = true
+			quoteChar = c
+			continue
+		}
+		if c == '(' {
+			depth++
+			continue
+		}
+		if c == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+		if depth == 0 && i+11 <= len(s) {
+			if strings.HasPrefix(upper[i:], "ON CONFLICT") {
+				if i == 0 || s[i-1] == ' ' || s[i-1] == '\t' || s[i-1] == '\n' || s[i-1] == ')' {
+					nextIdx := i + 11
+					if nextIdx == len(s) || s[nextIdx] == ' ' || s[nextIdx] == '\t' || s[nextIdx] == '\n' || s[nextIdx] == '(' {
+						return i
+					}
+				}
+			}
+		}
+	}
+	return -1
+}
+
+func parseOnConflict(s string) (*onConflictClause, error) {
+	s = strings.TrimSpace(s)
+	upper := strings.ToUpper(s)
+	if !strings.HasPrefix(upper, "ON CONFLICT") {
+		return nil, nil
+	}
+
+	rest := strings.TrimSpace(s[len("ON CONFLICT"):])
+	var targetCols []string
+
+	if strings.HasPrefix(rest, "(") {
+		closeIdx := strings.Index(rest, ")")
+		if closeIdx == -1 {
+			return nil, fmt.Errorf("malformed ON CONFLICT target columns: missing closing parenthesis")
+		}
+		innerCols := rest[1:closeIdx]
+		for _, c := range strings.Split(innerCols, ",") {
+			cleaned := cleanIdentifier(c)
+			if cleaned != "" {
+				targetCols = append(targetCols, cleaned)
+			}
+		}
+		rest = strings.TrimSpace(rest[closeIdx+1:])
+	} else if strings.HasPrefix(strings.ToUpper(rest), "ON CONSTRAINT") {
+		rest = strings.TrimSpace(rest[len("ON CONSTRAINT"):])
+		spIdx := strings.IndexAny(rest, " \t\r\n")
+		if spIdx != -1 {
+			rest = strings.TrimSpace(rest[spIdx:])
+		} else {
+			rest = ""
+		}
+	}
+
+	restUpper := strings.ToUpper(rest)
+	if !strings.HasPrefix(restUpper, "DO") {
+		return nil, fmt.Errorf("expected DO after ON CONFLICT, got %q", rest)
+	}
+	afterDo := strings.TrimSpace(rest[2:])
+	afterDoUpper := strings.ToUpper(afterDo)
+
+	if strings.HasPrefix(afterDoUpper, "NOTHING") {
+		return &onConflictClause{
+			action:     conflictActionDoNothing,
+			targetCols: targetCols,
+		}, nil
+	}
+
+	if !strings.HasPrefix(afterDoUpper, "UPDATE") {
+		return nil, fmt.Errorf("expected NOTHING or UPDATE after DO, got %q", afterDo)
+	}
+
+	afterUpdate := strings.TrimSpace(afterDo[6:])
+	afterUpdateUpper := strings.ToUpper(afterUpdate)
+	if !strings.HasPrefix(afterUpdateUpper, "SET") {
+		return nil, fmt.Errorf("expected SET after DO UPDATE, got %q", afterUpdate)
+	}
+
+	setBody := strings.TrimSpace(afterUpdate[3:])
+	whereCond := ""
+
+	whereIdx := findTopLevelKeyword(setBody, "WHERE")
+	if whereIdx != -1 {
+		whereCond = strings.TrimSpace(setBody[whereIdx+5:])
+		setBody = strings.TrimSpace(setBody[:whereIdx])
+	}
+
+	assignmentParts := splitAssignments(setBody)
+	var assignments []onConflictAssignment
+	for _, part := range assignmentParts {
+		eqIdx := strings.Index(part, "=")
+		if eqIdx == -1 {
+			return nil, fmt.Errorf("invalid assignment in DO UPDATE SET: %q", part)
+		}
+		col := cleanIdentifier(part[:eqIdx])
+		expr := strings.TrimSpace(part[eqIdx+1:])
+		assignments = append(assignments, onConflictAssignment{
+			column: col,
+			expr:   expr,
+		})
+	}
+
+	return &onConflictClause{
+		action:      conflictActionDoUpdate,
+		targetCols:  targetCols,
+		assignments: assignments,
+		whereCond:   whereCond,
+	}, nil
+}
+
+func splitAssignments(s string) []string {
+	var parts []string
+	var cur strings.Builder
+	inString := false
+	var quoteChar byte
+	depth := 0
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if inString {
+			cur.WriteByte(c)
+			if c == quoteChar {
+				if i+1 < len(s) && s[i+1] == quoteChar {
+					i++
+					cur.WriteByte(s[i])
+					continue
+				}
+				inString = false
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			inString = true
+			quoteChar = c
+			cur.WriteByte(c)
+			continue
+		}
+		if c == '(' {
+			depth++
+			cur.WriteByte(c)
+			continue
+		}
+		if c == ')' {
+			if depth > 0 {
+				depth--
+			}
+			cur.WriteByte(c)
+			continue
+		}
+		if c == ',' && depth == 0 {
+			if str := strings.TrimSpace(cur.String()); str != "" {
+				parts = append(parts, str)
+			}
+			cur.Reset()
+			continue
+		}
+		cur.WriteByte(c)
+	}
+	if str := strings.TrimSpace(cur.String()); str != "" {
+		parts = append(parts, str)
+	}
+	return parts
+}
+
 func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
-	insRe := regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)`)
+	insRe := regexp.MustCompile(`(?is)^(?:INSERT|UPSERT)(?:\s+INTO)?\s+([^\s(]+)`)
 	if m := insRe.FindStringSubmatch(cleaned); len(m) >= 2 {
 		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivInsert); err != nil {
 			return nil, err
 		}
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause present)
+	isUpsert := strings.HasPrefix(strings.ToUpper(cleaned), "UPSERT")
+	insertSQL := cleaned
+	if isUpsert {
+		if strings.HasPrefix(strings.ToUpper(cleaned), "UPSERT INTO ") {
+			insertSQL = "INSERT INTO " + cleaned[len("UPSERT INTO "):]
+		} else if strings.HasPrefix(strings.ToUpper(cleaned), "UPSERT ") {
+			insertSQL = "INSERT INTO " + cleaned[len("UPSERT "):]
+		}
+	}
+
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause or ON CONFLICT/UPSERT present)
 	hasOutput := strings.Contains(strings.ToUpper(cleaned), " OUTPUT ")
-	if !hasOutput {
+	hasConflict := strings.Contains(strings.ToUpper(cleaned), "ON CONFLICT") || isUpsert
+	if !hasOutput && !hasConflict {
 		if res, err := s.execVBDEDML("INSERT", cleaned, start, cs); err == nil {
 			return res, nil
 		} else if strings.Contains(err.Error(), "IDENTITY_INSERT") {
@@ -43,7 +264,7 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 	}
 
 	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+VALUES\s*(.*)$`)
-	matches := re.FindStringSubmatch(cleaned)
+	matches := re.FindStringSubmatch(insertSQL)
 	if len(matches) < 5 {
 		return nil, fmt.Errorf("invalid INSERT INTO syntax")
 	}
@@ -52,6 +273,22 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 	rawCols := matches[2]
 	rawOutput := strings.TrimSpace(matches[3])
 	rawValues := matches[4]
+
+	var onConflict *onConflictClause
+	valuesPart := rawValues
+	if conflictIdx := findOnConflictIndex(rawValues); conflictIdx != -1 {
+		conflictStr := strings.TrimSpace(rawValues[conflictIdx:])
+		valuesPart = strings.TrimSpace(rawValues[:conflictIdx])
+		clause, err := parseOnConflict(conflictStr)
+		if err != nil {
+			return nil, err
+		}
+		onConflict = clause
+	} else if isUpsert {
+		onConflict = &onConflictClause{
+			action: conflictActionDoUpdate,
+		}
+	}
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
@@ -109,7 +346,7 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 		}
 	}
 
-	tupleStrings := parseValueTuples(rawValues)
+	tupleStrings := parseValueTuples(valuesPart)
 	if len(tupleStrings) == 0 {
 		return nil, fmt.Errorf("no values supplied in INSERT statement")
 	}
@@ -199,7 +436,131 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 			}
 		}
 
+		if onConflict != nil {
+			var conflictCols []string
+			if len(onConflict.targetCols) > 0 {
+				conflictCols = onConflict.targetCols
+			} else if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
+				conflictCols = []string{pkCol.Name}
+			}
+
+			var existingRec storage.Record
+			var existingPk storage.Value
+			pkCol, _ := schema.PrimaryKeyColumn()
+
+			if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
+				if targetVal, ok := rec[pkCol.Name]; ok {
+					if ex, err := tx.Get(tableName, targetVal); err == nil && ex != nil {
+						existingRec = ex
+						existingPk = targetVal
+					}
+				}
+			}
+
+			if existingRec == nil && len(conflictCols) > 0 {
+				if cur, err := tx.Scan(tableName); err == nil {
+					for cur.Next() {
+						r, err := cur.Record()
+						if err != nil {
+							continue
+						}
+						matched := true
+						for _, cc := range conflictCols {
+							rv, ok1 := r[cc]
+							iv, ok2 := rec[cc]
+							if !ok1 || !ok2 || rv.Compare(iv) != 0 {
+								matched = false
+								break
+							}
+						}
+						if matched {
+							existingRec = r
+							if pkCol != nil {
+								existingPk = r[pkCol.Name]
+							}
+							break
+						}
+					}
+					cur.Close()
+				}
+			}
+
+			if existingRec != nil {
+				if onConflict.action == conflictActionDoNothing {
+					continue
+				} else if onConflict.action == conflictActionDoUpdate {
+					evalMap := make(map[string]any)
+					for k, v := range existingRec {
+						val := formatStorageValue(v)
+						evalMap[k] = val
+						evalMap[strings.ToLower(k)] = val
+						evalMap[tableName+"."+k] = val
+						evalMap[strings.ToLower(tableName)+"."+strings.ToLower(k)] = val
+					}
+					for k, v := range rec {
+						val := formatStorageValue(v)
+						evalMap["EXCLUDED."+k] = val
+						evalMap["excluded."+strings.ToLower(k)] = val
+						evalMap["EXCLUDED."+strings.ToLower(k)] = val
+						evalMap["excluded."+k] = val
+					}
+
+					if onConflict.whereCond != "" {
+						if !evaluateWhereConditionMap(evalMap, onConflict.whereCond) {
+							continue
+						}
+					}
+
+					updatedRec := cloneRecord(existingRec)
+					assignments := onConflict.assignments
+					if len(assignments) == 0 {
+						// CockroachDB / SQLion UPSERT default: update all non-PK columns
+						for _, c := range schema.Columns {
+							if c.PrimaryKey {
+								continue
+							}
+							if newVal, ok := rec[c.Name]; ok {
+								updatedRec[c.Name] = newVal
+							}
+						}
+					} else {
+						for _, assign := range assignments {
+							colSchema, _, found := schema.FindColumn(assign.column)
+							if !found {
+								if isEphemeral {
+									_ = tx.Rollback()
+								}
+								return nil, fmt.Errorf("column %q not found in table %q", assign.column, tableName)
+							}
+							val := evalMergeExpr(assign.expr, evalMap, colSchema.Type)
+							updatedRec[colSchema.Name] = val
+						}
+					}
+
+					if err := tx.Update(tableName, existingPk, updatedRec); err != nil {
+						if isEphemeral {
+							_ = tx.Rollback()
+						}
+						return nil, fmt.Errorf("update row error in ON CONFLICT: %w", err)
+					}
+					if len(outputProjs) > 0 {
+						outRow, cols := evaluateOutputRow(outputProjs, existingRec, updatedRec, schema)
+						outputRows = append(outputRows, outRow)
+						outputCols = cols
+					}
+					insertedCount++
+					continue
+				}
+			}
+		}
+
 		if err := tx.Insert(tableName, rec); err != nil {
+			if onConflict != nil && onConflict.action == conflictActionDoNothing {
+				errLower := strings.ToLower(err.Error())
+				if errors.Is(err, storage.ErrKeyExists) || strings.Contains(errLower, "already exists") || strings.Contains(errLower, "unique") {
+					continue
+				}
+			}
 			if isEphemeral {
 				_ = tx.Rollback()
 			}
@@ -220,14 +581,19 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 		}
 	}
 
+	cmdName := "INSERT"
+	if isUpsert {
+		cmdName = "UPSERT"
+	}
+
 	return &QueryResult{
 		Success:      true,
-		Command:      "INSERT",
+		Command:      cmdName,
 		Columns:      outputCols,
 		Rows:         outputRows,
 		RowsAffected: insertedCount,
 		DurationUS:   time.Since(start).Microseconds(),
-		Messages:     []string{fmt.Sprintf("%d rows inserted into %q", insertedCount, tableName)},
+		Messages:     []string{fmt.Sprintf("%d rows affected into %q", insertedCount, tableName)},
 	}, nil
 }
 
@@ -3656,29 +4022,53 @@ func parseValueTuples(s string) []string {
 	var cur strings.Builder
 	inTuple := false
 	inString := false
+	var quoteChar byte
+	depth := 0
 
 	for i := 0; i < len(s); i++ {
 		c := s[i]
-		if c == '\'' && (i == 0 || s[i-1] != '\\') {
-			inString = !inString
-			cur.WriteByte(c)
-			continue
-		}
 		if inString {
 			cur.WriteByte(c)
+			if c == quoteChar {
+				if i+1 < len(s) && s[i+1] == quoteChar {
+					i++
+					cur.WriteByte(s[i])
+					continue
+				}
+				inString = false
+			}
+			continue
+		}
+		if c == '\'' || c == '"' {
+			inString = true
+			quoteChar = c
+			if inTuple {
+				cur.WriteByte(c)
+			}
 			continue
 		}
 
 		if c == '(' {
-			inTuple = true
-			cur.Reset()
+			if !inTuple {
+				inTuple = true
+				depth = 1
+				cur.Reset()
+				continue
+			}
+			depth++
+			cur.WriteByte(c)
 			continue
 		}
 		if c == ')' {
 			if inTuple {
-				tuples = append(tuples, cur.String())
-				inTuple = false
-				cur.Reset()
+				depth--
+				if depth == 0 {
+					tuples = append(tuples, cur.String())
+					inTuple = false
+					cur.Reset()
+					continue
+				}
+				cur.WriteByte(c)
 			}
 			continue
 		}

@@ -378,9 +378,15 @@ func evalMergeExpr(expr string, evalMap map[string]any, targetType storage.DataT
 	// 1. Check direct variable or column identifier
 	cleaned := cleanIdentifier(expr)
 	if val, ok := evalMap[cleaned]; ok {
+		if val == nil {
+			return storage.NullValue(targetType)
+		}
 		return parseValueToType(fmt.Sprintf("%v", val), targetType)
 	}
 	if val, ok := evalMap[strings.ToLower(cleaned)]; ok {
+		if val == nil {
+			return storage.NullValue(targetType)
+		}
 		return parseValueToType(fmt.Sprintf("%v", val), targetType)
 	}
 
@@ -389,7 +395,10 @@ func evalMergeExpr(expr string, evalMap map[string]any, targetType storage.DataT
 	astExpr := p.ParseExpr()
 	if astExpr != nil && len(p.Errors()) == 0 {
 		resVal, err := proc.EvalRowExpr(astExpr, evalMap, nil)
-		if err == nil && resVal != nil {
+		if err == nil {
+			if resVal == nil {
+				return storage.NullValue(targetType)
+			}
 			return parseValueToType(fmt.Sprintf("%v", resVal), targetType)
 		}
 	}
