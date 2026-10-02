@@ -1177,6 +1177,30 @@ func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 	return tx.insertLocked(tableName, record)
 }
 
+func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
+
+	tx.engine.mu.RLock()
+	td, exists := tx.engine.tables[tableName]
+	if !exists {
+		tx.engine.mu.RUnlock()
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	schema := td.Schema
+	tx.engine.mu.RUnlock()
+
+	rec := schema.RowToRecord(row)
+	return tx.insertLocked(tableName, rec)
+}
+
 func (tx *Transaction) insertLocked(tableName string, record storage.Record) error {
 	tx.engine.mu.RLock()
 	td, exists := tx.engine.tables[tableName]
@@ -1350,6 +1374,30 @@ func (tx *Transaction) Update(tableName string, pk storage.Value, record storage
 	}
 
 	return tx.updateLocked(tableName, pk, record, 0)
+}
+
+func (tx *Transaction) UpdateRow(tableName string, pk storage.Value, row storage.Row) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
+
+	tx.engine.mu.RLock()
+	td, exists := tx.engine.tables[tableName]
+	if !exists {
+		tx.engine.mu.RUnlock()
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	schema := td.Schema
+	tx.engine.mu.RUnlock()
+
+	rec := schema.RowToRecord(row)
+	return tx.updateLocked(tableName, pk, rec, 0)
 }
 
 func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record storage.Record, depth int) error {

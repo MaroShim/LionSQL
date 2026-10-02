@@ -759,6 +759,15 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 	return nil
 }
 
+func (tx *WTTx) InsertRow(tableName string, row storage.Row) error {
+	tbl, err := tx.sess.engine.GetTable(tableName)
+	if err != nil {
+		return err
+	}
+	rec := tbl.RowToRecord(row)
+	return tx.Insert(tableName, rec)
+}
+
 func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record) error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -817,6 +826,15 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	})
 
 	return nil
+}
+
+func (tx *WTTx) UpdateRow(tableName string, pk storage.Value, row storage.Row) error {
+	tbl, err := tx.sess.engine.GetTable(tableName)
+	if err != nil {
+		return err
+	}
+	rec := tbl.RowToRecord(row)
+	return tx.Update(tableName, pk, rec)
 }
 
 func (tx *WTTx) Delete(tableName string, pk storage.Value) error {

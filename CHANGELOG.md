@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Standardized In-Memory OCC engine snapshot persistence strictly on `tables.mpk` (MessagePack metadata container) and OLTP row records on schema-ordered contiguous `Row` representations.
 
 ### Added
+- **Direct Row Mutation Transaction APIs (`pkg/storage`, `pkg/storage/memengine`, `pkg/storage/wiredtiger`)**:
+  - Added `InsertRow` and `UpdateRow` methods to the `storage.Transaction` interface contract across all storage backends.
+  - Allows the VDBE bytecode VM and query executors to write contiguous `storage.Row` directly without allocating intermediate `map[string]Value` records.
+
 - **Zero-Allocation UndoLog Optimization & Purge of Legacy Record Cloning (`pkg/storage/wiredtiger`)**:
   - Refactored `wtUndoOp` in `pkg/storage/wiredtiger/wt_engine.go` to store raw binary tuple bytes (`oldData []byte`) instead of cloned `map[string]Value` records.
   - Implemented `getRawBytesLocked` and `putRawBytesLocked` to achieve zero-copy savepoint rollbacks (`RollbackTo`) directly at the WiredTiger cursor level.
