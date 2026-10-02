@@ -36,7 +36,7 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 * [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/sql/doc/HIGH_AVAILABILITY.md)
   * Crash safety, checkpointing, AOF compaction, and online hot backup/restore pipelines.
 * [`ADR.md`](file:///Users/maro/Projects/sql/doc/ADR.md)
-  * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution).
+  * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution, HA replication, dual-track UDFs: ADR-001 through ADR-018).
 
 ---
 
@@ -55,7 +55,9 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
 * [`EXTENSIONS.md`](file:///Users/maro/Projects/sql/doc/EXTENSIONS.md)
-  * Advanced SQL capabilities: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB operators, CTEs, Foreign Keys with cascading actions.
+  * Advanced SQL capabilities: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB operators, CTEs, Foreign Keys with cascading actions, and Dual-Track UDF architecture (Go native SPI + Wasm sandbox).
+* [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](file:///Users/maro/Projects/sql/doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md)
+  * Continuous and discrete quantiles (`PERCENTILE_CONT`, `PERCENTILE_DISC`), ANSI `WITHIN GROUP (ORDER BY ...)`, `MEDIAN`, and streaming approximate quantiles (`APPROX_PERCENTILE` via T-Digest).
 * [`LOG_PROCESSING_GREP_AWK.md`](file:///Users/maro/Projects/sql/doc/LOG_PROCESSING_GREP_AWK.md)
   * In-engine text & log processing operators (`GREP`, `AWK`, `SPLIT_PART`).
   * Zero-copy pushdown filtering, structured token extraction, and schema-free log analytics.
@@ -102,4 +104,9 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 * [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/sql/doc/TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.
 * [`ROADMAP.md`](file:///Users/maro/Projects/sql/doc/ROADMAP.md)
-  * Completed milestones and future technical development initiatives.
+  * Versioned milestone tracking (Phases 1 to 5) and future technical architectural initiatives.
+* [`TODO.md`](file:///Users/maro/Projects/sql/TODO.md)
+  * Daily actionable engineering backlog and task status tracker.
+* [`CHANGELOG.md`](file:///Users/maro/Projects/sql/CHANGELOG.md)
+  * Release history and detailed changelogs following Keep a Changelog standard.
+

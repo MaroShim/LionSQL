@@ -21,6 +21,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented non-null integer fast-paths in `storage.Value.Equal` and `storage.Value.Compare` (`TypeInt`), bypassing type dispatch, null checks, and decimal conversions for high-frequency point lookups and SkipList index operations.
   - Optimized `storage.Value.String()` to use `strconv.FormatInt` and `strconv.FormatBool`, replacing `fmt.Sprintf` reflection overhead on hot formatting paths.
 
+### Documentation
+- **Architecture & Operational Documentation Audit (`README.md`, `doc/*`)**:
+  - Added ADR-017 (1-Writer Multi-Reader High-Availability Replication Topology) and ADR-018 (Dual-Track UDF Architecture: Native Go In-Process SPI & WebAssembly Sandbox) in `doc/ADR.md`.
+  - Added Section 12 for WAL replication endpoints (`/api/replication/stream`, `/api/replication/status`, `/api/replication/ack`, `/api/replication/promote`, `/api/replication/demote`) in `doc/API_REFERENCE.md`.
+  - Added Section 7 for 1-Writer Multi-Reader High-Availability Cluster Operations and Failover Runbook in `doc/OPERATIONS.md`.
+  - Updated root `README.md` and `doc/README.md` with replication CLI flags (`--replica-of`, `--node-id`, `--ephemeral`), endpoint reference tables, and links to `TODO.md` and `PERCENTILE_AND_QUANTILE_ANALYTICS.md`.
+  - Updated system architecture diagram and module directory layout in `doc/ARCHITECTURE.md`.
+
 ## [0.11.0] - 2026-10-02
 
 ### Added

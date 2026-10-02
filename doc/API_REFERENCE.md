@@ -575,4 +575,106 @@ SQLion hosts the official client library directly for zero-dependency browser in
 - `GET /sdk/sqlion.js`: Universal JavaScript Client SDK bundle (`Content-Type: application/javascript`)
 - `GET /sdk/sqlion.d.ts`: TypeScript Declaration definitions (`Content-Type: text/typescript`)
 
+---
+
+## 12. High-Availability & WAL Replication Endpoints
+
+SQLion supports 1-Writer Multi-Reader High-Availability clustering with linear WAL streaming and zero-downtime failover promotion.
+
+### 12.1. `GET /api/replication/status`
+Returns the replication state, role, committed LSN, and follower statuses.
+
+- **Response `200 OK` (Primary Node)**:
+  ```json
+  {
+    "role": "primary",
+    "node_id": "primary-node-1",
+    "current_lsn": 105400,
+    "replayed_lsn": 105400,
+    "is_read_only": false,
+    "connected_replicas": 2,
+    "replicas": [
+      {
+        "id": "replica-node-1",
+        "remote_addr": "10.0.0.2:48392",
+        "last_acked_lsn": 105398,
+        "replication_lag": 2,
+        "connected_at": "2026-10-02T10:00:00Z",
+        "last_ack_at": "2026-10-02T10:14:32Z"
+      }
+    ]
+  }
+  ```
+
+- **Response `200 OK` (Replica Node)**:
+  ```json
+  {
+    "role": "replica",
+    "node_id": "replica-node-1",
+    "current_lsn": 105398,
+    "replayed_lsn": 105398,
+    "is_read_only": true,
+    "primary_url": "http://10.0.0.1:8090"
+  }
+  ```
+
+### 12.2. `GET /api/replication/stream`
+Streams chunked, line-delimited binary-framed WAL records from the primary node to connected followers.
+
+- **Query Parameters**:
+  - `from_lsn`: Starting LSN sequence number (defaults to `0` or replica's current position).
+  - `replica_id`: Unique identifier of the requesting follower node.
+- **Headers**:
+  - `Content-Type: text/plain; charset=utf-8`
+  - `Cache-Control: no-cache, no-transform`
+- **Stream Format**:
+  - Heartbeat lines: `:heartbeat\n` (sent every 5 seconds to keep the HTTP connection alive).
+  - Serialized WAL frame records: `{"lsn": 105401, "tx_id": 9928, "type": "INSERT", "table": "accounts", ...}\n`
+
+### 12.3. `POST /api/replication/ack`
+Replicas report heartbeat acknowledgments and their latest replayed LSN to the primary node.
+
+- **Request Body**:
+  ```json
+  {
+    "node_id": "replica-node-1",
+    "acked_lsn": 105401
+  }
+  ```
+- **Response `200 OK`**:
+  ```json
+  {
+    "ok": true
+  }
+  ```
+
+### 12.4. `POST /api/replication/promote`
+Instantly promotes a secondary replica into an active primary node capable of accepting writes. Lifts read-only locks without restarting the process.
+
+- **Response `200 OK`**:
+  ```json
+  {
+    "status": "promoted",
+    "role": "primary"
+  }
+  ```
+
+### 12.5. `POST /api/replication/demote`
+Demotes an active primary node into a secondary replica and attaches it to a new primary URL.
+
+- **Request Body**:
+  ```json
+  {
+    "primary_url": "http://10.0.0.2:8090"
+  }
+  ```
+- **Response `200 OK`**:
+  ```json
+  {
+    "status": "demoted",
+    "role": "replica"
+  }
+  ```
+
+
 

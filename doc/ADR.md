@@ -22,6 +22,8 @@ This document records the critical architectural decisions made throughout the d
 - [ADR-014: 3-Stage Verification Pipeline (Build ➔ Test `-race` ➔ Commit) & Flake-Free Hermeticity](#adr-014-3-stage-verification-pipeline-build--test--race--commit--flake-free-hermeticity)
 - [ADR-015: Single-Engine VDBE Unification for Interactive Queries (DQL & DML)](#adr-015-single-engine-vdbe-unification-for-interactive-queries-dql--dml)
 - [ADR-016: Zero-Parse Prepared Statement VDBE Bytecode Caching across Wire Protocols](#adr-016-zero-parse-prepared-statement-vdbe-bytecode-caching-across-wire-protocols)
+- [ADR-017: 1-Writer Multi-Reader High-Availability Replication Topology & Linear WAL Streaming](#adr-017-1-writer-multi-reader-high-availability-replication-topology--linear-wal-streaming)
+- [ADR-018: Dual-Track User-Defined Function (UDF) Architecture: Native Go In-Process SPI & WebAssembly Sandbox](#adr-018-dual-track-user-defined-function-udf-architecture-native-go-in-process-spi--webassembly-sandbox)
 
 ---
 
@@ -453,3 +455,61 @@ Precompile prepared queries directly into VDBE bytecode programs (`*proc.Program
 - **Positive**: Zero-parse query execution hot path. Slashes per-query latency and memory allocations. Completely decouples query compilation from execution.
 - **Negative**: Session memory holds compiled programs (bounded by Golden Rule 29 via session lifecycle cleanup).
 - **Compliance**: Adheres to Golden Rule 30 (Zero-Allocation Hot Paths) and Golden Rule 31 (Responsive Latency Budget).
+
+---
+
+## ADR-017: 1-Writer Multi-Reader High-Availability Replication Topology & Linear WAL Streaming
+
+### Status
+Accepted
+
+### Context
+Enterprise production environments require scale-out read capacity and automated disaster failover without sacrificing transactional write throughput. Distributed multi-master topologies (such as multi-master Paxos or 2PC) introduce prohibitive consensus round-trip latency on write paths, distributed lock contention, and cascading abort penalties on high-frequency OLTP workloads.
+
+### Decision
+Adopt a **1-Writer Multi-Reader Primary-Replica Topology** with asynchronous/semi-synchronous linear WAL streaming:
+1. **Single Writer Primary (`RolePrimary`)**:
+   - Accepts all write mutations (DDL and DML) and enforces OCC/MVCC validation.
+   - Assigns monotonically increasing Log Sequence Numbers (`LSN`) to committed transactions and broadcasts binary framed WAL records via `Broadcaster`.
+   - Exposes streaming endpoints: `GET /api/replication/stream?from_lsn=<n>&replica_id=<id>` and `POST /api/replication/ack`.
+2. **Multi-Reader Secondary Replicas (`RoleReplica`)**:
+   - Launched with `--replica-of <primary_url>` and `--node-id <id>`.
+   - Replays streamed WAL records sequentially via background `ReplicationClient`.
+   - Enforces strict read-only execution across all wire protocols (PGWire, TDS, HTTP REST) by rejecting mutating statements with `ErrReadOnlyReplica`.
+3. **Zero-Downtime Failover & Promotion**:
+   - Secondary replicas can be promoted immediately to primary status via `POST /api/replication/promote` (`Promote()`), lifting read-only write locks and allowing the new primary to accept writes without process restart.
+   - Primary nodes can be demoted cleanly via `POST /api/replication/demote`.
+
+### Consequences
+- **Positive**: Preserves raw single-node write performance (300,000+ tpmC) with zero distributed consensus penalty. Provides linear read scalability across secondary nodes. Fast, deterministic failover.
+- **Negative**: Replicas observe small, bounded replication lag ($< 5\text{ms}$ under typical LAN conditions) before replaying incoming WAL frames.
+- **Compliance**: Adheres to Golden Rule 22 (Modular Interface Abstraction), Golden Rule 33 (Concurrency Safety), and GEMINI.md Section 6 (Scale-Up Primacy & WAL Replication Topology).
+
+---
+
+## ADR-018: Dual-Track User-Defined Function (UDF) Architecture: Native Go In-Process SPI & WebAssembly Sandbox
+
+### Status
+Accepted
+
+### Context
+Modern database workloads require custom algorithmic transformations (cryptographic hashing, domain-specific parsing, mathematical formulas). Providing extensibility in a Go database engine has historically been challenging:
+- Standard Go dynamic plugins (`plugin.Open` / `.so`) are fragile: they fail to run on Windows, mandate exact Go compiler patch version matching, and force dynamic Cgo linkage.
+- Embedding heavy interpreted scripting runtimes (e.g. JavaScript, Python) incurs severe allocation overhead, slow numeric execution, and security escape risks.
+
+### Decision
+Adopt a **Dual-Track User-Defined Function (UDF)** extensibility model:
+1. **Track 1: Go Native In-Process SPI (`proc.RegisterScalarFunction`)**:
+   - For applications embedding SQLion as an in-process Go library.
+   - Developers register type-safe Go functions `func(args []storage.Value) (storage.Value, error)` directly with the runtime engine at startup.
+   - Zero FFI boundary crossing, zero sandbox serialization overhead ($< 5\text{ns}$ per function invocation).
+2. **Track 2: WebAssembly (Wasm) Sandboxed Extensions (`wazero`)**:
+   - For standalone multi-tenant server deployments.
+   - Users compile functions from Rust, Go, C, or Zig into standalone `.wasm` bytecode modules and register them dynamically (`CREATE FUNCTION ... AS WASM`).
+   - Executed via pure-Go zero-Cgo WebAssembly runtime (`wazero`) with strict instruction fuel limits, memory sandboxing, and zero host filesystem/network access.
+
+### Consequences
+- **Positive**: Best-of-both-worlds extensibility. Embedded users achieve native Go speed, while standalone deployments gain cross-platform, secure, polyglot user functions without compiler version lock-in.
+- **Negative**: Wasm execution introduces memory marshalling overhead compared to direct native function pointers.
+- **Compliance**: Adheres to Golden Rule 26 (Extension Boundary Sandboxing), Golden Rule 84 (Hermetic Cross-Platform Parity), and Golden Rule 86 (Pure Static Binaries).
+

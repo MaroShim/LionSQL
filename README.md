@@ -121,6 +121,10 @@ SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micro
 - **Online Non-Blocking Snapshot Hot Backup**:
   - Live, point-in-time `.tar.gz` database backups captured via read-only snapshot transactions without blocking writers or interrupting active OLTP traffic.
   - Accessible via CLI (`-backup`, `-restore`), REST API (`/api/backup`, `/api/restore`), and Web Studio UI.
+- **1-Writer Multi-Reader High-Availability Replication**:
+  - Cluster scaling via linear WAL streaming (`GET /api/replication/stream`) from single primary writer to secondary read replicas.
+  - Replicas enforce strict read-only execution across all wire protocols (`ErrReadOnlyReplica`), offering linear horizontal query scaling.
+  - Zero-downtime failover promotion (`POST /api/replication/promote`) promoting replicas to active primary nodes without process restart.
 - **High-Performance Storage Backends & TPC-C Benchmark**:
   - **In-Memory OCC Engine**: Fine-grained table-level striped locking, pure-Go concurrent SkipList secondary indexes, and zero-copy cursor iteration delivering **1,251,489 tpmC** and **43,832 TPS** on the standard TPC-C benchmark.
   - **WiredTiger (Default)**: Cgo-backed lock-free B+Tree with hazard pointers, MessagePack binary record codec, and cursor caching delivering **507,456 tpmC**.
@@ -349,6 +353,9 @@ run();
 | `-tds` | `127.0.0.1:1433` | Microsoft SQL Server TDS protocol listen address |
 | `-dir` | `data` | Database storage directory |
 | `-engine` | `wiredtiger` | Storage engine backend (`wiredtiger` or `memory`) |
+| `-ephemeral` | `false` | Disable WAL/AOF persistence for in-memory engine (pure RAM) |
+| `-replica-of` | `""` | Primary server URL to stream WAL from (runs as read-only replica) |
+| `-node-id` | `"node-1"` | Unique cluster node identifier for replication tracking |
 | `-work-mem` | `64MB` | Default memory limit per query operator before spill-to-disk |
 | `-max-workers` | `NumCPU * 4` | Maximum concurrent query execution workers |
 | `-max-idle-sessions` | `64` | Maximum idle storage sessions to retain in pool |
@@ -413,6 +420,11 @@ SQLion exposes a complete PocketBase-style REST API on `:8090`:
 | `GET` | `/api/backup` | Stream live `.tar.gz` snapshot hot backup |
 | `POST` | `/api/backup` | Create backup file on server (`{"target": "path"}`) |
 | `POST` | `/api/restore` | Restore database from archive file or multipart upload |
+| `GET` | `/api/replication/status` | Get node replication role, LSN, lag, and replica list |
+| `GET` | `/api/replication/stream` | Stream chunked WAL frames to connected replicas |
+| `POST` | `/api/replication/ack` | Report follower heartbeat and replayed LSN |
+| `POST` | `/api/replication/promote` | Promote replica to active primary node |
+| `POST` | `/api/replication/demote` | Demote primary node to follower under a new primary |
 
 ---
 
@@ -432,24 +444,26 @@ Start here for a complete subject-based directory of all architectural blueprint
 
 ### Core Architecture & Internals Specifications
 - **[System Architecture Specification](doc/ARCHITECTURE.md)**: Exhaustive technical specification covering Volcano iterators, dual-parser decoupling, and storage backends.
-- **[Architecture Decision Records (ADRs)](doc/ADR.md)**: Historical log of 14 foundational architectural decisions (ADR-001 through ADR-014).
+- **[Architecture Decision Records (ADRs)](doc/ADR.md)**: Historical log of 18 foundational architectural decisions (ADR-001 through ADR-018).
 - **[VDBE Bytecode Virtual Machine Internals](doc/INTERNALS_VDBE.md)**: Register allocation, opcode instruction set architecture (ISA), and procedural execution.
 - **[Storage Engine Mechanics (WiredTiger & Memory OCC)](doc/INTERNALS_STORAGE.md)**: Lock-free B+Trees, hazard pointers, OCC validation, and AOF log compaction.
 - **[Cost-Based Optimizer & Volcano Pipeline Internals](doc/INTERNALS_CBO_VOLCANO.md)**: Equi-depth histograms, physical cost formulas, and external merge sort.
 - **[Multi-Wire Protocol Internals](doc/INTERNALS_WIRE_PROTOCOLS.md)**: Binary framing for PostgreSQL v3, TDS 7.x/8.0, and goroutine connection pooler.
 - **[Virtual System Catalog & Data Dictionary](doc/DATA_DICTIONARY.md)**: System views (`sys.*`, `information_schema.*`), data types, and tool compatibility.
-- **[High Availability & Disaster Recovery](doc/HIGH_AVAILABILITY.md)**: Multi-node replication topology, Raft consensus clustering, failover, and recovery SLAs.
-- **[Extension & Driver Development Guide](doc/EXTENSIONS.md)**: Pluggable storage engines, fallback parsers, wire protocol drivers, and sandbox safety.
+- **[High Availability & Disaster Recovery](doc/HIGH_AVAILABILITY.md)**: Multi-node replication topology, 1-writer multi-reader WAL streaming, failover, and recovery SLAs.
+- **[Extension & Driver Development Guide](doc/EXTENSIONS.md)**: Dual-track UDFs (Go native SPI + Wasm sandbox), pluggable storage engines, and fallback parsers.
 
 ### User Guides & Operations
 - **[T-SQL & SQL Syntax Reference Guide](doc/TSQL_REFERENCE.md)**: Complete language reference for procedures, triggers, UDFs, TVFs, and queries.
-- **[HTTP REST API & Realtime SSE Specification](doc/API_REFERENCE.md)**: OpenAPI-style endpoint documentation and JavaScript EventSource examples.
+- **[Percentile & Quantile Analytics](doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md)**: Continuous/discrete quantiles (`PERCENTILE_CONT`, `PERCENTILE_DISC`), `MEDIAN`, and streaming `APPROX_PERCENTILE` (T-Digest).
+- **[In-Engine Text & Log Analytics](doc/LOG_PROCESSING_GREP_AWK.md)**: Zero-copy `GREP`, `REGEXP_LIKE`, and `AWK` / `SPLIT_PART` filter and extraction operators.
 - **[Observability, Metrics & Telemetry Guide](doc/METRICS.md)**: Prometheus time-series metrics, health probes, alerting rules, and Grafana integration.
-- **[Production Deployment & Operations Runbook](doc/OPERATIONS.md)**: Systemd services, Docker deployment, disaster recovery, and security hardening.
+- **[Production Deployment & Operations Runbook](doc/OPERATIONS.md)**: Systemd services, Docker deployment, 1-writer replication failover, and security hardening.
 - **[Performance Tuning & Benchmark Guide](doc/BENCHMARK.md)**: High-concurrency banking benchmark harness, TPS measurement, and memory tuning.
 - **[Database Migration Guide](doc/MIGRATION.md)**: Procedures for migrating from PostgreSQL, MSSQL, SQLite, and MySQL.
 - **[Security Policy & Threat Model](doc/SECURITY.md)**: RBAC access control, SQL injection immunity, and vulnerability disclosure.
-- **[Engineering Roadmap & Milestones](doc/ROADMAP.md)**: Near-term and long-term milestones (Raft replication, vector search).
+- **[Engineering Roadmap & Milestones](doc/ROADMAP.md)**: Versioned milestones across 5 phases (HA replication, DuckDB/Arrow zero-copy snapshots, vector search).
+- **[Actionable Engineering Backlog (TODO.md)](TODO.md)**: Immediate, daily task backlog and prioritized operational execution tracker.
 - **[Troubleshooting, Error Diagnostics & FAQ](doc/TROUBLESHOOTING.md)**: Port conflicts, serialization conflicts, slow query tuning, and client driver setup.
 - **[Contributing & Development Guide](CONTRIBUTING.md)**: Engineering standards, 3-stage verification pipeline, and pull request checklist.
 - **[Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.md)**: Standards, pledge, enforcement responsibilities, and guidelines.

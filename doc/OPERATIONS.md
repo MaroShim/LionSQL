@@ -279,3 +279,82 @@ readinessProbe:
 | `queued_requests` | `0` to `5` | If persistently > 50, increase `-max-workers` or scale CPU |
 | `active_workers` | `< max_workers * 0.8` | Normal working capacity |
 | `idle_sessions` | `> 5` | If dropping to 0, increase `-max-idle-sessions` |
+
+---
+
+## 7. High-Availability & 1-Writer Multi-Reader Replication Runbook
+
+SQLion enforces a **1-Writer Multi-Reader High-Availability Architecture** (GEMINI.md Section 6). The primary node accepts all read/write mutations, while secondary replicas continuously stream and replay WAL records, providing linear horizontal read capacity and rapid failover.
+
+### 7.1. Launching the Primary Node
+
+Start the primary node with a unique node identifier:
+
+```bash
+/usr/local/bin/sqlion \
+    -node-id=prod-primary-01 \
+    -dir=/var/lib/sqlion/data \
+    -engine=wiredtiger \
+    -http=0.0.0.0:8090 \
+    -pg=0.0.0.0:5433 \
+    -tds=0.0.0.0:1433
+```
+
+### 7.2. Launching Read Replicas
+
+Launch one or more secondary replicas pointing to the primary's HTTP address via `-replica-of`:
+
+```bash
+/usr/local/bin/sqlion \
+    -node-id=prod-replica-01 \
+    -replica-of=http://primary-host.internal:8090 \
+    -dir=/var/lib/sqlion/replica_data \
+    -engine=wiredtiger \
+    -http=0.0.0.0:8090 \
+    -pg=0.0.0.0:5433 \
+    -tds=0.0.0.0:1433
+```
+
+Upon boot, the replica:
+1. Connects to `http://primary-host.internal:8090/api/replication/stream`.
+2. Establishes a persistent chunked stream from its last replayed LSN.
+3. Spawns a background thread dispatching LSN acknowledgments to `/api/replication/ack`.
+4. Enforces strict read-only execution across PGWire, TDS, and HTTP REST (`ErrReadOnlyReplica`).
+
+### 7.3. Monitoring Replication Lag
+
+Query `/api/replication/status` on either primary or replica:
+
+```bash
+# Check primary status & connected followers
+curl -fsS http://primary-host.internal:8090/api/replication/status | jq .
+
+# Check replica status & current replayed LSN
+curl -fsS http://replica-host.internal:8090/api/replication/status | jq .
+```
+
+Alerting threshold: If `replication_lag` (Primary `current_lsn` - Replica `replayed_lsn`) exceeds 1,000 for longer than 30 seconds, investigate network throughput or replica disk I/O saturation.
+
+### 7.4. Zero-Downtime Failover & Promotion Runbook
+
+If the primary node fails or undergoes maintenance:
+
+1. **Promote the Most Up-to-Date Replica**:
+   Select the replica with the highest `replayed_lsn` and issue the promotion command:
+   ```bash
+   curl -fsS -X POST http://replica-host.internal:8090/api/replication/promote
+   ```
+   The replica immediately lifts read-only constraints, transitions to `RolePrimary`, and begins accepting write traffic.
+
+2. **Redirect Application Write Traffic**:
+   Update DNS or your external layer-4 load balancer (AWS NLB, HAProxy) to point write traffic to `replica-host.internal`.
+
+3. **Re-attaching the Old Primary as a Follower**:
+   When the previous primary host is restored, demote it and attach it as a follower to the new primary:
+   ```bash
+   curl -fsS -X POST \
+       -H "Content-Type: application/json" \
+       -d '{"primary_url": "http://replica-host.internal:8090"}' \
+       http://old-primary.internal:8090/api/replication/demote
+   ```
+

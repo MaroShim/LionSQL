@@ -66,11 +66,12 @@ SQLion is an enterprise-grade, high-concurrency embedded OLTP database engine wr
                                                |
                                                v
 +---------------------------------------------------------------------------------------------------------+
-|                                    Backup, Recovery & Management Layer                                  |
-|   - Non-Blocking Online Snapshot Hot Backup (.tar.gz with manifest, schema, catalog, jsonl data)        |
+|                               High Availability, Replication & Backup Layer                             |
+|   - 1-Writer Multi-Reader Topology: Linear WAL Streaming & Replica Broadcaster (pkg/replication)        |
+|   - Zero-Downtime Failover & Replica Promotion (/api/replication/promote, /api/replication/demote)       |
+|   - Non-Blocking Online Snapshot Hot Backup (.tar.gz with manifest, schema, catalog, mpk data)          |
 |   - Point-in-Time Restore Engine (CLI: -backup / -restore, HTTP: /api/backup, /api/restore)             |
-|   - PostgreSQL High-Speed Streaming Protocol (COPY FROM STDIN / COPY TO STDOUT)                         |
-|   - Daemon Lifecycle Management (start, stop, restart, status with PID and logfile locking)             |
+|   - Daemon Lifecycle Management (start, stop, restart, status with PID and lockfiles)                   |
 +---------------------------------------------------------------------------------------------------------+
 ```
 
@@ -358,24 +359,27 @@ SQLion embeds a PocketBase-style administration dashboard (`pkg/ui/dashboard.htm
 │   ├── server/                # Server entry point, CLI flags, daemon control
 │   └── bench/                 # High-concurrency OLTP & storage benchmarks
 ├── doc/
-│   ├── ADR.md                 # Architecture Decision Records (ADRs 001 - 014)
+│   ├── ADR.md                 # Architecture Decision Records (ADRs 001 - 018)
 │   └── ARCHITECTURE.md        # Complete System Technical Specification (This document)
 ├── pkg/
 │   ├── api/                   # HTTP REST API, Session Pooler, Realtime Broker, Auth
 │   ├── auth/                  # Password hashing (bcrypt), JWT generation & revocation
 │   ├── backup/                # Non-blocking snapshot backup & restore engine
 │   ├── catalog/               # System catalog, table schemas, procedures, triggers, stats
+│   ├── config/                # JSON and CLI configuration loader and hierarchical resolution
 │   ├── execution/             # Volcano Iterator engine, memory governor, external sort
 │   ├── planner/               # Cost-Based Optimizer (CBO), cost formulas, histograms
 │   ├── proc/                  # T-SQL compiler, native Pratt parser, plan cache
 │   │   ├── parser/antlr/      # Official Microsoft T-SQL ANTLR4 fallback parser
 │   │   └── runtime/           # Native VDBE Bytecode VM, ambient transactions
+│   ├── replication/           # 1-Writer Multi-Reader WAL streaming, broadcaster, replica client
 │   ├── storage/               # Unified storage.Engine interface, Value/Record abstractions
 │   │   ├── memengine/         # Pure-Go OCC in-memory engine with WAL/AOF persistence
 │   │   └── wiredtiger/        # WiredTiger Cgo storage engine implementation
 │   ├── ui/                    # Embedded HTML/CSS/JS dashboard (embed.FS)
 │   └── wire/                  # Multi-wire protocols: PostgreSQL v3, COPY, TDS 7.x/8.0
 ├── GEMINI.md                  # Project engineering rules and architectural invariants
+├── TODO.md                    # Actionable daily engineering backlog and task tracker
 └── go.mod                     # Go module definitions
 ```
 
