@@ -705,6 +705,9 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 	if tx.closed {
 		return storage.ErrTxClosed
 	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
 
 	tbl, err := tx.sess.engine.GetTable(tableName)
 	if err != nil {
@@ -763,6 +766,9 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	if tx.closed {
 		return storage.ErrTxClosed
 	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
 
 	existing, err := tx.getLocked(tableName, pk)
 	if err != nil {
@@ -819,6 +825,9 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 
 	if tx.closed {
 		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
 	}
 
 	var oldRec storage.Record

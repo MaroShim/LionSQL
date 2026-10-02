@@ -1171,7 +1171,7 @@ func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 		return storage.ErrTxClosed
 	}
 	if tx.opts.ReadOnly {
-		return fmt.Errorf("cannot insert in read-only transaction")
+		return storage.ErrReadOnlyTransaction
 	}
 
 	return tx.insertLocked(tableName, record)
@@ -1346,7 +1346,7 @@ func (tx *Transaction) Update(tableName string, pk storage.Value, record storage
 		return storage.ErrTxClosed
 	}
 	if tx.opts.ReadOnly {
-		return fmt.Errorf("cannot update in read-only transaction")
+		return storage.ErrReadOnlyTransaction
 	}
 
 	return tx.updateLocked(tableName, pk, record, 0)
@@ -1585,7 +1585,7 @@ func (tx *Transaction) Delete(tableName string, pk storage.Value) error {
 		return storage.ErrTxClosed
 	}
 	if tx.opts.ReadOnly {
-		return fmt.Errorf("cannot delete in read-only transaction")
+		return storage.ErrReadOnlyTransaction
 	}
 
 	return tx.deleteLocked(tableName, pk, 0)

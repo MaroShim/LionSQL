@@ -28,6 +28,8 @@ var (
 	ErrSavepointNotFound    = errors.New("savepoint not found")
 	ErrPartitionNotFound    = errors.New("partition not found")
 	ErrTableNotPartitioned  = errors.New("table is not partitioned")
+	ErrReadOnlyTransaction  = errors.New("cannot execute mutation in read-only transaction (SQLSTATE 25006)")
+	ErrReadOnlyReplica      = errors.New("cannot execute write operations on read-only replica (SQLSTATE 25006)")
 )
 
 // DataType represents the column data type.

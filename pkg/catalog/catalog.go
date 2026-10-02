@@ -427,6 +427,13 @@ func (c *Catalog) ListTableStats() map[string]*planner.TableStats {
 	return res
 }
 
+// InvalidateTableStats clears cached statistics for a table upon DDL mutations.
+func (c *Catalog) InvalidateTableStats(tableName string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.tableStats, tableName)
+}
+
 // CreateView registers a new view. Returns ErrViewExists if a view with that name already exists.
 func (c *Catalog) CreateView(v *View) error {
 	c.mu.Lock()

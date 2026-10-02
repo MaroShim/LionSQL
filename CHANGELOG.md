@@ -21,6 +21,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Standardized In-Memory OCC engine snapshot persistence strictly on `tables.mpk` (MessagePack metadata container) and OLTP row records on schema-ordered contiguous `Row` representations.
 
 ### Added
+- **Storage/Session Read-Only Defense in Depth & DDL Catalog Synchronization (`pkg/storage`, `pkg/catalog`, `pkg/backup`)**:
+  - Enforced strict `ErrReadOnlyTransaction` and `ErrReadOnlyReplica` (SQLSTATE `25006`) errors across all storage mutations (`Insert`, `Update`, `Delete`) in In-Memory OCC and WiredTiger engines.
+  - Propagated read-only error semantics cleanly to VDBE virtual machine and higher-layer SQL execution engines to prevent secondary replica data contamination.
+  - Implemented `ApplyWALRecordWithOptions` in `pkg/backup/pitr.go` with `ddlHook` support and `OpDropPartition` replay handling.
+  - Added `InvalidateTableStats` to `catalog.Catalog` for instantaneous CBO cache invalidation upon replicated DDL operations.
+
 - **Transaction Lifecycle & MVCC Commit Timestamp / LSN Snapshot Binding (`pkg/storage`, `pkg/storage/memengine`, `pkg/storage/wiredtiger`)**:
   - Extended `storage.TxOptions` with `SnapshotLSN` and `SnapshotTimestamp` to enable deterministic consistent snapshot bounds across replication replicas.
   - Added `SnapshotLSN()`, `SnapshotTimestamp()`, `CommitLSN()`, and `CommitTimestamp()` to the `storage.Transaction` interface contract.

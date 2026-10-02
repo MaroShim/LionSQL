@@ -32,11 +32,27 @@ type PITRResult struct {
 }
 
 // ApplyWALRecordToEngine applies a single committed WAL batch to any storage engine.
+// ApplyWALRecordToEngine applies a single committed WAL batch to any storage engine.
 // If the underlying engine is *memengine.Engine, it uses direct memory mutation for maximum throughput.
 // Otherwise, it replays operations through the transactional engine contract.
 func ApplyWALRecordToEngine(eng storage.Engine, rec memengine.WALRecord) error {
+	return ApplyWALRecordWithOptions(eng, rec, nil)
+}
+
+// ApplyWALRecordWithOptions applies a WAL record and invokes an optional ddlHook callback for catalog synchronization.
+func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlHook func(op memengine.WALOp)) error {
 	if me, ok := eng.(*memengine.Engine); ok {
-		return me.ApplyWALRecord(rec)
+		err := me.ApplyWALRecord(rec)
+		if err == nil && ddlHook != nil {
+			for _, op := range rec.Ops {
+				switch op.Type {
+				case memengine.OpCreateTable, memengine.OpDropTable, memengine.OpTruncateTable,
+					memengine.OpCreateIndex, memengine.OpDropIndex, memengine.OpDropPartition:
+					ddlHook(op)
+				}
+			}
+		}
+		return err
 	}
 
 	for _, op := range rec.Ops {
@@ -45,16 +61,36 @@ func ApplyWALRecordToEngine(eng storage.Engine, rec memengine.WALRecord) error {
 			if op.Schema != nil {
 				_ = eng.CreateTable(op.Schema)
 			}
+			if ddlHook != nil {
+				ddlHook(op)
+			}
 		case memengine.OpDropTable:
 			_ = eng.DropTable(op.Table)
+			if ddlHook != nil {
+				ddlHook(op)
+			}
 		case memengine.OpTruncateTable:
 			_ = eng.TruncateTable(op.Table)
+			if ddlHook != nil {
+				ddlHook(op)
+			}
+		case memengine.OpDropPartition:
+			_ = eng.DropPartition(op.Table, op.Key)
+			if ddlHook != nil {
+				ddlHook(op)
+			}
 		case memengine.OpCreateIndex:
 			if op.IndexSchema != nil {
 				_ = eng.CreateIndex(op.IndexSchema)
 			}
+			if ddlHook != nil {
+				ddlHook(op)
+			}
 		case memengine.OpDropIndex:
 			_ = eng.DropIndex(op.Table, op.IndexName)
+			if ddlHook != nil {
+				ddlHook(op)
+			}
 		case memengine.OpInsert:
 			sess, err := eng.NewSession()
 			if err != nil {
