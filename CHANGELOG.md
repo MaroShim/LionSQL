@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- **TPC-C VDBE Stored Procedure Single Atomic Transaction Encapsulation (`cmd/tpcc_vdbe`)**:
+  - Refactored `runVDBENewOrder`, `runVDBEDelivery`, and `runVDBEStockLevel` in `cmd/tpcc_vdbe` to execute within explicit, atomic ACID transactions (`sess.BeginTx` and `exec.RunInTx`) rather than multi-statement ambient autocommit transactions.
+  - Aligns VDBE TPC-C benchmark execution strictly with official TPC-C specification invariants (all order lines and district header mutations committed atomically in a single transaction).
+  - Eliminates redundant multi-transaction Cgo begin/commit overhead across New-Order loops.
+
 ### Removed
 - **Legacy Text JSON & Fallback Storage Codecs (`pkg/storage/wiredtiger`, `pkg/storage/memengine`)**:
   - Removed JSON and MessagePack fallback parsing from WiredTiger record decoding (`decodeRecord` and `decodeRow`), standardizing 100% on native binary tuple format (`0x01`).

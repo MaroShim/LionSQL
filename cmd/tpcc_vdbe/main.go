@@ -347,8 +347,14 @@ func runVDBENewOrder(exec *runtime.Executor, cache *runtime.PlanCache, sess stor
 	oKey := fmt.Sprintf("%d_%d_%d", wID, dID, nextOID)
 	olCnt := int64(rng.Intn(6) + 5) // 5 to 10 lines
 
-	// 1. Run header via VDBE Bytecode
-	_, err := exec.Run(progHeader, "TPCC_NewOrderHeader", map[string]any{
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		return false
+	}
+	defer tx.Rollback()
+
+	// 1. Run header via VDBE Bytecode within atomic tx
+	_, _, err = exec.RunInTx(progHeader, map[string]any{
 		"w_id":      wID,
 		"d_key":     dKey,
 		"c_key":     cKey,
@@ -357,12 +363,12 @@ func runVDBENewOrder(exec *runtime.Executor, cache *runtime.PlanCache, sess stor
 		"d_id":      dID,
 		"c_id":      cID,
 		"ol_cnt":    olCnt,
-	}, sess)
+	}, tx, nil)
 	if err != nil {
 		return false
 	}
 
-	// 2. Run order lines via VDBE Bytecode
+	// 2. Run order lines via VDBE Bytecode within same atomic tx
 	for ol := 1; ol <= int(olCnt); ol++ {
 		iID := rng.Intn(totalItems) + 1
 		sKey := fmt.Sprintf("%d_%d", wID, iID)
@@ -370,7 +376,7 @@ func runVDBENewOrder(exec *runtime.Executor, cache *runtime.PlanCache, sess stor
 		olKey := fmt.Sprintf("%d_%d_%d_%d", wID, dID, nextOID, ol)
 		lineAmount := float64(orderQty) * float64(10+(iID%90))
 
-		_, err := exec.Run(progLine, "TPCC_NewOrderLine", map[string]any{
+		_, _, err := exec.RunInTx(progLine, map[string]any{
 			"s_key":     sKey,
 			"i_id":      iID,
 			"order_qty": orderQty,
@@ -380,13 +386,13 @@ func runVDBENewOrder(exec *runtime.Executor, cache *runtime.PlanCache, sess stor
 			"w_id":      wID,
 			"ol":        ol,
 			"amount":    lineAmount,
-		}, sess)
+		}, tx, nil)
 		if err != nil {
 			return false
 		}
 	}
 
-	return true
+	return tx.Commit() == nil
 }
 
 func runVDBEPayment(exec *runtime.Executor, cache *runtime.PlanCache, sess storage.Session, rng *rand.Rand, wID, dID, cID int) bool {
@@ -427,13 +433,19 @@ func runVDBEDelivery(exec *runtime.Executor, cache *runtime.PlanCache, sess stor
 		return false
 	}
 
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		return false
+	}
+	defer tx.Rollback()
+
 	for d := 1; d <= 10; d++ {
 		noKey := fmt.Sprintf("%d_%d_1001", wID, d)
-		_, _ = exec.Run(prog, "TPCC_Delivery", map[string]any{
+		_, _, _ = exec.RunInTx(prog, map[string]any{
 			"no_key": noKey,
-		}, sess)
+		}, tx, nil)
 	}
-	return true
+	return tx.Commit() == nil
 }
 
 func runVDBEStockLevel(exec *runtime.Executor, cache *runtime.PlanCache, sess storage.Session, rng *rand.Rand, wID, dID, totalItems int) bool {
@@ -442,16 +454,25 @@ func runVDBEStockLevel(exec *runtime.Executor, cache *runtime.PlanCache, sess st
 		return false
 	}
 
+	tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		return false
+	}
+	defer tx.Rollback()
+
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
 	for k := 0; k < 5; k++ {
 		iID := rng.Intn(totalItems) + 1
 		sKey := fmt.Sprintf("%d_%d", wID, iID)
-		_, _ = exec.Run(prog, "TPCC_StockLevel", map[string]any{
+		_, _, err := exec.RunInTx(prog, map[string]any{
 			"d_key": dKey,
 			"s_key": sKey,
-		}, sess)
+		}, tx, nil)
+		if err != nil {
+			return false
+		}
 	}
-	return true
+	return tx.Commit() == nil
 }
 
 func execWithRetry(maxRetries int, rng *rand.Rand, fn func() bool) (bool, int) {
