@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 )
 
@@ -15,7 +16,27 @@ const (
 var (
 	ErrInvalidTupleHeader  = errors.New("invalid tuple header or version")
 	ErrTupleBufferTooShort = errors.New("tuple buffer truncated or too short")
+
+	tupleBufferPool = sync.Pool{
+		New: func() any {
+			b := make([]byte, 0, 512)
+			return &b
+		},
+	}
 )
+
+// GetTupleBuffer borrows a scratch slice from the global buffer pool.
+func GetTupleBuffer() *[]byte {
+	return tupleBufferPool.Get().(*[]byte)
+}
+
+// PutTupleBuffer returns a scratch slice back to the global buffer pool.
+func PutTupleBuffer(buf *[]byte) {
+	if buf != nil {
+		*buf = (*buf)[:0]
+		tupleBufferPool.Put(buf)
+	}
+}
 
 // Row represents an ordered sequence of column values aligned with TableSchema.Columns.
 type Row struct {
@@ -86,8 +107,28 @@ func EncodeTuple(schema *TableSchema, rec Record) ([]byte, error) {
 	numCols := len(schema.Columns)
 	nullBitmapLen := (numCols + 7) / 8
 
-	// Preallocate estimate buffer
 	buf := make([]byte, 1+nullBitmapLen, 64)
+	return EncodeTupleToBuffer(schema, rec, buf)
+}
+
+// EncodeTupleToBuffer encodes a Record into the provided destination slice, reusing its capacity.
+func EncodeTupleToBuffer(schema *TableSchema, rec Record, buf []byte) ([]byte, error) {
+	if schema == nil {
+		return nil, errors.New("nil table schema")
+	}
+
+	numCols := len(schema.Columns)
+	nullBitmapLen := (numCols + 7) / 8
+
+	neededLen := 1 + nullBitmapLen
+	if cap(buf) < neededLen {
+		buf = make([]byte, neededLen, neededLen+numCols*8)
+	} else {
+		buf = buf[:neededLen]
+		for i := 0; i < neededLen; i++ {
+			buf[i] = 0
+		}
+	}
 	buf[0] = TupleCodecVersion
 
 	var scratch [10]byte

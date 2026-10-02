@@ -631,6 +631,18 @@ type WTTx struct {
 }
 
 func serializeRecord(cur *C.WT_CURSOR, schema *storage.TableSchema, record storage.Record) ([]byte, error) {
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+	b, err := serializeRecordToBuffer(cur, schema, record, *bufPtr)
+	if err != nil {
+		return nil, err
+	}
+	res := make([]byte, len(b))
+	copy(res, b)
+	return res, nil
+}
+
+func serializeRecordToBuffer(cur *C.WT_CURSOR, schema *storage.TableSchema, record storage.Record, buf []byte) ([]byte, error) {
 	if C.go_wt_cursor_is_format_string(cur) != 0 {
 		b, err := json.Marshal(record)
 		if err != nil {
@@ -639,7 +651,7 @@ func serializeRecord(cur *C.WT_CURSOR, schema *storage.TableSchema, record stora
 		return append(b, 0), nil
 	}
 	if schema != nil {
-		return storage.EncodeTuple(schema, record)
+		return storage.EncodeTupleToBuffer(schema, record, buf)
 	}
 	return msgpack.Marshal(record)
 }
@@ -727,7 +739,10 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	defer C.go_wt_cursor_reset(cur)
 
 	tbl, _ := tx.sess.engine.GetTable(tableName)
-	recBytes, err := serializeRecord(cur, tbl, existing)
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	recBytes, err := serializeRecordToBuffer(cur, tbl, existing, *bufPtr)
 	if err != nil {
 		return err
 	}
@@ -1061,7 +1076,10 @@ func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Rec
 	defer C.go_wt_cursor_reset(cur)
 
 	tbl, _ := tx.sess.engine.GetTable(tableName)
-	recBytes, err := serializeRecord(cur, tbl, record)
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	recBytes, err := serializeRecordToBuffer(cur, tbl, record, *bufPtr)
 	if err != nil {
 		return err
 	}

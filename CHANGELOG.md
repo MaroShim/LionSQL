@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Tuple Serialization Buffer & VM Execution Frame Pooling via `sync.Pool` (`pkg/storage`, `pkg/proc/runtime`, `pkg/storage/wiredtiger`)**:
+  - Implemented `tupleBufferPool` in `pkg/storage/tuple.go` (`GetTupleBuffer`, `PutTupleBuffer`, and `EncodeTupleToBuffer`) to eliminate heap allocations during high-frequency binary tuple encoding.
+  - Integrated pooled byte buffers into WiredTiger's record serialization pipeline (`serializeRecordToBuffer`), avoiding byte slice allocations on every `putLocked` and `Update` operation.
+  - Added `framePool` to T-SQL VDBE `Executor` in `pkg/proc/runtime/vm.go`, pooling and recycling `VMFrame` execution contexts across stored procedure invocations with comprehensive register and state cleanup.
+
 - **Direct Row Passthrough Architecture for Query Execution & Storage Cursors (`pkg/storage`, `pkg/execution`)**:
   - Extended `storage.Cursor` interface with `Row() (storage.Row, error)` and `storage.Transaction` with `GetRow(tableName string, pk storage.Value) (storage.Row, error)` to pass raw slice-backed rows directly to execution engines without `map[string]Value` conversions.
   - Implemented `DecodeTupleToRow` in `pkg/storage/tuple.go` to unpack binary tuples directly into contiguous `Row` values, eliminating intermediate record allocations in WiredTiger cursor reads.

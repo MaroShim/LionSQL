@@ -106,7 +106,7 @@ type Executor struct {
 	mu          sync.RWMutex
 	udfs        map[string]*UDFEntry
 	triggers    map[string]map[string][]*TriggerEntry // table (lower) -> event (upper) -> entries
-	regPool     sync.Pool
+	framePool   sync.Pool
 	tableGetter execution.TableGetter
 }
 
@@ -119,10 +119,16 @@ func NewExecutor(cache *PlanCache) *Executor {
 		cache:    cache,
 		udfs:     make(map[string]*UDFEntry),
 		triggers: make(map[string]map[string][]*TriggerEntry),
-		regPool: sync.Pool{
+		framePool: sync.Pool{
 			New: func() any {
-				r := make([]storage.Value, 64)
-				return &r
+				return &VMFrame{
+					regs:            make([]storage.Value, 64),
+					vars:            make(map[string]storage.Value),
+					cursors:         make(map[string]*cursorState),
+					transientTables: make(map[string][]map[string]any),
+					catchStack:      make([]int, 0, 8),
+					logs:            make([]string, 0, 8),
+				}
 			},
 		},
 	}
@@ -355,32 +361,51 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 		numRegs = 64
 	}
 
-	regPtr := e.regPool.Get().(*[]storage.Value)
-	if len(*regPtr) < numRegs {
-		*regPtr = make([]storage.Value, numRegs)
-	}
-	regs := (*regPtr)[:numRegs]
-	for i := range regs {
-		regs[i] = storage.NullValue(storage.TypeUnknown)
+	f := e.framePool.Get().(*VMFrame)
+	if cap(f.regs) < numRegs {
+		f.regs = make([]storage.Value, numRegs)
+	} else {
+		f.regs = f.regs[:numRegs]
 	}
 
-	return &VMFrame{
-		executor:        e,
-		tx:              tx,
-		prog:            prog,
-		regs:            regs,
-		vars:            make(map[string]storage.Value),
-		cursors:         make(map[string]*cursorState),
-		transientTables: make(map[string][]map[string]any),
-		catchStack:      make([]int, 0),
-		logs:            make([]string, 0),
-		fetchStatus:     -1,
+	// Reset structures for clean re-execution
+	for k := range f.vars {
+		delete(f.vars, k)
 	}
+	for k := range f.cursors {
+		delete(f.cursors, k)
+	}
+	for k := range f.transientTables {
+		delete(f.transientTables, k)
+	}
+	f.catchStack = f.catchStack[:0]
+	f.logs = f.logs[:0]
+
+	f.executor = e
+	f.tx = tx
+	f.prog = prog
+	f.ctx = nil
+	f.rows = nil
+	f.columns = nil
+	f.rowCount = 0
+	f.tranCount = 0
+	f.lastIdentity = 0
+	f.lastError = 0
+	f.fetchStatus = -1
+	for i := range f.regs {
+		f.regs[i] = storage.NullValue(storage.TypeUnknown)
+	}
+
+	return f
 }
 
 func (e *Executor) releaseFrame(frame *VMFrame) {
-	r := frame.regs
-	e.regPool.Put(&r)
+	if frame == nil {
+		return
+	}
+	frame.tx = nil
+	frame.prog = nil
+	e.framePool.Put(frame)
 }
 
 // Execute runs the VM instruction loop starting at startPC.
