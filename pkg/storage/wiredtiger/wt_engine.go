@@ -327,6 +327,19 @@ func (e *Engine) TruncateTable(tableName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
+	// Verify no other table has a foreign key referencing this table
+	for otherName, otherSchema := range e.tables {
+		if strings.EqualFold(otherName, tableName) {
+			continue
+		}
+		for _, fk := range otherSchema.ForeignKeys {
+			if strings.EqualFold(fk.ParentTable, tableName) {
+				return fmt.Errorf("%w: cannot truncate table %q because it is referenced by foreign key %q on table %q",
+					storage.ErrDependentObjectsExist, tableName, fk.Name, otherName)
+			}
+		}
+	}
+
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
 		return fmt.Errorf("open_session failed: code %d", ret)
@@ -352,6 +365,7 @@ func (e *Engine) TruncateTable(tableName string) error {
 		C.free(unsafe.Pointer(idxURI))
 	}
 
+	e.nextLSN.Add(1)
 	return nil
 }
 
