@@ -903,6 +903,14 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
+	// 0.25 Prepared Statements: PREPARE / DEALLOCATE / DROP PREPARE
+	if strings.HasPrefix(upper, "PREPARE ") {
+		return s.execPrepare(trimmed, start, cs)
+	}
+	if strings.HasPrefix(upper, "DEALLOCATE ") || strings.HasPrefix(upper, "DROP PREPARE ") {
+		return s.execDeallocate(trimmed, start, cs)
+	}
+
 	// 0.3 Substitute session variables in SQL query if present
 	cs.mu.Lock()
 	if len(cs.Vars) > 0 {

@@ -584,6 +584,20 @@ func (s *Server) execProcedureCall(query string, start time.Time, cs *ClientSess
 		return s.execBuiltinSystemProc(procLower, args, start)
 	}
 
+	// Check if this is a prepared statement in the active session
+	if cs != nil {
+		cs.mu.Lock()
+		prep, isPrep := cs.PreparedStmts[procLower]
+		cs.mu.Unlock()
+		if isPrep && prep != nil {
+			return s.execPreparedStatement(prep, args, start, cs, ctx)
+		}
+	}
+
+	if len(args) > 0 && strings.HasPrefix(strings.ToUpper(args[0]), "USING ") {
+		return nil, fmt.Errorf("prepared statement %q not found", procName)
+	}
+
 	procMeta, err := s.catalog.GetProcedure(procName)
 	if err != nil {
 		return nil, fmt.Errorf("procedure %q not found: %w", procName, err)

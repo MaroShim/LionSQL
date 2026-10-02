@@ -2050,7 +2050,13 @@ func (s *Server) execSelectInto(targetTable, projections, fromClause string, sta
 }
 
 func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	prog, err := proc.CompileStatement(cleaned)
+	var prog *proc.Program
+	var err error
+	if s.executor != nil && s.executor.Cache() != nil {
+		prog, err = s.executor.Cache().GetOrCompile(cleaned)
+	} else {
+		prog, err = proc.CompileStatement(cleaned)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -2136,7 +2142,13 @@ func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *Clien
 }
 
 func (s *Server) execVDBESelect(cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	prog, err := proc.CompileQuery(cleaned)
+	var prog *proc.Program
+	var err error
+	if s.executor != nil && s.executor.Cache() != nil {
+		prog, err = s.executor.Cache().GetOrCompile(cleaned)
+	} else {
+		prog, err = proc.CompileQuery(cleaned)
+	}
 	if err != nil {
 		return nil, err
 	}

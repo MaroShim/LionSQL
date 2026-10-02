@@ -1238,13 +1238,35 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 		return where
 	}
 	res := where
+	type varBinding struct {
+		name string
+		val  string
+	}
+	seen := make(map[string]bool)
+	var bindings []varBinding
+
 	for k, v := range f.vars {
-		varName := "@" + strings.TrimPrefix(k, "@")
+		clean := cleanSymbol(k)
+		varName := "@" + clean
+		lower := strings.ToLower(varName)
+		if seen[lower] {
+			continue
+		}
+		seen[lower] = true
 		valStr := v.String()
 		if v.Type == storage.TypeVarChar {
 			valStr = "'" + strings.ReplaceAll(v.SVal, "'", "''") + "'"
 		}
-		res = strings.ReplaceAll(res, varName, valStr)
+		bindings = append(bindings, varBinding{name: varName, val: valStr})
+	}
+
+	sort.Slice(bindings, func(i, j int) bool {
+		return len(bindings[i].name) > len(bindings[j].name)
+	})
+
+	for _, b := range bindings {
+		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(b.name) + `\b`)
+		res = re.ReplaceAllString(res, b.val)
 	}
 	return res
 }

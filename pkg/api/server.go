@@ -36,6 +36,7 @@ type ClientSession struct {
 	Vars            map[string]any
 	TableVars       map[string]string // @table_var -> physical table name
 	TempTables      []string          // session-scoped #temp_tables
+	PreparedStmts   map[string]*PreparedStatement
 	User            string            // active database user principal for RBAC
 	OriginalUser    string            // original user prior to SETUSER / EXECUTE AS
 	QueryCtx        context.Context
@@ -349,13 +350,14 @@ func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
 	s.spidCounter++
 
 	cs := &ClientSession{
-		ID:           id,
-		SPID:         s.spidCounter,
-		Session:      sess,
-		Vars:         make(map[string]any),
-		TableVars:    make(map[string]string),
-		User:         "dbo",
-		OriginalUser: "dbo",
+		ID:            id,
+		SPID:          s.spidCounter,
+		Session:       sess,
+		Vars:          make(map[string]any),
+		TableVars:     make(map[string]string),
+		PreparedStmts: make(map[string]*PreparedStatement),
+		User:          "dbo",
+		OriginalUser:  "dbo",
 	}
 	s.sessions[id] = cs
 	return cs, nil
@@ -399,6 +401,7 @@ func (s *Server) CloseSession(id string) {
 			_ = s.engine.DropTable(tempTbl)
 		}
 		cs.TempTables = nil
+		cs.PreparedStmts = nil
 
 		if cs.CancelFunc != nil {
 			cs.CancelRequested = true

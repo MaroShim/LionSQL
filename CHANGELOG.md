@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- **Parameterized Plan Cache & SQL Prepared Statements (`pkg/api`, `pkg/proc/runtime`)**:
+  - Implemented SQL-level prepared statements: `PREPARE <name> [ (types) ] AS <stmt>`, `PREPARE <name> FROM '<stmt>'` (with string literals or session variables), `EXECUTE <name> [ (args) | USING @vars ]`, and `DEALLOCATE [PREPARE] <name>` / `DEALLOCATE ALL`.
+  - Added quote- and comment-aware placeholder normalizer rewriting `$1, $2, ...` and `?` positional parameters into internal VDBE bytecode variables (`@p1, @p2, ...`) without corrupting string literals or comments.
+  - Integrated `runtime.PlanCache` in `execVBDEDML` (for recurring `INSERT`, `UPDATE`, `DELETE`) and `execVDBESelect` (for recurring queries), avoiding repeated lexing, parsing, and compilation overhead.
+  - Hardened `VMFrame.bindWhereVariables` against substring prefix collisions (e.g. `@p1` vs `@p10`) using word boundary regular expressions and descending key length sorting.
+  - Added comprehensive test suite in `pkg/api/prepare_test.go` verifying basic SELECTs, MySQL-style FROM/USING, batch INSERT/UPDATE/DELETE, explicit transaction rollback atomicity, and plan cache throughput.
+
 - **In-Memory Ephemeral Engine Mode & Zero-Disk Persistence (`cmd/server`, `pkg/config`, `pkg/storage/memengine`, `pkg/api`)**:
   - Added `--ephemeral` CLI flag and `ephemeral` configuration property for `memory` engine backend, completely disabling WAL/AOF logging, RDB snapshot generation, and disk directory creation for pure in-memory operation.
   - Implemented `IsEphemeral()` and `PersistenceSummary()` on `memengine.Engine`.
