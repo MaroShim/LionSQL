@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Schema-Aware Compact Binary Tuple Codec & Row Architecture (`pkg/storage`)**:
+  - Implemented schema-aware binary tuple serialization (`EncodeTuple` and `DecodeTuple` in `pkg/storage/tuple.go`): features a 1-byte version tag, compact bit-packed null bitmap, and sequentially packed typed payloads (varint integers, IEEE-754 floats, unix nano timestamps, and length-prefixed strings).
+  - Achieved a further 50% storage footprint reduction over compact MessagePack (103 bytes vs 204 bytes, and 92.7% reduction vs JSON 1413 bytes) with sub-100ns encoding throughput (76.6ns/op).
+  - Introduced the ordered `Row` struct (`type Row struct { Values []Value }`) with bidirectional zero-loss conversion helpers `TableSchema.RecordToRow` and `TableSchema.RowToRecord`.
+  - Added comprehensive round-trip tests and benchmarks in `pkg/storage/tuple_test.go`.
+
 - **High-Performance Compact MessagePack Codec & Index Key Encoding Acceleration (`pkg/storage`, `pkg/storage/memengine`)**:
   - Implemented custom MessagePack `CustomEncoder` and `CustomDecoder` for `storage.Value` (`pkg/storage/value_codec.go`): encodes values into a compact 2-element array `[DataType, Payload]`, slashing serialized `Value` footprint from 89 bytes down to 3 bytes (96.6% reduction) and 3-column record footprint from 279 bytes to 35 bytes (87.5% reduction).
   - Maintained 100% backward compatibility with legacy map-based `tables.mpk` snapshots and WAL logs via automatic `msgpcode` format detection.

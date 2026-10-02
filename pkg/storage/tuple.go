@@ -1,0 +1,279 @@
+package storage
+
+import (
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"math"
+	"time"
+)
+
+const (
+	TupleCodecVersion byte = 0x01
+)
+
+var (
+	ErrInvalidTupleHeader  = errors.New("invalid tuple header or version")
+	ErrTupleBufferTooShort = errors.New("tuple buffer truncated or too short")
+)
+
+// Row represents an ordered sequence of column values aligned with TableSchema.Columns.
+type Row struct {
+	Values []Value
+}
+
+// RecordToRow converts a column-mapped Record into an ordered Row according to schema.
+func (s *TableSchema) RecordToRow(rec Record) Row {
+	if s == nil {
+		return Row{}
+	}
+	vals := make([]Value, len(s.Columns))
+	for i, col := range s.Columns {
+		if v, ok := rec[col.Name]; ok {
+			vals[i] = v
+		} else {
+			vals[i] = NullValue(col.Type)
+		}
+	}
+	return Row{Values: vals}
+}
+
+// RowToRecord converts an ordered Row back into a column-mapped Record according to schema.
+func (s *TableSchema) RowToRecord(row Row) Record {
+	if s == nil {
+		return nil
+	}
+	rec := make(Record, len(s.Columns))
+	for i, col := range s.Columns {
+		if i < len(row.Values) {
+			rec[col.Name] = row.Values[i]
+		} else {
+			rec[col.Name] = NullValue(col.Type)
+		}
+	}
+	return rec
+}
+
+// EncodeTuple encodes a Record into a compact schema-aware binary tuple.
+// Format Layout:
+//   [1 byte Version]
+//   [ceil(N/8) bytes NullBitmap]
+//   [Sequential Payload for non-null columns]
+func EncodeTuple(schema *TableSchema, rec Record) ([]byte, error) {
+	if schema == nil {
+		return nil, errors.New("nil table schema")
+	}
+
+	numCols := len(schema.Columns)
+	nullBitmapLen := (numCols + 7) / 8
+
+	// Preallocate estimate buffer
+	buf := make([]byte, 1+nullBitmapLen, 64)
+	buf[0] = TupleCodecVersion
+
+	var scratch [10]byte
+
+	for i, col := range schema.Columns {
+		val, ok := rec[col.Name]
+		if !ok || val.IsNull {
+			buf[1+(i/8)] |= 1 << (i % 8)
+			continue
+		}
+
+		switch col.Type {
+		case TypeInt:
+			n := binary.PutVarint(scratch[:], val.IVal)
+			buf = append(buf, scratch[:n]...)
+
+		case TypeFloat:
+			bits := math.Float64bits(val.FVal)
+			binary.LittleEndian.PutUint64(scratch[:8], bits)
+			buf = append(buf, scratch[:8]...)
+
+		case TypeBool:
+			if val.BVal {
+				buf = append(buf, 1)
+			} else {
+				buf = append(buf, 0)
+			}
+
+		case TypeDateTime:
+			binary.LittleEndian.PutUint64(scratch[:8], uint64(val.TVal.UnixNano()))
+			buf = append(buf, scratch[:8]...)
+
+		case TypeDate:
+			binary.LittleEndian.PutUint64(scratch[:8], uint64(val.TVal.Unix()))
+			buf = append(buf, scratch[:8]...)
+
+		case TypeTime:
+			str := val.SVal
+			n := binary.PutUvarint(scratch[:], uint64(len(str)))
+			buf = append(buf, scratch[:n]...)
+			buf = append(buf, str...)
+
+		case TypeBinary:
+			raw := val.BinVal
+			n := binary.PutUvarint(scratch[:], uint64(len(raw)))
+			buf = append(buf, scratch[:n]...)
+			buf = append(buf, raw...)
+
+		case TypeDecimal:
+			str := val.Decimal().String()
+			n := binary.PutUvarint(scratch[:], uint64(len(str)))
+			buf = append(buf, scratch[:n]...)
+			buf = append(buf, str...)
+
+		case TypeVarChar, TypeJSON, TypeUUID:
+			str := val.SVal
+			n := binary.PutUvarint(scratch[:], uint64(len(str)))
+			buf = append(buf, scratch[:n]...)
+			buf = append(buf, str...)
+
+		default:
+			str := val.String()
+			n := binary.PutUvarint(scratch[:], uint64(len(str)))
+			buf = append(buf, scratch[:n]...)
+			buf = append(buf, str...)
+		}
+	}
+
+	return buf, nil
+}
+
+// DecodeTuple decodes a compact binary tuple back into a Record.
+func DecodeTuple(schema *TableSchema, data []byte) (Record, error) {
+	if schema == nil {
+		return nil, errors.New("nil table schema")
+	}
+	if len(data) < 1 {
+		return nil, ErrTupleBufferTooShort
+	}
+	if data[0] != TupleCodecVersion {
+		return nil, fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+	}
+
+	numCols := len(schema.Columns)
+	nullBitmapLen := (numCols + 7) / 8
+	if len(data) < 1+nullBitmapLen {
+		return nil, ErrTupleBufferTooShort
+	}
+
+	bitmap := data[1 : 1+nullBitmapLen]
+	offset := 1 + nullBitmapLen
+
+	rec := make(Record, numCols)
+
+	for i, col := range schema.Columns {
+		isNull := (bitmap[i/8] & (1 << (i % 8))) != 0
+		if isNull {
+			rec[col.Name] = NullValue(col.Type)
+			continue
+		}
+
+		if offset > len(data) {
+			return nil, fmt.Errorf("%w at col %d (%s)", ErrTupleBufferTooShort, i, col.Name)
+		}
+
+		switch col.Type {
+		case TypeInt:
+			iVal, n := binary.Varint(data[offset:])
+			if n <= 0 {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			offset += n
+			rec[col.Name] = IntValue(iVal)
+
+		case TypeFloat:
+			if offset+8 > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			bits := binary.LittleEndian.Uint64(data[offset : offset+8])
+			offset += 8
+			rec[col.Name] = FloatValue(math.Float64frombits(bits))
+
+		case TypeBool:
+			if offset+1 > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			bVal := data[offset] != 0
+			offset += 1
+			rec[col.Name] = BoolValue(bVal)
+
+		case TypeDateTime:
+			if offset+8 > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			nano := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+			offset += 8
+			rec[col.Name] = DateTimeValue(time.Unix(0, nano).UTC())
+
+		case TypeDate:
+			if offset+8 > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			sec := int64(binary.LittleEndian.Uint64(data[offset : offset+8]))
+			offset += 8
+			rec[col.Name] = DateValue(time.Unix(sec, 0).UTC())
+
+		case TypeTime:
+			strLen, n := binary.Uvarint(data[offset:])
+			if n <= 0 || offset+n+int(strLen) > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			offset += n
+			sVal := string(data[offset : offset+int(strLen)])
+			offset += int(strLen)
+			rec[col.Name] = Value{Type: TypeTime, SVal: sVal}
+
+		case TypeBinary:
+			binLen, n := binary.Uvarint(data[offset:])
+			if n <= 0 || offset+n+int(binLen) > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			offset += n
+			bVal := data[offset : offset+int(binLen)]
+			offset += int(binLen)
+			rec[col.Name] = BinaryValue(bVal)
+
+		case TypeDecimal:
+			decLen, n := binary.Uvarint(data[offset:])
+			if n <= 0 || offset+n+int(decLen) > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			offset += n
+			sVal := string(data[offset : offset+int(decLen)])
+			offset += int(decLen)
+			rec[col.Name] = DecimalValue(sVal)
+
+		case TypeVarChar, TypeJSON, TypeUUID:
+			strLen, n := binary.Uvarint(data[offset:])
+			if n <= 0 || offset+n+int(strLen) > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			offset += n
+			sVal := string(data[offset : offset+int(strLen)])
+			offset += int(strLen)
+
+			switch col.Type {
+			case TypeVarChar:
+				rec[col.Name] = StringValue(sVal)
+			case TypeJSON:
+				rec[col.Name] = JSONValue(sVal)
+			case TypeUUID:
+				rec[col.Name] = UUIDValue(sVal)
+			}
+
+		default:
+			strLen, n := binary.Uvarint(data[offset:])
+			if n <= 0 || offset+n+int(strLen) > len(data) {
+				return nil, fmt.Errorf("%w: at %s", ErrTupleBufferTooShort, col.Name)
+			}
+			offset += n
+			sVal := string(data[offset : offset+int(strLen)])
+			offset += int(strLen)
+			rec[col.Name] = StringValue(sVal)
+		}
+	}
+
+	return rec, nil
+}
