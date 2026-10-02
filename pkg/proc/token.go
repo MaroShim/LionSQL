@@ -131,12 +131,14 @@ const (
 	TokenOutput
 	TokenRollup
 	TokenCube
+	TokenGroupingSets
 )
 
 var keywords = map[string]TokenType{
-	"ROLLUP":      TokenRollup,
-	"CUBE":        TokenCube,
-	"OUTPUT":      TokenOutput,
+	"ROLLUP":        TokenRollup,
+	"CUBE":          TokenCube,
+	"GROUPING_SETS": TokenGroupingSets,
+	"OUTPUT":        TokenOutput,
 	"DISTINCT":    TokenDistinct,
 	"SAVE":        TokenSave,
 	"SAVEPOINT":   TokenSavepoint,

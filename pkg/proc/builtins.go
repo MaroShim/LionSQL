@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -344,6 +345,59 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 			n = 8000
 		}
 		return storage.StringValue(strings.Repeat(str, n))
+
+	case "GREP":
+		// GREP(text, pattern): returns true if pattern matches text.
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.BoolValue(false)
+		}
+		text := valToString(args[0])
+		pattern := valToString(args[1])
+		if pattern == "" {
+			return storage.BoolValue(true)
+		}
+		matched, err := regexp.MatchString(pattern, text)
+		if err != nil {
+			// Fallback to case-insensitive literal substring match on malformed regex
+			matched = strings.Contains(strings.ToLower(text), strings.ToLower(pattern))
+		}
+		return storage.BoolValue(matched)
+
+	case "AWK", "SPLIT_PART":
+		// AWK(text, delimiter, field_index) or AWK(text, field_index):
+		// 1-based indexing ($1, $2, ...). If delimiter is omitted or empty, splits on whitespace.
+		if len(args) < 2 || args[0].IsNull {
+			return storage.StringValue("")
+		}
+		text := valToString(args[0])
+		var delim string
+		var fieldIdx int
+
+		if len(args) == 2 {
+			// AWK(text, field_index) -> default whitespace delimiter
+			delim = ""
+			fieldIdx = int(args[1].IVal)
+		} else {
+			// AWK(text, delimiter, field_index)
+			delim = valToString(args[1])
+			fieldIdx = int(args[2].IVal)
+		}
+
+		if fieldIdx <= 0 {
+			return storage.StringValue("")
+		}
+
+		var fields []string
+		if delim == "" || delim == " " {
+			fields = strings.Fields(text)
+		} else {
+			fields = strings.Split(text, delim)
+		}
+
+		if fieldIdx > len(fields) {
+			return storage.StringValue("")
+		}
+		return storage.StringValue(fields[fieldIdx-1])
 
 	// ----------------------------------------------------
 	// 3. Mathematical Functions

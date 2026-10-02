@@ -711,18 +711,20 @@ const (
 	GroupByNormal GroupByModifier = iota
 	GroupByRollup
 	GroupByCube
+	GroupByGroupingSets
 )
 
 // GeneralSelectStmt represents a complete interactive SELECT statement.
 type GeneralSelectStmt struct {
-	CTEs        []CTEClause
-	Projections []Projection
-	From        TableRef
-	Joins       []JoinClause
-	Where       Expr
-	GroupBy     []Expr
-	GroupByMod  GroupByModifier
-	Having      Expr
+	CTEs         []CTEClause
+	Projections  []Projection
+	From         TableRef
+	Joins        []JoinClause
+	Where        Expr
+	GroupBy      []Expr
+	GroupByMod   GroupByModifier
+	GroupingSets [][]string
+	Having       Expr
 	OrderBy     []OrderByItem
 	Limit       int64
 	Distinct    bool
@@ -783,6 +785,12 @@ func (s *GeneralSelectStmt) String() string {
 			b.WriteString(fmt.Sprintf("ROLLUP(%s)", inner))
 		case GroupByCube:
 			b.WriteString(fmt.Sprintf("CUBE(%s)", inner))
+		case GroupByGroupingSets:
+			var setStrs []string
+			for _, set := range s.GroupingSets {
+				setStrs = append(setStrs, fmt.Sprintf("(%s)", strings.Join(set, ", ")))
+			}
+			b.WriteString(fmt.Sprintf("GROUPING SETS (%s)", strings.Join(setStrs, ", ")))
 		default:
 			b.WriteString(inner)
 		}

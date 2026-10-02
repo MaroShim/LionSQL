@@ -1803,6 +1803,65 @@ func TestSQLExecutor_BuiltinFunctions(t *testing.T) {
 	if err != nil || len(res.Rows) != 1 || res.Rows[0]["bucket"] != "2026-09-23 15:35:00" {
 		t.Fatalf("DATE_BUCKET failed: %+v, err: %v", res, err)
 	}
+
+	// 9. GREP scalar function
+	res, err = server.ExecuteSQL("SELECT GREP('panic: runtime error', 'runtime|fatal') AS matched;")
+	if err != nil || len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["matched"]) != "true" {
+		t.Fatalf("GREP true failed: %+v, err: %v", res, err)
+	}
+	res, err = server.ExecuteSQL("SELECT GREP('all good', 'error|fatal') AS matched;")
+	if err != nil || len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["matched"]) != "false" {
+		t.Fatalf("GREP false failed: %+v, err: %v", res, err)
+	}
+
+	// 10. AWK scalar function ($1, $3 extraction)
+	res, err = server.ExecuteSQL("SELECT AWK('127.0.0.1 GET /api 200', 1) AS ip, AWK('127.0.0.1 GET /api 200', 4) AS status;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["ip"] != "127.0.0.1" || res.Rows[0]["status"] != "200" {
+		t.Fatalf("AWK whitespace failed: %+v, err: %v", res, err)
+	}
+
+	// 11. AWK / SPLIT_PART with custom delimiter
+	res, err = server.ExecuteSQL("SELECT AWK('root:x:0:0:root:/root:/bin/bash', ':', 1) AS user, SPLIT_PART('root:x:0:0:root:/root:/bin/bash', ':', 7) AS shell;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["user"] != "root" || res.Rows[0]["shell"] != "/bin/bash" {
+		t.Fatalf("AWK with delimiter failed: %+v, err: %v", res, err)
+	}
+}
+
+func TestSQLExecutor_GrepAndAwkInQuery(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	_, err := server.ExecuteSQL(`CREATE TABLE app_logs (id INT PRIMARY KEY, raw_log VARCHAR(255));`)
+	if err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+
+	_, err = server.ExecuteSQL(`INSERT INTO app_logs (id, raw_log) VALUES
+		(1, '192.168.1.10 GET /index.html 200 1024'),
+		(2, '192.168.1.10 POST /login 500 256'),
+		(3, '10.0.0.5 GET /api/data 200 4096'),
+		(4, '10.0.0.5 POST /api/data 502 128');`)
+	if err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
+
+	// Filter with GREP on HTTP 5xx errors
+	res, err := server.ExecuteSQL(`SELECT id, AWK(raw_log, 1) AS ip, AWK(raw_log, 4) AS status_code FROM app_logs WHERE GREP(raw_log, ' 50[0-9] ');`)
+	if err != nil || !res.Success {
+		t.Fatalf("query with GREP failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 error log rows, got %d: %+v", len(res.Rows), res.Rows)
+	}
+
+	// GROUP BY AWK-extracted field
+	resGroup, err := server.ExecuteSQL(`SELECT AWK(raw_log, 1) AS client_ip, COUNT(*) AS hit_count FROM app_logs GROUP BY AWK(raw_log, 1) ORDER BY client_ip ASC;`)
+	if err != nil || !resGroup.Success {
+		t.Fatalf("query with AWK in GROUP BY failed: %v", err)
+	}
+	if len(resGroup.Rows) != 2 {
+		t.Fatalf("expected 2 client IP groups, got %d: %+v", len(resGroup.Rows), resGroup.Rows)
+	}
 }
 
 func TestSQLExecutor_ExplainBytecode(t *testing.T) {

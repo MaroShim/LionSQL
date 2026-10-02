@@ -32,6 +32,7 @@ type aggField struct {
 	rawExpr   string
 	isStar    bool
 	isLiteral bool
+	parsed    proc.Expr
 }
 
 type groupAccumulator struct {
@@ -164,7 +165,14 @@ func (a *AggregateIterator) parseFields() {
 			}
 			alias = strings.Trim(alias, "\"`[]")
 		}
-		a.fields = append(a.fields, aggField{isLiteral: true, argCol: p, alias: alias, rawExpr: p})
+		var parsedExpr proc.Expr
+		if strings.Contains(p, "->") || strings.Contains(p, "(") {
+			parser := proc.NewParser(proc.NewLexer(p))
+			if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
+				parsedExpr = ast
+			}
+		}
+		a.fields = append(a.fields, aggField{isLiteral: true, argCol: p, alias: alias, rawExpr: p, parsed: parsedExpr})
 		a.schema = append(a.schema, alias)
 	}
 
@@ -397,6 +405,13 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 				}
 				if isGroupCol {
 					vals[fIdx] = colVal
+				} else if f.parsed != nil {
+					res, err := proc.EvalRowExpr(f.parsed, acc.groupTuple.ToEvalMap(), nil)
+					if err == nil {
+						vals[fIdx] = res
+					} else {
+						vals[fIdx] = nil
+					}
 				} else {
 					v, _ := lookupVal(acc.groupTuple, f.argCol)
 					vals[fIdx] = v

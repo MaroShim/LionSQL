@@ -239,6 +239,20 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 		}
 	}
 
+	// Standalone boolean expression (e.g. GREP(msg, 'err'))
+	if val, ok := lookupVal(t, cond); ok && val != nil {
+		switch v := val.(type) {
+		case bool:
+			return v
+		case int64:
+			return v != 0
+		case int:
+			return v != 0
+		case string:
+			return len(v) > 0 && !strings.EqualFold(v, "false") && v != "0"
+		}
+	}
+
 	return false
 }
 

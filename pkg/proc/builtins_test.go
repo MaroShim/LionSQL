@@ -317,3 +317,59 @@ func TestBuiltin_DateTruncAndBucket(t *testing.T) {
 	}
 }
 
+func TestBuiltin_GrepAndAwk(t *testing.T) {
+	// 1. GREP regex match
+	msg := storage.StringValue("2026-10-02 15:30:00 [ERROR] worker-1: connection pool timeout")
+	g1 := EvalBuiltin("GREP", []storage.Value{msg, storage.StringValue("ERROR|FATAL")})
+	if !g1.BVal {
+		t.Errorf("GREP expected true for 'ERROR|FATAL', got false")
+	}
+
+	g2 := EvalBuiltin("GREP", []storage.Value{msg, storage.StringValue("worker-[0-9]+")})
+	if !g2.BVal {
+		t.Errorf("GREP expected true for 'worker-[0-9]+', got false")
+	}
+
+	g3 := EvalBuiltin("GREP", []storage.Value{msg, storage.StringValue("CRITICAL")})
+	if g3.BVal {
+		t.Errorf("GREP expected false for 'CRITICAL', got true")
+	}
+
+	// 2. AWK default whitespace delimiter
+	logLine := storage.StringValue("192.168.1.100 - user42 [02/Oct/2026] 200 4096")
+	awk1 := EvalBuiltin("AWK", []storage.Value{logLine, storage.IntValue(1)})
+	if awk1.SVal != "192.168.1.100" {
+		t.Errorf("AWK($1) expected '192.168.1.100', got %q", awk1.SVal)
+	}
+
+	awk3 := EvalBuiltin("AWK", []storage.Value{logLine, storage.IntValue(3)})
+	if awk3.SVal != "user42" {
+		t.Errorf("AWK($3) expected 'user42', got %q", awk3.SVal)
+	}
+
+	awk5 := EvalBuiltin("AWK", []storage.Value{logLine, storage.IntValue(5)})
+	if awk5.SVal != "200" {
+		t.Errorf("AWK($5) expected '200', got %q", awk5.SVal)
+	}
+
+	// 3. AWK custom delimiter (e.g. CSV, colon)
+	csvLine := storage.StringValue("apple,banana,cherry,date")
+	awkCsv := EvalBuiltin("AWK", []storage.Value{csvLine, storage.StringValue(","), storage.IntValue(3)})
+	if awkCsv.SVal != "cherry" {
+		t.Errorf("AWK with comma expected 'cherry', got %q", awkCsv.SVal)
+	}
+
+	// 4. SPLIT_PART alias
+	sp := EvalBuiltin("SPLIT_PART", []storage.Value{csvLine, storage.StringValue(","), storage.IntValue(2)})
+	if sp.SVal != "banana" {
+		t.Errorf("SPLIT_PART expected 'banana', got %q", sp.SVal)
+	}
+
+	// 5. Out of bounds index
+	oob := EvalBuiltin("AWK", []storage.Value{csvLine, storage.StringValue(","), storage.IntValue(10)})
+	if oob.SVal != "" {
+		t.Errorf("AWK out of bounds expected empty string, got %q", oob.SVal)
+	}
+}
+
+
