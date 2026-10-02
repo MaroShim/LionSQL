@@ -3,7 +3,6 @@ package memengine
 import (
 	"bufio"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -240,42 +239,7 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 		return 0, nil
 	}
 
-	// Probe first byte to determine format
-	var firstByte [1]byte
-	if _, err := file.Read(firstByte[:]); err != nil {
-		return 0, err
-	}
-	_, _ = file.Seek(0, io.SeekStart)
-
 	var maxLSN int64
-
-	if firstByte[0] == '{' {
-		// Legacy JSON lines fallback
-		scanner := bufio.NewScanner(file)
-		buf := make([]byte, 64*1024)
-		scanner.Buffer(buf, 16*1024*1024)
-		lineNum := 0
-
-		for scanner.Scan() {
-			lineNum++
-			line := scanner.Bytes()
-			if len(line) == 0 {
-				continue
-			}
-
-			var rec WALRecord
-			if err := json.Unmarshal(line, &rec); err != nil {
-				return maxLSN, fmt.Errorf("corrupted JSON WAL entry at line %d: %w", lineNum, err)
-			}
-			if rec.LSN > maxLSN {
-				maxLSN = rec.LSN
-			}
-			if err := applyFn(rec); err != nil {
-				return maxLSN, fmt.Errorf("failed to apply WAL record (LSN=%d, line=%d): %w", rec.LSN, lineNum, err)
-			}
-		}
-		return maxLSN, scanner.Err()
-	}
 
 	// Binary MessagePack length-prefixed frames
 	reader := bufio.NewReaderSize(file, 64*1024)
