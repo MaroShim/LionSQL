@@ -21,6 +21,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Standardized In-Memory OCC engine snapshot persistence strictly on `tables.mpk` (MessagePack metadata container) and OLTP row records on schema-ordered contiguous `Row` representations.
 
 ### Added
+- **Transaction Lifecycle & MVCC Commit Timestamp / LSN Snapshot Binding (`pkg/storage`, `pkg/storage/memengine`, `pkg/storage/wiredtiger`)**:
+  - Extended `storage.TxOptions` with `SnapshotLSN` and `SnapshotTimestamp` to enable deterministic consistent snapshot bounds across replication replicas.
+  - Added `SnapshotLSN()`, `SnapshotTimestamp()`, `CommitLSN()`, and `CommitTimestamp()` to the `storage.Transaction` interface contract.
+  - Implemented monotonic `CurrentLSN()` on `storage.Engine` across both In-Memory OCC and WiredTiger storage engines.
+  - Ensured atomic assignment and exposure of committed LSN and unix nano timestamps upon transaction commit.
+
 - **Zero-Allocation Compact Binary Tuple WAL & Replication Pipeline (`pkg/storage`, `pkg/storage/memengine`, `pkg/backup`)**:
   - Implemented `EncodeRow` and `EncodeRowToBuffer` in `pkg/storage/tuple.go` for schema-aware compact binary tuple encoding directly from contiguous `storage.Row` without `map[string]Value` conversions, achieving 29.75ns/op throughput (5x faster than map encoding).
   - Extended `WALOp` with `Data []byte`, allowing transaction commit (`tx.Commit`) to write raw binary tuples directly into WAL records with zero intermediate map allocations (`op.Record = nil`).

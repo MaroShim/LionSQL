@@ -281,13 +281,10 @@ func (e *Engine) SetWALHook(fn func(rec WALRecord)) {
 	e.walHook = fn
 }
 
-// recordWALLocked writes a WAL record and invokes the registered walHook, if any.
-func (e *Engine) recordWALLocked(ops []WALOp) {
+// recordWALLocked writes a WAL record, invokes the registered walHook, and returns the assigned WALRecord.
+func (e *Engine) recordWALLocked(ops []WALOp) WALRecord {
 	if len(ops) == 0 {
-		return
-	}
-	if e.wal == nil && e.walHook == nil {
-		return
+		return WALRecord{}
 	}
 	rec := WALRecord{
 		LSN:       e.nextLSN.Add(1),
@@ -303,6 +300,7 @@ func (e *Engine) recordWALLocked(ops []WALOp) {
 	if e.walHook != nil {
 		e.walHook(rec)
 	}
+	return rec
 }
 
 // New creates a new in-memory storage engine.
@@ -1069,14 +1067,25 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 		return nil, fmt.Errorf("engine is closed")
 	}
 
+	snapLSN := opts.SnapshotLSN
+	if snapLSN == 0 {
+		snapLSN = s.engine.CurrentLSN()
+	}
+	snapTS := opts.SnapshotTimestamp
+	if snapTS == 0 {
+		snapTS = time.Now().UnixNano()
+	}
+
 	return &Transaction{
-		engine:     s.engine,
-		opts:       opts,
-		local:      make(map[string]map[string]storage.Row),
-		baseVers:   make(map[string]map[string]int64),
-		deleted:    make(map[string]map[string]bool),
-		changes:    make(map[string]rowChange),
-		savepoints: make(map[string]savepointState),
+		engine:            s.engine,
+		opts:              opts,
+		snapshotLSN:       snapLSN,
+		snapshotTimestamp: snapTS,
+		local:             make(map[string]map[string]storage.Row),
+		baseVers:          make(map[string]map[string]int64),
+		deleted:           make(map[string]map[string]bool),
+		changes:           make(map[string]rowChange),
+		savepoints:        make(map[string]savepointState),
 	}, nil
 }
 
@@ -1110,16 +1119,48 @@ type savepointState struct {
 
 // Transaction handles copy-on-write delta mutations with zero start overhead, OCC validation, and atomic commit.
 type Transaction struct {
-	mu         sync.Mutex
-	engine     *Engine
-	opts       storage.TxOptions
-	local      map[string]map[string]storage.Row // tableName -> key -> row
-	baseVers   map[string]map[string]int64       // tableName -> key -> baseVersion
-	deleted    map[string]map[string]bool        // tableName -> key -> bool
-	changes    map[string]rowChange              // "table:key" -> rowChange
-	savepoints map[string]savepointState
-	spNames    []string
-	closed     bool
+	mu                sync.Mutex
+	engine            *Engine
+	opts              storage.TxOptions
+	snapshotLSN       int64
+	snapshotTimestamp int64
+	commitLSN         int64
+	commitTimestamp   int64
+	local             map[string]map[string]storage.Row // tableName -> key -> row
+	baseVers          map[string]map[string]int64       // tableName -> key -> baseVersion
+	deleted           map[string]map[string]bool        // tableName -> key -> bool
+	changes           map[string]rowChange              // "table:key" -> rowChange
+	savepoints        map[string]savepointState
+	spNames           []string
+	closed            bool
+}
+
+// SnapshotLSN returns the snapshot LSN bound at transaction start.
+func (tx *Transaction) SnapshotLSN() int64 {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.snapshotLSN
+}
+
+// SnapshotTimestamp returns the snapshot unix nano timestamp bound at transaction start.
+func (tx *Transaction) SnapshotTimestamp() int64 {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.snapshotTimestamp
+}
+
+// CommitLSN returns the committed LSN (0 if uncommitted or rolled back).
+func (tx *Transaction) CommitLSN() int64 {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.commitLSN
+}
+
+// CommitTimestamp returns the committed unix nano timestamp (0 if uncommitted or rolled back).
+func (tx *Transaction) CommitTimestamp() int64 {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.commitTimestamp
 }
 
 func (tx *Transaction) Insert(tableName string, record storage.Record) error {
@@ -2494,7 +2535,12 @@ func (tx *Transaction) Commit() error {
 				BaseVer: ch.baseVer,
 			})
 		}
-		tx.engine.recordWALLocked(ops)
+		rec := tx.engine.recordWALLocked(ops)
+		tx.commitLSN = rec.LSN
+		tx.commitTimestamp = rec.Timestamp
+	} else {
+		tx.commitLSN = tx.snapshotLSN
+		tx.commitTimestamp = time.Now().UnixNano()
 	}
 
 	tx.savepoints = nil

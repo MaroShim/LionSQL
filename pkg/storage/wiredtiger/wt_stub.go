@@ -28,6 +28,10 @@ func (e *Engine) Close() error {
 	return nil
 }
 
+func (e *Engine) CurrentLSN() int64 {
+	return 0
+}
+
 func (e *Engine) NewSession() (storage.Session, error) {
 	return nil, fmt.Errorf("wiredtiger storage engine not enabled")
 }

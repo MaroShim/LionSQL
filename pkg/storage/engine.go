@@ -670,7 +670,9 @@ type Cursor interface {
 
 // TxOptions configures transaction behaviors.
 type TxOptions struct {
-	ReadOnly bool
+	ReadOnly          bool
+	SnapshotLSN       int64 // Optional snapshot visibility bound by LSN (0 for current engine LSN)
+	SnapshotTimestamp int64 // Optional snapshot visibility bound by unix nano timestamp (0 for current time)
 }
 
 // Transaction represents an ACID transaction unit.
@@ -690,6 +692,10 @@ type Transaction interface {
 	Savepoint(name string) error
 	RollbackTo(name string) error
 	ReleaseSavepoint(name string) error
+	SnapshotLSN() int64
+	SnapshotTimestamp() int64
+	CommitLSN() int64
+	CommitTimestamp() int64
 }
 
 // Session represents an active connection/session.
@@ -703,6 +709,7 @@ type Engine interface {
 	Type() string
 	Open(dir string) error
 	Close() error
+	CurrentLSN() int64
 	NewSession() (Session, error)
 	CreateTable(schema *TableSchema) error
 	DropTable(tableName string) error

@@ -412,3 +412,100 @@ func TestEngine_TruncateTable(t *testing.T) {
 	}
 }
 
+func TestTransaction_LifecycleAndSnapshotCommitMetadata(t *testing.T) {
+	eng := New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "balance", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	initialLSN := eng.CurrentLSN()
+	if initialLSN <= 0 {
+		t.Fatalf("expected initial LSN > 0 after CreateTable, got %d", initialLSN)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	// 1. Begin write transaction
+	tx1, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+
+	if tx1.SnapshotLSN() != initialLSN {
+		t.Fatalf("expected snapshot LSN %d, got %d", initialLSN, tx1.SnapshotLSN())
+	}
+	if tx1.SnapshotTimestamp() <= 0 {
+		t.Fatalf("expected positive snapshot timestamp, got %d", tx1.SnapshotTimestamp())
+	}
+	if tx1.CommitLSN() != 0 || tx1.CommitTimestamp() != 0 {
+		t.Fatalf("uncommitted tx must have zero commit LSN/ts, got %d, %d", tx1.CommitLSN(), tx1.CommitTimestamp())
+	}
+
+	// Insert row and commit
+	if err := tx1.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(1),
+		"balance": storage.IntValue(1000),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	commitLSN1 := tx1.CommitLSN()
+	if commitLSN1 <= initialLSN {
+		t.Fatalf("expected commitLSN %d > initialLSN %d", commitLSN1, initialLSN)
+	}
+	if tx1.CommitTimestamp() <= 0 {
+		t.Fatalf("expected positive commit timestamp, got %d", tx1.CommitTimestamp())
+	}
+	if eng.CurrentLSN() != commitLSN1 {
+		t.Fatalf("expected engine CurrentLSN %d to match tx commitLSN %d", eng.CurrentLSN(), commitLSN1)
+	}
+
+	// 2. Rollback transaction should not assign commit LSN
+	tx2, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx2.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(2),
+		"balance": storage.IntValue(2000),
+	})
+	_ = tx2.Rollback()
+
+	if tx2.CommitLSN() != 0 || tx2.CommitTimestamp() != 0 {
+		t.Fatalf("rolled back tx must retain zero commit LSN/ts, got %d, %d", tx2.CommitLSN(), tx2.CommitTimestamp())
+	}
+
+	// 3. Explicit SnapshotLSN binding in options (Replica simulation)
+	customSnapLSN := int64(9999)
+	customSnapTS := int64(1234567890)
+	tx3, _ := sess.BeginTx(storage.TxOptions{
+		ReadOnly:          true,
+		SnapshotLSN:       customSnapLSN,
+		SnapshotTimestamp: customSnapTS,
+	})
+	defer tx3.Rollback()
+
+	if tx3.SnapshotLSN() != customSnapLSN {
+		t.Fatalf("expected custom snapshot LSN %d, got %d", customSnapLSN, tx3.SnapshotLSN())
+	}
+	if tx3.SnapshotTimestamp() != customSnapTS {
+		t.Fatalf("expected custom snapshot ts %d, got %d", customSnapTS, tx3.SnapshotTimestamp())
+	}
+}
+
+

@@ -153,6 +153,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"time"
 	"unsafe"
 
 	"sqlion/pkg/storage"
@@ -164,6 +166,7 @@ type Engine struct {
 	conn    *C.WT_CONNECTION
 	homeDir string
 	tables  map[string]*storage.TableSchema
+	nextLSN atomic.Int64
 	closed  bool
 }
 
@@ -177,6 +180,11 @@ func New() *Engine {
 // Type returns the human-readable storage engine backend name.
 func (e *Engine) Type() string {
 	return "WiredTiger"
+}
+
+// CurrentLSN returns the latest assigned Log Sequence Number.
+func (e *Engine) CurrentLSN() int64 {
+	return e.nextLSN.Load()
 }
 
 func (e *Engine) Open(dir string) error {
@@ -597,9 +605,20 @@ func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error)
 		return nil, fmt.Errorf("begin_transaction failed with code %d", ret)
 	}
 
+	snapLSN := opts.SnapshotLSN
+	if snapLSN == 0 {
+		snapLSN = s.engine.CurrentLSN()
+	}
+	snapTS := opts.SnapshotTimestamp
+	if snapTS == 0 {
+		snapTS = time.Now().UnixNano()
+	}
+
 	return &WTTx{
-		sess: s,
-		opts: opts,
+		sess:              s,
+		opts:              opts,
+		snapshotLSN:       snapLSN,
+		snapshotTimestamp: snapTS,
 	}, nil
 }
 
@@ -619,13 +638,45 @@ type wtUndoOp struct {
 
 // WTTx manages ACID mutations in WiredTiger.
 type WTTx struct {
-	sess       *WTSession
-	opts       storage.TxOptions
-	mu         sync.Mutex
-	closed     bool
-	undoLog    []wtUndoOp
-	savepoints map[string]int
-	spNames    []string
+	sess              *WTSession
+	opts              storage.TxOptions
+	snapshotLSN       int64
+	snapshotTimestamp int64
+	commitLSN         int64
+	commitTimestamp   int64
+	mu                sync.Mutex
+	closed            bool
+	undoLog           []wtUndoOp
+	savepoints        map[string]int
+	spNames           []string
+}
+
+// SnapshotLSN returns the snapshot LSN bound at transaction start.
+func (tx *WTTx) SnapshotLSN() int64 {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.snapshotLSN
+}
+
+// SnapshotTimestamp returns the snapshot unix nano timestamp bound at transaction start.
+func (tx *WTTx) SnapshotTimestamp() int64 {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.snapshotTimestamp
+}
+
+// CommitLSN returns the committed LSN (0 if uncommitted or rolled back).
+func (tx *WTTx) CommitLSN() int64 {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.commitLSN
+}
+
+// CommitTimestamp returns the committed unix nano timestamp (0 if uncommitted or rolled back).
+func (tx *WTTx) CommitTimestamp() int64 {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.commitTimestamp
 }
 
 func serializeRecord(cur *C.WT_CURSOR, schema *storage.TableSchema, record storage.Record) ([]byte, error) {
@@ -928,6 +979,9 @@ func (tx *WTTx) Commit() error {
 	if ret != 0 {
 		return fmt.Errorf("commit_transaction failed with code %d", ret)
 	}
+
+	tx.commitLSN = tx.sess.engine.nextLSN.Add(1)
+	tx.commitTimestamp = time.Now().UnixNano()
 	return nil
 }
 
