@@ -175,3 +175,27 @@ When the `wal.aof` file exceeds threshold (default 64MB):
 4. Atomically renames `tables.mpk.tmp` to `tables.mpk`.
 5. Truncates `wal.aof` to zero length.
 6. Releases engine lock.
+
+---
+
+## 4. Value Representation, Fast-Paths & Ephemeral Mode (v0.11.0)
+
+### 4.1. `storage.Value` Integer Fast-Paths
+Point lookups, primary key equality tests, and SkipList index searches account for the highest frequency operations in OLTP workloads. SQLion optimizes `storage.Value`:
+- **`Value.Equal` Fast-Path**:
+  ```go
+  if v.Type == TypeInt && other.Type == TypeInt && !v.IsNull && !other.IsNull {
+      return v.IVal == other.IVal
+  }
+  ```
+  Bypasses null checks, type reflection, and fallback dispatch.
+- **`Value.Compare` Fast-Path**:
+  Directly compares `v.IVal` and `other.IVal` without decimal conversions or allocations.
+- **`Value.String` Formatting**:
+  Replaces `fmt.Sprintf` reflection on hot paths with `strconv.FormatInt(v.IVal, 10)` and `strconv.FormatBool(v.BVal)`.
+
+### 4.2. In-Memory Ephemeral Engine Mode (`--ephemeral`)
+For testing, embedded caches, and ephemeral compute pods, SQLion supports pure in-memory operation:
+- Invoked via `--ephemeral` flag or `ephemeral: true` configuration.
+- Completely suppresses WAL/AOF log disk writes, background fsyncs, and table snapshot creation.
+- Inspected via `DBCC PERSISTENCE` and `DBCC USEROPTIONS`.

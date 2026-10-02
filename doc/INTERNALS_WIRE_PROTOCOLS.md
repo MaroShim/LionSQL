@@ -165,3 +165,27 @@ SQLion eliminates external PgBouncer instances by managing client connections di
 - **Memory Efficiency**: 10,000 idle connections consume less than 50MB of server RAM.
 - **Fairness & Queueing**: Jobs exceeding available worker capacity wait on bounded worker channels without timing out or dropping TCP sockets.
 - **Real-Time Observability**: Pool saturation and queue depths are queryable via `GET /api/pool/stats`.
+
+---
+
+## 5. Zero-Allocation Response Packet Buffer Pooling (v0.11.0)
+
+Under high-concurrency client connections streaming multi-thousand row result sets, per-row memory allocations create severe GC pressure. SQLion implements granular `sync.Pool` buffer recycling across both wire protocols:
+
+### 5.1. PostgreSQL Wire Protocol (`WriteDataRow`)
+- Preallocates 4KB slice buffers via `packetBufferPool = sync.Pool`.
+- Calculates total row wire payload length in advance and slices the pooled buffer directly:
+  ```go
+  var packetBufferPool = sync.Pool{
+      New: func() any {
+          b := make([]byte, 4096)
+          return &b
+      },
+  }
+  ```
+- Writes directly to network socket and returns buffers with capacity <= 64KB back to the pool.
+
+### 5.2. Microsoft TDS Protocol (`BuildRow`)
+- Employs `tdsRowBufferPool = sync.Pool` recycling `*bytes.Buffer` instances for ROW token (`0xD1`) construction.
+- Eliminates repeated struct allocations per row and passes buffer pointers directly to `binary.Write`.
+

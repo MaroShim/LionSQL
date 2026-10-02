@@ -119,3 +119,43 @@ To upgrade SQLion clusters without downtime:
    - The leader transfers authority to an upgraded follower node.
 3. **Upgrade Former Leader**:
    - Stop, upgrade, and restart the remaining node as a follower.
+
+---
+
+## 7. 1-Writer Multi-Reader High-Availability Replication (v0.11.0)
+
+SQLion integrates a native, standalone 1-Writer Multi-Reader High Availability Availability Group architecture into `cmd/server` (`pkg/replication`):
+
+```
+                        [ Primary Node (:5433 / :1433 / :8090) ]
+                                    (Read / Write)
+                                          │
+                  ┌───────────────────────┴───────────────────────┐
+                  │ WAL Streaming (/api/replication/stream)       │
+                  ▼                                               ▼
+     [ Replica 1 (:5434 / :1434) ]                   [ Replica 2 (:5435 / :1435) ]
+      (Strict Read-Only Standby)                      (Strict Read-Only Standby)
+```
+
+### 7.1. Server CLI Configuration
+- **Primary Node**:
+  ```bash
+  ./bin/server --port=5433 --tds-port=1433 --http-port=8090 --data-dir=data/primary --node-id=node-primary
+  ```
+- **Secondary Replica Node**:
+  ```bash
+  ./bin/server --port=5434 --tds-port=1434 --http-port=8091 --data-dir=data/replica1 --node-id=node-replica1 --replica-of=http://localhost:8090
+  ```
+
+### 7.2. Replication Management REST Endpoints
+- **`GET /api/replication/stream?from_lsn=<n>`**: Streams compressed binary framed WAL records incrementally from primary to connected replicas via chunked transfer.
+- **`GET /api/replication/status`**: Reports node role (`primary` or `replica`), current committed LSN, replication lag, and connected replicas.
+- **`POST /api/replication/ack`**: Replicas send heartbeat acknowledgments reporting their latest replayed LSN.
+- **`POST /api/replication/promote`**: Instantly promotes a replica into an active primary node capable of accepting writes.
+- **`POST /api/replication/demote`**: Demotes a node to follower status upon graceful cluster reconfigurations.
+
+### 7.3. Read-Only Invariant Enforcement
+Secondary replicas enforce strict read-only execution across all wire protocols:
+- Any mutating DDL (`CREATE/ALTER/DROP/TRUNCATE`) or DML (`INSERT/UPDATE/DELETE/MERGE`) query is immediately rejected with `ErrReadOnlyReplica` (SQLSTATE `25006`).
+- Interactive transactions requesting write access (`BEGIN TRANSACTION READ WRITE`) fail fast without mutating local state.
+
