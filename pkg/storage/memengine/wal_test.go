@@ -285,7 +285,7 @@ func TestMemEngine_LegacyJSON_AutoMigrationToMessagePack(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	// Create legacy tables.json manually
-	legacyTables := map[string]*TableData{
+	legacyTables := map[string]*legacyTableData{
 		"legacy_users": {
 			Schema: storage.TableSchema{
 				Name: "legacy_users",

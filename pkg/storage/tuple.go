@@ -54,6 +54,25 @@ func (s *TableSchema) RowToRecord(row Row) Record {
 	return rec
 }
 
+// ApplyRecordToRow updates a Row with the fields present in rec according to schema.
+func (s *TableSchema) ApplyRecordToRow(row Row, rec Record) Row {
+	if s == nil {
+		return row
+	}
+	vals := make([]Value, len(s.Columns))
+	if len(row.Values) > 0 {
+		copy(vals, row.Values)
+	}
+	for i, col := range s.Columns {
+		if v, ok := rec[col.Name]; ok {
+			vals[i] = v
+		} else if i >= len(row.Values) {
+			vals[i] = NullValue(col.Type)
+		}
+	}
+	return Row{Values: vals}
+}
+
 // EncodeTuple encodes a Record into a compact schema-aware binary tuple.
 // Format Layout:
 //   [1 byte Version]

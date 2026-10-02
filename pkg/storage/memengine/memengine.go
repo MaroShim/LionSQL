@@ -62,13 +62,47 @@ func (idx *IndexData) SyncEntries() {
 
 // TableData stores rows in memory for a single table with OCC version tracking and secondary indexes.
 type TableData struct {
-	mu       sync.RWMutex
-	Schema   storage.TableSchema       `json:"schema"`
-	Rows     map[string]storage.Record `json:"rows"`
-	Versions map[string]int64               `json:"versions"`
-	Keys     []string                       `json:"keys"`
-	Indexes  map[string]*IndexData          `json:"indexes,omitempty"`
+	mu         sync.RWMutex
+	Schema     storage.TableSchema            `json:"schema"`
+	Rows       map[string]storage.Row         `json:"rows"`
+	Versions   map[string]int64               `json:"versions"`
+	Keys       []string                       `json:"keys"`
+	Indexes    map[string]*IndexData          `json:"indexes,omitempty"`
 	Partitions map[string]map[string]struct{} `json:"partitions,omitempty"`
+}
+
+type legacyTableData struct {
+	Schema     storage.TableSchema            `json:"schema"`
+	Rows       map[string]storage.Record      `json:"rows"`
+	Versions   map[string]int64               `json:"versions"`
+	Keys       []string                       `json:"keys"`
+	Indexes    map[string]*IndexData          `json:"indexes,omitempty"`
+	Partitions map[string]map[string]struct{} `json:"partitions,omitempty"`
+}
+
+func convertLegacyTables(legacy map[string]*legacyTableData) map[string]*TableData {
+	res := make(map[string]*TableData, len(legacy))
+	for name, leg := range legacy {
+		td := &TableData{
+			Schema:     leg.Schema,
+			Rows:       make(map[string]storage.Row, len(leg.Rows)),
+			Versions:   leg.Versions,
+			Keys:       leg.Keys,
+			Indexes:    leg.Indexes,
+			Partitions: leg.Partitions,
+		}
+		for pk, rec := range leg.Rows {
+			td.Rows[pk] = leg.Schema.RecordToRow(rec)
+		}
+		res[name] = td
+	}
+	return res
+}
+
+func cloneRow(r storage.Row) storage.Row {
+	vals := make([]storage.Value, len(r.Values))
+	copy(vals, r.Values)
+	return storage.Row{Values: vals}
 }
 
 func (td *TableData) addPartitionKey(partID, pk string) {
@@ -230,7 +264,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 			e.tables[op.Schema.Name] = &TableData{
 				Schema:     *op.Schema,
-				Rows:       make(map[string]storage.Record),
+				Rows:       make(map[string]storage.Row),
 				Versions:   make(map[string]int64),
 				Keys:       make([]string, 0),
 				Indexes:    make(map[string]*IndexData),
@@ -240,7 +274,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			delete(e.tables, op.Table)
 		case OpTruncateTable:
 			if td, exists := e.tables[op.Table]; exists {
-				td.Rows = make(map[string]storage.Record)
+				td.Rows = make(map[string]storage.Row)
 				td.Versions = make(map[string]int64)
 				td.Keys = make([]string, 0)
 				td.Partitions = make(map[string]map[string]struct{})
@@ -253,12 +287,12 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if td, exists := e.tables[op.Table]; exists {
 				if pksSet, ok := td.Partitions[op.Key]; ok {
 					for pk := range pksSet {
-						oldRec, hadOld := td.Rows[pk]
+						oldRow, hadOld := td.Rows[pk]
 						delete(td.Rows, pk)
 						delete(td.Versions, pk)
 						if hadOld {
 							for _, idxData := range td.Indexes {
-								oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+								oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
 								idxData.Delete(oldKey, pk)
 							}
 						}
@@ -283,8 +317,8 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Schema:  *op.IndexSchema,
 				Entries: make([]IndexEntry, 0),
 			}
-			for pk, rowRec := range td.Rows {
-				keyVal := extractIndexKey(rowRec, op.IndexSchema.Columns)
+			for pk, row := range td.Rows {
+				keyVal := extractIndexKeyFromRow(&td.Schema, row, op.IndexSchema.Columns)
 				_ = idxData.Insert(keyVal, pk)
 			}
 			if td.Indexes == nil {
@@ -310,18 +344,19 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !exists {
 				continue
 			}
+			row := td.Schema.RecordToRow(op.Record)
 			if _, hasKey := td.Rows[op.Key]; !hasKey {
 				td.Keys = append(td.Keys, op.Key)
 			}
-			td.Rows[op.Key] = op.Record
+			td.Rows[op.Key] = row
 			td.Versions[op.Key] = 1
 			if td.Schema.IsPartitioned() {
-				if pKey, err := td.Schema.ComputePartitionKey(op.Record); err == nil {
+				if pKey, err := td.Schema.ComputePartitionKeyFromRow(row); err == nil {
 					td.addPartitionKey(pKey, op.Key)
 				}
 			}
 			for _, idxData := range td.Indexes {
-				newKey := extractIndexKey(op.Record, idxData.Schema.Columns)
+				newKey := extractIndexKeyFromRow(&td.Schema, row, idxData.Schema.Columns)
 				_ = idxData.Insert(newKey, op.Key)
 			}
 		case OpUpdate:
@@ -329,18 +364,19 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !exists {
 				continue
 			}
-			oldRec, hadOld := td.Rows[op.Key]
+			oldRow, hadOld := td.Rows[op.Key]
 			if !hadOld {
 				td.Keys = append(td.Keys, op.Key)
 			}
-			td.Rows[op.Key] = op.Record
+			row := td.Schema.RecordToRow(op.Record)
+			td.Rows[op.Key] = row
 			td.Versions[op.Key] = op.BaseVer + 1
 			if td.Schema.IsPartitioned() {
 				var oldPKey, newPKey string
 				if hadOld {
-					oldPKey, _ = td.Schema.ComputePartitionKey(oldRec)
+					oldPKey, _ = td.Schema.ComputePartitionKeyFromRow(oldRow)
 				}
-				newPKey, _ = td.Schema.ComputePartitionKey(op.Record)
+				newPKey, _ = td.Schema.ComputePartitionKeyFromRow(row)
 				if oldPKey != newPKey {
 					if oldPKey != "" {
 						td.removePartitionKey(oldPKey, op.Key)
@@ -352,10 +388,10 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 			for _, idxData := range td.Indexes {
 				if hadOld {
-					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+					oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
 					idxData.Delete(oldKey, op.Key)
 				}
-				newKey := extractIndexKey(op.Record, idxData.Schema.Columns)
+				newKey := extractIndexKeyFromRow(&td.Schema, row, idxData.Schema.Columns)
 				_ = idxData.Insert(newKey, op.Key)
 			}
 		case OpDelete:
@@ -363,11 +399,11 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !exists {
 				continue
 			}
-			oldRec, hadOld := td.Rows[op.Key]
+			oldRow, hadOld := td.Rows[op.Key]
 			delete(td.Rows, op.Key)
 			delete(td.Versions, op.Key)
 			if td.Schema.IsPartitioned() && hadOld {
-				if pKey, err := td.Schema.ComputePartitionKey(oldRec); err == nil {
+				if pKey, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
 					td.removePartitionKey(pKey, op.Key)
 				}
 			}
@@ -379,7 +415,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 			if hadOld {
 				for _, idxData := range td.Indexes {
-					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+					oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
 					idxData.Delete(oldKey, op.Key)
 				}
 			}
@@ -465,8 +501,34 @@ func (e *Engine) loadDiskLocked() {
 	mpkFile := filepath.Join(e.dataDir, "tables.mpk")
 	if data, err := os.ReadFile(mpkFile); err == nil && len(data) > 0 {
 		var loaded map[string]*TableData
+		var isLegacy bool
 		if err := UnmarshalMsgPack(data, &loaded); err == nil && loaded != nil {
-			e.tables = loaded
+			for _, td := range loaded {
+				if len(td.Schema.Columns) > 0 && len(td.Rows) > 0 {
+					for _, r := range td.Rows {
+						if len(r.Values) == 0 {
+							isLegacy = true
+							break
+						}
+					}
+				}
+				if isLegacy {
+					break
+				}
+			}
+			if !isLegacy {
+				e.tables = loaded
+			}
+		}
+
+		if e.tables == nil || isLegacy {
+			var legacy map[string]*legacyTableData
+			if err := UnmarshalMsgPack(data, &legacy); err == nil && legacy != nil {
+				e.tables = convertLegacyTables(legacy)
+			}
+		}
+
+		if e.tables != nil {
 			for _, td := range e.tables {
 				if td.Versions == nil {
 					td.Versions = make(map[string]int64)
@@ -484,8 +546,8 @@ func (e *Engine) loadDiskLocked() {
 					if td.Partitions == nil {
 						td.Partitions = make(map[string]map[string]struct{})
 					}
-					for k, rec := range td.Rows {
-						if pKey, err := td.Schema.ComputePartitionKey(rec); err == nil {
+					for k, row := range td.Rows {
+						if pKey, err := td.Schema.ComputePartitionKeyFromRow(row); err == nil {
 							td.addPartitionKey(pKey, k)
 						}
 					}
@@ -498,9 +560,17 @@ func (e *Engine) loadDiskLocked() {
 	// 2. Fallback to legacy JSON snapshot (tables.json) with auto-migration
 	jsonFile := filepath.Join(e.dataDir, "tables.json")
 	if data, err := os.ReadFile(jsonFile); err == nil && len(data) > 0 {
-		var loaded map[string]*TableData
-		if err := json.Unmarshal(data, &loaded); err == nil && loaded != nil {
-			e.tables = loaded
+		var legacy map[string]*legacyTableData
+		if err := json.Unmarshal(data, &legacy); err == nil && legacy != nil {
+			e.tables = convertLegacyTables(legacy)
+		} else {
+			var loaded map[string]*TableData
+			if err := json.Unmarshal(data, &loaded); err == nil && loaded != nil {
+				e.tables = loaded
+			}
+		}
+
+		if e.tables != nil {
 			for _, td := range e.tables {
 				if td.Versions == nil {
 					td.Versions = make(map[string]int64)
@@ -518,8 +588,8 @@ func (e *Engine) loadDiskLocked() {
 					if td.Partitions == nil {
 						td.Partitions = make(map[string]map[string]struct{})
 					}
-					for k, rec := range td.Rows {
-						if pKey, err := td.Schema.ComputePartitionKey(rec); err == nil {
+					for k, row := range td.Rows {
+						if pKey, err := td.Schema.ComputePartitionKeyFromRow(row); err == nil {
 							td.addPartitionKey(pKey, k)
 						}
 					}
@@ -564,7 +634,7 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 
 	td := &TableData{
 		Schema:     *schema,
-		Rows:       make(map[string]storage.Record),
+		Rows:       make(map[string]storage.Row),
 		Versions:   make(map[string]int64),
 		Keys:       make([]string, 0),
 		Indexes:    make(map[string]*IndexData),
@@ -612,8 +682,8 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	}
 
 	// Populate index from existing rows
-	for pk, rec := range td.Rows {
-		keyVal := extractIndexKey(rec, index.Columns)
+	for pk, row := range td.Rows {
+		keyVal := extractIndexKeyFromRow(&td.Schema, row, index.Columns)
 		if err := idxData.Insert(keyVal, pk); err != nil {
 			return err
 		}
@@ -683,6 +753,54 @@ func extractIndexKey(rec storage.Record, cols []string) storage.Value {
 	return storage.StringValue(sb.String())
 }
 
+func extractIndexKeyFromRow(schema *storage.TableSchema, row storage.Row, cols []string) storage.Value {
+	if len(cols) == 0 {
+		return storage.NullValue(storage.TypeUnknown)
+	}
+	if len(cols) == 1 {
+		if schema != nil {
+			if _, idx, found := schema.FindColumn(cols[0]); found && idx >= 0 && idx < len(row.Values) {
+				return row.Values[idx]
+			}
+		}
+		return storage.NullValue(storage.TypeUnknown)
+	}
+	var sb strings.Builder
+	for i, c := range cols {
+		if i > 0 {
+			sb.WriteByte(0)
+		}
+		if schema != nil {
+			if _, idx, found := schema.FindColumn(c); found && idx >= 0 && idx < len(row.Values) {
+				sb.WriteString(storage.EncodeIndexKeyPart(row.Values[idx]))
+				continue
+			}
+		}
+		sb.WriteString("NULL")
+	}
+	return storage.StringValue(sb.String())
+}
+
+func rowMatchesFK(schema *storage.TableSchema, row storage.Row, cols []string, vals []storage.Value) bool {
+	if len(cols) != len(vals) || schema == nil {
+		return false
+	}
+	for i, col := range cols {
+		_, idx, found := schema.FindColumn(col)
+		if !found || idx < 0 || idx >= len(row.Values) {
+			return false
+		}
+		v := row.Values[idx]
+		if v.IsNull {
+			return false
+		}
+		if !valuesEqual(v, vals[i]) {
+			return false
+		}
+	}
+	return true
+}
+
 func (e *Engine) DropTable(tableName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -735,7 +853,7 @@ func (e *Engine) TruncateTable(tableName string) error {
 	}
 
 	td.mu.Lock()
-	td.Rows = make(map[string]storage.Record)
+	td.Rows = make(map[string]storage.Row)
 	td.Versions = make(map[string]int64)
 	td.Keys = make([]string, 0)
 	td.Partitions = make(map[string]map[string]struct{})
@@ -775,12 +893,12 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 
 	// Delete all rows in partition and purge secondary index references
 	for pk := range pksSet {
-		oldRec, hadOld := td.Rows[pk]
+		oldRow, hadOld := td.Rows[pk]
 		delete(td.Rows, pk)
 		delete(td.Versions, pk)
 		if hadOld {
 			for _, idxData := range td.Indexes {
-				oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+				oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
 				idxData.Delete(oldKey, pk)
 			}
 		}
@@ -882,9 +1000,9 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 	}
 
 	return &Transaction{
-		engine:   s.engine,
-		opts:     opts,
-		local:      make(map[string]map[string]storage.Record),
+		engine:     s.engine,
+		opts:       opts,
+		local:      make(map[string]map[string]storage.Row),
 		baseVers:   make(map[string]map[string]int64),
 		deleted:    make(map[string]map[string]bool),
 		changes:    make(map[string]rowChange),
@@ -909,11 +1027,12 @@ type rowChange struct {
 	table   string
 	key     string
 	baseVer int64
+	row     storage.Row
 	rec     storage.Record
 }
 
 type savepointState struct {
-	local    map[string]map[string]storage.Record
+	local    map[string]map[string]storage.Row
 	baseVers map[string]map[string]int64
 	deleted  map[string]map[string]bool
 	changes  map[string]rowChange
@@ -924,10 +1043,10 @@ type Transaction struct {
 	mu         sync.Mutex
 	engine     *Engine
 	opts       storage.TxOptions
-	local      map[string]map[string]storage.Record // tableName -> key -> record
-	baseVers   map[string]map[string]int64          // tableName -> key -> baseVersion
-	deleted    map[string]map[string]bool           // tableName -> key -> bool
-	changes    map[string]rowChange                 // "table:key" -> rowChange
+	local      map[string]map[string]storage.Row // tableName -> key -> row
+	baseVers   map[string]map[string]int64       // tableName -> key -> baseVersion
+	deleted    map[string]map[string]bool        // tableName -> key -> bool
+	changes    map[string]rowChange              // "table:key" -> rowChange
 	savepoints map[string]savepointState
 	spNames    []string
 	closed     bool
@@ -1010,12 +1129,12 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[tableName]; ok {
-		for epk, locRec := range localRows {
+		for epk, locRow := range localRows {
 			if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
 				for _, idx := range schema.Indexes {
 					if idx.Unique {
 						keyVal := extractIndexKey(record, idx.Columns)
-						locVal := extractIndexKey(locRec, idx.Columns)
+						locVal := extractIndexKeyFromRow(&schema, locRow, idx.Columns)
 						if keyVal.Equal(locVal) {
 							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
 						}
@@ -1094,7 +1213,8 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	}
 
 	recCopy := cloneRecord(record)
-	tx.putLocal(tableName, pkKey, recCopy, 0)
+	rowCopy := schema.RecordToRow(record)
+	tx.putLocal(tableName, pkKey, rowCopy, 0)
 	tx.unmarkDeleted(tableName, pkKey)
 
 	changeKey := tableName + ":" + pkKey
@@ -1103,6 +1223,7 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 		table:   tableName,
 		key:     pkKey,
 		baseVer: 0,
+		row:     rowCopy,
 		rec:     recCopy,
 	}
 
@@ -1246,6 +1367,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 	tx.setBaseVer(tableName, pkKey, ver)
 	originalBaseVer := tx.getBaseVer(tableName, pkKey)
 
+	updatedRow := schema.RecordToRow(updated)
 	if newPkKey != pkKey {
 		tx.removeLocal(tableName, pkKey)
 		tx.markDeleted(tableName, pkKey)
@@ -1256,17 +1378,18 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 			baseVer: originalBaseVer,
 		}
 
-		tx.putLocal(tableName, newPkKey, updated, 0)
+		tx.putLocal(tableName, newPkKey, updatedRow, 0)
 		tx.unmarkDeleted(tableName, newPkKey)
 		tx.changes[tableName+":"+newPkKey] = rowChange{
 			kind:    changeInsert,
 			table:   tableName,
 			key:     newPkKey,
 			baseVer: 0,
+			row:     updatedRow,
 			rec:     updated,
 		}
 	} else {
-		tx.putLocal(tableName, pkKey, updated, originalBaseVer)
+		tx.putLocal(tableName, pkKey, updatedRow, originalBaseVer)
 		tx.unmarkDeleted(tableName, pkKey)
 
 		changeKey := tableName + ":" + pkKey
@@ -1275,6 +1398,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 			table:   tableName,
 			key:     pkKey,
 			baseVer: originalBaseVer,
+			row:     updatedRow,
 			rec:     updated,
 		}
 	}
@@ -1526,14 +1650,14 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 	}
 
 	parentTd.mu.RLock()
-	for pkStr, rec := range parentTd.Rows {
+	for pkStr, row := range parentTd.Rows {
 		if tx.isLocallyDeleted(fk.ParentTable, pkStr) {
 			continue
 		}
 		if _, inLocal := tx.getLocal(fk.ParentTable, pkStr); inLocal {
 			continue
 		}
-		if recordMatchesFK(rec, parentCols, childVals) {
+		if rowMatchesFK(&parentTd.Schema, row, parentCols, childVals) {
 			parentTd.mu.RUnlock()
 			tx.engine.mu.RUnlock()
 			return true, nil
@@ -1543,11 +1667,11 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[fk.ParentTable]; ok {
-		for pkStr, rec := range localRows {
+		for pkStr, row := range localRows {
 			if tx.isLocallyDeleted(fk.ParentTable, pkStr) {
 				continue
 			}
-			if recordMatchesFK(rec, parentCols, childVals) {
+			if rowMatchesFK(&parentTd.Schema, row, parentCols, childVals) {
 				return true, nil
 			}
 		}
@@ -1569,6 +1693,7 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 		tx.engine.mu.RUnlock()
 		return nil, err
 	}
+	_, childPkIdx, _ := childSchema.FindColumn(childPkCol.Name)
 
 	pCols := fk.ParentColumns
 	if len(pCols) == 0 {
@@ -1591,27 +1716,27 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 
 	var matchingPKs []storage.Value
 	childTd.mu.RLock()
-	for pkStr, rec := range childTd.Rows {
+	for pkStr, row := range childTd.Rows {
 		if tx.isLocallyDeleted(childTable, pkStr) {
 			continue
 		}
 		if _, inLocal := tx.getLocal(childTable, pkStr); inLocal {
 			continue
 		}
-		if recordMatchesFK(rec, fk.ChildColumns, parentValues) {
-			matchingPKs = append(matchingPKs, rec[childPkCol.Name])
+		if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) && childPkIdx >= 0 && childPkIdx < len(row.Values) {
+			matchingPKs = append(matchingPKs, row.Values[childPkIdx])
 		}
 	}
 	childTd.mu.RUnlock()
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[childTable]; ok {
-		for pkStr, rec := range localRows {
+		for pkStr, row := range localRows {
 			if tx.isLocallyDeleted(childTable, pkStr) {
 				continue
 			}
-			if recordMatchesFK(rec, fk.ChildColumns, parentValues) {
-				matchingPKs = append(matchingPKs, rec[childPkCol.Name])
+			if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) && childPkIdx >= 0 && childPkIdx < len(row.Values) {
+				matchingPKs = append(matchingPKs, row.Values[childPkIdx])
 			}
 		}
 	}
@@ -1665,35 +1790,54 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 	return rec, err
 }
 
-func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string, clone bool) (storage.Record, int64, error) {
+func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool) (storage.Row, int64, error) {
 	if tx.isLocallyDeleted(tableName, pkKey) {
-		return nil, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+		return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
 	}
 
-	if rec, found := tx.getLocal(tableName, pkKey); found {
+	if row, found := tx.getLocal(tableName, pkKey); found {
 		ver := tx.getBaseVer(tableName, pkKey)
-		return rec, ver, nil
+		if clone {
+			return cloneRow(row), ver, nil
+		}
+		return row, ver, nil
 	}
 
 	tx.engine.mu.RLock()
 	td, exists := tx.engine.tables[tableName]
 	if !exists {
 		tx.engine.mu.RUnlock()
-		return nil, 0, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+		return storage.Row{}, 0, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 	td.mu.RLock()
-	rec, exists := td.Rows[pkKey]
+	row, exists := td.Rows[pkKey]
 	ver := td.Versions[pkKey]
 	td.mu.RUnlock()
 	tx.engine.mu.RUnlock()
 
 	if !exists {
-		return nil, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+		return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
 	}
 
 	if clone {
-		return cloneRecord(rec), ver, nil
+		return cloneRow(row), ver, nil
 	}
+	return row, ver, nil
+}
+
+func (tx *Transaction) getRecordAndVerUnderLock(tableName, pkKey string, clone bool) (storage.Record, int64, error) {
+	row, ver, err := tx.getRowAndVerUnderLock(tableName, pkKey, false)
+	if err != nil {
+		return nil, 0, err
+	}
+	tx.engine.mu.RLock()
+	td, ok := tx.engine.tables[tableName]
+	var schema storage.TableSchema
+	if ok {
+		schema = td.Schema
+	}
+	tx.engine.mu.RUnlock()
+	rec := schema.RowToRecord(row)
 	return rec, ver, nil
 }
 
@@ -1796,11 +1940,11 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 
 	// Check uncommitted local rows in transaction
 	if localRows, ok := tx.local[tableName]; ok {
-		for pk, locRec := range localRows {
+		for pk, locRow := range localRows {
 			if tx.isLocallyDeleted(tableName, pk) {
 				continue
 			}
-			partID, err := td.Schema.ComputePartitionKey(locRec)
+			partID, err := td.Schema.ComputePartitionKeyFromRow(locRow)
 			if err == nil && partSet[partID] {
 				keySet[pk] = struct{}{}
 			}
@@ -1859,8 +2003,8 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 			continue
 		}
 
-		if locRec, inLocal := tx.getLocal(tableName, pk); inLocal {
-			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
+		if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
+			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 				pks = append(pks, pk)
 			}
@@ -1871,11 +2015,11 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 	}
 
 	if localRows, ok := tx.local[tableName]; ok {
-		for pk, locRec := range localRows {
+		for pk, locRow := range localRows {
 			if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
 				continue
 			}
-			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
+			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 				pks = append(pks, pk)
 				seen[pk] = true
@@ -1984,8 +2128,8 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 			continue
 		}
 
-		if locRec, inLocal := tx.getLocal(tableName, pk); inLocal {
-			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
+		if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
+			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 				pks = append(pks, pk)
 			}
@@ -1997,11 +2141,11 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 	}
 
 	if localRows, ok := tx.local[tableName]; ok {
-		for pk, locRec := range localRows {
+		for pk, locRow := range localRows {
 			if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
 				continue
 			}
-			idxVal := extractIndexKey(locRec, idxData.Schema.Columns)
+			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 				pks = append(pks, pk)
 				seen[pk] = true
@@ -2095,7 +2239,7 @@ func (tx *Transaction) Commit() error {
 			}
 			for _, idxData := range td.Indexes {
 				if idxData.Schema.Unique {
-					keyVal := extractIndexKey(ch.rec, idxData.Schema.Columns)
+					keyVal := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
 					existing := idxData.ScanRange(&keyVal, &keyVal)
 					for _, epk := range existing {
 						if epk != ch.key {
@@ -2111,7 +2255,7 @@ func (tx *Transaction) Commit() error {
 			if ch.kind == changeUpdate {
 				for _, idxData := range td.Indexes {
 					if idxData.Schema.Unique {
-						keyVal := extractIndexKey(ch.rec, idxData.Schema.Columns)
+						keyVal := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
 						existing := idxData.ScanRange(&keyVal, &keyVal)
 						for _, epk := range existing {
 							if epk != ch.key {
@@ -2130,30 +2274,30 @@ func (tx *Transaction) Commit() error {
 		if !exists {
 			continue
 		}
-		oldRec, hadOld := td.Rows[ch.key]
+		oldRow, hadOld := td.Rows[ch.key]
 
 		switch ch.kind {
 		case changeInsert:
-			td.Rows[ch.key] = ch.rec
+			td.Rows[ch.key] = ch.row
 			td.Versions[ch.key] = 1
 			if td.Schema.IsPartitioned() {
-				if partID, err := td.Schema.ComputePartitionKey(ch.rec); err == nil {
+				if partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row); err == nil {
 					td.addPartitionKey(partID, ch.key)
 				}
 			}
 			for _, idxData := range td.Indexes {
-				newKey := extractIndexKey(ch.rec, idxData.Schema.Columns)
+				newKey := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
 				_ = idxData.Insert(newKey, ch.key)
 			}
 		case changeUpdate:
-			td.Rows[ch.key] = ch.rec
+			td.Rows[ch.key] = ch.row
 			td.Versions[ch.key] = ch.baseVer + 1
 			if td.Schema.IsPartitioned() {
 				var oldPartID, newPartID string
 				if hadOld {
-					oldPartID, _ = td.Schema.ComputePartitionKey(oldRec)
+					oldPartID, _ = td.Schema.ComputePartitionKeyFromRow(oldRow)
 				}
-				newPartID, _ = td.Schema.ComputePartitionKey(ch.rec)
+				newPartID, _ = td.Schema.ComputePartitionKeyFromRow(ch.row)
 				if oldPartID != newPartID {
 					if oldPartID != "" {
 						td.removePartitionKey(oldPartID, ch.key)
@@ -2165,23 +2309,23 @@ func (tx *Transaction) Commit() error {
 			}
 			for _, idxData := range td.Indexes {
 				if hadOld {
-					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+					oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
 					idxData.Delete(oldKey, ch.key)
 				}
-				newKey := extractIndexKey(ch.rec, idxData.Schema.Columns)
+				newKey := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
 				_ = idxData.Insert(newKey, ch.key)
 			}
 		case changeDelete:
 			delete(td.Rows, ch.key)
 			delete(td.Versions, ch.key)
 			if td.Schema.IsPartitioned() && hadOld {
-				if partID, err := td.Schema.ComputePartitionKey(oldRec); err == nil {
+				if partID, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
 					td.removePartitionKey(partID, ch.key)
 				}
 			}
 			if hadOld {
 				for _, idxData := range td.Indexes {
-					oldKey := extractIndexKey(oldRec, idxData.Schema.Columns)
+					oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
 					idxData.Delete(oldKey, ch.key)
 				}
 			}
@@ -2201,11 +2345,17 @@ func (tx *Transaction) Commit() error {
 			case changeDelete:
 				opType = OpDelete
 			}
+			rec := ch.rec
+			if rec == nil && ch.kind != changeDelete {
+				if td, ok := tx.engine.tables[ch.table]; ok {
+					rec = td.Schema.RowToRecord(ch.row)
+				}
+			}
 			ops = append(ops, WALOp{
 				Type:    opType,
 				Table:   ch.table,
 				Key:     ch.key,
-				Record:  ch.rec,
+				Record:  rec,
 				BaseVer: ch.baseVer,
 			})
 		}
@@ -2340,12 +2490,12 @@ func (tx *Transaction) ReleaseSavepoint(name string) error {
 	return nil
 }
 
-func cloneLocalMap(m map[string]map[string]storage.Record) map[string]map[string]storage.Record {
-	res := make(map[string]map[string]storage.Record, len(m))
+func cloneLocalMap(m map[string]map[string]storage.Row) map[string]map[string]storage.Row {
+	res := make(map[string]map[string]storage.Row, len(m))
 	for tbl, rows := range m {
-		tblMap := make(map[string]storage.Record, len(rows))
-		for k, rec := range rows {
-			tblMap[k] = cloneRecord(rec)
+		tblMap := make(map[string]storage.Row, len(rows))
+		for k, row := range rows {
+			tblMap[k] = cloneRow(row)
 		}
 		res[tbl] = tblMap
 	}
@@ -2380,6 +2530,7 @@ func cloneChangesMap(m map[string]rowChange) map[string]rowChange {
 	res := make(map[string]rowChange, len(m))
 	for k, ch := range m {
 		chCopy := ch
+		chCopy.row = cloneRow(ch.row)
 		if ch.rec != nil {
 			chCopy.rec = cloneRecord(ch.rec)
 		}
@@ -2388,12 +2539,12 @@ func cloneChangesMap(m map[string]rowChange) map[string]rowChange {
 	return res
 }
 
-func (tx *Transaction) getLocal(table, key string) (storage.Record, bool) {
+func (tx *Transaction) getLocal(table, key string) (storage.Row, bool) {
 	if t, ok := tx.local[table]; ok {
 		r, exists := t[key]
 		return r, exists
 	}
-	return nil, false
+	return storage.Row{}, false
 }
 
 func (tx *Transaction) getBaseVer(table, key string) int64 {
@@ -2414,13 +2565,13 @@ func (tx *Transaction) setBaseVer(table, key string, ver int64) {
 	}
 }
 
-func (tx *Transaction) putLocal(table, key string, rec storage.Record, baseVer int64) {
+func (tx *Transaction) putLocal(table, key string, row storage.Row, baseVer int64) {
 	t, ok := tx.local[table]
 	if !ok {
-		t = make(map[string]storage.Record)
+		t = make(map[string]storage.Row)
 		tx.local[table] = t
 	}
-	t[key] = rec
+	t[key] = row
 	tx.setBaseVer(table, key, baseVer)
 }
 
@@ -2485,13 +2636,15 @@ func (c *memCursor) Next() bool {
 		if c.tx != nil {
 			c.tx.mu.Lock()
 			isDel := c.tx.isLocallyDeleted(c.tableName, pk)
-			locRec, inLocal := c.tx.getLocal(c.tableName, pk)
+			locRow, inLocal := c.tx.getLocal(c.tableName, pk)
 			c.tx.mu.Unlock()
 			if isDel {
 				continue
 			}
 			if inLocal {
-				c.curRec = locRec
+				if c.td != nil {
+					c.curRec = c.td.Schema.RowToRecord(locRow)
+				}
 				return true
 			}
 		}
@@ -2504,10 +2657,10 @@ func (c *memCursor) Next() bool {
 		}
 		if c.td != nil {
 			c.td.mu.RLock()
-			rec, exists := c.td.Rows[pk]
+			row, exists := c.td.Rows[pk]
 			c.td.mu.RUnlock()
 			if exists {
-				c.curRec = rec
+				c.curRec = c.td.Schema.RowToRecord(row)
 				return true
 			}
 		}

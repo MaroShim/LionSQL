@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **In-Memory OCC Engine Contiguous Row Storage Transition (`pkg/storage/memengine`, `pkg/storage`)**:
+  - Replaced map-based row storage (`map[string]storage.Record`) with contiguous slice-backed `Row` structures (`map[string]storage.Row`), drastically cutting Go pointer indirection, map hash computation, and GC tracing pressure across high-volume OLTP workloads.
+  - Converted internal transaction mutation buffers (`local map[string]map[string]storage.Row`) and `rowChange` journals to operate on schema-ordered `Row` objects.
+  - Optimized foreign key validation (`rowMatchesFK`) and secondary index key extraction (`extractIndexKeyFromRow`) to evaluate directly against ordered column slice indices without intermediate record map allocations.
+  - Preserved transparent backward compatibility with legacy snapshots and WAL logs via automatic format detection and `legacyTableData` migration.
+
 - **In-Memory OCC Zero-Copy Read-Only Optimization & Prefix Key Acceleration (`pkg/storage/memengine`, `pkg/api`)**:
   - Eliminated unnecessary map cloning in `Transaction.Get` for read-only transactions (`tx.opts.ReadOnly`), reducing heap allocations and GC pressure on high-frequency read paths.
   - Optimized `buildCompositePrefixKey` in `pkg/api/sqlexec_dml.go` using pre-allocated `strings.Builder` with capacity reservation to eliminate temporary slice and string allocations during composite index scans.

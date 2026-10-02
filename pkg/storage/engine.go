@@ -187,6 +187,21 @@ func (s *TableSchema) ComputePartitionKey(rec Record) (string, error) {
 	return s.ComputePartitionKeyFromValue(val)
 }
 
+func (s *TableSchema) ComputePartitionKeyFromRow(row Row) (string, error) {
+	if !s.IsPartitioned() {
+		return "", nil
+	}
+	_, idx, found := s.FindColumn(s.Partition.Column)
+	if !found || idx < 0 || idx >= len(row.Values) {
+		return "null", nil
+	}
+	val := row.Values[idx]
+	if val.IsNull {
+		return "null", nil
+	}
+	return s.ComputePartitionKeyFromValue(val)
+}
+
 func (s *TableSchema) ComputePartitionKeyFromValue(val Value) (string, error) {
 	if !s.IsPartitioned() {
 		return "", nil
