@@ -30,7 +30,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ## 3. Storage & Engine Hardening (장기 과제)
 
-- [ ] **Pure-Go 임베디드 영속 스토리지 백엔드 (Pebble / bbolt)**
-  - CGO 없는 순수 정적 바이너리(`CGO_ENABLED=0`) 배포를 위한 제3의 스토리지 엔진 옵션 (`-engine=pebble`).
 - [ ] **Volcano 청크 단위 배치 실행 (Vectorized Chunk Iterator)**
   - 행 단위 `Next()` 호출 오버헤드를 줄이기 위해 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍.
+- [ ] **WiredTiger 세션 및 커서 풀링 최적화 (`pkg/storage/wiredtiger`)**
+  - 고빈도 트랜잭션 경로에서 Cgo 커서 오픈/클로즈 오버헤드를 줄이기 위한 스레드 로컬 커서 재사용 고도화.

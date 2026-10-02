@@ -12,7 +12,7 @@ This document charts the development milestones, current implementation status, 
 - Dual Storage (WiredTiger + In-Memory OCC)    - Transaction Savepoints (SAVEPOINT / ROLLBACK)       - AI Vector Embeddings (HNSW & IVF-Flat)
 - Dual Parser (Native Pratt + ANTLR4 Fallback) - VDBE PlanCache & OpRelQuery Physical Caching        - 3-Node Distributed Raft Consensus
 - VDBE Virtual Machine & PlanCache Sharing     - Zero-Copy Streaming Cursor (memengine)             - Real-Time CDC Streaming (Kafka / NATS)
-- Volcano Relational Engine & Window Functions - Pure-Go Persistent Storage (Pebble / bbolt)        - Full-Text Search Engine (BM25)
+- Volcano Relational Engine & Window Functions - WiredTiger Cursor Pooling & Hazard Cache           - Full-Text Search Engine (BM25)
 - CBO Histograms, Pushdown, Constant Folding   - Background MVCC Vacuum / Version GC
 - Online Hot Backup & COPY Streaming           - Multi-Join DP / Genetic Query Optimizer
 (COMPLETED - 100%)                             (COMPLETED & ACTIVE)                                 (PLANNED)
@@ -100,11 +100,12 @@ This document charts the development milestones, current implementation status, 
   - SkipList/B+Tree 인덱스 스캔과 동일한 지연 평가(Lazy Evaluation) 패턴 일원화.
 - **기대 효과**: 수십만~수백만 행 스캔 시 메모리 할당 90% 이상 절감 및 Go 런타임 GC 스파이크 방지.
 
-#### 2.2. CGO 없는 Pure-Go 임베디드 영속 스토리지 백엔드 (Pebble / bbolt)
-- **현황**: 현재 디스크 영속 스토리지는 WiredTiger (Cgo)에 의존하고 있어, C 컴파일러가 없는 환경에서 크로스 컴파일하거나 순수 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 86)로 배포할 때 제약이 발생함.
+#### 2.2. WiredTiger 세션 및 커서 풀링 최적화 (Cgo 오버헤드 최소화)
+- **현황**: WiredTiger는 검증된 최고 수준의 엔터프라이즈 B+Tree MVCC 스토리지이나, 고빈도 단건 CRUD 연산 시 Cgo 커서 오픈/클로즈 오버헤드가 발생함.
 - **과제**:
-  - CockroachDB의 고성능 LSM-Tree 엔진인 Pebble 또는 순수 Go B+Tree인 bbolt를 `storage.Engine` 인터페이스 뒤로 래핑하여 제3의 스토리지 엔진 옵션(`-engine=pebble`)으로 추가.
-- **기대 효과**: 외부 C 라이브러리 없이 완벽한 단일 바이너리(`CGO_ENABLED=0`) 크로스 플랫폼 배포 실현.
+  - 워커 고루틴별 커서 캐싱 및 세션 풀링을 고도화하여 Cgo 브릿지 지연시간을 단축하고 In-Memory 백엔드 수준의 극저지연성 달성.
+  - 레코드 직렬화 경로의 Zero-Allocation 바이너리 코덱 유지보수 및 Hazard Pointer 캐시 적중률 극대화.
+- **기대 효과**: WiredTiger의 OLTP 처리량 추가 20~30% 견인 및 CPU 사이클 절감.
 
 #### 2.3. 공유 메모리(Shared Memory / mmap) 기반 Apache Arrow 컬럼 스냅샷 및 Zero-Copy OLAP 연동
 - **현황**: SQLion의 모든 테이블은 행 지향(Row-Oriented) 구조로 OLTP 초고속 처리에 최적화되어 있으나, 대용량 집계(`COUNT/SUM/AVG/GROUP BY`) 및 분석 쿼리 시 행 단위 역직렬화 오버헤드가 발생함.
