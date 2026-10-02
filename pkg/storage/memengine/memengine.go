@@ -60,15 +60,170 @@ func (idx *IndexData) SyncEntries() {
 	}
 }
 
-// TableData stores rows in memory for a single table with OCC version tracking and secondary indexes.
+const numTableShards = 64
+
+type tableShard struct {
+	mu       sync.RWMutex
+	rows     map[string]storage.Row
+	versions map[string]int64
+	_pad     [32]byte
+}
+
+// TableData stores rows in memory for a single table with fine-grained sharded OCC version tracking and secondary indexes.
 type TableData struct {
-	mu         sync.RWMutex
+	mu         sync.RWMutex                   // Table-level RW lock for DDL (DROP, TRUNCATE) and table-wide schema changes
+	partMu     sync.RWMutex                   // Lock for partition metadata
+	shards     [numTableShards]tableShard
+	shardsInit bool
 	Schema     storage.TableSchema            `json:"schema"`
-	Rows       map[string]storage.Row         `json:"rows"`
-	Versions   map[string]int64               `json:"versions"`
-	Keys       []string                       `json:"keys"`
+	Rows       map[string]storage.Row         `json:"rows,omitempty"`     // For snapshot persistence & backward compatibility
+	Versions   map[string]int64               `json:"versions,omitempty"` // For snapshot persistence
+	Keys       []string                       `json:"keys,omitempty"`
 	Indexes    map[string]*IndexData          `json:"indexes,omitempty"`
 	Partitions map[string]map[string]struct{} `json:"partitions,omitempty"`
+}
+
+func hashShard(key string) int {
+	var h uint32 = 2166136261
+	for i := 0; i < len(key); i++ {
+		h ^= uint32(key[i])
+		h *= 16777619
+	}
+	return int(h & (numTableShards - 1))
+}
+
+func (td *TableData) initShards() {
+	if td.shardsInit {
+		return
+	}
+	for i := 0; i < numTableShards; i++ {
+		if td.shards[i].rows == nil {
+			td.shards[i].rows = make(map[string]storage.Row)
+		}
+		if td.shards[i].versions == nil {
+			td.shards[i].versions = make(map[string]int64)
+		}
+	}
+	if len(td.Rows) > 0 {
+		for k, r := range td.Rows {
+			sIdx := hashShard(k)
+			td.shards[sIdx].rows[k] = r
+			if td.Versions != nil {
+				td.shards[sIdx].versions[k] = td.Versions[k]
+			} else {
+				td.shards[sIdx].versions[k] = 1
+			}
+		}
+	}
+	td.shardsInit = true
+}
+
+func (td *TableData) ensureShardsInit() {
+	if !td.shardsInit {
+		td.initShards()
+	}
+}
+
+func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
+	td.ensureShardsInit()
+	sIdx := hashShard(pk)
+	sh := &td.shards[sIdx]
+	sh.mu.RLock()
+	r, ok := sh.rows[pk]
+	v := sh.versions[pk]
+	sh.mu.RUnlock()
+	return r, v, ok
+}
+
+func (td *TableData) hasKey(pk string) bool {
+	td.ensureShardsInit()
+	sIdx := hashShard(pk)
+	sh := &td.shards[sIdx]
+	sh.mu.RLock()
+	_, ok := sh.rows[pk]
+	sh.mu.RUnlock()
+	return ok
+}
+
+func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
+	td.ensureShardsInit()
+	sIdx := hashShard(pk)
+	sh := &td.shards[sIdx]
+	sh.mu.Lock()
+	sh.rows[pk] = row
+	sh.versions[pk] = ver
+	sh.mu.Unlock()
+}
+
+func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
+	td.ensureShardsInit()
+	sIdx := hashShard(pk)
+	sh := &td.shards[sIdx]
+	sh.mu.Lock()
+	oldRow, hadOld := sh.rows[pk]
+	delete(sh.rows, pk)
+	delete(sh.versions, pk)
+	sh.mu.Unlock()
+	return oldRow, hadOld
+}
+
+func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
+	td.ensureShardsInit()
+	for i := 0; i < numTableShards; i++ {
+		sh := &td.shards[i]
+		sh.mu.RLock()
+		for k, r := range sh.rows {
+			if !fn(k, r) {
+				sh.mu.RUnlock()
+				return
+			}
+		}
+		sh.mu.RUnlock()
+	}
+}
+
+func (td *TableData) collectKeys(filter func(pk string) bool) []string {
+	td.ensureShardsInit()
+	var keys []string
+	for i := 0; i < numTableShards; i++ {
+		sh := &td.shards[i]
+		sh.mu.RLock()
+		for k := range sh.rows {
+			if filter == nil || filter(k) {
+				keys = append(keys, k)
+			}
+		}
+		sh.mu.RUnlock()
+	}
+	return keys
+}
+
+func (td *TableData) syncShardsToMapsLocked() {
+	td.ensureShardsInit()
+	td.Rows = make(map[string]storage.Row)
+	td.Versions = make(map[string]int64)
+	for i := 0; i < numTableShards; i++ {
+		sh := &td.shards[i]
+		sh.mu.RLock()
+		for k, r := range sh.rows {
+			td.Rows[k] = r
+			td.Versions[k] = sh.versions[k]
+		}
+		sh.mu.RUnlock()
+	}
+}
+
+func (td *TableData) truncateShardsLocked() {
+	for i := 0; i < numTableShards; i++ {
+		sh := &td.shards[i]
+		sh.mu.Lock()
+		sh.rows = make(map[string]storage.Row)
+		sh.versions = make(map[string]int64)
+		sh.mu.Unlock()
+	}
+	td.Rows = make(map[string]storage.Row)
+	td.Versions = make(map[string]int64)
+	td.Keys = make([]string, 0)
 }
 
 type legacyTableData struct {
@@ -94,6 +249,7 @@ func convertLegacyTables(legacy map[string]*legacyTableData) map[string]*TableDa
 		for pk, rec := range leg.Rows {
 			td.Rows[pk] = leg.Schema.RecordToRow(rec)
 		}
+		td.initShards()
 		res[name] = td
 	}
 	return res
@@ -262,7 +418,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if op.Schema == nil {
 				continue
 			}
-			e.tables[op.Schema.Name] = &TableData{
+			td := &TableData{
 				Schema:     *op.Schema,
 				Rows:       make(map[string]storage.Row),
 				Versions:   make(map[string]int64),
@@ -270,13 +426,13 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Indexes:    make(map[string]*IndexData),
 				Partitions: make(map[string]map[string]struct{}),
 			}
+			td.initShards()
+			e.tables[op.Schema.Name] = td
 		case OpDropTable:
 			delete(e.tables, op.Table)
 		case OpTruncateTable:
 			if td, exists := e.tables[op.Table]; exists {
-				td.Rows = make(map[string]storage.Row)
-				td.Versions = make(map[string]int64)
-				td.Keys = make([]string, 0)
+				td.truncateShardsLocked()
 				td.Partitions = make(map[string]map[string]struct{})
 				for _, idx := range td.Indexes {
 					idx.sl = NewSkipList(idx.Schema.Unique)
@@ -287,9 +443,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if td, exists := e.tables[op.Table]; exists {
 				if pksSet, ok := td.Partitions[op.Key]; ok {
 					for pk := range pksSet {
-						oldRow, hadOld := td.Rows[pk]
-						delete(td.Rows, pk)
-						delete(td.Versions, pk)
+						oldRow, hadOld := td.deleteRowAndVer(pk)
 						if hadOld {
 							for _, idxData := range td.Indexes {
 								oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
@@ -298,11 +452,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 						}
 					}
 					delete(td.Partitions, op.Key)
-					newKeys := make([]string, 0, len(td.Rows))
-					for k := range td.Rows {
-						newKeys = append(newKeys, k)
-					}
-					td.Keys = newKeys
+					td.Keys = td.collectKeys(nil)
 				}
 			}
 		case OpCreateIndex:
@@ -317,10 +467,11 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Schema:  *op.IndexSchema,
 				Entries: make([]IndexEntry, 0),
 			}
-			for pk, row := range td.Rows {
+			td.forEachRow(func(pk string, row storage.Row) bool {
 				keyVal := extractIndexKeyFromRow(&td.Schema, row, op.IndexSchema.Columns)
 				_ = idxData.Insert(keyVal, pk)
-			}
+				return true
+			})
 			if td.Indexes == nil {
 				td.Indexes = make(map[string]*IndexData)
 			}
@@ -345,11 +496,10 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				continue
 			}
 			row := td.Schema.RecordToRow(op.Record)
-			if _, hasKey := td.Rows[op.Key]; !hasKey {
+			if !td.hasKey(op.Key) {
 				td.Keys = append(td.Keys, op.Key)
 			}
-			td.Rows[op.Key] = row
-			td.Versions[op.Key] = 1
+			td.putRowAndVer(op.Key, row, 1)
 			if td.Schema.IsPartitioned() {
 				if pKey, err := td.Schema.ComputePartitionKeyFromRow(row); err == nil {
 					td.addPartitionKey(pKey, op.Key)
@@ -364,13 +514,12 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !exists {
 				continue
 			}
-			oldRow, hadOld := td.Rows[op.Key]
+			oldRow, _, hadOld := td.getRowAndVer(op.Key)
 			if !hadOld {
 				td.Keys = append(td.Keys, op.Key)
 			}
 			row := td.Schema.RecordToRow(op.Record)
-			td.Rows[op.Key] = row
-			td.Versions[op.Key] = op.BaseVer + 1
+			td.putRowAndVer(op.Key, row, op.BaseVer+1)
 			if td.Schema.IsPartitioned() {
 				var oldPKey, newPKey string
 				if hadOld {
@@ -399,9 +548,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !exists {
 				continue
 			}
-			oldRow, hadOld := td.Rows[op.Key]
-			delete(td.Rows, op.Key)
-			delete(td.Versions, op.Key)
+			oldRow, hadOld := td.deleteRowAndVer(op.Key)
 			if td.Schema.IsPartitioned() && hadOld {
 				if pKey, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
 					td.removePartitionKey(pKey, op.Key)
@@ -474,6 +621,7 @@ func (e *Engine) saveDiskLocked() error {
 		return nil
 	}
 	for _, td := range e.tables {
+		td.syncShardsToMapsLocked()
 		for _, idx := range td.Indexes {
 			idx.SyncEntries()
 		}
@@ -536,6 +684,7 @@ func (e *Engine) loadDiskLocked() {
 						td.Versions[k] = 1
 					}
 				}
+				td.initShards()
 				if td.Indexes == nil {
 					td.Indexes = make(map[string]*IndexData)
 				}
@@ -578,6 +727,7 @@ func (e *Engine) loadDiskLocked() {
 						td.Versions[k] = 1
 					}
 				}
+				td.initShards()
 				if td.Indexes == nil {
 					td.Indexes = make(map[string]*IndexData)
 				}
@@ -640,6 +790,7 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		Indexes:    make(map[string]*IndexData),
 		Partitions: make(map[string]map[string]struct{}),
 	}
+	td.initShards()
 	for _, idx := range schema.Indexes {
 		td.Indexes[idx.Name] = &IndexData{
 			Schema:  idx,
@@ -682,11 +833,17 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	}
 
 	// Populate index from existing rows
-	for pk, row := range td.Rows {
+	var insertErr error
+	td.forEachRow(func(pk string, row storage.Row) bool {
 		keyVal := extractIndexKeyFromRow(&td.Schema, row, index.Columns)
 		if err := idxData.Insert(keyVal, pk); err != nil {
-			return err
+			insertErr = err
+			return false
 		}
+		return true
+	})
+	if insertErr != nil {
+		return insertErr
 	}
 
 	if td.Indexes == nil {
@@ -853,9 +1010,7 @@ func (e *Engine) TruncateTable(tableName string) error {
 	}
 
 	td.mu.Lock()
-	td.Rows = make(map[string]storage.Row)
-	td.Versions = make(map[string]int64)
-	td.Keys = make([]string, 0)
+	td.truncateShardsLocked()
 	td.Partitions = make(map[string]map[string]struct{})
 	for _, idx := range td.Indexes {
 		idx.sl = NewSkipList(idx.Schema.Unique)
@@ -893,9 +1048,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 
 	// Delete all rows in partition and purge secondary index references
 	for pk := range pksSet {
-		oldRow, hadOld := td.Rows[pk]
-		delete(td.Rows, pk)
-		delete(td.Versions, pk)
+		oldRow, hadOld := td.deleteRowAndVer(pk)
 		if hadOld {
 			for _, idxData := range td.Indexes {
 				oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
@@ -906,11 +1059,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	delete(td.Partitions, partitionName)
 
 	// Rebuild keys
-	newKeys := make([]string, 0, len(td.Rows))
-	for k := range td.Rows {
-		newKeys = append(newKeys, k)
-	}
-	td.Keys = newKeys
+	td.Keys = td.collectKeys(nil)
 
 	e.recordWALLocked([]WALOp{{
 		Type:  OpDropPartition,
@@ -1096,10 +1245,7 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	} else {
 		tx.engine.mu.RLock()
 		if td, ok := tx.engine.tables[tableName]; ok {
-			td.mu.RLock()
-			_, inEngine := td.Rows[pkKey]
-			td.mu.RUnlock()
-			if inEngine {
+			if td.hasKey(pkKey) {
 				tx.engine.mu.RUnlock()
 				return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, tableName)
 			}
@@ -1639,9 +1785,7 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		}
 		tx.engine.mu.RLock()
 		if pTd, ok := tx.engine.tables[fk.ParentTable]; ok {
-			pTd.mu.RLock()
-			_, inEngine := pTd.Rows[parentKey]
-			pTd.mu.RUnlock()
+			inEngine := pTd.hasKey(parentKey)
 			tx.engine.mu.RUnlock()
 			return inEngine, nil
 		}
@@ -1649,22 +1793,24 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 		return false, nil
 	}
 
-	parentTd.mu.RLock()
-	for pkStr, row := range parentTd.Rows {
+	matched := false
+	parentTd.forEachRow(func(pkStr string, row storage.Row) bool {
 		if tx.isLocallyDeleted(fk.ParentTable, pkStr) {
-			continue
+			return true
 		}
 		if _, inLocal := tx.getLocal(fk.ParentTable, pkStr); inLocal {
-			continue
+			return true
 		}
 		if rowMatchesFK(&parentTd.Schema, row, parentCols, childVals) {
-			parentTd.mu.RUnlock()
-			tx.engine.mu.RUnlock()
-			return true, nil
+			matched = true
+			return false
 		}
-	}
-	parentTd.mu.RUnlock()
+		return true
+	})
 	tx.engine.mu.RUnlock()
+	if matched {
+		return true, nil
+	}
 
 	if localRows, ok := tx.local[fk.ParentTable]; ok {
 		for pkStr, row := range localRows {
@@ -1715,19 +1861,18 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 	}
 
 	var matchingPKs []storage.Value
-	childTd.mu.RLock()
-	for pkStr, row := range childTd.Rows {
+	childTd.forEachRow(func(pkStr string, row storage.Row) bool {
 		if tx.isLocallyDeleted(childTable, pkStr) {
-			continue
+			return true
 		}
 		if _, inLocal := tx.getLocal(childTable, pkStr); inLocal {
-			continue
+			return true
 		}
 		if rowMatchesFK(&childSchema, row, fk.ChildColumns, parentValues) && childPkIdx >= 0 && childPkIdx < len(row.Values) {
 			matchingPKs = append(matchingPKs, row.Values[childPkIdx])
 		}
-	}
-	childTd.mu.RUnlock()
+		return true
+	})
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[childTable]; ok {
@@ -1826,10 +1971,7 @@ func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool
 		tx.engine.mu.RUnlock()
 		return storage.Row{}, 0, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
-	td.mu.RLock()
-	row, exists := td.Rows[pkKey]
-	ver := td.Versions[pkKey]
-	td.mu.RUnlock()
+	row, ver, exists := td.getRowAndVer(pkKey)
 	tx.engine.mu.RUnlock()
 
 	if !exists {
@@ -1873,14 +2015,9 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
-	td.mu.RLock()
-	keys := make([]string, 0, len(td.Rows)+len(tx.local[tableName]))
-	for k := range td.Rows {
-		if !tx.isLocallyDeleted(tableName, k) {
-			keys = append(keys, k)
-		}
-	}
-	td.mu.RUnlock()
+	keys := td.collectKeys(func(k string) bool {
+		return !tx.isLocallyDeleted(tableName, k)
+	})
 	tx.engine.mu.RUnlock()
 
 	if localRows, ok := tx.local[tableName]; ok {
@@ -1936,7 +2073,7 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 		return tx.Scan(tableName)
 	}
 
-	td.mu.RLock()
+	td.partMu.RLock()
 	partSet := make(map[string]bool, len(partitions))
 	for _, p := range partitions {
 		partSet[p] = true
@@ -1952,7 +2089,7 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 			}
 		}
 	}
-	td.mu.RUnlock()
+	td.partMu.RUnlock()
 	tx.engine.mu.RUnlock()
 
 	// Check uncommitted local rows in transaction
@@ -2214,44 +2351,91 @@ func (tx *Transaction) Commit() error {
 	}
 
 	// 1. Collect distinct table names affected by this transaction
-	tableSet := make(map[string]struct{})
-	for _, ch := range tx.changes {
-		tableSet[ch.table] = struct{}{}
+	type shardRef struct {
+		tableName string
+		shardIdx  int
+		td        *TableData
 	}
+
+	tableSet := make(map[string]*TableData)
+	shardMap := make(map[string]map[int]struct{})
+
+	for _, ch := range tx.changes {
+		td, exists := tx.engine.tables[ch.table]
+		if !exists {
+			continue
+		}
+		tableSet[ch.table] = td
+		sIdx := hashShard(ch.key)
+		if shardMap[ch.table] == nil {
+			shardMap[ch.table] = make(map[int]struct{})
+		}
+		shardMap[ch.table][sIdx] = struct{}{}
+	}
+
 	tableNames := make([]string, 0, len(tableSet))
 	for name := range tableSet {
 		tableNames = append(tableNames, name)
 	}
 	sort.Strings(tableNames) // Strict Lock Hierarchy to prevent deadlocks (Rule 10)
 
+	var neededShards []shardRef
+	for _, tName := range tableNames {
+		td := tableSet[tName]
+		sIndices := make([]int, 0, len(shardMap[tName]))
+		for idx := range shardMap[tName] {
+			sIndices = append(sIndices, idx)
+		}
+		sort.Ints(sIndices) // Canonical Shard Ordering within table (Rule 10)
+		for _, idx := range sIndices {
+			neededShards = append(neededShards, shardRef{
+				tableName: tName,
+				shardIdx:  idx,
+				td:        td,
+			})
+		}
+	}
+
 	// 2. Acquire shared read lock on engine catalog to resolve table pointers
 	tx.engine.mu.RLock()
 	defer tx.engine.mu.RUnlock()
 
-	// 3. Acquire exclusive lock on each affected table in sorted canonical order
-	affectedTables := make([]*TableData, 0, len(tableNames))
-	for _, name := range tableNames {
-		td, exists := tx.engine.tables[name]
-		if exists {
-			td.mu.Lock()
-			affectedTables = append(affectedTables, td)
+	// 3. Acquire Intent-Shared RLock on affected tables (prevents concurrent DDL DROP/TRUNCATE)
+	for _, tName := range tableNames {
+		tableSet[tName].mu.RLock()
+	}
+
+	// 4. Acquire exclusive lock on each affected shard in strict canonical order
+	for i := range neededShards {
+		neededShards[i].td.shards[neededShards[i].shardIdx].mu.Lock()
+	}
+
+	var unlocked bool
+	unlockAll := func() {
+		if unlocked {
+			return
+		}
+		unlocked = true
+		for i := len(neededShards) - 1; i >= 0; i-- {
+			neededShards[i].td.shards[neededShards[i].shardIdx].mu.Unlock()
+		}
+		for i := len(tableNames) - 1; i >= 0; i-- {
+			tableSet[tableNames[i]].mu.RUnlock()
 		}
 	}
-	defer func() {
-		for i := len(affectedTables) - 1; i >= 0; i-- {
-			affectedTables[i].mu.Unlock()
-		}
-	}()
+	defer unlockAll()
 
-	// 1. Verify OCC version conflicts and unique constraints
+	// 5. Verify OCC version conflicts and unique constraints
 	for _, ch := range tx.changes {
 		td, exists := tx.engine.tables[ch.table]
 		if !exists {
 			continue
 		}
-		curVer := td.Versions[ch.key]
+		sIdx := hashShard(ch.key)
+		sh := &td.shards[sIdx]
+		curVer := sh.versions[ch.key]
 		if ch.kind == changeInsert {
-			if _, exists := td.Rows[ch.key]; exists {
+			if _, exists := sh.rows[ch.key]; exists {
 				return storage.ErrSerializationFailure
 			}
 			for _, idxData := range td.Indexes {
@@ -2285,21 +2469,25 @@ func (tx *Transaction) Commit() error {
 		}
 	}
 
-	// 2. Apply changes and update secondary indexes atomically
+	// 6. Apply changes and update secondary indexes atomically
 	for _, ch := range tx.changes {
 		td, exists := tx.engine.tables[ch.table]
 		if !exists {
 			continue
 		}
-		oldRow, hadOld := td.Rows[ch.key]
+		sIdx := hashShard(ch.key)
+		sh := &td.shards[sIdx]
+		oldRow, hadOld := sh.rows[ch.key]
 
 		switch ch.kind {
 		case changeInsert:
-			td.Rows[ch.key] = ch.row
-			td.Versions[ch.key] = 1
+			sh.rows[ch.key] = ch.row
+			sh.versions[ch.key] = 1
 			if td.Schema.IsPartitioned() {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row); err == nil {
+					td.partMu.Lock()
 					td.addPartitionKey(partID, ch.key)
+					td.partMu.Unlock()
 				}
 			}
 			for _, idxData := range td.Indexes {
@@ -2307,8 +2495,8 @@ func (tx *Transaction) Commit() error {
 				_ = idxData.Insert(newKey, ch.key)
 			}
 		case changeUpdate:
-			td.Rows[ch.key] = ch.row
-			td.Versions[ch.key] = ch.baseVer + 1
+			sh.rows[ch.key] = ch.row
+			sh.versions[ch.key] = ch.baseVer + 1
 			if td.Schema.IsPartitioned() {
 				var oldPartID, newPartID string
 				if hadOld {
@@ -2316,12 +2504,14 @@ func (tx *Transaction) Commit() error {
 				}
 				newPartID, _ = td.Schema.ComputePartitionKeyFromRow(ch.row)
 				if oldPartID != newPartID {
+					td.partMu.Lock()
 					if oldPartID != "" {
 						td.removePartitionKey(oldPartID, ch.key)
 					}
 					if newPartID != "" {
 						td.addPartitionKey(newPartID, ch.key)
 					}
+					td.partMu.Unlock()
 				}
 			}
 			for _, idxData := range td.Indexes {
@@ -2333,11 +2523,13 @@ func (tx *Transaction) Commit() error {
 				_ = idxData.Insert(newKey, ch.key)
 			}
 		case changeDelete:
-			delete(td.Rows, ch.key)
-			delete(td.Versions, ch.key)
+			delete(sh.rows, ch.key)
+			delete(sh.versions, ch.key)
 			if td.Schema.IsPartitioned() && hadOld {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
+					td.partMu.Lock()
 					td.removePartitionKey(partID, ch.key)
+					td.partMu.Unlock()
 				}
 			}
 			if hadOld {
@@ -2348,6 +2540,9 @@ func (tx *Transaction) Commit() error {
 			}
 		}
 	}
+
+	// Release shard and table locks before WAL disk I/O to avoid holding locks during fsync/compaction
+	unlockAll()
 
 	// 3. Append atomic WAL record and notify walHook if enabled
 	if len(tx.changes) > 0 {
@@ -2677,9 +2872,7 @@ func (c *memCursor) Next() bool {
 			continue
 		}
 		if c.td != nil {
-			c.td.mu.RLock()
-			row, exists := c.td.Rows[pk]
-			c.td.mu.RUnlock()
+			row, _, exists := c.td.getRowAndVer(pk)
 			if exists {
 				c.curRow = row
 				c.curRec = nil

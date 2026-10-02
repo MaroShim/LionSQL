@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Fine-Grained Sharded Locking Architecture for In-Memory OCC Engine (`pkg/storage/memengine`)**:
+  - Replaced table-level exclusive locking during `Commit()` with 64-shard striped row locks (`[64]tableShard`), eliminating global table contention and serial blocking across concurrent write transactions.
+  - Implemented hierarchical intent-shared locking (`td.mu.RLock()` for intent share vs `td.mu.Lock()` for DDL) and strictly ordered canonical lock acquisition (`tableNames` ascending, followed by `shardIdx` ascending) to mathematically eliminate transaction deadlocks (Rule 10).
+  - Transitioned `GetRow`, `Get`, `hasKey`, and `memCursor.Next` to lightweight per-shard read locks, allowing concurrent point lookups and scans to proceed unblocked while other transactions commit on non-overlapping shards.
+  - Accelerated transaction commit by unlocking memory shard locks immediately upon state mutation and prior to atomic WAL appending, minimizing critical sections and eliminating self-deadlocks during AOF rewrite compactions.
+
 - **Tuple Serialization Buffer & VM Execution Frame Pooling via `sync.Pool` (`pkg/storage`, `pkg/proc/runtime`, `pkg/storage/wiredtiger`)**:
   - Implemented `tupleBufferPool` in `pkg/storage/tuple.go` (`GetTupleBuffer`, `PutTupleBuffer`, and `EncodeTupleToBuffer`) to eliminate heap allocations during high-frequency binary tuple encoding.
   - Integrated pooled byte buffers into WiredTiger's record serialization pipeline (`serializeRecordToBuffer`), avoiding byte slice allocations on every `putLocked` and `Update` operation.
