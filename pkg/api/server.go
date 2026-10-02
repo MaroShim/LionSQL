@@ -46,6 +46,26 @@ type ClientSession struct {
 	mu              sync.Mutex
 }
 
+// IsReadOnly returns true if the session was configured as read-only.
+func (cs *ClientSession) IsReadOnly() bool {
+	if cs == nil {
+		return false
+	}
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
+		return true
+	}
+	return false
+}
+
+// TxOptions returns the configured transaction options for this session.
+func (cs *ClientSession) TxOptions() storage.TxOptions {
+	return storage.TxOptions{
+		ReadOnly: cs.IsReadOnly(),
+	}
+}
+
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
 type Server struct {
 	catalog        *catalog.Catalog

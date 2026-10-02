@@ -126,7 +126,7 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 		}
 		defer session.Close()
 
-		t, err := session.BeginTx(storage.TxOptions{})
+		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {
 			return nil, err
 		}
@@ -1639,7 +1639,7 @@ func (s *Server) execSelectInto(targetTable, projections, fromClause string, sta
 			}
 			defer session.Close()
 
-			t, err := session.BeginTx(storage.TxOptions{})
+			t, err := session.BeginTx(cs.TxOptions())
 			if err != nil {
 				return nil, err
 			}
@@ -1700,7 +1700,7 @@ func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *Clien
 		}
 		defer session.Close()
 
-		t, err := session.BeginTx(storage.TxOptions{})
+		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {
 			return nil, err
 		}
@@ -3389,7 +3389,7 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 		}
 		defer session.Close()
 
-		t, err := session.BeginTx(storage.TxOptions{})
+		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {
 			return nil, err
 		}
@@ -3559,7 +3559,7 @@ func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*
 		}
 		defer session.Close()
 
-		t, err := session.BeginTx(storage.TxOptions{})
+		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {
 			return nil, err
 		}

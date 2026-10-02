@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Standardized In-Memory OCC engine snapshot persistence strictly on `tables.mpk` (MessagePack metadata container) and OLTP row records on schema-ordered contiguous `Row` representations.
 
 ### Added
+- **Wire Protocol Session Read-Only Transaction Option Binding (`pkg/api`)**:
+  - Bound session-scoped `transaction_read_only` variable and `SET TRANSACTION READ ONLY` directly into interactive and autocommit `BeginTx` transaction options.
+  - Added `IsReadOnly()` and `TxOptions()` helper methods to `ClientSession` to ensure read-only transactions are strictly enforced down to the storage engine level.
+
 - **Atomic Batched DML WAL Replay Optimization (`pkg/backup`)**:
   - Refactored `ApplyWALRecordWithOptions` in `pkg/backup/pitr.go` to batch contiguous DML mutations (`INSERT`, `UPDATE`, `DELETE`) within a single atomic transaction rather than allocating and committing per-row sessions.
   - Eliminates redundant begin/commit cycles and Cgo roundtrips across WAL replay loops, improving recovery and replication replay throughput.

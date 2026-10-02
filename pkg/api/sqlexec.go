@@ -388,7 +388,16 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		if cs.Tx != nil {
 			return nil, fmt.Errorf("transaction already active on session %s", cs.ID)
 		}
-		tx, err := cs.Session.BeginTx(storage.TxOptions{})
+		opts := storage.TxOptions{}
+		if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
+			opts.ReadOnly = true
+		}
+		if strings.Contains(upper, "READ ONLY") {
+			opts.ReadOnly = true
+		} else if strings.Contains(upper, "READ WRITE") {
+			opts.ReadOnly = false
+		}
+		tx, err := cs.Session.BeginTx(opts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to start transaction: %w", err)
 		}
