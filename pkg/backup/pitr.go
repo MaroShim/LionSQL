@@ -55,9 +55,59 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 		return err
 	}
 
+	var (
+		sess storage.Session
+		tx   storage.Transaction
+	)
+
+	ensureTx := func() error {
+		if tx != nil {
+			return nil
+		}
+		var err error
+		sess, err = eng.NewSession()
+		if err != nil {
+			return err
+		}
+		tx, err = sess.BeginTx(storage.TxOptions{})
+		if err != nil {
+			_ = sess.Close()
+			sess = nil
+			return err
+		}
+		return nil
+	}
+
+	commitTx := func() error {
+		if tx == nil {
+			return nil
+		}
+		err := tx.Commit()
+		_ = sess.Close()
+		tx = nil
+		sess = nil
+		return err
+	}
+
+	rollbackTx := func() {
+		if tx != nil {
+			_ = tx.Rollback()
+			_ = sess.Close()
+			tx = nil
+			sess = nil
+		}
+	}
+
+	defer func() {
+		rollbackTx()
+	}()
+
 	for _, op := range rec.Ops {
 		switch op.Type {
 		case memengine.OpCreateTable:
+			if err := commitTx(); err != nil {
+				return err
+			}
 			if op.Schema != nil {
 				_ = eng.CreateTable(op.Schema)
 			}
@@ -65,21 +115,33 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 				ddlHook(op)
 			}
 		case memengine.OpDropTable:
+			if err := commitTx(); err != nil {
+				return err
+			}
 			_ = eng.DropTable(op.Table)
 			if ddlHook != nil {
 				ddlHook(op)
 			}
 		case memengine.OpTruncateTable:
+			if err := commitTx(); err != nil {
+				return err
+			}
 			_ = eng.TruncateTable(op.Table)
 			if ddlHook != nil {
 				ddlHook(op)
 			}
 		case memengine.OpDropPartition:
+			if err := commitTx(); err != nil {
+				return err
+			}
 			_ = eng.DropPartition(op.Table, op.Key)
 			if ddlHook != nil {
 				ddlHook(op)
 			}
 		case memengine.OpCreateIndex:
+			if err := commitTx(); err != nil {
+				return err
+			}
 			if op.IndexSchema != nil {
 				_ = eng.CreateIndex(op.IndexSchema)
 			}
@@ -87,18 +149,15 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 				ddlHook(op)
 			}
 		case memengine.OpDropIndex:
+			if err := commitTx(); err != nil {
+				return err
+			}
 			_ = eng.DropIndex(op.Table, op.IndexName)
 			if ddlHook != nil {
 				ddlHook(op)
 			}
 		case memengine.OpInsert:
-			sess, err := eng.NewSession()
-			if err != nil {
-				return err
-			}
-			tx, err := sess.BeginTx(storage.TxOptions{})
-			if err != nil {
-				_ = sess.Close()
+			if err := ensureTx(); err != nil {
 				return err
 			}
 			rec := op.Record
@@ -109,29 +168,14 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 				}
 			}
 			if err := tx.Insert(op.Table, rec); err != nil {
-				_ = tx.Rollback()
-				_ = sess.Close()
 				return err
 			}
-			if err := tx.Commit(); err != nil {
-				_ = sess.Close()
-				return err
-			}
-			_ = sess.Close()
 		case memengine.OpUpdate:
-			sess, err := eng.NewSession()
-			if err != nil {
-				return err
-			}
-			tx, err := sess.BeginTx(storage.TxOptions{})
-			if err != nil {
-				_ = sess.Close()
+			if err := ensureTx(); err != nil {
 				return err
 			}
 			tblSchema, err := eng.GetTable(op.Table)
 			if err != nil {
-				_ = tx.Rollback()
-				_ = sess.Close()
 				return err
 			}
 			rec := op.Record
@@ -140,8 +184,6 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			}
 			pkCol, err := tblSchema.PrimaryKeyColumn()
 			if err != nil {
-				_ = tx.Rollback()
-				_ = sess.Close()
 				return err
 			}
 			var pkVal storage.Value
@@ -152,51 +194,28 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 				pkVal = memengine.ParsePKValue(op.Key, pkCol.Type)
 			}
 			if err := tx.Update(op.Table, pkVal, rec); err != nil {
-				_ = tx.Rollback()
-				_ = sess.Close()
 				return err
 			}
-			if err := tx.Commit(); err != nil {
-				_ = sess.Close()
-				return err
-			}
-			_ = sess.Close()
 		case memengine.OpDelete:
-			sess, err := eng.NewSession()
-			if err != nil {
-				return err
-			}
-			tx, err := sess.BeginTx(storage.TxOptions{})
-			if err != nil {
-				_ = sess.Close()
+			if err := ensureTx(); err != nil {
 				return err
 			}
 			tblSchema, err := eng.GetTable(op.Table)
 			if err != nil {
-				_ = tx.Rollback()
-				_ = sess.Close()
 				return err
 			}
 			pkCol, err := tblSchema.PrimaryKeyColumn()
 			if err != nil {
-				_ = tx.Rollback()
-				_ = sess.Close()
 				return err
 			}
 			pkVal := memengine.ParsePKValue(op.Key, pkCol.Type)
 			if err := tx.Delete(op.Table, pkVal); err != nil {
-				_ = tx.Rollback()
-				_ = sess.Close()
 				return err
 			}
-			if err := tx.Commit(); err != nil {
-				_ = sess.Close()
-				return err
-			}
-			_ = sess.Close()
 		}
 	}
-	return nil
+
+	return commitTx()
 }
 
 // RestorePITR restores the base snapshot (if supplied) and continuously applies archived WAL segments

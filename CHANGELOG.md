@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Standardized In-Memory OCC engine snapshot persistence strictly on `tables.mpk` (MessagePack metadata container) and OLTP row records on schema-ordered contiguous `Row` representations.
 
 ### Added
+- **Atomic Batched DML WAL Replay Optimization (`pkg/backup`)**:
+  - Refactored `ApplyWALRecordWithOptions` in `pkg/backup/pitr.go` to batch contiguous DML mutations (`INSERT`, `UPDATE`, `DELETE`) within a single atomic transaction rather than allocating and committing per-row sessions.
+  - Eliminates redundant begin/commit cycles and Cgo roundtrips across WAL replay loops, improving recovery and replication replay throughput.
+
 - **Storage/Session Read-Only Defense in Depth & DDL Catalog Synchronization (`pkg/storage`, `pkg/catalog`, `pkg/backup`)**:
   - Enforced strict `ErrReadOnlyTransaction` and `ErrReadOnlyReplica` (SQLSTATE `25006`) errors across all storage mutations (`Insert`, `Update`, `Delete`) in In-Memory OCC and WiredTiger engines.
   - Propagated read-only error semantics cleanly to VDBE virtual machine and higher-layer SQL execution engines to prevent secondary replica data contamination.
