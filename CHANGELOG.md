@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **In-Memory OCC Zero-Copy Read-Only Optimization & Prefix Key Acceleration (`pkg/storage/memengine`, `pkg/api`)**:
+  - Eliminated unnecessary map cloning in `Transaction.Get` for read-only transactions (`tx.opts.ReadOnly`), reducing heap allocations and GC pressure on high-frequency read paths.
+  - Optimized `buildCompositePrefixKey` in `pkg/api/sqlexec_dml.go` using pre-allocated `strings.Builder` with capacity reservation to eliminate temporary slice and string allocations during composite index scans.
+
 - **WiredTiger Engine Native Binary Tuple Codec Integration (`pkg/storage/wiredtiger`)**:
   - Connected `EncodeTuple` and `DecodeTuple` directly into WiredTiger's record serialization pipeline (`serializeRecord` and `decodeRecord` in `pkg/storage/wiredtiger/wt_engine.go`).
   - Records inserted and updated into WiredTiger B+Tree tables are now stored as ultra-compact binary tuples with zero column name repetition, halving the raw Cgo payload size transferred across the engine boundary.

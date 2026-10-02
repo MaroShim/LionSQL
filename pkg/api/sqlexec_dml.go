@@ -4178,22 +4178,26 @@ func splitOnAnd(where string) []string {
 // prefix columns of a composite index given an equality-condition value map.
 // The value lookup is case-insensitive on column names.
 func buildCompositePrefixKey(cols []string, eqColVals map[string]string, schema *storage.TableSchema) string {
-	var parts []string
-	for _, col := range cols {
+	var sb strings.Builder
+	sb.Grow(64)
+	for i, col := range cols {
 		val, ok := eqColVals[strings.ToLower(col)]
 		if !ok {
 			break
+		}
+		if i > 0 {
+			sb.WriteByte(0)
 		}
 		// Format the value using storage.EncodeIndexKeyPart for consistent composite key encoding.
 		colMeta, _, found := schema.FindColumn(col)
 		if found && colMeta != nil {
 			sv := parseValueToType(val, colMeta.Type)
-			parts = append(parts, storage.EncodeIndexKeyPart(sv))
+			sb.WriteString(storage.EncodeIndexKeyPart(sv))
 		} else {
-			parts = append(parts, storage.EncodeIndexKeyPart(storage.StringValue(val)))
+			sb.WriteString(storage.EncodeIndexKeyPart(storage.StringValue(val)))
 		}
 	}
-	return strings.Join(parts, "\x00")
+	return sb.String()
 }
 
 type indexRangeCond struct {

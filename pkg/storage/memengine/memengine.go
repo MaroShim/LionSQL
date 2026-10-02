@@ -104,7 +104,44 @@ type Engine struct {
 	fsyncPolicy  FsyncPolicy
 	nextLSN      atomic.Int64
 	aofThreshold int64 // Size threshold in bytes to trigger AOF rewrite compaction
+	walHook      func(rec WALRecord)
 	closed       bool
+}
+
+// CurrentLSN returns the latest assigned Log Sequence Number.
+func (e *Engine) CurrentLSN() int64 {
+	return e.nextLSN.Load()
+}
+
+// SetWALHook registers a callback that is synchronously invoked whenever a new WAL record is committed.
+func (e *Engine) SetWALHook(fn func(rec WALRecord)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.walHook = fn
+}
+
+// recordWALLocked writes a WAL record and invokes the registered walHook, if any.
+func (e *Engine) recordWALLocked(ops []WALOp) {
+	if len(ops) == 0 {
+		return
+	}
+	if e.wal == nil && e.walHook == nil {
+		return
+	}
+	rec := WALRecord{
+		LSN:       e.nextLSN.Add(1),
+		Timestamp: time.Now().UnixNano(),
+		Ops:       ops,
+	}
+	if e.wal != nil {
+		_ = e.wal.Append(rec)
+		if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
+			_ = e.rewriteAOFLocked()
+		}
+	}
+	if e.walHook != nil {
+		e.walHook(rec)
+	}
 }
 
 // New creates a new in-memory storage engine.
@@ -541,17 +578,11 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	}
 	e.tables[schema.Name] = td
 
-	if e.wal != nil {
-		_ = e.wal.Append(WALRecord{
-			LSN:       e.nextLSN.Add(1),
-			Timestamp: time.Now().UnixNano(),
-			Ops: []WALOp{{
-				Type:   OpCreateTable,
-				Table:  schema.Name,
-				Schema: schema,
-			}},
-		})
-	}
+	e.recordWALLocked([]WALOp{{
+		Type:   OpCreateTable,
+		Table:  schema.Name,
+		Schema: schema,
+	}})
 	return nil
 }
 
@@ -594,17 +625,11 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	td.Indexes[index.Name] = idxData
 	td.Schema.Indexes = append(td.Schema.Indexes, *index)
 
-	if e.wal != nil {
-		_ = e.wal.Append(WALRecord{
-			LSN:       e.nextLSN.Add(1),
-			Timestamp: time.Now().UnixNano(),
-			Ops: []WALOp{{
-				Type:        OpCreateIndex,
-				Table:       index.TableName,
-				IndexSchema: index,
-			}},
-		})
-	}
+	e.recordWALLocked([]WALOp{{
+		Type:        OpCreateIndex,
+		Table:       index.TableName,
+		IndexSchema: index,
+	}})
 	return nil
 }
 
@@ -625,17 +650,11 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	delete(td.Indexes, indexName)
 	td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 
-	if e.wal != nil {
-		_ = e.wal.Append(WALRecord{
-			LSN:       e.nextLSN.Add(1),
-			Timestamp: time.Now().UnixNano(),
-			Ops: []WALOp{{
-				Type:      OpDropIndex,
-				Table:     tableName,
-				IndexName: indexName,
-			}},
-		})
-	}
+	e.recordWALLocked([]WALOp{{
+		Type:      OpDropIndex,
+		Table:     tableName,
+		IndexName: indexName,
+	}})
 	return nil
 }
 
@@ -686,16 +705,10 @@ func (e *Engine) DropTable(tableName string) error {
 	}
 
 	delete(e.tables, tableName)
-	if e.wal != nil {
-		_ = e.wal.Append(WALRecord{
-			LSN:       e.nextLSN.Add(1),
-			Timestamp: time.Now().UnixNano(),
-			Ops: []WALOp{{
-				Type:  OpDropTable,
-				Table: tableName,
-			}},
-		})
-	}
+	e.recordWALLocked([]WALOp{{
+		Type:  OpDropTable,
+		Table: tableName,
+	}})
 	return nil
 }
 
@@ -732,16 +745,10 @@ func (e *Engine) TruncateTable(tableName string) error {
 	}
 	td.mu.Unlock()
 
-	if e.wal != nil {
-		_ = e.wal.Append(WALRecord{
-			LSN:       e.nextLSN.Add(1),
-			Timestamp: time.Now().UnixNano(),
-			Ops: []WALOp{{
-				Type:  OpTruncateTable,
-				Table: tableName,
-			}},
-		})
-	}
+	e.recordWALLocked([]WALOp{{
+		Type:  OpTruncateTable,
+		Table: tableName,
+	}})
 	return nil
 }
 
@@ -787,17 +794,11 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	}
 	td.Keys = newKeys
 
-	if e.wal != nil {
-		_ = e.wal.Append(WALRecord{
-			LSN:       e.nextLSN.Add(1),
-			Timestamp: time.Now().UnixNano(),
-			Ops: []WALOp{{
-				Type:  OpDropPartition,
-				Table: tableName,
-				Key:   partitionName,
-			}},
-		})
-	}
+	e.recordWALLocked([]WALOp{{
+		Type:  OpDropPartition,
+		Table: tableName,
+		Key:   partitionName,
+	}})
 
 	return nil
 }
@@ -1656,7 +1657,8 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 	}
 
 	pkKey := pk.String()
-	rec, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, true)
+	clone := !tx.opts.ReadOnly
+	rec, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, clone)
 	if err == nil {
 		tx.setBaseVer(tableName, pkKey, ver)
 	}
@@ -2186,8 +2188,8 @@ func (tx *Transaction) Commit() error {
 		}
 	}
 
-	// 3. Append atomic WAL record to AOF log if enabled
-	if tx.engine.wal != nil && len(tx.changes) > 0 {
+	// 3. Append atomic WAL record and notify walHook if enabled
+	if len(tx.changes) > 0 {
 		ops := make([]WALOp, 0, len(tx.changes))
 		for _, ch := range tx.changes {
 			var opType WALOpType
@@ -2207,15 +2209,7 @@ func (tx *Transaction) Commit() error {
 				BaseVer: ch.baseVer,
 			})
 		}
-		_ = tx.engine.wal.Append(WALRecord{
-			LSN:       tx.engine.nextLSN.Add(1),
-			Timestamp: time.Now().UnixNano(),
-			Ops:       ops,
-		})
-
-		if tx.engine.aofThreshold > 0 && tx.engine.wal.Size() > tx.engine.aofThreshold {
-			_ = tx.engine.rewriteAOFLocked()
-		}
+		tx.engine.recordWALLocked(ops)
 	}
 
 	tx.savepoints = nil
