@@ -21,6 +21,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Standardized In-Memory OCC engine snapshot persistence strictly on `tables.mpk` (MessagePack metadata container) and OLTP row records on schema-ordered contiguous `Row` representations.
 
 ### Added
+- **TPC-C VDBE Atomic Transaction Invariant Suite & Architecture Guidelines (`cmd/tpcc_vdbe`, `GEMINI.md`)**:
+  - Added automated atomicity test suite `cmd/tpcc_vdbe/atomicity_test.go` verifying that TPC-C New-Order commits and rolls back atomically across both In-Memory and WiredTiger engines with zero state leakage.
+  - Formalized Core Architectural Invariant Section 7 in `GEMINI.md` mandating strict All-or-Nothing atomic ACID transaction modeling across all benchmarks and multi-statement workloads.
+
 - **Fine-Grained Sharded Locking Architecture for In-Memory OCC Engine (`pkg/storage/memengine`)**:
   - Replaced table-level exclusive locking during `Commit()` with 64-shard striped row locks (`[64]tableShard`), eliminating global table contention and serial blocking across concurrent write transactions.
   - Implemented hierarchical intent-shared locking (`td.mu.RLock()` for intent share vs `td.mu.Lock()` for DDL) and strictly ordered canonical lock acquisition (`tableNames` ascending, followed by `shardIdx` ascending) to mathematically eliminate transaction deadlocks (Rule 10).

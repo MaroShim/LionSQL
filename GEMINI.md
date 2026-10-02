@@ -121,14 +121,27 @@ SQLion prioritizes **Vertical Scale-Up Hardware Saturation** and **1-Writer Mult
 
 ---
 
-## 7. Engineering Guidelines & Development Pipeline
+## 7. Core Architectural Invariant: Benchmark & Transaction Modeling Fidelity (Atomic ACID Invariance)
+
+SQLion mandates **Strict Atomic ACID Transaction Modeling** across all benchmarks (TPC-C, TPC-H, microbenchmarks), test harnesses, and stored procedure workloads:
+
+1. **All-or-Nothing Transaction Fidelity**:
+   - Multi-statement business transactions (e.g. TPC-C New-Order consisting of warehouse read, district counter increment, customer lookup, order/new_order insertion, and 5~10 order line/stock updates) **must strictly execute within a single atomic ACID transaction boundary** (`sess.BeginTx()` -> `tx.Commit()`).
+   - Splitting a single logical business transaction across multiple autocommit statements or separate ambient transactions (e.g. looping with `exec.Run()`) is **strictly prohibited**.
+2. **VDBE Bytecode VM Transaction Coupling**:
+   - Multi-step stored procedure sequences or partitioned VDBE bytecode programs running under benchmark harnesses must execute via `exec.RunInTx(prog, params, tx, nil)`, sharing the explicit transaction handle `tx`.
+   - Any transaction failure, conflict abort, or rollback inside a step must immediately trigger `tx.Rollback()`, leaving no partial writes or dangling records.
+
+---
+
+## 8. Engineering Guidelines & Development Pipeline
 
 ### 3-Stage Verification Pipeline (Build ➔ Test ➔ Commit)
 All modifications, refactoring, and feature additions must strictly pass the following 3 stages before committing:
 
 1. **Build**:
    ```bash
-   go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
+   go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
    ```
 2. **Test (Race-Free Verification)**:
    ```bash
@@ -138,3 +151,4 @@ All modifications, refactoring, and feature additions must strictly pass the fol
 3. **Commit**:
    - Conventional Commits format (`feat(...)`, `fix(...)`, `refactor(...)`, etc.).
    - Strictly avoid decorative emojis in commit messages, comments, and code.
+
