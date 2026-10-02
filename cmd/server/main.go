@@ -35,7 +35,8 @@ func main() {
 	httpAddr := flag.String("http", "127.0.0.1:8090", "HTTP service address (set to empty to disable)")
 	pgAddr := flag.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address (set to empty to disable)")
 	tdsAddr := flag.String("tds", "127.0.0.1:1433", "TDS (MSSQL) wire protocol listen address (set to empty to disable)")
-	dataDir := flag.String("dir", "data", "Data directory for database files (default: data)")
+	defaultDataDir := resolveDefaultDataDir()
+	dataDir := flag.String("dir", defaultDataDir, "Data directory for database files (default: adjacent to bin/ or 'data')")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
 	adminEmail := flag.String("admin-email", "admin@sqlion.local", "Default superuser email")
@@ -164,7 +165,7 @@ func main() {
 	}
 
 	if strings.TrimSpace(cfg.Server.DataDir) == "" {
-		cfg.Server.DataDir = "data"
+		cfg.Server.DataDir = defaultDataDir
 	}
 
 	resolvedPidFile := cfg.Server.PIDFile
@@ -718,3 +719,30 @@ func resolveLogFilePath(flagVal, defaultName, dataDir string) string {
 		return flagVal
 	}
 }
+
+// resolveDefaultDataDir locates the default data directory.
+// If the server binary is inside a 'bin' directory (e.g. <root>/bin/server),
+// it resolves to the sibling 'data' directory at the same level (<root>/data).
+// Otherwise, it falls back to "data" in the current working directory.
+func resolveDefaultDataDir() string {
+	exePath, err := os.Executable()
+	if err != nil {
+		return "data"
+	}
+	return resolveDefaultDataDirFromExe(exePath)
+}
+
+func resolveDefaultDataDirFromExe(exePath string) string {
+	resolvedPath, err := filepath.EvalSymlinks(exePath)
+	if err != nil {
+		resolvedPath = exePath
+	}
+	exeDir := filepath.Dir(resolvedPath) // e.g. /path/to/bin
+	parentDir := filepath.Dir(exeDir)    // e.g. /path/to
+
+	if filepath.Base(exeDir) == "bin" {
+		return filepath.Join(parentDir, "data")
+	}
+	return "data"
+}
+

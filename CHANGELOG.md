@@ -7,7 +7,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-### Changed
+- **Default Data Directory Resolution Relative to Executable Location (`cmd/server`)**:
+  - Enhanced default `-dir` flag and server initialization to automatically resolve adjacent data directory (`<binary_dir>/../data`) when the server executable is located inside a `bin/` directory.
+  - Prevents unintended database creation in disparate current working directories when executing `./bin/server` from arbitrary shell locations.
+  - Added unit test `TestResolveDefaultDataDirFromExe` in `cmd/server/server_test.go`.
+
 - **TPC-C VDBE Stored Procedure Single Atomic Transaction Encapsulation (`cmd/tpcc_vdbe`)**:
   - Refactored `runVDBENewOrder`, `runVDBEDelivery`, and `runVDBEStockLevel` in `cmd/tpcc_vdbe` to execute within explicit, atomic ACID transactions (`sess.BeginTx` and `exec.RunInTx`) rather than multi-statement ambient autocommit transactions.
   - Aligns VDBE TPC-C benchmark execution strictly with official TPC-C specification invariants (all order lines and district header mutations committed atomically in a single transaction).
