@@ -56,6 +56,9 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
 * [`EXTENSIONS.md`](file:///Users/maro/Projects/sql/doc/EXTENSIONS.md)
   * Advanced SQL capabilities: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB operators, CTEs, Foreign Keys with cascading actions.
+* [`LOG_PROCESSING_GREP_AWK.md`](file:///Users/maro/Projects/sql/doc/LOG_PROCESSING_GREP_AWK.md)
+  * In-engine text & log processing operators (`GREP`, `AWK`, `SPLIT_PART`).
+  * Zero-copy pushdown filtering, structured token extraction, and schema-free log analytics.
 
 ---
 
