@@ -454,6 +454,22 @@ func (e *FunctionCallExpr) String() string {
 	return fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", "))
 }
 
+// WithinGroupExpr represents an ordered-set aggregate like PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY col [ASC|DESC])
+type WithinGroupExpr struct {
+	Function *FunctionCallExpr
+	OrderBy  Expr
+	Desc     bool
+}
+
+func (e *WithinGroupExpr) exprNode() {}
+func (e *WithinGroupExpr) String() string {
+	dir := ""
+	if e.Desc {
+		dir = " DESC"
+	}
+	return fmt.Sprintf("%s WITHIN GROUP (ORDER BY %s%s)", e.Function.String(), e.OrderBy.String(), dir)
+}
+
 // InExpr represents Expr [NOT] IN (Expr1, Expr2, ...) or Expr [NOT] IN (SELECT ...)
 type InExpr struct {
 	Expr  Expr

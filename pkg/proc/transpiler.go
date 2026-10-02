@@ -452,6 +452,8 @@ func containsColRef(expr Expr) bool {
 				return true
 			}
 		}
+	case *WithinGroupExpr:
+		return containsColRef(e.OrderBy)
 	}
 	return false
 }
@@ -752,6 +754,9 @@ func transpileExprWithScope(expr Expr, rowScope string) (string, error) {
 			return "", fmt.Errorf("unsupported binary operator: %v", e.Op)
 		}
 		return fmt.Sprintf("(%s %s %s)", leftJS, opStr, rightJS), nil
+
+	case *WithinGroupExpr:
+		return "null", nil
 
 	default:
 		return "", fmt.Errorf("unsupported expression type: %T", expr)

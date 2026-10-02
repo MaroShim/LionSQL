@@ -108,6 +108,9 @@ func FoldConstants(expr Expr) Expr {
 		}
 		return e
 
+	case *WithinGroupExpr:
+		return e
+
 	case *IsNullExpr:
 		e.Expr = FoldConstants(e.Expr)
 		if isConstantExpr(e.Expr) {
@@ -175,7 +178,7 @@ func isConstantExpr(expr Expr) bool {
 	switch e := expr.(type) {
 	case *LiteralExpr:
 		return true
-	case *VariableExpr, *ColumnRefExpr, *ScalarSubqueryExpr, *ExistsExpr:
+	case *VariableExpr, *ColumnRefExpr, *ScalarSubqueryExpr, *ExistsExpr, *WithinGroupExpr:
 		return false
 	case *UnaryExpr:
 		return isConstantExpr(e.Expr)

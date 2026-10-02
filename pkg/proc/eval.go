@@ -254,6 +254,9 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 	case *FunctionCallExpr:
 		return evalRowFunction(e.Name, e.Args, row, execSubquery)
 
+	case *WithinGroupExpr:
+		return nil, nil
+
 	case *ExistsExpr:
 		if execSubquery == nil || e.Query == nil {
 			return false, nil

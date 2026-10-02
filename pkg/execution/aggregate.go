@@ -23,16 +23,21 @@ const (
 	aggMin
 	aggMax
 	aggGrouping
+	aggPercentileCont
+	aggPercentileDisc
+	aggApproxPercentile
+	aggMedian
 )
 
 type aggField struct {
-	fnType    aggFuncType
-	argCol    string
-	alias     string
-	rawExpr   string
-	isStar    bool
-	isLiteral bool
-	parsed    proc.Expr
+	fnType     aggFuncType
+	argCol     string
+	alias      string
+	rawExpr    string
+	isStar     bool
+	isLiteral  bool
+	percentile float64
+	parsed     proc.Expr
 }
 
 type groupAccumulator struct {
@@ -44,6 +49,8 @@ type groupAccumulator struct {
 	isDecimal  map[int]bool
 	mins       map[int]any
 	maxs       map[int]any
+	values     map[int][]float64
+	tDigests   map[int]*TDigest
 }
 
 // AggregateIterator evaluates GROUP BY, aggregate functions (COUNT, SUM, AVG, MIN, MAX), and HAVING filters.
@@ -150,6 +157,83 @@ func (a *AggregateIterator) parseFields() {
 			}
 			rawCall := fmt.Sprintf("GROUPING(%s)", arg)
 			a.fields = append(a.fields, aggField{fnType: aggGrouping, argCol: arg, alias: alias, rawExpr: rawCall})
+			a.schema = append(a.schema, alias)
+			continue
+		}
+
+		medianRe := regexp.MustCompile(`(?i)^\s*MEDIAN\s*\(\s*(?:DISTINCT\s+)?([^\)]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+		if m := medianRe.FindStringSubmatch(p); len(m) == 3 {
+			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
+			alias := m[2]
+			if alias == "" {
+				alias = "median"
+			}
+			a.fields = append(a.fields, aggField{fnType: aggMedian, argCol: arg, alias: alias, percentile: 0.5, rawExpr: p})
+			a.schema = append(a.schema, alias)
+			continue
+		}
+
+		approxPercRe := regexp.MustCompile(`(?i)^\s*APPROX_PERCENTILE\s*\(\s*([^,\)]+)\s*,\s*([0-9\.]+)(?:\s*,\s*([0-9\.]+))?\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+		if m := approxPercRe.FindStringSubmatch(p); len(m) == 5 {
+			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
+			pVal, _ := strconv.ParseFloat(m[2], 64)
+			alias := m[4]
+			if alias == "" {
+				alias = "approx_percentile"
+			}
+			a.fields = append(a.fields, aggField{fnType: aggApproxPercentile, argCol: arg, alias: alias, percentile: pVal, rawExpr: p})
+			a.schema = append(a.schema, alias)
+			continue
+		}
+
+		percCont2Re := regexp.MustCompile(`(?i)^\s*PERCENTILE_CONT\s*\(\s*([^,\)]+)\s*,\s*([0-9\.]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+		if m := percCont2Re.FindStringSubmatch(p); len(m) == 4 {
+			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
+			pVal, _ := strconv.ParseFloat(m[2], 64)
+			alias := m[3]
+			if alias == "" {
+				alias = "percentile_cont"
+			}
+			a.fields = append(a.fields, aggField{fnType: aggPercentileCont, argCol: arg, alias: alias, percentile: pVal, rawExpr: p})
+			a.schema = append(a.schema, alias)
+			continue
+		}
+
+		percDisc2Re := regexp.MustCompile(`(?i)^\s*PERCENTILE_DISC\s*\(\s*([^,\)]+)\s*,\s*([0-9\.]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+		if m := percDisc2Re.FindStringSubmatch(p); len(m) == 4 {
+			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
+			pVal, _ := strconv.ParseFloat(m[2], 64)
+			alias := m[3]
+			if alias == "" {
+				alias = "percentile_disc"
+			}
+			a.fields = append(a.fields, aggField{fnType: aggPercentileDisc, argCol: arg, alias: alias, percentile: pVal, rawExpr: p})
+			a.schema = append(a.schema, alias)
+			continue
+		}
+
+		percContWithinRe := regexp.MustCompile(`(?i)^\s*PERCENTILE_CONT\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([^\)\s]+)(?:\s+(?:ASC|DESC))?\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+		if m := percContWithinRe.FindStringSubmatch(p); len(m) == 4 {
+			pVal, _ := strconv.ParseFloat(m[1], 64)
+			arg := strings.Trim(strings.TrimSpace(m[2]), "\"`[]")
+			alias := m[3]
+			if alias == "" {
+				alias = "percentile_cont"
+			}
+			a.fields = append(a.fields, aggField{fnType: aggPercentileCont, argCol: arg, alias: alias, percentile: pVal, rawExpr: p})
+			a.schema = append(a.schema, alias)
+			continue
+		}
+
+		percDiscWithinRe := regexp.MustCompile(`(?i)^\s*PERCENTILE_DISC\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([^\)\s]+)(?:\s+(?:ASC|DESC))?\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+		if m := percDiscWithinRe.FindStringSubmatch(p); len(m) == 4 {
+			pVal, _ := strconv.ParseFloat(m[1], 64)
+			arg := strings.Trim(strings.TrimSpace(m[2]), "\"`[]")
+			alias := m[3]
+			if alias == "" {
+				alias = "percentile_disc"
+			}
+			a.fields = append(a.fields, aggField{fnType: aggPercentileDisc, argCol: arg, alias: alias, percentile: pVal, rawExpr: p})
 			a.schema = append(a.schema, alias)
 			continue
 		}
@@ -286,6 +370,8 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 					isDecimal:  make(map[int]bool),
 					mins:       make(map[int]any),
 					maxs:       make(map[int]any),
+					values:     make(map[int][]float64),
+					tDigests:   make(map[int]*TDigest),
 				}
 				groups[groupKeyStr] = acc
 				groupOrder = append(groupOrder, groupKeyStr)
@@ -338,6 +424,22 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 				case aggMax:
 					if cur, ok := acc.maxs[fIdx]; !ok || CompareValues(val, cur) > 0 {
 						acc.maxs[fIdx] = val
+					}
+				case aggPercentileCont, aggPercentileDisc, aggMedian:
+					if fVal, ok := toFloat64(val); ok {
+						acc.values[fIdx] = append(acc.values[fIdx], fVal)
+						acc.counts[fIdx]++
+					}
+				case aggApproxPercentile:
+					if fVal, ok := toFloat64(val); ok {
+						td, exists := acc.tDigests[fIdx]
+						if !exists {
+							td = NewTDigest(100)
+							acc.tDigests[fIdx] = td
+						}
+						td.Add(fVal)
+						acc.values[fIdx] = append(acc.values[fIdx], fVal)
+						acc.counts[fIdx]++
 					}
 				}
 			}
@@ -476,6 +578,49 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 				val = acc.mins[fIdx]
 			case aggMax:
 				val = acc.maxs[fIdx]
+			case aggPercentileCont, aggMedian:
+				if acc.counts[fIdx] == 0 || len(acc.values[fIdx]) == 0 {
+					val = nil
+				} else {
+					sort.Float64s(acc.values[fIdx])
+					res := ComputePercentileCont(acc.values[fIdx], f.percentile)
+					if res == math.Trunc(res) {
+						val = int64(res)
+					} else {
+						val = res
+					}
+				}
+			case aggPercentileDisc:
+				if acc.counts[fIdx] == 0 || len(acc.values[fIdx]) == 0 {
+					val = nil
+				} else {
+					sort.Float64s(acc.values[fIdx])
+					res := ComputePercentileDisc(acc.values[fIdx], f.percentile)
+					if res == math.Trunc(res) {
+						val = int64(res)
+					} else {
+						val = res
+					}
+				}
+			case aggApproxPercentile:
+				if acc.counts[fIdx] == 0 {
+					val = nil
+				} else if td, ok := acc.tDigests[fIdx]; ok {
+					var res float64
+					if len(acc.values[fIdx]) <= 10000 {
+						sort.Float64s(acc.values[fIdx])
+						res = ComputePercentileCont(acc.values[fIdx], f.percentile)
+					} else {
+						res = td.Quantile(f.percentile)
+					}
+					if res == math.Trunc(res) {
+						val = int64(res)
+					} else {
+						val = res
+					}
+				} else {
+					val = nil
+				}
 			}
 
 			vals[fIdx] = val

@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- **In-Engine Exact & Streaming Quantile Analytics: `PERCENTILE_CONT`, `PERCENTILE_DISC`, `APPROX_PERCENTILE`, and `MEDIAN` (`pkg/execution`, `pkg/proc`, `pkg/planner`, `pkg/api`)**:
+  - Implemented continuous percentile `PERCENTILE_CONT` (linear interpolation) and discrete percentile `PERCENTILE_DISC` supporting both ANSI `WITHIN GROUP (ORDER BY ...)` and 2-argument standard syntax.
+  - Introduced streaming approximate percentile operator `APPROX_PERCENTILE` powered by the T-Digest clustering algorithm, achieving high tail accuracy (P90, P95, P99) with bounded $O(1)$ memory ($< 4\text{ KB}$ per group).
+  - Added dedicated `MEDIAN` aggregate and window operator.
+  - Seamlessly enabled all quantile functions in global aggregations, `GROUP BY` grouping dimensions, and `OVER (PARTITION BY ...)` analytic window partitions.
+  - Added unit test suites in `pkg/execution/tdigest_test.go` and full E2E SQL tests in `pkg/api/percentile_test.go`.
+
 - **In-Engine Log Extraction & Filtering Operators: `GREP` / `REGEXP_LIKE` and `AWK` (`pkg/proc`, `pkg/execution`, `pkg/api`)**:
   - Implemented high-performance scalar functions `GREP(text, pattern)` (with ANSI SQL standard alias `REGEXP_LIKE`) and `AWK(text, [delim], field_index)` (also aliased as `SPLIT_PART`).
   - Enables zero-copy, in-database text filtering and structured field extraction from unstructured raw logs and delimited strings without dumping to external terminal pipelines.

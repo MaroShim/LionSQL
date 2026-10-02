@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -238,6 +239,56 @@ func (w *WindowIterator) computeWindowFunction(winDef planner.WindowDef, indices
 
 	case "SUM", "COUNT", "AVG", "MIN", "MAX":
 		w.computeWindowAggregate(winDef, indices, winValues)
+
+	case "PERCENTILE_CONT", "PERCENTILE_DISC", "APPROX_PERCENTILE", "MEDIAN":
+		w.computeWindowPercentile(winDef, indices, winValues)
+	}
+}
+
+func (w *WindowIterator) computeWindowPercentile(winDef planner.WindowDef, indices []int, winValues []any) {
+	fn := strings.ToUpper(winDef.Function)
+	targetCol := ""
+	percentile := 0.5
+
+	if len(winDef.Args) > 0 {
+		targetCol = winDef.Args[0]
+	}
+	if len(winDef.Args) > 1 {
+		if p, err := strconv.ParseFloat(winDef.Args[1], 64); err == nil {
+			percentile = p
+		}
+	}
+
+	var vals []float64
+	for _, rowIdx := range indices {
+		if v := w.rows[rowIdx].Get(targetCol); v != nil {
+			if f, ok := toFloat64(v); ok {
+				vals = append(vals, f)
+			}
+		}
+	}
+
+	var computedVal any
+	if len(vals) == 0 {
+		computedVal = nil
+	} else {
+		sort.Float64s(vals)
+		var res float64
+		switch fn {
+		case "PERCENTILE_DISC":
+			res = ComputePercentileDisc(vals, percentile)
+		default: // PERCENTILE_CONT, APPROX_PERCENTILE, MEDIAN
+			res = ComputePercentileCont(vals, percentile)
+		}
+		if res == math.Trunc(res) {
+			computedVal = int64(res)
+		} else {
+			computedVal = res
+		}
+	}
+
+	for _, rowIdx := range indices {
+		winValues[rowIdx] = computedVal
 	}
 }
 

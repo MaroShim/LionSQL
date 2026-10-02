@@ -189,7 +189,9 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		}
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
-			strings.Contains(pUpper, "MAX(") {
+			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") ||
+			strings.Contains(pUpper, "PERCENTILE_CONT(") || strings.Contains(pUpper, "PERCENTILE_DISC(") ||
+			strings.Contains(pUpper, "APPROX_PERCENTILE(") || strings.Contains(pUpper, "MEDIAN(") {
 			hasAgg = true
 		}
 	}
@@ -454,7 +456,9 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		}
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
-			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") {
+			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") ||
+			strings.Contains(pUpper, "PERCENTILE_CONT(") || strings.Contains(pUpper, "PERCENTILE_DISC(") ||
+			strings.Contains(pUpper, "APPROX_PERCENTILE(") || strings.Contains(pUpper, "MEDIAN(") {
 			hasAgg = true
 			break
 		}
@@ -1419,7 +1423,13 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 	rawArgs := strings.TrimSpace(funcPart[fnOpenParen+1 : fnCloseParen])
 
 	var args []string
-	if rawArgs != "" {
+	if strings.Contains(strings.ToUpper(funcPart), "WITHIN GROUP") {
+		withinRe := regexp.MustCompile(`(?i)^\s*(PERCENTILE_CONT|PERCENTILE_DISC)\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([a-zA-Z0-9_\.]+)(?:\s+(?:ASC|DESC))?\s*\)\s*$`)
+		if m := withinRe.FindStringSubmatch(funcPart); len(m) == 4 {
+			fnName = strings.ToUpper(m[1])
+			args = []string{strings.Trim(m[3], "\"`[]'"), m[2]} // [targetCol, percentile]
+		}
+	} else if rawArgs != "" {
 		for _, arg := range strings.Split(rawArgs, ",") {
 			a := strings.Trim(strings.TrimSpace(arg), "\"`[]'")
 			if a != "" {

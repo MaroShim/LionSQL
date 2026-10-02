@@ -1639,10 +1639,44 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 	}
 	p.nextToken() // eat )
 
-	return &FunctionCallExpr{
+	fn := &FunctionCallExpr{
 		Name: name,
 		Args: args,
 	}
+
+	if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "WITHIN") {
+		p.nextToken() // eat WITHIN
+		if p.curTokenIs(TokenGroup) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "GROUP")) {
+			p.nextToken() // eat GROUP
+			if p.curTokenIs(TokenLParen) {
+				p.nextToken() // eat (
+				if p.curTokenIs(TokenOrder) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ORDER")) {
+					p.nextToken() // eat ORDER
+					if p.curTokenIs(TokenBy) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "BY")) {
+						p.nextToken() // eat BY
+						orderExpr := p.parseExpression(precLowest)
+						isDesc := false
+						if p.curTokenIs(TokenDesc) {
+							isDesc = true
+							p.nextToken()
+						} else if p.curTokenIs(TokenAsc) {
+							p.nextToken()
+						}
+						if p.curTokenIs(TokenRParen) {
+							p.nextToken() // eat )
+						}
+						return &WithinGroupExpr{
+							Function: fn,
+							OrderBy:  orderExpr,
+							Desc:     isDesc,
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return fn
 }
 
 // ParseSQL parses a single interactive or procedural SQL statement into an AST Statement.
