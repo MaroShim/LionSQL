@@ -381,7 +381,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		var pData unsafe.Pointer
 		var sz C.size_t
 		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
-			rec, err := decodeRecord(C.GoBytes(pData, C.int(sz)))
+			rec, err := decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
 			if err == nil {
 				pKey, err := tbl.ComputePartitionKey(rec)
 				if err == nil && pKey == partitionName {
@@ -429,7 +429,7 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 		var pData unsafe.Pointer
 		var sz C.size_t
 		if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret == 0 && pData != nil {
-			rec, err := decodeRecord(C.GoBytes(pData, C.int(sz)))
+			rec, err := decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
 			if err == nil {
 				if pKey, err := tbl.ComputePartitionKey(rec); err == nil {
 					partCounts[pKey]++
@@ -630,13 +630,16 @@ type WTTx struct {
 	spNames    []string
 }
 
-func serializeRecord(cur *C.WT_CURSOR, record storage.Record) ([]byte, error) {
+func serializeRecord(cur *C.WT_CURSOR, schema *storage.TableSchema, record storage.Record) ([]byte, error) {
 	if C.go_wt_cursor_is_format_string(cur) != 0 {
 		b, err := json.Marshal(record)
 		if err != nil {
 			return nil, err
 		}
 		return append(b, 0), nil
+	}
+	if schema != nil {
+		return storage.EncodeTuple(schema, record)
 	}
 	return msgpack.Marshal(record)
 }
@@ -671,7 +674,7 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 	}
 	defer C.go_wt_cursor_reset(cur)
 
-	recBytes, err := serializeRecord(cur, record)
+	recBytes, err := serializeRecord(cur, tbl, record)
 	if err != nil {
 		return err
 	}
@@ -723,7 +726,8 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	}
 	defer C.go_wt_cursor_reset(cur)
 
-	recBytes, err := serializeRecord(cur, existing)
+	tbl, _ := tx.sess.engine.GetTable(tableName)
+	recBytes, err := serializeRecord(cur, tbl, existing)
 	if err != nil {
 		return err
 	}
@@ -822,7 +826,8 @@ func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, e
 		return nil, fmt.Errorf("cursor_get_value failed")
 	}
 
-	return decodeRecord(C.GoBytes(pData, C.int(sz)))
+	tbl, _ := tx.sess.engine.GetTable(tableName)
+	return decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
 }
 
 func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
@@ -841,8 +846,10 @@ func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
 		return nil, fmt.Errorf("open_cursor failed: %d", ret)
 	}
 
+	tbl, _ := tx.sess.engine.GetTable(tableName)
 	return &WTCursor{
-		cur: cur,
+		cur:    cur,
+		schema: tbl,
 	}, nil
 }
 
@@ -1018,7 +1025,8 @@ func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Rec
 	}
 	defer C.go_wt_cursor_reset(cur)
 
-	recBytes, err := serializeRecord(cur, record)
+	tbl, _ := tx.sess.engine.GetTable(tableName)
+	recBytes, err := serializeRecord(cur, tbl, record)
 	if err != nil {
 		return err
 	}
@@ -1059,6 +1067,7 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 // WTCursor iterates over WiredTiger table records.
 type WTCursor struct {
 	cur    *C.WT_CURSOR
+	schema *storage.TableSchema
 	closed bool
 }
 
@@ -1080,10 +1089,15 @@ func (c *WTCursor) Record() (storage.Record, error) {
 		return nil, fmt.Errorf("cursor_get_val_raw failed: %d", ret)
 	}
 
-	return decodeRecord(C.GoBytes(pData, C.int(sz)))
+	return decodeRecord(c.schema, C.GoBytes(pData, C.int(sz)))
 }
 
-func decodeRecord(data []byte) (storage.Record, error) {
+func decodeRecord(schema *storage.TableSchema, data []byte) (storage.Record, error) {
+	if len(data) > 0 && data[0] == storage.TupleCodecVersion && schema != nil {
+		if rec, err := storage.DecodeTuple(schema, data); err == nil {
+			return rec, nil
+		}
+	}
 	var rec storage.Record
 	if err := msgpack.Unmarshal(data, &rec); err == nil {
 		return rec, nil

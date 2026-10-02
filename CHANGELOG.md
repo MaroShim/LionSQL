@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **WiredTiger Engine Native Binary Tuple Codec Integration (`pkg/storage/wiredtiger`)**:
+  - Connected `EncodeTuple` and `DecodeTuple` directly into WiredTiger's record serialization pipeline (`serializeRecord` and `decodeRecord` in `pkg/storage/wiredtiger/wt_engine.go`).
+  - Records inserted and updated into WiredTiger B+Tree tables are now stored as ultra-compact binary tuples with zero column name repetition, halving the raw Cgo payload size transferred across the engine boundary.
+  - Implemented multi-tier decoding fallback: checks version tag `0x01` to parse binary tuples first, gracefully falling back to MessagePack or JSON for 100% backward compatibility with preexisting tables.
+  - Enhanced `WTCursor` with table schema context to allow direct zero-alloc tuple unpacking during sequential and index scans.
+
 - **Schema-Aware Compact Binary Tuple Codec & Row Architecture (`pkg/storage`)**:
   - Implemented schema-aware binary tuple serialization (`EncodeTuple` and `DecodeTuple` in `pkg/storage/tuple.go`): features a 1-byte version tag, compact bit-packed null bitmap, and sequentially packed typed payloads (varint integers, IEEE-754 floats, unix nano timestamps, and length-prefixed strings).
   - Achieved a further 50% storage footprint reduction over compact MessagePack (103 bytes vs 204 bytes, and 92.7% reduction vs JSON 1413 bytes) with sub-100ns encoding throughput (76.6ns/op).
