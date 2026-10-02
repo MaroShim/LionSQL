@@ -65,7 +65,14 @@ func ApplyWALRecordToEngine(eng storage.Engine, rec memengine.WALRecord) error {
 				_ = sess.Close()
 				return err
 			}
-			if err := tx.Insert(op.Table, op.Record); err != nil {
+			rec := op.Record
+			if rec == nil && len(op.Data) > 0 {
+				tblSchema, err := eng.GetTable(op.Table)
+				if err == nil {
+					rec, _ = storage.DecodeTuple(tblSchema, op.Data)
+				}
+			}
+			if err := tx.Insert(op.Table, rec); err != nil {
 				_ = tx.Rollback()
 				_ = sess.Close()
 				return err
@@ -91,17 +98,24 @@ func ApplyWALRecordToEngine(eng storage.Engine, rec memengine.WALRecord) error {
 				_ = sess.Close()
 				return err
 			}
+			rec := op.Record
+			if rec == nil && len(op.Data) > 0 {
+				rec, _ = storage.DecodeTuple(tblSchema, op.Data)
+			}
 			pkCol, err := tblSchema.PrimaryKeyColumn()
 			if err != nil {
 				_ = tx.Rollback()
 				_ = sess.Close()
 				return err
 			}
-			pkVal, ok := op.Record[pkCol.Name]
-			if !ok {
+			var pkVal storage.Value
+			if rec != nil {
+				pkVal = rec[pkCol.Name]
+			}
+			if pkVal.IsNull || pkVal.Type == 0 {
 				pkVal = memengine.ParsePKValue(op.Key, pkCol.Type)
 			}
-			if err := tx.Update(op.Table, pkVal, op.Record); err != nil {
+			if err := tx.Update(op.Table, pkVal, rec); err != nil {
 				_ = tx.Rollback()
 				_ = sess.Close()
 				return err

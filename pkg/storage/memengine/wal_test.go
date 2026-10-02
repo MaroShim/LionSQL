@@ -335,3 +335,106 @@ func TestMemEngine_SnapshotPersistence_MessagePack(t *testing.T) {
 		t.Fatalf("failed to retrieve record from tables.mpk: %+v, err: %v", rec, err)
 	}
 }
+
+func TestMemEngine_WAL_CompactBinaryTupleZeroCopy(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "sqlion_wal_tuple_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	eng := New()
+	eng.SetFsyncPolicy(FsyncAlways)
+	if err := eng.Open(tempDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+
+	var capturedOps []WALOp
+	eng.SetWALHook(func(rec WALRecord) {
+		capturedOps = append(capturedOps, rec.Ops...)
+	})
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "holder", Type: storage.TypeVarChar},
+			{Name: "balance", Type: storage.TypeFloat},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(100),
+		"holder":  storage.StringValue("ZeroCopy Test"),
+		"balance": storage.FloatValue(5000.5),
+	})
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Verify captured WALOp contains raw compact binary tuple Data (0x01 prefix) and nil Record
+	var insertOp *WALOp
+	for i := range capturedOps {
+		if capturedOps[i].Type == OpInsert {
+			insertOp = &capturedOps[i]
+			break
+		}
+	}
+	if insertOp == nil {
+		t.Fatalf("expected OpInsert WALOp to be captured")
+	}
+	if len(insertOp.Data) == 0 {
+		t.Fatalf("expected insertOp.Data to be populated with raw binary tuple bytes")
+	}
+	if insertOp.Data[0] != storage.TupleCodecVersion {
+		t.Errorf("expected version 0x%02x, got 0x%02x", storage.TupleCodecVersion, insertOp.Data[0])
+	}
+	if insertOp.Record != nil {
+		t.Errorf("expected insertOp.Record to be nil for zero-allocation commit, got: %+v", insertOp.Record)
+	}
+
+	// Verify decoding directly into Row
+	row, err := storage.DecodeTupleToRow(schema, insertOp.Data)
+	if err != nil {
+		t.Fatalf("DecodeTupleToRow failed: %v", err)
+	}
+	if len(row.Values) != 3 || row.Values[0].IVal != 100 || row.Values[1].SVal != "ZeroCopy Test" || row.Values[2].FVal != 5000.5 {
+		t.Fatalf("decoded row mismatch: %+v", row.Values)
+	}
+
+	// Crash engine without snapshot and verify recovery purely from WAL with op.Data
+	if eng.wal != nil {
+		_ = eng.wal.Close()
+	}
+
+	recoveredEng := New()
+	if err := recoveredEng.Open(tempDir); err != nil {
+		t.Fatalf("failed to recover engine: %v", err)
+	}
+	defer recoveredEng.Close()
+
+	recSess, _ := recoveredEng.NewSession()
+	defer recSess.Close()
+
+	readTx, _ := recSess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	rec, err := readTx.Get("accounts", storage.IntValue(100))
+	if err != nil {
+		t.Fatalf("failed to get recovered record: %v", err)
+	}
+	if rec["holder"].SVal != "ZeroCopy Test" || rec["balance"].FVal != 5000.5 {
+		t.Fatalf("recovered record mismatch: %+v", rec)
+	}
+}
+

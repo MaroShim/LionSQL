@@ -143,3 +143,63 @@ func BenchmarkTupleCodec_Decode(b *testing.B) {
 		_, _ = DecodeTuple(schema, data)
 	}
 }
+
+func TestEncodeRow_RoundTrip(t *testing.T) {
+	schema := &TableSchema{
+		Columns: []Column{
+			{Name: "id", Type: TypeInt},
+			{Name: "name", Type: TypeVarChar},
+			{Name: "balance", Type: TypeFloat},
+		},
+	}
+	row := Row{
+		Values: []Value{
+			IntValue(42),
+			StringValue("Zero-Copy Row"),
+			FloatValue(99.9),
+		},
+	}
+
+	data, err := EncodeRow(schema, row)
+	if err != nil {
+		t.Fatalf("EncodeRow failed: %v", err)
+	}
+
+	decodedRow, err := DecodeTupleToRow(schema, data)
+	if err != nil {
+		t.Fatalf("DecodeTupleToRow failed: %v", err)
+	}
+
+	if len(decodedRow.Values) != 3 {
+		t.Fatalf("expected 3 values, got %d", len(decodedRow.Values))
+	}
+	if decodedRow.Values[0].IVal != 42 || decodedRow.Values[1].SVal != "Zero-Copy Row" || decodedRow.Values[2].FVal != 99.9 {
+		t.Fatalf("decoded row mismatch: %+v", decodedRow.Values)
+	}
+}
+
+func BenchmarkTupleCodec_EncodeRow(b *testing.B) {
+	schema := &TableSchema{
+		Columns: []Column{
+			{Name: "id", Type: TypeInt},
+			{Name: "name", Type: TypeVarChar},
+			{Name: "balance", Type: TypeFloat},
+			{Name: "created_at", Type: TypeDateTime},
+		},
+	}
+	row := Row{
+		Values: []Value{
+			IntValue(1),
+			StringValue("Alice"),
+			FloatValue(100.5),
+			DateTimeValue(time.Now()),
+		},
+	}
+
+	buf := make([]byte, 0, 64)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = EncodeRowToBuffer(schema, row, buf)
+	}
+}
+

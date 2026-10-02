@@ -45,6 +45,7 @@ type WALOp struct {
 	Type        WALOpType            `json:"type" msgpack:"type"`
 	Table       string               `json:"table" msgpack:"table"`
 	Key         string               `json:"key,omitempty" msgpack:"key,omitempty"`
+	Data        []byte               `json:"data,omitempty" msgpack:"data,omitempty"`
 	Record      storage.Record       `json:"record,omitempty" msgpack:"record,omitempty"`
 	BaseVer     int64                `json:"base_ver,omitempty" msgpack:"base_ver,omitempty"`
 	Schema      *storage.TableSchema `json:"schema,omitempty" msgpack:"schema,omitempty"`

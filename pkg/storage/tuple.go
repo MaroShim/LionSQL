@@ -94,12 +94,8 @@ func (s *TableSchema) ApplyRecordToRow(row Row, rec Record) Row {
 	return Row{Values: vals}
 }
 
-// EncodeTuple encodes a Record into a compact schema-aware binary tuple.
-// Format Layout:
-//   [1 byte Version]
-//   [ceil(N/8) bytes NullBitmap]
-//   [Sequential Payload for non-null columns]
-func EncodeTuple(schema *TableSchema, rec Record) ([]byte, error) {
+// EncodeRow encodes an ordered Row into a compact schema-aware binary tuple.
+func EncodeRow(schema *TableSchema, row Row) ([]byte, error) {
 	if schema == nil {
 		return nil, errors.New("nil table schema")
 	}
@@ -108,11 +104,11 @@ func EncodeTuple(schema *TableSchema, rec Record) ([]byte, error) {
 	nullBitmapLen := (numCols + 7) / 8
 
 	buf := make([]byte, 1+nullBitmapLen, 64)
-	return EncodeTupleToBuffer(schema, rec, buf)
+	return EncodeRowToBuffer(schema, row, buf)
 }
 
-// EncodeTupleToBuffer encodes a Record into the provided destination slice, reusing its capacity.
-func EncodeTupleToBuffer(schema *TableSchema, rec Record, buf []byte) ([]byte, error) {
+// EncodeRowToBuffer encodes an ordered Row into the provided destination slice, reusing its capacity.
+func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error) {
 	if schema == nil {
 		return nil, errors.New("nil table schema")
 	}
@@ -134,8 +130,13 @@ func EncodeTupleToBuffer(schema *TableSchema, rec Record, buf []byte) ([]byte, e
 	var scratch [10]byte
 
 	for i, col := range schema.Columns {
-		val, ok := rec[col.Name]
-		if !ok || val.IsNull {
+		var val Value
+		if i < len(row.Values) {
+			val = row.Values[i]
+		} else {
+			val = NullValue(col.Type)
+		}
+		if val.IsNull {
 			buf[1+(i/8)] |= 1 << (i % 8)
 			continue
 		}
@@ -199,6 +200,27 @@ func EncodeTupleToBuffer(schema *TableSchema, rec Record, buf []byte) ([]byte, e
 
 	return buf, nil
 }
+
+// EncodeTuple encodes a Record into a compact schema-aware binary tuple.
+// Format Layout:
+//   [1 byte Version]
+//   [ceil(N/8) bytes NullBitmap]
+//   [Sequential Payload for non-null columns]
+func EncodeTuple(schema *TableSchema, rec Record) ([]byte, error) {
+	if schema == nil {
+		return nil, errors.New("nil table schema")
+	}
+	return EncodeRow(schema, schema.RecordToRow(rec))
+}
+
+// EncodeTupleToBuffer encodes a Record into the provided destination slice, reusing its capacity.
+func EncodeTupleToBuffer(schema *TableSchema, rec Record, buf []byte) ([]byte, error) {
+	if schema == nil {
+		return nil, errors.New("nil table schema")
+	}
+	return EncodeRowToBuffer(schema, schema.RecordToRow(rec), buf)
+}
+
 
 // DecodeTupleToRow decodes a compact binary tuple directly into a Row without map allocations.
 func DecodeTupleToRow(schema *TableSchema, data []byte) (Row, error) {

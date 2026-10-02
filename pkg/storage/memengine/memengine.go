@@ -466,7 +466,16 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !exists {
 				continue
 			}
-			row := td.Schema.RecordToRow(op.Record)
+			var row storage.Row
+			if len(op.Data) > 0 {
+				var err error
+				row, err = storage.DecodeTupleToRow(&td.Schema, op.Data)
+				if err != nil {
+					continue
+				}
+			} else if op.Record != nil {
+				row = td.Schema.RecordToRow(op.Record)
+			}
 			if !td.hasKey(op.Key) {
 				td.Keys = append(td.Keys, op.Key)
 			}
@@ -489,7 +498,16 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if !hadOld {
 				td.Keys = append(td.Keys, op.Key)
 			}
-			row := td.Schema.RecordToRow(op.Record)
+			var row storage.Row
+			if len(op.Data) > 0 {
+				var err error
+				row, err = storage.DecodeTupleToRow(&td.Schema, op.Data)
+				if err != nil {
+					continue
+				}
+			} else if op.Record != nil {
+				row = td.Schema.RecordToRow(op.Record)
+			}
 			td.putRowAndVer(op.Key, row, op.BaseVer+1)
 			if td.Schema.IsPartitioned() {
 				var oldPKey, newPKey string
@@ -2460,17 +2478,19 @@ func (tx *Transaction) Commit() error {
 			case changeDelete:
 				opType = OpDelete
 			}
-			rec := ch.rec
-			if rec == nil && ch.kind != changeDelete {
-				if td, ok := tx.engine.tables[ch.table]; ok {
-					rec = td.Schema.RowToRecord(ch.row)
+			var rawData []byte
+			if td, ok := tx.engine.tables[ch.table]; ok && ch.kind != changeDelete {
+				var err error
+				rawData, err = storage.EncodeRow(&td.Schema, ch.row)
+				if err != nil {
+					rawData = nil
 				}
 			}
 			ops = append(ops, WALOp{
 				Type:    opType,
 				Table:   ch.table,
 				Key:     ch.key,
-				Record:  rec,
+				Data:    rawData,
 				BaseVer: ch.baseVer,
 			})
 		}
