@@ -155,8 +155,6 @@ import (
 	"sync"
 	"unsafe"
 
-	"github.com/vmihailenco/msgpack/v5"
-
 	"sqlion/pkg/storage"
 )
 
@@ -643,17 +641,10 @@ func serializeRecord(cur *C.WT_CURSOR, schema *storage.TableSchema, record stora
 }
 
 func serializeRecordToBuffer(cur *C.WT_CURSOR, schema *storage.TableSchema, record storage.Record, buf []byte) ([]byte, error) {
-	if C.go_wt_cursor_is_format_string(cur) != 0 {
-		b, err := json.Marshal(record)
-		if err != nil {
-			return nil, err
-		}
-		return append(b, 0), nil
-	}
 	if schema != nil {
 		return storage.EncodeTupleToBuffer(schema, record, buf)
 	}
-	return msgpack.Marshal(record)
+	return nil, fmt.Errorf("table schema is required for binary tuple serialization")
 }
 
 func (tx *WTTx) Insert(tableName string, record storage.Record) error {
@@ -1161,31 +1152,16 @@ func (c *WTCursor) Row() (storage.Row, error) {
 
 func decodeRecord(schema *storage.TableSchema, data []byte) (storage.Record, error) {
 	if len(data) > 0 && data[0] == storage.TupleCodecVersion && schema != nil {
-		if rec, err := storage.DecodeTuple(schema, data); err == nil {
-			return rec, nil
-		}
+		return storage.DecodeTuple(schema, data)
 	}
-	var rec storage.Record
-	if err := msgpack.Unmarshal(data, &rec); err == nil {
-		return rec, nil
-	}
-	if err := json.Unmarshal(data, &rec); err == nil {
-		return rec, nil
-	}
-	return nil, fmt.Errorf("failed to decode record bytes")
+	return nil, fmt.Errorf("invalid binary tuple record bytes")
 }
 
 func decodeRow(schema *storage.TableSchema, data []byte) (storage.Row, error) {
 	if len(data) > 0 && data[0] == storage.TupleCodecVersion && schema != nil {
-		if row, err := storage.DecodeTupleToRow(schema, data); err == nil {
-			return row, nil
-		}
+		return storage.DecodeTupleToRow(schema, data)
 	}
-	rec, err := decodeRecord(schema, data)
-	if err != nil {
-		return storage.Row{}, err
-	}
-	return schema.RecordToRow(rec), nil
+	return storage.Row{}, fmt.Errorf("invalid binary tuple record bytes")
 }
 
 func (c *WTCursor) Close() error {

@@ -1,7 +1,6 @@
 package memengine
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -226,34 +225,6 @@ func (td *TableData) truncateShardsLocked() {
 	td.Keys = make([]string, 0)
 }
 
-type legacyTableData struct {
-	Schema     storage.TableSchema            `json:"schema"`
-	Rows       map[string]storage.Record      `json:"rows"`
-	Versions   map[string]int64               `json:"versions"`
-	Keys       []string                       `json:"keys"`
-	Indexes    map[string]*IndexData          `json:"indexes,omitempty"`
-	Partitions map[string]map[string]struct{} `json:"partitions,omitempty"`
-}
-
-func convertLegacyTables(legacy map[string]*legacyTableData) map[string]*TableData {
-	res := make(map[string]*TableData, len(legacy))
-	for name, leg := range legacy {
-		td := &TableData{
-			Schema:     leg.Schema,
-			Rows:       make(map[string]storage.Row, len(leg.Rows)),
-			Versions:   leg.Versions,
-			Keys:       leg.Keys,
-			Indexes:    leg.Indexes,
-			Partitions: leg.Partitions,
-		}
-		for pk, rec := range leg.Rows {
-			td.Rows[pk] = leg.Schema.RecordToRow(rec)
-		}
-		td.initShards()
-		res[name] = td
-	}
-	return res
-}
 
 func cloneRow(r storage.Row) storage.Row {
 	vals := make([]storage.Value, len(r.Values))
@@ -645,109 +616,41 @@ func (e *Engine) loadDiskLocked() {
 		return
 	}
 
-	// 1. Try standard MessagePack binary snapshot (tables.mpk)
 	mpkFile := filepath.Join(e.dataDir, "tables.mpk")
-	if data, err := os.ReadFile(mpkFile); err == nil && len(data) > 0 {
-		var loaded map[string]*TableData
-		var isLegacy bool
-		if err := UnmarshalMsgPack(data, &loaded); err == nil && loaded != nil {
-			for _, td := range loaded {
-				if len(td.Schema.Columns) > 0 && len(td.Rows) > 0 {
-					for _, r := range td.Rows {
-						if len(r.Values) == 0 {
-							isLegacy = true
-							break
-						}
-					}
-				}
-				if isLegacy {
-					break
-				}
-			}
-			if !isLegacy {
-				e.tables = loaded
-			}
-		}
-
-		if e.tables == nil || isLegacy {
-			var legacy map[string]*legacyTableData
-			if err := UnmarshalMsgPack(data, &legacy); err == nil && legacy != nil {
-				e.tables = convertLegacyTables(legacy)
-			}
-		}
-
-		if e.tables != nil {
-			for _, td := range e.tables {
-				if td.Versions == nil {
-					td.Versions = make(map[string]int64)
-					for k := range td.Rows {
-						td.Versions[k] = 1
-					}
-				}
-				td.initShards()
-				if td.Indexes == nil {
-					td.Indexes = make(map[string]*IndexData)
-				}
-				for _, idx := range td.Indexes {
-					idx.getSkipList()
-				}
-				if td.Schema.IsPartitioned() {
-					if td.Partitions == nil {
-						td.Partitions = make(map[string]map[string]struct{})
-					}
-					for k, row := range td.Rows {
-						if pKey, err := td.Schema.ComputePartitionKeyFromRow(row); err == nil {
-							td.addPartitionKey(pKey, k)
-						}
-					}
-				}
-			}
-			return
-		}
+	data, err := os.ReadFile(mpkFile)
+	if err != nil || len(data) == 0 {
+		return
 	}
 
-	// 2. Fallback to legacy JSON snapshot (tables.json) with auto-migration
-	jsonFile := filepath.Join(e.dataDir, "tables.json")
-	if data, err := os.ReadFile(jsonFile); err == nil && len(data) > 0 {
-		var legacy map[string]*legacyTableData
-		if err := json.Unmarshal(data, &legacy); err == nil && legacy != nil {
-			e.tables = convertLegacyTables(legacy)
-		} else {
-			var loaded map[string]*TableData
-			if err := json.Unmarshal(data, &loaded); err == nil && loaded != nil {
-				e.tables = loaded
+	var loaded map[string]*TableData
+	if err := UnmarshalMsgPack(data, &loaded); err != nil || loaded == nil {
+		return
+	}
+
+	e.tables = loaded
+	for _, td := range e.tables {
+		if td.Versions == nil {
+			td.Versions = make(map[string]int64)
+			for k := range td.Rows {
+				td.Versions[k] = 1
 			}
 		}
-
-		if e.tables != nil {
-			for _, td := range e.tables {
-				if td.Versions == nil {
-					td.Versions = make(map[string]int64)
-					for k := range td.Rows {
-						td.Versions[k] = 1
-					}
-				}
-				td.initShards()
-				if td.Indexes == nil {
-					td.Indexes = make(map[string]*IndexData)
-				}
-				for _, idx := range td.Indexes {
-					idx.getSkipList()
-				}
-				if td.Schema.IsPartitioned() {
-					if td.Partitions == nil {
-						td.Partitions = make(map[string]map[string]struct{})
-					}
-					for k, row := range td.Rows {
-						if pKey, err := td.Schema.ComputePartitionKeyFromRow(row); err == nil {
-							td.addPartitionKey(pKey, k)
-						}
-					}
+		td.initShards()
+		if td.Indexes == nil {
+			td.Indexes = make(map[string]*IndexData)
+		}
+		for _, idx := range td.Indexes {
+			idx.getSkipList()
+		}
+		if td.Schema.IsPartitioned() {
+			if td.Partitions == nil {
+				td.Partitions = make(map[string]map[string]struct{})
+			}
+			for k, row := range td.Rows {
+				if pKey, err := td.Schema.ComputePartitionKeyFromRow(row); err == nil {
+					td.addPartitionKey(pKey, k)
 				}
 			}
-			// Migrate automatically to MessagePack format
-			_ = e.saveDiskLocked()
-			_ = os.Remove(jsonFile)
 		}
 	}
 }

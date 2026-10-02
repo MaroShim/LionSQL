@@ -1,7 +1,6 @@
 package memengine
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -277,67 +276,62 @@ func TestMemEngine_WAL_FsyncPolicies(t *testing.T) {
 	}
 }
 
-func TestMemEngine_LegacyJSON_AutoMigrationToMessagePack(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_json_migration_*")
+func TestMemEngine_SnapshotPersistence_MessagePack(t *testing.T) {
+	tempDir, err := os.MkdirTemp("", "sqlion_mpk_snapshot_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tempDir)
 
-	// Create legacy tables.json manually
-	legacyTables := map[string]*legacyTableData{
-		"legacy_users": {
-			Schema: storage.TableSchema{
-				Name: "legacy_users",
-				Columns: []storage.Column{
-					{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
-					{Name: "name", Type: storage.TypeVarChar},
-				},
-			},
-			Rows: map[string]storage.Record{
-				"1": {
-					"id":   storage.IntValue(1),
-					"name": storage.StringValue("OldUser"),
-				},
-			},
-			Versions: map[string]int64{"1": 1},
-			Keys:     []string{"1"},
-			Indexes:  make(map[string]*IndexData),
-		},
-	}
-	jsonData, _ := json.Marshal(legacyTables)
-	jsonPath := filepath.Join(tempDir, "tables.json")
-	_ = os.WriteFile(jsonPath, jsonData, 0644)
-
-	// Open Engine -> should automatically load tables.json and migrate to tables.mpk
 	eng := New()
 	if err := eng.Open(tempDir); err != nil {
-		t.Fatalf("Open failed on legacy directory: %v", err)
+		t.Fatalf("Open failed: %v", err)
 	}
-	_ = eng.Close()
 
-	// Verify tables.mpk was created and tables.json removed
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("users", storage.Record{
+		"id":   storage.IntValue(1),
+		"name": storage.StringValue("Alice"),
+	})
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	if err := eng.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// Verify tables.mpk was created
 	mpkPath := filepath.Join(tempDir, "tables.mpk")
 	if _, err := os.Stat(mpkPath); os.IsNotExist(err) {
-		t.Fatalf("expected tables.mpk to be created after migration")
-	}
-	if _, err := os.Stat(jsonPath); !os.IsNotExist(err) {
-		t.Fatalf("expected legacy tables.json to be cleaned up")
+		t.Fatalf("expected tables.mpk to exist")
 	}
 
-	// Reopen with new MessagePack format and verify record
+	// Reopen with new engine instance and verify data from tables.mpk
 	reopened := New()
 	if err := reopened.Open(tempDir); err != nil {
 		t.Fatalf("Reopen failed: %v", err)
 	}
 	defer reopened.Close()
 
-	sess, _ := reopened.NewSession()
-	tx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
-	defer tx.Rollback()
+	sess2, _ := reopened.NewSession()
+	tx2, _ := sess2.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer tx2.Rollback()
 
-	rec, err := tx.Get("legacy_users", storage.IntValue(1))
-	if err != nil || rec["name"].SVal != "OldUser" {
-		t.Fatalf("failed to retrieve migrated record: %+v, err: %v", rec, err)
+	rec, err := tx2.Get("users", storage.IntValue(1))
+	if err != nil || rec["name"].SVal != "Alice" {
+		t.Fatalf("failed to retrieve record from tables.mpk: %+v, err: %v", rec, err)
 	}
 }

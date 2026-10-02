@@ -7,6 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Removed
+- **Legacy Text JSON & Fallback Storage Codecs (`pkg/storage/wiredtiger`, `pkg/storage/memengine`)**:
+  - Removed JSON and MessagePack fallback parsing from WiredTiger record decoding (`decodeRecord` and `decodeRow`), standardizing 100% on native binary tuple format (`0x01`).
+  - Purged legacy `tables.json` disk loading, JSON-to-MessagePack auto-migration logic, and `legacyTableData` map conversion structures from the in-memory engine.
+  - Standardized In-Memory OCC engine snapshot persistence strictly on `tables.mpk` (MessagePack metadata container) and OLTP row records on schema-ordered contiguous `Row` representations.
+
 ### Added
 - **Fine-Grained Sharded Locking Architecture for In-Memory OCC Engine (`pkg/storage/memengine`)**:
   - Replaced table-level exclusive locking during `Commit()` with 64-shard striped row locks (`[64]tableShard`), eliminating global table contention and serial blocking across concurrent write transactions.
