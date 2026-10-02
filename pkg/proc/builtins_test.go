@@ -378,4 +378,42 @@ func TestBuiltin_GrepAndAwk(t *testing.T) {
 	}
 }
 
+func TestCustomScalarFunctionSPI(t *testing.T) {
+	// Register custom Go function: DOUBLE_INT
+	RegisterScalarFunction("DOUBLE_INT", func(args []storage.Value) storage.Value {
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		return storage.IntValue(args[0].IVal * 2)
+	})
+
+	if !HasScalarFunction("double_int") {
+		t.Fatalf("expected HasScalarFunction to be true (case-insensitive)")
+	}
+
+	res := EvalBuiltin("double_int", []storage.Value{storage.IntValue(21)})
+	if res.IVal != 42 {
+		t.Fatalf("expected DOUBLE_INT(21) = 42, got %d", res.IVal)
+	}
+
+	// Register string transform: GREET
+	RegisterScalarFunction("GREET", func(args []storage.Value) storage.Value {
+		if len(args) == 0 {
+			return storage.StringValue("Hello, World!")
+		}
+		return storage.StringValue("Hello, " + args[0].SVal + "!")
+	})
+
+	greetRes := EvalBuiltin("greet", []storage.Value{storage.StringValue("Gopher")})
+	if greetRes.SVal != "Hello, Gopher!" {
+		t.Fatalf("expected 'Hello, Gopher!', got %q", greetRes.SVal)
+	}
+
+	// Unregister
+	UnregisterScalarFunction("DOUBLE_INT")
+	if HasScalarFunction("double_int") {
+		t.Fatalf("expected HasScalarFunction to be false after unregistering")
+	}
+}
+
 

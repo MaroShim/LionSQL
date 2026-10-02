@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"sqlion/pkg/storage"
@@ -25,9 +26,41 @@ var commonDateFormats = []string{
 	"01/02/2006",
 }
 
-// EvalBuiltin evaluates standard T-SQL scalar functions.
+// ScalarFunction represents an in-process native Go scalar function callback.
+type ScalarFunction func(args []storage.Value) storage.Value
+
+var customScalarFunctions sync.Map
+
+// RegisterScalarFunction registers an in-process custom Go function as a user-defined scalar function.
+// It can be invoked directly in SQL queries and stored procedures with zero FFI boundary overhead.
+func RegisterScalarFunction(name string, fn ScalarFunction) {
+	upper := strings.ToUpper(cleanBuiltinName(name))
+	customScalarFunctions.Store(upper, fn)
+}
+
+// UnregisterScalarFunction unregisters a custom Go scalar function.
+func UnregisterScalarFunction(name string) {
+	upper := strings.ToUpper(cleanBuiltinName(name))
+	customScalarFunctions.Delete(upper)
+}
+
+// HasScalarFunction checks if a custom scalar function is registered.
+func HasScalarFunction(name string) bool {
+	upper := strings.ToUpper(cleanBuiltinName(name))
+	_, ok := customScalarFunctions.Load(upper)
+	return ok
+}
+
+// EvalBuiltin evaluates standard T-SQL scalar functions and registered native Go scalar UDFs.
 func EvalBuiltin(name string, args []storage.Value) storage.Value {
 	upper := strings.ToUpper(cleanBuiltinName(name))
+
+	// 1. Fast-path lookup for registered native Go scalar functions
+	if val, ok := customScalarFunctions.Load(upper); ok {
+		if fn, isFn := val.(ScalarFunction); isFn && fn != nil {
+			return fn(args)
+		}
+	}
 
 	switch upper {
 	// ----------------------------------------------------

@@ -7,6 +7,7 @@ import (
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
 )
@@ -2385,6 +2386,46 @@ func TestSQLExecutor_TimeBucketGrouping(t *testing.T) {
 		t.Errorf("bucket 3 mismatch: got %+v", res.Rows[2])
 	}
 }
+
+func TestCustomScalarFunction_SQLExec(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	// Register a custom mathematical function: SQUARE_NUM
+	proc.RegisterScalarFunction("SQUARE_NUM", func(args []storage.Value) storage.Value {
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		val := args[0].IVal
+		return storage.IntValue(val * val)
+	})
+	defer proc.UnregisterScalarFunction("SQUARE_NUM")
+
+	// Create table and insert a row
+	if _, err := server.ExecuteSQL("CREATE TABLE accounts (id INT PRIMARY KEY, holder VARCHAR(50), balance INT);"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := server.ExecuteSQL("INSERT INTO accounts VALUES (1, 'Alice', 1000);"); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// Execute SQL using the custom function
+	res, err := server.ExecuteSQL("SELECT holder, balance, SQUARE_NUM(balance) AS sq_balance FROM accounts WHERE id = 1;")
+	if err != nil || !res.Success {
+		t.Fatalf("query with custom scalar function failed: %v", err)
+	}
+
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+
+	row := res.Rows[0]
+	// Account 1 has balance 1000, so SQUARE_NUM(1000) should be 1000000
+	if fmt.Sprintf("%v", row["sq_balance"]) != "1000000" {
+		t.Fatalf("expected sq_balance to be 1000000, got %v", row["sq_balance"])
+	}
+}
+
 
 
 

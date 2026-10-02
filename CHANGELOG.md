@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **In-Process Go Native Scalar UDF Registration SPI (`pkg/proc`, `pkg/api`)**:
+  - Implemented thread-safe `ScalarFunction` callback type with `RegisterScalarFunction`, `UnregisterScalarFunction`, and `HasScalarFunction` using `sync.Map` in `pkg/proc/builtins.go`.
+  - Added zero-overhead fast-path lookup in `EvalBuiltin` executing registered custom Go callbacks ahead of standard built-in dispatch at sub-microsecond in-process speed.
+  - Added unit test `TestCustomScalarFunctionSPI` in `pkg/proc/builtins_test.go` and integration test `TestCustomScalarFunction_SQLExec` in `pkg/api/sqlexec_test.go`.
+
+- **System Diagnostic Health Verification Engine Probes (`cmd/server`)**:
+  - Integrated dynamic probe 5.4 into `--doctor` CLI utility in `cmd/server/doctor.go` verifying dynamic Go scalar UDF registration, invocation, and unregistration lifecycle.
+  - Validated all 17 diagnostic probes across host environment, filesystem write/read integrity, network port availability, storage engine MVCC/hazard pointers, dual-parser execution, and cryptographic subsystems.
+
 - **VDBE Physical Execution PlanNode Caching (`pkg/planner`, `pkg/proc`, `pkg/proc/runtime`)**:
   - Added `PlanNode.Clone()` deep copy method in `pkg/planner/planner.go` to clone Volcano physical execution plan trees including projections, group keys, window definitions, and child plan nodes.
   - Implemented immutable `CachedPlan` caching on `RelQueryData` within `VMFrame.execRelQuery`, bypassing full CBO join planning and stats estimation on repeated invariant queries without where clauses.

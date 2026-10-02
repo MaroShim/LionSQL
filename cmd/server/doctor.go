@@ -356,6 +356,23 @@ END;
 			}
 		}
 	}
+
+	// 5.4 In-Process Go Scalar UDF SPI
+	probeUDFName := "__DOCTOR_PROBE_UDF__"
+	proc.RegisterScalarFunction(probeUDFName, func(args []storage.Value) storage.Value {
+		return storage.IntValue(42)
+	})
+	if proc.HasScalarFunction(probeUDFName) {
+		res := proc.EvalBuiltin(probeUDFName, nil)
+		proc.UnregisterScalarFunction(probeUDFName)
+		if res.IVal == 42 && !proc.HasScalarFunction(probeUDFName) {
+			d.addResult(cat, "In-Process Scalar UDF SPI", "Dynamic Go callback registration & dispatch verified", "OK", nil)
+		} else {
+			d.addResult(cat, "In-Process Scalar UDF SPI", "Scalar function evaluation mismatch", "FAIL", nil)
+		}
+	} else {
+		d.addResult(cat, "In-Process Scalar UDF SPI", "Failed to register scalar UDF", "FAIL", nil)
+	}
 }
 
 // 6. Security & Cryptographic Subsystem
