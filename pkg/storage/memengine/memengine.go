@@ -1790,6 +1790,23 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 	return rec, err
 }
 
+func (tx *Transaction) GetRow(tableName string, pk storage.Value) (storage.Row, error) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.Row{}, storage.ErrTxClosed
+	}
+
+	pkKey := pk.String()
+	clone := !tx.opts.ReadOnly
+	row, ver, err := tx.getRowAndVerUnderLock(tableName, pkKey, clone)
+	if err == nil {
+		tx.setBaseVer(tableName, pkKey, ver)
+	}
+	return row, err
+}
+
 func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool) (storage.Row, int64, error) {
 	if tx.isLocallyDeleted(tableName, pkKey) {
 		return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
@@ -2617,6 +2634,7 @@ type memCursor struct {
 	td        *TableData
 	keys      []string
 	idx       int
+	curRow    storage.Row
 	curRec    storage.Record
 	closed    bool
 	resolver  func(pk string) (storage.Record, bool)
@@ -2630,6 +2648,7 @@ func (c *memCursor) Next() bool {
 		c.idx++
 		if c.idx >= len(c.keys) {
 			c.curRec = nil
+			c.curRow = storage.Row{}
 			return false
 		}
 		pk := c.keys[c.idx]
@@ -2642,15 +2661,17 @@ func (c *memCursor) Next() bool {
 				continue
 			}
 			if inLocal {
-				if c.td != nil {
-					c.curRec = c.td.Schema.RowToRecord(locRow)
-				}
+				c.curRow = locRow
+				c.curRec = nil
 				return true
 			}
 		}
 		if c.resolver != nil {
 			if rec, ok := c.resolver(pk); ok {
 				c.curRec = rec
+				if c.td != nil {
+					c.curRow = c.td.Schema.RecordToRow(rec)
+				}
 				return true
 			}
 			continue
@@ -2660,7 +2681,8 @@ func (c *memCursor) Next() bool {
 			row, exists := c.td.Rows[pk]
 			c.td.mu.RUnlock()
 			if exists {
-				c.curRec = c.td.Schema.RowToRecord(row)
+				c.curRow = row
+				c.curRec = nil
 				return true
 			}
 		}
@@ -2668,16 +2690,27 @@ func (c *memCursor) Next() bool {
 }
 
 func (c *memCursor) Record() (storage.Record, error) {
-	if c.closed || c.curRec == nil {
+	if c.closed || (c.curRec == nil && len(c.curRow.Values) == 0) {
 		return nil, fmt.Errorf("cursor out of range or closed")
 	}
+	if c.curRec == nil && c.td != nil {
+		c.curRec = c.td.Schema.RowToRecord(c.curRow)
+	}
 	return c.curRec, nil
+}
+
+func (c *memCursor) Row() (storage.Row, error) {
+	if c.closed || (c.curRec == nil && len(c.curRow.Values) == 0) {
+		return storage.Row{}, fmt.Errorf("cursor out of range or closed")
+	}
+	return c.curRow, nil
 }
 
 func (c *memCursor) Close() error {
 	c.closed = true
 	c.keys = nil
 	c.curRec = nil
+	c.curRow = storage.Row{}
 	c.resolver = nil
 	c.tx = nil
 	c.td = nil

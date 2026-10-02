@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Direct Row Passthrough Architecture for Query Execution & Storage Cursors (`pkg/storage`, `pkg/execution`)**:
+  - Extended `storage.Cursor` interface with `Row() (storage.Row, error)` and `storage.Transaction` with `GetRow(tableName string, pk storage.Value) (storage.Row, error)` to pass raw slice-backed rows directly to execution engines without `map[string]Value` conversions.
+  - Implemented `DecodeTupleToRow` in `pkg/storage/tuple.go` to unpack binary tuples directly into contiguous `Row` values, eliminating intermediate record allocations in WiredTiger cursor reads.
+  - Added `FormatRow` in `pkg/execution/iterator.go` and updated `SeqScanIterator` and `IndexScanIterator` to format volcano execution tuples directly from `storage.Row` via O(1) column index projections.
+
 - **In-Memory OCC Engine Contiguous Row Storage Transition (`pkg/storage/memengine`, `pkg/storage`)**:
   - Replaced map-based row storage (`map[string]storage.Record`) with contiguous slice-backed `Row` structures (`map[string]storage.Row`), drastically cutting Go pointer indirection, map hash computation, and GC tracing pressure across high-volume OLTP workloads.
   - Converted internal transaction mutation buffers (`local map[string]map[string]storage.Row`) and `rowChange` journals to operate on schema-ordered `Row` objects.

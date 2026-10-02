@@ -801,6 +801,12 @@ func (tx *WTTx) Get(tableName string, pk storage.Value) (storage.Record, error) 
 	return tx.getLocked(tableName, pk)
 }
 
+func (tx *WTTx) GetRow(tableName string, pk storage.Value) (storage.Row, error) {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+	return tx.getRowLocked(tableName, pk)
+}
+
 func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, error) {
 	if tx.closed {
 		return nil, storage.ErrTxClosed
@@ -828,6 +834,35 @@ func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, e
 
 	tbl, _ := tx.sess.engine.GetTable(tableName)
 	return decodeRecord(tbl, C.GoBytes(pData, C.int(sz)))
+}
+
+func (tx *WTTx) getRowLocked(tableName string, pk storage.Value) (storage.Row, error) {
+	if tx.closed {
+		return storage.Row{}, storage.ErrTxClosed
+	}
+
+	cur, err := tx.sess.getCursor(tableName)
+	if err != nil {
+		return storage.Row{}, err
+	}
+	defer C.go_wt_cursor_reset(cur)
+
+	cKey := C.CString(pk.String())
+	defer C.free(unsafe.Pointer(cKey))
+
+	C.go_wt_cursor_set_key(cur, cKey)
+	if ret := C.go_wt_cursor_search(cur); ret != 0 {
+		return storage.Row{}, storage.ErrKeyNotFound
+	}
+
+	var pData unsafe.Pointer
+	var sz C.size_t
+	if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret != 0 || pData == nil {
+		return storage.Row{}, fmt.Errorf("cursor_get_value failed")
+	}
+
+	tbl, _ := tx.sess.engine.GetTable(tableName)
+	return decodeRow(tbl, C.GoBytes(pData, C.int(sz)))
 }
 
 func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
@@ -1092,6 +1127,20 @@ func (c *WTCursor) Record() (storage.Record, error) {
 	return decodeRecord(c.schema, C.GoBytes(pData, C.int(sz)))
 }
 
+func (c *WTCursor) Row() (storage.Row, error) {
+	if c.closed || c.cur == nil {
+		return storage.Row{}, fmt.Errorf("cursor closed")
+	}
+
+	var pData unsafe.Pointer
+	var sz C.size_t
+	if ret := C.go_wt_cursor_get_val_raw(c.cur, &pData, &sz); ret != 0 || pData == nil {
+		return storage.Row{}, fmt.Errorf("cursor_get_val_raw failed: %d", ret)
+	}
+
+	return decodeRow(c.schema, C.GoBytes(pData, C.int(sz)))
+}
+
 func decodeRecord(schema *storage.TableSchema, data []byte) (storage.Record, error) {
 	if len(data) > 0 && data[0] == storage.TupleCodecVersion && schema != nil {
 		if rec, err := storage.DecodeTuple(schema, data); err == nil {
@@ -1106,6 +1155,19 @@ func decodeRecord(schema *storage.TableSchema, data []byte) (storage.Record, err
 		return rec, nil
 	}
 	return nil, fmt.Errorf("failed to decode record bytes")
+}
+
+func decodeRow(schema *storage.TableSchema, data []byte) (storage.Row, error) {
+	if len(data) > 0 && data[0] == storage.TupleCodecVersion && schema != nil {
+		if row, err := storage.DecodeTupleToRow(schema, data); err == nil {
+			return row, nil
+		}
+	}
+	rec, err := decodeRecord(schema, data)
+	if err != nil {
+		return storage.Row{}, err
+	}
+	return schema.RecordToRow(rec), nil
 }
 
 func (c *WTCursor) Close() error {

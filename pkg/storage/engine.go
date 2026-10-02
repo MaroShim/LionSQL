@@ -664,6 +664,7 @@ type Record map[string]Value
 type Cursor interface {
 	Next() bool
 	Record() (Record, error)
+	Row() (Row, error)
 	Close() error
 }
 
@@ -678,6 +679,7 @@ type Transaction interface {
 	Update(tableName string, pk Value, record Record) error
 	Delete(tableName string, pk Value) error
 	Get(tableName string, pk Value) (Record, error)
+	GetRow(tableName string, pk Value) (Row, error)
 	Scan(tableName string) (Cursor, error)
 	ScanPartitions(tableName string, partitions []string) (Cursor, error)
 	IndexScan(tableName string, indexName string, low, high *Value) (Cursor, error)

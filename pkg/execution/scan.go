@@ -72,6 +72,10 @@ func (s *SeqScanIterator) Next(ctx context.Context) (Tuple, error) {
 		return Tuple{}, io.EOF
 	}
 
+	if row, err := s.cursor.Row(); err == nil {
+		return FormatRow(row, s.schema, s.alias, s.colIndexMap), nil
+	}
+
 	rec, err := s.cursor.Record()
 	if err != nil {
 		return Tuple{}, err
@@ -172,6 +176,10 @@ func (s *IndexScanIterator) Next(ctx context.Context) (Tuple, error) {
 
 	if !s.cursor.Next() {
 		return Tuple{}, io.EOF
+	}
+
+	if row, err := s.cursor.Row(); err == nil {
+		return FormatRow(row, s.schema, s.alias, s.colIndexMap), nil
 	}
 
 	rec, err := s.cursor.Record()
