@@ -717,7 +717,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	// Analyze predicate pushdown across primary and joined relations
 	pushdownRes := PushDownPredicates(q, schema, rightSchemas)
 
-	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(=|<|<=|>|>=|!=|<>)\s*(.+)$`)
+	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(<=|>=|!=|<>|<|>|==|=|LIKE)\s*(.+)$`)
 
 	var chosenIndex *storage.IndexSchema
 	var chosenCond string
@@ -899,12 +899,20 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		if len(remainingPrimary) > 0 {
 			filterCond := strings.Join(remainingPrimary, " AND ")
 			filterCost := chosenCost + float64(chosenEstRows)*CPUOperatorCost
+			remSel := 0.5
+			if leftStats != nil {
+				remSel = leftStats.EstimateCompoundSelectivity(remainingPrimary)
+			}
+			remEstRows := int64(math.Ceil(float64(chosenEstRows) * remSel))
+			if remEstRows < 1 {
+				remEstRows = 1
+			}
 			scanNode = &PlanNode{
 				Type:          NodeFilter,
 				FilterCond:    filterCond,
 				StartupCost:   0.25,
 				TotalCost:     filterCost,
-				EstimatedRows: int64(math.Max(1, float64(chosenEstRows)*0.5)),
+				EstimatedRows: remEstRows,
 				Children:      []*PlanNode{scanNode},
 			}
 		}
@@ -933,14 +941,8 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 		if len(pushdownRes.PrimaryConds) > 0 {
 			sel := 0.33
-			if leftStats != nil && len(pushdownRes.PrimaryConds) == 1 {
-				if m := eqRe.FindStringSubmatch(pushdownRes.PrimaryConds[0]); len(m) == 4 {
-					rawCol := m[1]
-					if idx := strings.Index(rawCol, "."); idx != -1 {
-						rawCol = rawCol[idx+1:]
-					}
-					sel = leftStats.EstimateSelectivity(rawCol, m[2], strings.TrimSpace(m[3]))
-				}
+			if leftStats != nil {
+				sel = leftStats.EstimateCompoundSelectivity(pushdownRes.PrimaryConds)
 			}
 			filterEstRows := int64(math.Ceil(float64(estimatedTotal) * sel))
 			if filterEstRows < 1 {

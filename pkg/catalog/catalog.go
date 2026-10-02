@@ -408,12 +408,28 @@ func (c *Catalog) SetTableStats(tableName string, stats *planner.TableStats) {
 	c.tableStats[tableName] = stats
 }
 
-// GetTableStats retrieves CBO statistics for a table.
+// GetTableStats retrieves CBO statistics for a table, falling back to dynamic live count if unanalyzed.
 func (c *Catalog) GetTableStats(tableName string) (*planner.TableStats, bool) {
 	c.mu.RLock()
-	defer c.mu.RUnlock()
 	stats, found := c.tableStats[tableName]
-	return stats, found
+	c.mu.RUnlock()
+	if found && stats != nil {
+		return stats, true
+	}
+
+	// Dynamic baseline fallback using engine live row count
+	type rowCounter interface {
+		TableRowCount(tableName string) (int64, error)
+	}
+	if c.engine != nil {
+		if rc, ok := c.engine.(rowCounter); ok {
+			if cnt, err := rc.TableRowCount(tableName); err == nil {
+				return planner.NewTableStats(tableName, cnt), true
+			}
+		}
+	}
+
+	return nil, false
 }
 
 // ListTableStats returns all cached table statistics.

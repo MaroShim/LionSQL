@@ -5,6 +5,7 @@ import (
 
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/planner"
+	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
 )
 
@@ -26,6 +27,48 @@ func TestCatalog_TableStats(t *testing.T) {
 	all := cat.ListTableStats()
 	if len(all) != 1 || all["customers"] == nil {
 		t.Fatalf("expected 1 table stats in list, got %d", len(all))
+	}
+}
+
+func TestCatalog_DynamicTableRowCountFallback(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+
+	schema := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(1), "name": storage.StringValue("A")})
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(2), "name": storage.StringValue("B")})
+	_ = tx.Insert("items", storage.Record{"id": storage.IntValue(3), "name": storage.StringValue("C")})
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Dynamic fallback without explicit ANALYZE / SetTableStats
+	stats, found := cat.GetTableStats("items")
+	if !found || stats == nil {
+		t.Fatalf("expected dynamic TableStats fallback to find 'items'")
+	}
+	if stats.RowCount != 3 {
+		t.Fatalf("expected dynamic row count 3, got: %d", stats.RowCount)
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"sqlion/pkg/storage"
+	"sqlion/pkg/storage/memengine"
 )
 
 // --- T-SQL Database Console Commands (DBCC) ---
@@ -25,6 +26,28 @@ func (s *Server) execDBCC(query string, start time.Time, cs *ClientSession) (*Qu
 	}
 	upperRest := strings.ToUpper(rest)
 
+	// DBCC PERSISTENCE or DBCC ENGINE
+	if strings.HasPrefix(upperRest, "PERSISTENCE") || strings.HasPrefix(upperRest, "ENGINE") {
+		engineType := s.engine.Type()
+		persistence := "persistent"
+		if me, ok := s.engine.(*memengine.Engine); ok {
+			persistence = me.PersistenceSummary()
+		}
+		rows := []map[string]any{
+			{"Property": "Engine", "Value": engineType},
+			{"Property": "Persistence", "Value": persistence},
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "DBCC",
+			Columns:      []string{"Property", "Value"},
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+			Messages:     []string{"DBCC execution completed. If DBCC printed error messages, contact your system administrator."},
+		}, nil
+	}
+
 	// 1. DBCC USEROPTIONS
 	if strings.HasPrefix(upperRest, "USEROPTIONS") {
 		isoLevel := "read committed"
@@ -34,6 +57,11 @@ func (s *Server) execDBCC(query string, start time.Time, cs *ClientSession) (*Qu
 				isoLevel = lvl
 			}
 			cs.mu.Unlock()
+		}
+
+		persistence := "persistent"
+		if me, ok := s.engine.(*memengine.Engine); ok {
+			persistence = me.PersistenceSummary()
 		}
 
 		options := []struct {
@@ -53,6 +81,7 @@ func (s *Server) execDBCC(query string, start time.Time, cs *ClientSession) (*Qu
 			{"ansi_nulls", "SET"},
 			{"concat_null_yields_null", "SET"},
 			{"isolation level", isoLevel},
+			{"persistence", persistence},
 		}
 
 		rows := make([]map[string]any, len(options))

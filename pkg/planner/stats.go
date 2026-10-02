@@ -3,6 +3,7 @@ package planner
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -154,6 +155,73 @@ func (ts *TableStats) EstimateSelectivity(colName string, op string, valStr stri
 	default:
 		return 0.33
 	}
+}
+
+var (
+	cboEqRe     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(<=|>=|!=|<>|<|>|==|=|LIKE)\s*(.+)$`)
+	cboIsNullRe = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s+IS\s+(NOT\s+)?NULL\s*$`)
+)
+
+// EstimateCompoundSelectivity calculates the combined selectivity across multiple AND-predicates using statistical independence.
+func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
+	if ts == nil || len(conds) == 0 {
+		return 0.33
+	}
+
+	totalSel := 1.0
+	matchedAny := false
+
+	for _, cond := range conds {
+		cond = strings.TrimSpace(cond)
+		if cond == "" || cond == "1=1" || cond == "1 = 1" {
+			continue
+		}
+
+		if m := cboEqRe.FindStringSubmatch(cond); len(m) == 4 {
+			rawCol := m[1]
+			if idx := strings.Index(rawCol, "."); idx != -1 {
+				rawCol = rawCol[idx+1:]
+			}
+			colName := cleanIdent(rawCol)
+			op := m[2]
+			val := strings.TrimSpace(m[3])
+			sel := ts.EstimateSelectivity(colName, op, val)
+			totalSel *= sel
+			matchedAny = true
+		} else if m := cboIsNullRe.FindStringSubmatch(cond); len(m) >= 2 {
+			rawCol := m[1]
+			if idx := strings.Index(rawCol, "."); idx != -1 {
+				rawCol = rawCol[idx+1:]
+			}
+			colName := cleanIdent(rawCol)
+			op := "IS NULL"
+			if strings.TrimSpace(m[2]) != "" {
+				op = "IS NOT NULL"
+			}
+			sel := ts.EstimateSelectivity(colName, op, "")
+			totalSel *= sel
+			matchedAny = true
+		} else {
+			totalSel *= 0.33
+			matchedAny = true
+		}
+	}
+
+	if !matchedAny {
+		return 0.33
+	}
+
+	minSel := 0.0001
+	if ts.RowCount > 0 {
+		minSel = 1.0 / float64(ts.RowCount)
+	}
+	if totalSel < minSel {
+		totalSel = minSel
+	}
+	if totalSel > 1.0 {
+		totalSel = 1.0
+	}
+	return totalSel
 }
 
 // interpolateRange estimates selectivity for <, <=, >, >= using histogram buckets.

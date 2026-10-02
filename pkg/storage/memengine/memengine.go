@@ -181,6 +181,18 @@ func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
 	}
 }
 
+func (td *TableData) rowCount() int64 {
+	td.ensureShardsInit()
+	var total int64
+	for i := 0; i < numTableShards; i++ {
+		sh := &td.shards[i]
+		sh.mu.RLock()
+		total += int64(len(sh.rows))
+		sh.mu.RUnlock()
+	}
+	return total
+}
+
 func (td *TableData) collectKeys(filter func(pk string) bool) []string {
 	td.ensureShardsInit()
 	var keys []string
@@ -345,6 +357,41 @@ func New() *Engine {
 // Type returns the human-readable storage engine backend name.
 func (e *Engine) Type() string {
 	return "In-Memory OCC"
+}
+
+// IsEphemeral returns true if persistence is completely disabled (pure in-memory mode).
+func (e *Engine) IsEphemeral() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.dataDir == "" || (!e.opts.EnableAOF && !e.opts.EnableRDB)
+}
+
+// PersistenceSummary returns a descriptive string of the persistence mode.
+func (e *Engine) PersistenceSummary() string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.dataDir == "" || (!e.opts.EnableAOF && !e.opts.EnableRDB) {
+		return "ephemeral"
+	}
+	var parts []string
+	if e.opts.EnableAOF {
+		parts = append(parts, "AOF")
+	}
+	if e.opts.EnableRDB {
+		parts = append(parts, "RDB")
+	}
+	return strings.Join(parts, "+")
+}
+
+// TableRowCount returns the row count of a table in O(1) time across shards.
+func (e *Engine) TableRowCount(tableName string) (int64, error) {
+	e.mu.RLock()
+	td, exists := e.tables[tableName]
+	e.mu.RUnlock()
+	if !exists {
+		return 0, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+	return td.rowCount(), nil
 }
 
 // SetFsyncPolicy sets the disk synchronization policy for WAL/AOF.

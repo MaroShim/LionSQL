@@ -10,11 +10,12 @@ import (
 
 // ServerConfig defines server storage and process parameters.
 type ServerConfig struct {
-	DataDir  string `json:"data_dir"`
-	Engine   string `json:"engine"`
-	AutoSeed bool   `json:"auto_seed"`
-	PIDFile  string `json:"pid_file,omitempty"`
-	LogFile  string `json:"log_file,omitempty"`
+	DataDir   string `json:"data_dir"`
+	Engine    string `json:"engine"`
+	Ephemeral bool   `json:"ephemeral"`
+	AutoSeed  bool   `json:"auto_seed"`
+	PIDFile   string `json:"pid_file,omitempty"`
+	LogFile   string `json:"log_file,omitempty"`
 }
 
 // TLSConfig defines encryption parameters for wire protocols.

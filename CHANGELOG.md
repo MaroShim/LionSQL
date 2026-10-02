@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+- **In-Memory Ephemeral Engine Mode & Zero-Disk Persistence (`cmd/server`, `pkg/config`, `pkg/storage/memengine`, `pkg/api`)**:
+  - Added `--ephemeral` CLI flag and `ephemeral` configuration property for `memory` engine backend, completely disabling WAL/AOF logging, RDB snapshot generation, and disk directory creation for pure in-memory operation.
+  - Implemented `IsEphemeral()` and `PersistenceSummary()` on `memengine.Engine`.
+  - Added `DBCC PERSISTENCE` / `DBCC ENGINE` console commands and exposed active persistence state in `DBCC USEROPTIONS`.
+  - Added unit test `TestEphemeralEngine` in `pkg/storage/memengine/ephemeral_test.go` and `TestDBCC_PersistenceAndEphemeral` in `pkg/api/ephemeral_test.go`.
+
+- **CBO Compound Selectivity & Dynamic Live Row Count Estimation (`pkg/planner`, `pkg/catalog`, `pkg/storage/memengine`, `pkg/api`)**:
+  - Implemented `EstimateCompoundSelectivity` on `TableStats` to accurately compute combined selectivity for multi-predicate filter clauses using statistical independence instead of falling back to static constants.
+  - Added $O(1)$ `TableRowCount()` method to `memengine.Engine` across concurrent shards.
+  - Enhanced `catalog.GetTableStats` with dynamic live row count fallback, giving the query planner instant cardinality awareness even before explicit `ANALYZE` commands are executed.
+  - Added unit tests in `pkg/planner/stats_test.go`, `pkg/catalog/catalog_test.go`, and end-to-end integration test in `pkg/api/cbo_test.go`.
+
 - **PostgreSQL-Style `INSERT ... ON CONFLICT` & CockroachDB-Style `UPSERT INTO` Syntax (`pkg/api`)**:
   - Implemented PostgreSQL-compatible `INSERT ... ON CONFLICT (target_col) DO NOTHING` and `ON CONFLICT DO NOTHING` to gracefully ignore unique/primary key conflicts.
   - Implemented `INSERT ... ON CONFLICT (target_col) DO UPDATE SET col = expr, ... [WHERE condition]` with full support for proposed values via `EXCLUDED.<col>` (and `excluded.<col>`) and existing row values via `<table_name>.<col>` or `<col>`.

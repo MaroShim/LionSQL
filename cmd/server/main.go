@@ -38,6 +38,7 @@ func main() {
 	defaultDataDir := resolveDefaultDataDir()
 	dataDir := flag.String("dir", defaultDataDir, "Data directory for database files (default: adjacent to bin/ or 'data')")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
+	ephemeralFlag := flag.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence (disables WAL, AOF, and RDB snapshots)")
 	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
 	adminEmail := flag.String("admin-email", "admin@sqlion.local", "Default superuser email")
 	adminPass := flag.String("admin-pass", "1234567890", "Default superuser password")
@@ -114,6 +115,9 @@ func main() {
 	}
 	if visited["engine"] {
 		cfg.Server.Engine = *engineType
+	}
+	if visited["ephemeral"] {
+		cfg.Server.Ephemeral = *ephemeralFlag
 	}
 	if visited["seed"] {
 		cfg.Server.AutoSeed = *autoSeed
@@ -276,10 +280,20 @@ func main() {
 			log.Fatalf("[SQLion] Failed to open WiredTiger storage engine: %v. If you wish to use the in-memory engine, specify --engine=memory explicitly.", err)
 		}
 	case "memory":
-		eng = memengine.New()
-		if err := eng.Open(cfg.Server.DataDir); err != nil {
+		memEng := memengine.New()
+		opts := memengine.DefaultOptions(cfg.Server.DataDir)
+		if cfg.Server.Ephemeral {
+			opts.EnableAOF = false
+			opts.EnableRDB = false
+			opts.DataDir = ""
+			log.Printf("[SQLion] In-Memory engine running in EPHEMERAL mode (pure in-memory, zero disk persistence)")
+		} else {
+			log.Printf("[SQLion] In-Memory engine running in PERSISTENT mode (AOF: %v, RDB: %v, dir: %s)", opts.EnableAOF, opts.EnableRDB, cfg.Server.DataDir)
+		}
+		if err := memEng.OpenWithOptions(opts); err != nil {
 			log.Fatalf("Failed to open storage engine: %v", err)
 		}
+		eng = memEng
 	default:
 		log.Fatalf("Unknown storage engine: %s. Options: wiredtiger, memory", cfg.Server.Engine)
 	}

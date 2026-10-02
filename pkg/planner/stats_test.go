@@ -63,3 +63,29 @@ func TestTableStats_CategoricalNDV(t *testing.T) {
 		t.Fatalf("expected status selectivity ~0.20, got %f", sel)
 	}
 }
+
+func TestTableStats_EstimateCompoundSelectivity(t *testing.T) {
+	ts := planner.NewTableStats("accounts", 1000)
+
+	idVals := make([]storage.Value, 1000)
+	for i := 0; i < 1000; i++ {
+		idVals[i] = storage.IntValue(int64(i + 1))
+	}
+	ts.Columns["id"] = planner.BuildColumnStats("id", storage.TypeInt, idVals, 0, 1000)
+
+	statuses := []string{"ACTIVE", "BLOCKED"}
+	statVals := make([]storage.Value, 1000)
+	for i := 0; i < 1000; i++ {
+		statVals[i] = storage.StringValue(statuses[i%2])
+	}
+	ts.Columns["status"] = planner.BuildColumnStats("status", storage.TypeVarChar, statVals, 0, 1000)
+
+	// id <= 500 (sel ~0.50) AND status = 'ACTIVE' (sel 0.50)
+	// Compound selectivity = 0.50 * 0.50 = 0.25
+	conds := []string{"id <= 500", "status = 'ACTIVE'"}
+	compSel := ts.EstimateCompoundSelectivity(conds)
+	if compSel < 0.20 || compSel > 0.30 {
+		t.Fatalf("expected compound selectivity ~0.25, got %f", compSel)
+	}
+}
+
