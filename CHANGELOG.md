@@ -7,10 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-- **In-Engine Log Extraction & Filtering Operators: `GREP` and `AWK` (`pkg/proc`, `pkg/execution`, `pkg/api`)**:
-  - Implemented high-performance scalar functions `GREP(text, pattern)` and `AWK(text, [delim], field_index)` (also aliased as `SPLIT_PART`).
+- **In-Engine Log Extraction & Filtering Operators: `GREP` / `REGEXP_LIKE` and `AWK` (`pkg/proc`, `pkg/execution`, `pkg/api`)**:
+  - Implemented high-performance scalar functions `GREP(text, pattern)` (with ANSI SQL standard alias `REGEXP_LIKE`) and `AWK(text, [delim], field_index)` (also aliased as `SPLIT_PART`).
   - Enables zero-copy, in-database text filtering and structured field extraction from unstructured raw logs and delimited strings without dumping to external terminal pipelines.
-  - Supported `GREP` and `AWK` seamlessly in `SELECT` projections, `WHERE` predicate filters, and `GROUP BY` aggregation dimensions.
+  - Supported `GREP`, `REGEXP_LIKE`, and `AWK` seamlessly in `SELECT` projections, `WHERE` predicate filters, and `GROUP BY` aggregation dimensions.
   - Added comprehensive test suites in `pkg/proc/builtins_test.go` and `pkg/api/sqlexec_test.go`.
 
 - **Default Data Directory Resolution Relative to Executable Location (`cmd/server`)**:

@@ -346,8 +346,8 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(strings.Repeat(str, n))
 
-	case "GREP":
-		// GREP(text, pattern): returns true if pattern matches text.
+	case "GREP", "REGEXP_LIKE":
+		// GREP(text, pattern) or REGEXP_LIKE(text, pattern): returns true if pattern matches text.
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
 			return storage.BoolValue(false)
 		}

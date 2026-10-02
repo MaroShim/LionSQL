@@ -335,6 +335,12 @@ func TestBuiltin_GrepAndAwk(t *testing.T) {
 		t.Errorf("GREP expected false for 'CRITICAL', got true")
 	}
 
+	// REGEXP_LIKE alias
+	r1 := EvalBuiltin("REGEXP_LIKE", []storage.Value{msg, storage.StringValue("ERROR|FATAL")})
+	if !r1.BVal {
+		t.Errorf("REGEXP_LIKE expected true, got false")
+	}
+
 	// 2. AWK default whitespace delimiter
 	logLine := storage.StringValue("192.168.1.100 - user42 [02/Oct/2026] 200 4096")
 	awk1 := EvalBuiltin("AWK", []storage.Value{logLine, storage.IntValue(1)})

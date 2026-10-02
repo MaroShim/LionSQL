@@ -32,13 +32,17 @@ Storage Pages ──► Zero-Copy Byte Scan ──► In-Engine GREP/AWK Filter 
 
 ## 2. Operator Specifications
 
-### 2.1. `GREP(text, pattern)`
+### 2.1. `GREP(text, pattern)` / `REGEXP_LIKE`
 
-Evaluates whether `text` matches the regular expression or substring `pattern`. Returns a boolean value (`true` / `false`).
+Evaluates whether `text` matches the regular expression or substring `pattern`. Returns a boolean value (`true` / `false`). `REGEXP_LIKE` is provided as an exact ANSI SQL / Oracle / PostgreSQL / MySQL standard alias.
 
 #### Syntax
 ```sql
+-- 1. Compact Unix-style operator
 GREP(text_expression, pattern_string)
+
+-- 2. ANSI / Oracle / PostgreSQL compatibility alias
+REGEXP_LIKE(text_expression, pattern_string)
 ```
 
 #### Arguments

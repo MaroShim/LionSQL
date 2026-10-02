@@ -1814,6 +1814,12 @@ func TestSQLExecutor_BuiltinFunctions(t *testing.T) {
 		t.Fatalf("GREP false failed: %+v, err: %v", res, err)
 	}
 
+	// REGEXP_LIKE alias
+	res, err = server.ExecuteSQL("SELECT REGEXP_LIKE('panic: runtime error', 'runtime|fatal') AS matched;")
+	if err != nil || len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["matched"]) != "true" {
+		t.Fatalf("REGEXP_LIKE true failed: %+v, err: %v", res, err)
+	}
+
 	// 10. AWK scalar function ($1, $3 extraction)
 	res, err = server.ExecuteSQL("SELECT AWK('127.0.0.1 GET /api 200', 1) AS ip, AWK('127.0.0.1 GET /api 200', 4) AS status;")
 	if err != nil || len(res.Rows) != 1 || res.Rows[0]["ip"] != "127.0.0.1" || res.Rows[0]["status"] != "200" {
