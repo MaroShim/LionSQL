@@ -313,6 +313,13 @@ func main() {
 	defer eng.Close()
 
 	cat := catalog.New(eng)
+	if !*ephemeralFlag && cfg.Server.DataDir != "" {
+		if err := cat.SetPersistenceDir(cfg.Server.DataDir); err != nil {
+			log.Printf("[SQLion] Warning: Failed to load CBO statistics: %v", err)
+		} else if stats := cat.ListTableStats(); len(stats) > 0 {
+			log.Printf("[SQLion] Restored CBO statistics for %d tables from %s/cbo_stats.json", len(stats), cfg.Server.DataDir)
+		}
+	}
 
 	// Standalone CLI Backup Operation
 	if *backupTarget != "" {

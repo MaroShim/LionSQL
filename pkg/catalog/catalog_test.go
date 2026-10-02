@@ -1,6 +1,8 @@
 package catalog_test
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"sqlion/pkg/catalog"
@@ -135,5 +137,90 @@ func TestCatalog_ProcedureDuplicateCheck(t *testing.T) {
 	procs := cat.ListProcedures()
 	if len(procs) != 1 {
 		t.Fatalf("expected exactly 1 procedure in list, got %d", len(procs))
+	}
+}
+
+func TestCatalog_TableStatsPersistence(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sqlion_cbo_stats_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng1 := memengine.New()
+	defer eng1.Close()
+	cat1 := catalog.New(eng1)
+
+	// 1. Enable persistence
+	if err := cat1.SetPersistenceDir(tmpDir); err != nil {
+		t.Fatalf("SetPersistenceDir failed: %v", err)
+	}
+	if cat1.PersistenceDir() != tmpDir {
+		t.Fatalf("expected persistence dir %s, got %s", tmpDir, cat1.PersistenceDir())
+	}
+
+	// 2. Build stats and save via SetTableStats
+	ts := planner.NewTableStats("orders", 1000)
+	vals := []storage.Value{
+		storage.IntValue(10),
+		storage.IntValue(50),
+		storage.IntValue(100),
+	}
+	ts.Columns["total"] = planner.BuildColumnStats("total", storage.TypeInt, vals, 0, 1000)
+	cat1.SetTableStats("orders", ts)
+
+	// Verify cbo_stats.json exists physically on disk
+	statsFile := filepath.Join(tmpDir, "cbo_stats.json")
+	if _, err := os.Stat(statsFile); err != nil {
+		t.Fatalf("expected %s to exist on disk: %v", statsFile, err)
+	}
+
+	// 3. Create fresh catalog in separate instance and load existing stats
+	eng2 := memengine.New()
+	defer eng2.Close()
+	cat2 := catalog.New(eng2)
+
+	if err := cat2.SetPersistenceDir(tmpDir); err != nil {
+		t.Fatalf("cat2 SetPersistenceDir failed: %v", err)
+	}
+
+	loadedStats, found := cat2.GetTableStats("orders")
+	if !found || loadedStats == nil {
+		t.Fatalf("expected cat2 to restore table stats for 'orders'")
+	}
+	if loadedStats.RowCount != 1000 {
+		t.Fatalf("expected row count 1000, got %d", loadedStats.RowCount)
+	}
+	if col, ok := loadedStats.Columns["total"]; !ok || col.DistinctCount != 3 {
+		t.Fatalf("expected col 'total' with distinct count 3, got %+v", col)
+	}
+
+	// 4. Test InvalidateTableStats auto-sync to disk
+	cat2.InvalidateTableStats("orders")
+	if _, found := cat2.GetTableStats("orders"); found {
+		t.Fatalf("expected 'orders' stats to be invalidated")
+	}
+
+	// Check third catalog sees empty stats
+	cat3 := catalog.New(eng2)
+	if err := cat3.SetPersistenceDir(tmpDir); err != nil {
+		t.Fatalf("cat3 SetPersistenceDir failed: %v", err)
+	}
+	if _, found := cat3.GetTableStats("orders"); found {
+		t.Fatalf("expected cat3 to find no stats after invalidation")
+	}
+
+	// 5. Explicit Save/Load file testing
+	manualPath := filepath.Join(tmpDir, "manual_stats.json")
+	cat1.SetTableStats("orders", ts)
+	if err := cat1.SaveTableStatsToFile(manualPath); err != nil {
+		t.Fatalf("SaveTableStatsToFile failed: %v", err)
+	}
+	cat4 := catalog.New(eng2)
+	if err := cat4.LoadTableStatsFromFile(manualPath); err != nil {
+		t.Fatalf("LoadTableStatsFromFile failed: %v", err)
+	}
+	if st, ok := cat4.GetTableStats("orders"); !ok || st.RowCount != 1000 {
+		t.Fatalf("expected restored stats from manual file")
 	}
 }

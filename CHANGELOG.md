@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **CBO Table Statistics Disk Persistence (`pkg/catalog`, `pkg/storage`, `cmd/server`)**:
+  - Implemented `SetPersistenceDir`, `PersistenceDir`, `SaveTableStatsToFile`, and `LoadTableStatsFromFile` on `catalog.Catalog`.
+  - Added atomic disk persistence (`*.tmp` write followed by atomic rename, Golden Rule 1 & 5) of `cbo_stats.json` triggered automatically on `SetTableStats` and `InvalidateTableStats`.
+  - Added `MarshalJSON` and `UnmarshalJSON` support to `storage.Decimal` for lossless JSON serialization of decimal histogram buckets.
+  - Connected `cat.SetPersistenceDir(cfg.Server.DataDir)` in standalone server startup (`cmd/server/main.go`), ensuring CBO stats and optimized execution plans survive server restarts.
+  - Added unit test `TestCatalog_TableStatsPersistence` in `pkg/catalog/catalog_test.go`.
+
 - **In-Process Go Native Scalar UDF Registration SPI (`pkg/proc`, `pkg/api`)**:
   - Implemented thread-safe `ScalarFunction` callback type with `RegisterScalarFunction`, `UnregisterScalarFunction`, and `HasScalarFunction` using `sync.Map` in `pkg/proc/builtins.go`.
   - Added zero-overhead fast-path lookup in `EvalBuiltin` executing registered custom Go callbacks ahead of standard built-in dispatch at sub-microsecond in-process speed.

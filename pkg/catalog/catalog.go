@@ -1,8 +1,11 @@
 package catalog
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -73,13 +76,14 @@ type View struct {
 
 // Catalog manages database schemas, stored procedures, functions, triggers, and CBO statistics.
 type Catalog struct {
-	mu         sync.RWMutex
-	engine     storage.Engine
-	procedures map[string]*Procedure
-	functions  map[string]*Function
-	triggers   map[string]*Trigger
-	views      map[string]*View
-	tableStats map[string]*planner.TableStats
+	mu             sync.RWMutex
+	engine         storage.Engine
+	persistenceDir string
+	procedures     map[string]*Procedure
+	functions      map[string]*Function
+	triggers       map[string]*Trigger
+	views          map[string]*View
+	tableStats     map[string]*planner.TableStats
 }
 
 // New creates a Catalog instance attached to a storage engine.
@@ -406,6 +410,9 @@ func (c *Catalog) SetTableStats(tableName string, stats *planner.TableStats) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.tableStats[tableName] = stats
+	if c.persistenceDir != "" {
+		_ = c.persistTableStatsLocked()
+	}
 }
 
 // GetTableStats retrieves CBO statistics for a table, falling back to dynamic live count if unanalyzed.
@@ -448,6 +455,98 @@ func (c *Catalog) InvalidateTableStats(tableName string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	delete(c.tableStats, tableName)
+	if c.persistenceDir != "" {
+		_ = c.persistTableStatsLocked()
+	}
+}
+
+// SetPersistenceDir sets the directory where catalog statistics are persisted.
+// If the directory contains existing statistics (cbo_stats.json), they are automatically loaded.
+func (c *Catalog) SetPersistenceDir(dir string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cleanDir := filepath.Clean(dir)
+	c.persistenceDir = cleanDir
+	statsFile := filepath.Join(cleanDir, "cbo_stats.json")
+	if _, err := os.Stat(statsFile); err == nil {
+		return c.loadTableStatsFileLocked(statsFile)
+	}
+	return nil
+}
+
+// PersistenceDir returns the currently configured persistence directory.
+func (c *Catalog) PersistenceDir() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.persistenceDir
+}
+
+// SaveTableStatsToFile saves current table statistics atomically to targetPath.
+func (c *Catalog) SaveTableStatsToFile(targetPath string) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.saveStatsToPathLocked(targetPath)
+}
+
+// LoadTableStatsFromFile loads table statistics from targetPath.
+func (c *Catalog) LoadTableStatsFromFile(targetPath string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.loadTableStatsFileLocked(targetPath)
+}
+
+func (c *Catalog) saveStatsToPathLocked(targetPath string) error {
+	cleanPath := filepath.Clean(targetPath)
+	dir := filepath.Dir(cleanPath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create directory %q: %w", dir, err)
+	}
+
+	data, err := json.MarshalIndent(c.tableStats, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to serialize CBO table stats: %w", err)
+	}
+	data = append(data, '\n')
+
+	tmpPath := fmt.Sprintf("%s.tmp.%d", cleanPath, time.Now().UnixNano())
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write temporary stats file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, cleanPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to atomically rename stats file: %w", err)
+	}
+	return nil
+}
+
+func (c *Catalog) loadTableStatsFileLocked(targetPath string) error {
+	cleanPath := filepath.Clean(targetPath)
+	data, err := os.ReadFile(cleanPath)
+	if err != nil {
+		return fmt.Errorf("failed to read CBO stats file: %w", err)
+	}
+
+	var statsMap map[string]*planner.TableStats
+	if err := json.Unmarshal(data, &statsMap); err != nil {
+		return fmt.Errorf("failed to parse CBO stats JSON: %w", err)
+	}
+
+	if c.tableStats == nil {
+		c.tableStats = make(map[string]*planner.TableStats)
+	}
+	for k, v := range statsMap {
+		c.tableStats[k] = v
+	}
+	return nil
+}
+
+func (c *Catalog) persistTableStatsLocked() error {
+	if c.persistenceDir == "" {
+		return nil
+	}
+	statsFile := filepath.Join(c.persistenceDir, "cbo_stats.json")
+	return c.saveStatsToPathLocked(statsFile)
 }
 
 // CreateView registers a new view. Returns ErrViewExists if a view with that name already exists.

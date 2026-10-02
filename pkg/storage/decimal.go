@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -394,4 +395,30 @@ func exp10(n int32) *big.Int {
 	}
 	res := new(big.Int).Exp(bigTen, big.NewInt(int64(n)), nil)
 	return res
+}
+
+// MarshalJSON serializes Decimal to a JSON string representation.
+func (d Decimal) MarshalJSON() ([]byte, error) {
+	return json.Marshal(d.String())
+}
+
+// UnmarshalJSON deserializes Decimal from a JSON string or number representation.
+func (d *Decimal) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		dec, pErr := ParseDecimal(s)
+		if pErr != nil {
+			*d = ZeroDecimal(2)
+			return nil
+		}
+		*d = dec
+		return nil
+	}
+	var f float64
+	if err := json.Unmarshal(b, &f); err == nil {
+		*d = NewDecimalFromFloat(f, 4)
+		return nil
+	}
+	*d = ZeroDecimal(2)
+	return nil
 }
