@@ -6,6 +6,10 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ## 1. High Priority (Near-Term)
 
+- [x] **공식 Microsoft MSSQL 드라이버 E2E 통합 검증 & TDS 호환성 강화 (`pkg/wire/tds`)**
+  - `github.com/microsoft/go-mssqldb` 공식 Go 드라이버 기반 실제 E2E 통합 테스트 스위트 구축 (`driver_integration_test.go`).
+  - TDS `PacketTransactionManager` (0x0E), Collation/Transaction `ENVCHANGE` 토큰, 트랜잭션 디스크립터 및 `DoneInXact` 상태 머신 완비.
+  - 드라이버 Ping, CRUD, Prepared Statements (`sp_prepare`), 매개변수 바인딩, 세션 SET 옵션, 트랜잭션 커밋/롤백 100% 통과.
 - [ ] **임베디드 웹 스튜디오 HA 복제 모니터링 대시보드 (`pkg/ui`)**
   - 브라우저 웹 스튜디오(`:8090/_/`)에 고가용성(HA) 복제 상태(Primary vs Replica) 시각화 카드 추가.
   - 연결된 Replica 목록, LSN 랙(Lag) 지연 시간, 스트리밍 상태 표시 및 수동 승격(`Promote`) 버튼 제공.

@@ -32,6 +32,7 @@ type Server struct {
 	byteCache   *runtime.PlanCache
 	executor    *runtime.Executor
 	spidCounter uint32
+	txCounter   uint64
 	tlsConfig   *tls.Config
 	requireSSL  bool
 	mu          sync.Mutex
@@ -62,6 +63,7 @@ func NewServerWithCache(addr string, cat *catalog.Catalog, eng storage.Engine, c
 		byteCache:   cache,
 		executor:    executor,
 		spidCounter: 50, // Standard MSSQL user SPIDs begin at 51
+		txCounter:   1000,
 	}
 }
 
@@ -214,16 +216,18 @@ type parsedRPC struct {
 
 // ConnectionSession holds state for a single active TDS client connection.
 type ConnectionSession struct {
-	SPID        uint16
-	SessionID   string
-	HostName    string
-	UserName    string
-	AppName     string
-	Database    string
-	PacketSize  uint32
-	prepMu      sync.Mutex
-	prepCounter int32
-	prepared    map[int32]*TdsPreparedStatement
+	SPID         uint16
+	SessionID    string
+	HostName     string
+	UserName     string
+	AppName      string
+	Database     string
+	PacketSize   uint32
+	inTx         bool
+	txDescriptor uint64
+	prepMu       sync.Mutex
+	prepCounter  int32
+	prepared     map[int32]*TdsPreparedStatement
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
@@ -288,6 +292,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		case PacketRPC:
 			s.handleRPC(conn, pkt, sess)
+
+		case PacketTransactionManager:
+			s.handleTransactionManager(conn, pkt, sess)
 
 		case PacketAttention:
 			s.handleAttention(conn, pkt, sess)
@@ -386,12 +393,16 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 	envDB := BuildEnvChangeDatabase(sess.Database, "master")
 	resp.Write(envDB)
 
-	// 3. ENVCHANGE for PacketSize (0xE3)
+	// 3. ENVCHANGE for Collation (0xE3)
+	envCollation := BuildEnvChangeCollation(DefaultCollation)
+	resp.Write(envCollation)
+
+	// 4. ENVCHANGE for PacketSize (0xE3)
 	pktSizeStr := fmt.Sprintf("%d", sess.PacketSize)
 	envPkt := BuildEnvChangePacketSize(pktSizeStr, "4096")
 	resp.Write(envPkt)
 
-	// 4. DONE token (0xFD)
+	// 5. DONE token (0xFD)
 	done := BuildDone(TokenDone, DoneFinal, 0, 0)
 	resp.Write(done)
 
@@ -731,12 +742,16 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 			buf.Write(BuildRow(cols, rowVals))
 		}
 
+		doneStatus := DoneFinal
+		if sess.inTx {
+			doneStatus |= DoneInXact
+		}
 		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows))))
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
 		buf.Write(BuildReturnStatus(0))
-		buf.Write(BuildDoneProc(DoneFinal, 0xC1, uint64(len(res.Rows))))
+		buf.Write(BuildDoneProc(doneStatus, 0xC1, uint64(len(res.Rows))))
 	} else {
 		if extraTokens != nil {
 			extraTokens(&buf)
@@ -745,7 +760,11 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		if rowCount == 0 && res.RowsAffected > 0 {
 			rowCount = uint64(res.RowsAffected)
 		}
-		buf.Write(BuildDoneProc(DoneFinal|DoneCount, 0xC1, rowCount))
+		doneStatus := DoneFinal
+		if sess.inTx {
+			doneStatus |= DoneInXact
+		}
+		buf.Write(BuildDoneProc(doneStatus|DoneCount, 0xC1, rowCount))
 	}
 
 	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
@@ -839,6 +858,30 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		buf.Write(BuildInfo(0, 1, 10, msg, "SQLION", "", 1))
 	}
 
+	upperCmd := strings.ToUpper(res.Command)
+	if upperCmd == "BEGIN" {
+		sess.inTx = true
+		sess.txDescriptor = atomic.AddUint64(&s.txCounter, 1)
+		buf.Write(BuildEnvChangeBeginTransaction(sess.txDescriptor))
+	} else if upperCmd == "COMMIT" {
+		if sess.inTx {
+			buf.Write(BuildEnvChangeCommitTransaction(sess.txDescriptor))
+			sess.inTx = false
+			sess.txDescriptor = 0
+		}
+	} else if upperCmd == "ROLLBACK" {
+		if sess.inTx {
+			buf.Write(BuildEnvChangeRollbackTransaction(sess.txDescriptor))
+			sess.inTx = false
+			sess.txDescriptor = 0
+		}
+	}
+
+	doneStatus := DoneFinal
+	if sess.inTx {
+		doneStatus |= DoneInXact
+	}
+
 	if len(res.Columns) > 0 {
 		cols := s.inferColumnInfos(res)
 		buf.Write(BuildColMetaData(cols))
@@ -860,10 +903,10 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 			extraTokens(&buf)
 		}
 		buf.Write(BuildReturnStatus(0))
-		buf.Write(BuildDoneProc(DoneFinal, 0xC1, uint64(len(res.Rows))))
+		buf.Write(BuildDoneProc(doneStatus, 0xC1, uint64(len(res.Rows))))
 	} else {
 		cmdCode := uint16(0)
-		switch strings.ToUpper(res.Command) {
+		switch upperCmd {
 		case "SELECT":
 			cmdCode = 0xC1
 		case "INSERT":
@@ -879,7 +922,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 			extraTokens(&buf)
 		}
 		buf.Write(BuildReturnStatus(0))
-		buf.Write(BuildDoneProc(DoneFinal|DoneCount, cmdCode, uint64(res.RowsAffected)))
+		buf.Write(BuildDoneProc(doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected)))
 	}
 
 	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
@@ -1452,6 +1495,87 @@ func (s *Server) handleAttention(conn net.Conn, pkt *Packet, sess *ConnectionSes
 	_ = WritePacket(conn, PacketTabular, sess.SPID, done)
 }
 
+func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
+	payload := pkt.Payload
+	if len(payload) < 4 {
+		done := BuildDone(TokenDone, DoneFinal, 0, 0)
+		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+		return
+	}
+
+	body := payload
+	totalHeadersLen := binary.LittleEndian.Uint32(payload[:4])
+	if totalHeadersLen >= 4 && int(totalHeadersLen) < len(payload) {
+		body = payload[totalHeadersLen:]
+	}
+
+	if len(body) < 2 {
+		done := BuildDone(TokenDone, DoneFinal, 0, 0)
+		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+		return
+	}
+
+	rqType := binary.LittleEndian.Uint16(body[:2])
+	switch rqType {
+	case 5: // tmBeginXact
+		_, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, "BEGIN TRANSACTION")
+		if err != nil {
+			var buf bytes.Buffer
+			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
+			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
+			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			return
+		}
+		sess.inTx = true
+		sess.txDescriptor = atomic.AddUint64(&s.txCounter, 1)
+
+		var buf bytes.Buffer
+		buf.Write(BuildEnvChangeBeginTransaction(sess.txDescriptor))
+		buf.Write(BuildDone(TokenDone, DoneFinal|DoneInXact, 0, 0))
+		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+
+	case 7: // tmCommitXact
+		txDesc := sess.txDescriptor
+		sess.inTx = false
+		sess.txDescriptor = 0
+		_, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, "COMMIT TRANSACTION")
+		if err != nil {
+			var buf bytes.Buffer
+			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
+			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
+			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			return
+		}
+
+		var buf bytes.Buffer
+		buf.Write(BuildEnvChangeCommitTransaction(txDesc))
+		buf.Write(BuildDone(TokenDone, DoneFinal, 0, 0))
+		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+
+	case 8: // tmRollbackXact
+		txDesc := sess.txDescriptor
+		sess.inTx = false
+		sess.txDescriptor = 0
+		_, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, "ROLLBACK TRANSACTION")
+		if err != nil {
+			var buf bytes.Buffer
+			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
+			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
+			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			return
+		}
+
+		var buf bytes.Buffer
+		buf.Write(BuildEnvChangeRollbackTransaction(txDesc))
+		buf.Write(BuildDone(TokenDone, DoneFinal, 0, 0))
+		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+
+	default:
+		done := BuildDone(TokenDone, DoneFinal, 0, 0)
+		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+	}
+}
+
 func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *ConnectionSession) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
@@ -1490,6 +1614,30 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		buf.Write(BuildInfo(0, 1, 10, msg, "SQLION", "", 1))
 	}
 
+	upperCmd := strings.ToUpper(res.Command)
+	if upperCmd == "BEGIN" {
+		sess.inTx = true
+		sess.txDescriptor = atomic.AddUint64(&s.txCounter, 1)
+		buf.Write(BuildEnvChangeBeginTransaction(sess.txDescriptor))
+	} else if upperCmd == "COMMIT" {
+		if sess.inTx {
+			buf.Write(BuildEnvChangeCommitTransaction(sess.txDescriptor))
+			sess.inTx = false
+			sess.txDescriptor = 0
+		}
+	} else if upperCmd == "ROLLBACK" {
+		if sess.inTx {
+			buf.Write(BuildEnvChangeRollbackTransaction(sess.txDescriptor))
+			sess.inTx = false
+			sess.txDescriptor = 0
+		}
+	}
+
+	doneStatus := DoneFinal
+	if sess.inTx {
+		doneStatus |= DoneInXact
+	}
+
 	if len(res.Columns) > 0 {
 		cols := s.inferColumnInfos(res)
 		buf.Write(BuildColMetaData(cols))
@@ -1506,10 +1654,10 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 			buf.Write(BuildRow(cols, rowVals))
 		}
 
-		buf.Write(BuildDone(TokenDone, DoneFinal|DoneCount, 0xC1, uint64(len(res.Rows))))
+		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, uint64(len(res.Rows))))
 	} else {
 		cmdCode := uint16(0)
-		switch strings.ToUpper(res.Command) {
+		switch upperCmd {
 		case "SELECT":
 			cmdCode = 0xC1
 		case "INSERT":
@@ -1521,7 +1669,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		default:
 			cmdCode = 0x00
 		}
-		buf.Write(BuildDone(TokenDone, DoneFinal|DoneCount, cmdCode, uint64(res.RowsAffected)))
+		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected)))
 	}
 
 	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())

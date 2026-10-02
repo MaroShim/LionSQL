@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Microsoft SQL Server Official Client Driver Compatibility (`pkg/wire/tds`)**:
+  - Integrated official client driver verification suite (`pkg/wire/tds/driver_integration_test.go`) utilizing `github.com/microsoft/go-mssqldb v1.11.2`.
+  - Added full support for `PacketTransactionManager` (0x0E) handling `tmBeginXact` (5), `tmCommitXact` (7), and `tmRollbackXact` (8) with transaction descriptors.
+  - Implemented `ENVCHANGE` token builders for SQL collation (`BuildEnvChangeCollation`, Type 7), transaction initiation (`BuildEnvChangeBeginTransaction`, Type 8), commit (`BuildEnvChangeCommitTransaction`, Type 9), and rollback (`BuildEnvChangeRollbackTransaction`, Type 10).
+  - Added connection session transaction state tracking (`inTx`, `txDescriptor`, `DoneInXact` status flag propagation) across SQL batches, RPC requests, and transaction manager packets.
+  - Verified 100% pass across official driver integration tests: connection ping, query evaluation, CRUD, prepared statements via `sp_prepare`, parameterized filters, session SET options, transactions (commit/rollback), and sys metadata catalog views.
+
 - **CBO Table Statistics Disk Persistence (`pkg/catalog`, `pkg/storage`, `cmd/server`)**:
   - Implemented `SetPersistenceDir`, `PersistenceDir`, `SaveTableStatsToFile`, and `LoadTableStatsFromFile` on `catalog.Catalog`.
   - Added atomic disk persistence (`*.tmp` write followed by atomic rename, Golden Rule 1 & 5) of `cbo_stats.json` triggered automatically on `SetTableStats` and `InvalidateTableStats`.

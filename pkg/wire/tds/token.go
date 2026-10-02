@@ -268,6 +268,82 @@ func BuildEnvChangePacketSize(newSize, oldSize string) []byte {
 	return buf.Bytes()
 }
 
+// BuildEnvChangeCollation builds an ENVCHANGE token (0xE3) for SQL collation.
+func BuildEnvChangeCollation(collation []byte) []byte {
+	var payload bytes.Buffer
+	payload.WriteByte(EnvChangeCollation)
+
+	// NewValue: 1 byte length + collation bytes
+	payload.WriteByte(byte(len(collation)))
+	payload.Write(collation)
+
+	// OldValue: 1 byte length = 0 (empty B_VARCHAR)
+	payload.WriteByte(0)
+
+	var buf bytes.Buffer
+	buf.WriteByte(TokenEnvChange)
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(payload.Len()))
+	buf.Write(payload.Bytes())
+	return buf.Bytes()
+}
+
+// BuildEnvChangeBeginTransaction builds an ENVCHANGE token (0xE3) for BEGIN TRANSACTION (Type 8).
+func BuildEnvChangeBeginTransaction(txDescriptor uint64) []byte {
+	var payload bytes.Buffer
+	payload.WriteByte(EnvChangeBeginTransaction)
+
+	// NewValue: B_VARBYTE (1 byte length = 8 + 8 bytes uint64 LE)
+	payload.WriteByte(8)
+	_ = binary.Write(&payload, binary.LittleEndian, txDescriptor)
+
+	// OldValue: B_VARBYTE (1 byte length = 0)
+	payload.WriteByte(0)
+
+	var buf bytes.Buffer
+	buf.WriteByte(TokenEnvChange)
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(payload.Len()))
+	buf.Write(payload.Bytes())
+	return buf.Bytes()
+}
+
+// BuildEnvChangeCommitTransaction builds an ENVCHANGE token (0xE3) for COMMIT TRANSACTION (Type 9).
+func BuildEnvChangeCommitTransaction(txDescriptor uint64) []byte {
+	var payload bytes.Buffer
+	payload.WriteByte(EnvChangeCommitTransaction)
+
+	// NewValue: B_VARBYTE (1 byte length = 0)
+	payload.WriteByte(0)
+
+	// OldValue: B_VARBYTE (1 byte length = 8 + 8 bytes uint64 LE)
+	payload.WriteByte(8)
+	_ = binary.Write(&payload, binary.LittleEndian, txDescriptor)
+
+	var buf bytes.Buffer
+	buf.WriteByte(TokenEnvChange)
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(payload.Len()))
+	buf.Write(payload.Bytes())
+	return buf.Bytes()
+}
+
+// BuildEnvChangeRollbackTransaction builds an ENVCHANGE token (0xE3) for ROLLBACK TRANSACTION (Type 10).
+func BuildEnvChangeRollbackTransaction(txDescriptor uint64) []byte {
+	var payload bytes.Buffer
+	payload.WriteByte(EnvChangeRollbackTransaction)
+
+	// NewValue: B_VARBYTE (1 byte length = 0)
+	payload.WriteByte(0)
+
+	// OldValue: B_VARBYTE (1 byte length = 8 + 8 bytes uint64 LE)
+	payload.WriteByte(8)
+	_ = binary.Write(&payload, binary.LittleEndian, txDescriptor)
+
+	var buf bytes.Buffer
+	buf.WriteByte(TokenEnvChange)
+	_ = binary.Write(&buf, binary.LittleEndian, uint16(payload.Len()))
+	buf.Write(payload.Bytes())
+	return buf.Bytes()
+}
+
 // BuildDone builds a DONE (0xFD) or DONEINPROC (0xFF) token.
 func BuildDone(tokenType byte, status uint16, curCmd uint16, rowCount uint64) []byte {
 	var buf bytes.Buffer

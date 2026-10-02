@@ -85,3 +85,14 @@
 * **규약**:
   * 다단계 비즈니스 로직은 반드시 단일 트랜잭션 핸들 `tx`를 공유하여 `exec.RunInTx(prog, params, tx, nil)` 형태로 실행해야 합니다.
   * 도중 에러나 충돌(`ErrWriteConflict`, `WT_ROLLBACK`) 발생 시 즉시 `tx.Rollback()`을 호출하여 단 하나의 잔여 데이터도 남기지 않아야 합니다.
+
+---
+
+## 8. TDS 트랜잭션 디스크립터 & `PacketTransactionManager` (0x0E)
+
+* **상황**: 공식 Microsoft Go 드라이버(`github.com/microsoft/go-mssqldb`)나 .NET SqlClient는 `db.BeginTx()` 호출 시 일반 텍스트 `BEGIN TRANSACTION` 배치 대신 TDS 전용 패킷인 `PacketTransactionManager` (0x0E, `tmBeginXact = 5`)를 전송합니다.
+* **주의점**:
+  * TDS 서버가 0x0E 패킷을 단순 DONE으로 처리하면, 클라이언트 드라이버 내부의 `sess.tranid`가 0으로 남아 이어지는 트랜잭션 쿼리 실행(`tx.Exec`) 시 `server does not have an active transaction: the transaction was aborted by the server, likely due to an error while SET XACT_ABORT is ON` 에러를 발생시킵니다.
+  * 트랜잭션 시작 시 서버는 반드시 8바이트 고유 트랜잭션 디스크립터를 발급하고 `ENVCHANGE` 토큰 (Type 8: `EnvChangeBeginTransaction`)을 응답 스트림에 포함해야 하며, 트랜잭션 활성 중의 모든 DONE 토큰 상태 플래그에 `DoneInXact` (0x0004) 비트를 설정해야 합니다.
+  * 트랜잭션 종료 시(COMMIT: Type 9, ROLLBACK: Type 10) 역시 구 디스크립터를 담은 `ENVCHANGE` 토큰을 반환해야 드라이버의 트랜잭션 상태 머신이 정상 복귀합니다.
+
