@@ -257,16 +257,45 @@ func (td *TableData) removePartitionKey(partID, pk string) {
 }
 
 // Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence and WAL (AOF) logging.
+// Options defines Redis-style AOF and RDB persistence configuration.
+type Options struct {
+	DataDir       string
+	EnableAOF     bool          // Whether to write append-only log (wal.aof)
+	EnableRDB     bool          // Whether to periodically save and load RDB snapshots (tables.mpk)
+	FsyncPolicy   FsyncPolicy   // FsyncAlways, FsyncEverySec, FsyncNo
+	AOFThreshold  int64         // Size in bytes to trigger automatic AOF rewrite compaction (default: 64MB)
+	RDBInterval   time.Duration // Periodic RDB snapshot / AOF rewrite interval (default: 60s)
+	RDBMinChanges int64         // Minimum mutation count to trigger snapshot (default: 1000)
+}
+
+// DefaultOptions returns safe default persistence options based on directory.
+func DefaultOptions(dir string) Options {
+	return Options{
+		DataDir:       dir,
+		EnableAOF:     dir != "",
+		EnableRDB:     dir != "",
+		FsyncPolicy:   FsyncEverySec,
+		AOFThreshold:  64 * 1024 * 1024,
+		RDBInterval:   60 * time.Second,
+		RDBMinChanges: 1000,
+	}
+}
+
+// Engine implements an in-memory OCC storage engine with optional Redis-style AOF/RDB durability.
 type Engine struct {
-	mu           sync.RWMutex
-	dataDir      string
-	tables       map[string]*TableData
-	wal          *WALWriter
-	fsyncPolicy  FsyncPolicy
-	nextLSN      atomic.Int64
-	aofThreshold int64 // Size threshold in bytes to trigger AOF rewrite compaction
-	walHook      func(rec WALRecord)
-	closed       bool
+	mu               sync.RWMutex
+	opts             Options
+	dataDir          string
+	tables           map[string]*TableData
+	wal              *WALWriter
+	fsyncPolicy      FsyncPolicy
+	nextLSN          atomic.Int64
+	aofThreshold     int64 // Size threshold in bytes to trigger AOF rewrite compaction
+	changesSinceSave atomic.Int64
+	walHook          func(rec WALRecord)
+	stopCh           chan struct{}
+	bgWg             sync.WaitGroup
+	closed           bool
 }
 
 // CurrentLSN returns the latest assigned Log Sequence Number.
@@ -286,6 +315,7 @@ func (e *Engine) recordWALLocked(ops []WALOp) WALRecord {
 	if len(ops) == 0 {
 		return WALRecord{}
 	}
+	e.changesSinceSave.Add(int64(len(ops)))
 	rec := WALRecord{
 		LSN:       e.nextLSN.Add(1),
 		Timestamp: time.Now().UnixNano(),
@@ -308,7 +338,7 @@ func New() *Engine {
 	return &Engine{
 		tables:       make(map[string]*TableData),
 		fsyncPolicy:  FsyncEverySec,
-		aofThreshold: 10 * 1024 * 1024, // 10MB default compaction threshold
+		aofThreshold: 64 * 1024 * 1024, // 64MB default compaction threshold
 	}
 }
 
@@ -334,43 +364,110 @@ func (e *Engine) SetAOFThreshold(bytes int64) {
 	e.aofThreshold = bytes
 }
 
+// Open initializes the engine with default options based on directory.
 func (e *Engine) Open(dir string) error {
+	e.mu.RLock()
+	thresh := e.aofThreshold
+	policy := e.fsyncPolicy
+	e.mu.RUnlock()
+	opts := DefaultOptions(dir)
+	if thresh > 0 {
+		opts.AOFThreshold = thresh
+	}
+	if policy != 0 {
+		opts.FsyncPolicy = policy
+	}
+	return e.OpenWithOptions(opts)
+}
+
+// OpenWithOptions initializes the engine with explicit Redis-style persistence options.
+func (e *Engine) OpenWithOptions(opts Options) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
 	e.closed = false
-	if dir != "" {
-		e.dataDir = filepath.Clean(dir)
+	e.opts = opts
+	e.fsyncPolicy = opts.FsyncPolicy
+	if opts.AOFThreshold > 0 {
+		e.aofThreshold = opts.AOFThreshold
+	}
+
+	if opts.DataDir != "" {
+		e.dataDir = filepath.Clean(opts.DataDir)
 		if err := os.MkdirAll(e.dataDir, 0755); err != nil {
 			return fmt.Errorf("failed to create data directory: %w", err)
 		}
 
-		// 1. Load baseline snapshot (RDB) if present
-		e.loadDiskLocked()
-
-		// 2. Replay subsequent AOF log records if present
-		aofPath := filepath.Join(e.dataDir, "wal.aof")
-		maxLSN, err := ReplayWAL(aofPath, func(rec WALRecord) error {
-			return e.applyWALRecordLocked(rec)
-		})
-		if err != nil {
-			return fmt.Errorf("WAL replay error: %w", err)
+		// 1. Load baseline snapshot (RDB) if enabled
+		if opts.EnableRDB {
+			e.loadDiskLocked()
 		}
-		e.nextLSN.Store(maxLSN)
 
-		// 3. Open WAL writer for future append-only logging
-		walWriter, err := NewWALWriter(aofPath, e.fsyncPolicy)
-		if err != nil {
-			return fmt.Errorf("failed to initialize WAL writer: %w", err)
-		}
-		e.wal = walWriter
+		// 2. Replay subsequent AOF log records if enabled
+		if opts.EnableAOF {
+			aofPath := filepath.Join(e.dataDir, "wal.aof")
+			maxLSN, err := ReplayWAL(aofPath, func(rec WALRecord) error {
+				return e.applyWALRecordLocked(rec)
+			})
+			if err != nil {
+				return fmt.Errorf("WAL replay error: %w", err)
+			}
+			e.nextLSN.Store(maxLSN)
 
-		// If AOF is already larger than threshold on startup, compact it
-		if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
-			_ = e.rewriteAOFLocked()
+			// 3. Open WAL writer for future append-only logging
+			walWriter, err := NewWALWriter(aofPath, e.fsyncPolicy)
+			if err != nil {
+				return fmt.Errorf("failed to initialize WAL writer: %w", err)
+			}
+			e.wal = walWriter
+
+			// If AOF is already larger than threshold on startup, compact it
+			if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
+				_ = e.rewriteAOFLocked()
+			}
 		}
 	}
+
+	// 4. Start Redis-style background snapshot / compaction timer
+	if (opts.EnableRDB || opts.EnableAOF) && opts.RDBInterval > 0 && e.dataDir != "" {
+		stopCh := make(chan struct{})
+		e.stopCh = stopCh
+		e.bgWg.Add(1)
+		go e.bgSaveLoop(stopCh, opts.RDBInterval, opts.RDBMinChanges)
+	}
+
 	return nil
+}
+
+func (e *Engine) bgSaveLoop(stopCh <-chan struct{}, interval time.Duration, minChanges int64) {
+	defer e.bgWg.Done()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			e.mu.Lock()
+			if e.closed {
+				e.mu.Unlock()
+				return
+			}
+			changes := e.changesSinceSave.Load()
+			if changes >= minChanges {
+				if e.opts.EnableAOF && e.wal != nil {
+					// Redis AOF -> RDB compaction: dump snapshot to RDB and truncate AOF
+					_ = e.rewriteAOFLocked()
+				} else if e.opts.EnableRDB {
+					// Pure RDB periodic snapshot
+					_ = e.saveDiskLocked()
+				}
+				e.changesSinceSave.Store(0)
+			}
+			e.mu.Unlock()
+		}
+	}
 }
 
 // ApplyWALRecord applies a single committed WAL record directly to the in-memory engine.
@@ -585,15 +682,26 @@ func (e *Engine) rewriteAOFLocked() error {
 
 func (e *Engine) Close() error {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.closed {
+		e.mu.Unlock()
 		return nil
 	}
 	e.closed = true
 
+	stopCh := e.stopCh
+	e.stopCh = nil
+	if stopCh != nil {
+		close(stopCh)
+	}
+	e.mu.Unlock()
+
+	e.bgWg.Wait()
+
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	var saveErr, walErr error
-	if e.dataDir != "" {
+	if e.dataDir != "" && e.opts.EnableRDB {
 		saveErr = e.saveDiskLocked()
 	}
 	if e.wal != nil {
@@ -2548,7 +2656,8 @@ func (tx *Transaction) Commit() error {
 	unlockAll()
 
 	// 3. Append atomic WAL record and notify walHook if enabled
-	if len(tx.changes) > 0 {
+	needWAL := (tx.engine.wal != nil || tx.engine.walHook != nil)
+	if needWAL && len(tx.changes) > 0 {
 		ops := make([]WALOp, 0, len(tx.changes))
 		for _, ch := range tx.changes {
 			var opType WALOpType
@@ -2580,7 +2689,12 @@ func (tx *Transaction) Commit() error {
 		tx.commitLSN = rec.LSN
 		tx.commitTimestamp = rec.Timestamp
 	} else {
-		tx.commitLSN = tx.snapshotLSN
+		if len(tx.changes) > 0 {
+			tx.engine.changesSinceSave.Add(int64(len(tx.changes)))
+			tx.commitLSN = tx.engine.nextLSN.Add(1)
+		} else {
+			tx.commitLSN = tx.snapshotLSN
+		}
 		tx.commitTimestamp = time.Now().UnixNano()
 	}
 

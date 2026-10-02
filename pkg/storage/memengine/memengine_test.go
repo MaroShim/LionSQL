@@ -2,7 +2,10 @@ package memengine
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"sqlion/pkg/storage"
 )
@@ -507,5 +510,122 @@ func TestTransaction_LifecycleAndSnapshotCommitMetadata(t *testing.T) {
 		t.Fatalf("expected custom snapshot ts %d, got %d", customSnapTS, tx3.SnapshotTimestamp())
 	}
 }
+
+func TestMemEngine_RedisStyleOptionsAndCommitCycle(t *testing.T) {
+	// 1. Test Pure In-Memory Mode (AOF=false, RDB=false)
+	tmpDir := t.TempDir()
+	engMem := New()
+	err := engMem.OpenWithOptions(Options{
+		DataDir:   tmpDir,
+		EnableAOF: false,
+		EnableRDB: false,
+	})
+	if err != nil {
+		t.Fatalf("OpenWithOptions failed: %v", err)
+	}
+	defer engMem.Close()
+
+	schema := &storage.TableSchema{
+		Name: "cache",
+		Columns: []storage.Column{
+			{Name: "k", Type: storage.TypeVarChar, PrimaryKey: true},
+			{Name: "v", Type: storage.TypeVarChar},
+		},
+	}
+	if err := engMem.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, _ := engMem.NewSession()
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("cache", storage.Record{"k": storage.StringValue("key1"), "v": storage.StringValue("val1")})
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Verify no AOF or RDB file created in pure in-memory mode
+	aofPath := filepath.Join(tmpDir, "wal.aof")
+	rdbPath := filepath.Join(tmpDir, "tables.mpk")
+	if _, err := os.Stat(aofPath); !os.IsNotExist(err) {
+		t.Errorf("expected wal.aof to NOT exist in pure in-memory mode, got %v", err)
+	}
+	_ = engMem.Close()
+	if _, err := os.Stat(rdbPath); !os.IsNotExist(err) {
+		t.Errorf("expected tables.mpk to NOT exist in pure in-memory mode, got %v", err)
+	}
+
+	// 2. Test Redis AOF -> RDB commit cycle and background rewrite
+	cycleDir := t.TempDir()
+	engCycle := New()
+	err = engCycle.OpenWithOptions(Options{
+		DataDir:       cycleDir,
+		EnableAOF:     true,
+		EnableRDB:     true,
+		FsyncPolicy:   FsyncEverySec,
+		AOFThreshold:  1024 * 1024,
+		RDBInterval:   30 * time.Millisecond,
+		RDBMinChanges: 2,
+	})
+	if err != nil {
+		t.Fatalf("OpenWithOptions cycle failed: %v", err)
+	}
+
+	if err := engCycle.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable cycle failed: %v", err)
+	}
+
+	sessCycle, _ := engCycle.NewSession()
+	defer sessCycle.Close()
+
+	// Mutate beyond RDBMinChanges (CreateTable is 1 op, Insert is 1 op -> 2 ops)
+	txCycle, _ := sessCycle.BeginTx(storage.TxOptions{})
+	_ = txCycle.Insert("cache", storage.Record{"k": storage.StringValue("user:1"), "v": storage.StringValue("alice")})
+	_ = txCycle.Commit()
+
+	// Wait for bgSaveLoop to trigger AOF -> RDB rewrite cycle
+	cycleRDB := filepath.Join(cycleDir, "tables.mpk")
+	deadline := time.Now().Add(2 * time.Second)
+	saved := false
+	for time.Now().Before(deadline) {
+		if fi, err := os.Stat(cycleRDB); err == nil && fi.Size() > 0 {
+			saved = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !saved {
+		t.Fatalf("timed out waiting for background AOF -> RDB compaction to create tables.mpk")
+	}
+
+	_ = engCycle.Close()
+
+	// 3. Restart and verify data restored from RDB
+	engRestored := New()
+	err = engRestored.OpenWithOptions(Options{
+		DataDir:   cycleDir,
+		EnableRDB: true,
+	})
+	if err != nil {
+		t.Fatalf("failed to open restored engine: %v", err)
+	}
+	defer engRestored.Close()
+
+	restoredSess, _ := engRestored.NewSession()
+	defer restoredSess.Close()
+
+	readTx, _ := restoredSess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	rec, err := readTx.Get("cache", storage.StringValue("user:1"))
+	if err != nil {
+		t.Fatalf("failed to read restored key: %v", err)
+	}
+	if rec["v"].SVal != "alice" {
+		t.Errorf("expected alice, got %+v", rec["v"])
+	}
+}
+
 
 
