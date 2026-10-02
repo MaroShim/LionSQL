@@ -227,7 +227,7 @@ func (e *Engine) Open(dir string) error {
 	cHome := C.CString(dir)
 	defer C.free(unsafe.Pointer(cHome))
 
-	cConfig := C.CString("create,cache_size=500M,session_max=2000,log=(enabled=true)")
+	cConfig := C.CString("create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)")
 	defer C.free(unsafe.Pointer(cConfig))
 
 	var conn *C.WT_CONNECTION
@@ -730,6 +730,24 @@ type WTTx struct {
 	spNames           []string
 	walOps            []memengine.WALOp
 	spWALIndices      map[string]int
+	tableCache        map[string]*storage.TableSchema
+}
+
+func (tx *WTTx) getTableLocked(tableName string) (*storage.TableSchema, error) {
+	if tx.tableCache != nil {
+		if tbl, ok := tx.tableCache[tableName]; ok {
+			return tbl, nil
+		}
+	}
+	tbl, err := tx.sess.engine.GetTable(tableName)
+	if err != nil {
+		return nil, err
+	}
+	if tx.tableCache == nil {
+		tx.tableCache = make(map[string]*storage.TableSchema, 4)
+	}
+	tx.tableCache[tableName] = tbl
+	return tbl, nil
 }
 
 // SnapshotLSN returns the snapshot LSN bound at transaction start.
@@ -790,11 +808,33 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 		return storage.ErrReadOnlyTransaction
 	}
 
-	tbl, err := tx.sess.engine.GetTable(tableName)
+	tbl, err := tx.getTableLocked(tableName)
 	if err != nil {
 		return err
 	}
+	return tx.insertLocked(tableName, tbl, record)
+}
 
+func (tx *WTTx) InsertRow(tableName string, row storage.Row) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
+
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	rec := tbl.RowToRecord(row)
+	return tx.insertLocked(tableName, tbl, rec)
+}
+
+func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record storage.Record) error {
 	pkCol, err := tbl.PrimaryKeyColumn()
 	if err != nil {
 		return err
@@ -846,15 +886,6 @@ func (tx *WTTx) Insert(tableName string, record storage.Record) error {
 	return nil
 }
 
-func (tx *WTTx) InsertRow(tableName string, row storage.Row) error {
-	tbl, err := tx.sess.engine.GetTable(tableName)
-	if err != nil {
-		return err
-	}
-	rec := tbl.RowToRecord(row)
-	return tx.Insert(tableName, rec)
-}
-
 func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record) error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -866,8 +897,39 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 		return storage.ErrReadOnlyTransaction
 	}
 
-	oldData, _ := tx.getRawBytesLocked(tableName, pk)
-	existing, err := tx.getLocked(tableName, pk)
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	return tx.updateLocked(tableName, tbl, pk, record)
+}
+
+func (tx *WTTx) UpdateRow(tableName string, pk storage.Value, row storage.Row) error {
+	tx.mu.Lock()
+	defer tx.mu.Unlock()
+
+	if tx.closed {
+		return storage.ErrTxClosed
+	}
+	if tx.opts.ReadOnly {
+		return storage.ErrReadOnlyTransaction
+	}
+
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	rec := tbl.RowToRecord(row)
+	return tx.updateLocked(tableName, tbl, pk, rec)
+}
+
+func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk storage.Value, record storage.Record) error {
+	oldData, err := tx.getRawBytesLocked(tableName, pk)
+	if err != nil {
+		return err
+	}
+
+	existing, err := decodeRecord(tbl, oldData)
 	if err != nil {
 		return err
 	}
@@ -882,7 +944,6 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	}
 	defer C.go_wt_cursor_reset(cur)
 
-	tbl, _ := tx.sess.engine.GetTable(tableName)
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
 
@@ -923,15 +984,6 @@ func (tx *WTTx) Update(tableName string, pk storage.Value, record storage.Record
 	return nil
 }
 
-func (tx *WTTx) UpdateRow(tableName string, pk storage.Value, row storage.Row) error {
-	tbl, err := tx.sess.engine.GetTable(tableName)
-	if err != nil {
-		return err
-	}
-	rec := tbl.RowToRecord(row)
-	return tx.Update(tableName, pk, rec)
-}
-
 func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -943,7 +995,10 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 		return storage.ErrReadOnlyTransaction
 	}
 
-	oldData, _ := tx.getRawBytesLocked(tableName, pk)
+	var oldData []byte
+	if len(tx.savepoints) > 0 {
+		oldData, _ = tx.getRawBytesLocked(tableName, pk)
+	}
 
 	cur, err := tx.sess.getCursor(tableName)
 	if err != nil {
@@ -1017,11 +1072,14 @@ func (tx *WTTx) getRawBytesLocked(tableName string, pk storage.Value) ([]byte, e
 }
 
 func (tx *WTTx) getLocked(tableName string, pk storage.Value) (storage.Record, error) {
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return nil, err
+	}
 	rawBytes, err := tx.getRawBytesLocked(tableName, pk)
 	if err != nil {
 		return nil, err
 	}
-	tbl, _ := tx.sess.engine.GetTable(tableName)
 	return decodeRecord(tbl, rawBytes)
 }
 
@@ -1029,29 +1087,15 @@ func (tx *WTTx) getRowLocked(tableName string, pk storage.Value) (storage.Row, e
 	if tx.closed {
 		return storage.Row{}, storage.ErrTxClosed
 	}
-
-	cur, err := tx.sess.getCursor(tableName)
+	tbl, err := tx.getTableLocked(tableName)
 	if err != nil {
 		return storage.Row{}, err
 	}
-	defer C.go_wt_cursor_reset(cur)
-
-	cKey := C.CString(pk.String())
-	defer C.free(unsafe.Pointer(cKey))
-
-	C.go_wt_cursor_set_key(cur, cKey)
-	if ret := C.go_wt_cursor_search(cur); ret != 0 {
-		return storage.Row{}, storage.ErrKeyNotFound
+	rawBytes, err := tx.getRawBytesLocked(tableName, pk)
+	if err != nil {
+		return storage.Row{}, err
 	}
-
-	var pData unsafe.Pointer
-	var sz C.size_t
-	if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret != 0 || pData == nil {
-		return storage.Row{}, fmt.Errorf("cursor_get_value failed")
-	}
-
-	tbl, _ := tx.sess.engine.GetTable(tableName)
-	return decodeRow(tbl, C.GoBytes(pData, C.int(sz)))
+	return decodeRow(tbl, rawBytes)
 }
 
 func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
@@ -1070,7 +1114,7 @@ func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
 		return nil, fmt.Errorf("open_cursor failed: %d", ret)
 	}
 
-	tbl, _ := tx.sess.engine.GetTable(tableName)
+	tbl, _ := tx.getTableLocked(tableName)
 	return &WTCursor{
 		cur:    cur,
 		schema: tbl,
@@ -1101,6 +1145,7 @@ func (tx *WTTx) Commit() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	tx.tableCache = nil
 	walOps := tx.walOps
 	tx.walOps = nil
 	tx.spWALIndices = nil
@@ -1136,6 +1181,7 @@ func (tx *WTTx) Rollback() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	tx.tableCache = nil
 	tx.walOps = nil
 	tx.spWALIndices = nil
 	tx.undoLog = nil

@@ -381,6 +381,9 @@ func (e *Engine) ApplyWALRecord(rec WALRecord) error {
 }
 
 func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
+	if rec.LSN > e.nextLSN.Load() {
+		e.nextLSN.Store(rec.LSN)
+	}
 	for _, op := range rec.Ops {
 		switch op.Type {
 		case OpCreateTable:
@@ -1076,18 +1079,21 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 		snapTS = time.Now().UnixNano()
 	}
 
-	return &Transaction{
+	tx := &Transaction{
 		engine:            s.engine,
 		opts:              opts,
 		snapshotLSN:       snapLSN,
 		snapshotTimestamp: snapTS,
-		local:             make(map[string]map[string]storage.Row),
-		baseVers:          make(map[string]map[string]int64),
-		deleted:           make(map[string]map[string]bool),
-		changes:           make(map[string]rowChange),
-		tableCache:        make(map[string]*TableData),
-		savepoints:        make(map[string]savepointState),
-	}, nil
+		tableCache:        make(map[string]*TableData, 4),
+		baseVers:          make(map[string]map[string]int64, 4),
+	}
+	if !opts.ReadOnly {
+		tx.local = make(map[string]map[string]storage.Row, 4)
+		tx.deleted = make(map[string]map[string]bool, 4)
+		tx.changes = make(map[string]rowChange, 16)
+		tx.savepoints = make(map[string]savepointState, 2)
+	}
+	return tx, nil
 }
 
 func (s *Session) Close() error {
@@ -2771,6 +2777,9 @@ func (tx *Transaction) getBaseVer(table, key string) int64 {
 }
 
 func (tx *Transaction) setBaseVer(table, key string, ver int64) {
+	if tx.baseVers == nil {
+		tx.baseVers = make(map[string]map[string]int64, 4)
+	}
 	v, ok := tx.baseVers[table]
 	if !ok {
 		v = make(map[string]int64)
