@@ -436,7 +436,7 @@ SQLion provides comprehensive documentation covering system architecture, operat
 Start here for a complete subject-based directory of all architectural blueprints, internals, and guides.
 
 ### Backend-as-a-Service (BaaS) & Developer APIs
-- **[Official JavaScript & TypeScript SDK Guide](doc/SDK.md)**: Universal zero-dependency client library for Web, Node.js, Bun, and Deno.
+- **[Official Web SDK & HTML Embedding Guide](doc/WEB_SDK.md)**: Universal zero-dependency client library and HTML embedding patterns for Web, Node.js, Bun, and Deno.
 - **[Auto-Generated RESTful CRUD API](doc/AUTO_REST_API.md)**: Zero-code `/api/records/:table` endpoints with rich boolean filter expressions.
 - **[Webhooks & Row-Level Security (RLS)](doc/WEBHOOKS_AND_RLS.md)**: Non-blocking mutation webhooks with HMAC signatures and declarative `@auth` access rules.
 - **[Cron Jobs Scheduler & SMTP Mailer](doc/CRON_AND_MAILER.md)**: Embedded 5-field cron automation and transactional HTML email dispatching.

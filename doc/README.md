@@ -15,7 +15,7 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 - ARCHITECTURE.md   - INTERNALS_VDBE.md        - INTERNALS_WIRE.md   - AUTO_REST_API.md
 - INTERNALS_STOR.md - INTERNALS_CBO_VOLCANO.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
 - DATA_DICTIONARY   - EXTENSIONS.md                                  - CRON_AND_MAILER.md
-- HIGH_AVAIL.md                                                      - SDK.md
+- HIGH_AVAIL.md                                                      - WEB_SDK.md
                                                                      - API_REFERENCE.md
 ```
 
@@ -82,9 +82,9 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 * [`CRON_AND_MAILER.md`](file:///Users/maro/Projects/sql/doc/CRON_AND_MAILER.md)
   * **Embedded Cron Jobs Scheduler**: Recurring SQL query and T-SQL stored procedure automation with standard 5-field cron syntax.
   * **Embedded SMTP Mailer**: Transactional HTML email templates (`welcome`, `password_reset`, `verification`) and delivery audit ring buffer.
-* [`SDK.md`](file:///Users/maro/Projects/sql/doc/SDK.md)
-  * Official universal JavaScript & TypeScript Client SDK (`sqlion.js`, `sqlion.d.ts`).
-  * Browser CDN inclusion, npm/ESM imports, collection services, realtime SSE subscriptions, and typed models.
+* [`WEB_SDK.md`](file:///Users/maro/Projects/sql/doc/WEB_SDK.md)
+  * Official universal Web SDK & HTML embedding guide (`sqlion.js`, `sqlion.d.ts`).
+  * Zero-dependency single-file HTML templates, vanilla `fetch()`, realtime SSE live sync, and HTMX recipes.
 * [`API_REFERENCE.md`](file:///Users/maro/Projects/sql/doc/API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
 

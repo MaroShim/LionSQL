@@ -35,6 +35,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added Section 7 for 1-Writer Multi-Reader High-Availability Cluster Operations and Failover Runbook in `doc/OPERATIONS.md`.
   - Updated root `README.md` and `doc/README.md` with replication CLI flags (`--replica-of`, `--node-id`, `--ephemeral`), endpoint reference tables, and links to `TODO.md` and `PERCENTILE_AND_QUANTILE_ANALYTICS.md`.
   - Updated system architecture diagram and module directory layout in `doc/ARCHITECTURE.md`.
+- **Web SDK & HTML Embedding Guide (`doc/WEB_SDK.md`)**:
+  - Renamed `doc/SDK.md` to `doc/WEB_SDK.md` to explicitly represent the web frontend and browser embedding capabilities.
+  - Added Section 9 (Web & HTML Embedding Recipes) providing zero-dependency single-file HTML templates (`fetch()`), real-time SSE live synchronization, declarative HTMX embedding, and T-SQL `FOR JSON PATH` client interpolation.
+  - Synchronized documentation references across `README.md` and `doc/README.md`.
 
 ## [0.11.0] - 2026-10-02
 
