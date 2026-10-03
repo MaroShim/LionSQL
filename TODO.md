@@ -1,6 +1,6 @@
 # SQLion Engineering TODO & Backlog
 
-This document tracks active tasks, short-term engineering priorities, and conceptual backlog items for SQLion. For long-term architectural visions, refer to [doc/ROADMAP.md](doc/ROADMAP.md).
+This document tracks active tasks, short-term engineering priorities, and conceptual backlog items for SQLion. For long-term architectural visions, refer to [ROADMAP.md](ROADMAP.md).
 
 ---
 
