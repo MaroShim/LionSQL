@@ -50,7 +50,8 @@
 SQLion 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:
 
 1. **3단계 검증 파이프라인 (Build ➔ Test `-race` ➔ Commit)**:
-   - 모든 수정 후에는 빌드 컴파일 검증 ➔ 레이스 디텍터를 포함한 전체 테스트 통과 ➔ Conventional Commit 순서를 엄격히 지켜야 합니다.
+   - 모든 기능 수정 및 리팩토링 후에는 빌드 컴파일 검증 ➔ 레이스 디텍터를 포함한 전체 테스트 통과 ➔ Conventional Commit 순서를 엄격히 지켜야 합니다.
+   - **문서 수정 예외 규약**: 설정이나 런타임에 영향을 주지 않는 순수 마크다운(`.md`) 및 텍스트 문서 수정 시에는 불필요한 빌드/테스트 단계를 생략하고 바로 커밋합니다.
    - 명령어:
      ```bash
      go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
