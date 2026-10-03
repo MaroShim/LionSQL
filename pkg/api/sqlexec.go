@@ -383,7 +383,17 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	}
 
 	// 0. Interactive Transactions: BEGIN / COMMIT / ROLLBACK
-	if strings.HasPrefix(upper, "BEGIN TRANSACTION") || strings.HasPrefix(upper, "BEGIN TRAN") || upper == "BEGIN" || strings.HasPrefix(upper, "START TRANSACTION") {
+	isBeginTx := upper == "BEGIN" ||
+		strings.HasPrefix(upper, "BEGIN TRANSACTION") ||
+		strings.HasPrefix(upper, "BEGIN TRAN") ||
+		strings.HasPrefix(upper, "BEGIN WORK") ||
+		strings.HasPrefix(upper, "BEGIN READ") ||
+		strings.HasPrefix(upper, "BEGIN ISOLATION") ||
+		strings.HasPrefix(upper, "BEGIN DEFERRABLE") ||
+		strings.HasPrefix(upper, "BEGIN NOT DEFERRABLE") ||
+		strings.HasPrefix(upper, "START TRANSACTION")
+
+	if isBeginTx {
 		cs.mu.Lock()
 		defer cs.mu.Unlock()
 		if cs.Tx != nil {
@@ -418,7 +428,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}, nil
 	}
 
-	if strings.HasPrefix(upper, "COMMIT TRANSACTION") || strings.HasPrefix(upper, "COMMIT TRAN") || upper == "COMMIT" {
+	if strings.HasPrefix(upper, "COMMIT") {
 		cs.mu.Lock()
 		defer cs.mu.Unlock()
 		if cs.Tx == nil {

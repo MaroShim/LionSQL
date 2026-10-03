@@ -241,6 +241,51 @@ func WriteDataRow(w io.Writer, values []string) error {
 	return err
 }
 
+// WriteDataRowBytes sends a single DataRow with raw byte slices or nil (for NULL).
+func WriteDataRowBytes(w io.Writer, values [][]byte) error {
+	payloadLen := 4 + 2
+	for _, v := range values {
+		if v == nil {
+			payloadLen += 4
+		} else {
+			payloadLen += 4 + len(v)
+		}
+	}
+
+	totalLen := 1 + payloadLen
+	bp := packetBufferPool.Get().(*[]byte)
+	var buf []byte
+	if cap(*bp) >= totalLen {
+		buf = (*bp)[:totalLen]
+	} else {
+		buf = make([]byte, totalLen)
+	}
+
+	buf[0] = MsgDataRow
+	binary.BigEndian.PutUint32(buf[1:5], uint32(payloadLen))
+	binary.BigEndian.PutUint16(buf[5:7], uint16(len(values)))
+
+	offset := 7
+	for _, v := range values {
+		if v == nil {
+			binary.BigEndian.PutUint32(buf[offset:], 0xFFFFFFFF)
+			offset += 4
+		} else {
+			binary.BigEndian.PutUint32(buf[offset:], uint32(len(v)))
+			offset += 4
+			copy(buf[offset:], v)
+			offset += len(v)
+		}
+	}
+
+	_, err := w.Write(buf)
+	if cap(buf) <= 65536 {
+		*bp = buf[:0]
+		packetBufferPool.Put(bp)
+	}
+	return err
+}
+
 // WriteCommandComplete sends CommandComplete tag.
 func WriteCommandComplete(w io.Writer, tag string) error {
 	payloadLen := 4 + len(tag) + 1

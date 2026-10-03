@@ -1,0 +1,356 @@
+package wire_test
+
+import (
+	"context"
+	"database/sql"
+	"fmt"
+	"net"
+	"testing"
+	"time"
+
+	_ "github.com/lib/pq"
+	"sqlion/pkg/catalog"
+	"sqlion/pkg/storage/memengine"
+	"sqlion/pkg/wire"
+)
+
+func startTestPostgresServer(t *testing.T) (*wire.Server, int) {
+	t.Helper()
+
+	eng := memengine.New()
+	_ = eng.Open("")
+	cat := catalog.New(eng)
+
+	srv := wire.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start PG wire server: %v", err)
+	}
+
+	tcpAddr, ok := srv.Addr().(*net.TCPAddr)
+	if !ok {
+		srv.Close()
+		t.Fatalf("Failed to get TCP address from server")
+	}
+
+	return srv, tcpAddr.Port
+}
+
+func TestDriverIntegration_LibPQ_Ping(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := db.PingContext(ctx); err != nil {
+		t.Fatalf("db.PingContext failed: %v", err)
+	}
+}
+
+func TestDriverIntegration_LibPQ_QueryBasic(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var result int
+	if err := db.QueryRowContext(ctx, "SELECT 40 + 2").Scan(&result); err != nil {
+		t.Fatalf("QueryRow failed: %v", err)
+	}
+	if result != 42 {
+		t.Fatalf("expected 42, got %d", result)
+	}
+
+	var msg string
+	if err := db.QueryRowContext(ctx, "SELECT 'Hello SQLion'").Scan(&msg); err != nil {
+		t.Fatalf("QueryRow string failed: %v", err)
+	}
+	if msg != "Hello SQLion" {
+		t.Fatalf("expected 'Hello SQLion', got %q", msg)
+	}
+}
+
+func TestDriverIntegration_LibPQ_TableCRUD(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. CREATE TABLE
+	if _, err := db.ExecContext(ctx, "CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), age INT)"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 2. INSERT
+	res, err := db.ExecContext(ctx, "INSERT INTO users VALUES (1, 'Alice', 30), (2, 'Bob', 25)")
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected != 2 {
+		t.Fatalf("expected 2 rows affected, got %d", rowsAffected)
+	}
+
+	// 3. SELECT Single Row
+	var name string
+	var age int
+	if err := db.QueryRowContext(ctx, "SELECT name, age FROM users WHERE id = 1").Scan(&name, &age); err != nil {
+		t.Fatalf("SELECT single row failed: %v", err)
+	}
+	if name != "Alice" || age != 30 {
+		t.Fatalf("expected Alice 30, got %s %d", name, age)
+	}
+
+	// 4. UPDATE
+	if _, err := db.ExecContext(ctx, "UPDATE users SET age = 31 WHERE id = 1"); err != nil {
+		t.Fatalf("UPDATE failed: %v", err)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT age FROM users WHERE id = 1").Scan(&age); err != nil {
+		t.Fatalf("SELECT after UPDATE failed: %v", err)
+	}
+	if age != 31 {
+		t.Fatalf("expected age 31, got %d", age)
+	}
+
+	// 5. DELETE
+	if _, err := db.ExecContext(ctx, "DELETE FROM users WHERE id = 2"); err != nil {
+		t.Fatalf("DELETE failed: %v", err)
+	}
+	var count int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM users").Scan(&count); err != nil {
+		t.Fatalf("SELECT COUNT failed: %v", err)
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 user remaining, got %d", count)
+	}
+}
+
+func TestDriverIntegration_LibPQ_ParameterizedQuery(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, "CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR(50), price INT)"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO products VALUES (1, 'Apple', 10), (2, 'Banana', 20), (3, 'Cherry', 30)"); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// Query with $1 parameter placeholder
+	rows, err := db.QueryContext(ctx, "SELECT name, price FROM products WHERE price >= $1 ORDER BY id", 20)
+	if err != nil {
+		t.Fatalf("QueryContext with parameter failed: %v", err)
+	}
+	defer rows.Close()
+
+	type prod struct {
+		Name  string
+		Price int
+	}
+	var list []prod
+	for rows.Next() {
+		var p prod
+		if err := rows.Scan(&p.Name, &p.Price); err != nil {
+			t.Fatalf("rows.Scan failed: %v", err)
+		}
+		list = append(list, p)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows.Err failed: %v", err)
+	}
+
+	if len(list) != 2 {
+		t.Fatalf("expected 2 products, got %d: %+v", len(list), list)
+	}
+	if list[0].Name != "Banana" || list[0].Price != 20 {
+		t.Fatalf("expected Banana 20, got %+v", list[0])
+	}
+	if list[1].Name != "Cherry" || list[1].Price != 30 {
+		t.Fatalf("expected Cherry 30, got %+v", list[1])
+	}
+}
+
+func TestDriverIntegration_LibPQ_PreparedStatement(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, "CREATE TABLE items (id INT PRIMARY KEY, title VARCHAR(50))"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO items VALUES (1, 'Book'), (2, 'Pen')"); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// Prepare statement (triggers Parse/Describe/Bind/Execute over PG Extended Query Protocol)
+	stmt, err := db.PrepareContext(ctx, "SELECT title FROM items WHERE id = $1")
+	if err != nil {
+		t.Fatalf("db.PrepareContext failed: %v", err)
+	}
+	defer stmt.Close()
+
+	var title string
+	if err := stmt.QueryRowContext(ctx, 1).Scan(&title); err != nil {
+		t.Fatalf("stmt.QueryRow (1) failed: %v", err)
+	}
+	if title != "Book" {
+		t.Fatalf("expected 'Book', got %q", title)
+	}
+
+	if err := stmt.QueryRowContext(ctx, 2).Scan(&title); err != nil {
+		t.Fatalf("stmt.QueryRow (2) failed: %v", err)
+	}
+	if title != "Pen" {
+		t.Fatalf("expected 'Pen', got %q", title)
+	}
+}
+
+func TestDriverIntegration_LibPQ_Transactions(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, "CREATE TABLE accounts (id INT PRIMARY KEY, balance INT)"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO accounts VALUES (1, 1000)"); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// 1. Rollback test
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE accounts SET balance = 2000 WHERE id = 1"); err != nil {
+		t.Fatalf("tx.Exec failed: %v", err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("tx.Rollback failed: %v", err)
+	}
+
+	var bal int
+	if err := db.QueryRowContext(ctx, "SELECT balance FROM accounts WHERE id = 1").Scan(&bal); err != nil {
+		t.Fatalf("QueryRow after rollback failed: %v", err)
+	}
+	if bal != 1000 {
+		t.Fatalf("expected rolled back balance 1000, got %d", bal)
+	}
+
+	// 2. Commit test
+	tx2, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("BeginTx (2) failed: %v", err)
+	}
+	if _, err := tx2.ExecContext(ctx, "UPDATE accounts SET balance = 1500 WHERE id = 1"); err != nil {
+		t.Fatalf("tx2.Exec failed: %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("tx2.Commit failed: %v", err)
+	}
+
+	if err := db.QueryRowContext(ctx, "SELECT balance FROM accounts WHERE id = 1").Scan(&bal); err != nil {
+		t.Fatalf("QueryRow after commit failed: %v", err)
+	}
+	if bal != 1500 {
+		t.Fatalf("expected committed balance 1500, got %d", bal)
+	}
+}
+
+func TestDriverIntegration_LibPQ_SessionSetOptions(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Setting standard session variables
+	if _, err := db.ExecContext(ctx, "SET client_encoding = 'UTF8'"); err != nil {
+		t.Fatalf("SET client_encoding failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "SET TimeZone = 'UTC'"); err != nil {
+		t.Fatalf("SET TimeZone failed: %v", err)
+	}
+}
+
+func TestDriverIntegration_LibPQ_Metadata(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var ver string
+	if err := db.QueryRowContext(ctx, "SELECT version()").Scan(&ver); err != nil {
+		t.Fatalf("SELECT version() failed: %v", err)
+	}
+	if ver == "" {
+		t.Fatalf("expected non-empty version string")
+	}
+	t.Logf("PostgreSQL version(): %s", ver)
+}

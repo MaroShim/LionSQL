@@ -130,6 +130,16 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Addr returns the listener's network address.
+func (s *Server) Addr() net.Addr {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.listener != nil {
+		return s.listener.Addr()
+	}
+	return nil
+}
+
 // Close terminates the listener and active connections.
 func (s *Server) Close() error {
 	s.mu.Lock()
@@ -173,9 +183,10 @@ type PreparedStatement struct {
 }
 
 type Portal struct {
-	Name      string
-	Statement *PreparedStatement
-	Params    []string
+	Name          string
+	Statement     *PreparedStatement
+	Params        []string
+	ResultFormats []int16
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
@@ -472,6 +483,22 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements map[strin
 		_ = binary.Read(r, binary.BigEndian, &paramTypes[i])
 	}
 
+	// Infer parameter count if client passed 0 or fewer types than placeholders in queryStr
+	matches := pgParamRe.FindAllStringSubmatch(queryStr, -1)
+	maxIdx := 0
+	for _, m := range matches {
+		if len(m) == 2 {
+			if idx, err := strconv.Atoi(m[1]); err == nil && idx > maxIdx {
+				maxIdx = idx
+			}
+		}
+	}
+	if maxIdx > len(paramTypes) {
+		expanded := make([]int32, maxIdx)
+		copy(expanded, paramTypes)
+		paramTypes = expanded
+	}
+
 	prep := &PreparedStatement{
 		Name:       stmtName,
 		Query:      queryStr,
@@ -521,10 +548,23 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string
 		}
 	}
 
+	var numResultFormats int16
+	var resultFormats []int16
+	if r.Len() >= 2 {
+		_ = binary.Read(r, binary.BigEndian, &numResultFormats)
+		if numResultFormats > 0 {
+			resultFormats = make([]int16, numResultFormats)
+			for i := 0; i < int(numResultFormats); i++ {
+				_ = binary.Read(r, binary.BigEndian, &resultFormats[i])
+			}
+		}
+	}
+
 	portals[portalName] = &Portal{
-		Name:      portalName,
-		Statement: stmt,
-		Params:    paramVals,
+		Name:          portalName,
+		Statement:     stmt,
+		Params:        paramVals,
+		ResultFormats: resultFormats,
 	}
 
 	_ = WriteBindComplete(conn)
@@ -583,15 +623,52 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string) {
 					}
 				}
 				if err == nil && tbl != nil {
-					cols := make([]ColumnMeta, len(tbl.Columns))
-					for i, c := range tbl.Columns {
-						cols[i] = ColumnMeta{
-							Name:     c.Name,
-							DataType: typeToPgOID(c.Type),
+					selectPart := strings.TrimSpace(strings.TrimPrefix(parts[0], "SELECT"))
+					if selectPart == "*" {
+						cols := make([]ColumnMeta, len(tbl.Columns))
+						for i, c := range tbl.Columns {
+							cols[i] = ColumnMeta{
+								Name:     c.Name,
+								DataType: typeToPgOID(c.Type),
+							}
 						}
+						_ = WriteRowDescription(conn, cols)
+						return
 					}
-					_ = WriteRowDescription(conn, cols)
-					return
+
+					rawCols := strings.Split(selectPart, ",")
+					var cols []ColumnMeta
+					for _, rawCol := range rawCols {
+						colName := strings.TrimSpace(rawCol)
+						if colName == "" {
+							continue
+						}
+						if asIdx := strings.Index(strings.ToUpper(colName), " AS "); asIdx != -1 {
+							colName = strings.TrimSpace(colName[asIdx+4:])
+						}
+						var colType storage.DataType = storage.TypeVarChar
+						found := false
+						for _, c := range tbl.Columns {
+							if strings.EqualFold(c.Name, colName) {
+								colType = c.Type
+								colName = c.Name
+								found = true
+								break
+							}
+						}
+						var oid int32 = 25
+						if found {
+							oid = typeToPgOID(colType)
+						}
+						cols = append(cols, ColumnMeta{
+							Name:     colName,
+							DataType: oid,
+						})
+					}
+					if len(cols) > 0 {
+						_ = WriteRowDescription(conn, cols)
+						return
+					}
 				}
 			}
 		}
@@ -628,7 +705,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			defer session.Close()
 			res, err := s.executor.Run(portal.Statement.Program, "PreparedStatement", paramMap, session)
 			if err == nil {
-				s.writeExecutionResult(conn, res)
+				s.writeExecutionResult(conn, res, portal.Statement.Query, portal.ResultFormats)
 				return
 			}
 		}
@@ -636,33 +713,30 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 
 	// Fallback to text substitution
 	substitutedSQL := substituteParams(portal.Statement.Query, portal.Params)
-	s.runAndWriteQuery(conn, substitutedSQL, false, sessID)
+	s.runAndWriteQueryWithFormats(conn, substitutedSQL, false, sessID, portal.ResultFormats)
 }
 
-func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResult) {
+func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResult, query string, resultFormats []int16) {
 	if len(res.Columns) > 0 {
-		cols := make([]ColumnMeta, len(res.Columns))
-		for i, c := range res.Columns {
-			var oid int32 = 25
-			if len(res.Rows) > 0 {
-				if val, ok := res.Rows[0][c]; ok && val != nil {
-					oid = inferPgOID(val)
-				}
-			}
-			cols[i] = ColumnMeta{Name: c, DataType: oid}
+		var sampleRow map[string]any
+		if len(res.Rows) > 0 {
+			sampleRow = res.Rows[0]
 		}
-		_ = WriteRowDescription(conn, cols)
+		colOIDs := s.resolveColumnOIDs(query, res.Columns, sampleRow)
 
 		for _, row := range res.Rows {
-			vals := make([]string, len(res.Columns))
+			rowBytes := make([][]byte, len(res.Columns))
 			for i, colName := range res.Columns {
-				if v, ok := row[colName]; ok && v != nil {
-					vals[i] = fmt.Sprintf("%v", v)
-				} else {
-					vals[i] = ""
+				isBinary := false
+				if len(resultFormats) == 1 && resultFormats[0] == 1 {
+					isBinary = true
+				} else if i < len(resultFormats) && resultFormats[i] == 1 {
+					isBinary = true
 				}
+				val := getRowValue(row, colName)
+				rowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 			}
-			_ = WriteDataRow(conn, vals)
+			_ = WriteDataRowBytes(conn, rowBytes)
 		}
 		_ = WriteCommandComplete(conn, fmt.Sprintf("SELECT %d", len(res.Rows)))
 		return
@@ -671,7 +745,67 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 	if rowsCount == 0 && res.RowsAffected > 0 {
 		rowsCount = res.RowsAffected
 	}
-	_ = WriteCommandComplete(conn, fmt.Sprintf("OK %d", rowsCount))
+	_ = WriteCommandComplete(conn, formatPgCommandComplete(query, rowsCount, len(res.Rows)))
+}
+
+func formatPgCommandComplete(command string, rowsAffected int64, rowsCount int) string {
+	upper := strings.ToUpper(strings.TrimSpace(command))
+	fields := strings.Fields(upper)
+	firstWord := ""
+	if len(fields) > 0 {
+		firstWord = fields[0]
+	}
+
+	switch firstWord {
+	case "INSERT":
+		return fmt.Sprintf("INSERT 0 %d", rowsAffected)
+	case "DELETE":
+		return fmt.Sprintf("DELETE %d", rowsAffected)
+	case "UPDATE":
+		return fmt.Sprintf("UPDATE %d", rowsAffected)
+	case "SELECT":
+		cnt := rowsCount
+		if cnt == 0 && rowsAffected > 0 {
+			cnt = int(rowsAffected)
+		}
+		return fmt.Sprintf("SELECT %d", cnt)
+	case "MOVE":
+		return fmt.Sprintf("MOVE %d", rowsAffected)
+	case "FETCH":
+		return fmt.Sprintf("FETCH %d", rowsAffected)
+	case "COPY":
+		return fmt.Sprintf("COPY %d", rowsAffected)
+	case "BEGIN", "START":
+		return "BEGIN"
+	case "COMMIT":
+		return "COMMIT"
+	case "ROLLBACK":
+		return "ROLLBACK"
+	case "SET":
+		return "SET"
+	case "SHOW":
+		return "SHOW"
+	case "CREATE":
+		if len(fields) > 1 {
+			return fmt.Sprintf("CREATE %s", fields[1])
+		}
+		return "CREATE"
+	case "DROP":
+		if len(fields) > 1 {
+			return fmt.Sprintf("DROP %s", fields[1])
+		}
+		return "DROP"
+	case "ALTER":
+		if len(fields) > 1 {
+			return fmt.Sprintf("ALTER %s", fields[1])
+		}
+		return "ALTER"
+	default:
+		if firstWord != "" {
+			return firstWord
+		}
+		return "OK"
+	}
 }
 
 func (s *Server) handleClose(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
@@ -688,6 +822,10 @@ func (s *Server) handleClose(conn net.Conn, payload []byte, statements map[strin
 }
 
 func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool, sessID string) {
+	s.runAndWriteQueryWithFormats(conn, query, writeRowDesc, sessID, nil)
+}
+
+func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeRowDesc bool, sessID string, resultFormats []int16) {
 	trimmed := strings.TrimSpace(query)
 	upper := strings.ToUpper(trimmed)
 
@@ -712,30 +850,33 @@ func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool
 	}
 
 	if len(res.Columns) > 0 {
+		var sampleRow map[string]any
+		if len(res.Rows) > 0 {
+			sampleRow = res.Rows[0]
+		}
+		colOIDs := s.resolveColumnOIDs(query, res.Columns, sampleRow)
+
 		if writeRowDesc {
 			cols := make([]ColumnMeta, len(res.Columns))
 			for i, c := range res.Columns {
-				var oid int32 = 25
-				if len(res.Rows) > 0 {
-					if val, ok := res.Rows[0][c]; ok && val != nil {
-						oid = inferPgOID(val)
-					}
-				}
-				cols[i] = ColumnMeta{Name: c, DataType: oid}
+				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i]}
 			}
 			_ = WriteRowDescription(conn, cols)
 		}
 
 		for _, row := range res.Rows {
-			vals := make([]string, len(res.Columns))
+			rowBytes := make([][]byte, len(res.Columns))
 			for i, colName := range res.Columns {
-				if v, ok := row[colName]; ok && v != nil {
-					vals[i] = fmt.Sprintf("%v", v)
-				} else {
-					vals[i] = ""
+				isBinary := false
+				if len(resultFormats) == 1 && resultFormats[0] == 1 {
+					isBinary = true
+				} else if i < len(resultFormats) && resultFormats[i] == 1 {
+					isBinary = true
 				}
+				val := getRowValue(row, colName)
+				rowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 			}
-			_ = WriteDataRow(conn, vals)
+			_ = WriteDataRowBytes(conn, rowBytes)
 		}
 		_ = WriteCommandComplete(conn, fmt.Sprintf("SELECT %d", len(res.Rows)))
 		return
@@ -743,9 +884,133 @@ func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool
 
 	cmd := res.Command
 	if cmd == "" {
-		cmd = "OK"
+		cmd = trimmed
 	}
-	_ = WriteCommandComplete(conn, fmt.Sprintf("%s %d", cmd, res.RowsAffected))
+	_ = WriteCommandComplete(conn, formatPgCommandComplete(cmd, res.RowsAffected, len(res.Rows)))
+}
+
+func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow map[string]any) []int32 {
+	oids := make([]int32, len(colNames))
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	var tbl *storage.TableSchema
+	if strings.Contains(upper, "SELECT") && strings.Contains(upper, "FROM") {
+		parts := strings.Split(upper, "FROM")
+		if len(parts) >= 2 {
+			tblField := strings.Fields(parts[1])
+			if len(tblField) > 0 {
+				tblName := strings.Trim(tblField[0], ";, ")
+				t, err := s.engine.GetTable(tblName)
+				if err != nil {
+					t, err = s.engine.GetTable(strings.ToLower(tblName))
+				}
+				if err == nil {
+					tbl = t
+				}
+			}
+		}
+	}
+
+	for i, colName := range colNames {
+		var oid int32 = 0
+		if tbl != nil {
+			for _, c := range tbl.Columns {
+				if strings.EqualFold(c.Name, colName) {
+					oid = typeToPgOID(c.Type)
+					break
+				}
+			}
+		}
+		if oid == 0 {
+			if sampleRow != nil {
+				val := getRowValue(sampleRow, colName)
+				if val != nil {
+					oid = inferPgOID(val)
+				}
+			}
+			if oid == 0 {
+				oid = 25 // text
+			}
+		}
+		oids[i] = oid
+	}
+	return oids
+}
+
+func getRowValue(row map[string]any, colName string) any {
+	if val, ok := row[colName]; ok {
+		return val
+	}
+	for k, v := range row {
+		if strings.EqualFold(k, colName) {
+			return v
+		}
+	}
+	return nil
+}
+
+func formatColumnValue(val any, oid int32, isBinary bool) []byte {
+	if val == nil {
+		return nil
+	}
+	if !isBinary {
+		return []byte(fmt.Sprintf("%v", val))
+	}
+	switch oid {
+	case 23: // INT4
+		var n int32
+		switch v := val.(type) {
+		case int:
+			n = int32(v)
+		case int32:
+			n = v
+		case int64:
+			n = int32(v)
+		default:
+			if i, err := strconv.ParseInt(fmt.Sprintf("%v", val), 10, 32); err == nil {
+				n = int32(i)
+			}
+		}
+		b := make([]byte, 4)
+		binary.BigEndian.PutUint32(b, uint32(n))
+		return b
+	case 20: // INT8
+		var n int64
+		switch v := val.(type) {
+		case int:
+			n = int64(v)
+		case int64:
+			n = v
+		default:
+			if i, err := strconv.ParseInt(fmt.Sprintf("%v", val), 10, 64); err == nil {
+				n = i
+			}
+		}
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, uint64(n))
+		return b
+	case 21: // INT2
+		var n int16
+		switch v := val.(type) {
+		case int:
+			n = int16(v)
+		case int16:
+			n = v
+		default:
+			if i, err := strconv.ParseInt(fmt.Sprintf("%v", val), 10, 16); err == nil {
+				n = int16(i)
+			}
+		}
+		b := make([]byte, 2)
+		binary.BigEndian.PutUint16(b, uint16(n))
+		return b
+	case 17: // BYTEA
+		if b, ok := val.([]byte); ok {
+			return b
+		}
+		return []byte(fmt.Sprintf("%v", val))
+	default:
+		return []byte(fmt.Sprintf("%v", val))
+	}
 }
 
 func substituteParams(sql string, params []string) string {
@@ -809,10 +1074,13 @@ func inferPgOID(v any) int32 {
 	if v == nil {
 		return 25 // text
 	}
-	switch v.(type) {
+	switch v := v.(type) {
 	case int, int32:
 		return 23 // int4
 	case int64:
+		if v >= -2147483648 && v <= 2147483647 {
+			return 23 // int4
+		}
 		return 20 // int8
 	case float32, float64:
 		return 701 // float8

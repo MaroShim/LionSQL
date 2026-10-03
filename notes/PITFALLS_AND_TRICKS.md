@@ -96,3 +96,13 @@
   * 트랜잭션 시작 시 서버는 반드시 8바이트 고유 트랜잭션 디스크립터를 발급하고 `ENVCHANGE` 토큰 (Type 8: `EnvChangeBeginTransaction`)을 응답 스트림에 포함해야 하며, 트랜잭션 활성 중의 모든 DONE 토큰 상태 플래그에 `DoneInXact` (0x0004) 비트를 설정해야 합니다.
   * 트랜잭션 종료 시(COMMIT: Type 9, ROLLBACK: Type 10) 역시 구 디스크립터를 담은 `ENVCHANGE` 토큰을 반환해야 드라이버의 트랜잭션 상태 머신이 정상 복귀합니다.
 
+---
+
+## 9. PostgreSQL Wire Extended Query & lib/pq 바이너리 결과 디코딩
+
+* **상황**: 공식 Go PostgreSQL 드라이버(`github.com/lib/pq`)는 매개변수 쿼리(`QueryContext(..., $1)`) 및 프리페어드 구문(`PrepareContext`) 실행 시 Extended Query Protocol (`Parse` ➔ `Describe` ➔ `Bind` ➔ `Execute` ➔ `Sync`)을 사용합니다.
+* **주의점**:
+  * **매개변수 개수 추론 (Parameter Inference)**: `lib/pq`는 Parse 요청 시 매개변수 타입 목록을 길이 0(`numParamTypes = 0`)으로 전달하며 서버가 쿼리 스트링의 `$1`, `$2`를 보고 매개변수 개수를 스스로 추론할 것을 기대합니다. 서버가 0개로 `ParameterDescription`을 응답하면 드라이버는 `got 1 parameters but the statement requires 0` 에러를 냅니다. 따라서 쿼리 스트링의 `\$(\d+)`를 스캔하여 최대 인덱스만큼 OID 0(Unspecified) 배열을 동적 할당해야 합니다.
+  * **바이너리 결과 포맷 (Binary Result Format)**: `Describe` 응답의 `RowDescription`에서 컬럼 OID가 `oid.T_int4`(23), `int8`(20), `int2`(21), `bytea`(17), `uuid`(2950)로 보고되면, `lib/pq`는 `Bind` 패킷의 Result Format 코드로 바이너리(`format = 1`)를 요청합니다. 서버가 이를 무시하고 기존처럼 텍스트 문자열(예: `"20"`)을 `DataRow`로 전송하면, 드라이버의 `binaryDecode`가 4바이트 정수를 기대하다가 2바이트 ASCII를 읽고 슬라이스 범위 초과(`panic: runtime error: index out of range [3] with length 2`)로 런타임 패닉을 일으킵니다. 반드시 `Bind`의 Result Format을 파싱하여 빅엔디안 바이너리(`binary.BigEndian.PutUint32`)로 인코딩해야 합니다.
+  * **트랜잭션 구문 및 CommandComplete 태그**: `db.BeginTx()`는 `BEGIN READ WRITE` 또는 `BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE`를 보냅니다. `sqlexec.go`에서 `BEGIN` 프리픽스를 유연하게 수용해야 하며, 응답 시 PostgreSQL CommandComplete 태그는 부가 옵션 없이 반드시 정규 태그(`BEGIN`, `COMMIT`, `ROLLBACK`, `SET`)여야 드라이버가 인식합니다.
+
