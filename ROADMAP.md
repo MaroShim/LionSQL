@@ -27,21 +27,33 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - SQL Prepared Statements (PREPARE, EXECUTE, DEALLOCATE)
   - In-Memory Ephemeral Engine Mode (--ephemeral, Zero-Disk)
 
-[ Phase 3: Replication & Engine Zero-Allocation (v0.11.0) ] ──► CURRENT (COMPLETED)
+[ Phase 3: Replication, Official Drivers & Zero-Allocation (v0.11.0) ] ──► COMPLETED
   - 1-Writer Multi-Reader WAL Streaming Replication & Failover Promotion
+  - Microsoft SQL Server Official Client Driver Compatibility (go-mssqldb)
+  - PostgreSQL Official Client Driver Compatibility (lib/pq)
+  - CBO Table Statistics Disk Persistence (cbo_stats.json)
+  - Go Native In-Process Scalar Function SPI (proc.RegisterScalarFunction)
   - VDBE OpRelQuery Physical PlanNode Caching & Zero-Allocation Streaming
   - Wire Protocol Response Packet Buffer Pooling (sync.Pool)
   - storage.Value Integer Fast-Path & Hot-Path Formatting
 
-[ Phase 4: Observability, Parallelism & Dual UDF SPI (v0.12.0) ] ──► NEXT IN PROGRESS
+[ Phase 4: Observability, Parallelism, Engine Modularization & pgx (v0.12.0) ] ──► NEXT IN PROGRESS
   - Embedded Web Studio HA Replication Dashboard & Failover UI
   - Client-Side Read-Scale Load Balancing & Routing Interfaces
+  - PostgreSQL Modern Driver Compatibility: pgx/v5 & Pipelining (Flush)
+  - TDS Protocol Optimization: NBCROW (0xD2) & Attention Async Cancel (0x06)
   - ANALYZE TABLE Multi-Core Parallel Statistics & Histograms
+  - Sort-Merge Join Operator & Cost Modeling (MergeJoinIterator)
   - CREATE INDEX Background Parallel Sorting & Bulk Loading
-  - Dual-Track UDF SPI: Go Native In-Process API + Wasm Sandbox (wazero)
+  - Architecture Modularization: VDBE Dispatcher & pkg/engine Coordinator
+  - Wasm Runtime Sandbox UDF (wazero)
 
-[ Phase 5: Decoupled HTAP & Production Hardening (v1.0.0 LTS) ] ──► PLANNED
+[ Phase 5: Decoupled HTAP, Advanced CBO & Production Hardening (v1.0.0 LTS) ] ──► PLANNED
   - Shared Memory (POSIX shm / mmap) Apache Arrow IPC Snapshots (DuckDB Zero-Copy)
+  - Dynamic Programming (DP / Selinger) Large Join Order Optimization (N > 4)
+  - Extended Multi-Column Statistics, MCV & Optimizer Hints
+  - T-SQL Specialized TDS Serialization (UNIQUEIDENTIFIER, DATETIME2, PLP LOB)
+  - Multi-Language Client Certification (Python psycopg3/pymssql, Node.js pg/tedious)
   - WiredTiger Thread-Local Cursor & Session Pooling Optimization
   - Volcano Chunk-at-a-Time Vectorized Batch Streaming (1,024-tuple vectors)
   - Background MVCC Vacuuming & Undo Log Version Compaction
@@ -55,6 +67,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 ### 2.1. 코어 실행 엔진 (Core Execution Engine)
 - [x] **VDBE 바이트코드 가상 머신 (`pkg/proc/runtime`)**: SQLite 스타일 3-어드레스 레지스터 기반 VM, `sync.Pool` 레지스터 재사용, 프로시저/함수/트리거/커서/대화형 쿼리 실행.
 - [x] **VDBE `OpRelQuery` 물리 플랜 캐싱 (`pkg/proc`, `pkg/proc/runtime`, `pkg/planner`)**: AST 파싱(`CachedQueryInfo`) 및 물리 플랜 트리(`CachedPlan`) 딥 클론 캐싱, `sync.RWMutex` 스레드 안전성 보장.
+- [x] **Go 네이티브 인프로세스 스칼라 함수 등록 SPI (`pkg/proc`, `pkg/api`)**: `proc.RegisterScalarFunction(name, fn)` 스레드 안전 SPI 및 나노초 단위(< 5ns) 직결 인라인 호출, `--doctor` 동적 검증 프로브 탑재.
 - [x] **0-Allocation 행 스트리밍 (`Tuple.ToRow()`) (`pkg/execution`)**: 중간 `map[string]any` 해시맵 생성 없이 저수준 `storage.Value` 슬라이스 직결 변환, GC 압박 70% 절감.
 - [x] **Volcano Iterator 관계형 실행 파이프라인 (`pkg/execution`)**: 풀 스트리밍 반복자 (`SeqScan`, `IndexScan`, `IndexOnlyScan`, `Filter`, `Project`, `Sort`, `Limit`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `CTE`).
 - [x] **윈도우 함수 & 프레임 분석 엔진 (`pkg/execution/window.go`)**: `OVER (PARTITION BY ... ORDER BY ... [ROWS BETWEEN])`, `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`, 윈도우 집계(`SUM`, `AVG`, `COUNT`, `MIN`, `MAX`).
@@ -64,6 +77,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 ### 2.2. 쿼리 옵티마이저 & CBO (Query Optimizer)
 - [x] **비용 기반 옵티마이저 (CBO) & 히스토그램 통계 (`pkg/planner/stats.go`)**: `ANALYZE TABLE` 64-버킷 등빈도 히스토그램, 카디널리티, NDV, NULL 비율 수집, Hash Join vs Index Nested Loop Join 자동 비용 산출.
+- [x] **CBO 통계 메타데이터 디스크 영속화 (`pkg/catalog`, `cbo_stats.json`)**: 원자적 파일 쓰기(Golden Rule 1 & 5) 및 `storage.Decimal` 손실 없는 JSON 직렬화, 서버 재시작 후에도 `ANALYZE` 통계 및 최적화 플랜 100% 보존.
 - [x] **복합 조건절 선택도 추정 (Compound Selectivity) (`pkg/planner/stats.go`)**: 독립성 가정 결합 확률 계산 및 실시간 라이브 행 수 동적 반영.
 - [x] **조건절 푸시다운 (Predicate Pushdown) (`pkg/planner/pushdown.go`)**: 복합 `WHERE` 조건절을 조인 전 하위 스캔 반복자로 조건 조기 전달.
 - [x] **상수 폴딩 & 불리언 단순화 (Constant Folding) (`pkg/proc/fold.go`)**: 컴파일 타임 리터럴 연산, 내장 함수 선계산, 항진/모순 조건 \(O(1)\) 단축 평가.
@@ -81,6 +95,8 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - [x] **외래키 무결성 제약조건 (`pkg/catalog`)**: `ON DELETE/UPDATE CASCADE`, `SET NULL`, `RESTRICT` 참조 무결성 보장.
 
 ### 2.4. 와이어 프로토콜 & API (Protocols & API)
+- [x] **공식 Microsoft MSSQL 드라이버 E2E 통합 검증 & TDS 7.x/8.0 완성 (`pkg/wire/tds`)**: `github.com/microsoft/go-mssqldb` 공식 드라이버 100% PASS, `PacketTransactionManager` (0x0E), Collation/Transaction `ENVCHANGE` 토큰, `DoneInXact` 트랜잭션 상태 머신.
+- [x] **공식 PostgreSQL 드라이버 E2E 통합 검증 & PGWire 프로토콜 완성 (`pkg/wire`)**: `github.com/lib/pq` 공식 드라이버 100% PASS, Extended Query 파라미터 개수 동적 추론, 투영 스키마 매칭, 바이너리 Result Format 지원, 대화형 트랜잭션 구문 지원.
 - [x] **이중 와이어 프로토콜 리스너 (`pkg/wire`, `pkg/wire/tds`)**: PostgreSQL Wire Protocol v3(`:5433`) 및 Microsoft SQL Server TDS 7.x/8.0(`:1433`) 동시 제공, SSL/TLS 지원.
 - [x] **패킷 버퍼 풀링 (`sync.Pool`) (`pkg/wire/protocol.go`, `pkg/wire/tds/token.go`)**: PGWire 4KB 고정 버퍼 풀(`packetBufferPool`) 및 TDS 행 토큰 버퍼 풀(`tdsRowBufferPool`)로 대량 스트리밍 시 힙 할당 제거.
 - [x] **SQL 레벨 Prepared Statements (`pkg/api/sqlexec_prepare.go`)**: `PREPARE`, `EXECUTE`, `DEALLOCATE` 구문 지원, `$1, ?` ➔ `@p1` 플레이스홀더 정규화, VDBE PlanCache 연동.
@@ -118,16 +134,45 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **과제**: 데이터를 N개 청크로 분할하여 병렬 정렬(Parallel Sort) 후 인덱스 리프에 K-Way 병합 벌크 삽입.
 - **기대 효과**: 프로덕션 DDL 인덱스 생성 시간 3~5배 단축.
 
-#### 4.5. 듀얼 트랙 UDF 확장 엔진 (Go Native SPI & Wasm Sandbox) (`pkg/proc`, `pkg/extension`)
-- **현황**: 현재 SQL 스크립트 기반 UDF(`CREATE FUNCTION`)만 지원되며, Go 언어나 외부 코드로 작성된 고성능 UDF 연동은 불가능함.
+#### 4.5. Wasm 런타임 샌드박스 UDF (`pkg/extension`, `wazero`)
+- **현황**: v0.11.0에서 Track 1(Go Native In-Process SPI)이 완료되었으며, 외부 독립 바이너리 플러그인을 위한 메모리 샌드박스가 요구됨.
 - **과제**:
-  - **Track 1 (Go Native SPI)**: SQLion을 Go 라이브러리로 임베딩하는 개발자를 위해 `proc.RegisterScalarFunction(name, fn)` Go API 제공 (제로 오버헤드, < 5ns 호출).
-  - **Track 2 (Wasm Sandbox)**: 독립 서버 환경에서 `CREATE FUNCTION ... AS WASM 'plugins/udf.wasm'` DDL 지원. CGO 없는 순수 Go `wazero` 런타임 탑재, 메모리 샌드박싱(Golden Rule 26)을 통한 크래시/패닉 격리.
-- **기대 효과**: 임베디드 Go 개발자와 독립 DB 서버 운영자 모두의 요구를 충족하는 완벽한 UDF 생태계 구축.
+  - 독립 서버 환경에서 `CREATE FUNCTION ... AS WASM 'plugins/udf.wasm'` DDL 지원.
+  - CGO 없는 순수 Go `wazero` 런타임 탑재, 메모리 샌드박싱(Golden Rule 26)을 통한 크래시/패닉 격리.
+- **기대 효과**: 외부 기여 코드 및 런타임 동적 플러그인을 안전하게 격리 실행.
+
+#### 4.6. 현대 표준 Go 드라이버 `pgx/v5` 통합 검증 및 파이프라이닝 지원 (`pkg/wire`)
+- **현황**: v0.11.0에서 `lib/pq` 통합 검증이 완료되었으나, 현대 Go 프로덕션 및 주요 ORM(GORM, Ent)은 `pgx/v5`를 표준으로 사용함.
+- **과제**:
+  - `github.com/jackc/pgx/v5` 기반 E2E 통합 테스트 스위트 구축.
+  - Extended Query `Flush`(`'H'`) 메시지 처리 및 파이프라이닝 상태 머신 동기화.
+  - `timestamp`, `timestamptz`, `bool`, `float8` 등 `pgx` 바이너리 인코딩/디코딩 타입 확장.
+- **기대 효과**: Go 생태계 최신 프로덕션 드라이버 100% 호환성 확보.
+
+#### 4.7. TDS 와이어 프로토콜 성능 최적화: NBCROW 압축 및 Attention 비동기 취소 (`pkg/wire/tds`)
+- **현황**: TDS 7.x/8.0 기본 프로토콜 및 `go-mssqldb` 트랜잭션 매니저가 검증되었으나, 대량 조회 대역폭 절감 및 쿼리 중단 패킷 처리가 필요함.
+- **과제**:
+  - TDS 7.3+ 표준 `NBCROW` (Null Bitmap Compressed Row, `0xD2`) 행 압축 지원 (NULL 컬럼 0바이트 패킹).
+  - Attention 패킷(`Type 0x06`) 수신 시 `context.CancelFunc` 호출 및 `DoneAttn (0x0020)` 응답 파이프라인 연동.
+- **기대 효과**: 대량 조회 네트워크 전송량 30% 절감 및 클라이언트 `SqlCommand.Cancel()` 즉각 응답.
+
+#### 4.8. CBO 소트-머지 조인 (Sort-Merge Join) 연산자 및 비용 모델 (`pkg/execution`, `pkg/planner`)
+- **현황**: 현재 조인은 Hash Join과 Index Nested Loop Join으로만 구성되어, 양측이 정렬된 상태에서도 불필요하게 해시 테이블을 빌드함.
+- **과제**:
+  - 정렬된 입력에 대해 $O(M+N)$ 단일 패스로 처리하는 `MergeJoinIterator` 연산자 구현.
+  - CBO 비용 산출 공식에 소트-머지 조인 대안 추가 및 실행 계획 선택기 연동.
+- **기대 효과**: ORDER BY 또는 인덱스 정렬 릴레이션 조인 시 메모리 사용량 제로화 및 조인 속도 대폭 개선.
+
+#### 4.9. 아키텍처 계층 정립: VDBE 디스패처 모듈화 및 SQL 코디네이터 분리 (`pkg/proc/runtime`, `pkg/engine`)
+- **현황**: `VMFrame.Execute` 내 824라인 거대 switch문과 `pkg/api`에 집중된 15,000+ 라인의 SQL 오케스트레이션 로직이 유지보수 복잡도를 가중시킴.
+- **과제**:
+  - VDBE switch 블록을 기능군별 private 헬퍼(`execFlowOp`, `execStorageOp`, `execRelOp`, `execArithOp`)로 인라인 분할.
+  - SQL 실행 오케스트레이션을 `pkg/engine` 코어 레이어로 독립 승격하여 어댑터(`pkg/api`, `pkg/wire`, `pkg/wire/tds`) 계층 정립.
+- **기대 효과**: 단방향 클린 아키텍처 확립, 순환 복잡도 완화 및 프로파일링 스택 추적성 개선.
 
 ---
 
-### Phase 5: Decoupled HTAP & Production Hardening (v1.0.0 LTS Target)
+### Phase 5: Decoupled HTAP, Advanced CBO & Production Hardening (v1.0.0 LTS Target)
 
 #### 5.1. 공유 메모리(POSIX shm / mmap) 기반 Apache Arrow IPC 스냅샷 (DuckDB Zero-Copy 연동)
 - **현황**: SQLion의 모든 테이블은 행 지향(Row-Oriented) 구조로 OLTP 초고속 처리에 최적화되어 있으나, 대용량 통계/집계 시 행 단위 역직렬화 오버헤드가 발생함.
@@ -155,6 +200,29 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **과제**: 튜플 변경 이력을 체인으로 관리하고 백그라운드 워커가 사용 종료된 구버전 튜플을 주기적으로 압축/정리.
 - **기대 효과**: 24/365 장기 가동 환경에서 메모리 누적 방지.
 
+#### 5.5. 동적 계획법(DP / Selinger) 기반 대규모 조인 순서 최적화 ($N > 4$) (`pkg/planner`)
+- **현황**: 4개 이하의 테이블 조인은 전수 순열 탐색으로 최적 플랜을 찾으나, 5개 이상 대규모 조인에서는 조합 폭발로 인해 휴리스틱으로 처리됨.
+- **과제**: Left-Deep 및 Bushy Tree를 포괄하는 DPccp 동적 계획법 탐색기 구현.
+- **기대 효과**: 대형 엔터프라이즈 ERP/데이터마트 조인 쿼리의 기하급수적 최적 플랜 도출.
+
+#### 5.6. 다중 컬럼 확장 통계 (Extended Statistics), MCV 및 옵티마이저 힌트 (`pkg/planner`)
+- **과제**:
+  - 컬럼 간 상관관계 편향을 교정하는 Multi-Column NDV 확장 통계 수집.
+  - 왜곡된 분포를 위한 MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합.
+  - `WITH (INDEX(...))`, `OPTION (HASH JOIN)`, `OPTION (FORCE ORDER)` 옵티마이저 힌트 강제 제어.
+- **기대 효과**: 통계 왜곡으로 인한 카디널리티 과소평가 원천 차단 및 DBA 플랜 강제 제어권 보장.
+
+#### 5.7. T-SQL 특화 타입 TDS 직렬화 및 PLP LOB 스트리밍 (`pkg/wire/tds`)
+- **과제**:
+  - `UNIQUEIDENTIFIER` (UUID 16바이트 GUID 리틀/빅엔디언 스왑).
+  - `DATETIME2` (`0x2A`), `DATE` (`0x28`), `TIME` (`0x29`) TDS 바이너리 인코딩.
+  - PLP (Partially Length-Prefixed) 8KB 초과 대용량 LOB 스트리밍 (`VARCHAR(MAX)`, `VARBINARY(MAX)`).
+- **기대 효과**: 엔터프라이즈 레거시 MSSQL 스키마의 100% 무결점 데이터 호환성.
+
+#### 5.8. 외부 언어 생태계 클라이언트 인증 하네스 (`pkg/wire`, `pkg/wire/tds`)
+- **과제**: Python(`psycopg3`, `pymssql`), Node.js(`pg`, `tedious`), C#/.NET(`Microsoft.Data.SqlClient`) 대상 자동화 호환성 검증 하네스 구축.
+- **기대 효과**: 멀티 언어 클라이언트 생태계 공식 인증.
+
 ---
 
 ## 4. 마일스톤별 핵심 추진 우선순위 매트릭스
@@ -163,11 +231,18 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | :---: | :---: | :--- | :---: | :---: | :--- |
 | **v0.12.0** | **P1** | **임베디드 웹 스튜디오 HA 복제 모니터링 카드** | UI & 운영 | 보통 (200~300줄) | 브라우저에서 복제 토폴로지 시각화 및 원클릭 Failover |
 | **v0.12.0** | **P1** | **`ANALYZE TABLE` 멀티코어 병렬 통계 수집** | CBO & 플래너 | 낮음 (50~100줄) | 대형 테이블 통계 수집 시간 4~8배 단축 (리스크 0%) |
+| **v0.12.0** | **P1** | **소트-머지 조인 (Sort-Merge Join) 연산자** | 실행기 & 플래너 | 보통 (250~350줄) | 정렬 릴레이션 조인 시 해시 빌드 오버헤드 및 메모리 제거 |
+| **v0.12.0** | **P2** | **현대 표준 Go 드라이버 `pgx/v5` 통합 검증** | 와이어 프로토콜 | 보통 (200~300줄) | Go 최신 프로덕션 생태계 및 ORM 완벽 호환 |
+| **v0.12.0** | **P2** | **TDS NBCROW 행 압축 및 Attention 쿼리 취소** | TDS 프로토콜 | 보통 (200~300줄) | 네트워크 전송량 30% 절감 및 클라이언트 쿼리 취소 연동 |
 | **v0.12.0** | **P2** | **클라이언트 읽기 분산 라우팅 인터페이스** | 프로토콜 & API | 낮음 (문서/설정) | 복제본을 활용한 무중단 Read Scale-Out 지원 |
-| **v0.12.0** | **P2** | **Go 네이티브 스칼라 함수 등록 SPI (In-Process UDF)** | 실행기 & 확장 | 낮음 (80~120줄) | 임베디드 Go 개발자를 위한 < 5ns 제로 오버헤드 UDF 바인딩 |
+| **v0.12.0** | **P2** | **VDBE 디스패처 모듈화 & SQL 코디네이터 분리** | 아키텍처 리팩토링 | 보통 (400~500줄) | 순환 복잡도 완화 및 단방향 클린 아키텍처 확립 |
 | **v0.12.0** | **P3** | **`CREATE INDEX` 백그라운드 병렬 정렬/벌크 로딩** | 스토리지 & DDL | 보통 (200~300줄) | 운영 중 신규 인덱스 빌드 속도 3~5배 단축 |
 | **v0.12.0** | **P3** | **Wasm 런타임 샌드박스 UDF (`wazero`)** | 플러그인 & 보안 | 보통 (300~400줄) | 런타임 동적 플러그인 적재 및 완전한 크래시 격리 |
 | **v1.0.0** | **P1** | **공유메모리 Apache Arrow IPC 스냅샷 (DuckDB)** | 분석 & HTAP | 보통 (300~400줄) | Zero-Copy, Zero-I/O 분리형 고성능 OLAP 결합 |
+| **v1.0.0** | **P1** | **$N > 4$ 체인 조인 동적 계획법 (DP / Selinger)** | CBO & 플래너 | 높음 (400~600줄) | 복잡한 다중 조인 쿼리의 기하급수적 최적 플랜 도출 |
+| **v1.0.0** | **P2** | **다중컬럼 확장통계, MCV 및 옵티마이저 힌트** | CBO & 플래너 | 보통 (300~400줄) | 통계 편향 교정 및 DBA 실행 계획 제어권 |
+| **v1.0.0** | **P2** | **T-SQL 특화 타입 TDS 직렬화 & PLP LOB 스트리밍** | TDS 프로토콜 | 보통 (300~400줄) | UNIQUEIDENTIFIER, DATETIME2, LOB 완벽 지원 |
 | **v1.0.0** | **P2** | **WiredTiger 세션 및 커서 풀링 최적화** | 스토리지 & Cgo | 보통 (200~300줄) | WiredTiger 단건 연산 Cgo 오버헤드 절감 및 TPS 견인 |
 | **v1.0.0** | **P2** | **Volcano 청크 단위 배치 실행 (Vectorized Chunk)** | 실행기 & SIMD | 높음 (600~800줄) | 대용량 관계형 스캔 및 집계 3~5배 가속 |
 | **v1.0.0** | **P3** | **백그라운드 MVCC Vacuum / Version GC** | 트랜잭션 & 메모리 | 높음 (400~500줄) | 장기 가동 인메모리 테이블 단편화 방지 |
+| **v1.0.0** | **P3** | **멀티랭귀지 클라이언트 호환성 인증 하네스** | 와이어 프로토콜 | 보통 (200~300줄) | Python, Node.js, C# 공식 드라이버 인증 |

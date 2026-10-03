@@ -19,9 +19,18 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - `github.com/jackc/pgx/v5` 기반 E2E 통합 테스트 스위트 구축.
   - Extended Query `Flush`(`'H'`) 메시지 처리 및 파이프라이닝 상태 머신 동기화.
   - `timestamp`, `timestamptz`, `bool`, `float8` 등 `pgx` 바이너리 인코딩/디코딩 타입 확장.
-- [ ] **외부 언어 생태계(Python/Node.js) 클라이언트 호환성 검증 및 하네스 구축 (`pkg/wire`)**
-  - Python `psycopg2`/`psycopg3` 드라이버 연결 및 초기 세션 쿼리(`extra_float_digits`, `server_version_num`) 처리.
-  - Node.js `pg` 라이브러리를 활용한 커넥션 풀링 및 쿼리 실행 검증.
+- [ ] **외부 언어 생태계(Python/Node.js/C#) 클라이언트 호환성 검증 및 하네스 구축 (`pkg/wire`, `pkg/wire/tds`)**
+  - Python `psycopg2`/`psycopg3`, `pymssql` 드라이버 연결 및 초기 세션 쿼리(`extra_float_digits`, `server_version_num`) 처리.
+  - Node.js `pg`, `tedious` 라이브러리를 활용한 커넥션 풀링 및 쿼리 실행 검증.
+  - .NET / C# `Microsoft.Data.SqlClient` 연결 및 기본 쿼리 검증.
+- [ ] **TDS 프로토콜 고도화: NBCROW 행 압축 및 Attention 쿼리 취소 (`pkg/wire/tds`)**
+  - TDS `NBCROW` (Null Bitmap Compressed Row, `0xD2`): NULL 컬럼에 대해 0바이트로 전송하여 네트워크 대역폭 30%+ 절감.
+  - Attention 패킷(`Type 0x06`) 처리: 장기 실행 쿼리 취소 시 VDBE 바이트코드 루프 중단(`context.CancelFunc`) 및 `DoneAttn (0x0020)` 응답.
+- [ ] **T-SQL 특수 타입 직렬화 및 PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**
+  - `UNIQUEIDENTIFIER` (UUID 16바이트 GUID 바이트 스왑), `DATETIME2` (`0x2A`), `DATE` (`0x28`), `TIME` (`0x29`) TDS 바이너리 인코딩.
+  - PLP (Partially Length-Prefixed) 기반 8KB 초과 `VARCHAR(MAX)` / `VARBINARY(MAX)` 대용량 청크 스트리밍.
+- [ ] **SSMS (SQL Server Management Studio) Object Explorer 가상 카탈로그/DMV 뷰 (`pkg/api`, `pkg/catalog`)**
+  - SSMS 접속 시 필수 조회되는 `sys.configurations`, `sys.dm_exec_sessions`, `sys.dm_exec_connections`, `sys.database_principals` 가상 뷰 완비로 SSMS 탐색기 트리 100% 호환.
 - [ ] **임베디드 웹 스튜디오 HA 복제 모니터링 대시보드 (`pkg/ui`)**
   - 브라우저 웹 스튜디오(`:8090/_/`)에 고가용성(HA) 복제 상태(Primary vs Replica) 시각화 카드 추가.
   - 연결된 Replica 목록, LSN 랙(Lag) 지연 시간, 스트리밍 상태 표시 및 수동 승격(`Promote`) 버튼 제공.
@@ -76,6 +85,8 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - 행 단위 `Next()` 호출 오버헤드를 줄이기 위해 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍.
 - [ ] **WiredTiger 세션 및 커서 풀링 최적화 (`pkg/storage/wiredtiger`)**
   - 고빈도 트랜잭션 경로에서 Cgo 커서 오픈/클로즈 오버헤드를 줄이기 위한 스레드 로컬 커서 재사용 고도화.
+- [ ] **백그라운드 MVCC Vacuum / Version GC (`pkg/storage/memengine`)**
+  - 장기 트랜잭션 종료 후 구버전 튜플 체인을 비동기로 회수/압축하여 메모리 단편화 및 누적 방지.
 
 ---
 
