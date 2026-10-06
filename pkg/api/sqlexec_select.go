@@ -1037,6 +1037,11 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 		return s.execSetOpSelect(setQuery, start, cs)
 	}
 
+	// 0. HeidiSQL & PG GUI virtual catalog multi-table JOIN intercept (e.g. pg_class JOIN pg_namespace)
+	if isHeidiSQLCatalogJoinQuery(cleaned) {
+		return s.execHeidiSQLCatalogJoinSelect(cleaned, start)
+	}
+
 	// 0. PIVOT: SELECT ... FROM ... PIVOT (...) ...
 	if hasPivot(cleaned) {
 		return s.execPivotSelect(cleaned, start, cs)

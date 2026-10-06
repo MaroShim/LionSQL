@@ -19,6 +19,7 @@ package api
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -194,22 +195,40 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 		columns = []string{"oid", "datname", "datdba", "encoding", "datcollate", "datctype",
 			"datistemplate", "datallowconn", "datconnlimit", "datlastsysoid",
 			"datfrozenxid", "datminmxid", "dattablespace", "datacl"}
-		allRows = append(allRows, map[string]any{
-			"oid":            1,
-			"datname":        "sqlion",
-			"datdba":         10,
-			"encoding":       6,
-			"datcollate":     "en_US.utf8",
-			"datctype":       "en_US.utf8",
-			"datistemplate":  false,
-			"datallowconn":   true,
-			"datconnlimit":   -1,
-			"datlastsysoid":  14000,
-			"datfrozenxid":   726,
-			"datminmxid":     1,
-			"dattablespace":  1663,
-			"datacl":         nil,
-		})
+		allRows = append(allRows,
+			map[string]any{
+				"oid":            1,
+				"datname":        "sqlion",
+				"datdba":         10,
+				"encoding":       6,
+				"datcollate":     "en_US.utf8",
+				"datctype":       "en_US.utf8",
+				"datistemplate":  false,
+				"datallowconn":   true,
+				"datconnlimit":   -1,
+				"datlastsysoid":  14000,
+				"datfrozenxid":   726,
+				"datminmxid":     1,
+				"dattablespace":  1663,
+				"datacl":         nil,
+			},
+			map[string]any{
+				"oid":            2,
+				"datname":        "postgres",
+				"datdba":         10,
+				"encoding":       6,
+				"datcollate":     "en_US.utf8",
+				"datctype":       "en_US.utf8",
+				"datistemplate":  false,
+				"datallowconn":   true,
+				"datconnlimit":   -1,
+				"datlastsysoid":  14000,
+				"datfrozenxid":   726,
+				"datminmxid":     1,
+				"dattablespace":  1663,
+				"datacl":         nil,
+			},
+		)
 
 	// ------------------------------------------------------------------ //
 	// pg_catalog.pg_namespace
@@ -1543,3 +1562,100 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 
 	return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, orderByClause, limitCount, start)
 }
+
+var heidiClassJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_class\s+(?:AS\s+)?c\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*c\.relnamespace`)
+var heidiProcJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_proc\s+(?:AS\s+)?p\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*p\.pronamespace`)
+
+func isHeidiSQLCatalogJoinQuery(sql string) bool {
+	upper := strings.ToUpper(sql)
+	if !strings.Contains(upper, "PG_NAMESPACE") {
+		return false
+	}
+	return heidiClassJoinRe.MatchString(sql) || heidiProcJoinRe.MatchString(sql)
+}
+
+func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
+	// Extract target schema from WHERE n.nspname = '...' if present, default to 'public'
+	targetSchema := "public"
+	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
+	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetSchema = m[1]
+	}
+
+	columns := []string{
+		"schema_name", "object_name", "object_kind",
+		"data_length", "index_length", "reltuples",
+		"comment", "proargtypes",
+	}
+
+	var allRows []map[string]any
+
+	if heidiClassJoinRe.MatchString(sql) {
+		// Tables and views
+		tables, _ := s.engine.ListTables()
+		for _, t := range tables {
+			allRows = append(allRows, map[string]any{
+				"schema_name":  targetSchema,
+				"object_name":  t.Name,
+				"object_kind":  "r",
+				"data_length":  int64(16384),
+				"index_length": int64(8192),
+				"reltuples":    float32(1000),
+				"comment":      nil,
+				"proargtypes":  nil,
+			})
+		}
+		if s.catalog != nil {
+			for _, v := range s.catalog.ListViews() {
+				allRows = append(allRows, map[string]any{
+					"schema_name":  targetSchema,
+					"object_name":  v.Name,
+					"object_kind":  "v",
+					"data_length":  int64(0),
+					"index_length": int64(0),
+					"reltuples":    float32(0),
+					"comment":      nil,
+					"proargtypes":  nil,
+				})
+			}
+		}
+	} else if heidiProcJoinRe.MatchString(sql) {
+		// Procedures and functions
+		if s.catalog != nil {
+			for _, p := range s.catalog.ListProcedures() {
+				allRows = append(allRows, map[string]any{
+					"schema_name":  targetSchema,
+					"object_name":  p.Name,
+					"object_kind":  "p",
+					"data_length":  nil,
+					"index_length": nil,
+					"reltuples":    nil,
+					"comment":      nil,
+					"proargtypes":  nil,
+				})
+			}
+			for _, f := range s.catalog.ListFunctions() {
+				allRows = append(allRows, map[string]any{
+					"schema_name":  targetSchema,
+					"object_name":  f.Name,
+					"object_kind":  "f",
+					"data_length":  nil,
+					"index_length": nil,
+					"reltuples":    nil,
+					"comment":      nil,
+					"proargtypes":  nil,
+				})
+			}
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
