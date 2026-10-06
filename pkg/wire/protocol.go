@@ -186,7 +186,35 @@ func WriteRowDescription(w io.Writer, cols []ColumnMeta) error {
 		offset += 2
 		binary.BigEndian.PutUint32(buf[offset:], uint32(c.DataType)) // type oid
 		offset += 4
-		binary.BigEndian.PutUint16(buf[offset:], 255) // type size
+
+		// Standard PostgreSQL typlen: fixed-size types have positive lengths,
+		// variable-length types (varchar, text, json, bytea, numeric) MUST have -1 (0xFFFF).
+		var typeSize int16 = -1
+		switch c.DataType {
+		case 16: // BOOL
+			typeSize = 1
+		case 21: // INT2
+			typeSize = 2
+		case 23: // INT4
+			typeSize = 4
+		case 20: // INT8
+			typeSize = 8
+		case 700: // FLOAT4
+			typeSize = 4
+		case 701: // FLOAT8
+			typeSize = 8
+		case 1082: // DATE
+			typeSize = 4
+		case 1083: // TIME
+			typeSize = 8
+		case 1114, 1184: // TIMESTAMP, TIMESTAMPTZ
+			typeSize = 8
+		case 2950: // UUID
+			typeSize = 16
+		default:
+			typeSize = -1 // varlena (text, varchar, bytea, json, numeric)
+		}
+		binary.BigEndian.PutUint16(buf[offset:], uint16(typeSize)) // type size
 		offset += 2
 		binary.BigEndian.PutUint32(buf[offset:], 0) // type modifier
 		offset += 4

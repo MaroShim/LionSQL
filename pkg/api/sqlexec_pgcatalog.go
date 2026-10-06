@@ -1565,16 +1565,26 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 
 var heidiClassJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_class\s+(?:AS\s+)?c\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*c\.relnamespace`)
 var heidiProcJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_proc\s+(?:AS\s+)?p\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*p\.pronamespace`)
+var heidiAttrJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_attribute\s+(?:AS\s+)?a\s+JOIN\s+pg_class\s+(?:AS\s+)?pgc\s+ON\s+pgc\.oid\s*=\s*a\.attrelid`)
 
 func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	upper := strings.ToUpper(sql)
-	if !strings.Contains(upper, "PG_NAMESPACE") {
-		return false
+	if strings.Contains(upper, "PG_NAMESPACE") {
+		return heidiClassJoinRe.MatchString(sql) || heidiProcJoinRe.MatchString(sql)
 	}
-	return heidiClassJoinRe.MatchString(sql) || heidiProcJoinRe.MatchString(sql)
+	if strings.Contains(upper, "PG_ATTRIBUTE") && strings.Contains(upper, "PG_CLASS") {
+		return heidiAttrJoinRe.MatchString(sql)
+	}
+	return false
 }
 
 func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
+	// Handle column metadata query:
+	// FROM pg_attribute AS a JOIN pg_class AS pgc ON pgc.oid = a.attrelid ... WHERE ...
+	if heidiAttrJoinRe.MatchString(sql) {
+		return s.execHeidiSQLColumnMetadataSelect(sql, start)
+	}
+
 	// Extract target schema from WHERE n.nspname = '...' if present, default to 'public'
 	targetSchema := "public"
 	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
@@ -1646,6 +1656,61 @@ func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*Qu
 					"proargtypes":  nil,
 				})
 			}
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (*QueryResult, error) {
+	// Look for target table name if specified, e.g. pgc.relname = 'accounts' or pgc.oid = ...
+	targetTable := ""
+	tblRe := regexp.MustCompile(`(?is)pgc\.relname\s*=\s*'([^']+)'`)
+	if m := tblRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetTable = m[1]
+	}
+
+	columns := []string{
+		"column_name", "attnum", "atttypid", "data_type",
+		"is_nullable", "column_comment", "column_default",
+		"character_maximum_length",
+	}
+
+	var allRows []map[string]any
+	tables, _ := s.engine.ListTables()
+
+	for _, t := range tables {
+		if targetTable != "" && !strings.EqualFold(t.Name, targetTable) {
+			continue
+		}
+		for i, c := range t.Columns {
+			oid := pgTypeOID(c.Type)
+			dtName := pgTypeName(c.Type)
+			isNullable := "YES"
+			if c.PrimaryKey || !c.Nullable {
+				isNullable = "NO"
+			}
+			var maxLen any = nil
+			if c.Type == storage.TypeVarChar && c.Precision > 0 {
+				maxLen = int64(c.Precision)
+			}
+			allRows = append(allRows, map[string]any{
+				"column_name":              c.Name,
+				"attnum":                   int16(i + 1),
+				"atttypid":                 oid,
+				"data_type":                dtName,
+				"is_nullable":              isNullable,
+				"column_comment":           nil,
+				"column_default":           nil,
+				"character_maximum_length": maxLen,
+			})
 		}
 	}
 
