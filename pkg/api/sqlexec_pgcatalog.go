@@ -160,6 +160,7 @@ func isPgCatalogTable(tableName string) bool {
 		"information_schema.columns",
 		"information_schema.schemata",
 		"information_schema.routines",
+		"information_schema.parameters",
 		"information_schema.table_constraints",
 		"information_schema.key_column_usage",
 		"information_schema.referential_constraints",
@@ -1301,6 +1302,49 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 					"created":          p.CreatedAt.Format("2006-01-02 15:04:05"),
 					"last_altered":     p.CreatedAt.Format("2006-01-02 15:04:05"),
 				})
+			}
+		}
+
+	// ------------------------------------------------------------------ //
+	// information_schema.parameters
+	// ------------------------------------------------------------------ //
+	case "information_schema.parameters":
+		columns = []string{
+			"specific_catalog", "specific_schema", "specific_name",
+			"ordinal_position", "parameter_mode", "is_result",
+			"as_locator", "parameter_name", "data_type",
+			"character_maximum_length", "character_octet_length",
+			"numeric_precision", "numeric_precision_radix", "numeric_scale",
+			"datetime_precision", "interval_type", "interval_precision",
+		}
+		defSchema := "dbo"
+		if strings.Contains(strings.ToLower(whereClause), "'public'") {
+			defSchema = "public"
+		}
+		if s.catalog != nil {
+			for _, p := range s.catalog.ListProcedures() {
+				for i, param := range p.Params {
+					dtName := pgTypeName(param.Type)
+					allRows = append(allRows, map[string]any{
+						"specific_catalog":         "sqlion",
+						"specific_schema":          defSchema,
+						"specific_name":            p.Name,
+						"ordinal_position":         i + 1,
+						"parameter_mode":           "IN",
+						"is_result":                "NO",
+						"as_locator":               "NO",
+						"parameter_name":           param.Name,
+						"data_type":                dtName,
+						"character_maximum_length": nil,
+						"character_octet_length":   nil,
+						"numeric_precision":        nil,
+						"numeric_precision_radix":  nil,
+						"numeric_scale":            nil,
+						"datetime_precision":       nil,
+						"interval_type":            nil,
+						"interval_precision":       nil,
+					})
+				}
 			}
 		}
 

@@ -773,6 +773,37 @@ func TestSQLExecutor_VirtualCatalogViews(t *testing.T) {
 		t.Fatalf("unexpected information_schema.tables result: %+v", res.Rows)
 	}
 
+	// 2b. Query information_schema.tables with Beekeeper Studio SQL Server syntax
+	res, err = server.ExecuteSQL(`SELECT
+        table_schema,
+        table_name
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE table_type NOT LIKE '%VIEW%'
+      ORDER BY table_schema, table_name;`)
+	if err != nil || !res.Success {
+		t.Fatalf("query Beekeeper SQL Server tables failed: %v", err)
+	}
+	if len(res.Rows) < 2 {
+		t.Fatalf("expected at least 2 tables in Beekeeper query, got: %+v (cols: %v)", res.Rows, res.Columns)
+	}
+
+	// 2c. Query information_schema.tables with schema filter [table_schema] = 'dbo'
+	res, err = server.ExecuteSQL(`SELECT
+        table_schema,
+        table_name
+      FROM INFORMATION_SCHEMA.TABLES
+      WHERE table_type NOT LIKE '%VIEW%' AND [table_schema] = 'dbo'
+      ORDER BY table_schema, table_name;`)
+	if err != nil || !res.Success || len(res.Rows) < 2 {
+		t.Fatalf("expected tables with [table_schema] = 'dbo', got: %+v (err: %v)", res, err)
+	}
+
+	// 2d. Query information_schema.parameters
+	res, err = server.ExecuteSQL(`SELECT specific_name, parameter_name, data_type FROM information_schema.parameters;`)
+	if err != nil || !res.Success {
+		t.Fatalf("query information_schema.parameters failed: %v", err)
+	}
+
 	// 3. Query sys.columns
 	res, err = server.ExecuteSQL(`SELECT column_name, data_type, is_nullable FROM sys.columns WHERE table_name = 'users' ORDER BY ordinal_position ASC;`)
 	if err != nil || !res.Success {

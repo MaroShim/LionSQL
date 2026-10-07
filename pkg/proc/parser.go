@@ -1353,6 +1353,23 @@ func (p *Parser) parseExpression(precedence int) Expr {
 
 		case TokenNot:
 			p.nextToken() // eat NOT
+			if p.curTokenIs(TokenLike) {
+				p.nextToken() // eat LIKE
+				pattern := p.parseExpression(precSum)
+				leftExp = &LikeExpr{Expr: leftExp, Not: true, Pattern: pattern}
+				break
+			}
+			if p.curTokenIs(TokenBetween) {
+				p.nextToken() // eat BETWEEN
+				low := p.parseExpression(precSum)
+				if !p.curTokenIs(TokenAnd) {
+					return nil
+				}
+				p.nextToken() // eat AND
+				high := p.parseExpression(precSum)
+				leftExp = &BetweenExpr{Expr: leftExp, Not: true, Low: low, High: high}
+				break
+			}
 			if p.curTokenIs(TokenIn) {
 				p.nextToken() // eat IN
 				if !p.curTokenIs(TokenLParen) {

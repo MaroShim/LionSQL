@@ -369,7 +369,45 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		return found
 	}
 
-	ops := []string{"!=", "<>", "<=", ">=", "=", "<", ">", " LIKE "}
+	upperWhere := strings.ToUpper(whereStr)
+	if strings.HasSuffix(upperWhere, " IS NOT NULL") {
+		colName := cleanIdentifier(whereStr[:len(whereStr)-len(" IS NOT NULL")])
+		val, ok := rec[colName]
+		if !ok {
+			if idx := strings.Index(colName, "."); idx != -1 {
+				val, ok = rec[colName[idx+1:]]
+			}
+		}
+		if !ok {
+			for k, v := range rec {
+				if strings.EqualFold(k, colName) {
+					val, ok = v, true
+					break
+				}
+			}
+		}
+		return ok && val != nil
+	}
+	if strings.HasSuffix(upperWhere, " IS NULL") {
+		colName := cleanIdentifier(whereStr[:len(whereStr)-len(" IS NULL")])
+		val, ok := rec[colName]
+		if !ok {
+			if idx := strings.Index(colName, "."); idx != -1 {
+				val, ok = rec[colName[idx+1:]]
+			}
+		}
+		if !ok {
+			for k, v := range rec {
+				if strings.EqualFold(k, colName) {
+					val, ok = v, true
+					break
+				}
+			}
+		}
+		return !ok || val == nil
+	}
+
+	ops := []string{" NOT LIKE ", " NOT ILIKE ", "!=", "<>", "<=", ">=", "=", "<", ">", " LIKE ", " ILIKE "}
 	for _, op := range ops {
 		idx := strings.Index(strings.ToUpper(whereStr), op)
 		if idx != -1 {
@@ -388,6 +426,14 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			if !ok {
 				if dotIdx := strings.Index(leftCol, "."); dotIdx != -1 {
 					val, ok = rec[leftCol[dotIdx+1:]]
+				}
+			}
+			if !ok {
+				for k, v := range rec {
+					if strings.EqualFold(k, leftCol) {
+						val, ok = v, true
+						break
+					}
 				}
 			}
 			if !ok {
@@ -428,11 +474,16 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 					return n1 <= n2
 				}
 				return strVal <= rightVal
-			case "LIKE":
+			case "LIKE", "ILIKE":
 				pat := strings.ReplaceAll(regexp.QuoteMeta(rightVal), "%", ".*")
 				pat = strings.ReplaceAll(pat, "_", ".")
 				matched, _ := regexp.MatchString("(?i)^"+pat+"$", strVal)
 				return matched
+			case "NOT LIKE", "NOT ILIKE":
+				pat := strings.ReplaceAll(regexp.QuoteMeta(rightVal), "%", ".*")
+				pat = strings.ReplaceAll(pat, "_", ".")
+				matched, _ := regexp.MatchString("(?i)^"+pat+"$", strVal)
+				return !matched
 			}
 		}
 	}

@@ -690,17 +690,22 @@ func seedSampleAccounts(eng storage.Engine) {
 			cur.Close()
 		}
 		if !hasRows {
-			_ = tx.Insert("accounts", storage.Record{
+			err1 := tx.Insert("accounts", storage.Record{
 				"id":      storage.IntValue(1),
 				"holder":  storage.StringValue("Alice"),
 				"balance": storage.IntValue(1000),
 			})
-			_ = tx.Insert("accounts", storage.Record{
+			err2 := tx.Insert("accounts", storage.Record{
 				"id":      storage.IntValue(2),
 				"holder":  storage.StringValue("Bob"),
 				"balance": storage.IntValue(500),
 			})
-			_ = tx.Commit()
+			if err1 != nil || err2 != nil {
+				log.Printf("[SQLion] Seed accounts insert error: %v, %v", err1, err2)
+			}
+			if err := tx.Commit(); err != nil {
+				log.Printf("[SQLion] Seed accounts commit error: %v", err)
+			}
 		} else {
 			_ = tx.Rollback()
 		}
