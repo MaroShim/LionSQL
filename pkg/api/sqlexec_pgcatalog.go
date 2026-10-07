@@ -1087,9 +1087,9 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"user_defined_type_name", "is_insertable_into", "is_typed",
 			"commit_action",
 		}
-		defSchema := "public"
-		if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
-			defSchema = "dbo"
+		defSchema := "dbo"
+		if strings.Contains(strings.ToLower(whereClause), "'public'") {
+			defSchema = "public"
 		}
 		for _, t := range tables {
 			allRows = append(allRows, map[string]any{
@@ -1149,9 +1149,9 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"identity_cycle", "is_generated", "generation_expression",
 			"is_updatable",
 		}
-		defSchema := "public"
-		if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
-			defSchema = "dbo"
+		defSchema := "dbo"
+		if strings.Contains(strings.ToLower(whereClause), "'public'") {
+			defSchema = "public"
 		}
 		for _, t := range tables {
 			for i, c := range t.Columns {
@@ -1278,14 +1278,18 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"to_sql_specific_schema", "to_sql_specific_name",
 			"as_locator", "created", "last_altered",
 		}
+		defSchema := "dbo"
+		if strings.Contains(strings.ToLower(whereClause), "'public'") {
+			defSchema = "public"
+		}
 		if s.catalog != nil {
 			for _, p := range s.catalog.ListProcedures() {
 				allRows = append(allRows, map[string]any{
 					"specific_catalog": "sqlion",
-					"specific_schema":  "public",
+					"specific_schema":  defSchema,
 					"specific_name":    p.Name,
 					"routine_catalog":  "sqlion",
-					"routine_schema":   "public",
+					"routine_schema":   defSchema,
 					"routine_name":     p.Name,
 					"routine_type":     "PROCEDURE",
 					"routine_body":     "SQL",
