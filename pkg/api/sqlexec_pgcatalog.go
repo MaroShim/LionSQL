@@ -1087,10 +1087,14 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"user_defined_type_name", "is_insertable_into", "is_typed",
 			"commit_action",
 		}
+		defSchema := "public"
+		if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
+			defSchema = "dbo"
+		}
 		for _, t := range tables {
 			allRows = append(allRows, map[string]any{
 				"table_catalog":                "sqlion",
-				"table_schema":                 "public",
+				"table_schema":                 defSchema,
 				"table_name":                   t.Name,
 				"table_type":                   "BASE TABLE",
 				"self_referencing_column_name": nil,
@@ -1145,6 +1149,10 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"identity_cycle", "is_generated", "generation_expression",
 			"is_updatable",
 		}
+		defSchema := "public"
+		if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
+			defSchema = "dbo"
+		}
 		for _, t := range tables {
 			for i, c := range t.Columns {
 				nullable := "YES"
@@ -1181,7 +1189,7 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 				}
 				allRows = append(allRows, map[string]any{
 					"table_catalog":            "sqlion",
-					"table_schema":             "public",
+					"table_schema":             defSchema,
 					"table_name":               t.Name,
 					"column_name":              c.Name,
 					"ordinal_position":         i + 1,

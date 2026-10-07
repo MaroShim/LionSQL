@@ -845,8 +845,16 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	// System function / version short-circuit
 	upper := strings.ToUpper(trimmed)
 	if strings.Contains(upper, "@@VERSION") {
+		colName := "version"
+		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
+			alias := strings.TrimSpace(trimmed[asIdx+4:])
+			alias = strings.Trim(alias, ";, []\"'")
+			if alias != "" {
+				colName = alias
+			}
+		}
 		cols := []ColumnInfo{
-			{Name: "", Type: TypeNVarChar, Size: 4000, Nullable: false},
+			{Name: colName, Type: TypeNVarChar, Size: 4000, Nullable: false},
 		}
 		var buf bytes.Buffer
 		buf.Write(BuildColMetaData(cols))
@@ -1616,8 +1624,16 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 	// System function / version short-circuit
 	upper := strings.ToUpper(trimmed)
 	if strings.Contains(upper, "@@VERSION") {
+		colName := "version"
+		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
+			alias := strings.TrimSpace(trimmed[asIdx+4:])
+			alias = strings.Trim(alias, ";, []\"'")
+			if alias != "" {
+				colName = alias
+			}
+		}
 		cols := []ColumnInfo{
-			{Name: "", Type: TypeNVarChar, Size: 4000, Nullable: false},
+			{Name: colName, Type: TypeNVarChar, Size: 4000, Nullable: false},
 		}
 		var buf bytes.Buffer
 		buf.Write(BuildColMetaData(cols))

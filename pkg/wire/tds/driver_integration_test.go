@@ -385,6 +385,20 @@ func TestDriverIntegration_GoMSSQLDB_MetadataAndDMVs(t *testing.T) {
 	}
 	t.Logf("@@VERSION: %s", version)
 
+	// 1b. Query SELECT @@VERSION as version (Beekeeper Studio query)
+	rowsVer, err := db.QueryContext(ctx, "SELECT @@VERSION as version")
+	if err != nil {
+		t.Fatalf("SELECT @@VERSION as version failed: %v", err)
+	}
+	cols, err := rowsVer.Columns()
+	if err != nil {
+		t.Fatalf("Columns() failed: %v", err)
+	}
+	if len(cols) != 1 || cols[0] != "version" {
+		t.Fatalf("expected column 'version', got %v", cols)
+	}
+	rowsVer.Close()
+
 	// 2. Query @@SPID
 	var spid int
 	if err := db.QueryRowContext(ctx, "SELECT @@SPID").Scan(&spid); err != nil {
