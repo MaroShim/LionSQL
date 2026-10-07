@@ -1567,9 +1567,13 @@ var heidiClassJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_class\s+(?:AS\s+)?c\s+
 var heidiProcJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_proc\s+(?:AS\s+)?p\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*p\.pronamespace`)
 var heidiAttrJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_attribute\s+(?:AS\s+)?a\s+JOIN\s+pg_class\s+(?:AS\s+)?pgc\s+ON\s+pgc\.oid\s*=\s*a\.attrelid`)
 var heidiFKJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_constraint\s+(?:AS\s+)?con\s+JOIN\s+pg_class\s+(?:AS\s+)?src_tbl`)
+var beekeeperTableJoinRe = regexp.MustCompile(`(?is)FROM\s+information_schema\.tables\s+(?:AS\s+)?t\s+JOIN\s+pg_class\s+(?:AS\s+)?pc\s+ON`)
 
 func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	upper := strings.ToUpper(sql)
+	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
+		return beekeeperTableJoinRe.MatchString(sql)
+	}
 	if strings.Contains(upper, "PG_CONSTRAINT") && strings.Contains(upper, "SRC_TBL") {
 		return heidiFKJoinRe.MatchString(sql)
 	}
@@ -1583,6 +1587,12 @@ func isHeidiSQLCatalogJoinQuery(sql string) bool {
 }
 
 func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
+	// Handle Beekeeper Studio table query:
+	// FROM information_schema.tables AS t JOIN pg_class AS pc ON ...
+	if beekeeperTableJoinRe.MatchString(sql) {
+		return s.execBeekeeperTableSelect(sql, start)
+	}
+
 	// Handle foreign key query:
 	// FROM pg_constraint con JOIN pg_class src_tbl ... WHERE con.contype = 'f'
 	if heidiFKJoinRe.MatchString(sql) {
@@ -1822,4 +1832,50 @@ func (s *Server) execHeidiSQLForeignKeySelect(sql string, start time.Time) (*Que
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
+
+func (s *Server) execBeekeeperTableSelect(sql string, start time.Time) (*QueryResult, error) {
+	// Beekeeper Studio queries:
+	// SELECT t.table_schema as schema, t.table_name as name, pc.relkind as tabletype, parent_pc.relkind as parenttype
+	// FROM information_schema.tables AS t
+	// JOIN pg_class AS pc ON t.table_name = pc.relname AND quote_ident(t.table_schema) = pc.relnamespace::regnamespace::text
+	// LEFT OUTER JOIN pg_inherits AS i ON pc.oid = i.inhrelid
+	// LEFT OUTER JOIN pg_class AS parent_pc ON parent_pc.oid = i.inhparent
+	// WHERE t.table_type NOT LIKE '%VIEW%'
+	// [AND table_schema = '...']
+	columns := []string{"schema", "name", "tabletype", "parenttype"}
+	var allRows []map[string]any
+
+	targetSchema := ""
+	schemaRe := regexp.MustCompile(`(?is)table_schema\s*=\s*'([^']+)'`)
+	if m := schemaRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetSchema = m[1]
+	}
+
+	tables, _ := s.engine.ListTables()
+	for _, t := range tables {
+		// sqlion user tables live in public and dbo
+		schemas := []string{"public"}
+		if targetSchema != "" {
+			schemas = []string{targetSchema}
+		}
+		for _, sch := range schemas {
+			allRows = append(allRows, map[string]any{
+				"schema":     sch,
+				"name":       t.Name,
+				"tabletype":  "r",
+				"parenttype": "r",
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
 

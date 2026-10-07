@@ -313,3 +313,53 @@ ORDER BY
 	}
 }
 
+func TestPgCatalog_BeekeeperStudioTableListQuery(t *testing.T) {
+	server, _, _ := setupCatalogTestServer(t)
+
+	beekeeperQuery := `
+SELECT
+  t.table_schema as schema,
+  t.table_name as name,
+  pc.relkind as tabletype,
+  parent_pc.relkind as parenttype
+FROM information_schema.tables AS t
+JOIN pg_class AS pc
+  ON t.table_name = pc.relname AND quote_ident(t.table_schema) = pc.relnamespace::regnamespace::text
+LEFT OUTER JOIN pg_inherits AS i
+  ON pc.oid = i.inhrelid
+LEFT OUTER JOIN pg_class AS parent_pc
+  ON parent_pc.oid = i.inhparent
+WHERE t.table_type NOT LIKE '%VIEW%'
+ORDER BY t.table_schema, t.table_name`
+
+	res, err := server.ExecuteSQL(beekeeperQuery)
+	if err != nil {
+		t.Fatalf("Beekeeper table list query failed: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("Beekeeper table list query was not successful")
+	}
+
+	expectedCols := []string{"schema", "name", "tabletype", "parenttype"}
+	if len(res.Columns) != len(expectedCols) {
+		t.Fatalf("expected columns %v, got %v", expectedCols, res.Columns)
+	}
+
+	// Should contain departments and employees
+	foundDept := false
+	foundEmp := false
+	for _, row := range res.Rows {
+		name := fmt.Sprintf("%v", row["name"])
+		if name == "departments" {
+			foundDept = true
+		} else if name == "employees" {
+			foundEmp = true
+		}
+	}
+
+	if !foundDept || !foundEmp {
+		t.Errorf("expected both departments and employees in Beekeeper table list, got rows: %+v", res.Rows)
+	}
+}
+
+
