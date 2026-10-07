@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"regexp"
 	"strings"
@@ -35,6 +36,7 @@ type Server struct {
 	txCounter   uint64
 	tlsConfig   *tls.Config
 	requireSSL  bool
+	devMode     bool
 	mu          sync.Mutex
 	closed      bool
 	wg          sync.WaitGroup
@@ -161,6 +163,20 @@ func (s *Server) RequireSSL() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.requireSSL
+}
+
+// SetDevMode enables or disables developer debug logging for TDS wire batches and RPCs.
+func (s *Server) SetDevMode(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devMode = enabled
+}
+
+// DevMode reports whether developer debug logging is active.
+func (s *Server) DevMode() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.devMode
 }
 
 func (s *Server) acceptLoop() {
@@ -447,6 +463,9 @@ func readLoginString(payload []byte, offsetPos int) string {
 
 func (s *Server) handleSQLBatch(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
 	query := extractSQLBatchQuery(pkt.Payload)
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][SQLBatch] %s", query)
+	}
 	s.executeQueryAndRespond(conn, query, sess)
 }
 
@@ -841,14 +860,24 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		return
 	}
 
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Query] %s", trimmed)
+	}
+
 	res, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, trimmed)
 	if err != nil {
+		if s.DevMode() {
+			log.Printf("[DEV][TDS][Error] query=%s err=%v", trimmed, err)
+		}
 		var buf bytes.Buffer
 		buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
 		buf.Write(BuildReturnStatus(-1))
 		buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 		return
+	}
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Success] query=%s cols=%v rows=%d duration=%dµs", trimmed, res.Columns, len(res.Rows), res.DurationUS)
 	}
 
 	var buf bytes.Buffer

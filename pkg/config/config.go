@@ -93,6 +93,7 @@ func (g GeneralQueryLogConfig) IsEnabled() bool {
 type LoggingConfig struct {
 	SlowQuery    SlowQueryLogConfig    `json:"slow_query"`
 	GeneralQuery GeneralQueryLogConfig `json:"general_query"`
+	DevMode      bool                  `json:"dev_mode,omitempty"`
 }
 
 // ReplicationConfig defines 1-Writer Multi-Reader HA availability group parameters.

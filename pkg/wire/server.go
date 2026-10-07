@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"regexp"
 	"strconv"
@@ -40,6 +41,7 @@ type Server struct {
 	activeConns map[uint32]*pgActiveConn
 	tlsConfig   *tls.Config
 	requireSSL  bool
+	devMode     bool
 	mu          sync.Mutex
 	closed      bool
 }
@@ -109,6 +111,20 @@ func (s *Server) SetRequireSSL(require bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.requireSSL = require
+}
+
+// SetDevMode enables or disables developer debug logging for wire queries and parameters.
+func (s *Server) SetDevMode(enabled bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.devMode = enabled
+}
+
+// DevMode reports whether developer debug logging is active.
+func (s *Server) DevMode() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.devMode
 }
 
 // TLSConfig returns the current TLS configuration.
@@ -454,6 +470,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 }
 
 func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
+	if s.DevMode() {
+		log.Printf("[DEV][PGWire][SimpleQuery] %s", strings.TrimSpace(query))
+	}
 	defer func() {
 		_ = WriteReadyForQueryStatus(conn, s.apiServer.GetSessionTxStatus(sessID))
 	}()
@@ -474,6 +493,9 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements map[strin
 	r := bytes.NewReader(payload)
 	stmtName, _ := readCString(r)
 	queryStr, _ := readCString(r)
+	if s.DevMode() {
+		log.Printf("[DEV][PGWire][Parse] stmt=%q query=%s", stmtName, queryStr)
+	}
 
 	var numParamTypes int16
 	_ = binary.Read(r, binary.BigEndian, &numParamTypes)
@@ -518,6 +540,9 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string
 	r := bytes.NewReader(payload)
 	portalName, _ := readCString(r)
 	stmtName, _ := readCString(r)
+	if s.DevMode() {
+		log.Printf("[DEV][PGWire][Bind] portal=%q stmt=%q", portalName, stmtName)
+	}
 
 	stmt, exists := statements[stmtName]
 	if !exists {
@@ -578,6 +603,9 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements map[st
 
 	targetType := payload[0]
 	targetName := string(bytes.TrimRight(payload[1:], "\x00"))
+	if s.DevMode() {
+		log.Printf("[DEV][PGWire][Describe] type=%c name=%q", targetType, targetName)
+	}
 
 	if targetType == 'S' {
 		stmt, exists := statements[targetName]
@@ -679,6 +707,9 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string) {
 func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string]*Portal, sessID string) {
 	r := bytes.NewReader(payload)
 	portalName, _ := readCString(r)
+	if s.DevMode() {
+		log.Printf("[DEV][PGWire][Execute] portal=%q", portalName)
+	}
 
 	portal, exists := portals[portalName]
 	if !exists {
@@ -845,8 +876,14 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 	}
 	res, err := s.apiServer.ExecuteSessionSQL(sessID, trimmed)
 	if err != nil {
+		if s.DevMode() {
+			log.Printf("[DEV][PGWire][Error] query=%s err=%v", trimmed, err)
+		}
 		_ = WriteError(conn, err.Error())
 		return
+	}
+	if s.DevMode() {
+		log.Printf("[DEV][PGWire][Success] query=%s cols=%v rows=%d duration=%dµs", trimmed, res.Columns, len(res.Rows), res.DurationUS)
 	}
 
 	if len(res.Columns) > 0 {

@@ -65,6 +65,7 @@ func main() {
 	configPath := flag.String("config", "", "Path to JSON configuration file (default: auto-detect ./sqlion.json or <dir>/sqlion.json)")
 	initConfig := flag.String("init-config", "", "Generate a default sqlion.json configuration file at specified path (or ./sqlion.json) and exit")
 	doctorFlag := flag.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
+	devFlag := flag.Bool("dev", false, "Enable developer mode (verbose wire query and parameter logging on stdout/stderr)")
 
 	// Daemon control flags
 	var daemon bool
@@ -169,6 +170,9 @@ func main() {
 	}
 	if visited["general-log"] {
 		cfg.Logging.GeneralQuery.File = resolveLogFilePath(*generalLog, "general.log", cfg.Server.DataDir)
+	}
+	if visited["dev"] {
+		cfg.Logging.DevMode = *devFlag
 	}
 	if visited["replica-of"] {
 		cfg.Replication.PrimaryURL = *replicaOf
@@ -491,9 +495,11 @@ func main() {
 
 	if pgEnabled {
 		wireServer = wire.NewServerWithCache(cfg.Network.PGAddr, cat, eng, sharedCache)
+		wireServer.SetDevMode(cfg.Logging.DevMode)
 	}
 	if tdsEnabled {
 		tdsServer = tds.NewServerWithCache(cfg.Network.TDSAddr, cat, eng, sharedCache)
+		tdsServer.SetDevMode(cfg.Logging.DevMode)
 	}
 
 	if (pgEnabled || tdsEnabled) && cfg.Network.TLS.IsEnabled() {
@@ -598,6 +604,9 @@ func main() {
 		}
 		if repMgr != nil {
 			fmt.Printf(" [Replication]    Role: %s, Node: %s (HistoryCap: %d)\n", repMgr.Role(), cfg.Replication.NodeID, cfg.Replication.HistoryCap)
+		}
+		if cfg.Logging.DevMode {
+			fmt.Println(" [Developer Mode] Enabled (-dev: Real-time Wire Query & Error Tracing)")
 		}
 		fmt.Println("------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")
