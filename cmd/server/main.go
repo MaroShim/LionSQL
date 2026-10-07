@@ -578,12 +578,12 @@ func main() {
 		}
 		fmt.Printf(" [Superuser Auth] %s (JWT Auth: %v)\n", cfg.Auth.AdminEmail, cfg.Auth.Enabled)
 		if wireServer != nil && strings.Contains(cfg.Network.PGAddr, ":") {
-			fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (DBeaver / psql)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
+			fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (Beekeeper / DBeaver / psql)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
 		} else {
 			fmt.Println(" [Postgres Wire]  Disabled (opted out)")
 		}
 		if tdsServer != nil && strings.Contains(cfg.Network.TDSAddr, ":") {
-			fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (DBeaver / Azure Data Studio / pymssql)\n", strings.Split(cfg.Network.TDSAddr, ":")[1])
+			fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (Beekeeper / DBeaver / Azure Data Studio / pymssql)\n", strings.Split(cfg.Network.TDSAddr, ":")[1])
 		} else {
 			fmt.Println(" [TDS / MSSQL]    Disabled (opted out)")
 		}

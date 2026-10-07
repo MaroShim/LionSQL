@@ -170,8 +170,8 @@ Upon startup, the console displays the connection endpoints:
  [Web Dashboard]  http://127.0.0.1:8090/_/
  [HTTP API]       http://127.0.0.1:8090/api/health
  [Superuser Auth] admin@sqlion.local (JWT Auth: false)
- [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (DBeaver / psql)
- [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (DBeaver / Azure Data Studio / pymssql)
+ [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (Beekeeper / DBeaver / psql)
+ [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (Beekeeper / DBeaver / Azure Data Studio / pymssql)
  [Data Directory] data
  [Storage Engine] wiredtiger
  [Session Pooler] Max Workers: 32, Max Idle Sessions: 64 (No PgBouncer required)
