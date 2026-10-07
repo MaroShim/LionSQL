@@ -490,13 +490,22 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 
 	case "sys.databases", "sysdatabases", "sys_databases":
 		columns = []string{"name", "schema_name", "database_id", "create_date", "state_desc"}
-		allRows = append(allRows, map[string]any{
-			"name":        "sqlion",
-			"schema_name": "sqlion",
-			"database_id": 1,
-			"create_date": "2026-01-01T00:00:00Z",
-			"state_desc":  "ONLINE",
-		})
+		allRows = append(allRows,
+			map[string]any{
+				"name":        "master",
+				"schema_name": "dbo",
+				"database_id": 1,
+				"create_date": "2026-01-01T00:00:00Z",
+				"state_desc":  "ONLINE",
+			},
+			map[string]any{
+				"name":        "sqlion",
+				"schema_name": "dbo",
+				"database_id": 2,
+				"create_date": "2026-01-01T00:00:00Z",
+				"state_desc":  "ONLINE",
+			},
+		)
 
 	case "sys.procedures", "sysprocedures", "sys_procedures":
 		columns = []string{"routine_name", "routine_type", "routine_schema", "created_date"}

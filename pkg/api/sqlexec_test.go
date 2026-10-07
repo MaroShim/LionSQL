@@ -799,7 +799,7 @@ func TestSQLExecutor_VirtualCatalogViews(t *testing.T) {
 	if err != nil || !res.Success {
 		t.Fatalf("query sys.databases failed: %v", err)
 	}
-	if len(res.Rows) != 1 || res.Rows[0]["name"] != "sqlion" {
+	if len(res.Rows) < 2 {
 		t.Fatalf("unexpected sys.databases: %+v", res.Rows)
 	}
 }

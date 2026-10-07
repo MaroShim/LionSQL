@@ -1246,6 +1246,7 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"default_character_set_name", "sql_path",
 		}
 		allRows = append(allRows,
+			map[string]any{"catalog_name": "sqlion", "schema_name": "dbo", "schema_owner": "sa", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
 			map[string]any{"catalog_name": "sqlion", "schema_name": "public", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
 			map[string]any{"catalog_name": "sqlion", "schema_name": "information_schema", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
 			map[string]any{"catalog_name": "sqlion", "schema_name": "pg_catalog", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
