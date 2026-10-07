@@ -397,7 +397,41 @@ func TestDriverIntegration_GoMSSQLDB_MetadataAndDMVs(t *testing.T) {
 	if len(cols) != 1 || cols[0] != "version" {
 		t.Fatalf("expected column 'version', got %v", cols)
 	}
+	if !rowsVer.Next() {
+		t.Fatalf("expected at least 1 row for version")
+	}
+	var verVal string
+	if err := rowsVer.Scan(&verVal); err != nil {
+		t.Fatalf("Scan version failed: %v", err)
+	}
+	if verVal == "" {
+		t.Fatalf("expected non-empty version")
+	}
 	rowsVer.Close()
+
+	// 1c. RPC Query: sp_executesql N'SELECT @@VERSION as version' (Beekeeper RPC mode)
+	rowsVerRPC, err := db.QueryContext(ctx, "exec sp_executesql N'SELECT @@VERSION as version'")
+	if err != nil {
+		t.Fatalf("RPC SELECT @@VERSION as version failed: %v", err)
+	}
+	colsRPC, err := rowsVerRPC.Columns()
+	if err != nil {
+		t.Fatalf("Columns() failed: %v", err)
+	}
+	if len(colsRPC) != 1 || colsRPC[0] != "version" {
+		t.Fatalf("expected column 'version', got %v", colsRPC)
+	}
+	if !rowsVerRPC.Next() {
+		t.Fatalf("expected at least 1 row for RPC version")
+	}
+	var verRPCVal string
+	if err := rowsVerRPC.Scan(&verRPCVal); err != nil {
+		t.Fatalf("Scan RPC version failed: %v", err)
+	}
+	if verRPCVal == "" {
+		t.Fatalf("expected non-empty version from RPC")
+	}
+	rowsVerRPC.Close()
 
 	// 2. Query @@SPID
 	var spid int

@@ -845,6 +845,9 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	// System function / version short-circuit
 	upper := strings.ToUpper(trimmed)
 	if strings.Contains(upper, "@@VERSION") {
+		if s.DevMode() {
+			log.Printf("[DEV][TDS][Query] %s", trimmed)
+		}
 		colName := "version"
 		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
 			alias := strings.TrimSpace(trimmed[asIdx+4:])
@@ -859,12 +862,20 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		var buf bytes.Buffer
 		buf.Write(BuildColMetaData(cols))
 		buf.Write(BuildRow(cols, []any{"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine"}))
+		doneStatus := DoneFinal
+		if sess.inTx {
+			doneStatus |= DoneInXact
+		}
+		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
 		buf.Write(BuildReturnStatus(0))
-		buf.Write(BuildDoneProc(DoneFinal|DoneCount, 0xC1, 1))
+		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		if s.DevMode() {
+			log.Printf("[DEV][TDS][Success] query=%s cols=%v rows=1", trimmed, []string{colName})
+		}
 		return
 	}
 
