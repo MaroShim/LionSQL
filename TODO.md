@@ -15,7 +15,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - Extended Query 프로토콜 매개변수 개수 추론(`handleParse`), 투영 컬럼 스키마 매칭(`writeSchemaDescription`), `Bind` 결과 바이너리 포맷 코드 지원(`formatColumnValue`, `WriteDataRowBytes`).
   - `BEGIN READ WRITE` 등 유연한 트랜잭션 구문 확장 및 PostgreSQL 표준 CommandComplete 태그 매핑.
   - 드라이버 Ping, 기본 쿼리, CRUD, 매개변수 쿼리, Prepared Statements, 트랜잭션(커밋/롤백), 세션 옵션, 메타데이터 100% 통과.
-- [ ] **현대 표준 Go 드라이버 `pgx/v5` 통합 검증 및 파이프라이닝 지원 (`pkg/wire`)**
+- [x] **현대 표준 Go 드라이버 `pgx/v5` 통합 검증 및 파이프라이닝 지원 (`pkg/wire`)**
   - `github.com/jackc/pgx/v5` 기반 E2E 통합 테스트 스위트 구축.
   - Extended Query `Flush`(`'H'`) 메시지 처리 및 파이프라이닝 상태 머신 동기화.
   - `timestamp`, `timestamptz`, `bool`, `float8` 등 `pgx` 바이너리 인코딩/디코딩 타입 확장.

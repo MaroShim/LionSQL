@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"regexp"
 	"strconv"
@@ -569,7 +570,21 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string
 		} else {
 			valBytes := make([]byte, paramLen)
 			_, _ = io.ReadFull(r, valBytes)
-			paramVals[i] = string(valBytes)
+			isBinary := false
+			if len(formats) == 1 && formats[0] == 1 {
+				isBinary = true
+			} else if i < len(formats) && formats[i] == 1 {
+				isBinary = true
+			}
+			if isBinary {
+				var pType int32 = 0
+				if i < len(stmt.ParamTypes) {
+					pType = stmt.ParamTypes[i]
+				}
+				paramVals[i] = decodeBinaryParam(valBytes, pType)
+			} else {
+				paramVals[i] = string(valBytes)
+			}
 		}
 	}
 
@@ -595,6 +610,103 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string
 	_ = WriteBindComplete(conn)
 }
 
+func decodeBinaryParam(b []byte, oid int32) string {
+	switch oid {
+	case 23: // INT4
+		if len(b) >= 4 {
+			return strconv.Itoa(int(int32(binary.BigEndian.Uint32(b))))
+		}
+	case 20: // INT8
+		if len(b) >= 8 {
+			return strconv.FormatInt(int64(binary.BigEndian.Uint64(b)), 10)
+		}
+	case 21: // INT2
+		if len(b) >= 2 {
+			return strconv.Itoa(int(int16(binary.BigEndian.Uint16(b))))
+		}
+	case 16: // BOOL
+		if len(b) >= 1 {
+			if b[0] != 0 {
+				return "true"
+			}
+			return "false"
+		}
+	case 701: // FLOAT8
+		if len(b) >= 8 {
+			bits := binary.BigEndian.Uint64(b)
+			return strconv.FormatFloat(math.Float64frombits(bits), 'f', -1, 64)
+		}
+	case 700: // FLOAT4
+		if len(b) >= 4 {
+			bits := binary.BigEndian.Uint32(b)
+			return strconv.FormatFloat(float64(math.Float32frombits(bits)), 'f', -1, 32)
+		}
+	case 1114, 1184: // TIMESTAMP / TIMESTAMPTZ
+		if len(b) >= 8 {
+			micros := int64(binary.BigEndian.Uint64(b))
+			pgEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+			t := pgEpoch.Add(time.Duration(micros) * time.Microsecond)
+			return t.Format("2006-01-02 15:04:05.999999")
+		}
+	case 1082: // DATE
+		if len(b) >= 4 {
+			days := int32(binary.BigEndian.Uint32(b))
+			pgEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+			t := pgEpoch.AddDate(0, 0, int(days))
+			return t.Format("2006-01-02")
+		}
+	default:
+		if len(b) == 4 {
+			return strconv.Itoa(int(int32(binary.BigEndian.Uint32(b))))
+		} else if len(b) == 8 {
+			return strconv.FormatInt(int64(binary.BigEndian.Uint64(b)), 10)
+		} else if len(b) == 2 {
+			return strconv.Itoa(int(int16(binary.BigEndian.Uint16(b))))
+		} else if len(b) == 1 {
+			if b[0] == 0 {
+				return "false"
+			} else if b[0] == 1 {
+				return "true"
+			}
+		}
+	}
+	return string(b)
+}
+
+func buildPreviewSQL(query string, paramTypes []int32) string {
+	matches := pgParamRe.FindAllStringSubmatch(query, -1)
+	if len(matches) == 0 {
+		return query
+	}
+	res := query
+	for _, m := range matches {
+		if len(m) == 2 {
+			idx, err := strconv.Atoi(m[1])
+			if err == nil {
+				paramOID := int32(0)
+				if idx-1 < len(paramTypes) {
+					paramOID = paramTypes[idx-1]
+				}
+				replacement := "1"
+				switch paramOID {
+				case 23, 20, 21:
+					replacement = "1"
+				case 701, 700, 1700:
+					replacement = "1.0"
+				case 16:
+					replacement = "true"
+				case 25, 1043:
+					replacement = "'sample'"
+				default:
+					replacement = "1"
+				}
+				res = strings.ReplaceAll(res, m[0], replacement)
+			}
+		}
+	}
+	return res
+}
+
 func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
 	if len(payload) < 2 {
 		_ = WriteNoData(conn)
@@ -614,20 +726,24 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements map[st
 			return
 		}
 		_ = WriteParameterDescription(conn, stmt.ParamTypes)
-		s.writeSchemaDescription(conn, stmt.Query)
+		s.writeSchemaDescription(conn, stmt.Query, stmt.ParamTypes)
 	} else if targetType == 'P' {
 		portal, exists := portals[targetName]
 		if !exists {
 			_ = WriteError(conn, fmt.Sprintf("portal %q does not exist", targetName))
 			return
 		}
-		s.writeSchemaDescription(conn, portal.Statement.Query)
+		var paramTypes []int32
+		if portal.Statement != nil {
+			paramTypes = portal.Statement.ParamTypes
+		}
+		s.writeSchemaDescription(conn, portal.Statement.Query, paramTypes)
 	} else {
 		_ = WriteNoData(conn)
 	}
 }
 
-func (s *Server) writeSchemaDescription(conn net.Conn, query string) {
+func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes []int32) {
 	upper := strings.ToUpper(strings.TrimSpace(query))
 	if strings.Contains(upper, "SELECT") && strings.Contains(upper, "FROM") {
 		parts := strings.Split(upper, "FROM")
@@ -687,6 +803,8 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string) {
 						var oid int32 = 25
 						if found {
 							oid = typeToPgOID(colType)
+						} else if strings.HasPrefix(strings.ToUpper(colName), "COUNT") {
+							oid = 20 // int8
 						}
 						cols = append(cols, ColumnMeta{
 							Name:     colName,
@@ -701,6 +819,29 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string) {
 			}
 		}
 	}
+
+	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
+		if strings.Contains(upper, "VERSION()") {
+			cols := []ColumnMeta{{Name: "version", DataType: 25}}
+			_ = WriteRowDescription(conn, cols)
+			return
+		}
+		previewSQL := buildPreviewSQL(query, paramTypes)
+		if res, err := s.apiServer.ExecuteSessionSQL("default", previewSQL); err == nil && len(res.Columns) > 0 {
+			var sampleRow map[string]any
+			if len(res.Rows) > 0 {
+				sampleRow = res.Rows[0]
+			}
+			colOIDs := s.resolveColumnOIDs(previewSQL, res.Columns, sampleRow)
+			cols := make([]ColumnMeta, len(res.Columns))
+			for i, c := range res.Columns {
+				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i]}
+			}
+			_ = WriteRowDescription(conn, cols)
+			return
+		}
+	}
+
 	_ = WriteNoData(conn)
 }
 
@@ -856,15 +997,36 @@ func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool
 	s.runAndWriteQueryWithFormats(conn, query, writeRowDesc, sessID, nil)
 }
 
+var blockCommentRe = regexp.MustCompile(`(?s)/\*.*?\*/`)
+
+func stripSQLComments(query string) string {
+	noBlock := blockCommentRe.ReplaceAllString(query, "")
+	lines := strings.Split(noBlock, "\n")
+	var sb strings.Builder
+	for _, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmedLine, "--") {
+			continue
+		}
+		if idx := strings.Index(line, "--"); idx != -1 {
+			line = line[:idx]
+		}
+		sb.WriteString(line)
+		sb.WriteByte('\n')
+	}
+	return strings.TrimSpace(sb.String())
+}
+
 func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeRowDesc bool, sessID string, resultFormats []int16) {
-	trimmed := strings.TrimSpace(query)
-	if trimmed == "" || trimmed == ";" {
+	cleaned := stripSQLComments(query)
+	if cleaned == "" || cleaned == ";" {
 		if s.DevMode() {
 			log.Printf("[DEV][PGWire][EmptyQuery] responding with EmptyQueryResponse ('I')")
 		}
 		_ = WriteEmptyQueryResponse(conn)
 		return
 	}
+	trimmed := cleaned
 	upper := strings.ToUpper(trimmed)
 
 	// Builtin pg check
@@ -965,7 +1127,10 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 			}
 		}
 		if oid == 0 {
-			if sampleRow != nil {
+			upperCol := strings.ToUpper(colName)
+			if strings.HasPrefix(upperCol, "COUNT") {
+				oid = 20 // int8
+			} else if sampleRow != nil {
 				val := getRowValue(sampleRow, colName)
 				if val != nil {
 					oid = inferPgOID(val)
@@ -1051,6 +1216,89 @@ func formatColumnValue(val any, oid int32, isBinary bool) []byte {
 		if b, ok := val.([]byte); ok {
 			return b
 		}
+		return []byte(fmt.Sprintf("%v", val))
+	case 16: // BOOL
+		b := byte(0)
+		switch v := val.(type) {
+		case bool:
+			if v {
+				b = 1
+			}
+		default:
+			str := strings.ToLower(fmt.Sprintf("%v", val))
+			if str == "true" || str == "1" || str == "t" {
+				b = 1
+			}
+		}
+		return []byte{b}
+	case 701: // FLOAT8
+		var f float64
+		switch v := val.(type) {
+		case float64:
+			f = v
+		case float32:
+			f = float64(v)
+		case int:
+			f = float64(v)
+		case int64:
+			f = float64(v)
+		default:
+			if parsed, err := strconv.ParseFloat(fmt.Sprintf("%v", val), 64); err == nil {
+				f = parsed
+			}
+		}
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, math.Float64bits(f))
+		return b
+	case 700: // FLOAT4
+		var f float32
+		switch v := val.(type) {
+		case float32:
+			f = v
+		case float64:
+			f = float32(v)
+		case int:
+			f = float32(v)
+		default:
+			if parsed, err := strconv.ParseFloat(fmt.Sprintf("%v", val), 32); err == nil {
+				f = float32(parsed)
+			}
+		}
+		b := make([]byte, 4)
+		binary.BigEndian.PutUint32(b, math.Float32bits(f))
+		return b
+	case 1114, 1184: // TIMESTAMP / TIMESTAMPTZ
+		var t time.Time
+		switch v := val.(type) {
+		case time.Time:
+			t = v
+		default:
+			parsed, err := time.Parse(time.RFC3339, fmt.Sprintf("%v", val))
+			if err != nil {
+				parsed, _ = time.Parse("2006-01-02 15:04:05", fmt.Sprintf("%v", val))
+			}
+			t = parsed
+		}
+		pgEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+		micros := t.UTC().Sub(pgEpoch).Microseconds()
+		b := make([]byte, 8)
+		binary.BigEndian.PutUint64(b, uint64(micros))
+		return b
+	case 1082: // DATE
+		var t time.Time
+		switch v := val.(type) {
+		case time.Time:
+			t = v
+		default:
+			parsed, _ := time.Parse("2006-01-02", fmt.Sprintf("%v", val))
+			t = parsed
+		}
+		pgEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+		days := int32(t.UTC().Sub(pgEpoch).Hours() / 24)
+		b := make([]byte, 4)
+		binary.BigEndian.PutUint32(b, uint32(days))
+		return b
+	case 25, 1043: // TEXT, VARCHAR
 		return []byte(fmt.Sprintf("%v", val))
 	default:
 		return []byte(fmt.Sprintf("%v", val))

@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **PostgreSQL Modern Driver Compatibility: `pgx/v5` & Pipelining (`pkg/wire`)**:
+  - Integrated official `github.com/jackc/pgx/v5` modern Go driver test suite (`pkg/wire/pgx_integration_test.go`) covering direct connection, stdlib `sql.Open("pgx", ...)`, CRUD, parameters, transactions, pipelined batch execution, and data types.
+  - Implemented binary parameter decoding (`decodeBinaryParam`) supporting `int4`, `int8`, `int2`, `bool`, `float4`, `float8`, `timestamp`, `timestamptz`, `date`, and string types.
+  - Extended binary column value serialization (`formatColumnValue`) supporting `BOOL` (1 byte), `FLOAT4` (4 bytes IEEE-754), `FLOAT8` (8 bytes IEEE-754), `TIMESTAMP`/`TIMESTAMPTZ` (microseconds since PG epoch), `DATE` (days since PG epoch), and text/varchar.
+  - Enhanced `writeSchemaDescription` with `buildPreviewSQL` to accurately infer and describe column OIDs for non-table scalar expressions (`SELECT 40 + 2`, `SELECT $1 + $2`, aggregates like `COUNT(*)`) in response to Extended Query `Describe` ('D').
+  - Implemented SQL comment stripping (`stripSQLComments`) and proper `EmptyQueryResponse` ('I') handling for comment-only queries (`-- ping`) sent by driver health-check probes.
+  - Verified 100% pass across direct `pgx.Connect`, parameterized queries, table CRUD, atomic transaction commit/rollback, `pgx.Batch` pipelining, and `database/sql` stdlib.
+
 - **PostgreSQL Official Client Driver Compatibility (`pkg/wire`)**:
   - Integrated official client driver verification suite (`pkg/wire/driver_integration_test.go`) utilizing `github.com/lib/pq v1.12.3`.
   - Added parameter count inference in `handleParse` for client queries utilizing `$1`, `$2` parameter placeholders when client passes 0 explicit parameter types.
