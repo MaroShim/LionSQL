@@ -858,6 +858,13 @@ func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool
 
 func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeRowDesc bool, sessID string, resultFormats []int16) {
 	trimmed := strings.TrimSpace(query)
+	if trimmed == "" || trimmed == ";" {
+		if s.DevMode() {
+			log.Printf("[DEV][PGWire][EmptyQuery] responding with EmptyQueryResponse ('I')")
+		}
+		_ = WriteEmptyQueryResponse(conn)
+		return
+	}
 	upper := strings.ToUpper(trimmed)
 
 	// Builtin pg check

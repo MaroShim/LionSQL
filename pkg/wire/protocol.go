@@ -20,6 +20,7 @@ const (
 	MsgBindComplete         byte = '2'
 	MsgCloseComplete        byte = '3'
 	MsgNoData               byte = 'n'
+	MsgEmptyQueryResponse   byte = 'I'
 	MsgParameterDescription byte = 't'
 	MsgCopyInResponse       byte = 'G'
 	MsgCopyOutResponse      byte = 'H'
@@ -65,6 +66,13 @@ func WriteCloseComplete(w io.Writer) error {
 // WriteNoData sends NoData ('n') message.
 func WriteNoData(w io.Writer) error {
 	buf := []byte{MsgNoData, 0, 0, 0, 4}
+	_, err := w.Write(buf)
+	return err
+}
+
+// WriteEmptyQueryResponse sends EmptyQueryResponse ('I') message for empty queries per PG wire spec.
+func WriteEmptyQueryResponse(w io.Writer) error {
+	buf := []byte{MsgEmptyQueryResponse, 0, 0, 0, 4}
 	_, err := w.Write(buf)
 	return err
 }
@@ -216,9 +224,9 @@ func WriteRowDescription(w io.Writer, cols []ColumnMeta) error {
 		}
 		binary.BigEndian.PutUint16(buf[offset:], uint16(typeSize)) // type size
 		offset += 2
-		binary.BigEndian.PutUint32(buf[offset:], 0) // type modifier
+		binary.BigEndian.PutUint32(buf[offset:], 0xFFFFFFFF)       // type modifier (-1: no modifier)
 		offset += 4
-		binary.BigEndian.PutUint16(buf[offset:], 0) // format text
+		binary.BigEndian.PutUint16(buf[offset:], 0)                // format text
 		offset += 2
 	}
 
