@@ -1566,9 +1566,13 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 var heidiClassJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_class\s+(?:AS\s+)?c\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*c\.relnamespace`)
 var heidiProcJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_proc\s+(?:AS\s+)?p\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*p\.pronamespace`)
 var heidiAttrJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_attribute\s+(?:AS\s+)?a\s+JOIN\s+pg_class\s+(?:AS\s+)?pgc\s+ON\s+pgc\.oid\s*=\s*a\.attrelid`)
+var heidiFKJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_constraint\s+(?:AS\s+)?con\s+JOIN\s+pg_class\s+(?:AS\s+)?src_tbl`)
 
 func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	upper := strings.ToUpper(sql)
+	if strings.Contains(upper, "PG_CONSTRAINT") && strings.Contains(upper, "SRC_TBL") {
+		return heidiFKJoinRe.MatchString(sql)
+	}
 	if strings.Contains(upper, "PG_NAMESPACE") {
 		return heidiClassJoinRe.MatchString(sql) || heidiProcJoinRe.MatchString(sql)
 	}
@@ -1579,6 +1583,12 @@ func isHeidiSQLCatalogJoinQuery(sql string) bool {
 }
 
 func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
+	// Handle foreign key query:
+	// FROM pg_constraint con JOIN pg_class src_tbl ... WHERE con.contype = 'f'
+	if heidiFKJoinRe.MatchString(sql) {
+		return s.execHeidiSQLForeignKeySelect(sql, start)
+	}
+
 	// Handle column metadata query:
 	// FROM pg_attribute AS a JOIN pg_class AS pgc ON pgc.oid = a.attrelid ... WHERE ...
 	if heidiAttrJoinRe.MatchString(sql) {
@@ -1710,6 +1720,95 @@ func (s *Server) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (
 				"column_comment":           nil,
 				"column_default":           nil,
 				"character_maximum_length": maxLen,
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execHeidiSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
+	// Extract table name from src_tbl.relname = '...' if present
+	targetTable := ""
+	tblRe := regexp.MustCompile(`(?is)src_tbl\.relname\s*=\s*'([^']+)'`)
+	if m := tblRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetTable = m[1]
+	}
+
+	targetSchema := "public"
+	nspRe := regexp.MustCompile(`(?is)src_ns\.nspname\s*=\s*'([^']+)'`)
+	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetSchema = m[1]
+	}
+
+	columns := []string{
+		"constraint_name",
+		"update_rule",
+		"delete_rule",
+		"table_schema",
+		"table_name",
+		"columns",
+		"ref_schema",
+		"ref_table",
+		"ref_columns",
+		"ord_position",
+	}
+
+	var allRows []map[string]any
+	tables, _ := s.engine.ListTables()
+
+	for _, t := range tables {
+		if targetTable != "" && !strings.EqualFold(t.Name, targetTable) {
+			continue
+		}
+		for _, fk := range t.ForeignKeys {
+			updRule := "NO ACTION"
+			switch fk.OnUpdate {
+			case storage.ActionCascade:
+				updRule = "CASCADE"
+			case storage.ActionSetNull:
+				updRule = "SET NULL"
+			case storage.ActionSetDefault:
+				updRule = "SET DEFAULT"
+			case storage.ActionRestrict:
+				updRule = "RESTRICT"
+			}
+
+			delRule := "NO ACTION"
+			switch fk.OnDelete {
+			case storage.ActionCascade:
+				delRule = "CASCADE"
+			case storage.ActionSetNull:
+				delRule = "SET NULL"
+			case storage.ActionSetDefault:
+				delRule = "SET DEFAULT"
+			case storage.ActionRestrict:
+				delRule = "RESTRICT"
+			}
+
+			var posList []string
+			for p := 1; p <= len(fk.ChildColumns); p++ {
+				posList = append(posList, fmt.Sprintf("%d", p))
+			}
+
+			allRows = append(allRows, map[string]any{
+				"constraint_name": fk.Name,
+				"update_rule":     updRule,
+				"delete_rule":     delRule,
+				"table_schema":    targetSchema,
+				"table_name":      t.Name,
+				"columns":         strings.Join(fk.ChildColumns, ","),
+				"ref_schema":      targetSchema,
+				"ref_table":       fk.ParentTable,
+				"ref_columns":     strings.Join(fk.ParentColumns, ","),
+				"ord_position":    strings.Join(posList, ","),
 			})
 		}
 	}

@@ -590,20 +590,29 @@ func parseCTEs(query string) ([]CTEInfo, string) {
 	return nil, trimmed
 }
 
-// SplitProjections splits projection list while respecting nested parentheses.
+// SplitProjections splits projection list while respecting nested parentheses and string literals.
 func SplitProjections(s string) []string {
 	var result []string
 	var cur strings.Builder
 	depth := 0
+	inString := false
 	for i := 0; i < len(s); i++ {
 		ch := s[i]
-		if ch == '(' {
-			depth++
-		} else if ch == ')' && depth > 0 {
-			depth--
+		if ch == '\'' {
+			inString = !inString
+			cur.WriteByte(ch)
+			continue
 		}
 
-		if ch == ',' && depth == 0 {
+		if !inString {
+			if ch == '(' {
+				depth++
+			} else if ch == ')' && depth > 0 {
+				depth--
+			}
+		}
+
+		if ch == ',' && depth == 0 && !inString {
 			result = append(result, strings.TrimSpace(cur.String()))
 			cur.Reset()
 		} else {

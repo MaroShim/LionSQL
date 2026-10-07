@@ -225,3 +225,91 @@ func TestPgCatalog_CoreViews(t *testing.T) {
 		t.Fatalf("failed to query pg_class without prefix: %v, rows: %+v", err, res.Rows)
 	}
 }
+
+func TestPgCatalog_HeidiSQLForeignKeyQuery(t *testing.T) {
+	server, eng, _ := setupCatalogTestServer(t)
+	defer eng.Close()
+
+	heidiFKQuery := `SELECT
+    con.conname AS constraint_name,
+    CASE con.confupdtype
+        WHEN 'a' THEN 'NO ACTION'
+        WHEN 'r' THEN 'RESTRICT'
+        WHEN 'c' THEN 'CASCADE'
+        WHEN 'n' THEN 'SET NULL'
+        WHEN 'd' THEN 'SET DEFAULT'
+    END AS update_rule,
+    CASE con.confdeltype
+        WHEN 'a' THEN 'NO ACTION'
+        WHEN 'r' THEN 'RESTRICT'
+        WHEN 'c' THEN 'CASCADE'
+        WHEN 'n' THEN 'SET NULL'
+        WHEN 'd' THEN 'SET DEFAULT'
+    END AS delete_rule,
+    src_ns.nspname  AS table_schema,
+    src_tbl.relname AS table_name,
+    string_agg(src_col.attname, ',' ORDER BY ord.pos) AS columns,
+    ref_ns.nspname  AS ref_schema,
+    ref_tbl.relname AS ref_table,
+    string_agg(ref_col.attname, ',' ORDER BY ord.pos) AS ref_columns,
+    string_agg(ord.pos::text, ',' ORDER BY ord.pos)   AS ord_position
+FROM pg_constraint con
+JOIN pg_class      src_tbl ON src_tbl.oid = con.conrelid
+JOIN pg_namespace  src_ns  ON src_ns.oid  = src_tbl.relnamespace
+JOIN LATERAL unnest(con.conkey) WITH ORDINALITY AS ord(attnum, pos) ON TRUE
+JOIN pg_attribute  src_col ON src_col.attrelid = src_tbl.oid AND src_col.attnum = ord.attnum
+JOIN pg_class      ref_tbl ON ref_tbl.oid = con.confrelid
+JOIN pg_namespace  ref_ns  ON ref_ns.oid  = ref_tbl.relnamespace
+JOIN LATERAL unnest(con.confkey) WITH ORDINALITY AS ref_ord(attnum, pos)        ON ref_ord.pos = ord.pos
+JOIN pg_attribute  ref_col ON ref_col.attrelid = ref_tbl.oid AND ref_col.attnum = ref_ord.attnum
+WHERE
+    con.contype = 'f'
+    AND src_ns.nspname  = 'dbo'
+    AND src_tbl.relname = 'employees'
+GROUP BY
+    con.conname,
+    con.confupdtype,
+    con.confdeltype,
+    src_ns.nspname,
+    src_tbl.relname,
+    ref_ns.nspname,
+    ref_tbl.relname
+ORDER BY
+    MIN(ord.pos)`
+
+	res, err := server.ExecuteSQL(heidiFKQuery)
+	if err != nil {
+		t.Fatalf("HeidiSQL FK query failed: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("HeidiSQL FK query was not successful")
+	}
+
+	expectedCols := []string{
+		"constraint_name", "update_rule", "delete_rule", "table_schema", "table_name",
+		"columns", "ref_schema", "ref_table", "ref_columns", "ord_position",
+	}
+	if len(res.Columns) != len(expectedCols) {
+		t.Fatalf("expected %d columns, got %d: %+v", len(expectedCols), len(res.Columns), res.Columns)
+	}
+	for i, col := range expectedCols {
+		if res.Columns[i] != col {
+			t.Errorf("column %d: expected %s, got %s", i, col, res.Columns[i])
+		}
+	}
+
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 FK row for employees, got %d: %+v", len(res.Rows), res.Rows)
+	}
+	row := res.Rows[0]
+	if fmt.Sprintf("%v", row["constraint_name"]) != "fk_emp_dept" {
+		t.Errorf("expected fk_emp_dept, got %v", row["constraint_name"])
+	}
+	if fmt.Sprintf("%v", row["columns"]) != "dept_id" {
+		t.Errorf("expected dept_id column, got %v", row["columns"])
+	}
+	if fmt.Sprintf("%v", row["ref_table"]) != "departments" {
+		t.Errorf("expected departments ref_table, got %v", row["ref_table"])
+	}
+}
+
