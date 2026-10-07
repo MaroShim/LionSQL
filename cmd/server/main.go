@@ -680,53 +680,77 @@ func seedSampleAccounts(eng storage.Engine) {
 	}
 	defer session.Close()
 
+	// Seed accounts if empty
 	tx, err := session.BeginTx(storage.TxOptions{})
-	if err != nil {
-		return
+	if err == nil {
+		cur, err := tx.Scan("accounts")
+		hasRows := false
+		if err == nil {
+			hasRows = cur.Next()
+			cur.Close()
+		}
+		if !hasRows {
+			_ = tx.Insert("accounts", storage.Record{
+				"id":      storage.IntValue(1),
+				"holder":  storage.StringValue("Alice"),
+				"balance": storage.IntValue(1000),
+			})
+			_ = tx.Insert("accounts", storage.Record{
+				"id":      storage.IntValue(2),
+				"holder":  storage.StringValue("Bob"),
+				"balance": storage.IntValue(500),
+			})
+			_ = tx.Commit()
+		} else {
+			_ = tx.Rollback()
+		}
 	}
-	_ = tx.Insert("accounts", storage.Record{
-		"id":      storage.IntValue(1),
-		"holder":  storage.StringValue("Alice"),
-		"balance": storage.IntValue(1000),
-	})
-	_ = tx.Insert("accounts", storage.Record{
-		"id":      storage.IntValue(2),
-		"holder":  storage.StringValue("Bob"),
-		"balance": storage.IntValue(500),
-	})
 
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(1),
-		"name":    storage.StringValue("Alice"),
-		"balance": storage.FloatValue(1000.5),
-		"status":  storage.StringValue("active"),
-	})
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(2),
-		"name":    storage.StringValue("Bob"),
-		"balance": storage.FloatValue(450.0),
-		"status":  storage.StringValue("pending"),
-	})
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(3),
-		"name":    storage.StringValue("Charlie"),
-		"balance": storage.FloatValue(800.0),
-		"status":  storage.StringValue("active"),
-	})
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(4),
-		"name":    storage.StringValue("Diana"),
-		"balance": storage.FloatValue(200.0),
-		"status":  storage.StringValue("inactive"),
-	})
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(5),
-		"name":    storage.StringValue("Evan"),
-		"balance": storage.FloatValue(600.0),
-		"status":  storage.StringValue("active"),
-	})
-
-	_ = tx.Commit()
+	// Seed customers if empty
+	txCust, err := session.BeginTx(storage.TxOptions{})
+	if err == nil {
+		cur, err := txCust.Scan("customers")
+		hasRows := false
+		if err == nil {
+			hasRows = cur.Next()
+			cur.Close()
+		}
+		if !hasRows {
+			_ = txCust.Insert("customers", storage.Record{
+				"id":      storage.IntValue(1),
+				"name":    storage.StringValue("Alice"),
+				"balance": storage.FloatValue(1000.5),
+				"status":  storage.StringValue("active"),
+			})
+			_ = txCust.Insert("customers", storage.Record{
+				"id":      storage.IntValue(2),
+				"name":    storage.StringValue("Bob"),
+				"balance": storage.FloatValue(450.0),
+				"status":  storage.StringValue("pending"),
+			})
+			_ = txCust.Insert("customers", storage.Record{
+				"id":      storage.IntValue(3),
+				"name":    storage.StringValue("Charlie"),
+				"balance": storage.FloatValue(800.0),
+				"status":  storage.StringValue("active"),
+			})
+			_ = txCust.Insert("customers", storage.Record{
+				"id":      storage.IntValue(4),
+				"name":    storage.StringValue("Diana"),
+				"balance": storage.FloatValue(200.0),
+				"status":  storage.StringValue("inactive"),
+			})
+			_ = txCust.Insert("customers", storage.Record{
+				"id":      storage.IntValue(5),
+				"name":    storage.StringValue("Evan"),
+				"balance": storage.FloatValue(600.0),
+				"status":  storage.StringValue("active"),
+			})
+			_ = txCust.Commit()
+		} else {
+			_ = txCust.Rollback()
+		}
+	}
 }
 
 func seedSampleProcedure(cat *catalog.Catalog) {
