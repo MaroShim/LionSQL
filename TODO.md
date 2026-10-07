@@ -98,4 +98,12 @@ This document tracks active tasks, short-term engineering priorities, and concep
 - [ ] **아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
   - `pkg/api`에 집중되어 있는 15,000+ 라인의 SQL 실행 오케스트레이션 로직을 `pkg/engine` 또는 `pkg/coordinator` 코어 레이어로 승격.
   - `pkg/api`(HTTP REST/Studio), `pkg/wire`(PGWire), `pkg/wire/tds`(TDS) 세 어댑터가 동등하게 코어 엔진 인터페이스를 호출하도록 단방향 클린 아키텍처 확립.
+- [ ] **VDBE 바이트코드 엔진 성능 튜닝 & 제로 할당 고속화 (`pkg/proc/runtime`)**
+  - **레지스터 풀링 & 제로 할당 (Zero-Allocation Hot Path)**: `sync.Pool` 기반 `VMFrame` 레지스터 슬라이스(`[]storage.Value`) 재활용 및 인터페이스 박싱(`any`) 제거, 프리미티브 정수/실수 인라인 직접 연산 강화.
+  - **디스패치 최적화 & 분기 예측 개선**: 바이트코드 디스패치 루프 최적화로 CPU L1 캐시 적중률 및 분기 예측(Branch Prediction) 효율 극대화.
+  - **관계형 스캔 벡터화 배치 파이프라이닝 (Vectorized Chunk Scan)**: `OpRelScan`, `OpIndexScan`에서 행 단위 VM 왕복 오버헤드를 줄이기 위한 N개(64~1024건) 단위 청크 벡터화 스트리밍.
+  - **바이트코드 상수 풀링 (Constant Pool Cache)**: 쿼리 및 프로시저 실행 시 반복 사용되는 리터럴 상수 복사를 방지하는 불변 상수 풀 인덱싱.
+  - **마이크로 벤치마크 및 pprof 프로파일링 하네스**: TPC-C New-Order 및 복합 T-SQL 프로시저 경로 대상 나노초(ns/op) 단위 CPU/할당 프로파일링 체계화.
+
+
 
