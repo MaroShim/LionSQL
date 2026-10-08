@@ -460,10 +460,7 @@ func (s *Server) execAnalyze(query string, start time.Time) (*QueryResult, error
 		}
 		_ = cursor.Close()
 
-		ts := planner.NewTableStats(tbl, rowCount)
-		for _, c := range schema.Columns {
-			ts.Columns[c.Name] = planner.BuildColumnStats(c.Name, c.Type, colVals[c.Name], nullCounts[c.Name], rowCount)
-		}
+		ts := planner.BuildTableStatsParallel(tbl, schema, colVals, nullCounts, rowCount)
 
 		if s.catalog != nil {
 			s.catalog.SetTableStats(tbl, ts)

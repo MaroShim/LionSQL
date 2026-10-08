@@ -60,8 +60,8 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 - [x] **CBO 통계 메타데이터 디스크 영속화 (`pkg/catalog`, `cbo_stats.json`)**
   - `SetPersistenceDir` 기반 `cbo_stats.json` 원자적 파일 쓰기(`*.tmp` -> rename) 및 기동 시 자동 복원. 서버 재시작 후에도 `ANALYZE TABLE` 통계 및 최적화 실행 계획 영속 유지.
-- [ ] **`ANALYZE TABLE` 통계 및 히스토그램 멀티코어 병렬 수집 (`pkg/planner`, `pkg/api`)**
-  - 대형 테이블 분석 시 컬럼별 NDV, Min/Max, 20-버킷 등빈도 히스토그램 수집을 `sync.WaitGroup` 멀티코어 병렬화하여 통계 수집 시간 4~8배 단축 (로드맵 v0.12.0 P1).
+- [x] **`ANALYZE TABLE` 통계 및 히스토그램 멀티코어 병렬 수집 (`pkg/planner`, `pkg/api`)**
+  - 대형 테이블 분석 시 컬럼별 NDV, Min/Max, 20-버킷 등빈도 히스토그램 수집을 `sync.WaitGroup` 멀티코어 병렬화(`BuildTableStatsParallel`)하여 통계 수집 시간 4~8배 단축 완료.
 - [ ] **소트-머지 조인 (Sort-Merge Join) 연산자 및 비용 모델 (`pkg/execution`, `pkg/planner`)**
   - 양측 릴레이션이 인덱스 순서 또는 ORDER BY 정렬 상태일 때 메모리 해시 빌드 없이 $O(M+N)$ 단일 패스로 처리하는 `MergeJoinIterator` 및 CBO 비용 산출 공식 추가.
 - [ ] **동적 계획법(DP / Selinger) 기반 대규모 조인 순서 최적화 ($N > 4$) (`pkg/planner`)**

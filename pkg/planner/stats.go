@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"sqlion/pkg/storage"
@@ -58,6 +59,25 @@ func NewTableStats(tableName string, rowCount int64) *TableStats {
 		Columns:    make(map[string]*ColumnStats),
 		AnalyzedAt: time.Now(),
 	}
+}
+
+// BuildTableStatsParallel computes ColumnStats for all columns in parallel using worker goroutines.
+func BuildTableStatsParallel(tbl string, schema *storage.TableSchema, colVals map[string][]storage.Value, nullCounts map[string]int64, rowCount int64) *TableStats {
+	ts := NewTableStats(tbl, rowCount)
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	for _, c := range schema.Columns {
+		wg.Add(1)
+		go func(col storage.Column) {
+			defer wg.Done()
+			cs := BuildColumnStats(col.Name, col.Type, colVals[col.Name], nullCounts[col.Name], rowCount)
+			mu.Lock()
+			ts.Columns[col.Name] = cs
+			mu.Unlock()
+		}(c)
+	}
+	wg.Wait()
+	return ts
 }
 
 // BuildColumnStats constructs ColumnStats from sampled/scanned column values.
