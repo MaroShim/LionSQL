@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.14.0] - 2026-10-08
+
 ### Fixed
 - **Deterministic Object ID Assignment & Table Row Count Calculation in Catalog (`pkg/storage/wiredtiger`, `pkg/api`)**:
   - Sorted `ListTables` deterministically by name in WiredTiger storage engine (`wt_engine.go`), eliminating random Go map iteration order that caused table and column object IDs (`objectId`) to shuffle between queries in DbGate.
@@ -26,12 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - Extended property column comments (`MS_Description`).
     - Stored procedures / programmables and SQL code definitions (`sys.syscomments`).
   - Generalized `inferColumnInfos` in TDS server (`pkg/wire/tds/server.go`) to infer `TypeDateTimeN` for column names ending in `date` or `time` (including camelCase `modifyDate`, `createDate`), resolving driver error `r.toISOString is not a function` in DbGate.
-
 - **DbGate & GUI Tool SQL Server Version & Edition Detection (`pkg/wire/tds`, `pkg/proc`, `pkg/api`)**:
   - Implemented multi-column version & edition detection interceptor (`matchVersionQuery`) in TDS server handling queries combining `@@VERSION`, `SERVERPROPERTY('productversion')`, `SERVERPROPERTY('EngineEdition')`, and `CASE ... END AS versionText`.
   - Added support for `SERVERPROPERTY` in T-SQL procedural built-in function dispatcher (`pkg/proc/builtins.go`) and scalar SQL executor (`pkg/api/sqlexec_select.go`).
   - Fixed TDS metadata serialization for integer columns to use `TypeIntN` (`0x26`), preventing driver error `Invalid type 0` on scalar expressions.
-
 - **Beekeeper Studio & GUI Tool Column Introspection & Pagination Parity (`pkg/wire/tds`, `pkg/proc`, `pkg/api`, `pkg/planner`)**:
   - Implemented double-quoted identifier (`"col"`) parsing in native Pratt parser lexer (`pkg/proc/lexer.go`), preventing syntax errors on ANSI/MSSQL quoted column aliases (`AS "column_name"`).
   - Added specialized virtual catalog interceptor for Beekeeper Studio's SQL Server column query (`FROM INFORMATION_SCHEMA.COLUMNS ic LEFT JOIN sys.computed_columns sc ON ...`), extracting target tables/schemas and formatting data types to native MSSQL representations (`int`, `varchar(255)`, `decimal(p,s)`, `bit`, `datetime`).
@@ -41,12 +43,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added virtual catalog stubs for `sys.computed_columns`, `sys.triggers`, `sys.foreign_keys`, and `sys.foreign_key_columns` in `pkg/api/sqlexec_dbcc.go`.
 
 ### Added
-- **Technical Documentation & Architecture Decision Records (`doc/`)**:
+- **Technical Documentation & Architecture Decision Records (`doc/`, `notes/`)**:
   - Authored `doc/CLIENT_TOOL_INTEGRATION.md`: Comprehensive connection and integration guide for Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, `psql`, `sqlcmd`, and programming language drivers (Go, Python, Node.js, C#, Rust, Java).
   - Authored `doc/TRANSACTION_CONCURRENCY.md`: Complete specification for non-blocking snapshot reads, In-Memory OCC vs WiredTiger MVCC concurrency models, private workspace isolation, and VDBE transaction coupling (`exec.RunInTx`).
+  - Authored `doc/RECORD_BINARY_FORMAT.md`: Schema-aware compact binary tuple storage format specification.
   - Added ADR-019 (Schema-Aware Compact Binary Tuple Storage Codec), ADR-020 (Multi-Protocol Virtual Catalog Interceptor Strategy), and ADR-021 (Open Source Licensing Strategy: GPL-3.0-or-later) to `doc/ADR.md`.
+  - Documented Go map iteration non-determinism landmine and mitigation strategies in `notes/PITFALLS_AND_TRICKS.md` (Section 10) and `doc/CLIENT_TOOL_INTEGRATION.md`.
+  - Adopted GNU General Public License v3 (`LICENSE`).
   - Updated `doc/README.md` indexing map and section listings with all new documents.
 
+---
+
+## [0.13.0] - 2026-10-07
+
+### Added
 - **PostgreSQL Modern Driver Compatibility: `pgx/v5` & Pipelining (`pkg/wire`)**:
   - Integrated official `github.com/jackc/pgx/v5` modern Go driver test suite (`pkg/wire/pgx_integration_test.go`) covering direct connection, stdlib `sql.Open("pgx", ...)`, CRUD, parameters, transactions, pipelined batch execution, and data types.
   - Implemented binary parameter decoding (`decodeBinaryParam`) supporting `int4`, `int8`, `int2`, `bool`, `float4`, `float8`, `timestamp`, `timestamptz`, `date`, and string types.
@@ -54,7 +64,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Enhanced `writeSchemaDescription` with `buildPreviewSQL` to accurately infer and describe column OIDs for non-table scalar expressions (`SELECT 40 + 2`, `SELECT $1 + $2`, aggregates like `COUNT(*)`) in response to Extended Query `Describe` ('D').
   - Implemented SQL comment stripping (`stripSQLComments`) and proper `EmptyQueryResponse` ('I') handling for comment-only queries (`-- ping`) sent by driver health-check probes.
   - Verified 100% pass across direct `pgx.Connect`, parameterized queries, table CRUD, atomic transaction commit/rollback, `pgx.Batch` pipelining, and `database/sql` stdlib.
+- **Real-Time Wire Protocol Developer Query Tracing (`-dev` CLI flag for PGWire & TDS)**:
+  - Added `-dev` command-line flag enabling real-time query logging with parameters, query execution timing, and error traces across both PostgreSQL Wire Protocol and Microsoft SQL Server TDS protocol.
+- **Microsoft SQL Server Virtual Metadata Catalog Enhancements (`sys.databases`, `information_schema.parameters`, `NOT LIKE`)**:
+  - Supported `sys.databases` returning `master` and active database catalogs, and default `dbo` schema in `information_schema.schemata`.
+  - Supported `NOT LIKE` pattern matching in catalog expression evaluator.
+  - Supported `information_schema.parameters` and procedural metadata introspection for client tools.
 
+### Fixed
+- **HeidiSQL PostgreSQL Virtual Catalog JOIN & Metadata Queries (`pkg/wire`, `pkg/api`)**:
+  - Intercepted HeidiSQL foreign key catalog query and escaped string literals properly in `SplitProjections`.
+  - Corrected `RowDescription` `DataTypeSize` and `atttypmod` for PostgreSQL table column metadata queries.
+  - Supported HeidiSQL virtual catalog queries joining `pg_class`, `pg_namespace`, `pg_attribute`, and `pg_constraint`.
+- **Beekeeper Studio PostgreSQL `pg_class` Table List Catalog Query (`pkg/api`)**:
+  - Supported Beekeeper Studio's `pg_class` query filtering with `relkind` and namespace joins.
+- **Sample Data Seeding Transaction Isolation per Table (`cmd/server`)**:
+  - Isolated sample data seeding transactions per table to prevent long-running OCC workspaces and commit lock contention during startup.
+
+---
+
+## [0.12.0] - 2026-10-03
+
+### Added
 - **PostgreSQL Official Client Driver Compatibility (`pkg/wire`)**:
   - Integrated official client driver verification suite (`pkg/wire/driver_integration_test.go`) utilizing `github.com/lib/pq v1.12.3`.
   - Added parameter count inference in `handleParse` for client queries utilizing `$1`, `$2` parameter placeholders when client passes 0 explicit parameter types.
@@ -62,39 +93,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL Extended Query `Bind` result format codes with `WriteDataRowBytes` and big-endian binary encoding for `int4`, `int8`, `int2`, `bytea`, and null value handling (`0xFFFFFFFF`).
   - Added flexible interactive transaction syntax support (`BEGIN READ WRITE`, `BEGIN ISOLATION LEVEL ...`, `COMMIT WORK`) and standard PostgreSQL `CommandComplete` tag formatting (`BEGIN`, `COMMIT`, `ROLLBACK`, `SET`, `CREATE <type>`, `DROP <type>`).
   - Verified 100% pass across official driver integration tests: connection ping, query evaluation, CRUD, prepared statements, parameterized queries, session SET options, transactions (commit/rollback), and sys metadata catalog views.
-
 - **Microsoft SQL Server Official Client Driver Compatibility (`pkg/wire/tds`)**:
   - Integrated official client driver verification suite (`pkg/wire/tds/driver_integration_test.go`) utilizing `github.com/microsoft/go-mssqldb v1.11.2`.
   - Added full support for `PacketTransactionManager` (0x0E) handling `tmBeginXact` (5), `tmCommitXact` (7), and `tmRollbackXact` (8) with transaction descriptors.
   - Implemented `ENVCHANGE` token builders for SQL collation (`BuildEnvChangeCollation`, Type 7), transaction initiation (`BuildEnvChangeBeginTransaction`, Type 8), commit (`BuildEnvChangeCommitTransaction`, Type 9), and rollback (`BuildEnvChangeRollbackTransaction`, Type 10).
   - Added connection session transaction state tracking (`inTx`, `txDescriptor`, `DoneInXact` status flag propagation) across SQL batches, RPC requests, and transaction manager packets.
   - Verified 100% pass across official driver integration tests: connection ping, query evaluation, CRUD, prepared statements via `sp_prepare`, parameterized filters, session SET options, transactions (commit/rollback), and sys metadata catalog views.
-
 - **CBO Table Statistics Disk Persistence (`pkg/catalog`, `pkg/storage`, `cmd/server`)**:
   - Implemented `SetPersistenceDir`, `PersistenceDir`, `SaveTableStatsToFile`, and `LoadTableStatsFromFile` on `catalog.Catalog`.
   - Added atomic disk persistence (`*.tmp` write followed by atomic rename, Golden Rule 1 & 5) of `cbo_stats.json` triggered automatically on `SetTableStats` and `InvalidateTableStats`.
   - Added `MarshalJSON` and `UnmarshalJSON` support to `storage.Decimal` for lossless JSON serialization of decimal histogram buckets.
   - Connected `cat.SetPersistenceDir(cfg.Server.DataDir)` in standalone server startup (`cmd/server/main.go`), ensuring CBO stats and optimized execution plans survive server restarts.
   - Added unit test `TestCatalog_TableStatsPersistence` in `pkg/catalog/catalog_test.go`.
-
 - **In-Process Go Native Scalar UDF Registration SPI (`pkg/proc`, `pkg/api`)**:
   - Implemented thread-safe `ScalarFunction` callback type with `RegisterScalarFunction`, `UnregisterScalarFunction`, and `HasScalarFunction` using `sync.Map` in `pkg/proc/builtins.go`.
   - Added zero-overhead fast-path lookup in `EvalBuiltin` executing registered custom Go callbacks ahead of standard built-in dispatch at sub-microsecond in-process speed.
   - Added unit test `TestCustomScalarFunctionSPI` in `pkg/proc/builtins_test.go` and integration test `TestCustomScalarFunction_SQLExec` in `pkg/api/sqlexec_test.go`.
-
 - **System Diagnostic Health Verification Engine Probes (`cmd/server`)**:
   - Integrated dynamic probe 5.4 into `--doctor` CLI utility in `cmd/server/doctor.go` verifying dynamic Go scalar UDF registration, invocation, and unregistration lifecycle.
   - Validated all 17 diagnostic probes across host environment, filesystem write/read integrity, network port availability, storage engine MVCC/hazard pointers, dual-parser execution, and cryptographic subsystems.
-
 - **VDBE Physical Execution PlanNode Caching (`pkg/planner`, `pkg/proc`, `pkg/proc/runtime`)**:
   - Added `PlanNode.Clone()` deep copy method in `pkg/planner/planner.go` to clone Volcano physical execution plan trees including projections, group keys, window definitions, and child plan nodes.
   - Implemented immutable `CachedPlan` caching on `RelQueryData` within `VMFrame.execRelQuery`, bypassing full CBO join planning and stats estimation on repeated invariant queries without where clauses.
   - Added thread-safe `mu sync.RWMutex` with `GetCachedQueryInfo`, `SetCachedQueryInfo`, `GetCachedPlan`, and `SetCachedPlan` accessors on `proc.RelQueryData` to ensure race-free concurrent execution across parallel worker threads.
-
 - **Wire Protocol Zero-Allocation Buffer Pooling (`pkg/wire`, `pkg/wire/tds`)**:
   - Integrated `packetBufferPool = sync.Pool` with 4KB preallocated buffers for PostgreSQL Wire Protocol (`WriteDataRow`), eliminating per-row heap allocations during high-concurrency result streaming.
   - Added `tdsRowBufferPool = sync.Pool` for TDS token row serialization (`BuildRow`), reusing `bytes.Buffer` instances and passing buffer pointers directly to `binary.Write`.
-
 - **Storage Value Integer Fast-Path Optimization (`pkg/storage`)**:
   - Implemented non-null integer fast-paths in `storage.Value.Equal` and `storage.Value.Compare` (`TypeInt`), bypassing type dispatch, null checks, and decimal conversions for high-frequency point lookups and SkipList index operations.
   - Optimized `storage.Value.String()` to use `strconv.FormatInt` and `strconv.FormatBool`, replacing `fmt.Sprintf` reflection overhead on hot formatting paths.
@@ -111,7 +135,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Established persistent `notes/` directory as an engineering context handover mechanism across development machines and AI pair programming sessions.
   - Authored `notes/README.md`, `notes/ENGINEERING_CONTEXT.md` (core architectural invariants, spec-out rationales, collaboration principles), `notes/PITFALLS_AND_TRICKS.md` (circular imports, build tags, sandbox networking, Decimal JSON roundtrips, transaction coupling), and `notes/REFACTORING_AND_ROADMAP.md` (decomposition history, next week priorities, CBO status).
   - Linked `notes/` reference in `GEMINI.md` and `README.md`.
-
 - **Architecture & Operational Documentation Audit (`README.md`, `doc/*`)**:
   - Added ADR-017 (1-Writer Multi-Reader High-Availability Replication Topology) and ADR-018 (Dual-Track UDF Architecture: Native Go In-Process SPI & WebAssembly Sandbox) in `doc/ADR.md`.
   - Added Section 12 for WAL replication endpoints (`/api/replication/stream`, `/api/replication/status`, `/api/replication/ack`, `/api/replication/promote`, `/api/replication/demote`) in `doc/API_REFERENCE.md`.
@@ -122,6 +145,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Renamed `doc/SDK.md` to `doc/WEB_SDK.md` to explicitly represent the web frontend and browser embedding capabilities.
   - Added Section 9 (Web & HTML Embedding Recipes) providing zero-dependency single-file HTML templates (`fetch()`), real-time SSE live synchronization, declarative HTMX embedding, and T-SQL `FOR JSON PATH` client interpolation.
   - Synchronized documentation references across `README.md` and `doc/README.md`.
+
+---
 
 ## [0.11.0] - 2026-10-02
 
