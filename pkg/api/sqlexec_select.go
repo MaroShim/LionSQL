@@ -413,6 +413,31 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		return false, "pg_terminate_backend"
 	}
 
+	// current_setting('setting_name')
+	if strings.HasPrefix(upper, "CURRENT_SETTING(") && strings.HasSuffix(upper, ")") {
+		arg := strings.TrimSpace(trimmed[len("CURRENT_SETTING(") : len(trimmed)-1])
+		arg = strings.Trim(arg, "'\"")
+		switch strings.ToLower(arg) {
+		case "server_version":
+			return "15.0", "current_setting"
+		case "server_version_num":
+			return "150000", "current_setting"
+		case "search_path":
+			return "public", "current_setting"
+		case "is_superuser":
+			return "on", "current_setting"
+		case "standard_conforming_strings":
+			return "on", "current_setting"
+		default:
+			return "", "current_setting"
+		}
+	}
+
+	// pg_is_other_temp_schema(oid)
+	if strings.HasPrefix(upper, "PG_IS_OTHER_TEMP_SCHEMA(") {
+		return false, "pg_is_other_temp_schema"
+	}
+
 	// Session variable @var
 	if strings.HasPrefix(trimmed, "@") {
 		if cs != nil {

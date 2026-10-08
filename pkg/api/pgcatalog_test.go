@@ -458,4 +458,140 @@ func TestMSSQL_PaginationAndBrackets(t *testing.T) {
 	}
 }
 
+func TestPgCatalog_DbGatePostgresIntrospection(t *testing.T) {
+	server, eng, _ := setupCatalogTestServer(t)
+	defer eng.Close()
+
+	// 1. DbGate tableList.js query
+	tableListQuery := `SELECT
+		n.nspname AS "schema_name",
+		c.relname AS "pure_name",
+		pg_relation_size(c.oid) AS "size_bytes"
+	FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+	WHERE c.relkind IN ('r', 'p') AND n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+	ORDER BY n.nspname, c.relname;`
+
+	res, err := server.ExecuteSQL(tableListQuery)
+	if err != nil || !res.Success {
+		t.Fatalf("DbGate tableList query failed: %v", err)
+	}
+	foundDept, foundEmp := false, false
+	for _, row := range res.Rows {
+		pureName := fmt.Sprintf("%v", row["pure_name"])
+		schemaName := fmt.Sprintf("%v", row["schema_name"])
+		if pureName == "departments" && schemaName == "public" {
+			foundDept = true
+		}
+		if pureName == "employees" && schemaName == "public" {
+			foundEmp = true
+		}
+	}
+	if !foundDept || !foundEmp {
+		t.Fatalf("DbGate tableList missing tables, rows: %+v", res.Rows)
+	}
+
+	// 2. DbGate columns.js query
+	colQuery := `SELECT
+		n.nspname AS "schema_name",
+		c.relname AS "pure_name",
+		c.oid AS "postgres_table_id",
+		a.attname AS "column_name",
+		a.attnum AS "postgres_column_id",
+		CASE WHEN a.attnotnull THEN 'NO' ELSE 'YES' END AS "is_nullable"
+	FROM pg_attribute a JOIN pg_class c ON a.attrelid = c.oid JOIN pg_namespace n ON c.relnamespace = n.oid
+	WHERE c.relname = 'employees';`
+
+	colRes, err := server.ExecuteSQL(colQuery)
+	if err != nil || !colRes.Success {
+		t.Fatalf("DbGate columns query failed: %v", err)
+	}
+	if len(colRes.Rows) == 0 {
+		t.Fatalf("DbGate columns returned 0 rows for employees")
+	}
+	if colRes.Rows[0]["pure_name"] != "employees" || colRes.Rows[0]["column_name"] != "emp_id" {
+		t.Errorf("unexpected first column in DbGate columns: %+v", colRes.Rows[0])
+	}
+
+	// 3. DbGate primaryKeys.js query
+	pkQuery := `SELECT
+		n.nspname AS "constraint_schema",
+		c.conname AS "constraint_name",
+		n.nspname AS "schema_name",
+		t.relname AS "pure_name",
+		a.attname AS "column_name"
+	FROM pg_catalog.pg_constraint AS c
+	JOIN pg_catalog.pg_class AS t ON t.oid = c.conrelid
+	JOIN pg_catalog.pg_namespace AS n ON n.oid = t.relnamespace
+	JOIN LATERAL unnest(c.conkey) AS u(attnum) ON TRUE;`
+
+	pkRes, err := server.ExecuteSQL(pkQuery)
+	if err != nil || !pkRes.Success {
+		t.Fatalf("DbGate primaryKeys query failed: %v", err)
+	}
+	foundEmpPK := false
+	for _, row := range pkRes.Rows {
+		if row["pure_name"] == "employees" && row["column_name"] == "emp_id" {
+			foundEmpPK = true
+			break
+		}
+	}
+	if !foundEmpPK {
+		t.Fatalf("DbGate primaryKeys did not find employees PK, rows: %+v", pkRes.Rows)
+	}
+
+	// 4. DbGate views.js CTE query
+	viewQuery := `WITH view_defs AS (
+		SELECT
+			c.relname AS pure_name,
+			n.nspname AS schema_name,
+			pg_get_viewdef(c.oid, true) AS viewdef
+		FROM pg_catalog.pg_class c
+		JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind = 'v'
+	) SELECT * FROM view_defs;`
+
+	viewRes, err := server.ExecuteSQL(viewQuery)
+	if err != nil || !viewRes.Success {
+		t.Fatalf("DbGate views query failed: %v", err)
+	}
+	if len(viewRes.Rows) == 0 || viewRes.Rows[0]["pure_name"] != "emp_view" {
+		t.Fatalf("DbGate views query unexpected result: %+v", viewRes.Rows)
+	}
+
+	// 5. DbGate indexes.js query
+	idxQuery := `SELECT
+		t.relname AS "table_name",
+		c.nspname AS "schema_name",
+		i.relname AS "index_name",
+		ix.indisprimary AS "is_primary",
+		ix.indisunique AS "is_unique"
+	FROM pg_class t
+	JOIN pg_index ix ON t.oid = ix.indrelid
+	JOIN pg_class i ON i.oid = ix.indexrelid
+	JOIN pg_namespace c ON c.oid = t.relnamespace;`
+
+	idxRes, err := server.ExecuteSQL(idxQuery)
+	if err != nil || !idxRes.Success {
+		t.Fatalf("DbGate indexes query failed: %v", err)
+	}
+	if len(idxRes.Rows) == 0 {
+		t.Fatalf("DbGate indexes returned 0 rows")
+	}
+
+	// 6. Scalar queries: CURRENT_SCHEMA() and CURRENT_SETTING(...)
+	scalarRes, err := server.ExecuteSQL("SELECT CURRENT_SCHEMA(), CURRENT_SETTING('server_version'), CURRENT_SETTING('search_path');")
+	if err != nil || !scalarRes.Success {
+		t.Fatalf("scalar functions failed: %v", err)
+	}
+	if len(scalarRes.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(scalarRes.Rows))
+	}
+	if scalarRes.Rows[0]["current_schema"] != "dbo" {
+		t.Errorf("expected current_schema = 'dbo', got %v", scalarRes.Rows[0]["current_schema"])
+	}
+	if scalarRes.Rows[0]["current_setting"] != "public" && scalarRes.Rows[0]["current_setting"] != "15.0" {
+		t.Errorf("unexpected current_setting result: %+v", scalarRes.Rows[0])
+	}
+}
+
 

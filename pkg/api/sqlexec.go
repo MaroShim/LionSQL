@@ -1096,6 +1096,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 
 	// 6. DQL: WITH (Common Table Expressions) / SELECT
 	if strings.HasPrefix(upper, "WITH ") {
+		if isHeidiSQLCatalogJoinQuery(trimmed) {
+			return s.execHeidiSQLCatalogJoinSelect(trimmed, start)
+		}
 		return s.execCTE(trimmed, start)
 	}
 	if strings.HasPrefix(upper, "SELECT") {

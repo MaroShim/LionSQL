@@ -1088,9 +1088,9 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"user_defined_type_name", "is_insertable_into", "is_typed",
 			"commit_action",
 		}
-		defSchema := "dbo"
-		if strings.Contains(strings.ToLower(whereClause), "'public'") {
-			defSchema = "public"
+		defSchema := "public"
+		if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
+			defSchema = "dbo"
 		}
 		for _, t := range tables {
 			allRows = append(allRows, map[string]any{
@@ -1150,9 +1150,9 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"identity_cycle", "is_generated", "generation_expression",
 			"is_updatable",
 		}
-		defSchema := "dbo"
-		if strings.Contains(strings.ToLower(whereClause), "'public'") {
-			defSchema = "public"
+		defSchema := "public"
+		if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
+			defSchema = "dbo"
 		}
 		for _, t := range tables {
 			for i, c := range t.Columns {
@@ -1279,9 +1279,9 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"to_sql_specific_schema", "to_sql_specific_name",
 			"as_locator", "created", "last_altered",
 		}
-		defSchema := "dbo"
-		if strings.Contains(strings.ToLower(whereClause), "'public'") {
-			defSchema = "public"
+		defSchema := "public"
+		if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
+			defSchema = "dbo"
 		}
 		if s.catalog != nil {
 			for _, p := range s.catalog.ListProcedures() {
@@ -1317,9 +1317,9 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 			"numeric_precision", "numeric_precision_radix", "numeric_scale",
 			"datetime_precision", "interval_type", "interval_precision",
 		}
-		defSchema := "dbo"
-		if strings.Contains(strings.ToLower(whereClause), "'public'") {
-			defSchema = "public"
+		defSchema := "public"
+		if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
+			defSchema = "dbo"
 		}
 		if s.catalog != nil {
 			for _, p := range s.catalog.ListProcedures() {
@@ -1620,59 +1620,81 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 	return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, orderByClause, limitCount, start)
 }
 
-var heidiClassJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_class\s+(?:AS\s+)?c\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*c\.relnamespace`)
-var heidiProcJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_proc\s+(?:AS\s+)?p\s+JOIN\s+pg_namespace\s+(?:AS\s+)?n\s+ON\s+n\.oid\s*=\s*p\.pronamespace`)
-var heidiAttrJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_attribute\s+(?:AS\s+)?a\s+JOIN\s+pg_class\s+(?:AS\s+)?pgc\s+ON\s+pgc\.oid\s*=\s*a\.attrelid`)
-var heidiFKJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_constraint\s+(?:AS\s+)?con\s+JOIN\s+pg_class\s+(?:AS\s+)?src_tbl`)
-var beekeeperTableJoinRe = regexp.MustCompile(`(?is)FROM\s+information_schema\.tables\s+(?:AS\s+)?t\s+JOIN\s+pg_class\s+(?:AS\s+)?pc\s+ON`)
-var beekeeperMSSQLColumnJoinRe = regexp.MustCompile(`(?is)FROM\s+INFORMATION_SCHEMA\.COLUMNS(?:\s+(?:AS\s+)?ic)?\s+LEFT\s+(?:OUTER\s+)?JOIN\s+sys\.computed_columns`)
-
 func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	upper := strings.ToUpper(sql)
 	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
-		return beekeeperMSSQLColumnJoinRe.MatchString(sql)
+		return true
 	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
-		return beekeeperTableJoinRe.MatchString(sql)
+		return true
 	}
-	if strings.Contains(upper, "PG_CONSTRAINT") && strings.Contains(upper, "SRC_TBL") {
-		return heidiFKJoinRe.MatchString(sql)
+	if strings.Contains(upper, "PG_CONSTRAINT") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "UNNEST") || strings.Contains(upper, "SRC_TBL") || strings.Contains(upper, "CONKEY")) {
+		return true
 	}
-	if strings.Contains(upper, "PG_NAMESPACE") {
-		return heidiClassJoinRe.MatchString(sql) || heidiProcJoinRe.MatchString(sql)
+	if strings.Contains(upper, "PG_INDEX") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "PG_NAMESPACE") || strings.Contains(upper, "INDEX_NAME") || strings.Contains(upper, "INDKEY")) {
+		return true
 	}
-	if strings.Contains(upper, "PG_ATTRIBUTE") && strings.Contains(upper, "PG_CLASS") {
-		return heidiAttrJoinRe.MatchString(sql)
+	if strings.Contains(upper, "PG_TRIGGER") && strings.Contains(upper, "JOIN") {
+		return true
+	}
+	if strings.Contains(upper, "PG_CLASS") && (strings.Contains(upper, "PG_NAMESPACE") || strings.Contains(upper, "VIEW_DEFS") || strings.Contains(upper, "RELNAMESPACE")) {
+		return true
+	}
+	if strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE") {
+		return true
+	}
+	if strings.Contains(upper, "PG_ATTRIBUTE") && (strings.Contains(upper, "PG_CLASS") || strings.Contains(upper, "JOIN")) {
+		return true
 	}
 	return false
 }
 
 func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
-	// Handle Beekeeper Studio SQL Server column query:
-	// FROM INFORMATION_SCHEMA.COLUMNS ic LEFT JOIN sys.computed_columns sc ON ...
-	if beekeeperMSSQLColumnJoinRe.MatchString(sql) {
+	upper := strings.ToUpper(sql)
+
+	// 1. Beekeeper Studio SQL Server column query:
+	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
 		return s.execBeekeeperMSSQLColumnSelect(sql, start)
 	}
 
-	// Handle Beekeeper Studio table query:
-	// FROM information_schema.tables AS t JOIN pg_class AS pc ON ...
-	if beekeeperTableJoinRe.MatchString(sql) {
+	// 2. Beekeeper Studio Postgres table query:
+	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
 		return s.execBeekeeperTableSelect(sql, start)
 	}
 
-	// Handle foreign key query:
-	// FROM pg_constraint con JOIN pg_class src_tbl ... WHERE con.contype = 'f'
-	if heidiFKJoinRe.MatchString(sql) {
-		return s.execHeidiSQLForeignKeySelect(sql, start)
+	// 3. Constraints: Foreign keys, Primary keys, Unique constraints
+	if strings.Contains(upper, "PG_CONSTRAINT") {
+		if strings.Contains(upper, "SRC_TBL") || strings.Contains(upper, "CONTYPE = 'F'") || strings.Contains(upper, "REF_TABLE") || strings.Contains(upper, "CONFRELID") {
+			return s.execHeidiSQLForeignKeySelect(sql, start)
+		}
+		return s.execDbGatePrimaryKeySelect(sql, start)
 	}
 
-	// Handle column metadata query:
-	// FROM pg_attribute AS a JOIN pg_class AS pgc ON pgc.oid = a.attrelid ... WHERE ...
-	if heidiAttrJoinRe.MatchString(sql) {
+	// 4. Indexes (DbGate indexes.js, indexcols.js)
+	if strings.Contains(upper, "PG_INDEX") {
+		return s.execDbGateIndexSelect(sql, start)
+	}
+
+	// 5. Triggers (DbGate triggers.js)
+	if strings.Contains(upper, "PG_TRIGGER") {
+		return s.execDbGateTriggerSelect(sql, start)
+	}
+
+	// 6. Column metadata query: pg_attribute + pg_class (DbGate columns.js, HeidiSQL)
+	if strings.Contains(upper, "PG_ATTRIBUTE") && strings.Contains(upper, "PG_CLASS") {
 		return s.execHeidiSQLColumnMetadataSelect(sql, start)
 	}
 
-	// Extract target schema from WHERE n.nspname = '...' if present, default to 'public'
+	// 7. Procedure / Function metadata query
+	if strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE") {
+		return s.execHeidiSQLProcSelect(sql, start)
+	}
+
+	// 8. Class + Namespace: Tables and Views (DbGate tableList.js, views.js, HeidiSQL)
+	return s.execHeidiSQLClassSelect(sql, start)
+}
+
+func (s *Server) execDbGatePrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
 	targetSchema := "public"
 	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
 	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
@@ -1680,67 +1702,22 @@ func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*Qu
 	}
 
 	columns := []string{
-		"schema_name", "object_name", "object_kind",
-		"data_length", "index_length", "reltuples",
-		"comment", "proargtypes",
+		"constraint_schema", "constraint_name", "schema_name",
+		"pure_name", "table_name", "column_name",
 	}
 
 	var allRows []map[string]any
-
-	if heidiClassJoinRe.MatchString(sql) {
-		// Tables and views
-		tables, _ := s.engine.ListTables()
-		for _, t := range tables {
-			allRows = append(allRows, map[string]any{
-				"schema_name":  targetSchema,
-				"object_name":  t.Name,
-				"object_kind":  "r",
-				"data_length":  int64(16384),
-				"index_length": int64(8192),
-				"reltuples":    float32(1000),
-				"comment":      nil,
-				"proargtypes":  nil,
-			})
-		}
-		if s.catalog != nil {
-			for _, v := range s.catalog.ListViews() {
+	tables, _ := s.engine.ListTables()
+	for _, t := range tables {
+		for _, c := range t.Columns {
+			if c.PrimaryKey {
 				allRows = append(allRows, map[string]any{
-					"schema_name":  targetSchema,
-					"object_name":  v.Name,
-					"object_kind":  "v",
-					"data_length":  int64(0),
-					"index_length": int64(0),
-					"reltuples":    float32(0),
-					"comment":      nil,
-					"proargtypes":  nil,
-				})
-			}
-		}
-	} else if heidiProcJoinRe.MatchString(sql) {
-		// Procedures and functions
-		if s.catalog != nil {
-			for _, p := range s.catalog.ListProcedures() {
-				allRows = append(allRows, map[string]any{
-					"schema_name":  targetSchema,
-					"object_name":  p.Name,
-					"object_kind":  "p",
-					"data_length":  nil,
-					"index_length": nil,
-					"reltuples":    nil,
-					"comment":      nil,
-					"proargtypes":  nil,
-				})
-			}
-			for _, f := range s.catalog.ListFunctions() {
-				allRows = append(allRows, map[string]any{
-					"schema_name":  targetSchema,
-					"object_name":  f.Name,
-					"object_kind":  "f",
-					"data_length":  nil,
-					"index_length": nil,
-					"reltuples":    nil,
-					"comment":      nil,
-					"proargtypes":  nil,
+					"constraint_schema": targetSchema,
+					"constraint_name":   "pk_" + t.Name,
+					"schema_name":       targetSchema,
+					"pure_name":         t.Name,
+					"table_name":        t.Name,
+					"column_name":       c.Name,
 				})
 			}
 		}
@@ -1756,27 +1733,294 @@ func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*Qu
 	}, nil
 }
 
+func (s *Server) execDbGateIndexSelect(sql string, start time.Time) (*QueryResult, error) {
+	upper := strings.ToUpper(sql)
+	targetSchema := "public"
+
+	// DbGate indexcols.js: SELECT a.attname as "column_name", a.attnum as "attnum", a.attrelid as "oid" ...
+	if strings.Contains(upper, "ATTNAME") && strings.Contains(upper, "ATTNUM") {
+		columns := []string{"column_name", "attnum", "oid"}
+		var allRows []map[string]any
+		tables, _ := s.engine.ListTables()
+		for tIdx, t := range tables {
+			toid := tableBaseOID(tIdx)
+			for i, c := range t.Columns {
+				allRows = append(allRows, map[string]any{
+					"column_name": c.Name,
+					"attnum":      int16(i + 1),
+					"oid":         toid,
+				})
+			}
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "SELECT",
+			Columns:      columns,
+			Rows:         allRows,
+			RowsAffected: int64(len(allRows)),
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// DbGate indexes.js:
+	columns := []string{
+		"table_name", "pure_name", "schema_name", "index_name",
+		"is_primary", "is_unique", "indkey", "indoption", "oid",
+	}
+	var allRows []map[string]any
+	tables, _ := s.engine.ListTables()
+	for tIdx, t := range tables {
+		toid := tableBaseOID(tIdx)
+		hasPK := false
+		for _, c := range t.Columns {
+			if c.PrimaryKey {
+				hasPK = true
+				break
+			}
+		}
+		if hasPK {
+			allRows = append(allRows, map[string]any{
+				"table_name":  t.Name,
+				"pure_name":   t.Name,
+				"schema_name": targetSchema,
+				"index_name":  "pk_" + t.Name,
+				"is_primary":  true,
+				"is_unique":   true,
+				"indkey":      "1",
+				"indoption":   "0",
+				"oid":         toid,
+			})
+		}
+		for _, idx := range t.Indexes {
+			allRows = append(allRows, map[string]any{
+				"table_name":  t.Name,
+				"pure_name":   t.Name,
+				"schema_name": targetSchema,
+				"index_name":  idx.Name,
+				"is_primary":  false,
+				"is_unique":   idx.Unique,
+				"indkey":      "1",
+				"indoption":   "0",
+				"oid":         toid,
+			})
+		}
+	}
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateTriggerSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"schema_name", "pure_name", "table_name", "trigger_name",
+		"timing", "event", "action_statement",
+	}
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         []map[string]any{},
+		RowsAffected: 0,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execHeidiSQLProcSelect(sql string, start time.Time) (*QueryResult, error) {
+	targetSchema := "public"
+	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
+	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetSchema = m[1]
+	}
+
+	columns := []string{
+		"schema_name", "pure_name", "object_name", "table_name", "object_kind",
+		"size_bytes", "data_length", "index_length", "reltuples",
+		"comment", "viewdef", "content", "hash", "proargtypes",
+	}
+	var allRows []map[string]any
+	if s.catalog != nil {
+		for _, p := range s.catalog.ListProcedures() {
+			allRows = append(allRows, map[string]any{
+				"schema_name":  targetSchema,
+				"pure_name":    p.Name,
+				"object_name":  p.Name,
+				"table_name":   p.Name,
+				"object_kind":  "p",
+				"size_bytes":   nil,
+				"data_length":  nil,
+				"index_length": nil,
+				"reltuples":    nil,
+				"comment":      nil,
+				"viewdef":      p.Body,
+				"content":      p.Body,
+				"hash":         "proc_hash",
+				"proargtypes":  nil,
+			})
+		}
+		for _, f := range s.catalog.ListFunctions() {
+			allRows = append(allRows, map[string]any{
+				"schema_name":  targetSchema,
+				"pure_name":    f.Name,
+				"object_name":  f.Name,
+				"table_name":   f.Name,
+				"object_kind":  "f",
+				"size_bytes":   nil,
+				"data_length":  nil,
+				"index_length": nil,
+				"reltuples":    nil,
+				"comment":      nil,
+				"viewdef":      f.Body,
+				"content":      f.Body,
+				"hash":         "func_hash",
+				"proargtypes":  nil,
+			})
+		}
+	}
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execHeidiSQLClassSelect(sql string, start time.Time) (*QueryResult, error) {
+	upper := strings.ToUpper(sql)
+	targetSchema := "public"
+	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
+	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetSchema = m[1]
+	}
+
+	columns := []string{
+		"schema_name", "pure_name", "object_name", "table_name", "object_kind",
+		"size_bytes", "data_length", "index_length", "reltuples",
+		"comment", "viewdef", "content", "hash", "proargtypes",
+	}
+
+	var allRows []map[string]any
+
+	// If query targets views specifically (DbGate views.js, HeidiSQL relkind = 'v', matviews)
+	if strings.Contains(upper, "RELKIND = 'V'") || strings.Contains(upper, "VIEW_DEFS") || strings.Contains(upper, "MATVIEW") {
+		if s.catalog != nil {
+			for _, v := range s.catalog.ListViews() {
+				allRows = append(allRows, map[string]any{
+					"schema_name":  targetSchema,
+					"pure_name":    v.Name,
+					"object_name":  v.Name,
+					"table_name":   v.Name,
+					"object_kind":  "v",
+					"size_bytes":   int64(0),
+					"data_length":  int64(0),
+					"index_length": int64(0),
+					"reltuples":    float32(0),
+					"comment":      nil,
+					"viewdef":      v.Query,
+					"content":      v.Query,
+					"hash":         "view_hash",
+					"proargtypes":  nil,
+				})
+			}
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "SELECT",
+			Columns:      columns,
+			Rows:         allRows,
+			RowsAffected: int64(len(allRows)),
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// Standard tables query (DbGate tableList.js, HeidiSQL)
+	tables, _ := s.engine.ListTables()
+	for _, t := range tables {
+		allRows = append(allRows, map[string]any{
+			"schema_name":  targetSchema,
+			"pure_name":    t.Name,
+			"object_name":  t.Name,
+			"table_name":   t.Name,
+			"object_kind":  "r",
+			"size_bytes":   int64(16384),
+			"data_length":  int64(16384),
+			"index_length": int64(8192),
+			"reltuples":    float32(1000),
+			"comment":      nil,
+			"viewdef":      nil,
+			"content":      nil,
+			"hash":         "table_hash",
+			"proargtypes":  nil,
+		})
+	}
+	if s.catalog != nil {
+		for _, v := range s.catalog.ListViews() {
+			allRows = append(allRows, map[string]any{
+				"schema_name":  targetSchema,
+				"pure_name":    v.Name,
+				"object_name":  v.Name,
+				"table_name":   v.Name,
+				"object_kind":  "v",
+				"size_bytes":   int64(0),
+				"data_length":  int64(0),
+				"index_length": int64(0),
+				"reltuples":    float32(0),
+				"comment":      nil,
+				"viewdef":      v.Query,
+				"content":      v.Query,
+				"hash":         "view_hash",
+				"proargtypes":  nil,
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
 func (s *Server) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (*QueryResult, error) {
-	// Look for target table name if specified, e.g. pgc.relname = 'accounts' or pgc.oid = ...
+	// Look for target table name if specified, e.g. pgc.relname = 'accounts' or c.relname = '...'
 	targetTable := ""
-	tblRe := regexp.MustCompile(`(?is)pgc\.relname\s*=\s*'([^']+)'`)
+	tblRe := regexp.MustCompile(`(?is)(?:pgc|c)\.relname\s*=\s*'([^']+)'`)
 	if m := tblRe.FindStringSubmatch(sql); len(m) == 2 {
 		targetTable = m[1]
 	}
 
+	targetSchema := "public"
+	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
+	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetSchema = m[1]
+	}
+
 	columns := []string{
-		"column_name", "attnum", "atttypid", "data_type",
-		"is_nullable", "column_comment", "column_default",
-		"character_maximum_length",
+		"schema_name", "pure_name", "table_name",
+		"postgres_table_id", "column_name", "postgres_column_id",
+		"attnum", "atttypid", "data_type", "is_nullable",
+		"char_max_length", "character_maximum_length",
+		"numeric_precision", "numeric_scale",
+		"default_value", "column_default", "column_comment",
 	}
 
 	var allRows []map[string]any
 	tables, _ := s.engine.ListTables()
 
-	for _, t := range tables {
+	for tIdx, t := range tables {
 		if targetTable != "" && !strings.EqualFold(t.Name, targetTable) {
 			continue
 		}
+		toid := tableBaseOID(tIdx)
 		for i, c := range t.Columns {
 			oid := pgTypeOID(c.Type)
 			dtName := pgTypeName(c.Type)
@@ -1788,15 +2032,32 @@ func (s *Server) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (
 			if c.Type == storage.TypeVarChar && c.Precision > 0 {
 				maxLen = int64(c.Precision)
 			}
+			var numPrec, numScale any = nil, nil
+			if c.Type == storage.TypeDecimal {
+				numPrec = int64(c.Precision)
+				numScale = int64(c.Scale)
+			} else if c.Type == storage.TypeInt {
+				numPrec = int64(32)
+				numScale = int64(0)
+			}
 			allRows = append(allRows, map[string]any{
+				"schema_name":              targetSchema,
+				"pure_name":                t.Name,
+				"table_name":               t.Name,
+				"postgres_table_id":        toid,
 				"column_name":              c.Name,
+				"postgres_column_id":       int16(i + 1),
 				"attnum":                   int16(i + 1),
 				"atttypid":                 oid,
 				"data_type":                dtName,
 				"is_nullable":              isNullable,
-				"column_comment":           nil,
-				"column_default":           nil,
+				"char_max_length":          maxLen,
 				"character_maximum_length": maxLen,
+				"numeric_precision":        numPrec,
+				"numeric_scale":            numScale,
+				"default_value":            nil,
+				"column_default":           nil,
+				"column_comment":           nil,
 			})
 		}
 	}
