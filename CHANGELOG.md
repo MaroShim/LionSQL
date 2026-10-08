@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **Beekeeper Studio & GUI Tool Column Introspection & Pagination Parity (`pkg/wire/tds`, `pkg/proc`, `pkg/api`, `pkg/planner`)**:
+  - Implemented double-quoted identifier (`"col"`) parsing in native Pratt parser lexer (`pkg/proc/lexer.go`), preventing syntax errors on ANSI/MSSQL quoted column aliases (`AS "column_name"`).
+  - Added specialized virtual catalog interceptor for Beekeeper Studio's SQL Server column query (`FROM INFORMATION_SCHEMA.COLUMNS ic LEFT JOIN sys.computed_columns sc ON ...`), extracting target tables/schemas and formatting data types to native MSSQL representations (`int`, `varchar(255)`, `decimal(p,s)`, `bit`, `datetime`).
+  - Added MSSQL pagination normalization (`normalizeMSSQLPagination`) converting `OFFSET <O> ROWS FETCH NEXT <N> ROWS ONLY` and `SELECT TOP <N>` queries to canonical `LIMIT <N> OFFSET <O>`.
+  - Added `OffsetCount` support to `pkg/planner.QueryInfo` and `pkg/planner.PlanNode`, hooked into `pkg/execution.NewLimitIterator(child, limit, offset)`.
+  - Added bracket and quote stripping in `ColumnIndexMap.Index` (`pkg/execution/iterator.go`) and `cleanIdent` (`pkg/planner/planner.go`) for zero-friction resolution of `[dbo].[table]` and `[column]` references.
+  - Added virtual catalog stubs for `sys.computed_columns`, `sys.triggers`, `sys.foreign_keys`, and `sys.foreign_key_columns` in `pkg/api/sqlexec_dbcc.go`.
+
 ### Added
 - **PostgreSQL Modern Driver Compatibility: `pgx/v5` & Pipelining (`pkg/wire`)**:
   - Integrated official `github.com/jackc/pgx/v5` modern Go driver test suite (`pkg/wire/pgx_integration_test.go`) covering direct connection, stdlib `sql.Open("pgx", ...)`, CRUD, parameters, transactions, pipelined batch execution, and data types.
