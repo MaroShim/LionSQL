@@ -433,6 +433,47 @@ func TestDriverIntegration_GoMSSQLDB_MetadataAndDMVs(t *testing.T) {
 	}
 	rowsVerRPC.Close()
 
+	// 1d. DbGate version & edition detection multi-column query
+	dbgateQuery := `SELECT
+  @@VERSION AS version,
+  SERVERPROPERTY ('productversion') as productVersion,
+  CONVERT(INT, SERVERPROPERTY ('EngineEdition')) as engineEdition,
+  CASE
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '8%' THEN 'SQL Server 2000'
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '9%' THEN 'SQL Server 2005'
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.0%' THEN 'SQL Server 2008'
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '10.5%' THEN 'SQL Server 2008 R2'
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '11%' THEN 'SQL Server 2012'
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '12%' THEN 'SQL Server 2014'
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '13%' THEN 'SQL Server 2016'
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '14%' THEN 'SQL Server 2017'
+  WHEN CONVERT(VARCHAR(128), SERVERPROPERTY ('productversion')) like '15%' THEN 'SQL Server 2019'
+  ELSE 'Unknown'
+  END AS versionText`
+	rowsDbGate, err := db.QueryContext(ctx, dbgateQuery)
+	if err != nil {
+		t.Fatalf("DbGate version query failed: %v", err)
+	}
+	colsDbGate, err := rowsDbGate.Columns()
+	if err != nil {
+		t.Fatalf("DbGate Columns() failed: %v", err)
+	}
+	if len(colsDbGate) != 4 || colsDbGate[0] != "version" || colsDbGate[1] != "productVersion" || colsDbGate[2] != "engineEdition" || colsDbGate[3] != "versionText" {
+		t.Fatalf("expected 4 DbGate columns [version, productVersion, engineEdition, versionText], got %v", colsDbGate)
+	}
+	if !rowsDbGate.Next() {
+		t.Fatalf("expected 1 row for DbGate version query")
+	}
+	var ver, prodVer, verText string
+	var engEdition int
+	if err := rowsDbGate.Scan(&ver, &prodVer, &engEdition, &verText); err != nil {
+		t.Fatalf("Scan DbGate version query failed: %v", err)
+	}
+	if prodVer != "15.0.2000.5" || engEdition != 3 || verText != "SQL Server 2019" {
+		t.Fatalf("unexpected DbGate version values: %s, %d, %s", prodVer, engEdition, verText)
+	}
+	rowsDbGate.Close()
+
 	// 2. Query @@SPID
 	var spid int
 	if err := db.QueryRowContext(ctx, "SELECT @@SPID").Scan(&spid); err != nil {

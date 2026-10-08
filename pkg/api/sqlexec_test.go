@@ -1011,7 +1011,7 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 	}
 
 	// 2. MSSQL system variables in scalar SELECT
-	res, err = server.ExecuteSQL("SELECT @@VERSION AS ver, @@SPID AS spid, @@TRANCOUNT AS tc, @@ROWCOUNT AS rc;")
+	res, err = server.ExecuteSQL("SELECT @@VERSION AS ver, @@SPID AS spid, @@TRANCOUNT AS tc, @@ROWCOUNT AS rc, SERVERPROPERTY('ProductVersion') AS pv, SERVERPROPERTY('EngineEdition') AS ee;")
 	if err != nil || !res.Success {
 		t.Fatalf("MSSQL scalar variables SELECT failed: %v", err)
 	}
@@ -1020,6 +1020,12 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 	}
 	if fmt.Sprintf("%v", res.Rows[0]["spid"]) != "51" {
 		t.Fatalf("expected @@SPID=51, got %v", res.Rows[0]["spid"])
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["pv"]) != "15.0.2000.5" {
+		t.Fatalf("expected SERVERPROPERTY('ProductVersion')=15.0.2000.5, got %v", res.Rows[0]["pv"])
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["ee"]) != "3" {
+		t.Fatalf("expected SERVERPROPERTY('EngineEdition')=3, got %v", res.Rows[0]["ee"])
 	}
 
 	// 3. SET options

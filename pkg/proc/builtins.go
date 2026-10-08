@@ -603,6 +603,34 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 	case "NEWID":
 		return storage.StringValue(generateUUIDv4())
 
+	case "SERVERPROPERTY":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		prop := strings.ToUpper(strings.TrimSpace(valToString(args[0])))
+		switch prop {
+		case "PRODUCTVERSION":
+			return storage.StringValue("15.0.2000.5")
+		case "PRODUCTMAJORVERSION":
+			return storage.StringValue("15")
+		case "PRODUCTLEVEL":
+			return storage.StringValue("RTM")
+		case "EDITION":
+			return storage.StringValue("Developer Edition (64-bit)")
+		case "ENGINEEDITION":
+			return storage.IntValue(3)
+		case "INSTANCENAME":
+			return storage.StringValue("MSSQLSERVER")
+		case "MACHINENAME", "SERVERNAME":
+			return storage.StringValue("SQLION")
+		case "COLLATION":
+			return storage.StringValue("SQL_Latin1_General_CP1_CI_AS")
+		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":
+			return storage.IntValue(0)
+		default:
+			return storage.StringValue("")
+		}
+
 	default:
 		if len(args) > 0 {
 			return args[0]
@@ -622,7 +650,7 @@ func IsBuiltinFunction(name string) bool {
 		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SIGN", "PI",
 		"ISNULL", "COALESCE", "IIF", "CHOOSE",
 		"JSON_VALUE", "JSON_QUERY",
-		"NEWID", "SCOPE_IDENTITY":
+		"NEWID", "SCOPE_IDENTITY", "SERVERPROPERTY":
 		return true
 	default:
 		return false

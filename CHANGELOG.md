@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **DbGate & GUI Tool SQL Server Version & Edition Detection (`pkg/wire/tds`, `pkg/proc`, `pkg/api`)**:
+  - Implemented multi-column version & edition detection interceptor (`matchVersionQuery`) in TDS server handling queries combining `@@VERSION`, `SERVERPROPERTY('productversion')`, `SERVERPROPERTY('EngineEdition')`, and `CASE ... END AS versionText`.
+  - Added support for `SERVERPROPERTY` in T-SQL procedural built-in function dispatcher (`pkg/proc/builtins.go`) and scalar SQL executor (`pkg/api/sqlexec_select.go`).
+  - Fixed TDS metadata serialization for integer columns to use `TypeIntN` (`0x26`), preventing driver error `Invalid type 0` on scalar expressions.
+
 - **Beekeeper Studio & GUI Tool Column Introspection & Pagination Parity (`pkg/wire/tds`, `pkg/proc`, `pkg/api`, `pkg/planner`)**:
   - Implemented double-quoted identifier (`"col"`) parsing in native Pratt parser lexer (`pkg/proc/lexer.go`), preventing syntax errors on ANSI/MSSQL quoted column aliases (`AS "column_name"`).
   - Added specialized virtual catalog interceptor for Beekeeper Studio's SQL Server column query (`FROM INFORMATION_SCHEMA.COLUMNS ic LEFT JOIN sys.computed_columns sc ON ...`), extracting target tables/schemas and formatting data types to native MSSQL representations (`int`, `varchar(255)`, `decimal(p,s)`, `bit`, `datetime`).

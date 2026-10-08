@@ -843,25 +843,13 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	}
 
 	// System function / version short-circuit
-	upper := strings.ToUpper(trimmed)
-	if strings.Contains(upper, "@@VERSION") {
+	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
 			log.Printf("[DEV][TDS][Query] %s", trimmed)
 		}
-		colName := "version"
-		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
-			alias := strings.TrimSpace(trimmed[asIdx+4:])
-			alias = strings.Trim(alias, ";, []\"'")
-			if alias != "" {
-				colName = alias
-			}
-		}
-		cols := []ColumnInfo{
-			{Name: colName, Type: TypeNVarChar, Size: 4000, Nullable: false},
-		}
 		var buf bytes.Buffer
 		buf.Write(BuildColMetaData(cols))
-		buf.Write(BuildRow(cols, []any{"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine"}))
+		buf.Write(BuildRow(cols, vals))
 		doneStatus := DoneFinal
 		if sess.inTx {
 			doneStatus |= DoneInXact
@@ -874,7 +862,11 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 		if s.DevMode() {
-			log.Printf("[DEV][TDS][Success] query=%s cols=%v rows=1", trimmed, []string{colName})
+			colNames := make([]string, len(cols))
+			for i, c := range cols {
+				colNames[i] = c.Name
+			}
+			log.Printf("[DEV][TDS][Success] query=%s cols=%v rows=1", trimmed, colNames)
 		}
 		return
 	}
@@ -1633,24 +1625,26 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 	}
 
 	// System function / version short-circuit
-	upper := strings.ToUpper(trimmed)
-	if strings.Contains(upper, "@@VERSION") {
-		colName := "version"
-		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
-			alias := strings.TrimSpace(trimmed[asIdx+4:])
-			alias = strings.Trim(alias, ";, []\"'")
-			if alias != "" {
-				colName = alias
-			}
-		}
-		cols := []ColumnInfo{
-			{Name: colName, Type: TypeNVarChar, Size: 4000, Nullable: false},
+	if cols, vals, ok := matchVersionQuery(trimmed); ok {
+		if s.DevMode() {
+			log.Printf("[DEV][TDS][Query] %s", trimmed)
 		}
 		var buf bytes.Buffer
 		buf.Write(BuildColMetaData(cols))
-		buf.Write(BuildRow(cols, []any{"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine"}))
-		buf.Write(BuildDone(TokenDone, DoneFinal|DoneCount, 0xC1, 1))
+		buf.Write(BuildRow(cols, vals))
+		doneStatus := DoneFinal
+		if sess.inTx {
+			doneStatus |= DoneInXact
+		}
+		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		if s.DevMode() {
+			colNames := make([]string, len(cols))
+			for i, c := range cols {
+				colNames[i] = c.Name
+			}
+			log.Printf("[DEV][TDS][Success] query=%s cols=%v rows=1", trimmed, colNames)
+		}
 		return
 	}
 
@@ -1773,3 +1767,84 @@ func (s *Server) inferColumnInfos(res *api.QueryResult) []ColumnInfo {
 
 	return cols
 }
+
+func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
+	upper := strings.ToUpper(trimmed)
+	if !strings.Contains(upper, "SELECT") {
+		return nil, nil, false
+	}
+
+	// 1. DbGate & Modern GUI tool multi-column version & edition detection
+	if strings.Contains(upper, "SERVERPROPERTY") && (strings.Contains(upper, "VERSION") || strings.Contains(upper, "PRODUCTVERSION") || strings.Contains(upper, "ENGINEEDITION")) {
+		cols := []ColumnInfo{
+			{Name: "version", Type: TypeNVarChar, Size: 4000, Nullable: false},
+			{Name: "productVersion", Type: TypeNVarChar, Size: 128, Nullable: false},
+			{Name: "engineEdition", Type: TypeIntN, Size: 4, Nullable: true},
+			{Name: "versionText", Type: TypeNVarChar, Size: 128, Nullable: false},
+		}
+		vals := []any{
+			"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine",
+			"15.0.2000.5",
+			int32(3),
+			"SQL Server 2019",
+		}
+		return cols, vals, true
+	}
+
+	// 2. Standard @@VERSION
+	if strings.Contains(upper, "@@VERSION") {
+		colName := "version"
+		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
+			alias := strings.TrimSpace(trimmed[asIdx+4:])
+			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
+				alias = alias[:commaIdx]
+			}
+			alias = strings.Trim(alias, ";, []\"'\r\n\t")
+			if alias != "" {
+				colName = alias
+			}
+		}
+		cols := []ColumnInfo{
+			{Name: colName, Type: TypeNVarChar, Size: 4000, Nullable: false},
+		}
+		vals := []any{
+			"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine",
+		}
+		return cols, vals, true
+	}
+
+	// 3. Standalone SERVERPROPERTY(...)
+	if strings.Contains(upper, "SERVERPROPERTY") {
+		colName := "property"
+		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
+			alias := strings.TrimSpace(trimmed[asIdx+4:])
+			if commaIdx := strings.Index(alias, ","); commaIdx != -1 {
+				alias = alias[:commaIdx]
+			}
+			alias = strings.Trim(alias, ";, []\"'\r\n\t")
+			if alias != "" {
+				colName = alias
+			}
+		}
+		var val any = "15.0.2000.5"
+		colType := TypeNVarChar
+		colSize := 128
+		if strings.Contains(upper, "ENGINEEDITION") {
+			val = int32(3)
+			colType = TypeIntN
+			colSize = 4
+		} else if strings.Contains(upper, "EDITION") {
+			val = "Developer Edition (64-bit)"
+		} else if strings.Contains(upper, "PRODUCTLEVEL") {
+			val = "RTM"
+		}
+		cols := []ColumnInfo{
+			{Name: colName, Type: colType, Size: colSize, Nullable: true},
+		}
+		vals := []any{val}
+		return cols, vals, true
+	}
+
+	return nil, nil, false
+}
+

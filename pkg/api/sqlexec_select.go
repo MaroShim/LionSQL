@@ -354,6 +354,34 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		return "", trimmed
 	}
 
+	// SERVERPROPERTY('prop')
+	if strings.HasPrefix(upper, "SERVERPROPERTY(") && strings.HasSuffix(upper, ")") {
+		arg := strings.TrimSpace(trimmed[len("SERVERPROPERTY(") : len(trimmed)-1])
+		arg = strings.Trim(arg, "'\"")
+		switch strings.ToUpper(arg) {
+		case "PRODUCTVERSION":
+			return "15.0.2000.5", "productversion"
+		case "PRODUCTMAJORVERSION":
+			return "15", "productmajorversion"
+		case "PRODUCTLEVEL":
+			return "RTM", "productlevel"
+		case "EDITION":
+			return "Developer Edition (64-bit)", "edition"
+		case "ENGINEEDITION":
+			return int64(3), "engineedition"
+		case "INSTANCENAME":
+			return "MSSQLSERVER", "instancename"
+		case "MACHINENAME", "SERVERNAME":
+			return "SQLION", "servername"
+		case "COLLATION":
+			return "SQL_Latin1_General_CP1_CI_AS", "collation"
+		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":
+			return int64(0), strings.ToLower(arg)
+		default:
+			return "", strings.ToLower(arg)
+		}
+	}
+
 	// pg_cancel_backend(pid)
 	if strings.HasPrefix(upper, "PG_CANCEL_BACKEND(") && strings.HasSuffix(upper, ")") {
 		arg := strings.TrimSpace(trimmed[len("PG_CANCEL_BACKEND(") : len(trimmed)-1])
