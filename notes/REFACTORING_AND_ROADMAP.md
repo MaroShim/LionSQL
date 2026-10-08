@@ -54,13 +54,15 @@
   * `pkg/api`(HTTP/웹 스튜디오), `pkg/wire`(PGWire), `pkg/wire/tds`(TDS) 3개 어댑터가 동등하게 코어 엔진 인터페이스를 단방향으로 호출하도록 클린 아키텍처 확립.
 
 ### 과제 3: VDBE 바이트코드 엔진 성능 튜닝 & 제로 할당 고속화 (`pkg/proc/runtime`)
-* **현황**: 단일 호스트 초당 수만 건 TPS 환경에서 행 단위 VM 인터프리터 루프 왕복 및 임시 레지스터 할당 오버헤드를 극한까지 줄일 필요가 있음.
-* **계획**:
-  * **레지스터 풀링 & 제로 할당**: `sync.Pool` 기반 `VMFrame` 레지스터 슬라이스(`[]storage.Value`) 재활용 및 인터페이스 박싱(`any`) 제거, 프리미티브 정수/실수 인라인 직접 연산 강화.
-  * **디스패치 최적화 & 분기 예측 개선**: 바이트코드 디스패치 루프 최적화로 CPU L1 캐시 적중률 및 분기 예측(Branch Prediction) 효율 극대화.
+* **현황**: T-SQL 프로시저 실행(`BenchmarkTransferFunds`) 프로파일링 결과 1회 실행당 **6.34µs / 22.2KB 메모리 할당 / 171회 힙 할당** 발생 중. 로컬 변수 해시맵 조회, 수식 평가 시 중간 컨텍스트 맵 생성, 매 명령어 채널 `select` 등이 주요 병목으로 확인됨.
+* **계획 (핵심 최적화 5대 과제)**:
+  1. **로컬 변수 슬롯화 (Local Variable Slot Indexing)**: T-SQL 로컬 변수(`@from`, `@amount` 등) 접근 시 `map[string]storage.Value` 해시맵 조회 및 문자열 해싱/소문자 변환을 제거하고, 컴파일 시 슬롯 인덱스(0, 1, 2...)를 부여하여 `f.slots[inst.B]` 고정 슬라이스 $O(1)$ 직접 배열 접근으로 전환.
+  2. **중간 컨텍스트 맵 생성(`buildRowEvalMap`) 제거 (Zero-Allocation Expression Evaluation)**: DML 및 수식 평가 시 매번 새 `map[string]any`를 생성하여 변수당 4개씩 키를 복사하고 `valToAny` 인터페이스 박싱을 하던 핵심 병목 제거 (현재 프로시저 실행당 22.2 KB / 171 allocs의 주원인 근절).
+  3. **컨텍스트 취소 검사 배치화 (Batch Cancellation Check)**: 매 단일 바이트코드 명령마다 채널 `select / default`를 호출하여 발생하는 20~40ns 고정 오버헤드를 해소하기 위해 64 또는 128개 명령 주기(`if pc&63 == 0 && f.ctx != nil`)로 취소 검사 주기 최적화.
+  4. **오프코드 특화(Specialization) 및 인터페이스 비교 제거**: `OpEq` 내 `inst.Data == "AND"` 등 동적 인터페이스 문자열 비교를 완전 제거하고 `OpAnd`, `OpOr` 독립 오프코드 분리 및 정수 핫패스 인라인 특화 오프코드(`OpAddInt`, `OpEqInt`) 도입.
+  5. **인스트럭션 구조체 밀도 최적화 (CPU L1 Cache Locality)**: `Instruction` 구조체 내 `Data any` 인터페이스 헤더(16바이트)를 분리하고 레지스터 연산을 8~16바이트 고정 크기 레코드로 밀도 높게 패킹하여 CPU L1 Data Cache 적중률 극대화.
   * **관계형 스캔 벡터화 배치 파이프라이닝**: `OpRelScan`, `OpIndexScan`에서 행 단위 VM 왕복 오버헤드를 줄이기 위한 N개(64~1024건) 단위 청크 벡터화 스트리밍.
-  * **바이트코드 상수 풀링**: 쿼리 및 프로시저 실행 시 반복 사용되는 리터럴 상수 복사를 방지하는 불변 상수 풀 인덱싱.
-  * **마이크로 벤치마크 및 pprof 프로파일링 하네스**: TPC-C New-Order 및 복합 T-SQL 프로시저 경로 대상 나노초(ns/op) 단위 CPU/할당 프로파일링 체계화.
+  * **마이크로 벤치마크 및 pprof 프로파일링 하네스**: `BenchmarkTransferFunds` (기준선: 6.34µs / 22.2KB / 171 allocs) 및 TPC-C New-Order 대상 단계별 성능 추적 및 검증.
 
 ---
 
