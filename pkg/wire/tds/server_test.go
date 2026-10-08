@@ -6,7 +6,9 @@ import (
 	"net"
 	"sync"
 	"testing"
+	"time"
 
+	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage/memengine"
@@ -622,6 +624,35 @@ func TestTDS_PlanCacheSharing(t *testing.T) {
 	}
 	if cachedProg == nil {
 		t.Fatalf("expected non-nil cached program in shared plan cache")
+	}
+}
+
+func TestTDS_InferColumnInfos_DateTime(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	srv := NewServer("127.0.0.1:0", cat, eng)
+
+	mockRes := &api.QueryResult{
+		Columns: []string{"id", "name", "create_date", "modify_date"},
+		Rows: []map[string]any{
+			{
+				"id":          1,
+				"name":        "Test",
+				"create_date": time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+				"modify_date": "2026-01-01T00:00:00Z",
+			},
+		},
+	}
+
+	cols := srv.inferColumnInfos(mockRes)
+	if len(cols) != 4 {
+		t.Fatalf("expected 4 cols, got %d", len(cols))
+	}
+	if cols[2].Type != TypeDateTimeN || cols[2].Size != 8 {
+		t.Fatalf("expected col create_date to be TypeDateTimeN with size 8, got type 0x%X size %d", cols[2].Type, cols[2].Size)
+	}
+	if cols[3].Type != TypeDateTimeN || cols[3].Size != 8 {
+		t.Fatalf("expected col modify_date to be TypeDateTimeN with size 8, got type 0x%X size %d", cols[3].Type, cols[3].Size)
 	}
 }
 

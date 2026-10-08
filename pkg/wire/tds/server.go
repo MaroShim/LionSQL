@@ -1733,6 +1733,12 @@ func (s *Server) inferColumnInfos(res *api.QueryResult) []ColumnInfo {
 		colSize := 4000
 		nullable := true
 
+		lowerCol := strings.ToLower(colName)
+		if strings.HasSuffix(lowerCol, "_date") || strings.HasSuffix(lowerCol, "_time") || lowerCol == "create_date" || lowerCol == "modify_date" || lowerCol == "created" || lowerCol == "modified" {
+			colType = TypeDateTimeN
+			colSize = 8
+		}
+
 		// Scan non-null sample values from rows
 		for _, row := range res.Rows {
 			if v, ok := row[colName]; ok && v != nil {
@@ -1750,8 +1756,10 @@ func (s *Server) inferColumnInfos(res *api.QueryResult) []ColumnInfo {
 					colType = TypeDateTimeN
 					colSize = 8
 				case string:
-					colType = TypeNVarChar
-					colSize = 4000
+					if colType != TypeDateTimeN {
+						colType = TypeNVarChar
+						colSize = 4000
+					}
 				}
 				break
 			}

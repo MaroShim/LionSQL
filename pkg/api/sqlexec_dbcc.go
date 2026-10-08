@@ -438,9 +438,11 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 	var allRows []map[string]any
 	tables, _ := s.engine.ListTables()
 
+	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
 	switch norm {
 	case "sys.tables", "systables", "sys_tables":
-		columns = []string{"table_name", "name", "object_id", "schema_id", "table_type", "table_schema", "column_count", "create_date"}
+		columns = []string{"table_name", "name", "object_id", "schema_id", "table_type", "table_schema", "column_count", "create_date", "modify_date"}
 		for i, t := range tables {
 			allRows = append(allRows, map[string]any{
 				"table_name":   t.Name,
@@ -450,7 +452,8 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 				"table_type":   "BASE TABLE",
 				"table_schema": "dbo",
 				"column_count": len(t.Columns),
-				"create_date":  "2026-01-01T00:00:00Z",
+				"create_date":  defaultDate,
+				"modify_date":  defaultDate,
 			})
 		}
 
@@ -499,14 +502,14 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 				"name":        "master",
 				"schema_name": "dbo",
 				"database_id": 1,
-				"create_date": "2026-01-01T00:00:00Z",
+				"create_date": defaultDate,
 				"state_desc":  "ONLINE",
 			},
 			map[string]any{
 				"name":        "sqlion",
 				"schema_name": "dbo",
 				"database_id": 2,
-				"create_date": "2026-01-01T00:00:00Z",
+				"create_date": defaultDate,
 				"state_desc":  "ONLINE",
 			},
 		)
@@ -519,7 +522,7 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 					"routine_name":   p.Name,
 					"routine_type":   "PROCEDURE",
 					"routine_schema": "dbo",
-					"created_date":   p.CreatedAt.Format(time.RFC3339),
+					"created_date":   p.CreatedAt,
 				})
 			}
 		}
@@ -582,19 +585,21 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 				"schema_id":    1,
 				"type":         "U",
 				"type_desc":    "USER_TABLE",
-				"create_date":  "2026-01-01T00:00:00Z",
-				"modify_date":  "2026-01-01T00:00:00Z",
+				"create_date":  defaultDate,
+				"modify_date":  defaultDate,
 			})
 		}
 
 	case "sys.views", "sysviews", "sys_views":
-		columns = []string{"name", "object_id", "schema_id"}
+		columns = []string{"name", "object_id", "schema_id", "create_date", "modify_date"}
 		if s.catalog != nil {
 			for _, v := range s.catalog.ListViews() {
 				allRows = append(allRows, map[string]any{
-					"name":      v.Name,
-					"object_id": 2000,
-					"schema_id": 1,
+					"name":        v.Name,
+					"object_id":   2000,
+					"schema_id":   1,
+					"create_date": defaultDate,
+					"modify_date": defaultDate,
 				})
 			}
 		}

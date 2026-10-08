@@ -435,11 +435,19 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 }
 
 func cleanSchemaPrefix(name string) string {
-	s := strings.Trim(name, "[]\"'`")
-	if strings.HasPrefix(strings.ToLower(s), "dbo.") {
-		s = s[4:]
+	s := strings.TrimSpace(name)
+	parts := strings.Split(s, ".")
+	for i, p := range parts {
+		parts[i] = strings.Trim(strings.TrimSpace(p), "[]\"'`")
 	}
-	return strings.Trim(s, "[]\"'`")
+	cleaned := strings.Join(parts, ".")
+	lower := strings.ToLower(cleaned)
+	if strings.HasPrefix(lower, "dbo.") {
+		cleaned = cleaned[4:]
+	} else if strings.HasPrefix(lower, "public.") {
+		cleaned = cleaned[7:]
+	}
+	return cleaned
 }
 
 func parseDataType(s string) storage.DataType {
@@ -2040,13 +2048,22 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		}
 	}
 
-	// 8. LIMIT clause
-	if p.curTokenIs(TokenLimit) {
-		p.nextToken() // eat LIMIT
-		if p.curTokenIs(TokenInt) {
-			n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
-			stmt.Limit = n
-			p.nextToken()
+	// 8. LIMIT and OFFSET clauses
+	for p.curTokenIs(TokenLimit) || p.curTokenIs(TokenOffset) {
+		if p.curTokenIs(TokenLimit) {
+			p.nextToken() // eat LIMIT
+			if p.curTokenIs(TokenInt) {
+				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				stmt.Limit = n
+				p.nextToken()
+			}
+		} else if p.curTokenIs(TokenOffset) {
+			p.nextToken() // eat OFFSET
+			if p.curTokenIs(TokenInt) {
+				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				stmt.Offset = n
+				p.nextToken()
+			}
 		}
 	}
 

@@ -132,9 +132,11 @@ const (
 	TokenRollup
 	TokenCube
 	TokenGroupingSets
+	TokenOffset
 )
 
 var keywords = map[string]TokenType{
+	"OFFSET":        TokenOffset,
 	"ROLLUP":        TokenRollup,
 	"CUBE":          TokenCube,
 	"GROUPING_SETS": TokenGroupingSets,

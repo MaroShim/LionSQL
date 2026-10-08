@@ -743,6 +743,7 @@ type GeneralSelectStmt struct {
 	Having       Expr
 	OrderBy     []OrderByItem
 	Limit       int64
+	Offset      int64
 	Distinct    bool
 	IsExplain   bool
 	IsAnalyze   bool

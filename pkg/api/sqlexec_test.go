@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
@@ -2473,6 +2474,67 @@ func TestCustomScalarFunction_SQLExec(t *testing.T) {
 	// Account 1 has balance 1000, so SQUARE_NUM(1000) should be 1000000
 	if fmt.Sprintf("%v", row["sq_balance"]) != "1000000" {
 		t.Fatalf("expected sq_balance to be 1000000, got %v", row["sq_balance"])
+	}
+}
+
+func TestSQLExecutor_DbGate_SelectLimitOffsetWithAlias(t *testing.T) {
+	server, cleanup := setupTestServer()
+	defer cleanup()
+
+	if _, err := server.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), balance INT);"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := server.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice', 100), (2, 'Bob', 200), (3, 'Charlie', 300);"); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// Exact query format sent by DbGate
+	query := `SELECT
+  "basetbl"."id" AS "id",
+  "basetbl"."name" AS "name",
+  "basetbl"."balance" AS "balance"
+  FROM "public"."users" "basetbl" LIMIT 100 OFFSET 0`
+
+	res, err := server.ExecuteSQL(query)
+	if err != nil {
+		t.Fatalf("DbGate SELECT failed: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("DbGate SELECT unsuccessful")
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d", len(res.Rows))
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["name"]) != "Alice" {
+		t.Fatalf("expected row 0 name to be Alice, got %v", res.Rows[0]["name"])
+	}
+
+	// Test OFFSET 1 LIMIT 1
+	offsetQuery := `SELECT "basetbl"."id" AS "id", "basetbl"."name" AS "name" FROM "public"."users" "basetbl" LIMIT 1 OFFSET 1`
+	resOff, err := server.ExecuteSQL(offsetQuery)
+	if err != nil {
+		t.Fatalf("DbGate offset SELECT failed: %v", err)
+	}
+	if len(resOff.Rows) != 1 {
+		t.Fatalf("expected 1 row for LIMIT 1 OFFSET 1, got %d", len(resOff.Rows))
+	}
+	if fmt.Sprintf("%v", resOff.Rows[0]["name"]) != "Bob" {
+		t.Fatalf("expected row name to be Bob, got %v", resOff.Rows[0]["name"])
+	}
+
+	// Test sys.tables date fields
+	sysRes, err := server.ExecuteSQL("SELECT name, create_date, modify_date FROM sys.tables")
+	if err != nil {
+		t.Fatalf("sys.tables query failed: %v", err)
+	}
+	if len(sysRes.Rows) == 0 {
+		t.Fatalf("expected sys.tables to return at least 1 row")
+	}
+	if _, ok := sysRes.Rows[0]["create_date"].(time.Time); !ok {
+		t.Fatalf("expected create_date to be time.Time, got %T (%v)", sysRes.Rows[0]["create_date"], sysRes.Rows[0]["create_date"])
+	}
+	if _, ok := sysRes.Rows[0]["modify_date"].(time.Time); !ok {
+		t.Fatalf("expected modify_date to be time.Time, got %T (%v)", sysRes.Rows[0]["modify_date"], sysRes.Rows[0]["modify_date"])
 	}
 }
 

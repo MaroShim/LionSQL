@@ -340,6 +340,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		HavingClause:  havingClause,
 		OrderByClause: orderByClause,
 		LimitCount:    stmt.Limit,
+		OffsetCount:   stmt.Offset,
 		HasAggregates: hasAgg,
 		Distinct:      stmt.Distinct,
 		IsAnalyze:     stmt.IsAnalyze,

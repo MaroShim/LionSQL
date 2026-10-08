@@ -1256,7 +1256,7 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	}
 
 	// Parse projection, table, WHERE, ORDER BY, LIMIT, OFFSET
-	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+([^\s,;]+)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$`)
+	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$`)
 	matches := selectRe.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
 		if !hasFromClause(cleaned) {
@@ -1267,7 +1267,11 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 
 	projStr := strings.TrimSpace(matches[1])
 	rawTable := strings.TrimSpace(matches[2])
-	tableName := cleanIdentifier(rawTable)
+	baseTableName := rawTable
+	if f := strings.Fields(rawTable); len(f) > 0 {
+		baseTableName = f[0]
+	}
+	tableName := cleanIdentifier(baseTableName)
 	whereClause := ""
 	if len(matches) > 3 {
 		whereClause = strings.TrimSpace(matches[3])
@@ -1291,11 +1295,10 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 			offsetCount = n
 		}
 	}
-	_ = offsetCount
 
 	// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
 	tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
-	if m := tvfCallRe.FindStringSubmatch(rawTable); len(m) == 3 {
+	if m := tvfCallRe.FindStringSubmatch(baseTableName); len(m) == 3 {
 		tvfName := cleanIdentifier(m[1])
 		argsRaw := m[2]
 		fnMeta, err := s.catalog.GetFunction(tvfName)
@@ -1525,7 +1528,14 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 		})
 	}
 
-	// 4. Apply LIMIT if present
+	// 4. Apply OFFSET & LIMIT if present
+	if offsetCount > 0 {
+		if offsetCount >= len(scannedRows) {
+			scannedRows = nil
+		} else {
+			scannedRows = scannedRows[offsetCount:]
+		}
+	}
 	if limitCount >= 0 && len(scannedRows) > limitCount {
 		scannedRows = scannedRows[:limitCount]
 	}
@@ -1546,7 +1556,20 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 			} else if v, ok := sr.row[pi.expr]; ok {
 				row[pi.alias] = v
 			} else {
-				row[pi.alias] = nil
+				cleanExpr := cleanIdentifier(pi.expr)
+				if v, ok := sr.row[cleanExpr]; ok {
+					row[pi.alias] = v
+				} else {
+					colPart := cleanExpr
+					if idx := strings.LastIndex(cleanExpr, "."); idx != -1 {
+						colPart = cleanExpr[idx+1:]
+					}
+					if v, ok := sr.row[colPart]; ok {
+						row[pi.alias] = v
+					} else {
+						row[pi.alias] = nil
+					}
+				}
 			}
 		}
 		rows = append(rows, row)
