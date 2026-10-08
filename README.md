@@ -494,7 +494,7 @@ SQLion strictly adheres to a **3-Stage Verification Pipeline** for every change:
 
 ## License
 
-SQLion is free open-source software licensed under the **GNU Affero General Public License v3 (AGPL-3.0-or-later)**. See [LICENSE](LICENSE) for details.
+SQLion is free open-source software licensed under the **GNU General Public License v3 (GPL-3.0-or-later)**. See [LICENSE](LICENSE) for details.
 
-Commercial licensing and proprietary embedding options are also available for enterprise deployments requiring custom terms without AGPL copyleft obligations.
+Commercial licensing and proprietary embedding options are also available for enterprise deployments requiring custom terms without GPL copyleft obligations.
 

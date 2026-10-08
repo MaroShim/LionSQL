@@ -288,10 +288,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [0.10.0] - 2026-10-01
 
 ### Changed
-- **Open Source Licensing: Transition to GNU Affero General Public License v3 (AGPL-3.0-or-later)**:
-  - Updated project license from GPL-2.0/GPL-3.0 to GNU Affero General Public License v3 (`AGPL-3.0-or-later`) across `LICENSE` and `README.md`.
-  - Added copyleft network interaction clause protecting network server deployment, wire protocols (:5433, :1433, :8090), and hosted DBaaS services against proprietary cloud free-riding.
-  - Formally documented dual-licensing path for enterprise deployments and proprietary software embedding.
+- **Open Source Licensing: GNU General Public License v3 (GPL-3.0-or-later)**:
+  - Formally consolidated project license under the GNU General Public License v3 (`GPL-3.0-or-later`) across `LICENSE` and `README.md`.
+  - Maintained commercial dual-licensing path for enterprise deployments requiring custom proprietary embedding terms.
 
 - **Architectural Invariant: Database Isolation Strategy (Instance-Based Isolation)**:
   - Formally codified instance-level isolation (Process / Container per Database) in `GEMINI.md` as a permanent core architectural invariant.
