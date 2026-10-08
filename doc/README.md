@@ -14,9 +14,10 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 [ Core & Storage ]  [ Query & VM ]             [ Wire Protocols ]    [ BaaS & APIs ]
 - ARCHITECTURE.md   - INTERNALS_VDBE.md        - INTERNALS_WIRE.md   - AUTO_REST_API.md
 - INTERNALS_STOR.md - INTERNALS_CBO_VOLCANO.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
-- DATA_DICTIONARY   - EXTENSIONS.md                                  - CRON_AND_MAILER.md
+- TX_CONCURRENCY.md - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
+- RECORD_BINARY.md  - LOG_PROC_GREP_AWK.md                           - WEB_SDK.md
+- DATA_DICTIONARY   - EXTENSIONS.md                                  - API_REFERENCE.md
 - HIGH_AVAIL.md                                                      - WEB_SDK.md
-                                                                     - API_REFERENCE.md
 ```
 
 ---
@@ -36,12 +37,17 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * Bit-level layout: `0x01` version header, $\lceil N/8 \rceil$ null bitmap, and dense ZigZag varint payloads.
   * Architectural lineage: PostgreSQL heap tuple `t_bits`, CockroachDB/TiDB KV encoding, and Protobuf varints.
   * WiredTiger B+Tree disk value persistence vs in-memory OCC WAL durability.
+* [`TRANSACTION_CONCURRENCY.md`](file:///Users/maro/Projects/sql/doc/TRANSACTION_CONCURRENCY.md)
+  * Transaction isolation and concurrency model specification.
+  * Non-blocking snapshot reads and private workspace isolation.
+  * In-Memory OCC with monotonic integer versioning vs WiredTiger MVCC with hazard pointers and transaction timestamps.
+  * VDBE transaction coupling (`exec.RunInTx`) and benchmark transaction fidelity.
 * [`DATA_DICTIONARY.md`](file:///Users/maro/Projects/sql/doc/DATA_DICTIONARY.md)
   * System catalogs, system tables, schema metadata persistence, and virtual catalog views (`sys.tables`, `INFORMATION_SCHEMA`).
 * [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/sql/doc/HIGH_AVAILABILITY.md)
   * Crash safety, checkpointing, AOF compaction, and online hot backup/restore pipelines.
 * [`ADR.md`](file:///Users/maro/Projects/sql/doc/ADR.md)
-  * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution, HA replication, dual-track UDFs: ADR-001 through ADR-018).
+  * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution, HA replication, dual-track UDFs, compact binary tuple codec, multi-protocol catalog interception, GPL v3 licensing: ADR-001 through ADR-021).
 
 ---
 
@@ -74,6 +80,11 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * **PostgreSQL Wire Protocol v3** (Port `5433`): Simple and Extended Query Protocols (`Parse`, `Bind`, `Execute`, `Sync`), parameter binding, and SSL/TLS.
   * **Microsoft SQL Server TDS 7.x/8.0** (Port `1433`): Prelogin, Login7, RPC packets, and `sp_prepexec` bytecode plan cache connection.
   * Client compatibility matrix (`psql`, DBeaver, GORM, Prisma, `sqlcmd`, SSMS, Azure Data Studio).
+* [`CLIENT_TOOL_INTEGRATION.md`](file:///Users/maro/Projects/sql/doc/CLIENT_TOOL_INTEGRATION.md)
+  * Comprehensive GUI & CLI client tool connection and integration guide.
+  * Tested client matrix: Beekeeper Studio, DBeaver Universal Database Tool, Azure Data Studio, SSMS, `psql`, and `sqlcmd`.
+  * Multi-protocol catalog interceptors, schema discovery routing, and pagination normalization (`OFFSET FETCH` / `TOP`).
+  * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
 
 ---
 

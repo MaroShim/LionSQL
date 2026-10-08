@@ -17,6 +17,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added virtual catalog stubs for `sys.computed_columns`, `sys.triggers`, `sys.foreign_keys`, and `sys.foreign_key_columns` in `pkg/api/sqlexec_dbcc.go`.
 
 ### Added
+- **Technical Documentation & Architecture Decision Records (`doc/`)**:
+  - Authored `doc/CLIENT_TOOL_INTEGRATION.md`: Comprehensive connection and integration guide for Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, `psql`, `sqlcmd`, and programming language drivers (Go, Python, Node.js, C#, Rust, Java).
+  - Authored `doc/TRANSACTION_CONCURRENCY.md`: Complete specification for non-blocking snapshot reads, In-Memory OCC vs WiredTiger MVCC concurrency models, private workspace isolation, and VDBE transaction coupling (`exec.RunInTx`).
+  - Added ADR-019 (Schema-Aware Compact Binary Tuple Storage Codec), ADR-020 (Multi-Protocol Virtual Catalog Interceptor Strategy), and ADR-021 (Open Source Licensing Strategy: GPL-3.0-or-later) to `doc/ADR.md`.
+  - Updated `doc/README.md` indexing map and section listings with all new documents.
+
 - **PostgreSQL Modern Driver Compatibility: `pgx/v5` & Pipelining (`pkg/wire`)**:
   - Integrated official `github.com/jackc/pgx/v5` modern Go driver test suite (`pkg/wire/pgx_integration_test.go`) covering direct connection, stdlib `sql.Open("pgx", ...)`, CRUD, parameters, transactions, pipelined batch execution, and data types.
   - Implemented binary parameter decoding (`decodeBinaryParam`) supporting `int4`, `int8`, `int2`, `bool`, `float4`, `float8`, `timestamp`, `timestamptz`, `date`, and string types.

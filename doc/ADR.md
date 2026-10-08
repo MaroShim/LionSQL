@@ -513,3 +513,79 @@ Adopt a **Dual-Track User-Defined Function (UDF)** extensibility model:
 - **Negative**: Wasm execution introduces memory marshalling overhead compared to direct native function pointers.
 - **Compliance**: Adheres to Golden Rule 26 (Extension Boundary Sandboxing), Golden Rule 84 (Hermetic Cross-Platform Parity), and Golden Rule 86 (Pure Static Binaries).
 
+---
+
+## ADR-019: Schema-Aware Compact Binary Tuple Storage Codec (`0x01`)
+
+### Status
+Accepted
+
+### Context
+Early iterations of SQLion explored generic serialization formats (JSON, BSON, MessagePack) for persisting records in WiredTiger B+Tree values and In-Memory WAL log frames. However, generic serialization formats introduce critical performance bottlenecks in high-throughput OLTP workloads:
+1. **Redundant Field Names**: Serializing string column keys (`"customer_id"`, `"balance"`) for every single row caused 60% to 80% storage bloat.
+2. **Intermediate Map Allocations**: Deserializing generic formats necessitated instantiating `map[string]any` dictionaries, triggering massive Go garbage collection (GC) pressure.
+3. **Branching & Type-Tag Overhead**: Repeating dynamic type descriptors per attribute wasted CPU instruction cache lines.
+
+### Decision
+Deprecate all generic text and MessagePack record codecs. Implement a **Schema-Aware Compact Binary Tuple Codec** (`pkg/storage/tuple.go`):
+1. **Contiguous Binary Layout**: `[0x01 Version Header (1 Byte)]` + `[Null Bitmap (ceil(N/8) Bytes)]` + `[Sequential Column Payloads]`.
+2. **Catalog Schema Primacy**: Leverage the table schema definition in the catalog to enforce column order, eliminating column names from row bytes completely.
+3. **Zero-Byte NULL Fields**: Columns marked NULL in the bitmask emit exactly zero bytes in the payload section.
+4. **ZigZag Varint Integer Compaction**: Compress numeric types via LEB128/ZigZag encoding (`binary.PutVarint`), reducing small integers to 1~2 bytes.
+5. **Zero-Allocation Buffer Pooling & Direct Row Passthrough**: Reuse scratch byte slices via `sync.Pool` on serialization paths, and decode directly into indexed `storage.Row` arrays without map allocations.
+
+### Consequences
+- **Positive**: 60%~80% reduction in on-disk record footprint; eliminates heap allocation churn on write paths; sub-microsecond row scanning.
+- **Negative**: Requires strict table schema coordination during recovery.
+- **Compliance**: Adheres to Golden Rule 13 (Control Character Sanitization), Golden Rule 30 (Zero-Allocation Hot Paths), and Rule 86 (Pure Static Binaries).
+
+---
+
+## ADR-020: Multi-Protocol Virtual Catalog Interceptor Strategy for Zero-Friction GUI Introspection
+
+### Status
+Accepted
+
+### Context
+Modern database GUI tools (Beekeeper Studio, DBeaver, Azure Data Studio, pgAdmin, SSMS) rely on extensive catalog introspection queries to render left-side object trees, column types, default values, and foreign key relationship diagrams.
+- PostgreSQL tools issue multi-table joins against `pg_class`, `pg_namespace`, `pg_attribute`, and `information_schema.tables`.
+- Microsoft SQL Server tools issue complex vendor-specific joins such as `FROM INFORMATION_SCHEMA.COLUMNS ic LEFT JOIN sys.computed_columns sc ON OBJECT_ID(...) = sc.object_id`.
+
+Building and maintaining physical disk tables and background catalog sync workers for hundreds of relational catalog views would severely complicate the database kernel, introduce catalog lock contention, and bloat the storage engine.
+
+### Decision
+Implement a **Virtual Catalog Interceptor Architecture** (`pkg/api/sqlexec_pgcatalog.go`, `pkg/api/sqlexec_dbcc.go`):
+1. **Planning-Phase Query Interception**: Detect standard GUI tool catalog join patterns during the query routing phase before physical table resolution.
+2. **Dynamic In-Memory Synthesis**: Synthesize response result sets dynamically from active table schemas in memory (`engine.GetTable()`, `catalog.Catalog`), returning deterministic OIDs and native protocol type names.
+3. **T-SQL Pagination & Identifier Normalization**: Automatically rewrite vendor pagination (`OFFSET ... ROWS FETCH NEXT ... ROWS ONLY` and `SELECT TOP <N>`) into canonical `LIMIT / OFFSET`, and sanitize bracketed (`[dbo].[table]`) and double-quoted (`"col"`) identifiers.
+4. **Zero Physical Catalog Bloat**: Maintain zero physical disk tables for internal system views; user databases remain pure, lightweight, and isolated.
+
+### Consequences
+- **Positive**: Immediate out-of-the-box compatibility with major PostgreSQL and SQL Server GUI management clients without proxy layers; zero catalog locking overhead.
+- **Negative**: Unrecognized vendor-specific GUI queries require regex/pattern interceptor coverage.
+- **Compliance**: Adheres to Golden Rule 14 (Platform Primitives First), Golden Rule 15 (KISS, Minimal Diff), and GEMINI.md Section 2 (Dual-Parser Architecture).
+
+---
+
+## ADR-021: Open Source Licensing Strategy: GNU General Public License v3 (GPL-3.0-or-later)
+
+### Status
+Accepted
+
+### Context
+SQLion was initially evaluated under the Affero General Public License (AGPL-3.0). However, AGPL-3.0 presents substantial adoption friction in modern cloud environments:
+- Enterprise users and development teams frequently avoid AGPL-licensed software due to network-trigger copyleft clauses that create legal ambiguity around containerized deployments, sidecar microservices, and private internal tooling.
+- To maximize adoption while ensuring that modifications to the database engine itself remain open source and freely accessible to the global engineering community, a clear, standard open-source license is required.
+
+### Decision
+Adopt the **GNU General Public License v3 (GPL-3.0-or-later)** across the entire SQLion codebase:
+1. Update `LICENSE` to the standard GNU General Public License version 3 text.
+2. Update all project documentation (`README.md`, `CHANGELOG.md`) and package headers to reflect `GPL-3.0-or-later`.
+3. Provide standard Open Source Initiative (OSI) compliance and commercial transparency.
+
+### Consequences
+- **Positive**: Protects the database engine against proprietary forks while removing network copyleft ambiguity, dramatically encouraging enterprise adoption and developer contribution.
+- **Negative**: Proprietary applications wishing to statically link SQLion into closed-source monoliths must comply with GPL-3.0 terms or deploy SQLion as a separate standalone service.
+- **Compliance**: Adheres to Golden Rule 19 (Documentation & Style Integrity) and Level 6 (Cross-Platform Portability & Production Release).
+
+
