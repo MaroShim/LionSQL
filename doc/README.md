@@ -24,6 +24,12 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 
 ## 2. Directory of Documents
 
+### 2.0. Official Manuals (공식 매뉴얼)
+* [`USER_MANUAL.md`](file:///Users/maro/Projects/sql/doc/USER_MANUAL.md)
+  * 설치, 기동, 클라이언트 도구 연동, 데이터베이스 개발 및 운영 유지보수 전 과정을 안내하는 공식 사용자 매뉴얼.
+* [`REFERENCE_MANUAL.md`](file:///Users/maro/Projects/sql/doc/REFERENCE_MANUAL.md)
+  * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
+
 ### 2.1. Architecture & Core Database Engine
 * [`ARCHITECTURE.md`](file:///Users/maro/Projects/sql/doc/ARCHITECTURE.md)
   * End-to-end architectural blueprint of SQLion.

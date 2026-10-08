@@ -130,3 +130,23 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - GUI 툴 접속 시 발생하는 `SET NOCOUNT ON/OFF`, `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`, `SET DATEFORMAT`, `SET TRANSACTION ISOLATION LEVEL` 등을 정규 AST 명령으로 파싱하고 세션 객체(`ClientSession`)에 상태 플래그로 완벽 바인딩.
 - [ ] **EXISTS / NOT EXISTS 상관 서브쿼리 술어 지원 (`pkg/planner/decorrelate.go`)**
   - `WHERE EXISTS (SELECT 1 FROM other WHERE other.id = t.id)` 술어(Predicate)의 Semi-Join / Anti-Join 변환 및 실행.
+
+---
+
+## 7. Overall System & Database Engine Performance Optimization Roadmap (전체 엔진 성능 고속화 로드맵)
+
+- [ ] **[Phase 1: 스토리지 & 트랜잭션] 그룹 커밋(Group Commit) 및 읽기 전용 패스트패스**
+  - **배치형 그룹 커밋 (Group Commit Pipelining)**: 개별 트랜잭션의 동기식 `fsync` 호출을 제거하고, 마이크로초 윈도우(50~100µs) 또는 버퍼 크기(32건) 단위로 단 1회의 시스템 콜(`writev` + `fdatasync`) 일괄 영속화 (동시성 OLTP TPS 2~4배 향상).
+  - **읽기 전용 트랜잭션 패스트패스 (Read-Only Fast-Path)**: DML이 발생하지 않은 트랜잭션은 OCC 유효성 검증과 WAL 기록을 건너뛰고 스냅샷 해제만 즉각 수행.
+- [ ] **[Phase 2: 튜플 디코딩 & 스토리지] 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 스캔**
+  - **프로젝션 푸시다운 & 지연 디코딩 (Lazy Tuple Decoding)**: 테이블 풀 스캔 또는 범위 스캔 시 전체 컬럼을 역직렬화하지 않고, Null 비트맵과 헤더 검사 후 쿼리에서 요구하는 특정 컬럼 오프셋만 선택적 슬라이싱하여 디코딩 (할당 및 CPU 절감).
+  - **커버링 인덱스 스캔 (Covering Index / Index-Only Scan)**: 인덱스 키/인클루드 컬럼만으로 프로젝션 충족 시 기본 테이블(B+Tree/SkipList) 키 조회 I/O 및 튜플 역직렬화 100% 생략.
+- [ ] **[Phase 3: 와이어 프로토콜 & 네트워크] 제로카피 와이어 인코딩 & I/O 버퍼 결합**
+  - **스토리지 ➔ 와이어 제로카피 직접 직렬화**: 중간 `[]any` 레코드 슬라이스 변환을 제거하고, `sync.Pool`로 관리되는 와이어 바이트 버퍼에 바이너리 튜플 데이터를 직접 포맷팅.
+  - **I/O 버퍼 결합 및 지연 플러시 (Write Combining & TCP_NODELAY)**: 행 단위 `Write()` 대신 커널 TCP 버퍼 MTU(4KB~16KB) 단위로 배치 기록 후 일괄 플러시.
+- [ ] **[Phase 4: 실행 엔진 & 볼케이노] 청크 단위 배치 반복자 (Chunked / Vectorized Volcano Execution)**
+  - **배치 튜플 프로세싱 (`NextBatch([64]Row)`)**: 행 단위 단일 `Next()` 가상 함수 호출을 64~256건 단위 튜플 청크 벡터 처리로 전환하여 함수 호출 오버헤드 완화 및 CPU L1 Data Cache / SIMD 파이프라이닝 극대화.
+- [ ] **[Phase 5: 쿼리 캐시 & 메모리] 고속 SQL 핑거프린팅 & 쿼리 전용 아레나(Arena)**
+  - **SQL 전문 고속 지문 해싱 (Fast SQL Fingerprinting)**: 파싱 전 Wyhash / FNV-1a 기반 텍스트 지문으로 `PlanCache` 선조회 및 단순 PK 점조회(`WHERE id = ?`) 스토리지 숏컷 라우팅.
+  - **세션/쿼리 전용 메모리 슬랩/아레나 (Per-Query Arena Allocator)**: 조인, 해시 테이블, 정렬 시 자잘한 힙 객체 할당 대신 아레나 포인터 전진 방식으로 할당 후 쿼리 종료 시 일괄 해제 (GC 압력 제거 및 p99 지연 시간 안정화).
+

@@ -93,3 +93,16 @@
 | **S-5** | **고급 조인(Join) 문법 확장 (`FULL OUTER`, `APPLY`)** | **대기 (`[ ]`)** | `FULL OUTER JOIN`, `CROSS JOIN`, T-SQL 특화 `CROSS/OUTER APPLY` 지원. |
 | **S-6** | **세션 제어문(SET Statements) 정식 AST 파서 및 상태 바인딩** | **대기 (`[ ]`)** | `SET NOCOUNT`, `SET ANSI_NULLS`, `SET TRANSACTION ISOLATION LEVEL` 세션 플래그 반영. |
 | **S-7** | **EXISTS / NOT EXISTS 상관 서브쿼리 술어 지원** | **대기 (`[ ]`)** | `WHERE EXISTS (...)` 조건의 Semi-Join / Anti-Join 변환 및 실행. |
+
+---
+
+## 5. Overall System & Database Engine Performance Optimization Roadmap (전체 엔진 성능 고속화 로드맵)
+
+| 단계 | 전략 분야 | 핵심 구현 과제 | 상태 | 예상 효과 및 ROI |
+| :---: | :--- | :--- | :---: | :--- |
+| **P-1** | **스토리지/트랜잭션** | **배치형 그룹 커밋 (Group Commit)** & 읽기 전용 Fast-Path | **대기 (`[ ]`)** | 동시 쓰기 워크로드 TPS 2~4배 향상 (15K ➔ 50K+ TPS) |
+| **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 (Lazy Decoding)** & 커버링 인덱스 스캔 | **대기 (`[ ]`)** | 스캔 속도 2배 향상, 불필요한 Varint 디코딩 힙 할당 제거 |
+| **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩** & I/O 버퍼 결합 (Write Combining) | **대기 (`[ ]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
+| **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next: 64~256건)** | **대기 (`[ ]`)** | 볼케이노 함수 호출 오버헤드 감소, 대량 집계/스캔 지연 60% 단축 |
+| **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱** & **쿼리 아레나 할당기 (Per-Query Arena)** | **대기 (`[ ]`)** | 단순 PK 조회 파서 바이패스, GC 부하 90% 경감 및 p99 지연 안정화 |
+
