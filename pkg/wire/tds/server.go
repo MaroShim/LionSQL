@@ -1648,13 +1648,23 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		return
 	}
 
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Query] %s", trimmed)
+	}
+
 	res, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, trimmed)
 	if err != nil {
+		if s.DevMode() {
+			log.Printf("[DEV][TDS][Error] query=%s err=%v", trimmed, err)
+		}
 		var buf bytes.Buffer
 		buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
 		buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 		return
+	}
+	if s.DevMode() {
+		log.Printf("[DEV][TDS][Success] query=%s cols=%v rows=%d duration=%dµs", trimmed, res.Columns, len(res.Rows), res.DurationUS)
 	}
 
 	var buf bytes.Buffer

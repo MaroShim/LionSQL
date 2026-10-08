@@ -20,10 +20,12 @@ package api
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"sqlion/pkg/catalog"
 	"sqlion/pkg/storage"
 )
 
@@ -2404,6 +2406,39 @@ func (s *Server) execBeekeeperMSSQLColumnSelect(sql string, start time.Time) (*Q
 	}, nil
 }
 
+func (s *Server) getSortedTables() []*storage.TableSchema {
+	if s.engine == nil {
+		return nil
+	}
+	tables, _ := s.engine.ListTables()
+	sort.Slice(tables, func(i, j int) bool {
+		return tables[i].Name < tables[j].Name
+	})
+	return tables
+}
+
+func (s *Server) getSortedViews() []*catalog.View {
+	if s.catalog == nil {
+		return nil
+	}
+	views := s.catalog.ListViews()
+	sort.Slice(views, func(i, j int) bool {
+		return views[i].Name < views[j].Name
+	})
+	return views
+}
+
+func (s *Server) getSortedProcedures() []*catalog.Procedure {
+	if s.catalog == nil {
+		return nil
+	}
+	procs := s.catalog.ListProcedures()
+	sort.Slice(procs, func(i, j int) bool {
+		return procs[i].Name < procs[j].Name
+	})
+	return procs
+}
+
 func parseTargetObjectIDs(sql string) map[int]bool {
 	inRe := regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
 	if m := inRe.FindStringSubmatch(sql); len(m) == 2 {
@@ -2437,7 +2472,7 @@ func (s *Server) execDbGateMSSQLColumnSelect(sql string, start time.Time) (*Quer
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables, _ := s.engine.ListTables()
+	tables := s.getSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -2554,7 +2589,7 @@ func (s *Server) execDbGateMSSQLPrimaryKeySelect(sql string, start time.Time) (*
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables, _ := s.engine.ListTables()
+	tables := s.getSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -2592,7 +2627,7 @@ func (s *Server) execDbGateMSSQLIndexSelect(sql string, start time.Time) (*Query
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables, _ := s.engine.ListTables()
+	tables := s.getSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -2629,7 +2664,7 @@ func (s *Server) execDbGateMSSQLIndexColumnSelect(sql string, start time.Time) (
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables, _ := s.engine.ListTables()
+	tables := s.getSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -2676,7 +2711,7 @@ func (s *Server) execDbGateMSSQLForeignKeySelect(sql string, start time.Time) (*
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables, _ := s.engine.ListTables()
+	tables := s.getSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -2712,15 +2747,36 @@ func (s *Server) execDbGateMSSQLForeignKeySelect(sql string, start time.Time) (*
 
 func (s *Server) execDbGateMSSQLRowCountSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"objectId", "tableRowCount"}
-	tables, _ := s.engine.ListTables()
+	tables := s.getSortedTables()
 	var allRows []map[string]any
+
+	var sess storage.Session
+	if s.engine != nil {
+		sess, _ = s.engine.NewSession()
+	}
+	if sess != nil {
+		defer sess.Close()
+	}
 
 	for tIdx, t := range tables {
 		objID := 1000 + tIdx
 		var cnt int64 = 0
 		if s.catalog != nil {
-			if st, ok := s.catalog.GetTableStats(t.Name); ok && st != nil {
+			if st, ok := s.catalog.GetTableStats(t.Name); ok && st != nil && st.RowCount > 0 {
 				cnt = st.RowCount
+			}
+		}
+		if cnt == 0 && sess != nil {
+			tx, err := sess.BeginTx(storage.TxOptions{})
+			if err == nil {
+				cursor, err := tx.Scan(t.Name)
+				if err == nil {
+					for cursor.Next() {
+						cnt++
+					}
+					cursor.Close()
+				}
+				_ = tx.Rollback()
 			}
 		}
 		allRows = append(allRows, map[string]any{
@@ -2784,10 +2840,10 @@ func (s *Server) execDbGateMSSQLTriggerSelect(sql string, start time.Time) (*Que
 
 func (s *Server) execDbGateMSSQLObjectSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"objectId", "modifyDate", "type", "pureName", "schemaName"}
-	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
-	tables, _ := s.engine.ListTables()
+	tables := s.getSortedTables()
 	for tIdx, t := range tables {
 		allRows = append(allRows, map[string]any{
 			"objectId":   1000 + tIdx,
@@ -2798,25 +2854,25 @@ func (s *Server) execDbGateMSSQLObjectSelect(sql string, start time.Time) (*Quer
 		})
 	}
 
-	if s.catalog != nil {
-		for vIdx, v := range s.catalog.ListViews() {
-			allRows = append(allRows, map[string]any{
-				"objectId":   2000 + vIdx,
-				"modifyDate": defaultDate,
-				"type":       "V",
-				"pureName":   v.Name,
-				"schemaName": "dbo",
-			})
-		}
-		for pIdx, p := range s.catalog.ListProcedures() {
-			allRows = append(allRows, map[string]any{
-				"objectId":   3000 + pIdx,
-				"modifyDate": defaultDate,
-				"type":       "P",
-				"pureName":   p.Name,
-				"schemaName": "dbo",
-			})
-		}
+	views := s.getSortedViews()
+	for vIdx, v := range views {
+		allRows = append(allRows, map[string]any{
+			"objectId":   2000 + vIdx,
+			"modifyDate": defaultDate,
+			"type":       "V",
+			"pureName":   v.Name,
+			"schemaName": "dbo",
+		})
+	}
+	procs := s.getSortedProcedures()
+	for pIdx, p := range procs {
+		allRows = append(allRows, map[string]any{
+			"objectId":   3000 + pIdx,
+			"modifyDate": defaultDate,
+			"type":       "P",
+			"pureName":   p.Name,
+			"schemaName": "dbo",
+		})
 	}
 
 	return &QueryResult{
@@ -2831,10 +2887,10 @@ func (s *Server) execDbGateMSSQLObjectSelect(sql string, start time.Time) (*Quer
 
 func (s *Server) execDbGateMSSQLTableSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "objectComment"}
-	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
-	tables, _ := s.engine.ListTables()
+	tables := s.getSortedTables()
 	for tIdx, t := range tables {
 		allRows = append(allRows, map[string]any{
 			"pureName":      t.Name,
@@ -2858,19 +2914,18 @@ func (s *Server) execDbGateMSSQLTableSelect(sql string, start time.Time) (*Query
 
 func (s *Server) execDbGateMSSQLViewSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate"}
-	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
-	if s.catalog != nil {
-		for vIdx, v := range s.catalog.ListViews() {
-			allRows = append(allRows, map[string]any{
-				"pureName":   v.Name,
-				"schemaName": "dbo",
-				"objectId":   2000 + vIdx,
-				"createDate": defaultDate,
-				"modifyDate": defaultDate,
-			})
-		}
+	views := s.getSortedViews()
+	for vIdx, v := range views {
+		allRows = append(allRows, map[string]any{
+			"pureName":   v.Name,
+			"schemaName": "dbo",
+			"objectId":   2000 + vIdx,
+			"createDate": defaultDate,
+			"modifyDate": defaultDate,
+		})
 	}
 
 	return &QueryResult{
@@ -2885,20 +2940,19 @@ func (s *Server) execDbGateMSSQLViewSelect(sql string, start time.Time) (*QueryR
 
 func (s *Server) execDbGateMSSQLProgrammablesSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "sqlObjectType"}
-	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
-	if s.catalog != nil {
-		for pIdx, p := range s.catalog.ListProcedures() {
-			allRows = append(allRows, map[string]any{
-				"pureName":      p.Name,
-				"schemaName":    "dbo",
-				"objectId":      3000 + pIdx,
-				"createDate":    defaultDate,
-				"modifyDate":    defaultDate,
-				"sqlObjectType": "P",
-			})
-		}
+	procs := s.getSortedProcedures()
+	for pIdx, p := range procs {
+		allRows = append(allRows, map[string]any{
+			"pureName":      p.Name,
+			"schemaName":    "dbo",
+			"objectId":      3000 + pIdx,
+			"createDate":    defaultDate,
+			"modifyDate":    defaultDate,
+			"sqlObjectType": "P",
+		})
 	}
 
 	return &QueryResult{

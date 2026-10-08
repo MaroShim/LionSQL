@@ -758,6 +758,48 @@ order by c.column_id`
 	if len(commentRes.Columns) != 3 || commentRes.Columns[0] != "objectId" {
 		t.Fatalf("unexpected comment columns: %+v", commentRes.Columns)
 	}
+
+	// 7. Verify dynamic row count after inserting rows
+	if _, err := server.ExecuteSQL("INSERT INTO users (id, name, balance) VALUES (1, 'Alice', 100);"); err != nil {
+		t.Fatalf("failed to insert row 1: %v", err)
+	}
+	if _, err := server.ExecuteSQL("INSERT INTO users (id, name, balance) VALUES (2, 'Bob', 200);"); err != nil {
+		t.Fatalf("failed to insert row 2: %v", err)
+	}
+	cntRes2, err := server.ExecuteSQL(cntQuery)
+	if err != nil || !cntRes2.Success {
+		t.Fatalf("DbGate MSSQL row count query 2 failed: %v", err)
+	}
+	if len(cntRes2.Rows) != 1 || cntRes2.Rows[0]["tableRowCount"] != int64(2) {
+		t.Fatalf("expected tableRowCount 2, got: %+v", cntRes2.Rows)
+	}
+
+	// 8. DbGate single table ID lookup: OBJECT_ID('[dbo].[users]')
+	objIDRes, err := server.ExecuteSQL("SELECT OBJECT_ID('[dbo].[users]') AS id")
+	if err != nil || !objIDRes.Success {
+		t.Fatalf("OBJECT_ID query failed: %v", err)
+	}
+	if len(objIDRes.Rows) != 1 || objIDRes.Rows[0]["id"] != int64(1000) {
+		t.Fatalf("expected id 1000, got: %+v", objIDRes.Rows)
+	}
+
+	// 9. OBJECT_NAME(1000)
+	objNameRes, err := server.ExecuteSQL("SELECT OBJECT_NAME(1000) AS name")
+	if err != nil || !objNameRes.Success {
+		t.Fatalf("OBJECT_NAME query failed: %v", err)
+	}
+	if len(objNameRes.Rows) != 1 || objNameRes.Rows[0]["name"] != "users" {
+		t.Fatalf("expected 'users', got: %+v", objNameRes.Rows)
+	}
+
+	// 10. QUOTENAME('users')
+	quoteRes, err := server.ExecuteSQL("SELECT QUOTENAME('users') AS q")
+	if err != nil || !quoteRes.Success {
+		t.Fatalf("QUOTENAME query failed: %v", err)
+	}
+	if len(quoteRes.Rows) != 1 || quoteRes.Rows[0]["q"] != "[users]" {
+		t.Fatalf("expected '[users]', got: %+v", quoteRes.Rows)
+	}
 }
 
 

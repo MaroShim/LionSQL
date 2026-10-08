@@ -536,6 +536,9 @@ func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 	for _, t := range e.tables {
 		res = append(res, t)
 	}
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].Name < res[j].Name
+	})
 	return res, nil
 }
 

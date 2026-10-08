@@ -382,6 +382,92 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		}
 	}
 
+	// SCHEMA_NAME(id)
+	if strings.HasPrefix(upper, "SCHEMA_NAME(") && strings.HasSuffix(upper, ")") {
+		return "dbo", "schema_name"
+	}
+
+	// SCHEMA_ID(name)
+	if strings.HasPrefix(upper, "SCHEMA_ID(") && strings.HasSuffix(upper, ")") {
+		return int64(1), "schema_id"
+	}
+
+	// OBJECT_ID('name', ['type'])
+	if strings.HasPrefix(upper, "OBJECT_ID(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("OBJECT_ID(") : len(trimmed)-1])
+		arg := inner
+		if commaIdx := strings.Index(inner, ","); commaIdx != -1 {
+			arg = strings.TrimSpace(inner[:commaIdx])
+		}
+		clean := strings.TrimSpace(arg)
+		clean = strings.TrimPrefix(clean, "N")
+		clean = strings.TrimPrefix(clean, "n")
+		clean = strings.Trim(clean, "'\"")
+		clean = strings.ReplaceAll(clean, "[", "")
+		clean = strings.ReplaceAll(clean, "]", "")
+		if dotIdx := strings.LastIndex(clean, "."); dotIdx != -1 {
+			clean = clean[dotIdx+1:]
+		}
+		tables := s.getSortedTables()
+		for tIdx, t := range tables {
+			if strings.EqualFold(t.Name, clean) {
+				return int64(1000 + tIdx), "id"
+			}
+		}
+		views := s.getSortedViews()
+		for vIdx, v := range views {
+			if strings.EqualFold(v.Name, clean) {
+				return int64(2000 + vIdx), "id"
+			}
+		}
+		procs := s.getSortedProcedures()
+		for pIdx, p := range procs {
+			if strings.EqualFold(p.Name, clean) {
+				return int64(3000 + pIdx), "id"
+			}
+		}
+		return nil, "id"
+	}
+
+	// OBJECT_NAME(id)
+	if strings.HasPrefix(upper, "OBJECT_NAME(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("OBJECT_NAME(") : len(trimmed)-1])
+		clean := strings.Trim(inner, "'\"")
+		if id, err := strconv.Atoi(clean); err == nil {
+			if id >= 1000 && id < 2000 {
+				tables := s.getSortedTables()
+				idx := id - 1000
+				if idx >= 0 && idx < len(tables) {
+					return tables[idx].Name, "object_name"
+				}
+			} else if id >= 2000 && id < 3000 {
+				views := s.getSortedViews()
+				idx := id - 2000
+				if idx >= 0 && idx < len(views) {
+					return views[idx].Name, "object_name"
+				}
+			} else if id >= 3000 && id < 4000 {
+				procs := s.getSortedProcedures()
+				idx := id - 3000
+				if idx >= 0 && idx < len(procs) {
+					return procs[idx].Name, "object_name"
+				}
+			}
+		}
+		return nil, "object_name"
+	}
+
+	// QUOTENAME('name')
+	if strings.HasPrefix(upper, "QUOTENAME(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("QUOTENAME(") : len(trimmed)-1])
+		arg := inner
+		if commaIdx := strings.Index(inner, ","); commaIdx != -1 {
+			arg = strings.TrimSpace(inner[:commaIdx])
+		}
+		clean := strings.Trim(strings.TrimSpace(arg), "'\"")
+		return "[" + clean + "]", "quotename"
+	}
+
 	// pg_cancel_backend(pid)
 	if strings.HasPrefix(upper, "PG_CANCEL_BACKEND(") && strings.HasSuffix(upper, ")") {
 		arg := strings.TrimSpace(trimmed[len("PG_CANCEL_BACKEND(") : len(trimmed)-1])

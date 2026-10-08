@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Deterministic Object ID Assignment & Table Row Count Calculation in Catalog (`pkg/storage/wiredtiger`, `pkg/api`)**:
+  - Sorted `ListTables` deterministically by name in WiredTiger storage engine (`wt_engine.go`), eliminating random Go map iteration order that caused table and column object IDs (`objectId`) to shuffle between queries in DbGate.
+  - Added deterministic `getSortedTables()`, `getSortedViews()`, and `getSortedProcedures()` in `pkg/api/sqlexec_pgcatalog.go` ensuring 100% stable object IDs across all MSSQL virtual catalog handlers.
+  - Added accurate dynamic row counting in `execDbGateMSSQLRowCountSelect` by scanning table rows via engine cursors.
+  - Implemented scalar SQL expressions `OBJECT_ID(...)`, `OBJECT_NAME(...)`, `SCHEMA_NAME(...)`, `SCHEMA_ID(...)`, and `QUOTENAME(...)` in `pkg/api/sqlexec_select.go` for DbGate single-table introspection queries.
 - **DbGate SQL Server GUI Introspection & Column Listing Parity (`pkg/api`, `pkg/wire/tds`)**:
   - Implemented specialized virtual catalog join handlers for DbGate's full MSSQL introspection pipeline:
     - Object modifications query (`sys.objects` + `sys.schemas` returning `objectId`, `modifyDate`, `type`, `pureName`, `schemaName`).
