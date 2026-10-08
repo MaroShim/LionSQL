@@ -123,7 +123,8 @@ func NewExecutor(cache *PlanCache) *Executor {
 			New: func() any {
 				return &VMFrame{
 					regs:            make([]storage.Value, 64),
-					vars:            make(map[string]storage.Value),
+					vars:            make(map[string]storage.Value, 16),
+					evalCtx:         make(map[string]any, 32),
 					cursors:         make(map[string]*cursorState),
 					transientTables: make(map[string][]map[string]any),
 					catchStack:      make([]int, 0, 8),
@@ -222,6 +223,7 @@ type VMFrame struct {
 	prog            *proc.Program
 	regs            []storage.Value
 	vars            map[string]storage.Value
+	evalCtx         map[string]any
 	cursors         map[string]*cursorState
 	transientTables map[string][]map[string]any
 	catchStack      []int
@@ -267,8 +269,7 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 	for k, v := range params {
 		clean := cleanSymbol(k)
 		stVal := toStorageValue(v)
-		frame.vars[clean] = stVal
-		frame.vars[strings.ToLower(clean)] = stVal
+		frame.setVar(clean, stVal)
 	}
 
 	retVal, err := frame.Execute(0)
@@ -306,8 +307,7 @@ func (e *Executor) RunInTx(prog *proc.Program, params map[string]any, tx storage
 	for k, v := range params {
 		clean := cleanSymbol(k)
 		stVal := toStorageValue(v)
-		frame.vars[clean] = stVal
-		frame.vars[strings.ToLower(clean)] = stVal
+		frame.setVar(clean, stVal)
 	}
 
 	retVal, err := frame.Execute(0)
@@ -335,8 +335,7 @@ func (e *Executor) ExecuteInTxContext(ctx context.Context, prog *proc.Program, p
 	for k, v := range params {
 		clean := cleanSymbol(k)
 		stVal := toStorageValue(v)
-		frame.vars[clean] = stVal
-		frame.vars[strings.ToLower(clean)] = stVal
+		frame.setVar(clean, stVal)
 	}
 
 	retVal, err := frame.Execute(0)
@@ -369,14 +368,12 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	}
 
 	// Reset structures for clean re-execution
-	for k := range f.vars {
-		delete(f.vars, k)
-	}
-	for k := range f.cursors {
-		delete(f.cursors, k)
-	}
-	for k := range f.transientTables {
-		delete(f.transientTables, k)
+	clear(f.vars)
+	clear(f.evalCtx)
+	clear(f.cursors)
+	clear(f.transientTables)
+	if f.evalCtx == nil {
+		f.evalCtx = make(map[string]any, 32)
 	}
 	f.catchStack = f.catchStack[:0]
 	f.logs = f.logs[:0]
@@ -1419,7 +1416,16 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 func (f *VMFrame) setVar(name string, val storage.Value) {
 	clean := cleanSymbol(name)
 	f.vars[clean] = val
-	f.vars[strings.ToLower(clean)] = val
+	lower := strings.ToLower(clean)
+	f.vars[lower] = val
+
+	if f.evalCtx != nil {
+		anyVal := valToAny(val)
+		f.evalCtx["@"+clean] = anyVal
+		f.evalCtx["@"+lower] = anyVal
+		f.evalCtx[clean] = anyVal
+		f.evalCtx[lower] = anyVal
+	}
 }
 
 func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[string]any) error {
@@ -1455,10 +1461,11 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		pkVal := toStorageValue(pkAny)
 		oldRec, err := f.tx.Get(data.Table, pkVal)
 		if err == nil && oldRec != nil {
-			rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
-			recUpdates := make(storage.Record)
-			newRowMap := make(map[string]any)
-			for k, v := range recordToMap(oldRec) {
+			oldRowMap := recordToMap(oldRec)
+			rowCtx := f.buildRowEvalMap(oldRowMap)
+			recUpdates := make(storage.Record, len(data.Assignments))
+			newRowMap := make(map[string]any, len(oldRowMap))
+			for k, v := range oldRowMap {
 				newRowMap[k] = v
 			}
 			for _, a := range data.Assignments {
@@ -1470,7 +1477,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			if err := f.tx.Update(data.Table, pkVal, recUpdates); err != nil {
 				return 0, fmt.Errorf("update error on %s: %w", data.Table, err)
 			}
-			_ = f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRowMap}, []map[string]any{recordToMap(oldRec)})
+			_ = f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRowMap}, []map[string]any{oldRowMap})
 			return 1, nil
 		}
 		return 0, nil
@@ -1912,19 +1919,16 @@ func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr) ([]stora
 }
 
 func (f *VMFrame) buildRowEvalMap(row map[string]any) map[string]any {
-	ctx := make(map[string]any)
-	for k, v := range f.vars {
-		anyVal := valToAny(v)
-		ctx["@"+k] = anyVal
-		ctx["@"+strings.ToLower(k)] = anyVal
-		ctx[k] = anyVal
-		ctx[strings.ToLower(k)] = anyVal
+	if len(row) == 0 {
+		return f.evalCtx
 	}
-	if row != nil {
-		for k, v := range row {
-			ctx[k] = v
-			ctx[strings.ToLower(k)] = v
-		}
+	ctx := make(map[string]any, len(f.evalCtx)+len(row)*2)
+	for k, v := range f.evalCtx {
+		ctx[k] = v
+	}
+	for k, v := range row {
+		ctx[k] = v
+		ctx[strings.ToLower(k)] = v
 	}
 	return ctx
 }
