@@ -137,7 +137,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 - [ ] **[Phase 1: 스토리지 & 트랜잭션] 그룹 커밋(Group Commit) 및 읽기 전용 패스트패스**
   - **배치형 그룹 커밋 (Group Commit Pipelining)**: 개별 트랜잭션의 동기식 `fsync` 호출을 제거하고, 마이크로초 윈도우(50~100µs) 또는 버퍼 크기(32건) 단위로 단 1회의 시스템 콜(`writev` + `fdatasync`) 일괄 영속화 (동시성 OLTP TPS 2~4배 향상).
-  - **읽기 전용 트랜잭션 패스트패스 (Read-Only Fast-Path)**: DML이 발생하지 않은 트랜잭션은 OCC 유효성 검증과 WAL 기록을 건너뛰고 스냅샷 해제만 즉각 수행.
+  - **[완료] 읽기 전용 트랜잭션 패스트패스 (Read-Only Fast-Path)**: DML이 발생하지 않은 트랜잭션 및 ReadOnly 트랜잭션은 OCC 유효성 검증과 WAL 기록을 건너뛰고 스냅샷 해제 및 불필요한 메타데이터 맵 할당 제거 완료.
 - [ ] **[Phase 2: 튜플 디코딩 & 스토리지] 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 스캔**
   - **프로젝션 푸시다운 & 지연 디코딩 (Lazy Tuple Decoding)**: 테이블 풀 스캔 또는 범위 스캔 시 전체 컬럼을 역직렬화하지 않고, Null 비트맵과 헤더 검사 후 쿼리에서 요구하는 특정 컬럼 오프셋만 선택적 슬라이싱하여 디코딩 (할당 및 CPU 절감).
   - **커버링 인덱스 스캔 (Covering Index / Index-Only Scan)**: 인덱스 키/인클루드 컬럼만으로 프로젝션 충족 시 기본 테이블(B+Tree/SkipList) 키 조회 I/O 및 튜플 역직렬화 100% 생략.

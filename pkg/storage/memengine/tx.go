@@ -47,9 +47,9 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 		snapshotLSN:       snapLSN,
 		snapshotTimestamp: snapTS,
 		tableCache:        make(map[string]*TableData, 4),
-		baseVers:          make(map[string]map[string]int64, 4),
 	}
 	if !opts.ReadOnly {
+		tx.baseVers = make(map[string]map[string]int64, 4)
 		tx.local = make(map[string]map[string]storage.Row, 4)
 		tx.deleted = make(map[string]map[string]bool, 4)
 		tx.changes = make(map[string]rowChange, 16)
@@ -1565,6 +1565,9 @@ func (tx *Transaction) Rollback() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	if tx.opts.ReadOnly || len(tx.changes) == 0 {
+		return nil
+	}
 	tx.changes = nil
 	tx.local = nil
 	tx.baseVers = nil
