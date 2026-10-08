@@ -1,10 +1,12 @@
 package runtime_test
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"sqlion/pkg/proc"
 	"sqlion/pkg/proc/runtime"
@@ -765,4 +767,35 @@ func TestVM_OpIndexScan(t *testing.T) {
 		t.Fatalf("expected 2 rows deleted, got %d", deleteRes.RowsAffected)
 	}
 }
+
+func TestRunContext_Cancellation(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	session, _ := eng.NewSession()
+	defer session.Close()
+
+	executor := runtime.NewExecutor(runtime.NewPlanCache())
+
+	// Infinite loop bytecode: OpJump 0
+	loopProg := &proc.Program{
+		Name: "TestInfiniteLoop",
+		Type: "PROCEDURE",
+		Instructions: []proc.Instruction{
+			{Op: proc.OpJump, A: 0},
+		},
+		NumRegisters: 1,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	_, err := executor.RunContext(ctx, loopProg, "TestInfiniteLoop", nil, session)
+	if err == nil {
+		t.Fatal("expected context deadline exceeded or cancellation error, got nil")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, context.Canceled) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 

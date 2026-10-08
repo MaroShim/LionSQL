@@ -414,7 +414,7 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 	pc := startPC
 
 	for pc < len(instructions) {
-		if f.ctx != nil {
+		if (pc&63 == 0) && f.ctx != nil {
 			select {
 			case <-f.ctx.Done():
 				return nil, f.ctx.Err()
