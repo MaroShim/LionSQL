@@ -107,5 +107,26 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - **관계형 스캔 벡터화 배치 파이프라이닝 (Vectorized Chunk Scan)**: `OpRelScan`, `OpIndexScan`에서 행 단위 VM 왕복 오버헤드를 줄이기 위한 N개(64~1024건) 단위 청크 벡터화 스트리밍.
   - **마이크로 벤치마크 및 pprof 프로파일링 하네스**: `BenchmarkTransferFunds` (기준선: 6.34µs / 22.2KB / 171 allocs) 및 TPC-C New-Order 대상 단계별 성능 추적 및 검증.
 
+---
 
+## 6. SQL Syntax & Parser Coverage Backlog (T-SQL & ANSI SQL 문법 완비 과제)
 
+- [ ] **T-SQL & ANSI 표준 페이징 정규 문법 완비 (`OFFSET ... FETCH NEXT ... ROWS ONLY`) (`pkg/proc`, `pkg/planner`)**
+  - 단순 `LIMIT / OFFSET`을 넘어 `ORDER BY ... OFFSET n ROWS FETCH NEXT m ROWS ONLY` 표준 구문을 Pratt/ANTLR AST에 1급 시민(First-Class)으로 완전 통합.
+  - T-SQL `SELECT TOP (n) [PERCENT] [WITH TIES]` 구문 AST 파싱 및 Volcano 실행 연동.
+- [ ] **복합 한정자(Qualifier) 및 인라인 별칭(Alias) 파싱 정밀화 (`pkg/proc/parser.go`)**
+  - 3단계 한정자(`[db].[schema].[table].[col]`) 및 2단계 한정자(`alias.col`, `"schema"."table"`)의 정규 토큰화 및 카탈로그 해석.
+  - `AS` 키워드가 생략된 인라인 테이블 별칭(`FROM accounts basetbl`) 및 컬럼 별칭(`SELECT id id_alias`) 파싱 안정화.
+- [ ] **FROM 절 파생 테이블(Derived Table) 및 인라인 서브쿼리 지원 (`pkg/planner`, `pkg/execution`)**
+  - `SELECT * FROM (SELECT id, balance FROM accounts) AS t WHERE t.balance > 100` 형태의 FROM 절 서브쿼리 AST 노드화 및 Volcano 실행 연동.
+- [ ] **T-SQL 내장 스칼라 함수 & 조건부 수식 정식 AST화 (`pkg/proc/eval.go`, `pkg/proc/compiler.go`)**
+  - 애드혹 문자열 파싱(`evalScalarExpr`) 탈피: `COALESCE()`, `ISNULL()`, `NULLIF()`, `QUOTENAME()`, `SCHEMA_NAME()`, `OBJECT_ID()`, `OBJECT_NAME()`.
+  - 데이터 타입 변환: `CAST(expr AS type)` 및 `CONVERT(type, expr [, style])`의 정식 파싱 및 타입 캐스팅 함수 엔진 직결.
+  - `CASE WHEN ... THEN ... ELSE ... END` 복합 조건식의 완전한 AST 표현 및 단락 평가(Short-Circuit Evaluation).
+- [ ] **고급 조인(Join) 문법 확장 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
+  - `FULL OUTER JOIN`, `CROSS JOIN` 지원.
+  - T-SQL 특화 `CROSS APPLY` 및 `OUTER APPLY` (테이블 반환 함수/상관 서브쿼리 조인) 지원.
+- [ ] **세션 제어문(SET Statements) 정식 AST 파서 및 세션 플래그 영속화 (`pkg/api`, `pkg/wire`)**
+  - GUI 툴 접속 시 발생하는 `SET NOCOUNT ON/OFF`, `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`, `SET DATEFORMAT`, `SET TRANSACTION ISOLATION LEVEL` 등을 정규 AST 명령으로 파싱하고 세션 객체(`ClientSession`)에 상태 플래그로 완벽 바인딩.
+- [ ] **EXISTS / NOT EXISTS 상관 서브쿼리 술어 지원 (`pkg/planner/decorrelate.go`)**
+  - `WHERE EXISTS (SELECT 1 FROM other WHERE other.id = t.id)` 술어(Predicate)의 Semi-Join / Anti-Join 변환 및 실행.
