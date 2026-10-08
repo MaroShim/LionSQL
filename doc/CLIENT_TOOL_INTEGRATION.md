@@ -100,6 +100,38 @@ Beekeeper Studio can connect to SQLion in either **PostgreSQL** or **SQL Server*
 
 ---
 
+### 2.4. DbGate Universal Database Manager
+
+DbGate is an open-source database manager that supports connecting to SQLion via either PostgreSQL or Microsoft SQL Server (TDS).
+
+#### Option A: PostgreSQL Connection
+1. New Connection -> **PostgreSQL**.
+2. Settings:
+   - **Server / Host**: `127.0.0.1`
+   - **Port**: `5433`
+   - **User**: `postgres`
+   - **Database**: `sqlion`
+   - **Password**: (leave blank or any string)
+3. Connect.
+
+#### Option B: Microsoft SQL Server Connection
+1. New Connection -> **Microsoft SQL Server**.
+2. Settings:
+   - **Server**: `127.0.0.1`
+   - **Port**: `1433`
+   - **User**: `sa`
+   - **Password**: (leave blank or any string)
+   - **Database**: `sqlion`
+   - **Encrypt**: `No`
+3. Connect.
+4. Features:
+   - Full tree navigation of tables, columns, primary keys, and foreign keys.
+   - Live row count display derived dynamically via transaction cursors.
+   - Interactive data grid with `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY` paging.
+
+
+---
+
 ## 3. Command-Line Client (CLI) Connectivity
 
 ### 3.1. PostgreSQL CLI (`psql`)
@@ -280,7 +312,26 @@ GUI tools connecting via TDS frequently send complex vendor-specific JOIN expres
 - **Virtual System Table Stubs**:
   `sys.tables`, `sys.columns`, `sys.indexes`, `sys.databases`, `sys.computed_columns`, `sys.triggers`, and `sys.foreign_keys` respond dynamically without maintaining physical disk storage.
 
-### 5.3. T-SQL Pagination & Identifier Normalization
+### 5.3. DbGate Multi-Step Introspection & Deterministic Object ID Invariant
+DbGate inspects Microsoft SQL Server schemas through a choreographed multi-step query pipeline:
+1. `modifications`: `sys.objects` + `sys.schemas` (discovering objects and `modifyDate`).
+2. `tables`: `sys.tables` + `sys.schemas` (fetching table object IDs and comments).
+3. `columns`: `sys.columns` + `sys.types` (fetching column definitions, nullability, data types, and default constraints).
+4. `primaryKeys`, `indexes`, `foreignKeys`: Resolving key constraints and relationships.
+5. `tableSizes`: Dynamically querying row counts via transaction cursors.
+
+#### The Go Map Non-Determinism Landmine:
+Because Go `map` iterations (`for ... range map`) randomize the starting element on each execution, calling `engine.ListTables()` without sorting caused table slices to shuffle between successive queries. This caused tables to receive shifting `objectId` values across steps:
+- Step 1 (`tables`) assigned `objectId: 1000` to Table A.
+- Step 2 (`columns`) assigned `objectId: 1000` to Table B.
+- DbGate assembled columns by matching `col.objectId == table.objectId`, creating an inversion where Table A displayed Table B's columns, causing subsequent data queries (`SELECT ...`) to fail due to mismatched column names.
+
+#### Architectural Resolution:
+- **Storage Layer Sorting**: Both `memengine.ListTables()` and `wiredtiger.ListTables()` sort tables strictly by name (`sort.Slice`).
+- **Defensive API Helpers**: `sqlexec_pgcatalog.go` routes all catalog lookups through `getSortedTables()`, `getSortedViews()`, and `getSortedProcedures()`.
+- **Bidirectional Scalar Mapping**: `OBJECT_ID('table')` and `OBJECT_NAME(id)` share the exact same sorted table order, guaranteeing 100% deterministic, bidirectional ID stability.
+
+### 5.4. T-SQL Pagination & Identifier Normalization
 GUI clients often format table data pagination queries using T-SQL-specific syntax:
 - **`OFFSET <O> ROWS FETCH NEXT <N> ROWS ONLY`**: Automatically rewritten by `normalizeMSSQLPagination` into canonical `LIMIT <N> OFFSET <O>`.
 - **`SELECT TOP <N>`**: Normalized to `SELECT ... LIMIT <N>`.
@@ -297,4 +348,8 @@ GUI clients often format table data pagination queries using T-SQL-specific synt
 | `encryption required but server does not support TLS` | Client driver requested strict SSL/TLS, but SQLion was started in plaintext mode. | Set `sslmode=disable` (PG) or `encrypt=disable` (TDS) in connection parameters, or launch SQLion with `-tls -tls-cert <cert> -tls-key <key>`. |
 | `USE <dbname> statement failed` | SQLion intentionally excludes `USE <dbname>` syntax (GEMINI.md Section 3). | Connect directly to the target database in the initial connection string; deploy separate process instances for separate databases. |
 | `table not found: dbo.mytable` | Schema prefix `dbo.` was not parsed. | Ensure running SQLion version with updated `cleanIdent` that strips `dbo.` and `public.` schema prefixes automatically. |
+| `table content empty or column mismatch in GUI` | Table `objectId` shuffled due to un-sorted map iteration across catalog queries. | Updated in `wt_engine.go` and `sqlexec_pgcatalog.go` with deterministic `sort.Slice` on table names. Click Refresh in the GUI. |
+| `row count shows 0 for all tables` | Catalog statistics were not yet analyzed. | Dynamic row scanning via `tx.Scan` fallback added in `execDbGateMSSQLRowCountSelect`. |
+| `r.toISOString is not a function in JS client` | Date columns in metadata were inferred as string instead of `TypeDateTimeN`. | Automatic datetime inference for column names ending in `Date` or `Time` added in TDS `inferColumnInfos`. |
 | `table content empty in GUI` | Legacy JSON-encoded `.wt` files from prior versions. | Drop and recreate table using modern binary tuple format (`0x01`). |
+

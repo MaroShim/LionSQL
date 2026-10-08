@@ -106,3 +106,34 @@
   * **바이너리 결과 포맷 (Binary Result Format)**: `Describe` 응답의 `RowDescription`에서 컬럼 OID가 `oid.T_int4`(23), `int8`(20), `int2`(21), `bytea`(17), `uuid`(2950)로 보고되면, `lib/pq`는 `Bind` 패킷의 Result Format 코드로 바이너리(`format = 1`)를 요청합니다. 서버가 이를 무시하고 기존처럼 텍스트 문자열(예: `"20"`)을 `DataRow`로 전송하면, 드라이버의 `binaryDecode`가 4바이트 정수를 기대하다가 2바이트 ASCII를 읽고 슬라이스 범위 초과(`panic: runtime error: index out of range [3] with length 2`)로 런타임 패닉을 일으킵니다. 반드시 `Bind`의 Result Format을 파싱하여 빅엔디안 바이너리(`binary.BigEndian.PutUint32`)로 인코딩해야 합니다.
   * **트랜잭션 구문 및 CommandComplete 태그**: `db.BeginTx()`는 `BEGIN READ WRITE` 또는 `BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE`를 보냅니다. `sqlexec.go`에서 `BEGIN` 프리픽스를 유연하게 수용해야 하며, 응답 시 PostgreSQL CommandComplete 태그는 부가 옵션 없이 반드시 정규 태그(`BEGIN`, `COMMIT`, `ROLLBACK`, `SET`)여야 드라이버가 인식합니다.
 
+---
+
+## 10. Go Map 순회 비결정론(Non-Determinism)과 가상 카탈로그 Object ID 불일치 지뢰
+
+* **상황**:
+  * Go 언어의 `map` 순회(`for ... range map`)는 런타임 보안 및 의도치 않은 순서 의존성을 방지하기 위해 매 실행마다 무작위 시작 오프셋을 갖는 비결정론적(Non-deterministic) 특성을 가집니다.
+  * WiredTiger 스토리지 엔진(`pkg/storage/wiredtiger/wt_engine.go`)의 초기 `ListTables()` 구현은 내부 `e.tables map[string]*storage.TableSchema`를 정렬 없이 그대로 순회하여 슬라이스를 반환했습니다.
+  * 가상 카탈로그(`pkg/api/sqlexec_pgcatalog.go`)는 MSSQL 시스템 뷰(`sys.objects`, `sys.tables`, `sys.columns`, `sys.indexes` 등)의 `objectId`를 테이블 슬라이스 인덱스에 기반하여 `1000 + tIdx`로 부여했습니다.
+* **치명적인 연쇄 장애 메커니즘 (Cascading Bug Mechanism)**:
+  * GUI 클라이언트(DbGate, Beekeeper Studio 등)는 메타데이터를 단일 쿼리가 아닌 여러 독립적인 쿼리로 분할 로딩합니다:
+    1. `modifications`: `sys.objects` 조회로 객체 목록 및 수정일자 확인
+    2. `tables`: `sys.tables` 조회로 테이블 기본 정보 수집
+    3. `columns`: `sys.columns` 조회로 컬럼 메타데이터 수집
+    4. `primaryKeys`: `sys.indexes` 조회로 기본 키 정보 수집
+  * 각 쿼리가 실행될 때마다 `ListTables()`의 반환 순서가 무작위로 섞였습니다:
+    * 쿼리 1(`tables`): `[accounts (1000), customers (1001), students (1002), users (1003)]`
+    * 쿼리 2(`columns`): `[users (1000), accounts (1001), students (1002), customers (1003)]`
+  * 그 결과:
+    * `tables` 쿼리에서 `accounts` 테이블은 `objectId: 1000`을 부여받았습니다.
+    * 그러나 `columns` 쿼리에서 `objectId: 1000`은 `users`의 컬럼들(`name`, `balance`)로 인코딩되었습니다.
+    * DbGate 클라이언트는 `columns.filter(c => c.objectId == table.objectId)`로 테이블과 컬럼을 조합하므로, `accounts` 테이블 아래에 `users`의 컬럼들이 매핑되고, `students` 아래에 `accounts`의 컬럼들이 매핑되는 대규모 메타데이터 뒤틀림이 발생했습니다.
+    * 사용자가 GUI에서 `students` 테이블을 열면, GUI는 존재하지도 않는 컬럼(`SELECT [id], [holder], [balance] FROM [dbo].[students]`)을 쿼리하여 데이터 조회가 완전히 실패했습니다.
+* **해결 및 영구 불변식 (Engineering Invariants)**:
+  1. **스토리지 엔진 레벨 결정론적 정렬 보장**:
+     - `memengine`과 `wiredtiger`의 `ListTables()`는 반환 슬라이스를 반드시 테이블 이름 오름차순으로 정렬(`sort.Slice(res, func(i, j int) bool { return res[i].Name < res[j].Name })`)하여 반환해야 합니다.
+  2. **가상 카탈로그 레이어의 이중 방어**:
+     - `pkg/api/sqlexec_pgcatalog.go`에 `getSortedTables()`, `getSortedViews()`, `getSortedProcedures()`를 배치하여 카탈로그 핸들러가 스토리지 엔진의 반환 순서와 무관하게 언제나 결정론적 순서와 `objectId`를 생성하도록 방어합니다.
+  3. **스칼라 함수와 양방향 일관성**:
+     - `OBJECT_ID('name')`과 `OBJECT_NAME(id)` 함수 역시 동일한 `getSortedTables()`를 공유하여, 개별 객체 조회와 전체 배치 카탈로그 조회 간에 단 1의 오차도 없는 일관성을 보장해야 합니다.
+
+
