@@ -1734,7 +1734,7 @@ func (s *Server) inferColumnInfos(res *api.QueryResult) []ColumnInfo {
 		nullable := true
 
 		lowerCol := strings.ToLower(colName)
-		if strings.HasSuffix(lowerCol, "_date") || strings.HasSuffix(lowerCol, "_time") || lowerCol == "create_date" || lowerCol == "modify_date" || lowerCol == "created" || lowerCol == "modified" {
+		if strings.HasSuffix(lowerCol, "date") || strings.HasSuffix(lowerCol, "time") || lowerCol == "created" || lowerCol == "modified" {
 			colType = TypeDateTimeN
 			colSize = 8
 		}

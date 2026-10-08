@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **DbGate SQL Server GUI Introspection & Column Listing Parity (`pkg/api`, `pkg/wire/tds`)**:
+  - Implemented specialized virtual catalog join handlers for DbGate's full MSSQL introspection pipeline:
+    - Object modifications query (`sys.objects` + `sys.schemas` returning `objectId`, `modifyDate`, `type`, `pureName`, `schemaName`).
+    - Tables catalog query (`sys.tables` + `sys.schemas` returning `pureName`, `schemaName`, `objectId`, `createDate`, `modifyDate`, `objectComment`).
+    - Views query (`sys.objects` + `sys.schemas` WHERE `type = 'V'`).
+    - Columns catalog query (`sys.columns` + `sys.types` returning `columnName`, `dataType`, `objectId`, `isIdentity`, `maxLength`, `precision`, `scale`, `isNullable`, `charMaxLength`, `columnId`, etc.).
+    - Primary keys (`sys.indexes` + `sys.index_columns` + `sys.columns` WHERE `is_primary_key = 1`).
+    - Non-primary indexes and index columns (`sys.indexes`, `sys.index_columns`).
+    - Foreign keys (`INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS` joined with `TABLE_CONSTRAINTS`).
+    - Table row count (`sys.tables` + `sys.indexes` + `sys.partitions`).
+    - Extended property column comments (`MS_Description`).
+    - Stored procedures / programmables and SQL code definitions (`sys.syscomments`).
+  - Generalized `inferColumnInfos` in TDS server (`pkg/wire/tds/server.go`) to infer `TypeDateTimeN` for column names ending in `date` or `time` (including camelCase `modifyDate`, `createDate`), resolving driver error `r.toISOString is not a function` in DbGate.
+
 - **DbGate & GUI Tool SQL Server Version & Edition Detection (`pkg/wire/tds`, `pkg/proc`, `pkg/api`)**:
   - Implemented multi-column version & edition detection interceptor (`matchVersionQuery`) in TDS server handling queries combining `@@VERSION`, `SERVERPROPERTY('productversion')`, `SERVERPROPERTY('EngineEdition')`, and `CASE ... END AS versionText`.
   - Added support for `SERVERPROPERTY` in T-SQL procedural built-in function dispatcher (`pkg/proc/builtins.go`) and scalar SQL executor (`pkg/api/sqlexec_select.go`).

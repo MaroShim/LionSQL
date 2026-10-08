@@ -20,6 +20,7 @@ package api
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -1622,6 +1623,33 @@ func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByCla
 
 func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	upper := strings.ToUpper(sql)
+	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "SYS.TYPES")) {
+		return true
+	}
+	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "IS_PRIMARY_KEY")) {
+		return true
+	}
+	if strings.Contains(upper, "SYS.INDEX_COLUMNS") {
+		return true
+	}
+	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "SCHEMANAME")) {
+		return true
+	}
+	if strings.Contains(upper, "SYS.PARAMETERS") && strings.Contains(upper, "JOIN") {
+		return true
+	}
+	if strings.Contains(upper, "SYS.TABLES") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "TABLEROWCOUNT") || strings.Contains(upper, "OBJECTCOMMENT")) {
+		return true
+	}
+	if strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "TRIGGERNAME") || strings.Contains(upper, "O.TYPE = 'TR'") || strings.Contains(upper, "O.TYPE='TR'") || strings.Contains(upper, "JOIN")) {
+		return true
+	}
+	if (strings.Contains(upper, "SYS.OBJECTS") || strings.Contains(upper, "SYS.TABLES")) && strings.Contains(upper, "SYS.SCHEMAS") {
+		return true
+	}
+	if strings.Contains(upper, "SYS.SYSCOMMENTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "CODETEXT")) {
+		return true
+	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
 		return true
 	}
@@ -1652,17 +1680,87 @@ func isHeidiSQLCatalogJoinQuery(sql string) bool {
 func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(sql)
 
-	// 1. Beekeeper Studio SQL Server column query:
+	// 1. DbGate SQL Server Primary Keys
+	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "IS_PRIMARY_KEY = 1") || strings.Contains(upper, "IS_PRIMARY_KEY=1")) {
+		return s.execDbGateMSSQLPrimaryKeySelect(sql, start)
+	}
+
+	// 2. DbGate SQL Server Indexes
+	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "IS_PRIMARY_KEY=0") || strings.Contains(upper, "IS_PRIMARY_KEY = 0")) {
+		return s.execDbGateMSSQLIndexSelect(sql, start)
+	}
+
+	// 3. DbGate SQL Server Index Columns
+	if strings.Contains(upper, "SYS.INDEX_COLUMNS") {
+		return s.execDbGateMSSQLIndexColumnSelect(sql, start)
+	}
+
+	// 4. DbGate & Modern GUI SQL Server column query:
+	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE")) {
+		return s.execDbGateMSSQLColumnSelect(sql, start)
+	}
+
+	// 5. DbGate SQL Server column comments (MS_Description)
+	if strings.Contains(upper, "COLUMNCOMMENT") && strings.Contains(upper, "SYS.COLUMNS") {
+		return s.execDbGateMSSQLColumnCommentSelect(sql, start)
+	}
+
+	// 6. Beekeeper Studio SQL Server column query:
 	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
 		return s.execBeekeeperMSSQLColumnSelect(sql, start)
 	}
 
-	// 2. Beekeeper Studio Postgres table query:
+	// 7. DbGate SQL Server Foreign Keys
+	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") {
+		return s.execDbGateMSSQLForeignKeySelect(sql, start)
+	}
+
+	// 8. DbGate SQL Server Table Row Count
+	if strings.Contains(upper, "TABLEROWCOUNT") || (strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.PARTITIONS")) {
+		return s.execDbGateMSSQLRowCountSelect(sql, start)
+	}
+
+	// 9. DbGate SQL Server Parameters
+	if strings.Contains(upper, "SYS.PARAMETERS") {
+		return s.execDbGateMSSQLParamSelect(sql, start)
+	}
+
+	// 10. DbGate SQL Server Triggers
+	if strings.Contains(upper, "TRIGGERNAME") || (strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "TYPE = 'TR'") || strings.Contains(upper, "TYPE='TR'"))) {
+		return s.execDbGateMSSQLTriggerSelect(sql, start)
+	}
+
+	// 11. DbGate SQL Server SQL Code (loadSqlCode)
+	if strings.Contains(upper, "SYS.SYSCOMMENTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "CODETEXT")) {
+		return s.execDbGateMSSQLLoadSqlCodeSelect(sql, start)
+	}
+
+	// 12. DbGate SQL Server Programmables
+	if strings.Contains(upper, "SQLOBJECTTYPE") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "('P', 'IF', 'FN', 'TF')")) {
+		return s.execDbGateMSSQLProgrammablesSelect(sql, start)
+	}
+
+	// 13. DbGate SQL Server Views
+	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && (strings.Contains(upper, "TYPE='V'") || strings.Contains(upper, "TYPE = 'V'")) {
+		return s.execDbGateMSSQLViewSelect(sql, start)
+	}
+
+	// 14. DbGate SQL Server Tables (tables.js)
+	if strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.SCHEMAS") && (strings.Contains(upper, "PURENAME") || strings.Contains(upper, "OBJECTCOMMENT")) {
+		return s.execDbGateMSSQLTableSelect(sql, start)
+	}
+
+	// 15. DbGate SQL Server Object Modifications / Master Object List (modifications.js)
+	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && strings.Contains(upper, "PURENAME") {
+		return s.execDbGateMSSQLObjectSelect(sql, start)
+	}
+
+	// 16. Beekeeper Studio Postgres table query:
 	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
 		return s.execBeekeeperTableSelect(sql, start)
 	}
 
-	// 3. Constraints: Foreign keys, Primary keys, Unique constraints
+	// 12. Constraints: Foreign keys, Primary keys, Unique constraints
 	if strings.Contains(upper, "PG_CONSTRAINT") {
 		if strings.Contains(upper, "SRC_TBL") || strings.Contains(upper, "CONTYPE = 'F'") || strings.Contains(upper, "REF_TABLE") || strings.Contains(upper, "CONFRELID") {
 			return s.execHeidiSQLForeignKeySelect(sql, start)
@@ -1670,27 +1768,27 @@ func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*Qu
 		return s.execDbGatePrimaryKeySelect(sql, start)
 	}
 
-	// 4. Indexes (DbGate indexes.js, indexcols.js)
+	// 13. Indexes (DbGate indexes.js, indexcols.js)
 	if strings.Contains(upper, "PG_INDEX") {
 		return s.execDbGateIndexSelect(sql, start)
 	}
 
-	// 5. Triggers (DbGate triggers.js)
+	// 14. Triggers (DbGate triggers.js)
 	if strings.Contains(upper, "PG_TRIGGER") {
 		return s.execDbGateTriggerSelect(sql, start)
 	}
 
-	// 6. Column metadata query: pg_attribute + pg_class (DbGate columns.js, HeidiSQL)
+	// 15. Column metadata query: pg_attribute + pg_class (DbGate columns.js, HeidiSQL)
 	if strings.Contains(upper, "PG_ATTRIBUTE") && strings.Contains(upper, "PG_CLASS") {
 		return s.execHeidiSQLColumnMetadataSelect(sql, start)
 	}
 
-	// 7. Procedure / Function metadata query
+	// 16. Procedure / Function metadata query
 	if strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE") {
 		return s.execHeidiSQLProcSelect(sql, start)
 	}
 
-	// 8. Class + Namespace: Tables and Views (DbGate tableList.js, views.js, HeidiSQL)
+	// 17. Class + Namespace: Tables and Views (DbGate tableList.js, views.js, HeidiSQL)
 	return s.execHeidiSQLClassSelect(sql, start)
 }
 
@@ -2292,6 +2390,544 @@ func (s *Server) execBeekeeperMSSQLColumnSelect(sql string, start time.Time) (*Q
 				"is_nullable":      nullable,
 				"is_generated":     "NO",
 				"data_type":        formatMSSQLDataType(c),
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func parseTargetObjectIDs(sql string) map[int]bool {
+	inRe := regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
+	if m := inRe.FindStringSubmatch(sql); len(m) == 2 {
+		res := make(map[int]bool)
+		for _, part := range strings.Split(m[1], ",") {
+			cleaned := strings.Trim(strings.TrimSpace(part), "'\" ")
+			if id, err := strconv.Atoi(cleaned); err == nil {
+				res[id] = true
+			}
+		}
+		if len(res) > 0 {
+			return res
+		}
+	}
+	eqRe := regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
+	if m := eqRe.FindStringSubmatch(sql); len(m) == 2 {
+		if id, err := strconv.Atoi(m[1]); err == nil {
+			return map[int]bool{id: true}
+		}
+	}
+	return nil
+}
+
+func (s *Server) execDbGateMSSQLColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"columnName", "dataType", "objectId", "isIdentity",
+		"maxLength", "precision", "scale", "isNullable",
+		"charMaxLength", "defaultValue", "defaultConstraint",
+		"computedExpression", "isPersisted", "columnId",
+		"numericPrecision", "numericScale", "isSparse", "columnComment",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql)
+	tables, _ := s.engine.ListTables()
+	var allRows []map[string]any
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+		for cIdx, c := range t.Columns {
+			dataType := "varchar"
+			maxLen := 255
+			prec := 0
+			scale := 0
+			var charMaxLen any = nil
+			var numPrec any = nil
+			var numScale any = nil
+
+			switch c.Type {
+			case storage.TypeInt:
+				dataType = "int"
+				maxLen = 4
+				prec = 10
+				numPrec = 10
+				numScale = 0
+			case storage.TypeFloat:
+				dataType = "float"
+				maxLen = 8
+				prec = 53
+				numPrec = 53
+			case storage.TypeDecimal:
+				dataType = "decimal"
+				maxLen = 9
+				prec = c.Precision
+				if prec <= 0 {
+					prec = 18
+				}
+				scale = c.Scale
+				if scale < 0 {
+					scale = 2
+				}
+				numPrec = prec
+				numScale = scale
+			case storage.TypeVarChar:
+				dataType = "varchar"
+				maxLen = c.Precision
+				if maxLen <= 0 {
+					maxLen = 255
+				}
+				charMaxLen = maxLen
+			case storage.TypeBool:
+				dataType = "bit"
+				maxLen = 1
+				prec = 1
+			case storage.TypeDateTime:
+				dataType = "datetime"
+				maxLen = 8
+				prec = 23
+				scale = 3
+			case storage.TypeDate:
+				dataType = "date"
+				maxLen = 3
+				prec = 10
+			case storage.TypeTime:
+				dataType = "time"
+				maxLen = 5
+				prec = 16
+				scale = 7
+			case storage.TypeUUID:
+				dataType = "uniqueidentifier"
+				maxLen = 16
+			case storage.TypeBinary:
+				dataType = "varbinary"
+				maxLen = 8000
+			case storage.TypeJSON:
+				dataType = "nvarchar"
+				maxLen = -1
+			}
+
+			allRows = append(allRows, map[string]any{
+				"columnName":         c.Name,
+				"dataType":           dataType,
+				"objectId":           objID,
+				"isIdentity":         false,
+				"maxLength":          maxLen,
+				"precision":          prec,
+				"scale":              scale,
+				"isNullable":         c.Nullable,
+				"charMaxLength":      charMaxLen,
+				"defaultValue":       nil,
+				"defaultConstraint":  nil,
+				"computedExpression": nil,
+				"isPersisted":        nil,
+				"columnId":           cIdx + 1,
+				"numericPrecision":   numPrec,
+				"numericScale":       numScale,
+				"isSparse":           false,
+				"columnComment":      nil,
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLPrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"objectId", "pureName", "schemaName", "columnName", "constraintName",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql)
+	tables, _ := s.engine.ListTables()
+	var allRows []map[string]any
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+		for _, c := range t.Columns {
+			if c.PrimaryKey {
+				allRows = append(allRows, map[string]any{
+					"objectId":       objID,
+					"pureName":       t.Name,
+					"schemaName":     "dbo",
+					"columnName":     c.Name,
+					"constraintName": "PK_" + t.Name,
+				})
+			}
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLIndexSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"object_id", "constraintName", "indexType", "isUnique",
+		"index_id", "is_unique_constraint", "filterDefinition",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql)
+	tables, _ := s.engine.ListTables()
+	var allRows []map[string]any
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+		for idxNum, idx := range t.Indexes {
+			allRows = append(allRows, map[string]any{
+				"object_id":            objID,
+				"constraintName":       idx.Name,
+				"indexType":            "NONCLUSTERED",
+				"isUnique":             idx.Unique,
+				"index_id":             idxNum + 2,
+				"is_unique_constraint": false,
+				"filterDefinition":     nil,
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLIndexColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"object_id", "index_id", "column_id", "columnName", "isDescending", "isIncludedColumn",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql)
+	tables, _ := s.engine.ListTables()
+	var allRows []map[string]any
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+		for idxNum, idx := range t.Indexes {
+			for _, colName := range idx.Columns {
+				colID := 1
+				for cIdx, c := range t.Columns {
+					if strings.EqualFold(c.Name, colName) {
+						colID = cIdx + 1
+						break
+					}
+				}
+				allRows = append(allRows, map[string]any{
+					"object_id":        objID,
+					"index_id":         idxNum + 2,
+					"column_id":        colID,
+					"columnName":       colName,
+					"isDescending":     false,
+					"isIncludedColumn": false,
+				})
+			}
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"schemaName", "pureName", "columnName", "refSchemaName",
+		"refTableName", "refColumnName", "constraintName",
+		"updateAction", "deleteAction", "objectId",
+	}
+
+	targetIDs := parseTargetObjectIDs(sql)
+	tables, _ := s.engine.ListTables()
+	var allRows []map[string]any
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
+		for _, fk := range t.ForeignKeys {
+			allRows = append(allRows, map[string]any{
+				"schemaName":     "dbo",
+				"pureName":       t.Name,
+				"columnName":     strings.Join(fk.ChildColumns, ", "),
+				"refSchemaName":  "dbo",
+				"refTableName":   fk.ParentTable,
+				"refColumnName":  strings.Join(fk.ParentColumns, ", "),
+				"constraintName": fk.Name,
+				"updateAction":   "NO ACTION",
+				"deleteAction":   "NO ACTION",
+				"objectId":       objID,
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLRowCountSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{"objectId", "tableRowCount"}
+	tables, _ := s.engine.ListTables()
+	var allRows []map[string]any
+
+	for tIdx, t := range tables {
+		objID := 1000 + tIdx
+		var cnt int64 = 0
+		if s.catalog != nil {
+			if st, ok := s.catalog.GetTableStats(t.Name); ok && st != nil {
+				cnt = st.RowCount
+			}
+		}
+		allRows = append(allRows, map[string]any{
+			"objectId":      objID,
+			"tableRowCount": cnt,
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLColumnCommentSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{"objectId", "columnComment", "columnId"}
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         []map[string]any{},
+		RowsAffected: 0,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLParamSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"parentObjectId", "objectId", "parameterObjectId", "pureName",
+		"parameterName", "dataType", "charMaxLength", "parameterMode",
+		"numericPrecision", "numericScale", "parameterIndex", "schemaName",
+	}
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         []map[string]any{},
+		RowsAffected: 0,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLTriggerSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"modifyDate", "objectId", "triggerName", "schemaName",
+		"tableName", "triggerTiming", "eventType", "definition",
+	}
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         []map[string]any{},
+		RowsAffected: 0,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLObjectSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{"objectId", "modifyDate", "type", "pureName", "schemaName"}
+	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var allRows []map[string]any
+
+	tables, _ := s.engine.ListTables()
+	for tIdx, t := range tables {
+		allRows = append(allRows, map[string]any{
+			"objectId":   1000 + tIdx,
+			"modifyDate": defaultDate,
+			"type":       "U",
+			"pureName":   t.Name,
+			"schemaName": "dbo",
+		})
+	}
+
+	if s.catalog != nil {
+		for vIdx, v := range s.catalog.ListViews() {
+			allRows = append(allRows, map[string]any{
+				"objectId":   2000 + vIdx,
+				"modifyDate": defaultDate,
+				"type":       "V",
+				"pureName":   v.Name,
+				"schemaName": "dbo",
+			})
+		}
+		for pIdx, p := range s.catalog.ListProcedures() {
+			allRows = append(allRows, map[string]any{
+				"objectId":   3000 + pIdx,
+				"modifyDate": defaultDate,
+				"type":       "P",
+				"pureName":   p.Name,
+				"schemaName": "dbo",
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLTableSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "objectComment"}
+	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var allRows []map[string]any
+
+	tables, _ := s.engine.ListTables()
+	for tIdx, t := range tables {
+		allRows = append(allRows, map[string]any{
+			"pureName":      t.Name,
+			"schemaName":    "dbo",
+			"objectId":      1000 + tIdx,
+			"createDate":    defaultDate,
+			"modifyDate":    defaultDate,
+			"objectComment": nil,
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLViewSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate"}
+	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var allRows []map[string]any
+
+	if s.catalog != nil {
+		for vIdx, v := range s.catalog.ListViews() {
+			allRows = append(allRows, map[string]any{
+				"pureName":   v.Name,
+				"schemaName": "dbo",
+				"objectId":   2000 + vIdx,
+				"createDate": defaultDate,
+				"modifyDate": defaultDate,
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLProgrammablesSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "sqlObjectType"}
+	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var allRows []map[string]any
+
+	if s.catalog != nil {
+		for pIdx, p := range s.catalog.ListProcedures() {
+			allRows = append(allRows, map[string]any{
+				"pureName":      p.Name,
+				"schemaName":    "dbo",
+				"objectId":      3000 + pIdx,
+				"createDate":    defaultDate,
+				"modifyDate":    defaultDate,
+				"sqlObjectType": "P",
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Server) execDbGateMSSQLLoadSqlCodeSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{"pureName", "schemaName", "codeText"}
+	var allRows []map[string]any
+
+	if s.catalog != nil {
+		for _, v := range s.catalog.ListViews() {
+			allRows = append(allRows, map[string]any{
+				"pureName":   v.Name,
+				"schemaName": "dbo",
+				"codeText":   v.Query,
+			})
+		}
+		for _, p := range s.catalog.ListProcedures() {
+			allRows = append(allRows, map[string]any{
+				"pureName":   p.Name,
+				"schemaName": "dbo",
+				"codeText":   p.Body,
 			})
 		}
 	}

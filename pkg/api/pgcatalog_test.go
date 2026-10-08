@@ -594,4 +594,171 @@ func TestPgCatalog_DbGatePostgresIntrospection(t *testing.T) {
 	}
 }
 
+func TestPgCatalog_DbGateMSSQLIntrospection(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	if _, err := server.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), balance INT);"); err != nil {
+		t.Fatalf("failed to create table: %v", err)
+	}
+
+	// 1. DbGate MSSQL column query
+	colQuery := `select c.name as columnName, t.name as dataType, c.object_id as objectId, c.is_identity as isIdentity,
+    c.max_length as maxLength, c.precision, c.scale, c.is_nullable as isNullable,
+    col.CHARACTER_MAXIMUM_LENGTH as charMaxLength,
+    d.definition as defaultValue, d.name as defaultConstraint,
+    m.definition as computedExpression, m.is_persisted as isPersisted, c.column_id as columnId, 
+    col.NUMERIC_PRECISION as numericPrecision,
+    col.NUMERIC_SCALE as numericScale,
+    c.is_sparse as isSparse,
+    ep.value as columnComment
+from sys.columns c
+inner join sys.types t on c.system_type_id = t.system_type_id and c.user_type_id = t.user_type_id
+inner join sys.objects o on c.object_id = o.object_id
+INNER JOIN sys.schemas u ON u.schema_id=o.schema_id 
+INNER JOIN INFORMATION_SCHEMA.COLUMNS col ON col.TABLE_NAME = o.name AND col.TABLE_SCHEMA = u.name and col.COLUMN_NAME = c.name
+left join sys.default_constraints d on c.default_object_id = d.object_id
+left join sys.computed_columns m on m.object_id = c.object_id and m.column_id = c.column_id
+left join sys.extended_properties ep on ep.major_id = c.object_id 
+    and ep.minor_id = c.column_id 
+    and ep.name = 'MS_Description'
+    and ep.class = 1
+where o.type = 'U' and o.object_id in ('1000') and u.name is not null 
+order by c.column_id`
+
+	colRes, err := server.ExecuteSQL(colQuery)
+	if err != nil || !colRes.Success {
+		t.Fatalf("DbGate MSSQL column query failed: %v", err)
+	}
+	if len(colRes.Rows) != 3 {
+		t.Fatalf("expected 3 columns for users, got %d", len(colRes.Rows))
+	}
+	if colRes.Rows[0]["columnName"] != "id" || colRes.Rows[0]["dataType"] != "int" {
+		t.Fatalf("unexpected col 0: %+v", colRes.Rows[0])
+	}
+	if colRes.Rows[1]["columnName"] != "name" || colRes.Rows[1]["dataType"] != "varchar" {
+		t.Fatalf("unexpected col 1: %+v", colRes.Rows[1])
+	}
+	if colRes.Rows[2]["columnName"] != "balance" || colRes.Rows[2]["dataType"] != "int" {
+		t.Fatalf("unexpected col 2: %+v", colRes.Rows[2])
+	}
+
+	// 2. DbGate MSSQL Primary Key query
+	pkQuery := `SELECT 
+    i.object_id AS objectId,
+    o.name AS pureName,
+    s.name AS schemaName,
+    c.name AS columnName,
+    i.name AS constraintName
+FROM 
+    sys.indexes i
+INNER JOIN 
+    sys.index_columns ic ON i.object_id = ic.object_id AND i.index_id = ic.index_id
+INNER JOIN 
+    sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id
+INNER JOIN
+    sys.objects o ON i.object_id = o.object_id
+INNER JOIN
+    sys.schemas s ON o.schema_id = s.schema_id
+WHERE 
+    i.is_primary_key = 1
+	and o.object_id in ('1000')
+    and s.name is not null 
+ORDER BY 
+    ic.key_ordinal`
+
+	pkRes, err := server.ExecuteSQL(pkQuery)
+	if err != nil || !pkRes.Success {
+		t.Fatalf("DbGate MSSQL PK query failed: %v", err)
+	}
+	if len(pkRes.Rows) != 1 || pkRes.Rows[0]["columnName"] != "id" {
+		t.Fatalf("expected 1 PK row with columnName 'id', got %+v", pkRes.Rows)
+	}
+
+	// 3. DbGate MSSQL modifications query (sys.objects + sys.schemas)
+	modQuery := `select o.object_id as objectId, o.modify_date as modifyDate, o.type, o.name as pureName, s.name as schemaName
+from sys.objects o
+inner join sys.schemas s on o.schema_id = s.schema_id
+where o.type in ('U', 'V', 'P', 'IF', 'FN', 'TF', 'TR')
+    and s.name  is not null`
+	modRes, err := server.ExecuteSQL(modQuery)
+	if err != nil || !modRes.Success {
+		t.Fatalf("DbGate MSSQL modifications query failed: %v", err)
+	}
+	if len(modRes.Rows) != 1 {
+		t.Fatalf("expected 1 object row, got %d", len(modRes.Rows))
+	}
+	if modRes.Rows[0]["pureName"] != "users" || modRes.Rows[0]["schemaName"] != "dbo" || modRes.Rows[0]["type"] != "U" {
+		t.Fatalf("unexpected mod row: %+v", modRes.Rows[0])
+	}
+	if modRes.Rows[0]["objectId"] != 1000 {
+		t.Fatalf("expected objectId 1000, got %v", modRes.Rows[0]["objectId"])
+	}
+
+	// 4. DbGate MSSQL tables query (sys.tables + sys.schemas)
+	tblQuery := `select
+	o.name as pureName, 
+	s.name as schemaName, 
+	o.object_id as objectId,
+	o.create_date as createDate, 
+	o.modify_date as modifyDate,
+	ep.value as objectComment
+from sys.tables o
+inner join sys.schemas s on o.schema_id = s.schema_id
+left join sys.extended_properties ep on ep.major_id = o.object_id and ep.minor_id = 0 and ep.name = 'MS_Description'`
+	tblRes, err := server.ExecuteSQL(tblQuery)
+	if err != nil || !tblRes.Success {
+		t.Fatalf("DbGate MSSQL tables query failed: %v", err)
+	}
+	if len(tblRes.Rows) != 1 || tblRes.Rows[0]["pureName"] != "users" || tblRes.Rows[0]["schemaName"] != "dbo" {
+		t.Fatalf("unexpected tbl row: %+v", tblRes.Rows)
+	}
+
+	// 5. DbGate MSSQL table row count query
+	cntQuery := `SELECT distinct
+    t.object_id as objectId,
+    p.rows AS tableRowCount
+FROM
+    sys.tables t
+INNER JOIN
+    sys.indexes i ON t.OBJECT_ID = i.object_id
+INNER JOIN
+    sys.partitions p ON i.object_id = p.OBJECT_ID AND i.index_id = p.index_id
+INNER JOIN
+    sys.schemas s ON t.schema_id = s.schema_id
+WHERE
+    t.NAME NOT LIKE 'dt%'
+    AND t.is_ms_shipped = 0
+    AND i.OBJECT_ID > 255
+    AND s.name  is not null`
+	cntRes, err := server.ExecuteSQL(cntQuery)
+	if err != nil || !cntRes.Success {
+		t.Fatalf("DbGate MSSQL row count query failed: %v", err)
+	}
+	if len(cntRes.Rows) != 1 || cntRes.Rows[0]["objectId"] != 1000 {
+		t.Fatalf("unexpected cnt row: %+v", cntRes.Rows)
+	}
+
+	// 6. DbGate MSSQL column comments query
+	commentQuery := `select c.object_id as objectId,
+	ep.value as columnComment,
+  c.column_id as columnId
+from sys.columns c
+inner join sys.objects o on c.object_id = o.object_id
+INNER JOIN sys.schemas u ON u.schema_id=o.schema_id
+INNER JOIN sys.extended_properties ep on ep.major_id = c.object_id and ep.minor_id = c.column_id and ep.name = 'MS_Description'
+where o.type IN ('U', 'V') and o.object_id  is not null and u.name  is not null
+order by c.column_id`
+	commentRes, err := server.ExecuteSQL(commentQuery)
+	if err != nil || !commentRes.Success {
+		t.Fatalf("DbGate MSSQL column comments query failed: %v", err)
+	}
+	if len(commentRes.Columns) != 3 || commentRes.Columns[0] != "objectId" {
+		t.Fatalf("unexpected comment columns: %+v", commentRes.Columns)
+	}
+}
+
+
 
