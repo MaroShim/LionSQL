@@ -143,7 +143,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - **커버링 인덱스 스캔 (Covering Index / Index-Only Scan)**: 인덱스 키/인클루드 컬럼만으로 프로젝션 충족 시 기본 테이블(B+Tree/SkipList) 키 조회 I/O 및 튜플 역직렬화 100% 생략.
 - [ ] **[Phase 3: 와이어 프로토콜 & 네트워크] 제로카피 와이어 인코딩 & I/O 버퍼 결합**
   - **스토리지 ➔ 와이어 제로카피 직접 직렬화**: 중간 `[]any` 레코드 슬라이스 변환을 제거하고, `sync.Pool`로 관리되는 와이어 바이트 버퍼에 바이너리 튜플 데이터를 직접 포맷팅.
-  - **I/O 버퍼 결합 및 지연 플러시 (Write Combining & TCP_NODELAY)**: 행 단위 `Write()` 대신 커널 TCP 버퍼 MTU(4KB~16KB) 단위로 배치 기록 후 일괄 플러시.
+  - **[완료] I/O 버퍼 결합 및 지연 플러시 (Write Combining & TCP_NODELAY)**: 행 단위 개별 `Write()`를 지양하고 32KB `bufio.Writer`로 행 및 명령 완료 패킷을 묶어 일괄 플러시하고 TCP_NODELAY를 적용하여 패킷 지연 및 syscall 횟수 최소화 완료.
 - [ ] **[Phase 4: 실행 엔진 & 볼케이노] 청크 단위 배치 반복자 (Chunked / Vectorized Volcano Execution)**
   - **배치 튜플 프로세싱 (`NextBatch([64]Row)`)**: 행 단위 단일 `Next()` 가상 함수 호출을 64~256건 단위 튜플 청크 벡터 처리로 전환하여 함수 호출 오버헤드 완화 및 CPU L1 Data Cache / SIMD 파이프라이닝 극대화.
 - [ ] **[Phase 5: 쿼리 캐시 & 메모리] 고속 SQL 핑거프린팅 & 쿼리 전용 아레나(Arena)**

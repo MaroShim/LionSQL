@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/tls"
 	"encoding/binary"
@@ -896,6 +897,7 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 		}
 		colOIDs := s.resolveColumnOIDs(query, res.Columns, sampleRow)
 
+		bw := bufio.NewWriterSize(conn, 32768)
 		for _, row := range res.Rows {
 			rowBytes := make([][]byte, len(res.Columns))
 			for i, colName := range res.Columns {
@@ -908,9 +910,10 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 				val := getRowValue(row, colName)
 				rowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 			}
-			_ = WriteDataRowBytes(conn, rowBytes)
+			_ = WriteDataRowBytes(bw, rowBytes)
 		}
-		_ = WriteCommandComplete(conn, fmt.Sprintf("SELECT %d", len(res.Rows)))
+		_ = WriteCommandComplete(bw, fmt.Sprintf("SELECT %d", len(res.Rows)))
+		_ = bw.Flush()
 		return
 	}
 	rowsCount := int64(len(res.Rows))
@@ -1062,12 +1065,13 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		}
 		colOIDs := s.resolveColumnOIDs(query, res.Columns, sampleRow)
 
+		bw := bufio.NewWriterSize(conn, 32768)
 		if writeRowDesc {
 			cols := make([]ColumnMeta, len(res.Columns))
 			for i, c := range res.Columns {
 				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i]}
 			}
-			_ = WriteRowDescription(conn, cols)
+			_ = WriteRowDescription(bw, cols)
 		}
 
 		for _, row := range res.Rows {
@@ -1082,9 +1086,10 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 				val := getRowValue(row, colName)
 				rowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 			}
-			_ = WriteDataRowBytes(conn, rowBytes)
+			_ = WriteDataRowBytes(bw, rowBytes)
 		}
-		_ = WriteCommandComplete(conn, fmt.Sprintf("SELECT %d", len(res.Rows)))
+		_ = WriteCommandComplete(bw, fmt.Sprintf("SELECT %d", len(res.Rows)))
+		_ = bw.Flush()
 		return
 	}
 
