@@ -31,6 +31,11 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 * [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_STORAGE.md)
   * Deep dive into the storage engine interface contract.
   * SkipList in-memory indexing vs WiredTiger page structures, checkpoints, and write-ahead logging (WAL).
+* [`RECORD_BINARY_FORMAT.md`](file:///Users/maro/Projects/sql/doc/RECORD_BINARY_FORMAT.md)
+  * Schema-Aware Compact Binary Tuple serialization specification (`pkg/storage/tuple.go`).
+  * Bit-level layout: `0x01` version header, $\lceil N/8 \rceil$ null bitmap, and dense ZigZag varint payloads.
+  * Architectural lineage: PostgreSQL heap tuple `t_bits`, CockroachDB/TiDB KV encoding, and Protobuf varints.
+  * WiredTiger B+Tree disk value persistence vs in-memory OCC WAL durability.
 * [`DATA_DICTIONARY.md`](file:///Users/maro/Projects/sql/doc/DATA_DICTIONARY.md)
   * System catalogs, system tables, schema metadata persistence, and virtual catalog views (`sys.tables`, `INFORMATION_SCHEMA`).
 * [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/sql/doc/HIGH_AVAILABILITY.md)
