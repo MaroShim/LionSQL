@@ -227,16 +227,17 @@ func parseInnerSelectWithProj(sql string) (projections, table, alias, whereClaus
 	return projections, table, alias, whereClause, true
 }
 
-func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause string, limitCount int64, ok bool) {
+func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause string, limitCount int64, offsetCount int64, ok bool) {
 	limitCount = -1
+	offsetCount = 0
 	sql = strings.TrimSpace(strings.TrimRight(sql, ";"))
 	if !strings.HasPrefix(strings.ToUpper(sql), "SELECT") {
-		return "", "", "", "", "", "", -1, false
+		return "", "", "", "", "", "", -1, 0, false
 	}
 
 	fromIdx := findKeywordIndex(sql, "FROM")
 	if fromIdx == -1 {
-		return "", "", "", "", "", "", -1, false
+		return "", "", "", "", "", "", -1, 0, false
 	}
 	projStr = strings.TrimSpace(sql[6:fromIdx])
 
@@ -246,9 +247,10 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 	havingIdx := findKeywordIndex(rest, "HAVING")
 	orderByIdx := findKeywordIndex(rest, "ORDER BY")
 	limitIdx := findKeywordIndex(rest, "LIMIT")
+	offsetIdx := findKeywordIndex(rest, "OFFSET")
 
 	firstAfterFrom := len(rest)
-	for _, idx := range []int{whereIdx, groupByIdx, havingIdx, orderByIdx, limitIdx} {
+	for _, idx := range []int{whereIdx, groupByIdx, havingIdx, orderByIdx, limitIdx, offsetIdx} {
 		if idx != -1 && idx < firstAfterFrom {
 			firstAfterFrom = idx
 		}
@@ -257,7 +259,7 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if whereIdx != -1 {
 		end := len(rest)
-		for _, idx := range []int{groupByIdx, havingIdx, orderByIdx, limitIdx} {
+		for _, idx := range []int{groupByIdx, havingIdx, orderByIdx, limitIdx, offsetIdx} {
 			if idx != -1 && idx > whereIdx && idx < end {
 				end = idx
 			}
@@ -267,7 +269,7 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if groupByIdx != -1 {
 		end := len(rest)
-		for _, idx := range []int{havingIdx, orderByIdx, limitIdx} {
+		for _, idx := range []int{havingIdx, orderByIdx, limitIdx, offsetIdx} {
 			if idx != -1 && idx > groupByIdx && idx < end {
 				end = idx
 			}
@@ -277,7 +279,7 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if havingIdx != -1 {
 		end := len(rest)
-		for _, idx := range []int{orderByIdx, limitIdx} {
+		for _, idx := range []int{orderByIdx, limitIdx, offsetIdx} {
 			if idx != -1 && idx > havingIdx && idx < end {
 				end = idx
 			}
@@ -287,20 +289,37 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if orderByIdx != -1 {
 		end := len(rest)
-		if limitIdx != -1 && limitIdx > orderByIdx {
-			end = limitIdx
+		for _, idx := range []int{limitIdx, offsetIdx} {
+			if idx != -1 && idx > orderByIdx && idx < end {
+				end = idx
+			}
 		}
 		orderByClause = strings.TrimSpace(rest[orderByIdx+8 : end])
 	}
 
 	if limitIdx != -1 {
-		limitStr := strings.TrimSpace(rest[limitIdx+5:])
+		end := len(rest)
+		if offsetIdx != -1 && offsetIdx > limitIdx {
+			end = offsetIdx
+		}
+		limitStr := strings.TrimSpace(rest[limitIdx+5 : end])
 		if n, err := strconv.ParseInt(limitStr, 10, 64); err == nil {
 			limitCount = n
 		}
 	}
 
-	return projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause, limitCount, true
+	if offsetIdx != -1 {
+		end := len(rest)
+		if limitIdx != -1 && limitIdx > offsetIdx {
+			end = limitIdx
+		}
+		offsetStr := strings.TrimSpace(rest[offsetIdx+6 : end])
+		if n, err := strconv.ParseInt(offsetStr, 10, 64); err == nil {
+			offsetCount = n
+		}
+	}
+
+	return projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause, limitCount, offsetCount, true
 }
 
 func splitAndConditions(where string) []string {

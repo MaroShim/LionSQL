@@ -414,7 +414,11 @@ func (s *Server) isVirtualCatalogTable(tableName string) bool {
 		"sys.objects", "sysobjects", "sys_objects",
 		"sys.views", "sysviews", "sys_views",
 		"sys.types", "systypes", "sys_types",
-		"sys.partitions", "system.partitions", "syspartitions", "sys_partitions":
+		"sys.partitions", "system.partitions", "syspartitions", "sys_partitions",
+		"sys.computed_columns", "syscomputedcolumns", "sys_computed_columns",
+		"sys.triggers", "systriggers", "sys_triggers",
+		"sys.foreign_keys", "sysforeignkeys", "sys_foreign_keys",
+		"sys.foreign_key_columns", "sysforeignkeycolumns", "sys_foreign_key_columns":
 		return true
 	default:
 		return false
@@ -619,6 +623,31 @@ func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, order
 				}
 			}
 		}
+
+	case "sys.computed_columns", "syscomputedcolumns", "sys_computed_columns":
+		columns = []string{"object_id", "name", "column_id", "definition", "is_persisted"}
+		allRows = []map[string]any{}
+
+	case "sys.triggers", "systriggers", "sys_triggers":
+		columns = []string{"name", "object_id", "parent_id", "type", "type_desc", "create_date"}
+		allRows = []map[string]any{}
+
+	case "sys.foreign_keys", "sysforeignkeys", "sys_foreign_keys":
+		columns = []string{"name", "object_id", "parent_object_id", "referenced_object_id"}
+		for tIdx, t := range tables {
+			for fkIdx, fk := range t.ForeignKeys {
+				allRows = append(allRows, map[string]any{
+					"name":                 fk.Name,
+					"object_id":            3000 + tIdx*100 + fkIdx,
+					"parent_object_id":     1000 + tIdx,
+					"referenced_object_id": 1000,
+				})
+			}
+		}
+
+	case "sys.foreign_key_columns", "sysforeignkeycolumns", "sys_foreign_key_columns":
+		columns = []string{"constraint_object_id", "parent_object_id", "parent_column_id", "referenced_object_id", "referenced_column_id"}
+		allRows = []map[string]any{}
 
 	default:
 		return nil, fmt.Errorf("unsupported virtual system table: %s", tableName)

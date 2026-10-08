@@ -1625,9 +1625,13 @@ var heidiProcJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_proc\s+(?:AS\s+)?p\s+JO
 var heidiAttrJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_attribute\s+(?:AS\s+)?a\s+JOIN\s+pg_class\s+(?:AS\s+)?pgc\s+ON\s+pgc\.oid\s*=\s*a\.attrelid`)
 var heidiFKJoinRe = regexp.MustCompile(`(?is)FROM\s+pg_constraint\s+(?:AS\s+)?con\s+JOIN\s+pg_class\s+(?:AS\s+)?src_tbl`)
 var beekeeperTableJoinRe = regexp.MustCompile(`(?is)FROM\s+information_schema\.tables\s+(?:AS\s+)?t\s+JOIN\s+pg_class\s+(?:AS\s+)?pc\s+ON`)
+var beekeeperMSSQLColumnJoinRe = regexp.MustCompile(`(?is)FROM\s+INFORMATION_SCHEMA\.COLUMNS(?:\s+(?:AS\s+)?ic)?\s+LEFT\s+(?:OUTER\s+)?JOIN\s+sys\.computed_columns`)
 
 func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	upper := strings.ToUpper(sql)
+	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
+		return beekeeperMSSQLColumnJoinRe.MatchString(sql)
+	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
 		return beekeeperTableJoinRe.MatchString(sql)
 	}
@@ -1644,6 +1648,12 @@ func isHeidiSQLCatalogJoinQuery(sql string) bool {
 }
 
 func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
+	// Handle Beekeeper Studio SQL Server column query:
+	// FROM INFORMATION_SCHEMA.COLUMNS ic LEFT JOIN sys.computed_columns sc ON ...
+	if beekeeperMSSQLColumnJoinRe.MatchString(sql) {
+		return s.execBeekeeperMSSQLColumnSelect(sql, start)
+	}
+
 	// Handle Beekeeper Studio table query:
 	// FROM information_schema.tables AS t JOIN pg_class AS pc ON ...
 	if beekeeperTableJoinRe.MatchString(sql) {
@@ -1921,6 +1931,106 @@ func (s *Server) execBeekeeperTableSelect(sql string, start time.Time) (*QueryRe
 				"name":       t.Name,
 				"tabletype":  "r",
 				"parenttype": "r",
+			})
+		}
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func formatMSSQLDataType(c storage.Column) string {
+	switch c.Type {
+	case storage.TypeInt:
+		return "int"
+	case storage.TypeFloat:
+		return "float"
+	case storage.TypeDecimal:
+		if c.Precision > 0 && c.Scale > 0 {
+			return fmt.Sprintf("decimal(%d,%d)", c.Precision, c.Scale)
+		} else if c.Precision > 0 {
+			return fmt.Sprintf("decimal(%d)", c.Precision)
+		}
+		return "decimal(18,2)"
+	case storage.TypeVarChar:
+		prec := c.Precision
+		if prec <= 0 {
+			prec = 255
+		}
+		return fmt.Sprintf("varchar(%d)", prec)
+	case storage.TypeBool:
+		return "bit"
+	case storage.TypeDateTime:
+		return "datetime"
+	case storage.TypeDate:
+		return "date"
+	case storage.TypeTime:
+		return "time(0)"
+	case storage.TypeUUID:
+		return "uniqueidentifier"
+	case storage.TypeBinary:
+		return "varbinary(max)"
+	case storage.TypeJSON:
+		return "nvarchar(max)"
+	default:
+		return "varchar(255)"
+	}
+}
+
+func (s *Server) execBeekeeperMSSQLColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+	// Beekeeper Studio queries:
+	// SELECT table_schema as "table_schema", table_name as "table_name", column_name as "column_name",
+	//        ordinal_position as "ordinal_position", column_default as "column_default", ic.is_nullable as "is_nullable",
+	//        CASE WHEN sc.definition is not null THEN 'YES' ELSE 'NO' END as "is_generated",
+	//        CASE ... END as "data_type"
+	// FROM INFORMATION_SCHEMA.COLUMNS ic
+	// LEFT JOIN sys.computed_columns sc ON OBJECT_ID(...) = sc.object_id AND ic.COLUMN_NAME = sc.name
+	// WHERE table_name = 'customers' AND table_schema = 'dbo'
+	// ORDER BY table_schema, table_name, ordinal_position
+	columns := []string{
+		"table_schema", "table_name", "column_name", "ordinal_position",
+		"column_default", "is_nullable", "is_generated", "data_type",
+	}
+
+	targetTable := ""
+	tblRe := regexp.MustCompile(`(?is)(?:ic\.)?table_name\s*=\s*'([^']+)'`)
+	if m := tblRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetTable = cleanIdentifier(m[1])
+	}
+
+	targetSchema := "dbo"
+	schRe := regexp.MustCompile(`(?is)(?:ic\.)?table_schema\s*=\s*'([^']+)'`)
+	if m := schRe.FindStringSubmatch(sql); len(m) == 2 {
+		targetSchema = cleanIdentifier(m[1])
+	}
+
+	tables, _ := s.engine.ListTables()
+	var allRows []map[string]any
+
+	for _, t := range tables {
+		if targetTable != "" && !strings.EqualFold(t.Name, targetTable) {
+			continue
+		}
+		for i, c := range t.Columns {
+			nullable := "NO"
+			if c.Nullable {
+				nullable = "YES"
+			}
+			allRows = append(allRows, map[string]any{
+				"table_schema":     targetSchema,
+				"table_name":       t.Name,
+				"column_name":      c.Name,
+				"ordinal_position": i + 1,
+				"column_default":   nil,
+				"is_nullable":      nullable,
+				"is_generated":     "NO",
+				"data_type":        formatMSSQLDataType(c),
 			})
 		}
 	}

@@ -120,6 +120,12 @@ func (l *Lexer) NextToken() Token {
 		tok.Line = tokLine
 		tok.Col = tokCol
 		return tok
+	case '"':
+		tok.Type = TokenIdent
+		tok.Literal = l.readQuotedIdentifier()
+		tok.Line = tokLine
+		tok.Col = tokCol
+		return tok
 	case '[':
 		tok.Type = TokenIdent
 		tok.Literal = l.readBracketedIdentifier()
@@ -202,16 +208,53 @@ func (l *Lexer) readBracketedIdentifier() string {
 	if l.ch == ']' {
 		l.readChar() // skip ']'
 	}
-	// Check if chained with . e.g. [dbo].[sp_name]
-	if l.ch == '.' && (l.peekChar() == '[' || isLetter(l.peekChar())) {
+	// Check if chained with . e.g. [dbo].[sp_name] or [dbo]."name"
+	if l.ch == '.' && (l.peekChar() == '[' || l.peekChar() == '"' || isLetter(l.peekChar())) {
 		l.readChar() // eat '.'
 		if l.ch == '[' {
 			l.readBracketedIdentifier()
+		} else if l.ch == '"' {
+			l.readQuotedIdentifier()
 		} else {
 			l.readIdentifier()
 		}
 	}
 	return l.input[startPos:l.pos]
+}
+
+func (l *Lexer) readQuotedIdentifier() string {
+	l.readChar() // skip initial '"'
+	var b strings.Builder
+	for {
+		if l.ch == 0 {
+			break
+		}
+		if l.ch == '"' {
+			if l.peekChar() == '"' {
+				// Escaped quote ""
+				b.WriteByte('"')
+				l.readChar()
+				l.readChar()
+				continue
+			}
+			l.readChar() // skip closing quote
+			break
+		}
+		b.WriteByte(l.ch)
+		l.readChar()
+	}
+	// Check if dot-qualified e.g. "dbo"."customers"
+	if l.ch == '.' && (l.peekChar() == '"' || l.peekChar() == '[' || isLetter(l.peekChar())) {
+		l.readChar() // eat '.'
+		if l.ch == '"' {
+			return b.String() + "." + l.readQuotedIdentifier()
+		} else if l.ch == '[' {
+			return b.String() + "." + l.readBracketedIdentifier()
+		} else {
+			return b.String() + "." + l.readIdentifier()
+		}
+	}
+	return b.String()
 }
 
 func (l *Lexer) readIdentifier() string {

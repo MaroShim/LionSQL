@@ -72,6 +72,15 @@ func (m *ColumnIndexMap) Index(name string) (int, bool) {
 	if !ok {
 		idx, ok = m.indices[strings.ToLower(name)]
 	}
+	if !ok {
+		cleaned := strings.Trim(name, "[]\"'`")
+		if cleaned != name {
+			idx, ok = m.indices[cleaned]
+			if !ok {
+				idx, ok = m.indices[strings.ToLower(cleaned)]
+			}
+		}
+	}
 	return idx, ok
 }
 

@@ -1016,8 +1016,38 @@ func (s *Server) execSetOpExplain(setQuery *planner.SetOpQuery, analyze bool, st
 	}, nil
 }
 
+var mssqlOffsetFetchRe = regexp.MustCompile(`(?is)\s+OFFSET\s+(\d+)\s+ROWS?\s+FETCH\s+(?:NEXT|FIRST)\s+(\d+)\s+ROWS?\s+ONLY`)
+var mssqlOffsetOnlyRe = regexp.MustCompile(`(?is)\s+OFFSET\s+(\d+)\s+ROWS?(?:\s*;|\s*$)`)
+var mssqlFetchOnlyRe = regexp.MustCompile(`(?is)\s+FETCH\s+(?:NEXT|FIRST)\s+(\d+)\s+ROWS?\s+ONLY`)
+var mssqlTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+)TOP\s*\(?\s*(\d+)\s*\)?\s+(DISTINCT\s+)?(.*)$`)
+var mssqlDistinctTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+DISTINCT\s+)TOP\s*\(?\s*(\d+)\s*\)?\s+(.*)$`)
+
+func normalizeMSSQLPagination(sql string) string {
+	if mssqlOffsetFetchRe.MatchString(sql) {
+		sql = mssqlOffsetFetchRe.ReplaceAllString(sql, " LIMIT $2 OFFSET $1")
+	} else if mssqlFetchOnlyRe.MatchString(sql) {
+		sql = mssqlFetchOnlyRe.ReplaceAllString(sql, " LIMIT $1")
+	} else if mssqlOffsetOnlyRe.MatchString(sql) {
+		sql = mssqlOffsetOnlyRe.ReplaceAllString(sql, " OFFSET $1")
+	}
+
+	upper := strings.ToUpper(sql)
+	if strings.Contains(upper, " TOP ") || strings.Contains(upper, " TOP(") {
+		if !strings.Contains(upper, " LIMIT ") {
+			if m := mssqlDistinctTopRe.FindStringSubmatch(sql); len(m) == 4 {
+				sql = fmt.Sprintf("%s%s LIMIT %s", m[1], m[3], m[2])
+			} else if m := mssqlTopRe.FindStringSubmatch(sql); len(m) == 5 {
+				dist := m[3]
+				sql = fmt.Sprintf("%s%s%s LIMIT %s", m[1], dist, m[4], m[2])
+			}
+		}
+	}
+	return sql
+}
+
 func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	cleaned = normalizeMSSQLPagination(cleaned)
 
 	// -1. T-SQL FOR JSON clause: SELECT ... FOR JSON PATH / AUTO [,...]
 	if hasForJSON(cleaned) {
@@ -1172,8 +1202,8 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 		}
 	}
 
-	// Parse projection, table, WHERE, ORDER BY, LIMIT
-	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+([^\s,;]+)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
+	// Parse projection, table, WHERE, ORDER BY, LIMIT, OFFSET
+	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+([^\s,;]+)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$`)
 	matches := selectRe.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
 		if !hasFromClause(cleaned) {
@@ -1202,6 +1232,13 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 			limitCount = n
 		}
 	}
+	offsetCount := 0
+	if len(matches) > 8 && matches[8] != "" {
+		if n, err := strconv.Atoi(matches[8]); err == nil {
+			offsetCount = n
+		}
+	}
+	_ = offsetCount
 
 	// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
 	tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
@@ -1823,7 +1860,14 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 		})
 	}
 
-	// 6. Apply LIMIT
+	// 6. Apply OFFSET & LIMIT
+	if qInfo.OffsetCount > 0 {
+		if int64(len(aggRows)) > qInfo.OffsetCount {
+			aggRows = aggRows[qInfo.OffsetCount:]
+		} else {
+			aggRows = nil
+		}
+	}
 	if qInfo.LimitCount >= 0 && int64(len(aggRows)) > qInfo.LimitCount {
 		aggRows = aggRows[:qInfo.LimitCount]
 	}

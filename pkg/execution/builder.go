@@ -76,7 +76,7 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if err != nil {
 			return nil, err
 		}
-		return NewLimitIterator(child, plan.LimitCount, 0), nil
+		return NewLimitIterator(child, plan.LimitCount, plan.OffsetCount), nil
 
 	case planner.NodeSort:
 		if len(plan.Children) == 0 {

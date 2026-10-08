@@ -362,4 +362,100 @@ ORDER BY t.table_schema, t.table_name`
 	}
 }
 
+func TestPgCatalog_BeekeeperStudioMSSQLColumnQuery(t *testing.T) {
+	server, _, _ := setupCatalogTestServer(t)
+
+	// Beekeeper Studio SQL Server column query
+	sql := `SELECT
+  table_schema as "table_schema",
+  table_name as "table_name",
+  column_name as "column_name",
+  ordinal_position as "ordinal_position",
+  column_default as "column_default",
+  ic.is_nullable as "is_nullable",
+  CASE
+    WHEN sc.definition is not null THEN 'YES'
+    ELSE 'NO'
+  END as "is_generated",
+  CASE
+    WHEN character_maximum_length is not null AND data_type != 'text'
+        THEN data_type + '(' + CAST(character_maximum_length AS VARCHAR(16)) + ')'
+    WHEN numeric_precision is not null
+        THEN data_type + '(' + CAST(numeric_precision AS VARCHAR(16)) + ')'
+    WHEN datetime_precision is not null AND data_type != 'date'
+        THEN data_type + '(' + CAST(datetime_precision AS VARCHAR(16)) + ')'
+    ELSE data_type
+  END as "data_type"
+FROM INFORMATION_SCHEMA.COLUMNS ic
+LEFT JOIN sys.computed_columns sc ON
+  OBJECT_ID(QUOTENAME(ic.TABLE_SCHEMA) + '.' + QUOTENAME(ic.TABLE_NAME)) = sc.object_id AND
+  ic.COLUMN_NAME = sc.name
+WHERE table_name = 'employees' AND table_schema = 'dbo'
+ORDER BY table_schema, table_name, ordinal_position;`
+
+	res, err := server.ExecuteSQL(sql)
+	if err != nil {
+		t.Fatalf("failed to execute Beekeeper MSSQL column query: %v", err)
+	}
+	if !res.Success {
+		t.Fatalf("Beekeeper MSSQL column query was not successful")
+	}
+
+	expectedCols := []string{
+		"table_schema", "table_name", "column_name", "ordinal_position",
+		"column_default", "is_nullable", "is_generated", "data_type",
+	}
+	if len(res.Columns) != len(expectedCols) {
+		t.Fatalf("expected columns %v, got %v", expectedCols, res.Columns)
+	}
+
+	if len(res.Rows) == 0 {
+		t.Fatalf("expected column rows for employees table, got 0")
+	}
+
+	colNames := make([]string, len(res.Rows))
+	for i, r := range res.Rows {
+		colNames[i] = fmt.Sprintf("%v", r["column_name"])
+	}
+	if colNames[0] != "emp_id" || colNames[1] != "emp_name" {
+		t.Errorf("unexpected columns: %v", colNames)
+	}
+}
+
+func TestMSSQL_PaginationAndBrackets(t *testing.T) {
+	server, _, _ := setupCatalogTestServer(t)
+
+	// Seed rows into departments and employees
+	_, err := server.ExecuteSQL("INSERT INTO departments (dept_id, dept_name) VALUES (10, 'Engineering');")
+	if err != nil {
+		t.Fatalf("failed to insert department: %v", err)
+	}
+	_, err = server.ExecuteSQL("INSERT INTO employees (emp_id, emp_name, dept_id, salary, active) VALUES (1, 'Alice', 10, 50000.0, true);")
+	if err != nil {
+		t.Fatalf("failed to insert: %v", err)
+	}
+	_, err = server.ExecuteSQL("INSERT INTO employees (emp_id, emp_name, dept_id, salary, active) VALUES (2, 'Bob', 10, 60000.0, true);")
+	if err != nil {
+		t.Fatalf("failed to insert: %v", err)
+	}
+
+	// 1. SELECT * FROM [dbo].[employees] OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY
+	res, err := server.ExecuteSQL("SELECT * FROM [dbo].[employees] OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY;")
+	if err != nil {
+		t.Fatalf("failed OFFSET FETCH query: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Errorf("expected 2 rows, got %d", len(res.Rows))
+	}
+
+	// 2. SELECT TOP 1 * FROM [dbo].[employees]
+	resTop, err := server.ExecuteSQL("SELECT TOP 1 * FROM [dbo].[employees];")
+	if err != nil {
+		t.Fatalf("failed TOP 1 query: %v", err)
+	}
+	if len(resTop.Rows) != 1 {
+		t.Errorf("expected 1 row, got %d", len(resTop.Rows))
+	}
+}
+
 

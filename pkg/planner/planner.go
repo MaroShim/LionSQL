@@ -101,6 +101,7 @@ type PlanNode struct {
 	SortKey          string      `json:"sort_key,omitempty"`
 	SortOrder        string      `json:"sort_order,omitempty"`
 	LimitCount       int64       `json:"limit_count,omitempty"`
+	OffsetCount      int64       `json:"offset_count,omitempty"`
 	Projections      []string    `json:"projections,omitempty"`
 	GroupKeys        []string             `json:"group_keys,omitempty"`
 	GroupByModifier  proc.GroupByModifier `json:"group_by_modifier,omitempty"`
@@ -167,6 +168,7 @@ type QueryInfo struct {
 	HavingClause  string
 	OrderByClause string
 	LimitCount    int64
+	OffsetCount   int64
 	HasAggregates bool
 	Distinct      bool
 	IsAnalyze     bool
@@ -194,7 +196,18 @@ func NewPlanner() *Planner {
 
 func cleanIdent(s string) string {
 	s = strings.TrimSpace(s)
-	return strings.Trim(s, "\"`[]")
+	parts := strings.Split(s, ".")
+	for i, p := range parts {
+		parts[i] = strings.Trim(strings.TrimSpace(p), "[]\"'`")
+	}
+	cleaned := strings.Join(parts, ".")
+	lower := strings.ToLower(cleaned)
+	if strings.HasPrefix(lower, "dbo.") {
+		cleaned = cleaned[4:]
+	} else if strings.HasPrefix(lower, "public.") {
+		cleaned = cleaned[7:]
+	}
+	return cleaned
 }
 
 func splitASTAndExpr(expr proc.Expr) []proc.Expr {
@@ -362,8 +375,9 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 
 	var projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause string
 	var limitCount int64 = -1
+	var offsetCount int64 = 0
 
-	if pStr, fClause, wClause, gStr, hClause, oClause, lCount, ok := splitSelectClauses(mainSQL); ok {
+	if pStr, fClause, wClause, gStr, hClause, oClause, lCount, offCount, ok := splitSelectClauses(mainSQL); ok {
 		projStr = pStr
 		fromClause = fClause
 		whereClause = wClause
@@ -371,8 +385,9 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		havingClause = hClause
 		orderByClause = oClause
 		limitCount = lCount
+		offsetCount = offCount
 	} else {
-		selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?$`)
+		selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$`)
 		matches := selectRe.FindStringSubmatch(mainSQL)
 		if len(matches) < 3 {
 			return nil, fmt.Errorf("invalid SELECT statement for planning: %q", mainSQL)
@@ -394,6 +409,11 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		if len(matches) > 7 && matches[7] != "" {
 			if n, err := strconv.ParseInt(matches[7], 10, 64); err == nil {
 				limitCount = n
+			}
+		}
+		if len(matches) > 8 && matches[8] != "" {
+			if n, err := strconv.ParseInt(matches[8], 10, 64); err == nil {
+				offsetCount = n
 			}
 		}
 	}
@@ -526,6 +546,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		HavingClause:  havingClause,
 		OrderByClause: orderByClause,
 		LimitCount:    limitCount,
+		OffsetCount:   offsetCount,
 		HasAggregates: hasAgg,
 		Distinct:      isDistinct,
 		IsAnalyze:     isAnalyze,
@@ -693,16 +714,17 @@ func parseTableAndAlias(str string) (string, string) {
 	if len(tokens) == 0 {
 		return "", ""
 	}
+	tbl := cleanIdent(tokens[0])
 	if len(tokens) == 1 {
-		return tokens[0], tokens[0]
+		return tbl, tbl
 	}
 	if len(tokens) == 2 {
-		return tokens[0], tokens[1]
+		return tbl, cleanIdent(tokens[1])
 	}
 	if len(tokens) == 3 && strings.EqualFold(tokens[1], "AS") {
-		return tokens[0], tokens[2]
+		return tbl, cleanIdent(tokens[2])
 	}
-	return tokens[0], tokens[1]
+	return tbl, cleanIdent(tokens[1])
 }
 
 // BuildPlan produces an optimized PlanNode tree for the given query and schema.
@@ -1258,9 +1280,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	currentNode = projNode
 
 	// Limit Node
-	if q.LimitCount >= 0 {
+	if q.LimitCount >= 0 || q.OffsetCount > 0 {
 		limitEstRows := currentNode.EstimatedRows
-		if q.LimitCount < limitEstRows {
+		if q.LimitCount >= 0 && q.LimitCount < limitEstRows {
 			limitEstRows = q.LimitCount
 		}
 
@@ -1273,6 +1295,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		limitNode := &PlanNode{
 			Type:          NodeLimit,
 			LimitCount:    q.LimitCount,
+			OffsetCount:   q.OffsetCount,
 			StartupCost:   currentNode.StartupCost,
 			TotalCost:     limitCost,
 			EstimatedRows: limitEstRows,
