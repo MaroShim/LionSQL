@@ -1,5 +1,7 @@
 # SQLion Project Architecture & Engineering Guidelines
 
+(한국어 공식 가이드라인 문서는 [GEMINI.ko.md](GEMINI.ko.md)를 참조하세요.)
+
 ## 1. Project Overview
 SQLion is a high-concurrency embedded OLTP database engine written in Go, packaged as a single standalone executable. It delivers enterprise-grade T-SQL stored procedure execution, ACID transaction durability, multiple wire protocols, and an embedded web management studio.
 

@@ -379,6 +379,7 @@ SQLion embeds a PocketBase-style administration dashboard (`pkg/ui/dashboard.htm
 │   ├── ui/                    # Embedded HTML/CSS/JS dashboard (embed.FS)
 │   └── wire/                  # Multi-wire protocols: PostgreSQL v3, COPY, TDS 7.x/8.0
 ├── GEMINI.md                  # Project engineering rules and architectural invariants
+├── GEMINI.ko.md               # Project engineering rules and architectural invariants (Korean)
 ├── TODO.ko.md                 # Actionable daily engineering backlog and task tracker (Korean)
 └── go.mod                     # Go module definitions
 ```
