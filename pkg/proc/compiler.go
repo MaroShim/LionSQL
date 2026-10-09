@@ -619,17 +619,14 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		// 1. Scalar SELECT without FROM (e.g. SELECT 1 + 1 AS res, 'hello' AS msg, GETDATE())
 		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain {
 			var colNames []string
-			var startReg int32 = -1
-			count := int32(len(s.Projections))
+			var projRegs []int32
 
-			for i, p := range s.Projections {
+			for _, p := range s.Projections {
 				reg, err := c.compileExpr(p.Expr)
 				if err != nil {
 					return err
 				}
-				if i == 0 {
-					startReg = reg
-				}
+				projRegs = append(projRegs, reg)
 				name := p.Alias
 				if name == "" {
 					if colRef, ok := p.Expr.(*ColumnRefExpr); ok {
@@ -641,10 +638,16 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 				colNames = append(colNames, name)
 			}
 
+			startReg := int32(0)
+			if len(projRegs) > 0 {
+				startReg = projRegs[0]
+			}
+			count := int32(len(projRegs))
 			c.emit(OpResultRow, startReg, count, 0, &ResultRowData{
 				Columns:  colNames,
 				StartReg: startReg,
 				Count:    count,
+				Regs:     projRegs,
 			})
 			return nil
 		}

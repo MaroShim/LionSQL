@@ -603,6 +603,15 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 	case "NEWID":
 		return storage.StringValue(generateUUIDv4())
 
+	case "NEWID7", "UUIDV7", "UUID_GENERATE_V7":
+		return storage.Value{Type: storage.TypeUUID, SVal: generateUUIDv7()}
+
+	case "GEN_RANDOM_UUID":
+		if len(args) > 0 && (args[0].IVal == 7 || args[0].SVal == "7") {
+			return storage.Value{Type: storage.TypeUUID, SVal: generateUUIDv7()}
+		}
+		return storage.Value{Type: storage.TypeUUID, SVal: generateUUIDv4()}
+
 	case "SERVERPROPERTY":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeVarChar)
@@ -650,7 +659,8 @@ func IsBuiltinFunction(name string) bool {
 		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SIGN", "PI",
 		"ISNULL", "COALESCE", "IIF", "CHOOSE",
 		"JSON_VALUE", "JSON_QUERY",
-		"NEWID", "SCOPE_IDENTITY", "SERVERPROPERTY":
+		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID",
+		"SCOPE_IDENTITY", "SERVERPROPERTY":
 		return true
 	default:
 		return false
@@ -1003,11 +1013,72 @@ func evalDateBucket(part string, width int64, t time.Time, origin time.Time, has
 	}
 }
 
+var (
+	uuidv7Mu sync.Mutex
+	lastV7Ms int64
+	v7Seq    uint16
+)
+
+// GenerateUUIDv7 generates an RFC 9562 Version 7 UUID string with 48-bit millisecond timestamp
+// and sub-millisecond sequence counter to guarantee strict monotonic ordering for B+Tree primary keys.
+func GenerateUUIDv7() string {
+	return generateUUIDv7()
+}
+
+// GenerateUUIDv4 generates an RFC 4122 Version 4 random UUID string.
+func GenerateUUIDv4() string {
+	return generateUUIDv4()
+}
+
 func generateUUIDv4() string {
 	var b [16]byte
 	_, _ = rand.Read(b[:])
 	b[6] = (b[6] & 0x0f) | 0x40 // Version 4
 	b[8] = (b[8] & 0x3f) | 0x80 // Variant 10
+	return strings.ToUpper(fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
+		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]))
+}
+
+func generateUUIDv7() string {
+	var b [16]byte
+	nowMs := time.Now().UnixMilli()
+
+	uuidv7Mu.Lock()
+	if nowMs > lastV7Ms {
+		lastV7Ms = nowMs
+		// Seed 12-bit sequence randomly with headroom (0..0x7FF) to avoid early overflow
+		var seed [2]byte
+		_, _ = rand.Read(seed[:])
+		v7Seq = (uint16(seed[0]&0x07) << 8) | uint16(seed[1])
+	} else {
+		// Same millisecond or clock backwards: increment sequence counter for strict monotonicity
+		v7Seq = (v7Seq + 1) & 0x0FFF
+		if v7Seq == 0 {
+			// Sequence counter rolled over within same millisecond; advance timestamp by 1ms
+			lastV7Ms++
+		}
+		nowMs = lastV7Ms
+	}
+	seq := v7Seq
+	uuidv7Mu.Unlock()
+
+	// 48-bit timestamp (big-endian)
+	b[0] = byte(nowMs >> 40)
+	b[1] = byte(nowMs >> 32)
+	b[2] = byte(nowMs >> 24)
+	b[3] = byte(nowMs >> 16)
+	b[4] = byte(nowMs >> 8)
+	b[5] = byte(nowMs)
+
+	// 4-bit version (0x7) + 12-bit sequence counter (rand_a)
+	b[6] = 0x70 | byte((seq>>8)&0x0F)
+	b[7] = byte(seq & 0xFF)
+
+	// 62-bit rand_b: fill bytes 8..15 with cryptographically secure random bytes
+	_, _ = rand.Read(b[8:])
+	// 2-bit variant (10xxxxxx)
+	b[8] = (b[8] & 0x3F) | 0x80
+
 	return strings.ToUpper(fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]))
 }

@@ -620,8 +620,10 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			evalCtx := f.buildRowEvalMap(nil)
 
 			cols := data.Columns
+			var tableSchema *storage.TableSchema
 			if tg := f.executor.getTableGetter(); tg != nil {
 				if schema, err := tg(data.Table); err == nil && schema != nil {
+					tableSchema = schema
 					var identityCol *storage.Column
 					for idx := range schema.Columns {
 						if schema.Columns[idx].Identity {
@@ -662,6 +664,24 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 					rowMap[col] = valToAny(stVal)
 					if (strings.EqualFold(col, "id") || strings.HasSuffix(strings.ToLower(col), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
 						f.lastIdentity = stVal.IVal
+					}
+				}
+			}
+
+			if tableSchema != nil {
+				for _, col := range tableSchema.Columns {
+					if _, exists := rec[col.Name]; !exists && col.Default != "" {
+						upper := strings.ToUpper(strings.TrimSpace(col.Default))
+						switch upper {
+						case "NEWID7()", "UUIDV7()", "UUID_GENERATE_V7()":
+							rec[col.Name] = storage.Value{Type: storage.TypeUUID, SVal: proc.GenerateUUIDv7()}
+						case "NEWID()", "GEN_RANDOM_UUID()":
+							rec[col.Name] = storage.Value{Type: storage.TypeUUID, SVal: proc.GenerateUUIDv4()}
+						case "GETDATE()", "NOW()", "CURRENT_TIMESTAMP":
+							rec[col.Name] = storage.DateTimeValue(time.Now())
+						case "GETUTCDATE()", "SYSDATETIME()":
+							rec[col.Name] = storage.DateTimeValue(time.Now().UTC())
+						}
 					}
 				}
 			}
@@ -1125,7 +1145,12 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			copy(cols, data.Columns)
 
 			for i := int32(0); i < data.Count; i++ {
-				regIdx := data.StartReg + i
+				var regIdx int32
+				if len(data.Regs) > int(i) {
+					regIdx = data.Regs[i]
+				} else {
+					regIdx = data.StartReg + i
+				}
 				var val any
 				if int(regIdx) < len(f.regs) {
 					val = valToAny(f.regs[regIdx])

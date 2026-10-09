@@ -2624,6 +2624,89 @@ func TestSQLExecutor_CompositeQualifiersAndImplicitAlias(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_UUIDv7PrimaryKey(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// 1. Standalone SELECT NEWID7(), UUIDV7(), GEN_RANDOM_UUID(7)
+	resFuncs, err := server.ExecuteSQL("SELECT NEWID7() AS u1, UUIDV7() AS u2, GEN_RANDOM_UUID(7) AS u3;")
+	if err != nil {
+		t.Fatalf("SELECT UUIDv7 functions failed: %v", err)
+	}
+	if len(resFuncs.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(resFuncs.Rows))
+	}
+	row0 := resFuncs.Rows[0]
+	for _, col := range []string{"u1", "u2", "u3"} {
+		str, ok := row0[col].(string)
+		if !ok || len(str) != 36 || str[14] != '7' {
+			t.Fatalf("expected valid UUIDv7 in column %s, got: %v", col, row0[col])
+		}
+	}
+
+	// 2. CREATE TABLE with DEFAULT NEWID7()
+	createSQL := `CREATE TABLE orders (
+		id UUID PRIMARY KEY DEFAULT NEWID7(),
+		item VARCHAR(50) NOT NULL,
+		amount INT NOT NULL,
+		created_at DATETIME DEFAULT GETDATE()
+	);`
+	if _, err := server.ExecuteSQL(createSQL); err != nil {
+		t.Fatalf("CREATE TABLE orders with DEFAULT NEWID7() failed: %v", err)
+	}
+
+	// 3. INSERT without specifying id (auto default evaluation)
+	if _, err := server.ExecuteSQL("INSERT INTO orders (item, amount) VALUES ('Laptop', 1200);"); err != nil {
+		t.Fatalf("INSERT without id failed: %v", err)
+	}
+
+	// 4. INSERT with explicit DEFAULT keyword
+	if _, err := server.ExecuteSQL("INSERT INTO orders (id, item, amount) VALUES (DEFAULT, 'Phone', 800);"); err != nil {
+		t.Fatalf("INSERT with explicit DEFAULT keyword failed: %v", err)
+	}
+
+	// 5. INSERT with explicit NEWID7() function call
+	if _, err := server.ExecuteSQL("INSERT INTO orders (id, item, amount) VALUES (NEWID7(), 'Tablet', 450);"); err != nil {
+		t.Fatalf("INSERT with explicit NEWID7() failed: %v", err)
+	}
+
+	// 6. Verify inserted rows and monotonicity
+	res, err := server.ExecuteSQL("SELECT id, item, amount FROM orders ORDER BY id ASC;")
+	if err != nil {
+		t.Fatalf("SELECT orders failed: %v", err)
+	}
+	if len(res.Rows) != 3 {
+		t.Fatalf("expected 3 rows, got %d: %+v", len(res.Rows), res.Rows)
+	}
+
+	var ids []string
+	for _, r := range res.Rows {
+		idStr, ok := r["id"].(string)
+		if !ok || len(idStr) != 36 || idStr[14] != '7' {
+			t.Fatalf("invalid UUIDv7 id in table row: %v", r["id"])
+		}
+		ids = append(ids, idStr)
+	}
+
+	// Because of sequential insertion, ids[0] < ids[1] < ids[2]
+	if strings.Compare(ids[0], ids[1]) >= 0 || strings.Compare(ids[1], ids[2]) >= 0 {
+		t.Fatalf("monotonic ordering failed across rows: %v", ids)
+	}
+
+	// 7. Point lookup by UUIDv7 Primary Key
+	queryPK := fmt.Sprintf("SELECT item, amount FROM orders WHERE id = '%s';", ids[1])
+	resPK, err := server.ExecuteSQL(queryPK)
+	if err != nil {
+		t.Fatalf("point lookup failed: %v", err)
+	}
+	if len(resPK.Rows) != 1 || resPK.Rows[0]["item"] != "Phone" {
+		t.Fatalf("expected Phone row, got: %+v", resPK.Rows)
+	}
+}
+
+
 
 
 

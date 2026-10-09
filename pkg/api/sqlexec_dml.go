@@ -399,7 +399,18 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 			if !found {
 				rec[colName] = parseLiteralValue(valStr, storage.TypeVarChar)
 			} else {
-				rec[colName] = parseLiteralValue(valStr, colSchema.Type)
+				if strings.EqualFold(valStr, "DEFAULT") && colSchema.Default != "" {
+					rec[colName] = parseLiteralValue(colSchema.Default, colSchema.Type)
+				} else {
+					rec[colName] = parseLiteralValue(valStr, colSchema.Type)
+				}
+			}
+		}
+
+		// Apply column default values for columns not provided in targetCols
+		for _, col := range schema.Columns {
+			if _, exists := rec[col.Name]; !exists && col.Default != "" {
+				rec[col.Name] = parseLiteralValue(col.Default, col.Type)
 			}
 		}
 

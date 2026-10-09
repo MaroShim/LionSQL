@@ -13,7 +13,7 @@ import (
 func IsDeterministicFunction(name string) bool {
 	upper := strings.ToUpper(cleanBuiltinName(name))
 	switch upper {
-	case "GETDATE", "NOW", "GETUTCDATE", "SYSDATETIME", "RAND", "NEWID", "UUID", "SCOPE_IDENTITY", "CURRENT_TIMESTAMP":
+	case "GETDATE", "NOW", "GETUTCDATE", "SYSDATETIME", "RAND", "NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID", "UUID", "SCOPE_IDENTITY", "CURRENT_TIMESTAMP":
 		return false
 	default:
 		return IsBuiltinFunction(name)

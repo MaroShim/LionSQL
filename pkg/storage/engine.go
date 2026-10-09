@@ -82,13 +82,14 @@ func (t DataType) String() string {
 
 // Column defines metadata for a single column.
 type Column struct {
-	Name       string   `json:"name"`
-	Type       DataType `json:"type"`
-	PrimaryKey bool     `json:"primary_key"`
-	Nullable   bool     `json:"nullable"`
-	Identity   bool     `json:"identity,omitempty"`
-	Precision  int      `json:"precision,omitempty"`
-	Scale      int      `json:"scale,omitempty"`
+	Name       string   `json:"name" msgpack:"name"`
+	Type       DataType `json:"type" msgpack:"type"`
+	PrimaryKey bool     `json:"primary_key" msgpack:"primary_key"`
+	Nullable   bool     `json:"nullable" msgpack:"nullable"`
+	Identity   bool     `json:"identity,omitempty" msgpack:"identity,omitempty"`
+	Precision  int      `json:"precision,omitempty" msgpack:"precision,omitempty"`
+	Scale      int      `json:"scale,omitempty" msgpack:"scale,omitempty"`
+	Default    string   `json:"default,omitempty" msgpack:"default,omitempty"`
 }
 
 // IndexSchema defines metadata for a secondary index.

@@ -339,6 +339,7 @@ type ResultRowData struct {
 	Columns  []string
 	StartReg int32
 	Count    int32
+	Regs     []int32
 }
 
 func (d *ResultRowData) String() string {

@@ -3,6 +3,7 @@ package proc
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"sqlion/pkg/storage"
 )
@@ -200,6 +201,64 @@ func TestBuiltin_UUID(t *testing.T) {
 	}
 	if parts[2][0] != '4' {
 		t.Errorf("Expected version 4, got %c in %s", parts[2][0], u1.SVal)
+	}
+}
+
+func TestBuiltin_UUIDv7(t *testing.T) {
+	u1 := EvalBuiltin("NEWID7", nil)
+	u2 := EvalBuiltin("UUIDV7", nil)
+	pgU := EvalBuiltin("GEN_RANDOM_UUID", []storage.Value{storage.IntValue(7)})
+
+	for _, u := range []storage.Value{u1, u2, pgU} {
+		if u.Type != storage.TypeUUID || len(u.SVal) != 36 {
+			t.Fatalf("Invalid UUIDv7 format or type: %v", u)
+		}
+		parts := strings.Split(u.SVal, "-")
+		if len(parts) != 5 || len(parts[0]) != 8 || len(parts[1]) != 4 || len(parts[2]) != 4 || len(parts[3]) != 4 || len(parts[4]) != 12 {
+			t.Fatalf("Malformed UUIDv7 structure: %s", u.SVal)
+		}
+		// Verify RFC 9562 Version 7: parts[2][0] == '7'
+		if parts[2][0] != '7' {
+			t.Errorf("Expected version 7, got %c in %s", parts[2][0], u.SVal)
+		}
+		// Verify RFC 9562 Variant 1: parts[3][0] in [8, 9, A, B]
+		vChar := parts[3][0]
+		if vChar != '8' && vChar != '9' && vChar != 'A' && vChar != 'B' &&
+			vChar != 'a' && vChar != 'b' {
+			t.Errorf("Expected variant 1 (8, 9, A, B), got %c in %s", vChar, u.SVal)
+		}
+	}
+
+	// Verify timestamp in upper 48 bits (first 8+4 = 12 hex chars) is close to current time
+	hexTs := strings.ReplaceAll(u1.SVal[:13], "-", "")
+	var tsMs int64
+	for i := 0; i < len(hexTs); i++ {
+		c := hexTs[i]
+		var val int64
+		if c >= '0' && c <= '9' {
+			val = int64(c - '0')
+		} else if c >= 'A' && c <= 'F' {
+			val = int64(c - 'A' + 10)
+		} else if c >= 'a' && c <= 'f' {
+			val = int64(c - 'a' + 10)
+		}
+		tsMs = (tsMs << 4) | val
+	}
+	nowMs := time.Now().UnixMilli()
+	if diff := tsMs - nowMs; diff < -5000 || diff > 5000 {
+		t.Errorf("Timestamp drift too large: tsMs=%d nowMs=%d diff=%dms", tsMs, nowMs, diff)
+	}
+
+	// Verify Strict Monotonicity within high frequency loop (1,000 UUIDs)
+	const count = 1000
+	uuids := make([]string, count)
+	for i := 0; i < count; i++ {
+		uuids[i] = GenerateUUIDv7()
+	}
+	for i := 0; i < count-1; i++ {
+		if strings.Compare(uuids[i], uuids[i+1]) >= 0 {
+			t.Fatalf("UUIDv7 monotonicity violated at index %d: %s >= %s", i, uuids[i], uuids[i+1])
+		}
 	}
 }
 

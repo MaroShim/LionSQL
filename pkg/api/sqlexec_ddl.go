@@ -130,6 +130,12 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK
 		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT")
 
+		defaultExpr := ""
+		defRe := regexp.MustCompile(`(?i)\bDEFAULT\s+(\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\'[^']*\'|\d+)`)
+		if m := defRe.FindStringSubmatch(cDefTrimmed); len(m) > 1 {
+			defaultExpr = cleanDefaultExpr(m[1])
+		}
+
 		schema.Columns = append(schema.Columns, storage.Column{
 			Name:       colName,
 			Type:       dataType,
@@ -138,6 +144,7 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 			Identity:   isIdentity,
 			Precision:  precision,
 			Scale:      scale,
+			Default:    defaultExpr,
 		})
 
 		if strings.Contains(cUpper, "REFERENCES") {
@@ -606,6 +613,37 @@ func splitColumnDefs(s string) []string {
 		defs = append(defs, strings.TrimSpace(cur.String()))
 	}
 	return defs
+}
+
+func cleanDefaultExpr(s string) string {
+	s = strings.TrimSpace(s)
+	// Strip redundant outer parentheses e.g. ((0)) -> 0 or (NEWID7()) -> NEWID7()
+	for strings.HasPrefix(s, "(") && strings.HasSuffix(s, ")") {
+		inner := s[1 : len(s)-1]
+		depth := 0
+		balanced := true
+		for i := 0; i < len(inner); i++ {
+			if inner[i] == '(' {
+				depth++
+			} else if inner[i] == ')' {
+				depth--
+				if depth < 0 {
+					balanced = false
+					break
+				}
+			}
+		}
+		if balanced && depth == 0 {
+			// Don't strip arguments from function calls e.g. "NEWID7()"
+			if strings.HasSuffix(s, "()") && !strings.HasPrefix(inner, "(") && strings.Index(s, "(") == len(s)-2 {
+				break
+			}
+			s = strings.TrimSpace(inner)
+		} else {
+			break
+		}
+	}
+	return s
 }
 
 func parseForeignKeyClause(def string, defaultChildCol string, defaultName string) (*storage.ForeignKeySchema, bool) {

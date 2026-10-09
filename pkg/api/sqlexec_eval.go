@@ -104,6 +104,19 @@ func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
 	if strings.EqualFold(s, "NULL") {
 		return storage.NullValue(targetType)
 	}
+
+	upper := strings.ToUpper(s)
+	switch upper {
+	case "NEWID7()", "UUIDV7()", "UUID_GENERATE_V7()":
+		return storage.UUIDValue(proc.GenerateUUIDv7())
+	case "NEWID()", "GEN_RANDOM_UUID()":
+		return storage.UUIDValue(proc.GenerateUUIDv4())
+	case "GETDATE()", "NOW()", "CURRENT_TIMESTAMP":
+		return storage.DateTimeValue(time.Now())
+	case "GETUTCDATE()", "SYSDATETIME()":
+		return storage.DateTimeValue(time.Now().UTC())
+	}
+
 	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
 		strVal := s[1 : len(s)-1]
 		strVal = strings.ReplaceAll(strVal, "''", "'")
