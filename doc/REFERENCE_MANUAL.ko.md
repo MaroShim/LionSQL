@@ -267,7 +267,7 @@
 #### 10.6. 개발자 엔지니어링 핸드오버 및 로드맵 문서 (Developer Context & Backlog)
 * [`ROADMAP.md`](file:///Users/maro/Projects/sql/ROADMAP.md)
   * 버전별 개발 마일스톤(Phase 1~5) 달성 현황 및 향후 중장기 핵심 로드맵.
-* [`TODO.md`](file:///Users/maro/Projects/sql/TODO.md)
+* [`TODO.ko.md`](file:///Users/maro/Projects/sql/TODO.ko.md)
   * VDBE 실행 루프 고속화, 파서 커버리지 확장, CBO 통계 등 단기 액션 플랜 및 작업 상태 트래커.
 * [`CHANGELOG.md`](file:///Users/maro/Projects/sql/CHANGELOG.md)
   * 버전별 릴리즈 변경 내역 및 기능 추가/수정 기록 (Keep a Changelog 표준).

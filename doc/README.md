@@ -25,9 +25,9 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 ## 2. Directory of Documents
 
 ### 2.0. Official Manuals (공식 매뉴얼)
-* [`USER_MANUAL.md`](file:///Users/maro/Projects/sql/doc/USER_MANUAL.md)
+* [`USER_MANUAL.ko.md`](file:///Users/maro/Projects/sql/doc/USER_MANUAL.ko.md)
   * 설치, 기동, 클라이언트 도구 연동, 데이터베이스 개발 및 운영 유지보수 전 과정을 안내하는 공식 사용자 매뉴얼.
-* [`REFERENCE_MANUAL.md`](file:///Users/maro/Projects/sql/doc/REFERENCE_MANUAL.md)
+* [`REFERENCE_MANUAL.ko.md`](file:///Users/maro/Projects/sql/doc/REFERENCE_MANUAL.ko.md)
   * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
 
 ### 2.1. Architecture & Core Database Engine
@@ -127,7 +127,7 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * Common operational errors, connection diagnostics, and debugging techniques.
 * [`ROADMAP.md`](file:///Users/maro/Projects/sql/ROADMAP.md)
   * Versioned milestone tracking (Phases 1 to 5) and future technical architectural initiatives.
-* [`TODO.md`](file:///Users/maro/Projects/sql/TODO.md)
+* [`TODO.ko.md`](file:///Users/maro/Projects/sql/TODO.ko.md)
   * Daily actionable engineering backlog and task status tracker.
 * [`CHANGELOG.md`](file:///Users/maro/Projects/sql/CHANGELOG.md)
   * Release history and detailed changelogs following Keep a Changelog standard.
