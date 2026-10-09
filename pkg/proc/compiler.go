@@ -329,6 +329,19 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		c.freeReg(1)
 		return nil
 
+	case *SetOptionStmt:
+		for k, v := range s.Options {
+			var bVal bool = true
+			if strings.EqualFold(v, "OFF") || v == "0" {
+				bVal = false
+			}
+			reg := c.allocReg()
+			c.emit(OpLoadConst, reg, 0, 0, storage.BoolValue(bVal))
+			c.emit(OpStoreVar, reg, 0, 0, strings.ToLower(k))
+			c.freeReg(1)
+		}
+		return nil
+
 	case *IfStmt:
 		condReg, err := c.compileExpr(s.Condition)
 		if err != nil {

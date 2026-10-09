@@ -126,8 +126,8 @@ This document tracks active tasks, short-term engineering priorities, and concep
 - [ ] **고급 조인(Join) 문법 확장 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
   - `FULL OUTER JOIN`, `CROSS JOIN` 지원.
   - T-SQL 특화 `CROSS APPLY` 및 `OUTER APPLY` (테이블 반환 함수/상관 서브쿼리 조인) 지원.
-- [ ] **세션 제어문(SET Statements) 정식 AST 파서 및 세션 플래그 영속화 (`pkg/api`, `pkg/wire`)**
-  - GUI 툴 접속 시 발생하는 `SET NOCOUNT ON/OFF`, `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`, `SET DATEFORMAT`, `SET TRANSACTION ISOLATION LEVEL` 등을 정규 AST 명령으로 파싱하고 세션 객체(`ClientSession`)에 상태 플래그로 완벽 바인딩.
+- [x] **세션 제어문(SET Statements) 정식 AST 파서 및 세션 플래그 영속화 (`pkg/api`, `pkg/wire`, `pkg/proc`)**
+  - GUI 툴 접속 및 프로시저 내부 `SET NOCOUNT ON/OFF`, `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`, 다중 옵션 쉼표 구분 문법 정식 AST(`SetOptionStmt`) 파싱, 바이트코드 컴파일 및 세션 플래그 바인딩 완료.
 - [ ] **EXISTS / NOT EXISTS 상관 서브쿼리 술어 지원 (`pkg/planner/decorrelate.go`)**
   - `WHERE EXISTS (SELECT 1 FROM other WHERE other.id = t.id)` 술어(Predicate)의 Semi-Join / Anti-Join 변환 및 실행.
 

@@ -798,4 +798,34 @@ func TestRunContext_Cancellation(t *testing.T) {
 	}
 }
 
+func TestSetOptionStmt(t *testing.T) {
+	script := `
+CREATE PROCEDURE TestProcWithSetOptions AS
+BEGIN
+	SET NOCOUNT ON;
+	SET ANSI_NULLS ON, QUOTED_IDENTIFIER ON;
+	RETURN 42;
+END;
+`
+	prog, err := proc.Compile(script)
+	if err != nil {
+		t.Fatalf("failed to compile script with SET options: %v", err)
+	}
+
+	eng := memengine.New()
+	defer eng.Close()
+	session, _ := eng.NewSession()
+	defer session.Close()
+
+	executor := runtime.NewExecutor(runtime.NewPlanCache())
+	res, err := executor.Run(prog, "TestProcWithSetOptions", nil, session)
+	if err != nil {
+		t.Fatalf("failed to run procedure with SET options: %v", err)
+	}
+	if fmt.Sprintf("%v", res.ReturnValue) != "42" {
+		t.Fatalf("expected return 42, got %v", res.ReturnValue)
+	}
+}
+
+
 

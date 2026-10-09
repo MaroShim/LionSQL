@@ -2538,6 +2538,34 @@ func TestSQLExecutor_DbGate_SelectLimitOffsetWithAlias(t *testing.T) {
 	}
 }
 
+func TestMultiOptionSet(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	sessID := "test-set-sess"
+	res, err := server.ExecuteSessionSQL(sessID, "SET NOCOUNT ON, ANSI_NULLS ON, QUOTED_IDENTIFIER ON;")
+	if err != nil || !res.Success {
+		t.Fatalf("multi-option SET failed: %v", err)
+	}
+
+	cs := server.GetSession(sessID)
+	if cs == nil {
+		t.Fatalf("session not found")
+	}
+	if cs.Vars["nocount"] != true {
+		t.Errorf("expected nocount true, got %v", cs.Vars["nocount"])
+	}
+	if cs.Vars["ansi_nulls"] != true {
+		t.Errorf("expected ansi_nulls true, got %v", cs.Vars["ansi_nulls"])
+	}
+	if cs.Vars["quoted_identifier"] != true {
+		t.Errorf("expected quoted_identifier true, got %v", cs.Vars["quoted_identifier"])
+	}
+}
+
+
 
 
 

@@ -174,6 +174,20 @@ func (s *SetStmt) String() string {
 	return fmt.Sprintf("SET %s = %s", s.Name, s.Value.String())
 }
 
+// SetOptionStmt represents SET <option> [ON | OFF | value] (e.g. SET NOCOUNT ON)
+type SetOptionStmt struct {
+	Options map[string]string
+}
+
+func (s *SetOptionStmt) stmtNode() {}
+func (s *SetOptionStmt) String() string {
+	var parts []string
+	for k, v := range s.Options {
+		parts = append(parts, fmt.Sprintf("%s %s", k, v))
+	}
+	return "SET " + strings.Join(parts, ", ")
+}
+
 // IfStmt represents IF Cond Statement [ELSE Statement]
 type IfStmt struct {
 	Condition Expr

@@ -91,7 +91,7 @@
 | **S-3** | **FROM 절 파생 테이블(Derived Table) 및 인라인 서브쿼리** | **대기 (`[ ]`)** | `FROM (SELECT ...) AS t` 서브쿼리 AST 노드화 및 Volcano 실행 연동. |
 | **S-4** | **T-SQL 내장 스칼라 함수 & 조건부 수식 정식 AST화** | **대기 (`[ ]`)** | `COALESCE`, `ISNULL`, `CAST`, `CONVERT`, `CASE WHEN` 정규 AST 표현 및 단락 평가. |
 | **S-5** | **고급 조인(Join) 문법 확장 (`FULL OUTER`, `APPLY`)** | **대기 (`[ ]`)** | `FULL OUTER JOIN`, `CROSS JOIN`, T-SQL 특화 `CROSS/OUTER APPLY` 지원. |
-| **S-6** | **세션 제어문(SET Statements) 정식 AST 파서 및 상태 바인딩** | **대기 (`[ ]`)** | `SET NOCOUNT`, `SET ANSI_NULLS`, `SET TRANSACTION ISOLATION LEVEL` 세션 플래그 반영. |
+| **S-6** | **세션 제어문(SET Statements) 정식 AST 파서 및 상태 바인딩** | **완료 (`[x]`)** | `SetOptionStmt` AST, VDBE 컴파일, 다중 옵션 쉼표 구분 및 세션 플래그 반영 완료. |
 | **S-7** | **EXISTS / NOT EXISTS 상관 서브쿼리 술어 지원** | **대기 (`[ ]`)** | `WHERE EXISTS (...)` 조건의 Semi-Join / Anti-Join 변환 및 실행. |
 
 ---

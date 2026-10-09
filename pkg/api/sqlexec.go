@@ -662,26 +662,43 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 			}
 		}
 
-		// E. SET <option> ON / OFF / <val> (e.g. SET NOCOUNT ON, SET ANSI_NULLS ON, SET LOCK_TIMEOUT 10000)
-		setParts := strings.Fields(rest)
-		if len(setParts) >= 2 && !strings.Contains(setParts[0], "=") && setParts[1] != "=" && !strings.EqualFold(setParts[1], "TO") {
-			optName := strings.ToLower(cleanIdentifier(setParts[0]))
-			optVal := strings.Trim(strings.Join(setParts[1:], " "), "';\"")
+		// E. SET <option> ON / OFF / <val> (e.g. SET NOCOUNT ON, SET ANSI_NULLS ON, SET NOCOUNT, ANSI_NULLS ON)
+		if !strings.Contains(rest, "=") && !strings.Contains(strings.ToUpper(rest), " TO ") {
+			rawItems := strings.Split(rest, ",")
+			var msgs []string
 			cs.mu.Lock()
-			if strings.EqualFold(optVal, "ON") {
-				cs.Vars[optName] = true
-			} else if strings.EqualFold(optVal, "OFF") {
-				cs.Vars[optName] = false
-			} else {
-				cs.Vars[optName] = optVal
+			for _, item := range rawItems {
+				item = strings.TrimSpace(item)
+				if item == "" {
+					continue
+				}
+				fields := strings.Fields(item)
+				if len(fields) == 0 {
+					continue
+				}
+				optName := strings.ToLower(cleanIdentifier(fields[0]))
+				optVal := "ON"
+				if len(fields) > 1 {
+					optVal = strings.Trim(strings.Join(fields[1:], " "), "';\"")
+				}
+				if strings.EqualFold(optVal, "ON") {
+					cs.Vars[optName] = true
+				} else if strings.EqualFold(optVal, "OFF") {
+					cs.Vars[optName] = false
+				} else {
+					cs.Vars[optName] = optVal
+				}
+				msgs = append(msgs, fmt.Sprintf("SET %s %s.", optName, optVal))
 			}
 			cs.mu.Unlock()
-			return &QueryResult{
-				Success:    true,
-				Command:    "SET",
-				Messages:   []string{fmt.Sprintf("SET %s %s.", optName, optVal)},
-				DurationUS: time.Since(start).Microseconds(),
-			}, nil
+			if len(msgs) > 0 {
+				return &QueryResult{
+					Success:    true,
+					Command:    "SET",
+					Messages:   msgs,
+					DurationUS: time.Since(start).Microseconds(),
+				}, nil
+			}
 		}
 
 		// F. Standard SET [SESSION] param [= | TO] value

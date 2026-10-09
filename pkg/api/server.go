@@ -441,6 +441,13 @@ func (s *Server) CloseSession(id string) {
 	}
 }
 
+// GetSession returns the active ClientSession by ID, or nil if not found.
+func (s *Server) GetSession(id string) *ClientSession {
+	s.sessMu.RLock()
+	defer s.sessMu.RUnlock()
+	return s.sessions[id]
+}
+
 // GetSessionTxStatus returns PostgreSQL transaction status byte:
 // 'I' = Idle (outside transaction)
 // 'T' = In active transaction block

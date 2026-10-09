@@ -864,27 +864,64 @@ func (p *Parser) parseDeclare() (Statement, error) {
 
 func (p *Parser) parseSet() (Statement, error) {
 	p.nextToken() // eat SET
-	if !p.curTokenIs(TokenVariable) {
-		return nil, fmt.Errorf("expected variable name in SET, got %s", p.curToken.Literal)
-	}
-	varName := p.curToken.Literal
-	p.nextToken()
 
-	if !p.curTokenIs(TokenEq) && !p.curTokenIs(TokenAssign) {
-		return nil, fmt.Errorf("expected = in SET, got %s", p.curToken.Literal)
-	}
-	p.nextToken()
+	// 1. Variable assignment: SET @var = expr
+	if p.curTokenIs(TokenVariable) {
+		varName := p.curToken.Literal
+		p.nextToken()
 
-	expr := p.parseExpression(precLowest)
-	if expr == nil {
-		return nil, fmt.Errorf("expected expression in SET %s", varName)
+		if !p.curTokenIs(TokenEq) && !p.curTokenIs(TokenAssign) {
+			return nil, fmt.Errorf("expected = in SET, got %s", p.curToken.Literal)
+		}
+		p.nextToken()
+
+		expr := p.parseExpression(precLowest)
+		if expr == nil {
+			return nil, fmt.Errorf("expected expression in SET %s", varName)
+		}
+
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+
+		return &SetStmt{Name: varName, Value: expr}, nil
+	}
+
+	// 2. T-SQL Session Options: SET <option> [ON | OFF | value]
+	options := make(map[string]string)
+	for {
+		if p.curTokenIs(TokenSemicolon) || p.curTokenIs(TokenEOF) {
+			break
+		}
+		optName := p.curToken.Literal
+		p.nextToken()
+
+		var optVal string = "ON"
+		if p.curTokenIs(TokenEq) || p.curTokenIs(TokenAssign) {
+			p.nextToken()
+			optVal = p.curToken.Literal
+			p.nextToken()
+		} else if strings.EqualFold(p.curToken.Literal, "ON") || strings.EqualFold(p.curToken.Literal, "OFF") {
+			optVal = strings.ToUpper(p.curToken.Literal)
+			p.nextToken()
+		} else if !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			optVal = p.curToken.Literal
+			p.nextToken()
+		}
+		options[strings.ToUpper(optName)] = optVal
+
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+			continue
+		}
+		break
 	}
 
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
 
-	return &SetStmt{Name: varName, Value: expr}, nil
+	return &SetOptionStmt{Options: options}, nil
 }
 
 func (p *Parser) parseIf() (Statement, error) {
