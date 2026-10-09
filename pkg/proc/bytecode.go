@@ -376,6 +376,8 @@ type Program struct {
 	Instructions []Instruction
 	Constants    []storage.Value
 	VarNames     []string
+	VarSlots     map[string]int32 // Slot index mapping for fast O(1) indexed variable access
+	SlotCount    int32            // Total number of allocated variable slots
 	NumRegisters int32
 	QuerySQL     string // Optional raw query SQL for ad-hoc / relational query programs
 }
@@ -384,7 +386,14 @@ type Program struct {
 func (p *Program) Disassemble() string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("=== Program: %s (%s) ===\n", p.Name, p.Type))
-	b.WriteString(fmt.Sprintf("Registers: %d, Constants: %d, Instructions: %d\n", p.NumRegisters, len(p.Constants), len(p.Instructions)))
+	b.WriteString(fmt.Sprintf("Registers: %d, Slots: %d, Constants: %d, Instructions: %d\n", p.NumRegisters, p.SlotCount, len(p.Constants), len(p.Instructions)))
+
+	if len(p.VarNames) > 0 {
+		b.WriteString("--- Variables ---\n")
+		for i, name := range p.VarNames {
+			b.WriteString(fmt.Sprintf("  [slot %02d] @%s\n", i, name))
+		}
+	}
 
 	if len(p.Constants) > 0 {
 		b.WriteString("--- Constants ---\n")

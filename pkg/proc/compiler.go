@@ -42,6 +42,8 @@ type Compiler struct {
 	maxRegisters    int32
 	constMap        map[string]int32
 	varNames        map[string]bool
+	varSlots        map[string]int32
+	slotNames       []string
 	loopBreaks      [][]int
 	loopContinues   [][]int
 	labels          map[string]int
@@ -55,9 +57,12 @@ func NewCompiler() *Compiler {
 			Instructions: make([]Instruction, 0),
 			Constants:    make([]storage.Value, 0),
 			VarNames:     make([]string, 0),
+			VarSlots:     make(map[string]int32),
 		},
 		constMap:        make(map[string]int32),
 		varNames:        make(map[string]bool),
+		varSlots:        make(map[string]int32),
+		slotNames:       make([]string, 0),
 		loopBreaks:      make([][]int, 0),
 		loopContinues:   make([][]int, 0),
 		labels:          make(map[string]int),
@@ -142,9 +147,7 @@ func CompileStatement(sql string) (*Program, error) {
 	if err := c.resolveGotos(); err != nil {
 		return nil, err
 	}
-	c.emit(OpReturn, -1, 0, 0, nil)
-	c.prog.NumRegisters = c.maxRegisters
-	return c.prog, nil
+	return c.finalizeProgram(), nil
 }
 
 // CompileQuery compiles an interactive / standalone SELECT or relational query into a VDBE Program containing OpRelQuery.
@@ -184,9 +187,7 @@ func CompileQuery(sql string) (*Program, error) {
 		})
 	}
 
-	c.emit(OpReturn, -1, 0, 0, nil)
-	c.prog.NumRegisters = c.maxRegisters
-	return c.prog, nil
+	return c.finalizeProgram(), nil
 }
 
 // CompileProcedure compiles a CreateProcStmt into a Program.
@@ -197,7 +198,7 @@ func CompileProcedure(stmt *CreateProcStmt) (*Program, error) {
 	c.prog.Params = stmt.Params
 
 	for _, p := range stmt.Params {
-		c.varNames[cleanVarName(p.Name)] = true
+		c.getOrAllocSlot(p.Name)
 	}
 
 	if err := c.compileStatement(stmt.Body); err != nil {
@@ -207,9 +208,7 @@ func CompileProcedure(stmt *CreateProcStmt) (*Program, error) {
 		return nil, err
 	}
 
-	c.emit(OpReturn, -1, 0, 0, nil)
-	c.prog.NumRegisters = c.maxRegisters
-	return c.prog, nil
+	return c.finalizeProgram(), nil
 }
 
 // CompileFunction compiles a CreateFunctionStmt into a Program.
@@ -221,7 +220,7 @@ func CompileFunction(stmt *CreateFunctionStmt) (*Program, error) {
 	c.prog.ReturnType = stmt.ReturnType
 
 	for _, p := range stmt.Params {
-		c.varNames[cleanVarName(p.Name)] = true
+		c.getOrAllocSlot(p.Name)
 	}
 
 	if err := c.compileStatement(stmt.Body); err != nil {
@@ -231,9 +230,7 @@ func CompileFunction(stmt *CreateFunctionStmt) (*Program, error) {
 		return nil, err
 	}
 
-	c.emit(OpReturn, -1, 0, 0, nil)
-	c.prog.NumRegisters = c.maxRegisters
-	return c.prog, nil
+	return c.finalizeProgram(), nil
 }
 
 // CompileTrigger compiles a CreateTriggerStmt into a Program.
@@ -251,9 +248,67 @@ func CompileTrigger(stmt *CreateTriggerStmt) (*Program, error) {
 		return nil, err
 	}
 
+	return c.finalizeProgram(), nil
+}
+
+func (c *Compiler) finalizeProgram() *Program {
 	c.emit(OpReturn, -1, 0, 0, nil)
 	c.prog.NumRegisters = c.maxRegisters
-	return c.prog, nil
+	c.prog.VarSlots = c.varSlots
+	c.prog.SlotCount = int32(len(c.slotNames))
+	c.prog.VarNames = c.slotNames
+	return c.prog
+}
+
+func isSystemVar(name string) bool {
+	if strings.HasPrefix(name, "@@") {
+		return true
+	}
+	clean := cleanVarName(name)
+	switch strings.ToUpper(clean) {
+	case "ROWCOUNT", "FETCH_STATUS", "TRANCOUNT", "IDENTITY", "ERROR", "VERSION", "SPID":
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *Compiler) getOrAllocSlot(varName string) int32 {
+	if isSystemVar(varName) {
+		return -1
+	}
+	clean := cleanVarName(varName)
+	if isSystemVar(clean) {
+		return -1
+	}
+	lower := strings.ToLower(clean)
+	if slot, exists := c.varSlots[lower]; exists {
+		return slot
+	}
+	slot := int32(len(c.slotNames))
+	c.varSlots[lower] = slot
+	c.varSlots[clean] = slot
+	c.slotNames = append(c.slotNames, clean)
+	c.varNames[clean] = true
+	return slot
+}
+
+func (c *Compiler) getSlot(varName string) int32 {
+	if isSystemVar(varName) {
+		return -1
+	}
+	clean := cleanVarName(varName)
+	if isSystemVar(clean) {
+		return -1
+	}
+	lower := strings.ToLower(clean)
+	if slot, exists := c.varSlots[lower]; exists {
+		return slot
+	}
+	if slot, exists := c.varSlots[clean]; exists {
+		return slot
+	}
+	return -1
 }
 
 func (c *Compiler) allocReg() int32 {
@@ -315,8 +370,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 	case *DeclareStmt:
 		varName := cleanVarName(s.Name)
-		c.varNames[varName] = true
-		c.prog.VarNames = append(c.prog.VarNames, varName)
+		c.getOrAllocSlot(varName)
 		return nil
 
 	case *SetStmt:
@@ -325,7 +379,8 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			return err
 		}
 		varName := cleanVarName(s.Name)
-		c.emit(OpStoreVar, valReg, 0, 0, varName)
+		slot := c.getOrAllocSlot(varName)
+		c.emit(OpStoreVar, valReg, slot, 0, varName)
 		c.freeReg(1)
 		return nil
 
@@ -337,7 +392,8 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			}
 			reg := c.allocReg()
 			c.emit(OpLoadConst, reg, 0, 0, storage.BoolValue(bVal))
-			c.emit(OpStoreVar, reg, 0, 0, strings.ToLower(k))
+			slot := c.getOrAllocSlot(k)
+			c.emit(OpStoreVar, reg, slot, 0, strings.ToLower(k))
 			c.freeReg(1)
 		}
 		return nil
@@ -528,9 +584,11 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *SelectIntoStmt:
+		intoVar := cleanVarName(s.IntoVar)
+		c.getOrAllocSlot(intoVar)
 		c.emit(OpSelectInto, 0, 0, 0, &SelectIntoData{
 			Column:   s.Column,
-			IntoVar:  cleanVarName(s.IntoVar),
+			IntoVar:  intoVar,
 			Table:    s.Table,
 			WhereCol: s.WhereCol,
 			WhereVal: s.WhereVal,
@@ -553,7 +611,9 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 	case *FetchNextStmt:
 		var vars []string
 		for _, v := range s.IntoVars {
-			vars = append(vars, cleanVarName(v))
+			clean := cleanVarName(v)
+			c.getOrAllocSlot(clean)
+			vars = append(vars, clean)
 		}
 		c.emit(OpCursorFetch, 0, 0, 0, &CursorData{
 			Name:     cleanVarName(s.CursorName),
@@ -750,12 +810,15 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 	case *VariableExpr:
 		r := c.allocReg()
 		varName := cleanVarName(e.Name)
-		c.emit(OpLoadVar, r, 0, 0, varName)
+		slot := c.getOrAllocSlot(varName)
+		c.emit(OpLoadVar, r, slot, 0, varName)
 		return r, nil
 
 	case *ColumnRefExpr:
 		r := c.allocReg()
-		c.emit(OpLoadVar, r, 0, 0, cleanVarName(e.Name))
+		varName := cleanVarName(e.Name)
+		slot := c.getSlot(varName)
+		c.emit(OpLoadVar, r, slot, 0, varName)
 		return r, nil
 
 	case *UnaryExpr:

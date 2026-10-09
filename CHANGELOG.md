@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **VDBE Local Variable Slot Indexing (`pkg/proc`, `pkg/proc/runtime`)**:
+  - Implemented compile-time variable slot allocation (`Program.VarSlots map[string]int32`, `Program.SlotCount int32`) and runtime $O(1)$ direct slice indexing (`VMFrame.slots[inst.B]`) for procedure parameters and local variables (`DECLARE`, `SET`, `SELECT INTO`), eliminating string hashing, case folding, and map lookup overhead on hot execution paths.
+  - Added dedicated unit tests for variable slot indexing and expression evaluation in `pkg/proc/runtime/vm_slots_test.go`.
+
+### Refactored
+- **VDBE Opcode Dispatcher Modularization (`pkg/proc/runtime/vm.go`, `pkg/proc/runtime/vm_dispatcher.go`)**:
+  - Modularized the 800+ line monolithic `switch inst.Op` in `VMFrame.Execute` into domain-specific execution helpers (`execFlowOp`, `execComputeOp`, `execTxOp`, `execStorageOp`, `execCursorAndCallOp`, `execRelOp`).
+  - Unified repetitive error catch-stack unwinding logic into a centralized `handleCatch` helper, reducing cyclomatic complexity and improving profiling trace clarity.
+
 ---
 
 ## [0.14.0] - 2026-10-08

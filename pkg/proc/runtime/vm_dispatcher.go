@@ -1,0 +1,830 @@
+package runtime
+
+import (
+	"fmt"
+	"sort"
+	"strings"
+	"time"
+
+	"sqlion/pkg/proc"
+	"sqlion/pkg/storage"
+)
+
+// handleCatch checks the active catchStack on error, routing execution to the catch handler if present.
+func (f *VMFrame) handleCatch(err error, pc *int) error {
+	if err == nil {
+		return nil
+	}
+	f.lastError = 50000
+	if len(f.catchStack) > 0 {
+		catchPC := f.catchStack[len(f.catchStack)-1]
+		f.catchStack = f.catchStack[:len(f.catchStack)-1]
+		*pc = catchPC
+		return nil
+	}
+	return err
+}
+
+// execFlowOp handles control flow, exception handling, and diagnostic logging opcodes.
+func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal any, err error) {
+	switch inst.Op {
+	case proc.OpHalt:
+		return true, nil, nil
+
+	case proc.OpReturn:
+		if inst.A >= 0 && int(inst.A) < len(f.regs) {
+			return true, valToAny(f.regs[inst.A]), nil
+		}
+		return true, nil, nil
+
+	case proc.OpJump:
+		*pc = int(inst.B)
+		return false, nil, nil
+
+	case proc.OpJumpIfFalse:
+		if !isTruthy(f.regs[inst.A]) {
+			*pc = int(inst.B)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfTrue:
+		if isTruthy(f.regs[inst.A]) {
+			*pc = int(inst.B)
+		}
+		return false, nil, nil
+
+	case proc.OpPushCatch:
+		f.catchStack = append(f.catchStack, int(inst.B))
+		return false, nil, nil
+
+	case proc.OpPopCatch:
+		if len(f.catchStack) > 0 {
+			f.catchStack = f.catchStack[:len(f.catchStack)-1]
+		}
+		return false, nil, nil
+
+	case proc.OpThrow, proc.OpRaiserror:
+		f.lastError = 50000
+		msg := fmt.Sprintf("%v", inst.Data)
+		if len(f.catchStack) > 0 {
+			catchPC := f.catchStack[len(f.catchStack)-1]
+			f.catchStack = f.catchStack[:len(f.catchStack)-1]
+			*pc = catchPC
+			return false, nil, nil
+		}
+		return false, nil, fmt.Errorf("%s", msg)
+
+	case proc.OpPrint:
+		v := f.regs[inst.A]
+		f.logs = append(f.logs, valToString(v))
+		return false, nil, nil
+
+	default:
+		return false, nil, fmt.Errorf("unexpected flow opcode: %v", inst.Op)
+	}
+}
+
+// execComputeOp handles constants, variables, arithmetic, comparisons, and boolean logic.
+func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
+	switch inst.Op {
+	case proc.OpLoadConst:
+		if int(inst.B) < len(f.prog.Constants) {
+			f.regs[inst.A] = f.prog.Constants[inst.B]
+		}
+
+	case proc.OpLoadVar:
+		slot := inst.B
+		if slot >= 0 && int(slot) < len(f.slots) {
+			f.regs[inst.A] = f.slots[slot]
+		} else {
+			varName, _ := inst.Data.(string)
+			v, found := f.getVar(varName)
+			if !found {
+				v = storage.StringValue(varName)
+			}
+			f.regs[inst.A] = v
+		}
+
+	case proc.OpStoreVar:
+		val := f.regs[inst.A]
+		slot := inst.B
+		varName, _ := inst.Data.(string)
+		if slot >= 0 && int(slot) < len(f.slots) {
+			f.slots[slot] = val
+			if varName != "" {
+				f.setVar(varName, val)
+			}
+		} else if varName != "" {
+			f.setVar(varName, val)
+		}
+
+	case proc.OpCopy:
+		f.regs[inst.A] = f.regs[inst.B]
+
+	case proc.OpAdd:
+		f.regs[inst.A] = storageAdd(f.regs[inst.B], f.regs[inst.C])
+
+	case proc.OpSub:
+		f.regs[inst.A] = storageSub(f.regs[inst.B], f.regs[inst.C])
+
+	case proc.OpMul:
+		f.regs[inst.A] = storageMul(f.regs[inst.B], f.regs[inst.C])
+
+	case proc.OpDiv:
+		res, err := storageDiv(f.regs[inst.B], f.regs[inst.C])
+		if err != nil {
+			return f.handleCatch(err, pc)
+		}
+		f.regs[inst.A] = res
+
+	case proc.OpNeg:
+		f.regs[inst.A] = storageNeg(f.regs[inst.B])
+
+	case proc.OpNot:
+		f.regs[inst.A] = storage.BoolValue(!isTruthy(f.regs[inst.B]))
+
+	case proc.OpEq:
+		if inst.Data == "AND" {
+			f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) && isTruthy(f.regs[inst.C]))
+		} else if inst.Data == "OR" {
+			f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) || isTruthy(f.regs[inst.C]))
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageEq(f.regs[inst.B], f.regs[inst.C]))
+		}
+
+	case proc.OpNeq:
+		f.regs[inst.A] = storage.BoolValue(!storageEq(f.regs[inst.B], f.regs[inst.C]))
+
+	case proc.OpLt:
+		f.regs[inst.A] = storage.BoolValue(storageLt(f.regs[inst.B], f.regs[inst.C]))
+
+	case proc.OpLte:
+		f.regs[inst.A] = storage.BoolValue(storageLte(f.regs[inst.B], f.regs[inst.C]))
+
+	case proc.OpGt:
+		f.regs[inst.A] = storage.BoolValue(storageGt(f.regs[inst.B], f.regs[inst.C]))
+
+	case proc.OpGte:
+		f.regs[inst.A] = storage.BoolValue(storageGte(f.regs[inst.B], f.regs[inst.C]))
+
+	case proc.OpLike:
+		str := valToString(f.regs[inst.B])
+		pat := valToString(f.regs[inst.C])
+		matched := matchLike(str, pat)
+		if not, ok := inst.Data.(bool); ok && not {
+			matched = !matched
+		}
+		f.regs[inst.A] = storage.BoolValue(matched)
+
+	case proc.OpBetween:
+		v := f.regs[inst.B]
+		low := f.regs[inst.C]
+		meta := inst.Data.(struct {
+			HighReg int32
+			Not     bool
+		})
+		high := f.regs[meta.HighReg]
+		inRange := storageGte(v, low) && storageLte(v, high)
+		if meta.Not {
+			inRange = !inRange
+		}
+		f.regs[inst.A] = storage.BoolValue(inRange)
+
+	case proc.OpIn:
+		val := f.regs[inst.B]
+		callData := inst.Data.(*proc.CallData)
+		found := false
+		for _, regIdx := range callData.ArgRegs {
+			if int(regIdx) < len(f.regs) && storageEq(val, f.regs[regIdx]) {
+				found = true
+				break
+			}
+		}
+		f.regs[inst.A] = storage.BoolValue(found)
+
+	case proc.OpIsNull:
+		f.regs[inst.A] = storage.BoolValue(f.regs[inst.B].IsNull)
+
+	case proc.OpIsNotNull:
+		f.regs[inst.A] = storage.BoolValue(!f.regs[inst.B].IsNull)
+
+	default:
+		return fmt.Errorf("unexpected compute opcode: %v", inst.Op)
+	}
+	return nil
+}
+
+// execTxOp handles transaction demarcation, savepoints, and rollbacks.
+func (f *VMFrame) execTxOp(inst *proc.Instruction) error {
+	switch inst.Op {
+	case proc.OpTxBegin:
+		f.tranCount++
+
+	case proc.OpTxCommit:
+		if f.tranCount > 0 {
+			f.tranCount--
+		}
+		if err := f.tx.Commit(); err != nil {
+			return err
+		}
+
+	case proc.OpTxRollback:
+		if f.tranCount > 0 {
+			f.tranCount--
+		}
+		if err := f.tx.Rollback(); err != nil {
+			return err
+		}
+
+	case proc.OpTxSavepoint:
+		spName, _ := inst.Data.(string)
+		if err := f.tx.Savepoint(spName); err != nil {
+			return err
+		}
+
+	case proc.OpTxRollbackTo:
+		spName, _ := inst.Data.(string)
+		if err := f.tx.RollbackTo(spName); err != nil {
+			return err
+		}
+
+	default:
+		return fmt.Errorf("unexpected tx opcode: %v", inst.Op)
+	}
+	return nil
+}
+
+// execStorageOp handles table DML, single-table point lookups, and SELECT INTO.
+func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
+	switch inst.Op {
+	case proc.OpInsert:
+		data := inst.Data.(*proc.DMLData)
+		rec := make(storage.Record)
+		rowMap := make(map[string]any)
+		evalCtx := f.buildRowEvalMap(nil)
+
+		cols := data.Columns
+		var tableSchema *storage.TableSchema
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(data.Table); err == nil && schema != nil {
+				tableSchema = schema
+				var identityCol *storage.Column
+				for idx := range schema.Columns {
+					if schema.Columns[idx].Identity {
+						identityCol = &schema.Columns[idx]
+						break
+					}
+				}
+
+				identityInsertAllowed := false
+				if val, ok := f.vars["identity_insert_table"]; ok && val.Type == storage.TypeVarChar {
+					if strings.EqualFold(val.SVal, data.Table) {
+						identityInsertAllowed = true
+					}
+				}
+
+				if len(cols) == 0 {
+					for _, c := range schema.Columns {
+						if c.Identity && !identityInsertAllowed {
+							continue
+						}
+						cols = append(cols, c.Name)
+					}
+				} else if identityCol != nil && !identityInsertAllowed {
+					for _, c := range cols {
+						if strings.EqualFold(c, identityCol.Name) {
+							return fmt.Errorf("Cannot insert explicit value for identity column in table %q when IDENTITY_INSERT is set to OFF", data.Table)
+						}
+					}
+				}
+			}
+		}
+
+		for i, col := range cols {
+			if i < len(data.ValExprs) {
+				vAny, _ := proc.EvalRowExpr(data.ValExprs[i], evalCtx, nil)
+				stVal := toStorageValue(vAny)
+				rec[col] = stVal
+				rowMap[col] = valToAny(stVal)
+				if (strings.EqualFold(col, "id") || strings.HasSuffix(strings.ToLower(col), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
+					f.lastIdentity = stVal.IVal
+				}
+			}
+		}
+
+		if tableSchema != nil {
+			for _, col := range tableSchema.Columns {
+				if _, exists := rec[col.Name]; !exists && col.Default != "" {
+					upper := strings.ToUpper(strings.TrimSpace(col.Default))
+					switch upper {
+					case "NEWID7()", "UUIDV7()", "UUID_GENERATE_V7()":
+						rec[col.Name] = storage.Value{Type: storage.TypeUUID, SVal: proc.GenerateUUIDv7()}
+					case "NEWID()", "GEN_RANDOM_UUID()":
+						rec[col.Name] = storage.Value{Type: storage.TypeUUID, SVal: proc.GenerateUUIDv4()}
+					case "GETDATE()", "NOW()", "CURRENT_TIMESTAMP":
+						rec[col.Name] = storage.DateTimeValue(time.Now())
+					case "GETUTCDATE()", "SYSDATETIME()":
+						rec[col.Name] = storage.DateTimeValue(time.Now().UTC())
+					}
+				}
+			}
+		}
+
+		if err := f.tx.Insert(data.Table, rec); err != nil {
+			return f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), pc)
+		}
+		f.rowCount++
+		if err := f.fireTriggers(data.Table, "INSERT", []map[string]any{rowMap}, nil); err != nil {
+			return err
+		}
+
+	case proc.OpUpdate:
+		data := inst.Data.(*proc.DMLData)
+		if data.WhereCol != "" && !f.isPKCol(data.Table, data.WhereCol) {
+			data.WhereExpr = &proc.BinaryExpr{
+				Left:  &proc.ColumnRefExpr{Name: data.WhereCol},
+				Op:    proc.TokenEq,
+				Right: data.WhereVal,
+			}
+			cnt, err := f.execUpdateWhere(data)
+			if err != nil {
+				return f.handleCatch(err, pc)
+			}
+			f.rowCount = cnt
+			return nil
+		}
+
+		evalCtx := f.buildRowEvalMap(nil)
+		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+		pkVal := toStorageValue(pkAny)
+
+		var oldRec storage.Record
+		if !isTransientTable(data.Table) {
+			oldRec, _ = f.tx.Get(data.Table, pkVal)
+		}
+
+		rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
+		rec := make(storage.Record)
+		for _, a := range data.Assignments {
+			valAny, _ := proc.EvalRowExpr(a.Value, rowCtx, nil)
+			rec[a.Column] = toStorageValue(valAny)
+		}
+
+		if err := f.tx.Update(data.Table, pkVal, rec); err != nil {
+			return f.handleCatch(err, pc)
+		}
+		f.rowCount = 1
+		if oldRec != nil {
+			oldRow := recordToMap(oldRec)
+			newRow := recordToMap(oldRec)
+			for k, v := range rec {
+				newRow[k] = valToAny(v)
+			}
+			if err := f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRow}, []map[string]any{oldRow}); err != nil {
+				return err
+			}
+		}
+
+	case proc.OpUpdateWhere:
+		data := inst.Data.(*proc.DMLData)
+		cnt, err := f.execUpdateWhere(data)
+		if err != nil {
+			return f.handleCatch(err, pc)
+		}
+		f.rowCount = cnt
+
+	case proc.OpDelete:
+		data := inst.Data.(*proc.DMLData)
+		if data.WhereCol != "" && !f.isPKCol(data.Table, data.WhereCol) {
+			data.WhereExpr = &proc.BinaryExpr{
+				Left:  &proc.ColumnRefExpr{Name: data.WhereCol},
+				Op:    proc.TokenEq,
+				Right: data.WhereVal,
+			}
+			cnt, err := f.execDeleteWhere(data)
+			if err != nil {
+				return f.handleCatch(err, pc)
+			}
+			f.rowCount = cnt
+			return nil
+		}
+
+		evalCtx := f.buildRowEvalMap(nil)
+		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+		pkVal := toStorageValue(pkAny)
+
+		var oldRec storage.Record
+		if !isTransientTable(data.Table) {
+			oldRec, _ = f.tx.Get(data.Table, pkVal)
+		}
+
+		if err := f.tx.Delete(data.Table, pkVal); err != nil {
+			return f.handleCatch(err, pc)
+		}
+		f.rowCount = 1
+		if oldRec != nil {
+			oldRow := recordToMap(oldRec)
+			if err := f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{oldRow}); err != nil {
+				return err
+			}
+		}
+
+	case proc.OpDeleteWhere:
+		data := inst.Data.(*proc.DMLData)
+		cnt, err := f.execDeleteWhere(data)
+		if err != nil {
+			return f.handleCatch(err, pc)
+		}
+		f.rowCount = cnt
+
+	case proc.OpSelectInto:
+		data := inst.Data.(*proc.SelectIntoData)
+		val, err := f.execSelectInto(data)
+		if err != nil {
+			return f.handleCatch(err, pc)
+		}
+		if data.IntoVar != "" {
+			f.setVar(data.IntoVar, val)
+		}
+		if inst.A >= 0 && int(inst.A) < len(f.regs) {
+			f.regs[inst.A] = val
+		}
+
+	case proc.OpPointSelect:
+		data := inst.Data.(*proc.PointSelectData)
+		evalCtx := f.buildRowEvalMap(nil)
+
+		vAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+		pkVal := toStorageValue(vAny)
+
+		tableName := cleanSymbol(data.Table)
+		if !f.isPKCol(tableName, data.WhereCol) {
+			sql := f.prog.QuerySQL
+			if sql == "" {
+				sql = fmt.Sprintf("SELECT * FROM %s WHERE %s = %v", data.Table, data.WhereCol, pkVal.String())
+			}
+			rows, cols, err := f.execRelQuery(sql, nil)
+			if err != nil {
+				return err
+			}
+			f.rows = rows
+			f.columns = cols
+			f.rowCount = int64(len(rows))
+			if inst.A >= 0 && int(inst.A) < len(f.regs) {
+				f.regs[inst.A] = storage.IntValue(int64(len(rows)))
+			}
+			return nil
+		}
+
+		var rowMap map[string]any
+		rec, err := f.tx.Get(tableName, pkVal)
+		if err == nil && rec != nil {
+			rowMap = recordToMap(rec)
+		}
+
+		var rows []map[string]any
+		var cols []string
+
+		isStar := len(data.Projections) == 1 && (data.Projections[0].Expr.String() == "*" || data.Projections[0].Alias == "*")
+
+		if rowMap != nil {
+			outRow := make(map[string]any)
+			rowCtx := f.buildRowEvalMap(rowMap)
+
+			if isStar {
+				for k := range rowMap {
+					cols = append(cols, k)
+				}
+				sort.Strings(cols)
+				for _, c := range cols {
+					outRow[c] = rowMap[c]
+				}
+			} else {
+				for _, p := range data.Projections {
+					colName := p.Alias
+					if colName == "" {
+						if colRef, ok := p.Expr.(*proc.ColumnRefExpr); ok {
+							colName = colRef.Name
+						} else {
+							colName = p.Expr.String()
+						}
+					}
+					cols = append(cols, colName)
+
+					vAny, _ := proc.EvalRowExpr(p.Expr, rowCtx, nil)
+					outRow[colName] = vAny
+				}
+			}
+			rows = append(rows, outRow)
+		} else {
+			if !isStar {
+				for _, p := range data.Projections {
+					colName := p.Alias
+					if colName == "" {
+						if colRef, ok := p.Expr.(*proc.ColumnRefExpr); ok {
+							colName = colRef.Name
+						} else {
+							colName = p.Expr.String()
+						}
+					}
+					cols = append(cols, colName)
+				}
+			}
+		}
+
+		f.rows = rows
+		f.columns = cols
+		f.rowCount = int64(len(rows))
+
+		if inst.A >= 0 && int(inst.A) < len(f.regs) {
+			f.regs[inst.A] = storage.IntValue(f.rowCount)
+		}
+
+	default:
+		return fmt.Errorf("unexpected storage opcode: %v", inst.Op)
+	}
+	return nil
+}
+
+// execCursorAndCallOp handles cursors, built-in calls, UDFs, stored procedures, and dynamic SQL.
+func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
+	switch inst.Op {
+	case proc.OpCursorOpen:
+		switch data := inst.Data.(type) {
+		case *proc.CursorData:
+			f.cursors[cleanSymbol(data.Name)] = &cursorState{
+				name:      cleanSymbol(data.Name),
+				table:     data.Table,
+				columns:   data.Columns,
+				whereExpr: data.WhereExpr,
+				idx:       0,
+			}
+		case string:
+			curName := cleanSymbol(data)
+			if cur, exists := f.cursors[curName]; exists {
+				rows, err := f.scanCursorRows(cur.table, cur.whereExpr)
+				if err != nil {
+					return err
+				}
+				cur.rows = rows
+				cur.idx = 0
+			}
+		}
+
+	case proc.OpCursorFetch:
+		data := inst.Data.(*proc.CursorData)
+		curName := cleanSymbol(data.Name)
+		cur, exists := f.cursors[curName]
+		if !exists || cur.idx >= len(cur.rows) {
+			f.fetchStatus = -1
+		} else {
+			row := cur.rows[cur.idx]
+			cur.idx++
+			f.fetchStatus = 0
+			for i, varName := range data.IntoVars {
+				if i < len(cur.columns) {
+					col := cur.columns[i]
+					if v, ok := row[col]; ok {
+						f.setVar(varName, v)
+					} else {
+						f.setVar(varName, storage.NullValue(storage.TypeUnknown))
+					}
+				}
+			}
+		}
+
+	case proc.OpCursorClose:
+		curName := cleanSymbol(inst.Data.(string))
+		if cur, exists := f.cursors[curName]; exists {
+			cur.idx = len(cur.rows)
+		}
+
+	case proc.OpCursorDealloc:
+		curName := cleanSymbol(inst.Data.(string))
+		delete(f.cursors, curName)
+
+	case proc.OpCallBuiltin:
+		callData := inst.Data.(*proc.CallData)
+		var args []storage.Value
+		for _, regIdx := range callData.ArgRegs {
+			if int(regIdx) < len(f.regs) {
+				args = append(args, f.regs[regIdx])
+			}
+		}
+		if strings.EqualFold(callData.Name, "SCOPE_IDENTITY") {
+			if f.lastIdentity > 0 {
+				f.regs[inst.A] = storage.IntValue(f.lastIdentity)
+			} else {
+				f.regs[inst.A] = storage.NullValue(storage.TypeInt)
+			}
+		} else {
+			f.regs[inst.A] = proc.EvalBuiltin(callData.Name, args)
+		}
+
+	case proc.OpCallUDF:
+		callData := inst.Data.(*proc.CallData)
+		res, err := f.callUDF(callData.Name, callData.ArgRegs)
+		if err != nil {
+			return f.handleCatch(err, pc)
+		}
+		f.regs[inst.A] = res
+
+	case proc.OpCallProc:
+		callData := inst.Data.(*proc.CallData)
+		if err := f.callProc(callData.Name, callData.ArgRegs); err != nil {
+			return f.handleCatch(err, pc)
+		}
+
+	case proc.OpExecDynamic:
+		val := f.regs[inst.A]
+		sqlStr := val.String()
+		if val.Type == storage.TypeVarChar {
+			sqlStr = val.SVal
+		}
+		sqlStr = strings.TrimSpace(sqlStr)
+		if sqlStr == "" {
+			return nil
+		}
+
+		prog, err := f.executor.Cache().GetOrCompile(sqlStr)
+		if err != nil {
+			prog, err = proc.Compile(sqlStr)
+			if err != nil {
+				return f.handleCatch(fmt.Errorf("dynamic SQL compile error: %w", err), pc)
+			}
+		}
+
+		res, err := f.executor.ExecuteInTx(prog, nil, f.tx, f.transientTables)
+		if err != nil {
+			return f.handleCatch(fmt.Errorf("dynamic SQL execution error: %w", err), pc)
+		}
+		if res != nil {
+			if len(res.Logs) > 0 {
+				f.logs = append(f.logs, res.Logs...)
+			}
+			if len(res.Rows) > 0 {
+				f.rows = res.Rows
+				f.columns = res.Columns
+				f.rowCount = int64(len(res.Rows))
+			}
+		}
+
+	default:
+		return fmt.Errorf("unexpected cursor/call opcode: %v", inst.Op)
+	}
+	return nil
+}
+
+// execRelOp handles relational queries (Volcano engine), secondary index scans, and result row emission.
+func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
+	switch inst.Op {
+	case proc.OpRelQuery:
+		var queryData *proc.RelQueryData
+		if data, ok := inst.Data.(*proc.RelQueryData); ok {
+			queryData = data
+		}
+		sql := ""
+		if queryData != nil {
+			sql = queryData.SQL
+		}
+		if sql == "" {
+			sql = f.prog.QuerySQL
+		}
+		if sql == "" {
+			return fmt.Errorf("OpRelQuery: empty query SQL")
+		}
+
+		rows, cols, err := f.execRelQuery(sql, queryData)
+		if err != nil {
+			return f.handleCatch(err, pc)
+		}
+
+		f.rows = rows
+		f.columns = cols
+		f.rowCount = int64(len(rows))
+
+		if queryData != nil && queryData.IntoVar != "" && len(rows) > 0 {
+			for _, v := range rows[0] {
+				f.setVar(queryData.IntoVar, toStorageValue(v))
+				break
+			}
+		}
+		if inst.A >= 0 && int(inst.A) < len(f.regs) {
+			f.regs[inst.A] = storage.IntValue(int64(len(rows)))
+		}
+
+	case proc.OpIndexScan:
+		data := inst.Data.(*proc.IndexScanData)
+		evalCtx := f.buildRowEvalMap(nil)
+
+		var lowVal *storage.Value
+		if data.LowVal != nil {
+			vAny, _ := proc.EvalRowExpr(data.LowVal, evalCtx, nil)
+			sv := toStorageValue(vAny)
+			lowVal = &sv
+		}
+
+		var highVal *storage.Value
+		if data.HighVal != nil {
+			vAny, _ := proc.EvalRowExpr(data.HighVal, evalCtx, nil)
+			sv := toStorageValue(vAny)
+			highVal = &sv
+		}
+
+		var cursor storage.Cursor
+		var err error
+		if data.IndexOnly {
+			cursor, err = f.tx.IndexOnlyScan(data.Table, data.IndexName, lowVal, highVal)
+		} else {
+			cursor, err = f.tx.IndexScan(data.Table, data.IndexName, lowVal, highVal)
+		}
+		if err != nil {
+			return f.handleCatch(fmt.Errorf("OpIndexScan on %s (%s) error: %w", data.Table, data.IndexName, err), pc)
+		}
+		defer cursor.Close()
+
+		var rows []map[string]any
+		var cols []string
+		if len(data.Projections) > 0 {
+			cols = data.Projections
+		}
+
+		for cursor.Next() {
+			rec, err := cursor.Record()
+			if err != nil {
+				break
+			}
+			rowMap := recordToMap(rec)
+
+			if data.WhereExpr != nil {
+				rowContext := f.buildRowEvalMap(rowMap)
+				if !proc.EvalBoolExpr(data.WhereExpr, rowContext, nil) {
+					continue
+				}
+			}
+
+			if len(cols) == 0 {
+				for k := range rec {
+					cols = append(cols, k)
+				}
+				sort.Strings(cols)
+			}
+
+			outRow := make(map[string]any, len(cols))
+			for _, c := range cols {
+				if v, ok := rowMap[c]; ok {
+					outRow[c] = v
+				} else {
+					outRow[c] = nil
+				}
+			}
+			rows = append(rows, outRow)
+		}
+
+		f.rows = rows
+		f.columns = cols
+		f.rowCount = int64(len(rows))
+
+		if data.IntoVar != "" && len(rows) > 0 {
+			for _, v := range rows[0] {
+				f.setVar(data.IntoVar, toStorageValue(v))
+				break
+			}
+		}
+		if inst.A >= 0 && int(inst.A) < len(f.regs) {
+			f.regs[inst.A] = storage.IntValue(int64(len(rows)))
+		}
+
+	case proc.OpResultRow:
+		data := inst.Data.(*proc.ResultRowData)
+		row := make(map[string]any, data.Count)
+		cols := make([]string, len(data.Columns))
+		copy(cols, data.Columns)
+
+		for i := int32(0); i < data.Count; i++ {
+			var regIdx int32
+			if len(data.Regs) > int(i) {
+				regIdx = data.Regs[i]
+			} else {
+				regIdx = data.StartReg + i
+			}
+			var val any
+			if int(regIdx) < len(f.regs) {
+				val = valToAny(f.regs[regIdx])
+			}
+			colName := fmt.Sprintf("col%d", i+1)
+			if int(i) < len(data.Columns) && data.Columns[i] != "" {
+				colName = data.Columns[i]
+			}
+			row[colName] = val
+		}
+
+		f.rows = append(f.rows, row)
+		f.columns = cols
+		f.rowCount = int64(len(f.rows))
+
+	default:
+		return fmt.Errorf("unexpected rel opcode: %v", inst.Op)
+	}
+	return nil
+}
