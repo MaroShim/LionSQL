@@ -35,6 +35,8 @@ const (
 	OpDiv
 	OpNeg
 	OpNot
+	OpAnd
+	OpOr
 	OpEq
 	OpNeq
 	OpLt
@@ -46,6 +48,17 @@ const (
 	OpIn
 	OpIsNull
 	OpIsNotNull
+
+	// Specialized Integer Arithmetic & Comparison (Hot-Path Inlining)
+	OpAddInt
+	OpSubInt
+	OpMulInt
+	OpEqInt
+	OpNeqInt
+	OpLtInt
+	OpLteInt
+	OpGtInt
+	OpGteInt
 
 	// Transaction Management
 	OpTxBegin
@@ -137,6 +150,10 @@ func (op OpCode) String() string {
 		return "NEG"
 	case OpNot:
 		return "NOT"
+	case OpAnd:
+		return "AND"
+	case OpOr:
+		return "OR"
 	case OpEq:
 		return "EQ"
 	case OpNeq:
@@ -159,6 +176,24 @@ func (op OpCode) String() string {
 		return "IS_NULL"
 	case OpIsNotNull:
 		return "IS_NOT_NULL"
+	case OpAddInt:
+		return "ADD_INT"
+	case OpSubInt:
+		return "SUB_INT"
+	case OpMulInt:
+		return "MUL_INT"
+	case OpEqInt:
+		return "EQ_INT"
+	case OpNeqInt:
+		return "NEQ_INT"
+	case OpLtInt:
+		return "LT_INT"
+	case OpLteInt:
+		return "LTE_INT"
+	case OpGtInt:
+		return "GT_INT"
+	case OpGteInt:
+		return "GTE_INT"
 	case OpTxBegin:
 		return "TX_BEGIN"
 	case OpTxCommit:

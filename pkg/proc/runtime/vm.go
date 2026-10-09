@@ -452,7 +452,10 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 
 		case proc.OpLoadConst, proc.OpLoadVar, proc.OpStoreVar, proc.OpCopy,
 			proc.OpAdd, proc.OpSub, proc.OpMul, proc.OpDiv, proc.OpNeg, proc.OpNot,
+			proc.OpAnd, proc.OpOr,
 			proc.OpEq, proc.OpNeq, proc.OpLt, proc.OpLte, proc.OpGt, proc.OpGte,
+			proc.OpAddInt, proc.OpSubInt, proc.OpMulInt,
+			proc.OpEqInt, proc.OpNeqInt, proc.OpLtInt, proc.OpLteInt, proc.OpGtInt, proc.OpGteInt,
 			proc.OpLike, proc.OpBetween, proc.OpIn, proc.OpIsNull, proc.OpIsNotNull:
 			if err := f.execComputeOp(&inst, &pc); err != nil {
 				return nil, err

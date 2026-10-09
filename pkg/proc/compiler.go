@@ -43,6 +43,7 @@ type Compiler struct {
 	constMap        map[string]int32
 	varNames        map[string]bool
 	varSlots        map[string]int32
+	varTypes        map[string]storage.DataType
 	slotNames       []string
 	loopBreaks      [][]int
 	loopContinues   [][]int
@@ -62,6 +63,7 @@ func NewCompiler() *Compiler {
 		constMap:        make(map[string]int32),
 		varNames:        make(map[string]bool),
 		varSlots:        make(map[string]int32),
+		varTypes:        make(map[string]storage.DataType),
 		slotNames:       make([]string, 0),
 		loopBreaks:      make([][]int, 0),
 		loopContinues:   make([][]int, 0),
@@ -198,7 +200,13 @@ func CompileProcedure(stmt *CreateProcStmt) (*Program, error) {
 	c.prog.Params = stmt.Params
 
 	for _, p := range stmt.Params {
-		c.getOrAllocSlot(p.Name)
+		varName := cleanVarName(p.Name)
+		c.getOrAllocSlot(varName)
+		if p.Type == storage.TypeInt {
+			c.varTypes[varName] = storage.TypeInt
+		} else {
+			c.varTypes[varName] = p.Type
+		}
 	}
 
 	if err := c.compileStatement(stmt.Body); err != nil {
@@ -220,7 +228,13 @@ func CompileFunction(stmt *CreateFunctionStmt) (*Program, error) {
 	c.prog.ReturnType = stmt.ReturnType
 
 	for _, p := range stmt.Params {
-		c.getOrAllocSlot(p.Name)
+		varName := cleanVarName(p.Name)
+		c.getOrAllocSlot(varName)
+		if p.Type == storage.TypeInt {
+			c.varTypes[varName] = storage.TypeInt
+		} else {
+			c.varTypes[varName] = p.Type
+		}
 	}
 
 	if err := c.compileStatement(stmt.Body); err != nil {
@@ -371,6 +385,11 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 	case *DeclareStmt:
 		varName := cleanVarName(s.Name)
 		c.getOrAllocSlot(varName)
+		if s.Type == storage.TypeInt {
+			c.varTypes[varName] = storage.TypeInt
+		} else {
+			c.varTypes[varName] = s.Type
+		}
 		return nil
 
 	case *SetStmt:
@@ -380,6 +399,9 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		}
 		varName := cleanVarName(s.Name)
 		slot := c.getOrAllocSlot(varName)
+		if c.isIntegerExpr(s.Value) {
+			c.varTypes[varName] = storage.TypeInt
+		}
 		c.emit(OpStoreVar, valReg, slot, 0, varName)
 		c.freeReg(1)
 		return nil
@@ -792,6 +814,29 @@ func (c *Compiler) resolveGotos() error {
 	return nil
 }
 
+func (c *Compiler) isIntegerExpr(e Expr) bool {
+	if e == nil {
+		return false
+	}
+	switch expr := e.(type) {
+	case *LiteralExpr:
+		return expr.Val.Type == storage.TypeInt && !expr.Val.IsNull
+	case *VariableExpr:
+		t, ok := c.varTypes[cleanVarName(expr.Name)]
+		return ok && t == storage.TypeInt
+	case *BinaryExpr:
+		switch expr.Op {
+		case TokenPlus, TokenMinus, TokenAsterisk:
+			return c.isIntegerExpr(expr.Left) && c.isIntegerExpr(expr.Right)
+		}
+	case *UnaryExpr:
+		if expr.Op == TokenMinus {
+			return c.isIntegerExpr(expr.Expr)
+		}
+	}
+	return false
+}
+
 func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 	if expr == nil {
 		r := c.allocReg()
@@ -845,31 +890,68 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		if err != nil {
 			return 0, err
 		}
+		isInt := c.isIntegerExpr(e.Left) && c.isIntegerExpr(e.Right)
 		switch e.Op {
 		case TokenPlus:
-			c.emit(OpAdd, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpAddInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpAdd, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenMinus:
-			c.emit(OpSub, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpSubInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpSub, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenAsterisk:
-			c.emit(OpMul, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpMulInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpMul, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenSlash:
 			c.emit(OpDiv, leftReg, leftReg, rightReg, nil)
 		case TokenEq:
-			c.emit(OpEq, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpEqInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpEq, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenNeq:
-			c.emit(OpNeq, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpNeqInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpNeq, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenLt:
-			c.emit(OpLt, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpLtInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpLt, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenLte:
-			c.emit(OpLte, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpLteInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpLte, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenGt:
-			c.emit(OpGt, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpGtInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpGt, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenGte:
-			c.emit(OpGte, leftReg, leftReg, rightReg, nil)
+			if isInt {
+				c.emit(OpGteInt, leftReg, leftReg, rightReg, nil)
+			} else {
+				c.emit(OpGte, leftReg, leftReg, rightReg, nil)
+			}
 		case TokenAnd:
-			c.emit(OpEq, leftReg, leftReg, rightReg, "AND")
+			c.emit(OpAnd, leftReg, leftReg, rightReg, nil)
 		case TokenOr:
-			c.emit(OpEq, leftReg, leftReg, rightReg, "OR")
+			c.emit(OpOr, leftReg, leftReg, rightReg, nil)
 		default:
 			return 0, fmt.Errorf("unsupported binary operator: %v", e.Op)
 		}

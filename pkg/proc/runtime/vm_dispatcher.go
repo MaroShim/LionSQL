@@ -122,13 +122,52 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 		f.regs[inst.A] = f.regs[inst.B]
 
 	case proc.OpAdd:
-		f.regs[inst.A] = storageAdd(f.regs[inst.B], f.regs[inst.C])
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal + vc.IVal)
+		} else {
+			f.regs[inst.A] = storageAdd(vb, vc)
+		}
+
+	case proc.OpAddInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal + vc.IVal)
+		} else {
+			f.regs[inst.A] = storageAdd(vb, vc)
+		}
 
 	case proc.OpSub:
-		f.regs[inst.A] = storageSub(f.regs[inst.B], f.regs[inst.C])
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal - vc.IVal)
+		} else {
+			f.regs[inst.A] = storageSub(vb, vc)
+		}
+
+	case proc.OpSubInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal - vc.IVal)
+		} else {
+			f.regs[inst.A] = storageSub(vb, vc)
+		}
 
 	case proc.OpMul:
-		f.regs[inst.A] = storageMul(f.regs[inst.B], f.regs[inst.C])
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal * vc.IVal)
+		} else {
+			f.regs[inst.A] = storageMul(vb, vc)
+		}
+
+	case proc.OpMulInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.IntValue(vb.IVal * vc.IVal)
+		} else {
+			f.regs[inst.A] = storageMul(vb, vc)
+		}
 
 	case proc.OpDiv:
 		res, err := storageDiv(f.regs[inst.B], f.regs[inst.C])
@@ -143,29 +182,111 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 	case proc.OpNot:
 		f.regs[inst.A] = storage.BoolValue(!isTruthy(f.regs[inst.B]))
 
+	case proc.OpAnd:
+		f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) && isTruthy(f.regs[inst.C]))
+
+	case proc.OpOr:
+		f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) || isTruthy(f.regs[inst.C]))
+
 	case proc.OpEq:
-		if inst.Data == "AND" {
-			f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) && isTruthy(f.regs[inst.C]))
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal == vc.IVal)
+		} else if inst.Data == "AND" {
+			f.regs[inst.A] = storage.BoolValue(isTruthy(vb) && isTruthy(vc))
 		} else if inst.Data == "OR" {
-			f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) || isTruthy(f.regs[inst.C]))
+			f.regs[inst.A] = storage.BoolValue(isTruthy(vb) || isTruthy(vc))
 		} else {
-			f.regs[inst.A] = storage.BoolValue(storageEq(f.regs[inst.B], f.regs[inst.C]))
+			f.regs[inst.A] = storage.BoolValue(storageEq(vb, vc))
+		}
+
+	case proc.OpEqInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal == vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageEq(vb, vc))
 		}
 
 	case proc.OpNeq:
-		f.regs[inst.A] = storage.BoolValue(!storageEq(f.regs[inst.B], f.regs[inst.C]))
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal != vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(!storageEq(vb, vc))
+		}
+
+	case proc.OpNeqInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal != vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(!storageEq(vb, vc))
+		}
 
 	case proc.OpLt:
-		f.regs[inst.A] = storage.BoolValue(storageLt(f.regs[inst.B], f.regs[inst.C]))
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal < vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageLt(vb, vc))
+		}
+
+	case proc.OpLtInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal < vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageLt(vb, vc))
+		}
 
 	case proc.OpLte:
-		f.regs[inst.A] = storage.BoolValue(storageLte(f.regs[inst.B], f.regs[inst.C]))
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal <= vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageLte(vb, vc))
+		}
+
+	case proc.OpLteInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal <= vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageLte(vb, vc))
+		}
 
 	case proc.OpGt:
-		f.regs[inst.A] = storage.BoolValue(storageGt(f.regs[inst.B], f.regs[inst.C]))
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal > vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageGt(vb, vc))
+		}
+
+	case proc.OpGtInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal > vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageGt(vb, vc))
+		}
 
 	case proc.OpGte:
-		f.regs[inst.A] = storage.BoolValue(storageGte(f.regs[inst.B], f.regs[inst.C]))
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal >= vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageGte(vb, vc))
+		}
+
+	case proc.OpGteInt:
+		vb, vc := f.regs[inst.B], f.regs[inst.C]
+		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+			f.regs[inst.A] = storage.BoolValue(vb.IVal >= vc.IVal)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(storageGte(vb, vc))
+		}
 
 	case proc.OpLike:
 		str := valToString(f.regs[inst.B])
