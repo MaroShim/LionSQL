@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented specialized integer arithmetic and comparison opcodes (`OpAddInt`, `OpSubInt`, `OpMulInt`, `OpEqInt`, `OpNeqInt`, `OpLtInt`, `OpLteInt`, `OpGtInt`, `OpGteInt`) with compile-time type detection and direct ALU execution, bypassing `storage.Value` float conversion and `math.Trunc` truncation on hot execution paths.
   - Separated `OpAnd` and `OpOr` as first-class virtual machine opcodes, eliminating runtime dynamic interface string comparisons (`inst.Data == "AND"` / `"OR"`) within `OpEq`.
   - Added unit test suite verifying opcode emission, logical branching, and execution accuracy in `pkg/proc/runtime/vm_specialization_test.go`.
+- **VDBE Fused Compare-and-Branch & Peephole Jump Optimization (`pkg/proc`, `pkg/proc/runtime`)**:
+  - Implemented fused compare-and-branch instructions (`OpJumpIfEq`, `OpJumpIfNeq`, `OpJumpIfLt`, `OpJumpIfLte`, `OpJumpIfGt`, `OpJumpIfGte`, and integer variants `OpJumpIfEqInt` ~ `OpJumpIfGteInt`), fusing relational comparison and conditional branching into a single instruction and eliminating intermediate boolean register materialization and VM dispatch cycles.
+  - Implemented compiler peephole optimizer (`optimizePeephole`) featuring fall-through jump elimination (converting `OpJump i+1` into `OpNop`) and recursive jump threading/chaining (eliminating intermediate trampoline jumps).
+  - Added comprehensive verification test suite in `pkg/proc/runtime/vm_jump_opt_test.go`.
 
 ### Refactored
 - **VDBE Opcode Dispatcher Modularization (`pkg/proc/runtime/vm.go`, `pkg/proc/runtime/vm_dispatcher.go`)**:
