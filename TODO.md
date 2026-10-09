@@ -106,7 +106,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - **1. [완료] 로컬 변수 슬롯화 (Local Variable Slot Indexing)**: T-SQL 파라미터 및 로컬 변수(`@from`, `@amount` 등) 접근 시 `map[string]storage.Value` 해시맵 조회 및 문자열 해싱/소문자 변환을 제거하고, 컴파일 타임 슬롯 인덱스(0, 1, 2...)를 부여하여 `f.slots[inst.B]` 고정 슬라이스 $O(1)$ 직접 배열 접근으로 전환 완료.
   - **2. [완료] 중간 컨텍스트 맵 생성(`buildRowEvalMap`) 제거 (Zero-Allocation Expression Evaluation)**: DML 및 수식 평가 시 `f.evalCtx` 사전 동기화 및 빈 행 캐싱을 적용하여 매번 새 `map[string]any` 생성/복사 병목 제거 완료 (프로시저 호출당 할당 171건 ➔ 122건으로 대폭 감소).
   - **3. [완료] 컨텍스트 취소 검사 배치화 (Batch Cancellation Check)**: 매 단일 바이트코드 명령마다 채널 `select / default`를 호출하여 발생하는 20~40ns 고정 오버헤드를 해소하기 위해 64개 명령 주기(`if pc&63 == 0 && f.ctx != nil`)로 취소 검사 주기 최적화 완료.
-  - **4. 오프코드 특화(Specialization) 및 인터페이스 비교 제거**: `OpEq` 내 `inst.Data == "AND"` 등 동적 인터페이스 문자열 비교를 완전 제거하고 `OpAnd`, `OpOr` 독립 오프코드 분리 및 정수 핫패스 인라인 특화 오프코드(`OpAddInt`, `OpEqInt`) 도입.
+  - **4. [완료] 오프코드 특화(Specialization) 및 인터페이스 비교 제거**: `OpEq` 내 `inst.Data == "AND"` 등 동적 인터페이스 문자열 비교를 완전 제거하고 `OpAnd`, `OpOr` 독립 오프코드 분리 및 정수 핫패스 인라인 특화 오프코드(`OpAddInt`, `OpSubInt`, `OpMulInt`, `OpEqInt`, `OpNeqInt`, `OpLtInt`, `OpLteInt`, `OpGtInt`, `OpGteInt`) 도입 완료.
   - **5. 인스트럭션 구조체 밀도 최적화 (CPU L1 Cache Locality)**: `Instruction` 구조체 내 `Data any` 인터페이스 헤더(16바이트)를 분리하고 레지스터 연산을 8~16바이트 고정 크기 레코드로 밀도 높게 패킹하여 CPU L1 Data Cache 적중률 극대화.
   - **관계형 스캔 벡터화 배치 파이프라이닝 (Vectorized Chunk Scan)**: `OpRelScan`, `OpIndexScan`에서 행 단위 VM 왕복 오버헤드를 줄이기 위한 N개(64~1024건) 단위 청크 벡터화 스트리밍.
   - **[완료] 마이크로 벤치마크 및 TPC-C 성능 추적 하네스 검증**: VDBE 슬롯화 및 디스패처 모듈화 적용 후 TPC-C VDBE **17,803 TPS (475,780 tpmC)** 달성 (네이티브 Go 28,300 TPS 대비 63% 유지율, New-Order p50 0.56ms, Payment p50 0.05ms) 검증 완료.

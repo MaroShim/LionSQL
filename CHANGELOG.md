@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **VDBE Local Variable Slot Indexing (`pkg/proc`, `pkg/proc/runtime`)**:
   - Implemented compile-time variable slot allocation (`Program.VarSlots map[string]int32`, `Program.SlotCount int32`) and runtime $O(1)$ direct slice indexing (`VMFrame.slots[inst.B]`) for procedure parameters and local variables (`DECLARE`, `SET`, `SELECT INTO`), eliminating string hashing, case folding, and map lookup overhead on hot execution paths.
   - Added dedicated unit tests for variable slot indexing and expression evaluation in `pkg/proc/runtime/vm_slots_test.go`.
+- **VDBE Integer Opcode Specialization & Dedicated Logical Operators (`pkg/proc`, `pkg/proc/runtime`)**:
+  - Implemented specialized integer arithmetic and comparison opcodes (`OpAddInt`, `OpSubInt`, `OpMulInt`, `OpEqInt`, `OpNeqInt`, `OpLtInt`, `OpLteInt`, `OpGtInt`, `OpGteInt`) with compile-time type detection and direct ALU execution, bypassing `storage.Value` float conversion and `math.Trunc` truncation on hot execution paths.
+  - Separated `OpAnd` and `OpOr` as first-class virtual machine opcodes, eliminating runtime dynamic interface string comparisons (`inst.Data == "AND"` / `"OR"`) within `OpEq`.
+  - Added unit test suite verifying opcode emission, logical branching, and execution accuracy in `pkg/proc/runtime/vm_specialization_test.go`.
 
 ### Refactored
 - **VDBE Opcode Dispatcher Modularization (`pkg/proc/runtime/vm.go`, `pkg/proc/runtime/vm_dispatcher.go`)**:
