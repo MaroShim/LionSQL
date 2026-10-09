@@ -81,10 +81,10 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ## 4. Storage & Engine Hardening (장기 과제)
 
-- [ ] **Primary Key 식별자 표준화: ULID 대신 IETF 공식 표준 UUIDv7 (RFC 9562) 채택 (`pkg/storage`, `pkg/proc`)**
+- [x] **Primary Key 식별자 표준화: ULID 대신 IETF 공식 표준 UUIDv7 (RFC 9562) 채택 (`pkg/storage`, `pkg/proc`)**
   - **결정 배경**: 2024년 5월 공식 제정된 RFC 9562 준수. ULID(비공식 커뮤니티 스펙, 26자 Base32) 대신 기존 16바이트 네이티브 `UUID` / `UNIQUEIDENTIFIER` 타입 및 와이어 프로토콜(PGWire, TDS)과 100% 무손실 호환되는 `UUIDv7` 채택.
-  - **B+Tree 순차 삽입 성능**: 상위 48비트 Unix Epoch 밀리초 타임스탬프로 단조 증가(Monotonic) 시퀀스를 형성하여 WiredTiger B+Tree 페이지 분할(Page Split) 및 Random I/O 제거.
-  - **내장 함수 및 기본값 지원**: T-SQL `NEWID7()`, `UUIDV7()` 및 PostgreSQL 호환 `GEN_RANDOM_UUID(7)` 내장 함수 구현, `DEFAULT NEWID7()` 테이블 PK 자동 생성 지원.
+  - **B+Tree 순차 삽입 성능**: 상위 48비트 Unix Epoch 밀리초 타임스탬프로 단조 증가(Monotonic) 시퀀스를 형성하여 WiredTiger B+Tree 페이지 분할(Page Split) 및 Random I/O 제거 완료.
+  - **내장 함수 및 기본값 지원**: T-SQL `NEWID7()`, `UUIDV7()` 및 PostgreSQL 호환 `GEN_RANDOM_UUID(7)` 내장 함수 구현, `DEFAULT NEWID7()` 테이블 PK 자동 생성 지원 완료.
 - [ ] **Volcano 청크 단위 배치 실행 (Vectorized Chunk Iterator)**
   - 행 단위 `Next()` 호출 오버헤드를 줄이기 위해 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍.
 - [ ] **WiredTiger 세션 및 커서 풀링 최적화 (`pkg/storage/wiredtiger`)**
