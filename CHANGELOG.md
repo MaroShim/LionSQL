@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.15.0] - 2026-10-09
+
 ### Added
 - **VDBE Local Variable Slot Indexing (`pkg/proc`, `pkg/proc/runtime`)**:
   - Implemented compile-time variable slot allocation (`Program.VarSlots map[string]int32`, `Program.SlotCount int32`) and runtime $O(1)$ direct slice indexing (`VMFrame.slots[inst.B]`) for procedure parameters and local variables (`DECLARE`, `SET`, `SELECT INTO`), eliminating string hashing, case folding, and map lookup overhead on hot execution paths.
@@ -27,10 +31,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Performance & Benchmarks
 - **Post-Optimization TPC-C & VDBE Benchmark Verification (`cmd/tpcc`, `cmd/tpcc_vdbe`, `doc/BENCHMARK.md`)**:
-  - Re-benchmarked native Go driver and T-SQL VDBE bytecode engine on standard TPC-C workload (2 Warehouses, 20 Workers, 15s) following VDBE dispatcher modularization and local variable slot indexing.
+  - Re-benchmarked native Go driver and T-SQL VDBE bytecode engine on standard TPC-C workload (2 Warehouses, 20 Workers, 15s) across variable slot indexing, opcode specialization, and fused compare-and-branch optimizations.
   - **Go Native API Driver**: Achieved **28,299.66 TPS (763,495.89 tpmC)** across 425,002 transactions (New-Order Avg 0.82ms / P95 3.01ms, Payment Avg 0.53ms / P95 2.12ms).
-  - **T-SQL VDBE Bytecode VM Engine**: Achieved **17,803.15 TPS (475,780.56 tpmC)** across 267,359 transactions with 2.17% serialization abort rate, delivering **63%** of raw native driver throughput on virtual machine.
-  - **VDBE Latency Distribution**: New-Order P50 0.56ms / P95 6.53ms / P99 16.74ms, Payment P50 0.05ms (50µs) / P95 3.13ms, Order-Status P50 0.01ms (10µs).
+  - **T-SQL VDBE Bytecode VM Engine**: Peak throughput reached **20,478.6 TPS (554,835 tpmC)**, overall sustained **17,563.10 TPS (471,372.34 tpmC)** (63% native parity) with significant tail latency reductions (Payment P95 dropped to 2.96ms, P99 to 11.64ms).
 
 ---
 
