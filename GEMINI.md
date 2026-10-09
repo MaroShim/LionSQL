@@ -152,7 +152,7 @@ All modifications, refactoring, and feature additions must strictly pass the fol
    - Conventional Commits format (`feat(...)`, `fix(...)`, `refactor(...)`, `docs(...)`, etc.).
    - Strictly avoid decorative emojis in commit messages, comments, and code.
 
-> **Exception (Documentation-Only Commits)**: 설정이나 런타임에 영향을 주지 않는 순수 마크다운(`.md`) 및 텍스트 문서 수정(`docs: ...`) 시에는 불필요한 빌드 및 테스트 단계를 생략하고 바로 커밋합니다.
+> **Exception (Documentation-Only Commits)**: For pure markdown (`*.md`) and text documentation modifications (`docs: ...`) that do not impact configurations or runtime behavior, the build and test steps may be bypassed and committed immediately.
 
 ---
 
