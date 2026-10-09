@@ -14,6 +14,7 @@ type OpCode uint8
 const (
 	// Control & Stack
 	OpHalt OpCode = iota
+	OpNop
 	OpReturn
 	OpLoadConst
 	OpLoadVar
@@ -22,6 +23,18 @@ const (
 	OpJump
 	OpJumpIfFalse
 	OpJumpIfTrue
+	OpJumpIfEq
+	OpJumpIfNeq
+	OpJumpIfLt
+	OpJumpIfLte
+	OpJumpIfGt
+	OpJumpIfGte
+	OpJumpIfEqInt
+	OpJumpIfNeqInt
+	OpJumpIfLtInt
+	OpJumpIfLteInt
+	OpJumpIfGtInt
+	OpJumpIfGteInt
 	OpPushCatch
 	OpPopCatch
 	OpThrow
@@ -112,6 +125,8 @@ func (op OpCode) String() string {
 		return "POINT_SELECT"
 	case OpHalt:
 		return "HALT"
+	case OpNop:
+		return "NOP"
 	case OpReturn:
 		return "RETURN"
 	case OpLoadConst:
@@ -128,6 +143,30 @@ func (op OpCode) String() string {
 		return "JUMP_IF_FALSE"
 	case OpJumpIfTrue:
 		return "JUMP_IF_TRUE"
+	case OpJumpIfEq:
+		return "JUMP_IF_EQ"
+	case OpJumpIfNeq:
+		return "JUMP_IF_NEQ"
+	case OpJumpIfLt:
+		return "JUMP_IF_LT"
+	case OpJumpIfLte:
+		return "JUMP_IF_LTE"
+	case OpJumpIfGt:
+		return "JUMP_IF_GT"
+	case OpJumpIfGte:
+		return "JUMP_IF_GTE"
+	case OpJumpIfEqInt:
+		return "JUMP_IF_EQ_INT"
+	case OpJumpIfNeqInt:
+		return "JUMP_IF_NEQ_INT"
+	case OpJumpIfLtInt:
+		return "JUMP_IF_LT_INT"
+	case OpJumpIfLteInt:
+		return "JUMP_IF_LTE_INT"
+	case OpJumpIfGtInt:
+		return "JUMP_IF_GT_INT"
+	case OpJumpIfGteInt:
+		return "JUMP_IF_GTE_INT"
 	case OpPushCatch:
 		return "PUSH_CATCH"
 	case OpPopCatch:
@@ -246,6 +285,17 @@ func (op OpCode) String() string {
 		return "INDEX_SCAN"
 	default:
 		return fmt.Sprintf("OP_%d", op)
+	}
+}
+
+// IsFusedJump returns true if the opcode is a fused compare-and-branch instruction.
+func IsFusedJump(op OpCode) bool {
+	switch op {
+	case OpJumpIfEq, OpJumpIfNeq, OpJumpIfLt, OpJumpIfLte, OpJumpIfGt, OpJumpIfGte,
+		OpJumpIfEqInt, OpJumpIfNeqInt, OpJumpIfLtInt, OpJumpIfLteInt, OpJumpIfGtInt, OpJumpIfGteInt:
+		return true
+	default:
+		return false
 	}
 }
 

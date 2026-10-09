@@ -31,6 +31,9 @@ func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal
 	case proc.OpHalt:
 		return true, nil, nil
 
+	case proc.OpNop:
+		return false, nil, nil
+
 	case proc.OpReturn:
 		if inst.A >= 0 && int(inst.A) < len(f.regs) {
 			return true, valToAny(f.regs[inst.A]), nil
@@ -50,6 +53,108 @@ func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal
 	case proc.OpJumpIfTrue:
 		if isTruthy(f.regs[inst.A]) {
 			*pc = int(inst.B)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfEqInt:
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+			if va.IVal == vb.IVal {
+				*pc = int(inst.C)
+			}
+		} else if storageEq(va, vb) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfNeqInt:
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+			if va.IVal != vb.IVal {
+				*pc = int(inst.C)
+			}
+		} else if !storageEq(va, vb) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfLtInt:
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+			if va.IVal < vb.IVal {
+				*pc = int(inst.C)
+			}
+		} else if storageLt(va, vb) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfLteInt:
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+			if va.IVal <= vb.IVal {
+				*pc = int(inst.C)
+			}
+		} else if storageLte(va, vb) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfGtInt:
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+			if va.IVal > vb.IVal {
+				*pc = int(inst.C)
+			}
+		} else if storageGt(va, vb) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfGteInt:
+		va, vb := f.regs[inst.A], f.regs[inst.B]
+		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
+			if va.IVal >= vb.IVal {
+				*pc = int(inst.C)
+			}
+		} else if storageGte(va, vb) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfEq:
+		if storageEq(f.regs[inst.A], f.regs[inst.B]) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfNeq:
+		if !storageEq(f.regs[inst.A], f.regs[inst.B]) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfLt:
+		if storageLt(f.regs[inst.A], f.regs[inst.B]) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfLte:
+		if storageLte(f.regs[inst.A], f.regs[inst.B]) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfGt:
+		if storageGt(f.regs[inst.A], f.regs[inst.B]) {
+			*pc = int(inst.C)
+		}
+		return false, nil, nil
+
+	case proc.OpJumpIfGte:
+		if storageGte(f.regs[inst.A], f.regs[inst.B]) {
+			*pc = int(inst.C)
 		}
 		return false, nil, nil
 

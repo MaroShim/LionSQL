@@ -440,7 +440,9 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 		pc++
 
 		switch inst.Op {
-		case proc.OpHalt, proc.OpReturn, proc.OpJump, proc.OpJumpIfFalse, proc.OpJumpIfTrue,
+		case proc.OpHalt, proc.OpNop, proc.OpReturn, proc.OpJump, proc.OpJumpIfFalse, proc.OpJumpIfTrue,
+			proc.OpJumpIfEq, proc.OpJumpIfNeq, proc.OpJumpIfLt, proc.OpJumpIfLte, proc.OpJumpIfGt, proc.OpJumpIfGte,
+			proc.OpJumpIfEqInt, proc.OpJumpIfNeqInt, proc.OpJumpIfLtInt, proc.OpJumpIfLteInt, proc.OpJumpIfGtInt, proc.OpJumpIfGteInt,
 			proc.OpPushCatch, proc.OpPopCatch, proc.OpThrow, proc.OpRaiserror, proc.OpPrint:
 			halt, retVal, err := f.execFlowOp(&inst, &pc)
 			if err != nil {

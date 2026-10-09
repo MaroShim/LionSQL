@@ -267,11 +267,196 @@ func CompileTrigger(stmt *CreateTriggerStmt) (*Program, error) {
 
 func (c *Compiler) finalizeProgram() *Program {
 	c.emit(OpReturn, -1, 0, 0, nil)
+	c.optimizePeephole()
 	c.prog.NumRegisters = c.maxRegisters
 	c.prog.VarSlots = c.varSlots
 	c.prog.SlotCount = int32(len(c.slotNames))
 	c.prog.VarNames = c.slotNames
 	return c.prog
+}
+
+// optimizePeephole applies static peep-hole optimizations to bytecode instructions:
+// 1. Fall-through jump elimination (converting OpJump i+1 to OpNop)
+// 2. Jump threading / chaining (trampoline jump elimination)
+func (c *Compiler) optimizePeephole() {
+	instructions := c.prog.Instructions
+	n := len(instructions)
+
+	for i := 0; i < n; i++ {
+		inst := &instructions[i]
+
+		// 1. Fall-through jump optimization
+		// If an unconditional OpJump jumps to the immediately following instruction (i + 1),
+		// it is a no-op fallthrough. Convert it to OpNop.
+		if inst.Op == OpJump && int(inst.B) == i+1 {
+			inst.Op = OpNop
+			continue
+		}
+
+		// 2. Jump threading / chaining
+		// If a jump instruction targets an instruction that itself is an unconditional OpJump,
+		// shortcut directly to the final destination.
+		target := -1
+		isFused := IsFusedJump(inst.Op)
+		if isFused {
+			target = int(inst.C)
+		} else if inst.Op == OpJump || inst.Op == OpJumpIfFalse || inst.Op == OpJumpIfTrue {
+			target = int(inst.B)
+		}
+
+		if target >= 0 && target < n {
+			visited := 0
+			curr := target
+			for visited < 32 && curr >= 0 && curr < n && instructions[curr].Op == OpJump {
+				next := int(instructions[curr].B)
+				if next == curr {
+					break
+				}
+				curr = next
+				visited++
+			}
+			if curr != target && curr >= 0 && curr < n {
+				if isFused {
+					inst.C = int32(curr)
+				} else {
+					inst.B = int32(curr)
+				}
+			}
+		}
+	}
+}
+
+func (c *Compiler) patchJumpTarget(pc int, targetPC int) {
+	if pc < 0 || pc >= len(c.prog.Instructions) {
+		return
+	}
+	inst := &c.prog.Instructions[pc]
+	if IsFusedJump(inst.Op) {
+		inst.C = int32(targetPC)
+	} else {
+		inst.B = int32(targetPC)
+	}
+}
+
+func (c *Compiler) compileConditionJump(cond Expr, invert bool) (int, error) {
+	if be, ok := cond.(*BinaryExpr); ok {
+		var fusedOp OpCode
+		isInt := c.isIntegerExpr(be.Left) && c.isIntegerExpr(be.Right)
+
+		switch be.Op {
+		case TokenEq:
+			if invert {
+				if isInt {
+					fusedOp = OpJumpIfNeqInt
+				} else {
+					fusedOp = OpJumpIfNeq
+				}
+			} else {
+				if isInt {
+					fusedOp = OpJumpIfEqInt
+				} else {
+					fusedOp = OpJumpIfEq
+				}
+			}
+		case TokenNeq:
+			if invert {
+				if isInt {
+					fusedOp = OpJumpIfEqInt
+				} else {
+					fusedOp = OpJumpIfEq
+				}
+			} else {
+				if isInt {
+					fusedOp = OpJumpIfNeqInt
+				} else {
+					fusedOp = OpJumpIfNeq
+				}
+			}
+		case TokenLt:
+			if invert {
+				if isInt {
+					fusedOp = OpJumpIfGteInt
+				} else {
+					fusedOp = OpJumpIfGte
+				}
+			} else {
+				if isInt {
+					fusedOp = OpJumpIfLtInt
+				} else {
+					fusedOp = OpJumpIfLt
+				}
+			}
+		case TokenLte:
+			if invert {
+				if isInt {
+					fusedOp = OpJumpIfGtInt
+				} else {
+					fusedOp = OpJumpIfGt
+				}
+			} else {
+				if isInt {
+					fusedOp = OpJumpIfLteInt
+				} else {
+					fusedOp = OpJumpIfLte
+				}
+			}
+		case TokenGt:
+			if invert {
+				if isInt {
+					fusedOp = OpJumpIfLteInt
+				} else {
+					fusedOp = OpJumpIfLte
+				}
+			} else {
+				if isInt {
+					fusedOp = OpJumpIfGtInt
+				} else {
+					fusedOp = OpJumpIfGt
+				}
+			}
+		case TokenGte:
+			if invert {
+				if isInt {
+					fusedOp = OpJumpIfLtInt
+				} else {
+					fusedOp = OpJumpIfLt
+				}
+			} else {
+				if isInt {
+					fusedOp = OpJumpIfGteInt
+				} else {
+					fusedOp = OpJumpIfGte
+				}
+			}
+		}
+
+		if fusedOp != 0 {
+			leftReg, err := c.compileExpr(be.Left)
+			if err != nil {
+				return 0, err
+			}
+			rightReg, err := c.compileExpr(be.Right)
+			if err != nil {
+				return 0, err
+			}
+			jmpPC := c.emit(fusedOp, leftReg, rightReg, 0, nil)
+			c.freeReg(2)
+			return jmpPC, nil
+		}
+	}
+
+	// General condition fallback
+	condReg, err := c.compileExpr(cond)
+	if err != nil {
+		return 0, err
+	}
+	op := OpJumpIfFalse
+	if !invert {
+		op = OpJumpIfTrue
+	}
+	jmpPC := c.emit(op, condReg, 0, 0, nil)
+	c.freeReg(1)
+	return jmpPC, nil
 }
 
 func isSystemVar(name string) bool {
@@ -353,6 +538,16 @@ func (c *Compiler) emit(op OpCode, a, b, cReg int32, data any) int {
 	return pc
 }
 
+// EmitForTest is a test helper for building manual bytecode programs.
+func (c *Compiler) EmitForTest(op OpCode, a, b, cReg int32, data any) int {
+	return c.emit(op, a, b, cReg, data)
+}
+
+// FinalizeProgramForTest is a test helper for finalizing manually built programs.
+func (c *Compiler) FinalizeProgramForTest() *Program {
+	return c.finalizeProgram()
+}
+
 func (c *Compiler) currentPC() int {
 	return len(c.prog.Instructions)
 }
@@ -421,12 +616,10 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *IfStmt:
-		condReg, err := c.compileExpr(s.Condition)
+		jmpFalse, err := c.compileConditionJump(s.Condition, true)
 		if err != nil {
 			return err
 		}
-		jmpFalse := c.emit(OpJumpIfFalse, condReg, 0, 0, nil)
-		c.freeReg(1)
 
 		if err := c.compileStatement(s.Then); err != nil {
 			return err
@@ -434,13 +627,13 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 		if s.Else != nil {
 			jmpEnd := c.emit(OpJump, 0, 0, 0, nil)
-			c.prog.Instructions[jmpFalse].B = int32(c.currentPC())
+			c.patchJumpTarget(jmpFalse, c.currentPC())
 			if err := c.compileStatement(s.Else); err != nil {
 				return err
 			}
-			c.prog.Instructions[jmpEnd].B = int32(c.currentPC())
+			c.patchJumpTarget(jmpEnd, c.currentPC())
 		} else {
-			c.prog.Instructions[jmpFalse].B = int32(c.currentPC())
+			c.patchJumpTarget(jmpFalse, c.currentPC())
 		}
 		return nil
 
@@ -449,12 +642,10 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		c.loopBreaks = append(c.loopBreaks, []int{})
 		c.loopContinues = append(c.loopContinues, []int{})
 
-		condReg, err := c.compileExpr(s.Condition)
+		jmpEnd, err := c.compileConditionJump(s.Condition, true)
 		if err != nil {
 			return err
 		}
-		jmpEnd := c.emit(OpJumpIfFalse, condReg, 0, 0, nil)
-		c.freeReg(1)
 
 		if err := c.compileStatement(s.Body); err != nil {
 			return err
@@ -462,18 +653,18 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 		c.emit(OpJump, 0, int32(loopStart), 0, nil)
 		endPC := c.currentPC()
-		c.prog.Instructions[jmpEnd].B = int32(endPC)
+		c.patchJumpTarget(jmpEnd, endPC)
 
 		breaks := c.loopBreaks[len(c.loopBreaks)-1]
 		c.loopBreaks = c.loopBreaks[:len(c.loopBreaks)-1]
 		for _, bPC := range breaks {
-			c.prog.Instructions[bPC].B = int32(endPC)
+			c.patchJumpTarget(bPC, endPC)
 		}
 
 		continues := c.loopContinues[len(c.loopContinues)-1]
 		c.loopContinues = c.loopContinues[:len(c.loopContinues)-1]
 		for _, cPC := range continues {
-			c.prog.Instructions[cPC].B = int32(loopStart)
+			c.patchJumpTarget(cPC, loopStart)
 		}
 		return nil
 

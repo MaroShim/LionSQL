@@ -48,7 +48,7 @@ END;
 	}
 
 	dis := prog.Disassemble()
-	if !strings.Contains(dis, "SELECT_INTO") || !strings.Contains(dis, "JUMP_IF_FALSE") {
+	if !strings.Contains(dis, "SELECT_INTO") || (!strings.Contains(dis, "JUMP_IF_FALSE") && !strings.Contains(dis, "JUMP_IF_LTE_INT")) {
 		t.Errorf("disassembly missing expected opcodes:\n%s", dis)
 	}
 }
