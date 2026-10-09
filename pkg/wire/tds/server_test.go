@@ -656,4 +656,57 @@ func TestTDS_InferColumnInfos_DateTime(t *testing.T) {
 	}
 }
 
+func TestTDS_AttentionQueryCancellation(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+
+	performHandshake(t, conn)
+
+	// Create a procedure with an infinite loop to cancel
+	createProcSQL := `CREATE PROCEDURE SpinCancel AS BEGIN DECLARE @c INT; SET @c = 0; WHILE 1=1 BEGIN SET @c = @c + 1; END; END;`
+	payload := sendSQLBatch(t, conn, createProcSQL)
+	if !bytes.Contains(payload, []byte{TokenDone}) {
+		t.Fatalf("failed to create SpinCancel procedure")
+	}
+
+	// 1. Send EXEC SpinCancel;
+	execSQL := "EXEC SpinCancel;"
+	u16SQL := EncodeUTF16LE(execSQL)
+	if err := WritePacket(conn, PacketSQLBatch, 1, u16SQL); err != nil {
+		t.Fatalf("failed to write SQLBatch packet: %v", err)
+	}
+
+	// Wait briefly so the VM is executing inside the WHILE loop
+	time.Sleep(30 * time.Millisecond)
+
+	// 2. Send Attention packet (Type 0x06)
+	if err := WritePacket(conn, PacketAttention, 1, nil); err != nil {
+		t.Fatalf("failed to write Attention packet: %v", err)
+	}
+
+	// 3. Read Attention response
+	attnResp, err := ReadPacket(conn)
+	if err != nil {
+		t.Fatalf("failed to read Attention response: %v", err)
+	}
+	if attnResp.Type != PacketTabular {
+		t.Fatalf("expected PacketTabular (0x04) in attention response, got 0x%02X", attnResp.Type)
+	}
+	if len(attnResp.Payload) < 3 || attnResp.Payload[0] != TokenDone {
+		t.Fatalf("expected TokenDone (0xFD) as first token in attention response, got %x", attnResp.Payload)
+	}
+	// Check status has DoneAttn (0x0020) bit set
+	status := binary.LittleEndian.Uint16(attnResp.Payload[1:3])
+	if status&DoneAttn == 0 {
+		t.Fatalf("expected DoneAttn flag (0x0020) in token status, got status 0x%04X", status)
+	}
+
+	// 4. Verify connection remains functional for subsequent queries
+	okPayload := sendSQLBatch(t, conn, "SELECT 123 AS num;")
+	if !bytes.Contains(okPayload, []byte{TokenRow}) {
+		t.Fatalf("subsequent query failed after attention packet; response: %x", okPayload)
+	}
+}
+
+
 

@@ -2,6 +2,7 @@ package tds
 
 import (
 	"bytes"
+	"context"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
@@ -286,40 +287,145 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 	defer s.apiServer.CloseSession(sess.SessionID)
 
-	for {
-		pkt, err := ReadPacket(conn)
+	// 2. Read initial packet (usually PacketPrelogin or direct Login7)
+	firstPkt, err := ReadPacket(conn)
+	if err != nil {
+		return
+	}
+
+	if firstPkt.Type == PacketPrelogin {
+		conn, err = s.handlePrelogin(conn, firstPkt, sess)
 		if err != nil {
 			return
 		}
+	}
 
-		switch pkt.Type {
+	stopChan := make(chan struct{})
+	defer close(stopChan)
+
+	packetChan := make(chan *Packet, 8)
+	errChan := make(chan error, 1)
+
+	// If the initial packet was not Prelogin, queue it for processing
+	if firstPkt.Type != PacketPrelogin {
+		packetChan <- firstPkt
+	}
+
+	go func() {
+		for {
+			p, err := ReadPacket(conn)
+			if err != nil {
+				select {
+				case <-stopChan:
+				case errChan <- err:
+				}
+				return
+			}
+			select {
+			case <-stopChan:
+				return
+			case packetChan <- p:
+			}
+		}
+	}()
+
+	var pendingPkt *Packet
+	for {
+		var p *Packet
+		if pendingPkt != nil {
+			p = pendingPkt
+			pendingPkt = nil
+		} else {
+			select {
+			case <-errChan:
+				return
+			case p = <-packetChan:
+			}
+		}
+
+		switch p.Type {
 		case PacketPrelogin:
 			var err error
-			conn, err = s.handlePrelogin(conn, pkt, sess)
+			conn, err = s.handlePrelogin(conn, p, sess)
 			if err != nil {
 				return
 			}
 
 		case PacketLogin7:
-			s.handleLogin7(conn, pkt, sess)
+			s.handleLogin7(conn, p, sess)
 
 		case PacketSQLBatch:
-			s.handleSQLBatch(conn, pkt, sess)
+			pendingPkt = s.runQueryWithAttention(conn, p, sess, packetChan, errChan, func(ctx context.Context) {
+				s.handleSQLBatch(conn, p, sess, ctx)
+			})
 
 		case PacketRPC:
-			s.handleRPC(conn, pkt, sess)
+			pendingPkt = s.runQueryWithAttention(conn, p, sess, packetChan, errChan, func(ctx context.Context) {
+				s.handleRPC(conn, p, sess, ctx)
+			})
 
 		case PacketTransactionManager:
-			s.handleTransactionManager(conn, pkt, sess)
+			s.handleTransactionManager(conn, p, sess)
 
 		case PacketAttention:
-			s.handleAttention(conn, pkt, sess)
+			s.handleAttention(conn, p, sess)
 
 		default:
 			// Fallback: send simple DONE
 			doneBytes := BuildDone(TokenDone, DoneFinal, 0, 0)
 			_ = WritePacket(conn, PacketTabular, sess.SPID, doneBytes)
 		}
+	}
+}
+
+func (s *Server) runQueryWithAttention(
+	conn net.Conn,
+	pkt *Packet,
+	sess *ConnectionSession,
+	packetChan <-chan *Packet,
+	errChan <-chan error,
+	execFn func(ctx context.Context),
+) *Packet {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	queryDone := make(chan struct{})
+	go func() {
+		defer close(queryDone)
+		execFn(ctx)
+	}()
+
+	select {
+	case <-queryDone:
+		return nil
+
+	case nextPkt := <-packetChan:
+		// Prioritize checking if query was already finished
+		select {
+		case <-queryDone:
+			if nextPkt.Type == PacketAttention {
+				s.handleAttention(conn, nextPkt, sess)
+				return nil
+			}
+			return nextPkt
+		default:
+		}
+
+		if nextPkt.Type == PacketAttention {
+			cancel()
+			<-queryDone
+			s.handleAttention(conn, nextPkt, sess)
+			return nil
+		}
+
+		// A subsequent command packet arrived before queryDone unblocked; wait for completion and preserve packet
+		<-queryDone
+		return nextPkt
+
+	case <-errChan:
+		cancel()
+		<-queryDone
+		return nil
 	}
 }
 
@@ -461,12 +567,12 @@ func readLoginString(payload []byte, offsetPos int) string {
 	return DecodeUTF16LE(payload[ib : ib+byteLen])
 }
 
-func (s *Server) handleSQLBatch(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
+func (s *Server) handleSQLBatch(conn net.Conn, pkt *Packet, sess *ConnectionSession, ctx context.Context) {
 	query := extractSQLBatchQuery(pkt.Payload)
 	if s.DevMode() {
 		log.Printf("[DEV][TDS][SQLBatch] %s", query)
 	}
-	s.executeQueryAndRespond(conn, query, sess)
+	s.executeQueryAndRespond(conn, query, sess, ctx)
 }
 
 func extractSQLBatchQuery(payload []byte) string {
@@ -488,7 +594,7 @@ func extractSQLBatchQuery(payload []byte) string {
 	return strings.TrimSpace(strings.Trim(DecodeUTF16LE(payload), "\x00"))
 }
 
-func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
+func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, ctx context.Context) {
 	rpc, err := parseRPCRequest(pkt.Payload)
 	if err != nil || rpc == nil {
 		done := BuildDone(TokenDone, DoneFinal, 0, 0)
@@ -522,18 +628,18 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession) 
 
 	switch procID {
 	case 10: // sp_executesql
-		s.handleRPCExecuteSQL(conn, rpc, sess)
+		s.handleRPCExecuteSQL(conn, rpc, sess, ctx)
 	case 11: // sp_prepare
 		s.handleRPCPrepare(conn, rpc, sess)
 	case 12: // sp_execute
-		s.handleRPCExecute(conn, rpc, sess)
+		s.handleRPCExecute(conn, rpc, sess, ctx)
 	case 13: // sp_prepexec
-		s.handleRPCPrepExec(conn, rpc, sess)
+		s.handleRPCPrepExec(conn, rpc, sess, ctx)
 	case 15: // sp_unprepare
 		s.handleRPCUnprepare(conn, rpc, sess)
 	default:
 		if rpc.ProcName != "" {
-			s.executeRPCAndRespond(conn, fmt.Sprintf("EXEC %s", rpc.ProcName), sess, nil)
+			s.executeRPCAndRespond(conn, fmt.Sprintf("EXEC %s", rpc.ProcName), sess, nil, ctx)
 		} else {
 			done := BuildDoneProc(DoneFinal, 0, 0)
 			_ = WritePacket(conn, PacketTabular, sess.SPID, done)
@@ -597,7 +703,7 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 }
 
-func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession) {
+func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession, ctx context.Context) {
 	var handle int32
 	if len(rpc.Params) > 0 {
 		handle = toInt32(rpc.Params[0].Value)
@@ -638,19 +744,22 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 		session, err := s.engine.NewSession()
 		if err == nil {
 			defer session.Close()
-			res, err := s.executor.Run(prep.Program, "TdsPrepared", paramMap, session)
+			res, err := s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
 			if err == nil {
 				s.respondExecutionResult(conn, res, sess, nil)
+				return
+			}
+			if ctx.Err() != nil {
 				return
 			}
 		}
 	}
 
 	execSQL := s.buildBoundSQL(prep.Query, prep.Params, boundParams)
-	s.executeRPCAndRespond(conn, execSQL, sess, nil)
+	s.executeRPCAndRespond(conn, execSQL, sess, nil, ctx)
 }
 
-func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession) {
+func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession, ctx context.Context) {
 	var paramsDecl string
 	var stmt string
 
@@ -717,11 +826,14 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 		session, err := s.engine.NewSession()
 		if err == nil {
 			defer session.Close()
-			res, err := s.executor.Run(prep.Program, "TdsPrepared", paramMap, session)
+			res, err := s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
 			if err == nil {
 				s.respondExecutionResult(conn, res, sess, func(buf *bytes.Buffer) {
 					buf.Write(BuildReturnValueInt(1, "@handle", handle))
 				})
+				return
+			}
+			if ctx.Err() != nil {
 				return
 			}
 		}
@@ -730,7 +842,7 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 	execSQL := s.buildBoundSQL(stmt, paramsDecl, boundParams)
 	s.executeRPCAndRespond(conn, execSQL, sess, func(buf *bytes.Buffer) {
 		buf.Write(BuildReturnValueInt(1, "@handle", handle))
-	})
+	}, ctx)
 }
 
 func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionResult, sess *ConnectionSession, extraTokens func(buf *bytes.Buffer)) {
@@ -805,7 +917,7 @@ func (s *Server) handleRPCUnprepare(conn net.Conn, rpc *parsedRPC, sess *Connect
 	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 }
 
-func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession) {
+func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession, ctx context.Context) {
 	if len(rpc.Params) == 0 {
 		done := BuildDoneProc(DoneFinal, 0, 0)
 		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
@@ -826,10 +938,10 @@ func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *Connec
 	}
 
 	execSQL := s.buildBoundSQL(stmt, paramsDecl, boundParams)
-	s.executeRPCAndRespond(conn, execSQL, sess, nil)
+	s.executeRPCAndRespond(conn, execSQL, sess, nil, ctx)
 }
 
-func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *ConnectionSession, extraTokens func(buf *bytes.Buffer)) {
+func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *ConnectionSession, extraTokens func(buf *bytes.Buffer), ctx context.Context) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		var buf bytes.Buffer
@@ -875,8 +987,15 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		log.Printf("[DEV][TDS][Query] %s", trimmed)
 	}
 
-	res, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, trimmed)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	res, err := s.apiServer.ExecuteSessionSQLContext(ctx, sess.SessionID, trimmed)
 	if err != nil {
+		if ctx.Err() != nil {
+			// Query canceled via Attention packet; do not write error packet
+			return
+		}
 		if s.DevMode() {
 			log.Printf("[DEV][TDS][Error] query=%s err=%v", trimmed, err)
 		}
@@ -1616,7 +1735,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 	}
 }
 
-func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *ConnectionSession) {
+func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *ConnectionSession, ctx context.Context) {
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		done := BuildDone(TokenDone, DoneFinal, 0, 0)
@@ -1652,8 +1771,15 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		log.Printf("[DEV][TDS][Query] %s", trimmed)
 	}
 
-	res, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, trimmed)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	res, err := s.apiServer.ExecuteSessionSQLContext(ctx, sess.SessionID, trimmed)
 	if err != nil {
+		if ctx.Err() != nil {
+			// Query canceled via Attention packet; do not write error packet
+			return
+		}
 		if s.DevMode() {
 			log.Printf("[DEV][TDS][Error] query=%s err=%v", trimmed, err)
 		}
