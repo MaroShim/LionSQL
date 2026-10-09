@@ -125,8 +125,8 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
 * [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/sql/doc/TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.
-* [`ROADMAP.md`](file:///Users/maro/Projects/sql/ROADMAP.md)
-  * Versioned milestone tracking (Phases 1 to 5) and future technical architectural initiatives.
+* [`ROADMAP.md`](file:///Users/maro/Projects/sql/ROADMAP.md) ([한국어](file:///Users/maro/Projects/sql/ROADMAP.ko.md))
+  * Versioned milestone progression from single-node OLTP to Always On HA and decoupled HTAP.
 * [`TODO.ko.md`](file:///Users/maro/Projects/sql/TODO.ko.md)
   * Daily actionable engineering backlog and task status tracker.
 * [`CHANGELOG.md`](file:///Users/maro/Projects/sql/CHANGELOG.md)
