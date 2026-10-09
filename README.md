@@ -126,8 +126,8 @@ SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micro
   - Replicas enforce strict read-only execution across all wire protocols (`ErrReadOnlyReplica`), offering linear horizontal query scaling.
   - Zero-downtime failover promotion (`POST /api/replication/promote`) promoting replicas to active primary nodes without process restart.
 - **High-Performance Storage Backends & TPC-C Benchmark**:
-  - **In-Memory OCC Engine**: Fine-grained table-level striped locking, pure-Go concurrent SkipList secondary indexes, and zero-copy cursor iteration delivering **12,000 ~ 16,000+ TPS** (300,000 ~ 450,000 tpmC) with sub-millisecond median latency on standard TPC-C transactions.
-  - **WiredTiger (Default)**: Cgo-backed lock-free B+Tree with hazard pointers, schema-aware compact binary tuple codec, and cursor caching delivering **10,000+ TPS** (~300,000 tpmC) under full ACID durability.
+  - **In-Memory OCC Engine**: Fine-grained table-level striped locking, pure-Go concurrent SkipList secondary indexes, and zero-copy cursor iteration delivering **28,000+ TPS** (763,000+ tpmC) via Go Native API and **17,800+ TPS** (475,000+ tpmC) on the compiled T-SQL VDBE Bytecode Virtual Machine with sub-millisecond median latency on standard TPC-C transactions.
+  - **WiredTiger (Default)**: Cgo-backed lock-free B+Tree with hazard pointers, schema-aware compact binary tuple codec, and cursor caching delivering **10,000 ~ 17,000+ TPS** (300,000 ~ 500,000 tpmC) under full ACID durability.
 
 ---
 

@@ -17,6 +17,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Modularized the 800+ line monolithic `switch inst.Op` in `VMFrame.Execute` into domain-specific execution helpers (`execFlowOp`, `execComputeOp`, `execTxOp`, `execStorageOp`, `execCursorAndCallOp`, `execRelOp`).
   - Unified repetitive error catch-stack unwinding logic into a centralized `handleCatch` helper, reducing cyclomatic complexity and improving profiling trace clarity.
 
+### Performance & Benchmarks
+- **Post-Optimization TPC-C & VDBE Benchmark Verification (`cmd/tpcc`, `cmd/tpcc_vdbe`, `doc/BENCHMARK.md`)**:
+  - Re-benchmarked native Go driver and T-SQL VDBE bytecode engine on standard TPC-C workload (2 Warehouses, 20 Workers, 15s) following VDBE dispatcher modularization and local variable slot indexing.
+  - **Go Native API Driver**: Achieved **28,299.66 TPS (763,495.89 tpmC)** across 425,002 transactions (New-Order Avg 0.82ms / P95 3.01ms, Payment Avg 0.53ms / P95 2.12ms).
+  - **T-SQL VDBE Bytecode VM Engine**: Achieved **17,803.15 TPS (475,780.56 tpmC)** across 267,359 transactions with 2.17% serialization abort rate, delivering **63%** of raw native driver throughput on virtual machine.
+  - **VDBE Latency Distribution**: New-Order P50 0.56ms / P95 6.53ms / P99 16.74ms, Payment P50 0.05ms (50µs) / P95 3.13ms, Order-Status P50 0.01ms (10µs).
+
 ---
 
 ## [0.14.0] - 2026-10-08

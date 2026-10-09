@@ -109,7 +109,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - **4. 오프코드 특화(Specialization) 및 인터페이스 비교 제거**: `OpEq` 내 `inst.Data == "AND"` 등 동적 인터페이스 문자열 비교를 완전 제거하고 `OpAnd`, `OpOr` 독립 오프코드 분리 및 정수 핫패스 인라인 특화 오프코드(`OpAddInt`, `OpEqInt`) 도입.
   - **5. 인스트럭션 구조체 밀도 최적화 (CPU L1 Cache Locality)**: `Instruction` 구조체 내 `Data any` 인터페이스 헤더(16바이트)를 분리하고 레지스터 연산을 8~16바이트 고정 크기 레코드로 밀도 높게 패킹하여 CPU L1 Data Cache 적중률 극대화.
   - **관계형 스캔 벡터화 배치 파이프라이닝 (Vectorized Chunk Scan)**: `OpRelScan`, `OpIndexScan`에서 행 단위 VM 왕복 오버헤드를 줄이기 위한 N개(64~1024건) 단위 청크 벡터화 스트리밍.
-  - **마이크로 벤치마크 및 pprof 프로파일링 하네스**: `BenchmarkTransferFunds` (기준선: 6.34µs / 22.2KB / 171 allocs) 및 TPC-C New-Order 대상 단계별 성능 추적 및 검증.
+  - **[완료] 마이크로 벤치마크 및 TPC-C 성능 추적 하네스 검증**: VDBE 슬롯화 및 디스패처 모듈화 적용 후 TPC-C VDBE **17,803 TPS (475,780 tpmC)** 달성 (네이티브 Go 28,300 TPS 대비 63% 유지율, New-Order p50 0.56ms, Payment p50 0.05ms) 검증 완료.
 
 ---
 

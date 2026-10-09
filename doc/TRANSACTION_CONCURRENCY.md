@@ -163,8 +163,10 @@ for attempt := 0; attempt <= maxRetries; attempt++ {
 }
 ```
 
-- **In-Memory OCC Benchmark Results**: Achieves a **99.8%** commit success rate on first attempt, delivering **1,251,489 tpmC** and **43,832 TPS**.
-- **WiredTiger MVCC Benchmark Results**: Delivers **507,456 tpmC** and **17,294 TPS** with sub-2ms median latency.
+- **In-Memory OCC Benchmark Results**:
+  - High-concurrency harness (10 Warehouses, 100 Workers): Achieves a **99.8%** commit success rate on first attempt, delivering **1,251,489 tpmC** and **43,832 TPS**.
+  - Standard OLTP harness (2 Warehouses, 20 Workers): Delivers **763,496 tpmC** and **28,300 TPS** (Native Go API) and **475,781 tpmC** / **17,803 TPS** on T-SQL VDBE bytecode VM with 2.17% serialization abort rate.
+- **WiredTiger MVCC Benchmark Results**: Delivers **507,456 tpmC** and **17,294 TPS** (Native) and **298,426 tpmC** / **10,936 TPS** (VDBE Bytecode) with sub-2ms median latency.
 
 ---
 
