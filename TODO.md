@@ -145,7 +145,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - **[완료] 읽기 전용 트랜잭션 패스트패스 (Read-Only Fast-Path)**: DML이 발생하지 않은 트랜잭션 및 ReadOnly 트랜잭션은 OCC 유효성 검증과 WAL 기록을 건너뛰고 스냅샷 해제 및 불필요한 메타데이터 맵 할당 제거 완료.
 - [ ] **[Phase 2: 튜플 디코딩 & 스토리지] 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 스캔**
   - **프로젝션 푸시다운 & 지연 디코딩 (Lazy Tuple Decoding)**: 테이블 풀 스캔 또는 범위 스캔 시 전체 컬럼을 역직렬화하지 않고, Null 비트맵과 헤더 검사 후 쿼리에서 요구하는 특정 컬럼 오프셋만 선택적 슬라이싱하여 디코딩 (할당 및 CPU 절감).
-  - **커버링 인덱스 스캔 (Covering Index / Index-Only Scan)**: 인덱스 키/인클루드 컬럼만으로 프로젝션 충족 시 기본 테이블(B+Tree/SkipList) 키 조회 I/O 및 튜플 역직렬화 100% 생략.
+  - **[완료] 커버링 인덱스 스캔 (Covering Index / Index-Only Scan)**: 인덱스 키와 테이블 PK만으로 투영이 충족될 때 기본 테이블 힙 페치 및 락을 100% 생략하는 `NodeIndexOnlyScan` 및 `SkipList.ScanRangeEntries` 가상 레코드 합성 완비 (`4f69eb6`). (후속 과제: T-SQL `INCLUDE (col...)` 비키 컬럼 문법 지원).
 - [ ] **[Phase 3: 와이어 프로토콜 & 네트워크] 제로카피 와이어 인코딩 & I/O 버퍼 결합**
   - **스토리지 ➔ 와이어 제로카피 직접 직렬화**: 중간 `[]any` 레코드 슬라이스 변환을 제거하고, `sync.Pool`로 관리되는 와이어 바이트 버퍼에 바이너리 튜플 데이터를 직접 포맷팅.
   - **[완료] I/O 버퍼 결합 및 지연 플러시 (Write Combining & TCP_NODELAY)**: 행 단위 개별 `Write()`를 지양하고 32KB `bufio.Writer`로 행 및 명령 완료 패킷을 묶어 일괄 플러시하고 TCP_NODELAY를 적용하여 패킷 지연 및 syscall 횟수 최소화 완료.
@@ -154,4 +154,61 @@ This document tracks active tasks, short-term engineering priorities, and concep
 - [ ] **[Phase 5: 쿼리 캐시 & 메모리] 고속 SQL 핑거프린팅 & 쿼리 전용 아레나(Arena)**
   - **SQL 전문 고속 지문 해싱 (Fast SQL Fingerprinting)**: 파싱 전 Wyhash / FNV-1a 기반 텍스트 지문으로 `PlanCache` 선조회 및 단순 PK 점조회(`WHERE id = ?`) 스토리지 숏컷 라우팅.
   - **세션/쿼리 전용 메모리 슬랩/아레나 (Per-Query Arena Allocator)**: 조인, 해시 테이블, 정렬 시 자잘한 힙 객체 할당 대신 아레나 포인터 전진 방식으로 할당 후 쿼리 종료 시 일괄 해제 (GC 압력 제거 및 p99 지연 시간 안정화).
+
+---
+
+## 8. Enterprise Security, Governance & Compliance (보안, 권한 & 감사)
+
+- [ ] **세분화된 SQL 객체 수준 RBAC (Role-Based Access Control) (`pkg/catalog`, `pkg/api`, `pkg/wire`)**
+  - SQL 표준 역할 및 사용자 관리 DDL: `CREATE ROLE <role>`, `CREATE USER <user> WITH PASSWORD = '...'`, `ALTER ROLE`, `DROP ROLE`.
+  - 객체별 세분화 권한 제어: `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO <role/user>`, `REVOKE`, `DENY`.
+  - 쿼리 실행 전 카탈로그 권한 인터셉터를 통한 권한 검증 및 세션 사용자 컨텍스트 바인딩.
+- [ ] **투명 데이터 암호화 (TDE: Transparent Data Encryption) (`pkg/storage`)**
+  - 디스크에 기록되는 WiredTiger 데이터 파일, WAL/AOF 저널 및 백업 아카이브를 AES-256-GCM으로 투명 암호화(Data at Rest Encryption).
+  - 마스터 암호화 키(MEK) 로테이션 및 환경 변수/KMS 키 주입 인터페이스.
+- [ ] **불변 엔터프라이즈 감사 로그 (Enterprise Audit Log) (`pkg/logger`, `pkg/api`)**
+  - 로그인 성공/실패, 권한 변경(`GRANT/REVOKE`), DDL 스키마 변경, 관리자 데이터 조작 이벤트를 태깅하여 위변조가 불가능한 불변 감사 파일로 안전 기록.
+
+---
+
+## 9. BaaS & Developer Experience Backlog (PocketBase 호환 & 개발자 생산성)
+
+- [ ] **선언적 스키마 마이그레이션 CLI (`cmd/server`, `pkg/migrate`)**
+  - `sqlion migrate new <name>`: 타임스탬프 기반 SQL 마이그레이션 파일 템플릿 자동 생성.
+  - `sqlion migrate up / down`: 트랜잭션 내에서 원자적 스키마 업그레이드 및 롤백 실행, 마이그레이션 적용 버전 이력 테이블(`_migrations`) 추적.
+- [ ] **소셜 로그인 (OAuth2 Providers) (`pkg/api/handlers_auth.go`)**
+  - Google, GitHub, Apple OAuth2 콜백 엔드포인트 내장 (`/api/auth/oauth2/callback`).
+  - 외부 ID 기반 사용자 자동 프로비저닝 및 SQLion JWT 토큰 발급.
+- [ ] **로컬 / S3 호환 파일 스토리지 모듈 (`pkg/api/handlers_files.go`)**
+  - 멀티파트 파일 업로드 API (`POST /api/files/:table/:id`) 및 정적 파일 서빙.
+  - 업로드된 이미지 파일의 비동기 썸네일 리사이징 및 MIME 타입 검증/용량 거버너.
+
+---
+
+## 10. High Availability, Always On & Event Streaming (HA 복제 & CDC)
+
+- [ ] **Always On 스타일 자동 장애 조치 및 리더 선출 (Automatic Failover & Leader Election) (`pkg/replication`)**
+  - Primary 노드 다운 시 복제 랙(LSN Lag)이 가장 적은 최신 Replica 노드를 새로운 Primary로 자동 승격 (Leader Promotion).
+  - 클라이언트 라우팅 갱신 및 Split-Brain 방지를 위한 리더 텀(Term) 검증.
+- [ ] **트랜잭셔널 아웃박스(Transactional Outbox) & CDC 이벤트 스트리밍 (`pkg/storage`, `pkg/api`)**
+  - 트랜잭션 커밋과 100% 원자적으로 연동되는 Row-level 변경 델타(Inserted/Updated/Deleted) 이벤트 스트림.
+  - 외부 메시지 브로커(Kafka, RabbitMQ) 또는 웹훅으로 무손실 발행하는 Outbox 디스패처.
+
+---
+
+## 11. Core Engine Hardening & Defensive Resources (자원 한도 방어 & 엔진 고도화)
+
+- [ ] **Prepared Statement & PlanCache 메모리 방어용 Bounded LRU 캐시 (Golden Rule 29 준수) (`pkg/proc/runtime`, `pkg/wire`)**
+  - PGWire, TDS 및 VDBE의 준비된 문장(`PlanCache`)에 세션당/글로벌 최대 용량(예: 256~1024건) 제한 및 LRU Eviction 메커니즘을 적용하여 장시간 연결에서의 메모리 누수 원천 방지.
+- [ ] **Hash Join 대규모 데이터 메모리 방어선 (Grace Hash Join / Spill to TempDir) (`pkg/execution`)**
+  - HashJoinIterator 빌드 테이블 적재 시 `work_mem` 한도를 초과할 경우 임시 디스크로 파티션 분할 처리하는 External Hash Join 지원.
+- [ ] **Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`)**
+  - CGO/WiredTiger 의존성 없이 완전한 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 86) 크로스 컴파일 배포를 위한 `storage.Engine` 플러그인 백엔드 추가.
+- [ ] **`INSTEAD OF` 트리거 런타임 인터셉터 (`pkg/proc/runtime`, `pkg/api`)**
+  - 뷰(View) 및 복합 테이블에 대한 `INSERT/UPDATE/DELETE` 작업을 가로채서 사용자 정의 프로시저/배치로 치환하는 런타임 DML 인터셉터 완비.
+- [ ] **PostgreSQL 와이어 프로토콜 서버 사이드 커서 (`pkg/wire`)**
+  - 대규모 쿼리 결과 집합을 분할 수신하는 드라이버 호환성을 위한 `DECLARE ... CURSOR FOR` 및 `FETCH n` 서버 사이드 커서 라이프사이클 지원.
+- [ ] **Web Management Studio UI 내 바이트코드 디스어셈블러 뷰어 (`pkg/ui`)**
+  - 웹 콘솔 UI에서 `EXPLAIN BYTECODE` 어셈블리 명령어와 오프코드 트레이스를 시각적으로 검사할 수 있는 어셈블리 뷰어 창 연동.
+
 
