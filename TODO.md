@@ -25,7 +25,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - .NET / C# `Microsoft.Data.SqlClient` 연결 및 기본 쿼리 검증.
 - [ ] **TDS 프로토콜 고도화: NBCROW 행 압축 및 Attention 쿼리 취소 (`pkg/wire/tds`)**
   - TDS `NBCROW` (Null Bitmap Compressed Row, `0xD2`): NULL 컬럼에 대해 0바이트로 전송하여 네트워크 대역폭 30%+ 절감.
-  - Attention 패킷(`Type 0x06`) 처리: 장기 실행 쿼리 취소 시 VDBE 바이트코드 루프 중단(`context.CancelFunc`) 및 `DoneAttn (0x0020)` 응답.
+  - **[완료] Attention 패킷(`Type 0x06`) 처리**: 장기 실행 쿼리 취소 시 비동기 패킷 디커플링 및 VDBE 바이트코드 루프 중단(`context.CancelFunc`), `DoneAttn (0x0020)` 응답 완비 완료.
 - [ ] **T-SQL 특수 타입 직렬화 및 PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**
   - `UNIQUEIDENTIFIER` (UUID 16바이트 GUID 바이트 스왑), `DATETIME2` (`0x2A`), `DATE` (`0x28`), `TIME` (`0x29`) TDS 바이너리 인코딩.
   - PLP (Partially Length-Prefixed) 기반 8KB 초과 `VARCHAR(MAX)` / `VARBINARY(MAX)` 대용량 청크 스트리밍.
