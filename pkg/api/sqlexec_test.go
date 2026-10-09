@@ -2565,6 +2565,65 @@ func TestMultiOptionSet(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_CompositeQualifiersAndImplicitAlias(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	// 1. DDL with brackets
+	_, err := server.ExecuteSQL("CREATE TABLE [dbo].[accounts] ([id] INT PRIMARY KEY, [balance] FLOAT);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 2. INSERT with composite qualifier
+	_, err = server.ExecuteSQL("INSERT INTO [dbo].[accounts] ([id], [balance]) VALUES (1, 500.0);")
+	if err != nil {
+		t.Fatalf("INSERT into [dbo].[accounts] failed: %v", err)
+	}
+	_, err = server.ExecuteSQL("INSERT INTO [mydb].[dbo].[accounts] (id, balance) VALUES (2, 1200.0);")
+	if err != nil {
+		t.Fatalf("INSERT into [mydb].[dbo].[accounts] failed: %v", err)
+	}
+
+	// 3. SELECT with 3-part name and implicit alias without AS
+	res, err := server.ExecuteSQL("SELECT a.id, a.balance FROM [mydb].[dbo].[accounts] a WHERE a.balance >= 500 ORDER BY a.id;")
+	if err != nil {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d: %+v", len(res.Rows), res.Rows)
+	}
+
+	// 4. SELECT with empty schema 3-part name [db]..[tbl]
+	res2, err := server.ExecuteSQL("SELECT a.id FROM [mydb]..[accounts] a WHERE a.id = 1;")
+	if err != nil {
+		t.Fatalf("SELECT with empty schema failed: %v", err)
+	}
+	if len(res2.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res2.Rows))
+	}
+
+	// 5. UPDATE with composite qualifier
+	_, err = server.ExecuteSQL("UPDATE [dbo].[accounts] SET balance = 600.0 WHERE id = 1;")
+	if err != nil {
+		t.Fatalf("UPDATE failed: %v", err)
+	}
+
+	// 6. DELETE with composite qualifier
+	_, err = server.ExecuteSQL("DELETE FROM [mydb].[dbo].[accounts] WHERE id = 2;")
+	if err != nil {
+		t.Fatalf("DELETE failed: %v", err)
+	}
+
+	// Verify final state
+	resFinal, err := server.ExecuteSQL("SELECT count(*) AS total FROM accounts;")
+	if err != nil || len(resFinal.Rows) == 0 {
+		t.Fatalf("final SELECT failed: %v", err)
+	}
+}
+
 
 
 

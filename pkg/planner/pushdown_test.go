@@ -241,3 +241,26 @@ func TestPushdown_ChainedThreeTableJoinFilterPushdown(t *testing.T) {
 		t.Errorf("expected root node to be Join rather than Filter, got:\n%s", lines[0])
 	}
 }
+
+func TestPushdown_CompositeQualifiersAndImplicitAlias(t *testing.T) {
+	p := planner.NewPlanner()
+	schemaUsers := &storage.TableSchema{
+		Name:    "users",
+		Columns: []storage.Column{{Name: "id", Type: storage.TypeInt}, {Name: "name", Type: storage.TypeVarChar}},
+	}
+
+	sql := "SELECT a.id, a.name FROM [mydb].[dbo].[users] a WHERE a.name = 'Alice'"
+	q, err := p.ParseSelect(sql)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	if q.TableName != "users" || q.TableAlias != "a" {
+		t.Fatalf("expected TableName: users, TableAlias: a, got TableName: %q, TableAlias: %q", q.TableName, q.TableAlias)
+	}
+
+	res := planner.PushDownPredicates(q, schemaUsers, nil)
+	if len(res.PrimaryConds) != 1 || res.PrimaryConds[0] != "a.name = 'Alice'" {
+		t.Errorf("expected pushed down primary cond 'a.name = 'Alice'', got %+v", res.PrimaryConds)
+	}
+}

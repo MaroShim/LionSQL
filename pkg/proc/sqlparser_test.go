@@ -200,3 +200,75 @@ func TestEvalRowExpr_AdvancedPredicates(t *testing.T) {
 		t.Errorf("expected CASE WHEN to evaluate to 'Gold', got %v (err=%v)", val, err)
 	}
 }
+
+func TestCleanSchemaPrefix_CompositeQualifiers(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"accounts", "accounts"},
+		{"[accounts]", "accounts"},
+		{"\"accounts\"", "accounts"},
+		{"`accounts`", "accounts"},
+		{"[dbo].[accounts]", "accounts"},
+		{"dbo.accounts", "accounts"},
+		{"public.accounts", "accounts"},
+		{"guest.accounts", "accounts"},
+		{"[mydb].[dbo].[accounts]", "accounts"},
+		{"mydb.dbo.accounts", "accounts"},
+		{"[mydb]..[accounts]", "accounts"},
+		{"mydb..accounts", "accounts"},
+		{"[server].[mydb].[dbo].[accounts]", "accounts"},
+		{"sys.tables", "sys.tables"},
+		{"[sys].[tables]", "sys.tables"},
+		{"[mydb].[sys].[tables]", "sys.tables"},
+		{"mydb.sys.tables", "sys.tables"},
+		{"information_schema.columns", "information_schema.columns"},
+		{"[mydb].[information_schema].[columns]", "information_schema.columns"},
+		{"pg_catalog.pg_tables", "pg_catalog.pg_tables"},
+		{"a.id", "a.id"},
+		{"[a].[id]", "a.id"},
+		{"##temp_orders", "##temp_orders"},
+	}
+
+	for _, tt := range tests {
+		got := proc.CleanSchemaPrefix(tt.input)
+		if got != tt.expected {
+			t.Errorf("CleanSchemaPrefix(%q) = %q; want %q", tt.input, got, tt.expected)
+		}
+	}
+}
+
+func TestParseSQL_ImplicitAliasAndCompositeQualifiers(t *testing.T) {
+	// 1. Implicit alias without AS in FROM and JOIN
+	sql := `SELECT a.id, a.name, o.total FROM [mydb].[dbo].[accounts] a INNER JOIN [mydb]..[orders] o ON a.id = o.account_id WHERE a.balance > 100;`
+	stmt, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel, ok := stmt.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected *GeneralSelectStmt, got %T", stmt)
+	}
+
+	if sel.From.Name != "accounts" || sel.From.Alias != "a" {
+		t.Errorf("expected From {Name: accounts, Alias: a}, got %+v", sel.From)
+	}
+	if len(sel.Joins) != 1 || sel.Joins[0].Table.Name != "orders" || sel.Joins[0].Table.Alias != "o" {
+		t.Errorf("expected Join {Name: orders, Alias: o}, got %+v", sel.Joins)
+	}
+
+	// 2. Implicit column alias without AS
+	sql2 := `SELECT id id_col, name name_col FROM accounts WHERE id = 1;`
+	stmt2, err := proc.ParseSQL(sql2)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel2, ok := stmt2.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected *GeneralSelectStmt, got %T", stmt2)
+	}
+	if len(sel2.Projections) != 2 || sel2.Projections[0].Alias != "id_col" || sel2.Projections[1].Alias != "name_col" {
+		t.Errorf("unexpected projections: %+v", sel2.Projections)
+	}
+}

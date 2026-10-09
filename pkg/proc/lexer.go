@@ -208,15 +208,31 @@ func (l *Lexer) readBracketedIdentifier() string {
 	if l.ch == ']' {
 		l.readChar() // skip ']'
 	}
-	// Check if chained with . e.g. [dbo].[sp_name] or [dbo]."name"
-	if l.ch == '.' && (l.peekChar() == '[' || l.peekChar() == '"' || isLetter(l.peekChar())) {
-		l.readChar() // eat '.'
-		if l.ch == '[' {
-			l.readBracketedIdentifier()
-		} else if l.ch == '"' {
-			l.readQuotedIdentifier()
+	// Check if chained with . e.g. [dbo].[sp_name], [db].[schema].[table], [db]..[table]
+	for l.ch == '.' {
+		if l.peekChar() == '.' {
+			l.readChar() // eat '.'
+			l.readChar() // eat second '.'
+			if l.ch == '[' {
+				l.readBracketedIdentifier()
+			} else if l.ch == '"' {
+				l.readQuotedIdentifier()
+			} else if isLetter(l.ch) {
+				l.readIdentifier()
+			}
+		} else if l.peekChar() == '[' || l.peekChar() == '"' || isLetter(l.peekChar()) || l.peekChar() == '*' {
+			l.readChar() // eat '.'
+			if l.ch == '[' {
+				l.readBracketedIdentifier()
+			} else if l.ch == '"' {
+				l.readQuotedIdentifier()
+			} else if l.ch == '*' {
+				l.readChar() // eat '*'
+			} else {
+				l.readIdentifier()
+			}
 		} else {
-			l.readIdentifier()
+			break
 		}
 	}
 	return l.input[startPos:l.pos]
@@ -244,14 +260,31 @@ func (l *Lexer) readQuotedIdentifier() string {
 		l.readChar()
 	}
 	// Check if dot-qualified e.g. "dbo"."customers"
-	if l.ch == '.' && (l.peekChar() == '"' || l.peekChar() == '[' || isLetter(l.peekChar())) {
-		l.readChar() // eat '.'
-		if l.ch == '"' {
-			return b.String() + "." + l.readQuotedIdentifier()
-		} else if l.ch == '[' {
-			return b.String() + "." + l.readBracketedIdentifier()
+	for l.ch == '.' {
+		if l.peekChar() == '.' {
+			l.readChar() // eat '.'
+			l.readChar() // eat second '.'
+			if l.ch == '"' {
+				return b.String() + ".." + l.readQuotedIdentifier()
+			} else if l.ch == '[' {
+				return b.String() + ".." + l.readBracketedIdentifier()
+			} else if isLetter(l.ch) {
+				return b.String() + ".." + l.readIdentifier()
+			}
+		} else if l.peekChar() == '"' || l.peekChar() == '[' || isLetter(l.peekChar()) || l.peekChar() == '*' {
+			l.readChar() // eat '.'
+			if l.ch == '"' {
+				return b.String() + "." + l.readQuotedIdentifier()
+			} else if l.ch == '[' {
+				return b.String() + "." + l.readBracketedIdentifier()
+			} else if l.ch == '*' {
+				l.readChar() // eat '*'
+				return b.String() + ".*"
+			} else {
+				return b.String() + "." + l.readIdentifier()
+			}
 		} else {
-			return b.String() + "." + l.readIdentifier()
+			break
 		}
 	}
 	return b.String()
@@ -262,15 +295,35 @@ func (l *Lexer) readIdentifier() string {
 	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
 		l.readChar()
 	}
-	// Check if dot-qualified schema identifier e.g. dbo.sp_name
-	if l.ch == '.' && (isLetter(l.peekChar()) || l.peekChar() == '[') {
-		l.readChar() // eat '.'
-		if l.ch == '[' {
-			l.readBracketedIdentifier()
-		} else {
-			for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
-				l.readChar()
+	// Check if chained with . e.g. dbo.sp_name, db.dbo.table, db..table, a.*
+	for l.ch == '.' {
+		if l.peekChar() == '.' {
+			l.readChar() // eat '.'
+			l.readChar() // eat second '.'
+			if l.ch == '[' {
+				l.readBracketedIdentifier()
+			} else if l.ch == '"' {
+				l.readQuotedIdentifier()
+			} else if isLetter(l.ch) {
+				for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
+					l.readChar()
+				}
 			}
+		} else if isLetter(l.peekChar()) || isDigit(l.peekChar()) || l.peekChar() == '_' || l.peekChar() == '[' || l.peekChar() == '"' || l.peekChar() == '*' {
+			l.readChar() // eat '.'
+			if l.ch == '[' {
+				l.readBracketedIdentifier()
+			} else if l.ch == '"' {
+				l.readQuotedIdentifier()
+			} else if l.ch == '*' {
+				l.readChar() // eat '*'
+			} else {
+				for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
+					l.readChar()
+				}
+			}
+		} else {
+			break
 		}
 	}
 	return l.input[startPos:l.pos]

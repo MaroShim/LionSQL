@@ -409,9 +409,11 @@ func (e *Executor) releaseFrame(frame *VMFrame) {
 func (f *VMFrame) Execute(startPC int) (any, error) {
 	instructions := f.prog.Instructions
 	pc := startPC
+	iterCount := 0
 
 	for pc < len(instructions) {
-		if (pc&63 == 0) && f.ctx != nil {
+		iterCount++
+		if (iterCount&63 == 0) && f.ctx != nil {
 			select {
 			case <-f.ctx.Done():
 				return nil, f.ctx.Err()
@@ -2314,10 +2316,14 @@ func cleanSymbol(name string) string {
 		return name
 	}
 	name = strings.TrimPrefix(name, "@")
-	name = strings.Trim(name, "[]\"'`")
-	if strings.HasPrefix(strings.ToLower(name), "dbo.") {
-		name = name[4:]
+	cleaned := proc.CleanSchemaPrefix(name)
+	// If it is a system schema like sys.tables, preserve it
+	lower := strings.ToLower(cleaned)
+	if strings.HasPrefix(lower, "sys.") || strings.HasPrefix(lower, "information_schema.") || strings.HasPrefix(lower, "pg_catalog.") || strings.HasPrefix(lower, "system.") {
+		return cleaned
 	}
-	name = strings.Trim(name, "[]\"'`")
-	return name
+	if dot := strings.LastIndex(cleaned, "."); dot != -1 {
+		return cleaned[dot+1:]
+	}
+	return cleaned
 }

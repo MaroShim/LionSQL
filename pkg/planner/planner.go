@@ -195,19 +195,7 @@ func NewPlanner() *Planner {
 }
 
 func cleanIdent(s string) string {
-	s = strings.TrimSpace(s)
-	parts := strings.Split(s, ".")
-	for i, p := range parts {
-		parts[i] = strings.Trim(strings.TrimSpace(p), "[]\"'`")
-	}
-	cleaned := strings.Join(parts, ".")
-	lower := strings.ToLower(cleaned)
-	if strings.HasPrefix(lower, "dbo.") {
-		cleaned = cleaned[4:]
-	} else if strings.HasPrefix(lower, "public.") {
-		cleaned = cleaned[7:]
-	}
-	return cleaned
+	return proc.CleanSchemaPrefix(s)
 }
 
 func splitASTAndExpr(expr proc.Expr) []proc.Expr {

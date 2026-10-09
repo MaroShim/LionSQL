@@ -434,20 +434,95 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 	}, nil
 }
 
-func cleanSchemaPrefix(name string) string {
+// CleanSchemaPrefix strips schema/database qualification, brackets, and quotes from identifiers.
+// For system catalog views (sys.*, information_schema.*, pg_catalog.*), the system schema prefix is preserved.
+// For default user schemas (dbo, public, guest) or multi-part database prefixes ([db].[dbo].[tbl], db..tbl),
+// the base table name is returned.
+func CleanSchemaPrefix(name string) string {
 	s := strings.TrimSpace(name)
+	if s == "" {
+		return ""
+	}
+	// If the string contains arithmetic, logical, or expression operators, it is an expression, not an identifier.
+	if strings.ContainsAny(s, "+-*/(),=><!~^&|;") {
+		return s
+	}
+	// If it contains whitespace and does not start with bracket or quote, it is not a single identifier.
+	if !strings.HasPrefix(s, "[") && !strings.HasPrefix(s, "\"") && !strings.HasPrefix(s, "`") {
+		if strings.ContainsAny(s, " \t\r\n") {
+			return s
+		}
+	}
 	parts := strings.Split(s, ".")
-	for i, p := range parts {
-		parts[i] = strings.Trim(strings.TrimSpace(p), "[]\"'`")
+	var cleanedParts []string
+	for _, p := range parts {
+		trimmed := strings.Trim(strings.TrimSpace(p), "[]\"'`")
+		if trimmed != "" {
+			cleanedParts = append(cleanedParts, trimmed)
+		}
 	}
-	cleaned := strings.Join(parts, ".")
-	lower := strings.ToLower(cleaned)
-	if strings.HasPrefix(lower, "dbo.") {
-		cleaned = cleaned[4:]
-	} else if strings.HasPrefix(lower, "public.") {
-		cleaned = cleaned[7:]
+	if len(cleanedParts) == 0 {
+		return ""
 	}
-	return cleaned
+	if len(cleanedParts) == 1 {
+		res := cleanedParts[0]
+		if strings.HasPrefix(res, "##") {
+			return strings.ToLower(res)
+		}
+		return res
+	}
+
+	last := cleanedParts[len(cleanedParts)-1]
+	secondLast := strings.ToLower(cleanedParts[len(cleanedParts)-2])
+
+	// Check for system catalog views
+	if secondLast == "sys" || secondLast == "information_schema" || secondLast == "pg_catalog" || secondLast == "system" {
+		return secondLast + "." + last
+	}
+
+	// Default user schemas: dbo, public, guest
+	if secondLast == "dbo" || secondLast == "public" || secondLast == "guest" {
+		return last
+	}
+
+	// Multi-part identifiers (e.g. mydb.dbo.accounts, mydb..accounts, server.mydb.dbo.accounts):
+	// Under SQLion's instance-level isolation, database catalog prefixes are stripped,
+	// returning the target table name.
+	if len(cleanedParts) >= 3 || len(parts) >= 3 {
+		return last
+	}
+
+	// 2-part identifier that is not a recognized schema (e.g. alias.column or custom_schema.table):
+	// Return normalized form "prefix.suffix"
+	return strings.Join(cleanedParts, ".")
+}
+
+func cleanSchemaPrefix(name string) string {
+	return CleanSchemaPrefix(name)
+}
+
+func isReservedAfterFromOrJoin(tok TokenType) bool {
+	switch tok {
+	case TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
+		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter,
+		TokenOn, TokenWith, TokenFor, TokenOffset,
+		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
+		return true
+	default:
+		return false
+	}
+}
+
+func isReservedAfterProjection(tok TokenType) bool {
+	switch tok {
+	case TokenFrom, TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
+		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter,
+		TokenOn, TokenWith, TokenFor, TokenOffset,
+		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
+		return true
+	default:
+		return false
+	}
 }
 
 func parseDataType(s string) storage.DataType {
@@ -1143,7 +1218,7 @@ func (p *Parser) parseInsert() (Statement, error) {
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected table name in INSERT, got %s", p.curToken.Literal)
 	}
-	tblName := p.curToken.Literal
+	tblName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
 	var cols []string
@@ -1153,7 +1228,7 @@ func (p *Parser) parseInsert() (Statement, error) {
 			if !p.curTokenIs(TokenIdent) {
 				return nil, fmt.Errorf("expected column name in INSERT, got %s", p.curToken.Literal)
 			}
-			cols = append(cols, p.curToken.Literal)
+			cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
 			p.nextToken()
 			if p.curTokenIs(TokenComma) {
 				p.nextToken()
@@ -1208,7 +1283,7 @@ func (p *Parser) parseUpdate() (Statement, error) {
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected table name in UPDATE, got %s", p.curToken.Literal)
 	}
-	tblName := p.curToken.Literal
+	tblName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
 	if !p.curTokenIs(TokenSet) {
@@ -1221,7 +1296,7 @@ func (p *Parser) parseUpdate() (Statement, error) {
 		if !p.curTokenIs(TokenIdent) {
 			return nil, fmt.Errorf("expected column name in UPDATE SET, got %s", p.curToken.Literal)
 		}
-		colName := p.curToken.Literal
+		colName := cleanSchemaPrefix(p.curToken.Literal)
 		p.nextToken()
 
 		if !p.curTokenIs(TokenEq) && !p.curTokenIs(TokenAssign) {
@@ -1255,7 +1330,7 @@ func (p *Parser) parseUpdate() (Statement, error) {
 			return &UpdateStmt{
 				Table:       tblName,
 				Assignments: assigns,
-				WhereCol:    colRef.Name,
+				WhereCol:    cleanSchemaPrefix(colRef.Name),
 				WhereVal:    bin.Right,
 			}, nil
 		}
@@ -1276,7 +1351,7 @@ func (p *Parser) parseDelete() (Statement, error) {
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected table name in DELETE, got %s", p.curToken.Literal)
 	}
-	tblName := p.curToken.Literal
+	tblName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
 	var whereExpr Expr
@@ -1293,7 +1368,7 @@ func (p *Parser) parseDelete() (Statement, error) {
 		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol {
 			return &DeleteStmt{
 				Table:    tblName,
-				WhereCol: colRef.Name,
+				WhereCol: cleanSchemaPrefix(colRef.Name),
 				WhereVal: bin.Right,
 			}, nil
 		}
@@ -1865,7 +1940,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
-		} else if p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenGroup) && !p.curTokenIs(TokenHaving) && !p.curTokenIs(TokenOrder) && !p.curTokenIs(TokenLimit) && !p.curTokenIs(TokenJoin) && !p.curTokenIs(TokenInner) && !p.curTokenIs(TokenLeft) {
+		} else if (p.curTokenIs(TokenIdent) || p.curTokenIs(TokenString)) && !isReservedAfterProjection(p.curToken.Type) {
 			alias = cleanSchemaPrefix(p.curToken.Literal)
 			p.nextToken()
 		}
@@ -1917,7 +1992,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
-		} else if p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenGroup) && !p.curTokenIs(TokenHaving) && !p.curTokenIs(TokenOrder) && !p.curTokenIs(TokenLimit) && !p.curTokenIs(TokenJoin) && !p.curTokenIs(TokenInner) && !p.curTokenIs(TokenLeft) && !p.curTokenIs(TokenOn) {
+		} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
 			alias = cleanSchemaPrefix(p.curToken.Literal)
 			p.nextToken()
 		}
@@ -1956,7 +2031,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				jAlias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
-		} else if p.curTokenIs(TokenIdent) && !p.curTokenIs(TokenOn) {
+		} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
 			jAlias = cleanSchemaPrefix(p.curToken.Literal)
 			p.nextToken()
 		}
