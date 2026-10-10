@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -450,16 +451,34 @@ func (f *VMFrame) execTxOp(inst *proc.Instruction) error {
 		if f.tranCount > 0 {
 			f.tranCount--
 		}
-		if err := f.tx.Commit(); err != nil {
-			return err
+		if f.tx != nil {
+			if err := f.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
+				return err
+			}
+		}
+		if f.session != nil {
+			newTx, err := f.session.BeginTx(storage.TxOptions{})
+			if err != nil {
+				return err
+			}
+			f.tx = newTx
 		}
 
 	case proc.OpTxRollback:
 		if f.tranCount > 0 {
 			f.tranCount--
 		}
-		if err := f.tx.Rollback(); err != nil {
-			return err
+		if f.tx != nil {
+			if err := f.tx.Rollback(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
+				return err
+			}
+		}
+		if f.session != nil {
+			newTx, err := f.session.BeginTx(storage.TxOptions{})
+			if err != nil {
+				return err
+			}
+			f.tx = newTx
 		}
 
 	case proc.OpTxSavepoint:

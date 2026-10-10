@@ -30,6 +30,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for `SELECT [DISTINCT] TOP (<n>|<n>) [PERCENT] [WITH TIES]` clause in the native parser and query planner, setting `LimitCount` and `TopPercent` / `TopWithTies` metadata.
   - Corrected `GeneralSelectStmt.String()` to emit `OFFSET` when `s.Offset > 0`.
   - Added comprehensive unit and execution test suites in `pkg/proc/sqlparser_test.go`, `pkg/planner/planner_test.go`, and `pkg/api/sqlexec_test.go`.
+- **AdventureWorks & nopCommerce E2E Stored Procedure Test Suite (`pkg/proc/runtime`)**:
+  - Implemented end-to-end stored procedure test suites modeled directly after Microsoft AdventureWorks (`dbo.uspProcessWorkOrder`) and nopCommerce (`dbo.RewardPointsHistory_Add`, `dbo.CustomerBatchMaintenance`).
+  - Validated complex control flow including nested transactions, `TRY...CATCH`, `THROW`, audit error logging tables, VIP tier promotions, and cursor traversal with `@@FETCH_STATUS`.
+
+### Fixed
+- **Post-Rollback & Post-Commit Transaction Continuity in VDBE Procedures (`pkg/proc/runtime`)**:
+  - Bound active `storage.Session` to `VMFrame` and enabled seamless new transaction initialization following in-procedure `ROLLBACK TRANSACTION` or `COMMIT TRANSACTION`.
+  - Fixed `ErrTxClosed` failure when running audit and error logging statements inside `BEGIN CATCH` blocks after rolling back failed business transactions.
 
 ### Documentation
 - **Canonical FSF GPL v3 LICENSE Alignment & Commercial Dual Licensing (`LICENSE`, `README.md`)**:

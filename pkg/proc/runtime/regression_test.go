@@ -854,4 +854,316 @@ END;
 	}
 }
 
+// ============================================================================
+// Real-World E2E Test Suite: AdventureWorks Stored Procedures
+// ============================================================================
+
+// TestRegression_AdventureWorks_WorkOrderAndErrorLogging simulates AdventureWorks
+// dbo.uspProcessWorkOrder with nested transactions, TRY...CATCH error handling,
+// stock validation, and logging to an ErrorLog audit table.
+func TestRegression_AdventureWorks_WorkOrderAndErrorLogging(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	// 1. Create AdventureWorks WorkOrder and ErrorLog tables
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "work_orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "product_id", Type: storage.TypeInt},
+			{Name: "order_qty", Type: storage.TypeInt},
+			{Name: "status", Type: storage.TypeVarChar},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable work_orders failed: %v", err)
+	}
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "error_logs",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "proc_name", Type: storage.TypeVarChar},
+			{Name: "error_msg", Type: storage.TypeVarChar},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable error_logs failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	// AdventureWorks-style stored procedure:
+	// Decrements product inventory, inserts a work order, rolls back and logs error if stock drops below 0.
+	procSQL := `
+CREATE PROCEDURE dbo.uspProcessWorkOrder
+    @work_order_id INT,
+    @prod_id INT,
+    @qty INT
+AS
+BEGIN
+    DECLARE @current_stock INT;
+    DECLARE @new_stock INT;
+
+    IF @qty <= 0
+    BEGIN
+        RETURN -1;
+    END
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        SELECT stock INTO @current_stock FROM products WHERE id = @prod_id;
+
+        IF @current_stock < @qty
+        BEGIN
+            THROW 'Insufficient stock for work order';
+        END
+
+        SET @new_stock = @current_stock - @qty;
+        UPDATE products SET stock = @new_stock WHERE id = @prod_id;
+
+        INSERT INTO work_orders (id, product_id, order_qty, status)
+        VALUES (@work_order_id, @prod_id, @qty, 'IN_PROGRESS');
+
+        COMMIT TRANSACTION;
+        RETURN 1;
+    END TRY
+    BEGIN CATCH
+        ROLLBACK TRANSACTION;
+        INSERT INTO error_logs (id, proc_name, error_msg)
+        VALUES (@work_order_id, 'uspProcessWorkOrder', 'Stock depletion error');
+        RETURN -99;
+    END CATCH
+END;
+`
+	prog, err := cache.GetOrCompile(procSQL)
+	if err != nil {
+		t.Fatalf("Compile dbo.uspProcessWorkOrder failed: %v", err)
+	}
+
+	// Case 1: Successful work order (Product 101 has stock 10, order 4 -> leaves 6)
+	resSuccess, err := executor.Run(prog, "uspProcessWorkOrder", map[string]any{
+		"work_order_id": 1,
+		"prod_id":       101,
+		"qty":           4,
+	}, session)
+	if err != nil {
+		t.Fatalf("Run success failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resSuccess.ReturnValue) != "1" {
+		t.Errorf("expected return value 1 for success, got %v", resSuccess.ReturnValue)
+	}
+
+	// Verify product 101 stock reduced to 6
+	chkTx, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	p101, _ := chkTx.Get("products", storage.IntValue(101))
+	wo1, _ := chkTx.Get("work_orders", storage.IntValue(1))
+	chkTx.Rollback()
+
+	if p101["stock"].IVal != 6 {
+		t.Errorf("expected product stock 6, got %d", p101["stock"].IVal)
+	}
+	if wo1["status"].SVal != "IN_PROGRESS" {
+		t.Errorf("expected work order status IN_PROGRESS, got %s", wo1["status"].SVal)
+	}
+
+	// Case 2: Insufficient stock (Product 101 has stock 6, order 20 -> THROW -> CATCH -> ROLLBACK -> Log)
+	resFail, err := executor.Run(prog, "uspProcessWorkOrder", map[string]any{
+		"work_order_id": 2,
+		"prod_id":       101,
+		"qty":           20,
+	}, session)
+	if err != nil {
+		t.Fatalf("Run failure failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resFail.ReturnValue) != "-99" {
+		t.Errorf("expected return value -99 for catch block, got %v", resFail.ReturnValue)
+	}
+
+	// Verify product 101 stock remained 6 (rollback confirmed) and error_log entry created
+	chkTx2, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	p101After, _ := chkTx2.Get("products", storage.IntValue(101))
+	errEntry, errLogErr := chkTx2.Get("error_logs", storage.IntValue(2))
+	chkTx2.Rollback()
+
+	if p101After["stock"].IVal != 6 {
+		t.Errorf("expected product stock intact at 6 after rollback, got %d", p101After["stock"].IVal)
+	}
+	if errLogErr != nil || errEntry == nil {
+		t.Fatalf("expected error log entry with id 2, got err: %v", errLogErr)
+	}
+	if errEntry["proc_name"].SVal != "uspProcessWorkOrder" {
+		t.Errorf("expected proc_name 'uspProcessWorkOrder', got %s", errEntry["proc_name"].SVal)
+	}
+}
+
+// ============================================================================
+// Real-World E2E Test Suite: nopCommerce Stored Procedures
+// ============================================================================
+
+// TestRegression_NopCommerce_RewardPointsAndMaintenance simulates nopCommerce
+// RewardPointsHistory_Add and CustomerBatchMaintenance routines.
+func TestRegression_NopCommerce_RewardPointsAndMaintenance(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	// 1. Create nopCommerce reward points history table
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "reward_points_history",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "customer_id", Type: storage.TypeInt},
+			{Name: "points", Type: storage.TypeInt},
+			{Name: "message", Type: storage.TypeVarChar},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable reward_points_history failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	// Procedure 1: RewardPointsHistory_Add
+	// Awards loyalty points, upgrades VIP status if balance crosses threshold, logs history.
+	procRewardSQL := `
+CREATE PROCEDURE dbo.RewardPointsHistory_Add
+    @log_id INT,
+    @customer_id INT,
+    @points INT,
+    @message VARCHAR(100)
+AS
+BEGIN
+    DECLARE @old_bal INT;
+    DECLARE @new_bal INT;
+
+    IF @points <= 0
+    BEGIN
+        RETURN 0;
+    END
+
+    BEGIN TRANSACTION;
+
+    SELECT balance INTO @old_bal FROM accounts WHERE id = @customer_id;
+    SET @new_bal = @old_bal + @points;
+
+    UPDATE accounts SET balance = @new_bal WHERE id = @customer_id;
+
+    IF @new_bal >= 1200
+    BEGIN
+        UPDATE accounts SET tier = 'DIAMOND' WHERE id = @customer_id;
+    END
+
+    INSERT INTO reward_points_history (id, customer_id, points, message)
+    VALUES (@log_id, @customer_id, @points, @message);
+
+    COMMIT TRANSACTION;
+    RETURN @new_bal;
+END;
+`
+	progReward, err := cache.GetOrCompile(procRewardSQL)
+	if err != nil {
+		t.Fatalf("Compile RewardPointsHistory_Add failed: %v", err)
+	}
+
+	// Customer 1 (Alice) has initial balance 1000, award 300 points -> total 1300 -> upgraded to DIAMOND
+	resReward, err := executor.Run(progReward, "RewardPointsHistory_Add", map[string]any{
+		"log_id":      1,
+		"customer_id": 1,
+		"points":      300,
+		"message":     "Summer promo purchase reward",
+	}, session)
+	if err != nil {
+		t.Fatalf("Run RewardPointsHistory_Add failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resReward.ReturnValue) != "1300" {
+		t.Errorf("expected return balance 1300, got %v", resReward.ReturnValue)
+	}
+
+	// Verify Alice's balance and tier update
+	chkTx, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	alice, _ := chkTx.Get("accounts", storage.IntValue(1))
+	hist, _ := chkTx.Get("reward_points_history", storage.IntValue(1))
+	chkTx.Rollback()
+
+	if alice["balance"].IVal != 1300 {
+		t.Errorf("expected Alice balance 1300, got %d", alice["balance"].IVal)
+	}
+	if alice["tier"].SVal != "DIAMOND" {
+		t.Errorf("expected Alice tier 'DIAMOND', got %s", alice["tier"].SVal)
+	}
+	if hist["points"].IVal != 300 || hist["message"].SVal != "Summer promo purchase reward" {
+		t.Errorf("unexpected reward points history record: %v", hist)
+	}
+
+	// Procedure 2: CustomerBatchMaintenance (nopCommerce guest/suspended customer scan & count)
+	// Iterates suspended accounts using a CURSOR, tallies suspended funds, and updates status to INACTIVE.
+	procMaintenanceSQL := `
+CREATE PROCEDURE dbo.CustomerBatchMaintenance
+    @target_status VARCHAR(20)
+AS
+BEGIN
+    DECLARE @acc_id INT;
+    DECLARE @acc_bal INT;
+    DECLARE @total_suspended_funds INT;
+    DECLARE @processed_count INT;
+
+    SET @total_suspended_funds = 0;
+    SET @processed_count = 0;
+
+    DECLARE cur CURSOR FOR SELECT id, balance FROM accounts WHERE status = @target_status;
+    OPEN cur;
+    FETCH NEXT FROM cur INTO @acc_id, @acc_bal;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        SET @total_suspended_funds = @total_suspended_funds + @acc_bal;
+        SET @processed_count = @processed_count + 1;
+        UPDATE accounts SET status = 'INACTIVE' WHERE id = @acc_id;
+        FETCH NEXT FROM cur INTO @acc_id, @acc_bal;
+    END
+
+    CLOSE cur;
+    DEALLOCATE cur;
+
+    RETURN @total_suspended_funds;
+END;
+`
+	progMaint, err := cache.GetOrCompile(procMaintenanceSQL)
+	if err != nil {
+		t.Fatalf("Compile CustomerBatchMaintenance failed: %v", err)
+	}
+
+	// Customer 3 (Charlie) is SUSPENDED with balance 200
+	resMaint, err := executor.Run(progMaint, "CustomerBatchMaintenance", map[string]any{
+		"target_status": "SUSPENDED",
+	}, session)
+	if err != nil {
+		t.Fatalf("Run CustomerBatchMaintenance failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resMaint.ReturnValue) != "200" {
+		t.Errorf("expected total suspended funds 200, got %v", resMaint.ReturnValue)
+	}
+
+	// Verify Charlie is now INACTIVE
+	chkTx2, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	charlie, _ := chkTx2.Get("accounts", storage.IntValue(3))
+	chkTx2.Rollback()
+
+	if charlie["status"].SVal != "INACTIVE" {
+		t.Errorf("expected Charlie status 'INACTIVE', got %s", charlie["status"].SVal)
+	}
+}
+
 

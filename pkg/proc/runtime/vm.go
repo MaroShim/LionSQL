@@ -287,6 +287,7 @@ func (e *Executor) GetTriggers(tableName string, event string) []*TriggerEntry {
 // VMFrame maintains the execution context for a bytecode invocation.
 type VMFrame struct {
 	executor        *Executor
+	session         storage.Session
 	tx              storage.Transaction
 	prog            *proc.Program
 	regs            []storage.Value
@@ -331,6 +332,7 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 	}
 
 	frame := e.newFrame(prog, tx)
+	frame.session = session
 	frame.ctx = ctx
 	defer e.releaseFrame(frame)
 
@@ -343,12 +345,16 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 
 	retVal, err := frame.Execute(0)
 	if err != nil {
-		_ = tx.Rollback()
+		if frame.tx != nil {
+			_ = frame.tx.Rollback()
+		}
 		return nil, fmt.Errorf("execution error (rolled back): %w", err)
 	}
 
-	if err := tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
-		return nil, fmt.Errorf("failed to commit ambient transaction: %w", err)
+	if frame.tx != nil {
+		if err := frame.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
+			return nil, fmt.Errorf("failed to commit ambient transaction: %w", err)
+		}
 	}
 
 	return &ExecutionResult{
@@ -484,6 +490,7 @@ func (e *Executor) releaseFrame(frame *VMFrame) {
 		return
 	}
 	frame.tx = nil
+	frame.session = nil
 	frame.prog = nil
 	e.framePool.Put(frame)
 }
