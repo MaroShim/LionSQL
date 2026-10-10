@@ -185,6 +185,40 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		res := evalDateBucket(part, width, t, origin, hasOrigin)
 		return storage.StringValue(res.Format("2006-01-02 15:04:05"))
 
+	case "EOMONTH":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		t, ok := parseDateValue(args[0])
+		if !ok {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		monthsToAdd := 0
+		if len(args) >= 2 && !args[1].IsNull {
+			if args[1].Type == storage.TypeInt {
+				monthsToAdd = int(args[1].IVal)
+			} else if args[1].Type == storage.TypeFloat {
+				monthsToAdd = int(args[1].FVal)
+			} else if args[1].Type == storage.TypeVarChar {
+				if m, err := strconv.Atoi(strings.TrimSpace(args[1].SVal)); err == nil {
+					monthsToAdd = m
+				}
+			}
+		}
+		target := time.Date(t.Year(), t.Month()+time.Month(monthsToAdd)+1, 1, 0, 0, 0, 0, t.Location())
+		lastDay := target.AddDate(0, 0, -1)
+		return storage.StringValue(lastDay.Format("2006-01-02"))
+
+	case "ISDATE":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.IntValue(0)
+		}
+		_, ok := parseDateValue(args[0])
+		if ok {
+			return storage.IntValue(1)
+		}
+		return storage.IntValue(0)
+
 	// ----------------------------------------------------
 	// 2. String Functions
 	// ----------------------------------------------------
@@ -752,7 +786,7 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 func IsBuiltinFunction(name string) bool {
 	switch strings.ToUpper(cleanBuiltinName(name)) {
 	case "GETDATE", "NOW", "GETUTCDATE", "SYSDATETIME",
-		"YEAR", "MONTH", "DAY", "DATEPART", "DATEDIFF", "DATEADD",
+		"YEAR", "MONTH", "DAY", "DATEPART", "DATEDIFF", "DATEADD", "EOMONTH", "ISDATE",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
 		"CONCAT", "CONCAT_WS", "QUOTENAME", "ASCII", "CHAR", "LEN", "LENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
 		"LEFT", "RIGHT", "SUBSTRING", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE",

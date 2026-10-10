@@ -24,7 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented `ASCII(character_expression)` and `CHAR(integer_expression)` for byte/ASCII character conversions.
   - Implemented `NULLIF(expression1, expression2)` returning NULL on equality or expression1 otherwise.
   - Implemented `ISNUMERIC(expression)` checking valid numeric data types or string parseability without NaN/Inf leaks.
+  - Implemented `EOMONTH(start_date [, month_to_add])` calculating the end of month date.
+  - Implemented `ISDATE(expression)` validating date string format conformance.
   - Registered all new functions in `IsBuiltinFunction` and added comprehensive unit tests in `pkg/proc/builtins_test.go`.
+- **Table-Driven T-SQL Expressions & Built-in Functions Test Suite (`pkg/proc/runtime`)**:
+  - Implemented 116+ granular table-driven test cases covering arithmetic precedence, math builtins, string manipulation, date/time functions, boolean logic truth tables, predicates (LIKE, BETWEEN, IN, IS NULL), and searched CASE WHEN expressions.
 - **Standard ANSI SQL:2008 & T-SQL Paging and TOP Syntax (`pkg/proc`, `pkg/planner`, `pkg/api`)**:
   - Implemented standard `OFFSET <n> [ROW|ROWS] FETCH {FIRST|NEXT} <m> [ROW|ROWS] ONLY` clauses in the native Pratt parser (`parseGeneralSelect`) and CBO clause splitter (`splitSelectClauses`).
   - Added support for `SELECT [DISTINCT] TOP (<n>|<n>) [PERCENT] [WITH TIES]` clause in the native parser and query planner, setting `LimitCount` and `TopPercent` / `TopWithTies` metadata.
