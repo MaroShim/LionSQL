@@ -134,25 +134,50 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ## 6. SQL Syntax & Parser Coverage Backlog (T-SQL & ANSI SQL 문법 완비 과제)
 
+### 6.1. [완료] 완료된 핵심 문법
 - [x] **[완료] T-SQL & ANSI 표준 페이징 정규 문법 완비 (`OFFSET ... FETCH NEXT ... ROWS ONLY` 및 `TOP`) (`pkg/proc`, `pkg/planner`, `pkg/api`)**
   - 단순 `LIMIT / OFFSET`을 넘어 `ORDER BY ... OFFSET n ROWS FETCH NEXT m ROWS ONLY` 표준 구문을 Pratt AST 및 CBO 플래너에 1급 시민(First-Class)으로 완전 통합.
   - T-SQL `SELECT [DISTINCT] TOP (n) [PERCENT] [WITH TIES]` 구문 AST 파싱 및 Volcano/CBO 실행 연동, 단위 및 E2E 테스트 검증 완료.
-- [x] **복합 한정자(Qualifier) 및 인라인 별칭(Alias) 파싱 정밀화 (`pkg/proc/parser.go`, `pkg/planner/planner.go`, `pkg/api/sqlexec.go`)**
+- [x] **[완료] 세션 제어문(SET Statements) 정식 AST 파서 및 세션 플래그 영속화 (`pkg/api`, `pkg/wire`, `pkg/proc`)**
+  - GUI 툴 접속 및 프로시저 내부 `SET NOCOUNT ON/OFF`, `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`, 다중 옵션 쉼표 구분 문법 정식 AST(`SetOptionStmt`) 파싱, 바이트코드 컴파일 및 세션 플래그 바인딩 완료.
+- [x] **[완료] 복합 한정자(Qualifier) 및 인라인 별칭(Alias) 파싱 정밀화 (`pkg/proc/parser.go`, `pkg/planner/planner.go`, `pkg/api/sqlexec.go`)**
   - 3단계/4단계 한정자(`[db].[schema].[table].[col]`, `db..table`) 및 2단계 한정자(`alias.col`, `"schema"."table"`)의 정규 토큰화 및 카탈로그 해석.
   - `AS` 키워드가 생략된 인라인 테이블 별칭(`FROM accounts basetbl`) 및 컬럼 별칭(`SELECT id id_alias`) 파싱 안정화.
-- [ ] **FROM 절 파생 테이블(Derived Table) 및 인라인 서브쿼리 지원 (`pkg/planner`, `pkg/execution`)**
-  - `SELECT * FROM (SELECT id, balance FROM accounts) AS t WHERE t.balance > 100` 형태의 FROM 절 서브쿼리 AST 노드화 및 Volcano 실행 연동.
-- [ ] **T-SQL 내장 스칼라 함수 & 조건부 수식 정식 AST화 (`pkg/proc/eval.go`, `pkg/proc/compiler.go`)**
-  - 애드혹 문자열 파싱(`evalScalarExpr`) 탈피: `COALESCE()`, `ISNULL()`, `NULLIF()`, `QUOTENAME()`, `SCHEMA_NAME()`, `OBJECT_ID()`, `OBJECT_NAME()`.
-  - 데이터 타입 변환: `CAST(expr AS type)` 및 `CONVERT(type, expr [, style])`의 정식 파싱 및 타입 캐스팅 함수 엔진 직결.
+
+### 6.2. P1: 실무 및 ORM/드라이버 필수 문법 (High Priority)
+- [ ] **표준 타입 캐스팅 & 수식 정식 AST화 (`pkg/proc/eval.go`, `pkg/proc/compiler.go`)**
+  - 데이터 타입 변환: `CAST(expr AS type)` 및 `CONVERT(type, expr [, style])`의 정규 Pratt AST 파싱 및 네이티브 캐스팅 함수 엔진 직결.
   - `CASE WHEN ... THEN ... ELSE ... END` 복합 조건식의 완전한 AST 표현 및 단락 평가(Short-Circuit Evaluation).
-- [ ] **고급 조인(Join) 문법 확장 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
-  - `FULL OUTER JOIN`, `CROSS JOIN` 지원.
-  - T-SQL 특화 `CROSS APPLY` 및 `OUTER APPLY` (테이블 반환 함수/상관 서브쿼리 조인) 지원.
-- [x] **세션 제어문(SET Statements) 정식 AST 파서 및 세션 플래그 영속화 (`pkg/api`, `pkg/wire`, `pkg/proc`)**
-  - GUI 툴 접속 및 프로시저 내부 `SET NOCOUNT ON/OFF`, `SET ANSI_NULLS ON`, `SET QUOTED_IDENTIFIER ON`, 다중 옵션 쉼표 구분 문법 정식 AST(`SetOptionStmt`) 파싱, 바이트코드 컴파일 및 세션 플래그 바인딩 완료.
-- [ ] **EXISTS / NOT EXISTS 상관 서브쿼리 술어 지원 (`pkg/planner/decorrelate.go`)**
-  - `WHERE EXISTS (SELECT 1 FROM other WHERE other.id = t.id)` 술어(Predicate)의 Semi-Join / Anti-Join 변환 및 실행.
+  - 애드혹 문자열 파싱 탈피: `COALESCE()`, `ISNULL()`, `NULLIF()`.
+- [ ] **`INSERT INTO ... SELECT ...` 및 `SELECT ... INTO <new_table>` (`pkg/proc`, `pkg/api`)**
+  - `INSERT INTO target (cols...) SELECT ... FROM source WHERE ...` 대량 배치 적재 DML 지원.
+  - `SELECT ... INTO <table_name> FROM ...` 쿼리 결과 즉시 신규 테이블 생성 및 적재 지원.
+- [ ] **FROM 절 파생 테이블(Derived Table) 및 인라인 서브쿼리 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
+  - `SELECT * FROM (SELECT id, balance FROM accounts) AS t WHERE t.balance > 100` 형태의 FROM 절 서브쿼리 AST 노드화 및 Volcano 실행 연동 (ORM 호환 필수).
+- [ ] **`WHERE EXISTS` / `NOT EXISTS` 상관 서브쿼리 술어 (`pkg/planner/decorrelate.go`, `pkg/execution`)**
+  - `WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)` 술어의 Semi-Join / Anti-Join 플래너 변환 및 실행.
+
+### 6.3. P2: T-SQL 핵심 특화 문법 (MSSQL 마이그레이션 호환성)
+- [ ] **`CROSS APPLY` 및 `OUTER APPLY` 조인 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
+  - 테이블 반환 함수(TVF) 및 행별 상관 서브쿼리 조인을 위한 T-SQL 핵심 조인 연산자 (PostgreSQL `LATERAL JOIN` 대응).
+- [ ] **DML `OUTPUT` 절 (`pkg/proc`, `pkg/execution`, `pkg/api`)**
+  - `INSERT ... OUTPUT INSERTED.id`, `UPDATE ... OUTPUT DELETED.col, INSERTED.col`, `DELETE ... OUTPUT DELETED.*` DML 변경 델타 즉시 반환 (PostgreSQL `RETURNING` 대응).
+- [ ] **로컬 임시 테이블 (`#temp_table`) 및 테이블 변수 (`DECLARE @tbl TABLE`) (`pkg/catalog`, `pkg/proc`)**
+  - 세션 스코프 로컬 인메모리 임시 테이블 생명주기 관리 및 저장 프로시저 내부 테이블 변수 연동.
+- [ ] **커버링 인덱스 비키 컬럼: `CREATE INDEX ... INCLUDE (col1, col2)` (`pkg/catalog`, `pkg/planner`)**
+  - B+Tree 리프 노드에 비키 컬럼을 페이로드로 적재하여 메인 테이블 힙 조회를 100% 생략하는 Index-Only Scan 극대화.
+- [ ] **자주 쓰이는 T-SQL 테이블/쿼리 힌트 매핑 (`pkg/proc`, `pkg/planner`)**
+  - `SELECT * FROM tbl WITH (NOLOCK)`: SQLion 논블로킹 스냅샷 격리로 안전한 no-op 매핑.
+  - `WITH (INDEX(ix_name))`, `OPTION (RECOMPILE)`, `OPTION (MAXDOP n)` 힌트 파서 수용 및 카탈로그 플래그 연동.
+- [ ] **T-SQL 시스템/카탈로그 메타데이터 내장 함수 (`pkg/proc/builtins.go`)**
+  - `OBJECT_ID()`, `OBJECT_NAME()`, `SCHEMA_NAME()`, `COL_LENGTH()`, `IDENT_CURRENT()`, `@@ROWCOUNT` 시스템 변수 정규화.
+
+### 6.4. P3: 표준 SQL 고급 분석 및 조인 확장
+- [ ] **`CROSS JOIN` 및 `FULL OUTER JOIN` (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
+  - 명시적 `CROSS JOIN` 구문 및 쉼표 조인(`FROM a, b`)의 데카르트 곱 실행기 완비.
+  - 양방향 외부 조인 `FULL OUTER JOIN` 파싱 및 연산자 지원.
+- [ ] **다차원 소계 집계: `GROUP BY GROUPING SETS`, `ROLLUP`, `CUBE` (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
+  - 다차원 분석 리포팅 쿼리를 위한 단일 패스 집계 그룹화 확장.
 
 ---
 

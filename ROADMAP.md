@@ -188,6 +188,13 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - Social login: Built-in Google and GitHub OAuth2 endpoints (`/api/auth/oauth2/callback`) with automatic user provisioning and JWT issuance.
 - **Expected Outcome**: PocketBase-class developer productivity and turnkey deployment workflows.
 
+#### 5.10. T-SQL & ANSI SQL Core Syntax Coverage Expansion (`pkg/proc`, `pkg/planner`, `pkg/execution`)
+- **Challenge**:
+  - **P1 (Practical & ORM Essentials)**: Native AST parsing for `CAST(expr AS type)` / `CONVERT()` and composite `CASE WHEN ... THEN ... ELSE ... END`, `INSERT INTO ... SELECT ...`, derived tables in FROM clause (`FROM (SELECT ...) AS t`), and `WHERE EXISTS` / `NOT EXISTS` correlated subquery predicates.
+  - **P2 (T-SQL Core Dialect Parity)**: `CROSS APPLY` / `OUTER APPLY` joins, DML `OUTPUT` clause (RETURNING counterpart), local temporary tables (`#temp_table`), covering index non-key columns (`INCLUDE (col...)`), and standard table/query hints (`WITH (NOLOCK)`).
+  - **P3 (Advanced Analytics & Joins)**: Explicit `CROSS JOIN`, `FULL OUTER JOIN`, and multi-dimensional grouping (`GROUP BY GROUPING SETS / ROLLUP / CUBE`).
+- **Expected Outcome**: 100% syntactic and semantic compatibility with enterprise ORMs (EF Core, GORM) and legacy MSSQL procedural batches.
+
 ---
 
 ### Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS Target)
@@ -267,6 +274,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 5** | **P2** | **CBO Sort-Merge Join Operator** | Executor & Planner | Medium (250~350 lines) | Eliminates hash table overhead for pre-sorted inputs |
 | **Phase 5** | **P2** | **TDS NBCROW Row Compression (0xD2)** | TDS Protocol | Medium (200~300 lines) | 30%+ network bandwidth savings on sparse/NULL-heavy tables |
 | **Phase 5** | **P2** | **`INSTEAD OF` Trigger Runtime Interceptor** | T-SQL Runtime | Medium (200~300 lines) | Virtual entity DML update routing on complex views |
+| **Phase 5** | **P1** | **T-SQL & ANSI SQL Core Syntax Coverage** | Parser & Planner | Medium (300~400 lines) | CAST/CONVERT, derived tables, INSERT..SELECT, CROSS APPLY |
 | **Phase 5** | **P3** | **Declarative Schema Migration CLI** | BaaS & Tooling | Medium (250~350 lines) | `sqlion migrate` atomic DDL version history tracking |
 | **Phase 5** | **P3** | **OAuth2 Social Login (Google, GitHub)** | Auth & API | Medium (200~300 lines) | Turnkey authentication and JWT provisioning for web/mobile apps |
 | **Phase 6** | **P1** | **Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero-downtime availability |

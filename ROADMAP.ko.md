@@ -188,6 +188,13 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - 소셜 로그인: Google, GitHub OAuth2 콜백 내장(`/api/auth/oauth2/callback`) 및 사용자/JWT 자동 프로비저닝.
 - **기대 효과**: PocketBase 수준의 원스톱 개발자 생산성과 마이그레이션 도구 지원.
 
+#### 5.10. T-SQL & ANSI SQL 핵심 문법 커버리지 확장 (`pkg/proc`, `pkg/planner`, `pkg/execution`)
+- **과제**:
+  - **P1 (실무/ORM 필수)**: `CAST(expr AS type)` / `CONVERT()` 및 `CASE WHEN` 복합 조건식 AST화, `INSERT INTO ... SELECT ...`, `FROM` 절 파생 테이블(`FROM (SELECT ...) AS t`), `WHERE EXISTS` / `NOT EXISTS` 상관 서브쿼리 술어 지원.
+  - **P2 (T-SQL 핵심 호환)**: `CROSS APPLY` / `OUTER APPLY` 조인, DML `OUTPUT` 절, 로컬 임시 테이블(`#temp_table`), 커버링 인덱스 비키 컬럼(`INCLUDE (col...)`), 핵심 테이블/쿼리 힌트(`WITH (NOLOCK)` 등).
+  - **P3 (고급 분석/조인)**: `CROSS JOIN`, `FULL OUTER JOIN`, `GROUP BY GROUPING SETS / ROLLUP / CUBE`.
+- **기대 효과**: 엔터프라이즈 ORM(EF Core, GORM) 및 레거시 MSSQL 프로시저/배치 스크립트 마이그레이션 100% 수용.
+
 ---
 
 ### Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS Target)
@@ -268,6 +275,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 5** | **P2** | **소트-머지 조인 (Sort-Merge Join) 연산자** | 실행기 & 플래너 | 보통 (250~350줄) | 정렬 릴레이션 조인 시 해시 빌드 오버헤드 및 메모리 제거 |
 | **Phase 5** | **P2** | **TDS NBCROW 행 압축 (0xD2)** | TDS 프로토콜 | 보통 (200~300줄) | NULL 컬럼 다수 조회 시 네트워크 전송 대역폭 30%+ 절감 |
 | **Phase 5** | **P2** | **`INSTEAD OF` 트리거 런타임 인터셉터** | T-SQL 실행기 | 보통 (200~300줄) | 뷰 및 복합 테이블 DML 치환 실행 |
+| **Phase 5** | **P1** | **T-SQL & ANSI SQL 핵심 문법 확장** | 파서 & 플래너 | 보통 (300~400줄) | CAST/CONVERT, 파생 테이블, INSERT..SELECT, CROSS APPLY |
 | **Phase 5** | **P3** | **선언적 스키마 마이그레이션 CLI** | BaaS & 도구 | 보통 (250~350줄) | `sqlion migrate` 원자적 DDL 버전 이력 관리 |
 | **Phase 5** | **P3** | **소셜 로그인 (OAuth2 Providers)** | 인증 & API | 보통 (200~300줄) | Google, GitHub 로그인 및 JWT 원스톱 프로비저닝 |
 | **Phase 6** | **P1** | **Always On 스타일 자동 장애 조치 (Failover)** | HA 복제 | 높음 (400~500줄) | 장애 시 최신 LSN Replica 자동 승격 및 무중단 고가용성 |
