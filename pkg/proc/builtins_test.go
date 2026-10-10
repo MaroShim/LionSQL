@@ -778,4 +778,102 @@ func TestBuiltin_GroupsA_Through_F(t *testing.T) {
 	}
 }
 
+func TestBuiltin_PostgreSQLCompatibility(t *testing.T) {
+	// 1. String aliases: SUBSTR, REPEAT, CHR
+	if s := EvalBuiltin("SUBSTR", []storage.Value{storage.StringValue("PostgreSQL"), storage.IntValue(1), storage.IntValue(8)}); s.SVal != "Postgres" {
+		t.Errorf("SUBSTR expected 'Postgres', got %q", s.SVal)
+	}
+	if r := EvalBuiltin("REPEAT", []storage.Value{storage.StringValue("ha"), storage.IntValue(3)}); r.SVal != "hahaha" {
+		t.Errorf("REPEAT expected 'hahaha', got %q", r.SVal)
+	}
+	if ch := EvalBuiltin("CHR", []storage.Value{storage.IntValue(65)}); ch.SVal != "A" {
+		t.Errorf("CHR(65) expected 'A', got %q", ch.SVal)
+	}
+
+	// 2. STRPOS(string, substring)
+	if pos := EvalBuiltin("STRPOS", []storage.Value{storage.StringValue("high"), storage.StringValue("ig")}); pos.IVal != 2 {
+		t.Errorf("STRPOS('high', 'ig') expected 2, got %d", pos.IVal)
+	}
+	if pos := EvalBuiltin("STRPOS", []storage.Value{storage.StringValue("high"), storage.StringValue("xyz")}); pos.IVal != 0 {
+		t.Errorf("STRPOS('high', 'xyz') expected 0, got %d", pos.IVal)
+	}
+
+	// 3. MD5(string) -> 32-char lowercase hex
+	if md5Val := EvalBuiltin("MD5", []storage.Value{storage.StringValue("hello")}); md5Val.SVal != "5d41402abc4b2a76b9719d911017c592" {
+		t.Errorf("MD5('hello') expected '5d41402abc4b2a76b9719d911017c592', got %q", md5Val.SVal)
+	}
+
+	// 4. LPAD and RPAD
+	if lp := EvalBuiltin("LPAD", []storage.Value{storage.StringValue("hi"), storage.IntValue(5), storage.StringValue("xy")}); lp.SVal != "xyxhi" {
+		t.Errorf("LPAD expected 'xyxhi', got %q", lp.SVal)
+	}
+	if rp := EvalBuiltin("RPAD", []storage.Value{storage.StringValue("hi"), storage.IntValue(5), storage.StringValue("xy")}); rp.SVal != "hixyx" {
+		t.Errorf("RPAD expected 'hixyx', got %q", rp.SVal)
+	}
+	if lpTrunc := EvalBuiltin("LPAD", []storage.Value{storage.StringValue("hello"), storage.IntValue(3)}); lpTrunc.SVal != "hel" {
+		t.Errorf("LPAD truncation expected 'hel', got %q", lpTrunc.SVal)
+	}
+
+	// 5. OCTET_LENGTH and BIT_LENGTH
+	if oct := EvalBuiltin("OCTET_LENGTH", []storage.Value{storage.StringValue("jose")}); oct.IVal != 4 {
+		t.Errorf("OCTET_LENGTH expected 4, got %d", oct.IVal)
+	}
+	if bit := EvalBuiltin("BIT_LENGTH", []storage.Value{storage.StringValue("jose")}); bit.IVal != 32 {
+		t.Errorf("BIT_LENGTH expected 32, got %d", bit.IVal)
+	}
+
+	// 6. INITCAP
+	if ic := EvalBuiltin("INITCAP", []storage.Value{storage.StringValue("hi tHErE")}); ic.SVal != "Hi There" {
+		t.Errorf("INITCAP expected 'Hi There', got %q", ic.SVal)
+	}
+
+	// 7. TO_CHAR
+	if tc := EvalBuiltin("TO_CHAR", []storage.Value{storage.StringValue("2026-10-10 15:30:45"), storage.StringValue("yyyy-MM-dd")}); tc.SVal != "2026-10-10" {
+		t.Errorf("TO_CHAR expected '2026-10-10', got %q", tc.SVal)
+	}
+
+	// 8. TO_DATE and TO_TIMESTAMP
+	if td := EvalBuiltin("TO_DATE", []storage.Value{storage.StringValue("2026-10-10 15:30:45")}); td.SVal != "2026-10-10" {
+		t.Errorf("TO_DATE expected '2026-10-10', got %q", td.SVal)
+	}
+	if tt := EvalBuiltin("TO_TIMESTAMP", []storage.Value{storage.IntValue(1600000000)}); tt.SVal != "2020-09-13 12:26:40" {
+		t.Errorf("TO_TIMESTAMP epoch expected '2020-09-13 12:26:40', got %q", tt.SVal)
+	}
+
+	// 9. DATE_PART and EXTRACT
+	d := storage.StringValue("2026-09-23 15:30:00")
+	if dp := EvalBuiltin("DATE_PART", []storage.Value{storage.StringValue("month"), d}); dp.IVal != 9 {
+		t.Errorf("DATE_PART month expected 9, got %d", dp.IVal)
+	}
+	if ext := EvalBuiltin("EXTRACT", []storage.Value{storage.StringValue("year"), d}); ext.IVal != 2026 {
+		t.Errorf("EXTRACT year expected 2026, got %d", ext.IVal)
+	}
+
+	// 10. QUOTE_IDENT and QUOTE_LITERAL
+	if qi := EvalBuiltin("QUOTE_IDENT", []storage.Value{storage.StringValue("user_table")}); qi.SVal != "\"user_table\"" {
+		t.Errorf("QUOTE_IDENT expected '\"user_table\"', got %q", qi.SVal)
+	}
+	if ql := EvalBuiltin("QUOTE_LITERAL", []storage.Value{storage.StringValue("O'Reilly")}); ql.SVal != "'O''Reilly'" {
+		t.Errorf("QUOTE_LITERAL expected ''O''Reilly'', got %q", ql.SVal)
+	}
+
+	// 11. RANDOM()
+	rnd := EvalBuiltin("RANDOM", nil)
+	if rnd.FVal < 0.0 || rnd.FVal >= 1.0 {
+		t.Errorf("RANDOM expected in [0, 1), got %f", rnd.FVal)
+	}
+
+	// Verification of IsBuiltinFunction for PG functions
+	pgFuncs := []string{
+		"SUBSTR", "REPEAT", "CHR", "STRPOS", "MD5", "LPAD", "RPAD",
+		"OCTET_LENGTH", "BIT_LENGTH", "INITCAP", "TO_CHAR", "TO_DATE", "TO_TIMESTAMP",
+		"DATE_PART", "EXTRACT", "QUOTE_IDENT", "QUOTE_LITERAL", "RANDOM",
+	}
+	for _, fn := range pgFuncs {
+		if !IsBuiltinFunction(fn) {
+			t.Errorf("Expected IsBuiltinFunction(%q) to be true", fn)
+		}
+	}
+}
+
 

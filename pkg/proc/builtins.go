@@ -111,7 +111,7 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.NullValue(storage.TypeInt)
 
-	case "DATEPART":
+	case "DATEPART", "DATE_PART", "EXTRACT":
 		if len(args) < 2 || args[1].IsNull {
 			return storage.NullValue(storage.TypeInt)
 		}
@@ -264,6 +264,30 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		h, min, s, ms := int(args[3].IVal), int(args[4].IVal), int(args[5].IVal), int(args[6].IVal)
 		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d", y, m, d, h, min, s, ms))
 
+	case "TO_DATE":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		if t, ok := parseDateValue(args[0]); ok {
+			return storage.StringValue(t.Format("2006-01-02"))
+		}
+		return storage.NullValue(storage.TypeVarChar)
+
+	case "TO_TIMESTAMP":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			sec := int64(n)
+			nsec := int64((n - float64(sec)) * 1e9)
+			t := time.Unix(sec, nsec).UTC()
+			return storage.StringValue(t.Format("2006-01-02 15:04:05"))
+		}
+		if t, ok := parseDateValue(args[0]); ok {
+			return storage.StringValue(t.Format("2006-01-02 15:04:05"))
+		}
+		return storage.NullValue(storage.TypeVarChar)
+
 	// ----------------------------------------------------
 	// 2. String Functions
 	// ----------------------------------------------------
@@ -289,12 +313,17 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(strings.Join(parts, sep))
 
-	case "QUOTENAME":
+	case "QUOTENAME", "QUOTE_IDENT", "QUOTE_LITERAL":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeVarChar)
 		}
 		str := valToString(args[0])
 		quoteChar := "["
+		if upper == "QUOTE_IDENT" {
+			quoteChar = "\""
+		} else if upper == "QUOTE_LITERAL" {
+			quoteChar = "'"
+		}
 		if len(args) >= 2 && !args[1].IsNull {
 			q := valToString(args[1])
 			if len(q) > 0 {
@@ -331,7 +360,7 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.IntValue(int64(str[0]))
 
-	case "CHAR":
+	case "CHAR", "CHR":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeVarChar)
 		}
@@ -408,7 +437,7 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(string(runes[len(runes)-n:]))
 
-	case "SUBSTRING":
+	case "SUBSTRING", "SUBSTR":
 		if len(args) < 3 || args[0].IsNull {
 			return storage.StringValue("")
 		}
@@ -515,7 +544,7 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(strings.Repeat(" ", n))
 
-	case "REPLICATE":
+	case "REPLICATE", "REPEAT":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull || args[1].IVal <= 0 {
 			return storage.StringValue("")
 		}
@@ -667,6 +696,134 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 			return storage.StringValue(formatNumberCustom(num, fmtStr))
 		}
 		return storage.StringValue(valToString(args[0]))
+
+	case "STRPOS":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.IntValue(0)
+		}
+		target := valToString(args[0])
+		sub := valToString(args[1])
+		if sub == "" {
+			return storage.IntValue(1)
+		}
+		idx := strings.Index(target, sub)
+		if idx == -1 {
+			return storage.IntValue(0)
+		}
+		runeOffset := len([]rune(target[:idx]))
+		return storage.IntValue(int64(runeOffset + 1))
+
+	case "MD5":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		data := []byte(valToString(args[0]))
+		h := md5.Sum(data)
+		return storage.StringValue(hex.EncodeToString(h[:]))
+
+	case "LPAD":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		str := valToString(args[0])
+		targetLen := int(args[1].IVal)
+		if args[1].Type == storage.TypeFloat {
+			targetLen = int(args[1].FVal)
+		}
+		if targetLen <= 0 {
+			return storage.StringValue("")
+		}
+		pad := " "
+		if len(args) >= 3 && !args[2].IsNull {
+			pad = valToString(args[2])
+			if pad == "" {
+				pad = " "
+			}
+		}
+		runes := []rune(str)
+		if len(runes) >= targetLen {
+			return storage.StringValue(string(runes[:targetLen]))
+		}
+		padRunes := []rune(pad)
+		needed := targetLen - len(runes)
+		var sb strings.Builder
+		for i := 0; i < needed; i++ {
+			sb.WriteRune(padRunes[i%len(padRunes)])
+		}
+		sb.WriteString(str)
+		return storage.StringValue(sb.String())
+
+	case "RPAD":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		str := valToString(args[0])
+		targetLen := int(args[1].IVal)
+		if args[1].Type == storage.TypeFloat {
+			targetLen = int(args[1].FVal)
+		}
+		if targetLen <= 0 {
+			return storage.StringValue("")
+		}
+		pad := " "
+		if len(args) >= 3 && !args[2].IsNull {
+			pad = valToString(args[2])
+			if pad == "" {
+				pad = " "
+			}
+		}
+		runes := []rune(str)
+		if len(runes) >= targetLen {
+			return storage.StringValue(string(runes[:targetLen]))
+		}
+		padRunes := []rune(pad)
+		needed := targetLen - len(runes)
+		var sb strings.Builder
+		sb.WriteString(str)
+		for i := 0; i < needed; i++ {
+			sb.WriteRune(padRunes[i%len(padRunes)])
+		}
+		return storage.StringValue(sb.String())
+
+	case "OCTET_LENGTH":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		return storage.IntValue(int64(len([]byte(valToString(args[0])))))
+
+	case "BIT_LENGTH":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		return storage.IntValue(int64(len([]byte(valToString(args[0]))) * 8))
+
+	case "INITCAP":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		s := valToString(args[0])
+		var sb strings.Builder
+		newWord := true
+		for _, r := range s {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) {
+				if newWord {
+					sb.WriteRune(unicode.ToUpper(r))
+					newWord = false
+				} else {
+					sb.WriteRune(unicode.ToLower(r))
+				}
+			} else {
+				sb.WriteRune(r)
+				newWord = true
+			}
+		}
+		return storage.StringValue(sb.String())
+
+	case "TO_CHAR":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return EvalBuiltin("FORMAT", args)
 
 	// ----------------------------------------------------
 	// 3. Mathematical Functions
@@ -902,7 +1059,7 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.NullValue(storage.TypeFloat)
 
-	case "RAND":
+	case "RAND", "RANDOM":
 		if len(args) > 0 && !args[0].IsNull {
 			seedVal := args[0].IVal
 			if args[0].Type == storage.TypeFloat {
@@ -1205,15 +1362,16 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 func IsBuiltinFunction(name string) bool {
 	switch strings.ToUpper(cleanBuiltinName(name)) {
 	case "GETDATE", "NOW", "GETUTCDATE", "SYSDATETIME",
-		"YEAR", "MONTH", "DAY", "DATEPART", "DATEDIFF", "DATEADD", "EOMONTH", "ISDATE",
+		"YEAR", "MONTH", "DAY", "DATEPART", "DATE_PART", "EXTRACT", "DATEDIFF", "DATEADD", "EOMONTH", "ISDATE",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
-		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS",
-		"CONCAT", "CONCAT_WS", "QUOTENAME", "ASCII", "CHAR", "LEN", "LENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
-		"LEFT", "RIGHT", "SUBSTRING", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE", "STUFF",
+		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS", "TO_DATE", "TO_TIMESTAMP",
+		"CONCAT", "CONCAT_WS", "QUOTENAME", "QUOTE_IDENT", "QUOTE_LITERAL", "ASCII", "CHAR", "CHR", "LEN", "LENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
+		"LEFT", "RIGHT", "SUBSTRING", "SUBSTR", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE", "REPEAT", "STUFF",
 		"PATINDEX", "UNICODE", "NCHAR", "SOUNDEX", "DIFFERENCE", "TRANSLATE", "FORMAT",
+		"STRPOS", "MD5", "LPAD", "RPAD", "OCTET_LENGTH", "BIT_LENGTH", "INITCAP", "TO_CHAR",
 		"GREP", "REGEXP_LIKE", "AWK", "SPLIT_PART",
 		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SIGN", "PI",
-		"EXP", "LOG", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "DEGREES", "RADIANS", "RAND",
+		"EXP", "LOG", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "DEGREES", "RADIANS", "RAND", "RANDOM",
 		"ISNULL", "COALESCE", "NULLIF", "ISNUMERIC", "IIF", "CHOOSE",
 		"JSON_VALUE", "JSON_QUERY",
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID",
