@@ -1,0 +1,1 @@
+/Users/maro/.gemini/config/GEMINI.md
