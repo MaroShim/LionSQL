@@ -305,6 +305,8 @@ type VMFrame struct {
 	tranCount       int
 	lastIdentity    int64
 	lastError       int
+	lastErrorMsg    string
+	lastErrorLine   int
 	ctx             context.Context
 }
 
@@ -477,6 +479,8 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	f.tranCount = 0
 	f.lastIdentity = 0
 	f.lastError = 0
+	f.lastErrorMsg = ""
+	f.lastErrorLine = 0
 	f.fetchStatus = -1
 	for i := range f.regs {
 		f.regs[i] = storage.NullValue(storage.TypeUnknown)

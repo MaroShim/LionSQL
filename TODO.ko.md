@@ -169,8 +169,13 @@ This document tracks active tasks, short-term engineering priorities, and concep
 - [ ] **자주 쓰이는 T-SQL 테이블/쿼리 힌트 매핑 (`pkg/proc`, `pkg/planner`)**
   - `SELECT * FROM tbl WITH (NOLOCK)`: SQLion 논블로킹 스냅샷 격리로 안전한 no-op 매핑.
   - `WITH (INDEX(ix_name))`, `OPTION (RECOMPILE)`, `OPTION (MAXDOP n)` 힌트 파서 수용 및 카탈로그 플래그 연동.
-- [ ] **T-SQL 시스템/카탈로그 메타데이터 내장 함수 (`pkg/proc/builtins.go`)**
-  - `OBJECT_ID()`, `OBJECT_NAME()`, `SCHEMA_NAME()`, `COL_LENGTH()`, `IDENT_CURRENT()`, `@@ROWCOUNT` 시스템 변수 정규화.
+- [x] **[완료] T-SQL 공식 내장 스칼라 함수 전수 완비 (A~F 그룹) (`pkg/proc/builtins.go`, `pkg/proc/runtime`)**
+  - **Group A (에러 핸들링)**: `ERROR_NUMBER()`, `ERROR_MESSAGE()`, `ERROR_LINE()`, `ERROR_SEVERITY()`, `ERROR_STATE()`, `ERROR_PROCEDURE()`, `@@ERROR` (CATCH 블록 오류 추적 완비)
+  - **Group B (문자열)**: `PATINDEX()`, `STUFF()`, `UNICODE()`, `NCHAR()`, `SOUNDEX()`, `DIFFERENCE()`, `TRANSLATE()`, `FORMAT()`
+  - **Group C (수학/삼각)**: `EXP()`, `LOG()`, `LOG10()`, `SIN()`, `COS()`, `TAN()`, `COT()`, `ASIN()`, `ACOS()`, `ATAN()`, `ATN2()`, `DEGREES()`, `RADIANS()`, `RAND()`
+  - **Group D (메타데이터/카탈로그)**: `OBJECT_ID()`, `OBJECT_NAME()`, `COL_LENGTH()`, `SCHEMA_NAME()`, `SCHEMA_ID()`, `DB_NAME()`, `DB_ID()`, `APP_NAME()`, `IDENT_CURRENT()`
+  - **Group E (암호화/체크섬)**: `HASHBYTES()` (MD5, SHA1, SHA2_256, SHA2_512), `CHECKSUM()`, `BINARY_CHECKSUM()`
+  - **Group F (날짜 파트 조합)**: `DATEFROMPARTS()`, `TIMEFROMPARTS()`, `DATETIMEFROMPARTS()`
 
 ### 6.4. P3: 표준 SQL 고급 분석 및 조인 확장
 - [ ] **`CROSS JOIN` 및 `FULL OUTER JOIN` (`pkg/proc`, `pkg/planner`, `pkg/execution`)**

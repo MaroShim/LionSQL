@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Complete T-SQL Official Built-in Scalar Function Suite (Groups A~F) (`pkg/proc`, `pkg/proc/runtime`)**:
+  - **Group A (Execution Context & Error Introspection)**: Added `ERROR_NUMBER()`, `ERROR_MESSAGE()`, `ERROR_LINE()`, `ERROR_SEVERITY()`, `ERROR_STATE()`, `ERROR_PROCEDURE()`, and `@@ERROR`. Wired error state tracking into `VMFrame` (`lastErrorMsg`, `lastErrorLine`) and `OpCallBuiltin` dispatcher inside `TRY...CATCH` blocks.
+  - **Group B (String Manipulation & Search)**: Added `PATINDEX(pattern, string)` supporting T-SQL wildcards (`%`, `_`, `[a-z]`), `UNICODE()`, `NCHAR()`, `SOUNDEX()` and `DIFFERENCE()` phonetics, `TRANSLATE()`, and `FORMAT()` supporting date layouts and number/currency patterns.
+  - **Group C (Math & Trigonometric Functions)**: Added `EXP()`, `LOG()`, `LOG10()`, `SIN()`, `COS()`, `TAN()`, `COT()`, `ASIN()`, `ACOS()`, `ATAN()`, `ATN2()`, `DEGREES()`, `RADIANS()`, and `RAND([seed])`.
+  - **Group D (Metadata & Schema Introspection)**: Added `OBJECT_ID()`, `OBJECT_NAME()`, `COL_LENGTH()`, `SCHEMA_NAME()`, `SCHEMA_ID()`, `DB_NAME()`, `DB_ID()`, `APP_NAME()`, and `IDENT_CURRENT()`.
+  - **Group E (Cryptography & Checksums)**: Added `HASHBYTES(algo, string)` (MD5, SHA, SHA1, SHA2_256, SHA2_512), `CHECKSUM()`, and `BINARY_CHECKSUM()`.
+  - **Group F (Date Constructors)**: Added `DATEFROMPARTS()`, `TIMEFROMPARTS()`, and `DATETIMEFROMPARTS()`.
+  - Added unit test suite `TestBuiltin_GroupsA_Through_F` in `pkg/proc/builtins_test.go` and regression tests `TestRegression_TryCatchErrorBuiltins` and `TestRegression_TSQLBuiltinsGroupsAThroughF` in `pkg/proc/runtime/regression_test.go`.
 - **VDBE Instruction 16-Byte Compaction & AuxData Pool (`pkg/proc`, `pkg/proc/runtime`)**:
   - Re-architected `proc.Instruction` into a dense 16-byte fixed-size record (`Op OpCode, Flags uint8, Aux uint16, A int32, B int32, C int32`) with zero struct padding, fitting exactly 4 instructions per 64-byte CPU L1 Data Cache line.
   - Eliminated the `Data any` 16-byte interface header from `Instruction`, externalizing variable-sized metadata and complex structures (`DMLData`, `CallData`, `SelectIntoData`, `RelQueryData`, `IndexScanData`, `ResultRowData`) to `Program.AuxData []any` indexed via `inst.Aux` (`uint16`).
@@ -42,6 +50,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Post-Rollback & Post-Commit Transaction Continuity in VDBE Procedures (`pkg/proc/runtime`)**:
   - Bound active `storage.Session` to `VMFrame` and enabled seamless new transaction initialization following in-procedure `ROLLBACK TRANSACTION` or `COMMIT TRANSACTION`.
   - Fixed `ErrTxClosed` failure when running audit and error logging statements inside `BEGIN CATCH` blocks after rolling back failed business transactions.
+- **VDBE Function Call Register Allocation & Projection Clobbering (`pkg/proc`, `pkg/api`)**:
+  - Fixed register clobbering in multi-expression scalar queries where argument deallocation in `FunctionCallExpr` caused the register allocator to decrement `regCounter` below the returned result register, overwriting preceding projection registers in subsequent expressions.
+  - Preserved catalog table introspection in table-less `OBJECT_ID` and `OBJECT_NAME` scalar queries by routing catalog introspection calls to `execScalarSelect`.
 
 ### Documentation
 - **Canonical FSF GPL v3 LICENSE Alignment & Commercial Dual Licensing (`LICENSE`, `README.md`)**:

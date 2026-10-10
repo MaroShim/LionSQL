@@ -1,14 +1,23 @@
 package proc
 
 import (
+	"crypto/md5"
 	"crypto/rand"
+	"crypto/sha1"
+	"crypto/sha256"
+	"crypto/sha512"
+	"encoding/hex"
 	"fmt"
+	"hash/crc32"
+	"hash/fnv"
 	"math"
+	mathrand "math/rand/v2"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"sqlion/pkg/storage"
 )
@@ -218,6 +227,42 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 			return storage.IntValue(1)
 		}
 		return storage.IntValue(0)
+
+	case "DATEFROMPARTS":
+		if len(args) < 3 || args[0].IsNull || args[1].IsNull || args[2].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		y, m, d := int(args[0].IVal), int(args[1].IVal), int(args[2].IVal)
+		if y < 1 || m < 1 || m > 12 || d < 1 || d > 31 {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d", y, m, d))
+
+	case "TIMEFROMPARTS":
+		if len(args) < 3 || args[0].IsNull || args[1].IsNull || args[2].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		h, m, s := int(args[0].IVal), int(args[1].IVal), int(args[2].IVal)
+		frac := int64(0)
+		prec := int64(0)
+		if len(args) >= 4 && !args[3].IsNull {
+			frac = args[3].IVal
+		}
+		if len(args) >= 5 && !args[4].IsNull {
+			prec = args[4].IVal
+		}
+		if prec > 0 {
+			return storage.StringValue(fmt.Sprintf("%02d:%02d:%02d.%0*d", h, m, s, int(prec), frac))
+		}
+		return storage.StringValue(fmt.Sprintf("%02d:%02d:%02d", h, m, s))
+
+	case "DATETIMEFROMPARTS":
+		if len(args) < 7 || args[0].IsNull || args[1].IsNull || args[2].IsNull || args[3].IsNull || args[4].IsNull || args[5].IsNull || args[6].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		y, m, d := int(args[0].IVal), int(args[1].IVal), int(args[2].IVal)
+		h, min, s, ms := int(args[3].IVal), int(args[4].IVal), int(args[5].IVal), int(args[6].IVal)
+		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d", y, m, d, h, min, s, ms))
 
 	// ----------------------------------------------------
 	// 2. String Functions
@@ -534,6 +579,95 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(fields[fieldIdx-1])
 
+	case "PATINDEX":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		pattern := valToString(args[0])
+		target := valToString(args[1])
+		return storage.IntValue(computePatindex(pattern, target))
+
+	case "UNICODE":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		s := valToString(args[0])
+		if len(s) == 0 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		runes := []rune(s)
+		return storage.IntValue(int64(runes[0]))
+
+	case "NCHAR":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		code := args[0].IVal
+		if args[0].Type == storage.TypeFloat {
+			code = int64(args[0].FVal)
+		}
+		if code < 0 || code > unicode.MaxRune {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.StringValue(string(rune(code)))
+
+	case "SOUNDEX":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.StringValue(computeSoundex(valToString(args[0])))
+
+	case "DIFFERENCE":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		s1 := computeSoundex(valToString(args[0]))
+		s2 := computeSoundex(valToString(args[1]))
+		score := 0
+		for i := 0; i < 4 && i < len(s1) && i < len(s2); i++ {
+			if s1[i] == s2[i] {
+				score++
+			}
+		}
+		return storage.IntValue(int64(score))
+
+	case "TRANSLATE":
+		if len(args) < 3 || args[0].IsNull || args[1].IsNull || args[2].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		input := valToString(args[0])
+		fromChars := []rune(valToString(args[1]))
+		toChars := []rune(valToString(args[2]))
+		if len(fromChars) != len(toChars) {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		mapping := make(map[rune]rune, len(fromChars))
+		for i, r := range fromChars {
+			mapping[r] = toChars[i]
+		}
+		var sb strings.Builder
+		for _, r := range input {
+			if tr, ok := mapping[r]; ok {
+				sb.WriteRune(tr)
+			} else {
+				sb.WriteRune(r)
+			}
+		}
+		return storage.StringValue(sb.String())
+
+	case "FORMAT":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		fmtStr := valToString(args[1])
+		if t, ok := parseDateValue(args[0]); ok {
+			return storage.StringValue(formatDateCustom(t, fmtStr))
+		}
+		if num, ok := toFloatNum(args[0]); ok {
+			return storage.StringValue(formatNumberCustom(num, fmtStr))
+		}
+		return storage.StringValue(valToString(args[0]))
+
 	// ----------------------------------------------------
 	// 3. Mathematical Functions
 	// ----------------------------------------------------
@@ -629,6 +763,155 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 
 	case "PI":
 		return storage.FloatValue(math.Pi)
+
+	case "EXP":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Exp(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "LOG":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		n, ok := toFloatNum(args[0])
+		if !ok || n <= 0 {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if len(args) >= 2 && !args[1].IsNull {
+			base, okBase := toFloatNum(args[1])
+			if !okBase || base <= 0 || base == 1 {
+				return storage.NullValue(storage.TypeFloat)
+			}
+			return storage.FloatValue(math.Log(n) / math.Log(base))
+		}
+		return storage.FloatValue(math.Log(n))
+
+	case "LOG10":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		n, ok := toFloatNum(args[0])
+		if !ok || n <= 0 {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		return storage.FloatValue(math.Log10(n))
+
+	case "SIN":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Sin(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "COS":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Cos(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "TAN":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Tan(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "COT":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			tanVal := math.Tan(n)
+			if tanVal == 0 {
+				return storage.NullValue(storage.TypeFloat)
+			}
+			return storage.FloatValue(1.0 / tanVal)
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "ASIN":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			if n < -1 || n > 1 {
+				return storage.NullValue(storage.TypeFloat)
+			}
+			return storage.FloatValue(math.Asin(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "ACOS":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			if n < -1 || n > 1 {
+				return storage.NullValue(storage.TypeFloat)
+			}
+			return storage.FloatValue(math.Acos(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "ATAN":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(math.Atan(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "ATN2":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		y, okY := toFloatNum(args[0])
+		x, okX := toFloatNum(args[1])
+		if !okY || !okX {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		return storage.FloatValue(math.Atan2(y, x))
+
+	case "DEGREES":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(n * 180.0 / math.Pi)
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "RADIANS":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(n * math.Pi / 180.0)
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "RAND":
+		if len(args) > 0 && !args[0].IsNull {
+			seedVal := args[0].IVal
+			if args[0].Type == storage.TypeFloat {
+				seedVal = int64(args[0].FVal)
+			}
+			r := mathrand.New(mathrand.NewPCG(uint64(seedVal), uint64(seedVal*6364136223846793005+1)))
+			return storage.FloatValue(r.Float64())
+		}
+		return storage.FloatValue(mathrand.Float64())
 
 	// ----------------------------------------------------
 	// 4. Conditional & Logical Functions
@@ -774,6 +1057,142 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 			return storage.StringValue("")
 		}
 
+	// ----------------------------------------------------
+	// 7. Error Handling & Execution Context (Group A)
+	// ----------------------------------------------------
+	case "ERROR_NUMBER", "@@ERROR":
+		return storage.IntValue(0)
+
+	case "ERROR_MESSAGE":
+		return storage.StringValue("")
+
+	case "ERROR_LINE":
+		return storage.IntValue(0)
+
+	case "ERROR_SEVERITY":
+		return storage.IntValue(16)
+
+	case "ERROR_STATE":
+		return storage.IntValue(1)
+
+	case "ERROR_PROCEDURE":
+		return storage.NullValue(storage.TypeVarChar)
+
+	// ----------------------------------------------------
+	// 8. Metadata & Schema Introspection (Group D)
+	// ----------------------------------------------------
+	case "OBJECT_ID":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		objName := strings.TrimSpace(valToString(args[0]))
+		if objName == "" {
+			return storage.NullValue(storage.TypeInt)
+		}
+		clean := strings.ToLower(cleanBuiltinName(objName))
+		id := int64(crc32.ChecksumIEEE([]byte(clean)))
+		if id <= 0 {
+			id = 1
+		}
+		return storage.IntValue(id)
+
+	case "OBJECT_NAME":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.NullValue(storage.TypeVarChar)
+
+	case "COL_LENGTH":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		return storage.IntValue(50)
+
+	case "SCHEMA_NAME":
+		schemaID := int64(1)
+		if len(args) > 0 && !args[0].IsNull {
+			schemaID = args[0].IVal
+		}
+		if schemaID == 1 {
+			return storage.StringValue("dbo")
+		}
+		return storage.StringValue("dbo")
+
+	case "SCHEMA_ID":
+		sName := "dbo"
+		if len(args) > 0 && !args[0].IsNull {
+			sName = valToString(args[0])
+		}
+		if strings.EqualFold(cleanBuiltinName(sName), "dbo") {
+			return storage.IntValue(1)
+		}
+		return storage.IntValue(1)
+
+	case "DB_NAME":
+		return storage.StringValue("SQLion")
+
+	case "DB_ID":
+		return storage.IntValue(1)
+
+	case "APP_NAME":
+		return storage.StringValue("SQLion")
+
+	case "IDENT_CURRENT":
+		return storage.IntValue(1)
+
+	// ----------------------------------------------------
+	// 9. Cryptography & Checksum (Group E)
+	// ----------------------------------------------------
+	case "HASHBYTES":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		algo := strings.ToUpper(strings.TrimSpace(valToString(args[0])))
+		data := []byte(valToString(args[1]))
+		var hashBytes []byte
+		switch algo {
+		case "MD5":
+			h := md5.Sum(data)
+			hashBytes = h[:]
+		case "SHA", "SHA1":
+			h := sha1.Sum(data)
+			hashBytes = h[:]
+		case "SHA2_256":
+			h := sha256.Sum256(data)
+			hashBytes = h[:]
+		case "SHA2_512":
+			h := sha512.Sum512(data)
+			hashBytes = h[:]
+		default:
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.StringValue("0x" + strings.ToUpper(hex.EncodeToString(hashBytes)))
+
+	case "CHECKSUM":
+		if len(args) == 0 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		h := fnv.New32a()
+		for _, a := range args {
+			if !a.IsNull {
+				h.Write([]byte(valToString(a)))
+			}
+		}
+		return storage.IntValue(int64(int32(h.Sum32())))
+
+	case "BINARY_CHECKSUM":
+		if len(args) == 0 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		var buf []byte
+		for _, a := range args {
+			if !a.IsNull {
+				buf = append(buf, []byte(valToString(a))...)
+			}
+		}
+		crc := crc32.ChecksumIEEE(buf)
+		return storage.IntValue(int64(int32(crc)))
+
 	default:
 		if len(args) > 0 {
 			return args[0]
@@ -788,13 +1207,20 @@ func IsBuiltinFunction(name string) bool {
 	case "GETDATE", "NOW", "GETUTCDATE", "SYSDATETIME",
 		"YEAR", "MONTH", "DAY", "DATEPART", "DATEDIFF", "DATEADD", "EOMONTH", "ISDATE",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
+		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS",
 		"CONCAT", "CONCAT_WS", "QUOTENAME", "ASCII", "CHAR", "LEN", "LENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
-		"LEFT", "RIGHT", "SUBSTRING", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE",
+		"LEFT", "RIGHT", "SUBSTRING", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE", "STUFF",
+		"PATINDEX", "UNICODE", "NCHAR", "SOUNDEX", "DIFFERENCE", "TRANSLATE", "FORMAT",
+		"GREP", "REGEXP_LIKE", "AWK", "SPLIT_PART",
 		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SIGN", "PI",
+		"EXP", "LOG", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "DEGREES", "RADIANS", "RAND",
 		"ISNULL", "COALESCE", "NULLIF", "ISNUMERIC", "IIF", "CHOOSE",
 		"JSON_VALUE", "JSON_QUERY",
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID",
-		"SCOPE_IDENTITY", "SERVERPROPERTY":
+		"SCOPE_IDENTITY", "SERVERPROPERTY",
+		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
+		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
+		"HASHBYTES", "CHECKSUM", "BINARY_CHECKSUM":
 		return true
 	default:
 		return false
@@ -1215,4 +1641,299 @@ func generateUUIDv7() string {
 
 	return strings.ToUpper(fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]))
+}
+
+func computeSoundex(s string) string {
+	s = strings.ToUpper(strings.TrimSpace(s))
+	if len(s) == 0 {
+		return "0000"
+	}
+	runes := []rune(s)
+	var filtered []rune
+	for _, r := range runes {
+		if r >= 'A' && r <= 'Z' {
+			filtered = append(filtered, r)
+		}
+	}
+	if len(filtered) == 0 {
+		return "0000"
+	}
+	firstChar := filtered[0]
+	getDigit := func(r rune) byte {
+		switch r {
+		case 'B', 'F', 'P', 'V':
+			return '1'
+		case 'C', 'G', 'J', 'K', 'Q', 'S', 'X', 'Z':
+			return '2'
+		case 'D', 'T':
+			return '3'
+		case 'L':
+			return '4'
+		case 'M', 'N':
+			return '5'
+		case 'R':
+			return '6'
+		default:
+			return '0'
+		}
+	}
+
+	var digits []byte
+	lastDigit := getDigit(firstChar)
+	for i := 1; i < len(filtered); i++ {
+		d := getDigit(filtered[i])
+		if d != '0' && d != lastDigit {
+			digits = append(digits, d)
+		}
+		if filtered[i] != 'H' && filtered[i] != 'W' {
+			lastDigit = d
+		}
+		if len(digits) == 3 {
+			break
+		}
+	}
+	for len(digits) < 3 {
+		digits = append(digits, '0')
+	}
+	return string(firstChar) + string(digits[:3])
+}
+
+func computePatindex(pattern, text string) int64 {
+	if pattern == "" || text == "" {
+		return 0
+	}
+	leadingPercent := strings.HasPrefix(pattern, "%")
+	trailingPercent := strings.HasSuffix(pattern, "%")
+
+	sub := pattern
+	if leadingPercent {
+		sub = sub[1:]
+	}
+	if trailingPercent && len(sub) > 0 {
+		sub = sub[:len(sub)-1]
+	}
+	if sub == "" {
+		return 1
+	}
+
+	var rx strings.Builder
+	if !leadingPercent {
+		rx.WriteString("^")
+	}
+
+	runes := []rune(sub)
+	for i := 0; i < len(runes); i++ {
+		ch := runes[i]
+		switch ch {
+		case '%':
+			rx.WriteString(".*?")
+		case '_':
+			rx.WriteString(".")
+		case '[':
+			j := i + 1
+			if j < len(runes) && runes[j] == '^' {
+				j++
+			}
+			if j < len(runes) && runes[j] == ']' {
+				j++
+			}
+			for j < len(runes) && runes[j] != ']' {
+				j++
+			}
+			if j < len(runes) && runes[j] == ']' {
+				bracketContent := string(runes[i : j+1])
+				rx.WriteString(bracketContent)
+				i = j
+			} else {
+				rx.WriteString(regexp.QuoteMeta(string(ch)))
+			}
+		default:
+			rx.WriteString(regexp.QuoteMeta(string(ch)))
+		}
+	}
+
+	if !trailingPercent {
+		rx.WriteString("$")
+	}
+
+	re, err := regexp.Compile("(?i)" + rx.String())
+	if err != nil {
+		return 0
+	}
+
+	loc := re.FindStringIndex(text)
+	if loc == nil {
+		return 0
+	}
+	matchedRunes := []rune(text[:loc[0]])
+	return int64(len(matchedRunes) + 1)
+}
+
+func formatDateCustom(t time.Time, format string) string {
+	switch strings.ToLower(format) {
+	case "d":
+		return t.Format("2006-01-02")
+	case "s":
+		return t.Format("2006-01-02T15:04:05")
+	}
+	var sb strings.Builder
+	runes := []rune(format)
+	for i := 0; i < len(runes); {
+		r := runes[i]
+		j := i + 1
+		for j < len(runes) && runes[j] == r {
+			j++
+		}
+		tokenLen := j - i
+		matched := true
+		switch r {
+		case 'y', 'Y':
+			if tokenLen >= 4 {
+				sb.WriteString(t.Format("2006"))
+			} else {
+				sb.WriteString(t.Format("06"))
+			}
+		case 'M':
+			if tokenLen >= 4 {
+				sb.WriteString(t.Format("January"))
+			} else if tokenLen == 3 {
+				sb.WriteString(t.Format("Jan"))
+			} else if tokenLen == 2 {
+				sb.WriteString(t.Format("01"))
+			} else {
+				sb.WriteString(t.Format("1"))
+			}
+		case 'd':
+			if tokenLen >= 4 {
+				sb.WriteString(t.Format("Monday"))
+			} else if tokenLen == 3 {
+				sb.WriteString(t.Format("Mon"))
+			} else if tokenLen == 2 {
+				sb.WriteString(t.Format("02"))
+			} else {
+				sb.WriteString(t.Format("2"))
+			}
+		case 'H':
+			if tokenLen >= 2 {
+				sb.WriteString(t.Format("15"))
+			} else {
+				sb.WriteString(fmt.Sprintf("%d", t.Hour()))
+			}
+		case 'h':
+			h12 := t.Hour() % 12
+			if h12 == 0 {
+				h12 = 12
+			}
+			if tokenLen >= 2 {
+				sb.WriteString(fmt.Sprintf("%02d", h12))
+			} else {
+				sb.WriteString(fmt.Sprintf("%d", h12))
+			}
+		case 'm':
+			if tokenLen >= 2 {
+				sb.WriteString(t.Format("04"))
+			} else {
+				sb.WriteString(fmt.Sprintf("%d", t.Minute()))
+			}
+		case 's':
+			if tokenLen >= 2 {
+				sb.WriteString(t.Format("05"))
+			} else {
+				sb.WriteString(fmt.Sprintf("%d", t.Second()))
+			}
+		case 'f', 'F':
+			ms := t.Nanosecond() / 1_000_000
+			if tokenLen >= 3 {
+				sb.WriteString(fmt.Sprintf("%03d", ms))
+			} else {
+				sb.WriteString(fmt.Sprintf("%d", ms))
+			}
+		case 't':
+			if t.Hour() >= 12 {
+				sb.WriteString("PM")
+			} else {
+				sb.WriteString("AM")
+			}
+		default:
+			matched = false
+		}
+		if matched {
+			i = j
+		} else {
+			sb.WriteRune(r)
+			i++
+		}
+	}
+	return sb.String()
+}
+
+func formatNumberCustom(num float64, format string) string {
+	f := strings.TrimSpace(format)
+	upper := strings.ToUpper(f)
+	if strings.HasPrefix(upper, "N") {
+		dec := 2
+		if len(upper) > 1 {
+			if d, err := strconv.Atoi(upper[1:]); err == nil {
+				dec = d
+			}
+		}
+		return formatWithCommas(num, dec)
+	}
+	if strings.HasPrefix(upper, "C") {
+		dec := 2
+		if len(upper) > 1 {
+			if d, err := strconv.Atoi(upper[1:]); err == nil {
+				dec = d
+			}
+		}
+		return "$" + formatWithCommas(num, dec)
+	}
+	if strings.HasPrefix(upper, "P") {
+		dec := 2
+		if len(upper) > 1 {
+			if d, err := strconv.Atoi(upper[1:]); err == nil {
+				dec = d
+			}
+		}
+		return formatWithCommas(num*100, dec) + "%"
+	}
+	if strings.HasPrefix(upper, "D") {
+		width := 1
+		if len(upper) > 1 {
+			if w, err := strconv.Atoi(upper[1:]); err == nil {
+				width = w
+			}
+		}
+		return fmt.Sprintf("%0*d", width, int64(num))
+	}
+	if strings.Count(f, "0") == len(f) && len(f) > 0 {
+		return fmt.Sprintf("%0*d", len(f), int64(num))
+	}
+	return strconv.FormatFloat(num, 'f', -1, 64)
+}
+
+func formatWithCommas(n float64, decimals int) string {
+	str := strconv.FormatFloat(n, 'f', decimals, 64)
+	parts := strings.Split(str, ".")
+	intPart := parts[0]
+	isNeg := false
+	if strings.HasPrefix(intPart, "-") {
+		isNeg = true
+		intPart = intPart[1:]
+	}
+	var res []byte
+	for i, c := range intPart {
+		if i > 0 && (len(intPart)-i)%3 == 0 {
+			res = append(res, ',')
+		}
+		res = append(res, byte(c))
+	}
+	out := string(res)
+	if isNeg {
+		out = "-" + out
+	}
+	if len(parts) > 1 {
+		out += "." + parts[1]
+	}
+	return out
 }

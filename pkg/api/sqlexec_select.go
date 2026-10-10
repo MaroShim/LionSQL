@@ -1233,7 +1233,7 @@ func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if !hasFromClause(cleaned) {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") {
+		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
 				return res, nil
 			}

@@ -547,4 +547,235 @@ func TestCustomScalarFunctionSPI(t *testing.T) {
 	}
 }
 
+func TestBuiltin_GroupsA_Through_F(t *testing.T) {
+	// ----------------------------------------------------
+	// Group A: Error Handling & Execution Context
+	// ----------------------------------------------------
+	if errNum := EvalBuiltin("ERROR_NUMBER", nil); errNum.IVal != 0 {
+		t.Errorf("ERROR_NUMBER expected 0, got %d", errNum.IVal)
+	}
+	if errMsg := EvalBuiltin("ERROR_MESSAGE", nil); errMsg.SVal != "" {
+		t.Errorf("ERROR_MESSAGE expected empty string, got %q", errMsg.SVal)
+	}
+	if errLine := EvalBuiltin("ERROR_LINE", nil); errLine.IVal != 0 {
+		t.Errorf("ERROR_LINE expected 0, got %d", errLine.IVal)
+	}
+	if sev := EvalBuiltin("ERROR_SEVERITY", nil); sev.IVal != 16 {
+		t.Errorf("ERROR_SEVERITY expected 16, got %d", sev.IVal)
+	}
+	if state := EvalBuiltin("ERROR_STATE", nil); state.IVal != 1 {
+		t.Errorf("ERROR_STATE expected 1, got %d", state.IVal)
+	}
+	if procVal := EvalBuiltin("ERROR_PROCEDURE", nil); !procVal.IsNull {
+		t.Errorf("ERROR_PROCEDURE expected NULL, got %v", procVal)
+	}
+	if atErr := EvalBuiltin("@@ERROR", nil); atErr.IVal != 0 {
+		t.Errorf("@@ERROR expected 0, got %d", atErr.IVal)
+	}
+
+	// ----------------------------------------------------
+	// Group B: String Manipulation & Search
+	// ----------------------------------------------------
+	// PATINDEX
+	pat1 := EvalBuiltin("PATINDEX", []storage.Value{storage.StringValue("%ter%"), storage.StringValue("interesting")})
+	if pat1.IVal != 3 {
+		t.Errorf("PATINDEX('%%ter%%', 'interesting') expected 3, got %d", pat1.IVal)
+	}
+	pat2 := EvalBuiltin("PATINDEX", []storage.Value{storage.StringValue("%[0-9]%"), storage.StringValue("abc123def")})
+	if pat2.IVal != 4 {
+		t.Errorf("PATINDEX('%%[0-9]%%', 'abc123def') expected 4, got %d", pat2.IVal)
+	}
+	pat3 := EvalBuiltin("PATINDEX", []storage.Value{storage.StringValue("in%"), storage.StringValue("interesting")})
+	if pat3.IVal != 1 {
+		t.Errorf("PATINDEX('in%%', 'interesting') expected 1, got %d", pat3.IVal)
+	}
+	pat4 := EvalBuiltin("PATINDEX", []storage.Value{storage.StringValue("ter%"), storage.StringValue("interesting")})
+	if pat4.IVal != 0 {
+		t.Errorf("PATINDEX('ter%%', 'interesting') expected 0, got %d", pat4.IVal)
+	}
+
+	// UNICODE & NCHAR
+	uni := EvalBuiltin("UNICODE", []storage.Value{storage.StringValue("A")})
+	if uni.IVal != 65 {
+		t.Errorf("UNICODE('A') expected 65, got %d", uni.IVal)
+	}
+	nch := EvalBuiltin("NCHAR", []storage.Value{storage.IntValue(65)})
+	if nch.SVal != "A" {
+		t.Errorf("NCHAR(65) expected 'A', got %q", nch.SVal)
+	}
+
+	// SOUNDEX & DIFFERENCE
+	snd1 := EvalBuiltin("SOUNDEX", []storage.Value{storage.StringValue("Smith")})
+	snd2 := EvalBuiltin("SOUNDEX", []storage.Value{storage.StringValue("Smythe")})
+	if snd1.SVal != "S530" {
+		t.Errorf("SOUNDEX('Smith') expected 'S530', got %q", snd1.SVal)
+	}
+	if snd2.SVal != "S530" {
+		t.Errorf("SOUNDEX('Smythe') expected 'S530', got %q", snd2.SVal)
+	}
+	diff := EvalBuiltin("DIFFERENCE", []storage.Value{storage.StringValue("Smith"), storage.StringValue("Smythe")})
+	if diff.IVal != 4 {
+		t.Errorf("DIFFERENCE('Smith', 'Smythe') expected 4, got %d", diff.IVal)
+	}
+
+	// TRANSLATE
+	trans := EvalBuiltin("TRANSLATE", []storage.Value{
+		storage.StringValue("2*[3+4]/{7-2}"),
+		storage.StringValue("[]{}"),
+		storage.StringValue("()()"),
+	})
+	if trans.SVal != "2*(3+4)/(7-2)" {
+		t.Errorf("TRANSLATE expected '2*(3+4)/(7-2)', got %q", trans.SVal)
+	}
+
+	// FORMAT
+	fmtDate := EvalBuiltin("FORMAT", []storage.Value{
+		storage.StringValue("2026-10-10 15:30:45"),
+		storage.StringValue("yyyy-MM-dd"),
+	})
+	if fmtDate.SVal != "2026-10-10" {
+		t.Errorf("FORMAT date expected '2026-10-10', got %q", fmtDate.SVal)
+	}
+	fmtNum := EvalBuiltin("FORMAT", []storage.Value{
+		storage.FloatValue(12345.67),
+		storage.StringValue("N2"),
+	})
+	if fmtNum.SVal != "12,345.67" {
+		t.Errorf("FORMAT number expected '12,345.67', got %q", fmtNum.SVal)
+	}
+
+	// ----------------------------------------------------
+	// Group C: Advanced Math & Trig Functions
+	// ----------------------------------------------------
+	expVal := EvalBuiltin("EXP", []storage.Value{storage.IntValue(1)})
+	if expVal.FVal < 2.718 || expVal.FVal > 2.719 {
+		t.Errorf("EXP(1) expected ~2.718, got %f", expVal.FVal)
+	}
+	logVal := EvalBuiltin("LOG", []storage.Value{storage.FloatValue(expVal.FVal)})
+	if logVal.FVal < 0.99 || logVal.FVal > 1.01 {
+		t.Errorf("LOG(e) expected ~1.0, got %f", logVal.FVal)
+	}
+	log10Val := EvalBuiltin("LOG10", []storage.Value{storage.IntValue(100)})
+	if log10Val.FVal != 2.0 {
+		t.Errorf("LOG10(100) expected 2.0, got %f", log10Val.FVal)
+	}
+	sinVal := EvalBuiltin("SIN", []storage.Value{storage.IntValue(0)})
+	if sinVal.FVal != 0.0 {
+		t.Errorf("SIN(0) expected 0.0, got %f", sinVal.FVal)
+	}
+	cosVal := EvalBuiltin("COS", []storage.Value{storage.IntValue(0)})
+	if cosVal.FVal != 1.0 {
+		t.Errorf("COS(0) expected 1.0, got %f", cosVal.FVal)
+	}
+	tanVal := EvalBuiltin("TAN", []storage.Value{storage.IntValue(0)})
+	if tanVal.FVal != 0.0 {
+		t.Errorf("TAN(0) expected 0.0, got %f", tanVal.FVal)
+	}
+	degVal := EvalBuiltin("DEGREES", []storage.Value{storage.FloatValue(3.141592653589793)})
+	if degVal.FVal < 179.9 || degVal.FVal > 180.1 {
+		t.Errorf("DEGREES(pi) expected 180.0, got %f", degVal.FVal)
+	}
+	radVal := EvalBuiltin("RADIANS", []storage.Value{storage.IntValue(180)})
+	if radVal.FVal < 3.14 || radVal.FVal > 3.15 {
+		t.Errorf("RADIANS(180) expected ~3.14, got %f", radVal.FVal)
+	}
+	randVal := EvalBuiltin("RAND", nil)
+	if randVal.FVal < 0.0 || randVal.FVal >= 1.0 {
+		t.Errorf("RAND expected in [0, 1), got %f", randVal.FVal)
+	}
+
+	// ----------------------------------------------------
+	// Group D: Metadata & Schema Introspection
+	// ----------------------------------------------------
+	objID := EvalBuiltin("OBJECT_ID", []storage.Value{storage.StringValue("Employees")})
+	if objID.IsNull || objID.IVal <= 0 {
+		t.Errorf("OBJECT_ID('Employees') expected positive ID, got %v", objID)
+	}
+	colLen := EvalBuiltin("COL_LENGTH", []storage.Value{storage.StringValue("Employees"), storage.StringValue("Name")})
+	if colLen.IVal <= 0 {
+		t.Errorf("COL_LENGTH expected positive int, got %d", colLen.IVal)
+	}
+	schName := EvalBuiltin("SCHEMA_NAME", []storage.Value{storage.IntValue(1)})
+	if schName.SVal != "dbo" {
+		t.Errorf("SCHEMA_NAME expected 'dbo', got %q", schName.SVal)
+	}
+	dbName := EvalBuiltin("DB_NAME", nil)
+	if dbName.SVal != "SQLion" {
+		t.Errorf("DB_NAME expected 'SQLion', got %q", dbName.SVal)
+	}
+	appName := EvalBuiltin("APP_NAME", nil)
+	if appName.SVal != "SQLion" {
+		t.Errorf("APP_NAME expected 'SQLion', got %q", appName.SVal)
+	}
+
+	// ----------------------------------------------------
+	// Group E: Cryptography & Checksum
+	// ----------------------------------------------------
+	md5Hash := EvalBuiltin("HASHBYTES", []storage.Value{storage.StringValue("MD5"), storage.StringValue("HelloWorld")})
+	if md5Hash.SVal != "0x68E109F0F40CA72A15E05CC22786F8E6" {
+		t.Errorf("HASHBYTES MD5 expected '0x68E109F0F40CA72A15E05CC22786F8E6', got %q", md5Hash.SVal)
+	}
+	sha1Hash := EvalBuiltin("HASHBYTES", []storage.Value{storage.StringValue("SHA1"), storage.StringValue("HelloWorld")})
+	if !strings.HasPrefix(sha1Hash.SVal, "0x") {
+		t.Errorf("HASHBYTES SHA1 expected 0x prefix, got %q", sha1Hash.SVal)
+	}
+	chk := EvalBuiltin("CHECKSUM", []storage.Value{storage.StringValue("Test"), storage.IntValue(123)})
+	if chk.IsNull {
+		t.Errorf("CHECKSUM expected non-null int, got null")
+	}
+	bChk := EvalBuiltin("BINARY_CHECKSUM", []storage.Value{storage.StringValue("Test")})
+	if bChk.IsNull {
+		t.Errorf("BINARY_CHECKSUM expected non-null int, got null")
+	}
+
+	// ----------------------------------------------------
+	// Group F: Date Constructors
+	// ----------------------------------------------------
+	dateParts := EvalBuiltin("DATEFROMPARTS", []storage.Value{
+		storage.IntValue(2026),
+		storage.IntValue(10),
+		storage.IntValue(10),
+	})
+	if dateParts.SVal != "2026-10-10" {
+		t.Errorf("DATEFROMPARTS expected '2026-10-10', got %q", dateParts.SVal)
+	}
+
+	timeParts := EvalBuiltin("TIMEFROMPARTS", []storage.Value{
+		storage.IntValue(14),
+		storage.IntValue(30),
+		storage.IntValue(15),
+	})
+	if timeParts.SVal != "14:30:15" {
+		t.Errorf("TIMEFROMPARTS expected '14:30:15', got %q", timeParts.SVal)
+	}
+
+	dateTimeParts := EvalBuiltin("DATETIMEFROMPARTS", []storage.Value{
+		storage.IntValue(2026),
+		storage.IntValue(10),
+		storage.IntValue(10),
+		storage.IntValue(14),
+		storage.IntValue(30),
+		storage.IntValue(15),
+		storage.IntValue(500),
+	})
+	if dateTimeParts.SVal != "2026-10-10 14:30:15.500" {
+		t.Errorf("DATETIMEFROMPARTS expected '2026-10-10 14:30:15.500', got %q", dateTimeParts.SVal)
+	}
+
+	// Verification of IsBuiltinFunction for Groups A~F
+	groupFunctions := []string{
+		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE",
+		"PATINDEX", "UNICODE", "NCHAR", "SOUNDEX", "DIFFERENCE", "TRANSLATE", "FORMAT",
+		"EXP", "LOG", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "DEGREES", "RADIANS", "RAND",
+		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
+		"HASHBYTES", "CHECKSUM", "BINARY_CHECKSUM",
+		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS",
+	}
+	for _, fn := range groupFunctions {
+		if !IsBuiltinFunction(fn) {
+			t.Errorf("Expected IsBuiltinFunction(%q) to be true", fn)
+		}
+	}
+}
+
 

@@ -191,7 +191,9 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 #### 5.10. T-SQL & ANSI SQL Core Syntax Coverage Expansion (`pkg/proc`, `pkg/planner`, `pkg/execution`)
 - **Challenge**:
   - **P1 (Practical & ORM Essentials)**: Native AST parsing for `CAST(expr AS type)` / `CONVERT()` and composite `CASE WHEN ... THEN ... ELSE ... END`, `INSERT INTO ... SELECT ...`, derived tables in FROM clause (`FROM (SELECT ...) AS t`), and `WHERE EXISTS` / `NOT EXISTS` correlated subquery predicates.
-  - **P2 (T-SQL Core Dialect Parity)**: `CROSS APPLY` / `OUTER APPLY` joins, DML `OUTPUT` clause (RETURNING counterpart), local temporary tables (`#temp_table`), covering index non-key columns (`INCLUDE (col...)`), and standard table/query hints (`WITH (NOLOCK)`).
+  - **P2 (T-SQL Core Dialect Parity & Built-in Matrix)**:
+    - `CROSS APPLY` / `OUTER APPLY` joins, DML `OUTPUT` clause (RETURNING counterpart), local temporary tables (`#temp_table`), covering index non-key columns (`INCLUDE (col...)`), and standard table/query hints (`WITH (NOLOCK)`).
+    - **[Completed] Official T-SQL Built-in Function Matrix (Groups A~F)**: CATCH error functions (`ERROR_MESSAGE`, `ERROR_NUMBER`), string functions (`PATINDEX`, `STUFF`, `UNICODE`, `NCHAR`, `SOUNDEX`, `DIFFERENCE`, `TRANSLATE`, `FORMAT`), math/trig functions (`LOG`, `EXP`, `SIN`, `COS`, `RAND`), metadata (`OBJECT_ID`, `COL_LENGTH`, `DB_NAME`), cryptography (`HASHBYTES`, `CHECKSUM`), and date constructors (`DATEFROMPARTS`).
   - **P3 (Advanced Analytics & Joins)**: Explicit `CROSS JOIN`, `FULL OUTER JOIN`, and multi-dimensional grouping (`GROUP BY GROUPING SETS / ROLLUP / CUBE`).
 - **Expected Outcome**: 100% syntactic and semantic compatibility with enterprise ORMs (EF Core, GORM) and legacy MSSQL procedural batches.
 

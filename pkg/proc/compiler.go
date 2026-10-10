@@ -1283,7 +1283,15 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			}
 			argRegs = append(argRegs, ar)
 		}
-		r := c.allocReg()
+		var r int32
+		if len(argRegs) > 0 {
+			r = argRegs[0]
+			if len(argRegs) > 1 {
+				c.freeReg(int32(len(argRegs) - 1))
+			}
+		} else {
+			r = c.allocReg()
+		}
 		fnName := strings.ToUpper(e.Name)
 		if isBuiltinFunction(fnName) {
 			c.emit(OpCallBuiltin, r, int32(len(argRegs)), 0, &CallData{
@@ -1296,7 +1304,6 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 				ArgRegs: argRegs,
 			})
 		}
-		c.freeReg(int32(len(argRegs)))
 		return r, nil
 
 	case *ScalarSubqueryExpr:

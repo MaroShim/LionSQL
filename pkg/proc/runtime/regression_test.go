@@ -580,6 +580,120 @@ END;
 	}
 }
 
+// 8b. Regression: TRY-CATCH Error Introspection Builtins (ERROR_NUMBER, ERROR_MESSAGE, ERROR_SEVERITY, ERROR_STATE)
+func TestRegression_TryCatchErrorBuiltins(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	tsql := `
+CREATE PROCEDURE ErrorCaptureProc
+    @should_fail INT
+AS
+BEGIN
+    DECLARE @err_num INT;
+    DECLARE @err_msg VARCHAR;
+    DECLARE @err_sev INT;
+    DECLARE @err_st INT;
+
+    BEGIN TRY
+        IF @should_fail = 1
+        BEGIN
+            THROW 'Custom validation failure in proc';
+        END
+        RETURN 0;
+    END TRY
+    BEGIN CATCH
+        SET @err_num = ERROR_NUMBER();
+        SET @err_msg = ERROR_MESSAGE();
+        SET @err_sev = ERROR_SEVERITY();
+        SET @err_st = ERROR_STATE();
+
+        PRINT @err_msg;
+        RETURN @err_num;
+    END CATCH
+END;
+`
+	// 1. Success path
+	resSuccess, err := runProc(t, eng, tsql, "ErrorCaptureProc", map[string]any{"should_fail": 0})
+	if err != nil {
+		t.Fatalf("success run failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resSuccess.ReturnValue) != "0" {
+		t.Errorf("expected return value 0, got %v", resSuccess.ReturnValue)
+	}
+
+	// 2. Failure path with error introspection
+	resFail, err := runProc(t, eng, tsql, "ErrorCaptureProc", map[string]any{"should_fail": 1})
+	if err != nil {
+		t.Fatalf("fail run failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resFail.ReturnValue) != "50000" {
+		t.Errorf("expected return value 50000, got %v", resFail.ReturnValue)
+	}
+	if len(resFail.Logs) == 0 || !strings.Contains(resFail.Logs[0], "Custom validation failure in proc") {
+		t.Errorf("expected error log 'Custom validation failure in proc', got %v", resFail.Logs)
+	}
+}
+
+// 8c. Regression: Groups A-F Builtins in T-SQL Stored Procedure
+func TestRegression_TSQLBuiltinsGroupsAThroughF(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	tsql := `
+CREATE PROCEDURE TestBuiltinsGroupsProc
+AS
+BEGIN
+    DECLARE @pat_idx INT;
+    DECLARE @trans_str VARCHAR;
+    DECLARE @fmt_str VARCHAR;
+    DECLARE @hash_val VARCHAR;
+    DECLARE @date_part VARCHAR;
+    DECLARE @exp_val FLOAT;
+
+    SET @pat_idx = PATINDEX('%world%', 'hello world');
+    SET @trans_str = TRANSLATE('1234', '14', 'AB');
+    SET @fmt_str = FORMAT(12345.67, 'N2');
+    SET @hash_val = HASHBYTES('MD5', 'TestString');
+    SET @date_part = DATEFROMPARTS(2026, 10, 10);
+    SET @exp_val = EXP(0);
+
+    PRINT @pat_idx;
+    PRINT @trans_str;
+    PRINT @fmt_str;
+    PRINT @hash_val;
+    PRINT @date_part;
+
+    RETURN @pat_idx;
+END;
+`
+	res, err := runProc(t, eng, tsql, "TestBuiltinsGroupsProc", map[string]any{})
+	if err != nil {
+		t.Fatalf("execution failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.ReturnValue) != "7" {
+		t.Errorf("expected return value 7 (PATINDEX of 'world' in 'hello world'), got %v", res.ReturnValue)
+	}
+	if len(res.Logs) < 5 {
+		t.Fatalf("expected at least 5 logs, got %v", res.Logs)
+	}
+	if res.Logs[0] != "7" {
+		t.Errorf("expected log 0 to be '7', got %q", res.Logs[0])
+	}
+	if res.Logs[1] != "A23B" {
+		t.Errorf("expected log 1 to be 'A23B', got %q", res.Logs[1])
+	}
+	if res.Logs[2] != "12,345.67" {
+		t.Errorf("expected log 2 to be '12,345.67', got %q", res.Logs[2])
+	}
+	if !strings.HasPrefix(res.Logs[3], "0x") {
+		t.Errorf("expected log 3 to start with '0x', got %q", res.Logs[3])
+	}
+	if res.Logs[4] != "2026-10-10" {
+		t.Errorf("expected log 4 to be '2026-10-10', got %q", res.Logs[4])
+	}
+}
+
 // 9. Regression: Searched CASE-WHEN Expressions with Multiple Branches
 func TestRegression_SearchedCaseWhenMultiBranch(t *testing.T) {
 	eng := setupRegressionDB(t)

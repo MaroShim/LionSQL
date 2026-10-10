@@ -17,6 +17,10 @@ func (f *VMFrame) handleCatch(err error, pc *int) error {
 		return nil
 	}
 	f.lastError = 50000
+	f.lastErrorMsg = err.Error()
+	if pc != nil {
+		f.lastErrorLine = *pc
+	}
 	if len(f.catchStack) > 0 {
 		catchPC := f.catchStack[len(f.catchStack)-1]
 		f.catchStack = f.catchStack[:len(f.catchStack)-1]
@@ -180,6 +184,10 @@ func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal
 	case proc.OpThrow, proc.OpRaiserror:
 		f.lastError = 50000
 		msg := fmt.Sprintf("%v", f.aux(inst))
+		f.lastErrorMsg = msg
+		if pc != nil {
+			f.lastErrorLine = *pc
+		}
 		if len(f.catchStack) > 0 {
 			catchPC := f.catchStack[len(f.catchStack)-1]
 			f.catchStack = f.catchStack[:len(f.catchStack)-1]
@@ -861,6 +869,22 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 				f.regs[inst.A] = storage.IntValue(f.lastIdentity)
 			} else {
 				f.regs[inst.A] = storage.NullValue(storage.TypeInt)
+			}
+		} else if strings.EqualFold(callData.Name, "ERROR_NUMBER") {
+			f.regs[inst.A] = storage.IntValue(int64(f.lastError))
+		} else if strings.EqualFold(callData.Name, "ERROR_MESSAGE") {
+			f.regs[inst.A] = storage.StringValue(f.lastErrorMsg)
+		} else if strings.EqualFold(callData.Name, "ERROR_LINE") {
+			f.regs[inst.A] = storage.IntValue(int64(f.lastErrorLine))
+		} else if strings.EqualFold(callData.Name, "ERROR_SEVERITY") {
+			f.regs[inst.A] = storage.IntValue(16)
+		} else if strings.EqualFold(callData.Name, "ERROR_STATE") {
+			f.regs[inst.A] = storage.IntValue(1)
+		} else if strings.EqualFold(callData.Name, "ERROR_PROCEDURE") {
+			if f.prog != nil && f.prog.Name != "" {
+				f.regs[inst.A] = storage.StringValue(f.prog.Name)
+			} else {
+				f.regs[inst.A] = storage.NullValue(storage.TypeVarChar)
 			}
 		} else {
 			f.regs[inst.A] = proc.EvalBuiltin(callData.Name, args)
