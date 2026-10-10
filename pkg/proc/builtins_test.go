@@ -114,6 +114,40 @@ func TestBuiltin_Strings(t *testing.T) {
 	if rep := EvalBuiltin("REPLICATE", []storage.Value{storage.StringValue("ab"), storage.IntValue(3)}); rep.SVal != "ababab" {
 		t.Errorf("Expected 'ababab', got %q", rep.SVal)
 	}
+
+	// CONCAT_WS
+	cws := EvalBuiltin("CONCAT_WS", []storage.Value{
+		storage.StringValue(", "),
+		storage.StringValue("Apple"),
+		storage.NullValue(storage.TypeVarChar),
+		storage.StringValue("Banana"),
+		storage.StringValue("Cherry"),
+	})
+	if cws.SVal != "Apple, Banana, Cherry" {
+		t.Errorf("Expected 'Apple, Banana, Cherry', got %q", cws.SVal)
+	}
+
+	// QUOTENAME
+	if q := EvalBuiltin("QUOTENAME", []storage.Value{storage.StringValue("my_table")}); q.SVal != "[my_table]" {
+		t.Errorf("Expected '[my_table]', got %q", q.SVal)
+	}
+	if q := EvalBuiltin("QUOTENAME", []storage.Value{storage.StringValue("col]name")}); q.SVal != "[col]]name]" {
+		t.Errorf("Expected '[col]]name]', got %q", q.SVal)
+	}
+	if q := EvalBuiltin("QUOTENAME", []storage.Value{storage.StringValue("abc"), storage.StringValue("'")}); q.SVal != "'abc'" {
+		t.Errorf("Expected ''abc'', got %q", q.SVal)
+	}
+	if q := EvalBuiltin("QUOTENAME", []storage.Value{storage.StringValue("o'reilly"), storage.StringValue("'")}); q.SVal != "'o''reilly'" {
+		t.Errorf("Expected ''o''reilly'', got %q", q.SVal)
+	}
+
+	// ASCII and CHAR
+	if a := EvalBuiltin("ASCII", []storage.Value{storage.StringValue("A")}); a.IVal != 65 {
+		t.Errorf("Expected 65, got %d", a.IVal)
+	}
+	if ch := EvalBuiltin("CHAR", []storage.Value{storage.IntValue(65)}); ch.SVal != "A" {
+		t.Errorf("Expected 'A', got %q", ch.SVal)
+	}
 }
 
 func TestBuiltin_Math(t *testing.T) {
@@ -182,6 +216,44 @@ func TestBuiltin_Logic(t *testing.T) {
 	coal := EvalBuiltin("COALESCE", []storage.Value{storage.NullValue(storage.TypeVarChar), storage.NullValue(storage.TypeInt), storage.IntValue(777)})
 	if coal.IVal != 777 {
 		t.Errorf("Expected 777, got %d", coal.IVal)
+	}
+
+	// NULLIF
+	n1 := EvalBuiltin("NULLIF", []storage.Value{storage.IntValue(10), storage.IntValue(10)})
+	if !n1.IsNull {
+		t.Errorf("Expected NULL for NULLIF(10, 10), got %v", n1)
+	}
+	n2 := EvalBuiltin("NULLIF", []storage.Value{storage.IntValue(10), storage.IntValue(20)})
+	if n2.IsNull || n2.IVal != 10 {
+		t.Errorf("Expected 10 for NULLIF(10, 20), got %v", n2)
+	}
+	n3 := EvalBuiltin("NULLIF", []storage.Value{storage.StringValue("same"), storage.StringValue("same")})
+	if !n3.IsNull {
+		t.Errorf("Expected NULL for NULLIF('same', 'same'), got %v", n3)
+	}
+
+	// ISNUMERIC
+	if isNum := EvalBuiltin("ISNUMERIC", []storage.Value{storage.IntValue(123)}); isNum.IVal != 1 {
+		t.Errorf("Expected 1 for int ISNUMERIC, got %d", isNum.IVal)
+	}
+	if isNum := EvalBuiltin("ISNUMERIC", []storage.Value{storage.StringValue("3.14159")}); isNum.IVal != 1 {
+		t.Errorf("Expected 1 for float string ISNUMERIC, got %d", isNum.IVal)
+	}
+	if isNum := EvalBuiltin("ISNUMERIC", []storage.Value{storage.StringValue("-42")}); isNum.IVal != 1 {
+		t.Errorf("Expected 1 for negative string ISNUMERIC, got %d", isNum.IVal)
+	}
+	if isNum := EvalBuiltin("ISNUMERIC", []storage.Value{storage.StringValue("not_a_number")}); isNum.IVal != 0 {
+		t.Errorf("Expected 0 for non-numeric string ISNUMERIC, got %d", isNum.IVal)
+	}
+	if isNum := EvalBuiltin("ISNUMERIC", []storage.Value{storage.NullValue(storage.TypeVarChar)}); isNum.IVal != 0 {
+		t.Errorf("Expected 0 for NULL ISNUMERIC, got %d", isNum.IVal)
+	}
+
+	// IsBuiltinFunction verification
+	for _, fn := range []string{"CONCAT_WS", "QUOTENAME", "ASCII", "CHAR", "NULLIF", "ISNUMERIC"} {
+		if !IsBuiltinFunction(fn) {
+			t.Errorf("Expected IsBuiltinFunction(%q) to be true", fn)
+		}
 	}
 }
 

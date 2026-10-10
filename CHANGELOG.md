@@ -18,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added deterministic LRU eviction when cache capacity is exceeded, thread-safe cache lookup promotion, `Len()`, `Capacity()`, and `Clear()` methods.
   - Normalized procedure and function lookup keys to lowercase for robust case-insensitive `GetByName` resolution.
   - Added unit test suite `TestPlanCache_BoundedLRU` and `TestPlanCache_PutAndGetByName` in `pkg/proc/runtime/plancache_test.go`.
+- **Expanded T-SQL Built-in Scalar Functions (`pkg/proc`)**:
+  - Implemented `CONCAT_WS(separator, expr1, expr2, ...)` supporting arbitrary string formatting with NULL-skipping semantics.
+  - Implemented `QUOTENAME(string [, quote_char])` supporting standard delimiters (`[]`, `'`, `"`, `()`, `{}`, `<>`) and escape doubling.
+  - Implemented `ASCII(character_expression)` and `CHAR(integer_expression)` for byte/ASCII character conversions.
+  - Implemented `NULLIF(expression1, expression2)` returning NULL on equality or expression1 otherwise.
+  - Implemented `ISNUMERIC(expression)` checking valid numeric data types or string parseability without NaN/Inf leaks.
+  - Registered all new functions in `IsBuiltinFunction` and added comprehensive unit tests in `pkg/proc/builtins_test.go`.
 
 ---
 

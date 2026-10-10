@@ -197,6 +197,74 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(b.String())
 
+	case "CONCAT_WS":
+		if len(args) < 2 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		sep := valToString(args[0])
+		var parts []string
+		for _, a := range args[1:] {
+			if !a.IsNull {
+				parts = append(parts, valToString(a))
+			}
+		}
+		return storage.StringValue(strings.Join(parts, sep))
+
+	case "QUOTENAME":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		str := valToString(args[0])
+		quoteChar := "["
+		if len(args) >= 2 && !args[1].IsNull {
+			q := valToString(args[1])
+			if len(q) > 0 {
+				quoteChar = string([]rune(q)[0])
+			}
+		}
+		var openChar, closeChar string
+		switch quoteChar {
+		case "[", "]":
+			openChar, closeChar = "[", "]"
+		case "'":
+			openChar, closeChar = "'", "'"
+		case "\"":
+			openChar, closeChar = "\"", "\""
+		case "(", ")":
+			openChar, closeChar = "(", ")"
+		case "{", "}":
+			openChar, closeChar = "{", "}"
+		case "<", ">":
+			openChar, closeChar = "<", ">"
+		default:
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		escaped := strings.ReplaceAll(str, closeChar, closeChar+closeChar)
+		return storage.StringValue(openChar + escaped + closeChar)
+
+	case "ASCII":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		str := valToString(args[0])
+		if len(str) == 0 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		return storage.IntValue(int64(str[0]))
+
+	case "CHAR":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		code := int(args[0].IVal)
+		if args[0].Type == storage.TypeFloat {
+			code = int(args[0].FVal)
+		}
+		if code < 0 || code > 255 {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.StringValue(string([]byte{byte(code)}))
+
 	case "LEN", "LENGTH":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.IntValue(0)
@@ -539,6 +607,38 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.NullValue(storage.TypeUnknown)
 
+	case "NULLIF":
+		if len(args) < 2 {
+			return storage.NullValue(storage.TypeUnknown)
+		}
+		if args[0].IsNull {
+			return args[0]
+		}
+		if !args[1].IsNull && args[0].Equal(args[1]) {
+			return storage.NullValue(args[0].Type)
+		}
+		return args[0]
+
+	case "ISNUMERIC":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.IntValue(0)
+		}
+		switch args[0].Type {
+		case storage.TypeInt, storage.TypeFloat, storage.TypeDecimal:
+			return storage.IntValue(1)
+		case storage.TypeVarChar:
+			s := strings.TrimSpace(args[0].SVal)
+			if s == "" || strings.EqualFold(s, "nan") || strings.EqualFold(s, "infinity") || strings.EqualFold(s, "+infinity") || strings.EqualFold(s, "-infinity") || strings.EqualFold(s, "inf") || strings.EqualFold(s, "+inf") || strings.EqualFold(s, "-inf") {
+				return storage.IntValue(0)
+			}
+			if _, err := strconv.ParseFloat(s, 64); err == nil {
+				return storage.IntValue(1)
+			}
+			return storage.IntValue(0)
+		default:
+			return storage.IntValue(0)
+		}
+
 	case "IIF":
 		if len(args) < 3 {
 			return storage.NullValue(storage.TypeUnknown)
@@ -654,10 +754,10 @@ func IsBuiltinFunction(name string) bool {
 	case "GETDATE", "NOW", "GETUTCDATE", "SYSDATETIME",
 		"YEAR", "MONTH", "DAY", "DATEPART", "DATEDIFF", "DATEADD",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
-		"CONCAT", "LEN", "LENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
+		"CONCAT", "CONCAT_WS", "QUOTENAME", "ASCII", "CHAR", "LEN", "LENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
 		"LEFT", "RIGHT", "SUBSTRING", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE",
 		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SIGN", "PI",
-		"ISNULL", "COALESCE", "IIF", "CHOOSE",
+		"ISNULL", "COALESCE", "NULLIF", "ISNUMERIC", "IIF", "CHOOSE",
 		"JSON_VALUE", "JSON_QUERY",
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID",
 		"SCOPE_IDENTITY", "SERVERPROPERTY":
