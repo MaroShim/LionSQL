@@ -86,6 +86,10 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * **PostgreSQL Wire Protocol v3** (Port `5433`): Simple and Extended Query Protocols (`Parse`, `Bind`, `Execute`, `Sync`), parameter binding, and SSL/TLS.
   * **Microsoft SQL Server TDS 7.x/8.0** (Port `1433`): Prelogin, Login7, RPC packets, and `sp_prepexec` bytecode plan cache connection.
   * Client compatibility matrix (`psql`, DBeaver, GORM, Prisma, `sqlcmd`, SSMS, Azure Data Studio).
+* [`PROTOCOL_EMULATION_GUIDELINES.md`](file:///Users/maro/Projects/sql/doc/PROTOCOL_EMULATION_GUIDELINES.md)
+  * Multi-protocol emulation boundary specification and architectural stop criteria.
+  * Four-Layer Boundary Model: Wire Framing (100%), Virtual Catalog Handshake (90%), Common DML (80%), Dialect Quirks & Procedures (10~20%).
+  * PostgreSQL stopping criteria, planned MySQL protocol specifications, and T-SQL single-kernel procedural invariance.
 * [`CLIENT_TOOL_INTEGRATION.md`](file:///Users/maro/Projects/sql/doc/CLIENT_TOOL_INTEGRATION.md)
   * Comprehensive GUI & CLI client tool connection and integration guide.
   * Tested client matrix: Beekeeper Studio, DBeaver Universal Database Tool, Azure Data Studio, SSMS, `psql`, and `sqlcmd`.

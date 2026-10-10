@@ -55,6 +55,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Preserved catalog table introspection in table-less `OBJECT_ID` and `OBJECT_NAME` scalar queries by routing catalog introspection calls to `execScalarSelect`.
 
 ### Documentation
+- **Multi-Protocol Emulation Boundaries & Scope Architecture Guidelines (`doc/PROTOCOL_EMULATION_GUIDELINES.md`)**:
+  - Established Four-Layer Protocol Emulation Boundary Model (Wire Framing 100%, Virtual Catalog Handshake 90%, Common DML 80%, Dialect Quirks 10~20%).
+  - Defined explicit scope stop criteria for PostgreSQL emulation, future MySQL (:3306) protocol implementation boundaries, and permanent single-kernel T-SQL VDBE procedural invariance.
 - **Canonical FSF GPL v3 LICENSE Alignment & Commercial Dual Licensing (`LICENSE`, `README.md`)**:
   - Restored `LICENSE` file to canonical verbatim GNU General Public License v3 text for seamless automated open-source compliance scanning.
   - Relocated and structured commercial dual-licensing and proprietary embedding terms in `README.md`.
