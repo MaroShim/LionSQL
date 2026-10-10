@@ -1166,4 +1166,362 @@ END;
 	}
 }
 
+// TestRegression_AdventureWorks_EmployeeRateChangeWithSavepoint simulates AdventureWorks
+// dbo.uspUpdateEmployeeHireInfo with nested SAVE TRANSACTION savepoints and partial rollbacks.
+func TestRegression_AdventureWorks_EmployeeRateChangeWithSavepoint(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "employees",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+			{Name: "department", Type: storage.TypeVarChar},
+			{Name: "rate", Type: storage.TypeFloat},
+			{Name: "vacation_hours", Type: storage.TypeInt},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable employees failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	// Seed employee 1 (John, Engineering, rate 50.0, vacation 40)
+	seedTx, _ := session.BeginTx(storage.TxOptions{})
+	_ = seedTx.Insert("employees", storage.Record{
+		"id":             storage.IntValue(1),
+		"name":           storage.StringValue("John Doe"),
+		"department":     storage.StringValue("Engineering"),
+		"rate":           storage.FloatValue(50.0),
+		"vacation_hours": storage.IntValue(40),
+	})
+	_ = seedTx.Commit()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	// AdventureWorks procedure with SAVE TRANSACTION:
+	// Always updates vacation_hours, then sets a savepoint. If @allow_rate_change is 0,
+	// rolls back only to the savepoint so that vacation_hours stay updated while rate is reverted.
+	procSQL := `
+CREATE PROCEDURE dbo.uspUpdateEmployeeRateAndVacation
+    @emp_id INT,
+    @new_rate FLOAT,
+    @new_vacation INT,
+    @allow_rate_change INT
+AS
+BEGIN
+    BEGIN TRANSACTION;
+
+    UPDATE employees SET vacation_hours = @new_vacation WHERE id = @emp_id;
+
+    SAVE TRANSACTION RateChangePoint;
+
+    UPDATE employees SET rate = @new_rate WHERE id = @emp_id;
+
+    IF @allow_rate_change = 0
+    BEGIN
+        ROLLBACK TRANSACTION RateChangePoint;
+    END
+
+    COMMIT TRANSACTION;
+    RETURN @new_vacation;
+END;
+`
+	prog, err := cache.GetOrCompile(procSQL)
+	if err != nil {
+		t.Fatalf("Compile dbo.uspUpdateEmployeeRateAndVacation failed: %v", err)
+	}
+
+	// Case 1: allow_rate_change = 0 (Partial Rollback: vacation updated to 55, rate remains 50.0)
+	res1, err := executor.Run(prog, "uspUpdateEmployeeRateAndVacation", map[string]any{
+		"emp_id":            1,
+		"new_rate":          75.0,
+		"new_vacation":      55,
+		"allow_rate_change": 0,
+	}, session)
+	if err != nil {
+		t.Fatalf("Run Case 1 failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res1.ReturnValue) != "55" {
+		t.Errorf("expected return value 55, got %v", res1.ReturnValue)
+	}
+
+	chkTx1, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	emp1, _ := chkTx1.Get("employees", storage.IntValue(1))
+	chkTx1.Rollback()
+
+	if emp1["vacation_hours"].IVal != 55 {
+		t.Errorf("expected vacation_hours 55, got %d", emp1["vacation_hours"].IVal)
+	}
+	if emp1["rate"].FVal != 50.0 {
+		t.Errorf("expected rate to remain 50.0 due to savepoint rollback, got %f", emp1["rate"].FVal)
+	}
+
+	// Case 2: allow_rate_change = 1 (Full Commit: vacation updated to 60, rate updated to 80.0)
+	res2, err := executor.Run(prog, "uspUpdateEmployeeRateAndVacation", map[string]any{
+		"emp_id":            1,
+		"new_rate":          80.0,
+		"new_vacation":      60,
+		"allow_rate_change": 1,
+	}, session)
+	if err != nil {
+		t.Fatalf("Run Case 2 failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res2.ReturnValue) != "60" {
+		t.Errorf("expected return value 60, got %v", res2.ReturnValue)
+	}
+
+	chkTx2, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	emp2, _ := chkTx2.Get("employees", storage.IntValue(1))
+	chkTx2.Rollback()
+
+	if emp2["vacation_hours"].IVal != 60 {
+		t.Errorf("expected vacation_hours 60, got %d", emp2["vacation_hours"].IVal)
+	}
+	if emp2["rate"].FVal != 80.0 {
+		t.Errorf("expected rate updated to 80.0, got %f", emp2["rate"].FVal)
+	}
+}
+
+// ============================================================================
+// Real-World E2E Test Suite: WideWorldImporters Sales Invoice
+// ============================================================================
+
+// TestRegression_WideWorldImporters_OrderInvoicingAndLedger simulates WideWorldImporters
+// order invoice generation with tier-based discount computation, balance deduction, and ledger recording.
+func TestRegression_WideWorldImporters_OrderInvoicingAndLedger(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "customer_orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "customer_id", Type: storage.TypeInt},
+			{Name: "total_amount", Type: storage.TypeInt},
+			{Name: "status", Type: storage.TypeVarChar},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable customer_orders failed: %v", err)
+	}
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "customer_ledger",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "customer_id", Type: storage.TypeInt},
+			{Name: "entry_type", Type: storage.TypeVarChar},
+			{Name: "amount", Type: storage.TypeInt},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable customer_ledger failed: %v", err)
+	}
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	// WideWorldImporters invoice procedure:
+	// Computes tier discount, validates customer balance, updates account balance,
+	// writes to orders table and ledger table in a single atomic transaction.
+	procSQL := `
+CREATE PROCEDURE dbo.uspProcessCustomerInvoice
+    @order_id INT,
+    @cust_id INT,
+    @raw_amount INT,
+    @ledger_id INT
+AS
+BEGIN
+    DECLARE @cust_tier VARCHAR(20);
+    DECLARE @cust_bal INT;
+    DECLARE @discount_amount INT;
+    DECLARE @final_amount INT;
+    DECLARE @new_balance INT;
+
+    SELECT tier INTO @cust_tier FROM accounts WHERE id = @cust_id;
+    SELECT balance INTO @cust_bal FROM accounts WHERE id = @cust_id;
+
+    SET @discount_amount = 0;
+    IF @cust_tier = 'VIP'
+    BEGIN
+        SET @discount_amount = @raw_amount * 20 / 100;
+    END
+    ELSE IF @cust_tier = 'GOLD'
+    BEGIN
+        SET @discount_amount = @raw_amount * 10 / 100;
+    END
+
+    SET @final_amount = @raw_amount - @discount_amount;
+
+    IF @cust_bal < @final_amount
+    BEGIN
+        THROW 'Insufficient customer account balance';
+    END
+
+    BEGIN TRANSACTION;
+
+    SET @new_balance = @cust_bal - @final_amount;
+    UPDATE accounts SET balance = @new_balance WHERE id = @cust_id;
+
+    INSERT INTO customer_orders (id, customer_id, total_amount, status)
+    VALUES (@order_id, @cust_id, @final_amount, 'INVOICED');
+
+    INSERT INTO customer_ledger (id, customer_id, entry_type, amount)
+    VALUES (@ledger_id, @cust_id, 'INVOICE_PAYMENT', @final_amount);
+
+    COMMIT TRANSACTION;
+    RETURN @final_amount;
+END;
+`
+	prog, err := cache.GetOrCompile(procSQL)
+	if err != nil {
+		t.Fatalf("Compile dbo.uspProcessCustomerInvoice failed: %v", err)
+	}
+
+	// Customer 1 (Alice, VIP, initial balance 1000):
+	// Order raw_amount = 200 -> VIP gets 20% discount (40) -> final_amount = 160 -> leaves balance 840
+	resAlice, err := executor.Run(prog, "uspProcessCustomerInvoice", map[string]any{
+		"order_id":   1001,
+		"cust_id":    1,
+		"raw_amount": 200,
+		"ledger_id":  5001,
+	}, session)
+	if err != nil {
+		t.Fatalf("Run Alice invoice failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resAlice.ReturnValue) != "160" {
+		t.Errorf("expected final amount 160 for VIP, got %v", resAlice.ReturnValue)
+	}
+
+	// Verify database changes
+	chkTx, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	aliceAcc, _ := chkTx.Get("accounts", storage.IntValue(1))
+	order1001, _ := chkTx.Get("customer_orders", storage.IntValue(1001))
+	ledger5001, _ := chkTx.Get("customer_ledger", storage.IntValue(5001))
+	chkTx.Rollback()
+
+	if aliceAcc["balance"].IVal != 840 {
+		t.Errorf("expected Alice balance 840, got %d", aliceAcc["balance"].IVal)
+	}
+	if order1001["total_amount"].IVal != 160 || order1001["status"].SVal != "INVOICED" {
+		t.Errorf("unexpected order record: %v", order1001)
+	}
+	if ledger5001["amount"].IVal != 160 || ledger5001["entry_type"].SVal != "INVOICE_PAYMENT" {
+		t.Errorf("unexpected ledger record: %v", ledger5001)
+	}
+}
+
+// ============================================================================
+// Real-World E2E Test Suite: nopCommerce Product Price Batch Adjustment
+// ============================================================================
+
+// TestRegression_NopCommerce_ProductPriceBatchAdjustment simulates nopCommerce
+// promotional price update routine using cursors and conditional branch calculation.
+func TestRegression_NopCommerce_ProductPriceBatchAdjustment(t *testing.T) {
+	eng := setupRegressionDB(t)
+	defer eng.Close()
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	// In setupRegressionDB:
+	// Product 101: Laptop Pro, Electronics, price 1200.0, stock 10
+	// Product 102: Wireless Mouse, Electronics, price 25.5, stock 50
+	// Product 103: Coffee Mug, Kitchen, price 12.0, stock 100
+	// Product 104: Desk Lamp, Office, price 45.0, stock 0
+	procSQL := `
+CREATE PROCEDURE dbo.uspApplyPromotionalDiscounts
+    @cat VARCHAR(50),
+    @min_stock INT
+AS
+BEGIN
+    DECLARE @pid INT;
+    DECLARE @old_price FLOAT;
+    DECLARE @new_price FLOAT;
+    DECLARE @mod_count INT;
+
+    SET @mod_count = 0;
+
+    DECLARE prod_cur CURSOR FOR SELECT id, price FROM products WHERE category = @cat;
+    OPEN prod_cur;
+    FETCH NEXT FROM prod_cur INTO @pid, @old_price;
+
+    WHILE @@FETCH_STATUS = 0
+    BEGIN
+        IF @old_price > 100.0
+        BEGIN
+            SET @new_price = @old_price * 0.90;
+        END
+        ELSE
+        BEGIN
+            SET @new_price = @old_price * 0.95;
+        END
+
+        UPDATE products SET price = @new_price WHERE id = @pid;
+        SET @mod_count = @mod_count + 1;
+
+        FETCH NEXT FROM prod_cur INTO @pid, @old_price;
+    END
+
+    CLOSE prod_cur;
+    DEALLOCATE prod_cur;
+
+    RETURN @mod_count;
+END;
+`
+	prog, err := cache.GetOrCompile(procSQL)
+	if err != nil {
+		t.Fatalf("Compile dbo.uspApplyPromotionalDiscounts failed: %v", err)
+	}
+
+	// Apply discount to category 'Electronics' (2 products: 101 and 102)
+	res, err := executor.Run(prog, "uspApplyPromotionalDiscounts", map[string]any{
+		"cat":       "Electronics",
+		"min_stock": 5,
+	}, session)
+	if err != nil {
+		t.Fatalf("Run discount update failed: %v", err)
+	}
+	if fmt.Sprintf("%v", res.ReturnValue) != "2" {
+		t.Errorf("expected 2 products updated, got %v", res.ReturnValue)
+	}
+
+	// Verify prices updated
+	chkTx, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	p101, _ := chkTx.Get("products", storage.IntValue(101))
+	p102, _ := chkTx.Get("products", storage.IntValue(102))
+	p103, _ := chkTx.Get("products", storage.IntValue(103))
+	chkTx.Rollback()
+
+	// 1200 * 0.90 = 1080.0
+	if p101["price"].FVal < 1079.9 || p101["price"].FVal > 1080.1 {
+		t.Errorf("expected product 101 price ~1080.0, got %f", p101["price"].FVal)
+	}
+	// 25.5 * 0.95 = 24.225
+	if p102["price"].FVal < 24.2 || p102["price"].FVal > 24.3 {
+		t.Errorf("expected product 102 price ~24.225, got %f", p102["price"].FVal)
+	}
+	// Kitchen product untouched: 12.0
+	if p103["price"].FVal != 12.0 {
+		t.Errorf("expected product 103 price intact at 12.0, got %f", p103["price"].FVal)
+	}
+}
+
 

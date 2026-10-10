@@ -30,9 +30,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for `SELECT [DISTINCT] TOP (<n>|<n>) [PERCENT] [WITH TIES]` clause in the native parser and query planner, setting `LimitCount` and `TopPercent` / `TopWithTies` metadata.
   - Corrected `GeneralSelectStmt.String()` to emit `OFFSET` when `s.Offset > 0`.
   - Added comprehensive unit and execution test suites in `pkg/proc/sqlparser_test.go`, `pkg/planner/planner_test.go`, and `pkg/api/sqlexec_test.go`.
-- **AdventureWorks & nopCommerce E2E Stored Procedure Test Suite (`pkg/proc/runtime`)**:
-  - Implemented end-to-end stored procedure test suites modeled directly after Microsoft AdventureWorks (`dbo.uspProcessWorkOrder`) and nopCommerce (`dbo.RewardPointsHistory_Add`, `dbo.CustomerBatchMaintenance`).
-  - Validated complex control flow including nested transactions, `TRY...CATCH`, `THROW`, audit error logging tables, VIP tier promotions, and cursor traversal with `@@FETCH_STATUS`.
+- **AdventureWorks, WideWorldImporters & nopCommerce E2E Stored Procedure Test Suite (`pkg/proc/runtime`)**:
+  - Implemented end-to-end stored procedure test suites modeled directly after Microsoft AdventureWorks (`dbo.uspProcessWorkOrder`, `dbo.uspUpdateEmployeeRateAndVacation`), WideWorldImporters (`dbo.uspProcessCustomerInvoice`), and nopCommerce (`dbo.RewardPointsHistory_Add`, `dbo.CustomerBatchMaintenance`, `dbo.uspApplyPromotionalDiscounts`).
+  - Validated complex control flow including nested transactions, `SAVE TRANSACTION` savepoints with partial rollbacks, `TRY...CATCH`, `THROW`, audit error logging tables, VIP tier promotions, customer invoicing ledger updates, and cursor traversal with `@@FETCH_STATUS`.
 
 ### Fixed
 - **Post-Rollback & Post-Commit Transaction Continuity in VDBE Procedures (`pkg/proc/runtime`)**:
