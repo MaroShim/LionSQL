@@ -3,6 +3,7 @@ package proc_test
 import (
 	"strings"
 	"testing"
+	"unsafe"
 
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
@@ -209,6 +210,13 @@ func TestCompiler_RelQueryBytecode(t *testing.T) {
 	dis := prog.Disassemble()
 	if !strings.Contains(dis, "REL_QUERY") {
 		t.Errorf("disassembly missing REL_QUERY opcode:\n%s", dis)
+	}
+}
+
+func TestInstruction_Size16Bytes(t *testing.T) {
+	sz := unsafe.Sizeof(proc.Instruction{})
+	if sz != 16 {
+		t.Fatalf("expected proc.Instruction to be packed to exactly 16 bytes for L1 cache line locality, got %d bytes", sz)
 	}
 }
 

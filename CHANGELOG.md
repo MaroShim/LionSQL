@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **VDBE Instruction 16-Byte Compaction & AuxData Pool (`pkg/proc`, `pkg/proc/runtime`)**:
+  - Re-architected `proc.Instruction` into a dense 16-byte fixed-size record (`Op OpCode, Flags uint8, Aux uint16, A int32, B int32, C int32`) with zero struct padding, fitting exactly 4 instructions per 64-byte CPU L1 Data Cache line.
+  - Eliminated the `Data any` 16-byte interface header from `Instruction`, externalizing variable-sized metadata and complex structures (`DMLData`, `CallData`, `SelectIntoData`, `RelQueryData`, `IndexScanData`, `ResultRowData`) to `Program.AuxData []any` indexed via `inst.Aux` (`uint16`).
+  - Added dedicated bitflag representations in `inst.Flags` for `OpLike` and `OpBetween` negation, eliminating heap allocations for between expressions during compilation.
+  - Added strict unit test `TestInstruction_Size16Bytes` in `pkg/proc/compiler_test.go` enforcing `unsafe.Sizeof(proc.Instruction{}) == 16`.
+
 ---
 
 ## [0.15.0] - 2026-10-09

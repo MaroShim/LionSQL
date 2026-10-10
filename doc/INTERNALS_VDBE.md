@@ -61,19 +61,19 @@ var registerPool = sync.Pool{
 
 ## 3. Instruction Set Architecture (ISA) & Opcode Reference
 
-The VDBE instruction format is defined in `pkg/proc/compiler.go`:
+The VDBE instruction format is defined in `pkg/proc/bytecode.go` as a 16-byte packed structure (zero padding) to maximize CPU L1 Data Cache locality (fits exactly 4 instructions per 64-byte L1 Cache Line):
 
 ```go
-type Opcode int
+type OpCode uint8
 
 type Instruction struct {
-    Op      Opcode
-    P1      int    // First integer operand (e.g. source register, jump target, opcode modifier)
-    P2      int    // Second integer operand (e.g. target register, parameter index)
-    P3      int    // Third integer operand (e.g. scratch register, comparison mode)
-    P4      string // String literal, table name, or column name
-    Comment string // Diagnostic comment for disassembly
-}
+    Op    OpCode // Operation code (1 byte)
+    Flags uint8  // Flags for negation, condition invert, nullability, etc. (1 byte)
+    Aux   uint16 // Auxiliary index into Program.AuxData or specialized payload (2 bytes)
+    A     int32  // Register A / Jump target PC / Return value register (4 bytes)
+    B     int32  // Register B / Slot index / Constant index / Jump PC (4 bytes)
+    C     int32  // Register C / Result register / Extra operand (4 bytes)
+} // Exactly 16 Bytes (Zero Padding)
 ```
 
 ### 3.1. Initialization & Flow Control Opcodes

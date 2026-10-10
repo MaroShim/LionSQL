@@ -94,23 +94,33 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ---
 
-## 5. Next Week Architecture & Engine Refactoring Backlog (차주 핵심 리팩토링)
+## 5. Next Week Architecture & Engine Refactoring Backlog (차주 최우선 핵심 리팩토링)
 
-- [x] **VDBE 바이트코드 디스패처 모듈화 (`pkg/proc/runtime/vm.go`, `pkg/proc/runtime/vm_dispatcher.go`)**
+### 차주 최우선 착수 과제 (Top Priorities)
+| 마일스톤 | 우선순위 | 핵심 과제 | 대상 위치 | 기대 효과 |
+| :---: | :---: | :--- | :--- | :--- |
+| **Phase 5** | **P1** | **VDBE Instruction 16B 패킹** | `pkg/proc/bytecode.go`, `pkg/proc/runtime/` | 64B L1 Cache Line당 4개 명령어 적재, VM 레이턴시 단축 |
+| **Phase 5** | **P1** | **SQL 코디네이터 분리 (`pkg/engine`)** | `pkg/api/sqlexec_*.go` ➔ `pkg/engine/` | `pkg/api`에서 SQL 실행 엔진 분리, 단방향 클린 아키텍처 확립 |
+
+- [x] **[완료] [Phase 5 / P1] VDBE Instruction 구조체 16바이트 패킹 (CPU L1 Data Cache Locality 극대화) (`pkg/proc/bytecode.go`, `pkg/proc/compiler.go`, `pkg/proc/runtime/`)**
+  - **상수 & 메타데이터 풀(AuxData) 분리**: `Data any` 인터페이스(16B)를 제거하고 `Program.AuxData []any` 슬라이스로 외주화하여 `inst.Aux`(uint16) 인덱스로 참조.
+  - **16바이트 고정 크기 레코드 압축**: `Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32` 16바이트 구조체로 재설계하여 64B L1 Cache Line당 정확히 4개 명령어 적재 (Zero Padding, `unsafe.Sizeof == 16` 테스트 검증 완료).
+  - **검증**: `TestInstruction_Size16Bytes` 단위 테스트 및 T-SQL 런타임/컴파일러 회귀 테스트 검증.
+- [ ] **[Phase 5 / P1] 아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
+  - `pkg/api`에 집중되어 있는 15,000+ 라인의 SQL 실행 오케스트레이션 로직(`sqlexec_*.go`)을 `pkg/engine` 코어 레이어로 독립 승격.
+  - `pkg/api`(HTTP REST/Studio), `pkg/wire`(PGWire), `pkg/wire/tds`(TDS) 세 어댑터가 동등하게 코어 엔진 인터페이스를 호출하도록 단방향 클린 아키텍처 확립.
+- [x] **[완료] VDBE 바이트코드 디스패처 모듈화 (`pkg/proc/runtime/vm.go`, `pkg/proc/runtime/vm_dispatcher.go`)**
   - `VMFrame.Execute` 내 824라인 거대 `switch op.Code` 블록을 기능군별 private 헬퍼 메서드로 분리 완료 (`execFlowOp`, `execComputeOp`, `execTxOp`, `execStorageOp`, `execCursorAndCallOp`, `execRelOp`).
   - 중복 catch stack 핸들링을 `handleCatch`로 통합(SSOT)하고, 순환 복잡도(Cyclomatic Complexity) 완화 및 프로파일링 스택 추적성 개선.
-- [ ] **아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
-  - `pkg/api`에 집중되어 있는 15,000+ 라인의 SQL 실행 오케스트레이션 로직을 `pkg/engine` 또는 `pkg/coordinator` 코어 레이어로 승격.
-  - `pkg/api`(HTTP REST/Studio), `pkg/wire`(PGWire), `pkg/wire/tds`(TDS) 세 어댑터가 동등하게 코어 엔진 인터페이스를 호출하도록 단방향 클린 아키텍처 확립.
-- [ ] **VDBE 바이트코드 엔진 성능 튜닝 & 제로 할당 고속화 (`pkg/proc/runtime`)**
-  - **1. [완료] 로컬 변수 슬롯화 (Local Variable Slot Indexing)**: T-SQL 파라미터 및 로컬 변수(`@from`, `@amount` 등) 접근 시 `map[string]storage.Value` 해시맵 조회 및 문자열 해싱/소문자 변환을 제거하고, 컴파일 타임 슬롯 인덱스(0, 1, 2...)를 부여하여 `f.slots[inst.B]` 고정 슬라이스 $O(1)$ 직접 배열 접근으로 전환 완료.
-  - **2. [완료] 중간 컨텍스트 맵 생성(`buildRowEvalMap`) 제거 (Zero-Allocation Expression Evaluation)**: DML 및 수식 평가 시 `f.evalCtx` 사전 동기화 및 빈 행 캐싱을 적용하여 매번 새 `map[string]any` 생성/복사 병목 제거 완료 (프로시저 호출당 할당 171건 ➔ 122건으로 대폭 감소).
-  - **3. [완료] 컨텍스트 취소 검사 배치화 (Batch Cancellation Check)**: 매 단일 바이트코드 명령마다 채널 `select / default`를 호출하여 발생하는 20~40ns 고정 오버헤드를 해소하기 위해 64개 명령 주기(`if pc&63 == 0 && f.ctx != nil`)로 취소 검사 주기 최적화 완료.
-  - **4. [완료] 오프코드 특화(Specialization) 및 인터페이스 비교 제거**: `OpEq` 내 `inst.Data == "AND"` 등 동적 인터페이스 문자열 비교를 완전 제거하고 `OpAnd`, `OpOr` 독립 오프코드 분리 및 정수 핫패스 인라인 특화 오프코드(`OpAddInt`, `OpSubInt`, `OpMulInt`, `OpEqInt`, `OpNeqInt`, `OpLtInt`, `OpLteInt`, `OpGtInt`, `OpGteInt`) 도입 완료.
-  - **5. [완료] 비교-점프 융합 및 피프홀 점프 체이닝 (Fused Compare-and-Branch & Jump Threading)**: `IF`/`WHILE` 조건문 평가 시 비교 오프코드와 점프 명령어를 단일 융합 오프코드(`OpJumpIfLtInt`, `OpJumpIfGteInt` 등)로 결합하여 불리언 레지스터 쓰기 및 VM 루프 디스패치를 50% 절감하고, `finalizeProgram` 피프홀 패스에서 징검다리 점프 체이닝 및 인접 Fall-through 점프 제거 완료.
-  - **6. 인스트럭션 구조체 밀도 최적화 (CPU L1 Cache Locality)**: `Instruction` 구조체 내 `Data any` 인터페이스 헤더(16바이트)를 분리하고 레지스터 연산을 8~16바이트 고정 크기 레코드로 밀도 높게 패킹하여 CPU L1 Data Cache 적중률 극대화.
-  - **관계형 스캔 벡터화 배치 파이프라이닝 (Vectorized Chunk Scan)**: `OpRelScan`, `OpIndexScan`에서 행 단위 VM 왕복 오버헤드를 줄이기 위한 N개(64~1024건) 단위 청크 벡터화 스트리밍.
-  - **[완료] 마이크로 벤치마크 및 TPC-C 성능 추적 하네스 검증**: VDBE 슬롯화 및 디스패처 모듈화 적용 후 TPC-C VDBE **17,803 TPS (475,780 tpmC)** 달성 (네이티브 Go 28,300 TPS 대비 63% 유지율, New-Order p50 0.56ms, Payment p50 0.05ms) 검증 완료.
+- [x] **[완료] VDBE 바이트코드 엔진 성능 튜닝 & 제로 할당 고속화 (`pkg/proc/runtime`)**
+  - **1. 로컬 변수 슬롯화 (Local Variable Slot Indexing)**: T-SQL 파라미터 및 로컬 변수(`@from`, `@amount` 등) 접근 시 `map[string]storage.Value` 해시맵 조회 및 문자열 해싱/소문자 변환을 제거하고, 컴파일 타임 슬롯 인덱스(0, 1, 2...)를 부여하여 `f.slots[inst.B]` 고정 슬라이스 $O(1)$ 직접 배열 접근으로 전환 완료.
+  - **2. 중간 컨텍스트 맵 생성(`buildRowEvalMap`) 제거 (Zero-Allocation Expression Evaluation)**: DML 및 수식 평가 시 `f.evalCtx` 사전 동기화 및 빈 행 캐싱을 적용하여 매번 새 `map[string]any` 생성/복사 병목 제거 완료 (프로시저 호출당 할당 171건 ➔ 122건으로 대폭 감소).
+  - **3. 컨텍스트 취소 검사 배치화 (Batch Cancellation Check)**: 매 단일 바이트코드 명령마다 채널 `select / default`를 호출하여 발생하는 20~40ns 고정 오버헤드를 해소하기 위해 64개 명령 주기(`if pc&63 == 0 && f.ctx != nil`)로 취소 검사 주기 최적화 완료.
+  - **4. 오프코드 특화(Specialization) 및 인터페이스 비교 제거**: `OpEq` 내 `inst.Data == "AND"` 등 동적 인터페이스 문자열 비교를 완전 제거하고 `OpAnd`, `OpOr` 독립 오프코드 분리 및 정수 핫패스 인라인 특화 오프코드(`OpAddInt`, `OpSubInt`, `OpMulInt`, `OpEqInt`, `OpNeqInt`, `OpLtInt`, `OpLteInt`, `OpGtInt`, `OpGteInt`) 도입 완료.
+  - **5. 비교-점프 융합 및 피프홀 점프 체이닝 (Fused Compare-and-Branch & Jump Threading)**: `IF`/`WHILE` 조건문 평가 시 비교 오프코드와 점프 명령어를 단일 융합 오프코드(`OpJumpIfLtInt`, `OpJumpIfGteInt` 등)로 결합하여 불리언 레지스터 쓰기 및 VM 루프 디스패치를 50% 절감하고, `finalizeProgram` 피프홀 패스에서 징검다리 점프 체이닝 및 인접 Fall-through 점프 제거 완료.
+  - **6. 마이크로 벤치마크 및 TPC-C 성능 추적 하네스 검증**: VDBE 슬롯화, 디스패처 모듈화 및 16B 인스트럭션 패킹 적용 후 TPC-C VDBE **18,542 TPS (495,834 tpmC)** 달성 (네이티브 Go 29,068 TPS 대비 63.8% 유지율, New-Order p50 0.56ms / p95 6.22ms, Payment p50 0.05ms / p95 2.99ms) 검증 완료.
+- [ ] **관계형 스캔 벡터화 배치 파이프라이닝 (Vectorized Chunk Scan) (`pkg/proc/runtime`)**
+  - `OpRelScan`, `OpIndexScan`에서 행 단위 VM 왕복 오버헤드를 줄이기 위한 N개(64~1024건) 단위 청크 벡터화 스트리밍.
 
 ---
 

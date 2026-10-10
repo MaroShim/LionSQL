@@ -299,13 +299,16 @@ func IsFusedJump(op OpCode) bool {
 	}
 }
 
-// Instruction represents a single VM instruction.
+// Instruction represents a single 16-byte VM instruction.
+// Packed to exactly 16 bytes (zero padding) to maximize CPU L1 Data Cache locality
+// (fits exactly 4 instructions per 64-byte L1 Cache Line).
 type Instruction struct {
-	Op   OpCode
-	A    int32
-	B    int32
-	C    int32
-	Data any
+	Op    OpCode // Operation code (1 byte)
+	Flags uint8  // Flags for negation, condition invert, nullability, etc. (1 byte)
+	Aux   uint16 // Auxiliary index into Program.AuxData or specialized payload (2 bytes)
+	A     int32  // Register A / Jump target PC / Return value register (4 bytes)
+	B     int32  // Register B / Slot index / Constant index / Jump PC (4 bytes)
+	C     int32  // Register C / Result register / Extra operand (4 bytes)
 }
 
 // CallData holds metadata for function and procedure invocations.
@@ -460,6 +463,7 @@ type Program struct {
 	Events       []string // For triggers
 	Instructions []Instruction
 	Constants    []storage.Value
+	AuxData      []any            // Out-of-band auxiliary metadata objects indexed by Instruction.Aux
 	VarNames     []string
 	VarSlots     map[string]int32 // Slot index mapping for fast O(1) indexed variable access
 	SlotCount    int32            // Total number of allocated variable slots
@@ -467,11 +471,58 @@ type Program struct {
 	QuerySQL     string // Optional raw query SQL for ad-hoc / relational query programs
 }
 
+// AddAux registers an auxiliary metadata object in Program.AuxData and returns a 1-based index.
+// Index 0 is reserved for nil (no aux data).
+func (p *Program) AddAux(data any) uint16 {
+	if p == nil || data == nil {
+		return 0
+	}
+	if len(p.AuxData) == 0 {
+		p.AuxData = append(p.AuxData, nil) // Index 0 reserved for nil
+	}
+	idx := len(p.AuxData)
+	p.AuxData = append(p.AuxData, data)
+	return uint16(idx)
+}
+
+// GetAux retrieves the auxiliary metadata object at the given 1-based index safely.
+func (p *Program) GetAux(aux uint16) any {
+	if p == nil || aux == 0 || int(aux) >= len(p.AuxData) {
+		return nil
+	}
+	return p.AuxData[aux]
+}
+
+// AddInstruction appends a new instruction to the program, automatically interning auxData if provided.
+func (p *Program) AddInstruction(op OpCode, a, b, c int32, auxData any) int {
+	var aux uint16
+	if auxData != nil {
+		aux = p.AddAux(auxData)
+	}
+	pc := len(p.Instructions)
+	p.Instructions = append(p.Instructions, Instruction{
+		Op:  op,
+		Aux: aux,
+		A:   a,
+		B:   b,
+		C:   c,
+	})
+	return pc
+}
+
+// GetData retrieves metadata for this instruction from the program.
+func (inst *Instruction) GetData(p *Program) any {
+	if p == nil {
+		return nil
+	}
+	return p.GetAux(inst.Aux)
+}
+
 // Disassemble produces a human-readable assembly listing of the bytecode program.
 func (p *Program) Disassemble() string {
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("=== Program: %s (%s) ===\n", p.Name, p.Type))
-	b.WriteString(fmt.Sprintf("Registers: %d, Slots: %d, Constants: %d, Instructions: %d\n", p.NumRegisters, p.SlotCount, len(p.Constants), len(p.Instructions)))
+	b.WriteString(fmt.Sprintf("Registers: %d, Slots: %d, Constants: %d, Instructions: %d, AuxData: %d\n", p.NumRegisters, p.SlotCount, len(p.Constants), len(p.Instructions), len(p.AuxData)))
 
 	if len(p.VarNames) > 0 {
 		b.WriteString("--- Variables ---\n")
@@ -489,9 +540,9 @@ func (p *Program) Disassemble() string {
 
 	b.WriteString("--- Instructions ---\n")
 	for pc, inst := range p.Instructions {
-		b.WriteString(fmt.Sprintf("  %04d: %-16s A:%-4d B:%-4d C:%-4d", pc, inst.Op.String(), inst.A, inst.B, inst.C))
-		if inst.Data != nil {
-			b.WriteString(fmt.Sprintf(" ; %v", inst.Data))
+		b.WriteString(fmt.Sprintf("  %04d: %-16s A:%-4d B:%-4d C:%-4d Flags:%-2d Aux:%-2d", pc, inst.Op.String(), inst.A, inst.B, inst.C, inst.Flags, inst.Aux))
+		if auxData := p.GetAux(inst.Aux); auxData != nil {
+			b.WriteString(fmt.Sprintf(" ; %v", auxData))
 		}
 		b.WriteString("\n")
 	}

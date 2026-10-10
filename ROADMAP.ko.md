@@ -49,7 +49,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - VDBE Integer Opcode Specialization & Dedicated Logical Operators (OpAddInt ~ OpGteInt, OpAnd, OpOr)
   - VDBE Fused Compare-and-Branch & Peephole Trampoline Jump Optimization
   - VDBE Dispatcher Modularization (Sub-Domain Execution Helpers & Centralized Catch-Stack)
-  - TPC-C VDBE Peak 20,478 TPS / Overall 17,563 TPS (63% Native Parity)
+  - TPC-C VDBE Peak 21,073 TPS / Overall 18,542 TPS (63.8% Native Parity)
 
 [ Phase 5: Enterprise Governance, Security & Engine Decoupling (v0.16.0 - v0.18.0) ] ──► NEXT IN PROGRESS
   - VDBE Instruction Struct 16-Byte Compaction (4 instructions per 64B L1 Cache Line)
@@ -139,12 +139,9 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 ### Phase 5: Enterprise Governance, Security & Engine Decoupling (v0.16.0 - v0.18.0 Target)
 
-#### 5.1. VDBE Instruction 구조체 16바이트 패킹 (`pkg/proc/bytecode.go`)
-- **현황**: 현재 `Instruction` 구조체는 `Data any` 인터페이스(16B)를 포함하여 32바이트 크기이며, CPU L1 Cache Line(64B)당 2개 명령어만 적재됨.
-- **과제**:
-  - `Data any`를 상수 풀(`Program.Constants`)로 외주화하고 16바이트 고정 크기 레코드(`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`)로 패킹.
-  - 64바이트 L1 Data Cache Line당 4개 명령어 고밀도 적재 실현.
-- **기대 효과**: L1 명령어 캐시 미스 대폭 감소 및 VDBE 가상 머신 디스패치 루프 지연시간 추가 10~15% 단축.
+#### 5.1. [완료] VDBE Instruction 구조체 16바이트 패킹 (`pkg/proc/bytecode.go`)
+- **구현 내용**: `Instruction` 구조체를 16바이트 고정 레이아웃(`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`, Zero Padding)으로 재설계하고, 메타데이터 객체를 `Program.AuxData []any` 풀로 분리하여 `inst.Aux` 인덱스로 참조.
+- **검증 완료**: `TestInstruction_Size16Bytes` 단위 테스트(`unsafe.Sizeof == 16`) 및 전체 T-SQL 가상머신 회귀 테스트 통과.
 
 #### 5.2. 아키텍처 계층 정립: SQL 실행 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)
 - **현황**: `pkg/api`에 집중된 15,000+ 라인의 SQL 오케스트레이션 로직으로 인해 PGWire와 TDS가 웹 API 계층에 의존하는 계층 역전 현상 존재.

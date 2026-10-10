@@ -127,11 +127,11 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc ./cmd/tpcc
 
 | Metric | In-Memory OCC Engine (High Concurrency: 10 Wh, 100 Wrk) | In-Memory OCC Engine (Standard OLTP: 2 Wh, 20 Wrk) | WiredTiger Engine (Disk MVCC: 10 Wh, 100 Wrk) |
 |---|---|---|---|
-| **tpmC** (New-Order / min) | **1,251,489 tpmC** | **763,496 tpmC** | **507,456 tpmC** |
-| **Overall Throughput** | **43,832 TPS** | **28,300 TPS** | **17,294 TPS** |
+| **tpmC** (New-Order / min) | **1,251,489 tpmC** | **785,099 tpmC** | **507,456 tpmC** |
+| **Overall Throughput** | **43,832 TPS** | **29,068 TPS** | **17,294 TPS** |
 | **New-Order Success Rate** | **99.8%** | **98.0%** | **91.5%** |
-| **Average Latency** | **0.20 ms** | **0.82 ms** | **1.82 ms** |
-| **P95 Latency** | **0.48 ms** | **3.01 ms** | **4.25 ms** |
+| **Average Latency** | **0.20 ms** | **0.79 ms** | **1.82 ms** |
+| **P95 Latency** | **0.48 ms** | **2.87 ms** | **4.25 ms** |
 
 ### 2.5. Native T-SQL VDBE Bytecode TPC-C Benchmark (`cmd/tpcc_vdbe`)
 
@@ -148,15 +148,15 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
 ./bin/tpcc_vdbe --engine=wiredtiger --warehouses=2 --workers=20 --duration=15s
 ```
 
-#### Official Verified VDBE Results (Post Variable Slot Indexing & Modular Dispatcher Optimization):
+#### Official Verified VDBE Results (Post Variable Slot Indexing, Modular Dispatcher & 16-Byte Compaction):
 
 | Metric | In-Memory OCC Engine (2 Wh, 20 Workers, 15s) | WiredTiger Engine (10 Wh, 20 Workers) | Analysis & Comparative Delta |
 |---|---|---|---|
-| **tpmC (New-Order / min)** | **475,781 tpmC** | **298,426 tpmC** | VM overhead minimized: delivers **63%** of raw native driver throughput |
-| **Overall Throughput (TPS)** | **17,803 TPS** | **10,936 TPS** | Full ACID atomic execution across all 5 standard TPC-C transaction types |
-| **Serialization Abort Rate** | **2.17%** | **4.46%** | Version OCC exhibits low serialization conflicts under high concurrency |
-| **New-Order P50 / P95 Latency** | **0.56 ms / 6.53 ms** | **2.19 ms / 7.62 ms** | Sub-millisecond median execution for multi-table business transactions |
-| **Payment P50 / P95 Latency** | **0.05 ms / 3.13 ms** | **0.31 ms / 2.85 ms** | Ultra-fast O(1) slot variable lookup and in-memory point mutations |
+| **tpmC (New-Order / min)** | **495,834 tpmC** | **298,426 tpmC** | VM overhead minimized: delivers **63.8%** of raw native driver throughput |
+| **Overall Throughput (TPS)** | **18,542 TPS** | **10,936 TPS** | Full ACID atomic execution across all 5 standard TPC-C transaction types |
+| **Serialization Abort Rate** | **2.24%** | **4.46%** | Version OCC exhibits low serialization conflicts under high concurrency |
+| **New-Order P50 / P95 Latency** | **0.56 ms / 6.22 ms** | **2.19 ms / 7.62 ms** | Sub-millisecond median execution for multi-table business transactions |
+| **Payment P50 / P95 Latency** | **0.05 ms / 2.99 ms** | **0.31 ms / 2.85 ms** | Ultra-fast O(1) slot variable lookup and in-memory point mutations |
 | **Order-Status P50 Latency** | **0.01 ms** | **0.12 ms** | Microsecond-level read-only query dispatch |
 | **Delivery / Stock-Level P50** | **0.04 ms / 0.04 ms** | **0.25 ms / 0.38 ms** | Sub-millisecond multi-row DML and range scan latency |
 

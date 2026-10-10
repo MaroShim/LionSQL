@@ -57,6 +57,7 @@ func NewCompiler() *Compiler {
 		prog: &Program{
 			Instructions: make([]Instruction, 0),
 			Constants:    make([]storage.Value, 0),
+			AuxData:      make([]any, 0),
 			VarNames:     make([]string, 0),
 			VarSlots:     make(map[string]int32),
 		},
@@ -527,13 +528,22 @@ func (c *Compiler) freeReg(count int32) {
 }
 
 func (c *Compiler) emit(op OpCode, a, b, cReg int32, data any) int {
+	return c.emitWithFlags(op, 0, a, b, cReg, data)
+}
+
+func (c *Compiler) emitWithFlags(op OpCode, flags uint8, a, b, cReg int32, data any) int {
+	var aux uint16
+	if data != nil {
+		aux = c.prog.AddAux(data)
+	}
 	pc := len(c.prog.Instructions)
 	c.prog.Instructions = append(c.prog.Instructions, Instruction{
-		Op:   op,
-		A:    a,
-		B:    b,
-		C:    cReg,
-		Data: data,
+		Op:    op,
+		Flags: flags,
+		Aux:   aux,
+		A:     a,
+		B:     b,
+		C:     cReg,
 	})
 	return pc
 }
@@ -608,7 +618,8 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 				bVal = false
 			}
 			reg := c.allocReg()
-			c.emit(OpLoadConst, reg, 0, 0, storage.BoolValue(bVal))
+			cIdx := c.internConst(storage.BoolValue(bVal))
+			c.emit(OpLoadConst, reg, cIdx, 0, nil)
 			slot := c.getOrAllocSlot(k)
 			c.emit(OpStoreVar, reg, slot, 0, strings.ToLower(k))
 			c.freeReg(1)
@@ -1184,10 +1195,11 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		if err != nil {
 			return 0, err
 		}
-		c.emit(OpBetween, valReg, valReg, lowReg, struct {
-			HighReg int32
-			Not     bool
-		}{HighReg: highReg, Not: e.Not})
+		var flags uint8
+		if e.Not {
+			flags = 1
+		}
+		c.emitWithFlags(OpBetween, flags, valReg, lowReg, highReg, nil)
 		c.freeReg(2)
 		return valReg, nil
 
@@ -1200,7 +1212,11 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		if err != nil {
 			return 0, err
 		}
-		c.emit(OpLike, valReg, valReg, patReg, e.Not)
+		var flags uint8
+		if e.Not {
+			flags = 1
+		}
+		c.emitWithFlags(OpLike, flags, valReg, valReg, patReg, nil)
 		c.freeReg(1)
 		return valReg, nil
 

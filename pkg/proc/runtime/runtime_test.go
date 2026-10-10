@@ -512,7 +512,7 @@ func TestVM_OpRelQueryVolcanoExecution(t *testing.T) {
 	foundCache := false
 	for _, inst := range prog.Instructions {
 		if inst.Op == proc.OpRelQuery {
-			if qData, ok := inst.Data.(*proc.RelQueryData); ok && qData.GetCachedQueryInfo() != nil {
+			if qData, ok := inst.GetData(prog).(*proc.RelQueryData); ok && qData.GetCachedQueryInfo() != nil {
 				foundCache = true
 				break
 			}
@@ -675,23 +675,18 @@ func TestVM_OpIndexScan(t *testing.T) {
 
 	// 1. Test direct OpIndexScan execution
 	prog := &proc.Program{
-		Name: "TestIndexScan",
-		Type: "QUERY",
-		Instructions: []proc.Instruction{
-			{
-				Op: proc.OpIndexScan,
-				Data: &proc.IndexScanData{
-					Table:       "employees",
-					IndexName:   "idx_emp_dept",
-					LowVal:      &proc.LiteralExpr{Val: storage.StringValue("IT")},
-					HighVal:     &proc.LiteralExpr{Val: storage.StringValue("IT")},
-					Projections: []string{"id", "dept", "salary"},
-				},
-			},
-			{Op: proc.OpReturn, A: -1},
-		},
+		Name:         "TestIndexScan",
+		Type:         "QUERY",
 		NumRegisters: 4,
 	}
+	prog.AddInstruction(proc.OpIndexScan, 0, 0, 0, &proc.IndexScanData{
+		Table:       "employees",
+		IndexName:   "idx_emp_dept",
+		LowVal:      &proc.LiteralExpr{Val: storage.StringValue("IT")},
+		HighVal:     &proc.LiteralExpr{Val: storage.StringValue("IT")},
+		Projections: []string{"id", "dept", "salary"},
+	})
+	prog.AddInstruction(proc.OpReturn, -1, 0, 0, nil)
 
 	res, err := executor.Run(prog, "TestIndexScan", nil, session)
 	if err != nil {
@@ -708,27 +703,22 @@ func TestVM_OpIndexScan(t *testing.T) {
 
 	// 2. Test OpUpdateWhere utilizing index scan
 	updateProg := &proc.Program{
-		Name: "TestIndexUpdate",
-		Type: "PROCEDURE",
-		Instructions: []proc.Instruction{
-			{
-				Op: proc.OpUpdateWhere,
-				Data: &proc.DMLData{
-					Table: "employees",
-					Assignments: []proc.UpdateAssignment{
-						{Column: "salary", Value: &proc.LiteralExpr{Val: storage.IntValue(9999)}},
-					},
-					WhereExpr: &proc.BinaryExpr{
-						Left:  &proc.ColumnRefExpr{Name: "dept"},
-						Op:    proc.TokenEq,
-						Right: &proc.LiteralExpr{Val: storage.StringValue("IT")},
-					},
-				},
-			},
-			{Op: proc.OpReturn, A: -1},
-		},
+		Name:         "TestIndexUpdate",
+		Type:         "PROCEDURE",
 		NumRegisters: 4,
 	}
+	updateProg.AddInstruction(proc.OpUpdateWhere, 0, 0, 0, &proc.DMLData{
+		Table: "employees",
+		Assignments: []proc.UpdateAssignment{
+			{Column: "salary", Value: &proc.LiteralExpr{Val: storage.IntValue(9999)}},
+		},
+		WhereExpr: &proc.BinaryExpr{
+			Left:  &proc.ColumnRefExpr{Name: "dept"},
+			Op:    proc.TokenEq,
+			Right: &proc.LiteralExpr{Val: storage.StringValue("IT")},
+		},
+	})
+	updateProg.AddInstruction(proc.OpReturn, -1, 0, 0, nil)
 
 	updateRes, err := executor.Run(updateProg, "TestIndexUpdate", nil, session)
 	if err != nil {
@@ -740,24 +730,19 @@ func TestVM_OpIndexScan(t *testing.T) {
 
 	// 3. Test OpDeleteWhere utilizing index scan
 	deleteProg := &proc.Program{
-		Name: "TestIndexDelete",
-		Type: "PROCEDURE",
-		Instructions: []proc.Instruction{
-			{
-				Op: proc.OpDeleteWhere,
-				Data: &proc.DMLData{
-					Table: "employees",
-					WhereExpr: &proc.BinaryExpr{
-						Left:  &proc.ColumnRefExpr{Name: "dept"},
-						Op:    proc.TokenEq,
-						Right: &proc.LiteralExpr{Val: storage.StringValue("IT")},
-					},
-				},
-			},
-			{Op: proc.OpReturn, A: -1},
-		},
+		Name:         "TestIndexDelete",
+		Type:         "PROCEDURE",
 		NumRegisters: 4,
 	}
+	deleteProg.AddInstruction(proc.OpDeleteWhere, 0, 0, 0, &proc.DMLData{
+		Table: "employees",
+		WhereExpr: &proc.BinaryExpr{
+			Left:  &proc.ColumnRefExpr{Name: "dept"},
+			Op:    proc.TokenEq,
+			Right: &proc.LiteralExpr{Val: storage.StringValue("IT")},
+		},
+	})
+	deleteProg.AddInstruction(proc.OpReturn, -1, 0, 0, nil)
 
 	deleteRes, err := executor.Run(deleteProg, "TestIndexDelete", nil, session)
 	if err != nil {

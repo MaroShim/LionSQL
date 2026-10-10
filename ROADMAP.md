@@ -49,7 +49,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - VDBE Integer Opcode Specialization & Dedicated Logical Operators (OpAddInt ~ OpGteInt, OpAnd, OpOr)
   - VDBE Fused Compare-and-Branch & Peephole Trampoline Jump Optimization
   - VDBE Dispatcher Modularization (Sub-Domain Execution Helpers & Centralized Catch-Stack)
-  - TPC-C VDBE Peak 20,478 TPS / Overall 17,563 TPS (63% Native Parity)
+  - TPC-C VDBE Peak 21,073 TPS / Overall 18,542 TPS (63.8% Native Parity)
 
 [ Phase 5: Enterprise Governance, Security & Engine Decoupling (v0.16.0 - v0.18.0) ] ──► NEXT IN PROGRESS
   - VDBE Instruction Struct 16-Byte Compaction (4 instructions per 64B L1 Cache Line)
@@ -139,12 +139,9 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 ### Phase 5: Enterprise Governance, Security & Engine Decoupling (v0.16.0 - v0.18.0 Target)
 
-#### 5.1. VDBE Instruction Struct 16-Byte Compaction (`pkg/proc/bytecode.go`)
-- **Current State**: The current `Instruction` struct occupies 32 bytes due to the `Data any` interface header (16B), fitting only 2 instructions per 64-byte CPU L1 Data Cache line.
-- **Challenge**:
-  - Externalize arbitrary operands to a constant pool (`Program.Constants`) and compact instructions into a 16-byte fixed layout (`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`).
-  - Fit exactly 4 instructions per 64-byte L1 Data Cache line.
-- **Expected Outcome**: Significantly reduced L1 cache miss ratios and 10~15% latency reduction in the VM dispatch loop.
+#### 5.1. [COMPLETED] VDBE Instruction Struct 16-Byte Compaction (`pkg/proc/bytecode.go`)
+- **Implemented**: Re-architected `Instruction` into a dense 16-byte fixed layout (`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`) with zero struct padding, externalizing metadata objects to `Program.AuxData []any` indexed via `inst.Aux`.
+- **Verified**: Confirmed `unsafe.Sizeof == 16` via `TestInstruction_Size16Bytes`, loading exactly 4 instructions per 64-byte L1 Data Cache line.
 
 #### 5.2. Architecture Layering: SQL Execution Coordinator Separation (`pkg/api` -> `pkg/engine`)
 - **Current State**: `pkg/api` contains over 15,000 lines of core SQL execution orchestration (`sqlexec_*.go`), causing an architectural inversion where PGWire and TDS depend on the HTTP API layer.
