@@ -164,9 +164,9 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - Implement tamper-evident immutable audit logging for authentication events, privilege changes (`GRANT/REVOKE`), and schema alterations.
 - **Expected Outcome**: Complete defense against direct physical disk extraction and full enterprise audit traceability.
 
-#### 5.5. Prepared Statement & PlanCache Memory Defense Bounded LRU Cache (Golden Rule 29) (`pkg/proc/runtime`, `pkg/wire`)
-- **Challenge**: Enforce bounded capacities (e.g. 256~1024 entries per session / globally) with LRU eviction across prepared statement maps and bytecode `PlanCache`.
-- **Expected Outcome**: Adherence to the Bounded Buffers invariant, preventing memory leaks and OOM crashes during long-lived client connections.
+#### 5.5. [COMPLETED] PlanCache Bounded LRU Cache & Memory Defense (Golden Rule 29) (`pkg/proc/runtime`)
+- **Implemented**: Replaced unbounded map storage in `PlanCache` with a bounded Least Recently Used (`container/list`) cache with `DefaultPlanCacheCapacity = 1024`.
+- **Verified**: Added deterministic LRU eviction on capacity saturation, thread-safe access promotion, case-insensitive symbol lookup, and 100% PASS on `plancache_test.go`. Enforces bounded resource discipline and mitigates OOM risks during long-running client workloads.
 
 #### 5.6. TDS Wire Protocol NBCROW Row Compression (`pkg/wire/tds`)
 - **Challenge**: Implement TDS 7.3+ standard `NBCROW` (Null Bitmap Compressed Row, `0xD2`) encoding, sending NULL column values with 0 payload bytes.

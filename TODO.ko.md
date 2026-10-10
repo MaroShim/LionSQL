@@ -97,15 +97,23 @@ This document tracks active tasks, short-term engineering priorities, and concep
 ## 5. Next Week Architecture & Engine Refactoring Backlog (차주 최우선 핵심 리팩토링)
 
 ### 차주 최우선 착수 과제 (Top Priorities)
-| 마일스톤 | 우선순위 | 핵심 과제 | 대상 위치 | 기대 효과 |
-| :---: | :---: | :--- | :--- | :--- |
-| **Phase 5** | **P1** | **VDBE Instruction 16B 패킹** | `pkg/proc/bytecode.go`, `pkg/proc/runtime/` | 64B L1 Cache Line당 4개 명령어 적재, VM 레이턴시 단축 |
-| **Phase 5** | **P1** | **SQL 코디네이터 분리 (`pkg/engine`)** | `pkg/api/sqlexec_*.go` ➔ `pkg/engine/` | `pkg/api`에서 SQL 실행 엔진 분리, 단방향 클린 아키텍처 확립 |
+| 마일스톤 | 우선순위 | 핵심 과제 | 대상 위치 | 기대 효과 | 상태 |
+| :---: | :---: | :--- | :--- | :--- | :---: |
+| **Phase 5** | **P1-1** | **VDBE Instruction 16B 패킹** | `pkg/proc/bytecode.go`, `pkg/proc/runtime/` | 64B L1 Cache Line당 4개 명령어 적재, VM 레이턴시 단축 | **완료** |
+| **Phase 5** | **P1-2** | **SQL 코디네이터 분리 (`pkg/engine`)** | `pkg/api/sqlexec_*.go` ➔ `pkg/engine/` | `pkg/api`에서 SQL 실행 엔진 분리, 단방향 클린 아키텍처 확립 | 대기 |
+| **Phase 5** | **P2** | **PlanCache Bounded LRU 캐시** | `pkg/proc/runtime/vm.go` | 메모리 상한 방어, OOM 크래시 방지 (Golden Rule 29) | **완료** |
+| **Phase 5** | **P2** | **T-SQL 내장 스칼라 함수 확장** | `pkg/proc/builtins.go` | `CONCAT_WS`, `QUOTENAME`, `ASCII`, `CHAR`, `NULLIF`, `ISNUMERIC` | **완료** |
 
 - [x] **[완료] [Phase 5 / P1] VDBE Instruction 구조체 16바이트 패킹 (CPU L1 Data Cache Locality 극대화) (`pkg/proc/bytecode.go`, `pkg/proc/compiler.go`, `pkg/proc/runtime/`)**
   - **상수 & 메타데이터 풀(AuxData) 분리**: `Data any` 인터페이스(16B)를 제거하고 `Program.AuxData []any` 슬라이스로 외주화하여 `inst.Aux`(uint16) 인덱스로 참조.
   - **16바이트 고정 크기 레코드 압축**: `Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32` 16바이트 구조체로 재설계하여 64B L1 Cache Line당 정확히 4개 명령어 적재 (Zero Padding, `unsafe.Sizeof == 16` 테스트 검증 완료).
   - **검증**: `TestInstruction_Size16Bytes` 단위 테스트 및 T-SQL 런타임/컴파일러 회귀 테스트 검증.
+- [x] **[완료] [Phase 5] PlanCache Bounded LRU 캐시 및 메모리 상한 방어 (Golden Rule 29) (`pkg/proc/runtime`)**
+  - 무제한 맵이었던 `PlanCache`를 `container/list` 기반 상한 용량(`DefaultPlanCacheCapacity = 1024`) LRU 캐시로 전면 개편.
+  - 용량 초과 시 자동 LRU 퇴출, 최근 참조 항목 앞단 승격, 프로시저/함수 대소문자 무관 검색(`GetByName`) 지원 및 `plancache_test.go` 단위 테스트 100% 통과.
+- [x] **[완료] [Phase 5] T-SQL 필수 내장 스칼라 함수 확장 (`pkg/proc/builtins.go`, `pkg/proc/builtins_test.go`)**
+  - `CONCAT_WS` (NULL 건너뛰기 지원 결합), `QUOTENAME` (구분 기호 및 이스케이프 중복), `ASCII`, `CHAR`, `NULLIF`, `ISNUMERIC` (NaN/Inf 방어) 내장 스칼라 함수 구현.
+  - `IsBuiltinFunction` 등록 및 단위 테스트 100% 통과.
 - [ ] **[Phase 5 / P1] 아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
   - `pkg/api`에 집중되어 있는 15,000+ 라인의 SQL 실행 오케스트레이션 로직(`sqlexec_*.go`)을 `pkg/engine` 코어 레이어로 독립 승격.
   - `pkg/api`(HTTP REST/Studio), `pkg/wire`(PGWire), `pkg/wire/tds`(TDS) 세 어댑터가 동등하게 코어 엔진 인터페이스를 호출하도록 단방향 클린 아키텍처 확립.

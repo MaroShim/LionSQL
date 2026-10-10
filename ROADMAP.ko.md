@@ -164,9 +164,9 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - 로그인 성공/실패, 권한 변경, DDL 변경 이벤트를 태깅하는 위변조 방지 불변 감사 로그 기록.
 - **기대 효과**: 디스크 파일 직접 탈취 시에도 데이터 유출 원천 방지 및 엔터프라이즈 감사 추적성 확보.
 
-#### 5.5. Prepared Statement & PlanCache 메모리 방어용 Bounded LRU 캐시 (Golden Rule 29) (`pkg/proc/runtime`, `pkg/wire`)
-- **과제**: 세션당/글로벌 최대 용량(256~1024건) 제한 및 LRU Eviction 메커니즘을 적용하여 장시간 유지 커넥션에서의 메모리 누수 원천 방지.
-- **기대 효과**: Bounded Buffer 원칙 준수로 무제한 메모리 증가 및 OOM 크래시 방어.
+#### 5.5. [완료] PlanCache 메모리 방어용 Bounded LRU 캐시 (Golden Rule 29) (`pkg/proc/runtime`)
+- **구현 내용**: `PlanCache`의 무제한 맵 저장을 `container/list` 기반의 상한 용량(`DefaultPlanCacheCapacity = 1024`) LRU 캐시로 전면 개편.
+- **검증 완료**: 용량 초과 시 자동 LRU 퇴출, 최근 참조 항목 승격, 프로시저/함수 대소문자 무관 검색(`GetByName`) 지원 및 `plancache_test.go` 단위 테스트 100% 통과. 장기 커넥션에서의 무제한 메모리 증가 및 OOM 방어 완료.
 
 #### 5.6. TDS 와이어 프로토콜 NBCROW 행 압축 (`pkg/wire/tds`)
 - **과제**: TDS 7.3+ 표준 `NBCROW` (Null Bitmap Compressed Row, `0xD2`) 행 압축 지원 (NULL 컬럼 0바이트 패킹).
