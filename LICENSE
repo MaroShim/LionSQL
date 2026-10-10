@@ -1,14 +1,3 @@
-GNU GENERAL PUBLIC LICENSE
-Version 3, 29 June 2007
-
-Copyright (C) 2026 SQLion Authors.
-SQLion is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
-
-Commercial licensing and proprietary embedding options are also available upon request for enterprise deployments requiring custom terms without GPL copyleft obligations.
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-
-================================================================================
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 
@@ -23,9 +12,12 @@ software and other kinds of works.
 
   The licenses for most software and other practical works are designed
 to take away your freedom to share and change the works.  By contrast,
-our general public licenses are intended to guarantee your freedom to
+the GNU General Public License is intended to guarantee your freedom to
 share and change all versions of a program--to make sure it remains free
-software for all its users.
+software for all its users.  We, the Free Software Foundation, use the
+GNU General Public License for most of our software; it applies also to
+any other work released this way by its authors.  You can apply it to
+your programs, too.
 
   When we speak of free software, we are referring to freedom, not
 price.  Our General Public Licenses are designed to make sure that you
@@ -49,15 +41,29 @@ know their rights.
 (1) assert copyright on the software, and (2) offer you this License
 giving you legal permission to copy, distribute and/or modify it.
 
-  A secondary benefit of defending all users' freedom is that
-improvements made in alternate versions of the program, if they
-become widely used, become available for other developers to incorporate.
-Many developers of free software are heartened and encouraged by the
-resulting cooperation.  However, some varieties of software do not
-invite such cooperation, and when you develop such software you may
-find that some users prefer not to use it.  Others, however, might
-find your work very useful, and their contributions will benefit the
-community.
+  For the developers' and authors' protection, the GPL clearly explains
+that there is no warranty for this free software.  For both users' and
+authors' sake, the GPL requires that modified versions be marked as
+changed, so that their problems will not be attributed erroneously to
+authors of previous versions.
+
+  Some devices are designed to deny users access to install or run
+modified versions of the software inside them, although the manufacturer
+can do so.  This is fundamentally incompatible with the aim of
+protecting users' freedom to change the software.  The systematic
+pattern of such abuse occurs in the area of products for individuals to
+use, which is precisely where it is most unacceptable.  Therefore, we
+have designed this version of the GPL to prohibit the practice for those
+products.  If such problems arise substantially in other domains, we
+stand ready to extend this provision to those domains in future versions
+of the GPL, as needed to protect the freedom of users.
+
+  Finally, every program is threatened constantly by software patents.
+States should not allow patents to restrict development and use of
+software on general-purpose computers, but in those that do, we wish to
+avoid the special danger that patents applied to a free program could
+make it effectively proprietary.  To prevent this, the GPL assures that
+patents cannot be used to render the program non-free.
 
   The precise terms and conditions for copying, distribution and
 modification follow.
@@ -161,10 +167,10 @@ in force.  You may convey covered works to others for the sole purpose
 of having them make modifications exclusively for you, or provide you
 with facilities for running those works, provided that you comply with
 the terms of this License in conveying all material for which you do
-not control copyright.  Those to whom you make or run the covered works
-for you must do so exclusively on your behalf, under your direction
-and control, on terms that prohibit them from making any copies of
-your copyrighted material outside their relationship with you.
+not control copyright.  Those who make or run the covered works for
+you must do so exclusively on your behalf, under your direction and
+control, on terms that prohibit them from making any copies of your
+copyrighted material outside their relationship with you.
 
   Conveying under any other circumstances is permitted solely under
 the conditions stated below.  Sublicensing is not allowed; section 10
@@ -444,9 +450,9 @@ receives a license from the original licensors, to run, modify and
 propagate that work, subject to this License.  You are not responsible
 for enforcing compliance by third parties with this License.
 
-  An "entity transaction" is a transaction transferring control of an
-organization, or substantially all assets of one, or subdividing an
-organization, or merging organizations.  If propagation of a covered
+  An "entity transaction" is a transaction that transfers control of
+an organization, or substantially all assets of one, or subdivides an
+organization, or merges organizations.  If propagation of a covered
 work results from an entity transaction, each party to that
 transaction who receives a copy of the work also receives whatever
 licenses to the work the party's predecessor in interest had or could
@@ -509,8 +515,8 @@ arrangement, you convey, or propagate by procuring conveyance of, a
 covered work, and grant a patent license to some of the parties
 receiving the covered work authorizing them to use, propagate, modify
 or convey a specific copy of the covered work, then the patent license
-is automatically extended to all recipients of the covered work and
-works based on it.
+you grant is automatically extended to all recipients of the covered
+work and works based on it.
 
   A patent license is "discriminatory" if it does not include within
 the scope of its coverage, prohibits the exercise of, or is
@@ -552,14 +558,14 @@ combined work, and to convey the resulting work.  The terms of this
 License will continue to apply to the part which is the covered work,
 but the special requirements of the GNU Affero General Public License,
 section 13, concerning interaction through a network will apply to the
-part which is the combination as such.
+combination as such.
 
   14. Revised Versions of this License.
 
   The Free Software Foundation may publish revised and/or new versions of
-the GNU General Public License from time to time.  Such new
-versions will be similar in spirit to the present version, but may differ
-in detail to address new problems or concerns.
+the GNU General Public License from time to time.  Such new versions will
+be similar in spirit to the present version, but may differ in detail to
+address new problems or concerns.
 
   Each version is given a distinguishing version number.  If the
 Program specifies that a certain numbered version of the GNU General
@@ -567,13 +573,13 @@ Public License "or any later version" applies to it, you have the
 option of following the terms and conditions either of that numbered
 version or of any later version published by the Free Software
 Foundation.  If the Program does not specify a version number of the
-GNU General Public License, you may choose any version ever
-published by the Free Software Foundation.
+GNU General Public License, you may choose any version ever published
+by the Free Software Foundation.
 
   If the Program specifies that a proxy can decide which future
-versions of the GNU General Public License can be used, that
-proxy's public statement of acceptance of a version permanently
-authorizes you to choose that version for the Program.
+versions of the GNU General Public License can be used, that proxy's
+public statement of acceptance of a version permanently authorizes you
+to choose that version for the Program.
 
   Later license versions may give you additional or different
 permissions.  However, no additional obligations are imposed on any

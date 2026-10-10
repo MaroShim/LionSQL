@@ -26,6 +26,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented `ISNUMERIC(expression)` checking valid numeric data types or string parseability without NaN/Inf leaks.
   - Registered all new functions in `IsBuiltinFunction` and added comprehensive unit tests in `pkg/proc/builtins_test.go`.
 
+### Documentation
+- **Canonical FSF GPL v3 LICENSE Alignment & Commercial Dual Licensing (`LICENSE`, `README.md`)**:
+  - Restored `LICENSE` file to canonical verbatim GNU General Public License v3 text for seamless automated open-source compliance scanning.
+  - Relocated and structured commercial dual-licensing and proprietary embedding terms in `README.md`.
+
 ---
 
 ## [0.15.0] - 2026-10-09
