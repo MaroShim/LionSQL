@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"container/list"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -46,31 +47,53 @@ type UDFEntry struct {
 	Program *proc.Program
 }
 
-// PlanCache stores precompiled native T-SQL bytecode programs for zero-recompile execution.
+// DefaultPlanCacheCapacity defines the maximum number of compiled bytecode plans retained in memory.
+const DefaultPlanCacheCapacity = 1024
+
+type planCacheEntry struct {
+	hash    string
+	program *proc.Program
+}
+
+// PlanCache stores precompiled native T-SQL bytecode programs with bounded LRU eviction (Golden Rule 29).
 type PlanCache struct {
 	mu       sync.RWMutex
-	programs map[string]*proc.Program
+	capacity int
+	programs map[string]*list.Element
+	lruList  *list.List
 	byName   map[string]*proc.Program
 }
 
-// NewPlanCache creates an execution plan cache for bytecode programs.
+// NewPlanCache creates an execution plan cache with DefaultPlanCacheCapacity (1024).
 func NewPlanCache() *PlanCache {
+	return NewPlanCacheWithCapacity(DefaultPlanCacheCapacity)
+}
+
+// NewPlanCacheWithCapacity creates an execution plan cache with a custom bounded capacity.
+func NewPlanCacheWithCapacity(capacity int) *PlanCache {
+	if capacity <= 0 {
+		capacity = DefaultPlanCacheCapacity
+	}
 	return &PlanCache{
-		programs: make(map[string]*proc.Program),
+		capacity: capacity,
+		programs: make(map[string]*list.Element),
+		lruList:  list.New(),
 		byName:   make(map[string]*proc.Program),
 	}
 }
 
-// GetOrCompile retrieves a cached bytecode program or compiles and caches the T-SQL script.
+// GetOrCompile retrieves a cached bytecode program or compiles and caches the T-SQL script with LRU promotion.
 func (c *PlanCache) GetOrCompile(script string) (*proc.Program, error) {
 	h := hashScript(script)
 
-	c.mu.RLock()
-	if prog, exists := c.programs[h]; exists {
-		c.mu.RUnlock()
+	c.mu.Lock()
+	if elem, exists := c.programs[h]; exists {
+		c.lruList.MoveToFront(elem)
+		prog := elem.Value.(*planCacheEntry).program
+		c.mu.Unlock()
 		return prog, nil
 	}
-	c.mu.RUnlock()
+	c.mu.Unlock()
 
 	prog, err := proc.Compile(script)
 	if err != nil {
@@ -78,9 +101,32 @@ func (c *PlanCache) GetOrCompile(script string) (*proc.Program, error) {
 	}
 
 	c.mu.Lock()
-	c.programs[h] = prog
-	c.byName[cleanSymbol(prog.Name)] = prog
-	c.mu.Unlock()
+	defer c.mu.Unlock()
+
+	// Double-check under lock in case another goroutine compiled it concurrently
+	if elem, exists := c.programs[h]; exists {
+		c.lruList.MoveToFront(elem)
+		return elem.Value.(*planCacheEntry).program, nil
+	}
+
+	// LRU eviction if capacity reached
+	if c.capacity > 0 && c.lruList.Len() >= c.capacity {
+		back := c.lruList.Back()
+		if back != nil {
+			c.lruList.Remove(back)
+			oldEntry := back.Value.(*planCacheEntry)
+			delete(c.programs, oldEntry.hash)
+		}
+	}
+
+	elem := c.lruList.PushFront(&planCacheEntry{
+		hash:    h,
+		program: prog,
+	})
+	c.programs[h] = elem
+	if prog.Name != "" {
+		c.byName[strings.ToLower(cleanSymbol(prog.Name))] = prog
+	}
 
 	return prog, nil
 }
@@ -89,15 +135,36 @@ func (c *PlanCache) GetOrCompile(script string) (*proc.Program, error) {
 func (c *PlanCache) PutByName(name string, prog *proc.Program) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.byName[cleanSymbol(name)] = prog
+	c.byName[strings.ToLower(cleanSymbol(name))] = prog
 }
 
 // GetByName retrieves a compiled bytecode program by procedure or function name.
 func (c *PlanCache) GetByName(name string) (*proc.Program, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	prog, ok := c.byName[cleanSymbol(name)]
+	prog, ok := c.byName[strings.ToLower(cleanSymbol(name))]
 	return prog, ok
+}
+
+// Len returns the current number of cached script programs.
+func (c *PlanCache) Len() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.programs)
+}
+
+// Capacity returns the maximum capacity of the plan cache.
+func (c *PlanCache) Capacity() int {
+	return c.capacity
+}
+
+// Clear flushes all cached bytecode programs.
+func (c *PlanCache) Clear() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.programs = make(map[string]*list.Element)
+	c.lruList = list.New()
+	c.byName = make(map[string]*proc.Program)
 }
 
 // Executor manages execution of compiled stored procedures, functions, and triggers within ambient ACID transactions.

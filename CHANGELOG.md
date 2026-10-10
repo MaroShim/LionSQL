@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Eliminated the `Data any` 16-byte interface header from `Instruction`, externalizing variable-sized metadata and complex structures (`DMLData`, `CallData`, `SelectIntoData`, `RelQueryData`, `IndexScanData`, `ResultRowData`) to `Program.AuxData []any` indexed via `inst.Aux` (`uint16`).
   - Added dedicated bitflag representations in `inst.Flags` for `OpLike` and `OpBetween` negation, eliminating heap allocations for between expressions during compilation.
   - Added strict unit test `TestInstruction_Size16Bytes` in `pkg/proc/compiler_test.go` enforcing `unsafe.Sizeof(proc.Instruction{}) == 16`.
+- **Bounded LRU PlanCache with Memory Limits (`pkg/proc/runtime`, Golden Rule 29)**:
+  - Replaced unbounded `PlanCache` map storage with a bounded Least Recently Used (`container/list`) cache (`DefaultPlanCacheCapacity = 1024`).
+  - Added deterministic LRU eviction when cache capacity is exceeded, thread-safe cache lookup promotion, `Len()`, `Capacity()`, and `Clear()` methods.
+  - Normalized procedure and function lookup keys to lowercase for robust case-insensitive `GetByName` resolution.
+  - Added unit test suite `TestPlanCache_BoundedLRU` and `TestPlanCache_PutAndGetByName` in `pkg/proc/runtime/plancache_test.go`.
 
 ---
 
