@@ -134,9 +134,9 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ## 6. SQL Syntax & Parser Coverage Backlog (T-SQL & ANSI SQL 문법 완비 과제)
 
-- [ ] **T-SQL & ANSI 표준 페이징 정규 문법 완비 (`OFFSET ... FETCH NEXT ... ROWS ONLY`) (`pkg/proc`, `pkg/planner`)**
-  - 단순 `LIMIT / OFFSET`을 넘어 `ORDER BY ... OFFSET n ROWS FETCH NEXT m ROWS ONLY` 표준 구문을 Pratt/ANTLR AST에 1급 시민(First-Class)으로 완전 통합.
-  - T-SQL `SELECT TOP (n) [PERCENT] [WITH TIES]` 구문 AST 파싱 및 Volcano 실행 연동.
+- [x] **[완료] T-SQL & ANSI 표준 페이징 정규 문법 완비 (`OFFSET ... FETCH NEXT ... ROWS ONLY` 및 `TOP`) (`pkg/proc`, `pkg/planner`, `pkg/api`)**
+  - 단순 `LIMIT / OFFSET`을 넘어 `ORDER BY ... OFFSET n ROWS FETCH NEXT m ROWS ONLY` 표준 구문을 Pratt AST 및 CBO 플래너에 1급 시민(First-Class)으로 완전 통합.
+  - T-SQL `SELECT [DISTINCT] TOP (n) [PERCENT] [WITH TIES]` 구문 AST 파싱 및 Volcano/CBO 실행 연동, 단위 및 E2E 테스트 검증 완료.
 - [x] **복합 한정자(Qualifier) 및 인라인 별칭(Alias) 파싱 정밀화 (`pkg/proc/parser.go`, `pkg/planner/planner.go`, `pkg/api/sqlexec.go`)**
   - 3단계/4단계 한정자(`[db].[schema].[table].[col]`, `db..table`) 및 2단계 한정자(`alias.col`, `"schema"."table"`)의 정규 토큰화 및 카탈로그 해석.
   - `AS` 키워드가 생략된 인라인 테이블 별칭(`FROM accounts basetbl`) 및 컬럼 별칭(`SELECT id id_alias`) 파싱 안정화.

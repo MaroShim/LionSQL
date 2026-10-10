@@ -505,7 +505,7 @@ func isReservedAfterFromOrJoin(tok TokenType) bool {
 	switch tok {
 	case TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
 		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter,
-		TokenOn, TokenWith, TokenFor, TokenOffset,
+		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch,
 		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
 		return true
 	default:
@@ -517,7 +517,7 @@ func isReservedAfterProjection(tok TokenType) bool {
 	switch tok {
 	case TokenFrom, TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
 		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter,
-		TokenOn, TokenWith, TokenFor, TokenOffset,
+		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch,
 		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
 		return true
 	default:
@@ -1922,9 +1922,37 @@ func (p *Parser) ParseSQLStatement() (Statement, error) {
 func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	stmt := &GeneralSelectStmt{Limit: -1}
 
-	if p.curTokenIs(TokenDistinct) {
-		stmt.Distinct = true
-		p.nextToken() // eat DISTINCT
+	for p.curTokenIs(TokenDistinct) || p.curTokenIs(TokenTop) {
+		if p.curTokenIs(TokenDistinct) {
+			stmt.Distinct = true
+			p.nextToken() // eat DISTINCT
+		} else if p.curTokenIs(TokenTop) {
+			p.nextToken() // eat TOP
+			hasParen := false
+			if p.curTokenIs(TokenLParen) {
+				hasParen = true
+				p.nextToken() // eat (
+			}
+			if p.curTokenIs(TokenInt) {
+				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				stmt.Limit = n
+				p.nextToken()
+			}
+			if hasParen && p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+			}
+			if p.curTokenIs(TokenPercent) {
+				stmt.TopPercent = true
+				p.nextToken() // eat PERCENT
+			}
+			if p.curTokenIs(TokenWith) {
+				p.nextToken() // eat WITH
+				if p.curTokenIs(TokenTies) || (p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "TIES")) {
+					stmt.TopWithTies = true
+					p.nextToken() // eat TIES
+				}
+			}
+		}
 	}
 
 	// 1. Projections
@@ -2160,8 +2188,8 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		}
 	}
 
-	// 8. LIMIT and OFFSET clauses
-	for p.curTokenIs(TokenLimit) || p.curTokenIs(TokenOffset) {
+	// 8. LIMIT, OFFSET and FETCH clauses (Standard ANSI SQL:2008 & T-SQL)
+	for p.curTokenIs(TokenLimit) || p.curTokenIs(TokenOffset) || p.curTokenIs(TokenFetch) {
 		if p.curTokenIs(TokenLimit) {
 			p.nextToken() // eat LIMIT
 			if p.curTokenIs(TokenInt) {
@@ -2174,6 +2202,29 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			if p.curTokenIs(TokenInt) {
 				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
 				stmt.Offset = n
+				p.nextToken()
+			}
+			// Optional ROW or ROWS (e.g. OFFSET 10 ROWS)
+			if p.curTokenIs(TokenRow) || p.curTokenIs(TokenRows) {
+				p.nextToken()
+			}
+		} else if p.curTokenIs(TokenFetch) {
+			p.nextToken() // eat FETCH
+			// Optional FIRST or NEXT (e.g. FETCH NEXT 5 ROWS ONLY)
+			if p.curTokenIs(TokenFirst) || p.curTokenIs(TokenNext) {
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenInt) {
+				n, _ := strconv.ParseInt(p.curToken.Literal, 10, 64)
+				stmt.Limit = n
+				p.nextToken()
+			}
+			// Optional ROW or ROWS
+			if p.curTokenIs(TokenRow) || p.curTokenIs(TokenRows) {
+				p.nextToken()
+			}
+			// Optional ONLY
+			if p.curTokenIs(TokenOnly) {
 				p.nextToken()
 			}
 		}

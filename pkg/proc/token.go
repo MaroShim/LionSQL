@@ -133,16 +133,30 @@ const (
 	TokenCube
 	TokenGroupingSets
 	TokenOffset
+	TokenRow
+	TokenRows
+	TokenFirst
+	TokenOnly
+	TokenTop
+	TokenPercent
+	TokenTies
 )
 
 var keywords = map[string]TokenType{
 	"OFFSET":        TokenOffset,
+	"ROW":           TokenRow,
+	"ROWS":          TokenRows,
+	"FIRST":         TokenFirst,
+	"ONLY":          TokenOnly,
+	"TOP":           TokenTop,
+	"PERCENT":       TokenPercent,
+	"TIES":          TokenTies,
 	"ROLLUP":        TokenRollup,
 	"CUBE":          TokenCube,
 	"GROUPING_SETS": TokenGroupingSets,
 	"OUTPUT":        TokenOutput,
-	"DISTINCT":    TokenDistinct,
-	"SAVE":        TokenSave,
+	"DISTINCT":      TokenDistinct,
+	"SAVE":          TokenSave,
 	"SAVEPOINT":   TokenSavepoint,
 	"GOTO":        TokenGoto,
 	"CREATE":      TokenCreate,

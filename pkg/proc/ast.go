@@ -759,6 +759,8 @@ type GeneralSelectStmt struct {
 	Limit       int64
 	Offset      int64
 	Distinct    bool
+	TopPercent  bool
+	TopWithTies bool
 	IsExplain   bool
 	IsAnalyze   bool
 	RawSQL      string
@@ -840,6 +842,9 @@ func (s *GeneralSelectStmt) String() string {
 	}
 	if s.Limit >= 0 {
 		b.WriteString(fmt.Sprintf(" LIMIT %d", s.Limit))
+	}
+	if s.Offset > 0 {
+		b.WriteString(fmt.Sprintf(" OFFSET %d", s.Offset))
 	}
 	return b.String()
 }

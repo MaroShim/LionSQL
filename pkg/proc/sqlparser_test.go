@@ -272,3 +272,78 @@ func TestParseSQL_ImplicitAliasAndCompositeQualifiers(t *testing.T) {
 		t.Errorf("unexpected projections: %+v", sel2.Projections)
 	}
 }
+
+func TestParseSQL_PagingAndTop(t *testing.T) {
+	// 1. Standard OFFSET ... ROWS FETCH NEXT ... ROWS ONLY
+	sql1 := `SELECT id, balance FROM accounts ORDER BY balance DESC OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY;`
+	stmt1, err := proc.ParseSQL(sql1)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel1, ok := stmt1.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected *GeneralSelectStmt, got %T", stmt1)
+	}
+	if sel1.Offset != 10 || sel1.Limit != 5 {
+		t.Errorf("expected offset 10, limit 5, got offset %d, limit %d", sel1.Offset, sel1.Limit)
+	}
+
+	// 2. OFFSET only
+	sql2 := `SELECT id FROM accounts ORDER BY id OFFSET 20 ROWS;`
+	stmt2, err := proc.ParseSQL(sql2)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel2 := stmt2.(*proc.GeneralSelectStmt)
+	if sel2.Offset != 20 || sel2.Limit != -1 {
+		t.Errorf("expected offset 20, limit -1, got offset %d, limit %d", sel2.Offset, sel2.Limit)
+	}
+
+	// 3. FETCH FIRST ... ROWS ONLY without explicit OFFSET
+	sql3 := `SELECT id FROM accounts ORDER BY id FETCH FIRST 15 ROWS ONLY;`
+	stmt3, err := proc.ParseSQL(sql3)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel3 := stmt3.(*proc.GeneralSelectStmt)
+	if sel3.Offset != 0 || sel3.Limit != 15 {
+		t.Errorf("expected offset 0, limit 15, got offset %d, limit %d", sel3.Offset, sel3.Limit)
+	}
+
+	// 4. TOP n
+	sql4 := `SELECT TOP 10 id, balance FROM accounts WHERE balance > 100;`
+	stmt4, err := proc.ParseSQL(sql4)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel4 := stmt4.(*proc.GeneralSelectStmt)
+	if sel4.Limit != 10 {
+		t.Errorf("expected limit 10, got %d", sel4.Limit)
+	}
+	if len(sel4.Projections) != 2 {
+		t.Errorf("expected 2 projections, got %d", len(sel4.Projections))
+	}
+
+	// 5. TOP (n) PERCENT WITH TIES
+	sql5 := `SELECT TOP (25) PERCENT WITH TIES id FROM accounts;`
+	stmt5, err := proc.ParseSQL(sql5)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel5 := stmt5.(*proc.GeneralSelectStmt)
+	if sel5.Limit != 25 || !sel5.TopPercent || !sel5.TopWithTies {
+		t.Errorf("expected limit 25, percent=true, ties=true, got %+v", sel5)
+	}
+
+	// 6. DISTINCT TOP n
+	sql6 := `SELECT DISTINCT TOP 5 id FROM accounts;`
+	stmt6, err := proc.ParseSQL(sql6)
+	if err != nil {
+		t.Fatalf("ParseSQL failed: %v", err)
+	}
+	sel6 := stmt6.(*proc.GeneralSelectStmt)
+	if sel6.Limit != 5 || !sel6.Distinct {
+		t.Errorf("expected limit 5, distinct=true, got %+v", sel6)
+	}
+}
+

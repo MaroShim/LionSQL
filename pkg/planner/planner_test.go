@@ -424,3 +424,53 @@ func TestPlanner_MultiTableChainedJoins(t *testing.T) {
 		t.Errorf("expected Index Scan on payments, got:\n%s", fullPlanText)
 	}
 }
+
+func TestPlanner_StandardPagingAndTop(t *testing.T) {
+	p := planner.NewPlanner()
+
+	// 1. OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY
+	sql1 := "SELECT id, name FROM accounts WHERE balance > 1000 ORDER BY balance DESC OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY"
+	q1, err := p.ParseSelect(sql1)
+	if err != nil {
+		t.Fatalf("ParseSelect failed for ANSI paging: %v", err)
+	}
+	if q1.OffsetCount != 10 || q1.LimitCount != 5 {
+		t.Errorf("expected offset 10, limit 5, got offset %d, limit %d", q1.OffsetCount, q1.LimitCount)
+	}
+
+	// 2. FETCH FIRST 10 ROWS ONLY without OFFSET
+	sql2 := "SELECT id, name FROM accounts ORDER BY id FETCH FIRST 10 ROWS ONLY"
+	q2, err := p.ParseSelect(sql2)
+	if err != nil {
+		t.Fatalf("ParseSelect failed for FETCH only: %v", err)
+	}
+	if q2.OffsetCount != 0 || q2.LimitCount != 10 {
+		t.Errorf("expected offset 0, limit 10, got offset %d, limit %d", q2.OffsetCount, q2.LimitCount)
+	}
+
+	// 3. TOP 5
+	sql3 := "SELECT TOP 5 id, name FROM accounts WHERE balance > 500 ORDER BY id"
+	q3, err := p.ParseSelect(sql3)
+	if err != nil {
+		t.Fatalf("ParseSelect failed for TOP: %v", err)
+	}
+	if q3.LimitCount != 5 {
+		t.Errorf("expected limit 5, got %d", q3.LimitCount)
+	}
+	if len(q3.Projections) != 2 || q3.Projections[0] != "id" || q3.Projections[1] != "name" {
+		t.Errorf("unexpected projections: %v", q3.Projections)
+	}
+
+	// 4. DISTINCT TOP (10)
+	sql4 := "SELECT DISTINCT TOP (10) id FROM accounts"
+	q4, err := p.ParseSelect(sql4)
+	if err != nil {
+		t.Fatalf("ParseSelect failed for DISTINCT TOP: %v", err)
+	}
+	if q4.LimitCount != 10 {
+		t.Errorf("expected limit 10, got %d", q4.LimitCount)
+	}
+	if !strings.Contains(q4.Projections[0], "id") {
+		t.Errorf("expected projection id, got %v", q4.Projections)
+	}
+}

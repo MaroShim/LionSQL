@@ -2706,6 +2706,68 @@ func TestSQLExecutor_UUIDv7PrimaryKey(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_StandardPagingAndTop(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	createSQL := `CREATE TABLE products (
+		id INT PRIMARY KEY,
+		name VARCHAR(50) NOT NULL,
+		price INT NOT NULL
+	);`
+	if _, err := server.ExecuteSQL(createSQL); err != nil {
+		t.Fatalf("CREATE TABLE products failed: %v", err)
+	}
+
+	for i := 1; i <= 20; i++ {
+		insertSQL := fmt.Sprintf("INSERT INTO products (id, name, price) VALUES (%d, 'Item%02d', %d);", i, i, i*10)
+		if _, err := server.ExecuteSQL(insertSQL); err != nil {
+			t.Fatalf("INSERT failed for row %d: %v", i, err)
+		}
+	}
+
+	// 1. OFFSET 5 ROWS FETCH NEXT 5 ROWS ONLY
+	q1 := "SELECT id, name, price FROM products ORDER BY id ASC OFFSET 5 ROWS FETCH NEXT 5 ROWS ONLY;"
+	res1, err := server.ExecuteSQL(q1)
+	if err != nil {
+		t.Fatalf("OFFSET FETCH query failed: %v", err)
+	}
+	if len(res1.Rows) != 5 {
+		t.Fatalf("expected 5 rows for OFFSET 5 FETCH 5, got %d: %+v", len(res1.Rows), res1.Rows)
+	}
+	if fmt.Sprint(res1.Rows[0]["id"]) != "6" || fmt.Sprint(res1.Rows[4]["id"]) != "10" {
+		t.Errorf("expected ids 6..10, got first=%v, last=%v", res1.Rows[0]["id"], res1.Rows[4]["id"])
+	}
+
+	// 2. FETCH FIRST 3 ROWS ONLY without explicit OFFSET
+	q2 := "SELECT id, name FROM products ORDER BY id ASC FETCH FIRST 3 ROWS ONLY;"
+	res2, err := server.ExecuteSQL(q2)
+	if err != nil {
+		t.Fatalf("FETCH FIRST query failed: %v", err)
+	}
+	if len(res2.Rows) != 3 {
+		t.Fatalf("expected 3 rows for FETCH FIRST 3, got %d", len(res2.Rows))
+	}
+	if fmt.Sprint(res2.Rows[0]["id"]) != "1" || fmt.Sprint(res2.Rows[2]["id"]) != "3" {
+		t.Errorf("expected ids 1..3, got first=%v, last=%v", res2.Rows[0]["id"], res2.Rows[2]["id"])
+	}
+
+	// 3. SELECT TOP 4
+	q3 := "SELECT TOP 4 id, name, price FROM products ORDER BY price DESC;"
+	res3, err := server.ExecuteSQL(q3)
+	if err != nil {
+		t.Fatalf("SELECT TOP query failed: %v", err)
+	}
+	if len(res3.Rows) != 4 {
+		t.Fatalf("expected 4 rows for TOP 4, got %d", len(res3.Rows))
+	}
+	if fmt.Sprint(res3.Rows[0]["id"]) != "20" || fmt.Sprint(res3.Rows[3]["id"]) != "17" {
+		t.Errorf("expected ids 20..17, got first=%v, last=%v", res3.Rows[0]["id"], res3.Rows[3]["id"])
+	}
+}
+
 
 
 

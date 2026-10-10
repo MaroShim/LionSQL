@@ -25,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented `NULLIF(expression1, expression2)` returning NULL on equality or expression1 otherwise.
   - Implemented `ISNUMERIC(expression)` checking valid numeric data types or string parseability without NaN/Inf leaks.
   - Registered all new functions in `IsBuiltinFunction` and added comprehensive unit tests in `pkg/proc/builtins_test.go`.
+- **Standard ANSI SQL:2008 & T-SQL Paging and TOP Syntax (`pkg/proc`, `pkg/planner`, `pkg/api`)**:
+  - Implemented standard `OFFSET <n> [ROW|ROWS] FETCH {FIRST|NEXT} <m> [ROW|ROWS] ONLY` clauses in the native Pratt parser (`parseGeneralSelect`) and CBO clause splitter (`splitSelectClauses`).
+  - Added support for `SELECT [DISTINCT] TOP (<n>|<n>) [PERCENT] [WITH TIES]` clause in the native parser and query planner, setting `LimitCount` and `TopPercent` / `TopWithTies` metadata.
+  - Corrected `GeneralSelectStmt.String()` to emit `OFFSET` when `s.Offset > 0`.
+  - Added comprehensive unit and execution test suites in `pkg/proc/sqlparser_test.go`, `pkg/planner/planner_test.go`, and `pkg/api/sqlexec_test.go`.
 
 ### Documentation
 - **Canonical FSF GPL v3 LICENSE Alignment & Commercial Dual Licensing (`LICENSE`, `README.md`)**:

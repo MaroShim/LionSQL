@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // DecorrelateSubqueries inspects the query's WHERE clause and transforms correlated or equijoin
@@ -241,6 +242,23 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 	}
 	projStr = strings.TrimSpace(sql[6:fromIdx])
 
+	// Check for TOP (n) / TOP n in projections
+	upperProj := strings.ToUpper(projStr)
+	if strings.HasPrefix(upperProj, "DISTINCT") && (len(upperProj) == 8 || unicode.IsSpace(rune(upperProj[8]))) {
+		afterDistinct := strings.TrimSpace(projStr[8:])
+		if lim, rem, ok := extractTop(afterDistinct); ok {
+			projStr = "DISTINCT " + rem
+			if limitCount == -1 {
+				limitCount = lim
+			}
+		}
+	} else if lim, rem, ok := extractTop(projStr); ok {
+		projStr = rem
+		if limitCount == -1 {
+			limitCount = lim
+		}
+	}
+
 	rest := strings.TrimSpace(sql[fromIdx+4:])
 	whereIdx := findKeywordIndex(rest, "WHERE")
 	groupByIdx := findKeywordIndex(rest, "GROUP BY")
@@ -248,9 +266,10 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 	orderByIdx := findKeywordIndex(rest, "ORDER BY")
 	limitIdx := findKeywordIndex(rest, "LIMIT")
 	offsetIdx := findKeywordIndex(rest, "OFFSET")
+	fetchIdx := findKeywordIndex(rest, "FETCH")
 
 	firstAfterFrom := len(rest)
-	for _, idx := range []int{whereIdx, groupByIdx, havingIdx, orderByIdx, limitIdx, offsetIdx} {
+	for _, idx := range []int{whereIdx, groupByIdx, havingIdx, orderByIdx, limitIdx, offsetIdx, fetchIdx} {
 		if idx != -1 && idx < firstAfterFrom {
 			firstAfterFrom = idx
 		}
@@ -259,7 +278,7 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if whereIdx != -1 {
 		end := len(rest)
-		for _, idx := range []int{groupByIdx, havingIdx, orderByIdx, limitIdx, offsetIdx} {
+		for _, idx := range []int{groupByIdx, havingIdx, orderByIdx, limitIdx, offsetIdx, fetchIdx} {
 			if idx != -1 && idx > whereIdx && idx < end {
 				end = idx
 			}
@@ -269,7 +288,7 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if groupByIdx != -1 {
 		end := len(rest)
-		for _, idx := range []int{havingIdx, orderByIdx, limitIdx, offsetIdx} {
+		for _, idx := range []int{havingIdx, orderByIdx, limitIdx, offsetIdx, fetchIdx} {
 			if idx != -1 && idx > groupByIdx && idx < end {
 				end = idx
 			}
@@ -279,7 +298,7 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if havingIdx != -1 {
 		end := len(rest)
-		for _, idx := range []int{orderByIdx, limitIdx, offsetIdx} {
+		for _, idx := range []int{orderByIdx, limitIdx, offsetIdx, fetchIdx} {
 			if idx != -1 && idx > havingIdx && idx < end {
 				end = idx
 			}
@@ -289,7 +308,7 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if orderByIdx != -1 {
 		end := len(rest)
-		for _, idx := range []int{limitIdx, offsetIdx} {
+		for _, idx := range []int{limitIdx, offsetIdx, fetchIdx} {
 			if idx != -1 && idx > orderByIdx && idx < end {
 				end = idx
 			}
@@ -299,27 +318,98 @@ func splitSelectClauses(sql string) (projStr, fromClause, whereClause, groupBySt
 
 	if limitIdx != -1 {
 		end := len(rest)
-		if offsetIdx != -1 && offsetIdx > limitIdx {
-			end = offsetIdx
+		for _, idx := range []int{offsetIdx, fetchIdx} {
+			if idx != -1 && idx > limitIdx && idx < end {
+				end = idx
+			}
 		}
 		limitStr := strings.TrimSpace(rest[limitIdx+5 : end])
-		if n, err := strconv.ParseInt(limitStr, 10, 64); err == nil {
-			limitCount = n
+		fields := strings.Fields(limitStr)
+		if len(fields) > 0 {
+			if n, err := strconv.ParseInt(fields[0], 10, 64); err == nil {
+				limitCount = n
+			}
 		}
 	}
 
 	if offsetIdx != -1 {
 		end := len(rest)
-		if limitIdx != -1 && limitIdx > offsetIdx {
-			end = limitIdx
+		for _, idx := range []int{limitIdx, fetchIdx} {
+			if idx != -1 && idx > offsetIdx && idx < end {
+				end = idx
+			}
 		}
 		offsetStr := strings.TrimSpace(rest[offsetIdx+6 : end])
-		if n, err := strconv.ParseInt(offsetStr, 10, 64); err == nil {
-			offsetCount = n
+		fields := strings.Fields(offsetStr)
+		if len(fields) > 0 {
+			if n, err := strconv.ParseInt(fields[0], 10, 64); err == nil {
+				offsetCount = n
+			}
+		}
+	}
+
+	if fetchIdx != -1 {
+		end := len(rest)
+		for _, idx := range []int{limitIdx, offsetIdx} {
+			if idx != -1 && idx > fetchIdx && idx < end {
+				end = idx
+			}
+		}
+		fetchStr := strings.TrimSpace(rest[fetchIdx+5 : end])
+		fields := strings.Fields(fetchStr)
+		for _, tok := range fields {
+			if n, err := strconv.ParseInt(tok, 10, 64); err == nil {
+				limitCount = n
+				break
+			}
 		}
 	}
 
 	return projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause, limitCount, offsetCount, true
+}
+
+func extractTop(proj string) (limit int64, remaining string, ok bool) {
+	trimmed := strings.TrimSpace(proj)
+	upper := strings.ToUpper(trimmed)
+	if !strings.HasPrefix(upper, "TOP") {
+		return -1, proj, false
+	}
+	rem := strings.TrimSpace(trimmed[3:])
+	hasParen := false
+	if strings.HasPrefix(rem, "(") {
+		hasParen = true
+		rem = strings.TrimSpace(rem[1:])
+	}
+	idx := 0
+	for idx < len(rem) && rem[idx] >= '0' && rem[idx] <= '9' {
+		idx++
+	}
+	if idx == 0 {
+		return -1, proj, false
+	}
+	n, err := strconv.ParseInt(rem[:idx], 10, 64)
+	if err != nil {
+		return -1, proj, false
+	}
+	rem = strings.TrimSpace(rem[idx:])
+	if hasParen {
+		if strings.HasPrefix(rem, ")") {
+			rem = strings.TrimSpace(rem[1:])
+		}
+	}
+	upperRem := strings.ToUpper(rem)
+	if strings.HasPrefix(upperRem, "PERCENT") && (len(upperRem) == 7 || unicode.IsSpace(rune(upperRem[7]))) {
+		rem = strings.TrimSpace(rem[7:])
+		upperRem = strings.ToUpper(rem)
+	}
+	if strings.HasPrefix(upperRem, "WITH") && (len(upperRem) == 4 || unicode.IsSpace(rune(upperRem[4]))) {
+		afterWith := strings.TrimSpace(rem[4:])
+		upperWith := strings.ToUpper(afterWith)
+		if strings.HasPrefix(upperWith, "TIES") && (len(upperWith) == 4 || unicode.IsSpace(rune(upperWith[4]))) {
+			rem = strings.TrimSpace(afterWith[4:])
+		}
+	}
+	return n, rem, true
 }
 
 func splitAndConditions(where string) []string {
