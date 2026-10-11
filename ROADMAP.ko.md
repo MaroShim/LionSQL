@@ -192,7 +192,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **과제**:
   - **P1 (실무/ORM 필수)**: `CAST(expr AS type)` / `CONVERT()` 및 `CASE WHEN` 복합 조건식 AST화, `INSERT INTO ... SELECT ...`, `FROM` 절 파생 테이블(`FROM (SELECT ...) AS t`), `WHERE EXISTS` / `NOT EXISTS` 상관 서브쿼리 술어 지원.
   - **P2 (T-SQL 핵심 호환 & 내장함수 완비)**:
-    - `CROSS APPLY` / `OUTER APPLY` 조인, DML `OUTPUT` 절, 로컬 임시 테이블(`#temp_table`), 커버링 인덱스 비키 컬럼(`INCLUDE (col...)`), 핵심 테이블/쿼리 힌트(`WITH (NOLOCK)` 등).
+    - `CROSS APPLY` / `OUTER APPLY` 조인, DML `OUTPUT` 절, 로컬 임시 테이블(`#temp_table`) 및 테이블 변수(`@tbl TABLE`), 커버링 인덱스 비키 컬럼(`INCLUDE (col...)`), 핵심 테이블/쿼리 힌트(`WITH (NOLOCK)` 등).
     - **[완료] 공식 T-SQL 내장 스칼라 함수 전수 완비 (A~F 그룹)**: 에러 핸들링(`ERROR_MESSAGE`, `ERROR_NUMBER`), 문자열(`PATINDEX`, `STUFF`, `UNICODE`, `NCHAR`, `SOUNDEX`, `DIFFERENCE`, `TRANSLATE`, `FORMAT`), 수학/삼각(`LOG`, `EXP`, `SIN`, `COS`, `RAND`), 메타데이터(`OBJECT_ID`, `COL_LENGTH`, `DB_NAME`), 암호화(`HASHBYTES`, `CHECKSUM`), 날짜 조합(`DATEFROMPARTS`).
   - **P3 (고급 분석/조인)**: `CROSS JOIN`, `FULL OUTER JOIN`, `GROUP BY GROUPING SETS / ROLLUP / CUBE`.
 - **기대 효과**: 엔터프라이즈 ORM(EF Core, GORM) 및 레거시 MSSQL 프로시저/배치 스크립트 마이그레이션 100% 수용.

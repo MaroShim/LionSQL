@@ -61,6 +61,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Canonical FSF GPL v3 LICENSE Alignment & Commercial Dual Licensing (`LICENSE`, `README.md`)**:
   - Restored `LICENSE` file to canonical verbatim GNU General Public License v3 text for seamless automated open-source compliance scanning.
   - Relocated and structured commercial dual-licensing and proprietary embedding terms in `README.md`.
+- **Temporary Tables & Table Variables Implementation Roadmap (`TODO.ko.md`, `ROADMAP.md`, `ROADMAP.ko.md`)**:
+  - Structured 3-phase engineering roadmap for session-isolated local temporary tables (`#temp_table`) and execution-frame-scoped table variables (`DECLARE @tbl TABLE`).
+  - Outlined name mangling isolation, Pratt parser grammar extensions, VDBE frame lifecycle integration, non-transactional rollback mechanics, and multi-protocol concurrency verification.
 
 ---
 
