@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Advanced T-SQL Built-in Functions & Bitwise Operators (`pkg/proc`, `pkg/proc/runtime`)**:
+  - **Logical Extremes**: Added `GREATEST(expr1, ...)` and `LEAST(expr1, ...)` supporting numeric and string lexical comparisons across arbitrary argument counts with NULL skipping.
+  - **Message Formatting**: Added `FORMATMESSAGE(msg, params...)` supporting `%s`, `%d`, `%i`, `%u`, and `%%` escapes.
+  - **Bit Manipulation (T-SQL 2022)**: Added `BIT_COUNT()`, `GET_BIT()`, `SET_BIT()`, `LEFT_SHIFT()`, and `RIGHT_SHIFT()`.
+  - **Timezone Offsets**: Added `SWITCHOFFSET()` and `TODATETIMEOFFSET()` with ISO fixed offset calculations and timezone-aware layout parsing in `commonDateFormats`.
+  - **Metadata & Properties**: Added `DATABASEPROPERTYEX()`, `OBJECTPROPERTY()`, `COLUMNPROPERTY()`, `INDEXPROPERTY()`, `OBJECT_SCHEMA_NAME()`, `TYPE_ID()`, and `TYPE_NAME()`.
+  - **Security & Roles**: Added `IS_SRVROLEMEMBER()`, `IS_MEMBER()`, `HAS_PERMS_BY_NAME()`, `PWDENCRYPT()`, and `PWDCOMPARE()`.
+  - **Global Session State**: Added `@@TRANCOUNT`, `@@LOCK_TIMEOUT`, `@@OPTIONS`, `@@NESTLEVEL`, `@@CPU_BUSY`, `@@IO_BUSY`, and `@@IDLE`.
+  - Registered all new functions in `IsBuiltinFunction` and added comprehensive unit test suite `TestBuiltin_AdvancedTSQLFunctions` in `pkg/proc/builtins_test.go`.
 - **Expanded T-SQL and System Built-in Scalar Functions (`pkg/proc`, `pkg/proc/runtime`)**:
   - **Date & Time**: Added `DATENAME()`, `CURRENT_TIMESTAMP`, `SYSUTCDATETIME()`, `SYSDATETIMEOFFSET()`, `SMALLDATETIMEFROMPARTS()`, and `DATEDIFF_BIG()`. Enhanced `normalizeDatePart` and `evalDatePart` with `weekday` (1=Sunday) and `dayofyear`.
   - **String Manipulation**: Added `DATALENGTH()` (raw byte counting), `PARSENAME()` (4-part object piece splitting with bracket preservation), `STRING_ESCAPE()` (JSON control characters escape), and enhanced `TRIM()` with custom cutset support.

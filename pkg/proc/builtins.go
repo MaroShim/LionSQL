@@ -12,6 +12,7 @@ import (
 	"hash/crc32"
 	"hash/fnv"
 	"math"
+	"math/bits"
 	mathrand "math/rand/v2"
 	"os"
 	"regexp"
@@ -25,6 +26,9 @@ import (
 )
 
 var commonDateFormats = []string{
+	"2006-01-02 15:04:05.999999999 -07:00",
+	"2006-01-02 15:04:05.9999999 -07:00",
+	"2006-01-02 15:04:05 -07:00",
 	"2006-01-02 15:04:05.999999999",
 	"2006-01-02 15:04:05",
 	time.RFC3339,
@@ -311,6 +315,30 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		t := time.Date(y, time.Month(m), d, hh, mm, 0, 0, time.UTC)
 		return storage.StringValue(t.Format("2006-01-02 15:04:00"))
+
+	case "SWITCHOFFSET":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		t, ok := parseDateValue(args[0])
+		if !ok {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		loc := parseOffsetLocation(valToString(args[1]))
+		shifted := t.In(loc)
+		return storage.StringValue(shifted.Format("2006-01-02 15:04:05.0000000 -07:00"))
+
+	case "TODATETIMEOFFSET":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		t, ok := parseDateValue(args[0])
+		if !ok {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		loc := parseOffsetLocation(valToString(args[1]))
+		res := time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), loc)
+		return storage.StringValue(res.Format("2006-01-02 15:04:05.0000000 -07:00"))
 
 	case "TO_DATE":
 		if len(args) == 0 || args[0].IsNull {
@@ -955,6 +983,37 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(b.String())
 
+	case "FORMATMESSAGE":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		fmtStr := valToString(args[0])
+		paramIdx := 1
+		var sb strings.Builder
+		for i := 0; i < len(fmtStr); i++ {
+			if fmtStr[i] == '%' && i+1 < len(fmtStr) {
+				spec := fmtStr[i+1]
+				if spec == '%' {
+					sb.WriteByte('%')
+					i++
+					continue
+				}
+				if paramIdx < len(args) {
+					argVal := args[paramIdx]
+					paramIdx++
+					if argVal.IsNull {
+						sb.WriteString("(null)")
+					} else {
+						sb.WriteString(valToString(argVal))
+					}
+					i++
+					continue
+				}
+			}
+			sb.WriteByte(fmtStr[i])
+		}
+		return storage.StringValue(sb.String())
+
 	// ----------------------------------------------------
 	// 3. Mathematical Functions
 	// ----------------------------------------------------
@@ -1213,6 +1272,70 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.FloatValue(mathrand.Float64())
 
+	case "BIT_COUNT":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		val := uint64(args[0].IVal)
+		if args[0].Type == storage.TypeFloat {
+			val = uint64(int64(args[0].FVal))
+		}
+		return storage.IntValue(int64(bits.OnesCount64(val)))
+
+	case "GET_BIT":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		val := uint64(args[0].IVal)
+		offset := args[1].IVal
+		if offset < 0 || offset > 63 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		bit := (val >> offset) & 1
+		return storage.IntValue(int64(bit))
+
+	case "SET_BIT":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		val := uint64(args[0].IVal)
+		offset := args[1].IVal
+		if offset < 0 || offset > 63 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		bitVal := int64(1)
+		if len(args) >= 3 && !args[2].IsNull {
+			bitVal = args[2].IVal
+		}
+		if bitVal == 0 {
+			val &^= (1 << offset)
+		} else {
+			val |= (1 << offset)
+		}
+		return storage.IntValue(int64(val))
+
+	case "LEFT_SHIFT":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		val := args[0].IVal
+		shift := args[1].IVal
+		if shift < 0 || shift > 63 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		return storage.IntValue(val << shift)
+
+	case "RIGHT_SHIFT":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		val := args[0].IVal
+		shift := args[1].IVal
+		if shift < 0 || shift > 63 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		return storage.IntValue(val >> shift)
+
 	// ----------------------------------------------------
 	// 4. Conditional & Logical Functions
 	// ----------------------------------------------------
@@ -1275,6 +1398,50 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 			return args[idx]
 		}
 		return storage.NullValue(storage.TypeUnknown)
+
+	case "GREATEST":
+		if len(args) == 0 {
+			return storage.NullValue(storage.TypeUnknown)
+		}
+		var maxVal storage.Value
+		hasVal := false
+		for _, a := range args {
+			if a.IsNull {
+				continue
+			}
+			if !hasVal {
+				maxVal = a
+				hasVal = true
+			} else if compareValues(a, maxVal) > 0 {
+				maxVal = a
+			}
+		}
+		if !hasVal {
+			return storage.NullValue(storage.TypeUnknown)
+		}
+		return maxVal
+
+	case "LEAST":
+		if len(args) == 0 {
+			return storage.NullValue(storage.TypeUnknown)
+		}
+		var minVal storage.Value
+		hasVal := false
+		for _, a := range args {
+			if a.IsNull {
+				continue
+			}
+			if !hasVal {
+				minVal = a
+				hasVal = true
+			} else if compareValues(a, minVal) < 0 {
+				minVal = a
+			}
+		}
+		if !hasVal {
+			return storage.NullValue(storage.TypeUnknown)
+		}
+		return minVal
 
 	// ----------------------------------------------------
 	// 5. JSON Functions
@@ -1532,6 +1699,218 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 	case "@@LANGUAGE":
 		return storage.StringValue("us_english")
 
+	case "@@TRANCOUNT", "TRANCOUNT":
+		return storage.IntValue(0)
+
+	case "@@LOCK_TIMEOUT", "LOCK_TIMEOUT":
+		return storage.IntValue(-1)
+
+	case "@@OPTIONS", "OPTIONS":
+		return storage.IntValue(5496)
+
+	case "@@NESTLEVEL", "NESTLEVEL":
+		return storage.IntValue(0)
+
+	case "@@CPU_BUSY":
+		return storage.IntValue(100)
+
+	case "@@IO_BUSY":
+		return storage.IntValue(50)
+
+	case "@@IDLE":
+		return storage.IntValue(1000)
+
+	case "DATABASEPROPERTYEX":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		prop := strings.ToUpper(strings.TrimSpace(valToString(args[1])))
+		switch prop {
+		case "STATUS":
+			return storage.StringValue("ONLINE")
+		case "COLLATION":
+			return storage.StringValue("SQL_Latin1_General_CP1_CI_AS")
+		case "COMPARISONSTYLE":
+			return storage.IntValue(196609)
+		case "EDITION":
+			return storage.StringValue("Developer")
+		case "RECOVERY":
+			return storage.StringValue("SIMPLE")
+		case "VERSION":
+			return storage.IntValue(904)
+		case "USERACCESS":
+			return storage.StringValue("MULTI_USER")
+		case "ISAUTOCLOSE", "ISAUTOSHRINK", "ISINMEMCAPABLE":
+			return storage.IntValue(0)
+		default:
+			return storage.StringValue("")
+		}
+
+	case "OBJECTPROPERTY":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		prop := strings.ToUpper(strings.TrimSpace(valToString(args[1])))
+		switch prop {
+		case "ISTABLE", "ISUSERTABLE", "ISPROCEDURE", "ISVIEW", "ISTRIGGER", "ISQUOTEDIDON", "ISANSINULLSON":
+			return storage.IntValue(1)
+		case "ISMSSHIPPED", "ISREPLICATED":
+			return storage.IntValue(0)
+		default:
+			return storage.IntValue(0)
+		}
+
+	case "COLUMNPROPERTY":
+		if len(args) < 3 || args[0].IsNull || args[1].IsNull || args[2].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		colName := strings.ToLower(strings.TrimSpace(valToString(args[1])))
+		prop := strings.ToUpper(strings.TrimSpace(valToString(args[2])))
+		switch prop {
+		case "ISIDENTITY":
+			if colName == "id" {
+				return storage.IntValue(1)
+			}
+			return storage.IntValue(0)
+		case "ALLOWSNULL", "PRECISION", "SCALE":
+			return storage.IntValue(1)
+		default:
+			return storage.IntValue(0)
+		}
+
+	case "INDEXPROPERTY":
+		if len(args) < 3 || args[0].IsNull || args[1].IsNull || args[2].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		prop := strings.ToUpper(strings.TrimSpace(valToString(args[2])))
+		switch prop {
+		case "ISUNIQUE", "ISCLUSTERED":
+			return storage.IntValue(1)
+		default:
+			return storage.IntValue(0)
+		}
+
+	case "OBJECT_SCHEMA_NAME":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.StringValue("dbo")
+
+	case "TYPE_ID":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		tName := strings.ToLower(strings.TrimSpace(valToString(args[0])))
+		switch tName {
+		case "int":
+			return storage.IntValue(56)
+		case "bigint":
+			return storage.IntValue(127)
+		case "smallint":
+			return storage.IntValue(52)
+		case "tinyint":
+			return storage.IntValue(48)
+		case "varchar":
+			return storage.IntValue(167)
+		case "nvarchar":
+			return storage.IntValue(231)
+		case "datetime":
+			return storage.IntValue(61)
+		case "bit":
+			return storage.IntValue(104)
+		case "decimal", "numeric":
+			return storage.IntValue(106)
+		case "float":
+			return storage.IntValue(62)
+		case "uniqueidentifier":
+			return storage.IntValue(36)
+		default:
+			return storage.NullValue(storage.TypeInt)
+		}
+
+	case "TYPE_NAME":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		tID := args[0].IVal
+		switch tID {
+		case 56:
+			return storage.StringValue("int")
+		case 127:
+			return storage.StringValue("bigint")
+		case 52:
+			return storage.StringValue("smallint")
+		case 48:
+			return storage.StringValue("tinyint")
+		case 167:
+			return storage.StringValue("varchar")
+		case 231:
+			return storage.StringValue("nvarchar")
+		case 61:
+			return storage.StringValue("datetime")
+		case 104:
+			return storage.StringValue("bit")
+		case 106:
+			return storage.StringValue("decimal")
+		case 62:
+			return storage.StringValue("float")
+		case 36:
+			return storage.StringValue("uniqueidentifier")
+		default:
+			return storage.NullValue(storage.TypeVarChar)
+		}
+
+	case "IS_SRVROLEMEMBER":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		role := strings.ToLower(strings.TrimSpace(valToString(args[0])))
+		if role == "sysadmin" || role == "serveradmin" || role == "setupadmin" || role == "securityadmin" {
+			return storage.IntValue(1)
+		}
+		return storage.IntValue(0)
+
+	case "IS_MEMBER":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		role := strings.ToLower(strings.TrimSpace(valToString(args[0])))
+		if role == "db_owner" || role == "db_datareader" || role == "db_datawriter" {
+			return storage.IntValue(1)
+		}
+		return storage.IntValue(0)
+
+	case "HAS_PERMS_BY_NAME":
+		return storage.IntValue(1)
+
+	case "PWDENCRYPT":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		pw := valToString(args[0])
+		h := sha512.Sum512([]byte(pw))
+		return storage.StringValue("0x0200" + strings.ToUpper(hex.EncodeToString(h[:])))
+
+	case "PWDCOMPARE":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		pw := valToString(args[0])
+		hashStr := strings.TrimPrefix(strings.ToUpper(strings.TrimSpace(valToString(args[1]))), "0X")
+		if strings.HasPrefix(hashStr, "0200") {
+			h := sha512.Sum512([]byte(pw))
+			expected := "0200" + strings.ToUpper(hex.EncodeToString(h[:]))
+			if hashStr == expected {
+				return storage.IntValue(1)
+			}
+			return storage.IntValue(0)
+		}
+		h256 := sha256.Sum256([]byte(pw))
+		if strings.EqualFold(hashStr, hex.EncodeToString(h256[:])) {
+			return storage.IntValue(1)
+		}
+		return storage.IntValue(0)
+
 	// ----------------------------------------------------
 	// 9. Cryptography & Checksum (Group E)
 	// ----------------------------------------------------
@@ -1600,22 +1979,28 @@ func IsBuiltinFunction(name string) bool {
 		"YEAR", "MONTH", "DAY", "DATEPART", "DATE_PART", "EXTRACT", "DATENAME", "DATEDIFF", "DATEDIFF_BIG", "DATEADD", "EOMONTH", "ISDATE",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
 		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS", "SMALLDATETIMEFROMPARTS", "TO_DATE", "TO_TIMESTAMP",
+		"SWITCHOFFSET", "TODATETIMEOFFSET",
 		"CONCAT", "CONCAT_WS", "QUOTENAME", "QUOTE_IDENT", "QUOTE_LITERAL", "ASCII", "CHAR", "CHR", "LEN", "LENGTH", "DATALENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
 		"LEFT", "RIGHT", "SUBSTRING", "SUBSTR", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE", "REPEAT", "STUFF",
-		"PARSENAME", "STRING_ESCAPE",
+		"PARSENAME", "STRING_ESCAPE", "FORMATMESSAGE",
 		"PATINDEX", "UNICODE", "NCHAR", "SOUNDEX", "DIFFERENCE", "TRANSLATE", "FORMAT",
 		"STRPOS", "MD5", "LPAD", "RPAD", "OCTET_LENGTH", "BIT_LENGTH", "INITCAP", "TO_CHAR",
 		"GREP", "REGEXP_LIKE", "AWK", "SPLIT_PART",
 		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SQUARE", "SIGN", "PI",
 		"EXP", "LOG", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "DEGREES", "RADIANS", "RAND", "RANDOM",
-		"ISNULL", "COALESCE", "NULLIF", "ISNUMERIC", "IIF", "CHOOSE",
+		"BIT_COUNT", "GET_BIT", "SET_BIT", "LEFT_SHIFT", "RIGHT_SHIFT",
+		"ISNULL", "COALESCE", "NULLIF", "ISNUMERIC", "IIF", "CHOOSE", "GREATEST", "LEAST",
 		"ISJSON", "JSON_VALUE", "JSON_QUERY", "JSON_MODIFY",
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID",
 		"SCOPE_IDENTITY", "SERVERPROPERTY",
 		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
 		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "COL_NAME", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
+		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY", "OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME", "USER_ID", "SUSER_ID",
+		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "PWDENCRYPT", "PWDCOMPARE",
 		"@@VERSION", "VERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
+		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS", "@@NESTLEVEL", "NESTLEVEL",
+		"@@CPU_BUSY", "@@IO_BUSY", "@@IDLE",
 		"HASHBYTES", "CHECKSUM", "BINARY_CHECKSUM":
 		return true
 	default:
@@ -2472,4 +2857,24 @@ func storageValueToInterface(v storage.Value) any {
 		return v.SVal
 	}
 }
+
+func parseOffsetLocation(s string) *time.Location {
+	s = strings.TrimSpace(s)
+	sign := 1
+	if strings.HasPrefix(s, "-") {
+		sign = -1
+		s = s[1:]
+	} else if strings.HasPrefix(s, "+") {
+		s = s[1:]
+	}
+	parts := strings.Split(s, ":")
+	hours, _ := strconv.Atoi(parts[0])
+	mins := 0
+	if len(parts) > 1 {
+		mins, _ = strconv.Atoi(parts[1])
+	}
+	sec := sign * (hours*3600 + mins*60)
+	return time.FixedZone(fmt.Sprintf("%+03d:%02d", sign*hours, mins), sec)
+}
+
 

@@ -1021,5 +1021,139 @@ func TestBuiltin_TSQLExpansions(t *testing.T) {
 	}
 }
 
+func TestBuiltin_AdvancedTSQLFunctions(t *testing.T) {
+	// 1. GREATEST & LEAST
+	g := EvalBuiltin("GREATEST", []storage.Value{storage.IntValue(10), storage.IntValue(50), storage.IntValue(30)})
+	if g.IVal != 50 {
+		t.Errorf("GREATEST(10, 50, 30) expected 50, got %d", g.IVal)
+	}
+	l := EvalBuiltin("LEAST", []storage.Value{storage.IntValue(10), storage.IntValue(50), storage.IntValue(30)})
+	if l.IVal != 10 {
+		t.Errorf("LEAST(10, 50, 30) expected 10, got %d", l.IVal)
+	}
+	gStr := EvalBuiltin("GREATEST", []storage.Value{storage.StringValue("apple"), storage.StringValue("zebra"), storage.StringValue("banana")})
+	if gStr.SVal != "zebra" {
+		t.Errorf("GREATEST strings expected 'zebra', got %q", gStr.SVal)
+	}
+
+	// 2. FORMATMESSAGE
+	fm := EvalBuiltin("FORMATMESSAGE", []storage.Value{
+		storage.StringValue("Order %s has %d items totaling $%s"),
+		storage.StringValue("ORD-999"),
+		storage.IntValue(3),
+		storage.StringValue("150.00"),
+	})
+	if fm.SVal != "Order ORD-999 has 3 items totaling $150.00" {
+		t.Errorf("FORMATMESSAGE expected formatted string, got %q", fm.SVal)
+	}
+
+	// 3. Bit Manipulation Functions
+	if bc := EvalBuiltin("BIT_COUNT", []storage.Value{storage.IntValue(7)}); bc.IVal != 3 {
+		t.Errorf("BIT_COUNT(7) expected 3, got %d", bc.IVal)
+	}
+	if gb := EvalBuiltin("GET_BIT", []storage.Value{storage.IntValue(4), storage.IntValue(2)}); gb.IVal != 1 {
+		t.Errorf("GET_BIT(4, 2) expected 1, got %d", gb.IVal)
+	}
+	if gb := EvalBuiltin("GET_BIT", []storage.Value{storage.IntValue(4), storage.IntValue(1)}); gb.IVal != 0 {
+		t.Errorf("GET_BIT(4, 1) expected 0, got %d", gb.IVal)
+	}
+	if sb := EvalBuiltin("SET_BIT", []storage.Value{storage.IntValue(0), storage.IntValue(3), storage.IntValue(1)}); sb.IVal != 8 {
+		t.Errorf("SET_BIT(0, 3, 1) expected 8, got %d", sb.IVal)
+	}
+	if ls := EvalBuiltin("LEFT_SHIFT", []storage.Value{storage.IntValue(1), storage.IntValue(4)}); ls.IVal != 16 {
+		t.Errorf("LEFT_SHIFT(1, 4) expected 16, got %d", ls.IVal)
+	}
+	if rs := EvalBuiltin("RIGHT_SHIFT", []storage.Value{storage.IntValue(16), storage.IntValue(4)}); rs.IVal != 1 {
+		t.Errorf("RIGHT_SHIFT(16, 4) expected 1, got %d", rs.IVal)
+	}
+
+	// 4. Timezone & Datetimeoffset
+	tDate := storage.StringValue("2026-10-11 15:30:00")
+	toDto := EvalBuiltin("TODATETIMEOFFSET", []storage.Value{tDate, storage.StringValue("+09:00")})
+	if !strings.Contains(toDto.SVal, "+09:00") {
+		t.Errorf("TODATETIMEOFFSET expected +09:00 offset, got %q", toDto.SVal)
+	}
+	sw := EvalBuiltin("SWITCHOFFSET", []storage.Value{toDto, storage.StringValue("-05:00")})
+	if !strings.Contains(sw.SVal, "-05:00") {
+		t.Errorf("SWITCHOFFSET expected -05:00 offset, got %q", sw.SVal)
+	}
+
+	// 5. Metadata & Property Functions
+	if dbProp := EvalBuiltin("DATABASEPROPERTYEX", []storage.Value{storage.StringValue("SQLion"), storage.StringValue("Status")}); dbProp.SVal != "ONLINE" {
+		t.Errorf("DATABASEPROPERTYEX Status expected 'ONLINE', got %q", dbProp.SVal)
+	}
+	if objProp := EvalBuiltin("OBJECTPROPERTY", []storage.Value{storage.IntValue(1), storage.StringValue("IsTable")}); objProp.IVal != 1 {
+		t.Errorf("OBJECTPROPERTY IsTable expected 1, got %d", objProp.IVal)
+	}
+	if colProp := EvalBuiltin("COLUMNPROPERTY", []storage.Value{storage.IntValue(1), storage.StringValue("id"), storage.StringValue("IsIdentity")}); colProp.IVal != 1 {
+		t.Errorf("COLUMNPROPERTY IsIdentity expected 1, got %d", colProp.IVal)
+	}
+	if idxProp := EvalBuiltin("INDEXPROPERTY", []storage.Value{storage.IntValue(1), storage.StringValue("idx_pk"), storage.StringValue("IsUnique")}); idxProp.IVal != 1 {
+		t.Errorf("INDEXPROPERTY IsUnique expected 1, got %d", idxProp.IVal)
+	}
+	if schema := EvalBuiltin("OBJECT_SCHEMA_NAME", []storage.Value{storage.IntValue(1)}); schema.SVal != "dbo" {
+		t.Errorf("OBJECT_SCHEMA_NAME expected 'dbo', got %q", schema.SVal)
+	}
+	if tid := EvalBuiltin("TYPE_ID", []storage.Value{storage.StringValue("int")}); tid.IVal != 56 {
+		t.Errorf("TYPE_ID('int') expected 56, got %d", tid.IVal)
+	}
+	if tname := EvalBuiltin("TYPE_NAME", []storage.Value{storage.IntValue(56)}); tname.SVal != "int" {
+		t.Errorf("TYPE_NAME(56) expected 'int', got %q", tname.SVal)
+	}
+
+	// 6. Security & Permission Functions
+	if srvRole := EvalBuiltin("IS_SRVROLEMEMBER", []storage.Value{storage.StringValue("sysadmin")}); srvRole.IVal != 1 {
+		t.Errorf("IS_SRVROLEMEMBER('sysadmin') expected 1, got %d", srvRole.IVal)
+	}
+	if dbRole := EvalBuiltin("IS_MEMBER", []storage.Value{storage.StringValue("db_owner")}); dbRole.IVal != 1 {
+		t.Errorf("IS_MEMBER('db_owner') expected 1, got %d", dbRole.IVal)
+	}
+	if perm := EvalBuiltin("HAS_PERMS_BY_NAME", []storage.Value{storage.StringValue("accounts"), storage.StringValue("OBJECT"), storage.StringValue("SELECT")}); perm.IVal != 1 {
+		t.Errorf("HAS_PERMS_BY_NAME expected 1, got %d", perm.IVal)
+	}
+	enc := EvalBuiltin("PWDENCRYPT", []storage.Value{storage.StringValue("Secret123!")})
+	if !strings.HasPrefix(enc.SVal, "0x0200") {
+		t.Errorf("PWDENCRYPT expected 0x0200 header, got %q", enc.SVal)
+	}
+	if cmp := EvalBuiltin("PWDCOMPARE", []storage.Value{storage.StringValue("Secret123!"), enc}); cmp.IVal != 1 {
+		t.Errorf("PWDCOMPARE valid password expected 1, got %d", cmp.IVal)
+	}
+	if cmp := EvalBuiltin("PWDCOMPARE", []storage.Value{storage.StringValue("WrongPassword"), enc}); cmp.IVal != 0 {
+		t.Errorf("PWDCOMPARE wrong password expected 0, got %d", cmp.IVal)
+	}
+
+	// 7. Global Status Functions
+	if tc := EvalBuiltin("@@TRANCOUNT", nil); tc.IVal != 0 {
+		t.Errorf("@@TRANCOUNT expected 0, got %d", tc.IVal)
+	}
+	if lt := EvalBuiltin("@@LOCK_TIMEOUT", nil); lt.IVal != -1 {
+		t.Errorf("@@LOCK_TIMEOUT expected -1, got %d", lt.IVal)
+	}
+	if opt := EvalBuiltin("@@OPTIONS", nil); opt.IVal != 5496 {
+		t.Errorf("@@OPTIONS expected 5496, got %d", opt.IVal)
+	}
+	if nl := EvalBuiltin("@@NESTLEVEL", nil); nl.IVal != 0 {
+		t.Errorf("@@NESTLEVEL expected 0, got %d", nl.IVal)
+	}
+
+	// 8. IsBuiltinFunction verification
+	suite := []string{
+		"GREATEST", "LEAST", "FORMATMESSAGE",
+		"BIT_COUNT", "GET_BIT", "SET_BIT", "LEFT_SHIFT", "RIGHT_SHIFT",
+		"SWITCHOFFSET", "TODATETIMEOFFSET",
+		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY",
+		"OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
+		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "PWDENCRYPT", "PWDCOMPARE",
+		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS",
+		"@@NESTLEVEL", "NESTLEVEL", "@@CPU_BUSY", "@@IO_BUSY", "@@IDLE",
+	}
+	for _, fn := range suite {
+		if !IsBuiltinFunction(fn) {
+			t.Errorf("Expected IsBuiltinFunction(%q) to be true", fn)
+		}
+	}
+}
+
+
 
 
