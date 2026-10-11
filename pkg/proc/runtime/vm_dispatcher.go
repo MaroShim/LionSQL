@@ -443,6 +443,15 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 	case proc.OpIsNotNull:
 		f.regs[inst.A] = storage.BoolValue(!f.regs[inst.B].IsNull)
 
+	case proc.OpCast:
+		srcVal := f.regs[inst.B]
+		castData := f.aux(inst).(*proc.CastData)
+		resVal, err := proc.EvalCast(srcVal, castData.TargetType, castData.Precision, castData.Scale, castData.Style, castData.Try)
+		if err != nil {
+			return f.handleCatch(err, pc)
+		}
+		f.regs[inst.A] = resVal
+
 	default:
 		return fmt.Errorf("unexpected compute opcode: %v", inst.Op)
 	}

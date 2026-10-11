@@ -251,6 +251,35 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		}
 		return nil, nil
 
+	case *CastExpr:
+		val, err := EvalRowExpr(e.Expr, row, execSubquery)
+		if err != nil {
+			if e.Try {
+				return nil, nil
+			}
+			return nil, err
+		}
+		stVal := anyToStorageVal(val)
+		res, err := EvalCast(stVal, e.TargetType, e.Precision, e.Scale, e.Style, e.Try)
+		if err != nil {
+			return nil, err
+		}
+		if res.IsNull {
+			return nil, nil
+		}
+		switch res.Type {
+		case storage.TypeInt:
+			return res.IVal, nil
+		case storage.TypeFloat:
+			return res.FVal, nil
+		case storage.TypeBool:
+			return res.BVal, nil
+		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
+			return res.TVal, nil
+		default:
+			return res.SVal, nil
+		}
+
 	case *FunctionCallExpr:
 		return evalRowFunction(e.Name, e.Args, row, execSubquery)
 
@@ -571,3 +600,267 @@ func isTruthyValue(v any) bool {
 		return true
 	}
 }
+
+// EvalCast performs type conversion matching SQL Server CAST and CONVERT semantics.
+func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style int, try bool) (storage.Value, error) {
+	if v.IsNull {
+		return storage.NullValue(targetType), nil
+	}
+
+	fail := func(err error) (storage.Value, error) {
+		if try {
+			return storage.NullValue(targetType), nil
+		}
+		return storage.Value{}, err
+	}
+
+	switch targetType {
+	case storage.TypeInt:
+		switch v.Type {
+		case storage.TypeInt:
+			return v, nil
+		case storage.TypeFloat:
+			return storage.IntValue(int64(v.FVal)), nil
+		case storage.TypeBool:
+			if v.BVal {
+				return storage.IntValue(1), nil
+			}
+			return storage.IntValue(0), nil
+		case storage.TypeVarChar:
+			s := strings.TrimSpace(v.SVal)
+			i, err := strconv.ParseInt(s, 10, 64)
+			if err != nil {
+				if f, err2 := strconv.ParseFloat(s, 64); err2 == nil {
+					return storage.IntValue(int64(f)), nil
+				}
+				return fail(fmt.Errorf("conversion failed when converting %q to data type int", v.SVal))
+			}
+			return storage.IntValue(i), nil
+		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
+			return storage.IntValue(v.TVal.Unix()), nil
+		case storage.TypeDecimal:
+			f := v.DVal.Float64()
+			return storage.IntValue(int64(f)), nil
+		default:
+			return fail(fmt.Errorf("unsupported conversion from %v to int", v.Type))
+		}
+
+	case storage.TypeFloat:
+		switch v.Type {
+		case storage.TypeFloat:
+			return v, nil
+		case storage.TypeInt:
+			return storage.FloatValue(float64(v.IVal)), nil
+		case storage.TypeBool:
+			if v.BVal {
+				return storage.FloatValue(1.0), nil
+			}
+			return storage.FloatValue(0.0), nil
+		case storage.TypeVarChar:
+			s := strings.TrimSpace(v.SVal)
+			f, err := strconv.ParseFloat(s, 64)
+			if err != nil {
+				return fail(fmt.Errorf("conversion failed when converting %q to data type float", v.SVal))
+			}
+			return storage.FloatValue(f), nil
+		case storage.TypeDecimal:
+			f := v.DVal.Float64()
+			return storage.FloatValue(f), nil
+		default:
+			return fail(fmt.Errorf("unsupported conversion from %v to float", v.Type))
+		}
+
+	case storage.TypeVarChar:
+		var str string
+		switch v.Type {
+		case storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
+			str = formatDateTimeByStyle(v.TVal, style)
+		default:
+			if style > 0 {
+				if t, err := parseDateTimeByStyle(v.String(), 120); err == nil {
+					str = formatDateTimeByStyle(t, style)
+				} else if dt, err := storage.DateTimeValueFromAny(v); err == nil && !dt.IsNull {
+					str = formatDateTimeByStyle(dt.TVal, style)
+				} else {
+					str = v.String()
+				}
+			} else {
+				str = v.String()
+			}
+		}
+		if prec > 0 && len(str) > prec {
+			str = str[:prec]
+		}
+		return storage.StringValue(str), nil
+
+	case storage.TypeBool:
+		switch v.Type {
+		case storage.TypeBool:
+			return v, nil
+		case storage.TypeInt:
+			return storage.BoolValue(v.IVal != 0), nil
+		case storage.TypeFloat:
+			return storage.BoolValue(v.FVal != 0.0), nil
+		case storage.TypeVarChar:
+			s := strings.TrimSpace(strings.ToUpper(v.SVal))
+			if s == "1" || s == "TRUE" {
+				return storage.BoolValue(true), nil
+			} else if s == "0" || s == "FALSE" {
+				return storage.BoolValue(false), nil
+			}
+			return fail(fmt.Errorf("conversion failed when converting %q to data type bit/bool", v.SVal))
+		default:
+			return fail(fmt.Errorf("unsupported conversion from %v to bit/bool", v.Type))
+		}
+
+	case storage.TypeDateTime:
+		switch v.Type {
+		case storage.TypeDateTime:
+			return v, nil
+		case storage.TypeDate:
+			return storage.DateTimeValue(v.TVal), nil
+		case storage.TypeTime:
+			return storage.DateTimeValue(v.TVal), nil
+		case storage.TypeVarChar:
+			t, err := parseDateTimeByStyle(v.SVal, style)
+			if err != nil {
+				dtVal, err2 := storage.DateTimeValueFromAny(v)
+				if err2 != nil {
+					return fail(fmt.Errorf("conversion failed when converting date and/or time from character string: %w", err))
+				}
+				return dtVal, nil
+			}
+			return storage.DateTimeValue(t), nil
+		default:
+			return fail(fmt.Errorf("unsupported conversion from %v to datetime", v.Type))
+		}
+
+	case storage.TypeDate:
+		switch v.Type {
+		case storage.TypeDate:
+			return v, nil
+		case storage.TypeDateTime:
+			return storage.DateValue(v.TVal), nil
+		case storage.TypeVarChar:
+			t, err := parseDateTimeByStyle(v.SVal, style)
+			if err != nil {
+				t2, err2 := storage.ParseDate(v.SVal)
+				if err2 != nil {
+					return fail(fmt.Errorf("conversion failed when converting %q to data type date", v.SVal))
+				}
+				return storage.DateValue(t2), nil
+			}
+			return storage.DateValue(t), nil
+		default:
+			return fail(fmt.Errorf("unsupported conversion from %v to date", v.Type))
+		}
+
+	case storage.TypeTime:
+		switch v.Type {
+		case storage.TypeTime:
+			return v, nil
+		case storage.TypeDateTime:
+			return storage.TimeValue(v.TVal), nil
+		case storage.TypeVarChar:
+			t, _, err := storage.ParseTime(v.SVal)
+			if err != nil {
+				return fail(fmt.Errorf("conversion failed when converting %q to data type time", v.SVal))
+			}
+			return storage.TimeValue(t), nil
+		default:
+			return fail(fmt.Errorf("unsupported conversion from %v to time", v.Type))
+		}
+
+	case storage.TypeDecimal:
+		decVal := storage.DecimalValue(v.String())
+		if scale > 0 {
+			decVal = storage.DecimalValueFromDecimal(decVal.DVal.Rescale(int32(scale)))
+		}
+		return decVal, nil
+
+	case storage.TypeUUID:
+		norm, err := storage.ParseUUID(v.String())
+		if err != nil {
+			return fail(fmt.Errorf("conversion failed when converting %q to uniqueidentifier: %w", v.String(), err))
+		}
+		return storage.UUIDValue(norm), nil
+
+	case storage.TypeBinary:
+		return storage.BinaryValueFromString(v.String()), nil
+
+	default:
+		return v, nil
+	}
+}
+
+func formatDateTimeByStyle(t time.Time, style int) string {
+	switch style {
+	case 1:
+		return t.Format("01/02/06")
+	case 101:
+		return t.Format("01/02/2006")
+	case 2:
+		return t.Format("06.01.02")
+	case 102:
+		return t.Format("2006.01.02")
+	case 3:
+		return t.Format("02/01/06")
+	case 103:
+		return t.Format("02/01/2006")
+	case 12:
+		return t.Format("060102")
+	case 112:
+		return t.Format("20060102")
+	case 23:
+		return t.Format("2006-01-02")
+	case 120, 20:
+		return t.Format("2006-01-02 15:04:05")
+	case 121, 21:
+		return t.Format("2006-01-02 15:04:05.000")
+	case 126:
+		return t.Format(time.RFC3339)
+	case 8, 108:
+		return t.Format("15:04:05")
+	case 24:
+		return t.Format("15:04:05")
+	default:
+		return t.Format("2006-01-02 15:04:05")
+	}
+}
+
+func parseDateTimeByStyle(s string, style int) (time.Time, error) {
+	s = strings.Trim(strings.TrimSpace(s), "'\"")
+	var layout string
+	switch style {
+	case 1:
+		layout = "01/02/06"
+	case 101:
+		layout = "01/02/2006"
+	case 2:
+		layout = "06.01.02"
+	case 102:
+		layout = "2006.01.02"
+	case 3:
+		layout = "02/01/06"
+	case 103:
+		layout = "02/01/2006"
+	case 12:
+		layout = "060102"
+	case 112:
+		layout = "20060102"
+	case 23:
+		layout = "2006-01-02"
+	case 120, 20:
+		layout = "2006-01-02 15:04:05"
+	case 121, 21:
+		layout = "2006-01-02 15:04:05.000"
+	case 126:
+		layout = time.RFC3339
+	case 8, 108, 24:
+		layout = "15:04:05"
+	default:
+		return time.Time{}, fmt.Errorf("unknown date style: %d", style)
+	}
+	return time.Parse(layout, s)
+}
+

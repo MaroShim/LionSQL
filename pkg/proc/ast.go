@@ -87,6 +87,29 @@ func (e *UnaryExpr) String() string {
 	return e.Op.String()
 }
 
+// CastExpr represents CAST(expr AS targetType) or CONVERT(targetType, expr [, style]) or expr::targetType.
+type CastExpr struct {
+	Expr       Expr
+	TargetType storage.DataType
+	Precision  int
+	Scale      int
+	Style      int
+	Try        bool
+}
+
+func (e *CastExpr) exprNode() {}
+func (e *CastExpr) String() string {
+	fn := "CAST"
+	if e.Try {
+		fn = "TRY_CAST"
+	}
+	exprStr := ""
+	if e.Expr != nil {
+		exprStr = e.Expr.String()
+	}
+	return fmt.Sprintf("%s(%s AS %v)", fn, exprStr, e.TargetType)
+}
+
 // CreateProcStmt represents CREATE PROCEDURE ... AS BEGIN ... END
 type CreateProcStmt struct {
 	Name    string

@@ -36,6 +36,7 @@ const (
 	TokenRParen    // )
 	TokenJSONExtract     // ->
 	TokenJSONExtractText // ->>
+	TokenDoubleColon     // ::
 
 	// Keywords
 	TokenCreate
@@ -140,9 +141,17 @@ const (
 	TokenTop
 	TokenPercent
 	TokenTies
+	TokenCast
+	TokenTryCast
+	TokenConvert
+	TokenTryConvert
 )
 
 var keywords = map[string]TokenType{
+	"CAST":          TokenCast,
+	"TRY_CAST":      TokenTryCast,
+	"CONVERT":       TokenConvert,
+	"TRY_CONVERT":   TokenTryConvert,
 	"OFFSET":        TokenOffset,
 	"ROW":           TokenRow,
 	"ROWS":          TokenRows,
@@ -300,6 +309,8 @@ func (t TokenType) String() string {
 		return "->"
 	case TokenJSONExtractText:
 		return "->>"
+	case TokenDoubleColon:
+		return "::"
 	default:
 		for k, v := range keywords {
 			if v == t {

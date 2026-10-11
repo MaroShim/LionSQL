@@ -115,6 +115,9 @@ const (
 	// Scalar / Point Query Direct Result Generation
 	OpResultRow
 	OpPointSelect
+
+	// Type Cast & Conversion
+	OpCast
 )
 
 func (op OpCode) String() string {
@@ -123,6 +126,8 @@ func (op OpCode) String() string {
 		return "RESULT_ROW"
 	case OpPointSelect:
 		return "POINT_SELECT"
+	case OpCast:
+		return "CAST"
 	case OpHalt:
 		return "HALT"
 	case OpNop:
@@ -435,6 +440,26 @@ func (d *ResultRowData) String() string {
 		return ""
 	}
 	return fmt.Sprintf("Cols:%v Regs:[%d..%d]", d.Columns, d.StartReg, d.StartReg+d.Count-1)
+}
+
+// CastData holds metadata for OpCast type conversion.
+type CastData struct {
+	TargetType storage.DataType
+	Precision  int
+	Scale      int
+	Style      int
+	Try        bool
+}
+
+func (d *CastData) String() string {
+	if d == nil {
+		return ""
+	}
+	prefix := "CAST"
+	if d.Try {
+		prefix = "TRY_CAST"
+	}
+	return fmt.Sprintf("%s AS %v(p:%d,s:%d,style:%d)", prefix, d.TargetType, d.Precision, d.Scale, d.Style)
 }
 
 // PointSelectData holds metadata for single-table primary key or point lookups.

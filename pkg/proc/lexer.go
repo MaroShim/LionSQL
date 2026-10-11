@@ -81,7 +81,13 @@ func (l *Lexer) NextToken() Token {
 	case ';':
 		tok = Token{Type: TokenSemicolon, Literal: ";", Line: tokLine, Col: tokCol}
 	case ':':
-		tok = Token{Type: TokenColon, Literal: ":", Line: tokLine, Col: tokCol}
+		if l.peekChar() == ':' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenDoubleColon, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else {
+			tok = Token{Type: TokenColon, Literal: ":", Line: tokLine, Col: tokCol}
+		}
 	case '(':
 		tok = Token{Type: TokenLParen, Literal: "(", Line: tokLine, Col: tokCol}
 	case ')':

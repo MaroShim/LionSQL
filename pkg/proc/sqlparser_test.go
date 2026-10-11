@@ -347,3 +347,92 @@ func TestParseSQL_PagingAndTop(t *testing.T) {
 	}
 }
 
+func TestParseSQL_CastAndConvert(t *testing.T) {
+	// 1. CAST(expr AS type)
+	sql1 := `SELECT CAST('12345' AS INT) AS num, CAST(100.5 AS VARCHAR(10)) AS str;`
+	stmt1, err := proc.ParseSQL(sql1)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for CAST: %v", err)
+	}
+	sel1 := stmt1.(*proc.GeneralSelectStmt)
+	if len(sel1.Projections) != 2 {
+		t.Fatalf("expected 2 projections, got %d", len(sel1.Projections))
+	}
+	cast1, ok := sel1.Projections[0].Expr.(*proc.CastExpr)
+	if !ok || cast1.TargetType != storage.TypeInt || cast1.Try {
+		t.Fatalf("unexpected cast1: %+v", cast1)
+	}
+	cast2, ok := sel1.Projections[1].Expr.(*proc.CastExpr)
+	if !ok || cast2.TargetType != storage.TypeVarChar || cast2.Precision != 10 {
+		t.Fatalf("unexpected cast2: %+v", cast2)
+	}
+
+	// 2. TRY_CAST
+	sql2 := `SELECT TRY_CAST('invalid' AS INT) AS safe_num;`
+	stmt2, err := proc.ParseSQL(sql2)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for TRY_CAST: %v", err)
+	}
+	sel2 := stmt2.(*proc.GeneralSelectStmt)
+	castTry, ok := sel2.Projections[0].Expr.(*proc.CastExpr)
+	if !ok || !castTry.Try || castTry.TargetType != storage.TypeInt {
+		t.Fatalf("unexpected try_cast: %+v", castTry)
+	}
+
+	// 3. CONVERT(type, expr, style)
+	sql3 := `SELECT CONVERT(VARCHAR(20), '2026-10-11 22:00:00', 112) AS ymd, TRY_CONVERT(INT, '999') AS num;`
+	stmt3, err := proc.ParseSQL(sql3)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for CONVERT: %v", err)
+	}
+	sel3 := stmt3.(*proc.GeneralSelectStmt)
+	conv1, ok := sel3.Projections[0].Expr.(*proc.CastExpr)
+	if !ok || conv1.TargetType != storage.TypeVarChar || conv1.Style != 112 || conv1.Try {
+		t.Fatalf("unexpected conv1: %+v", conv1)
+	}
+	conv2, ok := sel3.Projections[1].Expr.(*proc.CastExpr)
+	if !ok || conv2.TargetType != storage.TypeInt || !conv2.Try {
+		t.Fatalf("unexpected conv2: %+v", conv2)
+	}
+
+	// 4. PostgreSQL :: operator
+	sql4 := `SELECT '42'::INT AS answer, 123::VARCHAR AS str;`
+	stmt4, err := proc.ParseSQL(sql4)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for :: operator: %v", err)
+	}
+	sel4 := stmt4.(*proc.GeneralSelectStmt)
+	pgCast1, ok := sel4.Projections[0].Expr.(*proc.CastExpr)
+	if !ok || pgCast1.TargetType != storage.TypeInt {
+		t.Fatalf("unexpected pgCast1: %+v", pgCast1)
+	}
+	pgCast2, ok := sel4.Projections[1].Expr.(*proc.CastExpr)
+	if !ok || pgCast2.TargetType != storage.TypeVarChar {
+		t.Fatalf("unexpected pgCast2: %+v", pgCast2)
+	}
+
+	// 5. Evaluation test with EvalRowExpr
+	v1, err := proc.EvalRowExpr(cast1, nil, nil)
+	if err != nil || v1 != int64(12345) {
+		t.Errorf("EvalRowExpr cast1 failed: val=%v, err=%v", v1, err)
+	}
+
+	// TRY_CAST invalid string returns nil (NULL) without error
+	vTry, err := proc.EvalRowExpr(castTry, nil, nil)
+	if err != nil || vTry != nil {
+		t.Errorf("expected nil for failed TRY_CAST, got val=%v, err=%v", vTry, err)
+	}
+
+	// CONVERT date style 112 (YYYYMMDD)
+	vConv, err := proc.EvalRowExpr(conv1, nil, nil)
+	if err != nil || vConv != "20261011" {
+		t.Errorf("expected 20261011 for style 112 CONVERT, got val=%v, err=%v", vConv, err)
+	}
+
+	// PostgreSQL :: evaluation
+	vPg, err := proc.EvalRowExpr(pgCast1, nil, nil)
+	if err != nil || vPg != int64(42) {
+		t.Errorf("expected 42 for pgCast1, got val=%v, err=%v", vPg, err)
+	}
+}
+

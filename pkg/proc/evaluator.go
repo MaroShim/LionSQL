@@ -299,6 +299,16 @@ func evalExpr(expr Expr, ctx *ExecutionContext) (storage.Value, error) {
 			return storage.Value{}, err
 		}
 		return evalBinary(e.Op, left, right)
+
+	case *CastExpr:
+		val, err := evalExpr(e.Expr, ctx)
+		if err != nil {
+			if e.Try {
+				return storage.NullValue(e.TargetType), nil
+			}
+			return storage.Value{}, err
+		}
+		return EvalCast(val, e.TargetType, e.Precision, e.Scale, e.Style, e.Try)
 	}
 
 	return storage.Value{}, fmt.Errorf("unsupported expression: %T", expr)

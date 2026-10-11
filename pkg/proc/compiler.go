@@ -1325,6 +1325,20 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		})
 		return r, nil
 
+	case *CastExpr:
+		srcReg, err := c.compileExpr(e.Expr)
+		if err != nil {
+			return 0, err
+		}
+		c.emit(OpCast, srcReg, srcReg, 0, &CastData{
+			TargetType: e.TargetType,
+			Precision:  e.Precision,
+			Scale:      e.Scale,
+			Style:      e.Style,
+			Try:        e.Try,
+		})
+		return srcReg, nil
+
 	default:
 		return 0, fmt.Errorf("unsupported expression: %T", expr)
 	}

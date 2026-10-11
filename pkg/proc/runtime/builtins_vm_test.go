@@ -181,3 +181,60 @@ END
 		t.Errorf("Expected scope_identity 101, got %s", res.Logs[1])
 	}
 }
+
+func TestVM_CastAndConvert(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	cache := runtime.NewPlanCache()
+	exec := runtime.NewExecutor(cache)
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	script := `
+CREATE PROCEDURE TestCastConvertProc AS
+BEGIN
+    DECLARE @strNum VARCHAR(20);
+    DECLARE @intNum INT;
+    DECLARE @fltNum FLOAT;
+    DECLARE @tryNum INT;
+    DECLARE @convStr VARCHAR(30);
+
+    SET @strNum = '12345';
+    SET @intNum = CAST(@strNum AS INT);
+    SET @fltNum = CAST(@intNum AS FLOAT);
+    SET @tryNum = TRY_CAST('not_a_number' AS INT);
+    SET @convStr = CONVERT(VARCHAR(20), '2026-10-11 12:00:00', 112);
+
+    PRINT @intNum;
+    PRINT @fltNum;
+    PRINT @tryNum;
+    PRINT @convStr;
+END
+`
+	prog, err := cache.GetOrCompile(script)
+	if err != nil {
+		t.Fatalf("Compile script failed: %v", err)
+	}
+
+	res, err := exec.Run(prog, "TestCastConvertProc", nil, sess)
+	if err != nil {
+		t.Fatalf("Run script failed: %v", err)
+	}
+
+	expectedLogs := []string{"12345", "12345", "NULL", "20261011"}
+	if len(res.Logs) != len(expectedLogs) {
+		t.Fatalf("Expected %d logs, got %d: %v", len(expectedLogs), len(res.Logs), res.Logs)
+	}
+	for i, exp := range expectedLogs {
+		if !strings.HasPrefix(res.Logs[i], exp) && res.Logs[i] != exp {
+			t.Errorf("Log[%d] expected %q, got %q", i, exp, res.Logs[i])
+		}
+	}
+}
+

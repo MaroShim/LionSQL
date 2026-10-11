@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Native T-SQL CAST, CONVERT, TRY_CAST, TRY_CONVERT & PostgreSQL `::` Operator (`pkg/proc`, `pkg/proc/runtime`)**:
+  - **Syntax & Lexer**: Added keywords `CAST`, `TRY_CAST`, `CONVERT`, `TRY_CONVERT` and token `TokenDoubleColon` (`::`) with Pratt parser support for `CAST(expr AS target_type)`, `TRY_CAST(expr AS target_type)`, `CONVERT(target_type, expr [, style])`, `TRY_CONVERT(target_type, expr [, style])`, and PostgreSQL-compatible `expr::target_type`.
+  - **AST & Compiler**: Added `CastExpr` node and VDBE opcode `OpCast` with `CastData` auxiliary payload (`TargetType`, `Precision`, `Scale`, `Style`, `Try`).
+  - **Runtime & Evaluation**: Implemented `EvalCast()` supporting standard SQL and T-SQL conversion semantics across `INT`, `FLOAT`, `VARCHAR` (with style formatting and precision truncation), `BOOL`, `DATETIME`, `DATE`, `TIME`, `DECIMAL`, `UUID`, and `BINARY`.
+  - **Safe Casting**: Supported fail-safe casting in `TRY_CAST` and `TRY_CONVERT` returning `NULL` on parsing failure without runtime panic or procedure abort, while `CAST` and `CONVERT` trigger standard execution errors.
+  - **Testing**: Added unit test suite `TestParseSQL_CastAndConvert` in `pkg/proc/sqlparser_test.go` and VM integration test `TestVM_CastAndConvert` in `pkg/proc/runtime/builtins_vm_test.go`.
 - **Advanced T-SQL Built-in Functions & Bitwise Operators (`pkg/proc`, `pkg/proc/runtime`)**:
   - **Logical Extremes**: Added `GREATEST(expr1, ...)` and `LEAST(expr1, ...)` supporting numeric and string lexical comparisons across arbitrary argument counts with NULL skipping.
   - **Message Formatting**: Added `FORMATMESSAGE(msg, params...)` supporting `%s`, `%d`, `%i`, `%u`, and `%%` escapes.

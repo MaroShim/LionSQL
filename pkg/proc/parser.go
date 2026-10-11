@@ -43,6 +43,7 @@ var precedences = map[TokenType]int{
 	TokenSlash:           precProduct,
 	TokenJSONExtract:     precJSON,
 	TokenJSONExtractText: precJSON,
+	TokenDoubleColon:     precPrefix,
 }
 
 // Parser parses T-SQL tokens into an AST.
@@ -1563,6 +1564,20 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			p.nextToken() // eat NULL
 			leftExp = &IsNullExpr{Expr: leftExp, Not: isNot}
 
+		case TokenDoubleColon:
+			p.nextToken() // eat ::
+			if !p.curTokenIs(TokenIdent) {
+				return nil
+			}
+			dt, prec, scale := p.parseTypeSpec()
+			leftExp = &CastExpr{
+				Expr:       leftExp,
+				TargetType: dt,
+				Precision:  prec,
+				Scale:      scale,
+				Try:        false,
+			}
+
 		default:
 			op := p.curToken.Type
 			p.nextToken()
@@ -1612,6 +1627,14 @@ func (p *Parser) parsePrefix() Expr {
 		return expr
 	case TokenCase:
 		return p.parseCase()
+	case TokenCast:
+		return p.parseCast(false)
+	case TokenTryCast:
+		return p.parseCast(true)
+	case TokenConvert:
+		return p.parseConvert(false)
+	case TokenTryConvert:
+		return p.parseConvert(true)
 	case TokenIsNull, TokenCoalesce:
 		funcName := p.curToken.Literal
 		p.nextToken()
@@ -1717,6 +1740,107 @@ func (p *Parser) parsePrefix() Expr {
 		return exp
 	default:
 		return nil
+	}
+}
+
+func (p *Parser) parseTypeSpec() (storage.DataType, int, int) {
+	dt := parseDataType(p.curToken.Literal)
+	p.nextToken()
+	prec := 0
+	scale := 0
+	if p.curTokenIs(TokenLParen) {
+		p.nextToken()
+		if p.curTokenIs(TokenInt) {
+			prec, _ = strconv.Atoi(p.curToken.Literal)
+			p.nextToken()
+		}
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+			if p.curTokenIs(TokenInt) {
+				scale, _ = strconv.Atoi(p.curToken.Literal)
+				p.nextToken()
+			}
+		}
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken()
+		}
+	}
+	return dt, prec, scale
+}
+
+func (p *Parser) parseCast(try bool) Expr {
+	p.nextToken() // eat CAST or TRY_CAST
+	if !p.curTokenIs(TokenLParen) {
+		return nil
+	}
+	p.nextToken() // eat (
+	expr := p.parseExpression(precLowest)
+	if expr == nil {
+		return nil
+	}
+	if !p.curTokenIs(TokenAs) {
+		return nil
+	}
+	p.nextToken() // eat AS
+	if !p.curTokenIs(TokenIdent) {
+		return nil
+	}
+	dt, prec, scale := p.parseTypeSpec()
+	if !p.curTokenIs(TokenRParen) {
+		return nil
+	}
+	p.nextToken() // eat )
+	return &CastExpr{
+		Expr:       expr,
+		TargetType: dt,
+		Precision:  prec,
+		Scale:      scale,
+		Try:        try,
+	}
+}
+
+func (p *Parser) parseConvert(try bool) Expr {
+	p.nextToken() // eat CONVERT or TRY_CONVERT
+	if !p.curTokenIs(TokenLParen) {
+		return nil
+	}
+	p.nextToken() // eat (
+	if !p.curTokenIs(TokenIdent) {
+		return nil
+	}
+	dt, prec, scale := p.parseTypeSpec()
+	if !p.curTokenIs(TokenComma) {
+		return nil
+	}
+	p.nextToken() // eat ,
+	expr := p.parseExpression(precLowest)
+	if expr == nil {
+		return nil
+	}
+	style := 0
+	if p.curTokenIs(TokenComma) {
+		p.nextToken() // eat ,
+		if p.curTokenIs(TokenInt) {
+			style, _ = strconv.Atoi(p.curToken.Literal)
+			p.nextToken()
+		} else {
+			styleExpr := p.parseExpression(precLowest)
+			if lit, ok := styleExpr.(*LiteralExpr); ok && lit.Val.Type == storage.TypeInt {
+				style = int(lit.Val.IVal)
+			}
+		}
+	}
+	if !p.curTokenIs(TokenRParen) {
+		return nil
+	}
+	p.nextToken() // eat )
+	return &CastExpr{
+		Expr:       expr,
+		TargetType: dt,
+		Precision:  prec,
+		Scale:      scale,
+		Style:      style,
+		Try:        try,
 	}
 }
 
