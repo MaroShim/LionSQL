@@ -7,11 +7,13 @@ import (
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"hash/crc32"
 	"hash/fnv"
 	"math"
 	mathrand "math/rand/v2"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -75,7 +77,7 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 	// ----------------------------------------------------
 	// 1. Date & Time Functions
 	// ----------------------------------------------------
-	case "GETDATE", "NOW":
+	case "GETDATE", "NOW", "CURRENT_TIMESTAMP":
 		return storage.StringValue(time.Now().Format("2006-01-02 15:04:05"))
 
 	case "GETUTCDATE":
@@ -83,6 +85,12 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 
 	case "SYSDATETIME":
 		return storage.StringValue(time.Now().Format("2006-01-02 15:04:05.0000000"))
+
+	case "SYSUTCDATETIME":
+		return storage.StringValue(time.Now().UTC().Format("2006-01-02 15:04:05.0000000"))
+
+	case "SYSDATETIMEOFFSET":
+		return storage.StringValue(time.Now().Format("2006-01-02 15:04:05.0000000 -07:00"))
 
 	case "YEAR":
 		if len(args) == 0 || args[0].IsNull {
@@ -122,7 +130,30 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return evalDatePart(part, t)
 
+	case "DATENAME":
+		if len(args) < 2 || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		part := normalizeDatePart(valToString(args[0]))
+		t, ok := parseDateValue(args[1])
+		if !ok {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return evalDateName(part, t)
+
 	case "DATEDIFF":
+		if len(args) < 3 || args[1].IsNull || args[2].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		part := normalizeDatePart(valToString(args[0]))
+		t1, ok1 := parseDateValue(args[1])
+		t2, ok2 := parseDateValue(args[2])
+		if !ok1 || !ok2 {
+			return storage.NullValue(storage.TypeInt)
+		}
+		return evalDateDiff(part, t1, t2)
+
+	case "DATEDIFF_BIG":
 		if len(args) < 3 || args[1].IsNull || args[2].IsNull {
 			return storage.NullValue(storage.TypeInt)
 		}
@@ -264,6 +295,23 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		h, min, s, ms := int(args[3].IVal), int(args[4].IVal), int(args[5].IVal), int(args[6].IVal)
 		return storage.StringValue(fmt.Sprintf("%04d-%02d-%02d %02d:%02d:%02d.%03d", y, m, d, h, min, s, ms))
 
+	case "SMALLDATETIMEFROMPARTS":
+		if len(args) < 5 {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		for i := 0; i < 5; i++ {
+			if args[i].IsNull {
+				return storage.NullValue(storage.TypeVarChar)
+			}
+		}
+		y, m, d := int(args[0].IVal), int(args[1].IVal), int(args[2].IVal)
+		hh, mm := int(args[3].IVal), int(args[4].IVal)
+		if m < 1 || m > 12 || d < 1 || d > 31 || hh < 0 || hh > 23 || mm < 0 || mm > 59 {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		t := time.Date(y, time.Month(m), d, hh, mm, 0, 0, time.UTC)
+		return storage.StringValue(t.Format("2006-01-02 15:04:00"))
+
 	case "TO_DATE":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeVarChar)
@@ -379,6 +427,23 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.IntValue(int64(len([]rune(valToString(args[0])))))
 
+	case "DATALENGTH":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		switch args[0].Type {
+		case storage.TypeVarChar, storage.TypeJSON:
+			return storage.IntValue(int64(len(args[0].SVal)))
+		case storage.TypeInt, storage.TypeFloat, storage.TypeDateTime:
+			return storage.IntValue(8)
+		case storage.TypeDecimal, storage.TypeUUID:
+			return storage.IntValue(16)
+		case storage.TypeBool:
+			return storage.IntValue(1)
+		default:
+			return storage.IntValue(int64(len(valToString(args[0]))))
+		}
+
 	case "UPPER":
 		if len(args) == 0 || args[0].IsNull {
 			return storage.StringValue("")
@@ -395,7 +460,14 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		if len(args) == 0 || args[0].IsNull {
 			return storage.StringValue("")
 		}
-		return storage.StringValue(strings.TrimSpace(valToString(args[0])))
+		if len(args) == 1 {
+			return storage.StringValue(strings.TrimSpace(valToString(args[0])))
+		}
+		// TRIM(cutset, target) or TRIM(target, cutset)
+		arg0 := valToString(args[0])
+		arg1 := valToString(args[1])
+		// Check if first arg is cutset (e.g. TRIM('.,! ' FROM target))
+		return storage.StringValue(strings.Trim(arg1, arg0))
 
 	case "LTRIM":
 		if len(args) == 0 || args[0].IsNull {
@@ -825,6 +897,64 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return EvalBuiltin("FORMAT", args)
 
+	case "PARSENAME":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		piece := args[1].IVal
+		if piece < 1 || piece > 4 {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		objStr := strings.TrimSpace(valToString(args[0]))
+		parts := parseObjectPieces(objStr)
+		if parts == nil {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		idx := len(parts) - int(piece)
+		if idx < 0 || idx >= len(parts) {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.StringValue(parts[idx])
+
+	case "STRING_ESCAPE":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		escapeType := "json"
+		if len(args) >= 2 && !args[1].IsNull {
+			escapeType = strings.ToLower(strings.TrimSpace(valToString(args[1])))
+		}
+		str := valToString(args[0])
+		if escapeType != "json" {
+			return storage.StringValue(str)
+		}
+		var b strings.Builder
+		for _, r := range str {
+			switch r {
+			case '\\':
+				b.WriteString(`\\`)
+			case '"':
+				b.WriteString(`\"`)
+			case '\b':
+				b.WriteString(`\b`)
+			case '\f':
+				b.WriteString(`\f`)
+			case '\n':
+				b.WriteString(`\n`)
+			case '\r':
+				b.WriteString(`\r`)
+			case '\t':
+				b.WriteString(`\t`)
+			default:
+				if r < 0x20 {
+					b.WriteString(fmt.Sprintf(`\u%04x`, r))
+				} else {
+					b.WriteRune(r)
+				}
+			}
+		}
+		return storage.StringValue(b.String())
+
 	// ----------------------------------------------------
 	// 3. Mathematical Functions
 	// ----------------------------------------------------
@@ -901,6 +1031,19 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 				return storage.NullValue(storage.TypeFloat)
 			}
 			return storage.FloatValue(math.Sqrt(n))
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "SQUARE":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if args[0].Type == storage.TypeInt {
+			v := args[0].IVal
+			return storage.IntValue(v * v)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			return storage.FloatValue(n * n)
 		}
 		return storage.NullValue(storage.TypeFloat)
 
@@ -1171,6 +1314,51 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		return storage.JSONValue(val)
 
+	case "ISJSON":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		str := strings.TrimSpace(valToString(args[0]))
+		if str == "" {
+			return storage.IntValue(0)
+		}
+		var parsed any
+		if err := json.Unmarshal([]byte(str), &parsed); err != nil {
+			return storage.IntValue(0)
+		}
+		if len(args) >= 2 && !args[1].IsNull {
+			opt := strings.ToUpper(strings.TrimSpace(valToString(args[1])))
+			switch opt {
+			case "ARRAY":
+				if _, ok := parsed.([]any); !ok {
+					return storage.IntValue(0)
+				}
+			case "OBJECT":
+				if _, ok := parsed.(map[string]any); !ok {
+					return storage.IntValue(0)
+				}
+			case "SCALAR":
+				switch parsed.(type) {
+				case map[string]any, []any:
+					return storage.IntValue(0)
+				}
+			}
+		}
+		return storage.IntValue(1)
+
+	case "JSON_MODIFY":
+		if len(args) < 3 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		doc := valToString(args[0])
+		path := valToString(args[1])
+		newVal := args[2]
+		res, err := modifyJSONByPath(doc, path, newVal)
+		if err != nil {
+			return storage.StringValue(doc)
+		}
+		return storage.StringValue(res)
+
 	// ----------------------------------------------------
 	// 6. System Functions & Metadata
 	// ----------------------------------------------------
@@ -1297,6 +1485,53 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 	case "IDENT_CURRENT":
 		return storage.IntValue(1)
 
+	case "COL_NAME":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		colID := args[1].IVal
+		if colID == 1 {
+			return storage.StringValue("id")
+		}
+		return storage.StringValue(fmt.Sprintf("col%d", colID))
+
+	case "HOST_NAME":
+		h, err := os.Hostname()
+		if err != nil || h == "" {
+			return storage.StringValue("localhost")
+		}
+		return storage.StringValue(h)
+
+	case "HOST_ID":
+		return storage.IntValue(int64(os.Getpid()))
+
+	case "CURRENT_USER", "USER_NAME":
+		return storage.StringValue("dbo")
+
+	case "SUSER_NAME", "SUSER_SNAME":
+		return storage.StringValue("sa")
+
+	case "USER_ID":
+		return storage.IntValue(1)
+
+	case "SUSER_ID":
+		return storage.IntValue(1)
+
+	case "@@VERSION", "VERSION":
+		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) / SQLion Embedded Engine")
+
+	case "@@SERVERNAME":
+		return storage.StringValue("SQLION")
+
+	case "@@SPID", "SPID":
+		return storage.IntValue(51)
+
+	case "@@MAX_CONNECTIONS":
+		return storage.IntValue(32767)
+
+	case "@@LANGUAGE":
+		return storage.StringValue("us_english")
+
 	// ----------------------------------------------------
 	// 9. Cryptography & Checksum (Group E)
 	// ----------------------------------------------------
@@ -1361,23 +1596,26 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 // IsBuiltinFunction reports whether the named function is a built-in scalar function.
 func IsBuiltinFunction(name string) bool {
 	switch strings.ToUpper(cleanBuiltinName(name)) {
-	case "GETDATE", "NOW", "GETUTCDATE", "SYSDATETIME",
-		"YEAR", "MONTH", "DAY", "DATEPART", "DATE_PART", "EXTRACT", "DATEDIFF", "DATEADD", "EOMONTH", "ISDATE",
+	case "GETDATE", "NOW", "CURRENT_TIMESTAMP", "GETUTCDATE", "SYSDATETIME", "SYSUTCDATETIME", "SYSDATETIMEOFFSET",
+		"YEAR", "MONTH", "DAY", "DATEPART", "DATE_PART", "EXTRACT", "DATENAME", "DATEDIFF", "DATEDIFF_BIG", "DATEADD", "EOMONTH", "ISDATE",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
-		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS", "TO_DATE", "TO_TIMESTAMP",
-		"CONCAT", "CONCAT_WS", "QUOTENAME", "QUOTE_IDENT", "QUOTE_LITERAL", "ASCII", "CHAR", "CHR", "LEN", "LENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
+		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS", "SMALLDATETIMEFROMPARTS", "TO_DATE", "TO_TIMESTAMP",
+		"CONCAT", "CONCAT_WS", "QUOTENAME", "QUOTE_IDENT", "QUOTE_LITERAL", "ASCII", "CHAR", "CHR", "LEN", "LENGTH", "DATALENGTH", "UPPER", "LOWER", "TRIM", "LTRIM", "RTRIM",
 		"LEFT", "RIGHT", "SUBSTRING", "SUBSTR", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE", "REPEAT", "STUFF",
+		"PARSENAME", "STRING_ESCAPE",
 		"PATINDEX", "UNICODE", "NCHAR", "SOUNDEX", "DIFFERENCE", "TRANSLATE", "FORMAT",
 		"STRPOS", "MD5", "LPAD", "RPAD", "OCTET_LENGTH", "BIT_LENGTH", "INITCAP", "TO_CHAR",
 		"GREP", "REGEXP_LIKE", "AWK", "SPLIT_PART",
-		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SIGN", "PI",
+		"ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SQUARE", "SIGN", "PI",
 		"EXP", "LOG", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "DEGREES", "RADIANS", "RAND", "RANDOM",
 		"ISNULL", "COALESCE", "NULLIF", "ISNUMERIC", "IIF", "CHOOSE",
-		"JSON_VALUE", "JSON_QUERY",
+		"ISJSON", "JSON_VALUE", "JSON_QUERY", "JSON_MODIFY",
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID",
 		"SCOPE_IDENTITY", "SERVERPROPERTY",
 		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
-		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
+		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "COL_NAME", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
+		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME", "USER_ID", "SUSER_ID",
+		"@@VERSION", "VERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
 		"HASHBYTES", "CHECKSUM", "BINARY_CHECKSUM":
 		return true
 	default:
@@ -1485,8 +1723,12 @@ func normalizeDatePart(dp string) string {
 		return "quarter"
 	case "month", "mm", "m":
 		return "month"
-	case "day", "dd", "d", "dayofyear", "dy", "y":
+	case "day", "dd", "d":
 		return "day"
+	case "weekday", "dw", "w":
+		return "weekday"
+	case "dayofyear", "dy", "y":
+		return "dayofyear"
 	case "week", "wk", "ww":
 		return "week"
 	case "hour", "hh":
@@ -1512,6 +1754,10 @@ func evalDatePart(part string, t time.Time) storage.Value {
 		return storage.IntValue(int64(t.Month()))
 	case "day":
 		return storage.IntValue(int64(t.Day()))
+	case "weekday":
+		return storage.IntValue(int64(t.Weekday()) + 1)
+	case "dayofyear":
+		return storage.IntValue(int64(t.YearDay()))
 	case "week":
 		_, w := t.ISOWeek()
 		return storage.IntValue(int64(w))
@@ -2095,3 +2341,135 @@ func formatWithCommas(n float64, decimals int) string {
 	}
 	return out
 }
+
+func evalDateName(part string, t time.Time) storage.Value {
+	switch part {
+	case "year":
+		return storage.StringValue(strconv.Itoa(t.Year()))
+	case "quarter":
+		q := (int(t.Month())-1)/3 + 1
+		return storage.StringValue(strconv.Itoa(q))
+	case "month":
+		return storage.StringValue(t.Month().String())
+	case "day":
+		return storage.StringValue(strconv.Itoa(t.Day()))
+	case "weekday":
+		return storage.StringValue(t.Weekday().String())
+	case "dayofyear":
+		return storage.StringValue(strconv.Itoa(t.YearDay()))
+	case "week":
+		_, w := t.ISOWeek()
+		return storage.StringValue(strconv.Itoa(w))
+	case "hour":
+		return storage.StringValue(strconv.Itoa(t.Hour()))
+	case "minute":
+		return storage.StringValue(strconv.Itoa(t.Minute()))
+	case "second":
+		return storage.StringValue(strconv.Itoa(t.Second()))
+	case "millisecond":
+		return storage.StringValue(strconv.Itoa(t.Nanosecond() / 1e6))
+	default:
+		return storage.NullValue(storage.TypeVarChar)
+	}
+}
+
+func parseObjectPieces(s string) []string {
+	var parts []string
+	var current strings.Builder
+	inBracket := false
+	inQuote := false
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if ch == '[' && !inQuote {
+			inBracket = true
+			continue
+		} else if ch == ']' && inBracket {
+			inBracket = false
+			continue
+		} else if ch == '"' && !inBracket {
+			inQuote = !inQuote
+			continue
+		} else if ch == '.' && !inBracket && !inQuote {
+			parts = append(parts, current.String())
+			current.Reset()
+			continue
+		}
+		current.WriteByte(ch)
+	}
+	parts = append(parts, current.String())
+
+	if len(parts) > 4 {
+		return nil
+	}
+	return parts
+}
+
+func modifyJSONByPath(doc, path string, newVal storage.Value) (string, error) {
+	var data any
+	if err := json.Unmarshal([]byte(doc), &data); err != nil {
+		return doc, err
+	}
+	cleanPath := strings.TrimPrefix(strings.TrimSpace(path), "$")
+	cleanPath = strings.TrimPrefix(cleanPath, ".")
+	if cleanPath == "" {
+		if newVal.IsNull {
+			return "null", nil
+		}
+		marshaled, err := json.Marshal(storageValueToInterface(newVal))
+		return string(marshaled), err
+	}
+
+	parts := strings.Split(cleanPath, ".")
+	if obj, ok := data.(map[string]any); ok {
+		current := obj
+		for i := 0; i < len(parts)-1; i++ {
+			p := parts[i]
+			sub, exists := current[p]
+			if !exists {
+				nextMap := make(map[string]any)
+				current[p] = nextMap
+				current = nextMap
+			} else if nextMap, isMap := sub.(map[string]any); isMap {
+				current = nextMap
+			} else {
+				return doc, fmt.Errorf("path is not an object")
+			}
+		}
+		lastKey := parts[len(parts)-1]
+		if newVal.IsNull {
+			delete(current, lastKey)
+		} else {
+			current[lastKey] = storageValueToInterface(newVal)
+		}
+		res, err := json.Marshal(obj)
+		if err != nil {
+			return doc, err
+		}
+		return string(res), nil
+	}
+	return doc, nil
+}
+
+func storageValueToInterface(v storage.Value) any {
+	if v.IsNull {
+		return nil
+	}
+	switch v.Type {
+	case storage.TypeInt:
+		return v.IVal
+	case storage.TypeFloat:
+		return v.FVal
+	case storage.TypeBool:
+		return v.BVal
+	case storage.TypeJSON:
+		var parsed any
+		if err := json.Unmarshal([]byte(v.SVal), &parsed); err == nil {
+			return parsed
+		}
+		return v.SVal
+	default:
+		return v.SVal
+	}
+}
+

@@ -780,8 +780,8 @@ func TestBuiltin_GroupsA_Through_F(t *testing.T) {
 
 func TestBuiltin_PostgreSQLCompatibility(t *testing.T) {
 	// 1. String aliases: SUBSTR, REPEAT, CHR
-	if s := EvalBuiltin("SUBSTR", []storage.Value{storage.StringValue("PostgreSQL"), storage.IntValue(1), storage.IntValue(8)}); s.SVal != "Postgres" {
-		t.Errorf("SUBSTR expected 'Postgres', got %q", s.SVal)
+	if s := EvalBuiltin("SUBSTR", []storage.Value{storage.StringValue("PostgreSQL"), storage.IntValue(1), storage.IntValue(8)}); s.SVal != "PostgreS" {
+		t.Errorf("SUBSTR expected 'PostgreS', got %q", s.SVal)
 	}
 	if r := EvalBuiltin("REPEAT", []storage.Value{storage.StringValue("ha"), storage.IntValue(3)}); r.SVal != "hahaha" {
 		t.Errorf("REPEAT expected 'hahaha', got %q", r.SVal)
@@ -875,5 +875,151 @@ func TestBuiltin_PostgreSQLCompatibility(t *testing.T) {
 		}
 	}
 }
+
+func TestBuiltin_TSQLExpansions(t *testing.T) {
+	// 1. DATENAME
+	d := storage.StringValue("2026-10-11 15:30:45")
+	if dn := EvalBuiltin("DATENAME", []storage.Value{storage.StringValue("month"), d}); dn.SVal != "October" {
+		t.Errorf("DATENAME month expected 'October', got %q", dn.SVal)
+	}
+	if dn := EvalBuiltin("DATENAME", []storage.Value{storage.StringValue("weekday"), d}); dn.SVal != "Sunday" {
+		t.Errorf("DATENAME weekday expected 'Sunday', got %q", dn.SVal)
+	}
+	if dn := EvalBuiltin("DATENAME", []storage.Value{storage.StringValue("year"), d}); dn.SVal != "2026" {
+		t.Errorf("DATENAME year expected '2026', got %q", dn.SVal)
+	}
+	if dn := EvalBuiltin("DATENAME", []storage.Value{storage.StringValue("day"), d}); dn.SVal != "11" {
+		t.Errorf("DATENAME day expected '11', got %q", dn.SVal)
+	}
+
+	// 2. High-precision and timestamp constructors
+	ts := EvalBuiltin("CURRENT_TIMESTAMP", nil)
+	if ts.Type != storage.TypeVarChar || len(ts.SVal) != 19 {
+		t.Errorf("CURRENT_TIMESTAMP expected YYYY-MM-DD HH:MM:SS format, got %q", ts.SVal)
+	}
+	utc := EvalBuiltin("SYSUTCDATETIME", nil)
+	if utc.Type != storage.TypeVarChar || len(utc.SVal) < 20 {
+		t.Errorf("SYSUTCDATETIME expected high precision timestamp, got %q", utc.SVal)
+	}
+	offset := EvalBuiltin("SYSDATETIMEOFFSET", nil)
+	if offset.Type != storage.TypeVarChar || !strings.Contains(offset.SVal, ":") {
+		t.Errorf("SYSDATETIMEOFFSET expected timezone offset, got %q", offset.SVal)
+	}
+	sdt := EvalBuiltin("SMALLDATETIMEFROMPARTS", []storage.Value{
+		storage.IntValue(2026), storage.IntValue(10), storage.IntValue(11),
+		storage.IntValue(15), storage.IntValue(30),
+	})
+	if sdt.SVal != "2026-10-11 15:30:00" {
+		t.Errorf("SMALLDATETIMEFROMPARTS expected '2026-10-11 15:30:00', got %q", sdt.SVal)
+	}
+
+	// 3. DATEDIFF_BIG
+	d1 := storage.StringValue("2026-01-01")
+	d2 := storage.StringValue("2026-01-10")
+	if diff := EvalBuiltin("DATEDIFF_BIG", []storage.Value{storage.StringValue("day"), d1, d2}); diff.IVal != 9 {
+		t.Errorf("DATEDIFF_BIG expected 9, got %d", diff.IVal)
+	}
+
+	// 4. DATALENGTH vs LEN
+	paddedStr := storage.StringValue("hello   ")
+	if dl := EvalBuiltin("DATALENGTH", []storage.Value{paddedStr}); dl.IVal != 8 {
+		t.Errorf("DATALENGTH expected 8 for 'hello   ', got %d", dl.IVal)
+	}
+	if dl := EvalBuiltin("DATALENGTH", []storage.Value{storage.IntValue(100)}); dl.IVal != 8 {
+		t.Errorf("DATALENGTH expected 8 for int, got %d", dl.IVal)
+	}
+
+	// 5. PARSENAME
+	if p := EvalBuiltin("PARSENAME", []storage.Value{storage.StringValue("dbo.Customers"), storage.IntValue(1)}); p.SVal != "Customers" {
+		t.Errorf("PARSENAME piece 1 expected 'Customers', got %q", p.SVal)
+	}
+	if p := EvalBuiltin("PARSENAME", []storage.Value{storage.StringValue("dbo.Customers"), storage.IntValue(2)}); p.SVal != "dbo" {
+		t.Errorf("PARSENAME piece 2 expected 'dbo', got %q", p.SVal)
+	}
+	if p := EvalBuiltin("PARSENAME", []storage.Value{storage.StringValue("dbo.Customers"), storage.IntValue(3)}); !p.IsNull {
+		t.Errorf("PARSENAME piece 3 expected NULL, got %v", p)
+	}
+	if p := EvalBuiltin("PARSENAME", []storage.Value{storage.StringValue("[server].[db].[dbo].[Customers]"), storage.IntValue(4)}); p.SVal != "server" {
+		t.Errorf("PARSENAME piece 4 expected 'server', got %q", p.SVal)
+	}
+
+	// 6. STRING_ESCAPE
+	rawJSONText := storage.StringValue("Line 1\nLine 2\t\"quoted\"")
+	if esc := EvalBuiltin("STRING_ESCAPE", []storage.Value{rawJSONText, storage.StringValue("json")}); esc.SVal != "Line 1\\nLine 2\\t\\\"quoted\\\"" {
+		t.Errorf("STRING_ESCAPE expected escaped JSON, got %q", esc.SVal)
+	}
+
+	// 7. SQUARE
+	if sq := EvalBuiltin("SQUARE", []storage.Value{storage.IntValue(5)}); sq.IVal != 25 {
+		t.Errorf("SQUARE(5) expected 25, got %d", sq.IVal)
+	}
+	if sq := EvalBuiltin("SQUARE", []storage.Value{storage.FloatValue(2.5)}); sq.FVal != 6.25 {
+		t.Errorf("SQUARE(2.5) expected 6.25, got %f", sq.FVal)
+	}
+
+	// 8. ISJSON & JSON_MODIFY
+	validJSON := storage.StringValue(`{"name":"Alice","age":30}`)
+	if isJ := EvalBuiltin("ISJSON", []storage.Value{validJSON}); isJ.IVal != 1 {
+		t.Errorf("ISJSON valid expected 1, got %d", isJ.IVal)
+	}
+	if isJ := EvalBuiltin("ISJSON", []storage.Value{validJSON, storage.StringValue("OBJECT")}); isJ.IVal != 1 {
+		t.Errorf("ISJSON OBJECT expected 1, got %d", isJ.IVal)
+	}
+	if isJ := EvalBuiltin("ISJSON", []storage.Value{validJSON, storage.StringValue("ARRAY")}); isJ.IVal != 0 {
+		t.Errorf("ISJSON ARRAY expected 0, got %d", isJ.IVal)
+	}
+	if isJ := EvalBuiltin("ISJSON", []storage.Value{storage.StringValue("invalid json")}); isJ.IVal != 0 {
+		t.Errorf("ISJSON invalid expected 0, got %d", isJ.IVal)
+	}
+	modified := EvalBuiltin("JSON_MODIFY", []storage.Value{validJSON, storage.StringValue("$.age"), storage.IntValue(31)})
+	if !strings.Contains(modified.SVal, `"age":31`) {
+		t.Errorf("JSON_MODIFY expected updated age:31, got %q", modified.SVal)
+	}
+
+	// 9. System / Security Context
+	if un := EvalBuiltin("USER_NAME", nil); un.SVal != "dbo" {
+		t.Errorf("USER_NAME expected 'dbo', got %q", un.SVal)
+	}
+	if cu := EvalBuiltin("CURRENT_USER", nil); cu.SVal != "dbo" {
+		t.Errorf("CURRENT_USER expected 'dbo', got %q", cu.SVal)
+	}
+	if sn := EvalBuiltin("SUSER_NAME", nil); sn.SVal != "sa" {
+		t.Errorf("SUSER_NAME expected 'sa', got %q", sn.SVal)
+	}
+	if uid := EvalBuiltin("USER_ID", nil); uid.IVal != 1 {
+		t.Errorf("USER_ID expected 1, got %d", uid.IVal)
+	}
+	if sid := EvalBuiltin("SUSER_ID", nil); sid.IVal != 1 {
+		t.Errorf("SUSER_ID expected 1, got %d", sid.IVal)
+	}
+	if ver := EvalBuiltin("@@VERSION", nil); !strings.Contains(ver.SVal, "Microsoft SQL Server") {
+		t.Errorf("@@VERSION expected SQL Server header, got %q", ver.SVal)
+	}
+	if srv := EvalBuiltin("@@SERVERNAME", nil); srv.SVal != "SQLION" {
+		t.Errorf("@@SERVERNAME expected 'SQLION', got %q", srv.SVal)
+	}
+	if spid := EvalBuiltin("@@SPID", nil); spid.IVal != 51 {
+		t.Errorf("@@SPID expected 51, got %d", spid.IVal)
+	}
+	if col := EvalBuiltin("COL_NAME", []storage.Value{storage.IntValue(1), storage.IntValue(1)}); col.SVal != "id" {
+		t.Errorf("COL_NAME expected 'id', got %q", col.SVal)
+	}
+
+	// 10. IsBuiltinFunction verification
+	newFuncs := []string{
+		"DATENAME", "CURRENT_TIMESTAMP", "SYSUTCDATETIME", "SYSDATETIMEOFFSET",
+		"SMALLDATETIMEFROMPARTS", "DATEDIFF_BIG", "DATALENGTH", "PARSENAME",
+		"STRING_ESCAPE", "SQUARE", "ISJSON", "JSON_MODIFY",
+		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME",
+		"USER_ID", "SUSER_ID", "@@VERSION", "VERSION", "@@SERVERNAME", "@@SPID", "SPID",
+		"@@MAX_CONNECTIONS", "@@LANGUAGE", "COL_NAME",
+	}
+	for _, fn := range newFuncs {
+		if !IsBuiltinFunction(fn) {
+			t.Errorf("Expected IsBuiltinFunction(%q) to be true", fn)
+		}
+	}
+}
+
 
 

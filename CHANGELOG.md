@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Expanded T-SQL and System Built-in Scalar Functions (`pkg/proc`, `pkg/proc/runtime`)**:
+  - **Date & Time**: Added `DATENAME()`, `CURRENT_TIMESTAMP`, `SYSUTCDATETIME()`, `SYSDATETIMEOFFSET()`, `SMALLDATETIMEFROMPARTS()`, and `DATEDIFF_BIG()`. Enhanced `normalizeDatePart` and `evalDatePart` with `weekday` (1=Sunday) and `dayofyear`.
+  - **String Manipulation**: Added `DATALENGTH()` (raw byte counting), `PARSENAME()` (4-part object piece splitting with bracket preservation), `STRING_ESCAPE()` (JSON control characters escape), and enhanced `TRIM()` with custom cutset support.
+  - **Math & Numeric**: Added `SQUARE()` for float and integer square computations.
+  - **JSON Processing**: Added `ISJSON()` with optional type constraints (`VALUE`, `ARRAY`, `OBJECT`, `SCALAR`) and `JSON_MODIFY()` for dot-path property updates and key deletions.
+  - **System & Security Context**: Added `HOST_NAME()`, `HOST_ID()`, `CURRENT_USER`, `USER_NAME()`, `SUSER_NAME()`, `SUSER_SNAME()`, `USER_ID()`, `SUSER_ID()`, `@@VERSION`, `@@SERVERNAME`, `@@SPID`, `@@MAX_CONNECTIONS`, `@@LANGUAGE`, and `COL_NAME()`.
+  - Registered all new functions in `IsBuiltinFunction` and added comprehensive unit test suite `TestBuiltin_TSQLExpansions` in `pkg/proc/builtins_test.go`.
 - **Complete T-SQL Official Built-in Scalar Function Suite (Groups A~F) (`pkg/proc`, `pkg/proc/runtime`)**:
   - **Group A (Execution Context & Error Introspection)**: Added `ERROR_NUMBER()`, `ERROR_MESSAGE()`, `ERROR_LINE()`, `ERROR_SEVERITY()`, `ERROR_STATE()`, `ERROR_PROCEDURE()`, and `@@ERROR`. Wired error state tracking into `VMFrame` (`lastErrorMsg`, `lastErrorLine`) and `OpCallBuiltin` dispatcher inside `TRY...CATCH` blocks.
   - **Group B (String Manipulation & Search)**: Added `PATINDEX(pattern, string)` supporting T-SQL wildcards (`%`, `_`, `[a-z]`), `UNICODE()`, `NCHAR()`, `SOUNDEX()` and `DIFFERENCE()` phonetics, `TRANSLATE()`, and `FORMAT()` supporting date layouts and number/currency patterns.
