@@ -143,12 +143,15 @@ This document tracks active tasks, short-term engineering priorities, and concep
 - [x] **[완료] 복합 한정자(Qualifier) 및 인라인 별칭(Alias) 파싱 정밀화 (`pkg/proc/parser.go`, `pkg/planner/planner.go`, `pkg/api/sqlexec.go`)**
   - 3단계/4단계 한정자(`[db].[schema].[table].[col]`, `db..table`) 및 2단계 한정자(`alias.col`, `"schema"."table"`)의 정규 토큰화 및 카탈로그 해석.
   - `AS` 키워드가 생략된 인라인 테이블 별칭(`FROM accounts basetbl`) 및 컬럼 별칭(`SELECT id id_alias`) 파싱 안정화.
+- [x] **[완료] 표준 타입 캐스팅 & 안전 변환 문법 완비 (`CAST`, `CONVERT`, `TRY_CAST`, `TRY_CONVERT`, PostgreSQL `::`) (`pkg/proc`, `pkg/proc/runtime`)**
+  - **Pratt 정규 AST 및 파서 확장**: `CastExpr` AST 노드 추가, `CAST(expr AS type)`, `TRY_CAST(expr AS type)`, `CONVERT(type, expr [, style])`, `TRY_CONVERT(type, expr [, style])` 및 PostgreSQL `expr::type` 캐스팅 연산자 지원.
+  - **VDBE 바이트코드 컴파일 & VM 디스패처**: `OpCast` 연산 코드 및 `CastData`(`TargetType`, `Precision`, `Scale`, `Style`, `Try`) 메타데이터 연동.
+  - **네이티브 캐스팅 엔진 (`EvalCast`)**: `INT`, `FLOAT`, `VARCHAR` (스타일 변환 및 길이 제한), `BOOL`, `DATETIME`, `DATE`, `TIME`, `DECIMAL`, `UUID`, `BINARY` 전 타입 상호 변환 및 T-SQL 표준 날짜 스타일(1, 101, 112, 120, 121, 126 등) 지원.
+  - **안전 캐스팅(Safe-Casting)**: `TRY_CAST` 및 `TRY_CONVERT`의 변환 실패 시 에러를 유발하지 않고 안전하게 `NULL`을 반환하는 T-SQL 표준 명세 완비.
 
 ### 6.2. P1: 실무 및 ORM/드라이버 필수 문법 (High Priority)
-- [ ] **표준 타입 캐스팅 & 수식 정식 AST화 (`pkg/proc/eval.go`, `pkg/proc/compiler.go`)**
-  - 데이터 타입 변환: `CAST(expr AS type)` 및 `CONVERT(type, expr [, style])`의 정규 Pratt AST 파싱 및 네이티브 캐스팅 함수 엔진 직결.
-  - `CASE WHEN ... THEN ... ELSE ... END` 복합 조건식의 완전한 AST 표현 및 단락 평가(Short-Circuit Evaluation).
-  - 애드혹 문자열 파싱 탈피: `COALESCE()`, `ISNULL()`, `NULLIF()`.
+- [x] **[완료] `CASE WHEN ... THEN ... ELSE ... END` 복합 조건식 AST화 및 단락 평가 (Short-Circuit Evaluation) (`pkg/proc`)**
+- [x] **[완료] NULL 대체 스칼라 함수 완비: `COALESCE()`, `ISNULL()`, `NULLIF()` (`pkg/proc/builtins.go`)**
 - [ ] **`INSERT INTO ... SELECT ...` 및 `SELECT ... INTO <new_table>` (`pkg/proc`, `pkg/api`)**
   - `INSERT INTO target (cols...) SELECT ... FROM source WHERE ...` 대량 배치 적재 DML 지원.
   - `SELECT ... INTO <table_name> FROM ...` 쿼리 결과 즉시 신규 테이블 생성 및 적재 지원.
