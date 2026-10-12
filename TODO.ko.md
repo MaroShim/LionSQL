@@ -201,20 +201,34 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ## 7. Overall System & Database Engine Performance Optimization Roadmap (전체 엔진 성능 고속화 로드맵)
 
-- [ ] **[Phase 1: 스토리지 & 트랜잭션] 그룹 커밋(Group Commit) 및 읽기 전용 패스트패스**
-  - **배치형 그룹 커밋 (Group Commit Pipelining)**: 개별 트랜잭션의 동기식 `fsync` 호출을 제거하고, 마이크로초 윈도우(50~100µs) 또는 버퍼 크기(32건) 단위로 단 1회의 시스템 콜(`writev` + `fdatasync`) 일괄 영속화 (동시성 OLTP TPS 2~4배 향상).
+- [ ] **[Phase 1: 스토리지 & 트랜잭션] 그룹 커밋 (Group Commit Pipelining) 및 읽기 전용 패스트패스**
+  - **배치형 그룹 커밋 (Group Commit Pipelining & fsync 병합)**:
+    - **문제점**: 동시 다발적인 트랜잭션 커밋 시 각 워커 고루틴이 동기식 `fsync` / `fdatasync` 시스템 콜을 개별 호출하여 물리 NVMe I/O 한계(초당 수천 회)에 봉착.
+    - **해결책**: 트랜잭션 커밋 대기열(Channel / Ring Buffer)을 구축하고, 마이크로초 타임 윈도우(50~100µs) 또는 N개(32~64건) 단위로 단 1회의 시스템 콜(`writev` + `fdatasync`)로 WAL/AOF 저널을 일괄 영속화.
+    - **기대 효과**: 동시성 트랜잭션(16~64 워커) 포화 상태에서 쓰기 처리량(TPS) **2~4배 이상 폭증** (PostgreSQL/MySQL/CockroachDB 표준 아키텍처).
   - **[완료] 읽기 전용 트랜잭션 패스트패스 (Read-Only Fast-Path)**: DML이 발생하지 않은 트랜잭션 및 ReadOnly 트랜잭션은 OCC 유효성 검증과 WAL 기록을 건너뛰고 스냅샷 해제 및 불필요한 메타데이터 맵 할당 제거 완료.
-- [ ] **[Phase 2: 튜플 디코딩 & 스토리지] 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 스캔**
-  - **프로젝션 푸시다운 & 지연 디코딩 (Lazy Tuple Decoding)**: 테이블 풀 스캔 또는 범위 스캔 시 전체 컬럼을 역직렬화하지 않고, Null 비트맵과 헤더 검사 후 쿼리에서 요구하는 특정 컬럼 오프셋만 선택적 슬라이싱하여 디코딩 (할당 및 CPU 절감).
+- [ ] **[Phase 2: 튜플 디코딩 & 스토리지] 바이너리 튜플 지연 역직렬화 (Lazy Materialization) & 커버링 인덱스 스캔**
+  - **프로젝션 푸시다운 & 지연 디코딩 (Lazy Tuple Decoding & Column Projection Pushdown)**:
+    - **문제점**: 테이블 풀 스캔 또는 범위 스캔 시 수십 개 컬럼이 포함된 행 전체를 무조건 Go `storage.Value` 구조체로 일괄 언패킹하여 과도한 CPU 사이클과 GC 힙 할당 발생.
+    - **해결책**:
+      1. Null 비트맵과 헤더만 검사하여 WHERE 필터링 조건에 필요한 특정 컬럼 오프셋만 먼저 슬라이싱/디코딩.
+      2. 필터 조건에 부합(Match)하는 행에 한해서만 나머지 SELECT 투영 컬럼들을 지연 역직렬화(Lazy Materialization).
+    - **기대 효과**: 대형 테이블 스캔 시 불필요한 컬럼 디코딩 비용 및 메모리 할당 **70~80% 삭감**.
   - **[완료] 커버링 인덱스 스캔 (Covering Index / Index-Only Scan)**: 인덱스 키와 테이블 PK만으로 투영이 충족될 때 기본 테이블 힙 페치 및 락을 100% 생략하는 `NodeIndexOnlyScan` 및 `SkipList.ScanRangeEntries` 가상 레코드 합성 완비 (`4f69eb6`). (후속 과제: T-SQL `INCLUDE (col...)` 비키 컬럼 문법 지원).
 - [ ] **[Phase 3: 와이어 프로토콜 & 네트워크] 제로카피 와이어 인코딩 & I/O 버퍼 결합**
   - **스토리지 ➔ 와이어 제로카피 직접 직렬화**: 중간 `[]any` 레코드 슬라이스 변환을 제거하고, `sync.Pool`로 관리되는 와이어 바이트 버퍼에 바이너리 튜플 데이터를 직접 포맷팅.
   - **[완료] I/O 버퍼 결합 및 지연 플러시 (Write Combining & TCP_NODELAY)**: 행 단위 개별 `Write()`를 지양하고 32KB `bufio.Writer`로 행 및 명령 완료 패킷을 묶어 일괄 플러시하고 TCP_NODELAY를 적용하여 패킷 지연 및 syscall 횟수 최소화 완료.
-- [ ] **[Phase 4: 실행 엔진 & 볼케이노] 청크 단위 배치 반복자 (Chunked / Vectorized Volcano Execution)**
-  - **배치 튜플 프로세싱 (`NextBatch([64]Row)`)**: 행 단위 단일 `Next()` 가상 함수 호출을 64~256건 단위 튜플 청크 벡터 처리로 전환하여 함수 호출 오버헤드 완화 및 CPU L1 Data Cache / SIMD 파이프라이닝 극대화.
-- [ ] **[Phase 5: 쿼리 캐시 & 메모리] 고속 SQL 핑거프린팅 & 쿼리 전용 아레나(Arena)**
+- [ ] **[Phase 4: 실행 엔진 & 볼케이노] 청크 단위 배치 반복자 (Vectorized Chunk Iterator)**
+  - **배치 튜플 프로세싱 (`NextBatch([1024]Row)` / ClickHouse & DuckDB 스타일 벡터화)**:
+    - **문제점**: 행 단위 단일 `Next()` 가상 함수 인터페이스 호출로 인해 100만 행 처리 시 100만 번의 가상 함수 디스패치 및 분기 예측 실패(Branch Misprediction) 오버헤드 발생.
+    - **해결책**: `NextBatch(chunk *DataChunk)` 인터페이스로 전환하여 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍.
+    - **기대 효과**: CPU 분기 예측 적중률 극대화, CPU L1 Instruction Cache 보존, Go 컴파일러의 자동 루프 언롤링(Loop Unrolling) 유도로 대용량 테이블 스캔 및 집계 속도 **3~5배 가속**.
+- [ ] **[Phase 5: 쿼리 캐시 & 메모리] 고속 SQL 핑거프린팅 & 쿼리 전용 아레나 메모리 할당기 (Arena Allocator)**
   - **SQL 전문 고속 지문 해싱 (Fast SQL Fingerprinting)**: 파싱 전 Wyhash / FNV-1a 기반 텍스트 지문으로 `PlanCache` 선조회 및 단순 PK 점조회(`WHERE id = ?`) 스토리지 숏컷 라우팅.
-  - **세션/쿼리 전용 메모리 슬랩/아레나 (Per-Query Arena Allocator)**: 조인, 해시 테이블, 정렬 시 자잘한 힙 객체 할당 대신 아레나 포인터 전진 방식으로 할당 후 쿼리 종료 시 일괄 해제 (GC 압력 제거 및 p99 지연 시간 안정화).
+  - **세션/쿼리 전용 메모리 슬랩/아레나 (Per-Query Arena Allocator & GC Pressure Elimination)**:
+    - **문제점**: 해시 조인(Hash Join), 인메모리 정렬(Sort/Top-N), 그룹화 집계(Group By) 실행 시 수많은 임시 해시 엔트리와 버퍼 슬라이스가 Go 런타임 힙에 할당되어 GC STW(Stop-The-World) 및 p99 지연 시간 튀는 현상 발생.
+    - **해결책**: 쿼리/트랜잭션 생명주기에 묶인 아레나 메모리 블록을 사전 할당하고 포인터 전진 방식으로 할당한 뒤, 쿼리 종료 시 단 1번의 포인터 리셋으로 일괄 반환.
+    - **기대 효과**: 복잡한 대규모 분석 쿼리 시 Go GC 압박을 **0에 수렴**하게 만들고, p99/p99.9 응답 지연 시간을 극단적으로 안정화.
 
 ---
 

@@ -263,6 +263,24 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **과제**: 멀티파트 파일 업로드 API (`POST /api/files/:table/:id`), 정적 파일 서빙, 비동기 썸네일 리사이징 및 용량 거버너.
 - **기대 효과**: BaaS 스타일 올인원 파일 관리 역량 확보.
 
+#### 6.13. 파이프라인 그룹 커밋 및 fsync 일괄 병합 (Group Commit Pipelining) (`pkg/storage/memengine`, `pkg/storage/wiredtiger`)
+- **과제**:
+  - 커밋 대기열 큐(채널 / 링 버퍼)를 구축하여 워커 고루틴들의 동시 다발적인 트랜잭션 커밋 요청 수집.
+  - 마이크로초 윈도우(50~100µs) 또는 N개(32~64건) 단위로 단 1회의 시스템 콜(`writev` + `fdatasync`) 일괄 영속화.
+- **기대 효과**: 동시성 트랜잭션(16~64 워커) 포화 상태에서 쓰기 처리량(TPS) **2~4배 이상 폭증**, 물리 NVMe fsync 병목 원천 해소.
+
+#### 6.14. 바이너리 튜플 지연 역직렬화 및 프로젝션 푸시다운 (Lazy Materialization) (`pkg/storage`, `pkg/execution`)
+- **과제**:
+  - Null 비트맵과 헤더만 검사하여 WHERE 필터링 조건에 필요한 특정 컬럼 오프셋만 먼저 슬라이싱/디코딩.
+  - 필터 조건에 부합(Match)하는 행에 한해서만 나머지 SELECT 투영 컬럼들을 지연 역직렬화(Lazy Materialization).
+- **기대 효과**: 대형 테이블 스캔 시 불필요한 컬럼 디코딩 비용 및 메모리 할당 **70~80% 삭감**.
+
+#### 6.15. 세션/쿼리 전용 아레나 메모리 할당기 (Per-Query Arena Allocator & GC Elimination) (`pkg/execution`, `pkg/storage`)
+- **과제**:
+  - 개별 쿼리/트랜잭션 생명주기에 묶인 아레나 메모리 블록을 사전 할당하고 범프 포인터(Bump-pointer) 방식으로 고속 할당.
+  - 해시 조인, 인메모리 정렬, 집계 버퍼를 아레나에서 운용하고 쿼리 종료 시 단 1번의 포인터 리셋으로 일괄 반환.
+- **기대 효과**: 대규모 분석 쿼리 시 Go GC STW 압박을 **0에 수렴**하게 만들고, p99/p99.9 응답 지연 시간의 극단적 플랫 안정화 달성.
+
 ---
 
 ## 4. 마일스톤별 핵심 추진 우선순위 매트릭스
@@ -287,8 +305,12 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 6** | **P2** | **$N > 4$ 체인 조인 동적 계획법 (DP / Selinger)** | CBO & 플래너 | 높음 (400~600줄) | 복잡한 다중 조인 쿼리의 기하급수적 최적 플랜 도출 |
 | **Phase 6** | **P2** | **다중컬럼 확장통계, MCV 및 옵티마이저 힌트** | CBO & 플래너 | 보통 (300~400줄) | 통계 편향 교정 및 DBA 실행 계획 제어권 |
 | **Phase 6** | **P2** | **T-SQL 특화 타입 TDS 직렬화 & PLP LOB** | TDS 프로토콜 | 보통 (300~400줄) | UNIQUEIDENTIFIER, DATETIME2, LOB 완벽 지원 |
+| **Phase 6** | **P1** | **파이프라인 그룹 커밋 & fsync 병합** | 스토리지 & 트랜잭션 | 보통 (350~450줄) | 동시성 포화 시 쓰기 처리량(TPS) 2~4배 향상, fsync 병목 해소 |
+| **Phase 6** | **P1** | **바이너리 튜플 지연 역직렬화 (Lazy Decoding)** | 스토리지 & 실행기 | 보통 (300~400줄) | 대형 테이블 스캔 시 불필요 컬럼 디코딩 비용 및 GC 70~80% 삭감 |
+| **Phase 6** | **P1** | **세션/쿼리 전용 아레나 메모리 할당기** | 메모리 거버너 | 보통 (300~400줄) | 대형 조인/정렬/집계 시 Go GC 압박 0화 및 p99 지연 시간 플랫화 |
 | **Phase 6** | **P2** | **Volcano 청크 단위 배치 실행 (Vectorized)** | 실행기 & SIMD | 높음 (600~800줄) | 대용량 관계형 스캔 및 집계 3~5배 가속 |
 | **Phase 6** | **P3** | **백그라운드 MVCC Vacuum / Version GC** | 트랜잭션 & 메모리 | 높음 (400~500줄) | 장기 가동 인메모리 테이블 단편화 방지 |
 | **Phase 6** | **P3** | **Wasm 런타임 샌드박스 UDF (`wazero`)** | 플러그인 & 보안 | 보통 (300~400줄) | 런타임 동적 플러그인 적재 및 완전한 크래시 격리 |
 | **Phase 6** | **P3** | **멀티랭귀지 클라이언트 호환성 인증 하네스** | 와이어 프로토콜 | 보통 (200~300줄) | Python, Node.js, C# 공식 드라이버 인증 |
 | **Phase 6** | **P3** | **로컬 / S3 파일 스토리지 및 썸네일** | BaaS 스토리지 | 보통 (250~350줄) | 멀티파트 업로드 및 썸네일 자동 생성 |
+

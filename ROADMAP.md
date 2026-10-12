@@ -262,6 +262,25 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **Challenge**: Implement multipart file upload APIs (`POST /api/files/:table/:id`), static asset serving, asynchronous image thumbnail generation, and storage quotas.
 - **Expected Outcome**: Turnkey all-in-one BaaS storage capability directly inside the single standalone binary.
 
+#### 6.13. Pipelined Group Commit & fsync Batching (`pkg/storage/memengine`, `pkg/storage/wiredtiger`)
+- **Challenge**:
+  - Implement a concurrent commit queue (channel / ring buffer) collecting pending transaction commits across worker goroutines.
+  - Flush and sync WAL/AOF records in microsecond time windows (50~100µs) or batch size (32~64 transactions) with a single `writev` + `fdatasync` syscall.
+- **Expected Outcome**: 2~4x throughput multiplier under high-concurrency (16~64 workers) transactional write workloads, eliminating NVMe fsync saturation.
+
+#### 6.14. Lazy Tuple Materialization & Column Projection Pushdown (`pkg/storage`, `pkg/execution`)
+- **Challenge**:
+  - Inspect row headers and null bitmaps to decode only the filter columns required by the query `WHERE` predicate.
+  - Perform full tuple materialization and unpacking into Go `storage.Value` objects strictly for rows that pass the filter.
+- **Expected Outcome**: 70~80% reduction in CPU cycles and GC heap allocations during large-scale table scans and range queries.
+
+#### 6.15. Per-Query Arena Memory Allocator & GC Elimination (`pkg/execution`, `pkg/storage`)
+- **Challenge**:
+  - Allocate dedicated memory arena slabs tied to the lifecycle of individual analytical queries and transactions.
+  - Direct intermediate allocations for hash joins, in-memory sorting, and aggregations to the arena via bump-pointer allocation.
+  - Reclaim all query memory in a single pointer reset upon query completion without invoking the Go runtime GC.
+- **Expected Outcome**: Complete elimination of Go runtime GC Stop-The-World pauses and rock-solid flat p99/p99.9 latency during heavy analytical queries.
+
 ---
 
 ## 4. Prioritized Engineering Matrix
@@ -286,8 +305,12 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 6** | **P2** | **$N > 4$ Join Dynamic Programming (DP / Selinger)** | CBO & Planner | High (400~600 lines) | Optimal join ordering for complex multi-table queries |
 | **Phase 6** | **P2** | **Multi-Column Statistics, MCV & Optimizer Hints** | CBO & Planner | Medium (300~400 lines) | Corrects cardinality estimation skew, guarantees DBA execution plan control |
 | **Phase 6** | **P2** | **T-SQL Specialized TDS Serialization & PLP LOB** | TDS Protocol | Medium (300~400 lines) | Complete binary support for UNIQUEIDENTIFIER, DATETIME2, and large LOBs |
+| **Phase 6** | **P1** | **Pipelined Group Commit & fsync Batching** | Storage & Engine | Medium (350~450 lines) | 2~4x transactional write throughput boost under concurrency saturation |
+| **Phase 6** | **P1** | **Lazy Tuple Materialization & Projection Pushdown** | Storage & Executor | Medium (300~400 lines) | 70~80% CPU & GC reduction on large table scans |
+| **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
 | **Phase 6** | **P2** | **Volcano Chunked Batch Execution (Vectorized)** | Executor & SIMD | High (600~800 lines) | 3~5x acceleration for table scans and aggregate filters |
 | **Phase 6** | **P3** | **Background MVCC Vacuum / Version GC** | Concurrency & RAM | High (400~500 lines) | Eliminates memory fragmentation in 24/7 long-running in-memory tables |
 | **Phase 6** | **P3** | **Wasm Runtime Sandbox UDF (`wazero`)** | Plugins & Sandbox | Medium (300~400 lines) | Secure, crash-isolated in-engine execution of third-party plugins |
 | **Phase 6** | **P3** | **Multi-Language Client Certification Harness** | Wire Protocols | Medium (200~300 lines) | Automated integration suites for Python, Node.js, and .NET drivers |
 | **Phase 6** | **P3** | **Local & S3-Compatible File Storage & Thumbnails** | BaaS Storage | Medium (250~350 lines) | Multipart file upload and automatic image thumbnail generation |
+
