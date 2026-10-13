@@ -19,6 +19,7 @@ import (
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/engine"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage"
@@ -35,7 +36,7 @@ type Server struct {
 	listener    net.Listener
 	engine      storage.Engine
 	catalog     *catalog.Catalog
-	apiServer   *api.Server
+	coordinator engine.SQLCoordinator
 	planCache   *proc.PlanCache
 	byteCache   *runtime.PlanCache
 	executor    *runtime.Executor
@@ -66,12 +67,28 @@ func NewServerWithCache(addr string, cat *catalog.Catalog, eng storage.Engine, c
 		addr:        addr,
 		catalog:     cat,
 		engine:      eng,
-		apiServer:   api.NewServer(cat, eng),
+		coordinator: api.NewServer(cat, eng),
 		planCache:   proc.NewPlanCache(),
 		byteCache:   cache,
 		executor:    executor,
 		activeConns: make(map[uint32]*pgActiveConn),
 	}
+}
+
+// NewServerWithCoordinator creates a PostgreSQL wire protocol server with an explicit SQLCoordinator.
+func NewServerWithCoordinator(addr string, cat *catalog.Catalog, eng storage.Engine, cache *runtime.PlanCache, coord engine.SQLCoordinator) *Server {
+	s := NewServerWithCache(addr, cat, eng, cache)
+	if coord != nil {
+		s.coordinator = coord
+	}
+	return s
+}
+
+// SetCoordinator configures or overrides the SQL coordinator for query execution.
+func (s *Server) SetCoordinator(coord engine.SQLCoordinator) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.coordinator = coord
 }
 
 // SetBytecodePlanCache sets or replaces the bytecode plan cache and updates the executor.
@@ -212,7 +229,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 	connID := atomic.AddUint64(&s.connCounter, 1)
 	sessID := fmt.Sprintf("pg-%d", connID)
-	defer s.apiServer.CloseSession(sessID)
+	defer s.coordinator.CloseSession(sessID)
 
 	// 1. Initial Handshake: SSL or GSSENC or Cancel or Startup
 	buf := make([]byte, 8)
@@ -239,7 +256,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		s.mu.Unlock()
 
 		if targetSessID != "" {
-			s.apiServer.CancelSessionQuery(targetSessID)
+			s.coordinator.CancelSessionQuery(targetSessID)
 		}
 		return
 	}
@@ -299,7 +316,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			s.mu.Unlock()
 
 			if targetSessID != "" {
-				s.apiServer.CloseSession(targetSessID)
+				s.coordinator.CloseSession(targetSessID)
 			}
 			return
 		}
@@ -330,10 +347,10 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	// 2. Authentication Handshake
-	authSvc := s.apiServer.AuthService()
+	authSvc := s.coordinator.AuthService()
 	needsPassword := false
 	if authSvc != nil {
-		if s.apiServer.IsAuthEnabled() {
+		if s.coordinator.IsAuthEnabled() {
 			needsPassword = true
 		} else if login, err := authSvc.GetLogin(username); err == nil && login != nil && login.PasswordHash != "" {
 			needsPassword = true
@@ -392,7 +409,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	// Bind authenticated user to session
-	s.apiServer.SetSessionUser(sessID, username)
+	s.coordinator.SetSessionUser(sessID, username)
 
 	_ = WriteParameterStatus(conn, "server_version", "15.0 (SQLion)")
 	_ = WriteParameterStatus(conn, "server_encoding", "UTF8")
@@ -453,7 +470,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 			s.handleExecute(conn, payload, portals, sessID)
 
 		case 'S': // Sync
-			_ = WriteReadyForQueryStatus(conn, s.apiServer.GetSessionTxStatus(sessID))
+			_ = WriteReadyForQueryStatus(conn, s.coordinator.GetSessionTxStatus(sessID))
 
 		case 'C': // Close
 			s.handleClose(conn, payload, statements, portals)
@@ -466,7 +483,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 
 		default:
 			// Stay ready
-			_ = WriteReadyForQueryStatus(conn, s.apiServer.GetSessionTxStatus(sessID))
+			_ = WriteReadyForQueryStatus(conn, s.coordinator.GetSessionTxStatus(sessID))
 		}
 	}
 }
@@ -476,7 +493,7 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 		log.Printf("[DEV][PGWire][SimpleQuery] %s", strings.TrimSpace(query))
 	}
 	defer func() {
-		_ = WriteReadyForQueryStatus(conn, s.apiServer.GetSessionTxStatus(sessID))
+		_ = WriteReadyForQueryStatus(conn, s.coordinator.GetSessionTxStatus(sessID))
 	}()
 	s.runAndWriteQuery(conn, query, true, sessID)
 }
@@ -828,7 +845,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			return
 		}
 		previewSQL := buildPreviewSQL(query, paramTypes)
-		if res, err := s.apiServer.ExecuteSessionSQL("default", previewSQL); err == nil && len(res.Columns) > 0 {
+		if res, err := s.coordinator.ExecuteSessionSQL("default", previewSQL); err == nil && len(res.Columns) > 0 {
 			var sampleRow map[string]any
 			if len(res.Rows) > 0 {
 				sampleRow = res.Rows[0]
@@ -1046,7 +1063,7 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 	if sessID == "" {
 		sessID = "default"
 	}
-	res, err := s.apiServer.ExecuteSessionSQL(sessID, trimmed)
+	res, err := s.coordinator.ExecuteSessionSQL(sessID, trimmed)
 	if err != nil {
 		if s.DevMode() {
 			log.Printf("[DEV][PGWire][Error] query=%s err=%v", trimmed, err)

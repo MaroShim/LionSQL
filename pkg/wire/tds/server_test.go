@@ -10,6 +10,7 @@ import (
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/engine"
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage/memengine"
 )
@@ -632,7 +633,7 @@ func TestTDS_InferColumnInfos_DateTime(t *testing.T) {
 	cat := catalog.New(eng)
 	srv := NewServer("127.0.0.1:0", cat, eng)
 
-	mockRes := &api.QueryResult{
+	mockRes := &engine.QueryResult{
 		Columns: []string{"id", "name", "create_date", "modify_date"},
 		Rows: []map[string]any{
 			{

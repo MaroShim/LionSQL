@@ -10,23 +10,15 @@ import (
 	"strings"
 	"time"
 
+	"sqlion/pkg/engine"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/replication"
 	"sqlion/pkg/storage"
 )
 
-// QueryResult represents the outcome of a SQL statement execution.
-type QueryResult struct {
-	Success      bool             `json:"success"`
-	Command      string           `json:"command"`
-	Columns      []string         `json:"columns,omitempty"`
-	Rows         []map[string]any `json:"rows,omitempty"`
-	RowsAffected int64            `json:"rows_affected"`
-	DurationUS   int64            `json:"duration_us"`
-	Messages     []string         `json:"messages,omitempty"`
-	Error        string           `json:"error,omitempty"`
-}
+// QueryResult represents the outcome of a SQL statement execution (aliased from engine.QueryResult).
+type QueryResult = engine.QueryResult
 
 func parseSessionVarValue(s string) any {
 	s = strings.TrimSpace(s)

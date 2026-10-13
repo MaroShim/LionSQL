@@ -10,6 +10,7 @@ import (
 
 	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/engine"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
@@ -19,6 +20,12 @@ import (
 	"sqlion/pkg/storage"
 	"sqlion/pkg/ui"
 )
+
+// Ensure Server satisfies the engine.SQLCoordinator interface.
+var _ engine.SQLCoordinator = (*Server)(nil)
+
+// ActiveQueryInfo represents snapshot metadata of an in-flight query (aliased from engine.ActiveQueryInfo).
+type ActiveQueryInfo = engine.ActiveQueryInfo
 
 // ClientSession maintains interactive connection state: open transaction, session variables, and query cancellation context.
 type ClientSession struct {
@@ -489,14 +496,6 @@ func (s *Server) SetSessionUser(id, user string) {
 	}
 }
 
-// ActiveQueryInfo represents snapshot metadata of an in-flight query.
-type ActiveQueryInfo struct {
-	SessionID  string    `json:"session_id"`
-	SPID       int       `json:"spid"`
-	Query      string    `json:"query"`
-	StartTime  time.Time `json:"start_time"`
-	DurationUS int64     `json:"duration_us"`
-}
 
 // CancelSessionQuery triggers cooperative cancellation for the currently active statement on sessionID.
 // Returns true if an active query was found and cancellation was signaled.

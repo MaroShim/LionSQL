@@ -18,6 +18,7 @@ import (
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/engine"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage"
@@ -29,7 +30,7 @@ type Server struct {
 	listener    net.Listener
 	engine      storage.Engine
 	catalog     *catalog.Catalog
-	apiServer   *api.Server
+	coordinator engine.SQLCoordinator
 	planCache   *proc.PlanCache
 	byteCache   *runtime.PlanCache
 	executor    *runtime.Executor
@@ -61,13 +62,29 @@ func NewServerWithCache(addr string, cat *catalog.Catalog, eng storage.Engine, c
 		addr:        addr,
 		catalog:     cat,
 		engine:      eng,
-		apiServer:   api.NewServer(cat, eng),
+		coordinator: api.NewServer(cat, eng),
 		planCache:   proc.NewPlanCache(),
 		byteCache:   cache,
 		executor:    executor,
 		spidCounter: 50, // Standard MSSQL user SPIDs begin at 51
 		txCounter:   1000,
 	}
+}
+
+// NewServerWithCoordinator creates a TDS wire protocol server with an explicit SQLCoordinator.
+func NewServerWithCoordinator(addr string, cat *catalog.Catalog, eng storage.Engine, cache *runtime.PlanCache, coord engine.SQLCoordinator) *Server {
+	s := NewServerWithCache(addr, cat, eng, cache)
+	if coord != nil {
+		s.coordinator = coord
+	}
+	return s
+}
+
+// SetCoordinator configures or overrides the SQL coordinator for query execution.
+func (s *Server) SetCoordinator(coord engine.SQLCoordinator) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.coordinator = coord
 }
 
 // SetBytecodePlanCache sets or replaces the bytecode plan cache and updates the executor.
@@ -285,7 +302,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		PacketSize: DefaultPacketSize,
 		prepared:   make(map[int32]*TdsPreparedStatement),
 	}
-	defer s.apiServer.CloseSession(sess.SessionID)
+	defer s.coordinator.CloseSession(sess.SessionID)
 
 	// 2. Read initial packet (usually PacketPrelogin or direct Login7)
 	firstPkt, err := ReadPacket(conn)
@@ -853,7 +870,7 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 	}
 
 	if len(res.Columns) > 0 {
-		qr := &api.QueryResult{
+		qr := &engine.QueryResult{
 			Columns: res.Columns,
 			Rows:    res.Rows,
 			Success: true,
@@ -990,7 +1007,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	res, err := s.apiServer.ExecuteSessionSQLContext(ctx, sess.SessionID, trimmed)
+	res, err := s.coordinator.ExecuteSessionSQLContext(ctx, sess.SessionID, trimmed)
 	if err != nil {
 		if ctx.Err() != nil {
 			// Query canceled via Attention packet; do not write error packet
@@ -1677,7 +1694,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 	rqType := binary.LittleEndian.Uint16(body[:2])
 	switch rqType {
 	case 5: // tmBeginXact
-		_, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, "BEGIN TRANSACTION")
+		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "BEGIN TRANSACTION")
 		if err != nil {
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
@@ -1697,7 +1714,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		txDesc := sess.txDescriptor
 		sess.inTx = false
 		sess.txDescriptor = 0
-		_, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, "COMMIT TRANSACTION")
+		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "COMMIT TRANSACTION")
 		if err != nil {
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
@@ -1715,7 +1732,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		txDesc := sess.txDescriptor
 		sess.inTx = false
 		sess.txDescriptor = 0
-		_, err := s.apiServer.ExecuteSessionSQL(sess.SessionID, "ROLLBACK TRANSACTION")
+		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "ROLLBACK TRANSACTION")
 		if err != nil {
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
@@ -1774,7 +1791,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	res, err := s.apiServer.ExecuteSessionSQLContext(ctx, sess.SessionID, trimmed)
+	res, err := s.coordinator.ExecuteSessionSQLContext(ctx, sess.SessionID, trimmed)
 	if err != nil {
 		if ctx.Err() != nil {
 			// Query canceled via Attention packet; do not write error packet
@@ -1861,7 +1878,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 }
 
-func (s *Server) inferColumnInfos(res *api.QueryResult) []ColumnInfo {
+func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 	cols := make([]ColumnInfo, len(res.Columns))
 
 	for i, colName := range res.Columns {
