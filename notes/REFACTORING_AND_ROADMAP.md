@@ -69,14 +69,21 @@
 
 ---
 
-### 과제 2 (P1): 아키텍처 계층 정립: SQL 실행 코디네이터 분리 (`pkg/api` ➔ `pkg/engine`)
+### 과제 2 (P1): [진행 중] 아키텍처 계층 정립: SQL 실행 코디네이터 분리 (`pkg/api` ➔ `pkg/engine`)
 * **배경 & 문제점**:
   * `pkg/api` 패키지가 HTTP REST 핸들러뿐만 아니라 15,000+ 라인에 달하는 SQL 실행 오케스트레이션 로직(`sqlexec*.go`)을 함께 품고 있음.
   * 이로 인해 PGWire(`pkg/wire`)나 TDS(`pkg/wire/tds`)가 코어 엔진이 아닌 `pkg/api`에 의존하는 계층 역전(Layer Inversion) 현상이 존재.
-* **구현 계획**:
-  1. SQL 실행 오케스트레이션 로직을 `pkg/engine` 코어 레이어로 독립 승격.
-  2. `Engine` 또는 `Coordinator` 구조체로 세션 컨텍스트, 트랜잭션, AST 파서/플래너, Volcano 파이프라인, VDBE 실행기를 캡슐화.
-  3. `pkg/api`(HTTP/웹 스튜디오), `pkg/wire`(PGWire), `pkg/wire/tds`(TDS) 3대 프로토콜 어댑터가 동등하게 `pkg/engine`의 단일 인터페이스를 단방향으로 호출하도록 클린 아키텍처 확립.
+* **구현 진행 및 완료 내역**:
+  1. **코어 인터페이스 및 데이터 모델 독립 (`pkg/engine/coordinator.go`, `pkg/engine/session.go`)**:
+     - `engine.SQLCoordinator` 인터페이스 규약 정의: `ExecuteSQL`, `ExecuteSessionSQL`, `CloseSession`, `CancelSessionQuery`, `GetSessionTxStatus`, `SetSessionUser` 등 대화형 프로토콜 요구사항 100% 포괄.
+     - `engine.QueryResult`, `engine.ActiveQueryInfo`, `engine.ClientSession`, `engine.PreparedStatement` 코어 패키지 독립 승격.
+  2. **코어 `Coordinator` 구조체 구현 (`pkg/engine/coordinator_impl.go`)**:
+     - 카탈로그, 스토리지 엔진, 플랜 캐시, 바이트코드 실행기, 고루틴 세션 풀(`SessionPool`), 진단 로거를 통합 관리하는 독자 엔진 코디네이터 구현.
+  3. **프로토콜 레이어 디커플링 (`pkg/wire`, `pkg/wire/tds`)**:
+     - PGWire 및 TDS 서버가 `*api.Server` 구체 구현체 대신 `engine.SQLCoordinator` 인터페이스에만 의존하도록 리팩토링.
+     - `NewServerWithCoordinator` 생성자 및 `SetCoordinator` 주입 세터 연동 완료.
+  4. **후속 작업**:
+     - `pkg/api/sqlexec_*.go`의 세부 파싱/실행 파이프라인 메서드들을 `Coordinator`로 순차 이전 및 `api.Server` 위임 연동.
 
 ---
 
