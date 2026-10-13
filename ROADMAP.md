@@ -263,7 +263,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **Expected Outcome**: Turnkey all-in-one BaaS storage capability directly inside the single standalone binary.
 
 #### 6.13. [COMPLETED] Pipelined Group Commit & fsync Batching (`pkg/storage/memengine`, `pkg/storage/wiredtiger`)
-- **Result**: Implemented as leader/follower group commit in the memengine WAL (no timer window, zero added latency). `FsyncAlways` at 16/64 workers dropped from ~3.7ms to 0.062/0.038ms per commit. WiredTiger already group-commits natively.
+- **Result**: Implemented leader/follower group commit across both `memengine` WAL (`file.Sync`) and `wiredtiger` (`WT_SESSION::log_flush("sync=on")`) along with lock-free commit fast-paths. `FsyncAlways` latency at 16/64 workers dropped from ~3.7ms to 0.062/0.038ms per commit, and TPC-C VDBE reached 1,863 TPS (`memory -fsync always`) and 2,823 TPS (`wiredtiger -fsync always`).
 - **Challenge**:
   - Implement a concurrent commit queue (channel / ring buffer) collecting pending transaction commits across worker goroutines.
   - Flush and sync WAL/AOF records in microsecond time windows (50~100µs) or batch size (32~64 transactions) with a single `writev` + `fdatasync` syscall.

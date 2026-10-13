@@ -83,11 +83,7 @@ func main() {
 	fmt.Println("  SQLion TPC-C Benchmark Suite (Native T-SQL VDBE Bytecode Engine)")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Execution]      Precompiled T-SQL VDBE Bytecode (*proc.Program -> PlanCache)\n")
-	if *engineType == "memory" {
-		fmt.Printf(" [Storage Engine] %s (WAL fsync: %s, Dir: %s)\n", *engineType, fsyncMode, *dataDir)
-	} else {
-		fmt.Printf(" [Storage Engine] %s (Dir: %s)\n", *engineType, *dataDir)
-	}
+	fmt.Printf(" [Storage Engine] %s (WAL fsync: %s, Dir: %s)\n", *engineType, fsyncMode, *dataDir)
 	fmt.Printf(" [Scale Factor]   %d Warehouses (%d Items, %d Customers/District)\n", *numWarehouses, *numItems, *numCustPerDist)
 	fmt.Printf(" [Concurrency]    %d Client Workers\n", *numWorkers)
 	fmt.Printf(" [Duration]       %v\n", *durationFlag)
@@ -96,16 +92,18 @@ func main() {
 	// 1. Initialize Storage Engine
 	var eng storage.Engine
 	var memEng *memengine.Engine
+	var wtEng *wiredtiger.Engine
 	cleanupDir := false
 	switch *engineType {
 	case "wiredtiger":
 		_ = os.RemoveAll(*dataDir)
 		cleanupDir = true
-		eng = wiredtiger.New()
-		if err := eng.Open(*dataDir); err != nil {
+		wtEng = wiredtiger.New()
+		if err := wtEng.Open(*dataDir); err != nil {
 			fmt.Printf("Failed to open WiredTiger storage engine: %v\n", err)
 			os.Exit(1)
 		}
+		eng = wtEng
 	case "memory":
 		memEng = memengine.New()
 		if enableMemWAL {
@@ -149,6 +147,9 @@ func main() {
 
 	if memEng != nil && enableMemWAL {
 		memEng.SetFsyncPolicy(targetFsyncPolicy)
+	}
+	if wtEng != nil && enableMemWAL {
+		wtEng.SetFsyncPolicy(targetFsyncPolicy)
 	}
 
 	// 4. Compile TPC-C Stored Procedures into VDBE Bytecode

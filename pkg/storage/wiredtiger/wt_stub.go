@@ -35,6 +35,12 @@ func (e *Engine) CurrentLSN() int64 {
 
 func (e *Engine) SetWALHook(fn func(rec memengine.WALRecord)) {}
 
+func (e *Engine) SetFsyncPolicy(policy memengine.FsyncPolicy) {}
+
+func (e *Engine) FsyncPolicy() memengine.FsyncPolicy { return memengine.FsyncNone }
+
+func (e *Engine) SyncCount() int64 { return 0 }
+
 func (e *Engine) NewSession() (storage.Session, error) {
 	return nil, fmt.Errorf("wiredtiger storage engine not enabled")
 }

@@ -50,6 +50,10 @@ static int go_wt_session_rollback(WT_SESSION *session, const char *config) {
     return session->rollback_transaction(session, config);
 }
 
+static int go_wt_session_log_flush_sync(WT_SESSION *session) {
+    return session->log_flush(session, "sync=on");
+}
+
 static int go_wt_open_cursor(WT_SESSION *session, const char *uri, WT_CURSOR **cursorp) {
     return session->open_cursor(session, uri, NULL, NULL, cursorp);
 }
@@ -163,20 +167,65 @@ import (
 
 // Engine implements storage.Engine via the WiredTiger C API.
 type Engine struct {
-	mu      sync.RWMutex
-	conn    *C.WT_CONNECTION
-	homeDir string
-	tables  map[string]*storage.TableSchema
-	nextLSN atomic.Int64
-	walHook func(rec memengine.WALRecord)
-	closed  bool
+	mu           sync.RWMutex
+	conn         *C.WT_CONNECTION
+	homeDir      string
+	tables       map[string]*storage.TableSchema
+	nextLSN      atomic.Int64
+	walHook      func(rec memengine.WALRecord)
+	hasHook      atomic.Bool
+	walOrderMu   sync.Mutex
+	fsyncPolicy  atomic.Int32
+	syncMu       sync.Mutex
+	writeSeq     atomic.Int64
+	syncedSeq    atomic.Int64
+	syncCount    atomic.Int64
+	lastSyncNano atomic.Int64
+	closed       bool
 }
 
 // New creates a new WiredTiger storage engine instance.
 func New() *Engine {
-	return &Engine{
+	e := &Engine{
 		tables: make(map[string]*storage.TableSchema),
 	}
+	e.fsyncPolicy.Store(int32(memengine.FsyncNone))
+	return e
+}
+
+// SetFsyncPolicy configures the journal synchronization policy (FsyncNone, FsyncEverySec, FsyncAlways).
+func (e *Engine) SetFsyncPolicy(policy memengine.FsyncPolicy) {
+	e.fsyncPolicy.Store(int32(policy))
+}
+
+// FsyncPolicy returns the current journal synchronization policy.
+func (e *Engine) FsyncPolicy() memengine.FsyncPolicy {
+	return memengine.FsyncPolicy(e.fsyncPolicy.Load())
+}
+
+// SyncCount returns the number of journal log_flush(sync=on) calls issued by group commit.
+func (e *Engine) SyncCount() int64 {
+	return e.syncCount.Load()
+}
+
+// syncUpTo performs leader/follower group commit via WT_SESSION::log_flush(sync=on).
+// The first waiter on syncMu flushes all committed transactions up to writeSeq in a
+// single disk sync; followers covered by that flush return immediately without a syscall.
+func (e *Engine) syncUpTo(sess *C.WT_SESSION, seq int64) error {
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+
+	if e.syncedSeq.Load() >= seq {
+		return nil
+	}
+	target := e.writeSeq.Load()
+	e.syncCount.Add(1)
+	if ret := C.go_wt_session_log_flush_sync(sess); ret != 0 {
+		return fmt.Errorf("wiredtiger log_flush failed with code %d", ret)
+	}
+	e.syncedSeq.Store(target)
+	e.lastSyncNano.Store(time.Now().UnixNano())
+	return nil
 }
 
 // Type returns the human-readable storage engine backend name.
@@ -194,13 +243,15 @@ func (e *Engine) SetWALHook(fn func(rec memengine.WALRecord)) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	e.walHook = fn
+	e.hasHook.Store(fn != nil)
 }
 
-// recordWALLocked writes a WAL record, invokes the registered walHook, and returns the assigned WALRecord.
+// recordWALLocked assigns a monotonically ordered LSN and invokes walHook under walOrderMu.
 func (e *Engine) recordWALLocked(ops []memengine.WALOp) memengine.WALRecord {
 	if len(ops) == 0 {
 		return memengine.WALRecord{}
 	}
+	e.walOrderMu.Lock()
 	rec := memengine.WALRecord{
 		LSN:       e.nextLSN.Add(1),
 		Timestamp: time.Now().UnixNano(),
@@ -209,6 +260,7 @@ func (e *Engine) recordWALLocked(ops []memengine.WALOp) memengine.WALRecord {
 	if e.walHook != nil {
 		e.walHook(rec)
 	}
+	e.walOrderMu.Unlock()
 	return rec
 }
 
@@ -728,6 +780,7 @@ type WTTx struct {
 	commitTimestamp   int64
 	mu                sync.Mutex
 	closed            bool
+	hasWrites         bool
 	undoLog           []wtUndoOp
 	savepoints        map[string]int
 	spNames           []string
@@ -855,7 +908,10 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 	}
 	defer C.go_wt_cursor_reset(cur)
 
-	recBytes, err := serializeRecord(cur, tbl, record)
+	bufPtr := storage.GetTupleBuffer()
+	defer storage.PutTupleBuffer(bufPtr)
+
+	recBytes, err := serializeRecordToBuffer(cur, tbl, record, *bufPtr)
 	if err != nil {
 		return err
 	}
@@ -874,17 +930,24 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		return fmt.Errorf("cursor_insert failed with code %d", ret)
 	}
 
-	tx.undoLog = append(tx.undoLog, wtUndoOp{
-		table: tableName,
-		pk:    pkVal,
-		kind:  wtUndoDelete,
-	})
-	tx.walOps = append(tx.walOps, memengine.WALOp{
-		Type:  memengine.OpInsert,
-		Table: tableName,
-		Key:   pkStr,
-		Data:  recBytes,
-	})
+	tx.hasWrites = true
+	if len(tx.savepoints) > 0 {
+		tx.undoLog = append(tx.undoLog, wtUndoOp{
+			table: tableName,
+			pk:    pkVal,
+			kind:  wtUndoDelete,
+		})
+	}
+	if tx.sess.engine.hasHook.Load() {
+		recCopy := make([]byte, len(recBytes))
+		copy(recCopy, recBytes)
+		tx.walOps = append(tx.walOps, memengine.WALOp{
+			Type:  memengine.OpInsert,
+			Table: tableName,
+			Key:   pkStr,
+			Data:  recCopy,
+		})
+	}
 
 	return nil
 }
@@ -969,20 +1032,25 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		return fmt.Errorf("cursor_update failed with code %d", ret)
 	}
 
-	tx.undoLog = append(tx.undoLog, wtUndoOp{
-		table:   tableName,
-		pk:      pk,
-		kind:    wtUndoPut,
-		oldData: oldData,
-	})
-	recCopy := make([]byte, len(recBytes))
-	copy(recCopy, recBytes)
-	tx.walOps = append(tx.walOps, memengine.WALOp{
-		Type:  memengine.OpUpdate,
-		Table: tableName,
-		Key:   pk.String(),
-		Data:  recCopy,
-	})
+	tx.hasWrites = true
+	if len(tx.savepoints) > 0 {
+		tx.undoLog = append(tx.undoLog, wtUndoOp{
+			table:   tableName,
+			pk:      pk,
+			kind:    wtUndoPut,
+			oldData: oldData,
+		})
+	}
+	if tx.sess.engine.hasHook.Load() {
+		recCopy := make([]byte, len(recBytes))
+		copy(recCopy, recBytes)
+		tx.walOps = append(tx.walOps, memengine.WALOp{
+			Type:  memengine.OpUpdate,
+			Table: tableName,
+			Key:   pk.String(),
+			Data:  recCopy,
+		})
+	}
 
 	return nil
 }
@@ -1017,6 +1085,7 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 		return fmt.Errorf("cursor_remove failed with code %d", ret)
 	}
 
+	tx.hasWrites = true
 	if len(oldData) > 0 {
 		tx.undoLog = append(tx.undoLog, wtUndoOp{
 			table:   tableName,
@@ -1025,11 +1094,13 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 			oldData: oldData,
 		})
 	}
-	tx.walOps = append(tx.walOps, memengine.WALOp{
-		Type:  memengine.OpDelete,
-		Table: tableName,
-		Key:   pk.String(),
-	})
+	if tx.sess.engine.hasHook.Load() {
+		tx.walOps = append(tx.walOps, memengine.WALOp{
+			Type:  memengine.OpDelete,
+			Table: tableName,
+			Key:   pk.String(),
+		})
+	}
 
 	return nil
 }
@@ -1148,6 +1219,7 @@ func (tx *WTTx) Commit() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	hasWrites := tx.hasWrites
 	tx.tableCache = nil
 	walOps := tx.walOps
 	tx.walOps = nil
@@ -1163,15 +1235,34 @@ func (tx *WTTx) Commit() error {
 		return fmt.Errorf("commit_transaction failed with code %d", ret)
 	}
 
-	if len(walOps) > 0 {
-		tx.sess.engine.mu.Lock()
-		rec := tx.sess.engine.recordWALLocked(walOps)
-		tx.sess.engine.mu.Unlock()
+	if !hasWrites || tx.opts.ReadOnly {
+		tx.commitLSN = tx.snapshotLSN
+		tx.commitTimestamp = time.Now().UnixNano()
+		return nil
+	}
+
+	eng := tx.sess.engine
+	seq := eng.writeSeq.Add(1)
+	if len(walOps) > 0 && eng.hasHook.Load() {
+		rec := eng.recordWALLocked(walOps)
 		tx.commitLSN = rec.LSN
 		tx.commitTimestamp = rec.Timestamp
 	} else {
-		tx.commitLSN = tx.snapshotLSN
+		tx.commitLSN = eng.nextLSN.Add(1)
 		tx.commitTimestamp = time.Now().UnixNano()
+	}
+
+	switch eng.FsyncPolicy() {
+	case memengine.FsyncAlways:
+		if err := eng.syncUpTo(tx.sess.sess, seq); err != nil {
+			return err
+		}
+	case memengine.FsyncEverySec:
+		now := tx.commitTimestamp
+		last := eng.lastSyncNano.Load()
+		if now-last >= int64(time.Second) && eng.lastSyncNano.CompareAndSwap(last, now) {
+			_ = eng.syncUpTo(tx.sess.sess, seq)
+		}
 	}
 	return nil
 }

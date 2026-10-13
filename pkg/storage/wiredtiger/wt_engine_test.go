@@ -202,3 +202,69 @@ func TestWiredTigerWALHookAndReplay(t *testing.T) {
 		t.Errorf("expected bob to be deleted on replica, but found")
 	}
 }
+
+func TestWiredTiger_GroupCommit_FsyncAlways(t *testing.T) {
+	dir := t.TempDir()
+	eng := New()
+	eng.SetFsyncPolicy(memengine.FsyncAlways)
+	if err := eng.Open(dir); err != nil {
+		t.Fatalf("failed to open WT engine: %v", err)
+	}
+	defer eng.Close()
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "kv",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "v", Type: storage.TypeVarChar},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	const workers = 16
+	const perWorker = 15
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wID := w
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sess, err := eng.NewSession()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer sess.Close()
+			for j := 0; j < perWorker; j++ {
+				id := int64(wID*1000 + j)
+				tx, err := sess.BeginTx(storage.TxOptions{})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if err := tx.Insert("kv", storage.Record{
+					"id": storage.IntValue(id),
+					"v":  storage.StringValue("val"),
+				}); err != nil {
+					_ = tx.Rollback()
+					t.Error(err)
+					return
+				}
+				if err := tx.Commit(); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	total := int64(workers * perWorker)
+	syncs := eng.SyncCount()
+	if syncs <= 0 || syncs > total {
+		t.Fatalf("expected sync count in 1..%d, got %d", total, syncs)
+	}
+	t.Logf("WiredTiger group commit: %d commits flushed with %d log_flush(sync=on) calls (%.1f commits/sync)",
+		total, syncs, float64(total)/float64(syncs))
+}
