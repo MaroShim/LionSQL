@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"sqlion/pkg/storage"
@@ -254,13 +255,32 @@ func (e *Engine) saveDiskLocked() error {
 	if e.dataDir == "" {
 		return nil
 	}
+	e.diskMu.Lock()
+	defer e.diskMu.Unlock()
 	for _, td := range e.tables {
 		td.syncShardsToMapsLocked()
+		td.mu.Lock()
 		for _, idx := range td.Indexes {
 			idx.SyncEntries()
 		}
+		td.mu.Unlock()
+	}
+	tNames := make([]string, 0, len(e.tables))
+	for name := range e.tables {
+		tNames = append(tNames, name)
+	}
+	sort.Strings(tNames)
+	for _, name := range tNames {
+		td := e.tables[name]
+		td.mu.RLock()
+		td.partMu.RLock()
 	}
 	data, err := MarshalMsgPack(e.tables)
+	for i := len(tNames) - 1; i >= 0; i-- {
+		td := e.tables[tNames[i]]
+		td.partMu.RUnlock()
+		td.mu.RUnlock()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to encode tables to MessagePack: %w", err)
 	}

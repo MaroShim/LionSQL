@@ -8,10 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- **Leader/Follower Group Commit for memengine WAL (`pkg/storage/memengine`)**:
-  - Under `FsyncAlways`, `WALWriter.Append` now releases the write lock before syncing; the first waiter becomes the sync leader and one `fsync` makes every frame written so far durable, while followers return once covered. Zero added latency (no timer window); `fsync` runs outside the write mutex. Lock order is `syncMu` -> `mu`.
-  - `Sync()`, the periodic `FsyncEverySec` syncer, `Truncate()` and `Close()` share the same path; periodic sync failures are now logged instead of swallowed.
-  - Added `SyncCount()` plus tests and a benchmark (`wal_groupcommit_test.go`). Measured on Apple M1 (`FsyncAlways`): 1 worker 3.7ms/op unchanged class, 16 workers 3.72ms -> 0.062ms/op, 64 workers 3.81ms -> 0.038ms/op; ~39 commits per fsync in the batching test.
+- **Leader/Follower Group Commit & Concurrency Hardening for memengine WAL (`pkg/storage/memengine`)**:
+  - Under `FsyncAlways`, `WALWriter.Append` builds a single contiguous `[4-byte length | payload]` frame outside the lock, performs a single `write(2)` syscall under `mu`, and releases `mu` before syncing; the first waiter on `syncMu` becomes the sync leader and one `fsync` makes every frame written so far durable while followers return once covered. Lock order is `syncMu` -> `mu`.
+  - Fixed `WALWriter.Truncate()` to preserve `os.O_APPEND` when reopening the truncated WAL file, and changed `WALWriter.policy` to `atomic.Int32` (`SetPolicy` / `Policy`) to prevent data races when `Append` reads `policy` outside `mu`.
+  - Propagated `WALWriter.Append` and `rewriteAOFLocked` errors through `recordWALLocked` to `Transaction.Commit` and DDL methods (Rule 7 compliance).
+  - Guarded concurrent AOF compaction under `Engine.mu.RLock()` with `compacting` atomic CAS, `diskMu` serialization, and canonical table/partition lock ordering (`td.mu` -> `td.partMu`) in `saveDiskLocked()` and `syncShardsToMapsLocked()` to eliminate map read/write data races during concurrent commits and snapshot rewrites.
+  - Added `SyncCount()`, `TestMemEngine_GroupCommit_ConcurrentAOFCompaction`, and group commit unit/benchmark tests (`wal_groupcommit_test.go`). Measured on Apple M1 (`FsyncAlways`): 16 workers 3.72ms -> 0.062ms/op, 64 workers 3.81ms -> 0.038ms/op; ~37-39 commits per fsync.
   - WiredTiger already performs native slot-based group commit in its log subsystem; no custom queue was added there.
 - **Native T-SQL CAST, CONVERT, TRY_CAST, TRY_CONVERT & PostgreSQL `::` Operator (`pkg/proc`, `pkg/proc/runtime`)**:
   - **Syntax & Lexer**: Added keywords `CAST`, `TRY_CAST`, `CONVERT`, `TRY_CONVERT` and token `TokenDoubleColon` (`::`) with Pratt parser support for `CAST(expr AS target_type)`, `TRY_CAST(expr AS target_type)`, `CONVERT(target_type, expr [, style])`, `TRY_CONVERT(target_type, expr [, style])`, and PostgreSQL-compatible `expr::target_type`.

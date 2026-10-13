@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"sqlion/pkg/storage"
 )
 
 func newTestRecord(lsn int64) WALRecord {
@@ -166,4 +168,75 @@ func TestWAL_GroupCommit_TruncateDuringAppend(t *testing.T) {
 	}
 	close(stop)
 	wg.Wait()
+}
+
+// TestMemEngine_GroupCommit_ConcurrentAOFCompaction verifies that concurrent
+// Engine transactions under FsyncAlways with aggressive AOF compaction do not
+// race on snapshot maps or lose records across Truncate boundaries.
+func TestMemEngine_GroupCommit_ConcurrentAOFCompaction(t *testing.T) {
+	dir := t.TempDir()
+	eng := New()
+	eng.SetFsyncPolicy(FsyncAlways)
+	eng.SetAOFThreshold(512) // Trigger frequent AOF rewrites during concurrent commits
+	if err := eng.Open(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer eng.Close()
+
+	err := eng.CreateTable(&storage.TableSchema{
+		Name: "kv",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "v", Type: storage.TypeVarChar},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const workers = 16
+	const perWorker = 20
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wID := w
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sess, err := eng.NewSession()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer sess.Close()
+			for j := 0; j < perWorker; j++ {
+				id := int64(wID*1000 + j)
+				tx, err := sess.BeginTx(storage.TxOptions{})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if err := tx.Insert("kv", storage.Record{
+					"id": storage.IntValue(id),
+					"v":  storage.StringValue("val"),
+				}); err != nil {
+					_ = tx.Rollback()
+					t.Error(err)
+					return
+				}
+				if err := tx.Commit(); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+
+	cnt, err := eng.TableRowCount("kv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := int64(workers * perWorker); cnt != want {
+		t.Fatalf("expected %d rows after concurrent group commit + AOF rewrite, got %d", want, cnt)
+	}
 }

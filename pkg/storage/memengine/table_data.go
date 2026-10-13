@@ -202,6 +202,8 @@ func (td *TableData) collectKeys(filter func(pk string) bool) []string {
 }
 
 func (td *TableData) syncShardsToMapsLocked() {
+	td.mu.Lock()
+	defer td.mu.Unlock()
 	td.ensureShardsInit()
 	td.Rows = make(map[string]storage.Row)
 	td.Versions = make(map[string]int64)

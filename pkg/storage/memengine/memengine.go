@@ -50,6 +50,8 @@ type Engine struct {
 	stopCh           chan struct{}
 	bgWg             sync.WaitGroup
 	closed           bool
+	compacting       atomic.Bool
+	diskMu           sync.Mutex
 }
 
 // CurrentLSN returns the latest assigned Log Sequence Number.
@@ -65,9 +67,9 @@ func (e *Engine) SetWALHook(fn func(rec WALRecord)) {
 }
 
 // recordWALLocked writes a WAL record, invokes the registered walHook, and returns the assigned WALRecord.
-func (e *Engine) recordWALLocked(ops []WALOp) WALRecord {
+func (e *Engine) recordWALLocked(ops []WALOp) (WALRecord, error) {
 	if len(ops) == 0 {
-		return WALRecord{}
+		return WALRecord{}, nil
 	}
 	e.changesSinceSave.Add(int64(len(ops)))
 	rec := WALRecord{
@@ -76,15 +78,25 @@ func (e *Engine) recordWALLocked(ops []WALOp) WALRecord {
 		Ops:       ops,
 	}
 	if e.wal != nil {
-		_ = e.wal.Append(rec)
+		if err := e.wal.Append(rec); err != nil {
+			return rec, err
+		}
 		if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
-			_ = e.rewriteAOFLocked()
+			// Guard compaction with atomic CAS so concurrent committers under e.mu.RLock()
+			// do not race in saveDiskLocked() / rewriteAOFLocked().
+			if e.compacting.CompareAndSwap(false, true) {
+				if err := e.rewriteAOFLocked(); err != nil {
+					e.compacting.Store(false)
+					return rec, err
+				}
+				e.compacting.Store(false)
+			}
 		}
 	}
 	if e.walHook != nil {
 		e.walHook(rec)
 	}
-	return rec
+	return rec, nil
 }
 
 // New creates a new in-memory storage engine.
@@ -142,7 +154,7 @@ func (e *Engine) SetFsyncPolicy(policy FsyncPolicy) {
 	defer e.mu.Unlock()
 	e.fsyncPolicy = policy
 	if e.wal != nil {
-		e.wal.policy = policy
+		e.wal.SetPolicy(policy)
 	}
 }
 

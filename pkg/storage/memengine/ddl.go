@@ -55,11 +55,13 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	}
 	e.tables[schema.Name] = td
 
-	e.recordWALLocked([]WALOp{{
+	if _, err := e.recordWALLocked([]WALOp{{
 		Type:   OpCreateTable,
 		Table:  schema.Name,
 		Schema: schema,
-	}})
+	}}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -108,11 +110,13 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	td.Indexes[index.Name] = idxData
 	td.Schema.Indexes = append(td.Schema.Indexes, *index)
 
-	e.recordWALLocked([]WALOp{{
+	if _, err := e.recordWALLocked([]WALOp{{
 		Type:        OpCreateIndex,
 		Table:       index.TableName,
 		IndexSchema: index,
-	}})
+	}}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -133,11 +137,13 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	delete(td.Indexes, indexName)
 	td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 
-	e.recordWALLocked([]WALOp{{
+	if _, err := e.recordWALLocked([]WALOp{{
 		Type:      OpDropIndex,
 		Table:     tableName,
 		IndexName: indexName,
-	}})
+	}}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -236,10 +242,12 @@ func (e *Engine) DropTable(tableName string) error {
 	}
 
 	delete(e.tables, tableName)
-	e.recordWALLocked([]WALOp{{
+	if _, err := e.recordWALLocked([]WALOp{{
 		Type:  OpDropTable,
 		Table: tableName,
-	}})
+	}}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -274,10 +282,12 @@ func (e *Engine) TruncateTable(tableName string) error {
 	}
 	td.mu.Unlock()
 
-	e.recordWALLocked([]WALOp{{
+	if _, err := e.recordWALLocked([]WALOp{{
 		Type:  OpTruncateTable,
 		Table: tableName,
-	}})
+	}}); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -317,11 +327,13 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	// Rebuild keys
 	td.Keys = td.collectKeys(nil)
 
-	e.recordWALLocked([]WALOp{{
+	if _, err := e.recordWALLocked([]WALOp{{
 		Type:  OpDropPartition,
 		Table: tableName,
 		Key:   partitionName,
-	}})
+	}}); err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -1539,7 +1539,10 @@ func (tx *Transaction) Commit() error {
 				BaseVer: ch.baseVer,
 			})
 		}
-		rec := tx.engine.recordWALLocked(ops)
+		rec, err := tx.engine.recordWALLocked(ops)
+		if err != nil {
+			return err
+		}
 		tx.commitLSN = rec.LSN
 		tx.commitTimestamp = rec.Timestamp
 	} else {

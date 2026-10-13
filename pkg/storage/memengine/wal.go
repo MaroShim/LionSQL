@@ -68,7 +68,7 @@ type WALWriter struct {
 	mu         sync.Mutex
 	file       *os.File
 	path       string
-	policy     FsyncPolicy
+	policy     atomic.Int32
 	stopCh     chan struct{}
 	closed     bool
 	closeOnce  sync.Once
@@ -103,16 +103,26 @@ func NewWALWriter(path string, policy FsyncPolicy) (*WALWriter, error) {
 	w := &WALWriter{
 		file:       file,
 		path:       cleanPath,
-		policy:     policy,
 		stopCh:     make(chan struct{}),
 		bytesTotal: stat.Size(),
 	}
+	w.policy.Store(int32(policy))
 
 	if policy == FsyncEverySec {
 		go w.startPeriodicSync()
 	}
 
 	return w, nil
+}
+
+// SetPolicy atomically updates the fsync policy.
+func (w *WALWriter) SetPolicy(policy FsyncPolicy) {
+	w.policy.Store(int32(policy))
+}
+
+// Policy returns the current fsync policy.
+func (w *WALWriter) Policy() FsyncPolicy {
+	return FsyncPolicy(w.policy.Load())
 }
 
 func (w *WALWriter) startPeriodicSync() {
@@ -138,8 +148,11 @@ func (w *WALWriter) Append(rec WALRecord) error {
 		return fmt.Errorf("failed to marshal MessagePack WAL record: %w", err)
 	}
 
-	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
+	// Build single contiguous frame [4-byte big-endian length | payload] outside the lock
+	// so we issue a single write(2) syscall under w.mu.
+	frame := make([]byte, 4+len(payload))
+	binary.BigEndian.PutUint32(frame[:4], uint32(len(payload)))
+	copy(frame[4:], payload)
 
 	w.mu.Lock()
 	if w.closed || w.file == nil {
@@ -147,23 +160,17 @@ func (w *WALWriter) Append(rec WALRecord) error {
 		return fmt.Errorf("WAL writer is closed")
 	}
 
-	// Write length prefix (4 bytes) followed by MessagePack payload
-	n1, err := w.file.Write(header[:])
+	n, err := w.file.Write(frame)
 	if err != nil {
 		w.mu.Unlock()
-		return fmt.Errorf("failed to write WAL header: %w", err)
+		return fmt.Errorf("failed to write WAL frame: %w", err)
 	}
-	n2, err := w.file.Write(payload)
-	if err != nil {
-		w.mu.Unlock()
-		return fmt.Errorf("failed to write WAL payload: %w", err)
-	}
-	w.bytesTotal += int64(n1 + n2)
+	w.bytesTotal += int64(n)
 	w.writeSeq++
 	seq := w.writeSeq
 	w.mu.Unlock()
 
-	if w.policy == FsyncAlways {
+	if w.Policy() == FsyncAlways {
 		if err := w.syncUpTo(seq); err != nil {
 			return fmt.Errorf("failed to sync WAL: %w", err)
 		}
@@ -213,7 +220,7 @@ func (w *WALWriter) syncLeaderLocked() error {
 	return nil
 }
 
-// SyncCount returns the number of fsync calls issued by FsyncAlways commits.
+// SyncCount returns the number of fsync calls issued by WAL sync operations.
 func (w *WALWriter) SyncCount() int64 { return w.syncCount.Load() }
 
 // Sync flushes internal buffers and forces file synchronization to disk.
@@ -243,8 +250,8 @@ func (w *WALWriter) Truncate() error {
 		return err
 	}
 
-	// Truncate file to empty
-	file, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	// Truncate file to empty while preserving O_APPEND semantics
+	file, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC|os.O_APPEND, 0644)
 	if err != nil {
 		return fmt.Errorf("failed to truncate WAL file: %w", err)
 	}
