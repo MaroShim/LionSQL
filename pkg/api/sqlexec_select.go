@@ -101,7 +101,7 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 		opts.WorkMem = s.defaultWorkMem
 	}
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if wmVal, ok := cs.Vars["work_mem"]; ok {
 			switch v := wmVal.(type) {
 			case int64:
@@ -114,7 +114,7 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 				}
 			}
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	exec, err := execution.BuildExecutorWithOptions(plan, tx, s.engine.GetTable, opts)
@@ -306,9 +306,9 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		return int64(0), "@@trancount"
 	case "@@ROWCOUNT":
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			val, ok := cs.Vars["rowcount"]
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			if ok && val != nil {
 				return val, "@@rowcount"
 			}
@@ -320,9 +320,9 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		return int64(5432), "@@options"
 	case "@@ERROR", "ERROR_NUMBER()", "ERROR_NUMBER":
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			val, ok := cs.Vars["error"]
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			if ok && val != nil {
 				return val, "@@error"
 			}
@@ -330,9 +330,9 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		return int64(0), "@@error"
 	case "@@IDENTITY", "SCOPE_IDENTITY()", "SCOPE_IDENTITY":
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			val, ok := cs.Vars["identity"]
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			if ok && val != nil {
 				return val, "@@identity"
 			}
@@ -344,9 +344,9 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	if strings.HasPrefix(upper, "@@") {
 		varName := strings.ToLower(trimmed[2:])
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			v, exists := cs.Vars[varName]
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			if exists {
 				return v, trimmed
 			}
@@ -527,12 +527,12 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	// Session variable @var
 	if strings.HasPrefix(trimmed, "@") {
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			v, exists := cs.Vars[trimmed]
 			if !exists {
 				v = cs.Vars[strings.TrimPrefix(trimmed, "@")]
 			}
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			if v != nil {
 				return v, trimmed
 			}
@@ -574,14 +574,14 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	if astExpr != nil && len(p.Errors()) == 0 {
 		var varRow map[string]any
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			if len(cs.Vars) > 0 {
 				varRow = make(map[string]any, len(cs.Vars))
 				for k, v := range cs.Vars {
 					varRow[k] = v
 				}
 			}
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 		}
 		if res, err := proc.EvalRowExpr(astExpr, varRow, nil); err == nil && res != nil {
 			return res, trimmed
@@ -811,9 +811,9 @@ func (s *Server) execSelectInto(targetTable, projections, fromClause string, sta
 		s.globalTempMu.Unlock()
 	} else if strings.HasPrefix(targetTable, "#") {
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.TempTables = append(cs.TempTables, targetTable)
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 		}
 	}
 
@@ -913,14 +913,14 @@ func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *Clien
 
 	var params map[string]any
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if len(cs.Vars) > 0 {
 			params = make(map[string]any, len(cs.Vars))
 			for k, v := range cs.Vars {
 				params[k] = v
 			}
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	ctx := context.Background()
@@ -943,14 +943,14 @@ func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *Clien
 	}
 
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if execRes.LastIdentity > 0 {
 			cs.Vars["identity"] = execRes.LastIdentity
 			cs.Vars["@@identity"] = execRes.LastIdentity
 		}
 		cs.Vars["rowcount"] = execRes.RowsAffected
 		cs.Vars["@@rowcount"] = execRes.RowsAffected
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	msg := fmt.Sprintf("(%d rows affected)", execRes.RowsAffected)
@@ -999,14 +999,14 @@ func (s *Server) execVDBESelect(cleaned string, start time.Time, cs *ClientSessi
 
 	var params map[string]any
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if len(cs.Vars) > 0 {
 			params = make(map[string]any, len(cs.Vars))
 			for k, v := range cs.Vars {
 				params[k] = v
 			}
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	execRes, err := s.executor.ExecuteInTx(prog, params, tx, nil)

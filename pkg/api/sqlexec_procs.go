@@ -290,11 +290,11 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 		idx := int64(51)
 		for id, sess := range s.sessions {
 			cmdStr := "AWAITING COMMAND"
-			sess.mu.Lock()
+			sess.Mu.Lock()
 			if sess.Tx != nil {
 				cmdStr = "TRANSACTION ACTIVE"
 			}
-			sess.mu.Unlock()
+			sess.Mu.Unlock()
 			rows = append(rows, map[string]any{
 				"spid":       idx,
 				"ecid":       int64(0),
@@ -586,9 +586,9 @@ func (s *Server) execProcedureCall(query string, start time.Time, cs *ClientSess
 
 	// Check if this is a prepared statement in the active session
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		prep, isPrep := cs.PreparedStmts[procLower]
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 		if isPrep && prep != nil {
 			return s.execPreparedStatement(prep, args, start, cs, ctx)
 		}
@@ -718,13 +718,13 @@ func evalDynamicSQLExpression(raw string, cs *ClientSession) string {
 		part = strings.TrimSpace(part)
 		if strings.HasPrefix(part, "@") && cs != nil {
 			varName := strings.ToLower(part)
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			if v, ok := cs.Vars[varName]; ok && v != nil {
 				b.WriteString(fmt.Sprintf("%v", v))
 			} else if v, ok := cs.Vars[strings.TrimPrefix(varName, "@")]; ok && v != nil {
 				b.WriteString(fmt.Sprintf("%v", v))
 			}
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 		} else {
 			b.WriteString(unwrapSQLString(part))
 		}
@@ -787,8 +787,8 @@ func findTopLevelEquals(s string) int {
 func unwrapOrVar(val string, cs *ClientSession) string {
 	val = strings.TrimSpace(val)
 	if strings.HasPrefix(val, "@") && cs != nil {
-		cs.mu.Lock()
-		defer cs.mu.Unlock()
+		cs.Mu.Lock()
+		defer cs.Mu.Unlock()
 		varName := strings.ToLower(val)
 		if v, ok := cs.Vars[varName]; ok && v != nil {
 			return fmt.Sprintf("%v", v)
@@ -907,12 +907,12 @@ func parseSpParamDeclarations(declStr string) []spParamDecl {
 func formatBoundArgValue(rawVal string, cs *ClientSession) string {
 	rawVal = strings.TrimSpace(rawVal)
 	if strings.HasPrefix(rawVal, "@") && cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		v, ok := cs.Vars[strings.ToLower(rawVal)]
 		if !ok {
 			v, ok = cs.Vars[strings.ToLower(strings.TrimPrefix(rawVal, "@"))]
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 		if ok {
 			if v == nil {
 				return "NULL"

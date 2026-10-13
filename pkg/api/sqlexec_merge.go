@@ -259,9 +259,9 @@ func (s *Server) execMerge(query string, start time.Time, cs *ClientSession) (*Q
 	}
 
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		cs.Vars["@@rowcount"] = int(rowsAffected)
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	return &QueryResult{

@@ -12,14 +12,6 @@ import (
 	"sqlion/pkg/storage"
 )
 
-// PreparedStatement stores compiled bytecode and parameter definitions for repeated execution.
-type PreparedStatement struct {
-	Name       string
-	Query      string
-	Program    *proc.Program
-	ParamNames []string
-}
-
 // execPrepare parses and compiles PREPARE statement into a cached session PreparedStatement.
 func (s *Server) execPrepare(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	trimmed := strings.TrimSpace(query)
@@ -61,12 +53,12 @@ func (s *Server) execPrepare(query string, start time.Time, cs *ClientSession) (
 			if cs == nil {
 				return nil, fmt.Errorf("session variable %s requires an active session", varName)
 			}
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			v, ok := cs.Vars[varName]
 			if !ok {
 				v, ok = cs.Vars["@"+strings.TrimPrefix(varName, "@")]
 			}
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			if !ok || v == nil {
 				return nil, fmt.Errorf("session variable %s not found", varName)
 			}
@@ -106,7 +98,7 @@ func (s *Server) execPrepare(query string, start time.Time, cs *ClientSession) (
 	}
 
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if cs.PreparedStmts == nil {
 			cs.PreparedStmts = make(map[string]*PreparedStatement)
 		}
@@ -116,7 +108,7 @@ func (s *Server) execPrepare(query string, start time.Time, cs *ClientSession) (
 			Program:    prog,
 			ParamNames: paramNames,
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	return &QueryResult{
@@ -148,9 +140,9 @@ func (s *Server) execDeallocate(query string, start time.Time, cs *ClientSession
 
 	if strings.EqualFold(target, "ALL") {
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.PreparedStmts = make(map[string]*PreparedStatement)
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 		}
 		return &QueryResult{
 			Success:    true,
@@ -166,9 +158,9 @@ func (s *Server) execDeallocate(query string, start time.Time, cs *ClientSession
 	}
 
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		delete(cs.PreparedStmts, strings.ToLower(stmtName))
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	return &QueryResult{
@@ -275,14 +267,14 @@ func (s *Server) execPreparedStatement(prep *PreparedStatement, rawArgs []string
 
 	// 5. Update session variables
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if execRes.LastIdentity > 0 {
 			cs.Vars["identity"] = execRes.LastIdentity
 			cs.Vars["@@identity"] = execRes.LastIdentity
 		}
 		cs.Vars["rowcount"] = execRes.RowsAffected
 		cs.Vars["@@rowcount"] = execRes.RowsAffected
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	cmd := prep.Program.Type
@@ -534,8 +526,8 @@ func parseArgValue(arg string, cs *ClientSession) any {
 	arg = strings.TrimSpace(arg)
 	if strings.HasPrefix(arg, "@") {
 		if cs != nil {
-			cs.mu.Lock()
-			defer cs.mu.Unlock()
+			cs.Mu.Lock()
+			defer cs.Mu.Unlock()
 			if v, ok := cs.Vars[arg]; ok {
 				return v
 			}

@@ -295,13 +295,13 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 
 	identityInsertAllowed := false
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if cur, ok := cs.Vars["identity_insert_table"].(string); ok {
 			if strings.EqualFold(cur, tableName) {
 				identityInsertAllowed = true
 			}
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	var targetCols []string
@@ -419,16 +419,16 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 				maxID++
 				rec[identityCol.Name] = storage.IntValue(maxID)
 				if cs != nil {
-					cs.mu.Lock()
+					cs.Mu.Lock()
 					cs.Vars["identity"] = maxID
-					cs.mu.Unlock()
+					cs.Mu.Unlock()
 				}
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {
-						cs.mu.Lock()
+						cs.Mu.Lock()
 						cs.Vars["identity"] = v.IVal
-						cs.mu.Unlock()
+						cs.Mu.Unlock()
 					}
 					if v.IVal > maxID {
 						maxID = v.IVal

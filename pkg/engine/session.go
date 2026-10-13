@@ -77,13 +77,25 @@ func (cs *ClientSession) GetQueryTimeout() time.Duration {
 func parseTimeoutDurationVal(v any) time.Duration {
 	switch val := v.(type) {
 	case int:
-		return time.Duration(val) * time.Millisecond
+		if val > 0 {
+			return time.Duration(val) * time.Millisecond
+		}
 	case int64:
-		return time.Duration(val) * time.Millisecond
+		if val > 0 {
+			return time.Duration(val) * time.Millisecond
+		}
 	case float64:
-		return time.Duration(val) * time.Millisecond
+		if val > 0 {
+			return time.Duration(val) * time.Millisecond
+		}
+	case string:
+		if d, err := ParseTimeoutDuration(val); err == nil && d > 0 {
+			return d
+		}
 	case time.Duration:
-		return val
+		if val > 0 {
+			return val
+		}
 	}
 	return 0
 }

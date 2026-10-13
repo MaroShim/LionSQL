@@ -296,8 +296,8 @@ func (s *Server) execSetUser(query string, start time.Time, cs *ClientSession) (
 		return &QueryResult{Success: true, Command: "SETUSER"}, nil
 	}
 
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
 
 	// Revert commands
 	if upper == "SETUSER" || upper == "REVERT" || upper == "REVERT;" {

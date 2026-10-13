@@ -220,9 +220,9 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 		s.globalTempMu.Unlock()
 	} else if strings.HasPrefix(tableName, "#") {
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.TempTables = append(cs.TempTables, tableName)
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 		}
 	}
 

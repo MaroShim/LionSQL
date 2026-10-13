@@ -52,11 +52,11 @@ func (s *Server) execDBCC(query string, start time.Time, cs *ClientSession) (*Qu
 	if strings.HasPrefix(upperRest, "USEROPTIONS") {
 		isoLevel := "read committed"
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			if lvl, ok := cs.Vars["transaction_isolation"].(string); ok && lvl != "" {
 				isoLevel = lvl
 			}
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 		}
 
 		persistence := "persistent"

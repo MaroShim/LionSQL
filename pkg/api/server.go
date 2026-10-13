@@ -27,46 +27,11 @@ var _ engine.SQLCoordinator = (*Server)(nil)
 // ActiveQueryInfo represents snapshot metadata of an in-flight query (aliased from engine.ActiveQueryInfo).
 type ActiveQueryInfo = engine.ActiveQueryInfo
 
-// ClientSession maintains interactive connection state: open transaction, session variables, and query cancellation context.
-type ClientSession struct {
-	ID              string
-	SPID            int
-	Session         storage.Session
-	Tx              storage.Transaction
-	TxFailed        bool              // whether current transaction encountered an error ('E' in PGWire)
-	Vars            map[string]any
-	TableVars       map[string]string // @table_var -> physical table name
-	TempTables      []string          // session-scoped #temp_tables
-	PreparedStmts   map[string]*PreparedStatement
-	User            string            // active database user principal for RBAC
-	OriginalUser    string            // original user prior to SETUSER / EXECUTE AS
-	QueryCtx        context.Context
-	CancelFunc      context.CancelFunc
-	RunningQuery    string
-	QueryStartTime  time.Time
-	CancelRequested bool
-	mu              sync.Mutex
-}
+// ClientSession maintains interactive connection state (aliased from engine.ClientSession).
+type ClientSession = engine.ClientSession
 
-// IsReadOnly returns true if the session was configured as read-only.
-func (cs *ClientSession) IsReadOnly() bool {
-	if cs == nil {
-		return false
-	}
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-	if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
-		return true
-	}
-	return false
-}
-
-// TxOptions returns the configured transaction options for this session.
-func (cs *ClientSession) TxOptions() storage.TxOptions {
-	return storage.TxOptions{
-		ReadOnly: cs.IsReadOnly(),
-	}
-}
+// PreparedStatement stores compiled bytecode and parameter definitions (aliased from engine.PreparedStatement).
+type PreparedStatement = engine.PreparedStatement
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
 type Server struct {
@@ -428,7 +393,7 @@ func (s *Server) CloseSession(id string) {
 	}
 
 	if exists && cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		for _, physTable := range cs.TableVars {
 			_ = s.engine.DropTable(physTable)
 		}
@@ -450,7 +415,7 @@ func (s *Server) CloseSession(id string) {
 		}
 		storageSess := cs.Session
 		cs.Session = nil
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 
 		if storageSess != nil {
 			if s.pool != nil {
@@ -483,8 +448,8 @@ func (s *Server) GetSessionTxStatus(id string) byte {
 	if !exists || cs == nil {
 		return 'I'
 	}
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
 	if cs.Tx == nil {
 		return 'I'
 	}
@@ -503,10 +468,10 @@ func (s *Server) SetSessionUser(id, user string) {
 	cs, exists := s.sessions[id]
 	s.sessMu.RUnlock()
 	if exists && cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		cs.User = user
 		cs.OriginalUser = user
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 }
 
@@ -522,8 +487,8 @@ func (s *Server) CancelSessionQuery(sessionID string) bool {
 		return false
 	}
 
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
 
 	if cs.CancelFunc != nil {
 		cs.CancelRequested = true
@@ -550,8 +515,8 @@ func (s *Server) CancelQueryBySPID(spid int) bool {
 		return false
 	}
 
-	targetCS.mu.Lock()
-	defer targetCS.mu.Unlock()
+	targetCS.Mu.Lock()
+	defer targetCS.Mu.Unlock()
 
 	if targetCS.CancelFunc != nil {
 		targetCS.CancelRequested = true
@@ -569,7 +534,7 @@ func (s *Server) GetActiveQueries() []ActiveQueryInfo {
 	now := time.Now()
 	var active []ActiveQueryInfo
 	for _, cs := range s.sessions {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if cs.RunningQuery != "" && cs.CancelFunc != nil {
 			active = append(active, ActiveQueryInfo{
 				SessionID:  cs.ID,
@@ -579,7 +544,7 @@ func (s *Server) GetActiveQueries() []ActiveQueryInfo {
 				DurationUS: now.Sub(cs.QueryStartTime).Microseconds(),
 			})
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 	return active
 }

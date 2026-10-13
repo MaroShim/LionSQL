@@ -59,50 +59,6 @@ func parseTimeoutDuration(s string) (time.Duration, error) {
 	return engine.ParseTimeoutDuration(s)
 }
 
-// getQueryTimeout returns the configured query timeout duration for this session, or 0 if disabled.
-func (cs *ClientSession) getQueryTimeout() time.Duration {
-	if cs == nil {
-		return 0
-	}
-	cs.mu.Lock()
-	defer cs.mu.Unlock()
-
-	var raw any
-	if v, ok := cs.Vars["query_timeout"]; ok && v != nil {
-		raw = v
-	} else if v, ok := cs.Vars["statement_timeout"]; ok && v != nil {
-		raw = v
-	}
-	if raw == nil {
-		return 0
-	}
-
-	switch val := raw.(type) {
-	case int:
-		if val > 0 {
-			return time.Duration(val) * time.Millisecond
-		}
-	case int64:
-		if val > 0 {
-			return time.Duration(val) * time.Millisecond
-		}
-	case float64:
-		if val > 0 {
-			return time.Duration(val) * time.Millisecond
-		}
-	case string:
-		d, err := parseTimeoutDuration(val)
-		if err == nil && d > 0 {
-			return d
-		}
-	case time.Duration:
-		if val > 0 {
-			return val
-		}
-	}
-	return 0
-}
-
 // ExecuteSQL parses and runs one or more SQL statements against the engine and catalog on the default session.
 func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 	return s.ExecuteSessionSQL("default", query)
@@ -127,20 +83,20 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 	var queryCtx context.Context
 	var cancel context.CancelFunc
 
-	if timeout := cs.getQueryTimeout(); timeout > 0 {
+	if timeout := cs.GetQueryTimeout(); timeout > 0 {
 		queryCtx, cancel = context.WithTimeout(ctx, timeout)
 	} else {
 		queryCtx, cancel = context.WithCancel(ctx)
 	}
 	defer cancel()
 
-	cs.mu.Lock()
+	cs.Mu.Lock()
 	cs.QueryCtx = queryCtx
 	cs.CancelFunc = cancel
 	cs.RunningQuery = query
 	cs.QueryStartTime = overallStart
 	cs.CancelRequested = false
-	cs.mu.Unlock()
+	cs.Mu.Unlock()
 
 	stmts := splitStatements(query)
 	var lastRes *QueryResult
@@ -174,11 +130,11 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 			s.metrics.RecordQuery(cmd, dur, isErr, isSlow)
 		}
 
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		cs.QueryCtx = nil
 		cs.CancelFunc = nil
 		cs.RunningQuery = ""
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}()
 
 	if len(stmts) == 0 {
@@ -200,9 +156,9 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 
 		// In PostgreSQL mode (sessions prefixed with "pg-"), if transaction has failed, reject all commands except ROLLBACK
 		if cs != nil && strings.HasPrefix(cs.ID, "pg-") {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			failed := cs.TxFailed
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			if failed && !isRollbackOrResetQuery(stmt) {
 				execErr = fmt.Errorf("current transaction is aborted, commands ignored until end of transaction block")
 				return nil, execErr
@@ -212,12 +168,12 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 		res, err := s.execSingleStatement(cs, stmt)
 		if err != nil {
 			if cs != nil {
-				cs.mu.Lock()
+				cs.Mu.Lock()
 				cs.Vars["error"] = int64(50000)
 				if cs.Tx != nil && strings.HasPrefix(cs.ID, "pg-") {
 					cs.TxFailed = true
 				}
-				cs.mu.Unlock()
+				cs.Mu.Unlock()
 			}
 			if errors.Is(err, context.DeadlineExceeded) || (queryCtx.Err() != nil && errors.Is(queryCtx.Err(), context.DeadlineExceeded)) {
 				execErr = fmt.Errorf("canceling statement due to statement timeout")
@@ -232,9 +188,9 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 			return res, err
 		}
 		if cs != nil {
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.Vars["error"] = int64(0)
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 		}
 		lastRes = res
 	}
@@ -258,7 +214,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	// Rewrite table variables (@table -> physical table)
 	tblVarDeclRe := regexp.MustCompile(`(?is)^DECLARE\s+@[a-zA-Z0-9_]+\s+TABLE\b`)
 	if cs != nil {
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		if len(cs.TableVars) > 0 && !tblVarDeclRe.MatchString(trimmed) {
 			for varName, physTable := range cs.TableVars {
 				pattern := `(?i)@` + regexp.QuoteMeta(strings.TrimPrefix(varName, "@")) + `\b`
@@ -266,7 +222,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 			}
 			upper = strings.ToUpper(trimmed)
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 	}
 
 	// Process Management: KILL <spid> [WITH STATUSONLY]
@@ -298,8 +254,8 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		strings.HasPrefix(upper, "START TRANSACTION")
 
 	if isBeginTx {
-		cs.mu.Lock()
-		defer cs.mu.Unlock()
+		cs.Mu.Lock()
+		defer cs.Mu.Unlock()
 		if cs.Tx != nil {
 			return nil, fmt.Errorf("transaction already active on session %s", cs.ID)
 		}
@@ -333,8 +289,8 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	}
 
 	if strings.HasPrefix(upper, "COMMIT") {
-		cs.mu.Lock()
-		defer cs.mu.Unlock()
+		cs.Mu.Lock()
+		defer cs.Mu.Unlock()
 		if cs.Tx == nil {
 			return nil, fmt.Errorf("no active transaction to commit on session %s", cs.ID)
 		}
@@ -356,8 +312,8 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	}
 
 	if namePart, ok := trimAnyPrefix(upper, trimmed, "SAVE TRANSACTION ", "SAVE TRAN ", "SAVEPOINT "); ok {
-		cs.mu.Lock()
-		defer cs.mu.Unlock()
+		cs.Mu.Lock()
+		defer cs.Mu.Unlock()
 		if cs.Tx == nil {
 			return nil, fmt.Errorf("no active transaction to create savepoint on session %s", cs.ID)
 		}
@@ -377,8 +333,8 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	}
 
 	if namePart, ok := trimAnyPrefix(upper, trimmed, "RELEASE SAVEPOINT ", "RELEASE "); ok {
-		cs.mu.Lock()
-		defer cs.mu.Unlock()
+		cs.Mu.Lock()
+		defer cs.Mu.Unlock()
 		if cs.Tx == nil {
 			return nil, fmt.Errorf("no active transaction to release savepoint on session %s", cs.ID)
 		}
@@ -398,8 +354,8 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	}
 
 	if strings.HasPrefix(upper, "ROLLBACK") {
-		cs.mu.Lock()
-		defer cs.mu.Unlock()
+		cs.Mu.Lock()
+		defer cs.Mu.Unlock()
 		if cs.Tx == nil {
 			return nil, fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
 		}
@@ -461,9 +417,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		// A. SET TRANSACTION ISOLATION LEVEL <level>
 		if strings.HasPrefix(upperRest, "TRANSACTION ISOLATION LEVEL ") {
 			level := strings.TrimSpace(rest[len("TRANSACTION ISOLATION LEVEL "):])
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.Vars["transaction_isolation"] = strings.ToLower(level)
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			return &QueryResult{
 				Success:    true,
 				Command:    "SET",
@@ -475,9 +431,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		// B. SET TRANSACTION READ ONLY / READ WRITE
 		if strings.HasPrefix(upperRest, "TRANSACTION READ ") {
 			mode := strings.TrimSpace(rest[len("TRANSACTION READ "):])
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.Vars["transaction_read_only"] = strings.EqualFold(mode, "ONLY")
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			return &QueryResult{
 				Success:    true,
 				Command:    "SET",
@@ -493,9 +449,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 				idx = len("TIME ZONE ")
 			}
 			tz := strings.Trim(strings.TrimSpace(rest[idx:]), "=';\" ")
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.Vars["timezone"] = tz
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			return &QueryResult{
 				Success:    true,
 				Command:    "SET",
@@ -507,9 +463,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		// D. SET NAMES <enc>
 		if strings.HasPrefix(upperRest, "NAMES ") {
 			enc := strings.Trim(strings.TrimSpace(rest[len("NAMES "):]), "=';\" ")
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.Vars["client_encoding"] = enc
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			return &QueryResult{
 				Success:    true,
 				Command:    "SET",
@@ -544,17 +500,17 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 				}
 
 				if cs != nil {
-					cs.mu.Lock()
+					cs.Mu.Lock()
 					if state == "ON" {
 						if cur, ok := cs.Vars["identity_insert_table"].(string); ok && cur != "" && !strings.EqualFold(cur, targetTable) {
-							cs.mu.Unlock()
+							cs.Mu.Unlock()
 							return nil, fmt.Errorf("cannot SET IDENTITY_INSERT ON for table %q when IDENTITY_INSERT is already ON for table %q", targetTable, cur)
 						}
 						cs.Vars["identity_insert_table"] = strings.ToLower(targetTable)
 					} else {
 						delete(cs.Vars, "identity_insert_table")
 					}
-					cs.mu.Unlock()
+					cs.Mu.Unlock()
 				}
 
 				return &QueryResult{
@@ -570,7 +526,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		if !strings.Contains(rest, "=") && !strings.Contains(strings.ToUpper(rest), " TO ") {
 			rawItems := strings.Split(rest, ",")
 			var msgs []string
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			for _, item := range rawItems {
 				item = strings.TrimSpace(item)
 				if item == "" {
@@ -594,7 +550,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 				}
 				msgs = append(msgs, fmt.Sprintf("SET %s %s.", optName, optVal))
 			}
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			if len(msgs) > 0 {
 				return &QueryResult{
 					Success:    true,
@@ -615,9 +571,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 				if err != nil {
 					return nil, fmt.Errorf("invalid value for work_mem %q: %w", valStr, err)
 				}
-				cs.mu.Lock()
+				cs.Mu.Lock()
 				cs.Vars["work_mem"] = bytes
-				cs.mu.Unlock()
+				cs.Mu.Unlock()
 				return &QueryResult{
 					Success:    true,
 					Command:    "SET",
@@ -625,9 +581,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 					DurationUS: time.Since(start).Microseconds(),
 				}, nil
 			}
-			cs.mu.Lock()
+			cs.Mu.Lock()
 			cs.Vars[param] = valStr
-			cs.mu.Unlock()
+			cs.Mu.Unlock()
 			return &QueryResult{
 				Success:    true,
 				Command:    "SET",
@@ -648,12 +604,12 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	if m := showRe.FindStringSubmatch(trimmed); len(m) == 2 {
 		param := strings.ToLower(strings.TrimSpace(m[1]))
 		paramNorm := strings.ReplaceAll(param, " ", "_")
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		val, exists := cs.Vars[paramNorm]
 		if !exists {
 			val, exists = cs.Vars[param]
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 
 		valStr := ""
 		if exists {
@@ -748,12 +704,12 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 			}
 
 			if cs != nil {
-				cs.mu.Lock()
+				cs.Mu.Lock()
 				if cs.TableVars == nil {
 					cs.TableVars = make(map[string]string)
 				}
 				cs.TableVars[varName] = physTable
-				cs.mu.Unlock()
+				cs.Mu.Unlock()
 			}
 
 			return &QueryResult{
@@ -765,7 +721,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 
 		rawDecls := strings.TrimSpace(trimmed[len("DECLARE "):])
 		parts := strings.Split(rawDecls, ",")
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		for _, p := range parts {
 			p = strings.TrimSpace(strings.TrimRight(p, ";"))
 			if !strings.HasPrefix(p, "@") {
@@ -791,7 +747,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 			}
 			cs.Vars[varName] = val
 		}
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 		return &QueryResult{
 			Success:    true,
 			Command:    "DECLARE",
@@ -802,8 +758,8 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	// 0.1 Session Variables: SET @var = expr / SET @var := expr
 	setRe := regexp.MustCompile(`(?is)^SET\s+@([a-zA-Z0-9_]+)\s*(?::=|=)\s*(.*)$`)
 	if m := setRe.FindStringSubmatch(trimmed); len(m) == 3 {
-		cs.mu.Lock()
-		defer cs.mu.Unlock()
+		cs.Mu.Lock()
+		defer cs.Mu.Unlock()
 		varName := m[1]
 		expr := strings.TrimSpace(m[2])
 		expr = strings.TrimRight(expr, ";")
@@ -828,9 +784,9 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		if len(m) > 2 && m[2] != "" {
 			colHeader = m[2]
 		}
-		cs.mu.Lock()
+		cs.Mu.Lock()
 		val := cs.Vars[varName]
-		cs.mu.Unlock()
+		cs.Mu.Unlock()
 		return &QueryResult{
 			Success:      true,
 			Command:      "SELECT",
@@ -850,7 +806,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 	}
 
 	// 0.3 Substitute session variables in SQL query if present
-	cs.mu.Lock()
+	cs.Mu.Lock()
 	if len(cs.Vars) > 0 {
 		keys := make([]string, 0, len(cs.Vars))
 		for k := range cs.Vars {
@@ -871,7 +827,7 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		}
 		upper = strings.ToUpper(trimmed)
 	}
-	cs.mu.Unlock()
+	cs.Mu.Unlock()
 
 	// 0.4 Query Execution Plan: EXPLAIN [ANALYZE]
 	if strings.HasPrefix(upper, "EXPLAIN") {
