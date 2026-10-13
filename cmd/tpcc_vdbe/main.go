@@ -52,7 +52,7 @@ func main() {
 	numWorkers := flag.Int("workers", 20, "Number of concurrent client workers")
 	durationFlag := flag.Duration("duration", 15*time.Second, "Benchmark duration (e.g. 10s, 30s, 1m)")
 	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
-	fsyncFlag := flag.String("fsync", "off", "WAL fsync policy for memory engine: off (ephemeral), none, everysec, always")
+	fsyncFlag := flag.String("fsync", "everysec", "WAL fsync policy: off (ephemeral), none, everysec (default), always")
 	dataDir := flag.String("dir", "data/tpcc_vdbe_wt", "Data directory for WAL/WiredTiger backend")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
@@ -60,11 +60,15 @@ func main() {
 	flag.Parse()
 
 	fsyncMode := strings.ToLower(strings.TrimSpace(*fsyncFlag))
+	if fsyncMode == "" {
+		fsyncMode = "everysec"
+	}
 	var targetFsyncPolicy memengine.FsyncPolicy
 	enableMemWAL := false
 	switch fsyncMode {
-	case "", "off", "ephemeral":
+	case "off", "ephemeral":
 		enableMemWAL = false
+		targetFsyncPolicy = memengine.FsyncNone
 	case "none":
 		enableMemWAL = true
 		targetFsyncPolicy = memengine.FsyncNone

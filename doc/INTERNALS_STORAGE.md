@@ -74,6 +74,12 @@ WiredTiger is the default production disk storage engine for SQLion, integrated 
 ### 2.3. Zero-Cgo Fallback Stub (`wt_stub.go`)
 When compiled without `-tags wiredtiger`, `wt_stub.go` provides stub methods returning clear diagnostic errors prompting the user to run with `-engine=memory` or install `libwiredtiger-dev`.
 
+### 2.4. Journal Fsync & Group Commit Architecture
+WiredTiger durability is controlled via `SetFsyncPolicy()` and `FsyncPolicy()`:
+- **`FsyncEverySec` (Default)**: A dedicated background goroutine (`startPeriodicSync`) runs on a 1-second ticker using a private session to call `session->log_flush(session, "sync=on")`. This guarantees a maximum data loss window of $\le 1$ second on sudden power loss while completely eliminating disk barrier latency from client commit hot paths.
+- **`FsyncAlways`**: Enforces strict zero-loss durability using a **Leader/Follower Group Commit** mechanism. Concurrent commits serialize on `syncMu`; the leader thread issues `session->log_flush(session, "sync=on")` covering all accumulated sequence writes, and follower threads wake up immediately once their target write sequence is synced without issuing redundant physical disk barriers.
+- **`FsyncNone`**: Journal entries are written to OS cache without explicit `log_flush("sync=on")`.
+
 ---
 
 ## 3. Pure-Go In-Memory Engine (`pkg/storage/memengine/`)

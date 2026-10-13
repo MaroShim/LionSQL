@@ -167,21 +167,22 @@ import (
 
 // Engine implements storage.Engine via the WiredTiger C API.
 type Engine struct {
-	mu           sync.RWMutex
-	conn         *C.WT_CONNECTION
-	homeDir      string
-	tables       map[string]*storage.TableSchema
-	nextLSN      atomic.Int64
-	walHook      func(rec memengine.WALRecord)
-	hasHook      atomic.Bool
-	walOrderMu   sync.Mutex
-	fsyncPolicy  atomic.Int32
-	syncMu       sync.Mutex
-	writeSeq     atomic.Int64
-	syncedSeq    atomic.Int64
-	syncCount    atomic.Int64
-	lastSyncNano atomic.Int64
-	closed       bool
+	mu          sync.RWMutex
+	conn        *C.WT_CONNECTION
+	homeDir     string
+	tables      map[string]*storage.TableSchema
+	nextLSN     atomic.Int64
+	walHook     func(rec memengine.WALRecord)
+	hasHook     atomic.Bool
+	walOrderMu  sync.Mutex
+	fsyncPolicy atomic.Int32
+	syncMu      sync.Mutex
+	writeSeq    atomic.Int64
+	syncedSeq   atomic.Int64
+	syncCount   atomic.Int64
+	stopCh      chan struct{}
+	bgWg        sync.WaitGroup
+	closed      bool
 }
 
 // New creates a new WiredTiger storage engine instance.
@@ -189,7 +190,7 @@ func New() *Engine {
 	e := &Engine{
 		tables: make(map[string]*storage.TableSchema),
 	}
-	e.fsyncPolicy.Store(int32(memengine.FsyncNone))
+	e.fsyncPolicy.Store(int32(memengine.FsyncEverySec))
 	return e
 }
 
@@ -203,7 +204,7 @@ func (e *Engine) FsyncPolicy() memengine.FsyncPolicy {
 	return memengine.FsyncPolicy(e.fsyncPolicy.Load())
 }
 
-// SyncCount returns the number of journal log_flush(sync=on) calls issued by group commit.
+// SyncCount returns the number of journal log_flush(sync=on) calls issued by group commit or periodic sync.
 func (e *Engine) SyncCount() int64 {
 	return e.syncCount.Load()
 }
@@ -224,8 +225,34 @@ func (e *Engine) syncUpTo(sess *C.WT_SESSION, seq int64) error {
 		return fmt.Errorf("wiredtiger log_flush failed with code %d", ret)
 	}
 	e.syncedSeq.Store(target)
-	e.lastSyncNano.Store(time.Now().UnixNano())
 	return nil
+}
+
+func (e *Engine) startPeriodicSync(stopCh <-chan struct{}) {
+	defer e.bgWg.Done()
+
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
+		return
+	}
+	defer C.go_wt_session_close(sess)
+
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-stopCh:
+			return
+		case <-ticker.C:
+			if e.FsyncPolicy() == memengine.FsyncEverySec {
+				seq := e.writeSeq.Load()
+				if seq > e.syncedSeq.Load() {
+					_ = e.syncUpTo(sess, seq)
+				}
+			}
+		}
+	}
 }
 
 // Type returns the human-readable storage engine backend name.
@@ -292,6 +319,12 @@ func (e *Engine) Open(dir string) error {
 	e.closed = false
 
 	e.loadCatalog()
+
+	stopCh := make(chan struct{})
+	e.stopCh = stopCh
+	e.bgWg.Add(1)
+	go e.startPeriodicSync(stopCh)
+
 	return nil
 }
 
@@ -326,12 +359,25 @@ func (e *Engine) saveCatalog() error {
 
 func (e *Engine) Close() error {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
 	if e.closed || e.conn == nil {
+		e.mu.Unlock()
 		return nil
 	}
 	e.closed = true
+	stopCh := e.stopCh
+	e.stopCh = nil
+	if stopCh != nil {
+		close(stopCh)
+	}
+	e.mu.Unlock()
+
+	e.bgWg.Wait()
+
+	e.syncMu.Lock()
+	defer e.syncMu.Unlock()
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
 	ret := C.go_wt_close(e.conn)
 	e.conn = nil
 	if ret != 0 {
@@ -1252,16 +1298,9 @@ func (tx *WTTx) Commit() error {
 		tx.commitTimestamp = time.Now().UnixNano()
 	}
 
-	switch eng.FsyncPolicy() {
-	case memengine.FsyncAlways:
+	if eng.FsyncPolicy() == memengine.FsyncAlways {
 		if err := eng.syncUpTo(tx.sess.sess, seq); err != nil {
 			return err
-		}
-	case memengine.FsyncEverySec:
-		now := tx.commitTimestamp
-		last := eng.lastSyncNano.Load()
-		if now-last >= int64(time.Second) && eng.lastSyncNano.CompareAndSwap(last, now) {
-			_ = eng.syncUpTo(tx.sess.sess, seq)
 		}
 	}
 	return nil
