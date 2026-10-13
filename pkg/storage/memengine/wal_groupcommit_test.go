@@ -240,3 +240,98 @@ func TestMemEngine_GroupCommit_ConcurrentAOFCompaction(t *testing.T) {
 		t.Fatalf("expected %d rows after concurrent group commit + AOF rewrite, got %d", want, cnt)
 	}
 }
+
+// TestMemEngine_GroupCommit_StrictLSNOrdering verifies that under high-concurrency
+// group commits (FsyncAlways), frames in wal.aof and callbacks to walHook are
+// strictly ordered by LSN (1, 2, 3, ..., N) with zero out-of-order inversions.
+func TestMemEngine_GroupCommit_StrictLSNOrdering(t *testing.T) {
+	dir := t.TempDir()
+	eng := New()
+	eng.SetFsyncPolicy(FsyncAlways)
+	eng.SetAOFThreshold(0) // Disable compaction so all WAL frames remain in wal.aof
+	if err := eng.Open(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	var hookLSNs []int64
+	eng.SetWALHook(func(rec WALRecord) {
+		hookLSNs = append(hookLSNs, rec.LSN)
+	})
+
+	if err := eng.CreateTable(&storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "step", Type: storage.TypeInt},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	const workers = 32
+	const perWorker = 25
+	var wg sync.WaitGroup
+	for w := 0; w < workers; w++ {
+		wID := w
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			sess, err := eng.NewSession()
+			if err != nil {
+				t.Error(err)
+				return
+			}
+			defer sess.Close()
+			for j := 0; j < perWorker; j++ {
+				id := int64(wID*1000 + j)
+				tx, err := sess.BeginTx(storage.TxOptions{})
+				if err != nil {
+					t.Error(err)
+					return
+				}
+				if err := tx.Insert("orders", storage.Record{
+					"id":   storage.IntValue(id),
+					"step": storage.IntValue(int64(j)),
+				}); err != nil {
+					_ = tx.Rollback()
+					t.Error(err)
+					return
+				}
+				if err := tx.Commit(); err != nil {
+					t.Error(err)
+					return
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	if err := eng.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1 (CreateTable) + workers*perWorker (Inserts)
+	wantTotal := int64(1 + workers*perWorker)
+	if int64(len(hookLSNs)) != wantTotal {
+		t.Fatalf("expected %d walHook calls, got %d", wantTotal, len(hookLSNs))
+	}
+	for i, lsn := range hookLSNs {
+		if want := int64(i + 1); lsn != want {
+			t.Fatalf("walHook LSN out of order at index %d: want %d, got %d", i, want, lsn)
+		}
+	}
+
+	var fileIdx int64
+	maxLSN, err := ReplayWAL(filepath.Join(dir, "wal.aof"), func(rec WALRecord) error {
+		fileIdx++
+		if rec.LSN != fileIdx {
+			return fmt.Errorf("wal.aof frame %d has out-of-order LSN %d", fileIdx, rec.LSN)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("ReplayWAL failed: %v", err)
+	}
+	if maxLSN != wantTotal || fileIdx != wantTotal {
+		t.Fatalf("expected %d ordered frames in wal.aof, got %d (maxLSN=%d)", wantTotal, fileIdx, maxLSN)
+	}
+}

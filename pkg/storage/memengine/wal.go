@@ -141,11 +141,22 @@ func (w *WALWriter) startPeriodicSync() {
 	}
 }
 
-// Append writes a binary MessagePack length-prefixed frame to the WAL file.
+// Append writes a binary MessagePack length-prefixed frame to the WAL file
+// and synchronizes to disk if the policy is FsyncAlways.
 func (w *WALWriter) Append(rec WALRecord) error {
+	seq, err := w.writeFrame(rec)
+	if err != nil {
+		return err
+	}
+	return w.syncForPolicy(seq)
+}
+
+// writeFrame marshals rec and writes a single length-prefixed frame to the OS file buffer
+// under w.mu, returning the assigned write sequence number without calling fsync.
+func (w *WALWriter) writeFrame(rec WALRecord) (int64, error) {
 	payload, err := MarshalMsgPack(rec)
 	if err != nil {
-		return fmt.Errorf("failed to marshal MessagePack WAL record: %w", err)
+		return 0, fmt.Errorf("failed to marshal MessagePack WAL record: %w", err)
 	}
 
 	// Build single contiguous frame [4-byte big-endian length | payload] outside the lock
@@ -157,25 +168,29 @@ func (w *WALWriter) Append(rec WALRecord) error {
 	w.mu.Lock()
 	if w.closed || w.file == nil {
 		w.mu.Unlock()
-		return fmt.Errorf("WAL writer is closed")
+		return 0, fmt.Errorf("WAL writer is closed")
 	}
 
 	n, err := w.file.Write(frame)
 	if err != nil {
 		w.mu.Unlock()
-		return fmt.Errorf("failed to write WAL frame: %w", err)
+		return 0, fmt.Errorf("failed to write WAL frame: %w", err)
 	}
 	w.bytesTotal += int64(n)
 	w.writeSeq++
 	seq := w.writeSeq
 	w.mu.Unlock()
 
-	if w.Policy() == FsyncAlways {
+	return seq, nil
+}
+
+// syncForPolicy performs leader/follower group commit fsync up to seq when policy is FsyncAlways.
+func (w *WALWriter) syncForPolicy(seq int64) error {
+	if seq > 0 && w.Policy() == FsyncAlways {
 		if err := w.syncUpTo(seq); err != nil {
 			return fmt.Errorf("failed to sync WAL: %w", err)
 		}
 	}
-
 	return nil
 }
 

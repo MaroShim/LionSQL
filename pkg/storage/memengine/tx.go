@@ -1506,11 +1506,11 @@ func (tx *Transaction) Commit() error {
 		}
 	}
 
-	// Release shard and table locks before WAL disk I/O to avoid holding locks during fsync/compaction
-	unlockAll()
-
-	// 3. Append atomic WAL record and notify walHook if enabled
+	// 7. Assign monotonic LSN and append WAL frame while shard locks are still held
+	// so causal row version order and LSN order in the WAL file strictly match.
 	needWAL := (tx.engine.wal != nil || tx.engine.walHook != nil)
+	var walRec WALRecord
+	var walSeq int64
 	if needWAL && len(tx.changes) > 0 {
 		ops := make([]WALOp, 0, len(tx.changes))
 		for _, ch := range tx.changes {
@@ -1539,12 +1539,11 @@ func (tx *Transaction) Commit() error {
 				BaseVer: ch.baseVer,
 			})
 		}
-		rec, err := tx.engine.recordWALLocked(ops)
+		var err error
+		walRec, walSeq, err = tx.engine.appendWALFrameLocked(ops)
 		if err != nil {
 			return err
 		}
-		tx.commitLSN = rec.LSN
-		tx.commitTimestamp = rec.Timestamp
 	} else {
 		if len(tx.changes) > 0 {
 			tx.engine.changesSinceSave.Add(int64(len(tx.changes)))
@@ -1553,6 +1552,18 @@ func (tx *Transaction) Commit() error {
 			tx.commitLSN = tx.snapshotLSN
 		}
 		tx.commitTimestamp = time.Now().UnixNano()
+	}
+
+	// Release shard and table locks before WAL fsync / AOF compaction
+	unlockAll()
+
+	// 8. Perform group commit fsync and optional AOF compaction outside shard/table locks
+	if needWAL && len(tx.changes) > 0 {
+		if err := tx.engine.finishWALCommitLocked(walSeq); err != nil {
+			return err
+		}
+		tx.commitLSN = walRec.LSN
+		tx.commitTimestamp = walRec.Timestamp
 	}
 
 	tx.savepoints = nil

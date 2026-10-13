@@ -52,6 +52,7 @@ type Engine struct {
 	closed           bool
 	compacting       atomic.Bool
 	diskMu           sync.Mutex
+	walOrderMu       sync.Mutex
 }
 
 // CurrentLSN returns the latest assigned Log Sequence Number.
@@ -66,35 +67,69 @@ func (e *Engine) SetWALHook(fn func(rec WALRecord)) {
 	e.walHook = fn
 }
 
-// recordWALLocked writes a WAL record, invokes the registered walHook, and returns the assigned WALRecord.
-func (e *Engine) recordWALLocked(ops []WALOp) (WALRecord, error) {
+// appendWALFrameLocked atomically assigns the next monotonic LSN, writes the WAL frame
+// to the OS file buffer, and notifies walHook in strict LSN order. Group commit fsync and
+// AOF compaction are deferred to finishWALCommitLocked so shard locks are not held during disk sync.
+func (e *Engine) appendWALFrameLocked(ops []WALOp) (WALRecord, int64, error) {
 	if len(ops) == 0 {
-		return WALRecord{}, nil
+		return WALRecord{}, 0, nil
 	}
 	e.changesSinceSave.Add(int64(len(ops)))
+
+	e.walOrderMu.Lock()
 	rec := WALRecord{
 		LSN:       e.nextLSN.Add(1),
 		Timestamp: time.Now().UnixNano(),
 		Ops:       ops,
 	}
+	var seq int64
 	if e.wal != nil {
-		if err := e.wal.Append(rec); err != nil {
-			return rec, err
-		}
-		if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
-			// Guard compaction with atomic CAS so concurrent committers under e.mu.RLock()
-			// do not race in saveDiskLocked() / rewriteAOFLocked().
-			if e.compacting.CompareAndSwap(false, true) {
-				if err := e.rewriteAOFLocked(); err != nil {
-					e.compacting.Store(false)
-					return rec, err
-				}
-				e.compacting.Store(false)
-			}
+		var err error
+		seq, err = e.wal.writeFrame(rec)
+		if err != nil {
+			e.walOrderMu.Unlock()
+			return rec, 0, err
 		}
 	}
 	if e.walHook != nil {
 		e.walHook(rec)
+	}
+	e.walOrderMu.Unlock()
+
+	return rec, seq, nil
+}
+
+// finishWALCommitLocked performs group commit fsync (when FsyncAlways) and triggers
+// background-safe AOF compaction if the WAL file exceeds aofThreshold.
+func (e *Engine) finishWALCommitLocked(seq int64) error {
+	if e.wal == nil {
+		return nil
+	}
+	if err := e.wal.syncForPolicy(seq); err != nil {
+		return err
+	}
+	if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
+		// Guard compaction with atomic CAS so concurrent committers under e.mu.RLock()
+		// do not race in saveDiskLocked() / rewriteAOFLocked().
+		if e.compacting.CompareAndSwap(false, true) {
+			if err := e.rewriteAOFLocked(); err != nil {
+				e.compacting.Store(false)
+				return err
+			}
+			e.compacting.Store(false)
+		}
+	}
+	return nil
+}
+
+// recordWALLocked writes a WAL record, invokes the registered walHook, and returns the assigned WALRecord.
+func (e *Engine) recordWALLocked(ops []WALOp) (WALRecord, error) {
+	rec, seq, err := e.appendWALFrameLocked(ops)
+	if err != nil {
+		return rec, err
+	}
+	if err := e.finishWALCommitLocked(seq); err != nil {
+		return rec, err
 	}
 	return rec, nil
 }
