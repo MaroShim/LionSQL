@@ -5,9 +5,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"sqlion/pkg/storage"
@@ -29,10 +31,10 @@ const (
 type WALOpType string
 
 const (
-	OpCreateTable WALOpType = "CREATE_TABLE"
-	OpDropTable   WALOpType = "DROP_TABLE"
-	OpCreateIndex WALOpType = "CREATE_INDEX"
-	OpDropIndex   WALOpType = "DROP_INDEX"
+	OpCreateTable   WALOpType = "CREATE_TABLE"
+	OpDropTable     WALOpType = "DROP_TABLE"
+	OpCreateIndex   WALOpType = "CREATE_INDEX"
+	OpDropIndex     WALOpType = "DROP_INDEX"
 	OpInsert        WALOpType = "INSERT"
 	OpUpdate        WALOpType = "UPDATE"
 	OpDelete        WALOpType = "DELETE"
@@ -71,6 +73,13 @@ type WALWriter struct {
 	closed     bool
 	closeOnce  sync.Once
 	bytesTotal int64
+	syncCount  atomic.Int64
+
+	// Group commit state. Lock order: syncMu -> mu.
+	// writeSeq is guarded by mu; syncedSeq is guarded by syncMu.
+	syncMu    sync.Mutex
+	writeSeq  int64
+	syncedSeq int64
 }
 
 // NewWALWriter opens or creates a WAL file at the given path.
@@ -113,11 +122,9 @@ func (w *WALWriter) startPeriodicSync() {
 	for {
 		select {
 		case <-ticker.C:
-			w.mu.Lock()
-			if !w.closed && w.file != nil {
-				_ = w.file.Sync()
+			if err := w.syncAll(); err != nil {
+				log.Printf("[WAL] periodic sync failed: %v", err)
 			}
-			w.mu.Unlock()
 		case <-w.stopCh:
 			return
 		}
@@ -135,25 +142,29 @@ func (w *WALWriter) Append(rec WALRecord) error {
 	binary.BigEndian.PutUint32(header[:], uint32(len(payload)))
 
 	w.mu.Lock()
-	defer w.mu.Unlock()
-
 	if w.closed || w.file == nil {
+		w.mu.Unlock()
 		return fmt.Errorf("WAL writer is closed")
 	}
 
 	// Write length prefix (4 bytes) followed by MessagePack payload
 	n1, err := w.file.Write(header[:])
 	if err != nil {
+		w.mu.Unlock()
 		return fmt.Errorf("failed to write WAL header: %w", err)
 	}
 	n2, err := w.file.Write(payload)
 	if err != nil {
+		w.mu.Unlock()
 		return fmt.Errorf("failed to write WAL payload: %w", err)
 	}
 	w.bytesTotal += int64(n1 + n2)
+	w.writeSeq++
+	seq := w.writeSeq
+	w.mu.Unlock()
 
 	if w.policy == FsyncAlways {
-		if err := w.file.Sync(); err != nil {
+		if err := w.syncUpTo(seq); err != nil {
 			return fmt.Errorf("failed to sync WAL: %w", err)
 		}
 	}
@@ -161,15 +172,53 @@ func (w *WALWriter) Append(rec WALRecord) error {
 	return nil
 }
 
-// Sync flushes internal buffers and forces file synchronization to disk.
-func (w *WALWriter) Sync() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
+// syncUpTo makes every frame with sequence <= seq durable using leader/follower
+// group commit: the first waiter to take syncMu becomes the leader and fsyncs
+// all frames written so far; followers that queued behind it find their frame
+// already covered and return without issuing a syscall. The fsync runs outside
+// mu so other committers keep appending while the leader waits on the disk.
+func (w *WALWriter) syncUpTo(seq int64) error {
+	w.syncMu.Lock()
+	defer w.syncMu.Unlock()
 
-	if w.closed || w.file == nil {
+	if w.syncedSeq >= seq {
 		return nil
 	}
-	return w.file.Sync()
+	return w.syncLeaderLocked()
+}
+
+// syncAll flushes everything written so far (no-op if already durable).
+func (w *WALWriter) syncAll() error {
+	w.syncMu.Lock()
+	defer w.syncMu.Unlock()
+	return w.syncLeaderLocked()
+}
+
+// syncLeaderLocked must be called with syncMu held.
+func (w *WALWriter) syncLeaderLocked() error {
+	w.mu.Lock()
+	target := w.writeSeq
+	file := w.file
+	closed := w.closed
+	w.mu.Unlock()
+
+	if closed || file == nil || w.syncedSeq >= target {
+		return nil
+	}
+	w.syncCount.Add(1)
+	if err := file.Sync(); err != nil {
+		return err
+	}
+	w.syncedSeq = target
+	return nil
+}
+
+// SyncCount returns the number of fsync calls issued by FsyncAlways commits.
+func (w *WALWriter) SyncCount() int64 { return w.syncCount.Load() }
+
+// Sync flushes internal buffers and forces file synchronization to disk.
+func (w *WALWriter) Sync() error {
+	return w.syncAll()
 }
 
 // Size returns the total bytes written to the current WAL file.
@@ -181,6 +230,8 @@ func (w *WALWriter) Size() int64 {
 
 // Truncate safely resets the WAL file to 0 bytes after an AOF rewrite.
 func (w *WALWriter) Truncate() error {
+	w.syncMu.Lock()
+	defer w.syncMu.Unlock()
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -199,6 +250,8 @@ func (w *WALWriter) Truncate() error {
 	}
 	w.file = file
 	w.bytesTotal = 0
+	// Everything previously written has been discarded; nothing is pending.
+	w.syncedSeq = w.writeSeq
 
 	return nil
 }
@@ -209,6 +262,8 @@ func (w *WALWriter) Close() error {
 	w.closeOnce.Do(func() {
 		close(w.stopCh)
 
+		w.syncMu.Lock()
+		defer w.syncMu.Unlock()
 		w.mu.Lock()
 		defer w.mu.Unlock()
 

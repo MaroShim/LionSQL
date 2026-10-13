@@ -201,8 +201,8 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ## 7. Overall System & Database Engine Performance Optimization Roadmap (전체 엔진 성능 고속화 로드맵)
 
-- [ ] **[Phase 1: 스토리지 & 트랜잭션] 그룹 커밋 (Group Commit Pipelining) 및 읽기 전용 패스트패스**
-  - **배치형 그룹 커밋 (Group Commit Pipelining & fsync 병합)**:
+- [x] **[Phase 1: 스토리지 & 트랜잭션] 그룹 커밋 (Group Commit Pipelining) 및 읽기 전용 패스트패스**
+  - **[완료] 배치형 그룹 커밋 (Group Commit Pipelining & fsync 병합)**: memengine WAL에 리더/팔로워 방식 구현(타이머 없이 지연 0, fsync는 쓰기 뮤텍스 밖에서 실행). `FsyncAlways` 16워커 3.72ms -> 0.062ms/op, 64워커 3.81ms -> 0.038ms/op. WiredTiger는 자체 로그 서브시스템이 이미 그룹 커밋을 수행하므로 별도 큐 불필요.
     - **문제점**: 동시 다발적인 트랜잭션 커밋 시 각 워커 고루틴이 동기식 `fsync` / `fdatasync` 시스템 콜을 개별 호출하여 물리 NVMe I/O 한계(초당 수천 회)에 봉착.
     - **해결책**: 트랜잭션 커밋 대기열(Channel / Ring Buffer)을 구축하고, 마이크로초 타임 윈도우(50~100µs) 또는 N개(32~64건) 단위로 단 1회의 시스템 콜(`writev` + `fdatasync`)로 WAL/AOF 저널을 일괄 영속화.
     - **기대 효과**: 동시성 트랜잭션(16~64 워커) 포화 상태에서 쓰기 처리량(TPS) **2~4배 이상 폭증** (PostgreSQL/MySQL/CockroachDB 표준 아키텍처).

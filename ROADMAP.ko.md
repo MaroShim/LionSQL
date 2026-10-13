@@ -263,7 +263,8 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **과제**: 멀티파트 파일 업로드 API (`POST /api/files/:table/:id`), 정적 파일 서빙, 비동기 썸네일 리사이징 및 용량 거버너.
 - **기대 효과**: BaaS 스타일 올인원 파일 관리 역량 확보.
 
-#### 6.13. 파이프라인 그룹 커밋 및 fsync 일괄 병합 (Group Commit Pipelining) (`pkg/storage/memengine`, `pkg/storage/wiredtiger`)
+#### 6.13. [완료] 파이프라인 그룹 커밋 및 fsync 일괄 병합 (Group Commit Pipelining) (`pkg/storage/memengine`, `pkg/storage/wiredtiger`)
+- **결과**: memengine WAL에 리더/팔로워 그룹 커밋 구현(타이머 윈도우 없음, 추가 지연 0). `FsyncAlways` 16/64 워커에서 커밋당 ~3.7ms -> 0.062/0.038ms. WiredTiger는 자체 그룹 커밋 내장.
 - **과제**:
   - 커밋 대기열 큐(채널 / 링 버퍼)를 구축하여 워커 고루틴들의 동시 다발적인 트랜잭션 커밋 요청 수집.
   - 마이크로초 윈도우(50~100µs) 또는 N개(32~64건) 단위로 단 1회의 시스템 콜(`writev` + `fdatasync`) 일괄 영속화.
