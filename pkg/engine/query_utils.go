@@ -46,11 +46,11 @@ func SplitStatements(query string) []string {
 				}
 
 				if isProcOrFunc {
-					if (i == 0 || !isIdentChar(query[i-1])) && i+5 <= len(query) && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == len(query) || !isIdentChar(query[i+5])) {
+					if (i == 0 || !IsIdentChar(query[i-1])) && i+5 <= len(query) && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == len(query) || !IsIdentChar(query[i+5])) {
 						blockDepth++
-					} else if (i == 0 || !isIdentChar(query[i-1])) && i+4 <= len(query) && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == len(query) || !isIdentChar(query[i+4])) {
+					} else if (i == 0 || !IsIdentChar(query[i-1])) && i+4 <= len(query) && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == len(query) || !IsIdentChar(query[i+4])) {
 						blockDepth++
-					} else if (i == 0 || !isIdentChar(query[i-1])) && i+3 <= len(query) && strings.EqualFold(query[i:i+3], "END") && (i+3 == len(query) || !isIdentChar(query[i+3])) {
+					} else if (i == 0 || !IsIdentChar(query[i-1])) && i+3 <= len(query) && strings.EqualFold(query[i:i+3], "END") && (i+3 == len(query) || !IsIdentChar(query[i+3])) {
 						if blockDepth > 0 {
 							blockDepth--
 						}
@@ -84,7 +84,8 @@ func SplitStatements(query string) []string {
 	return stmts
 }
 
-func isIdentChar(ch byte) bool {
+// IsIdentChar reports whether ch is a valid SQL identifier character.
+func IsIdentChar(ch byte) bool {
 	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '@' || ch == '#'
 }
 
@@ -107,4 +108,60 @@ func ParseTimeoutDuration(s string) (time.Duration, error) {
 		return time.Duration(ms) * time.Millisecond, nil
 	}
 	return 0, nil
+}
+
+// CleanSavepointName strips delimiters, semicolons, quotes, and brackets from savepoint names.
+func CleanSavepointName(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimRight(raw, ";")
+	raw = strings.TrimSpace(raw)
+	raw = strings.Trim(raw, "[]\"'`")
+	return strings.TrimSpace(raw)
+}
+
+// TrimAnyPrefix returns original sliced past the first matching prefix matched case-insensitively against upper.
+func TrimAnyPrefix(upper, original string, prefixes ...string) (string, bool) {
+	for _, p := range prefixes {
+		if strings.HasPrefix(upper, p) {
+			return original[len(p):], true
+		}
+	}
+	return "", false
+}
+
+// IsRollbackOrResetQuery reports whether query is a transaction rollback or session reset command.
+func IsRollbackOrResetQuery(q string) bool {
+	upper := strings.ToUpper(strings.TrimSpace(q))
+	return strings.HasPrefix(upper, "ROLLBACK") ||
+		strings.HasPrefix(upper, "DISCARD") ||
+		strings.HasPrefix(upper, "RESET") ||
+		strings.HasPrefix(upper, "DEALLOCATE") ||
+		strings.HasPrefix(upper, "UNLISTEN")
+}
+
+// ParseSessionVarValue converts a T-SQL literal string to a native Go value (bool, int64, float64, string).
+func ParseSessionVarValue(s string) any {
+	s = strings.TrimSpace(s)
+	if strings.EqualFold(s, "NULL") {
+		return nil
+	}
+	if strings.EqualFold(s, "TRUE") {
+		return true
+	}
+	if strings.EqualFold(s, "FALSE") {
+		return false
+	}
+	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
+		return s[1 : len(s)-1]
+	}
+	if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") && len(s) >= 2 {
+		return s[1 : len(s)-1]
+	}
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		return n
+	}
+	if f, err := strconv.ParseFloat(s, 64); err == nil {
+		return f
+	}
+	return s
 }

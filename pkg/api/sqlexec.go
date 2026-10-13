@@ -21,33 +21,11 @@ import (
 type QueryResult = engine.QueryResult
 
 func parseSessionVarValue(s string) any {
-	s = strings.TrimSpace(s)
-	if strings.EqualFold(s, "NULL") {
-		return nil
-	}
-	if strings.EqualFold(s, "TRUE") {
-		return true
-	}
-	if strings.EqualFold(s, "FALSE") {
-		return false
-	}
-	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
-		return s[1 : len(s)-1]
-	}
-	if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") && len(s) >= 2 {
-		return s[1 : len(s)-1]
-	}
-	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return n
-	}
-	if f, err := strconv.ParseFloat(s, 64); err == nil {
-		return f
-	}
-	return s
+	return engine.ParseSessionVarValue(s)
 }
 
 func isIdentChar(ch byte) bool {
-	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '@' || ch == '#'
+	return engine.IsIdentChar(ch)
 }
 
 func splitStatements(query string) []string {
@@ -1021,31 +999,17 @@ func cleanIdentifier(s string) string {
 
 // cleanSavepointName strips delimiters, semicolon, quotes, and brackets from savepoint names.
 func cleanSavepointName(raw string) string {
-	raw = strings.TrimSpace(raw)
-	raw = strings.TrimRight(raw, ";")
-	raw = strings.TrimSpace(raw)
-	raw = strings.Trim(raw, "[]\"'`")
-	return strings.TrimSpace(raw)
+	return engine.CleanSavepointName(raw)
 }
 
 // trimAnyPrefix returns original sliced past the first matching prefix matched case-insensitively against upper.
 func trimAnyPrefix(upper, original string, prefixes ...string) (string, bool) {
-	for _, p := range prefixes {
-		if strings.HasPrefix(upper, p) {
-			return original[len(p):], true
-		}
-	}
-	return "", false
+	return engine.TrimAnyPrefix(upper, original, prefixes...)
 }
 
 // isRollbackOrResetQuery reports whether query is a transaction rollback or session reset command.
 func isRollbackOrResetQuery(q string) bool {
-	upper := strings.ToUpper(strings.TrimSpace(q))
-	return strings.HasPrefix(upper, "ROLLBACK") ||
-		strings.HasPrefix(upper, "DISCARD") ||
-		strings.HasPrefix(upper, "RESET") ||
-		strings.HasPrefix(upper, "DEALLOCATE") ||
-		strings.HasPrefix(upper, "UNLISTEN")
+	return engine.IsRollbackOrResetQuery(q)
 }
 
 // checkWriteAllowed ensures that write operations (DDL/DML) cannot be executed on read-only secondary replicas.
