@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"fmt"
@@ -54,20 +54,27 @@ func (m *MetricsCollector) RecordTransaction(action string) {
 	}
 }
 
+// PrometheusServerState carries server-level gauges that are not owned by MetricsCollector.
+type PrometheusServerState struct {
+	StartTime         time.Time
+	ActiveConnections int
+	TableCount        int
+	PlanCacheHits     int64
+	PlanCacheMisses   int64
+}
+
 // FormatPrometheus serializes current server state into the Prometheus standard text-based format (0.0.4).
-func (m *MetricsCollector) FormatPrometheus(s *Server) string {
+func (m *MetricsCollector) FormatPrometheus(st PrometheusServerState) string {
 	var b strings.Builder
 
 	// 1. Uptime
-	uptime := time.Since(s.startTime).Seconds()
+	uptime := time.Since(st.StartTime).Seconds()
 	b.WriteString("# HELP sqlion_uptime_seconds Total time in seconds since SQLion server process started.\n")
 	b.WriteString("# TYPE sqlion_uptime_seconds gauge\n")
 	b.WriteString(fmt.Sprintf("sqlion_uptime_seconds %.2f\n\n", uptime))
 
 	// 2. Active connections
-	s.sessMu.RLock()
-	activeConns := len(s.sessions)
-	s.sessMu.RUnlock()
+	activeConns := st.ActiveConnections
 	b.WriteString("# HELP sqlion_active_connections Current number of active client sessions.\n")
 	b.WriteString("# TYPE sqlion_active_connections gauge\n")
 	b.WriteString(fmt.Sprintf("sqlion_active_connections %d\n\n", activeConns))
@@ -119,21 +126,13 @@ func (m *MetricsCollector) FormatPrometheus(s *Server) string {
 	b.WriteString(fmt.Sprintf("sqlion_transactions_total{type=\"rollback\"} %d\n\n", m.transactionsRollback.Load()))
 
 	// 8. Total tables
-	tblCount := 0
-	if s.engine != nil {
-		if tbls, err := s.engine.ListTables(); err == nil {
-			tblCount = len(tbls)
-		}
-	}
+	tblCount := st.TableCount
 	b.WriteString("# HELP sqlion_tables_total Total number of user tables in the database engine.\n")
 	b.WriteString("# TYPE sqlion_tables_total gauge\n")
 	b.WriteString(fmt.Sprintf("sqlion_tables_total %d\n\n", tblCount))
 
 	// 9. Plan Cache Hit/Miss
-	var hits, misses int64
-	if s.planCache != nil {
-		hits, misses = s.planCache.Stats()
-	}
+	hits, misses := st.PlanCacheHits, st.PlanCacheMisses
 	b.WriteString("# HELP sqlion_plan_cache_hits_total Total number of stored procedure execution plan cache hits.\n")
 	b.WriteString("# TYPE sqlion_plan_cache_hits_total counter\n")
 	b.WriteString(fmt.Sprintf("sqlion_plan_cache_hits_total %d\n", hits))

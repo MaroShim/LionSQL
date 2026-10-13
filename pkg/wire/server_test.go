@@ -770,7 +770,7 @@ func TestWire_PasswordAuthentication(t *testing.T) {
 	defer srv.Close()
 
 	// Register login with password in auth service
-	authSvc := srv.apiServer.AuthService()
+	authSvc := srv.coordinator.AuthService()
 	_, err := authSvc.CreateLogin("alice", "mypassword123")
 	if err != nil {
 		t.Fatalf("failed to create login: %v", err)

@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"context"
@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	ErrPoolClosed   = errors.New("session pool is closed")
-	ErrPoolTimeout  = errors.New("timeout waiting for available session from pool")
+	ErrPoolClosed    = errors.New("session pool is closed")
+	ErrPoolTimeout   = errors.New("timeout waiting for available session from pool")
 	ErrPoolExhausted = errors.New("maximum active sessions reached and queue full")
 )
 

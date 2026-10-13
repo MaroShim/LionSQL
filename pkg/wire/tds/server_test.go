@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/proc/runtime"

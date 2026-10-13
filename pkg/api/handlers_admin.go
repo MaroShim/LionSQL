@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"sqlion/pkg/backup"
+	"sqlion/pkg/engine"
 )
 
 type execSQLReq struct {
@@ -132,7 +133,19 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write([]byte(s.metrics.FormatPrometheus(s)))
+	st := engine.PrometheusServerState{StartTime: s.startTime}
+	s.sessMu.RLock()
+	st.ActiveConnections = len(s.sessions)
+	s.sessMu.RUnlock()
+	if s.engine != nil {
+		if tbls, err := s.engine.ListTables(); err == nil {
+			st.TableCount = len(tbls)
+		}
+	}
+	if s.planCache != nil {
+		st.PlanCacheHits, st.PlanCacheMisses = s.planCache.Stats()
+	}
+	_, _ = w.Write([]byte(s.metrics.FormatPrometheus(st)))
 }
 
 func (s *Server) handleGetSlowQueries(w http.ResponseWriter, r *http.Request) {

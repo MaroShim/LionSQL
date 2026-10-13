@@ -23,13 +23,13 @@ type ClientSession struct {
 	SPID            int
 	Session         storage.Session
 	Tx              storage.Transaction
-	TxFailed        bool              // whether current transaction encountered an error ('E' in PGWire)
+	TxFailed        bool // whether current transaction encountered an error ('E' in PGWire)
 	Vars            map[string]any
 	TableVars       map[string]string // @table_var -> physical table name
 	TempTables      []string          // session-scoped #temp_tables
 	PreparedStmts   map[string]*PreparedStatement
-	User            string            // active database user principal for RBAC
-	OriginalUser    string            // original user prior to SETUSER / EXECUTE AS
+	User            string // active database user principal for RBAC
+	OriginalUser    string // original user prior to SETUSER / EXECUTE AS
 	QueryCtx        context.Context
 	CancelFunc      context.CancelFunc
 	RunningQuery    string

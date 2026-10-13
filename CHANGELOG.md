@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **SQL Coordinator extraction into `pkg/engine` (incremental)**:
+  - Introduced `engine.SQLCoordinator` interface; `pkg/wire` and `pkg/wire/tds` now hold a coordinator instead of `*api.Server` (`SetCoordinator`, `NewServerWithCoordinator`).
+  - Moved `SplitStatements`, `ParseTimeoutDuration`, `MetricsCollector`, `SlowQueryLogger`, `GeneralLogger`, `SessionPool`, and `RotatingLogWriter` to `pkg/engine`; `pkg/api` keeps type aliases (`engine_aliases.go`) for compatibility.
+  - `MetricsCollector.FormatPrometheus` now takes `engine.PrometheusServerState` instead of `*api.Server`.
 - **Leader/Follower Group Commit & Concurrency Hardening for memengine WAL (`pkg/storage/memengine`)**:
   - Under `FsyncAlways`, `WALWriter.Append` builds a single contiguous `[4-byte length | payload]` frame outside the lock, performs a single `write(2)` syscall under `mu`, and releases `mu` before syncing; the first waiter on `syncMu` becomes the sync leader and one `fsync` makes every frame written so far durable while followers return once covered. Lock order is `syncMu` -> `mu`.
   - Enforced strict monotonic LSN and causal row-version ordering (`appendWALFrameLocked` + `finishWALCommitLocked`): `Engine.walOrderMu` atomically pairs `nextLSN.Add(1)`, `WALWriter.writeFrame`, and `walHook` invocation while shard locks are still held, and releases shard/table locks (`unlockAll()`) before waiting on group commit `fsync` (`syncForPolicy`) and AOF compaction.
