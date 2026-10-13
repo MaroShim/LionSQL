@@ -82,6 +82,7 @@ type Server struct {
 	crons          *CronScheduler
 	mailer         *Mailer
 	pool           *SessionPool
+	coordinator    *engine.Coordinator
 	mux            *http.ServeMux
 	sessions           map[string]*ClientSession
 	sessMu             sync.RWMutex
@@ -127,6 +128,14 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		rls:                NewRLSManager(),
 		mailer:             mailer,
 		pool:               pool,
+		coordinator:        engine.NewCoordinator(cat, eng, engine.Config{
+			DefaultWorkMem:   execution.DefaultWorkMem,
+			SlowThreshold:    DefaultSlowQueryThreshold,
+			EnableGeneralLog: false,
+			AuthService:      authSvc,
+			EnableAuth:       enableAuth,
+			PoolConfig:       DefaultPoolConfig(),
+		}),
 		mux:                http.NewServeMux(),
 		sessions:           make(map[string]*ClientSession),
 		globalTempCreators: make(map[string]string),
@@ -191,6 +200,11 @@ func (s *Server) newPlanner() *planner.Planner {
 // Pool returns the underlying goroutine connection & session pool.
 func (s *Server) Pool() *SessionPool {
 	return s.pool
+}
+
+// Coordinator returns the underlying SQL execution coordinator.
+func (s *Server) Coordinator() *engine.Coordinator {
+	return s.coordinator
 }
 
 // SetPoolConfig updates the connection pool configuration.
