@@ -65,15 +65,16 @@ type WALRecord struct {
 
 // WALWriter handles thread-safe append-only logging with configurable fsync policies and MessagePack binary frames.
 type WALWriter struct {
-	mu         sync.Mutex
-	file       *os.File
-	path       string
-	policy     atomic.Int32
-	stopCh     chan struct{}
-	closed     bool
-	closeOnce  sync.Once
-	bytesTotal int64
-	syncCount  atomic.Int64
+	mu           sync.Mutex
+	file         *os.File
+	path         string
+	policy       atomic.Int32
+	periodicOnce sync.Once
+	stopCh       chan struct{}
+	closed       bool
+	closeOnce    sync.Once
+	bytesTotal   int64
+	syncCount    atomic.Int64
 
 	// Group commit state. Lock order: syncMu -> mu.
 	// writeSeq is guarded by mu; syncedSeq is guarded by syncMu.
@@ -106,11 +107,7 @@ func NewWALWriter(path string, policy FsyncPolicy) (*WALWriter, error) {
 		stopCh:     make(chan struct{}),
 		bytesTotal: stat.Size(),
 	}
-	w.policy.Store(int32(policy))
-
-	if policy == FsyncEverySec {
-		go w.startPeriodicSync()
-	}
+	w.SetPolicy(policy)
 
 	return w, nil
 }
@@ -118,6 +115,11 @@ func NewWALWriter(path string, policy FsyncPolicy) (*WALWriter, error) {
 // SetPolicy atomically updates the fsync policy.
 func (w *WALWriter) SetPolicy(policy FsyncPolicy) {
 	w.policy.Store(int32(policy))
+	if policy == FsyncEverySec {
+		w.periodicOnce.Do(func() {
+			go w.startPeriodicSync()
+		})
+	}
 }
 
 // Policy returns the current fsync policy.
@@ -132,8 +134,10 @@ func (w *WALWriter) startPeriodicSync() {
 	for {
 		select {
 		case <-ticker.C:
-			if err := w.syncAll(); err != nil {
-				log.Printf("[WAL] periodic sync failed: %v", err)
+			if w.Policy() == FsyncEverySec {
+				if err := w.syncAll(); err != nil {
+					log.Printf("[WAL] periodic sync failed: %v", err)
+				}
 			}
 		case <-w.stopCh:
 			return

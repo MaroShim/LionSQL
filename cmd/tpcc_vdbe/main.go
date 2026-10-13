@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -51,17 +52,42 @@ func main() {
 	numWorkers := flag.Int("workers", 20, "Number of concurrent client workers")
 	durationFlag := flag.Duration("duration", 15*time.Second, "Benchmark duration (e.g. 10s, 30s, 1m)")
 	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
-	dataDir := flag.String("dir", "data/tpcc_vdbe_wt", "Data directory for WiredTiger backend")
+	fsyncFlag := flag.String("fsync", "off", "WAL fsync policy for memory engine: off (ephemeral), none, everysec, always")
+	dataDir := flag.String("dir", "data/tpcc_vdbe_wt", "Data directory for WAL/WiredTiger backend")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
 	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries with exponential backoff on serialization conflict")
 	flag.Parse()
 
+	fsyncMode := strings.ToLower(strings.TrimSpace(*fsyncFlag))
+	var targetFsyncPolicy memengine.FsyncPolicy
+	enableMemWAL := false
+	switch fsyncMode {
+	case "", "off", "ephemeral":
+		enableMemWAL = false
+	case "none":
+		enableMemWAL = true
+		targetFsyncPolicy = memengine.FsyncNone
+	case "everysec":
+		enableMemWAL = true
+		targetFsyncPolicy = memengine.FsyncEverySec
+	case "always":
+		enableMemWAL = true
+		targetFsyncPolicy = memengine.FsyncAlways
+	default:
+		fmt.Printf("Unknown -fsync option: %s. Options: off, none, everysec, always\n", *fsyncFlag)
+		os.Exit(1)
+	}
+
 	fmt.Println("================================================================================")
 	fmt.Println("  SQLion TPC-C Benchmark Suite (Native T-SQL VDBE Bytecode Engine)")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Execution]      Precompiled T-SQL VDBE Bytecode (*proc.Program -> PlanCache)\n")
-	fmt.Printf(" [Storage Engine] %s (Dir: %s)\n", *engineType, *dataDir)
+	if *engineType == "memory" {
+		fmt.Printf(" [Storage Engine] %s (WAL fsync: %s, Dir: %s)\n", *engineType, fsyncMode, *dataDir)
+	} else {
+		fmt.Printf(" [Storage Engine] %s (Dir: %s)\n", *engineType, *dataDir)
+	}
 	fmt.Printf(" [Scale Factor]   %d Warehouses (%d Items, %d Customers/District)\n", *numWarehouses, *numItems, *numCustPerDist)
 	fmt.Printf(" [Concurrency]    %d Client Workers\n", *numWorkers)
 	fmt.Printf(" [Duration]       %v\n", *durationFlag)
@@ -69,24 +95,43 @@ func main() {
 
 	// 1. Initialize Storage Engine
 	var eng storage.Engine
+	var memEng *memengine.Engine
+	cleanupDir := false
 	switch *engineType {
 	case "wiredtiger":
 		_ = os.RemoveAll(*dataDir)
+		cleanupDir = true
 		eng = wiredtiger.New()
 		if err := eng.Open(*dataDir); err != nil {
 			fmt.Printf("Failed to open WiredTiger storage engine: %v\n", err)
 			os.Exit(1)
 		}
 	case "memory":
-		eng = memengine.New()
-		_ = eng.Open("")
+		memEng = memengine.New()
+		if enableMemWAL {
+			_ = os.RemoveAll(*dataDir)
+			cleanupDir = true
+			// Seed initial tables with FsyncNone for fast setup, then switch to targetFsyncPolicy
+			opts := memengine.DefaultOptions(*dataDir)
+			opts.EnableAOF = true
+			opts.EnableRDB = false
+			opts.AOFThreshold = 0
+			opts.FsyncPolicy = memengine.FsyncNone
+			if err := memEng.OpenWithOptions(opts); err != nil {
+				fmt.Printf("Failed to open memory storage engine with WAL: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			_ = memEng.Open("")
+		}
+		eng = memEng
 	default:
 		fmt.Printf("Unknown storage engine: %s. Options: memory, wiredtiger\n", *engineType)
 		os.Exit(1)
 	}
 	defer func() {
 		eng.Close()
-		if *engineType == "wiredtiger" {
+		if cleanupDir {
 			_ = os.RemoveAll(*dataDir)
 		}
 	}()
@@ -101,6 +146,10 @@ func main() {
 	seedStart := time.Now()
 	seedTPCCData(eng, *numWarehouses, *numItems, *numCustPerDist)
 	fmt.Printf("Done in %v.\n", time.Since(seedStart).Round(time.Millisecond))
+
+	if memEng != nil && enableMemWAL {
+		memEng.SetFsyncPolicy(targetFsyncPolicy)
+	}
 
 	// 4. Compile TPC-C Stored Procedures into VDBE Bytecode
 	fmt.Print("Compiling TPC-C stored procedures to VDBE bytecode... ")
