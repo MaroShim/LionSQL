@@ -543,9 +543,10 @@ func deduplicateRows(rows []map[string]any) []map[string]any {
 
 // rewriteViewsAsCTE detects view references in a SELECT query and rewrites the query as a CTE.
 // For example:
-//   SELECT name FROM v_eng WHERE salary > 80000
-//   -> WITH v_eng AS (SELECT ... FROM employees WHERE dept='Engineering')
-//      SELECT name FROM v_eng WHERE salary > 80000
+//
+//	SELECT name FROM v_eng WHERE salary > 80000
+//	-> WITH v_eng AS (SELECT ... FROM employees WHERE dept='Engineering')
+//	   SELECT name FROM v_eng WHERE salary > 80000
 //
 // Multiple views are accumulated into a single WITH clause.
 // Returns the rewritten query and true if at least one view was found.
@@ -1121,4 +1122,3 @@ func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 // -----------------------------------------------------------------------------
 // PIVOT Execution Engine
 // -----------------------------------------------------------------------------
-

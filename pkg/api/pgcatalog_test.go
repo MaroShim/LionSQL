@@ -801,6 +801,3 @@ order by c.column_id`
 		t.Fatalf("expected '[users]', got: %+v", quoteRes.Rows)
 	}
 }
-
-
-

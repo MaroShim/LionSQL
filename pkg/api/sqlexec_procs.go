@@ -286,9 +286,8 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 		cols := []string{"spid", "ecid", "status", "loginame", "hostname", "blk", "dbname", "cmd", "request_id"}
 		var rows []map[string]any
 
-		s.sessMu.RLock()
 		idx := int64(51)
-		for id, sess := range s.sessions {
+		for _, sess := range s.coordinator.SnapshotSessions() {
 			cmdStr := "AWAITING COMMAND"
 			sess.Mu.Lock()
 			if sess.Tx != nil {
@@ -307,9 +306,7 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 				"request_id": int64(0),
 			})
 			idx++
-			_ = id
 		}
-		s.sessMu.RUnlock()
 
 		if len(rows) == 0 {
 			rows = append(rows, map[string]any{
@@ -472,10 +469,10 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 			}
 
 			return &QueryResult{
-				Success:      true,
-				Command:      "EXEC",
-				Messages:     []string{"Caution: Changing any part of an object name could break scripts and stored procedures."},
-				DurationUS:   time.Since(start).Microseconds(),
+				Success:    true,
+				Command:    "EXEC",
+				Messages:   []string{"Caution: Changing any part of an object name could break scripts and stored procedures."},
+				DurationUS: time.Since(start).Microseconds(),
 			}, nil
 		}
 
@@ -549,10 +546,10 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 		}
 
 		return &QueryResult{
-			Success:      true,
-			Command:      "EXEC",
-			Messages:     []string{"Caution: Changing any part of an object name could break scripts and stored procedures."},
-			DurationUS:   time.Since(start).Microseconds(),
+			Success:    true,
+			Command:    "EXEC",
+			Messages:   []string{"Caution: Changing any part of an object name could break scripts and stored procedures."},
+			DurationUS: time.Since(start).Microseconds(),
 		}, nil
 	}
 
@@ -1019,4 +1016,3 @@ func substituteParamOutsideQuotes(query string, paramName string, formattedVal s
 	}
 	return b.String()
 }
-

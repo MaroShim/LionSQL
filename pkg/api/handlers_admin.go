@@ -127,16 +127,14 @@ func (s *Server) handleListActiveQueries(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	if s.metrics == nil {
+	if s.Metrics() == nil {
 		http.Error(w, "metrics collector not initialized", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	st := engine.PrometheusServerState{StartTime: s.startTime}
-	s.sessMu.RLock()
-	st.ActiveConnections = len(s.sessions)
-	s.sessMu.RUnlock()
+	st.ActiveConnections = s.coordinator.SessionCount()
 	if s.engine != nil {
 		if tbls, err := s.engine.ListTables(); err == nil {
 			st.TableCount = len(tbls)
@@ -145,11 +143,11 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if s.planCache != nil {
 		st.PlanCacheHits, st.PlanCacheMisses = s.planCache.Stats()
 	}
-	_, _ = w.Write([]byte(s.metrics.FormatPrometheus(st)))
+	_, _ = w.Write([]byte(s.Metrics().FormatPrometheus(st)))
 }
 
 func (s *Server) handleGetSlowQueries(w http.ResponseWriter, r *http.Request) {
-	if s.slowQueries == nil {
+	if s.SlowQueries() == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"threshold_ms": 0.0,
 			"count":        0,
@@ -163,11 +161,11 @@ func (s *Server) handleGetSlowQueries(w http.ResponseWriter, r *http.Request) {
 			limit = n
 		}
 	}
-	entries := s.slowQueries.GetEntries(limit)
+	entries := s.SlowQueries().GetEntries(limit)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"threshold_ms": float64(s.slowQueries.Threshold().Microseconds()) / 1000.0,
+		"threshold_ms": float64(s.SlowQueries().Threshold().Microseconds()) / 1000.0,
 		"count":        len(entries),
-		"log_file":     s.slowQueries.LogFilePath(),
+		"log_file":     s.SlowQueries().LogFilePath(),
 		"entries":      entries,
 	})
 }
@@ -206,13 +204,13 @@ func (s *Server) handleSetSlowQueryLogFile(w http.ResponseWriter, r *http.Reques
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":   true,
-		"file_path": s.slowQueries.LogFilePath(),
+		"file_path": s.SlowQueries().LogFilePath(),
 	})
 }
 
 func (s *Server) handleClearSlowQueries(w http.ResponseWriter, r *http.Request) {
-	if s.slowQueries != nil {
-		s.slowQueries.Clear()
+	if s.SlowQueries() != nil {
+		s.SlowQueries().Clear()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,
@@ -221,7 +219,7 @@ func (s *Server) handleClearSlowQueries(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleGetGeneralQueries(w http.ResponseWriter, r *http.Request) {
-	if s.generalLog == nil {
+	if s.GeneralLog() == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"enabled":  false,
 			"count":    0,
@@ -236,11 +234,11 @@ func (s *Server) handleGetGeneralQueries(w http.ResponseWriter, r *http.Request)
 			limit = n
 		}
 	}
-	entries := s.generalLog.GetEntries(limit)
+	entries := s.GeneralLog().GetEntries(limit)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"enabled":  s.generalLog.IsEnabled(),
+		"enabled":  s.GeneralLog().IsEnabled(),
 		"count":    len(entries),
-		"log_file": s.generalLog.LogFilePath(),
+		"log_file": s.GeneralLog().LogFilePath(),
 		"entries":  entries,
 	})
 }
@@ -274,13 +272,13 @@ func (s *Server) handleSetGeneralLogFile(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success":   true,
-		"file_path": s.generalLog.LogFilePath(),
+		"file_path": s.GeneralLog().LogFilePath(),
 	})
 }
 
 func (s *Server) handleClearGeneralQueries(w http.ResponseWriter, r *http.Request) {
-	if s.generalLog != nil {
-		s.generalLog.Clear()
+	if s.GeneralLog() != nil {
+		s.GeneralLog().Clear()
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,

@@ -2767,9 +2767,3 @@ func TestSQLExecutor_StandardPagingAndTop(t *testing.T) {
 		t.Errorf("expected ids 20..17, got first=%v, last=%v", res3.Rows[0]["id"], res3.Rows[3]["id"])
 	}
 }
-
-
-
-
-
-

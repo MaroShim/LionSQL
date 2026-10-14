@@ -147,8 +147,8 @@ func TestSlowQuery_LoggerAndEndpoints(t *testing.T) {
 	}
 
 	var res struct {
-		ThresholdMS float64               `json:"threshold_ms"`
-		Count       int                   `json:"count"`
+		ThresholdMS float64              `json:"threshold_ms"`
+		Count       int                  `json:"count"`
 		Entries     []api.SlowQueryEntry `json:"entries"`
 	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &res); err != nil {

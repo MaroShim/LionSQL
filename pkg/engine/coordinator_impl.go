@@ -2,6 +2,7 @@ package engine
 
 import (
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
@@ -129,6 +130,11 @@ func (c *Coordinator) Pool() *SessionPool {
 
 // SetPoolConfig reconfigures the session pool.
 func (c *Coordinator) SetPoolConfig(cfg PoolConfig) {
+	if c.pool != nil {
+		if err := c.pool.Close(); err != nil {
+			fmt.Fprintf(os.Stderr, "engine: failed to close previous session pool: %v\n", err)
+		}
+	}
 	c.pool = NewSessionPool(c.engine, cfg)
 }
 
@@ -429,6 +435,16 @@ func (c *Coordinator) Close() error {
 	}
 
 	var errs []error
+	if c.slowQueries != nil {
+		if err := c.slowQueries.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	if c.generalLog != nil {
+		if err := c.generalLog.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
 	if c.pool != nil {
 		if err := c.pool.Close(); err != nil {
 			errs = append(errs, err)

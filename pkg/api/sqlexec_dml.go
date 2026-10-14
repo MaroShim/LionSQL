@@ -598,7 +598,6 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 	}, nil
 }
 
-
 func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
@@ -911,5 +910,3 @@ func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*
 		Messages:     []string{fmt.Sprintf("%d rows deleted from %q", deletedCount, tableName)},
 	}, nil
 }
-
-

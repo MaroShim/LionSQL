@@ -141,4 +141,3 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		"message": "all sessions revoked successfully",
 	})
 }
-

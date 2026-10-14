@@ -422,4 +422,3 @@ func TestQueryTimeout_HTTPHeader(t *testing.T) {
 		t.Fatalf("HTTP query took too long to timeout: %v", dur)
 	}
 }
-

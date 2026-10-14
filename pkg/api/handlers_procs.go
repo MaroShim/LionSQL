@@ -245,4 +245,3 @@ func convertValue(v any, targetType storage.DataType) storage.Value {
 	}
 	return storage.StringValue(fmt.Sprintf("%v", v))
 }
-

@@ -97,8 +97,8 @@ func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs
 	plan := p.BuildMultiJoinPlanWithStats(qInfo, leftSchema, leftStats, rightSchemas, rightStats)
 
 	opts := execution.DefaultExecutorOptions()
-	if s.defaultWorkMem > 0 {
-		opts.WorkMem = s.defaultWorkMem
+	if wm := s.DefaultWorkMem(); wm > 0 {
+		opts.WorkMem = wm
 	}
 	if cs != nil {
 		cs.Mu.Lock()
@@ -482,15 +482,10 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		arg := strings.TrimSpace(trimmed[len("PG_TERMINATE_BACKEND(") : len(trimmed)-1])
 		if pid, err := strconv.Atoi(arg); err == nil {
 			canceled := s.CancelQueryBySPID(pid)
-			s.sessMu.RLock()
 			var targetID string
-			for _, sess := range s.sessions {
-				if sess.SPID == pid {
-					targetID = sess.ID
-					break
-				}
+			if target := s.coordinator.FindSessionBySPID(pid); target != nil {
+				targetID = target.ID
 			}
-			s.sessMu.RUnlock()
 			if targetID != "" {
 				s.CloseSession(targetID)
 			}
@@ -799,16 +794,11 @@ func (s *Server) execSelectInto(targetTable, projections, fromClause string, sta
 
 	// Register temp tables
 	if strings.HasPrefix(targetTable, "##") {
-		s.globalTempMu.Lock()
-		if s.globalTempCreators == nil {
-			s.globalTempCreators = make(map[string]string)
-		}
 		creatorID := "default"
 		if cs != nil && cs.ID != "" {
 			creatorID = cs.ID
 		}
-		s.globalTempCreators[targetTable] = creatorID
-		s.globalTempMu.Unlock()
+		s.coordinator.RegisterGlobalTemp(targetTable, creatorID)
 	} else if strings.HasPrefix(targetTable, "#") {
 		if cs != nil {
 			cs.Mu.Lock()
@@ -2053,5 +2043,3 @@ func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, 
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
-
-

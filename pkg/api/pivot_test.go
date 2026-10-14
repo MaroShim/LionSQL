@@ -316,4 +316,3 @@ func TestUnpivot_WithSubqueryAndBracketSyntax(t *testing.T) {
 		t.Errorf("expected lowest matching score 85, got %v", res.Rows[3]["Score"])
 	}
 }
-

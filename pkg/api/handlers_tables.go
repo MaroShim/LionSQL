@@ -170,4 +170,3 @@ func (s *Server) handleDropTable(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"success": true, "message": "table dropped"})
 }
-

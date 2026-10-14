@@ -208,16 +208,11 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 	}
 
 	if strings.HasPrefix(tableName, "##") {
-		s.globalTempMu.Lock()
-		if s.globalTempCreators == nil {
-			s.globalTempCreators = make(map[string]string)
-		}
 		creatorID := "default"
 		if cs != nil && cs.ID != "" {
 			creatorID = cs.ID
 		}
-		s.globalTempCreators[tableName] = creatorID
-		s.globalTempMu.Unlock()
+		s.coordinator.RegisterGlobalTemp(tableName, creatorID)
 	} else if strings.HasPrefix(tableName, "#") {
 		if cs != nil {
 			cs.Mu.Lock()
@@ -256,9 +251,7 @@ func (s *Server) execDropTable(query string, start time.Time) (*QueryResult, err
 	}
 
 	if strings.HasPrefix(tableName, "##") {
-		s.globalTempMu.Lock()
-		delete(s.globalTempCreators, tableName)
-		s.globalTempMu.Unlock()
+		s.coordinator.UnregisterGlobalTemp(tableName)
 	}
 
 	return &QueryResult{

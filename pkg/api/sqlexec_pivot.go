@@ -1144,5 +1144,3 @@ func (s *Server) execForJSONSelect(query string, start time.Time, cs *ClientSess
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
-
-

@@ -926,8 +926,3 @@ func TestAPI_ExecuteSQL_FormatArray(t *testing.T) {
 		t.Fatalf("expected 2 items, got %d", len(arrResp2))
 	}
 }
-
-
-
-
-

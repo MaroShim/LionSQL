@@ -45,11 +45,11 @@ func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
 // ExecuteSessionSQLContext runs SQL statements within a specific client session and cancellation context.
 func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (*QueryResult, error) {
 	// Acquire worker slot from built-in connection pool to prevent thread thrashing
-	if s.pool != nil {
-		if err := s.pool.AcquireWorker(ctx); err != nil {
+	if s.Pool() != nil {
+		if err := s.Pool().AcquireWorker(ctx); err != nil {
 			return nil, err
 		}
-		defer s.pool.ReleaseWorker()
+		defer s.Pool().ReleaseWorker()
 	}
 
 	cs, err := s.GetOrCreateSession(sessionID)
@@ -98,14 +98,14 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 		}
 
 		isSlow := false
-		if s.slowQueries != nil {
-			isSlow = s.slowQueries.Record(sessionID, query, dur, rowsAffected, execErr)
+		if s.SlowQueries() != nil {
+			isSlow = s.SlowQueries().Record(sessionID, query, dur, rowsAffected, execErr)
 		}
-		if s.generalLog != nil {
-			s.generalLog.Record(sessionID, query, dur, rowsAffected, execErr)
+		if s.GeneralLog() != nil {
+			s.GeneralLog().Record(sessionID, query, dur, rowsAffected, execErr)
 		}
-		if s.metrics != nil {
-			s.metrics.RecordQuery(cmd, dur, isErr, isSlow)
+		if s.Metrics() != nil {
+			s.Metrics().RecordQuery(cmd, dur, isErr, isSlow)
 		}
 
 		cs.Mu.Lock()
@@ -278,8 +278,8 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		if err != nil {
 			return nil, fmt.Errorf("commit error: %w", err)
 		}
-		if s.metrics != nil {
-			s.metrics.RecordTransaction("commit")
+		if s.Metrics() != nil {
+			s.Metrics().RecordTransaction("commit")
 		}
 		return &QueryResult{
 			Success:    true,
@@ -367,8 +367,8 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		if err != nil {
 			return nil, fmt.Errorf("rollback error: %w", err)
 		}
-		if s.metrics != nil {
-			s.metrics.RecordTransaction("rollback")
+		if s.Metrics() != nil {
+			s.Metrics().RecordTransaction("rollback")
 		}
 		return &QueryResult{
 			Success:    true,
@@ -990,7 +990,6 @@ func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryRes
 		DurationUS: time.Since(start).Microseconds(),
 	}, fmt.Errorf("unsupported SQL statement")
 }
-
 
 // cleanIdentifier strips quotes, brackets, and prefixes from table/column names.
 func cleanIdentifier(s string) string {

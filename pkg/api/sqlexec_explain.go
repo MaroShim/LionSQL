@@ -743,4 +743,3 @@ func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
 
 	return s.ExecuteSQL(mainSQL)
 }
-

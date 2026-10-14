@@ -175,9 +175,9 @@ func (s *Server) execDBCC(query string, start time.Time, cs *ClientSession) (*Qu
 		}
 
 		return &QueryResult{
-			Success:      true,
-			Command:      "DBCC",
-			Columns:      []string{"Table", "Rows", "AllocationErrors", "ConsistencyErrors", "Status"},
+			Success: true,
+			Command: "DBCC",
+			Columns: []string{"Table", "Rows", "AllocationErrors", "ConsistencyErrors", "Status"},
 			Rows: []map[string]any{{
 				"Table":             targetTable,
 				"Rows":              rowCount,
@@ -246,9 +246,9 @@ func (s *Server) execDBCC(query string, start time.Time, cs *ClientSession) (*Qu
 		)
 
 		return &QueryResult{
-			Success:      true,
-			Command:      "DBCC",
-			Columns:      []string{"Database", "TablesChecked", "AllocationErrors", "ConsistencyErrors", "Status"},
+			Success: true,
+			Command: "DBCC",
+			Columns: []string{"Database", "TablesChecked", "AllocationErrors", "ConsistencyErrors", "Status"},
 			Rows: []map[string]any{{
 				"Database":          "sqlion",
 				"TablesChecked":     len(tables),

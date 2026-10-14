@@ -173,9 +173,9 @@ func TestGeneralLogger_LifecycleAndEndpoints(t *testing.T) {
 		t.Fatalf("expected 200 OK, got %d", rec.Code)
 	}
 	var resp struct {
-		Enabled bool                 `json:"enabled"`
-		Count   int                  `json:"count"`
-		LogFile string               `json:"log_file"`
+		Enabled bool                  `json:"enabled"`
+		Count   int                   `json:"count"`
+		LogFile string                `json:"log_file"`
 		Entries []api.GeneralLogEntry `json:"entries"`
 	}
 	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {

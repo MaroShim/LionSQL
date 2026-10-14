@@ -329,4 +329,3 @@ func (s *Server) handleImportTable(w http.ResponseWriter, r *http.Request) {
 		"table":    tableName,
 	})
 }
-

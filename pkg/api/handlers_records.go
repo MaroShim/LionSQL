@@ -730,4 +730,3 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "Sample accounts and customers tables seeded successfully!"})
 }
-

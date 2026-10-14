@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"sqlion/pkg/auth"
@@ -35,31 +34,21 @@ type PreparedStatement = engine.PreparedStatement
 
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
 type Server struct {
-	catalog        *catalog.Catalog
-	engine         storage.Engine
-	planCache      *proc.PlanCache
-	executor       *runtime.Executor
-	auth           *auth.AuthService
-	enableAuth     bool
-	broker         *RealtimeBroker
-	webhooks       *WebhookDispatcher
-	rls            *RLSManager
-	crons          *CronScheduler
-	mailer         *Mailer
-	pool           *SessionPool
-	coordinator    *engine.Coordinator
-	mux            *http.ServeMux
-	sessions           map[string]*ClientSession
-	sessMu             sync.RWMutex
-	globalTempCreators map[string]string // lowercase table name -> creatorSessionID
-	globalTempMu       sync.RWMutex
-	defaultWorkMem     int64
-	spidCounter        int
-	metrics            *MetricsCollector
-	slowQueries        *SlowQueryLogger
-	generalLog         *GeneralLogger
-	replication        *replication.Manager
-	startTime          time.Time
+	catalog     *catalog.Catalog
+	engine      storage.Engine
+	planCache   *proc.PlanCache
+	executor    *runtime.Executor
+	auth        *auth.AuthService
+	enableAuth  bool
+	broker      *RealtimeBroker
+	webhooks    *WebhookDispatcher
+	rls         *RLSManager
+	crons       *CronScheduler
+	mailer      *Mailer
+	coordinator *engine.Coordinator
+	mux         *http.ServeMux
+	replication *replication.Manager
+	startTime   time.Time
 }
 
 // NewServer initializes a new Server with default in-memory auth service.
@@ -76,39 +65,32 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "1234567890")
 	}
 	cache := runtime.NewPlanCache()
-	pool := NewSessionPool(eng, DefaultPoolConfig())
 	broker := NewRealtimeBroker()
 	webhooks := NewWebhookDispatcher()
 	webhooks.StartBrokerListener(broker)
 	mailer := NewMailer(SMTPConfig{})
+	coord := engine.NewCoordinator(cat, eng, engine.Config{
+		DefaultWorkMem:   execution.DefaultWorkMem,
+		SlowThreshold:    DefaultSlowQueryThreshold,
+		EnableGeneralLog: false,
+		AuthService:      authSvc,
+		EnableAuth:       enableAuth,
+		PoolConfig:       DefaultPoolConfig(),
+	})
 	s := &Server{
-		catalog:            cat,
-		engine:             eng,
-		planCache:          proc.NewPlanCache(),
-		executor:           runtime.NewExecutor(cache),
-		auth:               authSvc,
-		enableAuth:         enableAuth,
-		broker:             broker,
-		webhooks:           webhooks,
-		rls:                NewRLSManager(),
-		mailer:             mailer,
-		pool:               pool,
-		coordinator:        engine.NewCoordinator(cat, eng, engine.Config{
-			DefaultWorkMem:   execution.DefaultWorkMem,
-			SlowThreshold:    DefaultSlowQueryThreshold,
-			EnableGeneralLog: false,
-			AuthService:      authSvc,
-			EnableAuth:       enableAuth,
-			PoolConfig:       DefaultPoolConfig(),
-		}),
-		mux:                http.NewServeMux(),
-		sessions:           make(map[string]*ClientSession),
-		globalTempCreators: make(map[string]string),
-		defaultWorkMem:     execution.DefaultWorkMem,
-		metrics:            NewMetricsCollector(),
-		slowQueries:        NewSlowQueryLogger(DefaultSlowQueryThreshold),
-		generalLog:         NewGeneralLogger(false),
-		startTime:          time.Now(),
+		catalog:     cat,
+		engine:      eng,
+		planCache:   proc.NewPlanCache(),
+		executor:    runtime.NewExecutor(cache),
+		auth:        authSvc,
+		enableAuth:  enableAuth,
+		broker:      broker,
+		webhooks:    webhooks,
+		rls:         NewRLSManager(),
+		mailer:      mailer,
+		coordinator: coord,
+		mux:         http.NewServeMux(),
+		startTime:   time.Now(),
 	}
 	s.executor.SetTableGetter(eng.GetTable)
 
@@ -132,17 +114,12 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 
 // SetDefaultWorkMem updates the server-wide default work_mem limit.
 func (s *Server) SetDefaultWorkMem(bytes int64) {
-	if bytes > 0 {
-		s.defaultWorkMem = bytes
-	}
+	s.coordinator.SetDefaultWorkMem(bytes)
 }
 
 // DefaultWorkMem returns the server-wide default work_mem limit.
 func (s *Server) DefaultWorkMem() int64 {
-	if s.defaultWorkMem <= 0 {
-		return execution.DefaultWorkMem
-	}
-	return s.defaultWorkMem
+	return s.coordinator.DefaultWorkMem()
 }
 
 func (s *Server) newPlanner() *planner.Planner {
@@ -164,7 +141,7 @@ func (s *Server) newPlanner() *planner.Planner {
 
 // Pool returns the underlying goroutine connection & session pool.
 func (s *Server) Pool() *SessionPool {
-	return s.pool
+	return s.coordinator.Pool()
 }
 
 // Coordinator returns the underlying SQL execution coordinator.
@@ -174,10 +151,7 @@ func (s *Server) Coordinator() *engine.Coordinator {
 
 // SetPoolConfig updates the connection pool configuration.
 func (s *Server) SetPoolConfig(cfg PoolConfig) {
-	if s.pool != nil {
-		_ = s.pool.Close()
-	}
-	s.pool = NewSessionPool(s.engine, cfg)
+	s.coordinator.SetPoolConfig(cfg)
 }
 
 // Broker returns the active realtime pub/sub broker.
@@ -236,6 +210,7 @@ func (s *Server) Replication() *replication.Manager {
 // SetReplicationManager configures the availability group replication manager and mounts replication endpoints.
 func (s *Server) SetReplicationManager(rm *replication.Manager) {
 	s.replication = rm
+	s.coordinator.SetReplicationManager(rm)
 	if rm != nil {
 		rm.RegisterRoutes(s.mux)
 	}
@@ -243,312 +218,109 @@ func (s *Server) SetReplicationManager(rm *replication.Manager) {
 
 // IsReadOnly reports whether this server node is currently operating as a read-only secondary replica.
 func (s *Server) IsReadOnly() bool {
-	if s.replication != nil {
-		return s.replication.IsReadOnly()
-	}
-	return false
+	return s.coordinator.IsReadOnly()
 }
 
 // SetEnableAuth toggles authentication enforcement for protected API routes.
 func (s *Server) SetEnableAuth(enable bool) {
 	s.enableAuth = enable
+	s.coordinator.SetAuthService(s.auth, enable)
 }
 
 // Metrics returns the Prometheus metrics collector instance.
 func (s *Server) Metrics() *MetricsCollector {
-	return s.metrics
+	return s.coordinator.Metrics()
 }
 
 // SlowQueries returns the slow query logger instance.
 func (s *Server) SlowQueries() *SlowQueryLogger {
-	return s.slowQueries
+	return s.coordinator.SlowQueries()
 }
 
 // SetSlowQueryThreshold sets the minimum duration for a query to be recorded as slow.
 func (s *Server) SetSlowQueryThreshold(d time.Duration) {
-	if s.slowQueries != nil {
-		s.slowQueries.SetThreshold(d)
+	sq := s.coordinator.SlowQueries()
+	if sq != nil {
+		sq.SetThreshold(d)
 	}
 }
 
 // SetSlowQueryLogFile configures disk file output for the slow query log.
 func (s *Server) SetSlowQueryLogFile(filePath string) error {
-	if s.slowQueries != nil {
-		return s.slowQueries.SetLogFile(filePath)
+	sq := s.coordinator.SlowQueries()
+	if sq != nil {
+		return sq.SetLogFile(filePath)
 	}
 	return nil
 }
 
 // GeneralLog returns the general query logger instance.
 func (s *Server) GeneralLog() *GeneralLogger {
-	return s.generalLog
+	return s.coordinator.GeneralLog()
 }
 
 // SetGeneralLogEnabled toggles general query logging.
 func (s *Server) SetGeneralLogEnabled(enabled bool) {
-	if s.generalLog != nil {
-		s.generalLog.SetEnabled(enabled)
+	gl := s.coordinator.GeneralLog()
+	if gl != nil {
+		gl.SetEnabled(enabled)
 	}
 }
 
 // SetGeneralLogFile configures disk file output for the general query log.
 func (s *Server) SetGeneralLogFile(filePath string) error {
-	if s.generalLog != nil {
-		return s.generalLog.SetLogFile(filePath)
+	gl := s.coordinator.GeneralLog()
+	if gl != nil {
+		return gl.SetLogFile(filePath)
 	}
 	return nil
 }
 
 // Close gracefully flushes and closes server log writers and session pools.
 func (s *Server) Close() error {
-	var errs []error
-	if s.slowQueries != nil {
-		if err := s.slowQueries.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if s.generalLog != nil {
-		if err := s.generalLog.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if s.pool != nil {
-		if err := s.pool.Close(); err != nil {
-			errs = append(errs, err)
-		}
-	}
-	if len(errs) > 0 {
-		return fmt.Errorf("errors closing server: %v", errs)
-	}
-	return nil
+	return s.coordinator.Close()
 }
 
 // GetOrCreateSession returns or registers a persistent client session.
 func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
-	if id == "" {
-		id = "default"
-	}
-	s.sessMu.Lock()
-	defer s.sessMu.Unlock()
-
-	if cs, exists := s.sessions[id]; exists {
-		return cs, nil
-	}
-
-	var sess storage.Session
-	var err error
-	if s.pool != nil {
-		sess, err = s.pool.AcquireSession()
-	} else {
-		sess, err = s.engine.NewSession()
-	}
-	if err != nil {
-		return nil, err
-	}
-
-	if s.spidCounter < 50 {
-		s.spidCounter = 50
-	}
-	s.spidCounter++
-
-	cs := &ClientSession{
-		ID:            id,
-		SPID:          s.spidCounter,
-		Session:       sess,
-		Vars:          make(map[string]any),
-		TableVars:     make(map[string]string),
-		PreparedStmts: make(map[string]*PreparedStatement),
-		User:          "dbo",
-		OriginalUser:  "dbo",
-	}
-	s.sessions[id] = cs
-	return cs, nil
+	return s.coordinator.GetOrCreateSession(id)
 }
 
-// CloseSession gracefully closes and unregisters a client session, returning the underlying session to the pool.
+// CloseSession gracefully closes and unregisters a client session.
 func (s *Server) CloseSession(id string) {
-	if id == "" || id == "default" {
-		return
-	}
-	s.sessMu.Lock()
-	cs, exists := s.sessions[id]
-	if exists {
-		delete(s.sessions, id)
-	}
-	s.sessMu.Unlock()
-
-	// Clean up any global temporary tables created by this session
-	s.globalTempMu.Lock()
-	var toDrop []string
-	for tbl, creatorID := range s.globalTempCreators {
-		if creatorID == id {
-			toDrop = append(toDrop, tbl)
-			delete(s.globalTempCreators, tbl)
-		}
-	}
-	s.globalTempMu.Unlock()
-
-	for _, tbl := range toDrop {
-		_ = s.engine.DropTable(tbl)
-	}
-
-	if exists && cs != nil {
-		cs.Mu.Lock()
-		for _, physTable := range cs.TableVars {
-			_ = s.engine.DropTable(physTable)
-		}
-		cs.TableVars = nil
-
-		for _, tempTbl := range cs.TempTables {
-			_ = s.engine.DropTable(tempTbl)
-		}
-		cs.TempTables = nil
-		cs.PreparedStmts = nil
-
-		if cs.CancelFunc != nil {
-			cs.CancelRequested = true
-			cs.CancelFunc()
-		}
-		if cs.Tx != nil {
-			_ = cs.Tx.Rollback()
-			cs.Tx = nil
-		}
-		storageSess := cs.Session
-		cs.Session = nil
-		cs.Mu.Unlock()
-
-		if storageSess != nil {
-			if s.pool != nil {
-				s.pool.ReleaseSession(storageSess)
-			} else {
-				_ = storageSess.Close()
-			}
-		}
-	}
+	s.coordinator.CloseSession(id)
 }
 
 // GetSession returns the active ClientSession by ID, or nil if not found.
 func (s *Server) GetSession(id string) *ClientSession {
-	s.sessMu.RLock()
-	defer s.sessMu.RUnlock()
-	return s.sessions[id]
+	return s.coordinator.GetSession(id)
 }
 
 // GetSessionTxStatus returns PostgreSQL transaction status byte:
-// 'I' = Idle (outside transaction)
-// 'T' = In active transaction block
-// 'E' = In failed transaction block
+// 'I' = Idle, 'T' = In active transaction block, 'E' = In failed transaction block
 func (s *Server) GetSessionTxStatus(id string) byte {
-	if id == "" || id == "default" {
-		return 'I'
-	}
-	s.sessMu.RLock()
-	cs, exists := s.sessions[id]
-	s.sessMu.RUnlock()
-	if !exists || cs == nil {
-		return 'I'
-	}
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-	if cs.Tx == nil {
-		return 'I'
-	}
-	if cs.TxFailed {
-		return 'E'
-	}
-	return 'T'
+	return s.coordinator.GetSessionTxStatus(id)
 }
 
 // SetSessionUser updates the active user principal on an interactive session.
 func (s *Server) SetSessionUser(id, user string) {
-	if id == "" || id == "default" {
-		return
-	}
-	s.sessMu.RLock()
-	cs, exists := s.sessions[id]
-	s.sessMu.RUnlock()
-	if exists && cs != nil {
-		cs.Mu.Lock()
-		cs.User = user
-		cs.OriginalUser = user
-		cs.Mu.Unlock()
-	}
+	s.coordinator.SetSessionUser(id, user)
 }
 
-
 // CancelSessionQuery triggers cooperative cancellation for the currently active statement on sessionID.
-// Returns true if an active query was found and cancellation was signaled.
 func (s *Server) CancelSessionQuery(sessionID string) bool {
-	s.sessMu.RLock()
-	cs, exists := s.sessions[sessionID]
-	s.sessMu.RUnlock()
-
-	if !exists || cs == nil {
-		return false
-	}
-
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-
-	if cs.CancelFunc != nil {
-		cs.CancelRequested = true
-		cs.CancelFunc()
-		return true
-	}
-	return false
+	return s.coordinator.CancelSessionQuery(sessionID)
 }
 
 // CancelQueryBySPID cancels the active query executing on the connection identified by spid.
-// Returns true if an active query was found and canceled.
 func (s *Server) CancelQueryBySPID(spid int) bool {
-	s.sessMu.RLock()
-	var targetCS *ClientSession
-	for _, cs := range s.sessions {
-		if cs.SPID == spid {
-			targetCS = cs
-			break
-		}
-	}
-	s.sessMu.RUnlock()
-
-	if targetCS == nil {
-		return false
-	}
-
-	targetCS.Mu.Lock()
-	defer targetCS.Mu.Unlock()
-
-	if targetCS.CancelFunc != nil {
-		targetCS.CancelRequested = true
-		targetCS.CancelFunc()
-		return true
-	}
-	return false
+	return s.coordinator.CancelQueryBySPID(spid)
 }
 
 // GetActiveQueries returns a snapshot list of all currently executing queries across all sessions.
 func (s *Server) GetActiveQueries() []ActiveQueryInfo {
-	s.sessMu.RLock()
-	defer s.sessMu.RUnlock()
-
-	now := time.Now()
-	var active []ActiveQueryInfo
-	for _, cs := range s.sessions {
-		cs.Mu.Lock()
-		if cs.RunningQuery != "" && cs.CancelFunc != nil {
-			active = append(active, ActiveQueryInfo{
-				SessionID:  cs.ID,
-				SPID:       cs.SPID,
-				Query:      cs.RunningQuery,
-				StartTime:  cs.QueryStartTime,
-				DurationUS: now.Sub(cs.QueryStartTime).Microseconds(),
-			})
-		}
-		cs.Mu.Unlock()
-	}
-	return active
+	return s.coordinator.GetActiveQueries()
 }
-
 
 // Handler returns the HTTP handler.
 func (s *Server) Handler() http.Handler {
@@ -595,8 +367,9 @@ func (s *Server) routes() {
 
 	// Connection Pool & Worker Metrics (Built-in Connection Pooler)
 	s.mux.HandleFunc("GET /api/pool/stats", func(w http.ResponseWriter, r *http.Request) {
-		if s.pool != nil {
-			writeJSON(w, http.StatusOK, s.pool.Stats())
+		if pool := s.Pool(); pool != nil {
+			writeJSON(w, http.StatusOK, pool.Stats())
+
 		} else {
 			writeJSON(w, http.StatusOK, map[string]string{"status": "pool_disabled"})
 		}
@@ -782,4 +555,3 @@ func (s *Server) wrapAuth(next http.HandlerFunc, isWrite bool, tableName string)
 		next(w, r)
 	}
 }
-

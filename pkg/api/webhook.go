@@ -29,12 +29,12 @@ const (
 type Webhook struct {
 	ID        string            `json:"id"`
 	Name      string            `json:"name"`
-	Table     string            `json:"table"`            // Specific table name or "*" for all tables
-	Events    []string          `json:"events"`           // "create", "update", "delete", "import", "create_table", "drop_table", or "*"
-	URL       string            `json:"url"`              // Target HTTP/HTTPS URL
-	Secret    string            `json:"secret,omitempty"` // Secret key for HMAC-SHA256 signature
-	Headers   map[string]string `json:"headers,omitempty"`// Custom HTTP request headers
-	Enabled   bool              `json:"enabled"`          // Active toggle
+	Table     string            `json:"table"`             // Specific table name or "*" for all tables
+	Events    []string          `json:"events"`            // "create", "update", "delete", "import", "create_table", "drop_table", or "*"
+	URL       string            `json:"url"`               // Target HTTP/HTTPS URL
+	Secret    string            `json:"secret,omitempty"`  // Secret key for HMAC-SHA256 signature
+	Headers   map[string]string `json:"headers,omitempty"` // Custom HTTP request headers
+	Enabled   bool              `json:"enabled"`           // Active toggle
 	CreatedAt int64             `json:"created_at"`
 	UpdatedAt int64             `json:"updated_at"`
 }

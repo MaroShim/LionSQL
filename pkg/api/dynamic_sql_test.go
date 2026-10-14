@@ -213,5 +213,3 @@ func TestDynamicSQL_DMLAndDDL(t *testing.T) {
 		t.Fatalf("expected error for empty sp_executesql, got nil")
 	}
 }
-
-

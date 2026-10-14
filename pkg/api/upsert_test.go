@@ -284,4 +284,3 @@ func TestOnConflict_OnConstraint(t *testing.T) {
 		t.Fatalf("expected id=1 name to be 'First', got: %v", sel.Rows[0]["name"])
 	}
 }
-

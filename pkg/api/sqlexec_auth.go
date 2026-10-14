@@ -307,10 +307,10 @@ func (s *Server) execSetUser(query string, start time.Time, cs *ClientSession) (
 			cs.User = "dbo"
 		}
 		return &QueryResult{
-			Success:      true,
-			Command:      "REVERT",
-			Messages:     []string{fmt.Sprintf("Execution context reverted to %q.", cs.User)},
-			DurationUS:   time.Since(start).Microseconds(),
+			Success:    true,
+			Command:    "REVERT",
+			Messages:   []string{fmt.Sprintf("Execution context reverted to %q.", cs.User)},
+			DurationUS: time.Since(start).Microseconds(),
 		}, nil
 	}
 
@@ -325,10 +325,10 @@ func (s *Server) execSetUser(query string, start time.Time, cs *ClientSession) (
 		}
 		cs.User = targetUser
 		return &QueryResult{
-			Success:      true,
-			Command:      "SETUSER",
-			Messages:     []string{fmt.Sprintf("Switched execution context to user %q.", targetUser)},
-			DurationUS:   time.Since(start).Microseconds(),
+			Success:    true,
+			Command:    "SETUSER",
+			Messages:   []string{fmt.Sprintf("Switched execution context to user %q.", targetUser)},
+			DurationUS: time.Since(start).Microseconds(),
 		}, nil
 	}
 
@@ -343,10 +343,10 @@ func (s *Server) execSetUser(query string, start time.Time, cs *ClientSession) (
 		}
 		cs.User = targetUser
 		return &QueryResult{
-			Success:      true,
-			Command:      "EXECUTE AS",
-			Messages:     []string{fmt.Sprintf("Execution context changed to user %q.", targetUser)},
-			DurationUS:   time.Since(start).Microseconds(),
+			Success:    true,
+			Command:    "EXECUTE AS",
+			Messages:   []string{fmt.Sprintf("Execution context changed to user %q.", targetUser)},
+			DurationUS: time.Since(start).Microseconds(),
 		}, nil
 	}
 
