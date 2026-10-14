@@ -37,7 +37,7 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 
 	addField := func(expr, alias string) {
 		f := projField{expr: expr, alias: alias}
-		if strings.Contains(expr, "->") || strings.Contains(expr, "(") {
+		if strings.ContainsAny(expr, " +-/*%()><=!|&,") || strings.Contains(expr, "->") {
 			parser := proc.NewParser(proc.NewLexer(expr))
 			if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
 				f.parsed = ast

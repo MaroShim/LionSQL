@@ -120,6 +120,16 @@ func TestParseSQL_DDLAndDML(t *testing.T) {
 	if !ok || len(ins.Tuples) != 2 || ins.Table != "users" {
 		t.Errorf("unexpected GeneralInsertStmt: %+v", ins)
 	}
+
+	// 5. Insert Into Select
+	stmt, err = proc.ParseSQL(`INSERT INTO users_backup (id, name) SELECT id, name FROM users WHERE id > 0;`)
+	if err != nil {
+		t.Fatalf("Insert into select parse error: %v", err)
+	}
+	insSel, ok := stmt.(*proc.GeneralInsertStmt)
+	if !ok || insSel.Select == nil || insSel.Table != "users_backup" || len(insSel.Columns) != 2 {
+		t.Errorf("unexpected GeneralInsertStmt with Select: %+v", insSel)
+	}
 }
 
 func TestEvalRowExpr_AdvancedPredicates(t *testing.T) {

@@ -242,6 +242,12 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
+	// Branch: INSERT INTO ... SELECT
+	reSelect := regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+(\(?\s*SELECT\s+.*)$`)
+	if selMatches := reSelect.FindStringSubmatch(insertSQL); len(selMatches) >= 5 {
+		return s.execInsertSelect(selMatches[1], selMatches[2], selMatches[3], selMatches[4], start, cs)
+	}
+
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause or ON CONFLICT/UPSERT present)
 	hasOutput := strings.Contains(strings.ToUpper(cleaned), " OUTPUT ")
 	hasConflict := strings.Contains(strings.ToUpper(cleaned), "ON CONFLICT") || isUpsert
@@ -590,6 +596,346 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	return &QueryResult{
 		Success:      true,
 		Command:      cmdName,
+		Columns:      outputCols,
+		Rows:         outputRows,
+		RowsAffected: insertedCount,
+		DurationUS:   time.Since(start).Microseconds(),
+		Messages:     []string{fmt.Sprintf("%d rows affected into %q", insertedCount, tableName)},
+	}, nil
+}
+
+func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	tableName := cleanIdentifier(rawTable)
+	selectPart := strings.TrimSpace(rawSelect)
+	if strings.HasPrefix(selectPart, "(") && strings.HasSuffix(selectPart, ")") {
+		selectPart = strings.TrimSpace(selectPart[1 : len(selectPart)-1])
+	}
+
+	var onConflict *onConflictClause
+	if conflictIdx := findOnConflictIndex(selectPart); conflictIdx != -1 {
+		conflictStr := strings.TrimSpace(selectPart[conflictIdx:])
+		selectPart = strings.TrimSpace(selectPart[:conflictIdx])
+		clause, err := parseOnConflict(conflictStr)
+		if err != nil {
+			return nil, err
+		}
+		onConflict = clause
+	}
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+	}
+
+	var identityCol *storage.Column
+	for i := range schema.Columns {
+		if schema.Columns[i].Identity {
+			identityCol = &schema.Columns[i]
+			break
+		}
+	}
+
+	identityInsertAllowed := false
+	if cs != nil {
+		cs.Mu.Lock()
+		if cur, ok := cs.Vars["identity_insert_table"].(string); ok {
+			if strings.EqualFold(cur, tableName) {
+				identityInsertAllowed = true
+			}
+		}
+		cs.Mu.Unlock()
+	}
+
+	var targetCols []string
+	if rawCols != "" {
+		for _, c := range strings.Split(rawCols, ",") {
+			cleanedCol := cleanIdentifier(c)
+			if colSchema, _, found := schema.FindColumn(cleanedCol); found {
+				targetCols = append(targetCols, colSchema.Name)
+			} else {
+				return nil, fmt.Errorf("invalid column name %q in table %q", cleanedCol, tableName)
+			}
+		}
+	} else {
+		if identityCol != nil && !identityInsertAllowed {
+			for _, c := range schema.Columns {
+				if !c.Identity {
+					targetCols = append(targetCols, c.Name)
+				}
+			}
+		} else {
+			for _, c := range schema.Columns {
+				targetCols = append(targetCols, c.Name)
+			}
+		}
+	}
+
+	hasIdentityInTarget := false
+	if identityCol != nil {
+		for _, c := range targetCols {
+			if strings.EqualFold(c, identityCol.Name) {
+				hasIdentityInTarget = true
+				break
+			}
+		}
+		if hasIdentityInTarget && !identityInsertAllowed {
+			return nil, fmt.Errorf("Cannot insert explicit value for identity column in table %q when IDENTITY_INSERT is set to OFF", tableName)
+		}
+	}
+
+	// 1. Execute the SELECT query
+	selRes, err := s.execSelect(selectPart, start, cs)
+	if err != nil {
+		return nil, err
+	}
+	if !selRes.Success {
+		return selRes, nil
+	}
+
+	// 2. Validate projected column count matches target column count
+	if len(selRes.Columns) != len(targetCols) {
+		return nil, fmt.Errorf("column count mismatch: target table %q expects %d columns, but SELECT produced %d columns", tableName, len(targetCols), len(selRes.Columns))
+	}
+
+	// 3. Begin Transaction if not already in session transaction
+	var tx storage.Transaction
+	var isEphemeral bool
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+		isEphemeral = false
+	} else {
+		session, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		defer session.Close()
+
+		t, err := session.BeginTx(cs.TxOptions())
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		isEphemeral = true
+	}
+
+	var maxID int64 = 0
+	if identityCol != nil {
+		if cur, err := tx.Scan(tableName); err == nil {
+			for cur.Next() {
+				if r, err := cur.Record(); err == nil {
+					if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+						maxID = v.IVal
+					}
+				}
+			}
+			cur.Close()
+		}
+	}
+
+	var outputProjs []outputProj
+	rawOutput = strings.TrimSpace(rawOutput)
+	if rawOutput != "" {
+		outputProjs = parseOutputClause(rawOutput)
+	}
+	var outputRows []map[string]any
+	var outputCols []string
+
+	insertedCount := int64(0)
+	for _, row := range selRes.Rows {
+		rec := make(storage.Record, len(schema.Columns))
+		for i, colName := range targetCols {
+			colSchema, _, _ := schema.FindColumn(colName)
+			srcCol := selRes.Columns[i]
+			val := row[srcCol]
+			rec[colName] = ConvertValue(val, colSchema.Type)
+		}
+
+		// Apply column default values for columns not provided in targetCols
+		for _, col := range schema.Columns {
+			if _, exists := rec[col.Name]; !exists && col.Default != "" {
+				rec[col.Name] = parseLiteralValue(col.Default, col.Type)
+			}
+		}
+
+		if identityCol != nil {
+			if !hasIdentityInTarget {
+				maxID++
+				rec[identityCol.Name] = storage.IntValue(maxID)
+				if cs != nil {
+					cs.Mu.Lock()
+					cs.Vars["identity"] = maxID
+					cs.Mu.Unlock()
+				}
+			} else {
+				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
+					if cs != nil {
+						cs.Mu.Lock()
+						cs.Vars["identity"] = v.IVal
+						cs.Mu.Unlock()
+					}
+					if v.IVal > maxID {
+						maxID = v.IVal
+					}
+				}
+			}
+		}
+
+		if onConflict != nil {
+			var conflictCols []string
+			if len(onConflict.targetCols) > 0 {
+				conflictCols = onConflict.targetCols
+			} else if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
+				conflictCols = []string{pkCol.Name}
+			}
+
+			var existingRec storage.Record
+			var existingPk storage.Value
+			pkCol, _ := schema.PrimaryKeyColumn()
+
+			if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
+				if targetVal, ok := rec[pkCol.Name]; ok {
+					if ex, err := tx.Get(tableName, targetVal); err == nil && ex != nil {
+						existingRec = ex
+						existingPk = targetVal
+					}
+				}
+			}
+
+			if existingRec == nil && len(conflictCols) > 0 {
+				if cur, err := tx.Scan(tableName); err == nil {
+					for cur.Next() {
+						r, err := cur.Record()
+						if err != nil {
+							continue
+						}
+						matched := true
+						for _, cc := range conflictCols {
+							rv, ok1 := r[cc]
+							iv, ok2 := rec[cc]
+							if !ok1 || !ok2 || rv.Compare(iv) != 0 {
+								matched = false
+								break
+							}
+						}
+						if matched {
+							existingRec = r
+							if pkCol != nil {
+								existingPk = r[pkCol.Name]
+							}
+							break
+						}
+					}
+					cur.Close()
+				}
+			}
+
+			if existingRec != nil {
+				if onConflict.action == conflictActionDoNothing {
+					continue
+				} else if onConflict.action == conflictActionDoUpdate {
+					evalMap := make(map[string]any)
+					for k, v := range existingRec {
+						val := formatStorageValue(v)
+						evalMap[k] = val
+						evalMap[strings.ToLower(k)] = val
+						evalMap[tableName+"."+k] = val
+						evalMap[strings.ToLower(tableName)+"."+strings.ToLower(k)] = val
+					}
+					for k, v := range rec {
+						val := formatStorageValue(v)
+						evalMap["EXCLUDED."+k] = val
+						evalMap["excluded."+strings.ToLower(k)] = val
+						evalMap["EXCLUDED."+strings.ToLower(k)] = val
+						evalMap["excluded."+k] = val
+					}
+
+					if onConflict.whereCond != "" {
+						if !evaluateWhereConditionMap(evalMap, onConflict.whereCond) {
+							continue
+						}
+					}
+
+					updatedRec := cloneRecord(existingRec)
+					assignments := onConflict.assignments
+					if len(assignments) == 0 {
+						for _, c := range schema.Columns {
+							if c.PrimaryKey {
+								continue
+							}
+							if newVal, ok := rec[c.Name]; ok {
+								updatedRec[c.Name] = newVal
+							}
+						}
+					} else {
+						for _, assign := range assignments {
+							colSchema, _, found := schema.FindColumn(assign.column)
+							if !found {
+								if isEphemeral {
+									_ = tx.Rollback()
+								}
+								return nil, fmt.Errorf("column %q not found in table %q", assign.column, tableName)
+							}
+							val := evalMergeExpr(assign.expr, evalMap, colSchema.Type)
+							updatedRec[colSchema.Name] = val
+						}
+					}
+
+					if err := tx.Update(tableName, existingPk, updatedRec); err != nil {
+						if isEphemeral {
+							_ = tx.Rollback()
+						}
+						return nil, fmt.Errorf("update row error in ON CONFLICT: %w", err)
+					}
+					if len(outputProjs) > 0 {
+						outRow, cols := evaluateOutputRow(outputProjs, existingRec, updatedRec, schema)
+						outputRows = append(outputRows, outRow)
+						outputCols = cols
+					}
+					insertedCount++
+					continue
+				}
+			}
+		}
+
+		if err := tx.Insert(tableName, rec); err != nil {
+			if onConflict != nil && onConflict.action == conflictActionDoNothing {
+				errLower := strings.ToLower(err.Error())
+				if errors.Is(err, storage.ErrKeyExists) || strings.Contains(errLower, "already exists") || strings.Contains(errLower, "unique") {
+					continue
+				}
+			}
+			if isEphemeral {
+				_ = tx.Rollback()
+			}
+			return nil, fmt.Errorf("insert row error on %q: %w", tableName, err)
+		}
+
+		if len(outputProjs) > 0 {
+			outRow, cols := evaluateOutputRow(outputProjs, nil, rec, schema)
+			outputRows = append(outputRows, outRow)
+			outputCols = cols
+		}
+		insertedCount++
+	}
+
+	if isEphemeral {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("transaction commit error: %w", err)
+		}
+	}
+
+	if identityCol != nil && cs != nil {
+		cs.Mu.Lock()
+		if cs.Vars == nil {
+			cs.Vars = make(map[string]any)
+		}
+		cs.Vars["identity"] = maxID
+		cs.Mu.Unlock()
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "INSERT",
 		Columns:      outputCols,
 		Rows:         outputRows,
 		RowsAffected: insertedCount,

@@ -160,8 +160,12 @@ This document tracks active tasks, short-term engineering priorities, and concep
 - [x] **[완료] NULL 대체 스칼라 함수 완비: `COALESCE()`, `ISNULL()`, `NULLIF()` (`pkg/proc/builtins.go`)**
 - [x] **[완료] `SELECT ... INTO <new_table>` 쿼리 결과 신규/임시 테이블 생성 및 적재 (`pkg/api/sqlexec_select.go`)**
   - `SELECT ... INTO <table_name> FROM ...` 쿼리 결과를 기반으로 카탈로그 스키마를 동적 생성하고 데이터 행을 즉시 신규/임시 테이블(`#[temp]`)에 대량 적재 완비 (`pkg/api/sqlexec_test.go` 테스트 통과).
-- [ ] **`INSERT INTO ... SELECT ...` 대량 배치 적재 (`pkg/proc`, `pkg/api`)**
-  - `INSERT INTO target (cols...) SELECT ... FROM source WHERE ...` 대량 배치 적재 DML 지원.
+- [x] **[완료] `INSERT INTO ... SELECT ...` 대량 배치 적재 (`pkg/proc`, `pkg/engine`, `pkg/execution`)**
+  - `INSERT INTO target [(cols...)] [OUTPUT ...] SELECT ...` 정규 AST 파싱 및 대량 배치 적재 파이프라인 구현 완료.
+  - 컬럼 리스트 매핑, 스키마 프로젝션 및 타입 안전 변환(`ConvertValue`), IDENTITY 컬럼 자동 생성 및 `SET IDENTITY_INSERT` 제어 지원.
+  - `ON CONFLICT (...) DO NOTHING / DO UPDATE` 및 `OUTPUT INSERTED.*` 절 연동 지원.
+  - 세션 범위 임시 테이블(`#temp`) 및 영구 테이블 간 복사/자체 적재 지원.
+  - `pkg/execution/project.go` 내 산술/일반 수식 프로젝션 평가 지원 및 `pkg/engine/coordinator_test.go` 종합 단위 테스트 완료.
 - [ ] **FROM 절 파생 테이블(Derived Table) 및 인라인 서브쿼리 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
   - `SELECT * FROM (SELECT id, balance FROM accounts) AS t WHERE t.balance > 100` 형태의 FROM 절 서브쿼리 AST 노드화 및 Volcano 실행 연동 (ORM 호환 필수).
 - [ ] **`WHERE EXISTS` / `NOT EXISTS` 상관 서브쿼리 술어 (`pkg/planner/decorrelate.go`, `pkg/execution`)**

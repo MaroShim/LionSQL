@@ -766,6 +766,9 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *GeneralInsertStmt:
+		if s.Select != nil {
+			return fmt.Errorf("INSERT INTO ... SELECT in bytecode VM is evaluated via execution coordinator")
+		}
 		for _, tuple := range s.Tuples {
 			c.emit(OpInsert, 0, 0, 0, &DMLData{
 				Table:    s.Table,

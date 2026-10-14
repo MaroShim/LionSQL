@@ -946,15 +946,22 @@ func (e *ExistsExpr) String() string {
 	return fmt.Sprintf("EXISTS (%s)", e.Query.String())
 }
 
-// GeneralInsertStmt represents INSERT INTO table (cols) VALUES (tuples...)
+// GeneralInsertStmt represents INSERT INTO table (cols) VALUES (tuples...) or INSERT INTO table (cols) SELECT ...
 type GeneralInsertStmt struct {
 	Table   string
 	Columns []string
 	Tuples  [][]Expr
+	Select  *GeneralSelectStmt
 }
 
 func (s *GeneralInsertStmt) stmtNode() {}
 func (s *GeneralInsertStmt) String() string {
+	if s.Select != nil {
+		if len(s.Columns) > 0 {
+			return fmt.Sprintf("INSERT INTO %s (%s) %s", s.Table, strings.Join(s.Columns, ", "), s.Select.String())
+		}
+		return fmt.Sprintf("INSERT INTO %s %s", s.Table, s.Select.String())
+	}
 	return fmt.Sprintf("INSERT INTO %s (%s) VALUES ...", s.Table, strings.Join(s.Columns, ", "))
 }
 

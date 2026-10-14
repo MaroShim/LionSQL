@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **`INSERT INTO ... SELECT` Batch DML Loading & Expression Evaluation Hardening (`pkg/engine`, `pkg/proc`, `pkg/execution`)**:
+  - Implemented `INSERT INTO <table> [(cols...)] [OUTPUT ...] SELECT ...` batch DML loading in `Coordinator.execInsertSelect()`.
+  - Added schema projection, explicit target column mapping, dynamic data type coercion via `ConvertValue()`, and automatic column count validation.
+  - Implemented identity column auto-increment generation and `SET IDENTITY_INSERT <table> ON/OFF` enforcement on batch insert operations.
+  - Fully integrated `ON CONFLICT (...) DO NOTHING / DO UPDATE` (with `EXCLUDED.<col>` evaluation) and `OUTPUT INSERTED.*` delta projection with `INSERT INTO ... SELECT`.
+  - Supported inter-table batch copies across persistent tables, self-inserts, and session-scoped temporary tables (`#temp`).
+  - Extended Pratt parser `GeneralInsertStmt` to represent `Select` query branches and updated parser methods `parseInsert` and `parseGeneralInsert` to consume `SELECT` cleanly.
+  - Fixed expression evaluation in `pkg/execution/project.go` `ProjectionIterator` to parse arithmetic and general expressions (`+-*/%()><=!|&,`) rather than skipping them, enabling full evaluation of computed columns in Volcano select queries.
+  - Added comprehensive unit tests in `pkg/proc/sqlparser_test.go` and `pkg/engine/coordinator_test.go` covering full table copies, filtered inserts, identity management, empty result sets, conflict updates, and output clauses.
 - **Full Architecture Layering: SQL Execution Coordinator Separation (`pkg/engine`, `pkg/api`, `pkg/wire`, `pkg/wire/tds`)**:
   - Migrated the entire SQL execution orchestration subsystem (13 `sqlexec_*.go` files, ~14,150 lines) from `pkg/api` to `pkg/engine`: `sqlexec.go`, `sqlexec_auth.go`, `sqlexec_dbcc.go`, `sqlexec_ddl.go`, `sqlexec_dml.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_merge.go`, `sqlexec_pgcatalog.go`, `sqlexec_pivot.go`, `sqlexec_prepare.go`, `sqlexec_procs.go`, and `sqlexec_select.go`.
   - Converted execution receivers to `(s *Coordinator)` and deleted transitional `exec_stub.go`.

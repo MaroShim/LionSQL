@@ -1241,8 +1241,24 @@ func (p *Parser) parseInsert() (Statement, error) {
 		p.nextToken()
 	}
 
+	if p.curTokenIs(TokenSelect) {
+		p.nextToken() // eat SELECT
+		sel, err := p.parseGeneralSelect()
+		if err != nil {
+			return nil, err
+		}
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		return &GeneralInsertStmt{
+			Table:   tblName,
+			Columns: cols,
+			Select:  sel,
+		}, nil
+	}
+
 	if !p.curTokenIs(TokenValues) {
-		return nil, fmt.Errorf("expected VALUES in INSERT, got %s", p.curToken.Literal)
+		return nil, fmt.Errorf("expected VALUES or SELECT after table name")
 	}
 	p.nextToken()
 
@@ -2387,8 +2403,24 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 		p.nextToken()
 	}
 
+	if p.curTokenIs(TokenSelect) {
+		p.nextToken() // eat SELECT
+		sel, err := p.parseGeneralSelect()
+		if err != nil {
+			return nil, err
+		}
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		return &GeneralInsertStmt{
+			Table:   tblName,
+			Columns: cols,
+			Select:  sel,
+		}, nil
+	}
+
 	if !p.curTokenIs(TokenValues) {
-		return nil, fmt.Errorf("expected VALUES in INSERT, got %s", p.curToken.Literal)
+		return nil, fmt.Errorf("expected VALUES or SELECT in INSERT, got %s", p.curToken.Literal)
 	}
 	p.nextToken()
 
