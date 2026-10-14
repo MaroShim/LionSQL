@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+---
+
+## [0.19.0] - 2026-10-14
+
 ### Changed
 - **Documentation Architecture Streamlining & Single Source of Truth (SSOT) Consolidation**:
   - Consolidated macro release roadmap into single source of truth at `ROADMAP.md` and removed duplicate `ROADMAP.ko.md`.
@@ -85,6 +89,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Completely eliminated `sqlion/pkg/api` imports from `pkg/wire/server.go` and `pkg/wire/tds/server.go`, establishing a strict unidirectional dependency graph (`wire` -> `engine`, `api` -> `engine`).
   - Added `pkg/engine/coordinator_test.go` verifying standalone DDL, DML, DQL, transaction commit/rollback, and cancellation with zero HTTP dependencies.
   - `engine.Coordinator` now solely owns sessions, session pool, metrics, slow/general query loggers, work_mem, and global temp table tracking; `api.Server` delegates to it and maintains 100% backward compatibility for HTTP/studio endpoints and tests.
+
+---
+
+## [0.18.0] - 2026-10-13
+
+### Added
 - **Leader/Follower Group Commit & Concurrency Hardening for memengine WAL (`pkg/storage/memengine`)**:
   - Under `FsyncAlways`, `WALWriter.Append` builds a single contiguous `[4-byte length | payload]` frame outside the lock, performs a single `write(2)` syscall under `mu`, and releases `mu` before syncing; the first waiter on `syncMu` becomes the sync leader and one `fsync` makes every frame written so far durable while followers return once covered. Lock order is `syncMu` -> `mu`.
   - Enforced strict monotonic LSN and causal row-version ordering (`appendWALFrameLocked` + `finishWALCommitLocked`): `Engine.walOrderMu` atomically pairs `nextLSN.Add(1)`, `WALWriter.writeFrame`, and `walHook` invocation while shard locks are still held, and releases shard/table locks (`unlockAll()`) before waiting on group commit `fsync` (`syncForPolicy`) and AOF compaction.
@@ -98,6 +108,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented `engine.Coordinator` struct (`pkg/engine/coordinator_impl.go`) and interactive session management primitives (`engine.ClientSession`, `engine.PreparedStatement` in `pkg/engine/session.go`), managing connection pooling, query timeouts, cancellation contexts, SPID allocation, and session variables in the core database layer.
   - Implemented `engine.SQLCoordinator` on `api.Server`, aliasing `api.QueryResult` and `api.ActiveQueryInfo` to `engine` for 100% backward compatibility across tests and handlers, and added `Server.Coordinator()` accessor.
   - Decoupled PostgreSQL Wire Protocol (`pkg/wire/server.go`) and TDS 7.x/8.0 Protocol (`pkg/wire/tds/server.go`) listeners to depend strictly on `engine.SQLCoordinator`, adding `NewServerWithCoordinator` and `SetCoordinator` to allow clean standalone wire execution without HTTP coupling.
+
+---
+
+## [0.17.0] - 2026-10-11
+
+### Added
 - **Native T-SQL CAST, CONVERT, TRY_CAST, TRY_CONVERT & PostgreSQL `::` Operator (`pkg/proc`, `pkg/proc/runtime`)**:
   - **Syntax & Lexer**: Added keywords `CAST`, `TRY_CAST`, `CONVERT`, `TRY_CONVERT` and token `TokenDoubleColon` (`::`) with Pratt parser support for `CAST(expr AS target_type)`, `TRY_CAST(expr AS target_type)`, `CONVERT(target_type, expr [, style])`, `TRY_CONVERT(target_type, expr [, style])`, and PostgreSQL-compatible `expr::target_type`.
   - **AST & Compiler**: Added `CastExpr` node and VDBE opcode `OpCast` with `CastData` auxiliary payload (`TargetType`, `Precision`, `Scale`, `Style`, `Try`).
@@ -120,6 +136,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - **JSON Processing**: Added `ISJSON()` with optional type constraints (`VALUE`, `ARRAY`, `OBJECT`, `SCALAR`) and `JSON_MODIFY()` for dot-path property updates and key deletions.
   - **System & Security Context**: Added `HOST_NAME()`, `HOST_ID()`, `CURRENT_USER`, `USER_NAME()`, `SUSER_NAME()`, `SUSER_SNAME()`, `USER_ID()`, `SUSER_ID()`, `@@VERSION`, `@@SERVERNAME`, `@@SPID`, `@@MAX_CONNECTIONS`, `@@LANGUAGE`, and `COL_NAME()`.
   - Registered all new functions in `IsBuiltinFunction` and added comprehensive unit test suite `TestBuiltin_TSQLExpansions` in `pkg/proc/builtins_test.go`.
+
+### Documentation
+- **Temporary Tables & Table Variables Implementation Roadmap (`TODO.ko.md`, `ROADMAP.md`, `ROADMAP.ko.md`)**:
+  - Structured 3-phase engineering roadmap for session-isolated local temporary tables (`#temp_table`) and execution-frame-scoped table variables (`DECLARE @tbl TABLE`).
+  - Outlined name mangling isolation, Pratt parser grammar extensions, VDBE frame lifecycle integration, non-transactional rollback mechanics, and multi-protocol concurrency verification.
+
+---
+
+## [0.16.0] - 2026-10-10
+
+### Added
 - **Complete T-SQL Official Built-in Scalar Function Suite (Groups A~F) (`pkg/proc`, `pkg/proc/runtime`)**:
   - **Group A (Execution Context & Error Introspection)**: Added `ERROR_NUMBER()`, `ERROR_MESSAGE()`, `ERROR_LINE()`, `ERROR_SEVERITY()`, `ERROR_STATE()`, `ERROR_PROCEDURE()`, and `@@ERROR`. Wired error state tracking into `VMFrame` (`lastErrorMsg`, `lastErrorLine`) and `OpCallBuiltin` dispatcher inside `TRY...CATCH` blocks.
   - **Group B (String Manipulation & Search)**: Added `PATINDEX(pattern, string)` supporting T-SQL wildcards (`%`, `_`, `[a-z]`), `UNICODE()`, `NCHAR()`, `SOUNDEX()` and `DIFFERENCE()` phonetics, `TRANSLATE()`, and `FORMAT()` supporting date layouts and number/currency patterns.
@@ -173,9 +200,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Canonical FSF GPL v3 LICENSE Alignment & Commercial Dual Licensing (`LICENSE`, `README.md`)**:
   - Restored `LICENSE` file to canonical verbatim GNU General Public License v3 text for seamless automated open-source compliance scanning.
   - Relocated and structured commercial dual-licensing and proprietary embedding terms in `README.md`.
-- **Temporary Tables & Table Variables Implementation Roadmap (`TODO.ko.md`, `ROADMAP.md`, `ROADMAP.ko.md`)**:
-  - Structured 3-phase engineering roadmap for session-isolated local temporary tables (`#temp_table`) and execution-frame-scoped table variables (`DECLARE @tbl TABLE`).
-  - Outlined name mangling isolation, Pratt parser grammar extensions, VDBE frame lifecycle integration, non-transactional rollback mechanics, and multi-protocol concurrency verification.
 
 ---
 
