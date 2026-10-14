@@ -26,6 +26,7 @@ const (
 	NodeHashJoin    NodeType = "Hash Join"
 	NodeHash        NodeType = "Hash"
 	NodeNestedLoop  NodeType = "Nested Loop"
+	NodeMergeJoin   NodeType = "Merge Join"
 	NodeAggregate   NodeType = "Aggregate"
 	NodeCTE         NodeType = "CTE Scan"
 	NodeMaterialize NodeType = "Materialize"
@@ -111,6 +112,7 @@ type PlanNode struct {
 	JoinType         string               `json:"join_type,omitempty"`
 	HashCond         string               `json:"hash_cond,omitempty"`
 	JoinCond         string               `json:"join_cond,omitempty"`
+	MergeCond        string               `json:"merge_cond,omitempty"`
 	CTEName          string               `json:"cte_name,omitempty"`
 	SetOp            string               `json:"set_op,omitempty"`
 	StartupCost      float64              `json:"startup_cost"`
@@ -1465,6 +1467,19 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 		if node.HashCond != "" {
 			sb.WriteString(fmt.Sprintf(" (hash_cond=%s)", node.HashCond))
 		}
+	case NodeMergeJoin:
+		if node.JoinType == "LEFT" {
+			sb.WriteString(" (Left)")
+		} else if node.JoinType == "RIGHT" {
+			sb.WriteString(" (Right)")
+		} else if node.JoinType == "FULL" {
+			sb.WriteString(" (Full)")
+		}
+		if node.MergeCond != "" {
+			sb.WriteString(fmt.Sprintf(" (merge_cond=%s)", node.MergeCond))
+		} else if node.JoinCond != "" {
+			sb.WriteString(fmt.Sprintf(" (merge_cond=%s)", node.JoinCond))
+		}
 	case NodeHash:
 		// Hash intermediate node
 	case NodeTableScan:
@@ -1918,11 +1933,12 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 	}
 
 	var nextNode *PlanNode
-	// CBO Decision: Compare Hash Join vs Index Nested Loop Join
+	// CBO Decision: Compare Hash Join vs Index Nested Loop Join vs Sort-Merge Join
 	isOuterUnmatched := strings.HasPrefix(strings.ToUpper(join.Type), "FULL") || strings.HasPrefix(strings.ToUpper(join.Type), "RIGHT")
 
 	forceHashJoin := hasQueryHint(queryHints, "HASH JOIN") || strings.Contains(strings.ToUpper(join.Type), "HASH")
 	forceLoopJoin := hasQueryHint(queryHints, "LOOP JOIN") || strings.Contains(strings.ToUpper(join.Type), "LOOP")
+	forceMergeJoin := hasQueryHint(queryHints, "MERGE JOIN") || strings.Contains(strings.ToUpper(join.Type), "MERGE")
 
 	// Check table hint on the joined table
 	joinForceIndex, joinForceTableScan := parseIndexHint(join.Hints)
@@ -1937,18 +1953,71 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		}
 	}
 
-	useNestedLoop := false
-	if !isOuterUnmatched && innerIndex != nil {
-		if forceLoopJoin {
-			useNestedLoop = true
-		} else if forceHashJoin {
-			useNestedLoop = false
+	// Calculate Sort-Merge Join Cost
+	cleanLeftKey := leftKey
+	if idx := strings.Index(cleanLeftKey, "."); idx != -1 {
+		cleanLeftKey = cleanLeftKey[idx+1:]
+	}
+	cleanLeftKey = strings.ToLower(cleanIdent(cleanLeftKey))
+
+	cleanRightKey := rightKey
+	if idx := strings.Index(cleanRightKey, "."); idx != -1 {
+		cleanRightKey = cleanRightKey[idx+1:]
+	}
+	cleanRightKey = strings.ToLower(cleanIdent(cleanRightKey))
+
+	outerSortCost := 0.0
+	isOuterSorted := false
+	if (currentNode.Type == NodeIndexScan || currentNode.Type == NodeIndexOnlyScan) && strings.Contains(strings.ToLower(currentNode.IndexCond), cleanLeftKey) {
+		isOuterSorted = true
+	} else if currentNode.Type == NodeSort && strings.EqualFold(cleanIdent(currentNode.SortKey), cleanLeftKey) {
+		isOuterSorted = true
+	}
+	if !isOuterSorted {
+		outerSortCost = float64(currentEstimatedRows)*(CPUTupleCost+math.Log2(math.Max(2, float64(currentEstimatedRows)))*2.0*CPUOperatorCost) + 0.1
+	}
+
+	innerSortCost := 0.0
+	isInnerSorted := false
+	if innerIndex != nil && len(innerIndex.Columns) > 0 && strings.EqualFold(innerIndex.Columns[0], cleanRightKey) {
+		isInnerSorted = true
+	}
+	if !isInnerSorted {
+		innerSortCost = float64(rRows)*(CPUTupleCost+math.Log2(math.Max(2, float64(rRows)))*2.0*CPUOperatorCost) + 0.1
+	}
+
+	mergeStreamingCost := (float64(currentEstimatedRows) + float64(rRows)) * CPUOperatorCost
+	mergeJoinTotalCost := currentNode.TotalCost + rScanCost + outerSortCost + innerSortCost + mergeStreamingCost
+
+	// Strategy selection
+	joinStrategy := "HASH"
+	if forceMergeJoin {
+		joinStrategy = "MERGE"
+	} else if forceLoopJoin && !isOuterUnmatched && innerIndex != nil {
+		joinStrategy = "LOOP"
+	} else if forceHashJoin {
+		joinStrategy = "HASH"
+	} else {
+		// Cost-based selection between NL, Hash, and Merge
+		if !isOuterUnmatched && innerIndex != nil && nlTotalCost < hashJoinTotalCost && nlTotalCost < mergeJoinTotalCost {
+			joinStrategy = "LOOP"
+		} else if mergeJoinTotalCost < hashJoinTotalCost {
+			joinStrategy = "MERGE"
 		} else {
-			useNestedLoop = (nlTotalCost < hashJoinTotalCost)
+			joinStrategy = "HASH"
 		}
 	}
 
-	if useNestedLoop {
+	cleanType := strings.ToUpper(strings.TrimSpace(join.Type))
+	cleanType = strings.ReplaceAll(cleanType, "MERGE", "")
+	cleanType = strings.ReplaceAll(cleanType, "HASH", "")
+	cleanType = strings.ReplaceAll(cleanType, "LOOP", "")
+	cleanType = strings.TrimSpace(cleanType)
+	if cleanType == "" {
+		cleanType = "INNER"
+	}
+
+	if joinStrategy == "LOOP" {
 		innerScanNode := &PlanNode{
 			Type:          NodeIndexScan,
 			Relation:      join.Table,
@@ -1963,12 +2032,45 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 
 		nextNode = &PlanNode{
 			Type:          NodeNestedLoop,
-			JoinType:      join.Type,
+			JoinType:      cleanType,
 			JoinCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
 			StartupCost:   currentNode.StartupCost + 0.25,
 			TotalCost:     nlTotalCost,
 			EstimatedRows: joinEstRows,
 			Children:      []*PlanNode{currentNode, innerScanNode},
+		}
+	} else if joinStrategy == "MERGE" {
+		var rScanNode *PlanNode
+		baseScan := &PlanNode{
+			Type:          NodeTableScan,
+			Relation:      join.Table,
+			Alias:         rAlias,
+			StartupCost:   0.0,
+			TotalCost:     rScanCost,
+			EstimatedRows: rRows,
+		}
+		if join.Filter != "" {
+			rScanNode = &PlanNode{
+				Type:          NodeFilter,
+				FilterCond:    join.Filter,
+				StartupCost:   0.0,
+				TotalCost:     rScanCost + float64(rRows)*CPUTupleCost,
+				EstimatedRows: int64(math.Max(1, float64(rRows)*0.5)),
+				Children:      []*PlanNode{baseScan},
+			}
+		} else {
+			rScanNode = baseScan
+		}
+
+		nextNode = &PlanNode{
+			Type:          NodeMergeJoin,
+			JoinType:      cleanType,
+			MergeCond:     fmt.Sprintf("(%s = %s)", leftKey, rightKey),
+			JoinCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
+			StartupCost:   currentNode.StartupCost + outerSortCost + innerSortCost,
+			TotalCost:     mergeJoinTotalCost,
+			EstimatedRows: joinEstRows,
+			Children:      []*PlanNode{currentNode, rScanNode},
 		}
 	} else {
 		// Hash Join Strategy
@@ -2004,7 +2106,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 
 		nextNode = &PlanNode{
 			Type:          NodeHashJoin,
-			JoinType:      join.Type,
+			JoinType:      cleanType,
 			HashCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
 			StartupCost:   hashBuildCost,
 			TotalCost:     hashJoinTotalCost,

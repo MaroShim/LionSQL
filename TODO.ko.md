@@ -8,7 +8,6 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P1** | **CBO** | **소트-머지 조인 (Sort-Merge Join) 연산자 (`B-3`)** | `pkg/execution`, `pkg/planner` | 정렬된 입력에 대해 해시리스 $O(M+N)$ 단일 패스 스트리밍 조인(`MergeJoinIterator`) 구현 |
 | **P2** | **성능** | **단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`)** | `pkg/engine`, `pkg/storage` | `SELECT * FROM tbl WHERE id = ?` 정규 파서/플래너 우회 스토리지 직결 (TPS 50%+ 향상) |
 | **P2** | **프로토콜** | **TDS NBCROW 행 압축 (`0xD2`)** | `pkg/wire/tds` | NULL 비트맵 기반 0바이트 전송으로 네트워크 대역폭 30%+ 절감 |
 | **P3** | **생태계** | **외부 언어 드라이버 E2E 검증 하네스** | `pkg/wire`, `pkg/wire/tds` | Python(`psycopg3`, `pymssql`), Node.js(`pg`, `tedious`), .NET(`SqlClient`) 검증 |
@@ -20,11 +19,11 @@
     - 테이블 힌트: `WITH (INDEX(<index_name>))` 강제 인덱스 스캔, `WITH (INDEX(0))` 강제 테이블 풀 스캔.
     - 쿼리 힌트: `OPTION (HASH JOIN)`, `OPTION (MERGE JOIN)`, `OPTION (LOOP JOIN)`, `OPTION (FORCE ORDER)` 조인 전략 강제.
     - CBO 플래너(`pkg/planner/cbo.go`)에서 힌트 존재 시 비용 계산 우회 및 힌트 지정 연산자 강제 선택.
-- [ ] **소트-머지 조인 (Sort-Merge Join) 연산자 및 비용 모델 (`B-3`) (`pkg/execution`, `pkg/planner`)**
+- [x] **소트-머지 조인 (Sort-Merge Join) 연산자 및 비용 모델 (`B-3`) (`pkg/execution`, `pkg/planner`)**
   - **배경**: 양측 입력 릴레이션이 이미 인덱스 정렬 순서이거나 사전 `ORDER BY`로 정렬된 경우, 거대한 인메모리 해시 테이블 빌드 비용을 완전히 제거.
   - **구현 내용**:
-    - `pkg/execution/merge_join.go`: $O(M+N)$ 단일 패스 스트리밍 반복자 `MergeJoinIterator` 신설 (동일 조인 키 중복 시 Mark & Restore 윈도우 스캔).
-    - `pkg/planner/cbo.go`: 양측 릴레이션의 정렬 속성(Sort Property)을 감지하고 해시 조인 vs 머지 조인 비용 경쟁 공식 추가.
+    - `pkg/execution/merge_join.go`: $O(M+N)$ 단일 패스 스트리밍 반복자 `MergeJoinIterator` 신설 (동일 조인 키 중복 시 Mark & Restore 윈도우 스캔, INNER/LEFT/RIGHT/FULL/SEMI/ANTI 지원).
+    - `pkg/planner/planner.go`: 양측 릴레이션의 정렬 속성(Sort Property)을 감지하고 해시 조인 vs 머지 조인 비용 경쟁 공식 및 `OPTION (MERGE JOIN)` 힌트 연동 추가.
 
 ### P2 세부 과제: 엔진 성능 & 프로토콜
 - [ ] **단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`) (`pkg/engine`, `pkg/storage`)**
@@ -57,7 +56,7 @@
 | **A-2** | **CBO 통계 메타데이터 디스크 영속화** | **완료 (`[x]`)** | `cbo_stats.json` 원자적 파일 쓰기 및 기동 시 자동 복원 연동 완료 |
 | **C-6** | **OR 조건 및 불리언 트리 선택도 계산** | **완료 (`[x]`)** | AST 재귀 평가, 배타합/독립합집합, NOT, IN, BETWEEN 정밀 산출 완료 |
 | **D-9** | **CBO 옵티마이저 힌트 오버라이드 제어** | **완료 (`[x]`)** | T-SQL 조인 힌트(`HASH/LOOP/MERGE`) 및 인덱스 힌트(`WITH (INDEX(...))`) 강제 반영 |
-| **B-3** | **소트-머지 조인 (Sort-Merge Join) 연산자** | **착수 예정 (`[ ]`)** | 정렬된 입력에 대해 $O(M+N)$ 해시리스 스트리밍 조인(`MergeJoinIterator`) |
+| **B-3** | **소트-머지 조인 (Sort-Merge Join) 연산자** | **완료 (`[x]`)** | 정렬된 입력에 대해 $O(M+N)$ 해시리스 스트리밍 조인(`MergeJoinIterator`) |
 | **B-4** | **$N > 4$ 체인 조인 동적 계획법 (DP)** | **대기 (`[ ]`)** | 5개 이상 테이블 조인 시 Left-Deep DP 및 Bushy Tree 동적 탐색 |
 | **C-5** | **다중 컬럼 확장 통계 (Extended Stats)** | **대기 (`[ ]`)** | 컬럼 상관관계로 인한 카디널리티 과소평가 방지 |
 | **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **대기 (`[ ]`)** | 왜곡 데이터 최빈값 분리 처리 |

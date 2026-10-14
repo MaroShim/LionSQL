@@ -685,6 +685,24 @@ func TestCoordinator_TableAndQueryHints(t *testing.T) {
 	if len(res.Rows) != 2 {
 		t.Fatalf("expected 2 rows with INNER HASH JOIN, got %d", len(res.Rows))
 	}
+
+	// OPTION (MERGE JOIN)
+	res, err = coord.ExecuteSQL(`SELECT items.name, categories.cat FROM items JOIN categories ON items.id = categories.item_id OPTION (MERGE JOIN);`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with OPTION (MERGE JOIN) failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows with OPTION (MERGE JOIN), got %d", len(res.Rows))
+	}
+
+	// Inline join hint: INNER MERGE JOIN
+	res, err = coord.ExecuteSQL(`SELECT items.name, categories.cat FROM items INNER MERGE JOIN categories ON items.id = categories.item_id;`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with INNER MERGE JOIN failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows with INNER MERGE JOIN, got %d", len(res.Rows))
+	}
 }
 
 func TestCoordinator_DML_Output(t *testing.T) {

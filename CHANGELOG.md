@@ -14,6 +14,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
 
 ### Added
+- **Sort-Merge Join (SMJ) Operator & CBO Cost Model (`B-3`) (`pkg/execution`, `pkg/planner`, `pkg/engine`)**:
+  - Implemented `MergeJoinIterator` in `pkg/execution/merge_join.go` providing $O(M+N)$ single-pass streaming joins with zero in-memory hash table overhead.
+  - Implemented Mark & Restore buffer windowing on the right-side relation to handle N:M duplicate join keys and duplicate Cartesian products.
+  - Full join type support: `INNER`, `LEFT`, `RIGHT`, `FULL`, `SEMI`, and `ANTI` joins with streaming NULL extension and SQL-compliant NULL key handling.
+  - Added `NodeMergeJoin` (`"Merge Join"`) plan node, `MergeCond` AST modeling, and plan text formatting in `pkg/planner/planner.go`.
+  - Added sort property (Interesting Orders) detection and cost formulas (zero sort cost for pre-sorted inputs, $N \log N$ for unsorted inputs) competing against Hash Join and Index Nested Loop Join.
+  - Automatic `NewSortIterator` wrapping in `pkg/execution/builder.go` for child inputs when relations are not pre-sorted.
+  - Added unit test suite in `pkg/execution/merge_join_test.go`, planner test suite in `pkg/planner/cbo_join_test.go`, and E2E query tests in `pkg/engine/coordinator_test.go`.
 - **CBO Optimizer Hints Override for Index and Join Strategies (`D-9`) (`pkg/planner`, `pkg/proc`, `pkg/engine`)**:
   - Implemented T-SQL table hints parsing and enforcement: `WITH (INDEX(<name>))` for forcing specific index scan, `WITH (INDEX(0))` / `WITH (INDEX())` for forcing full table scan, and comma-separated hints (e.g. `WITH (NOLOCK, INDEX(...))`).
   - Implemented query hints: `OPTION (HASH JOIN)`, `OPTION (LOOP JOIN)`, and `OPTION (FORCE ORDER)` in `pkg/proc/parser.go` and `pkg/planner/planner.go`.

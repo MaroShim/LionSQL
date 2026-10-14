@@ -61,7 +61,7 @@ SQLion은 자율형 단일 노드 고성능 OLTP 엔진에서 시작하여 엔�
   - [x] Granular SQL Object-Level RBAC (CREATE ROLE/USER, GRANT/REVOKE)
   - [x] CBO Boolean Tree & OR Selectivity Modeling (C-6)
   - [x] CBO Optimizer Hints Override (D-9)
-  - [ ] Sort-Merge Join Operator (B-3)
+  - [x] Sort-Merge Join Operator (B-3)
   - [ ] Fast SQL Fingerprinting & Simple PK Query Bypass (P-5)
   - [ ] TDS NBCROW (0xD2) Row Compression
   - [ ] Transparent Data Encryption (TDE: AES-256-GCM) & Immutable Audit Log
@@ -154,7 +154,7 @@ SQLion은 자율형 단일 노드 고성능 OLTP 엔진에서 시작하여 엔�
 #### 5.1. CBO 옵티마이저 힌트 오버라이드 제어 (`D-9`) & 소트-머지 조인 연산자 (`B-3`) (`pkg/planner`, `pkg/execution`)
 - **과제**:
   - `OPTION (HASH JOIN, LOOP JOIN, FORCE ORDER)`, `WITH (INDEX(<name>))` 힌트를 AST에 파싱하고 CBO 플래너 비용 결정을 강제 오버라이드 완료 (`D-9`).
-  - 정렬된 입력에 대해 $O(M+N)$ 단일 패스로 처리하는 `MergeJoinIterator` 연산자 구현 및 CBO 비용 공식 추가 (`B-3`).
+  - 정렬된 입력에 대해 $O(M+N)$ 단일 패스로 처리하는 `MergeJoinIterator` 연산자 구현 및 CBO 비용 공식 추가 완료 (`B-3`).
 - **기대 효과**: ORDER BY 또는 인덱스 정렬 릴레이션 조인 시 해시 빌드 메모리 오버헤드 제거 및 DBA 실행 계획 제어권 보장.
 
 #### 5.2. 단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`) (`pkg/engine`, `pkg/storage`)
@@ -259,7 +259,6 @@ SQLion은 자율형 단일 노드 고성능 OLTP 엔진에서 시작하여 엔�
 
 | 마일스톤 | 우선순위 | 과제명 | 해당 영역 | 구현 공수 | 기대 효과 |
 | :---: | :---: | :--- | :---: | :---: | :--- |
-| **Phase 5** | **P1** | **소트-머지 조인 (Sort-Merge Join) 연산자 (`B-3`)** | 실행기 & 플래너 | 보통 (250~350줄) | 정렬 릴레이션 조인 시 해시 빌드 오버헤드 및 메모리 제거 |
 | **Phase 5** | **P2** | **단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`)** | 엔진 & 스토리지 | 보통 (250~350줄) | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상 |
 | **Phase 5** | **P2** | **TDS NBCROW 행 압축 (`0xD2`)** | TDS 프로토콜 | 보통 (200~300줄) | NULL 컬럼 다수 조회 시 네트워크 전송 대역폭 30%+ 절감 |
 | **Phase 5** | **P2** | **투명 데이터 암호화 (TDE: AES-256-GCM)** | 스토리지 & 보안 | 보통 (250~350줄) | 디스크 파일 투명 암호화 및 불변 감사 로그 기록 |

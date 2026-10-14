@@ -61,7 +61,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - [x] Granular SQL Object-Level RBAC (CREATE ROLE/USER, GRANT/REVOKE)
   - [x] CBO Boolean Tree & OR Selectivity Modeling (C-6)
   - [x] CBO Optimizer Hints Override (D-9)
-  - [ ] Sort-Merge Join Operator (B-3)
+  - [x] Sort-Merge Join Operator (B-3)
   - [ ] Fast SQL Fingerprinting & Simple PK Query Bypass (P-5)
   - [ ] TDS NBCROW (0xD2) Row Compression
   - [ ] Transparent Data Encryption (TDE: AES-256-GCM) & Immutable Audit Log
@@ -154,7 +154,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 #### 5.1. CBO Optimizer Hints Override (`D-9`) & Sort-Merge Join Operator (`B-3`) (`pkg/planner`, `pkg/execution`)
 - **Challenge**:
   - Parse `OPTION (HASH JOIN, LOOP JOIN, FORCE ORDER)` and `WITH (INDEX(<name>))` hints to override CBO plan selection (Completed `D-9`).
-  - Implement an $O(M+N)$ single-pass `MergeJoinIterator` for pre-sorted relations and add sort-merge join cost models (`B-3`).
+  - Implement an $O(M+N)$ single-pass `MergeJoinIterator` for pre-sorted relations and add sort-merge join cost models (Completed `B-3`).
 - **Expected Outcome**: Elimination of hash table overhead on sorted inputs and full DBA execution plan control.
 
 #### 5.2. Fast SQL Fingerprinting & Simple PK Query Bypass (`P-5`) (`pkg/engine`, `pkg/storage`)
@@ -256,7 +256,6 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 | Milestone | Priority | Task Description | Domain | Estimated Effort | Strategic Benefit |
 | :---: | :---: | :--- | :---: | :---: | :--- |
-| **Phase 5** | **P1** | **CBO Sort-Merge Join Operator (`B-3`)** | Executor & Planner | Medium (250~350 lines) | Eliminates hash table overhead for pre-sorted inputs |
 | **Phase 5** | **P2** | **Fast SQL Fingerprinting & Simple PK Bypass (`P-5`)** | Engine & Storage | Medium (250~350 lines) | Bypasses parser/planner for point PK lookups, 50%+ TPS boost |
 | **Phase 5** | **P2** | **TDS NBCROW Row Compression (`0xD2`)** | TDS Protocol | Medium (200~300 lines) | 30%+ network bandwidth savings on sparse/NULL tables |
 | **Phase 5** | **P2** | **Transparent Data Encryption (TDE: AES-256-GCM)** | Storage & Security | Medium (250~350 lines) | Transparent data-at-rest encryption and immutable audit logging |

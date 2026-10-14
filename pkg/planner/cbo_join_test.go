@@ -407,3 +407,113 @@ func TestCBOOptimizerHints_TableHints(t *testing.T) {
 		t.Errorf("expected Index Scan with WITH (INDEX(idx_c_id)), got:\n%s", textIdx)
 	}
 }
+
+func TestCBOOptimizerHints_MergeJoin(t *testing.T) {
+	p := planner.NewPlanner()
+
+	schemaA := &storage.TableSchema{
+		Name: "table_a",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "b_id", Type: storage.TypeInt},
+		},
+	}
+	schemaB := &storage.TableSchema{
+		Name: "table_b",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+
+	statsA := planner.NewTableStats("table_a", 100)
+	statsB := planner.NewTableStats("table_b", 100)
+
+	rSchemas := map[string]*storage.TableSchema{
+		"table_b": schemaB,
+		"b":       schemaB,
+	}
+	rStats := map[string]*planner.TableStats{
+		"table_b": statsB,
+		"b":       statsB,
+	}
+
+	// 1. Query Hint: OPTION (MERGE JOIN)
+	sqlOpt := `SELECT a.id, b.val FROM table_a a JOIN table_b b ON a.b_id = b.id OPTION (MERGE JOIN)`
+	qOpt, err := p.ParseSelect(sqlOpt)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	planOpt := p.BuildMultiJoinPlanWithStats(qOpt, schemaA, statsA, rSchemas, rStats)
+	linesOpt := planner.FormatPlanText(planOpt, false)
+	textOpt := strings.Join(linesOpt, "\n")
+	if !strings.Contains(textOpt, "Merge Join") {
+		t.Errorf("expected Merge Join with OPTION (MERGE JOIN), got:\n%s", textOpt)
+	}
+
+	// 2. Inline Join Hint: INNER MERGE JOIN
+	sqlInline := `SELECT a.id, b.val FROM table_a a INNER MERGE JOIN table_b b ON a.b_id = b.id`
+	qInline, err := p.ParseSelect(sqlInline)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	planInline := p.BuildMultiJoinPlanWithStats(qInline, schemaA, statsA, rSchemas, rStats)
+	linesInline := planner.FormatPlanText(planInline, false)
+	textInline := strings.Join(linesInline, "\n")
+	if !strings.Contains(textInline, "Merge Join") {
+		t.Errorf("expected Merge Join with INNER MERGE JOIN, got:\n%s", textInline)
+	}
+}
+
+func TestCBOMergeJoin_CostSelection(t *testing.T) {
+	p := planner.NewPlanner()
+
+	// When outer relation and inner relation are both pre-sorted on their join keys,
+	// Sort-Merge Join eliminates hash table allocation and sort overhead, making it competitive.
+	schemaA := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_users_id", Columns: []string{"id"}, Unique: true},
+		},
+	}
+	schemaB := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+			{Name: "amount", Type: storage.TypeFloat},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_orders_user_id", Columns: []string{"user_id"}, Unique: false},
+		},
+	}
+
+	statsA := planner.NewTableStats("users", 1000)
+	statsB := planner.NewTableStats("orders", 1000)
+
+	rSchemas := map[string]*storage.TableSchema{
+		"orders": schemaB,
+		"o":      schemaB,
+	}
+	rStats := map[string]*planner.TableStats{
+		"orders": statsB,
+		"o":      statsB,
+	}
+
+	// Forcing MERGE JOIN or observing competitive plan
+	sql := `SELECT u.name, o.amount FROM users u JOIN orders o ON u.id = o.user_id OPTION (MERGE JOIN)`
+	q, err := p.ParseSelect(sql)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan := p.BuildMultiJoinPlanWithStats(q, schemaA, statsA, rSchemas, rStats)
+	lines := planner.FormatPlanText(plan, false)
+	planText := strings.Join(lines, "\n")
+	if !strings.Contains(planText, "Merge Join") {
+		t.Errorf("expected Merge Join in plan text, got:\n%s", planText)
+	}
+}

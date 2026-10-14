@@ -177,8 +177,8 @@ func TestPushdown_IndexScanSelectionInJoin(t *testing.T) {
 	if !strings.Contains(fullText, "Index Scan using idx_users_email on users") {
 		t.Errorf("expected Index Scan on users in join plan, got:\n%s", fullText)
 	}
-	// Verify that Hash Join or Nested Loop was generated
-	if !strings.Contains(fullText, "Hash Join") && !strings.Contains(fullText, "Nested Loop") {
+	// Verify that Hash Join, Nested Loop, or Merge Join was generated
+	if !strings.Contains(fullText, "Hash Join") && !strings.Contains(fullText, "Nested Loop") && !strings.Contains(fullText, "Merge Join") {
 		t.Errorf("expected join in plan, got:\n%s", fullText)
 	}
 	// Verify no redundant top-level filter

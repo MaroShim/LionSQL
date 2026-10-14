@@ -150,6 +150,48 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		}
 		return hIter, nil
 
+	case planner.NodeMergeJoin:
+		if len(plan.Children) < 2 {
+			return nil, fmt.Errorf("merge join requires at least 2 children")
+		}
+		leftIter, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
+		if err != nil {
+			return nil, err
+		}
+		rightIter, err := BuildExecutorWithOptions(plan.Children[1], tx, getTable, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		leftKey, rightKey := parseJoinCond(plan.MergeCond)
+		if leftKey == "" && rightKey == "" {
+			leftKey, rightKey = parseJoinCond(plan.JoinCond)
+		}
+
+		if !isPlanSortedOnKey(plan.Children[0], leftKey) {
+			sIter := NewSortIterator(leftIter, leftKey+" ASC")
+			if opts.WorkMem > 0 {
+				sIter.SetWorkMem(opts.WorkMem)
+			}
+			if opts.TempDir != "" {
+				sIter.SetTempDir(opts.TempDir)
+			}
+			leftIter = sIter
+		}
+		if !isPlanSortedOnKey(plan.Children[1], rightKey) {
+			sIter := NewSortIterator(rightIter, rightKey+" ASC")
+			if opts.WorkMem > 0 {
+				sIter.SetWorkMem(opts.WorkMem)
+			}
+			if opts.TempDir != "" {
+				sIter.SetTempDir(opts.TempDir)
+			}
+			rightIter = sIter
+		}
+
+		mIter := NewMergeJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
+		return mIter, nil
+
 	case planner.NodeNestedLoop:
 		if len(plan.Children) < 2 {
 			return nil, fmt.Errorf("nested loop join requires at least 2 children")
@@ -261,4 +303,32 @@ func parseJoinCond(cond string) (string, string) {
 		return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 	}
 	return "", ""
+}
+
+func isPlanSortedOnKey(plan *planner.PlanNode, key string) bool {
+	if plan == nil || key == "" {
+		return false
+	}
+	cleanKey := key
+	if idx := strings.Index(cleanKey, "."); idx != -1 {
+		cleanKey = cleanKey[idx+1:]
+	}
+	cleanKey = strings.ToLower(strings.Trim(cleanKey, "\"`[]"))
+
+	if plan.Type == planner.NodeSort {
+		sKey := plan.SortKey
+		if idx := strings.Index(sKey, "."); idx != -1 {
+			sKey = sKey[idx+1:]
+		}
+		sKey = strings.ToLower(strings.Trim(sKey, "\"`[]"))
+		return sKey == cleanKey
+	}
+
+	if plan.Type == planner.NodeIndexScan || plan.Type == planner.NodeIndexOnlyScan {
+		iCond := strings.ToLower(plan.IndexCond)
+		if strings.Contains(iCond, cleanKey) {
+			return true
+		}
+	}
+	return false
 }

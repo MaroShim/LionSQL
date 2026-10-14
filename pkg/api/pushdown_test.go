@@ -71,7 +71,7 @@ func TestSQLExecutor_PredicatePushdownInJoins(t *testing.T) {
 	if !strings.Contains(planStr, "Filter") {
 		t.Errorf("expected plan to contain Filter, got:\n%s", planStr)
 	}
-	if !strings.Contains(planStr, "Hash Join") && !strings.Contains(planStr, "Nested Loop") {
+	if !strings.Contains(planStr, "Hash Join") && !strings.Contains(planStr, "Nested Loop") && !strings.Contains(planStr, "Merge Join") {
 		t.Errorf("expected plan to contain Join, got:\n%s", planStr)
 	}
 }
