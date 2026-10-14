@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"fmt"
@@ -43,7 +43,7 @@ type parsedMerge struct {
 	clauses     []mergeClause
 }
 
-func (s *Server) execMerge(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	parsed, err := parseMergeQuery(cleaned)
@@ -273,7 +273,7 @@ func (s *Server) execMerge(query string, start time.Time, cs *ClientSession) (*Q
 	}, nil
 }
 
-func (s *Server) loadMergeSourceRows(parsed *parsedMerge, tx storage.Transaction, start time.Time, cs *ClientSession) ([]map[string]any, error) {
+func (s *Coordinator) loadMergeSourceRows(parsed *parsedMerge, tx storage.Transaction, start time.Time, cs *ClientSession) ([]map[string]any, error) {
 	raw := strings.TrimSpace(parsed.sourceRaw)
 
 	// Case 1: (VALUES (...), (...))

@@ -8,12 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- **SQL Coordinator extraction into `pkg/engine` (incremental)**:
-  - Introduced `engine.SQLCoordinator` interface; `pkg/wire` and `pkg/wire/tds` now hold a coordinator instead of `*api.Server` (`SetCoordinator`, `NewServerWithCoordinator`).
-  - Moved `SplitStatements`, `ParseTimeoutDuration`, `MetricsCollector`, `SlowQueryLogger`, `GeneralLogger`, `SessionPool`, and `RotatingLogWriter` to `pkg/engine`; `pkg/api` keeps type aliases (`engine_aliases.go`) for compatibility.
-  - `MetricsCollector.FormatPrometheus` now takes `engine.PrometheusServerState` instead of `*api.Server`.
-  - `api.ClientSession` and `api.PreparedStatement` are now aliases of the `engine` types (session mutex exported as `Mu`); `GetQueryTimeout` now lives only in `pkg/engine`.
-  - `engine.Coordinator` now solely owns sessions, session pool, metrics, slow/general query loggers, work_mem, and global temp table tracking (`RegisterGlobalTemp`, `SnapshotSessions`, `FindSessionBySPID`); `api.Server` delegates to it and no longer duplicates this state. `Coordinator.Close` now also closes the query log writers.
+- **Full Architecture Layering: SQL Execution Coordinator Separation (`pkg/engine`, `pkg/api`, `pkg/wire`, `pkg/wire/tds`)**:
+  - Migrated the entire SQL execution orchestration subsystem (13 `sqlexec_*.go` files, ~14,150 lines) from `pkg/api` to `pkg/engine`: `sqlexec.go`, `sqlexec_auth.go`, `sqlexec_dbcc.go`, `sqlexec_ddl.go`, `sqlexec_dml.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_merge.go`, `sqlexec_pgcatalog.go`, `sqlexec_pivot.go`, `sqlexec_prepare.go`, `sqlexec_procs.go`, and `sqlexec_select.go`.
+  - Converted execution receivers to `(s *Coordinator)` and deleted transitional `exec_stub.go`.
+  - Added `ConvertValue` helper in `pkg/engine/query_utils.go` and deduplicated conversion logic across `handlers_procs.go` and `sqlexec_select.go`.
+  - Completely eliminated `sqlion/pkg/api` imports from `pkg/wire/server.go` and `pkg/wire/tds/server.go`, establishing a strict unidirectional dependency graph (`wire` -> `engine`, `api` -> `engine`).
+  - Added `pkg/engine/coordinator_test.go` verifying standalone DDL, DML, DQL, transaction commit/rollback, and cancellation with zero HTTP dependencies.
+  - `engine.Coordinator` now solely owns sessions, session pool, metrics, slow/general query loggers, work_mem, and global temp table tracking; `api.Server` delegates to it and maintains 100% backward compatibility for HTTP/studio endpoints and tests.
 - **Leader/Follower Group Commit & Concurrency Hardening for memengine WAL (`pkg/storage/memengine`)**:
   - Under `FsyncAlways`, `WALWriter.Append` builds a single contiguous `[4-byte length | payload]` frame outside the lock, performs a single `write(2)` syscall under `mu`, and releases `mu` before syncing; the first waiter on `syncMu` becomes the sync leader and one `fsync` makes every frame written so far durable while followers return once covered. Lock order is `syncMu` -> `mu`.
   - Enforced strict monotonic LSN and causal row-version ordering (`appendWALFrameLocked` + `finishWALCommitLocked`): `Engine.walOrderMu` atomically pairs `nextLSN.Add(1)`, `WALWriter.writeFrame`, and `walHook` invocation while shard locks are still held, and releases shard/table locks (`unlockAll()`) before waiting on group commit `fsync` (`syncForPolicy`) and AOF compaction.

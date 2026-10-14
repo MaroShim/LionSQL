@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"errors"
@@ -14,7 +14,7 @@ import (
 	"sqlion/pkg/storage"
 )
 
-func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	prefixRe := regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\(`)
 	prefixLoc := prefixRe.FindStringSubmatchIndex(cleaned)
@@ -212,7 +212,7 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 		if cs != nil && cs.ID != "" {
 			creatorID = cs.ID
 		}
-		s.coordinator.RegisterGlobalTemp(tableName, creatorID)
+		s.RegisterGlobalTemp(tableName, creatorID)
 	} else if strings.HasPrefix(tableName, "#") {
 		if cs != nil {
 			cs.Mu.Lock()
@@ -229,7 +229,7 @@ func (s *Server) execCreateTable(query string, start time.Time, cs *ClientSessio
 	}, nil
 }
 
-func (s *Server) execDropTable(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropTable(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -251,7 +251,7 @@ func (s *Server) execDropTable(query string, start time.Time) (*QueryResult, err
 	}
 
 	if strings.HasPrefix(tableName, "##") {
-		s.coordinator.UnregisterGlobalTemp(tableName)
+		s.UnregisterGlobalTemp(tableName)
 	}
 
 	return &QueryResult{
@@ -262,7 +262,7 @@ func (s *Server) execDropTable(query string, start time.Time) (*QueryResult, err
 	}, nil
 }
 
-func (s *Server) execTruncateTable(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execTruncateTable(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^TRUNCATE\s+(?:TABLE\s+)?([^\s;]+)`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -283,7 +283,7 @@ func (s *Server) execTruncateTable(query string, start time.Time) (*QueryResult,
 	}, nil
 }
 
-func (s *Server) execCreateIndex(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^CREATE\s+(UNIQUE\s+)?INDEX\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -332,7 +332,7 @@ func (s *Server) execCreateIndex(query string, start time.Time) (*QueryResult, e
 	}, nil
 }
 
-func (s *Server) execDropIndex(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^DROP\s+INDEX\s+([^\s]+)(?:\s+ON\s+([^\s]+))?$`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -374,7 +374,7 @@ func (s *Server) execDropIndex(query string, start time.Time) (*QueryResult, err
 	}, nil
 }
 
-func (s *Server) execCreateProcedure(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateProcedure(query string, start time.Time) (*QueryResult, error) {
 	plan, err := proc.Parse(query)
 	if err != nil {
 		return nil, fmt.Errorf("parse procedure error: %w", err)
@@ -434,7 +434,7 @@ func (s *Server) execCreateProcedure(query string, start time.Time) (*QueryResul
 	}, nil
 }
 
-func (s *Server) execCreateFunction(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateFunction(query string, start time.Time) (*QueryResult, error) {
 	// 1. Check if Table-Valued Function (TVF): CREATE FUNCTION ... RETURNS TABLE AS RETURN ( ... )
 	tvfRe := regexp.MustCompile(`(?is)^CREATE\s+FUNCTION\s+([^\s(]+)\s*\((.*?)\)\s*RETURNS\s+TABLE\s+AS\s+RETURN\s*\(\s*(SELECT\s+.*)\s*\)\s*;?$`)
 	if m := tvfRe.FindStringSubmatch(strings.TrimSpace(query)); len(m) == 4 {
@@ -512,7 +512,7 @@ func (s *Server) execCreateFunction(query string, start time.Time) (*QueryResult
 	}, nil
 }
 
-func (s *Server) execCreateTrigger(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateTrigger(query string, start time.Time) (*QueryResult, error) {
 	trgStmt, err := proc.ParseTrigger(query)
 	if err != nil {
 		return nil, fmt.Errorf("parse trigger error: %w", err)
@@ -712,7 +712,7 @@ func parseForeignKeyClause(def string, defaultChildCol string, defaultName strin
 }
 
 // execCreateView handles CREATE [OR REPLACE] VIEW name AS <select>.
-func (s *Server) execCreateView(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// Pattern: CREATE [OR REPLACE] VIEW [IF NOT EXISTS] <name> AS <select>
@@ -759,7 +759,7 @@ func (s *Server) execCreateView(query string, start time.Time) (*QueryResult, er
 }
 
 // execDropView handles DROP VIEW [IF EXISTS] <name>.
-func (s *Server) execDropView(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	re := regexp.MustCompile(`(?is)^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(.+)$`)
@@ -791,7 +791,7 @@ func (s *Server) execDropView(query string, start time.Time) (*QueryResult, erro
 	}, nil
 }
 
-func (s *Server) execAlterTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// 1. ALTER TABLE <table> DROP PARTITION '<part>' (or without quotes)
@@ -820,7 +820,7 @@ func (s *Server) execAlterTable(query string, start time.Time, cs *ClientSession
 	return nil, fmt.Errorf("unrecognized or unsupported ALTER TABLE statement: %q", query)
 }
 
-func (s *Server) execShowPartitions(tableName string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execShowPartitions(tableName string, start time.Time) (*QueryResult, error) {
 	parts, err := s.engine.GetPartitions(tableName)
 	if err != nil {
 		return nil, err

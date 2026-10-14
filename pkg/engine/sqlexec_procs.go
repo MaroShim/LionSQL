@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"context"
@@ -124,7 +124,7 @@ func parseProcArgs(raw string) (string, []string) {
 	return procName, args
 }
 
-func (s *Server) execBuiltinSystemProc(procLower string, args []string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execBuiltinSystemProc(procLower string, args []string, start time.Time) (*QueryResult, error) {
 	cleanArgs := make([]string, len(args))
 	for i, a := range args {
 		cleanArgs[i] = unwrapSQLString(a)
@@ -287,7 +287,7 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 		var rows []map[string]any
 
 		idx := int64(51)
-		for _, sess := range s.coordinator.SnapshotSessions() {
+		for _, sess := range s.SnapshotSessions() {
 			cmdStr := "AWAITING COMMAND"
 			sess.Mu.Lock()
 			if sess.Tx != nil {
@@ -556,7 +556,7 @@ func (s *Server) execBuiltinSystemProc(procLower string, args []string, start ti
 	return nil, fmt.Errorf("unrecognized system stored procedure: %s", procLower)
 }
 
-func (s *Server) execProcedureCall(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	procName, args := parseProcArgs(query)
 
 	ctx := context.Background()
@@ -729,7 +729,7 @@ func evalDynamicSQLExpression(raw string, cs *ClientSession) string {
 	return b.String()
 }
 
-func (s *Server) execDynamicStringExec(args []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
+func (s *Coordinator) execDynamicStringExec(args []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
 	var evaluatedParts []string
 	for _, arg := range args {
 		val := evalDynamicSQLExpression(arg, cs)
@@ -809,7 +809,7 @@ func cleanOutputSuffix(s string) string {
 	return s
 }
 
-func (s *Server) execSpExecuteSQL(args []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
+func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("sp_executesql requires at least 1 parameter (@stmt)")
 	}

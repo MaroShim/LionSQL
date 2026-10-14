@@ -1,4 +1,4 @@
-package api
+package engine
 
 // sqlexec_pgcatalog.go — Virtual pg_catalog and information_schema catalog views.
 //
@@ -183,7 +183,7 @@ func isPgCatalogTable(tableName string) bool {
 
 // execPgCatalogSelect handles SELECT queries against pg_catalog.* and
 // information_schema.* virtual views.
-func (s *Server) execPgCatalogSelect(tableName, projStr, whereClause, orderByClause string, limitCount int, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execPgCatalogSelect(tableName, projStr, whereClause, orderByClause string, limitCount int, start time.Time) (*QueryResult, error) {
 	norm := strings.ToLower(strings.TrimSpace(tableName))
 
 	tables, _ := s.engine.ListTables()
@@ -1679,7 +1679,7 @@ func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	return false
 }
 
-func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(sql)
 
 	// 1. DbGate SQL Server Primary Keys
@@ -1794,7 +1794,7 @@ func (s *Server) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*Qu
 	return s.execHeidiSQLClassSelect(sql, start)
 }
 
-func (s *Server) execDbGatePrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGatePrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
 	targetSchema := "public"
 	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
 	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
@@ -1833,7 +1833,7 @@ func (s *Server) execDbGatePrimaryKeySelect(sql string, start time.Time) (*Query
 	}, nil
 }
 
-func (s *Server) execDbGateIndexSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateIndexSelect(sql string, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(sql)
 	targetSchema := "public"
 
@@ -1915,7 +1915,7 @@ func (s *Server) execDbGateIndexSelect(sql string, start time.Time) (*QueryResul
 	}, nil
 }
 
-func (s *Server) execDbGateTriggerSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateTriggerSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{
 		"schema_name", "pure_name", "table_name", "trigger_name",
 		"timing", "event", "action_statement",
@@ -1930,7 +1930,7 @@ func (s *Server) execDbGateTriggerSelect(sql string, start time.Time) (*QueryRes
 	}, nil
 }
 
-func (s *Server) execHeidiSQLProcSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execHeidiSQLProcSelect(sql string, start time.Time) (*QueryResult, error) {
 	targetSchema := "public"
 	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
 	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
@@ -1991,7 +1991,7 @@ func (s *Server) execHeidiSQLProcSelect(sql string, start time.Time) (*QueryResu
 	}, nil
 }
 
-func (s *Server) execHeidiSQLClassSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execHeidiSQLClassSelect(sql string, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(sql)
 	targetSchema := "public"
 	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
@@ -2090,7 +2090,7 @@ func (s *Server) execHeidiSQLClassSelect(sql string, start time.Time) (*QueryRes
 	}, nil
 }
 
-func (s *Server) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (*QueryResult, error) {
 	// Look for target table name if specified, e.g. pgc.relname = 'accounts' or c.relname = '...'
 	targetTable := ""
 	tblRe := regexp.MustCompile(`(?is)(?:pgc|c)\.relname\s*=\s*'([^']+)'`)
@@ -2172,7 +2172,7 @@ func (s *Server) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (
 	}, nil
 }
 
-func (s *Server) execHeidiSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execHeidiSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
 	// Extract table name from src_tbl.relname = '...' if present
 	targetTable := ""
 	tblRe := regexp.MustCompile(`(?is)src_tbl\.relname\s*=\s*'([^']+)'`)
@@ -2261,7 +2261,7 @@ func (s *Server) execHeidiSQLForeignKeySelect(sql string, start time.Time) (*Que
 	}, nil
 }
 
-func (s *Server) execBeekeeperTableSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execBeekeeperTableSelect(sql string, start time.Time) (*QueryResult, error) {
 	// Beekeeper Studio queries:
 	// SELECT t.table_schema as schema, t.table_name as name, pc.relkind as tabletype, parent_pc.relkind as parenttype
 	// FROM information_schema.tables AS t
@@ -2344,7 +2344,7 @@ func formatMSSQLDataType(c storage.Column) string {
 	}
 }
 
-func (s *Server) execBeekeeperMSSQLColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execBeekeeperMSSQLColumnSelect(sql string, start time.Time) (*QueryResult, error) {
 	// Beekeeper Studio queries:
 	// SELECT table_schema as "table_schema", table_name as "table_name", column_name as "column_name",
 	//        ordinal_position as "ordinal_position", column_default as "column_default", ic.is_nullable as "is_nullable",
@@ -2406,7 +2406,7 @@ func (s *Server) execBeekeeperMSSQLColumnSelect(sql string, start time.Time) (*Q
 	}, nil
 }
 
-func (s *Server) getSortedTables() []*storage.TableSchema {
+func (s *Coordinator) getSortedTables() []*storage.TableSchema {
 	if s.engine == nil {
 		return nil
 	}
@@ -2417,7 +2417,7 @@ func (s *Server) getSortedTables() []*storage.TableSchema {
 	return tables
 }
 
-func (s *Server) getSortedViews() []*catalog.View {
+func (s *Coordinator) getSortedViews() []*catalog.View {
 	if s.catalog == nil {
 		return nil
 	}
@@ -2428,7 +2428,7 @@ func (s *Server) getSortedViews() []*catalog.View {
 	return views
 }
 
-func (s *Server) getSortedProcedures() []*catalog.Procedure {
+func (s *Coordinator) getSortedProcedures() []*catalog.Procedure {
 	if s.catalog == nil {
 		return nil
 	}
@@ -2462,7 +2462,7 @@ func parseTargetObjectIDs(sql string) map[int]bool {
 	return nil
 }
 
-func (s *Server) execDbGateMSSQLColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLColumnSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{
 		"columnName", "dataType", "objectId", "isIdentity",
 		"maxLength", "precision", "scale", "isNullable",
@@ -2583,7 +2583,7 @@ func (s *Server) execDbGateMSSQLColumnSelect(sql string, start time.Time) (*Quer
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLPrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLPrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{
 		"objectId", "pureName", "schemaName", "columnName", "constraintName",
 	}
@@ -2620,7 +2620,7 @@ func (s *Server) execDbGateMSSQLPrimaryKeySelect(sql string, start time.Time) (*
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLIndexSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLIndexSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{
 		"object_id", "constraintName", "indexType", "isUnique",
 		"index_id", "is_unique_constraint", "filterDefinition",
@@ -2658,7 +2658,7 @@ func (s *Server) execDbGateMSSQLIndexSelect(sql string, start time.Time) (*Query
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLIndexColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLIndexColumnSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{
 		"object_id", "index_id", "column_id", "columnName", "isDescending", "isIncludedColumn",
 	}
@@ -2703,7 +2703,7 @@ func (s *Server) execDbGateMSSQLIndexColumnSelect(sql string, start time.Time) (
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{
 		"schemaName", "pureName", "columnName", "refSchemaName",
 		"refTableName", "refColumnName", "constraintName",
@@ -2745,7 +2745,7 @@ func (s *Server) execDbGateMSSQLForeignKeySelect(sql string, start time.Time) (*
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLRowCountSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLRowCountSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"objectId", "tableRowCount"}
 	tables := s.getSortedTables()
 	var allRows []map[string]any
@@ -2795,7 +2795,7 @@ func (s *Server) execDbGateMSSQLRowCountSelect(sql string, start time.Time) (*Qu
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLColumnCommentSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLColumnCommentSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"objectId", "columnComment", "columnId"}
 	return &QueryResult{
 		Success:      true,
@@ -2807,7 +2807,7 @@ func (s *Server) execDbGateMSSQLColumnCommentSelect(sql string, start time.Time)
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLParamSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLParamSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{
 		"parentObjectId", "objectId", "parameterObjectId", "pureName",
 		"parameterName", "dataType", "charMaxLength", "parameterMode",
@@ -2823,7 +2823,7 @@ func (s *Server) execDbGateMSSQLParamSelect(sql string, start time.Time) (*Query
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLTriggerSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLTriggerSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{
 		"modifyDate", "objectId", "triggerName", "schemaName",
 		"tableName", "triggerTiming", "eventType", "definition",
@@ -2838,7 +2838,7 @@ func (s *Server) execDbGateMSSQLTriggerSelect(sql string, start time.Time) (*Que
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLObjectSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLObjectSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"objectId", "modifyDate", "type", "pureName", "schemaName"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
@@ -2885,7 +2885,7 @@ func (s *Server) execDbGateMSSQLObjectSelect(sql string, start time.Time) (*Quer
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLTableSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLTableSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "objectComment"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
@@ -2912,7 +2912,7 @@ func (s *Server) execDbGateMSSQLTableSelect(sql string, start time.Time) (*Query
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLViewSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLViewSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
@@ -2938,7 +2938,7 @@ func (s *Server) execDbGateMSSQLViewSelect(sql string, start time.Time) (*QueryR
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLProgrammablesSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLProgrammablesSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "sqlObjectType"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
@@ -2965,7 +2965,7 @@ func (s *Server) execDbGateMSSQLProgrammablesSelect(sql string, start time.Time)
 	}, nil
 }
 
-func (s *Server) execDbGateMSSQLLoadSqlCodeSelect(sql string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDbGateMSSQLLoadSqlCodeSelect(sql string, start time.Time) (*QueryResult, error) {
 	columns := []string{"pureName", "schemaName", "codeText"}
 	var allRows []map[string]any
 

@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ import (
 	"sqlion/pkg/storage"
 )
 
-func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(strings.TrimSpace(query))
 	if strings.HasPrefix(upper, "EXPLAIN BYTECODE ") {
 		innerSQL := strings.TrimSpace(query[len("EXPLAIN BYTECODE "):])
@@ -251,7 +251,7 @@ func (s *Server) execExplain(query string, start time.Time) (*QueryResult, error
 	}, nil
 }
 
-func (s *Server) execDMLExplain(dmlSQL string, opts planner.ExplainOptions, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDMLExplain(dmlSQL string, opts planner.ExplainOptions, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(strings.TrimSpace(dmlSQL))
 	p := s.newPlanner()
 
@@ -365,7 +365,7 @@ func findSubqueryFrom(s string, prefixPattern *regexp.Regexp, startOffset int) (
 	return actualStart, closeParenIdx + 1, s[actualStart:openParenIdx], inner, true
 }
 
-func (s *Server) execAnalyze(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execAnalyze(query string, start time.Time) (*QueryResult, error) {
 	parts := strings.Fields(strings.TrimSpace(query))
 
 	var targetTable string
@@ -477,7 +477,7 @@ func (s *Server) execAnalyze(query string, start time.Time) (*QueryResult, error
 	}, nil
 }
 
-func (s *Server) resolveSubqueries(whereClause string) (string, error) {
+func (s *Coordinator) resolveSubqueries(whereClause string) (string, error) {
 	if whereClause == "" {
 		return "", nil
 	}
@@ -651,7 +651,7 @@ func formatSubqueryVal(v any) string {
 	}
 }
 
-func (s *Server) execCTE(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, error) {
 	p := s.newPlanner()
 	qInfo, err := p.ParseSelect(query)
 	if err != nil {

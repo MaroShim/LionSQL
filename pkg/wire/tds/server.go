@@ -16,7 +16,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/proc"
@@ -62,7 +61,7 @@ func NewServerWithCache(addr string, cat *catalog.Catalog, eng storage.Engine, c
 		addr:        addr,
 		catalog:     cat,
 		engine:      eng,
-		coordinator: api.NewServer(cat, eng),
+		coordinator: engine.NewCoordinator(cat, eng, engine.DefaultConfig()),
 		planCache:   proc.NewPlanCache(),
 		byteCache:   cache,
 		executor:    executor,

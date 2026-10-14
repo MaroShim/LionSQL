@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 )
 
 // execPrepare parses and compiles PREPARE statement into a cached session PreparedStatement.
-func (s *Server) execPrepare(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execPrepare(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	trimmed := strings.TrimSpace(query)
 	upper := strings.ToUpper(trimmed)
 	if !strings.HasPrefix(upper, "PREPARE ") {
@@ -120,7 +120,7 @@ func (s *Server) execPrepare(query string, start time.Time, cs *ClientSession) (
 }
 
 // execDeallocate drops one or all prepared statements from the active session.
-func (s *Server) execDeallocate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execDeallocate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	trimmed := strings.TrimSpace(query)
 	upper := strings.ToUpper(trimmed)
 
@@ -172,7 +172,7 @@ func (s *Server) execDeallocate(query string, start time.Time, cs *ClientSession
 }
 
 // execPreparedStatement binds arguments and executes a cached PreparedStatement via VDBE bytecode VM.
-func (s *Server) execPreparedStatement(prep *PreparedStatement, rawArgs []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
+func (s *Coordinator) execPreparedStatement(prep *PreparedStatement, rawArgs []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
 	if prep == nil || prep.Program == nil {
 		return nil, fmt.Errorf("invalid prepared statement")
 	}

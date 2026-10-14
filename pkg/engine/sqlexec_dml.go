@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"errors"
@@ -221,7 +221,7 @@ func splitAssignments(s string) []string {
 	return parts
 }
 
-func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
@@ -598,7 +598,7 @@ func (s *Server) execInsert(query string, start time.Time, cs *ClientSession) (*
 	}, nil
 }
 
-func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
@@ -769,7 +769,7 @@ func (s *Server) execUpdate(query string, start time.Time, cs *ClientSession) (*
 	}, nil
 }
 
-func (s *Server) execDelete(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check

@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"fmt"
@@ -550,7 +550,7 @@ func deduplicateRows(rows []map[string]any) []map[string]any {
 //
 // Multiple views are accumulated into a single WITH clause.
 // Returns the rewritten query and true if at least one view was found.
-func (s *Server) rewriteViewsAsCTE(query string) (string, bool) {
+func (s *Coordinator) rewriteViewsAsCTE(query string) (string, bool) {
 	views := s.catalog.ListViews()
 	if len(views) == 0 {
 		return query, false
@@ -738,7 +738,7 @@ func parseWhereConditions(where string) (map[string]string, map[string]*indexRan
 	return eqs, ranges
 }
 
-func (s *Server) findIndexAndBounds(schema *storage.TableSchema, whereClause string) (*storage.IndexSchema, *storage.Value, *storage.Value, bool) {
+func (s *Coordinator) findIndexAndBounds(schema *storage.TableSchema, whereClause string) (*storage.IndexSchema, *storage.Value, *storage.Value, bool) {
 	if schema == nil || len(schema.Indexes) == 0 || whereClause == "" {
 		return nil, nil, nil, false
 	}
@@ -884,7 +884,7 @@ func isIndexAscendingOrder(orderByClause string, idx *storage.IndexSchema, eqCol
 // execIndexSelect attempts to execute a simple SELECT using a composite or single-column index scan.
 // It is called before the VDBE path when the WHERE clause matches a known index on the target table.
 // Returns (result, true) on success, (nil, false) if no suitable index exists or the scan fails.
-func (s *Server) execIndexSelect(qInfo *planner.QueryInfo, tableName string, start time.Time, cs *ClientSession) (*QueryResult, bool) {
+func (s *Coordinator) execIndexSelect(qInfo *planner.QueryInfo, tableName string, start time.Time, cs *ClientSession) (*QueryResult, bool) {
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
 		return nil, false

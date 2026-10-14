@@ -5,11 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/engine"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
@@ -163,85 +162,5 @@ func (s *Server) handleExecProc(w http.ResponseWriter, r *http.Request) {
 }
 
 func convertValue(v any, targetType storage.DataType) storage.Value {
-	if v == nil {
-		return storage.NullValue(targetType)
-	}
-	switch targetType {
-	case storage.TypeInt:
-		switch num := v.(type) {
-		case float64:
-			return storage.IntValue(int64(num))
-		case int:
-			return storage.IntValue(int64(num))
-		case int64:
-			return storage.IntValue(num)
-		case string:
-			if num == "" {
-				return storage.NullValue(targetType)
-			}
-			var i int64
-			fmt.Sscanf(num, "%d", &i)
-			return storage.IntValue(i)
-		}
-	case storage.TypeVarChar:
-		return storage.StringValue(fmt.Sprintf("%v", v))
-	case storage.TypeFloat:
-		switch num := v.(type) {
-		case float64:
-			return storage.FloatValue(num)
-		case int:
-			return storage.FloatValue(float64(num))
-		case int64:
-			return storage.FloatValue(float64(num))
-		case string:
-			if num == "" {
-				return storage.NullValue(targetType)
-			}
-			f, _ := strconv.ParseFloat(num, 64)
-			return storage.FloatValue(f)
-		}
-	case storage.TypeDecimal:
-		switch num := v.(type) {
-		case storage.Decimal:
-			return storage.DecimalValueFromDecimal(num)
-		case float64:
-			return storage.DecimalValueFromDecimal(storage.NewDecimalFromFloat(num, 4))
-		case int:
-			return storage.DecimalValueFromDecimal(storage.NewDecimalFromInt(int64(num), 0))
-		case int64:
-			return storage.DecimalValueFromDecimal(storage.NewDecimalFromInt(num, 0))
-		case string:
-			if num == "" {
-				return storage.NullValue(targetType)
-			}
-			return storage.DecimalValue(num)
-		default:
-			return storage.DecimalValue(fmt.Sprintf("%v", v))
-		}
-	case storage.TypeBool:
-		switch b := v.(type) {
-		case bool:
-			return storage.BoolValue(b)
-		case string:
-			s := strings.ToLower(strings.TrimSpace(b))
-			return storage.BoolValue(s == "true" || s == "1" || s == "t")
-		case int, int64:
-			return storage.BoolValue(fmt.Sprintf("%v", b) == "1")
-		}
-	case storage.TypeDateTime:
-		switch t := v.(type) {
-		case time.Time:
-			return storage.DateTimeValue(t)
-		case string:
-			if t == "" {
-				return storage.NullValue(targetType)
-			}
-			for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
-				if parsed, err := time.Parse(layout, t); err == nil {
-					return storage.DateTimeValue(parsed)
-				}
-			}
-		}
-	}
-	return storage.StringValue(fmt.Sprintf("%v", v))
+	return engine.ConvertValue(v, targetType)
 }

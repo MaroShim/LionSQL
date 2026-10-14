@@ -1,6 +1,10 @@
 package api
 
-import "sqlion/pkg/engine"
+import (
+	"time"
+
+	"sqlion/pkg/engine"
+)
 
 // Compatibility aliases for components that now live in pkg/engine.
 type (
@@ -13,6 +17,7 @@ type (
 	PoolConfig       = engine.PoolConfig
 	PoolStats        = engine.PoolStats
 
+	QueryResult      = engine.QueryResult
 	RotatingLogWriter = engine.RotatingLogWriter
 )
 
@@ -35,4 +40,9 @@ var (
 	NewGeneralLogger     = engine.NewGeneralLogger
 	NewSessionPool       = engine.NewSessionPool
 	DefaultPoolConfig    = engine.DefaultPoolConfig
+	ParseTimeoutDuration = engine.ParseTimeoutDuration
 )
+
+func parseTimeoutDuration(s string) (time.Duration, error) {
+	return engine.ParseTimeoutDuration(s)
+}

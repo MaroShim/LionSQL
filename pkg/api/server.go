@@ -281,6 +281,21 @@ func (s *Server) Close() error {
 	return s.coordinator.Close()
 }
 
+// ExecuteSQL parses and runs one or more SQL statements on the default session.
+func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
+	return s.coordinator.ExecuteSQL(query)
+}
+
+// ExecuteSessionSQL runs one or more SQL statements within an existing or new session.
+func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult, error) {
+	return s.coordinator.ExecuteSessionSQL(sessionID, query)
+}
+
+// ExecuteSessionSQLContext runs SQL statements within a specific client session and cancellation context.
+func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (*QueryResult, error) {
+	return s.coordinator.ExecuteSessionSQLContext(ctx, sessionID, query)
+}
+
 // GetOrCreateSession returns or registers a persistent client session.
 func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
 	return s.coordinator.GetOrCreateSession(id)

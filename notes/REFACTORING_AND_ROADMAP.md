@@ -76,10 +76,10 @@
 
 ---
 
-### 과제 2 (P1): [진행 중] 아키텍처 계층 정립: SQL 실행 코디네이터 분리 (`pkg/api` ➔ `pkg/engine`)
+### 과제 2 (P1): [완료] 아키텍처 계층 정립: SQL 실행 코디네이터 분리 (`pkg/api` ➔ `pkg/engine`)
 * **배경 & 문제점**:
-  * `pkg/api` 패키지가 HTTP REST 핸들러뿐만 아니라 15,000+ 라인에 달하는 SQL 실행 오케스트레이션 로직(`sqlexec*.go`)을 함께 품고 있음.
-  * 이로 인해 PGWire(`pkg/wire`)나 TDS(`pkg/wire/tds`)가 코어 엔진이 아닌 `pkg/api`에 의존하는 계층 역전(Layer Inversion) 현상이 존재.
+  * `pkg/api` 패키지가 HTTP REST 핸들러뿐만 아니라 14,000+ 라인에 달하는 SQL 실행 오케스트레이션 로직(`sqlexec*.go`)을 함께 품고 있었음.
+  * 이로 인해 PGWire(`pkg/wire`)나 TDS(`pkg/wire/tds`)가 코어 엔진이 아닌 `pkg/api`에 의존하는 계층 역전(Layer Inversion) 현상이 존재했음.
 * **구현 진행 및 완료 내역**:
   1. **코어 인터페이스 및 데이터 모델 독립 (`pkg/engine/coordinator.go`, `pkg/engine/session.go`)**:
      - `engine.SQLCoordinator` 인터페이스 규약 정의: `ExecuteSQL`, `ExecuteSessionSQL`, `CloseSession`, `CancelSessionQuery`, `GetSessionTxStatus`, `SetSessionUser` 등 대화형 프로토콜 요구사항 100% 포괄.
@@ -87,16 +87,18 @@
   2. **코어 `Coordinator` 구조체 구현 (`pkg/engine/coordinator_impl.go`)**:
      - 카탈로그, 스토리지 엔진, 플랜 캐시, 바이트코드 실행기, 고루틴 세션 풀(`SessionPool`), 진단 로거를 통합 관리하는 독자 엔진 코디네이터 구현.
   3. **프로토콜 레이어 디커플링 (`pkg/wire`, `pkg/wire/tds`)**:
-     - PGWire 및 TDS 서버가 `*api.Server` 구체 구현체 대신 `engine.SQLCoordinator` 인터페이스에만 의존하도록 리팩토링.
-     - `NewServerWithCoordinator` 생성자 및 `SetCoordinator` 주입 세터 연동 완료.
+     - PGWire 및 TDS 서버에서 `sqlion/pkg/api` import를 100% 제거하고 `engine.NewCoordinator` 및 `engine.SQLCoordinator` 인터페이스에만 의존하도록 완전 리팩토링.
    4. **세션/풀/메트릭스/로거 소유권 `Coordinator` 단일화**:
       - `engine.Coordinator`가 세션 맵, 세션 풀, 메트릭스(`MetricsCollector`), Slow/General 쿼리 로거, `work_mem`, 전역 임시 테이블 추적(`RegisterGlobalTemp`)을 단독 소유하도록 이전 완료.
       - `api.Server`의 중복 필드/메서드를 제거하고 `s.coordinator` 위임 체계 확립.
       - `api.ClientSession` 및 `PreparedStatement`를 `engine` 타입 alias로 완전 통합.
    5. **순수 SQL 유틸리티 이관 (`pkg/engine/query_utils.go`)**:
-      - `SplitStatements`, `ParseTimeoutDuration`, `IsIdentChar`, `CleanSavepointName`, `TrimAnyPrefix`, `IsRollbackOrResetQuery`, `ParseSessionVarValue` 이전 및 패키지 간 중복 제거 완료.
-   6. **후속 작업**:
-      - `pkg/api/sqlexec_*.go`(13개 파일)의 파싱/실행 파이프라인 메서드들을 `Coordinator`로 최종 이전하고 `wire`의 `api` import 완전 제거.
+      - `SplitStatements`, `ParseTimeoutDuration`, `IsIdentChar`, `CleanSavepointName`, `TrimAnyPrefix`, `IsRollbackOrResetQuery`, `ParseSessionVarValue`, `ConvertValue` 이전 및 패키지 간 중복 제거 완료.
+   6. **13개 실행 파이프라인 파일 전면 이전 (`pkg/engine/sqlexec*.go`)**:
+      - `sqlexec.go`, `sqlexec_auth.go`, `sqlexec_dbcc.go`, `sqlexec_ddl.go`, `sqlexec_dml.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_merge.go`, `sqlexec_pgcatalog.go`, `sqlexec_pivot.go`, `sqlexec_prepare.go`, `sqlexec_procs.go`, `sqlexec_select.go` 전체 13개 파일(14,000+ 라인)을 `pkg/engine`으로 완전 이관.
+      - 리시버를 `(s *Coordinator)`로 전환하고 `exec_stub.go` 완전 삭제.
+   7. **검증**:
+      - `pkg/engine/coordinator_test.go` 직접 테스트 신설 및 전체 리포지토리 단위/통합 테스트 100% 통과(0 data race).
 
 ---
 

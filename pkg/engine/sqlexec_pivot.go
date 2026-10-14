@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"encoding/json"
@@ -180,7 +180,7 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 	}, nil
 }
 
-func (s *Server) execPivotSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execPivotSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	pvt, err := parsePivotQuery(query)
 	if err != nil {
 		return nil, err
@@ -451,7 +451,7 @@ func (s *Server) execPivotSelect(query string, start time.Time, cs *ClientSessio
 	}, nil
 }
 
-func (s *Server) evalSimpleRowWhere(row map[string]any, where string) bool {
+func (s *Coordinator) evalSimpleRowWhere(row map[string]any, where string) bool {
 	if where == "" {
 		return true
 	}
@@ -536,7 +536,7 @@ func (s *Server) evalSimpleRowWhere(row map[string]any, where string) bool {
 	return true
 }
 
-func (s *Server) evalPivotExpr(row map[string]any, expr string) any {
+func (s *Coordinator) evalPivotExpr(row map[string]any, expr string) any {
 	exprTrim := strings.TrimSpace(expr)
 	clean := cleanIdentifier(exprTrim)
 	if v, ok := row[clean]; ok {
@@ -803,7 +803,7 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 	}, nil
 }
 
-func (s *Server) execUnpivotSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execUnpivotSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	unpvt, err := parseUnpivotQuery(query)
 	if err != nil {
 		return nil, err
@@ -1041,7 +1041,7 @@ func parseForJSONQuery(query string) (*forJSONOptions, error) {
 	return opts, nil
 }
 
-func (s *Server) execForJSONSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execForJSONSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	opts, err := parseForJSONQuery(query)
 	if err != nil {
 		return nil, err

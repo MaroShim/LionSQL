@@ -101,7 +101,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
 | 마일스톤 | 우선순위 | 핵심 과제 | 대상 위치 | 기대 효과 | 상태 |
 | :---: | :---: | :--- | :--- | :--- | :---: |
 | **Phase 5** | **P1-1** | **VDBE Instruction 16B 패킹** | `pkg/proc/bytecode.go`, `pkg/proc/runtime/` | 64B L1 Cache Line당 4개 명령어 적재, VM 레이턴시 단축 | **완료** |
-| **Phase 5** | **P1-2** | **SQL 코디네이터 분리 (`pkg/engine`)** | `pkg/api/sqlexec_*.go` ➔ `pkg/engine/` | `pkg/api`에서 SQL 실행 엔진 분리, 단방향 클린 아키텍처 확립 | **진행 중 (70%)** |
+| **Phase 5** | **P1-2** | **SQL 코디네이터 분리 (`pkg/engine`)** | `pkg/api/sqlexec_*.go` ➔ `pkg/engine/` | `pkg/api`에서 SQL 실행 엔진 분리, 단방향 클린 아키텍처 확립 | **완료** |
 | **Phase 5** | **P2** | **PlanCache Bounded LRU 캐시** | `pkg/proc/runtime/vm.go` | 메모리 상한 방어, OOM 크래시 방지 (Golden Rule 29) | **완료** |
 | **Phase 5** | **P2** | **T-SQL 내장 스칼라 함수 확장** | `pkg/proc/builtins.go` | `CONCAT_WS`, `QUOTENAME`, `ASCII`, `CHAR`, `NULLIF`, `ISNUMERIC` | **완료** |
 
@@ -115,12 +115,14 @@ This document tracks active tasks, short-term engineering priorities, and concep
 - [x] **[완료] [Phase 5] T-SQL 필수 내장 스칼라 함수 확장 (`pkg/proc/builtins.go`, `pkg/proc/builtins_test.go`)**
   - `CONCAT_WS` (NULL 건너뛰기 지원 결합), `QUOTENAME` (구분 기호 및 이스케이프 중복), `ASCII`, `CHAR`, `NULLIF`, `ISNUMERIC` (NaN/Inf 방어) 내장 스칼라 함수 구현.
   - `IsBuiltinFunction` 등록 및 단위 테스트 100% 통과.
-- [-] **[진행 중] [Phase 5 / P1] 아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
+- [x] **[완료] [Phase 5 / P1] 아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
   - **1. 코어 인터페이스 및 데이터 모델 독립**: `engine.SQLCoordinator` 인터페이스, `QueryResult`, `ActiveQueryInfo`, `ClientSession`, `PreparedStatement` 분리 완료.
   - **2. 코어 `Coordinator` 구조체 및 소유권 단일화**: 세션 맵, 세션 풀(`SessionPool`), 메트릭스(`MetricsCollector`), Slow/General 로거, `work_mem`, 전역 임시 테이블 추적을 `Coordinator` 단독 소유로 일원화하고 `api.Server` 위임 체계 확립 완료.
   - **3. 프로토콜 레이어 디커플링**: PGWire(`pkg/wire`) 및 TDS(`pkg/wire/tds`) 서버가 `*api.Server` 대신 `engine.SQLCoordinator`에만 의존하도록 전환 완료 (`NewServerWithCoordinator`, `SetCoordinator`).
-  - **4. 순수 SQL 유틸리티 이관**: `SplitStatements`, `ParseTimeoutDuration`, `IsIdentChar`, `CleanSavepointName`, `TrimAnyPrefix`, `IsRollbackOrResetQuery`, `ParseSessionVarValue`를 `pkg/engine/query_utils.go`로 이관 완료.
-  - **5. 남은 후속 과제**: 13개 `sqlexec_*.go` 실행 파이프라인 파일들의 `pkg/engine` 최종 이전 및 `wire` 리스너의 `pkg/api` import 완전 제거.
+  - **4. 순수 SQL 유틸리티 이관**: `SplitStatements`, `ParseTimeoutDuration`, `IsIdentChar`, `CleanSavepointName`, `TrimAnyPrefix`, `IsRollbackOrResetQuery`, `ParseSessionVarValue`, `ConvertValue`를 `pkg/engine/query_utils.go`로 이관 완료.
+  - **5. 13개 실행 파이프라인 파일 전면 이관**: 13개 `sqlexec_*.go` 파일(14,000+ 라인)을 `pkg/engine`으로 완전 이관하고 리시버를 `(s *Coordinator)`로 전환 완료.
+  - **6. 와이어 리스너 역의존성 100% 제거**: `pkg/wire` 및 `pkg/wire/tds`에서 `pkg/api` import를 완전 제거하고 `engine.NewCoordinator` 직결 생성 적용 완료.
+  - **7. 검증**: `pkg/engine/coordinator_test.go` 직접 단위 테스트 신설 및 전체 리포지토리 레이스 프리 검증(100% PASS, 0 data race) 완료.
 - [x] **[완료] VDBE 바이트코드 디스패처 모듈화 (`pkg/proc/runtime/vm.go`, `pkg/proc/runtime/vm_dispatcher.go`)**
   - `VMFrame.Execute` 내 824라인 거대 `switch op.Code` 블록을 기능군별 private 헬퍼 메서드로 분리 완료 (`execFlowOp`, `execComputeOp`, `execTxOp`, `execStorageOp`, `execCursorAndCallOp`, `execRelOp`).
   - 중복 catch stack 핸들링을 `handleCatch`로 통합(SSOT)하고, 순환 복잡도(Cyclomatic Complexity) 완화 및 프로파일링 스택 추적성 개선.

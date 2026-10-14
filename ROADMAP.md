@@ -143,10 +143,12 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **Implemented**: Re-architected `Instruction` into a dense 16-byte fixed layout (`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`) with zero struct padding, externalizing metadata objects to `Program.AuxData []any` indexed via `inst.Aux`.
 - **Verified**: Confirmed `unsafe.Sizeof == 16` via `TestInstruction_Size16Bytes`, loading exactly 4 instructions per 64-byte L1 Data Cache line.
 
-#### 5.2. [IN PROGRESS] Architecture Layering: SQL Execution Coordinator Separation (`pkg/api` -> `pkg/engine`)
-- **Current State**: Core `engine.SQLCoordinator` interface, `Coordinator` struct, and session/pool/metrics/logger ownership have been decoupled into `pkg/engine`. Wire protocols (`pkg/wire`, `pkg/wire/tds`) now depend on `SQLCoordinator` instead of `*api.Server`. Pure SQL utilities have been migrated to `pkg/engine/query_utils.go`.
-- **Remaining Work**: Final migration of the 13 `sqlexec_*.go` execution pipeline files into `pkg/engine`, and removing `pkg/api` imports from wire listeners.
-- **Expected Outcome**: Reduced cyclomatic complexity, improved separation of concerns, and clean testability for all wire protocol adapters without layer inversion.
+#### 5.2. [COMPLETED] Architecture Layering: SQL Execution Coordinator Separation (`pkg/api` -> `pkg/engine`)
+- **Implemented**: Promoted over 14,000 lines of SQL execution orchestration (`sqlexec_*.go`) into a dedicated `pkg/engine` core layer:
+  - Core `engine.SQLCoordinator` contract, `Coordinator` orchestrator, session pool, metrics, and slow/general loggers completely owned by `pkg/engine`.
+  - Wire listeners (`pkg/wire`, `pkg/wire/tds`) now directly invoke `engine.SQLCoordinator` with zero dependencies or imports of `pkg/api`.
+  - `api.Server` seamlessly delegates query execution to `Coordinator`, maintaining 100% backward compatibility for embedded HTTP studio, webhooks, and tests.
+- **Verified**: 100% PASS on `pkg/engine/coordinator_test.go`, `pkg/wire`, `pkg/wire/tds`, and all `pkg/api` tests with 0 data races.
 
 #### 5.3. [COMPLETED] Granular SQL Object-Level RBAC (Role-Based Access Control) (`pkg/auth`, `pkg/catalog`, `pkg/api`)
 - **Implemented**: Full role and privilege management subsystem in `pkg/auth` and `pkg/api/sqlexec_auth.go`:
@@ -286,7 +288,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | Milestone | Priority | Task Description | Domain | Estimated Effort | Strategic Benefit |
 | :---: | :---: | :--- | :---: | :---: | :--- |
 | **Phase 5** | **P1** | **[COMPLETED] VDBE Instruction Struct 16-Byte Compaction** | Virtual Machine | Low (150~200 lines) | Fits 4 instructions per 64B L1 Cache Line, reduces VM latency |
-| **Phase 5** | **P1** | **[IN PROGRESS] SQL Execution Coordinator Separation (`pkg/engine`)** | Architecture | Medium (400~500 lines) | Unidirectional clean architecture, breaks API-to-wire layer inversion |
+| **Phase 5** | **P1** | **[COMPLETED] SQL Execution Coordinator Separation (`pkg/engine`)** | Architecture | Medium (400~500 lines) | Unidirectional clean architecture, breaks API-to-wire layer inversion |
 | **Phase 5** | **P1** | **[COMPLETED] Granular SQL Object-Level RBAC** | Security & Catalog | Medium (300~400 lines) | `CREATE ROLE/USER`, `GRANT/REVOKE` enterprise access control |
 | **Phase 5** | **P1** | **Transparent Data Encryption (TDE: AES-256-GCM)** | Storage & Security | Medium (250~350 lines) | Transparent data-at-rest encryption and immutable audit logging |
 | **Phase 5** | **P2** | **[COMPLETED] Prepared Statement Bounded LRU Cache** | Memory Governor | Low (100~150 lines) | Rule 29 compliance, prevents unbounded map growth on long-lived connections |

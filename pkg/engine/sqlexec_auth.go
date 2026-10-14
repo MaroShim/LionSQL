@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ var (
 )
 
 // checkTableAccess checks whether the current session user has permission to access a relation.
-func (s *Server) checkTableAccess(cs *ClientSession, table string, priv auth.Privilege) error {
+func (s *Coordinator) checkTableAccess(cs *ClientSession, table string, priv auth.Privilege) error {
 	if s.auth == nil {
 		return nil
 	}
@@ -54,7 +54,7 @@ func (s *Server) checkTableAccess(cs *ClientSession, table string, priv auth.Pri
 }
 
 // execCreateLogin handles CREATE LOGIN <name> WITH PASSWORD = '<password>'.
-func (s *Server) execCreateLogin(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateLogin(query string, start time.Time) (*QueryResult, error) {
 	m := reCreateLogin.FindStringSubmatch(query)
 	if len(m) < 3 {
 		return nil, fmt.Errorf("invalid syntax: expected CREATE LOGIN <login_name> WITH PASSWORD = '<password>'")
@@ -77,7 +77,7 @@ func (s *Server) execCreateLogin(query string, start time.Time) (*QueryResult, e
 }
 
 // execAlterLogin handles ALTER LOGIN <name> WITH PASSWORD = '<password>'.
-func (s *Server) execAlterLogin(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execAlterLogin(query string, start time.Time) (*QueryResult, error) {
 	m := reAlterLogin.FindStringSubmatch(query)
 	if len(m) < 3 {
 		return nil, fmt.Errorf("invalid syntax: expected ALTER LOGIN <login_name> WITH PASSWORD = '<password>'")
@@ -100,7 +100,7 @@ func (s *Server) execAlterLogin(query string, start time.Time) (*QueryResult, er
 }
 
 // execDropLogin handles DROP LOGIN [IF EXISTS] <name>.
-func (s *Server) execDropLogin(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropLogin(query string, start time.Time) (*QueryResult, error) {
 	m := reDropLogin.FindStringSubmatch(query)
 	if len(m) < 2 {
 		return nil, fmt.Errorf("invalid syntax: expected DROP LOGIN [IF EXISTS] <login_name>")
@@ -132,7 +132,7 @@ func (s *Server) execDropLogin(query string, start time.Time) (*QueryResult, err
 }
 
 // execCreateUser handles CREATE USER <name> [FOR LOGIN <login>] [WITH PASSWORD = '<password>'].
-func (s *Server) execCreateUser(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execCreateUser(query string, start time.Time) (*QueryResult, error) {
 	m := reCreateUser.FindStringSubmatch(query)
 	if len(m) < 2 {
 		return nil, fmt.Errorf("invalid syntax: expected CREATE USER <user_name> [FOR LOGIN <login_name>]")
@@ -170,7 +170,7 @@ func (s *Server) execCreateUser(query string, start time.Time) (*QueryResult, er
 }
 
 // execDropUser handles DROP USER [IF EXISTS] <name>.
-func (s *Server) execDropUser(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropUser(query string, start time.Time) (*QueryResult, error) {
 	m := reDropUser.FindStringSubmatch(query)
 	if len(m) < 2 {
 		return nil, fmt.Errorf("invalid syntax: expected DROP USER [IF EXISTS] <user_name>")
@@ -202,7 +202,7 @@ func (s *Server) execDropUser(query string, start time.Time) (*QueryResult, erro
 }
 
 // execGrant handles GRANT <permission> ON [TABLE] <table_name> TO <user_name>.
-func (s *Server) execGrant(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execGrant(query string, start time.Time) (*QueryResult, error) {
 	m := reGrant.FindStringSubmatch(query)
 	if len(m) < 4 {
 		return nil, fmt.Errorf("invalid syntax: expected GRANT <privilege> ON [TABLE] <table_name> TO <user_name>")
@@ -231,7 +231,7 @@ func (s *Server) execGrant(query string, start time.Time) (*QueryResult, error) 
 }
 
 // execRevoke handles REVOKE <permission> ON [TABLE] <table_name> FROM <user_name>.
-func (s *Server) execRevoke(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execRevoke(query string, start time.Time) (*QueryResult, error) {
 	m := reRevoke.FindStringSubmatch(query)
 	if len(m) < 4 {
 		return nil, fmt.Errorf("invalid syntax: expected REVOKE <privilege> ON [TABLE] <table_name> FROM <user_name>")
@@ -260,7 +260,7 @@ func (s *Server) execRevoke(query string, start time.Time) (*QueryResult, error)
 }
 
 // execDeny handles DENY <permission> ON [TABLE] <table_name> TO <user_name>.
-func (s *Server) execDeny(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDeny(query string, start time.Time) (*QueryResult, error) {
 	m := reDeny.FindStringSubmatch(query)
 	if len(m) < 4 {
 		return nil, fmt.Errorf("invalid syntax: expected DENY <privilege> ON [TABLE] <table_name> TO <user_name>")
@@ -289,7 +289,7 @@ func (s *Server) execDeny(query string, start time.Time) (*QueryResult, error) {
 }
 
 // execSetUser handles SETUSER '<username>' / SETUSER / EXECUTE AS USER = '<username>' / REVERT.
-func (s *Server) execSetUser(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execSetUser(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	upper := strings.ToUpper(strings.TrimSpace(query))
 
 	if cs == nil {

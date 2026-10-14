@@ -143,10 +143,12 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **구현 내용**: `Instruction` 구조체를 16바이트 고정 레이아웃(`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`, Zero Padding)으로 재설계하고, 메타데이터 객체를 `Program.AuxData []any` 풀로 분리하여 `inst.Aux` 인덱스로 참조.
 - **검증 완료**: `TestInstruction_Size16Bytes` 단위 테스트(`unsafe.Sizeof == 16`) 및 전체 T-SQL 가상머신 회귀 테스트 통과.
 
-#### 5.2. [진행 중] 아키텍처 계층 정립: SQL 실행 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)
-- **현황**: 코어 `engine.SQLCoordinator` 인터페이스, `Coordinator` 구조체 및 세션/풀/메트릭스/로거 소유권이 `pkg/engine`으로 분리 완료. PGWire와 TDS가 `*api.Server` 대신 `SQLCoordinator`에 의존하도록 리팩토링되었으며, 순수 SQL 유틸리티(`pkg/engine/query_utils.go`)가 이관됨.
-- **후속 과제**: 13개 `sqlexec_*.go` 실행 파이프라인 파일들의 `pkg/engine` 최종 이전 및 `wire` 리스너의 `pkg/api` import 완전 제거.
-- **기대 효과**: 순환 복잡도 완화, 계층 역전 해소 및 단방향 클린 아키텍처 확립.
+#### 5.2. [완료] 아키텍처 계층 정립: SQL 실행 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)
+- **구현 내용**: `pkg/api`에 집중되어 있던 14,000+ 라인의 SQL 실행 오케스트레이션 로직(`sqlexec_*.go`)을 `pkg/engine` 코어 레이어로 완전 독립 이전:
+  - 코어 `engine.SQLCoordinator` 인터페이스, `Coordinator` 실행기, 세션 풀, 메트릭스 및 슬로우/제너럴 로거의 소유권을 `pkg/engine`으로 일원화.
+  - 와이어 프로토콜 리스너(`pkg/wire`, `pkg/wire/tds`)가 `pkg/api` import를 완전 제거하고 `engine.SQLCoordinator`만을 단방향 직결 호출.
+  - `api.Server`는 `Coordinator`로 쿼리 실행을 투명하게 위임하여 임베디드 웹 스튜디오, 웹훅, 기존 테스트와의 100% 하위 호환성 유지.
+- **검증 완료**: `pkg/engine/coordinator_test.go`, `pkg/wire`, `pkg/wire/tds`, 및 `pkg/api` 전체 테스트 100% PASS (0 data race).
 
 #### 5.3. [완료] 세분화된 SQL 객체 수준 RBAC (Role-Based Access Control) (`pkg/auth`, `pkg/catalog`, `pkg/api`)
 - **구현 내용**: `pkg/auth` 및 `pkg/api/sqlexec_auth.go`에 엔터프라이즈 권한 관리 서브시스템 전면 구축 완료:
@@ -286,7 +288,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | 마일스톤 | 우선순위 | 과제명 | 해당 영역 | 구현 공수 | 기대 효과 |
 | :---: | :---: | :--- | :---: | :---: | :--- |
 | **Phase 5** | **P1** | **[완료] VDBE Instruction 구조체 16바이트 패킹** | 가상 머신 | 낮음 (150~200줄) | 64B L1 Cache Line당 4개 명령어 적재, VM 레이턴시 단축 |
-| **Phase 5** | **P1** | **[진행 중] SQL 실행 코디네이터 분리 (`pkg/engine`)** | 아키텍처 | 보통 (400~500줄) | 단방향 클린 아키텍처 확립 및 계층 역전 해소 |
+| **Phase 5** | **P1** | **[완료] SQL 실행 코디네이터 분리 (`pkg/engine`)** | 아키텍처 | 보통 (400~500줄) | 단방향 클린 아키텍처 확립 및 계층 역전 해소 |
 | **Phase 5** | **P1** | **[완료] 세분화된 SQL 객체 수준 RBAC** | 보안 & 카탈로그 | 보통 (300~400줄) | `CREATE ROLE/USER`, `GRANT/REVOKE` 엔터프라이즈 권한 제어 |
 | **Phase 5** | **P1** | **투명 데이터 암호화 (TDE: AES-256-GCM)** | 스토리지 & 보안 | 보통 (250~350줄) | 디스크 파일 투명 암호화 및 불변 감사 로그 기록 |
 | **Phase 5** | **P2** | **[완료] Prepared Statement Bounded LRU 캐시** | 메모리 거버너 | 낮음 (100~150줄) | Rule 29 준수, 장시간 연결에서의 세션 메모리 누수 차단 |

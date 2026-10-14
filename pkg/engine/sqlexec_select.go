@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"context"
@@ -19,7 +19,7 @@ import (
 	"sqlion/pkg/storage"
 )
 
-func (s *Server) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	p := s.newPlanner()
 	_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
 		_, err := s.engine.GetTable(cleanIdentifier(tbl))
@@ -261,7 +261,7 @@ func splitScalarProjections(s string) []string {
 	return res
 }
 
-func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
+func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	trimmed := strings.TrimSpace(expr)
 	upper := strings.ToUpper(trimmed)
 
@@ -483,7 +483,7 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 		if pid, err := strconv.Atoi(arg); err == nil {
 			canceled := s.CancelQueryBySPID(pid)
 			var targetID string
-			if target := s.coordinator.FindSessionBySPID(pid); target != nil {
+			if target := s.FindSessionBySPID(pid); target != nil {
 				targetID = target.ID
 			}
 			if targetID != "" {
@@ -586,7 +586,7 @@ func (s *Server) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	return trimmed, trimmed
 }
 
-func (s *Server) execScalarSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	upper := strings.ToUpper(cleaned)
 	if !strings.HasPrefix(upper, "SELECT") {
@@ -651,7 +651,7 @@ func (s *Server) execScalarSelect(query string, start time.Time, cs *ClientSessi
 	}, nil
 }
 
-func (s *Server) execSelectInto(targetTable, projections, fromClause string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execSelectInto(targetTable, projections, fromClause string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	// 1. Check if target table already exists
 	if _, err := s.engine.GetTable(targetTable); err == nil {
 		return nil, fmt.Errorf("table %q already exists", targetTable)
@@ -798,7 +798,7 @@ func (s *Server) execSelectInto(targetTable, projections, fromClause string, sta
 		if cs != nil && cs.ID != "" {
 			creatorID = cs.ID
 		}
-		s.coordinator.RegisterGlobalTemp(targetTable, creatorID)
+		s.RegisterGlobalTemp(targetTable, creatorID)
 	} else if strings.HasPrefix(targetTable, "#") {
 		if cs != nil {
 			cs.Mu.Lock()
@@ -865,7 +865,7 @@ func (s *Server) execSelectInto(targetTable, projections, fromClause string, sta
 	}, nil
 }
 
-func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	var prog *proc.Program
 	var err error
 	if s.executor != nil && s.executor.Cache() != nil {
@@ -957,7 +957,7 @@ func (s *Server) execVBDEDML(command, cleaned string, start time.Time, cs *Clien
 	}, nil
 }
 
-func (s *Server) execVDBESelect(cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	var prog *proc.Program
 	var err error
 	if s.executor != nil && s.executor.Cache() != nil {
@@ -1015,7 +1015,7 @@ func (s *Server) execVDBESelect(cleaned string, start time.Time, cs *ClientSessi
 	}, nil
 }
 
-func (s *Server) execSetOpSelect(setQuery *planner.SetOpQuery, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execSetOpSelect(setQuery *planner.SetOpQuery, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	if len(setQuery.Segments) < 2 {
 		return nil, fmt.Errorf("set operator requires at least 2 query branches")
 	}
@@ -1097,7 +1097,7 @@ func (s *Server) execSetOpSelect(setQuery *planner.SetOpQuery, start time.Time, 
 	}, nil
 }
 
-func (s *Server) execSetOpExplain(setQuery *planner.SetOpQuery, analyze bool, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execSetOpExplain(setQuery *planner.SetOpQuery, analyze bool, start time.Time) (*QueryResult, error) {
 	p := s.newPlanner()
 	plan, err := p.BuildSetOpPlan(setQuery, func(subSQL string) (*planner.PlanNode, error) {
 		qInfo, err := p.ParseSelect(subSQL)
@@ -1174,7 +1174,7 @@ func normalizeMSSQLPagination(sql string) string {
 	return sql
 }
 
-func (s *Server) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	cleaned = normalizeMSSQLPagination(cleaned)
 
@@ -1710,7 +1710,7 @@ func parseAggItem(proj string) aggItem {
 	}
 }
 
-func (s *Server) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
 	// 1. Parse projections into aggItems
 	var items []aggItem
 	var colHeaders []string

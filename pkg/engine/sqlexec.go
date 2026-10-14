@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"context"
@@ -10,40 +10,38 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/engine"
-	"sqlion/pkg/execution"
+		"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/replication"
 	"sqlion/pkg/storage"
 )
 
 // QueryResult represents the outcome of a SQL statement execution (aliased from engine.QueryResult).
-type QueryResult = engine.QueryResult
 
 func parseSessionVarValue(s string) any {
-	return engine.ParseSessionVarValue(s)
+	return ParseSessionVarValue(s)
 }
 
 func isIdentChar(ch byte) bool {
-	return engine.IsIdentChar(ch)
+	return IsIdentChar(ch)
 }
 
 func splitStatements(query string) []string {
-	return engine.SplitStatements(query)
+	return SplitStatements(query)
 }
 
 // parseTimeoutDuration parses duration strings with units (ms, s, m) or plain integers as milliseconds.
 func parseTimeoutDuration(s string) (time.Duration, error) {
-	return engine.ParseTimeoutDuration(s)
+	return ParseTimeoutDuration(s)
 }
 
 // ExecuteSQL parses and runs one or more SQL statements against the engine and catalog on the default session.
-func (s *Server) ExecuteSQL(query string) (*QueryResult, error) {
+func (s *Coordinator) ExecuteSQL(query string) (*QueryResult, error) {
 	return s.ExecuteSessionSQL("default", query)
 }
 
 // ExecuteSessionSQLContext runs SQL statements within a specific client session and cancellation context.
-func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (*QueryResult, error) {
+func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (*QueryResult, error) {
 	// Acquire worker slot from built-in connection pool to prevent thread thrashing
 	if s.Pool() != nil {
 		if err := s.Pool().AcquireWorker(ctx); err != nil {
@@ -176,11 +174,11 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 }
 
 // ExecuteSessionSQL runs SQL statements within a specific client session context.
-func (s *Server) ExecuteSessionSQL(sessionID string, query string) (*QueryResult, error) {
+func (s *Coordinator) ExecuteSessionSQL(sessionID string, query string) (*QueryResult, error) {
 	return s.ExecuteSessionSQLContext(context.Background(), sessionID, query)
 }
 
-func (s *Server) execSingleStatement(cs *ClientSession, query string) (*QueryResult, error) {
+func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*QueryResult, error) {
 	start := time.Now()
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
@@ -998,21 +996,21 @@ func cleanIdentifier(s string) string {
 
 // cleanSavepointName strips delimiters, semicolon, quotes, and brackets from savepoint names.
 func cleanSavepointName(raw string) string {
-	return engine.CleanSavepointName(raw)
+	return CleanSavepointName(raw)
 }
 
 // trimAnyPrefix returns original sliced past the first matching prefix matched case-insensitively against upper.
 func trimAnyPrefix(upper, original string, prefixes ...string) (string, bool) {
-	return engine.TrimAnyPrefix(upper, original, prefixes...)
+	return TrimAnyPrefix(upper, original, prefixes...)
 }
 
 // isRollbackOrResetQuery reports whether query is a transaction rollback or session reset command.
 func isRollbackOrResetQuery(q string) bool {
-	return engine.IsRollbackOrResetQuery(q)
+	return IsRollbackOrResetQuery(q)
 }
 
 // checkWriteAllowed ensures that write operations (DDL/DML) cannot be executed on read-only secondary replicas.
-func (s *Server) checkWriteAllowed() error {
+func (s *Coordinator) checkWriteAllowed() error {
 	if s.IsReadOnly() {
 		return fmt.Errorf("cannot execute write operation on read-only replica: %w", replication.ErrReadOnlyReplica)
 	}

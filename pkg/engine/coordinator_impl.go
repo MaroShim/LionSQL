@@ -9,6 +9,7 @@ import (
 	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/execution"
+	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/replication"
@@ -64,6 +65,10 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	}
 	if cfg.SlowThreshold <= 0 {
 		cfg.SlowThreshold = DefaultSlowQueryThreshold
+	}
+	if cfg.AuthService == nil {
+		cfg.AuthService = auth.NewAuthService(auth.Config{})
+		_, _ = cfg.AuthService.EnsureDefaultSuperuser("admin@sqlion.local", "1234567890")
 	}
 
 	cache := runtime.NewPlanCache()
@@ -121,6 +126,23 @@ func (c *Coordinator) BytecodePlanCache() *runtime.PlanCache {
 // PlanCache returns the AST plan cache.
 func (c *Coordinator) PlanCache() *proc.PlanCache {
 	return c.planCache
+}
+
+func (c *Coordinator) newPlanner() *planner.Planner {
+	p := planner.NewPlanner()
+	p.PartitionGetter = func(table string) []string {
+		if c.engine != nil {
+			if parts, err := c.engine.GetPartitions(table); err == nil {
+				names := make([]string, len(parts))
+				for i, pt := range parts {
+					names[i] = pt.Name
+				}
+				return names
+			}
+		}
+		return nil
+	}
+	return p
 }
 
 // Pool returns the underlying session pool.

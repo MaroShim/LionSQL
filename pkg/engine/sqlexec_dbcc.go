@@ -1,4 +1,4 @@
-package api
+package engine
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 
 // --- T-SQL Database Console Commands (DBCC) ---
 
-func (s *Server) execDBCC(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func (s *Coordinator) execDBCC(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	upper := strings.ToUpper(cleaned)
 
@@ -396,7 +396,7 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 	}, nil
 }
 
-func (s *Server) isVirtualCatalogTable(tableName string) bool {
+func (s *Coordinator) isVirtualCatalogTable(tableName string) bool {
 	lower := strings.ToLower(cleanIdentifier(tableName))
 	// Delegate pg_catalog.* and information_schema.* to the dedicated handler.
 	if isPgCatalogTable(lower) {
@@ -425,7 +425,7 @@ func (s *Server) isVirtualCatalogTable(tableName string) bool {
 	}
 }
 
-func (s *Server) execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause string, limitCount int, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause string, limitCount int, start time.Time) (*QueryResult, error) {
 	norm := strings.ToLower(cleanIdentifier(tableName))
 	norm = strings.TrimPrefix(norm, "dbo.")
 
