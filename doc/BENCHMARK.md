@@ -47,9 +47,25 @@ Any lost updates, phantom writes, or dirty reads immediately trigger an ACID vio
 
 ---
 
-## 2. Running Benchmarks
+## 2. Benchmark Hardware & System Environment
 
-### 2.1. Building the Benchmark Binary
+All verified performance metrics, TPC-C tpmC rates, TPS throughput, and latency percentiles documented in this guide were measured and recorded on the primary development host:
+
+| Hardware / System Component | Specification & Configuration |
+|---|---|
+| **System Host** | Apple iMac (24-inch, M1) |
+| **Processor (CPU)** | Apple M1 (8 cores: 4 High-Performance cores @ 3.20 GHz + 4 High-Efficiency cores @ 2.06 GHz) |
+| **Graphics (GPU)** | 8-Core integrated Apple M1 GPU |
+| **Unified Memory (RAM)** | 16 GB Unified Memory (LPDDR4X, unified architecture, 68.25 GB/s bandwidth) |
+| **Internal Storage (SSD)** | 500 GB Apple NVMe Solid State Drive (Apple APFS file system, hardware write caching) |
+| **Operating System** | macOS (Darwin ARM64) |
+| **Compiler & Runtime** | Go 1.24+ (`GOOS=darwin`, `GOARCH=arm64`, Cgo enabled for WiredTiger bindings) |
+
+---
+
+## 3. Running Benchmarks
+
+### 3.1. Building the Benchmark Binary
 
 ```bash
 # Compile benchmark binary with WiredTiger Cgo bindings
@@ -59,7 +75,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
 go build -buildvcs=false -o bin/bench ./cmd/bench
 ```
 
-### 2.2. Command-Line Arguments
+### 3.2. Command-Line Arguments
 
 | Flag | Default | Description |
 |---|---|---|
@@ -69,7 +85,7 @@ go build -buildvcs=false -o bin/bench ./cmd/bench
 | `-ops` | `50000` | Total number of transfer transactions to complete |
 | `-dir` | `data/bench_wt` | Storage directory for WiredTiger disk files |
 
-### 2.3. Example Executions
+### 3.3. Example Executions
 
 #### Benchmarking WiredTiger (Default Production Disk Engine)
 ```bash
@@ -108,7 +124,7 @@ ACID Integrity Audit: Initial 10,000,000,000 == Final 10,000,000,000 (PASSED)
 ./bin/bench -engine=memory -accounts=10000 -workers=100 -ops=50000
 ```
 
-### 2.4. Standard TPC-C OLTP Benchmark (`cmd/tpcc`)
+### 3.4. Standard TPC-C OLTP Benchmark (`cmd/tpcc`)
 
 SQLion includes a native, in-tree TPC-C benchmark suite (`cmd/tpcc/main.go`) modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`) executing the standard workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level).
 
@@ -133,7 +149,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc ./cmd/tpcc
 | **Average Latency** | **0.20 ms** | **0.79 ms** | **1.82 ms** |
 | **P95 Latency** | **0.48 ms** | **2.87 ms** | **4.25 ms** |
 
-### 2.5. Native T-SQL VDBE Bytecode TPC-C Benchmark (`cmd/tpcc_vdbe`)
+### 3.5. Native T-SQL VDBE Bytecode TPC-C Benchmark (`cmd/tpcc_vdbe`)
 
 SQLion also provides a full-stack T-SQL Stored Procedure TPC-C benchmark (`cmd/tpcc_vdbe/main.go`). Unlike `cmd/tpcc` which tests direct storage engine transaction APIs, `cmd/tpcc_vdbe` models all TPC-C operations as compiled Microsoft T-SQL stored procedures (`TPCC_NewOrderHeader`, `TPCC_NewOrderLine`, `TPCC_Payment`, `TPCC_OrderStatus`, `TPCC_Delivery`, `TPCC_StockLevel`) precompiled into VDBE bytecode (`*proc.Program`), cached in `PlanCache`, and executed on the virtual machine (`executor.Run`).
 
@@ -164,9 +180,9 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
 
 ---
 
-## 3. Performance Tuning Dimensions
+## 4. Performance Tuning Dimensions
 
-### 3.1. Query Memory Governor (`work_mem`) Tuning
+### 4.1. Query Memory Governor (`work_mem`) Tuning
 
 SQLion's relational engine enforces memory caps per operator (`ORDER BY`, `GROUP BY`, `HashJoin`):
 - **Default Budget**: `64MB` (`-work-mem=64MB`).
@@ -175,7 +191,7 @@ SQLion's relational engine enforces memory caps per operator (`ORDER BY`, `GROUP
 - **Analytical / Reporting Workloads (Large Joins & Sorts)**:
   Set `SET work_mem = '256MB'` within reporting sessions to keep multi-million row sorts entirely in RAM and bypass external merge sort disk spills.
 
-### 3.2. Connection Pooler & Worker Sizing
+### 4.2. Connection Pooler & Worker Sizing
 
 SQLion's internal pooler multiplexes client connections onto worker goroutines:
 - **`-max-workers`**:
@@ -187,14 +203,14 @@ SQLion's internal pooler multiplexes client connections onto worker goroutines:
   - Determines how many pre-warmed storage sessions are held in `sync.Pool`.
   - In high-throughput microservice environments, increase to `128` or `256` to eliminate session allocation overhead.
 
-### 3.3. Storage Engine Fsync Policies & Group Commit
+### 4.3. Storage Engine Fsync Policies & Group Commit
 
 Disk persistence and durability behavior is configurable across both `memory` and `wiredtiger` engines:
 1. `FsyncEverySec` (Default): Background goroutine flushes the write-ahead log / journal every 1 second. Maximum data loss on sudden power halt is bounded to 1 second. Provides peak throughput (> 50,000 TPS for memory, > 14,000 TPS for WiredTiger).
 2. `FsyncAlways`: Every committed transaction is made physically durable on disk via **Leader/Follower Group Commit**. Zero data loss ACID durability is guaranteed, while multiple concurrent commits are batched into a single hardware disk barrier (`fcntl(fd, F_FULLFSYNC)` or `log_flush("sync=on")`).
 3. `FsyncNone`: OS manages write buffer flushing without synchronous disk barriers. Highest throughput, lowest durability.
 
-### 3.4. Dual-Parser Plan Cache Optimization
+### 4.4. Dual-Parser Plan Cache Optimization
 
 SQLion caches parsed ASTs and compiled VDBE bytecode programs:
 - Parameterized queries (`SELECT * FROM accounts WHERE id = @id` or `$1`) avoid parser and compiler re-evaluation.
