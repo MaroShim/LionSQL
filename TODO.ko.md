@@ -191,3 +191,7 @@
   - TDS 7.3+ 표준 `BuildNBCRow` 신설, NULL 비트맵 패킹 및 0바이트 전송으로 네트워크 대역폭 30%+ 절감.
 - [x] **[CBO/조인] 소트-머지 조인 (Sort-Merge Join) 연산자 및 옵티마이저 힌트 (`B-3`, `D-9`) (`pkg/execution`, `pkg/planner`, `pkg/proc`)**
   - $O(M+N)$ 해시리스 스트리밍 반복자 `MergeJoinIterator` 신설 및 `OPTION (HASH/MERGE/LOOP JOIN)`, `WITH (INDEX(...))` 강제 오버라이드.
+- [x] **[생태계/GUI] 3대 메이저 GUI 클라이언트(DBeaver, DbGate, Beekeeper Studio) 완벽 호환 (`pkg/engine`, `pkg/wire`, `pkg/wire/tds`)**
+  - TDS 및 PGWire 양대 프로토콜 상에서 테이블 브라우징, 인덱스/외래키/프로시저 인트로스펙션, 스토리지 크기 산출 및 메타데이터 조회 전면 완비.
+  - DBeaver SQL Server 무한 쿼리 루프(`totalSize`, `usedSize` 컬럼 및 단일 `object_id` 필터링) 해결 및 PostgreSQL 멀티 네임스페이스(`public`, `dbo`) `pg_class` 인트로스펙션 지원.
+  - Beekeeper Studio 및 DbGate 테이블 한정 와일드카드 프로젝션(`alias.*`, `schema.table.*`)과 WiredTiger EOF 래핑 방지 래치 적용 완료.
