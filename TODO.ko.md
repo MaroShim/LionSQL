@@ -23,9 +23,10 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - Python `psycopg2`/`psycopg3`, `pymssql` 드라이버 연결 및 초기 세션 쿼리(`extra_float_digits`, `server_version_num`) 처리.
   - Node.js `pg`, `tedious` 라이브러리를 활용한 커넥션 풀링 및 쿼리 실행 검증.
   - .NET / C# `Microsoft.Data.SqlClient` 연결 및 기본 쿼리 검증.
-- [ ] **TDS 프로토콜 고도화: NBCROW 행 압축 및 Attention 쿼리 취소 (`pkg/wire/tds`)**
+- [ ] **TDS 프로토콜 고도화: NBCROW 행 압축 (`pkg/wire/tds`)**
   - TDS `NBCROW` (Null Bitmap Compressed Row, `0xD2`): NULL 컬럼에 대해 0바이트로 전송하여 네트워크 대역폭 30%+ 절감.
-  - **[완료] Attention 패킷(`Type 0x06`) 처리**: 장기 실행 쿼리 취소 시 비동기 패킷 디커플링 및 VDBE 바이트코드 루프 중단(`context.CancelFunc`), `DoneAttn (0x0020)` 응답 완비 완료.
+- [x] **[완료] TDS Attention 패킷(`Type 0x06`) 처리 및 비동기 쿼리 취소 (`pkg/wire/tds`)**
+  - 장기 실행 쿼리 취소 시 비동기 패킷 디커플링 및 VDBE 바이트코드 루프 중단(`context.CancelFunc`), `DoneAttn (0x0020)` 응답 완비 완료.
 - [ ] **T-SQL 특수 타입 직렬화 및 PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**
   - `UNIQUEIDENTIFIER` (UUID 16바이트 GUID 바이트 스왑), `DATETIME2` (`0x2A`), `DATE` (`0x28`), `TIME` (`0x29`) TDS 바이너리 인코딩.
   - PLP (Partially Length-Prefixed) 기반 8KB 초과 `VARCHAR(MAX)` / `VARBINARY(MAX)` 대용량 청크 스트리밍.
@@ -100,7 +101,7 @@ This document tracks active tasks, short-term engineering priorities, and concep
 | 마일스톤 | 우선순위 | 핵심 과제 | 대상 위치 | 기대 효과 | 상태 |
 | :---: | :---: | :--- | :--- | :--- | :---: |
 | **Phase 5** | **P1-1** | **VDBE Instruction 16B 패킹** | `pkg/proc/bytecode.go`, `pkg/proc/runtime/` | 64B L1 Cache Line당 4개 명령어 적재, VM 레이턴시 단축 | **완료** |
-| **Phase 5** | **P1-2** | **SQL 코디네이터 분리 (`pkg/engine`)** | `pkg/api/sqlexec_*.go` ➔ `pkg/engine/` | `pkg/api`에서 SQL 실행 엔진 분리, 단방향 클린 아키텍처 확립 | 대기 |
+| **Phase 5** | **P1-2** | **SQL 코디네이터 분리 (`pkg/engine`)** | `pkg/api/sqlexec_*.go` ➔ `pkg/engine/` | `pkg/api`에서 SQL 실행 엔진 분리, 단방향 클린 아키텍처 확립 | **진행 중 (70%)** |
 | **Phase 5** | **P2** | **PlanCache Bounded LRU 캐시** | `pkg/proc/runtime/vm.go` | 메모리 상한 방어, OOM 크래시 방지 (Golden Rule 29) | **완료** |
 | **Phase 5** | **P2** | **T-SQL 내장 스칼라 함수 확장** | `pkg/proc/builtins.go` | `CONCAT_WS`, `QUOTENAME`, `ASCII`, `CHAR`, `NULLIF`, `ISNUMERIC` | **완료** |
 
@@ -114,9 +115,12 @@ This document tracks active tasks, short-term engineering priorities, and concep
 - [x] **[완료] [Phase 5] T-SQL 필수 내장 스칼라 함수 확장 (`pkg/proc/builtins.go`, `pkg/proc/builtins_test.go`)**
   - `CONCAT_WS` (NULL 건너뛰기 지원 결합), `QUOTENAME` (구분 기호 및 이스케이프 중복), `ASCII`, `CHAR`, `NULLIF`, `ISNUMERIC` (NaN/Inf 방어) 내장 스칼라 함수 구현.
   - `IsBuiltinFunction` 등록 및 단위 테스트 100% 통과.
-- [ ] **[Phase 5 / P1] 아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
-  - `pkg/api`에 집중되어 있는 15,000+ 라인의 SQL 실행 오케스트레이션 로직(`sqlexec_*.go`)을 `pkg/engine` 코어 레이어로 독립 승격.
-  - `pkg/api`(HTTP REST/Studio), `pkg/wire`(PGWire), `pkg/wire/tds`(TDS) 세 어댑터가 동등하게 코어 엔진 인터페이스를 호출하도록 단방향 클린 아키텍처 확립.
+- [-] **[진행 중] [Phase 5 / P1] 아키텍처 계층 정립: SQL 실행 엔진 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**
+  - **1. 코어 인터페이스 및 데이터 모델 독립**: `engine.SQLCoordinator` 인터페이스, `QueryResult`, `ActiveQueryInfo`, `ClientSession`, `PreparedStatement` 분리 완료.
+  - **2. 코어 `Coordinator` 구조체 및 소유권 단일화**: 세션 맵, 세션 풀(`SessionPool`), 메트릭스(`MetricsCollector`), Slow/General 로거, `work_mem`, 전역 임시 테이블 추적을 `Coordinator` 단독 소유로 일원화하고 `api.Server` 위임 체계 확립 완료.
+  - **3. 프로토콜 레이어 디커플링**: PGWire(`pkg/wire`) 및 TDS(`pkg/wire/tds`) 서버가 `*api.Server` 대신 `engine.SQLCoordinator`에만 의존하도록 전환 완료 (`NewServerWithCoordinator`, `SetCoordinator`).
+  - **4. 순수 SQL 유틸리티 이관**: `SplitStatements`, `ParseTimeoutDuration`, `IsIdentChar`, `CleanSavepointName`, `TrimAnyPrefix`, `IsRollbackOrResetQuery`, `ParseSessionVarValue`를 `pkg/engine/query_utils.go`로 이관 완료.
+  - **5. 남은 후속 과제**: 13개 `sqlexec_*.go` 실행 파이프라인 파일들의 `pkg/engine` 최종 이전 및 `wire` 리스너의 `pkg/api` import 완전 제거.
 - [x] **[완료] VDBE 바이트코드 디스패처 모듈화 (`pkg/proc/runtime/vm.go`, `pkg/proc/runtime/vm_dispatcher.go`)**
   - `VMFrame.Execute` 내 824라인 거대 `switch op.Code` 블록을 기능군별 private 헬퍼 메서드로 분리 완료 (`execFlowOp`, `execComputeOp`, `execTxOp`, `execStorageOp`, `execCursorAndCallOp`, `execRelOp`).
   - 중복 catch stack 핸들링을 `handleCatch`로 통합(SSOT)하고, 순환 복잡도(Cyclomatic Complexity) 완화 및 프로파일링 스택 추적성 개선.
@@ -152,9 +156,10 @@ This document tracks active tasks, short-term engineering priorities, and concep
 ### 6.2. P1: 실무 및 ORM/드라이버 필수 문법 (High Priority)
 - [x] **[완료] `CASE WHEN ... THEN ... ELSE ... END` 복합 조건식 AST화 및 단락 평가 (Short-Circuit Evaluation) (`pkg/proc`)**
 - [x] **[완료] NULL 대체 스칼라 함수 완비: `COALESCE()`, `ISNULL()`, `NULLIF()` (`pkg/proc/builtins.go`)**
-- [ ] **`INSERT INTO ... SELECT ...` 및 `SELECT ... INTO <new_table>` (`pkg/proc`, `pkg/api`)**
+- [x] **[완료] `SELECT ... INTO <new_table>` 쿼리 결과 신규/임시 테이블 생성 및 적재 (`pkg/api/sqlexec_select.go`)**
+  - `SELECT ... INTO <table_name> FROM ...` 쿼리 결과를 기반으로 카탈로그 스키마를 동적 생성하고 데이터 행을 즉시 신규/임시 테이블(`#[temp]`)에 대량 적재 완비 (`pkg/api/sqlexec_test.go` 테스트 통과).
+- [ ] **`INSERT INTO ... SELECT ...` 대량 배치 적재 (`pkg/proc`, `pkg/api`)**
   - `INSERT INTO target (cols...) SELECT ... FROM source WHERE ...` 대량 배치 적재 DML 지원.
-  - `SELECT ... INTO <table_name> FROM ...` 쿼리 결과 즉시 신규 테이블 생성 및 적재 지원.
 - [ ] **FROM 절 파생 테이블(Derived Table) 및 인라인 서브쿼리 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
   - `SELECT * FROM (SELECT id, balance FROM accounts) AS t WHERE t.balance > 100` 형태의 FROM 절 서브쿼리 AST 노드화 및 Volcano 실행 연동 (ORM 호환 필수).
 - [ ] **`WHERE EXISTS` / `NOT EXISTS` 상관 서브쿼리 술어 (`pkg/planner/decorrelate.go`, `pkg/execution`)**
@@ -234,10 +239,10 @@ This document tracks active tasks, short-term engineering priorities, and concep
 
 ## 8. Enterprise Security, Governance & Compliance (보안, 권한 & 감사)
 
-- [ ] **세분화된 SQL 객체 수준 RBAC (Role-Based Access Control) (`pkg/catalog`, `pkg/api`, `pkg/wire`)**
-  - SQL 표준 역할 및 사용자 관리 DDL: `CREATE ROLE <role>`, `CREATE USER <user> WITH PASSWORD = '...'`, `ALTER ROLE`, `DROP ROLE`.
-  - 객체별 세분화 권한 제어: `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO <role/user>`, `REVOKE`, `DENY`.
-  - 쿼리 실행 전 카탈로그 권한 인터셉터를 통한 권한 검증 및 세션 사용자 컨텍스트 바인딩.
+- [x] **[완료] 세분화된 SQL 객체 수준 RBAC (Role-Based Access Control) (`pkg/auth`, `pkg/catalog`, `pkg/api`)**
+  - SQL 표준 역할 및 사용자 관리 DDL: `CREATE LOGIN`, `ALTER LOGIN`, `DROP LOGIN`, `CREATE USER`, `DROP USER`, `SETUSER` (사용자 가장 및 복귀).
+  - 객체별 세분화 권한 제어: `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `EXECUTE`, `CONTROL`, `REFERENCES` 권한에 대한 `GRANT`, `REVOKE`, `DENY`.
+  - 쿼리 실행 전 카탈로그 권한 인터셉터(`checkTableAccess`)를 통한 권한 검증 및 세션 사용자 컨텍스트 바인딩 완비 (`pkg/auth/rbac_test.go`, `pkg/auth/auth_test.go`, `pkg/api/rbac_test.go` 100% 통과).
 - [ ] **투명 데이터 암호화 (TDE: Transparent Data Encryption) (`pkg/storage`)**
   - 디스크에 기록되는 WiredTiger 데이터 파일, WAL/AOF 저널 및 백업 아카이브를 AES-256-GCM으로 투명 암호화(Data at Rest Encryption).
   - 마스터 암호화 키(MEK) 로테이션 및 환경 변수/KMS 키 주입 인터페이스.

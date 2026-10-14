@@ -143,20 +143,17 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **Implemented**: Re-architected `Instruction` into a dense 16-byte fixed layout (`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`) with zero struct padding, externalizing metadata objects to `Program.AuxData []any` indexed via `inst.Aux`.
 - **Verified**: Confirmed `unsafe.Sizeof == 16` via `TestInstruction_Size16Bytes`, loading exactly 4 instructions per 64-byte L1 Data Cache line.
 
-#### 5.2. Architecture Layering: SQL Execution Coordinator Separation (`pkg/api` -> `pkg/engine`)
-- **Current State**: `pkg/api` contains over 15,000 lines of core SQL execution orchestration (`sqlexec_*.go`), causing an architectural inversion where PGWire and TDS depend on the HTTP API layer.
-- **Challenge**:
-  - Promote SQL execution orchestration into a dedicated `pkg/engine` core layer.
-  - Establish a clean unidirectional architecture where `pkg/api`, `pkg/wire`, and `pkg/wire/tds` invoke the engine interface uniformly.
-- **Expected Outcome**: Reduced cyclomatic complexity, improved separation of concerns, and clean testability for all wire protocol adapters.
+#### 5.2. [IN PROGRESS] Architecture Layering: SQL Execution Coordinator Separation (`pkg/api` -> `pkg/engine`)
+- **Current State**: Core `engine.SQLCoordinator` interface, `Coordinator` struct, and session/pool/metrics/logger ownership have been decoupled into `pkg/engine`. Wire protocols (`pkg/wire`, `pkg/wire/tds`) now depend on `SQLCoordinator` instead of `*api.Server`. Pure SQL utilities have been migrated to `pkg/engine/query_utils.go`.
+- **Remaining Work**: Final migration of the 13 `sqlexec_*.go` execution pipeline files into `pkg/engine`, and removing `pkg/api` imports from wire listeners.
+- **Expected Outcome**: Reduced cyclomatic complexity, improved separation of concerns, and clean testability for all wire protocol adapters without layer inversion.
 
-#### 5.3. Granular SQL Object-Level RBAC (Role-Based Access Control) (`pkg/catalog`, `pkg/api`, `pkg/wire`)
-- **Current State**: Access control is currently based on a single superuser and API key authentication; granular database-level permissions are missing.
-- **Challenge**:
-  - Implement SQL standard role and user DDL: `CREATE ROLE <role>`, `CREATE USER <user> WITH PASSWORD = '...'`, `DROP ROLE`.
-  - Object-level privilege management: `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO <role/user>`, `REVOKE`, `DENY`.
-  - Pre-execution permission verification via catalog interceptors with session user context binding.
-- **Expected Outcome**: Compliance with enterprise internal control and regulatory standards (ISMS, financial security regulations).
+#### 5.3. [COMPLETED] Granular SQL Object-Level RBAC (Role-Based Access Control) (`pkg/auth`, `pkg/catalog`, `pkg/api`)
+- **Implemented**: Full role and privilege management subsystem in `pkg/auth` and `pkg/api/sqlexec_auth.go`:
+  - DDL statements: `CREATE LOGIN`, `ALTER LOGIN`, `DROP LOGIN`, `CREATE USER`, `DROP USER`, `SETUSER` (impersonation & revert).
+  - Privilege management: `GRANT`, `REVOKE`, `DENY` for `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `EXECUTE`, `CONTROL`, `REFERENCES`.
+  - Enforcement: Pre-execution table access interception (`checkTableAccess`) verifying session user permissions before DDL/DML processing.
+- **Verified**: 100% PASS on `pkg/auth/rbac_test.go`, `pkg/auth/auth_test.go`, and `pkg/api/rbac_test.go`.
 
 #### 5.4. Transparent Data Encryption (TDE) & Enterprise Immutable Audit Log (`pkg/storage`, `pkg/logger`)
 - **Challenge**:
@@ -288,11 +285,11 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 | Milestone | Priority | Task Description | Domain | Estimated Effort | Strategic Benefit |
 | :---: | :---: | :--- | :---: | :---: | :--- |
-| **Phase 5** | **P1** | **VDBE Instruction Struct 16-Byte Compaction** | Virtual Machine | Low (150~200 lines) | Fits 4 instructions per 64B L1 Cache Line, reduces VM latency |
-| **Phase 5** | **P1** | **SQL Execution Coordinator Separation (`pkg/engine`)** | Architecture | Medium (400~500 lines) | Unidirectional clean architecture, breaks API-to-wire layer inversion |
-| **Phase 5** | **P1** | **Granular SQL Object-Level RBAC** | Security & Catalog | Medium (300~400 lines) | `CREATE ROLE/USER`, `GRANT/REVOKE` enterprise access control |
+| **Phase 5** | **P1** | **[COMPLETED] VDBE Instruction Struct 16-Byte Compaction** | Virtual Machine | Low (150~200 lines) | Fits 4 instructions per 64B L1 Cache Line, reduces VM latency |
+| **Phase 5** | **P1** | **[IN PROGRESS] SQL Execution Coordinator Separation (`pkg/engine`)** | Architecture | Medium (400~500 lines) | Unidirectional clean architecture, breaks API-to-wire layer inversion |
+| **Phase 5** | **P1** | **[COMPLETED] Granular SQL Object-Level RBAC** | Security & Catalog | Medium (300~400 lines) | `CREATE ROLE/USER`, `GRANT/REVOKE` enterprise access control |
 | **Phase 5** | **P1** | **Transparent Data Encryption (TDE: AES-256-GCM)** | Storage & Security | Medium (250~350 lines) | Transparent data-at-rest encryption and immutable audit logging |
-| **Phase 5** | **P2** | **Prepared Statement Bounded LRU Cache** | Memory Governor | Low (100~150 lines) | Rule 29 compliance, prevents unbounded map growth on long-lived connections |
+| **Phase 5** | **P2** | **[COMPLETED] Prepared Statement Bounded LRU Cache** | Memory Governor | Low (100~150 lines) | Rule 29 compliance, prevents unbounded map growth on long-lived connections |
 | **Phase 5** | **P2** | **CBO Sort-Merge Join Operator** | Executor & Planner | Medium (250~350 lines) | Eliminates hash table overhead for pre-sorted inputs |
 | **Phase 5** | **P2** | **TDS NBCROW Row Compression (0xD2)** | TDS Protocol | Medium (200~300 lines) | 30%+ network bandwidth savings on sparse/NULL-heavy tables |
 | **Phase 5** | **P2** | **`INSTEAD OF` Trigger Runtime Interceptor** | T-SQL Runtime | Medium (200~300 lines) | Virtual entity DML update routing on complex views |
@@ -306,7 +303,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 6** | **P2** | **$N > 4$ Join Dynamic Programming (DP / Selinger)** | CBO & Planner | High (400~600 lines) | Optimal join ordering for complex multi-table queries |
 | **Phase 6** | **P2** | **Multi-Column Statistics, MCV & Optimizer Hints** | CBO & Planner | Medium (300~400 lines) | Corrects cardinality estimation skew, guarantees DBA execution plan control |
 | **Phase 6** | **P2** | **T-SQL Specialized TDS Serialization & PLP LOB** | TDS Protocol | Medium (300~400 lines) | Complete binary support for UNIQUEIDENTIFIER, DATETIME2, and large LOBs |
-| **Phase 6** | **P1** | **Pipelined Group Commit & fsync Batching** | Storage & Engine | Medium (350~450 lines) | 2~4x transactional write throughput boost under concurrency saturation |
+| **Phase 6** | **P1** | **[COMPLETED] Pipelined Group Commit & fsync Batching** | Storage & Engine | Medium (350~450 lines) | 2~4x transactional write throughput boost under concurrency saturation |
 | **Phase 6** | **P1** | **Lazy Tuple Materialization & Projection Pushdown** | Storage & Executor | Medium (300~400 lines) | 70~80% CPU & GC reduction on large table scans |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
 | **Phase 6** | **P2** | **Volcano Chunked Batch Execution (Vectorized)** | Executor & SIMD | High (600~800 lines) | 3~5x acceleration for table scans and aggregate filters |

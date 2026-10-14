@@ -143,20 +143,17 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **구현 내용**: `Instruction` 구조체를 16바이트 고정 레이아웃(`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`, Zero Padding)으로 재설계하고, 메타데이터 객체를 `Program.AuxData []any` 풀로 분리하여 `inst.Aux` 인덱스로 참조.
 - **검증 완료**: `TestInstruction_Size16Bytes` 단위 테스트(`unsafe.Sizeof == 16`) 및 전체 T-SQL 가상머신 회귀 테스트 통과.
 
-#### 5.2. 아키텍처 계층 정립: SQL 실행 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)
-- **현황**: `pkg/api`에 집중된 15,000+ 라인의 SQL 오케스트레이션 로직으로 인해 PGWire와 TDS가 웹 API 계층에 의존하는 계층 역전 현상 존재.
-- **과제**:
-  - SQL 실행 오케스트레이션을 `pkg/engine` 코어 레이어로 승격.
-  - 어댑터(`pkg/api`, `pkg/wire`, `pkg/wire/tds`)가 동등하게 코어 엔진을 단방향 호출하는 클린 아키텍처 확립.
-- **기대 효과**: 순환 복잡도 완화, 계층 순수성 확보 및 각 프로토콜 리스너의 독립 테스트 용이성 극대화.
+#### 5.2. [진행 중] 아키텍처 계층 정립: SQL 실행 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)
+- **현황**: 코어 `engine.SQLCoordinator` 인터페이스, `Coordinator` 구조체 및 세션/풀/메트릭스/로거 소유권이 `pkg/engine`으로 분리 완료. PGWire와 TDS가 `*api.Server` 대신 `SQLCoordinator`에 의존하도록 리팩토링되었으며, 순수 SQL 유틸리티(`pkg/engine/query_utils.go`)가 이관됨.
+- **후속 과제**: 13개 `sqlexec_*.go` 실행 파이프라인 파일들의 `pkg/engine` 최종 이전 및 `wire` 리스너의 `pkg/api` import 완전 제거.
+- **기대 효과**: 순환 복잡도 완화, 계층 역전 해소 및 단방향 클린 아키텍처 확립.
 
-#### 5.3. 세분화된 SQL 객체 수준 RBAC (Role-Based Access Control) (`pkg/catalog`, `pkg/api`, `pkg/wire`)
-- **현황**: 현재는 단일 Superuser 및 웹 스튜디오 API Key 위주로 인증되며, 데이터베이스 수준의 세분화된 권한 체계가 부재함.
-- **과제**:
-  - SQL 표준 역할/사용자 DDL: `CREATE ROLE <role>`, `CREATE USER <user> WITH PASSWORD = '...'`, `DROP ROLE`.
-  - 객체별 세분화 권한 제어: `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO <role/user>`, `REVOKE`, `DENY`.
-  - 카탈로그 권한 인터셉터를 통한 쿼리 실행 전 접근 제어 검증.
-- **기대 효과**: 엔터프라이즈 사내 컴플라이언스(ISMS, 금융보안 규정) 및 멀티유저 데이터베이스 보안 요건 충족.
+#### 5.3. [완료] 세분화된 SQL 객체 수준 RBAC (Role-Based Access Control) (`pkg/auth`, `pkg/catalog`, `pkg/api`)
+- **구현 내용**: `pkg/auth` 및 `pkg/api/sqlexec_auth.go`에 엔터프라이즈 권한 관리 서브시스템 전면 구축 완료:
+  - 계정/사용자 DDL: `CREATE LOGIN`, `ALTER LOGIN`, `DROP LOGIN`, `CREATE USER`, `DROP USER`, `SETUSER` (사용자 가장 및 복귀).
+  - 객체별 세분화 권한 제어: `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `EXECUTE`, `CONTROL`, `REFERENCES` 권한에 대한 `GRANT`, `REVOKE`, `DENY`.
+  - 권한 인터셉터: 쿼리 실행 전 세션 사용자 컨텍스트를 검증하는 카탈로그 인터셉터(`checkTableAccess`) 연동.
+- **검증 완료**: `pkg/auth/rbac_test.go`, `pkg/auth/auth_test.go`, `pkg/api/rbac_test.go` 단위 및 E2E 테스트 100% 통과.
 
 #### 5.4. 투명 데이터 암호화 (TDE: Transparent Data Encryption) 및 불변 감사 로그 (`pkg/storage`, `pkg/logger`)
 - **과제**:
@@ -288,11 +285,11 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 | 마일스톤 | 우선순위 | 과제명 | 해당 영역 | 구현 공수 | 기대 효과 |
 | :---: | :---: | :--- | :---: | :---: | :--- |
-| **Phase 5** | **P1** | **VDBE Instruction 구조체 16바이트 패킹** | 가상 머신 | 낮음 (150~200줄) | 64B L1 Cache Line당 4개 명령어 적재, VM 레이턴시 단축 |
-| **Phase 5** | **P1** | **SQL 실행 코디네이터 분리 (`pkg/engine`)** | 아키텍처 | 보통 (400~500줄) | 단방향 클린 아키텍처 확립 및 계층 역전 해소 |
-| **Phase 5** | **P1** | **세분화된 SQL 객체 수준 RBAC** | 보안 & 카탈로그 | 보통 (300~400줄) | `CREATE ROLE/USER`, `GRANT/REVOKE` 엔터프라이즈 권한 제어 |
+| **Phase 5** | **P1** | **[완료] VDBE Instruction 구조체 16바이트 패킹** | 가상 머신 | 낮음 (150~200줄) | 64B L1 Cache Line당 4개 명령어 적재, VM 레이턴시 단축 |
+| **Phase 5** | **P1** | **[진행 중] SQL 실행 코디네이터 분리 (`pkg/engine`)** | 아키텍처 | 보통 (400~500줄) | 단방향 클린 아키텍처 확립 및 계층 역전 해소 |
+| **Phase 5** | **P1** | **[완료] 세분화된 SQL 객체 수준 RBAC** | 보안 & 카탈로그 | 보통 (300~400줄) | `CREATE ROLE/USER`, `GRANT/REVOKE` 엔터프라이즈 권한 제어 |
 | **Phase 5** | **P1** | **투명 데이터 암호화 (TDE: AES-256-GCM)** | 스토리지 & 보안 | 보통 (250~350줄) | 디스크 파일 투명 암호화 및 불변 감사 로그 기록 |
-| **Phase 5** | **P2** | **Prepared Statement Bounded LRU 캐시** | 메모리 거버너 | 낮음 (100~150줄) | Rule 29 준수, 장시간 연결에서의 세션 메모리 누수 차단 |
+| **Phase 5** | **P2** | **[완료] Prepared Statement Bounded LRU 캐시** | 메모리 거버너 | 낮음 (100~150줄) | Rule 29 준수, 장시간 연결에서의 세션 메모리 누수 차단 |
 | **Phase 5** | **P2** | **소트-머지 조인 (Sort-Merge Join) 연산자** | 실행기 & 플래너 | 보통 (250~350줄) | 정렬 릴레이션 조인 시 해시 빌드 오버헤드 및 메모리 제거 |
 | **Phase 5** | **P2** | **TDS NBCROW 행 압축 (0xD2)** | TDS 프로토콜 | 보통 (200~300줄) | NULL 컬럼 다수 조회 시 네트워크 전송 대역폭 30%+ 절감 |
 | **Phase 5** | **P2** | **`INSTEAD OF` 트리거 런타임 인터셉터** | T-SQL 실행기 | 보통 (200~300줄) | 뷰 및 복합 테이블 DML 치환 실행 |
@@ -306,7 +303,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 6** | **P2** | **$N > 4$ 체인 조인 동적 계획법 (DP / Selinger)** | CBO & 플래너 | 높음 (400~600줄) | 복잡한 다중 조인 쿼리의 기하급수적 최적 플랜 도출 |
 | **Phase 6** | **P2** | **다중컬럼 확장통계, MCV 및 옵티마이저 힌트** | CBO & 플래너 | 보통 (300~400줄) | 통계 편향 교정 및 DBA 실행 계획 제어권 |
 | **Phase 6** | **P2** | **T-SQL 특화 타입 TDS 직렬화 & PLP LOB** | TDS 프로토콜 | 보통 (300~400줄) | UNIQUEIDENTIFIER, DATETIME2, LOB 완벽 지원 |
-| **Phase 6** | **P1** | **파이프라인 그룹 커밋 & fsync 병합** | 스토리지 & 트랜잭션 | 보통 (350~450줄) | 동시성 포화 시 쓰기 처리량(TPS) 2~4배 향상, fsync 병목 해소 |
+| **Phase 6** | **P1** | **[완료] 파이프라인 그룹 커밋 & fsync 병합** | 스토리지 & 트랜잭션 | 보통 (350~450줄) | 동시성 포화 시 쓰기 처리량(TPS) 2~4배 향상, fsync 병목 해소 |
 | **Phase 6** | **P1** | **바이너리 튜플 지연 역직렬화 (Lazy Decoding)** | 스토리지 & 실행기 | 보통 (300~400줄) | 대형 테이블 스캔 시 불필요 컬럼 디코딩 비용 및 GC 70~80% 삭감 |
 | **Phase 6** | **P1** | **세션/쿼리 전용 아레나 메모리 할당기** | 메모리 거버너 | 보통 (300~400줄) | 대형 조인/정렬/집계 시 Go GC 압박 0화 및 p99 지연 시간 플랫화 |
 | **Phase 6** | **P2** | **Volcano 청크 단위 배치 실행 (Vectorized)** | 실행기 & SIMD | 높음 (600~800줄) | 대용량 관계형 스캔 및 집계 3~5배 가속 |
