@@ -1,6 +1,6 @@
 # SQLion Engineering TODO & Backlog
 
-이 문서는 SQLion의 단기 엔지니어링 우선순위 과제, 도메인별 기능 백로그, 최근 완료된 마일스톤 이력을 관리하는 공식 엔지니어링 백로그입니다. 중장기 아키텍처 로드맵은 [ROADMAP.ko.md](ROADMAP.ko.md) ([English: ROADMAP.md](ROADMAP.md))를 참조하세요.
+이 문서는 SQLion의 단기 엔지니어링 우선순위 과제, 도메인별 기능 백로그, 최근 완료된 마일스톤 이력을 관리하는 공식 엔지니어링 백로그입니다. 중장기 아키텍처 로드맵은 [ROADMAP.md](ROADMAP.md)를 참조하세요.
 
 ---
 

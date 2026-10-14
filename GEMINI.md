@@ -163,6 +163,6 @@ When working across different development environments or initiating a new AI ag
 - [`notes/ENGINEERING_CONTEXT.md`](notes/ENGINEERING_CONTEXT.md): Architectural invariants, why alternatives were spec'd out, and collaboration principles.
 - [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): Circular import immunity, wiredtiger build tags, sandbox network handling, Decimal JSON serialization, and VDBE transaction coupling.
 - [`TODO.ko.md`](TODO.ko.md): Active engineering backlog, immediate priorities (P1, P2, P3), CBO & performance matrices, and verified milestones.
-- [`ROADMAP.md`](ROADMAP.md) ([`ROADMAP.ko.md`](ROADMAP.ko.md)): High-level release milestones (Phase 1~6), architectural evolution, and verified implementation status.
+- [`ROADMAP.md`](ROADMAP.md): High-level release milestones (Phase 1~6), architectural evolution, and verified implementation status.
 
 

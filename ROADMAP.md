@@ -1,7 +1,6 @@
 # SQLion Engineering Roadmap & Core Technical Milestones
 
 This document charts the development milestones, verified implementation status, and future engineering challenges for the SQLion high-concurrency embedded database engine.
-(한국어 공식 문서는 [ROADMAP.ko.md](ROADMAP.ko.md)를 참조하세요.)
 (For actionable engineering tasks and domain backlogs, refer to [TODO.ko.md](TODO.ko.md).)
 
 ---

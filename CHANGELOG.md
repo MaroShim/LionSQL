@@ -9,9 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - **Documentation Architecture Streamlining & Single Source of Truth (SSOT) Consolidation**:
-  - Consolidated engineering backlog into `TODO.ko.md` and macro release roadmap into `ROADMAP.md` / `ROADMAP.ko.md`.
-  - Absorbed CBO matrix and performance roadmap into `TODO.ko.md` and deleted redundant `notes/REFACTORING_AND_ROADMAP.md`.
-  - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
+  - Consolidated macro release roadmap into single source of truth at `ROADMAP.md` and removed duplicate `ROADMAP.ko.md`.
+  - Consolidated engineering backlog into `TODO.ko.md` and deleted redundant `notes/REFACTORING_AND_ROADMAP.md`.
+  - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, `README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
 
 ### Added
 - **Sort-Merge Join (SMJ) Operator & CBO Cost Model (`B-3`) (`pkg/execution`, `pkg/planner`, `pkg/engine`)**:

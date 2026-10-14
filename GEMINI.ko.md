@@ -163,5 +163,5 @@ SQLion은 모든 벤치마크(TPC-C, TPC-H, 마이크로 벤치마크), 테스�
 - [`notes/ENGINEERING_CONTEXT.md`](notes/ENGINEERING_CONTEXT.md): 아키텍처 불변 규칙, 대안 기술 Spec-Out 사유, 협업 엔지니어링 원칙.
 - [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): 순환 참조 방지, wiredtiger 빌드 태그, 샌드박스 네트워크 격리, 소수점 JSON 직렬화, VDBE 트랜잭션 결합.
 - [`TODO.ko.md`](TODO.ko.md): 액티브 엔지니어링 백로그, 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 최근 완료 마일스톤.
-- [`ROADMAP.ko.md`](ROADMAP.ko.md) ([`ROADMAP.md`](ROADMAP.md)): 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태.
+- [`ROADMAP.md`](ROADMAP.md): 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태.
 

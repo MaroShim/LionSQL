@@ -19,7 +19,7 @@
 
 3. **프로젝트 전역 로드맵 및 백로그**:
    - **[`TODO.ko.md`](../TODO.ko.md)**: 액티브 엔지니어링 백로그, 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 최근 완료 마일스톤
-   - **[`ROADMAP.ko.md`](../ROADMAP.ko.md)** ([English: `ROADMAP.md`](../ROADMAP.md)): 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태
+   - **[`ROADMAP.md`](../ROADMAP.md)**: 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태
 
 
 ---

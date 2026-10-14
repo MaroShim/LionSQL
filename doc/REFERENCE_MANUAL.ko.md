@@ -265,12 +265,10 @@
   * **장애 진단 및 문제 해결 가이드**: 포트 충돌, 권한 오류, 와이어 패킷 협상 실패, 트랜잭션 직렬화 충돌(`40001`), 클라이언트 캐시 무효화 등 빈발 오류 해결 방법.
 
 #### 10.6. 개발자 엔지니어링 핸드오버 및 로드맵 문서 (Developer Context & Backlog)
-* [`ROADMAP.md`](file:///Users/maro/Projects/sql/ROADMAP.md)
-  * 버전별 개발 마일스톤(Phase 1~5) 달성 현황 및 향후 중장기 핵심 로드맵.
+* [`ROADMAP.md`](../ROADMAP.md)
+  * 버전별 개발 마일스톤(Phase 1~6) 달성 현황 및 향후 중장기 핵심 로드맵.
 * [`TODO.ko.md`](../TODO.ko.md)
   * 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 도메인별 대기 백로그 및 최근 마일스톤 트래커.
-* [`ROADMAP.ko.md`](../ROADMAP.ko.md) ([`ROADMAP.md`](../ROADMAP.md))
-  * 단계별 거시 릴리즈 마일스톤(Phase 1~6), 핵심 구현 완료 상태 및 향후 중장기 기술 과제.
 * [`CHANGELOG.md`](../CHANGELOG.md)
   * 버전별 릴리즈 변경 내역 및 기능 추가/수정 기록 (Keep a Changelog 표준).
 * [`notes/ENGINEERING_CONTEXT.md`](../notes/ENGINEERING_CONTEXT.md)
