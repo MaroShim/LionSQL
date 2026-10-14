@@ -78,7 +78,6 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - T-SQL Specialized TDS Serialization (UNIQUEIDENTIFIER, DATETIME2, PLP LOB)
   - Multi-Language Client Certification (Python psycopg3/pymssql, Node.js pg/tedious, .NET SqlClient)
   - Storage to Wire Zero-Copy Direct Serialization (P-3)
-  - Background MVCC Vacuuming & Undo Log Version Compaction
   - Wasm Runtime Sandbox UDF (wazero)
   - Local & S3-Compatible File Storage Module & Thumbnail Resizing
 ```
@@ -245,23 +244,19 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **Challenge**: Transition row-by-row `Next()` calls to vector slice streaming (`NextBatch([64]Row)`), mitigating virtual function dispatch overhead.
 - **Expected Outcome**: 3~5x throughput acceleration for full-table scans, aggregations, and analytical filters.
 
-#### 6.10. Background MVCC Vacuuming & Version GC (`pkg/storage/memengine`)
-- **Challenge**: Maintain version chains for modified rows and reclaim expired versions and deletion tombstones asynchronously via background vacuum workers.
-- **Expected Outcome**: Prevention of memory fragmentation in 24/7 long-running in-memory workloads.
-
-#### 6.11. Wasm Runtime Sandbox UDF (`pkg/extension`, `wazero`)
+#### 6.10. Wasm Runtime Sandbox UDF (`pkg/extension`, `wazero`)
 - **Challenge**: Embed pure-Go `wazero` to execute dynamically loaded WebAssembly functions (`CREATE FUNCTION ... AS WASM`) in isolated memory sandboxes.
 - **Expected Outcome**: Safe in-engine execution of third-party plugins with zero host crash risk.
 
-#### 6.12. Local & S3-Compatible File Storage Module (`pkg/api/handlers_files.go`)
+#### 6.11. Local & S3-Compatible File Storage Module (`pkg/api/handlers_files.go`)
 - **Challenge**: Implement multipart file upload APIs (`POST /api/files/:table/:id`), static asset serving, asynchronous image thumbnail generation, and storage quotas.
 - **Expected Outcome**: Turnkey all-in-one BaaS storage capability directly inside the single standalone binary.
 
-#### 6.13. Lazy Tuple Materialization & Column Projection Pushdown (`pkg/storage`, `pkg/execution`)
+#### 6.12. Lazy Tuple Materialization & Column Projection Pushdown (`pkg/storage`, `pkg/execution`)
 - **Challenge**: Inspect row headers and null bitmaps to decode only the filter columns required by the query `WHERE` predicate, materializing remaining columns only for matching rows.
 - **Expected Outcome**: 70~80% reduction in CPU cycles and GC heap allocations during large-scale table scans.
 
-#### 6.14. Per-Query Arena Memory Allocator & GC Elimination (`pkg/execution`, `pkg/storage`)
+#### 6.13. Per-Query Arena Memory Allocator & GC Elimination (`pkg/execution`, `pkg/storage`)
 - **Challenge**: Allocate dedicated memory arena slabs tied to the lifecycle of individual analytical queries and transactions, reclaiming memory with a single pointer reset.
 - **Expected Outcome**: Complete elimination of Go runtime GC pauses and flat p99/p99.9 latency during heavy analytical queries.
 
@@ -288,6 +283,5 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 6** | **P2** | **Multi-Column Statistics, MCV & Optimizer Hints** | CBO & Planner | Medium (300~400 lines) | Corrects cardinality estimation skew on correlated columns |
 | **Phase 6** | **P2** | **T-SQL Specialized TDS Serialization & PLP LOB** | TDS Protocol | Medium (300~400 lines) | Complete binary support for UNIQUEIDENTIFIER, DATETIME2, LOB |
 | **Phase 6** | **P2** | **Volcano Chunked Batch Execution (Vectorized)** | Executor & SIMD | High (600~800 lines) | 3~5x acceleration for table scans and aggregate filters |
-| **Phase 6** | **P3** | **Background MVCC Vacuum / Version GC** | Concurrency & RAM | High (400~500 lines) | Eliminates memory fragmentation in 24/7 long-running in-memory tables |
 | **Phase 6** | **P3** | **Wasm Runtime Sandbox UDF (`wazero`)** | Plugins & Sandbox | Medium (300~400 lines) | Secure, crash-isolated in-engine execution of third-party plugins |
 | **Phase 6** | **P3** | **Local & S3-Compatible File Storage & Thumbnails** | BaaS Storage | Medium (250~350 lines) | Multipart file upload and automatic image thumbnail generation |

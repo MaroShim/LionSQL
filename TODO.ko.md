@@ -103,8 +103,6 @@
   - `SeqScan`, `IndexScan`, `Filter`, `Projection`, `Limit`, `Aggregate`, `Sort`, `HashJoin`, `IndexNestedLoopJoin`, `sqlexec_select` 전반에 배치 파이프라인 관통 및 기존 단건 `Next()` 투명 버퍼링 100% 하위 호환성 보장.
 - [ ] **세션/쿼리 전용 아레나 메모리 할당기 (Arena Allocator) (`pkg/execution`, `pkg/storage`)**
   - 해시 조인, 소트 버퍼에 대해 쿼리 수명주기에 묶인 아레나 할당기를 적용하여 Go GC 압박 원천 제거.
-- [ ] **백그라운드 MVCC Vacuum / Version GC (`pkg/storage/memengine`)**
-  - 장기 트랜잭션 종료 후 구버전 튜플 체인을 비동기로 회수/압축하여 메모리 단편화 및 누적 방지.
 
 ### 2.3. 와이어 프로토콜 & 생태계 (Wire Protocols & Ecosystem)
 - [ ] **T-SQL 특수 타입 직렬화 및 PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**
