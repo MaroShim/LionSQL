@@ -6,7 +6,7 @@
 
 ## 1. 핵심 아키텍처 불변식 (Core Architectural Invariants)
 
-새로운 환경의 AI나 개발자가 **가장 자주 범하는 실수는 다른 대형 DBMS(MySQL, Oracle, CockroachDB 등)의 복잡한 메커니즘을 섣불리 SQLion에 도입하려 하는 것**입니다. 아래 6가지 불변식은 심도 깊은 검토 끝에 확립된 핵심 기둥입니다.
+새로운 환경의 AI나 개발자가 **가장 자주 범하는 실수는 다른 대형 DBMS(MySQL, Oracle, CockroachDB 등)의 복잡한 메커니즘을 섣불리 SQLion에 도입하려 하는 것**입니다. 아래 8가지 불변식은 심도 깊은 검토 끝에 확립된 핵심 기둥입니다.
 
 ### ① 데이터베이스 격리 전략: 인스턴스 단위 물리 격리 (Process-per-Database)
 * **결정 사항**: 데이터베이스 단위 물리 프로세스/컨테이너 격리.
@@ -42,6 +42,21 @@
 * **결정 사항**:
   * **Track 1 (Go Native In-Process SPI)**: `proc.RegisterScalarFunction`. Go로 SQLion을 임베딩하는 개발자를 위한 제로 FFI 오버헤드 직결 호출 (<5ns).
   * **Track 2 (WebAssembly 샌드박스)**: 독립 서버 환경에서 안전하게 외부 함수를 실행하기 위한 `wazero` 메모리 샌드박스.
+
+### ⑦ 인메모리 OCC 스토리지: 백그라운드 Vacuum 스레드 배제 (Spec-Out)
+* **결정 사항**: 인메모리 OCC 엔진(`memengine`)은 세션 프라이빗 워크스페이스에서 변경분을 버퍼링한 뒤, 커밋 시점에 버전을 원자적으로 교체하거나 롤백 시 워크스페이스를 버림.
+* **배제(Spec-Out)된 것**: PostgreSQL 스타일의 백그라운드 멀티버전 데드 튜플 청소기(Background Vacuum Worker / GC 스레드).
+* **이유 & 맥락**:
+  * PostgreSQL이나 전통적 디스크 기반 MVCC는 테이블 블록 내에 구버전 튜플 체인을 남겨두기 때문에 주기적 진공 청소(Vacuum)가 필수적이지만, SQLion의 인메모리 OCC는 데드 튜플 체인을 메모리에 누적하지 않습니다.
+  * 주기적 백그라운드 Vacuum 루프는 불필요한 고루틴 생성, 주기적 전체 메모리 스캔, 락 경합 및 CPU 낭비만 초래하는 전형적인 오버엔지니어링(YAGNI, Golden Rule 15)이므로 의도적으로 배제했습니다.
+
+### ⑧ 분석/OLAP 연동: CDC 스트리밍 채택 및 공유 메모리(Arrow IPC) 스냅샷 배제 (Spec-Out)
+* **결정 사항**: 트랜잭션 커밋과 원자적으로 결합된 **CDC(Change Data Capture) / WAL 이벤트 스트림**을 단일 표준 파이프라인으로 채택. 외부 Kafka/RabbitMQ 브로커 전송은 물론, 임베디드 DuckDB OLAP 마이크로 배치 적재에도 동일 파이프라인 활용.
+* **배제(Spec-Out)된 것**: POSIX 공유 메모리(`/dev/shm`, `mmap`) 기반 Apache Arrow IPC 테이블 스냅샷 (`SNAPSHOT TABLE ... TO ARROW_SHM`).
+* **이유 & 맥락**:
+  * Arrow IPC 공유 메모리 방식은 쿼리나 주기마다 수 GB에 달하는 테이블 전체를 풀스캔하여 Arrow 포맷으로 직렬화해야 하므로 심각한 OLTP CPU/메모리 부하를 유발하며, 스냅샷 시점의 데이터만 보는 정적 배치 방식에 불과합니다.
+  * 또한 거대한 Apache Arrow Go SDK 의존성 추가(KISS 원칙 위배)와 OS별 비이식성(Windows 호환 불가, 도커 컨테이너 `/dev/shm` 64MB 제한) 문제를 발생시킵니다.
+  * 반면 CDC 스트리밍은 커밋된 변경분(Delta)만 가볍게 비동기 전달하므로 OLTP 오버헤드가 사실상 0이고, 실시간 반영(ms 단위)이 가능하며, 임베디드 DuckDB Appender와 네이티브하게 결합되므로 공유 메모리 스냅샷은 중복이자 불필요한 기능입니다.
 
 ---
 

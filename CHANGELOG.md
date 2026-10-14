@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Enriched `sys.databases` with database properties (`compatibility_level`, `collation_name`, `snapshot_isolation_state`, `recovery_model`, `page_verify_option`).
   - Added test coverage in `TestCoordinator_SSMS_VirtualCatalogQueries` (`pkg/engine/coordinator_test.go`).
 
+### Removed
+- **Redundant In-Memory MVCC Vacuum & Shared-Memory Arrow Snapshot Backlog Pruning**:
+  - Removed in-memory OCC background vacuum worker proposal from engineering backlogs. SQLion's in-memory OCC engine commits mutations atomically via version swaps and discards aborted workspaces without accumulating multi-version dead tuple chains, rendering background vacuum worker threads redundant (YAGNI, Golden Rule 15).
+  - Removed POSIX shared-memory (`/dev/shm`, `mmap`) Apache Arrow IPC table snapshot proposal. Serializing entire tables into Arrow IPC files incurs high CPU/memory scan overhead and OS portability friction; unified analytical ingestion (DuckDB, external brokers) behind the transaction-atomic CDC / WAL streaming pipeline.
+  - Documented architectural rationale and spec-out criteria in `notes/ENGINEERING_CONTEXT.md` (Invariants 7 and 8).
+
 ---
 
 ## [0.19.0] - 2026-10-14
