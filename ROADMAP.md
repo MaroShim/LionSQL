@@ -263,8 +263,6 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 | Milestone | Priority | Task Description | Domain | Estimated Effort | Strategic Benefit |
 | :---: | :---: | :--- | :---: | :---: | :--- |
-| **Phase 5** | **P2** | **Fast SQL Fingerprinting & Simple PK Bypass (`P-5`)** | Engine & Storage | Medium (250~350 lines) | Bypasses parser/planner for point PK lookups, 50%+ TPS boost |
-| **Phase 5** | **P2** | **TDS NBCROW Row Compression (`0xD2`)** | TDS Protocol | Medium (200~300 lines) | 30%+ network bandwidth savings on sparse/NULL tables |
 | **Phase 5** | **P2** | **Transparent Data Encryption (TDE: AES-256-GCM)** | Storage & Security | Medium (250~350 lines) | Transparent data-at-rest encryption and immutable audit logging |
 | **Phase 5** | **P2** | **`INSTEAD OF` Trigger Runtime Interceptor** | T-SQL Runtime | Medium (200~300 lines) | Virtual entity DML update routing on complex views |
 | **Phase 5** | **P3** | **Multi-Language Client Certification Harness** | Wire Protocols | Medium (200~300 lines) | Automated integration suites for Python, Node.js, and .NET |
