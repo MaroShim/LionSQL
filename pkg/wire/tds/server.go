@@ -41,6 +41,7 @@ type Server struct {
 	mu          sync.Mutex
 	closed      bool
 	wg          sync.WaitGroup
+	activeConns map[net.Conn]struct{}
 }
 
 // NewServer creates a new TDS wire protocol server.
@@ -136,7 +137,7 @@ func (s *Server) Addr() net.Addr {
 	return nil
 }
 
-// Close gracefully terminates the listener and waits for active connections.
+// Close gracefully terminates the listener and active connections within a 1-second bounded timeout.
 func (s *Server) Close() error {
 	s.mu.Lock()
 	if s.closed {
@@ -148,9 +149,22 @@ func (s *Server) Close() error {
 	if s.listener != nil {
 		err = s.listener.Close()
 	}
+	for c := range s.activeConns {
+		_ = c.Close()
+	}
 	s.mu.Unlock()
 
-	s.wg.Wait()
+	waitCh := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(waitCh)
+	}()
+
+	select {
+	case <-waitCh:
+	case <-time.After(1 * time.Second):
+	}
+
 	return err
 }
 
@@ -216,9 +230,26 @@ func (s *Server) acceptLoop() {
 			_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
 		}
 
+		s.mu.Lock()
+		if s.closed {
+			s.mu.Unlock()
+			_ = conn.Close()
+			return
+		}
+		if s.activeConns == nil {
+			s.activeConns = make(map[net.Conn]struct{})
+		}
+		s.activeConns[conn] = struct{}{}
+		s.mu.Unlock()
+
 		s.wg.Add(1)
 		go func(c net.Conn) {
 			defer s.wg.Done()
+			defer func() {
+				s.mu.Lock()
+				delete(s.activeConns, c)
+				s.mu.Unlock()
+			}()
 			s.handleConnection(c)
 		}(conn)
 	}

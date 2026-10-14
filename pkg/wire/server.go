@@ -46,6 +46,7 @@ type Server struct {
 	devMode     bool
 	mu          sync.Mutex
 	closed      bool
+	clientConns map[net.Conn]struct{}
 }
 
 // NewServer creates a new PostgreSQL wire protocol server.
@@ -182,10 +183,14 @@ func (s *Server) Close() error {
 		return nil
 	}
 	s.closed = true
+	var err error
 	if s.listener != nil {
-		return s.listener.Close()
+		err = s.listener.Close()
 	}
-	return nil
+	for c := range s.clientConns {
+		_ = c.Close()
+	}
+	return err
 }
 
 func (s *Server) acceptLoop() {
@@ -205,7 +210,27 @@ func (s *Server) acceptLoop() {
 			_ = tcpConn.SetKeepAlive(true)
 			_ = tcpConn.SetKeepAlivePeriod(30 * time.Second)
 		}
-		go s.handleConnection(conn)
+
+		s.mu.Lock()
+		if s.closed {
+			s.mu.Unlock()
+			_ = conn.Close()
+			return
+		}
+		if s.clientConns == nil {
+			s.clientConns = make(map[net.Conn]struct{})
+		}
+		s.clientConns[conn] = struct{}{}
+		s.mu.Unlock()
+
+		go func(c net.Conn) {
+			defer func() {
+				s.mu.Lock()
+				delete(s.clientConns, c)
+				s.mu.Unlock()
+			}()
+			s.handleConnection(c)
+		}(conn)
 	}
 }
 

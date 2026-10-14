@@ -627,30 +627,39 @@ func main() {
 	<-stop
 	log.Println("\n[SQLion] Initiating graceful shutdown...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
 
-	if repMgr != nil {
-		_ = repMgr.Close()
+	shutdownDone := make(chan struct{})
+	go func() {
+		if repMgr != nil {
+			_ = repMgr.Close()
+		}
+		if tdsServer != nil {
+			_ = tdsServer.Close()
+		}
+		if wireServer != nil {
+			_ = wireServer.Close()
+		}
+		if httpServer != nil {
+			_ = httpServer.Shutdown(ctx)
+			_ = httpServer.Close()
+		}
+		_ = server.Close()
+		_ = eng.Close()
+		close(shutdownDone)
+	}()
+
+	select {
+	case <-shutdownDone:
+		log.Println("[SQLion] Server stopped cleanly.")
+	case <-time.After(1500 * time.Millisecond):
+		log.Println("[SQLion] Graceful shutdown deadline (1.5s) reached, escalating teardown.")
 	}
-	if tdsServer != nil {
-		_ = tdsServer.Close()
-	}
-	if wireServer != nil {
-		_ = wireServer.Close()
-	}
-	if httpServer != nil {
-		_ = httpServer.Shutdown(ctx)
-		_ = httpServer.Close()
-	}
-	_ = server.Close()
-	_ = eng.Close()
 
 	if curPid, err := readPidFile(resolvedPidFile); err == nil && curPid == os.Getpid() {
 		_ = os.Remove(resolvedPidFile)
 	}
-
-	log.Println("[SQLion] Server stopped cleanly.")
 	os.Exit(0)
 }
 

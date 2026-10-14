@@ -735,6 +735,35 @@ func TestTDS_NBCRowEmission(t *testing.T) {
 	}
 }
 
+func TestTDS_GracefulCloseWithActiveConnections(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start server: %v", err)
+	}
+
+	addr := srv.Addr().String()
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("Dial failed: %v", err)
+	}
+	defer conn.Close()
+
+	// Keep connection idle without closing from client side.
+	// Server.Close() must terminate cleanly within a short duration.
+	start := time.Now()
+	if err := srv.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+	dur := time.Since(start)
+	if dur > 1500*time.Millisecond {
+		t.Fatalf("Server.Close took too long: %v (expected < 1.5s)", dur)
+	}
+}
+
 
 
 

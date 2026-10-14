@@ -23,6 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Enhanced `ProjectionIterator` in `pkg/execution/project.go` to recognize both unqualified (`*`) and table-qualified wildcards (`.*`, `alias.*`, `schema.table.*`).
   - Switched column alias extraction from `strings.Index` to `strings.LastIndex` to cleanly strip multi-part database and schema prefixes (e.g. `[dbo].[users].[col]`).
   - Added comprehensive regression tests across `pkg/engine/coordinator_test.go`, `pkg/wire/server_test.go`, and `pkg/wire/tds/driver_integration_test.go`.
+- **Graceful Shutdown Active Connection Teardown & Bounded Teardown (`cmd/server`, `pkg/wire`, `pkg/wire/tds`)**:
+  - Fixed an issue where graceful shutdown hung or took a long time when GUI clients (such as DbGate, Beekeeper) held idle TCP connections open.
+  - TDS (`pkg/wire/tds/server.go`) was waiting indefinitely on `sync.WaitGroup` because listener closure alone did not unblock clients blocked in read loops.
+  - Implemented active connection tracking across both TDS and PGWire listeners, closing active client sockets upon server teardown so reading goroutines unblock immediately.
+  - Enforced a strict 1.5-second bounded shutdown deadline in `cmd/server/main.go` adhering to Golden Rule 4.
+  - Added regression test `TestTDS_GracefulCloseWithActiveConnections` in `pkg/wire/tds/server_test.go`.
 
 ### Added
 - **Vectorized Chunk Iterator & Batch Volcano Execution (`P-4`) (`pkg/execution`, `pkg/engine`)**:
