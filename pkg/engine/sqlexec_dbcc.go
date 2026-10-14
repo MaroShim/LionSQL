@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"regexp"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -426,7 +427,19 @@ func (s *Coordinator) isVirtualCatalogTable(tableName string) bool {
 		"sys.computed_columns", "syscomputedcolumns", "sys_computed_columns",
 		"sys.triggers", "systriggers", "sys_triggers",
 		"sys.foreign_keys", "sysforeignkeys", "sys_foreign_keys",
-		"sys.foreign_key_columns", "sysforeignkeycolumns", "sys_foreign_key_columns":
+		"sys.foreign_key_columns", "sysforeignkeycolumns", "sys_foreign_key_columns",
+		"sys.configurations", "sysconfigurations", "sys_configurations",
+		"sys.dm_exec_sessions", "sysdmexecsessions", "sys_dm_exec_sessions",
+		"sys.dm_exec_connections", "sysdmexecconnections", "sys_dm_exec_connections",
+		"sys.database_principals", "sysdatabaseprincipals", "sys_database_principals",
+		"sys.server_principals", "sysserverprincipals", "sys_server_principals",
+		"sys.dm_os_sys_info", "sysdmosysinfo", "sys_dm_os_sys_info",
+		"sys.endpoints", "sysendpoints", "sys_endpoints",
+		"sys.database_files", "sysdatabasefiles", "sys_database_files",
+		"sys.master_files", "sysmasterfiles", "sys_master_files",
+		"sys.all_objects", "sysallobjects", "sys_all_objects",
+		"sys.all_columns", "sysallcolumns", "sys_all_columns",
+		"sys.all_views", "sysallviews", "sys_all_views":
 		return true
 	default:
 		return false
@@ -465,8 +478,8 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			})
 		}
 
-	case "sys.columns", "syscolumns", "sys_columns":
-		columns = []string{"table_name", "column_name", "name", "object_id", "column_id", "data_type", "is_nullable", "is_primary_key", "ordinal_position", "max_length", "precision", "scale"}
+	case "sys.columns", "syscolumns", "sys_columns", "sys.all_columns", "sysallcolumns", "sys_all_columns":
+		columns = []string{"table_name", "column_name", "name", "object_id", "column_id", "system_type_id", "user_type_id", "data_type", "is_nullable", "is_identity", "is_primary_key", "ordinal_position", "max_length", "precision", "scale"}
 		for tIdx, t := range tables {
 			for i, c := range t.Columns {
 				nullableStr := "YES"
@@ -479,8 +492,11 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 					"name":             c.Name,
 					"object_id":        1000 + tIdx,
 					"column_id":        i + 1,
+					"system_type_id":   56,
+					"user_type_id":     56,
 					"data_type":        c.Type.String(),
 					"is_nullable":      nullableStr,
+					"is_identity":      false,
 					"is_primary_key":   c.PrimaryKey,
 					"ordinal_position": i + 1,
 					"max_length":       255,
@@ -504,21 +520,69 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 		}
 
 	case "sys.databases", "sysdatabases", "sys_databases":
-		columns = []string{"name", "schema_name", "database_id", "create_date", "state_desc"}
+		columns = []string{
+			"name", "schema_name", "database_id", "source_database_id", "owner_sid",
+			"create_date", "compatibility_level", "collation_name", "user_access",
+			"user_access_desc", "is_read_only", "is_auto_close_on", "is_auto_shrink_on",
+			"state", "state_desc", "is_in_standby", "snapshot_isolation_state",
+			"snapshot_isolation_state_desc", "is_read_committed_snapshot_on",
+			"recovery_model", "recovery_model_desc", "page_verify_option",
+			"page_verify_option_desc", "is_auto_create_stats_on", "is_auto_update_stats_on",
+		}
 		allRows = append(allRows,
 			map[string]any{
-				"name":        "master",
-				"schema_name": "dbo",
-				"database_id": 1,
-				"create_date": defaultDate,
-				"state_desc":  "ONLINE",
+				"name":                          "master",
+				"schema_name":                   "dbo",
+				"database_id":                   1,
+				"source_database_id":            nil,
+				"owner_sid":                     nil,
+				"create_date":                   defaultDate,
+				"compatibility_level":           150,
+				"collation_name":                "SQL_Latin1_General_CP1_CI_AS",
+				"user_access":                   0,
+				"user_access_desc":              "MULTI_USER",
+				"is_read_only":                  false,
+				"is_auto_close_on":              false,
+				"is_auto_shrink_on":             false,
+				"state":                         0,
+				"state_desc":                    "ONLINE",
+				"is_in_standby":                 false,
+				"snapshot_isolation_state":      1,
+				"snapshot_isolation_state_desc": "ON",
+				"is_read_committed_snapshot_on": true,
+				"recovery_model":                1,
+				"recovery_model_desc":           "FULL",
+				"page_verify_option":            2,
+				"page_verify_option_desc":       "CHECKSUM",
+				"is_auto_create_stats_on":       true,
+				"is_auto_update_stats_on":       true,
 			},
 			map[string]any{
-				"name":        "sqlion",
-				"schema_name": "dbo",
-				"database_id": 2,
-				"create_date": defaultDate,
-				"state_desc":  "ONLINE",
+				"name":                          "sqlion",
+				"schema_name":                   "dbo",
+				"database_id":                   2,
+				"source_database_id":            nil,
+				"owner_sid":                     nil,
+				"create_date":                   defaultDate,
+				"compatibility_level":           150,
+				"collation_name":                "SQL_Latin1_General_CP1_CI_AS",
+				"user_access":                   0,
+				"user_access_desc":              "MULTI_USER",
+				"is_read_only":                  false,
+				"is_auto_close_on":              false,
+				"is_auto_shrink_on":             false,
+				"state":                         0,
+				"state_desc":                    "ONLINE",
+				"is_in_standby":                 false,
+				"snapshot_isolation_state":      1,
+				"snapshot_isolation_state_desc": "ON",
+				"is_read_committed_snapshot_on": true,
+				"recovery_model":                1,
+				"recovery_model_desc":           "FULL",
+				"page_verify_option":            2,
+				"page_verify_option_desc":       "CHECKSUM",
+				"is_auto_create_stats_on":       true,
+				"is_auto_update_stats_on":       true,
 			},
 		)
 
@@ -583,28 +647,70 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 			map[string]any{"name": "information_schema", "schema_id": 4, "principal_id": 4},
 		)
 
-	case "sys.objects", "sysobjects", "sys_objects":
-		columns = []string{"name", "object_id", "principal_id", "schema_id", "type", "type_desc", "create_date", "modify_date"}
+	case "sys.objects", "sysobjects", "sys_objects", "sys.all_objects", "sysallobjects", "sys_all_objects":
+		columns = []string{
+			"name", "object_id", "principal_id", "schema_id", "parent_object_id",
+			"type", "type_desc", "create_date", "modify_date",
+			"is_ms_shipped", "is_published", "is_schema_published",
+		}
 		for i, t := range tables {
 			allRows = append(allRows, map[string]any{
-				"name":         t.Name,
-				"object_id":    1000 + i,
-				"principal_id": nil,
-				"schema_id":    1,
-				"type":         "U",
-				"type_desc":    "USER_TABLE",
-				"create_date":  defaultDate,
-				"modify_date":  defaultDate,
+				"name":                t.Name,
+				"object_id":           1000 + i,
+				"principal_id":        nil,
+				"schema_id":           1,
+				"parent_object_id":    0,
+				"type":                "U",
+				"type_desc":           "USER_TABLE",
+				"create_date":         defaultDate,
+				"modify_date":         defaultDate,
+				"is_ms_shipped":       false,
+				"is_published":        false,
+				"is_schema_published": false,
 			})
 		}
+		if s.catalog != nil {
+			for vIdx, v := range s.catalog.ListViews() {
+				allRows = append(allRows, map[string]any{
+					"name":                v.Name,
+					"object_id":           2000 + vIdx,
+					"principal_id":        nil,
+					"schema_id":           1,
+					"parent_object_id":    0,
+					"type":                "V",
+					"type_desc":           "VIEW",
+					"create_date":         defaultDate,
+					"modify_date":         defaultDate,
+					"is_ms_shipped":       false,
+					"is_published":        false,
+					"is_schema_published": false,
+				})
+			}
+			for pIdx, p := range s.catalog.ListProcedures() {
+				allRows = append(allRows, map[string]any{
+					"name":                p.Name,
+					"object_id":           3000 + pIdx,
+					"principal_id":        nil,
+					"schema_id":           1,
+					"parent_object_id":    0,
+					"type":                "P",
+					"type_desc":           "SQL_STORED_PROCEDURE",
+					"create_date":         p.CreatedAt,
+					"modify_date":         p.CreatedAt,
+					"is_ms_shipped":       false,
+					"is_published":        false,
+					"is_schema_published": false,
+				})
+			}
+		}
 
-	case "sys.views", "sysviews", "sys_views":
+	case "sys.views", "sysviews", "sys_views", "sys.all_views", "sysallviews", "sys_all_views":
 		columns = []string{"name", "object_id", "schema_id", "create_date", "modify_date"}
 		if s.catalog != nil {
-			for _, v := range s.catalog.ListViews() {
+			for vIdx, v := range s.catalog.ListViews() {
 				allRows = append(allRows, map[string]any{
 					"name":        v.Name,
-					"object_id":   2000,
+					"object_id":   2000 + vIdx,
 					"schema_id":   1,
 					"create_date": defaultDate,
 					"modify_date": defaultDate,
@@ -661,6 +767,291 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 	case "sys.foreign_key_columns", "sysforeignkeycolumns", "sys_foreign_key_columns":
 		columns = []string{"constraint_object_id", "parent_object_id", "parent_column_id", "referenced_object_id", "referenced_column_id"}
 		allRows = []map[string]any{}
+
+	case "sys.configurations", "sysconfigurations", "sys_configurations":
+		columns = []string{
+			"configuration_id", "name", "value", "minimum", "maximum",
+			"value_in_use", "description", "is_dynamic", "is_advanced",
+		}
+		allRows = []map[string]any{
+			{"configuration_id": 101, "name": "recovery interval (min)", "value": 0, "minimum": 0, "maximum": 32767, "value_in_use": 0, "description": "Maximum recovery interval in minutes", "is_dynamic": true, "is_advanced": true},
+			{"configuration_id": 103, "name": "max worker threads", "value": 0, "minimum": 128, "maximum": 65535, "value_in_use": 0, "description": "Maximum worker threads", "is_dynamic": false, "is_advanced": true},
+			{"configuration_id": 109, "name": "network packet size (B)", "value": 4096, "minimum": 512, "maximum": 32767, "value_in_use": 4096, "description": "Network packet size", "is_dynamic": true, "is_advanced": true},
+			{"configuration_id": 115, "name": "nested triggers", "value": 1, "minimum": 0, "maximum": 1, "value_in_use": 1, "description": "Allow triggers to be invoked recursively", "is_dynamic": true, "is_advanced": false},
+			{"configuration_id": 503, "name": "max server memory (MB)", "value": 2147483647, "minimum": 128, "maximum": 2147483647, "value_in_use": 2147483647, "description": "Maximum size of server memory (MB)", "is_dynamic": true, "is_advanced": true},
+			{"configuration_id": 518, "name": "show advanced options", "value": 0, "minimum": 0, "maximum": 1, "value_in_use": 0, "description": "Show advanced options", "is_dynamic": true, "is_advanced": false},
+			{"configuration_id": 1538, "name": "remote access", "value": 1, "minimum": 0, "maximum": 1, "value_in_use": 1, "description": "Allow remote access", "is_dynamic": false, "is_advanced": false},
+			{"configuration_id": 1568, "name": "clr enabled", "value": 0, "minimum": 0, "maximum": 1, "value_in_use": 0, "description": "CLR integration enabled", "is_dynamic": true, "is_advanced": true},
+			{"configuration_id": 1576, "name": "remote admin connections", "value": 0, "minimum": 0, "maximum": 1, "value_in_use": 0, "description": "Dedicated Admin Connection (DAC) allowed from remote clients", "is_dynamic": true, "is_advanced": true},
+			{"configuration_id": 1579, "name": "filestream access level", "value": 0, "minimum": 0, "maximum": 2, "value_in_use": 0, "description": "FileStream access level", "is_dynamic": true, "is_advanced": true},
+		}
+
+	case "sys.dm_exec_sessions", "sysdmexecsessions", "sys_dm_exec_sessions":
+		columns = []string{
+			"session_id", "login_time", "host_name", "program_name", "host_process_id",
+			"client_version", "client_interface_name", "security_id", "login_name",
+			"nt_domain", "nt_user_name", "status", "cpu_time", "memory_usage",
+			"total_scheduled_time", "total_elapsed_time", "endpoint_id",
+			"last_request_start_time", "last_request_end_time", "reads", "writes",
+			"logical_reads", "is_user_process", "text_size", "language", "date_format",
+			"date_first", "quoted_identifier", "arithabort", "ansi_null_dflt_on",
+			"ansi_defaults", "ansi_warnings", "ansi_padding", "ansi_nulls",
+			"concat_null_yields_null", "transaction_isolation_level", "lock_timeout",
+			"deadlock_priority", "row_count", "prev_error", "original_login_name", "database_id",
+		}
+		allRows = append(allRows, map[string]any{
+			"session_id":                  int16(51),
+			"login_time":                  defaultDate,
+			"host_name":                   "localhost",
+			"program_name":                "Microsoft SQL Server Management Studio",
+			"host_process_id":             1000,
+			"client_version":              0,
+			"client_interface_name":       "Microsoft.Data.SqlClient",
+			"security_id":                 nil,
+			"login_name":                  "sa",
+			"nt_domain":                   "",
+			"nt_user_name":                "",
+			"status":                      "running",
+			"cpu_time":                    0,
+			"memory_usage":                1024,
+			"total_scheduled_time":        0,
+			"total_elapsed_time":          0,
+			"endpoint_id":                 1,
+			"last_request_start_time":     defaultDate,
+			"last_request_end_time":       defaultDate,
+			"reads":                       int64(0),
+			"writes":                      int64(0),
+			"logical_reads":               int64(0),
+			"is_user_process":             true,
+			"text_size":                   4096,
+			"language":                    "us_english",
+			"date_format":                 "mdy",
+			"date_first":                  int16(7),
+			"quoted_identifier":           true,
+			"arithabort":                  true,
+			"ansi_null_dflt_on":           true,
+			"ansi_defaults":               false,
+			"ansi_warnings":               true,
+			"ansi_padding":                true,
+			"ansi_nulls":                  true,
+			"concat_null_yields_null":     true,
+			"transaction_isolation_level": int16(2),
+			"lock_timeout":                -1,
+			"deadlock_priority":           0,
+			"row_count":                   int64(0),
+			"prev_error":                  0,
+			"original_login_name":         "sa",
+			"database_id":                 int16(1),
+		})
+
+	case "sys.dm_exec_connections", "sysdmexecconnections", "sys_dm_exec_connections":
+		columns = []string{
+			"session_id", "most_recent_session_id", "connect_time", "net_transport",
+			"protocol_type", "protocol_version", "endpoint_id", "encrypt_option",
+			"auth_scheme", "node_affinity", "num_reads", "num_writes",
+			"last_read", "last_write", "net_packet_size", "client_net_address",
+			"client_tcp_port", "local_net_address", "local_tcp_port", "connection_id",
+		}
+		allRows = append(allRows, map[string]any{
+			"session_id":             51,
+			"most_recent_session_id": 51,
+			"connect_time":           defaultDate,
+			"net_transport":          "TCP",
+			"protocol_type":          "TSQL",
+			"protocol_version":       0x74000004,
+			"endpoint_id":            1,
+			"encrypt_option":         "TRUE",
+			"auth_scheme":            "SQL",
+			"node_affinity":          int16(0),
+			"num_reads":              1,
+			"num_writes":             1,
+			"last_read":              defaultDate,
+			"last_write":             defaultDate,
+			"net_packet_size":        4096,
+			"client_net_address":     "127.0.0.1",
+			"client_tcp_port":        1433,
+			"local_net_address":      "127.0.0.1",
+			"local_tcp_port":         1433,
+			"connection_id":          "00000000-0000-0000-0000-000000000001",
+		})
+
+	case "sys.database_principals", "sysdatabaseprincipals", "sys_database_principals":
+		columns = []string{
+			"name", "principal_id", "type", "type_desc", "default_schema_name",
+			"create_date", "modify_date", "owning_principal_id", "sid",
+			"is_fixed_role", "authentication_type", "authentication_type_desc",
+			"default_language_name", "default_language_lcid",
+		}
+		allRows = []map[string]any{
+			{"name": "dbo", "principal_id": 1, "type": "S", "type_desc": "SQL_USER", "default_schema_name": "dbo", "create_date": defaultDate, "modify_date": defaultDate, "owning_principal_id": nil, "sid": nil, "is_fixed_role": false, "authentication_type": 2, "authentication_type_desc": "INSTANCE", "default_language_name": "us_english", "default_language_lcid": 1033},
+			{"name": "guest", "principal_id": 2, "type": "S", "type_desc": "SQL_USER", "default_schema_name": "guest", "create_date": defaultDate, "modify_date": defaultDate, "owning_principal_id": nil, "sid": nil, "is_fixed_role": false, "authentication_type": 0, "authentication_type_desc": "NONE", "default_language_name": nil, "default_language_lcid": nil},
+			{"name": "INFORMATION_SCHEMA", "principal_id": 3, "type": "S", "type_desc": "SQL_USER", "default_schema_name": nil, "create_date": defaultDate, "modify_date": defaultDate, "owning_principal_id": nil, "sid": nil, "is_fixed_role": false, "authentication_type": 0, "authentication_type_desc": "NONE", "default_language_name": nil, "default_language_lcid": nil},
+			{"name": "sys", "principal_id": 4, "type": "S", "type_desc": "SQL_USER", "default_schema_name": nil, "create_date": defaultDate, "modify_date": defaultDate, "owning_principal_id": nil, "sid": nil, "is_fixed_role": false, "authentication_type": 0, "authentication_type_desc": "NONE", "default_language_name": nil, "default_language_lcid": nil},
+			{"name": "public", "principal_id": 0, "type": "R", "type_desc": "DATABASE_ROLE", "default_schema_name": nil, "create_date": defaultDate, "modify_date": defaultDate, "owning_principal_id": nil, "sid": nil, "is_fixed_role": false, "authentication_type": 0, "authentication_type_desc": "NONE", "default_language_name": nil, "default_language_lcid": nil},
+			{"name": "db_owner", "principal_id": 16384, "type": "R", "type_desc": "DATABASE_ROLE", "default_schema_name": nil, "create_date": defaultDate, "modify_date": defaultDate, "owning_principal_id": 1, "sid": nil, "is_fixed_role": true, "authentication_type": 0, "authentication_type_desc": "NONE", "default_language_name": nil, "default_language_lcid": nil},
+		}
+
+	case "sys.server_principals", "sysserverprincipals", "sys_server_principals":
+		columns = []string{
+			"name", "principal_id", "sid", "type", "type_desc", "is_disabled",
+			"create_date", "modify_date", "default_database_name", "default_language_name",
+			"is_fixed_role",
+		}
+		allRows = []map[string]any{
+			{"name": "sa", "principal_id": 1, "sid": nil, "type": "S", "type_desc": "SQL_LOGIN", "is_disabled": false, "create_date": defaultDate, "modify_date": defaultDate, "default_database_name": "master", "default_language_name": "us_english", "is_fixed_role": false},
+			{"name": "public", "principal_id": 2, "sid": nil, "type": "R", "type_desc": "SERVER_ROLE", "is_disabled": false, "create_date": defaultDate, "modify_date": defaultDate, "default_database_name": nil, "default_language_name": nil, "is_fixed_role": false},
+			{"name": "sysadmin", "principal_id": 3, "sid": nil, "type": "R", "type_desc": "SERVER_ROLE", "is_disabled": false, "create_date": defaultDate, "modify_date": defaultDate, "default_database_name": nil, "default_language_name": nil, "is_fixed_role": true},
+		}
+
+	case "sys.dm_os_sys_info", "sysdmosysinfo", "sys_dm_os_sys_info":
+		columns = []string{
+			"cpu_count", "hyperthread_ratio", "physical_memory_kb", "virtual_memory_kb",
+			"sqlserver_start_time", "affinity_type", "affinity_type_desc", "os_priority_class",
+		}
+		allRows = []map[string]any{
+			{
+				"cpu_count":            runtime.NumCPU(),
+				"hyperthread_ratio":    runtime.NumCPU(),
+				"physical_memory_kb":   int64(16 * 1024 * 1024),
+				"virtual_memory_kb":    int64(16 * 1024 * 1024),
+				"sqlserver_start_time": defaultDate,
+				"affinity_type":        1,
+				"affinity_type_desc":   "AUTO",
+				"os_priority_class":    32,
+			},
+		}
+
+	case "sys.endpoints", "sysendpoints", "sys_endpoints":
+		columns = []string{
+			"endpoint_id", "principal_id", "name", "protocol", "protocol_desc",
+			"type", "type_desc", "state", "state_desc", "is_admin_endpoint",
+		}
+		allRows = []map[string]any{
+			{"endpoint_id": 1, "principal_id": 1, "name": "Dedicated Admin Connection", "protocol": 2, "protocol_desc": "TCP", "type": 2, "type_desc": "TSQL", "state": 0, "state_desc": "STARTED", "is_admin_endpoint": true},
+			{"endpoint_id": 2, "principal_id": 1, "name": "TSQL Default TCP", "protocol": 2, "protocol_desc": "TCP", "type": 2, "type_desc": "TSQL", "state": 0, "state_desc": "STARTED", "is_admin_endpoint": false},
+		}
+
+	case "sys.database_files", "sysdatabasefiles", "sys_database_files":
+		columns = []string{"file_id", "file_guid", "type", "type_desc", "data_space_id", "name", "physical_name", "state", "state_desc", "size", "max_size", "growth", "is_media_read_only", "is_read_only", "is_sparse", "is_percent_growth"}
+		allRows = append(allRows,
+			map[string]any{
+				"file_id":            1,
+				"file_guid":          nil,
+				"type":               0,
+				"type_desc":          "ROWS",
+				"data_space_id":      1,
+				"name":               "sqlion_data",
+				"physical_name":      "sqlion.mdf",
+				"state":              0,
+				"state_desc":         "ONLINE",
+				"size":               2048,
+				"max_size":           -1,
+				"growth":             1024,
+				"is_media_read_only": false,
+				"is_read_only":       false,
+				"is_sparse":          false,
+				"is_percent_growth":  false,
+			},
+			map[string]any{
+				"file_id":            2,
+				"file_guid":          nil,
+				"type":               1,
+				"type_desc":          "LOG",
+				"data_space_id":      0,
+				"name":               "sqlion_log",
+				"physical_name":      "sqlion_log.ldf",
+				"state":              0,
+				"state_desc":         "ONLINE",
+				"size":               1024,
+				"max_size":           -1,
+				"growth":             1024,
+				"is_media_read_only": false,
+				"is_read_only":       false,
+				"is_sparse":          false,
+				"is_percent_growth":  false,
+			},
+		)
+
+	case "sys.master_files", "sysmasterfiles", "sys_master_files":
+		columns = []string{"database_id", "file_id", "file_guid", "type", "type_desc", "data_space_id", "name", "physical_name", "state", "state_desc", "size", "max_size", "growth", "is_media_read_only", "is_read_only", "is_sparse", "is_percent_growth"}
+		allRows = append(allRows,
+			map[string]any{
+				"database_id":        1,
+				"file_id":            1,
+				"file_guid":          nil,
+				"type":               0,
+				"type_desc":          "ROWS",
+				"data_space_id":      1,
+				"name":               "master",
+				"physical_name":      "master.mdf",
+				"state":              0,
+				"state_desc":         "ONLINE",
+				"size":               2048,
+				"max_size":           -1,
+				"growth":             1024,
+				"is_media_read_only": false,
+				"is_read_only":       false,
+				"is_sparse":          false,
+				"is_percent_growth":  false,
+			},
+			map[string]any{
+				"database_id":        1,
+				"file_id":            2,
+				"file_guid":          nil,
+				"type":               1,
+				"type_desc":          "LOG",
+				"data_space_id":      0,
+				"name":               "mastlog",
+				"physical_name":      "mastlog.ldf",
+				"state":              0,
+				"state_desc":         "ONLINE",
+				"size":               1024,
+				"max_size":           -1,
+				"growth":             1024,
+				"is_media_read_only": false,
+				"is_read_only":       false,
+				"is_sparse":          false,
+				"is_percent_growth":  false,
+			},
+			map[string]any{
+				"database_id":        2,
+				"file_id":            1,
+				"file_guid":          nil,
+				"type":               0,
+				"type_desc":          "ROWS",
+				"data_space_id":      1,
+				"name":               "sqlion",
+				"physical_name":      "sqlion.mdf",
+				"state":              0,
+				"state_desc":         "ONLINE",
+				"size":               2048,
+				"max_size":           -1,
+				"growth":             1024,
+				"is_media_read_only": false,
+				"is_read_only":       false,
+				"is_sparse":          false,
+				"is_percent_growth":  false,
+			},
+			map[string]any{
+				"database_id":        2,
+				"file_id":            2,
+				"file_guid":          nil,
+				"type":               1,
+				"type_desc":          "LOG",
+				"data_space_id":      0,
+				"name":               "sqlion_log",
+				"physical_name":      "sqlion_log.ldf",
+				"state":              0,
+				"state_desc":         "ONLINE",
+				"size":               1024,
+				"max_size":           -1,
+				"growth":             1024,
+				"is_media_read_only": false,
+				"is_read_only":       false,
+				"is_sparse":          false,
+				"is_percent_growth":  false,
+			},
+		)
 
 	default:
 		return nil, fmt.Errorf("unsupported virtual system table: %s", tableName)

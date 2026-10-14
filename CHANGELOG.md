@@ -13,7 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Fixed empty table hierarchy in DBeaver PostgreSQL connections where table introspection queries filtered on `pg_class.relnamespace` (`WHERE c.relnamespace=2201` for `dbo` or `2200` for `public`). Updated `execHeidiSQLClassSelect` to emit metadata across both schemas and execute whereClause projection filtering.
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
-  - Supported scalar `SERVERPROPERTY('EngineEdition')` and `SERVERPROPERTY('Collation')` queries in TDS server handshake and introspection.
+### Added
+- **SSMS (SQL Server Management Studio) Object Explorer Virtual Catalogs & DMVs (`pkg/engine`)**:
+  - Implemented SQL Server management catalog and DMV views required for SSMS Object Explorer navigation: `sys.configurations`, `sys.dm_exec_sessions`, `sys.dm_exec_connections`, `sys.database_principals`, `sys.server_principals`, `sys.dm_os_sys_info`, `sys.endpoints`, `sys.database_files`, and `sys.master_files`.
+  - Added support for `sys.all_objects`, `sys.all_columns`, and `sys.all_views` with routine metadata integration.
+  - Enriched `sys.databases` with database properties (`compatibility_level`, `collation_name`, `snapshot_isolation_state`, `recovery_model`, `page_verify_option`).
+  - Added test coverage in `TestCoordinator_SSMS_VirtualCatalogQueries` (`pkg/engine/coordinator_test.go`).
 
 ---
 

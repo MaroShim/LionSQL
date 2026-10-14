@@ -1063,6 +1063,110 @@ WHERE c.relnamespace=2201 AND c.relkind not in ('i','I','c')`
 	}
 }
 
+func TestCoordinator_SSMS_VirtualCatalogQueries(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
 
+	// Setup a sample table
+	_, _ = coord.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50))")
+	_, _ = coord.ExecuteSQL("CREATE VIEW v_users AS SELECT id, name FROM users")
 
+	// 1. sys.configurations
+	resCfg, err := coord.ExecuteSQL("SELECT configuration_id, name, value, value_in_use FROM sys.configurations ORDER BY configuration_id")
+	if err != nil {
+		t.Fatalf("sys.configurations failed: %v", err)
+	}
+	if len(resCfg.Rows) == 0 {
+		t.Fatalf("expected configurations rows, got 0")
+	}
 
+	// 2. sys.dm_exec_sessions
+	resSess, err := coord.ExecuteSQL("SELECT session_id, login_name, status, is_user_process FROM sys.dm_exec_sessions")
+	if err != nil {
+		t.Fatalf("sys.dm_exec_sessions failed: %v", err)
+	}
+	if len(resSess.Rows) == 0 {
+		t.Fatalf("expected sessions rows, got 0")
+	}
+
+	// 3. sys.dm_exec_connections
+	resConn, err := coord.ExecuteSQL("SELECT session_id, net_transport, client_net_address FROM sys.dm_exec_connections")
+	if err != nil {
+		t.Fatalf("sys.dm_exec_connections failed: %v", err)
+	}
+	if len(resConn.Rows) == 0 {
+		t.Fatalf("expected connections rows, got 0")
+	}
+
+	// 4. sys.database_principals
+	resPrincipals, err := coord.ExecuteSQL("SELECT name, principal_id, type_desc FROM sys.database_principals")
+	if err != nil {
+		t.Fatalf("sys.database_principals failed: %v", err)
+	}
+	if len(resPrincipals.Rows) == 0 {
+		t.Fatalf("expected database_principals rows, got 0")
+	}
+
+	// 5. sys.server_principals
+	resServerPrincipals, err := coord.ExecuteSQL("SELECT name, principal_id, type_desc FROM sys.server_principals")
+	if err != nil {
+		t.Fatalf("sys.server_principals failed: %v", err)
+	}
+	if len(resServerPrincipals.Rows) == 0 {
+		t.Fatalf("expected server_principals rows, got 0")
+	}
+
+	// 6. sys.dm_os_sys_info
+	resSysInfo, err := coord.ExecuteSQL("SELECT cpu_count, physical_memory_kb FROM sys.dm_os_sys_info")
+	if err != nil {
+		t.Fatalf("sys.dm_os_sys_info failed: %v", err)
+	}
+	if len(resSysInfo.Rows) == 0 {
+		t.Fatalf("expected dm_os_sys_info rows, got 0")
+	}
+
+	// 7. sys.endpoints
+	resEndpoints, err := coord.ExecuteSQL("SELECT endpoint_id, name, protocol_desc, state_desc FROM sys.endpoints")
+	if err != nil {
+		t.Fatalf("sys.endpoints failed: %v", err)
+	}
+	if len(resEndpoints.Rows) == 0 {
+		t.Fatalf("expected endpoints rows, got 0")
+	}
+
+	// 8. sys.database_files and master.sys.master_files
+	resDbFiles, err := coord.ExecuteSQL("SELECT file_id, name, physical_name, size FROM sys.database_files")
+	if err != nil {
+		t.Fatalf("sys.database_files failed: %v", err)
+	}
+	if len(resDbFiles.Rows) == 0 {
+		t.Fatalf("expected database_files rows, got 0")
+	}
+
+	resMasterFiles, err := coord.ExecuteSQL("SELECT database_id, file_id, name FROM [master].[sys].[master_files]")
+	if err != nil {
+		t.Fatalf("master_files failed: %v", err)
+	}
+	if len(resMasterFiles.Rows) == 0 {
+		t.Fatalf("expected master_files rows, got 0")
+	}
+
+	// 9. sys.all_objects
+	resAllObj, err := coord.ExecuteSQL("SELECT name, type, type_desc FROM sys.all_objects")
+	if err != nil {
+		t.Fatalf("sys.all_objects failed: %v", err)
+	}
+	foundUsersTable := false
+	for _, r := range resAllObj.Rows {
+		if r["name"] == "users" && r["type"] == "U" {
+			foundUsersTable = true
+			break
+		}
+	}
+	if !foundUsersTable {
+		t.Fatalf("expected 'users' table in sys.all_objects, got %v", resAllObj.Rows)
+	}
+}
