@@ -2125,47 +2125,80 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	// 2. FROM clause
 	if p.curTokenIs(TokenFrom) {
 		p.nextToken() // eat FROM
-		if !p.curTokenIs(TokenIdent) {
-			return nil, fmt.Errorf("expected table name after FROM, got %s", p.curToken.Literal)
-		}
-		tblName := cleanSchemaPrefix(p.curToken.Literal)
-		p.nextToken()
-
-		var tvfArgs []Expr
-		isTVF := false
 		if p.curTokenIs(TokenLParen) {
-			isTVF = true
 			p.nextToken() // eat (
-			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-				arg := p.parseExpression(precLowest)
-				if arg != nil {
-					tvfArgs = append(tvfArgs, arg)
-				}
-				if p.curTokenIs(TokenComma) {
-					p.nextToken()
-				} else {
-					break
-				}
+			if p.curTokenIs(TokenSelect) {
+				p.nextToken() // eat SELECT
+			}
+			subSel, err := p.parseGeneralSelect()
+			if err != nil {
+				return nil, err
 			}
 			if !p.curTokenIs(TokenRParen) {
-				return nil, fmt.Errorf("expected ) closing TVF arguments")
+				return nil, fmt.Errorf("expected ) closing subquery in FROM, got %s", p.curToken.Literal)
 			}
 			p.nextToken() // eat )
-		}
 
-		alias := tblName
-		if p.curTokenIs(TokenAs) {
-			p.nextToken() // eat AS
-			if p.curTokenIs(TokenIdent) {
+			alias := ""
+			if p.curTokenIs(TokenAs) {
+				p.nextToken() // eat AS
+				if p.curTokenIs(TokenIdent) {
+					alias = cleanSchemaPrefix(p.curToken.Literal)
+					p.nextToken()
+				}
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
-		} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
-			alias = cleanSchemaPrefix(p.curToken.Literal)
-			p.nextToken()
-		}
 
-		stmt.From = TableRef{Name: tblName, Alias: alias, IsTVF: isTVF, TVFArgs: tvfArgs}
+			stmt.From = TableRef{
+				Name:     subSel.String(),
+				Alias:    alias,
+				Subquery: subSel,
+			}
+		} else {
+			if !p.curTokenIs(TokenIdent) {
+				return nil, fmt.Errorf("expected table name after FROM, got %s", p.curToken.Literal)
+			}
+			tblName := cleanSchemaPrefix(p.curToken.Literal)
+			p.nextToken()
+
+			var tvfArgs []Expr
+			isTVF := false
+			if p.curTokenIs(TokenLParen) {
+				isTVF = true
+				p.nextToken() // eat (
+				for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+					arg := p.parseExpression(precLowest)
+					if arg != nil {
+						tvfArgs = append(tvfArgs, arg)
+					}
+					if p.curTokenIs(TokenComma) {
+						p.nextToken()
+					} else {
+						break
+					}
+				}
+				if !p.curTokenIs(TokenRParen) {
+					return nil, fmt.Errorf("expected ) closing TVF arguments")
+				}
+				p.nextToken() // eat )
+			}
+
+			alias := tblName
+			if p.curTokenIs(TokenAs) {
+				p.nextToken() // eat AS
+				if p.curTokenIs(TokenIdent) {
+					alias = cleanSchemaPrefix(p.curToken.Literal)
+					p.nextToken()
+				}
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+				alias = cleanSchemaPrefix(p.curToken.Literal)
+				p.nextToken()
+			}
+
+			stmt.From = TableRef{Name: tblName, Alias: alias, IsTVF: isTVF, TVFArgs: tvfArgs}
+		}
 	}
 
 	// 3. JOIN clauses
@@ -2186,35 +2219,74 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		}
 		p.nextToken() // eat JOIN
 
-		if !p.curTokenIs(TokenIdent) {
-			return nil, fmt.Errorf("expected table name in JOIN, got %s", p.curToken.Literal)
-		}
-		jTbl := cleanSchemaPrefix(p.curToken.Literal)
-		p.nextToken()
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken() // eat (
+			if p.curTokenIs(TokenSelect) {
+				p.nextToken() // eat SELECT
+			}
+			subSel, err := p.parseGeneralSelect()
+			if err != nil {
+				return nil, err
+			}
+			if !p.curTokenIs(TokenRParen) {
+				return nil, fmt.Errorf("expected ) closing subquery in JOIN, got %s", p.curToken.Literal)
+			}
+			p.nextToken() // eat )
 
-		jAlias := jTbl
-		if p.curTokenIs(TokenAs) {
-			p.nextToken()
-			if p.curTokenIs(TokenIdent) {
+			jAlias := ""
+			if p.curTokenIs(TokenAs) {
+				p.nextToken()
+				if p.curTokenIs(TokenIdent) {
+					jAlias = cleanSchemaPrefix(p.curToken.Literal)
+					p.nextToken()
+				}
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
 				jAlias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
-		} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
-			jAlias = cleanSchemaPrefix(p.curToken.Literal)
+
+			if !p.curTokenIs(TokenOn) {
+				return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
+			}
+			p.nextToken() // eat ON
+
+			onExpr := p.parseExpression(precLowest)
+			stmt.Joins = append(stmt.Joins, JoinClause{
+				Type:  joinType,
+				Table: TableRef{Name: subSel.String(), Alias: jAlias, Subquery: subSel},
+				On:    onExpr,
+			})
+		} else {
+			if !p.curTokenIs(TokenIdent) {
+				return nil, fmt.Errorf("expected table name in JOIN, got %s", p.curToken.Literal)
+			}
+			jTbl := cleanSchemaPrefix(p.curToken.Literal)
 			p.nextToken()
-		}
 
-		if !p.curTokenIs(TokenOn) {
-			return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
-		}
-		p.nextToken() // eat ON
+			jAlias := jTbl
+			if p.curTokenIs(TokenAs) {
+				p.nextToken()
+				if p.curTokenIs(TokenIdent) {
+					jAlias = cleanSchemaPrefix(p.curToken.Literal)
+					p.nextToken()
+				}
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+				jAlias = cleanSchemaPrefix(p.curToken.Literal)
+				p.nextToken()
+			}
 
-		onExpr := p.parseExpression(precLowest)
-		stmt.Joins = append(stmt.Joins, JoinClause{
-			Type:  joinType,
-			Table: TableRef{Name: jTbl, Alias: jAlias},
-			On:    onExpr,
-		})
+			if !p.curTokenIs(TokenOn) {
+				return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
+			}
+			p.nextToken() // eat ON
+
+			onExpr := p.parseExpression(precLowest)
+			stmt.Joins = append(stmt.Joins, JoinClause{
+				Type:  joinType,
+				Table: TableRef{Name: jTbl, Alias: jAlias},
+				On:    onExpr,
+			})
+		}
 	}
 
 	// 4. WHERE clause

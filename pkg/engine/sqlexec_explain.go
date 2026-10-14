@@ -55,9 +55,21 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 	if strings.HasPrefix(innerUpper, "INSERT ") || strings.HasPrefix(innerUpper, "UPDATE ") || strings.HasPrefix(innerUpper, "DELETE ") {
 		return s.execDMLExplain(innerExplainSQL, opts, start)
 	}
-
 	if setQuery, ok := planner.FindTopLevelSetOps(innerExplainSQL); ok && setQuery != nil && len(setQuery.Segments) >= 2 {
 		return s.execSetOpExplain(setQuery, opts.Analyze, start)
+	}
+
+	if hasDerivedTables(innerExplainSQL) {
+		rewritten, tempTables, err := s.resolveDerivedTables(innerExplainSQL, start, nil)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			for _, tbl := range tempTables {
+				_ = s.engine.DropTable(tbl)
+			}
+		}()
+		innerExplainSQL = rewritten
 	}
 
 	p := s.newPlanner()

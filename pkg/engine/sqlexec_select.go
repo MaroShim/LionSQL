@@ -1231,6 +1231,20 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		return s.execScalarSelect(cleaned, start, cs)
 	}
 
+	// 0.5. Derived Tables in FROM / JOIN: e.g. FROM (SELECT ...) AS t
+	if hasDerivedTables(cleaned) {
+		rewritten, tempTables, err := s.resolveDerivedTables(cleaned, start, cs)
+		if err != nil {
+			return nil, err
+		}
+		defer func() {
+			for _, tbl := range tempTables {
+				_ = s.engine.DropTable(tbl)
+			}
+		}()
+		return s.execSelect(rewritten, start, cs)
+	}
+
 	p := s.newPlanner()
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil {

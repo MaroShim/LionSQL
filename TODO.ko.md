@@ -166,10 +166,14 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - `ON CONFLICT (...) DO NOTHING / DO UPDATE` 및 `OUTPUT INSERTED.*` 절 연동 지원.
   - 세션 범위 임시 테이블(`#temp`) 및 영구 테이블 간 복사/자체 적재 지원.
   - `pkg/execution/project.go` 내 산술/일반 수식 프로젝션 평가 지원 및 `pkg/engine/coordinator_test.go` 종합 단위 테스트 완료.
-- [ ] **FROM 절 파생 테이블(Derived Table) 및 인라인 서브쿼리 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
-  - `SELECT * FROM (SELECT id, balance FROM accounts) AS t WHERE t.balance > 100` 형태의 FROM 절 서브쿼리 AST 노드화 및 Volcano 실행 연동 (ORM 호환 필수).
-- [ ] **`WHERE EXISTS` / `NOT EXISTS` 상관 서브쿼리 술어 (`pkg/planner/decorrelate.go`, `pkg/execution`)**
-  - `WHERE EXISTS (SELECT 1 FROM orders o WHERE o.user_id = u.id)` 술어의 Semi-Join / Anti-Join 플래너 변환 및 실행.
+- [x] **[완료] FROM 절 파생 테이블(Derived Table) 및 인라인 서브쿼리 (`pkg/proc`, `pkg/engine`, `pkg/execution`)**
+  - `SELECT * FROM (SELECT ...) AS t` 및 `JOIN (SELECT ...) AS o ON ...` 인라인 서브쿼리 Pratt 정규 AST 파싱(`TableRef.Subquery`) 및 바인딩 완료.
+  - 서브쿼리 결과 자동 임시 테이블(`__dt_*`) 구체화(Materialization), 스키마 및 컬럼 타입 동적 추론, 격리 실행 및 트랜잭션 수명주기 Teardown 드롭 파이프라인(`pkg/engine/sqlexec_derived.go`) 완비.
+  - 중첩 파생 테이블(Nested Derived Tables), 집계 및 계산식 프로젝션 연계, `EXPLAIN` 지원 및 `pkg/engine/coordinator_test.go` 단위/통합 테스트 완료.
+- [x] **[완료] `WHERE EXISTS` / `NOT EXISTS` 상관 및 비상관 서브쿼리 술어 (`pkg/planner/decorrelate.go`, `pkg/engine`, `pkg/execution`)**
+  - 상관 `WHERE [NOT] EXISTS` 서브쿼리의 SEMI / ANTI 조인 CBO 플래너 변환(`DecorrelateSubqueries`) 및 Volcano 실행기(`HashJoinIterator`, `IndexNestedLoopJoinIterator`) 연동 완료.
+  - 비상관 `EXISTS` 서브쿼리의 조기 평가(`resolveSubqueries`) 및 불리언 술어 최적화 완비.
+  - `pkg/api/subquery_test.go` 및 `pkg/engine/coordinator_test.go` 다중 조건 검증 완료.
 
 ### 6.3. P2: T-SQL 핵심 특화 문법 (MSSQL 마이그레이션 호환성)
 - [ ] **`CROSS APPLY` 및 `OUTER APPLY` 조인 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**

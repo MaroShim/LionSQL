@@ -697,17 +697,20 @@ func (p Projection) String() string {
 	return p.Expr.String()
 }
 
-// TableRef represents a referenced table or TVF call.
+// TableRef represents a referenced table, TVF call, or derived table subquery.
 type TableRef struct {
-	Name    string
-	Alias   string
-	IsTVF   bool
-	TVFArgs []Expr
+	Name     string
+	Alias    string
+	IsTVF    bool
+	TVFArgs  []Expr
+	Subquery *GeneralSelectStmt
 }
 
 func (t TableRef) String() string {
 	var s string
-	if t.IsTVF {
+	if t.Subquery != nil {
+		s = fmt.Sprintf("(%s)", t.Subquery.String())
+	} else if t.IsTVF {
 		var args []string
 		for _, a := range t.TVFArgs {
 			args = append(args, a.String())

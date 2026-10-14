@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **`FROM` Derived Table Subqueries & `WHERE EXISTS` Correlated Predicates (`pkg/engine`, `pkg/proc`, `pkg/planner`, `pkg/execution`)**:
+  - Implemented `FROM (SELECT ...) AS t` and `JOIN (SELECT ...) AS o ON ...` inline derived table subqueries in `Coordinator.resolveDerivedTables()`.
+  - Added recursive derived table resolution, dynamic schema and data type inference, automatic materialization into isolated ephemeral tables (`#__dt_*`), and clean transaction lifecycle teardown.
+  - Extended Pratt parser `TableRef` with `Subquery *GeneralSelectStmt` to model derived tables as first-class AST nodes in `parseGeneralSelect()`.
+  - Verified `WHERE [NOT] EXISTS` correlated subqueries converting to SEMI and ANTI joins via `DecorrelateSubqueries` and Volcano `HashJoinIterator` / `IndexNestedLoopJoinIterator`, and uncorrelated EXISTS via `resolveSubqueries()`.
+  - Added comprehensive test suites in `pkg/proc/sqlparser_test.go` and `pkg/engine/coordinator_test.go` covering nested derived tables, aggregations, joins, EXPLAIN, and correlated/uncorrelated EXISTS predicates.
 - **`INSERT INTO ... SELECT` Batch DML Loading & Expression Evaluation Hardening (`pkg/engine`, `pkg/proc`, `pkg/execution`)**:
   - Implemented `INSERT INTO <table> [(cols...)] [OUTPUT ...] SELECT ...` batch DML loading in `Coordinator.execInsertSelect()`.
   - Added schema projection, explicit target column mapping, dynamic data type coercion via `ConvertValue()`, and automatic column count validation.

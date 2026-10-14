@@ -130,6 +130,19 @@ func TestParseSQL_DDLAndDML(t *testing.T) {
 	if !ok || insSel.Select == nil || insSel.Table != "users_backup" || len(insSel.Columns) != 2 {
 		t.Errorf("unexpected GeneralInsertStmt with Select: %+v", insSel)
 	}
+
+	// 6. Derived Table in FROM and JOIN
+	stmt, err = proc.ParseSQL(`SELECT t.id, o.amount FROM (SELECT id, name FROM users) AS t JOIN (SELECT user_id, amount FROM orders) AS o ON t.id = o.user_id;`)
+	if err != nil {
+		t.Fatalf("Derived table parse error: %v", err)
+	}
+	dtSel, ok := stmt.(*proc.GeneralSelectStmt)
+	if !ok || dtSel.From.Subquery == nil || dtSel.From.Alias != "t" {
+		t.Errorf("unexpected GeneralSelectStmt for FROM subquery: %+v", dtSel)
+	}
+	if len(dtSel.Joins) != 1 || dtSel.Joins[0].Table.Subquery == nil || dtSel.Joins[0].Table.Alias != "o" {
+		t.Errorf("unexpected GeneralSelectStmt for JOIN subquery: %+v", dtSel)
+	}
 }
 
 func TestEvalRowExpr_AdvancedPredicates(t *testing.T) {
