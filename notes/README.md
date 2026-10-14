@@ -17,10 +17,10 @@
    - **샌드박스 및 네트워크 격리 이슈**: 테스트 환경에서의 로컬 루프백 소켓/HTTP 주의사항
    - **원자적 파일 I/O 및 데이터 타입 직렬화**: 크래시 방지 파일 저장 규칙과 Decimal JSON 무결성
 
-3. **[`REFACTORING_AND_ROADMAP.md`](REFACTORING_AND_ROADMAP.md)**
-   - **최근 완료된 대규모 리팩토링 이력**: 540라인 레거시 조인 코드 제거, `sqlexec_dml.go`, `memengine.go`, `server.go` 분할 완료 내역
-   - **차주(Next Week) 예정 핵심 리팩토링**: VDBE `vm.go` 거대 switch 분할, `pkg/api`에서 코어 `pkg/engine` 코디네이터 분리 계획
-   - **CBO (Cost-Based Optimizer) 진행 현황 및 백로그**: 통계 영속화 완료 상태와 병렬 ANALYZE, Sort-Merge Join 로드맵
+3. **프로젝트 전역 로드맵 및 백로그**:
+   - **[`TODO.ko.md`](../TODO.ko.md)**: 액티브 엔지니어링 백로그, 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 최근 완료 마일스톤
+   - **[`ROADMAP.ko.md`](../ROADMAP.ko.md)** ([English: `ROADMAP.md`](../ROADMAP.md)): 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태
+
 
 ---
 

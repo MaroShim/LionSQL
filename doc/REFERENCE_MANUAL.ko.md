@@ -267,14 +267,15 @@
 #### 10.6. 개발자 엔지니어링 핸드오버 및 로드맵 문서 (Developer Context & Backlog)
 * [`ROADMAP.md`](file:///Users/maro/Projects/sql/ROADMAP.md)
   * 버전별 개발 마일스톤(Phase 1~5) 달성 현황 및 향후 중장기 핵심 로드맵.
-* [`TODO.ko.md`](file:///Users/maro/Projects/sql/TODO.ko.md)
-  * VDBE 실행 루프 고속화, 파서 커버리지 확장, CBO 통계 등 단기 액션 플랜 및 작업 상태 트래커.
-* [`CHANGELOG.md`](file:///Users/maro/Projects/sql/CHANGELOG.md)
+* [`TODO.ko.md`](../TODO.ko.md)
+  * 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 도메인별 대기 백로그 및 최근 마일스톤 트래커.
+* [`ROADMAP.ko.md`](../ROADMAP.ko.md) ([`ROADMAP.md`](../ROADMAP.md))
+  * 단계별 거시 릴리즈 마일스톤(Phase 1~6), 핵심 구현 완료 상태 및 향후 중장기 기술 과제.
+* [`CHANGELOG.md`](../CHANGELOG.md)
   * 버전별 릴리즈 변경 내역 및 기능 추가/수정 기록 (Keep a Changelog 표준).
-* [`notes/ENGINEERING_CONTEXT.md`](file:///Users/maro/Projects/sql/notes/ENGINEERING_CONTEXT.md)
+* [`notes/ENGINEERING_CONTEXT.md`](../notes/ENGINEERING_CONTEXT.md)
   * 아키텍처 불변 규칙, 대안 기술 Spec-Out 사유, 협업 엔지니어링 원칙.
-* [`notes/PITFALLS_AND_TRICKS.md`](file:///Users/maro/Projects/sql/notes/PITFALLS_AND_TRICKS.md)
+* [`notes/PITFALLS_AND_TRICKS.md`](../notes/PITFALLS_AND_TRICKS.md)
   * 순환 참조 방지, wiredtiger 빌드 태그, 샌드박스 네트워크 격리, 소수점 JSON 직렬화 등 개발 시 주의점.
-* [`notes/REFACTORING_AND_ROADMAP.md`](file:///Users/maro/Projects/sql/notes/REFACTORING_AND_ROADMAP.md)
-  * 단일 거대 파일 모듈화 분해 이력 및 차기 리팩토링/최적화 상세 계획.
+
 

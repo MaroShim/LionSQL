@@ -158,8 +158,10 @@ SQLion은 모든 벤치마크(TPC-C, TPC-H, 마이크로 벤치마크), 테스�
 
 ---
 
-## 9. 개발자 & AI 인수인계 컨텍스트 노트 (`notes/`)
-다양한 개발 환경에서 작업하거나 새로운 AI 에이전트 세션을 시작할 때는 과거 설계 논의, 음성적 지식(Spec-Out 사유), 엔지니어링 주의점 및 차기 리팩토링 계획에 대해 `notes/` 디렉터리를 참조하세요:
+## 9. 개발자 & AI 인수인계 컨텍스트 노트 (`notes/`) & 로드맵
+다양한 개발 환경에서 작업하거나 새로운 AI 에이전트 세션을 시작할 때는 과거 설계 논의, 음성적 지식(Spec-Out 사유), 엔지니어링 주의점 및 백로그에 대해 다음 문서를 참조하세요:
 - [`notes/ENGINEERING_CONTEXT.md`](notes/ENGINEERING_CONTEXT.md): 아키텍처 불변 규칙, 대안 기술 Spec-Out 사유, 협업 엔지니어링 원칙.
 - [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): 순환 참조 방지, wiredtiger 빌드 태그, 샌드박스 네트워크 격리, 소수점 JSON 직렬화, VDBE 트랜잭션 결합.
-- [`notes/REFACTORING_AND_ROADMAP.md`](notes/REFACTORING_AND_ROADMAP.md): 단일 거대 파일 모듈화 분해 이력, 차주 핵심 과제(VDBE 디스패처 모듈화, SQL 코디네이터 분리), CBO 최적화 백로그.
+- [`TODO.ko.md`](TODO.ko.md): 액티브 엔지니어링 백로그, 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 최근 완료 마일스톤.
+- [`ROADMAP.ko.md`](ROADMAP.ko.md) ([`ROADMAP.md`](ROADMAP.md)): 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태.
+
