@@ -71,6 +71,9 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * Complete Microsoft T-SQL syntax compatibility guide.
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
+* [`ANTLR_PARSER_COMPACT_STRATEGY.md`](file:///Users/maro/Projects/sql/doc/ANTLR_PARSER_COMPACT_STRATEGY.md)
+  * Technical roadmap and phased strategy for slimming down the generated T-SQL ANTLR4 parser (`pkg/proc/parser/antlr/`).
+  * Analysis of 267k-line generated code, unused listener pruning, grammar subsetting, ATN packing, and long-term Native Pratt Parser unification.
 * [`EXTENSIONS.md`](file:///Users/maro/Projects/sql/doc/EXTENSIONS.md)
   * Advanced SQL capabilities: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB operators, CTEs, Foreign Keys with cascading actions, and Dual-Track UDF architecture (Go native SPI + Wasm sandbox).
 * [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](file:///Users/maro/Projects/sql/doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md)
