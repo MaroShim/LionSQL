@@ -635,6 +635,13 @@ func TestDriverIntegration_BeekeeperDbGate_TableQuery(t *testing.T) {
 		"SELECT TOP 50 [dbo].[users].* FROM [dbo].[users];",
 		"SELECT TOP 50 [t].* FROM [dbo].[users] [t];",
 		"SELECT [basetbl].* FROM [dbo].[users] AS [basetbl];",
+		`SELECT
+  [basetbl].[id] AS [id],
+  [basetbl].[name] AS [name],
+  [basetbl].[email] AS [email]
+  FROM [dbo].[users] [basetbl]
+ORDER BY [id] ASC
+OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY`,
 	}
 
 	for _, q := range testQueries {

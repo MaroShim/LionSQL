@@ -29,6 +29,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented active connection tracking across both TDS and PGWire listeners, closing active client sockets upon server teardown so reading goroutines unblock immediately.
   - Enforced a strict 1.5-second bounded shutdown deadline in `cmd/server/main.go` adhering to Golden Rule 4.
   - Added regression test `TestTDS_GracefulCloseWithActiveConnections` in `pkg/wire/tds/server_test.go`.
+- **WiredTiger Cursor EOF Wrap-Around Prevention & Scan Latches (`pkg/storage/wiredtiger`, `pkg/execution`)**:
+  - Fixed an infinite loop / loading hang when browsing tables in GUI database clients (Beekeeper Studio, DbGate) across both PostgreSQL and SQL Server wire protocols.
+  - In WiredTiger C API, calling `cursor->next()` after reaching EOF (`WT_NOTFOUND`) wraps around and repositions the cursor back to the first row.
+  - In vectorized chunk iteration (`NextChunk`), tables with fewer than 1024 rows returned the first batch successfully, but subsequent chunk pulls invoked `cursor.Next()`, re-scanning the table indefinitely and locking up `SortIterator`, `AggregateIterator`, and query execution.
+  - Added an explicit `eof` boolean latch to `WTCursor` (`pkg/storage/wiredtiger/wt_engine.go`) as well as `SeqScanIterator` and `IndexScanIterator` (`pkg/execution/scan.go`), ensuring cursors permanently return `false` / `io.EOF` once depleted.
+  - Added unit test `TestWiredTiger_CursorNextEOFNoWrapAround` and coordinator test `TestWiredTiger_Coordinator_DbGateTableQuery` in `pkg/storage/wiredtiger/wt_engine_test.go`, plus DbGate query regression tests in `pkg/engine/coordinator_test.go` and `pkg/wire/tds/driver_integration_test.go`.
 
 ### Added
 - **Vectorized Chunk Iterator & Batch Volcano Execution (`P-4`) (`pkg/execution`, `pkg/engine`)**:

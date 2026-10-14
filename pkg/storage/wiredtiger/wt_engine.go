@@ -1512,17 +1512,22 @@ type WTCursor struct {
 	cur    *C.WT_CURSOR
 	schema *storage.TableSchema
 	closed bool
+	eof    bool
 }
 
 func (c *WTCursor) Next() bool {
-	if c.closed || c.cur == nil {
+	if c.closed || c.cur == nil || c.eof {
 		return false
 	}
-	return C.go_wt_cursor_next(c.cur) == 0
+	if C.go_wt_cursor_next(c.cur) != 0 {
+		c.eof = true
+		return false
+	}
+	return true
 }
 
 func (c *WTCursor) Record() (storage.Record, error) {
-	if c.closed || c.cur == nil {
+	if c.closed || c.cur == nil || c.eof {
 		return nil, fmt.Errorf("cursor closed")
 	}
 
@@ -1536,7 +1541,7 @@ func (c *WTCursor) Record() (storage.Record, error) {
 }
 
 func (c *WTCursor) Row() (storage.Row, error) {
-	if c.closed || c.cur == nil {
+	if c.closed || c.cur == nil || c.eof {
 		return storage.Row{}, fmt.Errorf("cursor closed")
 	}
 
@@ -1550,7 +1555,7 @@ func (c *WTCursor) Row() (storage.Row, error) {
 }
 
 func (c *WTCursor) RawTuple() ([]byte, bool) {
-	if c.closed || c.cur == nil {
+	if c.closed || c.cur == nil || c.eof {
 		return nil, false
 	}
 

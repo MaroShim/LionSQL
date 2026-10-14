@@ -881,8 +881,8 @@ func TestCoordinator_BeekeeperDbGateTableQueries(t *testing.T) {
 	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
 	defer coord.Close()
 
-	coord.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));")
-	coord.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice', 'alice@test.com'), (2, 'Bob', 'bob@test.com');")
+	coord.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100), email VARCHAR(100), balance FLOAT);")
+	coord.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice', 'alice@test.com', 100.0), (2, 'Bob', 'bob@test.com', 200.0);")
 
 	queries := []string{
 		"SELECT * FROM users;",
@@ -903,6 +903,13 @@ func TestCoordinator_BeekeeperDbGateTableQueries(t *testing.T) {
 		"SELECT users.* FROM users;",
 		"SELECT \"users\".* FROM \"users\";",
 		"SELECT \"public\".\"users\".* FROM \"public\".\"users\";",
+		`SELECT
+  [basetbl].[id] AS [id],
+  [basetbl].[name] AS [name],
+  [basetbl].[balance] AS [balance]
+  FROM [dbo].[users] [basetbl]
+ORDER BY [id] ASC
+OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY`,
 	}
 
 	for _, q := range queries {

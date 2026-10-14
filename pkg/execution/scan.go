@@ -19,6 +19,7 @@ type SeqScanIterator struct {
 	partitions  []string
 	bufChunk    Chunk
 	bufIdx      int
+	eof         bool
 }
 
 // NewSeqScanIterator creates a new sequential scan iterator.
@@ -48,6 +49,7 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
 	s.bufChunk.Reset()
 	s.bufIdx = 0
+	s.eof = false
 	var cur storage.Cursor
 	var err error
 	if len(s.partitions) > 0 {
@@ -63,7 +65,7 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 }
 
 func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
-	if s.cursor == nil {
+	if s.cursor == nil || s.eof {
 		return io.EOF
 	}
 	dest.Reset()
@@ -77,6 +79,7 @@ func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 
 	for dest.Len() < DefaultChunkSize {
 		if !s.cursor.Next() {
+			s.eof = true
 			if dest.Len() > 0 {
 				return nil
 			}
@@ -174,6 +177,7 @@ type IndexScanIterator struct {
 	Desc        bool
 	bufChunk    Chunk
 	bufIdx      int
+	eof         bool
 }
 
 // NewIndexScanIterator creates a new index scan iterator.
@@ -200,6 +204,7 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
 	s.bufChunk.Reset()
 	s.bufIdx = 0
+	s.eof = false
 	var cur storage.Cursor
 	var err error
 	if s.Desc {
@@ -217,7 +222,7 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 }
 
 func (s *IndexScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
-	if s.cursor == nil {
+	if s.cursor == nil || s.eof {
 		return io.EOF
 	}
 	dest.Reset()
@@ -231,6 +236,7 @@ func (s *IndexScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 
 	for dest.Len() < DefaultChunkSize {
 		if !s.cursor.Next() {
+			s.eof = true
 			if dest.Len() > 0 {
 				return nil
 			}
