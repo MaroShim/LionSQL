@@ -13,6 +13,9 @@
 | **`A` ~ `D`** | **CBO 최적화 (Optimizer)** | `A-1` ~ `D-9` | 비용 기반 옵티마이저 4대 기능 트랙 (A: 통계 수집, B: 조인 알고리즘, C: 선택도, D: 운영 제어) |
 | **`S-1` ~ `S-7`** | **SQL 문법 (Syntax)** | `S-1` ~ `S-7` | T-SQL 및 ANSI SQL 7대 문법 호환성 완비 트랙 (전 항목 완료) |
 
+> [!NOTE]
+> 전체 식별 코드 일람 및 상세 명세는 [notes/TAXONOMY.md](notes/TAXONOMY.md)를 참조하세요.
+
 ---
 
 ## 1. 차기 착수 우선순위 과제 (Next High Priorities)
