@@ -34,6 +34,13 @@
 * `doc/SDK.md` ➔ `doc/WEB_SDK.md`로 리네임 및 섹션 9(웹 & HTML 임베딩 레시피: Vanilla `fetch()`, SDK+SSE, HTMX, T-SQL `FOR JSON PATH`) 추가.
 * `doc/ADR.md`에 ADR-017(HA 복제) 및 ADR-018(듀얼 트랙 UDF) 추가.
 
+### ⑤ [P-1] 스토리지 파이프라인 그룹 커밋 및 무경합 패스트패스 구현 (`pkg/storage/memengine`, `pkg/storage/wiredtiger`)
+* **배경**: 동시 트랜잭션 증가 시 디스크 fsync 동기화 오버헤드로 인한 I/O 병목 및 커밋 지연 급증.
+* **조치 및 구현 성과**:
+  * **`memengine` WAL 그룹 커밋**: `WALWriter.Append` 단일 프레임 write + `syncMu` -> `mu` 락 계층 분리를 통한 리더/팔로워 일괄 `fsync` 구현. `walOrderMu`로 원자적 LSN 및 인과적 행버전 순서 보장, 백그라운드 AOF 압축 연동.
+  * **`wiredtiger` 그룹 커밋 & 패스트패스**: `WT_SESSION::log_flush("sync=on")` 리더/팔로워 그룹 커밋, 무동기 커밋 무경합 패스트패스, 주기적 1초 백그라운드 동기화 워커 분리 및 기본값 적용.
+  * **벤치마크 검증**: `FsyncAlways` 마이크로벤치마크 16워커 3.72ms -> 0.062ms/op, 64워커 3.81ms -> 0.038ms/op (지연 100배 단축). TPC-C VDBE(`-fsync always`) `memory` 1,863 TPS (49,922 tpmC), `wiredtiger` 2,823 TPS (77,481 tpmC) 및 기본 모드 `wiredtiger` 14,351 TPS (410,651 tpmC) 달성.
+
 ---
 
 ## 2. 차주 최우선 착수 과제 (Next Week Top Priorities)
@@ -82,8 +89,14 @@
   3. **프로토콜 레이어 디커플링 (`pkg/wire`, `pkg/wire/tds`)**:
      - PGWire 및 TDS 서버가 `*api.Server` 구체 구현체 대신 `engine.SQLCoordinator` 인터페이스에만 의존하도록 리팩토링.
      - `NewServerWithCoordinator` 생성자 및 `SetCoordinator` 주입 세터 연동 완료.
-  4. **후속 작업**:
-     - `pkg/api/sqlexec_*.go`의 세부 파싱/실행 파이프라인 메서드들을 `Coordinator`로 순차 이전 및 `api.Server` 위임 연동.
+   4. **세션/풀/메트릭스/로거 소유권 `Coordinator` 단일화**:
+      - `engine.Coordinator`가 세션 맵, 세션 풀, 메트릭스(`MetricsCollector`), Slow/General 쿼리 로거, `work_mem`, 전역 임시 테이블 추적(`RegisterGlobalTemp`)을 단독 소유하도록 이전 완료.
+      - `api.Server`의 중복 필드/메서드를 제거하고 `s.coordinator` 위임 체계 확립.
+      - `api.ClientSession` 및 `PreparedStatement`를 `engine` 타입 alias로 완전 통합.
+   5. **순수 SQL 유틸리티 이관 (`pkg/engine/query_utils.go`)**:
+      - `SplitStatements`, `ParseTimeoutDuration`, `IsIdentChar`, `CleanSavepointName`, `TrimAnyPrefix`, `IsRollbackOrResetQuery`, `ParseSessionVarValue` 이전 및 패키지 간 중복 제거 완료.
+   6. **후속 작업**:
+      - `pkg/api/sqlexec_*.go`(13개 파일)의 파싱/실행 파이프라인 메서드들을 `Coordinator`로 최종 이전하고 `wire`의 `api` import 완전 제거.
 
 ---
 
@@ -131,7 +144,7 @@
 
 | 단계 | 전략 분야 | 핵심 구현 과제 | 상태 | 예상 효과 및 ROI |
 | :---: | :--- | :--- | :---: | :--- |
-| **P-1** | **스토리지/트랜잭션** | **배치형 그룹 커밋 (Group Commit)** & 읽기 전용 Fast-Path | **대기 (`[ ]`)** | 동시 쓰기 워크로드 TPS 2~4배 향상 (15K ➔ 50K+ TPS) |
+| **P-1** | **스토리지/트랜잭션** | **배치형 그룹 커밋 (Group Commit)** & 읽기 전용 Fast-Path | **완료 (`[x]`)** | `memengine` WAL & `wiredtiger` 리더/팔로워 그룹 커밋 및 무경합 패스트패스 완료 (`FsyncAlways` 100배 지연 단축, TPC-C 2.8K TPS) |
 | **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 (Lazy Decoding)** & 커버링 인덱스 스캔 | **대기 (`[ ]`)** | 스캔 속도 2배 향상, 불필요한 Varint 디코딩 힙 할당 제거 |
 | **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩** & I/O 버퍼 결합 (Write Combining) | **대기 (`[ ]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next: 64~256건)** | **대기 (`[ ]`)** | 볼케이노 함수 호출 오버헤드 감소, 대량 집계/스캔 지연 60% 단축 |
