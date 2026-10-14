@@ -28,13 +28,19 @@ type ProjectionIterator struct {
 	outIdx      int
 }
 
+// isWildcard reports whether a projection item is an unqualified or table-qualified wildcard (* or alias.*).
+func isWildcard(item string) bool {
+	item = strings.TrimSpace(item)
+	return item == "*" || strings.HasSuffix(item, ".*")
+}
+
 // NewProjectionIterator creates a new projection operator.
 func NewProjectionIterator(child Iterator, projections []string) *ProjectionIterator {
 	p := &ProjectionIterator{
 		child: child,
 	}
 
-	if len(projections) == 0 || (len(projections) == 1 && (projections[0] == "*" || projections[0] == "")) {
+	if len(projections) == 0 || (len(projections) == 1 && (projections[0] == "" || isWildcard(projections[0]))) {
 		p.isSelectAll = true
 		return p
 	}
@@ -53,8 +59,12 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 
 	for _, item := range projections {
 		item = strings.TrimSpace(item)
-		if item == "*" {
-			p.isSelectAll = true
+		if isWildcard(item) {
+			if child != nil {
+				for _, col := range child.Schema() {
+					addField(col, col)
+				}
+			}
 			continue
 		}
 
@@ -81,7 +91,7 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 			} else {
 				// Bare expression / column name
 				alias := item
-				if dotIdx := strings.Index(alias, "."); dotIdx != -1 {
+				if dotIdx := strings.LastIndex(alias, "."); dotIdx != -1 {
 					alias = alias[dotIdx+1:]
 				}
 				alias = strings.Trim(alias, "\"`[]")

@@ -16,6 +16,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Consolidated macro release roadmap into single source of truth at `ROADMAP.md` and removed duplicate `ROADMAP.ko.md`.
   - Consolidated engineering backlog into `TODO.ko.md` and deleted redundant `notes/REFACTORING_AND_ROADMAP.md`.
   - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, `README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
+### Fixed
+- **Table-Qualified Wildcard Projections in Volcano Execution Engine (`pkg/execution`)**:
+  - Fixed an issue where GUI database managers (such as Beekeeper Studio and DbGate) received null column values when browsing table contents.
+  - GUI clients frequently generate table-qualified wildcard projections, such as `SELECT "basetbl".* FROM "public"."users" "basetbl" LIMIT 50 OFFSET 0` (PostgreSQL) or `SELECT TOP 50 [dbo].[users].* FROM [dbo].[users]` / `SELECT TOP 50 [t].* FROM [dbo].[users] [t]` (SQL Server TDS).
+  - Enhanced `ProjectionIterator` in `pkg/execution/project.go` to recognize both unqualified (`*`) and table-qualified wildcards (`.*`, `alias.*`, `schema.table.*`).
+  - Switched column alias extraction from `strings.Index` to `strings.LastIndex` to cleanly strip multi-part database and schema prefixes (e.g. `[dbo].[users].[col]`).
+  - Added comprehensive regression tests across `pkg/engine/coordinator_test.go`, `pkg/wire/server_test.go`, and `pkg/wire/tds/driver_integration_test.go`.
 
 ### Added
 - **Vectorized Chunk Iterator & Batch Volcano Execution (`P-4`) (`pkg/execution`, `pkg/engine`)**:

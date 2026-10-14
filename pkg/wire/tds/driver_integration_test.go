@@ -598,5 +598,80 @@ func TestDriverIntegration_GoMSSQLDB_NBCRowNulls(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_BeekeeperDbGate_TableQuery(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, "CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	_, err = db.ExecContext(ctx, "INSERT INTO users VALUES (1, 'Alice', 'alice@test.com'), (2, 'Bob', 'bob@test.com');")
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	testQueries := []string{
+		"SELECT TOP 50 * FROM [dbo].[users];",
+		"SELECT TOP 50 [dbo].[users].* FROM [dbo].[users];",
+		"SELECT TOP 50 [t].* FROM [dbo].[users] [t];",
+		"SELECT [basetbl].* FROM [dbo].[users] AS [basetbl];",
+	}
+
+	for _, q := range testQueries {
+		rows, err := db.QueryContext(ctx, q)
+		if err != nil {
+			t.Fatalf("query failed %q: %v", q, err)
+		}
+		cols, err := rows.Columns()
+		if err != nil {
+			rows.Close()
+			t.Fatalf("rows.Columns failed %q: %v", q, err)
+		}
+		if len(cols) != 3 {
+			rows.Close()
+			t.Fatalf("query %q: expected 3 columns, got %v", q, cols)
+		}
+
+		count := 0
+		for rows.Next() {
+			var id int
+			var name, email string
+			if err := rows.Scan(&id, &name, &email); err != nil {
+				rows.Close()
+				t.Fatalf("rows.Scan failed %q: %v", q, err)
+			}
+			if count == 0 && name != "Alice" {
+				rows.Close()
+				t.Fatalf("query %q: expected Alice, got %s", q, name)
+			}
+			count++
+		}
+		rows.Close()
+		if count != 2 {
+			t.Fatalf("query %q: expected 2 rows, got %d", q, count)
+		}
+	}
+}
+
 
 

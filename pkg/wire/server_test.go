@@ -174,6 +174,65 @@ func TestWire_SelectTableRecords(t *testing.T) {
 	}
 }
 
+func TestWire_BeekeeperDbGateQuery(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	go srv.handleConnection(serverConn)
+
+	// Startup
+	startupBuf := make([]byte, 8)
+	binary.BigEndian.PutUint32(startupBuf[:4], 8)
+	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
+	_, _ = clientConn.Write(startupBuf)
+
+	// Wait for Ready
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+		if header[0] == MsgReadyForQuery {
+			break
+		}
+	}
+
+	// Beekeeper exact query
+	query := "SELECT \"basetbl\".* FROM \"public\".\"accounts\" \"basetbl\" LIMIT 50 OFFSET 0\x00"
+	queryBuf := make([]byte, 1+4+len(query))
+	queryBuf[0] = 'Q'
+	binary.BigEndian.PutUint32(queryBuf[1:5], uint32(4+len(query)))
+	copy(queryBuf[5:], query)
+	_, _ = clientConn.Write(queryBuf)
+
+	var rowFound bool
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+
+		if header[0] == MsgDataRow {
+			rowFound = true
+			if !strings.Contains(string(payload), "Alice") {
+				t.Errorf("Expected Alice in row, got %s", string(payload))
+			}
+		}
+		if header[0] == MsgReadyForQuery {
+			break
+		}
+	}
+
+	if !rowFound {
+		t.Errorf("Expected at least one data row returned for Beekeeper query")
+	}
+}
+
 func TestWire_ExtendedQueryProtocol(t *testing.T) {
 	srv, _, _ := setupTestWireServer(t)
 

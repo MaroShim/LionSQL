@@ -874,5 +874,52 @@ func TestCoordinator_CoalesceAndIsNull(t *testing.T) {
 	}
 }
 
+func TestCoordinator_BeekeeperDbGateTableQueries(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	coord.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100), email VARCHAR(100));")
+	coord.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice', 'alice@test.com'), (2, 'Bob', 'bob@test.com');")
+
+	queries := []string{
+		"SELECT * FROM users;",
+		"SELECT * FROM \"users\" LIMIT 50;",
+		"SELECT * FROM \"public\".\"users\" LIMIT 50;",
+		"SELECT \"basetbl\".* FROM \"public\".\"users\" \"basetbl\" LIMIT 50 OFFSET 0;",
+		"SELECT \"basetbl\".* FROM \"public\".\"users\" AS \"basetbl\" LIMIT 50 OFFSET 0;",
+		"SELECT \"basetbl\".* FROM \"public\".\"users\" \"basetbl\" ORDER BY \"basetbl\".\"id\" ASC LIMIT 50 OFFSET 0;",
+		"SELECT \"basetbl\".* FROM \"public\".\"users\" \"basetbl\" ORDER BY \"id\" ASC LIMIT 50 OFFSET 0;",
+		"SELECT \"t\".* FROM \"public\".\"users\" \"t\" LIMIT 100;",
+		"SELECT TOP 50 * FROM [dbo].[users];",
+		"SELECT TOP 50 [dbo].[users].* FROM [dbo].[users];",
+		"SELECT TOP 50 [t].* FROM [dbo].[users] [t];",
+		"SELECT TOP 50 [basetbl].* FROM [dbo].[users] AS [basetbl];",
+		"SELECT TOP 50 [basetbl].* FROM [dbo].[users] AS [basetbl] ORDER BY [basetbl].[id] ASC;",
+		"SELECT TOP 50 [t].* FROM [dbo].[users] [t] ORDER BY [t].[id] ASC;",
+		"SELECT [users].* FROM [dbo].[users];",
+		"SELECT users.* FROM users;",
+		"SELECT \"users\".* FROM \"users\";",
+		"SELECT \"public\".\"users\".* FROM \"public\".\"users\";",
+	}
+
+	for _, q := range queries {
+		res, err := coord.ExecuteSQL(q)
+		if err != nil {
+			t.Errorf("query failed %q: %v", q, err)
+			continue
+		}
+		if len(res.Rows) != 2 {
+			t.Errorf("query %q: expected 2 rows, got %d", q, len(res.Rows))
+			continue
+		}
+		if res.Rows[0]["name"] != "Alice" {
+			t.Errorf("query %q: expected Alice, got %v (columns: %v, row: %+v)", q, res.Rows[0]["name"], res.Columns, res.Rows[0])
+		}
+	}
+}
+
 
 
