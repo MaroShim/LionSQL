@@ -438,6 +438,102 @@ func TestExecutor_IndexOnlyScan(t *testing.T) {
 	}
 }
 
+func TestExecutor_CoveringIndexWithInclude(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "products",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "sku", Type: storage.TypeVarChar},
+			{Name: "price", Type: storage.TypeFloat},
+			{Name: "description", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:        "idx_products_sku_cov",
+				TableName:   "products",
+				Columns:     []string{"sku"},
+				IncludeCols: []string{"price"},
+				Unique:      true,
+			},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable error: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	_ = tx.Insert("products", storage.Record{
+		"id":          storage.IntValue(1),
+		"sku":         storage.StringValue("PROD-001"),
+		"price":       storage.FloatValue(9.99),
+		"description": storage.StringValue("First product description"),
+	})
+	_ = tx.Insert("products", storage.Record{
+		"id":          storage.IntValue(2),
+		"sku":         storage.StringValue("PROD-002"),
+		"price":       storage.FloatValue(19.99),
+		"description": storage.StringValue("Second product description"),
+	})
+	_ = tx.Commit()
+
+	// Build Index-Only Scan plan for "SELECT id, sku, price FROM products WHERE sku = 'PROD-002'"
+	p := planner.NewPlanner()
+	q, err := p.ParseSelect("SELECT id, sku, price FROM products WHERE sku = 'PROD-002'")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan := p.BuildPlan(q, schema, 2)
+	if plan == nil {
+		t.Fatal("expected non-nil plan")
+	}
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	exec, err := execution.BuildExecutor(plan, readTx, eng.GetTable)
+	if err != nil {
+		t.Fatalf("BuildExecutor error: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := exec.Open(ctx); err != nil {
+		t.Fatalf("Executor Open failed: %v", err)
+	}
+	defer exec.Close()
+
+	var result []execution.Tuple
+	for {
+		tuple, err := exec.Next(ctx)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Executor Next error: %v", err)
+		}
+		result = append(result, tuple)
+	}
+
+	if len(result) != 1 {
+		t.Fatalf("expected 1 row from covering index-only scan, got %d", len(result))
+	}
+	if result[0].Get("sku") != "PROD-002" {
+		t.Fatalf("expected sku PROD-002, got %v", result[0].Get("sku"))
+	}
+	if result[0].Get("price") != float64(19.99) {
+		t.Fatalf("expected price 19.99, got %v", result[0].Get("price"))
+	}
+	if result[0].Get("id") != int64(2) {
+		t.Fatalf("expected id 2, got %v", result[0].Get("id"))
+	}
+}
+
 func TestExecutor_MultiTableChainedJoins(t *testing.T) {
 	eng := memengine.New()
 	_ = eng.Open("")

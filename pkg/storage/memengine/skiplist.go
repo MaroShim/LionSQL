@@ -14,10 +14,16 @@ const (
 	skipListP        = 0.5
 )
 
+// IndexItem associates a primary key reference and optional included covering columns with an index entry.
+type IndexItem struct {
+	PK            string          `json:"pk"`
+	IncludeValues []storage.Value `json:"include_values,omitempty"`
+}
+
 // SkipListNode represents an individual element in the SkipList.
 type SkipListNode struct {
 	Key     storage.Value
-	PKs     []string
+	Items   []IndexItem
 	forward []*SkipListNode
 }
 
@@ -60,7 +66,13 @@ func (sl *SkipList) randomLevel() int {
 
 // Insert adds a primary key (pk) reference associated with the specified index key.
 // Enforces uniqueness constraint if the SkipList was created with unique = true.
-func (sl *SkipList) Insert(key storage.Value, pk string) error {
+// Optional incVals specifies non-key covering values for covering index scans.
+func (sl *SkipList) Insert(key storage.Value, pk string, incVals ...[]storage.Value) error {
+	var inc []storage.Value
+	if len(incVals) > 0 {
+		inc = incVals[0]
+	}
+
 	sl.mu.Lock()
 	defer sl.mu.Unlock()
 
@@ -78,21 +90,23 @@ func (sl *SkipList) Insert(key storage.Value, pk string) error {
 
 	// Key already exists in SkipList
 	if curr != nil && curr.Key.Equal(key) {
-		if sl.unique && len(curr.PKs) > 0 {
-			for _, existingPK := range curr.PKs {
-				if existingPK == pk {
+		if sl.unique && len(curr.Items) > 0 {
+			for _, item := range curr.Items {
+				if item.PK == pk {
+					item.IncludeValues = inc
 					return nil // Already indexed for this exact PK
 				}
 			}
 			return fmt.Errorf("%w: duplicate key %q", storage.ErrUniqueViolation, key.String())
 		}
 
-		for _, existingPK := range curr.PKs {
-			if existingPK == pk {
+		for i := range curr.Items {
+			if curr.Items[i].PK == pk {
+				curr.Items[i].IncludeValues = inc
 				return nil
 			}
 		}
-		curr.PKs = append(curr.PKs, pk)
+		curr.Items = append(curr.Items, IndexItem{PK: pk, IncludeValues: inc})
 		return nil
 	}
 
@@ -107,7 +121,7 @@ func (sl *SkipList) Insert(key storage.Value, pk string) error {
 
 	newNode := &SkipListNode{
 		Key:     key,
-		PKs:     []string{pk},
+		Items:   []IndexItem{{PK: pk, IncludeValues: inc}},
 		forward: make([]*SkipListNode, lvl),
 	}
 
@@ -141,15 +155,15 @@ func (sl *SkipList) Delete(key storage.Value, pk string) {
 	}
 
 	// Filter out target pk
-	filtered := make([]string, 0, len(curr.PKs))
-	for _, p := range curr.PKs {
-		if p != pk {
-			filtered = append(filtered, p)
+	filtered := make([]IndexItem, 0, len(curr.Items))
+	for _, it := range curr.Items {
+		if it.PK != pk {
+			filtered = append(filtered, it)
 		}
 	}
 
 	if len(filtered) > 0 {
-		curr.PKs = filtered
+		curr.Items = filtered
 		return
 	}
 
@@ -182,8 +196,10 @@ func (sl *SkipList) Search(key storage.Value) ([]string, bool) {
 
 	curr = curr.forward[0]
 	if curr != nil && curr.Key.Equal(key) {
-		result := make([]string, len(curr.PKs))
-		copy(result, curr.PKs)
+		result := make([]string, len(curr.Items))
+		for i, it := range curr.Items {
+			result[i] = it.PK
+		}
 		return result, true
 	}
 	return nil, false
@@ -214,20 +230,23 @@ func (sl *SkipList) ScanRange(low, high *storage.Value) []string {
 		if high != nil && curr.Key.Compare(*high) > 0 {
 			break
 		}
-		result = append(result, curr.PKs...)
+		for _, item := range curr.Items {
+			result = append(result, item.PK)
+		}
 		curr = curr.forward[0]
 	}
 
 	return result
 }
 
-// SkipListEntry represents a key-PK pair from the index.
+// SkipListEntry represents a key-PK pair from the index, along with optional included covering columns.
 type SkipListEntry struct {
-	Key storage.Value
-	PK  string
+	Key           storage.Value
+	PK            string
+	IncludeValues []storage.Value
 }
 
-// ScanRangeEntries returns all (Key, PK) pairs whose indexed keys fall within [low, high] inclusive.
+// ScanRangeEntries returns all (Key, PK, IncludeValues) entries whose indexed keys fall within [low, high] inclusive.
 func (sl *SkipList) ScanRangeEntries(low, high *storage.Value) []SkipListEntry {
 	sl.mu.RLock()
 	defer sl.mu.RUnlock()
@@ -250,8 +269,12 @@ func (sl *SkipList) ScanRangeEntries(low, high *storage.Value) []SkipListEntry {
 		if high != nil && curr.Key.Compare(*high) > 0 {
 			break
 		}
-		for _, pk := range curr.PKs {
-			result = append(result, SkipListEntry{Key: curr.Key, PK: pk})
+		for _, item := range curr.Items {
+			result = append(result, SkipListEntry{
+				Key:           curr.Key,
+				PK:            item.PK,
+				IncludeValues: item.IncludeValues,
+			})
 		}
 		curr = curr.forward[0]
 	}
@@ -274,11 +297,25 @@ func (sl *SkipList) ToEntries() []IndexEntry {
 	entries := make([]IndexEntry, 0, sl.length)
 	curr := sl.head.forward[0]
 	for curr != nil {
-		pks := make([]string, len(curr.PKs))
-		copy(pks, curr.PKs)
+		pks := make([]string, len(curr.Items))
+		var incVals [][]storage.Value
+		hasInc := false
+		for i, it := range curr.Items {
+			pks[i] = it.PK
+			if len(it.IncludeValues) > 0 {
+				hasInc = true
+			}
+		}
+		if hasInc {
+			incVals = make([][]storage.Value, len(curr.Items))
+			for i, it := range curr.Items {
+				incVals[i] = it.IncludeValues
+			}
+		}
 		entries = append(entries, IndexEntry{
-			Key: curr.Key,
-			PKs: pks,
+			Key:           curr.Key,
+			PKs:           pks,
+			IncludeValues: incVals,
 		})
 		curr = curr.forward[0]
 	}
@@ -288,8 +325,12 @@ func (sl *SkipList) ToEntries() []IndexEntry {
 // FromEntries populates the SkipList from a slice of IndexEntry (used during snapshot restoration).
 func (sl *SkipList) FromEntries(entries []IndexEntry) error {
 	for _, entry := range entries {
-		for _, pk := range entry.PKs {
-			if err := sl.Insert(entry.Key, pk); err != nil {
+		for i, pk := range entry.PKs {
+			var inc []storage.Value
+			if i < len(entry.IncludeValues) {
+				inc = entry.IncludeValues[i]
+			}
+			if err := sl.Insert(entry.Key, pk, inc); err != nil {
 				return err
 			}
 		}

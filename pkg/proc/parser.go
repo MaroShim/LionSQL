@@ -2960,15 +2960,39 @@ func (p *Parser) parseCreateIndex() (*CreateIndexStmt, error) {
 	if p.curTokenIs(TokenRParen) {
 		p.nextToken()
 	}
+
+	var includeCols []string
+	if strings.EqualFold(p.curToken.Literal, "INCLUDE") {
+		p.nextToken()
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken()
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				if p.curTokenIs(TokenIdent) {
+					includeCols = append(includeCols, cleanSchemaPrefix(p.curToken.Literal))
+					p.nextToken()
+				}
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				} else {
+					break
+				}
+			}
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken()
+			}
+		}
+	}
+
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
 
 	return &CreateIndexStmt{
-		Name:    idxName,
-		Table:   tblName,
-		Columns: cols,
-		Unique:  isUnique,
+		Name:        idxName,
+		Table:       tblName,
+		Columns:     cols,
+		IncludeCols: includeCols,
+		Unique:      isUnique,
 	}, nil
 }
 

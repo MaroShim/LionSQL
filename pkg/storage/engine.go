@@ -94,10 +94,11 @@ type Column struct {
 
 // IndexSchema defines metadata for a secondary index.
 type IndexSchema struct {
-	Name      string   `json:"name"`
-	TableName string   `json:"table_name"`
-	Columns   []string `json:"columns"`
-	Unique    bool     `json:"unique"`
+	Name        string   `json:"name"`
+	TableName   string   `json:"table_name"`
+	Columns     []string `json:"columns"`
+	IncludeCols []string `json:"include_cols,omitempty"`
+	Unique      bool     `json:"unique"`
 }
 
 // ForeignKeyAction defines the referential action when parent key is deleted or updated.
@@ -685,6 +686,12 @@ type Cursor interface {
 	Record() (Record, error)
 	Row() (Row, error)
 	Close() error
+}
+
+// RawTupleCursor is an optional interface implemented by cursors that support zero-copy binary tuple access.
+type RawTupleCursor interface {
+	Cursor
+	RawTuple() ([]byte, bool)
 }
 
 // TxOptions configures transaction behaviors.

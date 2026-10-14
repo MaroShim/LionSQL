@@ -600,11 +600,11 @@ func TestCoordinator_TableAndQueryHints(t *testing.T) {
 	coord, _, cleanup := setupTestCoordinator(t)
 	defer cleanup()
 
-	_, err := coord.ExecuteSQL(`CREATE TABLE items (id INT PRIMARY KEY, name VARCHAR(50));`)
+	_, err := coord.ExecuteSQL(`CREATE TABLE items (id INT PRIMARY KEY, name VARCHAR(50), price FLOAT);`)
 	if err != nil {
 		t.Fatalf("CREATE TABLE items failed: %v", err)
 	}
-	_, err = coord.ExecuteSQL(`INSERT INTO items VALUES (1, 'Pen'), (2, 'Notebook');`)
+	_, err = coord.ExecuteSQL(`INSERT INTO items VALUES (1, 'Pen', 1.5), (2, 'Notebook', 4.5);`)
 	if err != nil {
 		t.Fatalf("INSERT items failed: %v", err)
 	}
@@ -638,6 +638,19 @@ func TestCoordinator_TableAndQueryHints(t *testing.T) {
 	}
 	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["name"]) != "Notebook" {
 		t.Fatalf("expected Notebook with INDEX(idx_items_name), got %+v", res.Rows)
+	}
+
+	// Covering Index with INCLUDE
+	_, err = coord.ExecuteSQL(`CREATE INDEX idx_items_covering ON items (name) INCLUDE (price);`)
+	if err != nil {
+		t.Fatalf("CREATE INDEX with INCLUDE failed: %v", err)
+	}
+	res, err = coord.ExecuteSQL(`SELECT name, price FROM items WHERE name = 'Notebook';`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with covering index failed: %v", err)
+	}
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["name"]) != "Notebook" {
+		t.Fatalf("expected Notebook with covering index, got %+v", res.Rows)
 	}
 
 	// Comma-separated hints: WITH (NOLOCK, INDEX(0))

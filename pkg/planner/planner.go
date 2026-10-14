@@ -973,6 +973,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 							for _, c := range idx.Columns {
 								coveredCols[strings.ToLower(c)] = true
 							}
+							for _, c := range idx.IncludeCols {
+								coveredCols[strings.ToLower(c)] = true
+							}
 							if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
 								coveredCols[strings.ToLower(pkCol.Name)] = true
 							}

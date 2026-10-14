@@ -919,12 +919,13 @@ func (s *CreateTableStmt) String() string {
 	return fmt.Sprintf("CREATE TABLE %s", s.Name)
 }
 
-// CreateIndexStmt represents CREATE [UNIQUE] INDEX ... ON table (cols...)
+// CreateIndexStmt represents CREATE [UNIQUE] INDEX ... ON table (cols...) [INCLUDE (inc_cols...)]
 type CreateIndexStmt struct {
-	Name    string
-	Table   string
-	Columns []string
-	Unique  bool
+	Name        string
+	Table       string
+	Columns     []string
+	IncludeCols []string
+	Unique      bool
 }
 
 func (s *CreateIndexStmt) stmtNode() {}
@@ -933,7 +934,11 @@ func (s *CreateIndexStmt) String() string {
 	if s.Unique {
 		u = "UNIQUE "
 	}
-	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)", u, s.Name, s.Table, strings.Join(s.Columns, ", "))
+	inc := ""
+	if len(s.IncludeCols) > 0 {
+		inc = fmt.Sprintf(" INCLUDE (%s)", strings.Join(s.IncludeCols, ", "))
+	}
+	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)%s", u, s.Name, s.Table, strings.Join(s.Columns, ", "), inc)
 }
 
 // DropTableStmt represents DROP TABLE [IF EXISTS] table

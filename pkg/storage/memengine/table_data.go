@@ -7,8 +7,9 @@ import (
 )
 
 type IndexEntry struct {
-	Key storage.Value `json:"key"`
-	PKs []string      `json:"pks"`
+	Key           storage.Value     `json:"key"`
+	PKs           []string          `json:"pks"`
+	IncludeValues [][]storage.Value `json:"include_values,omitempty"`
 }
 
 // IndexData holds sorted entries for a secondary index using a concurrent SkipList.
@@ -28,8 +29,8 @@ func (idx *IndexData) getSkipList() *SkipList {
 	return idx.sl
 }
 
-func (idx *IndexData) Insert(key storage.Value, pk string) error {
-	return idx.getSkipList().Insert(key, pk)
+func (idx *IndexData) Insert(key storage.Value, pk string, incVals ...[]storage.Value) error {
+	return idx.getSkipList().Insert(key, pk, incVals...)
 }
 
 func (idx *IndexData) Delete(key storage.Value, pk string) {

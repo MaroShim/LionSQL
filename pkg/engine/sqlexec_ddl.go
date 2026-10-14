@@ -293,10 +293,10 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time) (*QueryRe
 
 func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	re := regexp.MustCompile(`(?is)^CREATE\s+(UNIQUE\s+)?INDEX\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
+	re := regexp.MustCompile(`(?is)^CREATE\s+(UNIQUE\s+)?INDEX\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)(?:\s+INCLUDE\s*\((.*?)\))?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 5 {
-		return nil, fmt.Errorf("invalid CREATE INDEX syntax: expected CREATE [UNIQUE] INDEX <name> ON <table> (<cols>)")
+		return nil, fmt.Errorf("invalid CREATE INDEX syntax: expected CREATE [UNIQUE] INDEX <name> ON <table> (<cols>) [INCLUDE (<cols>)]")
 	}
 
 	isUnique := strings.TrimSpace(matches[1]) != ""
@@ -316,11 +316,22 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 		return nil, fmt.Errorf("no columns specified for index %q", indexName)
 	}
 
+	var includeCols []string
+	if len(matches) >= 6 && strings.TrimSpace(matches[5]) != "" {
+		for _, c := range strings.Split(matches[5], ",") {
+			cTrimmed := cleanIdentifier(strings.TrimSpace(c))
+			if cTrimmed != "" {
+				includeCols = append(includeCols, cTrimmed)
+			}
+		}
+	}
+
 	idxSchema := &storage.IndexSchema{
-		Name:      indexName,
-		TableName: tableName,
-		Columns:   cols,
-		Unique:    isUnique,
+		Name:        indexName,
+		TableName:   tableName,
+		Columns:     cols,
+		IncludeCols: includeCols,
+		Unique:      isUnique,
 	}
 
 	if err := s.engine.CreateIndex(idxSchema); err != nil {

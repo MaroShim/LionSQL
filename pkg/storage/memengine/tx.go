@@ -1232,8 +1232,13 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 	candidateEntries := idxData.ScanRangeEntries(low, high)
 	tx.engine.mu.RUnlock()
 
+	type indexOnlyPayload struct {
+		key         storage.Value
+		includeVals []storage.Value
+	}
+
 	pks := make([]string, 0, len(candidateEntries))
-	keyMap := make(map[string]storage.Value, len(candidateEntries))
+	keyMap := make(map[string]indexOnlyPayload, len(candidateEntries))
 	seen := make(map[string]bool, len(candidateEntries))
 
 	for _, entry := range candidateEntries {
@@ -1251,12 +1256,19 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 				pks = append(pks, pk)
+				keyMap[pk] = indexOnlyPayload{
+					key:         idxVal,
+					includeVals: extractIncludeValuesFromRow(&td.Schema, locRow, idxData.Schema.IncludeCols),
+				}
 			}
 			continue
 		}
 
 		pks = append(pks, pk)
-		keyMap[pk] = entry.Key
+		keyMap[pk] = indexOnlyPayload{
+			key:         entry.Key,
+			includeVals: entry.IncludeValues,
+		}
 	}
 
 	if localRows, ok := tx.local[tableName]; ok {
@@ -1268,23 +1280,27 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 				pks = append(pks, pk)
 				seen[pk] = true
+				keyMap[pk] = indexOnlyPayload{
+					key:         idxVal,
+					includeVals: extractIncludeValuesFromRow(&td.Schema, locRow, idxData.Schema.IncludeCols),
+				}
 			}
 		}
 	}
 
-	var colName string
-	if len(idxData.Schema.Columns) > 0 {
-		colName = idxData.Schema.Columns[0]
-	}
-
 	resolver := func(pk string) (storage.Record, bool) {
-		keyVal, ok := keyMap[pk]
+		payload, ok := keyMap[pk]
 		if !ok {
 			return nil, false
 		}
-		rec := make(storage.Record, 2)
-		if colName != "" {
-			rec[colName] = keyVal
+		rec := make(storage.Record, len(idxData.Schema.Columns)+len(idxData.Schema.IncludeCols)+1)
+		if len(idxData.Schema.Columns) == 1 {
+			rec[idxData.Schema.Columns[0]] = payload.key
+		}
+		for i, incCol := range idxData.Schema.IncludeCols {
+			if i < len(payload.includeVals) {
+				rec[incCol] = payload.includeVals[i]
+			}
 		}
 		if pkCol != nil {
 			rec[pkCol.Name] = ParsePKValue(pk, pkCol.Type)
@@ -1457,7 +1473,8 @@ func (tx *Transaction) Commit() error {
 			}
 			for _, idxData := range td.Indexes {
 				newKey := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
-				_ = idxData.Insert(newKey, ch.key)
+				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
+				_ = idxData.Insert(newKey, ch.key, incVals)
 			}
 		case changeUpdate:
 			sh.rows[ch.key] = ch.row
@@ -1485,7 +1502,8 @@ func (tx *Transaction) Commit() error {
 					idxData.Delete(oldKey, ch.key)
 				}
 				newKey := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
-				_ = idxData.Insert(newKey, ch.key)
+				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
+				_ = idxData.Insert(newKey, ch.key, incVals)
 			}
 		case changeDelete:
 			delete(sh.rows, ch.key)

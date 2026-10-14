@@ -84,6 +84,11 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 			return fmt.Errorf("%w: %s on table %s", storage.ErrColumnNotFound, colName, index.TableName)
 		}
 	}
+	for _, colName := range index.IncludeCols {
+		if _, _, found := td.Schema.FindColumn(colName); !found {
+			return fmt.Errorf("%w: %s on table %s", storage.ErrColumnNotFound, colName, index.TableName)
+		}
+	}
 
 	idxData := &IndexData{
 		Schema:  *index,
@@ -94,7 +99,8 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	var insertErr error
 	td.forEachRow(func(pk string, row storage.Row) bool {
 		keyVal := extractIndexKeyFromRow(&td.Schema, row, index.Columns)
-		if err := idxData.Insert(keyVal, pk); err != nil {
+		incVals := extractIncludeValuesFromRow(&td.Schema, row, index.IncludeCols)
+		if err := idxData.Insert(keyVal, pk, incVals); err != nil {
 			insertErr = err
 			return false
 		}
@@ -198,6 +204,38 @@ func extractIndexKeyFromRow(schema *storage.TableSchema, row storage.Row, cols [
 		sb.WriteString("NULL")
 	}
 	return storage.StringValue(sb.String())
+}
+
+func extractIncludeValues(rec storage.Record, cols []string) []storage.Value {
+	if len(cols) == 0 {
+		return nil
+	}
+	vals := make([]storage.Value, len(cols))
+	for i, c := range cols {
+		if v, ok := rec[c]; ok {
+			vals[i] = v
+		} else {
+			vals[i] = storage.NullValue(storage.TypeUnknown)
+		}
+	}
+	return vals
+}
+
+func extractIncludeValuesFromRow(schema *storage.TableSchema, row storage.Row, cols []string) []storage.Value {
+	if len(cols) == 0 {
+		return nil
+	}
+	vals := make([]storage.Value, len(cols))
+	for i, c := range cols {
+		if schema != nil {
+			if _, idx, found := schema.FindColumn(c); found && idx >= 0 && idx < len(row.Values) {
+				vals[i] = row.Values[idx]
+				continue
+			}
+		}
+		vals[i] = storage.NullValue(storage.TypeUnknown)
+	}
+	return vals
 }
 
 func rowMatchesFK(schema *storage.TableSchema, row storage.Row, cols []string, vals []storage.Value) bool {

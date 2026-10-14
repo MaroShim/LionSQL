@@ -101,6 +101,16 @@ func TestParseSQL_DDLAndDML(t *testing.T) {
 		t.Errorf("unexpected CreateIndexStmt: %+v", ci)
 	}
 
+	// 2b. Create index with INCLUDE
+	stmt, err = proc.ParseSQL(`CREATE INDEX idx_emp_dept ON employees (dept) INCLUDE (salary, title);`)
+	if err != nil {
+		t.Fatalf("Create index with INCLUDE parse error: %v", err)
+	}
+	ciInc, ok := stmt.(*proc.CreateIndexStmt)
+	if !ok || ciInc.Name != "idx_emp_dept" || ciInc.Table != "employees" || len(ciInc.Columns) != 1 || ciInc.Columns[0] != "dept" || len(ciInc.IncludeCols) != 2 || ciInc.IncludeCols[0] != "salary" || ciInc.IncludeCols[1] != "title" {
+		t.Errorf("unexpected CreateIndexStmt with INCLUDE: %+v", ciInc)
+	}
+
 	// 3. Drop table
 	stmt, err = proc.ParseSQL(`DROP TABLE IF EXISTS accounts;`)
 	if err != nil {

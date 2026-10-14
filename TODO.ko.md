@@ -22,8 +22,8 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P2** | **스토리지** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스 (`P-2`)** | `pkg/storage`, `pkg/execution` | WHERE 절 선별 디코딩으로 스캔 속도 2배 향상, 힙 할당 70% 삭감 |
-| **P3** | **생태계** | **외부 언어 드라이버 E2E 검증 하네스** | `pkg/wire`, `pkg/wire/tds` | Python(`psycopg3`, `pymssql`), Node.js(`pg`, `tedious`), .NET(`SqlClient`) 검증 |
+| **P2** | **생태계** | **외부 언어 드라이버 E2E 검증 하네스** | `pkg/wire`, `pkg/wire/tds` | Python(`psycopg3`, `pymssql`), Node.js(`pg`, `tedious`), .NET(`SqlClient`) 검증 |
+| **P3** | **스토리지** | **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`)** | `pkg/storage`, `pkg/wire` | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
 
 ### P1 세부 과제: CBO & 쿼리 최적화
 - [x] **CBO 옵티마이저 힌트 오버라이드 제어 (`D-9`) (`pkg/planner`, `pkg/proc`)**
@@ -92,15 +92,15 @@
 | 단계 | 전략 분야 | 핵심 구현 과제 | 상태 | 예상 효과 및 ROI |
 | :---: | :--- | :--- | :---: | :--- |
 | **P-1** | **스토리지/트랜잭션** | **배치형 그룹 커밋 & 무경합 Fast-Path** | **완료 (`[x]`)** | `FsyncAlways` 100배 지연 단축(0.038ms/op), TPC-C 2.8K TPS |
-| **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스** | **대기 (`[ ]`)** | 스캔 속도 2배 향상, 불필요한 Varint 디코딩 힙 할당 제거 |
+| **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스** | **완료 (`[x]`)** | 스캔 속도 2배 향상, 불필요한 Varint 디코딩 힙 할당 제거 |
 | **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **대기 (`[ ]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **대기 (`[ ]`)** | 볼케이노 함수 호출 오버헤드 감소, 대량 집계/스캔 지연 60% 단축 |
 | **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료 (`[x]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
 
-- [ ] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 투영 푸시다운 (`pkg/storage`, `pkg/execution`)**
+- [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 투영 푸시다운 (`pkg/storage`, `pkg/execution`)**
   - 풀 스캔 시 WHERE 절 조건 컬럼만 선별 디코딩하고, 조건을 통과한 행에 한해서만 나머지 투영 컬럼을 언패킹하여 CPU 및 힙 할당 70% 삭감.
-- [ ] **커버링 인덱스 비키 컬럼 문법 지원: `CREATE INDEX ... INCLUDE (col...)` (`pkg/catalog`, `pkg/planner`)**
-  - B+Tree 리프 노드에 비키 컬럼을 페이로드로 적재하여 메인 테이블 힙 조회를 100% 생략하는 Index-Only Scan 극대화.
+- [x] **커버링 인덱스 비키 컬럼 문법 지원: `CREATE INDEX ... INCLUDE (col...)` (`pkg/storage`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**
+  - B+Tree/SkipList 리프 노드에 비키 컬럼을 페이로드로 적재하여 메인 테이블 힙 조회를 100% 생략하는 Index-Only Scan 극대화.
 - [ ] **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`pkg/storage`, `pkg/wire`)**
   - 중간 `[]any` 레코드 슬라이스 변환을 제거하고 `sync.Pool` 와이어 버퍼에 바이너리 튜플 데이터를 직접 포맷팅.
 - [ ] **Volcano 청크 단위 배치 실행 (Vectorized Chunk Iterator: 64~1024건) (`pkg/execution`)**

@@ -152,6 +152,54 @@ func TestPlanner_IndexOnlyScan(t *testing.T) {
 	}
 }
 
+func TestPlanner_CoveringIndexWithInclude(t *testing.T) {
+	p := planner.NewPlanner()
+
+	schema := &storage.TableSchema{
+		Name: "employees",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "dept", Type: storage.TypeVarChar},
+			{Name: "salary", Type: storage.TypeFloat},
+			{Name: "title", Type: storage.TypeVarChar},
+			{Name: "bio", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:        "idx_emp_dept_covering",
+				TableName:   "employees",
+				Columns:     []string{"dept"},
+				IncludeCols: []string{"salary", "title"},
+				Unique:      true,
+			},
+		},
+	}
+
+	// 1. Projections covered by dept, salary, title, and id -> Index Only Scan
+	q1, err := p.ParseSelect("EXPLAIN SELECT id, dept, salary, title FROM employees WHERE dept = 'Engineering'")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan1 := p.BuildPlan(q1, schema, 1000)
+	lines1 := planner.FormatPlanText(plan1, false)
+	fullText1 := strings.Join(lines1, "\n")
+	if !strings.Contains(fullText1, "Index Only Scan using idx_emp_dept_covering on employees") {
+		t.Errorf("expected Index Only Scan in plan text, got:\n%s", fullText1)
+	}
+
+	// 2. Projection includes unindexed/unincluded column (bio) -> Regular Index Scan
+	q2, err := p.ParseSelect("EXPLAIN SELECT id, dept, bio FROM employees WHERE dept = 'Engineering'")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	plan2 := p.BuildPlan(q2, schema, 1000)
+	lines2 := planner.FormatPlanText(plan2, false)
+	fullText2 := strings.Join(lines2, "\n")
+	if !strings.Contains(fullText2, "Index Scan using idx_emp_dept_covering on employees") {
+		t.Errorf("expected Index Scan in plan text, got:\n%s", fullText2)
+	}
+}
+
 func TestPlanner_AnalyzeOutput(t *testing.T) {
 	p := planner.NewPlanner()
 

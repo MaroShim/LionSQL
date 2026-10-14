@@ -1549,6 +1549,20 @@ func (c *WTCursor) Row() (storage.Row, error) {
 	return decodeRow(c.schema, C.GoBytes(pData, C.int(sz)))
 }
 
+func (c *WTCursor) RawTuple() ([]byte, bool) {
+	if c.closed || c.cur == nil {
+		return nil, false
+	}
+
+	var pData unsafe.Pointer
+	var sz C.size_t
+	if ret := C.go_wt_cursor_get_val_raw(c.cur, &pData, &sz); ret != 0 || pData == nil {
+		return nil, false
+	}
+
+	return C.GoBytes(pData, C.int(sz)), true
+}
+
 func decodeRecord(schema *storage.TableSchema, data []byte) (storage.Record, error) {
 	if len(data) > 0 && data[0] == storage.TupleCodecVersion && schema != nil {
 		return storage.DecodeTuple(schema, data)

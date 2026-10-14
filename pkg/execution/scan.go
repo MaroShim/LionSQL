@@ -72,6 +72,18 @@ func (s *SeqScanIterator) Next(ctx context.Context) (Tuple, error) {
 		return Tuple{}, io.EOF
 	}
 
+	if rawCur, ok := s.cursor.(storage.RawTupleCursor); ok {
+		if rawData, ok := rawCur.RawTuple(); ok {
+			if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
+				return Tuple{
+					Values: make([]any, len(s.schema.Columns)),
+					Index:  s.colIndexMap,
+					Lazy:   lazy,
+				}, nil
+			}
+		}
+	}
+
 	if row, err := s.cursor.Row(); err == nil {
 		return FormatRow(row, s.schema, s.alias, s.colIndexMap), nil
 	}
@@ -176,6 +188,18 @@ func (s *IndexScanIterator) Next(ctx context.Context) (Tuple, error) {
 
 	if !s.cursor.Next() {
 		return Tuple{}, io.EOF
+	}
+
+	if rawCur, ok := s.cursor.(storage.RawTupleCursor); ok {
+		if rawData, ok := rawCur.RawTuple(); ok {
+			if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
+				return Tuple{
+					Values: make([]any, len(s.schema.Columns)),
+					Index:  s.colIndexMap,
+					Lazy:   lazy,
+				}, nil
+			}
+		}
 	}
 
 	if row, err := s.cursor.Row(); err == nil {

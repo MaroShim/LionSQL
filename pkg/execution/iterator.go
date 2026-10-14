@@ -97,11 +97,12 @@ func (m *ColumnIndexMap) Columns() []string {
 type Tuple struct {
 	Values []any
 	Index  *ColumnIndexMap
+	Lazy   *storage.LazyTuple
 }
 
 // IsNil returns true if the tuple is empty or uninitialized.
 func (t Tuple) IsNil() bool {
-	return t.Values == nil && t.Index == nil
+	return t.Values == nil && t.Index == nil && t.Lazy == nil
 }
 
 // Get returns the value for the given column name or expression.
@@ -110,7 +111,19 @@ func (t Tuple) Get(col string) any {
 		return nil
 	}
 	idx, ok := t.Index.Index(col)
-	if !ok || idx < 0 || idx >= len(t.Values) {
+	if !ok || idx < 0 {
+		return nil
+	}
+	if t.Lazy != nil && (idx >= len(t.Values) || t.Values[idx] == nil) {
+		val, err := t.Lazy.Get(idx)
+		if err == nil {
+			if idx < len(t.Values) {
+				t.Values[idx] = formatStorageVal(val)
+				return t.Values[idx]
+			}
+		}
+	}
+	if idx >= len(t.Values) {
 		return nil
 	}
 	return t.Values[idx]
@@ -122,7 +135,19 @@ func (t Tuple) GetOK(col string) (any, bool) {
 		return nil, false
 	}
 	idx, ok := t.Index.Index(col)
-	if !ok || idx < 0 || idx >= len(t.Values) {
+	if !ok || idx < 0 {
+		return nil, false
+	}
+	if t.Lazy != nil && (idx >= len(t.Values) || t.Values[idx] == nil) {
+		val, err := t.Lazy.Get(idx)
+		if err == nil {
+			if idx < len(t.Values) {
+				t.Values[idx] = formatStorageVal(val)
+				return t.Values[idx], true
+			}
+		}
+	}
+	if idx >= len(t.Values) {
 		return nil, false
 	}
 	return t.Values[idx], true
@@ -144,6 +169,15 @@ func (t Tuple) ToMap() map[string]any {
 	if t.Index == nil {
 		return nil
 	}
+	if t.Lazy != nil {
+		_, _ = t.Lazy.MaterializeRow()
+		dec := t.Lazy.DecodedValues()
+		for i := 0; i < len(t.Values) && i < len(dec); i++ {
+			if t.Values[i] == nil {
+				t.Values[i] = formatStorageVal(dec[i])
+			}
+		}
+	}
 	res := make(map[string]any, len(t.Index.cols))
 	for i, col := range t.Index.cols {
 		if i < len(t.Values) {
@@ -159,6 +193,11 @@ func (t Tuple) ToMap() map[string]any {
 
 // ToRow converts the slice-backed Tuple to a storage.Row according to column order or schema.
 func (t Tuple) ToRow(schema *storage.TableSchema) storage.Row {
+	if t.Lazy != nil {
+		if row, err := t.Lazy.MaterializeRow(); err == nil {
+			return row
+		}
+	}
 	if schema != nil {
 		vals := make([]storage.Value, len(schema.Columns))
 		for i, col := range schema.Columns {

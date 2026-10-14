@@ -18,6 +18,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, `README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
 
 ### Added
+- **Binary Tuple Lazy Decoding & Covering Index Non-Key Column Support (`P-2`) (`pkg/storage`, `pkg/execution`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**:
+  - Implemented `SkipTupleColumn` in `pkg/storage/tuple.go` enabling zero-allocation forward navigation through binary tuple columns without allocating string or heap buffers.
+  - Implemented `DecodeTupleSelected(schema, data, selectedCols)` and `LazyTuple` on-demand column decoding in `pkg/storage/tuple.go`, caching column offsets on forward scans to support out-of-order random column access in $O(1)$ time.
+  - Added `storage.RawTupleCursor` interface and wired `SeqScanIterator` and `IndexScanIterator` to construct `Tuple` with `LazyTuple`, allowing `FilterIterator` (WHERE predicate) to decode only predicate columns while completely bypassing decoding and heap allocations for rejected rows.
+  - Implemented covering index syntax `CREATE INDEX ... INCLUDE (col1, col2, ...)` across `pkg/proc/parser.go`, `pkg/proc/ast.go`, and `pkg/engine/sqlexec_ddl.go`.
+  - Added `IncludeCols` to `storage.IndexSchema` and extended `SkipList` / `IndexData` in `pkg/storage/memengine` to store non-key covering values (`IndexItem` / `SkipListEntry.IncludeValues`).
+  - Extended CBO index-covering detection in `pkg/planner/planner.go` (`isCovering`) and `memengine.IndexOnlyScan` to resolve included non-key columns directly from the index payload without touching table heap storage.
+  - Added comprehensive test suites verifying selective decoding, random access, out-of-order resolution, and covering index execution across `pkg/storage/tuple_test.go`, `pkg/planner/planner_test.go`, `pkg/execution/execution_test.go`, `pkg/proc/sqlparser_test.go`, and `pkg/engine/coordinator_test.go`.
 - **TDS NBCROW Row Compression Token (`0xD2`) (`pkg/wire/tds`)**:
   - Implemented `BuildNBCRow(cols []ColumnInfo, values []any)` in `pkg/wire/tds/token.go` compliant with [MS-TDS] 2.2.7.13 NBCROW specification.
   - Added null bitmap header (`ceil(N / 8)` bytes) preceding row column data, setting bit $k$ ($k/8, k\%8$) to 1 for NULL columns and eliminating all payload bytes (0-byte encoding) for NULL fields.
