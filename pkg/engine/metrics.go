@@ -18,6 +18,7 @@ type MetricsCollector struct {
 	slowQueriesTotal     atomic.Int64
 	transactionsCommit   atomic.Int64
 	transactionsRollback atomic.Int64
+	pkBypassHits         atomic.Int64
 	commandCounts        sync.Map // string (e.g. "SELECT") -> *atomic.Int64
 }
 
@@ -52,6 +53,16 @@ func (m *MetricsCollector) RecordTransaction(action string) {
 	} else if strings.EqualFold(action, "rollback") {
 		m.transactionsRollback.Add(1)
 	}
+}
+
+// RecordPKBypassHit increments the fast-path PK point lookup bypass counter.
+func (m *MetricsCollector) RecordPKBypassHit() {
+	m.pkBypassHits.Add(1)
+}
+
+// PKBypassHits returns total number of queries served via fast-path PK bypass.
+func (m *MetricsCollector) PKBypassHits() int64 {
+	return m.pkBypassHits.Load()
 }
 
 // PrometheusServerState carries server-level gauges that are not owned by MetricsCollector.
@@ -107,6 +118,11 @@ func (m *MetricsCollector) FormatPrometheus(st PrometheusServerState) string {
 	b.WriteString("# HELP sqlion_query_errors_total Total number of SQL queries that resulted in an error.\n")
 	b.WriteString("# TYPE sqlion_query_errors_total counter\n")
 	b.WriteString(fmt.Sprintf("sqlion_query_errors_total %d\n\n", m.queryErrorsTotal.Load()))
+
+	// 4.1 PK point lookup bypass hits
+	b.WriteString("# HELP sqlion_pk_bypass_hits_total Total number of simple PK lookups handled via zero-overhead storage bypass.\n")
+	b.WriteString("# TYPE sqlion_pk_bypass_hits_total counter\n")
+	b.WriteString(fmt.Sprintf("sqlion_pk_bypass_hits_total %d\n\n", m.pkBypassHits.Load()))
 
 	// 5. Total query duration
 	durSec := float64(m.queryDurationNanos.Load()) / 1e9

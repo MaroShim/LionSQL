@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"sqlion/pkg/auth"
@@ -55,6 +56,9 @@ type Coordinator struct {
 	slowQueries        *SlowQueryLogger
 	generalLog         *GeneralLogger
 	replication        *replication.Manager
+	pkBypassCache      map[uint64]*PKLookupPlan
+	pkBypassMu         sync.RWMutex
+	schemaVersion      atomic.Uint64
 	startTime          time.Time
 }
 
@@ -93,7 +97,19 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		metrics:            NewMetricsCollector(),
 		slowQueries:        NewSlowQueryLogger(cfg.SlowThreshold),
 		generalLog:         NewGeneralLogger(cfg.EnableGeneralLog),
+		pkBypassCache:      make(map[uint64]*PKLookupPlan, 256),
 		startTime:          time.Now(),
+	}
+}
+
+// InvalidatePKBypassCache clears cached fast-path PK lookup plans and increments schema version.
+func (c *Coordinator) InvalidatePKBypassCache() {
+	c.schemaVersion.Add(1)
+	c.pkBypassMu.Lock()
+	c.pkBypassCache = make(map[uint64]*PKLookupPlan, 256)
+	c.pkBypassMu.Unlock()
+	if c.executor != nil && c.executor.Cache() != nil {
+		c.executor.Cache().Clear()
 	}
 }
 

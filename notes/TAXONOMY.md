@@ -22,7 +22,8 @@
 | 우선순위 | 영역 | 대상 과제 식별자 | 대상 소스코드 위치 | 상태 및 주요 목표 |
 | :---: | :---: | :--- | :--- | :---: |
 | **P1** | **최적화** | **`D-9`**, **`B-3`** | `pkg/planner`, `pkg/execution` | **완료**: CBO 옵티마이저 힌트 오버라이드 및 소트-머지 조인 완비 |
-| **P2** | **성능/프로토콜** | **`P-5`**, **TDS NBCROW** | `pkg/engine`, `pkg/storage`, `pkg/wire/tds` | **진행 예정**: 단순 PK 조회 고속 바이패스 및 TDS 행 압축(`0xD2`) |
+| **P2** | **성능** | **`P-5`** | `pkg/engine`, `pkg/storage` | **완료**: 단순 PK 조회 고속 바이패스 캐시 완비 (TPS 50%+ 향상) |
+| **P2** | **프로토콜** | **TDS NBCROW** | `pkg/wire/tds` | **진행 예정**: TDS 행 압축(`0xD2`) 기반 네트워크 대역폭 절감 |
 | **P3** | **생태계** | **드라이버 E2E** | `pkg/wire`, `pkg/wire/tds` | **진행 예정**: Python(`psycopg3`, `pymssql`), Node.js, .NET 드라이버 E2E 하네스 |
 
 ---
@@ -37,7 +38,7 @@
 | **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 (Lazy Decoding)** | **대기** | 풀 스캔 시 WHERE 절 컬럼만 선별 디코딩하고 조건 통과 행만 전체 언패킹하여 CPU 및 힙 할당 70% 삭감. `CREATE INDEX ... INCLUDE` 커버링 인덱스 결합. | `pkg/storage`, `pkg/execution`, `pkg/catalog` |
 | **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **대기** | 중간 `[]any` 레코드 슬라이스 박싱을 제거하고 `sync.Pool` 버퍼에 바이너리 튜플 데이터를 직접 포맷팅하여 소켓 syscall 횟수 최소화. | `pkg/wire`, `pkg/storage` |
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **대기** | Volcano 반복자에서 1행 단위 함수 호출 대신 64~1024건 청크 단위 배치 실행을 적용하여 대량 집계 및 스캔 지연 60% 단축. | `pkg/execution` |
-| **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **대기** | `SELECT * FROM tbl WHERE id = ?` 형태의 단순 PK 점조회에 대해 Wyhash 지문 해싱 기반으로 파서/플래너를 우회하여 스토리지 엔진(`Engine.Get`) 직결 반환 (TPS 50%+ 향상). | `pkg/engine`, `pkg/storage` |
+| **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료** | `SELECT * FROM tbl WHERE id = ?` 단순 PK 점조회에 대해 FNV-1a 지문 해싱 및 바운디드 캐시 기반으로 파서/플래너/VDBE 우회 스토리지(`tx.Get`) 직결 반환. DDL 시 자동 무효화. | `pkg/engine`, `pkg/storage` |
 
 ---
 

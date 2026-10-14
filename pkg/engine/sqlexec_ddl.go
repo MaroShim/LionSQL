@@ -221,6 +221,8 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		}
 	}
 
+	s.InvalidatePKBypassCache()
+
 	return &QueryResult{
 		Success:    true,
 		Command:    "CREATE TABLE",
@@ -256,6 +258,8 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 		cs.UnregisterTempTable(tableName)
 	}
 
+	s.InvalidatePKBypassCache()
+
 	return &QueryResult{
 		Success:    true,
 		Command:    "DROP TABLE",
@@ -276,6 +280,8 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time) (*QueryRe
 	if err := s.engine.TruncateTable(tableName); err != nil {
 		return nil, err
 	}
+
+	s.InvalidatePKBypassCache()
 
 	return &QueryResult{
 		Success:    true,
@@ -752,6 +758,8 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 		}
 	}
 
+	s.InvalidatePKBypassCache()
+
 	return &QueryResult{
 		Success:      true,
 		Command:      "CREATE VIEW",
@@ -785,6 +793,8 @@ func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult,
 		return nil, err
 	}
 
+	s.InvalidatePKBypassCache()
+
 	return &QueryResult{
 		Success:      true,
 		Command:      "DROP VIEW",
@@ -810,6 +820,8 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		if err := s.engine.DropPartition(tableName, partitionName); err != nil {
 			return nil, err
 		}
+
+		s.InvalidatePKBypassCache()
 
 		return &QueryResult{
 			Success:    true,

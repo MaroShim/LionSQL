@@ -22,8 +22,8 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P2** | **성능** | **단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`)** | `pkg/engine`, `pkg/storage` | `SELECT * FROM tbl WHERE id = ?` 정규 파서/플래너 우회 스토리지 직결 (TPS 50%+ 향상) |
 | **P2** | **프로토콜** | **TDS NBCROW 행 압축 (`0xD2`)** | `pkg/wire/tds` | NULL 비트맵 기반 0바이트 전송으로 네트워크 대역폭 30%+ 절감 |
+| **P2** | **스토리지** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스 (`P-2`)** | `pkg/storage`, `pkg/execution` | WHERE 절 선별 디코딩으로 스캔 속도 2배 향상, 힙 할당 70% 삭감 |
 | **P3** | **생태계** | **외부 언어 드라이버 E2E 검증 하네스** | `pkg/wire`, `pkg/wire/tds` | Python(`psycopg3`, `pymssql`), Node.js(`pg`, `tedious`), .NET(`SqlClient`) 검증 |
 
 ### P1 세부 과제: CBO & 쿼리 최적화
@@ -40,11 +40,12 @@
     - `pkg/planner/planner.go`: 양측 릴레이션의 정렬 속성(Sort Property)을 감지하고 해시 조인 vs 머지 조인 비용 경쟁 공식 및 `OPTION (MERGE JOIN)` 힌트 연동 추가.
 
 ### P2 세부 과제: 엔진 성능 & 프로토콜
-- [ ] **단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`) (`pkg/engine`, `pkg/storage`)**
+- [x] **단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`) (`pkg/engine`, `pkg/storage`)**
   - **배경**: 전체 쿼리 트래픽의 70~80%를 차지하는 단순 단건 PK 점조회(`SELECT * FROM tbl WHERE id = ?`)에 대해 매번 정규 파서, 바인더, CBO 플래너, VDBE 컴파일러를 거치는 CPU 오버헤드 해소.
   - **구현 내용**:
-    - 쿼리 문자열 Wyhash/FNV 지문 해싱 기반 템플릿 인식.
-    - 정규 실행 엔진을 우회(Bypass)하여 스토리지 엔진 PK 인덱스 겟(`Engine.Get`)으로 직결 반환.
+    - 쿼리 문자열 FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지 및 바운디드 캐시(`PKLookupPlan`).
+    - 정규 실행 엔진을 우회(Bypass)하여 스토리지 엔진 PK 인덱스 겟(`tx.Get`)으로 직결 반환, DDL 발생 시 자동 무효화(`InvalidatePKBypassCache`).
+    - Prometheus 메트릭스 `sqlion_pk_bypass_hits_total` 연동 및 멀티 테이블 한정자/별칭 완벽 지원.
 - [ ] **TDS 프로토콜 고도화: NBCROW 행 압축 (`0xD2`) (`pkg/wire/tds`)**
   - **배경**: TDS 7.3+ 표준 `NBCROW` (Null Bitmap Compressed Row) 토큰을 적용하여 NULL 필드가 많은 희소 테이블 조회 시 네트워크 대역폭 대폭 절감.
   - **구현 내용**:
@@ -93,7 +94,7 @@
 | **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스** | **대기 (`[ ]`)** | 스캔 속도 2배 향상, 불필요한 Varint 디코딩 힙 할당 제거 |
 | **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **대기 (`[ ]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **대기 (`[ ]`)** | 볼케이노 함수 호출 오버헤드 감소, 대량 집계/스캔 지연 60% 단축 |
-| **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **대기 (`[ ]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
+| **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료 (`[x]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
 
 - [ ] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 투영 푸시다운 (`pkg/storage`, `pkg/execution`)**
   - 풀 스캔 시 WHERE 절 조건 컬럼만 선별 디코딩하고, 조건을 통과한 행에 한해서만 나머지 투영 컬럼을 언패킹하여 CPU 및 힙 할당 70% 삭감.
@@ -179,3 +180,7 @@
   - 에러(`ERROR_MESSAGE`), 문자열(`PATINDEX`, `STUFF`, `CONCAT_WS`), 수학/삼각(`LOG`, `EXP`, `RAND`), 메타데이터(`OBJECT_ID`, `DB_NAME`), 암호화(`HASHBYTES`), 날짜(`DATEFROMPARTS`) 등 완비.
 - [x] **[드라이버] 공식 클라이언트 드라이버 E2E 통합 검증**
   - Go 공식 드라이버 `go-mssqldb` (TDS), `lib/pq` (PGWire), `pgx/v5` (Extended Query Pipelining) 100% PASS 검증 완료.
+- [x] **[성능] 단순 PK 조회 고속 지문 해싱 & 스토리지 바이패스 캐시 (`P-5`) (`pkg/engine`, `pkg/storage`)**
+  - 쿼리 문자열 FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지 및 바운디드 캐시(`PKLookupPlan`).
+  - 정규 파서/CBO/VDBE 스택을 전면 우회하여 스토리지 엔진(`tx.Get`)으로 직결 반환, DDL 발생 시 자동 무효화(`InvalidatePKBypassCache`).
+  - Prometheus 메트릭스 `sqlion_pk_bypass_hits_total` 연동 및 멀티 테이블 한정자/별칭 완벽 지원.

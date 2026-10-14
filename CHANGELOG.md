@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, `README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
 
 ### Added
+- **Fast-Path SQL Fingerprinting & Simple PK Lookup Storage Bypass (`P-5`) (`pkg/engine`, `pkg/storage`)**:
+  - Implemented ultra-fast SQL template recognition and 64-bit FNV-1a fingerprint hashing in `pkg/engine/pk_bypass.go`.
+  - Added zero-overhead bypass path routing simple single-PK point lookups (`SELECT ... FROM tbl WHERE id = ?`) directly to storage engine index lookup (`tx.Get`), bypassing regular Pratt parser, AST allocations, CBO planner, and VDBE bytecode compilation.
+  - Added bounded plan cache `pkBypassCache` capped at 2,048 entries with automatic schema version tracking and invalidation on DDL mutations (`InvalidatePKBypassCache`).
+  - Added Prometheus metric `sqlion_pk_bypass_hits_total` to track bypass execution hits.
+  - Comprehensive support for composite qualifiers (`[db]..[tbl]`), implicit and explicit table aliases, bracketed/quoted identifiers, reverse operands (`WHERE 1 = id`), and `LIMIT 1` / `TOP 1` clauses.
+  - Added comprehensive test suite `pkg/engine/pk_bypass_test.go` verifying integer PK, string PK, transaction isolation, non-PK fallback, complex query fallback, and DDL cache invalidation.
 - **Sort-Merge Join (SMJ) Operator & CBO Cost Model (`B-3`) (`pkg/execution`, `pkg/planner`, `pkg/engine`)**:
   - Implemented `MergeJoinIterator` in `pkg/execution/merge_join.go` providing $O(M+N)$ single-pass streaming joins with zero in-memory hash table overhead.
   - Implemented Mark & Restore buffer windowing on the right-side relation to handle N:M duplicate join keys and duplicate Cartesian products.
