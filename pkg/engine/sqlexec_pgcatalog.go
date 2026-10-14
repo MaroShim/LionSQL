@@ -137,6 +137,10 @@ func isPgCatalogTable(tableName string) bool {
 		"pg_catalog.pg_index", "pg_index",
 		"pg_catalog.pg_settings", "pg_settings",
 		"pg_catalog.pg_description", "pg_description",
+		"pg_catalog.pg_shdescription", "pg_shdescription",
+		"pg_catalog.pg_tablespace", "pg_tablespace",
+		"pg_catalog.pg_collation", "pg_collation",
+		"pg_catalog.pg_conversion", "pg_conversion",
 		"pg_catalog.pg_constraint", "pg_constraint",
 		"pg_catalog.pg_proc", "pg_proc",
 		"pg_catalog.pg_stat_user_tables", "pg_stat_user_tables",
@@ -795,6 +799,42 @@ func (s *Coordinator) execPgCatalogSelect(tableName, projStr, whereClause, order
 	case "pg_catalog.pg_description", "pg_description":
 		columns = []string{"objoid", "classoid", "objsubid", "description"}
 		// No user-defined descriptions; return empty result set.
+
+	// ------------------------------------------------------------------ //
+	// pg_catalog.pg_shdescription
+	// ------------------------------------------------------------------ //
+	case "pg_catalog.pg_shdescription", "pg_shdescription":
+		columns = []string{"objoid", "classoid", "description"}
+		// No user-defined shared descriptions; return empty result set.
+
+	// ------------------------------------------------------------------ //
+	// pg_catalog.pg_tablespace
+	// ------------------------------------------------------------------ //
+	case "pg_catalog.pg_tablespace", "pg_tablespace":
+		columns = []string{"oid", "spcname", "spcowner", "spcacl", "spcoptions"}
+		allRows = append(allRows,
+			map[string]any{"oid": 1663, "spcname": "pg_default", "spcowner": 10, "spcacl": nil, "spcoptions": nil},
+			map[string]any{"oid": 1664, "spcname": "pg_global", "spcowner": 10, "spcacl": nil, "spcoptions": nil},
+		)
+
+	// ------------------------------------------------------------------ //
+	// pg_catalog.pg_collation
+	// ------------------------------------------------------------------ //
+	case "pg_catalog.pg_collation", "pg_collation":
+		columns = []string{"oid", "collname", "collnamespace", "collowner", "collprovider", "collisdeterministic", "collencoding", "collcollate", "collctype", "collversion"}
+		allRows = append(allRows,
+			map[string]any{"oid": 100, "collname": "default", "collnamespace": 11, "collowner": 10, "collprovider": "c", "collisdeterministic": true, "collencoding": 6, "collcollate": "en_US.utf8", "collctype": "en_US.utf8", "collversion": nil},
+		)
+
+	// ------------------------------------------------------------------ //
+	// pg_catalog.pg_conversion
+	// ------------------------------------------------------------------ //
+	case "pg_catalog.pg_conversion", "pg_conversion":
+		columns = []string{"oid", "conname", "connamespace", "conowner", "conforencoding", "contoencoding", "conproc", "condefault"}
+		allRows = append(allRows,
+			map[string]any{"oid": 1000, "conname": "ascii_to_utf8", "connamespace": 11, "conowner": 10, "conforencoding": 0, "contoencoding": 6, "conproc": 0, "condefault": true},
+			map[string]any{"oid": 1001, "conname": "utf8_to_ascii", "connamespace": 11, "conowner": 10, "conforencoding": 6, "contoencoding": 0, "conproc": 0, "condefault": true},
+		)
 
 	// ------------------------------------------------------------------ //
 	// pg_catalog.pg_proc
@@ -1676,6 +1716,15 @@ func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	if strings.Contains(upper, "PG_ATTRIBUTE") && (strings.Contains(upper, "PG_CLASS") || strings.Contains(upper, "JOIN")) {
 		return true
 	}
+	if strings.Contains(upper, "PG_SHDESCRIPTION") {
+		return true
+	}
+	if strings.Contains(upper, "PG_CONVERSION") {
+		return true
+	}
+	if strings.Contains(upper, "SYS.ALL_OBJECTS") {
+		return true
+	}
 	return false
 }
 
@@ -1790,7 +1839,22 @@ func (s *Coordinator) execHeidiSQLCatalogJoinSelect(sql string, start time.Time)
 		return s.execHeidiSQLProcSelect(sql, start)
 	}
 
-	// 17. Class + Namespace: Tables and Views (DbGate tableList.js, views.js, HeidiSQL)
+	// 17. DBeaver PostgreSQL pg_shdescription queries
+	if strings.Contains(upper, "PG_SHDESCRIPTION") {
+		return s.execDBeaverPgShdescriptionSelect(sql, start)
+	}
+
+	// 18. DBeaver PostgreSQL pg_conversion query
+	if strings.Contains(upper, "PG_CONVERSION") {
+		return s.execDBeaverPgConversionSelect(sql, start)
+	}
+
+	// 19. DBeaver SQL Server sys.all_objects query
+	if strings.Contains(upper, "SYS.ALL_OBJECTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "EXTENDED_PROPERTIES")) {
+		return s.execDBeaverMSSQLAllObjectsSelect(sql, start)
+	}
+
+	// 20. Class + Namespace: Tables and Views (DbGate tableList.js, views.js, HeidiSQL)
 	return s.execHeidiSQLClassSelect(sql, start)
 }
 
@@ -1931,10 +1995,26 @@ func (s *Coordinator) execDbGateTriggerSelect(sql string, start time.Time) (*Que
 }
 
 func (s *Coordinator) execHeidiSQLProcSelect(sql string, start time.Time) (*QueryResult, error) {
+	upper := strings.ToUpper(sql)
 	targetSchema := "public"
 	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
 	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
+	}
+
+	whereClause := ""
+	projStr := "*"
+	if whereIdx := strings.Index(upper, "WHERE"); whereIdx != -1 {
+		whereClause = sql[whereIdx+5:]
+		if orderIdx := strings.Index(strings.ToUpper(whereClause), "ORDER BY"); orderIdx != -1 {
+			whereClause = whereClause[:orderIdx]
+		}
+	}
+	if fromIdx := strings.Index(upper, "FROM"); fromIdx != -1 {
+		selectPart := sql[:fromIdx]
+		if selectIdx := strings.Index(strings.ToUpper(selectPart), "SELECT"); selectIdx != -1 {
+			projStr = strings.TrimSpace(selectPart[selectIdx+6:])
+		}
 	}
 
 	columns := []string{
@@ -1981,113 +2061,176 @@ func (s *Coordinator) execHeidiSQLProcSelect(sql string, start time.Time) (*Quer
 			})
 		}
 	}
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
-	}, nil
+	return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, "", -1, start)
 }
 
 func (s *Coordinator) execHeidiSQLClassSelect(sql string, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(sql)
-	targetSchema := "public"
-	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
-	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
-		targetSchema = m[1]
+	whereClause := ""
+	projStr := "*"
+	if whereIdx := strings.Index(upper, "WHERE"); whereIdx != -1 {
+		whereClause = sql[whereIdx+5:]
+		if orderIdx := strings.Index(strings.ToUpper(whereClause), "ORDER BY"); orderIdx != -1 {
+			whereClause = whereClause[:orderIdx]
+		}
+	}
+	if fromIdx := strings.Index(upper, "FROM"); fromIdx != -1 {
+		selectPart := sql[:fromIdx]
+		if selectIdx := strings.Index(strings.ToUpper(selectPart), "SELECT"); selectIdx != -1 {
+			projStr = strings.TrimSpace(selectPart[selectIdx+6:])
+		}
 	}
 
 	columns := []string{
+		"oid", "relname", "relnamespace", "reltype", "reloftype",
+		"relowner", "relam", "relfilenode", "reltablespace",
+		"relpages", "reltuples", "relallvisible", "reltoastrelid",
+		"relhasindex", "relisshared", "relpersistence", "relkind",
+		"relnatts", "relchecks", "relhasrules", "relhastriggers",
+		"relhassubclass", "relrowsecurity", "relforcerowsecurity",
+		"relispopulated", "relreplident", "relispartition",
+		"relrewrite", "relfrozenxid", "relminmxid", "relacl", "reloptions",
+		"description", "partition_expr", "partition_key",
 		"schema_name", "pure_name", "object_name", "table_name", "object_kind",
-		"size_bytes", "data_length", "index_length", "reltuples",
+		"size_bytes", "data_length", "index_length",
 		"comment", "viewdef", "content", "hash", "proargtypes",
+	}
+
+	schemas := []struct {
+		name string
+		oid  int
+	}{
+		{"public", 2200},
+		{"dbo", 2201},
 	}
 
 	var allRows []map[string]any
 
+	tables := s.getSortedTables()
+	views := s.getSortedViews()
+
 	// If query targets views specifically (DbGate views.js, HeidiSQL relkind = 'v', matviews)
 	if strings.Contains(upper, "RELKIND = 'V'") || strings.Contains(upper, "VIEW_DEFS") || strings.Contains(upper, "MATVIEW") {
-		if s.catalog != nil {
-			for _, v := range s.catalog.ListViews() {
+		for _, sch := range schemas {
+			for vIdx, v := range views {
 				allRows = append(allRows, map[string]any{
-					"schema_name":  targetSchema,
-					"pure_name":    v.Name,
-					"object_name":  v.Name,
-					"table_name":   v.Name,
-					"object_kind":  "v",
-					"size_bytes":   int64(0),
-					"data_length":  int64(0),
-					"index_length": int64(0),
-					"reltuples":    float32(0),
-					"comment":      nil,
-					"viewdef":      v.Query,
-					"content":      v.Query,
-					"hash":         "view_hash",
-					"proargtypes":  nil,
+					"oid":            20000 + vIdx,
+					"relname":        v.Name,
+					"nspname":        sch.name,
+					"relkind":        "v",
+					"relnamespace":   sch.oid,
+					"relpersistence": "p",
+					"relispopulated": true,
+					"description":    nil,
+					"partition_expr": nil,
+					"partition_key":  nil,
+					"schema_name":    sch.name,
+					"pure_name":      v.Name,
+					"object_name":    v.Name,
+					"table_name":     v.Name,
+					"object_kind":    "v",
+					"size_bytes":     int64(0),
+					"data_length":    int64(0),
+					"index_length":   int64(0),
+					"reltuples":      float32(0),
+					"comment":        nil,
+					"viewdef":        v.Query,
+					"content":        v.Query,
+					"hash":           "view_hash",
+					"proargtypes":    nil,
 				})
 			}
 		}
-		return &QueryResult{
-			Success:      true,
-			Command:      "SELECT",
-			Columns:      columns,
-			Rows:         allRows,
-			RowsAffected: int64(len(allRows)),
-			DurationUS:   time.Since(start).Microseconds(),
-		}, nil
+		return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, "", -1, start)
 	}
 
-	// Standard tables query (DbGate tableList.js, HeidiSQL)
-	tables, _ := s.engine.ListTables()
-	for _, t := range tables {
-		allRows = append(allRows, map[string]any{
-			"schema_name":  targetSchema,
-			"pure_name":    t.Name,
-			"object_name":  t.Name,
-			"table_name":   t.Name,
-			"object_kind":  "r",
-			"size_bytes":   int64(16384),
-			"data_length":  int64(16384),
-			"index_length": int64(8192),
-			"reltuples":    float32(1000),
-			"comment":      nil,
-			"viewdef":      nil,
-			"content":      nil,
-			"hash":         "table_hash",
-			"proargtypes":  nil,
-		})
-	}
-	if s.catalog != nil {
-		for _, v := range s.catalog.ListViews() {
+	// Standard tables query (DbGate tableList.js, HeidiSQL, DBeaver)
+	for _, sch := range schemas {
+		for tIdx, t := range tables {
+			toid := tableBaseOID(tIdx)
 			allRows = append(allRows, map[string]any{
-				"schema_name":  targetSchema,
-				"pure_name":    v.Name,
-				"object_name":  v.Name,
-				"table_name":   v.Name,
-				"object_kind":  "v",
-				"size_bytes":   int64(0),
-				"data_length":  int64(0),
-				"index_length": int64(0),
-				"reltuples":    float32(0),
-				"comment":      nil,
-				"viewdef":      v.Query,
-				"content":      v.Query,
-				"hash":         "view_hash",
-				"proargtypes":  nil,
+				"oid":                 toid,
+				"relname":             t.Name,
+				"nspname":             sch.name,
+				"relkind":             "r",
+				"relnamespace":        sch.oid,
+				"reltype":             0,
+				"reloftype":           0,
+				"relowner":            10,
+				"relam":               2,
+				"relfilenode":         toid,
+				"reltablespace":       1663,
+				"relpages":            int64(10),
+				"reltuples":           float32(1000),
+				"relallvisible":       int64(0),
+				"reltoastrelid":       0,
+				"relhasindex":         len(t.Indexes) > 0,
+				"relisshared":         false,
+				"relpersistence":      "p",
+				"relnatts":            len(t.Columns),
+				"relchecks":           0,
+				"relhasrules":         false,
+				"relhastriggers":      false,
+				"relhassubclass":      false,
+				"relrowsecurity":      false,
+				"relforcerowsecurity": false,
+				"relispopulated":      true,
+				"relreplident":        "d",
+				"relispartition":      false,
+				"relrewrite":          0,
+				"relfrozenxid":        0,
+				"relminmxid":          0,
+				"relacl":              nil,
+				"reloptions":          nil,
+				"description":         nil,
+				"partition_expr":      nil,
+				"partition_key":       nil,
+				"schema_name":         sch.name,
+				"pure_name":           t.Name,
+				"object_name":         t.Name,
+				"table_name":          t.Name,
+				"object_kind":         "r",
+				"size_bytes":          int64(16384),
+				"data_length":         int64(16384),
+				"index_length":        int64(8192),
+				"comment":             nil,
+				"viewdef":             nil,
+				"content":             nil,
+				"hash":                "table_hash",
+				"proargtypes":         nil,
+			})
+		}
+		for vIdx, v := range views {
+			allRows = append(allRows, map[string]any{
+				"oid":            20000 + vIdx,
+				"relname":        v.Name,
+				"nspname":        sch.name,
+				"relkind":        "v",
+				"relnamespace":   sch.oid,
+				"relpersistence": "p",
+				"relispopulated": true,
+				"description":    nil,
+				"partition_expr": nil,
+				"partition_key":  nil,
+				"schema_name":    sch.name,
+				"pure_name":      v.Name,
+				"object_name":    v.Name,
+				"table_name":     v.Name,
+				"object_kind":    "v",
+				"size_bytes":     int64(0),
+				"data_length":    int64(0),
+				"index_length":   int64(0),
+				"reltuples":      float32(0),
+				"comment":        nil,
+				"viewdef":        v.Query,
+				"content":        v.Query,
+				"hash":           "view_hash",
+				"proargtypes":    nil,
 			})
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
-	}, nil
+	return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, "", -1, start)
 }
 
 func (s *Coordinator) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (*QueryResult, error) {
@@ -2746,7 +2889,16 @@ func (s *Coordinator) execDbGateMSSQLForeignKeySelect(sql string, start time.Tim
 }
 
 func (s *Coordinator) execDbGateMSSQLRowCountSelect(sql string, start time.Time) (*QueryResult, error) {
-	columns := []string{"objectId", "tableRowCount"}
+	upper := strings.ToUpper(sql)
+	isDBeaver := strings.Contains(upper, "TOTALSIZE") || strings.Contains(upper, "USEDSIZE")
+	var columns []string
+	if isDBeaver {
+		columns = []string{"name", "rows", "totalSize", "usedSize"}
+	} else {
+		columns = []string{"objectId", "tableRowCount"}
+	}
+
+	targetIDs := parseTargetObjectIDs(sql)
 	tables := s.getSortedTables()
 	var allRows []map[string]any
 
@@ -2760,6 +2912,9 @@ func (s *Coordinator) execDbGateMSSQLRowCountSelect(sql string, start time.Time)
 
 	for tIdx, t := range tables {
 		objID := 1000 + tIdx
+		if targetIDs != nil && !targetIDs[objID] {
+			continue
+		}
 		var cnt int64 = 0
 		if s.catalog != nil {
 			if st, ok := s.catalog.GetTableStats(t.Name); ok && st != nil && st.RowCount > 0 {
@@ -2780,6 +2935,10 @@ func (s *Coordinator) execDbGateMSSQLRowCountSelect(sql string, start time.Time)
 			}
 		}
 		allRows = append(allRows, map[string]any{
+			"name":          t.Name,
+			"rows":          cnt,
+			"totalSize":     int64(16),
+			"usedSize":      int64(8),
 			"objectId":      objID,
 			"tableRowCount": cnt,
 		})
@@ -2995,3 +3154,130 @@ func (s *Coordinator) execDbGateMSSQLLoadSqlCodeSelect(sql string, start time.Ti
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
+
+func (s *Coordinator) execDBeaverPgShdescriptionSelect(sql string, start time.Time) (*QueryResult, error) {
+	upper := strings.ToUpper(sql)
+	if strings.Contains(upper, "PG_ROLES") {
+		columns := []string{
+			"oid", "rolname", "rolsuper", "rolinherit", "rolcreaterole",
+			"rolcreatedb", "rolcanlogin", "rolreplication", "rolconnlimit",
+			"rolpassword", "rolvaliduntil", "rolbypassrls", "rolconfig",
+			"description",
+		}
+		allRows := []map[string]any{
+			{
+				"oid":            10,
+				"rolname":        "postgres",
+				"rolsuper":       true,
+				"rolinherit":     true,
+				"rolcreaterole":  true,
+				"rolcreatedb":    true,
+				"rolcanlogin":    true,
+				"rolreplication": true,
+				"rolconnlimit":   -1,
+				"rolpassword":    "********",
+				"rolvaliduntil":  nil,
+				"rolbypassrls":   true,
+				"rolconfig":      nil,
+				"description":    nil,
+			},
+			{
+				"oid":            11,
+				"rolname":        "admin",
+				"rolsuper":       true,
+				"rolinherit":     true,
+				"rolcreaterole":  true,
+				"rolcreatedb":    true,
+				"rolcanlogin":    true,
+				"rolreplication": true,
+				"rolconnlimit":   -1,
+				"rolpassword":    "********",
+				"rolvaliduntil":  nil,
+				"rolbypassrls":   true,
+				"rolconfig":      nil,
+				"description":    nil,
+			},
+		}
+		return buildVirtualCatalogResult(columns, allRows, "*", "", "rolname", -1, start)
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      []string{"description"},
+		Rows:         []map[string]any{},
+		RowsAffected: 0,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Coordinator) execDBeaverPgConversionSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{"encid", "encname"}
+	allRows := []map[string]any{
+		{"encid": 6, "encname": "UTF8"},
+		{"encid": 0, "encname": "SQL_ASCII"},
+	}
+	return &QueryResult{
+		Success:      true,
+		Command:      "SELECT",
+		Columns:      columns,
+		Rows:         allRows,
+		RowsAffected: int64(len(allRows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Coordinator) execDBeaverMSSQLAllObjectsSelect(sql string, start time.Time) (*QueryResult, error) {
+	columns := []string{
+		"name", "object_id", "principal_id", "schema_id", "parent_object_id",
+		"type", "type_desc", "create_date", "modify_date",
+		"is_ms_shipped", "is_published", "is_schema_published",
+		"description", "is_external",
+	}
+	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	var allRows []map[string]any
+
+	tables := s.getSortedTables()
+	for tIdx, t := range tables {
+		allRows = append(allRows, map[string]any{
+			"name":                t.Name,
+			"object_id":           1000 + tIdx,
+			"principal_id":        nil,
+			"schema_id":           1,
+			"parent_object_id":    0,
+			"type":                "U",
+			"type_desc":           "USER_TABLE",
+			"create_date":         defaultDate,
+			"modify_date":         defaultDate,
+			"is_ms_shipped":       false,
+			"is_published":        false,
+			"is_schema_published": false,
+			"description":         nil,
+			"is_external":         false,
+		})
+	}
+
+	views := s.getSortedViews()
+	for vIdx, v := range views {
+		allRows = append(allRows, map[string]any{
+			"name":                v.Name,
+			"object_id":           2000 + vIdx,
+			"principal_id":        nil,
+			"schema_id":           1,
+			"parent_object_id":    0,
+			"type":                "V",
+			"type_desc":           "VIEW",
+			"create_date":         defaultDate,
+			"modify_date":         defaultDate,
+			"is_ms_shipped":       false,
+			"is_published":        false,
+			"is_schema_published": false,
+			"description":         nil,
+			"is_external":         false,
+		})
+	}
+
+	return buildVirtualCatalogResult(columns, allRows, "*", "", "name", -1, start)
+}
+
+

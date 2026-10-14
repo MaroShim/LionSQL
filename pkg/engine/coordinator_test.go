@@ -928,5 +928,141 @@ OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY`,
 	}
 }
 
+func TestCoordinator_DBeaverCatalogQueries(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	coord.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(100));")
+	coord.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice');")
+
+	// 1. DBeaver SQL Server sys.databases query with alias wildcard
+	resDb, err := coord.ExecuteSQL("SELECT db.* FROM sys.databases db ORDER BY db.name")
+	if err != nil {
+		t.Fatalf("sys.databases query failed: %v", err)
+	}
+	if len(resDb.Rows) == 0 {
+		t.Fatalf("expected databases, got 0 rows")
+	}
+	// Columns must NOT be just ["*"]
+	foundName := false
+	for _, c := range resDb.Columns {
+		if c == "name" {
+			foundName = true
+			break
+		}
+	}
+	if !foundName {
+		t.Fatalf("expected 'name' in columns, got %v", resDb.Columns)
+	}
+
+	// 2. DBeaver PostgreSQL pg_shdescription join query
+	resShDesc, err := coord.ExecuteSQL("select description from pg_shdescription join pg_database on objoid = pg_database.oid where datname = 'sqlion'")
+	if err != nil {
+		t.Fatalf("pg_shdescription join query failed: %v", err)
+	}
+	if len(resShDesc.Columns) != 1 || resShDesc.Columns[0] != "description" {
+		t.Fatalf("expected [description] column, got %v", resShDesc.Columns)
+	}
+
+	// 3. DBeaver PostgreSQL pg_roles with alias wildcard and left join pg_shdescription
+	resRoles, err := coord.ExecuteSQL("SELECT a.oid,a.*,pd.description FROM pg_catalog.pg_roles a left join pg_catalog.pg_shdescription pd on a.oid = pd.objoid ORDER BY a.rolname")
+	if err != nil {
+		t.Fatalf("pg_roles join query failed: %v", err)
+	}
+	if len(resRoles.Rows) == 0 {
+		t.Fatalf("expected roles, got 0 rows")
+	}
+	foundRolName := false
+	for _, c := range resRoles.Columns {
+		if c == "rolname" {
+			foundRolName = true
+			break
+		}
+	}
+	if !foundRolName {
+		t.Fatalf("expected 'rolname' in expanded columns, got %v", resRoles.Columns)
+	}
+
+	// 4. DBeaver PostgreSQL pg_conversion query
+	qConv := `SELECT c.contoencoding as encid,pg_catalog.pg_encoding_to_char(c.contoencoding) as encname
+FROM pg_catalog.pg_conversion c
+GROUP BY c.contoencoding
+ORDER BY 2`
+	resConv, err := coord.ExecuteSQL(qConv)
+	if err != nil {
+		t.Fatalf("pg_conversion query failed: %v", err)
+	}
+	if len(resConv.Rows) == 0 {
+		t.Fatalf("expected encodings, got 0 rows")
+	}
+
+	// 5. DBeaver SQL Server sys.all_objects query
+	qObj := `SELECT o.*,ep.value as description,t.is_external FROM sqlion.sys.all_objects o
+LEFT OUTER JOIN sqlion.sys.extended_properties ep ON ep.class=1 AND ep.major_id=o.object_id AND ep.minor_id=0 AND ep.name='MS_Description'
+LEFT OUTER JOIN sqlion.sys.tables t ON t.object_id=o.object_id
+WHERE o.type IN ('U','S','V','TT') AND o.schema_id = 1`
+	resObj, err := coord.ExecuteSQL(qObj)
+	if err != nil {
+		t.Fatalf("sys.all_objects query failed: %v", err)
+	}
+	foundObjName := false
+	for _, c := range resObj.Columns {
+		if c == "name" {
+			foundObjName = true
+			break
+		}
+	}
+	if !foundObjName {
+		t.Fatalf("expected 'name' in sys.all_objects columns, got %v", resObj.Columns)
+	}
+
+	// 6. DBeaver SQL Server Table Size & Rows query
+	qSize := `SELECT t.name, p.rows, SUM(a.total_pages) * 8 AS totalSize, SUM(a.used_pages) * 8 AS usedSize
+FROM sqlion.sys.tables t
+INNER JOIN sqlion.sys.indexes i ON t.OBJECT_ID = i.object_id
+INNER JOIN sqlion.sys.partitions p ON i.object_id = p.OBJECT_ID AND i.index_id = p.index_id
+INNER JOIN sqlion.sys.allocation_units a ON p.partition_id = a.container_id
+LEFT OUTER JOIN sqlion.sys.schemas s ON t.schema_id = s.schema_id
+WHERE t.schema_id =  1
+AND t.object_id= 1000
+GROUP BY t.name, p.rows`
+	resSize, err := coord.ExecuteSQL(qSize)
+	if err != nil {
+		t.Fatalf("table size query failed: %v", err)
+	}
+	if len(resSize.Rows) != 1 {
+		t.Fatalf("expected 1 row for table 1000, got %d", len(resSize.Rows))
+	}
+	if resSize.Rows[0]["name"] != "users" {
+		t.Fatalf("expected table name users, got %v", resSize.Rows[0]["name"])
+	}
+
+	// 7. DBeaver PostgreSQL pg_class table query with relnamespace=2201 (dbo)
+	qPgClass := `SELECT c.oid,c.*,d.description,pg_catalog.pg_get_expr(c.relpartbound, c.oid) as partition_expr,  pg_catalog.pg_get_partkeydef(c.oid) as partition_key
+FROM pg_catalog.pg_class c
+LEFT OUTER JOIN pg_catalog.pg_description d ON d.objoid=c.oid AND d.objsubid=0 AND d.classoid='pg_class'::regclass
+WHERE c.relnamespace=2201 AND c.relkind not in ('i','I','c')`
+	resPgClass, err := coord.ExecuteSQL(qPgClass)
+	if err != nil {
+		t.Fatalf("pg_class table query failed: %v", err)
+	}
+	if len(resPgClass.Rows) == 0 {
+		t.Fatalf("expected tables for dbo, got 0 rows")
+	}
+	foundRelName := false
+	for _, c := range resPgClass.Columns {
+		if c == "relname" {
+			foundRelName = true
+			break
+		}
+	}
+	if !foundRelName {
+		t.Fatalf("expected relname in columns, got %v", resPgClass.Columns)
+	}
+}
+
+
 
 

@@ -330,16 +330,24 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 	// Projection
 	var selectedCols []string
 	colSourceMap := make(map[string]string)
-	if projStr == "*" || projStr == "" {
+	trimmedProj := strings.TrimSpace(projStr)
+	if trimmedProj == "*" || trimmedProj == "" || strings.HasSuffix(trimmedProj, ".*") {
 		selectedCols = columns
 		for _, col := range columns {
 			colSourceMap[col] = col
 		}
 	} else {
 		asRe := regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
-		for _, c := range strings.Split(projStr, ",") {
+		for _, c := range splitScalarProjections(projStr) {
 			cTrimmed := strings.TrimSpace(c)
 			if cTrimmed == "" {
+				continue
+			}
+			if cTrimmed == "*" || strings.HasSuffix(cTrimmed, ".*") {
+				for _, col := range columns {
+					selectedCols = append(selectedCols, col)
+					colSourceMap[col] = col
+				}
 				continue
 			}
 			alias := ""

@@ -1988,7 +1988,7 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	}
 
 	// 1. DbGate & Modern GUI tool multi-column version & edition detection
-	if strings.Contains(upper, "SERVERPROPERTY") && (strings.Contains(upper, "VERSION") || strings.Contains(upper, "PRODUCTVERSION") || strings.Contains(upper, "ENGINEEDITION")) {
+	if strings.Contains(upper, "SERVERPROPERTY") && strings.Contains(upper, "PRODUCTVERSION") && (strings.Contains(upper, "VERSIONTEXT") || strings.Contains(upper, "CASE") || strings.Count(upper, "SERVERPROPERTY") > 1) {
 		cols := []ColumnInfo{
 			{Name: "version", Type: TypeNVarChar, Size: 4000, Nullable: false},
 			{Name: "productVersion", Type: TypeNVarChar, Size: 128, Nullable: false},
@@ -2038,6 +2038,8 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 			if alias != "" {
 				colName = alias
 			}
+		} else if m := regexp.MustCompile(`(?i)SERVERPROPERTY\s*\(\s*['"]?([a-zA-Z0-9_]+)['"]?\s*\)`).FindStringSubmatch(trimmed); len(m) == 2 {
+			colName = m[1]
 		}
 		var val any = "15.0.2000.5"
 		colType := TypeNVarChar
@@ -2046,6 +2048,8 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 			val = int32(3)
 			colType = TypeIntN
 			colSize = 4
+		} else if strings.Contains(upper, "COLLATION") {
+			val = "SQL_Latin1_General_CP1_CI_AS"
 		} else if strings.Contains(upper, "EDITION") {
 			val = "Developer Edition (64-bit)"
 		} else if strings.Contains(upper, "PRODUCTLEVEL") {

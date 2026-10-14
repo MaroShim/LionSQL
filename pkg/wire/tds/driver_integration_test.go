@@ -680,5 +680,62 @@ OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY`,
 	}
 }
 
+func TestDriverIntegration_DBeaver_Queries(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. DBeaver scalar SERVERPROPERTY('EngineEdition')
+	var engineEdition int
+	if err := db.QueryRowContext(ctx, "SELECT SERVERPROPERTY('EngineEdition')").Scan(&engineEdition); err != nil {
+		t.Fatalf("SELECT SERVERPROPERTY('EngineEdition') failed: %v", err)
+	}
+	if engineEdition != 3 {
+		t.Fatalf("expected engineEdition = 3, got %d", engineEdition)
+	}
+
+	// 2. DBeaver sys.databases query with db.*
+	rows, err := db.QueryContext(ctx, "SELECT db.* FROM sys.databases db ORDER BY db.name")
+	if err != nil {
+		t.Fatalf("SELECT db.* FROM sys.databases db failed: %v", err)
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatalf("Columns() failed: %v", err)
+	}
+	foundName := false
+	for _, c := range cols {
+		if c == "name" {
+			foundName = true
+			break
+		}
+	}
+	if !foundName {
+		t.Fatalf("expected 'name' in columns, got %v", cols)
+	}
+}
+
+
+
 
 
