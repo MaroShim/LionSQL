@@ -23,7 +23,8 @@
 | :---: | :---: | :--- | :--- | :---: |
 | **P1** | **최적화** | **`D-9`**, **`B-3`** | `pkg/planner`, `pkg/execution` | **완료**: CBO 옵티마이저 힌트 오버라이드 및 소트-머지 조인 완비 |
 | **P2** | **성능** | **`P-5`** | `pkg/engine`, `pkg/storage` | **완료**: 단순 PK 조회 고속 바이패스 캐시 완비 (TPS 50%+ 향상) |
-| **P2** | **프로토콜** | **TDS NBCROW** | `pkg/wire/tds` | **진행 예정**: TDS 행 압축(`0xD2`) 기반 네트워크 대역폭 절감 |
+| **P2** | **프로토콜** | **TDS NBCROW** | `pkg/wire/tds` | **완료**: TDS 행 압축(`0xD2`) 기반 네트워크 대역폭 절감 및 NULL 비트맵 지원 |
+| **P2** | **프로토콜** | **MySQL MVP** | `pkg/wire/mysql` | **진행 예정**: HandshakeV10, Native Auth, COM_QUERY 기반 MySQL 클라이언트 호환 |
 | **P3** | **생태계** | **드라이버 E2E** | `pkg/wire`, `pkg/wire/tds` | **진행 예정**: Python(`psycopg3`, `pymssql`), Node.js, .NET 드라이버 E2E 하네스 |
 
 ---

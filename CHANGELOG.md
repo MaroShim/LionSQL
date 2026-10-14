@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, `README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
 
 ### Added
+- **TDS NBCROW Row Compression Token (`0xD2`) (`pkg/wire/tds`)**:
+  - Implemented `BuildNBCRow(cols []ColumnInfo, values []any)` in `pkg/wire/tds/token.go` compliant with [MS-TDS] 2.2.7.13 NBCROW specification.
+  - Added null bitmap header (`ceil(N / 8)` bytes) preceding row column data, setting bit $k$ ($k/8, k\%8$) to 1 for NULL columns and eliminating all payload bytes (0-byte encoding) for NULL fields.
+  - Refactored `writeColumnValue` helper in `token.go` to unify non-NULL value serialization across `BuildRow` and `BuildNBCRow` with zero duplication.
+  - Integrated dynamic row format negotiation in `pkg/wire/tds/server.go`: tracking negotiated TDS version (`sess.TDSVersion >= 0x73000000`) and automatically emitting `TokenNBCRow` (`0xD2`) when rows contain NULL values (`sess.buildRow`), retaining `TokenRow` (`0xD1`) for all-non-NULL rows.
+  - Added comprehensive unit tests in `pkg/wire/tds/token_test.go` and `server_test.go` verifying single/multi-column null bitmaps, multi-byte bitmaps (10+ columns), and raw packet emission.
+  - Added official client integration test in `pkg/wire/tds/driver_integration_test.go` verifying `go-mssqldb` scanning NULL values into `sql.NullString` and `sql.NullInt64`.
 - **Fast-Path SQL Fingerprinting & Simple PK Lookup Storage Bypass (`P-5`) (`pkg/engine`, `pkg/storage`)**:
   - Implemented ultra-fast SQL template recognition and 64-bit FNV-1a fingerprint hashing in `pkg/engine/pk_bypass.go`.
   - Added zero-overhead bypass path routing simple single-PK point lookups (`SELECT ... FROM tbl WHERE id = ?`) directly to storage engine index lookup (`tx.Get`), bypassing regular Pratt parser, AST allocations, CBO planner, and VDBE bytecode compilation.

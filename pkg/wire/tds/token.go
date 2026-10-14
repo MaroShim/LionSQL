@@ -528,6 +528,66 @@ var tdsRowBufferPool = sync.Pool{
 	},
 }
 
+// writeColumnValue serializes a non-NULL column value according to its column type.
+func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
+	switch col.Type {
+	case TypeIntN:
+		intVal := toInt64(val)
+		if col.Size == 1 {
+			buf.WriteByte(1)
+			buf.WriteByte(byte(intVal))
+		} else if col.Size == 2 {
+			buf.WriteByte(2)
+			_ = binary.Write(buf, binary.LittleEndian, int16(intVal))
+		} else if col.Size == 4 {
+			buf.WriteByte(4)
+			_ = binary.Write(buf, binary.LittleEndian, int32(intVal))
+		} else {
+			buf.WriteByte(8)
+			_ = binary.Write(buf, binary.LittleEndian, intVal)
+		}
+
+	case TypeFltN:
+		fltVal := toFloat64(val)
+		buf.WriteByte(8)
+		_ = binary.Write(buf, binary.LittleEndian, fltVal)
+
+	case TypeBitN:
+		bitVal := toBool(val)
+		buf.WriteByte(1)
+		if bitVal {
+			buf.WriteByte(1)
+		} else {
+			buf.WriteByte(0)
+		}
+
+	case TypeDateTimeN:
+		// Encode as DATETIME (4 bytes days since 1900-01-01, 4 bytes 300ths of second)
+		t := toTime(val)
+		days, ticks := encodeDateTime(t)
+		buf.WriteByte(8)
+		_ = binary.Write(buf, binary.LittleEndian, days)
+		_ = binary.Write(buf, binary.LittleEndian, ticks)
+
+	case TypeNVarChar:
+		strVal := fmt.Sprintf("%v", val)
+		u16 := EncodeUTF16LE(strVal)
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
+		buf.Write(u16)
+
+	case TypeVarChar:
+		strVal := fmt.Sprintf("%v", val)
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(strVal)))
+		buf.WriteString(strVal)
+
+	default:
+		strVal := fmt.Sprintf("%v", val)
+		u16 := EncodeUTF16LE(strVal)
+		_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
+		buf.Write(u16)
+	}
+}
+
 // BuildRow builds a ROW token (0xD1) for a row of values matching cols.
 func BuildRow(cols []ColumnInfo, values []any) []byte {
 	buf := tdsRowBufferPool.Get().(*bytes.Buffer)
@@ -557,62 +617,55 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 			continue
 		}
 
-		switch col.Type {
-		case TypeIntN:
-			intVal := toInt64(val)
-			if col.Size == 1 {
-				buf.WriteByte(1)
-				buf.WriteByte(byte(intVal))
-			} else if col.Size == 2 {
-				buf.WriteByte(2)
-				_ = binary.Write(buf, binary.LittleEndian, int16(intVal))
-			} else if col.Size == 4 {
-				buf.WriteByte(4)
-				_ = binary.Write(buf, binary.LittleEndian, int32(intVal))
-			} else {
-				buf.WriteByte(8)
-				_ = binary.Write(buf, binary.LittleEndian, intVal)
-			}
+		writeColumnValue(buf, col, val)
+	}
 
-		case TypeFltN:
-			fltVal := toFloat64(val)
-			buf.WriteByte(8)
-			_ = binary.Write(buf, binary.LittleEndian, fltVal)
+	res := make([]byte, buf.Len())
+	copy(res, buf.Bytes())
+	return res
+}
 
-		case TypeBitN:
-			bitVal := toBool(val)
-			buf.WriteByte(1)
-			if bitVal {
-				buf.WriteByte(1)
-			} else {
-				buf.WriteByte(0)
-			}
-
-		case TypeDateTimeN:
-			// Encode as DATETIME (4 bytes days since 1900-01-01, 4 bytes 300ths of second)
-			t := toTime(val)
-			days, ticks := encodeDateTime(t)
-			buf.WriteByte(8)
-			_ = binary.Write(buf, binary.LittleEndian, days)
-			_ = binary.Write(buf, binary.LittleEndian, ticks)
-
-		case TypeNVarChar:
-			strVal := fmt.Sprintf("%v", val)
-			u16 := EncodeUTF16LE(strVal)
-			_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
-			buf.Write(u16)
-
-		case TypeVarChar:
-			strVal := fmt.Sprintf("%v", val)
-			_ = binary.Write(buf, binary.LittleEndian, uint16(len(strVal)))
-			buf.WriteString(strVal)
-
-		default:
-			strVal := fmt.Sprintf("%v", val)
-			u16 := EncodeUTF16LE(strVal)
-			_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
-			buf.Write(u16)
+// BuildNBCRow builds an NBCROW token (0xD2) with a null bitmap for a row of values matching cols.
+// It complies with [MS-TDS] 2.2.7.13 NBCROW:
+// Token: 0xD2
+// NullBitmap: ceil(len(cols)/8) bytes. Bit k (byte k/8, bit k%8) = 1 indicates column k is NULL.
+// ColumnData: non-NULL columns are serialized in column order; NULL columns take 0 bytes.
+func BuildNBCRow(cols []ColumnInfo, values []any) []byte {
+	buf := tdsRowBufferPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer func() {
+		if buf.Cap() <= 65536 {
+			tdsRowBufferPool.Put(buf)
 		}
+	}()
+	buf.WriteByte(TokenNBCRow)
+
+	numCols := len(cols)
+	bitmapLen := (numCols + 7) / 8
+	bitmap := make([]byte, bitmapLen)
+
+	for i := 0; i < numCols; i++ {
+		var val any
+		if i < len(values) {
+			val = values[i]
+		}
+		if val == nil {
+			bitmap[i/8] |= 1 << (i % 8)
+		}
+	}
+	buf.Write(bitmap)
+
+	for i := 0; i < numCols; i++ {
+		// If bit is set, column is NULL -> 0 bytes in data stream
+		if (bitmap[i/8] & (1 << (i % 8))) != 0 {
+			continue
+		}
+
+		var val any
+		if i < len(values) {
+			val = values[i]
+		}
+		writeColumnValue(buf, cols[i], val)
 	}
 
 	res := make([]byte, buf.Len())

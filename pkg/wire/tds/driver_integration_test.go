@@ -502,4 +502,101 @@ func TestDriverIntegration_GoMSSQLDB_MetadataAndDMVs(t *testing.T) {
 	t.Logf("sys.databases returned: %v", dbNames)
 }
 
+func TestDriverIntegration_GoMSSQLDB_NBCRowNulls(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. SELECT query returning explicit NULL values
+	var id int
+	var name sql.NullString
+	var score float64
+	var age sql.NullInt64
+
+	row := db.QueryRowContext(ctx, "SELECT 101 AS id, CAST(NULL AS VARCHAR(50)) AS name, 45.67 AS score, CAST(NULL AS INT) AS age")
+	if err := row.Scan(&id, &name, &score, &age); err != nil {
+		t.Fatalf("QueryRowContext with NULLs failed: %v", err)
+	}
+	if id != 101 {
+		t.Fatalf("expected id 101, got %d", id)
+	}
+	if name.Valid {
+		t.Fatalf("expected name to be NULL (Valid=false), got %v", name.String)
+	}
+	if score < 45.66 || score > 45.68 {
+		t.Fatalf("expected score ~45.67, got %f", score)
+	}
+	if age.Valid {
+		t.Fatalf("expected age to be NULL (Valid=false), got %v", age.Int64)
+	}
+
+	// 2. Table CRUD with NULL columns (testing NBCROW and standard ROW interleaving)
+	_, err = db.ExecContext(ctx, "CREATE TABLE items_null_test (id INT PRIMARY KEY, name VARCHAR(50), description VARCHAR(100));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, err = db.ExecContext(ctx, "INSERT INTO items_null_test (id, name, description) VALUES (1, 'Widget', NULL);")
+	if err != nil {
+		t.Fatalf("INSERT row 1 failed: %v", err)
+	}
+	_, err = db.ExecContext(ctx, "INSERT INTO items_null_test (id, name, description) VALUES (2, 'Gadget', 'A cool gadget');")
+	if err != nil {
+		t.Fatalf("INSERT row 2 failed: %v", err)
+	}
+
+	rows, err := db.QueryContext(ctx, "SELECT id, name, description FROM items_null_test ORDER BY id;")
+	if err != nil {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+	defer rows.Close()
+
+	// Row 1: description is NULL
+	if !rows.Next() {
+		t.Fatalf("expected row 1")
+	}
+	var r1ID int
+	var r1Name string
+	var r1Desc sql.NullString
+	if err := rows.Scan(&r1ID, &r1Name, &r1Desc); err != nil {
+		t.Fatalf("Scan row 1 failed: %v", err)
+	}
+	if r1ID != 1 || r1Name != "Widget" || r1Desc.Valid {
+		t.Fatalf("unexpected row 1 values: id=%d, name=%s, desc.Valid=%v", r1ID, r1Name, r1Desc.Valid)
+	}
+
+	// Row 2: description is NOT NULL
+	if !rows.Next() {
+		t.Fatalf("expected row 2")
+	}
+	var r2ID int
+	var r2Name string
+	var r2Desc sql.NullString
+	if err := rows.Scan(&r2ID, &r2Name, &r2Desc); err != nil {
+		t.Fatalf("Scan row 2 failed: %v", err)
+	}
+	if r2ID != 2 || r2Name != "Gadget" || !r2Desc.Valid || r2Desc.String != "A cool gadget" {
+		t.Fatalf("unexpected row 2 values: id=%d, name=%s, desc=%v", r2ID, r2Name, r2Desc.String)
+	}
+}
+
+
 

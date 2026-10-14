@@ -22,7 +22,7 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P2** | **프로토콜** | **TDS NBCROW 행 압축 (`0xD2`)** | `pkg/wire/tds` | NULL 비트맵 기반 0바이트 전송으로 네트워크 대역폭 30%+ 절감 |
+| **P2** | **프로토콜** | **MySQL 와이어 프로토콜 리스너 MVP (`:3306`)** | `pkg/wire/mysql` | MySQL/MariaDB 공식 클라이언트(mysql CLI, go-sql-driver/mysql) 호환 |
 | **P2** | **스토리지** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스 (`P-2`)** | `pkg/storage`, `pkg/execution` | WHERE 절 선별 디코딩으로 스캔 속도 2배 향상, 힙 할당 70% 삭감 |
 | **P3** | **생태계** | **외부 언어 드라이버 E2E 검증 하네스** | `pkg/wire`, `pkg/wire/tds` | Python(`psycopg3`, `pymssql`), Node.js(`pg`, `tedious`), .NET(`SqlClient`) 검증 |
 
@@ -46,10 +46,16 @@
     - 쿼리 문자열 FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지 및 바운디드 캐시(`PKLookupPlan`).
     - 정규 실행 엔진을 우회(Bypass)하여 스토리지 엔진 PK 인덱스 겟(`tx.Get`)으로 직결 반환, DDL 발생 시 자동 무효화(`InvalidatePKBypassCache`).
     - Prometheus 메트릭스 `sqlion_pk_bypass_hits_total` 연동 및 멀티 테이블 한정자/별칭 완벽 지원.
-- [ ] **TDS 프로토콜 고도화: NBCROW 행 압축 (`0xD2`) (`pkg/wire/tds`)**
+- [x] **TDS 프로토콜 고도화: NBCROW 행 압축 (`0xD2`) (`pkg/wire/tds`)**
   - **배경**: TDS 7.3+ 표준 `NBCROW` (Null Bitmap Compressed Row) 토큰을 적용하여 NULL 필드가 많은 희소 테이블 조회 시 네트워크 대역폭 대폭 절감.
   - **구현 내용**:
-    - `pkg/wire/tds/token.go`: 컬럼별 NULL 유무를 바이트 단위 비트맵으로 선행 패킹하고, NULL 컬럼에 대한 페이로드 전송 0바이트 처리.
+    - `pkg/wire/tds/token.go`: `BuildNBCRow` 신설. 컬럼별 NULL 유무를 바이트 단위 비트맵(`(len(cols)+7)/8`)으로 선행 패킹하고, NULL 컬럼 페이로드는 0바이트로 전송하여 네트워크 오버헤드 30%+ 절감.
+    - `pkg/wire/tds/server.go`: Login7 TDS 버전 협상(`sess.TDSVersion >= 0x73000000`) 연동 및 행 내 NULL 값 존재 시 `TokenNBCRow` (`0xD2`) 자동 선택 디스패치(`sess.buildRow`).
+    - `pkg/wire/tds/token_test.go` 및 `driver_integration_test.go`: 단일/복합 컬럼 NULL 비트맵 검증 및 공식 `go-mssqldb` 드라이버 NULL 왕복 스캔 검증 통과.
+- [ ] **MySQL 와이어 프로토콜 리스너 MVP (`pkg/wire/mysql`)**
+  - **배경**: PostgreSQL(5433), TDS(1433)에 이어 세계에서 가장 널리 쓰이는 MySQL 클라이언트 및 도구(MySQL CLI, Navicat, DBeaver 등) 호환성 확보.
+  - **구현 내용**:
+    - HandshakeV10 (Protocol 10), HandshakeResponse41, Native Password Auth (SHA-1 xor), OK/ERR/EOF 패킷 및 COM_QUERY 디스패치.
 
 ### P3 세부 과제: 드라이버 생태계
 - [ ] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**

@@ -256,6 +256,7 @@ type ConnectionSession struct {
 	AppName      string
 	Database     string
 	PacketSize   uint32
+	TDSVersion   uint32
 	inTx         bool
 	txDescriptor uint64
 	prepMu       sync.Mutex
@@ -299,6 +300,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		SessionID:  fmt.Sprintf("tds-%d", spid),
 		Database:   "master",
 		PacketSize: DefaultPacketSize,
+		TDSVersion: 0x74000004, // Default to TDS 7.4
 		prepared:   make(map[int32]*TdsPreparedStatement),
 	}
 	defer s.coordinator.CloseSession(sess.SessionID)
@@ -552,6 +554,12 @@ func (s *Server) parseLogin7(payload []byte, sess *ConnectionSession) {
 		return
 	}
 
+	// TDS Version negotiated by client (offset 4..8, DWORD Big-Endian per MS-TDS 2.2.6.4)
+	tdsVer := binary.BigEndian.Uint32(payload[4:8])
+	if tdsVer != 0 {
+		sess.TDSVersion = tdsVer
+	}
+
 	// Packet Size requested by client
 	packetSize := binary.LittleEndian.Uint32(payload[8:12])
 	if packetSize >= 512 && packetSize <= 32768 {
@@ -566,6 +574,20 @@ func (s *Server) parseLogin7(payload []byte, sess *ConnectionSession) {
 	if dbName != "" {
 		sess.Database = dbName
 	}
+}
+
+// buildRow formats a row of column values, choosing NBCROW (0xD2) when the negotiated
+// TDS version is 7.3 or newer and the row contains one or more NULL values,
+// or ROW (0xD1) otherwise.
+func (sess *ConnectionSession) buildRow(cols []ColumnInfo, values []any) []byte {
+	if sess != nil && sess.TDSVersion >= 0x73000000 {
+		for _, v := range values {
+			if v == nil {
+				return BuildNBCRow(cols, values)
+			}
+		}
+	}
+	return BuildRow(cols, values)
 }
 
 func readLoginString(payload []byte, offsetPos int) string {
@@ -886,7 +908,7 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 					rowVals[i] = nil
 				}
 			}
-			buf.Write(BuildRow(cols, rowVals))
+			buf.Write(sess.buildRow(cols, rowVals))
 		}
 
 		doneStatus := DoneFinal
@@ -977,7 +999,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		}
 		var buf bytes.Buffer
 		buf.Write(BuildColMetaData(cols))
-		buf.Write(BuildRow(cols, vals))
+		buf.Write(sess.buildRow(cols, vals))
 		doneStatus := DoneFinal
 		if sess.inTx {
 			doneStatus |= DoneInXact
@@ -1070,7 +1092,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 					rowVals[i] = nil
 				}
 			}
-			buf.Write(BuildRow(cols, rowVals))
+			buf.Write(sess.buildRow(cols, rowVals))
 		}
 
 		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows))))
@@ -1766,7 +1788,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		}
 		var buf bytes.Buffer
 		buf.Write(BuildColMetaData(cols))
-		buf.Write(BuildRow(cols, vals))
+		buf.Write(sess.buildRow(cols, vals))
 		doneStatus := DoneFinal
 		if sess.inTx {
 			doneStatus |= DoneInXact
@@ -1853,7 +1875,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 					rowVals[i] = nil
 				}
 			}
-			buf.Write(BuildRow(cols, rowVals))
+			buf.Write(sess.buildRow(cols, rowVals))
 		}
 
 		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, uint64(len(res.Rows))))

@@ -708,5 +708,33 @@ func TestTDS_AttentionQueryCancellation(t *testing.T) {
 	}
 }
 
+func TestTDS_NBCRowEmission(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// Query returning NULL column values
+	payload := sendSQLBatch(t, conn, "SELECT 100 AS id, NULL AS note;")
+
+	// Must contain TokenNBCRow (0xD2)
+	if !bytes.Contains(payload, []byte{TokenNBCRow}) {
+		t.Fatalf("expected TokenNBCRow (0xD2) in response with NULLs, got: %x", payload)
+	}
+
+	// Must NOT contain TokenRow (0xD1)
+	if bytes.Contains(payload, []byte{TokenRow}) {
+		t.Fatalf("expected TokenRow (0xD1) to NOT be present when NULLs are compressed via NBCROW")
+	}
+
+	// Query returning NO NULL column values
+	noNullPayload := sendSQLBatch(t, conn, "SELECT 200 AS id, 'complete' AS note;")
+
+	// Must contain TokenRow (0xD1)
+	if !bytes.Contains(noNullPayload, []byte{TokenRow}) {
+		t.Fatalf("expected TokenRow (0xD1) in response without NULLs, got: %x", noNullPayload)
+	}
+}
+
+
 
 
