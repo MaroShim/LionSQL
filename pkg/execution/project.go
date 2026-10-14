@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 
 	"sqlion/pkg/planner"
@@ -15,13 +16,16 @@ type projField struct {
 	parsed proc.Expr
 }
 
-// ProjectionIterator evaluates projected expressions and renames columns.
+// ProjectionIterator evaluates projected expressions and renames columns in row-by-row or vectorized chunk mode.
 type ProjectionIterator struct {
 	child       Iterator
 	fields      []projField
 	isSelectAll bool
 	schema      []string
 	colIndexMap *ColumnIndexMap
+	inChunk     Chunk
+	outChunk    Chunk
+	outIdx      int
 }
 
 // NewProjectionIterator creates a new projection operator.
@@ -93,6 +97,9 @@ func (p *ProjectionIterator) Open(ctx context.Context) error {
 	if p.child == nil {
 		return fmt.Errorf("projection: child iterator is nil")
 	}
+	p.inChunk.Reset()
+	p.outChunk.Reset()
+	p.outIdx = 0
 	if err := p.child.Open(ctx); err != nil {
 		return err
 	}
@@ -100,16 +107,10 @@ func (p *ProjectionIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func (p *ProjectionIterator) Next(ctx context.Context) (Tuple, error) {
-	tuple, err := p.child.Next(ctx)
-	if err != nil {
-		return Tuple{}, err
-	}
-
+func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 	if p.isSelectAll && len(p.fields) == 0 {
-		return tuple, nil
+		return tuple
 	}
-
 	vals := make([]any, len(p.fields))
 	for i, f := range p.fields {
 		if val, ok := tuple.GetOK(f.alias); ok {
@@ -136,7 +137,51 @@ func (p *ProjectionIterator) Next(ctx context.Context) (Tuple, error) {
 	return Tuple{
 		Values: vals,
 		Index:  p.colIndexMap,
-	}, nil
+	}
+}
+
+func (p *ProjectionIterator) NextChunk(ctx context.Context, dest *Chunk) error {
+	dest.Reset()
+	if p.child == nil {
+		return io.EOF
+	}
+
+	err := PullChunk(ctx, p.child, &p.inChunk, DefaultChunkSize)
+	if err != nil && err != io.EOF {
+		return err
+	}
+	if p.inChunk.Len() == 0 {
+		return io.EOF
+	}
+
+	if p.isSelectAll && len(p.fields) == 0 {
+		dest.Tuples = append(dest.Tuples, p.inChunk.Tuples...)
+		return nil
+	}
+
+	for _, tuple := range p.inChunk.Tuples {
+		dest.Tuples = append(dest.Tuples, p.projectTuple(tuple))
+	}
+	return nil
+}
+
+func (p *ProjectionIterator) Next(ctx context.Context) (Tuple, error) {
+	if p.outIdx < len(p.outChunk.Tuples) {
+		t := p.outChunk.Tuples[p.outIdx]
+		p.outIdx++
+		return t, nil
+	}
+	p.outChunk.Reset()
+	p.outIdx = 0
+	if err := p.NextChunk(ctx, &p.outChunk); err != nil {
+		return Tuple{}, err
+	}
+	if len(p.outChunk.Tuples) == 0 {
+		return Tuple{}, io.EOF
+	}
+	t := p.outChunk.Tuples[0]
+	p.outIdx = 1
+	return t, nil
 }
 
 func (p *ProjectionIterator) Close() error {

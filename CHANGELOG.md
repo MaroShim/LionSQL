@@ -18,6 +18,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, `README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
 
 ### Added
+- **Vectorized Chunk Iterator & Batch Volcano Execution (`P-4`) (`pkg/execution`, `pkg/engine`)**:
+  - Implemented `Chunk` (preallocated slice of `Tuple`, `DefaultChunkSize = 1024`, `MinChunkSize = 64`) and `ChunkedIterator` interface with `NextChunk(ctx context.Context, dest *Chunk) error` in `pkg/execution/chunk.go`.
+  - Implemented `PullChunk(ctx, it, dest, maxChunkSize)` providing fast-path zero-virtual-dispatch chunk pulling when child implements `ChunkedIterator`, with fallback buffering loop when child implements standard `Iterator`.
+  - Upgraded core relational operators to vectorized chunk streaming:
+    - `SeqScanIterator`: Ingests tuples directly into chunk buffers (`bufChunk`), eliminating per-tuple interface dispatch and supporting raw lazy tuple batching.
+    - `IndexScanIterator`: Buffers index traversal hits into chunks.
+    - `FilterIterator`: Evaluates WHERE/HAVING predicates in a vectorized inner loop over input chunks (`inChunk`), filtering batches directly into output chunks (`outChunk`).
+    - `ProjectionIterator`: Projects expressions in a vectorized loop over input chunks (`inChunk`) into destination chunks (`outChunk`).
+    - `LimitIterator`: Employs cursor index tracking (`inIdx`) over child chunks to guarantee precise LIMIT and OFFSET evaluation while strictly preserving Volcano short-circuiting.
+    - `AggregateIterator`: Drains child relations in 1,024-tuple chunks into group accumulators (`groupAccumulator`) during `Open`, and emits materialized groups in chunks.
+    - `SortIterator`: Materializes child records in batches during `Open`, spills runs, and emits sorted tuples (both in-memory quicksort and external merge min-heap) in chunks.
+    - `HashJoinIterator`: Vectorizes right-side build phase ingestion and outer probe iteration via `pullLeft` and `NextChunk`.
+    - `IndexNestedLoopJoinIterator`: Vectorizes outer relation pulling via `pullOuter` and streams joined tuples in chunks.
+    - `pkg/engine/sqlexec_select.go`: Drains execution plan in 1,024-tuple batches via `execution.PullChunk`, reducing CPU loop overhead and context cancellation checking by over 99%.
+  - Maintained 100% transparent backward compatibility: all operators retain standard `Next(ctx context.Context) (Tuple, error)` serving transparently from internal chunk buffers.
+  - Added comprehensive unit tests and benchmarks in `pkg/execution/execution_test.go` (`TestVectorizedChunk_PipelineStreaming`, `TestVectorizedChunk_Aggregation`, `BenchmarkVectorizedChunkVsRowByRow`).
 - **Binary Tuple Lazy Decoding & Covering Index Non-Key Column Support (`P-2`) (`pkg/storage`, `pkg/execution`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**:
   - Implemented `SkipTupleColumn` in `pkg/storage/tuple.go` enabling zero-allocation forward navigation through binary tuple columns without allocating string or heap buffers.
   - Implemented `DecodeTupleSelected(schema, data, selectedCols)` and `LazyTuple` on-demand column decoding in `pkg/storage/tuple.go`, caching column offsets on forward scans to support out-of-order random column access in $O(1)$ time.

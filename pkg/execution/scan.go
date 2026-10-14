@@ -8,7 +8,7 @@ import (
 	"sqlion/pkg/storage"
 )
 
-// SeqScanIterator scans a table sequentially row-by-row directly from a storage.Cursor.
+// SeqScanIterator scans a table sequentially row-by-row or in vectorized chunks directly from a storage.Cursor.
 type SeqScanIterator struct {
 	tx          storage.Transaction
 	tableName   string
@@ -17,6 +17,8 @@ type SeqScanIterator struct {
 	colIndexMap *ColumnIndexMap
 	cursor      storage.Cursor
 	partitions  []string
+	bufChunk    Chunk
+	bufIdx      int
 }
 
 // NewSeqScanIterator creates a new sequential scan iterator.
@@ -44,6 +46,8 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 		return fmt.Errorf("seq scan: transaction is nil")
 	}
 	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
+	s.bufChunk.Reset()
+	s.bufIdx = 0
 	var cur storage.Cursor
 	var err error
 	if len(s.partitions) > 0 {
@@ -58,42 +62,74 @@ func (s *SeqScanIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func (s *SeqScanIterator) Next(ctx context.Context) (Tuple, error) {
+func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 	if s.cursor == nil {
-		return Tuple{}, io.EOF
+		return io.EOF
 	}
+	dest.Reset()
 	select {
 	case <-ctx.Done():
-		return Tuple{}, ctx.Err()
+		return ctx.Err()
 	default:
 	}
 
-	if !s.cursor.Next() {
-		return Tuple{}, io.EOF
-	}
+	rawCur, hasRaw := s.cursor.(storage.RawTupleCursor)
 
-	if rawCur, ok := s.cursor.(storage.RawTupleCursor); ok {
-		if rawData, ok := rawCur.RawTuple(); ok {
-			if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
-				return Tuple{
-					Values: make([]any, len(s.schema.Columns)),
-					Index:  s.colIndexMap,
-					Lazy:   lazy,
-				}, nil
+	for dest.Len() < DefaultChunkSize {
+		if !s.cursor.Next() {
+			if dest.Len() > 0 {
+				return nil
+			}
+			return io.EOF
+		}
+
+		if hasRaw {
+			if rawData, ok := rawCur.RawTuple(); ok {
+				if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
+					dest.Tuples = append(dest.Tuples, Tuple{
+						Values: make([]any, len(s.schema.Columns)),
+						Index:  s.colIndexMap,
+						Lazy:   lazy,
+					})
+					continue
+				}
 			}
 		}
-	}
 
-	if row, err := s.cursor.Row(); err == nil {
-		return FormatRow(row, s.schema, s.alias, s.colIndexMap), nil
-	}
+		if row, err := s.cursor.Row(); err == nil {
+			dest.Tuples = append(dest.Tuples, FormatRow(row, s.schema, s.alias, s.colIndexMap))
+			continue
+		}
 
-	rec, err := s.cursor.Record()
-	if err != nil {
+		rec, err := s.cursor.Record()
+		if err != nil {
+			if dest.Len() > 0 {
+				return nil
+			}
+			return err
+		}
+		dest.Tuples = append(dest.Tuples, FormatRecord(rec, s.schema, s.alias, s.colIndexMap))
+	}
+	return nil
+}
+
+func (s *SeqScanIterator) Next(ctx context.Context) (Tuple, error) {
+	if s.bufIdx < len(s.bufChunk.Tuples) {
+		t := s.bufChunk.Tuples[s.bufIdx]
+		s.bufIdx++
+		return t, nil
+	}
+	s.bufChunk.Reset()
+	s.bufIdx = 0
+	if err := s.NextChunk(ctx, &s.bufChunk); err != nil {
 		return Tuple{}, err
 	}
-
-	return FormatRecord(rec, s.schema, s.alias, s.colIndexMap), nil
+	if len(s.bufChunk.Tuples) == 0 {
+		return Tuple{}, io.EOF
+	}
+	t := s.bufChunk.Tuples[0]
+	s.bufIdx = 1
+	return t, nil
 }
 
 func (s *SeqScanIterator) Close() error {
@@ -123,7 +159,7 @@ func (s *SeqScanIterator) ColIndexMap() *ColumnIndexMap {
 	return s.colIndexMap
 }
 
-// IndexScanIterator scans a table using a secondary index range.
+// IndexScanIterator scans a table using a secondary index range in row-by-row or vectorized chunk mode.
 type IndexScanIterator struct {
 	tx          storage.Transaction
 	tableName   string
@@ -136,6 +172,8 @@ type IndexScanIterator struct {
 	cursor      storage.Cursor
 	IndexOnly   bool
 	Desc        bool
+	bufChunk    Chunk
+	bufIdx      int
 }
 
 // NewIndexScanIterator creates a new index scan iterator.
@@ -160,6 +198,8 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 		return fmt.Errorf("index scan: transaction is nil")
 	}
 	s.colIndexMap = NewColumnIndexMap(s.schema, s.alias)
+	s.bufChunk.Reset()
+	s.bufIdx = 0
 	var cur storage.Cursor
 	var err error
 	if s.Desc {
@@ -176,42 +216,74 @@ func (s *IndexScanIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func (s *IndexScanIterator) Next(ctx context.Context) (Tuple, error) {
+func (s *IndexScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 	if s.cursor == nil {
-		return Tuple{}, io.EOF
+		return io.EOF
 	}
+	dest.Reset()
 	select {
 	case <-ctx.Done():
-		return Tuple{}, ctx.Err()
+		return ctx.Err()
 	default:
 	}
 
-	if !s.cursor.Next() {
-		return Tuple{}, io.EOF
-	}
+	rawCur, hasRaw := s.cursor.(storage.RawTupleCursor)
 
-	if rawCur, ok := s.cursor.(storage.RawTupleCursor); ok {
-		if rawData, ok := rawCur.RawTuple(); ok {
-			if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
-				return Tuple{
-					Values: make([]any, len(s.schema.Columns)),
-					Index:  s.colIndexMap,
-					Lazy:   lazy,
-				}, nil
+	for dest.Len() < DefaultChunkSize {
+		if !s.cursor.Next() {
+			if dest.Len() > 0 {
+				return nil
+			}
+			return io.EOF
+		}
+
+		if hasRaw {
+			if rawData, ok := rawCur.RawTuple(); ok {
+				if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
+					dest.Tuples = append(dest.Tuples, Tuple{
+						Values: make([]any, len(s.schema.Columns)),
+						Index:  s.colIndexMap,
+						Lazy:   lazy,
+					})
+					continue
+				}
 			}
 		}
-	}
 
-	if row, err := s.cursor.Row(); err == nil {
-		return FormatRow(row, s.schema, s.alias, s.colIndexMap), nil
-	}
+		if row, err := s.cursor.Row(); err == nil {
+			dest.Tuples = append(dest.Tuples, FormatRow(row, s.schema, s.alias, s.colIndexMap))
+			continue
+		}
 
-	rec, err := s.cursor.Record()
-	if err != nil {
+		rec, err := s.cursor.Record()
+		if err != nil {
+			if dest.Len() > 0 {
+				return nil
+			}
+			return err
+		}
+		dest.Tuples = append(dest.Tuples, FormatRecord(rec, s.schema, s.alias, s.colIndexMap))
+	}
+	return nil
+}
+
+func (s *IndexScanIterator) Next(ctx context.Context) (Tuple, error) {
+	if s.bufIdx < len(s.bufChunk.Tuples) {
+		t := s.bufChunk.Tuples[s.bufIdx]
+		s.bufIdx++
+		return t, nil
+	}
+	s.bufChunk.Reset()
+	s.bufIdx = 0
+	if err := s.NextChunk(ctx, &s.bufChunk); err != nil {
 		return Tuple{}, err
 	}
-
-	return FormatRecord(rec, s.schema, s.alias, s.colIndexMap), nil
+	if len(s.bufChunk.Tuples) == 0 {
+		return Tuple{}, io.EOF
+	}
+	t := s.bufChunk.Tuples[0]
+	s.bufIdx = 1
+	return t, nil
 }
 
 func (s *IndexScanIterator) Close() error {

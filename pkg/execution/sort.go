@@ -58,6 +58,8 @@ type SortIterator struct {
 	spillBytes int64
 	sortMethod string // "quicksort" or "external merge"
 	peakMemory int64
+	outChunk   Chunk
+	outIdx     int
 }
 
 // NewSortIterator creates a new sort operator from an ORDER BY clause string (e.g. "age DESC, name ASC").
@@ -200,10 +202,13 @@ func (s *SortIterator) Open(ctx context.Context) error {
 	s.mHeap = nil
 	s.sortMethod = "quicksort"
 	s.peakMemory = 0
+	s.outChunk.Reset()
+	s.outIdx = 0
 
 	var curMem int64 = 0
+	inChunk := NewChunk(DefaultChunkSize)
 
-	// Materialize incoming child tuples
+	// Materialize incoming child tuples in chunks
 	for {
 		select {
 		case <-ctx.Done():
@@ -211,26 +216,32 @@ func (s *SortIterator) Open(ctx context.Context) error {
 		default:
 		}
 
-		tuple, err := s.child.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
+		err := PullChunk(ctx, s.child, inChunk, DefaultChunkSize)
+		if err != nil && err != io.EOF {
 			return err
 		}
-
-		tSize := EstimateTupleSize(tuple)
-		if curMem+tSize > s.workMem && len(s.tuples) > 0 {
-			if err := s.spillRun(); err != nil {
-				return err
-			}
-			curMem = 0
+		if inChunk.Len() == 0 && err == io.EOF {
+			break
 		}
 
-		s.tuples = append(s.tuples, tuple)
-		curMem += tSize
-		if curMem > s.peakMemory {
-			s.peakMemory = curMem
+		for _, tuple := range inChunk.Tuples {
+			tSize := EstimateTupleSize(tuple)
+			if curMem+tSize > s.workMem && len(s.tuples) > 0 {
+				if err := s.spillRun(); err != nil {
+					return err
+				}
+				curMem = 0
+			}
+
+			s.tuples = append(s.tuples, tuple)
+			curMem += tSize
+			if curMem > s.peakMemory {
+				s.peakMemory = curMem
+			}
+		}
+
+		if err == io.EOF {
+			break
 		}
 	}
 
@@ -275,43 +286,72 @@ func (s *SortIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func (s *SortIterator) Next(ctx context.Context) (Tuple, error) {
+func (s *SortIterator) NextChunk(ctx context.Context, dest *Chunk) error {
+	dest.Reset()
 	select {
 	case <-ctx.Done():
-		return Tuple{}, ctx.Err()
+		return ctx.Err()
 	default:
 	}
 
 	// In-memory reading
 	if len(s.runFiles) == 0 {
 		if s.idx >= len(s.tuples) {
-			return Tuple{}, io.EOF
+			return io.EOF
 		}
-		t := s.tuples[s.idx]
-		s.idx++
-		return t, nil
+		for dest.Len() < DefaultChunkSize && s.idx < len(s.tuples) {
+			dest.Tuples = append(dest.Tuples, s.tuples[s.idx])
+			s.idx++
+		}
+		return nil
 	}
 
 	// External merge reading via Min-Heap
 	if s.mHeap == nil || s.mHeap.Len() == 0 {
+		return io.EOF
+	}
+
+	for dest.Len() < DefaultChunkSize && s.mHeap.Len() > 0 {
+		top := heap.Pop(s.mHeap).(heapItem)
+		dest.Tuples = append(dest.Tuples, top.tuple)
+
+		// Advance reader of the stream that just emitted top
+		var nextTuple Tuple
+		if err := s.decoders[top.runIdx].Decode(&nextTuple); err == nil {
+			heap.Push(s.mHeap, heapItem{tuple: nextTuple, runIdx: top.runIdx})
+		}
+	}
+
+	if dest.Len() == 0 {
+		return io.EOF
+	}
+	return nil
+}
+
+func (s *SortIterator) Next(ctx context.Context) (Tuple, error) {
+	if s.outIdx < len(s.outChunk.Tuples) {
+		t := s.outChunk.Tuples[s.outIdx]
+		s.outIdx++
+		return t, nil
+	}
+	s.outChunk.Reset()
+	s.outIdx = 0
+	if err := s.NextChunk(ctx, &s.outChunk); err != nil {
+		return Tuple{}, err
+	}
+	if len(s.outChunk.Tuples) == 0 {
 		return Tuple{}, io.EOF
 	}
-
-	top := heap.Pop(s.mHeap).(heapItem)
-	outTuple := top.tuple
-
-	// Advance reader of the stream that just emitted top
-	var nextTuple Tuple
-	if err := s.decoders[top.runIdx].Decode(&nextTuple); err == nil {
-		heap.Push(s.mHeap, heapItem{tuple: nextTuple, runIdx: top.runIdx})
-	}
-
-	return outTuple, nil
+	t := s.outChunk.Tuples[0]
+	s.outIdx = 1
+	return t, nil
 }
 
 func (s *SortIterator) Close() error {
 	s.tuples = nil
 	s.idx = 0
+	s.outChunk.Reset()
+	s.outIdx = 0
 
 	for _, f := range s.openFiles {
 		_ = f.Close()

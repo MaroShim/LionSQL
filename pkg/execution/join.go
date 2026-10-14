@@ -34,6 +34,10 @@ type HashJoinIterator struct {
 	workMem        int64
 	buildMemory    int64
 	colIndexMap    *ColumnIndexMap
+	inChunk        Chunk
+	inIdx          int
+	outChunk       Chunk
+	outIdx         int
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -110,37 +114,50 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	h.matchedRight = nil
 	h.unmatchedIdx = 0
 	h.buildMemory = 0
+	h.inChunk.Reset()
+	h.inIdx = 0
+	h.outChunk.Reset()
+	h.outIdx = 0
+
+	inChunk := NewChunk(DefaultChunkSize)
 	for {
 		select {
 		case <-ctx.Done():
+			_ = h.right.Close()
 			return ctx.Err()
 		default:
 		}
 
-		tuple, err := h.right.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
+		err := PullChunk(ctx, h.right, inChunk, DefaultChunkSize)
+		if err != nil && err != io.EOF {
 			_ = h.right.Close()
 			return fmt.Errorf("hash join build read error: %w", err)
 		}
-
-		h.buildMemory += EstimateTupleSize(tuple)
-
-		rIdx := -1
-		if trackRight {
-			rIdx = len(h.allRightTuples)
-			h.allRightTuples = append(h.allRightTuples, tuple)
-			h.matchedRight = append(h.matchedRight, false)
+		if inChunk.Len() == 0 && err == io.EOF {
+			break
 		}
 
-		keyVal, found := lookupVal(tuple, h.rightKey)
-		if !found || keyVal == nil {
-			continue
+		for _, tuple := range inChunk.Tuples {
+			h.buildMemory += EstimateTupleSize(tuple)
+
+			rIdx := -1
+			if trackRight {
+				rIdx = len(h.allRightTuples)
+				h.allRightTuples = append(h.allRightTuples, tuple)
+				h.matchedRight = append(h.matchedRight, false)
+			}
+
+			keyVal, found := lookupVal(tuple, h.rightKey)
+			if !found || keyVal == nil {
+				continue
+			}
+			kStr := fmt.Sprintf("%v", keyVal)
+			h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
 		}
-		kStr := fmt.Sprintf("%v", keyVal)
-		h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
+
+		if err == io.EOF {
+			break
+		}
 	}
 	_ = h.right.Close()
 
@@ -161,7 +178,27 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	return nil
 }
 
-func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
+func (h *HashJoinIterator) pullLeft(ctx context.Context) (Tuple, error) {
+	if h.inIdx < len(h.inChunk.Tuples) {
+		t := h.inChunk.Tuples[h.inIdx]
+		h.inIdx++
+		return t, nil
+	}
+	h.inChunk.Reset()
+	h.inIdx = 0
+	err := PullChunk(ctx, h.left, &h.inChunk, DefaultChunkSize)
+	if err != nil && err != io.EOF {
+		return Tuple{}, err
+	}
+	if len(h.inChunk.Tuples) == 0 && err == io.EOF {
+		return Tuple{}, io.EOF
+	}
+	t := h.inChunk.Tuples[0]
+	h.inIdx = 1
+	return t, nil
+}
+
+func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 	isFull := h.joinType == "FULL" || strings.HasPrefix(h.joinType, "FULL")
 	isRight := h.joinType == "RIGHT" || strings.HasPrefix(h.joinType, "RIGHT")
 	trackRight := isFull || isRight
@@ -187,7 +224,7 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		}
 
 		// Pull next probe tuple from outer relation
-		probeTuple, err := h.left.Next(ctx)
+		probeTuple, err := h.pullLeft(ctx)
 		if err != nil {
 			if err == io.EOF && trackRight {
 				for h.unmatchedIdx < len(h.allRightTuples) {
@@ -264,12 +301,50 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 	}
 }
 
+func (h *HashJoinIterator) NextChunk(ctx context.Context, dest *Chunk) error {
+	dest.Reset()
+	for dest.Len() < DefaultChunkSize {
+		t, err := h.nextTuple(ctx)
+		if err != nil {
+			if dest.Len() > 0 && err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		dest.Tuples = append(dest.Tuples, t)
+	}
+	return nil
+}
+
+func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
+	if h.outIdx < len(h.outChunk.Tuples) {
+		t := h.outChunk.Tuples[h.outIdx]
+		h.outIdx++
+		return t, nil
+	}
+	h.outChunk.Reset()
+	h.outIdx = 0
+	if err := h.NextChunk(ctx, &h.outChunk); err != nil {
+		return Tuple{}, err
+	}
+	if len(h.outChunk.Tuples) == 0 {
+		return Tuple{}, io.EOF
+	}
+	t := h.outChunk.Tuples[0]
+	h.outIdx = 1
+	return t, nil
+}
+
 func (h *HashJoinIterator) Close() error {
 	h.hashTable = nil
 	h.allRightTuples = nil
 	h.matchedRight = nil
 	h.currentProbe = Tuple{}
 	h.currentMatches = nil
+	h.inChunk.Reset()
+	h.inIdx = 0
+	h.outChunk.Reset()
+	h.outIdx = 0
 	if h.left != nil {
 		return h.left.Close()
 	}
@@ -325,6 +400,10 @@ type IndexNestedLoopJoinIterator struct {
 	hasMatch         bool
 	colIndexMap      *ColumnIndexMap
 	innerColIndexMap *ColumnIndexMap
+	inChunk          Chunk
+	inIdx            int
+	outChunk         Chunk
+	outIdx           int
 }
 
 // NewIndexNestedLoopJoinIterator creates a new Index Nested Loop Join operator.
@@ -373,10 +452,34 @@ func (n *IndexNestedLoopJoinIterator) Open(ctx context.Context) error {
 	n.currentOuter = Tuple{}
 	n.innerCursor = nil
 	n.hasMatch = false
+	n.inChunk.Reset()
+	n.inIdx = 0
+	n.outChunk.Reset()
+	n.outIdx = 0
 	return nil
 }
 
-func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
+func (n *IndexNestedLoopJoinIterator) pullOuter(ctx context.Context) (Tuple, error) {
+	if n.inIdx < len(n.inChunk.Tuples) {
+		t := n.inChunk.Tuples[n.inIdx]
+		n.inIdx++
+		return t, nil
+	}
+	n.inChunk.Reset()
+	n.inIdx = 0
+	err := PullChunk(ctx, n.outer, &n.inChunk, DefaultChunkSize)
+	if err != nil && err != io.EOF {
+		return Tuple{}, err
+	}
+	if len(n.inChunk.Tuples) == 0 && err == io.EOF {
+		return Tuple{}, io.EOF
+	}
+	t := n.inChunk.Tuples[0]
+	n.inIdx = 1
+	return t, nil
+}
+
+func (n *IndexNestedLoopJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -437,7 +540,7 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		}
 
 		// Pull next outer tuple
-		outerTuple, err := n.outer.Next(ctx)
+		outerTuple, err := n.pullOuter(ctx)
 		if err != nil {
 			return Tuple{}, err // io.EOF or context cancellation
 		}
@@ -468,7 +571,45 @@ func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
 	}
 }
 
+func (n *IndexNestedLoopJoinIterator) NextChunk(ctx context.Context, dest *Chunk) error {
+	dest.Reset()
+	for dest.Len() < DefaultChunkSize {
+		t, err := n.nextTuple(ctx)
+		if err != nil {
+			if dest.Len() > 0 && err == io.EOF {
+				return nil
+			}
+			return err
+		}
+		dest.Tuples = append(dest.Tuples, t)
+	}
+	return nil
+}
+
+func (n *IndexNestedLoopJoinIterator) Next(ctx context.Context) (Tuple, error) {
+	if n.outIdx < len(n.outChunk.Tuples) {
+		t := n.outChunk.Tuples[n.outIdx]
+		n.outIdx++
+		return t, nil
+	}
+	n.outChunk.Reset()
+	n.outIdx = 0
+	if err := n.NextChunk(ctx, &n.outChunk); err != nil {
+		return Tuple{}, err
+	}
+	if len(n.outChunk.Tuples) == 0 {
+		return Tuple{}, io.EOF
+	}
+	t := n.outChunk.Tuples[0]
+	n.outIdx = 1
+	return t, nil
+}
+
 func (n *IndexNestedLoopJoinIterator) Close() error {
+	n.inChunk.Reset()
+	n.inIdx = 0
+	n.outChunk.Reset()
+	n.outIdx = 0
 	if n.innerCursor != nil {
 		_ = n.innerCursor.Close()
 		n.innerCursor = nil

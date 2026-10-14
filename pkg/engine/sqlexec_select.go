@@ -135,18 +135,24 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	defer exec.Close()
 
 	var rows []map[string]any
+	chunk := execution.NewChunk(execution.DefaultChunkSize)
 	for {
-		tuple, err := exec.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
+		err := execution.PullChunk(ctx, exec, chunk, execution.DefaultChunkSize)
+		if err != nil && err != io.EOF {
 			if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
 				return nil, fmt.Errorf("canceling statement due to user request")
 			}
 			return nil, err
 		}
-		rows = append(rows, tuple.ToMap())
+		if chunk.Len() == 0 && err == io.EOF {
+			break
+		}
+		for _, tuple := range chunk.Tuples {
+			rows = append(rows, tuple.ToMap())
+		}
+		if err == io.EOF {
+			break
+		}
 	}
 
 	if qInfo.Distinct {

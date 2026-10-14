@@ -727,3 +727,208 @@ func TestTuple_ToRow(t *testing.T) {
 	}
 }
 
+func TestVectorizedChunk_PipelineStreaming(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable error: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+	tx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: false})
+
+	const totalRows = 5000
+	for i := 1; i <= totalRows; i++ {
+		_ = tx.Insert("items", storage.Record{
+			"id":  storage.IntValue(int64(i)),
+			"val": storage.IntValue(int64(i * 2)),
+		})
+	}
+	_ = tx.Commit()
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	// Pipeline: SeqScan -> Filter (val > 1000) -> Project (id, val) -> Limit 1500
+	scan := execution.NewSeqScanIterator(readTx, "items", "items", schema)
+	filter := execution.NewFilterIterator(scan, "val > 1000")
+	proj := execution.NewProjectionIterator(filter, []string{"id", "val"})
+	limit := execution.NewLimitIterator(proj, 1500, 0)
+
+	ctx := context.Background()
+	if err := limit.Open(ctx); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer limit.Close()
+
+	chunk := execution.NewChunk(execution.DefaultChunkSize)
+	var fetchedCount int
+	batchCount := 0
+
+	for {
+		err := execution.PullChunk(ctx, limit, chunk, execution.DefaultChunkSize)
+		if err != nil && err != io.EOF {
+			t.Fatalf("PullChunk failed: %v", err)
+		}
+		if chunk.Len() == 0 && err == io.EOF {
+			break
+		}
+		fetchedCount += chunk.Len()
+		batchCount++
+		if err == io.EOF {
+			break
+		}
+	}
+
+	if fetchedCount != 1500 {
+		t.Fatalf("expected 1500 rows, got %d", fetchedCount)
+	}
+	// With DefaultChunkSize = 1024, 1500 rows should arrive in 2 batches (1024 + 476)
+	if batchCount != 2 {
+		t.Fatalf("expected 2 chunk batches for 1500 rows, got %d", batchCount)
+	}
+}
+
+func TestVectorizedChunk_Aggregation(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "sales",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "category", Type: storage.TypeVarChar},
+			{Name: "amount", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable sales error: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+	tx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: false})
+
+	categories := []string{"Books", "Electronics", "Clothing"}
+	for i := 1; i <= 3000; i++ {
+		cat := categories[i%len(categories)]
+		_ = tx.Insert("sales", storage.Record{
+			"id":       storage.IntValue(int64(i)),
+			"category": storage.StringValue(cat),
+			"amount":   storage.IntValue(int64(i * 10)),
+		})
+	}
+	_ = tx.Commit()
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	scan := execution.NewSeqScanIterator(readTx, "sales", "sales", schema)
+	agg := execution.NewAggregateIterator(scan, []string{"category"}, []string{"category", "COUNT(*) AS total_count", "SUM(amount) AS total_amount"}, "")
+
+	ctx := context.Background()
+	if err := agg.Open(ctx); err != nil {
+		t.Fatalf("Agg Open failed: %v", err)
+	}
+	defer agg.Close()
+
+	chunk := execution.NewChunk(execution.DefaultChunkSize)
+	err := execution.PullChunk(ctx, agg, chunk, execution.DefaultChunkSize)
+	if err != nil && err != io.EOF {
+		t.Fatalf("Agg PullChunk failed: %v", err)
+	}
+
+	if chunk.Len() != 3 {
+		t.Fatalf("expected 3 aggregate groups, got %d", chunk.Len())
+	}
+}
+
+func BenchmarkVectorizedChunkVsRowByRow(b *testing.B) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "bench_items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeInt},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		b.Fatalf("CreateTable bench error: %v", err)
+	}
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+	tx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: false})
+
+	const N = 10000
+	for i := 1; i <= N; i++ {
+		_ = tx.Insert("bench_items", storage.Record{
+			"id":  storage.IntValue(int64(i)),
+			"val": storage.IntValue(int64(i)),
+		})
+	}
+	_ = tx.Commit()
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+	ctx := context.Background()
+
+	b.Run("RowByRow_Next", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			scan := execution.NewSeqScanIterator(readTx, "bench_items", "bench_items", schema)
+			filter := execution.NewFilterIterator(scan, "val > 100")
+			proj := execution.NewProjectionIterator(filter, []string{"id", "val"})
+			_ = proj.Open(ctx)
+			count := 0
+			for {
+				_, err := proj.Next(ctx)
+				if err == io.EOF {
+					break
+				}
+				count++
+			}
+			_ = proj.Close()
+		}
+	})
+
+	b.Run("VectorizedChunk_PullChunk", func(b *testing.B) {
+		chunk := execution.NewChunk(execution.DefaultChunkSize)
+		for i := 0; i < b.N; i++ {
+			scan := execution.NewSeqScanIterator(readTx, "bench_items", "bench_items", schema)
+			filter := execution.NewFilterIterator(scan, "val > 100")
+			proj := execution.NewProjectionIterator(filter, []string{"id", "val"})
+			_ = proj.Open(ctx)
+			count := 0
+			for {
+				err := execution.PullChunk(ctx, proj, chunk, execution.DefaultChunkSize)
+				if err != nil && err != io.EOF {
+					b.Fatalf("PullChunk error: %v", err)
+				}
+				if chunk.Len() == 0 && err == io.EOF {
+					break
+				}
+				count += chunk.Len()
+				if err == io.EOF {
+					break
+				}
+			}
+			_ = proj.Close()
+		}
+	})
+}
+
+

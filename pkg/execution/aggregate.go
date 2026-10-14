@@ -330,6 +330,7 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 	}
 
 	hasRows := false
+	inChunk := NewChunk(DefaultChunkSize)
 	for {
 		select {
 		case <-ctx.Done():
@@ -337,112 +338,118 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		default:
 		}
 
-		tuple, err := a.child.Next(ctx)
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
+		err := PullChunk(ctx, a.child, inChunk, DefaultChunkSize)
+		if err != nil && err != io.EOF {
 			return err
+		}
+		if inChunk.Len() == 0 && err == io.EOF {
+			break
 		}
 		hasRows = true
 
-		for _, mask := range masks {
-			var gk strings.Builder
-			gk.WriteString(strconv.FormatUint(uint64(mask), 10))
-			gk.WriteByte('\x01')
-			for i, k := range a.groupKeys {
-				if (mask & (1 << i)) != 0 {
-					val, _ := lookupVal(tuple, k)
-					gk.WriteString(fmt.Sprintf("%v", val))
+		for _, tuple := range inChunk.Tuples {
+			for _, mask := range masks {
+				var gk strings.Builder
+				gk.WriteString(strconv.FormatUint(uint64(mask), 10))
+				gk.WriteByte('\x01')
+				for i, k := range a.groupKeys {
+					if (mask & (1 << i)) != 0 {
+						val, _ := lookupVal(tuple, k)
+						gk.WriteString(fmt.Sprintf("%v", val))
+					}
+					gk.WriteByte('\x00')
 				}
-				gk.WriteByte('\x00')
-			}
-			groupKeyStr := gk.String()
+				groupKeyStr := gk.String()
 
-			acc, exists := groups[groupKeyStr]
-			if !exists {
-				acc = &groupAccumulator{
-					groupTuple: tuple,
-					groupMask:  mask,
-					counts:     make(map[int]int64),
-					sums:       make(map[int]float64),
-					decSums:    make(map[int]storage.Decimal),
-					isDecimal:  make(map[int]bool),
-					mins:       make(map[int]any),
-					maxs:       make(map[int]any),
-					values:     make(map[int][]float64),
-					tDigests:   make(map[int]*TDigest),
-				}
-				groups[groupKeyStr] = acc
-				groupOrder = append(groupOrder, groupKeyStr)
-			}
-
-			// Accumulate into acc
-			for fIdx, f := range a.fields {
-				if f.isLiteral || f.fnType == aggGrouping {
-					continue
-				}
-				if f.isStar {
-					acc.counts[fIdx]++
-					continue
+				acc, exists := groups[groupKeyStr]
+				if !exists {
+					acc = &groupAccumulator{
+						groupTuple: tuple,
+						groupMask:  mask,
+						counts:     make(map[int]int64),
+						sums:       make(map[int]float64),
+						decSums:    make(map[int]storage.Decimal),
+						isDecimal:  make(map[int]bool),
+						mins:       make(map[int]any),
+						maxs:       make(map[int]any),
+						values:     make(map[int][]float64),
+						tDigests:   make(map[int]*TDigest),
+					}
+					groups[groupKeyStr] = acc
+					groupOrder = append(groupOrder, groupKeyStr)
 				}
 
-				val, ok := lookupVal(tuple, f.argCol)
-				if !ok || val == nil {
-					continue
-				}
-
-				switch f.fnType {
-				case aggCount:
-					acc.counts[fIdx]++
-				case aggSum:
-					if isDecValue(val) {
-						dec, _ := tryDecimal(val)
-						acc.isDecimal[fIdx] = true
-						cur := acc.decSums[fIdx]
-						acc.decSums[fIdx] = cur.Add(dec)
-					} else {
-						fVal, _ := toFloat64(val)
-						acc.sums[fIdx] += fVal
+				// Accumulate into acc
+				for fIdx, f := range a.fields {
+					if f.isLiteral || f.fnType == aggGrouping {
+						continue
 					}
-					acc.counts[fIdx]++
-				case aggAvg:
-					if isDecValue(val) {
-						dec, _ := tryDecimal(val)
-						acc.isDecimal[fIdx] = true
-						cur := acc.decSums[fIdx]
-						acc.decSums[fIdx] = cur.Add(dec)
-					} else {
-						fVal, _ := toFloat64(val)
-						acc.sums[fIdx] += fVal
-					}
-					acc.counts[fIdx]++
-				case aggMin:
-					if cur, ok := acc.mins[fIdx]; !ok || CompareValues(val, cur) < 0 {
-						acc.mins[fIdx] = val
-					}
-				case aggMax:
-					if cur, ok := acc.maxs[fIdx]; !ok || CompareValues(val, cur) > 0 {
-						acc.maxs[fIdx] = val
-					}
-				case aggPercentileCont, aggPercentileDisc, aggMedian:
-					if fVal, ok := toFloat64(val); ok {
-						acc.values[fIdx] = append(acc.values[fIdx], fVal)
+					if f.isStar {
 						acc.counts[fIdx]++
+						continue
 					}
-				case aggApproxPercentile:
-					if fVal, ok := toFloat64(val); ok {
-						td, exists := acc.tDigests[fIdx]
-						if !exists {
-							td = NewTDigest(100)
-							acc.tDigests[fIdx] = td
+
+					val, ok := lookupVal(tuple, f.argCol)
+					if !ok || val == nil {
+						continue
+					}
+
+					switch f.fnType {
+					case aggCount:
+						acc.counts[fIdx]++
+					case aggSum:
+						if isDecValue(val) {
+							dec, _ := tryDecimal(val)
+							acc.isDecimal[fIdx] = true
+							cur := acc.decSums[fIdx]
+							acc.decSums[fIdx] = cur.Add(dec)
+						} else {
+							fVal, _ := toFloat64(val)
+							acc.sums[fIdx] += fVal
 						}
-						td.Add(fVal)
-						acc.values[fIdx] = append(acc.values[fIdx], fVal)
 						acc.counts[fIdx]++
+					case aggAvg:
+						if isDecValue(val) {
+							dec, _ := tryDecimal(val)
+							acc.isDecimal[fIdx] = true
+							cur := acc.decSums[fIdx]
+							acc.decSums[fIdx] = cur.Add(dec)
+						} else {
+							fVal, _ := toFloat64(val)
+							acc.sums[fIdx] += fVal
+						}
+						acc.counts[fIdx]++
+					case aggMin:
+						if cur, ok := acc.mins[fIdx]; !ok || CompareValues(val, cur) < 0 {
+							acc.mins[fIdx] = val
+						}
+					case aggMax:
+						if cur, ok := acc.maxs[fIdx]; !ok || CompareValues(val, cur) > 0 {
+							acc.maxs[fIdx] = val
+						}
+					case aggPercentileCont, aggPercentileDisc, aggMedian:
+						if fVal, ok := toFloat64(val); ok {
+							acc.values[fIdx] = append(acc.values[fIdx], fVal)
+							acc.counts[fIdx]++
+						}
+					case aggApproxPercentile:
+						if fVal, ok := toFloat64(val); ok {
+							td, exists := acc.tDigests[fIdx]
+							if !exists {
+								td = NewTDigest(100)
+								acc.tDigests[fIdx] = td
+							}
+							td.Add(fVal)
+							acc.values[fIdx] = append(acc.values[fIdx], fVal)
+							acc.counts[fIdx]++
+						}
 					}
 				}
 			}
+		}
+
+		if err == io.EOF {
+			break
 		}
 	}
 
@@ -632,6 +639,25 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func (a *AggregateIterator) NextChunk(ctx context.Context, dest *Chunk) error {
+	dest.Reset()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	if a.idx >= len(a.tuples) {
+		return io.EOF
+	}
+
+	for dest.Len() < DefaultChunkSize && a.idx < len(a.tuples) {
+		dest.Tuples = append(dest.Tuples, a.tuples[a.idx])
+		a.idx++
+	}
 	return nil
 }
 

@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 
@@ -10,12 +11,15 @@ import (
 	"sqlion/pkg/storage"
 )
 
-// FilterIterator evaluates a filter condition (WHERE or HAVING) over tuples streamed from a child iterator.
+// FilterIterator evaluates a filter condition (WHERE or HAVING) over tuples streamed from a child iterator in row-by-row or vectorized chunk mode.
 type FilterIterator struct {
 	child     Iterator
 	condition string
 	parsed    proc.Expr
 	hasParsed bool
+	inChunk   Chunk
+	outChunk  Chunk
+	outIdx    int
 }
 
 // NewFilterIterator creates a new filter operator.
@@ -48,26 +52,77 @@ func (f *FilterIterator) Open(ctx context.Context) error {
 	if f.child == nil {
 		return fmt.Errorf("filter: child iterator is nil")
 	}
+	f.inChunk.Reset()
+	f.outChunk.Reset()
+	f.outIdx = 0
 	return f.child.Open(ctx)
 }
 
-func (f *FilterIterator) Next(ctx context.Context) (Tuple, error) {
-	for {
+func (f *FilterIterator) NextChunk(ctx context.Context, dest *Chunk) error {
+	dest.Reset()
+	if f.child == nil {
+		return io.EOF
+	}
+
+	for dest.Len() < DefaultChunkSize {
 		select {
 		case <-ctx.Done():
-			return Tuple{}, ctx.Err()
+			return ctx.Err()
 		default:
 		}
 
-		tuple, err := f.child.Next(ctx)
-		if err != nil {
-			return Tuple{}, err // propagates io.EOF or errors
+		err := PullChunk(ctx, f.child, &f.inChunk, DefaultChunkSize)
+		if err != nil && err != io.EOF {
+			return err
+		}
+		if f.inChunk.Len() == 0 && err == io.EOF {
+			if dest.Len() > 0 {
+				return nil
+			}
+			return io.EOF
 		}
 
-		if f.condition == "" || f.evaluate(tuple) {
-			return tuple, nil
+		// Vectorized predicate evaluation
+		if f.condition == "" || f.condition == "1=1" || f.condition == "1 = 1" || strings.EqualFold(f.condition, "NOT 1=0") || strings.EqualFold(f.condition, "true") {
+			dest.Tuples = append(dest.Tuples, f.inChunk.Tuples...)
+		} else if f.condition == "1=0" || f.condition == "1 = 0" || strings.EqualFold(f.condition, "NOT 1=1") || strings.EqualFold(f.condition, "false") {
+			// matches none
+		} else {
+			for _, t := range f.inChunk.Tuples {
+				if f.evaluate(t) {
+					dest.Tuples = append(dest.Tuples, t)
+				}
+			}
+		}
+
+		if err == io.EOF {
+			break
 		}
 	}
+
+	if dest.Len() == 0 {
+		return io.EOF
+	}
+	return nil
+}
+
+func (f *FilterIterator) Next(ctx context.Context) (Tuple, error) {
+	if f.outIdx < len(f.outChunk.Tuples) {
+		t := f.outChunk.Tuples[f.outIdx]
+		f.outIdx++
+		return t, nil
+	}
+	f.outChunk.Reset()
+	f.outIdx = 0
+	if err := f.NextChunk(ctx, &f.outChunk); err != nil {
+		return Tuple{}, err
+	}
+	if len(f.outChunk.Tuples) == 0 {
+		return Tuple{}, io.EOF
+	}
+	t := f.outChunk.Tuples[0]
+	f.outIdx = 1
+	return t, nil
 }
 
 func (f *FilterIterator) Close() error {

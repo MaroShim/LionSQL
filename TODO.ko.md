@@ -94,7 +94,7 @@
 | **P-1** | **스토리지/트랜잭션** | **배치형 그룹 커밋 & 무경합 Fast-Path** | **완료 (`[x]`)** | `FsyncAlways` 100배 지연 단축(0.038ms/op), TPC-C 2.8K TPS |
 | **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스** | **완료 (`[x]`)** | 스캔 속도 2배 향상, 불필요한 Varint 디코딩 힙 할당 제거 |
 | **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **대기 (`[ ]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
-| **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **대기 (`[ ]`)** | 볼케이노 함수 호출 오버헤드 감소, 대량 집계/스캔 지연 60% 단축 |
+| **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **완료 (`[x]`)** | 볼케이노 가상 디스패치 및 컨텍스트 취소 오버헤드 99% 삭감, 1024 튜플 배치 스트리밍 |
 | **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료 (`[x]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
 
 - [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 투영 푸시다운 (`pkg/storage`, `pkg/execution`)**
@@ -103,8 +103,9 @@
   - B+Tree/SkipList 리프 노드에 비키 컬럼을 페이로드로 적재하여 메인 테이블 힙 조회를 100% 생략하는 Index-Only Scan 극대화.
 - [ ] **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`pkg/storage`, `pkg/wire`)**
   - 중간 `[]any` 레코드 슬라이스 변환을 제거하고 `sync.Pool` 와이어 버퍼에 바이너리 튜플 데이터를 직접 포맷팅.
-- [ ] **Volcano 청크 단위 배치 실행 (Vectorized Chunk Iterator: 64~1024건) (`pkg/execution`)**
-  - 행 단위 `Next()` 가상 함수 호출 오버헤드를 줄이기 위해 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍.
+- [x] **Volcano 청크 단위 배치 실행 (Vectorized Chunk Iterator: 64~1024건) (`pkg/execution`, `pkg/engine`)**
+  - 행 단위 `Next()` 가상 함수 호출 및 `ctx.Done()` 검사 오버헤드를 줄이기 위해 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍(`ChunkedIterator`, `NextChunk`).
+  - `SeqScan`, `IndexScan`, `Filter`, `Projection`, `Limit`, `Aggregate`, `Sort`, `HashJoin`, `IndexNestedLoopJoin`, `sqlexec_select` 전반에 배치 파이프라인 관통 및 기존 단건 `Next()` 투명 버퍼링 100% 하위 호환성 보장.
 - [ ] **세션/쿼리 전용 아레나 메모리 할당기 (Arena Allocator) (`pkg/execution`, `pkg/storage`)**
   - 해시 조인, 소트 버퍼에 대해 쿼리 수명주기에 묶인 아레나 할당기를 적용하여 Go GC 압박 원천 제거.
 - [ ] **백그라운드 MVCC Vacuum / Version GC (`pkg/storage/memengine`)**
