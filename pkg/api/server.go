@@ -9,6 +9,7 @@ import (
 
 	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/cdc"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/planner"
@@ -48,6 +49,7 @@ type Server struct {
 	coordinator *engine.Coordinator
 	mux         *http.ServeMux
 	replication *replication.Manager
+	cdcStreamer *cdc.Streamer
 	startTime   time.Time
 }
 
@@ -157,6 +159,24 @@ func (s *Server) SetPoolConfig(cfg PoolConfig) {
 // Broker returns the active realtime pub/sub broker.
 func (s *Server) Broker() *RealtimeBroker {
 	return s.broker
+}
+
+// SetCDCStreamer attaches the CDC streamer for real-time transaction event streaming.
+func (s *Server) SetCDCStreamer(streamer *cdc.Streamer) {
+	s.cdcStreamer = streamer
+}
+
+// CDCStreamer returns the active CDC streamer instance.
+func (s *Server) CDCStreamer() *cdc.Streamer {
+	return s.cdcStreamer
+}
+
+func (s *Server) handleCDCStream(w http.ResponseWriter, r *http.Request) {
+	if s.cdcStreamer == nil {
+		http.Error(w, "CDC streaming is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	s.cdcStreamer.ServeHTTP(w, r)
 }
 
 // AuthService returns the underlying authentication service.
@@ -392,6 +412,9 @@ func (s *Server) routes() {
 
 	// Realtime SSE Change Stream (PocketBase-style Live Event Stream)
 	s.mux.HandleFunc("GET /api/realtime", s.handleRealtimeStream)
+
+	// CDC (Change Data Capture) Stream (NDJSON / SSE for DuckDB, Kafka, and analytical ingestion)
+	s.mux.HandleFunc("GET /api/cdc/stream", s.handleCDCStream)
 
 	// Auth Endpoints (PocketBase compatible)
 	s.mux.HandleFunc("POST /api/auth/login", s.handleAuthLogin)

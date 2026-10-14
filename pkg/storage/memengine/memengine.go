@@ -67,6 +67,21 @@ func (e *Engine) SetWALHook(fn func(rec WALRecord)) {
 	e.walHook = fn
 }
 
+// AddWALHook registers an additional callback invoked whenever a new WAL record is committed.
+func (e *Engine) AddWALHook(fn func(rec WALRecord)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	prev := e.walHook
+	if prev == nil {
+		e.walHook = fn
+	} else {
+		e.walHook = func(rec WALRecord) {
+			prev(rec)
+			fn(rec)
+		}
+	}
+}
+
 // appendWALFrameLocked atomically assigns the next monotonic LSN, writes the WAL frame
 // to the OS file buffer, and notifies walHook in strict LSN order. Group commit fsync and
 // AOF compaction are deferred to finishWALCommitLocked so shard locks are not held during disk sync.

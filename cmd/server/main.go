@@ -20,6 +20,7 @@ import (
 	"sqlion/pkg/auth"
 	"sqlion/pkg/backup"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/cdc"
 	"sqlion/pkg/config"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
@@ -476,6 +477,16 @@ func main() {
 		}
 	}
 
+	// Initialize CDC (Change Data Capture) Streamer for decoupled analytics (DuckDB, Kafka, Webhooks)
+	cdcStreamer := cdc.NewStreamer(10000)
+	type walHookAdder interface {
+		AddWALHook(fn func(rec memengine.WALRecord))
+	}
+	if wha, ok := eng.(walHookAdder); ok {
+		wha.AddWALHook(cdcStreamer.OnWALRecord)
+	}
+	server.SetCDCStreamer(cdcStreamer)
+
 	var httpServer *http.Server
 	if cfg.Network.IsHTTPEnabled() {
 		httpServer = &http.Server{
@@ -574,6 +585,7 @@ func main() {
 		if httpServer != nil && strings.Contains(cfg.Network.HTTPAddr, ":") {
 			fmt.Printf(" [Web Dashboard]  http://%s/_/\n", cfg.Network.HTTPAddr)
 			fmt.Printf(" [HTTP API]       http://%s/api/health\n", cfg.Network.HTTPAddr)
+			fmt.Printf(" [CDC Stream]     http://%s/api/cdc/stream (NDJSON / SSE)\n", cfg.Network.HTTPAddr)
 		} else {
 			fmt.Println(" [Web Dashboard]  Disabled (opted out)")
 			fmt.Println(" [HTTP API]       Disabled (opted out)")
@@ -632,6 +644,9 @@ func main() {
 
 	shutdownDone := make(chan struct{})
 	go func() {
+		if cdcStreamer != nil {
+			cdcStreamer.Close()
+		}
 		if repMgr != nil {
 			_ = repMgr.Close()
 		}

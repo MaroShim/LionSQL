@@ -116,6 +116,8 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
   * Zero-dependency single-file HTML templates, vanilla `fetch()`, realtime SSE live sync, and HTMX recipes.
 * [`API_REFERENCE.md`](file:///Users/maro/Projects/sql/doc/API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
+* [`CDC_DUCKDB_INTEGRATION.md`](file:///Users/maro/Projects/sql/doc/CDC_DUCKDB_INTEGRATION.md)
+  * SQLion 실시간 CDC 스트림(`GET /api/cdc/stream`) 및 DuckDB 분리형(Decoupled) HTAP 분석 연동 가이드 (Python & DuckDB 샘플 포함).
 
 ---
 

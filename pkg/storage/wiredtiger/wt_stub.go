@@ -34,6 +34,7 @@ func (e *Engine) CurrentLSN() int64 {
 }
 
 func (e *Engine) SetWALHook(fn func(rec memengine.WALRecord)) {}
+func (e *Engine) AddWALHook(fn func(rec memengine.WALRecord)) {}
 
 func (e *Engine) SetFsyncPolicy(policy memengine.FsyncPolicy) {}
 

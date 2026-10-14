@@ -19,6 +19,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for `sys.all_objects`, `sys.all_columns`, and `sys.all_views` with routine metadata integration.
   - Enriched `sys.databases` with database properties (`compatibility_level`, `collation_name`, `snapshot_isolation_state`, `recovery_model`, `page_verify_option`).
   - Added test coverage in `TestCoordinator_SSMS_VirtualCatalogQueries` (`pkg/engine/coordinator_test.go`).
+- **Decoupled CDC (Change Data Capture) Event Streaming Framework (`pkg/cdc`, `pkg/api`, `cmd/server`)**:
+  - Implemented decoupled CDC event model (`ChangeEvent`) and real-time streaming coordinator (`Streamer`) with bounded ring-buffer historical replay (Golden Rule 23) and non-blocking backpressure fan-out (Golden Rule 29).
+  - Added HTTP streaming endpoint `GET /api/cdc/stream` supporting real-time Newline-Delimited JSON (NDJSON) and Server-Sent Events (SSE) with keep-alive heartbeat pings and table filtering (`?table=<name>&from_lsn=<lsn>`).
+  - Added `AddWALHook` multiplexing across both In-Memory OCC (`memengine`) and WiredTiger (`wt_engine`, `wt_stub`) backends to synchronously hook storage commit boundaries.
+  - Authored comprehensive integration guide and Python DuckDB micro-batch streaming recipe in `doc/CDC_DUCKDB_INTEGRATION.md`.
+  - Added unit test coverage in `pkg/cdc/streamer_test.go` covering event conversion, ring-buffer replay, table filtering, and HTTP NDJSON streaming.
 
 ### Removed
 - **Redundant In-Memory MVCC Vacuum & Shared-Memory Arrow Snapshot Backlog Pruning**:

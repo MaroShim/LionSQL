@@ -273,6 +273,22 @@ func (e *Engine) SetWALHook(fn func(rec memengine.WALRecord)) {
 	e.hasHook.Store(fn != nil)
 }
 
+// AddWALHook registers an additional callback invoked whenever a transaction commits or DDL executes.
+func (e *Engine) AddWALHook(fn func(rec memengine.WALRecord)) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	prev := e.walHook
+	if prev == nil {
+		e.walHook = fn
+	} else {
+		e.walHook = func(rec memengine.WALRecord) {
+			prev(rec)
+			fn(rec)
+		}
+	}
+	e.hasHook.Store(true)
+}
+
 // recordWALLocked assigns a monotonically ordered LSN and invokes walHook under walOrderMu.
 func (e *Engine) recordWALLocked(ops []memengine.WALOp) memengine.WALRecord {
 	if len(ops) == 0 {
