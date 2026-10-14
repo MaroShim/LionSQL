@@ -71,7 +71,7 @@
 | **B-4** | **$N > 4$ 체인 조인 동적 계획법 (DP)** | **대기 (`[ ]`)** | 5개 이상 테이블 조인 시 Left-Deep DP 및 Bushy Tree 동적 탐색 |
 | **C-5** | **다중 컬럼 확장 통계 (Extended Stats)** | **대기 (`[ ]`)** | 컬럼 상관관계로 인한 카디널리티 과소평가 방지 |
 | **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **대기 (`[ ]`)** | 왜곡 데이터 최빈값 분리 처리 |
-| **D-8** | **백그라운드 자동 통계 갱신 데몬** | **대기 (`[ ]`)** | DML 변동량(Dirty Tuples) 기반 자동 `ANALYZE` 트리거 |
+| **D-8** | **백그라운드 자동 통계 갱신 데몬** | **완료 (`[x]`)** | DML 변동량(Dirty Tuples) 기반 자동 `ANALYZE` 트리거 |
 
 - [ ] **동적 계획법(DP / Selinger) 기반 대규모 조인 순서 최적화 ($N > 4$) (`pkg/planner`)**
   - 4개 이하의 체인 조인 전수 순열 탐색을 넘어, $N > 4$ 테이블 조인에 대한 Left-Deep DP 및 Bushy Tree 동적 계획법(DPccp) 탐색 지원.
@@ -79,8 +79,9 @@
   - 컬럼 간 상관관계(예: 국가-도시)로 인한 복합 조건 카디널리티 과소평가(Underestimation)를 방지하는 다중 컬럼 NDV 수집.
 - [ ] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`pkg/planner`)**
   - 왜곡(Skew)이 심한 상위 N개 최빈값은 MCV 목록으로 보관하고 나머지 균등 분포는 히스토그램으로 이원화 처리.
-- [ ] **백그라운드 자동 통계 갱신 데몬 (Auto-Analyze Daemon) (`pkg/catalog`, `pkg/api`)**
-  - 테이블 DML 변경 비율(예: 10% 이상 Row 변동 발생)을 추적하여 백그라운드에서 비동기로 `ANALYZE` 자동 트리거.
+- [x] **백그라운드 자동 통계 갱신 데몬 (Auto-Analyze Daemon) (`D-8`) (`pkg/engine`, `pkg/catalog`, `pkg/storage`)**
+  - 테이블 DML 변경 비율(동적 임계치: `min_threshold + base_rows * scale_factor`)을 추적하여 백그라운드 비동기로 `coordinator.AnalyzeTable` 자동 트리거.
+  - 트랜잭션 커밋 핫패스에 락 경합 없이 원자적 카운팅(`AddWALHook`) 및 디바운싱 완비.
 
 ### 2.2. 스토리지 & 엔진 성능 (Storage & Engine Performance)
 

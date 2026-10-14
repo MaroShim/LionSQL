@@ -151,6 +151,14 @@ func (s *Server) Coordinator() *engine.Coordinator {
 	return s.coordinator
 }
 
+// AutoAnalyzer returns the background auto-analyze daemon instance.
+func (s *Server) AutoAnalyzer() *engine.AutoAnalyzer {
+	if s.coordinator != nil {
+		return s.coordinator.AutoAnalyzer()
+	}
+	return nil
+}
+
 // SetPoolConfig updates the connection pool configuration.
 func (s *Server) SetPoolConfig(cfg PoolConfig) {
 	s.coordinator.SetPoolConfig(cfg)

@@ -25,6 +25,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added `AddWALHook` multiplexing across both In-Memory OCC (`memengine`) and WiredTiger (`wt_engine`, `wt_stub`) backends to synchronously hook storage commit boundaries.
   - Authored comprehensive integration guide and Python DuckDB micro-batch streaming recipe in `doc/CDC_DUCKDB_INTEGRATION.md`.
   - Added unit test coverage in `pkg/cdc/streamer_test.go` covering event conversion, ring-buffer replay, table filtering, and HTTP NDJSON streaming.
+- **Asynchronous Auto-Analyze Background Statistics Daemon (`D-8`) (`pkg/engine`, `pkg/catalog`, `pkg/storage`)**:
+  - Implemented `AutoAnalyzer` (`pkg/engine/auto_analyze.go`) tracking per-table mutation volumes via `AddWALHook` commit listeners.
+  - Automatically triggers background parallel statistics analysis (`coordinator.AnalyzeTable`) when dirty row count crosses dynamic threshold (`min_threshold + base_rows * scale_factor`), keeping CBO column histograms fresh.
+  - Ensured lock hierarchy immunity (Golden Rule 10) by keeping the transaction commit hot-path non-blocking and executing all catalog and storage inspections asynchronously in debounced background goroutines.
+  - Added unit tests in `pkg/engine/auto_analyze_test.go` verifying threshold triggering, WAL hook listener, and atomic dirty counter resets.
 
 ### Removed
 - **Redundant In-Memory MVCC Vacuum & Shared-Memory Arrow Snapshot Backlog Pruning**:

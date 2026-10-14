@@ -443,6 +443,36 @@ func (s *Coordinator) execAnalyze(query string, start time.Time) (*QueryResult, 
 		}, nil
 	}
 
+	var messages []string
+	for _, tbl := range tablesToAnalyze {
+		ts, err := s.AnalyzeTable(tbl)
+		if err != nil {
+			return nil, err
+		}
+		schema, _ := s.engine.GetTable(tbl)
+		numCols := 0
+		if schema != nil {
+			numCols = len(schema.Columns)
+		}
+		messages = append(messages, fmt.Sprintf("Table %q analyzed successfully (%d rows, %d columns).", tbl, ts.RowCount, numCols))
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "ANALYZE",
+		Messages:     messages,
+		RowsAffected: int64(len(tablesToAnalyze)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+// AnalyzeTable scans the given table, builds parallel column statistics, and updates the catalog.
+func (s *Coordinator) AnalyzeTable(tbl string) (*planner.TableStats, error) {
+	schema, err := s.engine.GetTable(tbl)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", tbl, err)
+	}
+
 	session, err := s.engine.NewSession()
 	if err != nil {
 		return nil, fmt.Errorf("ANALYZE session error: %w", err)
@@ -455,57 +485,43 @@ func (s *Coordinator) execAnalyze(query string, start time.Time) (*QueryResult, 
 	}
 	defer tx.Rollback()
 
-	var messages []string
-	for _, tbl := range tablesToAnalyze {
-		schema, err := s.engine.GetTable(tbl)
-		if err != nil {
-			return nil, fmt.Errorf("table %q not found: %w", tbl, err)
-		}
+	cursor, err := tx.Scan(tbl)
+	if err != nil {
+		return nil, fmt.Errorf("ANALYZE scan error on %q: %w", tbl, err)
+	}
+	defer cursor.Close()
 
-		cursor, err := tx.Scan(tbl)
-		if err != nil {
-			return nil, fmt.Errorf("ANALYZE scan error on %q: %w", tbl, err)
-		}
-
-		colVals := make(map[string][]storage.Value)
-		nullCounts := make(map[string]int64)
-		for _, c := range schema.Columns {
-			colVals[c.Name] = make([]storage.Value, 0)
-		}
-
-		var rowCount int64 = 0
-		for cursor.Next() {
-			rec, err := cursor.Record()
-			if err != nil {
-				break
-			}
-			rowCount++
-			for _, c := range schema.Columns {
-				v, ok := rec[c.Name]
-				if !ok || v.IsNull {
-					nullCounts[c.Name]++
-				} else {
-					colVals[c.Name] = append(colVals[c.Name], v)
-				}
-			}
-		}
-		_ = cursor.Close()
-
-		ts := planner.BuildTableStatsParallel(tbl, schema, colVals, nullCounts, rowCount)
-
-		if s.catalog != nil {
-			s.catalog.SetTableStats(tbl, ts)
-		}
-		messages = append(messages, fmt.Sprintf("Table %q analyzed successfully (%d rows, %d columns).", tbl, rowCount, len(schema.Columns)))
+	colVals := make(map[string][]storage.Value)
+	nullCounts := make(map[string]int64)
+	for _, c := range schema.Columns {
+		colVals[c.Name] = make([]storage.Value, 0)
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "ANALYZE",
-		Messages:     messages,
-		RowsAffected: int64(len(tablesToAnalyze)),
-		DurationUS:   time.Since(start).Microseconds(),
-	}, nil
+	var rowCount int64 = 0
+	for cursor.Next() {
+		rec, err := cursor.Record()
+		if err != nil {
+			break
+		}
+		rowCount++
+		for _, c := range schema.Columns {
+			v, ok := rec[c.Name]
+			if !ok || v.IsNull {
+				nullCounts[c.Name]++
+			} else {
+				colVals[c.Name] = append(colVals[c.Name], v)
+			}
+		}
+	}
+
+	ts := planner.BuildTableStatsParallel(tbl, schema, colVals, nullCounts, rowCount)
+	if s.catalog != nil {
+		s.catalog.SetTableStats(tbl, ts)
+	}
+	if s.autoAnalyzer != nil {
+		s.autoAnalyzer.Reset(tbl)
+	}
+	return ts, nil
 }
 
 func (s *Coordinator) resolveSubqueries(whereClause string) (string, error) {

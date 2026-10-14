@@ -15,6 +15,7 @@ import (
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/replication"
 	"sqlion/pkg/storage"
+	"sqlion/pkg/storage/memengine"
 )
 
 // Config defines options for initializing a Coordinator.
@@ -59,6 +60,7 @@ type Coordinator struct {
 	pkBypassCache      map[uint64]*PKLookupPlan
 	pkBypassMu         sync.RWMutex
 	schemaVersion      atomic.Uint64
+	autoAnalyzer       *AutoAnalyzer
 	startTime          time.Time
 }
 
@@ -83,7 +85,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 
 	pool := NewSessionPool(eng, cfg.PoolConfig)
 
-	return &Coordinator{
+	coord := &Coordinator{
 		catalog:            cat,
 		engine:             eng,
 		planCache:          proc.NewPlanCache(),
@@ -100,6 +102,16 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		pkBypassCache:      make(map[uint64]*PKLookupPlan, 256),
 		startTime:          time.Now(),
 	}
+
+	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
+	type walHookAdder interface {
+		AddWALHook(fn func(rec memengine.WALRecord))
+	}
+	if wha, ok := eng.(walHookAdder); ok {
+		wha.AddWALHook(coord.autoAnalyzer.OnWALRecord)
+	}
+
+	return coord
 }
 
 // InvalidatePKBypassCache clears cached fast-path PK lookup plans and increments schema version.
@@ -461,6 +473,11 @@ func (c *Coordinator) GetActiveQueries() []ActiveQueryInfo {
 	return active
 }
 
+// AutoAnalyzer returns the background auto-analyze daemon instance.
+func (c *Coordinator) AutoAnalyzer() *AutoAnalyzer {
+	return c.autoAnalyzer
+}
+
 // Close gracefully closes the coordinator, session pool, and active sessions.
 func (c *Coordinator) Close() error {
 	c.sessMu.Lock()
@@ -475,6 +492,9 @@ func (c *Coordinator) Close() error {
 	}
 
 	var errs []error
+	if c.autoAnalyzer != nil {
+		c.autoAnalyzer.Close()
+	}
 	if c.slowQueries != nil {
 		if err := c.slowQueries.Close(); err != nil {
 			errs = append(errs, err)
