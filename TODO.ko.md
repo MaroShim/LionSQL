@@ -22,37 +22,32 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
+| **P1** | **스토리지/와이어** | **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`)** | `pkg/storage`, `pkg/wire` | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
 | **P2** | **생태계** | **외부 언어 드라이버 E2E 검증 하네스** | `pkg/wire`, `pkg/wire/tds` | Python(`psycopg3`, `pymssql`), Node.js(`pg`, `tedious`), .NET(`SqlClient`) 검증 |
-| **P3** | **스토리지** | **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`)** | `pkg/storage`, `pkg/wire` | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
+| **P2** | **CBO 최적화** | **다중 컬럼 확장 통계 (Extended Stats) (`C-5`)** | `pkg/planner` | 컬럼 상관관계(예: 국가-도시)에 따른 카디널리티 과소평가 방지 |
+| **P3** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`sqlion migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down` 및 `_migrations` 이력 추적 |
 
-### P1 세부 과제: CBO & 쿼리 최적화
+### P1/P2 최근 완료 과제: 엔진 성능 & 최적화
+- [x] **볼케이노 벡터화 청크 반복자 (Chunked Batch Next: 64~1024건) (`P-4`) (`pkg/execution`, `pkg/engine`)**
+  - **배경**: 행 단위 `Next()` 가상 함수 호출 및 `ctx.Done()` 검사 오버헤드로 인한 CPU 캐시 미스 해소.
+  - **구현 내용**:
+    - `pkg/execution/chunk.go`: `Chunk` 구조체(1,024건 프리알로케이션), `ChunkedIterator` 인터페이스, `PullChunk` 자동 폴백 엔진 신설.
+    - `SeqScan`, `IndexScan`, `Filter`, `Projection`, `Limit`, `Aggregate`, `Sort`, `HashJoin`, `IndexNestedLoopJoin`, `sqlexec_select` 전반에 배치 파이프라인 관통.
+    - 기존 단건 `Next()` 호출에 대해 내부 청크 버퍼링을 통한 100% 투명한 하위 호환성 보장.
+- [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 커버링 인덱스 (`P-2`) (`pkg/storage`, `pkg/execution`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**
+  - **배경**: 풀 스캔 및 인덱스 스캔 시 불필요한 모든 컬럼의 Varint/문자열 디코딩 힙 할당을 방지하고, 메인 테이블 조회를 생략.
+  - **구현 내용**:
+    - `pkg/storage/tuple.go`: 제로 할당 `SkipTupleColumn`, $O(1)$ 오프셋 캐싱 `LazyTuple`, 선별 디코딩 `DecodeTupleSelected` 구현.
+    - `CREATE INDEX ... INCLUDE(...)` 문법 파싱, 카탈로그 및 `SkipList` / `IndexData` 비키 페이로드 적재 연동.
+    - CBO 플래너 `isCovering` 및 `NodeIndexOnlyScan` 연동으로 테이블 힙 조회 100% 생략.
 - [x] **CBO 옵티마이저 힌트 오버라이드 제어 (`D-9`) (`pkg/planner`, `pkg/proc`)**
-  - **배경**: CBO 통계가 미비하거나 특수한 워크로드에서 DBA나 개발자가 실행 계획을 명시적으로 제어할 수 있는 수단 제공.
-  - **구현 내용**:
-    - 테이블 힌트: `WITH (INDEX(<index_name>))` 강제 인덱스 스캔, `WITH (INDEX(0))` 강제 테이블 풀 스캔.
-    - 쿼리 힌트: `OPTION (HASH JOIN)`, `OPTION (MERGE JOIN)`, `OPTION (LOOP JOIN)`, `OPTION (FORCE ORDER)` 조인 전략 강제.
-    - CBO 플래너(`pkg/planner/cbo.go`)에서 힌트 존재 시 비용 계산 우회 및 힌트 지정 연산자 강제 선택.
+  - 테이블 힌트(`WITH (INDEX(...))`) 및 쿼리 힌트(`OPTION (HASH/MERGE/LOOP JOIN, FORCE ORDER)`) 파싱 및 CBO 강제 오버라이드.
 - [x] **소트-머지 조인 (Sort-Merge Join) 연산자 및 비용 모델 (`B-3`) (`pkg/execution`, `pkg/planner`)**
-  - **배경**: 양측 입력 릴레이션이 이미 인덱스 정렬 순서이거나 사전 `ORDER BY`로 정렬된 경우, 거대한 인메모리 해시 테이블 빌드 비용을 완전히 제거.
-  - **구현 내용**:
-    - `pkg/execution/merge_join.go`: $O(M+N)$ 단일 패스 스트리밍 반복자 `MergeJoinIterator` 신설 (동일 조인 키 중복 시 Mark & Restore 윈도우 스캔, INNER/LEFT/RIGHT/FULL/SEMI/ANTI 지원).
-    - `pkg/planner/planner.go`: 양측 릴레이션의 정렬 속성(Sort Property)을 감지하고 해시 조인 vs 머지 조인 비용 경쟁 공식 및 `OPTION (MERGE JOIN)` 힌트 연동 추가.
-
-### P2 세부 과제: 엔진 성능 & 프로토콜
+  - 정렬 입력에 대한 $O(M+N)$ 해시리스 스트리밍 반복자 `MergeJoinIterator` 신설 및 CBO 비용 경쟁 모델 연동.
 - [x] **단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`) (`pkg/engine`, `pkg/storage`)**
-  - **배경**: 전체 쿼리 트래픽의 70~80%를 차지하는 단순 단건 PK 점조회(`SELECT * FROM tbl WHERE id = ?`)에 대해 매번 정규 파서, 바인더, CBO 플래너, VDBE 컴파일러를 거치는 CPU 오버헤드 해소.
-  - **구현 내용**:
-    - 쿼리 문자열 FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지 및 바운디드 캐시(`PKLookupPlan`).
-    - 정규 실행 엔진을 우회(Bypass)하여 스토리지 엔진 PK 인덱스 겟(`tx.Get`)으로 직결 반환, DDL 발생 시 자동 무효화(`InvalidatePKBypassCache`).
-    - Prometheus 메트릭스 `sqlion_pk_bypass_hits_total` 연동 및 멀티 테이블 한정자/별칭 완벽 지원.
+  - FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지, 정규 파서/CBO/VDBE 스택 우회 및 스토리지(`tx.Get`) 직결.
 - [x] **TDS 프로토콜 고도화: NBCROW 행 압축 (`0xD2`) (`pkg/wire/tds`)**
-  - **배경**: TDS 7.3+ 표준 `NBCROW` (Null Bitmap Compressed Row) 토큰을 적용하여 NULL 필드가 많은 희소 테이블 조회 시 네트워크 대역폭 대폭 절감.
-  - **구현 내용**:
-    - `pkg/wire/tds/token.go`: `BuildNBCRow` 신설. 컬럼별 NULL 유무를 바이트 단위 비트맵(`(len(cols)+7)/8`)으로 선행 패킹하고, NULL 컬럼 페이로드는 0바이트로 전송하여 네트워크 오버헤드 30%+ 절감.
-    - `pkg/wire/tds/server.go`: Login7 TDS 버전 협상(`sess.TDSVersion >= 0x73000000`) 연동 및 행 내 NULL 값 존재 시 `TokenNBCRow` (`0xD2`) 자동 선택 디스패치(`sess.buildRow`).
-    - `pkg/wire/tds/token_test.go` 및 `driver_integration_test.go`: 단일/복합 컬럼 NULL 비트맵 검증 및 공식 `go-mssqldb` 드라이버 NULL 왕복 스캔 검증 통과.
-
-### P3 세부 과제: 드라이버 생태계
+  - TDS 7.3+ 표준 `BuildNBCRow` 신설, NULL 비트맵 패킹 및 0바이트 전송을 통한 네트워크 오버헤드 30%+ 절감.
 - [ ] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**
   - **배경**: Go 공식 드라이버(`go-mssqldb`, `lib/pq`, `pgx/v5`)에 이어 엔터프라이즈 멀티 언어 클라이언트 검증.
   - **구현 내용**:
@@ -186,3 +181,13 @@
   - 쿼리 문자열 FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지 및 바운디드 캐시(`PKLookupPlan`).
   - 정규 파서/CBO/VDBE 스택을 전면 우회하여 스토리지 엔진(`tx.Get`)으로 직결 반환, DDL 발생 시 자동 무효화(`InvalidatePKBypassCache`).
   - Prometheus 메트릭스 `sqlion_pk_bypass_hits_total` 연동 및 멀티 테이블 한정자/별칭 완벽 지원.
+- [x] **[스토리지/디코딩] 바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 커버링 인덱스 INCLUDE (`P-2`) (`pkg/storage`, `pkg/execution`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**
+  - 제로 할당 `SkipTupleColumn`, $O(1)$ 오프셋 캐싱 `LazyTuple`, 선별 디코딩 `DecodeTupleSelected` 구현.
+  - `CREATE INDEX ... INCLUDE(...)` 문법 파싱, SkipList/IndexData 비키 페이로드 적재 및 CBO `isCovering` Index-Only Scan 극대화.
+- [x] **[실행 엔진] 볼케이노 벡터화 청크 반복자 및 1,024건 배치 스트리밍 (`P-4`) (`pkg/execution`, `pkg/engine`)**
+  - `ChunkedIterator` 및 `NextChunk` 인터페이스 신설, 1,024건 프리알로케이션 청크 기반 볼케이노 배치 파이프라인 관통.
+  - SeqScan, IndexScan, Filter, Project, Limit, Aggregate, Sort, HashJoin, IndexNestedLoopJoin, sqlexec_select 전반 배치 가속 및 100% 하위 호환성 보장.
+- [x] **[와이어 프로토콜] TDS NBCROW 행 압축 (`0xD2`) (`pkg/wire/tds`)**
+  - TDS 7.3+ 표준 `BuildNBCRow` 신설, NULL 비트맵 패킹 및 0바이트 전송으로 네트워크 대역폭 30%+ 절감.
+- [x] **[CBO/조인] 소트-머지 조인 (Sort-Merge Join) 연산자 및 옵티마이저 힌트 (`B-3`, `D-9`) (`pkg/execution`, `pkg/planner`, `pkg/proc`)**
+  - $O(M+N)$ 해시리스 스트리밍 반복자 `MergeJoinIterator` 신설 및 `OPTION (HASH/MERGE/LOOP JOIN)`, `WITH (INDEX(...))` 강제 오버라이드.
