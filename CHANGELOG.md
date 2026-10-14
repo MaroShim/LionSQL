@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Synchronized verified Phase 5 achievements across all roadmaps and updated documentation index references in `GEMINI.md`, `GEMINI.ko.md`, `notes/README.md`, and `doc/REFERENCE_MANUAL.ko.md`.
 
 ### Added
+- **CBO Optimizer Hints Override for Index and Join Strategies (`D-9`) (`pkg/planner`, `pkg/proc`, `pkg/engine`)**:
+  - Implemented T-SQL table hints parsing and enforcement: `WITH (INDEX(<name>))` for forcing specific index scan, `WITH (INDEX(0))` / `WITH (INDEX())` for forcing full table scan, and comma-separated hints (e.g. `WITH (NOLOCK, INDEX(...))`).
+  - Implemented query hints: `OPTION (HASH JOIN)`, `OPTION (LOOP JOIN)`, and `OPTION (FORCE ORDER)` in `pkg/proc/parser.go` and `pkg/planner/planner.go`.
+  - Implemented inline join hints: `INNER HASH JOIN`, `INNER LOOP JOIN`, `LEFT HASH JOIN`, `LEFT LOOP JOIN`, etc.
+  - Added join permutation bypass in CBO planner when `FORCE ORDER` is specified to evaluate joins in the written query order.
+  - Added direct routing in execution coordinator for queries containing table or query hints.
+  - Added unit and integration test coverage in `pkg/planner/cbo_join_test.go` and `pkg/engine/coordinator_test.go`, and marked `D-9` complete in `TODO.ko.md` and `ROADMAP.md` / `ROADMAP.ko.md`.
 - **CBO Boolean Tree & OR Selectivity Estimation (`pkg/planner`)**:
   - Implemented `TableStats.EstimateExprSelectivity()` to recursively evaluate AST expression trees for complex boolean filters.
   - Added same-column mutually exclusive equality OR summation ($P(A \cup B) = P(A) + P(B)$) and general independent OR union ($P(A \cup B) = P(A) + P(B) - P(A) \cdot P(B)$).

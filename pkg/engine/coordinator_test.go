@@ -617,6 +617,74 @@ func TestCoordinator_TableAndQueryHints(t *testing.T) {
 	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["name"]) != "Pen" {
 		t.Fatalf("expected Pen, got %+v", res.Rows)
 	}
+
+	// WITH (INDEX(0)) - Force Table Scan
+	res, err = coord.ExecuteSQL(`SELECT * FROM items WITH (INDEX(0)) WHERE id = 1;`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with INDEX(0) failed: %v", err)
+	}
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["name"]) != "Pen" {
+		t.Fatalf("expected Pen with INDEX(0), got %+v", res.Rows)
+	}
+
+	// Secondary Index & WITH (INDEX(idx_items_name))
+	_, err = coord.ExecuteSQL(`CREATE INDEX idx_items_name ON items (name);`)
+	if err != nil {
+		t.Fatalf("CREATE INDEX failed: %v", err)
+	}
+	res, err = coord.ExecuteSQL(`SELECT * FROM items WITH (INDEX(idx_items_name)) WHERE name = 'Notebook';`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with INDEX(idx_items_name) failed: %v", err)
+	}
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["name"]) != "Notebook" {
+		t.Fatalf("expected Notebook with INDEX(idx_items_name), got %+v", res.Rows)
+	}
+
+	// Comma-separated hints: WITH (NOLOCK, INDEX(0))
+	res, err = coord.ExecuteSQL(`SELECT * FROM items WITH (NOLOCK, INDEX(0)) WHERE id = 2;`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with comma-separated hints failed: %v", err)
+	}
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["name"]) != "Notebook" {
+		t.Fatalf("expected Notebook with NOLOCK, INDEX(0), got %+v", res.Rows)
+	}
+
+	// Joins with query hints and inline join hints
+	_, err = coord.ExecuteSQL(`CREATE TABLE categories (id INT PRIMARY KEY, item_id INT, cat VARCHAR(50));`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE categories failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`INSERT INTO categories VALUES (10, 1, 'Stationery'), (20, 2, 'Office');`)
+	if err != nil {
+		t.Fatalf("INSERT categories failed: %v", err)
+	}
+
+	// OPTION (FORCE ORDER)
+	res, err = coord.ExecuteSQL(`SELECT items.name, categories.cat FROM items JOIN categories ON items.id = categories.item_id OPTION (FORCE ORDER);`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with OPTION (FORCE ORDER) failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows with FORCE ORDER, got %d", len(res.Rows))
+	}
+
+	// OPTION (HASH JOIN)
+	res, err = coord.ExecuteSQL(`SELECT items.name, categories.cat FROM items JOIN categories ON items.id = categories.item_id OPTION (HASH JOIN);`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with OPTION (HASH JOIN) failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows with HASH JOIN, got %d", len(res.Rows))
+	}
+
+	// Inline join hint: INNER HASH JOIN
+	res, err = coord.ExecuteSQL(`SELECT items.name, categories.cat FROM items INNER HASH JOIN categories ON items.id = categories.item_id;`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with INNER HASH JOIN failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows with INNER HASH JOIN, got %d", len(res.Rows))
+	}
 }
 
 func TestCoordinator_DML_Output(t *testing.T) {

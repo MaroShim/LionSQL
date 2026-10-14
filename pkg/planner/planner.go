@@ -82,12 +82,13 @@ type CTEInfo struct {
 
 // JoinInfo contains metadata for a multi-table JOIN operation.
 type JoinInfo struct {
-	Type     string // "INNER", "LEFT", "SEMI", "ANTI"
+	Type     string // "INNER", "LEFT", "SEMI", "ANTI", etc.
 	Table    string
 	Alias    string
 	LeftKey  string
 	RightKey string
 	Filter   string // Optional filter condition on the joined table
+	Hints    []string
 }
 
 // PlanNode represents a single step in a query execution plan tree.
@@ -158,6 +159,7 @@ type QueryInfo struct {
 	CTEs          []CTEInfo
 	TableName     string
 	TableAlias    string
+	TableHints    []string
 	Join          *JoinInfo
 	Joins         []*JoinInfo
 	Projections   []string
@@ -172,6 +174,7 @@ type QueryInfo struct {
 	HasAggregates bool
 	Distinct      bool
 	IsAnalyze     bool
+	QueryHints    []string
 	AST           *proc.GeneralSelectStmt
 }
 
@@ -276,6 +279,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 			LeftKey:  cleanIdent(leftKey),
 			RightKey: cleanIdent(rightKey),
 			Filter:   filterCond,
+			Hints:    j.Table.Hints,
 		})
 	}
 
@@ -318,6 +322,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		CTEs:          ctes,
 		TableName:     stmt.From.Name,
 		TableAlias:    stmt.From.Alias,
+		TableHints:    stmt.From.Hints,
 		Join:          joinInfo,
 		Joins:         joins,
 		Projections:   projections,
@@ -332,6 +337,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		HasAggregates: hasAgg,
 		Distinct:      stmt.Distinct,
 		IsAnalyze:     stmt.IsAnalyze,
+		QueryHints:    stmt.QueryHints,
 		AST:           stmt,
 	}
 }
@@ -764,6 +770,41 @@ func (p *Planner) BuildJoinPlanWithStats(q *QueryInfo, schema *storage.TableSche
 	return p.BuildMultiJoinPlanWithStats(q, schema, leftStats, rSchemas, rStats)
 }
 
+// parseIndexHint inspects table hints for INDEX(...) or INDEX = ... directives.
+// Returns forceIndex name (or empty), and whether full table scan is forced (INDEX(0)).
+func parseIndexHint(hints []string) (forceIndex string, forceTableScan bool) {
+	for _, h := range hints {
+		trimmed := strings.TrimSpace(h)
+		u := strings.ToUpper(trimmed)
+		if strings.HasPrefix(u, "INDEX") {
+			rest := strings.TrimSpace(trimmed[5:])
+			rest = strings.TrimPrefix(rest, "=")
+			rest = strings.TrimSpace(rest)
+			rest = strings.TrimPrefix(rest, "(")
+			rest = strings.TrimSuffix(rest, ")")
+			rest = strings.TrimSpace(rest)
+			rest = strings.Trim(rest, "[]\"'`")
+			if rest == "0" || rest == "" {
+				return "", true
+			}
+			return rest, false
+		}
+	}
+	return "", false
+}
+
+// hasQueryHint checks if a specific query hint (e.g. "HASH JOIN", "FORCE ORDER") is present.
+func hasQueryHint(hints []string, target string) bool {
+	targetUpper := strings.ToUpper(strings.TrimSpace(target))
+	for _, h := range hints {
+		u := strings.ToUpper(strings.TrimSpace(h))
+		if u == targetUpper || strings.HasPrefix(u, targetUpper) {
+			return true
+		}
+	}
+	return false
+}
+
 // BuildMultiJoinPlanWithStats produces an optimized PlanNode tree supporting single or chained multi-table joins.
 func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.TableSchema, leftStats *TableStats, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats) *PlanNode {
 	estimatedTotal := int64(100)
@@ -791,12 +832,50 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	var chosenCost float64
 	var chosenCovering bool
 
-	if schema != nil && len(pushdownRes.PrimaryConds) > 0 {
-		// --- Composite index prefix match ---
-		// Collect all equality conditions from pushed-down predicates.
-		eqColSet := make(map[string]bool)
-		eqColVals := make(map[string]string)
-		onlyEqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
+	forceIndex, forceTableScan := parseIndexHint(q.TableHints)
+
+	if !forceTableScan && schema != nil {
+		if forceIndex != "" {
+			for i := range schema.Indexes {
+				if strings.EqualFold(schema.Indexes[i].Name, forceIndex) {
+					chosenIndex = &schema.Indexes[i]
+					break
+				}
+			}
+			if chosenIndex != nil {
+				matchedCond := false
+				for _, cond := range pushdownRes.PrimaryConds {
+					m := eqRe.FindStringSubmatch(cond)
+					if len(m) == 4 {
+						colName := strings.TrimSpace(m[1])
+						if dotIdx := strings.Index(colName, "."); dotIdx != -1 {
+							colName = colName[dotIdx+1:]
+						}
+						if strings.EqualFold(colName, chosenIndex.Columns[0]) {
+							chosenCond = cond
+							chosenCol = colName
+							chosenOp = strings.TrimSpace(m[2])
+							chosenVal = strings.TrimSpace(m[3])
+							matchedCond = true
+							break
+						}
+					}
+				}
+				if !matchedCond {
+					chosenCol = chosenIndex.Columns[0]
+					chosenOp = "="
+					chosenVal = "''"
+					chosenCond = ""
+				}
+				chosenEstRows = int64(math.Max(1, float64(estimatedTotal)*0.1))
+				chosenCost = 0.1
+			}
+		} else if len(pushdownRes.PrimaryConds) > 0 {
+			// --- Composite index prefix match ---
+			// Collect all equality conditions from pushed-down predicates.
+			eqColSet := make(map[string]bool)
+			eqColVals := make(map[string]string)
+			onlyEqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
 		for _, cond := range pushdownRes.PrimaryConds {
 			if m := onlyEqRe.FindStringSubmatch(cond); len(m) == 3 {
 				rawCol := m[1]
@@ -938,6 +1017,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			}
 		}
 	}
+}
 
 	if chosenIndex != nil {
 		nodeType := NodeIndexScan
@@ -1060,7 +1140,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		if joinList[i].Type != "INNER" {
 			// Non-inner join (e.g., LEFT OUTER JOIN): maintain sequence to preserve NULL-extension semantics
 			join := joinList[i]
-			currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats)
+			currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
 			availableTables[strings.ToLower(cleanIdent(join.Table))] = true
 			if join.Alias != "" {
 				availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
@@ -1076,12 +1156,14 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		}
 		innerBlock := joinList[i:j]
 
-		if len(innerBlock) <= 1 {
-			join := innerBlock[0]
-			currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats)
-			availableTables[strings.ToLower(cleanIdent(join.Table))] = true
-			if join.Alias != "" {
-				availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
+		forceOrder := hasQueryHint(q.QueryHints, "FORCE ORDER")
+		if forceOrder || len(innerBlock) <= 1 {
+			for _, join := range innerBlock {
+				currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
+				availableTables[strings.ToLower(cleanIdent(join.Table))] = true
+				if join.Alias != "" {
+					availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
+				}
 			}
 		} else {
 			// CBO Cost-Based Join Reordering: evaluate valid permutations for minimum TotalCost
@@ -1122,7 +1204,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 						valid = false
 						break
 					}
-					tempNode, tempEstRows = buildSingleJoinNode(tempNode, tempEstRows, oriented, rightSchemas, rightStats)
+					tempNode, tempEstRows = buildSingleJoinNode(tempNode, tempEstRows, oriented, rightSchemas, rightStats, q.QueryHints)
 					curAvail[strings.ToLower(cleanIdent(candidate.Table))] = true
 					if candidate.Alias != "" {
 						curAvail[strings.ToLower(cleanIdent(candidate.Alias))] = true
@@ -1144,7 +1226,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			} else {
 				// Fallback to original order
 				for _, join := range innerBlock {
-					currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats)
+					currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
 					availableTables[strings.ToLower(cleanIdent(join.Table))] = true
 					if join.Alias != "" {
 						availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
@@ -1746,7 +1828,7 @@ func permuteJoins(joins []*JoinInfo) [][]*JoinInfo {
 	return res
 }
 
-func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join *JoinInfo, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats) (*PlanNode, int64) {
+func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join *JoinInfo, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats, queryHints []string) (*PlanNode, int64) {
 	rTable := cleanIdent(join.Table)
 	rAlias := cleanIdent(join.Alias)
 	if rAlias == "" {
@@ -1838,7 +1920,35 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 	var nextNode *PlanNode
 	// CBO Decision: Compare Hash Join vs Index Nested Loop Join
 	isOuterUnmatched := strings.HasPrefix(strings.ToUpper(join.Type), "FULL") || strings.HasPrefix(strings.ToUpper(join.Type), "RIGHT")
-	if !isOuterUnmatched && innerIndex != nil && nlTotalCost < hashJoinTotalCost {
+
+	forceHashJoin := hasQueryHint(queryHints, "HASH JOIN") || strings.Contains(strings.ToUpper(join.Type), "HASH")
+	forceLoopJoin := hasQueryHint(queryHints, "LOOP JOIN") || strings.Contains(strings.ToUpper(join.Type), "LOOP")
+
+	// Check table hint on the joined table
+	joinForceIndex, joinForceTableScan := parseIndexHint(join.Hints)
+	if joinForceTableScan {
+		innerIndex = nil
+	} else if joinForceIndex != "" && rSchema != nil {
+		for i := range rSchema.Indexes {
+			if strings.EqualFold(rSchema.Indexes[i].Name, joinForceIndex) {
+				innerIndex = &rSchema.Indexes[i]
+				break
+			}
+		}
+	}
+
+	useNestedLoop := false
+	if !isOuterUnmatched && innerIndex != nil {
+		if forceLoopJoin {
+			useNestedLoop = true
+		} else if forceHashJoin {
+			useNestedLoop = false
+		} else {
+			useNestedLoop = (nlTotalCost < hashJoinTotalCost)
+		}
+	}
+
+	if useNestedLoop {
 		innerScanNode := &PlanNode{
 			Type:          NodeIndexScan,
 			Relation:      join.Table,

@@ -1314,8 +1314,8 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			}
 		}
 
-		// If query has joins (including subqueries decorrelated into joins), execute via Volcano CBO Engine
-		if len(qInfo.Joins) > 0 || qInfo.Join != nil {
+		// If query has joins, table/query hints, or subqueries, execute via Volcano CBO Engine
+		if len(qInfo.Joins) > 0 || qInfo.Join != nil || len(qInfo.TableHints) > 0 || len(qInfo.QueryHints) > 0 {
 			return s.execVolcanoSelect(qInfo, start, cs)
 		}
 

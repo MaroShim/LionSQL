@@ -2106,8 +2106,11 @@ func (p *Parser) parseTableHints() []string {
 	p.nextToken() // eat (
 	var hints []string
 	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-		hint := p.curToken.Literal
+		hintName := p.curToken.Literal
 		p.nextToken()
+		if p.curTokenIs(TokenEq) {
+			p.nextToken() // eat =
+		}
 		if p.curTokenIs(TokenLParen) {
 			p.nextToken() // eat (
 			inner := ""
@@ -2118,11 +2121,14 @@ func (p *Parser) parseTableHints() []string {
 			if p.curTokenIs(TokenRParen) {
 				p.nextToken() // eat )
 			}
-			hint = fmt.Sprintf("%s(%s)", hint, inner)
-		}
-		hints = append(hints, hint)
-		if p.curTokenIs(TokenComma) {
+			hintName = fmt.Sprintf("%s(%s)", hintName, inner)
+		} else if strings.EqualFold(hintName, "INDEX") && (p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt)) {
+			hintName = fmt.Sprintf("INDEX(%s)", p.curToken.Literal)
 			p.nextToken()
+		}
+		hints = append(hints, hintName)
+		if p.curTokenIs(TokenComma) {
+			p.nextToken() // eat ,
 		} else {
 			break
 		}
@@ -2269,8 +2275,12 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 					p.nextToken()
 				}
 			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
-				alias = cleanSchemaPrefix(p.curToken.Literal)
-				p.nextToken()
+				if (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) && p.peekToken.Type == TokenJoin {
+					// Do not consume HASH/LOOP/MERGE as alias when followed by JOIN
+				} else {
+					alias = cleanSchemaPrefix(p.curToken.Literal)
+					p.nextToken()
+				}
 			}
 			fromHints := p.parseTableHints()
 
@@ -2279,10 +2289,19 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	}
 
 	// 3. JOIN & APPLY clauses
-	for p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) || p.curTokenIs(TokenRight) || p.curTokenIs(TokenFull) || p.curTokenIs(TokenCross) || p.curTokenIs(TokenOuter) {
+	for p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) || p.curTokenIs(TokenRight) || p.curTokenIs(TokenFull) || p.curTokenIs(TokenCross) || p.curTokenIs(TokenOuter) ||
+		(p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE"))) {
 		joinType := "INNER"
 		isApply := false
-		if p.curTokenIs(TokenCross) {
+		if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) {
+			joinHint := strings.ToUpper(p.curToken.Literal)
+			p.nextToken()
+			if !p.curTokenIs(TokenJoin) {
+				return nil, fmt.Errorf("expected JOIN after %s, got %s", joinHint, p.curToken.Literal)
+			}
+			p.nextToken() // eat JOIN
+			joinType = "INNER " + joinHint
+		} else if p.curTokenIs(TokenCross) {
 			p.nextToken() // eat CROSS
 			if p.curTokenIs(TokenApply) {
 				p.nextToken() // eat APPLY
@@ -2309,6 +2328,11 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			if p.curTokenIs(TokenOuter) {
 				p.nextToken() // eat OUTER
 			}
+			var joinHint string
+			if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) {
+				joinHint = strings.ToUpper(p.curToken.Literal)
+				p.nextToken()
+			}
 			if p.curTokenIs(TokenApply) {
 				p.nextToken() // eat APPLY
 				joinType = "OUTER APPLY"
@@ -2318,6 +2342,9 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 					return nil, fmt.Errorf("expected JOIN, got %s", p.curToken.Literal)
 				}
 				p.nextToken() // eat JOIN
+				if joinHint != "" {
+					joinType = joinType + " " + joinHint
+				}
 			}
 		} else if p.curTokenIs(TokenRight) {
 			joinType = "RIGHT"
@@ -2325,26 +2352,50 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			if p.curTokenIs(TokenOuter) {
 				p.nextToken() // eat OUTER
 			}
+			var joinHint string
+			if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) {
+				joinHint = strings.ToUpper(p.curToken.Literal)
+				p.nextToken()
+			}
 			if !p.curTokenIs(TokenJoin) {
 				return nil, fmt.Errorf("expected JOIN after RIGHT, got %s", p.curToken.Literal)
 			}
 			p.nextToken() // eat JOIN
+			if joinHint != "" {
+				joinType = joinType + " " + joinHint
+			}
 		} else if p.curTokenIs(TokenFull) {
 			joinType = "FULL"
 			p.nextToken() // eat FULL
 			if p.curTokenIs(TokenOuter) {
 				p.nextToken() // eat OUTER
 			}
+			var joinHint string
+			if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) {
+				joinHint = strings.ToUpper(p.curToken.Literal)
+				p.nextToken()
+			}
 			if !p.curTokenIs(TokenJoin) {
 				return nil, fmt.Errorf("expected JOIN after FULL, got %s", p.curToken.Literal)
 			}
 			p.nextToken() // eat JOIN
+			if joinHint != "" {
+				joinType = joinType + " " + joinHint
+			}
 		} else if p.curTokenIs(TokenInner) {
 			p.nextToken() // eat INNER
+			var joinHint string
+			if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) {
+				joinHint = strings.ToUpper(p.curToken.Literal)
+				p.nextToken()
+			}
 			if !p.curTokenIs(TokenJoin) {
 				return nil, fmt.Errorf("expected JOIN, got %s", p.curToken.Literal)
 			}
 			p.nextToken() // eat JOIN
+			if joinHint != "" {
+				joinType = "INNER " + joinHint
+			}
 		} else if p.curTokenIs(TokenJoin) {
 			p.nextToken() // eat JOIN
 		}
@@ -2371,8 +2422,12 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 					p.nextToken()
 				}
 			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
-				jAlias = cleanSchemaPrefix(p.curToken.Literal)
-				p.nextToken()
+				if (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) && p.peekToken.Type == TokenJoin {
+					// Do not consume HASH/LOOP/MERGE as alias when followed by JOIN
+				} else {
+					jAlias = cleanSchemaPrefix(p.curToken.Literal)
+					p.nextToken()
+				}
 			}
 			jHints := p.parseTableHints()
 
@@ -2427,8 +2482,12 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 					p.nextToken()
 				}
 			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
-				jAlias = cleanSchemaPrefix(p.curToken.Literal)
-				p.nextToken()
+				if (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) && p.peekToken.Type == TokenJoin {
+					// Do not consume HASH/LOOP/MERGE as alias when followed by JOIN
+				} else {
+					jAlias = cleanSchemaPrefix(p.curToken.Literal)
+					p.nextToken()
+				}
 			}
 			jHints := p.parseTableHints()
 
@@ -2602,23 +2661,22 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		}
 	}
 
-	// 9. Query hints: OPTION ( RECOMPILE, MAXDOP 1, ... )
+	// 9. Query hints: OPTION ( RECOMPILE, MAXDOP 1, HASH JOIN, LOOP JOIN, MERGE JOIN, FORCE ORDER, ... )
 	if p.curTokenIs(TokenOption) {
 		p.nextToken() // eat OPTION
 		if p.curTokenIs(TokenLParen) {
 			p.nextToken() // eat (
 			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-				hint := p.curToken.Literal
-				p.nextToken()
-				if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) {
-					hint = fmt.Sprintf("%s %s", hint, p.curToken.Literal)
+				var hintParts []string
+				for !p.curTokenIs(TokenComma) && !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+					hintParts = append(hintParts, p.curToken.Literal)
 					p.nextToken()
 				}
-				stmt.QueryHints = append(stmt.QueryHints, hint)
+				if len(hintParts) > 0 {
+					stmt.QueryHints = append(stmt.QueryHints, strings.Join(hintParts, " "))
+				}
 				if p.curTokenIs(TokenComma) {
-					p.nextToken()
-				} else {
-					break
+					p.nextToken() // eat ,
 				}
 			}
 			if p.curTokenIs(TokenRParen) {
