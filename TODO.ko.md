@@ -141,8 +141,8 @@
 - [ ] **공유 메모리(POSIX shm / mmap) 기반 Apache Arrow IPC 컬럼 스냅샷 (Zero-Copy DuckDB 연동) (`pkg/storage`)**
   - 특정 시점의 테이블 데이터를 Apache Arrow IPC RecordBatch 포맷으로 직렬화하여 `/dev/shm` 또는 `mmap` 임시 파일에 기록 (`SNAPSHOT TABLE <t> TO ARROW_SHM <name>`).
   - 외부 분석 프로세스(DuckDB, Python Polars, Pandas)에 파일 디스크립터(FD)를 전달하여 Zero-Copy 커널 페이지 맵핑 기반 고속 분석 실현 (OLTP 쓰기 격리 유지).
-- [ ] **Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`)**
-  - CGO/WiredTiger 의존성 없이 완전한 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 86) 크로스 컴파일 배포를 위한 `storage.Engine` 플러그인 백엔드 추가.
+- [ ] **[보류 / Postponed] Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`)**
+  - CGO/WiredTiger 의존성 없이 완전한 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 36) 크로스 컴파일 배포를 위한 `storage.Engine` 플러그인 백엔드 (현재는 네이티브 WiredTiger CGO 및 인메모리 OCC 고성능 엔진에 집중하며 보류).
 - [ ] **WebAssembly (Wasm) 런타임 기반 동적 UDF 샌드박스 (`pkg/extension`, `wazero`)**
   - 독립 서버 환경에서 `CREATE FUNCTION <name> AS WASM '<path.wasm>'` DDL 지원.
   - CGO 없는 순수 Go `wazero` 런타임 탑재, 메모리 샌드박싱(Golden Rule 26)을 통한 크래시/패닉 격리.

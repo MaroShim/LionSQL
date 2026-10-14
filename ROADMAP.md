@@ -70,7 +70,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - Always On Style Automatic Failover & Leader Election
   - Transactional Outbox & CDC Event Streaming (Kafka / RabbitMQ)
   - Shared Memory (POSIX shm / mmap) Apache Arrow IPC Snapshots (DuckDB Zero-Copy)
-  - Pure Go Persistent Storage Engine Backend (Pebble / bbolt, CGO_ENABLED=0)
+  - [Postponed] Pure Go Persistent Storage Engine Backend (Pebble / bbolt, CGO_ENABLED=0)
   - Dynamic Programming (DP / Selinger) Large Join Order Optimization (N > 4)
   - Extended Multi-Column Statistics, MCV & Optimizer Hints
   - T-SQL Specialized TDS Serialization (UNIQUEIDENTIFIER, DATETIME2, PLP LOB)
@@ -203,7 +203,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - Guarantee zero blast radius: heavy analytical queries cannot cause OOM or block OLTP write paths.
 - **Expected Outcome**: Decoupled hybrid transactional/analytical processing (HTAP) integrating the open-source analytical ecosystem with 0ms transfer latency.
 
-#### 6.4. Pure-Go Persistent Storage Engine Option (Pebble / bbolt) (`pkg/storage`)
+#### 6.4. [Postponed] Pure-Go Persistent Storage Engine Option (Pebble / bbolt) (`pkg/storage`)
 - **Challenge**: Add a pure-Go persistent storage backend under the `storage.Engine` interface, enabling static compilation (`CGO_ENABLED=0`, Golden Rule 86) without C compiler toolchains.
 - **Expected Outcome**: 100% autonomous, cross-platform static binary distribution across any Linux/Windows/macOS environment.
 
@@ -265,7 +265,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 6** | **P1** | **Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
 | **Phase 6** | **P1** | **Transactional Outbox & CDC Streaming** | Storage & Events | Medium (300~400 lines) | Atomic row-level change event streams dispatched to Kafka/RabbitMQ |
 | **Phase 6** | **P1** | **Shared-Memory Apache Arrow IPC Snapshots (DuckDB)** | Analytics & HTAP | Medium (300~400 lines) | Zero-copy, zero-I/O decoupled OLAP engine integration |
-| **Phase 6** | **P1** | **Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
+| **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
 | **Phase 6** | **P1** | **Lazy Tuple Materialization & Projection Pushdown** | Storage & Executor | Medium (300~400 lines) | 70~80% CPU & GC reduction on large table scans |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
 | **Phase 6** | **P2** | **$N > 4$ Join Dynamic Programming (DP / Selinger)** | CBO & Planner | High (400~600 lines) | Optimal join ordering for complex multi-table queries |
