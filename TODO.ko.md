@@ -129,9 +129,14 @@
 - [ ] **Always On 스타일 자동 장애 조치 및 리더 선출 (Automatic Failover & Leader Election) (`pkg/replication`)**
   - Primary 노드 다운 시 복제 랙(LSN Lag)이 가장 적은 최신 Replica 노드를 새로운 Primary로 자동 승격 (Leader Promotion).
   - 클라이언트 라우팅 갱신 및 Split-Brain 방지를 위한 리더 텀(Term) 검증.
-- [ ] **트랜잭셔널 아웃박스(Transactional Outbox) & CDC 이벤트 스트리밍 (`pkg/storage`, `pkg/api`)**
-  - 트랜잭션 커밋과 100% 원자적으로 연동되는 Row-level 변경 델타(Inserted/Updated/Deleted) 이벤트 스트림.
-  - 외부 메시지 브로커(Kafka, RabbitMQ) 또는 웹훅으로 무손실 발행하는 Outbox 디스패처 (임베디드 DuckDB OLAP 마이크로 배치 적재에도 활용).
+- [x] **분리형 실시간 CDC (Change Data Capture) 스트리밍 프레임워크 (`pkg/cdc`, `pkg/api`, `cmd/server`)**
+  - 트랜잭션 커밋과 100% 원자적으로 연동되는 Row-level 변경 델타(Inserted/Updated/Deleted) 이벤트 모델(`ChangeEvent`) 및 스트리머(`Streamer`) 구축.
+  - 유계 링 버퍼(Bounded Ring Buffer, 10,000건) 기반 과거 LSN 재생, 비차단 팬아웃(Non-blocking Backpressure, Golden Rule 29), 테이블 필터링 지원.
+  - `GET /api/cdc/stream` 실시간 NDJSON 및 SSE 스트리밍 HTTP 엔드포인트 완비.
+  - 스토리지 엔진(`memengine`, `wiredtiger`) 커밋 훅 다중화(`AddWALHook`) 관통.
+  - Python 표준 라이브러리 기반 DuckDB 마이크로 배치 수신 워커 레시피 작성 (`doc/CDC_DUCKDB_INTEGRATION.md`).
+- [ ] **트랜잭셔널 아웃박스 외부 브로커 디스패처 (Kafka, RabbitMQ) (`pkg/cdc`, `pkg/storage`)**
+  - CDC 스트림을 외부 분산 메시지 브로커로 무손실 발행하는 Outbox 릴레이 워커.
 - [ ] **[보류 / Postponed] Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`)**
   - CGO/WiredTiger 의존성 없이 완전한 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 36) 크로스 컴파일 배포를 위한 `storage.Engine` 플러그인 백엔드 (현재는 네이티브 WiredTiger CGO 및 인메모리 OCC 고성능 엔진에 집중하며 보류).
 - [ ] **WebAssembly (Wasm) 런타임 기반 동적 UDF 샌드박스 (`pkg/extension`, `wazero`)**

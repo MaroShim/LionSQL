@@ -70,7 +70,8 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 [ Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS) ] ──► PLANNED
   - Always On Style Automatic Failover & Leader Election
-  - Transactional Outbox & CDC Event Streaming (Kafka / RabbitMQ / DuckDB)
+  - [x] Decoupled Real-time CDC Event Streaming (GET /api/cdc/stream & DuckDB HTAP)
+  - Transactional Outbox Broker Dispatcher (Kafka / RabbitMQ)
   - [Postponed] Pure Go Persistent Storage Engine Backend (Pebble / bbolt, CGO_ENABLED=0)
   - Dynamic Programming (DP / Selinger) Large Join Order Optimization (N > 4)
   - Extended Multi-Column Statistics, MCV & Optimizer Hints
@@ -204,11 +205,15 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - Implement term validation to prevent split-brain conditions and automate client routing handover.
 - **Expected Outcome**: 99.999% high availability with zero-touch automatic recovery.
 
-#### 6.2. Transactional Outbox & CDC Event Streaming (`pkg/storage`, `pkg/api`)
-- **Challenge**:
-  - Atomically generate row-level change delta events (inserted, updated, deleted) coupled with transaction commit boundaries.
-  - Implement reliable outbox dispatchers forwarding events to external message brokers (Kafka, RabbitMQ) or webhooks.
-- **Expected Outcome**: Lossless event-driven architecture integration without external dual-write anomalies.
+#### 6.2. Decoupled Real-time CDC Streaming & Transactional Outbox (`pkg/cdc`, `pkg/storage`, `pkg/api`)
+- **Implemented (`pkg/cdc`)**:
+  - Decoupled real-time CDC event streaming engine (`ChangeEvent`, `Streamer`) with bounded ring-buffer historical replay (Golden Rule 23) and non-blocking backpressure fan-out (Golden Rule 29).
+  - High-performance HTTP streaming endpoint `GET /api/cdc/stream` with real-time NDJSON and SSE support, table filtering (`?table=...`), and heartbeat keep-alive.
+  - Multi-hook registration (`AddWALHook`) across In-Memory OCC (`memengine`) and WiredTiger (`wt_engine`, `wt_stub`) backends to synchronously tap commit boundaries.
+  - Complete zero-dependency Python DuckDB micro-batch integration guide (`doc/CDC_DUCKDB_INTEGRATION.md`).
+- **Pending Outbox Forwarders**:
+  - Outbox dispatchers forwarding events to external message brokers (Kafka, RabbitMQ).
+- **Expected Outcome**: Decoupled hybrid transactional/analytical processing (HTAP) with zero OLTP blast radius, alongside lossless event-driven broker integration.
 
 #### 6.3. [Postponed] Pure-Go Persistent Storage Engine Option (Pebble / bbolt) (`pkg/storage`)
 - **Challenge**: Add a pure-Go persistent storage backend under the `storage.Engine` interface, enabling static compilation (`CGO_ENABLED=0`, Golden Rule 36) without C compiler toolchains.
@@ -266,7 +271,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 5** | **P3** | **Declarative Schema Migration CLI** | BaaS & Tooling | Medium (250~350 lines) | `sqlion migrate` atomic DDL version history tracking |
 | **Phase 5** | **P3** | **OAuth2 Social Login (Google, GitHub)** | Auth & API | Medium (200~300 lines) | Turnkey authentication and JWT provisioning |
 | **Phase 6** | **P1** | **Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
-| **Phase 6** | **P1** | **Transactional Outbox & CDC Streaming** | Storage & Events | Medium (300~400 lines) | Atomic row-level change event streams dispatched to Kafka/RabbitMQ/DuckDB |
+| **Phase 6** | **P2** | **Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
 | **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
 | **Phase 6** | **P1** | **Lazy Tuple Materialization & Projection Pushdown** | Storage & Executor | Medium (300~400 lines) | 70~80% CPU & GC reduction on large table scans |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
