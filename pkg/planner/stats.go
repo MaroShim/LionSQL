@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
 
@@ -177,12 +178,235 @@ func (ts *TableStats) EstimateSelectivity(colName string, op string, valStr stri
 	}
 }
 
+func (ts *TableStats) findColumnStats(colName string) (*ColumnStats, bool) {
+	if ts == nil || ts.Columns == nil {
+		return nil, false
+	}
+	col := cleanIdent(colName)
+	if cs, ok := ts.Columns[col]; ok && cs != nil {
+		return cs, true
+	}
+	if idx := strings.Index(col, "."); idx != -1 {
+		if cs, ok := ts.Columns[col[idx+1:]]; ok && cs != nil {
+			return cs, true
+		}
+	}
+	for k, cs := range ts.Columns {
+		if strings.EqualFold(k, col) && cs != nil {
+			return cs, true
+		}
+	}
+	return nil, false
+}
+
+func extractColumnFromExpr(expr proc.Expr) (string, bool) {
+	if expr == nil {
+		return "", false
+	}
+	switch e := expr.(type) {
+	case *proc.ColumnRefExpr:
+		return cleanIdent(e.Name), true
+	case *proc.LiteralExpr:
+		return "", false
+	default:
+		s := e.String()
+		if !strings.ContainsAny(s, " ()+-*/=><!&|;") {
+			return cleanIdent(s), true
+		}
+		return "", false
+	}
+}
+
+func extractColumnAndLiteral(left, right proc.Expr) (col string, val string, isLeftCol bool, ok bool) {
+	if colName, isCol := extractColumnFromExpr(left); isCol {
+		if lit, isLit := right.(*proc.LiteralExpr); isLit {
+			return colName, lit.Val.String(), true, true
+		}
+		return colName, strings.Trim(right.String(), "'\""), true, true
+	}
+	if colName, isCol := extractColumnFromExpr(right); isCol {
+		if lit, isLit := left.(*proc.LiteralExpr); isLit {
+			return colName, lit.Val.String(), false, true
+		}
+		return colName, strings.Trim(left.String(), "'\""), false, true
+	}
+	return "", "", false, false
+}
+
+func isSameColumnEquality(left, right proc.Expr) bool {
+	bLeft, ok1 := left.(*proc.BinaryExpr)
+	bRight, ok2 := right.(*proc.BinaryExpr)
+	if !ok1 || !ok2 {
+		return false
+	}
+	if bLeft.Op != proc.TokenEq || bRight.Op != proc.TokenEq {
+		return false
+	}
+	colLeft, _, _, okColLeft := extractColumnAndLiteral(bLeft.Left, bLeft.Right)
+	colRight, _, _, okColRight := extractColumnAndLiteral(bRight.Left, bRight.Right)
+	return okColLeft && okColRight && strings.EqualFold(colLeft, colRight)
+}
+
+func tokenToOpString(tok proc.TokenType) string {
+	switch tok {
+	case proc.TokenEq:
+		return "="
+	case proc.TokenNeq:
+		return "!="
+	case proc.TokenLt:
+		return "<"
+	case proc.TokenLte:
+		return "<="
+	case proc.TokenGt:
+		return ">"
+	case proc.TokenGte:
+		return ">="
+	case proc.TokenLike:
+		return "LIKE"
+	default:
+		return "="
+	}
+}
+
+func flipComparisonOp(op string) string {
+	switch op {
+	case "<":
+		return ">"
+	case "<=":
+		return ">="
+	case ">":
+		return "<"
+	case ">=":
+		return "<="
+	default:
+		return op
+	}
+}
+
+// EstimateExprSelectivity calculates selectivity recursively across a boolean expression tree (AND, OR, NOT, IN, BETWEEN).
+func (ts *TableStats) EstimateExprSelectivity(expr proc.Expr) float64 {
+	if ts == nil || ts.RowCount == 0 || expr == nil {
+		return 0.33
+	}
+
+	minSel := 0.0001
+	if ts.RowCount > 0 {
+		minSel = 1.0 / float64(ts.RowCount)
+	}
+
+	switch e := expr.(type) {
+	case *proc.BinaryExpr:
+		switch e.Op {
+		case proc.TokenAnd:
+			selLeft := ts.EstimateExprSelectivity(e.Left)
+			selRight := ts.EstimateExprSelectivity(e.Right)
+			return math.Max(minSel, selLeft*selRight)
+
+		case proc.TokenOr:
+			selLeft := ts.EstimateExprSelectivity(e.Left)
+			selRight := ts.EstimateExprSelectivity(e.Right)
+			if isSameColumnEquality(e.Left, e.Right) {
+				// Disjoint / mutually exclusive outcomes on the same column: P(A ∪ B) = P(A) + P(B)
+				return math.Min(1.0, math.Max(minSel, selLeft+selRight))
+			}
+			// General probability union for independent predicates: P(A ∪ B) = P(A) + P(B) - P(A)*P(B)
+			combined := selLeft + selRight - (selLeft * selRight)
+			return math.Min(1.0, math.Max(minSel, combined))
+
+		case proc.TokenEq, proc.TokenNeq, proc.TokenLt, proc.TokenLte, proc.TokenGt, proc.TokenGte:
+			col, val, isLeftCol, ok := extractColumnAndLiteral(e.Left, e.Right)
+			if !ok {
+				return 0.1
+			}
+			op := tokenToOpString(e.Op)
+			if !isLeftCol {
+				op = flipComparisonOp(op)
+			}
+			return ts.EstimateSelectivity(col, op, val)
+
+		case proc.TokenLike:
+			return 0.05
+		}
+
+	case *proc.UnaryExpr:
+		if e.Op == proc.TokenNot {
+			inner := ts.EstimateExprSelectivity(e.Expr)
+			return math.Max(minSel, math.Min(1.0, 1.0-inner))
+		}
+
+	case *proc.IsNullExpr:
+		if col, ok := extractColumnFromExpr(e.Expr); ok {
+			op := "IS NULL"
+			if e.Not {
+				op = "IS NOT NULL"
+			}
+			return ts.EstimateSelectivity(col, op, "")
+		}
+		return 0.1
+
+	case *proc.BetweenExpr:
+		if col, ok := extractColumnFromExpr(e.Expr); ok {
+			if cs, found := ts.findColumnStats(col); found {
+				lowVal := e.Low.String()
+				highVal := e.High.String()
+				highSel := cs.interpolateRange(highVal, true)
+				lowSel := cs.interpolateRange(lowVal, true)
+				rangeSel := math.Max(minSel, highSel-lowSel)
+				if e.Not {
+					rangeSel = math.Max(minSel, 1.0-rangeSel)
+				}
+				return math.Min(1.0, rangeSel)
+			}
+		}
+		return 0.25
+
+	case *proc.InExpr:
+		if col, ok := extractColumnFromExpr(e.Expr); ok {
+			if len(e.List) > 0 {
+				var inSel float64
+				if cs, found := ts.findColumnStats(col); found && cs.DistinctCount > 0 {
+					inSel = math.Min(1.0, float64(len(e.List))/float64(cs.DistinctCount))
+				} else {
+					inSel = math.Min(0.5, float64(len(e.List))*0.05)
+				}
+				if e.Not {
+					inSel = math.Max(minSel, 1.0-inSel)
+				}
+				return math.Max(minSel, inSel)
+			}
+			if e.Query != nil {
+				return 0.20
+			}
+		}
+		return 0.25
+
+	case *proc.LikeExpr:
+		sel := 0.05
+		if e.Not {
+			sel = 0.95
+		}
+		return sel
+
+	case *proc.LiteralExpr:
+		if e.Val.Type == storage.TypeBool {
+			if e.Val.BVal {
+				return 1.0
+			}
+			return 0.0
+		}
+	}
+
+	return 0.33
+}
+
 var (
 	cboEqRe     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(<=|>=|!=|<>|<|>|==|=|LIKE)\s*(.+)$`)
 	cboIsNullRe = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s+IS\s+(NOT\s+)?NULL\s*$`)
 )
 
-// EstimateCompoundSelectivity calculates the combined selectivity across multiple AND-predicates using statistical independence.
+// EstimateCompoundSelectivity calculates the combined selectivity across multiple predicates.
+// It parses each predicate into an AST expression when possible, using boolean tree rules (AND, OR, NOT, IN, BETWEEN),
+// and falls back to regex matching or heuristic defaults.
 func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
 	if ts == nil || len(conds) == 0 {
 		return 0.33
@@ -197,6 +421,16 @@ func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
 			continue
 		}
 
+		// 1. Try AST parsing first for full boolean tree (OR, NOT, AND, BETWEEN, IN)
+		parser := proc.NewParser(proc.NewLexer(cond))
+		if expr := parser.ParseExpr(); expr != nil && len(parser.Errors()) == 0 {
+			sel := ts.EstimateExprSelectivity(expr)
+			totalSel *= sel
+			matchedAny = true
+			continue
+		}
+
+		// 2. Fallback to regex pattern matching for simple comparisons
 		if m := cboEqRe.FindStringSubmatch(cond); len(m) == 4 {
 			rawCol := m[1]
 			if idx := strings.Index(rawCol, "."); idx != -1 {

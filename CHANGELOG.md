@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **CBO Boolean Tree & OR Selectivity Estimation (`pkg/planner`)**:
+  - Implemented `TableStats.EstimateExprSelectivity()` to recursively evaluate AST expression trees for complex boolean filters.
+  - Added same-column mutually exclusive equality OR summation ($P(A \cup B) = P(A) + P(B)$) and general independent OR union ($P(A \cup B) = P(A) + P(B) - P(A) \cdot P(B)$).
+  - Added exact selectivity estimation for `NOT` expressions ($1.0 - P(A)$), `IN (...)` predicates based on NDV, and `BETWEEN` range quantile bucket interpolation.
+  - Enhanced `TableStats.EstimateCompoundSelectivity()` to parse incoming filter strings into AST expressions with fallback to regex and heuristic estimators.
+  - Added unit test suite `TestTableStats_BooleanTreeAndORSelectivity` in `pkg/planner/stats_test.go` and marked `C-6` as complete in `notes/REFACTORING_AND_ROADMAP.md`.
 - **`FULL OUTER JOIN` & `RIGHT OUTER JOIN`, `COALESCE` / `ISNULL` Short-Circuiting, and Syntax Backlog Completion (`pkg/engine`, `pkg/proc`, `pkg/planner`, `pkg/execution`)**:
   - Implemented `FULL [OUTER] JOIN` and `RIGHT [OUTER] JOIN` in Volcano `HashJoinIterator`, tracking inner/build side matches and draining unmatched right-side tuples with `mergeNullsWithTuple()`.
   - Extended Pratt parser `parseGeneralSelect()` with `TokenFull` and `TokenRight` keywords, supporting optional `OUTER` and required `JOIN`.
