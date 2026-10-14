@@ -70,8 +70,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 [ Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS) ] ──► PLANNED
   - Always On Style Automatic Failover & Leader Election
-  - Transactional Outbox & CDC Event Streaming (Kafka / RabbitMQ)
-  - Shared Memory (POSIX shm / mmap) Apache Arrow IPC Snapshots (DuckDB Zero-Copy)
+  - Transactional Outbox & CDC Event Streaming (Kafka / RabbitMQ / DuckDB)
   - [Postponed] Pure Go Persistent Storage Engine Backend (Pebble / bbolt, CGO_ENABLED=0)
   - Dynamic Programming (DP / Selinger) Large Join Order Optimization (N > 4)
   - Extended Multi-Column Statistics, MCV & Optimizer Hints
@@ -211,52 +210,45 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - Implement reliable outbox dispatchers forwarding events to external message brokers (Kafka, RabbitMQ) or webhooks.
 - **Expected Outcome**: Lossless event-driven architecture integration without external dual-write anomalies.
 
-#### 6.3. Shared Memory (POSIX shm / mmap) Apache Arrow IPC Snapshots (DuckDB Zero-Copy Integration) (`pkg/storage`)
-- **Challenge**:
-  - Serialize point-in-time table snapshots into Apache Arrow IPC RecordBatch columnar format in POSIX shared memory (`/dev/shm` or `mmap` files) via `SNAPSHOT TABLE <t> TO ARROW_SHM <name>`.
-  - Pass file descriptors directly to external analytical engines (DuckDB, Python Polars, Pandas) for zero-copy vectorized processing.
-  - Guarantee zero blast radius: heavy analytical queries cannot cause OOM or block OLTP write paths.
-- **Expected Outcome**: Decoupled hybrid transactional/analytical processing (HTAP) integrating the open-source analytical ecosystem with 0ms transfer latency.
-
-#### 6.4. [Postponed] Pure-Go Persistent Storage Engine Option (Pebble / bbolt) (`pkg/storage`)
-- **Challenge**: Add a pure-Go persistent storage backend under the `storage.Engine` interface, enabling static compilation (`CGO_ENABLED=0`, Golden Rule 86) without C compiler toolchains.
+#### 6.3. [Postponed] Pure-Go Persistent Storage Engine Option (Pebble / bbolt) (`pkg/storage`)
+- **Challenge**: Add a pure-Go persistent storage backend under the `storage.Engine` interface, enabling static compilation (`CGO_ENABLED=0`, Golden Rule 36) without C compiler toolchains.
 - **Expected Outcome**: 100% autonomous, cross-platform static binary distribution across any Linux/Windows/macOS environment.
 
-#### 6.5. Dynamic Programming (DP / Selinger) Large Join Order Optimization ($N > 4$) (`pkg/planner`)
+#### 6.4. Dynamic Programming (DP / Selinger) Large Join Order Optimization ($N > 4$) (`pkg/planner`)
 - **Challenge**: Implement a DPccp dynamic programming search algorithm evaluating left-deep and bushy join trees for complex queries joining 5 or more tables.
 - **Expected Outcome**: Optimal execution plans for complex enterprise ERP and data mart join queries.
 
-#### 6.6. Extended Multi-Column Statistics, MCV & Optimizer Hints (`pkg/planner`)
+#### 6.5. Extended Multi-Column Statistics, MCV & Optimizer Hints (`pkg/planner`)
 - **Challenge**: Collect multi-column distinct value (NDV) statistics to correct cardinality underestimation on correlated columns and maintain MCV lists.
 - **Expected Outcome**: Elimination of estimation skew on correlated predicates.
 
-#### 6.7. T-SQL Specialized TDS Serialization & PLP LOB Streaming (`pkg/wire/tds`)
+#### 6.6. T-SQL Specialized TDS Serialization & PLP LOB Streaming (`pkg/wire/tds`)
 - **Challenge**:
   - Full binary encoding for `UNIQUEIDENTIFIER` (16-byte GUID byte swapping), `DATETIME2` (`0x2A`), `DATE` (`0x28`), and `TIME` (`0x29`).
   - Partially Length-Prefixed (PLP) streaming for large `VARCHAR(MAX)` and `VARBINARY(MAX)` payloads exceeding 8KB.
 - **Expected Outcome**: 100% wire-level data type compatibility for legacy enterprise SQL Server applications.
 
-#### 6.8. Multi-Language Client Ecosystem Certification (`pkg/wire`, `pkg/wire/tds`)
+#### 6.7. Multi-Language Client Ecosystem Certification (`pkg/wire`, `pkg/wire/tds`)
 - **Challenge**: Establish automated end-to-end certification test harnesses for Python (`psycopg3`, `pymssql`), Node.js (`pg`, `tedious`), and C#/.NET (`Microsoft.Data.SqlClient`).
 - **Expected Outcome**: Guaranteed out-of-the-box compatibility across all major application development stacks.
 
-#### 6.9. Volcano Chunked Batch Execution (Vectorized Chunk Iterator) (`pkg/execution`)
+#### 6.8. Volcano Chunked Batch Execution (Vectorized Chunk Iterator) (`pkg/execution`)
 - **Challenge**: Transition row-by-row `Next()` calls to vector slice streaming (`NextBatch([64]Row)`), mitigating virtual function dispatch overhead.
 - **Expected Outcome**: 3~5x throughput acceleration for full-table scans, aggregations, and analytical filters.
 
-#### 6.10. Wasm Runtime Sandbox UDF (`pkg/extension`, `wazero`)
+#### 6.9. Wasm Runtime Sandbox UDF (`pkg/extension`, `wazero`)
 - **Challenge**: Embed pure-Go `wazero` to execute dynamically loaded WebAssembly functions (`CREATE FUNCTION ... AS WASM`) in isolated memory sandboxes.
 - **Expected Outcome**: Safe in-engine execution of third-party plugins with zero host crash risk.
 
-#### 6.11. Local & S3-Compatible File Storage Module (`pkg/api/handlers_files.go`)
+#### 6.10. Local & S3-Compatible File Storage Module (`pkg/api/handlers_files.go`)
 - **Challenge**: Implement multipart file upload APIs (`POST /api/files/:table/:id`), static asset serving, asynchronous image thumbnail generation, and storage quotas.
 - **Expected Outcome**: Turnkey all-in-one BaaS storage capability directly inside the single standalone binary.
 
-#### 6.12. Lazy Tuple Materialization & Column Projection Pushdown (`pkg/storage`, `pkg/execution`)
+#### 6.11. Lazy Tuple Materialization & Column Projection Pushdown (`pkg/storage`, `pkg/execution`)
 - **Challenge**: Inspect row headers and null bitmaps to decode only the filter columns required by the query `WHERE` predicate, materializing remaining columns only for matching rows.
 - **Expected Outcome**: 70~80% reduction in CPU cycles and GC heap allocations during large-scale table scans.
 
-#### 6.13. Per-Query Arena Memory Allocator & GC Elimination (`pkg/execution`, `pkg/storage`)
+#### 6.12. Per-Query Arena Memory Allocator & GC Elimination (`pkg/execution`, `pkg/storage`)
 - **Challenge**: Allocate dedicated memory arena slabs tied to the lifecycle of individual analytical queries and transactions, reclaiming memory with a single pointer reset.
 - **Expected Outcome**: Complete elimination of Go runtime GC pauses and flat p99/p99.9 latency during heavy analytical queries.
 
@@ -274,8 +266,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 5** | **P3** | **Declarative Schema Migration CLI** | BaaS & Tooling | Medium (250~350 lines) | `sqlion migrate` atomic DDL version history tracking |
 | **Phase 5** | **P3** | **OAuth2 Social Login (Google, GitHub)** | Auth & API | Medium (200~300 lines) | Turnkey authentication and JWT provisioning |
 | **Phase 6** | **P1** | **Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
-| **Phase 6** | **P1** | **Transactional Outbox & CDC Streaming** | Storage & Events | Medium (300~400 lines) | Atomic row-level change event streams dispatched to Kafka/RabbitMQ |
-| **Phase 6** | **P1** | **Shared-Memory Apache Arrow IPC Snapshots (DuckDB)** | Analytics & HTAP | Medium (300~400 lines) | Zero-copy, zero-I/O decoupled OLAP engine integration |
+| **Phase 6** | **P1** | **Transactional Outbox & CDC Streaming** | Storage & Events | Medium (300~400 lines) | Atomic row-level change event streams dispatched to Kafka/RabbitMQ/DuckDB |
 | **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
 | **Phase 6** | **P1** | **Lazy Tuple Materialization & Projection Pushdown** | Storage & Executor | Medium (300~400 lines) | 70~80% CPU & GC reduction on large table scans |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
