@@ -2,6 +2,8 @@ package engine
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +29,7 @@ type ClientSession struct {
 	Vars            map[string]any
 	TableVars       map[string]string // @table_var -> physical table name
 	TempTables      []string          // session-scoped #temp_tables
+	TempTableMap    map[string]string // user #temp_table name -> physical __temp_<sessionID>_tableName
 	PreparedStmts   map[string]*PreparedStatement
 	User            string // active database user principal for RBAC
 	OriginalUser    string // original user prior to SETUSER / EXECUTE AS
@@ -99,3 +102,68 @@ func parseTimeoutDurationVal(v any) time.Duration {
 	}
 	return 0
 }
+
+// ResolveTempTableName returns the physical table name for a session-scoped temporary table.
+// If it is not a local temporary table (e.g. ##global_temp, or ordinary table), it returns the input unchanged.
+func (cs *ClientSession) ResolveTempTableName(tbl string) string {
+	if cs == nil || !strings.HasPrefix(tbl, "#") || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
+		return tbl
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.TempTableMap == nil {
+		cs.TempTableMap = make(map[string]string)
+	}
+	lower := strings.ToLower(tbl)
+	if phys, exists := cs.TempTableMap[lower]; exists {
+		return phys
+	}
+	// Generate mangled physical name
+	clean := strings.TrimPrefix(lower, "#")
+	sessID := cs.ID
+	if sessID == "" {
+		sessID = "default"
+	}
+	phys := fmt.Sprintf("__temp_%s_%s", sessID, clean)
+	cs.TempTableMap[lower] = phys
+	cs.TempTables = append(cs.TempTables, phys)
+	return phys
+}
+
+// GetTempTablePhysical returns the registered physical table name for a local #temp table if registered.
+func (cs *ClientSession) GetTempTablePhysical(tbl string) (string, bool) {
+	if cs == nil || !strings.HasPrefix(tbl, "#") || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
+		return tbl, false
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.TempTableMap == nil {
+		return "", false
+	}
+	phys, exists := cs.TempTableMap[strings.ToLower(tbl)]
+	return phys, exists
+}
+
+// UnregisterTempTable unregisters a dropped local temporary table.
+func (cs *ClientSession) UnregisterTempTable(tbl string) {
+	if cs == nil || !strings.HasPrefix(tbl, "#") || strings.HasPrefix(tbl, "##") || strings.HasPrefix(tbl, "#__") {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.TempTableMap == nil {
+		return
+	}
+	lower := strings.ToLower(tbl)
+	phys, exists := cs.TempTableMap[lower]
+	if exists {
+		delete(cs.TempTableMap, lower)
+		for i, t := range cs.TempTables {
+			if t == phys || t == lower {
+				cs.TempTables = append(cs.TempTables[:i], cs.TempTables[i+1:]...)
+				break
+			}
+		}
+	}
+}
+

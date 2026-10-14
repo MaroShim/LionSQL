@@ -505,8 +505,8 @@ func cleanSchemaPrefix(name string) string {
 func isReservedAfterFromOrJoin(tok TokenType) bool {
 	switch tok {
 	case TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
-		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter,
-		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch,
+		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter, TokenApply,
+		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch, TokenOption,
 		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
 		return true
 	default:
@@ -517,8 +517,8 @@ func isReservedAfterFromOrJoin(tok TokenType) bool {
 func isReservedAfterProjection(tok TokenType) bool {
 	switch tok {
 	case TokenFrom, TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
-		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter,
-		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch,
+		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter, TokenApply,
+		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch, TokenOption,
 		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
 		return true
 	default:
@@ -1211,6 +1211,30 @@ func (p *Parser) parseSelect() (Statement, error) {
 	}, nil
 }
 
+func (p *Parser) parseOutputCols() []string {
+	if !p.curTokenIs(TokenOutput) {
+		return nil
+	}
+	p.nextToken() // eat OUTPUT
+	var cols []string
+	for !p.curTokenIs(TokenSelect) && !p.curTokenIs(TokenValues) && !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+		col := p.curToken.Literal
+		p.nextToken()
+		if p.curTokenIs(TokenAs) {
+			p.nextToken()
+			col = p.curToken.Literal
+			p.nextToken()
+		}
+		cols = append(cols, col)
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+	return cols
+}
+
 func (p *Parser) parseInsert() (Statement, error) {
 	p.nextToken() // eat INSERT
 	if p.curTokenIs(TokenInto) {
@@ -1241,6 +1265,8 @@ func (p *Parser) parseInsert() (Statement, error) {
 		p.nextToken()
 	}
 
+	outputCols := p.parseOutputCols()
+
 	if p.curTokenIs(TokenSelect) {
 		p.nextToken() // eat SELECT
 		sel, err := p.parseGeneralSelect()
@@ -1251,9 +1277,10 @@ func (p *Parser) parseInsert() (Statement, error) {
 			p.nextToken()
 		}
 		return &GeneralInsertStmt{
-			Table:   tblName,
-			Columns: cols,
-			Select:  sel,
+			Table:      tblName,
+			Columns:    cols,
+			OutputCols: outputCols,
+			Select:     sel,
 		}, nil
 	}
 
@@ -1289,9 +1316,10 @@ func (p *Parser) parseInsert() (Statement, error) {
 	}
 
 	return &InsertStmt{
-		Table:   tblName,
-		Columns: cols,
-		Values:  vals,
+		Table:      tblName,
+		Columns:    cols,
+		Values:     vals,
+		OutputCols: outputCols,
 	}, nil
 }
 
@@ -1331,6 +1359,8 @@ func (p *Parser) parseUpdate() (Statement, error) {
 		}
 	}
 
+	outputCols := p.parseOutputCols()
+
 	var whereExpr Expr
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken()
@@ -1349,6 +1379,7 @@ func (p *Parser) parseUpdate() (Statement, error) {
 				Assignments: assigns,
 				WhereCol:    cleanSchemaPrefix(colRef.Name),
 				WhereVal:    bin.Right,
+				OutputCols:  outputCols,
 			}, nil
 		}
 	}
@@ -1356,6 +1387,7 @@ func (p *Parser) parseUpdate() (Statement, error) {
 	return &UpdateWhereStmt{
 		Table:       tblName,
 		Assignments: assigns,
+		OutputCols:  outputCols,
 		Where:       whereExpr,
 	}, nil
 }
@@ -1371,6 +1403,8 @@ func (p *Parser) parseDelete() (Statement, error) {
 	tblName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
+	outputCols := p.parseOutputCols()
+
 	var whereExpr Expr
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken()
@@ -1384,16 +1418,18 @@ func (p *Parser) parseDelete() (Statement, error) {
 	if bin, ok := whereExpr.(*BinaryExpr); ok && bin.Op == TokenEq {
 		if colRef, isCol := bin.Left.(*ColumnRefExpr); isCol {
 			return &DeleteStmt{
-				Table:    tblName,
-				WhereCol: cleanSchemaPrefix(colRef.Name),
-				WhereVal: bin.Right,
+				Table:      tblName,
+				WhereCol:   cleanSchemaPrefix(colRef.Name),
+				WhereVal:   bin.Right,
+				OutputCols: outputCols,
 			}, nil
 		}
 	}
 
 	return &DeleteWhereStmt{
-		Table: tblName,
-		Where: whereExpr,
+		Table:      tblName,
+		OutputCols: outputCols,
+		Where:      whereExpr,
 	}, nil
 }
 
@@ -2059,6 +2095,44 @@ func (p *Parser) ParseSQLStatement() (Statement, error) {
 	}
 }
 
+func (p *Parser) parseTableHints() []string {
+	if !p.curTokenIs(TokenWith) {
+		return nil
+	}
+	if p.peekToken.Type != TokenLParen {
+		return nil
+	}
+	p.nextToken() // eat WITH
+	p.nextToken() // eat (
+	var hints []string
+	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+		hint := p.curToken.Literal
+		p.nextToken()
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken() // eat (
+			inner := ""
+			if !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				inner = p.curToken.Literal
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+			}
+			hint = fmt.Sprintf("%s(%s)", hint, inner)
+		}
+		hints = append(hints, hint)
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+		} else {
+			break
+		}
+	}
+	if p.curTokenIs(TokenRParen) {
+		p.nextToken() // eat )
+	}
+	return hints
+}
+
 func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	stmt := &GeneralSelectStmt{Limit: -1}
 
@@ -2150,11 +2224,13 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
+			fromHints := p.parseTableHints()
 
 			stmt.From = TableRef{
 				Name:     subSel.String(),
 				Alias:    alias,
 				Subquery: subSel,
+				Hints:    fromHints,
 			}
 		} else {
 			if !p.curTokenIs(TokenIdent) {
@@ -2196,28 +2272,62 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
+			fromHints := p.parseTableHints()
 
-			stmt.From = TableRef{Name: tblName, Alias: alias, IsTVF: isTVF, TVFArgs: tvfArgs}
+			stmt.From = TableRef{Name: tblName, Alias: alias, IsTVF: isTVF, TVFArgs: tvfArgs, Hints: fromHints}
 		}
 	}
 
-	// 3. JOIN clauses
-	for p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) {
+	// 3. JOIN & APPLY clauses
+	for p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) || p.curTokenIs(TokenCross) || p.curTokenIs(TokenOuter) {
 		joinType := "INNER"
-		if p.curTokenIs(TokenLeft) {
+		isApply := false
+		if p.curTokenIs(TokenCross) {
+			p.nextToken() // eat CROSS
+			if p.curTokenIs(TokenApply) {
+				p.nextToken() // eat APPLY
+				joinType = "CROSS APPLY"
+				isApply = true
+			} else if p.curTokenIs(TokenJoin) {
+				p.nextToken() // eat JOIN
+				joinType = "CROSS"
+			} else {
+				return nil, fmt.Errorf("expected APPLY or JOIN after CROSS, got %s", p.curToken.Literal)
+			}
+		} else if p.curTokenIs(TokenOuter) {
+			p.nextToken() // eat OUTER
+			if p.curTokenIs(TokenApply) {
+				p.nextToken() // eat APPLY
+				joinType = "OUTER APPLY"
+				isApply = true
+			} else {
+				return nil, fmt.Errorf("expected APPLY after OUTER, got %s", p.curToken.Literal)
+			}
+		} else if p.curTokenIs(TokenLeft) {
 			joinType = "LEFT"
 			p.nextToken() // eat LEFT
 			if p.curTokenIs(TokenOuter) {
 				p.nextToken() // eat OUTER
 			}
+			if p.curTokenIs(TokenApply) {
+				p.nextToken() // eat APPLY
+				joinType = "OUTER APPLY"
+				isApply = true
+			} else {
+				if !p.curTokenIs(TokenJoin) {
+					return nil, fmt.Errorf("expected JOIN, got %s", p.curToken.Literal)
+				}
+				p.nextToken() // eat JOIN
+			}
 		} else if p.curTokenIs(TokenInner) {
 			p.nextToken() // eat INNER
+			if !p.curTokenIs(TokenJoin) {
+				return nil, fmt.Errorf("expected JOIN, got %s", p.curToken.Literal)
+			}
+			p.nextToken() // eat JOIN
+		} else if p.curTokenIs(TokenJoin) {
+			p.nextToken() // eat JOIN
 		}
-
-		if !p.curTokenIs(TokenJoin) {
-			return nil, fmt.Errorf("expected JOIN, got %s", p.curToken.Literal)
-		}
-		p.nextToken() // eat JOIN
 
 		if p.curTokenIs(TokenLParen) {
 			p.nextToken() // eat (
@@ -2244,16 +2354,20 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				jAlias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
+			jHints := p.parseTableHints()
 
-			if !p.curTokenIs(TokenOn) {
-				return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
+			var onExpr Expr
+			if !isApply {
+				if !p.curTokenIs(TokenOn) {
+					return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
+				}
+				p.nextToken() // eat ON
+				onExpr = p.parseExpression(precLowest)
 			}
-			p.nextToken() // eat ON
 
-			onExpr := p.parseExpression(precLowest)
 			stmt.Joins = append(stmt.Joins, JoinClause{
 				Type:  joinType,
-				Table: TableRef{Name: subSel.String(), Alias: jAlias, Subquery: subSel},
+				Table: TableRef{Name: subSel.String(), Alias: jAlias, Subquery: subSel, Hints: jHints},
 				On:    onExpr,
 			})
 		} else {
@@ -2262,6 +2376,28 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			}
 			jTbl := cleanSchemaPrefix(p.curToken.Literal)
 			p.nextToken()
+
+			var tvfArgs []Expr
+			isTVF := false
+			if p.curTokenIs(TokenLParen) {
+				isTVF = true
+				p.nextToken() // eat (
+				for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+					arg := p.parseExpression(precLowest)
+					if arg != nil {
+						tvfArgs = append(tvfArgs, arg)
+					}
+					if p.curTokenIs(TokenComma) {
+						p.nextToken()
+					} else {
+						break
+					}
+				}
+				if !p.curTokenIs(TokenRParen) {
+					return nil, fmt.Errorf("expected ) closing TVF arguments in JOIN")
+				}
+				p.nextToken() // eat )
+			}
 
 			jAlias := jTbl
 			if p.curTokenIs(TokenAs) {
@@ -2274,16 +2410,20 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				jAlias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}
+			jHints := p.parseTableHints()
 
-			if !p.curTokenIs(TokenOn) {
-				return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
+			var onExpr Expr
+			if !isApply {
+				if !p.curTokenIs(TokenOn) {
+					return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
+				}
+				p.nextToken() // eat ON
+				onExpr = p.parseExpression(precLowest)
 			}
-			p.nextToken() // eat ON
 
-			onExpr := p.parseExpression(precLowest)
 			stmt.Joins = append(stmt.Joins, JoinClause{
 				Type:  joinType,
-				Table: TableRef{Name: jTbl, Alias: jAlias},
+				Table: TableRef{Name: jTbl, Alias: jAlias, IsTVF: isTVF, TVFArgs: tvfArgs, Hints: jHints},
 				On:    onExpr,
 			})
 		}
@@ -2442,6 +2582,31 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		}
 	}
 
+	// 9. Query hints: OPTION ( RECOMPILE, MAXDOP 1, ... )
+	if p.curTokenIs(TokenOption) {
+		p.nextToken() // eat OPTION
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken() // eat (
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				hint := p.curToken.Literal
+				p.nextToken()
+				if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) {
+					hint = fmt.Sprintf("%s %s", hint, p.curToken.Literal)
+					p.nextToken()
+				}
+				stmt.QueryHints = append(stmt.QueryHints, hint)
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				} else {
+					break
+				}
+			}
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+			}
+		}
+	}
+
 	return stmt, nil
 }
 
@@ -2475,6 +2640,8 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 		p.nextToken()
 	}
 
+	outputCols := p.parseOutputCols()
+
 	if p.curTokenIs(TokenSelect) {
 		p.nextToken() // eat SELECT
 		sel, err := p.parseGeneralSelect()
@@ -2485,9 +2652,10 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 			p.nextToken()
 		}
 		return &GeneralInsertStmt{
-			Table:   tblName,
-			Columns: cols,
-			Select:  sel,
+			Table:      tblName,
+			Columns:    cols,
+			OutputCols: outputCols,
+			Select:     sel,
 		}, nil
 	}
 
@@ -2528,9 +2696,10 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 	}
 
 	return &GeneralInsertStmt{
-		Table:   tblName,
-		Columns: cols,
-		Tuples:  tuples,
+		Table:      tblName,
+		Columns:    cols,
+		OutputCols: outputCols,
+		Tuples:     tuples,
 	}, nil
 }
 

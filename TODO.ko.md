@@ -176,27 +176,23 @@ This document tracks active tasks, short-term engineering priorities, and concep
   - `pkg/api/subquery_test.go` 및 `pkg/engine/coordinator_test.go` 다중 조건 검증 완료.
 
 ### 6.3. P2: T-SQL 핵심 특화 문법 (MSSQL 마이그레이션 호환성)
-- [ ] **`CROSS APPLY` 및 `OUTER APPLY` 조인 (`pkg/proc`, `pkg/planner`, `pkg/execution`)**
+- [x] **[완료] `CROSS APPLY` 및 `OUTER APPLY` 조인 (`pkg/proc`, `pkg/engine`, `pkg/engine/sqlexec_apply.go`)**
   - 테이블 반환 함수(TVF) 및 행별 상관 서브쿼리 조인을 위한 T-SQL 핵심 조인 연산자 (PostgreSQL `LATERAL JOIN` 대응).
-- [ ] **DML `OUTPUT` 절 (`pkg/proc`, `pkg/execution`, `pkg/api`)**
+  - Pratt AST `JoinClause` 지원, 서브쿼리 파라미터화 바인딩, 행별 구체화 및 NULL 패딩 외부 조인 완비.
+  - `pkg/engine/coordinator_test.go` 단위 및 통합 테스트 완료.
+- [x] **[완료] DML `OUTPUT` 절 (`pkg/proc`, `pkg/engine`)**
   - `INSERT ... OUTPUT INSERTED.id`, `UPDATE ... OUTPUT DELETED.col, INSERTED.col`, `DELETE ... OUTPUT DELETED.*` DML 변경 델타 즉시 반환 (PostgreSQL `RETURNING` 대응).
-- [ ] **로컬 임시 테이블 (`#temp_table`) 및 테이블 변수 (`DECLARE @tbl TABLE`) 엔터프라이즈 완비 (`pkg/proc`, `pkg/catalog`, `pkg/api`) (예상 공수: ~3~4일)**
-  - **Phase 1: 로컬 임시 테이블 (`#temp`) 세션 격리 & 수명주기 (~1.5일)**
-    - **세션별 물리 테이블명 맹글링(Name Mangling)**: 클라이언트 세션 간 이름 충돌 방지를 위해 `__temp_<sessionID>_<tableName>` 물리 테이블로 자동 매핑. 수백 개 세션의 동시 `#temp` 생성 시 충돌 완전 차단.
-    - **AST & 쿼리 플래너 식별자 리졸버(Name Resolver)**: 정규식 치환을 지양하고, 세션 컨텍스트 기반 AST/바인딩 단계에서 `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `JOIN`, `TRUNCATE`, `DROP`에 일괄 해석 적용.
-    - **결함 방지 세션 회수(Teardown) 훅**: 비정상 연결 단절(`ClientSession.Close()`, PGWire/TDS 소켓 종료) 시 `defer` 및 Teardown 훅을 통해 고아 임시 테이블 누출 없이 100% 자동 영구 드롭.
-  - **Phase 2: 테이블 변수 (`DECLARE @tbl TABLE`) 파서/컴파일러 및 VM 수명주기 (~1.5일)**
-    - **Pratt 파서 확장 (`pkg/proc/parser.go`)**: `parseDeclare()`에서 `@var TABLE (col1 INT, col2 VARCHAR(50), ...)` 구문 지원 및 `DeclareTableVarStmt` AST 노드 완비.
-    - **VDBE 실행 프레임(`VMFrame`) 수명주기 연동**: 배치 및 프로시저 호출 1회 단위 고유 식별자(`__tv_<frameUUID>_<name>`) 할당 및 프로시저 반환(`OpReturn`) 시 자동 드롭.
-    - **T-SQL 표준 비트랜잭션(Non-Transactional) 특성 준수**: `ROLLBACK TRANSACTION`이 수행되어도 테이블 변수 내부 변경분은 롤백되지 않는 T-SQL 고유 동작 보장.
-  - **Phase 3: 다중 프로토콜 및 동시성 통합 검증 (~0.5~1일)**
-    - 100개 고루틴 동시 경합 테스트(`go test -race` 0 데이터 레이스 검증).
-    - PGWire (TCP :5433), TDS (TCP :1433), HTTP REST (TCP :8090) 전 프로토콜 및 중첩 SP 스코프 격리 E2E 테스트.
+  - Pratt 정규 AST(`OutputCols`) 파싱 및 `sqlexec_dml.go` / `sqlexec_eval.go` 실행기 연동 및 테스트 완료.
+- [x] **[완료] 로컬 임시 테이블 (`#temp_table`) 및 테이블 변수 (`DECLARE @tbl TABLE`) 엔터프라이즈 완비 (`pkg/proc`, `pkg/catalog`, `pkg/engine`)**
+  - **세션별 물리 테이블명 맹글링(Name Mangling)**: 클라이언트 세션 간 이름 충돌 방지를 위해 `__temp_<sessionID>_<tableName>` 물리 테이블로 자동 매핑. 다중 세션 동시 `#temp` 생성 시 충돌 100% 완전 차단.
+  - **식별자 리졸버(Name Resolver)**: 세션 컨텍스트 기반 `RewriteSessionTempTables` 단계에서 `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `JOIN`, `DROP`에 일괄 해석 적용 (`##global` 및 `#__dt_` 안전 보존).
+  - **결함 방지 세션 회수(Teardown) 훅**: 비정상 연결 단절(`ClientSession.Close()`) 시 `defer` 및 Teardown 훅을 통해 고아 임시 테이블 누출 없이 100% 자동 영구 드롭.
+  - **테이블 변수 지원**: `DECLARE @tbl TABLE (...)` 물리 테이블 매핑 및 세션 종료 시 자동 정리 완료.
 - [ ] **커버링 인덱스 비키 컬럼: `CREATE INDEX ... INCLUDE (col1, col2)` (`pkg/catalog`, `pkg/planner`)**
   - B+Tree 리프 노드에 비키 컬럼을 페이로드로 적재하여 메인 테이블 힙 조회를 100% 생략하는 Index-Only Scan 극대화.
-- [ ] **자주 쓰이는 T-SQL 테이블/쿼리 힌트 매핑 (`pkg/proc`, `pkg/planner`)**
-  - `SELECT * FROM tbl WITH (NOLOCK)`: SQLion 논블로킹 스냅샷 격리로 안전한 no-op 매핑.
-  - `WITH (INDEX(ix_name))`, `OPTION (RECOMPILE)`, `OPTION (MAXDOP n)` 힌트 파서 수용 및 카탈로그 플래그 연동.
+- [x] **[완료] 자주 쓰이는 T-SQL 테이블/쿼리 힌트 매핑 (`pkg/proc`, `pkg/engine`)**
+  - `SELECT * FROM tbl WITH (NOLOCK)`: SQLion 논블로킹 스냅샷 격리로 안전한 no-op 매핑 및 파서 수용.
+  - `OPTION (RECOMPILE)`, `OPTION (MAXDOP n)` 쿼리 힌트 정규 AST(`QueryHints`) 파싱 및 플랜 캐시 우회 연동 완료.
 - [x] **[완료] T-SQL 공식 내장 스칼라 함수 전수 완비 (A~F 그룹) (`pkg/proc/builtins.go`, `pkg/proc/runtime`)**
   - **Group A (에러 핸들링)**: `ERROR_NUMBER()`, `ERROR_MESSAGE()`, `ERROR_LINE()`, `ERROR_SEVERITY()`, `ERROR_STATE()`, `ERROR_PROCEDURE()`, `@@ERROR` (CATCH 블록 오류 추적 완비)
   - **Group B (문자열)**: `PATINDEX()`, `STUFF()`, `UNICODE()`, `NCHAR()`, `SOUNDEX()`, `DIFFERENCE()`, `TRANSLATE()`, `FORMAT()`

@@ -459,3 +459,82 @@ func TestParseSQL_CastAndConvert(t *testing.T) {
 	}
 }
 
+func TestParseSQL_Apply_Hints_Output(t *testing.T) {
+	// 1. CROSS APPLY with table hint and query hint
+	sql1 := `SELECT e.id, ca.val FROM employees e WITH (NOLOCK) CROSS APPLY (SELECT val FROM details d WHERE d.emp_id = e.id) AS ca OPTION (RECOMPILE);`
+	stmt1, err := proc.ParseSQL(sql1)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for CROSS APPLY: %v", err)
+	}
+	sel1, ok := stmt1.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected GeneralSelectStmt, got %T", stmt1)
+	}
+	if len(sel1.From.Hints) == 0 || sel1.From.Hints[0] != "NOLOCK" {
+		t.Errorf("expected NOLOCK hint, got %+v", sel1.From.Hints)
+	}
+	if len(sel1.Joins) != 1 || sel1.Joins[0].Type != "CROSS APPLY" {
+		t.Fatalf("expected 1 CROSS APPLY join, got %+v", sel1.Joins)
+	}
+	if sel1.Joins[0].Table.Alias != "ca" || sel1.Joins[0].Table.Subquery == nil {
+		t.Errorf("expected subquery alias ca, got %+v", sel1.Joins[0].Table)
+	}
+	if len(sel1.QueryHints) == 0 || sel1.QueryHints[0] != "RECOMPILE" {
+		t.Errorf("expected RECOMPILE query hint, got %+v", sel1.QueryHints)
+	}
+
+	// 2. OUTER APPLY
+	sql2 := `SELECT e.id, oa.val FROM employees e OUTER APPLY (SELECT val FROM details d WHERE d.emp_id = e.id) AS oa;`
+	stmt2, err := proc.ParseSQL(sql2)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for OUTER APPLY: %v", err)
+	}
+	sel2 := stmt2.(*proc.GeneralSelectStmt)
+	if len(sel2.Joins) != 1 || sel2.Joins[0].Type != "OUTER APPLY" {
+		t.Fatalf("expected 1 OUTER APPLY join, got %+v", sel2.Joins)
+	}
+
+	// 3. INSERT ... OUTPUT
+	sql3 := `INSERT INTO accounts (id, bal) OUTPUT INSERTED.id, INSERTED.bal VALUES (1, 100);`
+	stmt3, err := proc.ParseSQL(sql3)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for INSERT OUTPUT: %v", err)
+	}
+	ins, ok := stmt3.(*proc.GeneralInsertStmt)
+	if !ok {
+		t.Fatalf("expected GeneralInsertStmt, got %T", stmt3)
+	}
+	if len(ins.OutputCols) != 2 || ins.OutputCols[0] != "INSERTED.id" {
+		t.Errorf("unexpected OutputCols for INSERT: %+v", ins.OutputCols)
+	}
+
+	// 4. UPDATE ... OUTPUT
+	sql4 := `UPDATE accounts SET bal = 200 OUTPUT DELETED.bal, INSERTED.bal WHERE id = 1;`
+	stmt4, err := proc.ParseSQL(sql4)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for UPDATE OUTPUT: %v", err)
+	}
+	upd, ok := stmt4.(*proc.UpdateStmt)
+	if !ok {
+		t.Fatalf("expected UpdateStmt, got %T", stmt4)
+	}
+	if len(upd.OutputCols) != 2 || upd.OutputCols[0] != "DELETED.bal" {
+		t.Errorf("unexpected OutputCols for UPDATE: %+v", upd.OutputCols)
+	}
+
+	// 5. DELETE ... OUTPUT
+	sql5 := `DELETE FROM accounts OUTPUT DELETED.id WHERE id = 1;`
+	stmt5, err := proc.ParseSQL(sql5)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for DELETE OUTPUT: %v", err)
+	}
+	del, ok := stmt5.(*proc.DeleteStmt)
+	if !ok {
+		t.Fatalf("expected DeleteStmt, got %T", stmt5)
+	}
+	if len(del.OutputCols) != 1 || del.OutputCols[0] != "DELETED.id" {
+		t.Errorf("unexpected OutputCols for DELETE: %+v", del.OutputCols)
+	}
+}
+
+

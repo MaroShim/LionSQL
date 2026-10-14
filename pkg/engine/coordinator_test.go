@@ -457,4 +457,210 @@ func TestCoordinator_WhereExists(t *testing.T) {
 	}
 }
 
+func setupTestCoordinator(t *testing.T) (*engine.Coordinator, *catalog.Catalog, func()) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	cleanup := func() {
+		coord.Close()
+		eng.Close()
+	}
+	return coord, cat, cleanup
+}
+
+func TestCoordinator_SessionIsolatedTempTables(t *testing.T) {
+	coord, _, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	if _, err := coord.GetOrCreateSession("sess_a"); err != nil {
+		t.Fatalf("CreateSession A failed: %v", err)
+	}
+	defer coord.CloseSession("sess_a")
+
+	if _, err := coord.GetOrCreateSession("sess_b"); err != nil {
+		t.Fatalf("CreateSession B failed: %v", err)
+	}
+	defer coord.CloseSession("sess_b")
+
+	// Session A creates #data
+	if _, err := coord.ExecuteSessionSQL("sess_a", `CREATE TABLE #data (id INT PRIMARY KEY, val VARCHAR(50));`); err != nil {
+		t.Fatalf("Session A CREATE #data failed: %v", err)
+	}
+	if _, err := coord.ExecuteSessionSQL("sess_a", `INSERT INTO #data VALUES (1, 'from A'), (2, 'from A');`); err != nil {
+		t.Fatalf("Session A INSERT #data failed: %v", err)
+	}
+
+	// Session B creates #data simultaneously (no collision!)
+	if _, err := coord.ExecuteSessionSQL("sess_b", `CREATE TABLE #data (id INT PRIMARY KEY, val VARCHAR(50));`); err != nil {
+		t.Fatalf("Session B CREATE #data failed: %v", err)
+	}
+	if _, err := coord.ExecuteSessionSQL("sess_b", `INSERT INTO #data VALUES (10, 'from B'), (20, 'from B'), (30, 'from B');`); err != nil {
+		t.Fatalf("Session B INSERT #data failed: %v", err)
+	}
+
+	// Verify Session A sees only its 2 rows
+	resA, err := coord.ExecuteSessionSQL("sess_a", `SELECT * FROM #data;`)
+	if err != nil || !resA.Success {
+		t.Fatalf("Session A SELECT failed: %v", err)
+	}
+	if len(resA.Rows) != 2 {
+		t.Fatalf("expected 2 rows in Session A, got %d", len(resA.Rows))
+	}
+
+	// Verify Session B sees only its 3 rows
+	resB, err := coord.ExecuteSessionSQL("sess_b", `SELECT * FROM #data;`)
+	if err != nil || !resB.Success {
+		t.Fatalf("Session B SELECT failed: %v", err)
+	}
+	if len(resB.Rows) != 3 {
+		t.Fatalf("expected 3 rows in Session B, got %d", len(resB.Rows))
+	}
+
+	// Session A drops its #data
+	if _, err := coord.ExecuteSessionSQL("sess_a", `DROP TABLE #data;`); err != nil {
+		t.Fatalf("Session A DROP #data failed: %v", err)
+	}
+
+	// Session B still has its #data intact
+	resB2, err := coord.ExecuteSessionSQL("sess_b", `SELECT * FROM #data;`)
+	if err != nil || !resB2.Success {
+		t.Fatalf("Session B SELECT after A drop failed: %v", err)
+	}
+	if len(resB2.Rows) != 3 {
+		t.Fatalf("expected 3 rows in Session B after A drop, got %d", len(resB2.Rows))
+	}
+}
+
+func TestCoordinator_Apply_CrossAndOuter(t *testing.T) {
+	coord, _, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	_, err := coord.ExecuteSQL(`CREATE TABLE depts (dept_id INT PRIMARY KEY, dept_name VARCHAR(50));`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE depts failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`INSERT INTO depts VALUES
+		(1, 'Engineering'),
+		(2, 'Sales'),
+		(3, 'EmptyDept');`)
+	if err != nil {
+		t.Fatalf("INSERT depts failed: %v", err)
+	}
+
+	_, err = coord.ExecuteSQL(`CREATE TABLE emps (id INT PRIMARY KEY, dept_id INT, name VARCHAR(50), salary FLOAT);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE emps failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`INSERT INTO emps VALUES
+		(101, 1, 'Alice', 100000.0),
+		(102, 1, 'Bob', 90000.0),
+		(103, 2, 'Charlie', 80000.0);`)
+	if err != nil {
+		t.Fatalf("INSERT emps failed: %v", err)
+	}
+
+	// 1. CROSS APPLY: TOP 1 highest paid per department (EmptyDept omitted)
+	resCross, err := coord.ExecuteSQL(`SELECT d.dept_name, ca.name, ca.salary FROM depts d CROSS APPLY (SELECT TOP 1 name, salary FROM emps e WHERE e.dept_id = d.dept_id ORDER BY salary DESC) AS ca ORDER BY d.dept_name ASC;`)
+	if err != nil || !resCross.Success {
+		t.Fatalf("CROSS APPLY failed: %v", err)
+	}
+	if len(resCross.Rows) != 2 {
+		t.Fatalf("expected 2 rows for CROSS APPLY, got %d: %+v", len(resCross.Rows), resCross.Rows)
+	}
+	if fmt.Sprintf("%v", resCross.Rows[0]["dept_name"]) != "Engineering" || fmt.Sprintf("%v", resCross.Rows[0]["name"]) != "Alice" {
+		t.Errorf("unexpected row 0: %+v", resCross.Rows[0])
+	}
+	if fmt.Sprintf("%v", resCross.Rows[1]["dept_name"]) != "Sales" || fmt.Sprintf("%v", resCross.Rows[1]["name"]) != "Charlie" {
+		t.Errorf("unexpected row 1: %+v", resCross.Rows[1])
+	}
+
+	// 2. OUTER APPLY: TOP 1 highest paid per department (EmptyDept preserved with NULLs)
+	resOuter, err := coord.ExecuteSQL(`SELECT d.dept_name, oa.name, oa.salary FROM depts d OUTER APPLY (SELECT TOP 1 name, salary FROM emps e WHERE e.dept_id = d.dept_id ORDER BY salary DESC) AS oa ORDER BY d.dept_name ASC;`)
+	if err != nil || !resOuter.Success {
+		t.Fatalf("OUTER APPLY failed: %v", err)
+	}
+	if len(resOuter.Rows) != 3 {
+		t.Fatalf("expected 3 rows for OUTER APPLY, got %d: %+v", len(resOuter.Rows), resOuter.Rows)
+	}
+	if fmt.Sprintf("%v", resOuter.Rows[0]["dept_name"]) != "EmptyDept" || resOuter.Rows[0]["name"] != nil {
+		t.Errorf("expected EmptyDept with nil name, got %+v", resOuter.Rows[0])
+	}
+
+	// 3. EXPLAIN on APPLY
+	resExp, err := coord.ExecuteSQL(`EXPLAIN SELECT d.dept_name, ca.name FROM depts d CROSS APPLY (SELECT name FROM emps e WHERE e.dept_id = d.dept_id) AS ca;`)
+	if err != nil || !resExp.Success {
+		t.Fatalf("EXPLAIN APPLY failed: %v", err)
+	}
+	if len(resExp.Rows) == 0 {
+		t.Errorf("expected non-empty explain rows")
+	}
+}
+
+func TestCoordinator_TableAndQueryHints(t *testing.T) {
+	coord, _, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	_, err := coord.ExecuteSQL(`CREATE TABLE items (id INT PRIMARY KEY, name VARCHAR(50));`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE items failed: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`INSERT INTO items VALUES (1, 'Pen'), (2, 'Notebook');`)
+	if err != nil {
+		t.Fatalf("INSERT items failed: %v", err)
+	}
+
+	// WITH (NOLOCK) and OPTION (RECOMPILE)
+	res, err := coord.ExecuteSQL(`SELECT * FROM items WITH (NOLOCK) WHERE id = 1 OPTION (RECOMPILE);`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with NOLOCK and RECOMPILE failed: %v", err)
+	}
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["name"]) != "Pen" {
+		t.Fatalf("expected Pen, got %+v", res.Rows)
+	}
+}
+
+func TestCoordinator_DML_Output(t *testing.T) {
+	coord, _, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	_, err := coord.ExecuteSQL(`CREATE TABLE accounts (id INT PRIMARY KEY, balance FLOAT);`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE accounts failed: %v", err)
+	}
+
+	// 1. INSERT ... OUTPUT
+	resIns, err := coord.ExecuteSQL(`INSERT INTO accounts (id, balance) OUTPUT INSERTED.id, INSERTED.balance VALUES (10, 500.0);`)
+	if err != nil || !resIns.Success {
+		t.Fatalf("INSERT OUTPUT failed: %v", err)
+	}
+	if len(resIns.Rows) != 1 {
+		t.Fatalf("expected 1 row in INSERT OUTPUT, got %d: %+v", len(resIns.Rows), resIns.Rows)
+	}
+	if fmt.Sprintf("%v", resIns.Rows[0]["id"]) != "10" {
+		t.Errorf("expected id=10, got %v", resIns.Rows[0]["id"])
+	}
+
+	// 2. UPDATE ... OUTPUT
+	resUpd, err := coord.ExecuteSQL(`UPDATE accounts SET balance = 750.0 OUTPUT DELETED.balance, INSERTED.balance WHERE id = 10;`)
+	if err != nil || !resUpd.Success {
+		t.Fatalf("UPDATE OUTPUT failed: %v", err)
+	}
+	if len(resUpd.Rows) != 1 {
+		t.Fatalf("expected 1 row in UPDATE OUTPUT, got %d: %+v", len(resUpd.Rows), resUpd.Rows)
+	}
+
+	// 3. DELETE ... OUTPUT
+	resDel, err := coord.ExecuteSQL(`DELETE FROM accounts OUTPUT DELETED.id WHERE id = 10;`)
+	if err != nil || !resDel.Success {
+		t.Fatalf("DELETE OUTPUT failed: %v", err)
+	}
+	if len(resDel.Rows) != 1 {
+		t.Fatalf("expected 1 row in DELETE OUTPUT, got %d: %+v", len(resDel.Rows), resDel.Rows)
+	}
+	if fmt.Sprintf("%v", resDel.Rows[0]["id"]) != "10" {
+		t.Errorf("expected id=10 in DELETE OUTPUT, got %v", resDel.Rows[0]["id"])
+	}
+}
+
+
 

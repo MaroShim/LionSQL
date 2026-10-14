@@ -229,7 +229,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 	}, nil
 }
 
-func (s *Coordinator) execDropTable(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -252,6 +252,8 @@ func (s *Coordinator) execDropTable(query string, start time.Time) (*QueryResult
 
 	if strings.HasPrefix(tableName, "##") {
 		s.UnregisterGlobalTemp(tableName)
+	} else if cs != nil {
+		cs.UnregisterTempTable(tableName)
 	}
 
 	return &QueryResult{

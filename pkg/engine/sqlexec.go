@@ -201,6 +201,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		cs.Mu.Unlock()
 	}
 
+	// Rewrite session-isolated local temporary tables (#temp -> __temp_<sessionID>_temp)
+	if cs != nil && strings.Contains(trimmed, "#") {
+		trimmed = RewriteSessionTempTables(trimmed, cs)
+		upper = strings.ToUpper(trimmed)
+	}
+
 	// Process Management: KILL <spid> [WITH STATUSONLY]
 	killRe := regexp.MustCompile(`(?is)^KILL\s+(\d+)(?:\s+WITH\s+STATUSONLY)?$`)
 	if m := killRe.FindStringSubmatch(trimmed); len(m) == 2 {
@@ -911,7 +917,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
-		return s.execDropTable(trimmed, start)
+		return s.execDropTable(trimmed, start, cs)
 	}
 
 	// 4.1 DDL: DROP INDEX
@@ -991,6 +997,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 // cleanIdentifier strips quotes, brackets, and prefixes from table/column names.
 func cleanIdentifier(s string) string {
+	s = strings.TrimSpace(s)
+	if idx := strings.Index(strings.ToUpper(s), " WITH "); idx != -1 {
+		s = strings.TrimSpace(s[:idx])
+	}
 	return proc.CleanSchemaPrefix(s)
 }
 

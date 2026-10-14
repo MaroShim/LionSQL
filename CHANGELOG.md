@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **`CROSS APPLY` / `OUTER APPLY` Joins, Local `#temp` Session Isolation, Table/Query Hints, and DML `OUTPUT` (`pkg/engine`, `pkg/proc`, `pkg/planner`)**:
+  - Implemented `CROSS APPLY` and `OUTER APPLY` join execution engine in `Coordinator.execApplySelect()` (`pkg/engine/sqlexec_apply.go`), supporting correlated subquery lateral joins and table-valued functions (TVFs) with outer row parameter binding.
+  - Added enterprise-grade session isolation for local temporary tables (`#temp_table`) via automatic name mangling (`__temp_<sessionID>_<tableName>`), multi-session collision prevention, identifier rewriting in `RewriteSessionTempTables()`, and safe lifecycle teardown hooks on connection close.
+  - Implemented T-SQL table hints parsing and execution (`WITH (NOLOCK)` as a non-blocking OCC no-op) and query hints (`OPTION (RECOMPILE, MAXDOP n)`) with plan cache bypass.
+  - Fully wired DML `OUTPUT` clauses (`INSERT ... OUTPUT INSERTED.*`, `UPDATE ... OUTPUT DELETED.*, INSERTED.*`, `DELETE ... OUTPUT DELETED.*`) through Pratt AST (`OutputCols`) and execution coordinator.
+  - Added comprehensive test suites in `pkg/proc/sqlparser_test.go` and `pkg/engine/coordinator_test.go`.
 - **`FROM` Derived Table Subqueries & `WHERE EXISTS` Correlated Predicates (`pkg/engine`, `pkg/proc`, `pkg/planner`, `pkg/execution`)**:
   - Implemented `FROM (SELECT ...) AS t` and `JOIN (SELECT ...) AS o ON ...` inline derived table subqueries in `Coordinator.resolveDerivedTables()`.
   - Added recursive derived table resolution, dynamic schema and data type inference, automatic materialization into isolated ephemeral tables (`#__dt_*`), and clean transaction lifecycle teardown.

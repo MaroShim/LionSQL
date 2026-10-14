@@ -597,10 +597,11 @@ func (e *ScalarSubqueryExpr) String() string {
 	return fmt.Sprintf("(SELECT %s FROM %s)", e.Column, e.Table)
 }
 
-// UpdateWhereStmt represents UPDATE table SET col1 = expr1, ... WHERE <arbitrary condition>
+// UpdateWhereStmt represents UPDATE table SET col1 = expr1, ... [OUTPUT ...] WHERE <arbitrary condition>
 type UpdateWhereStmt struct {
 	Table       string
 	Assignments []UpdateAssignment
+	OutputCols  []string
 	Where       Expr
 }
 
@@ -610,24 +611,33 @@ func (s *UpdateWhereStmt) String() string {
 	for i, a := range s.Assignments {
 		assigns[i] = fmt.Sprintf("%s = %s", a.Column, a.Value.String())
 	}
-	if s.Where != nil {
-		return fmt.Sprintf("UPDATE %s SET %s WHERE %s", s.Table, strings.Join(assigns, ", "), s.Where.String())
+	outStr := ""
+	if len(s.OutputCols) > 0 {
+		outStr = " OUTPUT " + strings.Join(s.OutputCols, ", ")
 	}
-	return fmt.Sprintf("UPDATE %s SET %s", s.Table, strings.Join(assigns, ", "))
+	if s.Where != nil {
+		return fmt.Sprintf("UPDATE %s SET %s%s WHERE %s", s.Table, strings.Join(assigns, ", "), outStr, s.Where.String())
+	}
+	return fmt.Sprintf("UPDATE %s SET %s%s", s.Table, strings.Join(assigns, ", "), outStr)
 }
 
-// DeleteWhereStmt represents DELETE FROM table WHERE <arbitrary condition>
+// DeleteWhereStmt represents DELETE FROM table [OUTPUT ...] WHERE <arbitrary condition>
 type DeleteWhereStmt struct {
-	Table string
-	Where Expr
+	Table      string
+	OutputCols []string
+	Where      Expr
 }
 
 func (s *DeleteWhereStmt) stmtNode() {}
 func (s *DeleteWhereStmt) String() string {
-	if s.Where != nil {
-		return fmt.Sprintf("DELETE FROM %s WHERE %s", s.Table, s.Where.String())
+	outStr := ""
+	if len(s.OutputCols) > 0 {
+		outStr = " OUTPUT " + strings.Join(s.OutputCols, ", ")
 	}
-	return fmt.Sprintf("DELETE FROM %s", s.Table)
+	if s.Where != nil {
+		return fmt.Sprintf("DELETE FROM %s%s WHERE %s", s.Table, outStr, s.Where.String())
+	}
+	return fmt.Sprintf("DELETE FROM %s%s", s.Table, outStr)
 }
 
 // DeclareCursorStmt represents DECLARE cur_name CURSOR FOR SELECT cols FROM tbl WHERE cond
@@ -704,6 +714,7 @@ type TableRef struct {
 	IsTVF    bool
 	TVFArgs  []Expr
 	Subquery *GeneralSelectStmt
+	Hints    []string
 }
 
 func (t TableRef) String() string {
@@ -722,18 +733,27 @@ func (t TableRef) String() string {
 	if t.Alias != "" && t.Alias != t.Name {
 		s = fmt.Sprintf("%s AS %s", s, t.Alias)
 	}
+	if len(t.Hints) > 0 {
+		s = fmt.Sprintf("%s WITH (%s)", s, strings.Join(t.Hints, ", "))
+	}
 	return s
 }
 
-// JoinClause represents an INNER/LEFT JOIN clause.
+// JoinClause represents an INNER/LEFT JOIN or CROSS/OUTER APPLY clause.
 type JoinClause struct {
-	Type  string // "INNER" or "LEFT"
+	Type  string // "INNER", "LEFT", "CROSS APPLY", "OUTER APPLY", etc.
 	Table TableRef
 	On    Expr
 }
 
 func (j JoinClause) String() string {
-	return fmt.Sprintf("%s JOIN %s ON %s", j.Type, j.Table.String(), j.On.String())
+	if strings.Contains(j.Type, "APPLY") {
+		return fmt.Sprintf("%s %s", j.Type, j.Table.String())
+	}
+	if j.On != nil {
+		return fmt.Sprintf("%s JOIN %s ON %s", j.Type, j.Table.String(), j.On.String())
+	}
+	return fmt.Sprintf("%s JOIN %s", j.Type, j.Table.String())
 }
 
 // OrderByItem represents an ORDER BY term.
@@ -789,6 +809,7 @@ type GeneralSelectStmt struct {
 	TopWithTies bool
 	IsExplain   bool
 	IsAnalyze   bool
+	QueryHints  []string
 	RawSQL      string
 }
 
@@ -872,6 +893,9 @@ func (s *GeneralSelectStmt) String() string {
 	if s.Offset > 0 {
 		b.WriteString(fmt.Sprintf(" OFFSET %d", s.Offset))
 	}
+	if len(s.QueryHints) > 0 {
+		b.WriteString(fmt.Sprintf(" OPTION (%s)", strings.Join(s.QueryHints, ", ")))
+	}
 	return b.String()
 }
 
@@ -949,23 +973,28 @@ func (e *ExistsExpr) String() string {
 	return fmt.Sprintf("EXISTS (%s)", e.Query.String())
 }
 
-// GeneralInsertStmt represents INSERT INTO table (cols) VALUES (tuples...) or INSERT INTO table (cols) SELECT ...
+// GeneralInsertStmt represents INSERT INTO table (cols) [OUTPUT ...] VALUES (tuples...) or INSERT INTO table (cols) [OUTPUT ...] SELECT ...
 type GeneralInsertStmt struct {
-	Table   string
-	Columns []string
-	Tuples  [][]Expr
-	Select  *GeneralSelectStmt
+	Table      string
+	Columns    []string
+	OutputCols []string
+	Tuples     [][]Expr
+	Select     *GeneralSelectStmt
 }
 
 func (s *GeneralInsertStmt) stmtNode() {}
 func (s *GeneralInsertStmt) String() string {
+	outStr := ""
+	if len(s.OutputCols) > 0 {
+		outStr = " OUTPUT " + strings.Join(s.OutputCols, ", ")
+	}
 	if s.Select != nil {
 		if len(s.Columns) > 0 {
-			return fmt.Sprintf("INSERT INTO %s (%s) %s", s.Table, strings.Join(s.Columns, ", "), s.Select.String())
+			return fmt.Sprintf("INSERT INTO %s (%s)%s %s", s.Table, strings.Join(s.Columns, ", "), outStr, s.Select.String())
 		}
-		return fmt.Sprintf("INSERT INTO %s %s", s.Table, s.Select.String())
+		return fmt.Sprintf("INSERT INTO %s%s %s", s.Table, outStr, s.Select.String())
 	}
-	return fmt.Sprintf("INSERT INTO %s (%s) VALUES ...", s.Table, strings.Join(s.Columns, ", "))
+	return fmt.Sprintf("INSERT INTO %s (%s)%s VALUES ...", s.Table, strings.Join(s.Columns, ", "), outStr)
 }
 
 

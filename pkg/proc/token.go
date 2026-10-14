@@ -145,6 +145,9 @@ const (
 	TokenTryCast
 	TokenConvert
 	TokenTryConvert
+	TokenApply
+	TokenOption
+	TokenNolock
 )
 
 var keywords = map[string]TokenType{
@@ -257,6 +260,9 @@ var keywords = map[string]TokenType{
 	"AVG":         TokenAvg,
 	"MIN":         TokenMin,
 	"MAX":         TokenMax,
+	"APPLY":       TokenApply,
+	"OPTION":      TokenOption,
+	"NOLOCK":      TokenNolock,
 }
 
 func (t TokenType) String() string {

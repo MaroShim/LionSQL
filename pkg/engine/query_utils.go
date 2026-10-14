@@ -258,3 +258,116 @@ func convertValue(v any, targetType storage.DataType) storage.Value {
 	return ConvertValue(v, targetType)
 }
 
+// RewriteSessionTempTables replaces local temporary table references (#tableName) with session-isolated
+// physical table names (__temp_<sessionID>_tableName), while leaving global temporary tables (##global)
+// and internal tables (#__dt_, #__cte_) untouched.
+func RewriteSessionTempTables(query string, cs *ClientSession) string {
+	if cs == nil || !strings.Contains(query, "#") {
+		return query
+	}
+
+	var b strings.Builder
+	b.Grow(len(query) + 32)
+	inString := false
+	var quoteChar byte
+	n := len(query)
+
+	for i := 0; i < n; i++ {
+		ch := query[i]
+
+		// Track string literals '...' or "..."
+		if inString {
+			b.WriteByte(ch)
+			if ch == quoteChar {
+				// Escaped quotes '' or ""
+				if i+1 < n && query[i+1] == quoteChar {
+					i++
+					b.WriteByte(query[i])
+					continue
+				}
+				inString = false
+			}
+			continue
+		}
+
+		if ch == '\'' || ch == '"' {
+			inString = true
+			quoteChar = ch
+			b.WriteByte(ch)
+			continue
+		}
+
+		// Line comments --
+		if ch == '-' && i+1 < n && query[i+1] == '-' {
+			for i < n && query[i] != '\n' {
+				b.WriteByte(query[i])
+				i++
+			}
+			if i < n {
+				b.WriteByte(query[i])
+			}
+			continue
+		}
+
+		// Block comments /* ... */
+		if ch == '/' && i+1 < n && query[i+1] == '*' {
+			b.WriteByte(ch)
+			b.WriteByte(query[i+1])
+			i += 2
+			for i < n {
+				if query[i] == '*' && i+1 < n && query[i+1] == '/' {
+					b.WriteByte('*')
+					b.WriteByte('/')
+					i++
+					break
+				}
+				b.WriteByte(query[i])
+				i++
+			}
+			continue
+		}
+
+		// Check for #
+		if ch == '#' {
+			// If preceded by # (part of ##): leave as-is
+			if i > 0 && query[i-1] == '#' {
+				b.WriteByte(ch)
+				continue
+			}
+			// If followed by # (start of ##): leave as-is
+			if i+1 < n && query[i+1] == '#' {
+				b.WriteByte(ch)
+				continue
+			}
+			// If followed by __ (start of internal #__dt_ or #__cte_): leave as-is
+			if i+2 < n && query[i+1] == '_' && query[i+2] == '_' {
+				b.WriteByte(ch)
+				continue
+			}
+			// If preceded by an identifier char (e.g. abc#): leave as-is
+			if i > 0 && IsIdentChar(query[i-1]) {
+				b.WriteByte(ch)
+				continue
+			}
+
+			// Read identifier after #
+			j := i + 1
+			for j < n && (IsIdentChar(query[j]) && query[j] != '#') {
+				j++
+			}
+			if j > i+1 {
+				tblName := query[i:j]
+				phys := cs.ResolveTempTableName(tblName)
+				b.WriteString(phys)
+				i = j - 1
+				continue
+			}
+		}
+
+		b.WriteByte(ch)
+	}
+
+	return b.String()
+}
+
+

@@ -1150,8 +1150,17 @@ var mssqlOffsetOnlyRe = regexp.MustCompile(`(?is)\s+OFFSET\s+(\d+)\s+ROWS?(?:\s*
 var mssqlFetchOnlyRe = regexp.MustCompile(`(?is)\s+FETCH\s+(?:NEXT|FIRST)\s+(\d+)\s+ROWS?\s+ONLY`)
 var mssqlTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+)TOP\s*\(?\s*(\d+)\s*\)?\s+(DISTINCT\s+)?(.*)$`)
 var mssqlDistinctTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+DISTINCT\s+)TOP\s*\(?\s*(\d+)\s*\)?\s+(.*)$`)
+var mssqlNolockRe = regexp.MustCompile(`(?is)\bWITH\s*\(\s*(?:NOLOCK|READUNCOMMITTED)\s*\)`)
+var mssqlOptionRe = regexp.MustCompile(`(?is)\s+OPTION\s*\(.*?\)\s*$`)
 
 func normalizeMSSQLPagination(sql string) string {
+	if mssqlNolockRe.MatchString(sql) {
+		sql = mssqlNolockRe.ReplaceAllString(sql, "")
+	}
+	if mssqlOptionRe.MatchString(sql) {
+		sql = mssqlOptionRe.ReplaceAllString(sql, "")
+	}
+
 	if mssqlOffsetFetchRe.MatchString(sql) {
 		sql = mssqlOffsetFetchRe.ReplaceAllString(sql, " LIMIT $2 OFFSET $1")
 	} else if mssqlFetchOnlyRe.MatchString(sql) {
@@ -1229,6 +1238,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			}
 		}
 		return s.execScalarSelect(cleaned, start, cs)
+	}
+
+	// 0.4. CROSS APPLY and OUTER APPLY joins
+	if hasApply(cleaned) {
+		return s.execApplySelect(cleaned, start, cs)
 	}
 
 	// 0.5. Derived Tables in FROM / JOIN: e.g. FROM (SELECT ...) AS t

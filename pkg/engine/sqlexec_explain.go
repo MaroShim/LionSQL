@@ -59,6 +59,25 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 		return s.execSetOpExplain(setQuery, opts.Analyze, start)
 	}
 
+	if hasApply(innerExplainSQL) {
+		lines := []string{
+			"-> Lateral Apply (Nested Loop / Correlated Row Evaluation)",
+			fmt.Sprintf("   Query: %s", innerExplainSQL),
+		}
+		var rows []map[string]any
+		for _, l := range lines {
+			rows = append(rows, map[string]any{"QUERY PLAN": l})
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXPLAIN",
+			Columns:      []string{"QUERY PLAN"},
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+	}
+
 	if hasDerivedTables(innerExplainSQL) {
 		rewritten, tempTables, err := s.resolveDerivedTables(innerExplainSQL, start, nil)
 		if err != nil {

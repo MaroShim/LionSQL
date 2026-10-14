@@ -253,6 +253,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		Session:       sess,
 		Vars:          make(map[string]any),
 		TableVars:     make(map[string]string),
+		TempTableMap:  make(map[string]string),
 		PreparedStmts: make(map[string]*PreparedStatement),
 		User:          "dbo",
 		OriginalUser:  "dbo",
@@ -302,6 +303,7 @@ func (c *Coordinator) CloseSession(id string) {
 		}
 		cs.TableVars = nil
 		cs.TempTables = nil
+		cs.TempTableMap = nil
 		cs.PreparedStmts = nil
 
 		if cs.CancelFunc != nil {
