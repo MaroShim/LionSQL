@@ -9,18 +9,26 @@ import (
 	"sqlion/pkg/storage"
 )
 
+type hashMatch struct {
+	tuple Tuple
+	idx   int
+}
+
 // HashJoinIterator implements in-memory Hash Join between two relations.
 // The right child (inner) is buffered into a hash map during Open(), and
 // the left child (outer) is probed tuple-by-tuple during Next().
 type HashJoinIterator struct {
 	left           Iterator // Outer / Probe
 	right          Iterator // Inner / Build
-	joinType       string   // "INNER" or "LEFT"
+	joinType       string   // "INNER", "LEFT", "RIGHT", "FULL", "SEMI", "ANTI"
 	leftKey        string
 	rightKey       string
-	hashTable      map[string][]Tuple
+	hashTable      map[string][]hashMatch
+	allRightTuples []Tuple
+	matchedRight   []bool
+	unmatchedIdx   int
 	currentProbe   Tuple
-	currentMatches []Tuple
+	currentMatches []hashMatch
 	matchIdx       int
 	emittedAny     bool
 	workMem        int64
@@ -40,7 +48,7 @@ func NewHashJoinIterator(left, right Iterator, joinType, leftKey, rightKey strin
 		joinType:  jType,
 		leftKey:   strings.TrimSpace(leftKey),
 		rightKey:  strings.TrimSpace(rightKey),
-		hashTable: make(map[string][]Tuple),
+		hashTable: make(map[string][]hashMatch),
 		workMem:   DefaultWorkMem,
 	}
 }
@@ -93,7 +101,14 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		return fmt.Errorf("hash join build open error: %w", err)
 	}
 
-	h.hashTable = make(map[string][]Tuple)
+	isFull := h.joinType == "FULL" || strings.HasPrefix(h.joinType, "FULL")
+	isRight := h.joinType == "RIGHT" || strings.HasPrefix(h.joinType, "RIGHT")
+	trackRight := isFull || isRight
+
+	h.hashTable = make(map[string][]hashMatch)
+	h.allRightTuples = nil
+	h.matchedRight = nil
+	h.unmatchedIdx = 0
 	h.buildMemory = 0
 	for {
 		select {
@@ -113,12 +128,19 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 
 		h.buildMemory += EstimateTupleSize(tuple)
 
+		rIdx := -1
+		if trackRight {
+			rIdx = len(h.allRightTuples)
+			h.allRightTuples = append(h.allRightTuples, tuple)
+			h.matchedRight = append(h.matchedRight, false)
+		}
+
 		keyVal, found := lookupVal(tuple, h.rightKey)
 		if !found || keyVal == nil {
 			continue
 		}
 		kStr := fmt.Sprintf("%v", keyVal)
-		h.hashTable[kStr] = append(h.hashTable[kStr], tuple)
+		h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
 	}
 	_ = h.right.Close()
 
@@ -140,6 +162,10 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 }
 
 func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
+	isFull := h.joinType == "FULL" || strings.HasPrefix(h.joinType, "FULL")
+	isRight := h.joinType == "RIGHT" || strings.HasPrefix(h.joinType, "RIGHT")
+	trackRight := isFull || isRight
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -150,16 +176,35 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		// If current probe tuple has pending matches, emit next match (only for standard joins)
 		if h.joinType != "SEMI" && h.joinType != "ANTI" {
 			if !h.currentProbe.IsNil() && h.matchIdx < len(h.currentMatches) {
-				matchTuple := h.currentMatches[h.matchIdx]
+				m := h.currentMatches[h.matchIdx]
 				h.matchIdx++
 				h.emittedAny = true
-				return mergeTuples(h.currentProbe, matchTuple, h.colIndexMap), nil
+				if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
+					h.matchedRight[m.idx] = true
+				}
+				return mergeTuples(h.currentProbe, m.tuple, h.colIndexMap), nil
 			}
 		}
 
 		// Pull next probe tuple from outer relation
 		probeTuple, err := h.left.Next(ctx)
 		if err != nil {
+			if err == io.EOF && trackRight {
+				for h.unmatchedIdx < len(h.allRightTuples) {
+					idx := h.unmatchedIdx
+					h.unmatchedIdx++
+					if !h.matchedRight[idx] {
+						rTuple := h.allRightTuples[idx]
+						leftColsCount := 0
+						if h.left.ColIndexMap() != nil {
+							leftColsCount = len(h.left.ColIndexMap().Columns())
+						} else {
+							leftColsCount = len(h.left.Schema())
+						}
+						return mergeNullsWithTuple(leftColsCount, rTuple, h.colIndexMap), nil
+					}
+				}
+			}
 			return Tuple{}, err // propagates io.EOF or context error
 		}
 
@@ -195,22 +240,34 @@ func (h *HashJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		}
 
 		if hasMatch {
-			matchTuple := h.currentMatches[h.matchIdx]
+			m := h.currentMatches[h.matchIdx]
 			h.matchIdx++
 			h.emittedAny = true
-			return mergeTuples(h.currentProbe, matchTuple, h.colIndexMap), nil
+			if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
+				h.matchedRight[m.idx] = true
+			}
+			return mergeTuples(h.currentProbe, m.tuple, h.colIndexMap), nil
 		}
 
-		// If LEFT JOIN and no matches, emit probe tuple with NULLs
-		if (h.joinType == "LEFT" || strings.HasPrefix(h.joinType, "LEFT")) && !h.emittedAny {
+		// If LEFT JOIN or FULL JOIN and no matches, emit probe tuple with NULLs
+		isLeftOrFull := h.joinType == "LEFT" || strings.HasPrefix(h.joinType, "LEFT") || isFull
+		if isLeftOrFull && !h.emittedAny {
 			h.currentProbe = Tuple{}
-			return mergeTuplesWithNulls(probeTuple, len(h.right.Schema()), h.colIndexMap), nil
+			rightColsCount := 0
+			if h.right.ColIndexMap() != nil {
+				rightColsCount = len(h.right.ColIndexMap().Columns())
+			} else {
+				rightColsCount = len(h.right.Schema())
+			}
+			return mergeTuplesWithNulls(probeTuple, rightColsCount, h.colIndexMap), nil
 		}
 	}
 }
 
 func (h *HashJoinIterator) Close() error {
 	h.hashTable = nil
+	h.allRightTuples = nil
+	h.matchedRight = nil
 	h.currentProbe = Tuple{}
 	h.currentMatches = nil
 	if h.left != nil {
@@ -482,6 +539,15 @@ func mergeTuples(left, right Tuple, combinedIndex *ColumnIndexMap) Tuple {
 func mergeTuplesWithNulls(left Tuple, rightColsCount int, combinedIndex *ColumnIndexMap) Tuple {
 	vals := make([]any, len(left.Values)+rightColsCount)
 	copy(vals, left.Values)
+	return Tuple{
+		Values: vals,
+		Index:  combinedIndex,
+	}
+}
+
+func mergeNullsWithTuple(leftColsCount int, right Tuple, combinedIndex *ColumnIndexMap) Tuple {
+	vals := make([]any, leftColsCount+len(right.Values))
+	copy(vals[leftColsCount:], right.Values)
 	return Tuple{
 		Values: vals,
 		Index:  combinedIndex,

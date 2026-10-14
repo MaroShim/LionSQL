@@ -104,6 +104,7 @@ const (
 	TokenInner
 	TokenLeft
 	TokenRight
+	TokenFull
 	TokenOuter
 	TokenCross
 	TokenGroup
@@ -239,6 +240,7 @@ var keywords = map[string]TokenType{
 	"INNER":       TokenInner,
 	"LEFT":        TokenLeft,
 	"RIGHT":       TokenRight,
+	"FULL":        TokenFull,
 	"OUTER":       TokenOuter,
 	"CROSS":       TokenCross,
 	"GROUP":       TokenGroup,

@@ -505,7 +505,7 @@ func cleanSchemaPrefix(name string) string {
 func isReservedAfterFromOrJoin(tok TokenType) bool {
 	switch tok {
 	case TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
-		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter, TokenApply,
+		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenFull, TokenCross, TokenOuter, TokenApply,
 		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch, TokenOption,
 		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
 		return true
@@ -517,7 +517,7 @@ func isReservedAfterFromOrJoin(tok TokenType) bool {
 func isReservedAfterProjection(tok TokenType) bool {
 	switch tok {
 	case TokenFrom, TokenWhere, TokenGroup, TokenHaving, TokenOrder, TokenLimit,
-		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenCross, TokenOuter, TokenApply,
+		TokenJoin, TokenInner, TokenLeft, TokenRight, TokenFull, TokenCross, TokenOuter, TokenApply,
 		TokenOn, TokenWith, TokenFor, TokenOffset, TokenFetch, TokenOption,
 		TokenSemicolon, TokenRParen, TokenEOF, TokenComma:
 		return true
@@ -2279,7 +2279,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	}
 
 	// 3. JOIN & APPLY clauses
-	for p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) || p.curTokenIs(TokenCross) || p.curTokenIs(TokenOuter) {
+	for p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) || p.curTokenIs(TokenRight) || p.curTokenIs(TokenFull) || p.curTokenIs(TokenCross) || p.curTokenIs(TokenOuter) {
 		joinType := "INNER"
 		isApply := false
 		if p.curTokenIs(TokenCross) {
@@ -2319,6 +2319,26 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				}
 				p.nextToken() // eat JOIN
 			}
+		} else if p.curTokenIs(TokenRight) {
+			joinType = "RIGHT"
+			p.nextToken() // eat RIGHT
+			if p.curTokenIs(TokenOuter) {
+				p.nextToken() // eat OUTER
+			}
+			if !p.curTokenIs(TokenJoin) {
+				return nil, fmt.Errorf("expected JOIN after RIGHT, got %s", p.curToken.Literal)
+			}
+			p.nextToken() // eat JOIN
+		} else if p.curTokenIs(TokenFull) {
+			joinType = "FULL"
+			p.nextToken() // eat FULL
+			if p.curTokenIs(TokenOuter) {
+				p.nextToken() // eat OUTER
+			}
+			if !p.curTokenIs(TokenJoin) {
+				return nil, fmt.Errorf("expected JOIN after FULL, got %s", p.curToken.Literal)
+			}
+			p.nextToken() // eat JOIN
 		} else if p.curTokenIs(TokenInner) {
 			p.nextToken() // eat INNER
 			if !p.curTokenIs(TokenJoin) {

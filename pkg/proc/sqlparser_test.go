@@ -537,4 +537,54 @@ func TestParseSQL_Apply_Hints_Output(t *testing.T) {
 	}
 }
 
+func TestParseSQL_FullAndRightJoin(t *testing.T) {
+	sql := `SELECT u.id, o.id FROM users u FULL OUTER JOIN orders o ON u.id = o.user_id;`
+	stmt, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for FULL OUTER JOIN: %v", err)
+	}
+	sel, ok := stmt.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected GeneralSelectStmt, got %T", stmt)
+	}
+	if len(sel.Joins) != 1 {
+		t.Fatalf("expected 1 join, got %d", len(sel.Joins))
+	}
+	if sel.Joins[0].Type != "FULL" || sel.Joins[0].Table.Name != "orders" {
+		t.Errorf("unexpected join in FULL OUTER JOIN: %+v", sel.Joins[0])
+	}
+
+	sqlRight := `SELECT u.id, o.id FROM users u RIGHT JOIN orders o ON u.id = o.user_id;`
+	stmtRight, err := proc.ParseSQL(sqlRight)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for RIGHT JOIN: %v", err)
+	}
+	selRight, ok := stmtRight.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected GeneralSelectStmt, got %T", stmtRight)
+	}
+	if len(selRight.Joins) != 1 || selRight.Joins[0].Type != "RIGHT" {
+		t.Errorf("unexpected join in RIGHT JOIN: %+v", selRight.Joins[0])
+	}
+}
+
+func TestParseSQL_CoalesceAndIsNull(t *testing.T) {
+	sql := `SELECT COALESCE(price, 0.0) AS p, ISNULL(name, 'Unknown') AS n FROM items;`
+	stmt, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for COALESCE and ISNULL: %v", err)
+	}
+	sel, ok := stmt.(*proc.GeneralSelectStmt)
+	if !ok {
+		t.Fatalf("expected GeneralSelectStmt, got %T", stmt)
+	}
+	if len(sel.Projections) != 2 {
+		t.Fatalf("expected 2 projections, got %d", len(sel.Projections))
+	}
+	if sel.Projections[0].Alias != "p" || sel.Projections[1].Alias != "n" {
+		t.Errorf("unexpected aliases: %+v", sel.Projections)
+	}
+}
+
+
 

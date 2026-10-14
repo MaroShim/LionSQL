@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **`FULL OUTER JOIN` & `RIGHT OUTER JOIN`, `COALESCE` / `ISNULL` Short-Circuiting, and Syntax Backlog Completion (`pkg/engine`, `pkg/proc`, `pkg/planner`, `pkg/execution`)**:
+  - Implemented `FULL [OUTER] JOIN` and `RIGHT [OUTER] JOIN` in Volcano `HashJoinIterator`, tracking inner/build side matches and draining unmatched right-side tuples with `mergeNullsWithTuple()`.
+  - Extended Pratt parser `parseGeneralSelect()` with `TokenFull` and `TokenRight` keywords, supporting optional `OUTER` and required `JOIN`.
+  - Updated CBO planner to select `HashJoin` for `FULL` and `RIGHT` outer joins and enriched `EXPLAIN` plan output with `(Right)` and `(Full)`.
+  - Added short-circuit lazy evaluation for `COALESCE` and `ISNULL` in `evalRowFunction()`, and fixed column name fallback to preserve NULL column values.
+  - Prioritized parsed expression evaluation in `ProjectionIterator` to ensure aliased calculated expressions take precedence over input column shadowing.
+  - Added comprehensive unit and integration tests in `pkg/proc/sqlparser_test.go` and `pkg/engine/coordinator_test.go`.
+  - Marked all 7 items (`S-1` through `S-7`) in Section 4 of `notes/REFACTORING_AND_ROADMAP.md` as 100% complete.
 - **`CROSS APPLY` / `OUTER APPLY` Joins, Local `#temp` Session Isolation, Table/Query Hints, and DML `OUTPUT` (`pkg/engine`, `pkg/proc`, `pkg/planner`)**:
   - Implemented `CROSS APPLY` and `OUTER APPLY` join execution engine in `Coordinator.execApplySelect()` (`pkg/engine/sqlexec_apply.go`), supporting correlated subquery lateral joins and table-valued functions (TVFs) with outer row parameter binding.
   - Added enterprise-grade session isolation for local temporary tables (`#temp_table`) via automatic name mangling (`__temp_<sessionID>_<tableName>`), multi-session collision prevention, identifier rewriting in `RewriteSessionTempTables()`, and safe lifecycle teardown hooks on connection close.

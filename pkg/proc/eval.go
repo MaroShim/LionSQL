@@ -502,6 +502,20 @@ func evalRowFunction(name string, args []Expr, row map[string]any, execSubquery 
 		}
 	}
 
+	uName := strings.ToUpper(strings.TrimSpace(name))
+	if uName == "ISNULL" || uName == "COALESCE" {
+		for _, a := range args {
+			v, err := EvalRowExpr(a, row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			if v != nil {
+				return v, nil
+			}
+		}
+		return nil, nil
+	}
+
 	stArgs := make([]storage.Value, len(args))
 	for i, a := range args {
 		v, err := EvalRowExpr(a, row, execSubquery)
@@ -510,7 +524,25 @@ func evalRowFunction(name string, args []Expr, row map[string]any, execSubquery 
 		}
 		if v == nil && a != nil {
 			if colRef, ok := a.(*ColumnRefExpr); ok {
-				v = colRef.Name
+				inRow := false
+				if row != nil {
+					col := cleanSchemaPrefix(colRef.Name)
+					if _, ok := row[colRef.Name]; ok {
+						inRow = true
+					} else if _, ok := row[col]; ok {
+						inRow = true
+					} else {
+						for k := range row {
+							if strings.EqualFold(k, colRef.Name) || strings.EqualFold(k, col) {
+								inRow = true
+								break
+							}
+						}
+					}
+				}
+				if !inRow {
+					v = colRef.Name
+				}
 			}
 		}
 		stArgs[i] = anyToStorageVal(v)

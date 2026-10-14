@@ -662,5 +662,118 @@ func TestCoordinator_DML_Output(t *testing.T) {
 	}
 }
 
+func TestCoordinator_FullAndRightOuterJoin(t *testing.T) {
+	coord, _, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	if _, err := coord.ExecuteSQL(`CREATE TABLE departments (id INT PRIMARY KEY, name VARCHAR(50));`); err != nil {
+		t.Fatalf("CREATE TABLE departments failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL(`CREATE TABLE employees (id INT PRIMARY KEY, name VARCHAR(50), dept_id INT);`); err != nil {
+		t.Fatalf("CREATE TABLE employees failed: %v", err)
+	}
+
+	if _, err := coord.ExecuteSQL(`INSERT INTO departments (id, name) VALUES (10, 'Engineering'), (20, 'HR'), (30, 'Finance');`); err != nil {
+		t.Fatalf("INSERT departments failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL(`INSERT INTO employees (id, name, dept_id) VALUES (1, 'Alice', 10), (2, 'Bob', 20), (3, 'Charlie', 40);`); err != nil {
+		t.Fatalf("INSERT employees failed: %v", err)
+	}
+
+	// 1. FULL OUTER JOIN
+	resFull, err := coord.ExecuteSQL(`SELECT d.id AS did, d.name AS dname, e.id AS eid, e.name AS ename FROM departments d FULL OUTER JOIN employees e ON d.id = e.dept_id;`)
+	if err != nil || !resFull.Success {
+		t.Fatalf("FULL OUTER JOIN failed: %v", err)
+	}
+	if len(resFull.Rows) != 4 {
+		t.Fatalf("expected 4 rows in FULL OUTER JOIN, got %d: %+v", len(resFull.Rows), resFull.Rows)
+	}
+
+	var hasMatchedEng, hasMatchedHR, hasUnmatchedFinance, hasUnmatchedCharlie bool
+	for _, row := range resFull.Rows {
+		dname := fmt.Sprintf("%v", row["dname"])
+		ename := fmt.Sprintf("%v", row["ename"])
+		if dname == "Engineering" && ename == "Alice" {
+			hasMatchedEng = true
+		} else if dname == "HR" && ename == "Bob" {
+			hasMatchedHR = true
+		} else if dname == "Finance" && (row["ename"] == nil || ename == "<nil>") {
+			hasUnmatchedFinance = true
+		} else if (row["dname"] == nil || dname == "<nil>") && ename == "Charlie" {
+			hasUnmatchedCharlie = true
+		}
+	}
+	if !hasMatchedEng || !hasMatchedHR || !hasUnmatchedFinance || !hasUnmatchedCharlie {
+		t.Errorf("FULL OUTER JOIN row verification failed: Eng=%v, HR=%v, Finance=%v, Charlie=%v (rows: %+v)",
+			hasMatchedEng, hasMatchedHR, hasUnmatchedFinance, hasUnmatchedCharlie, resFull.Rows)
+	}
+
+	// 2. RIGHT OUTER JOIN
+	resRight, err := coord.ExecuteSQL(`SELECT d.name AS dname, e.id AS eid, e.name AS ename FROM departments d RIGHT OUTER JOIN employees e ON d.id = e.dept_id;`)
+	if err != nil || !resRight.Success {
+		t.Fatalf("RIGHT OUTER JOIN failed: %v", err)
+	}
+	if len(resRight.Rows) != 3 {
+		t.Fatalf("expected 3 rows in RIGHT OUTER JOIN, got %d: %+v", len(resRight.Rows), resRight.Rows)
+	}
+	hasCharlie := false
+	for _, row := range resRight.Rows {
+		if fmt.Sprintf("%v", row["ename"]) == "Charlie" {
+			hasCharlie = true
+			if row["dname"] != nil && fmt.Sprintf("%v", row["dname"]) != "<nil>" {
+				t.Errorf("expected NULL department for Charlie, got %v", row["dname"])
+			}
+		}
+	}
+	if !hasCharlie {
+		t.Errorf("expected Charlie in RIGHT JOIN results, got: %+v", resRight.Rows)
+	}
+}
+
+func TestCoordinator_CoalesceAndIsNull(t *testing.T) {
+	coord, _, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	if _, err := coord.ExecuteSQL(`CREATE TABLE items (id INT PRIMARY KEY, title VARCHAR(50), price FLOAT);`); err != nil {
+		t.Fatalf("CREATE TABLE items failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL(`INSERT INTO items (id, title, price) VALUES (1, 'Book', 15.0), (2, 'Freebie', NULL);`); err != nil {
+		t.Fatalf("INSERT items failed: %v", err)
+	}
+
+	// 1. ISNULL on column with NULL
+	res, err := coord.ExecuteSQL(`SELECT id, ISNULL(price, 0.0) AS final_price FROM items ORDER BY id ASC;`)
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT ISNULL failed: %v", err)
+	}
+	if len(res.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(res.Rows))
+	}
+	if fmt.Sprintf("%v", res.Rows[0]["final_price"]) != "15" {
+		t.Errorf("expected 15 for row 0, got %v", res.Rows[0]["final_price"])
+	}
+	if fmt.Sprintf("%v", res.Rows[1]["final_price"]) != "0" {
+		t.Errorf("expected 0 for row 1, got %v", res.Rows[1]["final_price"])
+	}
+
+	// 2. COALESCE multi-argument fallback
+	resCoal, err := coord.ExecuteSQL(`SELECT id, COALESCE(price, 99.9) AS c_price FROM items WHERE id = 2;`)
+	if err != nil || !resCoal.Success {
+		t.Fatalf("SELECT COALESCE failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resCoal.Rows[0]["c_price"]) != "99.9" {
+		t.Errorf("expected 99.9 for row 0, got %v", resCoal.Rows[0]["c_price"])
+	}
+
+	// 3. Constant scalar COALESCE & ISNULL without FROM
+	resConst, err := coord.ExecuteSQL(`SELECT COALESCE(NULL, NULL, 'ThirdVal', 'FourthVal') AS val;`)
+	if err != nil || !resConst.Success {
+		t.Fatalf("SELECT constant COALESCE failed: %v", err)
+	}
+	if fmt.Sprintf("%v", resConst.Rows[0]["val"]) != "ThirdVal" {
+		t.Errorf("expected 'ThirdVal', got %v", resConst.Rows[0]["val"])
+	}
+}
+
 
 

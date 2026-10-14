@@ -637,7 +637,7 @@ func SplitProjections(s string) []string {
 
 // parseFromAndJoins parses the FROM clause and extracts the base table and any number of chained JOINs.
 func parseFromAndJoins(fromClause string) (string, string, []*JoinInfo, error) {
-	joinPattern := regexp.MustCompile(`(?is)(?:(INNER|LEFT(?:\s+OUTER)?)\s+)?JOIN\s+([^\s]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s+ON\s+([^\s=]+)\s*=\s*([^\s=;]+)`)
+	joinPattern := regexp.MustCompile(`(?is)(?:(INNER|LEFT(?:\s+OUTER)?|RIGHT(?:\s+OUTER)?|FULL(?:\s+OUTER)?)\s+)?JOIN\s+([^\s]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s+ON\s+([^\s=]+)\s*=\s*([^\s=;]+)`)
 	matches := joinPattern.FindAllStringSubmatchIndex(fromClause, -1)
 	if len(matches) == 0 {
 		baseTable, baseAlias := parseTableAndAlias(fromClause)
@@ -669,8 +669,13 @@ func parseFromAndJoins(fromClause string) (string, string, []*JoinInfo, error) {
 		}
 
 		jType := "INNER"
-		if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(joinType)), "LEFT") {
+		uType := strings.ToUpper(strings.TrimSpace(joinType))
+		if strings.HasPrefix(uType, "LEFT") {
 			jType = "LEFT"
+		} else if strings.HasPrefix(uType, "RIGHT") {
+			jType = "RIGHT"
+		} else if strings.HasPrefix(uType, "FULL") {
+			jType = "FULL"
 		}
 		rightTable = cleanIdent(rightTable)
 		rightAlias = cleanIdent(rightAlias)
@@ -1370,6 +1375,10 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 	case NodeHashJoin:
 		if node.JoinType == "LEFT" {
 			sb.WriteString(" (Left)")
+		} else if node.JoinType == "RIGHT" {
+			sb.WriteString(" (Right)")
+		} else if node.JoinType == "FULL" {
+			sb.WriteString(" (Full)")
 		}
 		if node.HashCond != "" {
 			sb.WriteString(fmt.Sprintf(" (hash_cond=%s)", node.HashCond))
@@ -1828,7 +1837,8 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 
 	var nextNode *PlanNode
 	// CBO Decision: Compare Hash Join vs Index Nested Loop Join
-	if innerIndex != nil && nlTotalCost < hashJoinTotalCost {
+	isOuterUnmatched := strings.HasPrefix(strings.ToUpper(join.Type), "FULL") || strings.HasPrefix(strings.ToUpper(join.Type), "RIGHT")
+	if !isOuterUnmatched && innerIndex != nil && nlTotalCost < hashJoinTotalCost {
 		innerScanNode := &PlanNode{
 			Type:          NodeIndexScan,
 			Relation:      join.Table,
