@@ -136,4 +136,41 @@
   3. **스칼라 함수와 양방향 일관성**:
      - `OBJECT_ID('name')`과 `OBJECT_NAME(id)` 함수 역시 동일한 `getSortedTables()`를 공유하여, 개별 객체 조회와 전체 배치 카탈로그 조회 간에 단 1의 오차도 없는 일관성을 보장해야 합니다.
 
+---
+
+## 11. WiredTiger 커서의 EOF 래핑(Wrap-Around)과 벡터화 청크(ChunkedIterator) 무한 루프 지뢰
+
+* **상황**:
+  * WiredTiger 스토리지 엔진의 C API 커서(`WT_CURSOR`)는 테이블 끝(EOF)에 도달하여 `C.go_wt_cursor_next`가 0이 아닌 값(`WT_NOTFOUND`)을 반환한 후, 다시 `next()`를 호출하면 에러 상태를 유지하지 않고 **테이블의 첫 번째 레코드로 돌아가 다시 `0`(성공)을 반환하며 재순환(wrap-around)**하는 C API 고유의 순환 특성을 가집니다.
+* **치명적인 무한 루프 메커니즘**:
+  * P-4 벡터화 청크 배치 반복자(`ChunkedIterator`, `DefaultChunkSize = 1024`)는 청크 버퍼를 채울 때까지 `cursor.Next()`를 반복 호출합니다.
+  * 테이블의 행 수가 1024개 미만(예: 2건, 50건 등 일반적인 테이블 데이터)인 경우:
+    1. 첫 번째 청크 호출(`NextChunk`)에서 테이블 전체 레코드를 읽고 `cursor.Next()`가 false가 됩니다.
+    2. 데이터가 채워졌으므로 청크는 정상 반환(`return nil`)됩니다.
+    3. 다음 청크가 있는지 확인하기 위해 상위 연산자(`PullChunk`, `SortIterator`, `LimitIterator`)가 `NextChunk`를 다시 호출합니다.
+    4. 이때 내부에서 다시 `cursor.Next()`를 부르면 WiredTiger 커서가 1번 레코드로 래핑되어 다시 `true`를 반환합니다!
+    5. 이로 인해 청크가 끊임없이 무한히 채워져 반환되며, `SortIterator.Open`이나 `AggregateIterator.Open`이 100% CPU를 점유하며 영원히 끝나지 않는 무한 루프(Infinite Loading)에 빠집니다.
+* **해결 및 영구 불변식 (Engineering Invariants)**:
+  1. **스토리지 커서 레이어의 불변식 (`WTCursor`)**:
+     - `WTCursor` 구조체에 `eof bool` 플래그를 추가하여, `C.go_wt_cursor_next`가 0이 아닌 값을 한 번이라도 반환하면 `eof = true`로 래치(Latch)하고 이후의 모든 `Next()`, `Record()`, `Row()`, `RawTuple()` 호출에서 즉시 `false` 및 에러를 반환해야 합니다.
+  2. **실행 엔진 스캔 반복자 레이어의 이중 방어 (`SeqScanIterator`, `IndexScanIterator`)**:
+     - `SeqScanIterator`와 `IndexScanIterator` 역시 자체 `eof bool` 플래그를 유지하여, 하위 커서가 `Next() == false`를 반환한 시점에 `eof = true`로 설정하고 이후 재진입 시 커서를 다시 건드리지 않고 즉시 `io.EOF`를 반환해야 합니다.
+
+---
+
+## 12. Graceful Shutdown 시 유휴 클라이언트 TCP 소켓과 `sync.WaitGroup` 무한 대기 지뢰
+
+* **상황**:
+  * GUI 클라이언트(DbGate, Beekeeper Studio 등)나 연결 풀(Connection Pool)은 TCP 연결을 맺은 뒤 커넥션을 닫지 않고 유휴(Keep-Alive) 상태로 열어둔 채 소켓 읽기(`net.Conn.Read`) 루프에서 블로킹 대기합니다.
+* **문제 메커니즘**:
+  * 서버 종료 시 리스너 소켓(`net.Listener.Close()`)만 닫고 `s.wg.Wait()`을 호출하면, 이미 수락(Accept)되어 읽기 루프를 돌고 있는 클라이언트 고루틴들은 원격 클라이언트가 연결을 끊기 전까지 종료되지 않습니다.
+  * 결과적으로 프로세스가 `SIGINT`/`SIGTERM`을 받아도 `s.wg.Wait()`에서 수십 초 이상 멈춰 있거나 사실상 무한히 대기하는 현상이 발생합니다.
+* **해결 및 영구 불변식 (Engineering Invariants)**:
+  1. **활성 연결 추적 및 강제 소켓 종료**:
+     - PGWire(`wire.Server`) 및 TDS(`tds.Server`)는 연결 수락 시 `activeConns map[net.Conn]struct{}`에 소켓을 등록하고, `Close()` 진입 시 리스너 종료 직후 등록된 모든 활성 클라이언트 소켓의 `conn.Close()`를 명시적으로 호출해야 합니다.
+     - 소켓이 닫히면 블로킹 중이던 모든 고루틴의 `Read()`가 즉시 `net.ErrClosed` 에러를 만나 반환되며 `wg.Done()`이 호출됩니다.
+  2. **1.5초 바운디드 셧다운 데드라인 (Golden Rule 4)**:
+     - `cmd/server/main.go`의 시그널 수신 루프에서 최대 1.5초의 타임아웃 타이머(`time.After(1500 * time.Millisecond)`)를 동반한 채널 셀렉트를 적용하여, 만에 하나 비정상 블로킹이 발생하더라도 1.5초 이내에 결정론적으로 프로세스가 종료되도록 보장합니다.
+
+
 
