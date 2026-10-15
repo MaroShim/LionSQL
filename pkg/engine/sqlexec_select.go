@@ -728,9 +728,13 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 	}
 
 	// String literal
-	if (strings.HasPrefix(trimmed, "'") && strings.HasSuffix(trimmed, "'")) ||
-		(strings.HasPrefix(trimmed, "\"") && strings.HasSuffix(trimmed, "\"")) {
+	if isSingleQuotedLiteral(trimmed) {
 		unquoted := trimmed[1 : len(trimmed)-1]
+		if trimmed[0] == '\'' {
+			unquoted = strings.ReplaceAll(unquoted, "''", "'")
+		} else {
+			unquoted = strings.ReplaceAll(unquoted, `""`, `"`)
+		}
 		return unquoted, "?column?"
 	}
 
@@ -2276,3 +2280,27 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
+
+func isSingleQuotedLiteral(s string) bool {
+	if len(s) < 2 {
+		return false
+	}
+	quote := s[0]
+	if quote != '\'' && quote != '"' {
+		return false
+	}
+	if s[len(s)-1] != quote {
+		return false
+	}
+	for i := 1; i < len(s)-1; i++ {
+		if s[i] == quote {
+			if i+1 < len(s)-1 && s[i+1] == quote {
+				i++ // escaped quote '' or ""
+				continue
+			}
+			return false // closed before end of string
+		}
+	}
+	return true
+}
+

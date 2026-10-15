@@ -247,6 +247,15 @@ func (t Tuple) ToEvalMap() map[string]any {
 	if t.Index == nil {
 		return nil
 	}
+	if t.Lazy != nil {
+		_, _ = t.Lazy.MaterializeRow()
+		dec := t.Lazy.DecodedValues()
+		for i := 0; i < len(t.Values) && i < len(dec); i++ {
+			if t.Values[i] == nil {
+				t.Values[i] = formatStorageVal(dec[i])
+			}
+		}
+	}
 	res := make(map[string]any, len(t.Index.indices))
 	for k, idx := range t.Index.indices {
 		if idx >= 0 && idx < len(t.Values) {
