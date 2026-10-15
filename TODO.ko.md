@@ -23,10 +23,26 @@
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
-| **P2** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`lionsql migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down / status` 및 `_migrations` 이력 추적 |
+| **P2** | **고가용성** | **Always On 스타일 자동 장애 조치 및 리더 선출** | `pkg/replication` | 장애 시 최저 지연 LSN 레플리카 자동 승격 및 라우팅 절체 |
 | **P3** | **와이어 프로토콜** | **PostgreSQL 와이어 프로토콜 서버 사이드 커서** | `pkg/wire` | 대규모 쿼리 결과 집합 분할 수신 및 `DECLARE ... CURSOR` 지원 |
 
-### P1/P2 최근 완료 과제: 엔진 성능 & 최적화
+### P1/P2 최근 완료 과제: 엔진 성능 & BaaS 확장
+- [x] **선언적 스키마 마이그레이션 CLI (`lionsql migrate`) 및 `_migrations` 이력 추적 (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**
+  - **배경**: PocketBase 스타일의 개발자 생산성 극대화 및 독립형 데이터베이스 스키마 버전 관리 완비.
+  - **구현 내용**:
+    - `_migrations` 내부 테이블 자동 생성 및 마이그레이션 메타데이터(`version`, `name`, `applied_at`, `duration_ms`) 이력 추적.
+    - `pkg/migrate` 엔진 신설: `Create`, `Load`, `Up`, `Down`, `Status` 라이프사이클 및 단조 증가 타임스탬프 충돌 방지 완비.
+    - `cmd/lionsql` 통합 CLI 바이너리 구축 (`bin/lionsql`): `lionsql migrate new <name>`, `lionsql migrate up/down/status`, 임베디드 직접 쿼리 실행기 `lionsql sql "<query>"`.
+    - `cmd/server/main.go` 양방향 패리티 완비 (`./bin/server migrate ...`).
+    - `pkg/migrate/migrate_test.go` 및 `cmd/lionsql/main_test.go` 단위/통합 테스트 완비.
+- [x] **내장형 Google 및 GitHub OAuth2 소셜 로그인 & 자동 사용자 프로비저닝 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**
+  - **배경**: 서드파티 OAuth 라이브러리 없는 순수 Go 표준 라이브러리 기반 턴키 소셜 인증 및 웹 스튜디오 연동.
+  - **구현 내용**:
+    - `pkg/api/oauth.go`: Google 및 GitHub 인가 코드 교환, GitHub 비공개 이메일(`/user/emails`) 자동 해석 및 Mock 서버 주입 인터페이스.
+    - `pkg/auth`: `ProvisionOAuthUser` 신설을 통한 신규 Superuser 자동 프로비저닝, 계정 연동 및 서명된 HS256 JWT 즉시 발급.
+    - REST 엔드포인트 완비: `GET /api/auth/oauth2/providers`, `GET /api/auth/oauth2/url`, `GET/POST /api/auth/oauth2/callback`, `GET/PUT /api/settings/oauth2` (시크릿 마스킹 `••••••••`).
+    - 임베디드 웹 스튜디오(`pkg/ui/dashboard.html`) 로그인 모달 소셜 로그인 버튼 및 팝업 콜백(`postMessage`) 연동.
+    - `pkg/api/oauth_test.go` 완전 격리형 Mock HTTP 서버 기반 단위/통합 테스트 완비.
 - [x] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`C-7`) (`pkg/planner`)**
   - **배경**: 범주형 상태 컬럼이나 특정 핫스팟 값에 데이터가 집중되는 왜곡(Skew) 데이터 환경에서 균등 분포 가정(1/NDV)으로 인해 발생하는 선택도 최대 10~100배 오차 제거.
   - **구현 내용**:
