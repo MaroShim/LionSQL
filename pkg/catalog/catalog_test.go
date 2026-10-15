@@ -224,3 +224,43 @@ func TestCatalog_TableStatsPersistence(t *testing.T) {
 		t.Fatalf("expected restored stats from manual file")
 	}
 }
+
+func TestCatalog_ExtendedStatistics(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	stat := &catalog.StatisticDef{
+		Name:      "stat_geo",
+		TableName: "customers",
+		Columns:   []string{"country", "city"},
+	}
+
+	// 1. Create statistics
+	if err := cat.CreateStatistics(stat); err != nil {
+		t.Fatalf("CreateStatistics failed: %v", err)
+	}
+
+	// 2. Get statistics
+	got, ok := cat.GetStatistics("customers", "stat_geo")
+	if !ok || got == nil {
+		t.Fatalf("expected to find stat_geo in catalog")
+	}
+	if len(got.Columns) != 2 || got.Columns[0] != "country" || got.Columns[1] != "city" {
+		t.Fatalf("unexpected columns in stat_geo: %+v", got.Columns)
+	}
+
+	// 3. List statistics
+	list := cat.ListStatistics("customers")
+	if len(list) != 1 || list[0].Name != "stat_geo" {
+		t.Fatalf("expected 1 statistic in list, got %+v", list)
+	}
+
+	// 4. Drop statistics
+	if err := cat.DropStatistics("customers", "stat_geo"); err != nil {
+		t.Fatalf("DropStatistics failed: %v", err)
+	}
+	if _, ok := cat.GetStatistics("customers", "stat_geo"); ok {
+		t.Fatalf("expected stat_geo to be dropped")
+	}
+}

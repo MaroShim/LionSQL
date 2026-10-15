@@ -869,3 +869,100 @@ func (s *Coordinator) execShowPartitions(tableName string, start time.Time) (*Qu
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
 }
+
+func (s *Coordinator) execCreateStatistics(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	re := regexp.MustCompile(`(?is)^CREATE\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
+	matches := re.FindStringSubmatch(cleaned)
+	if len(matches) < 4 {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+
+	statName := cleanIdentifier(matches[1])
+	tableName := cleanIdentifier(matches[2])
+	colsRaw := matches[3]
+
+	var cols []string
+	for _, c := range strings.Split(colsRaw, ",") {
+		cTrimmed := cleanIdentifier(strings.TrimSpace(c))
+		if cTrimmed != "" {
+			cols = append(cols, cTrimmed)
+		}
+	}
+
+	if len(cols) < 2 {
+		return nil, fmt.Errorf("CREATE STATISTICS requires at least 2 columns, got %d", len(cols))
+	}
+
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
+	}
+
+	colMap := make(map[string]bool, len(schema.Columns))
+	for _, c := range schema.Columns {
+		colMap[strings.ToLower(c.Name)] = true
+	}
+	for _, col := range cols {
+		if !colMap[strings.ToLower(col)] {
+			return nil, fmt.Errorf("column %q does not exist in table %q", col, tableName)
+		}
+	}
+
+	if s.catalog != nil {
+		statDef := &catalog.StatisticDef{
+			Name:      statName,
+			TableName: tableName,
+			Columns:   cols,
+			CreatedAt: time.Now(),
+		}
+		if err := s.catalog.CreateStatistics(statDef); err != nil {
+			return nil, err
+		}
+	}
+
+	_, _ = s.AnalyzeTable(tableName)
+
+	msg := fmt.Sprintf("Statistics %q created successfully on table %q (%s).", statName, tableName, strings.Join(cols, ", "))
+	return &QueryResult{
+		Success:    true,
+		Command:    "CREATE STATISTICS",
+		Messages:   []string{msg},
+		DurationUS: time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Coordinator) execDropStatistics(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	reTblOn := regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
+	reDot := regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
+
+	var statName, tableName string
+	if m := reTblOn.FindStringSubmatch(cleaned); len(m) == 3 {
+		statName = cleanIdentifier(m[1])
+		tableName = cleanIdentifier(m[2])
+	} else if m := reDot.FindStringSubmatch(cleaned); len(m) == 2 {
+		target := cleanIdentifier(m[1])
+		if idx := strings.Index(target, "."); idx != -1 {
+			tableName = target[:idx]
+			statName = target[idx+1:]
+		} else {
+			statName = target
+		}
+	} else {
+		return nil, fmt.Errorf("invalid DROP STATISTICS syntax: expected DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>")
+	}
+
+	if s.catalog != nil {
+		if err := s.catalog.DropStatistics(tableName, statName); err != nil {
+			return nil, err
+		}
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "DROP STATISTICS",
+		Messages:   []string{fmt.Sprintf("Statistics %q dropped successfully.", statName)},
+		DurationUS: time.Since(start).Microseconds(),
+	}, nil
+}

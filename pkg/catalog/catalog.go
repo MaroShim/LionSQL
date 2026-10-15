@@ -74,6 +74,14 @@ type View struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// StatisticDef defines an extended multi-column statistics object (C-5).
+type StatisticDef struct {
+	Name      string    `json:"name"`
+	TableName string    `json:"table_name"`
+	Columns   []string  `json:"columns"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 // Catalog manages database schemas, stored procedures, functions, triggers, and CBO statistics.
 type Catalog struct {
 	mu             sync.RWMutex
@@ -84,6 +92,7 @@ type Catalog struct {
 	triggers       map[string]*Trigger
 	views          map[string]*View
 	tableStats     map[string]*planner.TableStats
+	statistics     map[string]*StatisticDef
 }
 
 // New creates a Catalog instance attached to a storage engine.
@@ -95,6 +104,7 @@ func New(eng storage.Engine) *Catalog {
 		triggers:   make(map[string]*Trigger),
 		views:      make(map[string]*View),
 		tableStats: make(map[string]*planner.TableStats),
+		statistics: make(map[string]*StatisticDef),
 	}
 }
 
@@ -612,4 +622,75 @@ func (c *Catalog) ListViews() []*View {
 		result = append(result, v)
 	}
 	return result
+}
+
+// CreateStatistics registers an extended statistics definition in the catalog (C-5).
+func (c *Catalog) CreateStatistics(stat *StatisticDef) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := strings.ToLower(cleanCatalogIdent(stat.TableName) + "." + cleanCatalogIdent(stat.Name))
+	c.statistics[key] = stat
+	return nil
+}
+
+// DropStatistics removes an extended statistics definition from the catalog and cached table stats (C-5).
+func (c *Catalog) DropStatistics(tableName, statName string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	cleanTbl := cleanCatalogIdent(tableName)
+	cleanStat := cleanCatalogIdent(statName)
+
+	if cleanTbl == "" {
+		foundKey := ""
+		for k, s := range c.statistics {
+			if strings.EqualFold(s.Name, cleanStat) {
+				foundKey = k
+				cleanTbl = s.TableName
+				break
+			}
+		}
+		if foundKey != "" {
+			delete(c.statistics, foundKey)
+		}
+	} else {
+		key := strings.ToLower(cleanTbl + "." + cleanStat)
+		delete(c.statistics, key)
+	}
+
+	if ts, ok := c.tableStats[cleanTbl]; ok && ts != nil {
+		var remaining []*planner.MultiColumnStats
+		for _, ms := range ts.MultiColumns {
+			if !strings.EqualFold(ms.Name, cleanStat) {
+				remaining = append(remaining, ms)
+			}
+		}
+		ts.MultiColumns = remaining
+		if c.persistenceDir != "" {
+			_ = c.persistTableStatsLocked()
+		}
+	}
+	return nil
+}
+
+// GetStatistics retrieves an extended statistics definition by table and stat name (C-5).
+func (c *Catalog) GetStatistics(tableName, statName string) (*StatisticDef, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	key := strings.ToLower(cleanCatalogIdent(tableName) + "." + cleanCatalogIdent(statName))
+	stat, ok := c.statistics[key]
+	return stat, ok
+}
+
+// ListStatistics lists all extended statistics definitions for a given table (C-5).
+func (c *Catalog) ListStatistics(tableName string) []*StatisticDef {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	cleanTbl := strings.ToLower(cleanCatalogIdent(tableName))
+	var res []*StatisticDef
+	for _, s := range c.statistics {
+		if strings.ToLower(cleanCatalogIdent(s.TableName)) == cleanTbl {
+			res = append(res, s)
+		}
+	}
+	return res
 }

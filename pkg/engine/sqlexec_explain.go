@@ -497,6 +497,27 @@ func (s *Coordinator) AnalyzeTable(tbl string) (*planner.TableStats, error) {
 		colVals[c.Name] = make([]storage.Value, 0)
 	}
 
+	type candGroup struct {
+		name string
+		cols []string
+	}
+	var candGroups []candGroup
+	if s.catalog != nil {
+		for _, statDef := range s.catalog.ListStatistics(tbl) {
+			candGroups = append(candGroups, candGroup{name: statDef.Name, cols: statDef.Columns})
+		}
+	}
+	for _, idx := range schema.Indexes {
+		if len(idx.Columns) > 1 {
+			candGroups = append(candGroups, candGroup{name: idx.Name, cols: idx.Columns})
+		}
+	}
+
+	multiSets := make([]map[string]struct{}, len(candGroups))
+	for i := range candGroups {
+		multiSets[i] = make(map[string]struct{})
+	}
+
 	var rowCount int64 = 0
 	for cursor.Next() {
 		rec, err := cursor.Record()
@@ -512,9 +533,31 @@ func (s *Coordinator) AnalyzeTable(tbl string) (*planner.TableStats, error) {
 				colVals[c.Name] = append(colVals[c.Name], v)
 			}
 		}
+
+		for i, grp := range candGroups {
+			var key strings.Builder
+			for j, colName := range grp.cols {
+				if j > 0 {
+					key.WriteByte(0)
+				}
+				v := rec[colName]
+				if v.IsNull {
+					key.WriteString("\x01NULL")
+				} else {
+					key.WriteString(v.String())
+				}
+			}
+			multiSets[i][key.String()] = struct{}{}
+		}
 	}
 
 	ts := planner.BuildTableStatsParallel(tbl, schema, colVals, nullCounts, rowCount)
+	for i, grp := range candGroups {
+		distinctCount := int64(len(multiSets[i]))
+		dep := planner.ComputeFunctionalDependency(grp.cols, distinctCount, ts.Columns, rowCount)
+		ts.AddMultiColumnStats(grp.name, grp.cols, distinctCount, dep)
+	}
+
 	if s.catalog != nil {
 		s.catalog.SetTableStats(tbl, ts)
 	}

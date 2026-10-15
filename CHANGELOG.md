@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **Multi-Column Extended Statistics & Functional Dependency Modeling (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**:
+  - Implemented `MultiColumnStats` and multi-column NDV collection in `pkg/planner/stats.go`, capturing joint column distributions to eliminate the Attribute Value Independence (AVI) cardinality underestimation on correlated predicates.
+  - Implemented `ComputeFunctionalDependency` calculating dependency degree ($dep \in [0.0, 1.0]$) from multi-column NDV and single-column NDVs, bounding estimation between joint dependency and independent multiplication.
+  - Integrated multi-column selectivity calculation in `EstimateCompoundSelectivity` and `EstimateExprSelectivity` (`flattenAndExpr`, `estimateAndConjunctsSelectivity`).
+  - Added T-SQL DDL syntax support for `CREATE STATISTICS stat_name ON table_name (col1, col2, ...)` and `DROP STATISTICS` (`pkg/engine`, `pkg/catalog`).
+  - Automatically analyzes and collects multi-column statistics for composite secondary indexes and registered statistic definitions during `ANALYZE TABLE`.
+  - Added unit and integration tests in `pkg/planner/stats_test.go`, `pkg/catalog/catalog_test.go`, and `pkg/api/sqlexec_test.go`.
 - **Selinger Dynamic Programming Join Order Optimization for $N > 4$ Tables (`B-4`) (`pkg/planner`)**:
   - Implemented `optimizeJoinOrderDP` using Selinger dynamic programming with subset bitmask state spaces (`1 << n`) and $O(1)$ flat-slice memoization, replacing exponential $O(N!)$ permutation generation.
   - Implemented primary connected pass pruning Cartesian cross products by validating join equality predicates against accumulated relation sets, with secondary fallback pass for queries with disconnected components.

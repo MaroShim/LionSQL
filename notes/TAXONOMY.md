@@ -56,19 +56,19 @@
 | 코드 | 과제명 | 상태 | 구현 상세 및 기대 효과 | 대상 패키지 |
 | :---: | :--- | :---: | :--- | :--- |
 | **B-3** | **소트-머지 조인 (Sort-Merge Join) 연산자 및 비용 모델** | **완료** | 양측 입력이 사전 정렬(인덱스 순서 또는 `ORDER BY`)된 경우 해시 테이블 빌드 오버헤드를 제거하는 $O(M+N)$ `MergeJoinIterator` 스트리밍 조인 구현. 중복 키 Mark & Restore 슬라이딩 윈도우 지원. | `pkg/execution`, `pkg/planner` |
-| **B-4** | **$N > 4$ 체인 조인 동적 계획법 (DP / Selinger)** | **대기** | 5개 이상 다중 테이블 조인 시 팩토리얼($N!$) 전수 탐색 대신 Left-Deep DP 및 Bushy Tree 동적 계획법(DPccp) 탐색을 적용하여 최적 조인 트리 도출. | `pkg/planner` |
+| **B-4** | **$N > 4$ 체인 조인 동적 계획법 (DP / Selinger)** | **완료** | 5개 이상 다중 테이블 조인 시 팩토리얼($N!$) 전수 탐색 대신 Left-Deep DP 및 Bushy Tree 동적 계획법(DPccp) 탐색을 적용하여 최적 조인 트리 도출. | `pkg/planner` |
 
 ### Track C: 선택도 & 통계 정밀화 (Selectivity & Distribution Modeling)
 | 코드 | 과제명 | 상태 | 구현 상세 및 기대 효과 | 대상 패키지 |
-| :---: | :--- | :---: | :--- | :--- |
-| **C-5** | **다중 컬럼 확장 통계 (Extended Statistics)** | **대기** | 컬럼 간 상관관계(예: 국가-도시)로 인한 복합 조건 카디널리티 과소평가(Underestimation)를 방지하는 다중 컬럼 NDV 수집 및 결합 선택도 산출. | `pkg/catalog`, `pkg/planner` |
+| :---: | :--- | :--- :--- | :--- |
+| **C-5** | **다중 컬럼 확장 통계 (Extended Statistics)** | **완료** | 컬럼 간 상관관계(예: 국가-도시)로 인한 복합 조건 카디널리티 과소평가(Underestimation)를 방지하는 다중 컬럼 NDV 수집 및 결합 선택도 산출. | `pkg/catalog`, `pkg/planner` |
 | **C-6** | **OR 조건 및 불리언 트리 재귀 선택도 계산** | **완료** | `TableStats.EstimateExprSelectivity()` 신설. 동일 컬럼 배타 합집합 $P(A)+P(B)$ 및 독립 합집합 $P(A)+P(B)-P(A)P(B)$, NOT, IN, BETWEEN 재귀 트리 평가 완비. | `pkg/planner` |
 | **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **대기** | 왜곡(Skew)이 심한 상위 N개 최빈값은 MCV 목록으로 별도 보관하고 균등 분포는 히스토그램으로 이원화 처리하여 선택도 오차 최소화. | `pkg/catalog`, `pkg/planner` |
 
 ### Track D: 운영 & 실행 제어 (Operations & Optimizer Control)
 | 코드 | 과제명 | 상태 | 구현 상세 및 기대 효과 | 대상 패키지 |
-| :---: | :--- | :---: | :--- | :--- |
-| **D-8** | **백그라운드 자동 통계 갱신 데몬 (Auto-Analyze)** | **대기** | 테이블 DML 변경 비율(예: 10% 이상 Row 변동 발생)을 추적하여 백그라운드 워커에서 비동기로 `ANALYZE` 자동 트리거. | `pkg/catalog`, `pkg/engine` |
+| :---: | :--- | :--- :--- | :--- |
+| **D-8** | **백그라운드 자동 통계 갱신 데몬 (Auto-Analyze)** | **완료** | 테이블 DML 변경 비율(예: 10% 이상 Row 변동 발생)을 추적하여 백그라운드 워커에서 비동기로 `ANALYZE` 자동 트리거. | `pkg/catalog`, `pkg/engine` |
 | **D-9** | **CBO 옵티마이저 힌트 오버라이드 제어** | **완료** | 테이블 힌트 `WITH (INDEX(...))` 및 쿼리 힌트 `OPTION (HASH/MERGE/LOOP JOIN, FORCE ORDER)` 파싱 및 CBO 플래너 비용 계산 강제 오버라이드. | `pkg/planner`, `pkg/proc` |
 
 ---

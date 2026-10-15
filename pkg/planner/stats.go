@@ -34,14 +34,24 @@ type ColumnStats struct {
 	Histogram     []storage.Value `json:"histogram,omitempty"` // Equi-depth quantile bucket bounds
 }
 
+// MultiColumnStats stores joint distribution, distinct combination count (NDV),
+// and functional dependency metadata for a group of correlated columns (C-5).
+type MultiColumnStats struct {
+	Name          string   `json:"name,omitempty"`
+	Columns       []string `json:"columns"`        // Cleaned lowercase column names, e.g. ["country", "city"]
+	DistinctCount int64    `json:"distinct_count"` // Multi-column NDV
+	Dependency    float64  `json:"dependency"`     // Degree of functional dependency [0.0, 1.0]
+}
+
 // TableStats stores table-level cardinality and column statistics.
 type TableStats struct {
-	TableName   string                  `json:"table_name"`
-	RowCount    int64                   `json:"row_count"`
-	PageCount   int64                   `json:"page_count"`
-	Columns     map[string]*ColumnStats `json:"columns"`
-	Partitions  []string                `json:"partitions,omitempty"`
-	AnalyzedAt  time.Time               `json:"analyzed_at"`
+	TableName    string                  `json:"table_name"`
+	RowCount     int64                   `json:"row_count"`
+	PageCount    int64                   `json:"page_count"`
+	Columns      map[string]*ColumnStats `json:"columns"`
+	MultiColumns []*MultiColumnStats     `json:"multi_columns,omitempty"`
+	Partitions   []string                `json:"partitions,omitempty"`
+	AnalyzedAt   time.Time               `json:"analyzed_at"`
 }
 
 // NewTableStats creates a new TableStats instance.
@@ -199,6 +209,197 @@ func (ts *TableStats) findColumnStats(colName string) (*ColumnStats, bool) {
 	return nil, false
 }
 
+// AddMultiColumnStats adds or updates extended multi-column statistics for a group of columns (C-5).
+func (ts *TableStats) AddMultiColumnStats(name string, cols []string, distinctCount int64, dependency float64) *MultiColumnStats {
+	if ts == nil || len(cols) < 2 {
+		return nil
+	}
+	cleanCols := make([]string, len(cols))
+	for i, c := range cols {
+		cleanCols[i] = strings.ToLower(cleanIdent(c))
+	}
+	sort.Strings(cleanCols)
+
+	if dependency < 0.0 {
+		dependency = 0.0
+	} else if dependency > 1.0 {
+		dependency = 1.0
+	}
+
+	for _, existing := range ts.MultiColumns {
+		if equalStringSlices(existing.Columns, cleanCols) {
+			existing.Name = name
+			existing.DistinctCount = distinctCount
+			existing.Dependency = dependency
+			return existing
+		}
+	}
+
+	ms := &MultiColumnStats{
+		Name:          name,
+		Columns:       cleanCols,
+		DistinctCount: distinctCount,
+		Dependency:    dependency,
+	}
+	ts.MultiColumns = append(ts.MultiColumns, ms)
+	return ms
+}
+
+// FindMultiColumnStats finds an exact matching MultiColumnStats for the given set of columns (order-independent).
+func (ts *TableStats) FindMultiColumnStats(cols []string) *MultiColumnStats {
+	if ts == nil || len(ts.MultiColumns) == 0 || len(cols) < 2 {
+		return nil
+	}
+	cleanCols := make([]string, len(cols))
+	for i, c := range cols {
+		cleanCols[i] = strings.ToLower(cleanIdent(c))
+	}
+	sort.Strings(cleanCols)
+
+	for _, ms := range ts.MultiColumns {
+		if equalStringSlices(ms.Columns, cleanCols) {
+			return ms
+		}
+	}
+	return nil
+}
+
+// FindBestMultiColumnStats finds the most specific MultiColumnStats whose columns are all present in queryCols.
+func (ts *TableStats) FindBestMultiColumnStats(queryCols []string) (*MultiColumnStats, []string) {
+	if ts == nil || len(ts.MultiColumns) == 0 || len(queryCols) < 2 {
+		return nil, nil
+	}
+	var bestStat *MultiColumnStats
+	for _, ms := range ts.MultiColumns {
+		if matchSubsetColumns(ms.Columns, queryCols) {
+			if bestStat == nil || len(ms.Columns) > len(bestStat.Columns) {
+				bestStat = ms
+			}
+		}
+	}
+	if bestStat == nil {
+		return nil, nil
+	}
+	return bestStat, bestStat.Columns
+}
+
+func matchSubsetColumns(statCols []string, queryCols []string) bool {
+	if len(statCols) > len(queryCols) || len(statCols) < 2 {
+		return false
+	}
+	colSet := make(map[string]bool, len(queryCols))
+	for _, c := range queryCols {
+		colSet[strings.ToLower(cleanIdent(c))] = true
+	}
+	for _, sc := range statCols {
+		if !colSet[strings.ToLower(cleanIdent(sc))] {
+			return false
+		}
+	}
+	return true
+}
+
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// EstimateMultiColumnSelectivity calculates combined joint selectivity for correlated columns (C-5).
+func (ts *TableStats) EstimateMultiColumnSelectivity(stat *MultiColumnStats, condCols []string, colSels map[string]float64) float64 {
+	if stat == nil || len(condCols) < 2 {
+		prod := 1.0
+		for _, c := range condCols {
+			prod *= colSels[c]
+		}
+		return prod
+	}
+
+	minSel := 1.0
+	prodSel := 1.0
+	for _, c := range condCols {
+		s, ok := colSels[c]
+		if !ok || s <= 0 {
+			s = 0.33
+		}
+		if s < minSel {
+			minSel = s
+		}
+		prodSel *= s
+	}
+
+	dep := stat.Dependency
+	var jointSel float64
+	if dep > 0.0 {
+		jointSel = dep*minSel + (1.0-dep)*prodSel
+	} else if stat.DistinctCount > 0 {
+		ndvSel := 1.0 / float64(stat.DistinctCount)
+		jointSel = math.Max(ndvSel, prodSel)
+	} else {
+		jointSel = prodSel
+	}
+
+	floor := 0.0001
+	if ts.RowCount > 0 {
+		floor = 1.0 / float64(ts.RowCount)
+	}
+	return math.Min(1.0, math.Max(floor, jointSel))
+}
+
+// ComputeFunctionalDependency computes degree of functional dependency [0.0, 1.0]
+// based on multi-column NDV and individual column NDVs (C-5).
+func ComputeFunctionalDependency(cols []string, multiNDV int64, colStats map[string]*ColumnStats, rowCount int64) float64 {
+	if len(cols) < 2 || multiNDV <= 0 || rowCount <= 0 {
+		return 0.0
+	}
+	var maxColNDV int64 = 1
+	var prodColNDV int64 = 1
+	hasStats := false
+	for _, c := range cols {
+		clean := strings.ToLower(cleanIdent(c))
+		if cs, ok := colStats[clean]; ok && cs != nil && cs.DistinctCount > 0 {
+			hasStats = true
+			if cs.DistinctCount > maxColNDV {
+				maxColNDV = cs.DistinctCount
+			}
+			if prodColNDV < rowCount {
+				prodColNDV *= cs.DistinctCount
+				if prodColNDV > rowCount {
+					prodColNDV = rowCount
+				}
+			}
+		}
+	}
+	if !hasStats {
+		return 0.0
+	}
+	indepNDV := prodColNDV
+	corrNDV := maxColNDV
+	if indepNDV <= corrNDV {
+		return 1.0
+	}
+	if multiNDV <= corrNDV {
+		return 1.0
+	}
+	if multiNDV >= indepNDV {
+		return 0.0
+	}
+	dep := float64(indepNDV-multiNDV) / float64(indepNDV-corrNDV)
+	if dep < 0.0 {
+		return 0.0
+	}
+	if dep > 1.0 {
+		return 1.0
+	}
+	return dep
+}
+
 func extractColumnFromExpr(expr proc.Expr) (string, bool) {
 	if expr == nil {
 		return "", false
@@ -298,6 +499,10 @@ func (ts *TableStats) EstimateExprSelectivity(expr proc.Expr) float64 {
 	case *proc.BinaryExpr:
 		switch e.Op {
 		case proc.TokenAnd:
+			if len(ts.MultiColumns) > 0 {
+				conjuncts := flattenAndExpr(e)
+				return ts.estimateAndConjunctsSelectivity(conjuncts, minSel)
+			}
 			selLeft := ts.EstimateExprSelectivity(e.Left)
 			selRight := ts.EstimateExprSelectivity(e.Right)
 			return math.Max(minSel, selLeft*selRight)
@@ -399,6 +604,89 @@ func (ts *TableStats) EstimateExprSelectivity(expr proc.Expr) float64 {
 	return 0.33
 }
 
+func flattenAndExpr(expr proc.Expr) []proc.Expr {
+	var list []proc.Expr
+	var walk func(ex proc.Expr)
+	walk = func(ex proc.Expr) {
+		if b, ok := ex.(*proc.BinaryExpr); ok && b.Op == proc.TokenAnd {
+			walk(b.Left)
+			walk(b.Right)
+			return
+		}
+		list = append(list, ex)
+	}
+	walk(expr)
+	return list
+}
+
+func (ts *TableStats) estimateAndConjunctsSelectivity(conjuncts []proc.Expr, minSel float64) float64 {
+	type eqItem struct {
+		col string
+		val string
+		sel float64
+		idx int
+	}
+	var eqItems []eqItem
+	otherSels := make([]float64, 0, len(conjuncts))
+
+	for i, c := range conjuncts {
+		if b, ok := c.(*proc.BinaryExpr); ok && b.Op == proc.TokenEq {
+			col, val, isLeftCol, matchOk := extractColumnAndLiteral(b.Left, b.Right)
+			if matchOk {
+				op := tokenToOpString(b.Op)
+				if !isLeftCol {
+					op = flipComparisonOp(op)
+				}
+				s := ts.EstimateSelectivity(col, op, val)
+				cleanCol := strings.ToLower(cleanIdent(col))
+				if idx := strings.Index(cleanCol, "."); idx != -1 {
+					cleanCol = cleanCol[idx+1:]
+				}
+				eqItems = append(eqItems, eqItem{col: cleanCol, val: val, sel: s, idx: i})
+				continue
+			}
+		}
+		s := ts.EstimateExprSelectivity(c)
+		otherSels = append(otherSels, s)
+	}
+
+	usedIndices := make(map[int]bool)
+	totalSel := 1.0
+
+	if len(eqItems) >= 2 {
+		queryCols := make([]string, len(eqItems))
+		for i, eq := range eqItems {
+			queryCols[i] = eq.col
+		}
+
+		if bestStat, matchedCols := ts.FindBestMultiColumnStats(queryCols); bestStat != nil && len(matchedCols) >= 2 {
+			colSels := make(map[string]float64)
+			for _, eq := range eqItems {
+				for _, mc := range matchedCols {
+					if strings.EqualFold(eq.col, mc) && !usedIndices[eq.idx] {
+						colSels[mc] = eq.sel
+						usedIndices[eq.idx] = true
+						break
+					}
+				}
+			}
+			jointSel := ts.EstimateMultiColumnSelectivity(bestStat, matchedCols, colSels)
+			totalSel *= jointSel
+		}
+	}
+
+	for _, eq := range eqItems {
+		if !usedIndices[eq.idx] {
+			totalSel *= eq.sel
+		}
+	}
+	for _, s := range otherSels {
+		totalSel *= s
+	}
+
+	return math.Min(1.0, math.Max(minSel, totalSel))
+}
+
 var (
 	cboEqRe     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(<=|>=|!=|<>|<|>|==|=|LIKE)\s*(.+)$`)
 	cboIsNullRe = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s+IS\s+(NOT\s+)?NULL\s*$`)
@@ -406,13 +694,19 @@ var (
 
 // EstimateCompoundSelectivity calculates the combined selectivity across multiple predicates.
 // It parses each predicate into an AST expression when possible, using boolean tree rules (AND, OR, NOT, IN, BETWEEN),
-// and falls back to regex matching or heuristic defaults.
+// and falls back to regex matching or heuristic defaults. It leverages MultiColumnStats for correlated equality conditions (C-5).
 func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
 	if ts == nil || len(conds) == 0 {
 		return 0.33
 	}
 
-	totalSel := 1.0
+	type parsedCond struct {
+		col  string
+		isEq bool
+		sel  float64
+	}
+
+	parsed := make([]parsedCond, 0, len(conds))
 	matchedAny := false
 
 	for _, cond := range conds {
@@ -424,8 +718,25 @@ func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
 		// 1. Try AST parsing first for full boolean tree (OR, NOT, AND, BETWEEN, IN)
 		parser := proc.NewParser(proc.NewLexer(cond))
 		if expr := parser.ParseExpr(); expr != nil && len(parser.Errors()) == 0 {
+			if b, ok := expr.(*proc.BinaryExpr); ok && b.Op == proc.TokenEq {
+				col, val, isLeftCol, matchOk := extractColumnAndLiteral(b.Left, b.Right)
+				if matchOk {
+					op := tokenToOpString(b.Op)
+					if !isLeftCol {
+						op = flipComparisonOp(op)
+					}
+					cleanCol := strings.ToLower(cleanIdent(col))
+					if idx := strings.Index(cleanCol, "."); idx != -1 {
+						cleanCol = cleanCol[idx+1:]
+					}
+					sel := ts.EstimateSelectivity(col, op, val)
+					parsed = append(parsed, parsedCond{col: cleanCol, isEq: true, sel: sel})
+					matchedAny = true
+					continue
+				}
+			}
 			sel := ts.EstimateExprSelectivity(expr)
-			totalSel *= sel
+			parsed = append(parsed, parsedCond{sel: sel})
 			matchedAny = true
 			continue
 		}
@@ -436,33 +747,73 @@ func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
 			if idx := strings.Index(rawCol, "."); idx != -1 {
 				rawCol = rawCol[idx+1:]
 			}
-			colName := cleanIdent(rawCol)
+			colName := strings.ToLower(cleanIdent(rawCol))
 			op := m[2]
 			val := strings.TrimSpace(m[3])
 			sel := ts.EstimateSelectivity(colName, op, val)
-			totalSel *= sel
+			isEq := (op == "=" || op == "==")
+			parsed = append(parsed, parsedCond{col: colName, isEq: isEq, sel: sel})
 			matchedAny = true
 		} else if m := cboIsNullRe.FindStringSubmatch(cond); len(m) >= 2 {
 			rawCol := m[1]
 			if idx := strings.Index(rawCol, "."); idx != -1 {
 				rawCol = rawCol[idx+1:]
 			}
-			colName := cleanIdent(rawCol)
+			colName := strings.ToLower(cleanIdent(rawCol))
 			op := "IS NULL"
 			if strings.TrimSpace(m[2]) != "" {
 				op = "IS NOT NULL"
 			}
 			sel := ts.EstimateSelectivity(colName, op, "")
-			totalSel *= sel
+			parsed = append(parsed, parsedCond{col: colName, sel: sel})
 			matchedAny = true
 		} else {
-			totalSel *= 0.33
+			parsed = append(parsed, parsedCond{sel: 0.33})
 			matchedAny = true
 		}
 	}
 
 	if !matchedAny {
 		return 0.33
+	}
+
+	totalSel := 1.0
+	usedIndices := make(map[int]bool)
+
+	// Evaluate multi-column statistics for correlated equality conditions (C-5)
+	if len(ts.MultiColumns) > 0 {
+		var eqIndices []int
+		var queryCols []string
+		for i, p := range parsed {
+			if p.isEq && p.col != "" {
+				eqIndices = append(eqIndices, i)
+				queryCols = append(queryCols, p.col)
+			}
+		}
+
+		if len(eqIndices) >= 2 {
+			if bestStat, matchedCols := ts.FindBestMultiColumnStats(queryCols); bestStat != nil && len(matchedCols) >= 2 {
+				colSels := make(map[string]float64)
+				for _, idx := range eqIndices {
+					p := parsed[idx]
+					for _, mc := range matchedCols {
+						if strings.EqualFold(p.col, mc) && !usedIndices[idx] {
+							colSels[mc] = p.sel
+							usedIndices[idx] = true
+							break
+						}
+					}
+				}
+				jointSel := ts.EstimateMultiColumnSelectivity(bestStat, matchedCols, colSels)
+				totalSel *= jointSel
+			}
+		}
+	}
+
+	for i, p := range parsed {
+		if !usedIndices[i] {
+			totalSel *= p.sel
+		}
 	}
 
 	minSel := 0.0001

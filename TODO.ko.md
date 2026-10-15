@@ -22,11 +22,19 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P1** | **CBO 최적화** | **다중 컬럼 확장 통계 (Extended Stats) (`C-5`)** | `pkg/planner` | 컬럼 상관관계(예: 국가-도시)에 따른 카디널리티 과소평가 방지 |
+| **P1** | **CBO 최적화** | **MCV (Most Common Values) 최빈값 목록 결합 (`C-7`)** | `pkg/planner` | 왜곡 데이터 최빈값 분리 보관으로 선택도 오차 최소화 |
 | **P2** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
 | **P3** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`sqlion migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down` 및 `_migrations` 이력 추적 |
 
 ### P1/P2 최근 완료 과제: 엔진 성능 & 최적화
+- [x] **다중 컬럼 확장 통계 및 함수적 종속성 모델링 (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**
+  - **배경**: 속성 값 독립성(AVI: Attribute Value Independence) 가정으로 인해 상관관계가 높은 다중 컬럼(예: 국가-도시) 조건 평가 시 카디널리티가 최대 10~100배 과소평가(Underestimation)되는 왜곡 해소.
+  - **구현 내용**:
+    - `MultiColumnStats` 모델 및 다중 컬럼 결합 NDV(DistinctCount) 수집 엔진 구현 (`pkg/planner/stats.go`).
+    - 단일 컬럼 NDV 대비 결합 NDV 비율을 기반으로 함수적 종속성 계수($dep \in [0.0, 1.0]$) 자동 산출 (`ComputeFunctionalDependency`).
+    - `EstimateCompoundSelectivity` 및 `EstimateExprSelectivity`에서 상관관계 컬럼 감지 시 $dep \cdot \min(P_i) + (1-dep) \cdot \prod P_i$ 결합 선택도 산출 적용.
+    - T-SQL DDL 문법 지원: `CREATE STATISTICS stat_name ON table_name (col1, col2, ...)` 및 `DROP STATISTICS` 파싱 및 카탈로그 영속화 연동.
+    - `ANALYZE TABLE` 실행 시 복합 보조 인덱스 및 등록된 확장 통계에 대한 다중 컬럼 결합 통계 자동 수집 완비.
 - [x] **$N > 4$ 체인 조인 동적 계획법 (DP / Selinger) 조인 순서 최적화 (`B-4`) (`pkg/planner`)**
   - **배경**: 5개 이상 다중 테이블 조인 시 기존 $O(N!)$ 전수 순열 탐색으로 인한 지수적 계산 폭증 방지 및 서브밀리초 최적 조인 트리 탐색.
   - **구현 내용**:
@@ -99,14 +107,14 @@
 | **D-9** | **CBO 옵티마이저 힌트 오버라이드 제어** | **완료 (`[x]`)** | T-SQL 조인 힌트(`HASH/LOOP/MERGE`) 및 인덱스 힌트(`WITH (INDEX(...))`) 강제 반영 |
 | **B-3** | **소트-머지 조인 (Sort-Merge Join) 연산자** | **완료 (`[x]`)** | 정렬된 입력에 대해 $O(M+N)$ 해시리스 스트리밍 조인(`MergeJoinIterator`) |
 | **B-4** | **$N > 4$ 체인 조인 동적 계획법 (DP)** | **완료 (`[x]`)** | 5개 이상 테이블 조인 시 Left-Deep DP 부분집합 비트마스크 동적 탐색 완료 |
-| **C-5** | **다중 컬럼 확장 통계 (Extended Stats)** | **대기 (`[ ]`)** | 컬럼 상관관계로 인한 카디널리티 과소평가 방지 |
+| **C-5** | **다중 컬럼 확장 통계 (Extended Stats)** | **완료 (`[x]`)** | 컬럼 상관관계로 인한 카디널리티 과소평가 방지 및 결합 선택도 산출 완료 |
 | **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **대기 (`[ ]`)** | 왜곡 데이터 최빈값 분리 처리 |
 | **D-8** | **백그라운드 자동 통계 갱신 데몬** | **완료 (`[x]`)** | DML 변동량(Dirty Tuples) 기반 자동 `ANALYZE` 트리거 |
 
 - [x] **동적 계획법(DP / Selinger) 기반 대규모 조인 순서 최적화 ($N > 4$) (`B-4`) (`pkg/planner`)**
   - 4개 이하의 체인 조인 전수 순열 탐색을 넘어, $N > 4$ 테이블 조인에 대한 부분집합 비트마스크(`1 << n`) 기반 Selinger DP 및 연결성 기반 가지치기(Pruning) 완비.
-- [ ] **다중 컬럼 확장 통계 (Extended / Multi-Column Statistics) (`pkg/planner`)**
-  - 컬럼 간 상관관계(예: 국가-도시)로 인한 복합 조건 카디널리티 과소평가(Underestimation)를 방지하는 다중 컬럼 NDV 수집.
+- [x] **다중 컬럼 확장 통계 (Extended / Multi-Column Statistics) (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**
+  - 컬럼 간 상관관계(예: 국가-도시)로 인한 복합 조건 카디널리티 과소평가(Underestimation)를 방지하는 다중 컬럼 NDV 수집, 함수적 종속성 모델링($dep$), CREATE/DROP STATISTICS DDL 및 결합 선택도 산출 완비.
 - [ ] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`pkg/planner`)**
   - 왜곡(Skew)이 심한 상위 N개 최빈값은 MCV 목록으로 보관하고 나머지 균등 분포는 히스토그램으로 이원화 처리.
 - [x] **백그라운드 자동 통계 갱신 데몬 (Auto-Analyze Daemon) (`D-8`) (`pkg/engine`, `pkg/catalog`, `pkg/storage`)**

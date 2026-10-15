@@ -914,6 +914,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execCreateIndex(trimmed, start)
 	}
 
+	// 3.2 DDL: CREATE STATISTICS (C-5)
+	if strings.HasPrefix(upper, "CREATE STATISTICS") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
+		return s.execCreateStatistics(trimmed, start)
+	}
+
 	// 4. DDL: DROP TABLE
 	if strings.HasPrefix(upper, "DROP TABLE") {
 		if err := s.checkWriteAllowed(); err != nil {
@@ -928,6 +936,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			return nil, err
 		}
 		return s.execDropIndex(trimmed, start)
+	}
+
+	// 4.1.5 DDL: DROP STATISTICS (C-5)
+	if strings.HasPrefix(upper, "DROP STATISTICS") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
+		return s.execDropStatistics(trimmed, start)
 	}
 
 	// 4.2 DDL/DML: TRUNCATE TABLE

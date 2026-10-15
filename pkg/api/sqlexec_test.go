@@ -2767,3 +2767,68 @@ func TestSQLExecutor_StandardPagingAndTop(t *testing.T) {
 		t.Errorf("expected ids 20..17, got first=%v, last=%v", res3.Rows[0]["id"], res3.Rows[3]["id"])
 	}
 }
+
+func TestSQLExecutor_CreateStatistics_CorrelatedSelectivity(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, err := server.ExecuteSQL(`CREATE TABLE customers (id INT PRIMARY KEY, country VARCHAR(20), city VARCHAR(50));`)
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// Insert correlated data: 100 rows where city strictly determines country
+	countries := []string{"US", "KR", "JP", "DE", "FR"}
+	for i := 1; i <= 100; i++ {
+		cIdx := (i - 1) % 5
+		country := countries[cIdx]
+		city := fmt.Sprintf("%s_City_%d", country, (i-1)%20)
+		_, err = server.ExecuteSQL(fmt.Sprintf("INSERT INTO customers (id, country, city) VALUES (%d, '%s', '%s');", i, country, city))
+		if err != nil {
+			t.Fatalf("INSERT row %d failed: %v", i, err)
+		}
+	}
+
+	// 1. CREATE STATISTICS stat_geo ON customers (country, city)
+	res, err := server.ExecuteSQL(`CREATE STATISTICS stat_geo ON customers (country, city);`)
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE STATISTICS failed: %v", err)
+	}
+
+	// Verify catalog has the statistics
+	stats, ok := cat.GetStatistics("customers", "stat_geo")
+	if !ok || stats == nil {
+		t.Fatalf("expected stat_geo in catalog")
+	}
+
+	// Verify table stats has multi-column stats
+	ts, ok := cat.GetTableStats("customers")
+	if !ok || ts == nil {
+		t.Fatalf("expected customers table stats")
+	}
+	ms := ts.FindMultiColumnStats([]string{"city", "country"})
+	if ms == nil {
+		t.Fatalf("expected multi-column stats on (country, city)")
+	}
+	if ms.Dependency < 0.9 {
+		t.Errorf("expected dependency ~1.0, got %f", ms.Dependency)
+	}
+
+	// 2. EXPLAIN query on correlated conditions
+	res, err = server.ExecuteSQL(`EXPLAIN SELECT * FROM customers WHERE country = 'US' AND city = 'US_City_0';`)
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN failed: %v", err)
+	}
+
+	// 3. DROP STATISTICS
+	res, err = server.ExecuteSQL(`DROP STATISTICS stat_geo ON customers;`)
+	if err != nil || !res.Success {
+		t.Fatalf("DROP STATISTICS failed: %v", err)
+	}
+	if _, ok := cat.GetStatistics("customers", "stat_geo"); ok {
+		t.Fatalf("expected stat_geo to be dropped")
+	}
+}
