@@ -1,4 +1,4 @@
-# SQLion
+# LionSQL
 
 High-Concurrency Embedded OLTP Database Engine & Multi-Protocol Stored Procedure Server
 
@@ -6,13 +6,13 @@ High-Concurrency Embedded OLTP Database Engine & Multi-Protocol Stored Procedure
 
 ## Overview
 
-SQLion is an enterprise-grade, high-concurrency embedded relational database engine written in Go and Cgo (WiredTiger). Designed with the simplicity of PocketBase and the operational power of enterprise relational engines, SQLion is delivered as a **single standalone executable** with zero external dependencies.
+LionSQL is an enterprise-grade, high-concurrency embedded relational database engine written in Go and Cgo (WiredTiger). Designed with the simplicity of PocketBase and the operational power of enterprise relational engines, LionSQL is delivered as a **single standalone executable** with zero external dependencies.
 
-SQLion seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Microsoft SQL Server TDS), an embedded web administration dashboard, a native T-SQL stored procedure bytecode virtual machine, a cost-based query optimizer (CBO), and a built-in goroutine connection pooler that eliminates the need for external tools like PgBouncer.
+LionSQL seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Microsoft SQL Server TDS), an embedded web administration dashboard, a native T-SQL stored procedure bytecode virtual machine, a cost-based query optimizer (CBO), and a built-in goroutine connection pooler that eliminates the need for external tools like PgBouncer.
 
 ```
                     +------------------------------------------+
-                    |                  SQLion                  |
+                    |                 LionSQL                  |
                     |  (Single Standalone Static Go Executable)|
                     +------------------------------------------+
                                          │
@@ -154,7 +154,7 @@ go build -buildvcs=false -o bin/server ./cmd/server
 ### 2. Starting the Server
 
 ```bash
-# Start SQLion with default ports and WiredTiger storage (creates 'data' directory)
+# Start LionSQL with default ports and WiredTiger storage (creates 'data' directory)
 ./bin/server
 
 # Or start with the pure-Go in-memory engine (zero Cgo required)
@@ -165,7 +165,7 @@ Upon startup, the console displays the connection endpoints:
 
 ```
 ------------------------------------------------------------
- SQLion - High-Concurrency OLTP & Stored Procedure Server
+ LionSQL - High-Concurrency OLTP & Stored Procedure Server
 ------------------------------------------------------------
  [Web Dashboard]  http://127.0.0.1:8090/_/
  [HTTP API]       http://127.0.0.1:8090/api/health
@@ -249,7 +249,7 @@ import (
 )
 
 func main() {
-	dsn := "postgres://admin:1234567890@127.0.0.1:5433/sqlion?sslmode=disable"
+	dsn := "postgres://admin:1234567890@127.0.0.1:5433/lionsql?sslmode=disable"
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		log.Fatal(err)
@@ -277,9 +277,9 @@ func main() {
 ### JavaScript / TypeScript (Official Client SDK)
 
 ```javascript
-import SQLion from './sdk/sqlion.js';
+import LionSQL from './sdk/sqlion.js';
 
-const client = new SQLion('http://127.0.0.1:8090', { auth: 'YOUR_API_KEY' });
+const client = new LionSQL('http://127.0.0.1:8090', { auth: 'YOUR_API_KEY' });
 
 // 1. Query records with declarative filtering & sorting
 const res = await client.collection('accounts').getList(1, 20, {
@@ -307,7 +307,7 @@ conn = psycopg2.connect(
     port=5433,
     user="admin",
     password="",
-    dbname="sqlion"
+    dbname="lionsql"
 )
 
 with conn.cursor() as cur:
@@ -327,7 +327,7 @@ const client = new Client({
   host: '127.0.0.1',
   port: 5433,
   user: 'admin',
-  database: 'sqlion',
+  database: 'lionsql',
 });
 
 async function run() {
@@ -364,10 +364,10 @@ run();
 
 ### Background Daemon Controls
 
-SQLion can run as a background service without third-party daemon wrappers:
+LionSQL can run as a background service without third-party daemon wrappers:
 
 ```bash
-# Start SQLion in the background
+# Start LionSQL in the background
 ./bin/server -d
 
 # Check daemon status and PID
@@ -384,23 +384,23 @@ SQLion can run as a background service without third-party daemon wrappers:
 
 ```bash
 # Offline or CLI-driven snapshot hot backup to target archive
-./bin/server -dir=data -backup=/backups/sqlion-snapshot.tar.gz
+./bin/server -dir=data -backup=/backups/lionsql-snapshot.tar.gz
 
 # Restore database from archive
-./bin/server -dir=data -restore=/backups/sqlion-snapshot.tar.gz
+./bin/server -dir=data -restore=/backups/lionsql-snapshot.tar.gz
 
 # Online live backup download via curl while server is running
 curl -OJ http://127.0.0.1:8090/api/backup
 
 # Online restore via HTTP POST multipart upload
-curl -X POST -F "backup=@/backups/sqlion-snapshot.tar.gz" http://127.0.0.1:8090/api/restore
+curl -X POST -F "backup=@/backups/lionsql-snapshot.tar.gz" http://127.0.0.1:8090/api/restore
 ```
 
 ---
 
 ## HTTP REST API Reference
 
-SQLion exposes a complete PocketBase-style REST API on `:8090`:
+LionSQL exposes a complete PocketBase-style REST API on `:8090`:
 
 | Method | Endpoint | Description |
 |---|---|---|
@@ -430,7 +430,7 @@ SQLion exposes a complete PocketBase-style REST API on `:8090`:
 
 ## Documentation Suite
 
-SQLion provides comprehensive documentation covering system architecture, operational runbooks, internal engine specifications, and API guides:
+LionSQL provides comprehensive documentation covering system architecture, operational runbooks, internal engine specifications, and API guides:
 
 ### [Master Technical Documentation Directory (doc/README.md)](doc/README.md)
 Start here for a complete subject-based directory of all architectural blueprints, internals, and guides.
@@ -474,7 +474,7 @@ Start here for a complete subject-based directory of all architectural blueprint
 
 ## Engineering Quality & Verification Pipeline
 
-SQLion strictly adheres to a **3-Stage Verification Pipeline** for every change:
+LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change:
 
 1. **Compilation (Build)**:
    ```bash
@@ -495,7 +495,7 @@ SQLion strictly adheres to a **3-Stage Verification Pipeline** for every change:
 ## License
 
 ### Open Source License
-SQLion is free open-source software licensed under the **GNU General Public License v3 (GPL-3.0-or-later)**. See [LICENSE](LICENSE) for the full canonical license text.
+LionSQL is free open-source software licensed under the **GNU General Public License v3 (GPL-3.0-or-later)**. See [LICENSE](LICENSE) for the full canonical license text.
 
 ### Commercial Dual Licensing & Enterprise Embeddings
 For commercial software development, proprietary in-engine embedding, or enterprise deployments that require custom licensing terms without GPL copyleft obligations, commercial dual-licensing agreements are available upon request.

@@ -1,13 +1,13 @@
-# SQLion Technical Documentation Directory
+# LionSQL Technical Documentation Directory
 
-Welcome to the comprehensive technical documentation for **SQLion**—a high-concurrency embedded OLTP database engine and modern Backend-as-a-Service (BaaS) packaged as a single standalone executable.
+Welcome to the comprehensive technical documentation for **LionSQL**—a high-concurrency embedded OLTP database engine and modern Backend-as-a-Service (BaaS) packaged as a single standalone executable.
 
 ---
 
 ## 1. Documentation Map by Subject Area
 
 ```
-                             [ SQLion Documentation Root ]
+                             [ LionSQL Documentation Root ]
                                           │
        ┌──────────────────┬───────────────┴───────────────┬──────────────────┐
        ▼                  ▼                               ▼                  ▼
@@ -32,7 +32,7 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 
 ### 2.1. Architecture & Core Database Engine
 * [`ARCHITECTURE.md`](file:///Users/maro/Projects/sql/doc/ARCHITECTURE.md)
-  * End-to-end architectural blueprint of SQLion.
+  * End-to-end architectural blueprint of LionSQL.
   * Dual-storage backend (Pure-Go OCC memory engine vs WiredTiger lock-free B+Tree with MVCC).
   * Ambient ACID transactions, isolation levels, and goroutine connection pooler.
 * [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_STORAGE.md)
@@ -117,7 +117,7 @@ Welcome to the comprehensive technical documentation for **SQLion**—a high-con
 * [`API_REFERENCE.md`](file:///Users/maro/Projects/sql/doc/API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
 * [`CDC_DUCKDB_INTEGRATION.md`](file:///Users/maro/Projects/sql/doc/CDC_DUCKDB_INTEGRATION.md)
-  * SQLion 실시간 CDC 스트림(`GET /api/cdc/stream`) 및 DuckDB 분리형(Decoupled) HTAP 분석 연동 가이드 (Python & DuckDB 샘플 포함).
+  * LionSQL 실시간 CDC 스트림(`GET /api/cdc/stream`) 및 DuckDB 분리형(Decoupled) HTAP 분석 연동 가이드 (Python & DuckDB 샘플 포함).
 
 ---
 
