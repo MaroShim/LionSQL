@@ -9,7 +9,7 @@
 | 접두사 / 코드 | 트랙 명칭 (도메인) | 번호 부여 규칙 및 범위 | 설명 |
 | :---: | :--- | :---: | :--- |
 | **`P1` ~ `P3`** | **우선순위 (Priority)** | `P1` ~ `P3` | 개발 착수 긴급도 (P1: 즉시 착수/완료, P2: 차기 착수, P3: 생태계 검증) |
-| **`P-1` ~ `P-5`** | **엔진 성능 (Performance)** | `P-1` ~ `P-5` | 스토리지, 디코딩, 와이어, 캐시 전반의 5대 핵심 성능 극대화 트랙 |
+| **`P-1` ~ `P-10`** | **엔진 성능 (Performance)** | `P-1` ~ `P-10` | 스토리지, 디코딩, 와이어, 캐시, 정규식, JSON, 병렬 쿼리 전반의 10대 핵심 성능 극대화 트랙 |
 | **`A` ~ `D`** | **CBO 최적화 (Optimizer)** | `A-1` ~ `D-9` | 비용 기반 옵티마이저 4대 기능 트랙 (A: 통계 수집, B: 조인 알고리즘, C: 선택도, D: 운영 제어) |
 | **`S-1` ~ `S-7`** | **SQL 문법 (Syntax)** | `S-1` ~ `S-7` | T-SQL 및 ANSI SQL 7대 문법 호환성 완비 트랙 (전 항목 완료) |
 
@@ -22,8 +22,13 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
+| **P1** | **엔진 성능 (P-6)** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | `pkg/engine` | 쿼리당 동적 `regexp.MustCompile` 힙 할당 및 5~15µs 지연 완전 제거 |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
-| **P2** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
+| **P2** | **엔진 성능 (P-7)** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너** | `pkg/storage`, `pkg/engine` | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
+| **P2** | **엔진 성능 (P-8)** | **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`cur->reset`)** | `pkg/storage/wiredtiger` | CGo 경유 WiredTiger 단건 조회/인덱스 스캔 TPS 30%+ 향상 |
+| **P2** | **엔진 성능 (P-9)** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | `pkg/engine`, `pkg/planner` | 반복 실행 OLTP 쿼리의 파서/CBO 플래너 오버헤드 100% 바이패스 |
+| **P3** | **엔진 성능 (P-10)** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | `pkg/execution` | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
+| **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성 & BaaS 확장
@@ -227,7 +232,41 @@
 | **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **완료 (`[x]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **완료 (`[x]`)** | 볼케이노 가상 디스패치 및 컨텍스트 취소 오버헤드 99% 삭감, 1024 튜플 배치 스트리밍 |
 | **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료 (`[x]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
+| **P-6** | **파서 & 엔진** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | **대기 (`[ ]`)** | 쿼리당 동적 `regexp.MustCompile` 힙 할당 및 5~15µs 지연 완전 제거 |
+| **P-7** | **JSON & 내장함수** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 키 스캐너** | **대기 (`[ ]`)** | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
+| **P-8** | **스토리지/CGo** | **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`cur->reset`)** | **대기 (`[ ]`)** | CGo 경유 WiredTiger 단건 조회/인덱스 스캔 TPS 30%+ 향상 |
+| **P-9** | **옵티마이저/캐시** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | **대기 (`[ ]`)** | 반복 실행 OLTP 쿼리의 파서/CBO 플래너 오버헤드 100% 바이패스 |
+| **P-10** | **실행기/병렬화** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | **대기 (`[ ]`)** | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
 
+- [ ] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 및 바이트 토큰 스캐너 전환 (`P-6`) (`pkg/engine`)**
+  - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_select.go`, `sqlexec_eval.go`, `sqlexec_explain.go`의 핫패스 함수 내부에 위치한 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 NFA/DFA 재컴파일 및 힙 할당 오버헤드(5~15µs) 제거.
+  - **구현 계획**:
+    - 모든 동적 정규식을 패키지 레벨 전역 변수(`var selectRe = regexp.MustCompile(...)`)로 승격 및 사전 컴파일.
+    - 고빈도 커맨드 분기(`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `KILL`, `USE`)에 대해 정규식 대신 슬라이스 프리픽스 및 바이트 토큰 스캐너 적용.
+    - 쿼리당 힙 할당 0건 및 디스패치 지연 서브마이크로초화.
+- [ ] **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너 (`P-7`) (`pkg/storage`, `pkg/engine`)**
+  - **배경**: `ExtractJSON`, `ExtractJSONText`, `JSONValueByPath` 호출 시 매번 Go 표준 라이브러리의 `json.Unmarshal`을 호출하여 `map[string]any`를 힙에 생성하는 오버헤드 및 단일 튜플 내 다중 JSON 필드 참조 시 중복 파싱 제거.
+  - **구현 계획**:
+    - 동일 튜플 평가 컨텍스트 내 파싱된 JSON DOM 캐싱: 한 행에서 `doc->>'name'`, `doc->>'city'` 등 여러 필드를 추출할 때 1회만 언마샬링.
+    - 최상위 키 추출 전용 제로-할당 경량 스트리밍 바이트 스캐너(`ScanJSONTopLevelKey`): 전체 트리 구축 없이 바이트 오프셋 슬라이싱으로 즉시 추출.
+    - JSON 대량 스캔/필터 쿼리 시 GC 부하 70% 경감.
+- [ ] **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`P-8`) (`pkg/storage/wiredtiger`)**
+  - **배경**: `tx.Get`, `tx.Scan`, `tx.IndexScan` 호출 시마다 CGo를 통해 `go_wt_open_cursor` 및 `cur->close`를 반복 수행하여 발생하는 CGo 전환 오버헤드 및 WiredTiger 내부 커서 메모리 재할당 병목 제거.
+  - **구현 계획**:
+    - 세션/트랜잭션 레벨 커서 캐시 도입: 테이블/인덱스 URI별로 열린 커서를 보관하고, 쿼리 종료 시 닫는 대신 `cur->reset()`으로 초기화 후 재사용.
+    - WiredTiger 단건 포인트 룩업(`tx.Get`) 및 인덱스 스캔 처리량 30%~50% 향상.
+- [ ] **정형 SQL Parameterized 쿼리 실행 계획 캐시 (`P-9`) (`pkg/engine`, `pkg/planner`)**
+  - **배경**: VDBE 프로시저 외에 일반 PGWire/TDS를 통해 유입되는 반복 실행 Parameterized 쿼리(`SELECT ... WHERE id = $1`)의 매회 정규식 파싱, AST 구축, CBO 비용 계산 및 Volcano 실행 트리 재생성 비용 제거.
+  - **구현 계획**:
+    - FNV-1a 64비트 쿼리 템플릿 해시 기반 Bounded LRU `SQLPlanCache` 구축.
+    - 캐시 히트 시 파서와 CBO 최적화 과정을 완전히 바이패스하고, 캐싱된 물리 실행 노드(`PlanNode`)에 런타임 파라미터만 리바인딩하여 실행.
+    - 고빈도 OLTP 쿼리 TPS 대폭 향상.
+- [ ] **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`P-10`) (`pkg/execution`)**
+  - **배경**: 현재 1개 쿼리가 단일 고루틴(1개 CPU 코어)에서만 실행되는 구조를 탈피하여, 100만 건 이상의 대규모 테이블 풀 스캔 및 집계 시 멀티코어 하드웨어 자원을 100% 활용.
+  - **구현 계획**:
+    - `ParallelSeqScanIterator`: 테이블 파티션 또는 레코드 키 범위를 N개 작업 단위로 분할하여 N개 워커 고루틴이 동시 스캔.
+    - 병렬 집계 취합기(`ParallelAggregateIterator`): 각 워커가 로컬 집계(`SUM`, `COUNT`)를 수행한 뒤 마스터가 최종 병합.
+    - 8코어/16코어 환경에서 대용량 집계 쿼리 4~8배 선형 가속.
 - [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 투영 푸시다운 (`pkg/storage`, `pkg/execution`)**
   - 풀 스캔 시 WHERE 절 조건 컬럼만 선별 디코딩하고, 조건을 통과한 행에 한해서만 나머지 투영 컬럼을 언패킹하여 CPU 및 힙 할당 70% 삭감.
 - [x] **커버링 인덱스 비키 컬럼 문법 지원: `CREATE INDEX ... INCLUDE (col...)` (`pkg/storage`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**
