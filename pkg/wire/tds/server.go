@@ -1936,18 +1936,35 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 	for i, colName := range res.Columns {
 		colType := TypeNVarChar
 		colSize := 4000
+		scale := 0
 		nullable := true
 
 		lowerCol := strings.ToLower(colName)
-		if strings.HasSuffix(lowerCol, "date") || strings.HasSuffix(lowerCol, "time") || lowerCol == "created" || lowerCol == "modified" {
+		if lowerCol == "create_date" || lowerCol == "modify_date" {
 			colType = TypeDateTimeN
 			colSize = 8
+		} else if strings.Contains(lowerCol, "datetime2") {
+			colType = TypeDateTime2N
+			colSize = 8
+			scale = 7
+		} else if strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") {
+			colType = TypeDateTimeN
+			colSize = 8
+		} else if strings.HasSuffix(lowerCol, "date") {
+			colType = TypeDateN
+			colSize = 3
+		} else if strings.HasSuffix(lowerCol, "time") || lowerCol == "created" || lowerCol == "modified" {
+			colType = TypeDateTimeN
+			colSize = 8
+		} else if strings.HasSuffix(lowerCol, "guid") || strings.HasSuffix(lowerCol, "uuid") || lowerCol == "uniqueidentifier" {
+			colType = TypeGuid
+			colSize = 16
 		}
 
 		// Scan non-null sample values from rows
 		for _, row := range res.Rows {
 			if v, ok := row[colName]; ok && v != nil {
-				switch v.(type) {
+				switch val := v.(type) {
 				case int, int64, int32, int16, int8:
 					colType = TypeIntN
 					colSize = 8
@@ -1958,10 +1975,28 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 					colType = TypeBitN
 					colSize = 1
 				case time.Time:
-					colType = TypeDateTimeN
-					colSize = 8
+					if strings.Contains(lowerCol, "datetime2") {
+						colType = TypeDateTime2N
+						colSize = 8
+						scale = 7
+					} else if lowerCol == "create_date" || lowerCol == "modify_date" || strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") || lowerCol == "created" || lowerCol == "modified" {
+						colType = TypeDateTimeN
+						colSize = 8
+					} else if strings.HasSuffix(lowerCol, "date") {
+						colType = TypeDateN
+						colSize = 3
+					} else {
+						colType = TypeDateTimeN
+						colSize = 8
+					}
 				case string:
-					if colType != TypeDateTimeN {
+					if isUUIDString(val) {
+						colType = TypeGuid
+						colSize = 16
+					} else if isDateString(val) && lowerCol != "create_date" && lowerCol != "modify_date" {
+						colType = TypeDateN
+						colSize = 3
+					} else if colType != TypeDateTimeN && colType != TypeDateTime2N && colType != TypeDateN && colType != TypeGuid {
 						colType = TypeNVarChar
 						colSize = 4000
 					}
@@ -1974,11 +2009,43 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 			Name:     colName,
 			Type:     colType,
 			Size:     colSize,
+			Scale:    scale,
 			Nullable: nullable,
 		}
 	}
 
 	return cols
+}
+
+func isUUIDString(s string) bool {
+	cleaned := strings.Trim(strings.TrimSpace(s), "'\"{}")
+	if len(cleaned) == 36 && cleaned[8] == '-' && cleaned[13] == '-' && cleaned[18] == '-' && cleaned[23] == '-' {
+		for i, c := range cleaned {
+			if i == 8 || i == 13 || i == 18 || i == 23 {
+				continue
+			}
+			if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func isDateString(s string) bool {
+	if len(s) == 10 && s[4] == '-' && s[7] == '-' {
+		for i, c := range s {
+			if i == 4 || i == 7 {
+				continue
+			}
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {

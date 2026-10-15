@@ -5,10 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
-	_ "github.com/microsoft/go-mssqldb"
+	mssql "github.com/microsoft/go-mssqldb"
 
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/storage/memengine"
@@ -732,6 +733,60 @@ func TestDriverIntegration_DBeaver_Queries(t *testing.T) {
 	}
 	if !foundName {
 		t.Fatalf("expected 'name' in columns, got %v", cols)
+	}
+}
+
+func TestDriverIntegration_DateDateTime2Guid(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, "CREATE TABLE events_2008 (id INT PRIMARY KEY, user_guid VARCHAR(36), event_date DATE, created_at DATETIME);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	testGuid := "6F9619FF-8B86-D011-B42D-00C04FC964FF"
+	_, err = db.ExecContext(ctx, fmt.Sprintf("INSERT INTO events_2008 (id, user_guid, event_date, created_at) VALUES (1, '%s', '2026-10-15', '2026-10-15 10:20:30');", testGuid))
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	var id int
+	var guidVal mssql.UniqueIdentifier
+	var dateVal time.Time
+	var createdAt time.Time
+	err = db.QueryRowContext(ctx, "SELECT id, user_guid, event_date, created_at FROM events_2008 WHERE id = 1;").Scan(&id, &guidVal, &dateVal, &createdAt)
+	if err != nil {
+		t.Fatalf("QueryRowContext failed: %v", err)
+	}
+
+	if id != 1 {
+		t.Fatalf("expected id 1, got %d", id)
+	}
+	if dateVal.Year() != 2026 || dateVal.Month() != 10 || dateVal.Day() != 15 {
+		t.Fatalf("expected event_date 2026-10-15, got %v", dateVal)
+	}
+	if !strings.EqualFold(guidVal.String(), testGuid) {
+		t.Fatalf("expected GUID %s, got %s", testGuid, guidVal.String())
 	}
 }
 

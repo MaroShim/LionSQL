@@ -3,7 +3,11 @@ package tds
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"testing"
+	"time"
+
+	"sqlion/pkg/engine"
 )
 
 func TestBuildNBCRow_SingleColumnNull(t *testing.T) {
@@ -137,5 +141,199 @@ func TestBuildNBCRow_AllNotNull(t *testing.T) {
 	}
 	if !bytes.Contains(raw, []byte("hello")) {
 		t.Fatalf("expected payload to contain 'hello'")
+	}
+}
+
+func TestTypeDateN_Encoding(t *testing.T) {
+	cols := []ColumnInfo{
+		{Name: "order_date", Type: TypeDateN, Nullable: true},
+	}
+
+	// 1. Verify ColMetaData:
+	meta := BuildColMetaData(cols)
+	if meta[0] != TokenColMetaData {
+		t.Fatalf("expected TokenColMetaData 0x81, got 0x%02X", meta[0])
+	}
+	colCount := binary.LittleEndian.Uint16(meta[1:3])
+	if colCount != 1 {
+		t.Fatalf("expected colCount 1, got %d", colCount)
+	}
+	typeByte := meta[9]
+	if typeByte != TypeDateN {
+		t.Fatalf("expected TypeDateN 0x28, got 0x%02X", typeByte)
+	}
+	// For TypeDateN, no TYPE_VARLEN follows. Next byte is ColName len
+	colNameLen := meta[10]
+	if int(colNameLen) != len("order_date") {
+		t.Fatalf("expected colNameLen %d, got %d", len("order_date"), colNameLen)
+	}
+
+	// 2. Verify ROW binary serialization for 2026-10-15:
+	// 2026-10-15 is day 739903 since 0001-01-01.
+	targetTime := time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC)
+	row := BuildRow(cols, []any{targetTime})
+	if row[0] != TokenRow {
+		t.Fatalf("expected TokenRow 0xD1, got 0x%02X", row[0])
+	}
+	if row[1] != 3 {
+		t.Fatalf("expected date length 3, got %d", row[1])
+	}
+	days := uint32(row[2]) | (uint32(row[3]) << 8) | (uint32(row[4]) << 16)
+	expectedDays := uint32(739903)
+	if days != expectedDays {
+		t.Fatalf("expected days %d, got %d", expectedDays, days)
+	}
+
+	// 3. String input "2026-10-15"
+	rowStr := BuildRow(cols, []any{"2026-10-15"})
+	daysStr := uint32(rowStr[2]) | (uint32(rowStr[3]) << 8) | (uint32(rowStr[4]) << 16)
+	if daysStr != expectedDays {
+		t.Fatalf("expected days %d from string, got %d", expectedDays, daysStr)
+	}
+
+	// 4. NULL in BuildRow: 1 byte len 0
+	rowNull := BuildRow(cols, []any{nil})
+	if rowNull[1] != 0 {
+		t.Fatalf("expected NULL length 0, got %d", rowNull[1])
+	}
+}
+
+func TestTypeDateTime2N_Encoding(t *testing.T) {
+	cols := []ColumnInfo{
+		{Name: "event_ts", Type: TypeDateTime2N, Scale: 7, Nullable: true},
+	}
+
+	// 1. Verify ColMetaData:
+	meta := BuildColMetaData(cols)
+	if meta[9] != TypeDateTime2N {
+		t.Fatalf("expected TypeDateTime2N 0x2A, got 0x%02X", meta[9])
+	}
+	if meta[10] != 7 {
+		t.Fatalf("expected scale 7, got %d", meta[10])
+	}
+
+	// 2. Verify ROW binary serialization:
+	// Target: 2026-10-15 12:34:56.1234567 UTC
+	targetTime := time.Date(2026, 10, 15, 12, 34, 56, 123456700, time.UTC)
+	row := BuildRow(cols, []any{targetTime})
+	if row[0] != TokenRow {
+		t.Fatalf("expected TokenRow 0xD1, got 0x%02X", row[0])
+	}
+	// Length byte for scale 7 is 8 (5 bytes time + 3 bytes date)
+	if row[1] != 8 {
+		t.Fatalf("expected length 8, got %d", row[1])
+	}
+	timePart := row[2:7]
+	datePart := row[7:10]
+
+	days := uint32(datePart[0]) | (uint32(datePart[1]) << 8) | (uint32(datePart[2]) << 16)
+	if days != 739903 {
+		t.Fatalf("expected days 739903, got %d", days)
+	}
+
+	// Time part: ticks in 100ns increments since midnight
+	// 12*3600 + 34*60 + 56 = 45296 seconds = 452,960,000,000 * 100ns + 1234567 = 452,961,234,567 ticks
+	ticks := uint64(timePart[0]) | (uint64(timePart[1]) << 8) | (uint64(timePart[2]) << 16) | (uint64(timePart[3]) << 24) | (uint64(timePart[4]) << 32)
+	expectedTicks := uint64(452961234567)
+	if ticks != expectedTicks {
+		t.Fatalf("expected ticks %d, got %d", expectedTicks, ticks)
+	}
+
+	// 3. NULL check
+	rowNull := BuildRow(cols, []any{nil})
+	if rowNull[1] != 0 {
+		t.Fatalf("expected NULL length 0, got %d", rowNull[1])
+	}
+}
+
+func TestTypeGuid_EncodingAndByteSwap(t *testing.T) {
+	cols := []ColumnInfo{
+		{Name: "id", Type: TypeGuid, Nullable: true},
+	}
+
+	// 1. Verify ColMetaData:
+	meta := BuildColMetaData(cols)
+	if meta[9] != TypeGuid {
+		t.Fatalf("expected TypeGuid 0x24, got 0x%02X", meta[9])
+	}
+	// Max length byte: 16 (0x10)
+	if meta[10] != 16 {
+		t.Fatalf("expected max length 16, got %d", meta[10])
+	}
+
+	// 2. Canonical test GUID:
+	// "6F9619FF-8B86-D011-B42D-00C04FC964FF"
+	// Part 1: 6F9619FF -> LE FF 19 96 6F
+	// Part 2: 8B86     -> LE 86 8B
+	// Part 3: D011     -> LE 11 D0
+	// Part 4: B42D     -> B4 2D
+	// Part 5: 00C04FC964FF -> 00 C0 4F C9 64 FF
+	guidStr := "6F9619FF-8B86-D011-B42D-00C04FC964FF"
+	row := BuildRow(cols, []any{guidStr})
+	if row[0] != TokenRow {
+		t.Fatalf("expected TokenRow 0xD1, got 0x%02X", row[0])
+	}
+	if row[1] != 16 {
+		t.Fatalf("expected length 16, got %d", row[1])
+	}
+	wireBytes := row[2:18]
+
+	expectedHex := "ff19966f868b11d0b42d00c04fc964ff"
+	actualHex := hex.EncodeToString(wireBytes)
+	if actualHex != expectedHex {
+		t.Fatalf("expected wire hex %s, got %s", expectedHex, actualHex)
+	}
+
+	// 3. Round-trip decode check:
+	decoded := decodeGUID(wireBytes)
+	expectedDecoded := "6f9619ff-8b86-d011-b42d-00c04fc964ff"
+	if decoded != expectedDecoded {
+		t.Fatalf("expected decoded GUID %s, got %s", expectedDecoded, decoded)
+	}
+
+	// 4. NULL check:
+	rowNull := BuildRow(cols, []any{nil})
+	if rowNull[1] != 0 {
+		t.Fatalf("expected NULL length 0, got %d", rowNull[1])
+	}
+}
+
+func TestInferColumnInfos_DateDateTime2Guid(t *testing.T) {
+	srv := &Server{}
+	qr := &engine.QueryResult{
+		Columns: []string{"user_id", "birth_date", "created_datetime2", "create_date"},
+		Rows: []map[string]any{
+			{
+				"user_id":           "6F9619FF-8B86-D011-B42D-00C04FC964FF",
+				"birth_date":        "1990-05-20",
+				"created_datetime2": time.Date(2026, 10, 15, 8, 30, 0, 0, time.UTC),
+				"create_date":       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	cols := srv.inferColumnInfos(qr)
+	if len(cols) != 4 {
+		t.Fatalf("expected 4 columns, got %d", len(cols))
+	}
+
+	// Column 0: user_id (UUID string) -> TypeGuid (0x24), size 16
+	if cols[0].Type != TypeGuid || cols[0].Size != 16 {
+		t.Errorf("col 0: expected TypeGuid size 16, got 0x%02X size %d", cols[0].Type, cols[0].Size)
+	}
+
+	// Column 1: birth_date (YYYY-MM-DD string) -> TypeDateN (0x28), size 3
+	if cols[1].Type != TypeDateN || cols[1].Size != 3 {
+		t.Errorf("col 1: expected TypeDateN size 3, got 0x%02X size %d", cols[1].Type, cols[1].Size)
+	}
+
+	// Column 2: created_datetime2 -> TypeDateTime2N (0x2A), size 8, scale 7
+	if cols[2].Type != TypeDateTime2N || cols[2].Scale != 7 {
+		t.Errorf("col 2: expected TypeDateTime2N scale 7, got 0x%02X scale %d", cols[2].Type, cols[2].Scale)
+	}
+
+	// Column 3: create_date (sys column) -> TypeDateTimeN (0x6F), size 8
+	if cols[3].Type != TypeDateTimeN || cols[3].Size != 8 {
+		t.Errorf("col 3: expected TypeDateTimeN size 8, got 0x%02X size %d", cols[3].Type, cols[3].Size)
 	}
 }

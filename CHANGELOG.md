@@ -30,6 +30,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Automatically triggers background parallel statistics analysis (`coordinator.AnalyzeTable`) when dirty row count crosses dynamic threshold (`min_threshold + base_rows * scale_factor`), keeping CBO column histograms fresh.
   - Ensured lock hierarchy immunity (Golden Rule 10) by keeping the transaction commit hot-path non-blocking and executing all catalog and storage inspections asynchronously in debounced background goroutines.
   - Added unit tests in `pkg/engine/auto_analyze_test.go` verifying threshold triggering, WAL hook listener, and atomic dirty counter resets.
+- **TDS 7.3 DATE, DATETIME2, and UNIQUEIDENTIFIER Binary Serialization (`pkg/wire/tds`)**:
+  - Implemented SQL Server 2008 / TDS 7.3 wire compatibility for `DATE` (`0x28` / `TypeDateN`), `DATETIME2` (`0x2A` / `TypeDateTime2N`), and `UNIQUEIDENTIFIER` (`0x24` / `TypeGuid`).
+  - Serialized `DATE` values as 3-byte unsigned integers (Little-Endian days since `0001-01-01`) compliant with [MS-TDS] 2.2.5.5.1.2 without trailing metadata.
+  - Serialized `DATETIME2` values with scale specifier (0..7) and combined fractional seconds ticks since midnight followed by 3-byte Gregorian date in Little-Endian according to [MS-TDS] 2.2.5.5.1.5.
+  - Implemented Windows GUID Mixed-Endian byte-swapping for `UNIQUEIDENTIFIER` (Little-Endian for Data1, Data2, and Data3, Big-Endian for Data4) ensuring zero data corruption when communicating with standard ADO.NET and Go MSSQL drivers.
+  - Enhanced column inference in `inferColumnInfos` to accurately detect DATE, DATETIME2, and UUID columns from result sets while preserving standard sys table DATETIME semantics (`create_date`, `modify_date`).
+  - Added unit tests in `pkg/wire/tds/token_test.go` and official driver integration tests in `pkg/wire/tds/driver_integration_test.go` verifying binary decoding using `github.com/microsoft/go-mssqldb` (`mssql.UniqueIdentifier` and `time.Time`).
 
 ### Removed
 - **Redundant In-Memory MVCC Vacuum & Shared-Memory Arrow Snapshot Backlog Pruning**:

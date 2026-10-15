@@ -3,6 +3,7 @@ package tds
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"math"
 	"strconv"
@@ -31,6 +32,7 @@ const (
 // TDS Data Types
 const (
 	TypeNull       byte = 0x1F
+	TypeGuid       byte = 0x24
 	TypeInt1       byte = 0x30
 	TypeBit        byte = 0x32
 	TypeInt2       byte = 0x34
@@ -109,10 +111,12 @@ var DefaultCollation = []byte{0x09, 0x04, 0xD0, 0x00, 0x34}
 
 // ColumnInfo holds metadata for a result set column.
 type ColumnInfo struct {
-	Name     string
-	Type     byte
-	Size     int
-	Nullable bool
+	Name      string
+	Type      byte
+	Size      int
+	Scale     int
+	Precision int
+	Nullable  bool
 }
 
 // BuildPreloginResponse generates a PRELOGIN reply packet payload.
@@ -493,6 +497,18 @@ func BuildColMetaData(cols []ColumnInfo) []byte {
 		case TypeDateTimeN:
 			// MaxLength: 1B (8)
 			buf.WriteByte(8)
+		case TypeDateN:
+			// [MS-TDS] 2.2.5.6: DATENTYPE MUST NOT have a TYPE_VARLEN
+		case TypeDateTime2N:
+			// [MS-TDS] 2.2.5.6: DATETIME2NTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
+			scale := byte(7)
+			if col.Scale > 0 && col.Scale <= 7 {
+				scale = byte(col.Scale)
+			}
+			buf.WriteByte(scale)
+		case TypeGuid:
+			// [MS-TDS] 2.2.5.5.1.1: GUIDTYPE is BYTELEN_TYPE with MaxLength 16 (0x10)
+			buf.WriteByte(16)
 		case TypeNVarChar:
 			// MaxLength: uint16 LE (e.g. 8000 or 0xFFFF)
 			maxLen := uint16(col.Size * 2)
@@ -569,6 +585,29 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 		_ = binary.Write(buf, binary.LittleEndian, days)
 		_ = binary.Write(buf, binary.LittleEndian, ticks)
 
+	case TypeDateN:
+		t := toTime(val)
+		tUTC := t.UTC()
+		days := daysSince0001(tUTC.Year(), int(tUTC.Month()), tUTC.Day())
+		buf.WriteByte(3)
+		buf.WriteByte(byte(days))
+		buf.WriteByte(byte(days >> 8))
+		buf.WriteByte(byte(days >> 16))
+
+	case TypeDateTime2N:
+		scale := byte(7)
+		if col.Scale > 0 && col.Scale <= 7 {
+			scale = byte(col.Scale)
+		}
+		data := encodeDateTime2(toTime(val), scale)
+		buf.WriteByte(byte(len(data)))
+		buf.Write(data)
+
+	case TypeGuid:
+		guidBytes := encodeGUID(val)
+		buf.WriteByte(16)
+		buf.Write(guidBytes)
+
 	case TypeNVarChar:
 		strVal := fmt.Sprintf("%v", val)
 		u16 := EncodeUTF16LE(strVal)
@@ -607,7 +646,7 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 
 		if val == nil {
 			switch col.Type {
-			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN:
+			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeDateTime2N, TypeGuid:
 				buf.WriteByte(0) // Length 0 indicates NULL
 			case TypeNVarChar, TypeVarChar:
 				_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF)) // 0xFFFF indicates NULL
@@ -727,11 +766,23 @@ func toTime(v any) time.Time {
 	case time.Time:
 		return t
 	case string:
-		parsed, err := time.Parse(time.RFC3339, t)
+		parsed, err := time.Parse(time.RFC3339Nano, t)
+		if err == nil {
+			return parsed
+		}
+		parsed, err = time.Parse(time.RFC3339, t)
+		if err == nil {
+			return parsed
+		}
+		parsed, err = time.Parse("2006-01-02 15:04:05.999999999", t)
 		if err == nil {
 			return parsed
 		}
 		parsed, err = time.Parse("2006-01-02 15:04:05", t)
+		if err == nil {
+			return parsed
+		}
+		parsed, err = time.Parse("2006-01-02", t)
 		if err == nil {
 			return parsed
 		}
@@ -751,4 +802,134 @@ func encodeDateTime(t time.Time) (int32, uint32) {
 	// Ticks: 300ths of a second (3.3333 ms per tick)
 	ticks := uint32(math.Round(float64(ms) * 300.0 / 1000.0))
 	return days, ticks
+}
+
+// daysSince0001 returns the number of days elapsed since 0001-01-01 (where 0001-01-01 is 0).
+func daysSince0001(year int, month int, day int) int32 {
+	m := month
+	y := year
+	if m <= 2 {
+		y -= 1
+		m += 12
+	}
+	era := y / 400
+	yoe := y - era*400
+	doy := (153*(m-3)+2)/5 + day - 1
+	doe := yoe*365 + yoe/4 - yoe/100 + doy
+	return int32(era*146097 + doe - 306)
+}
+
+// encodeDateTime2 encodes a time.Time into TDS 7.3 DATETIME2 binary format according to [MS-TDS] 2.2.5.5.1.5.
+// It consists of time(scale) followed by date (3 bytes LE days since 0001-01-01).
+func encodeDateTime2(t time.Time, scale byte) []byte {
+	if scale > 7 {
+		scale = 7
+	}
+	tUTC := t.UTC()
+	midnight := time.Date(tUTC.Year(), tUTC.Month(), tUTC.Day(), 0, 0, 0, 0, time.UTC)
+	nanos := tUTC.Sub(midnight).Nanoseconds()
+
+	nanosPerTick := int64(1)
+	for i := 0; i < int(9-scale); i++ {
+		nanosPerTick *= 10
+	}
+	ticks := uint64(nanos / nanosPerTick)
+
+	// Time length according to [MS-TDS] 2.2.5.5.1:
+	// scale 0..2: 3 bytes
+	// scale 3..4: 4 bytes
+	// scale 5..7: 5 bytes
+	timeLen := 5
+	if scale <= 2 {
+		timeLen = 3
+	} else if scale <= 4 {
+		timeLen = 4
+	}
+
+	days := daysSince0001(tUTC.Year(), int(tUTC.Month()), tUTC.Day())
+
+	buf := make([]byte, timeLen+3)
+	for i := 0; i < timeLen; i++ {
+		buf[i] = byte(ticks >> (i * 8))
+	}
+	buf[timeLen] = byte(days)
+	buf[timeLen+1] = byte(days >> 8)
+	buf[timeLen+2] = byte(days >> 16)
+	return buf
+}
+
+// encodeGUID parses a UUID and encodes it in Windows GUID Mixed-Endian binary layout for TDS uniqueidentifier.
+// Data1: 4 bytes Little-Endian
+// Data2: 2 bytes Little-Endian
+// Data3: 2 bytes Little-Endian
+// Data4: 8 bytes Big-Endian (preserved as-is)
+func encodeGUID(val any) []byte {
+	var raw [16]byte
+	switch v := val.(type) {
+	case [16]byte:
+		raw = v
+	case []byte:
+		if len(v) == 16 {
+			copy(raw[:], v)
+		}
+	case string:
+		cleaned := strings.Trim(strings.TrimSpace(v), "'\"{}")
+		cleaned = strings.ReplaceAll(cleaned, "-", "")
+		if len(cleaned) == 32 {
+			if b, err := hex.DecodeString(cleaned); err == nil && len(b) == 16 {
+				copy(raw[:], b)
+			}
+		}
+	default:
+		s := fmt.Sprintf("%v", val)
+		cleaned := strings.Trim(strings.TrimSpace(s), "'\"{}")
+		cleaned = strings.ReplaceAll(cleaned, "-", "")
+		if len(cleaned) == 32 {
+			if b, err := hex.DecodeString(cleaned); err == nil && len(b) == 16 {
+				copy(raw[:], b)
+			}
+		}
+	}
+
+	out := make([]byte, 16)
+	out[0] = raw[3]
+	out[1] = raw[2]
+	out[2] = raw[1]
+	out[3] = raw[0]
+
+	out[4] = raw[5]
+	out[5] = raw[4]
+
+	out[6] = raw[7]
+	out[7] = raw[6]
+
+	copy(out[8:], raw[8:16])
+	return out
+}
+
+// decodeGUID decodes a 16-byte Windows GUID Mixed-Endian binary representation into canonical RFC 4122 UUID string.
+func decodeGUID(wire []byte) string {
+	if len(wire) < 16 {
+		return ""
+	}
+	var raw [16]byte
+	raw[0] = wire[3]
+	raw[1] = wire[2]
+	raw[2] = wire[1]
+	raw[3] = wire[0]
+
+	raw[4] = wire[5]
+	raw[5] = wire[4]
+
+	raw[6] = wire[7]
+	raw[7] = wire[6]
+
+	copy(raw[8:16], wire[8:16])
+	return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+		raw[0], raw[1], raw[2], raw[3],
+		raw[4], raw[5],
+		raw[6], raw[7],
+		raw[8], raw[9],
+		raw[10], raw[11], raw[12], raw[13], raw[14], raw[15],
+	)
 }
