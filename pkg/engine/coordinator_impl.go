@@ -314,6 +314,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		TableVars:     make(map[string]string),
 		TempTableMap:  make(map[string]string),
 		PreparedStmts: make(map[string]*PreparedStatement),
+		Cursors:       make(map[string]*SessionCursor),
 		User:          "dbo",
 		OriginalUser:  "dbo",
 		IsReadOnlyFn:  c.IsReadOnly,

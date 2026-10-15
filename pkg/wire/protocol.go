@@ -29,7 +29,15 @@ const (
 	MsgCopyFail             byte = 'f'
 	MsgBackendKeyData       byte = 'K'
 	MsgSimpleQuery          byte = 'Q'
+	MsgPortalSuspended      byte = 's'
 )
+
+// WritePortalSuspended sends PortalSuspended ('s') message when portal execution is suspended due to maxRows limit.
+func WritePortalSuspended(w io.Writer) error {
+	buf := []byte{MsgPortalSuspended, 0, 0, 0, 4}
+	_, err := w.Write(buf)
+	return err
+}
 
 // WriteBackendKeyData sends BackendKeyData ('K') with process ID and cancellation secret key.
 func WriteBackendKeyData(w io.Writer, pid, secretKey uint32) error {

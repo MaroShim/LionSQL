@@ -246,6 +246,10 @@ type Portal struct {
 	Statement     *PreparedStatement
 	Params        []string
 	ResultFormats []int16
+	// Stateful execution for server-side portal cursor
+	Result   *engine.QueryResult
+	Pos      int
+	Executed bool
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
@@ -890,8 +894,11 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string]*Portal, sessID string) {
 	r := bytes.NewReader(payload)
 	portalName, _ := readCString(r)
+	var maxRows int32
+	_ = binary.Read(r, binary.BigEndian, &maxRows)
+
 	if s.DevMode() {
-		log.Printf("[DEV][PGWire][Execute] portal=%q", portalName)
+		log.Printf("[DEV][PGWire][Execute] portal=%q maxRows=%d", portalName, maxRows)
 	}
 
 	portal, exists := portals[portalName]
@@ -904,30 +911,105 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 		sessID = "default"
 	}
 
-	// Fast-path: Execute via precompiled VDBE bytecode Program if available
-	if portal.Statement != nil && portal.Statement.Program != nil {
-		paramMap := make(map[string]any, len(portal.Params)*3)
-		for i, paramVal := range portal.Params {
-			pIdx := i + 1
-			paramMap[fmt.Sprintf("p%d", pIdx)] = paramVal
-			paramMap[fmt.Sprintf("@p%d", pIdx)] = paramVal
-			paramMap[fmt.Sprintf("$%d", pIdx)] = paramVal
+	// 1. If not yet executed, execute the query and cache the result in the portal
+	if !portal.Executed {
+		// Fast-path: Execute via precompiled VDBE bytecode Program if available and full fetch requested
+		if portal.Statement != nil && portal.Statement.Program != nil && maxRows == 0 {
+			paramMap := make(map[string]any, len(portal.Params)*3)
+			for i, paramVal := range portal.Params {
+				pIdx := i + 1
+				paramMap[fmt.Sprintf("p%d", pIdx)] = paramVal
+				paramMap[fmt.Sprintf("@p%d", pIdx)] = paramVal
+				paramMap[fmt.Sprintf("$%d", pIdx)] = paramVal
+			}
+
+			session, err := s.engine.NewSession()
+			if err == nil {
+				defer session.Close()
+				res, err := s.executor.Run(portal.Statement.Program, "PreparedStatement", paramMap, session)
+				if err == nil {
+					s.writeExecutionResult(conn, res, portal.Statement.Query, portal.ResultFormats)
+					return
+				}
+			}
 		}
 
-		session, err := s.engine.NewSession()
-		if err == nil {
-			defer session.Close()
-			res, err := s.executor.Run(portal.Statement.Program, "PreparedStatement", paramMap, session)
-			if err == nil {
-				s.writeExecutionResult(conn, res, portal.Statement.Query, portal.ResultFormats)
-				return
-			}
+		// Standard session SQL execution
+		substitutedSQL := substituteParams(portal.Statement.Query, portal.Params)
+		res, err := s.coordinator.ExecuteSessionSQL(sessID, substitutedSQL)
+		if err != nil {
+			_ = WriteError(conn, err.Error())
+			return
+		}
+		portal.Result = res
+		portal.Pos = 0
+		portal.Executed = true
+	}
+
+	res := portal.Result
+	if res == nil {
+		_ = WriteError(conn, "empty execution result")
+		return
+	}
+
+	if len(res.Columns) == 0 {
+		cmd := res.Command
+		if cmd == "" {
+			cmd = portal.Statement.Query
+		}
+		_ = WriteCommandComplete(conn, formatPgCommandComplete(cmd, res.RowsAffected, len(res.Rows)))
+		return
+	}
+
+	totalRows := len(res.Rows)
+	startIdx := portal.Pos
+	endIdx := totalRows
+
+	if maxRows > 0 {
+		if startIdx+int(maxRows) < totalRows {
+			endIdx = startIdx + int(maxRows)
 		}
 	}
 
-	// Fallback to text substitution
-	substitutedSQL := substituteParams(portal.Statement.Query, portal.Params)
-	s.runAndWriteQueryWithFormats(conn, substitutedSQL, false, sessID, portal.ResultFormats)
+	var batchRows []map[string]any
+	if startIdx < totalRows {
+		batchRows = res.Rows[startIdx:endIdx]
+		portal.Pos = endIdx
+	}
+
+	var sampleRow map[string]any
+	if len(res.Rows) > 0 {
+		sampleRow = res.Rows[0]
+	}
+	colOIDs := s.resolveColumnOIDs(portal.Statement.Query, res.Columns, sampleRow)
+
+	bw := bufio.NewWriterSize(conn, 32768)
+	scratchRowBytes := make([][]byte, len(res.Columns))
+	for _, row := range batchRows {
+		for i, colName := range res.Columns {
+			isBinary := false
+			if len(portal.ResultFormats) == 1 && portal.ResultFormats[0] == 1 {
+				isBinary = true
+			} else if i < len(portal.ResultFormats) && portal.ResultFormats[i] == 1 {
+				isBinary = true
+			}
+			val := getRowValue(row, colName)
+			scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
+		}
+		_ = WriteDataRowBytes(bw, scratchRowBytes)
+	}
+
+	// 3. If there are still rows remaining and maxRows > 0, send PortalSuspended ('s')
+	if maxRows > 0 && portal.Pos < totalRows {
+		_ = bw.Flush()
+		_ = WritePortalSuspended(conn)
+		return
+	}
+
+	// 4. All rows delivered; send CommandComplete ('C')
+	tag := formatPgCommandComplete(res.Command, res.RowsAffected, totalRows)
+	_ = WriteCommandComplete(bw, tag)
+	_ = bw.Flush()
 }
 
 func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResult, query string, resultFormats []int16) {
@@ -953,7 +1035,11 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 			}
 			_ = WriteDataRowBytes(bw, scratchRowBytes)
 		}
-		_ = WriteCommandComplete(bw, fmt.Sprintf("SELECT %d", len(res.Rows)))
+		cmd := query
+		if strings.HasPrefix(strings.ToUpper(cmd), "FETCH") {
+			cmd = fmt.Sprintf("FETCH %d", len(res.Rows))
+		}
+		_ = WriteCommandComplete(bw, formatPgCommandComplete(cmd, int64(len(res.Rows)), len(res.Rows)))
 		_ = bw.Flush()
 		return
 	}
@@ -1016,6 +1102,10 @@ func formatPgCommandComplete(command string, rowsAffected int64, rowsCount int) 
 			return fmt.Sprintf("ALTER %s", fields[1])
 		}
 		return "ALTER"
+	case "DECLARE":
+		return "DECLARE CURSOR"
+	case "CLOSE":
+		return "CLOSE CURSOR"
 	default:
 		if firstWord != "" {
 			return firstWord
@@ -1129,7 +1219,12 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 			}
 			_ = WriteDataRowBytes(bw, scratchRowBytes)
 		}
-		_ = WriteCommandComplete(bw, fmt.Sprintf("SELECT %d", len(res.Rows)))
+		cmd := res.Command
+		if cmd == "" {
+			cmd = fmt.Sprintf("SELECT %d", len(res.Rows))
+		}
+		tag := formatPgCommandComplete(cmd, res.RowsAffected, len(res.Rows))
+		_ = WriteCommandComplete(bw, tag)
 		_ = bw.Flush()
 		return
 	}

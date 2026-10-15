@@ -19,6 +19,19 @@ type PreparedStatement struct {
 	ParamNames []string
 }
 
+// SessionCursor maintains stateful row iteration for server-side SQL cursors.
+type SessionCursor struct {
+	Name       string
+	Query      string
+	Columns    []string
+	Rows       []map[string]any
+	Pos        int // next row index to fetch (0-indexed)
+	WithHold   bool
+	Scroll     bool
+	Binary     bool
+	DeclaredAt time.Time
+}
+
 // ClientSession maintains interactive connection state: open transaction, session variables, and query cancellation context.
 type ClientSession struct {
 	ID              string
@@ -31,9 +44,10 @@ type ClientSession struct {
 	TempTables      []string          // session-scoped #temp_tables
 	TempTableMap    map[string]string // user #temp_table name -> physical __temp_<sessionID>_tableName
 	PreparedStmts   map[string]*PreparedStatement
-	User            string // active database user principal for RBAC
-	OriginalUser    string // original user prior to SETUSER / EXECUTE AS
-	Database        string // active virtual database context (default: "master")
+	Cursors         map[string]*SessionCursor // server-side cursor state
+	User            string                    // active database user principal for RBAC
+	OriginalUser    string                    // original user prior to SETUSER / EXECUTE AS
+	Database        string                    // active virtual database context (default: "master")
 	QueryCtx        context.Context
 	CancelFunc      context.CancelFunc
 	RunningQuery    string

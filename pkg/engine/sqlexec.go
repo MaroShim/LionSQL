@@ -307,6 +307,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		err := cs.Tx.Commit()
 		cs.Tx = nil
 		cs.TxFailed = false
+		// Close non-WITH HOLD cursors on COMMIT
+		if cs.Cursors != nil {
+			for name, cur := range cs.Cursors {
+				if !cur.WithHold {
+					delete(cs.Cursors, name)
+				}
+			}
+		}
 		if err != nil {
 			return nil, fmt.Errorf("commit error: %w", err)
 		}
@@ -396,6 +404,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		err := cs.Tx.Rollback()
 		cs.Tx = nil
 		cs.TxFailed = false
+		// Close all cursors on ROLLBACK (per PostgreSQL specification)
+		if cs.Cursors != nil {
+			cs.Cursors = make(map[string]*SessionCursor)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("rollback error: %w", err)
 		}
@@ -684,6 +696,26 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			RowsAffected: 1,
 			DurationUS:   time.Since(start).Microseconds(),
 		}, nil
+	}
+
+	// 0.075 Server-Side SQL Cursors: DECLARE <name> CURSOR FOR <query>
+	if isDeclareCursorQuery(trimmed) {
+		return s.execDeclareCursor(trimmed, start, cs)
+	}
+
+	// 0.076 Server-Side SQL Cursors: FETCH
+	if strings.HasPrefix(upper, "FETCH ") || upper == "FETCH" {
+		return s.execFetchCursor(trimmed, start, cs)
+	}
+
+	// 0.077 Server-Side SQL Cursors: MOVE
+	if strings.HasPrefix(upper, "MOVE ") || upper == "MOVE" {
+		return s.execMoveCursor(trimmed, start, cs)
+	}
+
+	// 0.078 Server-Side SQL Cursors: CLOSE
+	if strings.HasPrefix(upper, "CLOSE ") || upper == "CLOSE" {
+		return s.execCloseCursor(trimmed, start, cs)
 	}
 
 	// 0.08 T-SQL DECLARE variables: DECLARE @var [type] [= expr], ... or DECLARE @table TABLE (...)

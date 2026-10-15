@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"bytes"
 	"encoding/binary"
 	"io"
 	"net"
@@ -963,7 +964,257 @@ func TestWire_PasswordAuthentication(t *testing.T) {
 		if !strings.Contains(string(errPayload), "28P01") {
 			t.Fatalf("expected 28P01 in error response, got %q", string(errPayload))
 		}
+		_ = cat
 	})
-
-	_ = cat
 }
+
+func TestPGWire_ServerSideSQLCursor(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	go srv.handleConnection(serverConn)
+
+	// Startup
+	startupBuf := make([]byte, 8)
+	binary.BigEndian.PutUint32(startupBuf[:4], 8)
+	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
+	_, _ = clientConn.Write(startupBuf)
+
+	// Wait for Ready ('Z')
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+		if header[0] == MsgReadyForQuery {
+			break
+		}
+	}
+
+	sendQuery := func(q string) (string, []string) {
+		qBytes := append([]byte(q), 0)
+		msg := make([]byte, 5+len(qBytes))
+		msg[0] = 'Q'
+		binary.BigEndian.PutUint32(msg[1:5], uint32(4+len(qBytes)))
+		copy(msg[5:], qBytes)
+		_, _ = clientConn.Write(msg)
+
+		var completeTag string
+		var rows []string
+
+		for {
+			hdr := make([]byte, 5)
+			_, err := io.ReadFull(clientConn, hdr)
+			if err != nil {
+				t.Fatalf("failed to read response: %v", err)
+			}
+			l := binary.BigEndian.Uint32(hdr[1:5])
+			pay := make([]byte, l-4)
+			_, _ = io.ReadFull(clientConn, pay)
+
+			if hdr[0] == MsgDataRow {
+				rows = append(rows, string(pay))
+			} else if hdr[0] == MsgCommandComplete {
+				completeTag = string(bytes.TrimRight(pay, "\x00"))
+			} else if hdr[0] == MsgReadyForQuery {
+				break
+			}
+		}
+		return completeTag, rows
+	}
+
+	sendQuery("INSERT INTO accounts (id, holder, balance) VALUES (2, 'Bob', 2000);")
+
+	// 1. Begin transaction & Declare cursor
+	tag, _ := sendQuery("BEGIN;")
+	if tag != "BEGIN" {
+		t.Fatalf("expected BEGIN, got %q", tag)
+	}
+
+	tag, _ = sendQuery("DECLARE c_cur CURSOR FOR SELECT id, holder FROM accounts ORDER BY id;")
+	if tag != "DECLARE CURSOR" {
+		t.Fatalf("expected DECLARE CURSOR, got %q", tag)
+	}
+
+	// 2. Fetch 1 row
+	tag, rows := sendQuery("FETCH 1 FROM c_cur;")
+	if tag != "FETCH 1" || len(rows) != 1 {
+		t.Fatalf("expected FETCH 1 with 1 row, got tag=%q rows=%d", tag, len(rows))
+	}
+	if !strings.Contains(rows[0], "Alice") {
+		t.Fatalf("expected Alice, got %s", rows[0])
+	}
+
+	// 3. Fetch 1 row (Bob)
+	tag, rows = sendQuery("FETCH 1 FROM c_cur;")
+	if tag != "FETCH 1" || len(rows) != 1 {
+		t.Fatalf("expected FETCH 1 with 1 row, got tag=%q rows=%d", tag, len(rows))
+	}
+	if !strings.Contains(rows[0], "Bob") {
+		t.Fatalf("expected Bob, got %s", rows[0])
+	}
+
+	// 4. Fetch next (EOF)
+	tag, rows = sendQuery("FETCH 1 FROM c_cur;")
+	if tag != "FETCH 0" || len(rows) != 0 {
+		t.Fatalf("expected FETCH 0 with 0 rows, got tag=%q rows=%d", tag, len(rows))
+	}
+
+	// 5. Close cursor
+	tag, _ = sendQuery("CLOSE c_cur;")
+	if tag != "CLOSE CURSOR" {
+		t.Fatalf("expected CLOSE CURSOR, got %q", tag)
+	}
+
+	sendQuery("COMMIT;")
+}
+
+func TestPGWire_ExtendedQueryPortalBatching(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	go srv.handleConnection(serverConn)
+
+	// Startup
+	startupBuf := make([]byte, 8)
+	binary.BigEndian.PutUint32(startupBuf[:4], 8)
+	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
+	_, _ = clientConn.Write(startupBuf)
+
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+		if header[0] == MsgReadyForQuery {
+			break
+		}
+	}
+
+	// Populate additional rows in accounts
+	initQuery := "INSERT INTO accounts (id, holder, balance) VALUES (2, 'Bob', 200), (3, 'Charlie', 300), (4, 'David', 400), (5, 'Eve', 500);"
+	initQBytes := append([]byte(initQuery), 0)
+	qMsg := make([]byte, 5+len(initQBytes))
+	qMsg[0] = 'Q'
+	binary.BigEndian.PutUint32(qMsg[1:5], uint32(4+len(initQBytes)))
+	copy(qMsg[5:], initQBytes)
+	_, _ = clientConn.Write(qMsg)
+
+	for {
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(clientConn, header)
+		msgLen := binary.BigEndian.Uint32(header[1:5])
+		payload := make([]byte, msgLen-4)
+		_, _ = io.ReadFull(clientConn, payload)
+		if header[0] == MsgReadyForQuery {
+			break
+		}
+	}
+
+	// 1. Send Parse ('P'): stmt="s_page", query="SELECT id, holder FROM accounts ORDER BY id;"
+	stmtName := "s_page\x00"
+	queryStr := "SELECT id, holder FROM accounts ORDER BY id\x00"
+	parsePayload := append([]byte(stmtName), []byte(queryStr)...)
+	parsePayload = append(parsePayload, 0, 0) // 0 params
+	pMsg := make([]byte, 5+len(parsePayload))
+	pMsg[0] = 'P'
+	binary.BigEndian.PutUint32(pMsg[1:5], uint32(4+len(parsePayload)))
+	copy(pMsg[5:], parsePayload)
+	_, _ = clientConn.Write(pMsg)
+
+	// Expect ParseComplete ('1')
+	hdr := make([]byte, 5)
+	_, _ = io.ReadFull(clientConn, hdr)
+	if hdr[0] != MsgParseComplete {
+		t.Fatalf("expected ParseComplete, got %c", hdr[0])
+	}
+
+	// 2. Send Bind ('B'): portal="p_page", stmt="s_page", 0 params, 0 format codes
+	bindPayload := append([]byte("p_page\x00"), []byte(stmtName)...)
+	bindPayload = append(bindPayload, 0, 0) // 0 format codes
+	bindPayload = append(bindPayload, 0, 0) // 0 params
+	bindPayload = append(bindPayload, 0, 0) // 0 result format codes
+	bMsg := make([]byte, 5+len(bindPayload))
+	bMsg[0] = 'B'
+	binary.BigEndian.PutUint32(bMsg[1:5], uint32(4+len(bindPayload)))
+	copy(bMsg[5:], bindPayload)
+	_, _ = clientConn.Write(bMsg)
+
+	// Expect BindComplete ('2')
+	_, _ = io.ReadFull(clientConn, hdr)
+	if hdr[0] != MsgBindComplete {
+		t.Fatalf("expected BindComplete, got %c", hdr[0])
+	}
+
+	sendExecute := func(portal string, maxRows int32) (lastMsg byte, dataRows int, tag string) {
+		pNameBytes := append([]byte(portal), 0)
+		ePayload := make([]byte, len(pNameBytes)+4)
+		copy(ePayload, pNameBytes)
+		binary.BigEndian.PutUint32(ePayload[len(pNameBytes):], uint32(maxRows))
+
+		eMsg := make([]byte, 5+len(ePayload))
+		eMsg[0] = 'E'
+		binary.BigEndian.PutUint32(eMsg[1:5], uint32(4+len(ePayload)))
+		copy(eMsg[5:], ePayload)
+		_, _ = clientConn.Write(eMsg)
+
+		for {
+			h := make([]byte, 5)
+			_, _ = io.ReadFull(clientConn, h)
+			l := binary.BigEndian.Uint32(h[1:5])
+			p := make([]byte, l-4)
+			_, _ = io.ReadFull(clientConn, p)
+
+			if h[0] == MsgDataRow {
+				dataRows++
+			} else if h[0] == MsgPortalSuspended {
+				return MsgPortalSuspended, dataRows, ""
+			} else if h[0] == MsgCommandComplete {
+				return MsgCommandComplete, dataRows, string(bytes.TrimRight(p, "\x00"))
+			}
+		}
+	}
+
+	// Batch 1: maxRows = 2 (Alice, Bob) -> expect PortalSuspended ('s')
+	lastMsg, count, _ := sendExecute("p_page", 2)
+	if lastMsg != MsgPortalSuspended || count != 2 {
+		t.Fatalf("batch 1: expected PortalSuspended with 2 rows, got msg=%c count=%d", lastMsg, count)
+	}
+
+	// Batch 2: maxRows = 2 (Charlie, David) -> expect PortalSuspended ('s')
+	lastMsg, count, _ = sendExecute("p_page", 2)
+	if lastMsg != MsgPortalSuspended || count != 2 {
+		t.Fatalf("batch 2: expected PortalSuspended with 2 rows, got msg=%c count=%d", lastMsg, count)
+	}
+
+	// Batch 3: maxRows = 2 (Eve, total=5) -> all rows finished, expect CommandComplete ('C')
+	lastMsg, count, tag := sendExecute("p_page", 2)
+	if lastMsg != MsgCommandComplete || count != 1 {
+		t.Fatalf("batch 3: expected CommandComplete with 1 row, got msg=%c count=%d (tag: %s)", lastMsg, count, tag)
+	}
+	if tag != "SELECT 5" {
+		t.Fatalf("expected tag SELECT 5, got %q", tag)
+	}
+
+	// Close portal
+	closePayload := []byte{'P', 'p', 'p', 'a', 'g', 'e', 0}
+	cMsg := make([]byte, 5+len(closePayload))
+	cMsg[0] = 'C'
+	binary.BigEndian.PutUint32(cMsg[1:5], uint32(4+len(closePayload)))
+	copy(cMsg[5:], closePayload)
+	_, _ = clientConn.Write(cMsg)
+
+	_, _ = io.ReadFull(clientConn, hdr)
+	if hdr[0] != MsgCloseComplete {
+		t.Fatalf("expected CloseComplete, got %c", hdr[0])
+	}
+}
+

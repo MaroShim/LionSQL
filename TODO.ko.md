@@ -23,10 +23,19 @@
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
-| **P2** | **와이어 프로토콜** | **PostgreSQL 와이어 프로토콜 서버 사이드 커서** | `pkg/wire` | 대규모 쿼리 결과 집합 분할 수신 및 `DECLARE ... CURSOR` 지원 |
-| **P3** | **이벤트/스트리밍** | **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ)** | `pkg/cdc` | CDC 이벤트 스트림의 외부 메시지 브로커 무손실 포워딩 |
+| **P2** | **이벤트/스트리밍** | **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ)** | `pkg/cdc` | CDC 이벤트 스트림의 외부 메시지 브로커 무손실 포워딩 |
+| **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
 
 ### P1/P2 최근 완료 과제: 고가용성 & BaaS 확장
+- [x] **PostgreSQL 서버 사이드 커서 및 Extended Query 포털 배치 스트리밍 (`pkg/engine`, `pkg/wire`)**
+  - **배경**: 대규모 데이터셋 조회 시 클라이언트 메모리 고갈 방지 및 PostgreSQL 표준 SQL 커서(`DECLARE ... CURSOR`, `FETCH`, `MOVE`, `CLOSE`) 및 드라이버 포털 배치(`Execute` with `maxRows`, `PortalSuspended`) 완비.
+  - **구현 내용**:
+    - `pkg/engine/sqlexec_cursor.go`: `DECLARE <name> [SCROLL] [BINARY] CURSOR [{WITH|WITHOUT} HOLD] FOR <query>` 스냅샷 커서 등록기 구현.
+    - 커서 제어 명령 구현: `FETCH` 및 `MOVE` 지원 (`NEXT`, `PRIOR`, `FIRST`, `LAST`, `ALL`, `FORWARD`, `BACKWARD`, `ABSOLUTE <n>`, `RELATIVE <n>`, 정수 카운트).
+    - 커서 해제: 단일 커서 `CLOSE <name>` 및 전체 커서 일괄 정리 `CLOSE ALL`.
+    - 트랜잭션 수명주기 불변성: 일반 커서는 `COMMIT` 시 파기, `WITH HOLD` 커서는 `COMMIT` 후에도 유지, `ROLLBACK` 시 모든 커서 즉각 파기 (PostgreSQL 공식 표준).
+    - Extended Query 프로토콜 연동 (`pkg/wire/server.go`): `Execute ('E')` 메시지의 `maxRows`를 파싱하여 배치 단위(`maxRows`)로 데이터 튜플을 스트리밍하고 미완료 시 `MsgPortalSuspended ('s')` 송출, 완료 시 `MsgCommandComplete ('C')` 송출.
+    - 단위 및 통합 테스트 완비: `pkg/engine/sqlexec_cursor_test.go` 및 `pkg/wire/server_test.go`.
 - [x] **관용적 No-Op `USE <database>` 및 세션 가상 DB 컨텍스트 동기화 (`pkg/engine`, `pkg/wire/tds`, `pkg/proc/runtime`)**
   - **배경**: 인스턴스 단위 격리(Instance-Based Isolation) 아키텍처 불변성을 엄격히 유지하면서도, 레거시 SQL Server 덤프 스크립트, 마이그레이션 도구, DBeaver/SSMS GUI 클라이언트와의 100% 호환성 확보.
   - **구현 내용**:
