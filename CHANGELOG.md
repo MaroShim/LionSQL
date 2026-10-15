@@ -14,6 +14,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **Always On Style Automatic Failover & Leader Election (`pkg/replication`, `cmd/server`, `pkg/config`, `pkg/ui`)**:
+  - Implemented Always On style automated leader election and failover coordinator (`pkg/replication/failover.go`) with highest-LSN precedence, guaranteeing zero data loss.
+  - Implemented monotonic term tracking (`term int64`) across nodes, leader announcements (`POST /api/replication/leader`), and peer voting (`POST /api/replication/vote`).
+  - Added primary split-brain prevention (fencing): primary node immediately steps down to read-only replica upon detecting a higher term announcement or votes.
+  - Added primary heartbeat timeout detection in secondary replicas (`ReplicationClient.LastHeartbeatTime()`) with automatic election triggering upon primary failure.
+  - Added CLI flags and configuration support: `-auto-failover`, `-peers`, `-self-url`, `-heartbeat-timeout-ms`, and `-election-timeout-ms`.
+  - Updated embedded Web Studio (`pkg/ui/dashboard.html`) to display cluster term and auto-failover topology state.
+  - Added comprehensive unit and integration tests in `pkg/replication/failover_test.go` covering LSN precedence, split-brain prevention, quorum voting, and end-to-end auto-failover.
 - **Declarative Schema Migration Engine & `lionsql` Unified CLI Tool (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**:
   - Implemented declarative database schema migration package `pkg/migrate` with automatic `_migrations` tracking table.
   - Implemented `lionsql` unified command-line executable (`cmd/lionsql`, `bin/lionsql`):

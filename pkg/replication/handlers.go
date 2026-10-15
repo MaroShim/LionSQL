@@ -15,6 +15,8 @@ func (m *Manager) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/replication/ack", m.handleAck)
 	mux.HandleFunc("POST /api/replication/promote", m.handlePromote)
 	mux.HandleFunc("POST /api/replication/demote", m.handleDemote)
+	mux.HandleFunc("POST /api/replication/vote", m.handleVote)
+	mux.HandleFunc("POST /api/replication/leader", m.handleLeader)
 }
 
 func (m *Manager) handleStream(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +54,7 @@ func (m *Manager) handleStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache, no-transform")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("X-Replication-Term", strconv.FormatInt(m.Term(), 10))
 	w.WriteHeader(http.StatusOK)
 	flusher.Flush()
 
@@ -63,7 +66,7 @@ func (m *Manager) handleStream(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case <-heartbeatTicker.C:
-			if _, err := fmt.Fprint(w, ":heartbeat\n"); err != nil {
+			if _, err := fmt.Fprintf(w, ":heartbeat term=%d\n", m.Term()); err != nil {
 				return
 			}
 			flusher.Flush()
@@ -114,17 +117,38 @@ func (m *Manager) handleAck(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 }
 
+type promoteRequest struct {
+	Term int64 `json:"term,omitempty"`
+}
+
 func (m *Manager) handlePromote(w http.ResponseWriter, r *http.Request) {
-	if err := m.Promote(); err != nil {
+	var req promoteRequest
+	if r.Body != nil && r.ContentLength > 0 {
+		_ = json.NewDecoder(r.Body).Decode(&req)
+	}
+
+	var err error
+	if req.Term > 0 {
+		err = m.PromoteWithTerm(req.Term)
+	} else {
+		err = m.Promote()
+	}
+
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "promoted", "role": string(RolePrimary)})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status": "promoted",
+		"role":   string(RolePrimary),
+		"term":   m.Term(),
+	})
 }
 
 type demoteRequest struct {
 	PrimaryURL string `json:"primary_url"`
+	Term       int64  `json:"term,omitempty"`
 }
 
 func (m *Manager) handleDemote(w http.ResponseWriter, r *http.Request) {
@@ -133,10 +157,51 @@ func (m *Manager) handleDemote(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := m.Demote(req.PrimaryURL); err != nil {
+
+	var err error
+	if req.Term > 0 {
+		err = m.DemoteWithTerm(req.PrimaryURL, req.Term)
+	} else {
+		err = m.Demote(req.PrimaryURL)
+	}
+
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(map[string]string{"status": "demoted", "role": string(RoleReplica)})
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"status": "demoted",
+		"role":   string(RoleReplica),
+		"term":   m.Term(),
+	})
 }
+
+func (m *Manager) handleVote(w http.ResponseWriter, r *http.Request) {
+	var req VoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	resp := m.HandleVote(req)
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func (m *Manager) handleLeader(w http.ResponseWriter, r *http.Request) {
+	var ann LeaderAnnouncement
+	if err := json.NewDecoder(r.Body).Decode(&ann); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := m.HandleLeaderAnnouncement(ann); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+

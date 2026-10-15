@@ -23,10 +23,19 @@
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
-| **P2** | **고가용성** | **Always On 스타일 자동 장애 조치 및 리더 선출** | `pkg/replication` | 장애 시 최저 지연 LSN 레플리카 자동 승격 및 라우팅 절체 |
-| **P3** | **와이어 프로토콜** | **PostgreSQL 와이어 프로토콜 서버 사이드 커서** | `pkg/wire` | 대규모 쿼리 결과 집합 분할 수신 및 `DECLARE ... CURSOR` 지원 |
+| **P2** | **와이어 프로토콜** | **PostgreSQL 와이어 프로토콜 서버 사이드 커서** | `pkg/wire` | 대규모 쿼리 결과 집합 분할 수신 및 `DECLARE ... CURSOR` 지원 |
+| **P3** | **이벤트/스트리밍** | **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ)** | `pkg/cdc` | CDC 이벤트 스트림의 외부 메시지 브로커 무손실 포워딩 |
 
-### P1/P2 최근 완료 과제: 엔진 성능 & BaaS 확장
+### P1/P2 최근 완료 과제: 고가용성 & BaaS 확장
+- [x] **Always On 스타일 자동 장애 조치(Auto-Failover) 및 리더 선출 (`pkg/replication`, `cmd/server`, `pkg/config`, `pkg/ui`)**
+  - **배경**: 엔터프라이즈 99.999% 무중단 운영을 위한 Primary 장애 자동 감지, 최저 지연 LSN 레플리카 무손실 승격 및 스플릿 브레인 방지.
+  - **구현 내용**:
+    - `pkg/replication/failover.go`: 단조 증가 리더 텀(`term int64`) 및 Always On 최신 LSN 우선 규칙(`req.LastLSN >= localLSN`) 기반 리더 선출 코디네이터 구현.
+    - 스플릿 브레인 방지(펜싱): 기존 Primary가 상위 텀 발표(`POST /api/replication/leader`)나 투표 요청 감지 시 즉시 읽기 전용 레플리카로 자동 강등(`role = RoleReplica`, 쓰기 트랜잭션 차단).
+    - Primary 하트비트 타임아웃 자동 감지(`ReplicationClient.LastHeartbeatTime()`) 및 정족수(Quorum) 기반 백그라운드 선출 루프 완비.
+    - CLI 플래그 및 JSON 설정 연동: `-auto-failover`, `-peers`, `-self-url`, `-heartbeat-timeout-ms`, `-election-timeout-ms`.
+    - 임베디드 웹 스튜디오(`pkg/ui/dashboard.html`) 실시간 리더 텀 및 고가용성 상태 시각화 연동.
+    - 단위 및 E2E 통합 테스트 완비 (`pkg/replication/failover_test.go`): LSN 우선권 검증, 스플릿 브레인 방지, 정족수 투표, Primary 강제 다운 시 자동 승격 및 신규 Primary 쓰기 검증.
 - [x] **선언적 스키마 마이그레이션 CLI (`lionsql migrate`) 및 `_migrations` 이력 추적 (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**
   - **배경**: PocketBase 스타일의 개발자 생산성 극대화 및 독립형 데이터베이스 스키마 버전 관리 완비.
   - **구현 내용**:

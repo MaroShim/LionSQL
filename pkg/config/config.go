@@ -124,11 +124,17 @@ type LoggingConfig struct {
 
 // ReplicationConfig defines 1-Writer Multi-Reader HA availability group parameters.
 type ReplicationConfig struct {
-	Enabled    bool   `json:"enabled"`
-	Role       string `json:"role"`                  // "PRIMARY" or "REPLICA"
-	PrimaryURL string `json:"primary_url,omitempty"` // e.g. "http://127.0.0.1:8090"
-	NodeID     string `json:"node_id,omitempty"`
-	HistoryCap int    `json:"history_cap,omitempty"`
+	Enabled            bool     `json:"enabled"`
+	Role               string   `json:"role"`                            // "PRIMARY" or "REPLICA"
+	PrimaryURL         string   `json:"primary_url,omitempty"`           // e.g. "http://127.0.0.1:8090"
+	SelfURL            string   `json:"self_url,omitempty"`              // e.g. "http://127.0.0.1:8091"
+	NodeID             string   `json:"node_id,omitempty"`
+	HistoryCap         int      `json:"history_cap,omitempty"`
+	AutoFailover       bool     `json:"auto_failover,omitempty"`
+	Peers              []string `json:"peers,omitempty"`                 // Peer HTTP URLs
+	HeartbeatTimeoutMS float64  `json:"heartbeat_timeout_ms,omitempty"`  // default: 3000ms
+	ElectionTimeoutMS  float64  `json:"election_timeout_ms,omitempty"`   // default: 1500ms
+	Quorum             int      `json:"quorum,omitempty"`
 }
 
 // Config represents the unified, hierarchical configuration for SQLion.

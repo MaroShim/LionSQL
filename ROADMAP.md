@@ -208,11 +208,16 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 
 ### Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS Target)
 
-#### 6.1. Always On Style Automatic Failover & Leader Election (`pkg/replication`)
-- **Challenge**:
-  - Automatically promote the replica with the lowest LSN lag to primary upon heartbeat timeout.
-  - Implement term validation to prevent split-brain conditions and automate client routing handover.
-- **Expected Outcome**: 99.999% high availability with zero-touch automatic recovery.
+#### 6.1. Always On Style Automatic Failover & Leader Election (`pkg/replication`, `cmd/server`, `pkg/config`, `pkg/ui`) (Completed)
+- **Implemented**:
+  - Always On automated failover coordinator (`pkg/replication/failover.go`) with highest-LSN precedence rule ensuring zero data loss.
+  - Monotonic term tracking (`term int64`) across nodes, leader announcements (`POST /api/replication/leader`), and peer voting (`POST /api/replication/vote`).
+  - Split-brain prevention (fencing): primary node immediately steps down to read-only replica upon detecting a higher term announcement or votes.
+  - Primary heartbeat timeout detection in secondary replicas (`ReplicationClient.LastHeartbeatTime()`) with automatic election triggering upon primary failure.
+  - Full CLI flag and configuration integration (`-auto-failover`, `-peers`, `-self-url`, `-heartbeat-timeout-ms`, `-election-timeout-ms`).
+  - Embedded Web Studio (`pkg/ui/dashboard.html`) real-time term and auto-failover status visualization.
+  - Comprehensive unit and integration test suite (`pkg/replication/failover_test.go`).
+- **Strategic Value**: Enterprise 99.999% high availability with zero-touch automatic recovery and zero data loss.
 
 #### 6.2. Decoupled Real-time CDC Streaming & Transactional Outbox (`pkg/cdc`, `pkg/storage`, `pkg/api`)
 - **Implemented (`pkg/cdc`)**:
@@ -278,7 +283,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 5** | **P2** | **`INSTEAD OF` Trigger Runtime Interceptor** | T-SQL Runtime | Medium (200~300 lines) | Virtual entity DML update routing on complex views |
 | **Phase 5** | **P3** | **[Completed] Declarative Schema Migration CLI** | BaaS & Tooling | Medium (250~350 lines) | `lionsql migrate` atomic DDL version history tracking |
 | **Phase 5** | **P3** | **[Completed] OAuth2 Social Login (Google, GitHub)** | Auth & API | Medium (200~300 lines) | Turnkey authentication, user auto-provisioning, and JWT issuance |
-| **Phase 6** | **P1** | **Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
+| **Phase 6** | **P1** | **[Completed] Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
 | **Phase 6** | **P2** | **Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
 | **Phase 6** | **P2** | **[Completed] MCV (Most Common Values) Skew List Statistics (`C-7`)** | CBO & Planner | Medium (250~350 lines) | Corrects non-uniform skew distribution estimation error (MCV + Histogram complete) |

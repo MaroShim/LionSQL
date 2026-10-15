@@ -1057,6 +1057,8 @@ const procRes = await client.exec('TransferFunds', {
           </div>
           <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">
             Node ID: <code id="ha-node-id" style="color: #93c5fd; font-weight: 600;">--</code>
+            <span style="margin: 0 4px;">&bull;</span>
+            Term: <code id="ha-term" style="color: #cbd5e1; font-weight: 600;">--</code>
           </div>
         </div>
 
@@ -4222,6 +4224,9 @@ const procRes = await client.exec('TransferFunds', {
 
       const nodeIdEl = document.getElementById('ha-node-id');
       if (nodeIdEl) nodeIdEl.textContent = data.node_id || '--';
+
+      const termEl = document.getElementById('ha-term');
+      if (termEl) termEl.textContent = (data.term !== undefined && data.term !== null) ? data.term : '1';
 
       const lsnEl = document.getElementById('ha-current-lsn');
       if (lsnEl) lsnEl.textContent = (data.current_lsn !== undefined && data.current_lsn !== null) ? data.current_lsn : '--';

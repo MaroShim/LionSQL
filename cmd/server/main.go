@@ -74,6 +74,11 @@ func main() {
 	generalLog := flag.String("general-log", "", "Enable general query logging (e.g. data/general.log, pass 'true' for default)")
 	replicaOf := flag.String("replica-of", "", "Primary server HTTP URL to replicate from (e.g. http://127.0.0.1:8090)")
 	nodeID := flag.String("node-id", "", "Unique replication node identifier")
+	autoFailover := flag.Bool("auto-failover", false, "Enable Always On automatic failover upon primary heartbeat timeout")
+	peersFlag := flag.String("peers", "", "Comma-separated list of peer HTTP URLs for availability group quorum")
+	selfURLFlag := flag.String("self-url", "", "HTTP URL of this node used for peer routing and failover election")
+	heartbeatTimeout := flag.Float64("heartbeat-timeout-ms", 0, "Heartbeat failure detection timeout in milliseconds (default: 3000ms)")
+	electionTimeout := flag.Float64("election-timeout-ms", 0, "Leader election vote timeout in milliseconds (default: 1500ms)")
 	configPath := flag.String("config", "", "Path to JSON configuration file (default: auto-detect ./sqlion.json or <dir>/sqlion.json)")
 	initConfig := flag.String("init-config", "", "Generate a default sqlion.json configuration file at specified path (or ./sqlion.json) and exit")
 	doctorFlag := flag.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
@@ -195,6 +200,31 @@ func main() {
 	}
 	if visited["node-id"] {
 		cfg.Replication.NodeID = *nodeID
+	}
+	if visited["auto-failover"] {
+		cfg.Replication.AutoFailover = *autoFailover
+		if *autoFailover {
+			cfg.Replication.Enabled = true
+		}
+	}
+	if visited["peers"] {
+		var peerList []string
+		for _, p := range strings.Split(*peersFlag, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" {
+				peerList = append(peerList, p)
+			}
+		}
+		cfg.Replication.Peers = peerList
+	}
+	if visited["self-url"] {
+		cfg.Replication.SelfURL = *selfURLFlag
+	}
+	if visited["heartbeat-timeout-ms"] {
+		cfg.Replication.HeartbeatTimeoutMS = *heartbeatTimeout
+	}
+	if visited["election-timeout-ms"] {
+		cfg.Replication.ElectionTimeoutMS = *electionTimeout
 	}
 
 	if strings.TrimSpace(cfg.Server.DataDir) == "" {
@@ -472,13 +502,29 @@ func main() {
 		if role == "" {
 			role = replication.RolePrimary
 		}
+
+		var hbTimeout time.Duration
+		if cfg.Replication.HeartbeatTimeoutMS > 0 {
+			hbTimeout = time.Duration(cfg.Replication.HeartbeatTimeoutMS * float64(time.Millisecond))
+		}
+		var elecTimeout time.Duration
+		if cfg.Replication.ElectionTimeoutMS > 0 {
+			elecTimeout = time.Duration(cfg.Replication.ElectionTimeoutMS * float64(time.Millisecond))
+		}
+
 		var err error
 		repMgr, err = replication.NewManager(replication.Config{
-			NodeID:     cfg.Replication.NodeID,
-			Role:       role,
-			PrimaryURL: cfg.Replication.PrimaryURL,
-			HistoryCap: cfg.Replication.HistoryCap,
-			Engine:     eng,
+			NodeID:           cfg.Replication.NodeID,
+			Role:             role,
+			PrimaryURL:       cfg.Replication.PrimaryURL,
+			SelfURL:          cfg.Replication.SelfURL,
+			Peers:            cfg.Replication.Peers,
+			AutoFailover:     cfg.Replication.AutoFailover,
+			HeartbeatTimeout: hbTimeout,
+			ElectionTimeout:  elecTimeout,
+			Quorum:           cfg.Replication.Quorum,
+			HistoryCap:       cfg.Replication.HistoryCap,
+			Engine:           eng,
 		})
 		if err != nil {
 			log.Fatalf("[SQLion] Failed to initialize replication manager: %v", err)
@@ -486,6 +532,9 @@ func main() {
 		server.SetReplicationManager(repMgr)
 		if err := repMgr.Start(context.Background()); err != nil {
 			log.Fatalf("[SQLion] Failed to start replication: %v", err)
+		}
+		if cfg.Replication.AutoFailover {
+			log.Printf("[SQLion] Availability Group: Always On Auto-Failover enabled (peers: %d, heartbeat timeout: %v)", len(cfg.Replication.Peers), hbTimeout)
 		}
 	}
 
