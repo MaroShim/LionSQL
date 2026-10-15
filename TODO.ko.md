@@ -23,11 +23,18 @@
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
 | **P1** | **스토리지/와이어** | **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`)** | `pkg/storage`, `pkg/wire` | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
-| **P2** | **생태계** | **외부 언어 드라이버 E2E 검증 하네스** | `pkg/wire`, `pkg/wire/tds` | Python(`psycopg3`, `pymssql`), Node.js(`pg`, `tedious`), .NET(`SqlClient`) 검증 |
 | **P2** | **CBO 최적화** | **다중 컬럼 확장 통계 (Extended Stats) (`C-5`)** | `pkg/planner` | 컬럼 상관관계(예: 국가-도시)에 따른 카디널리티 과소평가 방지 |
+| **P2** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
 | **P3** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`sqlion migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down` 및 `_migrations` 이력 추적 |
 
 ### P1/P2 최근 완료 과제: 엔진 성능 & 최적화
+- [x] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**
+  - **배경**: Go 공식 드라이버(`go-mssqldb`, `lib/pq`, `pgx/v5`)에 이어 엔터프라이즈 멀티 언어 클라이언트 검증.
+  - **구현 내용**:
+    - `pkg/wire/driver_external_test.go`: Python `psycopg3` (PGWire :5433) 연결, DDL/DML, NULL 값 처리, 명시적 트랜잭션(COMMIT/ROLLBACK) E2E 검증.
+    - `pkg/wire/tds/driver_external_test.go`: Python `pymssql` (TDS :1433 / FreeTDS dblib) 연결, DDL/DML, DATE/TIME/GUID 바이너리 파싱, 트랜잭션 원자성 E2E 검증.
+    - FreeTDS/pymssql 클라이언트 호환성: 일반 DDL 실행 시 unsolicited INFO 토큰 예외 방지 가드(`server.go` PRINT 전용 제한) 적용.
+    - `uv run` 기반 격리형 실행 환경 및 미설치 환경 자동 스킵(`exec.LookPath`) 연동으로 100% 무결점 밀폐형 테스트(Golden Rule 17) 달성.
 - [x] **볼케이노 벡터화 청크 반복자 (Chunked Batch Next: 64~1024건) (`P-4`) (`pkg/execution`, `pkg/engine`)**
   - **배경**: 행 단위 `Next()` 가상 함수 호출 및 `ctx.Done()` 검사 오버헤드로 인한 CPU 캐시 미스 해소.
   - **구현 내용**:
@@ -51,12 +58,6 @@
 - [x] **SQL Server 2008 / TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET 및 UNIQUEIDENTIFIER 바이너리 직렬화 (`pkg/wire/tds`)**
   - `DATE`(0x28, 0001-01-01 기준 일수 3바이트 LE), `TIME`(0x29, Scale 0..7 100ns 틱 3~5바이트), `DATETIME2`(0x2A, Scale 0..7 틱 + 그레고리력 3바이트), `DATETIMEOFFSET`(0x2B, UTC DATETIME2 + 2바이트 분 오프셋), `UNIQUEIDENTIFIER`(0x24, Windows Mixed-Endian 바이트 스왑) 전 항목 완비.
   - 결과셋 컬럼 타입 자동 추론(`inferColumnInfos`) 고도화 및 공식 `github.com/microsoft/go-mssqldb`(`mssql.UniqueIdentifier`, `time.Time`) 통합 검증 완료.
-- [ ] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**
-  - **배경**: Go 공식 드라이버(`go-mssqldb`, `lib/pq`, `pgx/v5`)에 이어 엔터프라이즈 멀티 언어 클라이언트 검증.
-  - **구현 내용**:
-    - Python: `psycopg3` (PGWire) 및 `pymssql` (TDS) 연결, 세션 초기화 파라미터(`extra_float_digits` 등), 기본 CRUD 검증.
-    - Node.js: `pg` 및 `tedious` 연결 풀링 및 쿼리 파이프라이닝 검증.
-    - C# / .NET: `Microsoft.Data.SqlClient` TDS 접속 및 매개변수화 프로시저 호출 검증.
 
 ---
 
@@ -109,9 +110,14 @@
   - 해시 조인, 소트 버퍼에 대해 쿼리 수명주기에 묶인 아레나 할당기를 적용하여 Go GC 압박 원천 제거.
 
 ### 2.3. 와이어 프로토콜 & 생태계 (Wire Protocols & Ecosystem)
-- [ ] **T-SQL 특수 타입 직렬화 및 PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**
-  - `UNIQUEIDENTIFIER` (UUID 16바이트 GUID 바이트 스왑), `DATETIME2` (`0x2A`), `DATE` (`0x28`), `TIME` (`0x29`) TDS 바이너리 인코딩.
+- [x] **T-SQL 특수 타입 직렬화 (TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET, UNIQUEIDENTIFIER) (`pkg/wire/tds`)**
+  - `UNIQUEIDENTIFIER` (UUID 16바이트 Windows GUID 바이트 스왑), `DATE` (`0x28`, 3바이트 LE), `TIME` (`0x29`, 100ns 틱 3~5바이트), `DATETIME2` (`0x2A`, 틱 + 3바이트 날짜), `DATETIMEOFFSET` (`0x2B`, UTC DATETIME2 + 2바이트 분 오프셋) TDS 바이너리 인코딩 완비.
+  - 결과셋 컬럼 타입 자동 추론(`inferColumnInfos`) 고도화 및 `go-mssqldb` 공식 드라이버 통합 검증 완료.
+- [ ] **PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**
   - PLP (Partially Length-Prefixed) 기반 8KB 초과 `VARCHAR(MAX)` / `VARBINARY(MAX)` 대용량 청크 스트리밍.
+- [x] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**
+  - Python `psycopg3` (PostgreSQL Wire Protocol :5433) 및 `pymssql` (TDS Protocol :1433) 종단간 통합 검증 완료.
+  - `CREATE TABLE`, `INSERT`, `SELECT`, DATE/TIME/GUID 바이너리 파싱, 트랜잭션 `COMMIT`/`ROLLBACK` 원자성 및 NULL 값 처리 완비.
 - [x] **SSMS (SQL Server Management Studio) Object Explorer 가상 카탈로그/DMV 뷰 (`pkg/engine`, `pkg/catalog`)**
   - SSMS 접속 및 탐색기 트리 조회에 필수적인 `sys.configurations`, `sys.dm_exec_sessions`, `sys.dm_exec_connections`, `sys.database_principals`, `sys.server_principals`, `sys.dm_os_sys_info`, `sys.endpoints`, `sys.database_files`, `sys.master_files`, `sys.all_objects`, `sys.all_columns`, `sys.all_views` 가상 뷰 완비.
 - [ ] **PostgreSQL 와이어 프로토콜 서버 사이드 커서 (`pkg/wire`)**

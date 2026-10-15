@@ -1081,12 +1081,12 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 
 	var buf bytes.Buffer
 
-	// Emit any INFO messages
-	for _, msg := range res.Messages {
-		buf.Write(BuildInfo(0, 1, 10, msg, "SQLION", "", 1))
-	}
-
 	upperCmd := strings.ToUpper(res.Command)
+	if upperCmd == "PRINT" {
+		for _, msg := range res.Messages {
+			buf.Write(BuildInfo(0, 1, 0, msg, "SQLION", "", 1))
+		}
+	}
 	if upperCmd == "BEGIN" {
 		sess.inTx = true
 		sess.txDescriptor = atomic.AddUint64(&s.txCounter, 1)
@@ -1864,12 +1864,12 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 
 	var buf bytes.Buffer
 
-	// Emit any INFO messages (e.g. PRINT statements or proc logs)
-	for _, msg := range res.Messages {
-		buf.Write(BuildInfo(0, 1, 10, msg, "SQLION", "", 1))
-	}
-
 	upperCmd := strings.ToUpper(res.Command)
+	if upperCmd == "PRINT" {
+		for _, msg := range res.Messages {
+			buf.Write(BuildInfo(0, 1, 0, msg, "SQLION", "", 1))
+		}
+	}
 	if upperCmd == "BEGIN" {
 		sess.inTx = true
 		sess.txDescriptor = atomic.AddUint64(&s.txCounter, 1)

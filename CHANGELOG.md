@@ -39,6 +39,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented Windows GUID Mixed-Endian byte-swapping for `UNIQUEIDENTIFIER` (Little-Endian for Data1, Data2, and Data3, Big-Endian for Data4) ensuring zero data corruption when communicating with standard ADO.NET and Go MSSQL drivers.
   - Enhanced column inference in `inferColumnInfos` to accurately detect DATE, TIME, DATETIME2, DATETIMEOFFSET, and UUID columns from result sets while preserving standard sys table DATETIME semantics (`create_date`, `modify_date`).
   - Added unit tests in `pkg/wire/tds/token_test.go` and official driver integration tests in `pkg/wire/tds/driver_integration_test.go` verifying binary decoding using `github.com/microsoft/go-mssqldb` (`mssql.UniqueIdentifier` and `time.Time`).
+- **External Multi-Language Client Driver E2E Integration Test Harness (`pkg/wire`, `pkg/wire/tds`)**:
+  - Implemented hermetic, automated integration test suites validating external ecosystem client drivers: Python `psycopg3` (PostgreSQL Wire Protocol :5433) in `pkg/wire/driver_external_test.go` and Python `pymssql` (TDS Protocol :1433 / FreeTDS dblib) in `pkg/wire/tds/driver_external_test.go`.
+  - Verified DDL table creation, CRUD operations, NULL value semantics, explicit transaction atomicity (`COMMIT` and `ROLLBACK`), and binary serialization of `DATE`, `TIME`, and `UNIQUEIDENTIFIER` into native Python types (`datetime.date`, `datetime.time`, `uuid.UUID`).
+  - Fixed unsolicited `TokenInfo` emission on regular DDL queries in `pkg/wire/tds/server.go`, ensuring FreeTDS dblib and `pymssql` do not treat informational tokens as database errors.
+  - Employed `uv run` isolated ephemeral sandboxing with automatic fallback/skipping when `uv` is unavailable (`exec.LookPath`), preserving deterministic, flakeless test execution (Golden Rule 17).
 
 ### Removed
 - **Redundant In-Memory MVCC Vacuum & Shared-Memory Arrow Snapshot Backlog Pruning**:
