@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 	"time"
 
 	"sqlion/pkg/api"
@@ -22,7 +23,9 @@ import (
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/cdc"
 	"sqlion/pkg/config"
+	"sqlion/pkg/engine"
 	"sqlion/pkg/execution"
+	"sqlion/pkg/migrate"
 	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
 	"sqlion/pkg/replication"
@@ -34,6 +37,14 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "migrate" {
+		if err := handleServerMigrate(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	httpAddr := flag.String("http", "127.0.0.1:8090", "HTTP service address (set to empty to disable)")
 	pgAddr := flag.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address (set to empty to disable)")
 	tdsAddr := flag.String("tds", "127.0.0.1:1433", "TDS (MSSQL) wire protocol listen address (set to empty to disable)")
@@ -872,5 +883,182 @@ func resolveDefaultDataDirFromExe(exePath string) string {
 		return filepath.Join(parentDir, "data")
 	}
 	return "data"
+}
+
+func reorderMigrateArgs(args []string) []string {
+	var flags []string
+	var nonFlags []string
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if strings.HasPrefix(arg, "-") {
+			flags = append(flags, arg)
+			if !strings.Contains(arg, "=") && i+1 < len(args) && !strings.HasPrefix(args[i+1], "-") {
+				flags = append(flags, args[i+1])
+				i++
+			}
+		} else {
+			nonFlags = append(nonFlags, arg)
+		}
+	}
+	return append(flags, nonFlags...)
+}
+
+func handleServerMigrate(args []string) error {
+	if len(args) == 0 {
+		fmt.Println("Usage: server migrate <new|up|down|status> [flags]")
+		return nil
+	}
+
+	subcmd := strings.ToLower(args[0])
+	subargs := args[1:]
+
+	switch subcmd {
+	case "new", "create":
+		fs := flag.NewFlagSet("server migrate new", flag.ContinueOnError)
+		migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
+		if err := fs.Parse(reorderMigrateArgs(subargs)); err != nil {
+			return err
+		}
+		if len(fs.Args()) == 0 {
+			return fmt.Errorf("migration name is required")
+		}
+		mf, err := migrate.Create(*migrationsDir, fs.Args()[0])
+		if err != nil {
+			return err
+		}
+		fmt.Printf("[SQLion] Created migration pair (%s):\n  Up:   %s\n  Down: %s\n", mf.Version, mf.UpPath, mf.DownPath)
+		return nil
+
+	case "up":
+		fs := flag.NewFlagSet("server migrate up", flag.ContinueOnError)
+		migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
+		dataDir := fs.String("data", "data", "Path to database data directory")
+		fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
+		engineType := fs.String("engine", "wiredtiger", "Storage engine backend")
+		steps := fs.Int("steps", 0, "Steps to apply (0 = all)")
+		fs.IntVar(steps, "n", 0, "Steps to apply (0 = all)")
+		if err := fs.Parse(reorderMigrateArgs(subargs)); err != nil {
+			return err
+		}
+		eng, coord, err := openCoordinatorForMigrate(*dataDir, *engineType)
+		if err != nil {
+			return err
+		}
+		defer eng.Close()
+		applied, err := migrate.Up(context.Background(), coord, *migrationsDir, *steps)
+		if err != nil {
+			return err
+		}
+		if len(applied) == 0 {
+			fmt.Println("[SQLion] No pending migrations.")
+			return nil
+		}
+		for _, r := range applied {
+			fmt.Printf("  [%s] %s (%dms)\n", r.Version, r.Name, r.DurationMS)
+		}
+		fmt.Printf("[SQLion] Successfully applied %d migration(s).\n", len(applied))
+		return nil
+
+	case "down":
+		fs := flag.NewFlagSet("server migrate down", flag.ContinueOnError)
+		migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
+		dataDir := fs.String("data", "data", "Path to database data directory")
+		fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
+		engineType := fs.String("engine", "wiredtiger", "Storage engine backend")
+		steps := fs.Int("steps", 1, "Steps to revert")
+		fs.IntVar(steps, "n", 1, "Steps to revert")
+		if err := fs.Parse(reorderMigrateArgs(subargs)); err != nil {
+			return err
+		}
+		eng, coord, err := openCoordinatorForMigrate(*dataDir, *engineType)
+		if err != nil {
+			return err
+		}
+		defer eng.Close()
+		reverted, err := migrate.Down(context.Background(), coord, *migrationsDir, *steps)
+		if err != nil {
+			return err
+		}
+		if len(reverted) == 0 {
+			fmt.Println("[SQLion] No applied migrations to revert.")
+			return nil
+		}
+		for _, r := range reverted {
+			fmt.Printf("  [%s] %s (%dms)\n", r.Version, r.Name, r.DurationMS)
+		}
+		fmt.Printf("[SQLion] Successfully rolled back %d migration(s).\n", len(reverted))
+		return nil
+
+	case "status":
+		fs := flag.NewFlagSet("server migrate status", flag.ContinueOnError)
+		migrationsDir := fs.String("dir", "migrations", "Path to migrations directory")
+		dataDir := fs.String("data", "data", "Path to database data directory")
+		fs.StringVar(dataDir, "data-dir", "data", "Path to database data directory")
+		engineType := fs.String("engine", "wiredtiger", "Storage engine backend")
+		if err := fs.Parse(reorderMigrateArgs(subargs)); err != nil {
+			return err
+		}
+		eng, coord, err := openCoordinatorForMigrate(*dataDir, *engineType)
+		if err != nil {
+			return err
+		}
+		defer eng.Close()
+		statuses, err := migrate.Status(context.Background(), coord, *migrationsDir)
+		if err != nil {
+			return err
+		}
+		if len(statuses) == 0 {
+			fmt.Printf("[SQLion] No migrations found in directory %s\n", *migrationsDir)
+			return nil
+		}
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 3, ' ', 0)
+		fmt.Fprintln(w, "VERSION\tNAME\tSTATUS\tAPPLIED AT\tDURATION")
+		for _, s := range statuses {
+			st := "Pending"
+			at := "-"
+			dur := "-"
+			if s.Applied {
+				st = "Applied"
+				at = s.AppliedAt
+				dur = fmt.Sprintf("%dms", s.DurationMS)
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", s.Version, s.Name, st, at, dur)
+		}
+		w.Flush()
+		return nil
+
+	default:
+		return fmt.Errorf("unknown migrate subcommand %q", subcmd)
+	}
+}
+
+func openCoordinatorForMigrate(dataDir, engineType string) (storage.Engine, *engine.Coordinator, error) {
+	cleanDir := filepath.Clean(dataDir)
+	var eng storage.Engine
+
+	switch engineType {
+	case "wiredtiger":
+		eng = wiredtiger.New()
+		if err := eng.Open(cleanDir); err != nil {
+			return nil, nil, fmt.Errorf("failed to open wiredtiger storage at %q: %w", cleanDir, err)
+		}
+	case "memory":
+		memEng := memengine.New()
+		opts := memengine.DefaultOptions(cleanDir)
+		if err := memEng.OpenWithOptions(opts); err != nil {
+			return nil, nil, fmt.Errorf("failed to open memory storage: %w", err)
+		}
+		eng = memEng
+	default:
+		return nil, nil, fmt.Errorf("unknown engine %q", engineType)
+	}
+
+	cat := catalog.New(eng)
+	_ = cat.SetPersistenceDir(cleanDir)
+	coord := engine.NewCoordinator(cat, eng, engine.Config{
+		DefaultWorkMem: 64 * 1024 * 1024,
+	})
+
+	return eng, coord, nil
 }
 

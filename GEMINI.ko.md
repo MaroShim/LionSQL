@@ -143,7 +143,7 @@ SQLion은 모든 벤치마크(TPC-C, TPC-H, 마이크로 벤치마크), 테스�
 
 1. **빌드 (Build)**:
    ```bash
-   go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+   go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
    ```
 2. **테스트 (Race-Free 무결성 검증)**:
    ```bash

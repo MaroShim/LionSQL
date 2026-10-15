@@ -14,6 +14,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **Declarative Schema Migration Engine & `lionsql` Unified CLI Tool (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**:
+  - Implemented declarative database schema migration package `pkg/migrate` with automatic `_migrations` tracking table.
+  - Implemented `lionsql` unified command-line executable (`cmd/lionsql`, `bin/lionsql`):
+    - `lionsql migrate new <name>`: generates timestamped UTC migration pairs (`YYYYMMDDHHMMSS_<name>.up.sql` and `.down.sql`) with collision avoidance.
+    - `lionsql migrate up`: executes pending migrations sequentially with atomic duration tracking and records applied versions into `_migrations`.
+    - `lionsql migrate down`: rolls back applied migrations using `.down.sql` scripts and updates `_migrations`.
+    - `lionsql migrate status`: displays a clean tabular view of migration versions, names, applied status, timestamps, and execution durations.
+    - `lionsql sql "<query>"`: executes ad-hoc SQL statements headless directly against the embedded database engine and prints aligned tabular results.
+    - `lionsql version` & `lionsql help`: displays database engine metadata, wire protocols, storage backends, and command syntax.
+  - Added dual parity in `cmd/server/main.go` so `./bin/server migrate ...` and `./bin/lionsql migrate ...` operate with identical subcommands and flags.
+  - Added unit and CLI lifecycle integration tests in `pkg/migrate/migrate_test.go` and `cmd/lionsql/main_test.go`.
 - **Built-in Google & GitHub OAuth2 Social Login and Automatic User Provisioning (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**:
   - Implemented standard OAuth2 authorization and token exchange for Google and GitHub identity providers with zero external dependencies (`pkg/api/oauth.go`, `handlers_oauth.go`).
   - Added REST endpoints: `GET /api/auth/oauth2/providers` (list active providers), `GET /api/auth/oauth2/url` (generate auth redirect URL with CSRF state), `POST /api/auth/oauth2/callback` (SPA / REST client exchange), and `GET /api/auth/oauth2/callback` (browser popup redirect with localStorage synchronization and `postMessage` event dispatching).

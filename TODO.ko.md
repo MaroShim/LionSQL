@@ -198,8 +198,13 @@
   - 관리자 전용 OAuth 설정 조회/수정 API (`GET/PUT /api/settings/oauth2`) 및 클라이언트 마스킹(`••••••••`).
   - 브라우저 웹 스튜디오(`:8090/_/`) 로그인 다이얼로그 내 Google / GitHub 로그인 버튼 및 팝업 콜백(`postMessage`) 연동.
   - 외부 네트워크 의존성 없는 완전 격리형 Mock HTTP 서버 기반 단위/통합 테스트 완비 (`pkg/api/oauth_test.go`).
-- [ ] **선언적 스키마 마이그레이션 CLI (`cmd/server`, `pkg/migrate`)**
-  - `sqlion migrate new / up / down` 스키마 이력 테이블(`_migrations`) 추적 관리.
+- [x] **선언적 스키마 마이그레이션 CLI (`lionsql migrate`) (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**
+  - 타임스탬프 기반 마이그레이션 파일 페어(`YYYYMMDDHHMMSS_<name>.up.sql` / `.down.sql`) 생성 (`lionsql migrate new <name>`).
+  - 데이터베이스 스키마 순차 배포 및 실행 지연 시간 추적 (`lionsql migrate up [-steps=N]`).
+  - `.down.sql` 기반 역순 롤백 및 `_migrations` 이력 갱신 (`lionsql migrate down [-steps=N]`).
+  - 배포 상태 정렬 표 형식 출력 (`lionsql migrate status`).
+  - 임베디드 데이터베이스 직접 쿼리 실행기 (`lionsql sql "<query>"`).
+  - `cmd/server` 및 `cmd/lionsql` 양방향 CLI 문법 패리티 완비.
 
 ---
 
