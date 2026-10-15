@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **Selinger Dynamic Programming Join Order Optimization for $N > 4$ Tables (`B-4`) (`pkg/planner`)**:
+  - Implemented `optimizeJoinOrderDP` using Selinger dynamic programming with subset bitmask state spaces (`1 << n`) and $O(1)$ flat-slice memoization, replacing exponential $O(N!)$ permutation generation.
+  - Implemented primary connected pass pruning Cartesian cross products by validating join equality predicates against accumulated relation sets, with secondary fallback pass for queries with disconnected components.
+  - Enforced bounded state space ($n \le 12$, Golden Rules 21 & 23) ensuring constant sub-millisecond CBO planning times on complex multi-table queries.
+  - Added unit test coverage for 6-table and 8-table chain joins in `TestCBOJoinOrderOptimization_SelingerDP_LargeChain` and `TestCBOJoinOrderOptimization_SelingerDP_EightTables` (`pkg/planner/cbo_join_test.go`).
 - **SSMS (SQL Server Management Studio) Object Explorer Virtual Catalogs & DMVs (`pkg/engine`)**:
   - Implemented SQL Server management catalog and DMV views required for SSMS Object Explorer navigation: `sys.configurations`, `sys.dm_exec_sessions`, `sys.dm_exec_connections`, `sys.database_principals`, `sys.server_principals`, `sys.dm_os_sys_info`, `sys.endpoints`, `sys.database_files`, and `sys.master_files`.
   - Added support for `sys.all_objects`, `sys.all_columns`, and `sys.all_views` with routine metadata integration.

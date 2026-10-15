@@ -1,8 +1,10 @@
 package planner_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"sqlion/pkg/planner"
 	"sqlion/pkg/storage"
@@ -515,5 +517,176 @@ func TestCBOMergeJoin_CostSelection(t *testing.T) {
 	planText := strings.Join(lines, "\n")
 	if !strings.Contains(planText, "Merge Join") {
 		t.Errorf("expected Merge Join in plan text, got:\n%s", planText)
+	}
+}
+
+func TestCBOJoinOrderOptimization_SelingerDP_LargeChain(t *testing.T) {
+	p := planner.NewPlanner()
+
+	// 6 tables in a chain:
+	// users (1,000)
+	// orders (50,000)
+	// line_items (200,000)
+	// products (5,000)
+	// suppliers (200)
+	// cities (50)
+	sql := `SELECT u.name, o.id, l.item, p.price, s.name, c.name FROM users u JOIN orders o ON u.id = o.user_id JOIN line_items l ON o.id = l.order_id JOIN products p ON l.product_id = p.id JOIN suppliers s ON p.supplier_id = s.id JOIN cities c ON s.city_id = c.id`
+	q, err := p.ParseSelect(sql)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	userSchema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	orderSchema := &storage.TableSchema{
+		Name: "orders",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+		},
+	}
+	lineSchema := &storage.TableSchema{
+		Name: "line_items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "order_id", Type: storage.TypeInt},
+			{Name: "product_id", Type: storage.TypeInt},
+			{Name: "item", Type: storage.TypeVarChar},
+		},
+	}
+	productSchema := &storage.TableSchema{
+		Name: "products",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "supplier_id", Type: storage.TypeInt},
+			{Name: "price", Type: storage.TypeFloat},
+		},
+	}
+	supplierSchema := &storage.TableSchema{
+		Name: "suppliers",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "city_id", Type: storage.TypeInt},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	citySchema := &storage.TableSchema{
+		Name: "cities",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+
+	userStats := planner.NewTableStats("users", 1000)
+	orderStats := planner.NewTableStats("orders", 50000)
+	lineStats := planner.NewTableStats("line_items", 200000)
+	productStats := planner.NewTableStats("products", 5000)
+	supplierStats := planner.NewTableStats("suppliers", 200)
+	cityStats := planner.NewTableStats("cities", 50)
+
+	rSchemas := map[string]*storage.TableSchema{
+		"orders":     orderSchema,
+		"o":          orderSchema,
+		"line_items": lineSchema,
+		"l":          lineSchema,
+		"products":   productSchema,
+		"p":          productSchema,
+		"suppliers":  supplierSchema,
+		"s":          supplierSchema,
+		"cities":     citySchema,
+		"c":          citySchema,
+	}
+	rStats := map[string]*planner.TableStats{
+		"orders":     orderStats,
+		"o":          orderStats,
+		"line_items": lineStats,
+		"l":          lineStats,
+		"products":   productStats,
+		"p":          productStats,
+		"suppliers":  supplierStats,
+		"s":          supplierStats,
+		"cities":     cityStats,
+		"c":          cityStats,
+	}
+
+	start := time.Now()
+	plan := p.BuildMultiJoinPlanWithStats(q, userSchema, userStats, rSchemas, rStats)
+	dur := time.Since(start)
+
+	if plan == nil {
+		t.Fatal("expected non-nil plan for 6-table join")
+	}
+
+	// Performance verification: Selinger DP for 5 joins must complete well within 50ms (typically < 1ms)
+	if dur > 50*time.Millisecond {
+		t.Errorf("expected Selinger DP join optimization to finish under 50ms, took %v", dur)
+	}
+
+	lines := planner.FormatPlanText(plan, false)
+	planText := strings.Join(lines, "\n")
+	if !strings.Contains(planText, "Join") {
+		t.Fatalf("expected Join nodes in plan, got:\n%s", planText)
+	}
+}
+
+func TestCBOJoinOrderOptimization_SelingerDP_EightTables(t *testing.T) {
+	p := planner.NewPlanner()
+
+	// 8-table chain join (N=7 joins). Permutation approach would require 7! = 5,040 iterations.
+	// Selinger DP executes in O(7 * 2^6) = 448 iterations.
+	sql := `SELECT t1.id, t8.val FROM t1
+		JOIN t2 ON t1.id = t2.t1_id
+		JOIN t3 ON t2.id = t3.t2_id
+		JOIN t4 ON t3.id = t4.t3_id
+		JOIN t5 ON t4.id = t5.t4_id
+		JOIN t6 ON t5.id = t6.t5_id
+		JOIN t7 ON t6.id = t7.t6_id
+		JOIN t8 ON t7.id = t8.t7_id`
+
+	q, err := p.ParseSelect(sql)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	schemas := make(map[string]*storage.TableSchema)
+	stats := make(map[string]*planner.TableStats)
+
+	for i := 1; i <= 8; i++ {
+		name := fmt.Sprintf("t%d", i)
+		cols := []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		}
+		if i > 1 {
+			cols = append(cols, storage.Column{Name: fmt.Sprintf("t%d_id", i-1), Type: storage.TypeInt})
+		}
+		sch := &storage.TableSchema{Name: name, Columns: cols}
+		st := planner.NewTableStats(name, int64(i*1000))
+		schemas[name] = sch
+		stats[name] = st
+	}
+
+	start := time.Now()
+	plan := p.BuildMultiJoinPlanWithStats(q, schemas["t1"], stats["t1"], schemas, stats)
+	dur := time.Since(start)
+
+	if plan == nil {
+		t.Fatal("expected non-nil plan for 8-table join")
+	}
+
+	if dur > 100*time.Millisecond {
+		t.Errorf("expected 8-table Selinger DP to complete in < 100ms, took %v", dur)
+	}
+
+	lines := planner.FormatPlanText(plan, false)
+	planText := strings.Join(lines, "\n")
+	if !strings.Contains(planText, "Join") {
+		t.Fatalf("expected Join nodes in plan, got:\n%s", planText)
 	}
 }

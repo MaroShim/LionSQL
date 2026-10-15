@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/bits"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1171,60 +1172,12 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				}
 			}
 		} else {
-			// CBO Cost-Based Join Reordering: evaluate valid permutations for minimum TotalCost
-			perms := permuteJoins(innerBlock)
-			var bestNode *PlanNode
-			var bestEstRows int64
-			bestCost := math.MaxFloat64
-			var bestTables map[string]bool
-
-			for _, perm := range perms {
-				curAvail := make(map[string]bool, len(availableTables)+len(perm)*2)
-				for k, v := range availableTables {
-					curAvail[k] = v
-				}
-
-				valid := true
-				tempNode := currentNode
-				tempEstRows := currentEstimatedRows
-
-				for _, candidate := range perm {
-					var rSchema *storage.TableSchema
-					rTbl := cleanIdent(candidate.Table)
-					rAls := cleanIdent(candidate.Alias)
-					if rightSchemas != nil {
-						if s, ok := rightSchemas[candidate.Table]; ok {
-							rSchema = s
-						} else if s, ok := rightSchemas[rTbl]; ok {
-							rSchema = s
-						} else if s, ok := rightSchemas[candidate.Alias]; ok {
-							rSchema = s
-						} else if s, ok := rightSchemas[rAls]; ok {
-							rSchema = s
-						}
-					}
-
-					oriented, ok := checkAndOrientJoinKeys(candidate, curAvail, rSchema)
-					if !ok {
-						valid = false
-						break
-					}
-					tempNode, tempEstRows = buildSingleJoinNode(tempNode, tempEstRows, oriented, rightSchemas, rightStats, q.QueryHints)
-					curAvail[strings.ToLower(cleanIdent(candidate.Table))] = true
-					if candidate.Alias != "" {
-						curAvail[strings.ToLower(cleanIdent(candidate.Alias))] = true
-					}
-				}
-
-				if valid && (bestNode == nil || tempNode.TotalCost < bestCost) {
-					bestCost = tempNode.TotalCost
-					bestNode = tempNode
-					bestEstRows = tempEstRows
-					bestTables = curAvail
-				}
-			}
-
-			if bestNode != nil {
+			// CBO Cost-Based Join Reordering via Selinger Dynamic Programming (B-4)
+			bestNode, bestEstRows, bestTables, ok := optimizeJoinOrderDP(
+				currentNode, currentEstimatedRows, availableTables,
+				innerBlock, rightSchemas, rightStats, q.QueryHints,
+			)
+			if ok && bestNode != nil {
 				currentNode = bestNode
 				currentEstimatedRows = bestEstRows
 				availableTables = bestTables
@@ -1829,21 +1782,181 @@ func checkAndOrientJoinKeys(j *JoinInfo, availableTables map[string]bool, rSchem
 	return &copyJ, true
 }
 
-func permuteJoins(joins []*JoinInfo) [][]*JoinInfo {
-	if len(joins) <= 1 {
-		return [][]*JoinInfo{joins}
+type joinDPEntry struct {
+	node      *PlanNode
+	estRows   int64
+	tables    map[string]bool
+	totalCost float64
+}
+
+type candInfo struct {
+	orig   *JoinInfo
+	table  string
+	alias  string
+	schema *storage.TableSchema
+}
+
+// optimizeJoinOrderDP finds the optimal join ordering for a set of contiguous INNER joins
+// using Selinger dynamic programming (B-4) with subset bitmask memoization.
+func optimizeJoinOrderDP(
+	currentNode *PlanNode,
+	currentEstimatedRows int64,
+	availableTables map[string]bool,
+	innerBlock []*JoinInfo,
+	rightSchemas map[string]*storage.TableSchema,
+	rightStats map[string]*TableStats,
+	queryHints []string,
+) (*PlanNode, int64, map[string]bool, bool) {
+	n := len(innerBlock)
+	if n == 0 {
+		return currentNode, currentEstimatedRows, availableTables, true
 	}
-	var res [][]*JoinInfo
-	for i, j := range joins {
-		rest := make([]*JoinInfo, 0, len(joins)-1)
-		rest = append(rest, joins[:i]...)
-		rest = append(rest, joins[i+1:]...)
-		for _, p := range permuteJoins(rest) {
-			perm := append([]*JoinInfo{j}, p...)
-			res = append(res, perm)
+	// Bound DP state space to <= 12 tables to ensure constant-time sub-millisecond planning (Golden Rule 21, 23)
+	if n > 12 {
+		return nil, 0, nil, false
+	}
+
+	cands := make([]candInfo, n)
+	for k, j := range innerBlock {
+		t := strings.ToLower(cleanIdent(j.Table))
+		a := ""
+		if j.Alias != "" {
+			a = strings.ToLower(cleanIdent(j.Alias))
+		}
+		var s *storage.TableSchema
+		if rightSchemas != nil {
+			if sc, ok := rightSchemas[j.Table]; ok && sc != nil {
+				s = sc
+			} else if sc, ok := rightSchemas[cleanIdent(j.Table)]; ok && sc != nil {
+				s = sc
+			} else if sc, ok := rightSchemas[j.Alias]; ok && sc != nil {
+				s = sc
+			} else if a != "" {
+				if sc, ok := rightSchemas[a]; ok && sc != nil {
+					s = sc
+				}
+			}
+		}
+		cands[k] = candInfo{orig: j, table: t, alias: a, schema: s}
+	}
+
+	dpSize := 1 << n
+	dp := make([]*joinDPEntry, dpSize)
+
+	baseTables := make(map[string]bool, len(availableTables)+n*2)
+	for k, v := range availableTables {
+		baseTables[k] = v
+	}
+
+	dp[0] = &joinDPEntry{
+		node:      currentNode,
+		estRows:   currentEstimatedRows,
+		tables:    baseTables,
+		totalCost: currentNode.TotalCost,
+	}
+
+	// 1. Primary Selinger Pass: connect only through matching join keys (cross products pruned)
+	for size := 1; size <= n; size++ {
+		for mask := uint32(1); mask < uint32(dpSize); mask++ {
+			if bits.OnesCount32(mask) != size {
+				continue
+			}
+
+			for k := 0; k < n; k++ {
+				bit := uint32(1 << k)
+				if (mask & bit) == 0 {
+					continue
+				}
+				prevMask := mask &^ bit
+				prevEntry := dp[prevMask]
+				if prevEntry == nil {
+					continue
+				}
+
+				cand := cands[k]
+				oriented, ok := checkAndOrientJoinKeys(cand.orig, prevEntry.tables, cand.schema)
+				if !ok {
+					continue
+				}
+
+				joinedNode, joinedEstRows := buildSingleJoinNode(prevEntry.node, prevEntry.estRows, oriented, rightSchemas, rightStats, queryHints)
+				if dp[mask] == nil || joinedNode.TotalCost < dp[mask].totalCost {
+					newTables := make(map[string]bool, len(prevEntry.tables)+2)
+					for t, v := range prevEntry.tables {
+						newTables[t] = v
+					}
+					newTables[cand.table] = true
+					if cand.alias != "" {
+						newTables[cand.alias] = true
+					}
+					dp[mask] = &joinDPEntry{
+						node:      joinedNode,
+						estRows:   joinedEstRows,
+						tables:    newTables,
+						totalCost: joinedNode.TotalCost,
+					}
+				}
+			}
 		}
 	}
-	return res
+
+	fullMask := uint32(dpSize - 1)
+	if dp[fullMask] != nil {
+		best := dp[fullMask]
+		return best.node, best.estRows, best.tables, true
+	}
+
+	// 2. Secondary Fallback Pass: allow Cartesian (unconnected) joins if no fully-connected path exists
+	for size := 1; size <= n; size++ {
+		for mask := uint32(1); mask < uint32(dpSize); mask++ {
+			if bits.OnesCount32(mask) != size || dp[mask] != nil {
+				continue
+			}
+
+			for k := 0; k < n; k++ {
+				bit := uint32(1 << k)
+				if (mask & bit) == 0 {
+					continue
+				}
+				prevMask := mask &^ bit
+				prevEntry := dp[prevMask]
+				if prevEntry == nil {
+					continue
+				}
+
+				cand := cands[k]
+				oriented, ok := checkAndOrientJoinKeys(cand.orig, prevEntry.tables, cand.schema)
+				if !ok {
+					oriented = cand.orig
+				}
+
+				joinedNode, joinedEstRows := buildSingleJoinNode(prevEntry.node, prevEntry.estRows, oriented, rightSchemas, rightStats, queryHints)
+				if dp[mask] == nil || joinedNode.TotalCost < dp[mask].totalCost {
+					newTables := make(map[string]bool, len(prevEntry.tables)+2)
+					for t, v := range prevEntry.tables {
+						newTables[t] = v
+					}
+					newTables[cand.table] = true
+					if cand.alias != "" {
+						newTables[cand.alias] = true
+					}
+					dp[mask] = &joinDPEntry{
+						node:      joinedNode,
+						estRows:   joinedEstRows,
+						tables:    newTables,
+						totalCost: joinedNode.TotalCost,
+					}
+				}
+			}
+		}
+	}
+
+	if dp[fullMask] != nil {
+		best := dp[fullMask]
+		return best.node, best.estRows, best.tables, true
+	}
+
+	return nil, 0, nil, false
 }
 
 func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join *JoinInfo, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats, queryHints []string) (*PlanNode, int64) {
