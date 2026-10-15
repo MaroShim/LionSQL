@@ -137,6 +137,17 @@ type ReplicationConfig struct {
 	Quorum             int      `json:"quorum,omitempty"`
 }
 
+// OutboxConfig defines settings for Transactional Outbox broker forwarding.
+type OutboxConfig struct {
+	Enabled        bool     `json:"enabled"`
+	TableFilter    string   `json:"table_filter,omitempty"`
+	TopicPrefix    string   `json:"topic_prefix,omitempty"`
+	DedicatedTable bool     `json:"dedicated_table,omitempty"`
+	WebhookURLs    []string `json:"webhook_urls,omitempty"`
+	KafkaEndpoint  string   `json:"kafka_endpoint,omitempty"`
+	RabbitMQURL    string   `json:"rabbitmq_url,omitempty"`
+}
+
 // Config represents the unified, hierarchical configuration for SQLion.
 type Config struct {
 	Server      ServerConfig      `json:"server"`
@@ -145,6 +156,7 @@ type Config struct {
 	Resources   ResourcesConfig   `json:"resources"`
 	Logging     LoggingConfig     `json:"logging"`
 	Replication ReplicationConfig `json:"replication"`
+	Outbox      OutboxConfig      `json:"outbox,omitempty"`
 }
 
 // DefaultConfig returns the production-ready zero-config baseline.
@@ -154,6 +166,9 @@ func DefaultConfig() *Config {
 			DataDir:  "data",
 			Engine:   "wiredtiger",
 			AutoSeed: true,
+		},
+		Outbox: OutboxConfig{
+			TopicPrefix: "sqlion.",
 		},
 		Replication: ReplicationConfig{
 			Enabled:    true,

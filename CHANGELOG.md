@@ -13,6 +13,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Fixed empty table hierarchy in DBeaver PostgreSQL connections where table introspection queries filtered on `pg_class.relnamespace` (`WHERE c.relnamespace=2201` for `dbo` or `2200` for `public`). Updated `execHeidiSQLClassSelect` to emit metadata across both schemas and execute whereClause projection filtering.
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
 ### Added
+- **Transactional Outbox Broker Dispatcher & Lossless Event Streaming (`pkg/cdc`, `pkg/config`, `pkg/api`, `cmd/server`)**:
+  - Implemented `OutboxDispatcher` (`pkg/cdc/outbox.go`) subscribing to transaction-committed CDC event streams and reliably dispatching messages to external message brokers.
+  - Implemented normalized `OutboxMessage` formatting supporting both general CDC table mutation streaming (topic prefix `sqlion.<table_name>`) and dedicated outbox tables (`outbox` / `_outbox`) extracting `topic`, `payload`, `key`, and `headers`.
+  - Added at-least-once delivery guarantees with atomic checkpoint persistence (`outbox_checkpoint.json`, Golden Rules 1 & 5) tracking `last_ack_lsn` and resuming from last acknowledged LSN upon server restarts.
+  - Implemented exponential backoff retry loop (`MaxRetries`, `InitialBackoff`, `MaxBackoff`) and cooperative cancellation.
+  - Built-in pluggable message broker sinks (`pkg/cdc/outbox_sinks.go`):
+    - `MemorySink`: Thread-safe in-memory sink for embedded streaming and hermetic testing.
+    - `WebhookSink`: HTTP POST webhook forwarding with custom headers and authorization tokens.
+    - `KafkaRESTSink`: Confluent / Strimzi / Upstash Kafka REST Proxy forwarding (`/topics/{topic}`).
+    - `RabbitMQHTTPSink`: RabbitMQ Management HTTP API publishing (`/api/exchanges/{vhost}/{exchange}/publish`).
+  - Added REST observability endpoint `GET /api/cdc/outbox/status` reporting live dispatch metrics (`dispatched_count`, `failed_count`, `retried_count`, `last_ack_lsn`, `sink_count`, `active`).
+  - Added CLI flags (`-outbox`, `-outbox-table`, `-outbox-topic-prefix`, `-outbox-webhook`, `-outbox-kafka`, `-outbox-rabbitmq`) and JSON configuration (`cfg.Outbox`).
+  - Added comprehensive unit and integration tests across all sinks, dedicated outbox tables, retries, checkpointing, and REST endpoints (`pkg/cdc/outbox_test.go`, `pkg/api/outbox_api_test.go`).
 - **PostgreSQL Server-Side Cursors & Extended Query Portal Batching (`pkg/engine`, `pkg/wire`)**:
   - Implemented full SQL-level server-side cursors in `pkg/engine`: `DECLARE <name> [SCROLL|NO SCROLL] [BINARY] CURSOR [{WITH|WITHOUT} HOLD] FOR <query>`, `FETCH [direction] [count] [FROM|IN] <name>`, `MOVE [direction] [count] [FROM|IN] <name>`, `CLOSE <name>`, and `CLOSE ALL`.
   - Added directional positioning for `FETCH` and `MOVE`: `NEXT`, `PRIOR`, `FIRST`, `LAST`, `ALL`, `FORWARD`, `BACKWARD`, `ABSOLUTE <n>`, `RELATIVE <n>`, and count-based chunking.

@@ -23,10 +23,19 @@
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
-| **P2** | **이벤트/스트리밍** | **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ)** | `pkg/cdc` | CDC 이벤트 스트림의 외부 메시지 브로커 무손실 포워딩 |
-| **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
+| **P2** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
+| **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성 & BaaS 확장
+- [x] **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ/Webhook) (`pkg/cdc`, `pkg/config`, `pkg/api`, `cmd/server`)**
+  - **배경**: 분산 마이크로서비스 환경에서 듀얼 라이트(Dual-Write) 문제 해결 및 데이터베이스 커밋과 100% 원자적으로 연동되는 무손실 메시지 브로커 발행(At-Least-Once Delivery).
+  - **구현 내용**:
+    - `pkg/cdc/outbox.go`: 트랜잭션 커밋 CDC 스트림 구독 및 `OutboxMessage` 정규화 디스패처 구현. 일반 테이블 변경 CDC 스트리밍(`sqlion.<table_name>`)과 전용 아웃박스 테이블(`outbox` / `_outbox`) 스키마(`topic`, `payload`, `key`, `headers`) 자동 해석 지원.
+    - 무손실 체크포인트 영속화: 원자적 스왑 파일(`outbox_checkpoint.json`, Golden Rules 1 & 5) 기반으로 마지막 처리 LSN(`last_ack_lsn`)을 기록하여 재기동 시 유실 없이 자동 재개.
+    - 지수 백오프 재시도: 브로커 일시 장애 시 최대 재시도 횟수(`MaxRetries`) 및 점진적 백오프 루프 관통.
+    - 플러그형 브로커 싱크(`pkg/cdc/outbox_sinks.go`): `MemorySink`(테스트/임베디드), `WebhookSink`(HTTP POST), `KafkaRESTSink`(Confluent/Strimzi/Upstash), `RabbitMQHTTPSink`(Management REST API).
+    - 운영 관측성 및 CLI 연동: `GET /api/cdc/outbox/status` 실시간 모니터링 엔드포인트 완비 및 CLI 플래그(`-outbox`, `-outbox-table`, `-outbox-webhook`, `-outbox-kafka`, `-outbox-rabbitmq`), JSON 설정 바인딩.
+    - 단위 및 E2E 테스트 완비 (`pkg/cdc/outbox_test.go`, `pkg/api/outbox_api_test.go`).
 - [x] **PostgreSQL 서버 사이드 커서 및 Extended Query 포털 배치 스트리밍 (`pkg/engine`, `pkg/wire`)**
   - **배경**: 대규모 데이터셋 조회 시 클라이언트 메모리 고갈 방지 및 PostgreSQL 표준 SQL 커서(`DECLARE ... CURSOR`, `FETCH`, `MOVE`, `CLOSE`) 및 드라이버 포털 배치(`Execute` with `maxRows`, `PortalSuspended`) 완비.
   - **구현 내용**:
@@ -231,8 +240,8 @@
   - `GET /api/cdc/stream` 실시간 NDJSON 및 SSE 스트리밍 HTTP 엔드포인트 완비.
   - 스토리지 엔진(`memengine`, `wiredtiger`) 커밋 훅 다중화(`AddWALHook`) 관통.
   - Python 표준 라이브러리 기반 DuckDB 마이크로 배치 수신 워커 레시피 작성 (`doc/CDC_DUCKDB_INTEGRATION.md`).
-- [ ] **트랜잭셔널 아웃박스 외부 브로커 디스패처 (Kafka, RabbitMQ) (`pkg/cdc`, `pkg/storage`)**
-  - CDC 스트림을 외부 분산 메시지 브로커로 무손실 발행하는 Outbox 릴레이 워커.
+- [x] **트랜잭셔널 아웃박스 외부 브로커 디스패처 (Kafka, RabbitMQ, Webhook) (`pkg/cdc`, `pkg/config`, `pkg/api`, `cmd/server`)**
+  - CDC 스트림을 외부 분산 메시지 브로커로 무손실 발행하는 Outbox 릴레이 워커, 지수 백오프 재시도 및 아웃박스 체크포인트 원자적 영속화 완비.
 - [ ] **[보류 / Postponed] Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`)**
   - CGO/WiredTiger 의존성 없이 완전한 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 36) 크로스 컴파일 배포를 위한 `storage.Engine` 플러그인 백엔드 (현재는 네이티브 WiredTiger CGO 및 인메모리 OCC 고성능 엔진에 집중하며 보류).
 - [x] **내장형 Google 및 GitHub OAuth2 소셜 로그인 & 자동 사용자 프로비저닝 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**

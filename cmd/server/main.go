@@ -83,6 +83,12 @@ func main() {
 	initConfig := flag.String("init-config", "", "Generate a default sqlion.json configuration file at specified path (or ./sqlion.json) and exit")
 	doctorFlag := flag.Bool("doctor", false, "Run self-diagnostic health checks on host environment, resources, ports, and storage engines and exit")
 	devFlag := flag.Bool("dev", false, "Enable developer mode (verbose wire query and parameter logging on stdout/stderr)")
+	outboxFlag := flag.Bool("outbox", false, "Enable Transactional Outbox broker dispatcher")
+	outboxTable := flag.String("outbox-table", "", "Filter outbox dispatcher to specific table (default: all)")
+	outboxTopicPrefix := flag.String("outbox-topic-prefix", "", "Prefix for outbox broker topics (default: 'sqlion.')")
+	outboxWebhook := flag.String("outbox-webhook", "", "Webhook URL for outbox message forwarding")
+	outboxKafka := flag.String("outbox-kafka", "", "Kafka REST Proxy endpoint (e.g. http://localhost:8082)")
+	outboxRabbitMQ := flag.String("outbox-rabbitmq", "", "RabbitMQ Management API endpoint (e.g. http://localhost:15672)")
 
 	// Daemon control flags
 	var daemon bool
@@ -225,6 +231,27 @@ func main() {
 	}
 	if visited["election-timeout-ms"] {
 		cfg.Replication.ElectionTimeoutMS = *electionTimeout
+	}
+	if visited["outbox"] {
+		cfg.Outbox.Enabled = *outboxFlag
+	}
+	if visited["outbox-table"] {
+		cfg.Outbox.TableFilter = *outboxTable
+	}
+	if visited["outbox-topic-prefix"] {
+		cfg.Outbox.TopicPrefix = *outboxTopicPrefix
+	}
+	if visited["outbox-webhook"] && *outboxWebhook != "" {
+		cfg.Outbox.Enabled = true
+		cfg.Outbox.WebhookURLs = append(cfg.Outbox.WebhookURLs, *outboxWebhook)
+	}
+	if visited["outbox-kafka"] && *outboxKafka != "" {
+		cfg.Outbox.Enabled = true
+		cfg.Outbox.KafkaEndpoint = *outboxKafka
+	}
+	if visited["outbox-rabbitmq"] && *outboxRabbitMQ != "" {
+		cfg.Outbox.Enabled = true
+		cfg.Outbox.RabbitMQURL = *outboxRabbitMQ
 	}
 
 	if strings.TrimSpace(cfg.Server.DataDir) == "" {
@@ -548,6 +575,47 @@ func main() {
 	}
 	server.SetCDCStreamer(cdcStreamer)
 
+	// Initialize Transactional Outbox Broker Dispatcher if enabled
+	var outboxDispatcher *cdc.OutboxDispatcher
+	if cfg.Outbox.Enabled {
+		outboxCfg := cdc.DefaultDispatcherConfig()
+		outboxCfg.DataDir = cfg.Server.DataDir
+		if cfg.Outbox.TableFilter != "" {
+			outboxCfg.TableFilter = cfg.Outbox.TableFilter
+		}
+		if cfg.Outbox.TopicPrefix != "" {
+			outboxCfg.TopicPrefix = cfg.Outbox.TopicPrefix
+		}
+		outboxCfg.DedicatedTable = cfg.Outbox.DedicatedTable
+
+		outboxDispatcher = cdc.NewOutboxDispatcher(cdcStreamer, outboxCfg)
+
+		// Wire configured broker sinks
+		for _, whURL := range cfg.Outbox.WebhookURLs {
+			if whSink, err := cdc.NewWebhookSink(cdc.WebhookConfig{TargetURL: whURL}); err == nil {
+				outboxDispatcher.RegisterSink(whSink)
+			}
+		}
+		if cfg.Outbox.KafkaEndpoint != "" {
+			if kSink, err := cdc.NewKafkaRESTSink(cdc.KafkaRESTConfig{Endpoint: cfg.Outbox.KafkaEndpoint}); err == nil {
+				outboxDispatcher.RegisterSink(kSink)
+			}
+		}
+		if cfg.Outbox.RabbitMQURL != "" {
+			if rSink, err := cdc.NewRabbitMQHTTPSink(cdc.RabbitMQHTTPConfig{Endpoint: cfg.Outbox.RabbitMQURL}); err == nil {
+				outboxDispatcher.RegisterSink(rSink)
+			}
+		}
+
+		if err := outboxDispatcher.Start(context.Background()); err != nil {
+			log.Printf("[SQLion] Warning: Failed to start Outbox Dispatcher: %v", err)
+		} else {
+			server.SetOutboxDispatcher(outboxDispatcher)
+			defer outboxDispatcher.Stop()
+			log.Printf("[SQLion] Transactional Outbox Broker Dispatcher active (sinks: %d, table filter: '%s')", len(outboxDispatcher.Sinks()), outboxCfg.TableFilter)
+		}
+	}
+
 	var httpServer *http.Server
 	if cfg.Network.IsHTTPEnabled() {
 		httpServer = &http.Server{
@@ -679,6 +747,9 @@ func main() {
 		}
 		if repMgr != nil {
 			fmt.Printf(" [Replication]    Role: %s, Node: %s (HistoryCap: %d)\n", repMgr.Role(), cfg.Replication.NodeID, cfg.Replication.HistoryCap)
+		}
+		if outboxDispatcher != nil {
+			fmt.Printf(" [Outbox Broker]  Active (Sinks: %d, Table Filter: '%s')\n", len(outboxDispatcher.Sinks()), cfg.Outbox.TableFilter)
 		}
 		if cfg.Logging.DevMode {
 			fmt.Println(" [Developer Mode] Enabled (-dev: Real-time Wire Query & Error Tracing)")

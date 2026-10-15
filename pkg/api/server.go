@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -50,9 +51,10 @@ type Server struct {
 	coordinator *engine.Coordinator
 	mux         *http.ServeMux
 	replication *replication.Manager
-	cdcStreamer *cdc.Streamer
-	oauth       *OAuthManager
-	startTime   time.Time
+	cdcStreamer      *cdc.Streamer
+	outboxDispatcher *cdc.OutboxDispatcher
+	oauth            *OAuthManager
+	startTime        time.Time
 }
 
 // NewServer initializes a new Server with default in-memory auth service.
@@ -188,6 +190,26 @@ func (s *Server) handleCDCStream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.cdcStreamer.ServeHTTP(w, r)
+}
+
+// SetOutboxDispatcher attaches the Transactional Outbox broker dispatcher.
+func (s *Server) SetOutboxDispatcher(dispatcher *cdc.OutboxDispatcher) {
+	s.outboxDispatcher = dispatcher
+}
+
+// OutboxDispatcher returns the active outbox dispatcher instance.
+func (s *Server) OutboxDispatcher() *cdc.OutboxDispatcher {
+	return s.outboxDispatcher
+}
+
+func (s *Server) handleOutboxStatus(w http.ResponseWriter, r *http.Request) {
+	if s.outboxDispatcher == nil {
+		http.Error(w, "Outbox dispatcher is not configured", http.StatusServiceUnavailable)
+		return
+	}
+	stats := s.outboxDispatcher.Stats()
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(stats)
 }
 
 // AuthService returns the underlying authentication service.
@@ -438,6 +460,7 @@ func (s *Server) routes() {
 
 	// CDC (Change Data Capture) Stream (NDJSON / SSE for DuckDB, Kafka, and analytical ingestion)
 	s.mux.HandleFunc("GET /api/cdc/stream", s.handleCDCStream)
+	s.mux.HandleFunc("GET /api/cdc/outbox/status", s.handleOutboxStatus)
 
 	// Auth Endpoints (PocketBase compatible)
 	s.mux.HandleFunc("POST /api/auth/login", s.handleAuthLogin)

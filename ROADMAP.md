@@ -74,7 +74,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - [x] Always On Style Automatic Failover & Leader Election
   - [x] Tolerant Virtual No-Op USE Statement & Session Database Synchronization
   - [x] Decoupled Real-time CDC Event Streaming (GET /api/cdc/stream & DuckDB HTAP)
-  - Transactional Outbox Broker Dispatcher (Kafka / RabbitMQ)
+  - [x] Transactional Outbox Broker Dispatcher (Kafka / RabbitMQ / Webhook)
   - [Postponed] Pure Go Persistent Storage Engine Backend (Pebble / bbolt, CGO_ENABLED=0)
   - [x] Dynamic Programming (DP / Selinger) Large Join Order Optimization (N > 4) (B-4)
   - [x] Extended Multi-Column Statistics (C-5), MCV & Optimizer Hints
@@ -221,15 +221,19 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - Comprehensive unit and integration test suite (`pkg/replication/failover_test.go`).
 - **Strategic Value**: Enterprise 99.999% high availability with zero-touch automatic recovery and zero data loss.
 
-#### 6.2. Decoupled Real-time CDC Streaming & Transactional Outbox (`pkg/cdc`, `pkg/storage`, `pkg/api`)
-- **Implemented (`pkg/cdc`)**:
+#### 6.2. Decoupled Real-time CDC Streaming & Transactional Outbox (`pkg/cdc`, `pkg/storage`, `pkg/api`) (Completed)
+- **Implemented (`pkg/cdc`, `pkg/api`)**:
   - Decoupled real-time CDC event streaming engine (`ChangeEvent`, `Streamer`) with bounded ring-buffer historical replay (Golden Rule 23) and non-blocking backpressure fan-out (Golden Rule 29).
   - High-performance HTTP streaming endpoint `GET /api/cdc/stream` with real-time NDJSON and SSE support, table filtering (`?table=...`), and heartbeat keep-alive.
   - Multi-hook registration (`AddWALHook`) across In-Memory OCC (`memengine`) and WiredTiger (`wt_engine`, `wt_stub`) backends to synchronously tap commit boundaries.
   - Complete zero-dependency Python DuckDB micro-batch integration guide (`doc/CDC_DUCKDB_INTEGRATION.md`).
-- **Pending Outbox Forwarders**:
-  - Outbox dispatchers forwarding events to external message brokers (Kafka, RabbitMQ).
-- **Expected Outcome**: Decoupled hybrid transactional/analytical processing (HTAP) with zero OLTP blast radius, alongside lossless event-driven broker integration.
+  - **Transactional Outbox Broker Dispatcher**:
+    - At-least-once guaranteed delivery with atomic checkpoint persistence (`outbox_checkpoint.json`, Golden Rules 1 & 5).
+    - Dual event mapping: general CDC table mutations (`sqlion.<table_name>`) and dedicated outbox tables (`outbox` / `_outbox`) extracting `topic`, `payload`, `key`, and `headers`.
+    - Exponential backoff retry loop (`MaxRetries`, `InitialBackoff`, `MaxBackoff`) and cooperative cancellation.
+    - Pluggable broker sinks: `MemorySink`, `WebhookSink`, `KafkaRESTSink` (Confluent/Strimzi/Upstash), and `RabbitMQHTTPSink` (Management API).
+    - REST observability endpoint `GET /api/cdc/outbox/status`, CLI flags (`-outbox`, `-outbox-table`, etc.), and JSON configuration (`cfg.Outbox`).
+- **Outcome**: Decoupled hybrid transactional/analytical processing (HTAP) with zero OLTP blast radius, alongside lossless event-driven broker integration.
 
 #### 6.3. [Postponed] Pure-Go Persistent Storage Engine Option (Pebble / bbolt) (`pkg/storage`)
 - **Challenge**: Add a pure-Go persistent storage backend under the `storage.Engine` interface, enabling static compilation (`CGO_ENABLED=0`, Golden Rule 36) without C compiler toolchains.
@@ -285,7 +289,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 5** | **P3** | **[Completed] OAuth2 Social Login (Google, GitHub)** | Auth & API | Medium (200~300 lines) | Turnkey authentication, user auto-provisioning, and JWT issuance |
 | **Phase 6** | **P1** | **[Completed] Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
-| **Phase 6** | **P2** | **Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
+| **Phase 6** | **P2** | **[Completed] Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
 | **Phase 6** | **P2** | **[Completed] MCV (Most Common Values) Skew List Statistics (`C-7`)** | CBO & Planner | Medium (250~350 lines) | Corrects non-uniform skew distribution estimation error (MCV + Histogram complete) |
 | **Phase 6** | **P3** | **[Completed] Multi-Language Client Certification (Python, Go, GUI)** | Wire Protocols | Medium (200~300 lines) | Automated integration suites for psycopg3, pymssql, pgx, go-mssqldb, DBeaver |
 | **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
