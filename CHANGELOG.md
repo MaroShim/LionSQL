@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-10-15
+
 ### Fixed
 - **DBeaver Table Introspection & Sizing Compatibility across PostgreSQL and TDS (`pkg/engine`, `pkg/wire/tds`)**:
   - Fixed infinite query polling loop in DBeaver SQL Server connections caused by mismatched table size and row count projection columns. DBeaver issues `SELECT t.name, p.rows, SUM(a.total_pages) * 8 AS totalSize, SUM(a.used_pages) * 8 AS usedSize FROM sys.tables t ... WHERE t.schema_id = 1 AND t.object_id = <id> GROUP BY t.name, p.rows`; updated `execDbGateMSSQLRowCountSelect` to project `name`, `rows`, `totalSize`, and `usedSize` matching the requested `object_id`.

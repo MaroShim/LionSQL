@@ -17,7 +17,7 @@ import (
 	"sqlion/pkg/storage/wiredtiger"
 )
 
-const version = "0.7.0"
+const version = "0.20.0"
 
 func printUsage() {
 	fmt.Printf(`lionsql v%s - High-Concurrency Embedded OLTP Database CLI
