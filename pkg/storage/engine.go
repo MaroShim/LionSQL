@@ -99,7 +99,16 @@ type IndexSchema struct {
 	Columns     []string `json:"columns"`
 	IncludeCols []string `json:"include_cols,omitempty"`
 	Unique      bool     `json:"unique"`
+	Expression  string   `json:"expression,omitempty" msgpack:"expression,omitempty"`
+	ExprColumn  string   `json:"expr_column,omitempty" msgpack:"expr_column,omitempty"`
+	ExprPath    string   `json:"expr_path,omitempty" msgpack:"expr_path,omitempty"`
 }
+
+// IsExpression reports whether the index is a functional expression index on a JSON document or column expression.
+func (s *IndexSchema) IsExpression() bool {
+	return s != nil && (s.Expression != "" || s.ExprColumn != "")
+}
+
 
 // ForeignKeyAction defines the referential action when parent key is deleted or updated.
 type ForeignKeyAction int
@@ -328,6 +337,43 @@ func (s *TableSchema) FindIndexByColumn(colName string) (*IndexSchema, bool) {
 			if strings.EqualFold(col, colName) {
 				return &s.Indexes[i], true
 			}
+		}
+	}
+	return nil, false
+}
+
+// FindExpressionIndex finds a functional expression index on the specified column and JSON path.
+func (s *TableSchema) FindExpressionIndex(colName, jsonPath string) (*IndexSchema, bool) {
+	normPath := strings.TrimSpace(jsonPath)
+	if !strings.HasPrefix(normPath, "$") {
+		if strings.HasPrefix(normPath, "[") {
+			normPath = "$" + normPath
+		} else {
+			normPath = "$." + normPath
+		}
+	}
+	for i := range s.Indexes {
+		idx := &s.Indexes[i]
+		if !idx.IsExpression() {
+			continue
+		}
+		targetCol := idx.ExprColumn
+		if targetCol == "" && len(idx.Columns) > 0 {
+			targetCol = idx.Columns[0]
+		}
+		if !strings.EqualFold(targetCol, colName) {
+			continue
+		}
+		idxNormPath := strings.TrimSpace(idx.ExprPath)
+		if !strings.HasPrefix(idxNormPath, "$") {
+			if strings.HasPrefix(idxNormPath, "[") {
+				idxNormPath = "$" + idxNormPath
+			} else {
+				idxNormPath = "$." + idxNormPath
+			}
+		}
+		if strings.EqualFold(idxNormPath, normPath) {
+			return idx, true
 		}
 	}
 	return nil, false

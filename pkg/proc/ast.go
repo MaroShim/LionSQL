@@ -926,6 +926,9 @@ type CreateIndexStmt struct {
 	Columns     []string
 	IncludeCols []string
 	Unique      bool
+	Expression  string
+	ExprColumn  string
+	ExprPath    string
 }
 
 func (s *CreateIndexStmt) stmtNode() {}
@@ -937,6 +940,9 @@ func (s *CreateIndexStmt) String() string {
 	inc := ""
 	if len(s.IncludeCols) > 0 {
 		inc = fmt.Sprintf(" INCLUDE (%s)", strings.Join(s.IncludeCols, ", "))
+	}
+	if s.Expression != "" {
+		return fmt.Sprintf("CREATE %sINDEX %s ON %s ((%s))%s", u, s.Name, s.Table, s.Expression, inc)
 	}
 	return fmt.Sprintf("CREATE %sINDEX %s ON %s (%s)%s", u, s.Name, s.Table, strings.Join(s.Columns, ", "), inc)
 }

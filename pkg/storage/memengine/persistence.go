@@ -86,7 +86,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 						oldRow, hadOld := td.deleteRowAndVer(pk)
 						if hadOld {
 							for _, idxData := range td.Indexes {
-								oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
+								oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 								idxData.Delete(oldKey, pk)
 							}
 						}
@@ -108,7 +108,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Entries: make([]IndexEntry, 0),
 			}
 			td.forEachRow(func(pk string, row storage.Row) bool {
-				keyVal := extractIndexKeyFromRow(&td.Schema, row, op.IndexSchema.Columns)
+				keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, row, op.IndexSchema)
 				_ = idxData.Insert(keyVal, pk)
 				return true
 			})
@@ -155,7 +155,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				}
 			}
 			for _, idxData := range td.Indexes {
-				newKey := extractIndexKeyFromRow(&td.Schema, row, idxData.Schema.Columns)
+				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, row, &idxData.Schema)
 				_ = idxData.Insert(newKey, op.Key)
 			}
 		case OpUpdate:
@@ -195,10 +195,10 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 			for _, idxData := range td.Indexes {
 				if hadOld {
-					oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
+					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, op.Key)
 				}
-				newKey := extractIndexKeyFromRow(&td.Schema, row, idxData.Schema.Columns)
+				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, row, &idxData.Schema)
 				_ = idxData.Insert(newKey, op.Key)
 			}
 		case OpDelete:
@@ -220,7 +220,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 			if hadOld {
 				for _, idxData := range td.Indexes {
-					oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
+					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, op.Key)
 				}
 			}

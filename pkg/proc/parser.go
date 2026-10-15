@@ -2053,7 +2053,7 @@ func (p *Parser) ParseSQLStatement() (Statement, error) {
 			return p.parseCreateTable()
 		}
 		if p.peekTokenIs(TokenIndex) || p.peekTokenIs(TokenUnique) {
-			return p.parseCreateIndex()
+			return p.ParseCreateIndex()
 		}
 		if p.peekTokenIs(TokenProcedure) || p.peekTokenIs(TokenProc) {
 			return p.ParseProcedure()
@@ -2915,7 +2915,85 @@ func (p *Parser) parseCreateTable() (*CreateTableStmt, error) {
 	}, nil
 }
 
-func (p *Parser) parseCreateIndex() (*CreateIndexStmt, error) {
+// ExtractJSONExprInfo inspects an expression to determine if it represents a JSON extraction
+// expression such as:
+//   - col->>'key'
+//   - col->'a'->>'b'
+//   - col->'tags'->>0
+//   - JSON_VALUE(col, '$.path')
+// It returns the column name, normalized JSON path (starting with $), and true if recognized.
+func ExtractJSONExprInfo(expr Expr) (colName, jsonPath string, ok bool) {
+	if expr == nil {
+		return "", "", false
+	}
+	switch e := expr.(type) {
+	case *BinaryExpr:
+		if e.Op != TokenJSONExtract && e.Op != TokenJSONExtractText {
+			return "", "", false
+		}
+		var segments []string
+		curr := e
+		for {
+			var seg string
+			switch r := curr.Right.(type) {
+			case *LiteralExpr:
+				if r.Val.Type == storage.TypeVarChar {
+					seg = "." + r.Val.SVal
+				} else if r.Val.Type == storage.TypeInt {
+					seg = fmt.Sprintf("[%d]", r.Val.IVal)
+				} else {
+					seg = "." + r.Val.String()
+				}
+			case *ColumnRefExpr:
+				seg = "." + cleanSchemaPrefix(r.Name)
+			default:
+				return "", "", false
+			}
+			segments = append([]string{seg}, segments...)
+
+			if leftBin, isBin := curr.Left.(*BinaryExpr); isBin && (leftBin.Op == TokenJSONExtract || leftBin.Op == TokenJSONExtractText) {
+				curr = leftBin
+			} else if leftCol, isCol := curr.Left.(*ColumnRefExpr); isCol {
+				colName = cleanSchemaPrefix(leftCol.Name)
+				break
+			} else {
+				return "", "", false
+			}
+		}
+
+		var pathBuilder strings.Builder
+		pathBuilder.WriteString("$")
+		for _, seg := range segments {
+			pathBuilder.WriteString(seg)
+		}
+		return colName, pathBuilder.String(), true
+
+	case *FunctionCallExpr:
+		if strings.EqualFold(e.Name, "JSON_VALUE") && len(e.Args) >= 2 {
+			if colRef, isCol := e.Args[0].(*ColumnRefExpr); isCol {
+				colName = cleanSchemaPrefix(colRef.Name)
+				if lit, isLit := e.Args[1].(*LiteralExpr); isLit {
+					rawPath := lit.Val.SVal
+					if rawPath == "" && !lit.Val.IsNull {
+						rawPath = lit.Val.String()
+					}
+					rawPath = strings.TrimSpace(rawPath)
+					if !strings.HasPrefix(rawPath, "$") {
+						if strings.HasPrefix(rawPath, "[") {
+							rawPath = "$" + rawPath
+						} else {
+							rawPath = "$." + rawPath
+						}
+					}
+					return colName, rawPath, true
+				}
+			}
+		}
+	}
+	return "", "", false
+}
+
+func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 	p.nextToken() // eat CREATE
 	isUnique := false
 	if p.curTokenIs(TokenUnique) {
@@ -2950,19 +3028,47 @@ func (p *Parser) parseCreateIndex() (*CreateIndexStmt, error) {
 	p.nextToken()
 
 	var cols []string
-	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
-		if p.curTokenIs(TokenIdent) {
-			cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
+	var exprStr string
+	var exprCol string
+	var exprPath string
+
+	isExpr := p.curTokenIs(TokenLParen) ||
+		(p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "JSON_VALUE")) ||
+		(p.curTokenIs(TokenIdent) && (p.peekTokenIs(TokenJSONExtract) || p.peekTokenIs(TokenJSONExtractText)))
+
+	if isExpr {
+		expr := p.parseExpression(precLowest)
+		if expr == nil {
+			return nil, fmt.Errorf("invalid expression in CREATE INDEX")
+		}
+		if p.curTokenIs(TokenRParen) {
 			p.nextToken()
 		}
-		if p.curTokenIs(TokenComma) {
-			p.nextToken()
+
+		exprStr = expr.String()
+		col, path, ok := ExtractJSONExprInfo(expr)
+		if ok {
+			exprCol = col
+			exprPath = path
+			cols = append(cols, col)
 		} else {
-			break
+			cols = append(cols, exprStr)
 		}
-	}
-	if p.curTokenIs(TokenRParen) {
-		p.nextToken()
+	} else {
+		for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+			if p.curTokenIs(TokenIdent) {
+				cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
+				p.nextToken()
+			}
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			} else {
+				break
+			}
+		}
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken()
+		}
 	}
 
 	var includeCols []string
@@ -2997,6 +3103,9 @@ func (p *Parser) parseCreateIndex() (*CreateIndexStmt, error) {
 		Columns:     cols,
 		IncludeCols: includeCols,
 		Unique:      isUnique,
+		Expression:  exprStr,
+		ExprColumn:  exprCol,
+		ExprPath:    exprPath,
 	}, nil
 }
 

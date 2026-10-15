@@ -79,9 +79,19 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	}
 
 	// Validate columns
-	for _, colName := range index.Columns {
+	if index.IsExpression() {
+		colName := index.ExprColumn
+		if colName == "" && len(index.Columns) > 0 {
+			colName = index.Columns[0]
+		}
 		if _, _, found := td.Schema.FindColumn(colName); !found {
-			return fmt.Errorf("%w: %s on table %s", storage.ErrColumnNotFound, colName, index.TableName)
+			return fmt.Errorf("%w: column %s on table %s", storage.ErrColumnNotFound, colName, index.TableName)
+		}
+	} else {
+		for _, colName := range index.Columns {
+			if _, _, found := td.Schema.FindColumn(colName); !found {
+				return fmt.Errorf("%w: %s on table %s", storage.ErrColumnNotFound, colName, index.TableName)
+			}
 		}
 	}
 	for _, colName := range index.IncludeCols {
@@ -98,7 +108,7 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	// Populate index from existing rows
 	var insertErr error
 	td.forEachRow(func(pk string, row storage.Row) bool {
-		keyVal := extractIndexKeyFromRow(&td.Schema, row, index.Columns)
+		keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, row, index)
 		incVals := extractIncludeValuesFromRow(&td.Schema, row, index.IncludeCols)
 		if err := idxData.Insert(keyVal, pk, incVals); err != nil {
 			insertErr = err
@@ -151,6 +161,46 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 		return err
 	}
 	return nil
+}
+
+func extractIndexKeyFromRecord(rec storage.Record, idx *storage.IndexSchema) storage.Value {
+	if idx != nil && idx.IsExpression() {
+		colName := idx.ExprColumn
+		if colName == "" && len(idx.Columns) > 0 {
+			colName = idx.Columns[0]
+		}
+		if docVal, ok := rec[colName]; ok && !docVal.IsNull {
+			return storage.ExtractJSONIndexKey(docVal.String(), idx.ExprPath)
+		}
+		return storage.NullValue(storage.TypeVarChar)
+	}
+	if idx != nil {
+		return extractIndexKey(rec, idx.Columns)
+	}
+	return storage.NullValue(storage.TypeUnknown)
+}
+
+func extractIndexKeyFromRowWithSchema(schema *storage.TableSchema, row storage.Row, idx *storage.IndexSchema) storage.Value {
+	if idx != nil && idx.IsExpression() {
+		colName := idx.ExprColumn
+		if colName == "" && len(idx.Columns) > 0 {
+			colName = idx.Columns[0]
+		}
+		if schema != nil {
+			if _, colIdx, found := schema.FindColumn(colName); found && colIdx >= 0 && colIdx < len(row.Values) {
+				docVal := row.Values[colIdx]
+				if docVal.IsNull {
+					return storage.NullValue(storage.TypeVarChar)
+				}
+				return storage.ExtractJSONIndexKey(docVal.String(), idx.ExprPath)
+			}
+		}
+		return storage.NullValue(storage.TypeVarChar)
+	}
+	if idx != nil {
+		return extractIndexKeyFromRow(schema, row, idx.Columns)
+	}
+	return storage.NullValue(storage.TypeUnknown)
 }
 
 func extractIndexKey(rec storage.Record, cols []string) storage.Value {
@@ -355,7 +405,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		oldRow, hadOld := td.deleteRowAndVer(pk)
 		if hadOld {
 			for _, idxData := range td.Indexes {
-				oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
+				oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 				idxData.Delete(oldKey, pk)
 			}
 		}

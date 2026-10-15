@@ -293,6 +293,36 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time) (*QueryRe
 
 func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+
+	// 1. Try Pratt parser first (full support for functional expression indexes & double parens)
+	p := proc.NewParser(proc.NewLexer(cleaned))
+	if stmt, err := p.ParseCreateIndex(); err == nil && stmt != nil && len(stmt.Columns) > 0 {
+		idxSchema := &storage.IndexSchema{
+			Name:        stmt.Name,
+			TableName:   stmt.Table,
+			Columns:     stmt.Columns,
+			IncludeCols: stmt.IncludeCols,
+			Unique:      stmt.Unique,
+			Expression:  stmt.Expression,
+			ExprColumn:  stmt.ExprColumn,
+			ExprPath:    stmt.ExprPath,
+		}
+		if err := s.engine.CreateIndex(idxSchema); err != nil {
+			return nil, err
+		}
+		msg := fmt.Sprintf("Index %q created successfully on table %q.", stmt.Name, stmt.Table)
+		if stmt.Unique {
+			msg = fmt.Sprintf("Unique index %q created successfully on table %q.", stmt.Name, stmt.Table)
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "CREATE INDEX",
+			Messages:   []string{msg},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	// 2. Fallback to regex for legacy/vendor queries
 	re := regexp.MustCompile(`(?is)^CREATE\s+(UNIQUE\s+)?INDEX\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)(?:\s+INCLUDE\s*\((.*?)\))?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 5 {

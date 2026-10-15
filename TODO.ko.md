@@ -195,10 +195,13 @@
     - RFC 6901 / 경량 JSONPath(키 접근 및 `$.key.nested[0]`) 고속 파서 및 프로젝션/WHERE 필터 평가 연동.
     - `Tuple.ToEvalMap()` 지연 튜플(LazyTuple) 역직렬화 누락 버그 해결 및 스칼라 문자열 리터럴(`isSingleQuotedLiteral`) 식별 정밀화.
     - In-Memory OCC 및 WiredTiger 양대 스토리지 백엔드 상에서 단일/체인 추출, 다중 테이블 조인 및 필터 100% 통합 검증 완료 (`pkg/engine/json_query_test.go`, `pkg/engine/json_wt_test.go`).
-  - [ ] **[다음 과제] [2단계] 기능 표현식 인덱스 DDL 및 스토리지 키 추출 (`pkg/proc`, `pkg/storage`)**:
-    - `CREATE INDEX idx ON tbl ((data->>'key'))` 및 `CREATE INDEX idx ON tbl ((JSON_VALUE(data, '$.path')))` 이중 괄호 기능 인덱스 DDL 파싱 및 AST 정규화 (`*proc.JsonExtractExpr`).
-    - 스토리지 튜플 삽입/갱신 시 JSON 키 추출 및 SkipList / WiredTiger B+Tree 키 등록, `catalog.json` 영속화.
-  - [ ] **[대기] [3단계] CBO 표현식 인덱스 매칭 및 E2E/성능 벤치마크 (`pkg/planner`, `pkg/wire`)**:
+  - [x] **[2단계] 기능 표현식 인덱스 DDL 및 스토리지 키 추출 (완료) (`pkg/proc`, `pkg/storage`, `pkg/engine`)**:
+    - `CREATE [UNIQUE] INDEX idx ON tbl ((data->>'key'))` 및 `CREATE INDEX idx ON tbl ((JSON_VALUE(data, '$.path')))` 이중 괄호 기능 인덱스 DDL 파싱 및 AST 정규화 (`ExtractJSONExprInfo`, `ParseCreateIndex`).
+    - `storage.IndexSchema`에 `Expression`, `ExprColumn`, `ExprPath` 및 `IsExpression()`, `TableSchema.FindExpressionIndex` 완비.
+    - 스토리지 튜플 삽입/갱신/삭제 시 `ExtractJSONIndexKey`를 통해 실시간 SkipList 및 WAL 동기화 (`extractIndexKeyFromRowWithSchema`).
+    - ANSI SQL 표준 준수: UNIQUE 표현식 인덱스에서 NULL 다중 허용(`!key.IsNull`), 중복 비-NULL 키 삽입 시 즉각 `ErrUniqueViolation` 롤백.
+    - In-Memory OCC 및 WiredTiger 양대 스토리지 백엔드 상에서 DDL 생성, 직접 `IndexScan` 범위 스캔, UPDATE/DELETE 실시간 동기화 100% 통합 검증 완료 (`TestJSON_ExpressionIndex`, `TestJSON_ExpressionIndex_WiredTiger`).
+  - [ ] **[다음 과제] [3단계] CBO 표현식 인덱스 매칭 및 E2E/성능 벤치마크 (`pkg/planner`, `pkg/wire`)**:
     - CBO 옵티마이저 매칭: `WHERE data->>'city' = 'Seoul'` 또는 `WHERE JSON_VALUE(data, '$.city') = 'Seoul'` 평가 시 순차 스캔 대신 인덱스 스캔(`IndexScan`) 자동 선택.
     - PGWire / TDS 드라이버 E2E 통합 테스트 및 10만 건 JSON 컬럼 대상 풀스캔 vs 인덱스 스캔 성능 벤치마크.
 

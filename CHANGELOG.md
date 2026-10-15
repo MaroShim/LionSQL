@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Semi-Structured JSON Functional Expression Indexing & Built-in Operators (ADR-022) (`pkg/proc`, `pkg/storage`, `pkg/engine`)**:
+  - Implemented T-SQL & ANSI standard JSON built-in functions: `ISJSON(val)`, `JSON_VALUE(col, '$.path')`, `JSON_QUERY(col, '$.path')`, `JSON_MODIFY(col, '$.path', new_val)`.
+  - Added PostgreSQL JSON operators `->` (JSON object/array extraction) and `->>` (scalar text extraction) to Pratt parser and Volcano/VDBE query execution engines.
+  - Added support for functional B-Tree expression index DDL: `CREATE [UNIQUE] INDEX ... ON table ((col->>'key'))` and `CREATE INDEX ... ON table ((JSON_VALUE(col, '$.path')))`.
+  - Implemented sub-microsecond JSON index key extraction (`storage.ExtractJSONIndexKey`) and real-time synchronization in In-Memory OCC SkipList and WiredTiger B+Tree engines on row `INSERT`, `UPDATE`, and `DELETE`.
+  - Enforced ANSI SQL UNIQUE constraint semantics for expression indexes: multiple NULL keys are permitted without collision, while duplicate non-null keys trigger atomic rollback (`ErrUniqueViolation`).
+  - Added unit and integration test suites in `pkg/engine/json_query_test.go` and `pkg/engine/json_wt_test.go`.
 - **Per-Query Arena Memory Allocator for Zero-GC Execution (`pkg/storage`, `pkg/execution`, `pkg/engine`)**:
   - Implemented high-performance query/session-scoped memory arena slab allocator (`pkg/storage/arena.go`) with bump-pointer allocation and 8-byte alignment, eliminating Go runtime garbage collection overhead and heap fragmentation during heavy analytical queries.
   - Slabs pooled via `sync.Pool` across raw bytes (`DefaultByteSlabSize = 64KB`), storage values (`DefaultValueSlabSize = 2048 Values`), and interface slices (`DefaultAnySlabSize = 2048 []any`).

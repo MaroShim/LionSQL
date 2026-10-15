@@ -252,3 +252,32 @@ func parsePathSegments(p string) []string {
 	}
 	return segments
 }
+
+// ExtractJSONIndexKey extracts an index key value from a JSON document at the specified path.
+func ExtractJSONIndexKey(docStr string, path string) Value {
+	if docStr == "" {
+		return NullValue(TypeVarChar)
+	}
+	val, ok := JSONValueByPath(docStr, path)
+	if !ok || val == nil {
+		return NullValue(TypeVarChar)
+	}
+	switch v := val.(type) {
+	case string:
+		return StringValue(v)
+	case int64:
+		return IntValue(v)
+	case int:
+		return IntValue(int64(v))
+	case float64:
+		if v == float64(int64(v)) {
+			return IntValue(int64(v))
+		}
+		return FloatValue(v)
+	case bool:
+		return BoolValue(v)
+	default:
+		return StringValue(fmt.Sprintf("%v", v))
+	}
+}
+

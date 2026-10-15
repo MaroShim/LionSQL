@@ -6,6 +6,7 @@ import (
 
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/engine"
+	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
 )
 
@@ -164,6 +165,169 @@ func TestJSON_TableQueries(t *testing.T) {
 	}
 	if res.Rows[0]["city"] != "Seoul" || res.Rows[0]["item"] != "laptop" {
 		t.Fatalf("unexpected joined row: %+v", res.Rows[0])
+	}
+}
+
+func TestJSON_ExpressionIndex(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, doc VARCHAR(500));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, err = coord.ExecuteSQL(`INSERT INTO users VALUES 
+		(1, '{"city": "Seoul", "email": "alice@sqlion.org", "nested": {"country": "KR"}}'),
+		(2, '{"city": "Busan", "email": "bob@sqlion.org", "nested": {"country": "KR"}}'),
+		(3, '{"city": "Tokyo", "email": "charlie@sqlion.org", "nested": {"country": "JP"}}');`)
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// 1. Create expression index with PostgreSQL ->> syntax: ((doc->>'city'))
+	_, err = coord.ExecuteSQL("CREATE INDEX idx_user_city ON users ((doc->>'city'));")
+	if err != nil {
+		t.Fatalf("CREATE INDEX ((doc->>'city')) failed: %v", err)
+	}
+
+	// Verify TableSchema expression index metadata
+	tbl, err := eng.GetTable("users")
+	if err != nil || tbl == nil {
+		t.Fatalf("table users not found: %v", err)
+	}
+	idx, found := tbl.FindExpressionIndex("doc", "$.city")
+	if !found || idx == nil {
+		t.Fatalf("FindExpressionIndex(doc, $.city) not found: %+v", tbl.Indexes)
+	}
+	if !idx.IsExpression() || idx.ExprColumn != "doc" || idx.ExprPath != "$.city" {
+		t.Fatalf("unexpected index schema: %+v", idx)
+	}
+
+	// 2. Create expression index with ANSI / MSSQL syntax: ((JSON_VALUE(doc, '$.nested.country')))
+	res, err := coord.ExecuteSQL("CREATE INDEX idx_user_country ON users ((JSON_VALUE(doc, '$.nested.country')));")
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE INDEX ((JSON_VALUE(...))) failed: %v, res: %+v", err, res)
+	}
+	tbl, err = eng.GetTable("users")
+	if err != nil {
+		t.Fatalf("GetTable failed: %v", err)
+	}
+	idxCountry, found := tbl.FindExpressionIndex("doc", "$.nested.country")
+	if !found || idxCountry == nil {
+		t.Fatalf("FindExpressionIndex(doc, $.nested.country) not found: %+v", tbl.Indexes)
+	}
+
+	// 3. Test IndexScan direct lookup on the expression index
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx.Rollback()
+
+	keySeoul := storage.StringValue("Seoul")
+	cur, err := tx.IndexScan("users", "idx_user_city", &keySeoul, &keySeoul)
+	if err != nil {
+		t.Fatalf("IndexScan failed: %v", err)
+	}
+	defer cur.Close()
+	var foundPks []string
+	for cur.Next() {
+		rec, rerr := cur.Record()
+		if rerr != nil {
+			t.Fatalf("cur.Record failed: %v", rerr)
+		}
+		foundPks = append(foundPks, rec["id"].String())
+	}
+	if len(foundPks) != 1 || foundPks[0] != "1" {
+		t.Fatalf("expected PK ['1'], got %v", foundPks)
+	}
+
+	// 4. Test UNIQUE expression index
+	_, err = coord.ExecuteSQL("CREATE UNIQUE INDEX idx_uniq_email ON users ((doc->>'email'));")
+	if err != nil {
+		t.Fatalf("CREATE UNIQUE INDEX failed: %v", err)
+	}
+
+	// Insert duplicate email -> MUST fail with unique violation
+	_, err = coord.ExecuteSQL(`INSERT INTO users VALUES (4, '{"city": "Incheon", "email": "alice@sqlion.org"}');`)
+	if err == nil {
+		t.Fatalf("expected unique violation on duplicate email alice@sqlion.org, but insert succeeded")
+	}
+
+	// Insert documents without email (NULL key) -> MUST succeed (multiple NULLs allowed in unique index)
+	_, err = coord.ExecuteSQL(`INSERT INTO users VALUES (5, '{"city": "Daegu"}');`)
+	if err != nil {
+		t.Fatalf("expected insert with null email to succeed, got: %v", err)
+	}
+	_, err = coord.ExecuteSQL(`INSERT INTO users VALUES (6, '{"city": "Daejeon"}');`)
+	if err != nil {
+		t.Fatalf("expected second insert with null email to succeed, got: %v", err)
+	}
+
+	// 5. Test UPDATE synchronization in expression index
+	_, err = coord.ExecuteSQL(`UPDATE users SET doc = '{"city": "Suwon", "email": "alice_new@sqlion.org"}' WHERE id = 1;`)
+	if err != nil {
+		t.Fatalf("UPDATE failed: %v", err)
+	}
+
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx2.Rollback()
+
+	// Old city "Seoul" should no longer match
+	curOld, err := tx2.IndexScan("users", "idx_user_city", &keySeoul, &keySeoul)
+	if err != nil {
+		t.Fatalf("IndexScan old key failed: %v", err)
+	}
+	defer curOld.Close()
+	if curOld.Next() {
+		r, _ := curOld.Record()
+		t.Fatalf("expected 0 rows for old key 'Seoul', got row %+v", r)
+	}
+
+	// New city "Suwon" should match
+	keySuwon := storage.StringValue("Suwon")
+	curNew, err := tx2.IndexScan("users", "idx_user_city", &keySuwon, &keySuwon)
+	if err != nil {
+		t.Fatalf("IndexScan new key failed: %v", err)
+	}
+	defer curNew.Close()
+	if !curNew.Next() {
+		t.Fatalf("expected 1 row for new key 'Suwon'")
+	}
+	rNew, _ := curNew.Record()
+	if rNew["id"].String() != "1" {
+		t.Fatalf("expected PK '1' for new key 'Suwon', got: %+v", rNew)
+	}
+
+	// 6. Test DELETE synchronization in expression index
+	_, err = coord.ExecuteSQL(`DELETE FROM users WHERE id = 1;`)
+	if err != nil {
+		t.Fatalf("DELETE failed: %v", err)
+	}
+	tx3, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx3.Rollback()
+	curDel, err := tx3.IndexScan("users", "idx_user_city", &keySuwon, &keySuwon)
+	if err != nil {
+		t.Fatalf("IndexScan deleted key failed: %v", err)
+	}
+	defer curDel.Close()
+	if curDel.Next() {
+		r, _ := curDel.Record()
+		t.Fatalf("expected 0 rows after delete for 'Suwon', got row %+v", r)
 	}
 }
 

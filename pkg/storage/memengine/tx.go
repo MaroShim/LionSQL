@@ -217,12 +217,14 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	td.mu.RLock()
 	for _, idxData := range td.Indexes {
 		if idxData.Schema.Unique {
-			keyVal := extractIndexKey(record, idxData.Schema.Columns)
-			existing := idxData.ScanRange(&keyVal, &keyVal)
-			for _, epk := range existing {
-				if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
-					td.mu.RUnlock()
-					return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+			keyVal := extractIndexKeyFromRecord(record, &idxData.Schema)
+			if !keyVal.IsNull {
+				existing := idxData.ScanRange(&keyVal, &keyVal)
+				for _, epk := range existing {
+					if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+						td.mu.RUnlock()
+						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+					}
 				}
 			}
 		}
@@ -234,9 +236,9 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 			if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
 				for _, idx := range schema.Indexes {
 					if idx.Unique {
-						keyVal := extractIndexKey(record, idx.Columns)
-						locVal := extractIndexKeyFromRow(&schema, locRow, idx.Columns)
-						if keyVal.Equal(locVal) {
+						keyVal := extractIndexKeyFromRecord(record, &idx)
+						locVal := extractIndexKeyFromRowWithSchema(&schema, locRow, &idx)
+						if !keyVal.IsNull && !locVal.IsNull && keyVal.Equal(locVal) {
 							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
 						}
 					}
@@ -1135,7 +1137,7 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 			}
 
 			if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
-				idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
+				idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
 				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 					pks = append(pks, pk)
 				}
@@ -1152,7 +1154,7 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 				if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
 					continue
 				}
-				idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
+				idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
 				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 					pks = append(pks, pk)
 					seen[pk] = true
@@ -1269,7 +1271,7 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 			}
 
 			if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
-				idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
+				idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
 				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 					pks = append(pks, pk)
 					keyMap[pk] = indexOnlyPayload{
@@ -1294,7 +1296,7 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 				if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
 					continue
 				}
-				idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
+				idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
 				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
 					pks = append(pks, pk)
 					seen[pk] = true
@@ -1440,11 +1442,13 @@ func (tx *Transaction) Commit() error {
 			}
 			for _, idxData := range td.Indexes {
 				if idxData.Schema.Unique {
-					keyVal := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
-					existing := idxData.ScanRange(&keyVal, &keyVal)
-					for _, epk := range existing {
-						if epk != ch.key {
-							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+					keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
+					if !keyVal.IsNull {
+						existing := idxData.ScanRange(&keyVal, &keyVal)
+						for _, epk := range existing {
+							if epk != ch.key {
+								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+							}
 						}
 					}
 				}
@@ -1456,11 +1460,13 @@ func (tx *Transaction) Commit() error {
 			if ch.kind == changeUpdate {
 				for _, idxData := range td.Indexes {
 					if idxData.Schema.Unique {
-						keyVal := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
-						existing := idxData.ScanRange(&keyVal, &keyVal)
-						for _, epk := range existing {
-							if epk != ch.key {
-								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+						keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
+						if !keyVal.IsNull {
+							existing := idxData.ScanRange(&keyVal, &keyVal)
+							for _, epk := range existing {
+								if epk != ch.key {
+									return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+								}
 							}
 						}
 					}
@@ -1491,7 +1497,7 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 			for _, idxData := range td.Indexes {
-				newKey := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
+				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				_ = idxData.Insert(newKey, ch.key, incVals)
 			}
@@ -1517,10 +1523,10 @@ func (tx *Transaction) Commit() error {
 			}
 			for _, idxData := range td.Indexes {
 				if hadOld {
-					oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
+					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, ch.key)
 				}
-				newKey := extractIndexKeyFromRow(&td.Schema, ch.row, idxData.Schema.Columns)
+				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
 				_ = idxData.Insert(newKey, ch.key, incVals)
 			}
@@ -1536,7 +1542,7 @@ func (tx *Transaction) Commit() error {
 			}
 			if hadOld {
 				for _, idxData := range td.Indexes {
-					oldKey := extractIndexKeyFromRow(&td.Schema, oldRow, idxData.Schema.Columns)
+					oldKey := extractIndexKeyFromRowWithSchema(&td.Schema, oldRow, &idxData.Schema)
 					idxData.Delete(oldKey, ch.key)
 				}
 			}

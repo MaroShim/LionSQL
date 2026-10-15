@@ -50,3 +50,59 @@ func TestJSON_WiredTigerQueries(t *testing.T) {
 		t.Fatalf("expected 1 row with city='Seoul' age=28, got %+v", res.Rows)
 	}
 }
+
+func TestJSON_ExpressionIndex_WiredTiger(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_json_expr_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := wiredtiger.New()
+	if err := eng.Open(filepath.Join(tmpDir, "db")); err != nil {
+		t.Fatalf("failed to open WT engine: %v", err)
+	}
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err = coord.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, doc VARCHAR(500));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, err = coord.ExecuteSQL(`INSERT INTO users VALUES 
+		(1, '{"city": "Seoul", "country": "KR"}'),
+		(2, '{"city": "Busan", "country": "KR"}');`)
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	res, err := coord.ExecuteSQL("CREATE INDEX idx_wt_city ON users ((doc->>'city'));")
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE INDEX ((doc->>'city')) failed: %v, res: %+v", err, res)
+	}
+
+	res, err = coord.ExecuteSQL("CREATE INDEX idx_wt_country ON users ((JSON_VALUE(doc, '$.country')));")
+	if err != nil || !res.Success {
+		t.Fatalf("CREATE INDEX ((JSON_VALUE(...))) failed: %v, res: %+v", err, res)
+	}
+
+	tbl, err := eng.GetTable("users")
+	if err != nil {
+		t.Fatalf("GetTable failed: %v", err)
+	}
+
+	idxCity, found := tbl.FindExpressionIndex("doc", "$.city")
+	if !found || !idxCity.IsExpression() || idxCity.ExprPath != "$.city" {
+		t.Fatalf("expected idx_wt_city expression index, got: %+v", idxCity)
+	}
+
+	idxCountry, found := tbl.FindExpressionIndex("doc", "$.country")
+	if !found || !idxCountry.IsExpression() || idxCountry.ExprPath != "$.country" {
+		t.Fatalf("expected idx_wt_country expression index, got: %+v", idxCountry)
+	}
+}
+
