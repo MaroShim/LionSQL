@@ -53,7 +53,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 * [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/sql/doc/HIGH_AVAILABILITY.md)
   * Crash safety, checkpointing, AOF compaction, and online hot backup/restore pipelines.
 * [`ADR.md`](file:///Users/maro/Projects/sql/doc/ADR.md)
-  * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution, HA replication, dual-track UDFs, compact binary tuple codec, multi-protocol catalog interception, GPL v3 licensing: ADR-001 through ADR-021).
+  * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution, HA replication, dual-track UDFs, compact binary tuple codec, multi-protocol catalog interception, GPL v3 licensing, hybrid JSON expression B-Tree indexing: ADR-001 through ADR-022).
 
 ---
 
@@ -67,6 +67,11 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Cost-Based Optimizer (CBO), selectivity models, and 64-bucket equi-depth histograms.
   * Constant folding, predicate pushdown, and correlated subquery decorrelation (`SEMI`/`ANTI` joins).
   * `work_mem` memory governor and disk-spilling external merge sort.
+* [`JSON_SPEC_AND_INDEXING.md`](file:///Users/maro/Projects/sql/doc/JSON_SPEC_AND_INDEXING.md)
+  * Semi-structured JSON document querying and expression B-Tree indexing specification.
+  * Comparative architectural analysis across PostgreSQL, MySQL 8.0, and Microsoft SQL Server.
+  * Dual-protocol AST normalization (`*proc.JsonExtractExpr`), `JSON_VALUE`, `JSON_QUERY`, `ISJSON`, and PostgreSQL `->` / `->>` operators.
+  * Single-statement functional B-Tree index DDL (`CREATE INDEX ... ON tbl ((data->>'key'))`) and CBO index matching.
 * [`TSQL_REFERENCE.md`](file:///Users/maro/Projects/sql/doc/TSQL_REFERENCE.md)
   * Complete Microsoft T-SQL syntax compatibility guide.
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).

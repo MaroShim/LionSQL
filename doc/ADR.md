@@ -584,8 +584,34 @@ Adopt the **GNU General Public License v3 (GPL-3.0-or-later)** across the entire
 3. Provide standard Open Source Initiative (OSI) compliance and commercial transparency.
 
 ### Consequences
-- **Positive**: Protects the database engine against proprietary forks while removing network copyleft ambiguity, dramatically encouraging enterprise adoption and developer contribution.
-- **Negative**: Proprietary applications wishing to statically link SQLion into closed-source monoliths must comply with GPL-3.0 terms or deploy SQLion as a separate standalone service.
 - **Compliance**: Adheres to Golden Rule 19 (Documentation & Style Integrity) and Level 6 (Cross-Platform Portability & Production Release).
+
+---
+
+## ADR-022: Hybrid Expression B-Tree Indexing for Semi-Structured JSON Documents
+
+### Status
+Accepted
+
+### Context
+Modern web architectures and BaaS platforms store semi-structured JSON payloads in relational tables. To accelerate point lookups and range queries over JSON attributes, database engines employ different strategies:
+- **Microsoft SQL Server**: Requires a 2-step DDL approach (`ALTER TABLE ... ADD col AS JSON_VALUE(...) PERSISTED` followed by `CREATE INDEX`).
+- **PostgreSQL**: Supports functional/expression B-Tree indexes (`CREATE INDEX ON tbl ((data->>'key'))`) and Generalized Inverted Indexes (GIN).
+- **MySQL 8.0**: Supports functional key parts (`CREATE INDEX ON tbl ((CAST(data->>'$.key' AS CHAR(50))))`).
+SQLion features dual wire protocols (PostgreSQL Wire Protocol :5433 and TDS :1433) backed by high-performance B+Tree storage backends (WiredTiger MVCC and Concurrent SkipList). SQLion requires a unified indexing model that minimizes DDL friction, avoids GIN write amplification, and bridges PostgreSQL and T-SQL client tools seamlessly.
+
+### Decision
+Adopt **Hybrid Expression B-Tree Indexing** as SQLion's canonical JSON index architecture:
+1. **Single-Statement DDL**: Support direct expression index creation without prior computed column declarations:
+   - PostgreSQL syntax: `CREATE INDEX idx ON tbl ((data->>'attribute'));`
+   - T-SQL syntax: `CREATE INDEX idx ON tbl ((JSON_VALUE(data, '$.attribute')));`
+2. **Unified AST Representation**: Normalize both PostgreSQL operators (`->>`) and T-SQL functions (`JSON_VALUE`) into a shared `*proc.JsonExtractExpr` AST node during parsing.
+3. **Storage Engine Reusability (B+Tree)**: Evaluate the JSON extraction expression on write (`INSERT` / `UPDATE`) and store the resulting scalar key in standard WiredTiger B+Tree and SkipList index pages, achieving zero-allocation $O(\log N)$ search with zero GIN storage overhead.
+4. **CBO Integration**: Cost-Based Optimizer matches both `WHERE data->>'attr' = 'val'` and `WHERE JSON_VALUE(data, '$.attr') = 'val'` to the same underlying B+Tree index.
+
+### Consequences
+- **Positive**: Frictionless single-statement indexing for both PostgreSQL and MSSQL clients; reuses existing high-throughput B+Tree storage without write amplification.
+- **Negative**: Queries searching arbitrary, unspecified JSON keys across deeply nested documents cannot leverage index acceleration without explicitly creating an expression index for that path.
+- **Compliance**: Adheres to Golden Rule 15 (Radical KISS, DRY & Deletion-First), Rule 19 (Modular Interface Abstraction), and `doc/JSON_SPEC_AND_INDEXING.md`.
 
 
