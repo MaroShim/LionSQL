@@ -64,6 +64,19 @@ with psycopg.connect(conn_str, autocommit=True) as conn:
         assert rows[2][0] == 3 and rows[2][1] is None and rows[2][2] is None, f"unexpected row 2: {rows[2]}"
         print("CRUD test passed:", rows)
 
+        # 4-1. Parameterized SELECT
+        cur.execute("SELECT id, name, price FROM py_items WHERE id = %%s;", (2,))
+        p_row = cur.fetchone()
+        assert p_row is not None and p_row[0] == 2 and p_row[1] == 'Gadget', f"unexpected param row: {p_row}"
+        print("Parameterized SELECT passed:", p_row)
+
+        # 4-2. Parameterized INSERT
+        cur.execute("INSERT INTO py_items VALUES (%%s, %%s, %%s, %%s);", (4, 'ParamWidget', 79.99, True))
+        cur.execute("SELECT name, price FROM py_items WHERE id = %%s;", (4,))
+        p_row4 = cur.fetchone()
+        assert p_row4 is not None and p_row4[0] == 'ParamWidget', f"unexpected row 4: {p_row4}"
+        print("Parameterized INSERT passed:", p_row4)
+
 # 5. Transactions (Rollback & Commit)
 with psycopg.connect(conn_str, autocommit=False) as conn:
     with conn.cursor() as cur:

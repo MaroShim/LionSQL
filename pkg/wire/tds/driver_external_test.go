@@ -87,6 +87,21 @@ cnt = cursor.fetchone()[0]
 assert cnt == 1, f"expected 1 row after commit, got {cnt}"
 print("Transaction COMMIT verified!")
 
+# 6. Parameterized query
+conn.autocommit(True)
+cursor.execute("SELECT id, name, price FROM py_tds_items WHERE id = %%d;", (1,))
+p_row = cursor.fetchone()
+assert p_row is not None and p_row[0] == 1 and p_row[1] == 'Server', f"unexpected param row: {p_row}"
+print("Parameterized query passed:", p_row)
+
+# 7. Stored Procedure
+cursor.execute("CREATE PROCEDURE py_proc_update @target_id INT, @new_price FLOAT AS BEGIN UPDATE py_tds_items SET price = @new_price WHERE id = @target_id; END;")
+cursor.execute("EXEC py_proc_update 1, 1499.00;")
+cursor.execute("SELECT price FROM py_tds_items WHERE id = 1;")
+proc_row = cursor.fetchone()
+assert proc_row is not None and abs(proc_row[0] - 1499.00) < 0.01, f"unexpected proc row: {proc_row}"
+print("Stored procedure execution passed:", proc_row)
+
 conn.close()
 print("ALL PYMSSQL TESTS PASSED!")
 `, port, port)
