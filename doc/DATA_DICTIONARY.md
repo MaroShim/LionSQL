@@ -32,6 +32,9 @@ Supported naming conventions include dot notation (`sys.tables`, `information_sc
               Filtered & Sorted Result Set
 ```
 
+> [!NOTE]
+> While catalog queries are emulated dynamically through virtual views, physical schema definitions and optimizer statistics are persisted to disk via `catalog.json` and `cbo_stats.json` in the instance data directory. For low-level details on physical directory layouts, atomic persistence, and secondary index structures, see [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/SQLion/doc/INTERNALS_STORAGE.md#5-physical-storage-directory-layout-metadata--secondary-index-persistence).
+
 ---
 
 ## 2. Table Catalog Views

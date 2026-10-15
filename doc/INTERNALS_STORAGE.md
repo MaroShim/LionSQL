@@ -205,3 +205,135 @@ For testing, embedded caches, and ephemeral compute pods, SQLion supports pure i
 - Invoked via `--ephemeral` flag or `ephemeral: true` configuration.
 - Completely suppresses WAL/AOF log disk writes, background fsyncs, and table snapshot creation.
 - Inspected via `DBCC PERSISTENCE` and `DBCC USEROPTIONS`.
+
+---
+
+## 5. Physical Storage Directory Layout, Metadata & Secondary Index Persistence
+
+SQLion organizes its physical data directory (`--data-dir`) cleanly, decoupling table data, metadata catalogs, query optimizer statistics, and secondary indexes.
+
+### 5.1. Data Directory Physical File Layout
+
+Depending on the configured storage backend (`-engine=wiredtiger` or `-engine=memory`), the data directory contains the following file structures:
+
+```
+<data-dir>/
+├── catalog.json              # Schema & metadata catalog (tables, columns, indexes, constraints)
+├── cbo_stats.json            # Cost-Based Optimizer statistics (histograms, NDV, row counts)
+│
+├── [WiredTiger Storage Engine: -engine=wiredtiger]
+│   ├── WiredTiger            # Engine version and metadata lock file
+│   ├── WiredTiger.basecfg    # Base WiredTiger configuration parameters
+│   ├── WiredTiger.lock       # Multi-process exclusion lock
+│   ├── WiredTiger.wt         # System metadata B+Tree (catalog of all physical .wt files)
+│   ├── WiredTigerLAS.wt      # Lookaside table for long-running MVCC snapshot rollback
+│   ├── WiredTiger.turtle     # Root bootstrap file locating WiredTiger.wt
+│   ├── journal/              # Write-Ahead Log directory (WiredTigerLog.XXXXXXXXXX)
+│   │   ├── WiredTigerLog.0000000001
+│   │   └── WiredTigerPreAlloc.0000000001
+│   ├── <table_name>.wt       # Per-table B+Tree data file (e.g., users.wt, orders.wt)
+│   └── index:<table_name>:<index_name>.wt  # Secondary index B+Tree files
+│
+└── [In-Memory OCC Engine: -engine=memory]
+    ├── tables.mpk            # Atomic binary snapshot of all TableData, rows, and IndexData
+    ├── tables.mpk.tmp        # Temporary staging file for atomic snapshot rotation (RewriteAOF)
+    └── wal.aof               # Append-Only File (continuous binary transaction WAL log)
+```
+
+---
+
+### 5.2. Metadata Persistence Architecture (`catalog.json`)
+
+Table definitions, column structures, constraints, partition boundaries, and secondary index definitions are not scattered across individual data files; they are centralized in `catalog.json` located at the root of the data directory.
+
+#### Schema Representation
+`catalog.json` persists a JSON array of `storage.TableSchema` objects:
+
+```json
+[
+  {
+    "name": "orders",
+    "columns": [
+      {
+        "name": "id",
+        "type": 1,
+        "nullable": false,
+        "primary_key": true,
+        "auto_increment": true
+      },
+      {
+        "name": "customer_id",
+        "type": 1,
+        "nullable": false
+      },
+      {
+        "name": "payload",
+        "type": 8,
+        "nullable": true
+      }
+    ],
+    "indexes": [
+      {
+        "name": "idx_orders_customer",
+        "table_name": "orders",
+        "columns": ["customer_id"],
+        "unique": false
+      }
+    ],
+    "foreign_keys": [],
+    "check_constraints": [],
+    "partition_scheme": null
+  }
+]
+```
+
+#### Lifecycle & Durability Guarantees
+1. **Startup (`loadCatalog`)**:
+   - When the engine opens (`Engine.Open(dir)`), it reads and unmarshals `catalog.json` into an in-memory map (`e.tables[name]`).
+   - Query execution and VDBE compilation look up table schemas from this memory cache in $O(1)$ time with zero disk I/O.
+2. **DDL Execution (`saveCatalog`)**:
+   - DDL statements (`CREATE TABLE`, `DROP TABLE`, `ALTER TABLE`, `CREATE INDEX`, `DROP INDEX`, `TRUNCATE TABLE`) acquire the engine catalog write lock (`e.mu.Lock()`).
+   - The updated catalog is serialized with indentation and written to disk (`os.WriteFile`) with non-executable permissions (`0644`).
+   - For replication and CDC streams, a corresponding DDL WAL operation (`OpCreateTable`, `OpDropTable`, `OpCreateIndex`, `OpDropIndex`) is recorded.
+
+---
+
+### 5.3. Cost-Based Optimizer Statistics Persistence (`cbo_stats.json`)
+
+Statistics gathered via `ANALYZE TABLE <name>` are separated from schema definitions and stored in `cbo_stats.json`:
+- **Contents**: Cardinality estimates, page footprint, column null counts, Number of Distinct Values (`NDV`), minimum/maximum value bounds, and 64-bucket equi-depth histograms (`planner.TableStats`).
+- **Atomic Persistence**: Serialized through temporary staging files (`cbo_stats.json.tmp.<nanos>`) and committed using atomic file renames (`os.Rename`), ensuring zero corruption if power fails during `ANALYZE TABLE`.
+- **Automatic Loading**: When `Catalog.SetPersistenceDir(dir)` is invoked on startup, existing statistics are loaded into memory and referenced by the Volcano Cost-Based Optimizer.
+
+---
+
+### 5.4. Secondary Index Storage & Persistence Mechanics
+
+SQLion provides secondary indexing across both storage engines, using engine-optimized persistence strategies:
+
+#### 1. WiredTiger MVCC Disk Engine
+- **Metadata Registration**: Index definitions (`storage.IndexSchema`) are stored in `catalog.json` within the table's schema.
+- **Physical B+Tree Pages**:
+  - Secondary indexes are mapped to individual WiredTiger URI endpoints: `index:<table_name>:<index_name>`.
+  - Keys in secondary index B+Trees consist of the indexed column values, pointing to the corresponding primary key string.
+  - WiredTiger manages secondary index pages, hazard pointers, dirty page eviction, and MVCC visibility automatically within `<table_name>.wt` or dedicated index files.
+- **Crash Recovery**: Checkpoints and journal logs (`journal/WiredTigerLog.*`) guarantee consistent recovery of both table rows and secondary index B+Trees to the same point-in-time.
+
+#### 2. In-Memory OCC Engine (`memengine`)
+- **In-Memory Representation (SkipList)**:
+  - Secondary indexes are maintained in memory as concurrent lock-free SkipLists (`*SkipList`).
+  - Supports $O(\log N)$ search, forward/reverse range iterations (`ScanRange`, `ScanRangeEntries`), and unique constraint checks.
+- **Snapshot Persistence (`tables.mpk`)**:
+  - During disk snapshotting (`saveDiskLocked()`) or AOF log compaction (`RewriteAOF()`), `idx.SyncEntries()` exports the active SkipList nodes into a serializable slice of `IndexEntry`:
+    ```go
+    type IndexEntry struct {
+        Key           storage.Value     `json:"key"`
+        PKs           []string          `json:"pks"`
+        IncludeValues [][]storage.Value `json:"include_values,omitempty"`
+    }
+    ```
+  - The entries are packed into `TableData.Indexes` and written atomically to `tables.mpk` via MessagePack.
+- **Incremental WAL Durability (`wal.aof`)**:
+  - DDL operations (`OpCreateIndex`, `OpDropIndex`) and row mutations (`OpInsert`, `OpUpdate`, `OpDelete`) append binary WAL records to `wal.aof`.
+  - When replaying the WAL during server startup, `OpCreateIndex` dynamically builds the SkipList by scanning current rows, while subsequent DML ops keep the index synchronized.
+
