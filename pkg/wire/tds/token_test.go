@@ -507,4 +507,22 @@ func TestTypePLP_LOBEncoding(t *testing.T) {
 	if nullLen != 0xFFFFFFFFFFFFFFFF {
 		t.Fatalf("expected NULL PLP length 0xFFFFFFFFFFFFFFFF, got 0x%016X", nullLen)
 	}
+
+	// 4. WriteNBCRowDirect (P-3)
+	var buf bytes.Buffer
+	rowMap := map[string]any{"doc": testPayload}
+	WriteNBCRowDirect(&buf, cols, rowMap)
+	nbcBytes := buf.Bytes()
+	if nbcBytes[0] != TokenNBCRow {
+		t.Fatalf("expected TokenNBCRow 0xD2, got 0x%02X", nbcBytes[0])
+	}
+	// Null bitmap is 1 byte at index 1: 0 (not null)
+	if nbcBytes[1] != 0 {
+		t.Fatalf("expected null bitmap 0, got 0x%02X", nbcBytes[1])
+	}
+	// Offset 2 onwards should be PLP stream
+	nbcTotalLen := binary.LittleEndian.Uint64(nbcBytes[2:10])
+	if nbcTotalLen != 10000 {
+		t.Fatalf("expected NBC total length 10000, got %d", nbcTotalLen)
+	}
 }

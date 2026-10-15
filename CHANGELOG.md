@@ -30,6 +30,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Automatically triggers background parallel statistics analysis (`coordinator.AnalyzeTable`) when dirty row count crosses dynamic threshold (`min_threshold + base_rows * scale_factor`), keeping CBO column histograms fresh.
   - Ensured lock hierarchy immunity (Golden Rule 10) by keeping the transaction commit hot-path non-blocking and executing all catalog and storage inspections asynchronously in debounced background goroutines.
   - Added unit tests in `pkg/engine/auto_analyze_test.go` verifying threshold triggering, WAL hook listener, and atomic dirty counter resets.
+- **Storage ➔ Wire Zero-Copy Direct Serialization (`P-3`) (`pkg/wire`, `pkg/wire/tds`)**:
+  - Implemented `WriteNBCRowDirect` in TDS wire protocol emitting `TokenNBCRow` (0xD2) and null bitmaps directly into the network serialization buffer, eliminating per-row intermediate `[]any` slice allocations and buffer cloning.
+  - Implemented single `scratchVals []any` allocation per result set outside row iteration in `executeRPCAndRespond` and `executeQueryAndRespond` (`pkg/wire/tds/server.go`).
+  - Pre-allocated `scratchRowBytes [][]byte` outside the streaming loop in PostgreSQL Wire protocol `writeExecutionResult` and `runAndWriteQueryWithFormats` (`pkg/wire/server.go`), eliminating per-row heap allocations on the critical network streaming path.
 - **T-SQL Core System Built-in Functions & Identity Tracking (`pkg/proc`, `pkg/engine`)**:
   - Implemented T-SQL system functions: `ISNUMERIC(expr)`, `CHARINDEX(pattern, str [, start])`, `PATINDEX(pattern, str)`, `STUFF(expr, start, len, replace)`, `IDENT_CURRENT('tableName')`, `COLUMNPROPERTY(id, col, prop)` (supporting `IsIdentity`, `AllowsNull`, `Precision`, `Scale`, `IsComputed`), and `SCOPE_IDENTITY()`.
   - Added per-table identity state tracking (`SetTableLastIdentity`, `GetTableLastIdentity`) in `Coordinator`.

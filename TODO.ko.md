@@ -22,12 +22,17 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P1** | **스토리지/와이어** | **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`)** | `pkg/storage`, `pkg/wire` | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
-| **P2** | **CBO 최적화** | **다중 컬럼 확장 통계 (Extended Stats) (`C-5`)** | `pkg/planner` | 컬럼 상관관계(예: 국가-도시)에 따른 카디널리티 과소평가 방지 |
+| **P1** | **CBO 최적화** | **다중 컬럼 확장 통계 (Extended Stats) (`C-5`)** | `pkg/planner` | 컬럼 상관관계(예: 국가-도시)에 따른 카디널리티 과소평가 방지 |
 | **P2** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
 | **P3** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`sqlion migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down` 및 `_migrations` 이력 추적 |
 
 ### P1/P2 최근 완료 과제: 엔진 성능 & 최적화
+- [x] **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`) (`pkg/wire`, `pkg/wire/tds`)**
+  - **배경**: 쿼리 결과 스트리밍 시 행마다 `[]any` 및 `[][]byte` 슬라이스를 생성하는 힙 할당 오버헤드와 복사 제거.
+  - **구현 내용**:
+    - TDS 프로토콜 `WriteNBCRowDirect` 신설: `TokenNBCRow` (0xD2) 및 NULL 비트맵을 네트워크 직렬화 버퍼에 직접 기록.
+    - `executeRPCAndRespond` 및 `executeQueryAndRespond`에서 행 반복문 외부 `scratchVals []any` 1회 할당 재사용.
+    - PGWire 프로토콜 `writeExecutionResult` 및 `runAndWriteQueryWithFormats`에서 행 반복문 외부 `scratchRowBytes [][]byte` 1회 할당 재사용.
 - [x] **T-SQL 핵심 시스템 내장 함수 및 IDENTITY 추적 완비 (`pkg/proc`, `pkg/engine`)**
   - **배경**: SQL Server 애플리케이션 및 ORM(Dapper, EF Core) 호환성을 위한 핵심 시스템 스칼라 함수 및 ID 생성 추적 기능 제공.
   - **구현 내용**:

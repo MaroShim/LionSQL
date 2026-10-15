@@ -939,8 +939,8 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 		colOIDs := s.resolveColumnOIDs(query, res.Columns, sampleRow)
 
 		bw := bufio.NewWriterSize(conn, 32768)
+		scratchRowBytes := make([][]byte, len(res.Columns))
 		for _, row := range res.Rows {
-			rowBytes := make([][]byte, len(res.Columns))
 			for i, colName := range res.Columns {
 				isBinary := false
 				if len(resultFormats) == 1 && resultFormats[0] == 1 {
@@ -949,9 +949,9 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 					isBinary = true
 				}
 				val := getRowValue(row, colName)
-				rowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
+				scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 			}
-			_ = WriteDataRowBytes(bw, rowBytes)
+			_ = WriteDataRowBytes(bw, scratchRowBytes)
 		}
 		_ = WriteCommandComplete(bw, fmt.Sprintf("SELECT %d", len(res.Rows)))
 		_ = bw.Flush()
@@ -1115,8 +1115,8 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 			_ = WriteRowDescription(bw, cols)
 		}
 
+		scratchRowBytes := make([][]byte, len(res.Columns))
 		for _, row := range res.Rows {
-			rowBytes := make([][]byte, len(res.Columns))
 			for i, colName := range res.Columns {
 				isBinary := false
 				if len(resultFormats) == 1 && resultFormats[0] == 1 {
@@ -1125,9 +1125,9 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 					isBinary = true
 				}
 				val := getRowValue(row, colName)
-				rowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
+				scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 			}
-			_ = WriteDataRowBytes(bw, rowBytes)
+			_ = WriteDataRowBytes(bw, scratchRowBytes)
 		}
 		_ = WriteCommandComplete(bw, fmt.Sprintf("SELECT %d", len(res.Rows)))
 		_ = bw.Flush()

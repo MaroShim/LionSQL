@@ -820,6 +820,41 @@ func BuildNBCRow(cols []ColumnInfo, values []any) []byte {
 	return res
 }
 
+// WriteNBCRowDirect writes an NBCROW token (0xD2) directly into destBuf from a row map.
+// It eliminates intermediate []any slice allocations and buffer copy overheads (P-3).
+func WriteNBCRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]any) {
+	destBuf.WriteByte(TokenNBCRow)
+
+	numCols := len(cols)
+	bitmapLen := (numCols + 7) / 8
+
+	var smallBitmap [16]byte
+	var bitmap []byte
+	if bitmapLen <= len(smallBitmap) {
+		bitmap = smallBitmap[:bitmapLen]
+		for i := 0; i < bitmapLen; i++ {
+			bitmap[i] = 0
+		}
+	} else {
+		bitmap = make([]byte, bitmapLen)
+	}
+
+	for i := 0; i < numCols; i++ {
+		val := row[cols[i].Name]
+		if val == nil {
+			bitmap[i/8] |= 1 << (i % 8)
+		}
+	}
+	destBuf.Write(bitmap)
+
+	for i := 0; i < numCols; i++ {
+		if (bitmap[i/8] & (1 << (i % 8))) != 0 {
+			continue
+		}
+		val := row[cols[i].Name]
+		writeColumnValue(destBuf, cols[i], val)
+	}
+}
 
 func toInt64(v any) int64 {
 	switch n := v.(type) {

@@ -621,6 +621,23 @@ func (sess *ConnectionSession) buildRow(cols []ColumnInfo, values []any) []byte 
 	return BuildRow(cols, values)
 }
 
+// writeRowDirect formats and appends a row to destBuf, choosing NBCROW (0xD2) when negotiated
+// TDS version is 7.3 or newer, or ROW (0xD1) otherwise, with zero intermediate []any boxing (P-3).
+func (sess *ConnectionSession) writeRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]any, scratchVals []any) {
+	if sess != nil && sess.TDSVersion >= 0x73000000 {
+		for _, col := range cols {
+			if row[col.Name] == nil {
+				WriteNBCRowDirect(destBuf, cols, row)
+				return
+			}
+		}
+	}
+	for i, col := range cols {
+		scratchVals[i] = row[col.Name]
+	}
+	destBuf.Write(BuildRow(cols, scratchVals))
+}
+
 func readLoginString(payload []byte, offsetPos int) string {
 	if offsetPos+4 > len(payload) {
 		return ""
@@ -1114,16 +1131,9 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		cols := s.inferColumnInfos(res)
 		buf.Write(BuildColMetaData(cols))
 
+		scratchVals := make([]any, len(res.Columns))
 		for _, row := range res.Rows {
-			rowVals := make([]any, len(res.Columns))
-			for i, colName := range res.Columns {
-				if v, ok := row[colName]; ok {
-					rowVals[i] = v
-				} else {
-					rowVals[i] = nil
-				}
-			}
-			buf.Write(sess.buildRow(cols, rowVals))
+			sess.writeRowDirect(&buf, cols, row, scratchVals)
 		}
 
 		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows))))
@@ -1905,16 +1915,9 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		cols := s.inferColumnInfos(res)
 		buf.Write(BuildColMetaData(cols))
 
+		scratchVals := make([]any, len(res.Columns))
 		for _, row := range res.Rows {
-			rowVals := make([]any, len(res.Columns))
-			for i, colName := range res.Columns {
-				if v, ok := row[colName]; ok {
-					rowVals[i] = v
-				} else {
-					rowVals[i] = nil
-				}
-			}
-			buf.Write(sess.buildRow(cols, rowVals))
+			sess.writeRowDirect(&buf, cols, row, scratchVals)
 		}
 
 		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, uint64(len(res.Rows))))
