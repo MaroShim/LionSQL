@@ -224,6 +224,34 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
+	// 0.005 Database Context Switching: USE <database> (Tolerant Virtual No-Op)
+	useRe := regexp.MustCompile(`(?is)^USE\s+(?:\[([^\]]+)\]|"([^"]+)"|'([^']+)'|([a-zA-Z0-9_.-]+))\s*;?$`)
+	if m := useRe.FindStringSubmatch(trimmed); len(m) > 0 {
+		var dbName string
+		for i := 1; i < len(m); i++ {
+			if m[i] != "" {
+				dbName = m[i]
+				break
+			}
+		}
+		if dbName == "" {
+			dbName = "master"
+		}
+		if cs != nil {
+			cs.Mu.Lock()
+			cs.Database = dbName
+			cs.Vars["current_database"] = dbName
+			cs.Mu.Unlock()
+		}
+
+		return &QueryResult{
+			Success:    true,
+			Command:    "USE",
+			Messages:   []string{fmt.Sprintf("Database context set to %s.", dbName)},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
 	// 0. Interactive Transactions: BEGIN / COMMIT / ROLLBACK
 	isBeginTx := upper == "BEGIN" ||
 		strings.HasPrefix(upper, "BEGIN TRANSACTION") ||

@@ -1888,6 +1888,18 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 			buf.Write(BuildInfo(0, 1, 0, msg, "SQLION", "", 1))
 		}
 	}
+	if upperCmd == "USE" {
+		newDB := "master"
+		if len(res.Messages) > 0 && strings.HasPrefix(res.Messages[0], "Database context set to ") {
+			newDB = strings.TrimSuffix(strings.TrimPrefix(res.Messages[0], "Database context set to "), ".")
+		}
+		oldDB := sess.Database
+		if oldDB == "" {
+			oldDB = "master"
+		}
+		sess.Database = newDB
+		buf.Write(BuildEnvChangeDatabase(newDB, oldDB))
+	}
 	if upperCmd == "BEGIN" {
 		sess.inTx = true
 		sess.txDescriptor = atomic.AddUint64(&s.txCounter, 1)

@@ -1254,3 +1254,66 @@ func TestReplicaSessionZeroAllocationFastPath(t *testing.T) {
 	}
 }
 
+// TestTolerantUseDatabase verifies tolerant virtual no-op acceptance of USE <database>
+// and seamless synchronization with DB_NAME() and CURRENT_DATABASE().
+func TestTolerantUseDatabase(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.Config{})
+
+	// 1. Initial state defaults to sqlion for generic sessions, master for TDS sessions
+	res, err := coord.ExecuteSessionSQL("sess-db-1", "SELECT DB_NAME() AS db, CURRENT_DATABASE() AS cdb, DB_ID() AS id;")
+	if err != nil {
+		t.Fatalf("initial SELECT DB_NAME() failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["db"] != "sqlion" || res.Rows[0]["cdb"] != "sqlion" {
+		t.Fatalf("expected default database sqlion, got: %v", res.Rows)
+	}
+
+	resTds, err := coord.ExecuteSessionSQL("tds-db-1", "SELECT DB_NAME() AS db, CURRENT_DATABASE() AS cdb;")
+	if err != nil || len(resTds.Rows) != 1 || resTds.Rows[0]["db"] != "master" || resTds.Rows[0]["cdb"] != "master" {
+		t.Fatalf("expected default database master for TDS session, got: %v", resTds.Rows)
+	}
+
+	// 2. Bracketed identifier: USE [SalesDB]
+	resUse, err := coord.ExecuteSessionSQL("sess-db-1", "USE [SalesDB];")
+	if err != nil {
+		t.Fatalf("USE [SalesDB] failed: %v", err)
+	}
+	if !resUse.Success || resUse.Command != "USE" {
+		t.Fatalf("unexpected USE response: %+v", resUse)
+	}
+
+	res, err = coord.ExecuteSessionSQL("sess-db-1", "SELECT DB_NAME() AS db;")
+	if err != nil || res.Rows[0]["db"] != "SalesDB" {
+		t.Fatalf("expected DB_NAME() SalesDB after USE, got: %v", res.Rows)
+	}
+
+	// 3. Quoted identifier: USE "Analytics_2026"
+	_, err = coord.ExecuteSessionSQL("sess-db-1", `USE "Analytics_2026";`)
+	if err != nil {
+		t.Fatalf(`USE "Analytics_2026" failed: %v`, err)
+	}
+
+	res, err = coord.ExecuteSessionSQL("sess-db-1", "SELECT DB_NAME() AS db, CURRENT_DATABASE() AS cdb;")
+	if err != nil || res.Rows[0]["db"] != "Analytics_2026" || res.Rows[0]["cdb"] != "Analytics_2026" {
+		t.Fatalf("expected Analytics_2026, got: %v", res.Rows)
+	}
+
+	// 4. Batch query with USE prefix: USE [master]; CREATE TABLE ...; INSERT ...; SELECT ...
+	batchSQL := `
+USE [master];
+CREATE TABLE t_use_demo (id INT PRIMARY KEY, title VARCHAR(50));
+INSERT INTO t_use_demo (id, title) VALUES (100, 'Test Record');
+SELECT id, title FROM t_use_demo WHERE id = 100;
+`
+	resBatch, err := coord.ExecuteSessionSQL("sess-db-1", batchSQL)
+	if err != nil {
+		t.Fatalf("batch query with USE prefix failed: %v", err)
+	}
+	if len(resBatch.Rows) != 1 || resBatch.Rows[0]["title"] != "Test Record" {
+		t.Fatalf("unexpected batch query result: %+v", resBatch.Rows)
+	}
+}
+
+

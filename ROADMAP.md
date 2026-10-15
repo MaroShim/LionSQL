@@ -71,7 +71,8 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - [x] BaaS Expansion: Declarative Schema Migration CLI (lionsql migrate) & OAuth2 Social Login
 
 [ Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS) ] ──► PLANNED
-  - Always On Style Automatic Failover & Leader Election
+  - [x] Always On Style Automatic Failover & Leader Election
+  - [x] Tolerant Virtual No-Op USE Statement & Session Database Synchronization
   - [x] Decoupled Real-time CDC Event Streaming (GET /api/cdc/stream & DuckDB HTAP)
   - Transactional Outbox Broker Dispatcher (Kafka / RabbitMQ)
   - [Postponed] Pure Go Persistent Storage Engine Backend (Pebble / bbolt, CGO_ENABLED=0)

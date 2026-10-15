@@ -895,6 +895,18 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 			} else {
 				f.regs[inst.A] = storage.NullValue(storage.TypeVarChar)
 			}
+		} else if strings.EqualFold(callData.Name, "DB_NAME") || strings.EqualFold(callData.Name, "CURRENT_DATABASE") {
+			if len(args) == 0 {
+				if dbVal, ok := f.getVar("current_database"); ok && !dbVal.IsNull && dbVal.SVal != "" {
+					f.regs[inst.A] = dbVal
+				} else if dbVal, ok := f.getVar("db_name"); ok && !dbVal.IsNull && dbVal.SVal != "" {
+					f.regs[inst.A] = dbVal
+				} else {
+					f.regs[inst.A] = proc.EvalBuiltin(callData.Name, args)
+				}
+			} else {
+				f.regs[inst.A] = proc.EvalBuiltin(callData.Name, args)
+			}
 		} else {
 			f.regs[inst.A] = proc.EvalBuiltin(callData.Name, args)
 		}

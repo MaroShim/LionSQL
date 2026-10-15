@@ -764,6 +764,33 @@ func TestTDS_GracefulCloseWithActiveConnections(t *testing.T) {
 	}
 }
 
+func TestTDS_TolerantUseDatabase(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	// Send USE [TestAnalyticsDB]
+	payload := sendSQLBatch(t, conn, "USE [TestAnalyticsDB];")
+
+	// Verify TokenEnvChange (0xE3) is present in response
+	if !bytes.Contains(payload, []byte{TokenEnvChange}) {
+		t.Fatalf("expected TokenEnvChange (0xE3) in response to USE [TestAnalyticsDB], got: %x", payload)
+	}
+
+	// Verify database change payload contains TestAnalyticsDB
+	utf16DB := EncodeUTF16LE("TestAnalyticsDB")
+	if !bytes.Contains(payload, utf16DB) {
+		t.Fatalf("expected UTF-16LE TestAnalyticsDB in ENVCHANGE token payload")
+	}
+
+	// Verify subsequent SELECT DB_NAME() returns the switched database context
+	dbPayload := sendSQLBatch(t, conn, "SELECT DB_NAME() AS db;")
+	if !bytes.Contains(dbPayload, utf16DB) {
+		t.Fatalf("expected SELECT DB_NAME() to return TestAnalyticsDB")
+	}
+}
+
+
 
 
 

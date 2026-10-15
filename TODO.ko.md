@@ -27,6 +27,14 @@
 | **P3** | **이벤트/스트리밍** | **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ)** | `pkg/cdc` | CDC 이벤트 스트림의 외부 메시지 브로커 무손실 포워딩 |
 
 ### P1/P2 최근 완료 과제: 고가용성 & BaaS 확장
+- [x] **관용적 No-Op `USE <database>` 및 세션 가상 DB 컨텍스트 동기화 (`pkg/engine`, `pkg/wire/tds`, `pkg/proc/runtime`)**
+  - **배경**: 인스턴스 단위 격리(Instance-Based Isolation) 아키텍처 불변성을 엄격히 유지하면서도, 레거시 SQL Server 덤프 스크립트, 마이그레이션 도구, DBeaver/SSMS GUI 클라이언트와의 100% 호환성 확보.
+  - **구현 내용**:
+    - `pkg/engine/sqlexec.go`: `USE <database>` (`USE master`, `USE [SalesDB]`, `USE "Analytics_2026"`) 정규식 인터셉트를 통한 무오류 즉시 수용 및 `Command: "USE"` 응답.
+    - 세션 격리형 가상 DB 추적: `ClientSession.Database` 및 `ClientSession.Vars["current_database"]` / `["db_name"]` 동기화 (기본 세션 `sqlion`, TDS 세션 `master`).
+    - 스칼라 함수 일원화: `DB_NAME()`, `CURRENT_DATABASE()`, `DB_ID()`, `ORIGINAL_DB_NAME()` 호출 시 세션 활성 데이터베이스를 완벽 동기화 반환 (테이블 미참조 스칼라 SELECT 및 VDBE `OpCallBuiltin` 바인딩).
+    - TDS 와이어 프로토콜 연동: `pkg/wire/tds/server.go`에서 `USE` 명령 실행 시 공식 MS-TDS `TokenEnvChange (0xE3)` (`EnvChangeDatabase`) 토큰 스트림을 클라이언트로 즉시 송출.
+    - 회귀 테스트 완비: `pkg/engine/coordinator_test.go` (`TestTolerantUseDatabase`), `pkg/wire/tds/server_test.go` (`TestTDS_TolerantUseDatabase`).
 - [x] **Always On 스타일 자동 장애 조치(Auto-Failover) 및 리더 선출 (`pkg/replication`, `cmd/server`, `pkg/config`, `pkg/ui`)**
   - **배경**: 엔터프라이즈 99.999% 무중단 운영을 위한 Primary 장애 자동 감지, 최저 지연 LSN 레플리카 무손실 승격 및 스플릿 브레인 방지.
   - **구현 내용**:

@@ -33,6 +33,7 @@ type ClientSession struct {
 	PreparedStmts   map[string]*PreparedStatement
 	User            string // active database user principal for RBAC
 	OriginalUser    string // original user prior to SETUSER / EXECUTE AS
+	Database        string // active virtual database context (default: "master")
 	QueryCtx        context.Context
 	CancelFunc      context.CancelFunc
 	RunningQuery    string

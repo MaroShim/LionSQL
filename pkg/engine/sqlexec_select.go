@@ -272,9 +272,20 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 	upper := strings.ToUpper(trimmed)
 
 	// Builtin system / database functions
+	currDB := "sqlion"
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.Database != "" {
+			currDB = cs.Database
+		} else if strings.HasPrefix(cs.ID, "tds-") {
+			currDB = "master"
+		}
+		cs.Mu.Unlock()
+	}
+
 	switch upper {
 	case "CURRENT_DATABASE()", "CURRENT_DATABASE":
-		return "sqlion", "current_database"
+		return currDB, "current_database"
 	case "CURRENT_SCHEMA()", "CURRENT_SCHEMA":
 		return "dbo", "current_schema"
 	case "CURRENT_SCHEMAS(TRUE)", "CURRENT_SCHEMAS(FALSE)", "CURRENT_SCHEMAS":
@@ -284,7 +295,14 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 	case "VERSION()":
 		return "PostgreSQL 15.0 (SQLion OLTP & Stored Procedure Server)", "version"
 	case "DB_NAME()", "DB_NAME":
-		return "sqlion", "db_name"
+		return currDB, "db_name"
+	case "DB_ID()", "DB_ID":
+		return int64(1), "db_id"
+	case "ORIGINAL_DB_NAME()", "ORIGINAL_DB_NAME":
+		if cs != nil && strings.HasPrefix(cs.ID, "tds-") {
+			return "master", "original_db_name"
+		}
+		return "sqlion", "original_db_name"
 	case "SCHEMA_NAME()", "SCHEMA_NAME":
 		return "dbo", "schema_name"
 	case "PG_BACKEND_PID()", "PG_BACKEND_PID":
@@ -1160,11 +1178,13 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 	var params map[string]any
 	if cs != nil {
 		cs.Mu.Lock()
-		if len(cs.Vars) > 0 {
-			params = make(map[string]any, len(cs.Vars))
-			for k, v := range cs.Vars {
-				params[k] = v
-			}
+		params = make(map[string]any, len(cs.Vars)+2)
+		for k, v := range cs.Vars {
+			params[k] = v
+		}
+		if cs.Database != "" {
+			params["current_database"] = cs.Database
+			params["db_name"] = cs.Database
 		}
 		cs.Mu.Unlock()
 	}
@@ -1408,7 +1428,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if !hasFromClause(cleaned) {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") {
+		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
 				return res, nil
 			}

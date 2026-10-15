@@ -12,8 +12,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Fixed infinite query polling loop in DBeaver SQL Server connections caused by mismatched table size and row count projection columns. DBeaver issues `SELECT t.name, p.rows, SUM(a.total_pages) * 8 AS totalSize, SUM(a.used_pages) * 8 AS usedSize FROM sys.tables t ... WHERE t.schema_id = 1 AND t.object_id = <id> GROUP BY t.name, p.rows`; updated `execDbGateMSSQLRowCountSelect` to project `name`, `rows`, `totalSize`, and `usedSize` matching the requested `object_id`.
   - Fixed empty table hierarchy in DBeaver PostgreSQL connections where table introspection queries filtered on `pg_class.relnamespace` (`WHERE c.relnamespace=2201` for `dbo` or `2200` for `public`). Updated `execHeidiSQLClassSelect` to emit metadata across both schemas and execute whereClause projection filtering.
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
-  - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **Tolerant Virtual No-Op `USE <database>` Statement & Dynamic Session Database Synchronization (`pkg/engine`, `pkg/wire/tds`, `pkg/proc/runtime`)**:
+  - Implemented tolerant virtual no-op acceptance for `USE <database>` statements (`USE master`, `USE [SalesDB]`, `USE "Analytics_2026"`, etc.) without syntax errors or multi-database catalog multiplexing overhead, preserving Instance-Level Isolation (Process per Database).
+  - Added session database context tracking in `ClientSession.Database` and `ClientSession.Vars["current_database"]` / `["db_name"]`. Standard sessions default to `"sqlion"`, while TDS sessions default to `"master"`.
+  - Seamlessly synchronized scalar functions `DB_NAME()`, `CURRENT_DATABASE()`, `DB_ID()`, and `ORIGINAL_DB_NAME()` across table-less scalar SQL executions, VDBE virtual machine procedure runs (`OpCallBuiltin`), and `ClientSession` state.
+  - Implemented official TDS `TokenEnvChange (0xE3)` (`EnvChangeDatabase`) token emission upon executing `USE <database>` over TDS connections, fully satisfying SSMS, DBeaver, and legacy MSSQL migration script requirements.
+  - Added regression test suites in `pkg/engine/coordinator_test.go` (`TestTolerantUseDatabase`) and `pkg/wire/tds/server_test.go` (`TestTDS_TolerantUseDatabase`).
 - **Always On Style Automatic Failover & Leader Election (`pkg/replication`, `cmd/server`, `pkg/config`, `pkg/ui`)**:
   - Implemented Always On style automated leader election and failover coordinator (`pkg/replication/failover.go`) with highest-LSN precedence, guaranteeing zero data loss.
   - Implemented monotonic term tracking (`term int64`) across nodes, leader announcements (`POST /api/replication/leader`), and peer voting (`POST /api/replication/vote`).

@@ -300,10 +300,16 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 	}
 	c.spidCounter++
 
+	defaultDB := "sqlion"
+	if strings.HasPrefix(id, "tds-") {
+		defaultDB = "master"
+	}
+
 	cs := &ClientSession{
 		ID:            id,
 		SPID:          c.spidCounter,
 		Session:       sess,
+		Database:      defaultDB,
 		Vars:          make(map[string]any),
 		TableVars:     make(map[string]string),
 		TempTableMap:  make(map[string]string),
