@@ -192,12 +192,14 @@
   - CDC 스트림을 외부 분산 메시지 브로커로 무손실 발행하는 Outbox 릴레이 워커.
 - [ ] **[보류 / Postponed] Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`)**
   - CGO/WiredTiger 의존성 없이 완전한 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 36) 크로스 컴파일 배포를 위한 `storage.Engine` 플러그인 백엔드 (현재는 네이티브 WiredTiger CGO 및 인메모리 OCC 고성능 엔진에 집중하며 보류).
-- [ ] **WebAssembly (Wasm) 런타임 기반 동적 UDF 샌드박스 (`pkg/extension`, `wazero`)**
-  - 독립 서버 환경에서 `CREATE FUNCTION <name> AS WASM '<path.wasm>'` DDL 지원.
-  - CGO 없는 순수 Go `wazero` 런타임 탑재, 메모리 샌드박싱(Golden Rule 26)을 통한 크래시/패닉 격리.
-- [ ] **선언적 스키마 마이그레이션 CLI (`cmd/server`, `pkg/migrate`) & 소셜 로그인 (`pkg/api/handlers_auth.go`)**
+- [x] **내장형 Google 및 GitHub OAuth2 소셜 로그인 & 자동 사용자 프로비저닝 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**
+  - Google 및 GitHub 공식 OAuth2 엔드포인트 연동 (`GET /api/auth/oauth2/providers`, `GET /api/auth/oauth2/url`, `GET/POST /api/auth/oauth2/callback`).
+  - 외부 ID 및 이메일 기반 자동 사용자 프로비저닝(`ProvisionOAuthUser`), 계정 연동 및 JWT 토큰 즉시 발급.
+  - 관리자 전용 OAuth 설정 조회/수정 API (`GET/PUT /api/settings/oauth2`) 및 클라이언트 마스킹(`••••••••`).
+  - 브라우저 웹 스튜디오(`:8090/_/`) 로그인 다이얼로그 내 Google / GitHub 로그인 버튼 및 팝업 콜백(`postMessage`) 연동.
+  - 외부 네트워크 의존성 없는 완전 격리형 Mock HTTP 서버 기반 단위/통합 테스트 완비 (`pkg/api/oauth_test.go`).
+- [ ] **선언적 스키마 마이그레이션 CLI (`cmd/server`, `pkg/migrate`)**
   - `sqlion migrate new / up / down` 스키마 이력 테이블(`_migrations`) 추적 관리.
-  - Google, GitHub, Apple OAuth2 콜백 내장 및 자동 사용자 프로비저닝.
 
 ---
 

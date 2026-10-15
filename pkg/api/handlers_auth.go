@@ -66,13 +66,21 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"token": token,
-		"record": map[string]any{
-			"id":         u.ID,
-			"email":      u.Email,
-			"created_at": u.CreatedAt,
-		},
+		"token":  token,
+		"record": superuserRecord(u),
 	})
+}
+
+func superuserRecord(u *auth.Superuser) map[string]any {
+	return map[string]any{
+		"id":             u.ID,
+		"email":          u.Email,
+		"name":           u.Name,
+		"avatar_url":     u.AvatarURL,
+		"oauth_provider": u.OAuthProvider,
+		"created_at":     u.CreatedAt,
+		"updated_at":     u.UpdatedAt,
+	}
 }
 
 func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
@@ -88,11 +96,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"id":         u.ID,
-		"email":      u.Email,
-		"created_at": u.CreatedAt,
-	})
+	writeJSON(w, http.StatusOK, superuserRecord(u))
 }
 
 func (s *Server) handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
@@ -109,12 +113,8 @@ func (s *Server) handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"token": freshToken,
-		"record": map[string]any{
-			"id":         u.ID,
-			"email":      u.Email,
-			"created_at": u.CreatedAt,
-		},
+		"token":  freshToken,
+		"record": superuserRecord(u),
 	})
 }
 

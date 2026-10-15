@@ -54,11 +54,37 @@ func (n NetworkConfig) IsTDSEnabled() bool {
 	return strings.TrimSpace(n.TDSAddr) != ""
 }
 
+// OAuthProviderConfig defines settings for a single OAuth2 social provider (Google, GitHub).
+type OAuthProviderConfig struct {
+	Enabled      bool   `json:"enabled"`
+	ClientID     string `json:"client_id"`
+	ClientSecret string `json:"client_secret"`
+	RedirectURL  string `json:"redirect_url,omitempty"`
+	AuthURL      string `json:"auth_url,omitempty"`      // optional custom override
+	TokenURL     string `json:"token_url,omitempty"`     // optional custom override
+	UserInfoURL  string `json:"user_info_url,omitempty"` // optional custom override
+}
+
+// MaskedSecret returns a redacted string for client-side configuration displays.
+func (p OAuthProviderConfig) MaskedSecret() string {
+	if p.ClientSecret == "" {
+		return ""
+	}
+	return "••••••••"
+}
+
+// OAuth2Config defines settings for third-party OAuth2 identity providers.
+type OAuth2Config struct {
+	Google OAuthProviderConfig `json:"google"`
+	GitHub OAuthProviderConfig `json:"github"`
+}
+
 // AuthConfig defines administrative authentication and credential settings.
 type AuthConfig struct {
-	Enabled    bool   `json:"enabled"`
-	AdminEmail string `json:"admin_email"`
-	AdminPass  string `json:"admin_pass"`
+	Enabled    bool         `json:"enabled"`
+	AdminEmail string       `json:"admin_email"`
+	AdminPass  string       `json:"admin_pass"`
+	OAuth2     OAuth2Config `json:"oauth2,omitempty"`
 }
 
 // ResourcesConfig defines concurrency and memory limits.
@@ -176,36 +202,72 @@ func LoadFromFile(filePath string) (*Config, error) {
 
 // AutoDiscoverConfig attempts to locate an existing config file or falls back to defaults.
 // Precedence: explicitPath > ./sqlion.json > <dataDir>/sqlion.json > Built-in Defaults.
+// Applies environment variable overrides as per Golden Rule 37.
 func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, error) {
+	var resCfg *Config
+	var resPath string
+
 	if explicitPath != "" {
 		cfg, err := LoadFromFile(explicitPath)
 		if err != nil {
 			return nil, "", err
 		}
-		return cfg, explicitPath, nil
-	}
-
-	// Check ./sqlion.json in current working directory
-	if fi, err := os.Stat("sqlion.json"); err == nil && !fi.IsDir() {
+		resCfg = cfg
+		resPath = explicitPath
+	} else if fi, err := os.Stat("sqlion.json"); err == nil && !fi.IsDir() {
 		cfg, err := LoadFromFile("sqlion.json")
 		if err == nil {
-			return cfg, "sqlion.json", nil
+			resCfg = cfg
+			resPath = "sqlion.json"
 		}
-	}
-
-	// Check <dataDir>/sqlion.json
-	if dataDir != "" {
+	} else if dataDir != "" {
 		dataConfig := filepath.Join(dataDir, "sqlion.json")
 		if fi, err := os.Stat(dataConfig); err == nil && !fi.IsDir() {
 			cfg, err := LoadFromFile(dataConfig)
 			if err == nil {
-				return cfg, dataConfig, nil
+				resCfg = cfg
+				resPath = dataConfig
 			}
 		}
 	}
 
-	// Fallback to zero-config defaults
-	return DefaultConfig(), "", nil
+	if resCfg == nil {
+		resCfg = DefaultConfig()
+	}
+	ApplyEnvOverrides(resCfg)
+	return resCfg, resPath, nil
+}
+
+// ApplyEnvOverrides overrides configuration settings with environment variables.
+// Follows Golden Rule 37: CLI Arguments > Environment Variables > Config File > Built-in Defaults.
+func ApplyEnvOverrides(cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	// Google OAuth
+	if val := os.Getenv("SQLION_OAUTH_GOOGLE_CLIENT_ID"); val != "" {
+		cfg.Auth.OAuth2.Google.ClientID = val
+		cfg.Auth.OAuth2.Google.Enabled = true
+	}
+	if val := os.Getenv("SQLION_OAUTH_GOOGLE_CLIENT_SECRET"); val != "" {
+		cfg.Auth.OAuth2.Google.ClientSecret = val
+		cfg.Auth.OAuth2.Google.Enabled = true
+	}
+	if val := os.Getenv("SQLION_OAUTH_GOOGLE_REDIRECT_URL"); val != "" {
+		cfg.Auth.OAuth2.Google.RedirectURL = val
+	}
+	// GitHub OAuth
+	if val := os.Getenv("SQLION_OAUTH_GITHUB_CLIENT_ID"); val != "" {
+		cfg.Auth.OAuth2.GitHub.ClientID = val
+		cfg.Auth.OAuth2.GitHub.Enabled = true
+	}
+	if val := os.Getenv("SQLION_OAUTH_GITHUB_CLIENT_SECRET"); val != "" {
+		cfg.Auth.OAuth2.GitHub.ClientSecret = val
+		cfg.Auth.OAuth2.GitHub.Enabled = true
+	}
+	if val := os.Getenv("SQLION_OAUTH_GITHUB_REDIRECT_URL"); val != "" {
+		cfg.Auth.OAuth2.GitHub.RedirectURL = val
+	}
 }
 
 // WriteToFileAtomic writes configuration to disk via a temporary swap file and atomic rename.

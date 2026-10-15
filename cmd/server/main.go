@@ -417,6 +417,7 @@ func main() {
 	_, _ = authSvc.EnsureDefaultSuperuser(cfg.Auth.AdminEmail, cfg.Auth.AdminPass)
 
 	server := api.NewServerWithAuth(cat, eng, authSvc, cfg.Auth.Enabled)
+	server.SetOAuthConfig(cfg.Auth.OAuth2)
 	if cfg.Resources.MaxWorkers > 0 || cfg.Resources.MaxIdleSessions > 0 {
 		poolCfg := api.DefaultPoolConfig()
 		if cfg.Resources.MaxWorkers > 0 {

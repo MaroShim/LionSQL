@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **Built-in Google & GitHub OAuth2 Social Login and Automatic User Provisioning (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**:
+  - Implemented standard OAuth2 authorization and token exchange for Google and GitHub identity providers with zero external dependencies (`pkg/api/oauth.go`, `handlers_oauth.go`).
+  - Added REST endpoints: `GET /api/auth/oauth2/providers` (list active providers), `GET /api/auth/oauth2/url` (generate auth redirect URL with CSRF state), `POST /api/auth/oauth2/callback` (SPA / REST client exchange), and `GET /api/auth/oauth2/callback` (browser popup redirect with localStorage synchronization and `postMessage` event dispatching).
+  - Implemented automatic superuser provisioning and account linking in `AuthService` (`ProvisionOAuthUser`): automatically provisions new accounts or links existing users by email or provider UID, issuing valid signed HS256 JWT tokens.
+  - Added configuration support via `sqlion.json`, environment variables (`SQLION_OAUTH_GOOGLE_*`, `SQLION_OAUTH_GITHUB_*`), and administrative runtime management endpoints (`GET /api/settings/oauth2`, `PUT /api/settings/oauth2`) with automatic secret masking (`••••••••`).
+  - Enhanced embedded Web Studio (`pkg/ui/dashboard.html`) login modal with Google and GitHub social login buttons and popup completion handlers.
+  - Added comprehensive hermetic unit tests with mock OAuth2 servers in `pkg/api/oauth_test.go` and `pkg/auth/auth_test.go`.
 - **Replica Node Zero-Allocation Read-Only Transaction Fast-Path (`pkg/engine`, `pkg/storage/memengine`)**:
   - Wired dynamic `IsReadOnlyFn` detection into `ClientSession`, automatically binding all sessions on secondary replicas to strict read-only transactions (`storage.TxOptions{ReadOnly: true}`).
   - Completely eliminated write-set buffers (`local`, `deleted`, `changes`, `savepoints`) and OCC base version tracking maps (`baseVers`) on read-only transactions, reducing memory allocations and GC overhead on high-frequency `SELECT` workloads.

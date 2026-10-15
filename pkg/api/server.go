@@ -10,6 +10,7 @@ import (
 	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/cdc"
+	"sqlion/pkg/config"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/planner"
@@ -50,6 +51,7 @@ type Server struct {
 	mux         *http.ServeMux
 	replication *replication.Manager
 	cdcStreamer *cdc.Streamer
+	oauth       *OAuthManager
 	startTime   time.Time
 }
 
@@ -92,6 +94,7 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		mailer:      mailer,
 		coordinator: coord,
 		mux:         http.NewServeMux(),
+		oauth:       NewOAuthManager(config.OAuth2Config{}),
 		startTime:   time.Now(),
 	}
 	s.executor.SetTableGetter(eng.GetTable)
@@ -228,6 +231,18 @@ func (s *Server) Crons() *CronScheduler {
 // Mailer returns the embedded SMTP mailer engine.
 func (s *Server) Mailer() *Mailer {
 	return s.mailer
+}
+
+// OAuth returns the OAuth2 identity provider manager.
+func (s *Server) OAuth() *OAuthManager {
+	return s.oauth
+}
+
+// SetOAuthConfig updates the third-party OAuth2 configuration.
+func (s *Server) SetOAuthConfig(cfg config.OAuth2Config) {
+	if s.oauth != nil {
+		s.oauth.UpdateConfig(cfg)
+	}
 }
 
 // Replication returns the availability group replication manager, or nil if not configured.
@@ -429,6 +444,14 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/auth/me", s.handleAuthMe)
 	s.mux.HandleFunc("POST /api/auth/refresh", s.handleAuthRefresh)
 	s.mux.HandleFunc("POST /api/auth/logout", s.handleAuthLogout)
+
+	// OAuth2 Social Login Endpoints (Google, GitHub)
+	s.mux.HandleFunc("GET /api/auth/oauth2/providers", s.handleListOAuthProviders)
+	s.mux.HandleFunc("GET /api/auth/oauth2/url", s.handleGetOAuthURL)
+	s.mux.HandleFunc("POST /api/auth/oauth2/callback", s.handleOAuthCallback)
+	s.mux.HandleFunc("GET /api/auth/oauth2/callback", s.handleOAuthCallback)
+	s.mux.HandleFunc("GET /api/settings/oauth2", s.wrapSuperuser(s.handleGetOAuthSettings))
+	s.mux.HandleFunc("PUT /api/settings/oauth2", s.wrapSuperuser(s.handleUpdateOAuthSettings))
 
 	// API Keys Management Endpoints (Superuser only)
 	s.mux.HandleFunc("GET /api/keys", s.wrapSuperuser(s.handleListAPIKeys))

@@ -176,3 +176,63 @@ func TestAuth_APIKeys(t *testing.T) {
 		t.Fatalf("Expected ErrInvalidAPIKey after revocation, got %v", err)
 	}
 }
+
+func TestAuth_OAuthProvisioning(t *testing.T) {
+	svc := NewAuthService(Config{})
+
+	// 1. Provision new OAuth user
+	u1, err := svc.ProvisionOAuthUser("google", "1001", "dev@example.com", "Dev User", "https://img.test/pic.png")
+	if err != nil {
+		t.Fatalf("ProvisionOAuthUser failed: %v", err)
+	}
+	if u1.OAuthProvider != "google" || u1.OAuthID != "1001" || u1.Email != "dev@example.com" {
+		t.Fatalf("Unexpected user state: %+v", u1)
+	}
+	if u1.Name != "Dev User" || u1.AvatarURL != "https://img.test/pic.png" {
+		t.Fatalf("Unexpected name/avatar: %+v", u1)
+	}
+
+	// 2. Fetch by OAuth
+	found := svc.GetUserByOAuth("google", "1001")
+	if found == nil || found.ID != u1.ID {
+		t.Fatalf("GetUserByOAuth failed to find user")
+	}
+
+	// 3. Re-provision same OAuth user with updated profile
+	u1Updated, err := svc.ProvisionOAuthUser("google", "1001", "dev@example.com", "Dev Updated", "https://img.test/pic2.png")
+	if err != nil {
+		t.Fatalf("Re-provision failed: %v", err)
+	}
+	if u1Updated.ID != u1.ID || u1Updated.Name != "Dev Updated" {
+		t.Fatalf("Expected updated user with same ID, got %+v", u1Updated)
+	}
+
+	// 4. Link existing user by email
+	existing, err := svc.EnsureDefaultSuperuser("github_user@example.com", "strongpass")
+	if err != nil {
+		t.Fatalf("EnsureDefaultSuperuser failed: %v", err)
+	}
+	linked, err := svc.ProvisionOAuthUser("github", "2002", "github_user@example.com", "GitHub User", "")
+	if err != nil {
+		t.Fatalf("Linking existing user via OAuth failed: %v", err)
+	}
+	if linked.ID != existing.ID {
+		t.Fatalf("Expected linked user to have existing ID %s, got %s", existing.ID, linked.ID)
+	}
+	if linked.OAuthProvider != "github" || linked.OAuthID != "2002" {
+		t.Fatalf("Expected github provider link, got %+v", linked)
+	}
+
+	// 5. Generate and validate token for OAuth provisioned user
+	token, err := svc.GenerateToken(u1)
+	if err != nil {
+		t.Fatalf("GenerateToken failed for OAuth user: %v", err)
+	}
+	validated, err := svc.ValidateToken(token)
+	if err != nil {
+		t.Fatalf("ValidateToken failed: %v", err)
+	}
+	if validated.ID != u1.ID {
+		t.Fatalf("Validated ID mismatch: %s vs %s", validated.ID, u1.ID)
+	}
+}

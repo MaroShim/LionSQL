@@ -1265,6 +1265,19 @@ const procRes = await client.exec('TransferFunds', {
         
         <button type="submit" class="btn" style="width: 100%; margin-top: 10px; padding: 10px; font-size: 0.9rem;">Sign In</button>
       </form>
+      <div id="oauth-providers-container" style="margin-top: 16px; border-top: 1px solid var(--border); padding-top: 14px; display: none;">
+        <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-bottom: 10px;">Or continue with</div>
+        <div style="display: flex; gap: 8px;">
+          <button id="oauth-btn-google" type="button" class="btn btn-secondary" onclick="loginWithOAuth('google')" style="flex: 1; display: none; align-items: center; justify-content: center; gap: 6px; font-size: 0.8rem; padding: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032,6.033-6.032c1.498,0,2.866,0.549,3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"/></svg>
+            Google
+          </button>
+          <button id="oauth-btn-github" type="button" class="btn btn-secondary" onclick="loginWithOAuth('github')" style="flex: 1; display: none; align-items: center; justify-content: center; gap: 6px; font-size: 0.8rem; padding: 8px;">
+            <svg width="14" height="14" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/></svg>
+            GitHub
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -3207,12 +3220,92 @@ const procRes = await client.exec('TransferFunds', {
     // --- Authentication & Session Management ---
     function showLoginModal() {
       document.getElementById('login-modal').style.display = 'flex';
+      checkOAuthProviders();
     }
 
     function hideLoginModal() {
       document.getElementById('login-modal').style.display = 'none';
       document.getElementById('login-error').style.display = 'none';
     }
+
+    async function checkOAuthProviders() {
+      try {
+        const res = await fetch('/api/auth/oauth2/providers');
+        if (!res.ok) return;
+        const data = await res.json();
+        const provs = data.providers || {};
+        let hasAny = false;
+
+        const gBtn = document.getElementById('oauth-btn-google');
+        if (gBtn) {
+          if (provs.google && provs.google.enabled) {
+            gBtn.style.display = 'flex';
+            hasAny = true;
+          } else {
+            gBtn.style.display = 'none';
+          }
+        }
+
+        const ghBtn = document.getElementById('oauth-btn-github');
+        if (ghBtn) {
+          if (provs.github && provs.github.enabled) {
+            ghBtn.style.display = 'flex';
+            hasAny = true;
+          } else {
+            ghBtn.style.display = 'none';
+          }
+        }
+
+        const container = document.getElementById('oauth-providers-container');
+        if (container) {
+          container.style.display = hasAny ? 'block' : 'none';
+        }
+      } catch (_) {}
+    }
+
+    async function loginWithOAuth(provider) {
+      const errBox = document.getElementById('login-error');
+      if (errBox) errBox.style.display = 'none';
+      try {
+        const res = await fetch('/api/auth/oauth2/url?provider=' + encodeURIComponent(provider));
+        if (!res.ok) {
+          const err = await res.json();
+          if (errBox) {
+            errBox.style.display = 'block';
+            errBox.innerText = err.error || 'Failed to initialize OAuth';
+          }
+          return;
+        }
+        const data = await res.json();
+        if (data.url) {
+          const w = 550, h = 650;
+          const left = (window.screen.width / 2) - (w / 2);
+          const top = (window.screen.height / 2) - (h / 2);
+          window.open(data.url, 'SQLion OAuth', `width=${w},height=${h},top=${top},left=${left}`);
+        }
+      } catch (e) {
+        if (errBox) {
+          errBox.style.display = 'block';
+          errBox.innerText = 'OAuth Error: ' + e;
+        }
+      }
+    }
+
+    // Listen for OAuth completion message from popup window
+    window.addEventListener('message', (ev) => {
+      if (ev.data && ev.data.type === 'SQLION_OAUTH_SUCCESS') {
+        const token = ev.data.token;
+        const record = ev.data.record || {};
+        if (token) {
+          localStorage.setItem('sqlion_auth_token', token);
+          localStorage.setItem('sqlion_auth_email', record.email || '');
+          updateUserDisplay(record.name || record.email);
+          hideLoginModal();
+          loadTables();
+          loadProcedures();
+        }
+      }
+    });
 
     async function handleLoginSubmit(e) {
       e.preventDefault();
