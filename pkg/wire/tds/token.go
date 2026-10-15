@@ -54,6 +54,7 @@ const (
 	TypeDateN      byte = 0x28
 	TypeTimeN      byte = 0x29
 	TypeDateTime2N byte = 0x2A
+	TypeDateTimeOffsetN byte = 0x2B
 	TypeBigVarChar byte = 0xA7
 	TypeVarChar    byte = 0xA7
 	TypeNVarChar   byte = 0xE7
@@ -499,8 +500,22 @@ func BuildColMetaData(cols []ColumnInfo) []byte {
 			buf.WriteByte(8)
 		case TypeDateN:
 			// [MS-TDS] 2.2.5.6: DATENTYPE MUST NOT have a TYPE_VARLEN
+		case TypeTimeN:
+			// [MS-TDS] 2.2.5.6: TIMENTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
+			scale := byte(7)
+			if col.Scale > 0 && col.Scale <= 7 {
+				scale = byte(col.Scale)
+			}
+			buf.WriteByte(scale)
 		case TypeDateTime2N:
 			// [MS-TDS] 2.2.5.6: DATETIME2NTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
+			scale := byte(7)
+			if col.Scale > 0 && col.Scale <= 7 {
+				scale = byte(col.Scale)
+			}
+			buf.WriteByte(scale)
+		case TypeDateTimeOffsetN:
+			// [MS-TDS] 2.2.5.6: DATETIMEOFFSETNTYPE scale (1 byte, 0..7). Default 7 (100ns precision).
 			scale := byte(7)
 			if col.Scale > 0 && col.Scale <= 7 {
 				scale = byte(col.Scale)
@@ -594,12 +609,30 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 		buf.WriteByte(byte(days >> 8))
 		buf.WriteByte(byte(days >> 16))
 
+	case TypeTimeN:
+		scale := byte(7)
+		if col.Scale > 0 && col.Scale <= 7 {
+			scale = byte(col.Scale)
+		}
+		data := encodeTime(toTime(val), scale)
+		buf.WriteByte(byte(len(data)))
+		buf.Write(data)
+
 	case TypeDateTime2N:
 		scale := byte(7)
 		if col.Scale > 0 && col.Scale <= 7 {
 			scale = byte(col.Scale)
 		}
 		data := encodeDateTime2(toTime(val), scale)
+		buf.WriteByte(byte(len(data)))
+		buf.Write(data)
+
+	case TypeDateTimeOffsetN:
+		scale := byte(7)
+		if col.Scale > 0 && col.Scale <= 7 {
+			scale = byte(col.Scale)
+		}
+		data := encodeDateTimeOffset(toTime(val), scale)
 		buf.WriteByte(byte(len(data)))
 		buf.Write(data)
 
@@ -646,7 +679,7 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 
 		if val == nil {
 			switch col.Type {
-			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeDateTime2N, TypeGuid:
+			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
 				buf.WriteByte(0) // Length 0 indicates NULL
 			case TypeNVarChar, TypeVarChar:
 				_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF)) // 0xFFFF indicates NULL
@@ -774,7 +807,15 @@ func toTime(v any) time.Time {
 		if err == nil {
 			return parsed
 		}
+		parsed, err = time.Parse("2006-01-02 15:04:05.999999999 -07:00", t)
+		if err == nil {
+			return parsed
+		}
 		parsed, err = time.Parse("2006-01-02 15:04:05.999999999", t)
+		if err == nil {
+			return parsed
+		}
+		parsed, err = time.Parse("2006-01-02 15:04:05 -07:00", t)
 		if err == nil {
 			return parsed
 		}
@@ -783,6 +824,14 @@ func toTime(v any) time.Time {
 			return parsed
 		}
 		parsed, err = time.Parse("2006-01-02", t)
+		if err == nil {
+			return parsed
+		}
+		parsed, err = time.Parse("15:04:05.999999999", t)
+		if err == nil {
+			return parsed
+		}
+		parsed, err = time.Parse("15:04:05", t)
 		if err == nil {
 			return parsed
 		}
@@ -855,6 +904,54 @@ func encodeDateTime2(t time.Time, scale byte) []byte {
 	buf[timeLen] = byte(days)
 	buf[timeLen+1] = byte(days >> 8)
 	buf[timeLen+2] = byte(days >> 16)
+	return buf
+}
+
+// encodeTime encodes a time.Time into TDS 7.3 TIME binary format according to [MS-TDS] 2.2.5.5.1.4.
+// It consists of an unsigned integer representing number of 10^(-scale) second increments since midnight (LE).
+// Scale 0..2: 3 bytes, Scale 3..4: 4 bytes, Scale 5..7: 5 bytes.
+func encodeTime(t time.Time, scale byte) []byte {
+	if scale > 7 {
+		scale = 7
+	}
+	nanos := int64(t.Hour())*3600*1e9 + int64(t.Minute())*60*1e9 + int64(t.Second())*1e9 + int64(t.Nanosecond())
+
+	nanosPerTick := int64(1)
+	for i := 0; i < int(9-scale); i++ {
+		nanosPerTick *= 10
+	}
+	ticks := uint64(nanos / nanosPerTick)
+
+	timeLen := 5
+	if scale <= 2 {
+		timeLen = 3
+	} else if scale <= 4 {
+		timeLen = 4
+	}
+
+	buf := make([]byte, timeLen)
+	for i := 0; i < timeLen; i++ {
+		buf[i] = byte(ticks >> (i * 8))
+	}
+	return buf
+}
+
+// encodeDateTimeOffset encodes a time.Time into TDS 7.3 DATETIMEOFFSET binary format according to [MS-TDS] 2.2.5.5.1.6.
+// It consists of datetime2(scale) in UTC followed by a 2-byte signed integer representing timezone offset in minutes (LE).
+func encodeDateTimeOffset(t time.Time, scale byte) []byte {
+	if scale > 7 {
+		scale = 7
+	}
+	tUTC := t.In(time.UTC)
+	dt2 := encodeDateTime2(tUTC, scale)
+
+	_, offsetSec := t.Zone()
+	offsetMin := int16(offsetSec / 60)
+
+	buf := make([]byte, len(dt2)+2)
+	copy(buf, dt2)
+	buf[len(dt2)] = byte(offsetMin)
+	buf[len(dt2)+1] = byte(offsetMin >> 8)
 	return buf
 }
 

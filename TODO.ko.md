@@ -48,8 +48,8 @@
   - FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지, 정규 파서/CBO/VDBE 스택 우회 및 스토리지(`tx.Get`) 직결.
 - [x] **TDS 프로토콜 고도화: NBCROW 행 압축 (`0xD2`) (`pkg/wire/tds`)**
   - TDS 7.3+ 표준 `BuildNBCRow` 신설, NULL 비트맵 패킹 및 0바이트 전송을 통한 네트워크 오버헤드 30%+ 절감.
-- [x] **SQL Server 2008 / TDS 7.3 DATE, DATETIME2 및 UNIQUEIDENTIFIER 바이너리 직렬화 (`pkg/wire/tds`)**
-  - `DATE`(0x28, 0001-01-01 기준 일수 3바이트 LE), `DATETIME2`(0x2A, Scale 0..7 100ns 틱 + 그레고리력 3바이트), `UNIQUEIDENTIFIER`(0x24, Windows Mixed-Endian 바이트 스왑) 바이너리 와이어 직렬화 구현.
+- [x] **SQL Server 2008 / TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET 및 UNIQUEIDENTIFIER 바이너리 직렬화 (`pkg/wire/tds`)**
+  - `DATE`(0x28, 0001-01-01 기준 일수 3바이트 LE), `TIME`(0x29, Scale 0..7 100ns 틱 3~5바이트), `DATETIME2`(0x2A, Scale 0..7 틱 + 그레고리력 3바이트), `DATETIMEOFFSET`(0x2B, UTC DATETIME2 + 2바이트 분 오프셋), `UNIQUEIDENTIFIER`(0x24, Windows Mixed-Endian 바이트 스왑) 전 항목 완비.
   - 결과셋 컬럼 타입 자동 추론(`inferColumnInfos`) 고도화 및 공식 `github.com/microsoft/go-mssqldb`(`mssql.UniqueIdentifier`, `time.Time`) 통합 검증 완료.
 - [ ] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**
   - **배경**: Go 공식 드라이버(`go-mssqldb`, `lib/pq`, `pgx/v5`)에 이어 엔터프라이즈 멀티 언어 클라이언트 검증.

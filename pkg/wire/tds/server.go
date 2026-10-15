@@ -1943,6 +1943,10 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 		if lowerCol == "create_date" || lowerCol == "modify_date" {
 			colType = TypeDateTimeN
 			colSize = 8
+		} else if strings.Contains(lowerCol, "datetimeoffset") || strings.Contains(lowerCol, "offset") {
+			colType = TypeDateTimeOffsetN
+			colSize = 10
+			scale = 7
 		} else if strings.Contains(lowerCol, "datetime2") {
 			colType = TypeDateTime2N
 			colSize = 8
@@ -1953,6 +1957,10 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 		} else if strings.HasSuffix(lowerCol, "date") {
 			colType = TypeDateN
 			colSize = 3
+		} else if lowerCol == "time" || strings.HasSuffix(lowerCol, "_time") || strings.HasSuffix(lowerCol, "time_only") {
+			colType = TypeTimeN
+			colSize = 5
+			scale = 7
 		} else if strings.HasSuffix(lowerCol, "time") || lowerCol == "created" || lowerCol == "modified" {
 			colType = TypeDateTimeN
 			colSize = 8
@@ -1975,9 +1983,17 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 					colType = TypeBitN
 					colSize = 1
 				case time.Time:
-					if strings.Contains(lowerCol, "datetime2") {
+					if strings.Contains(lowerCol, "datetimeoffset") || strings.Contains(lowerCol, "offset") {
+						colType = TypeDateTimeOffsetN
+						colSize = 10
+						scale = 7
+					} else if strings.Contains(lowerCol, "datetime2") {
 						colType = TypeDateTime2N
 						colSize = 8
+						scale = 7
+					} else if lowerCol == "time" || strings.HasSuffix(lowerCol, "_time") || strings.HasSuffix(lowerCol, "time_only") {
+						colType = TypeTimeN
+						colSize = 5
 						scale = 7
 					} else if lowerCol == "create_date" || lowerCol == "modify_date" || strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") || lowerCol == "created" || lowerCol == "modified" {
 						colType = TypeDateTimeN
@@ -1996,7 +2012,15 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 					} else if isDateString(val) && lowerCol != "create_date" && lowerCol != "modify_date" {
 						colType = TypeDateN
 						colSize = 3
-					} else if colType != TypeDateTimeN && colType != TypeDateTime2N && colType != TypeDateN && colType != TypeGuid {
+					} else if isTimeString(val) {
+						colType = TypeTimeN
+						colSize = 5
+						scale = 7
+					} else if (strings.Contains(lowerCol, "datetimeoffset") || strings.Contains(lowerCol, "offset")) && (strings.Contains(val, "+") || strings.Contains(val, "-")) {
+						colType = TypeDateTimeOffsetN
+						colSize = 10
+						scale = 7
+					} else if colType != TypeDateTimeN && colType != TypeDateTime2N && colType != TypeDateN && colType != TypeTimeN && colType != TypeDateTimeOffsetN && colType != TypeGuid {
 						colType = TypeNVarChar
 						colSize = 4000
 					}
@@ -2037,6 +2061,22 @@ func isDateString(s string) bool {
 	if len(s) == 10 && s[4] == '-' && s[7] == '-' {
 		for i, c := range s {
 			if i == 4 || i == 7 {
+				continue
+			}
+			if c < '0' || c > '9' {
+				return false
+			}
+		}
+		return true
+	}
+	return false
+}
+
+func isTimeString(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) >= 8 && s[2] == ':' && s[5] == ':' {
+		for i, c := range s {
+			if i == 2 || i == 5 || (i == 8 && c == '.') {
 				continue
 			}
 			if c < '0' || c > '9' {

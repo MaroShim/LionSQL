@@ -298,23 +298,131 @@ func TestTypeGuid_EncodingAndByteSwap(t *testing.T) {
 	}
 }
 
+func TestTypeTimeN_Encoding(t *testing.T) {
+	cols := []ColumnInfo{
+		{Name: "start_time", Type: TypeTimeN, Scale: 7, Nullable: true},
+	}
+
+	// 1. Verify ColMetaData:
+	meta := BuildColMetaData(cols)
+	if meta[9] != TypeTimeN {
+		t.Fatalf("expected TypeTimeN 0x29, got 0x%02X", meta[9])
+	}
+	if meta[10] != 7 {
+		t.Fatalf("expected scale 7, got %d", meta[10])
+	}
+
+	// 2. Target time: 14:30:15.1234567
+	// 14*3600 + 30*60 + 15 = 52215 seconds
+	// 52215 * 10,000,000 + 1234567 = 522,151,234,567 ticks
+	targetTime := time.Date(2026, 1, 1, 14, 30, 15, 123456700, time.UTC)
+	row := BuildRow(cols, []any{targetTime})
+	if row[0] != TokenRow {
+		t.Fatalf("expected TokenRow 0xD1, got 0x%02X", row[0])
+	}
+	if row[1] != 5 {
+		t.Fatalf("expected time length 5, got %d", row[1])
+	}
+	timePart := row[2:7]
+	ticks := uint64(timePart[0]) | (uint64(timePart[1]) << 8) | (uint64(timePart[2]) << 16) | (uint64(timePart[3]) << 24) | (uint64(timePart[4]) << 32)
+	expectedTicks := uint64(522151234567)
+	if ticks != expectedTicks {
+		t.Fatalf("expected ticks %d, got %d", expectedTicks, ticks)
+	}
+
+	// 3. String input "14:30:15"
+	rowStr := BuildRow(cols, []any{"14:30:15"})
+	if rowStr[1] != 5 {
+		t.Fatalf("expected string time length 5, got %d", rowStr[1])
+	}
+	ticksStr := uint64(rowStr[2]) | (uint64(rowStr[3]) << 8) | (uint64(rowStr[4]) << 16) | (uint64(rowStr[5]) << 24) | (uint64(rowStr[6]) << 32)
+	expectedTicksStr := uint64(522150000000)
+	if ticksStr != expectedTicksStr {
+		t.Fatalf("expected ticks %d from string, got %d", expectedTicksStr, ticksStr)
+	}
+
+	// 4. NULL check:
+	rowNull := BuildRow(cols, []any{nil})
+	if rowNull[1] != 0 {
+		t.Fatalf("expected NULL length 0, got %d", rowNull[1])
+	}
+}
+
+func TestTypeDateTimeOffsetN_Encoding(t *testing.T) {
+	cols := []ColumnInfo{
+		{Name: "created_dto", Type: TypeDateTimeOffsetN, Scale: 7, Nullable: true},
+	}
+
+	// 1. Verify ColMetaData:
+	meta := BuildColMetaData(cols)
+	if meta[9] != TypeDateTimeOffsetN {
+		t.Fatalf("expected TypeDateTimeOffsetN 0x2B, got 0x%02X", meta[9])
+	}
+	if meta[10] != 7 {
+		t.Fatalf("expected scale 7, got %d", meta[10])
+	}
+
+	// 2. Target: 2026-10-15 12:34:56.1234567 +09:00 (KST, +540 minutes)
+	kst := time.FixedZone("KST", 9*3600)
+	targetTime := time.Date(2026, 10, 15, 12, 34, 56, 123456700, kst)
+	row := BuildRow(cols, []any{targetTime})
+	if row[0] != TokenRow {
+		t.Fatalf("expected TokenRow 0xD1, got 0x%02X", row[0])
+	}
+	// Total length: 5 (time) + 3 (date) + 2 (offset) = 10 bytes
+	if row[1] != 10 {
+		t.Fatalf("expected length 10, got %d", row[1])
+	}
+	timePart := row[2:7]
+	datePart := row[7:10]
+	offsetPart := row[10:12]
+
+	// In UTC: 12:34:56 - 9 hours = 03:34:56.1234567 UTC on 2026-10-15
+	// Date part: 739903
+	days := uint32(datePart[0]) | (uint32(datePart[1]) << 8) | (uint32(datePart[2]) << 16)
+	if days != 739903 {
+		t.Fatalf("expected days 739903, got %d", days)
+	}
+
+	// Time in UTC: 3*3600 + 34*60 + 56 = 12896 seconds = 128,961,234,567 ticks
+	ticks := uint64(timePart[0]) | (uint64(timePart[1]) << 8) | (uint64(timePart[2]) << 16) | (uint64(timePart[3]) << 24) | (uint64(timePart[4]) << 32)
+	expectedTicks := uint64(128961234567)
+	if ticks != expectedTicks {
+		t.Fatalf("expected UTC ticks %d, got %d", expectedTicks, ticks)
+	}
+
+	// Offset: +540 minutes (0x021C LE -> 1C 02)
+	offsetMin := int16(binary.LittleEndian.Uint16(offsetPart))
+	if offsetMin != 540 {
+		t.Fatalf("expected offset 540, got %d", offsetMin)
+	}
+
+	// 3. NULL check:
+	rowNull := BuildRow(cols, []any{nil})
+	if rowNull[1] != 0 {
+		t.Fatalf("expected NULL length 0, got %d", rowNull[1])
+	}
+}
+
 func TestInferColumnInfos_DateDateTime2Guid(t *testing.T) {
 	srv := &Server{}
 	qr := &engine.QueryResult{
-		Columns: []string{"user_id", "birth_date", "created_datetime2", "create_date"},
+		Columns: []string{"user_id", "birth_date", "created_datetime2", "create_date", "shift_time", "order_offset"},
 		Rows: []map[string]any{
 			{
 				"user_id":           "6F9619FF-8B86-D011-B42D-00C04FC964FF",
 				"birth_date":        "1990-05-20",
 				"created_datetime2": time.Date(2026, 10, 15, 8, 30, 0, 0, time.UTC),
 				"create_date":       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+				"shift_time":        "09:30:00",
+				"order_offset":      "2026-10-15 12:34:56 +09:00",
 			},
 		},
 	}
 
 	cols := srv.inferColumnInfos(qr)
-	if len(cols) != 4 {
-		t.Fatalf("expected 4 columns, got %d", len(cols))
+	if len(cols) != 6 {
+		t.Fatalf("expected 6 columns, got %d", len(cols))
 	}
 
 	// Column 0: user_id (UUID string) -> TypeGuid (0x24), size 16
@@ -335,5 +443,15 @@ func TestInferColumnInfos_DateDateTime2Guid(t *testing.T) {
 	// Column 3: create_date (sys column) -> TypeDateTimeN (0x6F), size 8
 	if cols[3].Type != TypeDateTimeN || cols[3].Size != 8 {
 		t.Errorf("col 3: expected TypeDateTimeN size 8, got 0x%02X size %d", cols[3].Type, cols[3].Size)
+	}
+
+	// Column 4: shift_time (HH:MM:SS string) -> TypeTimeN (0x29), size 5, scale 7
+	if cols[4].Type != TypeTimeN || cols[4].Size != 5 || cols[4].Scale != 7 {
+		t.Errorf("col 4: expected TypeTimeN size 5 scale 7, got 0x%02X size %d scale %d", cols[4].Type, cols[4].Size, cols[4].Scale)
+	}
+
+	// Column 5: order_offset -> TypeDateTimeOffsetN (0x2B), size 10, scale 7
+	if cols[5].Type != TypeDateTimeOffsetN || cols[5].Size != 10 || cols[5].Scale != 7 {
+		t.Errorf("col 5: expected TypeDateTimeOffsetN size 10 scale 7, got 0x%02X size %d scale %d", cols[5].Type, cols[5].Size, cols[5].Scale)
 	}
 }

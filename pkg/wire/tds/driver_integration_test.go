@@ -790,6 +790,64 @@ func TestDriverIntegration_DateDateTime2Guid(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_TimeAndDateTimeOffset(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, "CREATE TABLE shifts_2008 (id INT PRIMARY KEY, shift_time VARCHAR(20), order_offset VARCHAR(40));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, err = db.ExecContext(ctx, "INSERT INTO shifts_2008 (id, shift_time, order_offset) VALUES (1, '14:30:15', '2026-10-15 12:34:56 +09:00');")
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	var id int
+	var timeVal time.Time
+	var offsetVal time.Time
+	err = db.QueryRowContext(ctx, "SELECT id, shift_time, order_offset FROM shifts_2008 WHERE id = 1;").Scan(&id, &timeVal, &offsetVal)
+	if err != nil {
+		t.Fatalf("QueryRowContext failed: %v", err)
+	}
+
+	if id != 1 {
+		t.Fatalf("expected id 1, got %d", id)
+	}
+	// Verify TIME: 14:30:15
+	if timeVal.Hour() != 14 || timeVal.Minute() != 30 || timeVal.Second() != 15 {
+		t.Fatalf("expected shift_time 14:30:15, got %v", timeVal)
+	}
+	// Verify DATETIMEOFFSET: 2026-10-15 12:34:56 with +09:00 offset
+	if offsetVal.Year() != 2026 || offsetVal.Month() != 10 || offsetVal.Day() != 15 || offsetVal.Hour() != 12 || offsetVal.Minute() != 34 || offsetVal.Second() != 56 {
+		t.Fatalf("expected order_offset 2026-10-15 12:34:56, got %v", offsetVal)
+	}
+	_, offSec := offsetVal.Zone()
+	if offSec != 9*3600 {
+		t.Fatalf("expected zone offset +09:00 (+32400 sec), got %d", offSec)
+	}
+}
+
 
 
 
