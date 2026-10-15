@@ -1240,6 +1240,14 @@ func substituteParamOutsideQuotes(query string, paramName string, formattedVal s
 				b.WriteRune(ch)
 				i++
 			} else if ch == '@' {
+				isDoubleAtParam := strings.HasPrefix(paramName, "@@")
+				prevIsAt := i > 0 && runes[i-1] == '@'
+				nextIsAt := i+1 < len(runes) && runes[i+1] == '@'
+				if !isDoubleAtParam && (prevIsAt || nextIsAt) {
+					b.WriteRune(ch)
+					i++
+					continue
+				}
 				remainder := string(runes[i:])
 				loc := re.FindStringIndex(remainder)
 				if len(loc) == 2 && loc[0] == 0 {
@@ -2021,8 +2029,21 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 						colSize = 10
 						scale = 7
 					} else if colType != TypeDateTimeN && colType != TypeDateTime2N && colType != TypeDateN && colType != TypeTimeN && colType != TypeDateTimeOffsetN && colType != TypeGuid {
-						colType = TypeNVarChar
-						colSize = 4000
+						if len(val) > 4000 || strings.Contains(lowerCol, "max") || strings.Contains(lowerCol, "lob") {
+							colType = TypeNVarChar
+							colSize = -1
+						} else {
+							colType = TypeNVarChar
+							colSize = 4000
+						}
+					}
+				case []byte:
+					if len(val) > 8000 || strings.Contains(lowerCol, "max") || strings.Contains(lowerCol, "lob") {
+						colType = TypeBigVarBin
+						colSize = -1
+					} else {
+						colType = TypeBigVarBin
+						colSize = len(val)
 					}
 				}
 				break
@@ -2035,6 +2056,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 			Size:     colSize,
 			Scale:    scale,
 			Nullable: nullable,
+			IsPLP:    colSize == -1,
 		}
 	}
 

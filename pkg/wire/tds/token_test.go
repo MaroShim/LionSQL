@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/hex"
+	"strings"
 	"testing"
 	"time"
 
@@ -453,5 +454,57 @@ func TestInferColumnInfos_DateDateTime2Guid(t *testing.T) {
 	// Column 5: order_offset -> TypeDateTimeOffsetN (0x2B), size 10, scale 7
 	if cols[5].Type != TypeDateTimeOffsetN || cols[5].Size != 10 || cols[5].Scale != 7 {
 		t.Errorf("col 5: expected TypeDateTimeOffsetN size 10 scale 7, got 0x%02X size %d scale %d", cols[5].Type, cols[5].Size, cols[5].Scale)
+	}
+}
+
+func TestTypePLP_LOBEncoding(t *testing.T) {
+	cols := []ColumnInfo{
+		{Name: "doc", Type: TypeVarChar, Size: -1, IsPLP: true, Nullable: true},
+	}
+
+	// 1. ColMetaData: MaxLength must be 0xFFFF (PLP indicator)
+	meta := BuildColMetaData(cols)
+	// ColType is at byte 9 (TypeVarChar 0xA7)
+	if meta[9] != TypeVarChar {
+		t.Fatalf("expected TypeVarChar 0xA7, got 0x%02X", meta[9])
+	}
+	// MaxLength is at bytes 10-11: 0xFFFF
+	maxLen := binary.LittleEndian.Uint16(meta[10:12])
+	if maxLen != 0xFFFF {
+		t.Fatalf("expected PLP max length 0xFFFF (65535), got 0x%04X", maxLen)
+	}
+
+	// 2. Normal value: payload > 8000 bytes (e.g. 10000 bytes)
+	testPayload := strings.Repeat("A", 10000)
+	row := BuildRow(cols, []any{testPayload})
+	if row[0] != TokenRow {
+		t.Fatalf("expected TokenRow 0xD1, got 0x%02X", row[0])
+	}
+	// Offset 1: 8-byte total length
+	totalLen := binary.LittleEndian.Uint64(row[1:9])
+	if totalLen != 10000 {
+		t.Fatalf("expected total length 10000, got %d", totalLen)
+	}
+	// Chunk 1 length at offset 9: uint32(8000)
+	chunk1Len := binary.LittleEndian.Uint32(row[9:13])
+	if chunk1Len != 8000 {
+		t.Fatalf("expected chunk 1 length 8000, got %d", chunk1Len)
+	}
+	// Chunk 2 length at offset 13 + 8000 = 8013: uint32(2000)
+	chunk2Len := binary.LittleEndian.Uint32(row[8013:8017])
+	if chunk2Len != 2000 {
+		t.Fatalf("expected chunk 2 length 2000, got %d", chunk2Len)
+	}
+	// Terminator chunk at offset 8017 + 2000 = 10017: uint32(0)
+	termChunk := binary.LittleEndian.Uint32(row[10017:10021])
+	if termChunk != 0 {
+		t.Fatalf("expected terminator chunk 0, got %d", termChunk)
+	}
+
+	// 3. NULL value: 8-byte 0xFFFFFFFFFFFFFFFF
+	nullRow := BuildRow(cols, []any{nil})
+	nullLen := binary.LittleEndian.Uint64(nullRow[1:9])
+	if nullLen != 0xFFFFFFFFFFFFFFFF {
+		t.Fatalf("expected NULL PLP length 0xFFFFFFFFFFFFFFFF, got 0x%016X", nullLen)
 	}
 }

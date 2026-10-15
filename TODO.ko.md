@@ -28,6 +28,14 @@
 | **P3** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`sqlion migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down` 및 `_migrations` 이력 추적 |
 
 ### P1/P2 최근 완료 과제: 엔진 성능 & 최적화
+- [x] **TDS PLP (Partially Length-Prefixed) LOB 청크 스트리밍 (`VARCHAR(MAX)`, `VARBINARY(MAX)`) (`pkg/wire/tds`)**
+  - **배경**: TDS 프로토콜에서 8,000 바이트를 초과하는 대용량 LOB 데이터 전송 시 단일 패킷 길이를 초과하는 페이로드 전송 표준 규격 준수.
+  - **구현 내용**:
+    - [MS-TDS] 2.2.5.2 규격 기반 PLP(Partially Length-Prefixed) 청크 인코딩 엔진 구현 (`writePLPValue`).
+    - `ColMetaData`에서 비제한 LOB 타입(`VARCHAR(MAX)`, `NVARCHAR(MAX)`, `VARBINARY(MAX)`)에 대해 `0xFFFF` (65535) 길이 지시자 지정.
+    - 8바이트 전체 길이 헤더, 최대 8,000바이트 단위 청크 분할 전송, 4바이트 제로 종료 청크(`0x00000000`) 스트리밍.
+    - PLP 8바이트 `0xFFFFFFFFFFFFFFFF` NULL 표현식 완비.
+    - Go 공식 `sqlserver` 드라이버(12,000바이트) 및 Python `pymssql` 드라이버(10,000바이트) E2E 검증 완료.
 - [x] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**
   - **배경**: Go 공식 드라이버(`go-mssqldb`, `lib/pq`, `pgx/v5`)에 이어 엔터프라이즈 멀티 언어 클라이언트 검증.
   - **구현 내용**:

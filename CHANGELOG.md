@@ -30,6 +30,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Automatically triggers background parallel statistics analysis (`coordinator.AnalyzeTable`) when dirty row count crosses dynamic threshold (`min_threshold + base_rows * scale_factor`), keeping CBO column histograms fresh.
   - Ensured lock hierarchy immunity (Golden Rule 10) by keeping the transaction commit hot-path non-blocking and executing all catalog and storage inspections asynchronously in debounced background goroutines.
   - Added unit tests in `pkg/engine/auto_analyze_test.go` verifying threshold triggering, WAL hook listener, and atomic dirty counter resets.
+- **TDS PLP (Partially Length-Prefixed) LOB Chunk Streaming (`pkg/wire/tds`)**:
+  - Implemented [MS-TDS] 2.2.5.2 Partially Length-Prefixed (PLP) LOB stream encoding for `VARCHAR(MAX)`, `NVARCHAR(MAX)`, and `VARBINARY(MAX)` (> 8,000 bytes) payloads.
+  - Configured `ColMetaData` to signal `0xFFFF` (65535) max length for unbounded LOB types.
+  - Implemented `writePLPValue` streaming 8-byte Little-Endian total payload length, chunk headers (up to 8,000 bytes per chunk with 4-byte LE lengths), and 4-byte zero terminal chunk (`0x00000000`).
+  - Added PLP 8-byte `0xFFFFFFFFFFFFFFFF` NULL value serialization across `TypeVarChar`, `TypeNVarChar`, and `TypeBigVarBin`.
+  - Added unit test `TestTypePLP_LOBEncoding` (`token_test.go`), official Go driver integration test `TestDriverIntegration_PLP_LOBStreaming` (12,000 bytes), and Python `pymssql` driver verification (10,000 bytes).
 - **TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET, and UNIQUEIDENTIFIER Binary Serialization (`pkg/wire/tds`)**:
   - Implemented complete SQL Server 2008 / TDS 7.3 wire compatibility for `DATE` (`0x28` / `TypeDateN`), `TIME` (`0x29` / `TypeTimeN`), `DATETIME2` (`0x2A` / `TypeDateTime2N`), `DATETIMEOFFSET` (`0x2B` / `TypeDateTimeOffsetN`), and `UNIQUEIDENTIFIER` (`0x24` / `TypeGuid`).
   - Serialized `DATE` values as 3-byte unsigned integers (Little-Endian days since `0001-01-01`) compliant with [MS-TDS] 2.2.5.5.1.2 without trailing metadata.

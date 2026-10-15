@@ -118,6 +118,7 @@ type ColumnInfo struct {
 	Scale     int
 	Precision int
 	Nullable  bool
+	IsPLP     bool
 }
 
 // BuildPreloginResponse generates a PRELOGIN reply packet payload.
@@ -525,23 +526,44 @@ func BuildColMetaData(cols []ColumnInfo) []byte {
 			// [MS-TDS] 2.2.5.5.1.1: GUIDTYPE is BYTELEN_TYPE with MaxLength 16 (0x10)
 			buf.WriteByte(16)
 		case TypeNVarChar:
-			// MaxLength: uint16 LE (e.g. 8000 or 0xFFFF)
-			maxLen := uint16(col.Size * 2)
-			if col.Size <= 0 || col.Size > 4000 {
-				maxLen = 8000
+			if col.IsPLP || col.Size == -1 {
+				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
+			} else {
+				maxLen := uint16(col.Size * 2)
+				if col.Size <= 0 || col.Size > 4000 {
+					maxLen = 8000
+				}
+				_ = binary.Write(&buf, binary.LittleEndian, maxLen)
 			}
-			_ = binary.Write(&buf, binary.LittleEndian, maxLen)
 			buf.Write(DefaultCollation)
 		case TypeVarChar:
-			maxLen := uint16(col.Size)
-			if col.Size <= 0 || col.Size > 8000 {
-				maxLen = 8000
+			if col.IsPLP || col.Size == -1 {
+				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
+			} else {
+				maxLen := uint16(col.Size)
+				if col.Size <= 0 || col.Size > 8000 {
+					maxLen = 8000
+				}
+				_ = binary.Write(&buf, binary.LittleEndian, maxLen)
 			}
-			_ = binary.Write(&buf, binary.LittleEndian, maxLen)
 			buf.Write(DefaultCollation)
+		case TypeBigVarBin:
+			if col.IsPLP || col.Size == -1 {
+				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
+			} else {
+				maxLen := uint16(col.Size)
+				if col.Size <= 0 || col.Size > 8000 {
+					maxLen = 8000
+				}
+				_ = binary.Write(&buf, binary.LittleEndian, maxLen)
+			}
 		default:
 			// Fallback to NVarChar
-			_ = binary.Write(&buf, binary.LittleEndian, uint16(8000))
+			if col.IsPLP || col.Size == -1 {
+				_ = binary.Write(&buf, binary.LittleEndian, uint16(0xFFFF))
+			} else {
+				_ = binary.Write(&buf, binary.LittleEndian, uint16(8000))
+			}
 			buf.Write(DefaultCollation)
 		}
 
@@ -642,22 +664,67 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 		buf.Write(guidBytes)
 
 	case TypeNVarChar:
-		strVal := fmt.Sprintf("%v", val)
-		u16 := EncodeUTF16LE(strVal)
-		_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
-		buf.Write(u16)
+		if col.IsPLP || col.Size == -1 {
+			writePLPValue(buf, EncodeUTF16LE(fmt.Sprintf("%v", val)))
+		} else {
+			strVal := fmt.Sprintf("%v", val)
+			u16 := EncodeUTF16LE(strVal)
+			_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
+			buf.Write(u16)
+		}
 
 	case TypeVarChar:
-		strVal := fmt.Sprintf("%v", val)
-		_ = binary.Write(buf, binary.LittleEndian, uint16(len(strVal)))
-		buf.WriteString(strVal)
+		if col.IsPLP || col.Size == -1 {
+			writePLPValue(buf, []byte(fmt.Sprintf("%v", val)))
+		} else {
+			strVal := fmt.Sprintf("%v", val)
+			_ = binary.Write(buf, binary.LittleEndian, uint16(len(strVal)))
+			buf.WriteString(strVal)
+		}
+
+	case TypeBigVarBin:
+		var raw []byte
+		if b, ok := val.([]byte); ok {
+			raw = b
+		} else {
+			raw = []byte(fmt.Sprintf("%v", val))
+		}
+		if col.IsPLP || col.Size == -1 {
+			writePLPValue(buf, raw)
+		} else {
+			_ = binary.Write(buf, binary.LittleEndian, uint16(len(raw)))
+			buf.Write(raw)
+		}
 
 	default:
-		strVal := fmt.Sprintf("%v", val)
-		u16 := EncodeUTF16LE(strVal)
-		_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
-		buf.Write(u16)
+		if col.IsPLP || col.Size == -1 {
+			writePLPValue(buf, EncodeUTF16LE(fmt.Sprintf("%v", val)))
+		} else {
+			strVal := fmt.Sprintf("%v", val)
+			u16 := EncodeUTF16LE(strVal)
+			_ = binary.Write(buf, binary.LittleEndian, uint16(len(u16)))
+			buf.Write(u16)
+		}
 	}
+}
+
+// writePLPValue streams partially length-prefixed LOB payloads per [MS-TDS] 2.2.5.2.
+// It writes an 8-byte total length, followed by 4-byte chunk lengths and chunks (up to 8000 bytes each),
+// terminated by a 4-byte zero chunk (0x00000000).
+func writePLPValue(buf *bytes.Buffer, payload []byte) {
+	totalLen := uint64(len(payload))
+	_ = binary.Write(buf, binary.LittleEndian, totalLen)
+	chunkSize := 8000
+	for offset := 0; offset < len(payload); offset += chunkSize {
+		end := offset + chunkSize
+		if end > len(payload) {
+			end = len(payload)
+		}
+		chunk := payload[offset:end]
+		_ = binary.Write(buf, binary.LittleEndian, uint32(len(chunk)))
+		buf.Write(chunk)
+	}
+	_ = binary.Write(buf, binary.LittleEndian, uint32(0)) // 0 chunk terminates PLP stream
 }
 
 // BuildRow builds a ROW token (0xD1) for a row of values matching cols.
@@ -681,10 +748,18 @@ func BuildRow(cols []ColumnInfo, values []any) []byte {
 			switch col.Type {
 			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
 				buf.WriteByte(0) // Length 0 indicates NULL
-			case TypeNVarChar, TypeVarChar:
-				_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF)) // 0xFFFF indicates NULL
+			case TypeNVarChar, TypeVarChar, TypeBigVarBin:
+				if col.IsPLP || col.Size == -1 {
+					_ = binary.Write(buf, binary.LittleEndian, uint64(0xFFFFFFFFFFFFFFFF))
+				} else {
+					_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF)) // 0xFFFF indicates NULL
+				}
 			default:
-				_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF))
+				if col.IsPLP || col.Size == -1 {
+					_ = binary.Write(buf, binary.LittleEndian, uint64(0xFFFFFFFFFFFFFFFF))
+				} else {
+					_ = binary.Write(buf, binary.LittleEndian, uint16(0xFFFF))
+				}
 			}
 			continue
 		}
@@ -744,6 +819,7 @@ func BuildNBCRow(cols []ColumnInfo, values []any) []byte {
 	copy(res, buf.Bytes())
 	return res
 }
+
 
 func toInt64(v any) int64 {
 	switch n := v.(type) {

@@ -848,6 +848,63 @@ func TestDriverIntegration_TimeAndDateTimeOffset(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_PLP_LOBStreaming(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, "CREATE TABLE plp_docs (id INT PRIMARY KEY, big_text VARCHAR(MAX), null_text VARCHAR(MAX));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 12,000 character string (exceeds standard 8,000 byte packet limit)
+	expectedText := strings.Repeat("A", 12000)
+	_, err = db.ExecContext(ctx, "INSERT INTO plp_docs (id, big_text, null_text) VALUES (1, '"+expectedText+"', NULL);")
+	if err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	var id int
+	var bigText string
+	var nullText sql.NullString
+	err = db.QueryRowContext(ctx, "SELECT id, big_text, null_text FROM plp_docs WHERE id = 1;").Scan(&id, &bigText, &nullText)
+	if err != nil {
+		t.Fatalf("QueryRowContext failed: %v", err)
+	}
+
+	if id != 1 {
+		t.Fatalf("expected id 1, got %d", id)
+	}
+	if len(bigText) != 12000 {
+		t.Fatalf("expected big_text length 12000, got %d", len(bigText))
+	}
+	if bigText != expectedText {
+		t.Fatalf("big_text content mismatch")
+	}
+	if nullText.Valid {
+		t.Fatalf("expected null_text to be NULL, got %v", nullText.String)
+	}
+}
+
 
 
 

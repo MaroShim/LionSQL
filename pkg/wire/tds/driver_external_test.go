@@ -102,6 +102,15 @@ proc_row = cursor.fetchone()
 assert proc_row is not None and abs(proc_row[0] - 1499.00) < 0.01, f"unexpected proc row: {proc_row}"
 print("Stored procedure execution passed:", proc_row)
 
+# 8. LOB PLP Streaming (> 8000 bytes)
+cursor.execute("CREATE TABLE py_lob (id INT PRIMARY KEY, big_content VARCHAR(MAX));")
+big_str = 'Z' * 10000
+cursor.execute("INSERT INTO py_lob VALUES (1, '" + big_str + "');")
+cursor.execute("SELECT id, big_content FROM py_lob WHERE id = 1;")
+lob_row = cursor.fetchone()
+assert lob_row is not None and lob_row[0] == 1 and len(lob_row[1]) == 10000, f"unexpected lob length: {len(lob_row[1]) if lob_row else None}"
+print("PLP LOB streaming passed (10,000 bytes)!")
+
 conn.close()
 print("ALL PYMSSQL TESTS PASSED!")
 `, port, port)
