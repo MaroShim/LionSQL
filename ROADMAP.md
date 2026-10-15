@@ -231,10 +231,11 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **Implemented (`B-4`)**: Replaced $O(N!)$ permutation generation with Selinger dynamic programming evaluating subset bitmasks (`1 << n`) with flat-slice $O(1)$ indexing. Includes primary join-key connectivity pass (pruning Cartesian products) with fallback disconnected pass, bounded to $n \le 12$ relations. Validated sub-millisecond planning on 6-table and 8-table chain joins.
 - **Outcome**: Sub-millisecond join reordering for complex multi-table queries, eliminating exponential combinatorial blowup.
 
-#### 6.5. Extended Multi-Column Statistics (`C-5`), MCV & Optimizer Hints (`pkg/planner`)
-- **Implemented (`C-5`)**: Added `MultiColumnStats`, multi-column NDV collection, functional dependency coefficient calculation ($dep \in [0.0, 1.0]$), and joint selectivity calculation ($dep \cdot \min(P_i) + (1-dep) \cdot \prod P_i$) in `EstimateCompoundSelectivity` and `EstimateExprSelectivity` (`pkg/planner/stats.go`). Added DDL support for `CREATE STATISTICS stat_name ON tbl (col1, col2, ...)` and `DROP STATISTICS` (`pkg/engine`, `pkg/catalog`). Automatically collects multi-column statistics for composite indexes and registered statistics during `ANALYZE TABLE`.
-- **Pending**: MCV (Most Common Values) skew list statistics.
-- **Expected Outcome**: Elimination of estimation skew on correlated predicates.
+#### 6.5. Extended Multi-Column Statistics (`C-5`), MCV (`C-7`) & Optimizer Hints (`pkg/planner`) (Completed)
+- **Implemented (`C-5`, `C-7`)**:
+  - `MultiColumnStats` (`C-5`): multi-column NDV collection, functional dependency coefficient calculation ($dep \in [0.0, 1.0]$), and joint selectivity calculation ($dep \cdot \min(P_i) + (1-dep) \cdot \prod P_i$) in `EstimateCompoundSelectivity` and `EstimateExprSelectivity` (`pkg/planner/stats.go`). Added DDL support for `CREATE STATISTICS stat_name ON tbl (col1, col2, ...)` and `DROP STATISTICS` (`pkg/engine`, `pkg/catalog`). Automatically collects multi-column statistics for composite indexes and registered statistics during `ANALYZE TABLE`.
+  - `MCVItem` & Skew List Statistics (`C-7`): extracted Most Common Values (Top-20) with observed frequencies in `BuildColumnStats`. Decoupled selectivity evaluation between exact MCV matching and equi-depth histogram interpolation on the non-MCV tail for `=`, `!=`, `IN`, `BETWEEN`, and range predicates (`<`, `<=`, `>`, `>=`).
+- **Outcome**: Elimination of cardinality underestimation on correlated columns and skewed categorical/numerical attributes.
 
 #### 6.6. T-SQL Specialized TDS Serialization (Completed) & PLP LOB Streaming (`pkg/wire/tds`)
 - **Implemented**: Full binary encoding and decoding for `UNIQUEIDENTIFIER` (16-byte Windows Mixed-Endian GUID byte swapping), `DATE` (`0x28`), `TIME` (`0x29`), `DATETIME2` (`0x2A`), and `DATETIMEOFFSET` (`0x2B`).
@@ -279,7 +280,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 6** | **P1** | **Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
 | **Phase 6** | **P2** | **Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
-| **Phase 6** | **P2** | **MCV (Most Common Values) Skew List Statistics** | CBO & Planner | Medium (250~350 lines) | Corrects non-uniform skew distribution estimation error (C-5 Multi-column complete) |
+| **Phase 6** | **P2** | **[Completed] MCV (Most Common Values) Skew List Statistics (`C-7`)** | CBO & Planner | Medium (250~350 lines) | Corrects non-uniform skew distribution estimation error (MCV + Histogram complete) |
 | **Phase 6** | **P3** | **Multi-Language Client Harness (Node.js & .NET)** | Wire Protocols | Medium (200~300 lines) | Automated integration suites for tedious, pg, and SqlClient (Python complete) |
 | **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
 | **Phase 6** | **P3** | **Wasm Runtime Sandbox UDF (`wazero`)** | Plugins & Sandbox | Medium (300~400 lines) | Secure, crash-isolated in-engine execution of third-party plugins |

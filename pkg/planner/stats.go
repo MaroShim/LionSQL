@@ -15,23 +15,33 @@ import (
 
 // Standard PostgreSQL-aligned query cost parameters.
 const (
-	SeqPageCost        = 1.0    // Cost of a sequential disk page fetch
-	RandomPageCost     = 4.0    // Cost of a non-sequential disk page fetch
-	CPUTupleCost       = 0.01   // Cost of processing a tuple
-	CPUIndexTupleCost  = 0.005  // Cost of processing an index entry
-	CPUOperatorCost    = 0.0025 // Cost of evaluating an operator or function
-	RowsPerPageDefault = 50     // Default average number of rows per disk page
+	SeqPageCost          = 1.0    // Cost of a sequential disk page fetch
+	RandomPageCost       = 4.0    // Cost of a non-sequential disk page fetch
+	CPUTupleCost         = 0.01   // Cost of processing a tuple
+	CPUIndexTupleCost    = 0.005  // Cost of processing an index entry
+	CPUOperatorCost      = 0.0025 // Cost of evaluating an operator or function
+	RowsPerPageDefault   = 50     // Default average number of rows per disk page
+	MaxMCVCount          = 20     // Maximum number of Most Common Values retained per column (C-7)
+	MinMCVCountThreshold = 2      // Minimum occurrences required to qualify as an MCV unless NDV == 1
 )
+
+// MCVItem represents a Most Common Value and its observed frequency in the dataset (C-7).
+type MCVItem struct {
+	Value     storage.Value `json:"value"`
+	Frequency float64       `json:"frequency"` // Fraction of non-null rows [0.0, 1.0]
+	Count     int64         `json:"count"`     // Absolute occurrence count
+}
 
 // ColumnStats stores statistical distribution metadata for a single column.
 type ColumnStats struct {
-	Name          string          `json:"name"`
+	Name          string           `json:"name"`
 	Type          storage.DataType `json:"type"`
-	NullCount     int64           `json:"null_count"`
-	DistinctCount int64           `json:"distinct_count"` // NDV (Number of Distinct Values)
-	MinVal        storage.Value   `json:"min_val"`
-	MaxVal        storage.Value   `json:"max_val"`
-	Histogram     []storage.Value `json:"histogram,omitempty"` // Equi-depth quantile bucket bounds
+	NullCount     int64            `json:"null_count"`
+	DistinctCount int64            `json:"distinct_count"` // NDV (Number of Distinct Values)
+	MinVal        storage.Value    `json:"min_val"`
+	MaxVal        storage.Value    `json:"max_val"`
+	Histogram     []storage.Value  `json:"histogram,omitempty"` // Equi-depth quantile bucket bounds (non-MCV tail)
+	MCVList       []MCVItem        `json:"mcv_list,omitempty"`  // Most Common Values and frequencies (C-7)
 }
 
 // MultiColumnStats stores joint distribution, distinct combination count (NDV),
@@ -91,6 +101,137 @@ func BuildTableStatsParallel(tbl string, schema *storage.TableSchema, colVals ma
 	return ts
 }
 
+// SumMCVFrequency computes the cumulative frequency of all items in MCVList.
+func (cs *ColumnStats) SumMCVFrequency() float64 {
+	if cs == nil || len(cs.MCVList) == 0 {
+		return 0.0
+	}
+	var total float64
+	for _, m := range cs.MCVList {
+		total += m.Frequency
+	}
+	if total > 1.0 {
+		return 1.0
+	}
+	return total
+}
+
+// FindMCV finds an MCVItem matching the target storage value.
+func (cs *ColumnStats) FindMCV(target storage.Value) (*MCVItem, bool) {
+	if cs == nil || len(cs.MCVList) == 0 {
+		return nil, false
+	}
+	for i := range cs.MCVList {
+		if cs.MCVList[i].Value.Compare(target) == 0 {
+			return &cs.MCVList[i], true
+		}
+	}
+	return nil, false
+}
+
+// isMCVValue reports whether val is present in MCVList.
+func (cs *ColumnStats) isMCVValue(val storage.Value) bool {
+	_, found := cs.FindMCV(val)
+	return found
+}
+
+// EstimateRangeSelectivity computes range selectivity combining MCV matches and non-MCV histogram interpolation (C-7).
+func (cs *ColumnStats) EstimateRangeSelectivity(valStr string, isLess bool, orEqual bool) float64 {
+	target := parseStorageVal(valStr, cs.Type)
+
+	var mcvFreqSum float64
+	for _, m := range cs.MCVList {
+		cmp := m.Value.Compare(target)
+		if isLess {
+			if cmp < 0 || (orEqual && cmp == 0) {
+				mcvFreqSum += m.Frequency
+			}
+		} else {
+			if cmp > 0 || (orEqual && cmp == 0) {
+				mcvFreqSum += m.Frequency
+			}
+		}
+	}
+
+	remWeight := 1.0 - cs.SumMCVFrequency()
+	if remWeight <= 0.0001 || len(cs.Histogram) < 2 {
+		if len(cs.MCVList) > 0 {
+			return math.Min(1.0, math.Max(0.0001, mcvFreqSum))
+		}
+		return cs.interpolateRange(valStr, isLess)
+	}
+
+	histSel := cs.interpolateRange(valStr, isLess)
+	total := mcvFreqSum + (remWeight * histSel)
+	return math.Min(1.0, math.Max(0.0001, total))
+}
+
+// EstimateBetweenSelectivity computes BETWEEN selectivity combining MCVs and non-MCV histogram (C-7).
+func (cs *ColumnStats) EstimateBetweenSelectivity(lowStr, highStr string) float64 {
+	low := parseStorageVal(lowStr, cs.Type)
+	high := parseStorageVal(highStr, cs.Type)
+	if low.Compare(high) > 0 {
+		low, high = high, low
+	}
+
+	var mcvFreqSum float64
+	for _, m := range cs.MCVList {
+		if m.Value.Compare(low) >= 0 && m.Value.Compare(high) <= 0 {
+			mcvFreqSum += m.Frequency
+		}
+	}
+
+	remWeight := 1.0 - cs.SumMCVFrequency()
+	if remWeight <= 0.0001 || len(cs.Histogram) < 2 {
+		if len(cs.MCVList) > 0 {
+			return math.Min(1.0, math.Max(0.0001, mcvFreqSum))
+		}
+		highSel := cs.interpolateRange(highStr, true)
+		lowSel := cs.interpolateRange(lowStr, true)
+		return math.Max(0.0001, highSel-lowSel)
+	}
+
+	highSel := cs.interpolateRange(highStr, true)
+	lowSel := cs.interpolateRange(lowStr, true)
+	histSel := math.Max(0.0, highSel-lowSel)
+
+	total := mcvFreqSum + (remWeight * histSel)
+	return math.Min(1.0, math.Max(0.0001, total))
+}
+
+// EstimateInSelectivity calculates selectivity for an IN clause using MCV matching and remaining tail estimation (C-7).
+func (cs *ColumnStats) EstimateInSelectivity(list []proc.Expr) float64 {
+	if len(list) == 0 {
+		return 0.0
+	}
+	var matchedMCVFreq float64
+	unmatchedCount := 0
+
+	for _, item := range list {
+		valStr := item.String()
+		target := parseStorageVal(valStr, cs.Type)
+		if m, ok := cs.FindMCV(target); ok {
+			matchedMCVFreq += m.Frequency
+		} else {
+			unmatchedCount++
+		}
+	}
+
+	remFreq := 1.0 - cs.SumMCVFrequency()
+	remDistinct := cs.DistinctCount - int64(len(cs.MCVList))
+	var nonMCVSel float64
+	if remDistinct > 0 && remFreq > 0 {
+		nonMCVSel = float64(unmatchedCount) * (remFreq / float64(remDistinct))
+	} else if cs.DistinctCount > 0 {
+		nonMCVSel = float64(unmatchedCount) * (1.0 / float64(cs.DistinctCount))
+	} else {
+		nonMCVSel = float64(unmatchedCount) * 0.05
+	}
+
+	total := matchedMCVFreq + nonMCVSel
+	return math.Min(1.0, math.Max(0.0001, total))
+}
+
 // BuildColumnStats constructs ColumnStats from sampled/scanned column values.
 func BuildColumnStats(name string, colType storage.DataType, vals []storage.Value, nullCount int64, totalRows int64) *ColumnStats {
 	cs := &ColumnStats{
@@ -111,28 +252,101 @@ func BuildColumnStats(name string, colType storage.DataType, vals []storage.Valu
 	cs.MinVal = vals[0]
 	cs.MaxVal = vals[len(vals)-1]
 
-	// Compute NDV (Number of Distinct Values)
-	distinct := int64(1)
+	// Compute NDV (Number of Distinct Values) and value counts
+	type valCount struct {
+		val   storage.Value
+		count int64
+	}
+	groups := make([]valCount, 0, 64)
+	var curVal = vals[0]
+	var curCount int64 = 1
 	for i := 1; i < len(vals); i++ {
-		if !vals[i].Equal(vals[i-1]) {
-			distinct++
+		if vals[i].Equal(curVal) {
+			curCount++
+		} else {
+			groups = append(groups, valCount{val: curVal, count: curCount})
+			curVal = vals[i]
+			curCount = 1
 		}
 	}
-	cs.DistinctCount = distinct
+	groups = append(groups, valCount{val: curVal, count: curCount})
+	cs.DistinctCount = int64(len(groups))
+
+	// Extract Most Common Values (MCVs) (C-7)
+	totalVals := float64(len(vals))
+	if len(groups) == 1 {
+		cs.MCVList = []MCVItem{
+			{Value: groups[0].val, Frequency: 1.0, Count: groups[0].count},
+		}
+	} else {
+		// Sort groups by count descending
+		sortedGroups := make([]valCount, len(groups))
+		copy(sortedGroups, groups)
+		sort.Slice(sortedGroups, func(i, j int) bool {
+			if sortedGroups[i].count != sortedGroups[j].count {
+				return sortedGroups[i].count > sortedGroups[j].count
+			}
+			return sortedGroups[i].val.Compare(sortedGroups[j].val) < 0
+		})
+
+		avgFreq := 1.0 / float64(cs.DistinctCount)
+		mcvCandidates := make([]MCVItem, 0, MaxMCVCount)
+
+		for _, g := range sortedGroups {
+			if len(mcvCandidates) >= MaxMCVCount {
+				break
+			}
+			freq := float64(g.count) / totalVals
+			// Qualify as MCV if count >= MinMCVCountThreshold AND:
+			// - Either small cardinality (<= MaxMCVCount distinct values)
+			// - Or frequency is higher than average uniform frequency
+			// - Or count is significantly elevated (>= 1% of total)
+			if g.count >= MinMCVCountThreshold {
+				if len(groups) <= MaxMCVCount || freq >= avgFreq*1.2 || freq >= 0.01 {
+					mcvCandidates = append(mcvCandidates, MCVItem{
+						Value:     g.val,
+						Frequency: freq,
+						Count:     g.count,
+					})
+				}
+			}
+		}
+		if len(mcvCandidates) > 0 {
+			cs.MCVList = mcvCandidates
+		}
+	}
+
+	// Filter out MCVs to build Equi-Depth Histogram on the non-MCV tail (C-7)
+	var nonMCVVals []storage.Value
+	if len(cs.MCVList) == 0 {
+		nonMCVVals = vals
+	} else if len(cs.MCVList) == len(groups) {
+		nonMCVVals = vals
+	} else {
+		nonMCVVals = make([]storage.Value, 0, len(vals))
+		for _, v := range vals {
+			if !cs.isMCVValue(v) {
+				nonMCVVals = append(nonMCVVals, v)
+			}
+		}
+		if len(nonMCVVals) == 0 {
+			nonMCVVals = vals
+		}
+	}
 
 	// Construct Equi-Depth Histogram (up to 20 quantile buckets)
 	numBuckets := 20
-	if len(vals) < numBuckets {
-		numBuckets = len(vals)
+	if len(nonMCVVals) < numBuckets {
+		numBuckets = len(nonMCVVals)
 	}
 	if numBuckets > 1 {
 		cs.Histogram = make([]storage.Value, numBuckets)
 		for b := 0; b < numBuckets; b++ {
-			idx := int(float64(b) * float64(len(vals)-1) / float64(numBuckets-1))
-			cs.Histogram[b] = vals[idx]
+			idx := int(float64(b) * float64(len(nonMCVVals)-1) / float64(numBuckets-1))
+			cs.Histogram[b] = nonMCVVals[idx]
 		}
-	} else if len(vals) > 0 {
-		cs.Histogram = []storage.Value{vals[0]}
+	} else if len(nonMCVVals) > 0 {
+		cs.Histogram = []storage.Value{nonMCVVals[0]}
 	}
 
 	return cs
@@ -160,27 +374,51 @@ func (ts *TableStats) EstimateSelectivity(colName string, op string, valStr stri
 		nonNullFraction = 0.01
 	}
 
+	minSel := 0.0001
+	if ts.RowCount > 0 {
+		minSel = 1.0 / float64(ts.RowCount)
+	}
+
 	switch op {
 	case "IS NULL":
 		return float64(cs.NullCount) / float64(ts.RowCount)
 	case "IS NOT NULL":
 		return nonNullFraction
 	case "=", "==":
-		if cs.DistinctCount > 0 {
-			sel := 1.0 / float64(cs.DistinctCount)
-			return math.Min(1.0, math.Max(0.0001, sel*nonNullFraction))
+		target := parseStorageVal(valStr, cs.Type)
+		if mcv, ok := cs.FindMCV(target); ok {
+			return math.Min(1.0, math.Max(minSel, mcv.Frequency*nonNullFraction))
 		}
-		return 0.1
+		// Not in MCV: belongs to non-MCV tail
+		remFreq := 1.0 - cs.SumMCVFrequency()
+		remDistinct := cs.DistinctCount - int64(len(cs.MCVList))
+		if remDistinct <= 0 {
+			return minSel
+		}
+		sel := (remFreq / float64(remDistinct)) * nonNullFraction
+		return math.Min(1.0, math.Max(minSel, sel))
+
 	case "!=", "<>":
-		if cs.DistinctCount > 0 {
-			sel := 1.0 - (1.0 / float64(cs.DistinctCount))
-			return math.Min(1.0, math.Max(0.0, sel*nonNullFraction))
+		target := parseStorageVal(valStr, cs.Type)
+		if mcv, ok := cs.FindMCV(target); ok {
+			sel := (1.0 - mcv.Frequency) * nonNullFraction
+			return math.Min(1.0, math.Max(minSel, sel))
 		}
-		return 0.9
+		remFreq := 1.0 - cs.SumMCVFrequency()
+		remDistinct := cs.DistinctCount - int64(len(cs.MCVList))
+		if remDistinct <= 0 {
+			return math.Min(1.0, math.Max(minSel, nonNullFraction))
+		}
+		eqSel := remFreq / float64(remDistinct)
+		sel := (1.0 - eqSel) * nonNullFraction
+		return math.Min(1.0, math.Max(minSel, sel))
+
 	case "<", "<=":
-		return cs.interpolateRange(valStr, true) * nonNullFraction
+		orEqual := (op == "<=")
+		return cs.EstimateRangeSelectivity(valStr, true, orEqual) * nonNullFraction
 	case ">", ">=":
-		return cs.interpolateRange(valStr, false) * nonNullFraction
+		orEqual := (op == ">=")
+		return cs.EstimateRangeSelectivity(valStr, false, orEqual) * nonNullFraction
 	case "LIKE":
 		return 0.05 // Typical pattern selectivity
 	default:
@@ -554,13 +792,15 @@ func (ts *TableStats) EstimateExprSelectivity(expr proc.Expr) float64 {
 			if cs, found := ts.findColumnStats(col); found {
 				lowVal := e.Low.String()
 				highVal := e.High.String()
-				highSel := cs.interpolateRange(highVal, true)
-				lowSel := cs.interpolateRange(lowVal, true)
-				rangeSel := math.Max(minSel, highSel-lowSel)
-				if e.Not {
-					rangeSel = math.Max(minSel, 1.0-rangeSel)
+				nonNullFraction := 1.0 - (float64(cs.NullCount) / float64(ts.RowCount))
+				if nonNullFraction < 0.01 {
+					nonNullFraction = 0.01
 				}
-				return math.Min(1.0, rangeSel)
+				rangeSel := cs.EstimateBetweenSelectivity(lowVal, highVal) * nonNullFraction
+				if e.Not {
+					rangeSel = math.Max(minSel, nonNullFraction-rangeSel)
+				}
+				return math.Min(1.0, math.Max(minSel, rangeSel))
 			}
 		}
 		return 0.25
@@ -569,15 +809,19 @@ func (ts *TableStats) EstimateExprSelectivity(expr proc.Expr) float64 {
 		if col, ok := extractColumnFromExpr(e.Expr); ok {
 			if len(e.List) > 0 {
 				var inSel float64
-				if cs, found := ts.findColumnStats(col); found && cs.DistinctCount > 0 {
-					inSel = math.Min(1.0, float64(len(e.List))/float64(cs.DistinctCount))
+				if cs, found := ts.findColumnStats(col); found {
+					nonNullFraction := 1.0 - (float64(cs.NullCount) / float64(ts.RowCount))
+					if nonNullFraction < 0.01 {
+						nonNullFraction = 0.01
+					}
+					inSel = cs.EstimateInSelectivity(e.List) * nonNullFraction
 				} else {
 					inSel = math.Min(0.5, float64(len(e.List))*0.05)
 				}
 				if e.Not {
 					inSel = math.Max(minSel, 1.0-inSel)
 				}
-				return math.Max(minSel, inSel)
+				return math.Min(1.0, math.Max(minSel, inSel))
 			}
 			if e.Query != nil {
 				return 0.20
@@ -909,6 +1153,8 @@ func parseStorageVal(s string, t storage.DataType) storage.Value {
 		return storage.FloatValue(f)
 	case storage.TypeBool:
 		return storage.BoolValue(strings.EqualFold(s, "true") || s == "1")
+	case storage.TypeDecimal:
+		return storage.DecimalValue(s)
 	case storage.TypeVarChar:
 		return storage.StringValue(s)
 	default:

@@ -22,11 +22,19 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P1** | **CBO 최적화** | **MCV (Most Common Values) 최빈값 목록 결합 (`C-7`)** | `pkg/planner` | 왜곡 데이터 최빈값 분리 보관으로 선택도 오차 최소화 |
-| **P2** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
-| **P3** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`sqlion migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down` 및 `_migrations` 이력 추적 |
+| **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
+| **P2** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`lionsql migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down / status` 및 `_migrations` 이력 추적 |
+| **P3** | **와이어 프로토콜** | **PostgreSQL 와이어 프로토콜 서버 사이드 커서** | `pkg/wire` | 대규모 쿼리 결과 집합 분할 수신 및 `DECLARE ... CURSOR` 지원 |
 
 ### P1/P2 최근 완료 과제: 엔진 성능 & 최적화
+- [x] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`C-7`) (`pkg/planner`)**
+  - **배경**: 범주형 상태 컬럼이나 특정 핫스팟 값에 데이터가 집중되는 왜곡(Skew) 데이터 환경에서 균등 분포 가정(1/NDV)으로 인해 발생하는 선택도 최대 10~100배 오차 제거.
+  - **구현 내용**:
+    - `MCVItem` 모델 및 컬럼 통계 내 `MCVList` 추출 엔진 구현 (`pkg/planner/stats.go`).
+    - `BuildColumnStats`에서 상위 최빈값(Top-20, 발생 빈도 >= 1% 및 평균 빈도 1.2배 초과) 자동 탐지 및 MCV 목록 분리.
+    - 동치(`=`), 부등치(`!=`), `IN`, `BETWEEN`, 범위(`<`, `<=`, `>`, `>=`) 평가 시 MCV 일치 여부를 1차 검사하고, 비-MCV 롱테일에 대해서만 히스토그램 보간을 적용하는 이원화 모델 완비.
+    - `cbo_stats.json` 영속화 및 역직렬화 무결성 보장.
+    - 범주형/수치형 왜곡 데이터, 균등 데이터, 단일값 데이터 및 JSON 라운드트립 단위 테스트 완비 (`pkg/planner/stats_test.go`).
 - [x] **다중 컬럼 확장 통계 및 함수적 종속성 모델링 (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**
   - **배경**: 속성 값 독립성(AVI: Attribute Value Independence) 가정으로 인해 상관관계가 높은 다중 컬럼(예: 국가-도시) 조건 평가 시 카디널리티가 최대 10~100배 과소평가(Underestimation)되는 왜곡 해소.
   - **구현 내용**:
@@ -108,15 +116,15 @@
 | **B-3** | **소트-머지 조인 (Sort-Merge Join) 연산자** | **완료 (`[x]`)** | 정렬된 입력에 대해 $O(M+N)$ 해시리스 스트리밍 조인(`MergeJoinIterator`) |
 | **B-4** | **$N > 4$ 체인 조인 동적 계획법 (DP)** | **완료 (`[x]`)** | 5개 이상 테이블 조인 시 Left-Deep DP 부분집합 비트마스크 동적 탐색 완료 |
 | **C-5** | **다중 컬럼 확장 통계 (Extended Stats)** | **완료 (`[x]`)** | 컬럼 상관관계로 인한 카디널리티 과소평가 방지 및 결합 선택도 산출 완료 |
-| **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **대기 (`[ ]`)** | 왜곡 데이터 최빈값 분리 처리 |
+| **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **완료 (`[x]`)** | 왜곡 데이터 최빈값 분리 보관 및 비-MCV 히스토그램 이원화 완비 |
 | **D-8** | **백그라운드 자동 통계 갱신 데몬** | **완료 (`[x]`)** | DML 변동량(Dirty Tuples) 기반 자동 `ANALYZE` 트리거 |
 
 - [x] **동적 계획법(DP / Selinger) 기반 대규모 조인 순서 최적화 ($N > 4$) (`B-4`) (`pkg/planner`)**
   - 4개 이하의 체인 조인 전수 순열 탐색을 넘어, $N > 4$ 테이블 조인에 대한 부분집합 비트마스크(`1 << n`) 기반 Selinger DP 및 연결성 기반 가지치기(Pruning) 완비.
 - [x] **다중 컬럼 확장 통계 (Extended / Multi-Column Statistics) (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**
   - 컬럼 간 상관관계(예: 국가-도시)로 인한 복합 조건 카디널리티 과소평가(Underestimation)를 방지하는 다중 컬럼 NDV 수집, 함수적 종속성 모델링($dep$), CREATE/DROP STATISTICS DDL 및 결합 선택도 산출 완비.
-- [ ] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`pkg/planner`)**
-  - 왜곡(Skew)이 심한 상위 N개 최빈값은 MCV 목록으로 보관하고 나머지 균등 분포는 히스토그램으로 이원화 처리.
+- [x] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`C-7`) (`pkg/planner`)**
+  - 왜곡(Skew)이 심한 상위 N개 최빈값(Top-20)은 MCV 목록으로 보관하고 나머지 균등 분포는 히스토그램으로 이원화 처리하여 선택도 오차 최소화.
 - [x] **백그라운드 자동 통계 갱신 데몬 (Auto-Analyze Daemon) (`D-8`) (`pkg/engine`, `pkg/catalog`, `pkg/storage`)**
   - 테이블 DML 변경 비율(동적 임계치: `min_threshold + base_rows * scale_factor`)을 추적하여 백그라운드 비동기로 `coordinator.AnalyzeTable` 자동 트리거.
   - 트랜잭션 커밋 핫패스에 락 경합 없이 원자적 카운팅(`AddWALHook`) 및 디바운싱 완비.

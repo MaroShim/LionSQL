@@ -63,7 +63,7 @@
 | :---: | :--- | :--- :--- | :--- |
 | **C-5** | **다중 컬럼 확장 통계 (Extended Statistics)** | **완료** | 컬럼 간 상관관계(예: 국가-도시)로 인한 복합 조건 카디널리티 과소평가(Underestimation)를 방지하는 다중 컬럼 NDV 수집 및 결합 선택도 산출. | `pkg/catalog`, `pkg/planner` |
 | **C-6** | **OR 조건 및 불리언 트리 재귀 선택도 계산** | **완료** | `TableStats.EstimateExprSelectivity()` 신설. 동일 컬럼 배타 합집합 $P(A)+P(B)$ 및 독립 합집합 $P(A)+P(B)-P(A)P(B)$, NOT, IN, BETWEEN 재귀 트리 평가 완비. | `pkg/planner` |
-| **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **대기** | 왜곡(Skew)이 심한 상위 N개 최빈값은 MCV 목록으로 별도 보관하고 균등 분포는 히스토그램으로 이원화 처리하여 선택도 오차 최소화. | `pkg/catalog`, `pkg/planner` |
+| **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **완료** | 왜곡(Skew)이 심한 상위 N개 최빈값은 MCV 목록으로 별도 보관하고 균등 분포는 히스토그램으로 이원화 처리하여 선택도 오차 최소화. | `pkg/catalog`, `pkg/planner` |
 
 ### Track D: 운영 & 실행 제어 (Operations & Optimizer Control)
 | 코드 | 과제명 | 상태 | 구현 상세 및 기대 효과 | 대상 패키지 |

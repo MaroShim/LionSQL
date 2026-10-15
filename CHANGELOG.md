@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **MCV (Most Common Values) Skew List Statistics & Dual-Distribution Modeling (`C-7`) (`pkg/planner`)**:
+  - Implemented `MCVItem` model and automatic top-frequent values extraction (`MaxMCVCount = 20`, frequency $\ge 1\%$ or $> 1.2\times$ average uniform frequency) in `BuildColumnStats` (`pkg/planner/stats.go`).
+  - Decoupled selectivity estimation into an exact-match MCV phase and an equi-depth histogram interpolation phase on the non-MCV tail for `=`, `!=`, `IN`, `BETWEEN`, and range inequalities (`<`, `<=`, `>`, `>=`), resolving up to 10~100x cardinality estimation errors on non-uniformly distributed columns.
+  - Ensured seamless persistence and deserialization of `MCVList` in `cbo_stats.json`.
+  - Added comprehensive test coverage in `pkg/planner/stats_test.go` covering categorical skew, numerical skew with range queries, uniform distributions, single-value columns, and JSON roundtrip serialization.
 - **Multi-Column Extended Statistics & Functional Dependency Modeling (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**:
   - Implemented `MultiColumnStats` and multi-column NDV collection in `pkg/planner/stats.go`, capturing joint column distributions to eliminate the Attribute Value Independence (AVI) cardinality underestimation on correlated predicates.
   - Implemented `ComputeFunctionalDependency` calculating dependency degree ($dep \in [0.0, 1.0]$) from multi-column NDV and single-column NDVs, bounding estimation between joint dependency and independent multiplication.

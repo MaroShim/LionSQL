@@ -1,6 +1,7 @@
 package planner_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -240,5 +241,216 @@ func TestTableStats_MultiColumnStatistics_FunctionalDependency(t *testing.T) {
 		t.Errorf("expected partial dependency ~0.50, got %f", depPartial)
 	}
 }
+
+func TestTableStats_MostCommonValues_CategoricalSkew(t *testing.T) {
+	// Scenario: 10,000 order rows with highly skewed status distribution:
+	// 'ACTIVE': 8,000 rows (80%)
+	// 'PENDING': 1,500 rows (15%)
+	// 'DELETED': 500 rows (5%)
+	ts := planner.NewTableStats("orders", 10000)
+
+	vals := make([]storage.Value, 10000)
+	for i := 0; i < 8000; i++ {
+		vals[i] = storage.StringValue("ACTIVE")
+	}
+	for i := 8000; i < 9500; i++ {
+		vals[i] = storage.StringValue("PENDING")
+	}
+	for i := 9500; i < 10000; i++ {
+		vals[i] = storage.StringValue("DELETED")
+	}
+
+	cs := planner.BuildColumnStats("status", storage.TypeVarChar, vals, 0, 10000)
+	ts.Columns["status"] = cs
+
+	// 1. Verify MCV list extraction
+	if len(cs.MCVList) != 3 {
+		t.Fatalf("expected exactly 3 MCV items, got %d", len(cs.MCVList))
+	}
+	if cs.MCVList[0].Value.String() != "ACTIVE" || cs.MCVList[0].Frequency < 0.79 || cs.MCVList[0].Frequency > 0.81 {
+		t.Errorf("expected top MCV 'ACTIVE' freq ~0.80, got %s freq %f", cs.MCVList[0].Value.String(), cs.MCVList[0].Frequency)
+	}
+	if cs.MCVList[1].Value.String() != "PENDING" || cs.MCVList[1].Frequency < 0.14 || cs.MCVList[1].Frequency > 0.16 {
+		t.Errorf("expected 2nd MCV 'PENDING' freq ~0.15, got %s freq %f", cs.MCVList[1].Value.String(), cs.MCVList[1].Frequency)
+	}
+	if cs.MCVList[2].Value.String() != "DELETED" || cs.MCVList[2].Frequency < 0.04 || cs.MCVList[2].Frequency > 0.06 {
+		t.Errorf("expected 3rd MCV 'DELETED' freq ~0.05, got %s freq %f", cs.MCVList[2].Value.String(), cs.MCVList[2].Frequency)
+	}
+
+	// 2. Exact equality selectivity using MCVs
+	selActive := ts.EstimateSelectivity("status", "=", "ACTIVE")
+	if selActive < 0.79 || selActive > 0.81 {
+		t.Errorf("expected ACTIVE selectivity ~0.80, got %f", selActive)
+	}
+
+	selPending := ts.EstimateSelectivity("status", "=", "PENDING")
+	if selPending < 0.14 || selPending > 0.16 {
+		t.Errorf("expected PENDING selectivity ~0.15, got %f", selPending)
+	}
+
+	selDeleted := ts.EstimateSelectivity("status", "=", "DELETED")
+	if selDeleted < 0.04 || selDeleted > 0.06 {
+		t.Errorf("expected DELETED selectivity ~0.05, got %f", selDeleted)
+	}
+
+	// 3. Non-MCV unknown value equality
+	selUnknown := ts.EstimateSelectivity("status", "=", "UNKNOWN")
+	if selUnknown > 0.001 {
+		t.Errorf("expected non-existent value selectivity ~0.0001 (minSel), got %f", selUnknown)
+	}
+
+	// 4. Inequality selectivity: != 'ACTIVE' -> 1.0 - 0.80 = 0.20
+	selNotActive := ts.EstimateSelectivity("status", "!=", "ACTIVE")
+	if selNotActive < 0.19 || selNotActive > 0.21 {
+		t.Errorf("expected != 'ACTIVE' selectivity ~0.20, got %f", selNotActive)
+	}
+
+	// 5. IN clause evaluation
+	condIn := ts.EstimateCompoundSelectivity([]string{"status IN ('ACTIVE', 'PENDING')"})
+	// 0.80 + 0.15 = 0.95
+	if condIn < 0.94 || condIn > 0.96 {
+		t.Errorf("expected IN ('ACTIVE', 'PENDING') selectivity ~0.95, got %f", condIn)
+	}
+}
+
+func TestTableStats_MostCommonValues_NumericSkewAndRange(t *testing.T) {
+	// Scenario: 10,000 transaction amounts with heavy skew at 100 (70%) and 200 (20%),
+	// plus a uniform tail of 1,000 distinct values from 1 to 1000 (10%).
+	ts := planner.NewTableStats("txs", 10000)
+
+	vals := make([]storage.Value, 0, 10000)
+	for i := 0; i < 7000; i++ {
+		vals = append(vals, storage.IntValue(100))
+	}
+	for i := 0; i < 2000; i++ {
+		vals = append(vals, storage.IntValue(200))
+	}
+	for i := 1; i <= 1000; i++ {
+		vals = append(vals, storage.IntValue(int64(i)))
+	}
+
+	cs := planner.BuildColumnStats("amount", storage.TypeInt, vals, 0, 10000)
+	ts.Columns["amount"] = cs
+
+	// Verify top MCVs are 100 (freq ~0.70) and 200 (freq ~0.20)
+	if len(cs.MCVList) < 2 {
+		t.Fatalf("expected at least 2 MCVs, got %d", len(cs.MCVList))
+	}
+	if cs.MCVList[0].Value.IVal != 100 || cs.MCVList[0].Frequency < 0.69 || cs.MCVList[0].Frequency > 0.71 {
+		t.Errorf("expected top MCV 100 freq ~0.70, got %d freq %f", cs.MCVList[0].Value.IVal, cs.MCVList[0].Frequency)
+	}
+	if cs.MCVList[1].Value.IVal != 200 || cs.MCVList[1].Frequency < 0.19 || cs.MCVList[1].Frequency > 0.21 {
+		t.Errorf("expected 2nd MCV 200 freq ~0.20, got %d freq %f", cs.MCVList[1].Value.IVal, cs.MCVList[1].Frequency)
+	}
+
+	// 1. Equality: amount = 100 -> ~0.70
+	sel100 := ts.EstimateSelectivity("amount", "=", "100")
+	if sel100 < 0.69 || sel100 > 0.71 {
+		t.Errorf("expected amount=100 selectivity ~0.70, got %f", sel100)
+	}
+
+	// 2. Equality on rare non-MCV value: amount = 555 -> very small selectivity
+	selRare := ts.EstimateSelectivity("amount", "=", "555")
+	if selRare > 0.005 {
+		t.Errorf("expected rare tail selectivity < 0.005, got %f", selRare)
+	}
+
+	// 3. Range selectivity: amount < 150
+	// Includes MCV 100 (0.70) + portion of tail 1..1000 < 150 (~15% of 10% = 0.015) -> ~0.715
+	selRange := ts.EstimateSelectivity("amount", "<", "150")
+	if selRange < 0.68 || selRange > 0.75 {
+		t.Errorf("expected amount < 150 selectivity ~0.715, got %f", selRange)
+	}
+
+	// 4. BETWEEN selectivity: amount BETWEEN 150 AND 250
+	// Includes MCV 200 (0.20) + tail between 150 and 250 (~10% of 10% = 0.010) -> ~0.210
+	selBetween := ts.EstimateCompoundSelectivity([]string{"amount BETWEEN 150 AND 250"})
+	if selBetween < 0.18 || selBetween > 0.24 {
+		t.Errorf("expected amount BETWEEN 150 AND 250 selectivity ~0.21, got %f", selBetween)
+	}
+}
+
+func TestTableStats_MostCommonValues_UniformAndSingleValue(t *testing.T) {
+	// Case 1: All distinct unique values (e.g. Primary Key 1..1000)
+	ts1 := planner.NewTableStats("users", 1000)
+	idVals := make([]storage.Value, 1000)
+	for i := 0; i < 1000; i++ {
+		idVals[i] = storage.IntValue(int64(i + 1))
+	}
+	cs1 := planner.BuildColumnStats("id", storage.TypeInt, idVals, 0, 1000)
+	ts1.Columns["id"] = cs1
+
+	// No MCVs should be extracted for uniform distinct values
+	if len(cs1.MCVList) != 0 {
+		t.Errorf("expected 0 MCVs for unique column, got %d", len(cs1.MCVList))
+	}
+	selEq := ts1.EstimateSelectivity("id", "=", "42")
+	if selEq < 0.0009 || selEq > 0.0011 {
+		t.Errorf("expected uniform selectivity ~0.001, got %f", selEq)
+	}
+
+	// Case 2: 100% Homogeneous column (all 1000 rows have 'ACTIVE')
+	ts2 := planner.NewTableStats("settings", 1000)
+	homoVals := make([]storage.Value, 1000)
+	for i := 0; i < 1000; i++ {
+		homoVals[i] = storage.StringValue("ACTIVE")
+	}
+	cs2 := planner.BuildColumnStats("status", storage.TypeVarChar, homoVals, 0, 1000)
+	ts2.Columns["status"] = cs2
+
+	if len(cs2.MCVList) != 1 {
+		t.Fatalf("expected 1 MCV for homogeneous column, got %d", len(cs2.MCVList))
+	}
+	if cs2.MCVList[0].Frequency != 1.0 || cs2.MCVList[0].Count != 1000 {
+		t.Errorf("expected frequency 1.0 and count 1000, got %f and %d", cs2.MCVList[0].Frequency, cs2.MCVList[0].Count)
+	}
+	selHomo := ts2.EstimateSelectivity("status", "=", "ACTIVE")
+	if selHomo != 1.0 {
+		t.Errorf("expected 1.0 selectivity for homogeneous column, got %f", selHomo)
+	}
+}
+
+func TestTableStats_MostCommonValues_JSONRoundTrip(t *testing.T) {
+	ts := planner.NewTableStats("inventory", 1000)
+	vals := make([]storage.Value, 1000)
+	for i := 0; i < 800; i++ {
+		vals[i] = storage.StringValue("IN_STOCK")
+	}
+	for i := 800; i < 1000; i++ {
+		vals[i] = storage.StringValue("BACKORDER")
+	}
+	cs := planner.BuildColumnStats("state", storage.TypeVarChar, vals, 0, 1000)
+	ts.Columns["state"] = cs
+
+	// Serialize TableStats to JSON
+	data, err := json.Marshal(ts)
+	if err != nil {
+		t.Fatalf("failed to marshal TableStats: %v", err)
+	}
+
+	// Deserialize back
+	var restored planner.TableStats
+	if err := json.Unmarshal(data, &restored); err != nil {
+		t.Fatalf("failed to unmarshal TableStats: %v", err)
+	}
+
+	restoredCol, ok := restored.Columns["state"]
+	if !ok || restoredCol == nil {
+		t.Fatalf("restored state column stats missing")
+	}
+	if len(restoredCol.MCVList) != 2 {
+		t.Fatalf("expected 2 MCVs after restore, got %d", len(restoredCol.MCVList))
+	}
+	if restoredCol.MCVList[0].Value.String() != "IN_STOCK" || restoredCol.MCVList[0].Frequency < 0.79 {
+		t.Errorf("restored MCV0 mismatch: %+v", restoredCol.MCVList[0])
+	}
+
+	// Selectivity after restore must be identical
+	sel := restored.EstimateSelectivity("state", "=", "IN_STOCK")
+	if sel < 0.79 || sel > 0.81 {
+		t.Errorf("expected restored selectivity ~0.80, got %f", sel)
+	}
+}
+
 
 
