@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"sqlion/pkg/planner"
+	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
 
@@ -293,6 +294,24 @@ func parseIndexCond(cond string, schema *storage.TableSchema) (*storage.Value, *
 		v := storage.StringValue(valStr)
 		return &v, &v
 	}
+
+	// Try functional expression index condition: e.g. "doc ->> 'city' = 'Seoul'" or "JSON_VALUE(doc, '$.city') = 'Seoul'"
+	p := proc.NewParser(proc.NewLexer(cond))
+	if expr := p.ParseExpression(proc.PrecLowest); expr != nil {
+		if bin, ok := expr.(*proc.BinaryExpr); ok && (bin.Op == proc.TokenAssign || bin.Op == proc.TokenEq) {
+			if lit, isLit := bin.Right.(*proc.LiteralExpr); isLit {
+				v := lit.Val
+				return &v, &v
+			}
+		}
+	}
+
+	if eqIdx := strings.LastIndex(cond, "="); eqIdx != -1 {
+		valStr := strings.Trim(strings.TrimSpace(cond[eqIdx+1:]), "'\"")
+		v := storage.StringValue(valStr)
+		return &v, &v
+	}
+
 	return nil, nil
 }
 

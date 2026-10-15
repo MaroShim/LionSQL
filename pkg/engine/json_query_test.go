@@ -2,7 +2,9 @@ package engine_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/engine"
@@ -330,4 +332,133 @@ func TestJSON_ExpressionIndex(t *testing.T) {
 		t.Fatalf("expected 0 rows after delete for 'Suwon', got row %+v", r)
 	}
 }
+
+func TestJSON_ExpressionIndex_CBO_And_Explain(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, doc VARCHAR(500));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// Insert 100 rows
+	for i := 1; i <= 100; i++ {
+		city := fmt.Sprintf("City_%d", i%10)
+		_, err = coord.ExecuteSQL(fmt.Sprintf(`INSERT INTO users VALUES (%d, '{"city": "%s", "age": %d}');`, i, city, 20+(i%30)))
+		if err != nil {
+			t.Fatalf("INSERT failed: %v", err)
+		}
+	}
+
+	// 1. Before index creation, EXPLAIN should show Seq Scan
+	res, err := coord.ExecuteSQL("EXPLAIN SELECT id, doc FROM users WHERE doc->>'city' = 'City_3';")
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN before index failed: %v", err)
+	}
+	explainOutput := fmt.Sprintf("%v", res.Rows)
+	if !strings.Contains(explainOutput, "Seq Scan") {
+		t.Fatalf("expected Seq Scan before index, got: %s", explainOutput)
+	}
+
+	// 2. Create expression index on doc->>'city'
+	_, err = coord.ExecuteSQL("CREATE INDEX idx_user_city ON users ((doc->>'city'));")
+	if err != nil {
+		t.Fatalf("CREATE INDEX failed: %v", err)
+	}
+
+	// 3. After index creation, EXPLAIN should show Index Scan using idx_user_city
+	res, err = coord.ExecuteSQL("EXPLAIN SELECT id, doc FROM users WHERE doc->>'city' = 'City_3';")
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN with ->> failed: %v", err)
+	}
+	explainOutput = fmt.Sprintf("%v", res.Rows)
+	if !strings.Contains(explainOutput, "Index Scan") || !strings.Contains(explainOutput, "idx_user_city") {
+		t.Fatalf("expected Index Scan using idx_user_city, got: %s", explainOutput)
+	}
+
+	// 4. Also EXPLAIN with JSON_VALUE(doc, '$.city') should match idx_user_city
+	res, err = coord.ExecuteSQL("EXPLAIN SELECT id, doc FROM users WHERE JSON_VALUE(doc, '$.city') = 'City_3';")
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN with JSON_VALUE failed: %v", err)
+	}
+	explainOutput = fmt.Sprintf("%v", res.Rows)
+	if !strings.Contains(explainOutput, "Index Scan") || !strings.Contains(explainOutput, "idx_user_city") {
+		t.Fatalf("expected Index Scan using idx_user_city for JSON_VALUE, got: %s", explainOutput)
+	}
+
+	// 5. Execute actual SELECT query through engine coordinator
+	res, err = coord.ExecuteSQL("SELECT id, doc->>'city' AS city FROM users WHERE doc->>'city' = 'City_3' ORDER BY id ASC;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT failed: %v", err)
+	}
+	if len(res.Rows) != 10 {
+		t.Fatalf("expected 10 rows for City_3, got %d", len(res.Rows))
+	}
+	for _, r := range res.Rows {
+		if r["city"] != "City_3" {
+			t.Fatalf("expected city='City_3', got: %+v", r)
+		}
+	}
+
+	// 6. Execute SELECT query with JSON_VALUE
+	res, err = coord.ExecuteSQL("SELECT id, doc->>'city' AS city FROM users WHERE JSON_VALUE(doc, '$.city') = 'City_3' ORDER BY id ASC;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT with JSON_VALUE failed: %v", err)
+	}
+	if len(res.Rows) != 10 {
+		t.Fatalf("expected 10 rows for JSON_VALUE City_3, got %d", len(res.Rows))
+	}
+}
+
+func TestJSON_ExpressionIndex_Benchmark(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL("CREATE TABLE items (id INT PRIMARY KEY, doc VARCHAR(500));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE items failed: %v", err)
+	}
+
+	// Batch insert 1,000 JSON rows
+	const totalRows = 1000
+	for i := 1; i <= totalRows; i++ {
+		dept := fmt.Sprintf("Dept_%d", i%50) // 20 rows per dept
+		_, err = coord.ExecuteSQL(fmt.Sprintf(`INSERT INTO items VALUES (%d, '{"dept": "%s", "cost": %d}');`, i, dept, i*10))
+		if err != nil {
+			t.Fatalf("INSERT item %d failed: %v", i, err)
+		}
+	}
+
+	// 1. Measure SeqScan duration (without index)
+	startSeq := time.Now()
+	resSeq, err := coord.ExecuteSQL("SELECT id, doc->>'dept' AS dept FROM items WHERE doc->>'dept' = 'Dept_25';")
+	durationSeq := time.Since(startSeq)
+	if err != nil || !resSeq.Success || len(resSeq.Rows) != 20 {
+		t.Fatalf("SeqScan failed or row count mismatch: err=%v, count=%d", err, len(resSeq.Rows))
+	}
+
+	// 2. Create expression index
+	_, err = coord.ExecuteSQL("CREATE INDEX idx_item_dept ON items ((doc->>'dept'));")
+	if err != nil {
+		t.Fatalf("CREATE INDEX failed: %v", err)
+	}
+
+	// 3. Measure IndexScan duration (with functional index)
+	startIndex := time.Now()
+	resIdx, err := coord.ExecuteSQL("SELECT id, doc->>'dept' AS dept FROM items WHERE doc->>'dept' = 'Dept_25';")
+	durationIndex := time.Since(startIndex)
+	if err != nil || !resIdx.Success || len(resIdx.Rows) != 20 {
+		t.Fatalf("IndexScan failed or row count mismatch: err=%v, count=%d", err, len(resIdx.Rows))
+	}
+
+	t.Logf("1,000 JSON rows: SeqScan=%v, IndexScan=%v (rows=%d)", durationSeq, durationIndex, len(resIdx.Rows))
+}
+
 

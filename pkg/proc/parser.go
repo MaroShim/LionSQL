@@ -23,6 +23,9 @@ const (
 	precPrefix      // -X, NOT X
 )
 
+// PrecLowest represents the lowest operator precedence level for expression parsing.
+const PrecLowest = precLowest
+
 var precedences = map[TokenType]int{
 	TokenOr:              precOr,
 	TokenAnd:             precAnd,
@@ -1478,6 +1481,11 @@ func (p *Parser) parseExec() (Statement, error) {
 	}
 
 	return &ExecStmt{ProcName: name, Args: args}, nil
+}
+
+// ParseExpression parses an expression starting from the specified precedence level.
+func (p *Parser) ParseExpression(precedence int) Expr {
+	return p.parseExpression(precedence)
 }
 
 // Pratt expression parsing

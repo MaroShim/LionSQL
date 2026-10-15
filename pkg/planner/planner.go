@@ -1020,6 +1020,49 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 						chosenCovering = isCovering
 					}
 				}
+			} else {
+				// --- Functional expression index match (e.g. doc->>'city' = 'Seoul' or JSON_VALUE(doc, '$.city') = 'Seoul') ---
+				pExpr := proc.NewParser(proc.NewLexer(cond))
+				if parsedExpr := pExpr.ParseExpression(proc.PrecLowest); parsedExpr != nil {
+					if bin, ok := parsedExpr.(*proc.BinaryExpr); ok && (bin.Op == proc.TokenAssign || bin.Op == proc.TokenEq) {
+						colName, jsonPath, isJSON := proc.ExtractJSONExprInfo(bin.Left)
+						if isJSON {
+							if idxDot := strings.Index(colName, "."); idxDot != -1 {
+								colName = colName[idxDot+1:]
+							}
+							colName = cleanIdent(colName)
+							if idx, found := schema.FindExpressionIndex(colName, jsonPath); found {
+								if chosenIndex != nil && len(chosenIndex.Columns) > 1 {
+									continue
+								}
+								sel := 0.1
+								if idx.Unique {
+									sel = 1.0 / float64(estimatedTotal)
+								}
+								estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
+								if estRows < 1 {
+									estRows = 1
+								}
+								startupCost := 0.25
+								indexPagesCost := (float64(estRows) / float64(RowsPerPageDefault)) * RandomPageCost
+								if indexPagesCost < 0.05 {
+									indexPagesCost = 0.05
+								}
+								indexScanCost := startupCost + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
+								if indexScanCost < tableScanTotalCost && (chosenIndex == nil || indexScanCost < chosenCost) {
+									chosenIndex = idx
+									chosenCond = cond
+									chosenCol = bin.Left.String()
+									chosenOp = "="
+									chosenVal = bin.Right.String()
+									chosenEstRows = estRows
+									chosenCost = indexScanCost
+									chosenCovering = false
+								}
+							}
+						}
+					}
+				}
 			}
 		}
 	}

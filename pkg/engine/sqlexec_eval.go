@@ -813,6 +813,51 @@ func (s *Coordinator) findIndexAndBounds(schema *storage.TableSchema, whereClaus
 		}
 	}
 
+	// 3. Try functional expression index
+	for i := range schema.Indexes {
+		candIdx := &schema.Indexes[i]
+		if !candIdx.IsExpression() {
+			continue
+		}
+		targetCol := candIdx.ExprColumn
+		if targetCol == "" && len(candIdx.Columns) > 0 {
+			targetCol = candIdx.Columns[0]
+		}
+		normCandPath := strings.TrimSpace(candIdx.ExprPath)
+		if !strings.HasPrefix(normCandPath, "$") {
+			if strings.HasPrefix(normCandPath, "[") {
+				normCandPath = "$" + normCandPath
+			} else {
+				normCandPath = "$." + normCandPath
+			}
+		}
+
+		conds := strings.Split(whereClause, " AND ")
+		for _, cond := range conds {
+			cond = strings.TrimSpace(cond)
+			p := proc.NewParser(proc.NewLexer(cond))
+			if expr := p.ParseExpression(proc.PrecLowest); expr != nil {
+				if bin, ok := expr.(*proc.BinaryExpr); ok && (bin.Op == proc.TokenAssign || bin.Op == proc.TokenEq) {
+					colName, jsonPath, isJSON := proc.ExtractJSONExprInfo(bin.Left)
+					if isJSON {
+						if dot := strings.Index(colName, "."); dot != -1 {
+							colName = colName[dot+1:]
+						}
+						if strings.EqualFold(colName, targetCol) && strings.EqualFold(jsonPath, normCandPath) {
+							if lit, isLit := bin.Right.(*proc.LiteralExpr); isLit {
+								val := lit.Val
+								return candIdx, &val, &val, true
+							}
+							valStr := strings.Trim(strings.TrimSpace(bin.Right.String()), "'\"")
+							val := storage.StringValue(valStr)
+							return candIdx, &val, &val, true
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return nil, nil, nil, false
 }
 
@@ -935,6 +980,15 @@ func (s *Coordinator) execIndexSelect(qInfo *planner.QueryInfo, tableName string
 	// Determine projection columns.
 	projections := qInfo.Projections
 	isSelectAll := len(projections) == 0 || (len(projections) == 1 && (projections[0] == "*" || projections[0] == ""))
+	if !isSelectAll {
+		for _, p := range projections {
+			pTrim := strings.TrimSpace(p)
+			if strings.ContainsAny(pTrim, "()->+/*") || strings.Contains(strings.ToUpper(pTrim), " AS ") {
+				// Complex expression or aliased projection: delegate to Volcano engine
+				return nil, false
+			}
+		}
+	}
 	var selectedCols []string
 	if isSelectAll {
 		for _, col := range schema.Columns {

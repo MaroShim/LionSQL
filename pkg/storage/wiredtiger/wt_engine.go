@@ -1262,7 +1262,28 @@ func (tx *WTTx) ScanPartitions(tableName string, partitions []string) (storage.C
 }
 
 func (tx *WTTx) IndexScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
-	return tx.Scan(tableName)
+	cur, err := tx.Scan(tableName)
+	if err != nil {
+		return nil, err
+	}
+	if low == nil && high == nil {
+		return cur, nil
+	}
+	tbl, _ := tx.getTableLocked(tableName)
+	if tbl == nil {
+		return cur, nil
+	}
+	idx, _, found := tbl.FindIndex(indexName)
+	if !found || idx == nil {
+		return cur, nil
+	}
+	return &wtFilteredIndexCursor{
+		base:   cur,
+		schema: tbl,
+		idx:    idx,
+		low:    low,
+		high:   high,
+	}, nil
 }
 
 func (tx *WTTx) IndexOnlyScan(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
@@ -1271,6 +1292,129 @@ func (tx *WTTx) IndexOnlyScan(tableName string, indexName string, low, high *sto
 
 func (tx *WTTx) IndexScanDesc(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
 	return tx.IndexScan(tableName, indexName, low, high)
+}
+
+type wtFilteredIndexCursor struct {
+	base    storage.Cursor
+	schema  *storage.TableSchema
+	idx     *storage.IndexSchema
+	low     *storage.Value
+	high    *storage.Value
+	currRow storage.Row
+	currRec storage.Record
+	currRaw []byte
+	hasRaw  bool
+}
+
+func (c *wtFilteredIndexCursor) Next() bool {
+	for c.base.Next() {
+		rawCur, ok := c.base.(storage.RawTupleCursor)
+		if ok {
+			c.currRaw, c.hasRaw = rawCur.RawTuple()
+		}
+		row, err := c.base.Row()
+		if err != nil {
+			rec, rerr := c.base.Record()
+			if rerr != nil {
+				continue
+			}
+			c.currRec = rec
+			c.currRow = storage.Row{}
+			if c.matchesRecord(rec) {
+				return true
+			}
+			continue
+		}
+		c.currRow = row
+		c.currRec = nil
+		if c.matchesRow(row) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *wtFilteredIndexCursor) matchesRecord(rec storage.Record) bool {
+	var key storage.Value
+	if c.idx.IsExpression() {
+		colName := c.idx.ExprColumn
+		if colName == "" && len(c.idx.Columns) > 0 {
+			colName = c.idx.Columns[0]
+		}
+		if docVal, ok := rec[colName]; ok && !docVal.IsNull {
+			key = storage.ExtractJSONIndexKey(docVal.String(), c.idx.ExprPath)
+		} else {
+			key = storage.NullValue(storage.TypeVarChar)
+		}
+	} else if len(c.idx.Columns) > 0 {
+		key = rec[c.idx.Columns[0]]
+	}
+	if c.low != nil && key.Compare(*c.low) < 0 {
+		return false
+	}
+	if c.high != nil && key.Compare(*c.high) > 0 {
+		return false
+	}
+	return true
+}
+
+func (c *wtFilteredIndexCursor) matchesRow(row storage.Row) bool {
+	var key storage.Value
+	if c.idx.IsExpression() {
+		colName := c.idx.ExprColumn
+		if colName == "" && len(c.idx.Columns) > 0 {
+			colName = c.idx.Columns[0]
+		}
+		if c.schema != nil {
+			if _, colIdx, found := c.schema.FindColumn(colName); found && colIdx >= 0 && colIdx < len(row.Values) {
+				docVal := row.Values[colIdx]
+				if !docVal.IsNull {
+					key = storage.ExtractJSONIndexKey(docVal.String(), c.idx.ExprPath)
+				} else {
+					key = storage.NullValue(storage.TypeVarChar)
+				}
+			}
+		}
+	} else if len(c.idx.Columns) > 0 && c.schema != nil {
+		if _, colIdx, found := c.schema.FindColumn(c.idx.Columns[0]); found && colIdx >= 0 && colIdx < len(row.Values) {
+			key = row.Values[colIdx]
+		}
+	}
+	if c.low != nil && key.Compare(*c.low) < 0 {
+		return false
+	}
+	if c.high != nil && key.Compare(*c.high) > 0 {
+		return false
+	}
+	return true
+}
+
+func (c *wtFilteredIndexCursor) Record() (storage.Record, error) {
+	if c.currRec != nil {
+		return c.currRec, nil
+	}
+	if len(c.currRow.Values) > 0 && c.schema != nil {
+		return c.schema.RowToRecord(c.currRow), nil
+	}
+	return c.base.Record()
+}
+
+func (c *wtFilteredIndexCursor) Row() (storage.Row, error) {
+	if len(c.currRow.Values) > 0 {
+		return c.currRow, nil
+	}
+	return c.base.Row()
+}
+
+func (c *wtFilteredIndexCursor) RawTuple() ([]byte, bool) {
+	if c.hasRaw {
+		return c.currRaw, true
+	}
+	return nil, false
+}
+
+func (c *wtFilteredIndexCursor) Close() error {
+	return c.base.Close()
 }
 
 func (tx *WTTx) Commit() error {

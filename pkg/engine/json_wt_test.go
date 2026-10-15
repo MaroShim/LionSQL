@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"sqlion/pkg/catalog"
@@ -103,6 +104,25 @@ func TestJSON_ExpressionIndex_WiredTiger(t *testing.T) {
 	idxCountry, found := tbl.FindExpressionIndex("doc", "$.country")
 	if !found || !idxCountry.IsExpression() || idxCountry.ExprPath != "$.country" {
 		t.Fatalf("expected idx_wt_country expression index, got: %+v", idxCountry)
+	}
+
+	// Test EXPLAIN selecting idx_wt_city on WiredTiger
+	resExp, err := coord.ExecuteSQL("EXPLAIN SELECT id, doc FROM users WHERE doc->>'city' = 'Seoul';")
+	if err != nil || !resExp.Success {
+		t.Fatalf("EXPLAIN failed on WT: %v", err)
+	}
+	expText := fmt.Sprintf("%v", resExp.Rows)
+	if !strings.Contains(expText, "Index Scan") || !strings.Contains(expText, "idx_wt_city") {
+		t.Fatalf("expected Index Scan on WT, got: %s", expText)
+	}
+
+	// Test SELECT with WHERE condition on WiredTiger
+	resQuery, err := coord.ExecuteSQL("SELECT id, doc->>'city' AS city FROM users WHERE doc->>'city' = 'Seoul';")
+	if err != nil || !resQuery.Success {
+		t.Fatalf("SELECT failed on WT: %v", err)
+	}
+	if len(resQuery.Rows) != 1 || resQuery.Rows[0]["city"] != "Seoul" {
+		t.Fatalf("expected 1 row with city='Seoul' on WT, got: %+v", resQuery.Rows)
 	}
 }
 
