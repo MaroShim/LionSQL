@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **T-SQL `STRING_SPLIT` Table-Valued Function & Query Resolution Compatibility (`pkg/engine`)**:
+  - Implemented official Microsoft T-SQL `STRING_SPLIT(string, separator [, enable_ordinal])` table-valued function in `pkg/engine/sqlexec_string_split.go`.
+  - Added full support for direct invocation (`SELECT value [, ordinal] FROM STRING_SPLIT(...) [AS alias]`), national string literals (`N'...'`), session variables (`@var`), `WHERE` filtering, `ORDER BY`, `DISTINCT`, aggregate `COUNT(*)`, and standard SQL pagination (`LIMIT` / `OFFSET` and T-SQL `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY`).
+  - Added seamless subquery integration (`WHERE col IN (SELECT value FROM STRING_SPLIT(@ids, ','))`) via session-aware subquery resolution (`resolveSubqueriesWithSession`).
+  - Added full `CROSS APPLY STRING_SPLIT(col, ',')` and `OUTER APPLY` support across joined table rows.
+  - Added comprehensive test suites in `pkg/engine/sqlexec_string_split_test.go` verifying basic splits, custom delimiters, ordinal tracking, subquery evaluation, and `CROSS APPLY` joins.
+
 ## [0.20.0] - 2026-10-15
 
 ### Fixed

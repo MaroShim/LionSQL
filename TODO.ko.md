@@ -27,6 +27,14 @@
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성 & BaaS 확장
+- [x] **T-SQL `STRING_SPLIT` 테이블 반환 함수 & 서브쿼리/CROSS APPLY 완비 (`pkg/engine`)**
+  - **배경**: 모던 SQL Server 및 T-SQL 저장 프로시저의 필수 TVF인 `STRING_SPLIT(string, separator [, enable_ordinal])` 지원을 통해 `WHERE id IN (SELECT value FROM STRING_SPLIT(@ids, ','))` 및 동적 태그 분해 `CROSS APPLY STRING_SPLIT(col, ',')`의 100% 호환성 확보.
+  - **구현 내용**:
+    - `pkg/engine/sqlexec_string_split.go`: `STRING_SPLIT(string, separator [, enable_ordinal])` 파싱 및 레코드셋 생성기 구현. 단일 쿼리(`SELECT value, ordinal FROM STRING_SPLIT(...)`), 테이블 별칭(`AS s`), 컬럼 별칭, `WHERE` 필터링, `ORDER BY`, `DISTINCT`, 집계 `COUNT(*)`, 페이징(`LIMIT`/`OFFSET` 및 T-SQL `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY`) 완비.
+    - 세션 변수 연동: `@tags`, `@ids` 등 세션 변수를 즉각 해결하여 프로시저 및 매개변수화 쿼리와 매끄럽게 결합.
+    - 서브쿼리 해결 (`pkg/engine/sqlexec_explain.go`): `resolveSubqueriesWithSession`을 통해 `WHERE id IN (SELECT value FROM STRING_SPLIT(...))` 구문을 세션 컨텍스트 하에서 리터럴 리스트로 원자적 치환 후 초고속 엔진 경로 실행.
+    - `CROSS APPLY` 및 `OUTER APPLY` 연동: 행별 컬럼 데이터를 매개변수화하여 다중 행 조인 스트림 자동 생성.
+    - 단위 및 E2E 테스트 완비 (`pkg/engine/sqlexec_string_split_test.go`).
 - [x] **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ/Webhook) (`pkg/cdc`, `pkg/config`, `pkg/api`, `cmd/server`)**
   - **배경**: 분산 마이크로서비스 환경에서 듀얼 라이트(Dual-Write) 문제 해결 및 데이터베이스 커밋과 100% 원자적으로 연동되는 무손실 메시지 브로커 발행(At-Least-Once Delivery).
   - **구현 내용**:

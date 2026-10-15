@@ -568,8 +568,19 @@ func (s *Coordinator) AnalyzeTable(tbl string) (*planner.TableStats, error) {
 }
 
 func (s *Coordinator) resolveSubqueries(whereClause string) (string, error) {
+	return s.resolveSubqueriesWithSession(whereClause, nil)
+}
+
+func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *ClientSession) (string, error) {
 	if whereClause == "" {
 		return "", nil
+	}
+
+	execSubquery := func(sql string) (*QueryResult, error) {
+		if cs != nil {
+			return s.ExecuteSessionSQL(cs.ID, sql)
+		}
+		return s.ExecuteSQL(sql)
 	}
 
 	result := whereClause
@@ -582,7 +593,7 @@ func (s *Coordinator) resolveSubqueries(whereClause string) (string, error) {
 		if !found {
 			break
 		}
-		innerRes, err := s.ExecuteSQL(innerSQL)
+		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
 			// If inner query failed (e.g. contains outer reference), skip so planner can decorrelate
 			offset = mEnd
@@ -615,7 +626,7 @@ func (s *Coordinator) resolveSubqueries(whereClause string) (string, error) {
 		tokens := strings.Fields(prefix)
 		colName := cleanIdentifier(tokens[0])
 		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
-		innerRes, err := s.ExecuteSQL(innerSQL)
+		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
 			offset = mEnd
 			continue

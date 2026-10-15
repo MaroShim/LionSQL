@@ -27,7 +27,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	})
 
 	if qInfo.WhereClause != "" {
-		if resolved, err := s.resolveSubqueries(qInfo.WhereClause); err == nil {
+		if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs); err == nil {
 			qInfo.WhereClause = resolved
 		}
 	}
@@ -1455,6 +1455,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		return s.execSelect(rewritten, start, cs)
 	}
 
+	// 0.6. T-SQL STRING_SPLIT table-valued function: SELECT ... FROM STRING_SPLIT(...)
+	if isStringSplitSelect(cleaned) {
+		return s.execStringSplitSelect(cleaned, start, cs)
+	}
+
 	p := s.newPlanner()
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil {
@@ -1515,15 +1520,15 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			return s.execVolcanoSelect(qInfo, start, cs)
 		}
 
-		rawWhere := qInfo.WhereClause
 		if qInfo.WhereClause != "" {
-			if resolved, err := s.resolveSubqueries(qInfo.WhereClause); err == nil {
+			if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs); err == nil && resolved != qInfo.WhereClause {
+				cleaned = strings.Replace(cleaned, qInfo.WhereClause, resolved, 1)
 				qInfo.WhereClause = resolved
 			}
 		}
 
-		// If query has subqueries in WHERE, execute via Volcano
-		if strings.Contains(strings.ToUpper(rawWhere), "EXISTS") || strings.Contains(strings.ToUpper(rawWhere), "SELECT") {
+		// If query has unresolved subqueries in WHERE (e.g. correlated), execute via Volcano
+		if strings.Contains(strings.ToUpper(qInfo.WhereClause), "EXISTS") || strings.Contains(strings.ToUpper(qInfo.WhereClause), "SELECT") {
 			return s.execVolcanoSelect(qInfo, start, cs)
 		}
 
@@ -1575,7 +1580,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	whereClause := ""
 	if len(matches) > 3 {
 		whereClause = strings.TrimSpace(matches[3])
-		if resolved, err := s.resolveSubqueries(whereClause); err == nil {
+		if resolved, err := s.resolveSubqueriesWithSession(whereClause, cs); err == nil {
 			whereClause = resolved
 		}
 	}
