@@ -10,6 +10,7 @@
 | :---: | :--- | :---: | :--- |
 | **`P1` ~ `P3`** | **우선순위 (Priority)** | `P1` ~ `P3` | 개발 착수 긴급도 (P1: 즉시 착수/완료, P2: 차기 착수, P3: 생태계 검증) |
 | **`P-1` ~ `P-10`** | **엔진 성능 (Performance)** | `P-1` ~ `P-10` | 스토리지, 디코딩, 와이어, 캐시, 정규식, JSON, 병렬 쿼리 전반의 10대 핵심 성능 극대화 트랙 |
+| **`R-1` ~ `R-5`** | **코드 리팩토링 (Refactoring)** | `R-1` ~ `R-5` | 거대 파일 모듈 분해, 단일 책임 원칙(SRP), DRY 중복 해소 및 가상 뷰 레지스트리화 |
 | **`A` ~ `D`** | **CBO 최적화 (Optimizer)** | `A-1` ~ `D-9` | 비용 기반 옵티마이저 4대 기능 트랙 (A: 통계 수집, B: 조인 알고리즘, C: 선택도, D: 운영 제어) |
 | **`S-1` ~ `S-7`** | **SQL 문법 (Syntax)** | `S-1` ~ `S-7` | T-SQL 및 ANSI SQL 7대 문법 호환성 완비 트랙 (전 항목 완료) |
 
@@ -22,6 +23,7 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
+| **P1** | **아키텍처/리팩토링 (R-1)** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | `pkg/engine` | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
 | **P1** | **엔진 성능 (P-6)** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | `pkg/engine` | 쿼리당 동적 `regexp.MustCompile` 힙 할당 및 5~15µs 지연 완전 제거 |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
 | **P2** | **엔진 성능 (P-7)** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너** | `pkg/storage`, `pkg/engine` | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
@@ -335,6 +337,51 @@
   - 배포 상태 정렬 표 형식 출력 (`lionsql migrate status`).
   - 임베디드 데이터베이스 직접 쿼리 실행기 (`lionsql sql "<query>"`).
   - `cmd/server` 및 `cmd/lionsql` 양방향 CLI 문법 패리티 완비.
+
+### 2.6. 코드베이스 구조 개선 & 아키텍처 리팩토링 (Architecture & Refactoring)
+
+| 번호 | 영역 | 핵심 구현 과제 | 상태 | 목표 및 리팩토링 상세 |
+| :---: | :--- | :--- | :---: | :--- |
+| **R-1** | **엔진/카탈로그** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | **대기 (`[ ]`)** | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
+| **R-2** | **파서/내장함수** | **Pratt 파서 및 내장 함수 도메인별 관심사 분리** | **대기 (`[ ]`)** | `parser.go`(3.2K줄), `builtins.go`(2.8K줄) 도메인 모듈화 |
+| **R-3** | **엔진/실행기** | **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화** | **대기 (`[ ]`)** | `sqlexec_eval.go`와 `execution/builder.go` 간 중복 제거 (DRY) |
+| **R-4** | **스토리지/OCC** | **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해** | **대기 (`[ ]`)** | `memengine/tx.go`(1.9K줄)의 `Commit()`, 스캔, 세이브포인트 분리 |
+| **R-5** | **스토리지/CGo** | **WiredTiger CGo 바인딩 격리 및 트랜잭션/커서 모듈화** | **대기 (`[ ]`)** | `wt_engine.go`(1.7K줄)의 CGo 인터페이스, 커서, DDL 물리적 분리 |
+
+- [ ] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**
+  - **배경**: 현재 단일 파일(3,283라인)에 PostgreSQL `pg_catalog`, ANSI `information_schema`, MSSQL `sys.tables`/DMV, DBeaver/Beekeeper/DbGate/HeidiSQL 도구별 쿼리 인터셉터가 혼재되어 유지보수성과 가독성이 저하됨.
+  - **구현 계획 (2단계 점진적 통합)**:
+    - **Step 1 (물리적 파일 분리)**:
+      - `sqlexec_pgcatalog.go`: 순수 PostgreSQL 시스템 카탈로그 (`pg_class`, `pg_namespace`, `pg_type`, `pg_database` 등)
+      - `sqlexec_mssql_sys.go`: SQL Server / TDS 전용 가상 카탈로그 및 DMV (`sys.tables`, `sys.columns`, `sys.dm_*`, `sys.database_files` 등)
+      - `sqlexec_info_schema.go`: ANSI 표준 정보 스키마 (`information_schema.tables`, `columns`, `table_constraints` 등)
+      - `sqlexec_gui_interop.go`: HeidiSQL, Beekeeper, DbGate 등 특정 GUI 클라이언트 특화 카탈로그 조인 쿼리 인터셉터
+    - **Step 2 (가상 뷰 레지스트리화)**:
+      - 거대한 `switch norm` 및 if-else 분기 대신, 가상 뷰 시그니처(`type VirtualCatalogView func(coord *Coordinator, where, order string, limit int) ([]string, []map[string]any, error)`) 정의.
+      - 레지스트리(`map[string]VirtualCatalogView`) 기반 $O(1)$ 동적 디스패치 구조로 전환하여 신규 뷰 추가 시 기존 코드 수정 없는 개방-폐쇄 원칙(OCP) 달성.
+- [ ] **Pratt 파서 및 내장 함수 도메인별 관심사 분리 (`R-2`) (`pkg/proc`)**
+  - **배경**: `pkg/proc/parser.go`(3,241라인)와 `pkg/proc/builtins.go`(2,880라인)가 단일 파일에 비대하게 집중되어 신규 문법/함수 추가 시 인지 부하 및 머지 충돌 위험 증가.
+  - **구현 계획**:
+    - 파서 분리: `parser_expr.go`(Pratt 연산자 우선순위 식 파싱), `parser_stmt.go`(T-SQL 제어문 `IF/WHILE/TRY`), `parser_ddl.go`(`CREATE/ALTER/DROP`), `parser_dml.go`(`SELECT/DML`).
+    - 내장 함수 분리: `builtins_string.go`, `builtins_date.go`, `builtins_math.go`, `builtins_json.go`, `builtins_sys.go`.
+- [ ] **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 및 조건 평가 로직 일원화 (`R-3`) (`pkg/engine`, `pkg/execution`, `pkg/planner`)**
+  - **배경**: `sqlexec_eval.go`의 단일 테이블 고속 검색과 `execution/builder.go`의 Volcano 플랜 빌더 간에 인덱스 범위 검색 경계(`lowVal`, `highVal`) 추출 및 조건식 파싱 로직이 중복 존재(DRY 위반).
+  - **구현 계획**:
+    - `pkg/planner/bounds.go` 또는 `pkg/engine/bounds.go` 공통 헬퍼로 인덱스 바운드 추출 로직을 단일화.
+    - 새로운 인덱스 타입(표현식 인덱스, 다중 컬럼 인덱스 등) 추가 시 양쪽 엔진이 100% 동일한 경계 분석 엔진을 공유하도록 보장.
+- [ ] **In-Memory OCC 스토리지 트랜잭션 라이프사이클 모듈 분해 (`R-4`) (`pkg/storage/memengine`)**
+  - **배경**: `pkg/storage/memengine/tx.go`(1,965라인)에 트랜잭션 라이프사이클 전체와 500줄 이상의 인라인 `Commit()` 함수가 집중되어 동시성 로직의 가독성 저하.
+  - **구현 계획**:
+    - `tx_commit.go`: 샤드 정렬 락 획득, OCC 버전 충돌 검증(`validateConflicts`), 유니크 제약 검증(`validateUniqueConstraints`), 인덱스 갱신(`applyIndexMutations`), WAL/AOF 디스패치(`flushWAL`) 단계별 함수 분해.
+    - `tx_scan.go`: `Scan()`, `IndexScan()`, 샤드 범위 반복자 분리.
+    - `tx_savepoint.go`: 세이브포인트 생성 및 롤백 로직 분리.
+- [ ] **WiredTiger 스토리지 CGo 바인딩 격리 및 파일 분해 (`R-5`) (`pkg/storage/wiredtiger`)**
+  - **배경**: `pkg/storage/wiredtiger/wt_engine.go`(1,753라인)에 저수준 C/CGo 인터페이스, 세션/트랜잭션 관리, 커서 래핑, DDL이 한 파일에 혼재.
+  - **구현 계획**:
+    - `wt_cgo.go`: 순수 CGo 인터페이스 및 C 래퍼 함수 격리.
+    - `wt_cursor.go`: `wtCursor`, `wtFilteredIndexCursor` 커서 순회 및 바운드 검사 로직 전담.
+    - `wt_tx.go`: `WTTx` 트랜잭션 커밋/롤백/스캔 라이프사이클 전담.
+    - `wt_engine.go`: 스토리지 엔진 수명주기, 세션 풀링 및 DDL 전담.
 
 ---
 
