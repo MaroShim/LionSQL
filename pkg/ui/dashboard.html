@@ -336,6 +336,10 @@
         <span>Settings / Mail</span>
         <span class="badge" style="background:#854d0e; color:#fef08a; font-size:0.65rem;">SMTP</span>
       </button>
+      <button class="nav-btn" data-view="replication" onclick="switchView('replication')">
+        <span>Replication (HA)</span>
+        <span id="nav-ha-badge" class="badge" style="background:#1e293b; color:#94a3b8; font-size:0.65rem;">HA</span>
+      </button>
     </nav>
     <div style="padding: 12px 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
       <button class="btn btn-secondary" style="width: 100%; font-size: 0.75rem; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="downloadDatabaseBackup()">
@@ -1024,6 +1028,133 @@ const procRes = await client.exec('TransferFunds', {
           </div>
         </div>
       </div>
+    <!-- View: High Availability & Replication -->
+    <div id="view-replication" style="display: none;">
+      <div class="header-bar">
+        <div>
+          <h2>High Availability &amp; Replication</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Real-time physical WAL replication streaming, replica lag monitoring, and failover promotion.
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--text-muted);">
+            <span id="ha-poll-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
+            <span>Auto-refresh (3s)</span>
+          </div>
+          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="loadReplicationStatus()">
+            Refresh
+          </button>
+        </div>
+      </div>
+
+      <!-- Overview Metric Cards Grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+        <div class="card" style="padding: 16px; border-left: 4px solid #3b82f6;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Cluster Role</div>
+          <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+            <span id="ha-role-badge" class="badge" style="font-size: 0.9rem; padding: 4px 10px; background: #064e3b; color: #6ee7b7;">--</span>
+          </div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">
+            Node ID: <code id="ha-node-id" style="color: #93c5fd; font-weight: 600;">--</code>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 16px; border-left: 4px solid #10b981;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Current LSN</div>
+          <div style="margin-top: 8px; font-size: 1.4rem; font-weight: 700; font-family: monospace; color: #f8fafc;" id="ha-current-lsn">--</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">Physical WAL Sequence Offset</div>
+        </div>
+
+        <div class="card" style="padding: 16px; border-left: 4px solid #8b5cf6;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Access Permission</div>
+          <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
+            <span id="ha-access-mode" class="badge" style="font-size: 0.85rem; padding: 4px 10px; background: #1e3a8a; color: #93c5fd;">--</span>
+          </div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);" id="ha-access-desc">ACID Mutation &amp; OCC Validation</div>
+        </div>
+
+        <div class="card" style="padding: 16px; border-left: 4px solid #f59e0b;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;" id="ha-peer-title">Topology Target</div>
+          <div style="margin-top: 8px; font-size: 1.1rem; font-weight: 600; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="ha-peer-value">--</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);" id="ha-peer-desc">Topology Link</div>
+        </div>
+      </div>
+
+      <!-- Replica Promotion Action Card (Visible only when role is REPLICA) -->
+      <div id="ha-replica-action-card" class="card" style="display: none; border: 1px solid #d97706; background: rgba(217, 119, 6, 0.08); padding: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+          <div>
+            <div style="font-size: 1rem; font-weight: 700; color: #fde68a;">Replica Failover Promotion</div>
+            <div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 4px;">
+              This instance is actively replicating as a read-only secondary replica. Promoting it will detach from upstream primary (<code id="ha-replica-upstream-url" style="color: #93c5fd;">--</code>) and switch this instance to an authoritative read-write Primary node.
+            </div>
+          </div>
+          <button class="btn" style="background: #d97706; padding: 8px 18px; font-size: 0.85rem; white-space: nowrap;" onclick="openPromoteModal()">
+            Promote to Primary
+          </button>
+        </div>
+      </div>
+
+      <!-- Primary Replicas Table Card (Visible when role is PRIMARY) -->
+      <div id="ha-primary-replicas-card" class="card" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <div>
+            <h3 style="font-size: 1.05rem; font-weight: 600;">Connected Secondary Replicas</h3>
+            <div style="font-size: 0.78rem; color: var(--text-muted); margin-top: 2px;">
+              Live stream subscribers receiving physical WAL updates.
+            </div>
+          </div>
+          <span id="ha-replicas-count-badge" class="badge" style="background: #1e3a8a; color: #93c5fd; font-size: 0.75rem; padding: 4px 8px;">0 Replicas</span>
+        </div>
+        <div style="overflow-x: auto;">
+          <table style="margin-top: 8px;">
+            <thead>
+              <tr>
+                <th>Replica Node ID</th>
+                <th>Remote Address</th>
+                <th>State</th>
+                <th>Acked LSN</th>
+                <th>Replication Lag</th>
+                <th>Last Heartbeat</th>
+                <th>Connected Since</th>
+              </tr>
+            </thead>
+            <tbody id="ha-replicas-tbody">
+              <tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">Loading replicas...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Standalone Mode Explanatory Card (Visible when replication is not configured/enabled) -->
+      <div id="ha-standalone-card" class="card" style="display: none; border-left: 4px solid #64748b;">
+        <div style="display: flex; align-items: flex-start; gap: 16px;">
+          <div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge" style="background: #334155; color: #cbd5e1; font-size: 0.75rem;">STANDALONE</span>
+              <h3 style="font-size: 1.05rem; font-weight: 600;">Autonomous Single-Node Engine</h3>
+            </div>
+            <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 6px; line-height: 1.5;">
+              High-Availability (HA) replication streaming is not enabled on this instance. SQLion is currently running as an autonomous standalone database with local ACID durability.
+            </div>
+            <div style="margin-top: 14px; background: #090d16; border: 1px solid var(--border); border-radius: 6px; padding: 12px;">
+              <div style="font-size: 0.75rem; font-weight: 600; color: #93c5fd; margin-bottom: 6px;">How to Start High-Availability Replication Topology:</div>
+              <pre style="font-size: 0.75rem; color: #cbd5e1; line-height: 1.5; margin: 0; font-family: monospace;"># 1. Primary Node (Single Writer)
+./bin/server --port=8090 --pg-port=5433 --tds-port=1433 --rep-role=primary --rep-node=primary-1
+
+# 2. Secondary Replica Node (Read-Only Scale-Out)
+./bin/server --port=8091 --pg-port=5434 --tds-port=1434 --rep-role=replica --rep-node=replica-1 --rep-primary=http://127.0.0.1:8090</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Replication Architecture Invariant Reference Card -->
+      <div class="card" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">
+        <div style="font-weight: 600; color: #f8fafc; margin-bottom: 4px;">High Availability Architecture Invariant: 1-Writer Multi-Reader Topology</div>
+        SQLion prioritizes vertical scale-up hardware saturation with 1-Writer Multi-Reader physical WAL replication. Readers never block writers and writers never block readers. All write transactions execute strictly on the authoritative Primary node, while Replicas stream and replay physical WAL records with sub-millisecond latency.
+      </div>
     </div>
 
   </main>
@@ -1313,6 +1444,24 @@ const procRes = await client.exec('TransferFunds', {
         <button type="button" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="closeAPIPreviewModal()">Close</button>
       </div>
     </div>
+  <!-- Promote Replica to Primary Confirmation Modal -->
+  <div id="promote-replica-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 480px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <h3 style="font-size: 1.1rem; font-weight: 700; color: #f59e0b;">Promote Node to Primary</h3>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closePromoteModal()">✕</button>
+      </div>
+      <div style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 16px;">
+        Are you sure you want to promote this replica to an active <strong style="color: #6ee7b7;">PRIMARY</strong> node?
+        <div style="margin-top: 10px; padding: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; font-size: 0.78rem; color: #fca5a5;">
+          This instance will become writeable, detach from its upstream primary, and begin accepting direct mutation statements.
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="closePromoteModal()">Cancel</button>
+        <button id="btn-confirm-promote" type="button" class="btn" style="background: #d97706;" onclick="executePromote()">Confirm &amp; Promote</button>
+      </div>
+    </div>
   </div>
 
   <!-- Floating Toast Notification -->
@@ -1322,8 +1471,15 @@ const procRes = await client.exec('TransferFunds', {
     let proceduresList = [];
     let tablesList = [];
     let currentTableSubView = 'records';
+    let replicationPollTimer = null;
+    let currentReplicationData = null;
 
     function switchView(view) {
+      if (replicationPollTimer) {
+        clearInterval(replicationPollTimer);
+        replicationPollTimer = null;
+      }
+
       document.querySelectorAll('.nav-btn').forEach(b => {
         if (b.getAttribute('data-view') === view) {
           b.classList.add('active');
@@ -1331,7 +1487,7 @@ const procRes = await client.exec('TransferFunds', {
           b.classList.remove('active');
         }
       });
-      const views = ['apikeys', 'query', 'tables', 'procedures', 'webhooks', 'crons', 'mail', 'sdk'];
+      const views = ['apikeys', 'query', 'tables', 'procedures', 'webhooks', 'crons', 'mail', 'sdk', 'replication'];
       views.forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
@@ -1351,6 +1507,11 @@ const procRes = await client.exec('TransferFunds', {
       } else if (view === 'mail') {
         loadMailSettings();
         loadMailLogs();
+      } else if (view === 'replication') {
+        loadReplicationStatus();
+        replicationPollTimer = setInterval(() => {
+          loadReplicationStatus(true);
+        }, 3000);
       } else if (view === 'query') {
         const input = document.getElementById('sql-query-input');
         if (input) input.focus();
@@ -3897,6 +4058,237 @@ const procRes = await client.exec('TransferFunds', {
       }
     }
 
+    // ----------------------------------------------------
+    // High Availability (HA) Replication Functions
+    // ----------------------------------------------------
+    function openPromoteModal() {
+      const modal = document.getElementById('promote-replica-modal');
+      if (modal) modal.style.display = 'flex';
+    }
+
+    function closePromoteModal() {
+      const modal = document.getElementById('promote-replica-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function executePromote() {
+      const btn = document.getElementById('btn-confirm-promote');
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Promoting...';
+      }
+
+      try {
+        const res = await authFetch('/api/replication/promote', { method: 'POST' });
+        if (res.ok) {
+          closePromoteModal();
+          showToast('Node successfully promoted to PRIMARY!');
+          await loadReplicationStatus();
+        } else {
+          const errText = await res.text();
+          showToast('Promotion failed: ' + errText, true);
+        }
+      } catch (err) {
+        showToast('Promotion error: ' + err.message, true);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = 'Confirm & Promote';
+        }
+      }
+    }
+
+    async function loadReplicationStatus(silent = false) {
+      try {
+        const res = await authFetch('/api/replication/status');
+        if (res.status === 404) {
+          renderReplicationStandalone();
+          updateReplicationSidebarBadge('STANDALONE');
+          return;
+        }
+        if (!res.ok) {
+          if (!silent) showToast('Failed to fetch replication status: ' + res.statusText, true);
+          return;
+        }
+        const data = await res.json();
+        currentReplicationData = data;
+        renderReplicationView(data);
+        updateReplicationSidebarBadge(data.role);
+      } catch (err) {
+        if (!silent) {
+          console.error('Error loading replication status:', err);
+        }
+      }
+    }
+
+    function renderReplicationView(data) {
+      const standaloneCard = document.getElementById('ha-standalone-card');
+      const primaryCard = document.getElementById('ha-primary-replicas-card');
+      const replicaCard = document.getElementById('ha-replica-action-card');
+      if (standaloneCard) standaloneCard.style.display = 'none';
+
+      const nodeIdEl = document.getElementById('ha-node-id');
+      if (nodeIdEl) nodeIdEl.textContent = data.node_id || '--';
+
+      const lsnEl = document.getElementById('ha-current-lsn');
+      if (lsnEl) lsnEl.textContent = (data.current_lsn !== undefined && data.current_lsn !== null) ? data.current_lsn : '--';
+
+      const roleBadge = document.getElementById('ha-role-badge');
+      const accessBadge = document.getElementById('ha-access-mode');
+      const accessDesc = document.getElementById('ha-access-desc');
+      const peerTitle = document.getElementById('ha-peer-title');
+      const peerValue = document.getElementById('ha-peer-value');
+      const peerDesc = document.getElementById('ha-peer-desc');
+
+      if (data.role === 'PRIMARY') {
+        if (roleBadge) {
+          roleBadge.textContent = 'PRIMARY';
+          roleBadge.style.background = '#064e3b';
+          roleBadge.style.color = '#6ee7b7';
+        }
+        if (accessBadge) {
+          accessBadge.textContent = 'Read / Write';
+          accessBadge.style.background = '#1e3a8a';
+          accessBadge.style.color = '#93c5fd';
+        }
+        if (accessDesc) accessDesc.textContent = 'Authoritative ACID Mutations & OCC Validation';
+
+        const repCount = data.replicas ? data.replicas.length : 0;
+        if (peerTitle) peerTitle.textContent = 'Connected Replicas';
+        if (peerValue) peerValue.textContent = repCount + (repCount === 1 ? ' Replica' : ' Replicas');
+        if (peerDesc) peerDesc.textContent = 'Active physical stream subscribers';
+
+        if (primaryCard) primaryCard.style.display = 'block';
+        if (replicaCard) replicaCard.style.display = 'none';
+
+        const countBadge = document.getElementById('ha-replicas-count-badge');
+        if (countBadge) countBadge.textContent = repCount + (repCount === 1 ? ' Replica' : ' Replicas');
+
+        renderReplicasTable(data.replicas || []);
+      } else if (data.role === 'REPLICA') {
+        if (roleBadge) {
+          roleBadge.textContent = 'REPLICA';
+          roleBadge.style.background = '#854d0e';
+          roleBadge.style.color = '#fef08a';
+        }
+        if (accessBadge) {
+          accessBadge.textContent = 'Read-Only';
+          accessBadge.style.background = '#854d0e';
+          accessBadge.style.color = '#fef08a';
+        }
+        if (accessDesc) accessDesc.textContent = 'Strict Write Guard (Snapshot Queries Only)';
+
+        if (peerTitle) peerTitle.textContent = 'Upstream Primary';
+        if (peerValue) peerValue.innerHTML = `<code style="color: #93c5fd; font-size: 0.9rem;">${escapeHtml(data.primary_url || '--')}</code>`;
+        if (peerDesc) peerDesc.textContent = 'Physical WAL streaming source';
+
+        if (primaryCard) primaryCard.style.display = 'none';
+        if (replicaCard) replicaCard.style.display = 'block';
+
+        const upstreamUrlEl = document.getElementById('ha-replica-upstream-url');
+        if (upstreamUrlEl) upstreamUrlEl.textContent = data.primary_url || '--';
+      }
+    }
+
+    function renderReplicasTable(replicas) {
+      const tbody = document.getElementById('ha-replicas-tbody');
+      if (!tbody) return;
+
+      if (!replicas || replicas.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: var(--text-muted); padding: 30px;">No secondary replicas currently streaming from this primary node.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = replicas.map(r => {
+        let stateBadge = '';
+        if (r.state === 'STREAMING') {
+          stateBadge = '<span class="badge" style="background:#064e3b; color:#6ee7b7;">STREAMING</span>';
+        } else if (r.state === 'CATCHING_UP') {
+          stateBadge = '<span class="badge" style="background:#854d0e; color:#fef08a;">CATCHING_UP</span>';
+        } else {
+          stateBadge = `<span class="badge" style="background:#7f1d1d; color:#fca5a5;">${escapeHtml(r.state || 'DISCONNECTED')}</span>`;
+        }
+
+        const lagDisplay = (r.replication_lag === 0) ?
+          '<span style="color:#10b981; font-weight:600;">0 (Up to date)</span>' :
+          `<span style="color:#f59e0b; font-weight:600;">${r.replication_lag} LSN</span>`;
+
+        const heartbeatStr = r.last_heartbeat ? new Date(r.last_heartbeat).toLocaleTimeString() : '--';
+        const connectedStr = r.connected_at ? new Date(r.connected_at).toLocaleString() : '--';
+
+        return `<tr>
+          <td><code style="color:#93c5fd; font-weight:600;">${escapeHtml(r.node_id)}</code></td>
+          <td><code style="color:#cbd5e1;">${escapeHtml(r.remote_addr)}</code></td>
+          <td>${stateBadge}</td>
+          <td style="font-family:monospace; font-size:0.85rem;">${r.acked_lsn}</td>
+          <td>${lagDisplay}</td>
+          <td style="font-size:0.8rem; color:var(--text-muted);">${heartbeatStr}</td>
+          <td style="font-size:0.8rem; color:var(--text-muted);">${connectedStr}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    function renderReplicationStandalone() {
+      const standaloneCard = document.getElementById('ha-standalone-card');
+      const primaryCard = document.getElementById('ha-primary-replicas-card');
+      const replicaCard = document.getElementById('ha-replica-action-card');
+
+      if (standaloneCard) standaloneCard.style.display = 'block';
+      if (primaryCard) primaryCard.style.display = 'none';
+      if (replicaCard) replicaCard.style.display = 'none';
+
+      const roleBadge = document.getElementById('ha-role-badge');
+      if (roleBadge) {
+        roleBadge.textContent = 'STANDALONE';
+        roleBadge.style.background = '#334155';
+        roleBadge.style.color = '#cbd5e1';
+      }
+
+      const nodeIdEl = document.getElementById('ha-node-id');
+      if (nodeIdEl) nodeIdEl.textContent = 'standalone-local';
+
+      const lsnEl = document.getElementById('ha-current-lsn');
+      if (lsnEl) lsnEl.textContent = 'Local Engine';
+
+      const accessBadge = document.getElementById('ha-access-mode');
+      if (accessBadge) {
+        accessBadge.textContent = 'Read / Write';
+        accessBadge.style.background = '#1e3a8a';
+        accessBadge.style.color = '#93c5fd';
+      }
+
+      const accessDesc = document.getElementById('ha-access-desc');
+      if (accessDesc) accessDesc.textContent = 'Standalone Single-Node Durability';
+
+      const peerTitle = document.getElementById('ha-peer-title');
+      if (peerTitle) peerTitle.textContent = 'Replication Status';
+
+      const peerValue = document.getElementById('ha-peer-value');
+      if (peerValue) peerValue.textContent = 'Disabled';
+
+      const peerDesc = document.getElementById('ha-peer-desc');
+      if (peerDesc) peerDesc.textContent = 'Single autonomous database instance';
+    }
+
+    function updateReplicationSidebarBadge(role) {
+      const badge = document.getElementById('nav-ha-badge');
+      if (!badge) return;
+
+      if (role === 'PRIMARY') {
+        badge.textContent = 'PRIMARY';
+        badge.style.background = '#064e3b';
+        badge.style.color = '#6ee7b7';
+      } else if (role === 'REPLICA') {
+        badge.textContent = 'REPLICA';
+        badge.style.background = '#854d0e';
+        badge.style.color = '#fef08a';
+      } else {
+        badge.textContent = 'HA';
+        badge.style.background = '#1e293b';
+        badge.style.color = '#94a3b8';
+      }
+    }
+
     // Init
     loadEngineInfo();
     checkAuthSession();
@@ -3906,6 +4298,7 @@ const procRes = await client.exec('TransferFunds', {
     loadWebhooks();
     loadCrons();
     loadMailSettings();
+    loadReplicationStatus(true);
     initRealtime();
     renderSQLHistoryDropdown();
     renderSQLFavoritesDropdown();

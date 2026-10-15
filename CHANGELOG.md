@@ -14,6 +14,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **Embedded Web Studio HA Replication Monitoring & Promotion Dashboard (`pkg/ui`)**:
+  - Implemented high-availability replication monitoring in embedded Web Studio (`:8090/_/`) with dedicated sidebar navigation and real-time status card (`view-replication`).
+  - Added topology visualization displaying cluster role (`PRIMARY` / `REPLICA` / `STANDALONE`), active engine LSN offset, read/write transaction mode, and connected stream consumers.
+  - Implemented connected secondary replica monitoring table detailing node ID, remote client address, streaming state (`STREAMING`, `CATCHING_UP`, `DISCONNECTED`), acked LSN, and physical replication lag.
+  - Provided interactive failover promotion interface with confirmation modal dispatching `POST /api/replication/promote` to instantly promote secondary replicas to authoritative read-write primary.
+  - Added 3-second auto-refresh polling loop with active view lifecycle management and graceful fallback for standalone instances.
+  - Added unit test coverage in `pkg/ui/embed_test.go` (`TestReplicationMonitoringElements`).
 - **MCV (Most Common Values) Skew List Statistics & Dual-Distribution Modeling (`C-7`) (`pkg/planner`)**:
   - Implemented `MCVItem` model and automatic top-frequent values extraction (`MaxMCVCount = 20`, frequency $\ge 1\%$ or $> 1.2\times$ average uniform frequency) in `BuildColumnStats` (`pkg/planner/stats.go`).
   - Decoupled selectivity estimation into an exact-match MCV phase and an equi-depth histogram interpolation phase on the non-MCV tail for `=`, `!=`, `IN`, `BETWEEN`, and range inequalities (`<`, `<=`, `>`, `>=`), resolving up to 10~100x cardinality estimation errors on non-uniformly distributed columns.

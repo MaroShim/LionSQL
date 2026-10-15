@@ -39,6 +39,8 @@ func TestDashboardMenuOrderAndContent(t *testing.T) {
 		`Client SDK`,
 		`data-view="mail"`,
 		`Settings / Mail`,
+		`data-view="replication"`,
+		`Replication (HA)`,
 	}
 
 	lastIdx := 0
@@ -65,3 +67,36 @@ func TestHandler(t *testing.T) {
 		t.Errorf("expected response to contain SQLion brand")
 	}
 }
+
+func TestReplicationMonitoringElements(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`id="view-replication"`,
+		`id="ha-role-badge"`,
+		`id="ha-current-lsn"`,
+		`id="ha-access-mode"`,
+		`id="ha-primary-replicas-card"`,
+		`id="ha-replicas-tbody"`,
+		`id="ha-replica-action-card"`,
+		`id="ha-standalone-card"`,
+		`id="promote-replica-modal"`,
+		`openPromoteModal()`,
+		`closePromoteModal()`,
+		`executePromote()`,
+		`loadReplicationStatus(`,
+		`/api/replication/promote`,
+		`/api/replication/status`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q", snippet)
+		}
+	}
+}
+

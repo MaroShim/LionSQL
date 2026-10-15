@@ -165,7 +165,7 @@
   - SSMS 접속 및 탐색기 트리 조회에 필수적인 `sys.configurations`, `sys.dm_exec_sessions`, `sys.dm_exec_connections`, `sys.database_principals`, `sys.server_principals`, `sys.dm_os_sys_info`, `sys.endpoints`, `sys.database_files`, `sys.master_files`, `sys.all_objects`, `sys.all_columns`, `sys.all_views` 가상 뷰 완비.
 - [ ] **PostgreSQL 와이어 프로토콜 서버 사이드 커서 (`pkg/wire`)**
   - 대규모 쿼리 결과 집합을 분할 수신하는 드라이버 호환성을 위한 `DECLARE ... CURSOR FOR` 및 `FETCH n` 서버 사이드 커서 라이프사이클 지원.
-- [ ] **임베디드 웹 스튜디오 HA 복제 모니터링 카드 (`pkg/ui`)**
+- [x] **임베디드 웹 스튜디오 HA 복제 모니터링 카드 (`pkg/ui`)**
   - 브라우저 웹 스튜디오(`:8090/_/`)에 고가용성(HA) 복제 상태(Primary vs Replica) 시각화 카드 추가.
   - 연결된 Replica 목록, LSN 랙(Lag) 지연 시간, 스트리밍 상태 표시 및 수동 승격(`Promote`) 버튼 제공.
 
