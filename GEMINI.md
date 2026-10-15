@@ -178,6 +178,9 @@ All modifications, refactoring, and feature additions must strictly pass the fol
 
 > **Exception (Documentation-Only Commits)**: For pure markdown (`*.md`) and text documentation modifications (`docs: ...`) that do not impact configurations or runtime behavior, the build and test steps may be bypassed and committed immediately.
 
+### Continuous Backlog & TODO Discipline (`TODO.ko.md` Auto-Sync Invariant)
+Whenever new features, architectural decisions (ADRs), or technical requirements are discussed and agreed upon during a conversation, the AI agent must **proactively and automatically register them in `TODO.ko.md`** (under Section 1 Priority table and Section 2 Domain-specific backlog) within the same session without waiting for an explicit user command. Likewise, whenever a task or refactoring is completed and passes verification, the agent must immediately mark it as complete (`[x]`) and record a brief implementation summary.
+
 ---
 
 ## 10. Developer & AI Handover Context Notes (`notes/`) & Roadmap
