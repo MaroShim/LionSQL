@@ -2922,7 +2922,7 @@ func (s *Coordinator) execDbGateMSSQLRowCountSelect(sql string, start time.Time)
 			}
 		}
 		if cnt == 0 && sess != nil {
-			tx, err := sess.BeginTx(storage.TxOptions{})
+			tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
 			if err == nil {
 				cursor, err := tx.Scan(t.Name)
 				if err == nil {

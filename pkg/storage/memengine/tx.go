@@ -924,16 +924,18 @@ func (tx *Transaction) GetRow(tableName string, pk storage.Value) (storage.Row, 
 }
 
 func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool) (storage.Row, int64, error) {
-	if tx.isLocallyDeleted(tableName, pkKey) {
-		return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
-	}
-
-	if row, found := tx.getLocal(tableName, pkKey); found {
-		ver := tx.getBaseVer(tableName, pkKey)
-		if clone {
-			return cloneRow(row), ver, nil
+	if !tx.opts.ReadOnly {
+		if tx.isLocallyDeleted(tableName, pkKey) {
+			return storage.Row{}, 0, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
 		}
-		return row, ver, nil
+
+		if row, found := tx.getLocal(tableName, pkKey); found {
+			ver := tx.getBaseVer(tableName, pkKey)
+			if clone {
+				return cloneRow(row), ver, nil
+			}
+			return row, ver, nil
+		}
 	}
 
 	td, err := tx.getTableLocked(tableName)
@@ -980,15 +982,22 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
-	keys := td.collectKeys(func(k string) bool {
-		return !tx.isLocallyDeleted(tableName, k)
-	})
+	var keys []string
+	if tx.opts.ReadOnly {
+		keys = td.collectKeys(nil)
+	} else {
+		keys = td.collectKeys(func(k string) bool {
+			return !tx.isLocallyDeleted(tableName, k)
+		})
+	}
 	tx.engine.mu.RUnlock()
 
-	if localRows, ok := tx.local[tableName]; ok {
-		for k := range localRows {
-			if !tx.isLocallyDeleted(tableName, k) {
-				keys = append(keys, k)
+	if !tx.opts.ReadOnly {
+		if localRows, ok := tx.local[tableName]; ok {
+			for k := range localRows {
+				if !tx.isLocallyDeleted(tableName, k) {
+					keys = append(keys, k)
+				}
 			}
 		}
 	}
@@ -1048,7 +1057,7 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 	for p := range partSet {
 		if pks, ok := td.Partitions[p]; ok {
 			for pk := range pks {
-				if !tx.isLocallyDeleted(tableName, pk) {
+				if tx.opts.ReadOnly || !tx.isLocallyDeleted(tableName, pk) {
 					keySet[pk] = struct{}{}
 				}
 			}
@@ -1058,14 +1067,16 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 	tx.engine.mu.RUnlock()
 
 	// Check uncommitted local rows in transaction
-	if localRows, ok := tx.local[tableName]; ok {
-		for pk, locRow := range localRows {
-			if tx.isLocallyDeleted(tableName, pk) {
-				continue
-			}
-			partID, err := td.Schema.ComputePartitionKeyFromRow(locRow)
-			if err == nil && partSet[partID] {
-				keySet[pk] = struct{}{}
+	if !tx.opts.ReadOnly {
+		if localRows, ok := tx.local[tableName]; ok {
+			for pk, locRow := range localRows {
+				if tx.isLocallyDeleted(tableName, pk) {
+					continue
+				}
+				partID, err := td.Schema.ComputePartitionKeyFromRow(locRow)
+				if err == nil && partSet[partID] {
+					keySet[pk] = struct{}{}
+				}
 			}
 		}
 	}
@@ -1118,30 +1129,34 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		}
 		seen[pk] = true
 
-		if tx.isLocallyDeleted(tableName, pk) {
-			continue
-		}
-
-		if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
-			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
-			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-				pks = append(pks, pk)
+		if !tx.opts.ReadOnly {
+			if tx.isLocallyDeleted(tableName, pk) {
+				continue
 			}
-			continue
+
+			if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
+				idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
+				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+					pks = append(pks, pk)
+				}
+				continue
+			}
 		}
 
 		pks = append(pks, pk)
 	}
 
-	if localRows, ok := tx.local[tableName]; ok {
-		for pk, locRow := range localRows {
-			if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
-				continue
-			}
-			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
-			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-				pks = append(pks, pk)
-				seen[pk] = true
+	if !tx.opts.ReadOnly {
+		if localRows, ok := tx.local[tableName]; ok {
+			for pk, locRow := range localRows {
+				if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
+					continue
+				}
+				idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
+				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+					pks = append(pks, pk)
+					seen[pk] = true
+				}
 			}
 		}
 	}
@@ -1248,20 +1263,22 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 		}
 		seen[pk] = true
 
-		if tx.isLocallyDeleted(tableName, pk) {
-			continue
-		}
-
-		if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
-			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
-			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-				pks = append(pks, pk)
-				keyMap[pk] = indexOnlyPayload{
-					key:         idxVal,
-					includeVals: extractIncludeValuesFromRow(&td.Schema, locRow, idxData.Schema.IncludeCols),
-				}
+		if !tx.opts.ReadOnly {
+			if tx.isLocallyDeleted(tableName, pk) {
+				continue
 			}
-			continue
+
+			if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
+				idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
+				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+					pks = append(pks, pk)
+					keyMap[pk] = indexOnlyPayload{
+						key:         idxVal,
+						includeVals: extractIncludeValuesFromRow(&td.Schema, locRow, idxData.Schema.IncludeCols),
+					}
+				}
+				continue
+			}
 		}
 
 		pks = append(pks, pk)
@@ -1271,18 +1288,20 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 		}
 	}
 
-	if localRows, ok := tx.local[tableName]; ok {
-		for pk, locRow := range localRows {
-			if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
-				continue
-			}
-			idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
-			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-				pks = append(pks, pk)
-				seen[pk] = true
-				keyMap[pk] = indexOnlyPayload{
-					key:         idxVal,
-					includeVals: extractIncludeValuesFromRow(&td.Schema, locRow, idxData.Schema.IncludeCols),
+	if !tx.opts.ReadOnly {
+		if localRows, ok := tx.local[tableName]; ok {
+			for pk, locRow := range localRows {
+				if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
+					continue
+				}
+				idxVal := extractIndexKeyFromRow(&td.Schema, locRow, idxData.Schema.Columns)
+				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+					pks = append(pks, pk)
+					seen[pk] = true
+					keyMap[pk] = indexOnlyPayload{
+						key:         idxVal,
+						includeVals: extractIncludeValuesFromRow(&td.Schema, locRow, idxData.Schema.IncludeCols),
+					}
 				}
 			}
 		}
@@ -1765,6 +1784,9 @@ func cloneChangesMap(m map[string]rowChange) map[string]rowChange {
 }
 
 func (tx *Transaction) getLocal(table, key string) (storage.Row, bool) {
+	if tx.opts.ReadOnly || tx.local == nil {
+		return storage.Row{}, false
+	}
 	if t, ok := tx.local[table]; ok {
 		r, exists := t[key]
 		return r, exists
@@ -1773,6 +1795,9 @@ func (tx *Transaction) getLocal(table, key string) (storage.Row, bool) {
 }
 
 func (tx *Transaction) getBaseVer(table, key string) int64 {
+	if tx.opts.ReadOnly || tx.baseVers == nil {
+		return 0
+	}
 	if t, ok := tx.baseVers[table]; ok {
 		return t[key]
 	}
@@ -1780,6 +1805,9 @@ func (tx *Transaction) getBaseVer(table, key string) int64 {
 }
 
 func (tx *Transaction) setBaseVer(table, key string, ver int64) {
+	if tx.opts.ReadOnly {
+		return
+	}
 	if tx.baseVers == nil {
 		tx.baseVers = make(map[string]map[string]int64, 4)
 	}
@@ -1825,6 +1853,9 @@ func (tx *Transaction) unmarkDeleted(table, key string) {
 }
 
 func (tx *Transaction) isLocallyDeleted(table, key string) bool {
+	if tx.opts.ReadOnly || tx.deleted == nil {
+		return false
+	}
 	if d, ok := tx.deleted[table]; ok {
 		return d[key]
 	}

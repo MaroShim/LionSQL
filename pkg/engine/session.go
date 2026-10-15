@@ -38,13 +38,17 @@ type ClientSession struct {
 	RunningQuery    string
 	QueryStartTime  time.Time
 	CancelRequested bool
+	IsReadOnlyFn    func() bool // reports whether the engine/host is running in read-only replica mode
 	Mu              sync.Mutex
 }
 
-// IsReadOnly returns true if the session was configured as read-only.
+// IsReadOnly returns true if the session or host node was configured as read-only.
 func (cs *ClientSession) IsReadOnly() bool {
 	if cs == nil {
 		return false
+	}
+	if cs.IsReadOnlyFn != nil && cs.IsReadOnlyFn() {
+		return true
 	}
 	cs.Mu.Lock()
 	defer cs.Mu.Unlock()

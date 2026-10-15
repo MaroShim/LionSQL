@@ -310,6 +310,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		PreparedStmts: make(map[string]*PreparedStatement),
 		User:          "dbo",
 		OriginalUser:  "dbo",
+		IsReadOnlyFn:  c.IsReadOnly,
 	}
 	c.sessions[id] = cs
 	return cs, nil

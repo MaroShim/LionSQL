@@ -14,6 +14,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added support for PostgreSQL system catalogs queried by DBeaver, including `pg_conversion`, `pg_shdescription`, `pg_tablespace`, and `pg_collation`.
   - Fixed nested comma projection splitting in `splitScalarProjections` so functions like `format('%I.%I', ...)` in catalog queries are not fragmented.
 ### Added
+- **Replica Node Zero-Allocation Read-Only Transaction Fast-Path (`pkg/engine`, `pkg/storage/memengine`)**:
+  - Wired dynamic `IsReadOnlyFn` detection into `ClientSession`, automatically binding all sessions on secondary replicas to strict read-only transactions (`storage.TxOptions{ReadOnly: true}`).
+  - Completely eliminated write-set buffers (`local`, `deleted`, `changes`, `savepoints`) and OCC base version tracking maps (`baseVers`) on read-only transactions, reducing memory allocations and GC overhead on high-frequency `SELECT` workloads.
+  - Optimized `memengine` read operations (`Get`, `GetRow`, `Scan`, `IndexScan`, `ScanIndexOnly`, `ScanPartitions`) to bypass local change/delete map lookups and avoid cloning row data when `tx.opts.ReadOnly` is active.
+  - Added test coverage in `pkg/engine/coordinator_test.go` (`TestReplicaSessionZeroAllocationFastPath`).
 - **Embedded Web Studio HA Replication Monitoring & Promotion Dashboard (`pkg/ui`)**:
   - Implemented high-availability replication monitoring in embedded Web Studio (`:8090/_/`) with dedicated sidebar navigation and real-time status card (`view-replication`).
   - Added topology visualization displaying cluster role (`PRIMARY` / `REPLICA` / `STANDALONE`), active engine LSN offset, read/write transaction mode, and connected stream consumers.

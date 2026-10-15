@@ -7,6 +7,7 @@ import (
 
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/engine"
+	"sqlion/pkg/replication"
 	"sqlion/pkg/storage/memengine"
 )
 
@@ -1170,3 +1171,86 @@ func TestCoordinator_SSMS_VirtualCatalogQueries(t *testing.T) {
 		t.Fatalf("expected 'users' table in sys.all_objects, got %v", resAllObj.Rows)
 	}
 }
+
+func TestReplicaSessionZeroAllocationFastPath(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	// 1. Create table and sample data on primary mode
+	if _, err := coord.ExecuteSQL("CREATE TABLE products (id INT PRIMARY KEY, name VARCHAR(50), price FLOAT)"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := coord.ExecuteSQL("INSERT INTO products (id, name, price) VALUES (1, 'Widget', 19.99), (2, 'Gadget', 29.99)"); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// 2. Attach replication manager in RoleReplica mode
+	repMgr, err := replication.NewManager(replication.Config{
+		NodeID:     "replica-node-1",
+		Role:       replication.RoleReplica,
+		PrimaryURL: "http://127.0.0.1:8090",
+		Engine:     eng,
+	})
+	if err != nil {
+		t.Fatalf("failed to create replication manager: %v", err)
+	}
+	defer repMgr.Close()
+
+	coord.SetReplicationManager(repMgr)
+
+	// 3. Verify coordinator is recognized as read-only
+	if !coord.IsReadOnly() {
+		t.Fatalf("expected coordinator to be read-only")
+	}
+
+	// 4. Verify newly acquired session automatically inherits ReadOnly status
+	sess, err := coord.GetOrCreateSession("replica-sess-1")
+	if err != nil {
+		t.Fatalf("GetOrCreateSession failed: %v", err)
+	}
+	if !sess.IsReadOnly() {
+		t.Fatalf("expected replica session to report IsReadOnly() == true")
+	}
+	if !sess.TxOptions().ReadOnly {
+		t.Fatalf("expected replica session TxOptions.ReadOnly to be true")
+	}
+
+	// 5. Verify write query is rejected on replica session
+	_, err = coord.ExecuteSessionSQL("replica-sess-1", "INSERT INTO products (id, name, price) VALUES (3, 'Doohickey', 9.99)")
+	if err == nil {
+		t.Fatalf("expected INSERT on read-only replica to fail, got nil")
+	}
+
+	// 6. Verify read query succeeds on replica session
+	res, err := coord.ExecuteSessionSQL("replica-sess-1", "SELECT id, name, price FROM products WHERE id = 1")
+	if err != nil {
+		t.Fatalf("SELECT on read-only replica failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["name"] != "Widget" {
+		t.Fatalf("unexpected query result on replica: %v", res.Rows)
+	}
+
+	// 7. Test Failover Promotion: Promote replica to Primary
+	if err := repMgr.Promote(); err != nil {
+		t.Fatalf("failed to promote replica: %v", err)
+	}
+	if coord.IsReadOnly() {
+		t.Fatalf("promoted coordinator should no longer be read-only")
+	}
+	if sess.IsReadOnly() {
+		t.Fatalf("session on promoted node should dynamically report IsReadOnly() == false")
+	}
+	if sess.TxOptions().ReadOnly {
+		t.Fatalf("session TxOptions on promoted node should be read-write (ReadOnly == false)")
+	}
+
+	// 8. Verify writes are now accepted on the promoted node
+	if _, err := coord.ExecuteSessionSQL("replica-sess-1", "INSERT INTO products (id, name, price) VALUES (3, 'Doohickey', 9.99)"); err != nil {
+		t.Fatalf("INSERT on promoted primary failed: %v", err)
+	}
+}
+
