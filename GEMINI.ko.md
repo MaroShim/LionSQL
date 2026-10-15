@@ -73,7 +73,8 @@ SQLion은 단일 프로세스 내에서 다중 데이터베이스 카탈로그�
    - **독립적 수명 주기**: 데이터베이스별 독립적인 스케일링, 업그레이드, 시점 복구(PITR) 및 재시작 가능.
    - **KISS 원칙 및 불필요한 복잡성 제거**: 데이터베이스 커널 내 교차 데이터베이스 카탈로그 잠금, 세션 데이터베이스 컨텍스트 스위칭 오버헤드, 분산 락 경합 제거.
 2. **영구 명세 불변 규칙**:
-   - **`USE <dbname>` 구문**: 명시적으로 **Spec Out (제외)**. 각 SQLion 프로세스는 데이터 디렉터리(`--data-dir`)당 정확히 하나의 격리된 데이터베이스 카탈로그만 서비스합니다.
+   - **진짜 다중 데이터베이스 카탈로그 동시 마운트 및 런타임 카탈로그 멀티플렉싱**: 명시적으로 **Spec Out (제외)**. 각 SQLion 프로세스는 데이터 디렉터리(`--data-dir`)당 정확히 하나의 격리된 데이터베이스 카탈로그만 서비스합니다.
+   - **`USE <dbname>` 관용적 가상 No-Op 허용 정책**: 단, MSSQL 덤프 스크립트, 마이그레이션 파일, DBeaver/SSMS/sqlcmd 등 외부 도구와의 100% 호환성을 위해 `USE <dbname>` (`USE master`, `USE [SalesDB]`) 구문은 **관용적 가상 No-Op(Tolerant Virtual No-Op)**으로 즉시 수용하고 TDS 환경 변경 토큰(`0xE3 ENVCHANGE`)과 세션 가상 DB 컨텍스트(`ClientSession.Database`, `DB_NAME()`, `CURRENT_DATABASE()`)를 동기화하여 구문 에러를 원천 차단함.
    - **멀티 테넌트 배포 표준**: 멀티 테넌시 및 다중 데이터베이스는 전용 포트와 디렉터리를 갖춘 가벼운 SQLion 독립 프로세스/컨테이너(`--port`, `--data-dir`)를 통해 배포됩니다.
 
 ---
@@ -136,7 +137,28 @@ SQLion은 모든 벤치마크(TPC-C, TPC-H, 마이크로 벤치마크), 테스�
 
 ---
 
-## 8. 엔지니어링 가이드라인 & 개발 파이프라인
+## 8. 핵심 아키텍처 불변 규칙: 엔진 단순성 및 명시적 기능 배제 (Explicit Spec-Out Decisions)
+
+SQLion은 엔터프라이즈급 sub-microsecond 트랜잭션 성능과 자립형 단일 바이너리(KISS) 아키텍처를 영구히 유지하기 위해 다음 기능들을 명시적으로 **Spec Out (영구 배제 및 불변 규칙)**으로 확정합니다:
+
+1. **절차 언어 런타임 단일화 & 중복 인터프리터(PL/pgSQL) 배제**:
+   - 프로시저 및 UDF 실행 엔진은 Native SQLite VDBE 스타일의 고성능 T-SQL 바이트코드 가상머신(`pkg/proc`)으로 완전 단일화합니다.
+   - PGWire는 PostgreSQL 표준 드라이버, ORM 및 GUI 도구(DBeaver, Beekeeper Studio 등)와의 클라이언트 연결 게이트웨이로만 기능하며, 엔진 내부에 PL/pgSQL 인터프리터를 중복 구현/탑재하는 것은 코어 비대화 및 버그 발생 지점 증가를 방지하기 위해 명시적으로 **Spec Out**합니다.
+2. **모던 JSON 전면 표준화 & 레거시 XML DML/XQuery 엔진 배제**:
+   - 반정형 데이터 처리는 T-SQL 및 ANSI 표준 JSON 함수군(`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`, `FOR JSON PATH / AUTO`) 및 Go 네이티브 고속 JSON 파서로 표준화합니다.
+   - 2000년대 레거시 Microsoft XML 스키마 검증, XML 데이터 타입 및 XML DML(`.modify()`, `.nodes()`, `.value()`, XQuery 프로세서)은 메모리 오버헤드와 파서 복잡성 배제를 위해 명시적으로 **Spec Out**합니다.
+3. **인메모리 OCC 스토리지 데드 튜플 백그라운드 Vacuum 스레드 배제**:
+   - 인메모리 OCC 엔진(`memengine`)은 세션 프라이빗 워크스페이스에서 변경분을 버퍼링 후 커밋 시 원자적으로 버전을 교체하거나 롤백 시 워크스페이스를 버림으로써 데드 튜플 체인을 메모리에 누적하지 않습니다.
+   - 불필요한 백그라운드 고루틴 생성, 주기적 전체 메모리 스캔 및 락 경합을 유발하는 PostgreSQL 스타일의 Vacuum 워커 스레드는 오버엔지니어링(YAGNI)으로 명시적으로 **Spec Out**합니다.
+4. **CDC 이벤트 스트리밍 표준화 & POSIX 공유 메모리(Arrow IPC) 스냅샷 배제**:
+   - 트랜잭션 커밋과 원자적으로 결합된 CDC/WAL 이벤트 스트림을 단일 표준 파이프라인으로 채택하여 임베디드 DuckDB OLAP 마이크로 배치 적재와 외부 브로커 포워딩을 일원화합니다.
+   - 쿼리마다 수 GB의 테이블을 풀스캔하여 직렬화하는 높은 OLTP CPU 부하와 OS 비이식성(도커 컨테이너 `/dev/shm` 64MB 한계, Windows 미지원)을 초래하는 Apache Arrow IPC 공유 메모리 스냅샷은 명시적으로 **Spec Out**합니다.
+5. **외부 분산 트랜잭션 코디네이터 (XA / MS DTC) 배제**:
+   - 네트워크 분산 2PC 트랜잭션 프로토콜인 XA Two-Phase Commit 및 Microsoft Distributed Transaction Coordinator (MS DTC)는 단일 노드 16,000+ TPS 트랜잭션 처리량 보존을 위해 명시적으로 **Spec Out**합니다. 분산 환경의 정합성은 비동기/반동기 WAL 복제와 멱등적(Idempotent) 이벤트 컨슈밍으로 처리합니다.
+
+---
+
+## 9. 엔지니어링 가이드라인 & 개발 파이프라인
 
 ### 3단계 검증 파이프라인 (Build ➔ Test ➔ Commit)
 모든 수정, 리팩토링 및 기능 추가는 커밋하기 전에 반드시 다음 3단계를 순서대로 통과해야 합니다:
@@ -158,7 +180,7 @@ SQLion은 모든 벤치마크(TPC-C, TPC-H, 마이크로 벤치마크), 테스�
 
 ---
 
-## 9. 개발자 & AI 인수인계 컨텍스트 노트 (`notes/`) & 로드맵
+## 10. 개발자 & AI 인수인계 컨텍스트 노트 (`notes/`) & 로드맵
 다양한 개발 환경에서 작업하거나 새로운 AI 에이전트 세션을 시작할 때는 과거 설계 논의, 음성적 지식(Spec-Out 사유), 엔지니어링 주의점 및 백로그에 대해 다음 문서를 참조하세요:
 - [`notes/ENGINEERING_CONTEXT.md`](notes/ENGINEERING_CONTEXT.md): 아키텍처 불변 규칙, 대안 기술 Spec-Out 사유, 협업 엔지니어링 원칙.
 - [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): 순환 참조 방지, wiredtiger 빌드 태그, 샌드박스 네트워크 격리, 소수점 JSON 직렬화, VDBE 트랜잭션 결합.

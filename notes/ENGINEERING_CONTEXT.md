@@ -10,10 +10,12 @@
 
 ### ① 데이터베이스 격리 전략: 인스턴스 단위 물리 격리 (Process-per-Database)
 * **결정 사항**: 데이터베이스 단위 물리 프로세스/컨테이너 격리.
-* **배제(Spec-Out)된 것**: 단일 프로세스 내 멀티 데이터베이스 카탈로그 멀티플렉싱 및 `USE <dbname>` 문법.
+* **배제(Spec-Out)된 것**: 단일 프로세스 내 진짜 다중 데이터베이스 카탈로그 동시 마운트 및 런타임 카탈로그 멀티플렉싱.
+* **관용적 가상 No-Op 허용 정책**:
+  * 단, MSSQL 덤프 스크립트, 마이그레이션 파일, DBeaver/SSMS/sqlcmd 등 외부 도구와의 100% 호환성을 위해 `USE <dbname>` (`USE master`, `USE [SalesDB]`) 구문은 **관용적 가상 No-Op(Tolerant Virtual No-Op)**으로 즉시 수용하고 TDS 환경 변경 토큰(`0xE3 ENVCHANGE`)과 세션 가상 DB 컨텍스트(`ClientSession.Database`, `DB_NAME()`, `CURRENT_DATABASE()`)를 동기화하여 구문 에러를 원천 차단함.
 * **이유 & 맥락**:
-  * 단일 프로세스 내 카탈로그 멀티플렉싱은 세션별 DB 컨텍스트 스위칭, 교차 DB 잠금 경합, 한 테넌트의 메모리 누수가 전체를 죽이는 장애 반경(Blast Radius) 문제를 낳습니다.
-  * SQLion은 단일 정적 바이너리로 매우 가볍게 구동되므로, 멀티 테넌시는 포트(`--port`, `--http`)와 데이터 디렉토리(`--dir`)를 분리한 독립 프로세스/컨테이너로 배포하는 것이 Radically Simple(KISS)하며 보안 및 자원 격리에 절대적으로 유리합니다.
+  * 단일 프로세스 내 물리적 카탈로그 멀티플렉싱은 세션별 DB 컨텍스트 스위칭, 교차 DB 메타데이터 잠금 경합, 한 테넌트의 메모리 누수가 전체를 죽이는 장애 반경(Blast Radius) 문제를 낳습니다.
+  * SQLion은 단일 정적 바이너리로 매우 가볍게 구동되므로, 멀티 테넌시는 포트(`--port`, `--http`)와 데이터 디렉토리(`--data-dir`)를 분리한 독립 프로세스/컨테이너로 배포하는 것이 Radically Simple(KISS)하며 보안 및 자원 격리에 절대적으로 유리합니다.
 
 ### ② 트랜잭션 동시성 모델: Non-Blocking 스냅샷 격리 / 커밋 읽기
 * **결정 사항**: 독자(Reader)는 필자(Writer)를 막지 않고, 필자도 독자를 막지 않는 비차단 스냅샷 격리.
@@ -57,6 +59,27 @@
   * Arrow IPC 공유 메모리 방식은 쿼리나 주기마다 수 GB에 달하는 테이블 전체를 풀스캔하여 Arrow 포맷으로 직렬화해야 하므로 심각한 OLTP CPU/메모리 부하를 유발하며, 스냅샷 시점의 데이터만 보는 정적 배치 방식에 불과합니다.
   * 또한 거대한 Apache Arrow Go SDK 의존성 추가(KISS 원칙 위배)와 OS별 비이식성(Windows 호환 불가, 도커 컨테이너 `/dev/shm` 64MB 제한) 문제를 발생시킵니다.
   * 반면 CDC 스트리밍은 커밋된 변경분(Delta)만 가볍게 비동기 전달하므로 OLTP 오버헤드가 사실상 0이고, 실시간 반영(ms 단위)이 가능하며, 임베디드 DuckDB Appender와 네이티브하게 결합되므로 공유 메모리 스냅샷은 중복이자 불필요한 기능입니다.
+
+### ⑨ 절차 언어 런타임 단일화 & 중복 인터프리터(PL/pgSQL) 배제 (Spec-Out)
+* **결정 사항**: 저장 프로시저 및 함수 실행 엔진은 Native SQLite VDBE 스타일의 고성능 T-SQL 바이트코드 가상머신(`pkg/proc`)으로 완전 단일화.
+* **배제(Spec-Out)된 것**: PostgreSQL 전용 절차 언어(PL/pgSQL) 인터프리터 및 다중 프로시저 언어 런타임 탑재.
+* **이유 & 맥락**:
+  * PGWire는 PostgreSQL 생태계의 표준 드라이버, ORM 및 GUI 클라이언트 도구(DBeaver, Beekeeper Studio 등)와의 완벽한 접속 인터페이스(I/O 게이트웨이)로 기능합니다.
+  * 프로시저 비즈니스 로직 런타임까지 중복으로 PL/pgSQL 인터프리터를 구현하여 탑재하는 것은 코어 엔진 비대화, 실행 경로 이중화, 잠재적 보안 버그 및 관리 비용을 2배로 증가시키는 안티패턴(KISS & DRY 위배)이므로 의도적으로 배제합니다.
+
+### ⑩ 모던 JSON 표준화 & 레거시 XML DML/XQuery 엔진 배제 (Spec-Out)
+* **결정 사항**: 반정형(Semi-Structured) 데이터 저장 및 추출은 T-SQL 및 ANSI 표준 JSON 함수군(`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`, `FOR JSON PATH / AUTO`) 및 Go 네이티브 고속 JSON 엔진으로 전면 표준화.
+* **배제(Spec-Out)된 것**: 2000년대 레거시 Microsoft XML 데이터 타입 및 XML DML(`.modify()`, `.nodes()`, `.value()`, `.exist()`, XQuery/XPath 프로세서).
+* **이유 & 맥락**:
+  * 과거 엔터프라이즈 환경에서 사용되던 XML 스키마 검증 및 XQuery 엔진은 수만 라인의 파서 복잡성과 메모리 오버헤드를 유발합니다.
+  * 모던 웹, 모바일, BaaS(PocketBase/Supabase 스타일) 및 마이크로서비스 생태계는 100% JSON으로 통일되어 있으므로, 무거운 레거시 XML DML 엔진은 의도적으로 배제하고 고성능 JSON 처리에 집중합니다.
+
+### ⑪ 외부 분산 트랜잭션 코디네이터 (XA / MS DTC) 배제 (Spec-Out)
+* **결정 사항**: 엄격한 단일 노드 원자적 ACID 트랜잭션 모델링과 선형적 LSN WAL 복제본 승격 토폴로지 채택.
+* **배제(Spec-Out)된 것**: 네트워크 분산 트랜잭션 프로토콜인 XA Two-Phase Commit 및 Microsoft Distributed Transaction Coordinator (MS DTC).
+* **이유 & 맥락**:
+  * 분산 트랜잭션 코디네이터는 네트워크 단절 시 인다웃(In-Doubt) 트랜잭션 잠금 고착, 코디네이터 단일 장애점(SPOF), 네트워크 RTT에 의한 쓰기 지연시간 폭증(16,000+ TPS 붕괴)을 유발합니다.
+  * 트랜잭션 경계는 항상 단일 노드 내에서 원자적으로 종결(`sess.BeginTx()` -> `tx.Commit()`)되며, 분산 환경의 정합성은 비동기/반동기 WAL 복제와 멱등적(Idempotent) 이벤트 컨슈밍으로 해결합니다.
 
 ---
 

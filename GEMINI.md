@@ -73,7 +73,8 @@ SQLion adopts **Instance-Level Isolation (Process / Container per Database)** as
    - **Independent Lifecycle**: Enables independent scaling, upgrading, point-in-time recovery (PITR), and restarts per database.
    - **KISS & Zero Redundant Complexity**: Eliminates cross-database catalog locking, session database context switching overhead, and distributed lock contention in the database kernel.
 2. **Permanent Specification Invariant**:
-   - **`USE <dbname>` Syntax**: Explicitly **Spec Out**. Each SQLion process serves exactly one isolated database catalog per data directory (`--data-dir`).
+   - **True Multi-Database Catalog Multiplexing**: Explicitly **Spec Out**. Each SQLion process serves exactly one isolated database catalog per data directory (`--data-dir`).
+   - **`USE <dbname>` Tolerant Virtual No-Op Policy**: To guarantee 100% interoperability with MSSQL export scripts, database migrations, and tools like DBeaver, SSMS, and sqlcmd, the `USE <dbname>` (`USE master`, `USE [SalesDB]`) statement is accepted as a **Tolerant Virtual No-Op**. The server synchronizes session virtual database state (`ClientSession.Database`, `DB_NAME()`, `CURRENT_DATABASE()`) and emits official TDS environment change tokens (`0xE3 ENVCHANGE`), eliminating syntax errors without physical catalog switching.
    - **Multi-Tenant Deployment Standard**: Multi-tenancy and multiple databases are deployed via lightweight SQLion standalone processes/containers with dedicated ports and directories (`--port`, `--data-dir`).
 
 ---
@@ -136,7 +137,28 @@ SQLion mandates **Strict Atomic ACID Transaction Modeling** across all benchmark
 
 ---
 
-## 8. Engineering Guidelines & Development Pipeline
+## 8. Core Architectural Invariant: Engine Simplicity & Explicit Spec-Out Decisions
+
+SQLion permanently designates the following architectural models as **Spec Out (Excluded / Non-Goals)** to protect sub-microsecond transaction performance, single-node hardware saturation, and zero-dependency self-containment:
+
+1. **Unified Procedural Runtime & PL/pgSQL Interpreter Exclusion (Spec-Out)**:
+   - Stored procedure and UDF execution is strictly unified under the high-performance SQLite VDBE-style T-SQL bytecode virtual machine (`pkg/proc`).
+   - PGWire functions solely as a client I/O gateway for standard PostgreSQL drivers, ORMs, and tools. Implementing a redundant second procedural interpreter (PL/pgSQL) inside the database kernel is explicitly **Spec Out** to prevent engine bloat, duplicated execution paths, and security attack surface duplication (KISS & DRY).
+2. **Modern JSON Standardization & Legacy XML DML / XQuery Exclusion (Spec-Out)**:
+   - Semi-structured document processing is standardized around T-SQL and ANSI JSON functions (`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`, `FOR JSON PATH / AUTO`) backed by Go's native high-speed parser.
+   - 2000s legacy Microsoft XML schema validation, XML data types, and XML DML (`.modify()`, `.nodes()`, `.value()`, XQuery engines) are explicitly **Spec Out** to eliminate memory bloat and parser complexity.
+3. **In-Memory OCC Storage: Background Vacuum Thread Exclusion (Spec-Out)**:
+   - The in-memory OCC engine (`memengine`) buffers transaction mutations in private workspaces and atomically swaps versions on commit or discards workspaces on rollback, never accumulating dead-tuple chains in memory.
+   - Background multi-version dead tuple cleanup threads (PostgreSQL-style Vacuum workers) that consume background goroutines, scan memory, and cause lock thrashing are explicitly **Spec Out** as YAGNI over-engineering.
+4. **CDC Event Streaming Standardization & POSIX Shared Memory (Arrow IPC) Exclusion (Spec-Out)**:
+   - Transaction-committed CDC/WAL event streaming is the unified pipeline for both DuckDB OLAP micro-batch ingestion and external message broker forwarding.
+   - Static Apache Arrow IPC shared memory snapshotting (`/dev/shm`) that incurs massive table full-scan CPU overhead and OS non-portability (Docker container 64MB limits, lack of Windows support) is explicitly **Spec Out**.
+5. **External Distributed Transaction Coordinators (XA / MS DTC) Exclusion (Spec-Out)**:
+   - Network two-phase commit protocols like XA and Microsoft Distributed Transaction Coordinator (MS DTC) are explicitly **Spec Out** to preserve single-node 16,000+ TPS transaction throughput. Distributed consistency is achieved via asynchronous/semi-synchronous WAL replication and idempotent consumer processing.
+
+---
+
+## 9. Engineering Guidelines & Development Pipeline
 
 ### 3-Stage Verification Pipeline (Build ➔ Test ➔ Commit)
 All modifications, refactoring, and feature additions must strictly pass the following 3 stages before committing:
@@ -158,7 +180,7 @@ All modifications, refactoring, and feature additions must strictly pass the fol
 
 ---
 
-## 9. Developer & AI Handover Context Notes (`notes/`) & Roadmap
+## 10. Developer & AI Handover Context Notes (`notes/`) & Roadmap
 When working across different development environments or initiating a new AI agent session, refer to the following documentation for engineering context, guidelines, and backlogs:
 - [`notes/ENGINEERING_CONTEXT.md`](notes/ENGINEERING_CONTEXT.md): Architectural invariants, why alternatives were spec'd out, and collaboration principles.
 - [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): Circular import immunity, wiredtiger build tags, sandbox network handling, Decimal JSON serialization, and VDBE transaction coupling.
