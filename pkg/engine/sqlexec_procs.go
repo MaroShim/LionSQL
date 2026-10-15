@@ -29,7 +29,8 @@ func unwrapSQLString(s string) string {
 	return s
 }
 
-func parseProcArgs(raw string) (string, []string) {
+// ParseProcArgs parses procedure name and argument tokens from EXEC / CALL query string.
+func ParseProcArgs(raw string) (string, []string) {
 	raw = strings.TrimSpace(raw)
 	upper := strings.ToUpper(raw)
 	if strings.HasPrefix(upper, "EXEC ") {
@@ -557,7 +558,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, args []string, sta
 }
 
 func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	procName, args := parseProcArgs(query)
+	procName, args := ParseProcArgs(query)
 
 	ctx := context.Background()
 	if cs != nil && cs.QueryCtx != nil {
@@ -643,10 +644,17 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	}
 	messages = append(messages, fmt.Sprintf("Return code: %v", res.ReturnValue))
 
+	rowsAffected := res.RowsAffected
+	if rowsAffected == 0 && len(res.Rows) > 0 {
+		rowsAffected = int64(len(res.Rows))
+	}
+
 	return &QueryResult{
 		Success:      true,
 		Command:      "EXEC",
-		RowsAffected: 1,
+		Columns:      res.Columns,
+		Rows:         res.Rows,
+		RowsAffected: rowsAffected,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     messages,
 	}, nil

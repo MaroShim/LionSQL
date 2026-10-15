@@ -20,6 +20,12 @@ type SeqScanIterator struct {
 	bufChunk    Chunk
 	bufIdx      int
 	eof         bool
+	arena       *storage.Arena
+}
+
+// SetArena configures an optional memory arena for zero-GC tuple allocation.
+func (s *SeqScanIterator) SetArena(a *storage.Arena) {
+	s.arena = a
 }
 
 // NewSeqScanIterator creates a new sequential scan iterator.
@@ -89,8 +95,14 @@ func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 		if hasRaw {
 			if rawData, ok := rawCur.RawTuple(); ok {
 				if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
+					var vals []any
+					if s.arena != nil {
+						vals = s.arena.AllocAnySlice(len(s.schema.Columns))
+					} else {
+						vals = make([]any, len(s.schema.Columns))
+					}
 					dest.Tuples = append(dest.Tuples, Tuple{
-						Values: make([]any, len(s.schema.Columns)),
+						Values: vals,
 						Index:  s.colIndexMap,
 						Lazy:   lazy,
 					})
@@ -100,7 +112,7 @@ func (s *SeqScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 		}
 
 		if row, err := s.cursor.Row(); err == nil {
-			dest.Tuples = append(dest.Tuples, FormatRow(row, s.schema, s.alias, s.colIndexMap))
+			dest.Tuples = append(dest.Tuples, FormatRowWithArena(row, s.schema, s.alias, s.colIndexMap, s.arena))
 			continue
 		}
 
@@ -178,6 +190,12 @@ type IndexScanIterator struct {
 	bufChunk    Chunk
 	bufIdx      int
 	eof         bool
+	arena       *storage.Arena
+}
+
+// SetArena configures an optional memory arena for zero-GC tuple allocation.
+func (s *IndexScanIterator) SetArena(a *storage.Arena) {
+	s.arena = a
 }
 
 // NewIndexScanIterator creates a new index scan iterator.
@@ -246,8 +264,14 @@ func (s *IndexScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 		if hasRaw {
 			if rawData, ok := rawCur.RawTuple(); ok {
 				if lazy, err := storage.NewLazyTuple(s.schema, rawData); err == nil {
+					var vals []any
+					if s.arena != nil {
+						vals = s.arena.AllocAnySlice(len(s.schema.Columns))
+					} else {
+						vals = make([]any, len(s.schema.Columns))
+					}
 					dest.Tuples = append(dest.Tuples, Tuple{
-						Values: make([]any, len(s.schema.Columns)),
+						Values: vals,
 						Index:  s.colIndexMap,
 						Lazy:   lazy,
 					})
@@ -257,7 +281,7 @@ func (s *IndexScanIterator) NextChunk(ctx context.Context, dest *Chunk) error {
 		}
 
 		if row, err := s.cursor.Row(); err == nil {
-			dest.Tuples = append(dest.Tuples, FormatRow(row, s.schema, s.alias, s.colIndexMap))
+			dest.Tuples = append(dest.Tuples, FormatRowWithArena(row, s.schema, s.alias, s.colIndexMap, s.arena))
 			continue
 		}
 

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"sqlion/pkg/storage"
 )
 
 // DefaultWorkMem defines the default memory budget per query execution operator (64MB).
@@ -13,8 +15,9 @@ const DefaultWorkMem int64 = 64 * 1024 * 1024
 
 // ExecutorOptions controls memory budgets and scratch space for query operators.
 type ExecutorOptions struct {
-	WorkMem int64  `json:"work_mem"`
-	TempDir string `json:"temp_dir"`
+	WorkMem int64          `json:"work_mem"`
+	TempDir string         `json:"temp_dir"`
+	Arena   *storage.Arena `json:"-"`
 }
 
 // DefaultExecutorOptions returns production default execution options.

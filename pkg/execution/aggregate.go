@@ -65,6 +65,12 @@ type AggregateIterator struct {
 	idx         int
 	schema      []string
 	colIndexMap *ColumnIndexMap
+	arena       *storage.Arena
+}
+
+// SetArena configures an optional memory arena for aggregate result tuples.
+func (a *AggregateIterator) SetArena(ar *storage.Arena) {
+	a.arena = ar
 }
 
 // NewAggregateIterator creates a new Aggregate operator.
@@ -455,7 +461,12 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 
 	// If no rows returned and no GROUP BY (global aggregation: e.g. SELECT COUNT(*) FROM empty)
 	if !hasRows && len(a.groupKeys) == 0 {
-		vals := make([]any, len(a.fields))
+		var vals []any
+		if a.arena != nil {
+			vals = a.arena.AllocAnySlice(len(a.fields))
+		} else {
+			vals = make([]any, len(a.fields))
+		}
 		for fIdx, f := range a.fields {
 			if f.isStar || f.fnType == aggCount {
 				vals[fIdx] = int64(0)
@@ -495,7 +506,12 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 	// Materialize groups into result tuples
 	for _, gk := range groupOrder {
 		acc := groups[gk]
-		vals := make([]any, len(a.fields))
+		var vals []any
+		if a.arena != nil {
+			vals = a.arena.AllocAnySlice(len(a.fields))
+		} else {
+			vals = make([]any, len(a.fields))
+		}
 
 		for fIdx, f := range a.fields {
 			if f.isLiteral {

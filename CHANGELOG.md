@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Per-Query Arena Memory Allocator for Zero-GC Execution (`pkg/storage`, `pkg/execution`, `pkg/engine`)**:
+  - Implemented high-performance query/session-scoped memory arena slab allocator (`pkg/storage/arena.go`) with bump-pointer allocation and 8-byte alignment, eliminating Go runtime garbage collection overhead and heap fragmentation during heavy analytical queries.
+  - Slabs pooled via `sync.Pool` across raw bytes (`DefaultByteSlabSize = 64KB`), storage values (`DefaultValueSlabSize = 2048 Values`), and interface slices (`DefaultAnySlabSize = 2048 []any`).
+  - Implemented $O(1)$ single-pointer reset (`Reset()`, `Release()`, `PutArena()`), recycling slabs back to global pool without leaks.
+  - Integrated with `pkg/execution` operators:
+    - `ExecutorOptions.Arena *storage.Arena`: wired into Volcano plan tree builder (`BuildExecutorWithOptions`).
+    - `SeqScanIterator` and `IndexScanIterator`: arena-allocated tuple value buffers and `FormatRowWithArena`.
+    - `HashJoinIterator`: zero-allocation key interning (`h.arena.AllocString`) and merged tuple allocations (`mergeTuplesWithArena`, `mergeTuplesWithNullsAndArena`, `mergeNullsWithTupleAndArena`).
+    - `SortIterator`: arena-backed sorting buffers.
+    - `AggregateIterator`: arena-allocated group result tuples.
+    - `execVolcanoSelect`: borrow and return query-scoped arena via `storage.GetArena()` and `defer storage.PutArena(arena)`.
+  - Added unit test suites and benchmarks in `pkg/storage/arena_test.go` (14.0 ns/op, 0 B/op, 0 allocs/op) and `pkg/execution/arena_test.go`.
+- **PostgreSQL Wire Protocol T-SQL Stored Procedure Execution Compatibility (`pkg/wire`, `pkg/proc`, `pkg/engine`)**:
+  - Added full support for executing T-SQL stored procedures over PostgreSQL wire protocol (:5433) using both `EXEC <proc>` and PostgreSQL standard `CALL <proc>(args)` syntax.
+  - Added procedure result row schema propagation in `writeSchemaDescription` and `handleExecute`, enabling extended query protocol drivers (`pgx`, `psycopg3`, `node-postgres`) to describe, bind, and scan procedure result rows without OID mismatches.
+  - Updated native Pratt parser (`pkg/proc/parser.go`) to parse general `SELECT` statements inside stored procedure scripts alongside `SELECT INTO`.
+  - Propagated execution result rows and columns in `execProcedureCall` (`pkg/engine/sqlexec_procs.go`).
+  - Added end-to-end driver integration test in `pkg/wire/pgx_integration_test.go` (`TestDriverIntegration_PGX_TSQLStoredProcedure`).
 - **T-SQL `STRING_SPLIT` Table-Valued Function & Query Resolution Compatibility (`pkg/engine`)**:
   - Implemented official Microsoft T-SQL `STRING_SPLIT(string, separator [, enable_ordinal])` table-valued function in `pkg/engine/sqlexec_string_split.go`.
   - Added full support for direct invocation (`SELECT value [, ordinal] FROM STRING_SPLIT(...) [AS alias]`), national string literals (`N'...'`), session variables (`@var`), `WHERE` filtering, `ORDER BY`, `DISTINCT`, aggregate `COUNT(*)`, and standard SQL pagination (`LIMIT` / `OFFSET` and T-SQL `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY`).

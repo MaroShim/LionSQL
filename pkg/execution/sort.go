@@ -10,6 +10,8 @@ import (
 	"os"
 	"sort"
 	"strings"
+
+	"sqlion/pkg/storage"
 )
 
 type sortItem struct {
@@ -60,6 +62,12 @@ type SortIterator struct {
 	peakMemory int64
 	outChunk   Chunk
 	outIdx     int
+	arena      *storage.Arena
+}
+
+// SetArena configures an optional memory arena for sort buffer and tuple allocations.
+func (s *SortIterator) SetArena(a *storage.Arena) {
+	s.arena = a
 }
 
 // NewSortIterator creates a new sort operator from an ORDER BY clause string (e.g. "age DESC, name ASC").

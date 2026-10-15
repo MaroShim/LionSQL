@@ -888,6 +888,47 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 	}
 
+	if strings.HasPrefix(upper, "EXEC") || strings.HasPrefix(upper, "CALL") {
+		procName, _ := engine.ParseProcArgs(query)
+		if procName != "" {
+			var prog *proc.Program
+			if s.byteCache != nil {
+				if p, found := s.byteCache.GetByName(procName); found && p != nil {
+					prog = p
+				} else if s.catalog != nil {
+					if procMeta, err := s.catalog.GetProcedure(procName); err == nil && procMeta != nil {
+						if compiled, err := s.byteCache.GetOrCompile(procMeta.Body); err == nil && compiled != nil {
+							s.byteCache.PutByName(procName, compiled)
+							prog = compiled
+						}
+					}
+				}
+			}
+
+			if prog != nil {
+				if cols := prog.ResultColumns(); len(cols) > 0 {
+					querySQL := ""
+					if s.catalog != nil {
+						if procMeta, err := s.catalog.GetProcedure(procName); err == nil && procMeta != nil {
+							querySQL = procMeta.Body
+						}
+					}
+					colOIDs := s.resolveColumnOIDs(querySQL, cols, nil)
+					colMetas := make([]ColumnMeta, len(cols))
+					for i, c := range cols {
+						oid := colOIDs[i]
+						if oid == 0 {
+							oid = 25
+						}
+						colMetas[i] = ColumnMeta{Name: c, DataType: oid}
+					}
+					_ = WriteRowDescription(conn, colMetas)
+					return
+				}
+			}
+		}
+	}
+
 	_ = WriteNoData(conn)
 }
 
@@ -981,7 +1022,16 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 	if len(res.Rows) > 0 {
 		sampleRow = res.Rows[0]
 	}
-	colOIDs := s.resolveColumnOIDs(portal.Statement.Query, res.Columns, sampleRow)
+	queryForOIDs := portal.Statement.Query
+	if strings.HasPrefix(strings.ToUpper(strings.TrimSpace(queryForOIDs)), "EXEC") || strings.HasPrefix(strings.ToUpper(strings.TrimSpace(queryForOIDs)), "CALL") {
+		procName, _ := engine.ParseProcArgs(queryForOIDs)
+		if procName != "" && s.catalog != nil {
+			if procMeta, err := s.catalog.GetProcedure(procName); err == nil && procMeta != nil {
+				queryForOIDs = procMeta.Body
+			}
+		}
+	}
+	colOIDs := s.resolveColumnOIDs(queryForOIDs, res.Columns, sampleRow)
 
 	bw := bufio.NewWriterSize(conn, 32768)
 	scratchRowBytes := make([][]byte, len(res.Columns))

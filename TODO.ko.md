@@ -208,8 +208,9 @@
 - [x] **Volcano 청크 단위 배치 실행 (Vectorized Chunk Iterator: 64~1024건) (`pkg/execution`, `pkg/engine`)**
   - 행 단위 `Next()` 가상 함수 호출 및 `ctx.Done()` 검사 오버헤드를 줄이기 위해 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍(`ChunkedIterator`, `NextChunk`).
   - `SeqScan`, `IndexScan`, `Filter`, `Projection`, `Limit`, `Aggregate`, `Sort`, `HashJoin`, `IndexNestedLoopJoin`, `sqlexec_select` 전반에 배치 파이프라인 관통 및 기존 단건 `Next()` 투명 버퍼링 100% 하위 호환성 보장.
-- [ ] **세션/쿼리 전용 아레나 메모리 할당기 (Arena Allocator) (`pkg/execution`, `pkg/storage`)**
-  - 해시 조인, 소트 버퍼에 대해 쿼리 수명주기에 묶인 아레나 할당기를 적용하여 Go GC 압박 원천 제거.
+- [x] **세션/쿼리 전용 아레나 메모리 할당기 (Arena Allocator) (`pkg/execution`, `pkg/storage`)**
+  - 해시 조인, 소트 버퍼, 스캔, 어그리게이션에 대해 쿼리 수명주기에 묶인 아레나 할당기를 적용하여 Go GC 압박 원천 제거 (`GetArena` / `PutArena`, `AllocAnySlice`, `AllocValues`, `AllocString`, `AllocBytes`).
+  - 8바이트 정렬 슬랩 풀링(`sync.Pool`)과 단일 포인터 리셋($O(1)$)으로 슬랩 재활용 및 제로 GC 실행 경로 구현.
 
 ### 2.3. 와이어 프로토콜 & 생태계 (Wire Protocols & Ecosystem)
 - [x] **T-SQL 특수 타입 직렬화 (TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET, UNIQUEIDENTIFIER) (`pkg/wire/tds`)**

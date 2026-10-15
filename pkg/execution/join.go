@@ -38,6 +38,7 @@ type HashJoinIterator struct {
 	inIdx          int
 	outChunk       Chunk
 	outIdx         int
+	arena          *storage.Arena
 }
 
 // NewHashJoinIterator creates a new Hash Join operator.
@@ -55,6 +56,11 @@ func NewHashJoinIterator(left, right Iterator, joinType, leftKey, rightKey strin
 		hashTable: make(map[string][]hashMatch),
 		workMem:   DefaultWorkMem,
 	}
+}
+
+// SetArena configures an optional memory arena for zero-GC key string and merged tuple allocation.
+func (h *HashJoinIterator) SetArena(a *storage.Arena) {
+	h.arena = a
 }
 
 // SetWorkMem sets the maximum memory budget for the hash table.
@@ -151,7 +157,21 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 			if !found || keyVal == nil {
 				continue
 			}
-			kStr := fmt.Sprintf("%v", keyVal)
+			var kStr string
+			if sVal, ok := keyVal.(string); ok {
+				if h.arena != nil {
+					kStr = h.arena.AllocString(sVal)
+				} else {
+					kStr = sVal
+				}
+			} else {
+				formatted := fmt.Sprintf("%v", keyVal)
+				if h.arena != nil {
+					kStr = h.arena.AllocString(formatted)
+				} else {
+					kStr = formatted
+				}
+			}
 			h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
 		}
 
@@ -219,7 +239,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 				if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
 					h.matchedRight[m.idx] = true
 				}
-				return mergeTuples(h.currentProbe, m.tuple, h.colIndexMap), nil
+				return mergeTuplesWithArena(h.currentProbe, m.tuple, h.colIndexMap, h.arena), nil
 			}
 		}
 
@@ -238,7 +258,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 						} else {
 							leftColsCount = len(h.left.Schema())
 						}
-						return mergeNullsWithTuple(leftColsCount, rTuple, h.colIndexMap), nil
+						return mergeNullsWithTupleAndArena(leftColsCount, rTuple, h.colIndexMap, h.arena), nil
 					}
 				}
 			}
@@ -253,7 +273,12 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 		keyVal, found := lookupVal(probeTuple, h.leftKey)
 		hasMatch := false
 		if found && keyVal != nil {
-			kStr := fmt.Sprintf("%v", keyVal)
+			var kStr string
+			if sVal, ok := keyVal.(string); ok {
+				kStr = sVal
+			} else {
+				kStr = fmt.Sprintf("%v", keyVal)
+			}
 			if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
 				hasMatch = true
 				h.currentMatches = matches
@@ -283,7 +308,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 			if trackRight && m.idx >= 0 && m.idx < len(h.matchedRight) {
 				h.matchedRight[m.idx] = true
 			}
-			return mergeTuples(h.currentProbe, m.tuple, h.colIndexMap), nil
+			return mergeTuplesWithArena(h.currentProbe, m.tuple, h.colIndexMap, h.arena), nil
 		}
 
 		// If LEFT JOIN or FULL JOIN and no matches, emit probe tuple with NULLs
@@ -296,7 +321,7 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 			} else {
 				rightColsCount = len(h.right.Schema())
 			}
-			return mergeTuplesWithNulls(probeTuple, rightColsCount, h.colIndexMap), nil
+			return mergeTuplesWithNullsAndArena(probeTuple, rightColsCount, h.colIndexMap, h.arena), nil
 		}
 	}
 }
@@ -668,7 +693,16 @@ func (n *IndexNestedLoopJoinIterator) innerSchemaColumns() []string {
 }
 
 func mergeTuples(left, right Tuple, combinedIndex *ColumnIndexMap) Tuple {
-	vals := make([]any, len(left.Values)+len(right.Values))
+	return mergeTuplesWithArena(left, right, combinedIndex, nil)
+}
+
+func mergeTuplesWithArena(left, right Tuple, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
+	var vals []any
+	if arena != nil {
+		vals = arena.AllocAnySlice(len(left.Values) + len(right.Values))
+	} else {
+		vals = make([]any, len(left.Values)+len(right.Values))
+	}
 	copy(vals, left.Values)
 	copy(vals[len(left.Values):], right.Values)
 	return Tuple{
@@ -678,7 +712,16 @@ func mergeTuples(left, right Tuple, combinedIndex *ColumnIndexMap) Tuple {
 }
 
 func mergeTuplesWithNulls(left Tuple, rightColsCount int, combinedIndex *ColumnIndexMap) Tuple {
-	vals := make([]any, len(left.Values)+rightColsCount)
+	return mergeTuplesWithNullsAndArena(left, rightColsCount, combinedIndex, nil)
+}
+
+func mergeTuplesWithNullsAndArena(left Tuple, rightColsCount int, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
+	var vals []any
+	if arena != nil {
+		vals = arena.AllocAnySlice(len(left.Values) + rightColsCount)
+	} else {
+		vals = make([]any, len(left.Values)+rightColsCount)
+	}
 	copy(vals, left.Values)
 	return Tuple{
 		Values: vals,
@@ -687,7 +730,16 @@ func mergeTuplesWithNulls(left Tuple, rightColsCount int, combinedIndex *ColumnI
 }
 
 func mergeNullsWithTuple(leftColsCount int, right Tuple, combinedIndex *ColumnIndexMap) Tuple {
-	vals := make([]any, leftColsCount+len(right.Values))
+	return mergeNullsWithTupleAndArena(leftColsCount, right, combinedIndex, nil)
+}
+
+func mergeNullsWithTupleAndArena(leftColsCount int, right Tuple, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
+	var vals []any
+	if arena != nil {
+		vals = arena.AllocAnySlice(leftColsCount + len(right.Values))
+	} else {
+		vals = make([]any, leftColsCount+len(right.Values))
+	}
 	copy(vals[leftColsCount:], right.Values)
 	return Tuple{
 		Values: vals,

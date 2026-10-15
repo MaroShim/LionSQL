@@ -518,6 +518,37 @@ func (p *Program) GetAux(aux uint16) any {
 	return p.AuxData[aux]
 }
 
+// ResultColumns inspects Program auxiliary data to find output column names if this program emits rows.
+func (p *Program) ResultColumns() []string {
+	if p == nil {
+		return nil
+	}
+	for _, aux := range p.AuxData {
+		if aux == nil {
+			continue
+		}
+		if rowData, ok := aux.(*ResultRowData); ok && len(rowData.Columns) > 0 {
+			return rowData.Columns
+		}
+		if pointData, ok := aux.(*PointSelectData); ok && len(pointData.Projections) > 0 {
+			var cols []string
+			for _, pr := range pointData.Projections {
+				name := pr.Alias
+				if name == "" {
+					if colRef, ok := pr.Expr.(*ColumnRefExpr); ok {
+						name = colRef.Name
+					} else {
+						name = pr.Expr.String()
+					}
+				}
+				cols = append(cols, name)
+			}
+			return cols
+		}
+	}
+	return nil
+}
+
 // AddInstruction appends a new instruction to the program, automatically interning auxData if provided.
 func (p *Program) AddInstruction(op OpCode, a, b, c int32, auxData any) int {
 	var aux uint16

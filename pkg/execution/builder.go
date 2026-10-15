@@ -29,10 +29,16 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if err != nil {
 			return nil, fmt.Errorf("table scan schema lookup failed for %q: %w", plan.Relation, err)
 		}
+		var sIter *SeqScanIterator
 		if len(plan.Partitions) > 0 {
-			return NewSeqScanIteratorWithPartitions(tx, plan.Relation, plan.Alias, schema, plan.Partitions), nil
+			sIter = NewSeqScanIteratorWithPartitions(tx, plan.Relation, plan.Alias, schema, plan.Partitions)
+		} else {
+			sIter = NewSeqScanIterator(tx, plan.Relation, plan.Alias, schema)
 		}
-		return NewSeqScanIterator(tx, plan.Relation, plan.Alias, schema), nil
+		if opts.Arena != nil {
+			sIter.SetArena(opts.Arena)
+		}
+		return sIter, nil
 
 	case planner.NodeIndexScan, planner.NodeIndexOnlyScan:
 		schema, err := getTable(plan.Relation)
@@ -43,6 +49,9 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		low, high := parseIndexCond(plan.IndexCond, schema)
 		it := NewIndexScanIterator(tx, plan.Relation, plan.Alias, plan.IndexName, low, high, schema)
 		it.IndexOnly = (plan.Type == planner.NodeIndexOnlyScan)
+		if opts.Arena != nil {
+			it.SetArena(opts.Arena)
+		}
 		if plan.FilterCond != "" {
 			return NewFilterIterator(it, plan.FilterCond), nil
 		}
@@ -97,6 +106,9 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if opts.TempDir != "" {
 			sIter.SetTempDir(opts.TempDir)
 		}
+		if opts.Arena != nil {
+			sIter.SetArena(opts.Arena)
+		}
 		return sIter, nil
 
 	case planner.NodeAggregate:
@@ -107,7 +119,11 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if err != nil {
 			return nil, err
 		}
-		return NewAggregateIteratorWithModifier(child, plan.GroupKeys, plan.GroupByModifier, plan.Projections, plan.HavingCond), nil
+		aIter := NewAggregateIteratorWithModifier(child, plan.GroupKeys, plan.GroupByModifier, plan.Projections, plan.HavingCond)
+		if opts.Arena != nil {
+			aIter.SetArena(opts.Arena)
+		}
+		return aIter, nil
 
 	case planner.NodeWindow:
 		if len(plan.Children) == 0 {
@@ -147,6 +163,9 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		hIter := NewHashJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
 		if opts.WorkMem > 0 {
 			hIter.SetWorkMem(opts.WorkMem)
+		}
+		if opts.Arena != nil {
+			hIter.SetArena(opts.Arena)
 		}
 		return hIter, nil
 

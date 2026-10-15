@@ -1156,59 +1156,63 @@ func (p *Parser) parseTx() (Statement, error) {
 func (p *Parser) parseSelect() (Statement, error) {
 	p.nextToken() // eat SELECT
 
-	if !p.curTokenIs(TokenIdent) {
-		return nil, fmt.Errorf("expected column in SELECT, got %s", p.curToken.Literal)
-	}
-	colName := p.curToken.Literal
-	p.nextToken()
+	if p.curTokenIs(TokenIdent) && p.peekTokenIs(TokenInto) {
+		colName := p.curToken.Literal
+		p.nextToken() // eat col
+		p.nextToken() // eat INTO
 
-	if !p.curTokenIs(TokenInto) {
-		return nil, fmt.Errorf("currently only SELECT col INTO @var is supported in stored procedure scripts")
-	}
-	p.nextToken()
-
-	if !p.curTokenIs(TokenVariable) {
-		return nil, fmt.Errorf("expected @variable after INTO, got %s", p.curToken.Literal)
-	}
-	varName := p.curToken.Literal
-	p.nextToken()
-
-	if !p.curTokenIs(TokenFrom) {
-		return nil, fmt.Errorf("expected FROM, got %s", p.curToken.Literal)
-	}
-	p.nextToken()
-
-	if !p.curTokenIs(TokenIdent) {
-		return nil, fmt.Errorf("expected table name, got %s", p.curToken.Literal)
-	}
-	tblName := p.curToken.Literal
-	p.nextToken()
-
-	var whereCol string
-	var whereVal Expr
-	if p.curTokenIs(TokenWhere) {
-		p.nextToken()
-		if p.curTokenIs(TokenIdent) && p.peekTokenIs(TokenEq) {
-			whereCol = p.curToken.Literal
-			p.nextToken()
-			p.nextToken() // eat =
-			whereVal = p.parseExpression(precLowest)
-		} else {
-			whereVal = p.parseExpression(precLowest)
+		if !p.curTokenIs(TokenVariable) {
+			return nil, fmt.Errorf("expected @variable after INTO, got %s", p.curToken.Literal)
 		}
+		varName := p.curToken.Literal
+		p.nextToken()
+
+		if !p.curTokenIs(TokenFrom) {
+			return nil, fmt.Errorf("expected FROM, got %s", p.curToken.Literal)
+		}
+		p.nextToken()
+
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected table name, got %s", p.curToken.Literal)
+		}
+		tblName := p.curToken.Literal
+		p.nextToken()
+
+		var whereCol string
+		var whereVal Expr
+		if p.curTokenIs(TokenWhere) {
+			p.nextToken()
+			if p.curTokenIs(TokenIdent) && p.peekTokenIs(TokenEq) {
+				whereCol = p.curToken.Literal
+				p.nextToken()
+				p.nextToken() // eat =
+				whereVal = p.parseExpression(precLowest)
+			} else {
+				whereVal = p.parseExpression(precLowest)
+			}
+		}
+
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+
+		return &SelectIntoStmt{
+			Column:   colName,
+			IntoVar:  varName,
+			Table:    tblName,
+			WhereCol: whereCol,
+			WhereVal: whereVal,
+		}, nil
 	}
 
+	stmt, err := p.parseGeneralSelect()
+	if err != nil {
+		return nil, err
+	}
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
-
-	return &SelectIntoStmt{
-		Column:   colName,
-		IntoVar:  varName,
-		Table:    tblName,
-		WhereCol: whereCol,
-		WhereVal: whereVal,
-	}, nil
+	return stmt, nil
 }
 
 func (p *Parser) parseOutputCols() []string {

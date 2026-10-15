@@ -45,10 +45,20 @@ type Row struct {
 
 // RecordToRow converts a column-mapped Record into an ordered Row according to schema.
 func (s *TableSchema) RecordToRow(rec Record) Row {
+	return s.RecordToRowWithArena(rec, nil)
+}
+
+// RecordToRowWithArena converts a Record into an ordered Row using arena memory if non-nil.
+func (s *TableSchema) RecordToRowWithArena(rec Record, arena *Arena) Row {
 	if s == nil {
 		return Row{}
 	}
-	vals := make([]Value, len(s.Columns))
+	var vals []Value
+	if arena != nil {
+		vals = arena.AllocValues(len(s.Columns))
+	} else {
+		vals = make([]Value, len(s.Columns))
+	}
 	for i, col := range s.Columns {
 		if v, ok := rec[col.Name]; ok {
 			vals[i] = v
@@ -224,6 +234,11 @@ func EncodeTupleToBuffer(schema *TableSchema, rec Record, buf []byte) ([]byte, e
 
 // DecodeTupleToRow decodes a compact binary tuple directly into a Row without map allocations.
 func DecodeTupleToRow(schema *TableSchema, data []byte) (Row, error) {
+	return DecodeTupleToRowWithArena(schema, data, nil)
+}
+
+// DecodeTupleToRowWithArena decodes a compact binary tuple directly into a Row using arena-allocated Value slice.
+func DecodeTupleToRowWithArena(schema *TableSchema, data []byte, arena *Arena) (Row, error) {
 	if schema == nil {
 		return Row{}, errors.New("nil table schema")
 	}
@@ -243,7 +258,12 @@ func DecodeTupleToRow(schema *TableSchema, data []byte) (Row, error) {
 	bitmap := data[1 : 1+nullBitmapLen]
 	offset := 1 + nullBitmapLen
 
-	vals := make([]Value, numCols)
+	var vals []Value
+	if arena != nil {
+		vals = arena.AllocValues(numCols)
+	} else {
+		vals = make([]Value, numCols)
+	}
 
 	for i, col := range schema.Columns {
 		isNull := (bitmap[i/8] & (1 << (i % 8))) != 0
@@ -403,6 +423,11 @@ func SkipTupleColumn(colType DataType, data []byte, offset int) (int, error) {
 // DecodeTupleSelected decodes only the specified column indices from a binary tuple,
 // skipping unselected columns without allocating strings or heap memory.
 func DecodeTupleSelected(schema *TableSchema, data []byte, selectedCols []int) (Row, error) {
+	return DecodeTupleSelectedWithArena(schema, data, selectedCols, nil)
+}
+
+// DecodeTupleSelectedWithArena decodes only the specified column indices using arena memory.
+func DecodeTupleSelectedWithArena(schema *TableSchema, data []byte, selectedCols []int, arena *Arena) (Row, error) {
 	if schema == nil {
 		return Row{}, errors.New("nil table schema")
 	}
@@ -429,7 +454,12 @@ func DecodeTupleSelected(schema *TableSchema, data []byte, selectedCols []int) (
 		}
 	}
 
-	vals := make([]Value, numCols)
+	var vals []Value
+	if arena != nil {
+		vals = arena.AllocValues(numCols)
+	} else {
+		vals = make([]Value, numCols)
+	}
 
 	for i, col := range schema.Columns {
 		isNull := (bitmap[i/8] & (1 << (i % 8))) != 0

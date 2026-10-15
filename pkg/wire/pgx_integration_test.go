@@ -273,3 +273,74 @@ func TestDriverIntegration_PGX_DataTypes(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_PGX_TSQLStoredProcedure(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable", port)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := pgx.Connect(ctx, connStr)
+	if err != nil {
+		t.Fatalf("pgx.Connect failed: %v", err)
+	}
+	defer conn.Close(ctx)
+
+	// 1. Prepare table
+	if _, err := conn.Exec(ctx, "CREATE TABLE sp_emp (id INT PRIMARY KEY, name VARCHAR(50), salary INT)"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := conn.Exec(ctx, "INSERT INTO sp_emp (id, name, salary) VALUES (1, 'Alice', 100), (2, 'Bob', 200)"); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	// 2. Define T-SQL stored procedure with parameter and control flow
+	procSQL := `CREATE PROCEDURE sp_get_emp @target_id INT AS 
+BEGIN 
+    SELECT id, name, salary FROM sp_emp WHERE id = @target_id; 
+END;`
+	if _, err := conn.Exec(ctx, procSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE failed: %v", err)
+	}
+
+	// 3. Execute T-SQL stored procedure via PGWire using EXEC syntax
+	var id, salary int
+	var name string
+	if err := conn.QueryRow(ctx, "EXEC sp_get_emp 1;").Scan(&id, &name, &salary); err != nil {
+		t.Fatalf("EXEC sp_get_emp failed: %v", err)
+	}
+	if id != 1 || name != "Alice" || salary != 100 {
+		t.Fatalf("expected (1, Alice, 100), got (%d, %s, %d)", id, name, salary)
+	}
+
+	// 4. Update via T-SQL procedure
+	bonusProcSQL := `CREATE PROCEDURE sp_give_bonus @emp_id INT, @bonus INT AS 
+BEGIN 
+    UPDATE sp_emp SET salary = salary + @bonus WHERE id = @emp_id; 
+END;`
+	if _, err := conn.Exec(ctx, bonusProcSQL); err != nil {
+		t.Fatalf("CREATE PROCEDURE bonus failed: %v", err)
+	}
+
+	if _, err := conn.Exec(ctx, "EXEC sp_give_bonus 1, 50;"); err != nil {
+		t.Fatalf("EXEC sp_give_bonus failed: %v", err)
+	}
+
+	// 5. Verify update succeeded
+	if err := conn.QueryRow(ctx, "SELECT salary FROM sp_emp WHERE id = 1;").Scan(&salary); err != nil {
+		t.Fatalf("QueryRow failed: %v", err)
+	}
+	if salary != 150 {
+		t.Fatalf("expected salary 150, got %d", salary)
+	}
+
+	// 6. Test CALL syntax (PostgreSQL standard call syntax)
+	if err := conn.QueryRow(ctx, "CALL sp_get_emp(2);").Scan(&id, &name, &salary); err != nil {
+		t.Fatalf("CALL sp_get_emp(2) failed: %v", err)
+	}
+	if id != 2 || name != "Bob" || salary != 200 {
+		t.Fatalf("expected (2, Bob, 200), got (%d, %s, %d)", id, name, salary)
+	}
+}
+

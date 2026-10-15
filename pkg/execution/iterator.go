@@ -419,6 +419,11 @@ func FormatRecord(rec storage.Record, schema *storage.TableSchema, alias string,
 
 // FormatRow converts a storage.Row into a Tuple using precomputed column offsets without map lookups.
 func FormatRow(row storage.Row, schema *storage.TableSchema, alias string, colMap *ColumnIndexMap) Tuple {
+	return FormatRowWithArena(row, schema, alias, colMap, nil)
+}
+
+// FormatRowWithArena converts a storage.Row into a Tuple using arena-allocated value slices if arena is non-nil.
+func FormatRowWithArena(row storage.Row, schema *storage.TableSchema, alias string, colMap *ColumnIndexMap, arena *storage.Arena) Tuple {
 	if schema == nil {
 		return Tuple{}
 	}
@@ -427,7 +432,12 @@ func FormatRow(row storage.Row, schema *storage.TableSchema, alias string, colMa
 	}
 
 	n := len(schema.Columns)
-	vals := make([]any, n)
+	var vals []any
+	if arena != nil {
+		vals = arena.AllocAnySlice(n)
+	} else {
+		vals = make([]any, n)
+	}
 	numVals := len(row.Values)
 	for i := 0; i < n && i < numVals; i++ {
 		vals[i] = formatStorageVal(row.Values[i])

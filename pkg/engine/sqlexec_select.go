@@ -97,6 +97,10 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	plan := p.BuildMultiJoinPlanWithStats(qInfo, leftSchema, leftStats, rightSchemas, rightStats)
 
 	opts := execution.DefaultExecutorOptions()
+	arena := storage.GetArena()
+	defer storage.PutArena(arena)
+	opts.Arena = arena
+
 	if wm := s.DefaultWorkMem(); wm > 0 {
 		opts.WorkMem = wm
 	}
