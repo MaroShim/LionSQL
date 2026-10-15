@@ -22,6 +22,7 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
+| **P1** | **쿼리/스토리지** | **반정형 JSON 표현식 B-Tree 인덱스 & 내장함수 완비 (`ADR-022`)** | `pkg/proc`, `pkg/storage`, `pkg/planner` | `((data->>'key'))` 및 `JSON_VALUE` 기능 인덱스 및 CBO 인덱스 스캔 가속 |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
 | **P2** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
@@ -187,6 +188,12 @@
 - [x] **백그라운드 자동 통계 갱신 데몬 (Auto-Analyze Daemon) (`D-8`) (`pkg/engine`, `pkg/catalog`, `pkg/storage`)**
   - 테이블 DML 변경 비율(동적 임계치: `min_threshold + base_rows * scale_factor`)을 추적하여 백그라운드 비동기로 `coordinator.AnalyzeTable` 자동 트리거.
   - 트랜잭션 커밋 핫패스에 락 경합 없이 원자적 카운팅(`AddWALHook`) 및 디바운싱 완비.
+- [ ] **반정형 JSON 표현식 B-Tree 인덱스 및 내장 함수 완비 (`ADR-022`) (`pkg/proc`, `pkg/storage`, `pkg/planner`, `pkg/engine`)**
+  - `CREATE INDEX idx ON tbl ((data->>'key'))` 및 `CREATE INDEX idx ON tbl ((JSON_VALUE(data, '$.path')))` 기능 인덱스 DDL 파싱 및 AST 정규화 (`*proc.JsonExtractExpr`).
+  - 스토리지 튜플 삽입/갱신 시 JSON 키 추출 및 SkipList / WiredTiger B+Tree 키 등록.
+  - CBO 옵티마이저 매칭: `WHERE data->>'city' = 'Seoul'` 또는 `WHERE JSON_VALUE(data, '$.city') = 'Seoul'` 평가 시 순차 스캔 대신 인덱스 스캔(`IndexScan`) 자동 선택.
+  - T-SQL & ANSI 내장 함수 완비: `JSON_VALUE`, `JSON_QUERY`, `ISJSON`, `JSON_MODIFY`, PostgreSQL `->` 및 `->>` 연산자.
+
 
 ### 2.2. 스토리지 & 엔진 성능 (Storage & Engine Performance)
 
