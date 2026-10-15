@@ -714,7 +714,7 @@ func EvalBuiltin(name string, args []storage.Value) storage.Value {
 		}
 		pattern := valToString(args[0])
 		target := valToString(args[1])
-		return storage.IntValue(computePatindex(pattern, target))
+		return storage.IntValue(ComputePatindex(pattern, target))
 
 	case "UNICODE":
 		if len(args) == 0 || args[0].IsNull {
@@ -2487,7 +2487,7 @@ func computeSoundex(s string) string {
 	return string(firstChar) + string(digits[:3])
 }
 
-func computePatindex(pattern, text string) int64 {
+func ComputePatindex(pattern, text string) int64 {
 	if pattern == "" || text == "" {
 		return 0
 	}

@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -59,6 +60,8 @@ type Coordinator struct {
 	replication        *replication.Manager
 	pkBypassCache      map[uint64]*PKLookupPlan
 	pkBypassMu         sync.RWMutex
+	lastIdentities     map[string]int64
+	lastIdentMu        sync.RWMutex
 	schemaVersion      atomic.Uint64
 	autoAnalyzer       *AutoAnalyzer
 	startTime          time.Time
@@ -100,6 +103,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 		slowQueries:        NewSlowQueryLogger(cfg.SlowThreshold),
 		generalLog:         NewGeneralLogger(cfg.EnableGeneralLog),
 		pkBypassCache:      make(map[uint64]*PKLookupPlan, 256),
+		lastIdentities:     make(map[string]int64),
 		startTime:          time.Now(),
 	}
 
@@ -112,6 +116,27 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	}
 
 	return coord
+}
+
+// SetTableLastIdentity records the most recent identity value generated for a table.
+func (c *Coordinator) SetTableLastIdentity(tableName string, id int64) {
+	c.lastIdentMu.Lock()
+	if c.lastIdentities == nil {
+		c.lastIdentities = make(map[string]int64)
+	}
+	c.lastIdentities[strings.ToLower(tableName)] = id
+	c.lastIdentMu.Unlock()
+}
+
+// GetTableLastIdentity retrieves the most recent identity value generated for a table.
+func (c *Coordinator) GetTableLastIdentity(tableName string) (int64, bool) {
+	c.lastIdentMu.RLock()
+	defer c.lastIdentMu.RUnlock()
+	if c.lastIdentities == nil {
+		return 0, false
+	}
+	v, ok := c.lastIdentities[strings.ToLower(tableName)]
+	return v, ok
 }
 
 // InvalidatePKBypassCache clears cached fast-path PK lookup plans and increments schema version.

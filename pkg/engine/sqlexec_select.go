@@ -334,7 +334,7 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 			}
 		}
 		return int64(0), "@@error"
-	case "@@IDENTITY", "SCOPE_IDENTITY()", "SCOPE_IDENTITY":
+	case "@@IDENTITY":
 		if cs != nil {
 			cs.Mu.Lock()
 			val, ok := cs.Vars["identity"]
@@ -344,6 +344,19 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 			}
 		}
 		return nil, "@@identity"
+	case "SCOPE_IDENTITY()", "SCOPE_IDENTITY":
+		if cs != nil {
+			cs.Mu.Lock()
+			val, ok := cs.Vars["scope_identity"]
+			if !ok || val == nil {
+				val, ok = cs.Vars["identity"]
+			}
+			cs.Mu.Unlock()
+			if ok && val != nil {
+				return val, "scope_identity"
+			}
+		}
+		return nil, "scope_identity"
 	}
 
 	// System variable @@var
@@ -472,6 +485,157 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 		}
 		clean := strings.Trim(strings.TrimSpace(arg), "'\"")
 		return "[" + clean + "]", "quotename"
+	}
+
+	// IDENT_CURRENT('tableName')
+	if strings.HasPrefix(upper, "IDENT_CURRENT(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("IDENT_CURRENT(") : len(trimmed)-1])
+		clean := strings.Trim(strings.TrimSpace(inner), "'\"[]")
+		if lastID, ok := s.GetTableLastIdentity(clean); ok {
+			return lastID, "ident_current"
+		}
+		tbl, err := s.engine.GetTable(clean)
+		if err == nil && tbl != nil {
+			return int64(1), "ident_current"
+		}
+		return nil, "ident_current"
+	}
+
+	// COLUMNPROPERTY(object_id, 'column_name', 'property')
+	if strings.HasPrefix(upper, "COLUMNPROPERTY(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("COLUMNPROPERTY(") : len(trimmed)-1])
+		parts := strings.Split(inner, ",")
+		if len(parts) >= 3 {
+			objIDStr := strings.TrimSpace(parts[0])
+			colName := strings.Trim(strings.TrimSpace(parts[1]), "'\"[]")
+			propName := strings.Trim(strings.TrimSpace(parts[2]), "'\"")
+
+			var id int
+			if strings.HasPrefix(strings.ToUpper(objIDStr), "OBJECT_ID(") && strings.HasSuffix(objIDStr, ")") {
+				tblName := strings.Trim(strings.TrimSpace(objIDStr[len("OBJECT_ID(") : len(objIDStr)-1]), "'\"[]")
+				tables := s.getSortedTables()
+				for tIdx, t := range tables {
+					if strings.EqualFold(t.Name, tblName) {
+						id = 1000 + tIdx
+						break
+					}
+				}
+			} else if parsedID, err := strconv.Atoi(objIDStr); err == nil {
+				id = parsedID
+			}
+
+			if id >= 1000 && id < 2000 {
+				tables := s.getSortedTables()
+				idx := id - 1000
+				if idx >= 0 && idx < len(tables) {
+					t := tables[idx]
+					for _, col := range t.Columns {
+						if strings.EqualFold(col.Name, colName) {
+							switch strings.ToUpper(propName) {
+							case "ISIDENTITY":
+								if col.Identity {
+									return int64(1), "columnproperty"
+								}
+								return int64(0), "columnproperty"
+							case "ALLOWSNULL":
+								if col.Nullable {
+									return int64(1), "columnproperty"
+								}
+								return int64(0), "columnproperty"
+							case "PRECISION":
+								return int64(col.Precision), "columnproperty"
+							case "SCALE":
+								return int64(col.Scale), "columnproperty"
+							case "ISCOMPUTED":
+								return int64(0), "columnproperty"
+							default:
+								return int64(0), "columnproperty"
+							}
+						}
+					}
+				}
+			}
+		}
+		return nil, "columnproperty"
+	}
+
+	// ISNUMERIC(expr)
+	if strings.HasPrefix(upper, "ISNUMERIC(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("ISNUMERIC(") : len(trimmed)-1])
+		clean := strings.Trim(strings.TrimSpace(inner), "'\"")
+		if _, err := strconv.ParseFloat(clean, 64); err == nil {
+			return int64(1), "isnumeric"
+		}
+		return int64(0), "isnumeric"
+	}
+
+	// CHARINDEX(sub, target [, start])
+	if strings.HasPrefix(upper, "CHARINDEX(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("CHARINDEX(") : len(trimmed)-1])
+		parts := strings.Split(inner, ",")
+		if len(parts) >= 2 {
+			sub := strings.Trim(strings.TrimSpace(parts[0]), "'\"")
+			target := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+			start := 1
+			if len(parts) >= 3 {
+				if s, err := strconv.Atoi(strings.TrimSpace(parts[2])); err == nil {
+					start = s
+				}
+			}
+			if start < 1 {
+				start = 1
+			}
+			runes := []rune(target)
+			if start > len(runes) {
+				return int64(0), "charindex"
+			}
+			subSlice := string(runes[start-1:])
+			idx := strings.Index(strings.ToUpper(subSlice), strings.ToUpper(sub))
+			if idx == -1 {
+				return int64(0), "charindex"
+			}
+			runeOffset := len([]rune(subSlice[:idx]))
+			return int64(start + runeOffset), "charindex"
+		}
+		return int64(0), "charindex"
+	}
+
+	// PATINDEX(pattern, target)
+	if strings.HasPrefix(upper, "PATINDEX(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("PATINDEX(") : len(trimmed)-1])
+		parts := strings.Split(inner, ",")
+		if len(parts) >= 2 {
+			pattern := strings.Trim(strings.TrimSpace(parts[0]), "'\"")
+			target := strings.Trim(strings.TrimSpace(parts[1]), "'\"")
+			idx := proc.ComputePatindex(pattern, target)
+			return idx, "patindex"
+		}
+		return int64(0), "patindex"
+	}
+
+	// STUFF(str, start, length, replace)
+	if strings.HasPrefix(upper, "STUFF(") && strings.HasSuffix(upper, ")") {
+		inner := strings.TrimSpace(trimmed[len("STUFF(") : len(trimmed)-1])
+		parts := strings.Split(inner, ",")
+		if len(parts) >= 4 {
+			str := strings.Trim(strings.TrimSpace(parts[0]), "'\"")
+			start, err1 := strconv.Atoi(strings.TrimSpace(parts[1]))
+			length, err2 := strconv.Atoi(strings.TrimSpace(parts[2]))
+			replace := strings.Trim(strings.TrimSpace(parts[3]), "'\"")
+			if err1 == nil && err2 == nil {
+				runes := []rune(str)
+				if start >= 1 && start <= len(runes)+1 && length >= 0 {
+					deleteStart := start - 1
+					deleteEnd := deleteStart + length
+					if deleteEnd > len(runes) {
+						deleteEnd = len(runes)
+					}
+					res := string(runes[:deleteStart]) + replace + string(runes[deleteEnd:])
+					return res, "stuff"
+				}
+			}
+		}
+		return nil, "stuff"
 	}
 
 	// pg_cancel_backend(pid)

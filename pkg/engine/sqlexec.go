@@ -792,7 +792,9 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	if len(cs.Vars) > 0 {
 		keys := make([]string, 0, len(cs.Vars))
 		for k := range cs.Vars {
-			keys = append(keys, k)
+			if strings.HasPrefix(k, "@") {
+				keys = append(keys, k)
+			}
 		}
 		sort.Slice(keys, func(i, j int) bool {
 			return len(keys[i]) > len(keys[j])

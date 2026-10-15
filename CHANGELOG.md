@@ -30,6 +30,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Automatically triggers background parallel statistics analysis (`coordinator.AnalyzeTable`) when dirty row count crosses dynamic threshold (`min_threshold + base_rows * scale_factor`), keeping CBO column histograms fresh.
   - Ensured lock hierarchy immunity (Golden Rule 10) by keeping the transaction commit hot-path non-blocking and executing all catalog and storage inspections asynchronously in debounced background goroutines.
   - Added unit tests in `pkg/engine/auto_analyze_test.go` verifying threshold triggering, WAL hook listener, and atomic dirty counter resets.
+- **T-SQL Core System Built-in Functions & Identity Tracking (`pkg/proc`, `pkg/engine`)**:
+  - Implemented T-SQL system functions: `ISNUMERIC(expr)`, `CHARINDEX(pattern, str [, start])`, `PATINDEX(pattern, str)`, `STUFF(expr, start, len, replace)`, `IDENT_CURRENT('tableName')`, `COLUMNPROPERTY(id, col, prop)` (supporting `IsIdentity`, `AllowsNull`, `Precision`, `Scale`, `IsComputed`), and `SCOPE_IDENTITY()`.
+  - Added per-table identity state tracking (`SetTableLastIdentity`, `GetTableLastIdentity`) in `Coordinator`.
+  - Fixed session variable parameter substitution in `sqlexec.go` and `sqlexec_procs.go` to prevent single-at user variables from colliding with double-at system variables (`@@IDENTITY`).
+  - Added tests across Go driver integration tests (`TestDriverIntegration_TSQLFunctions`), Python `pymssql` driver tests, and session identity tests (`TestSQLExecutor_ErrorAndIdentityInsert`).
 - **TDS PLP (Partially Length-Prefixed) LOB Chunk Streaming (`pkg/wire/tds`)**:
   - Implemented [MS-TDS] 2.2.5.2 Partially Length-Prefixed (PLP) LOB stream encoding for `VARCHAR(MAX)`, `NVARCHAR(MAX)`, and `VARBINARY(MAX)` (> 8,000 bytes) payloads.
   - Configured `ColMetaData` to signal `0xFFFF` (65535) max length for unbounded LOB types.

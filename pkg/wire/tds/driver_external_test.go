@@ -111,6 +111,12 @@ lob_row = cursor.fetchone()
 assert lob_row is not None and lob_row[0] == 1 and len(lob_row[1]) == 10000, f"unexpected lob length: {len(lob_row[1]) if lob_row else None}"
 print("PLP LOB streaming passed (10,000 bytes)!")
 
+# 9. T-SQL Built-in functions
+cursor.execute("SELECT ISNUMERIC('99.9'), CHARINDEX('sql', 'mysqlion'), STUFF('Hello World', 1, 5, 'Hi');")
+fn_row = cursor.fetchone()
+assert fn_row[0] == 1 and fn_row[1] == 3 and fn_row[2] == 'Hi World', f"unexpected fn row: {fn_row}"
+print("T-SQL built-in functions passed:", fn_row)
+
 conn.close()
 print("ALL PYMSSQL TESTS PASSED!")
 `, port, port)

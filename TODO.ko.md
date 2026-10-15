@@ -28,6 +28,12 @@
 | **P3** | **BaaS 확장** | **선언적 스키마 마이그레이션 CLI (`sqlion migrate`)** | `cmd/server`, `pkg/migrate` | `migrate new / up / down` 및 `_migrations` 이력 추적 |
 
 ### P1/P2 최근 완료 과제: 엔진 성능 & 최적화
+- [x] **T-SQL 핵심 시스템 내장 함수 및 IDENTITY 추적 완비 (`pkg/proc`, `pkg/engine`)**
+  - **배경**: SQL Server 애플리케이션 및 ORM(Dapper, EF Core) 호환성을 위한 핵심 시스템 스칼라 함수 및 ID 생성 추적 기능 제공.
+  - **구현 내용**:
+    - `ISNUMERIC`, `CHARINDEX`, `PATINDEX`, `STUFF`, `IDENT_CURRENT`, `COLUMNPROPERTY`(IsIdentity, AllowsNull, Precision 등), `SCOPE_IDENTITY` 함수 구현.
+    - `Coordinator` 테이블별 마지막 발번 ID 추적(`SetTableLastIdentity`/`GetTableLastIdentity`).
+    - 세션 변수 치환 시 단일 `@` 사용자 변수가 시스템 `@@IDENTITY`와 충돌하는 토큰 결함 수정.
 - [x] **TDS PLP (Partially Length-Prefixed) LOB 청크 스트리밍 (`VARCHAR(MAX)`, `VARBINARY(MAX)`) (`pkg/wire/tds`)**
   - **배경**: TDS 프로토콜에서 8,000 바이트를 초과하는 대용량 LOB 데이터 전송 시 단일 패킷 길이를 초과하는 페이로드 전송 표준 규격 준수.
   - **구현 내용**:

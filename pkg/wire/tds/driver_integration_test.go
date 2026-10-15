@@ -905,6 +905,98 @@ func TestDriverIntegration_PLP_LOBStreaming(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_TSQLFunctions(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. ISNUMERIC
+	var isNum1, isNum2 int
+	err = db.QueryRowContext(ctx, "SELECT ISNUMERIC('42.5'), ISNUMERIC('invalid_text');").Scan(&isNum1, &isNum2)
+	if err != nil {
+		t.Fatalf("ISNUMERIC query failed: %v", err)
+	}
+	if isNum1 != 1 || isNum2 != 0 {
+		t.Fatalf("unexpected ISNUMERIC results: %d, %d", isNum1, isNum2)
+	}
+
+	// 2. CHARINDEX
+	var charIdx int
+	err = db.QueryRowContext(ctx, "SELECT CHARINDEX('world', 'hello world');").Scan(&charIdx)
+	if err != nil {
+		t.Fatalf("CHARINDEX query failed: %v", err)
+	}
+	if charIdx != 7 {
+		t.Fatalf("expected CHARINDEX 7, got %d", charIdx)
+	}
+
+	// 3. PATINDEX
+	var patIdx int
+	err = db.QueryRowContext(ctx, "SELECT PATINDEX('%[0-9]%', 'abc123def');").Scan(&patIdx)
+	if err != nil {
+		t.Fatalf("PATINDEX query failed: %v", err)
+	}
+	if patIdx != 4 {
+		t.Fatalf("expected PATINDEX 4, got %d", patIdx)
+	}
+
+	// 4. STUFF
+	var stuffVal string
+	err = db.QueryRowContext(ctx, "SELECT STUFF('abcdef', 2, 3, 'xyz');").Scan(&stuffVal)
+	if err != nil {
+		t.Fatalf("STUFF query failed: %v", err)
+	}
+	if stuffVal != "axyzef" {
+		t.Fatalf("expected STUFF 'axyzef', got %s", stuffVal)
+	}
+
+	// 5. SCOPE_IDENTITY and @@IDENTITY
+	_, err = db.ExecContext(ctx, "CREATE TABLE id_test_tbl (id INT IDENTITY PRIMARY KEY, name VARCHAR(20));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE id_test_tbl failed: %v", err)
+	}
+	_, err = db.ExecContext(ctx, "INSERT INTO id_test_tbl (name) VALUES ('first');")
+	if err != nil {
+		t.Fatalf("INSERT into id_test_tbl failed: %v", err)
+	}
+
+	var identCurrent int
+	err = db.QueryRowContext(ctx, "SELECT IDENT_CURRENT('id_test_tbl');").Scan(&identCurrent)
+	if err != nil {
+		t.Fatalf("IDENT_CURRENT failed: %v", err)
+	}
+	if identCurrent != 1 {
+		t.Fatalf("expected IDENT_CURRENT 1, got %d", identCurrent)
+	}
+
+	var isIdent int
+	err = db.QueryRowContext(ctx, "SELECT COLUMNPROPERTY(OBJECT_ID('id_test_tbl'), 'id', 'IsIdentity');").Scan(&isIdent)
+	if err != nil {
+		t.Fatalf("COLUMNPROPERTY failed: %v", err)
+	}
+	if isIdent != 1 {
+		t.Fatalf("expected COLUMNPROPERTY IsIdentity 1, got %d", isIdent)
+	}
+}
+
 
 
 

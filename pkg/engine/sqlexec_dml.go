@@ -427,15 +427,19 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 				if cs != nil {
 					cs.Mu.Lock()
 					cs.Vars["identity"] = maxID
+					cs.Vars["scope_identity"] = maxID
 					cs.Mu.Unlock()
 				}
+				s.SetTableLastIdentity(schema.Name, maxID)
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {
 						cs.Mu.Lock()
 						cs.Vars["identity"] = v.IVal
+						cs.Vars["scope_identity"] = v.IVal
 						cs.Mu.Unlock()
 					}
+					s.SetTableLastIdentity(schema.Name, v.IVal)
 					if v.IVal > maxID {
 						maxID = v.IVal
 					}
@@ -764,15 +768,19 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 				if cs != nil {
 					cs.Mu.Lock()
 					cs.Vars["identity"] = maxID
+					cs.Vars["scope_identity"] = maxID
 					cs.Mu.Unlock()
 				}
+				s.SetTableLastIdentity(schema.Name, maxID)
 			} else {
 				if v, ok := rec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
 					if cs != nil {
 						cs.Mu.Lock()
 						cs.Vars["identity"] = v.IVal
+						cs.Vars["scope_identity"] = v.IVal
 						cs.Mu.Unlock()
 					}
+					s.SetTableLastIdentity(schema.Name, v.IVal)
 					if v.IVal > maxID {
 						maxID = v.IVal
 					}

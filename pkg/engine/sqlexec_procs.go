@@ -998,6 +998,14 @@ func substituteParamOutsideQuotes(query string, paramName string, formattedVal s
 				b.WriteRune(ch)
 				i++
 			} else if ch == '@' {
+				isDoubleAtParam := strings.HasPrefix(paramName, "@@")
+				prevIsAt := i > 0 && runes[i-1] == '@'
+				nextIsAt := i+1 < len(runes) && runes[i+1] == '@'
+				if !isDoubleAtParam && (prevIsAt || nextIsAt) {
+					b.WriteRune(ch)
+					i++
+					continue
+				}
 				remainder := string(runes[i:])
 				loc := re.FindStringIndex(remainder)
 				if len(loc) == 2 && loc[0] == 0 {
