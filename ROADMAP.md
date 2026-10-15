@@ -77,9 +77,9 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - [Postponed] Pure Go Persistent Storage Engine Backend (Pebble / bbolt, CGO_ENABLED=0)
   - Dynamic Programming (DP / Selinger) Large Join Order Optimization (N > 4)
   - Extended Multi-Column Statistics, MCV & Optimizer Hints
-  - T-SQL Specialized TDS Serialization (UNIQUEIDENTIFIER, DATETIME2, PLP LOB)
+  - [x] T-SQL Specialized TDS Serialization (UNIQUEIDENTIFIER, DATETIME2, PLP LOB)
   - Multi-Language Client Certification (Python psycopg3/pymssql, Node.js pg/tedious, .NET SqlClient)
-  - Storage to Wire Zero-Copy Direct Serialization (P-3)
+  - [x] Storage to Wire Zero-Copy Direct Serialization (P-3)
   - Wasm Runtime Sandbox UDF (wazero)
   - Local & S3-Compatible File Storage Module & Thumbnail Resizing
 ```
@@ -144,6 +144,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - [x] **Granular SQL Object-Level RBAC (`pkg/auth`, `pkg/catalog`, `pkg/api`)**: Complete role/user DDL (`CREATE LOGIN/USER`, `SETUSER`), granular privileges (`GRANT/REVOKE/DENY` for `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `EXECUTE`, `CONTROL`, `REFERENCES`), and pre-execution catalog interceptors (`checkTableAccess`).
 
 ### 2.5. Wire Protocols & Tool Interoperability
+- [x] **Storage ➔ Wire Zero-Copy Direct Serialization (`P-3`) (`pkg/wire`, `pkg/wire/tds`)**: Implemented `WriteNBCRowDirect` in TDS wire protocol emitting `TokenNBCRow` (0xD2) and null bitmaps directly into wire buffers, eliminated per-row `[]any` and `[][]byte` boxing, and pre-allocated single scratch slices across TDS and PGWire streaming hot paths.
 - [x] **TDS PLP (Partially Length-Prefixed) LOB Chunk Streaming (`pkg/wire/tds`)**: Implemented [MS-TDS] 2.2.5.2 PLP streaming encoding for `VARCHAR(MAX)`, `NVARCHAR(MAX)`, and `VARBINARY(MAX)` (> 8,000 bytes) with 8-byte total length headers, up to 8,000-byte chunk splits with 4-byte LE length headers, 4-byte zero terminal chunk, and 8-byte `0xFFFFFFFFFFFFFFFF` NULL values.
 - [x] **TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET, and UNIQUEIDENTIFIER Binary Serialization (`pkg/wire/tds`)**: Complete SQL Server 2008 / TDS 7.3 wire binary serialization for `DATE` (`0x28`, 3-byte LE days since 0001-01-01), `TIME` (`0x29`, 100ns ticks with scale 0..7), `DATETIME2` (`0x2A`, ticks + date), `DATETIMEOFFSET` (`0x2B`, UTC datetime2 + 2-byte minute offset), and `UNIQUEIDENTIFIER` (`0x24`, Windows Mixed-Endian GUID byte swap). Result set column type inference auto-detects date/time/guid types and official `go-mssqldb` passes 100%.
 - [x] **External Multi-Language Client Driver Certification Harness (`pkg/wire`, `pkg/wire/tds`)**: Automated hermetic end-to-end integration test suites for Python `psycopg3` (PostgreSQL Wire Protocol :5433) and `pymssql` (TDS Protocol :1433 / FreeTDS dblib), verifying DDL, CRUD, binary date/time/UUID parsing, NULL handling, and explicit transaction (`COMMIT`/`ROLLBACK`) atomicity via isolated `uv run` sandboxing.
@@ -272,13 +273,11 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 5** | **P2** | **`INSTEAD OF` Trigger Runtime Interceptor** | T-SQL Runtime | Medium (200~300 lines) | Virtual entity DML update routing on complex views |
 | **Phase 5** | **P3** | **Declarative Schema Migration CLI** | BaaS & Tooling | Medium (250~350 lines) | `sqlion migrate` atomic DDL version history tracking |
 | **Phase 5** | **P3** | **OAuth2 Social Login (Google, GitHub)** | Auth & API | Medium (200~300 lines) | Turnkey authentication and JWT provisioning |
-| **Phase 6** | **P1** | **Storage to Wire Zero-Copy Direct Serialization (`P-3`)** | Storage & Wire | Medium (300~400 lines) | Direct binary tuple formatting into wire buffers, bypassing []any boxing |
 | **Phase 6** | **P1** | **Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
 | **Phase 6** | **P2** | **Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
 | **Phase 6** | **P2** | **$N > 4$ Join Dynamic Programming (DP / Selinger)** | CBO & Planner | High (400~600 lines) | Optimal join ordering for complex multi-table queries |
 | **Phase 6** | **P2** | **Multi-Column Statistics, MCV & Optimizer Hints** | CBO & Planner | Medium (300~400 lines) | Corrects cardinality estimation skew on correlated columns |
-| **Phase 6** | **P2** | **TDS PLP LOB Chunk Streaming (>8KB)** | TDS Protocol | Medium (250~350 lines) | Partially length-prefixed streaming for large VARCHAR(MAX)/VARBINARY(MAX) |
 | **Phase 6** | **P3** | **Multi-Language Client Harness (Node.js & .NET)** | Wire Protocols | Medium (200~300 lines) | Automated integration suites for tedious, pg, and SqlClient (Python complete) |
 | **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
 | **Phase 6** | **P3** | **Wasm Runtime Sandbox UDF (`wazero`)** | Plugins & Sandbox | Medium (300~400 lines) | Secure, crash-isolated in-engine execution of third-party plugins |

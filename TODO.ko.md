@@ -112,7 +112,7 @@
 | :---: | :--- | :--- | :---: | :--- |
 | **P-1** | **스토리지/트랜잭션** | **배치형 그룹 커밋 & 무경합 Fast-Path** | **완료 (`[x]`)** | `FsyncAlways` 100배 지연 단축(0.038ms/op), TPC-C 2.8K TPS |
 | **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스** | **완료 (`[x]`)** | 스캔 속도 2배 향상, 불필요한 Varint 디코딩 힙 할당 제거 |
-| **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **대기 (`[ ]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
+| **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **완료 (`[x]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **완료 (`[x]`)** | 볼케이노 가상 디스패치 및 컨텍스트 취소 오버헤드 99% 삭감, 1024 튜플 배치 스트리밍 |
 | **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료 (`[x]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
 
@@ -120,8 +120,9 @@
   - 풀 스캔 시 WHERE 절 조건 컬럼만 선별 디코딩하고, 조건을 통과한 행에 한해서만 나머지 투영 컬럼을 언패킹하여 CPU 및 힙 할당 70% 삭감.
 - [x] **커버링 인덱스 비키 컬럼 문법 지원: `CREATE INDEX ... INCLUDE (col...)` (`pkg/storage`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**
   - B+Tree/SkipList 리프 노드에 비키 컬럼을 페이로드로 적재하여 메인 테이블 힙 조회를 100% 생략하는 Index-Only Scan 극대화.
-- [ ] **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`pkg/storage`, `pkg/wire`)**
-  - 중간 `[]any` 레코드 슬라이스 변환을 제거하고 `sync.Pool` 와이어 버퍼에 바이너리 튜플 데이터를 직접 포맷팅.
+- [x] **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`) (`pkg/wire`, `pkg/wire/tds`)**
+  - TDS 프로토콜 `WriteNBCRowDirect` 신설: `TokenNBCRow` (0xD2) 및 NULL 비트맵을 네트워크 직렬화 버퍼에 직접 기록하여 중간 `[]any` 레코드 박싱 및 버퍼 복사 100% 제거.
+  - TDS 및 PGWire 프로토콜 결과 스트리밍 핫패스에서 행 반복문 외부 `scratchVals` / `scratchRowBytes` 1회 할당 재사용.
 - [x] **Volcano 청크 단위 배치 실행 (Vectorized Chunk Iterator: 64~1024건) (`pkg/execution`, `pkg/engine`)**
   - 행 단위 `Next()` 가상 함수 호출 및 `ctx.Done()` 검사 오버헤드를 줄이기 위해 1,024개 튜플 벡터 단위 슬라이스 배치 스트리밍(`ChunkedIterator`, `NextChunk`).
   - `SeqScan`, `IndexScan`, `Filter`, `Projection`, `Limit`, `Aggregate`, `Sort`, `HashJoin`, `IndexNestedLoopJoin`, `sqlexec_select` 전반에 배치 파이프라인 관통 및 기존 단건 `Next()` 투명 버퍼링 100% 하위 호환성 보장.
@@ -132,8 +133,8 @@
 - [x] **T-SQL 특수 타입 직렬화 (TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET, UNIQUEIDENTIFIER) (`pkg/wire/tds`)**
   - `UNIQUEIDENTIFIER` (UUID 16바이트 Windows GUID 바이트 스왑), `DATE` (`0x28`, 3바이트 LE), `TIME` (`0x29`, 100ns 틱 3~5바이트), `DATETIME2` (`0x2A`, 틱 + 3바이트 날짜), `DATETIMEOFFSET` (`0x2B`, UTC DATETIME2 + 2바이트 분 오프셋) TDS 바이너리 인코딩 완비.
   - 결과셋 컬럼 타입 자동 추론(`inferColumnInfos`) 고도화 및 `go-mssqldb` 공식 드라이버 통합 검증 완료.
-- [ ] **PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**
-  - PLP (Partially Length-Prefixed) 기반 8KB 초과 `VARCHAR(MAX)` / `VARBINARY(MAX)` 대용량 청크 스트리밍.
+- [x] **PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**
+  - [MS-TDS] 2.2.5.2 Partially Length-Prefixed (PLP) 스트리밍 규격 구현 (`writePLPValue`), 8바이트 전체 길이 헤더, 최대 8,000바이트 단위 청크 분할 및 4바이트 제로 종료 청크(`0x00000000`) 전송, 8바이트 `0xFFFFFFFFFFFFFFFF` NULL 표현 완비.
 - [x] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**
   - Python `psycopg3` (PostgreSQL Wire Protocol :5433) 및 `pymssql` (TDS Protocol :1433) 종단간 통합 검증 완료.
   - `CREATE TABLE`, `INSERT`, `SELECT`, DATE/TIME/GUID 바이너리 파싱, 트랜잭션 `COMMIT`/`ROLLBACK` 원자성 및 NULL 값 처리 완비.
