@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Production Storage & Filesystem Encryption Guide (`doc/STORAGE_ENCRYPTION_GUIDE.md`, `doc/SECURITY.md`)**:
+  - Authored comprehensive guide detailing data-at-rest encryption standard using OS/Cloud hardware-accelerated block storage subsystems (Linux LUKS2 / dm-crypt with AES-NI, AWS EBS Encryption, GCP CMEK, Azure Managed Disks).
+  - Postponed in-kernel software-level TDE in favor of native platform primitives to prevent double-encryption NVMe I/O degradation and isolate key management outside database process memory (Golden Rules 14 & 15).
+  - Documented NVMe dm-crypt workqueue bypass performance tuning, unattended TPM 2.0 key binding, encrypted Kubernetes StorageClasses, and AES-256-GCM off-site backup export.
 - **5-Table E-Commerce & Banking Demo Seed Database (`scripts/demo_seed.sql`)**:
   - Implemented standalone sample database script featuring 5 standard tables and rich sample datasets:
     - `customers`: Customer personal information (ID, name, email, phone, city, created_at).

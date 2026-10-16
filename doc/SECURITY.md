@@ -23,6 +23,9 @@ SQLion **never** invokes external operating system shells (`sh -c`, `cmd.exe`, `
 ### 1.4. Non-Destructive Atomic File Safety (Golden Rule 1)
 Database state snapshots (`tables.mpk`), backup archives, and configuration files are written to temporary swap files (`*.tmp`) and flushed via `file.Sync()` before executing an atomic filesystem rename (`os.Rename`). A sudden power interruption or system crash cannot produce zero-byte truncated database files.
 
+### 1.5. Data-at-Rest Encryption (Storage Subsystem Standard)
+SQLion delegates data-at-rest encryption to the underlying OS and cloud block storage subsystems (Linux LUKS2 / dm-crypt, AWS EBS Encryption, GCP CMEK, Azure Managed Disk Encryption) rather than in-process software TDE. This eliminates double-encryption CPU overhead, harnesses dedicated AES-NI hardware instructions, and isolates key custody from the database runtime. See the comprehensive [Storage Encryption Guide](STORAGE_ENCRYPTION_GUIDE.md) for full deployment procedures.
+
 ---
 
 ## 2. Authentication & Access Control

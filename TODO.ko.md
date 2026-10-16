@@ -23,10 +23,10 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
-| **P2** | **스토리지 성능 (P-11)** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | `pkg/storage/memengine` | 매 트랜잭션 6개 맵 할당 제거, 초당 2만 TPS 환경 GC 압력 80%+ 급감 |
-| **P2** | **실행기 성능 (P-12)** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | `pkg/execution` | 1,024건 튜플 배치 슬라이스 재할당 방지 및 대량 쿼리 GC 오버헤드 최소화 |
+| **P1** | **스토리지 성능 (P-11)** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | `pkg/storage/memengine` | 매 트랜잭션 6개 맵 할당 제거, 초당 2만 TPS 환경 GC 압력 80%+ 급감 |
+| **P1** | **실행기 성능 (P-12)** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | `pkg/execution` | 1,024건 튜플 배치 슬라이스 재할당 방지 및 대량 쿼리 GC 오버헤드 최소화 |
 | **P2** | **엔진 성능 (P-7)** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너** | `pkg/storage`, `pkg/engine` | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
+| **P2** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: In-Kernel AES) & 감사 로그** | `pkg/storage` | **보류 (Postponed)** - 파일시스템/블록 레벨 암호화(LUKS2, AWS EBS, GCP CMEK) 표준 권고 채택 ([`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)) |
 | **P2** | **엔진 성능 (P-9)** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | `pkg/engine`, `pkg/planner` | **보류** (SP 바이트코드 캐시 및 Prepared/PK 바이패스로 대체 충족) |
 | **P3** | **엔진 성능 (P-10)** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | `pkg/execution` | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
 | **P3** | **엔터프라이즈 인증** | **LDAP / Active Directory 디렉토리 인증 공급자 (`pkg/auth`)** | `pkg/auth` | 사내 계정 디렉토리 연동 (AuthProvider SPI 기반 플러그인) |
@@ -34,6 +34,16 @@
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **프로덕션 스토리지 파일시스템 암호화 표준 가이드 수립 & TDE 보류 (`doc/STORAGE_ENCRYPTION_GUIDE.md`, `doc/SECURITY.md`)**
+  - **배경**: 인-커널 소프트웨어 레벨 TDE(Transparent Data Encryption)는 클라우드 블록 스토리지나 엔터프라이즈 파일시스템과 중복 암호화되어 심각한 NVMe I/O 처리량 저하 및 CPU 암호화 부하를 유발함.
+  - **결정 및 구현**:
+    - **TDE 보류 및 플랫폼 프리미티브 위임 (Golden Rule 14, 15)**: 데이터베이스 프로세스 내부 소프트웨어 암호화 대신 OS 커널(`dm-crypt`/LUKS2 with AES-NI) 및 클라우드 KMS 블록 볼륨 암호화(AWS EBS, GCP CMEK, Azure Managed Disk)를 공식 표준으로 채택.
+    - **프로덕션 암호화 가이드 수립 (`doc/STORAGE_ENCRYPTION_GUIDE.md`)**:
+      - Linux 온프레미스/베어메탈 LUKS2 파티셔닝, ext4/XFS 포맷, NVMe 작업 큐 바이패스 성능 튜닝(`--perf-no_read_workqueue --perf-no_write_workqueue`).
+      - AWS EBS / GCP PD / Azure Managed Disk 암호화 StorageClass 매니페스트.
+      - 컨테이너/쿠버네티스 읽기 전용 루트 및 암호화 마운트 바운더리 격리 가이드.
+      - 백업 아카이브 OpenSSL AES-256-GCM 오프사이트 전송 암호화 절차.
+      - PCI-DSS v4.0, HIPAA, SOC 2, GDPR 규제 준수 매핑 완비.
 - [x] **가상 카탈로그 멀티테이블 조인 인터셉터 격리 리팩토링 (`pkg/catalog/virtual`, `pkg/engine`)**
   - **배경**: `pkg/engine/sqlexec_gui_interop.go`와 `sqlexec_mssql_sys.go`에 분산되어 있던 DBeaver, DbGate, Beekeeper Studio 등 GUI 도구용 메타데이터 크로스 조인 쿼리 가로채기(PostgreSQL `pg_class JOIN pg_namespace`, `pg_attribute JOIN pg_class`, `pg_constraint`, `pg_proc`, MSSQL `sys.columns JOIN sys.types`, `sys.indexes`, `sys.partitions`) 레이어를 독립 패키지인 `pkg/catalog/virtual`로 분리하여 엔진과의 결합도를 낮추고 유지보수성을 극대화.
   - **구현 내용**:
