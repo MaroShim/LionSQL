@@ -2,6 +2,8 @@
 
 High-Concurrency Embedded OLTP Database Engine & Multi-Protocol Stored Procedure Server
 
+(한국어 문서는 [README.ko.md](README.ko.md)를 참조하세요.)
+
 ---
 
 ## Overview
