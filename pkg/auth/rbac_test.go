@@ -195,3 +195,52 @@ func TestRBAC_UnifiedSuperuserLogins(t *testing.T) {
 		t.Fatalf("expected dropping postgres login to fail")
 	}
 }
+
+type mockExternalProvider struct {
+	users map[string]string // user -> password
+}
+
+func (m *mockExternalProvider) Name() string { return "mock_ldap" }
+
+func (m *mockExternalProvider) Authenticate(username, password string) (*auth.Login, error) {
+	if expected, ok := m.users[username]; ok && expected == password {
+		return &auth.Login{
+			Name:       username,
+			IsDisabled: false,
+		}, nil
+	}
+	return nil, auth.ErrInvalidCredentials
+}
+
+func TestRBAC_ExternalAuthProvider(t *testing.T) {
+	svc := auth.NewAuthService(auth.Config{})
+	_, _ = svc.EnsureDefaultSuperuser("admin@sqlion.local", "MasterPass!")
+
+	mockLDAP := &mockExternalProvider{
+		users: map[string]string{
+			"ldap_user": "CorporatePass123!",
+		},
+	}
+	svc.RegisterProvider(mockLDAP)
+
+	if len(svc.Providers()) != 1 {
+		t.Fatalf("expected 1 provider registered")
+	}
+
+	// 1. External LDAP user succeeds with corporate password
+	login, err := svc.AuthenticateLogin("ldap_user", "CorporatePass123!")
+	if err != nil || login == nil {
+		t.Fatalf("expected external provider authentication to succeed: %v", err)
+	}
+
+	// 2. Wrong corporate password fails
+	if _, err := svc.AuthenticateLogin("ldap_user", "WrongPass"); err == nil {
+		t.Fatalf("expected wrong password to fail")
+	}
+
+	// 3. Local built-in admin still takes precedence
+	saLogin, err := svc.AuthenticateLogin("sa", "MasterPass!")
+	if err != nil || saLogin == nil {
+		t.Fatalf("expected built-in sa login to succeed with master pass")
+	}
+}

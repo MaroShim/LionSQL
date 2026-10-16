@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - Synchronized `AlterLoginPassword` for built-in logins to automatically update the superuser password and keep HTTP, PG, and TDS administrator credentials identical without divergence.
     - `pkg/wire`: Updated PGWire handshake to allow trust login for built-in accounts when `--auth=false`, while strictly validating against the unified superuser password when `--auth=true`.
     - `pkg/wire/tds`: Implemented MS-TDS 2.2.6.4 password de-obfuscation (`readLoginPassword`: nibble swap + XOR `0xA5`) in `parseLogin7`; enforced authentication verification in `handleLogin7` when `--auth=true`, returning standard SQL Server Login Failed error token (Number `18456`, Severity `14`, State `1`) on bad credentials.
+    - Implemented pluggable `AuthProvider` SPI interface (`pkg/auth/provider.go`) and chain-of-responsibility authentication resolution (`s.RegisterProvider`, `s.Providers`), enabling future enterprise LDAP / Active Directory directory integrations without external dependencies.
     - Added comprehensive unit and integration tests in `pkg/auth/rbac_test.go`, `pkg/wire/server_test.go`, and `pkg/wire/tds/auth_test.go` with 100% race-free verification across all packages.
 
 ### Removed

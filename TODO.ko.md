@@ -29,10 +29,19 @@
 | **P2** | **엔진 성능 (P-7)** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너** | `pkg/storage`, `pkg/engine` | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
 | **P2** | **엔진 성능 (P-9)** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | `pkg/engine`, `pkg/planner` | **보류** (SP 바이트코드 캐시 및 Prepared/PK 바이패스로 대체 충족) |
 | **P3** | **엔진 성능 (P-10)** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | `pkg/execution` | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
+| **P3** | **엔터프라이즈 인증** | **LDAP / Active Directory 디렉토리 인증 공급자 (`pkg/auth`)** | `pkg/auth` | 사내 계정 디렉토리 연동 (AuthProvider SPI 기반 플러그인) |
 | **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **PGWire, TDS, HTTP 전반의 통합 관리자 인증 및 AuthProvider SPI 추상화 (`pkg/auth`, `pkg/wire`, `pkg/wire/tds`)**
+  - **배경**: HTTP(`admin@sqlion.local`), PostgreSQL(`postgres`), SQL Server(`sa`) 간 관리자 비밀번호가 분산되지 않고 단일 원천(SSOT)으로 동기화 관리되도록 개선하고, 향후 LDAP 연동을 위한 인터페이스 추상화 완비.
+  - **구현 내용**:
+    - `AuthService.defaultAdminEmail` 단일 원천 관리자 해시 보관 및 `AuthenticateLogin`에서 내장 관리자(`sa`, `postgres`, `admin`)의 단일 비밀번호 자동 검증.
+    - `ALTER LOGIN sa WITH PASSWORD = '...'` 실행 시 HTTP 슈퍼유저 비밀번호도 실시간 동기화.
+    - `pkg/wire` 및 `pkg/wire/tds`: `--auth=false` 시 신뢰(Trust) 무인증 접속 허용, `--auth=true` 시 단일 관리자 비밀번호 엄격 검증 및 실패 시 표준 에러(TDS Error 18456, PGWire 28P01) 반환.
+    - `AuthProvider` SPI 인터페이스(`pkg/auth/provider.go`) 신설 및 `RegisterProvider` 외부 공급자 체인 조회 구조 완비.
+    - 단위 및 동시성 경쟁 테스트 100% PASS 검증 완료.
 - [x] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링 (`P-6`) (`pkg/engine`)**
   - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_derived.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_mssql_sys.go`, `sqlexec_gui_interop.go`, `sqlexec_string_split.go`, `sqlexec_procs.go` 등 핫패스 쿼리 라우팅 및 행 루프 내부에 분산되어 있던 40여 개의 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 DFA 재컴파일 지연(5~15µs) 및 힙 할당 병목 해소.
   - **구현 내용**:

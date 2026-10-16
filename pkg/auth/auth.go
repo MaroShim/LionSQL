@@ -83,6 +83,7 @@ type AuthService struct {
 	logins            map[string]*Login  // keyed by normalized login name
 	dbUsers           map[string]*User   // keyed by normalized database user name
 	grants            map[string]map[string]map[Privilege]GrantType // user -> table -> priv -> allow/deny
+	providers         []AuthProvider
 	mu                sync.RWMutex
 }
 
@@ -119,6 +120,25 @@ func NewAuthService(cfg Config) *AuthService {
 	svc.dbUsers["postgres"] = &User{Name: "postgres", LoginName: "postgres", Roles: []string{"db_owner"}, CreatedAt: now, UpdatedAt: now}
 
 	return svc
+}
+
+// RegisterProvider registers an external authentication provider (e.g. LDAP, Active Directory).
+func (s *AuthService) RegisterProvider(provider AuthProvider) {
+	if provider == nil {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.providers = append(s.providers, provider)
+}
+
+// Providers returns a copy of all registered authentication providers.
+func (s *AuthService) Providers() []AuthProvider {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]AuthProvider, len(s.providers))
+	copy(out, s.providers)
+	return out
 }
 
 // HashPassword generates a salted SHA256 password hash: salt:hash.

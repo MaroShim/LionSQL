@@ -180,6 +180,7 @@ func (s *AuthService) GetLogin(name string) (*Login, error) {
 
 // AuthenticateLogin verifies login name and password.
 // Built-in administrative logins (sa, postgres, admin) authenticate against the single unified superuser password.
+// External directory providers (e.g. LDAP, Active Directory) are consulted before local user accounts.
 func (s *AuthService) AuthenticateLogin(name, password string) (*Login, error) {
 	norm := strings.ToLower(strings.TrimSpace(name))
 	s.mu.RLock()
@@ -198,6 +199,13 @@ func (s *AuthService) AuthenticateLogin(name, password string) (*Login, error) {
 				}
 				return l, nil
 			}
+		}
+	}
+
+	// Consult registered external authentication providers (e.g. LDAP, Active Directory)
+	for _, prov := range s.providers {
+		if login, err := prov.Authenticate(norm, password); err == nil && login != nil {
+			return login, nil
 		}
 	}
 
