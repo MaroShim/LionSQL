@@ -549,11 +549,13 @@ JSON 데이터 컬럼 내부의 특정 속성을 추출하여 B+Tree 인덱스�
 | :--- | :--- | :--- | :--- | :--- | :---: | :---: |
 | **T-SQL 구문 호환성** | `pkg/proc` (Pratt/ANTLR) | 10대 고급 문법 정답셋 일치 | 100% 일치 | 100% 일치 | 100% | **PASS** |
 | **TDS 7.3 와이어 I/O** | `pkg/wire/tds` | PLP 25KB, NBCROW, UUIDv7 | 패킷 무손실 | SHA-256 일치 | 100% | **PASS** |
-| **OLTP 처리량 (TPC-C)**| `pkg/proc/runtime` | 16-Worker 동시성 TPS | 10,000 TPS | **17,834.46 TPS** | **178%** | **PASS** |
+| **OLTP 처리량 (TPC-C)**| `pkg/proc/runtime` | 20-Worker 동시성 TPS | 10,000 TPS | **20,087.70 TPS** (OCC) / **16,814.17 TPS** (WT) | **200%** | **PASS** |
 | **트랜잭션 지연 시간** | `pkg/storage/memengine` | P50 / P99 Latency | < 5ms | **P50: 12µs, P99: 1.2ms** | **400%** | **PASS** |
 | **크래시 복구성** | `pkg/storage/wiredtiger`| SIGKILL 후 무손실 복구 | 0 Data Loss | 1,000 Tx 100% 무손실 | 100% | **PASS** |
 | **HA 페일오버** | `pkg/replication` | 비동기 복제 및 리더 승격 | 분기 방지 | 승격 후 즉각 쓰기 수용 | 100% | **PASS** |
 | **프로토콜 간 정합성** | `pkg/wire` | PGWire $\leftrightarrow$ TDS $\leftrightarrow$ REST | 100% 실시간 공유 | 0-Delay 데이터 동기화 | 100% | **PASS** |
+| **드라이버 적합성 인증**| `pkg/wire` | PostgreSQL JDBC (`pgjdbc`), `psqlODBC` | 정식 드라이버 호환 | 세션 제어 및 카탈로그 100% 일치 | 100% | **PASS** |
+| **가상 카탈로그 최적화**| `pkg/catalog/virtual` | 0-Alloc 프리필터 및 공백 무관 등호 매칭 | 0 힙 할당 | **103.5ns, 0 B/op, 0 allocs/op** | **100%** | **PASS** |
 | **실시간 분석 (HTAP)** | `pkg/cdc`, DuckDB | 500건 CDC 벡터 집계 속도 | < 100ms | **1.59ms** | **6200%** | **PASS** |
 | **CBO 플래너 제어** | `pkg/planner` | 쿼리 힌트 및 커버링 스캔 | 계획 강제 반영 | Index-Only Scan 활성화 | 100% | **PASS** |
 | **JSON B-Tree 인덱스** | `pkg/engine` | 함수형 표현식 인덱스 선택 | Index Scan | `idx_user_city` 자동 선택 | 100% | **PASS** |

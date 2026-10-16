@@ -60,10 +60,15 @@ For high-throughput ORMs (GORM, Prisma, Hibernate) and prepared statements, Lion
 ```
 [ Client Message ] ──> Parse ('P')      ──> Compiles & stores PreparedStatement in session
                    ──> Describe ('D')   ──> Sends ParameterDescription ('t') & RowDescription ('T')
-                   ──> Bind ('B')       ──> Binds parameter arguments to statement into Portal
+                   ──> Bind ('B')       ──> Decodes binary/text parameters directly into typed storage.Value
                    ──> Execute ('E')    ──> Evaluates Portal query under session transaction
                    ──> Sync ('S')       ──> Flushes outputs and sends ReadyForQuery ('Z')
 ```
+
+#### Direct Binary Parameter Value Decoding (`P-14`)
+During the `Bind ('B')` phase, client drivers can transmit parameters in binary format (format code `1`):
+- **Bypassing String Round-Trips**: Traditional wire adapters decode binary numbers to string literals (`strconv.Itoa`) and subsequently re-parse them. LionSQL directly reads the binary byte stream into typed `storage.Value` (`IntValue`, `FloatValue`, `BoolValue`, `UUIDValue`) in `decodeBinaryParamValue`.
+- **Precomputed Parameter Name Tables**: Up to 64 parameters use precomputed static parameter name slices (`$1`~`$64`, `@p1`~`@p64`, `p1`~`p64`), completely eliminating `fmt.Sprintf` heap allocations during prepared statement execution.
 
 ---
 
@@ -115,6 +120,11 @@ Every TDS communication is framed by an 8-byte header:
   - `0x12`: LOGIN7 authentication packet.
 - **`Status` (Byte)**: `0x01` indicates end-of-message (EOM).
 - **`Length` (Uint16 Big-Endian)**: Total packet size including 8-byte header.
+
+#### Single-Frame Buffer Pooling & Syscall Optimization
+To minimize system call overhead during high-frequency result set streaming:
+- **Unified Contiguous Frame (`tdsFramePool`)**: Uses a `sync.Pool`-backed 4,096-byte frame buffer (`tdsFramePool`) where the 8-byte TDS header and payload are packed contiguously into a single slice.
+- **50% Syscall Reduction**: Replaces the split `Write(hdr)` followed by `Write(payload)` pattern with a single `Write(frame[:len])` call, eliminating 1 network system call per packet.
 
 ---
 

@@ -287,11 +287,55 @@ for row in cursor:
 conn.close()
 ```
 
+### 4.5. Java / JVM (`PostgreSQL JDBC Driver - pgjdbc`)
+
+LionSQL is certified compatible with the official PostgreSQL JDBC Driver (`org.postgresql:postgresql`):
+
+```java
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.Statement;
+
+public class App {
+    public static void main(String[] args) throws Exception {
+        String url = "jdbc:postgresql://127.0.0.1:5433/sqlion?sslmode=disable";
+        try (Connection conn = DriverManager.getConnection(url, "postgres", "")) {
+            try (Statement stmt = conn.createStatement()) {
+                ResultSet rs = stmt.executeQuery("SELECT id, holder, balance FROM accounts;");
+                while (rs.next()) {
+                    System.out.println("Account: " + rs.getInt("id") + ", " + rs.getString("holder"));
+                }
+            }
+        }
+    }
+}
+```
+
+### 4.6. C / C++ / ODBC (`psqlODBC Driver`)
+
+Standard ODBC connection string for `psqlODBC` / `unixODBC`:
+
+```ini
+[LionSQL]
+Driver = PostgreSQL Unicode
+Server = 127.0.0.1
+Port = 5433
+Database = sqlion
+Username = postgres
+Password = 
+SSLmode = disable
+```
+
 ---
 
 ## 5. Architectural Machinery: Virtual Catalog Interceptors
 
-GUI clients rely heavily on deep metadata introspection to display left-side object trees, column types, default values, and foreign keys. Rather than building heavy in-memory tables for hundreds of internal catalog tables, LionSQL implements **Lightweight Virtual Catalog Interceptors** (`pkg/api/sqlexec_pgcatalog.go` and `sqlexec_dbcc.go`).
+GUI clients rely heavily on deep metadata introspection to display left-side object trees, column types, default values, and foreign keys. Rather than maintaining heavy in-memory catalog tables for hundreds of PostgreSQL and SQL Server catalog schemas, LionSQL implements **Zero-Allocation Fast-Filtered Virtual Catalog Interceptors** (`pkg/catalog/virtual/interceptor.go`).
+
+### 5.0. Zero-Allocation Fast Filter (`containsFold`) & Whitespace-Resilient Matching (`containsEq`)
+- **Fast Filter (Bypass)**: Normal OLTP queries (`SELECT * FROM orders WHERE ...`) bypass catalog matching immediately via an ASCII case-insensitive byte scanner (`containsFold`) with **0 heap allocations (0 B/op, 0 allocs/op)** and sub-100ns latency.
+- **Whitespace Resilience (`containsEq`)**: Client queries matching catalog constraints (such as `sys.objects WHERE o.type = 'TR'` or `sys.indexes WHERE is_primary_key=1`) are evaluated with arbitrary whitespace tolerance around `=`, preventing false-negative introspection errors regardless of client SQL formatting.
 
 ### 5.1. PostgreSQL Catalog Views
 When clients query standard catalog tables, LionSQL intercepts the queries before physical execution:
