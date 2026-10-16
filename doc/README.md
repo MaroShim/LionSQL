@@ -136,6 +136,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Prometheus metrics (`/metrics`) and slow query logging (`/api/slow-queries`).
 * [`SECURITY.md`](file:///Users/maro/Projects/sql/doc/SECURITY.md)
   * Authentication models, JWT lifecycle, API key role scoping, and network encryption.
+* [`IMMUTABLE_AUDIT_LOG.md`](file:///Users/maro/Projects/sql/doc/IMMUTABLE_AUDIT_LOG.md)
+  * Enterprise cryptographic audit logging architecture and compliance specification (PCI-DSS v4.0 Req 10, SOC 2 Type II, SHA-256 hash chaining, non-blocking MPSC ring buffer, and offline CLI verifier).
 * [`BENCHMARK.md`](file:///Users/maro/Projects/sql/doc/BENCHMARK.md)
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).
 * [`MIGRATION.md`](file:///Users/maro/Projects/sql/doc/MIGRATION.md)
