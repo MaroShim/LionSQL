@@ -23,7 +23,6 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P1** | **아키텍처/리팩토링 (R-1)** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | `pkg/engine` | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
 | **P1** | **엔진 성능 (P-6)** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | `pkg/engine` | 쿼리당 동적 `regexp.MustCompile` 힙 할당 및 5~15µs 지연 완전 제거 |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
 | **P2** | **엔진 성능 (P-7)** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너** | `pkg/storage`, `pkg/engine` | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
@@ -33,7 +32,13 @@
 | **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
-### P1/P2 최근 완료 과제: 고가용성 & BaaS 확장
+### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**
+  - **배경**: 단일 파일(3,283라인)에 PostgreSQL `pg_catalog`, ANSI `information_schema`, MSSQL `sys.tables`/DMV, DBeaver/Beekeeper/DbGate/HeidiSQL 도구별 쿼리 인터셉터가 혼재되어 거대한 switch 분기문과 높은 유지보수 비용을 초래함.
+  - **구현 내용**:
+    - 도메인별 4개 모듈 분리 완료: `sqlexec_pgcatalog.go`(634줄), `sqlexec_info_schema.go`(420줄), `sqlexec_mssql_sys.go`(554줄), `sqlexec_gui_interop.go`(477줄).
+    - `VirtualCatalogView` 함수 시그니처 및 `registerCatalogView` 레지스트리 패턴 도입: 거대한 switch 분기를 15줄 수준의 $O(1)$ 맵 디스패치(`execPgCatalogSelect`) 및 $O(1)$ 테이블 식별(`isPgCatalogTable`)로 슬림화.
+    - 전체 25개 패키지 레이스 감지 테스트 100% PASS 검증 완료.
 - [x] **반정형 JSON 표현식 B-Tree 인덱스 & 내장함수 완비 (`ADR-022`) (`pkg/proc`, `pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/engine`)**
   - **배경**: PostgreSQL JSON 이항 연산자(`->`, `->>`) 및 T-SQL/ANSI JSON 표준 함수(`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`) 지원, 기능 표현식 인덱스(`((data->>'key'))`)를 통한 반정형 도큐먼트 쿼리의 초고속 B-Tree 인덱스 스캔 가속.
   - **구현 내용**:
@@ -342,23 +347,25 @@
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 목표 및 리팩토링 상세 |
 | :---: | :--- | :--- | :---: | :--- |
-| **R-1** | **엔진/카탈로그** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | **대기 (`[ ]`)** | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
+| **R-1** | **엔진/카탈로그** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | **완료 (`[x]`)** | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
 | **R-2** | **파서/내장함수** | **Pratt 파서 및 내장 함수 도메인별 관심사 분리** | **대기 (`[ ]`)** | `parser.go`(3.2K줄), `builtins.go`(2.8K줄) 도메인 모듈화 |
 | **R-3** | **엔진/실행기** | **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화** | **대기 (`[ ]`)** | `sqlexec_eval.go`와 `execution/builder.go` 간 중복 제거 (DRY) |
 | **R-4** | **스토리지/OCC** | **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해** | **대기 (`[ ]`)** | `memengine/tx.go`(1.9K줄)의 `Commit()`, 스캔, 세이브포인트 분리 |
 | **R-5** | **스토리지/CGo** | **WiredTiger CGo 바인딩 격리 및 트랜잭션/커서 모듈화** | **대기 (`[ ]`)** | `wt_engine.go`(1.7K줄)의 CGo 인터페이스, 커서, DDL 물리적 분리 |
 
-- [ ] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**
-  - **배경**: 현재 단일 파일(3,283라인)에 PostgreSQL `pg_catalog`, ANSI `information_schema`, MSSQL `sys.tables`/DMV, DBeaver/Beekeeper/DbGate/HeidiSQL 도구별 쿼리 인터셉터가 혼재되어 유지보수성과 가독성이 저하됨.
-  - **구현 계획 (2단계 점진적 통합)**:
-    - **Step 1 (물리적 파일 분리)**:
-      - `sqlexec_pgcatalog.go`: 순수 PostgreSQL 시스템 카탈로그 (`pg_class`, `pg_namespace`, `pg_type`, `pg_database` 등)
-      - `sqlexec_mssql_sys.go`: SQL Server / TDS 전용 가상 카탈로그 및 DMV (`sys.tables`, `sys.columns`, `sys.dm_*`, `sys.database_files` 등)
-      - `sqlexec_info_schema.go`: ANSI 표준 정보 스키마 (`information_schema.tables`, `columns`, `table_constraints` 등)
-      - `sqlexec_gui_interop.go`: HeidiSQL, Beekeeper, DbGate 등 특정 GUI 클라이언트 특화 카탈로그 조인 쿼리 인터셉터
-    - **Step 2 (가상 뷰 레지스트리화)**:
-      - 거대한 `switch norm` 및 if-else 분기 대신, 가상 뷰 시그니처(`type VirtualCatalogView func(coord *Coordinator, where, order string, limit int) ([]string, []map[string]any, error)`) 정의.
-      - 레지스트리(`map[string]VirtualCatalogView`) 기반 $O(1)$ 동적 디스패치 구조로 전환하여 신규 뷰 추가 시 기존 코드 수정 없는 개방-폐쇄 원칙(OCP) 달성.
+- [x] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**
+  - **배경**: 단일 파일(3,284라인)에 PostgreSQL `pg_catalog`, ANSI `information_schema`, MSSQL `sys.tables`/DMV, DBeaver/Beekeeper/DbGate/HeidiSQL 도구별 쿼리 인터셉터가 혼재되어 유지보수성과 가독성이 저하됨.
+  - **구현 내용**:
+    - **도메인별 물리적 파일 분리**:
+      - `sqlexec_pgcatalog.go` (634라인으로 80% 이상 슬림화): 순수 PostgreSQL `pg_catalog.pg_*` 가상 테이블 및 전역 레지스트리 디스패처.
+      - `sqlexec_mssql_sys.go` (554라인): SQL Server / TDS 전용 가상 카탈로그 및 DMV (`sys.tables`, `sys.columns`, `sys.dm_*`, `sys.database_files` 등) 및 데이터타입 포매터.
+      - `sqlexec_info_schema.go` (420라인): ANSI 표준 정보 스키마 (`information_schema.tables`, `columns`, `table_constraints` 등) 및 스키마 카탈로그 매핑.
+      - `sqlexec_gui_interop.go` (477라인): HeidiSQL, Beekeeper Studio, DbGate, DBeaver 멀티 테이블 크로스 조인 쿼리 인터셉터.
+    - **가상 뷰 레지스트리 패턴 확립 (`VirtualCatalogView`)**:
+      - `VirtualCatalogView` 함수 시그니처 및 동시성 안전 읽기 전용 `catalogViewRegistry map[string]VirtualCatalogView` 도입.
+      - 기존 60줄의 `isPgCatalogTable` 분기문을 $O(1)$ 맵 조회로 교체.
+      - 기존 1,500줄의 `execPgCatalogSelect` 거대 switch-case를 15줄의 $O(1)$ 레지스트리 디스패처로 전면 교체(개방-폐쇄 원칙 OCP 달성).
+    - 전체 25개 패키지 race-free 테스트(100% PASS) 및 GUI 클라이언트 호환성 보장.
 - [ ] **Pratt 파서 및 내장 함수 도메인별 관심사 분리 (`R-2`) (`pkg/proc`)**
   - **배경**: `pkg/proc/parser.go`(3,241라인)와 `pkg/proc/builtins.go`(2,880라인)가 단일 파일에 비대하게 집중되어 신규 문법/함수 추가 시 인지 부하 및 머지 충돌 위험 증가.
   - **구현 계획**:

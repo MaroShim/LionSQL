@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- **Virtual System Catalog Modularization & Registry Pattern Architecture (`R-1`) (`pkg/engine`)**:
+  - Decomposed monolithic 3,284-line `sqlexec_pgcatalog.go` into domain-specific modules:
+    - `sqlexec_pgcatalog.go` (634 lines): Core PostgreSQL `pg_catalog.pg_*` virtual views and centralized registry dispatcher.
+    - `sqlexec_mssql_sys.go` (554 lines): SQL Server / TDS virtual catalog views and DMVs (`sys.tables`, `sys.columns`, `sys.dm_*`, `sys.database_files`, etc.).
+    - `sqlexec_info_schema.go` (420 lines): ANSI standard information schema views (`information_schema.tables`, `columns`, `table_constraints`, etc.).
+    - `sqlexec_gui_interop.go` (477 lines): Multi-table catalog cross-join query interceptors for GUI tools (HeidiSQL, Beekeeper Studio, DbGate, DBeaver).
+  - Implemented pluggable `VirtualCatalogView` type and $O(1)$ dispatch registry (`catalogViewRegistry`), replacing the 60-line `isPgCatalogTable` branch and 1,500-line `execPgCatalogSelect` switch while adhering to the Open-Closed Principle (OCP).
+  - Preserved 100% interoperability with external GUI database administration tools and verified race-free execution across all packages.
+
 ### Added
 - **Semi-Structured JSON Functional Expression Indexing & Built-in Operators (ADR-022) (`pkg/proc`, `pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/engine`)**:
   - Implemented T-SQL & ANSI standard JSON built-in functions: `ISJSON(val)`, `JSON_VALUE(col, '$.path')`, `JSON_QUERY(col, '$.path')`, `JSON_MODIFY(col, '$.path', new_val)`.
