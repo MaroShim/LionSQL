@@ -7,13 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-### Refactored
-- **Test Suite Boilerplate Diet & Helper Unification (-291 Lines) (`pkg/wire`, `pkg/api`)**:
-  - Implemented `authenticatePGClient` in `pkg/wire/server_test.go`, eliminating verbose raw socket packet writing and response draining across password authentication subtests (`Success`, `Failure`, `GlobalAuthSuperuser`) (-140 lines).
-  - Streamlined `TestWire_ConcurrentConnectionMultiplexing` using `connectPGClient` and `sendPGQuery` (-65 lines).
-  - Simplified `TestPGWire_ServerSideSQLCursor` connection lifecycle using `connectPGClient` (-20 lines).
-  - Enhanced `setupMemServer` in `pkg/api/common_test.go` with automatic `t.Cleanup` memory engine teardown, replacing repetitive 4-line setup boilerplate across 31 unit tests in `pkg/api/sqlexec_test.go` with a single `setupMemServer(t)` call (-120 lines).
-  - Net deletion of 291 lines of repetitive test code while preserving 100% test coverage and zero data races.
+---
+
+## [0.23.0] - 2026-10-17
 
 ### Added
 - **Virtual Catalog Query Interceptor Zero-Alloc Fast Filter & Whitespace-Resilient Matcher (`pkg/catalog/virtual`)**:
@@ -35,6 +31,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented `sync.Pool`-backed 4,096-byte frame buffer (`tdsFramePool`) in `pkg/wire/tds/packet.go` to pack the 8-byte TDS header and chunk payload contiguously into a single byte slice.
   - Eliminated the split two-call `Write(hdr)` and `Write(payload)` pattern, cutting OS socket system calls by exactly 50% across all TDS client responses with zero heap allocation.
   - Added unit test `TestTDS_WritePacket_SingleSyscallPerPacket` to deterministically verify single-syscall emission across empty, single-frame, and multi-frame packets.
+- **TPC-C VDBE Bytecode Engine 20k TPS Milestone & Benchmark Verification (`doc/BENCHMARK.md`, `README.md`)**:
+  - Reached **20,087.70 TPS** (541,708.93 tpmC, peak 25,298 TPS) on the In-Memory OCC engine with 10 warehouses and 20 concurrent client workers, achieving sub-millisecond median latencies (New-Order P50 0.69ms, Payment P50 0.05ms) and slashing serialization abort rate to **0.10%**.
+  - Advanced WiredTiger disk B+Tree MVCC throughput to **16,814.17 TPS** (457,021.04 tpmC, +13.2% gain) with flat P99 tail latency (New-Order P99 9.46ms), powered by P-8 cursor pooling and P-12 chunk pooling.
+- **Enterprise Architecture & Technical Documentation Suite (`doc/`, `README.ko.md`)**:
+  - Authored [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md): genesis and technical rationale behind core architecture (WiredTiger, Go, T-SQL VDBE VM, dual wire listeners, single binary packaging, Antigravity AI pair programming).
+  - Authored [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md): memory layout, buffer pooling (`sync.Pool`), arena slabs, and hot-path GC avoidance strategies (`P-1` ~ `P-14`).
+  - Authored [`doc/ENTERPRISE_AUTHENTICATION_SPI.md`](doc/ENTERPRISE_AUTHENTICATION_SPI.md): unified superuser model, `AuthProvider` SPI interface, LDAP/AD directory architecture, and perimeter proxy security topology.
+  - Authored [`doc/SCHEMA_MIGRATIONS_CLI.md`](doc/SCHEMA_MIGRATIONS_CLI.md): declarative schema migrations guide, `lionsql migrate` workflow, and zero-downtime deployment patterns.
+  - Authored [`doc/AUDIT_LOG_SPECIFICATION.md`](doc/AUDIT_LOG_SPECIFICATION.md): enterprise immutable cryptographic audit log specification (HMAC-SHA256 hash chains, tamper-evident verification, GDPR/HIPAA/SOX compliance).
+  - Authored [`README.ko.md`](README.ko.md): comprehensive Korean documentation covering architecture, features, wire protocols, CLI, benchmarks, and production quickstart.
+
+### Refactored
+- **Test Suite Boilerplate Diet & Helper Unification (-291 Lines) (`pkg/wire`, `pkg/api`)**:
+  - Implemented `authenticatePGClient` in `pkg/wire/server_test.go`, eliminating verbose raw socket packet writing and response draining across password authentication subtests (`Success`, `Failure`, `GlobalAuthSuperuser`) (-140 lines).
+  - Streamlined `TestWire_ConcurrentConnectionMultiplexing` using `connectPGClient` and `sendPGQuery` (-65 lines).
+  - Simplified `TestPGWire_ServerSideSQLCursor` connection lifecycle using `connectPGClient` (-20 lines).
+  - Enhanced `setupMemServer` in `pkg/api/common_test.go` with automatic `t.Cleanup` memory engine teardown, replacing repetitive 4-line setup boilerplate across 31 unit tests in `pkg/api/sqlexec_test.go` with a single `setupMemServer(t)` call (-120 lines).
+  - Net deletion of 291 lines of repetitive test code while preserving 100% test coverage and zero data races.
+- **Strategic Blueprint & Operational Backlog Restructuring (`ROADMAP.md`, `TODO.ko.md`, `README.md`)**:
+  - Restructured `ROADMAP.md` as an authoritative strategic blueprint detailing Phases 1 through 6, v1.0 LTS exit criteria, active Phase 6 deliverables, explicit spec-out decisions, and post-1.0 horizons.
+  - Transformed `TODO.ko.md` into a high-velocity operational cockpit with clear taxonomy tags, active P1 sprint queue, domain-specific backlog matrices, and post-1.0 deferred backlog, eliminating over 870 lines of circular redundant logs.
+  - Grouped Section 2 (Key Features) across `README.md` and `README.ko.md` into 5 coherent architectural pillars.
+
+---
+
+## [0.22.0] - 2026-10-16
+
+### Added
 - **Volcano Vectorized Batch Chunk Pooling (`P-12`) (`pkg/execution`)**:
   - Implemented `sync.Pool`-backed vector batch chunk pooling (`GetChunk`, `PutChunk`, `AcquireChunk`, `ReleaseChunk`) in `pkg/execution/chunk.go`.
   - Cleared tuple references (`Tuple.Values`, `Lazy`, `Index`) upon chunk recycling to prevent GC memory leaks, bounding pooled chunk capacity to `DefaultChunkSize * 4` (Golden Rule 23).
@@ -44,9 +68,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Leveraged Go 1.21+ built-in `clear(m)` in `releaseToPoolLocked()` to wipe map contents in $O(1)$ time while preserving underlying hash table bucket arrays.
   - Added bounded resource guard against oversized transaction collections (> 1,024 changes) to prevent memory retention spikes.
   - Achieved zero-allocation transaction creation for high-frequency OLTP workloads (16,000~20,000+ TPS).
-- **TPC-C VDBE Bytecode Engine 20k TPS Milestone & Benchmark Verification (`doc/BENCHMARK.md`, `README.md`)**:
-  - Reached **20,087.70 TPS** (541,708.93 tpmC, peak 25,298 TPS) on the In-Memory OCC engine with 10 warehouses and 20 concurrent client workers, achieving sub-millisecond median latencies (New-Order P50 0.69ms, Payment P50 0.05ms) and slashing serialization abort rate to **0.10%**.
-  - Advanced WiredTiger disk B+Tree MVCC throughput to **16,814.17 TPS** (457,021.04 tpmC, +13.2% gain) with flat P99 tail latency (New-Order P99 9.46ms), powered by P-8 cursor pooling and P-12 chunk pooling.
 - **Semi-Structured JSON Same-Tuple DOM Cache & Zero-Allocation Key Scanner (`P-7`) (`pkg/storage`, `pkg/engine`)**:
   - Implemented zero-allocation streaming byte scanner `ScanJSONTopLevelKey` in `pkg/storage/json.go` for direct extraction of top-level scalar keys (`doc->>'city'`, `JSON_VALUE(doc, '$.city')`) without unmarshaling or building an AST/DOM.
   - Implemented bounded FIFO DOM cache (`globalDOMCache`, capacity 1,024 entries) with thread-safe `sync.RWMutex` to parse JSON documents once per tuple when querying multiple complex paths.
@@ -85,6 +106,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - Added support for multi-argument type modifiers (e.g. `DECIMAL(15, 2)`, `NUMERIC(10, 4)`) in procedure/function parameter lists, return types, and `DECLARE` variable statements.
   - Enhanced procedure executor (`pkg/engine/sqlexec_procs.go`):
     - Added support for both named parameter calls (`EXEC Proc @Param = Val`) and positional parameter calls.
+- **Unified Index Bounds & Condition Resolution Engine (`R-3`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)**:
+  - Implemented centralized `pkg/planner/bounds.go` module eliminating code duplication (DRY) across Volcano plan tree builder and single-table fast-path coordinator:
+    - `ParseWhereConditions`: $O(N)$ single-pass condition parser with parentheses/quote depth tracking and package-level precompiled regex singletons supporting `=`, `BETWEEN ... AND ...`, `>=`, `>`, `<=`, `<`.
+    - `ParseIndexCond`: unified index condition bound extractor supporting single/composite indexes, range expressions, and functional JSON expression predicates (`doc->>'key' = 'val'`).
+    - `ParseValueToType`: centralized string-to-storage-value parser supporting `TypeInt`, `TypeFloat`, `TypeDecimal`, `TypeBool`, `TypeDateTime`, `TypeDate`, `TypeTime`, `TypeUUID`, `TypeBinary`, `TypeVarChar`.
+    - `BuildCompositePrefixKey` & `FindIndexAndBounds`: shared composite index prefix and candidate index resolver.
+  - Refactored `pkg/execution/builder.go`: removed duplicated parsing logic and unneeded `regexp`/`proc` imports, enhancing Volcano index scan iterators with full range bound capabilities.
+  - Refactored `pkg/engine/sqlexec_eval.go`: removed over 260 lines of duplicated bounds extraction logic and delegated to `planner.Bounds`.
+  - Added comprehensive test suites in `pkg/planner/bounds_test.go` and verified 100% race-free pass across all packages.
+- **Pratt Parser & Built-in Functions Domain Modularization (`R-2`) (`pkg/proc`)**:
+  - Modularized monolithic `pkg/proc/parser.go` (3,241 lines) into 5 focused domain modules:
+    - `parser.go` (280 lines, 90%+ reduction): Core `Parser` struct, `NewParser`, token advancement, and syntax helpers.
+    - `parser_ddl.go` (599 lines): `CREATE`/`ALTER`/`DROP` procedures, functions, triggers, tables, and indexes.
+    - `parser_dml.go` (1,141 lines): `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `WITH` (CTE), and `EXPLAIN` query parsing.
+    - `parser_stmt.go` (656 lines): T-SQL procedural control statements (`IF`/`WHILE`/`TRY...CATCH`/`BEGIN...END`), transactions, cursors, and `EXEC`.
+    - `parser_expr.go` (615 lines): Pratt operator precedence expressions, function calls, `CASE WHEN`, and JSON extraction expressions.
+  - Modularized monolithic `pkg/proc/builtins.go` (2,880 lines) into 6 domain-specific modules:
+    - `builtins.go` (153 lines, 94%+ reduction): Scalar function SPI registration, domain dispatchers (`EvalBuiltin`, `IsBuiltinFunction`), and common type converters.
+    - `builtins_date.go` (765 lines): T-SQL & ANSI date/time functions and date parsing/truncation/bucketing helpers.
+    - `builtins_string.go` (885 lines): String manipulation, regex matching, `PATINDEX`, `SOUNDEX`, and number formatting helpers.
+    - `builtins_math.go` (352 lines): Mathematical, trigonometric, and bitwise manipulation functions.
+    - `builtins_json.go` (179 lines): JSON scalar functions (`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`) and path modifiers.
+    - `builtins_sys.go` (697 lines): System context, metadata introspection, UUIDv7 generation, error functions, conditional logic (`ISNULL`, `COALESCE`), and cryptographic hashing.
+  - Preserved 100% syntactic and runtime parity with zero data races verified across all 25 packages.
+- **Virtual System Catalog Modularization & Registry Pattern Architecture (`R-1`) (`pkg/engine`)**:
+  - Decomposed monolithic 3,284-line `sqlexec_pgcatalog.go` into domain-specific modules:
+    - `sqlexec_pgcatalog.go` (634 lines): Core PostgreSQL `pg_catalog.pg_*` virtual views and centralized registry dispatcher.
+    - `sqlexec_mssql_sys.go` (554 lines): SQL Server / TDS virtual catalog views and DMVs (`sys.tables`, `sys.columns`, `sys.dm_*`, `sys.database_files`, etc.).
+    - `sqlexec_info_schema.go` (420 lines): ANSI standard information schema views (`information_schema.tables`, `columns`, `table_constraints`, etc.).
+    - `sqlexec_gui_interop.go` (477 lines): Multi-table catalog cross-join query interceptors for GUI tools (HeidiSQL, Beekeeper Studio, DbGate, DBeaver).
+  - Implemented pluggable `VirtualCatalogView` type and $O(1)$ dispatch registry (`catalogViewRegistry`), replacing the 60-line `isPgCatalogTable` branch and 1,500-line `execPgCatalogSelect` switch while adhering to the Open-Closed Principle (OCP).
+  - Preserved 100% interoperability with external GUI database administration tools and verified race-free execution across all packages.
 
 ### Security
 - **Unified Multi-Protocol Superuser Authentication & Single-Source-of-Truth RBAC (`pkg/auth`, `pkg/wire`, `pkg/wire/tds`)**:
@@ -122,39 +175,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Reduced point lookup latency to **894 ns/op** (1,130,000+ OPS) and 100-row table scans with decoding to **27 µs/op** (36,000+ scans/sec).
   - Verified 100% race-free concurrency across all 25 packages with zero memory leaks and safe nested scan isolation.
 
-### Changed
-- **Unified Index Bounds & Condition Resolution Engine (`R-3`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)**:
-  - Implemented centralized `pkg/planner/bounds.go` module eliminating code duplication (DRY) across Volcano plan tree builder and single-table fast-path coordinator:
-    - `ParseWhereConditions`: $O(N)$ single-pass condition parser with parentheses/quote depth tracking and package-level precompiled regex singletons supporting `=`, `BETWEEN ... AND ...`, `>=`, `>`, `<=`, `<`.
-    - `ParseIndexCond`: unified index condition bound extractor supporting single/composite indexes, range expressions, and functional JSON expression predicates (`doc->>'key' = 'val'`).
-    - `ParseValueToType`: centralized string-to-storage-value parser supporting `TypeInt`, `TypeFloat`, `TypeDecimal`, `TypeBool`, `TypeDateTime`, `TypeDate`, `TypeTime`, `TypeUUID`, `TypeBinary`, `TypeVarChar`.
-    - `BuildCompositePrefixKey` & `FindIndexAndBounds`: shared composite index prefix and candidate index resolver.
-  - Refactored `pkg/execution/builder.go`: removed duplicated parsing logic and unneeded `regexp`/`proc` imports, enhancing Volcano index scan iterators with full range bound capabilities.
-  - Refactored `pkg/engine/sqlexec_eval.go`: removed over 260 lines of duplicated bounds extraction logic and delegated to `planner.Bounds`.
-  - Added comprehensive test suites in `pkg/planner/bounds_test.go` and verified 100% race-free pass across all packages.
-- **Pratt Parser & Built-in Functions Domain Modularization (`R-2`) (`pkg/proc`)**:
-  - Modularized monolithic `pkg/proc/parser.go` (3,241 lines) into 5 focused domain modules:
-    - `parser.go` (280 lines, 90%+ reduction): Core `Parser` struct, `NewParser`, token advancement, and syntax helpers.
-    - `parser_ddl.go` (599 lines): `CREATE`/`ALTER`/`DROP` procedures, functions, triggers, tables, and indexes.
-    - `parser_dml.go` (1,141 lines): `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `WITH` (CTE), and `EXPLAIN` query parsing.
-    - `parser_stmt.go` (656 lines): T-SQL procedural control statements (`IF`/`WHILE`/`TRY...CATCH`/`BEGIN...END`), transactions, cursors, and `EXEC`.
-    - `parser_expr.go` (615 lines): Pratt operator precedence expressions, function calls, `CASE WHEN`, and JSON extraction expressions.
-  - Modularized monolithic `pkg/proc/builtins.go` (2,880 lines) into 6 domain-specific modules:
-    - `builtins.go` (153 lines, 94%+ reduction): Scalar function SPI registration, domain dispatchers (`EvalBuiltin`, `IsBuiltinFunction`), and common type converters.
-    - `builtins_date.go` (765 lines): T-SQL & ANSI date/time functions and date parsing/truncation/bucketing helpers.
-    - `builtins_string.go` (885 lines): String manipulation, regex matching, `PATINDEX`, `SOUNDEX`, and number formatting helpers.
-    - `builtins_math.go` (352 lines): Mathematical, trigonometric, and bitwise manipulation functions.
-    - `builtins_json.go` (179 lines): JSON scalar functions (`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`) and path modifiers.
-    - `builtins_sys.go` (697 lines): System context, metadata introspection, UUIDv7 generation, error functions, conditional logic (`ISNULL`, `COALESCE`), and cryptographic hashing.
-  - Preserved 100% syntactic and runtime parity with zero data races verified across all 25 packages.
-- **Virtual System Catalog Modularization & Registry Pattern Architecture (`R-1`) (`pkg/engine`)**:
-  - Decomposed monolithic 3,284-line `sqlexec_pgcatalog.go` into domain-specific modules:
-    - `sqlexec_pgcatalog.go` (634 lines): Core PostgreSQL `pg_catalog.pg_*` virtual views and centralized registry dispatcher.
-    - `sqlexec_mssql_sys.go` (554 lines): SQL Server / TDS virtual catalog views and DMVs (`sys.tables`, `sys.columns`, `sys.dm_*`, `sys.database_files`, etc.).
-    - `sqlexec_info_schema.go` (420 lines): ANSI standard information schema views (`information_schema.tables`, `columns`, `table_constraints`, etc.).
-    - `sqlexec_gui_interop.go` (477 lines): Multi-table catalog cross-join query interceptors for GUI tools (HeidiSQL, Beekeeper Studio, DbGate, DBeaver).
-  - Implemented pluggable `VirtualCatalogView` type and $O(1)$ dispatch registry (`catalogViewRegistry`), replacing the 60-line `isPgCatalogTable` branch and 1,500-line `execPgCatalogSelect` switch while adhering to the Open-Closed Principle (OCP).
-  - Preserved 100% interoperability with external GUI database administration tools and verified race-free execution across all packages.
+---
+
+## [0.21.0] - 2026-10-15
 
 ### Added
 - **Semi-Structured JSON Functional Expression Indexing & Built-in Operators (ADR-022) (`pkg/proc`, `pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/engine`)**:
@@ -191,6 +214,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added seamless subquery integration (`WHERE col IN (SELECT value FROM STRING_SPLIT(@ids, ','))`) via session-aware subquery resolution (`resolveSubqueriesWithSession`).
   - Added full `CROSS APPLY STRING_SPLIT(col, ',')` and `OUTER APPLY` support across joined table rows.
   - Added comprehensive test suites in `pkg/engine/sqlexec_string_split_test.go` verifying basic splits, custom delimiters, ordinal tracking, subquery evaluation, and `CROSS APPLY` joins.
+
+---
 
 ## [0.20.0] - 2026-10-15
 
