@@ -59,10 +59,10 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 		params = append(params, ParamDef{Name: paramName, Type: paramType})
 		p.nextToken()
 
-		// Skip optional (length) e.g. VARCHAR(50)
+		// Skip optional (length/precision, scale) e.g. VARCHAR(50), DECIMAL(15, 2)
 		if p.curTokenIs(TokenLParen) {
 			p.nextToken()
-			if p.curTokenIs(TokenInt) {
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 				p.nextToken()
 			}
 			if p.curTokenIs(TokenRParen) {
@@ -137,10 +137,10 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 		params = append(params, ParamDef{Name: paramName, Type: paramType})
 		p.nextToken()
 
-		// Skip optional (length) e.g. VARCHAR(50)
+		// Skip optional (length/precision, scale) e.g. VARCHAR(50), DECIMAL(15, 2)
 		if p.curTokenIs(TokenLParen) {
 			p.nextToken()
-			if p.curTokenIs(TokenInt) {
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 				p.nextToken()
 			}
 			if p.curTokenIs(TokenRParen) {
@@ -171,10 +171,10 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 	retType := parseDataType(p.curToken.Literal)
 	p.nextToken()
 
-	// Skip optional (length) e.g. VARCHAR(50)
+	// Skip optional (length/precision, scale) e.g. VARCHAR(50), DECIMAL(15, 2)
 	if p.curTokenIs(TokenLParen) {
 		p.nextToken()
-		if p.curTokenIs(TokenInt) {
+		for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 			p.nextToken()
 		}
 		if p.curTokenIs(TokenRParen) {

@@ -617,15 +617,33 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	defer session.Close()
 
 	argMap := make(map[string]any)
-	for i, param := range procMeta.Params {
-		if i < len(args) {
-			raw := unwrapSQLString(args[i])
+	for i, arg := range args {
+		arg = strings.TrimSpace(arg)
+		targetParam := ""
+		valStr := arg
+		if eqIdx := strings.IndexByte(arg, '='); eqIdx != -1 {
+			k := strings.TrimSpace(arg[:eqIdx])
+			v := strings.TrimSpace(arg[eqIdx+1:])
+			k = strings.TrimPrefix(k, "@")
+			for _, p := range procMeta.Params {
+				if strings.EqualFold(strings.TrimPrefix(p.Name, "@"), k) {
+					targetParam = p.Name
+					break
+				}
+			}
+			valStr = v
+		} else if i < len(procMeta.Params) {
+			targetParam = procMeta.Params[i].Name
+		}
+
+		if targetParam != "" {
+			raw := unwrapSQLString(valStr)
 			if num, err := strconv.ParseInt(raw, 10, 64); err == nil {
-				argMap[param.Name] = num
+				argMap[targetParam] = num
 			} else if f, err := strconv.ParseFloat(raw, 64); err == nil {
-				argMap[param.Name] = f
+				argMap[targetParam] = f
 			} else {
-				argMap[param.Name] = raw
+				argMap[targetParam] = raw
 			}
 		}
 	}

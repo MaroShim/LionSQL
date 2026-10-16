@@ -9,20 +9,68 @@ import (
 	"sqlion/pkg/storage"
 )
 
+// StripLeadingComments removes leading SQL line comments (--) and block comments (/* */) as well as whitespace.
+func StripLeadingComments(s string) string {
+	for {
+		s = strings.TrimSpace(s)
+		if strings.HasPrefix(s, "--") {
+			idx := strings.IndexByte(s, '\n')
+			if idx == -1 {
+				return ""
+			}
+			s = s[idx+1:]
+		} else if strings.HasPrefix(s, "/*") {
+			idx := strings.Index(s, "*/")
+			if idx == -1 {
+				return ""
+			}
+			s = s[idx+2:]
+		} else {
+			break
+		}
+	}
+	return s
+}
+
+func isBeginTransaction(rest string) bool {
+	rest = strings.TrimLeft(rest, " \t\r\n")
+	upper := strings.ToUpper(rest)
+	if strings.HasPrefix(upper, "TRANSACTION") {
+		after := upper[len("TRANSACTION"):]
+		return len(after) == 0 || !IsIdentChar(after[0])
+	}
+	if strings.HasPrefix(upper, "TRAN") {
+		after := upper[len("TRAN"):]
+		return len(after) == 0 || !IsIdentChar(after[0])
+	}
+	if strings.HasPrefix(upper, "DISTRIBUTED") {
+		after := upper[len("DISTRIBUTED"):]
+		if len(after) == 0 || !IsIdentChar(after[0]) {
+			return true
+		}
+	}
+	return false
+}
+
 // SplitStatements splits a multi-statement SQL batch by semicolons, properly respecting quotes and BEGIN...END blocks.
 func SplitStatements(query string) []string {
 	var stmts []string
 	var cur strings.Builder
 	inQuote := false
 	quoteChar := byte(0)
+	inLineComment := false
+	inBlockComment := false
 	blockDepth := 0
 	isProcOrFunc := false
 
 	checkProc := func(s string) bool {
-		sUpper := strings.ToUpper(strings.TrimSpace(s))
+		sUpper := strings.ToUpper(StripLeadingComments(s))
 		return strings.HasPrefix(sUpper, "CREATE PROCEDURE") ||
+			strings.HasPrefix(sUpper, "CREATE PROC") ||
 			strings.HasPrefix(sUpper, "CREATE OR ALTER PROCEDURE") ||
+			strings.HasPrefix(sUpper, "CREATE OR ALTER PROC") ||
 			strings.HasPrefix(sUpper, "ALTER PROCEDURE") ||
+			strings.HasPrefix(sUpper, "ALTER PROC") ||
 			strings.HasPrefix(sUpper, "CREATE FUNCTION") ||
 			strings.HasPrefix(sUpper, "CREATE OR ALTER FUNCTION") ||
 			strings.HasPrefix(sUpper, "ALTER FUNCTION") ||
@@ -33,54 +81,93 @@ func SplitStatements(query string) []string {
 
 	for i := 0; i < len(query); i++ {
 		ch := query[i]
+
+		if inLineComment {
+			cur.WriteByte(ch)
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+
+		if inBlockComment {
+			cur.WriteByte(ch)
+			if ch == '*' && i+1 < len(query) && query[i+1] == '/' {
+				cur.WriteByte('/')
+				i++
+				inBlockComment = false
+			}
+			continue
+		}
+
 		if inQuote {
 			if ch == quoteChar && (i == 0 || query[i-1] != '\\') {
 				inQuote = false
 			}
 			cur.WriteByte(ch)
-		} else {
-			if ch == '\'' || ch == '"' {
-				inQuote = true
-				quoteChar = ch
-				cur.WriteByte(ch)
-			} else {
-				if !isProcOrFunc && checkProc(cur.String()) {
-					isProcOrFunc = true
-				}
+			continue
+		}
 
-				if isProcOrFunc {
-					if (i == 0 || !IsIdentChar(query[i-1])) && i+5 <= len(query) && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == len(query) || !IsIdentChar(query[i+5])) {
-						blockDepth++
-					} else if (i == 0 || !IsIdentChar(query[i-1])) && i+4 <= len(query) && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == len(query) || !IsIdentChar(query[i+4])) {
-						blockDepth++
-					} else if (i == 0 || !IsIdentChar(query[i-1])) && i+3 <= len(query) && strings.EqualFold(query[i:i+3], "END") && (i+3 == len(query) || !IsIdentChar(query[i+3])) {
-						if blockDepth > 0 {
-							blockDepth--
-						}
-					}
-				}
+		if ch == '\'' || ch == '"' {
+			inQuote = true
+			quoteChar = ch
+			cur.WriteByte(ch)
+			continue
+		}
 
-				if ch == ';' {
-					if isProcOrFunc && blockDepth > 0 {
-						cur.WriteByte(ch)
-					} else {
-						stmt := strings.TrimSpace(cur.String())
-						if stmt != "" {
-							stmts = append(stmts, stmt)
-						}
-						cur.Reset()
-						isProcOrFunc = false
-						blockDepth = 0
-					}
-				} else {
-					cur.WriteByte(ch)
+		if ch == '-' && i+1 < len(query) && query[i+1] == '-' {
+			inLineComment = true
+			cur.WriteByte(ch)
+			cur.WriteByte(query[i+1])
+			i++
+			continue
+		}
+
+		if ch == '/' && i+1 < len(query) && query[i+1] == '*' {
+			inBlockComment = true
+			cur.WriteByte(ch)
+			cur.WriteByte(query[i+1])
+			i++
+			continue
+		}
+
+		if !isProcOrFunc && checkProc(cur.String()) {
+			isProcOrFunc = true
+		}
+
+		if isProcOrFunc {
+			if (i == 0 || !IsIdentChar(query[i-1])) && i+5 <= len(query) && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == len(query) || !IsIdentChar(query[i+5])) {
+				if !isBeginTransaction(query[i+5:]) {
+					blockDepth++
+				}
+			} else if (i == 0 || !IsIdentChar(query[i-1])) && i+4 <= len(query) && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == len(query) || !IsIdentChar(query[i+4])) {
+				blockDepth++
+			} else if (i == 0 || !IsIdentChar(query[i-1])) && i+3 <= len(query) && strings.EqualFold(query[i:i+3], "END") && (i+3 == len(query) || !IsIdentChar(query[i+3])) {
+				if blockDepth > 0 {
+					blockDepth--
 				}
 			}
+		}
+
+		if ch == ';' {
+			if isProcOrFunc && blockDepth > 0 {
+				cur.WriteByte(ch)
+			} else {
+				stmt := strings.TrimSpace(cur.String())
+				if stmt != "" && StripLeadingComments(stmt) != "" {
+					stmts = append(stmts, stmt)
+				}
+				cur.Reset()
+				isProcOrFunc = false
+				blockDepth = 0
+			}
+		} else {
+			cur.WriteByte(ch)
 		}
 	}
 	if cur.Len() > 0 {
 		stmt := strings.TrimSpace(cur.String())
-		if stmt != "" {
+		if stmt != "" && StripLeadingComments(stmt) != "" {
 			stmts = append(stmts, stmt)
 		}
 	}

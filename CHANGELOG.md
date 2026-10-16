@@ -7,6 +7,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **5-Table E-Commerce & Banking Demo Seed Database (`scripts/demo_seed.sql`, `pkg/demo`)**:
+  - Implemented standalone sample database script featuring 5 standard tables and rich sample datasets:
+    - `customers`: Customer personal information (ID, name, email, phone, city, created_at).
+    - `accounts`: Bank accounts and balances (ID, customer_id, account_number, balance, account_type, status, created_at).
+    - `products`: Product catalog and inventory (ID, name, category, price, stock_qty, created_at).
+    - `sales`: Order master records (ID, customer_id, order_date, total_amount, status).
+    - `sales_details`: Order line items (ID, sales_id, product_id, quantity, unit_price, subtotal).
+  - Implemented 2 production-grade T-SQL stored procedures:
+    - `TransferFunds`: Multi-step banking fund transfer with balance verification, transaction commit/rollback, and error throwing.
+    - `ProcessOrder`: E-commerce order placement with product inventory check, stock decrement, sales/sales_details record insertion, and transaction commit.
+  - Created `pkg/demo` package providing `GetSeedSQL()` with `//go:embed` fallback, preserving single standalone binary zero-dependency portability while allowing file-based customization.
+
+### Changed
+- **Default AutoSeed Disabled & Hardcoded Go Seeding Removal (`cmd/server`, `pkg/config`)**:
+  - Changed default `--seed` CLI flag and `cfg.Server.AutoSeed` configuration from `true` to `false` for enterprise safety.
+  - Deleted legacy hardcoded Go struct seed methods (`seedSampleAccounts`, `seedSampleProcedure`, 140 lines) from `cmd/server/main.go`, replacing them with unified `server.ExecuteSQL(seedSQL)` execution.
+  - Enhanced `SplitStatements` (`pkg/engine/query_utils.go`) and statement router (`pkg/engine/sqlexec.go`):
+    - Added `StripLeadingComments` to safely ignore SQL line (`--`) and block (`/* */`) comments when detecting command types.
+    - Fixed `blockDepth` tracking to distinguish `BEGIN TRANSACTION` / `BEGIN TRAN` from block delimiters `BEGIN ... END`.
+  - Enhanced T-SQL parser (`pkg/proc/parser_ddl.go`, `pkg/proc/parser_stmt.go`):
+    - Added support for multi-argument type modifiers (e.g. `DECIMAL(15, 2)`, `NUMERIC(10, 4)`) in procedure/function parameter lists, return types, and `DECLARE` variable statements.
+  - Enhanced procedure executor (`pkg/engine/sqlexec_procs.go`):
+    - Added support for both named parameter calls (`EXEC Proc @Param = Val`) and positional parameter calls.
+
 ### Security
 - **Unified Multi-Protocol Superuser Authentication & Single-Source-of-Truth RBAC (`pkg/auth`, `pkg/wire`, `pkg/wire/tds`)**:
   - Unified administrator password storage across HTTP REST/Web Studio, PostgreSQL Wire Protocol (`:5433`), and Microsoft SQL Server TDS (`:1433`):

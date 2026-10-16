@@ -17,8 +17,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Server.Engine != "wiredtiger" {
 		t.Errorf("expected engine 'wiredtiger', got %q", cfg.Server.Engine)
 	}
-	if !cfg.Server.AutoSeed {
-		t.Errorf("expected auto_seed true")
+	if cfg.Server.AutoSeed {
+		t.Errorf("expected auto_seed false")
 	}
 	if cfg.Network.HTTPAddr != "127.0.0.1:8090" {
 		t.Errorf("expected http_addr '127.0.0.1:8090', got %q", cfg.Network.HTTPAddr)

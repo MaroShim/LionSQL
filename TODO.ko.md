@@ -34,6 +34,14 @@
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **하드코딩 Go 시딩 제거 및 5개 테이블 기반 독립 데모 스크립트(`scripts/demo_seed.sql`) & `--seed=false` 기본값 전환 (`cmd/server`, `pkg/demo`, `scripts/`)**
+  - **배경**: 서버 바이너리에 Go 구조체로 하드코딩되어 있던 샘플 데이터 시딩 로직(`seedSampleAccounts`, `seedSampleProcedure`)을 제거하고, 실무 및 교육용으로 널리 쓰이는 표준 5개 테이블 세트와 샘플 Stored Procedure를 포함한 독립 SQL 스크립트로 분리하여 재사용성과 유지보수성을 극대화.
+  - **구현 내용**:
+    - **5개 표준 데모 테이블 완비 (`scripts/demo_seed.sql`)**: `customers`(고객 인적사항), `accounts`(고객 계좌 및 잔액), `products`(판매 상품 카탈로그), `sales`(주문 마스터), `sales_details`(주문 상세) 및 샘플 데이터 레코드(각 5~10건) 등록.
+    - **샘플 Stored Procedure 2종 완비**: 금융 계좌 이체 프로시저(`TransferFunds`) 및 전자상거래 주문 처리/재고 차감 프로시저(`ProcessOrder`).
+    - **`--seed=false` 기본값 전환**: 운영 환경 안정성을 위해 자동 시딩 기본값을 `false`로 전환(`pkg/config/config.go`, `cmd/server/main.go`).
+    - **내장 임베딩 및 파일 분리 (`pkg/demo/seed.go`)**: 배포 바이너리 단독 실행 시에도 동작하도록 `//go:embed`를 적용하되, `scripts/demo_seed.sql`이 존재할 경우 파일 우선 로딩.
+    - **SQL 스크립트 분할기 및 프로시저 파서 개선**: 주석 무시(`StripLeadingComments`), `BEGIN TRANSACTION` 구문의 블록 깊이 오인식 방지, `DECIMAL(15, 2)` 등 다중 인자 타입 한정자 파싱 지원, `EXEC` 명명된 파라미터(`@Name = Val`) 및 위치 파라미터 동시 지원.
 - [x] **PGWire, TDS, HTTP 전반의 통합 관리자 인증 및 AuthProvider SPI 추상화 (`pkg/auth`, `pkg/wire`, `pkg/wire/tds`)**
   - **배경**: HTTP(`admin@sqlion.local`), PostgreSQL(`postgres`), SQL Server(`sa`) 간 관리자 비밀번호가 분산되지 않고 단일 원천(SSOT)으로 동기화 관리되도록 개선하고, 향후 LDAP 연동을 위한 인터페이스 추상화 완비.
   - **구현 내용**:

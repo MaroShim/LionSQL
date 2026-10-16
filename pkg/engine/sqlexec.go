@@ -198,6 +198,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return &QueryResult{Success: true, Command: "EMPTY", DurationUS: time.Since(start).Microseconds()}, nil
 	}
 
+	trimmed = StripLeadingComments(trimmed)
+	if trimmed == "" {
+		return &QueryResult{Success: true, Command: "EMPTY", DurationUS: time.Since(start).Microseconds()}, nil
+	}
+
 	upper := strings.ToUpper(trimmed)
 
 	// Rewrite table variables (@table -> physical table)

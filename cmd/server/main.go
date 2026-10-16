@@ -23,10 +23,10 @@ import (
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/cdc"
 	"sqlion/pkg/config"
+	"sqlion/pkg/demo"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/migrate"
-	"sqlion/pkg/proc"
 	_ "sqlion/pkg/proc/parser/antlr"
 	"sqlion/pkg/replication"
 	"sqlion/pkg/storage"
@@ -52,7 +52,7 @@ func main() {
 	dataDir := flag.String("dir", defaultDataDir, "Data directory for database files (default: adjacent to bin/ or 'data')")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	ephemeralFlag := flag.Bool("ephemeral", false, "Run in purely in-memory ephemeral mode with zero disk persistence (disables WAL, AOF, and RDB snapshots)")
-	autoSeed := flag.Bool("seed", true, "Automatically seed sample data on startup")
+	autoSeed := flag.Bool("seed", false, "Automatically seed demo sample database (scripts/demo_seed.sql) on startup")
 	adminEmail := flag.String("admin-email", "admin@sqlion.local", "Default superuser email")
 	adminPass := flag.String("admin-pass", "1234567890", "Default superuser password")
 	enableAuth := flag.Bool("auth", false, "Enforce JWT authentication on protected REST endpoints")
@@ -475,12 +475,6 @@ func main() {
 		return
 	}
 
-	// Auto-seed if requested
-	if cfg.Server.AutoSeed {
-		seedSampleAccounts(eng)
-		seedSampleProcedure(cat)
-	}
-
 	authSvc := auth.NewAuthService(auth.Config{})
 	_, _ = authSvc.EnsureDefaultSuperuser(cfg.Auth.AdminEmail, cfg.Auth.AdminPass)
 
@@ -499,6 +493,17 @@ func main() {
 	if cfg.Resources.WorkMem != "" {
 		if bytes, err := execution.ParseMemSize(cfg.Resources.WorkMem); err == nil && bytes > 0 {
 			server.SetDefaultWorkMem(bytes)
+		}
+	}
+
+	// Auto-seed demo sample database if requested
+	if cfg.Server.AutoSeed {
+		seedSQL := demo.GetSeedSQL()
+		log.Printf("[LionSQL] Seeding demo sample database (scripts/demo_seed.sql)...")
+		if _, err := server.ExecuteSQL(seedSQL); err != nil {
+			log.Printf("[LionSQL] Warning: demo seed script returned error: %v", err)
+		} else {
+			log.Printf("[LionSQL] Demo sample database seeded successfully.")
 		}
 	}
 
@@ -807,155 +812,6 @@ func main() {
 		_ = os.Remove(resolvedPidFile)
 	}
 	os.Exit(0)
-}
-
-func seedSampleAccounts(eng storage.Engine) {
-	accountsSchema := &storage.TableSchema{
-		Name: "accounts",
-		Columns: []storage.Column{
-			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
-			{Name: "holder", Type: storage.TypeVarChar, Nullable: false},
-			{Name: "balance", Type: storage.TypeInt, Nullable: false},
-		},
-	}
-	_ = eng.CreateTable(accountsSchema)
-
-	customersSchema := &storage.TableSchema{
-		Name: "customers",
-		Columns: []storage.Column{
-			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
-			{Name: "name", Type: storage.TypeVarChar, Nullable: false},
-			{Name: "balance", Type: storage.TypeFloat, Nullable: false},
-			{Name: "status", Type: storage.TypeVarChar, Nullable: false},
-		},
-	}
-	_ = eng.CreateTable(customersSchema)
-
-	session, err := eng.NewSession()
-	if err != nil {
-		return
-	}
-	defer session.Close()
-
-	// Seed accounts if empty
-	tx, err := session.BeginTx(storage.TxOptions{})
-	if err == nil {
-		cur, err := tx.Scan("accounts")
-		hasRows := false
-		if err == nil {
-			hasRows = cur.Next()
-			cur.Close()
-		}
-		if !hasRows {
-			err1 := tx.Insert("accounts", storage.Record{
-				"id":      storage.IntValue(1),
-				"holder":  storage.StringValue("Alice"),
-				"balance": storage.IntValue(1000),
-			})
-			err2 := tx.Insert("accounts", storage.Record{
-				"id":      storage.IntValue(2),
-				"holder":  storage.StringValue("Bob"),
-				"balance": storage.IntValue(500),
-			})
-			if err1 != nil || err2 != nil {
-				log.Printf("[SQLion] Seed accounts insert error: %v, %v", err1, err2)
-			}
-			if err := tx.Commit(); err != nil {
-				log.Printf("[SQLion] Seed accounts commit error: %v", err)
-			}
-		} else {
-			_ = tx.Rollback()
-		}
-	}
-
-	// Seed customers if empty
-	txCust, err := session.BeginTx(storage.TxOptions{})
-	if err == nil {
-		cur, err := txCust.Scan("customers")
-		hasRows := false
-		if err == nil {
-			hasRows = cur.Next()
-			cur.Close()
-		}
-		if !hasRows {
-			_ = txCust.Insert("customers", storage.Record{
-				"id":      storage.IntValue(1),
-				"name":    storage.StringValue("Alice"),
-				"balance": storage.FloatValue(1000.5),
-				"status":  storage.StringValue("active"),
-			})
-			_ = txCust.Insert("customers", storage.Record{
-				"id":      storage.IntValue(2),
-				"name":    storage.StringValue("Bob"),
-				"balance": storage.FloatValue(450.0),
-				"status":  storage.StringValue("pending"),
-			})
-			_ = txCust.Insert("customers", storage.Record{
-				"id":      storage.IntValue(3),
-				"name":    storage.StringValue("Charlie"),
-				"balance": storage.FloatValue(800.0),
-				"status":  storage.StringValue("active"),
-			})
-			_ = txCust.Insert("customers", storage.Record{
-				"id":      storage.IntValue(4),
-				"name":    storage.StringValue("Diana"),
-				"balance": storage.FloatValue(200.0),
-				"status":  storage.StringValue("inactive"),
-			})
-			_ = txCust.Insert("customers", storage.Record{
-				"id":      storage.IntValue(5),
-				"name":    storage.StringValue("Evan"),
-				"balance": storage.FloatValue(600.0),
-				"status":  storage.StringValue("active"),
-			})
-			_ = txCust.Commit()
-		} else {
-			_ = txCust.Rollback()
-		}
-	}
-}
-
-func seedSampleProcedure(cat *catalog.Catalog) {
-	script := `CREATE PROCEDURE TransferFunds
-    @from INT,
-    @to INT,
-    @amount INT
-AS
-BEGIN
-    DECLARE @sender_bal INT;
-    SELECT balance INTO @sender_bal FROM accounts WHERE id = @from;
-
-    IF @sender_bal < @amount
-    BEGIN
-        RAISERROR('Insufficient funds in sender balance');
-        RETURN -1;
-    END
-
-    UPDATE accounts SET balance = balance - @amount WHERE id = @from;
-    UPDATE accounts SET balance = balance + @amount WHERE id = @to;
-    PRINT 'Money successfully transferred!';
-    RETURN 0;
-END;`
-
-	var jsCode string
-	lexer := proc.NewLexer(script)
-	parser := proc.NewParser(lexer)
-	if plan, err := parser.ParseProcedure(); err == nil {
-		if prog, err := proc.CompileProcedure(plan); err == nil {
-			jsCode = prog.Disassemble()
-		}
-	}
-
-	_ = cat.RegisterProcedure(&catalog.Procedure{
-		Name: "TransferFunds",
-		Params: []catalog.ParamDef{
-			{Name: "@from", Type: storage.TypeInt},
-			{Name: "@to", Type: storage.TypeInt},
-			{Name: "@amount", Type: storage.TypeInt},
-		},
-		Body:   script,
-		JSCode: jsCode,
-	})
 }
 
 func checkPortAvailable(addr string) error {

@@ -139,7 +139,7 @@ func DefaultConfig() *Config {
 		Server: ServerConfig{
 			DataDir:  "data",
 			Engine:   "wiredtiger",
-			AutoSeed: true,
+			AutoSeed: false,
 		},
 		Outbox: OutboxConfig{
 			TopicPrefix: "sqlion.",
