@@ -155,6 +155,9 @@ SQLion은 엔터프라이즈급 sub-microsecond 트랜잭션 성능과 자립형
    - 쿼리마다 수 GB의 테이블을 풀스캔하여 직렬화하는 높은 OLTP CPU 부하와 OS 비이식성(도커 컨테이너 `/dev/shm` 64MB 한계, Windows 미지원)을 초래하는 Apache Arrow IPC 공유 메모리 스냅샷은 명시적으로 **Spec Out**합니다.
 5. **외부 분산 트랜잭션 코디네이터 (XA / MS DTC) 배제**:
    - 네트워크 분산 2PC 트랜잭션 프로토콜인 XA Two-Phase Commit 및 Microsoft Distributed Transaction Coordinator (MS DTC)는 단일 노드 16,000+ TPS 트랜잭션 처리량 보존을 위해 명시적으로 **Spec Out**합니다. 분산 환경의 정합성은 비동기/반동기 WAL 복제와 멱등적(Idempotent) 이벤트 컨슈밍으로 처리합니다.
+6. **DB 커널 내장 OAuth2 소셜 로그인 및 서드파티 SaaS 인증 배제 (Spec-Out)**:
+   - 데이터베이스 엔진의 보안 및 사용자 인증은 엔터프라이즈 데이터베이스 표준 규격(PGWire의 SCRAM-SHA-256, TDS의 SQL Server 표준/NTLM 인증, HTTP 관리용 안전한 토큰 기반 RBAC/API-Key)으로 완전 일원화합니다.
+   - 외부 컨슈머용 OAuth2 소셜 로그인(구글, 깃허브 등 특정 SaaS의 웹 리다이렉트 핸들러, Client Secret 생명주기 관리, 아웃바운드 인터넷 토큰 교환 HTTP 호출)을 데이터베이스 커널 정적 바이너리에 직접 내장하는 것은 명시적으로 **Spec Out**합니다. 이를 통해 외부 인터넷 아웃바운드 통신 의존성을 완전히 제거하고, Client Secret 유출 리스크 및 보안 공격 표면(Attack Surface)을 원천 차단하며, 데이터베이스 커널 본연의 경량성과 무결성을 보호합니다(Golden Rule #15 KISS 및 단일 책임 원칙). 엔터프라이즈 SSO 및 소셜 로그인은 데이터베이스 커널이 아닌 전면 경계 프록시(Keycloak, OAuth2-Proxy, Nginx 등)가 담당하는 것이 표준 아키텍처입니다.
 
 ---
 

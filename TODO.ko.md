@@ -141,14 +141,15 @@
     - `cmd/lionsql` 통합 CLI 바이너리 구축 (`bin/lionsql`): `lionsql migrate new <name>`, `lionsql migrate up/down/status`, 임베디드 직접 쿼리 실행기 `lionsql sql "<query>"`.
     - `cmd/server/main.go` 양방향 패리티 완비 (`./bin/server migrate ...`).
     - `pkg/migrate/migrate_test.go` 및 `cmd/lionsql/main_test.go` 단위/통합 테스트 완비.
-- [x] **내장형 Google 및 GitHub OAuth2 소셜 로그인 & 자동 사용자 프로비저닝 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**
-  - **배경**: 서드파티 OAuth 라이브러리 없는 순수 Go 표준 라이브러리 기반 턴키 소셜 인증 및 웹 스튜디오 연동.
-  - **구현 내용**:
-    - `pkg/api/oauth.go`: Google 및 GitHub 인가 코드 교환, GitHub 비공개 이메일(`/user/emails`) 자동 해석 및 Mock 서버 주입 인터페이스.
-    - `pkg/auth`: `ProvisionOAuthUser` 신설을 통한 신규 Superuser 자동 프로비저닝, 계정 연동 및 서명된 HS256 JWT 즉시 발급.
-    - REST 엔드포인트 완비: `GET /api/auth/oauth2/providers`, `GET /api/auth/oauth2/url`, `GET/POST /api/auth/oauth2/callback`, `GET/PUT /api/settings/oauth2` (시크릿 마스킹 `••••••••`).
-    - 임베디드 웹 스튜디오(`pkg/ui/dashboard.html`) 로그인 모달 소셜 로그인 버튼 및 팝업 콜백(`postMessage`) 연동.
-    - `pkg/api/oauth_test.go` 완전 격리형 Mock HTTP 서버 기반 단위/통합 테스트 완비.
+- [x] **[제거 / Spec-Out] 내장형 OAuth2 소셜 로그인 배제 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**
+  - **배경 및 결정 사유**: DB 커널 내부에서 구글/깃허브 웹 리다이렉트 및 아웃바운드 인터넷 토큰 교환을 처리하는 것은 단일 책임 원칙 및 KISS(Rule 15)를 위반하고 보안 공격 표면을 확대함. 1.0 릴리즈 안정화를 위해 스펙 아웃(Spec-Out) 결정 (`GEMINI.md` 섹션 8.6, `notes/ENGINEERING_CONTEXT.md` 섹션 1.12).
+  - **제거 내용**:
+    - `pkg/api/oauth.go`, `pkg/api/handlers_oauth.go`, `pkg/api/oauth_test.go` 파일 완전 삭제.
+    - `pkg/api/server.go`: OAuth 매니저, 라우트(`/api/auth/oauth2/*`, `/api/settings/oauth2`) 및 핸들러 제거.
+    - `pkg/auth/auth.go`: `ProvisionOAuthUser`, `GetUserByOAuth` 및 슈퍼유저 OAuth 필드 제거.
+    - `pkg/config/config.go`: `OAuth2Config` 및 `SQLION_OAUTH_*` 환경 변수 파싱 제거.
+    - `pkg/ui/dashboard.html`: 웹 스튜디오 로그인 팝업 내 OAuth 버튼 및 메시지 리스너 제거.
+    - 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
 - [x] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`C-7`) (`pkg/planner`)**
   - **배경**: 범주형 상태 컬럼이나 특정 핫스팟 값에 데이터가 집중되는 왜곡(Skew) 데이터 환경에서 균등 분포 가정(1/NDV)으로 인해 발생하는 선택도 최대 10~100배 오차 제거.
   - **구현 내용**:
@@ -376,12 +377,8 @@
   - CDC 스트림을 외부 분산 메시지 브로커로 무손실 발행하는 Outbox 릴레이 워커, 지수 백오프 재시도 및 아웃박스 체크포인트 원자적 영속화 완비.
 - [ ] **[보류 / Postponed] Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`)**
   - CGO/WiredTiger 의존성 없이 완전한 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 36) 크로스 컴파일 배포를 위한 `storage.Engine` 플러그인 백엔드 (현재는 네이티브 WiredTiger CGO 및 인메모리 OCC 고성능 엔진에 집중하며 보류).
-- [x] **내장형 Google 및 GitHub OAuth2 소셜 로그인 & 자동 사용자 프로비저닝 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**
-  - Google 및 GitHub 공식 OAuth2 엔드포인트 연동 (`GET /api/auth/oauth2/providers`, `GET /api/auth/oauth2/url`, `GET/POST /api/auth/oauth2/callback`).
-  - 외부 ID 및 이메일 기반 자동 사용자 프로비저닝(`ProvisionOAuthUser`), 계정 연동 및 JWT 토큰 즉시 발급.
-  - 관리자 전용 OAuth 설정 조회/수정 API (`GET/PUT /api/settings/oauth2`) 및 클라이언트 마스킹(`••••••••`).
-  - 브라우저 웹 스튜디오(`:8090/_/`) 로그인 다이얼로그 내 Google / GitHub 로그인 버튼 및 팝업 콜백(`postMessage`) 연동.
-  - 외부 네트워크 의존성 없는 완전 격리형 Mock HTTP 서버 기반 단위/통합 테스트 완비 (`pkg/api/oauth_test.go`).
+- [x] **[제거 / Spec-Out] 내장형 Google 및 GitHub OAuth2 소셜 로그인 & 자동 사용자 프로비저닝 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**
+  - DB 커널 경량화, 아웃바운드 인터넷 의존성 제거, 보안 공격 표면 축소를 위해 커널 내장 OAuth2 소셜 로그인을 제거하고 전면 리버스 프록시 위임으로 표준화 (`GEMINI.md` 8.6절 Spec-Out).
 - [x] **선언적 스키마 마이그레이션 CLI (`lionsql migrate`) (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**
   - 타임스탬프 기반 마이그레이션 파일 페어(`YYYYMMDDHHMMSS_<name>.up.sql` / `.down.sql`) 생성 (`lionsql migrate new <name>`).
   - 데이터베이스 스키마 순차 배포 및 실행 지연 시간 추적 (`lionsql migrate up [-steps=N]`).

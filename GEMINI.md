@@ -155,6 +155,9 @@ SQLion permanently designates the following architectural models as **Spec Out (
    - Static Apache Arrow IPC shared memory snapshotting (`/dev/shm`) that incurs massive table full-scan CPU overhead and OS non-portability (Docker container 64MB limits, lack of Windows support) is explicitly **Spec Out**.
 5. **External Distributed Transaction Coordinators (XA / MS DTC) Exclusion (Spec-Out)**:
    - Network two-phase commit protocols like XA and Microsoft Distributed Transaction Coordinator (MS DTC) are explicitly **Spec Out** to preserve single-node 16,000+ TPS transaction throughput. Distributed consistency is achieved via asynchronous/semi-synchronous WAL replication and idempotent consumer processing.
+6. **In-Kernel OAuth2 Social Login & Third-Party SaaS Auth Exclusion (Spec-Out)**:
+   - Database kernel security and identity management is strictly unified around standard enterprise database authentication mechanisms: SCRAM-SHA-256 for PGWire, SQL Server standard/NTLM authentication for TDS, and secure token-based RBAC with JWT/API-Key for HTTP management.
+   - Embedding external consumer OAuth2 web authentication (Google, GitHub OAuth2 HTTP endpoints, redirect handlers, client secret lifecycle management, and outbound internet token exchange calls) directly inside the database kernel binary is explicitly **Spec Out**. This eliminates outbound internet dependencies, prevents client secret exposure risks, minimizes the security attack surface, and maintains absolute database kernel purity (KISS & Golden Rule #15). Enterprise SSO/Identity Federation should be handled by standard perimeter proxies (e.g. Keycloak, OAuth2-Proxy, Nginx) rather than the database kernel.
 
 ---
 

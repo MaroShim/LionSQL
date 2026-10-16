@@ -73,13 +73,12 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 func superuserRecord(u *auth.Superuser) map[string]any {
 	return map[string]any{
-		"id":             u.ID,
-		"email":          u.Email,
-		"name":           u.Name,
-		"avatar_url":     u.AvatarURL,
-		"oauth_provider": u.OAuthProvider,
-		"created_at":     u.CreatedAt,
-		"updated_at":     u.UpdatedAt,
+		"id":         u.ID,
+		"email":      u.Email,
+		"name":       u.Name,
+		"avatar_url": u.AvatarURL,
+		"created_at": u.CreatedAt,
+		"updated_at": u.UpdatedAt,
 	}
 }
 

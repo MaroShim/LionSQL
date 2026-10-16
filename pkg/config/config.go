@@ -54,37 +54,11 @@ func (n NetworkConfig) IsTDSEnabled() bool {
 	return strings.TrimSpace(n.TDSAddr) != ""
 }
 
-// OAuthProviderConfig defines settings for a single OAuth2 social provider (Google, GitHub).
-type OAuthProviderConfig struct {
-	Enabled      bool   `json:"enabled"`
-	ClientID     string `json:"client_id"`
-	ClientSecret string `json:"client_secret"`
-	RedirectURL  string `json:"redirect_url,omitempty"`
-	AuthURL      string `json:"auth_url,omitempty"`      // optional custom override
-	TokenURL     string `json:"token_url,omitempty"`     // optional custom override
-	UserInfoURL  string `json:"user_info_url,omitempty"` // optional custom override
-}
-
-// MaskedSecret returns a redacted string for client-side configuration displays.
-func (p OAuthProviderConfig) MaskedSecret() string {
-	if p.ClientSecret == "" {
-		return ""
-	}
-	return "••••••••"
-}
-
-// OAuth2Config defines settings for third-party OAuth2 identity providers.
-type OAuth2Config struct {
-	Google OAuthProviderConfig `json:"google"`
-	GitHub OAuthProviderConfig `json:"github"`
-}
-
 // AuthConfig defines administrative authentication and credential settings.
 type AuthConfig struct {
-	Enabled    bool         `json:"enabled"`
-	AdminEmail string       `json:"admin_email"`
-	AdminPass  string       `json:"admin_pass"`
-	OAuth2     OAuth2Config `json:"oauth2,omitempty"`
+	Enabled    bool   `json:"enabled"`
+	AdminEmail string `json:"admin_email"`
+	AdminPass  string `json:"admin_pass"`
 }
 
 // ResourcesConfig defines concurrency and memory limits.
@@ -264,30 +238,6 @@ func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, e
 func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
-	}
-	// Google OAuth
-	if val := os.Getenv("SQLION_OAUTH_GOOGLE_CLIENT_ID"); val != "" {
-		cfg.Auth.OAuth2.Google.ClientID = val
-		cfg.Auth.OAuth2.Google.Enabled = true
-	}
-	if val := os.Getenv("SQLION_OAUTH_GOOGLE_CLIENT_SECRET"); val != "" {
-		cfg.Auth.OAuth2.Google.ClientSecret = val
-		cfg.Auth.OAuth2.Google.Enabled = true
-	}
-	if val := os.Getenv("SQLION_OAUTH_GOOGLE_REDIRECT_URL"); val != "" {
-		cfg.Auth.OAuth2.Google.RedirectURL = val
-	}
-	// GitHub OAuth
-	if val := os.Getenv("SQLION_OAUTH_GITHUB_CLIENT_ID"); val != "" {
-		cfg.Auth.OAuth2.GitHub.ClientID = val
-		cfg.Auth.OAuth2.GitHub.Enabled = true
-	}
-	if val := os.Getenv("SQLION_OAUTH_GITHUB_CLIENT_SECRET"); val != "" {
-		cfg.Auth.OAuth2.GitHub.ClientSecret = val
-		cfg.Auth.OAuth2.GitHub.Enabled = true
-	}
-	if val := os.Getenv("SQLION_OAUTH_GITHUB_REDIRECT_URL"); val != "" {
-		cfg.Auth.OAuth2.GitHub.RedirectURL = val
 	}
 }
 

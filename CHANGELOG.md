@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Removed
+- **In-Kernel OAuth2 Social Login & Third-Party SaaS Auth Exclusion (Spec-Out) (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**:
+  - Excluded consumer OAuth2 social login (Google, GitHub OAuth2 endpoints, redirect handlers, client secret lifecycle, and outbound HTTP token exchanges) to adhere to Golden Rule 15 (KISS & DRY) and single responsibility principle:
+    - Removed `pkg/api/oauth.go`, `pkg/api/handlers_oauth.go`, and `pkg/api/oauth_test.go`.
+    - Removed `s.oauth`, `NewOAuthManager`, `OAuth()`, `SetOAuthConfig()`, and routes `/api/auth/oauth2/*`, `/api/settings/oauth2` from `pkg/api/server.go`.
+    - Removed `ProvisionOAuthUser`, `GetUserByOAuth`, and OAuth fields from `pkg/auth/auth.go`.
+    - Removed OAuth configuration structs and environment variable bindings (`SQLION_OAUTH_*`) from `pkg/config/config.go`.
+    - Removed OAuth provider login buttons and message event listeners from Web Dashboard modal (`pkg/ui/dashboard.html`).
+  - Recorded architectural invariant in `GEMINI.md`, `GEMINI.ko.md` (Section 8.6), and `notes/ENGINEERING_CONTEXT.md` (Section 1.12): enterprise SSO and third-party identity federation are delegated to standard perimeter reverse proxies (Keycloak, OAuth2-Proxy, Nginx) while keeping the database kernel self-contained and attack-surface minimal.
+
 ### Performance
 - **SQL Parser & Engine Hot-Path Regular Expression Precompilation (`P-6`) (`pkg/engine`)**:
   - Eliminated over 40 dynamic `regexp.MustCompile(...)` invocations across query routing, DML parsing, and row-level evaluation loops in `pkg/engine/`:

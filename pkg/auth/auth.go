@@ -46,16 +46,14 @@ type APIKey struct {
 
 // Superuser represents an administrative account modeled after PocketBase v0.25+.
 type Superuser struct {
-	ID            string    `json:"id"`
-	Email         string    `json:"email"`
-	OAuthProvider string    `json:"oauth_provider,omitempty"`
-	OAuthID       string    `json:"oauth_id,omitempty"`
-	Name          string    `json:"name,omitempty"`
-	AvatarURL     string    `json:"avatar_url,omitempty"`
-	PasswordHash  string    `json:"-"`
-	TokenKey      string    `json:"-"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	Email        string    `json:"email"`
+	Name         string    `json:"name,omitempty"`
+	AvatarURL    string    `json:"avatar_url,omitempty"`
+	PasswordHash string    `json:"-"`
+	TokenKey     string    `json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Claims represents JWT token payload.
@@ -79,7 +77,6 @@ type AuthService struct {
 	tokenDuration time.Duration
 	users         map[string]*Superuser // keyed by normalized email
 	usersByID     map[string]*Superuser
-	usersByOAuth  map[string]*Superuser // keyed by "provider:oauth_id"
 	apiKeys       map[string]*APIKey // keyed by hashed key
 	apiKeysByID   map[string]*APIKey // keyed by ID
 	logins        map[string]*Login  // keyed by normalized login name
@@ -104,7 +101,6 @@ func NewAuthService(cfg Config) *AuthService {
 		tokenDuration: dur,
 		users:         make(map[string]*Superuser),
 		usersByID:     make(map[string]*Superuser),
-		usersByOAuth:  make(map[string]*Superuser),
 		apiKeys:       make(map[string]*APIKey),
 		apiKeysByID:   make(map[string]*APIKey),
 		logins:        make(map[string]*Login),
@@ -192,92 +188,6 @@ func (s *AuthService) EnsureDefaultSuperuser(email, password string) (*Superuser
 	s.users[normEmail] = u
 	s.usersByID[u.ID] = u
 	return u, nil
-}
-
-// ProvisionOAuthUser atomically provisions or links an external OAuth user account.
-func (s *AuthService) ProvisionOAuthUser(provider, oauthID, email, name, avatarURL string) (*Superuser, error) {
-	provider = strings.ToLower(strings.TrimSpace(provider))
-	oauthID = strings.TrimSpace(oauthID)
-	if provider == "" || oauthID == "" {
-		return nil, errors.New("provider and oauth_id are required")
-	}
-	normEmail := strings.ToLower(strings.TrimSpace(email))
-	oauthKey := provider + ":" + oauthID
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	now := time.Now().UTC()
-
-	// 1. Lookup existing user by Provider:OAuthID
-	if u, exists := s.usersByOAuth[oauthKey]; exists {
-		if name != "" {
-			u.Name = name
-		}
-		if avatarURL != "" {
-			u.AvatarURL = avatarURL
-		}
-		if normEmail != "" && u.Email == "" {
-			u.Email = normEmail
-			s.users[normEmail] = u
-		}
-		u.UpdatedAt = now
-		return u, nil
-	}
-
-	// 2. Lookup existing user by email to link account
-	if normEmail != "" {
-		if u, exists := s.users[normEmail]; exists {
-			u.OAuthProvider = provider
-			u.OAuthID = oauthID
-			if name != "" {
-				u.Name = name
-			}
-			if avatarURL != "" {
-				u.AvatarURL = avatarURL
-			}
-			u.UpdatedAt = now
-			s.usersByOAuth[oauthKey] = u
-			return u, nil
-		}
-	}
-
-	// 3. Auto-provision new user
-	userEmail := normEmail
-	if userEmail == "" {
-		userEmail = fmt.Sprintf("%s_%s@oauth.sqlion.local", provider, oauthID)
-	}
-
-	pwHash, err := HashPassword(generateRandomKey(32))
-	if err != nil {
-		return nil, err
-	}
-
-	u := &Superuser{
-		ID:            generateRandomKey(8),
-		Email:         userEmail,
-		OAuthProvider: provider,
-		OAuthID:       oauthID,
-		Name:          name,
-		AvatarURL:     avatarURL,
-		PasswordHash:  pwHash,
-		TokenKey:      generateRandomKey(16),
-		CreatedAt:     now,
-		UpdatedAt:     now,
-	}
-
-	s.users[userEmail] = u
-	s.usersByID[u.ID] = u
-	s.usersByOAuth[oauthKey] = u
-	return u, nil
-}
-
-// GetUserByOAuth returns the superuser linked to the given OAuth provider and remote user ID, or nil if not found.
-func (s *AuthService) GetUserByOAuth(provider, oauthID string) *Superuser {
-	key := strings.ToLower(strings.TrimSpace(provider)) + ":" + strings.TrimSpace(oauthID)
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.usersByOAuth[key]
 }
 
 // Authenticate checks email/password and returns the superuser plus a newly signed JWT.

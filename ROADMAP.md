@@ -199,11 +199,11 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 - **Challenge**: Intercept `INSERT`, `UPDATE`, and `DELETE` operations on views and complex tables, substituting them with user-defined procedural routines.
 - **Expected Outcome**: Virtual entity update capability on complex views and encapsulated business integrity enforcement.
 
-#### 5.8. BaaS Developer Productivity: Migration CLI & OAuth2 Social Login (`cmd/lionsql`, `pkg/migrate`, `cmd/server`, `pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)
+#### 5.8. BaaS Developer Productivity: Migration CLI (`cmd/lionsql`, `pkg/migrate`, `cmd/server`, `pkg/api`, `pkg/config`)
 - **Implemented**:
   - Declarative schema migration engine and `lionsql` unified CLI tool: `lionsql migrate new <name>`, `lionsql migrate up / down / status`, ad-hoc headless `lionsql sql "<query>"`, and atomic `_migrations` version history tracking.
   - Dual binary parity: identical migration syntax and flag handling across `lionsql migrate` and `server migrate`.
-  - Built-in Google and GitHub OAuth2 social login: official endpoints (`/api/auth/oauth2/providers`, `/api/auth/oauth2/url`, `GET/POST /api/auth/oauth2/callback`), automatic user provisioning (`ProvisionOAuthUser`), JWT issuance, secret masking (`GET/PUT /api/settings/oauth2`), and embedded Web Studio modal popup integration.
+  - In-Kernel OAuth2 social login was evaluated and excluded (**Spec-Out**, GEMINI.md Section 8.6) to preserve database kernel purity, remove outbound internet token exchanges, and adhere to KISS / Golden Rule 15.
 - **Strategic Value**: PocketBase-class developer productivity, turnkey deployment workflows, and seamless administrative CLI automation.
 
 ---
@@ -286,7 +286,7 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
 | **Phase 5** | **P2** | **Transparent Data Encryption (TDE: AES-256-GCM)** | Storage & Security | Medium (250~350 lines) | Transparent data-at-rest encryption and immutable audit logging |
 | **Phase 5** | **P2** | **`INSTEAD OF` Trigger Runtime Interceptor** | T-SQL Runtime | Medium (200~300 lines) | Virtual entity DML update routing on complex views |
 | **Phase 5** | **P3** | **[Completed] Declarative Schema Migration CLI** | BaaS & Tooling | Medium (250~350 lines) | `lionsql migrate` atomic DDL version history tracking |
-| **Phase 5** | **P3** | **[Completed] OAuth2 Social Login (Google, GitHub)** | Auth & API | Medium (200~300 lines) | Turnkey authentication, user auto-provisioning, and JWT issuance |
+| **Phase 5** | **P3** | **[Spec-Out] OAuth2 Social Login (Google, GitHub)** | Auth & API | - | Excluded to protect kernel purity; delegated to perimeter reverse proxy |
 | **Phase 6** | **P1** | **[Completed] Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
 | **Phase 6** | **P2** | **[Completed] Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
