@@ -86,8 +86,8 @@ LionSQL seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micr
   - Pure-Go SMTP client with TLS/STARTTLS support and password masking.
   - Built-in HTML templates for `welcome`, `password_reset`, and `verification` workflows.
 - **Concurrent Dual Wire Protocols**:
-  - **PostgreSQL v3 Protocol (Port 5433)**: Compatible with `psql`, DBeaver, GORM, Prisma, asyncpg, and pgx. Supports SSL/TLS encryption and Extended Query Protocol (`Parse`, `Bind`, `Execute`, `Sync`).
-  - **Microsoft SQL Server TDS 7.x/8.0 Protocol (Port 1433)**: Compatible with `sqlcmd`, SQL Server Management Studio (SSMS), Azure Data Studio, and `pymssql`. Supports RPC prepared statement pipeline (`sp_prepare`, `sp_execute`, `sp_prepexec`).
+  - **PostgreSQL v3 Protocol (Port 5433)**: Certified compatible with `psql`, PostgreSQL JDBC (`pgjdbc`), `psqlODBC`, DBeaver, GORM, Prisma, asyncpg, and pgx. Supports SSL/TLS encryption, direct binary bind value decoding, and Extended Query Protocol (`Parse`, `Bind`, `Execute`, `Sync`).
+  - **Microsoft SQL Server TDS 7.x/8.0 Protocol (Port 1433)**: Compatible with `sqlcmd`, SQL Server Management Studio (SSMS), Azure Data Studio, `pymssql`, and `go-mssqldb`. Supports RPC prepared statement pipeline (`sp_prepare`, `sp_execute`, `sp_prepexec`) and single-frame buffer pooling.
 - **Single-Engine VDBE Virtual Machine Unification**:
   - Standalone interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and stored procedures execute on the exact same register-based VDBE Virtual Machine (`proc.CompileQuery`, `proc.CompileStatement` ➔ `s.executor.ExecuteInTx`).
   - Eliminates separate execution engines and unifies relational execution (`OpRelQuery`), secondary index scans (`OpIndexScan`), and DML mutations (`OpInsert`, `OpUpdate`, `OpDelete`) on a single VM.

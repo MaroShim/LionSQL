@@ -85,14 +85,16 @@ LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLT
   - [x] Multi-Language Client Certification (Python psycopg3/pymssql, Go pgx/mssql, GUI)
   - [x] Storage to Wire Zero-Copy Direct Serialization (P-3)
   - [x] TDS Single-Frame Buffer Pooling & 50% Syscall Reduction
-  - [ ] DML storage.Record (Map) Elimination & storage.Row (Slice) Fast-Path (P-13)
-  - [ ] Prepared Statement Zero-Alloc Binary Bind & Direct Value Decoding (P-14)
-  - [ ] WiredTiger Multi-Row & Secondary Index Batch CGo Insertion (P-15)
-  - [ ] In-Memory OCC Row-Level Atomic CAS Commit Validation (P-16)
-  - [ ] VDBE Fused Column Arithmetic Super-Instruction (OpIncrColInt) (P-17)
-  - [ ] Enterprise Immutable Audit Log
+  - [Postponed] DML storage.Record (Map) Elimination & storage.Row (Slice) Fast-Path (P-13)
+  - [x] Prepared Statement Zero-Alloc Binary Bind & Direct Value Decoding (P-14)
+  - [Postponed] WiredTiger Multi-Row & Secondary Index Batch CGo Insertion (P-15)
+  - [Postponed] In-Memory OCC Row-Level Atomic CAS Commit Validation (P-16)
+  - [Postponed] VDBE Fused Column Arithmetic Super-Instruction (OpIncrColInt) (P-17)
+  - [x] Virtual Catalog Query Interceptor Zero-Alloc Fast Filter & Whitespace-Resilient Matcher
+  - [x] Enterprise ODBC / JDBC Driver Certification & Conformance Testing (pgjdbc & psqlODBC)
+  - [x] Test Suite Boilerplate Diet & Setup Helper Unification (-291 Lines Net Reduction)
+  - [ ] Enterprise Immutable Audit Log (PCI-DSS / SOC2 SHA-256 Hash Chaining) (Active / Next Week P1)
   - [Postponed] INSTEAD OF Trigger Interceptor
-  - [ ] Enterprise ODBC / JDBC Driver Certification & Conformance Testing
   - [Spec-Out] Local & S3-Compatible File Storage Module & Thumbnail Resizing (GEMINI.md 8.7절)
 ```
 

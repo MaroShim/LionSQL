@@ -42,6 +42,20 @@ For client-side applications and microservices:
   - `readonly`: Permitted only to execute `GET` queries. Mutations are rejected with `403 Forbidden`.
 - **Table Whitelists**: API keys can be locked to a specific slice of tables (`allowed_tables: ["products", "categories"]`). Requests targeting unlisted tables are rejected.
 
+### 2.3. Enterprise Immutable Audit Logging (PCI-DSS / SOC2 Compliance)
+LionSQL incorporates an append-only, tamper-evident audit logging subsystem (`pkg/audit`) specifically engineered for strict financial and enterprise security compliance:
+- **Audited Security Events**:
+  - **Authentication**: Connection attempts, login success, and authentication failures across PGWire (`:5433`), TDS (`:1433`), and Web/REST API (`:8090`).
+  - **Authorization**: Role creation, deletion, membership changes, and privilege grants/revocations (`GRANT`, `REVOKE`).
+  - **Schema & DDL Operations**: All structural metadata changes (`CREATE`, `ALTER`, `DROP`, `TRUNCATE TABLE`, `CREATE/DROP PROCEDURE`).
+  - **Administrative Control**: User creation, password resets, configuration overrides, and emergency aborts.
+- **Cryptographic Immutability via SHA-256 Hash Chaining**:
+  - Each audit log record contains an incremental sequence number, timestamp (UTC nanoseconds), client IP/protocol, authenticated identity, event type, detail payload, and a `prev_hash` field.
+  - The record's SHA-256 hash is computed over `prev_hash || sequence || timestamp || event || identity || payload`.
+  - Any unauthorized modification, record deletion, reordering, or retroactive insertion breaks the cryptographic hash chain, allowing automated verification tools to immediately detect tampering.
+- **Non-Blocking Zero-Overhead Durability**:
+  - Audit events are emitted through ring buffers and flushed asynchronously to disk (`audit.log`) via background batch writer threads, avoiding synchronization bottlenecks on low-latency OLTP execution paths.
+
 ---
 
 ## 3. Network Security & Production Hardening
