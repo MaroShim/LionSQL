@@ -119,6 +119,83 @@ func sendPGQuery(t *testing.T, conn net.Conn, sql string) [][]byte {
 	return dataRows
 }
 
+// authenticatePGClient connects to srv with the given user and password and returns (success, errorPayload).
+func authenticatePGClient(t *testing.T, srv *Server, user, password string) (bool, string) {
+	t.Helper()
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+
+	go srv.handleConnection(serverConn)
+
+	params := map[string]string{"user": user, "database": "sqlion"}
+	var payload []byte
+	for k, v := range params {
+		payload = append(payload, []byte(k)...)
+		payload = append(payload, 0)
+		payload = append(payload, []byte(v)...)
+		payload = append(payload, 0)
+	}
+	payload = append(payload, 0)
+	msgLen := 8 + len(payload)
+	buf := make([]byte, msgLen)
+	binary.BigEndian.PutUint32(buf[:4], uint32(msgLen))
+	binary.BigEndian.PutUint32(buf[4:8], 196608)
+	copy(buf[8:], payload)
+	if _, err := clientConn.Write(buf); err != nil {
+		t.Fatalf("failed to send startup: %v", err)
+	}
+
+	header := make([]byte, 5)
+	if _, err := io.ReadFull(clientConn, header); err != nil {
+		t.Fatalf("failed to read auth header: %v", err)
+	}
+	if header[0] == MsgErrorResponse {
+		errLen := binary.BigEndian.Uint32(header[1:5])
+		errPayload := make([]byte, errLen-4)
+		_, _ = io.ReadFull(clientConn, errPayload)
+		return false, string(errPayload)
+	}
+	if header[0] != MsgAuth {
+		t.Fatalf("expected MsgAuth 'R', got %c", header[0])
+	}
+	authPayload := make([]byte, 4)
+	if _, err := io.ReadFull(clientConn, authPayload); err != nil {
+		t.Fatalf("failed to read auth code: %v", err)
+	}
+	if binary.BigEndian.Uint32(authPayload) != 3 {
+		t.Fatalf("expected CleartextPassword code 3, got %d", binary.BigEndian.Uint32(authPayload))
+	}
+
+	pwMsg := password + "\x00"
+	pwBuf := make([]byte, 1+4+len(pwMsg))
+	pwBuf[0] = 'p'
+	binary.BigEndian.PutUint32(pwBuf[1:5], uint32(4+len(pwMsg)))
+	copy(pwBuf[5:], pwMsg)
+	if _, err := clientConn.Write(pwBuf); err != nil {
+		t.Fatalf("failed to send password: %v", err)
+	}
+
+	if _, err := io.ReadFull(clientConn, header); err != nil {
+		t.Fatalf("failed to read auth response header: %v", err)
+	}
+	if header[0] == MsgErrorResponse {
+		errLen := binary.BigEndian.Uint32(header[1:5])
+		errPayload := make([]byte, errLen-4)
+		_, _ = io.ReadFull(clientConn, errPayload)
+		return false, string(errPayload)
+	}
+	if header[0] == MsgAuth {
+		if _, err := io.ReadFull(clientConn, authPayload); err != nil {
+			t.Fatalf("failed to read auth ok code: %v", err)
+		}
+		if binary.BigEndian.Uint32(authPayload) == 0 {
+			return true, ""
+		}
+	}
+	return false, "unexpected response"
+}
+
 func TestWire_HandshakeAndSelectVersion(t *testing.T) {
 	srv, _, _ := setupTestWireServer(t)
 	clientConn := connectPGClient(t, srv)
@@ -320,73 +397,10 @@ func TestWire_ConcurrentConnectionMultiplexing(t *testing.T) {
 		go func(clientID int) {
 			defer wg.Done()
 
-			clientConn, serverConn := net.Pipe()
-			defer clientConn.Close()
-			defer serverConn.Close()
-
-			go srv.handleConnection(serverConn)
-
-			// 1. Startup message
-			startupBuf := make([]byte, 8)
-			binary.BigEndian.PutUint32(startupBuf[:4], 8)
-			binary.BigEndian.PutUint32(startupBuf[4:8], 196608) // 3.0
-			if _, err := clientConn.Write(startupBuf); err != nil {
-				t.Errorf("client %d failed write startup: %v", clientID, err)
-				return
-			}
-
-			// Read until ReadyForQuery ('Z')
-			header := make([]byte, 5)
-			for {
-				if _, err := io.ReadFull(clientConn, header); err != nil {
-					t.Errorf("client %d handshake read header failed: %v", clientID, err)
-					return
-				}
-				msgLen := binary.BigEndian.Uint32(header[1:5])
-				payload := make([]byte, msgLen-4)
-				if _, err := io.ReadFull(clientConn, payload); err != nil {
-					t.Errorf("client %d handshake read payload failed: %v", clientID, err)
-					return
-				}
-				if header[0] == MsgReadyForQuery {
-					break
-				}
-			}
-
-			// 2. Execute query
-			query := "SELECT * FROM accounts;\x00"
-			queryBuf := make([]byte, 1+4+len(query))
-			queryBuf[0] = 'Q'
-			binary.BigEndian.PutUint32(queryBuf[1:5], uint32(4+len(query)))
-			copy(queryBuf[5:], query)
-
-			if _, err := clientConn.Write(queryBuf); err != nil {
-				t.Errorf("client %d send query failed: %v", clientID, err)
-				return
-			}
-
-			gotComplete := false
-			for {
-				if _, err := io.ReadFull(clientConn, header); err != nil {
-					t.Errorf("client %d query response read failed: %v", clientID, err)
-					return
-				}
-				msgLen := binary.BigEndian.Uint32(header[1:5])
-				payload := make([]byte, msgLen-4)
-				if _, err := io.ReadFull(clientConn, payload); err != nil {
-					t.Errorf("client %d payload read failed: %v", clientID, err)
-					return
-				}
-				if header[0] == MsgCommandComplete {
-					gotComplete = true
-				}
-				if header[0] == MsgReadyForQuery {
-					break
-				}
-			}
-
-			if !gotComplete {
-				t.Errorf("client %d did not receive CommandComplete", clientID)
+			clientConn := connectPGClient(t, srv)
+			rows := sendPGQuery(t, clientConn, "SELECT * FROM accounts;")
+			if len(rows) == 0 {
+				t.Errorf("client %d did not receive data rows", clientID)
 			}
 		}(i)
 	}
@@ -661,151 +675,30 @@ func TestWire_TransactionStatusAndSQLState(t *testing.T) {
 }
 
 func TestWire_PasswordAuthentication(t *testing.T) {
-	srv, eng, cat := setupTestWireServer(t)
+	srv, eng, _ := setupTestWireServer(t)
 	defer eng.Close()
 	defer srv.Close()
 
-	// Register login with password in auth service
 	authSvc := srv.coordinator.AuthService()
-	_, err := authSvc.CreateLogin("alice", "mypassword123")
-	if err != nil {
+	if _, err := authSvc.CreateLogin("alice", "mypassword123"); err != nil {
 		t.Fatalf("failed to create login: %v", err)
 	}
 
-	// Helper to build StartupMessage with parameters
-	buildStartup := func(params map[string]string) []byte {
-		var payload []byte
-		for k, v := range params {
-			payload = append(payload, []byte(k)...)
-			payload = append(payload, 0)
-			payload = append(payload, []byte(v)...)
-			payload = append(payload, 0)
-		}
-		payload = append(payload, 0) // terminating zero
-		msgLen := 4 + 4 + len(payload)
-		buf := make([]byte, msgLen)
-		binary.BigEndian.PutUint32(buf[:4], uint32(msgLen))
-		binary.BigEndian.PutUint32(buf[4:8], 196608) // 3.0
-		copy(buf[8:], payload)
-		return buf
-	}
-
-	// Subtest 1: Successful Password Authentication
 	t.Run("Success", func(t *testing.T) {
-		clientConn, serverConn := net.Pipe()
-		defer clientConn.Close()
-		defer serverConn.Close()
-
-		go srv.handleConnection(serverConn)
-
-		// Send Startup with user: alice
-		startup := buildStartup(map[string]string{"user": "alice", "database": "sqlion"})
-		if _, err := clientConn.Write(startup); err != nil {
-			t.Fatalf("failed to send startup: %v", err)
-		}
-
-		// Read Auth Request: expect MsgAuth ('R') code 3 (CleartextPassword)
-		header := make([]byte, 5)
-		if _, err := io.ReadFull(clientConn, header); err != nil {
-			t.Fatalf("failed to read auth request header: %v", err)
-		}
-		if header[0] != MsgAuth {
-			t.Fatalf("expected MsgAuth 'R', got %c", header[0])
-		}
-		authPayload := make([]byte, 4)
-		if _, err := io.ReadFull(clientConn, authPayload); err != nil {
-			t.Fatalf("failed to read auth code: %v", err)
-		}
-		authCode := binary.BigEndian.Uint32(authPayload)
-		if authCode != 3 {
-			t.Fatalf("expected CleartextPassword code 3, got %d", authCode)
-		}
-
-		// Send PasswordMessage ('p') with correct password
-		pwMsg := "mypassword123\x00"
-		pwBuf := make([]byte, 1+4+len(pwMsg))
-		pwBuf[0] = 'p'
-		binary.BigEndian.PutUint32(pwBuf[1:5], uint32(4+len(pwMsg)))
-		copy(pwBuf[5:], pwMsg)
-		if _, err := clientConn.Write(pwBuf); err != nil {
-			t.Fatalf("failed to send password: %v", err)
-		}
-
-		// Read AuthOK ('R' code 0)
-		if _, err := io.ReadFull(clientConn, header); err != nil {
-			t.Fatalf("failed to read auth ok header: %v", err)
-		}
-		if header[0] != MsgAuth {
-			t.Fatalf("expected MsgAuth 'R' for AuthOK, got %c", header[0])
-		}
-		if _, err := io.ReadFull(clientConn, authPayload); err != nil {
-			t.Fatalf("failed to read auth ok code: %v", err)
-		}
-		if binary.BigEndian.Uint32(authPayload) != 0 {
-			t.Fatalf("expected AuthOK code 0, got %d", binary.BigEndian.Uint32(authPayload))
-		}
-
-		// Drain until ReadyForQuery ('Z')
-		for {
-			h := make([]byte, 5)
-			if _, err := io.ReadFull(clientConn, h); err != nil {
-				t.Fatalf("failed to drain until ready: %v", err)
-			}
-			msgLen := binary.BigEndian.Uint32(h[1:5])
-			p := make([]byte, msgLen-4)
-			if _, err := io.ReadFull(clientConn, p); err != nil {
-				t.Fatalf("failed to read payload: %v", err)
-			}
-			if h[0] == MsgReadyForQuery {
-				break
-			}
+		ok, errPayload := authenticatePGClient(t, srv, "alice", "mypassword123")
+		if !ok {
+			t.Fatalf("expected auth success, got error: %s", errPayload)
 		}
 	})
 
-	// Subtest 2: Failed Password Authentication
 	t.Run("Failure", func(t *testing.T) {
-		clientConn, serverConn := net.Pipe()
-		defer clientConn.Close()
-		defer serverConn.Close()
-
-		go srv.handleConnection(serverConn)
-
-		// Send Startup with user: alice
-		startup := buildStartup(map[string]string{"user": "alice", "database": "sqlion"})
-		_, _ = clientConn.Write(startup)
-
-		// Read Auth Request (code 3)
-		header := make([]byte, 9)
-		_, _ = io.ReadFull(clientConn, header)
-
-		// Send wrong password
-		pwMsg := "wrong_password\x00"
-		pwBuf := make([]byte, 1+4+len(pwMsg))
-		pwBuf[0] = 'p'
-		binary.BigEndian.PutUint32(pwBuf[1:5], uint32(4+len(pwMsg)))
-		copy(pwBuf[5:], pwMsg)
-		_, _ = clientConn.Write(pwBuf)
-
-		// Expect ErrorResponse ('E') with SQLSTATE '28P01'
-		errHeader := make([]byte, 5)
-		if _, err := io.ReadFull(clientConn, errHeader); err != nil {
-			t.Fatalf("failed to read error header: %v", err)
+		ok, errPayload := authenticatePGClient(t, srv, "alice", "wrong_password")
+		if ok || !strings.Contains(errPayload, "28P01") {
+			t.Fatalf("expected 28P01 failure, got ok=%v, payload=%q", ok, errPayload)
 		}
-		if errHeader[0] != MsgErrorResponse {
-			t.Fatalf("expected MsgErrorResponse 'E', got %c", errHeader[0])
-		}
-		errLen := binary.BigEndian.Uint32(errHeader[1:5])
-		errPayload := make([]byte, errLen-4)
-		_, _ = io.ReadFull(clientConn, errPayload)
-		if !strings.Contains(string(errPayload), "28P01") {
-			t.Fatalf("expected 28P01 in error response, got %q", string(errPayload))
-		}
-		_ = cat
 	})
 
-	// Subtest 3: Global Auth Enabled with Unified Superuser Login
 	t.Run("GlobalAuthSuperuser", func(t *testing.T) {
-		// Enable global auth on coordinator and set superuser password
 		coord, ok := srv.coordinator.(*engine.Coordinator)
 		if ok {
 			coord.SetAuthService(authSvc, true)
@@ -813,88 +706,20 @@ func TestWire_PasswordAuthentication(t *testing.T) {
 		_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "SuperUnifiedPass99!")
 
 		// 3.1: user=postgres with correct superuser password must succeed
-		cConn1, sConn1 := net.Pipe()
-		defer cConn1.Close()
-		defer sConn1.Close()
-		go srv.handleConnection(sConn1)
-
-		startup := buildStartup(map[string]string{"user": "postgres", "database": "sqlion"})
-		_, _ = cConn1.Write(startup)
-
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(cConn1, header)
-		authPayload := make([]byte, 4)
-		_, _ = io.ReadFull(cConn1, authPayload)
-		if binary.BigEndian.Uint32(authPayload) != 3 {
-			t.Fatalf("expected cleartext password request (3), got %d", binary.BigEndian.Uint32(authPayload))
-		}
-
-		pwMsg := "SuperUnifiedPass99!\x00"
-		pwBuf := make([]byte, 1+4+len(pwMsg))
-		pwBuf[0] = 'p'
-		binary.BigEndian.PutUint32(pwBuf[1:5], uint32(4+len(pwMsg)))
-		copy(pwBuf[5:], pwMsg)
-		_, _ = cConn1.Write(pwBuf)
-
-		_, _ = io.ReadFull(cConn1, header)
-		_, _ = io.ReadFull(cConn1, authPayload)
-		if binary.BigEndian.Uint32(authPayload) != 0 {
-			t.Fatalf("expected AuthOK (0) for postgres with superuser pass, got %d", binary.BigEndian.Uint32(authPayload))
+		if ok, err := authenticatePGClient(t, srv, "postgres", "SuperUnifiedPass99!"); !ok {
+			t.Fatalf("expected superuser auth success, got error: %s", err)
 		}
 
 		// 3.2: user=postgres with wrong password must be rejected
-		cConn2, sConn2 := net.Pipe()
-		defer cConn2.Close()
-		defer sConn2.Close()
-		go srv.handleConnection(sConn2)
-
-		_, _ = cConn2.Write(startup)
-		_, _ = io.ReadFull(cConn2, header)
-		_, _ = io.ReadFull(cConn2, authPayload)
-
-		badPw := "WrongPass!\x00"
-		badBuf := make([]byte, 1+4+len(badPw))
-		badBuf[0] = 'p'
-		binary.BigEndian.PutUint32(badBuf[1:5], uint32(4+len(badPw)))
-		copy(badBuf[5:], badPw)
-		_, _ = cConn2.Write(badBuf)
-
-		errHeader := make([]byte, 5)
-		if _, err := io.ReadFull(cConn2, errHeader); err != nil {
-			t.Fatalf("failed to read error header: %v", err)
-		}
-		if errHeader[0] != MsgErrorResponse {
-			t.Fatalf("expected MsgErrorResponse 'E', got %c", errHeader[0])
+		if ok, _ := authenticatePGClient(t, srv, "postgres", "WrongPass!"); ok {
+			t.Fatalf("expected auth failure for wrong superuser password")
 		}
 	})
 }
 
 func TestPGWire_ServerSideSQLCursor(t *testing.T) {
 	srv, _, _ := setupTestWireServer(t)
-
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-
-	go srv.handleConnection(serverConn)
-
-	// Startup
-	startupBuf := make([]byte, 8)
-	binary.BigEndian.PutUint32(startupBuf[:4], 8)
-	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
-	_, _ = clientConn.Write(startupBuf)
-
-	// Wait for Ready ('Z')
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-		if header[0] == MsgReadyForQuery {
-			break
-		}
-	}
+	clientConn := connectPGClient(t, srv)
 
 	sendQuery := func(q string) (string, []string) {
 		qBytes := append([]byte(q), 0)

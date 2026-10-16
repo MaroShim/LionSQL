@@ -9,14 +9,15 @@ import (
 )
 
 // setupMemServer creates a lightweight in-memory test api.Server with automatic cleanup.
-func setupMemServer(t *testing.T) (*api.Server, func()) {
+func setupMemServer(t *testing.T) *api.Server {
 	t.Helper()
 	eng := memengine.New()
 	cat := catalog.New(eng)
 	server := api.NewServer(cat, eng)
-	return server, func() {
+	t.Cleanup(func() {
 		_ = eng.Close()
-	}
+	})
+	return server
 }
 
 // execStatements runs multiple SQL statements sequentially, failing the test immediately on any error.

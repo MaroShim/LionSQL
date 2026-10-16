@@ -9,20 +9,19 @@ import (
 	"sqlion/pkg/storage/memengine"
 )
 
-func setupEmployeesTestServer(t *testing.T) (*api.Server, func()) {
-	server, cleanup := setupMemServer(t)
+func setupEmployeesTestServer(t *testing.T) *api.Server {
+	server := setupMemServer(t)
 	execStatements(t, server,
 		`CREATE TABLE employees (id INT PRIMARY KEY, dept VARCHAR(50), salary INT);`,
 		`INSERT INTO employees (id, dept, salary) VALUES
 			(1, 'Eng', 10), (2, 'Eng', 20), (3, 'Eng', 30), (4, 'Eng', 40),
 			(5, 'Sales', 50), (6, 'Sales', 100), (7, 'Sales', 150);`,
 	)
-	return server, cleanup
+	return server
 }
 
 func TestSQLExecutor_Percentile_GroupBy(t *testing.T) {
-	server, cleanup := setupEmployeesTestServer(t)
-	defer cleanup()
+	server := setupEmployeesTestServer(t)
 
 	// 1. ANSI WITHIN GROUP syntax
 	q1 := `SELECT dept, 
@@ -128,8 +127,7 @@ func TestSQLExecutor_ApproxPercentileAndMedian(t *testing.T) {
 }
 
 func TestSQLExecutor_Percentile_WindowFunction(t *testing.T) {
-	server, cleanup := setupEmployeesTestServer(t)
-	defer cleanup()
+	server := setupEmployeesTestServer(t)
 
 	// Window function with OVER (PARTITION BY dept)
 	q := `SELECT id, dept, salary, 

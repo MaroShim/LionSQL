@@ -14,11 +14,7 @@ import (
 )
 
 func TestSQLExecutor_DDL_DML_DQL(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// 1. CREATE TABLE
 	createSQL := `CREATE TABLE customers (
@@ -93,11 +89,7 @@ func TestSQLExecutor_DDL_DML_DQL(t *testing.T) {
 }
 
 func TestSQLExecutor_CreateProcedureAndExec(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// Create table first
 	_, _ = server.ExecuteSQL(`CREATE TABLE wallets (id INT PRIMARY KEY, balance INT);`)
@@ -170,11 +162,7 @@ END;`
 }
 
 func TestSQLExecutor_CreateIndexAndScan(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	_, _ = server.ExecuteSQL(`CREATE TABLE members (id INT PRIMARY KEY, username VARCHAR(50), score INT);`)
 	_, _ = server.ExecuteSQL(`INSERT INTO members (id, username, score) VALUES (1, 'alice', 95), (2, 'bob', 80), (3, 'charlie', 95);`)
@@ -208,11 +196,7 @@ func TestSQLExecutor_CreateIndexAndScan(t *testing.T) {
 }
 
 func TestSQLExecutor_TemporaryTables(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// 1. CREATE TABLE #temp_summary
 	res, err := server.ExecuteSQL(`CREATE TABLE #temp_summary (
@@ -247,11 +231,7 @@ func TestSQLExecutor_TemporaryTables(t *testing.T) {
 }
 
 func TestSQLExecutor_TableValuedFunction(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	_, _ = server.ExecuteSQL(`CREATE TABLE bank_accounts (id INT PRIMARY KEY, holder VARCHAR(50), balance INT);`)
 	_, _ = server.ExecuteSQL(`INSERT INTO bank_accounts (id, holder, balance) VALUES (1, 'Alice', 5000), (2, 'Bob', 1200), (3, 'Charlie', 300);`)
@@ -283,11 +263,7 @@ func TestSQLExecutor_TableValuedFunction(t *testing.T) {
 }
 
 func TestSQLExecutor_ExplainAndExplainAnalyze(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	_, _ = server.ExecuteSQL(`CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), score INT);`)
 	_, _ = server.ExecuteSQL(`CREATE INDEX idx_users_score ON users(score);`)
@@ -337,11 +313,7 @@ func TestSQLExecutor_ExplainAndExplainAnalyze(t *testing.T) {
 }
 
 func TestSQLExecutor_HashJoin_InnerAndLeft(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// Create tables
 	_, _ = server.ExecuteSQL(`CREATE TABLE customers (id INT PRIMARY KEY, name VARCHAR(50), city VARCHAR(50));`)
@@ -397,11 +369,7 @@ func TestSQLExecutor_HashJoin_InnerAndLeft(t *testing.T) {
 }
 
 func TestSQLExecutor_IndexNestedLoopJoin(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// Create tables and index on orders(cust_id)
 	_, _ = server.ExecuteSQL(`CREATE TABLE customers (id INT PRIMARY KEY, name VARCHAR(50));`)
@@ -440,11 +408,7 @@ func TestSQLExecutor_IndexNestedLoopJoin(t *testing.T) {
 }
 
 func TestSQLExecutor_GroupByAndHaving(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	_, _ = server.ExecuteSQL(`CREATE TABLE employees (id INT PRIMARY KEY, department VARCHAR(50), salary INT);`)
 	_, _ = server.ExecuteSQL(`INSERT INTO employees (id, department, salary) VALUES 
@@ -507,11 +471,7 @@ func TestSQLExecutor_GroupByAndHaving(t *testing.T) {
 }
 
 func TestSQLExecutor_CTE_Basic(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	_, _ = server.ExecuteSQL(`CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50), role VARCHAR(50), dept_id INT);`)
 	_, _ = server.ExecuteSQL(`INSERT INTO users (id, name, role, dept_id) VALUES 
@@ -560,11 +520,7 @@ func TestSQLExecutor_CTE_Basic(t *testing.T) {
 }
 
 func TestSQLExecutor_Subqueries_Scalar_In_Exists(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	_, _ = server.ExecuteSQL(`CREATE TABLE depts (id INT PRIMARY KEY, name VARCHAR(50));`)
 	_, _ = server.ExecuteSQL(`CREATE TABLE emps (id INT PRIMARY KEY, name VARCHAR(50), dept_id INT, salary INT);`)
@@ -620,11 +576,7 @@ func TestSQLExecutor_Subqueries_Scalar_In_Exists(t *testing.T) {
 }
 
 func TestSQLExecutor_SessionTransactions_CommitAndRollback(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	_, err := server.ExecuteSQL(`CREATE TABLE bank_accounts (id INT PRIMARY KEY, owner VARCHAR(50), balance INT);`)
 	if err != nil {
@@ -679,11 +631,7 @@ func TestSQLExecutor_SessionTransactions_CommitAndRollback(t *testing.T) {
 }
 
 func TestSQLExecutor_SessionVariables(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	_, _ = server.ExecuteSQL(`CREATE TABLE members (id INT PRIMARY KEY, name VARCHAR(50), tier VARCHAR(20), points INT);`)
 	_, _ = server.ExecuteSQL(`INSERT INTO members (id, name, tier, points) VALUES 
@@ -736,11 +684,7 @@ func TestSQLExecutor_SessionVariables(t *testing.T) {
 }
 
 func TestSQLExecutor_VirtualCatalogViews(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// Create test tables and procedures
 	_, _ = server.ExecuteSQL(`CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50) NOT NULL, age INT);`)
@@ -837,11 +781,7 @@ func TestSQLExecutor_VirtualCatalogViews(t *testing.T) {
 }
 
 func TestSQLExecutor_AnalyzeTableAndStats(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// Create table and insert data
 	_, err := server.ExecuteSQL(`CREATE TABLE items (id INT PRIMARY KEY, category VARCHAR(20), price FLOAT);`)
@@ -917,11 +857,7 @@ func TestSQLExecutor_AnalyzeTableAndStats(t *testing.T) {
 }
 
 func TestSQLExecutor_WorkMemGovernorAndSpill(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// 1. Check default work_mem
 	res, err := server.ExecuteSessionSQL("sess1", `SHOW work_mem;`)
@@ -985,11 +921,7 @@ func TestSQLExecutor_WorkMemGovernorAndSpill(t *testing.T) {
 }
 
 func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// 1. Table-less scalar SELECT
 	res, err := server.ExecuteSQL("SELECT 1;")
@@ -1132,11 +1064,7 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 }
 
 func TestSQLExecutor_BuiltinSystemStoredProcedures(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// Create test table
 	_, _ = server.ExecuteSQL("CREATE TABLE inventory (id INT PRIMARY KEY, sku VARCHAR(50), qty INT);")
@@ -1212,11 +1140,7 @@ func TestSQLExecutor_BuiltinSystemStoredProcedures(t *testing.T) {
 }
 
 func TestSQLExecutor_ErrorAndIdentityInsert(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 	sessID := "test_identity_sess"
 
 	// 1. Initial @@ERROR should be 0
@@ -1359,11 +1283,7 @@ func TestSQLExecutor_ErrorAndIdentityInsert(t *testing.T) {
 }
 
 func TestSQLExecutor_GlobalTemporaryTables(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	sess1 := "session_alpha"
 	sess2 := "session_beta"
@@ -1445,11 +1365,7 @@ func TestSQLExecutor_GlobalTemporaryTables(t *testing.T) {
 }
 
 func TestSQLExecutor_DBCCCommands(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 	sessID := "dbcc_sess"
 
 	// Setup a sample table
@@ -1923,11 +1839,7 @@ func TestSQLExecutor_GrepAndAwkInQuery(t *testing.T) {
 }
 
 func TestSQLExecutor_ExplainBytecode(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	query := "EXPLAIN BYTECODE SELECT id, name FROM users WHERE id > 10"
 	res, err := server.ExecuteSQL(query)
@@ -1959,11 +1871,7 @@ func TestSQLExecutor_ExplainBytecode(t *testing.T) {
 }
 
 func TestSQLExecutor_VBDEDML(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 	sessID := "vdbe_dml_sess"
 
 	// 1. Setup table
@@ -2080,11 +1988,7 @@ func TestSQLExecutor_VBDEDML(t *testing.T) {
 }
 
 func TestSQLExecutor_MultiTableChainedJoins(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// 1. Setup tables
 	_, err := server.ExecuteSQL("CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50));")
@@ -2246,10 +2150,7 @@ func TestSQLExecutor_DecimalAndFixedPoint(t *testing.T) {
 }
 
 func TestSQLExecutor_SetOperations(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// 1. Setup sample tables
 	_, err := server.ExecuteSQL("CREATE TABLE north_emp (id INT PRIMARY KEY, name VARCHAR(50), dept VARCHAR(50));")
@@ -2386,10 +2287,7 @@ func TestSQLExecutor_SetOperations(t *testing.T) {
 }
 
 func TestSQLExecutor_TimeBucketGrouping(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// Create test events table
 	_, err := server.ExecuteSQL("CREATE TABLE log_events (id INT, created_at VARCHAR(30), duration INT);")
@@ -2539,10 +2437,7 @@ func TestSQLExecutor_DbGate_SelectLimitOffsetWithAlias(t *testing.T) {
 }
 
 func TestMultiOptionSet(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	sessID := "test-set-sess"
 	res, err := server.ExecuteSessionSQL(sessID, "SET NOCOUNT ON, ANSI_NULLS ON, QUOTED_IDENTIFIER ON;")
@@ -2566,10 +2461,7 @@ func TestMultiOptionSet(t *testing.T) {
 }
 
 func TestSQLExecutor_CompositeQualifiersAndImplicitAlias(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// 1. DDL with brackets
 	_, err := server.ExecuteSQL("CREATE TABLE [dbo].[accounts] ([id] INT PRIMARY KEY, [balance] FLOAT);")
@@ -2625,10 +2517,7 @@ func TestSQLExecutor_CompositeQualifiersAndImplicitAlias(t *testing.T) {
 }
 
 func TestSQLExecutor_UUIDv7PrimaryKey(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	// 1. Standalone SELECT NEWID7(), UUIDV7(), GEN_RANDOM_UUID(7)
 	resFuncs, err := server.ExecuteSQL("SELECT NEWID7() AS u1, UUIDV7() AS u2, GEN_RANDOM_UUID(7) AS u3;")
@@ -2707,10 +2596,7 @@ func TestSQLExecutor_UUIDv7PrimaryKey(t *testing.T) {
 }
 
 func TestSQLExecutor_StandardPagingAndTop(t *testing.T) {
-	eng := memengine.New()
-	defer eng.Close()
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
+	server := setupMemServer(t)
 
 	createSQL := `CREATE TABLE products (
 		id INT PRIMARY KEY,
@@ -2771,7 +2657,6 @@ func TestSQLExecutor_StandardPagingAndTop(t *testing.T) {
 func TestSQLExecutor_CreateStatistics_CorrelatedSelectivity(t *testing.T) {
 	eng := memengine.New()
 	defer eng.Close()
-
 	cat := catalog.New(eng)
 	server := api.NewServer(cat, eng)
 

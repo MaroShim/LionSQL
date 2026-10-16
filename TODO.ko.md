@@ -26,6 +26,17 @@
 | **P2** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/logger`, `pkg/api` | 로그인, 권한 변경(`GRANT/REVOKE`), DDL 변경, 관리자 데이터 조작 이벤트 불변 감사 기록 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **테스트 스위트 중복 보일러플레이트 대규모 슬림화 (Net -291줄) (`pkg/wire`, `pkg/api`)**
+  - **배경**: `pkg/wire/server_test.go` 및 `pkg/api/sqlexec_test.go` 등 대형 테스트 파일에 걸쳐 반복되던 저수준 TCP 소켓 핸드셰이크, 패스워드 인증 패킷 루프, 인메모리 엔진 셋업 중복 코드 대량 제거(Golden Rule 15: Radical KISS & Deletion-First).
+  - **구현 내용**:
+    - `pkg/wire/server_test.go`:
+      - `authenticatePGClient` 헬퍼 도입: 패스워드 인증(`CleartextPassword`, `AuthOK`, `ErrorResponse 28P01`, 슈퍼유저 인증) 서브테스트 중복 제거 (-140줄).
+      - `TestWire_ConcurrentConnectionMultiplexing`: 공통 헬퍼 `connectPGClient` 및 `sendPGQuery`를 적용하여 30개 동시 클라이언트 루프 슬림화 (-65줄).
+      - `TestPGWire_ServerSideSQLCursor`: 중복 소켓 핸드셰이크 제거 (-20줄).
+    - `pkg/api/sqlexec_test.go`:
+      - `common_test.go`의 `setupMemServer(t)` 헬퍼를 `t.Cleanup` 기반으로 개선.
+      - 31개 단위 테스트에 걸쳐 복사-붙여넣기되어 있던 `memengine.New()`, `defer eng.Close()`, `catalog.New(eng)`, `api.NewServer(cat, eng)` 4줄 블록을 `server := setupMemServer(t)` 단 1줄로 일괄 교체 (-120줄).
+    - 전체 패키지 빌드 및 `go test -race` 100% 무결성 통과 (Net 291 라인 순수 코드 삭제 달성).
 - [x] **가상 카탈로그 쿼리 인터셉터 0-Alloc 프리필터 & 공백 무관 등호 매칭 리팩토링 (`pkg/catalog/virtual`)**
   - **배경**: 매 `SELECT` 쿼리마다 `strings.ToUpper(sql)`을 호출하여 힙 메모리를 복제하고 17개 이상의 `strings.Contains`를 순차 검사하는 핫패스 오버헤드 해소, 및 `O.TYPE = 'TR'` / `O.TYPE='TR'`처럼 등호(`=`) 좌우 공백 형태가 불일치할 때(`O.TYPE= 'TR'`, `O.TYPE ='TR'`, 탭/다중 공백) 가상 카탈로그 인터셉터가 매칭에 실패하던 잠재적 결함(False Negative) 원천 해결.
   - **구현 내용**:

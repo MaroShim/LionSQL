@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Refactored
+- **Test Suite Boilerplate Diet & Helper Unification (-291 Lines) (`pkg/wire`, `pkg/api`)**:
+  - Implemented `authenticatePGClient` in `pkg/wire/server_test.go`, eliminating verbose raw socket packet writing and response draining across password authentication subtests (`Success`, `Failure`, `GlobalAuthSuperuser`) (-140 lines).
+  - Streamlined `TestWire_ConcurrentConnectionMultiplexing` using `connectPGClient` and `sendPGQuery` (-65 lines).
+  - Simplified `TestPGWire_ServerSideSQLCursor` connection lifecycle using `connectPGClient` (-20 lines).
+  - Enhanced `setupMemServer` in `pkg/api/common_test.go` with automatic `t.Cleanup` memory engine teardown, replacing repetitive 4-line setup boilerplate across 31 unit tests in `pkg/api/sqlexec_test.go` with a single `setupMemServer(t)` call (-120 lines).
+  - Net deletion of 291 lines of repetitive test code while preserving 100% test coverage and zero data races.
+
 ### Added
 - **Virtual Catalog Query Interceptor Zero-Alloc Fast Filter & Whitespace-Resilient Matcher (`pkg/catalog/virtual`)**:
   - Implemented zero-allocation ASCII case-insensitive substring scanner `containsFold` and `hasCatalogCandidate` in `pkg/catalog/virtual/interceptor.go`, enabling non-catalog OLTP `SELECT` queries to bypass catalog checks with 0 heap allocations (`0 B/op`, `0 allocs/op`) and 103ns dispatch latency.
