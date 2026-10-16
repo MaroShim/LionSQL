@@ -254,41 +254,9 @@ func splitLogicalConditions(whereStr string, op string) []string {
 }
 
 func parseValueToType(s string, t storage.DataType) storage.Value {
-	s = strings.TrimSpace(s)
-	if strings.EqualFold(s, "NULL") {
-		return storage.NullValue(t)
-	}
-	s = strings.Trim(s, "'\"")
-	switch t {
-	case storage.TypeInt:
-		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
-			return storage.IntValue(n)
-		}
-	case storage.TypeFloat:
-		if f, err := strconv.ParseFloat(s, 64); err == nil {
-			return storage.FloatValue(f)
-		}
-	case storage.TypeDecimal:
-		return storage.DecimalValue(s)
-	case storage.TypeBool:
-		if b, err := strconv.ParseBool(s); err == nil {
-			return storage.BoolValue(b)
-		}
-	case storage.TypeDateTime:
-		if tVal, err := time.Parse(time.RFC3339, s); err == nil {
-			return storage.DateTimeValue(tVal)
-		}
-	case storage.TypeDate:
-		return storage.DateValueFromString(s)
-	case storage.TypeTime:
-		return storage.TimeValueFromString(s)
-	case storage.TypeUUID:
-		return storage.UUIDValue(s)
-	case storage.TypeBinary:
-		return storage.BinaryValueFromString(s)
-	}
-	return storage.StringValue(s)
+	return planner.ParseValueToType(s, t)
 }
+
 
 func evaluateWhereCondition(rec storage.Record, whereStr string) bool {
 	whereStr = strings.TrimSpace(whereStr)
@@ -601,265 +569,25 @@ func parseEqualityConditions(where string) map[string]string {
 // splitOnAnd splits a WHERE clause on top-level AND keywords,
 // respecting parentheses depth so subexpressions are not split.
 func splitOnAnd(where string) []string {
-	var parts []string
-	depth := 0
-	start := 0
-	upper := strings.ToUpper(where)
-	for i := 0; i < len(upper); i++ {
-		switch upper[i] {
-		case '(':
-			depth++
-		case ')':
-			if depth > 0 {
-				depth--
-			}
-		}
-		if depth == 0 && i+4 <= len(upper) && upper[i:i+4] == " AND" &&
-			(i+4 == len(upper) || upper[i+4] == ' ' || upper[i+4] == '(') {
-			parts = append(parts, strings.TrimSpace(where[start:i]))
-			i += 4
-			start = i
-		}
-	}
-	parts = append(parts, strings.TrimSpace(where[start:]))
-	return parts
+	return planner.SplitOnAnd(where)
 }
 
 // buildCompositePrefixKey builds a \x00-separated composite key string from the
 // prefix columns of a composite index given an equality-condition value map.
-// The value lookup is case-insensitive on column names.
 func buildCompositePrefixKey(cols []string, eqColVals map[string]string, schema *storage.TableSchema) string {
-	var sb strings.Builder
-	sb.Grow(64)
-	for i, col := range cols {
-		val, ok := eqColVals[strings.ToLower(col)]
-		if !ok {
-			break
-		}
-		if i > 0 {
-			sb.WriteByte(0)
-		}
-		// Format the value using storage.EncodeIndexKeyPart for consistent composite key encoding.
-		colMeta, _, found := schema.FindColumn(col)
-		if found && colMeta != nil {
-			sv := parseValueToType(val, colMeta.Type)
-			sb.WriteString(storage.EncodeIndexKeyPart(sv))
-		} else {
-			sb.WriteString(storage.EncodeIndexKeyPart(storage.StringValue(val)))
-		}
-	}
-	return sb.String()
+	return planner.BuildCompositePrefixKey(cols, eqColVals, schema)
 }
 
-type indexRangeCond struct {
-	hasMin bool
-	minVal string
-	hasMax bool
-	maxVal string
-}
+type indexRangeCond = planner.IndexRangeCond
 
-func parseWhereConditions(where string) (map[string]string, map[string]*indexRangeCond) {
-	eqs := make(map[string]string)
-	ranges := make(map[string]*indexRangeCond)
-	parts := splitOnAnd(where)
-
-	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*=\s*(.+?)\s*$`)
-	gteRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*>=\s*(.+?)\s*$`)
-	gtRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*>\s*(.+?)\s*$`)
-	lteRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*<=\s*(.+?)\s*$`)
-	ltRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*<\s*(.+?)\s*$`)
-	betweenRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s+BETWEEN\s+(.+?)\s+AND\s+(.+?)\s*$`)
-
-	cleanCol := func(s string) string {
-		raw := strings.TrimSpace(s)
-		if dot := strings.LastIndex(raw, "."); dot != -1 {
-			raw = raw[dot+1:]
-		}
-		return strings.ToLower(cleanIdentifier(raw))
-	}
-	cleanVal := func(s string) string {
-		return strings.Trim(strings.TrimSpace(s), "'\"")
-	}
-
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if m := eqRe.FindStringSubmatch(part); len(m) == 3 {
-			col := cleanCol(m[1])
-			eqs[col] = cleanVal(m[2])
-		} else if m := betweenRe.FindStringSubmatch(part); len(m) == 4 {
-			col := cleanCol(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &indexRangeCond{}
-				ranges[col] = r
-			}
-			r.hasMin = true
-			r.minVal = cleanVal(m[2])
-			r.hasMax = true
-			r.maxVal = cleanVal(m[3])
-		} else if m := gteRe.FindStringSubmatch(part); len(m) == 3 {
-			col := cleanCol(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &indexRangeCond{}
-				ranges[col] = r
-			}
-			r.hasMin = true
-			r.minVal = cleanVal(m[2])
-		} else if m := gtRe.FindStringSubmatch(part); len(m) == 3 {
-			col := cleanCol(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &indexRangeCond{}
-				ranges[col] = r
-			}
-			r.hasMin = true
-			r.minVal = cleanVal(m[2])
-		} else if m := lteRe.FindStringSubmatch(part); len(m) == 3 {
-			col := cleanCol(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &indexRangeCond{}
-				ranges[col] = r
-			}
-			r.hasMax = true
-			r.maxVal = cleanVal(m[2])
-		} else if m := ltRe.FindStringSubmatch(part); len(m) == 3 {
-			col := cleanCol(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &indexRangeCond{}
-				ranges[col] = r
-			}
-			r.hasMax = true
-			r.maxVal = cleanVal(m[2])
-		}
-	}
-	return eqs, ranges
+func parseWhereConditions(where string) (map[string]string, map[string]*planner.IndexRangeCond) {
+	return planner.ParseWhereConditions(where)
 }
 
 func (s *Coordinator) findIndexAndBounds(schema *storage.TableSchema, whereClause string) (*storage.IndexSchema, *storage.Value, *storage.Value, bool) {
-	if schema == nil || len(schema.Indexes) == 0 || whereClause == "" {
-		return nil, nil, nil, false
-	}
-	eqColVals, rangeCols := parseWhereConditions(whereClause)
-	eqColSet := make(map[string]bool, len(eqColVals))
-	for col := range eqColVals {
-		eqColSet[col] = true
-	}
-
-	// 1. Try composite index first
-	idx, prefixLen := schema.FindBestCompositeIndex(eqColSet)
-	if idx != nil && len(idx.Columns) > 1 {
-		if prefixLen > 0 {
-			prefixKey := buildCompositePrefixKey(idx.Columns[:prefixLen], eqColVals, schema)
-			// Check if next column has a range condition
-			if prefixLen < len(idx.Columns) {
-				nextCol := strings.ToLower(idx.Columns[prefixLen])
-				if r, ok := rangeCols[nextCol]; ok && r != nil {
-					nextMeta, _, found := schema.FindColumn(nextCol)
-					if found && nextMeta != nil {
-						lowStr := prefixKey
-						highStr := prefixKey + "\xff\xff\xff\xff"
-						if r.hasMin {
-							encMin := storage.EncodeIndexKeyPart(parseValueToType(r.minVal, nextMeta.Type))
-							lowStr = prefixKey + "\x00" + encMin
-						}
-						if r.hasMax {
-							encMax := storage.EncodeIndexKeyPart(parseValueToType(r.maxVal, nextMeta.Type))
-							highStr = prefixKey + "\x00" + encMax + "\xff\xff\xff\xff"
-						}
-						lowVal := storage.StringValue(lowStr)
-						highVal := storage.StringValue(highStr)
-						return idx, &lowVal, &highVal, true
-					}
-				}
-			}
-			// Pure prefix match on composite index
-			lowVal := storage.StringValue(prefixKey)
-			highVal := storage.StringValue(prefixKey + "\xff\xff\xff\xff")
-			return idx, &lowVal, &highVal, true
-		}
-	}
-
-	// 2. Try single-column index
-	for i := range schema.Indexes {
-		candIdx := &schema.Indexes[i]
-		if len(candIdx.Columns) != 1 {
-			continue
-		}
-		colName := strings.ToLower(candIdx.Columns[0])
-		colMeta, _, found := schema.FindColumn(colName)
-		if !found || colMeta == nil {
-			continue
-		}
-		// Check equality
-		if valStr, ok := eqColVals[colName]; ok {
-			parsed := parseValueToType(valStr, colMeta.Type)
-			return candIdx, &parsed, &parsed, true
-		}
-		// Check range
-		if r, ok := rangeCols[colName]; ok && r != nil {
-			var lowVal, highVal *storage.Value
-			if r.hasMin {
-				v := parseValueToType(r.minVal, colMeta.Type)
-				lowVal = &v
-			}
-			if r.hasMax {
-				v := parseValueToType(r.maxVal, colMeta.Type)
-				highVal = &v
-			}
-			return candIdx, lowVal, highVal, true
-		}
-	}
-
-	// 3. Try functional expression index
-	for i := range schema.Indexes {
-		candIdx := &schema.Indexes[i]
-		if !candIdx.IsExpression() {
-			continue
-		}
-		targetCol := candIdx.ExprColumn
-		if targetCol == "" && len(candIdx.Columns) > 0 {
-			targetCol = candIdx.Columns[0]
-		}
-		normCandPath := strings.TrimSpace(candIdx.ExprPath)
-		if !strings.HasPrefix(normCandPath, "$") {
-			if strings.HasPrefix(normCandPath, "[") {
-				normCandPath = "$" + normCandPath
-			} else {
-				normCandPath = "$." + normCandPath
-			}
-		}
-
-		conds := strings.Split(whereClause, " AND ")
-		for _, cond := range conds {
-			cond = strings.TrimSpace(cond)
-			p := proc.NewParser(proc.NewLexer(cond))
-			if expr := p.ParseExpression(proc.PrecLowest); expr != nil {
-				if bin, ok := expr.(*proc.BinaryExpr); ok && (bin.Op == proc.TokenAssign || bin.Op == proc.TokenEq) {
-					colName, jsonPath, isJSON := proc.ExtractJSONExprInfo(bin.Left)
-					if isJSON {
-						if dot := strings.Index(colName, "."); dot != -1 {
-							colName = colName[dot+1:]
-						}
-						if strings.EqualFold(colName, targetCol) && strings.EqualFold(jsonPath, normCandPath) {
-							if lit, isLit := bin.Right.(*proc.LiteralExpr); isLit {
-								val := lit.Val
-								return candIdx, &val, &val, true
-							}
-							valStr := strings.Trim(strings.TrimSpace(bin.Right.String()), "'\"")
-							val := storage.StringValue(valStr)
-							return candIdx, &val, &val, true
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return nil, nil, nil, false
+	return planner.FindIndexAndBounds(schema, whereClause)
 }
+
 
 func isIndexDescendingOrder(orderByClause string, idx *storage.IndexSchema, eqColVals map[string]string) bool {
 	if orderByClause == "" || idx == nil {

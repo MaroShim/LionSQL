@@ -33,6 +33,18 @@
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화 (`R-3`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)**
+  - **배경**: `sqlexec_eval.go`의 단일 테이블 고속 검색과 `execution/builder.go`의 Volcano 플랜 빌더 간에 인덱스 범위 검색 경계(`lowVal`, `highVal`) 추출 및 조건식 파싱 로직이 중복 존재(DRY 위반)하고, Volcano 인덱스 스캔에서 범위 조건(`BETWEEN`, `>=`, `<=`) 처리가 누락되어 있었음.
+  - **구현 내용**:
+    - `pkg/planner/bounds.go` 공통 모듈 신설:
+      - `ParseWhereConditions`: 등호(`=`), `BETWEEN ... AND ...`, 부등호(`>=`, `>`, `<=`, `<`) 및 문자열/괄호 중첩을 고려한 $O(N)$ 단일 패스 파서 및 정규식 패키지 변수 사전 컴파일 적용.
+      - `ParseIndexCond`: 단일/복합 인덱스 조건식 및 반정형 JSON 기능 표현식(`doc->>'key' = 'val'`) 바운드 추출 일원화.
+      - `ParseValueToType`: `TypeInt`, `TypeFloat`, `TypeDecimal`, `TypeBool`, `TypeDateTime`, `TypeDate`, `TypeTime`, `TypeUUID`, `TypeBinary` 전 데이터 타입 파싱 통합.
+      - `BuildCompositePrefixKey`: 복합 인덱스 `\x00` 구분자 접두사 키 생성 엔진 공통화.
+      - `FindIndexAndBounds`: 복합 인덱스, 단일 컬럼 인덱스(등치/범위), 함수적 표현식 인덱스 매칭 일원화.
+    - `pkg/execution/builder.go`: 중복 함수(`parseIndexCond`, `parseValueByType`, 미사용 `regexp`/`proc` 임포트) 완전 제거 및 `planner.ParseIndexCond` 호출로 단일화 (Volcano 엔진의 범위 인덱스 스캔 완벽 지원).
+    - `pkg/engine/sqlexec_eval.go`: 중복 구현된 260줄 이상의 바운드 파싱 로직을 제거하고 `planner.Bounds` 위임으로 슬림화.
+    - 단위 테스트 `pkg/planner/bounds_test.go` 완비 및 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
 - [x] **Pratt 파서 및 내장 함수 도메인별 관심사 분리 (`R-2`) (`pkg/proc`)**
   - **배경**: `pkg/proc/parser.go`(3,241라인)와 `pkg/proc/builtins.go`(2,880라인)가 단일 파일에 비대하게 집중되어 신규 문법/함수 추가 시 인지 부하 및 머지 충돌 위험 증가.
   - **구현 내용**:
@@ -366,7 +378,7 @@
 | :---: | :--- | :--- | :---: | :--- |
 | **R-1** | **엔진/카탈로그** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | **완료 (`[x]`)** | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
 | **R-2** | **파서/내장함수** | **Pratt 파서 및 내장 함수 도메인별 관심사 분리** | **완료 (`[x]`)** | `parser.go`(3.2K줄), `builtins.go`(2.8K줄) 도메인 모듈화 |
-| **R-3** | **엔진/실행기** | **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화** | **대기 (`[ ]`)** | `sqlexec_eval.go`와 `execution/builder.go` 간 중복 제거 (DRY) |
+| **R-3** | **엔진/실행기** | **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화** | **완료 (`[x]`)** | `sqlexec_eval.go`와 `execution/builder.go` 간 중복 제거 (DRY) |
 | **R-4** | **스토리지/OCC** | **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해** | **대기 (`[ ]`)** | `memengine/tx.go`(1.9K줄)의 `Commit()`, 스캔, 세이브포인트 분리 |
 | **R-5** | **스토리지/CGo** | **WiredTiger CGo 바인딩 격리 및 트랜잭션/커서 모듈화** | **대기 (`[ ]`)** | `wt_engine.go`(1.7K줄)의 CGo 인터페이스, 커서, DDL 물리적 분리 |
 
@@ -400,11 +412,18 @@
       - `builtins_json.go` (179줄): JSON 내장 함수 및 경로 탐색/수정 헬퍼.
       - `builtins_sys.go` (697줄): 시스템, 메타데이터, UUIDv7, 에러, 조건 논리(ISNULL/COALESCE), 암호화 함수.
     - 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
-- [ ] **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 및 조건 평가 로직 일원화 (`R-3`) (`pkg/engine`, `pkg/execution`, `pkg/planner`)**
-  - **배경**: `sqlexec_eval.go`의 단일 테이블 고속 검색과 `execution/builder.go`의 Volcano 플랜 빌더 간에 인덱스 범위 검색 경계(`lowVal`, `highVal`) 추출 및 조건식 파싱 로직이 중복 존재(DRY 위반).
-  - **구현 계획**:
-    - `pkg/planner/bounds.go` 또는 `pkg/engine/bounds.go` 공통 헬퍼로 인덱스 바운드 추출 로직을 단일화.
-    - 새로운 인덱스 타입(표현식 인덱스, 다중 컬럼 인덱스 등) 추가 시 양쪽 엔진이 100% 동일한 경계 분석 엔진을 공유하도록 보장.
+- [x] **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 및 조건 평가 로직 일원화 (`R-3`) (`pkg/engine`, `pkg/execution`, `pkg/planner`)**
+  - **배경**: `sqlexec_eval.go`의 단일 테이블 고속 검색과 `execution/builder.go`의 Volcano 플랜 빌더 간에 인덱스 범위 검색 경계(`lowVal`, `highVal`) 추출 및 조건식 파싱 로직이 중복 존재(DRY 위반)하고, Volcano 인덱스 스캔에서 범위 조건(`BETWEEN`, `>=`, `<=`) 처리가 누락되어 있었음.
+  - **구현 내용**:
+    - `pkg/planner/bounds.go` 공통 모듈 신설:
+      - `ParseWhereConditions`: 등호(`=`), `BETWEEN ... AND ...`, 부등호(`>=`, `>`, `<=`, `<`) 및 문자열/괄호 중첩을 고려한 $O(N)$ 단일 패스 파서 및 정규식 패키지 변수 사전 컴파일 적용.
+      - `ParseIndexCond`: 단일/복합 인덱스 조건식 및 반정형 JSON 기능 표현식(`doc->>'key' = 'val'`) 바운드 추출 일원화.
+      - `ParseValueToType`: `TypeInt`, `TypeFloat`, `TypeDecimal`, `TypeBool`, `TypeDateTime`, `TypeDate`, `TypeTime`, `TypeUUID`, `TypeBinary` 전 데이터 타입 파싱 통합.
+      - `BuildCompositePrefixKey`: 복합 인덱스 `\x00` 구분자 접두사 키 생성 엔진 공통화.
+      - `FindIndexAndBounds`: 복합 인덱스, 단일 컬럼 인덱스(등치/범위), 함수적 표현식 인덱스 매칭 일원화.
+    - `pkg/execution/builder.go`: 중복 함수(`parseIndexCond`, `parseValueByType`, 미사용 `regexp`/`proc` 임포트) 완전 제거 및 `planner.ParseIndexCond` 호출로 단일화 (Volcano 엔진의 범위 인덱스 스캔 완벽 지원).
+    - `pkg/engine/sqlexec_eval.go`: 중복 구현된 260줄 이상의 바운드 파싱 로직을 제거하고 `planner.Bounds` 위임으로 슬림화.
+    - 단위 테스트 `pkg/planner/bounds_test.go` 완비 및 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
 - [ ] **In-Memory OCC 스토리지 트랜잭션 라이프사이클 모듈 분해 (`R-4`) (`pkg/storage/memengine`)**
   - **배경**: `pkg/storage/memengine/tx.go`(1,965라인)에 트랜잭션 라이프사이클 전체와 500줄 이상의 인라인 `Commit()` 함수가 집중되어 동시성 로직의 가독성 저하.
   - **구현 계획**:

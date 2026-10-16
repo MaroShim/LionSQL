@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Changed
+- **Unified Index Bounds & Condition Resolution Engine (`R-3`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)**:
+  - Implemented centralized `pkg/planner/bounds.go` module eliminating code duplication (DRY) across Volcano plan tree builder and single-table fast-path coordinator:
+    - `ParseWhereConditions`: $O(N)$ single-pass condition parser with parentheses/quote depth tracking and package-level precompiled regex singletons supporting `=`, `BETWEEN ... AND ...`, `>=`, `>`, `<=`, `<`.
+    - `ParseIndexCond`: unified index condition bound extractor supporting single/composite indexes, range expressions, and functional JSON expression predicates (`doc->>'key' = 'val'`).
+    - `ParseValueToType`: centralized string-to-storage-value parser supporting `TypeInt`, `TypeFloat`, `TypeDecimal`, `TypeBool`, `TypeDateTime`, `TypeDate`, `TypeTime`, `TypeUUID`, `TypeBinary`, `TypeVarChar`.
+    - `BuildCompositePrefixKey` & `FindIndexAndBounds`: shared composite index prefix and candidate index resolver.
+  - Refactored `pkg/execution/builder.go`: removed duplicated parsing logic and unneeded `regexp`/`proc` imports, enhancing Volcano index scan iterators with full range bound capabilities.
+  - Refactored `pkg/engine/sqlexec_eval.go`: removed over 260 lines of duplicated bounds extraction logic and delegated to `planner.Bounds`.
+  - Added comprehensive test suites in `pkg/planner/bounds_test.go` and verified 100% race-free pass across all packages.
 - **Pratt Parser & Built-in Functions Domain Modularization (`R-2`) (`pkg/proc`)**:
   - Modularized monolithic `pkg/proc/parser.go` (3,241 lines) into 5 focused domain modules:
     - `parser.go` (280 lines, 90%+ reduction): Core `Parser` struct, `NewParser`, token advancement, and syntax helpers.

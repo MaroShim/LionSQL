@@ -2,11 +2,9 @@ package execution
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
 	"sqlion/pkg/planner"
-	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
 
@@ -47,7 +45,7 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 			return nil, fmt.Errorf("index scan schema lookup failed for %q: %w", plan.Relation, err)
 		}
 
-		low, high := parseIndexCond(plan.IndexCond, schema)
+		low, high := planner.ParseIndexCond(plan.IndexCond, schema)
 		it := NewIndexScanIterator(tx, plan.Relation, plan.Alias, plan.IndexName, low, high, schema)
 		it.IndexOnly = (plan.Type == planner.NodeIndexOnlyScan)
 		if opts.Arena != nil {
@@ -272,65 +270,6 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 
 	default:
 		return nil, fmt.Errorf("unsupported plan node type: %s", plan.Type)
-	}
-}
-
-func parseIndexCond(cond string, schema *storage.TableSchema) (*storage.Value, *storage.Value) {
-	cond = strings.Trim(cond, "()")
-	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
-	if m := eqRe.FindStringSubmatch(cond); len(m) == 3 {
-		colName := m[1]
-		if idx := strings.Index(colName, "."); idx != -1 {
-			colName = colName[idx+1:]
-		}
-		valStr := strings.Trim(strings.TrimSpace(m[2]), "'\"")
-
-		if schema != nil {
-			if colMeta, _, found := schema.FindColumn(colName); found && colMeta != nil {
-				parsed := parseValueByType(valStr, colMeta.Type)
-				return &parsed, &parsed
-			}
-		}
-		v := storage.StringValue(valStr)
-		return &v, &v
-	}
-
-	// Try functional expression index condition: e.g. "doc ->> 'city' = 'Seoul'" or "JSON_VALUE(doc, '$.city') = 'Seoul'"
-	p := proc.NewParser(proc.NewLexer(cond))
-	if expr := p.ParseExpression(proc.PrecLowest); expr != nil {
-		if bin, ok := expr.(*proc.BinaryExpr); ok && (bin.Op == proc.TokenAssign || bin.Op == proc.TokenEq) {
-			if lit, isLit := bin.Right.(*proc.LiteralExpr); isLit {
-				v := lit.Val
-				return &v, &v
-			}
-		}
-	}
-
-	if eqIdx := strings.LastIndex(cond, "="); eqIdx != -1 {
-		valStr := strings.Trim(strings.TrimSpace(cond[eqIdx+1:]), "'\"")
-		v := storage.StringValue(valStr)
-		return &v, &v
-	}
-
-	return nil, nil
-}
-
-func parseValueByType(s string, t storage.DataType) storage.Value {
-	switch t {
-	case storage.TypeInt:
-		var n int64
-		_, _ = fmt.Sscanf(s, "%d", &n)
-		return storage.IntValue(n)
-	case storage.TypeFloat:
-		var f float64
-		_, _ = fmt.Sscanf(s, "%f", &f)
-		return storage.FloatValue(f)
-	case storage.TypeBool:
-		return storage.BoolValue(strings.EqualFold(s, "true") || s == "1")
-	case storage.TypeVarChar:
-		return storage.StringValue(s)
-	default:
-		return storage.StringValue(s)
 	}
 }
 
