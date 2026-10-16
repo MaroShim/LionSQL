@@ -86,6 +86,10 @@ LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLT
   - [x] Storage to Wire Zero-Copy Direct Serialization (P-3)
   - [x] TDS Single-Frame Buffer Pooling & 50% Syscall Reduction
   - [ ] DML storage.Record (Map) Elimination & storage.Row (Slice) Fast-Path (P-13)
+  - [ ] Prepared Statement Zero-Alloc Binary Bind & Direct Value Decoding (P-14)
+  - [ ] WiredTiger Multi-Row & Secondary Index Batch CGo Insertion (P-15)
+  - [ ] In-Memory OCC Row-Level Atomic CAS Commit Validation (P-16)
+  - [ ] VDBE Fused Column Arithmetic Super-Instruction (OpIncrColInt) (P-17)
   - [ ] Enterprise Immutable Audit Log
   - [Postponed] INSTEAD OF Trigger Interceptor
   - [ ] Enterprise ODBC / JDBC Driver Certification & Conformance Testing

@@ -24,6 +24,10 @@
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
 | **P1** | **성능/DML (`P-13`)** | **DML `storage.Record`(Map) 제거 ➔ `storage.Row`(Slice) 직결 (Zero-Alloc DML)** | `pkg/proc/runtime`, `pkg/engine`, `pkg/storage` | VDBE 및 DML에서 중간 맵 생성과 해시 룩업을 제거하고 `Row` 슬라이스 직결로 DML 처리량 20~30% 향상 |
+| **P1** | **와이어/바인드 (`P-14`)** | **Prepared Statement 바이너리 바인드 파라미터 제로-할당 & 문자열 변환 제거** | `pkg/wire`, `pkg/engine` | 바인딩 시 바이너리 ➔ 문자열 ➔ 타입 파싱의 이중 변환을 제거하고 `storage.Value` 직결 변환 |
+| **P1** | **스토리지/CGo (`P-15`)** | **WiredTiger 다중 행 및 인덱스 배치 CGo 삽입 (`go_wt_cursor_batch_insert`)** | `pkg/storage/wiredtiger` | 트랜잭션당 CGo 호출 횟수를 1/5~1/10로 축소하여 디스크 엔진 20,000+ TPS 돌파 |
+| **P2** | **스토리지/OCC (`P-16`)** | **In-Memory OCC Row-Level Atomic CAS 커밋 검증 (Lock-Free)** | `pkg/storage/memengine` | 샤드 락 대신 `atomic.CompareAndSwapInt64` 무락 검증으로 고경합 어보트율 0.1% 미만화 |
+| **P2** | **실행기/VDBE (`P-17`)** | **VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt` / Super-Instruction)** | `pkg/proc`, `pkg/proc/runtime` | `GetColumn+AddInt+StoreColumn` 패턴을 1개 슈퍼 명령어로 융합하여 VM 루프 66% 삭감 |
 | **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
@@ -354,6 +358,10 @@
 | **P-11** | **스토리지/풀링** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | **완료 (`[x]`)** | 트랜잭션 맵 6개 동적 할당 0건화, 초당 2만 TPS GC 부하 80%+ 경감 |
 | **P-12** | **실행기/풀링** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | **완료 (`[x]`)** | 1,024건 슬라이스 할당 제거 및 대용량 배치/P-10 병렬 스트리밍 GC 최소화 |
 | **P-13** | **실행기/DML** | **DML Record(Map) 제거 ➔ Row(Slice) 직결 (Zero-Alloc DML)** | **우선 착수 (`[ ]`)** | 중간 맵 할당 및 해시 룩업 완전 제거, DML 처리량 20~30% 향상 |
+| **P-14** | **와이어/바인드** | **Prepared Statement 바이너리 바인드 제로-할당 & 문자열 변환 제거** | **우선 착수 (`[ ]`)** | 바인딩 시 바이너리 ➔ 문자열 ➔ 타입 파싱의 이중 변환을 제거하고 직결 변환 |
+| **P-15** | **스토리지/CGo** | **WiredTiger 다중 행 및 인덱스 배치 CGo 삽입 (`go_wt_cursor_batch_insert`)** | **우선 착수 (`[ ]`)** | 트랜잭션당 CGo 호출 횟수를 1/5~1/10로 축소하여 디스크 엔진 20,000+ TPS 돌파 |
+| **P-16** | **스토리지/OCC** | **In-Memory OCC Row-Level Atomic CAS 커밋 검증 (Lock-Free)** | **대기 (`[ ]`)** | 샤드 락 대신 `atomic.CompareAndSwapInt64` 무락 검증으로 고경합 어보트율 0.1% 미만화 |
+| **P-17** | **실행기/VDBE** | **VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt` / Super-Instruction)** | **대기 (`[ ]`)** | `GetColumn+AddInt+StoreColumn` 패턴을 1개 슈퍼 명령어로 융합하여 VM 루프 66% 삭감 |
 
 - [ ] **DML `storage.Record`(Map) 제거 ➔ `storage.Row`(Slice) 직결 파이프라인 (`P-13`) (`pkg/proc/runtime`, `pkg/engine`, `pkg/storage`)**
   - **배경**: VDBE `OpInsert`/`OpUpdate` 및 DML 실행기(`sqlexec_dml.go`)에서 스토리지 엔진(`tx.Insert`)으로 데이터를 넘길 때 매번 `make(map[string]Value)` 맵을 힙에 생성하고, 스토리지 엔진은 이를 다시 컬럼별로 순회하며 해시 룩업하여 슬라이스로 변환하는 중복 오버헤드 제거.
@@ -361,6 +369,28 @@
     - `pkg/proc/runtime/vm_dispatcher.go`: `OpInsert` 및 `OpUpdate`에서 중간 `storage.Record` 맵 생성을 제거하고, 스키마 컬럼 슬롯 오프셋에 직접 값을 채워 `storage.Row` 슬라이스를 구성.
     - `pkg/engine/sqlexec_dml.go`: DML 파싱/실행 시 컬럼 인덱스 매핑을 통해 직접 `storage.Row`를 생성하고 기구축된 `tx.InsertRow(table, row)` / `tx.UpdateRow(table, pk, row)`로 직결.
     - DML/Prepared Statement 처리 시 맵 할당 0건(Zero-Allocation) 달성 및 TPC-C/DML 처리량 20~30% 향상.
+
+- [ ] **Prepared Statement 바이너리 바인드 제로-할당 & 이중 변환 제거 (`P-14`) (`pkg/wire`, `pkg/engine`)**
+  - **배경**: PGWire `Bind ('B')` 및 TDS `RPC (sp_executesql)` 수신 시 클라이언트가 보낸 정수/부동소수점 바이너리를 굳이 `strconv.Itoa` 등으로 문자열로 바꾼 뒤, 쿼리 실행 엔진에서 다시 `storage.IntValue()`로 파싱하는 불필요한 이중 변환 및 매 쿼리당 슬라이스 동적 할당 오버헤드 제거.
+  - **구현 내용**:
+    - `pkg/wire/server.go`: `decodeBinaryParam`에서 문자열 변환 없이 `storage.Value`로 즉시 타입 디코딩.
+    - 파라미터 슬라이스 풀링(`sync.Pool`) 적용으로 매개변수화 쿼리 수신 핫패스 힙 할당 0건화.
+
+- [ ] **WiredTiger 다중 행 및 인덱스 배치 CGo 삽입 (`go_wt_cursor_batch_insert`) (`P-15`) (`pkg/storage/wiredtiger`)**
+  - **배경**: TPC-C New-Order나 다중 행 DML 처리 시 매 행마다, 그리고 테이블의 보조 인덱스마다 CGo 경계를 넘나들어(`go_wt_cursor_insert_raw`) 트랜잭션당 수십 회의 CGo 스택 전환 오버헤드가 누적되는 병목 해소.
+  - **구현 내용**:
+    - `wt_engine.go` C preamble에 다중 키-값 튜플을 단일 C 루프에서 일괄 커서 삽입하는 `go_wt_cursor_batch_insert` 헬퍼 함수 구현.
+    - 트랜잭션당 CGo 호출 횟수를 1/5~1/10로 축소하여 WiredTiger 엔진 20,000+ TPS 돌파 견인.
+
+- [ ] **In-Memory OCC Row-Level Atomic CAS 커밋 검증 (`P-16`) (`pkg/storage/memengine`)**
+  - **배경**: In-Memory OCC 엔진의 `Commit()` 단계에서 레코드 버전 유효성을 검증할 때 테이블 샤드 뮤텍스(`shard.mu.Lock()`)를 획득하여, 고밀도 경합 환경(2 Warehouses)에서 락 대기 및 직렬화 어보트율(2~3%)이 상승하는 병목 해소.
+  - **구현 내용**:
+    - 버전 검증 및 갱신을 `atomic.CompareAndSwapInt64(&row.Ver, baseVer, newVer)` 기반 무락(Lock-Free) 알고리즘으로 전환하여 고경합 충돌 어보트율을 0.1% 미만으로 억제.
+
+- [ ] **VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt` / Super-Instruction) (`P-17`) (`pkg/proc`, `pkg/proc/runtime`)**
+  - **배경**: TPC-C New-Order/Payment 등 핵심 트랜잭션 바이트코드에서 `OpGetColumn` ➔ `OpAddInt/OpSubInt` ➔ `OpStoreColumn` 패턴이 반복되며 발생하는 3회의 VM 디스패치 루프 및 분기 예측 비용 절감.
+  - **구현 내용**:
+    - 컴파일러 피프홀 최적화 패스에서 컬럼 가감 산술 시퀀스를 단일 융합 명령어(`OpIncrColInt`)로 치환하여 바이트코드 루프 디스패치 66% 삭감.
 
 - [x] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 및 캐싱 리팩토링 (`P-6`) (`pkg/engine`)**
   - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_derived.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_mssql_sys.go`, `sqlexec_gui_interop.go`, `sqlexec_string_split.go`, `sqlexec_procs.go`의 핫패스 함수 및 행 루프 내부에 분산되어 있던 40여 개의 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 NFA/DFA 재컴파일 및 힙 할당 오버헤드(5~15µs) 제거.
