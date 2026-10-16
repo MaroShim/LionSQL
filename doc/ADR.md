@@ -1,6 +1,6 @@
-# SQLion Architecture Decision Records (ADR)
+# LionSQL Architecture Decision Records (ADR)
 
-This document records the critical architectural decisions made throughout the design and development of SQLion, explaining the context, problem statements, evaluated alternatives, decisions taken, and their engineering consequences.
+This document records the critical architectural decisions made throughout the design and development of LionSQL, explaining the context, problem statements, evaluated alternatives, decisions taken, and their engineering consequences.
 
 ---
 
@@ -36,7 +36,7 @@ Accepted
 Traditional relational databases (PostgreSQL, Microsoft SQL Server, MySQL) require complex operational stacks: external connection poolers (PgBouncer), separate web administration GUIs (pgAdmin, DBeaver), and runtime dependencies (C runtimes, shared libraries). In microservices, edge deployments, and developer environments, this operational footprint creates significant setup overhead, network latency between tiers, and orchestration complexity.
 
 ### Decision
-Package SQLion as a single, statically compiled standalone executable written in Go that embeds:
+Package LionSQL as a single, statically compiled standalone executable written in Go that embeds:
 1. Multi-protocol wire listeners (PostgreSQL v3 on `:5433`, TDS on `:1433`).
 2. HTTP REST/JSON API and embedded Web Management Studio on `:8090` (compiled via `embed.FS`).
 3. Core storage engines, query compiler, bytecode VM, and connection pooler.
@@ -414,7 +414,7 @@ Formally mandate the **3-Stage Verification Pipeline** across all code changes:
 Accepted
 
 ### Context
-Historically, SQLion maintained dual execution pathways:
+Historically, LionSQL maintained dual execution pathways:
 1. Procedural logic (`CREATE PROCEDURE`, triggers, UDFs) executed on the register-based VDBE Virtual Machine (`pkg/proc/runtime`).
 2. Interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) executed through ad-hoc engine routines (`execSelect`, `execInsert`, `execUpdate`, `execDelete` in `pkg/api/sqlexec.go`).
 
@@ -500,7 +500,7 @@ Modern database workloads require custom algorithmic transformations (cryptograp
 ### Decision
 Adopt a **Dual-Track User-Defined Function (UDF)** extensibility model:
 1. **Track 1: Go Native In-Process SPI (`proc.RegisterScalarFunction`)**:
-   - For applications embedding SQLion as an in-process Go library.
+   - For applications embedding LionSQL as an in-process Go library.
    - Developers register type-safe Go functions `func(args []storage.Value) (storage.Value, error)` directly with the runtime engine at startup.
    - Zero FFI boundary crossing, zero sandbox serialization overhead ($< 5\text{ns}$ per function invocation).
 2. **Track 2: WebAssembly (Wasm) Sandboxed Extensions (`wazero`)**:
@@ -521,7 +521,7 @@ Adopt a **Dual-Track User-Defined Function (UDF)** extensibility model:
 Accepted
 
 ### Context
-Early iterations of SQLion explored generic serialization formats (JSON, BSON, MessagePack) for persisting records in WiredTiger B+Tree values and In-Memory WAL log frames. However, generic serialization formats introduce critical performance bottlenecks in high-throughput OLTP workloads:
+Early iterations of LionSQL explored generic serialization formats (JSON, BSON, MessagePack) for persisting records in WiredTiger B+Tree values and In-Memory WAL log frames. However, generic serialization formats introduce critical performance bottlenecks in high-throughput OLTP workloads:
 1. **Redundant Field Names**: Serializing string column keys (`"customer_id"`, `"balance"`) for every single row caused 60% to 80% storage bloat.
 2. **Intermediate Map Allocations**: Deserializing generic formats necessitated instantiating `map[string]any` dictionaries, triggering massive Go garbage collection (GC) pressure.
 3. **Branching & Type-Tag Overhead**: Repeating dynamic type descriptors per attribute wasted CPU instruction cache lines.
@@ -573,12 +573,12 @@ Implement a **Virtual Catalog Interceptor Architecture** (`pkg/api/sqlexec_pgcat
 Accepted
 
 ### Context
-SQLion was initially evaluated under the Affero General Public License (AGPL-3.0). However, AGPL-3.0 presents substantial adoption friction in modern cloud environments:
+LionSQL was initially evaluated under the Affero General Public License (AGPL-3.0). However, AGPL-3.0 presents substantial adoption friction in modern cloud environments:
 - Enterprise users and development teams frequently avoid AGPL-licensed software due to network-trigger copyleft clauses that create legal ambiguity around containerized deployments, sidecar microservices, and private internal tooling.
 - To maximize adoption while ensuring that modifications to the database engine itself remain open source and freely accessible to the global engineering community, a clear, standard open-source license is required.
 
 ### Decision
-Adopt the **GNU General Public License v3 (GPL-3.0-or-later)** across the entire SQLion codebase:
+Adopt the **GNU General Public License v3 (GPL-3.0-or-later)** across the entire LionSQL codebase:
 1. Update `LICENSE` to the standard GNU General Public License version 3 text.
 2. Update all project documentation (`README.md`, `CHANGELOG.md`) and package headers to reflect `GPL-3.0-or-later`.
 3. Provide standard Open Source Initiative (OSI) compliance and commercial transparency.
@@ -598,10 +598,10 @@ Modern web architectures and BaaS platforms store semi-structured JSON payloads 
 - **Microsoft SQL Server**: Requires a 2-step DDL approach (`ALTER TABLE ... ADD col AS JSON_VALUE(...) PERSISTED` followed by `CREATE INDEX`).
 - **PostgreSQL**: Supports functional/expression B-Tree indexes (`CREATE INDEX ON tbl ((data->>'key'))`) and Generalized Inverted Indexes (GIN).
 - **MySQL 8.0**: Supports functional key parts (`CREATE INDEX ON tbl ((CAST(data->>'$.key' AS CHAR(50))))`).
-SQLion features dual wire protocols (PostgreSQL Wire Protocol :5433 and TDS :1433) backed by high-performance B+Tree storage backends (WiredTiger MVCC and Concurrent SkipList). SQLion requires a unified indexing model that minimizes DDL friction, avoids GIN write amplification, and bridges PostgreSQL and T-SQL client tools seamlessly.
+LionSQL features dual wire protocols (PostgreSQL Wire Protocol :5433 and TDS :1433) backed by high-performance B+Tree storage backends (WiredTiger MVCC and Concurrent SkipList). LionSQL requires a unified indexing model that minimizes DDL friction, avoids GIN write amplification, and bridges PostgreSQL and T-SQL client tools seamlessly.
 
 ### Decision
-Adopt **Hybrid Expression B-Tree Indexing** as SQLion's canonical JSON index architecture:
+Adopt **Hybrid Expression B-Tree Indexing** as LionSQL's canonical JSON index architecture:
 1. **Single-Statement DDL**: Support direct expression index creation without prior computed column declarations:
    - PostgreSQL syntax: `CREATE INDEX idx ON tbl ((data->>'attribute'));`
    - T-SQL syntax: `CREATE INDEX idx ON tbl ((JSON_VALUE(data, '$.attribute')));`

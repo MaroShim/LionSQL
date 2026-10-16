@@ -1,12 +1,12 @@
-# SQLion Performance Tuning & Benchmark Guide
+# LionSQL Performance Tuning & Benchmark Guide
 
-This document outlines the benchmark methodology, workload profiles, command-line arguments, and tuning recommendations for SQLion under high-concurrency OLTP workloads.
+This document outlines the benchmark methodology, workload profiles, command-line arguments, and tuning recommendations for LionSQL under high-concurrency OLTP workloads.
 
 ---
 
 ## 1. Built-in Benchmark Architecture (`cmd/bench`)
 
-SQLion includes a native, high-concurrency benchmarking tool (`cmd/bench/main.go`) that simulates heavy banking transfer transactions (`TransferFunds` stored procedure) executing across parallel worker goroutines.
+LionSQL includes a native, high-concurrency benchmarking tool (`cmd/bench/main.go`) that simulates heavy banking transfer transactions (`TransferFunds` stored procedure) executing across parallel worker goroutines.
 
 ```
                   +----------------------------------------------+
@@ -95,7 +95,7 @@ go build -buildvcs=false -o bin/bench ./cmd/bench
 Sample output:
 ```
 ================================================================================
-  SQLion High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)
+  LionSQL High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)
 ================================================================================
  [Target]         Stored Procedure (T-SQL -> Bytecode Plan Cache -> ACID Tx)
  [Storage Engine] wiredtiger (Dir: data/bench_wt)
@@ -126,7 +126,7 @@ ACID Integrity Audit: Initial 10,000,000,000 == Final 10,000,000,000 (PASSED)
 
 ### 3.4. Standard TPC-C OLTP Benchmark (`cmd/tpcc`)
 
-SQLion includes a native, in-tree TPC-C benchmark suite (`cmd/tpcc/main.go`) modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`) executing the standard workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level).
+LionSQL includes a native, in-tree TPC-C benchmark suite (`cmd/tpcc/main.go`) modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`) executing the standard workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level).
 
 ```bash
 # Build TPC-C benchmark binary
@@ -151,7 +151,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc ./cmd/tpcc
 
 ### 3.5. Native T-SQL VDBE Bytecode TPC-C Benchmark (`cmd/tpcc_vdbe`)
 
-SQLion also provides a full-stack T-SQL Stored Procedure TPC-C benchmark (`cmd/tpcc_vdbe/main.go`). Unlike `cmd/tpcc` which tests direct storage engine transaction APIs, `cmd/tpcc_vdbe` models all TPC-C operations as compiled Microsoft T-SQL stored procedures (`TPCC_NewOrderHeader`, `TPCC_NewOrderLine`, `TPCC_Payment`, `TPCC_OrderStatus`, `TPCC_Delivery`, `TPCC_StockLevel`) precompiled into VDBE bytecode (`*proc.Program`), cached in `PlanCache`, and executed on the virtual machine (`executor.Run`).
+LionSQL also provides a full-stack T-SQL Stored Procedure TPC-C benchmark (`cmd/tpcc_vdbe/main.go`). Unlike `cmd/tpcc` which tests direct storage engine transaction APIs, `cmd/tpcc_vdbe` models all TPC-C operations as compiled Microsoft T-SQL stored procedures (`TPCC_NewOrderHeader`, `TPCC_NewOrderLine`, `TPCC_Payment`, `TPCC_OrderStatus`, `TPCC_Delivery`, `TPCC_StockLevel`) precompiled into VDBE bytecode (`*proc.Program`), cached in `PlanCache`, and executed on the virtual machine (`executor.Run`).
 
 ```bash
 # Build TPC-C VDBE benchmark binary
@@ -164,19 +164,33 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
 ./bin/tpcc_vdbe --engine=wiredtiger --warehouses=2 --workers=20 --duration=15s
 ```
 
-#### Official Verified VDBE Results (`everysec` 1-Second Periodic Fsync, 2 Warehouses, 20 Workers):
+#### Official Verified VDBE Results:
+
+##### 1. Scale Factor 10 Warehouses, 20 Client Workers (Balanced Contention & Pooling Accelerated):
+
+| Metric | In-Memory OCC Engine (`fsync off`) | WiredTiger Engine (`everysec` 1s Fsync) | Analysis & Production Invariants |
+|---|---|---|---|
+| **tpmC (New-Order / min)** | **541,708.93 tpmC** | **457,021.04 tpmC** | Peak performance: In-Memory OCC breaks 540k tpmC; WiredTiger achieves >457k tpmC |
+| **Overall Throughput (TPS)** | **20,087.70 TPS** (Peak 25,298 TPS) | **16,814.17 TPS** (Peak 16,815 TPS) | Full ACID atomic execution across all 5 standard TPC-C transaction types |
+| **Serialization Abort Rate** | **0.10%** | **3.73%** | P-11/P-12 map & chunk pooling slash aborts and eliminate GC pauses |
+| **New-Order P50 / P99 Latency** | **0.69 ms / 19.33 ms** | **0.85 ms / 9.46 ms** | Sub-millisecond median; WiredTiger provides ultra-flat P99 tail latency |
+| **Payment P50 / P99 Latency** | **0.05 ms / 5.38 ms** | **0.12 ms / 7.22 ms** | O(1) slot variable lookup, balance mutation, and NBCROW zero-copy framing |
+| **Order-Status P50 / P99** | **0.01 ms / 0.09 ms** | **0.01 ms / 0.67 ms** | Microsecond-level read-only query dispatch across both backends |
+| **Delivery / Stock-Level P50** | **0.06 ms / 0.05 ms** | **0.06 ms / 0.07 ms** | Sub-millisecond multi-row DML and range scan latency |
+
+##### 2. Scale Factor 2 Warehouses, 20 Client Workers (Dense District Contention):
 
 | Metric | In-Memory OCC Engine (`everysec`) | WiredTiger Engine (`everysec`) | Analysis & Comparative Delta |
 |---|---|---|---|
-| **tpmC (New-Order / min)** | **417,302 tpmC** | **422,956 tpmC** | Parity achieved: Both engines deliver >410,000 tpmC with 1s periodic durability |
-| **Overall Throughput (TPS)** | **15,507 TPS** | **14,849 TPS** | Full ACID atomic execution across all 5 standard TPC-C transaction types |
-| **Serialization Abort Rate** | **3.13%** | **12.59%** | OCC private workspaces minimize conflict retries; WT MVCC handles B+Tree concurrency |
-| **New-Order P50 / P95 Latency** | **0.72 ms / 5.86 ms** | **1.04 ms / 4.07 ms** | Sub-millisecond to ~1ms median execution for multi-table business transactions |
-| **Payment P50 / P95 Latency** | **0.13 ms / 3.34 ms** | **0.60 ms / 3.73 ms** | Ultra-fast O(1) slot variable lookup and point mutations |
+| **tpmC (New-Order / min)** | **365,912.96 tpmC** | **371,341.77 tpmC** | High contention resilience: Both engines deliver >365,000 tpmC with 1s periodic durability |
+| **Overall Throughput (TPS)** | **13,543.59 TPS** | **12,893.16 TPS** | Consistent sustained throughput under 20 workers competing for 2 warehouses |
+| **Serialization Abort Rate** | **3.22%** | **13.79%** | OCC private workspaces minimize conflict retries; WT MVCC handles B+Tree concurrency |
+| **New-Order P50 / P95 Latency** | **0.79 ms / 6.85 ms** | **1.15 ms / 4.66 ms** | Sub-millisecond to ~1ms median execution for multi-table business transactions |
+| **Payment P50 / P95 Latency** | **0.14 ms / 4.11 ms** | **0.69 ms / 4.16 ms** | Ultra-fast O(1) slot variable lookup and point mutations |
 | **Order-Status P50 Latency** | **0.01 ms** | **0.01 ms** | Microsecond-level read-only query dispatch across both backends |
-| **Delivery / Stock-Level P50** | **0.03 ms / 0.05 ms** | **0.05 ms / 0.06 ms** | Sub-millisecond multi-row DML and range scan latency |
+| **Delivery / Stock-Level P50** | **0.03 ms / 0.05 ms** | **0.06 ms / 0.06 ms** | Sub-millisecond multi-row DML and range scan latency |
 
-*(Note: Under `-fsync off`, In-Memory OCC reaches **19,522 TPS** (523,688 tpmC). Under `-fsync always`, Leader/Follower Group Commit reaches **1,744 TPS** on Apple Silicon NVMe despite physical `F_FULLFSYNC` barrier latencies).*
+*(Note: Under `-fsync always`, Leader/Follower Group Commit delivers **1,744 ~ 1,863 TPS** on Apple Silicon NVMe despite physical `F_FULLFSYNC` barrier latencies).*
 
 ---
 
@@ -184,7 +198,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
 
 ### 4.1. Query Memory Governor (`work_mem`) Tuning
 
-SQLion's relational engine enforces memory caps per operator (`ORDER BY`, `GROUP BY`, `HashJoin`):
+LionSQL's relational engine enforces memory caps per operator (`ORDER BY`, `GROUP BY`, `HashJoin`):
 - **Default Budget**: `64MB` (`-work-mem=64MB`).
 - **Low Memory Environments (< 2GB RAM)**:
   Set `-work-mem=16MB` to allow high concurrency without risking process OOM.
@@ -193,7 +207,7 @@ SQLion's relational engine enforces memory caps per operator (`ORDER BY`, `GROUP
 
 ### 4.2. Connection Pooler & Worker Sizing
 
-SQLion's internal pooler multiplexes client connections onto worker goroutines:
+LionSQL's internal pooler multiplexes client connections onto worker goroutines:
 - **`-max-workers`**:
   - Default: `NumCPU * 4`.
   - For compute-heavy or CPU-bound stored procedures, set `-max-workers=NumCPU * 2`.
@@ -212,6 +226,6 @@ Disk persistence and durability behavior is configurable across both `memory` an
 
 ### 4.4. Dual-Parser Plan Cache Optimization
 
-SQLion caches parsed ASTs and compiled VDBE bytecode programs:
+LionSQL caches parsed ASTs and compiled VDBE bytecode programs:
 - Parameterized queries (`SELECT * FROM accounts WHERE id = @id` or `$1`) avoid parser and compiler re-evaluation.
 - Prepared statements (`'P'` Parse over PostgreSQL wire protocol) are stored per connection in `statements` map and execute with sub-microsecond latency.

@@ -1,25 +1,25 @@
-# SQLion Official Web SDK & HTML Embedding Guide
+# LionSQL Official Web SDK & HTML Embedding Guide
 
-The official **SQLion Web SDK** provides a PocketBase-compatible, zero-dependency client library and HTML embedding patterns for Web Browsers, Node.js (v18+), Bun, Deno, Next.js, Nuxt, and Edge workers.
+The official **LionSQL Web SDK** provides a PocketBase-compatible, zero-dependency client library and HTML embedding patterns for Web Browsers, Node.js (v18+), Bun, Deno, Next.js, Nuxt, and Edge workers.
 
 ---
 
 ## 1. Quickstart & Installation
 
 ### Option A: Direct CDN / Script Tag (Zero Install)
-Load the SDK directly from your running SQLion server:
+Load the SDK directly from your running LionSQL server:
 ```html
 <script src="http://127.0.0.1:8090/sdk/sqlion.js"></script>
 <script>
-  const client = new SQLion('http://127.0.0.1:8090');
+  const client = new LionSQL('http://127.0.0.1:8090');
 </script>
 ```
 
 ### Option B: ES Module / NPM / Bundler
 ```javascript
-import SQLion from './sdk/sqlion.js';
+import LionSQL from './sdk/sqlion.js';
 
-const client = new SQLion('http://127.0.0.1:8090', {
+const client = new LionSQL('http://127.0.0.1:8090', {
   token: 'YOUR_JWT_OR_API_KEY' // optional initial token
 });
 ```
@@ -190,7 +190,7 @@ const res = await client.collection<Customer>('customers').getList(1, 10);
 
 ## 9. Web & HTML Embedding Recipes
 
-Because SQLion serves its REST API, SQL endpoint, realtime SSE stream, and JavaScript SDK from a single executable on port `:8090`, you can embed dynamic query results into HTML pages with zero build tools (no Node.js, npm, or webpack required).
+Because LionSQL serves its REST API, SQL endpoint, realtime SSE stream, and JavaScript SDK from a single executable on port `:8090`, you can embed dynamic query results into HTML pages with zero build tools (no Node.js, npm, or webpack required).
 
 ### 9.1. Pattern 1: Pure HTML + Vanilla `fetch()` (Zero-Dependency Single File)
 
@@ -201,7 +201,7 @@ Save this snippet as `query_table.html` and double-click to open in any web brow
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SQLion Query Viewer</title>
+  <title>LionSQL Query Viewer</title>
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 2rem; }
     table { border-collapse: collapse; width: 100%; max-width: 900px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
@@ -253,14 +253,14 @@ Save this snippet as `query_table.html` and double-click to open in any web brow
 
 ### 9.2. Pattern 2: Web SDK + Realtime SSE Live Reactive Dashboard
 
-This pattern connects directly to SQLion's built-in Server-Sent Events stream. When any background client mutates data (via `psql`, `sqlcmd`, or REST), the web table updates automatically without manual page refreshing:
+This pattern connects directly to LionSQL's built-in Server-Sent Events stream. When any background client mutates data (via `psql`, `sqlcmd`, or REST), the web table updates automatically without manual page refreshing:
 
 ```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>SQLion Realtime Live Dashboard</title>
+  <title>LionSQL Realtime Live Dashboard</title>
   <style>
     body { font-family: sans-serif; margin: 2rem; }
     .card { background: white; border: 1px solid #ddd; padding: 1rem; border-radius: 8px; max-width: 600px; margin-bottom: 1rem; }
@@ -271,11 +271,11 @@ This pattern connects directly to SQLion's built-in Server-Sent Events stream. W
   <h2>Live Accounts Monitor <span class="status">&#x25CF; Connected</span></h2>
   <div id="container">Connecting...</div>
 
-  <!-- Load Web SDK directly from SQLion server (zero npm dependencies) -->
+  <!-- Load Web SDK directly from LionSQL server (zero npm dependencies) -->
   <script type="module">
-    import SQLion from 'http://localhost:8090/sdk/sqlion.js';
+    import LionSQL from 'http://localhost:8090/sdk/sqlion.js';
 
-    const db = new SQLion('http://localhost:8090');
+    const db = new LionSQL('http://localhost:8090');
 
     // 1. Initial data fetch
     async function refresh() {
@@ -304,7 +304,7 @@ This pattern connects directly to SQLion's built-in Server-Sent Events stream. W
 
 ### 9.3. Pattern 3: Declarative HTMX (Zero-JavaScript Polling & Embedding)
 
-If you prefer declarative HTML without writing JavaScript, use [HTMX](https://htmx.org) with SQLion's REST or SQL endpoints:
+If you prefer declarative HTML without writing JavaScript, use [HTMX](https://htmx.org) with LionSQL's REST or SQL endpoints:
 
 ```html
 <!DOCTYPE html>
@@ -330,7 +330,7 @@ If you prefer declarative HTML without writing JavaScript, use [HTMX](https://ht
 
 ### 9.4. Pattern 4: T-SQL `FOR JSON PATH` Direct HTML Interpolation
 
-SQLion natively supports Microsoft T-SQL `FOR JSON PATH` queries. You can query structured JSON objects directly in SQL, avoiding client-side serialization:
+LionSQL natively supports Microsoft T-SQL `FOR JSON PATH` queries. You can query structured JSON objects directly in SQL, avoiding client-side serialization:
 
 ```javascript
 const res = await fetch('http://localhost:8090/api/sql', {

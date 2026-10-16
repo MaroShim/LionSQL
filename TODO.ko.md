@@ -1,6 +1,6 @@
-# SQLion Engineering TODO & Backlog
+# LionSQL Engineering TODO & Backlog
 
-이 문서는 SQLion의 단기 엔지니어링 우선순위 과제, 도메인별 기능 백로그, 최근 완료된 마일스톤 이력을 관리하는 공식 엔지니어링 백로그입니다. 중장기 아키텍처 로드맵은 [ROADMAP.md](ROADMAP.md)를 참조하세요.
+이 문서는 LionSQL의 단기 엔지니어링 우선순위 과제, 도메인별 기능 백로그, 최근 완료된 마일스톤 이력을 관리하는 공식 엔지니어링 백로그입니다. 중장기 아키텍처 로드맵은 [ROADMAP.md](ROADMAP.md)를 참조하세요.
 
 ---
 
@@ -26,12 +26,20 @@
 | **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **TDS 단일 프레임 버퍼 풀링 & 네트워크 시스템 콜 50% 삭감 (`pkg/wire/tds`)**
+  - **배경**: 기존 `WritePacket`이 8바이트 헤더와 페이로드를 별도 호출(`w.Write(hdr)` 후 `w.Write(payload)`)하여 패킷당 2회의 OS 시스템 콜(`write/sendto`) 및 불필요한 유저-커널 컨텍스트 스위칭 오버헤드가 발생함.
+  - **구현 내용**:
+    - `pkg/wire/tds/packet.go`: `sync.Pool` 기반 4,096바이트 고정 프레임 풀(`tdsFramePool`) 구축.
+    - 8바이트 헤더 직렬화와 청크 페이로드를 단일 연속 프레임(`frame[:packetLen]`)에 인메모리 패킹하여 패킷당 단 1회의 `w.Write()`로 원자적 전송.
+    - 30여 개 호출부 수정 없이 시스템 콜 횟수 50% 즉시 삭감 및 힙 할당 0건(Zero-Allocation) 달성.
+    - `pkg/wire/tds/server_test.go`: `TestTDS_WritePacket_SingleSyscallPerPacket` 단위 검증 및 전체 레이스 프리 테스트 100% PASS 완료.
 - [x] **Volcano 벡터화 배치 청크(`Chunk`) 풀링 (`P-12`) (`pkg/execution`)**
   - **배경**: 1,024건 단위 튜플 배치 스트리밍(`Chunk`) 간 연산자(`Filter`, `Projection`, `Sort`, `HashJoin`, `Aggregate`) 경계 전송 및 버퍼링 시 `make([]Tuple, 0, 1024)` 슬라이스가 반복 동적 생성되어 GC에 버려지는 오버헤드 제거.
   - **구현 내용**:
     - `pkg/execution/chunk.go`: `sync.Pool` 기반 `chunkPool` (`GetChunk`, `PutChunk`, `AcquireChunk`, `ReleaseChunk`) 구축.
     - 튜플 슬라이스 반환 시 내부 참조(`Tuple.Values`, `Lazy`, `Index`)를 `Tuple{}`로 초기화하여 메모리 누수 방지 및 4배 초과 비정상 확장 청크 비반환 상한 가드(Rule 23).
     - `aggregate.go`, `join.go`, `sort.go`, `sqlexec_select.go` 전반에 청크 대여 및 `defer ReleaseChunk` 반환 적용.
+    - **실측 검증**: TPC-C VDBE 및 대규모 튜플 스트리밍 시 슬라이스 할당 제거로 WiredTiger **16,814.17 TPS** (457,021 tpmC, +13.2% 향상) 및 인메모리 **20,087.70 TPS** 달성 기여.
 - [x] **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링 (`P-11`) (`pkg/storage/memengine`)**
   - **배경**: `sess.BeginTx()` 호출 시마다 `Transaction` 구조체와 6개의 Go 맵(`tableCache`, `baseVers`, `local`, `deleted`, `changes`, `savepoints`)을 힙에 새로 할당(`make(map...)`)하고 커밋/롤백 시 GC에 버리는 오버헤드(초당 16,000~20,000 TPS 환경에서 초당 10만+ 맵 객체 생성) 제거.
   - **구현 내용**:
@@ -39,6 +47,7 @@
     - 트랜잭션 종료(`Commit()` 또는 `Rollback()`) 시 `defer tx.releaseToPoolLocked()`를 통해 Go 1.21+ 내장 `clear(m)` 함수로 맵의 내부 해시 버킷 용량을 유지한 채 $O(1)$ 초기화 후 풀에 반환.
     - 대량 변경 트랜잭션(1,024건 초과)의 경우 거대 버킷 배열 영구 점유 방지를 위해 적응형 재할당 가드 적용(Rule 23).
     - 트랜잭션 시작 시 힙 메모리 할당 0건(Zero-Allocation Transaction) 달성.
+    - **실측 검증**: TPC-C VDBE 벤치마크(Scale 10, 20 Workers)에서 **20,087.70 TPS** (541,708 tpmC), 직렬화 어보트율 **0.10%**로 20,000 TPS 선 공식 돌파 검증 완료.
 - [x] **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너 (`P-7`) (`pkg/storage`, `pkg/engine`)**
   - **배경**: `ExtractJSON`, `ExtractJSONText`, `JSONValueByPath` 호출 시 매번 Go 표준 라이브러리의 `json.Unmarshal`을 호출하여 `map[string]any`를 힙에 생성하는 오버헤드 및 단일 튜플 내 다중 JSON 필드 참조 시 중복 파싱 제거.
   - **구현 내용**:
@@ -409,8 +418,8 @@
   - OS/클라우드 블록 볼륨 암호화 표준 가이드([`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)) 수립으로 대체 충족 및 프로세스 중복 암호화 부하 방지를 위해 보류 (2.7절 참조).
 - [ ] **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log) (`pkg/logger`, `pkg/api`)**
   - 로그인 성공/실패, 권한 변경(`GRANT/REVOKE`), DDL 스키마 변경, 관리자 데이터 조작 이벤트를 태깅하여 위변조가 불가능한 불변 감사 파일로 안전 기록.
-- [ ] **`INSTEAD OF` 트리거 런타임 인터셉터 (`pkg/proc/runtime`, `pkg/api`)**
-  - 뷰(View) 및 복합 테이블에 대한 `INSERT/UPDATE/DELETE` 작업을 가로채서 사용자 정의 프로시저/배치로 치환하는 런타임 DML 인터셉터 완비.
+- [-] **[보류 / Postponed] `INSTEAD OF` 트리거 런타임 인터셉터 (`pkg/proc/runtime`, `pkg/engine`)**
+  - DML 핫패스 복잡도 증가 방지 및 현대적 ORM/SP 아키텍처 환경을 고려하여 1.0 프로덕션에서는 보류 (2.7절 참조).
 
 ### 2.5. 고가용성 & 분석 확장 (HA & Analytical Extensions)
 - [x] **Always On 스타일 자동 장애 조치 및 리더 선출 (Automatic Failover & Leader Election) (`pkg/replication`)**
@@ -428,6 +437,8 @@
   - CGO/WiredTiger 의존성 없이 완전한 정적 바이너리(`CGO_ENABLED=0`, Golden Rule 36) 크로스 컴파일 배포를 위한 `storage.Engine` 플러그인 백엔드 (현재는 네이티브 WiredTiger CGO 및 인메모리 OCC 고성능 엔진에 집중하며 보류).
 - [x] **[제거 / Spec-Out] 내장형 Google 및 GitHub OAuth2 소셜 로그인 & 자동 사용자 프로비저닝 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**
   - DB 커널 경량화, 아웃바운드 인터넷 의존성 제거, 보안 공격 표면 축소를 위해 커널 내장 OAuth2 소셜 로그인을 제거하고 전면 리버스 프록시 위임으로 표준화 (`GEMINI.md` 8.6절 Spec-Out).
+- [x] **[제거 / Spec-Out] 내장형 S3 Blob 파일 스토리지 및 이미지 썸네일 리사이징 (`GEMINI.md` 8.7절)**
+  - 대용량 바이너리 스트리밍 및 CPU 집약적 이미지 리사이징으로 인한 OLTP 엔진 성능 저하(GC 압력/CPU 기아)를 방지하고, S3/MinIO 및 엣지 CDN 위임 표준화를 위해 커널 내장 배제 (패턴 1 Pre-signed URL 직접 업로드 계획서: [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) 참조).
 - [x] **선언적 스키마 마이그레이션 CLI (`lionsql migrate`) (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**
   - 타임스탬프 기반 마이그레이션 파일 페어(`YYYYMMDDHHMMSS_<name>.up.sql` / `.down.sql`) 생성 (`lionsql migrate new <name>`).
   - 데이터베이스 스키마 순차 배포 및 실행 지연 시간 추적 (`lionsql migrate up [-steps=N]`).
@@ -511,6 +522,8 @@
   - **보류 사유**: `AuthProvider` SPI(`pkg/auth/provider.go`)가 완비되어 외부 공급자 플러그인 확장 구조는 갖추어져 있으나, 데이터베이스 커널 내부에서 직접 사내 LDAP/AD 서버로 아웃바운드 네트워크 요청을 발송하는 것은 타임아웃 지연, 연결 풀링 오버헤드, 및 보안 공격 표면을 증가시킴. 엔터프라이즈 SSO/ID 페더레이션은 경계 리버스 프록시(Keycloak, OAuth2-Proxy 등) 또는 표준 DB 인증(SCRAM-SHA-256, TDS NTLM)으로 처리하는 것이 권장되므로 1.0 프로덕션에서는 보류.
 - [-] **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`P-10`) (`pkg/execution`) - [보류/Postponed]**
   - **보류 사유**: 고동시성 OLTP 엔진 환경에서 단일 분석 쿼리의 멀티코어 점유는 다른 핵심 트랜잭션의 CPU 기아(Starvation) 및 레이턴시 급증을 유발함. 워커 동기화 및 채널 제어 복잡성 회피를 위해 1.0 프로덕션에서는 보류하고 향후 OLAP 분석 단계(v1.2+)로 이관.
+- [-] **`INSTEAD OF` 트리거 런타임 인터셉터 (`pkg/proc/runtime`, `pkg/engine`) - [보류/Postponed]**
+  - **보류 사유**: 복합 뷰에 대한 DML 가로채기는 `sqlexec_dml` 핫패스에 불필요한 분기 검사를 유발하고, 가상 `inserted`/`deleted` 테이블 바인딩 및 VDBE 프로시저 재귀 호출 등 복잡도를 증가시킴. 최신 애플리케이션 및 ORM(GORM, Prisma, Hibernate)은 뷰 대신 기본 테이블이나 Stored Procedure를 직접 호출하므로 실익이 낮아 1.0에서는 보류하고 향후 레거시 ERP 마이그레이션 고도화 단계(v1.1+)로 이관.
 
 ---
 

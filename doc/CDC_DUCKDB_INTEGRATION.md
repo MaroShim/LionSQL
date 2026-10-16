@@ -1,13 +1,13 @@
-# SQLion CDC (Change Data Capture) & DuckDB Integration Guide
+# LionSQL CDC (Change Data Capture) & DuckDB Integration Guide
 
-SQLion은 고성능 OLTP 데이터베이스로서 트랜잭션의 신뢰성(ACID)과 초당 16,000+ TPS 이상의 처리량을 최우선으로 보장합니다. 본 문서는 SQLion의 코어 엔진을 가볍고 안전하게 유지하면서, **외부 분석 애플리케이션(Python, BI 툴, 분석 서버)에서 DuckDB를 임베딩하여 SQLion의 데이터를 실시간으로 고속 분석하는 분리형(Decoupled) CDC 연동 아키텍처**를 설명합니다.
+LionSQL은 고성능 OLTP 데이터베이스로서 트랜잭션의 신뢰성(ACID)과 초당 16,000+ TPS 이상의 처리량을 최우선으로 보장합니다. 본 문서는 LionSQL의 코어 엔진을 가볍고 안전하게 유지하면서, **외부 분석 애플리케이션(Python, BI 툴, 분석 서버)에서 DuckDB를 임베딩하여 LionSQL의 데이터를 실시간으로 고속 분석하는 분리형(Decoupled) CDC 연동 아키텍처**를 설명합니다.
 
 ---
 
 ## 1. 아키텍처 개요 (Decoupled Analytics Architecture)
 
 ```
-[ OLTP 영역: SQLion Server ]
+[ OLTP 영역: LionSQL Server ]
    ├── Port :5433 (PostgreSQL Wire Protocol)
    ├── Port :1433 (TDS / MSSQL Wire Protocol)
    └── Port :8090 (HTTP API & CDC Stream)
@@ -30,17 +30,17 @@ SQLion은 고성능 OLTP 데이터베이스로서 트랜잭션의 신뢰성(ACID
 
 ### 왜 분리형 아키텍처인가?
 1. **장애 격리 (Zero Blast Radius)**:
-   - 분석 쿼리가 수천만 건의 데이터를 조인/집계하다가 OOM(메모리 고갈)이 발생해도, SQLion OLTP 코어 엔진은 영향을 받지 않고 정상 동작합니다.
+   - 분석 쿼리가 수천만 건의 데이터를 조인/집계하다가 OOM(메모리 고갈)이 발생해도, LionSQL OLTP 코어 엔진은 영향을 받지 않고 정상 동작합니다.
 2. **단일 바이너리 경량성 유지 (KISS & Golden Rule 15, 36)**:
-   - SQLion 바이너리에 수십 MB 크기의 C++17 DuckDB 엔진을 얹지 않으므로 빌드 속도와 정적 실행 파일의 순수성이 유지됩니다.
+   - LionSQL 바이너리에 수십 MB 크기의 C++17 DuckDB 엔진을 얹지 않으므로 빌드 속도와 정적 실행 파일의 순수성이 유지됩니다.
 3. **분석 스케일아웃(Scale-Out)**:
-   - 동일한 SQLion CDC 엔드포인트를 여러 분석 워커나 데이터 과학자가 각자의 로컬 DuckDB에서 자유롭게 구독할 수 있습니다.
+   - 동일한 LionSQL CDC 엔드포인트를 여러 분석 워커나 데이터 과학자가 각자의 로컬 DuckDB에서 자유롭게 구독할 수 있습니다.
 
 ---
 
-## 2. SQLion CDC 스트리밍 API 명세
+## 2. LionSQL CDC 스트리밍 API 명세
 
-SQLion 서버 기동 시 (`:8090` HTTP 활성화), 다음과 같은 실시간 CDC 스트림 엔드포인트가 제공됩니다:
+LionSQL 서버 기동 시 (`:8090` HTTP 활성화), 다음과 같은 실시간 CDC 스트림 엔드포인트가 제공됩니다:
 
 - **엔드포인트**: `GET /api/cdc/stream`
 - **쿼리 파라미터**:
@@ -59,7 +59,7 @@ SQLion 서버 기동 시 (`:8090` HTTP 활성화), 다음과 같은 실시간 CD
 
 ## 3. Python + DuckDB 연동 샘플 코드 (`duckdb_cdc_worker.py`)
 
-Python 분석 환경에서 추가 라이브러리(Kafka, Debezium 등) 없이 표준 라이브러리와 `duckdb`만으로 SQLion의 변경 사항을 실시간 반영하는 예제입니다:
+Python 분석 환경에서 추가 라이브러리(Kafka, Debezium 등) 없이 표준 라이브러리와 `duckdb`만으로 LionSQL의 변경 사항을 실시간 반영하는 예제입니다:
 
 ```python
 #!/usr/bin/env python3
@@ -83,9 +83,9 @@ def run_cdc_ingestion():
     """)
     print("[DuckDB] Analytics database connected and table prepared.")
 
-    # 2. SQLion CDC 스트림 연결 (orders 테이블 구독)
+    # 2. LionSQL CDC 스트림 연결 (orders 테이블 구독)
     url = "http://127.0.0.1:8090/api/cdc/stream?table=orders"
-    print(f"[CDC Worker] Subscribing to SQLion CDC stream: {url}")
+    print(f"[CDC Worker] Subscribing to LionSQL CDC stream: {url}")
 
     req = urllib.request.Request(url)
     with urllib.request.urlopen(req) as resp:

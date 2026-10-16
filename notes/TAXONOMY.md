@@ -1,6 +1,6 @@
-# SQLion Task Identification Code Taxonomy & Catalog (`notes/TAXONOMY.md`)
+# LionSQL Task Identification Code Taxonomy & Catalog (`notes/TAXONOMY.md`)
 
-이 문서는 SQLion 프로젝트 전반에서 과제 관리, 로드맵 추적, 커밋 메시지 식별용으로 사용되는 **전체 식별 코드 체계(Taxonomy)와 도메인별 과제 일람표**입니다.
+이 문서는 LionSQL 프로젝트 전반에서 과제 관리, 로드맵 추적, 커밋 메시지 식별용으로 사용되는 **전체 식별 코드 체계(Taxonomy)와 도메인별 과제 일람표**입니다.
 
 과거 완료된 마일스톤부터 현재 진행 중인 과제, 향후 착수할 백로그까지 고유 식별자(ID)를 통해 일관되게 추적할 수 있도록 정의합니다.
 
@@ -75,7 +75,7 @@
 
 ## 5. T-SQL & ANSI SQL 문법 완비 트랙 (`S-1` ~ `S-7`, 전 항목 완료)
 
-SQLion 네이티브 파서 및 바이트코드 엔진에서 공식 지원하는 7대 핵심 SQL 문법 체계입니다.
+LionSQL 네이티브 파서 및 바이트코드 엔진에서 공식 지원하는 7대 핵심 SQL 문법 체계입니다.
 
 | 코드 | 과제명 | 상태 | 구현 상세 및 지원 문법 | 대상 패키지 |
 | :---: | :--- | :---: | :--- | :--- |

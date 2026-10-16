@@ -1,6 +1,6 @@
-# Contributing to SQLion
+# Contributing to LionSQL
 
-Thank you for your interest in contributing to SQLion! This guide explains our engineering standards, architecture invariants, development workflow, and verification pipeline.
+Thank you for your interest in contributing to LionSQL! This guide explains our engineering standards, architecture invariants, development workflow, and verification pipeline.
 
 ---
 
@@ -10,7 +10,7 @@ Thank you for your interest in contributing to SQLion! This guide explains our e
 - **WiredTiger (Optional for Cgo production backend)**:
   - macOS: `brew install wiredtiger`
   - Ubuntu/Debian: `sudo apt-get install libwiredtiger-dev`
-- Note: SQLion can also be built and developed in pure Go without WiredTiger or Cgo:
+- Note: LionSQL can also be built and developed in pure Go without WiredTiger or Cgo:
   ```bash
   go build -buildvcs=false -o bin/server ./cmd/server
   ```
@@ -84,7 +84,7 @@ Contributors must observe the following engineering golden rules:
 
 ## 4. Dual-Parser Architecture Invariant
 
-SQLion enforces a **Dual-Parser Architecture**:
+LionSQL enforces a **Dual-Parser Architecture**:
 1. **Primary Fast-Path (Native Pratt Parser)**: `pkg/proc/lexer.go`, `pkg/proc/parser.go`.
 2. **Secondary Fallback (Official ANTLR4 T-SQL Parser)**: `pkg/proc/parser/antlr/`.
 

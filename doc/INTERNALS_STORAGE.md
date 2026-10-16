@@ -1,6 +1,6 @@
-# SQLion Internals: Storage Engine Mechanics (WiredTiger MVCC & Pure-Go OCC)
+# LionSQL Internals: Storage Engine Mechanics (WiredTiger MVCC & Pure-Go OCC)
 
-This document details the low-level data structures, concurrency control mechanisms, index layouts, and crash persistence strategies implemented in SQLion's storage subsystem (`pkg/storage/`).
+This document details the low-level data structures, concurrency control mechanisms, index layouts, and crash persistence strategies implemented in LionSQL's storage subsystem (`pkg/storage/`).
 
 ---
 
@@ -37,7 +37,7 @@ type Transaction interface {
 
 ## 2. WiredTiger Storage Backend (`pkg/storage/wiredtiger/`)
 
-WiredTiger is the default production disk storage engine for SQLion, integrated via Cgo to MongoDB's libwiredtiger.
+WiredTiger is the default production disk storage engine for LionSQL, integrated via Cgo to MongoDB's libwiredtiger.
 
 ```
                   +----------------------------------------------+
@@ -187,7 +187,7 @@ When the `wal.aof` file exceeds threshold (default 64MB):
 ## 4. Value Representation, Fast-Paths & Ephemeral Mode (v0.11.0)
 
 ### 4.1. `storage.Value` Integer Fast-Paths
-Point lookups, primary key equality tests, and SkipList index searches account for the highest frequency operations in OLTP workloads. SQLion optimizes `storage.Value`:
+Point lookups, primary key equality tests, and SkipList index searches account for the highest frequency operations in OLTP workloads. LionSQL optimizes `storage.Value`:
 - **`Value.Equal` Fast-Path**:
   ```go
   if v.Type == TypeInt && other.Type == TypeInt && !v.IsNull && !other.IsNull {
@@ -201,7 +201,7 @@ Point lookups, primary key equality tests, and SkipList index searches account f
   Replaces `fmt.Sprintf` reflection on hot paths with `strconv.FormatInt(v.IVal, 10)` and `strconv.FormatBool(v.BVal)`.
 
 ### 4.2. In-Memory Ephemeral Engine Mode (`--ephemeral`)
-For testing, embedded caches, and ephemeral compute pods, SQLion supports pure in-memory operation:
+For testing, embedded caches, and ephemeral compute pods, LionSQL supports pure in-memory operation:
 - Invoked via `--ephemeral` flag or `ephemeral: true` configuration.
 - Completely suppresses WAL/AOF log disk writes, background fsyncs, and table snapshot creation.
 - Inspected via `DBCC PERSISTENCE` and `DBCC USEROPTIONS`.
@@ -210,7 +210,7 @@ For testing, embedded caches, and ephemeral compute pods, SQLion supports pure i
 
 ## 5. Physical Storage Directory Layout, Metadata & Secondary Index Persistence
 
-SQLion organizes its physical data directory (`--data-dir`) cleanly, decoupling table data, metadata catalogs, query optimizer statistics, and secondary indexes.
+LionSQL organizes its physical data directory (`--data-dir`) cleanly, decoupling table data, metadata catalogs, query optimizer statistics, and secondary indexes.
 
 ### 5.1. Data Directory Physical File Layout
 
@@ -309,7 +309,7 @@ Statistics gathered via `ANALYZE TABLE <name>` are separated from schema definit
 
 ### 5.4. Secondary Index Storage & Persistence Mechanics
 
-SQLion provides secondary indexing across both storage engines, using engine-optimized persistence strategies:
+LionSQL provides secondary indexing across both storage engines, using engine-optimized persistence strategies:
 
 #### 1. WiredTiger MVCC Disk Engine
 - **Metadata Registration**: Index definitions (`storage.IndexSchema`) are stored in `catalog.json` within the table's schema.

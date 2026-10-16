@@ -1,19 +1,19 @@
-# SQLion Security Policy & Threat Modeling
+# LionSQL Security Policy & Threat Modeling
 
-This document outlines SQLion's security architecture, threat mitigations, authentication mechanisms, hardening guidelines, and responsible vulnerability disclosure policy.
+This document outlines LionSQL's security architecture, threat mitigations, authentication mechanisms, hardening guidelines, and responsible vulnerability disclosure policy.
 
 ---
 
 ## 1. Security Architecture & Threat Mitigations
 
-SQLion enforces defense-in-depth principles across its compiler, network protocols, execution VM, and storage engines.
+LionSQL enforces defense-in-depth principles across its compiler, network protocols, execution VM, and storage engines.
 
 ### 1.1. SQL Injection Immunity
 - **Parameter Substitution**: The PostgreSQL Extended Query Protocol (`Parse`, `Bind`, `Execute`) and TDS RPC protocols separate SQL AST parsing from parameter evaluation. Arguments are passed as typed parameters (`$1`, `$2` or `@from`, `@to`) rather than string concatenations.
 - **AST Quoting & Escaping**: When literals must be interpolated internally (`substituteParams`), single quotes are escaped (`''`) and numeric types are validated via `strconv.ParseFloat` before substitution.
 
 ### 1.2. Shell Injection Immunity (Golden Rule 3)
-SQLion **never** invokes external operating system shells (`sh -c`, `cmd.exe`, `bash`). When external processes are spawned (e.g. daemon fork management), parsed argument vectors are passed directly to `exec.Command` without shell interpretation.
+LionSQL **never** invokes external operating system shells (`sh -c`, `cmd.exe`, `bash`). When external processes are spawned (e.g. daemon fork management), parsed argument vectors are passed directly to `exec.Command` without shell interpretation.
 
 ### 1.3. Defensive Path Security & Traversal Guards (Golden Rule 5)
 - All user-supplied file paths (backup files, restore archives, data directories) are normalized using `filepath.Clean`.
@@ -24,7 +24,7 @@ SQLion **never** invokes external operating system shells (`sh -c`, `cmd.exe`, `
 Database state snapshots (`tables.mpk`), backup archives, and configuration files are written to temporary swap files (`*.tmp`) and flushed via `file.Sync()` before executing an atomic filesystem rename (`os.Rename`). A sudden power interruption or system crash cannot produce zero-byte truncated database files.
 
 ### 1.5. Data-at-Rest Encryption (Storage Subsystem Standard)
-SQLion delegates data-at-rest encryption to the underlying OS and cloud block storage subsystems (Linux LUKS2 / dm-crypt, AWS EBS Encryption, GCP CMEK, Azure Managed Disk Encryption) rather than in-process software TDE. This eliminates double-encryption CPU overhead, harnesses dedicated AES-NI hardware instructions, and isolates key custody from the database runtime. See the comprehensive [Storage Encryption Guide](STORAGE_ENCRYPTION_GUIDE.md) for full deployment procedures.
+LionSQL delegates data-at-rest encryption to the underlying OS and cloud block storage subsystems (Linux LUKS2 / dm-crypt, AWS EBS Encryption, GCP CMEK, Azure Managed Disk Encryption) rather than in-process software TDE. This eliminates double-encryption CPU overhead, harnesses dedicated AES-NI hardware instructions, and isolates key custody from the database runtime. See the comprehensive [Storage Encryption Guide](STORAGE_ENCRYPTION_GUIDE.md) for full deployment procedures.
 
 ---
 
@@ -47,7 +47,7 @@ For client-side applications and microservices:
 ## 3. Network Security & Production Hardening
 
 ### 3.1. TLS/SSL Termination Architecture
-SQLion serves unencrypted wire protocols (`:5433`, `:1433`) and HTTP (`:8090`) designed for high-throughput private VPC deployment. For external traffic:
+LionSQL serves unencrypted wire protocols (`:5433`, `:1433`) and HTTP (`:8090`) designed for high-throughput private VPC deployment. For external traffic:
 - Terminate TLS/HTTPS at a reverse proxy (Caddy, Nginx, Envoy, or AWS ALB).
 - Never expose ports `8090`, `5433`, or `1433` directly to the public internet without a firewall or VPN.
 
@@ -68,7 +68,7 @@ sudo ufw allow from 10.0.1.0/24 to any port 8090 proto tcp
 
 ## 4. Vulnerability Disclosure Policy
 
-If you discover a security vulnerability in SQLion, please report it responsibly rather than opening a public issue.
+If you discover a security vulnerability in LionSQL, please report it responsibly rather than opening a public issue.
 
 ### Reporting Procedure
 - **Email**: Send detailed reproduction steps, proof-of-concept scripts, and affected versions to `security@sqlion.local` (or create a private GitHub Security Advisory).

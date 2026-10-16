@@ -1,6 +1,6 @@
-# SQLion HTTP REST API & Realtime SSE Specification
+# LionSQL HTTP REST API & Realtime SSE Specification
 
-SQLion provides an embedded, zero-dependency PocketBase-style HTTP REST API and Server-Sent Events (SSE) streaming engine on port `8090` (configurable via `-http`).
+LionSQL provides an embedded, zero-dependency PocketBase-style HTTP REST API and Server-Sent Events (SSE) streaming engine on port `8090` (configurable via `-http`).
 
 ---
 
@@ -125,7 +125,7 @@ Drops the specified table and its secondary indexes.
 
 ### 2.2. Records CRUD (Auto-Generated RESTful Endpoints)
 
-SQLion automatically exposes standard RESTful CRUD endpoints for every table. For detailed documentation on filtering operators, nested expressions, and client SDK integration, see [Auto-Generated RESTful API Guide](AUTO_REST_API.md).
+LionSQL automatically exposes standard RESTful CRUD endpoints for every table. For detailed documentation on filtering operators, nested expressions, and client SDK integration, see [Auto-Generated RESTful API Guide](AUTO_REST_API.md).
 
 #### `GET /api/records/:table` (or `/api/tables/:name/records`)
 Fetches records with built-in query filtering, multi-column sorting, pagination, and full-text search.
@@ -401,7 +401,7 @@ Monitors internal goroutine connection pooler and worker status.
 
 ## 7. Webhook Dispatch Engine
 
-SQLion features an embedded, asynchronous Webhook Dispatch Engine. Whenever records are created, updated, deleted, or imported via REST or T-SQL, configured webhooks receive asynchronous HTTP `POST` notifications with exponential backoff retries and HMAC-SHA256 signature verification.
+LionSQL features an embedded, asynchronous Webhook Dispatch Engine. Whenever records are created, updated, deleted, or imported via REST or T-SQL, configured webhooks receive asynchronous HTTP `POST` notifications with exponential backoff retries and HMAC-SHA256 signature verification.
 
 ### 7.1. `GET /api/webhooks`
 Lists all registered webhooks.
@@ -445,16 +445,16 @@ Clears the in-memory delivery history ring buffer.
 ### 7.7. HMAC Signature Verification
 If a `secret` is configured, outgoing webhooks include a signature header:
 ```http
-X-SQLion-Signature: sha256=<hex_hmac_sha256(secret, payload)>
-X-SQLion-Event: create
-X-SQLion-Delivery: <delivery_uuid>
+X-LionSQL-Signature: sha256=<hex_hmac_sha256(secret, payload)>
+X-LionSQL-Event: create
+X-LionSQL-Delivery: <delivery_uuid>
 ```
 
 ---
 
 ## 8. Declarative Row-Level Security (RLS)
 
-SQLion provides declarative, PocketBase-style Row-Level Security rules configured per table. Rules control `list`, `view`, `create`, `update`, and `delete` operations on REST endpoints (`/api/records/:table` and `/api/tables/:table/records`).
+LionSQL provides declarative, PocketBase-style Row-Level Security rules configured per table. Rules control `list`, `view`, `create`, `update`, and `delete` operations on REST endpoints (`/api/records/:table` and `/api/tables/:table/records`).
 
 ### 8.1. Rule Types & Execution
 - **`list_rule`**: Conjoined as an automatic WHERE filter into all list queries. If empty, public access is allowed. If set to an impossible condition (e.g. `false`), list queries return empty results.
@@ -494,7 +494,7 @@ Clears all RLS rules for a table, restoring unrestricted public access.
 
 ## 9. Cron Jobs & Recurring Scheduler
 
-SQLion features an embedded, non-blocking Cron Scheduler supporting standard 5-field cron syntax (`min hour dom month dow`).
+LionSQL features an embedded, non-blocking Cron Scheduler supporting standard 5-field cron syntax (`min hour dom month dow`).
 
 ### 9.1. `GET /api/crons`
 Lists all registered cron jobs.
@@ -570,7 +570,7 @@ Dispatches a password reset link to the specified email address using the `passw
 
 ## 11. Client SDK Static Distribution
 
-SQLion hosts the official client library directly for zero-dependency browser integration.
+LionSQL hosts the official client library directly for zero-dependency browser integration.
 
 - `GET /sdk/sqlion.js`: Universal JavaScript Client SDK bundle (`Content-Type: application/javascript`)
 - `GET /sdk/sqlion.d.ts`: TypeScript Declaration definitions (`Content-Type: text/typescript`)
@@ -579,7 +579,7 @@ SQLion hosts the official client library directly for zero-dependency browser in
 
 ## 12. High-Availability & WAL Replication Endpoints
 
-SQLion supports 1-Writer Multi-Reader High-Availability clustering with linear WAL streaming and zero-downtime failover promotion.
+LionSQL supports 1-Writer Multi-Reader High-Availability clustering with linear WAL streaming and zero-downtime failover promotion.
 
 ### 12.1. `GET /api/replication/status`
 Returns the replication state, role, committed LSN, and follower statuses.

@@ -1,6 +1,6 @@
-# SQLion Observability, Metrics & Telemetry Guide
+# LionSQL Observability, Metrics & Telemetry Guide
 
-SQLion provides comprehensive telemetry, performance metrics, and health probe interfaces to ensure production observability across containerized and bare-metal environments. This guide details the metrics dictionary, Prometheus scraping integration, health probe endpoints, and Grafana dashboard recommendations.
+LionSQL provides comprehensive telemetry, performance metrics, and health probe interfaces to ensure production observability across containerized and bare-metal environments. This guide details the metrics dictionary, Prometheus scraping integration, health probe endpoints, and Grafana dashboard recommendations.
 
 ---
 
@@ -8,7 +8,7 @@ SQLion provides comprehensive telemetry, performance metrics, and health probe i
 
 ```
   ┌──────────────────────────────────────────────────────────┐
-  │                     SQLion Server                        │
+  │                     LionSQL Server                        │
   │                                                          │
   │   [ Connection Pool ]  [ Query Engine ]  [ Storage Engine]
   │           │                   │                 │        │
@@ -80,7 +80,7 @@ Exposes real-time worker utilization, queue backpressure, and session allocation
 
 ## 4. Prometheus Metrics Dictionary
 
-When running with Prometheus telemetry enabled, SQLion exports standard OpenMetrics/Prometheus formatted time-series:
+When running with Prometheus telemetry enabled, LionSQL exports standard OpenMetrics/Prometheus formatted time-series:
 
 ### 4.1 Connection Pool & Concurrency Metrics
 
@@ -113,7 +113,7 @@ When running with Prometheus telemetry enabled, SQLion exports standard OpenMetr
 
 ## 5. Prometheus Configuration Example
 
-Add SQLion as a scrape target in your `prometheus.yml`:
+Add LionSQL as a scrape target in your `prometheus.yml`:
 
 ```yaml
 scrape_configs:
@@ -135,30 +135,30 @@ scrape_configs:
 groups:
   - name: sqlion_alerts
     rules:
-      - alert: SQLionPoolSaturation
+      - alert: LionSQLPoolSaturation
         expr: sqlion_pool_queued_requests > 10
         for: 1m
         labels:
           severity: warning
         annotations:
-          summary: "SQLion connection pool backpressure detected"
+          summary: "LionSQL connection pool backpressure detected"
           description: "Over 10 requests queued for more than 1 minute on {{ $labels.instance }}."
 
-      - alert: SQLionHighQueryLatencyP99
+      - alert: LionSQLHighQueryLatencyP99
         expr: histogram_quantile(0.99, rate(sqlion_query_duration_seconds_bucket[5m])) > 0.5
         for: 2m
         labels:
           severity: warning
         annotations:
-          summary: "SQLion P99 latency exceeding 500ms"
+          summary: "LionSQL P99 latency exceeding 500ms"
           description: "99th percentile query latency is {{ $value }}s on {{ $labels.instance }}."
 
-      - alert: SQLionInstanceDown
+      - alert: LionSQLInstanceDown
         expr: up{job="sqlion"} == 0
         for: 30s
         labels:
           severity: critical
         annotations:
-          summary: "SQLion instance unreachable"
-          description: "SQLion instance {{ $labels.instance }} failed liveness checks."
+          summary: "LionSQL instance unreachable"
+          description: "LionSQL instance {{ $labels.instance }} failed liveness checks."
 ```

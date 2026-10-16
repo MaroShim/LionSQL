@@ -1,12 +1,12 @@
-# SQLion Data Dictionary & Virtual System Catalog
+# LionSQL Data Dictionary & Virtual System Catalog
 
-SQLion provides built-in virtual system catalog views adhering to both Microsoft SQL Server (`sys.*`) and ANSI/ISO standard (`information_schema.*`) specifications. These virtual views allow standard database client tools—such as DBeaver, JetBrains DataGrip, SQL Server Management Studio (SSMS), Azure Data Studio, Navicat, and `psql`—to inspect schemas, tables, columns, indexes, procedures, and query optimizer statistics seamlessly.
+LionSQL provides built-in virtual system catalog views adhering to both Microsoft SQL Server (`sys.*`) and ANSI/ISO standard (`information_schema.*`) specifications. These virtual views allow standard database client tools—such as DBeaver, JetBrains DataGrip, SQL Server Management Studio (SSMS), Azure Data Studio, Navicat, and `psql`—to inspect schemas, tables, columns, indexes, procedures, and query optimizer statistics seamlessly.
 
 ---
 
 ## 1. Architecture & Emulation Model
 
-All catalog queries against `sys.*` and `information_schema.*` are intercepted dynamically in the query execution layer (`pkg/api/sqlexec.go`). Rather than persisting static tables, SQLion constructs catalog representations on-the-fly from the underlying storage metadata, procedure catalog (`pkg/proc/catalog.go`), and cost-based optimizer table statistics (`pkg/cbo/statistics.go`).
+All catalog queries against `sys.*` and `information_schema.*` are intercepted dynamically in the query execution layer (`pkg/api/sqlexec.go`). Rather than persisting static tables, LionSQL constructs catalog representations on-the-fly from the underlying storage metadata, procedure catalog (`pkg/proc/catalog.go`), and cost-based optimizer table statistics (`pkg/cbo/statistics.go`).
 
 Supported naming conventions include dot notation (`sys.tables`, `information_schema.tables`), underscore notation (`sys_tables`), unified shorthand (`systables`), and schema prefixes (`dbo.sys.tables`).
 
@@ -33,7 +33,7 @@ Supported naming conventions include dot notation (`sys.tables`, `information_sc
 ```
 
 > [!NOTE]
-> While catalog queries are emulated dynamically through virtual views, physical schema definitions and optimizer statistics are persisted to disk via `catalog.json` and `cbo_stats.json` in the instance data directory. For low-level details on physical directory layouts, atomic persistence, and secondary index structures, see [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/SQLion/doc/INTERNALS_STORAGE.md#5-physical-storage-directory-layout-metadata--secondary-index-persistence).
+> While catalog queries are emulated dynamically through virtual views, physical schema definitions and optimizer statistics are persisted to disk via `catalog.json` and `cbo_stats.json` in the instance data directory. For low-level details on physical directory layouts, atomic persistence, and secondary index structures, see [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_STORAGE.md#5-physical-storage-directory-layout-metadata--secondary-index-persistence).
 
 ---
 
@@ -75,7 +75,7 @@ Provides structural information regarding all columns across all registered tabl
 |---|---|---|---|
 | `table_name` | `VARCHAR(128)` | NO | Name of the parent table. |
 | `column_name` | `VARCHAR(128)` | NO | Name of the column. |
-| `data_type` | `VARCHAR(64)` | NO | SQLion data type representation (`INT`, `BIGINT`, `VARCHAR(n)`, `FLOAT`, `BOOLEAN`, `JSON`, `BLOB`, `DATETIME`). |
+| `data_type` | `VARCHAR(64)` | NO | LionSQL data type representation (`INT`, `BIGINT`, `VARCHAR(n)`, `FLOAT`, `BOOLEAN`, `JSON`, `BLOB`, `DATETIME`). |
 | `is_nullable` | `VARCHAR(3)` | NO | `'YES'` if column permits NULL values, `'NO'` otherwise. |
 | `is_primary_key` | `BOOLEAN` | NO | `true` if column forms part of the primary key, `false` otherwise. |
 | `ordinal_position` | `INTEGER` | NO | 1-based sequential position of the column within the table. |
@@ -118,7 +118,7 @@ WHERE table_name = 'orders';
 
 ### 5.1 `sys.databases` / `information_schema.schemata`
 
-Lists the databases hosted by the current SQLion instance.
+Lists the databases hosted by the current LionSQL instance.
 
 - **Aliases**: `sys.databases`, `sysdatabases`, `sys_databases`, `information_schema.schemata`
 
@@ -162,7 +162,7 @@ ORDER BY routine_name ASC;
 
 ## 7. Cost-Based Optimizer Statistics Views
 
-SQLion exposes its internal Volcano Cost-Based Optimizer (CBO) catalog statistics through virtual views to allow query tuning and execution plan analysis.
+LionSQL exposes its internal Volcano Cost-Based Optimizer (CBO) catalog statistics through virtual views to allow query tuning and execution plan analysis.
 
 ### 7.1 `sys.table_stats`
 
@@ -204,7 +204,7 @@ WHERE table_name = 'customers';
 
 ## 8. Client Tool Compatibility Matrix
 
-| Client Tool | Protocol | Catalog Query Strategy | SQLion Compatibility |
+| Client Tool | Protocol | Catalog Query Strategy | LionSQL Compatibility |
 |---|---|---|---|
 | **DBeaver** | PostgreSQL (`:5433`) | Queries `information_schema.tables`, `information_schema.columns` | Full native tree navigation |
 | **DataGrip** | PostgreSQL (`:5433`) | Queries `information_schema` and `pg_catalog` | Full schema inspection |

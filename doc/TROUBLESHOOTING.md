@@ -1,6 +1,6 @@
-# SQLion Troubleshooting, Error Diagnostics & FAQ
+# LionSQL Troubleshooting, Error Diagnostics & FAQ
 
-This guide provides actionable solutions for common deployment, connectivity, query optimization, and storage engine issues encountered when operating SQLion.
+This guide provides actionable solutions for common deployment, connectivity, query optimization, and storage engine issues encountered when operating LionSQL.
 
 ---
 
@@ -14,7 +14,7 @@ Failed to start PostgreSQL wire protocol listener: listen tcp 127.0.0.1:5433: bi
 ```
 
 #### Cause
-Another process (or an existing instance of PostgreSQL or SQLion) is already bound to port `5433`, `1433`, or `8090`.
+Another process (or an existing instance of PostgreSQL or LionSQL) is already bound to port `5433`, `1433`, or `8090`.
 
 #### Resolution
 1. Identify the occupying process:
@@ -34,7 +34,7 @@ Another process (or an existing instance of PostgreSQL or SQLion) is already bou
 
 #### Symptom
 ```
-[SQLion] Failed to open WiredTiger storage engine: wiredtiger_open failed with code 2: No such file or directory
+[LionSQL] Failed to open WiredTiger storage engine: wiredtiger_open failed with code 2: No such file or directory
 ```
 
 #### Cause
@@ -146,7 +146,7 @@ psql: error: connection to server at "127.0.0.1", port 5433 failed: server does 
 ```
 
 #### Resolution
-SQLion serves unencrypted wire protocol internally, intended to run behind a TLS-terminating reverse proxy (Nginx/Caddy) or private VPC. Specify `sslmode=disable`:
+LionSQL serves unencrypted wire protocol internally, intended to run behind a TLS-terminating reverse proxy (Nginx/Caddy) or private VPC. Specify `sslmode=disable`:
 ```bash
 psql "host=127.0.0.1 port=5433 user=admin dbname=sqlion sslmode=disable"
 ```

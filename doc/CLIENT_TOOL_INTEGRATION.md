@@ -1,12 +1,12 @@
-# SQLion Client & GUI Tool Integration Guide (`doc/CLIENT_TOOL_INTEGRATION.md`)
+# LionSQL Client & GUI Tool Integration Guide (`doc/CLIENT_TOOL_INTEGRATION.md`)
 
-This document provides a comprehensive integration and connectivity guide for GUI management tools, command-line interfaces (CLIs), and official language drivers communicating with SQLion via PostgreSQL Wire Protocol v3 (`:5433`) and Microsoft SQL Server TDS Protocol (`:1433`).
+This document provides a comprehensive integration and connectivity guide for GUI management tools, command-line interfaces (CLIs), and official language drivers communicating with LionSQL via PostgreSQL Wire Protocol v3 (`:5433`) and Microsoft SQL Server TDS Protocol (`:1433`).
 
 ---
 
 ## 1. Multi-Protocol Overview & Default Ports
 
-SQLion acts as a zero-external-dependency database engine that concurrently serves both PostgreSQL and Microsoft SQL Server clients out of a single static executable (`bin/server`).
+LionSQL acts as a zero-external-dependency database engine that concurrently serves both PostgreSQL and Microsoft SQL Server clients out of a single static executable (`bin/server`).
 
 | Protocol | Default Port | Default Superuser | Password | Database Name | Standard Client Ecosystem |
 |---|---|---|---|---|---|
@@ -14,7 +14,7 @@ SQLion acts as a zero-external-dependency database engine that concurrently serv
 | **Microsoft SQL Server (TDS 7.x/8.0)** | `1433` (TCP) | `sa` (or `admin`) | Any / Empty (Dev) | `sqlion` (or `master`) | Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, go-mssqldb, pymssql |
 | **HTTP REST & Studio** | `8090` (TCP) | `admin@sqlion.local` | `1234567890` | `sqlion` | Embedded Web Studio (`/_/`), curl, OpenAPI, fetch |
 
-> Note: SQLion enforces **Instance-Based Database Isolation** (GEMINI.md Section 3). Each server process hosts exactly one isolated database catalog per data directory (`--data-dir`).
+> Note: LionSQL enforces **Instance-Based Database Isolation** (GEMINI.md Section 3). Each server process hosts exactly one isolated database catalog per data directory (`--data-dir`).
 
 ---
 
@@ -22,7 +22,7 @@ SQLion acts as a zero-external-dependency database engine that concurrently serv
 
 ### 2.1. Beekeeper Studio
 
-Beekeeper Studio can connect to SQLion in either **PostgreSQL** or **SQL Server** mode.
+Beekeeper Studio can connect to LionSQL in either **PostgreSQL** or **SQL Server** mode.
 
 #### Option A: PostgreSQL Connection Mode (Recommended for General GUI Browsing)
 1. Select **Postgres** from the New Connection menu.
@@ -32,7 +32,7 @@ Beekeeper Studio can connect to SQLion in either **PostgreSQL** or **SQL Server*
    - **User**: `postgres`
    - **Password**: Leave empty or enter any string.
    - **Default Database**: `sqlion`
-   - **SSL**: `Disable` (unless SQLion was started with `-tls` and `-require-ssl`).
+   - **SSL**: `Disable` (unless LionSQL was started with `-tls` and `-require-ssl`).
 3. Click **Test** and **Connect**.
 4. Supported features:
    - Live table schema browsing with column types, primary keys, and nullability.
@@ -102,7 +102,7 @@ Beekeeper Studio can connect to SQLion in either **PostgreSQL** or **SQL Server*
 
 ### 2.4. DbGate Universal Database Manager
 
-DbGate is an open-source database manager that supports connecting to SQLion via either PostgreSQL or Microsoft SQL Server (TDS).
+DbGate is an open-source database manager that supports connecting to LionSQL via either PostgreSQL or Microsoft SQL Server (TDS).
 
 #### Option A: PostgreSQL Connection
 1. New Connection -> **PostgreSQL**.
@@ -170,7 +170,7 @@ sqlcmd -S 127.0.0.1,1433 -U sa -d sqlion -Q "SELECT @@VERSION; SELECT * FROM cus
 
 ### 4.1. Go (`pgx/v5` - Modern PostgreSQL Driver)
 
-SQLion is fully validated against `github.com/jackc/pgx/v5` with Extended Query Protocol, binary format encoding, and pipelining:
+LionSQL is fully validated against `github.com/jackc/pgx/v5` with Extended Query Protocol, binary format encoding, and pipelining:
 
 ```go
 package main
@@ -207,7 +207,7 @@ func main() {
 
 ### 4.2. Go (`github.com/microsoft/go-mssqldb` - Official MSSQL Driver)
 
-SQLion supports `PacketTransactionManager` (0x0E), explicit transaction descriptors, `sp_prepare` / `sp_execute`, and TDS session settings:
+LionSQL supports `PacketTransactionManager` (0x0E), explicit transaction descriptors, `sp_prepare` / `sp_execute`, and TDS session settings:
 
 ```go
 package main
@@ -291,10 +291,10 @@ conn.close()
 
 ## 5. Architectural Machinery: Virtual Catalog Interceptors
 
-GUI clients rely heavily on deep metadata introspection to display left-side object trees, column types, default values, and foreign keys. Rather than building heavy in-memory tables for hundreds of internal catalog tables, SQLion implements **Lightweight Virtual Catalog Interceptors** (`pkg/api/sqlexec_pgcatalog.go` and `sqlexec_dbcc.go`).
+GUI clients rely heavily on deep metadata introspection to display left-side object trees, column types, default values, and foreign keys. Rather than building heavy in-memory tables for hundreds of internal catalog tables, LionSQL implements **Lightweight Virtual Catalog Interceptors** (`pkg/api/sqlexec_pgcatalog.go` and `sqlexec_dbcc.go`).
 
 ### 5.1. PostgreSQL Catalog Views
-When clients query standard catalog tables, SQLion intercepts the queries before physical execution:
+When clients query standard catalog tables, LionSQL intercepts the queries before physical execution:
 - `pg_class`, `pg_namespace`, `pg_attribute`, `pg_type`: Deterministic OIDs (`16384` for base user tables, standard PostgreSQL OIDs for data types like `23` for int4, `1043` for varchar, `1700` for numeric).
 - `pg_constraint`, `information_schema.table_constraints`, `information_schema.key_column_usage`: Emits primary key, unique, and foreign key definitions so that ERD visualizers (DBeaver, Beekeeper) render relationship arrows accurately.
 - `pg_proc`: Emits registered stored procedures and functions.
@@ -308,7 +308,7 @@ GUI tools connecting via TDS frequently send complex vendor-specific JOIN expres
   LEFT JOIN sys.computed_columns sc ON ...
   WHERE table_name = 'customers' AND table_schema = 'dbo'
   ```
-  SQLion intercepts this pattern, inspects table schemas from `engine.GetTable()`, and formats data types directly into canonical MSSQL representations (`int`, `varchar(255)`, `decimal(p,s)`, `bit`, `datetime`).
+  LionSQL intercepts this pattern, inspects table schemas from `engine.GetTable()`, and formats data types directly into canonical MSSQL representations (`int`, `varchar(255)`, `decimal(p,s)`, `bit`, `datetime`).
 - **Virtual System Table Stubs**:
   `sys.tables`, `sys.columns`, `sys.indexes`, `sys.databases`, `sys.computed_columns`, `sys.triggers`, and `sys.foreign_keys` respond dynamically without maintaining physical disk storage.
 
@@ -344,10 +344,10 @@ GUI clients often format table data pagination queries using T-SQL-specific synt
 
 | Issue / Error Symptom | Root Cause | Solution |
 |---|---|---|
-| `connection refused on :5433 or :1433` | SQLion process is not running or listening on standard ports. | Run `./bin/server -engine wiredtiger -dir ./data` and check `lsof -i :5433 -i :1433`. |
-| `encryption required but server does not support TLS` | Client driver requested strict SSL/TLS, but SQLion was started in plaintext mode. | Set `sslmode=disable` (PG) or `encrypt=disable` (TDS) in connection parameters, or launch SQLion with `-tls -tls-cert <cert> -tls-key <key>`. |
-| `USE <dbname> statement failed` | SQLion intentionally excludes `USE <dbname>` syntax (GEMINI.md Section 3). | Connect directly to the target database in the initial connection string; deploy separate process instances for separate databases. |
-| `table not found: dbo.mytable` | Schema prefix `dbo.` was not parsed. | Ensure running SQLion version with updated `cleanIdent` that strips `dbo.` and `public.` schema prefixes automatically. |
+| `connection refused on :5433 or :1433` | LionSQL process is not running or listening on standard ports. | Run `./bin/server -engine wiredtiger -dir ./data` and check `lsof -i :5433 -i :1433`. |
+| `encryption required but server does not support TLS` | Client driver requested strict SSL/TLS, but LionSQL was started in plaintext mode. | Set `sslmode=disable` (PG) or `encrypt=disable` (TDS) in connection parameters, or launch LionSQL with `-tls -tls-cert <cert> -tls-key <key>`. |
+| `USE <dbname> statement failed` | LionSQL intentionally excludes `USE <dbname>` syntax (GEMINI.md Section 3). | Connect directly to the target database in the initial connection string; deploy separate process instances for separate databases. |
+| `table not found: dbo.mytable` | Schema prefix `dbo.` was not parsed. | Ensure running LionSQL version with updated `cleanIdent` that strips `dbo.` and `public.` schema prefixes automatically. |
 | `table content empty or column mismatch in GUI` | Table `objectId` shuffled due to un-sorted map iteration across catalog queries. | Updated in `wt_engine.go` and `sqlexec_pgcatalog.go` with deterministic `sort.Slice` on table names. Click Refresh in the GUI. |
 | `row count shows 0 for all tables` | Catalog statistics were not yet analyzed. | Dynamic row scanning via `tx.Scan` fallback added in `execDbGateMSSQLRowCountSelect`. |
 | `r.toISOString is not a function in JS client` | Date columns in metadata were inferred as string instead of `TypeDateTimeN`. | Automatic datetime inference for column names ending in `Date` or `Time` added in TDS `inferColumnInfos`. |

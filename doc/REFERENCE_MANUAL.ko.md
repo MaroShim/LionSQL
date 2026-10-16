@@ -1,6 +1,6 @@
-# SQLion Reference Manual
+# LionSQL Reference Manual
 
-이 문서는 SQLion 데이터베이스 엔진의 모든 명령어, 설정값, SQL 구문 및 문법 규격, 데이터 타입, 시스템 내장 함수, 가상 카탈로그 뷰, REST API 엔드포인트 및 와이어 프로토콜 사양을 총망라하는 **레퍼런스 매뉴얼(Reference Manual)** 목차 및 골격입니다.
+이 문서는 LionSQL 데이터베이스 엔진의 모든 명령어, 설정값, SQL 구문 및 문법 규격, 데이터 타입, 시스템 내장 함수, 가상 카탈로그 뷰, REST API 엔드포인트 및 와이어 프로토콜 사양을 총망라하는 **레퍼런스 매뉴얼(Reference Manual)** 목차 및 골격입니다.
 
 ---
 
@@ -189,7 +189,7 @@
 ---
 
 ### 제9장. 에러 코드 및 진단 레퍼런스 (Error Codes & Diagnostics)
-* **9.1. SQLion 표준 에러 코드**
+* **9.1. LionSQL 표준 에러 코드**
   * 내부 에러 코드, 영문 메시지, ANSI SQLSTATE 5자리 매핑 테이블
 * **9.2. TDS 에러 코드 및 심각도 (TDS Error Numbers & Severity)**
   * Severity 1~10 (Informational / Warnings), Severity 11~16 (User Execution Errors), Severity 17~25 (System Fatal Errors)
@@ -260,7 +260,7 @@
 * [`BENCHMARK.md`](file:///Users/maro/Projects/sql/doc/BENCHMARK.md)
   * **성능 벤치마크 및 검증 방법론**: TPC-C 벤치마크 측정 결과, pgbench 및 T-SQL 저장 프로시저 마이크로 벤치마크 처리량(TPS)과 지연 시간 프로파일.
 * [`MIGRATION.md`](file:///Users/maro/Projects/sql/doc/MIGRATION.md)
-  * **이기종 데이터베이스 마이그레이션 가이드**: PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 데이터 스키마 및 레코드를 SQLion으로 이전하는 절차.
+  * **이기종 데이터베이스 마이그레이션 가이드**: PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 데이터 스키마 및 레코드를 LionSQL으로 이전하는 절차.
 * [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/sql/doc/TROUBLESHOOTING.md)
   * **장애 진단 및 문제 해결 가이드**: 포트 충돌, 권한 오류, 와이어 패킷 협상 실패, 트랜잭션 직렬화 충돌(`40001`), 클라이언트 캐시 무효화 등 빈발 오류 해결 방법.
 

@@ -1,12 +1,12 @@
-# SQLion Engineering Context & Architectural Invariants (`notes/ENGINEERING_CONTEXT.md`)
+# LionSQL Engineering Context & Architectural Invariants (`notes/ENGINEERING_CONTEXT.md`)
 
-이 문서는 SQLion의 설계 원칙, 확립된 핵심 불변식(Invariants), 의도적으로 배제(Spec-Out)한 대안들의 이유, 그리고 사용자가 요구하는 엄격한 엔지니어링 및 협업 규약을 설명합니다.
+이 문서는 LionSQL의 설계 원칙, 확립된 핵심 불변식(Invariants), 의도적으로 배제(Spec-Out)한 대안들의 이유, 그리고 사용자가 요구하는 엄격한 엔지니어링 및 협업 규약을 설명합니다.
 
 ---
 
 ## 1. 핵심 아키텍처 불변식 (Core Architectural Invariants)
 
-새로운 환경의 AI나 개발자가 **가장 자주 범하는 실수는 다른 대형 DBMS(MySQL, Oracle, CockroachDB 등)의 복잡한 메커니즘을 섣불리 SQLion에 도입하려 하는 것**입니다. 아래 8가지 불변식은 심도 깊은 검토 끝에 확립된 핵심 기둥입니다.
+새로운 환경의 AI나 개발자가 **가장 자주 범하는 실수는 다른 대형 DBMS(MySQL, Oracle, CockroachDB 등)의 복잡한 메커니즘을 섣불리 LionSQL에 도입하려 하는 것**입니다. 아래 8가지 불변식은 심도 깊은 검토 끝에 확립된 핵심 기둥입니다.
 
 ### ① 데이터베이스 격리 전략: 인스턴스 단위 물리 격리 (Process-per-Database)
 * **결정 사항**: 데이터베이스 단위 물리 프로세스/컨테이너 격리.
@@ -15,7 +15,7 @@
   * 단, MSSQL 덤프 스크립트, 마이그레이션 파일, DBeaver/SSMS/sqlcmd 등 외부 도구와의 100% 호환성을 위해 `USE <dbname>` (`USE master`, `USE [SalesDB]`) 구문은 **관용적 가상 No-Op(Tolerant Virtual No-Op)**으로 즉시 수용하고 TDS 환경 변경 토큰(`0xE3 ENVCHANGE`)과 세션 가상 DB 컨텍스트(`ClientSession.Database`, `DB_NAME()`, `CURRENT_DATABASE()`)를 동기화하여 구문 에러를 원천 차단함.
 * **이유 & 맥락**:
   * 단일 프로세스 내 물리적 카탈로그 멀티플렉싱은 세션별 DB 컨텍스트 스위칭, 교차 DB 메타데이터 잠금 경합, 한 테넌트의 메모리 누수가 전체를 죽이는 장애 반경(Blast Radius) 문제를 낳습니다.
-  * SQLion은 단일 정적 바이너리로 매우 가볍게 구동되므로, 멀티 테넌시는 포트(`--port`, `--http`)와 데이터 디렉토리(`--data-dir`)를 분리한 독립 프로세스/컨테이너로 배포하는 것이 Radically Simple(KISS)하며 보안 및 자원 격리에 절대적으로 유리합니다.
+  * LionSQL은 단일 정적 바이너리로 매우 가볍게 구동되므로, 멀티 테넌시는 포트(`--port`, `--http`)와 데이터 디렉토리(`--data-dir`)를 분리한 독립 프로세스/컨테이너로 배포하는 것이 Radically Simple(KISS)하며 보안 및 자원 격리에 절대적으로 유리합니다.
 
 ### ② 트랜잭션 동시성 모델: Non-Blocking 스냅샷 격리 / 커밋 읽기
 * **결정 사항**: 독자(Reader)는 필자(Writer)를 막지 않고, 필자도 독자를 막지 않는 비차단 스냅샷 격리.
@@ -27,12 +27,12 @@
 ### ③ 단일 정적 바이너리 자립성 (Zero External Dependencies)
 * **결정 사항**: 코어 커널, PGWire(:5433), TDS(:1433), HTTP API(:8090), 임베디드 Web Studio, 고루틴 커넥션 풀러, 크론 스케줄러, SMTP 메일러가 단일 정적 실행 파일(`bin/server`) 내에서 동작.
 * **배제(Spec-Out)된 것**: 외부 사이드카(PgBouncer, Redis 캐시 계층, Nginx, 외부 cron 데몬) 및 외부 코디네이터(ZooKeeper, etcd, Consul, Kafka).
-* **이유 & 맥락**: SQLion의 최대 강점은 바이너리 하나 복사해서 `--dir`만 주면 수 초 만에 엔터프라이즈급 DB가 기동되는 간결함입니다. 외부 의존성 추가는 절대 금지됩니다.
+* **이유 & 맥락**: LionSQL의 최대 강점은 바이너리 하나 복사해서 `--dir`만 주면 수 초 만에 엔터프라이즈급 DB가 기동되는 간결함입니다. 외부 의존성 추가는 절대 금지됩니다.
 
 ### ④ 수직적 확장 우선(Scale-Up Primacy) & 1-Writer Multi-Reader 복제
 * **결정 사항**: 단일 노드 하드웨어 포화(Multi-core, NVMe, VDBE 바이트코드 최적화) + 1-Writer Primary와 N-Reader Replica 간 비동기/반동기 WAL 스트리밍 복제.
 * **배제(Spec-Out)된 것**: 분산 2PC(Two-Phase Commit) 트랜잭션 샤딩 및 멀티 마스터 클러스터링.
-* **이유 & 맥락**: 분산 2PC는 네트워크 RTT로 인해 쓰기 지연시간을 급증시킵니다. SQLion은 단일 노드에서 16,000+ TPS 이상의 raw 성능을 뽑아내고, 읽기 확장은 LSN 기반 복제본으로 처리하며, 고가용성은 페일오버 승격(`Promote`)으로 해결합니다.
+* **이유 & 맥락**: 분산 2PC는 네트워크 RTT로 인해 쓰기 지연시간을 급증시킵니다. LionSQL은 단일 노드에서 16,000+ TPS 이상의 raw 성능을 뽑아내고, 읽기 확장은 LSN 기반 복제본으로 처리하며, 고가용성은 페일오버 승격(`Promote`)으로 해결합니다.
 
 ### ⑤ 듀얼 파서 전략 (Dual-Parser Architecture)
 * **결정 사항**:
@@ -42,14 +42,14 @@
 
 ### ⑥ 듀얼 트랙 UDF 전략 (ADR-018)
 * **결정 사항**:
-  * **Track 1 (Go Native In-Process SPI)**: `proc.RegisterScalarFunction`. Go로 SQLion을 임베딩하는 개발자를 위한 제로 FFI 오버헤드 직결 호출 (<5ns).
+  * **Track 1 (Go Native In-Process SPI)**: `proc.RegisterScalarFunction`. Go로 LionSQL을 임베딩하는 개발자를 위한 제로 FFI 오버헤드 직결 호출 (<5ns).
   * **Track 2 (WebAssembly 샌드박스)**: 독립 서버 환경에서 안전하게 외부 함수를 실행하기 위한 `wazero` 메모리 샌드박스.
 
 ### ⑦ 인메모리 OCC 스토리지: 백그라운드 Vacuum 스레드 배제 (Spec-Out)
 * **결정 사항**: 인메모리 OCC 엔진(`memengine`)은 세션 프라이빗 워크스페이스에서 변경분을 버퍼링한 뒤, 커밋 시점에 버전을 원자적으로 교체하거나 롤백 시 워크스페이스를 버림.
 * **배제(Spec-Out)된 것**: PostgreSQL 스타일의 백그라운드 멀티버전 데드 튜플 청소기(Background Vacuum Worker / GC 스레드).
 * **이유 & 맥락**:
-  * PostgreSQL이나 전통적 디스크 기반 MVCC는 테이블 블록 내에 구버전 튜플 체인을 남겨두기 때문에 주기적 진공 청소(Vacuum)가 필수적이지만, SQLion의 인메모리 OCC는 데드 튜플 체인을 메모리에 누적하지 않습니다.
+  * PostgreSQL이나 전통적 디스크 기반 MVCC는 테이블 블록 내에 구버전 튜플 체인을 남겨두기 때문에 주기적 진공 청소(Vacuum)가 필수적이지만, LionSQL의 인메모리 OCC는 데드 튜플 체인을 메모리에 누적하지 않습니다.
   * 주기적 백그라운드 Vacuum 루프는 불필요한 고루틴 생성, 주기적 전체 메모리 스캔, 락 경합 및 CPU 낭비만 초래하는 전형적인 오버엔지니어링(YAGNI, Golden Rule 15)이므로 의도적으로 배제했습니다.
 
 ### ⑧ 분석/OLAP 연동: CDC 스트리밍 채택 및 공유 메모리(Arrow IPC) 스냅샷 배제 (Spec-Out)
@@ -88,11 +88,18 @@
   * 데이터베이스 커널이 외부 상용 SaaS(Google/GitHub)의 웹 엔드포인트와 통신하는 것은 외부 인터넷 의존성을 강제하고 보안 공격 표면(Attack Surface)을 넓히는 안티패턴입니다.
   * DB 엔진 본연의 무결성과 경량성을 지키며, 엔터프라이즈 SSO 연동은 데이터베이스 커널 내부가 아닌 전면 게이트웨이/리버스 프록시(Keycloak, OAuth2-Proxy 등)에 위임하는 것이 표준 아키텍처입니다(Golden Rule #15 KISS 및 단일 책임 원칙).
 
+### ⑬ DB 커널 내장 S3 Blob 파일 스토리지 및 이미지 썸네일 처리 배제 (Spec-Out)
+* **결정 사항**: 데이터베이스 프로세스 내부에 S3 호환 오브젝트 스토리지 서버/클라이언트 모듈 및 이미지 디코딩/리사이징(썸네일) 라이브러리를 직접 내장하는 것을 영구 배제(Spec-Out)함.
+* **배제 이유 & 맥락**:
+  * **KISS & YAGNI 및 OLTP 코어 보호 (Golden Rule 15)**: 대용량 바이너리 청크 스트리밍과 무거운 래스터 이미지 변환 연산은 Go 런타임 힙 메모리 할당과 CPU를 급격히 점유하여 고동시성 OLTP 트랜잭션의 서브밀리초 지연 시간(p99)을 훼손합니다.
+  * **플랫폼 프리미티브 우선 (Golden Rule 14)**: 대용량 오브젝트 저장 및 미디어 리사이징은 전용 오브젝트 스토리지(AWS S3, MinIO, Cloudflare R2) 및 엣지 CDN(Cloudflare Images)의 고유 영역이며, 데이터베이스는 S3 URI 및 메타데이터를 관계형 컬럼(`VARCHAR`)으로 저장하는 것이 엔터프라이즈 아키텍처 표준입니다.
+  * **보안 공격 표면 격리 (Level 1)**: 이미지 디코더/파서는 버퍼 오버플로우 및 메모리 취약점의 빈번한 공격 경로이므로 데이터베이스 커널 프로세스와 물리적으로 분리되어야 합니다.
+
 ---
 
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
-SQLion 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:
+LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:
 
 1. **3단계 검증 파이프라인 (Build ➔ Test `-race` ➔ Commit)**:
    - 모든 기능 수정 및 리팩토링 후에는 빌드 컴파일 검증 ➔ 레이스 디텍터를 포함한 전체 테스트 통과 ➔ Conventional Commit 순서를 엄격히 지켜야 합니다.

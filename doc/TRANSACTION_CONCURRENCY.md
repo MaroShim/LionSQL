@@ -1,12 +1,12 @@
-# SQLion Internals: Transaction Isolation & Concurrency Model (`doc/TRANSACTION_CONCURRENCY.md`)
+# LionSQL Internals: Transaction Isolation & Concurrency Model (`doc/TRANSACTION_CONCURRENCY.md`)
 
-This document details the transaction processing invariants, concurrency control architectures, isolation guarantees, and virtual machine coupling implemented in SQLion's storage engines and execution pipeline.
+This document details the transaction processing invariants, concurrency control architectures, isolation guarantees, and virtual machine coupling implemented in LionSQL's storage engines and execution pipeline.
 
 ---
 
 ## 1. Foundational Invariants
 
-SQLion enforces **Non-Blocking Snapshot Isolation / Read Committed with Optimistic/Hazard Concurrency Control** as its canonical transaction processing invariant (GEMINI.md Section 4).
+LionSQL enforces **Non-Blocking Snapshot Isolation / Read Committed with Optimistic/Hazard Concurrency Control** as its canonical transaction processing invariant (GEMINI.md Section 4).
 
 ```
                       [ Client Transaction Lifecycle ]
@@ -35,7 +35,7 @@ SQLion enforces **Non-Blocking Snapshot Isolation / Read Committed with Optimist
 ```
 
 ### 1.1. Non-Blocking Reads (Readers Never Block Writers, Writers Never Block Readers)
-Traditional two-phase locking (2PL) databases acquire shared locks for read operations, causing concurrent writes to stall until readers complete. SQLion completely eliminates 2PL read locks across both backends:
+Traditional two-phase locking (2PL) databases acquire shared locks for read operations, causing concurrent writes to stall until readers complete. LionSQL completely eliminates 2PL read locks across both backends:
 - Queries always read from consistent point-in-time snapshots.
 - Read operations never acquire shared locks, never wait on active transactions, and never prevent concurrent writers from modifying the same rows.
 
@@ -49,7 +49,7 @@ All mutating operations (`INSERT`, `UPDATE`, `DELETE`) are strictly buffered ins
 
 ## 2. Storage Engine Concurrency Profiles
 
-SQLion provides two distinct, production-grade storage engines optimized for different operational profiles:
+LionSQL provides two distinct, production-grade storage engines optimized for different operational profiles:
 
 ### 2.1. In-Memory OCC Engine (`pkg/storage/memengine/`)
 
@@ -91,7 +91,7 @@ WiredTiger operates as a disk-based, lock-free **Multi-Version Concurrency Contr
 #### Write Conflict Detection
 - When concurrent transactions attempt to modify the identical Primary Key key-value pair, WiredTiger detects conflicting uncommitted transaction timestamps at the cursor write level.
 - Conflicting writes immediately return `WT_ROLLBACK`.
-- SQLion intercepts `WT_ROLLBACK` and translates it into standard `storage.ErrWriteConflict` for uniform error handling across protocols.
+- LionSQL intercepts `WT_ROLLBACK` and translates it into standard `storage.ErrWriteConflict` for uniform error handling across protocols.
 
 ---
 
@@ -104,7 +104,7 @@ In enterprise benchmarks (TPC-C, TPC-H) and multi-step T-SQL stored procedures, 
 - Decrementing stock quantities.
 
 ### 3.1. The Single Transaction Handle Invariant
-SQLion strictly enforces **Atomic ACID Transaction Modeling** across the VDBE bytecode virtual machine (GEMINI.md Section 7):
+LionSQL strictly enforces **Atomic ACID Transaction Modeling** across the VDBE bytecode virtual machine (GEMINI.md Section 7):
 
 ```go
 // Correct: Single atomic transaction boundary
@@ -136,7 +136,7 @@ return tx.Commit()
 
 Under extreme concurrency (e.g. TPC-C with 100 workers and 10 warehouses running at 40,000+ TPS), write-write conflicts on contested rows (e.g., district order counters `d_next_o_id`) are a natural mathematical property of ACID serialization.
 
-SQLion benchmarks incorporate an explicit **Exponential Backoff Retry Strategy**:
+LionSQL benchmarks incorporate an explicit **Exponential Backoff Retry Strategy**:
 
 ```go
 for attempt := 0; attempt <= maxRetries; attempt++ {
@@ -172,8 +172,8 @@ for attempt := 0; attempt <= maxRetries; attempt++ {
 
 ## 5. Architectural Non-Goals & Spec-Out Decisions
 
-To preserve sub-microsecond latency and single-node hardware saturation, the following models are explicitly **Spec Out** from SQLion's core database kernel (GEMINI.md Section 4):
+To preserve sub-microsecond latency and single-node hardware saturation, the following models are explicitly **Spec Out** from LionSQL's core database kernel (GEMINI.md Section 4):
 
-1. **`READ UNCOMMITTED` Dirty Reads**: Compromising data integrity to avoid lock contention is unnecessary because SQLion's snapshot reads are already completely non-blocking.
+1. **`READ UNCOMMITTED` Dirty Reads**: Compromising data integrity to avoid lock contention is unnecessary because LionSQL's snapshot reads are already completely non-blocking.
 2. **Heavy Distributed Two-Phase Locking (2PL)**: Shared read locking tables and distributed lock managers introduce catastrophic false abort penalties, deadlock graph detection overhead, and severe CPU thrashing.
 3. **Serializable Snapshot Isolation (SSI) Graph Tracking**: Tracking read-write anti-dependency graphs (`siREAD` locks) in memory incurs up to 40% throughput penalty. High-concurrency OLTP applications achieve equivalent consistency via explicit OCC version checking or optimistic fail-fast retries.

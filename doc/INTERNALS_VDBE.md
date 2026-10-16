@@ -1,12 +1,12 @@
-# SQLion Internals: Virtual Database Engine (VDBE) & Bytecode Specification
+# LionSQL Internals: Virtual Database Engine (VDBE) & Bytecode Specification
 
-This document describes the internal architecture of SQLion's native T-SQL Bytecode Virtual Machine, compiler pipeline, register allocation strategy, opcode instruction set architecture (ISA), and procedural runtime environment.
+This document describes the internal architecture of LionSQL's native T-SQL Bytecode Virtual Machine, compiler pipeline, register allocation strategy, opcode instruction set architecture (ISA), and procedural runtime environment.
 
 ---
 
 ## 1. Virtual Machine Architecture Overview
 
-SQLion executes T-SQL stored procedures, triggers, and user-defined functions using a register-based Virtual Database Engine (VDBE) inspired by SQLite. Unlike stack-based virtual machines or JavaScript runtimes (e.g. Goja), SQLion's VDBE minimizes heap allocations through pooled register arrays and direct primitive evaluation.
+LionSQL executes T-SQL stored procedures, triggers, and user-defined functions using a register-based Virtual Database Engine (VDBE) inspired by SQLite. Unlike stack-based virtual machines or JavaScript runtimes (e.g. Goja), LionSQL's VDBE minimizes heap allocations through pooled register arrays and direct primitive evaluation.
 
 ```
 [T-SQL Source Script]
@@ -196,7 +196,7 @@ VDBE execution operates within an ambient transaction context (`storage.Transact
 
 ## 6. Single-Engine Interactive DQL & DML Unification
 
-SQLion enforces a single execution engine architecture where both procedural scripts and standalone interactive queries execute directly on the VDBE:
+LionSQL enforces a single execution engine architecture where both procedural scripts and standalone interactive queries execute directly on the VDBE:
 
 ```
 [Interactive SELECT / INSERT / UPDATE / DELETE]
@@ -224,7 +224,7 @@ SQLion enforces a single execution engine architecture where both procedural scr
 
 ## 7. Prepared Statement Bytecode Caching across Wire Protocols
 
-To eliminate lexical parsing overhead on high-frequency queries, SQLion caches compiled `*proc.Program` bytecode directly inside session state:
+To eliminate lexical parsing overhead on high-frequency queries, LionSQL caches compiled `*proc.Program` bytecode directly inside session state:
 
 1. **PostgreSQL Wire Protocol v3 (`pkg/wire`)**:
    - During `Parse` ('P'), the SQL statement is compiled into `*proc.Program` via `proc.CompileQuery` or `proc.CompileStatement` and stored in `sess.statements[name]`.
@@ -237,7 +237,7 @@ To eliminate lexical parsing overhead on high-frequency queries, SQLion caches c
 
 ## 8. Web Management Studio Visual Bytecode Disassembler
 
-SQLion includes an integrated VDBE Bytecode Disassembler accessible via SQL Query Studio (`http://localhost:8090/_/`):
+LionSQL includes an integrated VDBE Bytecode Disassembler accessible via SQL Query Studio (`http://localhost:8090/_/`):
 - **`EXPLAIN BYTECODE <sql>`**: Returns a disassembled tabular listing of instructions (`Addr`, `Opcode`, `P1`, `P2`, `P3`, `P4`, `Comment`).
 - **Interactive Web Studio**: Features a dedicated "Explain Bytecode" action with syntax highlighting for opcodes, control flow jumps, register allocations, and one-click clipboard copying.
 

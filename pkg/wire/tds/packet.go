@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync"
 	"unicode/utf16"
 )
 
@@ -95,17 +96,29 @@ func ReadPacket(r io.Reader) (*Packet, error) {
 	}, nil
 }
 
+var tdsFramePool = sync.Pool{
+	New: func() any {
+		b := make([]byte, DefaultPacketSize)
+		return &b
+	},
+}
+
 // WritePacket writes a payload chunked into TDS frames to w with the specified packet type.
+// It bundles the 8-byte TDS header and payload chunk into a single contiguous frame buffer
+// recycled via sync.Pool to execute a single atomic write per packet (halving OS syscall overhead).
 func WritePacket(w io.Writer, pType byte, spid uint16, payload []byte) error {
+	bufPtr := tdsFramePool.Get().(*[]byte)
+	defer tdsFramePool.Put(bufPtr)
+	frame := *bufPtr
+
 	if len(payload) == 0 {
-		var hdr [HeaderSize]byte
-		hdr[0] = pType
-		hdr[1] = StatusEOM
-		binary.BigEndian.PutUint16(hdr[2:4], HeaderSize)
-		binary.BigEndian.PutUint16(hdr[4:6], spid)
-		hdr[6] = 1 // PacketID
-		hdr[7] = 0 // Window
-		_, err := w.Write(hdr[:])
+		frame[0] = pType
+		frame[1] = StatusEOM
+		binary.BigEndian.PutUint16(frame[2:4], HeaderSize)
+		binary.BigEndian.PutUint16(frame[4:6], spid)
+		frame[6] = 1 // PacketID
+		frame[7] = 0 // Window
+		_, err := w.Write(frame[:HeaderSize])
 		return err
 	}
 
@@ -127,18 +140,16 @@ func WritePacket(w io.Writer, pType byte, spid uint16, payload []byte) error {
 		}
 
 		packetLen := uint16(HeaderSize + chunkLen)
-		var hdr [HeaderSize]byte
-		hdr[0] = pType
-		hdr[1] = status
-		binary.BigEndian.PutUint16(hdr[2:4], packetLen)
-		binary.BigEndian.PutUint16(hdr[4:6], spid)
-		hdr[6] = packetID
-		hdr[7] = 0
+		frame[0] = pType
+		frame[1] = status
+		binary.BigEndian.PutUint16(frame[2:4], packetLen)
+		binary.BigEndian.PutUint16(frame[4:6], spid)
+		frame[6] = packetID
+		frame[7] = 0
 
-		if _, err := w.Write(hdr[:]); err != nil {
-			return err
-		}
-		if _, err := w.Write(payload[offset : offset+chunkLen]); err != nil {
+		copy(frame[HeaderSize:HeaderSize+chunkLen], payload[offset:offset+chunkLen])
+
+		if _, err := w.Write(frame[:packetLen]); err != nil {
 			return err
 		}
 

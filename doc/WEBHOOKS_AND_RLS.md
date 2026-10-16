@@ -1,6 +1,6 @@
-# SQLion Webhooks & Declarative Row-Level Security (RLS) Guide
+# LionSQL Webhooks & Declarative Row-Level Security (RLS) Guide
 
-SQLion combines the performance and ACID transaction guarantees of an enterprise relational database with the developer velocity of a Backend-as-a-Service (BaaS).
+LionSQL combines the performance and ACID transaction guarantees of an enterprise relational database with the developer velocity of a Backend-as-a-Service (BaaS).
 
 This document outlines the architecture, configuration, and practical usage of two core BaaS features:
 1. **Asynchronous Webhook Dispatch Engine**: Real-time HTTP push notifications for database mutations.
@@ -12,7 +12,7 @@ This document outlines the architecture, configuration, and practical usage of t
 
 ### 1.1. Architecture Overview
 
-Whenever rows are inserted, updated, deleted, or bulk-imported into SQLion (via REST API, Web Studio, or T-SQL statements), the internal `RealtimeBroker` broadcasts mutation events. The `WebhookDispatcher` listens for these events and dispatches HTTP POST payloads asynchronously to registered endpoints without blocking the database writer transaction.
+Whenever rows are inserted, updated, deleted, or bulk-imported into LionSQL (via REST API, Web Studio, or T-SQL statements), the internal `RealtimeBroker` broadcasts mutation events. The `WebhookDispatcher` listens for these events and dispatches HTTP POST payloads asynchronously to registered endpoints without blocking the database writer transaction.
 
 ```
        [ Client / API / T-SQL Query ]
@@ -43,7 +43,7 @@ Whenever rows are inserted, updated, deleted, or bulk-imported into SQLion (via 
 - **Non-Blocking In-Memory Queue**: Dispatches occur off the hot path via buffered channels (capacity: 1024).
 - **Worker Pool**: 4 dedicated goroutine workers process HTTP deliveries concurrently.
 - **Exponential Backoff Retries**: Transient failures (e.g. HTTP 500, network timeout) are retried up to 3 times with exponential backoff (1s, 2s, 4s).
-- **HMAC-SHA256 Payload Signature**: Outgoing requests include an `X-SQLion-Signature: sha256=<hex>` header computed using the webhook's pre-shared secret.
+- **HMAC-SHA256 Payload Signature**: Outgoing requests include an `X-LionSQL-Signature: sha256=<hex>` header computed using the webhook's pre-shared secret.
 - **Delivery Log Ring Buffer**: The latest 200 delivery attempts (status code, latency in ms, attempt count, timestamp) are kept in memory and inspectable via REST or Web Studio.
 - **Web Studio Integration**: Full GUI under the "Webhooks" navigation tab for registering webhooks, triggering instant test pings, and viewing delivery logs.
 
@@ -140,7 +140,7 @@ Response:
 
 ### 2.1. Concepts & Threat Model
 
-Unlike traditional RDBMS where row security requires complex triggers or vendor-specific SQL policies, SQLion provides simple, declarative **PocketBase-style rules** per table.
+Unlike traditional RDBMS where row security requires complex triggers or vendor-specific SQL policies, LionSQL provides simple, declarative **PocketBase-style rules** per table.
 
 Rules are defined as boolean expressions evaluated at runtime for each REST API operation:
 
@@ -159,7 +159,7 @@ Rules are defined as boolean expressions evaluated at runtime for each REST API 
 
 ### 2.2. Dynamic `@auth.*` Variables
 
-SQLion automatically resolves authentication tokens from the request context (JWT token, API Key, or `X-User-ID` / `X-Tenant-ID` headers):
+LionSQL automatically resolves authentication tokens from the request context (JWT token, API Key, or `X-User-ID` / `X-Tenant-ID` headers):
 
 - `@auth.id`: The unique identifier of the authenticated user.
 - `@auth.role`: The user's role (e.g. `'admin'`, `'editor'`, `'member'`).
@@ -236,7 +236,7 @@ Authorization: Bearer <TOKEN>
 
 ## Part 3: Web Studio GUI Workflow
 
-1. Navigate to the SQLion Web Studio at `http://127.0.0.1:8090/`.
+1. Navigate to the LionSQL Web Studio at `http://127.0.0.1:8090/`.
 2. Under **Tables & Records Studio**:
    - Click the **Security Rules (RLS)** subview button.
    - Choose a preset (e.g. *Owner Only* or *Multi-Tenant*) or define custom expressions.

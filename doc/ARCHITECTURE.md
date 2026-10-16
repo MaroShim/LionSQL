@@ -1,8 +1,8 @@
-# SQLion System Architecture & Technical Specification
+# LionSQL System Architecture & Technical Specification
 
 ## 1. Executive Summary & Architectural Vision
 
-SQLion is an enterprise-grade, high-concurrency embedded OLTP database engine written in pure Go and Cgo (WiredTiger). Packaged as a single standalone binary with zero external operational dependencies, it combines multi-engine ACID storage, full Microsoft T-SQL procedural execution, multi-wire protocol interoperability (PostgreSQL and TDS/MSSQL), an embedded connection pooler, and an embedded web management studio.
+LionSQL is an enterprise-grade, high-concurrency embedded OLTP database engine written in pure Go and Cgo (WiredTiger). Packaged as a single standalone binary with zero external operational dependencies, it combines multi-engine ACID storage, full Microsoft T-SQL procedural execution, multi-wire protocol interoperability (PostgreSQL and TDS/MSSQL), an embedded connection pooler, and an embedded web management studio.
 
 ```
 +---------------------------------------------------------------------------------------------------------+
@@ -81,7 +81,7 @@ SQLion is an enterprise-grade, high-concurrency embedded OLTP database engine wr
 
 ### 2.1. Dual-Parser Architecture & Fallback Strategy
 
-To balance sub-microsecond parsing latency with complete syntax compatibility for complex enterprise Microsoft T-SQL scripts, SQLion uses a dual-parser architecture:
+To balance sub-microsecond parsing latency with complete syntax compatibility for complex enterprise Microsoft T-SQL scripts, LionSQL uses a dual-parser architecture:
 
 ```mermaid
 flowchart TD
@@ -177,7 +177,7 @@ type Iterator interface {
 
 ### 2.4. Native VDBE Bytecode Virtual Machine & Single-Engine Execution
 
-SQLion unifies all procedural logic and interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) on the exact same register-based VDBE Virtual Machine:
+LionSQL unifies all procedural logic and interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) on the exact same register-based VDBE Virtual Machine:
 
 ```
 [Interactive SQL / T-SQL Script / Prepared Stmt]
@@ -261,7 +261,7 @@ The database engine abstracts the storage tier behind the `storage.Engine` inter
 
 ### 2.6. Multi-Wire Protocols & Built-in Connection Pooler
 
-SQLion exposes concurrent native wire protocol listeners on distinct ports, eliminating external protocol adapters:
+LionSQL exposes concurrent native wire protocol listeners on distinct ports, eliminating external protocol adapters:
 
 ```mermaid
 sequenceDiagram
@@ -307,7 +307,7 @@ sequenceDiagram
 
 ### 2.7. Online Snapshot Hot Backup & Point-in-Time Restore Engine
 
-SQLion includes a live database backup engine that operates without taking locks or pausing incoming read and write transactions:
+LionSQL includes a live database backup engine that operates without taking locks or pausing incoming read and write transactions:
 
 ```
 Live Production Engine (Active Reads & Writes)
@@ -341,7 +341,7 @@ Live Production Engine (Active Reads & Writes)
 
 ### 2.8. Embedded Web Management Studio
 
-SQLion embeds a PocketBase-style administration dashboard (`pkg/ui/dashboard.html` served from `/_/` via `embed.FS`):
+LionSQL embeds a PocketBase-style administration dashboard (`pkg/ui/dashboard.html` served from `/_/` via `embed.FS`):
 1. **Real-Time Data Sync**: Server-Sent Events (SSE) stream (`/api/realtime`) automatically pushes table mutation events (`ActionCreate`, `ActionUpdate`, `ActionDelete`, `ActionImport`) to active browser tabs.
 2. **Interactive SQL Query Studio**: Real-time syntax editor with query execution history, saved query favorites, and `EXPLAIN ANALYZE` execution plan visualization.
 3. **Spreadsheet Table Editor**: In-place row editing, column sorting, pagination, and full-text record search.
@@ -353,7 +353,7 @@ SQLion embeds a PocketBase-style administration dashboard (`pkg/ui/dashboard.htm
 ## 3. Directory Layout & Module Structure
 
 ```
-/Users/maro/Projects/SQLion/
+/Users/maro/Projects/LionSQL/
 ├── bin/                       # Compiled binaries (server, bench)
 ├── cmd/
 │   ├── server/                # Server entry point, CLI flags, daemon control

@@ -1,6 +1,6 @@
-# SQLion Extension & Driver Development Guide
+# LionSQL Extension & Driver Development Guide
 
-SQLion is engineered around modular, decoupled interface contracts (Open-Closed Principle). Developers can extend SQLion with custom storage backends, secondary procedure parsers, custom scalar functions, and alternative wire protocol frontends without modifying the database core.
+LionSQL is engineered around modular, decoupled interface contracts (Open-Closed Principle). Developers can extend LionSQL with custom storage backends, secondary procedure parsers, custom scalar functions, and alternative wire protocol frontends without modifying the database core.
 
 ---
 
@@ -88,7 +88,7 @@ To implement a custom storage backend:
 
 ## 3. Secondary Parser Extension SPI (`pkg/proc`)
 
-SQLion enforces a dual-parser architecture where unknown or advanced vendor syntax falls back to secondary parsers without creating circular dependencies.
+LionSQL enforces a dual-parser architecture where unknown or advanced vendor syntax falls back to secondary parsers without creating circular dependencies.
 
 ### 3.1 Fallback Parser Registration
 
@@ -132,7 +132,7 @@ func parseCustomSyntax(script string) (*proc.CreateProcStmt, error) {
 
 ## 4. Wire Protocol Extension SPI (`pkg/wire`)
 
-SQLion natively supports PostgreSQL Wire Protocol v3 and Microsoft SQL Server TDS. Developers can implement alternative wire protocol handlers (such as MySQL Protocol or Redis Serialization Protocol).
+LionSQL natively supports PostgreSQL Wire Protocol v3 and Microsoft SQL Server TDS. Developers can implement alternative wire protocol handlers (such as MySQL Protocol or Redis Serialization Protocol).
 
 ### 4.1 Wire Handler Lifecycle
 Every wire listener follows a unified connection lifecycle:
@@ -146,7 +146,7 @@ Every wire listener follows a unified connection lifecycle:
 
 ## 5. User-Defined Functions (UDF) Extension SPI: Dual-Track Architecture
 
-SQLion defines a complementary dual-track extension model for custom user functions, catering to both in-process application developers and standalone database deployments:
+LionSQL defines a complementary dual-track extension model for custom user functions, catering to both in-process application developers and standalone database deployments:
 
 ```
                             [ User-Defined Functions (UDF) ]
@@ -161,7 +161,7 @@ SQLion defines a complementary dual-track extension model for custom user functi
 ```
 
 ### 5.1. Track 1: Go Native Function Registration SPI (`pkg/proc`)
-For developers embedding SQLion directly inside Go applications or microservices:
+For developers embedding LionSQL directly inside Go applications or microservices:
 ```go
 // Register a high-performance Go function directly into the SQL engine
 proc.RegisterScalarFunction("CUSTOM_HASH", func(args []storage.Value) storage.Value {
@@ -176,11 +176,11 @@ proc.RegisterScalarFunction("CUSTOM_HASH", func(args []storage.Value) storage.Va
 - **Portability**: Pure Go; compiles cleanly on Windows, macOS, and Linux without Cgo dependencies.
 
 ### 5.2. Track 2: WebAssembly (Wasm) Dynamic Sandboxed UDFs (`pkg/extension`)
-For standalone database deployments where operators need to dynamically load custom functions without recompiling or restarting the SQLion server binary:
+For standalone database deployments where operators need to dynamically load custom functions without recompiling or restarting the LionSQL server binary:
 ```sql
 CREATE FUNCTION compute_risk_score AS WASM 'plugins/risk_model.wasm';
 ```
-- **Zero-CGO Pure-Go Runtime**: Powered by [wazero](https://wazero.io/), maintaining SQLion's single static binary invariant.
+- **Zero-CGO Pure-Go Runtime**: Powered by [wazero](https://wazero.io/), maintaining LionSQL's single static binary invariant.
 - **Multi-Language Authoring**: Users can author plugins in Go (TinyGo), Rust, C, or Zig, compiling to standard WebAssembly.
 - **Strict Fault Isolation**: Executes within an isolated virtual memory sandbox. Unhandled panics or memory violations are trapped cleanly (Golden Rule 26), ensuring zero crash impact on the core database kernel.
 
@@ -188,7 +188,7 @@ CREATE FUNCTION compute_risk_score AS WASM 'plugins/risk_model.wasm';
 
 ## 6. Extension Sandboxing & Safety Guidelines
 
-In accordance with SQLion Engineering Guidelines:
+In accordance with LionSQL Engineering Guidelines:
 - **Panic Recovery (Rule 26)**: All extension entrypoints and callbacks must be wrapped in `defer func() { if r := recover(); r != nil { ... } }()` panic interceptors to prevent third-party crashes from terminating the database engine.
 - **Defensive Boundary Checks (Rule 11)**: Validate all slice and buffer accesses against bounds before indexing.
 - **Resource Hygiene (Rule 24)**: Ensure every open file descriptor, network socket, and cursor is closed cleanly via `defer Close()`.

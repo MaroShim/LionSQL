@@ -1,9 +1,9 @@
-# SQLion Project Architecture & Engineering Guidelines
+# LionSQL Project Architecture & Engineering Guidelines
 
 (한국어 공식 가이드라인 문서는 [GEMINI.ko.md](GEMINI.ko.md)를 참조하세요.)
 
 ## 1. Project Overview
-SQLion is a high-concurrency embedded OLTP database engine written in Go, packaged as a single standalone executable. It delivers enterprise-grade T-SQL stored procedure execution, ACID transaction durability, multiple wire protocols, and an embedded web management studio.
+LionSQL is a high-concurrency embedded OLTP database engine written in Go, packaged as a single standalone executable. It delivers enterprise-grade T-SQL stored procedure execution, ACID transaction durability, multiple wire protocols, and an embedded web management studio.
 
 - **Storage Backends**: In-Memory OCC (Optimistic Concurrency Control with WAL & AOF compaction) and WiredTiger (Lock-free B+Tree with MVCC & hazard pointers).
 - **Wire Protocols**:
@@ -16,7 +16,7 @@ SQLion is a high-concurrency embedded OLTP database engine written in Go, packag
 
 ## 2. Core Architectural Invariant: Dual-Parser & Automatic Fallback Strategy
 
-SQLion enforces a **Dual-Parser Architecture** to simultaneously achieve sub-microsecond parsing latency and 100% full-spec Microsoft T-SQL syntax compatibility:
+LionSQL enforces a **Dual-Parser Architecture** to simultaneously achieve sub-microsecond parsing latency and 100% full-spec Microsoft T-SQL syntax compatibility:
 
 ```
                   [ T-SQL Client Script / Query ]
@@ -65,7 +65,7 @@ SQLion enforces a **Dual-Parser Architecture** to simultaneously achieve sub-mic
 
 ## 3. Core Architectural Invariant: Database Isolation Strategy (Instance-Based Isolation)
 
-SQLion adopts **Instance-Level Isolation (Process / Container per Database)** as a core architectural invariant, rather than multi-database catalog multiplexing (`USE <dbname>`) inside a single process:
+LionSQL adopts **Instance-Level Isolation (Process / Container per Database)** as a core architectural invariant, rather than multi-database catalog multiplexing (`USE <dbname>`) inside a single process:
 
 1. **Architectural Rationale**:
    - **Fault & Resource Isolation**: Prevents runaway queries, memory leaks, or file descriptor saturation in one database from impacting others.
@@ -73,15 +73,15 @@ SQLion adopts **Instance-Level Isolation (Process / Container per Database)** as
    - **Independent Lifecycle**: Enables independent scaling, upgrading, point-in-time recovery (PITR), and restarts per database.
    - **KISS & Zero Redundant Complexity**: Eliminates cross-database catalog locking, session database context switching overhead, and distributed lock contention in the database kernel.
 2. **Permanent Specification Invariant**:
-   - **True Multi-Database Catalog Multiplexing**: Explicitly **Spec Out**. Each SQLion process serves exactly one isolated database catalog per data directory (`--data-dir`).
+   - **True Multi-Database Catalog Multiplexing**: Explicitly **Spec Out**. Each LionSQL process serves exactly one isolated database catalog per data directory (`--data-dir`).
    - **`USE <dbname>` Tolerant Virtual No-Op Policy**: To guarantee 100% interoperability with MSSQL export scripts, database migrations, and tools like DBeaver, SSMS, and sqlcmd, the `USE <dbname>` (`USE master`, `USE [SalesDB]`) statement is accepted as a **Tolerant Virtual No-Op**. The server synchronizes session virtual database state (`ClientSession.Database`, `DB_NAME()`, `CURRENT_DATABASE()`) and emits official TDS environment change tokens (`0xE3 ENVCHANGE`), eliminating syntax errors without physical catalog switching.
-   - **Multi-Tenant Deployment Standard**: Multi-tenancy and multiple databases are deployed via lightweight SQLion standalone processes/containers with dedicated ports and directories (`--port`, `--data-dir`).
+   - **Multi-Tenant Deployment Standard**: Multi-tenancy and multiple databases are deployed via lightweight LionSQL standalone processes/containers with dedicated ports and directories (`--port`, `--data-dir`).
 
 ---
 
 ## 4. Core Architectural Invariant: Transaction Isolation & Concurrency Model
 
-SQLion defines **Non-Blocking Snapshot Isolation / Read Committed with Optimistic/Hazard Concurrency Control** as its canonical transaction processing invariant across both storage engines:
+LionSQL defines **Non-Blocking Snapshot Isolation / Read Committed with Optimistic/Hazard Concurrency Control** as its canonical transaction processing invariant across both storage engines:
 
 1. **Architectural Principles**:
    - **Non-Blocking Reads (Readers Never Block Writers, Writers Never Block Readers)**: Both backends completely eliminate traditional 2PL (Two-Phase Locking) read locks. Queries always read from consistent snapshots without acquiring shared locks.
@@ -97,7 +97,7 @@ SQLion defines **Non-Blocking Snapshot Isolation / Read Committed with Optimisti
 
 ## 5. Core Architectural Invariant: Self-Contained Single Binary (Zero-External-Dependency)
 
-SQLion is architected as an **Autonomous, Zero-External-Dependency Standalone Static Executable**:
+LionSQL is architected as an **Autonomous, Zero-External-Dependency Standalone Static Executable**:
 
 1. **Architectural Principles**:
    - **Full-Stack Self-Containment**: Database kernel, multi-protocol wire listeners (PGWire :5433, TDS :1433), HTTP/REST engine (:8090), embedded Web Studio (`embed.FS`), Goroutine connection pooler, cron job scheduler, and SMTP mailer run out of a single static binary.
@@ -110,7 +110,7 @@ SQLion is architected as an **Autonomous, Zero-External-Dependency Standalone St
 
 ## 6. Core Architectural Invariant: Scale-Up Primacy & WAL Replication Topology
 
-SQLion prioritizes **Vertical Scale-Up Hardware Saturation** and **1-Writer Multi-Reader Asynchronous/Semi-Synchronous WAL Replication** over complex distributed multi-master sharding:
+LionSQL prioritizes **Vertical Scale-Up Hardware Saturation** and **1-Writer Multi-Reader Asynchronous/Semi-Synchronous WAL Replication** over complex distributed multi-master sharding:
 
 1. **Architectural Principles**:
    - **Single-Node Hardware Saturation**: Focuses engineering effort on maximizing multi-core CPU concurrency, lock-free data structures (Concurrent SkipList, Hazard Pointers), NVMe I/O efficiency, and sub-microsecond VDBE bytecode execution on a single host.
@@ -126,7 +126,7 @@ SQLion prioritizes **Vertical Scale-Up Hardware Saturation** and **1-Writer Mult
 
 ## 7. Core Architectural Invariant: Benchmark & Transaction Modeling Fidelity (Atomic ACID Invariance)
 
-SQLion mandates **Strict Atomic ACID Transaction Modeling** across all benchmarks (TPC-C, TPC-H, microbenchmarks), test harnesses, and stored procedure workloads:
+LionSQL mandates **Strict Atomic ACID Transaction Modeling** across all benchmarks (TPC-C, TPC-H, microbenchmarks), test harnesses, and stored procedure workloads:
 
 1. **All-or-Nothing Transaction Fidelity**:
    - Multi-statement business transactions (e.g. TPC-C New-Order consisting of warehouse read, district counter increment, customer lookup, order/new_order insertion, and 5~10 order line/stock updates) **must strictly execute within a single atomic ACID transaction boundary** (`sess.BeginTx()` -> `tx.Commit()`).
@@ -139,7 +139,7 @@ SQLion mandates **Strict Atomic ACID Transaction Modeling** across all benchmark
 
 ## 8. Core Architectural Invariant: Engine Simplicity & Explicit Spec-Out Decisions
 
-SQLion permanently designates the following architectural models as **Spec Out (Excluded / Non-Goals)** to protect sub-microsecond transaction performance, single-node hardware saturation, and zero-dependency self-containment:
+LionSQL permanently designates the following architectural models as **Spec Out (Excluded / Non-Goals)** to protect sub-microsecond transaction performance, single-node hardware saturation, and zero-dependency self-containment:
 
 1. **Unified Procedural Runtime & PL/pgSQL Interpreter Exclusion (Spec-Out)**:
    - Stored procedure and UDF execution is strictly unified under the high-performance SQLite VDBE-style T-SQL bytecode virtual machine (`pkg/proc`).
@@ -158,6 +158,9 @@ SQLion permanently designates the following architectural models as **Spec Out (
 6. **In-Kernel OAuth2 Social Login & Third-Party SaaS Auth Exclusion (Spec-Out)**:
    - Database kernel security and identity management is strictly unified around standard enterprise database authentication mechanisms: SCRAM-SHA-256 for PGWire, SQL Server standard/NTLM authentication for TDS, and secure token-based RBAC with JWT/API-Key for HTTP management.
    - Embedding external consumer OAuth2 web authentication (Google, GitHub OAuth2 HTTP endpoints, redirect handlers, client secret lifecycle management, and outbound internet token exchange calls) directly inside the database kernel binary is explicitly **Spec Out**. This eliminates outbound internet dependencies, prevents client secret exposure risks, minimizes the security attack surface, and maintains absolute database kernel purity (KISS & Golden Rule #15). Enterprise SSO/Identity Federation should be handled by standard perimeter proxies (e.g. Keycloak, OAuth2-Proxy, Nginx) rather than the database kernel.
+7. **In-Kernel S3 Blob File Storage & Image Thumbnail Processing Exclusion (Spec-Out)**:
+   - Embedding binary blob storage servers, multipart S3 streaming, and CPU-intensive image resizing/thumbnailing directly inside the high-concurrency database kernel process is explicitly **Spec Out** to preserve ultra-low latency OLTP execution and avoid runtime memory/CPU starvation (Golden Rules 14 & 15).
+   - Object storage and media pipelines are standardly delegated to dedicated object storage services (AWS S3, MinIO, Cloudflare R2) and edge CDNs, while LionSQL stores the canonical URI/metadata pointers in relational tables.
 
 ---
 

@@ -360,6 +360,54 @@ func TestTDS_PacketFraming(t *testing.T) {
 	}
 }
 
+type callCountingWriter struct {
+	writes [][]byte
+}
+
+func (w *callCountingWriter) Write(p []byte) (int, error) {
+	cp := make([]byte, len(p))
+	copy(cp, p)
+	w.writes = append(w.writes, cp)
+	return len(p), nil
+}
+
+func TestTDS_WritePacket_SingleSyscallPerPacket(t *testing.T) {
+	// 1. Empty payload: exactly 1 write of 8-byte header
+	cw := &callCountingWriter{}
+	if err := WritePacket(cw, PacketTabular, 1, nil); err != nil {
+		t.Fatalf("WritePacket with nil failed: %v", err)
+	}
+	if len(cw.writes) != 1 {
+		t.Fatalf("expected 1 write call for empty payload, got %d", len(cw.writes))
+	}
+	if len(cw.writes[0]) != HeaderSize {
+		t.Fatalf("expected write length %d, got %d", HeaderSize, len(cw.writes[0]))
+	}
+
+	// 2. Single-packet payload (1,000 bytes): exactly 1 write of 1008 bytes (not 2 writes)
+	cw2 := &callCountingWriter{}
+	payload1k := make([]byte, 1000)
+	if err := WritePacket(cw2, PacketTabular, 2, payload1k); err != nil {
+		t.Fatalf("WritePacket with 1k failed: %v", err)
+	}
+	if len(cw2.writes) != 1 {
+		t.Fatalf("expected exactly 1 write call for 1k payload, got %d (syscall not consolidated)", len(cw2.writes))
+	}
+	if len(cw2.writes[0]) != HeaderSize+1000 {
+		t.Fatalf("expected write length %d, got %d", HeaderSize+1000, len(cw2.writes[0]))
+	}
+
+	// 3. Multi-packet payload (10,000 bytes): 10000 / 4088 = 3 packets -> exactly 3 write calls
+	cw3 := &callCountingWriter{}
+	payload10k := make([]byte, 10000)
+	if err := WritePacket(cw3, PacketTabular, 3, payload10k); err != nil {
+		t.Fatalf("WritePacket with 10k failed: %v", err)
+	}
+	if len(cw3.writes) != 3 {
+		t.Fatalf("expected exactly 3 write calls for 10k payload (3 packets), got %d", len(cw3.writes))
+	}
+}
+
 func sendRPC(t *testing.T, conn net.Conn, procID uint16, optionFlags uint16, paramsPayload []byte) []byte {
 	t.Helper()
 	var rpcBuf bytes.Buffer

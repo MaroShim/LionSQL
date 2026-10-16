@@ -3,13 +3,13 @@
 ## 1. Overview & Architectural Motivation
 Modern web applications, microservices, and Backend-as-a-Service (BaaS) frameworks (e.g. Supabase, PocketBase, Prisma, Next.js) increasingly adopt semi-structured document patterns where relational tables store JSON payloads alongside primary relational keys.
 
-To provide first-class support for semi-structured data across both PostgreSQL Wire Protocol (`:5433`) and Microsoft SQL Server TDS Protocol (`:1433`), SQLion unifies JSON querying and indexing into a high-performance, dual-protocol standard backed by its native B+Tree storage backends (WiredTiger MVCC & In-Memory OCC SkipList).
+To provide first-class support for semi-structured data across both PostgreSQL Wire Protocol (`:5433`) and Microsoft SQL Server TDS Protocol (`:1433`), LionSQL unifies JSON querying and indexing into a high-performance, dual-protocol standard backed by its native B+Tree storage backends (WiredTiger MVCC & In-Memory OCC SkipList).
 
 ---
 
 ## 2. Syntax Comparison: PostgreSQL vs MySQL vs SQL Server
 
-| Capability / DBMS | **PostgreSQL** | **MySQL (8.0+)** | **Microsoft SQL Server (T-SQL)** | **SQLion (Unified Architecture)** |
+| Capability / DBMS | **PostgreSQL** | **MySQL (8.0+)** | **Microsoft SQL Server (T-SQL)** | **LionSQL (Unified Architecture)** |
 | :--- | :--- | :--- | :--- | :--- |
 | **Scalar Extraction** | `data->>'key'` | `data->>'$.key'` | `JSON_VALUE(data, '$.key')` | **Both supported**: `data->>'key'` and `JSON_VALUE(data, '$.key')` |
 | **Object / Array Extraction** | `data->'key'` | `data->'$.key'` | `JSON_QUERY(data, '$.key')` | **Both supported**: `data->'key'` and `JSON_QUERY(data, '$.key')` |
@@ -20,11 +20,11 @@ To provide first-class support for semi-structured data across both PostgreSQL W
 
 ---
 
-## 3. SQLion Architectural Decision: Expression B-Tree Indexing
+## 3. LionSQL Architectural Decision: Expression B-Tree Indexing
 
 ### 3.1. Rationale for Expression B-Tree Indexing
 1. **Zero-Overhead Storage Alignment (KISS & DRY)**:
-   - SQLion's storage engines are optimized for sorted scalar keys: WiredTiger Lock-Free B+Trees (`pkg/storage/wiredtiger`) and Concurrent SkipLists (`pkg/storage/memengine`).
+   - LionSQL's storage engines are optimized for sorted scalar keys: WiredTiger Lock-Free B+Trees (`pkg/storage/wiredtiger`) and Concurrent SkipLists (`pkg/storage/memengine`).
    - Generalized Inverted Indexes (GIN) require dedicated posting lists, inverted tree structures, and high write amplification on ingestion.
    - An **Expression B-Tree Index** extracts a scalar string/number from the JSON column on write (`INSERT` / `UPDATE`) and stores it directly into standard B+Tree index pages, achieving sub-microsecond point lookups and range scans.
 2. **Frictionless Developer Experience (DX)**:

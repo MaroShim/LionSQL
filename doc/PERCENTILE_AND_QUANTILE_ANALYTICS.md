@@ -1,10 +1,10 @@
-# SQLion Quantile & Percentile Analytics Specification
+# LionSQL Quantile & Percentile Analytics Specification
 
 ## 1. Architectural Overview
 
 In high-concurrency OLAP and telemetry pipelines, computing percentiles (P50, P90, P95, P99) in client applications requires transferring uncompressed raw datasets across the network, leading to high network I/O, CPU overhead, and memory pressure.
 
-SQLion implements **in-engine exact and streaming approximate quantile operators** across both its Volcano execution engine and window function subsystem:
+LionSQL implements **in-engine exact and streaming approximate quantile operators** across both its Volcano execution engine and window function subsystem:
 - **`PERCENTILE_CONT`**: ANSI SQL standard continuous percentile with linear interpolation.
 - **`PERCENTILE_DISC`**: ANSI SQL standard discrete percentile (nearest rank).
 - **`APPROX_PERCENTILE`**: High-performance streaming approximate percentile powered by the **T-Digest** algorithm with bounded memory footprint ($O(1)$ centroids).

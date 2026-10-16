@@ -1,6 +1,6 @@
-# SQLion Pitfalls & Engineering Tricks (`notes/PITFALLS_AND_TRICKS.md`)
+# LionSQL Pitfalls & Engineering Tricks (`notes/PITFALLS_AND_TRICKS.md`)
 
-이 문서는 SQLion 코드베이스에서 작업할 때 다른 기계의 개발자나 AI가 섣불리 건드렸다가 컴파일 에러, 런타임 패닉, 데이터 레이스를 겪기 쉬운 **미묘한 지뢰밭(Landmines)과 특수한 아키텍처 트릭**을 기록합니다.
+이 문서는 LionSQL 코드베이스에서 작업할 때 다른 기계의 개발자나 AI가 섣불리 건드렸다가 컴파일 에러, 런타임 패닉, 데이터 레이스를 겪기 쉬운 **미묘한 지뢰밭(Landmines)과 특수한 아키텍처 트릭**을 기록합니다.
 
 ---
 

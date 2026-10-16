@@ -35,7 +35,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * End-to-end architectural blueprint of LionSQL.
   * Dual-storage backend (Pure-Go OCC memory engine vs WiredTiger lock-free B+Tree with MVCC).
   * Ambient ACID transactions, isolation levels, and goroutine connection pooler.
-* [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/SQLion/doc/INTERNALS_STORAGE.md)
+* [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_STORAGE.md)
   * Deep dive into the storage engine interface contract.
   * SkipList in-memory indexing vs WiredTiger page structures, checkpoints, and write-ahead logging (WAL).
   * Physical storage directory layout, `catalog.json` metadata persistence, `cbo_stats.json`, and secondary index persistence.
@@ -124,6 +124,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
 * [`CDC_DUCKDB_INTEGRATION.md`](file:///Users/maro/Projects/sql/doc/CDC_DUCKDB_INTEGRATION.md)
   * LionSQL 실시간 CDC 스트림(`GET /api/cdc/stream`) 및 DuckDB 분리형(Decoupled) HTAP 분석 연동 가이드 (Python & DuckDB 샘플 포함).
+* [`S3_PRESIGNED_STORAGE_PLAN.md`](file:///Users/maro/Projects/sql/doc/S3_PRESIGNED_STORAGE_PLAN.md)
+  * 패턴 1 S3 Pre-signed URL 직접 업로드 아키텍처 및 구현 계획 (순수 Go SigV4 서명, REST API, T-SQL 내장 함수, CDC 고아 파일 방지).
 
 ---
 

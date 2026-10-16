@@ -1,6 +1,6 @@
-# SQLion Auto-Generated RESTful Records CRUD API
+# LionSQL Auto-Generated RESTful Records CRUD API
 
-SQLion provides instant, zero-code **Auto-Generated RESTful CRUD APIs** for all database tables. The moment a table is created (via T-SQL DDL, SQL migration, or Web Studio), standard REST endpoints are automatically exposed under `/api/records/:table`.
+LionSQL provides instant, zero-code **Auto-Generated RESTful CRUD APIs** for all database tables. The moment a table is created (via T-SQL DDL, SQL migration, or Web Studio), standard REST endpoints are automatically exposed under `/api/records/:table`.
 
 Frontend applications (React, Next.js, Vue, Flutter, iOS, Android) and backend microservices can interact directly with the database without writing boilerplate backend controllers, ORM models, or custom SQL wrappers.
 
@@ -23,7 +23,7 @@ Frontend applications (React, Next.js, Vue, Flutter, iOS, Android) and backend m
                         │
                         ▼
   ┌────────────────────────────────────────────────────────┐
-  │  SQLion Core Engine                                    │
+  │  LionSQL Core Engine                                    │
   │  ├─ URL Query Filter Parser (pkg/api/records_filter.go) │
   │  ├─ Granular Table-Level API Key Authorization         │
   │  ├─ Storage Session & Concurrency Governor             │
@@ -353,4 +353,4 @@ eventSource.onmessage = (e) => {
   console.log('Realtime change detected:', event);
 };
 ```
-Whenever a record is created, modified, or deleted via `/api/records/:table`, SQLion broadcasts the event instantaneously to all connected subscribers.
+Whenever a record is created, modified, or deleted via `/api/records/:table`, LionSQL broadcasts the event instantaneously to all connected subscribers.

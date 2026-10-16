@@ -1,12 +1,12 @@
-# SQLion User Manual
+# LionSQL User Manual
 
-이 문서는 SQLion 데이터베이스 엔진을 처음 설치하고 실행하는 방법부터, 클라이언트 연결, 애플리케이션 개발, 그리고 운영 및 유지보수까지 전 과정을 단계별로 안내하는 **사용자 매뉴얼(User Manual)** 목차 및 골격입니다.
+이 문서는 LionSQL 데이터베이스 엔진을 처음 설치하고 실행하는 방법부터, 클라이언트 연결, 애플리케이션 개발, 그리고 운영 및 유지보수까지 전 과정을 단계별로 안내하는 **사용자 매뉴얼(User Manual)** 목차 및 골격입니다.
 
 ---
 
 ## 목차 (Table of Contents)
 
-### 제1장. SQLion 소개 (Introduction)
+### 제1장. LionSQL 소개 (Introduction)
 * **1.1. 개요 및 핵심 특징**
   * 단일 바이너리(Zero-External-Dependency) 아키텍처
   * 고동시성 임베디드 OLTP 엔진과 내장 Backend-as-a-Service (BaaS)

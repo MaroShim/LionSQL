@@ -1,6 +1,6 @@
-# SQLion Production Deployment & Operations Runbook
+# LionSQL Production Deployment & Operations Runbook
 
-This guide details deployment patterns, operational runbooks, process supervision, disaster recovery, and security hardening for SQLion in production environments.
+This guide details deployment patterns, operational runbooks, process supervision, disaster recovery, and security hardening for LionSQL in production environments.
 
 ---
 
@@ -31,7 +31,7 @@ Create `/etc/systemd/system/sqlion.service`:
 
 ```ini
 [Unit]
-Description=SQLion High-Concurrency OLTP Database Server
+Description=LionSQL High-Concurrency OLTP Database Server
 After=network.target local-fs.target
 Documentation=https://github.com/sqlion/sqlion
 
@@ -128,7 +128,7 @@ volumes:
 
 ## 3. Background Daemon Lifecycle Controls
 
-SQLion includes native daemon lifecycle commands without external process wrappers:
+LionSQL includes native daemon lifecycle commands without external process wrappers:
 
 ```bash
 # 1. Start as background daemon
@@ -187,7 +187,7 @@ chmod +x /etc/cron.daily/sqlion-backup
 
 In the event of hardware failure or catastrophic corruption:
 
-1. Provision a clean host and install the SQLion binary.
+1. Provision a clean host and install the LionSQL binary.
 2. Retrieve the latest backup archive (`sqlion_backup_YYYYMMDD_HHMMSS.tar.gz`).
 3. Restore using the CLI utility:
    ```bash
@@ -211,7 +211,7 @@ In the event of hardware failure or catastrophic corruption:
 ### 5.1. Network Binding & Reverse Proxy
 
 For public production environments:
-1. Bind SQLion HTTP API (`-http`) to `127.0.0.1:8090`.
+1. Bind LionSQL HTTP API (`-http`) to `127.0.0.1:8090`.
 2. Terminate TLS/HTTPS and WebSockets using Nginx or Caddy.
 
 Example Nginx reverse proxy configuration:
@@ -284,7 +284,7 @@ readinessProbe:
 
 ## 7. High-Availability & 1-Writer Multi-Reader Replication Runbook
 
-SQLion enforces a **1-Writer Multi-Reader High-Availability Architecture** (GEMINI.md Section 6). The primary node accepts all read/write mutations, while secondary replicas continuously stream and replay WAL records, providing linear horizontal read capacity and rapid failover.
+LionSQL enforces a **1-Writer Multi-Reader High-Availability Architecture** (GEMINI.md Section 6). The primary node accepts all read/write mutations, while secondary replicas continuously stream and replay WAL records, providing linear horizontal read capacity and rapid failover.
 
 ### 7.1. Launching the Primary Node
 

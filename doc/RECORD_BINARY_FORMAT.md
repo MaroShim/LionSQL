@@ -1,6 +1,6 @@
-# SQLion Internals: Schema-Aware Compact Binary Tuple Format (`pkg/storage/tuple.go`)
+# LionSQL Internals: Schema-Aware Compact Binary Tuple Format (`pkg/storage/tuple.go`)
 
-This document details the binary record serialization format, bit-level memory layout, encoding specifications, performance optimizations, and architectural lineage implemented in SQLion's storage layer.
+This document details the binary record serialization format, bit-level memory layout, encoding specifications, performance optimizations, and architectural lineage implemented in LionSQL's storage layer.
 
 ---
 
@@ -13,13 +13,13 @@ Traditional database engines and document stores frequently rely on generic seri
 2. **Dynamic Type Tag Overhead**: Repeating type tags per field imposes unnecessary branch mispredictions and decoding overhead.
 3. **Heavy Heap Allocation**: Deserializing generic formats typically instantiates intermediate `map[string]any` dictionaries, triggering high Go garbage collection (GC) pressure.
 
-SQLion eliminates these overheads via a **Schema-Aware Compact Binary Tuple Codec** (`pkg/storage/tuple.go`). Because table schemas are already persisted in the database catalog, tuples omit column names and sequential type descriptors entirely, serializing only minimal headers, null bitmaps, and dense value payloads.
+LionSQL eliminates these overheads via a **Schema-Aware Compact Binary Tuple Codec** (`pkg/storage/tuple.go`). Because table schemas are already persisted in the database catalog, tuples omit column names and sequential type descriptors entirely, serializing only minimal headers, null bitmaps, and dense value payloads.
 
 ---
 
 ## 2. Binary Layout Specification
 
-A SQLion binary tuple is a contiguous byte slice structured as follows:
+A LionSQL binary tuple is a contiguous byte slice structured as follows:
 
 ```
 ┌─────────────────┬──────────────────────────┬────────────────────────────────────────────────────────┐
@@ -66,12 +66,12 @@ Non-NULL columns are serialized in the exact ordinal sequence defined by `TableS
 ## 3. Detailed Data Type Encodings
 
 ### 3.1. Integer Compression (`TypeInt`)
-SQLion applies Google Protocol Buffers-style ZigZag encoding combined with LEB128 unsigned varints (`binary.PutVarint`):
+LionSQL applies Google Protocol Buffers-style ZigZag encoding combined with LEB128 unsigned varints (`binary.PutVarint`):
 - Small positive and negative integers (e.g., $0, 1, -1, 100$) map to small unsigned values and pack into 1 or 2 bytes instead of 8 bytes.
 - Typical OLTP Primary Keys and foreign key IDs ($1 \sim 100,000$) require only 2 to 3 bytes.
 
 ### 3.2. Variable-Length String & Binary Encoding
-Rather than null-terminated strings (`\0`), which prevent binary transparency and require linear byte scanning, SQLion enforces length-prefixed encoding:
+Rather than null-terminated strings (`\0`), which prevent binary transparency and require linear byte scanning, LionSQL enforces length-prefixed encoding:
 - The byte length $L$ is encoded as an unsigned LEB128 varint (`binary.PutUvarint`).
 - Followed immediately by the exact $L$ bytes.
 - Decoders read the length in $O(1)$, allocate or slice the underlying buffer directly without string scanning, and preserve embedded null characters (`\x00`).
@@ -85,10 +85,10 @@ High-precision monetary and financial amounts (`storage.Decimal`, e.g., TPC-C ba
 
 ## 4. Architectural Lineage & Design Influences
 
-The architecture of SQLion's compact binary tuple derives from battle-tested principles established in modern relational and distributed database kernels:
+The architecture of LionSQL's compact binary tuple derives from battle-tested principles established in modern relational and distributed database kernels:
 
 ```
-                  [ Architectural Lineage of SQLion Binary Tuple ]
+                  [ Architectural Lineage of LionSQL Binary Tuple ]
                                           │
        ┌──────────────────────────────────┼──────────────────────────────────┐
        ▼                                  ▼                                  ▼
@@ -99,7 +99,7 @@ The architecture of SQLion's compact binary tuple derives from battle-tested pri
 
 1. **PostgreSQL Heap Tuple Header (`t_bits`)**:
    - Reference: PostgreSQL `HeapTupleHeaderData` (`src/include/access/htup_details.h`).
-   - PostgreSQL places a null bitmap (`t_bits`) immediately after the fixed header, allowing NULL attributes to consume zero payload storage. SQLion adopts this exact rule via the prefix null bitmap.
+   - PostgreSQL places a null bitmap (`t_bits`) immediately after the fixed header, allowing NULL attributes to consume zero payload storage. LionSQL adopts this exact rule via the prefix null bitmap.
 2. **Schema-Aware Row Encoding in Distributed KV Engines**:
    - Reference: CockroachDB row-level encoding, TiDB Table-to-KV mapping.
    - Key-Value-backed SQL engines decouple schema metadata from row payloads. Since the database catalog already maintains column types and indices, rows persist only raw values in column definition order.
@@ -111,7 +111,7 @@ The architecture of SQLion's compact binary tuple derives from battle-tested pri
 
 ## 5. Storage Engine Integration
 
-SQLion applies this binary tuple codec across both storage engines in distinct, optimized roles:
+LionSQL applies this binary tuple codec across both storage engines in distinct, optimized roles:
 
 ### 5.1. WiredTiger Storage Backend (`pkg/storage/wiredtiger/`)
 WiredTiger organizes tables as B+Trees where keys and values are opaque byte arrays:
@@ -135,7 +135,7 @@ The in-memory OCC engine partitions responsibilities between fast RAM execution 
 
 ## 6. Zero-Allocation & Concurrency Performance
 
-To satisfy SQLion's engineering golden rules regarding zero-allocation hot paths (Rule 30) and responsive latency budgets (Rule 31), the tuple codec incorporates several low-level optimizations:
+To satisfy LionSQL's engineering golden rules regarding zero-allocation hot paths (Rule 30) and responsive latency budgets (Rule 31), the tuple codec incorporates several low-level optimizations:
 
 ### 6.1. Scratch Buffer Pooling (`sync.Pool`)
 Encoding binary tuples requires allocating destination byte slices. Instead of triggering dynamic heap allocations per mutation, `pkg/storage/tuple.go` maintains a global buffer pool:
@@ -156,7 +156,7 @@ Legacy database layers typically decode bytes into `map[string]any` dictionaries
 2. String hashing overhead for column lookups.
 3. Interface boxing (`any`) for primitive values.
 
-SQLion's `DecodeTupleToRow(schema, data)` bypasses maps entirely:
+LionSQL's `DecodeTupleToRow(schema, data)` bypasses maps entirely:
 - Pre-allocates a slice of `storage.Value` matching `len(schema.Columns)`.
 - Fills values directly by index using unboxed primitive fields (`IVal int64`, `FVal float64`, `SVal string`, `BVal bool`).
 - Upstream Volcano iterators and VDBE execution frames consume `storage.Row` directly, achieving zero map overhead across scans.

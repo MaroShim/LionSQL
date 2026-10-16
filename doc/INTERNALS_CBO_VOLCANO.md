@@ -1,6 +1,6 @@
-# SQLion Internals: Cost-Based Optimizer (CBO) & Volcano Iterator Pipeline
+# LionSQL Internals: Cost-Based Optimizer (CBO) & Volcano Iterator Pipeline
 
-This document describes the internal algorithms, physical cost models, statistical estimation techniques, and memory governor mechanics implemented in SQLion's query planner (`pkg/planner/`) and relational execution engine (`pkg/execution/`).
+This document describes the internal algorithms, physical cost models, statistical estimation techniques, and memory governor mechanics implemented in LionSQL's query planner (`pkg/planner/`) and relational execution engine (`pkg/execution/`).
 
 ---
 
@@ -120,7 +120,7 @@ The query planner evaluates alternative physical execution plans using cost mode
 
 ### 3.1. Statistics Catalog & `ANALYZE TABLE`
 
-When `ANALYZE TABLE <name>` runs, SQLion computes:
+When `ANALYZE TABLE <name>` runs, LionSQL computes:
 
 ```go
 type TableStats struct {

@@ -1,12 +1,12 @@
-# SQLion Internals: Multi-Wire Protocol Mechanics (PostgreSQL v3 & MSSQL TDS)
+# LionSQL Internals: Multi-Wire Protocol Mechanics (PostgreSQL v3 & MSSQL TDS)
 
-This document details the binary framing, state machines, packet parsers, and multiplexing mechanisms implemented in SQLion's wire protocol subsystem (`pkg/wire/` and `pkg/wire/tds/`).
+This document details the binary framing, state machines, packet parsers, and multiplexing mechanisms implemented in LionSQL's wire protocol subsystem (`pkg/wire/` and `pkg/wire/tds/`).
 
 ---
 
 ## 1. Multi-Protocol Wire Architecture
 
-SQLion concurrently listens on standard database ports using native Go TCP servers, eliminating proxy layers:
+LionSQL concurrently listens on standard database ports using native Go TCP servers, eliminating proxy layers:
 
 ```
                                  [ Client Applications ]
@@ -39,13 +39,13 @@ SQLion concurrently listens on standard database ports using native Go TCP serve
 sequenceDiagram
     autonumber
     participant Client
-    participant Server as SQLion (Port :5433)
+    participant Server as LionSQL (Port :5433)
 
     Client->>Server: SSLRequest (Int32(8), Int32(80877103))
     Server-->>Client: Byte('N') (SSL not enabled)
     Client->>Server: StartupMessage (Int32(len), Version(3.0), key-value pairs)
     Server-->>Client: AuthenticationOk ('R', Int32(8), Int32(0))
-    Server-->>Client: ParameterStatus ('S', "server_version", "15.0 (SQLion)")
+    Server-->>Client: ParameterStatus ('S', "server_version", "15.0 (LionSQL)")
     Server-->>Client: ParameterStatus ('S', "client_encoding", "UTF8")
     Server-->>Client: ParameterStatus ('S', "standard_conforming_strings", "on")
     Server-->>Client: ReadyForQuery ('Z', Int32(5), Byte('I'))
@@ -55,7 +55,7 @@ sequenceDiagram
 
 ### 2.2. Extended Query Protocol State Machine
 
-For high-throughput ORMs (GORM, Prisma, Hibernate) and prepared statements, SQLion implements the Extended Query Protocol:
+For high-throughput ORMs (GORM, Prisma, Hibernate) and prepared statements, LionSQL implements the Extended Query Protocol:
 
 ```
 [ Client Message ] ──> Parse ('P')      ──> Compiles & stores PreparedStatement in session
@@ -124,7 +124,7 @@ Every TDS communication is framed by an 8-byte header:
 sequenceDiagram
     autonumber
     participant Client as sqlcmd / SSMS
-    participant Server as SQLion (Port :1433)
+    participant Server as LionSQL (Port :1433)
 
     Client->>Server: PRELOGIN Packet (Type 0x12, Version tokens, Encryption 0x02)
     Server-->>Client: PRELOGIN Response (Encryption 0x02 - Not Supported, Version 15.0)
@@ -147,7 +147,7 @@ When client tools call stored procedures (e.g. `EXEC TransferFunds @from=1, @to=
 
 ## 4. Built-in Connection Pooler Architecture
 
-SQLion eliminates external PgBouncer instances by managing client connections directly inside the Go runtime:
+LionSQL eliminates external PgBouncer instances by managing client connections directly inside the Go runtime:
 
 ```
 [ 10,000+ External Client Connections ]
@@ -170,7 +170,7 @@ SQLion eliminates external PgBouncer instances by managing client connections di
 
 ## 5. Zero-Allocation Response Packet Buffer Pooling (v0.11.0)
 
-Under high-concurrency client connections streaming multi-thousand row result sets, per-row memory allocations create severe GC pressure. SQLion implements granular `sync.Pool` buffer recycling across both wire protocols:
+Under high-concurrency client connections streaming multi-thousand row result sets, per-row memory allocations create severe GC pressure. LionSQL implements granular `sync.Pool` buffer recycling across both wire protocols:
 
 ### 5.1. PostgreSQL Wire Protocol (`WriteDataRow`)
 - Preallocates 4KB slice buffers via `packetBufferPool = sync.Pool`.

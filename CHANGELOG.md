@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to SQLion are documented in this file.
+All notable changes to LionSQL are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ---
@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **TDS Single-Frame Buffer Pooling & 50% Syscall Reduction (`pkg/wire/tds`)**:
+  - Implemented `sync.Pool`-backed 4,096-byte frame buffer (`tdsFramePool`) in `pkg/wire/tds/packet.go` to pack the 8-byte TDS header and chunk payload contiguously into a single byte slice.
+  - Eliminated the split two-call `Write(hdr)` and `Write(payload)` pattern, cutting OS socket system calls by exactly 50% across all TDS client responses with zero heap allocation.
+  - Added unit test `TestTDS_WritePacket_SingleSyscallPerPacket` to deterministically verify single-syscall emission across empty, single-frame, and multi-frame packets.
 - **Volcano Vectorized Batch Chunk Pooling (`P-12`) (`pkg/execution`)**:
   - Implemented `sync.Pool`-backed vector batch chunk pooling (`GetChunk`, `PutChunk`, `AcquireChunk`, `ReleaseChunk`) in `pkg/execution/chunk.go`.
   - Cleared tuple references (`Tuple.Values`, `Lazy`, `Index`) upon chunk recycling to prevent GC memory leaks, bounding pooled chunk capacity to `DefaultChunkSize * 4` (Golden Rule 23).
@@ -17,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Leveraged Go 1.21+ built-in `clear(m)` in `releaseToPoolLocked()` to wipe map contents in $O(1)$ time while preserving underlying hash table bucket arrays.
   - Added bounded resource guard against oversized transaction collections (> 1,024 changes) to prevent memory retention spikes.
   - Achieved zero-allocation transaction creation for high-frequency OLTP workloads (16,000~20,000+ TPS).
+- **TPC-C VDBE Bytecode Engine 20k TPS Milestone & Benchmark Verification (`doc/BENCHMARK.md`, `README.md`)**:
+  - Reached **20,087.70 TPS** (541,708.93 tpmC, peak 25,298 TPS) on the In-Memory OCC engine with 10 warehouses and 20 concurrent client workers, achieving sub-millisecond median latencies (New-Order P50 0.69ms, Payment P50 0.05ms) and slashing serialization abort rate to **0.10%**.
+  - Advanced WiredTiger disk B+Tree MVCC throughput to **16,814.17 TPS** (457,021.04 tpmC, +13.2% gain) with flat P99 tail latency (New-Order P99 9.46ms), powered by P-8 cursor pooling and P-12 chunk pooling.
 - **Semi-Structured JSON Same-Tuple DOM Cache & Zero-Allocation Key Scanner (`P-7`) (`pkg/storage`, `pkg/engine`)**:
   - Implemented zero-allocation streaming byte scanner `ScanJSONTopLevelKey` in `pkg/storage/json.go` for direct extraction of top-level scalar keys (`doc->>'city'`, `JSON_VALUE(doc, '$.city')`) without unmarshaling or building an AST/DOM.
   - Implemented bounded FIFO DOM cache (`globalDOMCache`, capacity 1,024 entries) with thread-safe `sync.RWMutex` to parse JSON documents once per tuple when querying multiple complex paths.
@@ -298,7 +305,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Removed
 - **Redundant In-Memory MVCC Vacuum & Shared-Memory Arrow Snapshot Backlog Pruning**:
-  - Removed in-memory OCC background vacuum worker proposal from engineering backlogs. SQLion's in-memory OCC engine commits mutations atomically via version swaps and discards aborted workspaces without accumulating multi-version dead tuple chains, rendering background vacuum worker threads redundant (YAGNI, Golden Rule 15).
+  - Removed in-memory OCC background vacuum worker proposal from engineering backlogs. LionSQL's in-memory OCC engine commits mutations atomically via version swaps and discards aborted workspaces without accumulating multi-version dead tuple chains, rendering background vacuum worker threads redundant (YAGNI, Golden Rule 15).
   - Removed POSIX shared-memory (`/dev/shm`, `mmap`) Apache Arrow IPC table snapshot proposal. Serializing entire tables into Arrow IPC files incurs high CPU/memory scan overhead and OS portability friction; unified analytical ingestion (DuckDB, external brokers) behind the transaction-atomic CDC / WAL streaming pipeline.
   - Documented architectural rationale and spec-out criteria in `notes/ENGINEERING_CONTEXT.md` (Invariants 7 and 8).
 
@@ -712,7 +719,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - **1-Writer Multi-Reader WAL Replication & High-Availability Server Integration (`cmd/server`, `pkg/replication`, `pkg/api`, `pkg/config`)**:
-  - Integrated the availability group replication manager into the SQLion standalone server, supporting 1-writer primary nodes and multi-reader secondary replicas.
+  - Integrated the availability group replication manager into the LionSQL standalone server, supporting 1-writer primary nodes and multi-reader secondary replicas.
   - Added CLI flags `--replica-of <primary_url>` and `--node-id <id>` with corresponding configuration hierarchy mappings in `sqlion.json`.
   - Exposed HTTP endpoints `/api/replication/stream`, `/api/replication/status`, `/api/replication/ack`, `/api/replication/promote`, and `/api/replication/demote`.
   - Enforced strict read-only invariants across all wire protocols and REST endpoints for secondary replicas (`IsReadOnly()` write rejection with `ErrReadOnlyReplica`), guarding DDL (`CREATE/ALTER/DROP/TRUNCATE`), DML (`INSERT/UPDATE/DELETE/MERGE`), and interactive `BEGIN TRANSACTION READ WRITE`.
@@ -1176,7 +1183,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added comprehensive test suite in `pkg/api/mailer_test.go`.
 - **Asynchronous Webhook Dispatch Engine (`pkg/api`, `pkg/ui`)**:
   - Implemented asynchronous, non-blocking `WebhookDispatcher` (`pkg/api/webhook.go`) with dedicated goroutine worker pool (4 workers), bounded event channel queue (capacity 1024), and exponential backoff retry policy (up to 3 retries: 1s, 2s, 4s).
-  - Added cryptographic payload integrity verification via HMAC-SHA256 signatures transmitted in the `X-SQLion-Signature: sha256=<hex>` request header.
+  - Added cryptographic payload integrity verification via HMAC-SHA256 signatures transmitted in the `X-LionSQL-Signature: sha256=<hex>` request header.
   - Implemented thread-safe, in-memory delivery audit ring buffer (capped at 200 entries) recording delivery attempt count, HTTP response status code, round-trip latency in milliseconds, and execution timestamps.
   - Integrated with `RealtimeBroker`, automatically fanning out database mutation events (`create`, `update`, `delete`, `import`) to matching webhooks across all database tables or specific table scopes.
   - Exposed RESTful management endpoints (`pkg/api/webhook_handlers.go`): `GET /api/webhooks`, `POST /api/webhooks`, `DELETE /api/webhooks/:id`, `POST /api/webhooks/:id/test` (instant test ping delivery), `GET /api/webhooks/deliveries`, and `DELETE /api/webhooks/deliveries`.
@@ -1508,7 +1515,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - `LICENSE`: Official GNU General Public License v2 / v3 dual licensing terms.
 
 ### Changed
-- Standardized project workspace paths and module references to `SQLion` across all architectural documentation.
+- Standardized project workspace paths and module references to `LionSQL` across all architectural documentation.
 
 ---
 
@@ -1590,7 +1597,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - WiredTiger session tuning and disk I/O optimization.
 
 ### Changed
-- Project, Go module, and repository rebranded and standardized to `SQLion`.
+- Project, Go module, and repository rebranded and standardized to `LionSQL`.
 
 ---
 

@@ -1,6 +1,6 @@
-# SQLion In-Engine Log Processing: GREP and AWK Reference Guide
+# LionSQL In-Engine Log Processing: GREP and AWK Reference Guide
 
-This document specifies the design, syntax, and operational usage of SQLion's native in-engine log processing operators: `GREP` and `AWK` (also aliased as `SPLIT_PART`).
+This document specifies the design, syntax, and operational usage of LionSQL's native in-engine log processing operators: `GREP` and `AWK` (also aliased as `SPLIT_PART`).
 
 ---
 
@@ -15,10 +15,10 @@ Database Disk ──► Row Deserialization ──► String Encoding ──► 
 
 This traditional workflow introduces massive I/O serialization penalties, high network bandwidth usage, and memory fragmentation (GC pressure).
 
-SQLion brings Unix-style text and log processing directly into the database engine:
+LionSQL brings Unix-style text and log processing directly into the database engine:
 
 ```
-[ SQLion In-Engine Pipeline ]
+[ LionSQL In-Engine Pipeline ]
 Storage Pages ──► Zero-Copy Byte Scan ──► In-Engine GREP/AWK Filter ──► Materialized Result Set
                                             (Discard unneeded rows)
 ```
@@ -47,7 +47,7 @@ REGEXP_LIKE(text_expression, pattern_string)
 
 #### Arguments
 - `text_expression`: The input string or table column to search against. If `NULL`, returns `false`.
-- `pattern_string`: A standard regular expression pattern (Go RE2 standard). If empty (`''`), returns `true`. If the pattern is an invalid regular expression, SQLion falls back to a safe case-insensitive literal substring search.
+- `pattern_string`: A standard regular expression pattern (Go RE2 standard). If empty (`''`), returns `true`. If the pattern is an invalid regular expression, LionSQL falls back to a safe case-insensitive literal substring search.
 
 #### Return Type
 - `BOOLEAN` (`true` or `false`).
@@ -164,5 +164,5 @@ END;
 ## 4. Performance & Engineering Best Practices
 
 1. **Predicate Pushdown**: Place `GREP` directly inside `WHERE` clauses so the volcano `FilterIterator` can reject non-matching rows early before projection allocations.
-2. **Deterministic Regex Compilation**: SQLion caches parsed regular expressions in evaluation loops, avoiding repeated pattern re-compilations over high-volume scans.
-3. **Safe Fallback**: If an invalid regex pattern is provided (such as an unclosed bracket), SQLion automatically falls back to an exact case-insensitive substring search rather than panicking or terminating active client transactions.
+2. **Deterministic Regex Compilation**: LionSQL caches parsed regular expressions in evaluation loops, avoiding repeated pattern re-compilations over high-volume scans.
+3. **Safe Fallback**: If an invalid regex pattern is provided (such as an unclosed bracket), LionSQL automatically falls back to an exact case-insensitive substring search rather than panicking or terminating active client transactions.

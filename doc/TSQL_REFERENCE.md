@@ -1,12 +1,12 @@
-# SQLion T-SQL & SQL Syntax Reference Guide
+# LionSQL T-SQL & SQL Syntax Reference Guide
 
-This document provides the definitive syntax specification and usage reference for SQLion's SQL and Microsoft T-SQL procedural dialect.
+This document provides the definitive syntax specification and usage reference for LionSQL's SQL and Microsoft T-SQL procedural dialect.
 
 ---
 
 ## 1. Supported Data Types
 
-SQLion supports the following core SQL and T-SQL primitive types:
+LionSQL supports the following core SQL and T-SQL primitive types:
 
 | Type Name | Synonyms | Storage Representation | Default Literal Format | Nullable |
 |---|---|---|---|---|
@@ -82,7 +82,7 @@ CREATE TABLE ##global_config (
 
 ### 2.5. Secondary Indexes
 
-SQLion supports unique and non-unique secondary indexes on single or multiple columns:
+LionSQL supports unique and non-unique secondary indexes on single or multiple columns:
 
 ```sql
 -- Create non-unique secondary index
@@ -172,7 +172,7 @@ SELECT item_id, quantity * price AS total FROM @cart;
 
 ## 4. Relational Queries (DQL)
 
-SQLion executes relational queries using a streaming Volcano Iterator Pipeline with Cost-Based Optimization.
+LionSQL executes relational queries using a streaming Volcano Iterator Pipeline with Cost-Based Optimization.
 
 ### 4.1. Filtering & Projection
 
@@ -184,7 +184,7 @@ WHERE balance >= 500 AND (holder = 'Alice' OR holder LIKE 'B%');
 
 ### 4.2. Joins (Hash Join & Index Nested Loop Join)
 
-SQLion supports `INNER JOIN`, `LEFT OUTER JOIN`, and `RIGHT OUTER JOIN`. The CBO evaluates whether to construct an in-memory hash join or probe secondary indexes:
+LionSQL supports `INNER JOIN`, `LEFT OUTER JOIN`, and `RIGHT OUTER JOIN`. The CBO evaluates whether to construct an in-memory hash join or probe secondary indexes:
 
 ```sql
 SELECT a.id, a.holder, o.order_id, o.amount
@@ -206,7 +206,7 @@ HAVING COUNT(*) > 10;
 
 ### 4.4. Sorting, Memory Governor & Pagination
 
-SQLion bounds memory consumption during sorting. When accumulated rows exceed `work_mem`, an **External Merge Sort** automatically spills chunks to disk and merges them via an N-way Min-Heap:
+LionSQL bounds memory consumption during sorting. When accumulated rows exceed `work_mem`, an **External Merge Sort** automatically spills chunks to disk and merges them via an N-way Min-Heap:
 
 ```sql
 -- Configure session-specific sort memory limit
@@ -241,7 +241,7 @@ WHERE id IN (SELECT user_id FROM orders WHERE amount > 500);
 
 ### 4.6. Window Functions
 
-SQLion supports ANSI/ISO SQL and T-SQL window ranking and offset functions via physical `WindowIterator`:
+LionSQL supports ANSI/ISO SQL and T-SQL window ranking and offset functions via physical `WindowIterator`:
 
 ```sql
 SELECT id, dept_id, salary,
@@ -270,7 +270,7 @@ WHERE JSON_VALUE(metadata, '$.profile.city') = 'Seoul';
 
 ## 5. T-SQL Stored Procedures
 
-Stored procedures are compiled by SQLion into native register-based VDBE bytecode programs and executed under ambient ACID transactions.
+Stored procedures are compiled by LionSQL into native register-based VDBE bytecode programs and executed under ambient ACID transactions.
 
 ### 5.1. Procedure Syntax & Local Variables
 
@@ -389,7 +389,7 @@ END;
 
 ### 5.6. Flow Control: `GOTO` & Labels
 
-SQLion supports unconditional forward and backward jumps via `GOTO`:
+LionSQL supports unconditional forward and backward jumps via `GOTO`:
 
 ```sql
 CREATE PROCEDURE ProcessQueue
@@ -459,7 +459,7 @@ END;
 
 ## 7. Table Triggers & Virtual Delta Tables
 
-SQLion supports event-driven triggers attached to tables with `AFTER` and `INSTEAD OF` timing for `INSERT`, `UPDATE`, and `DELETE`. Triggers have access to virtual delta relations:
+LionSQL supports event-driven triggers attached to tables with `AFTER` and `INSTEAD OF` timing for `INSERT`, `UPDATE`, and `DELETE`. Triggers have access to virtual delta relations:
 - **`INSERTED`**: Contains new rows being inserted or updated.
 - **`DELETED`**: Contains superseded rows being updated or deleted.
 
@@ -545,7 +545,7 @@ SET IDENTITY_INSERT accounts ON;
 
 ### 9.2. Administrative Stored Procedures
 
-SQLion provides native implementations of Microsoft SQL Server administrative procedures:
+LionSQL provides native implementations of Microsoft SQL Server administrative procedures:
 
 - **`sp_help ['object_name']`**: Introspects table schema, columns, nullable status, and primary/secondary indexes.
 - **`sp_spaceused ['object_name']`**: Reports table row counts, data storage footprint, and index allocations.
@@ -584,4 +584,4 @@ SQLion provides native implementations of Microsoft SQL Server administrative pr
 - `@@ERROR`: Returns `0` on success or non-zero error code.
 - `@@SPID`: Current connection session ID.
 - `@@TRANCOUNT`: Active transaction nesting depth.
-- `@@VERSION`: SQLion build version, engine type, and OS platform.
+- `@@VERSION`: LionSQL build version, engine type, and OS platform.

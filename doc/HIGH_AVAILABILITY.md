@@ -1,12 +1,12 @@
-# SQLion High Availability & Disaster Recovery Architecture
+# LionSQL High Availability & Disaster Recovery Architecture
 
-SQLion is architected to provide enterprise-grade High Availability (HA), continuous data durability, and disaster recovery (DR) across distributed environments. This document details the clustering topology, replication protocols, automatic failover mechanisms, and recovery service level agreements (SLAs).
+LionSQL is architected to provide enterprise-grade High Availability (HA), continuous data durability, and disaster recovery (DR) across distributed environments. This document details the clustering topology, replication protocols, automatic failover mechanisms, and recovery service level agreements (SLAs).
 
 ---
 
 ## 1. High Availability Architecture Overview
 
-SQLion supports two primary clustering models:
+LionSQL supports two primary clustering models:
 1. **Primary-Replica Asynchronous / Semi-Synchronous Log Shipping**: Optimized for read scaling and low-latency local write throughput.
 2. **Quorum-Based Raft Consensus Clustering**: Provides zero-data-loss (RPO = 0) state machine replication and automatic failover (RTO < 5 seconds) without external orchestrators.
 
@@ -17,7 +17,7 @@ SQLion supports two primary clustering models:
                  │ Write Traffic                         │ Read Queries
                  ▼                                       ▼
        ┌───────────────────┐                   ┌───────────────────┐
-       │   SQLion Leader   │                   │  SQLion Follower  │
+       │   LionSQL Leader   │                   │  LionSQL Follower  │
        │   (Read / Write)  │                   │    (Read Only)    │
        └─────────┬─────────┘                   └─────────▲─────────┘
                  │                                       │
@@ -25,7 +25,7 @@ SQLion supports two primary clustering models:
                  │                                       │
                  ▼                                       ▼
        ┌───────────────────┐                   ┌───────────────────┐
-       │  SQLion Follower  │                   │  SQLion Follower  │
+       │  LionSQL Follower  │                   │  LionSQL Follower  │
        │    (Read Only)    │                   │    (Read Only)    │
        └───────────────────┘                   └───────────────────┘
 ```
@@ -50,7 +50,7 @@ Followers maintain persistent TCP streaming connections to the primary node.
 ## 3. Consensus & Failover Lifecycle
 
 ### 3.1 Leader Election
-SQLion utilizes a leader election protocol based on Raft:
+LionSQL utilizes a leader election protocol based on Raft:
 - Each node maintains a randomized election timer ($150\text{ms} - 300\text{ms}$).
 - If a follower misses leader heartbeats beyond the election timeout, it increments its term, transitions to `Candidate` state, and requests votes from peers.
 - A candidate requires majority approval to become the new `Leader`.
@@ -77,7 +77,7 @@ Split-brain scenarios are structurally prevented through strict quorum enforceme
 ## 4. Disaster Recovery & Backup Strategy
 
 ### 4.1 Online Non-Blocking Hot Snapshots
-SQLion provides built-in online non-blocking backup mechanisms (`POST /api/backup` or CLI `-backup <path>`):
+LionSQL provides built-in online non-blocking backup mechanisms (`POST /api/backup` or CLI `-backup <path>`):
 - **Point-in-Time Consistency**: Utilizing MVCC and engine-level checkpointing (such as WiredTiger named checkpoints or In-Memory OCC snapshot isolation), backups are taken live without acquiring table-level locks or interrupting write transactions.
 - **Zero Query Impact**: Background workers stream read-only data pages directly to target storage (local disk, NFS, or cloud object stores) with adaptive throttling to prevent I/O starvation of foreground queries.
 
@@ -108,10 +108,10 @@ Recommended configurations for HAProxy, NGINX, or Envoy:
 
 ## 6. Zero-Downtime Rolling Upgrades
 
-To upgrade SQLion clusters without downtime:
+To upgrade LionSQL clusters without downtime:
 1. **Upgrade Follower Nodes First**:
    - Drain traffic from target follower node.
-   - Stop SQLion process (`SIGTERM`), replace binary with new version, and restart.
+   - Stop LionSQL process (`SIGTERM`), replace binary with new version, and restart.
    - Wait for node to catch up to the leader's LSN and verify health via `GET /api/health`.
    - Repeat for all follower nodes.
 2. **Perform Controlled Leader Step-Down**:
@@ -124,7 +124,7 @@ To upgrade SQLion clusters without downtime:
 
 ## 7. 1-Writer Multi-Reader High-Availability Replication (v0.11.0)
 
-SQLion integrates a native, standalone 1-Writer Multi-Reader High Availability Availability Group architecture into `cmd/server` (`pkg/replication`):
+LionSQL integrates a native, standalone 1-Writer Multi-Reader High Availability Availability Group architecture into `cmd/server` (`pkg/replication`):
 
 ```
                         [ Primary Node (:5433 / :1433 / :8090) ]

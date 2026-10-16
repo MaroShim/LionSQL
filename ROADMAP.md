@@ -1,13 +1,13 @@
-# SQLion Engineering Roadmap & Core Technical Milestones
+# LionSQL Engineering Roadmap & Core Technical Milestones
 
-This document charts the development milestones, verified implementation status, and future engineering challenges for the SQLion high-concurrency embedded database engine.
+This document charts the development milestones, verified implementation status, and future engineering challenges for the LionSQL high-concurrency embedded database engine.
 (For actionable engineering tasks and domain backlogs, refer to [TODO.ko.md](TODO.ko.md).)
 
 ---
 
 ## 1. Milestones & Release Progression Overview
 
-SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP engine to an enterprise-grade, high-availability hybrid database system:
+LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLTP engine to an enterprise-grade, high-availability hybrid database system:
 
 ```
 [ Phase 1: Core Foundation (v0.1.0 - v0.8.0) ] ────► COMPLETED
@@ -85,9 +85,10 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - [x] Multi-Language Client Certification (Python psycopg3/pymssql, Go pgx/mssql, GUI)
   - [x] Storage to Wire Zero-Copy Direct Serialization (P-3)
   - [Postponed] Wasm Runtime Sandbox UDF (wazero)
-  - [Postponed] Volcano Multicore Parallel Query Execution Engine (P-10)
-  - [ ] Enterprise Immutable Audit Log & INSTEAD OF Trigger Interceptor
+  - [ ] Enterprise Immutable Audit Log
+  - [Postponed] INSTEAD OF Trigger Interceptor
   - [ ] Enterprise ODBC / JDBC Driver Certification & Conformance Testing
+  - [Spec-Out] Local & S3-Compatible File Storage Module & Thumbnail Resizing (GEMINI.md 8.7절)
 ```
 
 ---

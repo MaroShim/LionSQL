@@ -1,6 +1,6 @@
-# SQLion Cron Jobs & Mailer Architecture Guide
+# LionSQL Cron Jobs & Mailer Architecture Guide
 
-SQLion includes an embedded recurring **Cron Scheduler** and an outbound **SMTP Mailer** with built-in transactional email templates. Both services operate directly inside the standalone SQLion binary without requiring external cron daemons (like `crontab` or `systemd timers`) or third-party mailing agents.
+LionSQL includes an embedded recurring **Cron Scheduler** and an outbound **SMTP Mailer** with built-in transactional email templates. Both services operate directly inside the standalone LionSQL binary without requiring external cron daemons (like `crontab` or `systemd timers`) or third-party mailing agents.
 
 ---
 
@@ -36,7 +36,7 @@ The `CronScheduler` (`pkg/api/cron.go`) evaluates registered tasks against a 1-s
 
 ### 1.2. Schedule Format (Standard 5-Field Cron)
 
-SQLion supports standard 5-field cron expressions:
+LionSQL supports standard 5-field cron expressions:
 ```
 ┌───────────── minute (0 - 59)
 │ ┌───────────── hour (0 - 23)
@@ -109,7 +109,7 @@ The `Mailer` (`pkg/api/mailer.go`) provides transactional email delivery using G
 - `username`: SMTP auth username
 - `password`: SMTP auth password (masked in API responses as `••••••••`)
 - `from_email`: Sender email address (e.g. `no-reply@yourdomain.com`)
-- `from_name`: Sender display name (e.g. `SQLion Notifications`)
+- `from_name`: Sender display name (e.g. `LionSQL Notifications`)
 - `tls`: Enable direct TLS dial
 - `enabled`: Global toggle to enable/disable outgoing email delivery
 

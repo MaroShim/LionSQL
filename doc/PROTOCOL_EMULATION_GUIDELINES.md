@@ -1,10 +1,10 @@
-# SQLion Engineering Guidelines: Multi-Protocol Emulation Boundaries
+# LionSQL Engineering Guidelines: Multi-Protocol Emulation Boundaries
 
 ## 1. Overview & Core Architectural Identity
 
-SQLion is architected as an **autonomous, high-concurrency embedded OLTP database engine** featuring a single unified VDBE bytecode virtual machine executing Microsoft T-SQL stored procedures and ANSI SQL queries.
+LionSQL is architected as an **autonomous, high-concurrency embedded OLTP database engine** featuring a single unified VDBE bytecode virtual machine executing Microsoft T-SQL stored procedures and ANSI SQL queries.
 
-To maximize ecosystem reach, SQLion exposes multiple database network listeners concurrently from its single static executable:
+To maximize ecosystem reach, LionSQL exposes multiple database network listeners concurrently from its single static executable:
 - **TDS 7.x/8.0 Protocol** (Default TCP `:1433`): Native Microsoft SQL Server tools, SSMS, Azure Data Studio, `go-mssqldb`.
 - **PostgreSQL Wire Protocol v3** (Default TCP `:5433`): `psql`, `pgx/v5`, `lib/pq`, DBeaver, TablePlus, DataGrip, GORM, Prisma.
 - **MySQL Client/Server Protocol** (Planned TCP `:3306`): `mysql` CLI, Navicat, MySQL Workbench, `go-sql-driver/mysql`, PHP/Python MySQL drivers.
@@ -17,10 +17,10 @@ This document establishes the **permanent scope boundaries and architectural sto
 ## 2. Core Architectural Invariant: Protocol Gateway vs Engine Identity
 
 ### 2.1. The "Ecosystem Gateway" Principle (The 80/20 Rule)
-Protocol emulation in SQLion serves a single strategic objective:
+Protocol emulation in LionSQL serves a single strategic objective:
 > **"Allow developers to connect existing GUI tools, ORMs, and official client SDKs without installing proprietary drivers or deploying external proxies (PgBouncer, ProxySQL)."**
 
-It is an explicit non-goal to turn SQLion into a 100% clone of PostgreSQL or MySQL. Emulating every internal catalog table, procedural language, and dialect-specific quirk is an anti-pattern proven to produce fragile, unmaintainable codebases.
+It is an explicit non-goal to turn LionSQL into a 100% clone of PostgreSQL or MySQL. Emulating every internal catalog table, procedural language, and dialect-specific quirk is an anti-pattern proven to produce fragile, unmaintainable codebases.
 
 ### 2.2. Precedents in Modern Systems
 - **ClickHouse**: Listens on MySQL (:9004) and PostgreSQL (:9005) wire protocols to allow tool connectivity, but compiles all queries through ClickHouse's own vectorized engine with zero support for `PL/pgSQL` or MySQL stored routines.
@@ -31,7 +31,7 @@ It is an explicit non-goal to turn SQLion into a 100% clone of PostgreSQL or MyS
 
 ## 3. Four-Layer Protocol Boundary Model
 
-To maintain engineering discipline, every wire protocol implementation in SQLion must strictly adhere to the Four-Layer Model:
+To maintain engineering discipline, every wire protocol implementation in LionSQL must strictly adhere to the Four-Layer Model:
 
 ```
 +--------------------------------------------------------------------------+
@@ -79,12 +79,12 @@ To maintain engineering discipline, every wire protocol implementation in SQLion
 - **Goal**: Seamlessly execute everyday application CRUD queries.
 - **Requirements**:
   - Standard ANSI SQL queries are routed directly to the Volcano CBO planner or native VDBE compiler.
-  - Transactions: `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT` map directly to SQLion's ACID transaction manager.
+  - Transactions: `BEGIN`, `COMMIT`, `ROLLBACK`, `SAVEPOINT` map directly to LionSQL's ACID transaction manager.
 
 ### Layer 4: Dialect-Specific Features & Procedural Logic (10~20% Selective)
 - **Goal**: Prevent dialect fragmentation while offering maximum ergonomic convenience.
 - **Invariants**:
-  - **Single Procedural Engine**: SQLion's procedural engine is permanently unified on **Microsoft T-SQL VDBE bytecode execution**. PL/pgSQL (`DO $$ ... $$`) and MySQL stored routines (`DELIMITER //`) are explicitly **Spec-Out**.
+  - **Single Procedural Engine**: LionSQL's procedural engine is permanently unified on **Microsoft T-SQL VDBE bytecode execution**. PL/pgSQL (`DO $$ ... $$`) and MySQL stored routines (`DELIMITER //`) are explicitly **Spec-Out**.
   - **Function Aliases**: Support only the 20~30 most common scalar function synonyms by aliasing them directly to existing built-ins in `pkg/proc/builtins.go`.
 
 ---
@@ -142,7 +142,7 @@ When implementing the MySQL wire listener, the following strict bounds must be m
 1. **MySQL Stored Procedures & Functions**:
    - `CREATE PROCEDURE ... BEGIN ... END` using `DELIMITER` syntax is Spec-Out.
 2. **Replication & Binary Logging**:
-   - `COM_BINLOG_DUMP`, `COM_REGISTER_SLAVE`, and GTID event streaming are Spec-Out (SQLion uses native WAL replication).
+   - `COM_BINLOG_DUMP`, `COM_REGISTER_SLAVE`, and GTID event streaming are Spec-Out (LionSQL uses native WAL replication).
 3. **Administrative & Maintenance Commands**:
    - `FLUSH PRIVILEGES`, `OPTIMIZE TABLE`, `ANALYZE TABLE`, `RESET MASTER` are Spec-Out.
 4. **Non-Standard Implicit Coercions**:
