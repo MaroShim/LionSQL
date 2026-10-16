@@ -26,8 +26,6 @@
 | **P1** | **스토리지 성능 (P-11)** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | `pkg/storage/memengine` | 매 트랜잭션 6개 맵 할당 제거, 초당 2만 TPS 환경 GC 압력 80%+ 급감 |
 | **P1** | **실행기 성능 (P-12)** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | `pkg/execution` | 1,024건 튜플 배치 슬라이스 재할당 방지 및 대량 쿼리 GC 오버헤드 최소화 |
 | **P2** | **엔진 성능 (P-7)** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너** | `pkg/storage`, `pkg/engine` | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
-| **P2** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: In-Kernel AES) & 감사 로그** | `pkg/storage` | **보류 (Postponed)** - 파일시스템/블록 레벨 암호화(LUKS2, AWS EBS, GCP CMEK) 표준 권고 채택 ([`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)) |
-| **P2** | **엔진 성능 (P-9)** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | `pkg/engine`, `pkg/planner` | **보류** (SP 바이트코드 캐시 및 Prepared/PK 바이패스로 대체 충족) |
 | **P3** | **엔진 성능 (P-10)** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | `pkg/execution` | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
 | **P3** | **엔터프라이즈 인증** | **LDAP / Active Directory 디렉토리 인증 공급자 (`pkg/auth`)** | `pkg/auth` | 사내 계정 디렉토리 연동 (AuthProvider SPI 기반 플러그인) |
 | **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
@@ -437,8 +435,8 @@
 | **R-1** | **엔진/카탈로그** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | **완료 (`[x]`)** | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
 | **R-2** | **파서/내장함수** | **Pratt 파서 및 내장 함수 도메인별 관심사 분리** | **완료 (`[x]`)** | `parser.go`(3.2K줄), `builtins.go`(2.8K줄) 도메인 모듈화 |
 | **R-3** | **엔진/실행기** | **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화** | **완료 (`[x]`)** | `sqlexec_eval.go`와 `execution/builder.go` 간 중복 제거 (DRY) |
-| **R-4** | **스토리지/OCC** | **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해** | **대기 (`[ ]`)** | `memengine/tx.go`(1.9K줄)의 `Commit()`, 스캔, 세이브포인트 분리 |
-| **R-5** | **스토리지/CGo** | **WiredTiger CGo 바인딩 격리 및 트랜잭션/커서 모듈화** | **대기 (`[ ]`)** | `wt_engine.go`(1.7K줄)의 CGo 인터페이스, 커서, DDL 물리적 분리 |
+| **R-4** | **스토리지/OCC** | **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해** | **Post-1.0 이관 (`[-]`)** | 1.0 안정성 우선, 동시성 검증 완료 상태 보존 (2.7절 참조) |
+| **R-5** | **스토리지/CGo** | **WiredTiger CGo 바인딩 격리 및 트랜잭션/커서 모듈화** | **Post-1.0 이관 (`[-]`)** | 1.0 안정성 우선, CGo 빌드 복잡도 및 회귀 위험 방지 (2.7절 참조) |
 
 - [x] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**
   - **배경**: 단일 파일(3,284라인)에 PostgreSQL `pg_catalog`, ANSI `information_schema`, MSSQL `sys.tables`/DMV, DBeaver/Beekeeper/DbGate/HeidiSQL 도구별 쿼리 인터셉터가 혼재되어 유지보수성과 가독성이 저하됨.
@@ -482,19 +480,23 @@
     - `pkg/execution/builder.go`: 중복 함수(`parseIndexCond`, `parseValueByType`, 미사용 `regexp`/`proc` 임포트) 완전 제거 및 `planner.ParseIndexCond` 호출로 단일화 (Volcano 엔진의 범위 인덱스 스캔 완벽 지원).
     - `pkg/engine/sqlexec_eval.go`: 중복 구현된 260줄 이상의 바운드 파싱 로직을 제거하고 `planner.Bounds` 위임으로 슬림화.
     - 단위 테스트 `pkg/planner/bounds_test.go` 완비 및 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
-- [ ] **In-Memory OCC 스토리지 트랜잭션 라이프사이클 모듈 분해 (`R-4`) (`pkg/storage/memengine`)**
-  - **배경**: `pkg/storage/memengine/tx.go`(1,965라인)에 트랜잭션 라이프사이클 전체와 500줄 이상의 인라인 `Commit()` 함수가 집중되어 동시성 로직의 가독성 저하.
-  - **구현 계획**:
-    - `tx_commit.go`: 샤드 정렬 락 획득, OCC 버전 충돌 검증(`validateConflicts`), 유니크 제약 검증(`validateUniqueConstraints`), 인덱스 갱신(`applyIndexMutations`), WAL/AOF 디스패치(`flushWAL`) 단계별 함수 분해.
-    - `tx_scan.go`: `Scan()`, `IndexScan()`, 샤드 범위 반복자 분리.
-    - `tx_savepoint.go`: 세이브포인트 생성 및 롤백 로직 분리.
-- [ ] **WiredTiger 스토리지 CGo 바인딩 격리 및 파일 분해 (`R-5`) (`pkg/storage/wiredtiger`)**
-  - **배경**: `pkg/storage/wiredtiger/wt_engine.go`(1,753라인)에 저수준 C/CGo 인터페이스, 세션/트랜잭션 관리, 커서 래핑, DDL이 한 파일에 혼재.
-  - **구현 계획**:
-    - `wt_cgo.go`: 순수 CGo 인터페이스 및 C 래퍼 함수 격리.
-    - `wt_cursor.go`: `wtCursor`, `wtFilteredIndexCursor` 커서 순회 및 바운드 검사 로직 전담.
-    - `wt_tx.go`: `WTTx` 트랜잭션 커밋/롤백/스캔 라이프사이클 전담.
-    - `wt_engine.go`: 스토리지 엔진 수명주기, 세션 풀링 및 DDL 전담.
+
+### 2.7. Post-1.0 유지보수 및 보류 백로그 (Post-1.0 Maintenance & Deferred Backlog)
+
+1.0 릴리즈의 안정성 확보 및 YAGNI/KISS 원칙(Golden Rule 14, 15)에 따라, 런타임 성능이나 기능 결함이 아니며 회귀 위험이 있는 구조적 리팩토링 및 플랫폼 대체재가 충분한 과제들을 1.0 이후(v1.1+) 유지보수 백로그로 공식 이관·보류합니다.
+
+- [-] **In-Memory OCC 스토리지 트랜잭션 라이프사이클 모듈 분해 (`R-4`) (`pkg/storage/memengine`) - [Post-1.0 이관]**
+  - **이관 사유**: 현재 TPC-C 14,800+ TPS 및 25개 전 패키지 레이스 검사 100% PASS(0 Data Race)로 동시성 안정성이 완벽히 입증됨. 단순 파일 분리는 런타임 성능 이득이 없고 오히려 락/세이브포인트 회귀 위험을 유발하므로 1.0 안정화 단계에서는 현상 유지.
+  - **향후 계획 (v1.1+)**: `tx_commit.go`, `tx_scan.go`, `tx_savepoint.go` 파일 분해.
+- [-] **WiredTiger 스토리지 CGo 바인딩 격리 및 파일 분해 (`R-5`) (`pkg/storage/wiredtiger`) - [Post-1.0 이관]**
+  - **이관 사유**: CGo C 헤더 바인딩, 커서 풀링, `-tags wiredtiger` 빌드 제약(`wt_stub.go`)이 정밀하게 페어링되어 안정 동작 중. 1.0 이전 파일 쪼개기는 빌드 태그 복잡성 및 CGo 메모리 관리 실수 위험 대비 실익이 없음.
+  - **향후 계획 (v1.1+)**: `wt_cgo.go`, `wt_cursor.go`, `wt_tx.go` 분리.
+- [-] **투명한 데이터 암호화 (TDE: In-Kernel AES-256-GCM) (`pkg/storage`) - [보류/Postponed]**
+  - **보류 사유**: 데이터베이스 프로세스 내부 소프트웨어 TDE는 클라우드 볼륨(AWS EBS, GCP PD) 및 OS 블록 디바이스(LUKS2)와 중복 암호화되어 NVMe I/O 처리량을 최대 35% 저하시키고 프로세스 메모리 내 키 유출 위험을 유발함. 플랫폼 하드웨어 가속(AES-NI) 기반 스토리지 파일시스템 암호화 표준 가이드([`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)) 수립으로 대체 충족.
+- [-] **정형 SQL Parameterized 쿼리 실행 계획 캐시 (`P-9`) (`pkg/engine`, `pkg/planner`) - [보류/Postponed]**
+  - **보류 사유**: 고빈도 OLTP 경로는 이미 SP VDBE 바이트코드 캐시(`runtime.PlanCache`), SP 내부 물리 플랜 바인딩(`RelQueryData.CachedPlan`), Prepared Statement 캐시, 단순 PK 스토리지 직결 바이패스(`pkBypassCache`)로 100% 최적화되어 파싱/플래닝이 생략됨. Ad-hoc 임의 SQL 템플릿화는 리터럴 충돌 위험 대비 실익이 낮음.
+- [-] **Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`) - [보류/Postponed]**
+  - **보류 사유**: CGO 의존성 없는 완전 정적 바이너리 배포를 위한 플러그인 백엔드 구상이었으나, 1.0 프로덕션에서는 검증된 WiredTiger B+Tree 엔진과 순수 Go 초고속 In-Memory OCC 엔진 2대 백엔드 체제에 집중(KISS & DRY).
 
 ---
 
