@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/engine"
 	"sqlion/pkg/proc/runtime"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
@@ -965,6 +966,71 @@ func TestWire_PasswordAuthentication(t *testing.T) {
 			t.Fatalf("expected 28P01 in error response, got %q", string(errPayload))
 		}
 		_ = cat
+	})
+
+	// Subtest 3: Global Auth Enabled with Unified Superuser Login
+	t.Run("GlobalAuthSuperuser", func(t *testing.T) {
+		// Enable global auth on coordinator and set superuser password
+		coord, ok := srv.coordinator.(*engine.Coordinator)
+		if ok {
+			coord.SetAuthService(authSvc, true)
+		}
+		_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "SuperUnifiedPass99!")
+
+		// 3.1: user=postgres with correct superuser password must succeed
+		cConn1, sConn1 := net.Pipe()
+		defer cConn1.Close()
+		defer sConn1.Close()
+		go srv.handleConnection(sConn1)
+
+		startup := buildStartup(map[string]string{"user": "postgres", "database": "sqlion"})
+		_, _ = cConn1.Write(startup)
+
+		header := make([]byte, 5)
+		_, _ = io.ReadFull(cConn1, header)
+		authPayload := make([]byte, 4)
+		_, _ = io.ReadFull(cConn1, authPayload)
+		if binary.BigEndian.Uint32(authPayload) != 3 {
+			t.Fatalf("expected cleartext password request (3), got %d", binary.BigEndian.Uint32(authPayload))
+		}
+
+		pwMsg := "SuperUnifiedPass99!\x00"
+		pwBuf := make([]byte, 1+4+len(pwMsg))
+		pwBuf[0] = 'p'
+		binary.BigEndian.PutUint32(pwBuf[1:5], uint32(4+len(pwMsg)))
+		copy(pwBuf[5:], pwMsg)
+		_, _ = cConn1.Write(pwBuf)
+
+		_, _ = io.ReadFull(cConn1, header)
+		_, _ = io.ReadFull(cConn1, authPayload)
+		if binary.BigEndian.Uint32(authPayload) != 0 {
+			t.Fatalf("expected AuthOK (0) for postgres with superuser pass, got %d", binary.BigEndian.Uint32(authPayload))
+		}
+
+		// 3.2: user=postgres with wrong password must be rejected
+		cConn2, sConn2 := net.Pipe()
+		defer cConn2.Close()
+		defer sConn2.Close()
+		go srv.handleConnection(sConn2)
+
+		_, _ = cConn2.Write(startup)
+		_, _ = io.ReadFull(cConn2, header)
+		_, _ = io.ReadFull(cConn2, authPayload)
+
+		badPw := "WrongPass!\x00"
+		badBuf := make([]byte, 1+4+len(badPw))
+		badBuf[0] = 'p'
+		binary.BigEndian.PutUint32(badBuf[1:5], uint32(4+len(badPw)))
+		copy(badBuf[5:], badPw)
+		_, _ = cConn2.Write(badBuf)
+
+		errHeader := make([]byte, 5)
+		if _, err := io.ReadFull(cConn2, errHeader); err != nil {
+			t.Fatalf("failed to read error header: %v", err)
+		}
+		if errHeader[0] != MsgErrorResponse {
+			t.Fatalf("expected MsgErrorResponse 'E', got %c", errHeader[0])
+		}
 	})
 }
 

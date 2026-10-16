@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/proc"
@@ -284,6 +285,7 @@ type ConnectionSession struct {
 	SessionID    string
 	HostName     string
 	UserName     string
+	Password     string
 	AppName      string
 	Database     string
 	PacketSize   uint32
@@ -553,6 +555,39 @@ func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSess
 
 func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
 	s.parseLogin7(pkt.Payload, sess)
+	if sess.UserName == "" {
+		sess.UserName = "sa"
+	}
+
+	// Verify authentication if coordinator auth is enabled or login requires password
+	if s.coordinator != nil {
+		authSvc := s.coordinator.AuthService()
+		if authSvc != nil {
+			needsAuth := false
+			if s.coordinator.IsAuthEnabled() {
+				needsAuth = true
+			} else if login, err := authSvc.GetLogin(sess.UserName); err == nil && login != nil && login.PasswordHash != "" {
+				if !auth.IsBuiltinAdminLogin(sess.UserName) {
+					needsAuth = true
+				}
+			}
+
+			if needsAuth {
+				if _, err := authSvc.AuthenticateLogin(sess.UserName, sess.Password); err != nil {
+					errMsg := fmt.Sprintf("Login failed for user '%s'.", sess.UserName)
+					errToken := BuildError(18456, 1, 14, errMsg, "SQLion", "", 1)
+					doneToken := BuildDone(TokenDone, DoneError, 0, 0)
+
+					var errResp bytes.Buffer
+					errResp.Write(errToken)
+					errResp.Write(doneToken)
+					_ = WritePacket(conn, PacketTabular, sess.SPID, errResp.Bytes())
+					return
+				}
+			}
+		}
+		s.coordinator.SetSessionUser(sess.SessionID, sess.UserName)
+	}
 
 	var resp bytes.Buffer
 
@@ -600,6 +635,7 @@ func (s *Server) parseLogin7(payload []byte, sess *ConnectionSession) {
 	// Extract UTF-16LE strings using offset/length pairs
 	sess.HostName = readLoginString(payload, 36)
 	sess.UserName = readLoginString(payload, 40)
+	sess.Password = readLoginPassword(payload, 44)
 	sess.AppName = readLoginString(payload, 48)
 	dbName := readLoginString(payload, 68)
 	if dbName != "" {
@@ -651,6 +687,29 @@ func readLoginString(payload []byte, offsetPos int) string {
 	}
 
 	return DecodeUTF16LE(payload[ib : ib+byteLen])
+}
+
+// readLoginPassword extracts and de-obfuscates the TDS Login7 password per MS-TDS 2.2.6.4.
+func readLoginPassword(payload []byte, offsetPos int) string {
+	if offsetPos+4 > len(payload) {
+		return ""
+	}
+	ib := int(binary.LittleEndian.Uint16(payload[offsetPos : offsetPos+2]))
+	cch := int(binary.LittleEndian.Uint16(payload[offsetPos+2 : offsetPos+4]))
+	byteLen := cch * 2
+
+	if ib == 0 || cch == 0 || ib+byteLen > len(payload) {
+		return ""
+	}
+
+	raw := payload[ib : ib+byteLen]
+	decrypted := make([]byte, len(raw))
+	for i, b := range raw {
+		b1 := b ^ 0xA5
+		decrypted[i] = ((b1 >> 4) & 0x0F) | ((b1 << 4) & 0xF0)
+	}
+
+	return DecodeUTF16LE(decrypted)
 }
 
 func (s *Server) handleSQLBatch(conn net.Conn, pkt *Packet, sess *ConnectionSession, ctx context.Context) {

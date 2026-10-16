@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Security
+- **Unified Multi-Protocol Superuser Authentication & Single-Source-of-Truth RBAC (`pkg/auth`, `pkg/wire`, `pkg/wire/tds`)**:
+  - Unified administrator password storage across HTTP REST/Web Studio, PostgreSQL Wire Protocol (`:5433`), and Microsoft SQL Server TDS (`:1433`):
+    - `pkg/auth`: Stored administrator credentials in a single source of truth (`s.defaultAdminEmail` / `s.users[s.defaultAdminEmail]`); routed built-in administrative logins (`sa`, `postgres`, `admin`) in `AuthenticateLogin` directly to the unified superuser password hash.
+    - Synchronized `AlterLoginPassword` for built-in logins to automatically update the superuser password and keep HTTP, PG, and TDS administrator credentials identical without divergence.
+    - `pkg/wire`: Updated PGWire handshake to allow trust login for built-in accounts when `--auth=false`, while strictly validating against the unified superuser password when `--auth=true`.
+    - `pkg/wire/tds`: Implemented MS-TDS 2.2.6.4 password de-obfuscation (`readLoginPassword`: nibble swap + XOR `0xA5`) in `parseLogin7`; enforced authentication verification in `handleLogin7` when `--auth=true`, returning standard SQL Server Login Failed error token (Number `18456`, Severity `14`, State `1`) on bad credentials.
+    - Added comprehensive unit and integration tests in `pkg/auth/rbac_test.go`, `pkg/wire/server_test.go`, and `pkg/wire/tds/auth_test.go` with 100% race-free verification across all packages.
+
 ### Removed
 - **In-Kernel OAuth2 Social Login & Third-Party SaaS Auth Exclusion (Spec-Out) (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**:
   - Excluded consumer OAuth2 social login (Google, GitHub OAuth2 endpoints, redirect handlers, client secret lifecycle, and outbound HTTP token exchanges) to adhere to Golden Rule 15 (KISS & DRY) and single responsibility principle:

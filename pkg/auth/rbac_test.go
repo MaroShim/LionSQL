@@ -146,3 +146,52 @@ func TestRBAC_TablePermissionsGrantRevokeDeny(t *testing.T) {
 		}
 	}
 }
+
+func TestRBAC_UnifiedSuperuserLogins(t *testing.T) {
+	svc := auth.NewAuthService(auth.Config{})
+	_, err := svc.EnsureDefaultSuperuser("admin@sqlion.local", "SuperSecret123!")
+	if err != nil {
+		t.Fatalf("EnsureDefaultSuperuser failed: %v", err)
+	}
+
+	// 1. All built-in administrator logins must succeed with the single superuser password
+	for _, name := range []string{"sa", "postgres", "admin", "SA", "Postgres"} {
+		login, err := svc.AuthenticateLogin(name, "SuperSecret123!")
+		if err != nil || login == nil {
+			t.Fatalf("AuthenticateLogin for %q failed with superuser password: %v", name, err)
+		}
+	}
+
+	// 2. Wrong password must fail
+	for _, name := range []string{"sa", "postgres", "admin"} {
+		if _, err := svc.AuthenticateLogin(name, "WrongPassword"); err == nil {
+			t.Fatalf("AuthenticateLogin for %q unexpectedly succeeded with wrong password", name)
+		}
+	}
+
+	// 3. Altering sa password synchronizes the superuser password
+	if err := svc.AlterLoginPassword("sa", "NewSecret456!"); err != nil {
+		t.Fatalf("AlterLoginPassword failed: %v", err)
+	}
+
+	// Superuser HTTP authentication must now work with new password
+	su, _, err := svc.Authenticate("admin@sqlion.local", "NewSecret456!")
+	if err != nil || su == nil {
+		t.Fatalf("HTTP Superuser authenticate failed after AlterLoginPassword: %v", err)
+	}
+
+	// Wire logins (sa, postgres, admin) must now all require the new password
+	for _, name := range []string{"sa", "postgres", "admin"} {
+		if _, err := svc.AuthenticateLogin(name, "NewSecret456!"); err != nil {
+			t.Fatalf("AuthenticateLogin for %q with updated password failed: %v", name, err)
+		}
+		if _, err := svc.AuthenticateLogin(name, "SuperSecret123!"); err == nil {
+			t.Fatalf("AuthenticateLogin for %q unexpectedly accepted old password", name)
+		}
+	}
+
+	// 4. Built-in postgres login cannot be dropped
+	if err := svc.DropLogin("postgres"); err == nil {
+		t.Fatalf("expected dropping postgres login to fail")
+	}
+}

@@ -73,16 +73,17 @@ type Config struct {
 
 // AuthService manages superuser authentication, password verification, JWT lifecycles, and API Keys.
 type AuthService struct {
-	secret        []byte
-	tokenDuration time.Duration
-	users         map[string]*Superuser // keyed by normalized email
-	usersByID     map[string]*Superuser
-	apiKeys       map[string]*APIKey // keyed by hashed key
-	apiKeysByID   map[string]*APIKey // keyed by ID
-	logins        map[string]*Login  // keyed by normalized login name
-	dbUsers       map[string]*User   // keyed by normalized database user name
-	grants        map[string]map[string]map[Privilege]GrantType // user -> table -> priv -> allow/deny
-	mu            sync.RWMutex
+	secret            []byte
+	tokenDuration     time.Duration
+	defaultAdminEmail string
+	users             map[string]*Superuser // keyed by normalized email
+	usersByID         map[string]*Superuser
+	apiKeys           map[string]*APIKey // keyed by hashed key
+	apiKeysByID       map[string]*APIKey // keyed by ID
+	logins            map[string]*Login  // keyed by normalized login name
+	dbUsers           map[string]*User   // keyed by normalized database user name
+	grants            map[string]map[string]map[Privilege]GrantType // user -> table -> priv -> allow/deny
+	mu                sync.RWMutex
 }
 
 // NewAuthService creates a new AuthService.
@@ -112,8 +113,10 @@ func NewAuthService(cfg Config) *AuthService {
 	now := time.Now().UTC()
 	svc.logins["sa"] = &Login{Name: "sa", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
 	svc.logins["admin"] = &Login{Name: "admin", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
+	svc.logins["postgres"] = &Login{Name: "postgres", IsDisabled: false, CreatedAt: now, UpdatedAt: now}
 	svc.dbUsers["dbo"] = &User{Name: "dbo", LoginName: "sa", Roles: []string{"db_owner"}, CreatedAt: now, UpdatedAt: now}
 	svc.dbUsers["guest"] = &User{Name: "guest", LoginName: "guest", Roles: []string{"public"}, CreatedAt: now, UpdatedAt: now}
+	svc.dbUsers["postgres"] = &User{Name: "postgres", LoginName: "postgres", Roles: []string{"db_owner"}, CreatedAt: now, UpdatedAt: now}
 
 	return svc
 }
@@ -166,18 +169,22 @@ func (s *AuthService) EnsureDefaultSuperuser(email, password string) (*Superuser
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if u, exists := s.users[normEmail]; exists {
-		return u, nil
-	}
-
+	s.defaultAdminEmail = normEmail
 	pwHash, err := HashPassword(password)
 	if err != nil {
 		return nil, err
 	}
 
 	now := time.Now().UTC()
+	if u, exists := s.users[normEmail]; exists {
+		if password != "" {
+			u.PasswordHash = pwHash
+			u.UpdatedAt = now
+		}
+		return u, nil
+	}
 	u := &Superuser{
-		ID:           generateRandomKey(8),
+		ID:           "admin",
 		Email:        normEmail,
 		PasswordHash: pwHash,
 		TokenKey:     generateRandomKey(16),

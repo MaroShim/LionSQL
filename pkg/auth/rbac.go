@@ -102,31 +102,52 @@ func (s *AuthService) CreateLogin(name, password string) (*Login, error) {
 	return l, nil
 }
 
+// IsBuiltinAdminLogin checks whether a login name represents a built-in administrator (sa, postgres, admin).
+func IsBuiltinAdminLogin(name string) bool {
+	norm := strings.ToLower(strings.TrimSpace(name))
+	return norm == "sa" || norm == "postgres" || norm == "admin"
+}
+
 // AlterLoginPassword updates the password for an existing login.
+// If altering a built-in administrator login, it synchronizes the unified superuser password.
 func (s *AuthService) AlterLoginPassword(name, newPassword string) error {
 	norm := strings.ToLower(strings.TrimSpace(name))
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	l, exists := s.logins[norm]
-	if !exists {
-		return fmt.Errorf("%w: %s", ErrLoginNotFound, name)
-	}
-
 	pwHash, err := HashPassword(newPassword)
 	if err != nil {
 		return err
 	}
+	now := time.Now().UTC()
+
+	if IsBuiltinAdminLogin(norm) {
+		if s.defaultAdminEmail != "" {
+			if admin, exists := s.users[s.defaultAdminEmail]; exists {
+				admin.PasswordHash = pwHash
+				admin.UpdatedAt = now
+			}
+		}
+	}
+
+	l, exists := s.logins[norm]
+	if !exists {
+		if !IsBuiltinAdminLogin(norm) {
+			return fmt.Errorf("%w: %s", ErrLoginNotFound, name)
+		}
+		l = &Login{Name: norm, IsDisabled: false, CreatedAt: now}
+		s.logins[norm] = l
+	}
 
 	l.PasswordHash = pwHash
-	l.UpdatedAt = time.Now().UTC()
+	l.UpdatedAt = now
 	return nil
 }
 
 // DropLogin removes a server login principal.
 func (s *AuthService) DropLogin(name string) error {
 	norm := strings.ToLower(strings.TrimSpace(name))
-	if norm == "sa" || norm == "admin" {
+	if IsBuiltinAdminLogin(norm) {
 		return errors.New("cannot drop built-in administrator login")
 	}
 
@@ -148,18 +169,39 @@ func (s *AuthService) GetLogin(name string) (*Login, error) {
 
 	l, exists := s.logins[norm]
 	if !exists {
+		if IsBuiltinAdminLogin(norm) {
+			now := time.Now().UTC()
+			return &Login{Name: norm, IsDisabled: false, CreatedAt: now, UpdatedAt: now}, nil
+		}
 		return nil, fmt.Errorf("%w: %s", ErrLoginNotFound, name)
 	}
 	return l, nil
 }
 
 // AuthenticateLogin verifies login name and password.
+// Built-in administrative logins (sa, postgres, admin) authenticate against the single unified superuser password.
 func (s *AuthService) AuthenticateLogin(name, password string) (*Login, error) {
 	norm := strings.ToLower(strings.TrimSpace(name))
 	s.mu.RLock()
-	l, exists := s.logins[norm]
-	s.mu.RUnlock()
+	defer s.mu.RUnlock()
 
+	if IsBuiltinAdminLogin(norm) {
+		if s.defaultAdminEmail != "" {
+			if admin, exists := s.users[s.defaultAdminEmail]; exists && admin.PasswordHash != "" {
+				if !VerifyPassword(password, admin.PasswordHash) {
+					return nil, ErrInvalidCredentials
+				}
+				l, exists := s.logins[norm]
+				if !exists {
+					now := time.Now().UTC()
+					return &Login{Name: norm, IsDisabled: false, CreatedAt: now, UpdatedAt: now}, nil
+				}
+				return l, nil
+			}
+		}
+	}
+
+	l, exists := s.logins[norm]
 	if !exists || l.IsDisabled || !VerifyPassword(password, l.PasswordHash) {
 		return nil, ErrInvalidCredentials
 	}

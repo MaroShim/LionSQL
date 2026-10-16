@@ -17,6 +17,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/proc"
@@ -381,7 +382,9 @@ func (s *Server) handleConnection(conn net.Conn) {
 		if s.coordinator.IsAuthEnabled() {
 			needsPassword = true
 		} else if login, err := authSvc.GetLogin(username); err == nil && login != nil && login.PasswordHash != "" {
-			needsPassword = true
+			if !auth.IsBuiltinAdminLogin(username) {
+				needsPassword = true
+			}
 		}
 	}
 
