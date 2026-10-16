@@ -25,6 +25,8 @@
 | :---: | :---: | :--- | :--- | :--- |
 | **P1** | **엔진 성능 (P-6)** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | `pkg/engine` | 쿼리당 동적 `regexp.MustCompile` 힙 할당 및 5~15µs 지연 완전 제거 |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
+| **P2** | **스토리지 성능 (P-11)** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | `pkg/storage/memengine` | 매 트랜잭션 6개 맵 할당 제거, 초당 2만 TPS 환경 GC 압력 80%+ 급감 |
+| **P2** | **실행기 성능 (P-12)** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | `pkg/execution` | 1,024건 튜플 배치 슬라이스 재할당 방지 및 대량 쿼리 GC 오버헤드 최소화 |
 | **P2** | **엔진 성능 (P-7)** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너** | `pkg/storage`, `pkg/engine` | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
 | **P2** | **엔진 성능 (P-9)** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | `pkg/engine`, `pkg/planner` | **보류** (SP 바이트코드 캐시 및 Prepared/PK 바이패스로 대체 충족) |
 | **P3** | **엔진 성능 (P-10)** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | `pkg/execution` | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
@@ -279,6 +281,8 @@
 | **P-8** | **스토리지/CGo** | **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`cur->reset`)** | **완료 (`[x]`)** | 세션별 커서 풀링 및 C 헬퍼 단일화로 894ns 룩업(1.13M+ OPS) 달성 |
 | **P-9** | **옵티마이저/캐시** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | **보류 (`[-]`)** | SP/Prepared/PK 바이패스 캐시로 주요 OLTP 경로 기충족되어 보류 |
 | **P-10** | **실행기/병렬화** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | **대기 (`[ ]`)** | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
+| **P-11** | **스토리지/풀링** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | **대기 (`[ ]`)** | 트랜잭션 맵 6개 동적 할당 0건화, 초당 2만 TPS GC 부하 80%+ 경감 |
+| **P-12** | **실행기/풀링** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | **대기 (`[ ]`)** | 1,024건 슬라이스 할당 제거 및 대용량 배치/P-10 병렬 스트리밍 GC 최소화 |
 
 - [ ] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 및 바이트 토큰 스캐너 전환 (`P-6`) (`pkg/engine`)**
   - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_select.go`, `sqlexec_eval.go`, `sqlexec_explain.go`의 핫패스 함수 내부에 위치한 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 NFA/DFA 재컴파일 및 힙 할당 오버헤드(5~15µs) 제거.
@@ -300,6 +304,18 @@
     - `ParallelSeqScanIterator`: 테이블 파티션 또는 레코드 키 범위를 N개 작업 단위로 분할하여 N개 워커 고루틴이 동시 스캔.
     - 병렬 집계 취합기(`ParallelAggregateIterator`): 각 워커가 로컬 집계(`SUM`, `COUNT`)를 수행한 뒤 마스터가 최종 병합.
     - 8코어/16코어 환경에서 대용량 집계 쿼리 4~8배 선형 가속.
+- [ ] **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링 (`P-11`) (`pkg/storage/memengine`)**
+  - **배경**: `sess.BeginTx()` 호출 시마다 `Transaction` 구조체와 6개의 Go 맵(`tableCache`, `baseVers`, `local`, `deleted`, `changes`, `savepoints`)을 힙에 새로 할당(`make(map...)`)하고 커밋/롤백 시 GC에 버리는 오버헤드(초당 16,000~20,000 TPS 환경에서 초당 10만+ 맵 객체 생성) 제거.
+  - **구현 계획**:
+    - `sync.Pool` 기반 `txPool` 도입.
+    - 트랜잭션 종료(`Commit()` 또는 `Rollback()`) 시 Go 1.21+ 내장 `clear(m)` 함수를 통해 맵의 내부 해시 버킷 용량을 유지한 채 $O(1)$ 초기화 후 풀에 반환.
+    - 트랜잭션 시작 시 힙 메모리 할당 0건(Zero-Allocation Transaction) 달성 및 p99 지연 시간 안정화.
+- [ ] **Volcano 벡터화 배치 청크(`Chunk`) 풀링 (`P-12`) (`pkg/execution`)**
+  - **배경**: 1,024건 단위 튜플 배치 스트리밍(`Chunk`) 간 연산자(`Filter`, `Projection`, `Sort`, `HashJoin`) 경계 전송 및 버퍼링 시 `make([]Tuple, 0, 1024)` 슬라이스가 반복 동적 생성되어 GC에 버려지는 현상 방지 및 향후 P-10 병렬 실행기 파이프라인 연계.
+  - **구현 계획**:
+    - `sync.Pool` 기반 `chunkPool` (`GetChunk`, `PutChunk`) 구축.
+    - `Chunk.Reset()`을 통해 1,024개 튜플 용량 슬라이스를 보존한 상태로 재대여.
+    - 10만~1000만 건 대규모 테이블 스캔, 정렬, 해시 조인 시 슬라이스 메모리 할당 및 복사 오버헤드 제거.
 - [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 투영 푸시다운 (`pkg/storage`, `pkg/execution`)**
   - 풀 스캔 시 WHERE 절 조건 컬럼만 선별 디코딩하고, 조건을 통과한 행에 한해서만 나머지 투영 컬럼을 언패킹하여 CPU 및 힙 할당 70% 삭감.
 - [x] **커버링 인덱스 비키 컬럼 문법 지원: `CREATE INDEX ... INCLUDE (col...)` (`pkg/storage`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**
