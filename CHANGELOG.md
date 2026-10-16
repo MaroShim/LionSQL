@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **PostgreSQL JDBC / psqlODBC Driver Enterprise Compatibility Certification (`pkg/wire`)**:
+  - Validated and certified end-to-end compatibility for official PostgreSQL JDBC (`pgjdbc`) and `psqlODBC` drivers.
+  - Verified driver session handshake parameter controls (`SET extra_float_digits = 3`, `SET application_name = 'PostgreSQL JDBC Driver'`, `SET client_min_messages = 'warning'`, `SET client_encoding = 'UTF8'`).
+  - Verified connection pool session status queries (`SHOW transaction_isolation`, `SHOW standard_conforming_strings`).
+  - Certified metadata introspection queries against `pg_type`, `information_schema.tables`, and `SELECT current_schema()` with unit test `TestDriverIntegration_LibPQ_JDBC_ODBC_Compatibility`.
 - **Prepared Statement Binary Bind Direct Value Decoding & Param Name Pooling (`P-14`) (`pkg/wire`, `pkg/wire/tds`)**:
   - Implemented `decodeBinaryParamValue` and `decodeTextParamValue` in `pkg/wire/server.go`, directly decoding incoming client parameter byte streams into typed `storage.Value` (`IntValue`, `FloatValue`, `BoolValue`, `StringValue`) and bypassing redundant binary-to-string-to-type double conversions (`strconv.Itoa`).
   - Added typed parameter values (`ParamValues []storage.Value`) to PGWire `Portal` struct, directly populating VDBE parameter map slots in `handleExecute`.

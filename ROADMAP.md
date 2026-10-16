@@ -302,7 +302,7 @@ LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLT
 | **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
 | **Phase 6** | **P2** | **[Completed] Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
 | **Phase 6** | **P2** | **[Completed] MCV (Most Common Values) Skew List Statistics (`C-7`)** | CBO & Planner | Medium (250~350 lines) | Corrects non-uniform skew distribution estimation error (MCV + Histogram complete) |
-| **Phase 6** | **P3** | **[Completed] Multi-Language Client Certification (Python, Go, GUI)** | Wire Protocols | Medium (200~300 lines) | Automated integration suites for psycopg3, pymssql, pgx, go-mssqldb, DBeaver |
+| **Phase 6** | **P3** | **[Completed] Multi-Language Client & JDBC/ODBC Certification (Python, Go, JDBC, GUI)** | Wire Protocols | Medium (200~300 lines) | Automated integration suites for psycopg3, pymssql, pgx, go-mssqldb, pgjdbc, DBeaver |
 | **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
 | **Phase 6** | **P3** | **Wasm Runtime Sandbox UDF (`wazero`)** | Plugins & Sandbox | Medium (300~400 lines) | Secure, crash-isolated in-engine execution of third-party plugins |
 | **Phase 6** | **P3** | **Local & S3-Compatible File Storage & Thumbnails** | BaaS Storage | Medium (250~350 lines) | Multipart file upload and automatic image thumbnail generation |

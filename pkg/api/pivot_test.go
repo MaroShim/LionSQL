@@ -8,7 +8,7 @@ func TestPivot_BasicSum(t *testing.T) {
 	server, cleanup := setupTestServer()
 	defer cleanup()
 
-	stmts := []string{
+	execStatements(t, server,
 		"CREATE TABLE quarterly_sales (id INT PRIMARY KEY, year INT, quarter VARCHAR(10), amount INT)",
 		"INSERT INTO quarterly_sales VALUES (1, 2023, 'Q1', 100)",
 		"INSERT INTO quarterly_sales VALUES (2, 2023, 'Q2', 150)",
@@ -18,12 +18,7 @@ func TestPivot_BasicSum(t *testing.T) {
 		"INSERT INTO quarterly_sales VALUES (6, 2024, 'Q2', 180)",
 		"INSERT INTO quarterly_sales VALUES (7, 2024, 'Q3', 220)",
 		"INSERT INTO quarterly_sales VALUES (8, 2024, 'Q4', 300)",
-	}
-	for _, stmt := range stmts {
-		if _, err := server.ExecuteSQL(stmt); err != nil {
-			t.Fatalf("setup failed (%q): %v", stmt, err)
-		}
-	}
+	)
 
 	query := `
 		SELECT year, [Q1], [Q2], [Q3], [Q4]
@@ -62,7 +57,7 @@ func TestPivot_CountAndDirectTable(t *testing.T) {
 	server, cleanup := setupTestServer()
 	defer cleanup()
 
-	stmts := []string{
+	execStatements(t, server,
 		"CREATE TABLE emp_dept (id INT PRIMARY KEY, dept VARCHAR(30), level VARCHAR(10))",
 		"INSERT INTO emp_dept VALUES (1, 'Engineering', 'Junior')",
 		"INSERT INTO emp_dept VALUES (2, 'Engineering', 'Junior')",
@@ -71,12 +66,7 @@ func TestPivot_CountAndDirectTable(t *testing.T) {
 		"INSERT INTO emp_dept VALUES (5, 'Marketing',   'Senior')",
 		"INSERT INTO emp_dept VALUES (6, 'Marketing',   'Senior')",
 		"INSERT INTO emp_dept VALUES (7, 'HR',          'Junior')",
-	}
-	for _, stmt := range stmts {
-		if _, err := server.ExecuteSQL(stmt); err != nil {
-			t.Fatalf("setup failed (%q): %v", stmt, err)
-		}
-	}
+	)
 
 	// Direct table source without derived subquery
 	query := `
@@ -128,7 +118,7 @@ func TestPivot_AliasesAndWhereAndOrder(t *testing.T) {
 	server, cleanup := setupTestServer()
 	defer cleanup()
 
-	stmts := []string{
+	execStatements(t, server,
 		"CREATE TABLE product_metrics (id INT PRIMARY KEY, region VARCHAR(20), metric_type VARCHAR(20), score INT)",
 		"INSERT INTO product_metrics VALUES (1, 'North', 'Speed',   90)",
 		"INSERT INTO product_metrics VALUES (2, 'North', 'Quality', 85)",
@@ -136,12 +126,7 @@ func TestPivot_AliasesAndWhereAndOrder(t *testing.T) {
 		"INSERT INTO product_metrics VALUES (4, 'South', 'Quality', 95)",
 		"INSERT INTO product_metrics VALUES (5, 'East',  'Speed',   60)",
 		"INSERT INTO product_metrics VALUES (6, 'East',  'Quality', 65)",
-	}
-	for _, stmt := range stmts {
-		if _, err := server.ExecuteSQL(stmt); err != nil {
-			t.Fatalf("setup failed (%q): %v", stmt, err)
-		}
-	}
+	)
 
 	// Using aliases in outer SELECT and WHERE filter
 	query := `
@@ -184,19 +169,14 @@ func TestPivot_MinMaxAggregates(t *testing.T) {
 	server, cleanup := setupTestServer()
 	defer cleanup()
 
-	stmts := []string{
+	execStatements(t, server,
 		"CREATE TABLE vendor_orders (id INT PRIMARY KEY, vendor_id INT, cat VARCHAR(20), price INT)",
 		"INSERT INTO vendor_orders VALUES (1, 101, 'Hardware', 500)",
 		"INSERT INTO vendor_orders VALUES (2, 101, 'Hardware', 300)",
 		"INSERT INTO vendor_orders VALUES (3, 101, 'Software', 200)",
 		"INSERT INTO vendor_orders VALUES (4, 102, 'Hardware', 700)",
 		"INSERT INTO vendor_orders VALUES (5, 102, 'Software', 400)",
-	}
-	for _, stmt := range stmts {
-		if _, err := server.ExecuteSQL(stmt); err != nil {
-			t.Fatalf("setup failed (%q): %v", stmt, err)
-		}
-	}
+	)
 
 	query := `
 		SELECT vendor_id, [Hardware], [Software]
@@ -232,16 +212,11 @@ func TestUnpivot_Basic(t *testing.T) {
 	server, cleanup := setupTestServer()
 	defer cleanup()
 
-	stmts := []string{
+	execStatements(t, server,
 		"CREATE TABLE wide_sales (id INT PRIMARY KEY, year INT, Q1 INT, Q2 INT, Q3 INT, Q4 INT)",
 		"INSERT INTO wide_sales VALUES (1, 2023, 100, 150, 200, 250)",
 		"INSERT INTO wide_sales VALUES (2, 2024, 120, 180, 220, 300)",
-	}
-	for _, stmt := range stmts {
-		if _, err := server.ExecuteSQL(stmt); err != nil {
-			t.Fatalf("setup failed (%q): %v", stmt, err)
-		}
-	}
+	)
 
 	query := `
 		SELECT year, quarter, amount
@@ -277,16 +252,11 @@ func TestUnpivot_WithSubqueryAndBracketSyntax(t *testing.T) {
 	server, cleanup := setupTestServer()
 	defer cleanup()
 
-	stmts := []string{
+	execStatements(t, server,
 		"CREATE TABLE customer_scores (cust_id INT PRIMARY KEY, [Math] INT, [English] INT, [Science] INT)",
 		"INSERT INTO customer_scores VALUES (101, 95, 88, 92)",
 		"INSERT INTO customer_scores VALUES (102, 70, 85, 80)",
-	}
-	for _, stmt := range stmts {
-		if _, err := server.ExecuteSQL(stmt); err != nil {
-			t.Fatalf("setup failed (%q): %v", stmt, err)
-		}
-	}
+	)
 
 	query := `
 		SELECT cust_id, Subject, Score

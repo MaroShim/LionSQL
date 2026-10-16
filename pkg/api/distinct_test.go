@@ -8,21 +8,15 @@ func TestSelectDistinct(t *testing.T) {
 	server, cleanup := setupTestServer()
 	defer cleanup()
 
-	// id column as explicit PK to avoid first-column PK inference on duplicates
-	stmts := []string{
+	execStatements(t, server,
 		"CREATE TABLE dist_test (id INT PRIMARY KEY, dept VARCHAR(50), salary INT)",
 		"INSERT INTO dist_test VALUES (1, 'Engineering', 90000)",
 		"INSERT INTO dist_test VALUES (2, 'Engineering', 95000)",
-		"INSERT INTO dist_test VALUES (3, 'Engineering', 90000)", // same dept/salary as row 1
+		"INSERT INTO dist_test VALUES (3, 'Engineering', 90000)",
 		"INSERT INTO dist_test VALUES (4, 'Marketing', 70000)",
-		"INSERT INTO dist_test VALUES (5, 'Marketing', 70000)", // same dept/salary as row 4
+		"INSERT INTO dist_test VALUES (5, 'Marketing', 70000)",
 		"INSERT INTO dist_test VALUES (6, 'HR', 65000)",
-	}
-	for _, stmt := range stmts {
-		if _, err := server.ExecuteSQL(stmt); err != nil {
-			t.Fatalf("setup failed (%q): %v", stmt, err)
-		}
-	}
+	)
 
 	t.Run("single column distinct", func(t *testing.T) {
 		res, err := server.ExecuteSQL("SELECT DISTINCT dept FROM dist_test")

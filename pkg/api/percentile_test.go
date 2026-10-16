@@ -10,36 +10,14 @@ import (
 )
 
 func setupEmployeesTestServer(t *testing.T) (*api.Server, func()) {
-	eng := memengine.New()
-	cat := catalog.New(eng)
-	server := api.NewServer(cat, eng)
-
-	_, err := server.ExecuteSQL(`CREATE TABLE employees (
-		id INT PRIMARY KEY,
-		dept VARCHAR(50),
-		salary INT
-	);`)
-	if err != nil {
-		t.Fatalf("CREATE TABLE failed: %v", err)
-	}
-
-	// Eng salaries: 10, 20, 30, 40 (median cont = 25, disc = 20)
-	// Sales salaries: 50, 100, 150 (median cont = 100, disc = 100)
-	_, err = server.ExecuteSQL(`INSERT INTO employees (id, dept, salary) VALUES
-		(1, 'Eng', 10),
-		(2, 'Eng', 20),
-		(3, 'Eng', 30),
-		(4, 'Eng', 40),
-		(5, 'Sales', 50),
-		(6, 'Sales', 100),
-		(7, 'Sales', 150);`)
-	if err != nil {
-		t.Fatalf("INSERT failed: %v", err)
-	}
-
-	return server, func() {
-		eng.Close()
-	}
+	server, cleanup := setupMemServer(t)
+	execStatements(t, server,
+		`CREATE TABLE employees (id INT PRIMARY KEY, dept VARCHAR(50), salary INT);`,
+		`INSERT INTO employees (id, dept, salary) VALUES
+			(1, 'Eng', 10), (2, 'Eng', 20), (3, 'Eng', 30), (4, 'Eng', 40),
+			(5, 'Sales', 50), (6, 'Sales', 100), (7, 'Sales', 150);`,
+	)
+	return server, cleanup
 }
 
 func TestSQLExecutor_Percentile_GroupBy(t *testing.T) {

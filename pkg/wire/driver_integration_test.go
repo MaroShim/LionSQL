@@ -354,3 +354,93 @@ func TestDriverIntegration_LibPQ_Metadata(t *testing.T) {
 	}
 	t.Logf("PostgreSQL version(): %s", ver)
 }
+
+func TestDriverIntegration_LibPQ_JDBC_ODBC_Compatibility(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. pgjdbc / psqlODBC initialization settings
+	initSettings := []string{
+		"SET extra_float_digits = 3",
+		"SET application_name = 'PostgreSQL JDBC Driver'",
+		"SET client_min_messages = 'warning'",
+		"SET client_encoding = 'UTF8'",
+	}
+	for _, sqlStmt := range initSettings {
+		if _, err := db.ExecContext(ctx, sqlStmt); err != nil {
+			t.Fatalf("Driver init %q failed: %v", sqlStmt, err)
+		}
+	}
+
+	// 2. SHOW parameter queries
+	var txIso string
+	if err := db.QueryRowContext(ctx, "SHOW transaction_isolation").Scan(&txIso); err != nil {
+		t.Fatalf("SHOW transaction_isolation failed: %v", err)
+	}
+	if txIso == "" {
+		t.Fatalf("expected non-empty transaction_isolation")
+	}
+
+	var scs string
+	if err := db.QueryRowContext(ctx, "SHOW standard_conforming_strings").Scan(&scs); err != nil {
+		t.Fatalf("SHOW standard_conforming_strings failed: %v", err)
+	}
+	if scs != "on" {
+		t.Fatalf("expected 'on', got %q", scs)
+	}
+
+	// 3. current_schema() function
+	var curSchema string
+	if err := db.QueryRowContext(ctx, "SELECT current_schema()").Scan(&curSchema); err != nil {
+		t.Fatalf("SELECT current_schema() failed: %v", err)
+	}
+	if curSchema == "" {
+		t.Fatalf("expected non-empty current_schema")
+	}
+
+	// 4. Create sample table for metadata verification
+	if _, err := db.ExecContext(ctx, "CREATE TABLE jdbc_test (id INT PRIMARY KEY, name VARCHAR(100));"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 5. pg_type catalog query (used by JDBC for type introspection)
+	rows, err := db.QueryContext(ctx, "SELECT typname, oid, typlen FROM pg_type WHERE typname IN ('int4', 'varchar', 'bool')")
+	if err != nil {
+		t.Fatalf("pg_type query failed: %v", err)
+	}
+	defer rows.Close()
+	typeCount := 0
+	for rows.Next() {
+		var typname string
+		var oid, typlen int
+		if err := rows.Scan(&typname, &oid, &typlen); err != nil {
+			t.Fatalf("Scan pg_type row failed: %v", err)
+		}
+		typeCount++
+	}
+	if typeCount == 0 {
+		t.Fatalf("expected at least 1 pg_type row, got 0")
+	}
+
+	// 6. information_schema.tables query (used by DatabaseMetaData.getTables())
+	var tblName, tblType string
+	if err := db.QueryRowContext(ctx, "SELECT table_name, table_type FROM information_schema.tables WHERE table_name = 'jdbc_test'").Scan(&tblName, &tblType); err != nil {
+		t.Fatalf("information_schema query failed: %v", err)
+	}
+	if tblName != "jdbc_test" {
+		t.Fatalf("expected table_name 'jdbc_test', got %q", tblName)
+	}
+	if tblType != "BASE TABLE" {
+		t.Fatalf("expected table_type 'BASE TABLE', got %q", tblType)
+	}
+}

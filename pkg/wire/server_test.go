@@ -46,16 +46,17 @@ func setupTestWireServer(t *testing.T) (*Server, storage.Engine, *catalog.Catalo
 	return srv, eng, cat
 }
 
-func TestWire_HandshakeAndSelectVersion(t *testing.T) {
-	srv, _, _ := setupTestWireServer(t)
-
+// connectPGClient creates a paired client/server connection, starts the connection handler,
+// and completes the protocol v3.0 startup handshake up to ReadyForQuery ('Z').
+func connectPGClient(t *testing.T, srv *Server) net.Conn {
+	t.Helper()
 	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-
 	go srv.handleConnection(serverConn)
+	t.Cleanup(func() {
+		_ = clientConn.Close()
+		_ = serverConn.Close()
+	})
 
-	// 1. Send StartupMessage (length 8: 8, protocol version 3.0: 196608)
 	startupBuf := make([]byte, 8)
 	binary.BigEndian.PutUint32(startupBuf[:4], 8)
 	binary.BigEndian.PutUint32(startupBuf[4:8], 196608) // 3.0
@@ -63,176 +64,97 @@ func TestWire_HandshakeAndSelectVersion(t *testing.T) {
 		t.Fatalf("Failed to write startup: %v", err)
 	}
 
-	// Read until ReadyForQuery ('Z')
 	for {
 		header := make([]byte, 5)
 		if _, err := io.ReadFull(clientConn, header); err != nil {
 			t.Fatalf("Failed to read header: %v", err)
 		}
-		msgType := header[0]
 		msgLen := binary.BigEndian.Uint32(header[1:5])
 		payload := make([]byte, msgLen-4)
 		if _, err := io.ReadFull(clientConn, payload); err != nil {
 			t.Fatalf("Failed to read payload: %v", err)
 		}
-		if msgType == MsgReadyForQuery {
+		if header[0] == MsgReadyForQuery {
 			break
 		}
 	}
+	return clientConn
+}
 
-	// 2. Send Simple Query: 'Q' "SELECT version();\0"
-	query := "SELECT version();\x00"
-	queryBuf := make([]byte, 1+4+len(query))
+// sendPGQuery sends a Simple Query ('Q') and returns all DataRow payloads.
+func sendPGQuery(t *testing.T, conn net.Conn, sql string) [][]byte {
+	t.Helper()
+	if !strings.HasSuffix(sql, "\x00") {
+		sql += "\x00"
+	}
+	queryBuf := make([]byte, 1+4+len(sql))
 	queryBuf[0] = 'Q'
-	binary.BigEndian.PutUint32(queryBuf[1:5], uint32(4+len(query)))
-	copy(queryBuf[5:], query)
+	binary.BigEndian.PutUint32(queryBuf[1:5], uint32(4+len(sql)))
+	copy(queryBuf[5:], sql)
 
-	if _, err := clientConn.Write(queryBuf); err != nil {
-		t.Fatalf("Failed to send query: %v", err)
+	if _, err := conn.Write(queryBuf); err != nil {
+		t.Fatalf("Failed to send query %q: %v", sql, err)
 	}
 
-	// 3. Receive RowDescription, DataRow, CommandComplete, ReadyForQuery
-	var versionOutput string
+	var dataRows [][]byte
 	for {
 		header := make([]byte, 5)
-		if _, err := io.ReadFull(clientConn, header); err != nil {
+		if _, err := io.ReadFull(conn, header); err != nil {
 			t.Fatalf("Failed to read response header: %v", err)
 		}
 		msgType := header[0]
 		msgLen := binary.BigEndian.Uint32(header[1:5])
 		payload := make([]byte, msgLen-4)
-		if _, err := io.ReadFull(clientConn, payload); err != nil {
+		if _, err := io.ReadFull(conn, payload); err != nil {
 			t.Fatalf("Failed to read response payload: %v", err)
 		}
 
 		if msgType == MsgDataRow {
-			versionOutput = string(payload)
+			dataRows = append(dataRows, payload)
 		}
 		if msgType == MsgReadyForQuery {
 			break
 		}
 	}
+	return dataRows
+}
 
-	if !strings.Contains(versionOutput, "SQLion") {
-		t.Errorf("Expected version to contain SQLion, got: %s", versionOutput)
+func TestWire_HandshakeAndSelectVersion(t *testing.T) {
+	srv, _, _ := setupTestWireServer(t)
+	clientConn := connectPGClient(t, srv)
+
+	rows := sendPGQuery(t, clientConn, "SELECT version();")
+	if len(rows) == 0 {
+		t.Fatalf("Expected at least one data row for SELECT version()")
+	}
+	if !strings.Contains(string(rows[0]), "SQLion") {
+		t.Errorf("Expected version to contain SQLion, got: %s", string(rows[0]))
 	}
 }
 
 func TestWire_SelectTableRecords(t *testing.T) {
 	srv, _, _ := setupTestWireServer(t)
+	clientConn := connectPGClient(t, srv)
 
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-
-	go srv.handleConnection(serverConn)
-
-	// Startup
-	startupBuf := make([]byte, 8)
-	binary.BigEndian.PutUint32(startupBuf[:4], 8)
-	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
-	_, _ = clientConn.Write(startupBuf)
-
-	// Wait for Ready
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-		if header[0] == MsgReadyForQuery {
-			break
-		}
+	rows := sendPGQuery(t, clientConn, "SELECT * FROM accounts")
+	if len(rows) == 0 {
+		t.Fatalf("Expected at least one data row from accounts")
 	}
-
-	// Query: SELECT * FROM accounts
-	query := "SELECT * FROM accounts\x00"
-	queryBuf := make([]byte, 1+4+len(query))
-	queryBuf[0] = 'Q'
-	binary.BigEndian.PutUint32(queryBuf[1:5], uint32(4+len(query)))
-	copy(queryBuf[5:], query)
-	_, _ = clientConn.Write(queryBuf)
-
-	var rowFound bool
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-
-		if header[0] == MsgDataRow {
-			rowFound = true
-			if !strings.Contains(string(payload), "Alice") {
-				t.Errorf("Expected Alice in row, got %s", string(payload))
-			}
-		}
-		if header[0] == MsgReadyForQuery {
-			break
-		}
-	}
-
-	if !rowFound {
-		t.Errorf("Expected at least one data row returned")
+	if !strings.Contains(string(rows[0]), "Alice") {
+		t.Errorf("Expected Alice in row, got: %s", string(rows[0]))
 	}
 }
 
 func TestWire_BeekeeperDbGateQuery(t *testing.T) {
 	srv, _, _ := setupTestWireServer(t)
+	clientConn := connectPGClient(t, srv)
 
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-
-	go srv.handleConnection(serverConn)
-
-	// Startup
-	startupBuf := make([]byte, 8)
-	binary.BigEndian.PutUint32(startupBuf[:4], 8)
-	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
-	_, _ = clientConn.Write(startupBuf)
-
-	// Wait for Ready
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-		if header[0] == MsgReadyForQuery {
-			break
-		}
+	rows := sendPGQuery(t, clientConn, `SELECT "basetbl".* FROM "public"."accounts" "basetbl" LIMIT 50 OFFSET 0`)
+	if len(rows) == 0 {
+		t.Fatalf("Expected at least one data row returned for Beekeeper query")
 	}
-
-	// Beekeeper exact query
-	query := "SELECT \"basetbl\".* FROM \"public\".\"accounts\" \"basetbl\" LIMIT 50 OFFSET 0\x00"
-	queryBuf := make([]byte, 1+4+len(query))
-	queryBuf[0] = 'Q'
-	binary.BigEndian.PutUint32(queryBuf[1:5], uint32(4+len(query)))
-	copy(queryBuf[5:], query)
-	_, _ = clientConn.Write(queryBuf)
-
-	var rowFound bool
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-
-		if header[0] == MsgDataRow {
-			rowFound = true
-			if !strings.Contains(string(payload), "Alice") {
-				t.Errorf("Expected Alice in row, got %s", string(payload))
-			}
-		}
-		if header[0] == MsgReadyForQuery {
-			break
-		}
-	}
-
-	if !rowFound {
-		t.Errorf("Expected at least one data row returned for Beekeeper query")
+	if !strings.Contains(string(rows[0]), "Alice") {
+		t.Errorf("Expected Alice in row, got: %s", string(rows[0]))
 	}
 }
 
@@ -629,81 +551,18 @@ func TestWire_PgCatalogAndInformationSchema(t *testing.T) {
 	defer eng.Close()
 	defer srv.Close()
 
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-
-	go srv.handleConnection(serverConn)
-
-	// Startup
-	startupBuf := make([]byte, 8)
-	binary.BigEndian.PutUint32(startupBuf[:4], 8)
-	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
-	_, _ = clientConn.Write(startupBuf)
-
-	// Wait for Ready
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-		if header[0] == MsgReadyForQuery {
-			break
-		}
-	}
+	clientConn := connectPGClient(t, srv)
 
 	// 1. Query pg_catalog.pg_class
-	q := "SELECT relname FROM pg_catalog.pg_class WHERE relname = 'accounts'\x00"
-	qBuf := make([]byte, 1+4+len(q))
-	qBuf[0] = 'Q'
-	binary.BigEndian.PutUint32(qBuf[1:5], uint32(4+len(q)))
-	copy(qBuf[5:], q)
-	_, _ = clientConn.Write(qBuf)
-
-	foundRow := false
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-		if header[0] == MsgDataRow {
-			foundRow = true
-		}
-		if header[0] == MsgReadyForQuery {
-			break
-		}
-	}
-	if !foundRow {
+	rows := sendPGQuery(t, clientConn, "SELECT relname FROM pg_catalog.pg_class WHERE relname = 'accounts'")
+	if len(rows) == 0 {
 		t.Fatalf("expected to receive DataRow for pg_class query")
 	}
 
-	// 2. Query information_schema.columns
-	q2 := "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'accounts'\x00"
-	q2Buf := make([]byte, 1+4+len(q2))
-	q2Buf[0] = 'Q'
-	binary.BigEndian.PutUint32(q2Buf[1:5], uint32(4+len(q2)))
-	copy(q2Buf[5:], q2)
-	_, _ = clientConn.Write(q2Buf)
-
-	rowCount := 0
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-		if header[0] == MsgDataRow {
-			rowCount++
-		}
-		if header[0] == MsgReadyForQuery {
-			break
-		}
-	}
-	// accounts has 3 columns: id, holder, balance
-	if rowCount != 3 {
-		t.Fatalf("expected 3 rows from information_schema.columns, got %d", rowCount)
+	// 2. Query information_schema.columns (accounts has 3 columns: id, holder, balance)
+	colRows := sendPGQuery(t, clientConn, "SELECT column_name, data_type FROM information_schema.columns WHERE table_name = 'accounts'")
+	if len(colRows) != 3 {
+		t.Fatalf("expected 3 rows from information_schema.columns, got %d", len(colRows))
 	}
 }
 
@@ -712,17 +571,7 @@ func TestWire_TransactionStatusAndSQLState(t *testing.T) {
 	defer eng.Close()
 	defer srv.Close()
 
-	clientConn, serverConn := net.Pipe()
-	defer clientConn.Close()
-	defer serverConn.Close()
-
-	go srv.handleConnection(serverConn)
-
-	// Startup
-	startupBuf := make([]byte, 8)
-	binary.BigEndian.PutUint32(startupBuf[:4], 8)
-	binary.BigEndian.PutUint32(startupBuf[4:8], 196608)
-	_, _ = clientConn.Write(startupBuf)
+	clientConn := connectPGClient(t, srv)
 
 	// Helper to send query and receive ready status byte
 	sendQuery := func(sql string) (byte, []byte, error) {
@@ -757,21 +606,6 @@ func TestWire_TransactionStatusAndSQLState(t *testing.T) {
 			}
 		}
 		return lastStatus, lastErrorPayload, nil
-	}
-
-	// Wait for initial ReadyForQuery
-	for {
-		header := make([]byte, 5)
-		_, _ = io.ReadFull(clientConn, header)
-		msgLen := binary.BigEndian.Uint32(header[1:5])
-		payload := make([]byte, msgLen-4)
-		_, _ = io.ReadFull(clientConn, payload)
-		if header[0] == MsgReadyForQuery {
-			if payload[0] != 'I' {
-				t.Fatalf("expected initial status 'I', got %c", payload[0])
-			}
-			break
-		}
 	}
 
 	// 1. Send BEGIN -> status should become 'T' (in transaction)

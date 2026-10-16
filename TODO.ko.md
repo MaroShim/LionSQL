@@ -23,9 +23,16 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
+| **P2** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/logger`, `pkg/api` | 로그인, 권한 변경(`GRANT/REVOKE`), DDL 변경, 관리자 데이터 조작 이벤트 불변 감사 기록 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 (`pkg/wire`)**
+  - **배경**: PostgreSQL 공식 JDBC(`pgjdbc`) 및 `psqlODBC`가 연결 및 메타데이터 인트로스펙션 시 전송하는 드라이버 핸드셰이크 파라미터 및 카탈로그 뷰 쿼리 호환성 검증.
+  - **구현 내용**:
+    - `pkg/wire/driver_integration_test.go`: `TestDriverIntegration_LibPQ_JDBC_ODBC_Compatibility` 단위 및 통합 검증 완비.
+    - 드라이버 초기화 세션 제어: `SET extra_float_digits = 3`, `SET application_name = 'PostgreSQL JDBC Driver'`, `SET client_min_messages = 'warning'`, `SET client_encoding = 'UTF8'` 정상 수용.
+    - 세션 상태 조회: `SHOW transaction_isolation`, `SHOW standard_conforming_strings` 호환성 검증.
+    - 카탈로그 인트로스펙션: `SELECT current_schema()`, `SELECT typname, oid, typlen FROM pg_type`, `SELECT table_name, table_type FROM information_schema.tables` 무결성 검증 (0.01s PASS).
 - [x] **Prepared Statement 바이너리 바인드 파라미터 제로-할당 & 이중 변환 제거 (`P-14`) (`pkg/wire`, `pkg/wire/tds`)**
   - **배경**: PGWire `Bind ('B')` 및 TDS RPC 수신 시 클라이언트가 보낸 정수/부동소수점/불리언 바이너리를 `strconv.Itoa` 등으로 문자열로 변환한 뒤, 쿼리 실행 엔진에서 다시 `storage.IntValue()` 등으로 파싱하는 불필요한 이중 변환 및 매 쿼리당 `fmt.Sprintf` 파라미터명 슬라이스 동적 할당 오버헤드 제거.
   - **구현 내용**:
@@ -439,6 +446,8 @@
   - `CREATE TABLE`, `INSERT`, `SELECT`, DATE/TIME/GUID 바이너리 파싱, 트랜잭션 `COMMIT`/`ROLLBACK` 원자성 및 NULL 값 처리 완비.
 - [x] **SSMS (SQL Server Management Studio) Object Explorer 가상 카탈로그/DMV 뷰 (`pkg/engine`, `pkg/catalog`)**
   - SSMS 접속 및 탐색기 트리 조회에 필수적인 `sys.configurations`, `sys.dm_exec_sessions`, `sys.dm_exec_connections`, `sys.database_principals`, `sys.server_principals`, `sys.dm_os_sys_info`, `sys.endpoints`, `sys.database_files`, `sys.master_files`, `sys.all_objects`, `sys.all_columns`, `sys.all_views` 가상 뷰 완비.
+- [x] **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 (`pkg/wire`)**
+  - PostgreSQL 공식 JDBC(`pgjdbc`) 및 `psqlODBC`가 요구하는 세션 초기화 파라미터(`extra_float_digits`, `application_name`, `client_min_messages`, `client_encoding`) 및 세션 상태(`SHOW transaction_isolation`, `SHOW standard_conforming_strings`), 카탈로그 뷰(`pg_type`, `information_schema.tables`, `SELECT current_schema()`) E2E 적합성 검증 완비.
 - [x] **PostgreSQL 서버 사이드 커서 및 Extended Query 포털 배치 스트리밍 (`pkg/engine`, `pkg/wire`)**
   - 대규모 쿼리 결과 집합을 분할 수신하는 드라이버 호환성을 위한 `DECLARE ... CURSOR [WITH HOLD] FOR`, `FETCH`, `MOVE`, `CLOSE [ALL]` 및 트랜잭션 경계 수명주기 완비.
   - Extended Query 프로토콜 `Execute`의 `maxRows` 페이로드 분할 스트리밍 및 `MsgPortalSuspended ('s')` 토큰 송출 지원.
