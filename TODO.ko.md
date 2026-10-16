@@ -33,6 +33,23 @@
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **Pratt 파서 및 내장 함수 도메인별 관심사 분리 (`R-2`) (`pkg/proc`)**
+  - **배경**: `pkg/proc/parser.go`(3,241라인)와 `pkg/proc/builtins.go`(2,880라인)가 단일 파일에 비대하게 집중되어 신규 문법/함수 추가 시 인지 부하 및 머지 충돌 위험 증가.
+  - **구현 내용**:
+    - **파서 모듈화 (3,241줄 ➔ 5개 도메인 파일 분해)**:
+      - `parser.go` (280줄, 90%+ 슬림화): 코어 구조체, NewParser, 렉서 탐색 및 공통 어휘 헬퍼.
+      - `parser_ddl.go` (599줄): 프로시저, 함수, 트리거, 테이블, 인덱스 생성/삭제 DDL.
+      - `parser_dml.go` (1,141줄): `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `WITH`(CTE), `EXPLAIN`.
+      - `parser_stmt.go` (656줄): `IF/WHILE/TRY...CATCH/BEGIN...END`, 트랜잭션, 커서, `EXEC`.
+      - `parser_expr.go` (615줄): Pratt 우선순위 식 파싱, 함수 호출, CASE WHEN, JSON 표현식 분석.
+    - **내장 함수 모듈화 (2,880줄 ➔ 6개 도메인 파일 분해)**:
+      - `builtins.go` (153줄, 94%+ 슬림화): 스칼라 함수 SPI 등록 및 도메인 디스패처, 공통 변환 헬퍼.
+      - `builtins_date.go` (765줄): 날짜/시간 함수 및 파싱/버킷 헬퍼.
+      - `builtins_string.go` (885줄): 문자열 조작, PATINDEX, SOUNDEX, 포맷팅 헬퍼.
+      - `builtins_math.go` (352줄): 수학, 삼각, 비트 연산 함수.
+      - `builtins_json.go` (179줄): JSON 내장 함수 및 경로 탐색/수정 헬퍼.
+      - `builtins_sys.go` (697줄): 시스템, 메타데이터, UUIDv7, 에러, 조건 논리(ISNULL/COALESCE), 암호화 함수.
+    - 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
 - [x] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**
   - **배경**: 단일 파일(3,283라인)에 PostgreSQL `pg_catalog`, ANSI `information_schema`, MSSQL `sys.tables`/DMV, DBeaver/Beekeeper/DbGate/HeidiSQL 도구별 쿼리 인터셉터가 혼재되어 거대한 switch 분기문과 높은 유지보수 비용을 초래함.
   - **구현 내용**:
@@ -348,7 +365,7 @@
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 목표 및 리팩토링 상세 |
 | :---: | :--- | :--- | :---: | :--- |
 | **R-1** | **엔진/카탈로그** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | **완료 (`[x]`)** | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
-| **R-2** | **파서/내장함수** | **Pratt 파서 및 내장 함수 도메인별 관심사 분리** | **대기 (`[ ]`)** | `parser.go`(3.2K줄), `builtins.go`(2.8K줄) 도메인 모듈화 |
+| **R-2** | **파서/내장함수** | **Pratt 파서 및 내장 함수 도메인별 관심사 분리** | **완료 (`[x]`)** | `parser.go`(3.2K줄), `builtins.go`(2.8K줄) 도메인 모듈화 |
 | **R-3** | **엔진/실행기** | **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화** | **대기 (`[ ]`)** | `sqlexec_eval.go`와 `execution/builder.go` 간 중복 제거 (DRY) |
 | **R-4** | **스토리지/OCC** | **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해** | **대기 (`[ ]`)** | `memengine/tx.go`(1.9K줄)의 `Commit()`, 스캔, 세이브포인트 분리 |
 | **R-5** | **스토리지/CGo** | **WiredTiger CGo 바인딩 격리 및 트랜잭션/커서 모듈화** | **대기 (`[ ]`)** | `wt_engine.go`(1.7K줄)의 CGo 인터페이스, 커서, DDL 물리적 분리 |
@@ -366,11 +383,23 @@
       - 기존 60줄의 `isPgCatalogTable` 분기문을 $O(1)$ 맵 조회로 교체.
       - 기존 1,500줄의 `execPgCatalogSelect` 거대 switch-case를 15줄의 $O(1)$ 레지스트리 디스패처로 전면 교체(개방-폐쇄 원칙 OCP 달성).
     - 전체 25개 패키지 race-free 테스트(100% PASS) 및 GUI 클라이언트 호환성 보장.
-- [ ] **Pratt 파서 및 내장 함수 도메인별 관심사 분리 (`R-2`) (`pkg/proc`)**
+- [x] **Pratt 파서 및 내장 함수 도메인별 관심사 분리 (`R-2`) (`pkg/proc`)**
   - **배경**: `pkg/proc/parser.go`(3,241라인)와 `pkg/proc/builtins.go`(2,880라인)가 단일 파일에 비대하게 집중되어 신규 문법/함수 추가 시 인지 부하 및 머지 충돌 위험 증가.
-  - **구현 계획**:
-    - 파서 분리: `parser_expr.go`(Pratt 연산자 우선순위 식 파싱), `parser_stmt.go`(T-SQL 제어문 `IF/WHILE/TRY`), `parser_ddl.go`(`CREATE/ALTER/DROP`), `parser_dml.go`(`SELECT/DML`).
-    - 내장 함수 분리: `builtins_string.go`, `builtins_date.go`, `builtins_math.go`, `builtins_json.go`, `builtins_sys.go`.
+  - **구현 내용**:
+    - **파서 모듈화 (3,241줄 ➔ 5개 도메인 파일 분해)**:
+      - `parser.go` (280줄, 90%+ 슬림화): 코어 구조체, NewParser, 렉서 탐색 및 공통 어휘 헬퍼.
+      - `parser_ddl.go` (599줄): 프로시저, 함수, 트리거, 테이블, 인덱스 생성/삭제 DDL.
+      - `parser_dml.go` (1,141줄): `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `WITH`(CTE), `EXPLAIN`.
+      - `parser_stmt.go` (656줄): `IF/WHILE/TRY...CATCH/BEGIN...END`, 트랜잭션, 커서, `EXEC`.
+      - `parser_expr.go` (615줄): Pratt 우선순위 식 파싱, 함수 호출, CASE WHEN, JSON 표현식 분석.
+    - **내장 함수 모듈화 (2,880줄 ➔ 6개 도메인 파일 분해)**:
+      - `builtins.go` (153줄, 94%+ 슬림화): 스칼라 함수 SPI 등록 및 도메인 디스패처, 공통 변환 헬퍼.
+      - `builtins_date.go` (765줄): 날짜/시간 함수 및 파싱/버킷 헬퍼.
+      - `builtins_string.go` (885줄): 문자열 조작, PATINDEX, SOUNDEX, 포맷팅 헬퍼.
+      - `builtins_math.go` (352줄): 수학, 삼각, 비트 연산 함수.
+      - `builtins_json.go` (179줄): JSON 내장 함수 및 경로 탐색/수정 헬퍼.
+      - `builtins_sys.go` (697줄): 시스템, 메타데이터, UUIDv7, 에러, 조건 논리(ISNULL/COALESCE), 암호화 함수.
+    - 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
 - [ ] **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 및 조건 평가 로직 일원화 (`R-3`) (`pkg/engine`, `pkg/execution`, `pkg/planner`)**
   - **배경**: `sqlexec_eval.go`의 단일 테이블 고속 검색과 `execution/builder.go`의 Volcano 플랜 빌더 간에 인덱스 범위 검색 경계(`lowVal`, `highVal`) 추출 및 조건식 파싱 로직이 중복 존재(DRY 위반).
   - **구현 계획**:

@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Changed
+- **Pratt Parser & Built-in Functions Domain Modularization (`R-2`) (`pkg/proc`)**:
+  - Modularized monolithic `pkg/proc/parser.go` (3,241 lines) into 5 focused domain modules:
+    - `parser.go` (280 lines, 90%+ reduction): Core `Parser` struct, `NewParser`, token advancement, and syntax helpers.
+    - `parser_ddl.go` (599 lines): `CREATE`/`ALTER`/`DROP` procedures, functions, triggers, tables, and indexes.
+    - `parser_dml.go` (1,141 lines): `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `WITH` (CTE), and `EXPLAIN` query parsing.
+    - `parser_stmt.go` (656 lines): T-SQL procedural control statements (`IF`/`WHILE`/`TRY...CATCH`/`BEGIN...END`), transactions, cursors, and `EXEC`.
+    - `parser_expr.go` (615 lines): Pratt operator precedence expressions, function calls, `CASE WHEN`, and JSON extraction expressions.
+  - Modularized monolithic `pkg/proc/builtins.go` (2,880 lines) into 6 domain-specific modules:
+    - `builtins.go` (153 lines, 94%+ reduction): Scalar function SPI registration, domain dispatchers (`EvalBuiltin`, `IsBuiltinFunction`), and common type converters.
+    - `builtins_date.go` (765 lines): T-SQL & ANSI date/time functions and date parsing/truncation/bucketing helpers.
+    - `builtins_string.go` (885 lines): String manipulation, regex matching, `PATINDEX`, `SOUNDEX`, and number formatting helpers.
+    - `builtins_math.go` (352 lines): Mathematical, trigonometric, and bitwise manipulation functions.
+    - `builtins_json.go` (179 lines): JSON scalar functions (`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`) and path modifiers.
+    - `builtins_sys.go` (697 lines): System context, metadata introspection, UUIDv7 generation, error functions, conditional logic (`ISNULL`, `COALESCE`), and cryptographic hashing.
+  - Preserved 100% syntactic and runtime parity with zero data races verified across all 25 packages.
 - **Virtual System Catalog Modularization & Registry Pattern Architecture (`R-1`) (`pkg/engine`)**:
   - Decomposed monolithic 3,284-line `sqlexec_pgcatalog.go` into domain-specific modules:
     - `sqlexec_pgcatalog.go` (634 lines): Core PostgreSQL `pg_catalog.pg_*` virtual views and centralized registry dispatcher.
