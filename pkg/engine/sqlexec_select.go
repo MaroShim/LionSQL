@@ -140,7 +140,8 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	defer exec.Close()
 
 	var rows []map[string]any
-	chunk := execution.NewChunk(execution.DefaultChunkSize)
+	chunk := execution.GetChunk()
+	defer execution.PutChunk(chunk)
 	for {
 		err := execution.PullChunk(ctx, exec, chunk, execution.DefaultChunkSize)
 		if err != nil && err != io.EOF {

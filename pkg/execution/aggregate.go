@@ -336,7 +336,8 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 	}
 
 	hasRows := false
-	inChunk := NewChunk(DefaultChunkSize)
+	inChunk := GetChunk()
+	defer PutChunk(inChunk)
 	for {
 		select {
 		case <-ctx.Done():

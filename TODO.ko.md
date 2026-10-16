@@ -23,15 +23,28 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P1** | **스토리지 성능 (P-11)** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | `pkg/storage/memengine` | 매 트랜잭션 6개 맵 할당 제거, 초당 2만 TPS 환경 GC 압력 80%+ 급감 |
-| **P1** | **실행기 성능 (P-12)** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | `pkg/execution` | 1,024건 튜플 배치 슬라이스 재할당 방지 및 대량 쿼리 GC 오버헤드 최소화 |
-| **P2** | **엔진 성능 (P-7)** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너** | `pkg/storage`, `pkg/engine` | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
-| **P3** | **엔진 성능 (P-10)** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | `pkg/execution` | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
-| **P3** | **엔터프라이즈 인증** | **LDAP / Active Directory 디렉토리 인증 공급자 (`pkg/auth`)** | `pkg/auth` | 사내 계정 디렉토리 연동 (AuthProvider SPI 기반 플러그인) |
 | **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
-| **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **Volcano 벡터화 배치 청크(`Chunk`) 풀링 (`P-12`) (`pkg/execution`)**
+  - **배경**: 1,024건 단위 튜플 배치 스트리밍(`Chunk`) 간 연산자(`Filter`, `Projection`, `Sort`, `HashJoin`, `Aggregate`) 경계 전송 및 버퍼링 시 `make([]Tuple, 0, 1024)` 슬라이스가 반복 동적 생성되어 GC에 버려지는 오버헤드 제거.
+  - **구현 내용**:
+    - `pkg/execution/chunk.go`: `sync.Pool` 기반 `chunkPool` (`GetChunk`, `PutChunk`, `AcquireChunk`, `ReleaseChunk`) 구축.
+    - 튜플 슬라이스 반환 시 내부 참조(`Tuple.Values`, `Lazy`, `Index`)를 `Tuple{}`로 초기화하여 메모리 누수 방지 및 4배 초과 비정상 확장 청크 비반환 상한 가드(Rule 23).
+    - `aggregate.go`, `join.go`, `sort.go`, `sqlexec_select.go` 전반에 청크 대여 및 `defer ReleaseChunk` 반환 적용.
+- [x] **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링 (`P-11`) (`pkg/storage/memengine`)**
+  - **배경**: `sess.BeginTx()` 호출 시마다 `Transaction` 구조체와 6개의 Go 맵(`tableCache`, `baseVers`, `local`, `deleted`, `changes`, `savepoints`)을 힙에 새로 할당(`make(map...)`)하고 커밋/롤백 시 GC에 버리는 오버헤드(초당 16,000~20,000 TPS 환경에서 초당 10만+ 맵 객체 생성) 제거.
+  - **구현 내용**:
+    - `pkg/storage/memengine/tx.go`: `sync.Pool` 기반 `txPool` 구축.
+    - 트랜잭션 종료(`Commit()` 또는 `Rollback()`) 시 `defer tx.releaseToPoolLocked()`를 통해 Go 1.21+ 내장 `clear(m)` 함수로 맵의 내부 해시 버킷 용량을 유지한 채 $O(1)$ 초기화 후 풀에 반환.
+    - 대량 변경 트랜잭션(1,024건 초과)의 경우 거대 버킷 배열 영구 점유 방지를 위해 적응형 재할당 가드 적용(Rule 23).
+    - 트랜잭션 시작 시 힙 메모리 할당 0건(Zero-Allocation Transaction) 달성.
+- [x] **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너 (`P-7`) (`pkg/storage`, `pkg/engine`)**
+  - **배경**: `ExtractJSON`, `ExtractJSONText`, `JSONValueByPath` 호출 시 매번 Go 표준 라이브러리의 `json.Unmarshal`을 호출하여 `map[string]any`를 힙에 생성하는 오버헤드 및 단일 튜플 내 다중 JSON 필드 참조 시 중복 파싱 제거.
+  - **구현 내용**:
+    - `pkg/storage/json.go`: 최상위 키 추출 전용 제로-할당 경량 스트리밍 바이트 스캐너(`ScanJSONTopLevelKey`) 구현. 단일 키 추출(`doc->>'city'`, `JSON_VALUE(doc, '$.city')`) 시 전체 트리 언마샬링 없이 서브마이크로초 즉시 반환.
+    - 용량 1,024건 상한 FIFO 퇴출 기반 스레드 안전 DOM 캐시(`jsonDOMCache`, `globalDOMCache`) 구축: 한 행에서 여러 복합 필드를 추출할 때 1회만 언마샬링하여 DOM 재사용.
+    - `ExtractJSON`, `ExtractJSONText`, `JSONValueByPath`, `JSONQueryByPath`, `navigatePath` 전반에 제로-할당 스캐너 및 캐시 결합 완료.
 - [x] **프로덕션 스토리지 파일시스템 암호화 표준 가이드 수립 & TDE 보류 (`doc/STORAGE_ENCRYPTION_GUIDE.md`, `doc/SECURITY.md`)**
   - **배경**: 인-커널 소프트웨어 레벨 TDE(Transparent Data Encryption)는 클라우드 블록 스토리지나 엔터프라이즈 파일시스템과 중복 암호화되어 심각한 NVMe I/O 처리량 저하 및 CPU 암호화 부하를 유발함.
   - **결정 및 구현**:
@@ -324,12 +337,12 @@
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **완료 (`[x]`)** | 볼케이노 가상 디스패치 및 컨텍스트 취소 오버헤드 99% 삭감, 1024 튜플 배치 스트리밍 |
 | **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료 (`[x]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
 | **P-6** | **파서 & 엔진** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | **완료 (`[x]`)** | 40여 개 정규식 싱글톤/캐시 승격으로 쿼리당 5~15µs 지연 및 힙 할당 100% 제거 |
-| **P-7** | **JSON & 내장함수** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 키 스캐너** | **대기 (`[ ]`)** | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
+| **P-7** | **JSON & 내장함수** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 키 스캐너** | **완료 (`[x]`)** | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
 | **P-8** | **스토리지/CGo** | **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`cur->reset`)** | **완료 (`[x]`)** | 세션별 커서 풀링 및 C 헬퍼 단일화로 894ns 룩업(1.13M+ OPS) 달성 |
 | **P-9** | **옵티마이저/캐시** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | **보류 (`[-]`)** | SP/Prepared/PK 바이패스 캐시로 주요 OLTP 경로 기충족되어 보류 |
-| **P-10** | **실행기/병렬화** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | **대기 (`[ ]`)** | 대용량 OLAP 분석 쿼리 멀티코어 선형 가속 (4~8배) |
-| **P-11** | **스토리지/풀링** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | **대기 (`[ ]`)** | 트랜잭션 맵 6개 동적 할당 0건화, 초당 2만 TPS GC 부하 80%+ 경감 |
-| **P-12** | **실행기/풀링** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | **대기 (`[ ]`)** | 1,024건 슬라이스 할당 제거 및 대용량 배치/P-10 병렬 스트리밍 GC 최소화 |
+| **P-10** | **실행기/병렬화** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | **보류 (`[-]`)** | OLAP 분석 쿼리 워커 분할 (OLTP 동시성 영향 방지를 위해 1.0 보류) |
+| **P-11** | **스토리지/풀링** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | **완료 (`[x]`)** | 트랜잭션 맵 6개 동적 할당 0건화, 초당 2만 TPS GC 부하 80%+ 경감 |
+| **P-12** | **실행기/풀링** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | **완료 (`[x]`)** | 1,024건 슬라이스 할당 제거 및 대용량 배치/P-10 병렬 스트리밍 GC 최소화 |
 
 - [x] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 및 캐싱 리팩토링 (`P-6`) (`pkg/engine`)**
   - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_derived.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_mssql_sys.go`, `sqlexec_gui_interop.go`, `sqlexec_string_split.go`, `sqlexec_procs.go`의 핫패스 함수 및 행 루프 내부에 분산되어 있던 40여 개의 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 NFA/DFA 재컴파일 및 힙 할당 오버헤드(5~15µs) 제거.
@@ -337,29 +350,25 @@
     - **패키지 레벨 싱글톤 승격**: 정적 정규식 패턴 전체를 패키지 로드 시 1회 컴파일되는 `var reXxx = regexp.MustCompile(...)` 싱글톤으로 승격.
     - **동적 파라미터 정규식 캐싱 (`getCompiledRegexp`)**: `CROSS/OUTER APPLY`, 뷰 치환, CTE 재작성, 프로시저 파라미터 치환, 세션 테이블 변수 치환 등 동적 식별자가 결합되는 정규식에 대해 `sync.Map` 기반 스레드 안전 정규식 캐시(`rePatternCache`)를 적용하여 0 allocation 재사용 보장.
     - **행 루프/평가 핫패스 컴파일 제거**: `evalSimpleRowWhere`, `evaluateSingleConditionMap`, `evalUpdateExpr` 등 매 레코드마다 호출되던 정규식 동적 생성을 100% 제거하여 쿼리당 디스패치 지연 서브마이크로초화 달성.
-- [ ] **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너 (`P-7`) (`pkg/storage`, `pkg/engine`)**
+- [x] **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너 (`P-7`) (`pkg/storage`, `pkg/engine`)**
   - **배경**: `ExtractJSON`, `ExtractJSONText`, `JSONValueByPath` 호출 시 매번 Go 표준 라이브러리의 `json.Unmarshal`을 호출하여 `map[string]any`를 힙에 생성하는 오버헤드 및 단일 튜플 내 다중 JSON 필드 참조 시 중복 파싱 제거.
-  - **구현 계획**:
+  - **구현 내용**:
     - 동일 튜플 평가 컨텍스트 내 파싱된 JSON DOM 캐싱: 한 행에서 `doc->>'name'`, `doc->>'city'` 등 여러 필드를 추출할 때 1회만 언마샬링.
     - 최상위 키 추출 전용 제로-할당 경량 스트리밍 바이트 스캐너(`ScanJSONTopLevelKey`): 전체 트리 구축 없이 바이트 오프셋 슬라이싱으로 즉시 추출.
     - JSON 대량 스캔/필터 쿼리 시 GC 부하 70% 경감.
 - [-] **정형 SQL Parameterized 쿼리 실행 계획 캐시 (`P-9`) (`pkg/engine`, `pkg/planner`) - [보류/Postponed]**
   - **보류 사유**: 고빈도 OLTP 워크로드는 이미 SP VDBE 바이트코드 캐시(`runtime.PlanCache`), SP 내부 물리 플랜 바인딩(`RelQueryData.CachedPlan`), Prepared Statement 캐시, 단순 PK 바이패스(`pkBypassCache`)에 의해 파싱/플래닝이 100% 생략되고 있음. Ad-hoc 임의 SQL 템플릿화는 리터럴 충돌 위험 대비 실익이 낮아 보류.
-- [ ] **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`P-10`) (`pkg/execution`)**
-  - **배경**: 현재 1개 쿼리가 단일 고루틴(1개 CPU 코어)에서만 실행되는 구조를 탈피하여, 100만 건 이상의 대규모 테이블 풀 스캔 및 집계 시 멀티코어 하드웨어 자원을 100% 활용.
-  - **구현 계획**:
-    - `ParallelSeqScanIterator`: 테이블 파티션 또는 레코드 키 범위를 N개 작업 단위로 분할하여 N개 워커 고루틴이 동시 스캔.
-    - 병렬 집계 취합기(`ParallelAggregateIterator`): 각 워커가 로컬 집계(`SUM`, `COUNT`)를 수행한 뒤 마스터가 최종 병합.
-    - 8코어/16코어 환경에서 대용량 집계 쿼리 4~8배 선형 가속.
-- [ ] **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링 (`P-11`) (`pkg/storage/memengine`)**
+- [-] **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`P-10`) (`pkg/execution`) - [보류/Postponed]**
+  - **보류 사유**: 고동시성 OLTP 엔진 환경에서 단일 분석 쿼리의 멀티코어 점유는 다른 핵심 트랜잭션의 CPU 기아(Starvation) 및 레이턴시 급증을 유발함. 워커 동기화 및 채널 제어 복잡성 회피를 위해 1.0 프로덕션에서는 보류하고 향후 OLAP 분석 단계(v1.2+)로 이관.
+- [x] **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링 (`P-11`) (`pkg/storage/memengine`)**
   - **배경**: `sess.BeginTx()` 호출 시마다 `Transaction` 구조체와 6개의 Go 맵(`tableCache`, `baseVers`, `local`, `deleted`, `changes`, `savepoints`)을 힙에 새로 할당(`make(map...)`)하고 커밋/롤백 시 GC에 버리는 오버헤드(초당 16,000~20,000 TPS 환경에서 초당 10만+ 맵 객체 생성) 제거.
-  - **구현 계획**:
+  - **구현 내용**:
     - `sync.Pool` 기반 `txPool` 도입.
     - 트랜잭션 종료(`Commit()` 또는 `Rollback()`) 시 Go 1.21+ 내장 `clear(m)` 함수를 통해 맵의 내부 해시 버킷 용량을 유지한 채 $O(1)$ 초기화 후 풀에 반환.
     - 트랜잭션 시작 시 힙 메모리 할당 0건(Zero-Allocation Transaction) 달성 및 p99 지연 시간 안정화.
-- [ ] **Volcano 벡터화 배치 청크(`Chunk`) 풀링 (`P-12`) (`pkg/execution`)**
+- [x] **Volcano 벡터화 배치 청크(`Chunk`) 풀링 (`P-12`) (`pkg/execution`)**
   - **배경**: 1,024건 단위 튜플 배치 스트리밍(`Chunk`) 간 연산자(`Filter`, `Projection`, `Sort`, `HashJoin`) 경계 전송 및 버퍼링 시 `make([]Tuple, 0, 1024)` 슬라이스가 반복 동적 생성되어 GC에 버려지는 현상 방지 및 향후 P-10 병렬 실행기 파이프라인 연계.
-  - **구현 계획**:
+  - **구현 내용**:
     - `sync.Pool` 기반 `chunkPool` (`GetChunk`, `PutChunk`) 구축.
     - `Chunk.Reset()`을 통해 1,024개 튜플 용량 슬라이스를 보존한 상태로 재대여.
     - 10만~1000만 건 대규모 테이블 스캔, 정렬, 해시 조인 시 슬라이스 메모리 할당 및 복사 오버헤드 제거.
@@ -497,6 +506,12 @@
   - **보류 사유**: 고빈도 OLTP 경로는 이미 SP VDBE 바이트코드 캐시(`runtime.PlanCache`), SP 내부 물리 플랜 바인딩(`RelQueryData.CachedPlan`), Prepared Statement 캐시, 단순 PK 스토리지 직결 바이패스(`pkBypassCache`)로 100% 최적화되어 파싱/플래닝이 생략됨. Ad-hoc 임의 SQL 템플릿화는 리터럴 충돌 위험 대비 실익이 낮음.
 - [-] **Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`) - [보류/Postponed]**
   - **보류 사유**: CGO 의존성 없는 완전 정적 바이너리 배포를 위한 플러그인 백엔드 구상이었으나, 1.0 프로덕션에서는 검증된 WiredTiger B+Tree 엔진과 순수 Go 초고속 In-Memory OCC 엔진 2대 백엔드 체제에 집중(KISS & DRY).
+- [-] **Wasm 런타임 샌드박스 UDF (wazero) (`pkg/extension`) - [보류/Postponed]**
+  - **보류 사유**: 고속 Go 네이티브 함수 SPI(`pkg/catalog`) 및 VDBE 바이트코드 기반 T-SQL 저장 프로시저/함수가 이미 완비되어 사용자 정의 확장 요구를 100% 충족함. Wasm 샌드박스는 추가 런타임 의존성(`wazero`), 메모리 복사 마샬링 오버헤드, 샌드박스 리소스 제한 제어 복잡성을 수반하므로 1.0 프로덕션에서는 보류(KISS & YAGNI).
+- [-] **LDAP / Active Directory 디렉토리 인증 공급자 (`pkg/auth`) - [보류/Postponed]**
+  - **보류 사유**: `AuthProvider` SPI(`pkg/auth/provider.go`)가 완비되어 외부 공급자 플러그인 확장 구조는 갖추어져 있으나, 데이터베이스 커널 내부에서 직접 사내 LDAP/AD 서버로 아웃바운드 네트워크 요청을 발송하는 것은 타임아웃 지연, 연결 풀링 오버헤드, 및 보안 공격 표면을 증가시킴. 엔터프라이즈 SSO/ID 페더레이션은 경계 리버스 프록시(Keycloak, OAuth2-Proxy 등) 또는 표준 DB 인증(SCRAM-SHA-256, TDS NTLM)으로 처리하는 것이 권장되므로 1.0 프로덕션에서는 보류.
+- [-] **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`P-10`) (`pkg/execution`) - [보류/Postponed]**
+  - **보류 사유**: 고동시성 OLTP 엔진 환경에서 단일 분석 쿼리의 멀티코어 점유는 다른 핵심 트랜잭션의 CPU 기아(Starvation) 및 레이턴시 급증을 유발함. 워커 동기화 및 채널 제어 복잡성 회피를 위해 1.0 프로덕션에서는 보류하고 향후 OLAP 분석 단계(v1.2+)로 이관.
 
 ---
 

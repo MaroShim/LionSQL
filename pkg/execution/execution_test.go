@@ -931,4 +931,43 @@ func BenchmarkVectorizedChunkVsRowByRow(b *testing.B) {
 	})
 }
 
+func TestVectorizedChunk_Pool(t *testing.T) {
+	c1 := execution.GetChunk()
+	if c1 == nil {
+		t.Fatalf("GetChunk returned nil")
+	}
+	if c1.Len() != 0 {
+		t.Fatalf("expected empty chunk, got len %d", c1.Len())
+	}
+	if cap(c1.Tuples) < execution.DefaultChunkSize {
+		t.Fatalf("expected capacity >= %d, got %d", execution.DefaultChunkSize, cap(c1.Tuples))
+	}
+
+	// Append mock tuples
+	c1.Tuples = append(c1.Tuples, execution.Tuple{
+		Values: []any{"val1", 123},
+	})
+	if c1.Len() != 1 {
+		t.Fatalf("expected len 1, got %d", c1.Len())
+	}
+
+	// Release back to pool
+	execution.PutChunk(c1)
+
+	// Acquire again
+	c2 := execution.AcquireChunk()
+	if c2 == nil {
+		t.Fatalf("AcquireChunk returned nil")
+	}
+	if c2.Len() != 0 {
+		t.Fatalf("expected cleared chunk from pool, got len %d", c2.Len())
+	}
+	execution.ReleaseChunk(c2)
+
+	// Safe handling of nil
+	execution.PutChunk(nil)
+	execution.ReleaseChunk(nil)
+}
+
+
 

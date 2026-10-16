@@ -214,7 +214,8 @@ func (s *SortIterator) Open(ctx context.Context) error {
 	s.outIdx = 0
 
 	var curMem int64 = 0
-	inChunk := NewChunk(DefaultChunkSize)
+	inChunk := GetChunk()
+	defer PutChunk(inChunk)
 
 	// Materialize incoming child tuples in chunks
 	for {

@@ -627,5 +627,93 @@ func TestMemEngine_RedisStyleOptionsAndCommitCycle(t *testing.T) {
 	}
 }
 
+func TestTransaction_PoolingAndMapReuse(t *testing.T) {
+	eng := New()
+	defer eng.Close()
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	schema := createTestSchema()
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	// 1. Commit cycle reusing tx and maps
+	for i := 1; i <= 10; i++ {
+		tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: false})
+		if err != nil {
+			t.Fatalf("BeginTx failed: %v", err)
+		}
+
+		mTx := tx.(*Transaction)
+		if len(mTx.changes) != 0 || len(mTx.local) != 0 {
+			t.Fatalf("expected cleared changes and local maps on tx begin, got %d, %d", len(mTx.changes), len(mTx.local))
+		}
+
+		rec := storage.Record{
+			"id":      storage.IntValue(int64(i)),
+			"holder":  storage.StringValue(fmt.Sprintf("item-%d", i)),
+			"balance": storage.IntValue(int64(i * 100)),
+		}
+		if err := tx.Insert("accounts", rec); err != nil {
+			t.Fatalf("Insert failed: %v", err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			t.Fatalf("Commit failed: %v", err)
+		}
+	}
+
+	// 2. Rollback cycle reusing tx and maps
+	for i := 11; i <= 20; i++ {
+		tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: false})
+		if err != nil {
+			t.Fatalf("BeginTx failed: %v", err)
+		}
+
+		mTx := tx.(*Transaction)
+		if len(mTx.changes) != 0 || len(mTx.local) != 0 {
+			t.Fatalf("expected cleared changes and local maps on tx begin, got %d, %d", len(mTx.changes), len(mTx.local))
+		}
+
+		rec := storage.Record{
+			"id":      storage.IntValue(int64(i)),
+			"holder":  storage.StringValue(fmt.Sprintf("item-%d", i)),
+			"balance": storage.IntValue(int64(i * 100)),
+		}
+		if err := tx.Insert("accounts", rec); err != nil {
+			t.Fatalf("Insert failed: %v", err)
+		}
+
+		if err := tx.Rollback(); err != nil {
+			t.Fatalf("Rollback failed: %v", err)
+		}
+	}
+
+	// Verify only items 1..10 were committed
+	readTx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx ReadOnly failed: %v", err)
+	}
+	defer readTx.Rollback()
+
+	for i := 1; i <= 10; i++ {
+		rec, err := readTx.Get("accounts", storage.IntValue(int64(i)))
+		if err != nil || rec == nil {
+			t.Fatalf("expected item %d committed, got err: %v", i, err)
+		}
+	}
+	for i := 11; i <= 20; i++ {
+		rec, err := readTx.Get("accounts", storage.IntValue(int64(i)))
+		if err == nil && rec != nil {
+			t.Fatalf("rolled back item %d must not exist", i)
+		}
+	}
+}
+
+
 
 

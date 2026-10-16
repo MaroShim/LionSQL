@@ -41,20 +41,65 @@ func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 		snapTS = time.Now().UnixNano()
 	}
 
-	tx := &Transaction{
-		engine:            s.engine,
-		opts:              opts,
-		snapshotLSN:       snapLSN,
-		snapshotTimestamp: snapTS,
-		tableCache:        make(map[string]*TableData, 4),
+	tx := txPool.Get().(*Transaction)
+	tx.mu.Lock()
+	tx.engine = s.engine
+	tx.opts = opts
+	tx.snapshotLSN = snapLSN
+	tx.snapshotTimestamp = snapTS
+	tx.commitLSN = 0
+	tx.commitTimestamp = 0
+	tx.closed = false
+	tx.inPool = false
+
+	if tx.tableCache == nil || len(tx.tableCache) > 64 {
+		tx.tableCache = make(map[string]*TableData, 4)
+	} else {
+		clear(tx.tableCache)
 	}
+
 	if !opts.ReadOnly {
-		tx.baseVers = make(map[string]map[string]int64, 4)
-		tx.local = make(map[string]map[string]storage.Row, 4)
-		tx.deleted = make(map[string]map[string]bool, 4)
-		tx.changes = make(map[string]rowChange, 16)
-		tx.savepoints = make(map[string]savepointState, 2)
+		if tx.baseVers == nil {
+			tx.baseVers = make(map[string]map[string]int64, 4)
+		} else {
+			for _, m := range tx.baseVers {
+				clear(m)
+			}
+			clear(tx.baseVers)
+		}
+
+		if tx.local == nil {
+			tx.local = make(map[string]map[string]storage.Row, 4)
+		} else {
+			for _, m := range tx.local {
+				clear(m)
+			}
+			clear(tx.local)
+		}
+
+		if tx.deleted == nil {
+			tx.deleted = make(map[string]map[string]bool, 4)
+		} else {
+			for _, m := range tx.deleted {
+				clear(m)
+			}
+			clear(tx.deleted)
+		}
+
+		if tx.changes == nil || len(tx.changes) > 1024 {
+			tx.changes = make(map[string]rowChange, 16)
+		} else {
+			clear(tx.changes)
+		}
+
+		if tx.savepoints == nil || len(tx.savepoints) > 16 {
+			tx.savepoints = make(map[string]savepointState, 2)
+		} else {
+			clear(tx.savepoints)
+		}
+		tx.spNames = tx.spNames[:0]
 	}
+	tx.mu.Unlock()
 	return tx, nil
 }
 
@@ -86,6 +131,19 @@ type savepointState struct {
 	changes  map[string]rowChange
 }
 
+var txPool = sync.Pool{
+	New: func() any {
+		return &Transaction{
+			tableCache: make(map[string]*TableData, 4),
+			baseVers:   make(map[string]map[string]int64, 4),
+			local:      make(map[string]map[string]storage.Row, 4),
+			deleted:    make(map[string]map[string]bool, 4),
+			changes:    make(map[string]rowChange, 16),
+			savepoints: make(map[string]savepointState, 2),
+		}
+	},
+}
+
 // Transaction handles copy-on-write delta mutations with zero start overhead, OCC validation, and atomic commit.
 type Transaction struct {
 	mu                sync.Mutex
@@ -103,6 +161,55 @@ type Transaction struct {
 	savepoints        map[string]savepointState
 	spNames           []string
 	closed            bool
+	inPool            bool
+}
+
+func (tx *Transaction) releaseToPoolLocked() {
+	if tx.inPool {
+		return
+	}
+	tx.inPool = true
+	if tx.tableCache != nil {
+		if len(tx.tableCache) > 64 {
+			tx.tableCache = nil
+		} else {
+			clear(tx.tableCache)
+		}
+	}
+	if tx.baseVers != nil {
+		for _, m := range tx.baseVers {
+			clear(m)
+		}
+		clear(tx.baseVers)
+	}
+	if tx.local != nil {
+		for _, m := range tx.local {
+			clear(m)
+		}
+		clear(tx.local)
+	}
+	if tx.deleted != nil {
+		for _, m := range tx.deleted {
+			clear(m)
+		}
+		clear(tx.deleted)
+	}
+	if tx.changes != nil {
+		if len(tx.changes) > 1024 {
+			tx.changes = nil
+		} else {
+			clear(tx.changes)
+		}
+	}
+	if tx.savepoints != nil {
+		if len(tx.savepoints) > 16 {
+			tx.savepoints = nil
+		} else {
+			clear(tx.savepoints)
+		}
+	}
+	tx.spNames = tx.spNames[:0]
+	txPool.Put(tx)
 }
 
 // SnapshotLSN returns the snapshot LSN bound at transaction start.
@@ -1347,6 +1454,7 @@ func (tx *Transaction) Commit() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
+	defer tx.releaseToPoolLocked()
 
 	if tx.opts.ReadOnly || len(tx.changes) == 0 {
 		return nil
@@ -1609,8 +1717,6 @@ func (tx *Transaction) Commit() error {
 		tx.commitTimestamp = walRec.Timestamp
 	}
 
-	tx.savepoints = nil
-	tx.spNames = nil
 	return nil
 }
 
@@ -1622,15 +1728,7 @@ func (tx *Transaction) Rollback() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
-	if tx.opts.ReadOnly || len(tx.changes) == 0 {
-		return nil
-	}
-	tx.changes = nil
-	tx.local = nil
-	tx.baseVers = nil
-	tx.deleted = nil
-	tx.savepoints = nil
-	tx.spNames = nil
+	defer tx.releaseToPoolLocked()
 	return nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"sync"
 )
 
 const (
@@ -17,6 +18,45 @@ const (
 // Chunk represents a contiguous batch of Tuples flowing between vectorized operators.
 type Chunk struct {
 	Tuples []Tuple
+}
+
+var chunkPool = sync.Pool{
+	New: func() any {
+		return NewChunk(DefaultChunkSize)
+	},
+}
+
+// GetChunk acquires an empty Chunk of DefaultChunkSize from the pool.
+func GetChunk() *Chunk {
+	c := chunkPool.Get().(*Chunk)
+	c.Reset()
+	return c
+}
+
+// PutChunk clears tuple references and returns the Chunk to the pool.
+func PutChunk(c *Chunk) {
+	if c == nil {
+		return
+	}
+	// Defensive check: do not retain abnormally oversized chunks to bound memory (Rule 23)
+	if cap(c.Tuples) > DefaultChunkSize*4 {
+		return
+	}
+	for i := range c.Tuples {
+		c.Tuples[i] = Tuple{}
+	}
+	c.Reset()
+	chunkPool.Put(c)
+}
+
+// AcquireChunk is an alias for GetChunk.
+func AcquireChunk() *Chunk {
+	return GetChunk()
+}
+
+// ReleaseChunk is an alias for PutChunk.
+func ReleaseChunk(c *Chunk) {
+	PutChunk(c)
 }
 
 // NewChunk creates an initialized Chunk preallocated to the specified capacity.

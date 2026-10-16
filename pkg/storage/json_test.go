@@ -100,3 +100,50 @@ func TestJSON_PathFunctions(t *testing.T) {
 		t.Fatalf("JSONQueryByPath($.user.name) should fail for scalar")
 	}
 }
+
+func TestJSON_ScanJSONTopLevelKey(t *testing.T) {
+	doc := `{"city": "Seoul", "age": 28, "active": true, "score": 98.5, "extra": null, "nested": {"k": "v"}}`
+
+	// 1. Unquoted string extraction
+	val, ok := storage.ScanJSONTopLevelKey(doc, "city", true)
+	if !ok || val != "Seoul" {
+		t.Fatalf("expected Seoul, got %q, %v", val, ok)
+	}
+
+	// 2. Quoted string extraction
+	val, ok = storage.ScanJSONTopLevelKey(doc, "city", false)
+	if !ok || val != `"Seoul"` {
+		t.Fatalf("expected \"Seoul\", got %q, %v", val, ok)
+	}
+
+	// 3. Integer extraction
+	val, ok = storage.ScanJSONTopLevelKey(doc, "age", true)
+	if !ok || val != "28" {
+		t.Fatalf("expected 28, got %q, %v", val, ok)
+	}
+
+	// 4. Boolean extraction
+	val, ok = storage.ScanJSONTopLevelKey(doc, "active", true)
+	if !ok || val != "true" {
+		t.Fatalf("expected true, got %q, %v", val, ok)
+	}
+
+	// 5. Float extraction
+	val, ok = storage.ScanJSONTopLevelKey(doc, "score", true)
+	if !ok || val != "98.5" {
+		t.Fatalf("expected 98.5, got %q, %v", val, ok)
+	}
+
+	// 6. Null extraction
+	val, ok = storage.ScanJSONTopLevelKey(doc, "extra", true)
+	if !ok || val != "null" {
+		t.Fatalf("expected null, got %q, %v", val, ok)
+	}
+
+	// 7. Non-existent key
+	_, ok = storage.ScanJSONTopLevelKey(doc, "missing", true)
+	if ok {
+		t.Fatalf("expected false for missing key")
+	}
+}
+

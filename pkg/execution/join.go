@@ -125,7 +125,8 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	h.outChunk.Reset()
 	h.outIdx = 0
 
-	inChunk := NewChunk(DefaultChunkSize)
+	inChunk := GetChunk()
+	defer PutChunk(inChunk)
 	for {
 		select {
 		case <-ctx.Done():
