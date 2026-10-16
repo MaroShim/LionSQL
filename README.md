@@ -68,68 +68,58 @@ LionSQL seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Micr
 
 ## Key Features
 
-- **Single Standalone Executable**: Ships as a single static binary embedding the database kernel, wire protocol servers, HTTP API, and web management studio via Go `embed.FS`. No runtime dependencies, JVM, or Node.js required.
-- **Auto-Generated RESTful Records CRUD API**:
-  - Instant zero-code REST endpoints (`/api/records/:table`) for all database tables upon creation.
-  - Advanced URL query filter engine (`filter=(balance>500 && status='active') || country='US'`), multi-column sorting (`sort=-id,balance`), pagination, and schema-aware JSON typing.
-- **Official Universal JavaScript & TypeScript Client SDK**:
-  - PocketBase-compatible client (`sqlion.js`, `sqlion.d.ts`) served directly by the standalone executable (`GET /sdk/sqlion.js`).
-  - Supports Web Browsers, Node.js (v18+), Bun, Deno, and Edge runtimes with collection CRUD, query builders, and typed models.
-- **Declarative Row-Level Security (RLS)**:
-  - Table-level access control rules (`list`, `view`, `create`, `update`, `delete`) with dynamic `@auth.id`, `@auth.role`, `@auth.email`, `@auth.tenant_id` context token substitution.
-  - Automatically injects `list_rule` conditions into queries (`(list_rule) && (client_filter)`), preventing unauthorized data leakage.
-- **Asynchronous Webhook Dispatch Engine**:
-  - Dispatches committed database mutations (`create`, `update`, `delete`, `import`) to external URLs via non-blocking worker pools and buffered channels.
-  - Includes HMAC-SHA256 payload integrity signatures, exponential backoff retries (up to 3 attempts), and a 200-entry delivery audit log.
-- **Embedded Cron Jobs Scheduler**:
-  - Non-blocking scheduler automating recurring SQL queries and T-SQL stored procedures using standard 5-field cron syntax (`min hour dom month dow`).
-  - Live execution tracking with ms-precision duration and error logging.
-- **Embedded SMTP Mailer & Transactional Email Templates**:
-  - Pure-Go SMTP client with TLS/STARTTLS support and password masking.
-  - Built-in HTML templates for `welcome`, `password_reset`, and `verification` workflows.
-- **Concurrent Dual Wire Protocols**:
-  - **PostgreSQL v3 Protocol (Port 5433)**: Certified compatible with `psql`, PostgreSQL JDBC (`pgjdbc`), `psqlODBC`, DBeaver, GORM, Prisma, asyncpg, and pgx. Supports SSL/TLS encryption, direct binary bind value decoding, and Extended Query Protocol (`Parse`, `Bind`, `Execute`, `Sync`).
-  - **Microsoft SQL Server TDS 7.x/8.0 Protocol (Port 1433)**: Compatible with `sqlcmd`, SQL Server Management Studio (SSMS), Azure Data Studio, `pymssql`, and `go-mssqldb`. Supports RPC prepared statement pipeline (`sp_prepare`, `sp_execute`, `sp_prepexec`) and single-frame buffer pooling.
+LionSQL's core capabilities are organized across five foundational architectural pillars:
+
+### 1. Core Engine & Virtual Machine Architecture
 - **Single-Engine VDBE Virtual Machine Unification**:
-  - Standalone interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and stored procedures execute on the exact same register-based VDBE Virtual Machine (`proc.CompileQuery`, `proc.CompileStatement` ➔ `s.executor.ExecuteInTx`).
-  - Eliminates separate execution engines and unifies relational execution (`OpRelQuery`), secondary index scans (`OpIndexScan`), and DML mutations (`OpInsert`, `OpUpdate`, `OpDelete`) on a single VM.
-  - Complete `EXPLAIN BYTECODE <sql>` disassembly inspection for all queries and procedures.
+  Interactive standalone queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and stored procedures execute on the exact same register-based VDBE Virtual Machine (`proc.CompileQuery`, `proc.CompileStatement` ➔ `s.executor.ExecuteInTx`). Relational execution (`OpRelQuery`), secondary index scans (`OpIndexScan`), and DML mutations (`OpInsert`, `OpUpdate`, `OpDelete`) are unified on a single VM with `EXPLAIN BYTECODE <sql>` disassembly verification.
 - **Prepared Statement VDBE Bytecode Caching**:
-  - Both PGWire and TDS listeners compile parameterized queries (`$1`, `$2` and `@p1`, `@p2`) directly into VDBE `*proc.Program` bytecode during preparation.
-  - Subsequent executions run precompiled bytecode directly, completely bypassing query re-parsing and string manipulation.
-- **Embedded Web Management Studio (Port 8090)**: Instant, zero-install web dashboard served at `http://localhost:8090/_/`:
-  - Spreadsheet-style table viewer with inline cell editing, pagination, and multi-column sorting.
-  - Interactive SQL Query Studio with execution history, query bookmarks, `EXPLAIN ANALYZE` visualizer, and **Visual VDBE Bytecode Disassembler**.
-  - Realtime Server-Sent Events (SSE) live synchronizing browser tables with concurrent background mutations.
-  - Granular API Key and Superuser JWT authentication management.
-  - Dedicated Webhooks, Cron Jobs, Mailer Settings, and Client SDK tabs.
-- **Enterprise T-SQL Procedural Engine**:
-  - Full support for `CREATE PROCEDURE`, `CREATE FUNCTION` (scalar and table-valued), and `CREATE TRIGGER` (`AFTER`, `INSTEAD OF`).
-  - Virtual delta tables (`INSERTED` and `DELETED`) for trigger execution.
-  - Control flow: `IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO` & labels, `PRINT`, `RAISERROR`, local variables (`@var`), and cursors.
-  - Rich T-SQL extensions: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB with extraction operators (`->`, `->>`, `JSON_VALUE`), Foreign Keys with cascading actions, table variables (`DECLARE @table TABLE`), `TRUNCATE TABLE`, `SELECT ... INTO`, and `DBCC` diagnostics.
+  Both PGWire and TDS listeners compile parameterized queries (`$1`, `$2` and `@p1`, `@p2`) directly into VDBE `*proc.Program` bytecode during preparation. Subsequent executions run precompiled bytecode directly, completely bypassing query re-parsing and string manipulation.
 - **Dual-Parser Architecture with Automatic Fallback**:
   - **Primary Fast-Path**: Zero-allocation Native Pratt parser achieving sub-microsecond parsing for high-frequency queries.
   - **Secondary Full-Spec Fallback**: Official Microsoft T-SQL ANTLR4 grammar parser invoked automatically on advanced syntax (bracket escapes, `WITH RECOMPILE`, vendor options).
-- **Volcano Relational Engine & Memory Governor**:
-  - Composable iterator execution: `SeqScan`, `IndexScan`, `Filter`, `Project`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `WindowIterator`, `CTE WITH`.
-  - **`work_mem` Memory Governor**: Prevents out-of-memory (OOM) crashes by automatically spilling sorted chunks to disk and performing an N-way Min-Heap streaming external merge sort.
+- **Volcano Relational Pipeline & Memory Governor**:
+  Composable iterator execution (`SeqScan`, `IndexScan`, `Filter`, `Project`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `WindowIterator`, `CTE WITH`) with 1,024-tuple batch chunk streaming. Includes `work_mem` memory governor that automatically spills sorted chunks to disk and performs an N-way Min-Heap streaming external merge sort.
 - **Cost-Based Optimizer (CBO)**:
-  - `ANALYZE TABLE <name>` statistics collection: row counts, distinct values (`NDV`), null counts, and 64-bucket equi-depth histograms.
-  - Cost formulas evaluating physical operator costs (disk page I/O + tuple CPU) to pick optimal join algorithms and index scan access paths.
-- **Built-in Goroutine Connection Pooler**:
-  - Handles 10,000+ simultaneous client connections over lightweight Go goroutines.
-  - Internal worker pool and session reuse eliminate the need for PgBouncer or external poolers.
-- **Online Non-Blocking Snapshot Hot Backup**:
-  - Live, point-in-time `.tar.gz` database backups captured via read-only snapshot transactions without blocking writers or interrupting active OLTP traffic.
-  - Accessible via CLI (`-backup`, `-restore`), REST API (`/api/backup`, `/api/restore`), and Web Studio UI.
-- **1-Writer Multi-Reader High-Availability Replication**:
-  - Cluster scaling via linear WAL streaming (`GET /api/replication/stream`) from single primary writer to secondary read replicas.
-  - Replicas enforce strict read-only execution across all wire protocols (`ErrReadOnlyReplica`), offering linear horizontal query scaling.
-  - Zero-downtime failover promotion (`POST /api/replication/promote`) promoting replicas to active primary nodes without process restart.
+  `ANALYZE TABLE <name>` statistics collection (row counts, distinct values `NDV`, 64-bucket equi-depth histograms), multi-column extended statistics (`C-5`), MCV skew list statistics (`C-7`), and Selinger dynamic programming join reordering (`B-4`) for sub-millisecond planning on complex multi-table joins.
+
+### 2. High-Performance Storage & ACID Concurrency
 - **High-Performance Storage Backends & TPC-C Benchmark**:
-  - **In-Memory OCC Engine**: Fine-grained table-level striped locking, pure-Go concurrent SkipList secondary indexes, and zero-allocation transaction/chunk pooling delivering **28,000+ TPS** (763,000+ tpmC) via Go Native API and **20,000+ TPS** (541,000+ tpmC) on the compiled T-SQL VDBE Bytecode Virtual Machine with sub-millisecond median latency on standard TPC-C transactions.
+  - **In-Memory OCC Engine**: Fine-grained table-level striped locking, pure-Go concurrent SkipList secondary indexes, and zero-allocation transaction/chunk pooling delivering **28,000+ TPS** (763,000+ tpmC) via Go Native API and **20,000+ TPS** (541,000+ tpmC) on compiled T-SQL VDBE Bytecode Virtual Machine with sub-millisecond median latency.
   - **WiredTiger (Default)**: Cgo-backed lock-free B+Tree with hazard pointers, schema-aware compact binary tuple codec, and cursor pooling delivering **16,800+ TPS** (457,000+ tpmC) on compiled T-SQL VDBE under full ACID durability.
+- **Online Non-Blocking Snapshot Hot Backup**:
+  Live, point-in-time `.tar.gz` database backups captured via read-only snapshot transactions without blocking writers or interrupting active OLTP traffic. Accessible via CLI (`-backup`, `-restore`), REST API (`/api/backup`, `/api/restore`), and Web Studio UI.
+- **1-Writer Multi-Reader High-Availability Replication**:
+  Cluster scaling via linear WAL streaming (`GET /api/replication/stream`) from single primary writer to secondary read replicas, enforcing strict read-only execution, zero-downtime failover promotion (`POST /api/replication/promote`), and Always On style automatic failover.
+
+### 3. Dual Wire Protocols & Connection Pooling
+- **Concurrent Dual Wire Protocols**:
+  - **PostgreSQL v3 Protocol (Port 5433)**: Certified compatible with `psql`, PostgreSQL JDBC (`pgjdbc`), `psqlODBC`, DBeaver, GORM, Prisma, asyncpg, and pgx. Supports SSL/TLS encryption, direct binary bind value decoding (P-14), and Extended Query Protocol (`Parse`, `Bind`, `Execute`, `Sync`).
+  - **Microsoft SQL Server TDS 7.x/8.0 Protocol (Port 1433)**: Compatible with `sqlcmd`, SSMS, Azure Data Studio, `pymssql`, and `go-mssqldb`. Supports RPC prepared statement pipeline (`sp_prepare`, `sp_execute`, `sp_prepexec`), TDS 7.3 binary date/time/UUID serialization, and single-frame buffer pooling halving write syscalls.
+- **Built-in Goroutine Connection Pooler**:
+  Handles 10,000+ simultaneous client connections over lightweight Go goroutines. Internal worker pool and session reuse eliminate the need for PgBouncer or external connection poolers.
+
+### 4. Enterprise T-SQL Procedural Runtime
+- **Enterprise T-SQL Stored Procedures & UDFs**:
+  Full support for `CREATE PROCEDURE`, `CREATE FUNCTION` (scalar and table-valued), and `CREATE TRIGGER` (`AFTER`, `INSTEAD OF`).
+- **Virtual Delta Tables & Control Flow**:
+  Virtual delta tables (`INSERTED` and `DELETED`) for trigger execution, control flow (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO` & labels, `PRINT`, `RAISERROR`), local variables (`@var`), table variables (`DECLARE @table TABLE`), session variables, and cursors.
+- **Rich SQL Extensions**:
+  Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB extraction operators (`->`, `->>`, `JSON_VALUE`), Foreign Keys with cascading actions, `TRUNCATE TABLE`, `SELECT ... INTO`, `STRING_SPLIT` TVF, and `DBCC` diagnostics.
+
+### 5. Backend-as-a-Service (BaaS) & Modern Web Stack
+- **Single Standalone Executable**:
+  Ships as a single static binary embedding the database kernel, wire protocol servers, HTTP API, and web management studio via Go `embed.FS`. No runtime dependencies, JVM, or Node.js required.
+- **Auto-Generated RESTful Records CRUD API**:
+  Instant zero-code REST endpoints (`/api/records/:table`) for all database tables upon creation, advanced boolean URL query filter engine (`filter`), multi-column sorting (`sort`), pagination, and schema-aware JSON typing.
+- **Embedded Web Management Studio (Port 8090)**:
+  Zero-install browser dashboard served at `http://localhost:8090/_/`, spreadsheet-style table viewer with inline cell editing, interactive SQL Query Studio with visual VDBE disassembler, realtime Server-Sent Events (SSE) live sync, and granular API Key / Superuser JWT management.
+- **Official Universal JavaScript & TypeScript Client SDK**:
+  PocketBase-compatible client (`sqlion.js`, `sqlion.d.ts`) served directly by the standalone executable (`GET /sdk/sqlion.js`), supporting Web Browsers, Node.js (v18+), Bun, Deno, and Edge runtimes.
+- **Declarative Row-Level Security (RLS) & Asynchronous Webhooks**:
+  Dynamic `@auth` context token substitution for table access rules, non-blocking webhook dispatcher with HMAC-SHA256 payload integrity signatures, exponential backoff retries, and delivery audit ring buffers.
+- **Embedded Cron Jobs Scheduler & SMTP Mailer**:
+  Non-blocking 5-field cron automation scheduler, pure-Go SMTP client with TLS/STARTTLS support, and built-in transactional HTML email templates.
 
 ---
 
