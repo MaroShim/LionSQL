@@ -23,6 +23,7 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
+| **P1** | **성능/DML (`P-13`)** | **DML `storage.Record`(Map) 제거 ➔ `storage.Row`(Slice) 직결 (Zero-Alloc DML)** | `pkg/proc/runtime`, `pkg/engine`, `pkg/storage` | VDBE 및 DML에서 중간 맵 생성과 해시 룩업을 제거하고 `Row` 슬라이스 직결로 DML 처리량 20~30% 향상 |
 | **P3** | **생태계/드라이버** | **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 확대** | `pkg/wire` | 엔터프라이즈 BI 도구 및 레거시 드라이버 연결 안정화 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
@@ -352,6 +353,14 @@
 | **P-10** | **실행기/병렬화** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | **보류 (`[-]`)** | OLAP 분석 쿼리 워커 분할 (OLTP 동시성 영향 방지를 위해 1.0 보류) |
 | **P-11** | **스토리지/풀링** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | **완료 (`[x]`)** | 트랜잭션 맵 6개 동적 할당 0건화, 초당 2만 TPS GC 부하 80%+ 경감 |
 | **P-12** | **실행기/풀링** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | **완료 (`[x]`)** | 1,024건 슬라이스 할당 제거 및 대용량 배치/P-10 병렬 스트리밍 GC 최소화 |
+| **P-13** | **실행기/DML** | **DML Record(Map) 제거 ➔ Row(Slice) 직결 (Zero-Alloc DML)** | **우선 착수 (`[ ]`)** | 중간 맵 할당 및 해시 룩업 완전 제거, DML 처리량 20~30% 향상 |
+
+- [ ] **DML `storage.Record`(Map) 제거 ➔ `storage.Row`(Slice) 직결 파이프라인 (`P-13`) (`pkg/proc/runtime`, `pkg/engine`, `pkg/storage`)**
+  - **배경**: VDBE `OpInsert`/`OpUpdate` 및 DML 실행기(`sqlexec_dml.go`)에서 스토리지 엔진(`tx.Insert`)으로 데이터를 넘길 때 매번 `make(map[string]Value)` 맵을 힙에 생성하고, 스토리지 엔진은 이를 다시 컬럼별로 순회하며 해시 룩업하여 슬라이스로 변환하는 중복 오버헤드 제거.
+  - **구현 내용**:
+    - `pkg/proc/runtime/vm_dispatcher.go`: `OpInsert` 및 `OpUpdate`에서 중간 `storage.Record` 맵 생성을 제거하고, 스키마 컬럼 슬롯 오프셋에 직접 값을 채워 `storage.Row` 슬라이스를 구성.
+    - `pkg/engine/sqlexec_dml.go`: DML 파싱/실행 시 컬럼 인덱스 매핑을 통해 직접 `storage.Row`를 생성하고 기구축된 `tx.InsertRow(table, row)` / `tx.UpdateRow(table, pk, row)`로 직결.
+    - DML/Prepared Statement 처리 시 맵 할당 0건(Zero-Allocation) 달성 및 TPC-C/DML 처리량 20~30% 향상.
 
 - [x] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 및 캐싱 리팩토링 (`P-6`) (`pkg/engine`)**
   - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_derived.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_mssql_sys.go`, `sqlexec_gui_interop.go`, `sqlexec_string_split.go`, `sqlexec_procs.go`의 핫패스 함수 및 행 루프 내부에 분산되어 있던 40여 개의 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 NFA/DFA 재컴파일 및 힙 할당 오버헤드(5~15µs) 제거.

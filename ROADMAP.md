@@ -84,7 +84,8 @@ LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLT
   - [x] T-SQL Specialized TDS Serialization (UNIQUEIDENTIFIER, DATETIME2, PLP LOB)
   - [x] Multi-Language Client Certification (Python psycopg3/pymssql, Go pgx/mssql, GUI)
   - [x] Storage to Wire Zero-Copy Direct Serialization (P-3)
-  - [Postponed] Wasm Runtime Sandbox UDF (wazero)
+  - [x] TDS Single-Frame Buffer Pooling & 50% Syscall Reduction
+  - [ ] DML storage.Record (Map) Elimination & storage.Row (Slice) Fast-Path (P-13)
   - [ ] Enterprise Immutable Audit Log
   - [Postponed] INSTEAD OF Trigger Interceptor
   - [ ] Enterprise ODBC / JDBC Driver Certification & Conformance Testing
