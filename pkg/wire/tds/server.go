@@ -264,6 +264,26 @@ type TdsPreparedStatement struct {
 	Program *proc.Program
 }
 
+var (
+	staticParamP  [64]string
+	staticParamAt [64]string
+)
+
+func init() {
+	for i := 0; i < 64; i++ {
+		pIdx := i + 1
+		staticParamP[i] = fmt.Sprintf("p%d", pIdx)
+		staticParamAt[i] = fmt.Sprintf("@p%d", pIdx)
+	}
+}
+
+func getParamNames(pIdx int) (string, string) {
+	if pIdx >= 1 && pIdx <= 64 {
+		return staticParamP[pIdx-1], staticParamAt[pIdx-1]
+	}
+	return fmt.Sprintf("p%d", pIdx), fmt.Sprintf("@p%d", pIdx)
+}
+
 // RPCParam describes a parameter passed in an RPC call.
 type RPCParam struct {
 	Name     string
@@ -882,8 +902,9 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 				paramMap["@"+cleanName] = p.Value
 			}
 			pIdx := i + 1
-			paramMap[fmt.Sprintf("p%d", pIdx)] = p.Value
-			paramMap[fmt.Sprintf("@p%d", pIdx)] = p.Value
+			pName, atName := getParamNames(pIdx)
+			paramMap[pName] = p.Value
+			paramMap[atName] = p.Value
 		}
 
 		session, err := s.engine.NewSession()
@@ -964,8 +985,9 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 				paramMap["@"+cleanName] = p.Value
 			}
 			pIdx := i + 1
-			paramMap[fmt.Sprintf("p%d", pIdx)] = p.Value
-			paramMap[fmt.Sprintf("@p%d", pIdx)] = p.Value
+			pName, atName := getParamNames(pIdx)
+			paramMap[pName] = p.Value
+			paramMap[atName] = p.Value
 		}
 
 		session, err := s.engine.NewSession()

@@ -306,6 +306,8 @@ LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLT
 | **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
 | **Phase 6** | **P3** | **Wasm Runtime Sandbox UDF (`wazero`)** | Plugins & Sandbox | Medium (300~400 lines) | Secure, crash-isolated in-engine execution of third-party plugins |
 | **Phase 6** | **P3** | **Local & S3-Compatible File Storage & Thumbnails** | BaaS Storage | Medium (250~350 lines) | Multipart file upload and automatic image thumbnail generation |
+| **Phase 6** | **P2** | **[Completed] Prepared Statement Binary Bind Direct Decoding (`P-14`)** | Wire Protocols | Low (150~200 lines) | Eliminates binary-to-string-to-type double conversions and pools param names |
+| **Phase 6** | **P3** | **[Postponed] DML Record(Map) Elimination -> Row(Slice) Fast-Path (`P-13`)** | Storage & DML | Medium (300~400 lines) | Postponed due to foreign key cascade and constraint engine regression risk |
 | **Phase 6** | **P3** | **[Postponed] WiredTiger Multi-Row Batch CGo Insert (`P-15`)** | Storage / CGo | High (350~500 lines) | Postponed due to CGo memory safety, segfault & rollback complexity |
 | **Phase 6** | **P3** | **[Postponed] In-Memory OCC Row-Level Atomic CAS Validation (`P-16`)** | Storage / OCC | High (400~600 lines) | Postponed due to high concurrency & ACID data corruption risks |
 | **Phase 6** | **P3** | **[Postponed] VDBE Fused Column Super-Instruction (`P-17`)** | VM / Compiler | Medium (300~450 lines) | Postponed due to bytecode peephole jump & type correctness risks |

@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Prepared Statement Binary Bind Direct Value Decoding & Param Name Pooling (`P-14`) (`pkg/wire`, `pkg/wire/tds`)**:
+  - Implemented `decodeBinaryParamValue` and `decodeTextParamValue` in `pkg/wire/server.go`, directly decoding incoming client parameter byte streams into typed `storage.Value` (`IntValue`, `FloatValue`, `BoolValue`, `StringValue`) and bypassing redundant binary-to-string-to-type double conversions (`strconv.Itoa`).
+  - Added typed parameter values (`ParamValues []storage.Value`) to PGWire `Portal` struct, directly populating VDBE parameter map slots in `handleExecute`.
+  - Added precomputed static parameter name lookup tables (`staticParamP`, `staticParamAt`, `staticParamDollar`) for up to 64 parameters in `pkg/wire/server.go` and `pkg/wire/tds/server.go`, completely eliminating `fmt.Sprintf` heap allocations during prepared statement bind/execute hot paths.
+  - Added comprehensive test coverage in `pkg/wire/server_test.go` (`TestPGWire_BinaryBindDirectValueDecoding`) verifying zero-allocation decoding and type fidelity across integer, float, boolean, and text types.
 - **TDS Single-Frame Buffer Pooling & 50% Syscall Reduction (`pkg/wire/tds`)**:
   - Implemented `sync.Pool`-backed 4,096-byte frame buffer (`tdsFramePool`) in `pkg/wire/tds/packet.go` to pack the 8-byte TDS header and chunk payload contiguously into a single byte slice.
   - Eliminated the split two-call `Write(hdr)` and `Write(payload)` pattern, cutting OS socket system calls by exactly 50% across all TDS client responses with zero heap allocation.

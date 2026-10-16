@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
+	"math"
 	"net"
 	"strings"
 	"sync"
@@ -1281,6 +1282,66 @@ func TestPGWire_ExtendedQueryPortalBatching(t *testing.T) {
 	_, _ = io.ReadFull(clientConn, hdr)
 	if hdr[0] != MsgCloseComplete {
 		t.Fatalf("expected CloseComplete, got %c", hdr[0])
+	}
+}
+
+func TestPGWire_BinaryBindDirectValueDecoding(t *testing.T) {
+	// 1. INT4 (OID 23)
+	int4Buf := make([]byte, 4)
+	binary.BigEndian.PutUint32(int4Buf, uint32(int32(12345)))
+	vInt4 := decodeBinaryParamValue(int4Buf, 23)
+	if vInt4.Type != storage.TypeInt || vInt4.IVal != 12345 {
+		t.Fatalf("expected INT4 12345, got %v (%s)", vInt4, vInt4.Type)
+	}
+
+	// 2. INT8 (OID 20)
+	int8Buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(int8Buf, uint64(int64(9876543210)))
+	vInt8 := decodeBinaryParamValue(int8Buf, 20)
+	if vInt8.Type != storage.TypeInt || vInt8.IVal != 9876543210 {
+		t.Fatalf("expected INT8 9876543210, got %v (%s)", vInt8, vInt8.Type)
+	}
+
+	// 3. FLOAT8 (OID 701)
+	float8Buf := make([]byte, 8)
+	binary.BigEndian.PutUint64(float8Buf, math.Float64bits(3.141592))
+	vFloat8 := decodeBinaryParamValue(float8Buf, 701)
+	if vFloat8.Type != storage.TypeFloat || math.Abs(vFloat8.FVal-3.141592) > 1e-6 {
+		t.Fatalf("expected FLOAT8 3.141592, got %v", vFloat8)
+	}
+
+	// 4. BOOL (OID 16)
+	vBoolTrue := decodeBinaryParamValue([]byte{1}, 16)
+	if vBoolTrue.Type != storage.TypeBool || !vBoolTrue.BVal {
+		t.Fatalf("expected BOOL true, got %v", vBoolTrue)
+	}
+	vBoolFalse := decodeBinaryParamValue([]byte{0}, 16)
+	if vBoolFalse.Type != storage.TypeBool || vBoolFalse.BVal {
+		t.Fatalf("expected BOOL false, got %v", vBoolFalse)
+	}
+
+	// 5. Text parameter decoding
+	vTextInt := decodeTextParamValue("42", 23)
+	if vTextInt.Type != storage.TypeInt || vTextInt.IVal != 42 {
+		t.Fatalf("expected parsed INT4 42, got %v", vTextInt)
+	}
+	vTextFloat := decodeTextParamValue("123.45", 701)
+	if vTextFloat.Type != storage.TypeFloat || math.Abs(vTextFloat.FVal-123.45) > 1e-6 {
+		t.Fatalf("expected parsed FLOAT8 123.45, got %v", vTextFloat)
+	}
+
+	// 6. Static param name lookup
+	p, at, dollar := getParamNames(1)
+	if p != "p1" || at != "@p1" || dollar != "$1" {
+		t.Fatalf("unexpected param names: %s, %s, %s", p, at, dollar)
+	}
+	p64, at64, dollar64 := getParamNames(64)
+	if p64 != "p64" || at64 != "@p64" || dollar64 != "$64" {
+		t.Fatalf("unexpected param names for 64: %s, %s, %s", p64, at64, dollar64)
+	}
+	p65, at65, dollar65 := getParamNames(65)
+	if p65 != "p65" || at65 != "@p65" || dollar65 != "$65" {
+		t.Fatalf("unexpected param names for 65: %s, %s, %s", p65, at65, dollar65)
 	}
 }
 

@@ -246,11 +246,34 @@ type Portal struct {
 	Name          string
 	Statement     *PreparedStatement
 	Params        []string
+	ParamValues   []storage.Value
 	ResultFormats []int16
 	// Stateful execution for server-side portal cursor
 	Result   *engine.QueryResult
 	Pos      int
 	Executed bool
+}
+
+var (
+	staticParamP      [64]string
+	staticParamAt     [64]string
+	staticParamDollar [64]string
+)
+
+func init() {
+	for i := 0; i < 64; i++ {
+		pIdx := i + 1
+		staticParamP[i] = fmt.Sprintf("p%d", pIdx)
+		staticParamAt[i] = fmt.Sprintf("@p%d", pIdx)
+		staticParamDollar[i] = fmt.Sprintf("$%d", pIdx)
+	}
+}
+
+func getParamNames(pIdx int) (string, string, string) {
+	if pIdx >= 1 && pIdx <= 64 {
+		return staticParamP[pIdx-1], staticParamAt[pIdx-1], staticParamDollar[pIdx-1]
+	}
+	return fmt.Sprintf("p%d", pIdx), fmt.Sprintf("@p%d", pIdx), fmt.Sprintf("$%d", pIdx)
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
@@ -610,12 +633,14 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string
 	var numParams int16
 	_ = binary.Read(r, binary.BigEndian, &numParams)
 	paramVals := make([]string, numParams)
+	paramStorageVals := make([]storage.Value, numParams)
 
 	for i := 0; i < int(numParams); i++ {
 		var paramLen int32
 		_ = binary.Read(r, binary.BigEndian, &paramLen)
 		if paramLen == -1 {
 			paramVals[i] = "NULL"
+			paramStorageVals[i] = storage.NullValue(storage.TypeUnknown)
 		} else {
 			valBytes := make([]byte, paramLen)
 			_, _ = io.ReadFull(r, valBytes)
@@ -625,14 +650,18 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string
 			} else if i < len(formats) && formats[i] == 1 {
 				isBinary = true
 			}
+			var pType int32 = 0
+			if i < len(stmt.ParamTypes) {
+				pType = stmt.ParamTypes[i]
+			}
 			if isBinary {
-				var pType int32 = 0
-				if i < len(stmt.ParamTypes) {
-					pType = stmt.ParamTypes[i]
-				}
-				paramVals[i] = decodeBinaryParam(valBytes, pType)
+				stVal := decodeBinaryParamValue(valBytes, pType)
+				paramStorageVals[i] = stVal
+				paramVals[i] = formatParamString(stVal)
 			} else {
-				paramVals[i] = string(valBytes)
+				strVal := string(valBytes)
+				paramVals[i] = strVal
+				paramStorageVals[i] = decodeTextParamValue(strVal, pType)
 			}
 		}
 	}
@@ -653,73 +682,126 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string
 		Name:          portalName,
 		Statement:     stmt,
 		Params:        paramVals,
+		ParamValues:   paramStorageVals,
 		ResultFormats: resultFormats,
 	}
 
 	_ = WriteBindComplete(conn)
 }
 
-func decodeBinaryParam(b []byte, oid int32) string {
+func decodeBinaryParamValue(b []byte, oid int32) storage.Value {
 	switch oid {
 	case 23: // INT4
 		if len(b) >= 4 {
-			return strconv.Itoa(int(int32(binary.BigEndian.Uint32(b))))
+			return storage.IntValue(int64(int32(binary.BigEndian.Uint32(b))))
 		}
 	case 20: // INT8
 		if len(b) >= 8 {
-			return strconv.FormatInt(int64(binary.BigEndian.Uint64(b)), 10)
+			return storage.IntValue(int64(binary.BigEndian.Uint64(b)))
 		}
 	case 21: // INT2
 		if len(b) >= 2 {
-			return strconv.Itoa(int(int16(binary.BigEndian.Uint16(b))))
+			return storage.IntValue(int64(int16(binary.BigEndian.Uint16(b))))
 		}
 	case 16: // BOOL
 		if len(b) >= 1 {
-			if b[0] != 0 {
-				return "true"
-			}
-			return "false"
+			return storage.BoolValue(b[0] != 0)
 		}
 	case 701: // FLOAT8
 		if len(b) >= 8 {
 			bits := binary.BigEndian.Uint64(b)
-			return strconv.FormatFloat(math.Float64frombits(bits), 'f', -1, 64)
+			return storage.FloatValue(math.Float64frombits(bits))
 		}
 	case 700: // FLOAT4
 		if len(b) >= 4 {
 			bits := binary.BigEndian.Uint32(b)
-			return strconv.FormatFloat(float64(math.Float32frombits(bits)), 'f', -1, 32)
+			return storage.FloatValue(float64(math.Float32frombits(bits)))
 		}
 	case 1114, 1184: // TIMESTAMP / TIMESTAMPTZ
 		if len(b) >= 8 {
 			micros := int64(binary.BigEndian.Uint64(b))
 			pgEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 			t := pgEpoch.Add(time.Duration(micros) * time.Microsecond)
-			return t.Format("2006-01-02 15:04:05.999999")
+			return storage.DateTimeValue(t)
 		}
 	case 1082: // DATE
 		if len(b) >= 4 {
 			days := int32(binary.BigEndian.Uint32(b))
 			pgEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 			t := pgEpoch.AddDate(0, 0, int(days))
-			return t.Format("2006-01-02")
+			return storage.DateValue(t)
+		}
+	case 17: // BYTEA
+		return storage.BinaryValue(b)
+	case 25, 1043: // TEXT, VARCHAR
+		return storage.StringValue(string(b))
+	case 2950: // UUID
+		if len(b) == 16 {
+			return storage.UUIDValue(fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]))
 		}
 	default:
 		if len(b) == 4 {
-			return strconv.Itoa(int(int32(binary.BigEndian.Uint32(b))))
+			return storage.IntValue(int64(int32(binary.BigEndian.Uint32(b))))
 		} else if len(b) == 8 {
-			return strconv.FormatInt(int64(binary.BigEndian.Uint64(b)), 10)
+			return storage.IntValue(int64(binary.BigEndian.Uint64(b)))
 		} else if len(b) == 2 {
-			return strconv.Itoa(int(int16(binary.BigEndian.Uint16(b))))
+			return storage.IntValue(int64(int16(binary.BigEndian.Uint16(b))))
 		} else if len(b) == 1 {
-			if b[0] == 0 {
-				return "false"
-			} else if b[0] == 1 {
-				return "true"
-			}
+			return storage.BoolValue(b[0] != 0)
 		}
 	}
-	return string(b)
+	return storage.StringValue(string(b))
+}
+
+func decodeTextParamValue(s string, oid int32) storage.Value {
+	if strings.EqualFold(s, "null") {
+		return storage.NullValue(storage.TypeUnknown)
+	}
+	switch oid {
+	case 23, 20, 21: // INT4, INT8, INT2
+		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return storage.IntValue(i)
+		}
+	case 700, 701: // FLOAT4, FLOAT8
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return storage.FloatValue(f)
+		}
+	case 16: // BOOL
+		if strings.EqualFold(s, "true") || s == "t" || s == "1" {
+			return storage.BoolValue(true)
+		} else if strings.EqualFold(s, "false") || s == "f" || s == "0" {
+			return storage.BoolValue(false)
+		}
+	}
+	return storage.StringValue(s)
+}
+
+func formatParamString(val storage.Value) string {
+	if val.IsNull {
+		return "NULL"
+	}
+	switch val.Type {
+	case storage.TypeInt:
+		return strconv.FormatInt(val.IVal, 10)
+	case storage.TypeFloat:
+		return strconv.FormatFloat(val.FVal, 'f', -1, 64)
+	case storage.TypeBool:
+		if val.BVal {
+			return "true"
+		}
+		return "false"
+	case storage.TypeDateTime:
+		return val.TVal.Format("2006-01-02 15:04:05.999999")
+	case storage.TypeDate:
+		return val.TVal.Format("2006-01-02")
+	default:
+		return val.String()
+	}
+}
+
+func decodeBinaryParam(b []byte, oid int32) string {
+	val := decodeBinaryParamValue(b, oid)
+	return formatParamString(val)
 }
 
 func buildPreviewSQL(query string, paramTypes []int32) string {
@@ -962,9 +1044,17 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			paramMap := make(map[string]any, len(portal.Params)*3)
 			for i, paramVal := range portal.Params {
 				pIdx := i + 1
-				paramMap[fmt.Sprintf("p%d", pIdx)] = paramVal
-				paramMap[fmt.Sprintf("@p%d", pIdx)] = paramVal
-				paramMap[fmt.Sprintf("$%d", pIdx)] = paramVal
+				pName, atName, dollarName := getParamNames(pIdx)
+				var anyVal any = paramVal
+				if i < len(portal.ParamValues) {
+					pv := portal.ParamValues[i]
+					if !pv.IsNull || pv.Type != storage.TypeUnknown {
+						anyVal = pv
+					}
+				}
+				paramMap[pName] = anyVal
+				paramMap[atName] = anyVal
+				paramMap[dollarName] = anyVal
 			}
 
 			session, err := s.engine.NewSession()
