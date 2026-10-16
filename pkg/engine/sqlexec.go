@@ -10,7 +10,8 @@ import (
 	"strings"
 	"time"
 
-		"sqlion/pkg/execution"
+		"sqlion/pkg/catalog/virtual"
+	"sqlion/pkg/execution"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/replication"
 	"sqlion/pkg/storage"
@@ -1041,8 +1042,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 6. DQL: WITH (Common Table Expressions) / SELECT
 	if strings.HasPrefix(upper, "WITH ") {
-		if isHeidiSQLCatalogJoinQuery(trimmed) {
-			return s.execHeidiSQLCatalogJoinSelect(trimmed, start)
+		if virtual.IsVirtualCatalogJoinQuery(trimmed) {
+			return s.execVirtualCatalogJoinSelect(trimmed, start)
 		}
 		return s.execCTE(trimmed, start)
 	}

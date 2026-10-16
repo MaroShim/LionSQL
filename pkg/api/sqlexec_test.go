@@ -1117,17 +1117,17 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 		t.Fatalf("quoted pg_tables query failed: %v", err)
 	}
 
-	// 9. HeidiSQL metadata query with UNION ALL and catalog JOINs
-	heidiSQL := `SELECT     n.nspname                          AS schema_name,     c.relname                          AS object_name,     c.relkind                          AS object_kind,     pg_table_size(format('%I.%I', n.nspname, c.relname))::bigint                  AS data_length,     pg_relation_size(format('%I.%I', n.nspname, c.relname))::bigint                 AS index_length,     c.reltuples,     obj_description(c.oid)             AS comment,     NULL                               AS proargtypes FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'dbo'   AND c.relkind IN ('r','v','m') UNION ALL SELECT     n.nspname                          AS schema_name,     p.proname                          AS object_name,     p.prokind                  AS object_kind,     NULL::bigint                       AS data_length,     NULL::bigint                       AS index_length,     NULL::real                         AS reltuples,     obj_description(p.oid)             AS comment,     p.proargtypes FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'dbo'   AND p.prokind IN ('f','p') ;`
-	res, err = server.ExecuteSQL(heidiSQL)
+	// 9. Virtual catalog metadata query with UNION ALL and catalog JOINs (DBeaver / DbGate)
+	virtualSQL := `SELECT     n.nspname                          AS schema_name,     c.relname                          AS object_name,     c.relkind                          AS object_kind,     pg_table_size(format('%I.%I', n.nspname, c.relname))::bigint                  AS data_length,     pg_relation_size(format('%I.%I', n.nspname, c.relname))::bigint                 AS index_length,     c.reltuples,     obj_description(c.oid)             AS comment,     NULL                               AS proargtypes FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = 'dbo'   AND c.relkind IN ('r','v','m') UNION ALL SELECT     n.nspname                          AS schema_name,     p.proname                          AS object_name,     p.prokind                  AS object_kind,     NULL::bigint                       AS data_length,     NULL::bigint                       AS index_length,     NULL::real                         AS reltuples,     obj_description(p.oid)             AS comment,     p.proargtypes FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'dbo'   AND p.prokind IN ('f','p') ;`
+	res, err = server.ExecuteSQL(virtualSQL)
 	if err != nil || !res.Success {
-		t.Fatalf("HeidiSQL metadata UNION query failed: %v", err)
+		t.Fatalf("Virtual catalog metadata UNION query failed: %v", err)
 	}
 	if len(res.Rows) == 0 {
-		t.Fatalf("HeidiSQL query returned 0 rows, expected at least 1 table row")
+		t.Fatalf("Virtual catalog query returned 0 rows, expected at least 1 table row")
 	}
 	if res.Rows[0]["schema_name"] != "dbo" || res.Rows[0]["object_name"] != "products" {
-		t.Fatalf("HeidiSQL query row mismatch: %+v", res.Rows[0])
+		t.Fatalf("Virtual catalog query row mismatch: %+v", res.Rows[0])
 	}
 }
 

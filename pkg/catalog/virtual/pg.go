@@ -1,10 +1,9 @@
-package engine
+package virtual
 
 import (
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"sqlion/pkg/storage"
 )
@@ -17,202 +16,65 @@ var (
 	reGuiTableSchemaEq = regexp.MustCompile(`(?is)table_schema\s*=\s*'([^']+)'`)
 )
 
-func isHeidiSQLCatalogJoinQuery(sql string) bool {
-	upper := strings.ToUpper(sql)
-	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "SYS.TYPES")) {
-		return true
-	}
-	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "IS_PRIMARY_KEY")) {
-		return true
-	}
-	if strings.Contains(upper, "SYS.INDEX_COLUMNS") {
-		return true
-	}
-	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "SCHEMANAME")) {
-		return true
-	}
-	if strings.Contains(upper, "SYS.PARAMETERS") && strings.Contains(upper, "JOIN") {
-		return true
-	}
-	if strings.Contains(upper, "SYS.TABLES") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "TABLEROWCOUNT") || strings.Contains(upper, "OBJECTCOMMENT")) {
-		return true
-	}
-	if strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "TRIGGERNAME") || strings.Contains(upper, "O.TYPE = 'TR'") || strings.Contains(upper, "O.TYPE='TR'") || strings.Contains(upper, "JOIN")) {
-		return true
-	}
-	if (strings.Contains(upper, "SYS.OBJECTS") || strings.Contains(upper, "SYS.TABLES")) && strings.Contains(upper, "SYS.SCHEMAS") {
-		return true
-	}
-	if strings.Contains(upper, "SYS.SYSCOMMENTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "CODETEXT")) {
-		return true
-	}
-	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
-		return true
-	}
-	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
-		return true
-	}
-	if strings.Contains(upper, "PG_CONSTRAINT") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "UNNEST") || strings.Contains(upper, "SRC_TBL") || strings.Contains(upper, "CONKEY")) {
-		return true
-	}
-	if strings.Contains(upper, "PG_INDEX") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "PG_NAMESPACE") || strings.Contains(upper, "INDEX_NAME") || strings.Contains(upper, "INDKEY")) {
-		return true
-	}
-	if strings.Contains(upper, "PG_TRIGGER") && strings.Contains(upper, "JOIN") {
-		return true
-	}
-	if strings.Contains(upper, "PG_CLASS") && (strings.Contains(upper, "PG_NAMESPACE") || strings.Contains(upper, "VIEW_DEFS") || strings.Contains(upper, "RELNAMESPACE")) {
-		return true
-	}
-	if strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE") {
-		return true
-	}
-	if strings.Contains(upper, "PG_ATTRIBUTE") && (strings.Contains(upper, "PG_CLASS") || strings.Contains(upper, "JOIN")) {
-		return true
-	}
-	if strings.Contains(upper, "PG_SHDESCRIPTION") {
-		return true
-	}
-	if strings.Contains(upper, "PG_CONVERSION") {
-		return true
-	}
-	if strings.Contains(upper, "SYS.ALL_OBJECTS") {
-		return true
-	}
-	return false
+func tableBaseOID(idx int) int {
+	return 16384 + idx
 }
 
-func (s *Coordinator) execHeidiSQLCatalogJoinSelect(sql string, start time.Time) (*QueryResult, error) {
-	upper := strings.ToUpper(sql)
-
-	// 1. DbGate SQL Server Primary Keys
-	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "IS_PRIMARY_KEY = 1") || strings.Contains(upper, "IS_PRIMARY_KEY=1")) {
-		return s.execDbGateMSSQLPrimaryKeySelect(sql, start)
+func pgTypeOID(t storage.DataType) int {
+	switch t {
+	case storage.TypeInt:
+		return 23 // int4
+	case storage.TypeFloat:
+		return 701 // float8
+	case storage.TypeDecimal:
+		return 1700 // numeric
+	case storage.TypeBool:
+		return 16 // bool
+	case storage.TypeDateTime:
+		return 1114 // timestamp
+	case storage.TypeDate:
+		return 1082 // date
+	case storage.TypeTime:
+		return 1083 // time
+	case storage.TypeUUID:
+		return 2950 // uuid
+	case storage.TypeBinary:
+		return 17 // bytea
+	case storage.TypeJSON:
+		return 114 // json
+	default:
+		return 1043 // varchar
 	}
-
-	// 2. DbGate SQL Server Indexes
-	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "IS_PRIMARY_KEY=0") || strings.Contains(upper, "IS_PRIMARY_KEY = 0")) {
-		return s.execDbGateMSSQLIndexSelect(sql, start)
-	}
-
-	// 3. DbGate SQL Server Index Columns
-	if strings.Contains(upper, "SYS.INDEX_COLUMNS") {
-		return s.execDbGateMSSQLIndexColumnSelect(sql, start)
-	}
-
-	// 4. DbGate & Modern GUI SQL Server column query:
-	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE")) {
-		return s.execDbGateMSSQLColumnSelect(sql, start)
-	}
-
-	// 5. DbGate SQL Server column comments (MS_Description)
-	if strings.Contains(upper, "COLUMNCOMMENT") && strings.Contains(upper, "SYS.COLUMNS") {
-		return s.execDbGateMSSQLColumnCommentSelect(sql, start)
-	}
-
-	// 6. Beekeeper Studio SQL Server column query:
-	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
-		return s.execBeekeeperMSSQLColumnSelect(sql, start)
-	}
-
-	// 7. DbGate SQL Server Foreign Keys
-	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") {
-		return s.execDbGateMSSQLForeignKeySelect(sql, start)
-	}
-
-	// 8. DbGate SQL Server Table Row Count
-	if strings.Contains(upper, "TABLEROWCOUNT") || (strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.PARTITIONS")) {
-		return s.execDbGateMSSQLRowCountSelect(sql, start)
-	}
-
-	// 9. DbGate SQL Server Parameters
-	if strings.Contains(upper, "SYS.PARAMETERS") {
-		return s.execDbGateMSSQLParamSelect(sql, start)
-	}
-
-	// 10. DbGate SQL Server Triggers
-	if strings.Contains(upper, "TRIGGERNAME") || (strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "TYPE = 'TR'") || strings.Contains(upper, "TYPE='TR'"))) {
-		return s.execDbGateMSSQLTriggerSelect(sql, start)
-	}
-
-	// 11. DbGate SQL Server SQL Code (loadSqlCode)
-	if strings.Contains(upper, "SYS.SYSCOMMENTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "CODETEXT")) {
-		return s.execDbGateMSSQLLoadSqlCodeSelect(sql, start)
-	}
-
-	// 12. DbGate SQL Server Programmables
-	if strings.Contains(upper, "SQLOBJECTTYPE") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "('P', 'IF', 'FN', 'TF')")) {
-		return s.execDbGateMSSQLProgrammablesSelect(sql, start)
-	}
-
-	// 13. DbGate SQL Server Views
-	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && (strings.Contains(upper, "TYPE='V'") || strings.Contains(upper, "TYPE = 'V'")) {
-		return s.execDbGateMSSQLViewSelect(sql, start)
-	}
-
-	// 14. DbGate SQL Server Tables (tables.js)
-	if strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.SCHEMAS") && (strings.Contains(upper, "PURENAME") || strings.Contains(upper, "OBJECTCOMMENT")) {
-		return s.execDbGateMSSQLTableSelect(sql, start)
-	}
-
-	// 15. DbGate SQL Server Object Modifications / Master Object List (modifications.js)
-	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && strings.Contains(upper, "PURENAME") {
-		return s.execDbGateMSSQLObjectSelect(sql, start)
-	}
-
-	// 16. Beekeeper Studio Postgres table query:
-	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
-		return s.execBeekeeperTableSelect(sql, start)
-	}
-
-	// 12. Constraints: Foreign keys, Primary keys, Unique constraints
-	if strings.Contains(upper, "PG_CONSTRAINT") {
-		if strings.Contains(upper, "SRC_TBL") || strings.Contains(upper, "CONTYPE = 'F'") || strings.Contains(upper, "REF_TABLE") || strings.Contains(upper, "CONFRELID") {
-			return s.execHeidiSQLForeignKeySelect(sql, start)
-		}
-		return s.execDbGatePrimaryKeySelect(sql, start)
-	}
-
-	// 13. Indexes (DbGate indexes.js, indexcols.js)
-	if strings.Contains(upper, "PG_INDEX") {
-		return s.execDbGateIndexSelect(sql, start)
-	}
-
-	// 14. Triggers (DbGate triggers.js)
-	if strings.Contains(upper, "PG_TRIGGER") {
-		return s.execDbGateTriggerSelect(sql, start)
-	}
-
-	// 15. Column metadata query: pg_attribute + pg_class (DbGate columns.js, HeidiSQL)
-	if strings.Contains(upper, "PG_ATTRIBUTE") && strings.Contains(upper, "PG_CLASS") {
-		return s.execHeidiSQLColumnMetadataSelect(sql, start)
-	}
-
-	// 16. Procedure / Function metadata query
-	if strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE") {
-		return s.execHeidiSQLProcSelect(sql, start)
-	}
-
-	// 17. DBeaver PostgreSQL pg_shdescription queries
-	if strings.Contains(upper, "PG_SHDESCRIPTION") {
-		return s.execDBeaverPgShdescriptionSelect(sql, start)
-	}
-
-	// 18. DBeaver PostgreSQL pg_conversion query
-	if strings.Contains(upper, "PG_CONVERSION") {
-		return s.execDBeaverPgConversionSelect(sql, start)
-	}
-
-	// 19. DBeaver SQL Server sys.all_objects query
-	if strings.Contains(upper, "SYS.ALL_OBJECTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "EXTENDED_PROPERTIES")) {
-		return s.execDBeaverMSSQLAllObjectsSelect(sql, start)
-	}
-
-	// 20. Class + Namespace: Tables and Views (DbGate tableList.js, views.js, HeidiSQL)
-	return s.execHeidiSQLClassSelect(sql, start)
 }
 
-func (s *Coordinator) execDbGatePrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
+func pgTypeName(t storage.DataType) string {
+	switch t {
+	case storage.TypeInt:
+		return "int4"
+	case storage.TypeFloat:
+		return "float8"
+	case storage.TypeDecimal:
+		return "numeric"
+	case storage.TypeBool:
+		return "bool"
+	case storage.TypeDateTime:
+		return "timestamp"
+	case storage.TypeDate:
+		return "date"
+	case storage.TypeTime:
+		return "time"
+	case storage.TypeUUID:
+		return "uuid"
+	case storage.TypeBinary:
+		return "bytea"
+	case storage.TypeJSON:
+		return "json"
+	default:
+		return "varchar"
+	}
+}
+
+func execDbGatePrimaryKeySelect(src Source, sql string) (*Result, error) {
 	targetSchema := "public"
 	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
@@ -224,7 +86,7 @@ func (s *Coordinator) execDbGatePrimaryKeySelect(sql string, start time.Time) (*
 	}
 
 	var allRows []map[string]any
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	for _, t := range tables {
 		for _, c := range t.Columns {
 			if c.PrimaryKey {
@@ -240,24 +102,20 @@ func (s *Coordinator) execDbGatePrimaryKeySelect(sql string, start time.Time) (*
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateIndexSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateIndexSelect(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	targetSchema := "public"
 
 	if strings.Contains(upper, "ATTNAME") && strings.Contains(upper, "ATTNUM") {
 		columns := []string{"column_name", "attnum", "oid"}
 		var allRows []map[string]any
-		tables, _ := s.engine.ListTables()
+		tables, _ := src.ListTables()
 		for tIdx, t := range tables {
 			toid := tableBaseOID(tIdx)
 			for i, c := range t.Columns {
@@ -268,13 +126,9 @@ func (s *Coordinator) execDbGateIndexSelect(sql string, start time.Time) (*Query
 				})
 			}
 		}
-		return &QueryResult{
-			Success:      true,
-			Command:      "SELECT",
-			Columns:      columns,
-			Rows:         allRows,
-			RowsAffected: int64(len(allRows)),
-			DurationUS:   time.Since(start).Microseconds(),
+		return &Result{
+			Columns: columns,
+			Rows:    allRows,
 		}, nil
 	}
 
@@ -283,7 +137,7 @@ func (s *Coordinator) execDbGateIndexSelect(sql string, start time.Time) (*Query
 		"is_primary", "is_unique", "indkey", "indoption", "oid",
 	}
 	var allRows []map[string]any
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	for tIdx, t := range tables {
 		toid := tableBaseOID(tIdx)
 		hasPK := false
@@ -320,32 +174,24 @@ func (s *Coordinator) execDbGateIndexSelect(sql string, start time.Time) (*Query
 			})
 		}
 	}
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateTriggerSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateTriggerSelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"schema_name", "pure_name", "table_name", "trigger_name",
 		"timing", "event", "action_statement",
 	}
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         []map[string]any{},
-		RowsAffected: 0,
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    []map[string]any{},
 	}, nil
 }
 
-func (s *Coordinator) execHeidiSQLProcSelect(sql string, start time.Time) (*QueryResult, error) {
+func execProcSelect(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	targetSchema := "public"
 	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
@@ -371,50 +217,53 @@ func (s *Coordinator) execHeidiSQLProcSelect(sql string, start time.Time) (*Quer
 		"schema_name", "pure_name", "object_name", "table_name", "object_kind",
 		"size_bytes", "data_length", "index_length", "reltuples",
 		"comment", "viewdef", "content", "hash", "proargtypes",
+		"proname", "prosrc",
 	}
 	var allRows []map[string]any
-	if s.catalog != nil {
-		for _, p := range s.catalog.ListProcedures() {
-			allRows = append(allRows, map[string]any{
-				"schema_name":  targetSchema,
-				"pure_name":    p.Name,
-				"object_name":  p.Name,
-				"table_name":   p.Name,
-				"object_kind":  "p",
-				"size_bytes":   nil,
-				"data_length":  nil,
-				"index_length": nil,
-				"reltuples":    nil,
-				"comment":      nil,
-				"viewdef":      p.Body,
-				"content":      p.Body,
-				"hash":         "proc_hash",
-				"proargtypes":  nil,
-			})
-		}
-		for _, f := range s.catalog.ListFunctions() {
-			allRows = append(allRows, map[string]any{
-				"schema_name":  targetSchema,
-				"pure_name":    f.Name,
-				"object_name":  f.Name,
-				"table_name":   f.Name,
-				"object_kind":  "f",
-				"size_bytes":   nil,
-				"data_length":  nil,
-				"index_length": nil,
-				"reltuples":    nil,
-				"comment":      nil,
-				"viewdef":      f.Body,
-				"content":      f.Body,
-				"hash":         "func_hash",
-				"proargtypes":  nil,
-			})
-		}
+	for _, p := range src.ListProcedures() {
+		allRows = append(allRows, map[string]any{
+			"schema_name":  targetSchema,
+			"pure_name":    p.Name,
+			"object_name":  p.Name,
+			"table_name":   p.Name,
+			"proname":      p.Name,
+			"prosrc":       p.Body,
+			"object_kind":  "p",
+			"size_bytes":   nil,
+			"data_length":  nil,
+			"index_length": nil,
+			"reltuples":    nil,
+			"comment":      nil,
+			"viewdef":      p.Body,
+			"content":      p.Body,
+			"hash":         "proc_hash",
+			"proargtypes":  nil,
+		})
 	}
-	return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, "", -1, start)
+	for _, f := range src.ListFunctions() {
+		allRows = append(allRows, map[string]any{
+			"schema_name":  targetSchema,
+			"pure_name":    f.Name,
+			"object_name":  f.Name,
+			"table_name":   f.Name,
+			"proname":      f.Name,
+			"prosrc":       f.Body,
+			"object_kind":  "f",
+			"size_bytes":   nil,
+			"data_length":  nil,
+			"index_length": nil,
+			"reltuples":    nil,
+			"comment":      nil,
+			"viewdef":      f.Body,
+			"content":      f.Body,
+			"hash":         "func_hash",
+			"proargtypes":  nil,
+		})
+	}
+	return FormatResult(columns, allRows, projStr, whereClause, "", -1)
 }
 
-func (s *Coordinator) execHeidiSQLClassSelect(sql string, start time.Time) (*QueryResult, error) {
+func execClassSelect(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	whereClause := ""
 	projStr := "*"
@@ -455,11 +304,10 @@ func (s *Coordinator) execHeidiSQLClassSelect(sql string, start time.Time) (*Que
 	}
 
 	var allRows []map[string]any
+	tables := src.GetSortedTables()
+	views := src.GetSortedViews()
 
-	tables := s.getSortedTables()
-	views := s.getSortedViews()
-
-	// If query targets views specifically (DbGate views.js, HeidiSQL relkind = 'v', matviews)
+	// If query targets views specifically (DbGate views.js, relkind = 'v', matviews)
 	if strings.Contains(upper, "RELKIND = 'V'") || strings.Contains(upper, "VIEW_DEFS") || strings.Contains(upper, "MATVIEW") {
 		for _, sch := range schemas {
 			for vIdx, v := range views {
@@ -491,10 +339,10 @@ func (s *Coordinator) execHeidiSQLClassSelect(sql string, start time.Time) (*Que
 				})
 			}
 		}
-		return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, "", -1, start)
+		return FormatResult(columns, allRows, projStr, whereClause, "", -1)
 	}
 
-	// Standard tables query (DbGate tableList.js, HeidiSQL, DBeaver)
+	// Standard tables query (DbGate tableList.js, DBeaver)
 	for _, sch := range schemas {
 		for tIdx, t := range tables {
 			toid := tableBaseOID(tIdx)
@@ -580,10 +428,10 @@ func (s *Coordinator) execHeidiSQLClassSelect(sql string, start time.Time) (*Que
 		}
 	}
 
-	return buildVirtualCatalogResult(columns, allRows, projStr, whereClause, "", -1, start)
+	return FormatResult(columns, allRows, projStr, whereClause, "", -1)
 }
 
-func (s *Coordinator) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (*QueryResult, error) {
+func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 	targetTable := ""
 	if m := reGuiRelnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetTable = m[1]
@@ -604,7 +452,7 @@ func (s *Coordinator) execHeidiSQLColumnMetadataSelect(sql string, start time.Ti
 	}
 
 	var allRows []map[string]any
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 
 	for tIdx, t := range tables {
 		if targetTable != "" && !strings.EqualFold(t.Name, targetTable) {
@@ -652,17 +500,13 @@ func (s *Coordinator) execHeidiSQLColumnMetadataSelect(sql string, start time.Ti
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execHeidiSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
+func execForeignKeySelect(src Source, sql string) (*Result, error) {
 	targetTable := ""
 	if m := reGuiSrcRelnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetTable = m[1]
@@ -687,7 +531,7 @@ func (s *Coordinator) execHeidiSQLForeignKeySelect(sql string, start time.Time) 
 	}
 
 	var allRows []map[string]any
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 
 	for _, t := range tables {
 		if targetTable != "" && !strings.EqualFold(t.Name, targetTable) {
@@ -738,17 +582,13 @@ func (s *Coordinator) execHeidiSQLForeignKeySelect(sql string, start time.Time) 
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execBeekeeperTableSelect(sql string, start time.Time) (*QueryResult, error) {
+func execBeekeeperTableSelect(src Source, sql string) (*Result, error) {
 	columns := []string{"schema", "name", "tabletype", "parenttype"}
 	var allRows []map[string]any
 
@@ -757,7 +597,7 @@ func (s *Coordinator) execBeekeeperTableSelect(sql string, start time.Time) (*Qu
 		targetSchema = m[1]
 	}
 
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	for _, t := range tables {
 		schemas := []string{"public"}
 		if targetSchema != "" {
@@ -773,17 +613,13 @@ func (s *Coordinator) execBeekeeperTableSelect(sql string, start time.Time) (*Qu
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDBeaverPgShdescriptionSelect(sql string, start time.Time) (*QueryResult, error) {
+func execPgShdescriptionSelect(sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	if strings.Contains(upper, "PG_ROLES") {
 		columns := []string{
@@ -826,31 +662,23 @@ func (s *Coordinator) execDBeaverPgShdescriptionSelect(sql string, start time.Ti
 				"description":    nil,
 			},
 		}
-		return buildVirtualCatalogResult(columns, allRows, "*", "", "rolname", -1, start)
+		return FormatResult(columns, allRows, "*", "", "rolname", -1)
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      []string{"description"},
-		Rows:         []map[string]any{},
-		RowsAffected: 0,
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: []string{"description"},
+		Rows:    []map[string]any{},
 	}, nil
 }
 
-func (s *Coordinator) execDBeaverPgConversionSelect(sql string, start time.Time) (*QueryResult, error) {
+func execPgConversionSelect(sql string) (*Result, error) {
 	columns := []string{"encid", "encname"}
 	allRows := []map[string]any{
 		{"encid": 6, "encname": "UTF8"},
 		{"encid": 0, "encname": "SQL_ASCII"},
 	}
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }

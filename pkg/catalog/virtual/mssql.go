@@ -1,59 +1,25 @@
-package engine
+package virtual
 
 import (
 	"fmt"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
 
-	"sqlion/pkg/catalog"
 	"sqlion/pkg/storage"
 )
 
 var (
-	reMssqlObjectIDIn   = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
-	reMssqlObjectIDEq   = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
-	reMssqlTableNameEq  = regexp.MustCompile(`(?is)(?:ic\.)?table_name\s*=\s*'([^']+)'`)
-	reMssqlSchemaNameEq = regexp.MustCompile(`(?is)(?:ic\.)?table_schema\s*=\s*'([^']+)'`)
+	reMssqlObjectIdIn       = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
+	reMssqlObjectIDEq       = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
+	reMssqlParentObjectIdIn = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?parent_object_id\s+in\s*\(([^)]+)\)`)
+	reMssqlTableNameEq      = regexp.MustCompile(`(?is)(?:table_name|c\.name|t\.name|ic\.table_name)\s*=\s*'([^']+)'`)
+	reMssqlSchemaNameEq     = regexp.MustCompile(`(?is)(?:table_schema|s\.name|ic\.table_schema)\s*=\s*'([^']+)'`)
 )
 
-func (s *Coordinator) getSortedTables() []*storage.TableSchema {
-	if s.engine == nil {
-		return nil
-	}
-	tables, _ := s.engine.ListTables()
-	sort.Slice(tables, func(i, j int) bool {
-		return tables[i].Name < tables[j].Name
-	})
-	return tables
-}
-
-func (s *Coordinator) getSortedViews() []*catalog.View {
-	if s.catalog == nil {
-		return nil
-	}
-	views := s.catalog.ListViews()
-	sort.Slice(views, func(i, j int) bool {
-		return views[i].Name < views[j].Name
-	})
-	return views
-}
-
-func (s *Coordinator) getSortedProcedures() []*catalog.Procedure {
-	if s.catalog == nil {
-		return nil
-	}
-	procs := s.catalog.ListProcedures()
-	sort.Slice(procs, func(i, j int) bool {
-		return procs[i].Name < procs[j].Name
-	})
-	return procs
-}
-
 func parseTargetObjectIDs(sql string) map[int]bool {
-	if m := reMssqlObjectIDIn.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reMssqlObjectIdIn.FindStringSubmatch(sql); len(m) == 2 {
 		res := make(map[int]bool)
 		for _, part := range strings.Split(m[1], ",") {
 			cleaned := strings.Trim(strings.TrimSpace(part), "'\" ")
@@ -111,7 +77,7 @@ func formatMSSQLDataType(c storage.Column) string {
 	}
 }
 
-func (s *Coordinator) execBeekeeperMSSQLColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+func execBeekeeperMSSQLColumnSelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"table_schema", "table_name", "column_name", "ordinal_position",
 		"column_default", "is_nullable", "is_generated", "data_type",
@@ -127,7 +93,7 @@ func (s *Coordinator) execBeekeeperMSSQLColumnSelect(sql string, start time.Time
 		targetSchema = cleanIdentifier(m[1])
 	}
 
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	var allRows []map[string]any
 
 	for _, t := range tables {
@@ -152,17 +118,13 @@ func (s *Coordinator) execBeekeeperMSSQLColumnSelect(sql string, start time.Time
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLColumnSelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"columnName", "dataType", "objectId", "isIdentity",
 		"maxLength", "precision", "scale", "isNullable",
@@ -172,7 +134,7 @@ func (s *Coordinator) execDbGateMSSQLColumnSelect(sql string, start time.Time) (
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -203,22 +165,22 @@ func (s *Coordinator) execDbGateMSSQLColumnSelect(sql string, start time.Time) (
 				numPrec = 53
 			case storage.TypeDecimal:
 				dataType = "decimal"
-				maxLen = 9
-				prec = c.Precision
-				if prec <= 0 {
-					prec = 18
+				maxLen = 17
+				prec = 18
+				scale = 2
+				if c.Precision > 0 {
+					prec = c.Precision
 				}
-				scale = c.Scale
-				if scale < 0 {
-					scale = 2
+				if c.Scale > 0 {
+					scale = c.Scale
 				}
 				numPrec = prec
 				numScale = scale
 			case storage.TypeVarChar:
 				dataType = "varchar"
-				maxLen = c.Precision
-				if maxLen <= 0 {
-					maxLen = 255
+				maxLen = 255
+				if c.Precision > 0 {
+					maxLen = c.Precision
 				}
 				charMaxLen = maxLen
 			case storage.TypeBool:
@@ -228,12 +190,9 @@ func (s *Coordinator) execDbGateMSSQLColumnSelect(sql string, start time.Time) (
 			case storage.TypeDateTime:
 				dataType = "datetime"
 				maxLen = 8
-				prec = 23
-				scale = 3
 			case storage.TypeDate:
 				dataType = "date"
 				maxLen = 3
-				prec = 10
 			case storage.TypeTime:
 				dataType = "time"
 				maxLen = 5
@@ -273,23 +232,19 @@ func (s *Coordinator) execDbGateMSSQLColumnSelect(sql string, start time.Time) (
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLPrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLPrimaryKeySelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"objectId", "pureName", "schemaName", "columnName", "constraintName",
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -310,24 +265,20 @@ func (s *Coordinator) execDbGateMSSQLPrimaryKeySelect(sql string, start time.Tim
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLIndexSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLIndexSelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"object_id", "constraintName", "indexType", "isUnique",
 		"index_id", "is_unique_constraint", "filterDefinition",
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -348,23 +299,19 @@ func (s *Coordinator) execDbGateMSSQLIndexSelect(sql string, start time.Time) (*
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLIndexColumnSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLIndexColumnSelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"object_id", "index_id", "column_id", "columnName", "isDescending", "isIncludedColumn",
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -393,17 +340,13 @@ func (s *Coordinator) execDbGateMSSQLIndexColumnSelect(sql string, start time.Ti
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLForeignKeySelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"schemaName", "pureName", "columnName", "refSchemaName",
 		"refTableName", "refColumnName", "constraintName",
@@ -411,7 +354,7 @@ func (s *Coordinator) execDbGateMSSQLForeignKeySelect(sql string, start time.Tim
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
 	for tIdx, t := range tables {
@@ -435,17 +378,13 @@ func (s *Coordinator) execDbGateMSSQLForeignKeySelect(sql string, start time.Tim
 		}
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLRowCountSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLRowCountSelect(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	isDBeaver := strings.Contains(upper, "TOTALSIZE") || strings.Contains(upper, "USEDSIZE")
 	var columns []string
@@ -456,40 +395,17 @@ func (s *Coordinator) execDbGateMSSQLRowCountSelect(sql string, start time.Time)
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	var allRows []map[string]any
-
-	var sess storage.Session
-	if s.engine != nil {
-		sess, _ = s.engine.NewSession()
-	}
-	if sess != nil {
-		defer sess.Close()
-	}
 
 	for tIdx, t := range tables {
 		objID := 1000 + tIdx
 		if targetIDs != nil && !targetIDs[objID] {
 			continue
 		}
-		var cnt int64 = 0
-		if s.catalog != nil {
-			if st, ok := s.catalog.GetTableStats(t.Name); ok && st != nil && st.RowCount > 0 {
-				cnt = st.RowCount
-			}
-		}
-		if cnt == 0 && sess != nil {
-			tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
-			if err == nil {
-				cursor, err := tx.Scan(t.Name)
-				if err == nil {
-					for cursor.Next() {
-						cnt++
-					}
-					cursor.Close()
-				}
-				_ = tx.Rollback()
-			}
+		cnt := int64(0)
+		if countProvider, ok := src.(interface{ GetTableRowCount(string) int64 }); ok {
+			cnt = countProvider.GetTableRowCount(t.Name)
 		}
 		allRows = append(allRows, map[string]any{
 			"name":          t.Name,
@@ -501,65 +417,49 @@ func (s *Coordinator) execDbGateMSSQLRowCountSelect(sql string, start time.Time)
 		})
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLColumnCommentSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLColumnCommentSelect(sql string) (*Result, error) {
 	columns := []string{"objectId", "columnComment", "columnId"}
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         []map[string]any{},
-		RowsAffected: 0,
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    []map[string]any{},
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLParamSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLParamSelect(sql string) (*Result, error) {
 	columns := []string{
 		"parentObjectId", "objectId", "parameterObjectId", "pureName",
 		"parameterName", "dataType", "charMaxLength", "parameterMode",
 		"numericPrecision", "numericScale", "parameterIndex", "schemaName",
 	}
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         []map[string]any{},
-		RowsAffected: 0,
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    []map[string]any{},
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLTriggerSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLTriggerSelect(sql string) (*Result, error) {
 	columns := []string{
 		"modifyDate", "objectId", "triggerName", "schemaName",
 		"tableName", "triggerTiming", "eventType", "definition",
 	}
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         []map[string]any{},
-		RowsAffected: 0,
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    []map[string]any{},
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLObjectSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLObjectSelect(src Source, sql string) (*Result, error) {
 	columns := []string{"objectId", "modifyDate", "type", "pureName", "schemaName"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	for tIdx, t := range tables {
 		allRows = append(allRows, map[string]any{
 			"objectId":   1000 + tIdx,
@@ -570,7 +470,7 @@ func (s *Coordinator) execDbGateMSSQLObjectSelect(sql string, start time.Time) (
 		})
 	}
 
-	views := s.getSortedViews()
+	views := src.GetSortedViews()
 	for vIdx, v := range views {
 		allRows = append(allRows, map[string]any{
 			"objectId":   2000 + vIdx,
@@ -580,7 +480,8 @@ func (s *Coordinator) execDbGateMSSQLObjectSelect(sql string, start time.Time) (
 			"schemaName": "dbo",
 		})
 	}
-	procs := s.getSortedProcedures()
+
+	procs := src.GetSortedProcedures()
 	for pIdx, p := range procs {
 		allRows = append(allRows, map[string]any{
 			"objectId":   3000 + pIdx,
@@ -591,22 +492,18 @@ func (s *Coordinator) execDbGateMSSQLObjectSelect(sql string, start time.Time) (
 		})
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLTableSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLTableSelect(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "objectComment"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	for tIdx, t := range tables {
 		allRows = append(allRows, map[string]any{
 			"pureName":      t.Name,
@@ -618,22 +515,18 @@ func (s *Coordinator) execDbGateMSSQLTableSelect(sql string, start time.Time) (*
 		})
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLViewSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLViewSelect(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
-	views := s.getSortedViews()
+	views := src.GetSortedViews()
 	for vIdx, v := range views {
 		allRows = append(allRows, map[string]any{
 			"pureName":   v.Name,
@@ -644,22 +537,18 @@ func (s *Coordinator) execDbGateMSSQLViewSelect(sql string, start time.Time) (*Q
 		})
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLProgrammablesSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLProgrammablesSelect(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "sqlObjectType"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
-	procs := s.getSortedProcedures()
+	procs := src.GetSortedProcedures()
 	for pIdx, p := range procs {
 		allRows = append(allRows, map[string]any{
 			"pureName":      p.Name,
@@ -671,48 +560,40 @@ func (s *Coordinator) execDbGateMSSQLProgrammablesSelect(sql string, start time.
 		})
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDbGateMSSQLLoadSqlCodeSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDbGateMSSQLLoadSqlCodeSelect(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "schemaName", "codeText"}
 	var allRows []map[string]any
 
-	if s.catalog != nil {
-		for _, v := range s.catalog.ListViews() {
-			allRows = append(allRows, map[string]any{
-				"pureName":   v.Name,
-				"schemaName": "dbo",
-				"codeText":   v.Query,
-			})
-		}
-		for _, p := range s.catalog.ListProcedures() {
-			allRows = append(allRows, map[string]any{
-				"pureName":   p.Name,
-				"schemaName": "dbo",
-				"codeText":   p.Body,
-			})
-		}
+	views := src.ListViews()
+	for _, v := range views {
+		allRows = append(allRows, map[string]any{
+			"pureName":   v.Name,
+			"schemaName": "dbo",
+			"codeText":   v.Query,
+		})
+	}
+	procs := src.ListProcedures()
+	for _, p := range procs {
+		allRows = append(allRows, map[string]any{
+			"pureName":   p.Name,
+			"schemaName": "dbo",
+			"codeText":   p.Body,
+		})
 	}
 
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      columns,
-		Rows:         allRows,
-		RowsAffected: int64(len(allRows)),
-		DurationUS:   time.Since(start).Microseconds(),
+	return &Result{
+		Columns: columns,
+		Rows:    allRows,
 	}, nil
 }
 
-func (s *Coordinator) execDBeaverMSSQLAllObjectsSelect(sql string, start time.Time) (*QueryResult, error) {
+func execDBeaverMSSQLAllObjectsSelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"name", "object_id", "principal_id", "schema_id", "parent_object_id",
 		"type", "type_desc", "create_date", "modify_date",
@@ -722,7 +603,7 @@ func (s *Coordinator) execDBeaverMSSQLAllObjectsSelect(sql string, start time.Ti
 	defaultDate := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	var allRows []map[string]any
 
-	tables := s.getSortedTables()
+	tables := src.GetSortedTables()
 	for tIdx, t := range tables {
 		allRows = append(allRows, map[string]any{
 			"name":                t.Name,
@@ -742,7 +623,7 @@ func (s *Coordinator) execDBeaverMSSQLAllObjectsSelect(sql string, start time.Ti
 		})
 	}
 
-	views := s.getSortedViews()
+	views := src.GetSortedViews()
 	for vIdx, v := range views {
 		allRows = append(allRows, map[string]any{
 			"name":                v.Name,
@@ -762,5 +643,5 @@ func (s *Coordinator) execDBeaverMSSQLAllObjectsSelect(sql string, start time.Ti
 		})
 	}
 
-	return buildVirtualCatalogResult(columns, allRows, "*", "", "name", -1, start)
+	return FormatResult(columns, allRows, "*", "", "name", -1)
 }

@@ -21,6 +21,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Directly loaded and executed from `scripts/demo_seed.sql` upon `--seed` flag, adhering to KISS and eliminating duplicate embedded assets.
 
 ### Changed
+- **Virtual Catalog Multi-Table Cross-Join Interceptor Layer Isolation (`pkg/catalog/virtual`, `pkg/engine`)**:
+  - Isolated multi-table cross-join query interceptors for GUI tools (DBeaver, DbGate, Beekeeper Studio) from `pkg/engine/sqlexec_gui_interop.go` and `pkg/engine/sqlexec_mssql_sys.go` into a dedicated package `pkg/catalog/virtual`.
+  - Defined `virtual.Source` interface for decoupled metadata access (`ListTables`, `GetTable`, `ListProcedures`, `ListFunctions`, `ListViews`, `GetView`, `GetSortedTables`, `GetSortedViews`, `GetSortedProcedures`) and optional `GetTableRowCount`.
+  - Implemented zero-dependency `virtual.FormatResult` row filtering, ordering, pagination, and projection evaluator.
+  - Implemented `virtual.IsVirtualCatalogJoinQuery` predicate and `virtual.Execute` router handling PostgreSQL and MSSQL virtual catalog cross-joins.
+  - Replaced legacy `HeidiSQL` terminology across all catalog join handlers, query matchers, and test cases with standard `VirtualCatalog`.
+  - Deleted obsolete `sqlexec_gui_interop.go` and pruned `sqlexec_mssql_sys.go` (1,300+ lines removed), adding `sqlexec_virtual.go` to bridge `Coordinator` to `virtual.Source`.
 - **Default AutoSeed Disabled & Hardcoded Go Seeding Removal (`cmd/server`, `pkg/config`)**:
   - Changed default `--seed` CLI flag and `cfg.Server.AutoSeed` configuration from `true` to `false` for enterprise safety.
   - Deleted legacy hardcoded Go struct seed methods (`seedSampleAccounts`, `seedSampleProcedure`, 140 lines) from `cmd/server/main.go`, replacing them with unified `server.ExecuteSQL(seedSQL)` execution.

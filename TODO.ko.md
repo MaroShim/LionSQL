@@ -34,6 +34,22 @@
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **가상 카탈로그 멀티테이블 조인 인터셉터 격리 리팩토링 (`pkg/catalog/virtual`, `pkg/engine`)**
+  - **배경**: `pkg/engine/sqlexec_gui_interop.go`와 `sqlexec_mssql_sys.go`에 분산되어 있던 DBeaver, DbGate, Beekeeper Studio 등 GUI 도구용 메타데이터 크로스 조인 쿼리 가로채기(PostgreSQL `pg_class JOIN pg_namespace`, `pg_attribute JOIN pg_class`, `pg_constraint`, `pg_proc`, MSSQL `sys.columns JOIN sys.types`, `sys.indexes`, `sys.partitions`) 레이어를 독립 패키지인 `pkg/catalog/virtual`로 분리하여 엔진과의 결합도를 낮추고 유지보수성을 극대화.
+  - **구현 내용**:
+    - **독립 패키지 신설 (`pkg/catalog/virtual`)**:
+      - `source.go`: 메타데이터 원천 인터페이스 `Source` (`ListTables`, `GetTable`, `ListProcedures`, `ListFunctions`, `ListViews`, `GetView`, `GetSortedTables`, `GetSortedViews`, `GetSortedProcedures`) 및 `Result` 구조체 정의.
+      - `result.go`: 가상 카탈로그 행 필터링, 정렬, 페이징, 프로젝션 평가기 `FormatResult` 및 정규식 최적화.
+      - `pg.go`: PostgreSQL 메타데이터 가상 조인 핸들러 (`execClassSelect`, `execColumnMetadataSelect`, `execPrimaryKeySelect`, `execIndexSelect`, `execForeignKeySelect`, `execTriggerSelect`, `execProcSelect`, `execBeekeeperTableSelect`, `execPgShdescriptionSelect`, `execPgConversionSelect`).
+      - `mssql.go`: SQL Server / TDS 메타데이터 가상 조인 핸들러 (`execBeekeeperMSSQLColumnSelect`, `execDbGateMSSQLColumnSelect`, `execDbGateMSSQLPrimaryKeySelect`, `execDbGateMSSQLIndexSelect`, `execDbGateMSSQLIndexColumnSelect`, `execDbGateMSSQLForeignKeySelect`, `execDbGateMSSQLRowCountSelect`, `execDbGateMSSQLColumnCommentSelect`, `execDbGateMSSQLParamSelect`, `execDbGateMSSQLTriggerSelect`, `execDbGateMSSQLObjectSelect`, `execDbGateMSSQLTableSelect`, `execDbGateMSSQLViewSelect`, `execDbGateMSSQLProgrammablesSelect`, `execDbGateMSSQLLoadSqlCodeSelect`, `execDBeaverMSSQLAllObjectsSelect`).
+      - `interceptor.go`: `IsVirtualCatalogJoinQuery(sql string) bool` 판별기 및 `Execute(src Source, sql string) (*Result, error)` 중앙 라우팅 디스패처.
+      - `interceptor_test.go`: 가상 카탈로그 단위 테스트 완비.
+    - **엔진 연동 및 코드 다이어트 (`pkg/engine`)**:
+      - `sqlexec_virtual.go`: `*Coordinator`가 `virtual.Source` 및 `GetTableRowCount(string) int64`를 충족하도록 구현하고 `execVirtualCatalogJoinSelect`로 단일화.
+      - `sqlexec.go`, `sqlexec_select.go`: `virtual.IsVirtualCatalogJoinQuery` 및 `s.execVirtualCatalogJoinSelect` 호출로 전환.
+      - 비대했던 `sqlexec_gui_interop.go`와 `sqlexec_mssql_sys.go` 중복 코드 1,300여 라인 완전 제거.
+      - 레거시 HeidiSQL 명칭을 표준적이고 중립적인 `VirtualCatalog`로 통일.
+    - 전체 패키지 빌드 및 race-free 테스트 100% PASS 검증 완료.
 - [x] **하드코딩 Go 시딩 제거 및 5개 테이블 기반 독립 데모 스크립트(`scripts/demo_seed.sql`) & `--seed=false` 기본값 전환 (`cmd/server`, `scripts/`)**
   - **배경**: 서버 바이너리에 Go 구조체로 하드코딩되어 있던 샘플 데이터 시딩 로직(`seedSampleAccounts`, `seedSampleProcedure`)을 제거하고, 실무 및 교육용으로 널리 쓰이는 표준 5개 테이블 세트와 샘플 Stored Procedure를 포함한 독립 SQL 스크립트로 분리하여 재사용성과 유지보수성을 극대화.
   - **구현 내용**:

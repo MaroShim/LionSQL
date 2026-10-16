@@ -226,11 +226,11 @@ func TestPgCatalog_CoreViews(t *testing.T) {
 	}
 }
 
-func TestPgCatalog_HeidiSQLForeignKeyQuery(t *testing.T) {
+func TestPgCatalog_VirtualCatalogForeignKeyQuery(t *testing.T) {
 	server, eng, _ := setupCatalogTestServer(t)
 	defer eng.Close()
 
-	heidiFKQuery := `SELECT
+	virtualFKQuery := `SELECT
     con.conname AS constraint_name,
     CASE con.confupdtype
         WHEN 'a' THEN 'NO ACTION'
@@ -277,12 +277,12 @@ GROUP BY
 ORDER BY
     MIN(ord.pos)`
 
-	res, err := server.ExecuteSQL(heidiFKQuery)
+	res, err := server.ExecuteSQL(virtualFKQuery)
 	if err != nil {
-		t.Fatalf("HeidiSQL FK query failed: %v", err)
+		t.Fatalf("Virtual catalog FK query failed: %v", err)
 	}
 	if !res.Success {
-		t.Fatalf("HeidiSQL FK query was not successful")
+		t.Fatalf("Virtual catalog FK query was not successful")
 	}
 
 	expectedCols := []string{

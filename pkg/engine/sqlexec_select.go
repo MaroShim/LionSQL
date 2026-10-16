@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"sqlion/pkg/auth"
+	"sqlion/pkg/catalog/virtual"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
@@ -1409,9 +1410,9 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		return s.execSetOpSelect(setQuery, start, cs)
 	}
 
-	// 0. HeidiSQL & PG GUI virtual catalog multi-table JOIN intercept (e.g. pg_class JOIN pg_namespace)
-	if isHeidiSQLCatalogJoinQuery(cleaned) {
-		return s.execHeidiSQLCatalogJoinSelect(cleaned, start)
+	// 0. Virtual catalog multi-table JOIN intercept (e.g. pg_class JOIN pg_namespace, sys.columns JOIN sys.types)
+	if virtual.IsVirtualCatalogJoinQuery(cleaned) {
+		return s.execVirtualCatalogJoinSelect(cleaned, start)
 	}
 
 	// 0. PIVOT: SELECT ... FROM ... PIVOT (...) ...
