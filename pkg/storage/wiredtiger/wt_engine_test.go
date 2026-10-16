@@ -3,6 +3,7 @@
 package wiredtiger
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -387,4 +388,331 @@ OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY`
 		t.Fatalf("unexpected row 1: %v", res.Rows[1])
 	}
 }
+
+func TestWiredTiger_CursorPoolingAndReset(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_pool_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("eng.Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "title", Type: storage.TypeVarChar, Nullable: false},
+			{Name: "qty", Type: storage.TypeInt, Nullable: false},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	wtSess := sess.(*WTSession)
+
+	// Insert 10 rows
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	for i := 1; i <= 10; i++ {
+		err := tx.Insert("items", storage.Record{
+			"id":    storage.IntValue(int64(i)),
+			"title": storage.StringValue(fmt.Sprintf("item_%d", i)),
+			"qty":   storage.IntValue(int64(i * 10)),
+		})
+		if err != nil {
+			t.Fatalf("Insert %d failed: %v", i, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// 1. Verify point lookups (tx.Get) and cursor reuse
+	tx2, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx2.Rollback()
+
+	for i := 1; i <= 10; i++ {
+		rec, err := tx2.Get("items", storage.IntValue(int64(i)))
+		if err != nil {
+			t.Fatalf("Get %d failed: %v", i, err)
+		}
+		if rec["title"].String() != fmt.Sprintf("item_%d", i) {
+			t.Fatalf("unexpected title for %d: %v", i, rec["title"])
+		}
+	}
+
+	// Pool should have 1 idle cursor for table:items
+	wtSess.mu.Lock()
+	poolCount := len(wtSess.cursorPool["table:items"])
+	allCount := len(wtSess.allCursors)
+	wtSess.mu.Unlock()
+	if poolCount != 1 || allCount != 1 {
+		t.Fatalf("expected 1 pooled cursor and 1 total cursor, got pool=%d, all=%d", poolCount, allCount)
+	}
+
+	// 2. Verify Scan cursor pooling and release
+	for loop := 0; loop < 5; loop++ {
+		cur, err := tx2.Scan("items")
+		if err != nil {
+			t.Fatalf("Scan loop %d failed: %v", loop, err)
+		}
+		count := 0
+		for cur.Next() {
+			count++
+		}
+		if count != 10 {
+			t.Fatalf("expected 10 records, got %d", count)
+		}
+		if err := cur.Close(); err != nil {
+			t.Fatalf("cur.Close failed: %v", err)
+		}
+	}
+
+	// Still only 1 cursor allocated in total across all 5 scans because it was reset and reused!
+	wtSess.mu.Lock()
+	poolCount = len(wtSess.cursorPool["table:items"])
+	allCount = len(wtSess.allCursors)
+	wtSess.mu.Unlock()
+	if poolCount != 1 || allCount != 1 {
+		t.Fatalf("expected 1 pooled and 1 total cursor after sequential scans, got pool=%d, all=%d", poolCount, allCount)
+	}
+
+	// 3. Verify nested scans on the same table
+	curOuter, err := tx2.Scan("items")
+	if err != nil {
+		t.Fatalf("curOuter Scan failed: %v", err)
+	}
+	defer curOuter.Close()
+
+	nestedCount := 0
+	for curOuter.Next() {
+		curInner, err := tx2.Scan("items")
+		if err != nil {
+			t.Fatalf("curInner Scan failed: %v", err)
+		}
+		for curInner.Next() {
+			nestedCount++
+		}
+		if err := curInner.Close(); err != nil {
+			t.Fatalf("curInner.Close failed: %v", err)
+		}
+	}
+	if nestedCount != 100 {
+		t.Fatalf("expected 100 nested iterations, got %d", nestedCount)
+	}
+	curOuter.Close()
+
+	// Both outer and inner cursors should now be pooled
+	wtSess.mu.Lock()
+	poolCount = len(wtSess.cursorPool["table:items"])
+	allCount = len(wtSess.allCursors)
+	wtSess.mu.Unlock()
+	if poolCount != 2 || allCount != 2 {
+		t.Fatalf("expected 2 pooled cursors after nested scans, got pool=%d, all=%d", poolCount, allCount)
+	}
+}
+
+func TestWiredTiger_PointLookupAndScanConcurrency(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_conc_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("eng.Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "bal", Type: storage.TypeInt, Nullable: false},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	initSess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	tx, err := initSess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	for i := 1; i <= 50; i++ {
+		_ = tx.Insert("accounts", storage.Record{
+			"id":  storage.IntValue(int64(i)),
+			"bal": storage.IntValue(int64(i * 100)),
+		})
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+	_ = initSess.Close()
+
+	var wg sync.WaitGroup
+	for w := 0; w < 4; w++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			s, err := eng.NewSession()
+			if err != nil {
+				t.Errorf("worker %d NewSession error: %v", workerID, err)
+				return
+			}
+			defer s.Close()
+
+			for iter := 0; iter < 20; iter++ {
+				txi, err := s.BeginTx(storage.TxOptions{ReadOnly: true})
+				if err != nil {
+					t.Errorf("worker %d BeginTx error: %v", workerID, err)
+					return
+				}
+				id := int64((iter % 50) + 1)
+				rec, err := txi.Get("accounts", storage.IntValue(id))
+				if err != nil || rec == nil {
+					t.Errorf("worker %d Get error: %v", workerID, err)
+					_ = txi.Rollback()
+					return
+				}
+				cur, err := txi.Scan("accounts")
+				if err != nil {
+					t.Errorf("worker %d Scan error: %v", workerID, err)
+					_ = txi.Rollback()
+					return
+				}
+				cnt := 0
+				for cur.Next() {
+					cnt++
+				}
+				_ = cur.Close()
+				if cnt != 50 {
+					t.Errorf("worker %d expected 50 rows, got %d", workerID, cnt)
+				}
+				_ = txi.Rollback()
+			}
+		}(w)
+	}
+	wg.Wait()
+}
+
+func BenchmarkWiredTiger_PointGet(b *testing.B) {
+	tmpDir, err := os.MkdirTemp("", "wt_bench_get_*")
+	if err != nil {
+		b.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		b.Fatalf("eng.Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "bench_tbl",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar, Nullable: false},
+		},
+	}
+	_ = eng.CreateTable(schema)
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	for i := 1; i <= 100; i++ {
+		_ = tx.Insert("bench_tbl", storage.Record{
+			"id":  storage.IntValue(int64(i)),
+			"val": storage.StringValue("benchmark_payload_value"),
+		})
+	}
+	_ = tx.Commit()
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		key := storage.IntValue(int64((i % 100) + 1))
+		_, _ = readTx.Get("bench_tbl", key)
+	}
+}
+
+func BenchmarkWiredTiger_Scan(b *testing.B) {
+	tmpDir, err := os.MkdirTemp("", "wt_bench_scan_*")
+	if err != nil {
+		b.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		b.Fatalf("eng.Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	schema := &storage.TableSchema{
+		Name: "bench_tbl",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar, Nullable: false},
+		},
+	}
+	_ = eng.CreateTable(schema)
+
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+
+	tx, _ := sess.BeginTx(storage.TxOptions{})
+	for i := 1; i <= 100; i++ {
+		_ = tx.Insert("bench_tbl", storage.Record{
+			"id":  storage.IntValue(int64(i)),
+			"val": storage.StringValue("benchmark_payload_value"),
+		})
+	}
+	_ = tx.Commit()
+
+	readTx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer readTx.Rollback()
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		cur, err := readTx.Scan("bench_tbl")
+		if err != nil {
+			b.Fatalf("Scan failed: %v", err)
+		}
+		for cur.Next() {
+			_, _ = cur.Row()
+		}
+		_ = cur.Close()
+	}
+}
+
+
 

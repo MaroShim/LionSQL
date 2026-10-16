@@ -147,6 +147,33 @@ static int go_wt_cursor_get_val_raw(WT_CURSOR *cursor, const void **datap, size_
         return ret;
     }
 }
+
+static int go_wt_cursor_get(WT_CURSOR *cursor, const char *key, const void **datap, size_t *sizep) {
+    cursor->set_key(cursor, key);
+    int ret = cursor->search(cursor);
+    if (ret != 0) {
+        cursor->reset(cursor);
+        return ret;
+    }
+    return go_wt_cursor_get_val_raw(cursor, datap, sizep);
+}
+
+static int go_wt_cursor_insert_raw(WT_CURSOR *cursor, const char *key, const void *data, size_t size) {
+    cursor->set_key(cursor, key);
+    go_wt_cursor_set_val_raw(cursor, data, size);
+    return cursor->insert(cursor);
+}
+
+static int go_wt_cursor_update_raw(WT_CURSOR *cursor, const char *key, const void *data, size_t size) {
+    cursor->set_key(cursor, key);
+    go_wt_cursor_set_val_raw(cursor, data, size);
+    return cursor->update(cursor);
+}
+
+static int go_wt_cursor_remove_key(WT_CURSOR *cursor, const char *key) {
+    cursor->set_key(cursor, key);
+    return cursor->remove(cursor);
+}
 */
 import "C"
 import (
@@ -726,13 +753,30 @@ func (e *Engine) NewSession() (storage.Session, error) {
 	}, nil
 }
 
+const maxIdleCursorsPerURI = 16
+
+// fastCString copies str into stackBuf with a null terminator if it fits,
+// avoiding C.CString heap allocation and C.free.
+func fastCString(str string, stackBuf []byte) (*C.char, func()) {
+	if len(str)+1 <= len(stackBuf) {
+		if len(str) > 0 {
+			copy(stackBuf, str)
+		}
+		stackBuf[len(str)] = 0
+		return (*C.char)(unsafe.Pointer(&stackBuf[0])), nil
+	}
+	cs := C.CString(str)
+	return cs, func() { C.free(unsafe.Pointer(cs)) }
+}
+
 // WTSession represents an active client connection to WiredTiger.
 type WTSession struct {
-	engine  *Engine
-	sess    *C.WT_SESSION
-	mu      sync.Mutex
-	closed  bool
-	cursors map[string]*C.WT_CURSOR
+	engine     *Engine
+	sess       *C.WT_SESSION
+	mu         sync.Mutex
+	closed     bool
+	cursorPool map[string][]*C.WT_CURSOR
+	allCursors map[*C.WT_CURSOR]struct{}
 }
 
 func (s *WTSession) Close() error {
@@ -744,10 +788,11 @@ func (s *WTSession) Close() error {
 	}
 	s.closed = true
 
-	for _, cur := range s.cursors {
+	for cur := range s.allCursors {
 		C.go_wt_cursor_close(cur)
 	}
-	s.cursors = nil
+	s.allCursors = nil
+	s.cursorPool = nil
 
 	ret := C.go_wt_session_close(s.sess)
 	s.sess = nil
@@ -757,33 +802,79 @@ func (s *WTSession) Close() error {
 	return nil
 }
 
-func (s *WTSession) getCursor(tableName string) (*C.WT_CURSOR, error) {
+func (s *WTSession) acquireCursor(uri string) (*C.WT_CURSOR, error) {
+	s.mu.Lock()
 	if s.closed || s.sess == nil {
+		s.mu.Unlock()
 		return nil, fmt.Errorf("session is closed")
 	}
-	uri := "table:" + tableName
-	if cur, ok := s.cursors[uri]; ok {
-		C.go_wt_cursor_reset(cur)
+
+	if pool := s.cursorPool[uri]; len(pool) > 0 {
+		idx := len(pool) - 1
+		cur := pool[idx]
+		s.cursorPool[uri] = pool[:idx]
+		s.mu.Unlock()
 		return cur, nil
 	}
+	s.mu.Unlock()
 
 	cURI := C.CString(uri)
 	defer C.free(unsafe.Pointer(cURI))
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed || s.sess == nil {
+		return nil, fmt.Errorf("session is closed")
+	}
 
 	var cur *C.WT_CURSOR
 	if ret := C.go_wt_open_cursor(s.sess, cURI, &cur); ret != 0 {
 		return nil, fmt.Errorf("open_cursor failed: %d", ret)
 	}
 
-	if s.cursors == nil {
-		s.cursors = make(map[string]*C.WT_CURSOR)
+	if s.allCursors == nil {
+		s.allCursors = make(map[*C.WT_CURSOR]struct{})
 	}
-	s.cursors[uri] = cur
+	s.allCursors[cur] = struct{}{}
 	return cur, nil
 }
 
+func (s *WTSession) releaseCursor(uri string, cur *C.WT_CURSOR) {
+	if cur == nil {
+		return
+	}
+	C.go_wt_cursor_reset(cur)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed || s.sess == nil {
+		delete(s.allCursors, cur)
+		C.go_wt_cursor_close(cur)
+		return
+	}
+
+	if s.cursorPool == nil {
+		s.cursorPool = make(map[string][]*C.WT_CURSOR)
+	}
+	pool := s.cursorPool[uri]
+	if len(pool) < maxIdleCursorsPerURI {
+		s.cursorPool[uri] = append(pool, cur)
+	} else {
+		delete(s.allCursors, cur)
+		C.go_wt_cursor_close(cur)
+	}
+}
+
+func (s *WTSession) getCursor(tableName string) (*C.WT_CURSOR, error) {
+	return s.acquireCursor("table:" + tableName)
+}
+
 func (s *WTSession) resetCursors() {
-	for _, cur := range s.cursors {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for cur := range s.allCursors {
 		C.go_wt_cursor_reset(cur)
 	}
 }
@@ -964,11 +1055,12 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 	}
 
 	pkStr := pkVal.String()
-	cur, err := tx.sess.getCursor(tableName)
+	uri := "table:" + tableName
+	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer C.go_wt_cursor_reset(cur)
+	defer tx.sess.releaseCursor(uri, cur)
 
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
@@ -978,17 +1070,18 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		return err
 	}
 
-	cKey := C.CString(pkStr)
-	defer C.free(unsafe.Pointer(cKey))
+	var keyBuf [256]byte
+	cKey, cleanup := fastCString(pkStr, keyBuf[:])
+	if cleanup != nil {
+		defer cleanup()
+	}
 
-	C.go_wt_cursor_set_key(cur, cKey)
 	var pData unsafe.Pointer
 	if len(recBytes) > 0 {
 		pData = unsafe.Pointer(&recBytes[0])
 	}
-	C.go_wt_cursor_set_val_raw(cur, pData, C.size_t(len(recBytes)))
 
-	if ret := C.go_wt_cursor_insert(cur); ret != 0 {
+	if ret := C.go_wt_cursor_insert_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
 		return fmt.Errorf("cursor_insert failed with code %d", ret)
 	}
 
@@ -1066,11 +1159,12 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		existing[col] = val
 	}
 
-	cur, err := tx.sess.getCursor(tableName)
+	uri := "table:" + tableName
+	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer C.go_wt_cursor_reset(cur)
+	defer tx.sess.releaseCursor(uri, cur)
 
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
@@ -1080,17 +1174,19 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		return err
 	}
 
-	cKey := C.CString(pk.String())
-	defer C.free(unsafe.Pointer(cKey))
+	pkStr := pk.String()
+	var keyBuf [256]byte
+	cKey, cleanup := fastCString(pkStr, keyBuf[:])
+	if cleanup != nil {
+		defer cleanup()
+	}
 
-	C.go_wt_cursor_set_key(cur, cKey)
 	var pData unsafe.Pointer
 	if len(recBytes) > 0 {
 		pData = unsafe.Pointer(&recBytes[0])
 	}
-	C.go_wt_cursor_set_val_raw(cur, pData, C.size_t(len(recBytes)))
 
-	if ret := C.go_wt_cursor_update(cur); ret != 0 {
+	if ret := C.go_wt_cursor_update_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
 		return fmt.Errorf("cursor_update failed with code %d", ret)
 	}
 
@@ -1133,17 +1229,21 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 		oldData, _ = tx.getRawBytesLocked(tableName, pk)
 	}
 
-	cur, err := tx.sess.getCursor(tableName)
+	uri := "table:" + tableName
+	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer C.go_wt_cursor_reset(cur)
+	defer tx.sess.releaseCursor(uri, cur)
 
-	cKey := C.CString(pk.String())
-	defer C.free(unsafe.Pointer(cKey))
+	pkStr := pk.String()
+	var keyBuf [256]byte
+	cKey, cleanup := fastCString(pkStr, keyBuf[:])
+	if cleanup != nil {
+		defer cleanup()
+	}
 
-	C.go_wt_cursor_set_key(cur, cKey)
-	if ret := C.go_wt_cursor_remove(cur); ret != 0 {
+	if ret := C.go_wt_cursor_remove_key(cur, cKey); ret != 0 {
 		return fmt.Errorf("cursor_remove failed with code %d", ret)
 	}
 
@@ -1184,24 +1284,24 @@ func (tx *WTTx) getRawBytesLocked(tableName string, pk storage.Value) ([]byte, e
 		return nil, storage.ErrTxClosed
 	}
 
-	cur, err := tx.sess.getCursor(tableName)
+	uri := "table:" + tableName
+	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return nil, err
 	}
-	defer C.go_wt_cursor_reset(cur)
+	defer tx.sess.releaseCursor(uri, cur)
 
-	cKey := C.CString(pk.String())
-	defer C.free(unsafe.Pointer(cKey))
-
-	C.go_wt_cursor_set_key(cur, cKey)
-	if ret := C.go_wt_cursor_search(cur); ret != 0 {
-		return nil, storage.ErrKeyNotFound
+	pkStr := pk.String()
+	var keyBuf [256]byte
+	cKey, cleanup := fastCString(pkStr, keyBuf[:])
+	if cleanup != nil {
+		defer cleanup()
 	}
 
 	var pData unsafe.Pointer
 	var sz C.size_t
-	if ret := C.go_wt_cursor_get_val_raw(cur, &pData, &sz); ret != 0 || pData == nil {
-		return nil, fmt.Errorf("cursor_get_value failed")
+	if ret := C.go_wt_cursor_get(cur, cKey, &pData, &sz); ret != 0 || pData == nil {
+		return nil, storage.ErrKeyNotFound
 	}
 
 	return C.GoBytes(pData, C.int(sz)), nil
@@ -1242,16 +1342,16 @@ func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
 		return nil, storage.ErrTxClosed
 	}
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
-	defer C.free(unsafe.Pointer(uri))
-
-	var cur *C.WT_CURSOR
-	if ret := C.go_wt_open_cursor(tx.sess.sess, uri, &cur); ret != 0 {
-		return nil, fmt.Errorf("open_cursor failed: %d", ret)
+	uri := fmt.Sprintf("table:%s", tableName)
+	cur, err := tx.sess.acquireCursor(uri)
+	if err != nil {
+		return nil, err
 	}
 
 	tbl, _ := tx.getTableLocked(tableName)
 	return &WTCursor{
+		sess:   tx.sess,
+		uri:    uri,
 		cur:    cur,
 		schema: tbl,
 	}, nil
@@ -1609,24 +1709,27 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 }
 
 func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes []byte) error {
-	cur, err := tx.sess.getCursor(tableName)
+	uri := "table:" + tableName
+	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer C.go_wt_cursor_reset(cur)
+	defer tx.sess.releaseCursor(uri, cur)
 
-	cKey := C.CString(pk.String())
-	defer C.free(unsafe.Pointer(cKey))
+	pkStr := pk.String()
+	var keyBuf [256]byte
+	cKey, cleanup := fastCString(pkStr, keyBuf[:])
+	if cleanup != nil {
+		defer cleanup()
+	}
 
-	C.go_wt_cursor_set_key(cur, cKey)
 	var pData unsafe.Pointer
 	if len(recBytes) > 0 {
 		pData = unsafe.Pointer(&recBytes[0])
 	}
-	C.go_wt_cursor_set_val_raw(cur, pData, C.size_t(len(recBytes)))
 
-	if ret := C.go_wt_cursor_update(cur); ret != 0 {
-		if ret := C.go_wt_cursor_insert(cur); ret != 0 {
+	if ret := C.go_wt_cursor_update_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
+		if ret := C.go_wt_cursor_insert_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
 			return fmt.Errorf("cursor put failed with code %d", ret)
 		}
 	}
@@ -1634,17 +1737,11 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 }
 
 func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Record) error {
-	cur, err := tx.sess.getCursor(tableName)
-	if err != nil {
-		return err
-	}
-	defer C.go_wt_cursor_reset(cur)
-
 	tbl, _ := tx.sess.engine.GetTable(tableName)
 	bufPtr := storage.GetTupleBuffer()
 	defer storage.PutTupleBuffer(bufPtr)
 
-	recBytes, err := serializeRecordToBuffer(cur, tbl, record, *bufPtr)
+	recBytes, err := serializeRecordToBuffer(nil, tbl, record, *bufPtr)
 	if err != nil {
 		return err
 	}
@@ -1653,22 +1750,28 @@ func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Rec
 }
 
 func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
-	cur, err := tx.sess.getCursor(tableName)
+	uri := "table:" + tableName
+	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
 	}
-	defer C.go_wt_cursor_reset(cur)
+	defer tx.sess.releaseCursor(uri, cur)
 
-	cKey := C.CString(pk.String())
-	defer C.free(unsafe.Pointer(cKey))
+	pkStr := pk.String()
+	var keyBuf [256]byte
+	cKey, cleanup := fastCString(pkStr, keyBuf[:])
+	if cleanup != nil {
+		defer cleanup()
+	}
 
-	C.go_wt_cursor_set_key(cur, cKey)
-	_ = C.go_wt_cursor_remove(cur)
+	_ = C.go_wt_cursor_remove_key(cur, cKey)
 	return nil
 }
 
 // WTCursor iterates over WiredTiger table records.
 type WTCursor struct {
+	sess   *WTSession
+	uri    string
 	cur    *C.WT_CURSOR
 	schema *storage.TableSchema
 	closed bool
@@ -1747,7 +1850,12 @@ func (c *WTCursor) Close() error {
 		return nil
 	}
 	c.closed = true
-	C.go_wt_cursor_close(c.cur)
+	cur := c.cur
 	c.cur = nil
+	if c.sess != nil && c.uri != "" {
+		c.sess.releaseCursor(c.uri, cur)
+	} else {
+		C.go_wt_cursor_close(cur)
+	}
 	return nil
 }
