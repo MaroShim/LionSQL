@@ -26,6 +26,17 @@
 | **P2** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/logger`, `pkg/api` | 로그인, 권한 변경(`GRANT/REVOKE`), DDL 변경, 관리자 데이터 조작 이벤트 불변 감사 기록 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **가상 카탈로그 쿼리 인터셉터 0-Alloc 프리필터 & 공백 무관 등호 매칭 리팩토링 (`pkg/catalog/virtual`)**
+  - **배경**: 매 `SELECT` 쿼리마다 `strings.ToUpper(sql)`을 호출하여 힙 메모리를 복제하고 17개 이상의 `strings.Contains`를 순차 검사하는 핫패스 오버헤드 해소, 및 `O.TYPE = 'TR'` / `O.TYPE='TR'`처럼 등호(`=`) 좌우 공백 형태가 불일치할 때(`O.TYPE= 'TR'`, `O.TYPE ='TR'`, 탭/다중 공백) 가상 카탈로그 인터셉터가 매칭에 실패하던 잠재적 결함(False Negative) 원천 해결.
+  - **구현 내용**:
+    - `pkg/catalog/virtual/interceptor.go`:
+      - `containsFold` (ASCII 대소문자 무관 제로-할당 부분 문자열 탐색) 및 `hasCatalogCandidate` 도입. 비카탈로그 일반 OLTP 쿼리는 메모리 힙 할당 0건(0 B/op, 0 allocs/op)으로 즉시 탈출.
+      - `containsEq`: 키와 값 사이의 `=` 주변 공백(공백 0개, 좌측만, 우측만, 다중 공백, 탭, 개행)을 완벽하게 허용하며 식별자 접두/접미사 경계 검증을 포함하는 공백 무관 등호 탐색기 구현.
+      - `matchAny`: 다중 조건 중복 코드를 제거하여 `IsVirtualCatalogJoinQuery`의 복잡도를 63줄에서 35줄로 슬림화.
+      - `Execute`: DbGate/Beekeeper 가상 카탈로그 조건(`IS_PRIMARY_KEY = 1/0`, `TYPE = 'TR'`, `TYPE = 'V'`, `CONTYPE = 'F'`)에 `containsEq` 전면 적용.
+    - `pkg/catalog/virtual/interceptor_internal_test.go` 및 `interceptor_test.go`:
+      - 공백 치환 조합(`= `, ` =`, ` = `, `=`, `\t=\n`, `   =   `), 경계 검증, 다중 등장 테스트 완비.
+      - 벤치마크 검증: 일반 OLTP 쿼리 10,057,021 ops, 103.5 ns/op, **0 B/op, 0 allocs/op** 달성.
 - [x] **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 (`pkg/wire`)**
   - **배경**: PostgreSQL 공식 JDBC(`pgjdbc`) 및 `psqlODBC`가 연결 및 메타데이터 인트로스펙션 시 전송하는 드라이버 핸드셰이크 파라미터 및 카탈로그 뷰 쿼리 호환성 검증.
   - **구현 내용**:

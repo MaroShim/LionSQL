@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Virtual Catalog Query Interceptor Zero-Alloc Fast Filter & Whitespace-Resilient Matcher (`pkg/catalog/virtual`)**:
+  - Implemented zero-allocation ASCII case-insensitive substring scanner `containsFold` and `hasCatalogCandidate` in `pkg/catalog/virtual/interceptor.go`, enabling non-catalog OLTP `SELECT` queries to bypass catalog checks with 0 heap allocations (`0 B/op`, `0 allocs/op`) and 103ns dispatch latency.
+  - Implemented `containsEq` helper to match key-value equality conditions across arbitrary whitespace variations (`= `, ` =`, ` = `, `=`, `\t=\n`, `   =   `) with identifier word-boundary guards, resolving potential false-negative matching bugs for triggers (`o.type = 'TR'`), views (`type = 'V'`), primary keys (`is_primary_key = 1/0`), and foreign key constraints (`contype = 'F'`).
+  - Streamlined `IsVirtualCatalogJoinQuery` with `matchAny`, cutting pattern boilerplate from 63 lines to 35 lines.
+  - Added unit tests in `interceptor_internal_test.go` and `interceptor_test.go` verifying 100% whitespace permutations and benchmark memory metrics.
 - **PostgreSQL JDBC / psqlODBC Driver Enterprise Compatibility Certification (`pkg/wire`)**:
   - Validated and certified end-to-end compatibility for official PostgreSQL JDBC (`pgjdbc`) and `psqlODBC` drivers.
   - Verified driver session handshake parameter controls (`SET extra_float_digits = 3`, `SET application_name = 'PostgreSQL JDBC Driver'`, `SET client_min_messages = 'warning'`, `SET client_encoding = 'UTF8'`).

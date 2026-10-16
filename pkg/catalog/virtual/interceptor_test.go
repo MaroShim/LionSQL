@@ -224,3 +224,44 @@ func TestExecute_MSSQLVirtualCatalog(t *testing.T) {
 		t.Errorf("expected row count 42, got %v", resRC.Rows[0]["tableRowCount"])
 	}
 }
+
+func TestIsVirtualCatalogJoinQuery_WhitespaceResilience(t *testing.T) {
+	// Queries that should match regardless of whitespace variations around '='
+	queries := []string{
+		"SELECT * FROM sys.objects WHERE o.type = 'TR'",
+		"SELECT * FROM sys.objects WHERE o.type= 'TR'",
+		"SELECT * FROM sys.objects WHERE o.type ='TR'",
+		"SELECT * FROM sys.objects WHERE o.type='TR'",
+		"SELECT * FROM sys.objects WHERE o.type   =   'TR'",
+		"SELECT * FROM sys.objects WHERE o.type\t=\t'TR'",
+		"SELECT * FROM sys.indexes WHERE is_primary_key=1",
+		"SELECT * FROM sys.indexes WHERE is_primary_key = 1",
+		"SELECT * FROM sys.indexes WHERE is_primary_key= 1",
+		"SELECT * FROM sys.indexes WHERE is_primary_key =1",
+	}
+
+	for _, q := range queries {
+		if !virtual.IsVirtualCatalogJoinQuery(q) {
+			t.Errorf("expected IsVirtualCatalogJoinQuery to return true for %q", q)
+		}
+	}
+}
+
+func BenchmarkIsVirtualCatalogJoinQuery_NormalOLTP(b *testing.B) {
+	sql := "SELECT id, username, balance FROM users WHERE id = 12345"
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = virtual.IsVirtualCatalogJoinQuery(sql)
+	}
+}
+
+func BenchmarkIsVirtualCatalogJoinQuery_CatalogQuery(b *testing.B) {
+	sql := "SELECT * FROM sys.columns c JOIN sys.types t ON c.user_type_id = t.user_type_id"
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = virtual.IsVirtualCatalogJoinQuery(sql)
+	}
+}
+

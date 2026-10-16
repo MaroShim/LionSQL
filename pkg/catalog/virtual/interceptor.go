@@ -4,34 +4,133 @@ import (
 	"strings"
 )
 
+// containsFold returns true if s contains substr (case-insensitive for ASCII).
+// It does not allocate memory on the heap.
+func containsFold(s, substr string) bool {
+	if len(substr) == 0 {
+		return true
+	}
+	if len(s) < len(substr) {
+		return false
+	}
+	firstLower := substr[0]
+	firstUpper := substr[0]
+	if firstLower >= 'a' && firstLower <= 'z' {
+		firstUpper = firstLower - ('a' - 'A')
+	} else if firstUpper >= 'A' && firstUpper <= 'Z' {
+		firstLower = firstUpper + ('a' - 'A')
+	}
+
+	limit := len(s) - len(substr)
+	for i := 0; i <= limit; i++ {
+		c := s[i]
+		if c == firstLower || c == firstUpper {
+			match := true
+			for j := 1; j < len(substr); j++ {
+				sc := s[i+j]
+				tc := substr[j]
+				if sc == tc {
+					continue
+				}
+				if sc >= 'a' && sc <= 'z' {
+					sc -= 'a' - 'A'
+				}
+				if tc >= 'a' && tc <= 'z' {
+					tc -= 'a' - 'A'
+				}
+				if sc != tc {
+					match = false
+					break
+				}
+			}
+			if match {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// hasCatalogCandidate quickly checks if sql contains any catalog prefix ("sys.", "pg_", "information_schema.")
+// case-insensitively without heap allocations.
+func hasCatalogCandidate(sql string) bool {
+	return containsFold(sql, "sys.") || containsFold(sql, "pg_") || containsFold(sql, "information_schema.")
+}
+
+// matchAny returns true if s contains any of the provided substrings.
+func matchAny(s string, substrs ...string) bool {
+	for _, sub := range substrs {
+		if strings.Contains(s, sub) {
+			return true
+		}
+	}
+	return false
+}
+
+// containsEq returns true if s contains left = right, with arbitrary whitespace around '='.
+// Assumes s, left, right are uppercase.
+func containsEq(s, left, right string) bool {
+	pos := 0
+	for {
+		idx := strings.Index(s[pos:], left)
+		if idx < 0 {
+			return false
+		}
+		// Word boundary check: left must not be a suffix of another identifier unless dot-prefixed
+		absIdx := pos + idx
+		if absIdx > 0 && !strings.HasPrefix(left, ".") {
+			prev := s[absIdx-1]
+			if (prev >= 'A' && prev <= 'Z') || (prev >= '0' && prev <= '9') || prev == '_' {
+				pos = absIdx + 1
+				continue
+			}
+		}
+
+		curr := absIdx + len(left)
+		for curr < len(s) && (s[curr] == ' ' || s[curr] == '\t' || s[curr] == '\r' || s[curr] == '\n') {
+			curr++
+		}
+		if curr < len(s) && s[curr] == '=' {
+			curr++
+			for curr < len(s) && (s[curr] == ' ' || s[curr] == '\t' || s[curr] == '\r' || s[curr] == '\n') {
+				curr++
+			}
+			if strings.HasPrefix(s[curr:], right) {
+				return true
+			}
+		}
+		pos = absIdx + 1
+	}
+}
+
 // IsVirtualCatalogJoinQuery returns true if the SQL query matches a known virtual catalog cross-join query pattern.
 func IsVirtualCatalogJoinQuery(sql string) bool {
+	// Zero-alloc fast-path: reject non-catalog queries before string allocation.
+	if !hasCatalogCandidate(sql) {
+		return false
+	}
+
 	upper := strings.ToUpper(sql)
-	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "SYS.TYPES")) {
+
+	if strings.Contains(upper, "SYS.COLUMNS") && matchAny(upper, "JOIN", "SYS.TYPES") {
 		return true
 	}
-	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "IS_PRIMARY_KEY")) {
+	if strings.Contains(upper, "SYS.INDEXES") && matchAny(upper, "JOIN", "IS_PRIMARY_KEY") {
 		return true
 	}
-	if strings.Contains(upper, "SYS.INDEX_COLUMNS") {
+	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS") {
 		return true
 	}
-	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "SCHEMANAME")) {
+	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && matchAny(upper, "JOIN", "SCHEMANAME") {
 		return true
 	}
 	if strings.Contains(upper, "SYS.PARAMETERS") && strings.Contains(upper, "JOIN") {
 		return true
 	}
-	if strings.Contains(upper, "SYS.TABLES") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "TABLEROWCOUNT") || strings.Contains(upper, "OBJECTCOMMENT")) {
+	if strings.Contains(upper, "SYS.TABLES") && matchAny(upper, "JOIN", "TABLEROWCOUNT", "OBJECTCOMMENT", "SYS.SCHEMAS") {
 		return true
 	}
-	if strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "TRIGGERNAME") || strings.Contains(upper, "O.TYPE = 'TR'") || strings.Contains(upper, "O.TYPE='TR'") || strings.Contains(upper, "JOIN")) {
-		return true
-	}
-	if (strings.Contains(upper, "SYS.OBJECTS") || strings.Contains(upper, "SYS.TABLES")) && strings.Contains(upper, "SYS.SCHEMAS") {
-		return true
-	}
-	if strings.Contains(upper, "SYS.SYSCOMMENTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "CODETEXT")) {
+	if strings.Contains(upper, "SYS.OBJECTS") && (matchAny(upper, "TRIGGERNAME", "JOIN", "SYS.SCHEMAS", "CODETEXT") || containsEq(upper, "TYPE", "'TR'")) {
 		return true
 	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
@@ -40,31 +139,25 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
 		return true
 	}
-	if strings.Contains(upper, "PG_CONSTRAINT") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "UNNEST") || strings.Contains(upper, "SRC_TBL") || strings.Contains(upper, "CONKEY")) {
+	if strings.Contains(upper, "PG_CONSTRAINT") && matchAny(upper, "JOIN", "UNNEST", "SRC_TBL", "CONKEY") {
 		return true
 	}
-	if strings.Contains(upper, "PG_INDEX") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "PG_NAMESPACE") || strings.Contains(upper, "INDEX_NAME") || strings.Contains(upper, "INDKEY")) {
+	if strings.Contains(upper, "PG_INDEX") && matchAny(upper, "JOIN", "PG_NAMESPACE", "INDEX_NAME", "INDKEY") {
 		return true
 	}
 	if strings.Contains(upper, "PG_TRIGGER") && strings.Contains(upper, "JOIN") {
 		return true
 	}
-	if strings.Contains(upper, "PG_CLASS") && (strings.Contains(upper, "PG_NAMESPACE") || strings.Contains(upper, "VIEW_DEFS") || strings.Contains(upper, "RELNAMESPACE")) {
+	if strings.Contains(upper, "PG_CLASS") && matchAny(upper, "PG_NAMESPACE", "VIEW_DEFS", "RELNAMESPACE") {
 		return true
 	}
 	if strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE") {
 		return true
 	}
-	if strings.Contains(upper, "PG_ATTRIBUTE") && (strings.Contains(upper, "PG_CLASS") || strings.Contains(upper, "JOIN")) {
+	if strings.Contains(upper, "PG_ATTRIBUTE") && matchAny(upper, "PG_CLASS", "JOIN") {
 		return true
 	}
-	if strings.Contains(upper, "PG_SHDESCRIPTION") {
-		return true
-	}
-	if strings.Contains(upper, "PG_CONVERSION") {
-		return true
-	}
-	if strings.Contains(upper, "SYS.ALL_OBJECTS") {
+	if matchAny(upper, "PG_SHDESCRIPTION", "PG_CONVERSION") {
 		return true
 	}
 	return false
@@ -75,12 +168,12 @@ func Execute(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 
 	// 1. DbGate SQL Server Primary Keys
-	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "IS_PRIMARY_KEY = 1") || strings.Contains(upper, "IS_PRIMARY_KEY=1")) {
+	if strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1") {
 		return execDbGateMSSQLPrimaryKeySelect(src, sql)
 	}
 
 	// 2. DbGate SQL Server Indexes
-	if strings.Contains(upper, "SYS.INDEXES") && (strings.Contains(upper, "IS_PRIMARY_KEY=0") || strings.Contains(upper, "IS_PRIMARY_KEY = 0")) {
+	if strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "0") {
 		return execDbGateMSSQLIndexSelect(src, sql)
 	}
 
@@ -120,7 +213,7 @@ func Execute(src Source, sql string) (*Result, error) {
 	}
 
 	// 10. DbGate SQL Server Triggers
-	if strings.Contains(upper, "TRIGGERNAME") || (strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "TYPE = 'TR'") || strings.Contains(upper, "TYPE='TR'"))) {
+	if strings.Contains(upper, "TRIGGERNAME") || (strings.Contains(upper, "SYS.OBJECTS") && containsEq(upper, "TYPE", "'TR'")) {
 		return execDbGateMSSQLTriggerSelect(sql)
 	}
 
@@ -135,7 +228,7 @@ func Execute(src Source, sql string) (*Result, error) {
 	}
 
 	// 13. DbGate SQL Server Views
-	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && (strings.Contains(upper, "TYPE='V'") || strings.Contains(upper, "TYPE = 'V'")) {
+	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && containsEq(upper, "TYPE", "'V'") {
 		return execDbGateMSSQLViewSelect(src, sql)
 	}
 
@@ -156,7 +249,7 @@ func Execute(src Source, sql string) (*Result, error) {
 
 	// 17. Constraints: Foreign keys, Primary keys, Unique constraints
 	if strings.Contains(upper, "PG_CONSTRAINT") {
-		if strings.Contains(upper, "SRC_TBL") || strings.Contains(upper, "CONTYPE = 'F'") || strings.Contains(upper, "REF_TABLE") || strings.Contains(upper, "CONFRELID") {
+		if strings.Contains(upper, "SRC_TBL") || containsEq(upper, "CONTYPE", "'F'") || strings.Contains(upper, "REF_TABLE") || strings.Contains(upper, "CONFRELID") {
 			return execForeignKeySelect(src, sql)
 		}
 		return execDbGatePrimaryKeySelect(src, sql)
