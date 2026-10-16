@@ -1,7 +1,9 @@
 # LionSQL Engineering Roadmap & Core Technical Milestones
 
 This document charts the development milestones, verified implementation status, and future engineering challenges for the LionSQL high-concurrency embedded database engine.
-(For actionable engineering tasks and domain backlogs, refer to [TODO.ko.md](TODO.ko.md).)
+
+> [!NOTE]
+> For actionable daily engineering tasks, prioritized backlog items, and ongoing refactoring tracks, refer to the active backlog in [TODO.ko.md](TODO.ko.md).
 
 ---
 
@@ -9,107 +11,123 @@ This document charts the development milestones, verified implementation status,
 
 LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLTP engine to an enterprise-grade, high-availability hybrid database system:
 
-```
-[ Phase 1: Core Foundation (v0.1.0 - v0.8.0) ] ────► COMPLETED
-  - Dual Wire Protocols (PGWire :5433 + TDS :1433)
-  - Dual Storage Engine (WiredTiger B+Tree + In-Memory OCC)
-  - Dual Parser (Native Pratt + ANTLR4 Fallback)
-  - VDBE Bytecode Virtual Machine & Volcano Relational Pipeline
-  - CBO Cost-Based Optimizer, Histograms & Predicate Pushdown
+| Phase | Version Range | Target Focus | Status |
+| :---: | :---: | :--- | :---: |
+| **Phase 1** | `v0.1.0` - `v0.8.0` | **Core Foundation & Virtual Machine Architecture** | **Completed** |
+| **Phase 2** | `v0.9.0` - `v0.10.0` | **SQL & Analytical Depth, Aggregations & Views** | **Completed** |
+| **Phase 3** | `v0.11.0` - `v0.12.0` | **Replication, Official Drivers & Zero-Allocation** | **Completed** |
+| **Phase 4** | `v0.13.0` - `v0.15.0` | **Modern Ecosystem, GUI Tool Interop & VDBE Acceleration** | **Completed** |
+| **Phase 5** | `v0.16.0` - `v0.19.0` | **Enterprise Governance, Security & Engine Decoupling** | **Active / Near Completion** |
+| **Phase 6** | `v1.0.0 LTS` | **Always On HA, Decoupled HTAP & Production Hardening** | **Planned / In Progress** |
 
-[ Phase 2: SQL & Analytical Depth (v0.9.0 - v0.10.0) ] ──► COMPLETED
-  - Window Functions & Frames (ROW_NUMBER, RANK, LEAD, LAG, OVER)
-  - Advanced Aggregations (GROUP BY ROLLUP, CUBE, GROUPING)
-  - Percentile / Quantile Analytics (PERCENTILE_CONT, T-Digest)
-  - Log Operators (GREP / REGEXP_LIKE, AWK / SPLIT_PART)
-  - Transaction Savepoints (SAVEPOINT, ROLLBACK TO SAVEPOINT)
-  - View Subsystem (CREATE VIEW, Materialized / Aggregation Views)
-  - Advanced DML (ON CONFLICT DO NOTHING / UPDATE)
-  - SQL Prepared Statements (PREPARE, EXECUTE, DEALLOCATE)
-  - In-Memory Ephemeral Engine Mode (--ephemeral, Zero-Disk)
+### Phase Details & Progression Highlights
 
-[ Phase 3: Replication, Official Drivers & Zero-Allocation (v0.11.0 - v0.12.0) ] ──► COMPLETED
-  - 1-Writer Multi-Reader WAL Streaming Replication & Failover Promotion
-  - Microsoft SQL Server Official Client Driver Compatibility (go-mssqldb)
-  - PostgreSQL Official Client Driver Compatibility (lib/pq)
-  - CBO Table Statistics Disk Persistence (cbo_stats.json)
-  - Go Native In-Process Scalar Function SPI (proc.RegisterScalarFunction)
-  - VDBE OpRelQuery Physical PlanNode Caching & Zero-Allocation Streaming
-  - Wire Protocol Response Packet Buffer Pooling (sync.Pool)
-  - storage.Value Integer Fast-Path & Hot-Path Formatting
-  - ANALYZE TABLE Multi-Core Parallel Statistics & Histograms (sync.WaitGroup)
+#### Phase 1: Core Foundation (`v0.1.0` - `v0.8.0`) — Completed
+- Dual Wire Protocols (PostgreSQL Wire Protocol v3 `:5433` + Microsoft SQL Server TDS 7.x/8.0 `:1433`)
+- Dual Storage Engine Architecture (WiredTiger lock-free B+Tree with MVCC + Pure-Go In-Memory OCC)
+- Dual Parser Strategy (Zero-allocation Native Pratt Parser + Official ANTLR4 Fallback)
+- SQLite-style Register-based VDBE Bytecode Virtual Machine & Volcano Relational Execution Pipeline
+- Cost-Based Optimizer (CBO), 64-bucket Equi-depth Histograms & Predicate Pushdown
 
-[ Phase 4: Modern Ecosystem, GUI Tool Interop & VDBE Acceleration (v0.13.0 - v0.15.0) ] ──► COMPLETED
-  - PostgreSQL Modern Driver Compatibility: pgx/v5 & Batch Pipelining (Flush)
-  - TDS Protocol Async Attention Query Cancellation (0x06) & Real-Time Query Tracing (-dev)
-  - Beekeeper Studio, DbGate & DBeaver Multi-Tool Catalog Interoperability
-  - ANSI/MSSQL Pagination (OFFSET ... FETCH NEXT ... ROWS ONLY, SELECT TOP N)
-  - IETF RFC 9562 Standard UUIDv7 (NEWID7, UUIDV7, GEN_RANDOM_UUID(7))
-  - VDBE Local Variable Slot Indexing (O(1) Array Direct Access)
-  - VDBE Integer Opcode Specialization & Dedicated Logical Operators (OpAddInt ~ OpGteInt, OpAnd, OpOr)
-  - VDBE Fused Compare-and-Branch & Peephole Trampoline Jump Optimization
-  - VDBE Dispatcher Modularization (Sub-Domain Execution Helpers & Centralized Catch-Stack)
-  - TPC-C VDBE Peak 21,073 TPS / Overall 18,542 TPS (63.8% Native Parity)
+#### Phase 2: SQL & Analytical Depth (`v0.9.0` - `v0.10.0`) — Completed
+- Window Functions & Framing (`ROW_NUMBER`, `RANK`, `DENSE_RANK`, `LEAD`, `LAG`, `OVER`)
+- Advanced Aggregations (`GROUP BY ROLLUP`, `CUBE`, `GROUPING`)
+- Percentile & Tail Quantile Analytics (`PERCENTILE_CONT`, streaming T-Digest)
+- In-Engine Log Processing Operators (`GREP` / `REGEXP_LIKE`, `AWK` / `SPLIT_PART`)
+- Transaction Savepoints (`SAVEPOINT`, `ROLLBACK TO SAVEPOINT`, `RELEASE SAVEPOINT`)
+- View Subsystem (`CREATE VIEW`, Materialized & Aggregation Views)
+- Advanced DML (`ON CONFLICT DO NOTHING / UPDATE`)
+- SQL Prepared Statements (`PREPARE`, `EXECUTE`, `DEALLOCATE`)
+- In-Memory Ephemeral Engine Mode (`--ephemeral`, Zero-Disk RAM execution)
 
-[ Phase 5: Enterprise Governance, Security & Engine Decoupling (v0.16.0 - v0.19.0) ] ──► ACTIVE
-  - [x] VDBE Instruction Struct 16-Byte Compaction (4 instructions per 64B L1 Cache Line)
-  - [x] SQL Coordinator Package Separation (pkg/api -> pkg/engine)
-  - [x] Storage WAL Group Commit & Fsync Acceleration (100x commit latency reduction)
-  - [x] T-SQL & ANSI Full Syntax Coverage (APPLY, FULL/RIGHT JOIN, Derived Tables, EXISTS, INSERT SELECT)
-  - [x] PlanCache Bounded LRU Cache & Memory Defense (Golden Rule 29)
-  - [x] Granular SQL Object-Level RBAC (CREATE ROLE/USER, GRANT/REVOKE)
-  - [x] CBO Boolean Tree & OR Selectivity Modeling (C-6)
-  - [x] CBO Optimizer Hints Override (D-9)
-  - [x] Sort-Merge Join Operator (B-3)
-  - [x] Fast SQL Fingerprinting & Simple PK Query Bypass (P-5)
-  - [x] TDS NBCROW (0xD2) Row Compression
-  - [x] Binary Tuple Lazy Decoding & Covering Index Non-Key Columns (P-2)
-  - [x] Volcano Chunk-at-a-Time Vectorized Batch Streaming (P-4)
-  - [x] TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET & UNIQUEIDENTIFIER Binary Serialization
-  - [x] Multi-Language Client Certification Harness (Python psycopg3 & pymssql E2E)
-  - [Postponed] Transparent Data Encryption (TDE: Replaced by doc/STORAGE_ENCRYPTION_GUIDE.md)
-  - [x] Volcano Vectorized Batch Chunk Pooling (P-12)
-  - [x] In-Memory OCC Transaction Object & Workspace Map Pooling (P-11)
-  - [x] Semi-Structured JSON Same-Tuple DOM Cache & Zero-Allocation Key Scanner (P-7)
-  - [x] BaaS Expansion: Declarative Schema Migration CLI (lionsql migrate) & Spec-Out OAuth2 Social Login
+#### Phase 3: Replication, Official Drivers & Zero-Allocation (`v0.11.0` - `v0.12.0`) — Completed
+- 1-Writer Multi-Reader WAL Streaming Replication & Zero-Downtime Failover Promotion
+- Microsoft SQL Server Official Client Driver Compatibility (`go-mssqldb`)
+- PostgreSQL Official Client Driver Compatibility (`lib/pq`)
+- CBO Table Statistics Disk Persistence (`cbo_stats.json`)
+- Go Native In-Process Scalar Function SPI (`proc.RegisterScalarFunction`)
+- VDBE `OpRelQuery` Physical PlanNode Caching & Zero-Allocation Streaming
+- Wire Protocol Response Packet Buffer Pooling (`sync.Pool`)
+- `storage.Value` Integer Fast-Path & Hot-Path Formatting
+- `ANALYZE TABLE` Multi-Core Parallel Statistics & Histograms (`sync.WaitGroup`)
 
-[ Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS) ] ──► PLANNED
-  - [x] Always On Style Automatic Failover & Leader Election
-  - [x] Tolerant Virtual No-Op USE Statement & Session Database Synchronization
-  - [x] Decoupled Real-time CDC Event Streaming (GET /api/cdc/stream & DuckDB HTAP)
-  - [x] Transactional Outbox Broker Dispatcher (Kafka / RabbitMQ / Webhook)
-  - [Postponed] Pure Go Persistent Storage Engine Backend (Pebble / bbolt, CGO_ENABLED=0)
-  - [x] Dynamic Programming (DP / Selinger) Large Join Order Optimization (N > 4) (B-4)
-  - [x] Extended Multi-Column Statistics (C-5), MCV & Optimizer Hints
-  - [x] T-SQL Specialized TDS Serialization (UNIQUEIDENTIFIER, DATETIME2, PLP LOB)
-  - [x] Multi-Language Client Certification (Python psycopg3/pymssql, Go pgx/mssql, GUI)
-  - [x] Storage to Wire Zero-Copy Direct Serialization (P-3)
-  - [x] TDS Single-Frame Buffer Pooling & 50% Syscall Reduction
-  - [Postponed] DML storage.Record (Map) Elimination & storage.Row (Slice) Fast-Path (P-13)
-  - [x] Prepared Statement Zero-Alloc Binary Bind & Direct Value Decoding (P-14)
-  - [Postponed] WiredTiger Multi-Row & Secondary Index Batch CGo Insertion (P-15)
-  - [Postponed] In-Memory OCC Row-Level Atomic CAS Commit Validation (P-16)
-  - [Postponed] VDBE Fused Column Arithmetic Super-Instruction (OpIncrColInt) (P-17)
-  - [x] Virtual Catalog Query Interceptor Zero-Alloc Fast Filter & Whitespace-Resilient Matcher
-  - [x] Enterprise ODBC / JDBC Driver Certification & Conformance Testing (pgjdbc & psqlODBC)
-  - [x] Test Suite Boilerplate Diet & Setup Helper Unification (-291 Lines Net Reduction)
-  - [ ] Enterprise Immutable Audit Log (PCI-DSS / SOC2 SHA-256 Hash Chaining) (Active / Next Week P1)
-  - [Postponed] INSTEAD OF Trigger Interceptor
-  - [Spec-Out] Local & S3-Compatible File Storage Module & Thumbnail Resizing (GEMINI.md 8.7절)
-```
+#### Phase 4: Modern Ecosystem, GUI Tool Interop & VDBE Acceleration (`v0.13.0` - `v0.15.0`) — Completed
+- PostgreSQL Modern Driver Compatibility: `pgx/v5` & Extended Query Batch Pipelining (`Flush`)
+- TDS Protocol Async Attention Query Cancellation (`0x06`) & Real-Time Query Tracing (`-dev`)
+- Beekeeper Studio, DbGate & DBeaver Multi-Tool Catalog Interoperability
+- ANSI / MSSQL Pagination (`OFFSET ... FETCH NEXT ... ROWS ONLY`, `SELECT TOP N`)
+- IETF RFC 9562 Standard UUIDv7 (`NEWID7`, `UUIDV7`, `GEN_RANDOM_UUID(7)`)
+- VDBE Local Variable Slot Indexing ($O(1)$ Array Direct Access)
+- VDBE Integer Opcode Specialization & Dedicated Logical Operators (`OpAddInt` ~ `OpGteInt`, `OpAnd`, `OpOr`)
+- VDBE Fused Compare-and-Branch & Peephole Trampoline Jump Optimization
+- VDBE Dispatcher Modularization (Sub-Domain Execution Helpers & Centralized Catch-Stack)
+- TPC-C VDBE Peak 21,073 TPS / Overall 18,542 TPS (63.8% Native Parity)
+
+#### Phase 5: Enterprise Governance, Security & Engine Decoupling (`v0.16.0` - `v0.19.0`) — Active
+- [x] VDBE Instruction Struct 16-Byte Compaction (4 instructions per 64B L1 Cache Line)
+- [x] SQL Coordinator Package Separation (`pkg/api` ➔ `pkg/engine`)
+- [x] Storage WAL Group Commit & Fsync Acceleration ($100\times$ commit latency reduction)
+- [x] T-SQL & ANSI Full Syntax Coverage (`APPLY`, `FULL/RIGHT JOIN`, Derived Tables, `EXISTS`, `INSERT SELECT`)
+- [x] PlanCache Bounded LRU Cache & Memory Defense (Golden Rule 29)
+- [x] Granular SQL Object-Level RBAC (`CREATE ROLE/USER`, `GRANT/REVOKE`)
+- [x] CBO Boolean Tree & OR Selectivity Modeling (`C-6`)
+- [x] CBO Optimizer Hints Override (`D-9`)
+- [x] Sort-Merge Join Operator (`B-3`)
+- [x] Fast SQL Fingerprinting & Simple PK Query Bypass (`P-5`)
+- [x] TDS NBCROW (`0xD2`) Row Compression
+- [x] Binary Tuple Lazy Decoding & Covering Index Non-Key Columns (`P-2`)
+- [x] Volcano Chunk-at-a-Time Vectorized Batch Streaming (`P-4`)
+- [x] TDS 7.3 `DATE`, `TIME`, `DATETIME2`, `DATETIMEOFFSET` & `UNIQUEIDENTIFIER` Binary Serialization
+- [x] Multi-Language Client Certification Harness (Python `psycopg3` & `pymssql` E2E)
+- [Postponed] Transparent Data Encryption (TDE: Replaced by [`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md))
+- [x] Volcano Vectorized Batch Chunk Pooling (`P-12`)
+- [x] In-Memory OCC Transaction Object & Workspace Map Pooling (`P-11`)
+- [x] Semi-Structured JSON Same-Tuple DOM Cache & Zero-Allocation Key Scanner (`P-7`)
+- [x] BaaS Expansion: Declarative Schema Migration CLI (`lionsql migrate`) & Spec-Out OAuth2 Social Login
+
+#### Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (`v1.0.0 LTS`) — Planned / In Progress
+- [x] Always On Style Automatic Failover & Leader Election
+- [x] Tolerant Virtual No-Op `USE` Statement & Session Database Synchronization
+- [x] Decoupled Real-time CDC Event Streaming (`GET /api/cdc/stream` & DuckDB HTAP)
+- [x] Transactional Outbox Broker Dispatcher (Kafka / RabbitMQ / Webhook)
+- [Postponed] Pure-Go Persistent Storage Engine Backend (Pebble / bbolt, `CGO_ENABLED=0`)
+- [x] Dynamic Programming (DP / Selinger) Large Join Order Optimization ($N > 4$) (`B-4`)
+- [x] Extended Multi-Column Statistics (`C-5`), MCV (`C-7`) & Optimizer Hints
+- [x] T-SQL Specialized TDS Serialization (`UNIQUEIDENTIFIER`, `DATETIME2`, PLP LOB)
+- [x] Multi-Language Client Certification (Python `psycopg3`/`pymssql`, Go `pgx`/`mssql`, GUI)
+- [x] Storage to Wire Zero-Copy Direct Serialization (`P-3`)
+- [x] TDS Single-Frame Buffer Pooling & 50% Syscall Reduction
+- [Postponed] DML `storage.Record` (Map) Elimination & `storage.Row` (Slice) Fast-Path (`P-13`)
+- [x] Prepared Statement Zero-Alloc Binary Bind & Direct Value Decoding (`P-14`)
+- [Postponed] WiredTiger Multi-Row & Secondary Index Batch CGo Insertion (`P-15`)
+- [Postponed] In-Memory OCC Row-Level Atomic CAS Commit Validation (`P-16`)
+- [Postponed] VDBE Fused Column Arithmetic Super-Instruction (`OpIncrColInt`) (`P-17`)
+- [x] Virtual Catalog Query Interceptor Zero-Alloc Fast Filter & Whitespace-Resilient Matcher
+- [x] Enterprise ODBC / JDBC Driver Certification & Conformance Testing (`pgjdbc` & `psqlODBC`)
+- [x] Test Suite Boilerplate Diet & Setup Helper Unification (-291 Lines Net Reduction)
+- [ ] Enterprise Immutable Audit Log (PCI-DSS / SOC2 SHA-256 Hash Chaining) (Active / Next Week P1)
+- [Postponed] `INSTEAD OF` Trigger Interceptor
+- [Spec-Out] Local & S3-Compatible File Storage Module & Thumbnail Resizing (GEMINI Section 8.7)
 
 ---
 
-## 2. Verified Implementation Status (Current Verification)
+## 2. Verified Implementation Status
 
 ### 2.1. Core Execution Engine
-- [x] **VDBE Instruction Struct 16-Byte Compaction (`pkg/proc/bytecode.go`)**: Dense 16-byte fixed layout (`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`, zero padding) externalizing metadata to `Program.AuxData []any`, loading exactly 4 instructions per 64-byte L1 Cache Line (`unsafe.Sizeof == 16`).
-- [x] **VDBE Bytecode Virtual Machine (`pkg/proc/runtime`)**: SQLite-style 3-address register virtual machine with `sync.Pool` register recycling, executing stored procedures, functions, triggers, cursors, and interactive queries.
-- [x] **VDBE Local Variable Slot Indexing (`pkg/proc`, `pkg/proc/runtime`)**: Compile-time variable slot allocation (`Program.VarSlots`) and runtime $O(1)$ direct slice indexing (`VMFrame.slots[inst.B]`), eliminating string hashing and map lookups.
-- [x] **VDBE Integer Opcode Specialization & Logical Operators (`pkg/proc`, `pkg/proc/runtime`)**: Specialized integer arithmetic/comparison opcodes (`OpAddInt` ~ `OpGteInt`) with direct ALU execution, plus first-class `OpAnd` and `OpOr` opcodes eliminating dynamic interface comparisons.
-- [x] **VDBE Fused Compare-and-Branch & Peephole Jump Optimization (`pkg/proc`, `pkg/proc/runtime`)**: Fused compare-and-branch instructions (`OpJumpIfEqInt`, etc.), trampoline jump threading, and adjacent fall-through jump elimination, cutting condition instructions by 50%.
-- [x] **VDBE Dispatcher Modularization (`pkg/proc/runtime/vm_dispatcher.go`)**: Decomposed the monolithic 800+ line switch into domain helpers (`execFlowOp`, `execComputeOp`, `execTxOp`, `execStorageOp`, `execCursorAndCallOp`, `execRelOp`) and centralized catch-stack unwinding (`handleCatch`).
-- [x] **PlanCache Bounded LRU Cache & Memory Defense (Golden Rule 29) (`pkg/proc/runtime`)**: `container/list` based bounded LRU cache (`DefaultPlanCacheCapacity = 1024`), automatic eviction upon capacity saturation, and long-lived connection memory defense.
+- [x] **VDBE Instruction Struct 16-Byte Compaction (`pkg/proc/bytecode.go`)**:
+  Dense 16-byte fixed layout (`Op uint8, Flags uint8, Aux uint16, A int32, B int32, C int32`, zero padding) externalizing metadata to `Program.AuxData []any`, loading exactly 4 instructions per 64-byte L1 Cache Line (`unsafe.Sizeof == 16`).
+- [x] **VDBE Bytecode Virtual Machine (`pkg/proc/runtime`)**:
+  SQLite-style 3-address register virtual machine with `sync.Pool` register recycling, executing stored procedures, functions, triggers, cursors, and interactive queries.
+- [x] **VDBE Local Variable Slot Indexing (`pkg/proc`, `pkg/proc/runtime`)**:
+  Compile-time variable slot allocation (`Program.VarSlots`) and runtime $O(1)$ direct slice indexing (`VMFrame.slots[inst.B]`), eliminating string hashing and map lookups.
+- [x] **VDBE Integer Opcode Specialization & Logical Operators (`pkg/proc`, `pkg/proc/runtime`)**:
+  Specialized integer arithmetic/comparison opcodes (`OpAddInt` ~ `OpGteInt`) with direct ALU execution, plus first-class `OpAnd` and `OpOr` opcodes eliminating dynamic interface comparisons.
+- [x] **VDBE Fused Compare-and-Branch & Peephole Jump Optimization (`pkg/proc`, `pkg/proc/runtime`)**:
+  Fused compare-and-branch instructions (`OpJumpIfEqInt`, etc.), trampoline jump threading, and adjacent fall-through jump elimination, cutting condition instructions by 50%.
+- [x] **VDBE Dispatcher Modularization (`pkg/proc/runtime/vm_dispatcher.go`)**:
+  Decomposed the monolithic 800+ line switch into domain helpers (`execFlowOp`, `execComputeOp`, `execTxOp`, `execStorageOp`, `execCursorAndCallOp`, `execRelOp`) and centralized catch-stack unwinding (`handleCatch`).
+- [x] **PlanCache Bounded LRU Cache & Memory Defense (Golden Rule 29) (`pkg/proc/runtime`)**:
+  `container/list` based bounded LRU cache (`DefaultPlanCacheCapacity = 1024`), automatic eviction upon capacity saturation, and long-lived connection memory defense.
 - [x] **T-SQL & ANSI SQL Core Syntaxes & Execution Engine (`S-1` ~ `S-7`)**:
   - `OFFSET ... FETCH NEXT ... ROWS ONLY` and `SELECT TOP (n)` standard pagination.
   - FROM-clause derived tables (`FROM (SELECT ...) AS t`) and inline subqueries with isolated materialization (`__dt_*`).
@@ -119,111 +137,157 @@ LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLT
   - `CAST`, `TRY_CAST`, `CONVERT`, `TRY_CONVERT`, PostgreSQL `::` regular AST parsing and VDBE `OpCast` integration.
   - `CASE WHEN` and `COALESCE`/`ISNULL` short-circuit evaluation.
   - `WHERE [NOT] EXISTS` correlated subquery Semi/Anti-Join CBO transformation and uncorrelated early evaluation.
-- [x] **In-Process Go Native Scalar UDF Registration SPI (`pkg/proc`, `pkg/api`)**: Thread-safe `proc.RegisterScalarFunction(name, fn)` SPI delivering zero-overhead, sub-microsecond in-process execution with built-in `--doctor` diagnostic probe.
-- [x] **Volcano Vectorized Chunk-at-a-Time Batch Streaming (`P-4`) (`pkg/execution`, `pkg/engine`)**: 1,024-tuple vectorized chunk streaming (`ChunkedIterator`, `NextChunk`) reducing virtual dispatch and context cancellation checks by 99% across SeqScan, IndexScan, Filter, Project, Limit, Aggregate, Sort, HashJoin, IndexNestedLoopJoin, and SQL select coordinator, with transparent 100% backward compatibility.
-- [x] **0-Allocation Row Streaming (`Tuple.ToRow()`) (`pkg/execution`)**: Direct low-level `storage.Value` slice conversion bypassing intermediate `map[string]any` heap allocation per row, cutting GC pressure by 70%.
-- [x] **Volcano Iterator Relational Execution Pipeline (`pkg/execution`)**: Full streaming iterator engine (`SeqScan`, `IndexScan`, `IndexOnlyScan`, `Filter`, `Project`, `Sort`, `Limit`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `CTE`).
-- [x] **Window Functions & Frame Analytic Engine (`pkg/execution/window.go`)**: Support for `OVER (PARTITION BY ... ORDER BY ... [ROWS BETWEEN])`, `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`, and aggregate window functions.
-- [x] **T-Digest Exact & Streaming Quantile Engine (`pkg/execution/tdigest.go`)**: High-accuracy tail percentile estimation with bounded memory (`PERCENTILE_CONT`, `PERCENTILE_DISC`).
-- [x] **Cooperative Query Cancellation (`pkg/proc/runtime`, `pkg/api`, `pkg/wire`)**: Non-destructive `context.Context` abort pipeline, T-SQL `KILL <spid>`, PostgreSQL `pg_cancel_backend()`, and wire `CancelRequest`.
+- [x] **In-Process Go Native Scalar UDF Registration SPI (`pkg/proc`, `pkg/api`)**:
+  Thread-safe `proc.RegisterScalarFunction(name, fn)` SPI delivering zero-overhead, sub-microsecond in-process execution with built-in `--doctor` diagnostic probe.
+- [x] **Volcano Vectorized Chunk-at-a-Time Batch Streaming (`P-4`) (`pkg/execution`, `pkg/engine`)**:
+  1,024-tuple vectorized chunk streaming (`ChunkedIterator`, `NextChunk`) reducing virtual dispatch and context cancellation checks by 99% across SeqScan, IndexScan, Filter, Project, Limit, Aggregate, Sort, HashJoin, IndexNestedLoopJoin, and SQL select coordinator, with transparent 100% backward compatibility.
+- [x] **0-Allocation Row Streaming (`Tuple.ToRow()`) (`pkg/execution`)**:
+  Direct low-level `storage.Value` slice conversion bypassing intermediate `map[string]any` heap allocation per row, cutting GC pressure by 70%.
+- [x] **Volcano Iterator Relational Execution Pipeline (`pkg/execution`)**:
+  Full streaming iterator engine (`SeqScan`, `IndexScan`, `IndexOnlyScan`, `Filter`, `Project`, `Sort`, `Limit`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `CTE`).
+- [x] **Window Functions & Frame Analytic Engine (`pkg/execution/window.go`)**:
+  Support for `OVER (PARTITION BY ... ORDER BY ... [ROWS BETWEEN])`, `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`, and aggregate window functions.
+- [x] **T-Digest Exact & Streaming Quantile Engine (`pkg/execution/tdigest.go`)**:
+  High-accuracy tail percentile estimation with bounded memory (`PERCENTILE_CONT`, `PERCENTILE_DISC`).
+- [x] **Cooperative Query Cancellation (`pkg/proc/runtime`, `pkg/api`, `pkg/wire`)**:
+  Non-destructive `context.Context` abort pipeline, T-SQL `KILL <spid>`, PostgreSQL `pg_cancel_backend()`, and wire `CancelRequest`.
 
 ### 2.2. Query Optimizer & CBO
-- [x] **Multi-Column Extended Statistics & Functional Dependency Modeling (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**: Multi-column NDV collection, functional dependency coefficient calculation ($dep \in [0.0, 1.0]$), `CREATE STATISTICS` / `DROP STATISTICS` DDL, and joint selectivity estimation ($dep \cdot \min(P_i) + (1-dep) \cdot \prod P_i$) eliminating cardinality underestimation on correlated columns.
-- [x] **Selinger Dynamic Programming Join Reordering for $N > 4$ Chains (`B-4`) (`pkg/planner/planner.go`)**: Replaced $O(N!)$ permutation enumeration with Selinger DP and subset bitmask memoization ($O(N \cdot 2^{N-1})$), pruning Cartesian products and bounding state spaces to $\le 12$ relations for sub-millisecond planning on complex multi-table joins.
-- [x] **CBO Optimizer Hints Override (`D-9`) (`pkg/planner`, `pkg/proc`)**: Table hints (`WITH (INDEX(...))`) and query hints (`OPTION (HASH/MERGE/LOOP JOIN, FORCE ORDER)`) for deterministic execution plan override.
-- [x] **Sort-Merge Join (SMJ) Operator & CBO Cost Modeling (`B-3`) (`pkg/execution`, `pkg/planner`)**: $O(M+N)$ single-pass streaming `MergeJoinIterator` for pre-sorted relations eliminating hash table overhead, with Mark & Restore buffer windowing for duplicates.
-- [x] **CBO Boolean Tree AST Selectivity Estimation & OR Compound Probabilities (`C-6`) (`pkg/planner/stats.go`)**: Recursive AST boolean tree evaluation, mutual exclusion union ($P(A)+P(B)$), independent union ($P(A)+P(B)-P(A)P(B)$), NOT ($1-P$), IN, and BETWEEN estimation.
-- [x] **Cost-Based Optimizer (CBO) & Statistics Catalog (`pkg/planner/stats.go`)**: `ANALYZE TABLE` 64-bucket equi-depth histograms, cardinality, distinct values (NDV), null fractions, and automatic cost modeling (Hash Join vs Index Nested Loop Join).
-- [x] **`ANALYZE TABLE` Multi-Core Parallel Statistics Collection (`pkg/planner/stats.go`)**: Parallelized column statistics gathering via `sync.WaitGroup` multi-core workers (`BuildTableStatsParallel`), accelerating analysis by 4~8x.
-- [x] **CBO Statistics Disk Persistence (`pkg/catalog`, `cbo_stats.json`)**: Atomic file writes (Golden Rules 1 & 5) and lossless `storage.Decimal` JSON serialization, preserving statistics and optimized plans across server restarts.
-- [x] **Predicate Pushdown (`pkg/planner/pushdown.go`)**: Complex filter conjunct pushdown to lower scan iterators before join materialization.
-- [x] **Constant Folding & Boolean Simplification (`pkg/proc/fold.go`)**: Compile-time constant arithmetic, pre-computed scalar functions, and tautology/contradiction short-circuit reduction.
-- [x] **Subquery Decorrelation (`pkg/planner/decorrelate.go`)**: Automatic rewrite of correlated `EXISTS`, `NOT EXISTS`, `IN`, and `NOT IN` predicates into relational `SEMI` / `ANTI` joins.
+- [x] **Multi-Column Extended Statistics & Functional Dependency Modeling (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**:
+  Multi-column NDV collection, functional dependency coefficient calculation ($dep \in [0.0, 1.0]$), `CREATE STATISTICS` / `DROP STATISTICS` DDL, and joint selectivity estimation ($dep \cdot \min(P_i) + (1-dep) \cdot \prod P_i$) eliminating cardinality underestimation on correlated columns.
+- [x] **Selinger Dynamic Programming Join Reordering for $N > 4$ Chains (`B-4`) (`pkg/planner/planner.go`)**:
+  Replaced $O(N!)$ permutation enumeration with Selinger DP and subset bitmask memoization ($O(N \cdot 2^{N-1})$), pruning Cartesian products and bounding state spaces to $\le 12$ relations for sub-millisecond planning on complex multi-table joins.
+- [x] **CBO Optimizer Hints Override (`D-9`) (`pkg/planner`, `pkg/proc`)**:
+  Table hints (`WITH (INDEX(...))`) and query hints (`OPTION (HASH/MERGE/LOOP JOIN, FORCE ORDER)`) for deterministic execution plan override.
+- [x] **Sort-Merge Join (SMJ) Operator & CBO Cost Modeling (`B-3`) (`pkg/execution`, `pkg/planner`)**:
+  $O(M+N)$ single-pass streaming `MergeJoinIterator` for pre-sorted relations eliminating hash table overhead, with Mark & Restore buffer windowing for duplicates.
+- [x] **CBO Boolean Tree AST Selectivity Estimation & OR Compound Probabilities (`C-6`) (`pkg/planner/stats.go`)**:
+  Recursive AST boolean tree evaluation, mutual exclusion union ($P(A)+P(B)$), independent union ($P(A)+P(B)-P(A)P(B)$), NOT ($1-P$), IN, and BETWEEN estimation.
+- [x] **Cost-Based Optimizer (CBO) & Statistics Catalog (`pkg/planner/stats.go`)**:
+  `ANALYZE TABLE` 64-bucket equi-depth histograms, cardinality, distinct values (NDV), null fractions, and automatic cost modeling (Hash Join vs Index Nested Loop Join).
+- [x] **`ANALYZE TABLE` Multi-Core Parallel Statistics Collection (`pkg/planner/stats.go`)**:
+  Parallelized column statistics gathering via `sync.WaitGroup` multi-core workers (`BuildTableStatsParallel`), accelerating analysis by 4~8x.
+- [x] **CBO Statistics Disk Persistence (`pkg/catalog`, `cbo_stats.json`)**:
+  Atomic file writes (Golden Rules 1 & 5) and lossless `storage.Decimal` JSON serialization, preserving statistics and optimized plans across server restarts.
+- [x] **Predicate Pushdown (`pkg/planner/pushdown.go`)**:
+  Complex filter conjunct pushdown to lower scan iterators before join materialization.
+- [x] **Constant Folding & Boolean Simplification (`pkg/proc/fold.go`)**:
+  Compile-time constant arithmetic, pre-computed scalar functions, and tautology/contradiction short-circuit reduction.
+- [x] **Subquery Decorrelation (`pkg/planner/decorrelate.go`)**:
+  Automatic rewrite of correlated `EXISTS`, `NOT EXISTS`, `IN`, and `NOT IN` predicates into relational `SEMI` / `ANTI` joins.
 
 ### 2.3. Storage, Transactions & Replication
-- [x] **Binary Tuple Lazy Decoding & Covering Index Non-Key Columns (`P-2`) (`pkg/storage`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**: Zero-allocation `SkipTupleColumn`, $O(1)$ offset caching `LazyTuple`, selective column decoding, and `CREATE INDEX ... INCLUDE(...)` covering non-key columns stored in secondary indexes for 100% table heap lookup bypass.
-- [x] **Fast SQL Fingerprinting & Simple PK Query Bypass (`P-5`) (`pkg/engine`, `pkg/storage`)**: 64-bit FNV-1a fingerprint hashing of point PK queries (`SELECT ... WHERE id = ?`) routing directly to storage engine (`tx.Get`), bypassing regular parser, CBO planner, and VDBE stack with bounded cache and DDL invalidation.
-- [x] **Storage Pipeline Group Commit & Fsync Acceleration**: Implemented leader/follower group commit across both `memengine` WAL (`file.Sync`) and `wiredtiger` (`WT_SESSION::log_flush("sync=on")`) along with lock-free commit fast-paths. `FsyncAlways` latency at 16/64 workers dropped 100x to 0.038ms per commit, and TPC-C VDBE reached 14,800+ TPS (422,000+ tpmC).
-- [x] **1-Writer Multi-Reader WAL Streaming Replication & HA (`pkg/replication`, `cmd/server`)**: Primary-to-replica live TCP WAL log shipping, replica read-only enforcement (`ErrReadOnlyReplica`), and zero-downtime promotion.
-- [x] **Dual Storage Engine Architecture (`pkg/storage`)**: Production disk-based WiredTiger (Cgo, lock-free B+Tree, MVCC) and pure-Go In-Memory OCC engine (MessagePack, WAL/AOF durability).
-- [x] **Covering Index Scan (Index-Only Scan) (`pkg/planner`, `pkg/execution`, `pkg/storage/memengine`)**: Zero-heap-fetch relational execution when projections are covered by index keys and PKs (`NodeIndexOnlyScan` and `SkipList.ScanRangeEntries` synthesized records).
-- [x] **IETF RFC 9562 Standard UUIDv7 (`pkg/storage`, `pkg/proc`)**: 48-bit monotonically increasing Unix Epoch timestamps for sequential B+Tree inserts, with `NEWID7()`, `UUIDV7()`, `GEN_RANDOM_UUID(7)` built-ins, and `DEFAULT NEWID7()` table PK defaults.
-- [x] **ClickHouse-Style Rolling Range Table Partitioning (`pkg/storage`, `pkg/planner`, `pkg/api`)**: Automatic rolling partitions via `PARTITION BY toYYYYMM(col)`, `MONTH(col)`, partition pruning, and $O(1)$ fast partition dropping (`DROP PARTITION`).
-- [x] **In-Memory Ephemeral Engine Mode (`cmd/server`, `pkg/storage/memengine`)**: `--ephemeral` flag disabling all disk logging for blazing-fast, RAM-only execution.
-- [x] **Transaction Savepoints (`pkg/api/savepoint_test.go`, `pkg/storage`)**: T-SQL `SAVE TRANSACTION` / ANSI `SAVEPOINT`, partial rollback `ROLLBACK TO SAVEPOINT`, and `RELEASE SAVEPOINT`.
-- [x] **Lock-Free Concurrent SkipList Index (`pkg/storage/memengine/skiplist.go`)**: Secondary index engine powered by concurrent SkipLists ($O(\log N)$, 2.8M inserts/sec).
-- [x] **Query Memory Limit Governor (`work_mem`) (`pkg/execution/spill.go`)**: Automatic fallback to external merge sort on temporary disk files when memory thresholds are exceeded.
-- [x] **Online Non-Blocking Hot Snapshot Backup (`pkg/backup`)**: Consistent point-in-time `.tar.gz` archive generation under read-only snapshot isolation (`POST /api/backup`) without write lock pauses.
+- [x] **Binary Tuple Lazy Decoding & Covering Index Non-Key Columns (`P-2`) (`pkg/storage`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**:
+  Zero-allocation `SkipTupleColumn`, $O(1)$ offset caching `LazyTuple`, selective column decoding, and `CREATE INDEX ... INCLUDE(...)` covering non-key columns stored in secondary indexes for 100% table heap lookup bypass.
+- [x] **Fast SQL Fingerprinting & Simple PK Query Bypass (`P-5`) (`pkg/engine`, `pkg/storage`)**:
+  64-bit FNV-1a fingerprint hashing of point PK queries (`SELECT ... WHERE id = ?`) routing directly to storage engine (`tx.Get`), bypassing regular parser, CBO planner, and VDBE stack with bounded cache and DDL invalidation.
+- [x] **Storage Pipeline Group Commit & Fsync Acceleration**:
+  Implemented leader/follower group commit across both `memengine` WAL (`file.Sync`) and `wiredtiger` (`WT_SESSION::log_flush("sync=on")`) along with lock-free commit fast-paths. `FsyncAlways` latency at 16/64 workers dropped 100x to 0.038ms per commit, and TPC-C VDBE reached 14,800+ TPS (422,000+ tpmC).
+- [x] **1-Writer Multi-Reader WAL Streaming Replication & HA (`pkg/replication`, `cmd/server`)**:
+  Primary-to-replica live TCP WAL log shipping, replica read-only enforcement (`ErrReadOnlyReplica`), and zero-downtime promotion.
+- [x] **Dual Storage Engine Architecture (`pkg/storage`)**:
+  Production disk-based WiredTiger (Cgo, lock-free B+Tree, MVCC) and pure-Go In-Memory OCC engine (MessagePack, WAL/AOF durability).
+- [x] **Covering Index Scan (Index-Only Scan) (`pkg/planner`, `pkg/execution`, `pkg/storage/memengine`)**:
+  Zero-heap-fetch relational execution when projections are covered by index keys and PKs (`NodeIndexOnlyScan` and `SkipList.ScanRangeEntries` synthesized records).
+- [x] **IETF RFC 9562 Standard UUIDv7 (`pkg/storage`, `pkg/proc`)**:
+  48-bit monotonically increasing Unix Epoch timestamps for sequential B+Tree inserts, with `NEWID7()`, `UUIDV7()`, `GEN_RANDOM_UUID(7)` built-ins, and `DEFAULT NEWID7()` table PK defaults.
+- [x] **ClickHouse-Style Rolling Range Table Partitioning (`pkg/storage`, `pkg/planner`, `pkg/api`)**:
+  Automatic rolling partitions via `PARTITION BY toYYYYMM(col)`, `MONTH(col)`, partition pruning, and $O(1)$ fast partition dropping (`DROP PARTITION`).
+- [x] **In-Memory Ephemeral Engine Mode (`cmd/server`, `pkg/storage/memengine`)**:
+  `--ephemeral` flag disabling all disk logging for blazing-fast, RAM-only execution.
+- [x] **Transaction Savepoints (`pkg/api/savepoint_test.go`, `pkg/storage`)**:
+  T-SQL `SAVE TRANSACTION` / ANSI `SAVEPOINT`, partial rollback `ROLLBACK TO SAVEPOINT`, and `RELEASE SAVEPOINT`.
+- [x] **Lock-Free Concurrent SkipList Index (`pkg/storage/memengine/skiplist.go`)**:
+  Secondary index engine powered by concurrent SkipLists ($O(\log N)$, 2.8M inserts/sec).
+- [x] **Query Memory Limit Governor (`work_mem`) (`pkg/execution/spill.go`)**:
+  Automatic fallback to external merge sort on temporary disk files when memory thresholds are exceeded.
+- [x] **Online Non-Blocking Hot Snapshot Backup (`pkg/backup`)**:
+  Consistent point-in-time `.tar.gz` archive generation under read-only snapshot isolation (`POST /api/backup`) without write lock pauses.
 
 ### 2.4. Architecture & Security
-- [x] **Architecture Layering: SQL Execution Coordinator Separation (`pkg/api` -> `pkg/engine`)**: Promoted over 14,000 lines of SQL execution orchestration (`sqlexec_*.go`) into a dedicated `pkg/engine` core layer. Wire listeners (`pkg/wire`, `pkg/wire/tds`) invoke `engine.SQLCoordinator` directly with zero dependencies on `pkg/api`, breaking layer inversion completely.
-- [x] **Granular SQL Object-Level RBAC (`pkg/auth`, `pkg/catalog`, `pkg/api`)**: Complete role/user DDL (`CREATE LOGIN/USER`, `SETUSER`), granular privileges (`GRANT/REVOKE/DENY` for `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `EXECUTE`, `CONTROL`, `REFERENCES`), and pre-execution catalog interceptors (`checkTableAccess`).
+- [x] **Architecture Layering: SQL Execution Coordinator Separation (`pkg/api` ➔ `pkg/engine`)**:
+  Promoted over 14,000 lines of SQL execution orchestration (`sqlexec_*.go`) into a dedicated `pkg/engine` core layer. Wire listeners (`pkg/wire`, `pkg/wire/tds`) invoke `engine.SQLCoordinator` directly with zero dependencies on `pkg/api`, breaking layer inversion completely.
+- [x] **Granular SQL Object-Level RBAC (`pkg/auth`, `pkg/catalog`, `pkg/api`)**:
+  Complete role/user DDL (`CREATE LOGIN/USER`, `SETUSER`), granular privileges (`GRANT/REVOKE/DENY` for `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `EXECUTE`, `CONTROL`, `REFERENCES`), and pre-execution catalog interceptors (`checkTableAccess`).
 
 ### 2.5. Wire Protocols & Tool Interoperability
-- [x] **PostgreSQL Server-Side Cursors & Extended Query Portal Batching (`pkg/engine`, `pkg/wire`)**: Full SQL-level cursor lifecycle (`DECLARE ... CURSOR [{WITH|WITHOUT} HOLD]`, `FETCH`, `MOVE`, `CLOSE`), directional positioning (`NEXT`, `PRIOR`, `FIRST`, `LAST`, `ALL`, `FORWARD`, `BACKWARD`, `ABSOLUTE`, `RELATIVE`, count), transaction hold/rollback compliance, and Extended Query `Execute` with `maxRows` streaming and `PortalSuspended ('s')` token emission.
-- [x] **Storage ➔ Wire Zero-Copy Direct Serialization (`P-3`) (`pkg/wire`, `pkg/wire/tds`)**: Implemented `WriteNBCRowDirect` in TDS wire protocol emitting `TokenNBCRow` (0xD2) and null bitmaps directly into wire buffers, eliminated per-row `[]any` and `[][]byte` boxing, and pre-allocated single scratch slices across TDS and PGWire streaming hot paths.
-- [x] **TDS PLP (Partially Length-Prefixed) LOB Chunk Streaming (`pkg/wire/tds`)**: Implemented [MS-TDS] 2.2.5.2 PLP streaming encoding for `VARCHAR(MAX)`, `NVARCHAR(MAX)`, and `VARBINARY(MAX)` (> 8,000 bytes) with 8-byte total length headers, up to 8,000-byte chunk splits with 4-byte LE length headers, 4-byte zero terminal chunk, and 8-byte `0xFFFFFFFFFFFFFFFF` NULL values.
-- [x] **TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET, and UNIQUEIDENTIFIER Binary Serialization (`pkg/wire/tds`)**: Complete SQL Server 2008 / TDS 7.3 wire binary serialization for `DATE` (`0x28`, 3-byte LE days since 0001-01-01), `TIME` (`0x29`, 100ns ticks with scale 0..7), `DATETIME2` (`0x2A`, ticks + date), `DATETIMEOFFSET` (`0x2B`, UTC datetime2 + 2-byte minute offset), and `UNIQUEIDENTIFIER` (`0x24`, Windows Mixed-Endian GUID byte swap). Result set column type inference auto-detects date/time/guid types and official `go-mssqldb` passes 100%.
-- [x] **External Multi-Language Client Driver Certification Harness (`pkg/wire`, `pkg/wire/tds`)**: Automated hermetic end-to-end integration test suites for Python `psycopg3` (PostgreSQL Wire Protocol :5433) and `pymssql` (TDS Protocol :1433 / FreeTDS dblib), verifying DDL, CRUD, binary date/time/UUID parsing, NULL handling, and explicit transaction (`COMMIT`/`ROLLBACK`) atomicity via isolated `uv run` sandboxing.
-- [x] **TDS Wire Protocol NBCROW Row Compression (`0xD2`) (`pkg/wire/tds`)**: TDS 7.3+ standard `BuildNBCRow` encoding with null bitmap headers and 0-byte payload for NULL columns, reducing network bandwidth by 30%+ on sparse queries.
-- [x] **PostgreSQL Modern Driver Compatibility: `pgx/v5` (`pkg/wire`)**: Full pass across `github.com/jackc/pgx/v5` test suite, binary parameter/result format decoding, and Extended Query `Flush` batch pipelining.
-- [x] **Official Microsoft MSSQL Driver E2E Compatibility (`pkg/wire/tds`)**: 100% pass across `github.com/microsoft/go-mssqldb`, `PacketTransactionManager` (0x0E), Collation/Transaction `ENVCHANGE` tokens, and `DoneInXact` transaction state machine.
-- [x] **Official PostgreSQL lib/pq Driver Compatibility (`pkg/wire`)**: 100% pass across `github.com/lib/pq`, dynamic parameter count inference, projection schema matching, and binary result formats.
-- [x] **TDS Asynchronous Attention Query Cancellation (`pkg/wire/tds`)**: Instant response to client `SqlCommand.Cancel()` via `Type 0x06` attention packet decoupling, VDBE loop cancellation (`context.CancelFunc`), and `DoneAttn (0x0020)` acknowledgments.
-- [x] **Developer Real-Time Wire Query Tracing (`-dev` flag) (`pkg/wire`, `pkg/wire/tds`)**: Real-time console logging of incoming queries, bound parameters, execution duration, and error traces across PGWire and TDS.
-- [x] **GUI Client Tool Interoperability (DbGate, Beekeeper Studio, DBeaver) (`pkg/wire/tds`, `pkg/api`)**: Virtual system catalog joins, `@@VERSION` / `SERVERPROPERTY` edition detection interceptors, and deterministic object ID assignment.
-- [x] **Embedded Web Management Studio (`pkg/ui`)**: Standalone web UI on `:8090/_/`, interactive query console, spreadsheet CRUD, and visual VDBE disassembler (`EXPLAIN BYTECODE`).
+- [x] **PostgreSQL Server-Side Cursors & Extended Query Portal Batching (`pkg/engine`, `pkg/wire`)**:
+  Full SQL-level cursor lifecycle (`DECLARE ... CURSOR [{WITH|WITHOUT} HOLD]`, `FETCH`, `MOVE`, `CLOSE`), directional positioning (`NEXT`, `PRIOR`, `FIRST`, `LAST`, `ALL`, `FORWARD`, `BACKWARD`, `ABSOLUTE`, `RELATIVE`, count), transaction hold/rollback compliance, and Extended Query `Execute` with `maxRows` streaming and `PortalSuspended ('s')` token emission.
+- [x] **Storage ➔ Wire Zero-Copy Direct Serialization (`P-3`) (`pkg/wire`, `pkg/wire/tds`)**:
+  Implemented `WriteNBCRowDirect` in TDS wire protocol emitting `TokenNBCRow` (0xD2) and null bitmaps directly into wire buffers, eliminated per-row `[]any` and `[][]byte` boxing, and pre-allocated single scratch slices across TDS and PGWire streaming hot paths.
+- [x] **TDS PLP (Partially Length-Prefixed) LOB Chunk Streaming (`pkg/wire/tds`)**:
+  Implemented [MS-TDS] 2.2.5.2 PLP streaming encoding for `VARCHAR(MAX)`, `NVARCHAR(MAX)`, and `VARBINARY(MAX)` (> 8,000 bytes) with 8-byte total length headers, up to 8,000-byte chunk splits with 4-byte LE length headers, 4-byte zero terminal chunk, and 8-byte `0xFFFFFFFFFFFFFFFF` NULL values.
+- [x] **TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET, and UNIQUEIDENTIFIER Binary Serialization (`pkg/wire/tds`)**:
+  Complete SQL Server 2008 / TDS 7.3 wire binary serialization for `DATE` (`0x28`, 3-byte LE days since 0001-01-01), `TIME` (`0x29`, 100ns ticks with scale 0..7), `DATETIME2` (`0x2A`, ticks + date), `DATETIMEOFFSET` (`0x2B`, UTC datetime2 + 2-byte minute offset), and `UNIQUEIDENTIFIER` (`0x24`, Windows Mixed-Endian GUID byte swap). Result set column type inference auto-detects date/time/guid types and official `go-mssqldb` passes 100%.
+- [x] **External Multi-Language Client Driver Certification Harness (`pkg/wire`, `pkg/wire/tds`)**:
+  Automated hermetic end-to-end integration test suites for Python `psycopg3` (PostgreSQL Wire Protocol :5433) and `pymssql` (TDS Protocol :1433 / FreeTDS dblib), verifying DDL, CRUD, binary date/time/UUID parsing, NULL handling, and explicit transaction (`COMMIT`/`ROLLBACK`) atomicity via isolated `uv run` sandboxing.
+- [x] **TDS Wire Protocol NBCROW Row Compression (`0xD2`) (`pkg/wire/tds`)**:
+  TDS 7.3+ standard `BuildNBCRow` encoding with null bitmap headers and 0-byte payload for NULL columns, reducing network bandwidth by 30%+ on sparse queries.
+- [x] **PostgreSQL Modern Driver Compatibility: `pgx/v5` (`pkg/wire`)**:
+  Full pass across `github.com/jackc/pgx/v5` test suite, binary parameter/result format decoding, and Extended Query `Flush` batch pipelining.
+- [x] **Official Microsoft MSSQL Driver E2E Compatibility (`pkg/wire/tds`)**:
+  100% pass across `github.com/microsoft/go-mssqldb`, `PacketTransactionManager` (0x0E), Collation/Transaction `ENVCHANGE` tokens, and `DoneInXact` transaction state machine.
+- [x] **Official PostgreSQL lib/pq Driver Compatibility (`pkg/wire`)**:
+  100% pass across `github.com/lib/pq`, dynamic parameter count inference, projection schema matching, and binary result formats.
+- [x] **TDS Asynchronous Attention Query Cancellation (`pkg/wire/tds`)**:
+  Instant response to client `SqlCommand.Cancel()` via `Type 0x06` attention packet decoupling, VDBE loop cancellation (`context.CancelFunc`), and `DoneAttn (0x0020)` acknowledgments.
+- [x] **Developer Real-Time Wire Query Tracing (`-dev` flag) (`pkg/wire`, `pkg/wire/tds`)**:
+  Real-time console logging of incoming queries, bound parameters, execution duration, and error traces across PGWire and TDS.
+- [x] **GUI Client Tool Interoperability (DbGate, Beekeeper Studio, DBeaver) (`pkg/wire/tds`, `pkg/api`)**:
+  Virtual system catalog joins, `@@VERSION` / `SERVERPROPERTY` edition detection interceptors, and deterministic object ID assignment.
+- [x] **Embedded Web Management Studio (`pkg/ui`)**:
+  Standalone web UI on `:8090/_/`, interactive query console, spreadsheet CRUD, and visual VDBE disassembler (`EXPLAIN BYTECODE`).
 
 ---
 
-## 3. Future Technical Milestones
+## 3. Technical Milestones & Implementation Details
 
-### Phase 5: Enterprise Governance, Security & Engine Decoupling (v0.16.0 - v0.19.0 Target)
+### Phase 5 Tracks: Enterprise Governance, Security & Engine Decoupling
 
-#### 5.1. CBO Optimizer Hints Override (`D-9`) & Sort-Merge Join Operator (`B-3`) (Completed)
+#### 5.1. CBO Optimizer Hints Override (`D-9`) & Sort-Merge Join Operator (`B-3`) — Completed
 - **Challenge**:
   - Parse `OPTION (HASH JOIN, LOOP JOIN, FORCE ORDER)` and `WITH (INDEX(<name>))` hints to override CBO plan selection (Completed `D-9`).
   - Implement an $O(M+N)$ single-pass `MergeJoinIterator` for pre-sorted relations and add sort-merge join cost models (Completed `B-3`).
 - **Outcome**: Elimination of hash table overhead on sorted inputs and full DBA execution plan control.
 
-#### 5.2. Fast SQL Fingerprinting & Simple PK Query Bypass (`P-5`) (Completed)
+#### 5.2. Fast SQL Fingerprinting & Simple PK Query Bypass (`P-5`) — Completed
 - **Challenge**: Bypass regular parsing, binding, CBO planning, and VDBE compilation for point PK lookups (`SELECT * FROM tbl WHERE id = ?`) by using Wyhash/FNV text fingerprinting and dispatching directly to `Engine.Get`.
 - **Outcome**: 50%+ boost in point query TPS and 90% reduction in GC overhead.
 
-#### 5.3. TDS Wire Protocol NBCROW Row Compression (`0xD2`) (Completed)
+#### 5.3. TDS Wire Protocol NBCROW Row Compression (`0xD2`) — Completed
 - **Challenge**: Implement TDS 7.3+ standard `NBCROW` (Null Bitmap Compressed Row, `0xD2`) encoding, sending NULL column values with 0 payload bytes.
 - **Outcome**: 30%+ reduction in network bandwidth consumption for enterprise queries returning sparse tables.
 
-#### 5.4. Binary Tuple Lazy Decoding & Covering Index Non-Key Columns (`P-2`) (Completed)
+#### 5.4. Binary Tuple Lazy Decoding & Covering Index Non-Key Columns (`P-2`) — Completed
 - **Challenge**: Implement zero-allocation `SkipTupleColumn`, selective decoding `DecodeTupleSelected`, $O(1)$ offset caching `LazyTuple`, and `CREATE INDEX ... INCLUDE(...)` covering non-key column storage.
 - **Outcome**: Zero heap allocation for unprojected columns during table scans and 100% table heap lookup elimination via Index-Only Scans.
 
-#### 5.5. Volcano Vectorized Chunk-at-a-Time Batch Streaming (`P-4`) (Completed)
+#### 5.5. Volcano Vectorized Chunk-at-a-Time Batch Streaming (`P-4`) — Completed
 - **Challenge**: Implement 1,024-tuple batch streaming (`ChunkedIterator`, `NextChunk`) across relational operators to reduce virtual dispatch and context cancellation overhead.
 - **Outcome**: 99% reduction in per-tuple function call overhead, tight vectorized filter/projection loops, and 100% backward compatibility for single-tuple consumers.
 
-#### 5.6. Transparent Data Encryption (TDE) & Enterprise Immutable Audit Log (`pkg/storage`, `pkg/logger`)
+#### 5.6. Enterprise Storage Encryption & Immutable Audit Log (`pkg/storage`, `pkg/audit`) — Active
 - **Challenge**:
-  - Encrypt WiredTiger data files, WAL/AOF journals, and backup archives at rest using AES-256-GCM (Data at Rest Encryption).
-  - Implement tamper-evident immutable audit logging for authentication events, privilege changes (`GRANT/REVOKE`), and schema alterations.
+  - Encrypt WiredTiger data files, WAL/AOF journals, and backup archives at rest using AES-256-GCM. (Standardized via platform LUKS2/EBS: [`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)).
+  - Implement tamper-evident cryptographic immutable audit logging for authentication events, privilege changes (`GRANT/REVOKE`), and schema alterations ([`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md)).
 - **Expected Outcome**: Complete defense against direct physical disk extraction and full enterprise audit traceability.
 
-#### 5.7. `INSTEAD OF` Trigger Runtime Interceptor (`pkg/proc/runtime`, `pkg/api`)
+#### 5.7. `INSTEAD OF` Trigger Runtime Interceptor (`pkg/proc/runtime`, `pkg/api`) — Postponed
 - **Challenge**: Intercept `INSERT`, `UPDATE`, and `DELETE` operations on views and complex tables, substituting them with user-defined procedural routines.
-- **Expected Outcome**: Virtual entity update capability on complex views and encapsulated business integrity enforcement.
+- **Status**: Postponed to post-1.0 to protect DML hot-path performance and avoid recursive execution complexity.
 
-#### 5.8. BaaS Developer Productivity: Migration CLI (`cmd/lionsql`, `pkg/migrate`, `cmd/server`, `pkg/api`, `pkg/config`)
+#### 5.8. BaaS Developer Productivity: Migration CLI (`cmd/lionsql`, `pkg/migrate`, `cmd/server`) — Completed
 - **Implemented**:
   - Declarative schema migration engine and `lionsql` unified CLI tool: `lionsql migrate new <name>`, `lionsql migrate up / down / status`, ad-hoc headless `lionsql sql "<query>"`, and atomic `_migrations` version history tracking.
   - Dual binary parity: identical migration syntax and flag handling across `lionsql migrate` and `server migrate`.
-  - In-Kernel OAuth2 social login was evaluated and excluded (**Spec-Out**, GEMINI.md Section 8.6) to preserve database kernel purity, remove outbound internet token exchanges, and adhere to KISS / Golden Rule 15.
+  - In-Kernel OAuth2 social login was evaluated and excluded (**Spec-Out**, GEMINI Section 8.6) to preserve database kernel purity, remove outbound internet token exchanges, and adhere to KISS / Golden Rule 15.
 - **Strategic Value**: PocketBase-class developer productivity, turnkey deployment workflows, and seamless administrative CLI automation.
 
 ---
 
-### Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS Target)
+### Phase 6 Tracks: High Availability Always On, Decoupled HTAP & Production Hardening
 
-#### 6.1. Always On Style Automatic Failover & Leader Election (`pkg/replication`, `cmd/server`, `pkg/config`, `pkg/ui`) (Completed)
+#### 6.1. Always On Style Automatic Failover & Leader Election (`pkg/replication`, `cmd/server`) — Completed
 - **Implemented**:
   - Always On automated failover coordinator (`pkg/replication/failover.go`) with highest-LSN precedence rule ensuring zero data loss.
   - Monotonic term tracking (`term int64`) across nodes, leader announcements (`POST /api/replication/leader`), and peer voting (`POST /api/replication/vote`).
@@ -234,8 +298,8 @@ LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLT
   - Comprehensive unit and integration test suite (`pkg/replication/failover_test.go`).
 - **Strategic Value**: Enterprise 99.999% high availability with zero-touch automatic recovery and zero data loss.
 
-#### 6.2. Decoupled Real-time CDC Streaming & Transactional Outbox (`pkg/cdc`, `pkg/storage`, `pkg/api`) (Completed)
-- **Implemented (`pkg/cdc`, `pkg/api`)**:
+#### 6.2. Decoupled Real-time CDC Streaming & Transactional Outbox (`pkg/cdc`, `pkg/storage`, `pkg/api`) — Completed
+- **Implemented**:
   - Decoupled real-time CDC event streaming engine (`ChangeEvent`, `Streamer`) with bounded ring-buffer historical replay (Golden Rule 23) and non-blocking backpressure fan-out (Golden Rule 29).
   - High-performance HTTP streaming endpoint `GET /api/cdc/stream` with real-time NDJSON and SSE support, table filtering (`?table=...`), and heartbeat keep-alive.
   - Multi-hook registration (`AddWALHook`) across In-Memory OCC (`memengine`) and WiredTiger (`wt_engine`, `wt_stub`) backends to synchronously tap commit boundaries.
@@ -248,69 +312,81 @@ LionSQL follows a phased evolutionary roadmap from an autonomous single-node OLT
     - REST observability endpoint `GET /api/cdc/outbox/status`, CLI flags (`-outbox`, `-outbox-table`, etc.), and JSON configuration (`cfg.Outbox`).
 - **Outcome**: Decoupled hybrid transactional/analytical processing (HTAP) with zero OLTP blast radius, alongside lossless event-driven broker integration.
 
-#### 6.3. [Postponed] Pure-Go Persistent Storage Engine Option (Pebble / bbolt) (`pkg/storage`)
+#### 6.3. Pure-Go Persistent Storage Engine Option (Pebble / bbolt) (`pkg/storage`) — Postponed
 - **Challenge**: Add a pure-Go persistent storage backend under the `storage.Engine` interface, enabling static compilation (`CGO_ENABLED=0`, Golden Rule 36) without C compiler toolchains.
-- **Expected Outcome**: 100% autonomous, cross-platform static binary distribution across any Linux/Windows/macOS environment.
+- **Status**: Postponed to post-1.0 to prioritize battle-tested WiredTiger B+Tree and pure-Go in-memory OCC dual engines.
 
-#### 6.4. Dynamic Programming (DP / Selinger) Large Join Order Optimization ($N > 4$) (`pkg/planner`) (Completed)
+#### 6.4. Dynamic Programming (DP / Selinger) Large Join Order Optimization ($N > 4$) (`pkg/planner`) — Completed
 - **Implemented (`B-4`)**: Replaced $O(N!)$ permutation generation with Selinger dynamic programming evaluating subset bitmasks (`1 << n`) with flat-slice $O(1)$ indexing. Includes primary join-key connectivity pass (pruning Cartesian products) with fallback disconnected pass, bounded to $n \le 12$ relations. Validated sub-millisecond planning on 6-table and 8-table chain joins.
 - **Outcome**: Sub-millisecond join reordering for complex multi-table queries, eliminating exponential combinatorial blowup.
 
-#### 6.5. Extended Multi-Column Statistics (`C-5`), MCV (`C-7`) & Optimizer Hints (`pkg/planner`) (Completed)
+#### 6.5. Extended Multi-Column Statistics (`C-5`), MCV (`C-7`) & Optimizer Hints (`pkg/planner`) — Completed
 - **Implemented (`C-5`, `C-7`)**:
   - `MultiColumnStats` (`C-5`): multi-column NDV collection, functional dependency coefficient calculation ($dep \in [0.0, 1.0]$), and joint selectivity calculation ($dep \cdot \min(P_i) + (1-dep) \cdot \prod P_i$) in `EstimateCompoundSelectivity` and `EstimateExprSelectivity` (`pkg/planner/stats.go`). Added DDL support for `CREATE STATISTICS stat_name ON tbl (col1, col2, ...)` and `DROP STATISTICS` (`pkg/engine`, `pkg/catalog`). Automatically collects multi-column statistics for composite indexes and registered statistics during `ANALYZE TABLE`.
   - `MCVItem` & Skew List Statistics (`C-7`): extracted Most Common Values (Top-20) with observed frequencies in `BuildColumnStats`. Decoupled selectivity evaluation between exact MCV matching and equi-depth histogram interpolation on the non-MCV tail for `=`, `!=`, `IN`, `BETWEEN`, and range predicates (`<`, `<=`, `>`, `>=`).
 - **Outcome**: Elimination of cardinality underestimation on correlated columns and skewed categorical/numerical attributes.
 
-#### 6.6. T-SQL Specialized TDS Serialization & PLP LOB Streaming (`pkg/wire/tds`) (Completed)
+#### 6.6. T-SQL Specialized TDS Serialization & PLP LOB Streaming (`pkg/wire/tds`) — Completed
 - **Implemented**: Full binary encoding and decoding for `UNIQUEIDENTIFIER` (16-byte Windows Mixed-Endian GUID byte swapping), `DATE` (`0x28`), `TIME` (`0x29`), `DATETIME2` (`0x2A`), and `DATETIMEOFFSET` (`0x2B`), alongside [MS-TDS] 2.2.5.2 Partially Length-Prefixed (PLP) chunk streaming for large `VARCHAR(MAX)` and `VARBINARY(MAX)` payloads exceeding 8KB.
 - **Outcome**: 100% wire-level data type compatibility for legacy enterprise SQL Server applications.
 
-#### 6.7. Multi-Language Client Ecosystem Certification (`pkg/wire`, `pkg/wire/tds`) (Completed)
+#### 6.7. Multi-Language Client Ecosystem Certification (`pkg/wire`, `pkg/wire/tds`) — Completed
 - **Implemented**: Automated hermetic E2E test harness for Python `psycopg3` (PGWire :5433) and `pymssql` (TDS :1433), alongside official Go drivers (`pgx/v5`, `lib/pq`, `go-mssqldb`) and GUI clients (DBeaver, DbGate, Beekeeper Studio), validating DDL, CRUD, binary types, and transaction atomicity.
 - **Outcome**: Guaranteed out-of-the-box compatibility across major application development stacks.
 
-#### 6.8. Volcano Chunked Batch Execution (Vectorized Chunk Iterator) (`pkg/execution`) (Completed)
+#### 6.8. Volcano Chunked Batch Execution (Vectorized Chunk Iterator) (`pkg/execution`) — Completed
 - **Implemented (`P-4`)**: Deployed 1,024-tuple batch streaming (`ChunkedIterator`, `NextChunk`) across relational operators (`SeqScan`, `IndexScan`, `Filter`, `Projection`, `Limit`, `Aggregate`, `Sort`, `HashJoin`, `IndexNestedLoopJoin`), mitigating virtual dispatch overhead by 99% while maintaining 100% backward compatibility for single-tuple consumers.
 - **Outcome**: 3~5x throughput acceleration for table scans, aggregations, and analytical filters.
 
-#### 6.9. Wasm Runtime Sandbox UDF (`pkg/extension`, `wazero`)
+#### 6.9. Wasm Runtime Sandbox UDF (`pkg/extension`, `wazero`) — Postponed
 - **Challenge**: Embed pure-Go `wazero` to execute dynamically loaded WebAssembly functions (`CREATE FUNCTION ... AS WASM`) in isolated memory sandboxes.
-- **Expected Outcome**: Safe in-engine execution of third-party plugins with zero host crash risk.
+- **Status**: Postponed to post-1.0. Existing Go native SPI and VDBE stored procedures fulfill enterprise extensibility needs without additional runtime dependencies.
 
-#### 6.10. Local & S3-Compatible File Storage Module (`pkg/api/handlers_files.go`)
-- **Challenge**: Implement multipart file upload APIs (`POST /api/files/:table/:id`), static asset serving, asynchronous image thumbnail generation, and storage quotas.
-- **Expected Outcome**: Turnkey all-in-one BaaS storage capability directly inside the single standalone binary.
+#### 6.10. Local & S3-Compatible File Storage Module (`pkg/api`) — Spec-Out
+- **Challenge**: Implement multipart file upload APIs (`POST /api/files/:table/:id`), static asset serving, and asynchronous image thumbnail generation.
+- **Status**: Excluded (**Spec-Out**, GEMINI Section 8.7). Delegated to external object storage (AWS S3, MinIO) via pre-signed direct upload patterns (`doc/S3_PRESIGNED_STORAGE_PLAN.md`).
 
-#### 6.11. Lazy Tuple Materialization & Column Projection Pushdown (`pkg/storage`, `pkg/execution`) (Completed)
+#### 6.11. Lazy Tuple Materialization & Column Projection Pushdown (`pkg/storage`, `pkg/execution`) — Completed
 - **Implemented (`P-2`)**: Selective decoding `DecodeTupleSelected`, zero-allocation `SkipTupleColumn`, and $O(1)$ offset caching `LazyTuple`, combined with covering index `INCLUDE(...)` payload storage to eliminate 100% of table heap lookups via Index-Only Scans.
 - **Outcome**: 70~80% reduction in CPU cycles and GC heap allocations during large-scale table scans.
 
-#### 6.12. Per-Query Arena Memory Allocator & GC Elimination (`pkg/execution`, `pkg/storage`)
+#### 6.12. Per-Query Arena Memory Allocator & GC Elimination (`pkg/execution`, `pkg/storage`) — Completed
 - **Challenge**: Allocate dedicated memory arena slabs tied to the lifecycle of individual analytical queries and transactions, reclaiming memory with a single pointer reset.
-- **Expected Outcome**: Complete elimination of Go runtime GC pauses and flat p99/p99.9 latency during heavy analytical queries.
+- **Implemented**: Implemented per-query slab arena allocator (`GetArena` / `PutArena`, `AllocAnySlice`, `AllocValues`, `AllocString`, `AllocBytes`) in `pkg/execution` and `pkg/storage`.
+- **Outcome**: Complete elimination of Go runtime GC pauses and flat p99/p99.9 latency during heavy analytical queries.
 
 ---
 
-## 4. Pending Task Matrix
+## 4. Strategic Roadmap & Task Matrix
 
-| Milestone | Priority | Task Description | Domain | Estimated Effort | Strategic Benefit |
-| :---: | :---: | :--- | :---: | :---: | :--- |
-| **Phase 5** | **P2** | **Transparent Data Encryption (TDE: AES-256-GCM)** | Storage & Security | Medium (250~350 lines) | Transparent data-at-rest encryption and immutable audit logging |
-| **Phase 5** | **P2** | **`INSTEAD OF` Trigger Runtime Interceptor** | T-SQL Runtime | Medium (200~300 lines) | Virtual entity DML update routing on complex views |
-| **Phase 5** | **P3** | **[Completed] Declarative Schema Migration CLI** | BaaS & Tooling | Medium (250~350 lines) | `lionsql migrate` atomic DDL version history tracking |
-| **Phase 5** | **P3** | **[Spec-Out] OAuth2 Social Login (Google, GitHub)** | Auth & API | - | Excluded to protect kernel purity; delegated to perimeter reverse proxy |
-| **Phase 6** | **P1** | **[Completed] Always On Style Automatic Failover** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica, zero downtime |
-| **Phase 6** | **P1** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large joins/sorts/aggregations |
-| **Phase 6** | **P2** | **[Completed] Transactional Outbox Broker Dispatcher (Kafka/RabbitMQ)** | Storage & Events | Medium (250~350 lines) | Reliable outbox forwarding to external brokers (Core CDC streaming complete) |
-| **Phase 6** | **P2** | **[Completed] MCV (Most Common Values) Skew List Statistics (`C-7`)** | CBO & Planner | Medium (250~350 lines) | Corrects non-uniform skew distribution estimation error (MCV + Histogram complete) |
-| **Phase 6** | **P3** | **[Completed] Multi-Language Client & JDBC/ODBC Certification (Python, Go, JDBC, GUI)** | Wire Protocols | Medium (200~300 lines) | Automated integration suites for psycopg3, pymssql, pgx, go-mssqldb, pgjdbc, DBeaver |
-| **Phase 6** | **P3** | **[Postponed] Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | 100% static standalone executable (`CGO_ENABLED=0`) distribution |
-| **Phase 6** | **P3** | **Wasm Runtime Sandbox UDF (`wazero`)** | Plugins & Sandbox | Medium (300~400 lines) | Secure, crash-isolated in-engine execution of third-party plugins |
-| **Phase 6** | **P3** | **Local & S3-Compatible File Storage & Thumbnails** | BaaS Storage | Medium (250~350 lines) | Multipart file upload and automatic image thumbnail generation |
-| **Phase 6** | **P2** | **[Completed] Prepared Statement Binary Bind Direct Decoding (`P-14`)** | Wire Protocols | Low (150~200 lines) | Eliminates binary-to-string-to-type double conversions and pools param names |
-| **Phase 6** | **P3** | **[Postponed] DML Record(Map) Elimination -> Row(Slice) Fast-Path (`P-13`)** | Storage & DML | Medium (300~400 lines) | Postponed due to foreign key cascade and constraint engine regression risk |
-| **Phase 6** | **P3** | **[Postponed] WiredTiger Multi-Row Batch CGo Insert (`P-15`)** | Storage / CGo | High (350~500 lines) | Postponed due to CGo memory safety, segfault & rollback complexity |
-| **Phase 6** | **P3** | **[Postponed] In-Memory OCC Row-Level Atomic CAS Validation (`P-16`)** | Storage / OCC | High (400~600 lines) | Postponed due to high concurrency & ACID data corruption risks |
-| **Phase 6** | **P3** | **[Postponed] VDBE Fused Column Super-Instruction (`P-17`)** | VM / Compiler | Medium (300~450 lines) | Postponed due to bytecode peephole jump & type correctness risks |
+The following matrix synthesizes the status, priority, and resource allocation across all foundational development tracks:
 
+| Phase | Priority | Status | Task Description | Domain | Estimated Effort | Strategic Benefit |
+| :---: | :---: | :---: | :--- | :---: | :---: | :--- |
+| **Phase 5** | **P1** | **Completed** | **CBO Optimizer Hints (`D-9`) & Sort-Merge Join (`B-3`)** | CBO & Planner | Medium (250~350 lines) | $O(M+N)$ hashless joins and deterministic execution plan override |
+| **Phase 5** | **P1** | **Completed** | **Fast SQL Fingerprinting & Simple PK Bypass (`P-5`)** | Engine & Cache | Low (150~200 lines) | Point query direct storage lookup bypassing CBO/VDBE |
+| **Phase 5** | **P1** | **Completed** | **Volcano Chunk Vectorized Batch Streaming (`P-4`)** | Execution Engine | Medium (300~400 lines) | 1,024-tuple batch streaming reducing dispatch overhead by 99% |
+| **Phase 5** | **P2** | **Completed** | **Lazy Tuple Decoding & Covering Index Non-Key (`P-2`)** | Storage & Index | Medium (250~350 lines) | Selective column decoding and 100% heap lookup bypass |
+| **Phase 5** | **P2** | **Completed** | **TDS NBCROW (`0xD2`) Row Compression** | Wire Protocols | Low (150~200 lines) | 30%+ network bandwidth reduction on sparse enterprise tables |
+| **Phase 5** | **P2** | **Postponed** | **Transparent Data Encryption (TDE: AES-256-GCM)** | Storage & Security | Medium (250~350 lines) | Replaced by OS/Cloud standard LUKS2/EBS guide (Rule 14) |
+| **Phase 5** | **P2** | **Postponed** | **`INSTEAD OF` Trigger Runtime Interceptor** | T-SQL Runtime | Medium (200~300 lines) | Postponed to post-1.0 to prevent DML hot-path overhead |
+| **Phase 5** | **P3** | **Completed** | **Declarative Schema Migration CLI (`lionsql migrate`)** | BaaS & Tooling | Medium (250~350 lines) | Atomic DDL version history tracking (`_migrations`) |
+| **Phase 5** | **P3** | **Spec-Out** | **In-Kernel OAuth2 Social Login (Google, GitHub)** | Auth & API | - | Excluded to protect kernel purity; delegated to reverse proxy |
+| **Phase 6** | **P1** | **Active** | **Enterprise Immutable Audit Log (PCI-DSS / SOC2)** | Security & Audit | Medium (300~400 lines) | SHA-256 hash chaining, MPSC ring buffer, offline verifier |
+| **Phase 6** | **P1** | **Completed** | **Always On Style Automatic Failover & Leader Election** | HA Replication | High (400~500 lines) | Automatic promotion of lowest-lag replica with zero downtime |
+| **Phase 6** | **P1** | **Completed** | **Per-Query Arena Memory Allocator** | Memory Governor | Medium (300~400 lines) | Eliminates Go GC pauses during large analytical queries |
+| **Phase 6** | **P2** | **Completed** | **Decoupled CDC Streaming & Transactional Outbox** | Storage & Events | Medium (300~450 lines) | Lossless event forwarding to Kafka/RabbitMQ/DuckDB |
+| **Phase 6** | **P2** | **Completed** | **Selinger DP Large Join Order Optimization ($N > 4$)** | CBO & Planner | Medium (250~350 lines) | Sub-millisecond join reordering for complex multi-table queries |
+| **Phase 6** | **P2** | **Completed** | **Extended Multi-Column Statistics (`C-5`) & MCV (`C-7`)** | CBO & Planner | Medium (250~350 lines) | Corrects non-uniform skew and correlation estimation errors |
+| **Phase 6** | **P2** | **Completed** | **Prepared Statement Binary Bind Direct Decoding (`P-14`)** | Wire Protocols | Low (150~200 lines) | Eliminates binary-string double conversions and pools param names |
+| **Phase 6** | **P2** | **Completed** | **TDS Single-Frame Buffer Pooling** | Wire Protocols | Low (100~150 lines) | Halves packet write syscalls and eliminates frame heap allocation |
+| **Phase 6** | **P2** | **Completed** | **Virtual Catalog 0-Alloc Fast Filter & Whitespace Matcher** | Catalog Engine | Low (150~200 lines) | 103ns zero-alloc OLTP pre-filter and whitespace-resilient matching |
+| **Phase 6** | **P3** | **Completed** | **Multi-Language Client & JDBC/ODBC Certification** | Wire Protocols | Medium (200~300 lines) | Verified psycopg3, pymssql, pgx, go-mssqldb, pgjdbc, psqlODBC |
+| **Phase 6** | **P3** | **Completed** | **Test Suite Boilerplate Diet (-291 Lines Net)** | Quality & Test | Medium (250~350 lines) | Streamlined test suite setup helpers and handshake routines |
+| **Phase 6** | **P3** | **Postponed** | **Pure-Go Persistent Engine Backend (Pebble/bbolt)** | Storage Backend | High (500~700 lines) | Postponed to post-1.0; focus on WiredTiger and memory OCC |
+| **Phase 6** | **P3** | **Postponed** | **Wasm Runtime Sandbox UDF (`wazero`)** | Plugins & Sandbox | Medium (300~400 lines) | Postponed to post-1.0; Go native SPI and VDBE suffice |
+| **Phase 6** | **P3** | **Spec-Out** | **Local & S3-Compatible File Storage & Thumbnails** | BaaS Storage | - | Excluded to protect OLTP kernel; delegated to external S3 |
+| **Phase 6** | **P3** | **Postponed** | **DML Record(Map) Elimination ➔ Row(Slice) (`P-13`)** | Storage & DML | Medium (300~400 lines) | Postponed due to foreign key cascade and constraint risks |
+| **Phase 6** | **P3** | **Postponed** | **WiredTiger Multi-Row Batch CGo Insert (`P-15`)** | Storage & CGo | High (350~500 lines) | Postponed due to CGo memory safety and crash risks |
+| **Phase 6** | **P3** | **Postponed** | **In-Memory OCC Atomic CAS Validation (`P-16`)** | Storage & OCC | High (400~600 lines) | Postponed due to concurrency and ACID corruption risks |
+| **Phase 6** | **P3** | **Postponed** | **VDBE Fused Column Super-Instruction (`P-17`)** | VM & Compiler | Medium (300~450 lines) | Postponed due to bytecode peephole jump and correctness risks |
