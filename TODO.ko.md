@@ -405,9 +405,8 @@
   - 연결된 Replica 목록, LSN 랙(Lag) 지연 시간, 스트리밍 상태 표시 및 수동 승격(`Promote`) 버튼 제공.
 
 ### 2.4. 엔터프라이즈 보안 & 거버넌스 (Enterprise Security & Governance)
-- [ ] **투명 데이터 암호화 (TDE: Transparent Data Encryption) (`pkg/storage`)**
-  - 디스크에 기록되는 WiredTiger 데이터 파일, WAL/AOF 저널 및 백업 아카이브를 AES-256-GCM으로 투명 암호화(Data at Rest Encryption).
-  - 마스터 암호화 키(MEK) 로테이션 및 환경 변수/KMS 키 주입 인터페이스.
+- [-] **[보류 / Postponed] 투명 데이터 암호화 (TDE: Transparent Data Encryption) (`pkg/storage`)**
+  - OS/클라우드 블록 볼륨 암호화 표준 가이드([`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)) 수립으로 대체 충족 및 프로세스 중복 암호화 부하 방지를 위해 보류 (2.7절 참조).
 - [ ] **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log) (`pkg/logger`, `pkg/api`)**
   - 로그인 성공/실패, 권한 변경(`GRANT/REVOKE`), DDL 스키마 변경, 관리자 데이터 조작 이벤트를 태깅하여 위변조가 불가능한 불변 감사 파일로 안전 기록.
 - [ ] **`INSTEAD OF` 트리거 런타임 인터셉터 (`pkg/proc/runtime`, `pkg/api`)**

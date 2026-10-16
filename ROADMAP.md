@@ -67,8 +67,11 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - [x] Volcano Chunk-at-a-Time Vectorized Batch Streaming (P-4)
   - [x] TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET & UNIQUEIDENTIFIER Binary Serialization
   - [x] Multi-Language Client Certification Harness (Python psycopg3 & pymssql E2E)
-  - [ ] Transparent Data Encryption (TDE: AES-256-GCM) & Immutable Audit Log
-  - [x] BaaS Expansion: Declarative Schema Migration CLI (lionsql migrate) & OAuth2 Social Login
+  - [Postponed] Transparent Data Encryption (TDE: Replaced by doc/STORAGE_ENCRYPTION_GUIDE.md)
+  - [x] Volcano Vectorized Batch Chunk Pooling (P-12)
+  - [x] In-Memory OCC Transaction Object & Workspace Map Pooling (P-11)
+  - [x] Semi-Structured JSON Same-Tuple DOM Cache & Zero-Allocation Key Scanner (P-7)
+  - [x] BaaS Expansion: Declarative Schema Migration CLI (lionsql migrate) & Spec-Out OAuth2 Social Login
 
 [ Phase 6: High Availability Always On, Decoupled HTAP & Production Hardening (v1.0.0 LTS) ] ──► PLANNED
   - [x] Always On Style Automatic Failover & Leader Election
@@ -81,8 +84,10 @@ SQLion follows a phased evolutionary roadmap from an autonomous single-node OLTP
   - [x] T-SQL Specialized TDS Serialization (UNIQUEIDENTIFIER, DATETIME2, PLP LOB)
   - [x] Multi-Language Client Certification (Python psycopg3/pymssql, Go pgx/mssql, GUI)
   - [x] Storage to Wire Zero-Copy Direct Serialization (P-3)
-  - Wasm Runtime Sandbox UDF (wazero)
-  - Local & S3-Compatible File Storage Module & Thumbnail Resizing
+  - [Postponed] Wasm Runtime Sandbox UDF (wazero)
+  - [Postponed] Volcano Multicore Parallel Query Execution Engine (P-10)
+  - [ ] Enterprise Immutable Audit Log & INSTEAD OF Trigger Interceptor
+  - [ ] Enterprise ODBC / JDBC Driver Certification & Conformance Testing
 ```
 
 ---
