@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- **5-Table E-Commerce & Banking Demo Seed Database (`scripts/demo_seed.sql`, `pkg/demo`)**:
+- **5-Table E-Commerce & Banking Demo Seed Database (`scripts/demo_seed.sql`)**:
   - Implemented standalone sample database script featuring 5 standard tables and rich sample datasets:
     - `customers`: Customer personal information (ID, name, email, phone, city, created_at).
     - `accounts`: Bank accounts and balances (ID, customer_id, account_number, balance, account_type, status, created_at).
@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented 2 production-grade T-SQL stored procedures:
     - `TransferFunds`: Multi-step banking fund transfer with balance verification, transaction commit/rollback, and error throwing.
     - `ProcessOrder`: E-commerce order placement with product inventory check, stock decrement, sales/sales_details record insertion, and transaction commit.
-  - Created `pkg/demo` package providing `GetSeedSQL()` with `//go:embed` fallback, preserving single standalone binary zero-dependency portability while allowing file-based customization.
+  - Directly loaded and executed from `scripts/demo_seed.sql` upon `--seed` flag, adhering to KISS and eliminating duplicate embedded assets.
 
 ### Changed
 - **Default AutoSeed Disabled & Hardcoded Go Seeding Removal (`cmd/server`, `pkg/config`)**:

@@ -23,7 +23,6 @@ import (
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/cdc"
 	"sqlion/pkg/config"
-	"sqlion/pkg/demo"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/migrate"
@@ -498,12 +497,17 @@ func main() {
 
 	// Auto-seed demo sample database if requested
 	if cfg.Server.AutoSeed {
-		seedSQL := demo.GetSeedSQL()
-		log.Printf("[LionSQL] Seeding demo sample database (scripts/demo_seed.sql)...")
-		if _, err := server.ExecuteSQL(seedSQL); err != nil {
-			log.Printf("[LionSQL] Warning: demo seed script returned error: %v", err)
+		seedPath := "scripts/demo_seed.sql"
+		sqlBytes, err := os.ReadFile(seedPath)
+		if err != nil {
+			log.Printf("[LionSQL] Error reading seed script %q: %v", seedPath, err)
 		} else {
-			log.Printf("[LionSQL] Demo sample database seeded successfully.")
+			log.Printf("[LionSQL] Seeding demo sample database from %s...", seedPath)
+			if _, err := server.ExecuteSQL(string(sqlBytes)); err != nil {
+				log.Printf("[LionSQL] Warning: demo seed script returned error: %v", err)
+			} else {
+				log.Printf("[LionSQL] Demo sample database seeded successfully.")
+			}
 		}
 	}
 
