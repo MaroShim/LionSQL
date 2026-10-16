@@ -23,7 +23,7 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P2** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/logger`, `pkg/api` | 로그인, 권한 변경(`GRANT/REVOKE`), DDL 변경, 관리자 데이터 조작 이벤트 불변 감사 기록 |
+| **P1** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/logger`, `pkg/api` | 로그인, 권한 변경(`GRANT/REVOKE`), DDL 변경, 관리자 데이터 조작 이벤트 불변 감사 기록 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
 - [x] **테스트 스위트 중복 보일러플레이트 대규모 슬림화 (Net -291줄) (`pkg/wire`, `pkg/api`)**
