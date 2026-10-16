@@ -31,29 +31,35 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
 
 ### 2.1. Architecture & Core Database Engine
-* [`ARCHITECTURE.md`](file:///Users/maro/Projects/sql/doc/ARCHITECTURE.md)
+* [`FOUNDATIONAL_DESIGN_DECISIONS.md`](file:///Users/maro/Projects/SQLion/doc/FOUNDATIONAL_DESIGN_DECISIONS.md)
+  * Genesis and foundational strategic architectural decisions of LionSQL.
+  * Deep dive into early design choices: WiredTiger lock-free B+Tree disk storage, pure-Go OCC in-memory companion engine, Go language runtime concurrency, Microsoft T-SQL procedural core with VDBE bytecode VM, PostgreSQL wire protocol ecosystem reach, embedded HTTP/REST BaaS engine, and Antigravity AI pair-programming engineering methodology.
+* [`ZERO_ALLOCATION_ARCHITECTURE.md`](file:///Users/maro/Projects/SQLion/doc/ZERO_ALLOCATION_ARCHITECTURE.md)
+  * Zero-allocation memory architecture, buffer reuse strategies, and GC mitigation enabling 20,000+ TPS (In-Memory OCC) and 16,800+ TPS (WiredTiger).
+  * Layer-by-layer breakdown: TDS single-frame pooling, PGWire binary bind direct decoding, zero-alloc ASCII catalog pre-filtering (`containsFold`), VDBE register recycling, Volcano chunk streaming (`TupleChunk` sync.Pool), and WiredTiger `WT_CURSOR` pooling/reset.
+* [`ARCHITECTURE.md`](file:///Users/maro/Projects/SQLion/doc/ARCHITECTURE.md)
   * End-to-end architectural blueprint of LionSQL.
   * Dual-storage backend (Pure-Go OCC memory engine vs WiredTiger lock-free B+Tree with MVCC).
   * Ambient ACID transactions, isolation levels, and goroutine connection pooler.
-* [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_STORAGE.md)
+* [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/SQLion/doc/INTERNALS_STORAGE.md)
   * Deep dive into the storage engine interface contract.
   * SkipList in-memory indexing vs WiredTiger page structures, checkpoints, and write-ahead logging (WAL).
   * Physical storage directory layout, `catalog.json` metadata persistence, `cbo_stats.json`, and secondary index persistence.
-* [`RECORD_BINARY_FORMAT.md`](file:///Users/maro/Projects/sql/doc/RECORD_BINARY_FORMAT.md)
+* [`RECORD_BINARY_FORMAT.md`](file:///Users/maro/Projects/SQLion/doc/RECORD_BINARY_FORMAT.md)
   * Schema-Aware Compact Binary Tuple serialization specification (`pkg/storage/tuple.go`).
   * Bit-level layout: `0x01` version header, $\lceil N/8 \rceil$ null bitmap, and dense ZigZag varint payloads.
   * Architectural lineage: PostgreSQL heap tuple `t_bits`, CockroachDB/TiDB KV encoding, and Protobuf varints.
   * WiredTiger B+Tree disk value persistence vs in-memory OCC WAL durability.
-* [`TRANSACTION_CONCURRENCY.md`](file:///Users/maro/Projects/sql/doc/TRANSACTION_CONCURRENCY.md)
+* [`TRANSACTION_CONCURRENCY.md`](file:///Users/maro/Projects/SQLion/doc/TRANSACTION_CONCURRENCY.md)
   * Transaction isolation and concurrency model specification.
   * Non-blocking snapshot reads and private workspace isolation.
   * In-Memory OCC with monotonic integer versioning vs WiredTiger MVCC with hazard pointers and transaction timestamps.
   * VDBE transaction coupling (`exec.RunInTx`) and benchmark transaction fidelity.
-* [`DATA_DICTIONARY.md`](file:///Users/maro/Projects/sql/doc/DATA_DICTIONARY.md)
+* [`DATA_DICTIONARY.md`](file:///Users/maro/Projects/SQLion/doc/DATA_DICTIONARY.md)
   * System catalogs, system tables, schema metadata persistence, and virtual catalog views (`sys.tables`, `INFORMATION_SCHEMA`).
-* [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/sql/doc/HIGH_AVAILABILITY.md)
+* [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/SQLion/doc/HIGH_AVAILABILITY.md)
   * Crash safety, checkpointing, AOF compaction, and online hot backup/restore pipelines.
-* [`ADR.md`](file:///Users/maro/Projects/sql/doc/ADR.md)
+* [`ADR.md`](file:///Users/maro/Projects/SQLion/doc/ADR.md)
   * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution, HA replication, dual-track UDFs, compact binary tuple codec, multi-protocol catalog interception, GPL v3 licensing, hybrid JSON expression B-Tree indexing: ADR-001 through ADR-022).
 
 ---
@@ -130,24 +136,28 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ---
 
 ### 2.5. Operations, Security & Benchmarks
-* [`OPERATIONS.md`](file:///Users/maro/Projects/sql/doc/OPERATIONS.md)
+* [`OPERATIONS.md`](file:///Users/maro/Projects/SQLion/doc/OPERATIONS.md)
   * Production deployment guidelines, CLI flags, configuration parameters, and graceful shutdown.
-* [`METRICS.md`](file:///Users/maro/Projects/sql/doc/METRICS.md)
+* [`SCHEMA_MIGRATIONS_CLI.md`](file:///Users/maro/Projects/SQLion/doc/SCHEMA_MIGRATIONS_CLI.md)
+  * Declarative schema migration toolchain (`lionsql migrate new/up/down/status`), timestamp versioning, atomic transactional DDL safety, and CI/CD/Kubernetes patterns.
+* [`METRICS.md`](file:///Users/maro/Projects/SQLion/doc/METRICS.md)
   * Prometheus metrics (`/metrics`) and slow query logging (`/api/slow-queries`).
-* [`SECURITY.md`](file:///Users/maro/Projects/sql/doc/SECURITY.md)
+* [`SECURITY.md`](file:///Users/maro/Projects/SQLion/doc/SECURITY.md)
   * Authentication models, JWT lifecycle, API key role scoping, and network encryption.
-* [`IMMUTABLE_AUDIT_LOG.md`](file:///Users/maro/Projects/sql/doc/IMMUTABLE_AUDIT_LOG.md)
+* [`ENTERPRISE_AUTHENTICATION_SPI.md`](file:///Users/maro/Projects/SQLion/doc/ENTERPRISE_AUTHENTICATION_SPI.md)
+  * Pluggable `AuthProvider` SPI for corporate directory services (LDAP/AD/PAM), multi-protocol identity convergence, and perimeter proxy security architecture.
+* [`IMMUTABLE_AUDIT_LOG.md`](file:///Users/maro/Projects/SQLion/doc/IMMUTABLE_AUDIT_LOG.md)
   * Enterprise cryptographic audit logging architecture and compliance specification (PCI-DSS v4.0 Req 10, SOC 2 Type II, SHA-256 hash chaining, non-blocking MPSC ring buffer, and offline CLI verifier).
-* [`BENCHMARK.md`](file:///Users/maro/Projects/sql/doc/BENCHMARK.md)
+* [`BENCHMARK.md`](file:///Users/maro/Projects/SQLion/doc/BENCHMARK.md)
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).
-* [`MIGRATION.md`](file:///Users/maro/Projects/sql/doc/MIGRATION.md)
+* [`MIGRATION.md`](file:///Users/maro/Projects/SQLion/doc/MIGRATION.md)
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
-* [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/sql/doc/TROUBLESHOOTING.md)
+* [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/SQLion/doc/TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.
-* [`ROADMAP.md`](../ROADMAP.md)
+* [`ROADMAP.md`](file:///Users/maro/Projects/SQLion/ROADMAP.md)
   * Versioned milestone progression from single-node OLTP to Always On HA and decoupled HTAP.
-* [`TODO.ko.md`](file:///Users/maro/Projects/sql/TODO.ko.md)
+* [`TODO.ko.md`](file:///Users/maro/Projects/SQLion/TODO.ko.md)
   * Daily actionable engineering backlog and task status tracker.
-* [`CHANGELOG.md`](file:///Users/maro/Projects/sql/CHANGELOG.md)
+* [`CHANGELOG.md`](file:///Users/maro/Projects/SQLion/CHANGELOG.md)
   * Release history and detailed changelogs following Keep a Changelog standard.
 
