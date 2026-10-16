@@ -1,6 +1,6 @@
 # LionSQL Engineering TODO & Backlog
 
-이 문서는 LionSQL의 단기 엔지니어링 우선순위 과제, 도메인별 기능 백로그, 최근 완료된 마일스톤 이력을 관리하는 공식 엔지니어링 백로그입니다.
+이 문서는 LionSQL의 실무 엔지니어링 실행 과제, 도메인별 백로그 매트릭스, 최근 완료된 변경 이력을 관리하는 공식 엔지니어링 작업 대시보드입니다.
 
 > [!NOTE]
 > 중장기 아키텍처 로드맵 및 버전별 마일스톤 릴리스 계획은 [ROADMAP.md](ROADMAP.md)를 참조하세요.
@@ -8,542 +8,194 @@
 
 ---
 
-## 식별 코드 체계 범례 (Taxonomy Legend)
+## 1. 식별 코드 체계 범례 (Taxonomy Legend)
 
 | 접두사 / 코드 | 트랙 명칭 (도메인) | 번호 범위 | 설명 |
 | :---: | :--- | :---: | :--- |
-| **`P1` ~ `P3`** | **우선순위 (Priority)** | `P1` ~ `P3` | 개발 착수 긴급도 (P1: 즉시 착수/활성, P2: 차기 착수, P3: 생태계 검증) |
-| **`P-1` ~ `P-17`** | **엔진 성능 (Performance)** | `P-1` ~ `P-17` | 스토리지, 디코딩, 와이어, 캐시, 정규식, JSON, 병렬 쿼리 전반의 핵심 성능 극대화 트랙 |
+| **`P1` ~ `P3`** | **우선순위 (Priority)** | `P1` ~ `P3` | 개발 착수 긴급도 (P1: 활성 스프린트/즉시 착수, P2: 차기 착수, P3: 생태계 검증) |
+| **`P-1` ~ `P-17`** | **엔진 성능 (Performance)** | `P-1` ~ `P-17` | 스토리지, 디코딩, 와이어, 캐시, 정규식, JSON, 메모리 풀링 17대 성능 트랙 |
 | **`R-1` ~ `R-5`** | **코드 리팩토링 (Refactoring)** | `R-1` ~ `R-5` | 거대 파일 모듈 분해, 단일 책임 원칙(SRP), DRY 중복 해소 및 가상 뷰 레지스트리화 |
 | **`A` ~ `D`** | **CBO 최적화 (Optimizer)** | `A-1` ~ `D-9` | 비용 기반 옵티마이저 4대 기능 트랙 (A: 통계 수집, B: 조인 알고리즘, C: 선택도, D: 운영 제어) |
 | **`S-1` ~ `S-7`** | **SQL 문법 (Syntax)** | `S-1` ~ `S-7` | T-SQL 및 ANSI SQL 7대 문법 호환성 완비 트랙 (전 항목 완료) |
 
 ---
 
-## 1. 차기 착수 우선순위 과제 (Active Priority Queue)
+## 2. 현재 활성 스프린트 과제 (Active Sprint Queue)
 
-| 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 | 상태 |
-| :---: | :---: | :--- | :--- | :--- | :---: |
-| **P1** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/logger`, `pkg/api` | 로그인, 권한 변경(`GRANT/REVOKE`), DDL 변경, 관리자 데이터 조작 이벤트 불변 감사 기록 (설계 완료: `doc/IMMUTABLE_AUDIT_LOG.md`) | **진행 예정 (차주 P1 착수)** |
+| 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 상태 | 관련 기술 문서 |
+| :---: | :---: | :--- | :--- | :---: | :--- |
+| **P1** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **차주 P1 착수 예정** | [`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md) |
 
----
+### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
 
-### 최근 완료 과제 구현 상세 (Recently Completed High-Priority Implementations)
-
-- [x] **테스트 스위트 중복 보일러플레이트 대규모 슬림화 (Net -291줄) (`pkg/wire`, `pkg/api`)**
-  - **배경**: `pkg/wire/server_test.go` 및 `pkg/api/sqlexec_test.go` 등 대형 테스트 파일에 걸쳐 반복되던 저수준 TCP 소켓 핸드셰이크, 패스워드 인증 패킷 루프, 인메모리 엔진 셋업 중복 코드 대량 제거(Golden Rule 15: Radical KISS & Deletion-First).
-  - **구현 내용**:
-    - `pkg/wire/server_test.go`:
-      - `authenticatePGClient` 헬퍼 도입: 패스워드 인증(`CleartextPassword`, `AuthOK`, `ErrorResponse 28P01`, 슈퍼유저 인증) 서브테스트 중복 제거 (-140줄).
-      - `TestWire_ConcurrentConnectionMultiplexing`: 공통 헬퍼 `connectPGClient` 및 `sendPGQuery`를 적용하여 30개 동시 클라이언트 루프 슬림화 (-65줄).
-      - `TestPGWire_ServerSideSQLCursor`: 중복 소켓 핸드셰이크 제거 (-20줄).
-    - `pkg/api/sqlexec_test.go`:
-      - `common_test.go`의 `setupMemServer(t)` 헬퍼를 `t.Cleanup` 기반으로 개선.
-      - 31개 단위 테스트에 걸쳐 복사-붙여넣기되어 있던 `memengine.New()`, `defer eng.Close()`, `catalog.New(eng)`, `api.NewServer(cat, eng)` 4줄 블록을 `server := setupMemServer(t)` 단 1줄로 일괄 교체 (-120줄).
-    - 전체 패키지 빌드 및 `go test -race` 100% 무결성 통과 (Net 291 라인 순수 코드 삭제 달성).
-
-- [x] **가상 카탈로그 쿼리 인터셉터 0-Alloc 프리필터 & 공백 무관 등호 매칭 리팩토링 (`pkg/catalog/virtual`)**
-  - **배경**: 매 `SELECT` 쿼리마다 `strings.ToUpper(sql)`을 호출하여 힙 메모리를 복제하고 17개 이상의 `strings.Contains`를 순차 검사하는 핫패스 오버헤드 해소, 및 `O.TYPE = 'TR'` / `O.TYPE='TR'`처럼 등호(`=`) 좌우 공백 형태가 불일치할 때(`O.TYPE= 'TR'`, `O.TYPE ='TR'`, 탭/다중 공백) 가상 카탈로그 인터셉터가 매칭에 실패하던 잠재적 결함(False Negative) 원천 해결.
-  - **구현 내용**:
-    - `pkg/catalog/virtual/interceptor.go`:
-      - `containsFold` (ASCII 대소문자 무관 제로-할당 부분 문자열 탐색) 및 `hasCatalogCandidate` 도입. 비카탈로그 일반 OLTP 쿼리는 메모리 힙 할당 0건(0 B/op, 0 allocs/op)으로 즉시 탈출.
-      - `containsEq`: 키와 값 사이의 `=` 주변 공백(공백 0개, 좌측만, 우측만, 다중 공백, 탭, 개행)을 완벽하게 허용하며 식별자 접두/접미사 경계 검증을 포함하는 공백 무관 등호 탐색기 구현.
-      - `matchAny`: 다중 조건 중복 코드를 제거하여 `IsVirtualCatalogJoinQuery`의 복잡도를 63줄에서 35줄로 슬림화.
-      - `Execute`: DbGate/Beekeeper 가상 카탈로그 조건(`IS_PRIMARY_KEY = 1/0`, `TYPE = 'TR'`, `TYPE = 'V'`, `CONTYPE = 'F'`)에 `containsEq` 전면 적용.
-    - `pkg/catalog/virtual/interceptor_internal_test.go` 및 `interceptor_test.go`:
-      - 공백 치환 조합(`= `, ` =`, ` = `, `=`, `\t=\n`, `   =   `), 경계 검증, 다중 등장 테스트 완비.
-      - 벤치마크 검증: 일반 OLTP 쿼리 10,057,021 ops, 103.5 ns/op, **0 B/op, 0 allocs/op** 달성.
-
-- [x] **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 (`pkg/wire`)**
-  - **배경**: PostgreSQL 공식 JDBC(`pgjdbc`) 및 `psqlODBC`가 연결 및 메타데이터 인트로스펙션 시 전송하는 드라이버 핸드셰이크 파라미터 및 카탈로그 뷰 쿼리 호환성 검증.
-  - **구현 내용**:
-    - `pkg/wire/driver_integration_test.go`: `TestDriverIntegration_LibPQ_JDBC_ODBC_Compatibility` 단위 및 통합 검증 완비.
-    - 드라이버 초기화 세션 제어: `SET extra_float_digits = 3`, `SET application_name = 'PostgreSQL JDBC Driver'`, `SET client_min_messages = 'warning'`, `SET client_encoding = 'UTF8'` 정상 수용.
-    - 세션 상태 조회: `SHOW transaction_isolation`, `SHOW standard_conforming_strings` 호환성 검증.
-    - 카탈로그 인트로스펙션: `SELECT current_schema()`, `SELECT typname, oid, typlen FROM pg_type`, `SELECT table_name, table_type FROM information_schema.tables` 무결성 검증 (0.01s PASS).
-
-- [x] **Prepared Statement 바이너리 바인드 파라미터 제로-할당 & 이중 변환 제거 (`P-14`) (`pkg/wire`, `pkg/wire/tds`)**
-  - **배경**: PGWire `Bind ('B')` 및 TDS RPC 수신 시 클라이언트가 보낸 정수/부동소수점/불리언 바이너리를 `strconv.Itoa` 등으로 문자열로 변환한 뒤, 쿼리 실행 엔진에서 다시 `storage.IntValue()` 등으로 파싱하는 불필요한 이중 변환 및 매 쿼리당 `fmt.Sprintf` 파라미터명 슬라이스 동적 할당 오버헤드 제거.
-  - **구현 내용**:
-    - `pkg/wire/server.go`: `decodeBinaryParamValue` 및 `decodeTextParamValue` 구현. OID(INT4, INT8, INT2, FLOAT4, FLOAT8, BOOL, DATE, DATETIME, UUID, BYTEA) 기반으로 문자열 변환 없이 `storage.Value`로 즉시 타입 디코딩.
-    - `Portal` 구조체에 `ParamValues []storage.Value` 필드 추가 및 `handleBind`에서 즉시 적재.
-    - `handleExecute`에서 VDBE 바이트코드 실행기 전달 시 typed `storage.Value`를 `paramMap`에 직결하여 VDBE 런타임 타입 변환 오버헤드 0건화.
-    - `pkg/wire/server.go` 및 `pkg/wire/tds/server.go`: 최대 64개 파라미터에 대한 정적 룩업 테이블(`p1`~`p64`, `@p1`~`@p64`, `$1`~`$64`)을 구축(`getParamNames`)하여 매 실행 루프마다 호출되던 `fmt.Sprintf` 힙 할당 100% 제거.
-    - `pkg/wire/server_test.go`: `TestPGWire_BinaryBindDirectValueDecoding` 단위 검증 및 `pkg/wire`, `pkg/wire/tds` 전체 E2E/드라이버 테스트 100% PASS 완료.
-
-- [x] **TDS 단일 프레임 버퍼 풀링 & 네트워크 시스템 콜 50% 삭감 (`pkg/wire/tds`)**
-  - **배경**: 기존 `WritePacket`이 8바이트 헤더와 페이로드를 별도 호출(`w.Write(hdr)` 후 `w.Write(payload)`)하여 패킷당 2회의 OS 시스템 콜(`write/sendto`) 및 불필요한 유저-커널 컨텍스트 스위칭 오버헤드가 발생함.
-  - **구현 내용**:
-    - `pkg/wire/tds/packet.go`: `sync.Pool` 기반 4,096바이트 고정 프레임 풀(`tdsFramePool`) 구축.
-    - 8바이트 헤더 직렬화와 청크 페이로드를 단일 연속 프레임(`frame[:packetLen]`)에 인메모리 패킹하여 패킷당 단 1회의 `w.Write()`로 원자적 전송.
-    - 30여 개 호출부 수정 없이 시스템 콜 횟수 50% 즉시 삭감 및 힙 할당 0건(Zero-Allocation) 달성.
-    - `pkg/wire/tds/server_test.go`: `TestTDS_WritePacket_SingleSyscallPerPacket` 단위 검증 및 전체 레이스 프리 테스트 100% PASS 완료.
-
-- [x] **Volcano 벡터화 배치 청크(`Chunk`) 풀링 (`P-12`) (`pkg/execution`)**
-  - **배경**: 1,024건 단위 튜플 배치 스트리밍(`Chunk`) 간 연산자(`Filter`, `Projection`, `Sort`, `HashJoin`, `Aggregate`) 경계 전송 및 버퍼링 시 `make([]Tuple, 0, 1024)` 슬라이스가 반복 동적 생성되어 GC에 버려지는 오버헤드 제거.
-  - **구현 내용**:
-    - `pkg/execution/chunk.go`: `sync.Pool` 기반 `chunkPool` (`GetChunk`, `PutChunk`, `AcquireChunk`, `ReleaseChunk`) 구축.
-    - 튜플 슬라이스 반환 시 내부 참조(`Tuple.Values`, `Lazy`, `Index`)를 `Tuple{}`로 초기화하여 메모리 누수 방지 및 4배 초과 비정상 확장 청크 비반환 상한 가드(Rule 23).
-    - `aggregate.go`, `join.go`, `sort.go`, `sqlexec_select.go` 전반에 청크 대여 및 `defer ReleaseChunk` 반환 적용.
-    - **실측 검증**: TPC-C VDBE 및 대규모 튜플 스트리밍 시 슬라이스 할당 제거로 WiredTiger **16,814.17 TPS** (457,021 tpmC, +13.2% 향상) 및 인메모리 **20,087.70 TPS** 달성 기여.
-
-- [x] **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링 (`P-11`) (`pkg/storage/memengine`)**
-  - **배경**: `sess.BeginTx()` 호출 시마다 `Transaction` 구조체와 6개의 Go 맵(`tableCache`, `baseVers`, `local`, `deleted`, `changes`, `savepoints`)을 힙에 새로 할당(`make(map...)`)하고 커밋/롤백 시 GC에 버리는 오버헤드(초당 16,000~20,000 TPS 환경에서 초당 10만+ 맵 객체 생성) 제거.
-  - **구현 내용**:
-    - `pkg/storage/memengine/tx.go`: `sync.Pool` 기반 `txPool` 구축.
-    - 트랜잭션 종료(`Commit()` 또는 `Rollback()`) 시 `defer tx.releaseToPoolLocked()`를 통해 Go 1.21+ 내장 `clear(m)` 함수로 맵의 내부 해시 버킷 용량을 유지한 채 $O(1)$ 초기화 후 풀에 반환.
-    - 대량 변경 트랜잭션(1,024건 초과)의 경우 거대 버킷 배열 영구 점유 방지를 위해 적응형 재할당 가드 적용(Rule 23).
-    - 트랜잭션 시작 시 힙 메모리 할당 0건(Zero-Allocation Transaction) 달성.
-    - **실측 검증**: TPC-C VDBE 벤치마크(Scale 10, 20 Workers)에서 **20,087.70 TPS** (541,708 tpmC), 직렬화 어보트율 **0.10%**로 20,000 TPS 선 공식 돌파 검증 완료.
-
-- [x] **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너 (`P-7`) (`pkg/storage`, `pkg/engine`)**
-  - **배경**: `ExtractJSON`, `ExtractJSONText`, `JSONValueByPath` 호출 시 매번 Go 표준 라이브러리의 `json.Unmarshal`을 호출하여 `map[string]any`를 힙에 생성하는 오버헤드 및 단일 튜플 내 다중 JSON 필드 참조 시 중복 파싱 제거.
-  - **구현 내용**:
-    - `pkg/storage/json.go`: 최상위 키 추출 전용 제로-할당 경량 스트리밍 바이트 스캐너(`ScanJSONTopLevelKey`) 구현. 단일 키 추출(`doc->>'city'`, `JSON_VALUE(doc, '$.city')`) 시 전체 트리 언마샬링 없이 서브마이크로초 즉시 반환.
-    - 용량 1,024건 상한 FIFO 퇴출 기반 스레드 안전 DOM 캐시(`jsonDOMCache`, `globalDOMCache`) 구축: 한 행에서 여러 복합 필드를 추출할 때 1회만 언마샬링하여 DOM 재사용.
-    - `ExtractJSON`, `ExtractJSONText`, `JSONValueByPath`, `JSONQueryByPath`, `navigatePath` 전반에 제로-할당 스캐너 및 캐시 결합 완료.
-
-- [x] **프로덕션 스토리지 파일시스템 암호화 표준 가이드 수립 & TDE 보류 (`doc/STORAGE_ENCRYPTION_GUIDE.md`, `doc/SECURITY.md`)**
-  - **배경**: 인-커널 소프트웨어 레벨 TDE(Transparent Data Encryption)는 클라우드 블록 스토리지나 엔터프라이즈 파일시스템과 중복 암호화되어 심각한 NVMe I/O 처리량 저하 및 CPU 암호화 부하를 유발함.
-  - **결정 및 구현**:
-    - **TDE 보류 및 플랫폼 프리미티브 위임 (Golden Rule 14, 15)**: 데이터베이스 프로세스 내부 소프트웨어 암호화 대신 OS 커널(`dm-crypt`/LUKS2 with AES-NI) 및 클라우드 KMS 블록 볼륨 암호화(AWS EBS, GCP CMEK, Azure Managed Disk)를 공식 표준으로 채택.
-    - **프로덕션 암호화 가이드 수립 (`doc/STORAGE_ENCRYPTION_GUIDE.md`)**:
-      - Linux 온프레미스/베어메탈 LUKS2 파티셔닝, ext4/XFS 포맷, NVMe 작업 큐 바이패스 성능 튜닝(`--perf-no_read_workqueue --perf-no_write_workqueue`).
-      - AWS EBS / GCP PD / Azure Managed Disk 암호화 StorageClass 매니페스트.
-      - 컨테이너/쿠버네티스 읽기 전용 루트 및 암호화 마운트 바운더리 격리 가이드.
-      - 백업 아카이브 OpenSSL AES-256-GCM 오프사이트 전송 암호화 절차.
-      - PCI-DSS v4.0, HIPAA, SOC 2, GDPR 규제 준수 매핑 완비.
-
-- [x] **가상 카탈로그 멀티테이블 조인 인터셉터 격리 리팩토링 (`pkg/catalog/virtual`, `pkg/engine`)**
-  - **배경**: `pkg/engine/sqlexec_gui_interop.go`와 `sqlexec_mssql_sys.go`에 분산되어 있던 DBeaver, DbGate, Beekeeper Studio 등 GUI 도구용 메타데이터 크로스 조인 쿼리 가로채기(PostgreSQL `pg_class JOIN pg_namespace`, `pg_attribute JOIN pg_class`, `pg_constraint`, `pg_proc`, MSSQL `sys.columns JOIN sys.types`, `sys.indexes`, `sys.partitions`) 레이어를 독립 패키지인 `pkg/catalog/virtual`로 분리하여 엔진과의 결합도를 낮추고 유지보수성을 극대화.
-  - **구현 내용**:
-    - **독립 패키지 신설 (`pkg/catalog/virtual`)**:
-      - `source.go`: 메타데이터 원천 인터페이스 `Source` 및 `Result` 구조체 정의.
-      - `result.go`: 가상 카탈로그 행 필터링, 정렬, 페이징, 프로젝션 평가기 `FormatResult` 및 정규식 최적화.
-      - `pg.go`: PostgreSQL 메타데이터 가상 조인 핸들러 모음.
-      - `mssql.go`: SQL Server / TDS 메타데이터 가상 조인 핸들러 모음.
-      - `interceptor.go`: `IsVirtualCatalogJoinQuery(sql string) bool` 판별기 및 `Execute(src Source, sql string) (*Result, error)` 중앙 라우팅 디스패처.
-      - `interceptor_test.go`: 가상 카탈로그 단위 테스트 완비.
-    - **엔진 연동 및 코드 다이어트 (`pkg/engine`)**:
-      - `sqlexec_virtual.go`: `*Coordinator`가 `virtual.Source` 및 `GetTableRowCount(string) int64`를 충족하도록 구현하고 `execVirtualCatalogJoinSelect`로 단일화.
-      - `sqlexec.go`, `sqlexec_select.go`: `virtual.IsVirtualCatalogJoinQuery` 및 `s.execVirtualCatalogJoinSelect` 호출로 전환.
-      - 비대했던 `sqlexec_gui_interop.go`와 `sqlexec_mssql_sys.go` 중복 코드 1,300여 라인 완전 제거.
-      - 레거시 HeidiSQL 명칭을 표준적이고 중립적인 `VirtualCatalog`로 통일.
-    - 전체 패키지 빌드 및 race-free 테스트 100% PASS 검증 완료.
-
-- [x] **하드코딩 Go 시딩 제거 및 5개 테이블 기반 독립 데모 스크립트(`scripts/demo_seed.sql`) & `--seed=false` 기본값 전환 (`cmd/server`, `scripts/`)**
-  - **배경**: 서버 바이너리에 Go 구조체로 하드코딩되어 있던 샘플 데이터 시딩 로직(`seedSampleAccounts`, `seedSampleProcedure`)을 제거하고, 실무 및 교육용으로 널리 쓰이는 표준 5개 테이블 세트와 샘플 Stored Procedure를 포함한 독립 SQL 스크립트로 분리하여 재사용성과 유지보수성을 극대화.
-  - **구현 내용**:
-    - **5개 표준 데모 테이블 완비 (`scripts/demo_seed.sql`)**: `customers`(고객 인적사항), `accounts`(고객 계좌 및 잔액), `products`(판매 상품 카탈로그), `sales`(주문 마스터), `sales_details`(주문 상세) 및 샘플 데이터 레코드(각 5~10건) 등록.
-    - **샘플 Stored Procedure 2종 완비**: 금융 계좌 이체 프로시저(`TransferFunds`) 및 전자상거래 주문 처리/재고 차감 프로시저(`ProcessOrder`).
-    - **`--seed=false` 기본값 전환**: 운영 환경 안정성을 위해 자동 시딩 기본값을 `false`로 전환(`pkg/config/config.go`, `cmd/server/main.go`).
-    - **단일 원천 스크립트 분리 (`scripts/demo_seed.sql`)**: 불필요한 바이너리 임베딩 중복 및 패키지 레이어 없이 `scripts/demo_seed.sql` 단일 원천 파일 유지 및 `--seed` 지정 시 파일 직접 로딩(KISS & DRY).
-    - **SQL 스크립트 분할기 및 프로시저 파서 개선**: 주석 무시(`StripLeadingComments`), `BEGIN TRANSACTION` 구문의 블록 깊이 오인식 방지, `DECIMAL(15, 2)` 등 다중 인자 타입 한정자 파싱 지원, `EXEC` 명명된 파라미터(`@Name = Val`) 및 위치 파라미터 동시 지원.
-
-- [x] **PGWire, TDS, HTTP 전반의 통합 관리자 인증 및 AuthProvider SPI 추상화 (`pkg/auth`, `pkg/wire`, `pkg/wire/tds`)**
-  - **배경**: HTTP(`admin@sqlion.local`), PostgreSQL(`postgres`), SQL Server(`sa`) 간 관리자 비밀번호가 분산되지 않고 단일 원천(SSOT)으로 동기화 관리되도록 개선하고, 향후 LDAP 연동을 위한 인터페이스 추상화 완비.
-  - **구현 내용**:
-    - `AuthService.defaultAdminEmail` 단일 원천 관리자 해시 보관 및 `AuthenticateLogin`에서 내장 관리자(`sa`, `postgres`, `admin`)의 단일 비밀번호 자동 검증.
-    - `ALTER LOGIN sa WITH PASSWORD = '...'` 실행 시 HTTP 슈퍼유저 비밀번호도 실시간 동기화.
-    - `pkg/wire` 및 `pkg/wire/tds`: `--auth=false` 시 신뢰(Trust) 무인증 접속 허용, `--auth=true` 시 단일 관리자 비밀번호 엄격 검증 및 실패 시 표준 에러(TDS Error 18456, PGWire 28P01) 반환.
-    - `AuthProvider` SPI 인터페이스(`pkg/auth/provider.go`) 신설 및 `RegisterProvider` 외부 공급자 체인 조회 구조 완비.
-    - 단위 및 동시성 경쟁 테스트 100% PASS 검증 완료.
-
-- [x] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링 (`P-6`) (`pkg/engine`)**
-  - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_derived.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_mssql_sys.go`, `sqlexec_gui_interop.go`, `sqlexec_string_split.go`, `sqlexec_procs.go` 등 핫패스 쿼리 라우팅 및 행 루프 내부에 분산되어 있던 40여 개의 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 DFA 재컴파일 지연(5~15µs) 및 힙 할당 병목 해소.
-  - **구현 내용**:
-    - **패키지 레벨 싱글톤 승격**: 정적 정규식 패턴 전체를 패키지 로드 시 1회 컴파일되는 `var reXxx = regexp.MustCompile(...)` 싱글톤으로 승격.
-    - **동적 파라미터 정규식 캐싱 (`getCompiledRegexp`)**: `CROSS/OUTER APPLY`, 뷰 치환, CTE 재작성, 프로시저 파라미터 치환 등 동적 식별자가 결합되는 정규식에 대해 `sync.Map` 기반 스레드 안전 정규식 캐시(`rePatternCache`)를 적용하여 0 allocation 재사용 보장.
-    - **행 루프/평가 핫패스 컴파일 제거**: `evalSimpleRowWhere`, `evaluateSingleConditionMap`, `evalUpdateExpr` 등 매 레코드마다 호출되던 정규식 동적 생성을 100% 제거.
-
-- [x] **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`P-8`) (`pkg/storage/wiredtiger`)**
-  - **배경**: `tx.Get`, `tx.Scan`, `tx.IndexScan`, `Insert`, `Update`, `Delete` 호출 시마다 CGo를 통한 `go_wt_open_cursor` 및 `cur->close` 반복 호출 오버헤드, 매 쿼리당 C `malloc`/`free`(`C.CString`), 그리고 단일 포인트 룩업당 6회의 CGo 경계 왕복 병목 해소.
-  - **구현 내용**:
-    - **세션 레벨 커서 풀링(`WTSession`)**: 테이블 URI(`table:name`)별로 유휴 커서 슬라이스(`cursorPool map[string][]*C.WT_CURSOR`, 최대 16개 한도)를 보관하여 `acquireCursor`/`releaseCursor`를 통해 닫지 않고 `C.go_wt_cursor_reset`으로 초기화 후 즉각 재사용.
-    - **단일 CGo 왕복 통합 헬퍼(`go_wt_cursor_get`, `go_wt_cursor_insert_raw`, `go_wt_cursor_update_raw`, `go_wt_cursor_remove_key`)**: C preamble 내에서 `set_key`, `search`/`operation`, `get_val_raw`를 단 1회의 CGo 호출로 통합 실행하여 CGo 호출 횟수를 1/3~1/6로 감축.
-    - **제로-할당 C 문자열 변환(`fastCString`)**: 256바이트 스택 버퍼(`[256]byte`) 기반 널 종료자 주입을 통해 일반 PK 조회 시 C `malloc`/`free` 호출을 100% 제거.
-    - **성능 검증**: 단건 PK 룩업(`tx.Get`) 처리량 894ns/op (초당 1,130,000+ OPS), 100건 스캔 및 튜플 디코딩 27µs/op (초당 36,000+ Table Scans), 멀티스레드 동시성 및 중첩 스캔 무결점 검증(0 Data Race).
-
-- [x] **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화 (`R-3`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)**
-  - **배경**: `sqlexec_eval.go`의 단일 테이블 고속 검색과 `execution/builder.go`의 Volcano 플랜 빌더 간에 인덱스 범위 검색 경계(`lowVal`, `highVal`) 추출 및 조건식 파싱 로직이 중복 존재(DRY 위반)하고, Volcano 인덱스 스캔에서 범위 조건(`BETWEEN`, `>=`, `<=`) 처리가 누락되어 있었음.
-  - **구현 내용**:
-    - `pkg/planner/bounds.go` 공통 모듈 신설: `ParseWhereConditions`, `ParseIndexCond`, `ParseValueToType`, `BuildCompositePrefixKey`, `FindIndexAndBounds` 통합.
-    - `pkg/execution/builder.go`: 중복 함수 완전 제거 및 `planner.ParseIndexCond` 호출로 단일화.
-    - `pkg/engine/sqlexec_eval.go`: 중복 구현된 260줄 이상의 바운드 파싱 로직을 제거하고 `planner.Bounds` 위임으로 슬림화.
-    - 단위 테스트 `pkg/planner/bounds_test.go` 완비 및 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
-
-- [x] **Pratt 파서 및 내장 함수 도메인별 관심사 분리 (`R-2`) (`pkg/proc`)**
-  - **배경**: `pkg/proc/parser.go`(3,241라인)와 `pkg/proc/builtins.go`(2,880라인)가 단일 파일에 비대하게 집중되어 신규 문법/함수 추가 시 인지 부하 및 머지 충돌 위험 증가.
-  - **구현 내용**:
-    - **파서 모듈화 (3,241줄 ➔ 5개 도메인 파일 분해)**: `parser.go` (280줄), `parser_ddl.go` (599줄), `parser_dml.go` (1,141줄), `parser_stmt.go` (656줄), `parser_expr.go` (615줄).
-    - **내장 함수 모듈화 (2,880줄 ➔ 6개 도메인 파일 분해)**: `builtins.go` (153줄), `builtins_date.go` (765줄), `builtins_string.go` (885줄), `builtins_math.go` (352줄), `builtins_json.go` (179줄), `builtins_sys.go` (697줄).
-    - 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
-
-- [x] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**
-  - **배경**: 단일 파일(3,283라인)에 PostgreSQL `pg_catalog`, ANSI `information_schema`, MSSQL `sys.tables`/DMV, DBeaver/Beekeeper/DbGate/HeidiSQL 도구별 쿼리 인터셉터가 혼재되어 거대한 switch 분기문과 높은 유지보수 비용을 초래함.
-  - **구현 내용**:
-    - 도메인별 4개 모듈 분리 완료: `sqlexec_pgcatalog.go`(634줄), `sqlexec_info_schema.go`(420줄), `sqlexec_mssql_sys.go`(554줄), `sqlexec_gui_interop.go`(477줄).
-    - `VirtualCatalogView` 함수 시그니처 및 `registerCatalogView` 레지스트리 패턴 도입: 거대한 switch 분기를 15줄 수준의 $O(1)$ 맵 디스패치(`execPgCatalogSelect`) 및 $O(1)$ 테이블 식별(`isPgCatalogTable`)로 슬림화.
-    - 전체 25개 패키지 레이스 감지 테스트 100% PASS 검증 완료.
-
-- [x] **반정형 JSON 표현식 B-Tree 인덱스 & 내장함수 완비 (`ADR-022`) (`pkg/proc`, `pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/engine`)**
-  - **배경**: PostgreSQL JSON 이항 연산자(`->`, `->>`) 및 T-SQL/ANSI JSON 표준 함수(`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`) 지원, 기능 표현식 인덱스(`((data->>'key'))`)를 통한 반정형 도큐먼트 쿼리의 초고속 B-Tree 인덱스 스캔 가속.
-  - **구현 내용**:
-    - JSON 내장 함수 및 Pratt 파서 연산자(`->`, `->>`) 완비.
-    - 기능 표현식 인덱스 DDL(`CREATE [UNIQUE] INDEX ON tbl ((expr))`) 파싱 및 AST 정규화.
-    - 스토리지 튜플 삽입/갱신/삭제 시 sub-microsecond JSON 키 추출(`storage.ExtractJSONIndexKey`), SkipList 및 WiredTiger B+Tree 실시간 동기화.
-    - ANSI SQL UNIQUE 제약 조건 준수: NULL 다중 허용(`!key.IsNull`) 및 중복 비-NULL 키 삽입 시 원자적 롤백(`ErrUniqueViolation`).
-    - CBO 옵티마이저 매칭(`pkg/planner`) 및 실행기 바인딩(`pkg/execution`): `WHERE data->>'city' = 'Seoul'` 또는 `JSON_VALUE(data, '$.city') = 'Seoul'` 평가 시 CBO가 `Index Scan` 자동 선택.
-    - 1,000건 JSON 레코드 대상 SeqScan(2.17ms) 대비 IndexScan(334µs)으로 7배+ 성능 가속 검증 완료.
-
-- [x] **T-SQL `STRING_SPLIT` 테이블 반환 함수 & 서브쿼리/CROSS APPLY 완비 (`pkg/engine`)**
-  - **배경**: 모던 SQL Server 및 T-SQL 저장 프로시저의 필수 TVF인 `STRING_SPLIT(string, separator [, enable_ordinal])` 지원을 통해 `WHERE id IN (SELECT value FROM STRING_SPLIT(@ids, ','))` 및 동적 태그 분해 `CROSS APPLY STRING_SPLIT(col, ',')`의 100% 호환성 확보.
-  - **구현 내용**:
-    - `pkg/engine/sqlexec_string_split.go`: `STRING_SPLIT(string, separator [, enable_ordinal])` 파싱 및 레코드셋 생성기 구현. 단일 쿼리, 테이블 별칭, 컬럼 별칭, `WHERE` 필터링, `ORDER BY`, `DISTINCT`, 집계 `COUNT(*)`, 페이징(`LIMIT`/`OFFSET` 및 T-SQL `OFFSET ... ROWS FETCH NEXT ... ROWS ONLY`) 완비.
-    - 세션 변수 연동: `@tags`, `@ids` 등 세션 변수를 즉각 해결하여 프로시저 및 매개변수화 쿼리와 매끄럽게 결합.
-    - 서브쿼리 해결 (`pkg/engine/sqlexec_explain.go`): `resolveSubqueriesWithSession`을 통해 `WHERE id IN (SELECT value FROM STRING_SPLIT(...))` 구문을 세션 컨텍스트 하에서 리터럴 리스트로 원자적 치환 후 초고속 엔진 경로 실행.
-    - `CROSS APPLY` 및 `OUTER APPLY` 연동: 행별 컬럼 데이터를 매개변수화하여 다중 행 조인 스트림 자동 생성.
-    - 단위 및 E2E 테스트 완비 (`pkg/engine/sqlexec_string_split_test.go`).
-
-- [x] **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ/Webhook) (`pkg/cdc`, `pkg/config`, `pkg/api`, `cmd/server`)**
-  - **배경**: 분산 마이크로서비스 환경에서 듀얼 라이트(Dual-Write) 문제 해결 및 데이터베이스 커밋과 100% 원자적으로 연동되는 무손실 메시지 브로커 발행(At-Least-Once Delivery).
-  - **구현 내용**:
-    - `pkg/cdc/outbox.go`: 트랜잭션 커밋 CDC 스트림 구독 및 `OutboxMessage` 정규화 디스패처 구현. 일반 테이블 변경 CDC 스트리밍(`sqlion.<table_name>`)과 전용 아웃박스 테이블(`outbox` / `_outbox`) 스키마(`topic`, `payload`, `key`, `headers`) 자동 해석 지원.
-    - 무손실 체크포인트 영속화: 원자적 스왑 파일(`outbox_checkpoint.json`, Golden Rules 1 & 5) 기반으로 마지막 처리 LSN(`last_ack_lsn`)을 기록하여 재기동 시 유실 없이 자동 재개.
-    - 지수 백오프 재시도: 브로커 일시 장애 시 최대 재시도 횟수(`MaxRetries`) 및 점진적 백오프 루프 관통.
-    - 플러그형 브로커 싱크(`pkg/cdc/outbox_sinks.go`): `MemorySink`(테스트/임베디드), `WebhookSink`(HTTP POST), `KafkaRESTSink`(Confluent/Strimzi/Upstash), `RabbitMQHTTPSink`(Management REST API).
-    - 운영 관측성 및 CLI 연동: `GET /api/cdc/outbox/status` 실시간 모니터링 엔드포인트 완비 및 CLI 플래그, JSON 설정 바인딩.
-    - 단위 및 E2E 테스트 완비 (`pkg/cdc/outbox_test.go`, `pkg/api/outbox_api_test.go`).
-
-- [x] **PostgreSQL 서버 사이드 커서 및 Extended Query 포털 배치 스트리밍 (`pkg/engine`, `pkg/wire`)**
-  - **배경**: 대규모 데이터셋 조회 시 클라이언트 메모리 고갈 방지 및 PostgreSQL 표준 SQL 커서(`DECLARE ... CURSOR`, `FETCH`, `MOVE`, `CLOSE`) 및 드라이버 포털 배치(`Execute` with `maxRows`, `PortalSuspended`) 완비.
-  - **구현 내용**:
-    - `pkg/engine/sqlexec_cursor.go`: `DECLARE <name> [SCROLL] [BINARY] CURSOR [{WITH|WITHOUT} HOLD] FOR <query>` 스냅샷 커서 등록기 구현.
-    - 커서 제어 명령 구현: `FETCH` 및 `MOVE` 지원 (`NEXT`, `PRIOR`, `FIRST`, `LAST`, `ALL`, `FORWARD`, `BACKWARD`, `ABSOLUTE <n>`, `RELATIVE <n>`, 정수 카운트).
-    - 커서 해제: 단일 커서 `CLOSE <name>` 및 전체 커서 일괄 정리 `CLOSE ALL`.
-    - 트랜잭션 수명주기 불변성: 일반 커서는 `COMMIT` 시 파기, `WITH HOLD` 커서는 `COMMIT` 후에도 유지, `ROLLBACK` 시 모든 커서 즉각 파기.
-    - Extended Query 프로토콜 연동 (`pkg/wire/server.go`): `Execute ('E')` 메시지의 `maxRows`를 파싱하여 배치 단위(`maxRows`)로 데이터 튜플을 스트리밍하고 미완료 시 `MsgPortalSuspended ('s')` 송출, 완료 시 `MsgCommandComplete ('C')` 송출.
-    - 단위 및 통합 테스트 완비: `pkg/engine/sqlexec_cursor_test.go` 및 `pkg/wire/server_test.go`.
-
-- [x] **관용적 No-Op `USE <database>` 및 세션 가상 DB 컨텍스트 동기화 (`pkg/engine`, `pkg/wire/tds`, `pkg/proc/runtime`)**
-  - **배경**: 인스턴스 단위 격리(Instance-Based Isolation) 아키텍처 불변성을 엄격히 유지하면서도, 레거시 SQL Server 덤프 스크립트, 마이그레이션 도구, DBeaver/SSMS GUI 클라이언트와의 100% 호환성 확보.
-  - **구현 내용**:
-    - `pkg/engine/sqlexec.go`: `USE <database>` 정규식 인터셉트를 통한 무오류 즉시 수용 및 `Command: "USE"` 응답.
-    - 세션 격리형 가상 DB 추적: `ClientSession.Database` 및 `ClientSession.Vars["current_database"]` / `["db_name"]` 동기화.
-    - 스칼라 함수 일원화: `DB_NAME()`, `CURRENT_DATABASE()`, `DB_ID()`, `ORIGINAL_DB_NAME()` 호출 시 세션 활성 데이터베이스를 완벽 동기화 반환.
-    - TDS 와이어 프로토콜 연동: `pkg/wire/tds/server.go`에서 `USE` 명령 실행 시 공식 MS-TDS `TokenEnvChange (0xE3)` (`EnvChangeDatabase`) 토큰 스트림을 클라이언트로 즉시 송출.
-    - 회귀 테스트 완비: `pkg/engine/coordinator_test.go` (`TestTolerantUseDatabase`), `pkg/wire/tds/server_test.go` (`TestTDS_TolerantUseDatabase`).
-
-- [x] **Always On 스타일 자동 장애 조치(Auto-Failover) 및 리더 선출 (`pkg/replication`, `cmd/server`, `pkg/config`, `pkg/ui`)**
-  - **배경**: 엔터프라이즈 99.999% 무중단 운영을 위한 Primary 장애 자동 감지, 최저 지연 LSN 레플리카 무손실 승격 및 스플릿 브레인 방지.
-  - **구현 내용**:
-    - `pkg/replication/failover.go`: 단조 증가 리더 텀(`term int64`) 및 Always On 최신 LSN 우선 규칙 기반 리더 선출 코디네이터 구현.
-    - 스플릿 브레인 방지(펜싱): 기존 Primary가 상위 텀 발표나 투표 요청 감지 시 즉시 읽기 전용 레플리카로 자동 강등.
-    - Primary 하트비트 타임아웃 자동 감지 및 정족수(Quorum) 기반 백그라운드 선출 루프 완비.
-    - CLI 플래그 및 JSON 설정 연동: `-auto-failover`, `-peers`, `-self-url`, `-heartbeat-timeout-ms`, `-election-timeout-ms`.
-    - 임베디드 웹 스튜디오(`pkg/ui/dashboard.html`) 실시간 리더 텀 및 고가용성 상태 시각화 연동.
-    - 단위 및 E2E 통합 테스트 완비 (`pkg/replication/failover_test.go`).
-
-- [x] **선언적 스키마 마이그레이션 CLI (`lionsql migrate`) 및 `_migrations` 이력 추적 (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**
-  - **배경**: PocketBase 스타일의 개발자 생산성 극대화 및 독립형 데이터베이스 스키마 버전 관리 완비.
-  - **구현 내용**:
-    - `_migrations` 내부 테이블 자동 생성 및 마이그레이션 메타데이터(`version`, `name`, `applied_at`, `duration_ms`) 이력 추적.
-    - `pkg/migrate` 엔진 신설: `Create`, `Load`, `Up`, `Down`, `Status` 라이프사이클 및 단조 증가 타임스탬프 충돌 방지 완비.
-    - `cmd/lionsql` 통합 CLI 바이너리 구축 (`bin/lionsql`): `lionsql migrate new <name>`, `lionsql migrate up/down/status`, 임베디드 직접 쿼리 실행기 `lionsql sql "<query>"`.
-    - `cmd/server/main.go` 양방향 패리티 완비 (`./bin/server migrate ...`).
-    - `pkg/migrate/migrate_test.go` 및 `cmd/lionsql/main_test.go` 단위/통합 테스트 완비.
-
-- [x] **[제거 / Spec-Out] 내장형 OAuth2 소셜 로그인 배제 (`pkg/api`, `pkg/auth`, `pkg/config`, `pkg/ui`)**
-  - **배경 및 결정 사유**: DB 커널 내부에서 구글/깃허브 웹 리다이렉트 및 아웃바운드 인터넷 토큰 교환을 처리하는 것은 단일 책임 원칙 및 KISS(Rule 15)를 위반하고 보안 공격 표면을 확대함. 1.0 릴리즈 안정화를 위해 스펙 아웃(Spec-Out) 결정 (`GEMINI.md` 섹션 8.6, `notes/ENGINEERING_CONTEXT.md` 섹션 1.12).
-  - **제거 내용**:
-    - `pkg/api/oauth.go`, `pkg/api/handlers_oauth.go`, `pkg/api/oauth_test.go` 파일 완전 삭제.
-    - `pkg/api/server.go`: OAuth 매니저, 라우트 및 핸들러 제거.
-    - `pkg/auth/auth.go`: `ProvisionOAuthUser`, `GetUserByOAuth` 및 슈퍼유저 OAuth 필드 제거.
-    - `pkg/config/config.go`: `OAuth2Config` 및 `SQLION_OAUTH_*` 환경 변수 파싱 제거.
-    - `pkg/ui/dashboard.html`: 웹 스튜디오 로그인 팝업 내 OAuth 버튼 및 메시지 리스너 제거.
-    - 전체 25개 패키지 race-free 테스트 100% PASS 검증 완료.
-
-- [x] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`C-7`) (`pkg/planner`)**
-  - **배경**: 범주형 상태 컬럼이나 특정 핫스팟 값에 데이터가 집중되는 왜곡(Skew) 데이터 환경에서 균등 분포 가정(1/NDV)으로 인해 발생하는 선택도 최대 10~100배 오차 제거.
-  - **구현 내용**:
-    - `MCVItem` 모델 및 컬럼 통계 내 `MCVList` 추출 엔진 구현 (`pkg/planner/stats.go`).
-    - `BuildColumnStats`에서 상위 최빈값(Top-20, 발생 빈도 >= 1% 및 평균 빈도 1.2배 초과) 자동 탐지 및 MCV 목록 분리.
-    - 동치, 부등치, `IN`, `BETWEEN`, 범위 평가 시 MCV 일치 여부를 1차 검사하고, 비-MCV 롱테일에 대해서만 히스토그램 보간을 적용하는 이원화 모델 완비.
-    - `cbo_stats.json` 영속화 및 역직렬화 무결성 보장.
-    - 범주형/수치형 왜곡 데이터, 균등 데이터, 단일값 데이터 및 JSON 라운드트립 단위 테스트 완비 (`pkg/planner/stats_test.go`).
-
-- [x] **다중 컬럼 확장 통계 및 함수적 종속성 모델링 (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**
-  - **배경**: 속성 값 독립성(AVI: Attribute Value Independence) 가정으로 인해 상관관계가 높은 다중 컬럼 조건 평가 시 카디널리티가 최대 10~100배 과소평가되는 왜곡 해소.
-  - **구현 내용**:
-    - `MultiColumnStats` 모델 및 다중 컬럼 결합 NDV 수집 엔진 구현 (`pkg/planner/stats.go`).
-    - 단일 컬럼 NDV 대비 결합 NDV 비율을 기반으로 함수적 종속성 계수($dep \in [0.0, 1.0]$) 자동 산출 (`ComputeFunctionalDependency`).
-    - `EstimateCompoundSelectivity` 및 `EstimateExprSelectivity`에서 상관관계 컬럼 감지 시 $dep \cdot \min(P_i) + (1-dep) \cdot \prod P_i$ 결합 선택도 산출 적용.
-    - T-SQL DDL 문법 지원: `CREATE STATISTICS stat_name ON table_name (col1, col2, ...)` 및 `DROP STATISTICS` 파싱 및 카탈로그 영속화 연동.
-    - `ANALYZE TABLE` 실행 시 복합 보조 인덱스 및 등록된 확장 통계에 대한 다중 컬럼 결합 통계 자동 수집 완비.
-
-- [x] **$N > 4$ 체인 조인 동적 계획법 (DP / Selinger) 조인 순서 최적화 (`B-4`) (`pkg/planner`)**
-  - **배경**: 5개 이상 다중 테이블 조인 시 기존 $O(N!)$ 전수 순열 탐색으로 인한 지수적 계산 폭증 방지 및 서브밀리초 최적 조인 트리 탐색.
-  - **구현 내용**:
-    - 부분집합 비트마스크(`1 << n`) 기반 Selinger 동적 계획법 `optimizeJoinOrderDP` 및 $O(1)$ 플랫 슬라이스 메모이제이션 구현.
-    - 조인 동등 조건 그래프 연결 검증을 통한 데카르트 곱 우선 가지치기 및 비연결 쿼리용 2차 폴백 패스 완비.
-    - DP 상태 공간 $\le 12$ 테이블 바운딩 가드(Golden Rules 21 & 23)로 복잡한 엔터프라이즈 ERP 다중 조인에서도 쿼리 플래닝 지연 서브밀리초 보장.
-    - 6개 및 8개 테이블 체인 조인에 대한 서브밀리초 플래닝 단위 테스트 완비 (`pkg/planner/cbo_join_test.go`).
-
-- [x] **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`) (`pkg/wire`, `pkg/wire/tds`)**
-  - **배경**: 쿼리 결과 스트리밍 시 행마다 `[]any` 및 `[][]byte` 슬라이스를 생성하는 힙 할당 오버헤드와 복사 제거.
-  - **구현 내용**:
-    - TDS 프로토콜 `WriteNBCRowDirect` 신설: `TokenNBCRow` (0xD2) 및 NULL 비트맵을 네트워크 직렬화 버퍼에 직접 기록.
-    - `executeRPCAndRespond` 및 `executeQueryAndRespond`에서 행 반복문 외부 `scratchVals []any` 1회 할당 재사용.
-    - PGWire 프로토콜 `writeExecutionResult` 및 `runAndWriteQueryWithFormats`에서 행 반복문 외부 `scratchRowBytes [][]byte` 1회 할당 재사용.
-
-- [x] **T-SQL 핵심 시스템 내장 함수 및 IDENTITY 추적 완비 (`pkg/proc`, `pkg/engine`)**
-  - **배경**: SQL Server 애플리케이션 및 ORM(Dapper, EF Core) 호환성을 위한 핵심 시스템 스칼라 함수 및 ID 생성 추적 기능 제공.
-  - **구현 내용**:
-    - `ISNUMERIC`, `CHARINDEX`, `PATINDEX`, `STUFF`, `IDENT_CURRENT`, `COLUMNPROPERTY`, `SCOPE_IDENTITY` 함수 구현.
-    - `Coordinator` 테이블별 마지막 발번 ID 추적(`SetTableLastIdentity`/`GetTableLastIdentity`).
-    - 세션 변수 치환 시 단일 `@` 사용자 변수가 시스템 `@@IDENTITY`와 충돌하는 토큰 결함 수정.
-
-- [x] **TDS PLP (Partially Length-Prefixed) LOB 청크 스트리밍 (`VARCHAR(MAX)`, `VARBINARY(MAX)`) (`pkg/wire/tds`)**
-  - **배경**: TDS 프로토콜에서 8,000 바이트를 초과하는 대용량 LOB 데이터 전송 시 단일 패킷 길이를 초과하는 페이로드 전송 표준 규격 준수.
-  - **구현 내용**:
-    - [MS-TDS] 2.2.5.2 규격 기반 PLP 청크 인코딩 엔진 구현 (`writePLPValue`).
-    - `ColMetaData`에서 비제한 LOB 타입에 대해 `0xFFFF` (65535) 길이 지시자 지정.
-    - 8바이트 전체 길이 헤더, 최대 8,000바이트 단위 청크 분할 전송, 4바이트 제로 종료 청크(`0x00000000`) 스트리밍.
-    - PLP 8바이트 `0xFFFFFFFFFFFFFFFF` NULL 표현식 완비.
-    - Go 공식 `sqlserver` 드라이버 및 Python `pymssql` 드라이버 E2E 검증 완료.
-
-- [x] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**
-  - **배경**: Go 공식 드라이버(`go-mssqldb`, `lib/pq`, `pgx/v5`)에 이어 엔터프라이즈 멀티 언어 클라이언트 검증.
-  - **구현 내용**:
-    - `pkg/wire/driver_external_test.go`: Python `psycopg3` (PGWire :5433) 연결, DDL/DML, NULL 값 처리, 명시적 트랜잭션(COMMIT/ROLLBACK) E2E 검증.
-    - `pkg/wire/tds/driver_external_test.go`: Python `pymssql` (TDS :1433 / FreeTDS dblib) 연결, DDL/DML, DATE/TIME/GUID 바이너리 파싱, 트랜잭션 원자성 E2E 검증.
-    - FreeTDS/pymssql 클라이언트 호환성: 일반 DDL 실행 시 unsolicited INFO 토큰 예외 방지 가드 적용.
-    - `uv run` 기반 격리형 실행 환경 및 미설치 환경 자동 스킵 연동으로 100% 무결점 밀폐형 테스트(Golden Rule 17) 달성.
-
-- [x] **볼케이노 벡터화 청크 반복자 (Chunked Batch Next: 64~1024건) (`P-4`) (`pkg/execution`, `pkg/engine`)**
-  - **배경**: 행 단위 `Next()` 가상 함수 호출 및 `ctx.Done()` 검사 오버헤드로 인한 CPU 캐시 미스 해소.
-  - **구현 내용**:
-    - `pkg/execution/chunk.go`: `Chunk` 구조체(1,024건 프리알로케이션), `ChunkedIterator` 인터페이스, `PullChunk` 자동 폴백 엔진 신설.
-    - `SeqScan`, `IndexScan`, `Filter`, `Projection`, `Limit`, `Aggregate`, `Sort`, `HashJoin`, `IndexNestedLoopJoin`, `sqlexec_select` 전반에 배치 파이프라인 관통.
-    - 기존 단건 `Next()` 호출에 대해 내부 청크 버퍼링을 통한 100% 투명한 하위 호환성 보장.
-
-- [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 커버링 인덱스 (`P-2`) (`pkg/storage`, `pkg/execution`, `pkg/planner`, `pkg/proc`, `pkg/engine`)**
-  - **배경**: 풀 스캔 및 인덱스 스캔 시 불필요한 모든 컬럼의 Varint/문자열 디코딩 힙 할당을 방지하고, 메인 테이블 조회를 생략.
-  - **구현 내용**:
-    - `pkg/storage/tuple.go`: 제로 할당 `SkipTupleColumn`, $O(1)$ 오프셋 캐싱 `LazyTuple`, 선별 디코딩 `DecodeTupleSelected` 구현.
-    - `CREATE INDEX ... INCLUDE(...)` 문법 파싱, 카탈로그 및 `SkipList` / `IndexData` 비키 페이로드 적재 연동.
-    - CBO 플래너 `isCovering` 및 `NodeIndexOnlyScan` 연동으로 테이블 힙 조회 100% 생략.
-
-- [x] **CBO 옵티마이저 힌트 오버라이드 제어 (`D-9`) (`pkg/planner`, `pkg/proc`)**
-  - 테이블 힌트(`WITH (INDEX(...))`) 및 쿼리 힌트(`OPTION (HASH/MERGE/LOOP JOIN, FORCE ORDER)`) 파싱 및 CBO 강제 오버라이드.
-
-- [x] **소트-머지 조인 (Sort-Merge Join) 연산자 및 비용 모델 (`B-3`) (`pkg/execution`, `pkg/planner`)**
-  - 정렬 입력에 대한 $O(M+N)$ 해시리스 스트리밍 반복자 `MergeJoinIterator` 신설 및 CBO 비용 경쟁 모델 연동.
-
-- [x] **단순 PK 조회 고속 지문 해싱 & 바이패스 캐시 (`P-5`) (`pkg/engine`, `pkg/storage`)**
-  - FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지, 정규 파서/CBO/VDBE 스택 우회 및 스토리지(`tx.Get`) 직결.
-
-- [x] **TDS 프로토콜 고도화: NBCROW 행 압축 (`0xD2`) (`pkg/wire/tds`)**
-  - TDS 7.3+ 표준 `BuildNBCRow` 신설, NULL 비트맵 패킹 및 0바이트 전송을 통한 네트워크 오버헤드 30%+ 절감.
-
-- [x] **SQL Server 2008 / TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET 및 UNIQUEIDENTIFIER 바이너리 직렬화 (`pkg/wire/tds`)**
-  - `DATE`(0x28), `TIME`(0x29), `DATETIME2`(0x2A), `DATETIMEOFFSET`(0x2B), `UNIQUEIDENTIFIER`(0x24) 전 항목 완비.
-  - 결과셋 컬럼 타입 자동 추론(`inferColumnInfos`) 고도화 및 공식 `github.com/microsoft/go-mssqldb` 통합 검증 완료.
+* **과제명**: 엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`pkg/audit`)
+* **표준 규격**: PCI-DSS v4.0 Requirement 10, SOC 2 Type II, HIPAA §164.312(b)
+* **핵심 아키텍처 및 구현 요구사항**:
+  1. **SHA-256 해시 체이닝 (Cryptographic Hash Chaining)**:
+     - 각 감사 레코드는 이전 레코드의 해시값을 포함하여 연결 ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$).
+     - 로그 파일 임의 변조, 행 삭제, 재정렬 시 오프라인 검증기에서 $100\%$ 즉각 탐지.
+  2. **비차단 MPSC 링 버퍼 (Non-Blocking Ring Buffer, Golden Rule 29)**:
+     - 트랜잭션 커밋 핫패스에서 디스크 I/O를 직접 수행하지 않고 인메모리 링 버퍼로 원자적 전달.
+     - 전용 백그라운드 플러셔 goroutine이 배치 단위 fsync 기록하여 OLTP 트랜잭션 지연 영향 $0\text{ms}$ 보장.
+  3. **감사 대상 이벤트 태깅**:
+     - 인증 이벤트: 로그인 성공/실패, 토큰 발급/폐기, 패스워드 변경.
+     - 권한 제어: `CREATE LOGIN/USER`, `GRANT`, `REVOKE`, `DENY`.
+     - 스키마 변경: `CREATE/ALTER/DROP TABLE`, `INDEX`, `PROCEDURE`, `VIEW`.
+     - 데이터 조작(선택적): 슈퍼유저 DML, 테이블 벌크 반출입.
+  4. **독립 CLI 무결성 검증기**:
+     - `lionsql audit verify -file=<audit.log>` 명령어를 통해 외부 감사인이 오프라인에서 암호학적 무결성 검증 가능.
 
 ---
 
-## 2. 도메인별 세부 백로그 (Domain-Specific Backlogs)
+## 3. 도메인별 통합 백로그 매트릭스 (Domain Backlog Matrices)
 
-### 2.1. CBO & 쿼리 최적화 (CBO & Query Engine)
+### 3.1. CBO & 쿼리 최적화 트랙 (`A` ~ `D`)
 
-| 번호 | 과제명 | 상태 | 설명 |
-| :---: | :--- | :---: | :--- |
-| **A-1** | **`ANALYZE TABLE` 멀티코어 병렬 통계 수집** | **완료 (`[x]`)** | 컬럼별 정렬 및 히스토그램 수집을 `sync.WaitGroup` 병렬화 완료 |
-| **A-2** | **CBO 통계 메타데이터 디스크 영속화** | **완료 (`[x]`)** | `cbo_stats.json` 원자적 파일 쓰기 및 기동 시 자동 복원 연동 완료 |
-| **C-6** | **OR 조건 및 불리언 트리 선택도 계산** | **완료 (`[x]`)** | AST 재귀 평가, 배타합/독립합집합, NOT, IN, BETWEEN 정밀 산출 완료 |
-| **D-9** | **CBO 옵티마이저 힌트 오버라이드 제어** | **완료 (`[x]`)** | T-SQL 조인 힌트(`HASH/LOOP/MERGE`) 및 인덱스 힌트(`WITH (INDEX(...))`) 강제 반영 |
-| **B-3** | **소트-머지 조인 (Sort-Merge Join) 연산자** | **완료 (`[x]`)** | 정렬된 입력에 대해 $O(M+N)$ 해시리스 스트리밍 조인(`MergeJoinIterator`) |
-| **B-4** | **$N > 4$ 체인 조인 동적 계획법 (DP)** | **완료 (`[x]`)** | 5개 이상 테이블 조인 시 Left-Deep DP 부분집합 비트마스크 동적 탐색 완료 |
-| **C-5** | **다중 컬럼 확장 통계 (Extended Stats)** | **완료 (`[x]`)** | 컬럼 상관관계로 인한 카디널리티 과소평가 방지 및 결합 선택도 산출 완료 |
-| **C-7** | **MCV (Most Common Values) 최빈값 목록 결합** | **완료 (`[x]`)** | 왜곡 데이터 최빈값 분리 보관 및 비-MCV 히스토그램 이원화 완비 |
-| **D-8** | **백그라운드 자동 통계 갱신 데몬** | **완료 (`[x]`)** | DML 변동량(Dirty Tuples) 기반 자동 `ANALYZE` 트리거 |
-
-- [x] **동적 계획법(DP / Selinger) 기반 대규모 조인 순서 최적화 ($N > 4$) (`B-4`) (`pkg/planner`)**:
-  4개 이하의 체인 조인 전수 순열 탐색을 넘어, $N > 4$ 테이블 조인에 대한 부분집합 비트마스크(`1 << n`) 기반 Selinger DP 및 연결성 기반 가지치기(Pruning) 완비.
-- [x] **다중 컬럼 확장 통계 (Extended / Multi-Column Statistics) (`C-5`) (`pkg/planner`, `pkg/catalog`, `pkg/engine`)**:
-  컬럼 간 상관관계(예: 국가-도시)로 인한 복합 조건 카디널리티 과소평가를 방지하는 다중 컬럼 NDV 수집, 함수적 종속성 모델링($dep$), CREATE/DROP STATISTICS DDL 및 결합 선택도 산출 완비.
-- [x] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`C-7`) (`pkg/planner`)**:
-  왜곡이 심한 상위 N개 최빈값(Top-20)은 MCV 목록으로 보관하고 나머지 균등 분포는 히스토그램으로 이원화 처리하여 선택도 오차 최소화.
-- [x] **백그라운드 자동 통계 갱신 데몬 (Auto-Analyze Daemon) (`D-8`) (`pkg/engine`, `pkg/catalog`, `pkg/storage`)**:
-  테이블 DML 변경 비율을 추적하여 백그라운드 비동기로 `coordinator.AnalyzeTable` 자동 트리거. 트랜잭션 커밋 핫패스에 락 경합 없이 원자적 카운팅(`AddWALHook`) 및 디바운싱 완비.
-- [x] **반정형 JSON 표현식 B-Tree 인덱스 및 내장 함수 완비 (`ADR-022`) (`pkg/proc`, `pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/engine`)**:
-  - [x] **[1단계] JSON 내장 함수 및 파서 연산자 구현 (완료)**: PostgreSQL `->`, `->>` 연산자, `ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY` 내장 함수 완비.
-  - [x] **[2단계] 기능 표현식 인덱스 DDL 및 스토리지 키 추출 (완료)**: `CREATE INDEX idx ON tbl ((data->>'key'))` 이중 괄호 DDL 파싱, 스토리지 SkipList 및 WiredTiger B+Tree 실시간 동기화.
-  - [x] **[3단계] CBO 표현식 인덱스 매칭 및 E2E 성능 벤치마크 (완료)**: CBO 옵티마이저가 JSON 표현식 쿼리에 대해 `Index Scan` 자동 선택, SeqScan 대비 6.5~7.3배 가속 달성.
+| 번호 | 과제명 | 구분 | 상태 | 구현 내용 요약 및 전략적 가치 |
+| :---: | :--- | :---: | :---: | :--- |
+| **A-1** | `ANALYZE TABLE` 멀티코어 병렬 통계 수집 | 통계 수집 | **완료 (`[x]`)** | `sync.WaitGroup` 기반 멀티코어 병렬화로 통계 수집 4~8배 가속 |
+| **A-2** | CBO 통계 메타데이터 디스크 영속화 | 통계 수집 | **완료 (`[x]`)** | `cbo_stats.json` 원자적 파일 쓰기 및 기동 시 자동 복원 연동 |
+| **B-3** | 소트-머지 조인 (Sort-Merge Join) 연산자 | 조인 엔진 | **완료 (`[x]`)** | 사전 정렬된 관계에 대해 $O(M+N)$ 단일 패스 해시리스 스트리밍 조인 |
+| **B-4** | $N > 4$ 체인 조인 동적 계획법 (Selinger DP) | 조인 최적화 | **완료 (`[x]`)** | Left-Deep DP 비트마스크 메모이제이션으로 $O(N!)$ 순열 폭증 방지 |
+| **C-5** | 다중 컬럼 확장 통계 (Extended Stats) | 선택도 모델 | **완료 (`[x]`)** | 다중 컬럼 결합 NDV 및 함수적 종속성($dep$) 모델링으로 과소평가 제거 |
+| **C-6** | OR 조건 및 불리언 트리 선택도 계산 | 선택도 모델 | **완료 (`[x]`)** | AST 재귀 평가, 배타합/독립합집합, NOT, IN, BETWEEN 정밀 산출 |
+| **C-7** | MCV (Most Common Values) 최빈값 목록 결합 | 선택도 모델 | **완료 (`[x]`)** | Top-20 최빈값 분리 보관 및 비-MCV 롱테일 히스토그램 이원화 |
+| **D-8** | 백그라운드 자동 통계 갱신 데몬 | 운영 제어 | **완료 (`[x]`)** | DML 변동량(Dirty Tuples) 임계치 도달 시 비동기 `ANALYZE` 자동 트리거 |
+| **D-9** | CBO 옵티마이저 힌트 오버라이드 제어 | 운영 제어 | **완료 (`[x]`)** | `OPTION (HASH/LOOP/MERGE JOIN)`, `WITH (INDEX(...))` 계획 강제 반영 |
 
 ---
 
-### 2.2. 스토리지 & 엔진 성능 (Storage & Engine Performance)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`)
 
-| 단계 | 전략 분야 | 핵심 구현 과제 | 상태 | 예상 효과 및 ROI |
+| 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
-| **P-1** | **스토리지/트랜잭션** | **배치형 그룹 커밋 & 무경합 Fast-Path** | **완료 (`[x]`)** | `FsyncAlways` 100배 지연 단축(0.038ms/op), TPC-C 2.8K TPS |
-| **P-2** | **스토리지/디코딩** | **바이너리 튜플 지연 역직렬화 & 커버링 인덱스** | **완료 (`[x]`)** | 스캔 속도 2배 향상, 불필요한 Varint 디코딩 힙 할당 제거 |
-| **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **완료 (`[x]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
-| **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **완료 (`[x]`)** | 볼케이노 가상 디스패치 및 컨텍스트 취소 오버헤드 99% 삭감, 1024 튜플 배치 스트리밍 |
-| **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료 (`[x]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
-| **P-6** | **파서 & 엔진** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | **완료 (`[x]`)** | 40여 개 정규식 싱글톤/캐시 승격으로 쿼리당 5~15µs 지연 및 힙 할당 100% 제거 |
-| **P-7** | **JSON & 내장함수** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 키 스캐너** | **완료 (`[x]`)** | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
-| **P-8** | **스토리지/CGo** | **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`cur->reset`)** | **완료 (`[x]`)** | 세션별 커서 풀링 및 C 헬퍼 단일화로 894ns 룩업(1.13M+ OPS) 달성 |
-| **P-9** | **옵티마이저/캐시** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | **보류 (`[-]`)** | SP/Prepared/PK 바이패스 캐시로 주요 OLTP 경로 기충족되어 보류 |
-| **P-10** | **실행기/병렬화** | **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`ParallelSeqScan`)** | **보류 (`[-]`)** | OLAP 분석 쿼리 워커 분할 (OLTP 동시성 영향 방지를 위해 1.0 보류) |
-| **P-11** | **스토리지/풀링** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | **완료 (`[x]`)** | 트랜잭션 맵 6개 동적 할당 0건화, 초당 2만 TPS GC 부하 80%+ 경감 |
-| **P-12** | **실행기/풀링** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | **완료 (`[x]`)** | 1,024건 슬라이스 할당 제거 및 대용량 배치/P-10 병렬 스트리밍 GC 최소화 |
-| **P-13** | **실행기/DML** | **DML Record(Map) 제거 ➔ Row(Slice) 직결 (Zero-Alloc DML)** | **보류 (`[-]`)** | 스토리지 계층의 외래키 연쇄 및 제약조건 엔진 회귀 위험으로 공식 보류 |
-| **P-14** | **와이어/바인드** | **Prepared Statement 바이너리 바인드 제로-할당 & 문자열 변환 제거** | **완료 (`[x]`)** | 바이너리 바인드 직접 파싱 및 정적 파라미터명 풀링으로 힙 할당 및 변환 비용 100% 제거 |
-| **P-15** | **스토리지/CGo** | **WiredTiger 다중 행 및 인덱스 배치 CGo 삽입 (`go_wt_cursor_batch_insert`)** | **보류 (`[-]`)** | CGo 메모리 관리/세그폴트/원자성 롤백 복잡성으로 보류 |
-| **P-16** | **스토리지/OCC** | **In-Memory OCC Row-Level Atomic CAS 커밋 검증 (Lock-Free)** | **보류 (`[-]`)** | 샤드 락 해제 시 롤백 경합/사일런트 데이터 손상 위험으로 보류 |
-| **P-17** | **실행기/VDBE** | **VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt` / Super-Instruction)** | **보류 (`[-]`)** | 점프 오프셋 오작동 및 타입 불일치 등 VM 복잡성으로 보류 |
-
-#### P 트랙 보류 및 완료 상세 사유
-- [-] **[보류 - 스토리지 FK/제약조건 복잡성] DML `storage.Record`(Map) 제거 ➔ `storage.Row`(Slice) 직결 파이프라인 (`P-13`) (`pkg/proc/runtime`, `pkg/engine`, `pkg/storage`)**:
-  외래키 연쇄 갱신, 유니크 인덱스 충돌 검사, 복합 제약조건 검증 로직이 `storage.Record` 구조와 강하게 결합되어 있어, 슬라이스 직결 전면 개편 시 ACID 트랜잭션 롤백 안정성 저해 및 회귀 위험이 큼. 데이터 안전(Golden Rule 1, 15)을 최우선으로 공식 보류.
-- [x] **Prepared Statement 바이너리 바인드 제로-할당 & 이중 변환 제거 (`P-14`) (`pkg/wire`, `pkg/engine`)**:
-  PGWire 및 TDS 수신 시 바이너리 바이트를 `storage.Value`로 즉시 디코딩하고, 64개 정적 파라미터명 풀링을 통해 `fmt.Sprintf` 힙 할당 100% 제거 완료.
-- [-] **[보류 - CGo 메모리/원자성 위험] WiredTiger 다중 행 및 인덱스 배치 CGo 삽입 (`P-15`) (`pkg/storage/wiredtiger`)**:
-  CGo 프리앰블 수준의 배치 삽입은 C 포인터 메모리 관리 오류, 세그폴트(SIGSEGV), 해저드 포인터 레이스 등 시스템 크래시 위험을 수반함. 현재 단일 노드 16,814 TPS의 높은 성능을 안정적으로 달성 중이므로 크래시 방지(Golden Rule 1, 36)를 위해 공식 보류.
-- [-] **[보류 - 동시성/ACID 위험] In-Memory OCC Row-Level Atomic CAS 커밋 검증 (`P-16`) (`pkg/storage/memengine`)**:
-  롤백 시 버전 복원 경쟁, 툼스톤 동시성 처리 등 동시성 엣지 케이스와 데이터 사일런트 손상 위험이 큼. 이미 TPC-C 20,087 TPS 환경에서 직렬화 어보트율 0.10%로 매우 안정적이므로 ACID 불변성을 최우선(Golden Rule 1, 10, 26)으로 공식 보류.
-- [-] **[보류 - VM 바이트코드 복잡성] VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt`) (`P-17`) (`pkg/proc`, `pkg/proc/runtime`)**:
-  바이트코드 점프 타깃(PC) 오프셋 불일치, 타입 변환 오류 등 가상 머신 실행 무결성 위협 위험이 큼. `sync.Pool` 레지스터 재사용과 서브마이크로초 디스패치로 20,087 TPS를 안정적으로 달성 중이므로 KISS(Golden Rule 15, 32) 원칙에 따라 공식 보류.
+| **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
+| **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
+| **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 | **완료 (`[x]`)** | `WriteNBCRowDirect` 직결, 중간 `[]any` 레코드 박싱 제거 |
+| **P-4** | 실행 엔진 | 벡터화 청크 반복자 (Chunked Batch Next) | **완료 (`[x]`)** | 1,024건 튜플 배치 스트리밍으로 가상 함수 디스패치 오버헤드 99% 제거 |
+| **P-5** | 캐시 | 고속 SQL 지문 해싱 & 단순 PK 조회 바이패스 | **완료 (`[x]`)** | FNV-1a 지문 해싱으로 CBO/VDBE 우회, 단순 PK 룩업 TPS 50%+ 향상 |
+| **P-6** | 파서/엔진 | 핫패스 정규식 사전 컴파일 및 캐싱 | **완료 (`[x]`)** | 40여 개 정규식 패키지 싱글톤 승격으로 쿼리당 5~15µs 힙 할당 제거 |
+| **P-7** | JSON | 반정형 JSON 동일 튜플 DOM 캐시 & 키 스캐너 | **완료 (`[x]`)** | `ScanJSONTopLevelKey` 무할당 스캐너 및 1,024건 DOM FIFO 캐시 |
+| **P-8** | 스토리지 | WiredTiger 커서 풀링 & `cur->reset` 재사용 | **완료 (`[x]`)** | 세션별 커서 풀링 및 C 헬퍼 단일화로 894ns 룩업(1.13M+ OPS) 달성 |
+| **P-9** | 옵티마이저 | 정형 SQL Parameterized 실행 계획 캐시 | **보류 (`[-]`)** | SP/Prepared/PK 바이패스로 고주파 경로가 기충족되어 보류 |
+| **P-10** | 실행기 | Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 | **보류 (`[-]`)** | OLTP 동시성 간섭 방지를 위해 1.0 보류 (v1.2+ 이관) |
+| **P-11** | 스토리지 | In-Memory OCC 트랜잭션 객체 & 맵 풀링 | **완료 (`[x]`)** | `tx.workspaces` 맵 `clear()` 재사용으로 트랜잭션 시작 할당 0건화 (20k TPS) |
+| **P-12** | 실행기 | Volcano 벡터화 배치 청크(`Chunk`) 풀링 | **완료 (`[x]`)** | `sync.Pool` 기반 1,024건 청크 재활용으로 대량 스캔 GC 부하 극소화 |
+| **P-13** | 실행기 | DML Record(Map) 제거 ➔ Row(Slice) 직결 | **보류 (`[-]`)** | 외래키 연쇄 및 제약조건 엔진 회귀 위험으로 공식 보류 |
+| **P-14** | 와이어 | Prepared Statement 바이너리 바인드 직접 디코딩 | **완료 (`[x]`)** | 중간 문자열 변환 제거 및 64개 정적 파라미터명 슬라이스 풀링 |
+| **P-15** | 스토리지 | WiredTiger 다중 행 배치 CGo 삽입 | **보류 (`[-]`)** | CGo 포인터 세그폴트 및 트랜잭션 롤백 복잡성으로 보류 |
+| **P-16** | 스토리지 | In-Memory OCC Row-Level Atomic CAS 커밋 | **보류 (`[-]`)** | 동시성 엣지 케이스 및 데이터 사일런트 손상 위험으로 보류 |
+| **P-17** | VM | VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt`) | **보류 (`[-]`)** | 바이트코드 점프 타깃(PC) 오프셋 불일치 및 VM 복잡성으로 보류 |
 
 ---
 
-### 2.3. 와이어 프로토콜 & 생태계 (Wire Protocols & Ecosystem)
-- [x] **T-SQL 특수 타입 직렬화 (TDS 7.3 DATE, TIME, DATETIME2, DATETIMEOFFSET, UNIQUEIDENTIFIER) (`pkg/wire/tds`)**:
-  `UNIQUEIDENTIFIER`, `DATE`, `TIME`, `DATETIME2`, `DATETIMEOFFSET` TDS 바이너리 인코딩 완비 및 공식 `go-mssqldb` 드라이버 통합 검증 완료.
-- [x] **PLP LOB 청크 스트리밍 (`pkg/wire/tds`)**:
-  [MS-TDS] 2.2.5.2 규격 기반 PLP 청크 인코딩 엔진 구현, 8바이트 전체 길이 헤더, 최대 8,000바이트 청크 분할 및 제로 종료 청크 전송 완비.
-- [x] **외부 언어 드라이버 E2E 통합 검증 하네스 (`pkg/wire`, `pkg/wire/tds`)**:
-  Python `psycopg3` (PGWire :5433) 및 `pymssql` (TDS :1433) 종단간 통합 검증 완료.
-- [x] **SSMS (SQL Server Management Studio) Object Explorer 가상 카탈로그/DMV 뷰 (`pkg/engine`, `pkg/catalog`)**:
-  SSMS 탐색기 트리 조회에 필수적인 `sys.configurations`, `sys.dm_exec_sessions`, `sys.all_objects` 등 가상 뷰 완비.
+### 3.3. 코드베이스 아키텍처 리팩토링 트랙 (`R-1` ~ `R-5`)
+
+| 번호 | 영역 | 핵심 리팩토링 과제 | 상태 | 목표 및 엔지니어링 성과 |
+| :---: | :--- | :--- | :---: | :--- |
+| **R-1** | 카탈로그 | 가상 시스템 카탈로그 모듈 분리 및 레지스트리화 | **완료 (`[x]`)** | 3,284줄 모놀리식 파일을 PG/MSSQL/ANSI 4개 도메인으로 분해, $O(1)$ 라우팅 |
+| **R-2** | 파서 | Pratt 파서 및 내장 함수 도메인별 관심사 분리 | **완료 (`[x]`)** | `parser.go`(3.2k줄 ➔ 5개 파일), `builtins.go`(2.8k줄 ➔ 6개 파일) 모듈화 |
+| **R-3** | 플래너 | 단일 테이블 패스트패스 vs Volcano 바운드 일원화 | **완료 (`[x]`)** | `pkg/planner/bounds.go` 공통 모듈 신설로 260줄 중복 제거 (DRY) |
+| **R-4** | 스토리지 | In-Memory OCC 트랜잭션 라이프사이클 모듈 분해 | **Post-1.0 (`[-]`)** | 1.0 안정성 최우선. 동시성 검증 완료 상태 보존을 위해 v1.1+ 이관 |
+| **R-5** | 스토리지 | WiredTiger CGo 바인딩 격리 및 트랜잭션 분해 | **Post-1.0 (`[-]`)** | 1.0 안정성 최우선. CGo 빌드 태그 복잡도 방지를 위해 v1.1+ 이관 |
+
+---
+
+## 4. 공식 보류 및 스펙-아웃 사유 명세 (Deferred & Spec-Out Rationale)
+
+1.0 릴리스 안정성 확보 및 극단적 KISS/YAGNI 원칙(Golden Rule 14, 15)에 따라 보류 및 배제된 항목들의 기술적 결정 사유입니다:
+
+### 4.1. 성능 및 실행 엔진 보류 과제
+* **DML `storage.Record` 제거 ➔ `storage.Row` 직결 (`P-13`)**:
+  `memengine` 및 WiredTiger 스토리지 계층의 복잡한 외래키 연쇄(CASCADE), 유니크 인덱스 충돌 검사, 복합 제약조건 검증 로직이 `storage.Record(map[string]Value)` 구조와 강하게 결합되어 있음. 이를 슬라이스 직결로 무리하게 전면 개편할 경우 엣지 케이스에서의 ACID 무결성 훼손 및 롤백 불안정 위험이 있어 보류.
+* **WiredTiger 다중 행 배치 CGo 삽입 (`P-15`)**:
+  CGo 프리앰블 수준의 일괄 삽입은 C 포인터 메모리 관리 오류, 세그폴트(SIGSEGV), 해저드 포인터 레이스 등 시스템 크래시 위험을 수반함. 이미 단일 노드 16,814 TPS의 높은 처리량을 안정적으로 달성 중이므로 크래시 방지(Rule 1, 36)를 위해 보류.
+* **In-Memory OCC Row-Level Atomic CAS 커밋 검증 (`P-16`)**:
+  롤백 시 버전 복원 경쟁, 툼스톤 동시성 처리 등 동시성 엣지 케이스와 데이터 사일런트 손상(Silent Corruption) 위험이 큼. 이미 TPC-C 20,087 TPS 환경에서 직렬화 어보트율이 0.10%로 극히 안정적이므로 시스템 무결성을 최우선으로 보류.
+* **VDBE 컬럼 산술 융합 슈퍼 명령어 (`P-17`)**:
+  바이트코드 점프 타깃(PC) 오프셋 불일치, 타입 불일치 등 가상 머신 실행 무결성 위협 위험이 큼. `sync.Pool` 레지스터 재사용과 서브마이크로초 디스패치로 20k TPS를 안정적으로 달성 중이므로 KISS 원칙에 따라 보류.
+
+### 4.2. 구조 리팩토링 및 플랫폼 보류 과제
+* **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해 (`R-4`) & WiredTiger CGo 분해 (`R-5`)**:
+  현재 25개 전 패키지 레이스 검사 100% PASS(0 Data Race)로 동시성 안정성이 완벽히 입증됨. 1.0 출시 전 단순 파일 분리는 런타임 성능 이득이 없고 오히려 회귀 위험을 유발하므로 v1.1+로 공식 이관.
+* **투명 데이터 암호화 (In-Kernel TDE)**:
+  인-커널 소프트웨어 암호화는 클라우드 볼륨(AWS EBS, GCP PD) 및 OS 블록 디바이스(LUKS2)와 중복 암호화되어 NVMe 처리량을 최대 35% 저하시킴. 하드웨어 가속(AES-NI) 기반 스토리지 파일시스템 암호화 표준 가이드([`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)) 수립으로 대체 충족.
+* **Pure-Go 영속 스토리지 엔진 (Pebble / bbolt)**:
+  1.0 프로덕션에서는 검증된 WiredTiger B+Tree 엔진과 순수 Go 초고속 In-Memory OCC 엔진 2대 백엔드 체제에 집중(v1.1+ 이관).
+
+### 4.3. 영구 스펙-아웃 (Spec-Out Invariants)
+* **내장형 OAuth2 소셜 로그인 배제**:
+  데이터베이스 커널 내부에서 구글/깃허브 웹 리다이렉트 및 아웃바운드 인터넷 토큰 교환을 처리하는 것은 단일 책임 원칙 및 KISS(Rule 15)를 위반하고 공격 표면을 확대함. 엔터프라이즈 리버스 프록시(Keycloak, OAuth2-Proxy) 위임으로 영구 표준화 (`GEMINI.md` 8.6절, ADR-021).
+* **내장형 S3 Blob 파일 스토리지 및 썸네일 리사이징 배제**:
+  대용량 바이너리 스트리밍 및 이미지 리사이징으로 인한 OLTP CPU/메모리 기아를 방지하고, S3/MinIO 직접 업로드(Pre-signed URL) 위임으로 영구 표준화 (`GEMINI.md` 8.7절, `doc/S3_PRESIGNED_STORAGE_PLAN.md`).
+
+---
+
+## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
+
+### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **테스트 스위트 중복 보일러플레이트 대규모 슬림화 (Net -291줄) (`pkg/wire`, `pkg/api`)**:
+  - `pkg/wire/server_test.go`: `authenticatePGClient` 헬퍼 도입 및 동시성/커서 테스트 슬림화 (-176줄).
+  - `pkg/api/sqlexec_test.go`: 31개 단위 테스트에 걸친 중복 인메모리 서버 초기화를 `setupMemServer(t)`로 단일화 (-115줄).
+  - 전체 패키지 무결성 유지 및 291줄 순수 코드 삭제 달성.
+- [x] **가상 카탈로그 쿼리 인터셉터 0-Alloc 프리필터 & 공백 무관 등호 매칭 리팩토링 (`pkg/catalog/virtual`)**:
+  - `containsFold` (ASCII 대소문자 무관 무할당 탐색) 및 `hasCatalogCandidate` 도입: 일반 OLTP 쿼리 103.5ns, 0 B/op 탈출.
+  - `containsEq`: 키와 값 사이 등호(`=`) 주변의 임의 공백 순열(`= `, ` =`, ` = `, `   =   `, 탭)을 완벽 수용하는 강건한 매처 구현.
 - [x] **ODBC / JDBC 엔터프라이즈 드라이버 적합성 인증 (`pkg/wire`)**:
-  PostgreSQL 공식 JDBC(`pgjdbc`) 및 `psqlODBC` 드라이버 초기화 및 카탈로그 뷰 E2E 적합성 검증 완비.
-- [x] **PostgreSQL 서버 사이드 커서 및 Extended Query 포털 배치 스트리밍 (`pkg/engine`, `pkg/wire`)**:
-  `DECLARE ... CURSOR [WITH HOLD] FOR`, `FETCH`, `MOVE`, `CLOSE [ALL]` 및 Extended Query `Execute`의 `maxRows` 페이로드 분할 스트리밍 지원.
-- [x] **임베디드 웹 스튜디오 HA 복제 모니터링 카드 (`pkg/ui`)**:
-  브라우저 웹 스튜디오(`:8090/_/`)에 고가용성(HA) 복제 상태 시각화 카드 추가 및 수동 승격(`Promote`) 버튼 제공.
-
----
-
-### 2.4. 엔터프라이즈 보안 & 거버넌스 (Enterprise Security & Governance)
-- [-] **[보류 / Postponed] 투명 데이터 암호화 (TDE: Transparent Data Encryption) (`pkg/storage`)**:
-  OS/클라우드 블록 볼륨 암호화 표준 가이드([`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)) 수립으로 대체 충족 및 프로세스 중복 암호화 부하 방지를 위해 보류.
-- [ ] **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log) (`pkg/logger`, `pkg/api`)**:
-  로그인 성공/실패, 권한 변경(`GRANT/REVOKE`), DDL 스키마 변경, 관리자 데이터 조작 이벤트를 태깅하여 위변조가 불가능한 불변 감사 파일로 안전 기록 (설계 사양: [`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md)).
-- [-] **[보류 / Postponed] `INSTEAD OF` 트리거 런타임 인터셉터 (`pkg/proc/runtime`, `pkg/engine`)**:
-  DML 핫패스 복잡도 증가 방지 및 현대적 ORM/SP 아키텍처 환경을 고려하여 1.0 프로덕션에서는 보류.
-
----
-
-### 2.5. 고가용성 & 분석 확장 (HA & Analytical Extensions)
-- [x] **Always On 스타일 자동 장애 조치 및 리더 선출 (Automatic Failover & Leader Election) (`pkg/replication`)**:
-  Primary 노드 다운 시 복제 랙(LSN Lag)이 가장 적은 최신 Replica 노드를 새로운 Primary로 자동 승격 (Leader Promotion).
-- [x] **분리형 실시간 CDC (Change Data Capture) 스트리밍 프레임워크 (`pkg/cdc`, `pkg/api`, `cmd/server`)**:
-  트랜잭션 커밋과 100% 원자적으로 연동되는 Row-level 변경 델타 이벤트 모델 구축, `GET /api/cdc/stream` 스트리밍 완비 및 DuckDB 분리형 HTAP 연동 가이드([`doc/CDC_DUCKDB_INTEGRATION.md`](doc/CDC_DUCKDB_INTEGRATION.md)) 작성.
-- [x] **트랜잭셔널 아웃박스 외부 브로커 디스패처 (Kafka, RabbitMQ, Webhook) (`pkg/cdc`, `pkg/config`, `pkg/api`, `cmd/server`)**:
-  CDC 스트림을 외부 분산 메시지 브로커로 무손실 발행하는 Outbox 릴레이 워커, 지수 백오프 재시도 및 아웃박스 체크포인트 원자적 영속화 완비.
-- [ ] **[보류 / Postponed] Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`)**:
-  CGO 의존성 없는 완전한 정적 바이너리 배포를 위한 백엔드 (WiredTiger 및 인메모리 OCC 고성능 엔진에 집중하며 보류).
-- [x] **[제거 / Spec-Out] 내장형 Google 및 GitHub OAuth2 소셜 로그인 & 자동 사용자 프로비저닝 (`pkg/api`, `pkg/auth`)**:
-  DB 커널 경량화 및 보안 공격 표면 축소를 위해 리버스 프록시 위임으로 표준화 (`GEMINI.md` 8.6절 Spec-Out).
-- [x] **[제거 / Spec-Out] 내장형 S3 Blob 파일 스토리지 및 이미지 썸네일 리사이징 (`GEMINI.md` 8.7절)**:
-  OLTP 엔진 성능 저하 방지 및 전용 오브젝트 스토리지 위임을 위해 커널 내장 배제 ([`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) 참조).
-- [x] **선언적 스키마 마이그레이션 CLI (`lionsql migrate`) (`cmd/lionsql`, `pkg/migrate`, `cmd/server`)**:
-  타임스탬프 기반 마이그레이션 파일 페어 생성, 원자적 배포, 롤백, 상태 조회 및 직접 쿼리 실행기(`lionsql sql`) 완비 ([`doc/SCHEMA_MIGRATIONS_CLI.md`](doc/SCHEMA_MIGRATIONS_CLI.md)).
-
----
-
-### 2.6. 코드베이스 구조 개선 & 아키텍처 리팩토링 (Architecture & Refactoring)
-
-| 번호 | 영역 | 핵심 구현 과제 | 상태 | 목표 및 리팩토링 상세 |
-| :---: | :--- | :--- | :---: | :--- |
-| **R-1** | **엔진/카탈로그** | **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화** | **완료 (`[x]`)** | 3.2K줄 `sqlexec_pgcatalog.go` 도메인 분해(PG/MSSQL/ANSI) 및 $O(1)$ 라우팅 |
-| **R-2** | **파서/내장함수** | **Pratt 파서 및 내장 함수 도메인별 관심사 분리** | **완료 (`[x]`)** | `parser.go`(3.2K줄), `builtins.go`(2.8K줄) 도메인 모듈화 |
-| **R-3** | **엔진/실행기** | **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화** | **완료 (`[x]`)** | `sqlexec_eval.go`와 `execution/builder.go` 간 중복 제거 (DRY) |
-| **R-4** | **스토리지/OCC** | **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해** | **Post-1.0 이관 (`[-]`)** | 1.0 안정성 우선, 동시성 검증 완료 상태 보존 (2.7절 참조) |
-| **R-5** | **스토리지/CGo** | **WiredTiger CGo 바인딩 격리 및 트랜잭션/커서 모듈화** | **Post-1.0 이관 (`[-]`)** | 1.0 안정성 우선, CGo 빌드 복잡도 및 회귀 위험 방지 (2.7절 참조) |
-
-- [x] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**:
-  도메인별 물리적 파일 분리(`sqlexec_pgcatalog.go`, `sqlexec_mssql_sys.go`, `sqlexec_info_schema.go`, `sqlexec_gui_interop.go`), `VirtualCatalogView` 레지스트리 패턴으로 거대한 switch 분기를 15줄 $O(1)$ 라우팅으로 슬림화.
+  - PostgreSQL 공식 JDBC(`pgjdbc`) 및 `psqlODBC` 드라이버 초기화 파라미터(`extra_float_digits`, `application_name`) 및 카탈로그 뷰 E2E 적합성 검증 완비.
+- [x] **Prepared Statement 바이너리 바인드 파라미터 직접 디코딩 (`P-14`) (`pkg/wire`, `pkg/wire/tds`)**:
+  - OID 기반 `storage.Value` 직접 디코딩으로 중간 문자열 변환 제거, 64개 정적 파라미터명 슬라이스 풀링으로 `fmt.Sprintf` 힙 할당 100% 제거.
+- [x] **TDS 단일 프레임 버퍼 풀링 & 네트워크 시스템 콜 50% 삭감 (`pkg/wire/tds`)**:
+  - `sync.Pool` 기반 4KB 고정 프레임 풀 구축, 8바이트 헤더와 페이로드를 단일 연속 프레임에 패킹하여 패킷당 1회의 `w.Write()` 시스템 콜 원자적 전송.
+- [x] **Volcano 벡터화 배치 청크(`Chunk`) 풀링 (`P-12`) (`pkg/execution`)**:
+  - 1,024건 단위 튜플 배치 스트리밍 버퍼를 `sync.Pool`로 재활용하여 대규모 테이블 스캔 및 조인 시 메모리 누수 방지 및 GC 부하 극소화.
+- [x] **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링 (`P-11`) (`pkg/storage/memengine`)**:
+  - 트랜잭션 종료 시 Go 1.21+ `clear(m)`으로 해시 버킷 용량을 유지한 채 $O(1)$ 초기화 및 풀링, TPC-C Scale 10에서 20,087 TPS 공식 돌파.
+- [x] **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 키 스캐너 (`P-7`) (`pkg/storage`, `pkg/engine`)**:
+  - `ScanJSONTopLevelKey` 제로-할당 스캐너 및 1,024건 FIFO DOM 캐시 결합으로 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감.
+- [x] **가상 카탈로그 멀티테이블 조인 인터셉터 격리 리팩토링 (`pkg/catalog/virtual`, `pkg/engine`)**:
+  - DBeaver/Beekeeper/DbGate 메타데이터 크로스 조인 쿼리 가로채기 레이어를 독립 패키지 `pkg/catalog/virtual`로 분리, 1,300여 라인 중복 코드 제거.
+- [x] **하드코딩 Go 시딩 제거 및 5개 테이블 기반 독립 데모 스크립트(`scripts/demo_seed.sql`) & `--seed=false` 기본값 전환**:
+  - `customers`, `accounts`, `products`, `sales`, `sales_details` 5개 표준 테이블과 `TransferFunds`, `ProcessOrder` 프로시저를 독립 SQL 파일로 분리.
+- [x] **PGWire, TDS, HTTP 전반의 통합 관리자 인증 및 AuthProvider SPI 추상화 (`pkg/auth`)**:
+  - 단일 슈퍼유저 비밀번호로 3개 와이어 프로토콜 통합 검증, `AuthProvider` SPI 인터페이스 신설로 외부 디렉터리 확장성 확보.
+- [x] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링 (`P-6`) (`pkg/engine`)**:
+  - 40여 개 동적 `regexp.MustCompile`을 패키지 싱글톤 및 `rePatternCache`로 승격하여 쿼리당 5~15µs 지연 및 힙 할당 100% 제거.
+- [x] **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`P-8`) (`pkg/storage/wiredtiger`)**:
+  - 세션별 `cursorPool` 보관 및 `C.go_wt_cursor_reset` 재사용으로 894ns 룩업(1.13M+ OPS) 달성.
+- [x] **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 로직 일원화 (`R-3`) (`pkg/planner`)**:
+  - `pkg/planner/bounds.go` 공통 모듈 신설로 260줄 이상의 중복 바운드 파싱 로직 제거.
 - [x] **Pratt 파서 및 내장 함수 도메인별 관심사 분리 (`R-2`) (`pkg/proc`)**:
-  파서 모듈화(코어, DDL, DML, Stmt, Expr 5개 파일) 및 내장 함수 모듈화(코어, 날짜, 문자열, 수학, JSON, 시스템 6개 파일) 완비.
-- [x] **단일 테이블 패스트패스 vs Volcano 인덱스 바운드 및 조건 평가 로직 일원화 (`R-3`) (`pkg/engine`, `pkg/execution`, `pkg/planner`)**:
-  `pkg/planner/bounds.go` 공통 모듈 신설을 통해 인덱스 바운드 파싱 로직 260줄 중복 제거 및 Volcano 인덱스 스캔 범위 검색 완벽 지원.
+  - 비대했던 `parser.go`와 `builtins.go`를 11개 도메인 모듈 파일로 깔끔하게 분해.
+- [x] **가상 시스템 카탈로그 모듈 분리 및 가상 뷰 레지스트리화 (`R-1`) (`pkg/engine`)**:
+  - 거대한 switch 분기를 15줄 수준의 $O(1)$ 레지스트리 맵 디스패치(`VirtualCatalogView`)로 슬림화.
 
----
-
-### 2.7. Post-1.0 유지보수 및 보류 백로그 (Post-1.0 Maintenance & Deferred Backlog)
-
-1.0 릴리즈의 안정성 확보 및 YAGNI/KISS 원칙(Golden Rule 14, 15)에 따라, 런타임 성능이나 기능 결함이 아니며 회귀 위험이 있는 구조적 리팩토링 및 플랫폼 대체재가 충분한 과제들을 1.0 이후(v1.1+) 유지보수 백로그로 공식 이관·보류합니다.
-
-- [-] **In-Memory OCC 스토리지 트랜잭션 라이프사이클 모듈 분해 (`R-4`) (`pkg/storage/memengine`) - [Post-1.0 이관]**:
-  현재 TPC-C 20,087 TPS 및 전 패키지 레이스 검사 100% PASS로 안정성이 입증됨. 1.0 안정화 단계에서는 동시성 검증 완료 상태를 보존하고 v1.1+에서 파일 분해 추진.
-- [-] **WiredTiger 스토리지 CGo 바인딩 격리 및 파일 분해 (`R-5`) (`pkg/storage/wiredtiger`) - [Post-1.0 이관]**:
-  CGo 헤더 바인딩, 커서 풀링, 빌드 제약(`wt_stub.go`)이 안정 페어링되어 동작 중이므로 v1.1+로 이관.
-- [-] **투명한 데이터 암호화 (TDE: In-Kernel AES-256-GCM) (`pkg/storage`) - [보류/Postponed]**:
-  하드웨어 가속(AES-NI) 기반 스토리지 파일시스템 암호화 표준 가이드([`doc/STORAGE_ENCRYPTION_GUIDE.md`](doc/STORAGE_ENCRYPTION_GUIDE.md)) 수립으로 대체 충족.
-- [-] **정형 SQL Parameterized 쿼리 실행 계획 캐시 (`P-9`) (`pkg/engine`, `pkg/planner`) - [보류/Postponed]**:
-  SP VDBE 바이트코드 캐시, Prepared Statement 캐시, 단순 PK 바이패스로 OLTP 핫패스가 이미 100% 최적화되어 보류.
-- [-] **Pure Go 영속 스토리지 엔진 옵션 (Pebble / bbolt) (`pkg/storage`) - [보류/Postponed]**:
-  1.0 프로덕션에서는 검증된 WiredTiger B+Tree 엔진과 순수 Go 초고속 In-Memory OCC 엔진 2대 백엔드 체제에 집중.
-- [-] **Wasm 런타임 샌드박스 UDF (wazero) (`pkg/extension`) - [보류/Postponed]**:
-  Go 네이티브 함수 SPI 및 VDBE T-SQL 저장 프로시저가 이미 완비되어 사용자 정의 확장 요구를 100% 충족하므로 보류.
-- [-] **LDAP / Active Directory 디렉토리 인증 공급자 (`pkg/auth`) - [보류/Postponed]**:
-  `AuthProvider` SPI가 완비되어 있으며, 엔터프라이즈 SSO는 경계 리버스 프록시(Keycloak 등)로 처리하는 것이 권장되므로 1.0 프로덕션에서는 보류 ([`doc/ENTERPRISE_AUTHENTICATION_SPI.md`](doc/ENTERPRISE_AUTHENTICATION_SPI.md)).
-- [-] **Volcano 대규모 분석 쿼리 멀티코어 병렬 실행기 (`P-10`) (`pkg/execution`) - [보류/Postponed]**:
-  고동시성 OLTP 엔진 환경에서 CPU 기아 방지를 위해 향후 OLAP 분석 단계(v1.2+)로 이관.
-- [-] **`INSTEAD OF` 트리거 런타임 인터셉터 (`pkg/proc/runtime`, `pkg/engine`) - [보류/Postponed]**:
-  DML 핫패스 복잡도 증가 방지를 위해 1.0에서는 보류하고 레거시 ERP 마이그레이션 단계(v1.1+)로 이관.
-
----
-
-## 3. 최근 완료된 핵심 마일스톤 아카이브 (Recently Completed Milestones)
-
-- [x] **[아키텍처] VDBE Instruction 구조체 16바이트 패킹 (`pkg/proc/bytecode.go`)**:
-  `Op(1B) + Flags(1B) + Aux(2B) + A(4B) + B(4B) + C(4B) = Exactly 16 Bytes` 고정 크기 레코드 압축. 64B L1 Cache Line당 정확히 4개 명령어 적재(`unsafe.Sizeof == 16`), VM 디스패치 레이턴시 단축.
-- [x] **[아키텍처] SQL 실행 코디네이터 패키지 분리 (`pkg/api` ➔ `pkg/engine`)**:
-  13개 `sqlexec_*.go` 파일(14,000+ 라인)을 `pkg/engine`으로 완전 이관. PGWire 및 TDS 리스너가 `pkg/api` 의존성 없이 `engine.SQLCoordinator` 단방향 직결 호출 확립.
-- [x] **[스토리지] 스토리지 파이프라인 배치형 그룹 커밋 (Group Commit & Fsync 가속)**:
-  `memengine` WAL 및 `wiredtiger` 양쪽 엔진 모두에 리더/팔로워 그룹 커밋 및 무경합 패스트패스 구현. `FsyncAlways` 마이크로벤치마크 커밋 지연 100배 단축(0.038ms/op), TPC-C VDBE 14,800+ TPS 달성.
-- [x] **[SQL 문법] T-SQL & ANSI SQL 7대 문법 및 실행 파이프라인 전면 완비 (`S-1` ~ `S-7`)**:
-  - `S-1`: `OFFSET ... FETCH NEXT ... ROWS ONLY` 및 `TOP (n)` 정규 페이징 완비.
-  - `S-2`: 복합 한정자(`[db].[schema].[tbl].[col]`) 및 인라인 별칭(`FROM accounts basetbl`) 파싱 정밀화.
-  - `S-3`: FROM 절 파생 테이블(`FROM (SELECT ...) AS t`) 및 인라인 서브쿼리 AST 노드화, 격리 구체화(`__dt_*`).
-  - `S-4`: `CAST`, `TRY_CAST`, `CONVERT`, `TRY_CONVERT`, `::` 및 `COALESCE`/`ISNULL` 단락 평가 완비.
-  - `S-5`: `CROSS APPLY`, `OUTER APPLY` 및 `FULL OUTER JOIN`, `RIGHT OUTER JOIN` 볼케이노 해시조인 완비.
-  - `S-6`: 세션 제어문(`SET NOCOUNT ON`, `SET ANSI_NULLS ON` 등) 정식 AST 파싱 및 세션 플래그 바인딩.
-  - `S-7`: `WHERE [NOT] EXISTS` 상관 서브쿼리 Semi/Anti-Join CBO 변환 및 비상관 조기 평가.
-- [x] **[CBO] CBO 불리언 트리 재귀 평가 & OR 조건 정밀 선택도 산출 (`C-6`)**:
-  `TableStats.EstimateExprSelectivity()` 신설, 동일 컬럼 배타 합, 독립 합집합, NOT, IN, BETWEEN 정밀 산출 완비.
-- [x] **[보안] 세분화된 SQL 객체 수준 RBAC (Role-Based Access Control) (`pkg/auth`, `pkg/catalog`, `pkg/api`)**:
-  `CREATE LOGIN/USER`, `SETUSER`, `GRANT/REVOKE/DENY` 및 사전 카탈로그 인터셉터(`checkTableAccess`) 완비.
-- [x] **[안정성] PlanCache Bounded LRU 캐시 및 메모리 상한 방어 (Golden Rule 29) (`pkg/proc/runtime`)**:
-  무제한 맵을 `container/list` 기반 상한 용량(`DefaultPlanCacheCapacity = 1024`) LRU 캐시로 전면 개편하여 OOM 원천 방지.
-- [x] **[T-SQL 내장함수] T-SQL 공식 내장 스칼라 함수 전수 완비 (A~F 그룹)**:
-  에러, 문자열, 수학/삼각, 메타데이터, 암호화, 날짜 함수군 완비.
-- [x] **[드라이버] 공식 클라이언트 드라이버 E2E 통합 검증**:
-  Go 공식 드라이버 `go-mssqldb` (TDS), `lib/pq` (PGWire), `pgx/v5` (Extended Query Pipelining) 100% PASS 검증 완료.
-- [x] **[성능] 단순 PK 조회 고속 지문 해싱 & 스토리지 바이패스 캐시 (`P-5`) (`pkg/engine`, `pkg/storage`)**:
-  쿼리 문자열 FNV-1a 64비트 지문 해싱 기반 Fast-Path 템플릿 탐지, 정규 파서/CBO/VDBE 스택 우회 및 스토리지(`tx.Get`) 직결.
-- [x] **[스토리지/디코딩] 바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 커버링 인덱스 INCLUDE (`P-2`)**:
-  제로 할당 `SkipTupleColumn`, $O(1)$ 오프셋 캐싱 `LazyTuple`, 선별 디코딩 `DecodeTupleSelected` 구현 및 Index-Only Scan 극대화.
-- [x] **[실행 엔진] 볼케이노 벡터화 청크 반복자 및 1,024건 배치 스트리밍 (`P-4`) (`pkg/execution`, `pkg/engine`)**:
-  `ChunkedIterator` 및 `NextChunk` 인터페이스 신설, 1,024건 프리알로케이션 청크 기반 볼케이노 배치 파이프라인 관통.
-- [x] **[와이어 프로토콜] TDS NBCROW 행 압축 (`0xD2`) (`pkg/wire/tds`)**:
-  TDS 7.3+ 표준 `BuildNBCRow` 신설, NULL 비트맵 패킹 및 0바이트 전송으로 네트워크 대역폭 30%+ 절감.
-- [x] **[CBO/조인] 소트-머지 조인 (Sort-Merge Join) 연산자 및 옵티마이저 힌트 (`B-3`, `D-9`)**:
-  $O(M+N)$ 해시리스 스트리밍 반복자 `MergeJoinIterator` 신설 및 `OPTION (HASH/MERGE/LOOP JOIN)`, `WITH (INDEX(...))` 강제 오버라이드.
-- [x] **[생태계/GUI] 3대 메이저 GUI 클라이언트(DBeaver, DbGate, Beekeeper Studio) 완벽 호환**:
-  TDS 및 PGWire 양대 프로토콜 상에서 테이블 브라우징, 인덱스/외래키/프로시저 인트로스펙션, 스토리지 크기 산출 및 메타데이터 조회 전면 완비.
+### 5.2. 코어 아키텍처 및 기능 마일스톤 이력
+- [x] **반정형 JSON 표현식 B-Tree 인덱스 & 내장함수 완비 (`ADR-022`)**:
+  - `->`, `->>`, `ISJSON`, `JSON_VALUE`, `JSON_QUERY` 지원, `((data->>'key'))` 기능 인덱스 DDL 파싱, CBO 인덱스 스캔 6.5~7.3배 가속.
+- [x] **T-SQL `STRING_SPLIT` 테이블 반환 함수 & 서브쿼리/CROSS APPLY 완비 (`pkg/engine`)**:
+  - `STRING_SPLIT` 파싱, 세션 변수 연동, `WHERE id IN (SELECT value FROM STRING_SPLIT(...))` 서브쿼리 해결 및 `CROSS APPLY` 연동.
+- [x] **Transactional Outbox 브로커 디스패처 (Kafka/RabbitMQ/Webhook) (`pkg/cdc`)**:
+  - CDC 커밋 스트림 기반 아웃박스 릴레이, 무손실 체크포인트(`outbox_checkpoint.json`), 지수 백오프 재시도 및 플러그형 싱크 완비.
+- [x] **PostgreSQL 서버 사이드 커서 및 Extended Query 포털 배치 스트리밍 (`pkg/wire`, `pkg/engine`)**:
+  - `DECLARE CURSOR`, `FETCH`, `MOVE`, `CLOSE` 커서 라이프사이클 및 Extended Query `Execute` `maxRows` 분할 스트리밍 지원.
+- [x] **관용적 No-Op `USE <database>` 및 세션 가상 DB 컨텍스트 동기화 (`pkg/engine`, `pkg/wire/tds`)**:
+  - `USE` 명령 무오류 즉시 수용, `ClientSession.Database` 동기화, `DB_NAME()` 반환, TDS `TokenEnvChange (0xE3)` 송출.
+- [x] **Always On 스타일 자동 장애 조치(Auto-Failover) 및 리더 선출 (`pkg/replication`)**:
+  - 단조 증가 텀, LSN 우선권 리더 선출, 스플릿 브레인 방지 펜싱, 하트비트 타임아웃 감지 및 자동 승격 완비.
+- [x] **선언적 스키마 마이그레이션 CLI (`lionsql migrate`) (`cmd/lionsql`, `pkg/migrate`)**:
+  - `_migrations` 메타데이터 추적, `new`, `up`, `down`, `status` 라이프사이클, 임베디드 직접 쿼리 실행기 `lionsql sql`.
+- [x] **MCV (Most Common Values) 최빈값 목록 및 히스토그램 결합 (`C-7`) (`pkg/planner`)**:
+  - Top-20 최빈값 분리 보관 및 비-MCV 롱테일 히스토그램 이원화로 왜곡 데이터 선택도 오차 최소화.
+- [x] **다중 컬럼 확장 통계 및 함수적 종속성 모델링 (`C-5`) (`pkg/planner`)**:
+  - 결합 NDV 수집, 종속성 계수($dep$) 산출, `CREATE/DROP STATISTICS` DDL 지원.
+- [x] **$N > 4$ 체인 조인 동적 계획법 (Selinger DP) (`B-4`) (`pkg/planner`)**:
+  - 비트마스크 메모이제이션 기반 Selinger DP, 데카르트 곱 가지치기, 6개/8개 테이블 체인 서브밀리초 플래닝.
+- [x] **스토리지 ➔ 와이어 제로카피 직접 직렬화 (`P-3`) (`pkg/wire`, `pkg/wire/tds`)**:
+  - `WriteNBCRowDirect` 직결, 네트워크 직렬화 버퍼 직접 기록으로 중간 힙 할당 제거.
+- [x] **TDS PLP (Partially Length-Prefixed) LOB 청크 스트리밍 (`pkg/wire/tds`)**:
+  - [MS-TDS] 2.2.5.2 PLP 규격 구현, 8KB 초과 `VARCHAR(MAX)` 청크 분할 전송 완비.
+- [x] **볼케이노 벡터화 청크 반복자 (Chunked Batch Next: 1,024건) (`P-4`) (`pkg/execution`)**:
+  - 1,024건 프리알로케이션 청크 기반 볼케이노 배치 파이프라인 관통 및 기존 단건 `Next()` 투명 버퍼링 100% 하위 호환성 보장.
+- [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 커버링 인덱스 (`P-2`) (`pkg/storage`)**:
+  - `SkipTupleColumn`, $O(1)$ `LazyTuple`, `CREATE INDEX ... INCLUDE(...)` 커버링 인덱스로 메인 테이블 힙 조회 100% 생략.
