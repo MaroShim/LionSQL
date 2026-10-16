@@ -12,6 +12,13 @@ import (
 	"sqlion/pkg/storage"
 )
 
+var (
+	reMssqlObjectIDIn   = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
+	reMssqlObjectIDEq   = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
+	reMssqlTableNameEq  = regexp.MustCompile(`(?is)(?:ic\.)?table_name\s*=\s*'([^']+)'`)
+	reMssqlSchemaNameEq = regexp.MustCompile(`(?is)(?:ic\.)?table_schema\s*=\s*'([^']+)'`)
+)
+
 func (s *Coordinator) getSortedTables() []*storage.TableSchema {
 	if s.engine == nil {
 		return nil
@@ -46,8 +53,7 @@ func (s *Coordinator) getSortedProcedures() []*catalog.Procedure {
 }
 
 func parseTargetObjectIDs(sql string) map[int]bool {
-	inRe := regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
-	if m := inRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reMssqlObjectIDIn.FindStringSubmatch(sql); len(m) == 2 {
 		res := make(map[int]bool)
 		for _, part := range strings.Split(m[1], ",") {
 			cleaned := strings.Trim(strings.TrimSpace(part), "'\" ")
@@ -59,8 +65,7 @@ func parseTargetObjectIDs(sql string) map[int]bool {
 			return res
 		}
 	}
-	eqRe := regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
-	if m := eqRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reMssqlObjectIDEq.FindStringSubmatch(sql); len(m) == 2 {
 		if id, err := strconv.Atoi(m[1]); err == nil {
 			return map[int]bool{id: true}
 		}
@@ -113,14 +118,12 @@ func (s *Coordinator) execBeekeeperMSSQLColumnSelect(sql string, start time.Time
 	}
 
 	targetTable := ""
-	tblRe := regexp.MustCompile(`(?is)(?:ic\.)?table_name\s*=\s*'([^']+)'`)
-	if m := tblRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reMssqlTableNameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetTable = cleanIdentifier(m[1])
 	}
 
 	targetSchema := "dbo"
-	schRe := regexp.MustCompile(`(?is)(?:ic\.)?table_schema\s*=\s*'([^']+)'`)
-	if m := schRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reMssqlSchemaNameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = cleanIdentifier(m[1])
 	}
 

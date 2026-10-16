@@ -14,8 +14,21 @@ import (
 	"sqlion/pkg/storage"
 )
 
+var (
+	rePivotMatch    = regexp.MustCompile(`(?i)\bPIVOT\s*\(`)
+	rePivotBody     = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_]+)\s*\((.*?)\)\s+FOR\s+([a-zA-Z0-9_#\[\].]+)\s+IN\s*\((.*?)\)\s*$`)
+	rePivotOrder    = regexp.MustCompile(`(?is)\s+ORDER\s+BY\s+(.*)$`)
+	rePivotWhere    = regexp.MustCompile(`(?is)\s+WHERE\s+(.*)$`)
+	rePivotCond     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_#\[\].]+)\s*(=|!=|<>|>=|<=|>|<)\s*(.+?)\s*$`)
+	reUnpivotMatch  = regexp.MustCompile(`(?i)\bUNPIVOT\s*\(`)
+	reUnpivotBody   = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_#\[\].]+)\s+FOR\s+([a-zA-Z0-9_#\[\].]+)\s+IN\s*\((.*?)\)\s*$`)
+	reForJsonMatch  = regexp.MustCompile(`(?i)\bFOR\s+JSON\s+(PATH|AUTO)\b`)
+	reForJsonClause = regexp.MustCompile(`(?i)\bFOR\s+JSON\s+(PATH|AUTO)(.*)$`)
+	reForJsonRoot   = regexp.MustCompile(`(?i)^ROOT(?:\s*\(\s*['"]?([^'"]+)['"]?\s*\))?`)
+)
+
 func hasPivot(query string) bool {
-	return regexp.MustCompile(`(?i)\bPIVOT\s*\(`).MatchString(query)
+	return rePivotMatch.MatchString(query)
 }
 
 type pivotParsedQuery struct {
@@ -37,8 +50,7 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 		return nil, fmt.Errorf("PIVOT query must start with SELECT")
 	}
 
-	re := regexp.MustCompile(`(?i)\bPIVOT\s*\(`)
-	loc := re.FindStringIndex(trimmed)
+	loc := rePivotMatch.FindStringIndex(trimmed)
 	if loc == nil {
 		return nil, fmt.Errorf("no PIVOT clause found")
 	}
@@ -134,8 +146,7 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 	afterPivot := strings.TrimSpace(trimmed[closeParen+1:])
 
 	// Parse pivot body: <agg_func>(<agg_col>) FOR <pivot_col> IN (<pivot_vals>)
-	pivotBodyRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_]+)\s*\((.*?)\)\s+FOR\s+([a-zA-Z0-9_#\[\].]+)\s+IN\s*\((.*?)\)\s*$`)
-	m := pivotBodyRe.FindStringSubmatch(pivotBody)
+	m := rePivotBody.FindStringSubmatch(pivotBody)
 	if len(m) != 5 {
 		return nil, fmt.Errorf("malformed PIVOT clause: %s", pivotBody)
 	}
@@ -155,13 +166,11 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 
 	// Parse afterPivot: [AS] <alias> [WHERE <where>] [ORDER BY <order>]
 	var orderByClause, whereClause, pivotAlias string
-	orderRe := regexp.MustCompile(`(?is)\s+ORDER\s+BY\s+(.*)$`)
-	if mOrder := orderRe.FindStringSubmatch(afterPivot); len(mOrder) == 2 {
+	if mOrder := rePivotOrder.FindStringSubmatch(afterPivot); len(mOrder) == 2 {
 		orderByClause = strings.TrimSpace(mOrder[1])
 		afterPivot = afterPivot[:len(afterPivot)-len(mOrder[0])]
 	}
-	whereRe := regexp.MustCompile(`(?is)\s+WHERE\s+(.*)$`)
-	if mWhere := whereRe.FindStringSubmatch(afterPivot); len(mWhere) == 2 {
+	if mWhere := rePivotWhere.FindStringSubmatch(afterPivot); len(mWhere) == 2 {
 		whereClause = strings.TrimSpace(mWhere[1])
 		afterPivot = afterPivot[:len(afterPivot)-len(mWhere[0])]
 	}
@@ -458,8 +467,7 @@ func (s *Coordinator) evalSimpleRowWhere(row map[string]any, where string) bool 
 	parts := splitOnAnd(where)
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		condRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_#\[\].]+)\s*(=|!=|<>|>=|<=|>|<)\s*(.+?)\s*$`)
-		m := condRe.FindStringSubmatch(part)
+		m := rePivotCond.FindStringSubmatch(part)
 		if len(m) != 4 {
 			continue
 		}
@@ -644,7 +652,7 @@ func compareAny(a, b any) int {
 // -----------------------------------------------------------------------------
 
 func hasUnpivot(query string) bool {
-	return regexp.MustCompile(`(?i)\bUNPIVOT\s*\(`).MatchString(query)
+	return reUnpivotMatch.MatchString(query)
 }
 
 type unpivotParsedQuery struct {
@@ -665,8 +673,7 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 		return nil, fmt.Errorf("UNPIVOT query must start with SELECT")
 	}
 
-	re := regexp.MustCompile(`(?i)\bUNPIVOT\s*\(`)
-	loc := re.FindStringIndex(trimmed)
+	loc := reUnpivotMatch.FindStringIndex(trimmed)
 	if loc == nil {
 		return nil, fmt.Errorf("no UNPIVOT clause found")
 	}
@@ -760,8 +767,7 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 	afterUnpivot := strings.TrimSpace(trimmed[closeParen+1:])
 
 	// Parse unpivot body: <val_col> FOR <name_col> IN (<cols>)
-	unpivotBodyRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_#\[\].]+)\s+FOR\s+([a-zA-Z0-9_#\[\].]+)\s+IN\s*\((.*?)\)\s*$`)
-	m := unpivotBodyRe.FindStringSubmatch(unpivotBody)
+	m := reUnpivotBody.FindStringSubmatch(unpivotBody)
 	if len(m) != 4 {
 		return nil, fmt.Errorf("malformed UNPIVOT clause: %s", unpivotBody)
 	}
@@ -779,13 +785,11 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 	}
 
 	var orderByClause, whereClause, unpivotAlias string
-	orderRe := regexp.MustCompile(`(?is)\s+ORDER\s+BY\s+(.*)$`)
-	if mOrder := orderRe.FindStringSubmatch(afterUnpivot); len(mOrder) == 2 {
+	if mOrder := rePivotOrder.FindStringSubmatch(afterUnpivot); len(mOrder) == 2 {
 		orderByClause = strings.TrimSpace(mOrder[1])
 		afterUnpivot = afterUnpivot[:len(afterUnpivot)-len(mOrder[0])]
 	}
-	whereRe := regexp.MustCompile(`(?is)\s+WHERE\s+(.*)$`)
-	if mWhere := whereRe.FindStringSubmatch(afterUnpivot); len(mWhere) == 2 {
+	if mWhere := rePivotWhere.FindStringSubmatch(afterUnpivot); len(mWhere) == 2 {
 		whereClause = strings.TrimSpace(mWhere[1])
 		afterUnpivot = afterUnpivot[:len(afterUnpivot)-len(mWhere[0])]
 	}
@@ -986,7 +990,7 @@ func (s *Coordinator) execUnpivotSelect(query string, start time.Time, cs *Clien
 // -----------------------------------------------------------------------------
 
 func hasForJSON(query string) bool {
-	return regexp.MustCompile(`(?i)\bFOR\s+JSON\s+(PATH|AUTO)\b`).MatchString(query)
+	return reForJsonMatch.MatchString(query)
 }
 
 type forJSONOptions struct {
@@ -998,8 +1002,7 @@ type forJSONOptions struct {
 }
 
 func parseForJSONQuery(query string) (*forJSONOptions, error) {
-	re := regexp.MustCompile(`(?i)\bFOR\s+JSON\s+(PATH|AUTO)(.*)$`)
-	loc := re.FindStringSubmatchIndex(query)
+	loc := reForJsonClause.FindStringSubmatchIndex(query)
 	if loc == nil {
 		return nil, fmt.Errorf("no FOR JSON clause found")
 	}
@@ -1028,8 +1031,7 @@ func parseForJSONQuery(query string) (*forJSONOptions, error) {
 				opts.IncludeNullValues = true
 			} else if strings.HasPrefix(pUpper, "ROOT") {
 				// ROOT or ROOT('name')
-				rootRe := regexp.MustCompile(`(?i)^ROOT(?:\s*\(\s*['"]?([^'"]+)['"]?\s*\))?`)
-				if m := rootRe.FindStringSubmatch(p); len(m) >= 2 && m[1] != "" {
+				if m := reForJsonRoot.FindStringSubmatch(p); len(m) >= 2 && m[1] != "" {
 					opts.RootName = m[1]
 				} else {
 					opts.RootName = "root"

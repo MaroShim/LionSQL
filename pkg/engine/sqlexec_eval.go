@@ -13,6 +13,12 @@ import (
 	"sqlion/pkg/storage"
 )
 
+var (
+	reEvalInClause    = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)
+	reEvalEqCondition = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*=\s*(.+?)\s*$`)
+	reEvalArithExpr   = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_]+)\s*([\+\-\*\/])\s*([0-9\.]+)\s*$`)
+)
+
 func parseValueTuples(s string) []string {
 	var tuples []string
 	var cur strings.Builder
@@ -321,8 +327,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		}
 	}
 
-	inRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)
-	if m := inRe.FindStringSubmatch(whereStr); len(m) == 4 {
+	if m := reEvalInClause.FindStringSubmatch(whereStr); len(m) == 4 {
 		colName := cleanIdentifier(m[1])
 		isNot := strings.TrimSpace(m[2]) != ""
 		valList := m[3]
@@ -529,7 +534,7 @@ func (s *Coordinator) rewriteViewsAsCTE(query string) (string, bool) {
 	for _, v := range views {
 		esc := regexp.QuoteMeta(v.Name)
 		// Match the view name as a standalone identifier (not inside quotes or parens).
-		re := regexp.MustCompile(`(?i)\b` + esc + `\b`)
+		re := getCompiledRegexp(`(?i)\b` + esc + `\b`)
 		if re.MatchString(query) {
 			cteParts = append(cteParts, fmt.Sprintf("%s AS (%s)", v.Name, v.Query))
 		}
@@ -550,10 +555,9 @@ func parseEqualityConditions(where string) map[string]string {
 	result := make(map[string]string)
 	// Split on AND (case-insensitive), skipping parenthesized groups.
 	parts := splitOnAnd(where)
-	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*=\s*(.+?)\s*$`)
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		if m := eqRe.FindStringSubmatch(part); len(m) == 3 {
+		if m := reEvalEqCondition.FindStringSubmatch(part); len(m) == 3 {
 			rawCol := m[1]
 			// Strip table qualifier (tbl.col -> col)
 			if dot := strings.LastIndex(rawCol, "."); dot != -1 {
@@ -852,8 +856,7 @@ func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema
 }
 
 func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataType) storage.Value {
-	arithRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_]+)\s*([\+\-\*\/])\s*([0-9\.]+)\s*$`)
-	if m := arithRe.FindStringSubmatch(exprStr); len(m) == 4 {
+	if m := reEvalArithExpr.FindStringSubmatch(exprStr); len(m) == 4 {
 		colName := cleanIdentifier(m[1])
 		op := m[2]
 		numStr := m[3]

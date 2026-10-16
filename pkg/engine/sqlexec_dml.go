@@ -11,6 +11,16 @@ import (
 	"sqlion/pkg/storage"
 )
 
+var (
+	reDmlInsertCheck  = regexp.MustCompile(`(?is)^(?:INSERT|UPSERT)(?:\s+INTO)?\s+([^\s(]+)`)
+	reDmlInsertSelect = regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+(\(?\s*SELECT\s+.*)$`)
+	reDmlInsertValues = regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+VALUES\s*(.*)$`)
+	reDmlUpdateCheck  = regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)`)
+	reDmlUpdate       = regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
+	reDmlDeleteCheck  = regexp.MustCompile(`(?is)^DELETE(?:\s+FROM)?\s+([^\s;]+)`)
+	reDmlDelete       = regexp.MustCompile(`(?is)^DELETE\s+(?:FROM\s+)?([^\s;]+)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
+)
+
 type onConflictAction int
 
 const (
@@ -225,8 +235,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
-	insRe := regexp.MustCompile(`(?is)^(?:INSERT|UPSERT)(?:\s+INTO)?\s+([^\s(]+)`)
-	if m := insRe.FindStringSubmatch(cleaned); len(m) >= 2 {
+	if m := reDmlInsertCheck.FindStringSubmatch(cleaned); len(m) >= 2 {
 		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivInsert); err != nil {
 			return nil, err
 		}
@@ -243,8 +252,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	}
 
 	// Branch: INSERT INTO ... SELECT
-	reSelect := regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+(\(?\s*SELECT\s+.*)$`)
-	if selMatches := reSelect.FindStringSubmatch(insertSQL); len(selMatches) >= 5 {
+	if selMatches := reDmlInsertSelect.FindStringSubmatch(insertSQL); len(selMatches) >= 5 {
 		return s.execInsertSelect(selMatches[1], selMatches[2], selMatches[3], selMatches[4], start, cs)
 	}
 
@@ -259,8 +267,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
-	re := regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+VALUES\s*(.*)$`)
-	matches := re.FindStringSubmatch(insertSQL)
+	matches := reDmlInsertValues.FindStringSubmatch(insertSQL)
 	if len(matches) < 5 {
 		return nil, fmt.Errorf("invalid INSERT INTO syntax")
 	}
@@ -956,8 +963,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
-	updRe := regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)`)
-	if m := updRe.FindStringSubmatch(cleaned); len(m) >= 2 {
+	if m := reDmlUpdateCheck.FindStringSubmatch(cleaned); len(m) >= 2 {
 		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivUpdate); err != nil {
 			return nil, err
 		}
@@ -970,8 +976,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 			return res, nil
 		}
 	}
-	re := regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
-	matches := re.FindStringSubmatch(cleaned)
+	matches := reDmlUpdate.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
 		return nil, fmt.Errorf("invalid UPDATE syntax")
 	}
@@ -1127,8 +1132,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
-	delRe := regexp.MustCompile(`(?is)^DELETE(?:\s+FROM)?\s+([^\s;]+)`)
-	if m := delRe.FindStringSubmatch(cleaned); len(m) >= 2 {
+	if m := reDmlDeleteCheck.FindStringSubmatch(cleaned); len(m) >= 2 {
 		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivDelete); err != nil {
 			return nil, err
 		}
@@ -1141,8 +1145,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			return res, nil
 		}
 	}
-	re := regexp.MustCompile(`(?is)^DELETE\s+(?:FROM\s+)?([^\s;]+)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
-	matches := re.FindStringSubmatch(cleaned)
+	matches := reDmlDelete.FindStringSubmatch(cleaned)
 	if len(matches) < 2 {
 		return nil, fmt.Errorf("invalid DELETE syntax")
 	}

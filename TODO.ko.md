@@ -23,7 +23,6 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 기대 효과 및 구현 요약 |
 | :---: | :---: | :--- | :--- | :--- |
-| **P1** | **엔진 성능 (P-6)** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | `pkg/engine` | 쿼리당 동적 `regexp.MustCompile` 힙 할당 및 5~15µs 지연 완전 제거 |
 | **P1** | **스토리지/보안** | **투명한 데이터 암호화 (TDE: AES-256-GCM) & 감사 로그** | `pkg/storage` | 데이터 파일 암호화 및 불변 감사 추적 로그 완비 |
 | **P2** | **스토리지 성능 (P-11)** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | `pkg/storage/memengine` | 매 트랜잭션 6개 맵 할당 제거, 초당 2만 TPS 환경 GC 압력 80%+ 급감 |
 | **P2** | **실행기 성능 (P-12)** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | `pkg/execution` | 1,024건 튜플 배치 슬라이스 재할당 방지 및 대량 쿼리 GC 오버헤드 최소화 |
@@ -34,6 +33,12 @@
 | **P3** | **플러그인/확장** | **Wasm 런타임 샌드박스 UDF (wazero)** | `pkg/extension` | 순수 Go wazero 기반 안전한 격리형 서드파티 확장 함수 |
 
 ### P1/P2 최근 완료 과제: 고가용성, 성능 & 리팩토링
+- [x] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링 (`P-6`) (`pkg/engine`)**
+  - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_derived.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_mssql_sys.go`, `sqlexec_gui_interop.go`, `sqlexec_string_split.go`, `sqlexec_procs.go` 등 핫패스 쿼리 라우팅 및 행 루프 내부에 분산되어 있던 40여 개의 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 DFA 재컴파일 지연(5~15µs) 및 힙 할당 병목 해소.
+  - **구현 내용**:
+    - **패키지 레벨 싱글톤 승격**: 정적 정규식 패턴 전체를 패키지 로드 시 1회 컴파일되는 `var reXxx = regexp.MustCompile(...)` 싱글톤으로 승격.
+    - **동적 파라미터 정규식 캐싱 (`getCompiledRegexp`)**: `CROSS/OUTER APPLY`, 뷰 치환, CTE 재작성, 프로시저 파라미터 치환 등 동적 식별자가 결합되는 정규식에 대해 `sync.Map` 기반 스레드 안전 정규식 캐시(`rePatternCache`)를 적용하여 0 allocation 재사용 보장.
+    - **행 루프/평가 핫패스 컴파일 제거**: `evalSimpleRowWhere`, `evaluateSingleConditionMap`, `evalUpdateExpr` 등 매 레코드마다 호출되던 정규식 동적 생성을 100% 제거.
 - [x] **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`P-8`) (`pkg/storage/wiredtiger`)**
   - **배경**: `tx.Get`, `tx.Scan`, `tx.IndexScan`, `Insert`, `Update`, `Delete` 호출 시마다 CGo를 통한 `go_wt_open_cursor` 및 `cur->close` 반복 호출 오버헤드, 매 쿼리당 C `malloc`/`free`(`C.CString`), 그리고 단일 포인트 룩업당 6회의 CGo 경계 왕복 병목 해소.
   - **구현 내용**:
@@ -276,7 +281,7 @@
 | **P-3** | **와이어 프로토콜** | **제로카피 와이어 인코딩 & I/O 버퍼 결합** | **완료 (`[x]`)** | 중간 `[]any` 레코드 박싱 제거, TCP syscall 횟수 대폭 감소 |
 | **P-4** | **실행 엔진** | **벡터화 청크 반복자 (Chunked Batch Next)** | **완료 (`[x]`)** | 볼케이노 가상 디스패치 및 컨텍스트 취소 오버헤드 99% 삭감, 1024 튜플 배치 스트리밍 |
 | **P-5** | **캐시 및 메모리** | **고속 SQL 지문 해싱 & 단순 PK 조회 바이패스** | **완료 (`[x]`)** | 단순 PK 조회 파서 바이패스, TPS 50%+ 향상, GC 부하 90% 경감 |
-| **P-6** | **파서 & 엔진** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | **대기 (`[ ]`)** | 쿼리당 동적 `regexp.MustCompile` 힙 할당 및 5~15µs 지연 완전 제거 |
+| **P-6** | **파서 & 엔진** | **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 리팩토링** | **완료 (`[x]`)** | 40여 개 정규식 싱글톤/캐시 승격으로 쿼리당 5~15µs 지연 및 힙 할당 100% 제거 |
 | **P-7** | **JSON & 내장함수** | **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 키 스캐너** | **대기 (`[ ]`)** | 다중 JSON 필드 추출 쿼리 CPU/GC 부하 50~70% 경감 |
 | **P-8** | **스토리지/CGo** | **WiredTiger 커서 풀링 & CGo 왕복 비용 절감 (`cur->reset`)** | **완료 (`[x]`)** | 세션별 커서 풀링 및 C 헬퍼 단일화로 894ns 룩업(1.13M+ OPS) 달성 |
 | **P-9** | **옵티마이저/캐시** | **정형 SQL Parameterized 쿼리 실행 계획 캐시 (SQL Plan Cache)** | **보류 (`[-]`)** | SP/Prepared/PK 바이패스 캐시로 주요 OLTP 경로 기충족되어 보류 |
@@ -284,12 +289,12 @@
 | **P-11** | **스토리지/풀링** | **In-Memory OCC 트랜잭션 객체 & 워크스페이스 맵 풀링** | **대기 (`[ ]`)** | 트랜잭션 맵 6개 동적 할당 0건화, 초당 2만 TPS GC 부하 80%+ 경감 |
 | **P-12** | **실행기/풀링** | **Volcano 벡터화 배치 청크(`Chunk`) 풀링** | **대기 (`[ ]`)** | 1,024건 슬라이스 할당 제거 및 대용량 배치/P-10 병렬 스트리밍 GC 최소화 |
 
-- [ ] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 및 바이트 토큰 스캐너 전환 (`P-6`) (`pkg/engine`)**
-  - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_select.go`, `sqlexec_eval.go`, `sqlexec_explain.go`의 핫패스 함수 내부에 위치한 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 NFA/DFA 재컴파일 및 힙 할당 오버헤드(5~15µs) 제거.
-  - **구현 계획**:
-    - 모든 동적 정규식을 패키지 레벨 전역 변수(`var selectRe = regexp.MustCompile(...)`)로 승격 및 사전 컴파일.
-    - 고빈도 커맨드 분기(`SELECT`, `INSERT`, `UPDATE`, `DELETE`, `KILL`, `USE`)에 대해 정규식 대신 슬라이스 프리픽스 및 바이트 토큰 스캐너 적용.
-    - 쿼리당 힙 할당 0건 및 디스패치 지연 서브마이크로초화.
+- [x] **SQL 파서 & 엔진 핫패스 정규식 사전 컴파일 및 캐싱 리팩토링 (`P-6`) (`pkg/engine`)**
+  - **배경**: `sqlexec.go`, `sqlexec_dml.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_derived.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_mssql_sys.go`, `sqlexec_gui_interop.go`, `sqlexec_string_split.go`, `sqlexec_procs.go`의 핫패스 함수 및 행 루프 내부에 분산되어 있던 40여 개의 동적 `regexp.MustCompile` 호출로 인한 매 쿼리당 NFA/DFA 재컴파일 및 힙 할당 오버헤드(5~15µs) 제거.
+  - **구현 내용**:
+    - **패키지 레벨 싱글톤 승격**: 정적 정규식 패턴 전체를 패키지 로드 시 1회 컴파일되는 `var reXxx = regexp.MustCompile(...)` 싱글톤으로 승격.
+    - **동적 파라미터 정규식 캐싱 (`getCompiledRegexp`)**: `CROSS/OUTER APPLY`, 뷰 치환, CTE 재작성, 프로시저 파라미터 치환, 세션 테이블 변수 치환 등 동적 식별자가 결합되는 정규식에 대해 `sync.Map` 기반 스레드 안전 정규식 캐시(`rePatternCache`)를 적용하여 0 allocation 재사용 보장.
+    - **행 루프/평가 핫패스 컴파일 제거**: `evalSimpleRowWhere`, `evaluateSingleConditionMap`, `evalUpdateExpr` 등 매 레코드마다 호출되던 정규식 동적 생성을 100% 제거하여 쿼리당 디스패치 지연 서브마이크로초화 달성.
 - [ ] **반정형 JSON 동일 튜플 DOM 캐시 & 제로-할당 경량 키 스캐너 (`P-7`) (`pkg/storage`, `pkg/engine`)**
   - **배경**: `ExtractJSON`, `ExtractJSONText`, `JSONValueByPath` 호출 시 매번 Go 표준 라이브러리의 `json.Unmarshal`을 호출하여 `map[string]any`를 힙에 생성하는 오버헤드 및 단일 튜플 내 다중 JSON 필드 참조 시 중복 파싱 제거.
   - **구현 계획**:

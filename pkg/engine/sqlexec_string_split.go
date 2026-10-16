@@ -11,6 +11,13 @@ import (
 	"sqlion/pkg/proc"
 )
 
+var (
+	reSplitLimit   = regexp.MustCompile(`(?is)\bLIMIT\s+(\d+)`)
+	reSplitOffset  = regexp.MustCompile(`(?is)\bOFFSET\s+(\d+)`)
+	reSplitOrderBy = regexp.MustCompile(`(?is)\bORDER\s+BY\s+(.*?)(?:;|$)`)
+	reSplitWhere   = regexp.MustCompile(`(?is)\bWHERE\s+(.*?)(?:;|$)`)
+)
+
 func isStringSplitSelect(query string) bool {
 	trimmed := strings.TrimSpace(query)
 	upper := strings.ToUpper(trimmed)
@@ -72,28 +79,24 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	var alias, whereClause, orderByClause string
 	var limitCount, offsetCount int
 
-	limitRe := regexp.MustCompile(`(?is)\bLIMIT\s+(\d+)`)
-	if m := limitRe.FindStringSubmatch(rest); len(m) == 2 {
+	if m := reSplitLimit.FindStringSubmatch(rest); len(m) == 2 {
 		limitCount, _ = strconv.Atoi(m[1])
-		rest = limitRe.ReplaceAllString(rest, "")
+		rest = reSplitLimit.ReplaceAllString(rest, "")
 	}
 
-	offsetRe := regexp.MustCompile(`(?is)\bOFFSET\s+(\d+)`)
-	if m := offsetRe.FindStringSubmatch(rest); len(m) == 2 {
+	if m := reSplitOffset.FindStringSubmatch(rest); len(m) == 2 {
 		offsetCount, _ = strconv.Atoi(m[1])
-		rest = offsetRe.ReplaceAllString(rest, "")
+		rest = reSplitOffset.ReplaceAllString(rest, "")
 	}
 
-	orderRe := regexp.MustCompile(`(?is)\bORDER\s+BY\s+(.*?)(?:;|$)`)
-	if m := orderRe.FindStringSubmatch(rest); len(m) == 2 {
+	if m := reSplitOrderBy.FindStringSubmatch(rest); len(m) == 2 {
 		orderByClause = strings.TrimSpace(m[1])
-		rest = orderRe.ReplaceAllString(rest, "")
+		rest = reSplitOrderBy.ReplaceAllString(rest, "")
 	}
 
-	whereRe := regexp.MustCompile(`(?is)\bWHERE\s+(.*?)(?:;|$)`)
-	if m := whereRe.FindStringSubmatch(rest); len(m) == 2 {
+	if m := reSplitWhere.FindStringSubmatch(rest); len(m) == 2 {
 		whereClause = strings.TrimSpace(m[1])
-		rest = whereRe.ReplaceAllString(rest, "")
+		rest = reSplitWhere.ReplaceAllString(rest, "")
 	}
 
 	// Whatever remains in rest is alias (e.g. "AS s", "s", or "")

@@ -12,6 +12,16 @@ import (
 	"sqlion/pkg/storage"
 )
 
+var (
+	reExplainTvfCall      = regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
+	reExplainInsert       = regexp.MustCompile(`(?i)^INSERT\s+INTO\s+([^\s(]+)`)
+	reExplainUpdate       = regexp.MustCompile(`(?i)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$`)
+	reExplainDelete       = regexp.MustCompile(`(?i)^DELETE\s+(?:FROM\s+)?([^\s]+)(?:\s+WHERE\s+(.*))?$`)
+	reExplainExists       = regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*\(?\s*SELECT\b`)
+	reExplainInSelect     = regexp.MustCompile(`(?is)\b([a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*\(?\s*SELECT\b`)
+	reExplainScalarSelect = regexp.MustCompile(`(?is)\(\s*SELECT\b`)
+)
+
 func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(strings.TrimSpace(query))
 	if strings.HasPrefix(upper, "EXPLAIN BYTECODE ") {
@@ -106,8 +116,7 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 	tableName := cleanIdentifier(rawTable)
 
 	// Check if Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
-	tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
-	if m := tvfCallRe.FindStringSubmatch(rawTable); len(m) == 3 {
+	if m := reExplainTvfCall.FindStringSubmatch(rawTable); len(m) == 3 {
 		tvfName := cleanIdentifier(m[1])
 		argsRaw := m[2]
 		fnMeta, err := s.catalog.GetFunction(tvfName)
@@ -289,14 +298,12 @@ func (s *Coordinator) execDMLExplain(dmlSQL string, opts planner.ExplainOptions,
 	var dmlType, tableName, whereCond string
 	if strings.HasPrefix(upper, "INSERT ") {
 		dmlType = "INSERT"
-		re := regexp.MustCompile(`(?i)^INSERT\s+INTO\s+([^\s(]+)`)
-		if m := re.FindStringSubmatch(dmlSQL); len(m) > 1 {
+		if m := reExplainInsert.FindStringSubmatch(dmlSQL); len(m) > 1 {
 			tableName = cleanIdentifier(m[1])
 		}
 	} else if strings.HasPrefix(upper, "UPDATE ") {
 		dmlType = "UPDATE"
-		re := regexp.MustCompile(`(?i)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$`)
-		if m := re.FindStringSubmatch(dmlSQL); len(m) > 1 {
+		if m := reExplainUpdate.FindStringSubmatch(dmlSQL); len(m) > 1 {
 			tableName = cleanIdentifier(m[1])
 			if len(m) > 3 {
 				whereCond = strings.TrimSpace(m[3])
@@ -304,8 +311,7 @@ func (s *Coordinator) execDMLExplain(dmlSQL string, opts planner.ExplainOptions,
 		}
 	} else if strings.HasPrefix(upper, "DELETE ") {
 		dmlType = "DELETE"
-		re := regexp.MustCompile(`(?i)^DELETE\s+(?:FROM\s+)?([^\s]+)(?:\s+WHERE\s+(.*))?$`)
-		if m := re.FindStringSubmatch(dmlSQL); len(m) > 1 {
+		if m := reExplainDelete.FindStringSubmatch(dmlSQL); len(m) > 1 {
 			tableName = cleanIdentifier(m[1])
 			if len(m) > 2 {
 				whereCond = strings.TrimSpace(m[2])
@@ -586,10 +592,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 	result := whereClause
 
 	// 1. [NOT] EXISTS (SELECT ...)
-	existsRe := regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*\(?\s*SELECT\b`)
 	offset := 0
 	for {
-		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, existsRe, offset)
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, reExplainExists, offset)
 		if !found {
 			break
 		}
@@ -616,10 +621,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 	}
 
 	// 2. [NOT] IN (SELECT ...) -> [NOT] IN (val1, val2, ...)
-	inSelectRe := regexp.MustCompile(`(?is)\b([a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*\(?\s*SELECT\b`)
 	offset = 0
 	for {
-		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, inSelectRe, offset)
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, reExplainInSelect, offset)
 		if !found {
 			break
 		}
@@ -681,10 +685,9 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 	}
 
 	// 3. Scalar Subquery in comparisons: e.g. > (SELECT ...), = (SELECT ...)
-	scalarRe := regexp.MustCompile(`(?is)\(\s*SELECT\b`)
 	offset = 0
 	for {
-		mStart, mEnd, _, innerSQL, found := findSubqueryFrom(result, scalarRe, offset)
+		mStart, mEnd, _, innerSQL, found := findSubqueryFrom(result, reExplainScalarSelect, offset)
 		if !found {
 			break
 		}
@@ -838,7 +841,7 @@ func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, erro
 		}
 
 		// Rewrite occurrences of cte.Name in mainSQL with tempName
-		cteWordRe := regexp.MustCompile(`\b` + regexp.QuoteMeta(cte.Name) + `\b`)
+		cteWordRe := getCompiledRegexp(`\b` + regexp.QuoteMeta(cte.Name) + `\b`)
 		mainSQL = cteWordRe.ReplaceAllString(mainSQL, tempName)
 	}
 

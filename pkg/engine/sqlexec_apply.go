@@ -5,10 +5,25 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"sqlion/pkg/proc"
 )
+
+var (
+	reApplyMatch   = regexp.MustCompile(`(?i)\b(CROSS|OUTER)\s+APPLY\b`)
+	rePatternCache sync.Map // map[string]*regexp.Regexp
+)
+
+func getCompiledRegexp(pat string) *regexp.Regexp {
+	if val, ok := rePatternCache.Load(pat); ok {
+		return val.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile(pat)
+	rePatternCache.Store(pat, re)
+	return re
+}
 
 // hasApply reports whether the query contains a CROSS APPLY or OUTER APPLY join.
 func hasApply(query string) bool {
@@ -16,8 +31,7 @@ func hasApply(query string) bool {
 	if !strings.Contains(upper, "APPLY") {
 		return false
 	}
-	re := regexp.MustCompile(`(?i)\b(CROSS|OUTER)\s+APPLY\b`)
-	return re.MatchString(query)
+	return reApplyMatch.MatchString(query)
 }
 
 // execApplySelect handles SELECT queries containing CROSS APPLY or OUTER APPLY clauses.
@@ -183,11 +197,11 @@ func buildParameterizedApplyQuery(tbl proc.TableRef, row map[string]any, leftAli
 			// Replace alias.column
 			if leftAlias != "" {
 				pat := fmt.Sprintf(`(?i)\b%s\.%s\b`, regexp.QuoteMeta(leftAlias), regexp.QuoteMeta(k))
-				rawSQL = regexp.MustCompile(pat).ReplaceAllString(rawSQL, lit)
+				rawSQL = getCompiledRegexp(pat).ReplaceAllString(rawSQL, lit)
 			}
 			if leftTableName != "" && leftTableName != leftAlias {
 				pat := fmt.Sprintf(`(?i)\b%s\.%s\b`, regexp.QuoteMeta(leftTableName), regexp.QuoteMeta(k))
-				rawSQL = regexp.MustCompile(pat).ReplaceAllString(rawSQL, lit)
+				rawSQL = getCompiledRegexp(pat).ReplaceAllString(rawSQL, lit)
 			}
 		}
 		return rawSQL, nil
@@ -201,10 +215,10 @@ func buildParameterizedApplyQuery(tbl proc.TableRef, row map[string]any, leftAli
 				lit := formatApplyLiteral(v)
 				if leftAlias != "" {
 					pat := fmt.Sprintf(`(?i)\b%s\.%s\b`, regexp.QuoteMeta(leftAlias), regexp.QuoteMeta(k))
-					s = regexp.MustCompile(pat).ReplaceAllString(s, lit)
+					s = getCompiledRegexp(pat).ReplaceAllString(s, lit)
 				}
 				patCol := fmt.Sprintf(`(?i)\b%s\b`, regexp.QuoteMeta(k))
-				s = regexp.MustCompile(patCol).ReplaceAllString(s, lit)
+				s = getCompiledRegexp(patCol).ReplaceAllString(s, lit)
 			}
 			argStrs = append(argStrs, s)
 		}

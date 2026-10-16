@@ -8,6 +8,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Performance
+- **SQL Parser & Engine Hot-Path Regular Expression Precompilation (`P-6`) (`pkg/engine`)**:
+  - Eliminated over 40 dynamic `regexp.MustCompile(...)` invocations across query routing, DML parsing, and row-level evaluation loops in `pkg/engine/`:
+    - `sqlexec.go`: Promoted session variables (`SET`, `SELECT @var`, `SELECT @@var`), temporary table declarations, and administration commands (`KILL`, `USE`, `SHOW`) to package-level singletons.
+    - `sqlexec_dml.go`: Precompiled DML syntax verification, `INSERT INTO ... SELECT`, `VALUES`, `UPDATE ... SET`, and `DELETE` pattern matchers (`reDmlInsertCheck`, `reDmlInsertSelect`, `reDmlInsertValues`, `reDmlUpdateCheck`, `reDmlUpdate`, `reDmlDeleteCheck`, `reDmlDelete`).
+    - `sqlexec_pivot.go`: Precompiled `hasPivot`, `hasUnpivot`, and `hasForJSON` predicates, body matchers (`rePivotBody`, `reUnpivotBody`), and row-level condition evaluators (`rePivotCond`), eliminating regex compilation inside per-row filter loops.
+    - `sqlexec_apply.go`: Implemented thread-safe regex cache (`rePatternCache sync.Map` via `getCompiledRegexp`) for outer row parameter substitutions, eliminating thousands of DFA compilations during nested loop joins.
+    - `sqlexec_derived.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_mssql_sys.go`, `sqlexec_gui_interop.go`, `sqlexec_string_split.go`, `sqlexec_procs.go`: Promoted all static patterns to package singletons and dynamic identifier patterns to cached regex instances.
+  - Reduced query dispatch and row evaluation latency by eliminating 5~15µs compilation overhead and associated heap allocations per regular expression per query.
 - **WiredTiger Session Cursor Pooling & CGo Boundary Overhead Reduction (`P-8`) (`pkg/storage/wiredtiger`)**:
   - Implemented session-level cursor pooling (`WTSession.acquireCursor` and `releaseCursor`) keyed by table URI (`table:<name>`), recycling cursors with `C.go_wt_cursor_reset` instead of closing and reopening them via CGo on every query.
   - Implemented unified C bridge helpers (`go_wt_cursor_get`, `go_wt_cursor_insert_raw`, `go_wt_cursor_update_raw`, `go_wt_cursor_remove_key`) in C preamble, collapsing multi-step CGo crossings (`set_key` -> `search`/`operation` -> `get_val_raw`) into a single CGo invocation (6x reduction in boundary transitions).

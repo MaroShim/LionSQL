@@ -979,7 +979,7 @@ func substituteParamOutsideQuotes(query string, paramName string, formattedVal s
 	if !strings.HasPrefix(paramName, "@") {
 		paramName = "@" + paramName
 	}
-	re := regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(paramName) + `\b`)
+	re := getCompiledRegexp(`(?i)^` + regexp.QuoteMeta(paramName) + `\b`)
 
 	var b strings.Builder
 	inString := false

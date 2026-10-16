@@ -9,6 +9,14 @@ import (
 	"sqlion/pkg/storage"
 )
 
+var (
+	reGuiNspnameEq     = regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
+	reGuiRelnameEq     = regexp.MustCompile(`(?is)(?:pgc|c)\.relname\s*=\s*'([^']+)'`)
+	reGuiSrcRelnameEq  = regexp.MustCompile(`(?is)src_tbl\.relname\s*=\s*'([^']+)'`)
+	reGuiSrcNspnameEq  = regexp.MustCompile(`(?is)src_ns\.nspname\s*=\s*'([^']+)'`)
+	reGuiTableSchemaEq = regexp.MustCompile(`(?is)table_schema\s*=\s*'([^']+)'`)
+)
+
 func isHeidiSQLCatalogJoinQuery(sql string) bool {
 	upper := strings.ToUpper(sql)
 	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "JOIN") || strings.Contains(upper, "SYS.TYPES")) {
@@ -206,8 +214,7 @@ func (s *Coordinator) execHeidiSQLCatalogJoinSelect(sql string, start time.Time)
 
 func (s *Coordinator) execDbGatePrimaryKeySelect(sql string, start time.Time) (*QueryResult, error) {
 	targetSchema := "public"
-	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
-	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
 	}
 
@@ -341,8 +348,7 @@ func (s *Coordinator) execDbGateTriggerSelect(sql string, start time.Time) (*Que
 func (s *Coordinator) execHeidiSQLProcSelect(sql string, start time.Time) (*QueryResult, error) {
 	upper := strings.ToUpper(sql)
 	targetSchema := "public"
-	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
-	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
 	}
 
@@ -579,14 +585,12 @@ func (s *Coordinator) execHeidiSQLClassSelect(sql string, start time.Time) (*Que
 
 func (s *Coordinator) execHeidiSQLColumnMetadataSelect(sql string, start time.Time) (*QueryResult, error) {
 	targetTable := ""
-	tblRe := regexp.MustCompile(`(?is)(?:pgc|c)\.relname\s*=\s*'([^']+)'`)
-	if m := tblRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reGuiRelnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetTable = m[1]
 	}
 
 	targetSchema := "public"
-	nspRe := regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
-	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
 	}
 
@@ -660,14 +664,12 @@ func (s *Coordinator) execHeidiSQLColumnMetadataSelect(sql string, start time.Ti
 
 func (s *Coordinator) execHeidiSQLForeignKeySelect(sql string, start time.Time) (*QueryResult, error) {
 	targetTable := ""
-	tblRe := regexp.MustCompile(`(?is)src_tbl\.relname\s*=\s*'([^']+)'`)
-	if m := tblRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reGuiSrcRelnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetTable = m[1]
 	}
 
 	targetSchema := "public"
-	nspRe := regexp.MustCompile(`(?is)src_ns\.nspname\s*=\s*'([^']+)'`)
-	if m := nspRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reGuiSrcNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
 	}
 
@@ -751,8 +753,7 @@ func (s *Coordinator) execBeekeeperTableSelect(sql string, start time.Time) (*Qu
 	var allRows []map[string]any
 
 	targetSchema := ""
-	schemaRe := regexp.MustCompile(`(?is)table_schema\s*=\s*'([^']+)'`)
-	if m := schemaRe.FindStringSubmatch(sql); len(m) == 2 {
+	if m := reGuiTableSchemaEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
 	}
 

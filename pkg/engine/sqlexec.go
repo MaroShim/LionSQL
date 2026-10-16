@@ -18,6 +18,19 @@ import (
 
 // QueryResult represents the outcome of a SQL statement execution (aliased from engine.QueryResult).
 
+var (
+	reTblVarDecl   = regexp.MustCompile(`(?is)^DECLARE\s+@[a-zA-Z0-9_]+\s+TABLE\b`)
+	reKillCmd      = regexp.MustCompile(`(?is)^KILL\s+(\d+)(?:\s+WITH\s+STATUSONLY)?$`)
+	reUseCmd       = regexp.MustCompile(`(?is)^USE\s+(?:\[([^\]]+)\]|"([^"]+)"|'([^']+)'|([a-zA-Z0-9_.-]+))\s*;?$`)
+	reSetConfig    = regexp.MustCompile(`(?is)^(?:SESSION\s+)?([a-zA-Z0-9_]+)\s*(?:TO|=)\s*(.*)$`)
+	reShowParts    = regexp.MustCompile(`(?is)^SHOW\s+PARTITIONS(?:\s+FROM)?\s+([^\s;]+)\s*;?$`)
+	reShowParam    = regexp.MustCompile(`(?is)^SHOW\s+(.*?)\s*;?$`)
+	reSelectSysVar = regexp.MustCompile(`(?is)^SELECT\s+@@([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
+	reTblVarCreate = regexp.MustCompile(`(?is)^DECLARE\s+(@[a-zA-Z0-9_]+)\s+TABLE\s*\((.*)\)\s*;?$`)
+	reSetVar       = regexp.MustCompile(`(?is)^SET\s+@([a-zA-Z0-9_]+)\s*(?::=|=)\s*(.*)$`)
+	reSelectVar    = regexp.MustCompile(`(?is)^SELECT\s+(@[a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
+)
+
 func parseSessionVarValue(s string) any {
 	return ParseSessionVarValue(s)
 }
@@ -188,13 +201,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	upper := strings.ToUpper(trimmed)
 
 	// Rewrite table variables (@table -> physical table)
-	tblVarDeclRe := regexp.MustCompile(`(?is)^DECLARE\s+@[a-zA-Z0-9_]+\s+TABLE\b`)
 	if cs != nil {
 		cs.Mu.Lock()
-		if len(cs.TableVars) > 0 && !tblVarDeclRe.MatchString(trimmed) {
+		if len(cs.TableVars) > 0 && !reTblVarDecl.MatchString(trimmed) {
 			for varName, physTable := range cs.TableVars {
 				pattern := `(?i)@` + regexp.QuoteMeta(strings.TrimPrefix(varName, "@")) + `\b`
-				trimmed = regexp.MustCompile(pattern).ReplaceAllString(trimmed, physTable)
+				trimmed = getCompiledRegexp(pattern).ReplaceAllString(trimmed, physTable)
 			}
 			upper = strings.ToUpper(trimmed)
 		}
@@ -208,8 +220,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// Process Management: KILL <spid> [WITH STATUSONLY]
-	killRe := regexp.MustCompile(`(?is)^KILL\s+(\d+)(?:\s+WITH\s+STATUSONLY)?$`)
-	if m := killRe.FindStringSubmatch(trimmed); len(m) == 2 {
+	if m := reKillCmd.FindStringSubmatch(trimmed); len(m) == 2 {
 		spid, _ := strconv.Atoi(m[1])
 		canceled := s.CancelQueryBySPID(spid)
 		msg := "Command(s) completed successfully."
@@ -225,8 +236,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.005 Database Context Switching: USE <database> (Tolerant Virtual No-Op)
-	useRe := regexp.MustCompile(`(?is)^USE\s+(?:\[([^\]]+)\]|"([^"]+)"|'([^']+)'|([a-zA-Z0-9_.-]+))\s*;?$`)
-	if m := useRe.FindStringSubmatch(trimmed); len(m) > 0 {
+	if m := reUseCmd.FindStringSubmatch(trimmed); len(m) > 0 {
 		var dbName string
 		for i := 1; i < len(m); i++ {
 			if m[i] != "" {
@@ -584,8 +594,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		// F. Standard SET [SESSION] param [= | TO] value
-		setConfigRe := regexp.MustCompile(`(?is)^(?:SESSION\s+)?([a-zA-Z0-9_]+)\s*(?:TO|=)\s*(.*)$`)
-		if m := setConfigRe.FindStringSubmatch(rest); len(m) == 3 {
+		if m := reSetConfig.FindStringSubmatch(rest); len(m) == 3 {
 			param := strings.ToLower(cleanIdentifier(m[1]))
 			valStr := strings.Trim(strings.TrimSpace(m[2]), "';\"")
 			if param == "work_mem" {
@@ -616,14 +625,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.05 SHOW PARTITIONS [FROM] <table>
-	showPartsRe := regexp.MustCompile(`(?is)^SHOW\s+PARTITIONS(?:\s+FROM)?\s+([^\s;]+)\s*;?$`)
-	if m := showPartsRe.FindStringSubmatch(trimmed); len(m) == 2 {
+	if m := reShowParts.FindStringSubmatch(trimmed); len(m) == 2 {
 		return s.execShowPartitions(cleanIdentifier(m[1]), start)
 	}
 
 	// 0.06 SHOW <parameter>
-	showRe := regexp.MustCompile(`(?is)^SHOW\s+(.*?)\s*;?$`)
-	if m := showRe.FindStringSubmatch(trimmed); len(m) == 2 {
+	if m := reShowParam.FindStringSubmatch(trimmed); len(m) == 2 {
 		param := strings.ToLower(strings.TrimSpace(m[1]))
 		paramNorm := strings.ReplaceAll(param, " ", "_")
 		cs.Mu.Lock()
@@ -680,8 +687,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.07 System variable query: SELECT @@var [AS alias]
-	selectSysVarRe := regexp.MustCompile(`(?is)^SELECT\s+@@([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
-	if m := selectSysVarRe.FindStringSubmatch(trimmed); len(m) >= 2 {
+	if m := reSelectSysVar.FindStringSubmatch(trimmed); len(m) >= 2 {
 		varName := strings.ToLower(m[1])
 		colHeader := "@@" + varName
 		if len(m) > 2 && m[2] != "" {
@@ -720,8 +726,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 0.08 T-SQL DECLARE variables: DECLARE @var [type] [= expr], ... or DECLARE @table TABLE (...)
 	if strings.HasPrefix(upper, "DECLARE ") {
-		tblVarRe := regexp.MustCompile(`(?is)^DECLARE\s+(@[a-zA-Z0-9_]+)\s+TABLE\s*\((.*)\)\s*;?$`)
-		if m := tblVarRe.FindStringSubmatch(trimmed); len(m) >= 3 {
+		if m := reTblVarCreate.FindStringSubmatch(trimmed); len(m) >= 3 {
 			varName := strings.ToLower(m[1])
 			if !strings.HasPrefix(varName, "@") {
 				varName = "@" + varName
@@ -798,8 +803,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.1 Session Variables: SET @var = expr / SET @var := expr
-	setRe := regexp.MustCompile(`(?is)^SET\s+@([a-zA-Z0-9_]+)\s*(?::=|=)\s*(.*)$`)
-	if m := setRe.FindStringSubmatch(trimmed); len(m) == 3 {
+	if m := reSetVar.FindStringSubmatch(trimmed); len(m) == 3 {
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
 		varName := m[1]
@@ -819,8 +823,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.2 Query Session Variable: SELECT @var [AS alias]
-	selectVarRe := regexp.MustCompile(`(?is)^SELECT\s+(@[a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
-	if m := selectVarRe.FindStringSubmatch(trimmed); len(m) >= 2 {
+	if m := reSelectVar.FindStringSubmatch(trimmed); len(m) >= 2 {
 		varName := m[1]
 		colHeader := varName
 		if len(m) > 2 && m[2] != "" {

@@ -10,26 +10,28 @@ import (
 	"sqlion/pkg/storage"
 )
 
-var derivedTableCounter int64
+var (
+	derivedTableCounter int64
+	reDerivedCheck      = regexp.MustCompile(`(?is)\b(?:FROM|JOIN)\s*\(\s*SELECT\b`)
+	reDerivedMatch      = regexp.MustCompile(`(?is)\b(FROM|JOIN|INNER\s+JOIN|LEFT\s+JOIN|LEFT\s+OUTER\s+JOIN|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|CROSS\s+JOIN|FULL\s+JOIN|FULL\s+OUTER\s+JOIN)\s*\(\s*SELECT\b`)
+	reDerivedAlias      = regexp.MustCompile(`(?is)^\s*(?:AS\s+)?([a-zA-Z0-9_#]+)`)
+	reSelectStarFrom    = regexp.MustCompile(`(?i)\bSELECT\s+\*\s+FROM\b`)
+)
 
 func hasDerivedTables(sql string) bool {
 	upper := strings.ToUpper(sql)
 	if !strings.Contains(upper, "SELECT") {
 		return false
 	}
-	derivedRe := regexp.MustCompile(`(?is)\b(?:FROM|JOIN)\s*\(\s*SELECT\b`)
-	return derivedRe.MatchString(sql)
+	return reDerivedCheck.MatchString(sql)
 }
 
 func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *ClientSession) (string, []string, error) {
 	currentSQL := query
 	var createdTables []string
 
-	derivedRe := regexp.MustCompile(`(?is)\b(FROM|JOIN|INNER\s+JOIN|LEFT\s+JOIN|LEFT\s+OUTER\s+JOIN|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|CROSS\s+JOIN|FULL\s+JOIN|FULL\s+OUTER\s+JOIN)\s*\(\s*SELECT\b`)
-	aliasRe := regexp.MustCompile(`(?is)^\s*(?:AS\s+)?([a-zA-Z0-9_#]+)`)
-
 	for {
-		loc := derivedRe.FindStringIndex(currentSQL)
+		loc := reDerivedMatch.FindStringIndex(currentSQL)
 		if loc == nil {
 			break
 		}
@@ -67,7 +69,7 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		alias := ""
 		matchEnd := closeParenIdx + 1
 
-		if m := aliasRe.FindStringSubmatch(afterClose); len(m) >= 2 {
+		if m := reDerivedAlias.FindStringSubmatch(afterClose); len(m) >= 2 {
 			alias = cleanIdentifier(m[1])
 			matchEnd = closeParenIdx + 1 + len(m[0])
 		}
@@ -205,13 +207,12 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		prefixPart := currentSQL[:openParenIdx]
 		suffixPart := currentSQL[matchEnd:]
 		if needSyntheticPK && len(innerRes.Columns) > 0 {
-			starRe := regexp.MustCompile(`(?i)\bSELECT\s+\*\s+FROM\b`)
-			if starRe.MatchString(prefixPart) {
+			if reSelectStarFrom.MatchString(prefixPart) {
 				var qualifiedCols []string
 				for _, col := range innerRes.Columns {
 					qualifiedCols = append(qualifiedCols, fmt.Sprintf("%s.%s", alias, col))
 				}
-				prefixPart = starRe.ReplaceAllString(prefixPart, "SELECT "+strings.Join(qualifiedCols, ", ")+" FROM ")
+				prefixPart = reSelectStarFrom.ReplaceAllString(prefixPart, "SELECT "+strings.Join(qualifiedCols, ", ")+" FROM ")
 			}
 		}
 
