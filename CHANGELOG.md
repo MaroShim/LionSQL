@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **In-Memory OCC Engine Storage Capacity Limit Guard (`MEM-3`) (`pkg/storage/memengine`, `cmd/server`)**:
+  - Implemented zero stop-the-world heap capacity monitoring via standard library `runtime/metrics` (`/memory/classes/heap/objects:bytes`).
+  - Added `MaxDataBytes` setting to `memengine.Options` and `Engine.SetMaxDataBytes(bytes)`, automatically wired to the global memory governor (`--max-memory`).
+  - Enforced fail-fast circuit breaker in `tx.Commit()` on data mutations (`changeInsert`, `changeUpdate`) when heap usage exceeds capacity limit, returning `storage.ErrTableFull (SQLSTATE 53200)` and preventing process OOM.
+  - Added unit test `TestMemEngine_CapacityGuard` in `pkg/storage/memengine/memengine_test.go` verifying fail-fast rejection when limit is exceeded and normal execution when limit is relaxed.
+
 ---
 
 ## [0.23.0] - 2026-10-17

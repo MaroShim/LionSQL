@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -714,6 +715,101 @@ func TestTransaction_PoolingAndMapReuse(t *testing.T) {
 	}
 }
 
+func TestMemEngine_CapacityGuard(t *testing.T) {
+	eng := New()
+	if err := eng.Open(""); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
 
+	schema := createTestSchema()
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
 
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
 
+	// 1. Unlimited capacity (default) - commit succeeds
+	tx1, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	err = tx1.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(1),
+		"holder":  storage.StringValue("Alice"),
+		"balance": storage.IntValue(100),
+	})
+	if err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx1.Commit(); err != nil {
+		t.Fatalf("expected commit to succeed with default limit, got: %v", err)
+	}
+
+	// 2. Set capacity limit below current heap - commit must return ErrTableFull
+	currHeap := CurrentHeapBytes()
+	if currHeap <= 0 {
+		t.Fatalf("expected positive heap bytes, got %d", currHeap)
+	}
+	eng.SetMaxDataBytes(1) // 1 byte limit is strictly below current heap
+
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	err = tx2.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(2),
+		"holder":  storage.StringValue("Bob"),
+		"balance": storage.IntValue(200),
+	})
+	if err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	err = tx2.Commit()
+	if err == nil {
+		t.Fatalf("expected ErrTableFull when heap exceeds MaxDataBytes, but commit succeeded")
+	}
+	if !errors.Is(err, storage.ErrTableFull) {
+		t.Fatalf("expected errors.Is(err, storage.ErrTableFull), got: %v", err)
+	}
+
+	// 3. Relax limit to generous budget - commit succeeds
+	eng.SetMaxDataBytes(currHeap + 100*1024*1024)
+
+	tx3, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	err = tx3.Insert("accounts", storage.Record{
+		"id":      storage.IntValue(2),
+		"holder":  storage.StringValue("Bob"),
+		"balance": storage.IntValue(200),
+	})
+	if err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx3.Commit(); err != nil {
+		t.Fatalf("expected commit to succeed with relaxed limit, got: %v", err)
+	}
+
+	// 4. Verify ReadTx can read both accounts
+	readTx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx ReadOnly failed: %v", err)
+	}
+	defer readTx.Rollback()
+
+	rec1, err := readTx.Get("accounts", storage.IntValue(1))
+	if err != nil || rec1 == nil {
+		t.Fatalf("account 1 not found: %v", err)
+	}
+	rec2, err := readTx.Get("accounts", storage.IntValue(2))
+	if err != nil || rec2 == nil {
+		t.Fatalf("account 2 not found: %v", err)
+	}
+}

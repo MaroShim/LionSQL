@@ -1583,6 +1583,24 @@ func (tx *Transaction) Commit() error {
 		}
 	}
 
+	// 5.1 Enforce in-memory engine storage memory limit guard (MEM-3)
+	if maxLimit := tx.engine.maxDataBytes.Load(); maxLimit > 0 {
+		hasInsertOrUpdate := false
+		for _, ch := range tx.changes {
+			if ch.kind == changeInsert || ch.kind == changeUpdate {
+				hasInsertOrUpdate = true
+				break
+			}
+		}
+		if hasInsertOrUpdate {
+			currHeap := CurrentHeapBytes()
+			if currHeap >= maxLimit {
+				return fmt.Errorf("%w: in-memory engine storage memory limit exceeded (%s >= %s)",
+					storage.ErrTableFull, formatBytes(currHeap), formatBytes(maxLimit))
+			}
+		}
+	}
+
 	// 6. Apply changes and update secondary indexes atomically
 	for _, ch := range tx.changes {
 		td, exists := tx.engine.tables[ch.table]

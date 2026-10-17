@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -371,6 +372,10 @@ func main() {
 	case "memory":
 		memEng := memengine.New()
 		opts := memengine.DefaultOptions(cfg.Server.DataDir)
+		if maxMem := execution.GetGlobalMemoryLimit(); maxMem > 0 && maxMem < math.MaxInt64 {
+			opts.MaxDataBytes = maxMem
+			log.Printf("[SQLion] In-Memory OCC engine capacity limit set to %s", execution.FormatMemSize(maxMem))
+		}
 		if cfg.Server.Ephemeral {
 			opts.EnableAOF = false
 			opts.EnableRDB = false

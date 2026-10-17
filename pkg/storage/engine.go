@@ -31,6 +31,7 @@ var (
 	ErrTableNotPartitioned  = errors.New("table is not partitioned")
 	ErrReadOnlyTransaction  = errors.New("cannot execute mutation in read-only transaction (SQLSTATE 25006)")
 	ErrReadOnlyReplica      = errors.New("cannot execute write operations on read-only replica (SQLSTATE 25006)")
+	ErrTableFull            = errors.New("table data limit exceeded (SQLSTATE 53200)")
 )
 
 // DataType represents the column data type.

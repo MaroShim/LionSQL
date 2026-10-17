@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/metrics"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -11,6 +12,30 @@ import (
 
 	"sqlion/pkg/storage"
 )
+
+// CurrentHeapBytes returns the current live heap memory allocated in bytes via runtime/metrics.
+func CurrentHeapBytes() int64 {
+	sample := make([]metrics.Sample, 1)
+	sample[0].Name = "/memory/classes/heap/objects:bytes"
+	metrics.Read(sample)
+	if sample[0].Value.Kind() == metrics.KindUint64 {
+		return int64(sample[0].Value.Uint64())
+	}
+	return 0
+}
+
+func formatBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
+}
 
 type Options struct {
 	DataDir       string
@@ -20,6 +45,7 @@ type Options struct {
 	AOFThreshold  int64         // Size in bytes to trigger automatic AOF rewrite compaction (default: 64MB)
 	RDBInterval   time.Duration // Periodic RDB snapshot / AOF rewrite interval (default: 60s)
 	RDBMinChanges int64         // Minimum mutation count to trigger snapshot (default: 1000)
+	MaxDataBytes  int64         // Maximum memory budget for in-memory storage in bytes (0 for unlimited)
 }
 
 // DefaultOptions returns safe default persistence options based on directory.
@@ -46,6 +72,7 @@ type Engine struct {
 	nextLSN          atomic.Int64
 	aofThreshold     int64 // Size threshold in bytes to trigger AOF rewrite compaction
 	changesSinceSave atomic.Int64
+	maxDataBytes     atomic.Int64
 	walHook          func(rec WALRecord)
 	stopCh           chan struct{}
 	bgWg             sync.WaitGroup
@@ -53,6 +80,20 @@ type Engine struct {
 	compacting       atomic.Bool
 	diskMu           sync.Mutex
 	walOrderMu       sync.Mutex
+}
+
+// SetMaxDataBytes sets the maximum capacity in bytes allowed for storage in the in-memory engine.
+// A value of 0 or negative disables the limit.
+func (e *Engine) SetMaxDataBytes(bytes int64) {
+	if bytes < 0 {
+		bytes = 0
+	}
+	e.maxDataBytes.Store(bytes)
+}
+
+// MaxDataBytes returns the current maximum capacity limit in bytes (0 if unlimited).
+func (e *Engine) MaxDataBytes() int64 {
+	return e.maxDataBytes.Load()
 }
 
 // CurrentLSN returns the latest assigned Log Sequence Number.
@@ -241,6 +282,9 @@ func (e *Engine) OpenWithOptions(opts Options) error {
 	e.fsyncPolicy = opts.FsyncPolicy
 	if opts.AOFThreshold > 0 {
 		e.aofThreshold = opts.AOFThreshold
+	}
+	if opts.MaxDataBytes > 0 {
+		e.maxDataBytes.Store(opts.MaxDataBytes)
 	}
 
 	if opts.DataDir != "" {
