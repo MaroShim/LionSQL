@@ -33,37 +33,37 @@ type ParamDef struct {
 
 // Procedure represents a registered stored procedure.
 type Procedure struct {
-	Name      string     `json:"name"`
-	Params    []ParamDef `json:"params"`
-	Body      string     `json:"body"`
-	JSCode    string     `json:"js_code"`
-	CreatedAt time.Time  `json:"created_at"`
-	UpdatedAt time.Time  `json:"updated_at"`
+	Name           string     `json:"name"`
+	Params         []ParamDef `json:"params"`
+	Body           string     `json:"body"`
+	BytecodeDisasm string     `json:"bytecode_disasm,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
 }
 
 // Function represents a registered User-Defined Function (UDF) or Table-Valued Function (TVF).
 type Function struct {
-	Name          string           `json:"name"`
-	Params        []ParamDef       `json:"params"`
-	ReturnType    storage.DataType `json:"return_type"`
-	IsTableValued bool             `json:"is_table_valued"`
-	TableColumns  []storage.Column `json:"table_columns,omitempty"`
-	Body          string           `json:"body"`
-	JSCode        string           `json:"js_code"`
-	CreatedAt     time.Time        `json:"created_at"`
-	UpdatedAt     time.Time        `json:"updated_at"`
+	Name           string           `json:"name"`
+	Params         []ParamDef       `json:"params"`
+	ReturnType     storage.DataType `json:"return_type"`
+	IsTableValued  bool             `json:"is_table_valued"`
+	TableColumns   []storage.Column `json:"table_columns,omitempty"`
+	Body           string           `json:"body"`
+	BytecodeDisasm string           `json:"bytecode_disasm,omitempty"`
+	CreatedAt      time.Time        `json:"created_at"`
+	UpdatedAt      time.Time        `json:"updated_at"`
 }
 
 // Trigger represents an event-driven table trigger.
 type Trigger struct {
-	Name      string    `json:"name"`
-	Table     string    `json:"table"`
-	Timing    string    `json:"timing"` // e.g. "AFTER", "INSTEAD OF"
-	Events    []string  `json:"events"` // e.g. ["INSERT", "UPDATE", "DELETE"]
-	Body      string    `json:"body"`
-	JSCode    string    `json:"js_code"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Name           string    `json:"name"`
+	Table          string    `json:"table"`
+	Timing         string    `json:"timing"` // e.g. "AFTER", "INSTEAD OF"
+	Events         []string  `json:"events"` // e.g. ["INSERT", "UPDATE", "DELETE"]
+	Body           string    `json:"body"`
+	BytecodeDisasm string    `json:"bytecode_disasm,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // View represents a named SQL view backed by a SELECT query.

@@ -33,7 +33,7 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 	upper := strings.ToUpper(trimmed)
 	var procName string
 	var paramDefs []catalog.ParamDef
-	var jsCode string
+	var disasm string
 	var orAlter bool
 	var isAlter bool
 
@@ -55,7 +55,7 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, compErr)
 			return
 		}
-		jsCode = prog.Disassemble()
+		disasm = prog.Disassemble()
 		s.executor.Cache().PutByName(procName, prog)
 	} else {
 		writeError(w, http.StatusBadRequest, fmt.Errorf("procedure must begin with CREATE PROCEDURE, ALTER PROCEDURE, or CREATE OR ALTER PROCEDURE (T-SQL)"))
@@ -63,10 +63,10 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	procMeta := &catalog.Procedure{
-		Name:   procName,
-		Params: paramDefs,
-		Body:   req.Script,
-		JSCode: jsCode,
+		Name:           procName,
+		Params:         paramDefs,
+		Body:           req.Script,
+		BytecodeDisasm: disasm,
 	}
 
 	var regErr error
@@ -97,10 +97,11 @@ func (s *Server) handleRegisterProc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"name":    procName,
-		"params":  paramDefs,
-		"js_code": jsCode,
-		"message": msg,
+		"name":            procName,
+		"params":          paramDefs,
+		"bytecode_disasm": disasm,
+		"js_code":         disasm, // backwards-compatible alias for existing clients
+		"message":         msg,
 	})
 }
 

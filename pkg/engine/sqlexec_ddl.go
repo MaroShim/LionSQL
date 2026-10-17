@@ -440,11 +440,11 @@ func (s *Coordinator) execCreateProcedure(query string, start time.Time) (*Query
 	}
 
 	procMeta := &catalog.Procedure{
-		Name:      plan.Name,
-		Body:      query,
-		JSCode:    prog.Disassemble(),
-		Params:    params,
-		CreatedAt: time.Now(),
+		Name:           plan.Name,
+		Body:           query,
+		BytecodeDisasm: prog.Disassemble(),
+		Params:         params,
+		CreatedAt:      time.Now(),
 	}
 
 	var regErr error
@@ -539,12 +539,12 @@ func (s *Coordinator) execCreateFunction(query string, start time.Time) (*QueryR
 	}
 
 	fnMeta := &catalog.Function{
-		Name:       fnStmt.Name,
-		ReturnType: fnStmt.ReturnType,
-		Body:       query,
-		JSCode:     prog.Disassemble(),
-		Params:     params,
-		CreatedAt:  time.Now(),
+		Name:           fnStmt.Name,
+		ReturnType:     fnStmt.ReturnType,
+		Body:           query,
+		BytecodeDisasm: prog.Disassemble(),
+		Params:         params,
+		CreatedAt:      time.Now(),
 	}
 
 	if err := s.catalog.RegisterFunction(fnMeta); err != nil {
@@ -573,13 +573,13 @@ func (s *Coordinator) execCreateTrigger(query string, start time.Time) (*QueryRe
 	}
 
 	trgMeta := &catalog.Trigger{
-		Name:      trgStmt.Name,
-		Table:     trgStmt.Table,
-		Timing:    trgStmt.Timing,
-		Events:    trgStmt.Events,
-		Body:      query,
-		JSCode:    prog.Disassemble(),
-		CreatedAt: time.Now(),
+		Name:           trgStmt.Name,
+		Table:          trgStmt.Table,
+		Timing:         trgStmt.Timing,
+		Events:         trgStmt.Events,
+		Body:           query,
+		BytecodeDisasm: prog.Disassemble(),
+		CreatedAt:      time.Now(),
 	}
 
 	if err := s.catalog.RegisterTrigger(trgMeta); err != nil {

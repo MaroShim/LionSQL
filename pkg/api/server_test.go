@@ -121,12 +121,16 @@ END
 	}
 
 	var regResp struct {
-		Name   string `json:"name"`
-		JSCode string `json:"js_code"`
+		Name           string `json:"name"`
+		BytecodeDisasm string `json:"bytecode_disasm"`
+		JSCode         string `json:"js_code"`
 	}
 	_ = json.NewDecoder(rec.Body).Decode(&regResp)
-	if !strings.Contains(regResp.JSCode, "TransferFunds") || !strings.Contains(regResp.JSCode, "Instructions") {
-		t.Fatalf("Expected bytecode disassembly in registration response, got: %s", regResp.JSCode)
+	if !strings.Contains(regResp.BytecodeDisasm, "TransferFunds") || !strings.Contains(regResp.BytecodeDisasm, "Instructions") {
+		t.Fatalf("Expected bytecode disassembly in registration response, got: %s", regResp.BytecodeDisasm)
+	}
+	if regResp.JSCode != regResp.BytecodeDisasm {
+		t.Fatalf("Expected js_code backward compatibility alias to match bytecode_disasm")
 	}
 
 	// Execute procedure via JSON HTTP RPC

@@ -130,7 +130,7 @@ func TestParseTSql_SyntaxError(t *testing.T) {
 	}
 }
 
-func TestBuildProcedure_ANTLRAndTranspile(t *testing.T) {
+func TestBuildProcedure_ANTLRAndCompile(t *testing.T) {
 	script := `
 CREATE PROCEDURE CalculateBonus
     @emp_id INT,
@@ -156,12 +156,12 @@ END;
 		t.Errorf("expected procedure name CalculateBonus, got %s", plan.Name)
 	}
 
-	jsCode, err := proc.Transpile(plan)
+	prog, err := proc.CompileProcedure(plan)
 	if err != nil {
-		t.Fatalf("Transpile failed: %v", err)
+		t.Fatalf("CompileProcedure failed: %v", err)
 	}
 
-	if len(jsCode) == 0 {
-		t.Fatalf("expected non-empty JS code")
+	if len(prog.Instructions) == 0 {
+		t.Fatalf("expected non-empty bytecode instructions")
 	}
 }

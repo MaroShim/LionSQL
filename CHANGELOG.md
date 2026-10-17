@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Enforced fail-fast circuit breaker in `tx.Commit()` on data mutations (`changeInsert`, `changeUpdate`) when heap usage exceeds capacity limit, returning `storage.ErrTableFull (SQLSTATE 53200)` and preventing process OOM.
   - Added unit test `TestMemEngine_CapacityGuard` in `pkg/storage/memengine/memengine_test.go` verifying fail-fast rejection when limit is exceeded and normal execution when limit is relaxed.
 
+### Removed
+- **Dead Code Elimination & Architecture Diet (`KISS-1`) (`pkg/proc`, `pkg/catalog`, `pkg/api`, `pkg/engine`)**:
+  - Completely deleted obsolete legacy JavaScript transpiler `pkg/proc/transpiler.go` (782 lines) and its tests `pkg/proc/transpiler_test.go` (387 lines), removing 1,169 lines of dead code after unifying the execution runtime exclusively around the SQLite VDBE Bytecode Virtual Machine.
+  - Renamed legacy `JSCode` fields across `catalog.Procedure`, `catalog.Function`, and `catalog.Trigger` structs to `BytecodeDisasm`, eliminating confusing misleading naming while preserving backward-compatible JSON aliases for external clients.
+  - Updated ANTLR procedure compilation tests in `pkg/proc/parser/antlr/antlr_test.go` to directly verify VDBE bytecode generation.
+
 ---
 
 ## [0.23.0] - 2026-10-17
