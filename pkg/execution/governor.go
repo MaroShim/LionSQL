@@ -3,6 +3,7 @@ package execution
 import (
 	"fmt"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -113,4 +114,35 @@ func FormatMemSize(bytes int64) string {
 		return fmt.Sprintf("%dkB", bytes/1024)
 	}
 	return fmt.Sprintf("%dB", bytes)
+}
+
+// DefaultMaxMemoryRatio is the default ratio (70%) of total physical RAM allocated to LionSQL.
+const DefaultMaxMemoryRatio float64 = 0.70
+
+// GetPhysicalMemory returns the host or container total physical RAM in bytes.
+func GetPhysicalMemory() int64 {
+	return getPlatformPhysicalMemory()
+}
+
+// GetDefaultMaxMemory returns 70% of detected physical RAM.
+func GetDefaultMaxMemory() int64 {
+	mem := GetPhysicalMemory()
+	if mem <= 0 {
+		return 4 * 1024 * 1024 * 1024
+	}
+	return int64(float64(mem) * DefaultMaxMemoryRatio)
+}
+
+// SetGlobalMemoryLimit configures the Go runtime soft heap memory limit (debug.SetMemoryLimit).
+// It returns the previously configured memory limit.
+func SetGlobalMemoryLimit(bytes int64) int64 {
+	if bytes <= 0 {
+		return debug.SetMemoryLimit(-1)
+	}
+	return debug.SetMemoryLimit(bytes)
+}
+
+// GetGlobalMemoryLimit returns the currently configured Go runtime soft heap memory limit.
+func GetGlobalMemoryLimit() int64 {
+	return debug.SetMemoryLimit(-1)
 }

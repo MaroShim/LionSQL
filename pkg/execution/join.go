@@ -145,7 +145,13 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 		}
 
 		for _, tuple := range inChunk.Tuples {
-			h.buildMemory += EstimateTupleSize(tuple)
+			tSize := EstimateTupleSize(tuple)
+			if h.workMem > 0 && h.buildMemory+tSize > h.workMem {
+				_ = h.right.Close()
+				return fmt.Errorf("hash join memory budget exceeded: %s > work_mem (%s)",
+					FormatMemSize(h.buildMemory+tSize), FormatMemSize(h.workMem))
+			}
+			h.buildMemory += tSize
 
 			rIdx := -1
 			if trackRight {

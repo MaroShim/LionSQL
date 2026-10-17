@@ -17,6 +17,9 @@
 | **`R-1` ~ `R-5`** | **코드 리팩토링 (Refactoring)** | `R-1` ~ `R-5` | 거대 파일 모듈 분해, 단일 책임 원칙(SRP), DRY 중복 해소 및 가상 뷰 레지스트리화 |
 | **`A` ~ `D`** | **CBO 최적화 (Optimizer)** | `A-1` ~ `D-9` | 비용 기반 옵티마이저 4대 기능 트랙 (A: 통계 수집, B: 조인 알고리즘, C: 선택도, D: 운영 제어) |
 | **`S-1` ~ `S-7`** | **SQL 문법 (Syntax)** | `S-1` ~ `S-7` | T-SQL 및 ANSI SQL 7대 문법 호환성 완비 트랙 (전 항목 완료) |
+| **`S3-1` ~ `S3-4`** | **오브젝트 스토리지 (Storage)** | `S3-1` ~ `S3-4` | 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 트랙 |
+| **`OBS-1` ~ `OBS-3`** | **관제 및 프로파일링 (Observability)** | `OBS-1` ~ `OBS-3` | Prometheus 메트릭, EXPLAIN ANALYZE, 슬로우 쿼리 웹훅 연동 트랙 |
+| **`SEC-1` ~ `SEC-2`** | **엔터프라이즈 보안 (Security)** | `SEC-1` ~ `SEC-2` | TDS Pre-Login TLS 암호화 협상 및 프로토콜 보안 강화 트랙 |
 
 ---
 
@@ -24,11 +27,31 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 상태 | 관련 기술 문서 |
 | :---: | :---: | :--- | :--- | :---: | :--- |
+| **P1** | **리소스/안정성** | **글로벌 메모리 예산 상한제 및 회로 차단기 (Global Memory Governor & Circuit Breaker)** | `pkg/config`, `pkg/execution`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P1** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **차주 P1 착수 예정** | [`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md) |
+| **P2** | **스토리지/가드** | **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`)** | `pkg/storage/memengine`, `pkg/config` | **차기 스프린트 대기** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **P2** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **스프린트 백로그 대기** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
+| **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **스프린트 백로그 대기** | - |
+| **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **스프린트 백로그 대기** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
+| **P3** | **알림/운영** | **슬로우 쿼리 실시간 웹훅 알림 (Slack / Discord / Webhook) (`OBS-3`)** | `pkg/engine`, `pkg/config` | **백로그 등록 (Post-1.0 후보)** | - |
+| **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **백로그 등록 (Post-1.0 후보)** | - |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
 
-* **과제명**: 엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`pkg/audit`)
+#### 1. 글로벌 메모리 예산 상한제 및 회로 차단기 (`pkg/config`, `pkg/execution`, `cmd/server`)
+* **과제 개요**: 무제한 메모리 할당으로 인한 OS OOM Killer 사살 방지(Golden Rule 1, 23)를 위한 프로세스/세션 레벨 방어 체계 구축.
+* **핵심 아키텍처 및 구현 요구사항**:
+  1. **`--max-memory` 글로벌 CLI 플래그 및 환경 설정 도입**:
+     - `--max-memory` (예: `2GB`, `4GB`) 플래그 및 `resources.max_memory` 설정 연동.
+     - 미설정 시 기본값: **호스트 시스템 물리 메모리(RAM)의 70%** 자동 계산 적용 (cgroups/sysctl/OS 메모리 자동 감지).
+  2. **Go 런타임 플랫폼 프리미티브 연동 (`debug.SetMemoryLimit`)**:
+     - Go 1.19+ `debug.SetMemoryLimit`을 호출하여 힙 메모리가 상한에 근접할 시 Go 런타임 GC가 사전에 능동적으로 메모리를 회수하도록 보장 (Golden Rule 14).
+     - 서버 기동 배너에 실시간 적용 메모리 예산 로깅 (`[Memory Governor] max_memory: X.XGB (70% of RAM), work_mem: 64MB`).
+  3. **대량 조인(`HashJoinIterator`) Fail-Fast 회로 차단기 (Circuit Breaker)**:
+     - 복잡한 디스크 스필러 오버엔지니어링(YAGNI, Golden Rule 15)을 배제하고, Build 단계에서 `buildMemory > workMem` 도달 시 즉시 안전한 중단 및 에러 반환 (`hash join memory budget exceeded: ... > work_mem`).
+     - 비정상적인 카테시안 조인 또는 초대용량 해시 조인으로부터 다른 정상 OLTP 쿼리들을 완벽히 격리 보호.
+
+#### 2. 엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`pkg/audit`)
 * **표준 규격**: PCI-DSS v4.0 Requirement 10, SOC 2 Type II, HIPAA §164.312(b)
 * **핵심 아키텍처 및 구현 요구사항**:
   1. **SHA-256 해시 체이닝 (Cryptographic Hash Chaining)**:
@@ -44,6 +67,22 @@
      - 데이터 조작(선택적): 슈퍼유저 DML, 테이블 벌크 반출입.
   4. **독립 CLI 무결성 검증기**:
      - `lionsql audit verify -file=<audit.log>` 명령어를 통해 외부 감사인이 오프라인에서 암호학적 무결성 검증 가능.
+
+#### 3. 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc`)
+* **과제 개요**: 대용량 바이너리 스트리밍 및 이미지 썸네일 처리를 DB 커널에서 배제(Spec-Out, `GEMINI.md` 8.7절)하고, 클라이언트가 외부 S3/R2/MinIO로 직접 업로드하도록 지원하는 제로-의존성 순수 Go SigV4 서명 서브시스템 구축.
+* **사전 구현 세부 요구사항 (Phase 1 ~ Phase 4)**:
+  1. **제로-의존성 경량 AWS SigV4 서명기 (`pkg/storage/s3sign`)**:
+     - 외부 AWS SDK(수십 MB) 없이 Go 표준 `crypto/hmac`, `crypto/sha256`만으로 Canonical Request, StringToSign, 다단계 파생 서명 키 계산.
+     - `SignPresignedPUT(bucket, key, contentType, expiresIn)` 및 `SignPresignedGET(bucket, key, expiresIn)` 구현.
+     - AWS 공식 Canonical Test Suite 기반 100% 호환성 단위 테스트 검증.
+  2. **통합 스토리지 설정 서브시스템 (`pkg/config`)**:
+     - `S3Config` (endpoint, region, access_key_id, secret_access_key, default_bucket, force_path_style, cdn_base_url) 구조체 및 환경 변수 바인딩 (`SQLION_S3_*`).
+  3. **HTTP REST Pre-signed 발급 API 엔드포인트 (`pkg/api/handlers_storage.go`)**:
+     - `POST /api/storage/presign` 엔드포인트 (JWT/API-Key RBAC 인증).
+     - 업로드용 `upload_url`, 조회용 `public_url`, 유효기간 반환 및 Content-Length/MIME 타입 화이트리스트 가드.
+  4. **T-SQL 내장 스칼라 함수 확장 (`pkg/proc/builtins_s3.go`, `pkg/engine`)**:
+     - `S3_PRESIGNED_PUT_URL('avatars/user.png')` 및 `S3_PRESIGNED_GET_URL(...)` 스칼라 함수 등록.
+     - Stored Procedure 및 대화형 쿼리에서 직접 업로드 링크 생성 지원.
 
 ---
 
@@ -101,6 +140,36 @@
 
 ---
 
+### 3.4. 클라우드 오브젝트 스토리지 & Pre-signed URL 연동 트랙 (`S3-1` ~ `S3-4`)
+
+| 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
+| :---: | :--- | :--- | :---: | :--- |
+| **S3-1** | 스토리지 | 제로-의존성 경량 AWS SigV4 서명기 구축 | **대기 (`[ ]`)** | 순수 Go 표준 라이브러리(`crypto/hmac`, `crypto/sha256`) 기반 Canonical Request & 다단계 파생 키 서명 (`pkg/storage/s3sign`) |
+| **S3-2** | 설정/API | S3 스토리지 설정 및 HTTP REST Pre-signed API | **대기 (`[ ]`)** | `POST /api/storage/presign` 엔드포인트, MIME/크기 가드, `S3Config` 환경 변수 연동 (`pkg/config`, `pkg/api`) |
+| **S3-3** | 파서/엔진 | T-SQL Pre-signed URL 내장 스칼라 함수 등록 | **대기 (`[ ]`)** | `S3_PRESIGNED_PUT_URL`, `S3_PRESIGNED_GET_URL` 내장 함수 및 SP 연동 (`pkg/proc`, `pkg/engine`) |
+| **S3-4** | UI/스튜디오 | 웹 관리자 스튜디오(Web Studio) 파일 업로드 위젯 | **대기 (`[ ]`)** | 레코드 편집 모달 내 브라우저 ➔ S3 직접 업로드 및 URL 자동 입력 위젯 연동 (`pkg/ui`) |
+
+---
+
+### 3.5. 엔터프라이즈 관제 및 쿼리 프로파일링 트랙 (`OBS-1` ~ `OBS-3`)
+
+| 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
+| :---: | :--- | :--- | :---: | :--- |
+| **OBS-1** | 관제/메트릭 | Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 | **대기 (`[ ]`)** | `/metrics` 텍스트 규격, 실시간 TPS/세션/메모리/복제 랙/스토리지 I/O 메트릭 노출 (`pkg/api`, `pkg/engine`) |
+| **OBS-2** | 최적화/DX | `EXPLAIN ANALYZE` 런타임 실행 프로파일러 | **대기 (`[ ]`)** | Volcano Iterator 래핑, 실제 소요 시간(Actual Time), 처리 행(Actual Rows), 피크 메모리 트리 시각화 (`pkg/planner`, `pkg/execution`) |
+| **OBS-3** | 운영/알림 | 슬로우 쿼리 실시간 웹훅 알림 (Slack / Discord / Webhook) | **대기 (`[ ]`)** | 임계치 초과 쿼리 실시간 비동기 웹훅 디스패처, 슬랙/디스코드 포맷터 연동 (`pkg/engine`, `pkg/config`) |
+
+---
+
+### 3.6. 프로토콜 보안 및 스토리지 가드 트랙 (`SEC-1`, `MEM-3`)
+
+| 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
+| :---: | :--- | :--- | :---: | :--- |
+| **SEC-1** | 와이어/보안 | TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 | **대기 (`[ ]`)** | MS-TDS 2.2.6.4 Pre-Login 토큰 내 암호화 협상 플래그 교환 및 엄격 암호화 핸드셰이크 완비 (`pkg/wire/tds`) |
+| **MEM-3** | 스토리지/가드 | In-Memory OCC 엔진 데이터 용량 한도 가드 (`memengine`) | **대기 (`[ ]`)** | 테이블/작업공간 데이터 크기 임계치 초과 시 `ErrTableFull` / `ErrOutOfMemory` 페일세이프 방어 (`pkg/storage/memengine`) |
+
+---
+
 ## 4. 공식 보류 및 스펙-아웃 사유 명세 (Deferred & Spec-Out Rationale)
 
 1.0 릴리스 안정성 확보 및 극단적 KISS/YAGNI 원칙(Golden Rule 14, 15)에 따라 보류 및 배제된 항목들의 기술적 결정 사유입니다:
@@ -134,6 +203,10 @@
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **글로벌 메모리 예산 상한제 및 대량 조인 회로 차단기 (`pkg/config`, `pkg/execution`, `cmd/server`)**:
+  - 호스트/컨테이너 물리 메모리 자동 감지(Darwin `sysctl`, Linux cgroups v1/v2 및 `/proc/meminfo`) 기반 시스템 RAM의 70%를 기본 글로벌 상한으로 자동 계산 및 적용.
+  - Go 런타임 플랫폼 프리미티브 연동 (`debug.SetMemoryLimit` / GOMEMLIMIT)으로 힙 메모리 상한 근접 시 능동적 사전 GC 트리거 및 OS OOM Killer 사살 방지.
+  - 대량 해시 조인(`HashJoinIterator`) 빌드 단계에서 `buildMemory > workMem` 초과 시 Fail-Fast 회로 차단기(`hash join memory budget exceeded`) 가동으로 비정상 쿼리 즉시 차단 및 타 세션 OLTP 격리 보호.
 - [x] **테스트 스위트 중복 보일러플레이트 대규모 슬림화 (Net -291줄) (`pkg/wire`, `pkg/api`)**:
   - `pkg/wire/server_test.go`: `authenticatePGClient` 헬퍼 도입 및 동시성/커서 테스트 슬림화 (-176줄).
   - `pkg/api/sqlexec_test.go`: 31개 단위 테스트에 걸친 중복 인메모리 서버 초기화를 `setupMemServer(t)`로 단일화 (-115줄).

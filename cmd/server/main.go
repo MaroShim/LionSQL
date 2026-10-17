@@ -58,6 +58,7 @@ func main() {
 	maxWorkers := flag.Int("max-workers", 0, "Max concurrent query execution workers (default: NumCPU * 4)")
 	maxIdleSessions := flag.Int("max-idle-sessions", 64, "Max idle storage sessions to retain in pool")
 	workMemStr := flag.String("work-mem", "64MB", "Default memory budget per query operator (e.g. 64MB, 128MB)")
+	maxMemoryStr := flag.String("max-memory", "", "Maximum global heap memory budget (default: 70% of physical RAM, e.g. 2GB, 4GB)")
 	enableTLS := flag.Bool("tls", false, "Enable SSL/TLS encrypted connections for PostgreSQL and TDS wire protocols")
 	tlsCert := flag.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKey := flag.String("tls-key", "", "Path to TLS private key file")
@@ -165,6 +166,9 @@ func main() {
 	}
 	if visited["work-mem"] {
 		cfg.Resources.WorkMem = *workMemStr
+	}
+	if visited["max-memory"] {
+		cfg.Resources.MaxMemory = *maxMemoryStr
 	}
 	if visited["tls"] {
 		cfg.Network.TLS.Enabled = *enableTLS
@@ -489,6 +493,18 @@ func main() {
 		server.SetPoolConfig(poolCfg)
 	}
 
+	// Memory Governor: Global memory budget (GOMEMLIMIT) & operator work_mem
+	var maxMemBytes int64
+	if cfg.Resources.MaxMemory != "" {
+		if bytes, err := execution.ParseMemSize(cfg.Resources.MaxMemory); err == nil && bytes > 0 {
+			maxMemBytes = bytes
+		}
+	}
+	if maxMemBytes <= 0 {
+		maxMemBytes = execution.GetDefaultMaxMemory()
+	}
+	execution.SetGlobalMemoryLimit(maxMemBytes)
+
 	if cfg.Resources.WorkMem != "" {
 		if bytes, err := execution.ParseMemSize(cfg.Resources.WorkMem); err == nil && bytes > 0 {
 			server.SetDefaultWorkMem(bytes)
@@ -742,7 +758,7 @@ func main() {
 		fmt.Printf(" [Storage Engine] %s\n", cfg.Server.Engine)
 		stats := server.Pool().Stats()
 		fmt.Printf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", stats.MaxWorkers, stats.MaxIdleSessions)
-		fmt.Printf(" [Memory Governor] work_mem: %s (External Merge Sort spill-to-disk enabled)\n", execution.FormatMemSize(server.DefaultWorkMem()))
+		fmt.Printf(" [Memory Governor] max_memory: %s (Go runtime GC soft limit), work_mem: %s (External Merge Sort & HashJoin guard)\n", execution.FormatMemSize(execution.GetGlobalMemoryLimit()), execution.FormatMemSize(server.DefaultWorkMem()))
 		if server.SlowQueries().LogFilePath() != "" {
 			fmt.Printf(" [Slow Query Log] %s (Threshold: %v)\n", server.SlowQueries().LogFilePath(), server.SlowQueries().Threshold())
 		}

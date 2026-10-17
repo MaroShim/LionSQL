@@ -66,6 +66,7 @@ type ResourcesConfig struct {
 	MaxWorkers      int    `json:"max_workers"`
 	MaxIdleSessions int    `json:"max_idle_sessions"`
 	WorkMem         string `json:"work_mem"`
+	MaxMemory       string `json:"max_memory"`
 }
 
 // SlowQueryLogConfig defines criteria and destination for slow queries.
@@ -238,6 +239,12 @@ func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, e
 func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
+	}
+	if v := os.Getenv("SQLION_WORK_MEM"); v != "" {
+		cfg.Resources.WorkMem = v
+	}
+	if v := os.Getenv("SQLION_MAX_MEMORY"); v != "" {
+		cfg.Resources.MaxMemory = v
 	}
 }
 
