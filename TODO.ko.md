@@ -32,12 +32,12 @@
 | **P1** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **차주 P1 착수 예정** | [`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md) |
 | **P2** | **스토리지/가드** | **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`)** | `pkg/storage/memengine`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **KISS/중복제거** | **가상 PG 카탈로그 생성기 중복 단일화 (`KISS-2`)** | `pkg/engine`, `pkg/catalog/virtual` | **완료 (`[x]`)** | - |
-| **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **스프린트 백로그 대기** | - |
+| **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | - |
 | **P2** | **KISS/자료구조** | **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | - |
 | **P2** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **스프린트 백로그 대기** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
 | **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **스프린트 백로그 대기** | - |
 | **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **스프린트 백로그 대기** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
-| **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **백로그 등록 (Post-1.0 후보)** | - |
+| **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **알림/운영** | **슬로우 쿼리 실시간 웹훅 알림 (Slack / Discord / Webhook) (`OBS-3`)** | `pkg/engine`, `pkg/config` | **백로그 등록 (Post-1.0 후보)** | - |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **백로그 등록 (Post-1.0 후보)** | - |
 
@@ -181,9 +181,9 @@
 | :---: | :--- | :--- | :---: | :--- |
 | **KISS-1** | KISS/다이어트 | 미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 | **완료 (`[x]`)** | VDBE VM 전환 이후 미사용 상태인 `pkg/proc/transpiler.go`(782줄) 및 테스트(387줄) 완전 삭제(총 1,169줄 제거), `catalog.Procedure.JSCode` 등 잔재 필드를 직관적인 `BytecodeDisasm` 메타데이터로 정리 완비 |
 | **KISS-2** | KISS/중복제거 | 가상 PG 카탈로그 및 information_schema 생성기 중복 단일화 | **완료 (`[x]`)** | `pkg/engine/sqlexec_pgcatalog.go`(1,102줄) 및 `sqlexec_info_schema.go`(588줄)를 완전 삭제하고 `pkg/catalog/virtual/`(`pg.go`, `info_schema.go`)로 일원화. `sqlexec_dbcc.go`는 `virtual.IsPgCatalogTable` 및 `virtual.ExecPgCatalogSelect`를 호출하도록 위임하여 순수 중복 제거 및 단일 책임 원칙(SRP) 완비 |
-| **KISS-3** | KISS/파서통합 | `sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 | **대기 (`[ ]`)** | `sqlexec_eval.go`, `sqlexec_pivot.go` 등의 취약한 정규식 문자열 분할을 제거하고 `pkg/proc`의 Pratt AST 노드를 직접 소비하도록 통합 |
+| **KISS-3** | KISS/파서통합 | `sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 | **연기 (Postponed)** | `sqlexec_eval.go`, `sqlexec_pivot.go` 등의 정규식 분할 로직을 `pkg/proc` Pratt AST 소비로 통합하는 과제로, 25개 패키지 및 E2E 드라이버 호환성 회귀 방지를 위해 Post-1.0으로 연기 |
 | **KISS-4** | KISS/자료구조 | In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 | **완료 (`[x]`)** | `pkg/storage/memengine/skiplist.go`의 `rndMu sync.Mutex` 및 `rnd *rand.Rand`를 완전 삭제하고 Go 표준 `math/rand/v2`로 전환하여 이중 락 중첩 제거 및 락-프리/제로-할당 난수 생성 구현 완비 |
-| **KISS-5** | KISS/실행통합 | 3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) | **대기 (`[ ]`)** | `sqlexec_select.go`(2,308줄)의 자체 인메모리 조인/소팅 인터프리터를 `pkg/execution` 화산형 Iterator 파이프라인으로 일원화 (Post-1.0) |
+| **KISS-5** | KISS/실행통합 | 3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) | **연기 (Postponed)** | `sqlexec_select.go`(2,308줄)의 인메모리 조인/소팅 인터프리터를 `pkg/execution` Iterator로 통합하는 과제로, 단일 테이블 패스트패스 및 TPC-C 20k TPS 성능 안정성 유지를 위해 Post-1.0으로 연기 |
 
 ---
 
@@ -209,7 +209,13 @@
 * **Pure-Go 영속 스토리지 엔진 (Pebble / bbolt)**:
   1.0 프로덕션에서는 검증된 WiredTiger B+Tree 엔진과 순수 Go 초고속 In-Memory OCC 엔진 2대 백엔드 체제에 집중(v1.1+ 이관).
 
-### 4.3. 영구 스펙-아웃 (Spec-Out Invariants)
+### 4.3. 아키텍처 다이어트 보류 과제 (Post-1.0 연기)
+* **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)**:
+  현재 25개 전 패키지와 JDBC/ODBC E2E 드라이버 테스트가 100% 통과 중인 상태에서 수십 개의 쿼리 실행기 정규식 패턴을 대규모로 개편할 경우 1.0 출시 전 예기치 않은 문법 파싱 리그레션 위험이 큼. 1.0 릴리스 안정성 확보를 위해 Post-1.0으로 연기.
+* **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)**:
+  `sqlexec_select.go`(2,308줄)는 단일 테이블 및 기본 조인/집계 패스트패스를 매우 빠르고 안정적으로 처리하고 있음. 이를 무리하게 통합하다가 TPC-C 20k TPS 및 OLTP 성능 튜닝에 부작용을 줄 위험이 있으므로 Post-1.0 장기 아키텍처 과제로 공식 연기.
+
+### 4.4. 영구 스펙-아웃 (Spec-Out Invariants)
 * **내장형 OAuth2 소셜 로그인 배제**:
   데이터베이스 커널 내부에서 구글/깃허브 웹 리다이렉트 및 아웃바운드 인터넷 토큰 교환을 처리하는 것은 단일 책임 원칙 및 KISS(Rule 15)를 위반하고 공격 표면을 확대함. 엔터프라이즈 리버스 프록시(Keycloak, OAuth2-Proxy) 위임으로 영구 표준화 (`GEMINI.md` 8.6절, ADR-021).
 * **내장형 S3 Blob 파일 스토리지 및 썸네일 리사이징 배제**:
