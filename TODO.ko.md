@@ -30,6 +30,7 @@
 | **P1** | **리소스/안정성** | **글로벌 메모리 예산 상한제 및 회로 차단기 (Global Memory Governor & Circuit Breaker)** | `pkg/config`, `pkg/execution`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P1** | **KISS/다이어트** | **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`)** | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
 | **P1** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **차주 P1 착수 예정** | [`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md) |
+| **P1** | **성능/크리티컬패스** | **크리티컬 패스 분할기, TDS 파라미터 바인딩, Row 스트리밍 및 UTF-16LE 변환 가속 (`PERF-1`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md) |
 | **P2** | **스토리지/가드** | **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`)** | `pkg/storage/memengine`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **KISS/중복제거** | **가상 PG 카탈로그 생성기 중복 단일화 (`KISS-2`)** | `pkg/engine`, `pkg/catalog/virtual` | **완료 (`[x]`)** | - |
 | **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | - |
@@ -184,6 +185,14 @@
 | **KISS-3** | KISS/파서통합 | `sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 | **연기 (Postponed)** | `sqlexec_eval.go`, `sqlexec_pivot.go` 등의 정규식 분할 로직을 `pkg/proc` Pratt AST 소비로 통합하는 과제로, 25개 패키지 및 E2E 드라이버 호환성 회귀 방지를 위해 Post-1.0으로 연기 |
 | **KISS-4** | KISS/자료구조 | In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 | **완료 (`[x]`)** | `pkg/storage/memengine/skiplist.go`의 `rndMu sync.Mutex` 및 `rnd *rand.Rand`를 완전 삭제하고 Go 표준 `math/rand/v2`로 전환하여 이중 락 중첩 제거 및 락-프리/제로-할당 난수 생성 구현 완비 |
 | **KISS-5** | KISS/실행통합 | 3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) | **연기 (Postponed)** | `sqlexec_select.go`(2,308줄)의 인메모리 조인/소팅 인터프리터를 `pkg/execution` Iterator로 통합하는 과제로, 단일 테이블 패스트패스 및 TPC-C 20k TPS 성능 안정성 유지를 위해 Post-1.0으로 연기 |
+
+---
+
+### 3.8. 크리티컬 패스 가속 및 무할당 스캐너 트랙 (`PERF-1`)
+
+| 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
+| :---: | :--- | :--- | :---: | :--- |
+| **PERF-1** | 성능/크리티컬패스 | 문장 분할기 및 TDS 파라미터 바인딩 가속 | **완료 (`[x]`)** | `SplitStatements`의 `strings.Builder` 및 매 바이트 O(N^2) 검사를 제거하고 인덱스 슬라이싱(`query[start:i]`) 기반 제로-카피 스캐너로 전면 재작성(16ns/op, 1 alloc). 함수 내부 동적 `regexp.MustCompile` 전역 `var` 승격. `sp_executesql` 1-Pass 단일 스캔 파라미터 바인딩으로 50배 가속(<1µs) 및 재발 방지 3원칙 문서화 완비 (`pkg/engine`, `pkg/wire/tds`, `notes/PITFALLS_AND_TRICKS.md`) |
 
 ---
 

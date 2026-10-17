@@ -14,9 +14,26 @@ import (
 	"sqlion/pkg/storage"
 )
 
+var (
+	reCreateTablePrefix = regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\(`)
+	reOnDelete          = regexp.MustCompile(`(?i)\bON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
+	reOnUpdate          = regexp.MustCompile(`(?i)\bON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
+	reTableFK           = regexp.MustCompile(`(?i)(?:CONSTRAINT\s+([^\s(]+)\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
+	reInlineFK          = regexp.MustCompile(`(?i)\bREFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
+	reCreateView        = regexp.MustCompile(`(?is)^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s+AS\s+(.+)$`)
+	reOrReplaceView     = regexp.MustCompile(`(?i)^CREATE\s+OR\s+REPLACE\s+VIEW`)
+	reIfNotExistsView   = regexp.MustCompile(`(?i)VIEW\s+IF\s+NOT\s+EXISTS`)
+	reDropView          = regexp.MustCompile(`(?is)^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(.+)$`)
+	reIfExistsView      = regexp.MustCompile(`(?i)^DROP\s+VIEW\s+IF\s+EXISTS`)
+	reDropPartition     = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+([^\s]+)\s+DROP\s+PARTITION\s+['"]?([^'";\s]+)['"]?\s*$`)
+	reCreateStats       = regexp.MustCompile(`(?is)^CREATE\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
+	reDropStatsOn       = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
+	reDropStats         = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
+)
+
 func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	prefixRe := regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\(`)
+	prefixRe := reCreateTablePrefix
 	prefixLoc := prefixRe.FindStringSubmatchIndex(cleaned)
 	if prefixLoc == nil {
 		return nil, fmt.Errorf("invalid CREATE TABLE syntax")
@@ -701,17 +718,14 @@ func parseForeignKeyClause(def string, defaultChildCol string, defaultName strin
 		OnUpdate: storage.ActionNoAction,
 	}
 
-	reOnDelete := regexp.MustCompile(`(?i)\bON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
 	if m := reOnDelete.FindStringSubmatch(defTrimmed); len(m) > 1 {
 		fk.OnDelete = storage.ParseForeignKeyAction(m[1])
 	}
 
-	reOnUpdate := regexp.MustCompile(`(?i)\bON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
 	if m := reOnUpdate.FindStringSubmatch(defTrimmed); len(m) > 1 {
 		fk.OnUpdate = storage.ParseForeignKeyAction(m[1])
 	}
 
-	reTableFK := regexp.MustCompile(`(?i)(?:CONSTRAINT\s+([^\s(]+)\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
 	if m := reTableFK.FindStringSubmatch(defTrimmed); len(m) > 0 {
 		if m[1] != "" {
 			fk.Name = cleanIdentifier(m[1])
@@ -737,7 +751,6 @@ func parseForeignKeyClause(def string, defaultChildCol string, defaultName strin
 		return &fk, true
 	}
 
-	reInlineFK := regexp.MustCompile(`(?i)\bREFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
 	if m := reInlineFK.FindStringSubmatch(defTrimmed); len(m) > 0 {
 		fk.ParentTable = cleanIdentifier(m[1])
 		if len(m) > 2 && strings.TrimSpace(m[2]) != "" {
@@ -765,7 +778,7 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// Pattern: CREATE [OR REPLACE] VIEW [IF NOT EXISTS] <name> AS <select>
-	re := regexp.MustCompile(`(?is)^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s+AS\s+(.+)$`)
+	re := reCreateView
 	m := re.FindStringSubmatch(cleaned)
 	if len(m) < 3 {
 		return nil, fmt.Errorf("invalid CREATE VIEW syntax")
@@ -774,8 +787,8 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 	viewName := cleanIdentifier(m[1])
 	selectQuery := strings.TrimSpace(m[2])
 
-	orReplace := regexp.MustCompile(`(?i)^CREATE\s+OR\s+REPLACE\s+VIEW`).MatchString(cleaned)
-	ifNotExists := regexp.MustCompile(`(?i)VIEW\s+IF\s+NOT\s+EXISTS`).MatchString(cleaned)
+	orReplace := reOrReplaceView.MatchString(cleaned)
+	ifNotExists := reIfNotExistsView.MatchString(cleaned)
 
 	view := &catalog.View{
 		Name:  viewName,
@@ -813,13 +826,13 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
-	re := regexp.MustCompile(`(?is)^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(.+)$`)
+	re := reDropView
 	m := re.FindStringSubmatch(cleaned)
 	if len(m) < 2 {
 		return nil, fmt.Errorf("invalid DROP VIEW syntax")
 	}
 
-	ifExists := regexp.MustCompile(`(?i)^DROP\s+VIEW\s+IF\s+EXISTS`).MatchString(cleaned)
+	ifExists := reIfExistsView.MatchString(cleaned)
 	viewName := cleanIdentifier(strings.TrimSpace(m[1]))
 
 	if err := s.catalog.DropView(viewName); err != nil {
@@ -848,7 +861,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// 1. ALTER TABLE <table> DROP PARTITION '<part>' (or without quotes)
-	dropPartRe := regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+([^\s]+)\s+DROP\s+PARTITION\s+['"]?([^'";\s]+)['"]?\s*$`)
+	dropPartRe := reDropPartition
 	if m := dropPartRe.FindStringSubmatch(cleaned); len(m) == 3 {
 		tableName := cleanIdentifier(m[1])
 		partitionName := strings.TrimSpace(m[2])
@@ -902,7 +915,7 @@ func (s *Coordinator) execShowPartitions(tableName string, start time.Time) (*Qu
 
 func (s *Coordinator) execCreateStatistics(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	re := regexp.MustCompile(`(?is)^CREATE\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
+	re := reCreateStats
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 4 {
 		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
@@ -964,8 +977,8 @@ func (s *Coordinator) execCreateStatistics(query string, start time.Time) (*Quer
 
 func (s *Coordinator) execDropStatistics(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	reTblOn := regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
-	reDot := regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
+	reTblOn := reDropStatsOn
+	reDot := reDropStats
 
 	var statName, tableName string
 	if m := reTblOn.FindStringSubmatch(cleaned); len(m) == 3 {

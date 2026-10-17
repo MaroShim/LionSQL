@@ -688,10 +688,7 @@ func (sess *ConnectionSession) writeRowDirect(destBuf *bytes.Buffer, cols []Colu
 			}
 		}
 	}
-	for i, col := range cols {
-		scratchVals[i] = row[col.Name]
-	}
-	destBuf.Write(BuildRow(cols, scratchVals))
+	WriteRowDirect(destBuf, cols, row)
 }
 
 func readLoginString(payload []byte, offsetPos int) string {
@@ -1029,15 +1026,7 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		buf.Write(BuildColMetaData(cols))
 
 		for _, row := range res.Rows {
-			rowVals := make([]any, len(res.Columns))
-			for i, colName := range res.Columns {
-				if v, ok := row[colName]; ok {
-					rowVals[i] = v
-				} else {
-					rowVals[i] = nil
-				}
-			}
-			buf.Write(sess.buildRow(cols, rowVals))
+			sess.writeRowDirect(&buf, cols, row, nil)
 		}
 
 		doneStatus := DoneFinal
@@ -1247,6 +1236,10 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 }
 
+func isIdentByte(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '#' || ch == '$'
+}
+
 func (s *Server) buildBoundSQL(query string, paramsDecl string, params []RPCParam) string {
 	query = strings.TrimSpace(query)
 	query = replaceQuestionPlaceholders(query)
@@ -1256,6 +1249,7 @@ func (s *Server) buildBoundSQL(query string, paramsDecl string, params []RPCPara
 
 	decls := parseParamDeclarations(paramsDecl)
 	usedParams := make(map[int]bool)
+	paramBindings := make(map[string]string)
 
 	// 1. Bind parameters declared in paramsDecl
 	for i, decl := range decls {
@@ -1279,7 +1273,11 @@ func (s *Server) buildBoundSQL(query string, paramsDecl string, params []RPCPara
 			usedParams[i] = true
 		}
 
-		query = substituteParamOutsideQuotes(query, decl.Name, formatSQLValue(val))
+		key := strings.ToLower(decl.Name)
+		if !strings.HasPrefix(key, "@") {
+			key = "@" + key
+		}
+		paramBindings[key] = formatSQLValue(val)
 	}
 
 	// 2. Bind any remaining parameters that weren't in paramsDecl
@@ -1294,68 +1292,119 @@ func (s *Server) buildBoundSQL(query string, paramsDecl string, params []RPCPara
 		if !strings.HasPrefix(paramName, "@") {
 			paramName = "@" + paramName
 		}
-		query = substituteParamOutsideQuotes(query, paramName, formatSQLValue(p.Value))
+		paramBindings[strings.ToLower(paramName)] = formatSQLValue(p.Value)
 	}
 
-	return query
+	if len(paramBindings) == 0 {
+		return query
+	}
+
+	return substituteParamsSinglePass(query, paramBindings)
 }
 
-func substituteParamOutsideQuotes(query string, paramName string, formattedVal string) string {
-	if !strings.HasPrefix(paramName, "@") {
-		paramName = "@" + paramName
+func substituteParamsSinglePass(query string, bindings map[string]string) string {
+	n := len(query)
+	if n == 0 {
+		return ""
 	}
-	re := regexp.MustCompile(`(?i)^` + regexp.QuoteMeta(paramName) + `\b`)
 
 	var b strings.Builder
-	inString := false
-	var quoteChar rune
-	runes := []rune(query)
+	b.Grow(n + len(bindings)*16)
 
-	for i := 0; i < len(runes); {
-		ch := runes[i]
+	inString := false
+	var quoteChar byte
+
+	for i := 0; i < n; {
+		ch := query[i]
+
 		if inString {
-			b.WriteRune(ch)
+			b.WriteByte(ch)
 			if ch == quoteChar {
-				if i+1 < len(runes) && runes[i+1] == quoteChar {
-					b.WriteRune(runes[i+1])
+				// Handle escaped quote: '' or ""
+				if i+1 < n && query[i+1] == quoteChar {
+					b.WriteByte(query[i+1])
 					i += 2
 					continue
 				}
 				inString = false
 			}
 			i++
-		} else {
-			if ch == '\'' || ch == '"' {
-				inString = true
-				quoteChar = ch
-				b.WriteRune(ch)
-				i++
-			} else if ch == '@' {
-				isDoubleAtParam := strings.HasPrefix(paramName, "@@")
-				prevIsAt := i > 0 && runes[i-1] == '@'
-				nextIsAt := i+1 < len(runes) && runes[i+1] == '@'
-				if !isDoubleAtParam && (prevIsAt || nextIsAt) {
-					b.WriteRune(ch)
-					i++
-					continue
-				}
-				remainder := string(runes[i:])
-				loc := re.FindStringIndex(remainder)
-				if len(loc) == 2 && loc[0] == 0 {
-					b.WriteString(formattedVal)
-					matchedRunes := len([]rune(remainder[:loc[1]]))
-					i += matchedRunes
-				} else {
-					b.WriteRune(ch)
-					i++
-				}
-			} else {
-				b.WriteRune(ch)
+			continue
+		}
+
+		// String literal start
+		if ch == '\'' || ch == '"' {
+			inString = true
+			quoteChar = ch
+			b.WriteByte(ch)
+			i++
+			continue
+		}
+
+		// Line comment (-- ...)
+		if ch == '-' && i+1 < n && query[i+1] == '-' {
+			b.WriteByte(ch)
+			b.WriteByte(query[i+1])
+			i += 2
+			for i < n && query[i] != '\n' {
+				b.WriteByte(query[i])
 				i++
 			}
+			continue
 		}
+
+		// Block comment (/* ... */)
+		if ch == '/' && i+1 < n && query[i+1] == '*' {
+			b.WriteByte(ch)
+			b.WriteByte(query[i+1])
+			i += 2
+			for i < n {
+				if query[i] == '*' && i+1 < n && query[i+1] == '/' {
+					b.WriteByte('*')
+					b.WriteByte('/')
+					i += 2
+					break
+				}
+				b.WriteByte(query[i])
+				i++
+			}
+			continue
+		}
+
+		// Parameter substitution: @ident or @@ident
+		if ch == '@' {
+			isDoubleAt := i+1 < n && query[i+1] == '@'
+			paramStart := i
+			i++
+			if isDoubleAt {
+				i++
+			}
+			for i < n && isIdentByte(query[i]) {
+				i++
+			}
+			ident := query[paramStart:i]
+			lowerIdent := strings.ToLower(ident)
+
+			if val, ok := bindings[lowerIdent]; ok {
+				b.WriteString(val)
+			} else {
+				b.WriteString(ident)
+			}
+			continue
+		}
+
+		b.WriteByte(ch)
+		i++
 	}
+
 	return b.String()
+}
+
+func substituteParamOutsideQuotes(query string, paramName string, formattedVal string) string {
+	if !strings.HasPrefix(paramName, "@") {
+		paramName = "@" + paramName
+	}
+	return substituteParamsSinglePass(query, map[string]string{strings.ToLower(paramName): formattedVal})
 }
 
 func parseParamDeclarations(decl string) []struct{ Name, Type string } {

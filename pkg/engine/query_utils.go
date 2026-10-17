@@ -52,38 +52,61 @@ func isBeginTransaction(rest string) bool {
 	return false
 }
 
+func isProcOrFuncHeader(s string) bool {
+	s = StripLeadingComments(s)
+	if len(s) < 10 {
+		return false
+	}
+	ch := s[0]
+	if ch != 'C' && ch != 'c' && ch != 'A' && ch != 'a' {
+		return false
+	}
+	sUpper := strings.ToUpper(s)
+	return strings.HasPrefix(sUpper, "CREATE PROCEDURE") ||
+		strings.HasPrefix(sUpper, "CREATE PROC") ||
+		strings.HasPrefix(sUpper, "CREATE OR ALTER PROCEDURE") ||
+		strings.HasPrefix(sUpper, "CREATE OR ALTER PROC") ||
+		strings.HasPrefix(sUpper, "ALTER PROCEDURE") ||
+		strings.HasPrefix(sUpper, "ALTER PROC") ||
+		strings.HasPrefix(sUpper, "CREATE FUNCTION") ||
+		strings.HasPrefix(sUpper, "CREATE OR ALTER FUNCTION") ||
+		strings.HasPrefix(sUpper, "ALTER FUNCTION") ||
+		strings.HasPrefix(sUpper, "CREATE TRIGGER") ||
+		strings.HasPrefix(sUpper, "CREATE OR ALTER TRIGGER") ||
+		strings.HasPrefix(sUpper, "ALTER TRIGGER")
+}
+
 // SplitStatements splits a multi-statement SQL batch by semicolons, properly respecting quotes and BEGIN...END blocks.
+// It uses an index-based slice scanner with zero intermediate string builder copies and zero heap allocations during scanning.
 func SplitStatements(query string) []string {
+	n := len(query)
+	if n == 0 {
+		return nil
+	}
+
+	// Fast-path: single statement without semicolons
+	if strings.IndexByte(query, ';') == -1 {
+		stmt := strings.TrimSpace(query)
+		if stmt != "" && StripLeadingComments(stmt) != "" {
+			return []string{stmt}
+		}
+		return nil
+	}
+
 	var stmts []string
-	var cur strings.Builder
+	start := 0
 	inQuote := false
 	quoteChar := byte(0)
 	inLineComment := false
 	inBlockComment := false
 	blockDepth := 0
 	isProcOrFunc := false
+	needHeaderCheck := true
 
-	checkProc := func(s string) bool {
-		sUpper := strings.ToUpper(StripLeadingComments(s))
-		return strings.HasPrefix(sUpper, "CREATE PROCEDURE") ||
-			strings.HasPrefix(sUpper, "CREATE PROC") ||
-			strings.HasPrefix(sUpper, "CREATE OR ALTER PROCEDURE") ||
-			strings.HasPrefix(sUpper, "CREATE OR ALTER PROC") ||
-			strings.HasPrefix(sUpper, "ALTER PROCEDURE") ||
-			strings.HasPrefix(sUpper, "ALTER PROC") ||
-			strings.HasPrefix(sUpper, "CREATE FUNCTION") ||
-			strings.HasPrefix(sUpper, "CREATE OR ALTER FUNCTION") ||
-			strings.HasPrefix(sUpper, "ALTER FUNCTION") ||
-			strings.HasPrefix(sUpper, "CREATE TRIGGER") ||
-			strings.HasPrefix(sUpper, "CREATE OR ALTER TRIGGER") ||
-			strings.HasPrefix(sUpper, "ALTER TRIGGER")
-	}
-
-	for i := 0; i < len(query); i++ {
+	for i := 0; i < n; i++ {
 		ch := query[i]
 
 		if inLineComment {
-			cur.WriteByte(ch)
 			if ch == '\n' {
 				inLineComment = false
 			}
@@ -91,9 +114,7 @@ func SplitStatements(query string) []string {
 		}
 
 		if inBlockComment {
-			cur.WriteByte(ch)
-			if ch == '*' && i+1 < len(query) && query[i+1] == '/' {
-				cur.WriteByte('/')
+			if ch == '*' && i+1 < n && query[i+1] == '/' {
 				i++
 				inBlockComment = false
 			}
@@ -104,45 +125,43 @@ func SplitStatements(query string) []string {
 			if ch == quoteChar && (i == 0 || query[i-1] != '\\') {
 				inQuote = false
 			}
-			cur.WriteByte(ch)
 			continue
 		}
 
 		if ch == '\'' || ch == '"' {
 			inQuote = true
 			quoteChar = ch
-			cur.WriteByte(ch)
+			needHeaderCheck = false
 			continue
 		}
 
-		if ch == '-' && i+1 < len(query) && query[i+1] == '-' {
+		if ch == '-' && i+1 < n && query[i+1] == '-' {
 			inLineComment = true
-			cur.WriteByte(ch)
-			cur.WriteByte(query[i+1])
 			i++
 			continue
 		}
 
-		if ch == '/' && i+1 < len(query) && query[i+1] == '*' {
+		if ch == '/' && i+1 < n && query[i+1] == '*' {
 			inBlockComment = true
-			cur.WriteByte(ch)
-			cur.WriteByte(query[i+1])
 			i++
 			continue
 		}
 
-		if !isProcOrFunc && checkProc(cur.String()) {
-			isProcOrFunc = true
+		if needHeaderCheck {
+			if ch > ' ' {
+				isProcOrFunc = isProcOrFuncHeader(query[start:])
+				needHeaderCheck = false
+			}
 		}
 
 		if isProcOrFunc {
-			if (i == 0 || !IsIdentChar(query[i-1])) && i+5 <= len(query) && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == len(query) || !IsIdentChar(query[i+5])) {
+			if (i == 0 || !IsIdentChar(query[i-1])) && i+5 <= n && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == n || !IsIdentChar(query[i+5])) {
 				if !isBeginTransaction(query[i+5:]) {
 					blockDepth++
 				}
-			} else if (i == 0 || !IsIdentChar(query[i-1])) && i+4 <= len(query) && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == len(query) || !IsIdentChar(query[i+4])) {
+			} else if (i == 0 || !IsIdentChar(query[i-1])) && i+4 <= n && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == n || !IsIdentChar(query[i+4])) {
 				blockDepth++
-			} else if (i == 0 || !IsIdentChar(query[i-1])) && i+3 <= len(query) && strings.EqualFold(query[i:i+3], "END") && (i+3 == len(query) || !IsIdentChar(query[i+3])) {
+			} else if (i == 0 || !IsIdentChar(query[i-1])) && i+3 <= n && strings.EqualFold(query[i:i+3], "END") && (i+3 == n || !IsIdentChar(query[i+3])) {
 				if blockDepth > 0 {
 					blockDepth--
 				}
@@ -151,26 +170,26 @@ func SplitStatements(query string) []string {
 
 		if ch == ';' {
 			if isProcOrFunc && blockDepth > 0 {
-				cur.WriteByte(ch)
-			} else {
-				stmt := strings.TrimSpace(cur.String())
-				if stmt != "" && StripLeadingComments(stmt) != "" {
-					stmts = append(stmts, stmt)
-				}
-				cur.Reset()
-				isProcOrFunc = false
-				blockDepth = 0
+				continue
 			}
-		} else {
-			cur.WriteByte(ch)
+			stmt := strings.TrimSpace(query[start:i])
+			if stmt != "" && StripLeadingComments(stmt) != "" {
+				stmts = append(stmts, stmt)
+			}
+			start = i + 1
+			isProcOrFunc = false
+			blockDepth = 0
+			needHeaderCheck = true
 		}
 	}
-	if cur.Len() > 0 {
-		stmt := strings.TrimSpace(cur.String())
+
+	if start < n {
+		stmt := strings.TrimSpace(query[start:])
 		if stmt != "" && StripLeadingComments(stmt) != "" {
 			stmts = append(stmts, stmt)
 		}
 	}
+
 	return stmts
 }
 

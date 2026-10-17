@@ -800,7 +800,7 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	var columns []string
 	row := make(map[string]any, len(projItems))
 
-	asRe := regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
+	asRe := reSelectAs
 
 	for i, item := range projItems {
 		item = strings.TrimSpace(item)
@@ -1353,6 +1353,13 @@ var mssqlDistinctTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+DISTINCT\s+)TOP\
 var mssqlNolockRe = regexp.MustCompile(`(?is)\bWITH\s*\(\s*(?:NOLOCK|READUNCOMMITTED)\s*\)`)
 var mssqlOptionRe = regexp.MustCompile(`(?is)\s+OPTION\s*\(.*?\)\s*$`)
 
+var (
+	reSelectStmt = regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$`)
+	reSelectInto = regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+INTO\s+([^\s,;]+)\s+FROM\s+(.*)$`)
+	reSelectAs   = regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
+	reSelectTvf  = regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
+)
+
 func normalizeMSSQLPagination(sql string) string {
 	if mssqlNolockRe.MatchString(sql) {
 		sql = mssqlNolockRe.ReplaceAllString(sql, "")
@@ -1427,7 +1434,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	}
 
 	// 0. SELECT ... INTO <target_table> FROM ...
-	selectIntoRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+INTO\s+([^\s,;]+)\s+FROM\s+(.*)$`)
+	selectIntoRe := reSelectInto
 	if m := selectIntoRe.FindStringSubmatch(cleaned); len(m) == 4 {
 		projections := strings.TrimSpace(m[1])
 		targetTable := cleanIdentifier(m[2])
@@ -1482,7 +1489,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		tableName := cleanIdentifier(rawTable)
 
 		// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
-		tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
+		tvfCallRe := reSelectTvf
 		if m := tvfCallRe.FindStringSubmatch(rawTable); len(m) == 3 {
 			tvfName := cleanIdentifier(m[1])
 			argsRaw := m[2]
@@ -1571,7 +1578,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	}
 
 	// Parse projection, table, WHERE, ORDER BY, LIMIT, OFFSET
-	selectRe := regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$`)
+	selectRe := reSelectStmt
 	matches := selectRe.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
 		if !hasFromClause(cleaned) {
@@ -1612,7 +1619,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	}
 
 	// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
-	tvfCallRe := regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
+	tvfCallRe := reSelectTvf
 	if m := tvfCallRe.FindStringSubmatch(baseTableName); len(m) == 3 {
 		tvfName := cleanIdentifier(m[1])
 		argsRaw := m[2]

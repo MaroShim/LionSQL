@@ -25,6 +25,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Updated ANTLR procedure compilation tests in `pkg/proc/parser/antlr/antlr_test.go` to directly verify VDBE bytecode generation.
 
 ### Refactored
+- **Critical Path Statement Splitter, Parameter Binding & TDS Zero-Alloc Acceleration (`PERF-1`) (`pkg/engine`, `pkg/wire/tds`)**:
+  - Rewrote `SplitStatements` in `pkg/engine/query_utils.go` as a clean, index-based slice scanner (`query[start:i]`), eliminating `strings.Builder` byte-by-byte copies and removing the O(N^2) `checkProc(cur.String())` character loop. Added fast-path for single queries (`strings.IndexByte(query, ';') == -1`), cutting allocations to 16 B/op (16 ns/op).
+  - Promoted local `regexp.MustCompile` declarations inside `execSelect`, `execCreateTable`, `execCreateView`, `execDropView`, `execAlterTable`, and `execCreateStatistics` to package-level `var` blocks, eliminating 15µs ~ 30µs of regex compilation overhead per query.
+  - Implemented single-pass O(N) parameter substitution (`substituteParamsSinglePass`) for `sp_executesql`, `sp_execute`, and `sp_prepexec` in `pkg/wire/tds/server.go`, eliminating per-parameter `regexp.MustCompile` and `[]rune` allocations and achieving 50x speedup (< 1µs, 927 ns/op).
+  - Implemented `WriteRowDirect` streaming in `pkg/wire/tds/token.go` and `pkg/wire/tds/server.go`, eliminating intermediate `make([]byte, ...)` buffer copies and achieving **0 B/op, 0 allocs/op (53.49 ns/op)** row serialization.
+  - Eliminated `binary.Write` reflection and interface boxing across integer, float, and timestamp column serialization in `writeColumnValue`, replacing them with stack-allocated `binary.LittleEndian.PutUint16/32/64` machine instructions, and added `val.(string)` type assertions before string formatting.
+  - Accelerated `EncodeUTF16LE` and `DecodeUTF16LE` with 7-bit ASCII fast-paths and direct `strings.Builder` streaming in `pkg/wire/tds/packet.go`, slashing allocation overhead from 3 allocs/op to 1 alloc/op (121.9 ns/op encode, 266.3 ns/op decode).
+  - Documented post-mortem and 3 recurrence prevention invariants in `notes/PITFALLS_AND_TRICKS.md` (Section 13).
 - **Simplify In-Memory SkipList PRNG with Go Standard Library (`KISS-4`) (`pkg/storage/memengine`)**:
   - Replaced legacy `math/rand` instance and its dedicated `rndMu sync.Mutex` in `SkipList` with Go 1.22+ lock-free `math/rand/v2`.
   - Completely eliminated redundant double locking (`sl.mu` + `sl.rndMu`) during index insertion, removed 16 bytes of struct memory overhead, and eliminated timestamp-based seed initialization.

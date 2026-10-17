@@ -172,5 +172,25 @@
   2. **1.5초 바운디드 셧다운 데드라인 (Golden Rule 4)**:
      - `cmd/server/main.go`의 시그널 수신 루프에서 최대 1.5초의 타임아웃 타이머(`time.After(1500 * time.Millisecond)`)를 동반한 채널 셀렉트를 적용하여, 만에 하나 비정상 블로킹이 발생하더라도 1.5초 이내에 결정론적으로 프로세스가 종료되도록 보장합니다.
 
+---
+
+## 13. 유틸리티의 크리티컬 핫패스 잠식(Utility-to-Hotpath Creep)과 재발 방지 3원칙
+
+* **사례 배경 및 원인 분석 (Incident Post-Mortem)**:
+  * **초기 배경**: `SplitStatements`는 본래 서버 기동 시 1회성 마이그레이션/시드 파일(`scripts/demo_seed.sql`)을 분할 실행하기 위해 작성된 단순 유틸리티였음. 당시에는 1회성이었으므로 `strings.Builder`에 한 글자씩 누적하며 매 바이트마다 `cur.String()`과 `strings.ToUpper`를 돌려 프로시저 헤더를 판별하는 O(N^2) 구현이 용인되었음.
+  * **잠식 과정 (Creep)**: 이후 엔진 쿼리 파이프라인 단일화 과정에서 `ExecuteSessionSQLContext(query)`의 최상단 관문으로 `splitStatements(query)`가 연결되면서, **초당 수만 번 실행되는 OLTP 최전선 핫패스**로 무심코 승격되어 버림.
+  * **정규식 동적 컴파일 누적**: `execSelect` 내부의 `selectRe`, `selectIntoRe`와 `sp_executesql`의 파라미터 치환(`substituteParamOutsideQuotes`)에서 매 쿼리/매 파라미터마다 `regexp.MustCompile`을 호출하여, 스토리지 코어가 수 마이크로초에 끝낸 쿼리 앞단에서 수십~수백 마이크로초와 수십 KB의 GC 쓰레기(Garbage)가 양산됨.
+  * **마스킹 원인**: 인-프로세스 VDBE 마이크로 벤치마크(`cmd/bench`, `cmd/tpcc_vdbe`)는 네트워크 와이어 및 SQL 프론트엔드를 바이패스하고 `exec.RunInTx(prog)`를 직접 호출했기 때문에, 이 병목이 사전에 조기 포착되지 못함.
+
+* **재발 방지 3대 엔지니어링 원칙 (Recurrence Prevention Invariants)**:
+  1. **유틸리티의 핫패스 승격 금지 및 무할당 감사 (No Utility Promotion without Hot-Path Audit)**:
+     - `ExecuteSessionSQLContext`, `Coordinator.exec*`, `pkg/wire/tds`, `pkg/wire` 등 네트워크 패킷 수신부터 쿼리 디스패치까지의 경로는 **골든 룰 #24(Zero-Allocation Hot Paths) 및 #25(16ms 레이턴시 예산)**가 절대적으로 적용되는 구역임.
+     - 1회성 스크립트나 마이그레이션용으로 작성된 헬퍼 함수를 이 경로에 연결할 때는 반드시 인덱스 슬라이싱(`query[start:i]`) 기반 제로-카피 스캐너로 전면 재작성해야 하며, `strings.Builder`를 통한 바이트 단위 재조합을 금지함.
+  2. **정규식 전역 승격 불변식 (Package-Level Constant Regex Invariant)**:
+     - 함수 본문 내부에서 `regexp.MustCompile` 또는 `regexp.Compile`을 동적 호출하는 것을 절대 금지함.
+     - 모든 정규 표현식은 반드시 파일 최상단 `var (...)` 블록에 선언하여 패키지 초기화 시점에 단 1회만 컴파일되어야 함.
+  3. **엔드-투-엔드 할당 회귀 벤치마크 의무화 (Allocation-Tracking Benchmark Discipline)**:
+     - 쿼리 프론트엔드 및 파라미터 바인딩 경로에는 반드시 `b.ReportAllocs()`를 동반한 벤치마크(`BenchmarkSplitStatements`, `BenchmarkTDS_BuildBoundSQL`)를 배치하여, CI 및 개발 검증 시 쿼리당 메모리 할당량(`B/op`, `allocs/op`)이 회귀(Regression)하지 않도록 결정론적으로 감시함.
+
 
 

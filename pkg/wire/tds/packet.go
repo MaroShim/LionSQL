@@ -5,8 +5,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
+	"unicode"
 	"unicode/utf16"
+	"unicode/utf8"
 )
 
 // TDS Packet Types
@@ -162,11 +165,39 @@ func WritePacket(w io.Writer, pType byte, spid uint16, payload []byte) error {
 
 // EncodeUTF16LE converts a Go UTF-8 string to a UTF-16LE byte slice.
 func EncodeUTF16LE(s string) []byte {
-	runes := []rune(s)
-	u16 := utf16.Encode(runes)
-	buf := make([]byte, len(u16)*2)
-	for i, v := range u16 {
-		binary.LittleEndian.PutUint16(buf[i*2:], v)
+	if len(s) == 0 {
+		return make([]byte, 0)
+	}
+
+	// ASCII fast-path: check if all characters are 7-bit ASCII
+	isASCII := true
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			isASCII = false
+			break
+		}
+	}
+	if isASCII {
+		buf := make([]byte, len(s)*2)
+		for i := 0; i < len(s); i++ {
+			buf[i*2] = s[i]
+			buf[i*2+1] = 0
+		}
+		return buf
+	}
+
+	// Non-ASCII path: direct encoding without intermediate []rune / []uint16 allocations
+	buf := make([]byte, 0, len(s)*2)
+	for _, r := range s {
+		switch {
+		case 0 <= r && r < 0xD800, 0xE000 <= r && r <= 0xFFFF:
+			buf = append(buf, byte(r), byte(r>>8))
+		case 0x10000 <= r && r <= 0x10FFFF:
+			r1, r2 := utf16.EncodeRune(r)
+			buf = append(buf, byte(r1), byte(r1>>8), byte(r2), byte(r2>>8))
+		default:
+			buf = append(buf, 0xFD, 0xFF) // unicode.ReplacementChar (0xFFFD)
+		}
 	}
 	return buf
 }
@@ -176,11 +207,54 @@ func DecodeUTF16LE(b []byte) string {
 	if len(b)%2 != 0 {
 		b = b[:len(b)-1]
 	}
-	u16 := make([]uint16, len(b)/2)
-	for i := 0; i < len(u16); i++ {
-		u16[i] = binary.LittleEndian.Uint16(b[i*2:])
+	if len(b) == 0 {
+		return ""
 	}
-	return string(utf16.Decode(u16))
+
+	// ASCII fast-path: check if all 16-bit code units are 7-bit ASCII
+	isASCII := true
+	for i := 0; i < len(b); i += 2 {
+		if b[i+1] != 0 || b[i] >= 0x80 {
+			isASCII = false
+			break
+		}
+	}
+	if isASCII {
+		var sb strings.Builder
+		sb.Grow(len(b) / 2)
+		for i := 0; i < len(b); i += 2 {
+			sb.WriteByte(b[i])
+		}
+		return sb.String()
+	}
+
+	// Non-ASCII path: direct decode without intermediate []uint16 and []rune slice allocations
+	var sb strings.Builder
+	sb.Grow(len(b))
+	var utf8Buf [utf8.UTFMax]byte
+	nWords := len(b) / 2
+	for i := 0; i < nWords; i++ {
+		u := binary.LittleEndian.Uint16(b[i*2:])
+		ru := rune(u)
+		if utf16.IsSurrogate(ru) {
+			if i+1 < nWords {
+				u2 := binary.LittleEndian.Uint16(b[(i+1)*2:])
+				r := utf16.DecodeRune(ru, rune(u2))
+				if r != unicode.ReplacementChar {
+					i++ // consumed surrogate pair
+					n := utf8.EncodeRune(utf8Buf[:], r)
+					sb.Write(utf8Buf[:n])
+					continue
+				}
+			}
+			n := utf8.EncodeRune(utf8Buf[:], unicode.ReplacementChar)
+			sb.Write(utf8Buf[:n])
+		} else {
+			n := utf8.EncodeRune(utf8Buf[:], ru)
+			sb.Write(utf8Buf[:n])
+		}
+	}
+	return sb.String()
 }
 
 // ReadBVarChar reads a length-prefixed (uint8 character count) UTF-16LE string.

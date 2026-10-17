@@ -838,6 +838,26 @@ func TestTDS_TolerantUseDatabase(t *testing.T) {
 	}
 }
 
+func BenchmarkTDS_BuildBoundSQL(b *testing.B) {
+	srv := &Server{}
+	query := "SELECT id, name, balance FROM accounts WHERE id = @p1 AND branch_id = @p2 AND status = @p3;"
+	paramsDecl := "@p1 INT, @p2 INT, @p3 VARCHAR(20)"
+	params := []RPCParam{
+		{Name: "@p1", Value: 1001},
+		{Name: "@p2", Value: 42},
+		{Name: "@p3", Value: "ACTIVE"},
+	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		bound := srv.buildBoundSQL(query, paramsDecl, params)
+		if len(bound) == 0 {
+			b.Fatal("empty bound SQL")
+		}
+	}
+}
+
 
 
 
