@@ -2,9 +2,8 @@ package memengine
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"sync"
-	"time"
 
 	"sqlion/pkg/storage"
 )
@@ -35,8 +34,6 @@ type SkipList struct {
 	level  int
 	length int
 	unique bool
-	rnd    *rand.Rand
-	rndMu  sync.Mutex
 }
 
 // NewSkipList creates an initialized SkipList for index indexing.
@@ -44,21 +41,16 @@ func NewSkipList(unique bool) *SkipList {
 	head := &SkipListNode{
 		forward: make([]*SkipListNode, maxSkipListLevel),
 	}
-	src := rand.NewSource(time.Now().UnixNano())
 	return &SkipList{
 		head:   head,
 		level:  1,
 		unique: unique,
-		rnd:    rand.New(src),
 	}
 }
 
 func (sl *SkipList) randomLevel() int {
-	sl.rndMu.Lock()
-	defer sl.rndMu.Unlock()
-
 	lvl := 1
-	for lvl < maxSkipListLevel && sl.rnd.Float64() < skipListP {
+	for lvl < maxSkipListLevel && rand.Float64() < skipListP {
 		lvl++
 	}
 	return lvl

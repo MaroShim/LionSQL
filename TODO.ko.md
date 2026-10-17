@@ -33,7 +33,7 @@
 | **P2** | **스토리지/가드** | **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`)** | `pkg/storage/memengine`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **KISS/중복제거** | **가상 PG 카탈로그 생성기 중복 단일화 (`KISS-2`)** | `pkg/engine`, `pkg/catalog/virtual` | **완료 (`[x]`)** | - |
 | **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **스프린트 백로그 대기** | - |
-| **P2** | **KISS/자료구조** | **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`)** | `pkg/storage/memengine` | **스프린트 백로그 대기** | - |
+| **P2** | **KISS/자료구조** | **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | - |
 | **P2** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **스프린트 백로그 대기** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
 | **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **스프린트 백로그 대기** | - |
 | **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **스프린트 백로그 대기** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
@@ -182,7 +182,7 @@
 | **KISS-1** | KISS/다이어트 | 미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 | **완료 (`[x]`)** | VDBE VM 전환 이후 미사용 상태인 `pkg/proc/transpiler.go`(782줄) 및 테스트(387줄) 완전 삭제(총 1,169줄 제거), `catalog.Procedure.JSCode` 등 잔재 필드를 직관적인 `BytecodeDisasm` 메타데이터로 정리 완비 |
 | **KISS-2** | KISS/중복제거 | 가상 PG 카탈로그 및 information_schema 생성기 중복 단일화 | **완료 (`[x]`)** | `pkg/engine/sqlexec_pgcatalog.go`(1,102줄) 및 `sqlexec_info_schema.go`(588줄)를 완전 삭제하고 `pkg/catalog/virtual/`(`pg.go`, `info_schema.go`)로 일원화. `sqlexec_dbcc.go`는 `virtual.IsPgCatalogTable` 및 `virtual.ExecPgCatalogSelect`를 호출하도록 위임하여 순수 중복 제거 및 단일 책임 원칙(SRP) 완비 |
 | **KISS-3** | KISS/파서통합 | `sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 | **대기 (`[ ]`)** | `sqlexec_eval.go`, `sqlexec_pivot.go` 등의 취약한 정규식 문자열 분할을 제거하고 `pkg/proc`의 Pratt AST 노드를 직접 소비하도록 통합 |
-| **KISS-4** | KISS/자료구조 | In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 | **대기 (`[ ]`)** | `pkg/storage/memengine/skiplist.go`의 `rndMu sync.Mutex`를 제거하고 Go 표준 thread-safe 난수 생성기로 단순화 |
+| **KISS-4** | KISS/자료구조 | In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 | **완료 (`[x]`)** | `pkg/storage/memengine/skiplist.go`의 `rndMu sync.Mutex` 및 `rnd *rand.Rand`를 완전 삭제하고 Go 표준 `math/rand/v2`로 전환하여 이중 락 중첩 제거 및 락-프리/제로-할당 난수 생성 구현 완비 |
 | **KISS-5** | KISS/실행통합 | 3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) | **대기 (`[ ]`)** | `sqlexec_select.go`(2,308줄)의 자체 인메모리 조인/소팅 인터프리터를 `pkg/execution` 화산형 Iterator 파이프라인으로 일원화 (Post-1.0) |
 
 ---
@@ -220,6 +220,9 @@
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`) (`pkg/storage/memengine`)**:
+  - `SkipList` 구조체에서 `rnd *rand.Rand` 포인터 및 `rndMu sync.Mutex` 락을 완전히 제거하고 Go 1.22+ `math/rand/v2`로 전환.
+  - `Insert()` 수행 중 발생하던 불필요한 이중 락킹(`sl.mu` + `sl.rndMu`) 및 시드 초기화 비용을 제거하여 락-프리/제로-할당 난수 레벨 결정 구현.
 - [x] **가상 PG 카탈로그 및 information_schema 생성기 단일화 (`KISS-2`) (`pkg/catalog/virtual`, `pkg/engine`)**:
   - `pkg/engine/sqlexec_pgcatalog.go`(1,102줄) 및 `sqlexec_info_schema.go`(588줄)를 `pkg/engine`에서 완전 삭제하고 `pkg/catalog/virtual/` 하위(`pg.go`, `info_schema.go`)로 일원화.
   - `pg_catalog.*`(35개 뷰)와 `information_schema.*`(17개 뷰) 가상 뷰 생성을 `virtual.Source` 추상화 기반으로 통합하고, 엔진 쿼리 라우팅을 `virtual.IsPgCatalogTable` 및 `virtual.ExecPgCatalogSelect`로 슬림화 (25개 패키지 100% PASS, 데이터 레이스 0).

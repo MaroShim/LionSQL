@@ -21,6 +21,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Updated ANTLR procedure compilation tests in `pkg/proc/parser/antlr/antlr_test.go` to directly verify VDBE bytecode generation.
 
 ### Refactored
+- **Simplify In-Memory SkipList PRNG with Go Standard Library (`KISS-4`) (`pkg/storage/memengine`)**:
+  - Replaced legacy `math/rand` instance and its dedicated `rndMu sync.Mutex` in `SkipList` with Go 1.22+ lock-free `math/rand/v2`.
+  - Completely eliminated redundant double locking (`sl.mu` + `sl.rndMu`) during index insertion, removed 16 bytes of struct memory overhead, and eliminated timestamp-based seed initialization.
 - **Unify Virtual PG Catalog & Information Schema Generators (`KISS-2`) (`pkg/catalog/virtual`, `pkg/engine`)**:
   - Migrated all 35 `pg_catalog.*` and 17 `information_schema.*` virtual table generators from `pkg/engine/` into `pkg/catalog/virtual/` (`pg.go` and `info_schema.go`).
   - Deleted legacy files `pkg/engine/sqlexec_pgcatalog.go` (1,102 lines) and `pkg/engine/sqlexec_info_schema.go` (588 lines) entirely, decoupling all virtual metadata generation behind the `virtual.Source` interface.
