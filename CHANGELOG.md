@@ -20,6 +20,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Renamed legacy `JSCode` fields across `catalog.Procedure`, `catalog.Function`, and `catalog.Trigger` structs to `BytecodeDisasm`, eliminating confusing misleading naming while preserving backward-compatible JSON aliases for external clients.
   - Updated ANTLR procedure compilation tests in `pkg/proc/parser/antlr/antlr_test.go` to directly verify VDBE bytecode generation.
 
+### Refactored
+- **Unify Virtual PG Catalog & Information Schema Generators (`KISS-2`) (`pkg/catalog/virtual`, `pkg/engine`)**:
+  - Migrated all 35 `pg_catalog.*` and 17 `information_schema.*` virtual table generators from `pkg/engine/` into `pkg/catalog/virtual/` (`pg.go` and `info_schema.go`).
+  - Deleted legacy files `pkg/engine/sqlexec_pgcatalog.go` (1,102 lines) and `pkg/engine/sqlexec_info_schema.go` (588 lines) entirely, decoupling all virtual metadata generation behind the `virtual.Source` interface.
+  - Simplified `Coordinator.execVirtualCatalogSelect` in `pkg/engine/sqlexec_dbcc.go` to delegate directly to `virtual.IsPgCatalogTable` and `virtual.ExecPgCatalogSelect`.
+
 ---
 
 ## [0.23.0] - 2026-10-17

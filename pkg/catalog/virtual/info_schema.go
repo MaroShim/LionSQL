@@ -1,4 +1,4 @@
-package engine
+package virtual
 
 import (
 	"fmt"
@@ -8,26 +8,26 @@ import (
 )
 
 func init() {
-	registerCatalogView("information_schema.tables", (*Coordinator).generateInfoSchemaTables)
-	registerCatalogView("information_schema.columns", (*Coordinator).generateInfoSchemaColumns)
-	registerCatalogView("information_schema.schemata", (*Coordinator).generateInfoSchemaSchemata)
-	registerCatalogView("information_schema.routines", (*Coordinator).generateInfoSchemaRoutines)
-	registerCatalogView("information_schema.parameters", (*Coordinator).generateInfoSchemaParameters)
-	registerCatalogView("information_schema.table_constraints", (*Coordinator).generateInfoSchemaTableConstraints)
-	registerCatalogView("information_schema.key_column_usage", (*Coordinator).generateInfoSchemaKeyColumnUsage)
-	registerCatalogView("information_schema.referential_constraints", (*Coordinator).generateInfoSchemaReferentialConstraints)
-	registerCatalogView("information_schema.constraint_column_usage", (*Coordinator).generateInfoSchemaConstraintColumnUsage)
-	registerCatalogView("information_schema.views", (*Coordinator).generateInfoSchemaViews)
-	registerCatalogView("information_schema.constraint_table_usage", (*Coordinator).generateInfoSchemaConstraintTableUsage)
-	registerCatalogView("information_schema.check_constraints", (*Coordinator).generateInfoSchemaCheckConstraints)
-	registerCatalogView("information_schema.role_table_grants", (*Coordinator).generateInfoSchemaRoleTableGrants)
-	registerCatalogView("information_schema.role_column_grants", (*Coordinator).generateInfoSchemaRoleColumnGrants)
-	registerCatalogView("information_schema.sequences", (*Coordinator).generateInfoSchemaSequences)
-	registerCatalogView("information_schema.enabled_roles", (*Coordinator).generateInfoSchemaEnabledRoles)
-	registerCatalogView("information_schema.applicable_roles", (*Coordinator).generateInfoSchemaApplicableRoles)
+	registerCatalogView("information_schema.tables", generateInfoSchemaTables)
+	registerCatalogView("information_schema.columns", generateInfoSchemaColumns)
+	registerCatalogView("information_schema.schemata", generateInfoSchemaSchemata)
+	registerCatalogView("information_schema.routines", generateInfoSchemaRoutines)
+	registerCatalogView("information_schema.parameters", generateInfoSchemaParameters)
+	registerCatalogView("information_schema.table_constraints", generateInfoSchemaTableConstraints)
+	registerCatalogView("information_schema.key_column_usage", generateInfoSchemaKeyColumnUsage)
+	registerCatalogView("information_schema.referential_constraints", generateInfoSchemaReferentialConstraints)
+	registerCatalogView("information_schema.constraint_column_usage", generateInfoSchemaConstraintColumnUsage)
+	registerCatalogView("information_schema.views", generateInfoSchemaViews)
+	registerCatalogView("information_schema.constraint_table_usage", generateInfoSchemaConstraintTableUsage)
+	registerCatalogView("information_schema.check_constraints", generateInfoSchemaCheckConstraints)
+	registerCatalogView("information_schema.role_table_grants", generateInfoSchemaRoleTableGrants)
+	registerCatalogView("information_schema.role_column_grants", generateInfoSchemaRoleColumnGrants)
+	registerCatalogView("information_schema.sequences", generateInfoSchemaSequences)
+	registerCatalogView("information_schema.enabled_roles", generateInfoSchemaEnabledRoles)
+	registerCatalogView("information_schema.applicable_roles", generateInfoSchemaApplicableRoles)
 }
 
-func (s *Coordinator) generateInfoSchemaTables(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaTables(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"table_catalog", "table_schema", "table_name", "table_type",
 		"self_referencing_column_name", "reference_generation",
@@ -39,7 +39,7 @@ func (s *Coordinator) generateInfoSchemaTables(whereClause string) ([]string, []
 	if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
 		defSchema = "dbo"
 	}
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	var allRows []map[string]any
 	for _, t := range tables {
 		allRows = append(allRows, map[string]any{
@@ -58,28 +58,26 @@ func (s *Coordinator) generateInfoSchemaTables(whereClause string) ([]string, []
 		})
 	}
 	// Also include views
-	if s.catalog != nil {
-		for _, v := range s.catalog.ListViews() {
-			allRows = append(allRows, map[string]any{
-				"table_catalog":                "sqlion",
-				"table_schema":                 "public",
-				"table_name":                   v.Name,
-				"table_type":                   "VIEW",
-				"self_referencing_column_name": nil,
-				"reference_generation":         nil,
-				"user_defined_type_catalog":    nil,
-				"user_defined_type_schema":     nil,
-				"user_defined_type_name":       nil,
-				"is_insertable_into":           "NO",
-				"is_typed":                     "NO",
-				"commit_action":                nil,
-			})
-		}
+	for _, v := range src.ListViews() {
+		allRows = append(allRows, map[string]any{
+			"table_catalog":                "sqlion",
+			"table_schema":                 "public",
+			"table_name":                   v.Name,
+			"table_type":                   "VIEW",
+			"self_referencing_column_name": nil,
+			"reference_generation":         nil,
+			"user_defined_type_catalog":    nil,
+			"user_defined_type_schema":     nil,
+			"user_defined_type_name":       nil,
+			"is_insertable_into":           "NO",
+			"is_typed":                     "NO",
+			"commit_action":                nil,
+		})
 	}
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaColumns(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaColumns(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"table_catalog", "table_schema", "table_name",
 		"column_name", "ordinal_position", "column_default",
@@ -102,7 +100,7 @@ func (s *Coordinator) generateInfoSchemaColumns(whereClause string) ([]string, [
 	if strings.Contains(strings.ToLower(whereClause), "'dbo'") {
 		defSchema = "dbo"
 	}
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	var allRows []map[string]any
 	for _, t := range tables {
 		for i, c := range t.Columns {
@@ -189,7 +187,7 @@ func (s *Coordinator) generateInfoSchemaColumns(whereClause string) ([]string, [
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaSchemata(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaSchemata(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"catalog_name", "schema_name", "schema_owner",
 		"default_character_set_catalog", "default_character_set_schema",
@@ -204,7 +202,7 @@ func (s *Coordinator) generateInfoSchemaSchemata(whereClause string) ([]string, 
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaRoutines(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaRoutines(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"specific_catalog", "specific_schema", "specific_name",
 		"routine_catalog", "routine_schema", "routine_name",
@@ -232,8 +230,8 @@ func (s *Coordinator) generateInfoSchemaRoutines(whereClause string) ([]string, 
 		defSchema = "dbo"
 	}
 	var allRows []map[string]any
-	if s.catalog != nil {
-		for _, p := range s.catalog.ListProcedures() {
+	if src != nil {
+		for _, p := range src.ListProcedures() {
 			allRows = append(allRows, map[string]any{
 				"specific_catalog":   "sqlion",
 				"specific_schema":    defSchema,
@@ -256,7 +254,7 @@ func (s *Coordinator) generateInfoSchemaRoutines(whereClause string) ([]string, 
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaParameters(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaParameters(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"specific_catalog", "specific_schema", "specific_name",
 		"ordinal_position", "parameter_mode", "is_result",
@@ -270,8 +268,8 @@ func (s *Coordinator) generateInfoSchemaParameters(whereClause string) ([]string
 		defSchema = "dbo"
 	}
 	var allRows []map[string]any
-	if s.catalog != nil {
-		for _, p := range s.catalog.ListProcedures() {
+	if src != nil {
+		for _, p := range src.ListProcedures() {
 			for i, param := range p.Params {
 				dtName := pgTypeName(param.Type)
 				allRows = append(allRows, map[string]any{
@@ -299,14 +297,14 @@ func (s *Coordinator) generateInfoSchemaParameters(whereClause string) ([]string
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaTableConstraints(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaTableConstraints(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"constraint_catalog", "constraint_schema", "constraint_name",
 		"table_catalog", "table_schema", "table_name",
 		"constraint_type", "is_deferrable", "initially_deferred",
 		"enforced", "nulls_distinct",
 	}
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	var allRows []map[string]any
 	for _, t := range tables {
 		// PRIMARY KEY
@@ -371,13 +369,13 @@ func (s *Coordinator) generateInfoSchemaTableConstraints(whereClause string) ([]
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaKeyColumnUsage(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaKeyColumnUsage(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"constraint_catalog", "constraint_schema", "constraint_name",
 		"table_catalog", "table_schema", "table_name",
 		"column_name", "ordinal_position", "position_in_unique_constraint",
 	}
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	var allRows []map[string]any
 	for _, t := range tables {
 		// PRIMARY KEY columns
@@ -447,13 +445,13 @@ func (s *Coordinator) generateInfoSchemaKeyColumnUsage(whereClause string) ([]st
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaReferentialConstraints(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaReferentialConstraints(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"constraint_catalog", "constraint_schema", "constraint_name",
 		"unique_constraint_catalog", "unique_constraint_schema", "unique_constraint_name",
 		"match_option", "update_rule", "delete_rule",
 	}
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	var allRows []map[string]any
 	for _, t := range tables {
 		for _, fk := range t.ForeignKeys {
@@ -473,12 +471,12 @@ func (s *Coordinator) generateInfoSchemaReferentialConstraints(whereClause strin
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaConstraintColumnUsage(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaConstraintColumnUsage(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"table_catalog", "table_schema", "table_name",
 		"column_name", "constraint_catalog", "constraint_schema", "constraint_name",
 	}
-	tables, _ := s.engine.ListTables()
+	tables, _ := src.ListTables()
 	var allRows []map[string]any
 	for _, t := range tables {
 		// PK columns
@@ -513,7 +511,7 @@ func (s *Coordinator) generateInfoSchemaConstraintColumnUsage(whereClause string
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaViews(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaViews(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{
 		"table_catalog", "table_schema", "table_name",
 		"view_definition", "check_option", "is_updatable",
@@ -521,8 +519,8 @@ func (s *Coordinator) generateInfoSchemaViews(whereClause string) ([]string, []m
 		"is_trigger_deletable", "is_trigger_insertable_into",
 	}
 	var allRows []map[string]any
-	if s.catalog != nil {
-		for _, v := range s.catalog.ListViews() {
+	if src != nil {
+		for _, v := range src.ListViews() {
 			allRows = append(allRows, map[string]any{
 				"table_catalog":              "sqlion",
 				"table_schema":               "public",
@@ -540,30 +538,30 @@ func (s *Coordinator) generateInfoSchemaViews(whereClause string) ([]string, []m
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaConstraintTableUsage(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaConstraintTableUsage(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{"table_catalog", "table_schema", "table_name",
 		"constraint_catalog", "constraint_schema", "constraint_name"}
 	return columns, []map[string]any{}
 }
 
-func (s *Coordinator) generateInfoSchemaCheckConstraints(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaCheckConstraints(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{"constraint_catalog", "constraint_schema", "constraint_name", "check_clause"}
 	return columns, []map[string]any{}
 }
 
-func (s *Coordinator) generateInfoSchemaRoleTableGrants(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaRoleTableGrants(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{"grantor", "grantee", "table_catalog", "table_schema",
 		"table_name", "privilege_type", "is_grantable", "with_hierarchy"}
 	return columns, []map[string]any{}
 }
 
-func (s *Coordinator) generateInfoSchemaRoleColumnGrants(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaRoleColumnGrants(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{"grantor", "grantee", "table_catalog", "table_schema",
 		"table_name", "privilege_type", "is_grantable", "with_hierarchy"}
 	return columns, []map[string]any{}
 }
 
-func (s *Coordinator) generateInfoSchemaSequences(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaSequences(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{"sequence_catalog", "sequence_schema", "sequence_name",
 		"data_type", "numeric_precision", "numeric_precision_radix",
 		"numeric_scale", "start_value", "minimum_value", "maximum_value",
@@ -571,7 +569,7 @@ func (s *Coordinator) generateInfoSchemaSequences(whereClause string) ([]string,
 	return columns, []map[string]any{}
 }
 
-func (s *Coordinator) generateInfoSchemaEnabledRoles(whereClause string) ([]string, []map[string]any) {
+func generateInfoSchemaEnabledRoles(src Source, whereClause string) ([]string, []map[string]any) {
 	columns := []string{"grantee", "role_name", "is_grantable"}
 	allRows := []map[string]any{
 		{
@@ -583,6 +581,6 @@ func (s *Coordinator) generateInfoSchemaEnabledRoles(whereClause string) ([]stri
 	return columns, allRows
 }
 
-func (s *Coordinator) generateInfoSchemaApplicableRoles(whereClause string) ([]string, []map[string]any) {
-	return s.generateInfoSchemaEnabledRoles(whereClause)
+func generateInfoSchemaApplicableRoles(src Source, whereClause string) ([]string, []map[string]any) {
+	return generateInfoSchemaEnabledRoles(src, whereClause)
 }

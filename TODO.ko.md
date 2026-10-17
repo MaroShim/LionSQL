@@ -31,7 +31,7 @@
 | **P1** | **KISS/다이어트** | **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`)** | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
 | **P1** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **차주 P1 착수 예정** | [`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md) |
 | **P2** | **스토리지/가드** | **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`)** | `pkg/storage/memengine`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
-| **P2** | **KISS/중복제거** | **가상 PG 카탈로그 생성기 중복 단일화 (`KISS-2`)** | `pkg/engine`, `pkg/catalog/virtual` | **스프린트 백로그 대기** | - |
+| **P2** | **KISS/중복제거** | **가상 PG 카탈로그 생성기 중복 단일화 (`KISS-2`)** | `pkg/engine`, `pkg/catalog/virtual` | **완료 (`[x]`)** | - |
 | **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **스프린트 백로그 대기** | - |
 | **P2** | **KISS/자료구조** | **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`)** | `pkg/storage/memengine` | **스프린트 백로그 대기** | - |
 | **P2** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **스프린트 백로그 대기** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
@@ -180,7 +180,7 @@
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
 | **KISS-1** | KISS/다이어트 | 미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 | **완료 (`[x]`)** | VDBE VM 전환 이후 미사용 상태인 `pkg/proc/transpiler.go`(782줄) 및 테스트(387줄) 완전 삭제(총 1,169줄 제거), `catalog.Procedure.JSCode` 등 잔재 필드를 직관적인 `BytecodeDisasm` 메타데이터로 정리 완비 |
-| **KISS-2** | KISS/중복제거 | 가상 PG 카탈로그 생성기 중복 단일화 | **대기 (`[ ]`)** | `sqlexec_pgcatalog.go`(1,102줄)와 `virtual/pg.go`(684줄) 간 중복된 `pg_class`, `pg_type`, `pg_tables` 생성기 및 타입 OID 로직을 공통 소스로 일원화 (약 500~700줄 중복 제거) |
+| **KISS-2** | KISS/중복제거 | 가상 PG 카탈로그 및 information_schema 생성기 중복 단일화 | **완료 (`[x]`)** | `pkg/engine/sqlexec_pgcatalog.go`(1,102줄) 및 `sqlexec_info_schema.go`(588줄)를 완전 삭제하고 `pkg/catalog/virtual/`(`pg.go`, `info_schema.go`)로 일원화. `sqlexec_dbcc.go`는 `virtual.IsPgCatalogTable` 및 `virtual.ExecPgCatalogSelect`를 호출하도록 위임하여 순수 중복 제거 및 단일 책임 원칙(SRP) 완비 |
 | **KISS-3** | KISS/파서통합 | `sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 | **대기 (`[ ]`)** | `sqlexec_eval.go`, `sqlexec_pivot.go` 등의 취약한 정규식 문자열 분할을 제거하고 `pkg/proc`의 Pratt AST 노드를 직접 소비하도록 통합 |
 | **KISS-4** | KISS/자료구조 | In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 | **대기 (`[ ]`)** | `pkg/storage/memengine/skiplist.go`의 `rndMu sync.Mutex`를 제거하고 Go 표준 thread-safe 난수 생성기로 단순화 |
 | **KISS-5** | KISS/실행통합 | 3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) | **대기 (`[ ]`)** | `sqlexec_select.go`(2,308줄)의 자체 인메모리 조인/소팅 인터프리터를 `pkg/execution` 화산형 Iterator 파이프라인으로 일원화 (Post-1.0) |
@@ -220,6 +220,13 @@
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **가상 PG 카탈로그 및 information_schema 생성기 단일화 (`KISS-2`) (`pkg/catalog/virtual`, `pkg/engine`)**:
+  - `pkg/engine/sqlexec_pgcatalog.go`(1,102줄) 및 `sqlexec_info_schema.go`(588줄)를 `pkg/engine`에서 완전 삭제하고 `pkg/catalog/virtual/` 하위(`pg.go`, `info_schema.go`)로 일원화.
+  - `pg_catalog.*`(35개 뷰)와 `information_schema.*`(17개 뷰) 가상 뷰 생성을 `virtual.Source` 추상화 기반으로 통합하고, 엔진 쿼리 라우팅을 `virtual.IsPgCatalogTable` 및 `virtual.ExecPgCatalogSelect`로 슬림화 (25개 패키지 100% PASS, 데이터 레이스 0).
+- [x] **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`) (`pkg/proc`, `pkg/catalog`, `cmd/`)**:
+  - VDBE VM 단일화에 따라 구형 JS 트랜스파일러(1,169줄) 완전 삭제, 잔재 필드를 `BytecodeDisasm` 메타데이터로 직관적 정리.
+- [x] **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`) (`pkg/storage/memengine`, `cmd/server`)**:
+  - `runtime/metrics` 기반 Zero-STW 힙 모니터링 및 `--max-memory` 연동, 용량 초과 시 `storage.ErrTableFull (SQLSTATE 53200)` 조기 반환으로 OOM 방지.
 - [x] **글로벌 메모리 예산 상한제 및 대량 조인 회로 차단기 (`pkg/config`, `pkg/execution`, `cmd/server`)**:
   - 호스트/컨테이너 물리 메모리 자동 감지(Darwin `sysctl`, Linux cgroups v1/v2 및 `/proc/meminfo`) 기반 시스템 RAM의 70%를 기본 글로벌 상한으로 자동 계산 및 적용.
   - Go 런타임 플랫폼 프리미티브 연동 (`debug.SetMemoryLimit` / GOMEMLIMIT)으로 힙 메모리 상한 근접 시 능동적 사전 GC 트리거 및 OS OOM Killer 사살 방지.

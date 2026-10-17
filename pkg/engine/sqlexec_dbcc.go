@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"sqlion/pkg/catalog/virtual"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
 )
@@ -408,7 +409,7 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 func (s *Coordinator) isVirtualCatalogTable(tableName string) bool {
 	lower := strings.ToLower(cleanIdentifier(tableName))
 	// Delegate pg_catalog.* and information_schema.* to the dedicated handler.
-	if isPgCatalogTable(lower) {
+	if virtual.IsPgCatalogTable(lower) {
 		return true
 	}
 	switch lower {
@@ -451,8 +452,19 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 	norm = strings.TrimPrefix(norm, "dbo.")
 
 	// Delegate pg_catalog.* and information_schema.* to the dedicated handler.
-	if isPgCatalogTable(norm) {
-		return s.execPgCatalogSelect(norm, projStr, whereClause, orderByClause, limitCount, start)
+	if virtual.IsPgCatalogTable(norm) {
+		res, err := virtual.ExecPgCatalogSelect(s, norm, projStr, whereClause, orderByClause, limitCount)
+		if err != nil {
+			return nil, err
+		}
+		return &QueryResult{
+			Success:      true,
+			Command:      "SELECT",
+			Columns:      res.Columns,
+			Rows:         res.Rows,
+			RowsAffected: int64(len(res.Rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	var columns []string
