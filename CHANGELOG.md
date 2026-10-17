@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Prometheus Extended Observability & OpenTelemetry OTLP JSON Exposition (`OBS-1`) (`pkg/engine`, `pkg/api`)**:
+  - Enhanced Prometheus text exposition (`GET /metrics`) with storage engine backend (`sqlion_storage_info{engine="..."}`), replication cluster status (`sqlion_replication_role{role="..."}`, `sqlion_replication_lag_bytes`, `sqlion_replication_current_lsn`), transaction conflict counters (`sqlion_transactions_total{type="conflict"}`), and configured global memory limits (`sqlion_memory_limit_bytes`).
+  - Implemented OpenTelemetry OTLP standard JSON endpoints (`GET /v1/metrics`, `GET /api/v1/metrics`) with service and resource attributes (`service.name="lionsql"`, `storage.engine`, `replication.role`) and cumulative/gauge scope metrics.
+  - Added comprehensive test suites in `pkg/api/metrics_test.go` verifying OTLP JSON structure, write-write transaction conflict counting, and extended Prometheus metric exposition.
 - **In-Memory OCC Engine Storage Capacity Limit Guard (`MEM-3`) (`pkg/storage/memengine`, `cmd/server`)**:
   - Implemented zero stop-the-world heap capacity monitoring via standard library `runtime/metrics` (`/memory/classes/heap/objects:bytes`).
   - Added `MaxDataBytes` setting to `memengine.Options` and `Engine.SetMaxDataBytes(bytes)`, automatically wired to the global memory governor (`--max-memory`).

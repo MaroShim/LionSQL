@@ -35,7 +35,7 @@
 | **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | - |
 | **P2** | **KISS/자료구조** | **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | - |
 | **P2** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **스프린트 백로그 대기** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
-| **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **스프린트 백로그 대기** | - |
+| **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **완료 (`[x]`)** | - |
 | **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **스프린트 백로그 대기** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
 | **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **알림/운영** | **슬로우 쿼리 실시간 웹훅 알림 (Slack / Discord / Webhook) (`OBS-3`)** | `pkg/engine`, `pkg/config` | **백로그 등록 (Post-1.0 후보)** | - |
@@ -160,7 +160,7 @@
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
-| **OBS-1** | 관제/메트릭 | Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 | **대기 (`[ ]`)** | `/metrics` 텍스트 규격, 실시간 TPS/세션/메모리/복제 랙/스토리지 I/O 메트릭 노출 (`pkg/api`, `pkg/engine`) |
+| **OBS-1** | 관제/메트릭 | Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 | **완료 (`[x]`)** | `/metrics` Prometheus 텍스트 규격 확장 (스토리지 엔진, 복제 상태/LSN/랙, 충돌 트랜잭션 수, 메모리 상한) 및 `/v1/metrics`, `/api/v1/metrics` OpenTelemetry OTLP JSON 엔드포인트 완비 (`pkg/engine`, `pkg/api`) |
 | **OBS-2** | 최적화/DX | `EXPLAIN ANALYZE` 런타임 실행 프로파일러 | **대기 (`[ ]`)** | Volcano Iterator 래핑, 실제 소요 시간(Actual Time), 처리 행(Actual Rows), 피크 메모리 트리 시각화 (`pkg/planner`, `pkg/execution`) |
 | **OBS-3** | 운영/알림 | 슬로우 쿼리 실시간 웹훅 알림 (Slack / Discord / Webhook) | **대기 (`[ ]`)** | 임계치 초과 쿼리 실시간 비동기 웹훅 디스패처, 슬랙/디스코드 포맷터 연동 (`pkg/engine`, `pkg/config`) |
 

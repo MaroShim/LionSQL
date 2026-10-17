@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"sqlion/pkg/backup"
 	"sqlion/pkg/engine"
+	"sqlion/pkg/execution"
 )
 
 type execSQLReq struct {
@@ -126,6 +128,51 @@ func (s *Server) handleListActiveQueries(w http.ResponseWriter, r *http.Request)
 	})
 }
 
+func (s *Server) buildPrometheusServerState() engine.PrometheusServerState {
+	st := engine.PrometheusServerState{StartTime: s.startTime}
+	st.ActiveConnections = s.coordinator.SessionCount()
+	if s.engine != nil {
+		engType := strings.ToLower(s.engine.Type())
+		if strings.Contains(engType, "memory") {
+			st.StorageEngine = "memengine"
+		} else if strings.Contains(engType, "wiredtiger") {
+			st.StorageEngine = "wiredtiger"
+		} else {
+			st.StorageEngine = engType
+		}
+		if tbls, err := s.engine.ListTables(); err == nil {
+			st.TableCount = len(tbls)
+		}
+		st.ReplicationCurrentLSN = s.engine.CurrentLSN()
+	}
+	if s.planCache != nil {
+		st.PlanCacheHits, st.PlanCacheMisses = s.planCache.Stats()
+	}
+
+	if memLimit := execution.GetGlobalMemoryLimit(); memLimit > 0 && memLimit < math.MaxInt64 {
+		st.MemoryLimitBytes = memLimit
+	}
+
+	if s.replication != nil {
+		repStatus := s.replication.Status()
+		st.ReplicationRole = string(repStatus.Role)
+		if repStatus.CurrentLSN > 0 {
+			st.ReplicationCurrentLSN = repStatus.CurrentLSN
+		}
+		var maxLag int64
+		for _, rep := range repStatus.Replicas {
+			if rep.ReplicationLag > maxLag {
+				maxLag = rep.ReplicationLag
+			}
+		}
+		st.ReplicationLagBytes = maxLag
+	} else {
+		st.ReplicationRole = "standalone"
+	}
+
+	return st
+}
+
 func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if s.Metrics() == nil {
 		http.Error(w, "metrics collector not initialized", http.StatusInternalServerError)
@@ -133,17 +180,24 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
-	st := engine.PrometheusServerState{StartTime: s.startTime}
-	st.ActiveConnections = s.coordinator.SessionCount()
-	if s.engine != nil {
-		if tbls, err := s.engine.ListTables(); err == nil {
-			st.TableCount = len(tbls)
-		}
-	}
-	if s.planCache != nil {
-		st.PlanCacheHits, st.PlanCacheMisses = s.planCache.Stats()
-	}
+	st := s.buildPrometheusServerState()
 	_, _ = w.Write([]byte(s.Metrics().FormatPrometheus(st)))
+}
+
+func (s *Server) handleOpenTelemetryMetrics(w http.ResponseWriter, r *http.Request) {
+	if s.Metrics() == nil {
+		http.Error(w, "metrics collector not initialized", http.StatusInternalServerError)
+		return
+	}
+	st := s.buildPrometheusServerState()
+	data, err := s.Metrics().FormatOpenTelemetry(st)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to format opentelemetry metrics: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 func (s *Server) handleGetSlowQueries(w http.ResponseWriter, r *http.Request) {

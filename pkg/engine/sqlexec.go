@@ -332,6 +332,13 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}
 		}
 		if err != nil {
+			if s.Metrics() != nil {
+				if errors.Is(err, storage.ErrSerializationFailure) {
+					s.Metrics().RecordTransaction("conflict")
+				} else {
+					s.Metrics().RecordTransaction("rollback")
+				}
+			}
 			return nil, fmt.Errorf("commit error: %w", err)
 		}
 		if s.Metrics() != nil {

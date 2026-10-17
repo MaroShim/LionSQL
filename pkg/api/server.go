@@ -466,8 +466,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/query/cancel", s.handleQueryCancel)
 	s.mux.HandleFunc("GET /api/queries/active", s.handleListActiveQueries)
 
-	// Prometheus Metrics & Observability API
+	// Prometheus Metrics & OpenTelemetry Observability API
 	s.mux.HandleFunc("GET /metrics", s.handleMetrics)
+	s.mux.HandleFunc("GET /v1/metrics", s.handleOpenTelemetryMetrics)
+	s.mux.HandleFunc("GET /api/v1/metrics", s.handleOpenTelemetryMetrics)
 
 	// Slow Queries Management API
 	s.mux.HandleFunc("GET /api/slow-queries", s.handleGetSlowQueries)

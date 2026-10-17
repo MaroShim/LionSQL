@@ -71,6 +71,11 @@ func TestMetrics_PrometheusExposition(t *testing.T) {
 		"sqlion_slow_queries_total",
 		"sqlion_transactions_total{type=\"commit\"}",
 		"sqlion_transactions_total{type=\"rollback\"}",
+		"sqlion_transactions_total{type=\"conflict\"}",
+		"sqlion_storage_info{engine=\"memengine\"}",
+		"sqlion_replication_role{role=\"standalone\"}",
+		"sqlion_replication_lag_bytes 0",
+		"sqlion_replication_current_lsn",
 		"sqlion_tables_total 1",
 		"sqlion_plan_cache_hits_total",
 		"sqlion_plan_cache_misses_total",
@@ -263,5 +268,156 @@ func TestMetrics_ConcurrentAccess(t *testing.T) {
 	expectedInserts := fmt.Sprintf("sqlion_queries_total{command=\"INSERT\"} %d", workers*iterations)
 	if !strings.Contains(body, expectedInserts) {
 		t.Errorf("expected %q in /metrics, got:\n%s", expectedInserts, body)
+	}
+}
+
+func TestMetrics_OpenTelemetryExposition(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, _ = server.ExecuteSQL("CREATE TABLE otel_test (id INT PRIMARY KEY, name VARCHAR(50));")
+	_, _ = server.ExecuteSQL("INSERT INTO otel_test VALUES (1, 'alice');")
+	_, _ = server.ExecuteSQL("SELECT * FROM otel_test;")
+
+	endpoints := []string{"/v1/metrics", "/api/v1/metrics"}
+	for _, ep := range endpoints {
+		req := httptest.NewRequest(http.MethodGet, ep, nil)
+		rec := httptest.NewRecorder()
+		server.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("expected 200 for %s, got %d: %s", ep, rec.Code, rec.Body.String())
+		}
+		if ct := rec.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+			t.Errorf("expected application/json for %s, got %s", ep, ct)
+		}
+
+		var otlp struct {
+			ResourceMetrics []struct {
+				Resource struct {
+					Attributes []struct {
+						Key   string `json:"key"`
+						Value struct {
+							StringValue string `json:"stringValue"`
+						} `json:"value"`
+					} `json:"attributes"`
+				} `json:"resource"`
+				ScopeMetrics []struct {
+					Scope struct {
+						Name    string `json:"name"`
+						Version string `json:"version"`
+					} `json:"scope"`
+					Metrics []struct {
+						Name        string `json:"name"`
+						Description string `json:"description"`
+						Unit        string `json:"unit"`
+					} `json:"metrics"`
+				} `json:"scopeMetrics"`
+			} `json:"resourceMetrics"`
+		}
+
+		if err := json.Unmarshal(rec.Body.Bytes(), &otlp); err != nil {
+			t.Fatalf("failed to parse OTLP JSON for %s: %v", ep, err)
+		}
+
+		if len(otlp.ResourceMetrics) == 0 {
+			t.Fatalf("empty resourceMetrics in %s response", ep)
+		}
+
+		rm := otlp.ResourceMetrics[0]
+		foundSvc := false
+		foundEngine := false
+		for _, attr := range rm.Resource.Attributes {
+			if attr.Key == "service.name" && attr.Value.StringValue == "lionsql" {
+				foundSvc = true
+			}
+			if attr.Key == "storage.engine" && attr.Value.StringValue == "memengine" {
+				foundEngine = true
+			}
+		}
+		if !foundSvc {
+			t.Errorf("service.name attribute not found in %s", ep)
+		}
+		if !foundEngine {
+			t.Errorf("storage.engine attribute not found in %s", ep)
+		}
+
+		if len(rm.ScopeMetrics) == 0 || len(rm.ScopeMetrics[0].Metrics) == 0 {
+			t.Fatalf("no metrics found in scopeMetrics for %s", ep)
+		}
+
+		metricNames := make(map[string]bool)
+		for _, m := range rm.ScopeMetrics[0].Metrics {
+			metricNames[m.Name] = true
+		}
+
+		expected := []string{
+			"sqlion.uptime_seconds",
+			"sqlion.active_connections",
+			"sqlion.queries_total",
+			"sqlion.query_errors_total",
+			"sqlion.query_duration_seconds_total",
+			"sqlion.transactions_total",
+			"sqlion.tables_total",
+			"sqlion.memory_alloc_bytes",
+			"sqlion.goroutines",
+			"sqlion.replication_lag_bytes",
+			"sqlion.replication_current_lsn",
+		}
+		for _, name := range expected {
+			if !metricNames[name] {
+				t.Errorf("expected metric %q in OTLP metrics, not found", name)
+			}
+		}
+	}
+}
+
+func TestMetrics_TransactionConflict(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	server := api.NewServer(cat, eng)
+
+	_, _ = server.ExecuteSQL("CREATE TABLE accounts (id INT PRIMARY KEY, balance INT);")
+	_, _ = server.ExecuteSQL("INSERT INTO accounts VALUES (1, 100);")
+
+	// Start Tx 1
+	tx1, err := server.ExecuteSessionSQL("s1", "BEGIN TRANSACTION;")
+	if err != nil || !tx1.Success {
+		t.Fatalf("start s1 tx failed: %v", err)
+	}
+	_, _ = server.ExecuteSessionSQL("s1", "UPDATE accounts SET balance = 150 WHERE id = 1;")
+
+	// Start Tx 2
+	tx2, err := server.ExecuteSessionSQL("s2", "BEGIN TRANSACTION;")
+	if err != nil || !tx2.Success {
+		t.Fatalf("start s2 tx failed: %v", err)
+	}
+	_, _ = server.ExecuteSessionSQL("s2", "UPDATE accounts SET balance = 200 WHERE id = 1;")
+
+	// Commit Tx 1 -> Succeeds
+	c1, err := server.ExecuteSessionSQL("s1", "COMMIT;")
+	if err != nil || !c1.Success {
+		t.Fatalf("commit s1 failed: %v", err)
+	}
+
+	// Commit Tx 2 -> Write-Write conflict on ID 1
+	_, err = server.ExecuteSessionSQL("s2", "COMMIT;")
+	if err == nil {
+		t.Fatalf("expected write conflict error on s2 commit, got nil")
+	}
+
+	// Check metrics
+	req := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	rec := httptest.NewRecorder()
+	server.ServeHTTP(rec, req)
+
+	body := rec.Body.String()
+	if !strings.Contains(body, "sqlion_transactions_total{type=\"conflict\"} 1") {
+		t.Errorf("expected conflict count 1 in /metrics, got:\n%s", body)
 	}
 }
