@@ -801,7 +801,20 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 		s.handleRPCUnprepare(conn, rpc, sess)
 	default:
 		if rpc.ProcName != "" {
-			s.executeRPCAndRespond(conn, fmt.Sprintf("EXEC %s", rpc.ProcName), sess, nil, ctx)
+			query := fmt.Sprintf("EXEC %s", rpc.ProcName)
+			if len(rpc.Params) > 0 {
+				var argStrs []string
+				for _, p := range rpc.Params {
+					valStr := formatSQLValue(p.Value)
+					if p.Name != "" {
+						argStrs = append(argStrs, fmt.Sprintf("%s = %s", p.Name, valStr))
+					} else {
+						argStrs = append(argStrs, valStr)
+					}
+				}
+				query = fmt.Sprintf("EXEC %s %s", rpc.ProcName, strings.Join(argStrs, ", "))
+			}
+			s.executeRPCAndRespond(conn, query, sess, nil, ctx)
 		} else {
 			done := BuildDoneProc(DoneFinal, 0, 0)
 			_ = WritePacket(conn, PacketTabular, sess.SPID, done)

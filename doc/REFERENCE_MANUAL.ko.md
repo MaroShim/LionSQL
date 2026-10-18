@@ -203,65 +203,65 @@
 본 레퍼런스 매뉴얼에서 다루는 각 서브시스템의 심층 설계, 내부 구조, 구현 알고리즘 및 벤치마크 결과는 아래의 세부 기술 문서(`doc/`)에서 상세히 확인하실 수 있습니다.
 
 #### 10.1. 아키텍처 및 스토리지 엔진 내부 구조 (Architecture & Storage Internals)
-* [`ARCHITECTURE.md`](file:///Users/maro/Projects/sql/doc/ARCHITECTURE.md)
+* [`ARCHITECTURE.md`](file:///Users/maro/Projects/LionSQL/doc/ARCHITECTURE.md)
   * **전체 아키텍처 청사진**: 듀얼 스토리지 엔진(인메모리 OCC vs WiredTiger B+Tree), 듀얼 파서 전략(Pratt fast-path + ANTLR4 fallback), VDBE 바이트코드 가상 머신, 고성능 고루틴 연결 풀러, 다중 와이어 프로토콜 단일 바이너리 통합 아키텍처 개요.
-* [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_STORAGE.md)
+* [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_STORAGE.md)
   * **스토리지 엔진 인터페이스 규격**: `Engine`, `Tx`, `Cursor` 핵심 계약 명세. Concurrent SkipList 인메모리 인덱싱 구조와 WiredTiger B+Tree 페이지 레이아웃, 체크포인트 및 WAL(Write-Ahead Logging) 내구성 설계.
-* [`RECORD_BINARY_FORMAT.md`](file:///Users/maro/Projects/sql/doc/RECORD_BINARY_FORMAT.md)
+* [`RECORD_BINARY_FORMAT.md`](file:///Users/maro/Projects/LionSQL/doc/RECORD_BINARY_FORMAT.md)
   * **바이너리 튜플 직렬화 규격**: 스키마 기반 압축 바이너리 튜플 포맷(`pkg/storage/tuple.go`). `0x01` 버전 헤더, $\lceil N/8 \rceil$ 널 비트맵, 지그재그 가변 길이 정수 인코딩 및 디스크/WAL 저장 공간 절감 설계.
-* [`TRANSACTION_CONCURRENCY.md`](file:///Users/maro/Projects/sql/doc/TRANSACTION_CONCURRENCY.md)
+* [`TRANSACTION_CONCURRENCY.md`](file:///Users/maro/Projects/LionSQL/doc/TRANSACTION_CONCURRENCY.md)
   * **트랜잭션 격리 및 동시성 제어**: Non-blocking Snapshot Isolation / Read Committed 모델. 인메모리 OCC 버전 충돌 검증, WiredTiger MVCC 해저드 포인터 및 VDBE 트랜잭션 커플링(`exec.RunInTx`) 규약.
-* [`DATA_DICTIONARY.md`](file:///Users/maro/Projects/sql/doc/DATA_DICTIONARY.md)
+* [`DATA_DICTIONARY.md`](file:///Users/maro/Projects/LionSQL/doc/DATA_DICTIONARY.md)
   * **데이터 딕셔너리 및 시스템 카탈로그**: 스키마 메타데이터 영속성 레이아웃, 시스템 테이블 및 가상 뷰(`sys.*`, `INFORMATION_SCHEMA.*`, `pg_catalog.*`)의 매핑 및 해석 원리.
-* [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/sql/doc/HIGH_AVAILABILITY.md)
+* [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/LionSQL/doc/HIGH_AVAILABILITY.md)
   * **고가용성 및 무중단 백업/복원**: 크래시 안전성 보장, LSN 기반 WAL 스트리밍 1-Writer Multi-Reader 복제, 무중단 Primary 승격, 온라인 핫 백업(`.tar.gz`) 및 복원 파이프라인.
-* [`ADR.md`](file:///Users/maro/Projects/sql/doc/ADR.md)
+* [`ADR.md`](file:///Users/maro/Projects/LionSQL/doc/ADR.md)
   * **아키텍처 결정 레코드 (Architectural Decision Records)**: VDBE 통합, 듀얼 파서 폴백, 단일 바이너리 배포, 단일 라이터 복제, 컴팩트 튜플 코덱, 다중 프로토콜 카탈로그 가로채기 등 핵심 설계 결정 및 트레이드오프 기록 (ADR-001 ~ ADR-021).
 
 #### 10.2. 쿼리 컴파일러, 최적화 및 실행 엔진 (Query Engine & VM Internals)
-* [`INTERNALS_VDBE.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_VDBE.md)
+* [`INTERNALS_VDBE.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_VDBE.md)
   * **바이트코드 가상 머신 (VDBE)**: SQLite 스타일의 레지스터 기반 VDBE 가상 머신 아키텍처. 핵심 바이트코드 Opcode 사양, `sync.Pool` 레지스터 재사용, 핫루프 최적화 및 컴파일된 플랜 캐시(`*runtime.PlanCache`) 운용.
-* [`INTERNALS_CBO_VOLCANO.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_CBO_VOLCANO.md)
+* [`INTERNALS_CBO_VOLCANO.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_CBO_VOLCANO.md)
   * **비용 기반 최적화기 및 볼케이노 반복자**: Volcano Iterator 파이프라인, 비용 기반 쿼리 최적화기(CBO), 64-버킷 등고 히스토그램 기반 선택도 모델, 상수 폴딩, 조건절 푸시다운, `work_mem` 초과 시 디스크 외부 정렬(External Merge Sort) 스필 메커니즘.
-* [`TSQL_REFERENCE.md`](file:///Users/maro/Projects/sql/doc/TSQL_REFERENCE.md)
+* [`TSQL_REFERENCE.md`](file:///Users/maro/Projects/LionSQL/doc/TSQL_REFERENCE.md)
   * **T-SQL 구문 및 문법 종합 레퍼런스**: Microsoft SQL Server 호환 저장 프로시저, 스칼라 및 인라인 테이블 반환 함수(TVF), DML 트리거(`INSERTED`/`DELETED`), 제어문(`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`), 커서 문법 가이드.
-* [`EXTENSIONS.md`](file:///Users/maro/Projects/sql/doc/EXTENSIONS.md)
+* [`EXTENSIONS.md`](file:///Users/maro/Projects/LionSQL/doc/EXTENSIONS.md)
   * **SQL 확장 및 UDF 아키텍처**: 윈도우 함수(`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), CTE(Common Table Expressions), 외래 키 연쇄 동작, Go 네이티브 SPI 및 WebAssembly(Wasm) 샌드박스 기반 이원화 사용자 정의 함수(UDF) 확장 규격.
-* [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](file:///Users/maro/Projects/sql/doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md)
+* [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](file:///Users/maro/Projects/LionSQL/doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md)
   * **백분위수 및 스트리밍 분위수 분석 함수**: `PERCENTILE_CONT`, `PERCENTILE_DISC`, ANSI `WITHIN GROUP (ORDER BY ...)`, `MEDIAN`, T-Digest 기반 스트리밍 근사 분위수(`APPROX_PERCENTILE`) 알고리즘 명세.
-* [`LOG_PROCESSING_GREP_AWK.md`](file:///Users/maro/Projects/sql/doc/LOG_PROCESSING_GREP_AWK.md)
+* [`LOG_PROCESSING_GREP_AWK.md`](file:///Users/maro/Projects/LionSQL/doc/LOG_PROCESSING_GREP_AWK.md)
   * **엔진 내장 로그 및 텍스트 처리 연산자**: Unix 파이프라인 친화적인 `GREP`, `AWK`, `SPLIT_PART` 연산자, 제로카피 푸시다운 정규식 필터링 및 비정형 로그 분석 파이프라인.
 
 #### 10.3. 와이어 프로토콜 및 클라이언트 호환성 (Protocols & Tool Integration)
-* [`INTERNALS_WIRE_PROTOCOLS.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_WIRE_PROTOCOLS.md)
+* [`INTERNALS_WIRE_PROTOCOLS.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_WIRE_PROTOCOLS.md)
   * **와이어 프로토콜 구현 상세**: PostgreSQL Wire Protocol v3(포트 5433) Simple/Extended 프로토콜 패킷 핸들링과 MS SQL Server TDS 7.x/8.0(포트 1433) Prelogin, Login7, RPC, `sp_prepexec` 플랜 캐시 연동 구조.
-* [`CLIENT_TOOL_INTEGRATION.md`](file:///Users/maro/Projects/sql/doc/CLIENT_TOOL_INTEGRATION.md)
+* [`CLIENT_TOOL_INTEGRATION.md`](file:///Users/maro/Projects/LionSQL/doc/CLIENT_TOOL_INTEGRATION.md)
   * **GUI/CLI 도구 연동 및 카탈로그 가로채기**: Beekeeper Studio, DBeaver, DbGate, Azure Data Studio, SSMS, `psql`, `sqlcmd` 연동 가이드. 도구별 메타데이터 쿼리 가로채기(Catalog Interception), 페이지네이션 변환 및 프로그래밍 언어 드라이버 연결 문자열 가이드.
 
 #### 10.4. BaaS 기능, 웹 SDK 및 REST API (BaaS, SDK & APIs)
-* [`AUTO_REST_API.md`](file:///Users/maro/Projects/sql/doc/AUTO_REST_API.md)
+* [`AUTO_REST_API.md`](file:///Users/maro/Projects/LionSQL/doc/AUTO_REST_API.md)
   * **무설정 자동 REST API**: PocketBase 스타일의 `/api/records/:table` CRUD 엔드포인트 자동 생성, URL 쿼리 연산자, 정렬, 페이징 필터링 사양.
-* [`WEBHOOKS_AND_RLS.md`](file:///Users/maro/Projects/sql/doc/WEBHOOKS_AND_RLS.md)
+* [`WEBHOOKS_AND_RLS.md`](file:///Users/maro/Projects/LionSQL/doc/WEBHOOKS_AND_RLS.md)
   * **웹훅 디스패처 및 행 수준 보안 (RLS)**: 비동기 워커 풀과 HMAC 서명 기반 웹훅 발송, 테이블별 선언적 행 수준 보안 규칙(`@auth.id`, `@auth.role` 토큰 치환) 적용 가이드.
-* [`CRON_AND_MAILER.md`](file:///Users/maro/Projects/sql/doc/CRON_AND_MAILER.md)
+* [`CRON_AND_MAILER.md`](file:///Users/maro/Projects/LionSQL/doc/CRON_AND_MAILER.md)
   * **임베디드 크론 스케줄러 및 트랜잭션 메일러**: 표준 5필드 크론 표현식을 통한 SQL/T-SQL 정기 배치 자동화와 링 버퍼 감사 로그를 갖춘 내장 트랜잭션 HTML SMTP 메일 발송기.
-* [`WEB_SDK.md`](file:///Users/maro/Projects/sql/doc/WEB_SDK.md)
+* [`WEB_SDK.md`](file:///Users/maro/Projects/LionSQL/doc/WEB_SDK.md)
   * **범용 웹 SDK 및 프론트엔드 연동 가이드**: 브라우저 임베디드 단일 파일 라이브러리(`sqlion.js`, `sqlion.d.ts`), 바닐라 JS, Server-Sent Events(SSE) 실시간 동기화, HTMX 연동 레시피.
-* [`API_REFERENCE.md`](file:///Users/maro/Projects/sql/doc/API_REFERENCE.md)
+* [`API_REFERENCE.md`](file:///Users/maro/Projects/LionSQL/doc/API_REFERENCE.md)
   * **HTTP REST & SSE API 사양서**: 시스템 헬스, 메트릭, 인증(JWT), 테이블 CRUD, 저장 프로시저 원격 호출, 백업/복원, 복제 스트리밍 엔드포인트 상세.
 
 #### 10.5. 운영, 보안, 성능 및 문제 해결 (Operations, Security & Performance)
-* [`OPERATIONS.md`](file:///Users/maro/Projects/sql/doc/OPERATIONS.md)
+* [`OPERATIONS.md`](file:///Users/maro/Projects/LionSQL/doc/OPERATIONS.md)
   * **프로덕션 운영 및 배포 가이드**: 시스템 환경 요구사항, 데몬 구동, 무중단 리로드, 안전한 종료(Graceful Shutdown), 메모리 거버너 튜닝 가이드.
-* [`METRICS.md`](file:///Users/maro/Projects/sql/doc/METRICS.md)
+* [`METRICS.md`](file:///Users/maro/Projects/LionSQL/doc/METRICS.md)
   * **모니터링 및 메트릭스**: 프로메테우스 호환 `/metrics` 엔드포인트 지표 명세(QPS, 지연 시간, 연결 풀, 메모리 사용량) 및 슬로우 쿼리 로깅 진단.
-* [`SECURITY.md`](file:///Users/maro/Projects/sql/doc/SECURITY.md)
+* [`SECURITY.md`](file:///Users/maro/Projects/LionSQL/doc/SECURITY.md)
   * **보안 아키텍처 및 권한 제어**: 내장 관리자 계정, JWT 수명 주기, API 키 기반 역할 스코핑, TLS/SSL 전송 계층 암호화.
-* [`BENCHMARK.md`](file:///Users/maro/Projects/sql/doc/BENCHMARK.md)
+* [`BENCHMARK.md`](file:///Users/maro/Projects/LionSQL/doc/BENCHMARK.md)
   * **성능 벤치마크 및 검증 방법론**: TPC-C 벤치마크 측정 결과, pgbench 및 T-SQL 저장 프로시저 마이크로 벤치마크 처리량(TPS)과 지연 시간 프로파일.
-* [`MIGRATION.md`](file:///Users/maro/Projects/sql/doc/MIGRATION.md)
+* [`MIGRATION.md`](file:///Users/maro/Projects/LionSQL/doc/MIGRATION.md)
   * **이기종 데이터베이스 마이그레이션 가이드**: PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 데이터 스키마 및 레코드를 LionSQL으로 이전하는 절차.
-* [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/sql/doc/TROUBLESHOOTING.md)
+* [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/LionSQL/doc/TROUBLESHOOTING.md)
   * **장애 진단 및 문제 해결 가이드**: 포트 충돌, 권한 오류, 와이어 패킷 협상 실패, 트랜잭션 직렬화 충돌(`40001`), 클라이언트 캐시 무효화 등 빈발 오류 해결 방법.
 
 #### 10.6. 개발자 엔지니어링 핸드오버 및 로드맵 문서 (Developer Context & Backlog)

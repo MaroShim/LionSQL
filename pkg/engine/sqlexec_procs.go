@@ -125,12 +125,198 @@ func ParseProcArgs(raw string) (string, []string) {
 	return procName, args
 }
 
-func (s *Coordinator) execBuiltinSystemProc(procLower string, args []string, start time.Time) (*QueryResult, error) {
-	cleanArgs := make([]string, len(args))
-	for i, a := range args {
+// parseProcParams maps arguments to parameter names, supporting both named (@param = val) and positional syntax.
+func parseProcParams(args []string, paramNames []string) map[string]string {
+	params := make(map[string]string, len(args))
+	posIdx := 0
+	for _, raw := range args {
+		trimmed := strings.TrimSpace(raw)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "@") && strings.Contains(trimmed, "=") {
+			parts := strings.SplitN(trimmed, "=", 2)
+			pName := strings.ToLower(strings.TrimSpace(parts[0]))
+			val := strings.TrimSpace(parts[1])
+			val = unwrapSQLString(val)
+			params[pName] = val
+		} else {
+			val := unwrapSQLString(trimmed)
+			if posIdx < len(paramNames) {
+				params[paramNames[posIdx]] = val
+			}
+			posIdx++
+		}
+	}
+	return params
+}
+
+func cleanTableNameParam(s string) string {
+	s = strings.TrimSpace(s)
+	s = unwrapSQLString(s)
+	s = strings.TrimSpace(s)
+	if strings.Contains(s, ".") {
+		parts := strings.Split(s, ".")
+		s = parts[len(parts)-1]
+	}
+	s = cleanIdentifier(s)
+	return s
+}
+
+func mapStorageColumnToSpColumn(col storage.Column, tblName string, dbName string, ordinal int) map[string]any {
+	row := map[string]any{
+		"TABLE_QUALIFIER":   dbName,
+		"TABLE_OWNER":       "dbo",
+		"TABLE_NAME":        tblName,
+		"COLUMN_NAME":       col.Name,
+		"ORDINAL_POSITION":  ordinal,
+		"REMARKS":           nil,
+		"COLUMN_DEF":        nil,
+		"SQL_DATETIME_SUB":  nil,
+		"CHAR_OCTET_LENGTH": nil,
+	}
+	if col.Default != "" {
+		row["COLUMN_DEF"] = col.Default
+	}
+	if col.Nullable {
+		row["NULLABLE"] = 1
+		row["IS_NULLABLE"] = "YES"
+	} else {
+		row["NULLABLE"] = 0
+		row["IS_NULLABLE"] = "NO"
+	}
+
+	switch col.Type {
+	case storage.TypeInt:
+		row["DATA_TYPE"] = 4 // SQL_INTEGER
+		row["TYPE_NAME"] = "int"
+		row["PRECISION"] = 10
+		row["LENGTH"] = 4
+		row["SCALE"] = 0
+		row["RADIX"] = 10
+		row["SQL_DATA_TYPE"] = 4
+		row["SS_DATA_TYPE"] = 56
+	case storage.TypeVarChar:
+		prec := col.Precision
+		if prec <= 0 {
+			prec = 255
+		}
+		row["DATA_TYPE"] = 12 // SQL_VARCHAR
+		row["TYPE_NAME"] = "varchar"
+		row["PRECISION"] = prec
+		row["LENGTH"] = prec
+		row["SCALE"] = nil
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = 12
+		row["CHAR_OCTET_LENGTH"] = prec
+		row["SS_DATA_TYPE"] = 39
+	case storage.TypeFloat:
+		row["DATA_TYPE"] = 6 // SQL_FLOAT
+		row["TYPE_NAME"] = "float"
+		row["PRECISION"] = 53
+		row["LENGTH"] = 8
+		row["SCALE"] = nil
+		row["RADIX"] = 2
+		row["SQL_DATA_TYPE"] = 6
+		row["SS_DATA_TYPE"] = 62
+	case storage.TypeBool:
+		row["DATA_TYPE"] = -7 // SQL_BIT
+		row["TYPE_NAME"] = "bit"
+		row["PRECISION"] = 1
+		row["LENGTH"] = 1
+		row["SCALE"] = nil
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = -7
+		row["SS_DATA_TYPE"] = 104
+	case storage.TypeDateTime:
+		row["DATA_TYPE"] = 93 // SQL_TYPE_TIMESTAMP
+		row["TYPE_NAME"] = "datetime"
+		row["PRECISION"] = 23
+		row["LENGTH"] = 16
+		row["SCALE"] = 3
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = 9
+		row["SQL_DATETIME_SUB"] = 3
+		row["SS_DATA_TYPE"] = 111
+	case storage.TypeDate:
+		row["DATA_TYPE"] = 91 // SQL_TYPE_DATE
+		row["TYPE_NAME"] = "date"
+		row["PRECISION"] = 10
+		row["LENGTH"] = 6
+		row["SCALE"] = 0
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = 9
+		row["SQL_DATETIME_SUB"] = 1
+		row["SS_DATA_TYPE"] = 40
+	case storage.TypeTime:
+		row["DATA_TYPE"] = -154 // SQL_SS_TIME2
+		row["TYPE_NAME"] = "time"
+		row["PRECISION"] = 16
+		row["LENGTH"] = 5
+		row["SCALE"] = 7
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = -154
+		row["SS_DATA_TYPE"] = 41
+	case storage.TypeDecimal:
+		prec := col.Precision
+		if prec <= 0 {
+			prec = 18
+		}
+		scale := col.Scale
+		row["DATA_TYPE"] = 3 // SQL_DECIMAL
+		row["TYPE_NAME"] = "decimal"
+		row["PRECISION"] = prec
+		row["LENGTH"] = 9
+		row["SCALE"] = scale
+		row["RADIX"] = 10
+		row["SQL_DATA_TYPE"] = 3
+		row["SS_DATA_TYPE"] = 108
+	case storage.TypeUUID:
+		row["DATA_TYPE"] = -11 // SQL_GUID
+		row["TYPE_NAME"] = "uniqueidentifier"
+		row["PRECISION"] = 36
+		row["LENGTH"] = 16
+		row["SCALE"] = nil
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = -11
+		row["SS_DATA_TYPE"] = 36
+	case storage.TypeBinary:
+		row["DATA_TYPE"] = -3 // SQL_VARBINARY
+		row["TYPE_NAME"] = "varbinary"
+		row["PRECISION"] = 8000
+		row["LENGTH"] = 8000
+		row["SCALE"] = nil
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = -3
+		row["SS_DATA_TYPE"] = 165
+	case storage.TypeJSON:
+		row["DATA_TYPE"] = 12 // SQL_VARCHAR
+		row["TYPE_NAME"] = "nvarchar"
+		row["PRECISION"] = 8000
+		row["LENGTH"] = 8000
+		row["SCALE"] = nil
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = 12
+		row["SS_DATA_TYPE"] = 231
+	default:
+		row["DATA_TYPE"] = 12
+		row["TYPE_NAME"] = "varchar"
+		row["PRECISION"] = 255
+		row["LENGTH"] = 255
+		row["SCALE"] = nil
+		row["RADIX"] = nil
+		row["SQL_DATA_TYPE"] = 12
+		row["SS_DATA_TYPE"] = 39
+	}
+	return row
+}
+
+func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	cleanArgs := make([]string, len(rawArgs))
+	for i, a := range rawArgs {
 		cleanArgs[i] = unwrapSQLString(a)
 	}
-	args = cleanArgs
+	args := cleanArgs
 
 	switch procLower {
 	case "sp_help":
@@ -552,6 +738,190 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, args []string, sta
 			Messages:   []string{"Caution: Changing any part of an object name could break scripts and stored procedures."},
 			DurationUS: time.Since(start).Microseconds(),
 		}, nil
+
+	case "sp_tables":
+		params := parseProcParams(rawArgs, []string{"@table_name", "@table_owner", "@table_qualifier", "@table_type", "@fusepattern"})
+		dbName := "master"
+		if cs != nil && cs.Database != "" {
+			dbName = cs.Database
+		}
+		if q, ok := params["@table_qualifier"]; ok && q != "" && !strings.EqualFold(q, "null") {
+			dbName = cleanTableNameParam(q)
+		}
+
+		tblFilter := params["@table_name"]
+		typeFilter := params["@table_type"]
+		ownerFilter := params["@table_owner"]
+
+		wantTable := true
+		wantView := true
+		if typeFilter != "" && !strings.EqualFold(typeFilter, "null") {
+			upperType := strings.ToUpper(typeFilter)
+			wantTable = strings.Contains(upperType, "TABLE") && !strings.Contains(upperType, "SYSTEM TABLE")
+			wantView = strings.Contains(upperType, "VIEW")
+		}
+
+		matchName := func(name string) bool {
+			if tblFilter == "" || tblFilter == "%" || strings.EqualFold(tblFilter, "null") {
+				return true
+			}
+			cleanFilter := cleanTableNameParam(tblFilter)
+			if cleanFilter == "" || cleanFilter == "%" {
+				return true
+			}
+			if strings.Contains(cleanFilter, "%") {
+				if strings.HasPrefix(cleanFilter, "%") && strings.HasSuffix(cleanFilter, "%") {
+					mid := strings.Trim(cleanFilter, "%")
+					return strings.Contains(strings.ToLower(name), strings.ToLower(mid))
+				}
+				if strings.HasPrefix(cleanFilter, "%") {
+					suffix := strings.TrimPrefix(cleanFilter, "%")
+					return strings.HasSuffix(strings.ToLower(name), strings.ToLower(suffix))
+				}
+				prefix := strings.TrimSuffix(cleanFilter, "%")
+				return strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix))
+			}
+			return strings.EqualFold(name, cleanFilter)
+		}
+
+		matchOwner := func(owner string) bool {
+			if ownerFilter == "" || ownerFilter == "%" || strings.EqualFold(ownerFilter, "null") {
+				return true
+			}
+			cleanOwner := cleanTableNameParam(ownerFilter)
+			return strings.EqualFold(cleanOwner, owner) || cleanOwner == "%"
+		}
+
+		cols := []string{"TABLE_QUALIFIER", "TABLE_OWNER", "TABLE_NAME", "TABLE_TYPE", "REMARKS"}
+		var rows []map[string]any
+
+		if wantTable && matchOwner("dbo") {
+			tables, _ := s.engine.ListTables()
+			for _, t := range tables {
+				if matchName(t.Name) {
+					rows = append(rows, map[string]any{
+						"TABLE_QUALIFIER": dbName,
+						"TABLE_OWNER":     "dbo",
+						"TABLE_NAME":      t.Name,
+						"TABLE_TYPE":      "TABLE",
+						"REMARKS":         nil,
+					})
+				}
+			}
+		}
+
+		if wantView && matchOwner("dbo") && s.catalog != nil {
+			views := s.catalog.ListViews()
+			for _, v := range views {
+				if matchName(v.Name) {
+					rows = append(rows, map[string]any{
+						"TABLE_QUALIFIER": dbName,
+						"TABLE_OWNER":     "dbo",
+						"TABLE_NAME":      v.Name,
+						"TABLE_TYPE":      "VIEW",
+						"REMARKS":         nil,
+					})
+				}
+			}
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXEC",
+			Columns:      cols,
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+
+	case "sp_columns":
+		params := parseProcParams(rawArgs, []string{"@table_name", "@table_owner", "@table_qualifier", "@column_name", "@odbcver"})
+		dbName := "master"
+		if cs != nil && cs.Database != "" {
+			dbName = cs.Database
+		}
+		if q, ok := params["@table_qualifier"]; ok && q != "" && !strings.EqualFold(q, "null") {
+			dbName = cleanTableNameParam(q)
+		}
+
+		tblParam := cleanTableNameParam(params["@table_name"])
+		colParam := params["@column_name"]
+		ownerFilter := params["@table_owner"]
+
+		cols := []string{
+			"TABLE_QUALIFIER",
+			"TABLE_OWNER",
+			"TABLE_NAME",
+			"COLUMN_NAME",
+			"DATA_TYPE",
+			"TYPE_NAME",
+			"PRECISION",
+			"LENGTH",
+			"SCALE",
+			"RADIX",
+			"NULLABLE",
+			"REMARKS",
+			"COLUMN_DEF",
+			"SQL_DATA_TYPE",
+			"SQL_DATETIME_SUB",
+			"CHAR_OCTET_LENGTH",
+			"ORDINAL_POSITION",
+			"IS_NULLABLE",
+			"SS_DATA_TYPE",
+		}
+		var rows []map[string]any
+
+		matchOwner := func(owner string) bool {
+			if ownerFilter == "" || ownerFilter == "%" || strings.EqualFold(ownerFilter, "null") {
+				return true
+			}
+			cleanOwner := cleanTableNameParam(ownerFilter)
+			return strings.EqualFold(cleanOwner, owner) || cleanOwner == "%"
+		}
+
+		matchCol := func(name string) bool {
+			if colParam == "" || colParam == "%" || strings.EqualFold(colParam, "null") {
+				return true
+			}
+			cleanCol := cleanTableNameParam(colParam)
+			if cleanCol == "" || cleanCol == "%" {
+				return true
+			}
+			if strings.Contains(cleanCol, "%") {
+				if strings.HasPrefix(cleanCol, "%") && strings.HasSuffix(cleanCol, "%") {
+					mid := strings.Trim(cleanCol, "%")
+					return strings.Contains(strings.ToLower(name), strings.ToLower(mid))
+				}
+				if strings.HasPrefix(cleanCol, "%") {
+					suffix := strings.TrimPrefix(cleanCol, "%")
+					return strings.HasSuffix(strings.ToLower(name), strings.ToLower(suffix))
+				}
+				prefix := strings.TrimSuffix(cleanCol, "%")
+				return strings.HasPrefix(strings.ToLower(name), strings.ToLower(prefix))
+			}
+			return strings.EqualFold(name, cleanCol)
+		}
+
+		if tblParam != "" && !strings.EqualFold(tblParam, "null") && matchOwner("dbo") {
+			tbl, err := s.engine.GetTable(tblParam)
+			if err == nil && tbl != nil {
+				for i, c := range tbl.Columns {
+					if !matchCol(c.Name) {
+						continue
+					}
+					rows = append(rows, mapStorageColumnToSpColumn(c, tbl.Name, dbName, i+1))
+				}
+			}
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXEC",
+			Columns:      cols,
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	return nil, fmt.Errorf("unrecognized system stored procedure: %s", procLower)
@@ -578,8 +948,8 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	switch procLower {
 	case "sp_executesql":
 		return s.execSpExecuteSQL(args, start, cs, ctx)
-	case "sp_help", "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename":
-		return s.execBuiltinSystemProc(procLower, args, start)
+	case "sp_help", "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename", "sp_tables", "sp_columns":
+		return s.execBuiltinSystemProc(procLower, args, start, cs)
 	}
 
 	// Check if this is a prepared statement in the active session

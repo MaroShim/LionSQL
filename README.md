@@ -86,7 +86,12 @@ LionSQL's core capabilities are organized across five foundational architectural
 ### 2. High-Performance Storage & ACID Concurrency
 - **High-Performance Storage Backends & TPC-C Benchmark**:
   - **In-Memory OCC Engine**: Fine-grained table-level striped locking, pure-Go concurrent SkipList secondary indexes, and zero-allocation transaction/chunk pooling delivering **28,000+ TPS** (763,000+ tpmC) via Go Native API and **20,000+ TPS** (541,000+ tpmC) on compiled T-SQL VDBE Bytecode Virtual Machine with sub-millisecond median latency.
-  - **WiredTiger (Default)**: Cgo-backed lock-free B+Tree with hazard pointers, schema-aware compact binary tuple codec, and cursor pooling delivering **16,800+ TPS** (457,000+ tpmC) on compiled T-SQL VDBE under full ACID durability.
+  - **WiredTiger (Default Engine)**: Cgo-backed lock-free B+Tree with hazard pointers, schema-aware compact binary tuple codec, and cursor pooling delivering **16,800+ TPS** (457,000+ tpmC) on compiled T-SQL VDBE under full ACID durability.
+- **Why WiredTiger as Default Storage Engine? (Zero-Vacuum & Lock-Free MVCC)**:
+  - **Zero-Vacuum & Bloat-Free MVCC**: Multi-version update chains (`WT_UPDATE`) reside strictly in RAM and are cleaned on-the-fly during checkpoint/eviction reconciliation. Completely eliminates PostgreSQL-style table bloat, dead-tuple chains, and Autovacuum I/O storms. (See [doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md](doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md) and [doc/INTERNALS_STORAGE.md](doc/INTERNALS_STORAGE.md)).
+  - **Predictable Low Latency**: Hazard Pointer lock-free in-memory B+Tree avoids LSM-Tree (RocksDB/Pebble) write stalls, heavy write amplification, and compaction tail-latency spikes.
+  - **True Non-Blocking Snapshot Isolation**: Readers never block writers and writers never block readers. Long-running backups, CSV exports, and DuckDB analytical loads never stall active OLTP transactions.
+  - **Dual Engine Synergy**: Use WiredTiger for heavy production workloads with NVMe ACID saturation; switch to pure-Go In-Memory OCC (`-engine=memory`) for zero-Cgo, cross-platform builds, CI/CD, and serverless environments.
 - **Online Non-Blocking Snapshot Hot Backup**:
   Live, point-in-time `.tar.gz` database backups captured via read-only snapshot transactions without blocking writers or interrupting active OLTP traffic. Accessible via CLI (`-backup`, `-restore`), REST API (`/api/backup`, `/api/restore`), and Web Studio UI.
 - **1-Writer Multi-Reader High-Availability Replication**:
@@ -489,6 +494,16 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
 ### Open Source License
 LionSQL is free open-source software licensed under the **GNU General Public License v3 (GPL-3.0-or-later)**. See [LICENSE](LICENSE) for the full canonical license text.
 
+### Third-Party Software & Copyright Attribution
+LionSQL incorporates or dynamically links with third-party software components under compatible open-source licenses:
+- **WiredTiger Storage Engine**:
+  - Copyright (c) MongoDB, Inc.
+  - Copyright (c) Keith Bostic and Michael Cahill.
+  - Licensed under the **GNU General Public License (GPLv2 or GPLv3)**.
+  - When LionSQL is built with `-tags wiredtiger`, it links with `libwiredtiger` governed by its respective GPL terms.
+
 ### Commercial Dual Licensing & Enterprise Embeddings
-For commercial software development, proprietary in-engine embedding, or enterprise deployments that require custom licensing terms without GPL copyleft obligations, commercial dual-licensing agreements are available upon request.
+For commercial software development, proprietary in-engine embedding, or enterprise deployments that require custom licensing terms without GPL copyleft obligations:
+- Commercial dual-licensing agreements covering LionSQL's proprietary kernel code are available upon request.
+- Deployments using LionSQL's pure-Go in-memory engine (`-engine=memory`) operate free of Cgo and third-party C library copyleft requirements. Commercial embedding with the WiredTiger storage backend requires a separate commercial WiredTiger license from MongoDB, Inc. or adherence to GPL.
 

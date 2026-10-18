@@ -86,7 +86,12 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 ### 2.2. 초고성능 스토리지 & ACID 트랜잭션 (Storage Engines & ACID Concurrency)
 - **초고성능 이중 스토리지 백엔드 & TPC-C 벤치마크**:
   - **In-Memory OCC 엔진**: 세밀한 테이블 단위 스트라이프 락, 순수 Go 동시성 SkipList 보조 인덱스, 무할당 트랜잭션/청크 풀링을 통해 Go Native API 기준 **28,000+ TPS** (763,000+ tpmC), 컴파일된 T-SQL VDBE 바이트코드 VM 기준 **20,000+ TPS** (541,000+ tpmC)를 달성.
-  - **WiredTiger (기본값)**: 해저드 포인터 기반 Cgo 락프리 B+Tree, 스키마 인식 컴팩트 바이너리 튜플 코덱, 커서 풀링(P-8)을 통해 컴파일된 T-SQL VDBE 환경에서 완전한 ACID 내구성을 유지하며 **16,800+ TPS** (457,000+ tpmC) 달성.
+  - **WiredTiger (기본 스토리지 엔진)**: 해저드 포인터 기반 Cgo 락프리 B+Tree, 스키마 인식 컴팩트 바이너리 튜플 코덱, 커서 풀링(P-8)을 통해 컴파일된 T-SQL VDBE 환경에서 완전한 ACID 내구성을 유지하며 **16,800+ TPS** (457,000+ tpmC) 달성.
+- **WiredTiger 기본 엔진 채택 배경 및 차별점 (Zero-Vacuum & Lock-Free MVCC)**:
+  - **Zero-Vacuum & 팽창 방지 MVCC (No Table Bloat)**: 다중 버전(MVCC) 업데이트 체인(`WT_UPDATE`)이 메모리(RAM)에서만 유지되며, 체크포인트 및 캐시 방출(Reconciliation) 시점에 최신 커밋 버전만 디스크에 기록합니다. PostgreSQL과 같은 별도의 `VACUUM` 프로세스, Autovacuum I/O 폭풍, 테이블 팽창(Table Bloat)이 원천적으로 발생하지 않습니다. (상세 원리는 [doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md](doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md) 및 [doc/INTERNALS_STORAGE.md](doc/INTERNALS_STORAGE.md) 참조).
+  - **예측 가능한 초저지연 (Predictable Low-Latency)**: RocksDB/Pebble과 같은 LSM-Tree 엔진에서 발생하는 대규모 백그라운드 Compaction 정체 현상 없이, Hazard Pointer 기반 락프리 B+Tree로 일관된 서브 밀리초 응답성을 보장합니다.
+  - **비차단 스냅샷 격리 (Non-Blocking Snapshot Isolation)**: 읽기가 쓰기를 결코 차단하지 않고, 쓰기 역시 읽기를 차단하지 않습니다. 장시간 소요되는 백업, 대용량 분석(DuckDB 연동, 덤프) 중에도 초당 16,000건 이상의 OLTP 트랜잭션 쓰기가 무중단 처리됩니다.
+  - **듀얼 백엔드 시너지**: 프로덕션에서는 WiredTiger의 견고한 NVMe ACID 내구성을 활용하고, 빠른 CI/CD 테스트 및 경량 로컬 환경에서는 Cgo 의존성 없는 Pure-Go In-Memory OCC 엔진(`-engine=memory`)을 자유롭게 전환하여 사용할 수 있습니다.
 - **비차단 온라인 스냅샷 핫 백업 (Hot Backup)**:
   활성 OLTP 트래픽을 차단하거나 쓰기 락을 걸지 않고, 읽기 전용 스냅샷 트랜잭션을 통해 실시간 `.tar.gz` 백업 아카이브 생성. CLI(`-backup`, `-restore`), REST API(`/api/backup`, `/api/restore`), Web Studio UI 전반에서 원클릭으로 지원됩니다.
 - **1-Writer 다중 리더 고가용성 복제 (HA Replication)**:
@@ -506,10 +511,20 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
 
 ---
 
-## 10. 라이선스 (License)
+## 10. 라이선스 및 저작권 (License & Third-Party Notices)
 
 ### 오픈 소스 라이선스
 LionSQL은 **GNU General Public License v3 (GPL-3.0-or-later)** 하에 배포되는 자유 오픈 소스 소프트웨어입니다. 전문은 [LICENSE](LICENSE) 파일을 참조하십시오.
 
-### 상용 듀얼 라이선스 (Commercial Dual Licensing)
-GPL 카피레프트 의무 없이 상용 소프트웨어 제품에 내장하거나 자체적인 라이선스 조항이 필요한 기업 고객을 위해 별도의 상용 듀얼 라이선스 계약을 제공합니다.
+### 서드파티 소프트웨어 저작권 고지 (Third-Party Software & Copyright Attribution)
+LionSQL은 다음 오픈 소스 소프트웨어를 통합하거나 동적 링크하여 사용하며, 해당 라이선스를 철저히 준수합니다:
+- **WiredTiger Storage Engine**:
+  - Copyright (c) MongoDB, Inc.
+  - Copyright (c) Keith Bostic and Michael Cahill.
+  - 라이선스: **GNU General Public License (GPLv2 또는 GPLv3)**.
+  - `-tags wiredtiger` 플래그로 빌드된 LionSQL 바이너리는 `libwiredtiger`에 링크되며 GPL 카피레프트 조건이 적용됩니다.
+
+### 상용 듀얼 라이선스 및 기업 임베딩 (Commercial Dual Licensing)
+GPL 카피레프트 의무 없이 자체 소프트웨어에 LionSQL을 내장하거나 독점 라이선스가 필요한 기업 고객을 위한 안내:
+- LionSQL의 독자적 코어 엔진 코드에 대한 상용 듀얼 라이선스 계약을 지원합니다.
+- Cgo 의존성이 없는 순수 Go 인메모리 엔진(`-engine=memory`)은 외부 C 라이브러리 카피레프트 제약 없이 상용 임베딩이 가능합니다. WiredTiger 백엔드를 포함한 상용 임베딩의 경우 MongoDB, Inc.의 상용 WiredTiger 라이선스를 취득하거나 GPL 조항을 준수해야 합니다.

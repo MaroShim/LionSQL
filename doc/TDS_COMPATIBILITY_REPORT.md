@@ -274,12 +274,12 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 
 123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **92.7% (114/123 - PASS 112개 + TYPE_DIFF 2개)의 압도적인 종합 호환율**을 달성했습니다.
 - **완벽히 통과된 강력한 엔터프라이즈 기능**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`).
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`).
 - **향후 확장을 위한 잔여 과제**:
   1. C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
-  2. DBeaver 및 구형 도구 호환을 위한 **레거시 메타데이터 프로시저 (`sp_tables`, `sp_columns`)** 지원 (`TDS-COMPAT-5`).
-  3. 한글/유니코드 **N-접두사(`N'...'`)** 직렬화 안정성 (`TDS-COMPAT-2`).
-  4. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1`).
-  5. 사용자 예외 발생 구문 **`RAISERROR`, `THROW`** 지원 (`TDS-COMPAT-9`).
+  2. 한글/유니코드 **N-접두사(`N'...'`)** 직렬화 안정성 (`TDS-COMPAT-2`).
+  3. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1`).
+  4. 사용자 예외 발생 구문 **`RAISERROR`, `THROW`** 지원 (`TDS-COMPAT-9`).
+  5. Ad-hoc 최상위 익명 제어문 **`IF...ELSE`, `WHILE`** 지원 (`TDS-COMPAT-4`).
 
 이 핵심 과제들이 단계적으로 완비됨에 따라 LionSQL은 실무 엔터프라이즈 .NET/Java/Node.js/Python 애플리케이션을 코드 수정 없이 100% 수용하는 진정한 무중단 SQL Server 대체제로 안착하고 있습니다.

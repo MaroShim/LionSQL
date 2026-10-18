@@ -24,6 +24,12 @@ This document records the critical architectural decisions made throughout the d
 - [ADR-016: Zero-Parse Prepared Statement VDBE Bytecode Caching across Wire Protocols](#adr-016-zero-parse-prepared-statement-vdbe-bytecode-caching-across-wire-protocols)
 - [ADR-017: 1-Writer Multi-Reader High-Availability Replication Topology & Linear WAL Streaming](#adr-017-1-writer-multi-reader-high-availability-replication-topology--linear-wal-streaming)
 - [ADR-018: Dual-Track User-Defined Function (UDF) Architecture: Native Go In-Process SPI & WebAssembly Sandbox](#adr-018-dual-track-user-defined-function-udf-architecture-native-go-in-process-spi--webassembly-sandbox)
+- [ADR-019: Schema-Aware Compact Binary Tuple Storage Codec (`0x01`)](#adr-019-schema-aware-compact-binary-tuple-storage-codec-0x01)
+- [ADR-020: Multi-Protocol Virtual Catalog Interceptor Strategy for Zero-Friction GUI Introspection](#adr-020-multi-protocol-virtual-catalog-interceptor-strategy-for-zero-friction-gui-introspection)
+- [ADR-021: Open Source Licensing Strategy: GNU General Public License v3 (GPL-3.0-or-later)](#adr-021-open-source-licensing-strategy-gnu-general-public-license-v3-gpl-30-or-later)
+- [ADR-022: Hybrid Expression B-Tree Indexing for Semi-Structured JSON Documents](#adr-022-hybrid-expression-b-tree-indexing-for-semi-structured-json-documents)
+- [ADR-023: Instance-Based Database Isolation & Multi-Database Catalog Multiplexing Spec-Out](#adr-023-instance-based-database-isolation--multi-database-catalog-multiplexing-spec-out)
+- [ADR-024: Decoupled CDC Event Streaming vs POSIX Shared Memory (Arrow IPC) Exclusion for OLAP Analytics](#adr-024-decoupled-cdc-event-streaming-vs-posix-shared-memory-arrow-ipc-exclusion-for-olap-analytics)
 
 ---
 
@@ -613,5 +619,55 @@ Adopt **Hybrid Expression B-Tree Indexing** as LionSQL's canonical JSON index ar
 - **Positive**: Frictionless single-statement indexing for both PostgreSQL and MSSQL clients; reuses existing high-throughput B+Tree storage without write amplification.
 - **Negative**: Queries searching arbitrary, unspecified JSON keys across deeply nested documents cannot leverage index acceleration without explicitly creating an expression index for that path.
 - **Compliance**: Adheres to Golden Rule 15 (Radical KISS, DRY & Deletion-First), Rule 19 (Modular Interface Abstraction), and `doc/JSON_SPEC_AND_INDEXING.md`.
+
+---
+
+## ADR-023: Instance-Based Database Isolation & Multi-Database Catalog Multiplexing Spec-Out
+
+### Status
+Accepted
+
+### Context
+Enterprise RDBMSs (PostgreSQL clusters, Microsoft SQL Server instances) traditionally support multi-database catalog multiplexing inside a single server process (`USE <dbname>`). However, in-kernel multi-database multiplexing introduces severe engineering complexity and operational liabilities:
+1. **Lack of Fault & Resource Isolation**: A runaway query, memory leak, or file descriptor saturation in one tenant database impacts all other databases in the same process.
+2. **Security & Blast Radius**: Cross-database vulnerabilities and memory leaks compromise sensitive tenant isolation.
+3. **Locking & Catalog Bloat**: Maintaining concurrent catalog locks, session database context switching, and multi-tenant schema sync introduces massive synchronization overhead.
+
+### Decision
+Adopt **Instance-Level Isolation (Process / Container per Database)** as a core architectural invariant:
+1. **1-Database per Process**: Each LionSQL server process serves exactly one isolated database catalog per data directory (`--data-dir`).
+2. **Multi-Database Catalog Multiplexing Explicitly Spec-Out**: In-kernel multi-database multiplexing is permanently excluded from the engine core.
+3. **`USE <dbname>` Tolerant Virtual No-Op**: To guarantee 100% interoperability with MSSQL export scripts, SSMS, DBeaver, and sqlcmd, the `USE <dbname>` statement is accepted as a Tolerant Virtual No-Op. The server synchronizes session virtual database state (`DB_NAME()`, `CURRENT_DATABASE()`) and emits official TDS environment change tokens (`0xE3 ENVCHANGE`), eliminating syntax errors without physical catalog switching.
+4. **Standard Multi-Tenant Deployment**: Multi-tenancy is deployed via lightweight LionSQL standalone processes/containers with dedicated ports and directories (`--port`, `--data-dir`).
+
+### Consequences
+- **Positive**: Absolute fault, security, and resource isolation; zero catalog lock contention; independent upgrades, scaling, and PITR per database.
+- **Negative**: Hosting dozens of micro-databases requires running multiple lightweight LionSQL processes.
+- **Compliance**: Adheres to Golden Rule 15 (Radical KISS & Deletion-First) and `GEMINI.md` Section 3.
+
+---
+
+## ADR-024: Decoupled CDC Event Streaming vs POSIX Shared Memory (Arrow IPC) Exclusion for OLAP Analytics
+
+### Status
+Accepted
+
+### Context
+High-concurrency OLTP databases frequently require integration with analytical engines (DuckDB, Pandas, BI dashboards) for real-time reporting. Two primary integration models were evaluated:
+1. **In-Kernel Coupling / POSIX Shared Memory (`/dev/shm` Apache Arrow IPC)**: Directly sharing memory buffers between LionSQL and an embedded DuckDB C++ instance.
+2. **Decoupled CDC Event Streaming**: Emitting committed transaction WAL records asynchronously via HTTP NDJSON/SSE (`/api/cdc/stream`) to an independent DuckDB worker.
+
+### Decision
+Standardize on **Decoupled CDC Event Streaming** and explicitly **Spec Out** POSIX Shared Memory Arrow IPC:
+1. **Zero Blast Radius**: Memory-intensive analytical queries (OOM) or DuckDB crashes cannot impact LionSQL's sub-millisecond OLTP transaction execution.
+2. **DuckDB Single-Writer Concurrency Isolation**: DuckDB's native single-writer lock model would severely serialize LionSQL's 16,000+ TPS concurrent writers if embedded in-kernel. Decoupling completely isolates OLTP concurrency from OLAP single-writer constraints.
+3. **Readers Never Block Writers**: DuckDB reads committed CDC events asynchronously; initial snapshot dumping uses LionSQL's non-blocking MVCC/OCC reads without acquiring shared read locks.
+4. **Eventual Convergence via Watermark LSN**: Initial load handovers use a 3-step cutover (Watermark LSN ➔ Full Dump ➔ CDC Stream with `INSERT OR REPLACE` Upsert) to guarantee 100% deterministic data convergence.
+
+### Consequences
+- **Positive**: Strict OLTP latency protection; cross-platform portability without POSIX `/dev/shm` constraints or Docker 64MB shared memory limits; horizontal analytical scale-out.
+- **Negative**: Introduces millisecond-level asynchronous replication lag between OLTP commit and DuckDB ingestion.
+- **Compliance**: Adheres to Golden Rule 14 (Platform Primitives First), Golden Rule 15 (KISS), and `GEMINI.md` Section 8.4.
+
 
 

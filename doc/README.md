@@ -15,9 +15,9 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 - ARCHITECTURE.md   - INTERNALS_VDBE.md        - INTERNALS_WIRE.md   - AUTO_REST_API.md
 - INTERNALS_STOR.md - INTERNALS_CBO_VOLCANO.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
 - TX_CONCURRENCY.md - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
-- RECORD_BINARY.md  - LOG_PROC_GREP_AWK.md                           - WEB_SDK.md
-- DATA_DICTIONARY   - EXTENSIONS.md                                  - API_REFERENCE.md
-- HIGH_AVAIL.md                                                      - WEB_SDK.md
+- SNAPSHOT_DUCKDB   - LOG_PROC_GREP_AWK.md     - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
+- RECORD_BINARY.md  - EXTENSIONS.md            - TEST_VERIF_REPORT   - API_REFERENCE.md
+- DATA_DICTIONARY   - HIGH_AVAIL.md                                  - WEB_SDK.md
 ```
 
 ---
@@ -25,139 +25,145 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ## 2. Directory of Documents
 
 ### 2.0. Official Manuals (공식 매뉴얼)
-* [`USER_MANUAL.ko.md`](file:///Users/maro/Projects/sql/doc/USER_MANUAL.ko.md)
+* [`USER_MANUAL.ko.md`](file:///Users/maro/Projects/LionSQL/doc/USER_MANUAL.ko.md)
   * 설치, 기동, 클라이언트 도구 연동, 데이터베이스 개발 및 운영 유지보수 전 과정을 안내하는 공식 사용자 매뉴얼.
-* [`REFERENCE_MANUAL.ko.md`](file:///Users/maro/Projects/sql/doc/REFERENCE_MANUAL.ko.md)
+* [`REFERENCE_MANUAL.ko.md`](file:///Users/maro/Projects/LionSQL/doc/REFERENCE_MANUAL.ko.md)
   * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
 
 ### 2.1. Architecture & Core Database Engine
-* [`FOUNDATIONAL_DESIGN_DECISIONS.md`](file:///Users/maro/Projects/SQLion/doc/FOUNDATIONAL_DESIGN_DECISIONS.md)
+* [`FOUNDATIONAL_DESIGN_DECISIONS.md`](file:///Users/maro/Projects/LionSQL/doc/FOUNDATIONAL_DESIGN_DECISIONS.md)
   * Genesis and foundational strategic architectural decisions of LionSQL.
   * Deep dive into early design choices: WiredTiger lock-free B+Tree disk storage, pure-Go OCC in-memory companion engine, Go language runtime concurrency, Microsoft T-SQL procedural core with VDBE bytecode VM, PostgreSQL wire protocol ecosystem reach, embedded HTTP/REST BaaS engine, and Antigravity AI pair-programming engineering methodology.
-* [`ZERO_ALLOCATION_ARCHITECTURE.md`](file:///Users/maro/Projects/SQLion/doc/ZERO_ALLOCATION_ARCHITECTURE.md)
+* [`ZERO_ALLOCATION_ARCHITECTURE.md`](file:///Users/maro/Projects/LionSQL/doc/ZERO_ALLOCATION_ARCHITECTURE.md)
   * Zero-allocation memory architecture, buffer reuse strategies, and GC mitigation enabling 20,000+ TPS (In-Memory OCC) and 16,800+ TPS (WiredTiger).
   * Layer-by-layer breakdown: TDS single-frame pooling, PGWire binary bind direct decoding, zero-alloc ASCII catalog pre-filtering (`containsFold`), VDBE register recycling, Volcano chunk streaming (`TupleChunk` sync.Pool), and WiredTiger `WT_CURSOR` pooling/reset.
-* [`ARCHITECTURE.md`](file:///Users/maro/Projects/SQLion/doc/ARCHITECTURE.md)
+* [`ARCHITECTURE.md`](file:///Users/maro/Projects/LionSQL/doc/ARCHITECTURE.md)
   * End-to-end architectural blueprint of LionSQL.
   * Dual-storage backend (Pure-Go OCC memory engine vs WiredTiger lock-free B+Tree with MVCC).
   * Ambient ACID transactions, isolation levels, and goroutine connection pooler.
-* [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/SQLion/doc/INTERNALS_STORAGE.md)
+* [`INTERNALS_STORAGE.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_STORAGE.md)
   * Deep dive into the storage engine interface contract.
   * SkipList in-memory indexing vs WiredTiger page structures, checkpoints, and write-ahead logging (WAL).
   * Physical storage directory layout, `catalog.json` metadata persistence, `cbo_stats.json`, and secondary index persistence.
-* [`RECORD_BINARY_FORMAT.md`](file:///Users/maro/Projects/SQLion/doc/RECORD_BINARY_FORMAT.md)
+* [`RECORD_BINARY_FORMAT.md`](file:///Users/maro/Projects/LionSQL/doc/RECORD_BINARY_FORMAT.md)
   * Schema-Aware Compact Binary Tuple serialization specification (`pkg/storage/tuple.go`).
   * Bit-level layout: `0x01` version header, $\lceil N/8 \rceil$ null bitmap, and dense ZigZag varint payloads.
   * Architectural lineage: PostgreSQL heap tuple `t_bits`, CockroachDB/TiDB KV encoding, and Protobuf varints.
   * WiredTiger B+Tree disk value persistence vs in-memory OCC WAL durability.
-* [`TRANSACTION_CONCURRENCY.md`](file:///Users/maro/Projects/SQLion/doc/TRANSACTION_CONCURRENCY.md)
+* [`TRANSACTION_CONCURRENCY.md`](file:///Users/maro/Projects/LionSQL/doc/TRANSACTION_CONCURRENCY.md)
   * Transaction isolation and concurrency model specification.
   * Non-blocking snapshot reads and private workspace isolation.
   * In-Memory OCC with monotonic integer versioning vs WiredTiger MVCC with hazard pointers and transaction timestamps.
   * VDBE transaction coupling (`exec.RunInTx`) and benchmark transaction fidelity.
-* [`DATA_DICTIONARY.md`](file:///Users/maro/Projects/SQLion/doc/DATA_DICTIONARY.md)
+* [`DATA_DICTIONARY.md`](file:///Users/maro/Projects/LionSQL/doc/DATA_DICTIONARY.md)
   * System catalogs, system tables, schema metadata persistence, and virtual catalog views (`sys.tables`, `INFORMATION_SCHEMA`).
-* [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/SQLion/doc/HIGH_AVAILABILITY.md)
+* [`HIGH_AVAILABILITY.md`](file:///Users/maro/Projects/LionSQL/doc/HIGH_AVAILABILITY.md)
   * Crash safety, checkpointing, AOF compaction, and online hot backup/restore pipelines.
-* [`ADR.md`](file:///Users/maro/Projects/SQLion/doc/ADR.md)
+* [`ADR.md`](file:///Users/maro/Projects/LionSQL/doc/ADR.md)
   * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution, HA replication, dual-track UDFs, compact binary tuple codec, multi-protocol catalog interception, GPL v3 licensing, hybrid JSON expression B-Tree indexing: ADR-001 through ADR-022).
 
 ---
 
 ### 2.2. Query Compilation, Optimization & Virtual Machine
-* [`INTERNALS_VDBE.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_VDBE.md)
+* [`INTERNALS_VDBE.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_VDBE.md)
   * SQLite-style register-based Virtual Database Engine (VDBE) architecture.
   * Bytecode opcodes specification (`OpInit`, `OpOpenRead`, `OpIndexScan`, `OpRelQuery`, `OpYield`).
   * `sync.Pool` register reuse and compiled program caching (`*runtime.PlanCache`).
-* [`INTERNALS_CBO_VOLCANO.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_CBO_VOLCANO.md)
+* [`INTERNALS_CBO_VOLCANO.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_CBO_VOLCANO.md)
   * Volcano iterator pipeline (`SeqScan`, `IndexScan`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`).
   * Cost-Based Optimizer (CBO), selectivity models, and 64-bucket equi-depth histograms.
   * Constant folding, predicate pushdown, and correlated subquery decorrelation (`SEMI`/`ANTI` joins).
   * `work_mem` memory governor and disk-spilling external merge sort.
-* [`JSON_SPEC_AND_INDEXING.md`](file:///Users/maro/Projects/sql/doc/JSON_SPEC_AND_INDEXING.md)
+* [`JSON_SPEC_AND_INDEXING.md`](file:///Users/maro/Projects/LionSQL/doc/JSON_SPEC_AND_INDEXING.md)
   * Semi-structured JSON document querying and expression B-Tree indexing specification.
   * Comparative architectural analysis across PostgreSQL, MySQL 8.0, and Microsoft SQL Server.
   * Dual-protocol AST normalization (`*proc.JsonExtractExpr`), `JSON_VALUE`, `JSON_QUERY`, `ISJSON`, and PostgreSQL `->` / `->>` operators.
   * Single-statement functional B-Tree index DDL (`CREATE INDEX ... ON tbl ((data->>'key'))`) and CBO index matching.
-* [`TSQL_REFERENCE.md`](file:///Users/maro/Projects/sql/doc/TSQL_REFERENCE.md)
+* [`TSQL_REFERENCE.md`](file:///Users/maro/Projects/LionSQL/doc/TSQL_REFERENCE.md)
   * Complete Microsoft T-SQL syntax compatibility guide.
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
-* [`ANTLR_PARSER_COMPACT_STRATEGY.md`](file:///Users/maro/Projects/sql/doc/ANTLR_PARSER_COMPACT_STRATEGY.md)
+* [`ANTLR_PARSER_COMPACT_STRATEGY.md`](file:///Users/maro/Projects/LionSQL/doc/ANTLR_PARSER_COMPACT_STRATEGY.md)
   * Technical roadmap and phased strategy for slimming down the generated T-SQL ANTLR4 parser (`pkg/proc/parser/antlr/`).
   * Analysis of 267k-line generated code, unused listener pruning, grammar subsetting, ATN packing, and long-term Native Pratt Parser unification.
-* [`EXTENSIONS.md`](file:///Users/maro/Projects/sql/doc/EXTENSIONS.md)
+* [`EXTENSIONS.md`](file:///Users/maro/Projects/LionSQL/doc/EXTENSIONS.md)
   * Advanced SQL capabilities: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB operators, CTEs, Foreign Keys with cascading actions, and Dual-Track UDF architecture (Go native SPI + Wasm sandbox).
-* [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](file:///Users/maro/Projects/sql/doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md)
+* [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](file:///Users/maro/Projects/LionSQL/doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md)
   * Continuous and discrete quantiles (`PERCENTILE_CONT`, `PERCENTILE_DISC`), ANSI `WITHIN GROUP (ORDER BY ...)`, `MEDIAN`, and streaming approximate quantiles (`APPROX_PERCENTILE` via T-Digest).
-* [`LOG_PROCESSING_GREP_AWK.md`](file:///Users/maro/Projects/sql/doc/LOG_PROCESSING_GREP_AWK.md)
+* [`LOG_PROCESSING_GREP_AWK.md`](file:///Users/maro/Projects/LionSQL/doc/LOG_PROCESSING_GREP_AWK.md)
   * In-engine text & log processing operators (`GREP`, `AWK`, `SPLIT_PART`).
   * Zero-copy pushdown filtering, structured token extraction, and schema-free log analytics.
 
 ---
 
 ### 2.3. Wire Protocols & Client Compatibility
-* [`INTERNALS_WIRE_PROTOCOLS.md`](file:///Users/maro/Projects/sql/doc/INTERNALS_WIRE_PROTOCOLS.md)
+* [`INTERNALS_WIRE_PROTOCOLS.md`](file:///Users/maro/Projects/LionSQL/doc/INTERNALS_WIRE_PROTOCOLS.md)
   * **PostgreSQL Wire Protocol v3** (Port `5433`): Simple and Extended Query Protocols (`Parse`, `Bind`, `Execute`, `Sync`), parameter binding, and SSL/TLS.
   * **Microsoft SQL Server TDS 7.x/8.0** (Port `1433`): Prelogin, Login7, RPC packets, and `sp_prepexec` bytecode plan cache connection.
   * Client compatibility matrix (`psql`, DBeaver, GORM, Prisma, `sqlcmd`, SSMS, Azure Data Studio).
-* [`PROTOCOL_EMULATION_GUIDELINES.md`](file:///Users/maro/Projects/sql/doc/PROTOCOL_EMULATION_GUIDELINES.md)
+* [`PROTOCOL_EMULATION_GUIDELINES.md`](file:///Users/maro/Projects/LionSQL/doc/PROTOCOL_EMULATION_GUIDELINES.md)
   * Multi-protocol emulation boundary specification and architectural stop criteria.
   * Four-Layer Boundary Model: Wire Framing (100%), Virtual Catalog Handshake (90%), Common DML (80%), Dialect Quirks & Procedures (10~20%).
   * PostgreSQL stopping criteria, planned MySQL protocol specifications, and T-SQL single-kernel procedural invariance.
-* [`CLIENT_TOOL_INTEGRATION.md`](file:///Users/maro/Projects/sql/doc/CLIENT_TOOL_INTEGRATION.md)
+* [`CLIENT_TOOL_INTEGRATION.md`](file:///Users/maro/Projects/LionSQL/doc/CLIENT_TOOL_INTEGRATION.md)
   * Comprehensive GUI & CLI client tool connection and integration guide.
   * Tested client matrix: Beekeeper Studio, DBeaver Universal Database Tool, Azure Data Studio, SSMS, `psql`, and `sqlcmd`.
   * Multi-protocol catalog interceptors, schema discovery routing, and pagination normalization (`OFFSET FETCH` / `TOP`).
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
+* [`TDS_COMPATIBILITY_REPORT.md`](file:///Users/maro/Projects/LionSQL/doc/TDS_COMPATIBILITY_REPORT.md)
+  * Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) 실시간 123개 T-SQL/ORM 호환성 전수 진단 및 갭 분석 종합 보고서 (PASS: 109개 88.6%, 실무 결함 분석 및 해결 과제 수록).
 
 ---
 
 ### 2.4. Backend-as-a-Service (BaaS), REST & Client SDKs
-* [`AUTO_REST_API.md`](file:///Users/maro/Projects/sql/doc/AUTO_REST_API.md)
+* [`AUTO_REST_API.md`](file:///Users/maro/Projects/LionSQL/doc/AUTO_REST_API.md)
   * PocketBase-style instant zero-code RESTful CRUD endpoints (`/api/records/:table`).
   * Advanced URL query engine: comparisons, pattern matching (`LIKE`), string containment (`~`), multi-column sorting, and pagination.
-* [`WEBHOOKS_AND_RLS.md`](file:///Users/maro/Projects/sql/doc/WEBHOOKS_AND_RLS.md)
+* [`WEBHOOKS_AND_RLS.md`](file:///Users/maro/Projects/LionSQL/doc/WEBHOOKS_AND_RLS.md)
   * **Asynchronous Webhook Dispatcher**: Non-blocking worker pool, exponential backoff retries, and HMAC-SHA256 signature verification.
   * **Declarative Row-Level Security (RLS)**: Table-level access rules (`list`, `view`, `create`, `update`, `delete`) with `@auth.id`, `@auth.role`, `@auth.tenant_id` variable substitution.
-* [`CRON_AND_MAILER.md`](file:///Users/maro/Projects/sql/doc/CRON_AND_MAILER.md)
+* [`CRON_AND_MAILER.md`](file:///Users/maro/Projects/LionSQL/doc/CRON_AND_MAILER.md)
   * **Embedded Cron Jobs Scheduler**: Recurring SQL query and T-SQL stored procedure automation with standard 5-field cron syntax.
   * **Embedded SMTP Mailer**: Transactional HTML email templates (`welcome`, `password_reset`, `verification`) and delivery audit ring buffer.
-* [`WEB_SDK.md`](file:///Users/maro/Projects/sql/doc/WEB_SDK.md)
+* [`WEB_SDK.md`](file:///Users/maro/Projects/LionSQL/doc/WEB_SDK.md)
   * Official universal Web SDK & HTML embedding guide (`sqlion.js`, `sqlion.d.ts`).
   * Zero-dependency single-file HTML templates, vanilla `fetch()`, realtime SSE live sync, and HTMX recipes.
-* [`API_REFERENCE.md`](file:///Users/maro/Projects/sql/doc/API_REFERENCE.md)
+* [`API_REFERENCE.md`](file:///Users/maro/Projects/LionSQL/doc/API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
-* [`CDC_DUCKDB_INTEGRATION.md`](file:///Users/maro/Projects/sql/doc/CDC_DUCKDB_INTEGRATION.md)
+* [`CDC_DUCKDB_INTEGRATION.md`](file:///Users/maro/Projects/LionSQL/doc/CDC_DUCKDB_INTEGRATION.md)
   * LionSQL 실시간 CDC 스트림(`GET /api/cdc/stream`) 및 DuckDB 분리형(Decoupled) HTAP 분석 연동 가이드 (Python & DuckDB 샘플 포함).
-* [`S3_PRESIGNED_STORAGE_PLAN.md`](file:///Users/maro/Projects/sql/doc/S3_PRESIGNED_STORAGE_PLAN.md)
+* [`SNAPSHOT_ISOLATION_AND_DUCKDB.md`](file:///Users/maro/Projects/LionSQL/doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md)
+  * 스토리지 엔진별(WiredTiger MVCC vs In-Memory OCC) 스냅샷 격리 메커니즘, 스냅샷 동결 시점의 본질적 차이, Vacuum 배제 원리 및 DuckDB 초기 덤프/실시간 CDC 정합성 핸드오버 심층 기술 백서.
+* [`S3_PRESIGNED_STORAGE_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/S3_PRESIGNED_STORAGE_PLAN.md)
   * 패턴 1 S3 Pre-signed URL 직접 업로드 아키텍처 및 구현 계획 (순수 Go SigV4 서명, REST API, T-SQL 내장 함수, CDC 고아 파일 방지).
 
 ---
 
 ### 2.5. Operations, Security & Benchmarks
-* [`OPERATIONS.md`](file:///Users/maro/Projects/SQLion/doc/OPERATIONS.md)
+* [`TEST_VERIFICATION_REPORT.md`](file:///Users/maro/Projects/LionSQL/doc/TEST_VERIFICATION_REPORT.md)
+  * LionSQL 코어 엔진 13대 핵심 기능 영역(CBO 힌트/커버링 인덱스, JSON 표현식 B-Tree 인덱스, SQL RBAC, 스키마 마이그레이션 CLI, 롤링 파티셔닝 등) 전수 실시간 검증 및 기술 딥다이브 종합 보고서 (100% PASS).
+* [`OPERATIONS.md`](file:///Users/maro/Projects/LionSQL/doc/OPERATIONS.md)
   * Production deployment guidelines, CLI flags, configuration parameters, and graceful shutdown.
-* [`SCHEMA_MIGRATIONS_CLI.md`](file:///Users/maro/Projects/SQLion/doc/SCHEMA_MIGRATIONS_CLI.md)
+* [`SCHEMA_MIGRATIONS_CLI.md`](file:///Users/maro/Projects/LionSQL/doc/SCHEMA_MIGRATIONS_CLI.md)
   * Declarative schema migration toolchain (`lionsql migrate new/up/down/status`), timestamp versioning, atomic transactional DDL safety, and CI/CD/Kubernetes patterns.
-* [`METRICS.md`](file:///Users/maro/Projects/SQLion/doc/METRICS.md)
+* [`METRICS.md`](file:///Users/maro/Projects/LionSQL/doc/METRICS.md)
   * Prometheus metrics (`/metrics`) and slow query logging (`/api/slow-queries`).
-* [`SECURITY.md`](file:///Users/maro/Projects/SQLion/doc/SECURITY.md)
+* [`SECURITY.md`](file:///Users/maro/Projects/LionSQL/doc/SECURITY.md)
   * Authentication models, JWT lifecycle, API key role scoping, and network encryption.
-* [`ENTERPRISE_AUTHENTICATION_SPI.md`](file:///Users/maro/Projects/SQLion/doc/ENTERPRISE_AUTHENTICATION_SPI.md)
+* [`ENTERPRISE_AUTHENTICATION_SPI.md`](file:///Users/maro/Projects/LionSQL/doc/ENTERPRISE_AUTHENTICATION_SPI.md)
   * Pluggable `AuthProvider` SPI for corporate directory services (LDAP/AD/PAM), multi-protocol identity convergence, and perimeter proxy security architecture.
-* [`IMMUTABLE_AUDIT_LOG.md`](file:///Users/maro/Projects/SQLion/doc/IMMUTABLE_AUDIT_LOG.md)
+* [`IMMUTABLE_AUDIT_LOG.md`](file:///Users/maro/Projects/LionSQL/doc/IMMUTABLE_AUDIT_LOG.md)
   * Enterprise cryptographic audit logging architecture and compliance specification (PCI-DSS v4.0 Req 10, SOC 2 Type II, SHA-256 hash chaining, non-blocking MPSC ring buffer, and offline CLI verifier).
-* [`BENCHMARK.md`](file:///Users/maro/Projects/SQLion/doc/BENCHMARK.md)
+* [`BENCHMARK.md`](file:///Users/maro/Projects/LionSQL/doc/BENCHMARK.md)
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).
-* [`MIGRATION.md`](file:///Users/maro/Projects/SQLion/doc/MIGRATION.md)
+* [`MIGRATION.md`](file:///Users/maro/Projects/LionSQL/doc/MIGRATION.md)
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
-* [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/SQLion/doc/TROUBLESHOOTING.md)
+* [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/LionSQL/doc/TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.
-* [`ROADMAP.md`](file:///Users/maro/Projects/SQLion/ROADMAP.md)
+* [`ROADMAP.md`](file:///Users/maro/Projects/LionSQL/ROADMAP.md)
   * Versioned milestone progression from single-node OLTP to Always On HA and decoupled HTAP.
-* [`TODO.ko.md`](file:///Users/maro/Projects/SQLion/TODO.ko.md)
+* [`TODO.ko.md`](file:///Users/maro/Projects/LionSQL/TODO.ko.md)
   * Daily actionable engineering backlog and task status tracker.
-* [`CHANGELOG.md`](file:///Users/maro/Projects/SQLion/CHANGELOG.md)
+* [`CHANGELOG.md`](file:///Users/maro/Projects/LionSQL/CHANGELOG.md)
   * Release history and detailed changelogs following Keep a Changelog standard.
 

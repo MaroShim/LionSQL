@@ -26,6 +26,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added test suites `TestEvalRowExpr_NullPropagation` (`pkg/proc`) and `TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull` (`pkg/wire/tds`).
 
 ### Added
+- **Legacy Metadata Stored Procedures `sp_tables` and `sp_columns` (`TDS-COMPAT-5`) (`pkg/engine`, `pkg/wire/tds`)**:
+  - Implemented built-in `sp_tables` in `pkg/engine/sqlexec_procs.go` supporting `@table_name`, `@table_owner`, `@table_qualifier`, and `@table_type` parameters with wildcard (`%`) filtering, returning standard `TABLE_QUALIFIER`, `TABLE_OWNER`, `TABLE_NAME`, `TABLE_TYPE`, and `REMARKS` columns for tables and views.
+  - Implemented built-in `sp_columns` returning standard 19-column ODBC/OLEDB metadata (`DATA_TYPE`, `TYPE_NAME`, `PRECISION`, `LENGTH`, `SCALE`, `RADIX`, `NULLABLE`, `COLUMN_DEF`, `ORDINAL_POSITION`, `IS_NULLABLE`, `SS_DATA_TYPE`, etc.) mapped from storage table column definitions with `@table_name`, `@column_name`, `@table_owner`, and `@table_qualifier` filtering.
+  - Added `parseProcParams` and `cleanTableNameParam` supporting both named (`@param = val`) and positional arguments, with bracket-escaped and schema-qualified name sanitization.
+  - Enhanced TDS `handleRPC` default handler in `pkg/wire/tds/server.go` to format RPC parameters into SQL `EXEC` statements with literal escaping via `formatSQLValue`, enabling seamless RPC invocation from GUI tools (DBeaver, SSMS) and database drivers.
+  - Added unit tests in `pkg/api/sqlexec_test.go` (`TestSQLExecutor_BuiltinSystemStoredProcedures`) and official Go MSSQL driver integration test in `pkg/wire/tds/driver_integration_test.go` (`TestDriverIntegration_GoMSSQLDB_SystemProcs_TablesAndColumns`).
 - **T-SQL Stored Procedure Inline Variable Declaration and Initialization (`TDS-COMPAT-7`) (`pkg/proc`, `pkg/engine`)**:
   - Added `Init Expr` to `proc.DeclareStmt` AST and extended `parseDeclare` in `pkg/proc/parser_stmt.go` to parse inline initializers (`DECLARE @var Type = <expr>`) with comma-separated multi-variable chaining.
   - Implemented VDBE bytecode compilation in `pkg/proc/compiler.go` (`case *DeclareStmt:`) to evaluate initializers sequentially and store values immediately via `OpStoreVar` and `OpCast`, supporting forward references in subsequent declarations.

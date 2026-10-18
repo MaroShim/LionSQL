@@ -1,0 +1,22 @@
+LionSQL
+Copyright (c) 2024-2026 Maro Shim and LionSQL Authors. All rights reserved.
+
+========================================================================
+Third-Party Software and Copyright Notices
+========================================================================
+
+1. WiredTiger Storage Engine
+   - Description: High-performance, concurrent multiversion B+tree storage engine.
+   - Copyright:
+     Copyright (c) 2008-2024 MongoDB, Inc.
+     Copyright (c) 2008-2014 Keith Bostic and Michael Cahill.
+   - License: GNU General Public License (GPLv2 or GPLv3)
+   - Source: https://github.com/wiredtiger/wiredtiger
+   - Notice: When LionSQL is compiled with the `wiredtiger` build tag (`-tags wiredtiger`),
+     the resulting executable links dynamically or statically with libwiredtiger.
+
+2. ANTLR4 Go Runtime & T-SQL Grammar
+   - Description: Parser generator runtime used for T-SQL fallback parsing.
+   - Copyright: Copyright (c) 2012-2022 The ANTLR Project. All rights reserved.
+   - License: BSD 3-Clause License
+   - Source: https://github.com/antlr4-go/antlr

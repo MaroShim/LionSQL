@@ -46,9 +46,9 @@
 | **P2** | **엔진/제어문** | **Ad-hoc 쿼리 배치 최상위 `IF ... ELSE` 및 `WHILE` 익명 VDBE 블록 실행 지원 (`TDS-COMPAT-4`)** | `pkg/engine`, `pkg/proc` | **신규 등록** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **수식/NULL** | **문자열 `+` 연산 시 `CONCAT_NULL_YIELDS_NULL ON` 규격에 따른 NULL 전파 보강 (`TDS-COMPAT-8`)** | `pkg/engine`, `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **예외/TDS** | **사용자 예외 발생 구문 (`RAISERROR`, `THROW`) 파싱 및 TDS Error Token(0xAA) 방출 (`TDS-COMPAT-9`)** | `pkg/engine`, `pkg/wire/tds` | **신규 등록** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
-| **P3** | **도구호환/카탈로그** | **레거시 메타데이터 저장 프로시저 (`sp_tables`, `sp_columns`) 빌트인 구현 (`TDS-COMPAT-5`)** | `pkg/engine` | **신규 등록** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
+| **P3** | **도구호환/카탈로그** | **레거시 메타데이터 저장 프로시저 (`sp_tables`, `sp_columns`) 빌트인 구현 (`TDS-COMPAT-5`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **Post-1.0 연기 (Postponed)** | - |
-| **P3** | **알림/운영** | **슬로우 쿼리 실시간 웹훅 알림 (Slack / Discord / Webhook) (`OBS-3`)** | `pkg/engine`, `pkg/config` | **백로그 등록 (Post-1.0 후보)** | - |
+| **P3** | **알림/운영** | **슬로우 쿼리 실시간 웹훅 알림 (Slack / Discord / Webhook) (`OBS-3`)** | `pkg/engine`, `pkg/config` | **스펙-아웃 권고 (Spec-Out)** | - |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **백로그 등록 (Post-1.0 후보)** | - |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
@@ -278,6 +278,19 @@
 * **내장형 S3 Blob 파일 스토리지 및 썸네일 리사이징 배제**:
   대용량 바이너리 스트리밍 및 이미지 리사이징으로 인한 OLTP CPU/메모리 기아를 방지하고, S3/MinIO 직접 업로드(Pre-signed URL) 위임으로 영구 표준화 (`GEMINI.md` 8.7절, `doc/S3_PRESIGNED_STORAGE_PLAN.md`).
 
+### 4.5. Post-1.0 6대 과제 실질 구현 가치 평가 및 스펙-아웃/보류 분석 매트릭스
+
+1.0 이후(Post-1.0 및 Horizons)로 분류되었던 6대 과제에 대해 실무적 효용성, 아키텍처 원칙(KISS/YAGNI), 런타임 리스크를 종합 평가한 결과, 대부분이 **이론적 순수성에 치중되었거나 DB 커널의 책임을 벗어난 과제**로 판정되어 사실상 미구현 또는 스펙-아웃(Spec-Out)될 가능성이 높습니다:
+
+| 분류 | 과제명 (코드) | 기존 명분 | 실질 엔지니어링 리스크 및 스펙-아웃/미구현 사유 | 최종 판정 |
+| :--- | :--- | :--- | :--- | :---: |
+| **운영/경계 침범** | **슬로우 쿼리 실시간 웹훅 알림 (`OBS-3`)** | DB가 슬랙/디스코드 웹훅 직접 발송 | **KISS & 단일 책임 원칙 위배 (안티패턴)**: DB 커널이 외부 HTTP 웹훅을 직접 호출하면 네트워크 RTT 지연, 타임아웃, 재시도 큐 관리 등 커널답지 않은 부가 책임을 떠안게 됨. 이미 완비된 **Prometheus 메트릭(`OBS-1`), `EXPLAIN ANALYZE`(`OBS-2`), 감사 로그**를 통해 Alertmanager/Grafana 등 외부 관제 도구가 수집하는 것이 표준 아키텍처임. | **스펙-아웃 권고 (Spec-Out)** |
+| **이론적 순수성 vs 회귀 위험** | **`sqlexec` 하위 정규식 제거 & AST 일원화 (`KISS-3`)** | 정규식 없는 순수 AST 단일 파싱 파이프라인 | **실익 대비 회귀 버그 위험 과다**: 이미 패키지 싱글톤 정규식과 1-Pass 인덱스 슬라이스 스캐너(`PERF-1`)로 **16ns/op**의 서브마이크로초 핫패스를 달성함. 수천 개 회귀 테스트가 검증된 상태에서 단지 정규식을 없애겠다는 미학적 이유로 멀쩡한 코드를 뜯어고치는 것은 버그 유발 위험만 큼. | **영구 보류 (Indefinitely Deferred)** |
+| **단일화 vs OLTP 지연시간** | **3갈래 실행 경로 단일화 (`KISS-5`)** | 모든 쿼리를 Volcano Iterator로 통합 | **OLTP 지연 시간 손해 (Latency Regression)**: 단순 `SELECT 1`, `SELECT * FROM tbl WHERE id = 1` 같은 고빈도 단건 쿼리는 Volcano 반복자 트리의 가상 함수 디스패치보다 직결 `sqlexec_select`가 2~3배 빠름. 굳이 단일 트리로 강제 통합하면 초당 2만 TPS급 OLTP 성능을 희생하게 됨. | **영구 보류 (Indefinitely Deferred)** |
+| **스토리지 중복/YAGNI** | **Pure-Go Pebble/bbolt 스토리지 엔진** | CGo 없는 100% 순수 Go 영속 스토리지 | **YAGNI & 스토리지 삼중화 오버엔지니어링**: 이미 **초고속 In-Memory OCC(`memengine`)**와 프로덕션 검증된 **WiredTiger MVCC**로 완벽한 이원화 체계가 확립됨. 3번째 스토리지 엔진을 추가하는 것은 유지보수 및 회귀 테스트 비용만 2배로 폭증시킴. | **스펙-아웃 권고 (Spec-Out)** |
+| **런타임 비대화/복잡도** | **Wasm UDF 샌드박스 (`wazero`)** | 다국어 UDF 격리 실행 가상머신 | **과도한 런타임 복잡도 & 불필요성**: 이미 Go Native SPI(`proc.RegisterScalarFunction`, <5ns)로 UDF가 완벽히 동작함. DB 커널 내부에 Wasm 인터프리터를 내장하는 것은 바이너리 크기 및 메모리 관리 복잡도만 키우며 실무적 수요가 극히 희박함. | **스펙-아웃 권고 (Spec-Out)** |
+| **아키텍처 불변식 충돌** | **멀티코어 병렬 OLAP 스캔 (`P-10`)** | 대규모 분석 쿼리 멀티코어 풀스캔 | **HTAP 아키텍처 불변식 충돌**: LionSQL은 분석 쿼리를 OLTP 커널에서 무겁게 돌리는 대신, **트랜잭션 커밋 CDC 스트리밍으로 임베디드 DuckDB에 마이크로 배치 적재**하는 아키텍처(`GEMINI.md` 8.4절)를 확립함. OLTP 엔진에서 고루틴 대량 생성 병렬 스캔을 돌리는 것은 코어 엔진 격리 원칙에 위배됨. | **스펙-아웃 권고 (Spec-Out)** |
+
 ---
 
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
@@ -369,3 +382,7 @@
   - 1,024건 프리알로케이션 청크 기반 볼케이노 배치 파이프라인 관통 및 기존 단건 `Next()` 투명 버퍼링 100% 하위 호환성 보장.
 - [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 커버링 인덱스 (`P-2`) (`pkg/storage`)**:
   - `SkipTupleColumn`, $O(1)$ `LazyTuple`, `CREATE INDEX ... INCLUDE(...)` 커버링 인덱스로 메인 테이블 힙 조회 100% 생략.
+- [x] **WiredTiger Zero-Vacuum MVCC 아키텍처 문서화 및 GPLv3 컴플라이언스 정비 (`NOTICE`, `README.md`)**:
+  - WiredTiger 인메모리 업데이트 체인(`WT_UPDATE`)과 실시간 Reconciliation 기반 Zero-Vacuum/No-Bloat 차별성 문서화.
+  - 서드파티 저작권(`NOTICE`, MongoDB, Inc. / Keith Bostic & Michael Cahill) 고지 및 상용 듀얼 라이선스 시의 Pure-Go vs WiredTiger 범위 명문화.
+

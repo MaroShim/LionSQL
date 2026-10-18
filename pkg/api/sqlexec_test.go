@@ -1183,6 +1183,39 @@ func TestSQLExecutor_BuiltinSystemStoredProcedures(t *testing.T) {
 	if err != nil || !res.Success || len(res.Rows) != 3 {
 		t.Fatalf("direct sp_help stock_items failed: %v", err)
 	}
+
+	// 9. sp_tables (all tables, named filter, wildcard pattern)
+	res, err = server.ExecuteSQL("EXEC sp_tables;")
+	if err != nil || !res.Success || len(res.Rows) < 1 {
+		t.Fatalf("EXEC sp_tables failed: %v", err)
+	}
+
+	res, err = server.ExecuteSQL("EXEC sp_tables @table_name = 'stock_items';")
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["TABLE_NAME"] != "stock_items" {
+		t.Fatalf("EXEC sp_tables with @table_name failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	res, err = server.ExecuteSQL("EXEC sp_tables @table_name = 'stock%', @table_type = \"'TABLE'\";")
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["TABLE_NAME"] != "stock_items" {
+		t.Fatalf("EXEC sp_tables with wildcard and type filter failed: %v, rows: %+v", err, res.Rows)
+	}
+
+	// 10. sp_columns (all columns of a table, column name filter)
+	res, err = server.ExecuteSQL("EXEC sp_columns @table_name = 'stock_items';")
+	if err != nil || !res.Success || len(res.Rows) != 3 {
+		t.Fatalf("EXEC sp_columns @table_name failed: %v, rows: %+v", err, res.Rows)
+	}
+	if res.Rows[0]["COLUMN_NAME"] != "id" || res.Rows[0]["DATA_TYPE"] != 4 || res.Rows[0]["TYPE_NAME"] != "int" {
+		t.Fatalf("unexpected column 0 in sp_columns: %+v", res.Rows[0])
+	}
+	if res.Rows[1]["COLUMN_NAME"] != "item_code" || res.Rows[1]["DATA_TYPE"] != 12 || res.Rows[1]["TYPE_NAME"] != "varchar" {
+		t.Fatalf("unexpected column 1 in sp_columns: %+v", res.Rows[1])
+	}
+
+	res, err = server.ExecuteSQL("EXEC sp_columns 'stock_items', 'dbo', 'master', 'item_code';")
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["COLUMN_NAME"] != "item_code" {
+		t.Fatalf("EXEC sp_columns positional with column filter failed: %v, rows: %+v", err, res.Rows)
+	}
 }
 
 func TestSQLExecutor_ErrorAndIdentityInsert(t *testing.T) {

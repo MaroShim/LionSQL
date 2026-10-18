@@ -1219,6 +1219,89 @@ END;
 	}
 }
 
+func TestDriverIntegration_GoMSSQLDB_SystemProcs_TablesAndColumns(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=5", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, "CREATE TABLE diag_customers (cust_id INT PRIMARY KEY, name VARCHAR(50) NOT NULL, score DECIMAL(10,2), active BIT DEFAULT 1);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 1. EXEC sp_tables
+	rows, err := db.QueryContext(ctx, "EXEC sp_tables @table_name = 'diag_customers';")
+	if err != nil {
+		t.Fatalf("EXEC sp_tables failed: %v", err)
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		var qualifier, owner, tableName, tableType string
+		var remarks sql.NullString
+		if err := rows.Scan(&qualifier, &owner, &tableName, &tableType, &remarks); err != nil {
+			t.Fatalf("Scan sp_tables row failed: %v", err)
+		}
+		if tableName == "diag_customers" && tableType == "TABLE" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("expected 1 row for diag_customers in sp_tables, got %d", count)
+	}
+
+	// 2. EXEC sp_columns
+	colRows, err := db.QueryContext(ctx, "EXEC sp_columns @table_name = 'diag_customers';")
+	if err != nil {
+		t.Fatalf("EXEC sp_columns failed: %v", err)
+	}
+	defer colRows.Close()
+
+	cols, err := colRows.Columns()
+	if err != nil {
+		t.Fatalf("colRows.Columns failed: %v", err)
+	}
+	if len(cols) != 19 {
+		t.Fatalf("expected 19 columns from sp_columns, got %d: %v", len(cols), cols)
+	}
+
+	var colNames []string
+	for colRows.Next() {
+		values := make([]any, len(cols))
+		scanArgs := make([]any, len(cols))
+		for i := range values {
+			scanArgs[i] = &values[i]
+		}
+		if err := colRows.Scan(scanArgs...); err != nil {
+			t.Fatalf("Scan sp_columns row failed: %v", err)
+		}
+		colNameStr := fmt.Sprintf("%v", values[3]) // COLUMN_NAME is index 3
+		colNames = append(colNames, colNameStr)
+	}
+	if len(colNames) != 4 || colNames[0] != "cust_id" || colNames[1] != "name" || colNames[2] != "score" || colNames[3] != "active" {
+		t.Fatalf("unexpected colNames from sp_columns: %v", colNames)
+	}
+}
+
 
 
 
