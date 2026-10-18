@@ -2,6 +2,7 @@ package tds
 
 import (
 	"bytes"
+	"container/list"
 	"context"
 	"crypto/tls"
 	"encoding/binary"
@@ -43,7 +44,8 @@ type Server struct {
 	mu          sync.Mutex
 	closed      bool
 	wg          sync.WaitGroup
-	activeConns map[net.Conn]struct{}
+	activeConns           map[net.Conn]struct{}
+	maxPreparedPerSession int
 }
 
 // NewServer creates a new TDS wire protocol server.
@@ -101,6 +103,22 @@ func (s *Server) SetBytecodePlanCache(cache *runtime.PlanCache) {
 	if s.engine != nil {
 		s.executor.SetTableGetter(s.engine.GetTable)
 	}
+}
+
+// SetMaxPreparedPerSession configures the per-session LRU prepared statement cache capacity.
+func (s *Server) SetMaxPreparedPerSession(max int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.maxPreparedPerSession = max
+}
+
+func (s *Server) getMaxPreparedPerSession() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.maxPreparedPerSession <= 0 {
+		return DefaultMaxPreparedPerSession
+	}
+	return s.maxPreparedPerSession
 }
 
 // BytecodePlanCache returns the active bytecode plan cache.
@@ -265,6 +283,100 @@ type TdsPreparedStatement struct {
 	Program *proc.Program
 }
 
+// DefaultMaxPreparedPerSession is the maximum number of prepared statements retained per connection session.
+const DefaultMaxPreparedPerSession = 256
+
+type tdsPreparedEntry struct {
+	handle int32
+	stmt   *TdsPreparedStatement
+}
+
+// TdsPreparedStatementCache implements a thread-safe bounded LRU cache for prepared statements (Golden Rule 23).
+type TdsPreparedStatementCache struct {
+	mu       sync.Mutex
+	capacity int
+	items    map[int32]*list.Element
+	lruList  *list.List
+}
+
+// NewTdsPreparedStatementCache creates a new bounded LRU cache for prepared statements.
+func NewTdsPreparedStatementCache(capacity int) *TdsPreparedStatementCache {
+	if capacity <= 0 {
+		capacity = DefaultMaxPreparedPerSession
+	}
+	return &TdsPreparedStatementCache{
+		capacity: capacity,
+		items:    make(map[int32]*list.Element),
+		lruList:  list.New(),
+	}
+}
+
+// Put inserts or updates a prepared statement in the cache, evicting the least recently used statement if capacity is reached.
+func (c *TdsPreparedStatementCache) Put(stmt *TdsPreparedStatement) {
+	if stmt == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if elem, exists := c.items[stmt.Handle]; exists {
+		elem.Value.(*tdsPreparedEntry).stmt = stmt
+		c.lruList.MoveToFront(elem)
+		return
+	}
+
+	if c.capacity > 0 && c.lruList.Len() >= c.capacity {
+		back := c.lruList.Back()
+		if back != nil {
+			c.lruList.Remove(back)
+			old := back.Value.(*tdsPreparedEntry)
+			delete(c.items, old.handle)
+		}
+	}
+
+	elem := c.lruList.PushFront(&tdsPreparedEntry{
+		handle: stmt.Handle,
+		stmt:   stmt,
+	})
+	c.items[stmt.Handle] = elem
+}
+
+// Get retrieves a prepared statement by handle and marks it as most recently used.
+func (c *TdsPreparedStatementCache) Get(handle int32) (*TdsPreparedStatement, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	elem, exists := c.items[handle]
+	if !exists {
+		return nil, false
+	}
+	c.lruList.MoveToFront(elem)
+	return elem.Value.(*tdsPreparedEntry).stmt, true
+}
+
+// Delete removes a prepared statement by handle from the cache.
+func (c *TdsPreparedStatementCache) Delete(handle int32) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if elem, exists := c.items[handle]; exists {
+		c.lruList.Remove(elem)
+		delete(c.items, handle)
+	}
+}
+
+// Len returns the current number of cached prepared statements.
+func (c *TdsPreparedStatementCache) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.lruList.Len()
+}
+
+// Capacity returns the maximum capacity of the cache.
+func (c *TdsPreparedStatementCache) Capacity() int {
+	return c.capacity
+}
+
 var (
 	staticParamP  [64]string
 	staticParamAt [64]string
@@ -315,7 +427,7 @@ type ConnectionSession struct {
 	txDescriptor uint64
 	prepMu       sync.Mutex
 	prepCounter  int32
-	prepared     map[int32]*TdsPreparedStatement
+	prepared     *TdsPreparedStatementCache
 }
 
 func (s *Server) handleConnection(conn net.Conn) {
@@ -355,7 +467,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		Database:   "master",
 		PacketSize: DefaultPacketSize,
 		TDSVersion: 0x74000004, // Default to TDS 7.4
-		prepared:   make(map[int32]*TdsPreparedStatement),
+		prepared:   NewTdsPreparedStatementCache(s.getMaxPreparedPerSession()),
 	}
 	defer s.coordinator.CloseSession(sess.SessionID)
 
@@ -869,7 +981,7 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 			prep.Program = prog
 		}
 	}
-	sess.prepared[handle] = prep
+	sess.prepared.Put(prep)
 	sess.prepMu.Unlock()
 
 	var buf bytes.Buffer
@@ -885,9 +997,7 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 		handle = toInt32(rpc.Params[0].Value)
 	}
 
-	sess.prepMu.Lock()
-	prep, exists := sess.prepared[handle]
-	sess.prepMu.Unlock()
+	prep, exists := sess.prepared.Get(handle)
 
 	if !exists {
 		var buf bytes.Buffer
@@ -978,7 +1088,7 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 			prep.Program = prog
 		}
 	}
-	sess.prepared[handle] = prep
+	sess.prepared.Put(prep)
 	sess.prepMu.Unlock()
 
 	var boundParams []RPCParam
@@ -1077,9 +1187,7 @@ func (s *Server) handleRPCUnprepare(conn net.Conn, rpc *parsedRPC, sess *Connect
 		handle = toInt32(rpc.Params[0].Value)
 	}
 
-	sess.prepMu.Lock()
-	delete(sess.prepared, handle)
-	sess.prepMu.Unlock()
+	sess.prepared.Delete(handle)
 
 	var buf bytes.Buffer
 	buf.Write(BuildReturnStatus(0))

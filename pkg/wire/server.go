@@ -3,6 +3,7 @@ package wire
 import (
 	"bufio"
 	"bytes"
+	"container/list"
 	"crypto/tls"
 	"encoding/binary"
 	"fmt"
@@ -47,7 +48,8 @@ type Server struct {
 	devMode     bool
 	mu          sync.Mutex
 	closed      bool
-	clientConns map[net.Conn]struct{}
+	clientConns           map[net.Conn]struct{}
+	maxPreparedPerSession int
 }
 
 // NewServer creates a new PostgreSQL wire protocol server.
@@ -131,6 +133,22 @@ func (s *Server) SetRequireSSL(require bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.requireSSL = require
+}
+
+// SetMaxPreparedPerSession configures the per-session LRU prepared statement cache capacity.
+func (s *Server) SetMaxPreparedPerSession(max int) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.maxPreparedPerSession = max
+}
+
+func (s *Server) getMaxPreparedPerSession() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.maxPreparedPerSession <= 0 {
+		return DefaultMaxPreparedPerSession
+	}
+	return s.maxPreparedPerSession
 }
 
 // SetDevMode enables or disables developer debug logging for wire queries and parameters.
@@ -252,6 +270,122 @@ type Portal struct {
 	Result   *engine.QueryResult
 	Pos      int
 	Executed bool
+}
+
+// DefaultMaxPreparedPerSession is the maximum number of prepared statements retained per connection session.
+const DefaultMaxPreparedPerSession = 256
+
+type pgPreparedEntry struct {
+	name string
+	stmt *PreparedStatement
+}
+
+// PreparedStatementCache implements a thread-safe bounded LRU cache for prepared statements in a PGWire session (Golden Rule 23).
+type PreparedStatementCache struct {
+	mu       sync.Mutex
+	capacity int
+	unnamed  *PreparedStatement
+	items    map[string]*list.Element
+	lruList  *list.List
+}
+
+// NewPreparedStatementCache creates a new bounded LRU cache for prepared statements.
+func NewPreparedStatementCache(capacity int) *PreparedStatementCache {
+	if capacity <= 0 {
+		capacity = DefaultMaxPreparedPerSession
+	}
+	return &PreparedStatementCache{
+		capacity: capacity,
+		items:    make(map[string]*list.Element),
+		lruList:  list.New(),
+	}
+}
+
+// Put inserts or updates a prepared statement in the cache, evicting the least recently used statement if capacity is reached.
+func (c *PreparedStatementCache) Put(name string, stmt *PreparedStatement) {
+	if stmt == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if name == "" {
+		c.unnamed = stmt
+		return
+	}
+
+	if elem, exists := c.items[name]; exists {
+		elem.Value.(*pgPreparedEntry).stmt = stmt
+		c.lruList.MoveToFront(elem)
+		return
+	}
+
+	if c.capacity > 0 && c.lruList.Len() >= c.capacity {
+		back := c.lruList.Back()
+		if back != nil {
+			c.lruList.Remove(back)
+			old := back.Value.(*pgPreparedEntry)
+			delete(c.items, old.name)
+		}
+	}
+
+	elem := c.lruList.PushFront(&pgPreparedEntry{
+		name: name,
+		stmt: stmt,
+	})
+	c.items[name] = elem
+}
+
+// Get retrieves a prepared statement by name and marks it as most recently used.
+func (c *PreparedStatementCache) Get(name string) (*PreparedStatement, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if name == "" {
+		if c.unnamed != nil {
+			return c.unnamed, true
+		}
+		return nil, false
+	}
+
+	elem, exists := c.items[name]
+	if !exists {
+		return nil, false
+	}
+	c.lruList.MoveToFront(elem)
+	return elem.Value.(*pgPreparedEntry).stmt, true
+}
+
+// Delete removes a prepared statement by name from the cache.
+func (c *PreparedStatementCache) Delete(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if name == "" {
+		c.unnamed = nil
+		return
+	}
+
+	if elem, exists := c.items[name]; exists {
+		c.lruList.Remove(elem)
+		delete(c.items, name)
+	}
+}
+
+// Len returns the current number of cached prepared statements.
+func (c *PreparedStatementCache) Len() int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	n := c.lruList.Len()
+	if c.unnamed != nil {
+		n++
+	}
+	return n
+}
+
+// Capacity returns the maximum capacity of the cache.
+func (c *PreparedStatementCache) Capacity() int {
+	return c.capacity
 }
 
 var (
@@ -480,7 +614,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		return
 	}
 
-	statements := make(map[string]*PreparedStatement)
+	statements := NewPreparedStatementCache(s.getMaxPreparedPerSession())
 	portals := make(map[string]*Portal)
 
 	// 3. Message Loop
@@ -562,7 +696,7 @@ func (s *Server) compileQueryToProgram(query string) (*proc.Program, error) {
 	return proc.Compile(translated)
 }
 
-func (s *Server) handleParse(conn net.Conn, payload []byte, statements map[string]*PreparedStatement) {
+func (s *Server) handleParse(conn net.Conn, payload []byte, statements *PreparedStatementCache) {
 	r := bytes.NewReader(payload)
 	stmtName, _ := readCString(r)
 	queryStr, _ := readCString(r)
@@ -604,12 +738,12 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements map[strin
 		prep.Program = prog
 	}
 
-	statements[stmtName] = prep
+	statements.Put(stmtName, prep)
 
 	_ = WriteParseComplete(conn)
 }
 
-func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
+func (s *Server) handleBind(conn net.Conn, payload []byte, statements *PreparedStatementCache, portals map[string]*Portal) {
 	r := bytes.NewReader(payload)
 	portalName, _ := readCString(r)
 	stmtName, _ := readCString(r)
@@ -617,7 +751,7 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements map[string
 		log.Printf("[DEV][PGWire][Bind] portal=%q stmt=%q", portalName, stmtName)
 	}
 
-	stmt, exists := statements[stmtName]
+	stmt, exists := statements.Get(stmtName)
 	if !exists {
 		_ = WriteError(conn, fmt.Sprintf("prepared statement %q does not exist", stmtName))
 		return
@@ -838,7 +972,7 @@ func buildPreviewSQL(query string, paramTypes []int32) string {
 	return res
 }
 
-func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
+func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *PreparedStatementCache, portals map[string]*Portal) {
 	if len(payload) < 2 {
 		_ = WriteNoData(conn)
 		return
@@ -851,7 +985,7 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements map[st
 	}
 
 	if targetType == 'S' {
-		stmt, exists := statements[targetName]
+		stmt, exists := statements.Get(targetName)
 		if !exists {
 			_ = WriteError(conn, fmt.Sprintf("prepared statement %q does not exist", targetName))
 			return
@@ -1257,12 +1391,12 @@ func formatPgCommandComplete(command string, rowsAffected int64, rowsCount int) 
 	}
 }
 
-func (s *Server) handleClose(conn net.Conn, payload []byte, statements map[string]*PreparedStatement, portals map[string]*Portal) {
+func (s *Server) handleClose(conn net.Conn, payload []byte, statements *PreparedStatementCache, portals map[string]*Portal) {
 	if len(payload) >= 2 {
 		targetType := payload[0]
 		targetName := string(bytes.TrimRight(payload[1:], "\x00"))
 		if targetType == 'S' {
-			delete(statements, targetName)
+			statements.Delete(targetName)
 		} else if targetType == 'P' {
 			delete(portals, targetName)
 		}

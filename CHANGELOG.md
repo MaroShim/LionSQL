@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Per-Session Prepared Statement Bounded LRU Cache (`PREP-1`) (`pkg/wire`, `pkg/wire/tds`)**:
+  - Implemented thread-safe `TdsPreparedStatementCache` (`pkg/wire/tds/server.go`) and `PreparedStatementCache` (`pkg/wire/server.go`) based on standard library `container/list` and mapped list elements, enforcing a default bound of 256 prepared statements per session (`DefaultMaxPreparedPerSession`).
+  - Added LRU promotion on `Get` / `Put` access and automatic eviction of least recently used statements when session capacity is reached, preventing unbound map growth and out-of-memory (OOM) risks across long-lived connection pools (DBeaver, GORM, HikariCP) in compliance with Golden Rule 23.
+  - Added `SetMaxPreparedPerSession` configuration method on TDS and PGWire server instances.
+  - Added unit and E2E eviction integration tests in `pkg/wire/tds/lru_test.go` and `pkg/wire/lru_test.go` verifying LRU eviction behavior, MRU preservation, concurrent safety, and protocol Error 8179 handling upon accessing evicted statement handles.
+
 ### Fixed
 - **WiredTiger `TRUNCATE TABLE` Transaction Isolation & Assertion Crash Prevention (`TDS-COMPAT-1` / Scenario 39-1) (`pkg/storage/wiredtiger`, `pkg/engine`, `pkg/wire/tds`)**:
   - Implemented active session tracking (`e.sessions map[*WTSession]struct{}`) and target table idle cursor eviction (`e.evictAllCursors(tableName)`) in `pkg/storage/wiredtiger/wt_engine.go` prior to truncation, eliminating WiredTiger C library cursor contention.

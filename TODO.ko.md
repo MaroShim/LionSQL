@@ -54,7 +54,7 @@
 | **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **설계 완료 (착수 준비)** | [`doc/UNIFIED_CLI_PLAN.md`](doc/UNIFIED_CLI_PLAN.md) |
 | **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
-| **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **신규 등록 (P1 착수 대기)** | - |
+| **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **완료 (`[x]`)** | - |
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P3** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md) |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
@@ -267,7 +267,7 @@
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
-| **PREP-1** | 와이어/안정성 | 세션별 Prepared Statement Bounded LRU 캐시 | **대기 (`[ ]`)** | PGWire(`statements`) 및 TDS(`sess.prepared`) 맵에 세션당 최대 256개 상한 Bounded LRU 캐시 메커니즘을 적용하여, DBeaver/GORM/HikariCP 등 장기 유지 커넥션에서의 메모리 누수 및 OOM 원천 차단 (Golden Rule 23 준수) (`pkg/wire/server.go`, `pkg/wire/tds/server.go`) |
+| **PREP-1** | 와이어/안정성 | 세션별 Prepared Statement Bounded LRU 캐시 | **완료 (`[x]`)** | PGWire(`PreparedStatementCache`) 및 TDS(`TdsPreparedStatementCache`)에 세션당 최대 256개 상한 Bounded LRU 캐시 메커니즘을 적용하여, DBeaver/GORM/HikariCP 등 장기 유지 커넥션에서의 메모리 누수 및 OOM 원천 차단 (Golden Rule 23 준수, 25개 패키지 레이스 검증 100% 통과) (`pkg/wire/server.go`, `pkg/wire/tds/server.go`) |
 
 ---
 
@@ -339,6 +339,11 @@
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **세션별 Prepared Statement Bounded LRU 캐시 적용 (`PREP-1`) (`pkg/wire`, `pkg/wire/tds`)**:
+  - TDS(`TdsPreparedStatementCache`) 및 PGWire(`PreparedStatementCache`)에 스레드 세이프 Bounded LRU 캐시(`container/list` + `map[*list.Element]`) 구현.
+  - 세션당 기본 최대 256개(`DefaultMaxPreparedPerSession`) 상한 설정 및 `SetMaxPreparedPerSession` 동적 제어 지원.
+  - 용량 초과 시 가장 오래 참조되지 않은(LRU) 준비된 문장을 자동 축출하고, 호출(`Get`/`Put`) 시 MRU로 승격하여 장기 커넥션 풀(DBeaver, GORM, HikariCP)에서의 메모리 누수 원천 차단 (Golden Rule 23 준수).
+  - 단위 및 E2E 축출 검증(`lru_test.go`) 및 25개 전 패키지 무결성/데이터 레이스 0건 통과.
 - [x] **크리티컬 패스 5대 무할당 최적화 (A~E) 완결 및 TDS 제로-할당 스트리밍 (`PERF-1`) (`pkg/engine`, `pkg/wire/tds`)**:
   - **[A] 정규식 패키지 싱글톤 승격**: DDL/DML 내부 15~30µs 정규식 컴파일 지연 및 15~25개 힙 객체 할당 100% 제거.
   - **[B] 문장 분할기 인덱스 기반 제로-카피 슬라이스 스캐너 재작성**: 바이트 단위 O(N^2) 루프 및 40KB 메모리 폭증 제거, 단일 쿼리 분할 **16.46 ns/op, 16 B/op, 1 allocs/op** 달성.
