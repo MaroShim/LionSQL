@@ -86,7 +86,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Complete Microsoft T-SQL syntax compatibility guide.
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
-* [`ANTLR_PARSER_COMPACT_STRATEGY.md`](file:///Users/maro/Projects/LionSQL/doc/ANTLR_PARSER_COMPACT_STRATEGY.md)
+* [`../notes/ANTLR_PARSER_COMPACT_STRATEGY.md`](file:///Users/maro/Projects/LionSQL/notes/ANTLR_PARSER_COMPACT_STRATEGY.md)
   * Technical roadmap and phased strategy for slimming down the generated T-SQL ANTLR4 parser (`pkg/proc/parser/antlr/`).
   * Analysis of 267k-line generated code, unused listener pruning, grammar subsetting, ATN packing, and long-term Native Pratt Parser unification.
 * [`EXTENSIONS.md`](file:///Users/maro/Projects/LionSQL/doc/EXTENSIONS.md)
@@ -115,7 +115,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
 * [`TDS_COMPATIBILITY_REPORT.md`](file:///Users/maro/Projects/LionSQL/doc/TDS_COMPATIBILITY_REPORT.md)
   * Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) 실시간 123개 T-SQL/ORM 호환성 전수 진단 및 갭 분석 종합 보고서 (PASS: 109개 88.6%, 실무 결함 분석 및 해결 과제 수록).
-* [`COLLATION_AND_LOCALE_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/COLLATION_AND_LOCALE_PLAN.md)
+* [`../notes/COLLATION_AND_LOCALE_PLAN.md`](file:///Users/maro/Projects/LionSQL/notes/COLLATION_AND_LOCALE_PLAN.md)
   * Microsoft SQL Server Collation, Locale & Multi-Language architecture and implementation plan (Tolerant `COLLATE` parser, `--collation` dynamic tokens, `COLLATIONPROPERTY`, and zero collation conflict policy).
 
 ---
@@ -139,7 +139,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Real-time CDC streaming (`GET /api/cdc/stream`) and decoupled HTAP analytical integration guide with DuckDB (includes Python & DuckDB workers).
 * [`SNAPSHOT_ISOLATION_AND_DUCKDB.md`](file:///Users/maro/Projects/LionSQL/doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md)
   * Deep-dive technical whitepaper on dual storage engine snapshot isolation (WiredTiger MVCC vs In-Memory OCC), intrinsic snapshot time-point distinctions, Zero-Vacuum architecture, and DuckDB initial sync / real-time CDC consistency cutover.
-* [`S3_PRESIGNED_STORAGE_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/S3_PRESIGNED_STORAGE_PLAN.md)
+* [`../notes/S3_PRESIGNED_STORAGE_PLAN.md`](file:///Users/maro/Projects/LionSQL/notes/S3_PRESIGNED_STORAGE_PLAN.md)
   * Pattern 1 S3 Pre-signed URL direct upload architecture and implementation plan (pure Go SigV4 signer, REST API, T-SQL built-in functions, CDC orphan asset cleanup).
 
 ---
@@ -157,7 +157,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Authentication models, JWT lifecycle, API key role scoping, and network encryption.
 * [`ENTERPRISE_AUTHENTICATION_SPI.md`](file:///Users/maro/Projects/LionSQL/doc/ENTERPRISE_AUTHENTICATION_SPI.md)
   * Pluggable `AuthProvider` SPI for corporate directory services (LDAP/AD/PAM), multi-protocol identity convergence, and perimeter proxy security architecture.
-* [`IMMUTABLE_AUDIT_LOG_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/IMMUTABLE_AUDIT_LOG_PLAN.md)
+* [`../notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](file:///Users/maro/Projects/LionSQL/notes/IMMUTABLE_AUDIT_LOG_PLAN.md)
   * Enterprise cryptographic audit logging architecture and implementation plan (PCI-DSS v4.0 Req 10, SOC 2 Type II, SHA-256 hash chaining, non-blocking MPSC ring buffer, and offline CLI verifier).
 * [`BENCHMARK.md`](file:///Users/maro/Projects/LionSQL/doc/BENCHMARK.md)
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).

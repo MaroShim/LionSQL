@@ -475,7 +475,7 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 - **[공식 레퍼런스 매뉴얼](doc/REFERENCE_MANUAL.ko.md)**: CLI 플래그, 설정 파일, SQL 문법, 함수, API 전체를 총망라한 레퍼런스 매뉴얼.
 - **[선언적 스키마 마이그레이션 CLI 가이드](doc/SCHEMA_MIGRATIONS_CLI.md)**: `lionsql migrate` 명령어, 버전 관리 규약, CI/CD 및 쿠버네티스 패턴.
 - **[엔터프라이즈 인증 SPI 및 디렉터리 연동](doc/ENTERPRISE_AUTHENTICATION_SPI.md)**: `AuthProvider` SPI, LDAP/Active Directory 연동, 경계 보안 아키텍처.
-- **[불변 감사 로그 아키텍처 및 구현 계획](doc/IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0, SOC 2 Type II 대응 SHA-256 해시 체이닝 감사 로그.
+- **[불변 감사 로그 아키텍처 및 구현 계획](notes/IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0, SOC 2 Type II 대응 SHA-256 해시 체이닝 감사 로그.
 - **[T-SQL 및 SQL 구문 레퍼런스 가이드](doc/TSQL_REFERENCE.md)**: 프로시저, 함수, 트리거, 제어 흐름문 전체 언어 레퍼런스.
 - **[클라이언트 도구 연동 가이드](doc/CLIENT_TOOL_INTEGRATION.md)**: DBeaver, SSMS, Azure Data Studio, Beekeeper, JDBC, ODBC 연동 가이드.
 - **[성능 튜닝 및 벤치마크 가이드](doc/BENCHMARK.md)**: 고동시성 뱅킹 벤치마크, TPS 측정치, 메모리 튜닝 가이드.

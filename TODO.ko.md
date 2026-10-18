@@ -32,13 +32,13 @@
 | :---: | :---: | :--- | :--- | :---: | :--- |
 | **P1** | **리소스/안정성** | **글로벌 메모리 예산 상한제 및 회로 차단기 (Global Memory Governor & Circuit Breaker)** | `pkg/config`, `pkg/execution`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P1** | **KISS/다이어트** | **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`)** | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
-| **P3** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **Post-1.0 연기 (Postponed)** | [`doc/IMMUTABLE_AUDIT_LOG_PLAN.md`](doc/IMMUTABLE_AUDIT_LOG_PLAN.md) |
+| **P3** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **Post-1.0 연기 (Postponed)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **P1** | **성능/크리티컬패스** | **크리티컬 패스 분할기, TDS 파라미터 바인딩, Row 스트리밍 및 UTF-16LE 변환 가속 (`PERF-1`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md) |
 | **P2** | **스토리지/가드** | **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`)** | `pkg/storage/memengine`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **KISS/중복제거** | **가상 PG 카탈로그 생성기 중복 단일화 (`KISS-2`)** | `pkg/engine`, `pkg/catalog/virtual` | **완료 (`[x]`)** | - |
 | **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | - |
 | **P2** | **KISS/자료구조** | **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | - |
-| **P3** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
+| **P3** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md) |
 | **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **완료 (`[x]`)** | - |
 | **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **완료 (`[x]`)** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
 | **P1** | **스토리지/안정성** | **WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 (`TDS-COMPAT-1`)** | `pkg/storage/wiredtiger`, `pkg/engine` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
@@ -52,12 +52,12 @@
 | **P3** | **도구호환/카탈로그** | **레거시 메타데이터 저장 프로시저 (`sp_tables`, `sp_columns`) 빌트인 구현 (`TDS-COMPAT-5`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **타입/와이어** | **`GETDATE()` 및 타임스탬프 함수의 네이티브 DATETIME 바이너리 직렬화 (`TDS-TYPE-1`)** | `pkg/engine`, `pkg/proc`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **Post-1.0 연기 (Postponed)** | - |
-| **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **설계 완료 (착수 준비)** | [`doc/UNIFIED_CLI_PLAN.md`](doc/UNIFIED_CLI_PLAN.md) |
+| **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **설계 완료 (착수 준비)** | [`notes/UNIFIED_CLI_PLAN.md`](notes/UNIFIED_CLI_PLAN.md) |
 | **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **완료 (`[x]`)** | - |
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
-| **P3** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md) |
+| **P3** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`notes/COLLATION_AND_LOCALE_PLAN.md`](notes/COLLATION_AND_LOCALE_PLAN.md) |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 
@@ -309,17 +309,17 @@
 * **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)**:
   현재 사설망 및 로컬/컨테이너 환경에서 TLS 비활성화(`encrypt=disable`) 모드로 100% 정상 통신 중임. 마이크로소프트 TDS 8.0의 복잡한 Pre-Login TLS 래핑 및 ALPN 핸드셰이크 협상은 공용 인터넷 노출 시 필요한 고급 보안 기능이며, 네트워크 암호화는 mTLS 리버스 프록시(Envoy, Traefik, stunnel) 또는 WireGuard/VPN으로 충분히 대체 가능함. 1.0 코어 안정성 확보를 위해 Post-1.0으로 공식 연기.
 * **다국어 Collation 및 로케일 전면 지원 트랙 (`LOC-1` ~ `LOC-4`)**:
-  LionSQL은 내부 스토리지를 완전한 표준 유니코드 UTF-8로 단일화하고 대소문자 무관(`CI_AS`) 비교를 기본 제공하여, 한글/영문/다국어 처리 및 드라이버 연동에 실무적 장애가 전혀 없음. 레거시 CodePage/Collation 에뮬레이션(`COLLATE` 관용 구문, 동적 TDS 바이너리 토큰 매핑, `COLLATIONPROPERTY`, `fn_helpcollations`)은 1.0 코어 엔진의 극단적 단순성(KISS)과 안정성 확보를 위해 전 항목을 Post-1.0으로 일괄 연기 (상세 설계: [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md)).
+  LionSQL은 내부 스토리지를 완전한 표준 유니코드 UTF-8로 단일화하고 대소문자 무관(`CI_AS`) 비교를 기본 제공하여, 한글/영문/다국어 처리 및 드라이버 연동에 실무적 장애가 전혀 없음. 레거시 CodePage/Collation 에뮬레이션(`COLLATE` 관용 구문, 동적 TDS 바이너리 토큰 매핑, `COLLATIONPROPERTY`, `fn_helpcollations`)은 1.0 코어 엔진의 극단적 단순성(KISS)과 안정성 확보를 위해 전 항목을 Post-1.0으로 일괄 연기 (상세 설계: [`notes/COLLATION_AND_LOCALE_PLAN.md`](notes/COLLATION_AND_LOCALE_PLAN.md)).
 * **불변 엔터프라이즈 감사 로그 트랙 (`AUDIT-1` ~ `AUDIT-4`)**:
-  1.0의 핵심 타겟 유저(독립 경량 OLTP, 사설망 컨테이너, T-SQL 마이그레이션) 환경에서는 외부 침입 감사나 금융권 규제 감사보다 엔진 안정성과 서브마이크로초 처리량(TPS)이 최우선임. 디스크/네트워크 레벨 암호화와 이미 완비된 CDC 스트리밍/Prometheus 관제/기본 인증(SCRAM-SHA-256, JWT)으로 기초 보안과 모니터링이 충분히 충족되므로, 규제 컴플라이언스 대응 전용 불변 로그 체계는 1.0 안정 릴리스 이후 엔터프라이즈 확장 단계(Post-1.0)로 연기 (상세 설계: [`doc/IMMUTABLE_AUDIT_LOG_PLAN.md`](doc/IMMUTABLE_AUDIT_LOG_PLAN.md)).
+  1.0의 핵심 타겟 유저(독립 경량 OLTP, 사설망 컨테이너, T-SQL 마이그레이션) 환경에서는 외부 침입 감사나 금융권 규제 감사보다 엔진 안정성과 서브마이크로초 처리량(TPS)이 최우선임. 디스크/네트워크 레벨 암호화와 이미 완비된 CDC 스트리밍/Prometheus 관제/기본 인증(SCRAM-SHA-256, JWT)으로 기초 보안과 모니터링이 충분히 충족되므로, 규제 컴플라이언스 대응 전용 불변 로그 체계는 1.0 안정 릴리스 이후 엔터프라이즈 확장 단계(Post-1.0)로 연기 (상세 설계: [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md)).
 * **클라우드 S3 Pre-signed URL 및 SigV4 서명기 트랙 (`S3-1` ~ `S3-4`)**:
-  대용량 미디어/Blob 파일 처리는 DB 커널의 핵심 책임(ACID 트랜잭션)이 아니며, 이미 인-커널 바이너리 저장은 영구 스펙-아웃(`GEMINI.md` 8.7절)되어 있음. 애플리케이션 레벨(AWS SDK)에서 S3 직접 업로드를 처리하는 표준 패턴이 널리 쓰이므로, DB 커널 내장 서명기 및 UI 위젯은 1.0 릴리스 이후로 연기 (상세 설계: [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md)).
+  대용량 미디어/Blob 파일 처리는 DB 커널의 핵심 책임(ACID 트랜잭션)이 아니며, 이미 인-커널 바이너리 저장은 영구 스펙-아웃(`GEMINI.md` 8.7절)되어 있음. 애플리케이션 레벨(AWS SDK)에서 S3 직접 업로드를 처리하는 표준 패턴이 널리 쓰이므로, DB 커널 내장 서명기 및 UI 위젯은 1.0 릴리스 이후로 연기 (상세 설계: [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md)).
 
 ### 4.4. 영구 스펙-아웃 (Spec-Out Invariants)
 * **내장형 OAuth2 웹 플로우 배제 & 클라이언트 사이드 토큰 교환 (Client-Side Token Exchange) 표준화**:
   데이터베이스 커널 내부에서 구글/깃허브 웹 브라우저 리다이렉트, 콜백 엔드포인트 수신, Client Secret 보관 및 아웃바운드 인터넷 토큰 교환을 처리하는 것은 단일 책임 원칙 및 KISS(Rule 15)를 위반하므로 명시적으로 배제함. 소셜 로그인은 Supabase/Firebase/Cognito 표준인 **Client-Side OIDC Token Exchange (RFC 8693)** 패턴(`AUTH-1`)으로 표준화: 클라이언트가 IdP SDK로 직접 로그인 후 획득한 서명된 ID Token(JWT)을 `POST /api/auth/token-exchange`로 전달하고, LionSQL 커널(`pkg/auth`)은 IdP의 공개키(JWKS)로 서명 무결성만 검증하여 내부 세션 토큰을 발급함 (`GEMINI.md` 8.6절).
 * **내장형 S3 Blob 파일 스토리지 및 썸네일 리사이징 배제**:
-  대용량 바이너리 스트리밍 및 이미지 리사이징으로 인한 OLTP CPU/메모리 기아를 방지하고, S3/MinIO 직접 업로드(Pre-signed URL) 위임으로 영구 표준화 (`GEMINI.md` 8.7절, `doc/S3_PRESIGNED_STORAGE_PLAN.md`).
+  대용량 바이너리 스트리밍 및 이미지 리사이징으로 인한 OLTP CPU/메모리 기아를 방지하고, S3/MinIO 직접 업로드(Pre-signed URL) 위임으로 영구 표준화 (`GEMINI.md` 8.7절, `notes/S3_PRESIGNED_STORAGE_PLAN.md`).
 * **미성숙 Pure-Go 영속 스토리지 엔진 (Pebble/bbolt) 단기 도입 배제 (Spec-Out & 지속적 대안 탐색)**:
   현재 Pure-Go 임베디드 스토리지 생태계(Pebble, bbolt, Badger 등)는 WiredTiger 수준의 고성능 멀티코어 MVCC B+Tree, Hazard Pointer 동시성, 세밀한 트랜잭션 타임스탬프와 ACID 격리를 온전히 대체하기에 아직 성숙도와 트랜잭션 기능 측면에서 프로덕션 OLTP 대안으로 쓸만한 상태가 아님. 따라서 1.0 프로덕션 체제에서는 공식 **스펙-아웃(Spec-Out)**으로 확정하며, WiredTiger MVCC(디스크)와 In-Memory OCC(메모리) 2대 백엔드 체제에 집중함. 단, 향후 CGo 완전 배제(Pure-Go 정적 단일 바이너리)를 위한 잠재적 스토리지 대안 후보 탐색은 지속적으로 모니터링함 (`GEMINI.md` 8.8절).
 * **슬로우 쿼리 실시간 웹훅 직발송 커널 내장 배제 (`OBS-3`) (Spec-Out & Post-1.0 툴링 아이디어 검토)**:

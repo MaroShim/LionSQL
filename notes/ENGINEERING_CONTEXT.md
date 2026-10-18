@@ -94,7 +94,7 @@
   * **KISS & YAGNI 및 OLTP 코어 보호 (Golden Rule 15)**: 대용량 바이너리 청크 스트리밍과 무거운 래스터 이미지 변환 연산은 Go 런타임 힙 메모리 할당과 CPU를 급격히 점유하여 고동시성 OLTP 트랜잭션의 서브밀리초 지연 시간(p99)을 훼손합니다.
 ### ⑭ 1.0 기능 스코프 및 단일 바이너리 경계 원칙 (Single Binary & Scope Consolidation)
 * **결정 사항**:
-  1. **단일 바이너리(`lionsql`) 완전 통합**: `bin/server`를 제거하고 단일 실행 파일 `bin/lionsql`이 포그라운드 서버 기동 및 데몬 라이프사이클(`start`, `stop`, `restart`, `status`), 마이그레이션(`migrate`), CLI 도구(`sql`, `doctor`)를 모두 일원화 처리 (`doc/UNIFIED_CLI_PLAN.md`).
+  1. **단일 바이너리(`lionsql`) 완전 통합**: `bin/server`를 제거하고 단일 실행 파일 `bin/lionsql`이 포그라운드 서버 기동 및 데몬 라이프사이클(`start`, `stop`, `restart`, `status`), 마이그레이션(`migrate`), CLI 도구(`sql`, `doctor`)를 모두 일원화 처리 ([`notes/UNIFIED_CLI_PLAN.md`](notes/UNIFIED_CLI_PLAN.md)).
   2. **내장 5필드 크론 잡 스케줄러 유지**: SQL Server Agent 대체 및 OS 독립적인 배치 실행(`sys.cron_jobs`)을 위해 1.0 코어에 유지하되 유휴 시 무오버헤드 보장.
   3. **내장 SMTP 메일러 유지 (기본 비활성화)**: PocketBase 스타일의 BaaS 완결성을 위해 유지하되, 보안 격리를 위해 기본값은 비활성화(Opt-In).
   4. **Kafka / RabbitMQ Outbox 직접 릴레이 절충안 유지**: 코어는 순수 CDC 스트림(`GET /api/cdc/stream`) PULL 파이프라인을 표준으로 하되, 외부 브로커 푸시는 명시적 `-outbox` 플래그로만 기동되는 옵트인 격리 구조를 유지하여 코어 OLTP의 무결점 안정성을 완벽히 보호함.
