@@ -164,6 +164,12 @@ LionSQL permanently designates the following architectural models as **Spec Out 
 8. **Premature Pure-Go Persistent Storage Engine (Pebble/bbolt) Adoption Exclusion (Spec-Out & Continuous Exploration)**:
    - Current open-source Pure-Go embedded key-value engines (Pebble, bbolt, Badger) are not yet mature enough to serve as production-grade alternatives to WiredTiger's lock-free multi-core MVCC B+Tree, hazard pointers, transaction timestamps, and strict ACID isolation. Introducing an immature third storage backend incurs unnecessary complexity, maintenance overhead, and performance compromises (Golden Rules 14 & 15).
    - Embedding an unviable Pure-Go storage engine is officially **Spec Out** for the 1.0 production release. LionSQL focuses engineering exclusively on its two proven backends: disk-based WiredTiger MVCC and pure in-memory OCC (`memengine`). Potential pure-Go storage engine candidates will continue to be evaluated and explored as the ecosystem matures.
+9. **In-Kernel Slow Query Webhook Direct Dispatch Exclusion (`OBS-3`) (Spec-Out & Post-1.0 Tooling Idea)**:
+   - Embedding outbound HTTP notification clients (Slack, Discord, generic webhooks) directly inside the database kernel process violates the Single Responsibility Principle, KISS, and engine purity (Golden Rules 14 & 15). Direct external HTTP calls from the kernel introduce network RTT latency, timeout handling, retry buffer queues, and potential thread starvation.
+   - Standard observability pipelines are already unified around Prometheus metrics (`OBS-1`), runtime execution profiler (`OBS-2`, `EXPLAIN ANALYZE`), and immutable audit logging. External monitoring tools (Alertmanager, Grafana, Vector) handle alerting independently. In-kernel webhook dispatch is officially **Spec Out**, deferred as an external sidecar/CLI tooling idea for future exploration.
+10. **In-Kernel WebAssembly (Wasm) UDF Sandbox (`wazero`) Exclusion (Spec-Out & Post-1.0 Exploratory Idea)**:
+   - Embedding a full Wasm virtual machine and bytecode interpreter (`wazero`) inside the database kernel incurs substantial binary bloat, runtime memory overhead, and JIT/Wasm lifecycle management complexity with minimal real-world OLTP demand.
+   - High-performance procedural and function execution is already unified under the SQLite VDBE-style T-SQL virtual machine (`pkg/proc`) and zero-allocation Go Native UDF SPI (`proc.RegisterScalarFunction`, <5ns). Embedding an unneeded third runtime is officially **Spec Out** for 1.0, to be re-evaluated as an exploratory idea in post-1.0 versions.
 
 ---
 

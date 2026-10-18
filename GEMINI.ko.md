@@ -165,6 +165,12 @@ LionSQL은 엔터프라이즈급 sub-microsecond 트랜잭션 성능과 자립�
    - 현재 오픈소스 Pure-Go 임베디드 스토리지 생태계(Pebble, bbolt, Badger 등)는 WiredTiger 수준의 고성능 멀티코어 MVCC B+Tree, Hazard Pointer 동시성, 세밀한 트랜잭션 타임스탬프와 ACID 격리를 온전히 대체하기에는 성숙도, 레이턴시, 트랜잭션 기능 측면에서 아직 프로덕션 OLTP 대안으로 쓸만한 상태가 아닙니다.
    - 따라서 1.0 프로덕션 체제에서는 미성숙한 제3의 영속 스토리지 엔진 도입을 공식 **스펙-아웃(Spec-Out)**으로 확정하며, WiredTiger MVCC(디스크)와 In-Memory OCC(메모리) 2대 백엔드 체제에 집중합니다.
    - 단, 향후 CGo 완전 배제(Pure-Go 정적 단일 바이너리)를 위한 잠재적 스토리지 대안 후보 탐색은 지속적으로 모니터링하고 평가합니다.
+9. **슬로우 쿼리 실시간 웹훅 직발송 커널 내장 배제 (`OBS-3`) (Spec-Out & Post-1.0 툴링 아이디어 검토)**:
+   - 데이터베이스 커널 내부에서 Slack, Discord 등의 외부 HTTP 웹훅을 직접 호출하는 것은 단일 책임 원칙, 극단적 KISS, 엔진 순수성을 심각하게 위반합니다 (Golden Rules 14 & 15).
+   - 커널 내부의 직접적인 아웃바운드 HTTP 호출은 네트워크 지연(RTT), 타임아웃 처리, 비동기 재시도 큐 관리, 고루틴 기아 등 심각한 런타임 리스크를 유발합니다. 관제 및 알림은 이미 구축된 표준 **Prometheus 메트릭(`OBS-1`), 런타임 실행 분석기(`OBS-2`, `EXPLAIN ANALYZE`), 암호학적 불변 감사 로그**를 통해 외부 전용 관제 도구(Alertmanager, Grafana, Vector 등)가 수집하여 처리하는 것이 표준 아키텍처입니다. 따라서 커널 내장 웹훅은 공식 **스펙-아웃(Spec-Out)**으로 확정하며, 필요 시 Post-1.0 외부 사이드카/CLI 도구 아이디어로만 검토합니다.
+10. **Wasm UDF 격리 샌드박스 (`wazero`) 커널 내장 배제 (Spec-Out & Post-1.0 아이디어 탐색)**:
+   - 데이터베이스 커널 내부에 별도의 WebAssembly 바이트코드 가상머신(`wazero`)을 내장하는 것은 정적 바이너리 크기 비대화, 런타임 메모리 오버헤드, JIT/Wasm 수명주기 관리 복잡도를 크게 증가시키며, 실제 OLTP 환경에서의 실무 수요도 극히 희박합니다.
+   - LionSQL은 이미 초고속 SQLite VDBE 스타일 T-SQL 가상머신(`pkg/proc`)과 제로-할당 Go Native UDF SPI(`proc.RegisterScalarFunction`, <5ns)로 프로시저 및 함수 실행 경로가 일원화되어 있습니다. 불필요한 제3의 런타임 내장은 공식 **스펙-아웃(Spec-Out)**으로 확정하며, 1.0 이후 장기적 아이디어 수준으로만 후보를 탐색합니다.
 
 ---
 
