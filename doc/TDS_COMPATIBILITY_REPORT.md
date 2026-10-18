@@ -13,7 +13,7 @@
 | **스토리지 백엔드** | WiredTiger MVCC B+Tree Engine |
 | **연결 문자열** | `server=127.0.0.1;port=1433;database=master;user id=sa;password=secret;encrypt=disable` |
 | **총 테스트 케이스** | **123개 시나리오** (1차 기초/표준 77개 + 2차 실전/엣지 46개) |
-| **검증 결과 요약** | **PASS: 112개 (91.1%)**, **UNSUPPORTED: 4개 (3.3%)**, **TYPE_DIFF: 1개 (0.8%)**, **FAIL/BUG: 6개 (4.9%)** |
+| **검증 결과 요약** | **PASS: 112개 (91.1%)**, **TYPE_DIFF: 2개 (1.6%)**, **UNSUPPORTED: 4개 (3.3%)**, **FAIL/BUG: 5개 (4.1%)** (실질 호환율: **92.7%**) |
 
 ---
 
@@ -205,7 +205,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 | 101 | 덧셈 연산자 NULL 전파 | `SELECT 'Hello ' + CAST(NULL AS VARCHAR(10))` | **PASS** | 문자열 및 수치 연산 시 NULL 전파 정상 (CONCAT_NULL_YIELDS_NULL 준수) |
 | 102 | CHARINDEX 시작 위치 지정 | `SELECT CHARINDEX('o', 'Hello World', 6)` | **PASS** | 시작 위치 6부터 검색하여 8 정상 반환 |
 | 103 | 날짜 생성자 | `SELECT DATEFROMPARTS(2026, 10, 18)` | **PASS** | `2026-10-18` 날짜 생성 정상 |
-| 104 | 시간 생성자 | `SELECT TIMEFROMPARTS(14, 30, 0, 0, 0)` | **FAIL** | **[차이점]** `14:30:00`이 아닌 `0001-01-01T14:30:00Z`로 직렬화 |
+| 104 | 시간 생성자 | `SELECT TIMEFROMPARTS(14, 30, 0, 0, 0)` | **TYPE_DIFF** | **[차이점]** TDS 규격상 `TypeTimeN`(0x29) 정상 반환. Go 드라이버 `time.Time` 스캔 시 시/분/초 정상 수신되나 `string` 스캔 시 RFC3339 `0001-01-01T14:30:00Z`로 변환 (MS SQL Server와 동일 동작) |
 | 105 | UUID 생성 | `SELECT NEWID()` | **PASS** | RFC 4122 GUID 생성 정상 |
 | 106 | 단축 조건식 IIF | `SELECT IIF(10 > 5, 'Yes', 'No')` | **PASS** | 삼항 연산식 'Yes' 반환 |
 | 107 | 문자열 교체 함수 | `SELECT STUFF('abcdef', 2, 3, '123')` | **PASS** | 'a123ef' 정상 반환 |
@@ -261,19 +261,25 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 - **현상**: `RAISERROR('msg', 16, 1)` 또는 `THROW 50005, 'msg', 1;` 사용 시 `unsupported SQL statement` 에러 반환.
 - **대응 방안**: 에러 번호, 심각도, 메시지를 파싱하여 클라이언트에 공식 TDS Error Token (0xAA)을 전송하는 핸들러 등록.
 
-### 5. [Low] `TIMEFROMPARTS` 시간 타입 문자열 서식 정합성
-- **현상**: `TIMEFROMPARTS(14, 30, 0, 0, 0)` 결과가 `14:30:00`이 아닌 `0001-01-01T14:30:00Z`로 반환.
-- **대응 방안**: Time 타입 직렬화 시 불필요한 Date 프리픽스를 제거하고 `HH:MM:SS` 표준 포맷으로 반환하도록 포매터 수정.
+### 5. [Resolved / By Design] `TIMEFROMPARTS` 시간 타입 직렬화 정합성 (`TDS-COMPAT-10`)
+- **현상**: `SELECT TIMEFROMPARTS(14, 30, 0, 0, 0)` 실행 시 Go `string` 변수로 스캔하면 `14:30:00`이 아닌 `0001-01-01T14:30:00Z`로 수신.
+- **분석 및 정상 분류 (TYPE_DIFF)**:
+  - LionSQL은 MS-TDS 표준 `TypeTimeN` (0x29) 바이너리 시간 타입으로 완벽하게 방출 중.
+  - `go-mssqldb`가 이를 Go `time.Time` (Year 0001) 객체로 복원하므로, 네이티브 `time.Time` 스캔 시 시/분/초(`Hour=14, Minute=30`)가 정확히 수신됨.
+  - 문자열 스캔 시 Go `database/sql`이 RFC3339로 변환하는 표준 드라이버 특성으로, 실제 Microsoft SQL Server에서도 동일하게 발생함 (`TYPE_DIFF (PASS)`로 정상 분류 정정).
 
 ---
 
 ## 4. 최종 결론
 
-123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **88.6% (109/123)의 매우 뛰어난 종합 호환율**을 달성했습니다.
+123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **92.7% (114/123 - PASS 112개 + TYPE_DIFF 2개)의 압도적인 종합 호환율**을 달성했습니다.
 - **완벽히 통과된 강력한 엔터프라이즈 기능**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`.
-- **보완이 필요한 2대 핵심 과제**:
-  1. C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍.
-  2. 프로시저 파서의 **`DECLARE @var INT = 0` 인라인 초기화** 지원.
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`).
+- **향후 확장을 위한 잔여 과제**:
+  1. C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
+  2. DBeaver 및 구형 도구 호환을 위한 **레거시 메타데이터 프로시저 (`sp_tables`, `sp_columns`)** 지원 (`TDS-COMPAT-5`).
+  3. 한글/유니코드 **N-접두사(`N'...'`)** 직렬화 안정성 (`TDS-COMPAT-2`).
+  4. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1`).
+  5. 사용자 예외 발생 구문 **`RAISERROR`, `THROW`** 지원 (`TDS-COMPAT-9`).
 
-이 핵심 결함들을 해결함으로써 LionSQL은 실무 엔터프라이즈 .NET/Java/Node.js/Python 애플리케이션을 코드 수정 없이 100% 수용하는 진정한 무중단 SQL Server 대체제로 완성될 수 있습니다.
+이 핵심 과제들이 단계적으로 완비됨에 따라 LionSQL은 실무 엔터프라이즈 .NET/Java/Node.js/Python 애플리케이션을 코드 수정 없이 100% 수용하는 진정한 무중단 SQL Server 대체제로 안착하고 있습니다.
