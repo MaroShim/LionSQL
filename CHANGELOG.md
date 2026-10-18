@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-10-18
+
 ### Added
 - **Per-Session Prepared Statement Bounded LRU Cache (`PREP-1`) (`pkg/wire`, `pkg/wire/tds`)**:
   - Implemented thread-safe `TdsPreparedStatementCache` (`pkg/wire/tds/server.go`) and `PreparedStatementCache` (`pkg/wire/server.go`) based on standard library `container/list` and mapped list elements, enforcing a default bound of 256 prepared statements per session (`DefaultMaxPreparedPerSession`).
