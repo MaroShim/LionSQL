@@ -182,7 +182,35 @@ func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal
 		return false, nil, nil
 
 	case proc.OpThrow, proc.OpRaiserror:
-		f.lastError = 50000
+		sev := 16
+		state := byte(1)
+		errNum := 50000
+
+		if inst.Op == proc.OpThrow {
+			if inst.A > 0 {
+				errNum = int(inst.A)
+			}
+			if inst.B > 0 {
+				state = byte(inst.B)
+			}
+		} else { // OpRaiserror
+			if inst.A > 0 {
+				sev = int(inst.A)
+			}
+			if inst.B > 0 {
+				state = byte(inst.B)
+			}
+			if inst.C > 0 {
+				errNum = int(inst.C)
+			}
+			// If severity <= 10, it is informational
+			if sev <= 10 {
+				f.logs = append(f.logs, fmt.Sprintf("%v", f.aux(inst)))
+				return false, nil, nil
+			}
+		}
+
+		f.lastError = errNum
 		msg := fmt.Sprintf("%v", f.aux(inst))
 		f.lastErrorMsg = msg
 		if pc != nil {
@@ -194,7 +222,12 @@ func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal
 			*pc = catchPC
 			return false, nil, nil
 		}
-		return false, nil, fmt.Errorf("%s", msg)
+		return false, nil, &proc.ProcError{
+			Number:   int32(errNum),
+			Severity: byte(sev),
+			State:    state,
+			Message:  msg,
+		}
 
 	case proc.OpPrint:
 		v := f.regs[inst.A]

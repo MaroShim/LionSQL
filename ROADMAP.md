@@ -27,7 +27,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 [ Phase 5: Enterprise Governance ] ──────► v0.16.0 - v0.19.0 [COMPLETED]
   Engine Decoupling (pkg/engine) + Group Commit + RBAC + CBO DP Join Order
 
-[ Phase 6: Production Hardening ] ───────► v1.0.0 LTS        [ACTIVE FOCUS]
+[ Phase 6: Production Hardening ] ───────► v1.0.0 LTS (2026 Release) [ACTIVE FOCUS]
   Always On Failover + Decoupled CDC/DuckDB + Immutable Audit Log + Driver Cert
 
 [ Future Horizons ] ─────────────────────► v1.1.0 - v1.2.0+  [PLANNED]
@@ -43,14 +43,14 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 3** | `v0.11.0` - `v0.12.0` | **Replication, Official Drivers & Zero-Allocation**<br>1-Writer multi-reader WAL streaming replication, official driver compatibility, buffer pooling. | **100% Completed** |
 | **Phase 4** | `v0.13.0` - `v0.15.0` | **Modern Ecosystem, GUI Tool Interop & VDBE Acceleration**<br>pgx/v5 pipelining, DBeaver/SSMS interop, UUIDv7, VDBE opcode specialization (21k TPS peak). | **100% Completed** |
 | **Phase 5** | `v0.16.0` - `v0.19.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI. | **100% Completed** |
-| **Phase 6** | `v1.0.0 LTS` | **Always On HA, Decoupled HTAP & Production Hardening**<br>Automatic failover, decoupled CDC to DuckDB, zero-alloc bind, certified drivers, immutable audit log. | **95% (Active)** |
+| **Phase 6** | `v1.0.0 LTS`<br>**(2026 Release)** | **Always On HA, Decoupled HTAP & Production Hardening**<br>Automatic failover, decoupled CDC to DuckDB, zero-alloc bind, certified drivers, immutable audit log. | **95% (Active)** |
 | **Horizons** | `v1.1.0+` | **Post-1.0 Architectural Extensions**<br>Pure-Go persistent storage backend, Wasm UDF sandbox (`wazero`), multi-core parallel OLAP scans. | **Planned** |
 
 ---
 
-## 2. v1.0.0 LTS Production Readiness & Exit Criteria
+## 2. LionSQL 1.0 (2026 Release) / v1.0.0 LTS Production Readiness & Exit Criteria
 
-To tag the official **v1.0.0 Long-Term Support (LTS)** release, the database engine must satisfy five non-negotiable exit criteria:
+To tag the official **LionSQL 1.0 (2026 Release) / v1.0.0 LTS** release, the database engine must satisfy five non-negotiable exit criteria:
 
 ```
                [ LionSQL v1.0.0 LTS Quality Gates ]
@@ -72,7 +72,7 @@ Driver Cert    & Zero-Race    Availability   Audit Log      Tooling & CLI
    - Always On automatic failover with highest-LSN promotion and split-brain fencing.
    - Decoupled real-time CDC streaming (`GET /api/cdc/stream`) with lossless transactional outbox forwarding.
 4. **Enterprise Security & Immutable Audit Logging (Current Sprint Focus)**:
-   - Cryptographic SHA-256 hash-chained immutable audit log satisfying PCI-DSS v4.0 Req 10 and SOC 2 Type II compliance (`doc/IMMUTABLE_AUDIT_LOG.md`).
+   - Cryptographic SHA-256 hash-chained immutable audit log satisfying PCI-DSS v4.0 Req 10 and SOC 2 Type II compliance (`doc/IMMUTABLE_AUDIT_LOG_PLAN.md`).
 5. **Autonomous Operational Tooling**:
    - In-tree declarative schema migration CLI (`lionsql migrate new/up/down/status`).
    - Online non-blocking snapshot hot backup/restore (`POST /api/backup`).
@@ -99,7 +99,7 @@ Driver Cert    & Zero-Race    Availability   Audit Log      Tooling & CLI
 
 ### 3.2. Active Deliverable (Target: Next Sprint Kickoff)
 * **Enterprise Cryptographic Immutable Audit Log (`pkg/audit`, `pkg/api`)**:
-  - **Specification**: Defined in master compliance document [`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md).
+  - **Specification**: Defined in master compliance document [`doc/IMMUTABLE_AUDIT_LOG_PLAN.md`](doc/IMMUTABLE_AUDIT_LOG_PLAN.md).
   - **Architecture**: SHA-256 hash chaining ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$), lock-free MPSC ring buffer, isolated background disk flusher, structured JSON records, and offline cryptographic verification CLI (`lionsql audit verify`).
   - **Compliance Scope**: PCI-DSS v4.0 Req 10, SOC 2 Type II, HIPAA §164.312(b).
 
@@ -171,7 +171,7 @@ CGO_ENABLED=0 distribution Safe third-party plugins  Multi-core analytical scans
 | **Phase 6** | Selinger DP Large Join Reordering ($N > 4$) | Query Planner | `v1.0.0 LTS` | **Completed** | [`doc/INTERNALS_CBO_VOLCANO.md`](doc/INTERNALS_CBO_VOLCANO.md) |
 | **Phase 6** | Zero-Allocation Memory & Buffer Pooling (P-1 ~ P-14) | Performance | `v1.0.0 LTS` | **Completed** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **Phase 6** | Enterprise Driver Certification (JDBC, ODBC, Python) | Client Ecosystem | `v1.0.0 LTS` | **Completed** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
-| **Phase 6** | **Enterprise Cryptographic Immutable Audit Log** | **Security & Audit** | **`v1.0.0 LTS`** | **Active Focus** | [`doc/IMMUTABLE_AUDIT_LOG.md`](doc/IMMUTABLE_AUDIT_LOG.md) |
+| **Phase 6** | **Enterprise Cryptographic Immutable Audit Log** | **Security & Audit** | **`v1.0.0 LTS`** | **Active Focus** | [`doc/IMMUTABLE_AUDIT_LOG_PLAN.md`](doc/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **Post-1.0** | Pure-Go Persistent Storage Engine (Pebble / bbolt) | Storage Engine | `v1.1.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#51-pure-go-persistent-storage-engine-backend-pebble--bbolt-v110) |
 | **Post-1.0** | WebAssembly Runtime Sandbox UDF (`wazero`) | Extensibility | `v1.1.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#52-webassembly-runtime-sandbox-udf-wazero-v110) |
 | **Post-1.0** | Multi-Core Parallel Analytical Query Execution | Query Execution | `v1.2.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#53-multi-core-parallel-analytical-query-execution-v120) |

@@ -2796,3 +2796,90 @@ func TestSQLExecutor_CreateStatistics_CorrelatedSelectivity(t *testing.T) {
 		t.Fatalf("expected stat_geo to be dropped")
 	}
 }
+
+func TestSQLExecutor_RaiserrorAndThrow(t *testing.T) {
+	server := setupMemServer(t)
+
+	// 1. RAISERROR severity 16 (error)
+	_, err := server.ExecuteSQL("RAISERROR('Fatal error occurred', 16, 1)")
+	if err == nil {
+		t.Fatalf("expected error from RAISERROR severity 16, got nil")
+	}
+	if !strings.Contains(err.Error(), "Fatal error occurred") {
+		t.Fatalf("expected 'Fatal error occurred' in error, got: %v", err)
+	}
+	type tdsDesc interface {
+		TdsErrorInfo() (int32, byte, byte)
+	}
+	if desc, ok := err.(tdsDesc); ok {
+		num, sev, st := desc.TdsErrorInfo()
+		if num != 50000 || sev != 16 || st != 1 {
+			t.Errorf("unexpected TDS error info: num=%d, sev=%d, st=%d", num, sev, st)
+		}
+	} else {
+		t.Errorf("expected err to implement tdsDesc interface")
+	}
+
+	// 2. RAISERROR severity <= 10 (informational)
+	res, err := server.ExecuteSQL("RAISERROR('Hello %s, code %d', 10, 1, 'world', 123)")
+	if err != nil {
+		t.Fatalf("expected success for RAISERROR severity 10, got err: %v", err)
+	}
+	if res.Command != "PRINT" || len(res.Messages) == 0 || res.Messages[0] != "Hello world, code 123" {
+		t.Fatalf("unexpected informational result: %+v", res)
+	}
+
+	// 3. THROW with custom error number
+	_, err = server.ExecuteSQL("THROW 50005, 'Something blew up', 2;")
+	if err == nil {
+		t.Fatalf("expected error from THROW, got nil")
+	}
+	if !strings.Contains(err.Error(), "Something blew up") {
+		t.Fatalf("expected 'Something blew up' in error, got: %v", err)
+	}
+	if desc, ok := err.(tdsDesc); ok {
+		num, sev, st := desc.TdsErrorInfo()
+		if num != 50005 || sev != 16 || st != 2 {
+			t.Errorf("unexpected THROW TDS error info: num=%d, sev=%d, st=%d", num, sev, st)
+		}
+	} else {
+		t.Errorf("expected err to implement tdsDesc interface")
+	}
+
+	// 4. Stored Procedure with RAISERROR
+	_, err = server.ExecuteSQL(`CREATE PROCEDURE proc_fail AS
+	BEGIN
+		RAISERROR('Failure from proc', 16, 1);
+	END;`)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE failed: %v", err)
+	}
+
+	_, err = server.ExecuteSQL("EXEC proc_fail;")
+	if err == nil {
+		t.Fatalf("expected error from EXEC proc_fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "Failure from proc") {
+		t.Fatalf("expected 'Failure from proc' in error, got: %v", err)
+	}
+
+	// 5. TRY...CATCH with THROW
+	_, err = server.ExecuteSQL(`CREATE PROCEDURE proc_try_catch AS
+	BEGIN
+		BEGIN TRY
+			THROW 60001, 'Caught inside proc', 1;
+		END TRY
+		BEGIN CATCH
+			PRINT 'Handled gracefully';
+		END CATCH
+	END;`)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE with TRY...CATCH failed: %v", err)
+	}
+
+	res, err = server.ExecuteSQL("EXEC proc_try_catch;")
+	if err != nil {
+		t.Fatalf("expected success from proc_try_catch, got err: %v", err)
+	}
+}
+

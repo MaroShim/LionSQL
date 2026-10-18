@@ -21,3 +21,6 @@ data/WiredTiger*
 .DS_Store
 .idea/
 .vscode/
+
+# Scratch & Temporary
+scratch/

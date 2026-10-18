@@ -3,6 +3,7 @@ package tds_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -1301,6 +1302,61 @@ func TestDriverIntegration_GoMSSQLDB_SystemProcs_TablesAndColumns(t *testing.T) 
 		t.Fatalf("unexpected colNames from sp_columns: %v", colNames)
 	}
 }
+
+func TestDriverIntegration_GoMSSQLDB_RaiserrorAndThrow(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("sqlserver://sa:admin@127.0.0.1:%d?database=master&encrypt=disable", port)
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("Failed to open sqlserver db: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. THROW statement via go-mssqldb
+	_, err = db.ExecContext(ctx, "THROW 50005, 'TDS throw test', 3;")
+	if err == nil {
+		t.Fatalf("expected error from THROW, got nil")
+	}
+	var mssqlErr mssql.Error
+	if !errors.As(err, &mssqlErr) {
+		t.Fatalf("expected mssql.Error, got %T: %v", err, err)
+	}
+	if mssqlErr.Number != 50005 || mssqlErr.Class != 16 || mssqlErr.State != 3 {
+		t.Errorf("unexpected mssql error details: Number=%d, Class=%d, State=%d", mssqlErr.Number, mssqlErr.Class, mssqlErr.State)
+	}
+	if !strings.Contains(mssqlErr.Message, "TDS throw test") {
+		t.Errorf("expected 'TDS throw test' in message, got %s", mssqlErr.Message)
+	}
+
+	// 2. RAISERROR severity 16 via go-mssqldb
+	_, err = db.ExecContext(ctx, "RAISERROR('TDS raiserror test', 16, 2);")
+	if err == nil {
+		t.Fatalf("expected error from RAISERROR, got nil")
+	}
+	if !errors.As(err, &mssqlErr) {
+		t.Fatalf("expected mssql.Error, got %T: %v", err, err)
+	}
+	if mssqlErr.Number != 50000 || mssqlErr.Class != 16 || mssqlErr.State != 2 {
+		t.Errorf("unexpected mssql error details: Number=%d, Class=%d, State=%d", mssqlErr.Number, mssqlErr.Class, mssqlErr.State)
+	}
+	if !strings.Contains(mssqlErr.Message, "TDS raiserror test") {
+		t.Errorf("expected 'TDS raiserror test' in message, got %s", mssqlErr.Message)
+	}
+}
+
 
 
 

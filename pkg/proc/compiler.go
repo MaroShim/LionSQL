@@ -730,11 +730,11 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *RaiseErrorStmt:
-		c.emit(OpRaiserror, 0, 0, 0, s.Message)
+		c.emit(OpRaiserror, int32(s.Severity), int32(s.State), int32(s.Number), s.Message)
 		return nil
 
 	case *ThrowStmt:
-		c.emit(OpThrow, 0, 0, 0, s.Message)
+		c.emit(OpThrow, int32(s.ErrorNumber), int32(s.State), 0, s.Message)
 		return nil
 
 	case *TryCatchStmt:

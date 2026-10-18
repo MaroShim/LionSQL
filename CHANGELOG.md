@@ -26,6 +26,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added test suites `TestEvalRowExpr_NullPropagation` (`pkg/proc`) and `TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull` (`pkg/wire/tds`).
 
 ### Added
+- **User Exception Statements `RAISERROR` and `THROW` with TDS Error Tokens (`TDS-COMPAT-9`) (`pkg/proc`, `pkg/engine`, `pkg/wire/tds`)**:
+  - Extended `RaiseErrorStmt` and `ThrowStmt` in `pkg/proc/ast.go` with structured fields: `Number`, `Severity`, `State`, and `Message`, implementing `TdsErrorInfo() (int32, byte, byte)`.
+  - Added AST parser support in `pkg/proc/parser_stmt.go` (`parseRaiserror`, `parseThrow`) for both parameterized and message/severity/state arguments.
+  - Implemented VDBE bytecode compilation (`OpRaiserror`, `OpThrow`) in `pkg/proc/compiler.go` and runtime handling in `pkg/proc/runtime/vm_dispatcher.go`, integrating with `TRY...CATCH` exception handling blocks and propagating `*proc.ProcError` outside catch stacks.
+  - Added Ad-hoc SQL batch execution support in `pkg/engine/sqlexec.go` (`execRaiserror`, `execThrow`), supporting C-style format specifiers (`%s`, `%d`), informational messages (severity <= 10) returning `PRINT` commands, and synchronizing global `@@ERROR`.
+  - Implemented `tdsErrorDescriber` interface and `extractTdsErrorInfo` in `pkg/wire/tds/server.go`, returning official TDS `0xAA ERROR Token` with exact error number, severity, state, and message to client drivers (`go-mssqldb`).
+  - Added unit test `TestSQLExecutor_RaiserrorAndThrow` in `pkg/api/sqlexec_test.go` and driver integration test `TestDriverIntegration_GoMSSQLDB_RaiserrorAndThrow` in `pkg/wire/tds/driver_integration_test.go`.
 - **Legacy Metadata Stored Procedures `sp_tables` and `sp_columns` (`TDS-COMPAT-5`) (`pkg/engine`, `pkg/wire/tds`)**:
   - Implemented built-in `sp_tables` in `pkg/engine/sqlexec_procs.go` supporting `@table_name`, `@table_owner`, `@table_qualifier`, and `@table_type` parameters with wildcard (`%`) filtering, returning standard `TABLE_QUALIFIER`, `TABLE_OWNER`, `TABLE_NAME`, `TABLE_TYPE`, and `REMARKS` columns for tables and views.
   - Implemented built-in `sp_columns` returning standard 19-column ODBC/OLEDB metadata (`DATA_TYPE`, `TYPE_NAME`, `PRECISION`, `LENGTH`, `SCALE`, `RADIX`, `NULLABLE`, `COLUMN_DEF`, `ORDINAL_POSITION`, `IS_NULLABLE`, `SS_DATA_TYPE`, etc.) mapped from storage table column definitions with `@table_name`, `@column_name`, `@table_owner`, and `@table_qualifier` filtering.

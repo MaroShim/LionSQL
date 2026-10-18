@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -1169,7 +1170,8 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 			log.Printf("[DEV][TDS][Error] query=%s err=%v", trimmed, err)
 		}
 		var buf bytes.Buffer
-		buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
+		num, state, sev, msg := extractTdsErrorInfo(err)
+		buf.Write(BuildError(num, state, sev, msg, "SQLION", "", 1))
 		buf.Write(BuildReturnStatus(-1))
 		buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
@@ -2014,7 +2016,8 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 			log.Printf("[DEV][TDS][Error] query=%s err=%v", trimmed, err)
 		}
 		var buf bytes.Buffer
-		buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
+		num, state, sev, msg := extractTdsErrorInfo(err)
+		buf.Write(BuildError(num, state, sev, msg, "SQLION", "", 1))
 		buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 		return
@@ -2352,3 +2355,20 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	return nil, nil, false
 }
 
+// tdsErrorDescriber is an interface implemented by errors providing structured TDS error information.
+type tdsErrorDescriber interface {
+	TdsErrorInfo() (int32, byte, byte)
+}
+
+// extractTdsErrorInfo extracts TDS error fields: number, state, severity (class), and message.
+func extractTdsErrorInfo(err error) (int32, byte, byte, string) {
+	if err == nil {
+		return 0, 0, 0, ""
+	}
+	var desc tdsErrorDescriber
+	if errors.As(err, &desc) {
+		num, sev, state := desc.TdsErrorInfo()
+		return num, state, sev, err.Error()
+	}
+	return 50000, 1, 16, err.Error()
+}

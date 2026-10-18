@@ -2,6 +2,7 @@ package proc
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -237,9 +238,14 @@ func (p *Parser) parseTryCatch() (Statement, error) {
 
 func (p *Parser) parseThrow() (Statement, error) {
 	p.nextToken() // eat THROW
+	var errNum int32 = 50000
 	msg := "An error occurred"
+	var state byte = 1
 
 	if p.curTokenIs(TokenInt) {
+		if n, err := strconv.ParseInt(p.curToken.Literal, 10, 32); err == nil {
+			errNum = int32(n)
+		}
 		p.nextToken() // eat errNum
 		if p.curTokenIs(TokenComma) {
 			p.nextToken() // eat comma
@@ -250,6 +256,9 @@ func (p *Parser) parseThrow() (Statement, error) {
 			if p.curTokenIs(TokenComma) {
 				p.nextToken()
 				if p.curTokenIs(TokenInt) {
+					if st, err := strconv.Atoi(p.curToken.Literal); err == nil {
+						state = byte(st)
+					}
 					p.nextToken()
 				}
 			}
@@ -263,7 +272,12 @@ func (p *Parser) parseThrow() (Statement, error) {
 		p.nextToken()
 	}
 
-	return &ThrowStmt{Message: msg}, nil
+	return &ThrowStmt{
+		ErrorNumber: errNum,
+		Severity:    16,
+		State:       state,
+		Message:     msg,
+	}, nil
 }
 
 func (p *Parser) parseBlock() (Statement, error) {
@@ -534,13 +548,49 @@ func (p *Parser) parseRaiserror() (Statement, error) {
 	}
 	p.nextToken()
 
-	if !p.curTokenIs(TokenString) {
-		return nil, fmt.Errorf("expected string message in RAISERROR")
-	}
-	msg := p.curToken.Literal
-	p.nextToken()
+	var errNum int32 = 50000
+	msg := ""
+	var sev byte = 16
+	var state byte = 1
 
-	// Skip severity and state parameters if present
+	if p.curTokenIs(TokenString) {
+		msg = p.curToken.Literal
+		p.nextToken()
+	} else if p.curTokenIs(TokenInt) {
+		if n, err := strconv.ParseInt(p.curToken.Literal, 10, 32); err == nil {
+			errNum = int32(n)
+			msg = fmt.Sprintf("Error %d", errNum)
+		}
+		p.nextToken()
+	} else {
+		return nil, fmt.Errorf("expected string message or error number in RAISERROR")
+	}
+
+	if p.curTokenIs(TokenComma) {
+		p.nextToken()
+		if p.curTokenIs(TokenInt) {
+			if sVal, err := strconv.Atoi(p.curToken.Literal); err == nil {
+				sev = byte(sVal)
+			}
+			p.nextToken()
+		} else {
+			p.parseExpression(precLowest)
+		}
+	}
+
+	if p.curTokenIs(TokenComma) {
+		p.nextToken()
+		if p.curTokenIs(TokenInt) {
+			if stVal, err := strconv.Atoi(p.curToken.Literal); err == nil {
+				state = byte(stVal)
+			}
+			p.nextToken()
+		} else {
+			p.parseExpression(precLowest)
+		}
+	}
+
+	// Skip any format arguments if present
 	for p.curTokenIs(TokenComma) {
 		p.nextToken()
 		p.parseExpression(precLowest)
@@ -555,7 +605,12 @@ func (p *Parser) parseRaiserror() (Statement, error) {
 		p.nextToken()
 	}
 
-	return &RaiseErrorStmt{Message: msg}, nil
+	return &RaiseErrorStmt{
+		Number:   errNum,
+		Severity: sev,
+		State:    state,
+		Message:  msg,
+	}, nil
 }
 
 func (p *Parser) parseTx() (Statement, error) {

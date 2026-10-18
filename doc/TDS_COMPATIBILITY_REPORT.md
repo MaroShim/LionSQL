@@ -225,7 +225,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 | 115-116 | 상관 서브쿼리 바인딩 | `CROSS APPLY (SELECT TOP (1) ... )`, `OUTER APPLY (...)` | **PASS** | 상관 행 생성기 `APPLY` 연산자 정상 실행 |
 | 117 | 세미콜론 없는 다중 구문 | `SELECT 1 AS a SELECT 2 AS b` | **PASS** | 세미콜론 없는 연속 SELECT 정상 파싱 |
 | 118-119 | 내장 진단 프로시저 | `EXEC sp_help 'diag_customers'`, `EXEC sp_who` | **PASS** | 테이블 스키마 및 활성 세션 정보 정상 반환 |
-| 120-121 | 사용자 예외 발생 | `RAISERROR('...', 16, 1)`, `THROW 50005, '...', 1;` | **UNSUPPORTED** | **[미지원]** ad-hoc 쿼리 파서에서 사용자 예외 문법 미인식 |
+| 120-121 | 사용자 예외 발생 | `RAISERROR('...', 16, 1)`, `THROW 50005, '...', 1;` | **PASS** | T-SQL 표준 사용자 정의 예외 파싱, 심각도 제어(<=10 안내, >=11 에러) 및 공식 TDS Error Token (0xAA) 방출 완벽 지원 |
 | 122-123 | 프로시저 변수 인라인 초기화 | `CREATE PROCEDURE ... AS BEGIN DECLARE @cnt INT = 0; ... END` | **PASS** | 프로시저 내 변수 선언 시 인라인 초기값 대입(`= <expr>`) 및 순차 의존성 정상 지원 |
 
 ---
@@ -257,9 +257,14 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
   - `pkg/engine/sqlexec_select.go`의 `evalScalarExpr`에서 `res == nil`을 정당한 SQL NULL 결과로 수용하도록 보강.
   - `TestEvalRowExpr_NullPropagation` 및 `TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull` 검증 완료.
 
-### 4. [Medium] 사용자 예외 발생 구문 (`RAISERROR`, `THROW`) 미지원
+### 4. [Resolved] 사용자 예외 발생 구문 (`RAISERROR`, `THROW`) 지원 (`TDS-COMPAT-9`)
 - **현상**: `RAISERROR('msg', 16, 1)` 또는 `THROW 50005, 'msg', 1;` 사용 시 `unsupported SQL statement` 에러 반환.
-- **대응 방안**: 에러 번호, 심각도, 메시지를 파싱하여 클라이언트에 공식 TDS Error Token (0xAA)을 전송하는 핸들러 등록.
+- **조치 완료**:
+  - `pkg/proc/ast.go`, `pkg/proc/parser_stmt.go`: `RAISERROR` 및 `THROW` AST 구조체 확장 및 구문 파싱 지원 (`Number`, `Severity`, `State`, `Message`).
+  - `pkg/proc/compiler.go`, `pkg/proc/runtime/vm_dispatcher.go`: VDBE 바이트코드 컴파일(`OpRaiserror`, `OpThrow`) 및 `TRY...CATCH` 스택 탈출/외부 전파 처리.
+  - `pkg/engine/sqlexec.go`: ad-hoc 배치 실행기 내 `RAISERROR`, `THROW` 지원, `printf` 포맷팅(`%s`, `%d`), 심각도 $\le 10$ 안내 메시지 처리, `@@ERROR` 전역 동기화.
+  - `pkg/wire/tds/server.go`: `tdsErrorDescriber` 인터페이스 및 `extractTdsErrorInfo`를 통해 클라이언트 드라이버로 공식 TDS Error Token (`0xAA`) 방출.
+  - `TestSQLExecutor_RaiserrorAndThrow`, `TestDriverIntegration_GoMSSQLDB_RaiserrorAndThrow` 검증 완료.
 
 ### 5. [Resolved / By Design] `TIMEFROMPARTS` 시간 타입 직렬화 정합성 (`TDS-COMPAT-10`)
 - **현상**: `SELECT TIMEFROMPARTS(14, 30, 0, 0, 0)` 실행 시 Go `string` 변수로 스캔하면 `14:30:00`이 아닌 `0001-01-01T14:30:00Z`로 수신.
@@ -272,14 +277,14 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 
 ## 4. 최종 결론
 
-123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **92.7% (114/123 - PASS 112개 + TYPE_DIFF 2개)의 압도적인 종합 호환율**을 달성했습니다.
+123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **94.3% (116/123 - PASS 114개 + TYPE_DIFF 2개)의 압도적인 종합 호환율**을 달성했습니다.
 - **완벽히 통과된 강력한 엔터프라이즈 기능**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`).
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`).
 - **향후 확장을 위한 잔여 과제**:
   1. C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
   2. 한글/유니코드 **N-접두사(`N'...'`)** 직렬화 안정성 (`TDS-COMPAT-2`).
   3. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1`).
-  4. 사용자 예외 발생 구문 **`RAISERROR`, `THROW`** 지원 (`TDS-COMPAT-9`).
-  5. Ad-hoc 최상위 익명 제어문 **`IF...ELSE`, `WHILE`** 지원 (`TDS-COMPAT-4`).
+  4. Ad-hoc 최상위 익명 제어문 **`IF...ELSE`, `WHILE`** 지원 (`TDS-COMPAT-4`).
 
 이 핵심 과제들이 단계적으로 완비됨에 따라 LionSQL은 실무 엔터프라이즈 .NET/Java/Node.js/Python 애플리케이션을 코드 수정 없이 100% 수용하는 진정한 무중단 SQL Server 대체제로 안착하고 있습니다.
+

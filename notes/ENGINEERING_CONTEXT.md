@@ -121,3 +121,6 @@ LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집�
 5. **모놀리식 파일 리팩토링 기준**:
    - 단순히 기계적으로 라인 수만 보고 자르는 것이 아니라, **도메인 책임(Responsibility)별로 묶어서 분할**합니다.
    - 예: `sqlexec_dml.go`에서 SELECT/PIVOT/EXPLAIN/EVAL을 분리하고 순수 DML만 남김.
+6. **문서 명명 규약 (Documentation Naming Conventions)**:
+   - 신규 기능 구현, 아키텍처 통합, 리팩토링을 위한 작업 계획/설계 제안 문서는 **반드시 `doc/*_PLAN.md` 접미사**를 부여하여 일반 매뉴얼/스펙 문서와 명확히 구분합니다 (예: `UNIFIED_CLI_PLAN.md`, `IMMUTABLE_AUDIT_LOG_PLAN.md`, `S3_PRESIGNED_STORAGE_PLAN.md`).
+   - 프로토콜 및 호환성 검증 결과 문서는 **`doc/*_REPORT.md`** 형식을 유지합니다 (예: `TDS_COMPATIBILITY_REPORT.md`, `PGWIRE_COMPATIBILITY_REPORT.md`, `TEST_VERIFICATION_REPORT.md`).

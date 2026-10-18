@@ -159,7 +159,17 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		if err != nil {
 			if cs != nil {
 				cs.Mu.Lock()
-				cs.Vars["error"] = int64(50000)
+				errNum := int64(50000)
+				type tdsErrorDescriber interface {
+					TdsErrorInfo() (int32, byte, byte)
+				}
+				if carrier, ok := err.(tdsErrorDescriber); ok {
+					n, _, _ := carrier.TdsErrorInfo()
+					if n != 0 {
+						errNum = int64(n)
+					}
+				}
+				cs.Vars["error"] = errNum
 				if cs.Tx != nil && strings.HasPrefix(cs.ID, "pg-") {
 					cs.TxFailed = true
 				}
@@ -990,6 +1000,16 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execProcedureCall(trimmed, start, cs)
 	}
 
+	// 2.1 User Exception: RAISERROR
+	if strings.HasPrefix(upper, "RAISERROR ") || strings.HasPrefix(upper, "RAISERROR(") || upper == "RAISERROR" || upper == "RAISERROR;" {
+		return s.execRaiserror(trimmed, start)
+	}
+
+	// 2.2 User Exception: THROW
+	if strings.HasPrefix(upper, "THROW ") || strings.HasPrefix(upper, "THROW;") || upper == "THROW" || upper == "THROW;" {
+		return s.execThrow(trimmed, start)
+	}
+
 	// 3. DDL: CREATE TABLE
 	if strings.HasPrefix(upper, "CREATE TABLE") {
 		if err := s.checkWriteAllowed(); err != nil {
@@ -1135,4 +1155,165 @@ func (s *Coordinator) checkWriteAllowed() error {
 		return fmt.Errorf("cannot execute write operation on read-only replica: %w", replication.ErrReadOnlyReplica)
 	}
 	return nil
+}
+
+// SQLError represents a structured SQL Server error containing error number, severity, and state.
+type SQLError struct {
+	Number   int32
+	Severity byte
+	State    byte
+	Message  string
+}
+
+func (e *SQLError) Error() string {
+	return e.Message
+}
+
+func (e *SQLError) TdsErrorInfo() (int32, byte, byte) {
+	return e.Number, e.Severity, e.State
+}
+
+func (s *Coordinator) execRaiserror(raw string, start time.Time) (*QueryResult, error) {
+	rem := strings.TrimSpace(raw)
+	upper := strings.ToUpper(rem)
+	if strings.HasPrefix(upper, "RAISERROR") {
+		rem = strings.TrimSpace(rem[9:])
+	}
+	rem = strings.TrimRight(rem, ";")
+	rem = strings.TrimSpace(rem)
+
+	// If wrapped in parentheses: RAISERROR(...)
+	if strings.HasPrefix(rem, "(") {
+		closeIdx := strings.LastIndex(rem, ")")
+		if closeIdx != -1 {
+			rem = strings.TrimSpace(rem[1:closeIdx])
+		}
+	}
+
+	// Check if trailing WITH clause exists, e.g. WITH NOWAIT, WITH LOG, WITH SETERROR
+	if idx := strings.Index(strings.ToUpper(rem), " WITH "); idx != -1 {
+		rem = strings.TrimSpace(rem[:idx])
+	}
+
+	rawArgs := SplitDeclarations(rem)
+	var args []string
+	for _, a := range rawArgs {
+		trimmed := strings.TrimSpace(a)
+		if trimmed != "" {
+			args = append(args, trimmed)
+		}
+	}
+
+	if len(args) == 0 {
+		return nil, &SQLError{Number: 50000, Severity: 16, State: 1, Message: "RAISERROR requires at least a message"}
+	}
+
+	// 1. Message or error number
+	msg := unwrapSQLString(args[0])
+	var errNum int32 = 50000
+	if n, err := strconv.ParseInt(args[0], 10, 32); err == nil && n >= 13000 {
+		errNum = int32(n)
+		msg = fmt.Sprintf("Error %d", errNum)
+	}
+
+	// 2. Severity (default 16)
+	sev := 16
+	if len(args) > 1 {
+		if val, err := strconv.Atoi(strings.TrimSpace(args[1])); err == nil {
+			sev = val
+		}
+	}
+
+	// 3. State (default 1)
+	state := 1
+	if len(args) > 2 {
+		if val, err := strconv.Atoi(strings.TrimSpace(args[2])); err == nil {
+			state = val
+		}
+	}
+
+	// 4. Format arguments for %s, %d, %i
+	if len(args) > 3 {
+		var formatArgs []any
+		for _, a := range args[3:] {
+			formatArgs = append(formatArgs, unwrapSQLString(a))
+		}
+		if strings.Contains(msg, "%") {
+			goFmt := strings.ReplaceAll(msg, "%s", "%v")
+			goFmt = strings.ReplaceAll(goFmt, "%d", "%v")
+			goFmt = strings.ReplaceAll(goFmt, "%i", "%v")
+			msg = fmt.Sprintf(goFmt, formatArgs...)
+		}
+	}
+
+	// Severity <= 10 produces an informational message (success), not a terminating error
+	if sev <= 10 {
+		return &QueryResult{
+			Success:    true,
+			Command:    "PRINT",
+			Messages:   []string{msg},
+			DurationUS: time.Since(start).Microseconds(),
+		}, nil
+	}
+
+	return nil, &SQLError{
+		Number:   errNum,
+		Severity: byte(sev),
+		State:    byte(state),
+		Message:  msg,
+	}
+}
+
+func (s *Coordinator) execThrow(raw string, start time.Time) (*QueryResult, error) {
+	rem := strings.TrimSpace(raw)
+	upper := strings.ToUpper(rem)
+	if strings.HasPrefix(upper, "THROW") {
+		rem = strings.TrimSpace(rem[5:])
+	}
+	rem = strings.TrimRight(rem, ";")
+	rem = strings.TrimSpace(rem)
+
+	if rem == "" {
+		// Bare THROW (rethrow)
+		return nil, &SQLError{
+			Number:   50000,
+			Severity: 16,
+			State:    1,
+			Message:  "An error occurred",
+		}
+	}
+
+	rawArgs := SplitDeclarations(rem)
+	var args []string
+	for _, a := range rawArgs {
+		trimmed := strings.TrimSpace(a)
+		if trimmed != "" {
+			args = append(args, trimmed)
+		}
+	}
+
+	var errNum int32 = 50000
+	msg := "An error occurred"
+	state := 1
+
+	if len(args) > 0 {
+		if val, err := strconv.ParseInt(strings.TrimSpace(args[0]), 10, 32); err == nil {
+			errNum = int32(val)
+		}
+	}
+	if len(args) > 1 {
+		msg = unwrapSQLString(args[1])
+	}
+	if len(args) > 2 {
+		if val, err := strconv.Atoi(strings.TrimSpace(args[2])); err == nil {
+			state = val
+		}
+	}
+
+	return nil, &SQLError{
+		Number:   errNum,
+		Severity: 16, // In T-SQL, THROW always has severity 16
+		State:    byte(state),
+		Message:  msg,
+	}
 }

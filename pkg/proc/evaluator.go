@@ -179,7 +179,24 @@ func evalStmt(stmt Statement, ctx *ExecutionContext) error {
 		return nil
 
 	case *RaiseErrorStmt:
-		return fmt.Errorf("RAISERROR: %s", s.Message)
+		if s.Severity <= 10 {
+			ctx.Printed = append(ctx.Printed, s.Message)
+			return nil
+		}
+		return &ProcError{
+			Number:   s.Number,
+			Severity: s.Severity,
+			State:    s.State,
+			Message:  s.Message,
+		}
+
+	case *ThrowStmt:
+		return &ProcError{
+			Number:   s.ErrorNumber,
+			Severity: s.Severity,
+			State:    s.State,
+			Message:  s.Message,
+		}
 
 	case *TxStmt:
 		switch s.Action {

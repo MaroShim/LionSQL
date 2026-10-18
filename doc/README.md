@@ -152,8 +152,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Authentication models, JWT lifecycle, API key role scoping, and network encryption.
 * [`ENTERPRISE_AUTHENTICATION_SPI.md`](file:///Users/maro/Projects/LionSQL/doc/ENTERPRISE_AUTHENTICATION_SPI.md)
   * Pluggable `AuthProvider` SPI for corporate directory services (LDAP/AD/PAM), multi-protocol identity convergence, and perimeter proxy security architecture.
-* [`IMMUTABLE_AUDIT_LOG.md`](file:///Users/maro/Projects/LionSQL/doc/IMMUTABLE_AUDIT_LOG.md)
-  * Enterprise cryptographic audit logging architecture and compliance specification (PCI-DSS v4.0 Req 10, SOC 2 Type II, SHA-256 hash chaining, non-blocking MPSC ring buffer, and offline CLI verifier).
+* [`IMMUTABLE_AUDIT_LOG_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/IMMUTABLE_AUDIT_LOG_PLAN.md)
+  * Enterprise cryptographic audit logging architecture and implementation plan (PCI-DSS v4.0 Req 10, SOC 2 Type II, SHA-256 hash chaining, non-blocking MPSC ring buffer, and offline CLI verifier).
 * [`BENCHMARK.md`](file:///Users/maro/Projects/LionSQL/doc/BENCHMARK.md)
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).
 * [`MIGRATION.md`](file:///Users/maro/Projects/LionSQL/doc/MIGRATION.md)

@@ -264,14 +264,33 @@ func (s *PrintStmt) String() string {
 	return fmt.Sprintf("PRINT %s", s.Expr.String())
 }
 
-// RaiseErrorStmt represents RAISERROR('message')
+// ProcError represents a structured procedural execution error.
+type ProcError struct {
+	Number   int32
+	Severity byte
+	State    byte
+	Message  string
+}
+
+func (e *ProcError) Error() string {
+	return e.Message
+}
+
+func (e *ProcError) TdsErrorInfo() (int32, byte, byte) {
+	return e.Number, e.Severity, e.State
+}
+
+// RaiseErrorStmt represents RAISERROR('message', severity, state)
 type RaiseErrorStmt struct {
-	Message string
+	Number   int32
+	Severity byte
+	State    byte
+	Message  string
 }
 
 func (s *RaiseErrorStmt) stmtNode() {}
 func (s *RaiseErrorStmt) String() string {
-	return fmt.Sprintf("RAISERROR('%s')", s.Message)
+	return fmt.Sprintf("RAISERROR('%s', %d, %d)", s.Message, s.Severity, s.State)
 }
 
 // TxAction represents transaction control.
@@ -418,12 +437,15 @@ func (s *TryCatchStmt) String() string {
 
 // ThrowStmt represents THROW 50000, 'msg', 1
 type ThrowStmt struct {
-	Message string
+	ErrorNumber int32
+	Severity    byte
+	State       byte
+	Message     string
 }
 
 func (s *ThrowStmt) stmtNode() {}
 func (s *ThrowStmt) String() string {
-	return fmt.Sprintf("THROW 50000, %q, 1", s.Message)
+	return fmt.Sprintf("THROW %d, %q, %d", s.ErrorNumber, s.Message, s.State)
 }
 
 // BreakStmt represents BREAK
