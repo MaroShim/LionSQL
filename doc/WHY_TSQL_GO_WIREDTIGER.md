@@ -2,7 +2,7 @@
 
 ## 1. Executive Overview
 
-> *"The ultimate strength of this project was determined at its inception—by the fundamental choice of T-SQL, Go, and WiredTiger."*
+> *"The ultimate strength of this project was determined at its inception, by the fundamental choice of T-SQL, Go, and WiredTiger."*
 
 The ultimate caliber and architectural longevity of a software system are rarely decided by late-stage micro-optimizations. Rather, they are sealed at the very beginning by the **foundational technology stack chosen on day one**.
 

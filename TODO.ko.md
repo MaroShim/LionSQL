@@ -40,7 +40,7 @@
 | **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **완료 (`[x]`)** | - |
 | **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **완료 (`[x]`)** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
 | **P1** | **스토리지/안정성** | **WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 (`TDS-COMPAT-1`)** | `pkg/storage/wiredtiger` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
-| **P1** | **와이어/유니코드** | **유니코드 N-prefix (`N'...'`) TDS UTF-16LE 직렬화 EOF 방지 (`TDS-COMPAT-2`)** | `pkg/wire/tds` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
+| **P1** | **와이어/유니코드** | **유니코드 N-prefix (`N'...'`) TDS UTF-16LE 직렬화 EOF 방지 (`TDS-COMPAT-2`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **ORM/와이어** | **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (Dapper `QueryMultiple` 필수) (`TDS-COMPAT-6`)** | `pkg/engine`, `pkg/wire/tds` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **프로시저/파서** | **T-SQL 프로시저 파서의 `DECLARE @var INT = <expr>` 인라인 초기화 지원 (`TDS-COMPAT-7`)** | `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **타입/파서** | **BIT 컬럼 수치 리터럴(`1`/`0`) 불리언 강제 변환(`CastValueToType`) 보강 (`TDS-COMPAT-3`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
@@ -370,6 +370,10 @@
   - 거대한 switch 분기를 15줄 수준의 $O(1)$ 레지스트리 맵 디스패치(`VirtualCatalogView`)로 슬림화.
 
 ### 5.2. 코어 아키텍처 및 기능 마일스톤 이력
+- [x] **T-SQL 유니코드 N-접두사 (`N'...'`) 리터럴 지원 (`TDS-COMPAT-2`) (`pkg/proc`, `pkg/engine`, `pkg/wire/tds`)**:
+  - `pkg/proc/lexer.go`: 렉서 `default` 분기에서 `N'...'` 및 `n'...'` 패턴을 식별자가 아닌 `TokenString`으로 직행 처리하여 파싱 오류 및 토큰 누락 방지.
+  - `pkg/engine/sqlexec_select.go` & `sqlexec_eval.go`: `isSingleQuotedLiteral`, `evalScalarExpr`, `parseLiteralValue`, `evaluateSingleConditionMap`에서 `N'...'` 언쿼트 및 WHERE 조건(`=`, `<>`, `IN`) 완벽 수용.
+  - 단위/DML 테스트(`TestSQLExecutor_NPrefixUnicodeLiterals`) 및 공식 `go-mssqldb` E2E 통합 테스트(`TestDriverIntegration_GoMSSQLDB_NPrefixUnicodeLiterals`) 100% PASS 검증 완료.
 - [x] **반정형 JSON 표현식 B-Tree 인덱스 & 내장함수 완비 (`ADR-022`)**:
   - `->`, `->>`, `ISJSON`, `JSON_VALUE`, `JSON_QUERY` 지원, `((data->>'key'))` 기능 인덱스 DDL 파싱, CBO 인덱스 스캔 6.5~7.3배 가속.
 - [x] **T-SQL `STRING_SPLIT` 테이블 반환 함수 & 서브쿼리/CROSS APPLY 완비 (`pkg/engine`)**:

@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Unicode N-prefix (`N'...'`) String Literal Support in T-SQL Lexer and Engine (`TDS-COMPAT-2`) (`pkg/proc`, `pkg/engine`, `pkg/wire/tds`)**:
+  - Fixed T-SQL lexer (`pkg/proc/lexer.go`) to recognize `N'...'` and `n'...'` as `TokenString` rather than tokenizing `N`/`n` as an identifier, eliminating parsing errors and driver stream deserialization failures.
+  - Enhanced `isSingleQuotedLiteral` and `evalScalarExpr` in `pkg/engine/sqlexec_select.go` to unquote `N'...'` literals in SELECT expressions, string concatenations (`+`), and projections.
+  - Enhanced DML literal parser (`parseLiteralValue`) and condition evaluators (`evaluateSingleConditionMap`, `parseEqualityConditions`) in `pkg/engine/sqlexec_eval.go` to support `N'...'` literals across all storage types and WHERE predicates (`=`, `<>`, `IN`).
+  - Added unit and DML regression tests in `pkg/api/sqlexec_test.go` (`TestSQLExecutor_NPrefixUnicodeLiterals`) and official Go MSSQL driver integration test in `pkg/wire/tds/driver_integration_test.go` (`TestDriverIntegration_GoMSSQLDB_NPrefixUnicodeLiterals`).
 - **BIT Column Numeric/String Literal Boolean Coercion Across Full Data Lifecycle (`TDS-COMPAT-3`) (`pkg/storage`, `pkg/engine`, `pkg/proc`, `pkg/execution`, `pkg/wire/tds`)**:
   - Implemented `storage.BoolValueFromAny(v Value) Value` supporting cross-type conversion from `TypeInt`, `TypeFloat`, `TypeDecimal`, and `TypeVarChar`/`TypeJSON` (`'1'`, `'0'`, `'true'`, `'false'`, `'t'`).
   - Added cross-type equality (`Value.Equal`) and ordering (`Value.Compare`) between `TypeBool` and `TypeInt`, enabling seamless predicate evaluation when comparing boolean fields against numeric literals.

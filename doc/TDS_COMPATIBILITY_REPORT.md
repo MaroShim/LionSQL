@@ -38,7 +38,7 @@ SSMS, Azure Data Studio, DBeaver, Beekeeper Studio 등 표준 SQL Server 관리 
 
 ---
 
-### 2.2 데이터 타입 및 리터럴 (7/9 PASS - 77.8%)
+### 2.2 데이터 타입 및 리터럴 (8/9 PASS - 88.9%)
 SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했습니다.
 
 | 번호 | 테스트 항목 | 질의 구문 (SQL) | 결과 | 상세 원인 및 분석 |
@@ -47,7 +47,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 | 24 | 부동소수점 및 고정소수점 | `SELECT CAST(3.14159 AS FLOAT), CAST(1234.56 AS DECIMAL(10,2))` | **PASS** | IEEE 754 Float 및 고정소수점 Decimal 정상 |
 | 25 | 표준 ASCII 문자열 | `SELECT 'Hello LionSQL' AS s` | **PASS** | `VARCHAR` 단일 바이트 문자열 정상 |
 | 26 | 표준 UTF-8 한글 문자열 | `SELECT '안녕하세요' AS s` | **PASS** | 유니코드 한글 UTF-8 정상 인코딩/디코딩 |
-| 27 | N-접두사 유니코드 리터럴 | `SELECT N'한글유니코드' AS s` | **FAIL** | **[버그]** TDS 스트림 디코딩 중 `unexpected EOF` 발생 (N'...' 토큰 UTF-16LE 바이트 스트림 길이 불일치) |
+| 27 | N-접두사 유니코드 리터럴 | `SELECT N'한글유니코드' AS s` | **PASS** | T-SQL 표준 N-접두사(`N'...'`) 유니코드 리터럴 토큰 파싱 및 UTF-16LE 직렬화 완벽 지원 |
 | 28 | 불리언(Bit) 타입 | `SELECT CAST(1 AS BIT), CAST(0 AS BIT)` | **PASS** | `TypeBitN` 단일 바이트 불리언 정상 변환 |
 | 29 | DateTime 네이티브 스캔 | `SELECT GETDATE() AS dt` | **TYPE_DIFF** | **[차이점]** COLMETADATA가 문자열 타입으로 응답되어 Go `*time.Time` 네이티브 스캔 시 타입 불일치 |
 | 30 | DateTime 포맷팅 스캔 | `SELECT CONVERT(VARCHAR(30), GETDATE(), 120)` | **PASS** | 표준 ISO 날짜 문자열 변환 및 스캔 정상 |
@@ -273,18 +273,25 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
   - `go-mssqldb`가 이를 Go `time.Time` (Year 0001) 객체로 복원하므로, 네이티브 `time.Time` 스캔 시 시/분/초(`Hour=14, Minute=30`)가 정확히 수신됨.
   - 문자열 스캔 시 Go `database/sql`이 RFC3339로 변환하는 표준 드라이버 특성으로, 실제 Microsoft SQL Server에서도 동일하게 발생함 (`TYPE_DIFF (PASS)`로 정상 분류 정정).
 
+### 6. [Resolved] 유니코드 N-접두사 (`N'...'`) 리터럴 지원 (`TDS-COMPAT-2`)
+- **현상**: `SELECT N'한글'` 실행 시 T-SQL 렉서가 `N`을 식별자(Identifier)로 오인 분리하여 파싱 에러 발생 및 클라이언트 드라이버 예기치 않은 오류 발생.
+- **조치 완료**:
+  - `pkg/proc/lexer.go`: 렉서의 `default` 토큰 분기에서 `(l.ch == 'N' || l.ch == 'n') && l.peekChar() == '\''` 선행 판별을 추가하여 `N'...'` 및 `n'...'` 문자열 리터럴을 `TokenString`으로 정확히 인식.
+  - `pkg/engine/sqlexec_select.go`: `isSingleQuotedLiteral` 및 `evalScalarExpr`에서 `N'...'` 접두사 패턴을 인식하고 언쿼트(Unquote)하여 정규 문자열 값으로 반환.
+  - `pkg/engine/sqlexec_eval.go`: DML 리터럴 파서(`parseLiteralValue`) 및 조건 평가기(`evaluateSingleConditionMap`, `parseEqualityConditions`)에서 `N'...'` 리터럴을 안전하게 처리하도록 보강 (`WHERE col = N'...'`, `WHERE col IN (N'...')`).
+  - `TestSQLExecutor_NPrefixUnicodeLiterals` (단위/엔진 DML 테스트) 및 `TestDriverIntegration_GoMSSQLDB_NPrefixUnicodeLiterals` (공식 `go-mssqldb` E2E 드라이버 통합 테스트) 검증 완료.
+
 ---
 
 ## 4. 최종 결론
 
-123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **94.3% (116/123 - PASS 114개 + TYPE_DIFF 2개)의 압도적인 종합 호환율**을 달성했습니다.
+123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **95.1% (117/123 - PASS 115개 + TYPE_DIFF 2개)의 압도적인 종합 호환율**을 달성했습니다.
 - **완벽히 통과된 강력한 엔터프라이즈 기능**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`).
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원.
 - **향후 확장을 위한 잔여 과제**:
   1. C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
-  2. 한글/유니코드 **N-접두사(`N'...'`)** 직렬화 안정성 (`TDS-COMPAT-2`).
-  3. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1`).
-  4. Ad-hoc 최상위 익명 제어문 **`IF...ELSE`, `WHILE`** 지원 (`TDS-COMPAT-4`).
+  2. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1`).
+  3. Ad-hoc 최상위 익명 제어문 **`IF...ELSE`, `WHILE`** 지원 (`TDS-COMPAT-4`).
 
 이 핵심 과제들이 단계적으로 완비됨에 따라 LionSQL은 실무 엔터프라이즈 .NET/Java/Node.js/Python 애플리케이션을 코드 수정 없이 100% 수용하는 진정한 무중단 SQL Server 대체제로 안착하고 있습니다.
 
