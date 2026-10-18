@@ -11,7 +11,7 @@ import (
 func TestBuiltin_DateTime(t *testing.T) {
 	// GETDATE / NOW
 	nowVal := EvalBuiltin("GETDATE", nil)
-	if nowVal.Type != storage.TypeVarChar || len(nowVal.SVal) != 19 {
+	if nowVal.Type != storage.TypeDateTime || nowVal.TVal.IsZero() {
 		t.Fatalf("Unexpected GETDATE format: %v", nowVal)
 	}
 
@@ -894,12 +894,12 @@ func TestBuiltin_TSQLExpansions(t *testing.T) {
 
 	// 2. High-precision and timestamp constructors
 	ts := EvalBuiltin("CURRENT_TIMESTAMP", nil)
-	if ts.Type != storage.TypeVarChar || len(ts.SVal) != 19 {
-		t.Errorf("CURRENT_TIMESTAMP expected YYYY-MM-DD HH:MM:SS format, got %q", ts.SVal)
+	if ts.Type != storage.TypeDateTime || ts.TVal.IsZero() {
+		t.Errorf("CURRENT_TIMESTAMP expected TypeDateTime, got %v", ts)
 	}
 	utc := EvalBuiltin("SYSUTCDATETIME", nil)
-	if utc.Type != storage.TypeVarChar || len(utc.SVal) < 20 {
-		t.Errorf("SYSUTCDATETIME expected high precision timestamp, got %q", utc.SVal)
+	if utc.Type != storage.TypeDateTime || utc.TVal.IsZero() {
+		t.Errorf("SYSUTCDATETIME expected TypeDateTime, got %v", utc)
 	}
 	offset := EvalBuiltin("SYSDATETIMEOFFSET", nil)
 	if offset.Type != storage.TypeVarChar || !strings.Contains(offset.SVal, ":") {

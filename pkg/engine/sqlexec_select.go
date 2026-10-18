@@ -320,8 +320,16 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 		return false, "pg_is_in_recovery"
 	case "PG_TRIGGER_DEPTH()", "PG_TRIGGER_DEPTH":
 		return int64(0), "pg_trigger_depth"
-	case "NOW()", "GETDATE()", "CURRENT_TIMESTAMP":
-		return time.Now().Format("2006-01-02 15:04:05"), "now"
+	case "GETDATE()", "GETDATE":
+		return time.Now(), "getdate"
+	case "NOW()", "NOW", "CURRENT_TIMESTAMP":
+		return time.Now(), "now"
+	case "GETUTCDATE()", "GETUTCDATE":
+		return time.Now().UTC(), "getutcdate"
+	case "SYSDATETIME()", "SYSDATETIME":
+		return time.Now(), "sysdatetime"
+	case "SYSUTCDATETIME()", "SYSUTCDATETIME":
+		return time.Now().UTC(), "sysutcdatetime"
 	case "@@VERSION":
 		return "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine", "@@version"
 	case "@@SPID":

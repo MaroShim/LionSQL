@@ -1420,11 +1420,84 @@ func TestDriverIntegration_GoMSSQLDB_NPrefixUnicodeLiterals(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_GoMSSQLDB_GetDateNativeScan(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
 
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
 
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
 
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
 
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
+	// 1. SELECT GETDATE() AS dt scanned into time.Time (Scenario 29)
+	var dt time.Time
+	if err := db.QueryRowContext(ctx, "SELECT GETDATE() AS dt").Scan(&dt); err != nil {
+		t.Fatalf("QueryRow SELECT GETDATE() AS dt into time.Time failed: %v", err)
+	}
+	if dt.IsZero() {
+		t.Fatalf("expected non-zero dt, got %v", dt)
+	}
+	if dt.Year() < 2026 {
+		t.Fatalf("expected year >= 2026, got %d", dt.Year())
+	}
 
+	// 2. SELECT GETDATE() (without alias) scanned into time.Time
+	var dtNoAlias time.Time
+	if err := db.QueryRowContext(ctx, "SELECT GETDATE()").Scan(&dtNoAlias); err != nil {
+		t.Fatalf("QueryRow SELECT GETDATE() into time.Time failed: %v", err)
+	}
+	if dtNoAlias.IsZero() {
+		t.Fatalf("expected non-zero dtNoAlias, got %v", dtNoAlias)
+	}
 
+	// 3. SELECT CURRENT_TIMESTAMP scanned into time.Time
+	var ts time.Time
+	if err := db.QueryRowContext(ctx, "SELECT CURRENT_TIMESTAMP AS ts").Scan(&ts); err != nil {
+		t.Fatalf("QueryRow SELECT CURRENT_TIMESTAMP into time.Time failed: %v", err)
+	}
+	if ts.IsZero() {
+		t.Fatalf("expected non-zero ts, got %v", ts)
+	}
+
+	// 4. SELECT GETUTCDATE() scanned into time.Time
+	var utc time.Time
+	if err := db.QueryRowContext(ctx, "SELECT GETUTCDATE() AS utc_now").Scan(&utc); err != nil {
+		t.Fatalf("QueryRow SELECT GETUTCDATE() into time.Time failed: %v", err)
+	}
+	if utc.IsZero() {
+		t.Fatalf("expected non-zero utc, got %v", utc)
+	}
+
+	// 5. String scan compatibility on GETDATE()
+	var s string
+	if err := db.QueryRowContext(ctx, "SELECT GETDATE() AS dt").Scan(&s); err != nil {
+		t.Fatalf("QueryRow SELECT GETDATE() into string failed: %v", err)
+	}
+	if len(s) == 0 {
+		t.Fatalf("expected non-empty string for GETDATE, got %q", s)
+	}
+
+	// 6. Formatted scan compatibility (Scenario 30)
+	var formatted string
+	if err := db.QueryRowContext(ctx, "SELECT CONVERT(VARCHAR(30), GETDATE(), 120) AS s").Scan(&formatted); err != nil {
+		t.Fatalf("QueryRow CONVERT(VARCHAR(30), GETDATE(), 120) failed: %v", err)
+	}
+	if len(formatted) < 19 {
+		t.Fatalf("expected ISO formatted date string (len >= 19), got %q", formatted)
+	}
+}
 

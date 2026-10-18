@@ -13,7 +13,7 @@
 | **스토리지 백엔드** | WiredTiger MVCC B+Tree Engine |
 | **연결 문자열** | `server=127.0.0.1;port=1433;database=master;user id=sa;password=secret;encrypt=disable` |
 | **총 테스트 케이스** | **123개 시나리오** (1차 기초/표준 77개 + 2차 실전/엣지 46개) |
-| **검증 결과 요약** | **PASS: 112개 (91.1%)**, **TYPE_DIFF: 2개 (1.6%)**, **UNSUPPORTED: 4개 (3.3%)**, **FAIL/BUG: 5개 (4.1%)** (실질 호환율: **92.7%**) |
+| **검증 결과 요약** | **PASS: 118개 (95.9%)**, **TYPE_DIFF: 1개 (0.8%)**, **UNSUPPORTED: 2개 (1.6%)**, **FAIL: 2개 (1.6%)** (실질 호환율: **96.7%**) |
 
 ---
 
@@ -38,7 +38,7 @@ SSMS, Azure Data Studio, DBeaver, Beekeeper Studio 등 표준 SQL Server 관리 
 
 ---
 
-### 2.2 데이터 타입 및 리터럴 (8/9 PASS - 88.9%)
+### 2.2 데이터 타입 및 리터럴 (9/9 PASS - 100%)
 SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했습니다.
 
 | 번호 | 테스트 항목 | 질의 구문 (SQL) | 결과 | 상세 원인 및 분석 |
@@ -49,7 +49,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 | 26 | 표준 UTF-8 한글 문자열 | `SELECT '안녕하세요' AS s` | **PASS** | 유니코드 한글 UTF-8 정상 인코딩/디코딩 |
 | 27 | N-접두사 유니코드 리터럴 | `SELECT N'한글유니코드' AS s` | **PASS** | T-SQL 표준 N-접두사(`N'...'`) 유니코드 리터럴 토큰 파싱 및 UTF-16LE 직렬화 완벽 지원 |
 | 28 | 불리언(Bit) 타입 | `SELECT CAST(1 AS BIT), CAST(0 AS BIT)` | **PASS** | `TypeBitN` 단일 바이트 불리언 정상 변환 |
-| 29 | DateTime 네이티브 스캔 | `SELECT GETDATE() AS dt` | **TYPE_DIFF** | **[차이점]** COLMETADATA가 문자열 타입으로 응답되어 Go `*time.Time` 네이티브 스캔 시 타입 불일치 |
+| 29 | DateTime 네이티브 스캔 | `SELECT GETDATE() AS dt` | **PASS** | `TypeDateTimeN` (0x6F) 바이너리 직렬화 및 Go/C# 네이티브 `time.Time` 스캔 완벽 지원 |
 | 30 | DateTime 포맷팅 스캔 | `SELECT CONVERT(VARCHAR(30), GETDATE(), 120)` | **PASS** | 표준 ISO 날짜 문자열 변환 및 스캔 정상 |
 | 31 | NULL 값 및 NBCROW 토큰 | `SELECT CAST(NULL AS INT), CAST(NULL AS VARCHAR(50))` | **PASS** | Null Bitmap Compression (NBCROW) 토큰 완벽 처리 |
 
@@ -134,7 +134,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 
 ---
 
-### 2.9 시스템 카탈로그 뷰 및 GUI 도구 호환 (8/10 PASS - 80.0%)
+### 2.9 시스템 카탈로그 뷰 및 GUI 도구 호환 (10/10 PASS - 100%)
 
 | 번호 | 테스트 항목 | 질의 구문 (SQL) | 결과 | 비고 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -146,8 +146,8 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 | 73 | 활성 커넥션 DMV | `SELECT session_id, client_net_address, connect_time FROM sys.dm_exec_connections` | **PASS** | TDS 접속 클라이언트 IP/포트 동적 뷰 제공 |
 | 74 | ANSI 테이블 카탈로그 | `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES` | **PASS** | 표준 ANSI SQL 테이블 카탈로그 제공 |
 | 75 | ANSI 컬럼 카탈로그 | `SELECT TABLE_NAME, COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS` | **PASS** | 표준 ANSI SQL 컬럼 카탈로그 제공 |
-| 76 | 레거시 테이블 프로시저 | `EXEC sp_tables` | **FAIL** | **[미구현]** `procedure not found: sp_tables` |
-| 77 | 레거시 컬럼 프로시저 | `EXEC sp_columns @table_name = 'diag_customers'` | **FAIL** | **[미구현]** `procedure not found: sp_columns` |
+| 76 | 레거시 테이블 프로시저 | `EXEC sp_tables` | **PASS** | 빌트인 `sp_tables` 카탈로그 프로시저 완벽 지원 (`TDS-COMPAT-5`) |
+| 77 | 레거시 컬럼 프로시저 | `EXEC sp_columns @table_name = 'diag_customers'` | **PASS** | 빌트인 `sp_columns` 19개 표준 컬럼 메타데이터 완벽 반환 (`TDS-COMPAT-5`) |
 
 ---
 
@@ -281,13 +281,22 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
   - `pkg/engine/sqlexec_eval.go`: DML 리터럴 파서(`parseLiteralValue`) 및 조건 평가기(`evaluateSingleConditionMap`, `parseEqualityConditions`)에서 `N'...'` 리터럴을 안전하게 처리하도록 보강 (`WHERE col = N'...'`, `WHERE col IN (N'...')`).
   - `TestSQLExecutor_NPrefixUnicodeLiterals` (단위/엔진 DML 테스트) 및 `TestDriverIntegration_GoMSSQLDB_NPrefixUnicodeLiterals` (공식 `go-mssqldb` E2E 드라이버 통합 테스트) 검증 완료.
 
+### 7. [Resolved] `GETDATE()` 및 타임스탬프 함수의 네이티브 DATETIME 바이너리 직렬화 (`TDS-TYPE-1` / 시나리오 29)
+- **현상**: `SELECT GETDATE() AS dt` 실행 시 엔진이 날짜를 문자열로 포맷팅하여 반환하고 와이어 계층이 `VARCHAR`로 응답하여, 클라이언트 드라이버에서 Go/C# 네이티브 `*time.Time` 객체로 직접 스캔(`row.Scan(&dt)`) 시 `unsupported Scan, storing driver.Value type string into type *time.Time` 타입 불일치 에러 발생.
+- **조치 완료**:
+  - `pkg/engine/sqlexec_select.go`: `evalScalarExpr`에서 `GETDATE()`, `NOW()`, `CURRENT_TIMESTAMP`, `GETUTCDATE()`, `SYSDATETIME()`을 문자열 포맷팅 대신 Go 네이티브 `time.Now()` (`time.Time`) 객체로 반환.
+  - `pkg/proc/builtins_date.go`: `evalDateBuiltin`에서 `GETDATE`, `CURRENT_TIMESTAMP`, `SYSUTCDATETIME` 등에 대해 `storage.DateTimeValue(time.Now())`를 반환하도록 일원화 (무할당 고속화).
+  - `pkg/proc/parser_expr.go`: 괄호 없는 SQL 표준 함수 `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_TIME`을 식별자가 아닌 `FunctionCallExpr`로 정확히 파싱.
+  - `pkg/wire/tds/server.go`: `lowerCol` 및 샘플 행 타입 판별에서 `getdate`, `now`, `current_timestamp` 컬럼의 TDS 메타데이터를 `TypeDateTimeN` (0x6F, 8바이트)으로 정확히 지정하여 공식 TDS 날짜/시간 바이너리 패킹 전송.
+  - `TestSQLExecutor_GetDateNativeTimestamp` (엔진 단위 테스트) 및 `TestDriverIntegration_GoMSSQLDB_GetDateNativeScan` (`go-mssqldb` 드라이버 E2E 통합 테스트: `time.Time` 스캔 및 기존 문자열 호환 스캔 동시 검증) 통과.
+
 ---
 
 ## 4. 최종 결론
 
-123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **95.1% (117/123 - PASS 115개 + TYPE_DIFF 2개)의 압도적인 종합 호환율**을 달성했습니다.
+123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **96.7% (119/123 - PASS 118개 + TYPE_DIFF 1개)의 압도적인 종합 호환율**을 달성했습니다.
 - **완벽히 통과된 강력한 엔터프라이즈 기능**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원.
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원, 네이티브 DATETIME 바이너리 직렬화(`GETDATE()`).
 - **향후 확장을 위한 잔여 과제**:
   1. C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
   2. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1`).

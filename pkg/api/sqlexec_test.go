@@ -2985,4 +2985,51 @@ func TestSQLExecutor_NPrefixUnicodeLiterals(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_GetDateNativeTimestamp(t *testing.T) {
+	server := setupMemServer(t)
+
+	// 1. SELECT GETDATE() AS dt
+	res, err := server.ExecuteSQL("SELECT GETDATE() AS dt;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT GETDATE() failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	dtVal, ok := res.Rows[0]["dt"].(time.Time)
+	if !ok {
+		t.Fatalf("expected time.Time for GETDATE(), got %T (%v)", res.Rows[0]["dt"], res.Rows[0]["dt"])
+	}
+	if dtVal.IsZero() {
+		t.Fatalf("expected non-zero dt, got %v", dtVal)
+	}
+
+	// 2. SELECT CURRENT_TIMESTAMP AS ts
+	res, err = server.ExecuteSQL("SELECT CURRENT_TIMESTAMP AS ts;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT CURRENT_TIMESTAMP failed: %v", err)
+	}
+	tsVal, ok := res.Rows[0]["ts"].(time.Time)
+	if !ok {
+		t.Fatalf("expected time.Time for CURRENT_TIMESTAMP, got %T (%v)", res.Rows[0]["ts"], res.Rows[0]["ts"])
+	}
+	if tsVal.IsZero() {
+		t.Fatalf("expected non-zero ts, got %v", tsVal)
+	}
+
+	// 3. SELECT GETUTCDATE() AS utc
+	res, err = server.ExecuteSQL("SELECT GETUTCDATE() AS utc;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT GETUTCDATE() failed: %v", err)
+	}
+	utcVal, ok := res.Rows[0]["utc"].(time.Time)
+	if !ok {
+		t.Fatalf("expected time.Time for GETUTCDATE(), got %T (%v)", res.Rows[0]["utc"], res.Rows[0]["utc"])
+	}
+	if utcVal.IsZero() {
+		t.Fatalf("expected non-zero utc, got %v", utcVal)
+	}
+}
+
+
 

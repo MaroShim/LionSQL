@@ -2120,7 +2120,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 			colType = TypeDateTime2N
 			colSize = 8
 			scale = 7
-		} else if strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") {
+		} else if lowerCol == "getdate" || lowerCol == "now" || lowerCol == "current_timestamp" || lowerCol == "getutcdate" || lowerCol == "sysdatetime" || lowerCol == "sysutcdatetime" || strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") {
 			colType = TypeDateTimeN
 			colSize = 8
 		} else if strings.HasSuffix(lowerCol, "date") {
@@ -2164,7 +2164,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 						colType = TypeTimeN
 						colSize = 5
 						scale = 7
-					} else if lowerCol == "create_date" || lowerCol == "modify_date" || strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") || lowerCol == "created" || lowerCol == "modified" {
+					} else if lowerCol == "getdate" || lowerCol == "now" || lowerCol == "current_timestamp" || lowerCol == "getutcdate" || lowerCol == "sysdatetime" || lowerCol == "sysutcdatetime" || lowerCol == "create_date" || lowerCol == "modify_date" || strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") || lowerCol == "created" || lowerCol == "modified" {
 						colType = TypeDateTimeN
 						colSize = 8
 					} else if strings.HasSuffix(lowerCol, "date") {

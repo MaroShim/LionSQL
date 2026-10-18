@@ -476,16 +476,16 @@ func isDateBuiltin(name string) bool {
 func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 	switch upper {
 	case "GETDATE", "NOW", "CURRENT_TIMESTAMP":
-		return storage.StringValue(time.Now().Format("2006-01-02 15:04:05"))
+		return storage.DateTimeValue(time.Now())
 
 	case "GETUTCDATE":
-		return storage.StringValue(time.Now().UTC().Format("2006-01-02 15:04:05"))
+		return storage.DateTimeValue(time.Now().UTC())
 
 	case "SYSDATETIME":
-		return storage.StringValue(time.Now().Format("2006-01-02 15:04:05.0000000"))
+		return storage.DateTimeValue(time.Now())
 
 	case "SYSUTCDATETIME":
-		return storage.StringValue(time.Now().UTC().Format("2006-01-02 15:04:05.0000000"))
+		return storage.DateTimeValue(time.Now().UTC())
 
 	case "SYSDATETIMEOFFSET":
 		return storage.StringValue(time.Now().Format("2006-01-02 15:04:05.0000000 -07:00"))

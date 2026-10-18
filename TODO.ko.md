@@ -48,6 +48,7 @@
 | **P2** | **수식/NULL** | **문자열 `+` 연산 시 `CONCAT_NULL_YIELDS_NULL ON` 규격에 따른 NULL 전파 보강 (`TDS-COMPAT-8`)** | `pkg/engine`, `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **예외/TDS** | **사용자 예외 발생 구문 (`RAISERROR`, `THROW`) 파싱 및 TDS Error Token(0xAA) 방출 (`TDS-COMPAT-9`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **도구호환/카탈로그** | **레거시 메타데이터 저장 프로시저 (`sp_tables`, `sp_columns`) 빌트인 구현 (`TDS-COMPAT-5`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
+| **P3** | **타입/와이어** | **`GETDATE()` 및 타임스탬프 함수의 네이티브 DATETIME 바이너리 직렬화 (`TDS-TYPE-1`)** | `pkg/engine`, `pkg/proc`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **Post-1.0 연기 (Postponed)** | - |
 | **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **설계 완료 (착수 준비)** | [`doc/UNIFIED_CLI_PLAN.md`](doc/UNIFIED_CLI_PLAN.md) |
 | **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
@@ -370,6 +371,10 @@
   - 거대한 switch 분기를 15줄 수준의 $O(1)$ 레지스트리 맵 디스패치(`VirtualCatalogView`)로 슬림화.
 
 ### 5.2. 코어 아키텍처 및 기능 마일스톤 이력
+- [x] **`GETDATE()` 및 타임스탬프 함수 네이티브 DATETIME 바이너리 직렬화 (`TDS-TYPE-1` / 시나리오 29) (`pkg/engine`, `pkg/proc`, `pkg/wire/tds`)**:
+  - `sqlexec_select.go` 및 `builtins_date.go`에서 `GETDATE()`, `CURRENT_TIMESTAMP`, `GETUTCDATE()`, `SYSDATETIME()`을 문자열 대신 Go 네이티브 `time.Time` 및 `storage.DateTimeValue`로 반환.
+  - `parser_expr.go`에서 괄호 없는 SQL 표준 함수 `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_TIME`을 `FunctionCallExpr`로 정확히 파싱.
+  - TDS 와이어 계층에서 `TypeDateTimeN` (0x6F, 8바이트) 바이너리 메타데이터로 직렬화하여 클라이언트 드라이버(`go-mssqldb`)의 네이티브 `time.Time` 스캔 및 문자열 호환 스캔 동시 완결.
 - [x] **T-SQL 유니코드 N-접두사 (`N'...'`) 리터럴 지원 (`TDS-COMPAT-2`) (`pkg/proc`, `pkg/engine`, `pkg/wire/tds`)**:
   - `pkg/proc/lexer.go`: 렉서 `default` 분기에서 `N'...'` 및 `n'...'` 패턴을 식별자가 아닌 `TokenString`으로 직행 처리하여 파싱 오류 및 토큰 누락 방지.
   - `pkg/engine/sqlexec_select.go` & `sqlexec_eval.go`: `isSingleQuotedLiteral`, `evalScalarExpr`, `parseLiteralValue`, `evaluateSingleConditionMap`에서 `N'...'` 언쿼트 및 WHERE 조건(`=`, `<>`, `IN`) 완벽 수용.

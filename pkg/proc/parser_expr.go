@@ -275,6 +275,10 @@ func (p *Parser) parsePrefix() Expr {
 		if p.curTokenIs(TokenLParen) {
 			return p.parseFunctionCall(ident)
 		}
+		upperIdent := strings.ToUpper(ident)
+		if upperIdent == "CURRENT_TIMESTAMP" || upperIdent == "CURRENT_DATE" || upperIdent == "CURRENT_TIME" || upperIdent == "GETDATE" {
+			return &FunctionCallExpr{Name: upperIdent}
+		}
 		return &ColumnRefExpr{Name: ident}
 	case TokenMinus:
 		p.nextToken()

@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Native DATETIME Binary Serialization for `GETDATE()` and Timestamp Built-ins (`TDS-TYPE-1` / Scenario 29) (`pkg/engine`, `pkg/proc`, `pkg/wire/tds`)**:
+  - Updated `evalScalarExpr` in `pkg/engine/sqlexec_select.go` and `evalDateBuiltin` in `pkg/proc/builtins_date.go` to return Go `time.Time` and `storage.DateTimeValue(time.Now())` for `GETDATE()`, `CURRENT_TIMESTAMP`, `GETUTCDATE()`, and `SYSDATETIME()` instead of formatted strings.
+  - Enhanced T-SQL Pratt expression parser in `pkg/proc/parser_expr.go` to parse zero-argument SQL standard functions `CURRENT_TIMESTAMP`, `CURRENT_DATE`, and `CURRENT_TIME` without parentheses as `FunctionCallExpr`.
+  - Configured TDS wire serialization in `pkg/wire/tds/server.go` to assign `TypeDateTimeN` (0x6F, 8-byte) metadata for `getdate`, `now`, and `current_timestamp` columns, enabling client drivers (`go-mssqldb`) to natively scan into `*time.Time` while maintaining string scan compatibility.
+  - Added unit test `TestSQLExecutor_GetDateNativeTimestamp` in `pkg/api/sqlexec_test.go` and E2E driver integration test `TestDriverIntegration_GoMSSQLDB_GetDateNativeScan` in `pkg/wire/tds/driver_integration_test.go`.
 - **Unicode N-prefix (`N'...'`) String Literal Support in T-SQL Lexer and Engine (`TDS-COMPAT-2`) (`pkg/proc`, `pkg/engine`, `pkg/wire/tds`)**:
   - Fixed T-SQL lexer (`pkg/proc/lexer.go`) to recognize `N'...'` and `n'...'` as `TokenString` rather than tokenizing `N`/`n` as an identifier, eliminating parsing errors and driver stream deserialization failures.
   - Enhanced `isSingleQuotedLiteral` and `evalScalarExpr` in `pkg/engine/sqlexec_select.go` to unquote `N'...'` literals in SELECT expressions, string concatenations (`+`), and projections.
