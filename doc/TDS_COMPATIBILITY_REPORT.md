@@ -13,7 +13,7 @@
 | **스토리지 백엔드** | WiredTiger MVCC B+Tree Engine |
 | **연결 문자열** | `server=127.0.0.1;port=1433;database=master;user id=sa;password=secret;encrypt=disable` |
 | **총 테스트 케이스** | **123개 시나리오** (1차 기초/표준 77개 + 2차 실전/엣지 46개) |
-| **검증 결과 요약** | **PASS: 110개 (89.4%)**, **UNSUPPORTED: 4개 (3.3%)**, **TYPE_DIFF: 1개 (0.8%)**, **FAIL/BUG: 8개 (6.5%)** |
+| **검증 결과 요약** | **PASS: 111개 (90.2%)**, **UNSUPPORTED: 4개 (3.3%)**, **TYPE_DIFF: 1개 (0.8%)**, **FAIL/BUG: 7개 (5.7%)** |
 
 ---
 
@@ -55,13 +55,13 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 
 ---
 
-### 2.3 기본 DDL, CRUD 및 트랜잭션 (7/8 PASS - 87.5%)
+### 2.3 기본 DDL, CRUD 및 트랜잭션 (8/8 PASS - 100%)
 
 | 번호 | 테스트 항목 | 질의 구문 (SQL) | 결과 | 상세 원인 및 분석 |
 | :--- | :--- | :--- | :--- | :--- |
 | 32 | 테이블 생성 제약조건 | `CREATE TABLE diag_users (id INT PRIMARY KEY, name VARCHAR(50) NOT NULL, score DECIMAL(5,2), active BIT DEFAULT 1, remark VARCHAR(100))` | **PASS** | 기본키, Not Null, 기본값, 다중 컬럼 생성 완료 |
 | 33 | 다건 행 삽입 | `INSERT INTO diag_users VALUES (1, 'Alice', 95.5, 1), (2, 'Bob', 82.0, 0), (3, 'Charlie', NULL, 1)` | **PASS** | 다중 Row VALUES 삽입 및 RowsAffected=3 반환 |
-| 34 | 조건절 조회 및 정렬 | `SELECT id, name, score FROM diag_users WHERE active = 1 ORDER BY id DESC` | **FAIL** | **[버그]** `INSERT` 시 BIT 컬럼에 `1` 삽입 시 불리언 변환 누락으로 `false`로 저장되어 `active = 1` 조건 불일치 |
+| 34 | 조건절 조회 및 정렬 | `SELECT id, name, score FROM diag_users WHERE active = 1 ORDER BY id DESC` | **PASS** | `INSERT`, `UPDATE` 및 `WHERE` 조건절에서 BIT 컬럼의 수치(`1`/`0`) 및 문자열(`'1'`/`'0'`) 리터럴 불리언 강제 변환 정상 동작 |
 | 35 | 수식 기반 UPDATE | `UPDATE diag_users SET score = score + 5.0, remark = 'Upgraded' WHERE id = 1` | **PASS** | 연산자 수식 반영 및 단일 행 업데이트 성공 |
 | 36 | 조건부 DELETE | `DELETE FROM diag_users WHERE id = 2` | **PASS** | 단일 행 삭제 성공 |
 | 37 | 인덱스 생성 | `CREATE INDEX idx_diag_users_name ON diag_users (name)` | **PASS** | 보조 B+Tree 인덱스 생성 성공 |

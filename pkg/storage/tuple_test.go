@@ -381,3 +381,41 @@ func BenchmarkLazyTuple_SelectiveVsFullDecode(b *testing.B) {
 	})
 }
 
+func TestTupleCodec_BoolNumericCoercion(t *testing.T) {
+	schema := &TableSchema{
+		Name: "test_bool_coercion",
+		Columns: []Column{
+			{Name: "id", Type: TypeInt, PrimaryKey: true},
+			{Name: "is_active", Type: TypeBool},
+			{Name: "is_verified", Type: TypeBool},
+		},
+	}
+
+	rec := Record{
+		"id":          IntValue(1),
+		"is_active":   IntValue(1),
+		"is_verified": IntValue(0),
+	}
+
+	data, err := EncodeTuple(schema, rec)
+	if err != nil {
+		t.Fatalf("EncodeTuple failed: %v", err)
+	}
+
+	decoded, err := DecodeTuple(schema, data)
+	if err != nil {
+		t.Fatalf("DecodeTuple failed: %v", err)
+	}
+
+	act := decoded["is_active"]
+	if act.Type != TypeBool || !act.BVal {
+		t.Errorf("expected is_active to be true TypeBool, got %v (%+v)", act.Type, act)
+	}
+
+	ver := decoded["is_verified"]
+	if ver.Type != TypeBool || ver.BVal {
+		t.Errorf("expected is_verified to be false TypeBool, got %v (%+v)", ver.Type, ver)
+	}
+}
+
+

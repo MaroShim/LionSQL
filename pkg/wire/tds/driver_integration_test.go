@@ -1051,6 +1051,113 @@ func TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_GoMSSQLDB_BitColumnNumericCoercion(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;user id=sa;password=secret;encrypt=disable", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. Create table with BIT columns
+	_, err = db.ExecContext(ctx, "CREATE TABLE test_bit (id INT PRIMARY KEY, is_active BIT, flag BIT);")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 2. Insert with numeric literals 1 and 0
+	_, err = db.ExecContext(ctx, "INSERT INTO test_bit VALUES (1, 1, 0);")
+	if err != nil {
+		t.Fatalf("INSERT numeric literals 1, 0 failed: %v", err)
+	}
+
+	_, err = db.ExecContext(ctx, "INSERT INTO test_bit VALUES (2, 0, 1);")
+	if err != nil {
+		t.Fatalf("INSERT numeric literals 0, 1 failed: %v", err)
+	}
+
+	// 3. Insert with string literals '1' and '0'
+	_, err = db.ExecContext(ctx, "INSERT INTO test_bit VALUES (3, '1', '0');")
+	if err != nil {
+		t.Fatalf("INSERT string literals '1', '0' failed: %v", err)
+	}
+
+	// 4. Query with WHERE is_active = 1
+	rows, err := db.QueryContext(ctx, "SELECT id, is_active, flag FROM test_bit WHERE is_active = 1 ORDER BY id;")
+	if err != nil {
+		t.Fatalf("SELECT WHERE is_active = 1 failed: %v", err)
+	}
+	defer rows.Close()
+
+	var count int
+	for rows.Next() {
+		var id int
+		var isActive, flag bool
+		if err := rows.Scan(&id, &isActive, &flag); err != nil {
+			t.Fatalf("Scan failed: %v", err)
+		}
+		if !isActive {
+			t.Errorf("expected is_active to be true, got false for id=%d", id)
+		}
+		count++
+	}
+	if count != 2 {
+		t.Errorf("expected 2 active rows, got %d", count)
+	}
+
+	// 5. Query with WHERE is_active = 0
+	var zeroId int
+	var zeroActive, zeroFlag bool
+	err = db.QueryRowContext(ctx, "SELECT id, is_active, flag FROM test_bit WHERE is_active = 0;").Scan(&zeroId, &zeroActive, &zeroFlag)
+	if err != nil {
+		t.Fatalf("SELECT WHERE is_active = 0 failed: %v", err)
+	}
+	if zeroId != 2 || zeroActive != false || zeroFlag != true {
+		t.Errorf("expected id=2, is_active=false, flag=true, got id=%d, active=%v, flag=%v", zeroId, zeroActive, zeroFlag)
+	}
+
+	// 6. Update BIT column with numeric literal 0
+	_, err = db.ExecContext(ctx, "UPDATE test_bit SET is_active = 0 WHERE id = 1;")
+	if err != nil {
+		t.Fatalf("UPDATE SET is_active = 0 failed: %v", err)
+	}
+
+	var updatedActive bool
+	err = db.QueryRowContext(ctx, "SELECT is_active FROM test_bit WHERE id = 1;").Scan(&updatedActive)
+	if err != nil {
+		t.Fatalf("SELECT updated is_active failed: %v", err)
+	}
+	if updatedActive != false {
+		t.Errorf("expected updated is_active to be false, got true")
+	}
+
+	// 7. Verify CAST(... AS BIT)
+	var cast1, cast0, castStr1, castStr0 bool
+	err = db.QueryRowContext(ctx, "SELECT CAST(1 AS BIT), CAST(0 AS BIT), CAST('1' AS BIT), CAST('0' AS BIT);").Scan(&cast1, &cast0, &castStr1, &castStr0)
+	if err != nil {
+		t.Fatalf("CAST AS BIT failed: %v", err)
+	}
+	if !cast1 || cast0 || !castStr1 || castStr0 {
+		t.Errorf("unexpected CAST results: cast1=%v, cast0=%v, castStr1=%v, castStr0=%v", cast1, cast0, castStr1, castStr0)
+	}
+}
+
+
 
 
 

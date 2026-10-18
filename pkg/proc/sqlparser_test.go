@@ -632,5 +632,41 @@ func TestEvalRowExpr_NullPropagation(t *testing.T) {
 	}
 }
 
+func TestEvalRowExpr_CastBit(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want any
+	}{
+		{name: "cast int 1", sql: "SELECT CAST(1 AS BIT)", want: true},
+		{name: "cast int 0", sql: "SELECT CAST(0 AS BIT)", want: false},
+		{name: "cast int 100", sql: "SELECT CAST(100 AS BIT)", want: true},
+		{name: "cast str 1", sql: "SELECT CAST('1' AS BIT)", want: true},
+		{name: "cast str 0", sql: "SELECT CAST('0' AS BIT)", want: false},
+		{name: "cast str true", sql: "SELECT CAST('true' AS BIT)", want: true},
+		{name: "cast str false", sql: "SELECT CAST('false' AS BIT)", want: false},
+		{name: "cast float nonzero", sql: "SELECT CAST(1.5 AS BIT)", want: true},
+		{name: "cast null", sql: "SELECT CAST(NULL AS BIT)", want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := proc.ParseSQL(tt.sql)
+			if err != nil {
+				t.Fatalf("ParseSQL failed for %s: %v", tt.sql, err)
+			}
+			sel := stmt.(*proc.GeneralSelectStmt)
+			val, err := proc.EvalRowExpr(sel.Projections[0].Expr, nil, nil)
+			if err != nil {
+				t.Fatalf("EvalRowExpr returned error for %s: %v", tt.sql, err)
+			}
+			if val != tt.want {
+				t.Errorf("expected %v, got %v for %s", tt.want, val, tt.sql)
+			}
+		})
+	}
+}
+
+
 
 

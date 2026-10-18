@@ -141,6 +141,9 @@ func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
 		if targetType == storage.TypeBinary {
 			return storage.BinaryValueFromString(strVal)
 		}
+		if targetType == storage.TypeBool {
+			return storage.BoolValueFromAny(storage.StringValue(strVal))
+		}
 		return storage.StringValue(strVal)
 	}
 
@@ -169,12 +172,7 @@ func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
 	case storage.TypeDecimal:
 		return storage.DecimalValue(s)
 	case storage.TypeBool:
-		if strings.EqualFold(s, "TRUE") || s == "1" {
-			return storage.BoolValue(true)
-		}
-		if strings.EqualFold(s, "FALSE") || s == "0" {
-			return storage.BoolValue(false)
-		}
+		return storage.BoolValueFromAny(storage.StringValue(s))
 	}
 	return storage.StringValue(s)
 }
@@ -340,11 +338,23 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		if !ok || val == nil {
 			return false
 		}
+		var isBool bool
+		var bVal bool
+		if b, ok := val.(bool); ok {
+			isBool = true
+			bVal = b
+		} else if sv, ok := val.(storage.Value); ok && sv.Type == storage.TypeBool {
+			isBool = true
+			bVal = sv.BVal
+		}
+
 		strVal := fmt.Sprintf("%v", val)
 		found := false
 		for _, rawItem := range strings.Split(valList, ",") {
 			item := strings.Trim(strings.TrimSpace(rawItem), "'\"")
-			if strings.EqualFold(strVal, item) {
+			if strings.EqualFold(strVal, item) ||
+				(isBool && bVal && (item == "1" || strings.EqualFold(item, "true"))) ||
+				(isBool && !bVal && (item == "0" || strings.EqualFold(item, "false"))) {
 				found = true
 				break
 			}
@@ -426,11 +436,37 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				return false
 			}
 
+			var isBool bool
+			var bVal bool
+			if b, ok := val.(bool); ok {
+				isBool = true
+				bVal = b
+			} else if sv, ok := val.(storage.Value); ok && sv.Type == storage.TypeBool {
+				isBool = true
+				bVal = sv.BVal
+			}
+
 			strVal := fmt.Sprintf("%v", val)
 			switch strings.TrimSpace(op) {
 			case "=":
+				if isBool {
+					if rightVal == "1" || strings.EqualFold(rightVal, "true") {
+						return bVal
+					}
+					if rightVal == "0" || strings.EqualFold(rightVal, "false") {
+						return !bVal
+					}
+				}
 				return strings.EqualFold(strVal, rightVal)
 			case "!=", "<>":
+				if isBool {
+					if rightVal == "1" || strings.EqualFold(rightVal, "true") {
+						return !bVal
+					}
+					if rightVal == "0" || strings.EqualFold(rightVal, "false") {
+						return bVal
+					}
+				}
 				return !strings.EqualFold(strVal, rightVal)
 			case ">":
 				n1, err1 := strconv.ParseFloat(strVal, 64)

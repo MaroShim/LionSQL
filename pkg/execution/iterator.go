@@ -517,19 +517,46 @@ func CompareValues(a, b any) int {
 
 	switch va := a.(type) {
 	case string:
+		if vb, ok := b.(bool); ok {
+			if strings.EqualFold(va, "true") || va == "1" {
+				if vb {
+					return 0
+				}
+				return 1
+			}
+			if strings.EqualFold(va, "false") || va == "0" {
+				if !vb {
+					return 0
+				}
+				return -1
+			}
+		}
 		vb := fmt.Sprintf("%v", b)
 		return strings.Compare(va, vb)
 	case bool:
-		vb, ok := b.(bool)
-		if !ok {
-			return strings.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
+		if vb, ok := b.(bool); ok {
+			if !va && vb {
+				return -1
+			} else if va && !vb {
+				return 1
+			}
+			return 0
 		}
-		if !va && vb {
-			return -1
-		} else if va && !vb {
-			return 1
+		if s, ok := b.(string); ok {
+			if strings.EqualFold(s, "true") || s == "1" {
+				if va {
+					return 0
+				}
+				return -1
+			}
+			if strings.EqualFold(s, "false") || s == "0" {
+				if !va {
+					return 0
+				}
+				return 1
+			}
 		}
-		return 0
+		return strings.Compare(fmt.Sprintf("%v", a), fmt.Sprintf("%v", b))
 	case time.Time:
 		vb, ok := b.(time.Time)
 		if !ok {
@@ -554,6 +581,21 @@ func toInt64(v any) (int64, bool) {
 		return int64(n), true
 	case float64:
 		return int64(n), true
+	case bool:
+		if n {
+			return 1, true
+		}
+		return 0, true
+	case storage.Value:
+		if n.Type == storage.TypeBool {
+			if n.BVal {
+				return 1, true
+			}
+			return 0, true
+		} else if n.Type == storage.TypeInt {
+			return n.IVal, true
+		}
+		return 0, false
 	default:
 		if num, ok := v.(interface{ Int64() (int64, error) }); ok {
 			if i, err := num.Int64(); err == nil {
@@ -577,6 +619,23 @@ func toFloat64(v any) (float64, bool) {
 		return float64(n), true
 	case int:
 		return float64(n), true
+	case bool:
+		if n {
+			return 1.0, true
+		}
+		return 0.0, true
+	case storage.Value:
+		if n.Type == storage.TypeBool {
+			if n.BVal {
+				return 1.0, true
+			}
+			return 0.0, true
+		} else if n.Type == storage.TypeInt {
+			return float64(n.IVal), true
+		} else if n.Type == storage.TypeFloat {
+			return n.FVal, true
+		}
+		return 0, false
 	case string:
 		if f, err := strconv.ParseFloat(n, 64); err == nil {
 			return f, true

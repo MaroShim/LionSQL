@@ -394,6 +394,9 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 			} else if col.Type == storage.TypeTime && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDateTime || val.Type == storage.TypeTime) {
 				val = storage.TimeValueFromAny(val)
 				record[col.Name] = val
+			} else if col.Type == storage.TypeBool && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat || val.Type == storage.TypeVarChar || val.Type == storage.TypeDecimal) {
+				val = storage.BoolValueFromAny(val)
+				record[col.Name] = val
 			} else if col.Type == storage.TypeDateTime && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDate) {
 				dt, err := storage.DateTimeValueFromAny(val)
 				if err != nil {
@@ -539,6 +542,9 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 				updated[col.Name] = val
 			} else if col.Type == storage.TypeTime && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDateTime || val.Type == storage.TypeTime) {
 				val = storage.TimeValueFromAny(val)
+				updated[col.Name] = val
+			} else if col.Type == storage.TypeBool && (val.Type == storage.TypeInt || val.Type == storage.TypeFloat || val.Type == storage.TypeVarChar || val.Type == storage.TypeDecimal) {
+				val = storage.BoolValueFromAny(val)
 				updated[col.Name] = val
 			} else if col.Type == storage.TypeDateTime && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDate) {
 				dt, err := storage.DateTimeValueFromAny(val)

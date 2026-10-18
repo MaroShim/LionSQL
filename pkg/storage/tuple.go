@@ -162,7 +162,11 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 			buf = append(buf, scratch[:8]...)
 
 		case TypeBool:
-			if val.BVal {
+			bVal := val.BVal
+			if val.Type != TypeBool {
+				bVal = BoolValueFromAny(val).BVal
+			}
+			if bVal {
 				buf = append(buf, 1)
 			} else {
 				buf = append(buf, 0)

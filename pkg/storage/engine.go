@@ -440,6 +440,28 @@ func BoolValue(v bool) Value {
 	return Value{Type: TypeBool, BVal: v}
 }
 
+// BoolValueFromAny converts an arbitrary Value to a TypeBool Value.
+func BoolValueFromAny(v Value) Value {
+	if v.IsNull {
+		return NullValue(TypeBool)
+	}
+	switch v.Type {
+	case TypeBool:
+		return v
+	case TypeInt:
+		return BoolValue(v.IVal != 0)
+	case TypeFloat:
+		return BoolValue(v.FVal != 0)
+	case TypeDecimal:
+		return BoolValue(!v.Decimal().IsZero())
+	case TypeVarChar, TypeJSON:
+		s := strings.Trim(strings.TrimSpace(v.SVal), "'\"")
+		return BoolValue(strings.EqualFold(s, "true") || s == "1" || strings.EqualFold(s, "t"))
+	default:
+		return BoolValue(false)
+	}
+}
+
 func DateTimeValue(v time.Time) Value {
 	return Value{Type: TypeDateTime, TVal: v}
 }
@@ -626,6 +648,12 @@ func (v Value) Equal(other Value) bool {
 		d2 := other.Decimal()
 		return d1.Equal(d2)
 	}
+	if (v.Type == TypeBool && other.Type == TypeInt) || (v.Type == TypeInt && other.Type == TypeBool) {
+		if v.Type == TypeBool {
+			return (v.BVal && other.IVal == 1) || (!v.BVal && other.IVal == 0)
+		}
+		return (other.BVal && v.IVal == 1) || (!other.BVal && v.IVal == 0)
+	}
 	if v.Type != other.Type {
 		return false
 	}
@@ -679,6 +707,26 @@ func (v Value) Compare(other Value) int {
 		d1 := v.Decimal()
 		d2 := other.Decimal()
 		return d1.Cmp(d2)
+	}
+	if (v.Type == TypeBool && other.Type == TypeInt) || (v.Type == TypeInt && other.Type == TypeBool) {
+		var vInt, oInt int64
+		if v.Type == TypeBool {
+			if v.BVal {
+				vInt = 1
+			}
+			oInt = other.IVal
+		} else {
+			vInt = v.IVal
+			if other.BVal {
+				oInt = 1
+			}
+		}
+		if vInt < oInt {
+			return -1
+		} else if vInt > oInt {
+			return 1
+		}
+		return 0
 	}
 	if v.Type == TypeUUID || v.Type == TypeBinary || v.Type == TypeDate || v.Type == TypeTime {
 		return CompareExtendedValues(v, other)

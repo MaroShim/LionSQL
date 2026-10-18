@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **BIT Column Numeric/String Literal Boolean Coercion Across Full Data Lifecycle (`TDS-COMPAT-3`) (`pkg/storage`, `pkg/engine`, `pkg/proc`, `pkg/execution`, `pkg/wire/tds`)**:
+  - Implemented `storage.BoolValueFromAny(v Value) Value` supporting cross-type conversion from `TypeInt`, `TypeFloat`, `TypeDecimal`, and `TypeVarChar`/`TypeJSON` (`'1'`, `'0'`, `'true'`, `'false'`, `'t'`).
+  - Added cross-type equality (`Value.Equal`) and ordering (`Value.Compare`) between `TypeBool` and `TypeInt`, enabling seamless predicate evaluation when comparing boolean fields against numeric literals.
+  - Added automatic boolean type coercion in `memengine` (`Insert` and `Update`) to prevent `ErrInvalidDataType` when passing numeric `1`/`0` to `BIT` columns.
+  - Fixed WiredTiger binary tuple encoding in `tuple.go` (`EncodeRowToBuffer`) by coercing non-`TypeBool` values into booleans before writing byte `1`/`0`, eliminating silent false (`0`) serialization.
+  - Enhanced DML literal parser (`parseLiteralValue`) and condition evaluators (`evaluateSingleConditionMap`, including `IN` clauses) in `pkg/engine/sqlexec_eval.go` to coerce `1`/`0` and `'1'`/`'0'` literals for boolean columns.
+  - Enhanced `EvalCast` and `toFloat` in `pkg/proc/eval.go` to support `TypeBool` casting from integers, decimals, and quoted string representations.
+  - Enhanced `CompareValues`, `toInt64`, and `toFloat64` in `pkg/execution/iterator.go` to handle cross-comparisons between booleans, integers, floats, and strings in Volcano execution operators.
+  - Added unit test `TestTupleCodec_BoolNumericCoercion` (`pkg/storage`), expression test `TestEvalRowExpr_CastBit` (`pkg/proc`), and driver integration test `TestDriverIntegration_GoMSSQLDB_BitColumnNumericCoercion` (`pkg/wire/tds`).
 - **Binary Arithmetic & String Concatenation NULL Propagation (`TDS-COMPAT-8`) (`pkg/proc`, `pkg/engine`)**:
   - Enforced ANSI and T-SQL standard `CONCAT_NULL_YIELDS_NULL ON` three-valued logic (3VL) NULL propagation in `pkg/proc/eval.go` (`evalRowBinaryOp`) across binary operators (`+`, `-`, `*`, `/`, `<`, `<=`, `>`, `>=`), preventing invalid string concatenation and negative formatting on NULL inputs.
   - Added NULL operand guards in `storageAdd`, `storageSub`, `storageMul`, `storageDiv`, `storageNeg`, `storageLt`, `storageLte`, `storageGt`, and `storageGte` in `pkg/proc/runtime/vm.go`.

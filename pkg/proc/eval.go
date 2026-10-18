@@ -621,6 +621,22 @@ func toFloat(v any) (float64, bool) {
 		return 0, false
 	}
 	switch val := v.(type) {
+	case bool:
+		if val {
+			return 1.0, true
+		}
+		return 0.0, true
+	case storage.Value:
+		if val.Type == storage.TypeBool {
+			if val.BVal {
+				return 1.0, true
+			}
+			return 0.0, true
+		} else if val.Type == storage.TypeInt {
+			return float64(val.IVal), true
+		} else if val.Type == storage.TypeFloat {
+			return val.FVal, true
+		}
 	case int64:
 		return float64(val), true
 	case int:
@@ -757,11 +773,13 @@ func EvalCast(v storage.Value, targetType storage.DataType, prec, scale, style i
 			return storage.BoolValue(v.IVal != 0), nil
 		case storage.TypeFloat:
 			return storage.BoolValue(v.FVal != 0.0), nil
+		case storage.TypeDecimal:
+			return storage.BoolValue(!v.Decimal().IsZero()), nil
 		case storage.TypeVarChar:
-			s := strings.TrimSpace(strings.ToUpper(v.SVal))
-			if s == "1" || s == "TRUE" {
+			s := strings.Trim(strings.TrimSpace(strings.ToUpper(v.SVal)), "'\"")
+			if s == "1" || s == "TRUE" || s == "T" {
 				return storage.BoolValue(true), nil
-			} else if s == "0" || s == "FALSE" {
+			} else if s == "0" || s == "FALSE" || s == "F" {
 				return storage.BoolValue(false), nil
 			}
 			return fail(fmt.Errorf("conversion failed when converting %q to data type bit/bool", v.SVal))
