@@ -22,6 +22,7 @@
 | **`SEC-1` ~ `SEC-2`** | **엔터프라이즈 보안 (Security)** | `SEC-1` ~ `SEC-2` | TDS Pre-Login TLS 암호화 협상 및 프로토콜 보안 강화 트랙 |
 | **`LOC-1` ~ `LOC-4`** | **다국어/정렬 (Collation)** | `LOC-1` ~ `LOC-4` | MSSQL Collation/로케일 지원, COLLATE 관용 파싱, 내장 함수 트랙 |
 | **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
+| **`AUTH-1`** | **인증/토큰교환 (Auth)** | `AUTH-1` | 클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) 트랙 |
 
 ---
 
@@ -58,6 +59,7 @@
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P3** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md) |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
+| **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
 
@@ -314,8 +316,8 @@
   대용량 미디어/Blob 파일 처리는 DB 커널의 핵심 책임(ACID 트랜잭션)이 아니며, 이미 인-커널 바이너리 저장은 영구 스펙-아웃(`GEMINI.md` 8.7절)되어 있음. 애플리케이션 레벨(AWS SDK)에서 S3 직접 업로드를 처리하는 표준 패턴이 널리 쓰이므로, DB 커널 내장 서명기 및 UI 위젯은 1.0 릴리스 이후로 연기 (상세 설계: [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md)).
 
 ### 4.4. 영구 스펙-아웃 (Spec-Out Invariants)
-* **내장형 OAuth2 소셜 로그인 배제**:
-  데이터베이스 커널 내부에서 구글/깃허브 웹 리다이렉트 및 아웃바운드 인터넷 토큰 교환을 처리하는 것은 단일 책임 원칙 및 KISS(Rule 15)를 위반하고 공격 표면을 확대함. 엔터프라이즈 리버스 프록시(Keycloak, OAuth2-Proxy) 위임으로 영구 표준화 (`GEMINI.md` 8.6절, ADR-021).
+* **내장형 OAuth2 웹 플로우 배제 & 클라이언트 사이드 토큰 교환 (Client-Side Token Exchange) 표준화**:
+  데이터베이스 커널 내부에서 구글/깃허브 웹 브라우저 리다이렉트, 콜백 엔드포인트 수신, Client Secret 보관 및 아웃바운드 인터넷 토큰 교환을 처리하는 것은 단일 책임 원칙 및 KISS(Rule 15)를 위반하므로 명시적으로 배제함. 소셜 로그인은 Supabase/Firebase/Cognito 표준인 **Client-Side OIDC Token Exchange (RFC 8693)** 패턴(`AUTH-1`)으로 표준화: 클라이언트가 IdP SDK로 직접 로그인 후 획득한 서명된 ID Token(JWT)을 `POST /api/auth/token-exchange`로 전달하고, LionSQL 커널(`pkg/auth`)은 IdP의 공개키(JWKS)로 서명 무결성만 검증하여 내부 세션 토큰을 발급함 (`GEMINI.md` 8.6절).
 * **내장형 S3 Blob 파일 스토리지 및 썸네일 리사이징 배제**:
   대용량 바이너리 스트리밍 및 이미지 리사이징으로 인한 OLTP CPU/메모리 기아를 방지하고, S3/MinIO 직접 업로드(Pre-signed URL) 위임으로 영구 표준화 (`GEMINI.md` 8.7절, `doc/S3_PRESIGNED_STORAGE_PLAN.md`).
 * **미성숙 Pure-Go 영속 스토리지 엔진 (Pebble/bbolt) 단기 도입 배제 (Spec-Out & 지속적 대안 탐색)**:
