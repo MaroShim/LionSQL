@@ -21,6 +21,7 @@
 | **`OBS-1` ~ `OBS-3`** | **관제 및 프로파일링 (Observability)** | `OBS-1` ~ `OBS-3` | Prometheus 메트릭, EXPLAIN ANALYZE, 슬로우 쿼리 웹훅 연동 트랙 |
 | **`SEC-1` ~ `SEC-2`** | **엔터프라이즈 보안 (Security)** | `SEC-1` ~ `SEC-2` | TDS Pre-Login TLS 암호화 협상 및 프로토콜 보안 강화 트랙 |
 | **`LOC-1` ~ `LOC-4`** | **다국어/정렬 (Collation)** | `LOC-1` ~ `LOC-4` | MSSQL Collation/로케일 지원, COLLATE 관용 파싱, 내장 함수 트랙 |
+| **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
 
 ---
 
@@ -53,9 +54,10 @@
 | **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **설계 완료 (착수 준비)** | [`doc/UNIFIED_CLI_PLAN.md`](doc/UNIFIED_CLI_PLAN.md) |
 | **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
+| **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **신규 등록 (P1 착수 대기)** | - |
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P2** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **설계 완료 (백로그 대기)** | [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md) |
-| **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **백로그 등록 (Post-1.0 후보)** | - |
+| **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
 
@@ -225,7 +227,7 @@
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
-| **SEC-1** | 와이어/보안 | TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 | **대기 (`[ ]`)** | MS-TDS 2.2.6.4 Pre-Login 토큰 내 암호화 협상 플래그 교환 및 엄격 암호화 핸드셰이크 완비 (`pkg/wire/tds`) |
+| **SEC-1** | 와이어/보안 | TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 | **Post-1.0 연기 (Postponed)** | MS-TDS 2.2.6.4 Pre-Login 토큰 내 암호화 협상 플래그 교환 및 엄격 암호화 핸드셰이크 완비 (`pkg/wire/tds`) |
 | **MEM-3** | 스토리지/가드 | In-Memory OCC 엔진 데이터 용량 한도 가드 (`memengine`) | **완료 (`[x]`)** | `runtime/metrics` 기반 STW-free 실시간 힙 측정, 트랜잭션 커밋 시 상한 초과 방어 및 `storage.ErrTableFull` 페일세이프 반환 완비 (`pkg/storage/memengine`, `cmd/server`) |
 
 ---
@@ -261,6 +263,14 @@
 
 ---
 
+### 3.10. 세션별 Prepared Statement 메모리 보호 및 Bounded LRU 트랙 (`PREP-1`)
+
+| 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
+| :---: | :--- | :--- | :---: | :--- |
+| **PREP-1** | 와이어/안정성 | 세션별 Prepared Statement Bounded LRU 캐시 | **대기 (`[ ]`)** | PGWire(`statements`) 및 TDS(`sess.prepared`) 맵에 세션당 최대 256개 상한 Bounded LRU 캐시 메커니즘을 적용하여, DBeaver/GORM/HikariCP 등 장기 유지 커넥션에서의 메모리 누수 및 OOM 원천 차단 (Golden Rule 23 준수) (`pkg/wire/server.go`, `pkg/wire/tds/server.go`) |
+
+---
+
 ## 4. 공식 보류 및 스펙-아웃 사유 명세 (Deferred & Spec-Out Rationale)
 
 1.0 릴리스 안정성 확보 및 극단적 KISS/YAGNI 원칙(Golden Rule 14, 15)에 따라 보류 및 배제된 항목들의 기술적 결정 사유입니다:
@@ -274,6 +284,10 @@
   롤백 시 버전 복원 경쟁, 툼스톤 동시성 처리 등 동시성 엣지 케이스와 데이터 사일런트 손상(Silent Corruption) 위험이 큼. 이미 TPC-C 20,087 TPS 환경에서 직렬화 어보트율이 0.10%로 극히 안정적이므로 시스템 무결성을 최우선으로 보류.
 * **VDBE 컬럼 산술 융합 슈퍼 명령어 (`P-17`)**:
   바이트코드 점프 타깃(PC) 오프셋 불일치, 타입 불일치 등 가상 머신 실행 무결성 위협 위험이 큼. `sync.Pool` 레지스터 재사용과 서브마이크로초 디스패치로 20k TPS를 안정적으로 달성 중이므로 KISS 원칙에 따라 보류.
+* **Volcano ➔ VDBE 결과 수집 시 Compact RowSet 구조 전환 (Post-1.0 검토)**:
+  현재 `ExecutionResult.Rows`가 `[]map[string]any`로 정의되어 있어 대량 조회(수만~수십만 건) 시 매 행마다 새로운 해시맵을 힙에 할당함(`tuple.ToMap()`). 1.0 프로덕션에서는 안정성을 위해 현행 인터페이스를 유지하고, 1.0 이후 컬럼 메타데이터 분리 및 `[]storage.Value` 1차원 슬라이스 기반 Compact RowSet으로 전환하여 GC 압박을 70% 이상 절감하는 과제로 검토.
+* **Hash Join 대규모 데이터 디스크 스필 (Grace Hash Join) (Post-1.0 검토)**:
+  현재 `HashJoinIterator`는 `work_mem` 초과 시 에러를 반환하여 프로세스 OOM 크래시를 안전하게 차단하고 있음(Golden Rule 23 안전 가드 완비). 1.0 프로덕션에서는 고성능 인메모리 OLTP 핫패스 안정성에 집중하고, `SortIterator`의 외장 머지 소트처럼 `work_mem` 초과 시 임시 디렉토리 파일로 파티셔닝하는 하이브리드 Grace Hash Join 구현은 1.0 이후 대규모 배치/분석 고도화 과제로 검토.
 
 ### 4.2. 구조 리팩토링 및 플랫폼 보류 과제
 * **In-Memory OCC 트랜잭션 라이프사이클 모듈 분해 (`R-4`) & WiredTiger CGo 분해 (`R-5`)**:
@@ -290,6 +304,8 @@
   `sqlexec_select.go`(2,308줄)는 단일 테이블 및 기본 조인/집계 패스트패스를 매우 빠르고 안정적으로 처리하고 있음. 이를 무리하게 통합하다가 TPC-C 20k TPS 및 OLTP 성능 튜닝에 부작용을 줄 위험이 있으므로 Post-1.0 장기 아키텍처 과제로 공식 연기.
 * **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (`TDS-COMPAT-6`)**:
   현대 웹/OLTP 백엔드(Spring, Prisma, Gorm 등)의 95% 이상은 단일 요청당 1개의 쿼리 결과셋을 소비하며, C# Dapper `QueryMultiple` 등 제한된 영역에서만 사용됨. 엔진 코어 인터페이스(`ExecuteSessionSQL`)를 전면 슬라이스로 개편하고 TDS 토큰 상태 머신을 건드리는 큰 변경을 1.0 직전에 넣으면 전체 패키지 회귀 위험이 큼. 클라이언트에서 쿼리를 2회 분리 호출하는 명확한 대안이 존재하므로 1.0 이후(Post-1.0)로 연기.
+* **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)**:
+  현재 사설망 및 로컬/컨테이너 환경에서 TLS 비활성화(`encrypt=disable`) 모드로 100% 정상 통신 중임. 마이크로소프트 TDS 8.0의 복잡한 Pre-Login TLS 래핑 및 ALPN 핸드셰이크 협상은 공용 인터넷 노출 시 필요한 고급 보안 기능이며, 네트워크 암호화는 mTLS 리버스 프록시(Envoy, Traefik, stunnel) 또는 WireGuard/VPN으로 충분히 대체 가능함. 1.0 코어 안정성 확보를 위해 Post-1.0으로 공식 연기.
 
 ### 4.4. 영구 스펙-아웃 (Spec-Out Invariants)
 * **내장형 OAuth2 소셜 로그인 배제**:
