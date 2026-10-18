@@ -53,7 +53,7 @@
 | **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **Post-1.0 연기 (Postponed)** | - |
 | **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **설계 완료 (착수 준비)** | [`doc/UNIFIED_CLI_PLAN.md`](doc/UNIFIED_CLI_PLAN.md) |
 | **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
-| **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
+| **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **완료 (`[x]`)** | - |
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P3** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md) |
@@ -343,6 +343,11 @@
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **기본키(PK) 중복 삽입 시 Unique Violation (SQLSTATE 23505) 에러 방출 (`PG-COMPAT-2`) (`pkg/storage/wiredtiger`, `pkg/engine`, `pkg/proc`, `pkg/wire`)**:
+  - WiredTiger `insertLocked`에서 C 커서 삽입 전 `go_wt_cursor_get` 선행 검사를 추가하여 기존 기본키가 이미 존재할 경우 덮어쓰기 대신 `storage.ErrKeyExists` 즉시 반환.
+  - DML 실행기(`pkg/engine/sqlexec_dml.go`) 및 VDBE `OpInsert`(`pkg/proc/runtime/vm_dispatcher.go`)에서 `storage.ErrKeyExists`/`storage.ErrUniqueViolation` 발생 시 `duplicate key value violates unique constraint on ...`으로 표준 에러 포맷팅.
+  - PGWire `WriteError`에서 `DUPLICATE`, `UNIQUE`, `ALREADY EXISTS` 문자열에 대해 PostgreSQL 표준 에러 코드 `23505 (unique_violation)` 매핑.
+  - `pkg/storage/wiredtiger/wt_engine_test.go` 단위 테스트 및 `pkg/wire/driver_integration_test.go` 공식 lib/pq 드라이버 E2E 통합 테스트 통과.
 - [x] **세션별 Prepared Statement Bounded LRU 캐시 적용 (`PREP-1`) (`pkg/wire`, `pkg/wire/tds`)**:
   - TDS(`TdsPreparedStatementCache`) 및 PGWire(`PreparedStatementCache`)에 스레드 세이프 Bounded LRU 캐시(`container/list` + `map[*list.Element]`) 구현.
   - 세션당 기본 최대 256개(`DefaultMaxPreparedPerSession`) 상한 설정 및 `SetMaxPreparedPerSession` 동적 제어 지원.

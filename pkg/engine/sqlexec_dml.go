@@ -582,6 +582,9 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			if isEphemeral {
 				_ = tx.Rollback()
 			}
+			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
+				return nil, fmt.Errorf("duplicate key value violates unique constraint on %q: %w", tableName, err)
+			}
 			return nil, fmt.Errorf("insert row error: %w", err)
 		}
 
@@ -921,6 +924,9 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			}
 			if isEphemeral {
 				_ = tx.Rollback()
+			}
+			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
+				return nil, fmt.Errorf("duplicate key value violates unique constraint on %q: %w", tableName, err)
 			}
 			return nil, fmt.Errorf("insert row error on %q: %w", tableName, err)
 		}

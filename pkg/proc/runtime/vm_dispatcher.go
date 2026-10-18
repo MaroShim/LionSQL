@@ -626,6 +626,9 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		}
 
 		if err := f.tx.Insert(data.Table, rec); err != nil {
+			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
+				return f.handleCatch(fmt.Errorf("duplicate key value violates unique constraint on %q: %w", data.Table, err), pc)
+			}
 			return f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), pc)
 		}
 		f.rowCount++

@@ -15,6 +15,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added unit and E2E eviction integration tests in `pkg/wire/tds/lru_test.go` and `pkg/wire/lru_test.go` verifying LRU eviction behavior, MRU preservation, concurrent safety, and protocol Error 8179 handling upon accessing evicted statement handles.
 
 ### Fixed
+- **Duplicate Primary Key Unique Constraint Enforcement (`PG-COMPAT-2` / SQLSTATE 23505) (`pkg/storage/wiredtiger`, `pkg/engine`, `pkg/proc`, `pkg/wire`)**:
+  - WiredTiger B+Tree insertion (`pkg/storage/wiredtiger/wt_engine.go` `insertLocked`) now explicitly verifies key existence via `go_wt_cursor_get` before raw insertion, eliminating silent overwrites and returning `storage.ErrKeyExists`.
+  - Formatted unique key constraint violation errors in `pkg/engine/sqlexec_dml.go` and `pkg/proc/runtime/vm_dispatcher.go` as `duplicate key value violates unique constraint on "<table_name>"`.
+  - Mapped unique violation errors to standard PostgreSQL error code `23505` (`unique_violation`) in `pkg/wire/protocol.go` (`WriteError`).
+  - Added unit test in `pkg/storage/wiredtiger/wt_engine_test.go` (`TestWiredTiger_DuplicatePrimaryKey_ErrKeyExists`) and E2E driver integration test in `pkg/wire/driver_integration_test.go` (`TestDriverIntegration_LibPQ_DuplicatePrimaryKey`).
 - **WiredTiger `TRUNCATE TABLE` Transaction Isolation & Assertion Crash Prevention (`TDS-COMPAT-1` / Scenario 39-1) (`pkg/storage/wiredtiger`, `pkg/engine`, `pkg/wire/tds`)**:
   - Implemented active session tracking (`e.sessions map[*WTSession]struct{}`) and target table idle cursor eviction (`e.evictAllCursors(tableName)`) in `pkg/storage/wiredtiger/wt_engine.go` prior to truncation, eliminating WiredTiger C library cursor contention.
   - Removed unsupported `index:` URI truncation loop that caused C library `unsupported object operation` errors.

@@ -3,6 +3,7 @@
 package wiredtiger
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -827,3 +828,79 @@ func TestWiredTiger_TruncateTable(t *testing.T) {
 	t.Logf("TruncateTable while uncommitted tx active returned: %v", truncErr)
 	_ = txOpen.Rollback()
 }
+
+func TestWiredTiger_DuplicatePrimaryKey_ErrKeyExists(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_dup_pk_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
+
+	tbl := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(tbl); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+
+	err = tx.Insert("items", storage.Record{
+		"id":  storage.IntValue(42),
+		"val": storage.StringValue("initial"),
+	})
+	if err != nil {
+		t.Fatalf("first Insert failed: %v", err)
+	}
+
+	// Attempt second insert with duplicate key 42
+	dupErr := tx.Insert("items", storage.Record{
+		"id":  storage.IntValue(42),
+		"val": storage.StringValue("duplicate"),
+	})
+	if dupErr == nil {
+		t.Fatalf("expected error on duplicate PK insert, got nil")
+	}
+	if !errors.Is(dupErr, storage.ErrKeyExists) {
+		t.Fatalf("expected storage.ErrKeyExists, got: %v", dupErr)
+	}
+
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Verify only the initial row is stored
+	txRead, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx read failed: %v", err)
+	}
+	defer txRead.Rollback()
+
+	rec, err := txRead.Get("items", storage.IntValue(42))
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if rec["val"].SVal != "initial" {
+		t.Fatalf("expected 'initial', got %q", rec["val"].SVal)
+	}
+}
+

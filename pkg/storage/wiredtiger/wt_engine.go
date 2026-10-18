@@ -1114,9 +1114,18 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 		defer cleanup()
 	}
 
+	// Verify primary key uniqueness
 	var pData unsafe.Pointer
+	var sz C.size_t
+	if ret := C.go_wt_cursor_get(cur, cKey, &pData, &sz); ret == 0 && pData != nil {
+		C.go_wt_cursor_reset(cur)
+		return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkStr, tableName)
+	}
+
 	if len(recBytes) > 0 {
 		pData = unsafe.Pointer(&recBytes[0])
+	} else {
+		pData = nil
 	}
 
 	if ret := C.go_wt_cursor_insert_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {

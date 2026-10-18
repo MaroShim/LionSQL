@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/storage/memengine"
 	"sqlion/pkg/wire"
@@ -444,3 +444,43 @@ func TestDriverIntegration_LibPQ_JDBC_ODBC_Compatibility(t *testing.T) {
 		t.Fatalf("expected table_type 'BASE TABLE', got %q", tblType)
 	}
 }
+
+func TestDriverIntegration_LibPQ_DuplicatePrimaryKey(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, "CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, err = db.ExecContext(ctx, "INSERT INTO users (id, name) VALUES (1, 'Alice');")
+	if err != nil {
+		t.Fatalf("First INSERT failed: %v", err)
+	}
+
+	// Second insert with duplicate primary key
+	_, err = db.ExecContext(ctx, "INSERT INTO users (id, name) VALUES (1, 'Bob');")
+	if err == nil {
+		t.Fatalf("expected error on duplicate primary key insert, got nil")
+	}
+
+	pqErr, ok := err.(*pq.Error)
+	if !ok {
+		t.Fatalf("expected *pq.Error, got %T: %v", err, err)
+	}
+	if pqErr.Code != "23505" {
+		t.Fatalf("expected SQLSTATE 23505 (unique_violation), got %s (message: %s)", pqErr.Code, pqErr.Message)
+	}
+}
+
