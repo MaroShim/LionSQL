@@ -56,7 +56,7 @@
 | **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **신규 등록 (P1 착수 대기)** | - |
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
-| **P2** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1`, `LOC-3`, `LOC-4`, `LOC-2`는 Post-1.0 연기)** | `pkg/proc`, `pkg/engine` | **설계 완료 (백로그 대기)** | [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md) |
+| **P3** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md) |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
@@ -256,10 +256,10 @@
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
-| **LOC-1** | 파서/DDL | DDL 및 쿼리 표현식 내 `COLLATE` 구문 관용 파싱 | **대기 (`[ ]`)** | `CREATE TABLE` 컬럼 정의 및 `WHERE`/`ORDER BY` 내 `COLLATE <name>` 관용 수용 (마이그레이션 DDL 에러 원천 방지, `_BIN`/`_BIN2` 엄격 비교 분기) (`pkg/proc/lexer.go`, `pkg/proc/parser.go`) |
+| **LOC-1** | 파서/DDL | DDL 및 쿼리 표현식 내 `COLLATE` 구문 관용 파싱 | **Post-1.0 연기 (Postponed)** | `CREATE TABLE` 컬럼 정의 및 `WHERE`/`ORDER BY` 내 `COLLATE <name>` 관용 수용 (마이그레이션 DDL 에러 원천 방지, `_BIN`/`_BIN2` 엄격 비교 분기) (`pkg/proc/lexer.go`, `pkg/proc/parser.go`) |
 | **LOC-2** | 설정/와이어 | 동적 Collation 설정 (`--collation`, `config.toml`) | **Post-1.0 연기 (Postponed)** | 서버 로케일 설정에 따라 TDS `LOGINACK`/`ENVCHANGE` 5바이트 바이너리 토큰(한국어 `0x12, 0x04...` 등) 동적 생성 및 매핑 (`pkg/config`, `pkg/wire/tds`) |
-| **LOC-3** | 함수/시스템 | T-SQL 내장 시스템 함수 `COLLATIONPROPERTY` 신설 | **대기 (`[ ]`)** | `COLLATIONPROPERTY(name, 'CodePage'\|'LCID'\|'ComparisonStyle')` 빌트인 구현 (SSMS, DBeaver, EF Core 스키마 리버스 엔지니어링 호환) (`pkg/proc/builtins_sys.go`) |
-| **LOC-4** | 카탈로그 | 가상 테이블 함수 `::fn_helpcollations()` 구현 | **대기 (`[ ]`)** | 주요 40대 국제/SQL Collation 목록(`name`, `description`)을 반환하는 가상 카탈로그 시스템 함수 연동 (`pkg/catalog/virtual/`) |
+| **LOC-3** | 함수/시스템 | T-SQL 내장 시스템 함수 `COLLATIONPROPERTY` 신설 | **Post-1.0 연기 (Postponed)** | `COLLATIONPROPERTY(name, 'CodePage'\|'LCID'\|'ComparisonStyle')` 빌트인 구현 (SSMS, DBeaver, EF Core 스키마 리버스 엔지니어링 호환) (`pkg/proc/builtins_sys.go`) |
+| **LOC-4** | 카탈로그 | 가상 테이블 함수 `::fn_helpcollations()` 구현 | **Post-1.0 연기 (Postponed)** | 주요 40대 국제/SQL Collation 목록(`name`, `description`)을 반환하는 가상 카탈로그 시스템 함수 연동 (`pkg/catalog/virtual/`) |
 
 ---
 
@@ -306,8 +306,8 @@
   현대 웹/OLTP 백엔드(Spring, Prisma, Gorm 등)의 95% 이상은 단일 요청당 1개의 쿼리 결과셋을 소비하며, C# Dapper `QueryMultiple` 등 제한된 영역에서만 사용됨. 엔진 코어 인터페이스(`ExecuteSessionSQL`)를 전면 슬라이스로 개편하고 TDS 토큰 상태 머신을 건드리는 큰 변경을 1.0 직전에 넣으면 전체 패키지 회귀 위험이 큼. 클라이언트에서 쿼리를 2회 분리 호출하는 명확한 대안이 존재하므로 1.0 이후(Post-1.0)로 연기.
 * **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)**:
   현재 사설망 및 로컬/컨테이너 환경에서 TLS 비활성화(`encrypt=disable`) 모드로 100% 정상 통신 중임. 마이크로소프트 TDS 8.0의 복잡한 Pre-Login TLS 래핑 및 ALPN 핸드셰이크 협상은 공용 인터넷 노출 시 필요한 고급 보안 기능이며, 네트워크 암호화는 mTLS 리버스 프록시(Envoy, Traefik, stunnel) 또는 WireGuard/VPN으로 충분히 대체 가능함. 1.0 코어 안정성 확보를 위해 Post-1.0으로 공식 연기.
-* **동적 Collation 설정 및 TDS 토큰 바이너리 매핑 (`LOC-2`)**:
-  현재 기본 유니코드(UTF-8 / UTF-16LE) 인코딩으로 영문 및 한글/다국어가 정상 처리되고 있으며, 클라이언트 드라이버(`go-mssqldb`, DBeaver, SSMS) 통신에 결함이 없음. 서버 전역 Collation 플래그에 따른 TDS 바이너리 토큰(`LOGINACK`, `ENVCHANGE`) 동적 변환 및 파싱은 1.0 코어 안정성 확보 이후로 연기(Post-1.0).
+* **다국어 Collation 및 로케일 전면 지원 트랙 (`LOC-1` ~ `LOC-4`)**:
+  LionSQL은 내부 스토리지를 완전한 표준 유니코드 UTF-8로 단일화하고 대소문자 무관(`CI_AS`) 비교를 기본 제공하여, 한글/영문/다국어 처리 및 드라이버 연동에 실무적 장애가 전혀 없음. 레거시 CodePage/Collation 에뮬레이션(`COLLATE` 관용 구문, 동적 TDS 바이너리 토큰 매핑, `COLLATIONPROPERTY`, `fn_helpcollations`)은 1.0 코어 엔진의 극단적 단순성(KISS)과 안정성 확보를 위해 전 항목을 Post-1.0으로 일괄 연기 (상세 설계: [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md)).
 
 ### 4.4. 영구 스펙-아웃 (Spec-Out Invariants)
 * **내장형 OAuth2 소셜 로그인 배제**:
