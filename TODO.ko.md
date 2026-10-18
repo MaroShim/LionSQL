@@ -31,13 +31,13 @@
 | :---: | :---: | :--- | :--- | :---: | :--- |
 | **P1** | **리소스/안정성** | **글로벌 메모리 예산 상한제 및 회로 차단기 (Global Memory Governor & Circuit Breaker)** | `pkg/config`, `pkg/execution`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P1** | **KISS/다이어트** | **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`)** | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
-| **P1** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **차주 P1 착수 예정** | [`doc/IMMUTABLE_AUDIT_LOG_PLAN.md`](doc/IMMUTABLE_AUDIT_LOG_PLAN.md) |
+| **P3** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **Post-1.0 연기 (Postponed)** | [`doc/IMMUTABLE_AUDIT_LOG_PLAN.md`](doc/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **P1** | **성능/크리티컬패스** | **크리티컬 패스 분할기, TDS 파라미터 바인딩, Row 스트리밍 및 UTF-16LE 변환 가속 (`PERF-1`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md) |
 | **P2** | **스토리지/가드** | **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`)** | `pkg/storage/memengine`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **KISS/중복제거** | **가상 PG 카탈로그 생성기 중복 단일화 (`KISS-2`)** | `pkg/engine`, `pkg/catalog/virtual` | **완료 (`[x]`)** | - |
 | **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | - |
 | **P2** | **KISS/자료구조** | **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | - |
-| **P2** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **스프린트 백로그 대기** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
+| **P3** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
 | **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **완료 (`[x]`)** | - |
 | **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **완료 (`[x]`)** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
 | **P1** | **스토리지/안정성** | **WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 (`TDS-COMPAT-1`)** | `pkg/storage/wiredtiger`, `pkg/engine` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
@@ -206,10 +206,10 @@
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
-| **S3-1** | 스토리지 | 제로-의존성 경량 AWS SigV4 서명기 구축 | **대기 (`[ ]`)** | 순수 Go 표준 라이브러리(`crypto/hmac`, `crypto/sha256`) 기반 Canonical Request & 다단계 파생 키 서명 (`pkg/storage/s3sign`) |
-| **S3-2** | 설정/API | S3 스토리지 설정 및 HTTP REST Pre-signed API | **대기 (`[ ]`)** | `POST /api/storage/presign` 엔드포인트, MIME/크기 가드, `S3Config` 환경 변수 연동 (`pkg/config`, `pkg/api`) |
-| **S3-3** | 파서/엔진 | T-SQL Pre-signed URL 내장 스칼라 함수 등록 | **대기 (`[ ]`)** | `S3_PRESIGNED_PUT_URL`, `S3_PRESIGNED_GET_URL` 내장 함수 및 SP 연동 (`pkg/proc`, `pkg/engine`) |
-| **S3-4** | UI/스튜디오 | 웹 관리자 스튜디오(Web Studio) 파일 업로드 위젯 | **대기 (`[ ]`)** | 레코드 편집 모달 내 브라우저 ➔ S3 직접 업로드 및 URL 자동 입력 위젯 연동 (`pkg/ui`) |
+| **S3-1** | 스토리지 | 제로-의존성 경량 AWS SigV4 서명기 구축 | **Post-1.0 연기 (Postponed)** | 순수 Go 표준 라이브러리(`crypto/hmac`, `crypto/sha256`) 기반 Canonical Request & 다단계 파생 키 서명 (`pkg/storage/s3sign`) |
+| **S3-2** | 설정/API | S3 스토리지 설정 및 HTTP REST Pre-signed API | **Post-1.0 연기 (Postponed)** | `POST /api/storage/presign` 엔드포인트, MIME/크기 가드, `S3Config` 환경 변수 연동 (`pkg/config`, `pkg/api`) |
+| **S3-3** | 파서/엔진 | T-SQL Pre-signed URL 내장 스칼라 함수 등록 | **Post-1.0 연기 (Postponed)** | `S3_PRESIGNED_PUT_URL`, `S3_PRESIGNED_GET_URL` 내장 함수 및 SP 연동 (`pkg/proc`, `pkg/engine`) |
+| **S3-4** | UI/스튜디오 | 웹 관리자 스튜디오(Web Studio) 파일 업로드 위젯 | **Post-1.0 연기 (Postponed)** | 레코드 편집 모달 내 브라우저 ➔ S3 직접 업로드 및 URL 자동 입력 위젯 연동 (`pkg/ui`) |
 
 ---
 
@@ -308,6 +308,10 @@
   현재 사설망 및 로컬/컨테이너 환경에서 TLS 비활성화(`encrypt=disable`) 모드로 100% 정상 통신 중임. 마이크로소프트 TDS 8.0의 복잡한 Pre-Login TLS 래핑 및 ALPN 핸드셰이크 협상은 공용 인터넷 노출 시 필요한 고급 보안 기능이며, 네트워크 암호화는 mTLS 리버스 프록시(Envoy, Traefik, stunnel) 또는 WireGuard/VPN으로 충분히 대체 가능함. 1.0 코어 안정성 확보를 위해 Post-1.0으로 공식 연기.
 * **다국어 Collation 및 로케일 전면 지원 트랙 (`LOC-1` ~ `LOC-4`)**:
   LionSQL은 내부 스토리지를 완전한 표준 유니코드 UTF-8로 단일화하고 대소문자 무관(`CI_AS`) 비교를 기본 제공하여, 한글/영문/다국어 처리 및 드라이버 연동에 실무적 장애가 전혀 없음. 레거시 CodePage/Collation 에뮬레이션(`COLLATE` 관용 구문, 동적 TDS 바이너리 토큰 매핑, `COLLATIONPROPERTY`, `fn_helpcollations`)은 1.0 코어 엔진의 극단적 단순성(KISS)과 안정성 확보를 위해 전 항목을 Post-1.0으로 일괄 연기 (상세 설계: [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md)).
+* **불변 엔터프라이즈 감사 로그 트랙 (`AUDIT-1` ~ `AUDIT-4`)**:
+  1.0의 핵심 타겟 유저(독립 경량 OLTP, 사설망 컨테이너, T-SQL 마이그레이션) 환경에서는 외부 침입 감사나 금융권 규제 감사보다 엔진 안정성과 서브마이크로초 처리량(TPS)이 최우선임. 디스크/네트워크 레벨 암호화와 이미 완비된 CDC 스트리밍/Prometheus 관제/기본 인증(SCRAM-SHA-256, JWT)으로 기초 보안과 모니터링이 충분히 충족되므로, 규제 컴플라이언스 대응 전용 불변 로그 체계는 1.0 안정 릴리스 이후 엔터프라이즈 확장 단계(Post-1.0)로 연기 (상세 설계: [`doc/IMMUTABLE_AUDIT_LOG_PLAN.md`](doc/IMMUTABLE_AUDIT_LOG_PLAN.md)).
+* **클라우드 S3 Pre-signed URL 및 SigV4 서명기 트랙 (`S3-1` ~ `S3-4`)**:
+  대용량 미디어/Blob 파일 처리는 DB 커널의 핵심 책임(ACID 트랜잭션)이 아니며, 이미 인-커널 바이너리 저장은 영구 스펙-아웃(`GEMINI.md` 8.7절)되어 있음. 애플리케이션 레벨(AWS SDK)에서 S3 직접 업로드를 처리하는 표준 패턴이 널리 쓰이므로, DB 커널 내장 서명기 및 UI 위젯은 1.0 릴리스 이후로 연기 (상세 설계: [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md)).
 
 ### 4.4. 영구 스펙-아웃 (Spec-Out Invariants)
 * **내장형 OAuth2 소셜 로그인 배제**:
