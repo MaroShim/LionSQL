@@ -720,6 +720,8 @@ func mergeTuples(left, right Tuple, combinedIndex *ColumnIndexMap) Tuple {
 }
 
 func mergeTuplesWithArena(left, right Tuple, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
+	left.Materialize()
+	right.Materialize()
 	var vals []any
 	if arena != nil {
 		vals = arena.AllocAnySlice(len(left.Values) + len(right.Values))
@@ -739,6 +741,7 @@ func mergeTuplesWithNulls(left Tuple, rightColsCount int, combinedIndex *ColumnI
 }
 
 func mergeTuplesWithNullsAndArena(left Tuple, rightColsCount int, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
+	left.Materialize()
 	var vals []any
 	if arena != nil {
 		vals = arena.AllocAnySlice(len(left.Values) + rightColsCount)
@@ -757,6 +760,7 @@ func mergeNullsWithTuple(leftColsCount int, right Tuple, combinedIndex *ColumnIn
 }
 
 func mergeNullsWithTupleAndArena(leftColsCount int, right Tuple, combinedIndex *ColumnIndexMap, arena *storage.Arena) Tuple {
+	right.Materialize()
 	var vals []any
 	if arena != nil {
 		vals = arena.AllocAnySlice(leftColsCount + len(right.Values))

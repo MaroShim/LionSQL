@@ -7,6 +7,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **Multi-Table Relational JOIN Column Resolution & LazyTuple Decoding (`PG-COMPAT-3` / `PG-ORM-9`) (`pkg/execution`, `pkg/wire`)**:
+  - Implemented `Tuple.Materialize()` in `pkg/execution/iterator.go` to force decoding of underlying `storage.LazyTuple` (used by the WiredTiger engine) into the `Values` slice before merging tuples or evaluating projections, resolving an issue where unprojected columns in joined relations evaluated to `nil`/`NULL`.
+  - Ensured all join implementations (`mergeTuplesWithArena`, `mergeTuplesWithNullsAndArena`, `mergeNullsWithTupleAndArena` in `pkg/execution/join.go` and `pkg/execution/merge_join.go`) materialize child tuples prior to combining value slices.
+  - Corrected projection field resolution order in `ProjectionIterator.projectTuple` (`pkg/execution/project.go`) to prioritize qualified expressions (`f.expr`, e.g. `o.amount`, `u.name`) over unqualified aliases (`f.alias`), preventing column shadowing when multiple joined tables share identical column names.
+  - Defensively hardened `MergeColumnIndexMaps` with fallback `leftLen` boundary calculation when `leftCols` is empty.
+  - Added E2E driver integration tests in `pkg/wire/driver_integration_test.go` (`TestDriverIntegration_LibPQ_RelationalJoin`) and `pkg/wire/driver_integration_wt_test.go` (`TestDriverIntegration_WiredTiger_RelationalJoin`), raising PGWire compliance across all 57 test scenarios to 100.0%.
+
 ## [0.24.0] - 2026-10-18
 
 ### Added

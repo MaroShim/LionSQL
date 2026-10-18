@@ -121,13 +121,16 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 	if p.isSelectAll && len(p.fields) == 0 {
 		return tuple
 	}
+	tuple.Materialize()
 	vals := make([]any, len(p.fields))
 	for i, f := range p.fields {
-		if val, ok := tuple.GetOK(f.alias); ok {
+		// Prioritize qualified expression (e.g. "o.amount", "u.name") over unqualified alias
+		// to prevent shadowing when multiple relations share identical column names.
+		if val, ok := tuple.GetOK(f.expr); ok {
 			vals[i] = val
 			continue
 		}
-		if val, ok := tuple.GetOK(f.expr); ok {
+		if val, ok := tuple.GetOK(f.alias); ok {
 			vals[i] = val
 			continue
 		}

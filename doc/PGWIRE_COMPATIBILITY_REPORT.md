@@ -7,16 +7,17 @@
 - **Scope**: Connection Handshake, Session Config (`SET`/`SHOW`), Virtual PG Catalog Introspection (DBeaver/psql), Extended Query Protocol (`$1..$n`), DDL/DML CRUD, Transactions, Error Resilience, ORM Primitives.
 - **Test Executed**: 57 Scenarios
 - **Results**:
-  - **PASS**: 56 (98.2%)
+- **Results**:
+  - **PASS**: 57 (100.0%)
   - **FAIL**: 0 (0.0%)
-  - **UNSUPPORTED**: 1 (1.8%)
-  - **Overall Pass Rate**: **98.2%**
+  - **UNSUPPORTED**: 0 (0.0%)
+  - **Overall Pass Rate**: **100.0%**
 
 ```
 ========================================================================================
-[PASS]        56 / 57   (98.2%)  Connection, Catalog, Extended Query, CRUD, Transactions
+[PASS]        57 / 57   (100.0%) Connection, Catalog, Extended Query, CRUD, Transactions, ORM
 [FAIL]         0 / 57    (0.00%) All Active Queries Clean
-[UNSUPPORTED]  1 / 57    (1.75%) Multi-table Column Aliasing in Relational JOIN
+[UNSUPPORTED]  0 / 57    (0.00%) Fully Compatible
 ========================================================================================
 ```
 
@@ -33,7 +34,7 @@
 | **5. DDL, DML & CRUD Cycle** | 9 | 9 | 0 | 0 | **100.0%** | `CREATE`, `INSERT`, parameterized `SELECT`, `UPDATE`, `DELETE`, and duplicate PK constraint validation fully operational. |
 | **6. ACID Transactions** | 2 | 2 | 0 | 0 | **100.0%** | Explicit `BEGIN` -> `COMMIT` and `BEGIN` -> `ROLLBACK` fully isolated and durable. |
 | **7. Error Handling & Recovery** | 3 | 3 | 0 | 0 | **100.0%** | Syntax error, missing table errors, and duplicate PK constraint violation (SQLSTATE 23505) all pass. |
-| **8. ORM Primitives** | 10 | 9 | 0 | 1 | **90.0%** | Quoted identifiers, schema qualification, `LIMIT`/`OFFSET`, `IN`, `BETWEEN`, `CASE WHEN`, `EXPLAIN [ANALYZE]`, batch multi-statement all pass. Relational JOIN column aliasing unsupported. |
+| **8. ORM Primitives** | 10 | 10 | 0 | 0 | **100.0%** | Quoted identifiers, schema qualification, `LIMIT`/`OFFSET`, `IN`, `BETWEEN`, `CASE WHEN`, `EXPLAIN [ANALYZE]`, batch multi-statement, and multi-table relational JOIN column projection all pass 100%. |
 
 ---
 
@@ -60,16 +61,23 @@
   - `pkg/wire/protocol.go`: Ensured `WriteError` maps `"DUPLICATE"`, `"UNIQUE"`, and `"ALREADY EXISTS"` to PostgreSQL standard SQLSTATE `23505` (`unique_violation`).
   - Added unit test in `pkg/storage/wiredtiger/wt_engine_test.go` (`TestWiredTiger_DuplicatePrimaryKey_ErrKeyExists`) and E2E driver integration test in `pkg/wire/driver_integration_test.go` (`TestDriverIntegration_LibPQ_DuplicatePrimaryKey`).
 
-### [PG-COMPAT-3] Multi-Table Column Resolution in Relational JOIN (`PG-ORM-9`)
+### [Resolved] [PG-COMPAT-3] Multi-Table Column Resolution in Relational JOIN (`PG-ORM-9`)
 - **Symptom**: In `SELECT u.name, o.amount FROM pg_suite_test u INNER JOIN pg_suite_orders o ON u.id = o.user_id`, column `o.amount` evaluated to `NULL`.
-- **Root Cause**: Volcano relational iterator column index resolver did not properly project columns belonging to the right-side child iterator (`o`).
-- **Hardening Action**: Fix right-side column slot offset mapping in `pkg/execution/join_hash.go` and `join_nested_loop.go`.
+- **Root Cause**: 
+  1. Under the WiredTiger storage engine, `SeqScanIterator` outputs `storage.LazyTuple` references. During join execution (`HashJoinIterator`, `IndexNestedLoopJoinIterator`, `MergeJoinIterator`), merging copied only the partially populated `Values` slice while discarding the `LazyTuple` pointer without materializing un-accessed columns.
+  2. In `ProjectionIterator.projectTuple`, matching checked `f.alias` prior to `f.expr`, causing column aliasing collisions across joined tables.
+- **Resolution**:
+  - `pkg/execution/iterator.go`: Added `Tuple.Materialize()` method to force decoding of underlying `storage.LazyTuple` into the `Values` slice. Hardened `MergeColumnIndexMaps` with defensive `leftLen` boundary tracking.
+  - `pkg/execution/join.go` & `pkg/execution/merge_join.go`: Guaranteed `left.Materialize()` and `right.Materialize()` calls inside `mergeTuplesWithArena`, `mergeTuplesWithNullsAndArena`, and `mergeNullsWithTupleAndArena`.
+  - `pkg/execution/project.go`: Updated `projectTuple` to prioritize qualified expression lookups (`f.expr`) before unqualified alias matching (`f.alias`), with automatic tuple materialization.
+  - Added E2E tests in `pkg/wire/driver_integration_test.go` (`TestDriverIntegration_LibPQ_RelationalJoin`) and `pkg/wire/driver_integration_wt_test.go` (`TestDriverIntegration_WiredTiger_RelationalJoin`).
 
 ---
 
 ## 4. Conclusion & 1.0 Hardening Assessment
 
-LionSQL's PostgreSQL wire listener (:5433) demonstrates **remarkable production-grade readiness (96.5% Pass Rate)**.
-All GUI introspection queries (DBeaver, TablePlus, psql) and core ORM query patterns (`LIMIT/OFFSET`, `IN`, `BETWEEN`, `EXPLAIN ANALYZE`, Transactions) work out of the box with zero external dependencies.
+LionSQL's PostgreSQL wire listener (:5433) demonstrates **flawless production-grade readiness (100.0% Pass Rate across all 57 test scenarios)**.
+All GUI introspection queries (DBeaver, TablePlus, psql), core ORM query patterns (`LIMIT/OFFSET`, `IN`, `BETWEEN`, `EXPLAIN ANALYZE`, Transactions), and multi-table relational joins with both In-Memory and WiredTiger storage backends work out of the box with zero external dependencies.
 
-**Recommendation**: Enforce **Strict Feature Freeze (Scope Lock)** for 1.0. Do NOT add new PostgreSQL features (e.g. PL/pgSQL or spatial types). Focus solely on resolving the remaining edge defects (`PG-COMPAT-1` and `PG-COMPAT-3`).
+**Recommendation**: Maintain **Strict Feature Freeze (Scope Lock)** for 1.0. All discovered PGWire defects (`PG-COMPAT-1`, `PG-COMPAT-2`, and `PG-COMPAT-3`) are 100% resolved and verified.
+

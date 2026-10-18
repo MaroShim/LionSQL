@@ -164,21 +164,29 @@ func (t Tuple) Set(col string, val any) {
 	}
 }
 
+// Materialize forces decoding of any underlying storage.LazyTuple into the Values slice.
+func (t *Tuple) Materialize() {
+	if t == nil || t.Lazy == nil {
+		return
+	}
+	_, _ = t.Lazy.MaterializeRow()
+	dec := t.Lazy.DecodedValues()
+	for i := 0; i < len(t.Values) && i < len(dec); i++ {
+		if t.Values[i] == nil {
+			t.Values[i] = formatStorageVal(dec[i])
+		}
+	}
+	t.Lazy = nil
+}
+
 // ToMap converts the slice-backed Tuple to a map[string]any for final serialization.
 func (t Tuple) ToMap() map[string]any {
 	if t.Index == nil {
 		return nil
 	}
-	if t.Lazy != nil {
-		_, _ = t.Lazy.MaterializeRow()
-		dec := t.Lazy.DecodedValues()
-		for i := 0; i < len(t.Values) && i < len(dec); i++ {
-			if t.Values[i] == nil {
-				t.Values[i] = formatStorageVal(dec[i])
-			}
-		}
-	}
+	t.Materialize()
 	res := make(map[string]any, len(t.Index.cols))
+
 	for i, col := range t.Index.cols {
 		if i < len(t.Values) {
 			v := t.Values[i]
@@ -247,15 +255,7 @@ func (t Tuple) ToEvalMap() map[string]any {
 	if t.Index == nil {
 		return nil
 	}
-	if t.Lazy != nil {
-		_, _ = t.Lazy.MaterializeRow()
-		dec := t.Lazy.DecodedValues()
-		for i := 0; i < len(t.Values) && i < len(dec); i++ {
-			if t.Values[i] == nil {
-				t.Values[i] = formatStorageVal(dec[i])
-			}
-		}
-	}
+	t.Materialize()
 	res := make(map[string]any, len(t.Index.indices))
 	for k, idx := range t.Index.indices {
 		if idx >= 0 && idx < len(t.Values) {
@@ -391,6 +391,15 @@ func MergeColumnIndexMaps(left, right *ColumnIndexMap) *ColumnIndexMap {
 		}
 	}
 	leftLen := len(leftCols)
+	if left != nil && leftLen == 0 && len(left.indices) > 0 {
+		maxIdx := -1
+		for _, idx := range left.indices {
+			if idx > maxIdx {
+				maxIdx = idx
+			}
+		}
+		leftLen = maxIdx + 1
+	}
 	if right != nil {
 		for k, idx := range right.indices {
 			if strings.Contains(k, ".") {

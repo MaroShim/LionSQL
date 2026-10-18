@@ -56,7 +56,7 @@
 | **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **완료 (`[x]`)** | - |
-| **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
+| **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P3** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`notes/COLLATION_AND_LOCALE_PLAN.md`](notes/COLLATION_AND_LOCALE_PLAN.md) |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
@@ -461,7 +461,9 @@
   - 1,024건 프리알로케이션 청크 기반 볼케이노 배치 파이프라인 관통 및 기존 단건 `Next()` 투명 버퍼링 100% 하위 호환성 보장.
 - [x] **바이너리 튜플 지연 역직렬화 (Lazy Decoding) & 커버링 인덱스 (`P-2`) (`pkg/storage`)**:
   - `SkipTupleColumn`, $O(1)$ `LazyTuple`, `CREATE INDEX ... INCLUDE(...)` 커버링 인덱스로 메인 테이블 힙 조회 100% 생략.
-- [x] **WiredTiger Zero-Vacuum MVCC 아키텍처 문서화 및 GPLv3 컴플라이언스 정비 (`NOTICE`, `README.md`)**:
-  - WiredTiger 인메모리 업데이트 체인(`WT_UPDATE`)과 실시간 Reconciliation 기반 Zero-Vacuum/No-Bloat 차별성 문서화.
-  - 서드파티 저작권(`NOTICE`, MongoDB, Inc. / Keith Bostic & Michael Cahill) 고지 및 상용 듀얼 라이선스 시의 Pure-Go vs WiredTiger 범위 명문화.
+- [x] **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 및 지연 디코딩(LazyTuple) 구체화 보강 (`PG-COMPAT-3` / `PG-ORM-9`) (`pkg/execution`, `pkg/wire`)**:
+  - `pkg/execution/iterator.go`: `Tuple.Materialize()` 메서드를 구현하여 `storage.LazyTuple` 지연 역직렬화 상태의 튜플을 조인 결합 또는 프로젝션 직전에 안전하게 물리 슬라이스로 디코딩하도록 보장. `MergeColumnIndexMaps`의 `leftLen` 계산 시 슬라이스 누락 방어 로직 추가.
+  - `pkg/execution/join.go` & `pkg/execution/merge_join.go`: `mergeTuplesWithArena`, `mergeTuplesWithNullsAndArena`, `mergeNullsWithTupleAndArena` 등 조인 튜플 병합 직전 좌/우측 튜플에 대해 `Materialize()`를 필수 호출하여 미조회 컬럼의 `NULL` 유실을 방지.
+  - `pkg/execution/project.go`: `projectTuple`에서 자식 튜플을 사전 구체화하고, 컬럼 탐색 시 한정된 표현식(`f.expr`, 예: `o.amount`, `u.name`)을 비한정 별칭(`f.alias`)보다 먼저 조회하도록 우선순위를 바로잡아 동일 컬럼명 섀도잉 문제 완전 해소.
+  - `pkg/wire/driver_integration_test.go` 및 `pkg/wire/driver_integration_wt_test.go` (`TestDriverIntegration_WiredTiger_RelationalJoin`)에 lib/pq 기반 E2E 조인 통합 테스트를 추가하여 PGWire 57개 전 시나리오 100.0% PASS 달성.
 

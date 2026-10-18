@@ -527,4 +527,65 @@ func TestDriverIntegration_LibPQ_UntypedParameter(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_LibPQ_RelationalJoin(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, "CREATE TABLE pg_suite_test (id INT PRIMARY KEY, name VARCHAR(50))"); err != nil {
+		t.Fatalf("CREATE TABLE pg_suite_test failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE TABLE pg_suite_orders (id INT PRIMARY KEY, user_id INT, amount FLOAT)"); err != nil {
+		t.Fatalf("CREATE TABLE pg_suite_orders failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE INDEX idx_orders_user_id ON pg_suite_orders (user_id)"); err != nil {
+		t.Fatalf("CREATE INDEX failed: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx, "INSERT INTO pg_suite_test VALUES (1, 'Alice'), (2, 'Bob')"); err != nil {
+		t.Fatalf("INSERT pg_suite_test failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO pg_suite_orders VALUES (101, 1, 99.5), (102, 2, 150.0)"); err != nil {
+		t.Fatalf("INSERT pg_suite_orders failed: %v", err)
+	}
+
+	rows, err := db.QueryContext(ctx, "SELECT u.name, o.amount FROM pg_suite_test u INNER JOIN pg_suite_orders o ON u.id = o.user_id")
+	if err != nil {
+		t.Fatalf("join query failed: %v", err)
+	}
+	defer rows.Close()
+
+	type result struct {
+		name   string
+		amount *float64
+	}
+	var res []result
+	for rows.Next() {
+		var r result
+		if err := rows.Scan(&r.name, &r.amount); err != nil {
+			t.Fatalf("scan error: %v", err)
+		}
+		res = append(res, r)
+	}
+	if len(res) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(res))
+	}
+	t.Logf("res: %+v", res)
+	if res[0].amount == nil {
+		t.Fatalf("res[0].amount is NULL! expected 99.5")
+	}
+	if *res[0].amount != 99.5 {
+		t.Fatalf("expected 99.5, got %v", *res[0].amount)
+	}
+}
+
 
