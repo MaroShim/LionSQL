@@ -1069,7 +1069,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
-		return s.execTruncateTable(trimmed, start)
+		return s.execTruncateTable(trimmed, start, cs)
 	}
 
 	// 4.3 DDL: ALTER TABLE

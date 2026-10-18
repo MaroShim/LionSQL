@@ -714,5 +714,116 @@ func BenchmarkWiredTiger_Scan(b *testing.B) {
 	}
 }
 
+func TestWiredTiger_TruncateTable(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_truncate_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
 
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("failed to open engine: %v", err)
+	}
+	defer eng.Close()
 
+	schema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar, Nullable: false},
+		},
+		Indexes: []storage.IndexSchema{
+			{Name: "idx_users_name", TableName: "users", Columns: []string{"name"}},
+		},
+	}
+	if err := eng.CreateTable(schema); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	for i := 1; i <= 10; i++ {
+		err = tx.Insert("users", storage.Record{
+			"id":   storage.IntValue(int64(i)),
+			"name": storage.StringValue(fmt.Sprintf("user_%d", i)),
+		})
+		if err != nil {
+			t.Fatalf("Insert failed: %v", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Verify rows exist
+	txRead, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx read failed: %v", err)
+	}
+	cur, err := txRead.Scan("users")
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	count := 0
+	for cur.Next() {
+		count++
+	}
+	_ = cur.Close()
+	_ = txRead.Rollback()
+
+	if count != 10 {
+		t.Fatalf("expected 10 rows, got %d", count)
+	}
+
+	// Now truncate table while sess is still alive (and holds cached cursors in its pool)
+	if err := eng.TruncateTable("users"); err != nil {
+		t.Fatalf("TruncateTable failed: %v", err)
+	}
+
+	// Verify table is empty
+	txCheck, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx check failed: %v", err)
+	}
+	curCheck, err := txCheck.Scan("users")
+	if err != nil {
+		t.Fatalf("Scan after truncate failed: %v", err)
+	}
+	countAfter := 0
+	for curCheck.Next() {
+		countAfter++
+	}
+	_ = curCheck.Close()
+	_ = txCheck.Rollback()
+
+	if countAfter != 0 {
+		t.Fatalf("expected 0 rows after truncate, got %d", countAfter)
+	}
+
+	// Now test TRUNCATE while an active transaction with uncommitted writes exists
+	txOpen, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	err = txOpen.Insert("users", storage.Record{
+		"id":   storage.IntValue(100),
+		"name": storage.StringValue("uncommitted"),
+	})
+	if err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+
+	// Attempt TruncateTable while txOpen is active
+	truncErr := eng.TruncateTable("users")
+	t.Logf("TruncateTable while uncommitted tx active returned: %v", truncErr)
+	_ = txOpen.Rollback()
+}

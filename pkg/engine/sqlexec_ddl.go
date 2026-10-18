@@ -285,7 +285,7 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 	}, nil
 }
 
-func (s *Coordinator) execTruncateTable(query string, start time.Time) (*QueryResult, error) {
+func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 	re := regexp.MustCompile(`(?is)^TRUNCATE\s+(?:TABLE\s+)?([^\s;]+)`)
 	matches := re.FindStringSubmatch(cleaned)
@@ -294,6 +294,94 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time) (*QueryRe
 	}
 
 	tableName := cleanIdentifier(matches[1])
+	if cs != nil && cs.TempTableMap != nil {
+		if realName, ok := cs.TempTableMap[tableName]; ok {
+			tableName = realName
+		}
+	}
+
+	// If inside an active transaction, perform transactional truncate:
+	// Verify foreign key references, then scan and delete all rows within cs.Tx
+	// so that uncommitted writes are cleared and ROLLBACK/COMMIT semantics are preserved.
+	if cs != nil && cs.Tx != nil {
+		tbl, err := s.engine.GetTable(tableName)
+		if err != nil {
+			return nil, err
+		}
+		tables, err := s.engine.ListTables()
+		if err != nil {
+			return nil, err
+		}
+		for _, other := range tables {
+			if strings.EqualFold(other.Name, tableName) {
+				continue
+			}
+			for _, fk := range other.ForeignKeys {
+				if strings.EqualFold(fk.ParentTable, tableName) {
+					return nil, fmt.Errorf("%w: cannot truncate table %q because it is referenced by foreign key %q on table %q",
+						storage.ErrDependentObjectsExist, tableName, fk.Name, other.Name)
+				}
+			}
+		}
+
+		cur, err := cs.Tx.Scan(tableName)
+		if err != nil {
+			return nil, err
+		}
+		defer cur.Close()
+
+		var pkColName string
+		var pkColIdx int = -1
+		if pkCol, perr := tbl.PrimaryKeyColumn(); perr == nil && pkCol != nil {
+			pkColName = pkCol.Name
+			_, pkColIdx, _ = tbl.FindColumn(pkColName)
+		}
+
+		var pks []storage.Value
+		for cur.Next() {
+			row, rerr := cur.Row()
+			if rerr == nil && len(row.Values) > 0 {
+				if pkColIdx >= 0 && pkColIdx < len(row.Values) {
+					pks = append(pks, row.Values[pkColIdx])
+				} else {
+					pks = append(pks, row.Values[0])
+				}
+			} else {
+				rec, rcerr := cur.Record()
+				if rcerr == nil {
+					if pkColName != "" {
+						if v, ok := rec[pkColName]; ok {
+							pks = append(pks, v)
+							continue
+						}
+					}
+					if v, ok := rec["id"]; ok {
+						pks = append(pks, v)
+					} else {
+						for _, v := range rec {
+							pks = append(pks, v)
+							break
+						}
+					}
+				}
+			}
+		}
+
+		for _, pk := range pks {
+			if err := cs.Tx.Delete(tableName, pk); err != nil {
+				return nil, err
+			}
+		}
+
+		s.InvalidatePKBypassCache()
+		return &QueryResult{
+			Success:    true,
+			Command:    "TRUNCATE TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Table %q truncated successfully", tableName)},
+		}, nil
+	}
+
 	if err := s.engine.TruncateTable(tableName); err != nil {
 		return nil, err
 	}

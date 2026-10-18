@@ -210,12 +210,15 @@ type Engine struct {
 	stopCh      chan struct{}
 	bgWg        sync.WaitGroup
 	closed      bool
+	sessMu      sync.Mutex
+	sessions    map[*WTSession]struct{}
 }
 
 // New creates a new WiredTiger storage engine instance.
 func New() *Engine {
 	e := &Engine{
-		tables: make(map[string]*storage.TableSchema),
+		tables:   make(map[string]*storage.TableSchema),
+		sessions: make(map[*WTSession]struct{}),
 	}
 	e.fsyncPolicy.Store(int32(memengine.FsyncEverySec))
 	return e
@@ -503,7 +506,7 @@ func (e *Engine) TruncateTable(tableName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	schema, exists := e.tables[tableName]
+	_, exists := e.tables[tableName]
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
@@ -520,6 +523,8 @@ func (e *Engine) TruncateTable(tableName string) error {
 			}
 		}
 	}
+
+	e.evictAllCursors(tableName)
 
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
@@ -538,12 +543,6 @@ func (e *Engine) TruncateTable(tableName string) error {
 		if ret := C.go_wt_session_create(sess, uri, config); ret != 0 {
 			return fmt.Errorf("recreate table failed: code %d", ret)
 		}
-	}
-
-	for _, idx := range schema.Indexes {
-		idxURI := C.CString(fmt.Sprintf("index:%s:%s", tableName, idx.Name))
-		_ = C.go_wt_session_truncate(sess, idxURI)
-		C.free(unsafe.Pointer(idxURI))
 	}
 
 	e.recordWALLocked([]memengine.WALOp{{
@@ -747,10 +746,28 @@ func (e *Engine) NewSession() (storage.Session, error) {
 		return nil, fmt.Errorf("open_session failed with code %d", ret)
 	}
 
-	return &WTSession{
+	wtSess := &WTSession{
 		engine: e,
 		sess:   sess,
-	}, nil
+	}
+	e.sessMu.Lock()
+	e.sessions[wtSess] = struct{}{}
+	e.sessMu.Unlock()
+
+	return wtSess, nil
+}
+
+func (e *Engine) evictAllCursors(tableName string) {
+	e.sessMu.Lock()
+	active := make([]*WTSession, 0, len(e.sessions))
+	for s := range e.sessions {
+		active = append(active, s)
+	}
+	e.sessMu.Unlock()
+
+	for _, s := range active {
+		s.evictCursors(tableName)
+	}
 }
 
 const maxIdleCursorsPerURI = 16
@@ -779,7 +796,28 @@ type WTSession struct {
 	allCursors map[*C.WT_CURSOR]struct{}
 }
 
+func (s *WTSession) evictCursors(tableName string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed || s.sess == nil {
+		return
+	}
+	uri := "table:" + tableName
+	if pool, ok := s.cursorPool[uri]; ok {
+		for _, cur := range pool {
+			delete(s.allCursors, cur)
+			C.go_wt_cursor_close(cur)
+		}
+		delete(s.cursorPool, uri)
+	}
+}
+
 func (s *WTSession) Close() error {
+	s.engine.sessMu.Lock()
+	delete(s.engine.sessions, s)
+	s.engine.sessMu.Unlock()
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

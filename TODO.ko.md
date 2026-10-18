@@ -39,7 +39,7 @@
 | **P2** | **스토리지/클라우드** | **클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 (`S3-1` ~ `S3-4`)** | `pkg/storage/s3sign`, `pkg/config`, `pkg/api`, `pkg/proc` | **스프린트 백로그 대기** | [`doc/S3_PRESIGNED_STORAGE_PLAN.md`](doc/S3_PRESIGNED_STORAGE_PLAN.md) |
 | **P2** | **운영/관제** | **Prometheus / OpenTelemetry 표준 관제 메트릭 엔드포인트 (`OBS-1`)** | `pkg/api`, `pkg/engine` | **완료 (`[x]`)** | - |
 | **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **완료 (`[x]`)** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
-| **P1** | **스토리지/안정성** | **WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 (`TDS-COMPAT-1`)** | `pkg/storage/wiredtiger` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
+| **P1** | **스토리지/안정성** | **WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 (`TDS-COMPAT-1`)** | `pkg/storage/wiredtiger`, `pkg/engine` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/유니코드** | **유니코드 N-prefix (`N'...'`) TDS UTF-16LE 직렬화 EOF 방지 (`TDS-COMPAT-2`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **ORM/와이어** | **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (Dapper `QueryMultiple` 필수) (`TDS-COMPAT-6`)** | `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **프로시저/파서** | **T-SQL 프로시저 파서의 `DECLARE @var INT = <expr>` 인라인 초기화 지원 (`TDS-COMPAT-7`)** | `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |

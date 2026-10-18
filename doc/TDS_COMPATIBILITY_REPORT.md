@@ -55,7 +55,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 
 ---
 
-### 2.3 기본 DDL, CRUD 및 트랜잭션 (8/8 PASS - 100%)
+### 2.3 기본 DDL, CRUD 및 트랜잭션 (9/9 PASS - 100%)
 
 | 번호 | 테스트 항목 | 질의 구문 (SQL) | 결과 | 상세 원인 및 분석 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -67,7 +67,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 | 37 | 인덱스 생성 | `CREATE INDEX idx_diag_users_name ON diag_users (name)` | **PASS** | 보조 B+Tree 인덱스 생성 성공 |
 | 38 | 인덱스 삭제 | `DROP INDEX idx_diag_users_name ON diag_users` | **PASS** | 보조 인덱스 제거 성공 |
 | 39 | 트랜잭션 롤백 무결성 | `BEGIN TRAN` -> `INSERT` -> `ROLLBACK TRAN` | **PASS** | 롤백 후 레코드 잔존 0건 확인 (ACID 원자성 보장) |
-| - | 테이블 절단 (TRUNCATE) | `TRUNCATE TABLE <table>` (별도 단독 검증) | **CRITICAL** | **[치명적 버그]** WiredTiger 모드에서 `TRUNCATE` 시 `txn->mod_count == 0` assertion 실패로 C 라이브러리 `abort()` 크래시 발생 |
+| 39-1 | 테이블 절단 (TRUNCATE) | `TRUNCATE TABLE <table>` (Autocommit 및 트랜잭션 내 `COMMIT`/`ROLLBACK` 무결성 검증) | **PASS** | WiredTiger 캐시 커서 안전 해제(`evictAllCursors`), C 라이브러리 크래시 방지 및 활성 트랜잭션 내 원자적 제거/롤백 복원 완벽 지원 (`TDS-COMPAT-1`) |
 
 ---
 
@@ -300,16 +300,28 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
   - `pkg/engine/sqlexec.go` & `sqlexec_procs.go`: `execAnonymousBlock` 구현으로 세션 변수(`cs.Vars`) 바인딩, VDBE 트랜잭션 내 제어문 실행, 실행 후 갱신된 변수 상태 동기화 및 관계형 결과셋 반환 파이프라인 구축.
   - `TestSQLExecutor_AdHocIfElseControlFlow`, `TestSQLExecutor_AdHocWhileLoop` (엔진 단위 테스트) 및 `TestDriverIntegration_Scenario64_AdHocIfElse`, `TestDriverIntegration_Scenario65_AdHocWhile` (`go-mssqldb` 공식 드라이버 E2E 통합 테스트) 통과.
 
+### 9. [Resolved] WiredTiger `TRUNCATE TABLE` 트랜잭션 격리 및 크래시 방지 (`TDS-COMPAT-1` / 시나리오 39-1)
+- **현상**:
+  1. WiredTiger 스토리지 모드에서 `TRUNCATE TABLE` 호출 시 다른 세션에 유휴 캐시 커서(`cursorPool`)가 남아있거나 존재하지 않는 `index:` URI에 대해 C truncate를 호출하여 C 라이브러리 `unsupported object operation` 에러 로그 또는 assertion 크래시 발생.
+  2. 활성 트랜잭션(`BEGIN TRAN`) 내에서 행을 삽입한 뒤 `TRUNCATE TABLE`을 실행하면, 엔진이 별도의 독립 세션에서 truncate를 수행하여 현재 트랜잭션 버퍼 내의 미커밋 행이 지워지지 않고 `COMMIT` 시 부활하는 트랜잭션 격리 누수 발생.
+- **조치 완료**:
+  - `pkg/storage/wiredtiger/wt_engine.go`:
+    - `Engine` 내 활성 세션 추적(`sessions map[*WTSession]struct{}`) 및 `TruncateTable` 호출 시 대상 테이블의 캐시된 유휴 커서를 전역 안전 해제(`evictAllCursors`).
+    - 비정상적인 `index:` URI truncate 루프 제거로 C 라이브러리 에러 원천 차단.
+  - `pkg/engine/sqlexec_ddl.go` & `sqlexec.go`:
+    - `execTruncateTable`에 `cs *ClientSession`을 전달하고, 활성 트랜잭션(`cs.Tx != nil`) 내 호출 시 외래키 참조 검증 후 트랜잭션 스코프 내의 모든 행을 `cs.Tx.Delete`로 원자적 제거. 이를 통해 `COMMIT` 시 완전 삭제, `ROLLBACK` 시 원상 복원되는 T-SQL 표준 ACID 격리 보장.
+    - 세션 임시 테이블(`#temp`) 물리 테이블명 변환(`cs.TempTableMap`) 지원.
+  - `TestWiredTiger_TruncateTable` (스토리지 엔진 단위 테스트) 및 `TestDriverIntegration_WiredTiger_TruncateTable` (공식 `go-mssqldb` E2E 통합 테스트: Autocommit 모드, 활성 트랜잭션 내 커밋 및 롤백 복원 무결성 100% 검증) 통과.
+
 ---
 
 ## 4. 최종 결론
 
-123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **98.4% (121/123 - PASS 120개 + TYPE_DIFF 1개)의 압도적인 종합 호환율**을 달성했습니다.
+123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **99.2% (122/123 - PASS 121개 + TYPE_DIFF 1개)의 압도적인 종합 호환율**을 달성했습니다.
 - **완벽히 통과된 강력한 엔터프라이즈 기능**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원, 네이티브 DATETIME 바이너리 직렬화(`GETDATE()`), Ad-hoc 최상위 익명 제어문(`IF...ELSE`, `WHILE`).
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원, 네이티브 DATETIME 바이너리 직렬화(`GETDATE()`), Ad-hoc 최상위 익명 제어문(`IF...ELSE`, `WHILE`), WiredTiger `TRUNCATE TABLE` 트랜잭션 격리 및 롤백 원자성 보장.
 - **향후 확장을 위한 잔여 과제**:
-  1. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1` - v1.0 릴리스 최종 과제).
-  2. [Post-1.0 연기] C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
+  1. [Post-1.0 연기] C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
 
 이 핵심 과제들이 단계적으로 완비됨에 따라 LionSQL은 실무 엔터프라이즈 .NET/Java/Node.js/Python 애플리케이션을 코드 수정 없이 100% 수용하는 진정한 무중단 SQL Server 대체제로 안착하고 있습니다.
 

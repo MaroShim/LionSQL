@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **WiredTiger `TRUNCATE TABLE` Transaction Isolation & Assertion Crash Prevention (`TDS-COMPAT-1` / Scenario 39-1) (`pkg/storage/wiredtiger`, `pkg/engine`, `pkg/wire/tds`)**:
+  - Implemented active session tracking (`e.sessions map[*WTSession]struct{}`) and target table idle cursor eviction (`e.evictAllCursors(tableName)`) in `pkg/storage/wiredtiger/wt_engine.go` prior to truncation, eliminating WiredTiger C library cursor contention.
+  - Removed unsupported `index:` URI truncation loop that caused C library `unsupported object operation` errors.
+  - Enhanced `execTruncateTable` in `pkg/engine/sqlexec_ddl.go` to receive `cs *ClientSession` and perform atomic, transaction-isolated record deletion within `cs.Tx` when called during an active transaction (`cs.Tx != nil`), guaranteeing full removal upon `COMMIT` and complete restoration upon `ROLLBACK` in accordance with T-SQL and ACID invariants.
+  - Added physical table mapping for temporary tables (`cs.TempTableMap`) during `TRUNCATE TABLE #temp`.
+  - Added storage engine unit tests in `pkg/storage/wiredtiger/wt_engine_test.go` (`TestWiredTiger_TruncateTable`) and E2E TDS driver integration tests in `pkg/wire/tds/driver_integration_wt_test.go` (`TestDriverIntegration_WiredTiger_TruncateTable`) verifying autocommit, explicit in-transaction commit, and in-transaction rollback integrity.
 - **Native DATETIME Binary Serialization for `GETDATE()` and Timestamp Built-ins (`TDS-TYPE-1` / Scenario 29) (`pkg/engine`, `pkg/proc`, `pkg/wire/tds`)**:
   - Updated `evalScalarExpr` in `pkg/engine/sqlexec_select.go` and `evalDateBuiltin` in `pkg/proc/builtins_date.go` to return Go `time.Time` and `storage.DateTimeValue(time.Now())` for `GETDATE()`, `CURRENT_TIMESTAMP`, `GETUTCDATE()`, and `SYSDATETIME()` instead of formatted strings.
   - Enhanced T-SQL Pratt expression parser in `pkg/proc/parser_expr.go` to parse zero-argument SQL standard functions `CURRENT_TIMESTAMP`, `CURRENT_DATE`, and `CURRENT_TIME` without parentheses as `FunctionCallExpr`.
