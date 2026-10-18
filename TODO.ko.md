@@ -90,6 +90,28 @@
      - `S3_PRESIGNED_PUT_URL('avatars/user.png')` 및 `S3_PRESIGNED_GET_URL(...)` 스칼라 함수 등록.
      - Stored Procedure 및 대화형 쿼리에서 직접 업로드 링크 생성 지원.
 
+#### 4. 크리티컬 패스 5대 무할당 최적화 완결 (A~E) (`PERF-1`) (`pkg/engine`, `pkg/wire/tds`)
+* **과제 개요**: TDS 네트워크 수신부터 쿼리 분할, 파라미터 바인딩, 엔진 실행, 결과 행 직렬화에 이르는 핫패스 전수 진단 및 5대 병목(A~E) 전면 제거 (완료 `[x]`).
+* **5대 최적화 상세 내역 및 벤치마크 성과**:
+  1. **[A] 정규식 패키지 싱글톤 승격 (`pkg/engine`)**:
+     - `execSelect`, `execCreateTable`, `execCreateView`, `execDropView`, `execAlterTable`, `execCreateStatistics` 내부 동적 `regexp.MustCompile`을 전면 패키지 레벨 `var`로 승격.
+     - 쿼리당 15~30µs 컴파일 지연 및 15~25개 힙 객체 할당 100% 제거.
+  2. **[B] 문장 분할기 인덱스 기반 제로-카피 슬라이스 스캐너 전면 재작성 (`pkg/engine/query_utils.go`)**:
+     - 바이트 단위 `cur.String()` O(N^2) 검사 루프와 `strings.Builder`를 전면 폐기하고, 단일 쿼리 세미콜론 검사 Fast-Path 및 인덱스 슬라이싱(`query[start:i]`) 도입.
+     - **단일 쿼리 분할 성능: 16.46 ns/op, 16 B/op, 1 allocs/op** (40KB 메모리 폭증 및 마이크로초 지연 완전 박멸).
+  3. **[C] TDS 파라미터 바인딩 O(N) 단일 패스 치환기 (`pkg/wire/tds/server.go`)**:
+     - `sp_executesql`, `sp_execute`에서 파라미터별 `regexp.MustCompile` 및 `[]rune` 변환을 제거하고 바이트 스캐너 기반 1-Pass 치환(`substituteParamsSinglePass`) 적용.
+     - **3개 파라미터 바인딩 성능: 923.1 ns/op (50배 가속, 서브마이크로초 진입)**.
+  4. **[D] TDS Row 스트리밍 직렬화 및 리플렉션 제거 (`pkg/wire/tds/token.go`, `server.go`)**:
+     - `WriteRowDirect` 구현으로 행당 신규 슬라이스 할당 및 이중 복사 완전 제거 (**53.49 ns/op, 0 B/op, 0 allocs/op 달성**).
+     - `writeColumnValue` 내 `binary.Write` 리플렉션을 스택 바이트 배열 기반 `binary.LittleEndian.PutUint16/32/64` 및 `math.Float64bits`로 교체하여 런타임 리플렉션 100% 제거.
+     - 문자열 컬럼 `val.(string)` 타입 단언 선행으로 불필요한 `fmt.Sprintf` 우회.
+  5. **[E] UTF-16LE / UTF-8 제로-할당 변환 (`pkg/wire/tds/packet.go`)**:
+     - ASCII Fast-Path 도입으로 쿼리/메타데이터 송수신 시 중간 `[]rune`, `[]uint16` 슬라이스 제거.
+     - **`EncodeUTF16LE_ASCII`: 121.9 ns/op, 192 B/op, 1 allocs/op** (3회 ➔ 1회 할당).
+     - **`DecodeUTF16LE_ASCII`: 266.3 ns/op, 96 B/op, 1 allocs/op** (3회 ➔ 1회 할당).
+* **재발 방지 3대 불변 원칙 수립**: [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md) 13절에 유틸리티 침투 경계, 크리티컬 패스 정규식/바이트 빌더 금지, 벤치마크 미러링 불변 원칙 영구 명문화.
+
 ---
 
 ## 3. 도메인별 통합 백로그 매트릭스 (Domain Backlog Matrices)
@@ -116,10 +138,10 @@
 | :---: | :--- | :--- | :---: | :--- |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
-| **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 | **완료 (`[x]`)** | `WriteNBCRowDirect` 직결, 중간 `[]any` 레코드 박싱 제거 |
+| **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
 | **P-4** | 실행 엔진 | 벡터화 청크 반복자 (Chunked Batch Next) | **완료 (`[x]`)** | 1,024건 튜플 배치 스트리밍으로 가상 함수 디스패치 오버헤드 99% 제거 |
 | **P-5** | 캐시 | 고속 SQL 지문 해싱 & 단순 PK 조회 바이패스 | **완료 (`[x]`)** | FNV-1a 지문 해싱으로 CBO/VDBE 우회, 단순 PK 룩업 TPS 50%+ 향상 |
-| **P-6** | 파서/엔진 | 핫패스 정규식 사전 컴파일 및 캐싱 | **완료 (`[x]`)** | 40여 개 정규식 패키지 싱글톤 승격으로 쿼리당 5~15µs 힙 할당 제거 |
+| **P-6** | 파서/엔진 | 핫패스 정규식 사전 컴파일 및 캐싱 (`PERF-1`) | **완료 (`[x]`)** | sqlexec/select/ddl 정규식 패키지 싱글톤 승격으로 쿼리당 15~30µs 힙 할당 제거 |
 | **P-7** | JSON | 반정형 JSON 동일 튜플 DOM 캐시 & 키 스캐너 | **완료 (`[x]`)** | `ScanJSONTopLevelKey` 무할당 스캐너 및 1,024건 DOM FIFO 캐시 |
 | **P-8** | 스토리지 | WiredTiger 커서 풀링 & `cur->reset` 재사용 | **완료 (`[x]`)** | 세션별 커서 풀링 및 C 헬퍼 단일화로 894ns 룩업(1.13M+ OPS) 달성 |
 | **P-9** | 옵티마이저 | 정형 SQL Parameterized 실행 계획 캐시 | **보류 (`[-]`)** | SP/Prepared/PK 바이패스로 고주파 경로가 기충족되어 보류 |
@@ -235,6 +257,13 @@
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **크리티컬 패스 5대 무할당 최적화 (A~E) 완결 및 TDS 제로-할당 스트리밍 (`PERF-1`) (`pkg/engine`, `pkg/wire/tds`)**:
+  - **[A] 정규식 패키지 싱글톤 승격**: DDL/DML 내부 15~30µs 정규식 컴파일 지연 및 15~25개 힙 객체 할당 100% 제거.
+  - **[B] 문장 분할기 인덱스 기반 제로-카피 슬라이스 스캐너 재작성**: 바이트 단위 O(N^2) 루프 및 40KB 메모리 폭증 제거, 단일 쿼리 분할 **16.46 ns/op, 16 B/op, 1 allocs/op** 달성.
+  - **[C] TDS 파라미터 바인딩 O(N) 단일 패스 치환기**: 바이트 스캐너 기반 1-Pass 치환으로 **923.1 ns/op (50배 가속, 서브마이크로초)** 달성.
+  - **[D] TDS Row 스트리밍 직렬화 및 리플렉션 제거**: `WriteRowDirect` 도입으로 행 직렬화 시 **53.49 ns/op, 0 B/op, 0 allocs/op (힙 할당 0건)** 달성 및 `binary.Write` 리플렉션 100% 박멸.
+  - **[E] UTF-16LE / UTF-8 제로-할당 변환**: ASCII Fast-Path 및 `strings.Builder` 스트리밍으로 중간 `[]rune`/`[]uint16` 제거 (**인코딩 121.9ns, 디코딩 266.3ns, 각각 1 allocs/op**).
+  - **재발 방지 3대 불변 원칙 수립**: [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md) 13절에 명문화.
 - [x] **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`) (`pkg/storage/memengine`)**:
   - `SkipList` 구조체에서 `rnd *rand.Rand` 포인터 및 `rndMu sync.Mutex` 락을 완전히 제거하고 Go 1.22+ `math/rand/v2`로 전환.
   - `Insert()` 수행 중 발생하던 불필요한 이중 락킹(`sl.mu` + `sl.rndMu`) 및 시드 초기화 비용을 제거하여 락-프리/제로-할당 난수 레벨 결정 구현.
