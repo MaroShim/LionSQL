@@ -470,6 +470,22 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 
 	// 1. Projections
 	for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenEOF) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenRParen) {
+		if p.curTokenIs(TokenVariable) && p.peekTokenIs(TokenEq) {
+			varName := p.curToken.Literal
+			p.nextToken() // eat @var
+			p.nextToken() // eat =
+			expr := p.parseExpression(precLowest)
+			if expr == nil {
+				return nil, fmt.Errorf("expected expression after %s =", varName)
+			}
+			stmt.Projections = append(stmt.Projections, Projection{Expr: expr, Alias: varName})
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+				continue
+			}
+			break
+		}
+
 		expr := p.parseExpression(precLowest)
 		if expr == nil {
 			return nil, fmt.Errorf("expected projection expression, got %s", p.curToken.Literal)

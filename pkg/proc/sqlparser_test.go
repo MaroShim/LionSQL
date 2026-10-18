@@ -596,5 +596,41 @@ func TestParseSQL_CoalesceAndIsNull(t *testing.T) {
 	}
 }
 
+func TestEvalRowExpr_NullPropagation(t *testing.T) {
+	tests := []struct {
+		name string
+		sql  string
+		want any
+	}{
+		{name: "string plus null", sql: "SELECT 'Hello ' + CAST(NULL AS VARCHAR(10))", want: nil},
+		{name: "null plus string", sql: "SELECT CAST(NULL AS VARCHAR(10)) + 'World'", want: nil},
+		{name: "int plus null", sql: "SELECT 10 + CAST(NULL AS INT)", want: nil},
+		{name: "null plus int", sql: "SELECT CAST(NULL AS INT) + 20", want: nil},
+		{name: "int minus null", sql: "SELECT 10 - CAST(NULL AS INT)", want: nil},
+		{name: "null minus int", sql: "SELECT CAST(NULL AS INT) - 5", want: nil},
+		{name: "int mul null", sql: "SELECT 10 * CAST(NULL AS INT)", want: nil},
+		{name: "null div int", sql: "SELECT CAST(NULL AS INT) / 2", want: nil},
+		{name: "int lt null", sql: "SELECT 10 < CAST(NULL AS INT)", want: nil},
+		{name: "null gte int", sql: "SELECT CAST(NULL AS INT) >= 5", want: nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stmt, err := proc.ParseSQL(tt.sql)
+			if err != nil {
+				t.Fatalf("ParseSQL failed for %s: %v", tt.sql, err)
+			}
+			sel := stmt.(*proc.GeneralSelectStmt)
+			val, err := proc.EvalRowExpr(sel.Projections[0].Expr, nil, nil)
+			if err != nil {
+				t.Fatalf("EvalRowExpr returned error for %s: %v", tt.sql, err)
+			}
+			if val != tt.want {
+				t.Errorf("expected %v, got %v for %s", tt.want, val, tt.sql)
+			}
+		})
+	}
+}
+
 
 

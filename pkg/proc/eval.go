@@ -353,6 +353,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return !strings.EqualFold(fmt.Sprintf("%v", left), fmt.Sprintf("%v", right)), nil
 
 	case TokenLt:
+		if left == nil || right == nil {
+			return nil, nil
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {
@@ -361,6 +364,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return fmt.Sprintf("%v", left) < fmt.Sprintf("%v", right), nil
 
 	case TokenLte:
+		if left == nil || right == nil {
+			return nil, nil
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {
@@ -369,6 +375,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return fmt.Sprintf("%v", left) <= fmt.Sprintf("%v", right), nil
 
 	case TokenGt:
+		if left == nil || right == nil {
+			return nil, nil
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {
@@ -377,6 +386,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return fmt.Sprintf("%v", left) > fmt.Sprintf("%v", right), nil
 
 	case TokenGte:
+		if left == nil || right == nil {
+			return nil, nil
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {
@@ -385,6 +397,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return fmt.Sprintf("%v", left) >= fmt.Sprintf("%v", right), nil
 
 	case TokenPlus:
+		if left == nil || right == nil {
+			return nil, nil
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {
@@ -397,6 +412,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return fmt.Sprintf("%v%v", left, right), nil
 
 	case TokenMinus:
+		if left == nil || right == nil {
+			return nil, nil
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {
@@ -409,6 +427,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return nil, fmt.Errorf("cannot subtract non-numeric values")
 
 	case TokenAsterisk:
+		if left == nil || right == nil {
+			return nil, nil
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {
@@ -421,6 +442,9 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return nil, fmt.Errorf("cannot multiply non-numeric values")
 
 	case TokenSlash:
+		if left == nil || right == nil {
+			return nil, nil
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
 		if isNum1 && isNum2 {

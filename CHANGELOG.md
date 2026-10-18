@@ -7,6 +7,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **Binary Arithmetic & String Concatenation NULL Propagation (`TDS-COMPAT-8`) (`pkg/proc`, `pkg/engine`)**:
+  - Enforced ANSI and T-SQL standard `CONCAT_NULL_YIELDS_NULL ON` three-valued logic (3VL) NULL propagation in `pkg/proc/eval.go` (`evalRowBinaryOp`) across binary operators (`+`, `-`, `*`, `/`, `<`, `<=`, `>`, `>=`), preventing invalid string concatenation and negative formatting on NULL inputs.
+  - Added NULL operand guards in `storageAdd`, `storageSub`, `storageMul`, `storageDiv`, `storageNeg`, `storageLt`, `storageLte`, `storageGt`, and `storageGte` in `pkg/proc/runtime/vm.go`.
+  - Updated `Coordinator.evalScalarExpr` in `pkg/engine/sqlexec_select.go` to legitimately return `nil` (`NULL`) for non-column AST expressions instead of falling through to raw query strings.
+  - Supported T-SQL `SELECT @var = <expr>` variable assignment projections in `parseGeneralSelect` (`pkg/proc/parser_dml.go`) and wired variable updates in `OpPointSelect` (`pkg/proc/runtime/vm_dispatcher.go`).
+  - Added `storage.TypeDecimal` support to `toFloatNum` and `isTruthy` in `pkg/proc/runtime/vm.go`.
+  - Added test suites `TestEvalRowExpr_NullPropagation` (`pkg/proc`) and `TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull` (`pkg/wire/tds`).
+
 ### Added
 - **Volcano Execution Engine Runtime Profiler for EXPLAIN ANALYZE (`OBS-2`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)**:
   - Implemented `InstrumentedIterator` in `pkg/execution/instrument.go` wrapping Volcano physical operators, capturing independent per-node `ActualStartupUS`, `ActualDurationUS`, `ActualRows`, and `ActualLoops` metrics across both row-by-row `Next()` and vectorized `NextChunk()` streaming paths.

@@ -13,7 +13,7 @@
 | **스토리지 백엔드** | WiredTiger MVCC B+Tree Engine |
 | **연결 문자열** | `server=127.0.0.1;port=1433;database=master;user id=sa;password=secret;encrypt=disable` |
 | **총 테스트 케이스** | **123개 시나리오** (1차 기초/표준 77개 + 2차 실전/엣지 46개) |
-| **검증 결과 요약** | **PASS: 109개 (88.6%)**, **UNSUPPORTED: 4개 (3.3%)**, **TYPE_DIFF: 1개 (0.8%)**, **FAIL/BUG: 9개 (7.3%)** |
+| **검증 결과 요약** | **PASS: 110개 (89.4%)**, **UNSUPPORTED: 4개 (3.3%)**, **TYPE_DIFF: 1개 (0.8%)**, **FAIL/BUG: 8개 (6.5%)** |
 
 ---
 
@@ -202,7 +202,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 | 98 | 안전한 정상 형변환 | `SELECT TRY_CAST('12345' AS INT)` | **PASS** | 정상 값 변환 (12345) |
 | 99 | 안전한 날짜 변환 | `SELECT TRY_CONVERT(DATETIME, '9999-99-99')` | **PASS** | 잘못된 날짜에 대해 NULL 정상 반환 |
 | 100 | NULL 허용 CONCAT | `SELECT CONCAT('Hello', ' ', NULL, 'World')` | **PASS** | `Hello World` 반환 (MSSQL 2012+ 표준) |
-| 101 | 덧셈 연산자 NULL 전파 | `SELECT 'Hello ' + CAST(NULL AS VARCHAR(10))` | **FAIL** | **[버그]** `NULL`이어야 하나 `"Hello "` 반환 (CONCAT_NULL_YIELDS_NULL 위반) |
+| 101 | 덧셈 연산자 NULL 전파 | `SELECT 'Hello ' + CAST(NULL AS VARCHAR(10))` | **PASS** | 문자열 및 수치 연산 시 NULL 전파 정상 (CONCAT_NULL_YIELDS_NULL 준수) |
 | 102 | CHARINDEX 시작 위치 지정 | `SELECT CHARINDEX('o', 'Hello World', 6)` | **PASS** | 시작 위치 6부터 검색하여 8 정상 반환 |
 | 103 | 날짜 생성자 | `SELECT DATEFROMPARTS(2026, 10, 18)` | **PASS** | `2026-10-18` 날짜 생성 정상 |
 | 104 | 시간 생성자 | `SELECT TIMEFROMPARTS(14, 30, 0, 0, 0)` | **FAIL** | **[차이점]** `14:30:00`이 아닌 `0001-01-01T14:30:00Z`로 직렬화 |
@@ -244,10 +244,13 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 - **원인**: 프로시저 파서(`pkg/proc/parser.go`)가 `DECLARE @x INT; SET @x = 0;`의 2단계 문법만 인식하고, T-SQL 표준인 인라인 할당(`= <expr>`)을 토큰화하지 못함.
 - **대응 방안**: `proc/parser.go`의 `parseDeclare` 함수에 `=` 대입 연산자 및 초기화 수식 파싱 로직 추가.
 
-### 3. [Medium] 문자열 `+` 연산 시 `CONCAT_NULL_YIELDS_NULL ON` 규격 위반
-- **현상**: `SELECT 'Hello ' + NULL` 실행 시 T-SQL 규격상 `NULL`이어야 하나 `"Hello "`가 반환됨.
-- **원인**: 수식 평가기(`sqlexec_eval.go`)에서 `+` 연산 시 피연산자의 NULL 전파(Null Propagation) 로직 누락.
-- **대응 방안**: 문자열 덧셈 시 좌/우 피연산자 중 하나라도 NULL이면 즉시 NULL을 반환하도록 조건 추가.
+### 3. [Resolved] 문자열 `+` 연산 시 `CONCAT_NULL_YIELDS_NULL ON` 규격 준수 (`TDS-COMPAT-8`)
+- **현상**: `SELECT 'Hello ' + NULL` 실행 시 T-SQL 규격상 `NULL`이어야 하나 `"Hello "`가 반환되던 결함.
+- **조치 완료**:
+  - `pkg/proc/eval.go`의 `evalRowBinaryOp`에 사칙/비교 연산자 NULL 전파 가드 추가.
+  - `pkg/proc/runtime/vm.go`의 `storageAdd`, `storageSub`, `storageMul`, `storageDiv`, `storageNeg`, `storageLt` 등에 NULL 전파 추가.
+  - `pkg/engine/sqlexec_select.go`의 `evalScalarExpr`에서 `res == nil`을 정당한 SQL NULL 결과로 수용하도록 보강.
+  - `TestEvalRowExpr_NullPropagation` 및 `TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull` 검증 완료.
 
 ### 4. [Medium] 사용자 예외 발생 구문 (`RAISERROR`, `THROW`) 미지원
 - **현상**: `RAISERROR('msg', 16, 1)` 또는 `THROW 50005, 'msg', 1;` 사용 시 `unsupported SQL statement` 에러 반환.

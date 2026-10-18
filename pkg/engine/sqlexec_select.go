@@ -776,8 +776,13 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 			}
 			cs.Mu.Unlock()
 		}
-		if res, err := proc.EvalRowExpr(astExpr, varRow, nil); err == nil && res != nil {
-			return res, trimmed
+		if res, err := proc.EvalRowExpr(astExpr, varRow, nil); err == nil {
+			if res != nil {
+				return res, trimmed
+			}
+			if _, isCol := astExpr.(*proc.ColumnRefExpr); !isCol {
+				return nil, trimmed
+			}
 		}
 	}
 

@@ -1409,10 +1409,7 @@ func (f *VMFrame) callSpExecuteSql(argRegs []int32) error {
 
 func storageAdd(a, b storage.Value) storage.Value {
 	if a.IsNull || b.IsNull {
-		if !a.IsNull {
-			return a
-		}
-		return b
+		return storage.NullValue(storage.TypeUnknown)
 	}
 	n1, ok1 := toFloatNum(a)
 	n2, ok2 := toFloatNum(b)
@@ -1427,6 +1424,9 @@ func storageAdd(a, b storage.Value) storage.Value {
 }
 
 func storageSub(a, b storage.Value) storage.Value {
+	if a.IsNull || b.IsNull {
+		return storage.NullValue(storage.TypeUnknown)
+	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
 	diff := n1 - n2
@@ -1437,6 +1437,9 @@ func storageSub(a, b storage.Value) storage.Value {
 }
 
 func storageMul(a, b storage.Value) storage.Value {
+	if a.IsNull || b.IsNull {
+		return storage.NullValue(storage.TypeUnknown)
+	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
 	prod := n1 * n2
@@ -1447,6 +1450,9 @@ func storageMul(a, b storage.Value) storage.Value {
 }
 
 func storageDiv(a, b storage.Value) (storage.Value, error) {
+	if a.IsNull || b.IsNull {
+		return storage.NullValue(storage.TypeUnknown), nil
+	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
 	if n2 == 0 {
@@ -1460,6 +1466,9 @@ func storageDiv(a, b storage.Value) (storage.Value, error) {
 }
 
 func storageNeg(a storage.Value) storage.Value {
+	if a.IsNull {
+		return a
+	}
 	if n, ok := toFloatNum(a); ok {
 		neg := -n
 		if neg == math.Trunc(neg) {
@@ -1486,6 +1495,9 @@ func storageEq(a, b storage.Value) bool {
 }
 
 func storageLt(a, b storage.Value) bool {
+	if a.IsNull || b.IsNull {
+		return false
+	}
 	n1, ok1 := toFloatNum(a)
 	n2, ok2 := toFloatNum(b)
 	if ok1 && ok2 {
@@ -1495,6 +1507,9 @@ func storageLt(a, b storage.Value) bool {
 }
 
 func storageLte(a, b storage.Value) bool {
+	if a.IsNull || b.IsNull {
+		return false
+	}
 	n1, ok1 := toFloatNum(a)
 	n2, ok2 := toFloatNum(b)
 	if ok1 && ok2 {
@@ -1504,6 +1519,9 @@ func storageLte(a, b storage.Value) bool {
 }
 
 func storageGt(a, b storage.Value) bool {
+	if a.IsNull || b.IsNull {
+		return false
+	}
 	n1, ok1 := toFloatNum(a)
 	n2, ok2 := toFloatNum(b)
 	if ok1 && ok2 {
@@ -1513,6 +1531,9 @@ func storageGt(a, b storage.Value) bool {
 }
 
 func storageGte(a, b storage.Value) bool {
+	if a.IsNull || b.IsNull {
+		return false
+	}
 	n1, ok1 := toFloatNum(a)
 	n2, ok2 := toFloatNum(b)
 	if ok1 && ok2 {
@@ -1528,7 +1549,7 @@ func toFloatNum(v storage.Value) (float64, bool) {
 	switch v.Type {
 	case storage.TypeInt:
 		return float64(v.IVal), true
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeDecimal:
 		return v.FVal, true
 	case storage.TypeBool:
 		if v.BVal {
@@ -1552,7 +1573,7 @@ func isTruthy(v storage.Value) bool {
 		return v.BVal
 	case storage.TypeInt:
 		return v.IVal != 0
-	case storage.TypeFloat:
+	case storage.TypeFloat, storage.TypeDecimal:
 		return v.FVal != 0
 	case storage.TypeVarChar:
 		return len(v.SVal) > 0 && !strings.EqualFold(v.SVal, "false") && v.SVal != "0"

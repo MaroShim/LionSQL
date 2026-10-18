@@ -735,6 +735,16 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			if inst.A >= 0 && int(inst.A) < len(f.regs) {
 				f.regs[inst.A] = storage.IntValue(int64(len(rows)))
 			}
+			if len(rows) > 0 {
+				lastRow := rows[len(rows)-1]
+				for _, p := range data.Projections {
+					if strings.HasPrefix(p.Alias, "@") {
+						if v, ok := lastRow[p.Alias]; ok {
+							f.setVar(p.Alias, toStorageValue(v))
+						}
+					}
+				}
+			}
 			return nil
 		}
 
@@ -775,6 +785,9 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 
 					vAny, _ := proc.EvalRowExpr(p.Expr, rowCtx, nil)
 					outRow[colName] = vAny
+					if strings.HasPrefix(colName, "@") {
+						f.setVar(colName, toStorageValue(vAny))
+					}
 				}
 			}
 			rows = append(rows, outRow)

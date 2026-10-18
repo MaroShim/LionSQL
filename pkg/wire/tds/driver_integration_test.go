@@ -997,6 +997,60 @@ func TestDriverIntegration_TSQLFunctions(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;user id=sa;password=secret;encrypt=disable", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. String + NULL yields NULL (CONCAT_NULL_YIELDS_NULL)
+	var nullStr sql.NullString
+	err = db.QueryRowContext(ctx, "SELECT 'Hello ' + CAST(NULL AS VARCHAR(10));").Scan(&nullStr)
+	if err != nil {
+		t.Fatalf("SELECT 'Hello ' + NULL failed: %v", err)
+	}
+	if nullStr.Valid {
+		t.Fatalf("expected NULL string for 'Hello ' + NULL, got valid string: %q", nullStr.String)
+	}
+
+	// 2. Int + NULL yields NULL
+	var nullInt sql.NullInt64
+	err = db.QueryRowContext(ctx, "SELECT 10 + CAST(NULL AS INT);").Scan(&nullInt)
+	if err != nil {
+		t.Fatalf("SELECT 10 + NULL failed: %v", err)
+	}
+	if nullInt.Valid {
+		t.Fatalf("expected NULL int for 10 + NULL, got valid int: %d", nullInt.Int64)
+	}
+
+	// 3. Normal string concatenation
+	var normStr string
+	err = db.QueryRowContext(ctx, "SELECT 'Hello ' + 'World';").Scan(&normStr)
+	if err != nil {
+		t.Fatalf("SELECT 'Hello ' + 'World' failed: %v", err)
+	}
+	if normStr != "Hello World" {
+		t.Fatalf("expected 'Hello World', got %q", normStr)
+	}
+}
+
 
 
 
