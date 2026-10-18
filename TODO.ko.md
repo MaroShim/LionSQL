@@ -41,7 +41,7 @@
 | **P1** | **스토리지/안정성** | **WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 (`TDS-COMPAT-1`)** | `pkg/storage/wiredtiger` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/유니코드** | **유니코드 N-prefix (`N'...'`) TDS UTF-16LE 직렬화 EOF 방지 (`TDS-COMPAT-2`)** | `pkg/wire/tds` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **ORM/와이어** | **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (Dapper `QueryMultiple` 필수) (`TDS-COMPAT-6`)** | `pkg/engine`, `pkg/wire/tds` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
-| **P1** | **프로시저/파서** | **T-SQL 프로시저 파서의 `DECLARE @var INT = <expr>` 인라인 초기화 지원 (`TDS-COMPAT-7`)** | `pkg/proc` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
+| **P1** | **프로시저/파서** | **T-SQL 프로시저 파서의 `DECLARE @var INT = <expr>` 인라인 초기화 지원 (`TDS-COMPAT-7`)** | `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **타입/파서** | **BIT 컬럼 수치 리터럴(`1`/`0`) 불리언 강제 변환(`CastValueToType`) 보강 (`TDS-COMPAT-3`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **엔진/제어문** | **Ad-hoc 쿼리 배치 최상위 `IF ... ELSE` 및 `WHILE` 익명 VDBE 블록 실행 지원 (`TDS-COMPAT-4`)** | `pkg/engine`, `pkg/proc` | **신규 등록** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **수식/NULL** | **문자열 `+` 연산 시 `CONCAT_NULL_YIELDS_NULL ON` 규격에 따른 NULL 전파 보강 (`TDS-COMPAT-8`)** | `pkg/engine`, `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |

@@ -102,7 +102,18 @@ func evalStmt(stmt Statement, ctx *ExecutionContext) error {
 		return nil
 
 	case *DeclareStmt:
-		ctx.Variables[s.Name] = storage.NullValue(s.Type)
+		if s.Init != nil {
+			val, err := evalExpr(s.Init, ctx)
+			if err != nil {
+				return err
+			}
+			if s.Type == storage.TypeBool {
+				val = storage.BoolValueFromAny(val)
+			}
+			ctx.Variables[s.Name] = val
+		} else {
+			ctx.Variables[s.Name] = storage.NullValue(s.Type)
+		}
 		return nil
 
 	case *SetStmt:

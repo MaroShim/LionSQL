@@ -26,6 +26,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added test suites `TestEvalRowExpr_NullPropagation` (`pkg/proc`) and `TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull` (`pkg/wire/tds`).
 
 ### Added
+- **T-SQL Stored Procedure Inline Variable Declaration and Initialization (`TDS-COMPAT-7`) (`pkg/proc`, `pkg/engine`)**:
+  - Added `Init Expr` to `proc.DeclareStmt` AST and extended `parseDeclare` in `pkg/proc/parser_stmt.go` to parse inline initializers (`DECLARE @var Type = <expr>`) with comma-separated multi-variable chaining.
+  - Implemented VDBE bytecode compilation in `pkg/proc/compiler.go` (`case *DeclareStmt:`) to evaluate initializers sequentially and store values immediately via `OpStoreVar` and `OpCast`, supporting forward references in subsequent declarations.
+  - Added expression evaluation for `DeclareStmt.Init` in `pkg/proc/evaluator.go`.
+  - Implemented `SplitDeclarations` in `pkg/engine/query_utils.go` to safely split comma-separated variable declarations in Ad-hoc batches without breaking on commas inside parentheses or string literals.
+  - Added unit test `TestCompiler_DeclareInlineInit` (`pkg/proc`), `TestSplitDeclarations` (`pkg/engine`), and driver integration test `TestDriverIntegration_GoMSSQLDB_InlineVariableDeclaration` (`pkg/wire/tds`).
 - **Volcano Execution Engine Runtime Profiler for EXPLAIN ANALYZE (`OBS-2`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)**:
   - Implemented `InstrumentedIterator` in `pkg/execution/instrument.go` wrapping Volcano physical operators, capturing independent per-node `ActualStartupUS`, `ActualDurationUS`, `ActualRows`, and `ActualLoops` metrics across both row-by-row `Next()` and vectorized `NextChunk()` streaming paths.
   - Implemented sub-microsecond precision profiling with nanosecond accumulation (`totalNanos`), preventing quantization truncation on fast in-memory scans and limit operators.

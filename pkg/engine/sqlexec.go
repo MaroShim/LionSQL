@@ -780,7 +780,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		rawDecls := strings.TrimSpace(trimmed[len("DECLARE "):])
-		parts := strings.Split(rawDecls, ",")
+		parts := splitDeclarations(rawDecls)
 		cs.Mu.Lock()
 		for _, p := range parts {
 			p = strings.TrimSpace(strings.TrimRight(p, ";"))
@@ -804,6 +804,22 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 					expr = strings.ReplaceAll(expr, k, fmt.Sprintf("%v", v))
 				}
 				val = parseSessionVarValue(expr)
+				if len(varFields) > 1 {
+					typeName := strings.ToUpper(varFields[1])
+					if idx := strings.Index(typeName, "("); idx != -1 {
+						typeName = typeName[:idx]
+					}
+					if typeName == "BIT" || typeName == "BOOL" || typeName == "BOOLEAN" {
+						if b, ok := val.(bool); ok {
+							val = b
+						} else if i, ok := val.(int64); ok {
+							val = (i != 0)
+						} else if s, ok := val.(string); ok {
+							s = strings.Trim(strings.TrimSpace(s), "'\"")
+							val = (strings.EqualFold(s, "true") || s == "1")
+						}
+					}
+				}
 			}
 			cs.Vars[varName] = val
 		}

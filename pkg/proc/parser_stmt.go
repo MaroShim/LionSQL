@@ -368,12 +368,18 @@ func (p *Parser) parseDeclare() (Statement, error) {
 			}
 		}
 
-		stmts = append(stmts, &DeclareStmt{Name: varName, Type: dt})
+		var initExpr Expr
+		if p.curTokenIs(TokenAssign) || p.curTokenIs(TokenEq) {
+			p.nextToken() // eat '=' or ':='
+			initExpr = p.parseExpression(precLowest)
+		}
+
+		stmts = append(stmts, &DeclareStmt{Name: varName, Type: dt, Init: initExpr})
 
 		if p.curTokenIs(TokenComma) {
 			p.nextToken()
-			if !p.curTokenIs(TokenVariable) {
-				return nil, fmt.Errorf("expected variable name after comma in DECLARE")
+			if !p.curTokenIs(TokenVariable) && !p.curTokenIs(TokenIdent) {
+				return nil, fmt.Errorf("expected variable name after comma in DECLARE, got %s", p.curToken.Literal)
 			}
 			varName = p.curToken.Literal
 			p.nextToken()

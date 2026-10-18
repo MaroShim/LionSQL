@@ -13,7 +13,7 @@
 | **스토리지 백엔드** | WiredTiger MVCC B+Tree Engine |
 | **연결 문자열** | `server=127.0.0.1;port=1433;database=master;user id=sa;password=secret;encrypt=disable` |
 | **총 테스트 케이스** | **123개 시나리오** (1차 기초/표준 77개 + 2차 실전/엣지 46개) |
-| **검증 결과 요약** | **PASS: 111개 (90.2%)**, **UNSUPPORTED: 4개 (3.3%)**, **TYPE_DIFF: 1개 (0.8%)**, **FAIL/BUG: 7개 (5.7%)** |
+| **검증 결과 요약** | **PASS: 112개 (91.1%)**, **UNSUPPORTED: 4개 (3.3%)**, **TYPE_DIFF: 1개 (0.8%)**, **FAIL/BUG: 6개 (4.9%)** |
 
 ---
 
@@ -226,7 +226,7 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 | 117 | 세미콜론 없는 다중 구문 | `SELECT 1 AS a SELECT 2 AS b` | **PASS** | 세미콜론 없는 연속 SELECT 정상 파싱 |
 | 118-119 | 내장 진단 프로시저 | `EXEC sp_help 'diag_customers'`, `EXEC sp_who` | **PASS** | 테이블 스키마 및 활성 세션 정보 정상 반환 |
 | 120-121 | 사용자 예외 발생 | `RAISERROR('...', 16, 1)`, `THROW 50005, '...', 1;` | **UNSUPPORTED** | **[미지원]** ad-hoc 쿼리 파서에서 사용자 예외 문법 미인식 |
-| 122-123 | 프로시저 변수 인라인 초기화 | `CREATE PROCEDURE ... AS BEGIN DECLARE @cnt INT = 0; ... END` | **FAIL** | **[버그]** 프로시저 파서에서 `DECLARE @var INT = <expr>` 인라인 할당 미지원 (`unexpected token: =`) |
+| 122-123 | 프로시저 변수 인라인 초기화 | `CREATE PROCEDURE ... AS BEGIN DECLARE @cnt INT = 0; ... END` | **PASS** | 프로시저 내 변수 선언 시 인라인 초기값 대입(`= <expr>`) 및 순차 의존성 정상 지원 |
 
 ---
 
@@ -239,10 +239,15 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 - **원인**: `pkg/engine/sqlexec.go:185`에서 `lastRes = res`로 순차 덮어쓰기하여 마지막 결과만 반환하며, TDS `server.go` 또한 단일 Resultset에 대해서만 토큰을 전송함.
 - **대응 방안**: `ExecuteSessionSQLContext`가 `[]*QueryResult` 슬라이스를 반환할 수 있도록 확장하고, TDS 와이어 계층에서 각 결과셋마다 `COLMETADATA ➔ ROW ➔ DONE (MoreResults)` 시퀀스를 연속 방출하도록 개편.
 
-### 2. [High] 프로시저 파서의 변수 선언 인라인 초기화 문법 누락 (`DECLARE @x INT = 0`)
+### 2. [Resolved] 프로시저 파서의 변수 선언 인라인 초기화 문법 지원 (`DECLARE @x INT = 0`, `TDS-COMPAT-7`)
 - **현상**: `CREATE PROCEDURE` 내에서 `DECLARE @zero INT = 0;` 사용 시 `unexpected token in statement: =` 구문 에러 발생.
-- **원인**: 프로시저 파서(`pkg/proc/parser.go`)가 `DECLARE @x INT; SET @x = 0;`의 2단계 문법만 인식하고, T-SQL 표준인 인라인 할당(`= <expr>`)을 토큰화하지 못함.
-- **대응 방안**: `proc/parser.go`의 `parseDeclare` 함수에 `=` 대입 연산자 및 초기화 수식 파싱 로직 추가.
+- **조치 완료**:
+  - `pkg/proc/ast.go`: `DeclareStmt` 구조체에 `Init Expr` 필드 추가 및 `String()` 포매터 반영.
+  - `pkg/proc/parser_stmt.go`: `parseDeclare`에서 `=` 연산자 및 초기화 수식 파싱 로직 추가, 쉼표 구분 다중 인라인 선언 지원.
+  - `pkg/proc/compiler.go`: `DeclareStmt.Init` VDBE 바이트코드 컴파일(`OpStoreVar`, `OpCast` 연동) 및 순차적 스코프 바인딩 구현.
+  - `pkg/proc/evaluator.go`: 인터프리터 런타임에서 초기값 수식 평가 및 변수 맵 할당 구현.
+  - `pkg/engine/query_utils.go`: `SplitDeclarations` 구현으로 괄호/따옴표 내 쉼표가 포함된 Ad-hoc `DECLARE` 파싱 안정성 확보.
+  - `TestCompiler_DeclareInlineInit`, `TestSplitDeclarations`, `TestDriverIntegration_GoMSSQLDB_InlineVariableDeclaration` 검증 완료.
 
 ### 3. [Resolved] 문자열 `+` 연산 시 `CONCAT_NULL_YIELDS_NULL ON` 규격 준수 (`TDS-COMPAT-8`)
 - **현상**: `SELECT 'Hello ' + NULL` 실행 시 T-SQL 규격상 `NULL`이어야 하나 `"Hello "`가 반환되던 결함.

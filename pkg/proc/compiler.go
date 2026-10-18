@@ -589,11 +589,23 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 	case *DeclareStmt:
 		varName := cleanVarName(s.Name)
-		c.getOrAllocSlot(varName)
+		slot := c.getOrAllocSlot(varName)
 		if s.Type == storage.TypeInt {
 			c.varTypes[varName] = storage.TypeInt
 		} else {
 			c.varTypes[varName] = s.Type
+		}
+		if s.Init != nil {
+			valReg, err := c.compileExpr(s.Init)
+			if err != nil {
+				return err
+			}
+			if s.Type == storage.TypeBool {
+				c.emit(OpCast, valReg, valReg, 0, &CastData{TargetType: storage.TypeBool})
+			} else if c.isIntegerExpr(s.Init) {
+				c.varTypes[varName] = storage.TypeInt
+			}
+			c.emit(OpStoreVar, valReg, slot, 0, varName)
 		}
 		return nil
 

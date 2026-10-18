@@ -220,5 +220,32 @@ func TestInstruction_Size16Bytes(t *testing.T) {
 	}
 }
 
+func TestCompiler_DeclareInlineInit(t *testing.T) {
+	tsql := `
+CREATE PROCEDURE TestInlineDecl
+AS
+BEGIN
+    DECLARE @cnt INT = 10, @multiplier INT = 2;
+    DECLARE @result INT = @cnt * @multiplier;
+    DECLARE @flag BIT = 1;
+    RETURN @result;
+END;
+`
+	prog, err := proc.Compile(tsql)
+	if err != nil {
+		t.Fatalf("Compile procedure with inline DECLARE failed: %v", err)
+	}
+
+	if prog.Name != "TestInlineDecl" {
+		t.Errorf("expected procedure name TestInlineDecl, got %s", prog.Name)
+	}
+
+	dis := prog.Disassemble()
+	if !strings.Contains(dis, "STORE_VAR") {
+		t.Errorf("expected STORE_VAR instruction in disassembly:\n%s", dis)
+	}
+}
+
+
 
 

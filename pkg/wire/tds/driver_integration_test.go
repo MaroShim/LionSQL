@@ -1157,6 +1157,69 @@ func TestDriverIntegration_GoMSSQLDB_BitColumnNumericCoercion(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_GoMSSQLDB_InlineVariableDeclaration(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;user id=sa;password=secret;encrypt=disable", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. Ad-hoc query with comma in parentheses and string literal
+	var val float64
+	var msg string
+	err = db.QueryRowContext(ctx, "DECLARE @val DECIMAL(10, 2) = 12.34, @msg VARCHAR(50) = 'hello, world'; SELECT @val, @msg;").Scan(&val, &msg)
+	if err != nil {
+		t.Fatalf("Ad-hoc inline DECLARE failed: %v", err)
+	}
+	if val != 12.34 || msg != "hello, world" {
+		t.Errorf("expected val=12.34, msg='hello, world', got val=%f, msg=%q", val, msg)
+	}
+
+	// 2. Create Procedure with multiple inline DECLARE statements and sequential dependency
+	createProcSQL := `
+CREATE PROCEDURE dbo.usp_TestInlineDecl
+AS
+BEGIN
+    DECLARE @cnt INT = 10, @multiplier INT = 3;
+    DECLARE @total INT = @cnt * @multiplier;
+    DECLARE @flag BIT = 1;
+    SELECT @total AS total, @flag AS flag;
+END;
+`
+	_, err = db.ExecContext(ctx, createProcSQL)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE with inline DECLARE failed: %v", err)
+	}
+
+	// 3. Execute the procedure
+	var total int
+	var flag bool
+	err = db.QueryRowContext(ctx, "EXEC dbo.usp_TestInlineDecl;").Scan(&total, &flag)
+	if err != nil {
+		t.Fatalf("EXEC dbo.usp_TestInlineDecl failed: %v", err)
+	}
+	if total != 30 || flag != true {
+		t.Errorf("expected total=30, flag=true, got total=%d, flag=%v", total, flag)
+	}
+}
+
+
 
 
 

@@ -476,4 +476,62 @@ func RewriteSessionTempTables(query string, cs *ClientSession) string {
 	return b.String()
 }
 
+// SplitDeclarations splits a comma-separated list of variable declarations while preserving commas inside quotes and parentheses.
+func SplitDeclarations(s string) []string {
+	var parts []string
+	var cur strings.Builder
+	inParen := 0
+	inQuote := false
+	quoteChar := byte(0)
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inQuote {
+			cur.WriteByte(ch)
+			if ch == quoteChar {
+				if i+1 < len(s) && s[i+1] == quoteChar {
+					i++
+					cur.WriteByte(s[i])
+				} else {
+					inQuote = false
+				}
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			inQuote = true
+			quoteChar = ch
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == '(' {
+			inParen++
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == ')' {
+			if inParen > 0 {
+				inParen--
+			}
+			cur.WriteByte(ch)
+			continue
+		}
+		if ch == ',' && inParen == 0 {
+			parts = append(parts, cur.String())
+			cur.Reset()
+			continue
+		}
+		cur.WriteByte(ch)
+	}
+	if cur.Len() > 0 {
+		parts = append(parts, cur.String())
+	}
+	return parts
+}
+
+func splitDeclarations(s string) []string {
+	return SplitDeclarations(s)
+}
+
+
 

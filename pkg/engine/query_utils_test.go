@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"sqlion/pkg/engine"
@@ -143,3 +144,21 @@ func BenchmarkSplitStatements_MultiStatement(b *testing.B) {
 		}
 	}
 }
+
+func TestSplitDeclarations(t *testing.T) {
+	input := "@val DECIMAL(10, 2) = 12.34, @msg VARCHAR(50) = 'hello, world', @count INT = (10 + 2)"
+	parts := engine.SplitDeclarations(input)
+	if len(parts) != 3 {
+		t.Fatalf("expected 3 declarations, got %d: %#v", len(parts), parts)
+	}
+	if strings.TrimSpace(parts[0]) != "@val DECIMAL(10, 2) = 12.34" {
+		t.Errorf("part 0 mismatch: %q", parts[0])
+	}
+	if strings.TrimSpace(parts[1]) != "@msg VARCHAR(50) = 'hello, world'" {
+		t.Errorf("part 1 mismatch: %q", parts[1])
+	}
+	if strings.TrimSpace(parts[2]) != "@count INT = (10 + 2)" {
+		t.Errorf("part 2 mismatch: %q", parts[2])
+	}
+}
+

@@ -175,14 +175,18 @@ func (s *BlockStmt) String() string {
 	return b.String()
 }
 
-// DeclareStmt represents DECLARE @var TYPE
+// DeclareStmt represents DECLARE @var TYPE [= Expr]
 type DeclareStmt struct {
 	Name string
 	Type storage.DataType
+	Init Expr
 }
 
 func (s *DeclareStmt) stmtNode() {}
 func (s *DeclareStmt) String() string {
+	if s.Init != nil {
+		return fmt.Sprintf("DECLARE %s %s = %s", s.Name, s.Type, s.Init.String())
+	}
 	return fmt.Sprintf("DECLARE %s %s", s.Name, s.Type)
 }
 
