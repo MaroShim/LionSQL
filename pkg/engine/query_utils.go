@@ -34,6 +34,9 @@ func StripLeadingComments(s string) string {
 
 func isBeginTransaction(rest string) bool {
 	rest = strings.TrimLeft(rest, " \t\r\n")
+	if len(rest) == 0 || rest[0] == ';' {
+		return true
+	}
 	upper := strings.ToUpper(rest)
 	if strings.HasPrefix(upper, "TRANSACTION") {
 		after := upper[len("TRANSACTION"):]
@@ -43,11 +46,18 @@ func isBeginTransaction(rest string) bool {
 		after := upper[len("TRAN"):]
 		return len(after) == 0 || !IsIdentChar(after[0])
 	}
+	if strings.HasPrefix(upper, "WORK") {
+		after := upper[len("WORK"):]
+		return len(after) == 0 || !IsIdentChar(after[0])
+	}
 	if strings.HasPrefix(upper, "DISTRIBUTED") {
 		after := upper[len("DISTRIBUTED"):]
 		if len(after) == 0 || !IsIdentChar(after[0]) {
 			return true
 		}
+	}
+	if strings.HasPrefix(upper, "READ") || strings.HasPrefix(upper, "ISOLATION") || strings.HasPrefix(upper, "DEFERRABLE") || strings.HasPrefix(upper, "NOT") {
+		return true
 	}
 	return false
 }
@@ -76,6 +86,59 @@ func isProcOrFuncHeader(s string) bool {
 		strings.HasPrefix(sUpper, "ALTER TRIGGER")
 }
 
+func isIfHeader(s string) bool {
+	s = StripLeadingComments(s)
+	if len(s) < 2 {
+		return false
+	}
+	ch := s[0]
+	if ch != 'I' && ch != 'i' {
+		return false
+	}
+	sUpper := strings.ToUpper(s)
+	if strings.HasPrefix(sUpper, "IF") {
+		rest := sUpper[2:]
+		return len(rest) == 0 || !IsIdentChar(rest[0])
+	}
+	return false
+}
+
+func hasNextTokenElse(s string, idx int) bool {
+	n := len(s)
+	for idx < n {
+		ch := s[idx]
+		if ch <= ' ' {
+			idx++
+			continue
+		}
+		if ch == '-' && idx+1 < n && s[idx+1] == '-' {
+			idx += 2
+			for idx < n && s[idx] != '\n' {
+				idx++
+			}
+			continue
+		}
+		if ch == '/' && idx+1 < n && s[idx+1] == '*' {
+			idx += 2
+			for idx+1 < n && !(s[idx] == '*' && s[idx+1] == '/') {
+				idx++
+			}
+			idx += 2
+			continue
+		}
+		break
+	}
+	if idx >= n {
+		return false
+	}
+	if idx+4 <= n && strings.EqualFold(s[idx:idx+4], "ELSE") {
+		if idx+4 == n || !IsIdentChar(s[idx+4]) {
+			return true
+		}
+	}
+	return false
+}
+
 // SplitStatements splits a multi-statement SQL batch by semicolons, properly respecting quotes and BEGIN...END blocks.
 // It uses an index-based slice scanner with zero intermediate string builder copies and zero heap allocations during scanning.
 func SplitStatements(query string) []string {
@@ -100,7 +163,7 @@ func SplitStatements(query string) []string {
 	inLineComment := false
 	inBlockComment := false
 	blockDepth := 0
-	isProcOrFunc := false
+	isIfStmt := false
 	needHeaderCheck := true
 
 	for i := 0; i < n; i++ {
@@ -149,27 +212,28 @@ func SplitStatements(query string) []string {
 
 		if needHeaderCheck {
 			if ch > ' ' {
-				isProcOrFunc = isProcOrFuncHeader(query[start:])
+				isIfStmt = isIfHeader(query[start:])
 				needHeaderCheck = false
 			}
 		}
 
-		if isProcOrFunc {
-			if (i == 0 || !IsIdentChar(query[i-1])) && i+5 <= n && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == n || !IsIdentChar(query[i+5])) {
-				if !isBeginTransaction(query[i+5:]) {
-					blockDepth++
-				}
-			} else if (i == 0 || !IsIdentChar(query[i-1])) && i+4 <= n && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == n || !IsIdentChar(query[i+4])) {
+		if (i == 0 || !IsIdentChar(query[i-1])) && i+5 <= n && strings.EqualFold(query[i:i+5], "BEGIN") && (i+5 == n || !IsIdentChar(query[i+5])) {
+			if !isBeginTransaction(query[i+5:]) {
 				blockDepth++
-			} else if (i == 0 || !IsIdentChar(query[i-1])) && i+3 <= n && strings.EqualFold(query[i:i+3], "END") && (i+3 == n || !IsIdentChar(query[i+3])) {
-				if blockDepth > 0 {
-					blockDepth--
-				}
+			}
+		} else if (i == 0 || !IsIdentChar(query[i-1])) && i+4 <= n && strings.EqualFold(query[i:i+4], "CASE") && (i+4 == n || !IsIdentChar(query[i+4])) {
+			blockDepth++
+		} else if (i == 0 || !IsIdentChar(query[i-1])) && i+3 <= n && strings.EqualFold(query[i:i+3], "END") && (i+3 == n || !IsIdentChar(query[i+3])) {
+			if blockDepth > 0 {
+				blockDepth--
 			}
 		}
 
 		if ch == ';' {
-			if isProcOrFunc && blockDepth > 0 {
+			if blockDepth > 0 {
+				continue
+			}
+			if isIfStmt && hasNextTokenElse(query, i+1) {
 				continue
 			}
 			stmt := strings.TrimSpace(query[start:i])
@@ -177,7 +241,7 @@ func SplitStatements(query string) []string {
 				stmts = append(stmts, stmt)
 			}
 			start = i + 1
-			isProcOrFunc = false
+			isIfStmt = false
 			blockDepth = 0
 			needHeaderCheck = true
 		}

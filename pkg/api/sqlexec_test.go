@@ -3031,5 +3031,70 @@ func TestSQLExecutor_GetDateNativeTimestamp(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_AdHocIfElseControlFlow(t *testing.T) {
+	server := setupMemServer(t)
+	sessID := "adhoc_if_test"
+
+	// 1. Scenario 64: DECLARE @flag INT = 1; IF @flag = 1 SELECT 'TRUE' AS res; ELSE SELECT 'FALSE' AS res;
+	res, err := server.ExecuteSessionSQL(sessID, "DECLARE @flag INT = 1; IF @flag = 1 SELECT 'TRUE' AS res; ELSE SELECT 'FALSE' AS res;")
+	if err != nil || !res.Success {
+		t.Fatalf("IF @flag = 1 failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	if val := fmt.Sprintf("%v", res.Rows[0]["res"]); val != "TRUE" {
+		t.Fatalf("expected 'TRUE', got: %v", val)
+	}
+
+	// 2. Branch ELSE: DECLARE @flag INT = 0; IF @flag = 1 SELECT 'TRUE' AS res; ELSE SELECT 'FALSE' AS res;
+	res, err = server.ExecuteSessionSQL(sessID, "DECLARE @flag INT = 0; IF @flag = 1 SELECT 'TRUE' AS res; ELSE SELECT 'FALSE' AS res;")
+	if err != nil || !res.Success {
+		t.Fatalf("IF @flag = 0 failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	if val := fmt.Sprintf("%v", res.Rows[0]["res"]); val != "FALSE" {
+		t.Fatalf("expected 'FALSE', got: %v", val)
+	}
+
+	// 3. Block syntax: IF ... BEGIN ... END ELSE BEGIN ... END
+	res, err = server.ExecuteSessionSQL(sessID, `
+		DECLARE @score INT = 85;
+		IF @score >= 80
+		BEGIN
+			SELECT 'PASS' AS grade;
+		END
+		ELSE
+		BEGIN
+			SELECT 'FAIL' AS grade;
+		END;
+	`)
+	if err != nil || !res.Success {
+		t.Fatalf("IF BEGIN...END failed: %v", err)
+	}
+	if len(res.Rows) != 1 || fmt.Sprintf("%v", res.Rows[0]["grade"]) != "PASS" {
+		t.Fatalf("expected 'PASS', got: %+v", res.Rows)
+	}
+}
+
+func TestSQLExecutor_AdHocWhileLoop(t *testing.T) {
+	server := setupMemServer(t)
+	sessID := "adhoc_while_test"
+
+	// Scenario 65: DECLARE @cnt INT = 0; WHILE @cnt < 5 BEGIN SET @cnt = @cnt + 1; END; SELECT @cnt AS count;
+	res, err := server.ExecuteSessionSQL(sessID, "DECLARE @cnt INT = 0; WHILE @cnt < 5 BEGIN SET @cnt = @cnt + 1; END; SELECT @cnt AS count;")
+	if err != nil || !res.Success {
+		t.Fatalf("WHILE loop failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	if val := fmt.Sprintf("%v", res.Rows[0]["count"]); val != "5" {
+		t.Fatalf("expected @cnt=5, got: %v", val)
+	}
+}
+
 
 

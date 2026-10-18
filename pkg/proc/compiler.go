@@ -121,6 +121,10 @@ func Compile(sql string) (*Program, error) {
 		return CompileStatement(sql)
 	}
 
+	if strings.HasPrefix(upper, "IF ") || strings.HasPrefix(upper, "WHILE ") || strings.HasPrefix(upper, "BEGIN ") || upper == "BEGIN" {
+		return CompileAnonymousBlock(sql)
+	}
+
 	// Fallback to procedure parser
 	lexer := NewLexer(sql)
 	parser := NewParser(lexer)
@@ -129,6 +133,28 @@ func Compile(sql string) (*Program, error) {
 		return nil, err
 	}
 	return CompileProcedure(stmt)
+}
+
+// CompileAnonymousBlock compiles an ad-hoc control-flow or block statement (IF, WHILE, BEGIN...END) into a VDBE Program.
+func CompileAnonymousBlock(sql string) (*Program, error) {
+	trimmed := strings.TrimSpace(sql)
+	c := NewCompiler()
+	c.prog.Name = "ANONYMOUS_BLOCK"
+	c.prog.Type = "BLOCK"
+	c.prog.QuerySQL = trimmed
+
+	p := NewParser(NewLexer(trimmed))
+	stmt, err := p.ParseStatement()
+	if err != nil {
+		return nil, err
+	}
+	if err := c.compileStatement(stmt); err != nil {
+		return nil, err
+	}
+	if err := c.resolveGotos(); err != nil {
+		return nil, err
+	}
+	return c.finalizeProgram(), nil
 }
 
 // CompileStatement compiles an interactive / standalone DML or SQL statement into a VDBE Program.

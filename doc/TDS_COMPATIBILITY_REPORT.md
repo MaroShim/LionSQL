@@ -13,7 +13,7 @@
 | **스토리지 백엔드** | WiredTiger MVCC B+Tree Engine |
 | **연결 문자열** | `server=127.0.0.1;port=1433;database=master;user id=sa;password=secret;encrypt=disable` |
 | **총 테스트 케이스** | **123개 시나리오** (1차 기초/표준 77개 + 2차 실전/엣지 46개) |
-| **검증 결과 요약** | **PASS: 118개 (95.9%)**, **TYPE_DIFF: 1개 (0.8%)**, **UNSUPPORTED: 2개 (1.6%)**, **FAIL: 2개 (1.6%)** (실질 호환율: **96.7%**) |
+| **검증 결과 요약** | **PASS: 120개 (97.6%)**, **TYPE_DIFF: 1개 (0.8%)**, **UNSUPPORTED: 0개 (0.0%)**, **FAIL: 2개 (1.6%)** (실질 호환율: **98.4%** / 121/123 PASS) |
 
 ---
 
@@ -122,13 +122,13 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
 
 ---
 
-### 2.8 T-SQL 절차적 제어문 및 저장 프로시저 (3/5 PASS - 60.0%)
+### 2.8 T-SQL 절차적 제어문 및 저장 프로시저 (5/5 PASS - 100%)
 
 | 번호 | 테스트 항목 | 질의 구문 (SQL) | 결과 | 상세 원인 및 분석 |
 | :--- | :--- | :--- | :--- | :--- |
 | 63 | Ad-hoc 변수 선언/조회 | `DECLARE @x INT = 50; SELECT @x * 2 AS result;` | **PASS** | 단일 배치 내 변수 할당 및 프로젝션 정상 |
-| 64 | Ad-hoc IF ... ELSE 제어문 | `DECLARE @flag INT = 1; IF @flag = 1 SELECT 'TRUE'; ELSE SELECT 'FALSE';` | **UNSUPPORTED** | **[미지원]** 일반 SQL 배치 파서에서 최상위 `IF` 문법 미지원 (`unsupported SQL statement`) |
-| 65 | Ad-hoc WHILE 루프 제어문 | `DECLARE @cnt INT = 0; WHILE @cnt < 5 BEGIN SET @cnt = @cnt + 1; END;` | **UNSUPPORTED** | **[미지원]** 일반 SQL 배치 파서에서 최상위 `WHILE` 문법 미지원 (`unsupported SQL statement`) |
+| 64 | Ad-hoc IF ... ELSE 제어문 | `DECLARE @flag INT = 1; IF @flag = 1 SELECT 'TRUE'; ELSE SELECT 'FALSE';` | **PASS** | 최상위 익명 `IF...ELSE` 제어문 파싱, 세미콜론 분리 보존 및 VDBE 바이트코드 분기 실행 정상 |
+| 65 | Ad-hoc WHILE 루프 제어문 | `DECLARE @cnt INT = 0; WHILE @cnt < 5 BEGIN SET @cnt = @cnt + 1; END;` | **PASS** | 최상위 익명 `WHILE` 루프 제어문 파싱, `BEGIN...END` 블록 보존 및 변수 상태 동기화 정상 |
 | 66 | IF/ELSE 프로시저 생성 | `CREATE PROCEDURE dbo.usp_DiagCalcDiscount ... AS BEGIN IF ... ELSE ... END;` | **PASS** | VDBE 컴파일러를 통해 `IF/ELSE`가 포함된 프로시저 바이트코드 정상 생성 |
 | 67 | 프로시저 실행 및 제어 흐름 | `EXEC dbo.usp_DiagCalcDiscount @price = 100.0` | **PASS** | VDBE 가상머신에서 분기문이 정상 실행되어 할인 가격(80.0) 정확히 산출 |
 
@@ -290,17 +290,26 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
   - `pkg/wire/tds/server.go`: `lowerCol` 및 샘플 행 타입 판별에서 `getdate`, `now`, `current_timestamp` 컬럼의 TDS 메타데이터를 `TypeDateTimeN` (0x6F, 8바이트)으로 정확히 지정하여 공식 TDS 날짜/시간 바이너리 패킹 전송.
   - `TestSQLExecutor_GetDateNativeTimestamp` (엔진 단위 테스트) 및 `TestDriverIntegration_GoMSSQLDB_GetDateNativeScan` (`go-mssqldb` 드라이버 E2E 통합 테스트: `time.Time` 스캔 및 기존 문자열 호환 스캔 동시 검증) 통과.
 
+### 8. [Resolved] Ad-hoc 최상위 익명 제어문 (`IF...ELSE`, `WHILE`) 지원 (`TDS-COMPAT-4` / 시나리오 64, 65)
+- **현상**: 인터랙티브 SQL 배치에서 최상위 `IF...ELSE` 제어문이나 `WHILE` 루프 사용 시 세미콜론 분리기(`SplitStatements`)가 블록 내부 또는 `THEN`/`ELSE` 경계를 쪼개어 문법 에러가 발생하거나 `unsupported SQL statement` 에러 반환.
+- **조치 완료**:
+  - `pkg/engine/query_utils.go`: `SplitStatements`에서 프로시저 외부의 일반 쿼리에서도 `BEGIN...END` 블록 깊이를 추적하도록 확장하고, `IF` 구문 뒤에 이어지는 `ELSE` 토큰을 선제 감지(`hasNextTokenElse`)하여 세미콜론이 제어문 블록을 조기 분할하지 않도록 보존. `isBeginTransaction`을 정교화하여 단독 `BEGIN;` 트랜잭션 시작과 복합 제어문 블록을 완벽하게 구분.
+  - `pkg/proc/parser_stmt.go`: `parseIf` 및 `parseWhile`에서 `THEN`, `ELSE`, `WHILE body` 뒤에 오는 후행 세미콜론을 유연하게 소비하도록 보강.
+  - `pkg/proc/compiler.go`: 최상위 제어문 및 복합 블록을 컴파일하는 `CompileAnonymousBlock` API 추가 및 `Compile` 라우터 연동.
+  - `pkg/proc/runtime/vm.go`: `ExecutionResult`에 `Vars` 필드를 추가하고 `collectFrameVars`를 통해 실행 후 갱신된 VDBE 레지스터/슬롯 변수 상태를 호출자에게 반환.
+  - `pkg/engine/sqlexec.go` & `sqlexec_procs.go`: `execAnonymousBlock` 구현으로 세션 변수(`cs.Vars`) 바인딩, VDBE 트랜잭션 내 제어문 실행, 실행 후 갱신된 변수 상태 동기화 및 관계형 결과셋 반환 파이프라인 구축.
+  - `TestSQLExecutor_AdHocIfElseControlFlow`, `TestSQLExecutor_AdHocWhileLoop` (엔진 단위 테스트) 및 `TestDriverIntegration_Scenario64_AdHocIfElse`, `TestDriverIntegration_Scenario65_AdHocWhile` (`go-mssqldb` 공식 드라이버 E2E 통합 테스트) 통과.
+
 ---
 
 ## 4. 최종 결론
 
-123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **96.7% (119/123 - PASS 118개 + TYPE_DIFF 1개)의 압도적인 종합 호환율**을 달성했습니다.
+123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **98.4% (121/123 - PASS 120개 + TYPE_DIFF 1개)의 압도적인 종합 호환율**을 달성했습니다.
 - **완벽히 통과된 강력한 엔터프라이즈 기능**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원, 네이티브 DATETIME 바이너리 직렬화(`GETDATE()`).
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원, 네이티브 DATETIME 바이너리 직렬화(`GETDATE()`), Ad-hoc 최상위 익명 제어문(`IF...ELSE`, `WHILE`).
 - **향후 확장을 위한 잔여 과제**:
   1. C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
   2. WiredTiger **`TRUNCATE TABLE`** 격리 (`TDS-COMPAT-1`).
-  3. Ad-hoc 최상위 익명 제어문 **`IF...ELSE`, `WHILE`** 지원 (`TDS-COMPAT-4`).
 
 이 핵심 과제들이 단계적으로 완비됨에 따라 LionSQL은 실무 엔터프라이즈 .NET/Java/Node.js/Python 애플리케이션을 코드 수정 없이 100% 수용하는 진정한 무중단 SQL Server 대체제로 안착하고 있습니다.
 

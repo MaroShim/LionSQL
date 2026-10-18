@@ -485,6 +485,9 @@ func (p *Parser) parseIf() (Statement, error) {
 	if err != nil {
 		return nil, err
 	}
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
+	}
 
 	var elseStmt Statement
 	if p.curTokenIs(TokenElse) {
@@ -492,6 +495,9 @@ func (p *Parser) parseIf() (Statement, error) {
 		elseStmt, err = p.parseStatement()
 		if err != nil {
 			return nil, err
+		}
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
 		}
 	}
 
@@ -512,6 +518,9 @@ func (p *Parser) parseWhile() (Statement, error) {
 	body, err := p.parseStatement()
 	if err != nil {
 		return nil, err
+	}
+	if p.curTokenIs(TokenSemicolon) {
+		p.nextToken()
 	}
 
 	return &WhileStmt{

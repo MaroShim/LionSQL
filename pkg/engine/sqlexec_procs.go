@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 )
 
@@ -1419,4 +1420,112 @@ func substituteParamOutsideQuotes(query string, paramName string, formattedVal s
 		}
 	}
 	return b.String()
+}
+
+// execAnonymousBlock compiles and executes ad-hoc anonymous control-flow statements (IF...ELSE, WHILE, BEGIN...END).
+func (s *Coordinator) execAnonymousBlock(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	trimmed := strings.TrimSpace(query)
+
+	prog, err := proc.CompileAnonymousBlock(trimmed)
+	if err != nil {
+		return nil, fmt.Errorf("compile anonymous block error: %w", err)
+	}
+
+	ctx := context.Background()
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.QueryCtx != nil {
+			ctx = cs.QueryCtx
+		}
+		cs.Mu.Unlock()
+	}
+
+	params := make(map[string]any)
+	if cs != nil {
+		cs.Mu.Lock()
+		for k, v := range cs.Vars {
+			clean := strings.TrimPrefix(k, "@")
+			if !strings.HasPrefix(k, "@") {
+				params[clean] = v
+				params["@"+clean] = v
+			}
+		}
+		for k, v := range cs.Vars {
+			if strings.HasPrefix(k, "@") {
+				clean := strings.TrimPrefix(k, "@")
+				params[clean] = v
+				params["@"+clean] = v
+			}
+		}
+		cs.Mu.Unlock()
+	}
+
+	var tx storage.Transaction
+	var createdSession storage.Session
+	if cs != nil && cs.Tx != nil {
+		tx = cs.Tx
+	} else {
+		sess, err := s.engine.NewSession()
+		if err != nil {
+			return nil, err
+		}
+		createdSession = sess
+		defer sess.Close()
+
+		t, err := sess.BeginTx(storage.TxOptions{})
+		if err != nil {
+			return nil, err
+		}
+		tx = t
+		defer func() {
+			if tx != nil {
+				_ = tx.Rollback()
+			}
+		}()
+	}
+
+	res, err := s.executor.ExecuteInTxContext(ctx, prog, params, tx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("execute anonymous block error: %w", err)
+	}
+
+	if createdSession != nil && tx != nil {
+		if err := tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
+			return nil, fmt.Errorf("failed to commit anonymous block tx: %w", err)
+		}
+		tx = nil
+	}
+
+	if cs != nil && res.Vars != nil {
+		cs.Mu.Lock()
+		for k, v := range res.Vars {
+			clean := strings.TrimPrefix(k, "@")
+			cs.Vars["@"+clean] = v
+			delete(cs.Vars, clean)
+		}
+		cs.Mu.Unlock()
+	}
+
+	rowsAffected := res.RowsAffected
+	if rowsAffected == 0 && len(res.Rows) > 0 {
+		rowsAffected = int64(len(res.Rows))
+	}
+
+	command := "BLOCK"
+	upper := strings.ToUpper(trimmed)
+	if strings.HasPrefix(upper, "IF ") {
+		command = "IF"
+	} else if strings.HasPrefix(upper, "WHILE ") {
+		command = "WHILE"
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      command,
+		Columns:      res.Columns,
+		Rows:         res.Rows,
+		RowsAffected: rowsAffected,
+		Messages:     res.Logs,
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
 }

@@ -1501,3 +1501,77 @@ func TestDriverIntegration_GoMSSQLDB_GetDateNativeScan(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_Scenario64_AdHocIfElse(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Scenario 64: DECLARE @flag INT = 1; IF @flag = 1 SELECT 'TRUE'; ELSE SELECT 'FALSE';
+	var res1 string
+	if err := db.QueryRowContext(ctx, "DECLARE @flag INT = 1; IF @flag = 1 SELECT 'TRUE' AS res; ELSE SELECT 'FALSE' AS res;").Scan(&res1); err != nil {
+		t.Fatalf("Scenario 64 (@flag=1) query failed: %v", err)
+	}
+	if res1 != "TRUE" {
+		t.Fatalf("expected 'TRUE', got %q", res1)
+	}
+
+	var res0 string
+	if err := db.QueryRowContext(ctx, "DECLARE @flag INT = 0; IF @flag = 1 SELECT 'TRUE' AS res; ELSE SELECT 'FALSE' AS res;").Scan(&res0); err != nil {
+		t.Fatalf("Scenario 64 (@flag=0) query failed: %v", err)
+	}
+	if res0 != "FALSE" {
+		t.Fatalf("expected 'FALSE', got %q", res0)
+	}
+}
+
+func TestDriverIntegration_Scenario65_AdHocWhile(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Scenario 65: DECLARE @cnt INT = 0; WHILE @cnt < 5 BEGIN SET @cnt = @cnt + 1; END; SELECT @cnt;
+	var cnt int
+	if err := db.QueryRowContext(ctx, "DECLARE @cnt INT = 0; WHILE @cnt < 5 BEGIN SET @cnt = @cnt + 1; END; SELECT @cnt AS count;").Scan(&cnt); err != nil {
+		t.Fatalf("Scenario 65 query failed: %v", err)
+	}
+	if cnt != 5 {
+		t.Fatalf("expected @cnt=5, got %d", cnt)
+	}
+}
+

@@ -31,6 +31,7 @@ type ExecutionResult struct {
 	Columns      []string         // Result projection column names
 	RowsAffected int64
 	LastIdentity int64
+	Vars         map[string]any // Final variable states after execution
 }
 
 // TriggerEntry holds metadata and precompiled bytecode for a trigger.
@@ -367,6 +368,7 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 		Columns:      frame.columns,
 		RowsAffected: frame.rowCount,
 		LastIdentity: frame.lastIdentity,
+		Vars:         collectFrameVars(frame),
 	}, nil
 }
 
@@ -428,7 +430,28 @@ func (e *Executor) ExecuteInTxContext(ctx context.Context, prog *proc.Program, p
 		Columns:      frame.columns,
 		RowsAffected: frame.rowCount,
 		LastIdentity: frame.lastIdentity,
+		Vars:         collectFrameVars(frame),
 	}, nil
+}
+
+func collectFrameVars(frame *VMFrame) map[string]any {
+	vars := make(map[string]any, len(frame.vars))
+	for k, v := range frame.vars {
+		clean := cleanSymbol(k)
+		vars[clean] = valToAny(v)
+	}
+	if frame.prog != nil && frame.prog.VarSlots != nil {
+		for varName, slot := range frame.prog.VarSlots {
+			if int(slot) >= 0 && int(slot) < len(frame.slots) {
+				stVal := frame.slots[slot]
+				if !stVal.IsNull || stVal.Type != storage.TypeUnknown {
+					clean := cleanSymbol(varName)
+					vars[clean] = valToAny(stVal)
+				}
+			}
+		}
+	}
+	return vars
 }
 
 func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame {

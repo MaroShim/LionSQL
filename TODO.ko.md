@@ -44,7 +44,7 @@
 | **P1** | **ORM/와이어** | **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (Dapper `QueryMultiple` 필수) (`TDS-COMPAT-6`)** | `pkg/engine`, `pkg/wire/tds` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **프로시저/파서** | **T-SQL 프로시저 파서의 `DECLARE @var INT = <expr>` 인라인 초기화 지원 (`TDS-COMPAT-7`)** | `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **타입/파서** | **BIT 컬럼 수치 리터럴(`1`/`0`) 불리언 강제 변환(`CastValueToType`) 보강 (`TDS-COMPAT-3`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
-| **P2** | **엔진/제어문** | **Ad-hoc 쿼리 배치 최상위 `IF ... ELSE` 및 `WHILE` 익명 VDBE 블록 실행 지원 (`TDS-COMPAT-4`)** | `pkg/engine`, `pkg/proc` | **신규 등록** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
+| **P2** | **엔진/제어문** | **Ad-hoc 쿼리 배치 최상위 `IF ... ELSE` 및 `WHILE` 익명 VDBE 블록 실행 지원 (`TDS-COMPAT-4`)** | `pkg/engine`, `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **수식/NULL** | **문자열 `+` 연산 시 `CONCAT_NULL_YIELDS_NULL ON` 규격에 따른 NULL 전파 보강 (`TDS-COMPAT-8`)** | `pkg/engine`, `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **예외/TDS** | **사용자 예외 발생 구문 (`RAISERROR`, `THROW`) 파싱 및 TDS Error Token(0xAA) 방출 (`TDS-COMPAT-9`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **도구호환/카탈로그** | **레거시 메타데이터 저장 프로시저 (`sp_tables`, `sp_columns`) 빌트인 구현 (`TDS-COMPAT-5`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
@@ -371,6 +371,13 @@
   - 거대한 switch 분기를 15줄 수준의 $O(1)$ 레지스트리 맵 디스패치(`VirtualCatalogView`)로 슬림화.
 
 ### 5.2. 코어 아키텍처 및 기능 마일스톤 이력
+- [x] **Ad-hoc 최상위 익명 제어문 (`IF...ELSE`, `WHILE`) 지원 (`TDS-COMPAT-4` / 시나리오 64, 65) (`pkg/engine`, `pkg/proc`, `pkg/wire/tds`)**:
+  - `pkg/engine/query_utils.go`: `SplitStatements`에서 일반 배치 쿼리의 `BEGIN...END` 블록 깊이를 추적하고 `hasNextTokenElse`로 `IF...ELSE` 경계 세미콜론 조기 분할 방지. 단독 `BEGIN;` 트랜잭션 시작과 복합 제어문 블록을 완벽히 분리하도록 `isBeginTransaction` 정합성 보강.
+  - `pkg/proc/parser_stmt.go`: `parseIf` 및 `parseWhile`에서 `thenStmt`, `elseStmt`, `body`의 후행 세미콜론 소비를 지원.
+  - `pkg/proc/compiler.go`: 최상위 제어문 및 블록을 VDBE 프로그램으로 컴파일하는 `CompileAnonymousBlock` API 추가.
+  - `pkg/proc/runtime/vm.go`: `ExecutionResult`에 `Vars` 필드를 추가하고 `collectFrameVars`를 통해 VDBE 슬롯/레지스터 변수 갱신 상태 반환.
+  - `pkg/engine/sqlexec.go` & `sqlexec_procs.go`: `execAnonymousBlock` 구현으로 세션 변수(`cs.Vars`) 바인딩, VDBE 트랜잭션 내 제어문 실행, 변수 상태 정규화 동기화 및 관계형 결과셋 반환 파이프라인 구축.
+  - 단위 테스트(`TestSQLExecutor_AdHocIfElseControlFlow`, `TestSQLExecutor_AdHocWhileLoop`) 및 `go-mssqldb` 공식 드라이버 E2E 통합 테스트(`TestDriverIntegration_Scenario64_AdHocIfElse`, `TestDriverIntegration_Scenario65_AdHocWhile`) 100% PASS 검증 완료.
 - [x] **`GETDATE()` 및 타임스탬프 함수 네이티브 DATETIME 바이너리 직렬화 (`TDS-TYPE-1` / 시나리오 29) (`pkg/engine`, `pkg/proc`, `pkg/wire/tds`)**:
   - `sqlexec_select.go` 및 `builtins_date.go`에서 `GETDATE()`, `CURRENT_TIMESTAMP`, `GETUTCDATE()`, `SYSDATETIME()`을 문자열 대신 Go 네이티브 `time.Time` 및 `storage.DateTimeValue`로 반환.
   - `parser_expr.go`에서 괄호 없는 SQL 표준 함수 `CURRENT_TIMESTAMP`, `CURRENT_DATE`, `CURRENT_TIME`을 `FunctionCallExpr`로 정확히 파싱.

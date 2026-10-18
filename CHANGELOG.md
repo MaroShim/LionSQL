@@ -36,6 +36,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added test suites `TestEvalRowExpr_NullPropagation` (`pkg/proc`) and `TestDriverIntegration_GoMSSQLDB_ConcatNullYieldsNull` (`pkg/wire/tds`).
 
 ### Added
+- **Ad-hoc Top-Level Anonymous Control-Flow Statements `IF...ELSE` and `WHILE` (`TDS-COMPAT-4` / Scenarios 64 & 65) (`pkg/engine`, `pkg/proc`, `pkg/wire/tds`)**:
+  - Enhanced `SplitStatements` in `pkg/engine/query_utils.go` to track compound `BEGIN...END` block nesting across all statements and look ahead for trailing `ELSE` tokens via `hasNextTokenElse`, preventing premature statement splits on semicolons inside `IF...ELSE` branches and `WHILE` loops.
+  - Refined `isBeginTransaction` to accurately differentiate standalone `BEGIN;` transaction starts from compound control-flow blocks.
+  - Extended `parseIf` and `parseWhile` in `pkg/proc/parser_stmt.go` to flexibly consume optional trailing semicolons after `thenStmt`, `elseStmt`, and loop bodies.
+  - Added `proc.CompileAnonymousBlock` in `pkg/proc/compiler.go` to compile top-level control-flow statements into executable VDBE bytecode programs.
+  - Added `Vars map[string]any` to `ExecutionResult` and implemented `collectFrameVars` in `pkg/proc/runtime/vm.go` to propagate updated register/slot variables back to callers.
+  - Added `execAnonymousBlock` in `pkg/engine/sqlexec_procs.go` and integrated top-level routing in `pkg/engine/sqlexec.go`, binding session variables (`cs.Vars`), running blocks in transactions, synchronizing updated variable states, and returning relational result sets.
+  - Added unit test suites `TestSQLExecutor_AdHocIfElseControlFlow` and `TestSQLExecutor_AdHocWhileLoop` (`pkg/api/sqlexec_test.go`) and E2E driver integration tests `TestDriverIntegration_Scenario64_AdHocIfElse` and `TestDriverIntegration_Scenario65_AdHocWhile` (`pkg/wire/tds/driver_integration_test.go`).
 - **User Exception Statements `RAISERROR` and `THROW` with TDS Error Tokens (`TDS-COMPAT-9`) (`pkg/proc`, `pkg/engine`, `pkg/wire/tds`)**:
   - Extended `RaiseErrorStmt` and `ThrowStmt` in `pkg/proc/ast.go` with structured fields: `Number`, `Severity`, `State`, and `Message`, implementing `TdsErrorInfo() (int32, byte, byte)`.
   - Added AST parser support in `pkg/proc/parser_stmt.go` (`parseRaiserror`, `parseThrow`) for both parameterized and message/severity/state arguments.

@@ -889,6 +889,12 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execDeallocate(trimmed, start, cs)
 	}
 
+	// 0.28 Control-flow & Anonymous Blocks: IF ... ELSE, WHILE ..., BEGIN ... END
+	if strings.HasPrefix(upper, "IF ") || strings.HasPrefix(upper, "WHILE ") ||
+		(strings.HasPrefix(upper, "BEGIN ") && !isBeginTransaction(trimmed[5:])) {
+		return s.execAnonymousBlock(trimmed, start, cs)
+	}
+
 	// 0.3 Substitute session variables in SQL query if present
 	cs.Mu.Lock()
 	if len(cs.Vars) > 0 {
