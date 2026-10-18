@@ -52,7 +52,7 @@
 | **P3** | **타입/와이어** | **`GETDATE()` 및 타임스탬프 함수의 네이티브 DATETIME 바이너리 직렬화 (`TDS-TYPE-1`)** | `pkg/engine`, `pkg/proc`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **Post-1.0 연기 (Postponed)** | - |
 | **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **설계 완료 (착수 준비)** | [`doc/UNIFIED_CLI_PLAN.md`](doc/UNIFIED_CLI_PLAN.md) |
-| **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
+| **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **완료 (`[x]`)** | - |
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
@@ -343,6 +343,11 @@
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 및 스키마 OID 캐싱 (`PG-COMPAT-1`) (`pkg/wire`)**:
+  - `PreparedStatement` 구조체에 분석된 `ColumnNames []string`, `ColumnOIDs []int32` 필드를 신설하고 `writeSchemaDescription`에서 분석된 메타데이터를 캐싱하여 Describe와 Execute 단계의 OID 규약을 100% 동기화.
+  - `buildPreviewSQL`에서 산술 연산자가 없는 단독 파라미터(`SELECT $1`, `$1, $2`)의 프리뷰 치환 기본값을 PostgreSQL 표준 규격에 따라 TEXT(`'sample'`)로 정의하여, 미지정 파라미터가 OID 23(4바이트 정수)으로 오인된 뒤 가변길이 문자열(3바이트 `"100"`)로 전송되어 `lib/pq` 클라이언트 패닉을 유발하던 결함 원천 해결.
+  - `writeExecutionResult` 및 `executePortal`에서 캐시된 Statement Column OID를 우선 적용하여 재추론 왜곡 차단.
+  - `pkg/wire/driver_integration_test.go`에 정수, 문자열, 다중 파라미터 동시 바인딩 E2E 통합 테스트(`TestDriverIntegration_LibPQ_UntypedParameter`) 100% PASS 검증 완료.
 - [x] **기본키(PK) 중복 삽입 시 Unique Violation (SQLSTATE 23505) 에러 방출 (`PG-COMPAT-2`) (`pkg/storage/wiredtiger`, `pkg/engine`, `pkg/proc`, `pkg/wire`)**:
   - WiredTiger `insertLocked`에서 C 커서 삽입 전 `go_wt_cursor_get` 선행 검사를 추가하여 기존 기본키가 이미 존재할 경우 덮어쓰기 대신 `storage.ErrKeyExists` 즉시 반환.
   - DML 실행기(`pkg/engine/sqlexec_dml.go`) 및 VDBE `OpInsert`(`pkg/proc/runtime/vm_dispatcher.go`)에서 `storage.ErrKeyExists`/`storage.ErrUniqueViolation` 발생 시 `duplicate key value violates unique constraint on ...`으로 표준 에러 포맷팅.

@@ -484,3 +484,47 @@ func TestDriverIntegration_LibPQ_DuplicatePrimaryKey(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_LibPQ_UntypedParameter(t *testing.T) {
+	srv, port := startTestPostgresServer(t)
+	defer srv.Close()
+
+	connStr := fmt.Sprintf("postgres://postgres:secret@127.0.0.1:%d/master?sslmode=disable&connect_timeout=3", port)
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var res int
+	err = db.QueryRowContext(ctx, "SELECT $1", 100).Scan(&res)
+	if err != nil {
+		t.Fatalf("QueryRowContext SELECT $1 (int) failed: %v", err)
+	}
+	if res != 100 {
+		t.Fatalf("expected 100, got %d", res)
+	}
+
+	var strRes string
+	err = db.QueryRowContext(ctx, "SELECT $1", "hello").Scan(&strRes)
+	if err != nil {
+		t.Fatalf("QueryRowContext SELECT $1 (string) failed: %v", err)
+	}
+	if strRes != "hello" {
+		t.Fatalf("expected 'hello', got %q", strRes)
+	}
+
+	var r1 int
+	var r2 string
+	err = db.QueryRowContext(ctx, "SELECT $1, $2", 42, "world").Scan(&r1, &r2)
+	if err != nil {
+		t.Fatalf("QueryRowContext SELECT $1, $2 failed: %v", err)
+	}
+	if r1 != 42 || r2 != "world" {
+		t.Fatalf("expected 42 and 'world', got %d, %q", r1, r2)
+	}
+}
+
+

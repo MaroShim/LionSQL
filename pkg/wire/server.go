@@ -254,10 +254,12 @@ func (s *Server) acceptLoop() {
 }
 
 type PreparedStatement struct {
-	Name       string
-	Query      string
-	ParamTypes []int32
-	Program    *proc.Program
+	Name        string
+	Query       string
+	ParamTypes  []int32
+	Program     *proc.Program
+	ColumnNames []string
+	ColumnOIDs  []int32
 }
 
 type Portal struct {
@@ -963,7 +965,11 @@ func buildPreviewSQL(query string, paramTypes []int32) string {
 				case 25, 1043:
 					replacement = "'sample'"
 				default:
-					replacement = "1"
+					if strings.ContainsAny(query, "+-*/") {
+						replacement = "1"
+					} else {
+						replacement = "'sample'"
+					}
 				}
 				res = strings.ReplaceAll(res, m[0], replacement)
 			}
@@ -991,7 +997,7 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 			return
 		}
 		_ = WriteParameterDescription(conn, stmt.ParamTypes)
-		s.writeSchemaDescription(conn, stmt.Query, stmt.ParamTypes)
+		s.writeSchemaDescription(conn, stmt.Query, stmt.ParamTypes, stmt)
 	} else if targetType == 'P' {
 		portal, exists := portals[targetName]
 		if !exists {
@@ -999,16 +1005,42 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 			return
 		}
 		var paramTypes []int32
+		var stmt *PreparedStatement
 		if portal.Statement != nil {
 			paramTypes = portal.Statement.ParamTypes
+			stmt = portal.Statement
 		}
-		s.writeSchemaDescription(conn, portal.Statement.Query, paramTypes)
+		s.writeSchemaDescription(conn, portal.Statement.Query, paramTypes, stmt)
 	} else {
 		_ = WriteNoData(conn)
 	}
 }
 
-func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes []int32) {
+func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes []int32, stmt *PreparedStatement) {
+	recordCols := func(cols []ColumnMeta) {
+		if stmt != nil && len(cols) > 0 {
+			stmt.ColumnNames = make([]string, len(cols))
+			stmt.ColumnOIDs = make([]int32, len(cols))
+			for i, c := range cols {
+				stmt.ColumnNames[i] = c.Name
+				stmt.ColumnOIDs[i] = c.DataType
+			}
+		}
+	}
+
+	if stmt != nil && len(stmt.ColumnOIDs) > 0 {
+		cols := make([]ColumnMeta, len(stmt.ColumnOIDs))
+		for i, oid := range stmt.ColumnOIDs {
+			name := "column"
+			if i < len(stmt.ColumnNames) {
+				name = stmt.ColumnNames[i]
+			}
+			cols[i] = ColumnMeta{Name: name, DataType: oid}
+		}
+		_ = WriteRowDescription(conn, cols)
+		return
+	}
+
 	upper := strings.ToUpper(strings.TrimSpace(query))
 	if strings.Contains(upper, "SELECT") && strings.Contains(upper, "FROM") {
 		parts := strings.Split(upper, "FROM")
@@ -1041,6 +1073,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 								DataType: typeToPgOID(c.Type),
 							}
 						}
+						recordCols(cols)
 						_ = WriteRowDescription(conn, cols)
 						return
 					}
@@ -1077,6 +1110,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 						})
 					}
 					if len(cols) > 0 {
+						recordCols(cols)
 						_ = WriteRowDescription(conn, cols)
 						return
 					}
@@ -1088,6 +1122,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
 		if strings.Contains(upper, "VERSION()") {
 			cols := []ColumnMeta{{Name: "version", DataType: 25}}
+			recordCols(cols)
 			_ = WriteRowDescription(conn, cols)
 			return
 		}
@@ -1102,6 +1137,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			for i, c := range res.Columns {
 				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i]}
 			}
+			recordCols(cols)
 			_ = WriteRowDescription(conn, cols)
 			return
 		}
@@ -1196,7 +1232,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 				defer session.Close()
 				res, err := s.executor.Run(portal.Statement.Program, "PreparedStatement", paramMap, session)
 				if err == nil {
-					s.writeExecutionResult(conn, res, portal.Statement.Query, portal.ResultFormats)
+					s.writeExecutionResult(conn, res, portal.Statement.Query, portal.ResultFormats, portal.Statement)
 					return
 				}
 			}
@@ -1258,7 +1294,13 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			}
 		}
 	}
-	colOIDs := s.resolveColumnOIDs(queryForOIDs, res.Columns, sampleRow)
+
+	var colOIDs []int32
+	if portal.Statement != nil && len(portal.Statement.ColumnOIDs) == len(res.Columns) {
+		colOIDs = portal.Statement.ColumnOIDs
+	} else {
+		colOIDs = s.resolveColumnOIDs(queryForOIDs, res.Columns, sampleRow)
+	}
 
 	bw := bufio.NewWriterSize(conn, 32768)
 	scratchRowBytes := make([][]byte, len(res.Columns))
@@ -1289,13 +1331,18 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 	_ = bw.Flush()
 }
 
-func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResult, query string, resultFormats []int16) {
+func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResult, query string, resultFormats []int16, stmt *PreparedStatement) {
 	if len(res.Columns) > 0 {
-		var sampleRow map[string]any
-		if len(res.Rows) > 0 {
-			sampleRow = res.Rows[0]
+		var colOIDs []int32
+		if stmt != nil && len(stmt.ColumnOIDs) == len(res.Columns) {
+			colOIDs = stmt.ColumnOIDs
+		} else {
+			var sampleRow map[string]any
+			if len(res.Rows) > 0 {
+				sampleRow = res.Rows[0]
+			}
+			colOIDs = s.resolveColumnOIDs(query, res.Columns, sampleRow)
 		}
-		colOIDs := s.resolveColumnOIDs(query, res.Columns, sampleRow)
 
 		bw := bufio.NewWriterSize(conn, 32768)
 		scratchRowBytes := make([][]byte, len(res.Columns))

@@ -15,6 +15,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added unit and E2E eviction integration tests in `pkg/wire/tds/lru_test.go` and `pkg/wire/lru_test.go` verifying LRU eviction behavior, MRU preservation, concurrent safety, and protocol Error 8179 handling upon accessing evicted statement handles.
 
 ### Fixed
+- **PGWire Untyped Parameter Evaluation Wire Length & Schema Metadata Synchronization (`PG-COMPAT-1`) (`pkg/wire`)**:
+  - Added cached `ColumnNames []string` and `ColumnOIDs []int32` to `PreparedStatement` struct in `pkg/wire/server.go`, ensuring resolved column metadata from Describe stage (`writeSchemaDescription`) is retained and strictly reused during Execute stage (`writeExecutionResult`, `executePortal`).
+  - Refined `buildPreviewSQL` to default untyped parameter placeholders to text (`'sample'`) matching PostgreSQL standard behavior when no arithmetic operators are present, resolving the issue where untyped placeholders were prematurely inferred as `int4` (OID 23) in `RowDescription` and then serialized as 3-byte strings (e.g. `"100"`), which caused `lib/pq` client runtime out-of-range slice panics.
+  - Added comprehensive E2E driver integration test `TestDriverIntegration_LibPQ_UntypedParameter` in `pkg/wire/driver_integration_test.go` verifying integer, string, and multi-parameter binding ($1, $2).
 - **Duplicate Primary Key Unique Constraint Enforcement (`PG-COMPAT-2` / SQLSTATE 23505) (`pkg/storage/wiredtiger`, `pkg/engine`, `pkg/proc`, `pkg/wire`)**:
   - WiredTiger B+Tree insertion (`pkg/storage/wiredtiger/wt_engine.go` `insertLocked`) now explicitly verifies key existence via `go_wt_cursor_get` before raw insertion, eliminating silent overwrites and returning `storage.ErrKeyExists`.
   - Formatted unique key constraint violation errors in `pkg/engine/sqlexec_dml.go` and `pkg/proc/runtime/vm_dispatcher.go` as `duplicate key value violates unique constraint on "<table_name>"`.
