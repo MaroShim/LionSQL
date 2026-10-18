@@ -41,7 +41,7 @@
 | **P2** | **최적화/DX** | **`EXPLAIN ANALYZE` 런타임 실행 프로파일러 (`OBS-2`)** | `pkg/planner`, `pkg/execution`, `pkg/engine` | **완료 (`[x]`)** | [`doc/INTERNALS_CBO_AND_STATISTICS.md`](doc/INTERNALS_CBO_AND_STATISTICS.md) |
 | **P1** | **스토리지/안정성** | **WiredTiger TRUNCATE TABLE 트랜잭션 격리 및 assertion 크래시 방지 (`TDS-COMPAT-1`)** | `pkg/storage/wiredtiger` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/유니코드** | **유니코드 N-prefix (`N'...'`) TDS UTF-16LE 직렬화 EOF 방지 (`TDS-COMPAT-2`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
-| **P1** | **ORM/와이어** | **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (Dapper `QueryMultiple` 필수) (`TDS-COMPAT-6`)** | `pkg/engine`, `pkg/wire/tds` | **신규 등록 (P1 긴급)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
+| **P2** | **ORM/와이어** | **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (Dapper `QueryMultiple` 필수) (`TDS-COMPAT-6`)** | `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P1** | **프로시저/파서** | **T-SQL 프로시저 파서의 `DECLARE @var INT = <expr>` 인라인 초기화 지원 (`TDS-COMPAT-7`)** | `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **타입/파서** | **BIT 컬럼 수치 리터럴(`1`/`0`) 불리언 강제 변환(`CastValueToType`) 보강 (`TDS-COMPAT-3`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P2** | **엔진/제어문** | **Ad-hoc 쿼리 배치 최상위 `IF ... ELSE` 및 `WHILE` 익명 VDBE 블록 실행 지원 (`TDS-COMPAT-4`)** | `pkg/engine`, `pkg/proc` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
@@ -288,12 +288,16 @@
   현재 25개 전 패키지와 JDBC/ODBC E2E 드라이버 테스트가 100% 통과 중인 상태에서 수십 개의 쿼리 실행기 정규식 패턴을 대규모로 개편할 경우 1.0 출시 전 예기치 않은 문법 파싱 리그레션 위험이 큼. 1.0 릴리스 안정성 확보를 위해 Post-1.0으로 연기.
 * **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)**:
   `sqlexec_select.go`(2,308줄)는 단일 테이블 및 기본 조인/집계 패스트패스를 매우 빠르고 안정적으로 처리하고 있음. 이를 무리하게 통합하다가 TPC-C 20k TPS 및 OLTP 성능 튜닝에 부작용을 줄 위험이 있으므로 Post-1.0 장기 아키텍처 과제로 공식 연기.
+* **다중 결과셋 (Multiple Result Sets) 스트리밍 지원 (`TDS-COMPAT-6`)**:
+  현대 웹/OLTP 백엔드(Spring, Prisma, Gorm 등)의 95% 이상은 단일 요청당 1개의 쿼리 결과셋을 소비하며, C# Dapper `QueryMultiple` 등 제한된 영역에서만 사용됨. 엔진 코어 인터페이스(`ExecuteSessionSQL`)를 전면 슬라이스로 개편하고 TDS 토큰 상태 머신을 건드리는 큰 변경을 1.0 직전에 넣으면 전체 패키지 회귀 위험이 큼. 클라이언트에서 쿼리를 2회 분리 호출하는 명확한 대안이 존재하므로 1.0 이후(Post-1.0)로 연기.
 
 ### 4.4. 영구 스펙-아웃 (Spec-Out Invariants)
 * **내장형 OAuth2 소셜 로그인 배제**:
   데이터베이스 커널 내부에서 구글/깃허브 웹 리다이렉트 및 아웃바운드 인터넷 토큰 교환을 처리하는 것은 단일 책임 원칙 및 KISS(Rule 15)를 위반하고 공격 표면을 확대함. 엔터프라이즈 리버스 프록시(Keycloak, OAuth2-Proxy) 위임으로 영구 표준화 (`GEMINI.md` 8.6절, ADR-021).
 * **내장형 S3 Blob 파일 스토리지 및 썸네일 리사이징 배제**:
   대용량 바이너리 스트리밍 및 이미지 리사이징으로 인한 OLTP CPU/메모리 기아를 방지하고, S3/MinIO 직접 업로드(Pre-signed URL) 위임으로 영구 표준화 (`GEMINI.md` 8.7절, `doc/S3_PRESIGNED_STORAGE_PLAN.md`).
+* **미성숙 Pure-Go 영속 스토리지 엔진 (Pebble/bbolt) 단기 도입 배제 (Spec-Out & 지속적 대안 탐색)**:
+  현재 Pure-Go 임베디드 스토리지 생태계(Pebble, bbolt, Badger 등)는 WiredTiger 수준의 고성능 멀티코어 MVCC B+Tree, Hazard Pointer 동시성, 세밀한 트랜잭션 타임스탬프와 ACID 격리를 온전히 대체하기에 아직 성숙도와 트랜잭션 기능 측면에서 프로덕션 OLTP 대안으로 쓸만한 상태가 아님. 따라서 1.0 프로덕션 체제에서는 공식 **스펙-아웃(Spec-Out)**으로 확정하며, WiredTiger MVCC(디스크)와 In-Memory OCC(메모리) 2대 백엔드 체제에 집중함. 단, 향후 CGo 완전 배제(Pure-Go 정적 단일 바이너리)를 위한 잠재적 스토리지 대안 후보 탐색은 지속적으로 모니터링함 (`GEMINI.md` 8.8절).
 
 ### 4.5. Post-1.0 6대 과제 실질 구현 가치 평가 및 스펙-아웃/보류 분석 매트릭스
 

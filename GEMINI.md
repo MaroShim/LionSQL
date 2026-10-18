@@ -161,6 +161,9 @@ LionSQL permanently designates the following architectural models as **Spec Out 
 7. **In-Kernel S3 Blob File Storage & Image Thumbnail Processing Exclusion (Spec-Out)**:
    - Embedding binary blob storage servers, multipart S3 streaming, and CPU-intensive image resizing/thumbnailing directly inside the high-concurrency database kernel process is explicitly **Spec Out** to preserve ultra-low latency OLTP execution and avoid runtime memory/CPU starvation (Golden Rules 14 & 15).
    - Object storage and media pipelines are standardly delegated to dedicated object storage services (AWS S3, MinIO, Cloudflare R2) and edge CDNs, while LionSQL stores the canonical URI/metadata pointers in relational tables.
+8. **Premature Pure-Go Persistent Storage Engine (Pebble/bbolt) Adoption Exclusion (Spec-Out & Continuous Exploration)**:
+   - Current open-source Pure-Go embedded key-value engines (Pebble, bbolt, Badger) are not yet mature enough to serve as production-grade alternatives to WiredTiger's lock-free multi-core MVCC B+Tree, hazard pointers, transaction timestamps, and strict ACID isolation. Introducing an immature third storage backend incurs unnecessary complexity, maintenance overhead, and performance compromises (Golden Rules 14 & 15).
+   - Embedding an unviable Pure-Go storage engine is officially **Spec Out** for the 1.0 production release. LionSQL focuses engineering exclusively on its two proven backends: disk-based WiredTiger MVCC and pure in-memory OCC (`memengine`). Potential pure-Go storage engine candidates will continue to be evaluated and explored as the ecosystem matures.
 
 ---
 

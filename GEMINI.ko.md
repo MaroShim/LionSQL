@@ -158,6 +158,13 @@ LionSQL은 엔터프라이즈급 sub-microsecond 트랜잭션 성능과 자립�
 6. **DB 커널 내장 OAuth2 소셜 로그인 및 서드파티 SaaS 인증 배제 (Spec-Out)**:
    - 데이터베이스 엔진의 보안 및 사용자 인증은 엔터프라이즈 데이터베이스 표준 규격(PGWire의 SCRAM-SHA-256, TDS의 SQL Server 표준/NTLM 인증, HTTP 관리용 안전한 토큰 기반 RBAC/API-Key)으로 완전 일원화합니다.
    - 외부 컨슈머용 OAuth2 소셜 로그인(구글, 깃허브 등 특정 SaaS의 웹 리다이렉트 핸들러, Client Secret 생명주기 관리, 아웃바운드 인터넷 토큰 교환 HTTP 호출)을 데이터베이스 커널 정적 바이너리에 직접 내장하는 것은 명시적으로 **Spec Out**합니다. 이를 통해 외부 인터넷 아웃바운드 통신 의존성을 완전히 제거하고, Client Secret 유출 리스크 및 보안 공격 표면(Attack Surface)을 원천 차단하며, 데이터베이스 커널 본연의 경량성과 무결성을 보호합니다(Golden Rule #15 KISS 및 단일 책임 원칙). 엔터프라이즈 SSO 및 소셜 로그인은 데이터베이스 커널이 아닌 전면 경계 프록시(Keycloak, OAuth2-Proxy, Nginx 등)가 담당하는 것이 표준 아키텍처입니다.
+7. **DB 커널 내장 S3 Blob 파일 스토리지 및 이미지 썸네일 리사이징 배제 (Spec-Out)**:
+   - 대용량 바이너리 스트리밍 및 CPU 집약적 이미지 리사이징으로 인한 OLTP 고성능 코어의 CPU/메모리 기아를 방지하기 위해 데이터베이스 커널 내장 Blob 파일 서버는 명시적으로 **Spec Out**합니다 (Golden Rules 14 & 15).
+   - 오브젝트 스토리지 파이프라인은 전용 클라우드 스토리지(AWS S3, MinIO, Cloudflare R2) 및 엣지 CDN에 위임하며, LionSQL은 테이블에 정규 URI 및 메타데이터 포인터만 저장합니다.
+8. **미성숙 Pure-Go 영속 스토리지 엔진 (Pebble/bbolt) 단기 도입 배제 (Spec-Out & 지속적 대안 탐색)**:
+   - 현재 오픈소스 Pure-Go 임베디드 스토리지 생태계(Pebble, bbolt, Badger 등)는 WiredTiger 수준의 고성능 멀티코어 MVCC B+Tree, Hazard Pointer 동시성, 세밀한 트랜잭션 타임스탬프와 ACID 격리를 온전히 대체하기에는 성숙도, 레이턴시, 트랜잭션 기능 측면에서 아직 프로덕션 OLTP 대안으로 쓸만한 상태가 아닙니다.
+   - 따라서 1.0 프로덕션 체제에서는 미성숙한 제3의 영속 스토리지 엔진 도입을 공식 **스펙-아웃(Spec-Out)**으로 확정하며, WiredTiger MVCC(디스크)와 In-Memory OCC(메모리) 2대 백엔드 체제에 집중합니다.
+   - 단, 향후 CGo 완전 배제(Pure-Go 정적 단일 바이너리)를 위한 잠재적 스토리지 대안 후보 탐색은 지속적으로 모니터링하고 평가합니다.
 
 ---
 
