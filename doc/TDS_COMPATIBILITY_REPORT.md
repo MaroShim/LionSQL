@@ -13,7 +13,7 @@
 | **스토리지 백엔드** | WiredTiger MVCC B+Tree Engine |
 | **연결 문자열** | `server=127.0.0.1;port=1433;database=master;user id=sa;password=secret;encrypt=disable` |
 | **총 테스트 케이스** | **123개 시나리오** (1차 기초/표준 77개 + 2차 실전/엣지 46개) |
-| **검증 결과 요약** | **PASS: 120개 (97.6%)**, **TYPE_DIFF: 1개 (0.8%)**, **UNSUPPORTED: 0개 (0.0%)**, **FAIL: 2개 (1.6%)** (실질 호환율: **98.4%** / 121/123 PASS) |
+| **검증 결과 요약** | **PASS: 121개 (98.4%)**, **TYPE_DIFF: 1개 (0.8%)**, **UNSUPPORTED: 0개 (0.0%)**, **FAIL: 1개 (0.8%)** (실질 호환율: **99.2%** / 122/123 PASS) |
 
 ---
 
@@ -313,15 +313,29 @@ SQL Server 고유의 데이터 타입 직렬화 및 토큰 교환을 검증했�
     - 세션 임시 테이블(`#temp`) 물리 테이블명 변환(`cs.TempTableMap`) 지원.
   - `TestWiredTiger_TruncateTable` (스토리지 엔진 단위 테스트) 및 `TestDriverIntegration_WiredTiger_TruncateTable` (공식 `go-mssqldb` E2E 통합 테스트: Autocommit 모드, 활성 트랜잭션 내 커밋 및 롤백 복원 무결성 100% 검증) 통과.
 
+### 10. [Resolved] 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 보호 (`PREP-1`)
+- **현상**:
+  - 장기 연결 세션 또는 대규모 풀러 환경에서 `sp_prepare` / `sp_prepexec`로 생성된 Prepared Statement 핸들이 상한선 없이 `map[int32]*PreparedStatement`에 무제한 누적되어 악의적 쿼리나 버그가 있는 클라이언트 연결 시 메모리 누착(OOM) 위험 상존.
+  - 핸들 번호 고갈 또는 축출 시 클라이언트에 적절한 표준 에러 토큰이 전달되지 않는 문제.
+- **조치 완료**:
+  - `pkg/wire/tds/server.go`:
+    - `TdsPreparedStatementCache` 구조체를 구현하고 `container/list` 이중 연결 리스트와 해시맵(`map[int32]*list.Element`)을 결합하여 $O(1)$ Bounded LRU 캐시 메커니즘 구축.
+    - 세션당 기본 최대 256개(`DefaultMaxPreparedPerSession`) 상한 적용.
+    - 용량 초과 시 가장 오래 참조되지 않은 Prepared Statement를 원자적으로 자동 축출(LRU Eviction)하고, 축출된 핸들 재사용 시 SQL Server 공식 에러 8179 (`The prepared statement handle %d is not valid or was evicted`) 방출.
+    - `sync.Mutex` 스레드 세이프 가드 적용.
+  - `pkg/wire/tds/lru_test.go`:
+    - `TestTdsPreparedStatementCache_Eviction` (256개 상한 및 LRU 퇴출 검증), `TestTdsPreparedStatementCache_GetUpdatesLRU` (LRU 순서 갱신 검증), `TestTdsPreparedStatementCache_Concurrent` (10개 고루틴 동시 접근 경합 검증) 100% 통과.
+
 ---
 
 ## 4. 최종 결론
 
 123개 실무 T-SQL 시나리오에 걸친 극한 호환성 탐색 결과, LionSQL은 **99.2% (122/123 - PASS 121개 + TYPE_DIFF 1개)의 압도적인 종합 호환율**을 달성했습니다.
 - **완벽히 통과된 강력한 엔터프라이즈 기능**:
-  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원, 네이티브 DATETIME 바이너리 직렬화(`GETDATE()`), Ad-hoc 최상위 익명 제어문(`IF...ELSE`, `WHILE`), WiredTiger `TRUNCATE TABLE` 트랜잭션 격리 및 롤백 원자성 보장.
+  `IDENTITY(1,1)`, `SCOPE_IDENTITY()`, `SAVE TRANSACTION` 부분 롤백, 임시 테이블(`#temp`), 테이블 변수(`@table`), DML `OUTPUT`, `MERGE` (UPSERT), `CROSS/OUTER APPLY`, `TRY_CAST`, `FOR JSON PATH`, `STRING_SPLIT`, 프로시저 변수 인라인 초기화(`DECLARE @x INT = 0`), BIT 컬럼 1/0 불리언 강제 변환, NULL 전파(`CONCAT_NULL_YIELDS_NULL`), 레거시 메타데이터 프로시저(`sp_tables`, `sp_columns`), 사용자 정의 예외(`RAISERROR`, `THROW`), 유니코드 N-접두사(`N'...'`) 리터럴 지원, 네이티브 DATETIME 바이너리 직렬화(`GETDATE()`), Ad-hoc 최상위 익명 제어문(`IF...ELSE`, `WHILE`), WiredTiger `TRUNCATE TABLE` 트랜잭션 격리 및 롤백 원자성 보장, 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 보호(`PREP-1`).
 - **향후 확장을 위한 잔여 과제**:
   1. [Post-1.0 연기] C# Dapper / EF Core 일괄 처리를 위한 **다중 결과셋 (Multiple Result Sets)** 스트리밍 (`TDS-COMPAT-6`).
 
 이 핵심 과제들이 단계적으로 완비됨에 따라 LionSQL은 실무 엔터프라이즈 .NET/Java/Node.js/Python 애플리케이션을 코드 수정 없이 100% 수용하는 진정한 무중단 SQL Server 대체제로 안착하고 있습니다.
+
 
