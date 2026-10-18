@@ -2883,3 +2883,106 @@ func TestSQLExecutor_RaiserrorAndThrow(t *testing.T) {
 	}
 }
 
+func TestSQLExecutor_NPrefixUnicodeLiterals(t *testing.T) {
+	server := setupMemServer(t)
+
+	// 1. Basic SELECT with N'...' and n'...'
+	res, err := server.ExecuteSQL("SELECT N'한글유니코드' AS s;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT N'한글유니코드' failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["s"] != "한글유니코드" {
+		t.Fatalf("expected '한글유니코드', got: %+v", res.Rows)
+	}
+
+	res, err = server.ExecuteSQL("SELECT n'소문자n유니코드' AS s;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT n'소문자n유니코드' failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["s"] != "소문자n유니코드" {
+		t.Fatalf("expected '소문자n유니코드', got: %+v", res.Rows)
+	}
+
+	// 2. Escaped quotes inside N'...'
+	res, err = server.ExecuteSQL("SELECT N'Lion''s Unicode Engine' AS s;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT N'Lion''s Unicode Engine' failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["s"] != "Lion's Unicode Engine" {
+		t.Fatalf("expected \"Lion's Unicode Engine\", got: %+v", res.Rows)
+	}
+
+	// 3. String concatenation with N'...'
+	res, err = server.ExecuteSQL("SELECT N'Hello ' + N'세계' AS s;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT concatenation failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["s"] != "Hello 세계" {
+		t.Fatalf("expected 'Hello 세계', got: %+v", res.Rows)
+	}
+
+	// 4. Table DML: INSERT, WHERE =, IN, UPDATE with N'...'
+	_, err = server.ExecuteSQL("CREATE TABLE nvarchar_test (id INT PRIMARY KEY, name VARCHAR(100));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	_, err = server.ExecuteSQL("INSERT INTO nvarchar_test (id, name) VALUES (1, N'홍길동'), (2, N'이순신');")
+	if err != nil {
+		t.Fatalf("INSERT with N'...' failed: %v", err)
+	}
+
+	allRes, _ := server.ExecuteSQL("SELECT * FROM nvarchar_test;")
+	if len(allRes.Rows) != 2 {
+		t.Fatalf("expected 2 rows in nvarchar_test, got %d", len(allRes.Rows))
+	}
+
+	res, err = server.ExecuteSQL("SELECT id, name FROM nvarchar_test WHERE name = N'홍길동';")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT WHERE = N'...' failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["name"] != "홍길동" {
+		t.Fatalf("expected '홍길동', got: %+v", res.Rows)
+	}
+
+	res, err = server.ExecuteSQL("SELECT id, name FROM nvarchar_test WHERE name IN (N'홍길동', N'강감찬');")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT WHERE IN N'...' failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["name"] != "홍길동" {
+		t.Fatalf("expected '홍길동' in IN query, got: %+v", res.Rows)
+	}
+
+	_, err = server.ExecuteSQL("UPDATE nvarchar_test SET name = N'세종대왕' WHERE name = N'홍길동';")
+	if err != nil {
+		t.Fatalf("UPDATE with N'...' failed: %v", err)
+	}
+
+	res, err = server.ExecuteSQL("SELECT id, name FROM nvarchar_test WHERE id = 1;")
+	if err != nil || !res.Success {
+		t.Fatalf("SELECT after update failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["name"] != "세종대왕" {
+		t.Fatalf("expected '세종대왕', got: %+v", res.Rows)
+	}
+
+	// 5. Stored procedure with N'...'
+	_, err = server.ExecuteSQL(`CREATE PROCEDURE proc_nstr AS
+	BEGIN
+		DECLARE @msg VARCHAR(50) = N'프로시저 유니코드';
+		PRINT @msg;
+	END;`)
+	if err != nil {
+		t.Fatalf("CREATE PROCEDURE failed: %v", err)
+	}
+
+	res, err = server.ExecuteSQL("EXEC proc_nstr;")
+	if err != nil || !res.Success {
+		t.Fatalf("EXEC proc_nstr failed: %v", err)
+	}
+	if len(res.Messages) == 0 || res.Messages[0] != "프로시저 유니코드" {
+		t.Fatalf("expected '프로시저 유니코드', got: %+v", res.Messages)
+	}
+}
+
+

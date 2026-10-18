@@ -731,11 +731,17 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 
 	// String literal
 	if isSingleQuotedLiteral(trimmed) {
-		unquoted := trimmed[1 : len(trimmed)-1]
-		if trimmed[0] == '\'' {
+		var unquoted string
+		if (strings.HasPrefix(trimmed, "N'") || strings.HasPrefix(trimmed, "n'")) && strings.HasSuffix(trimmed, "'") && len(trimmed) >= 3 {
+			unquoted = trimmed[2 : len(trimmed)-1]
 			unquoted = strings.ReplaceAll(unquoted, "''", "'")
 		} else {
-			unquoted = strings.ReplaceAll(unquoted, `""`, `"`)
+			unquoted = trimmed[1 : len(trimmed)-1]
+			if trimmed[0] == '\'' {
+				unquoted = strings.ReplaceAll(unquoted, "''", "'")
+			} else {
+				unquoted = strings.ReplaceAll(unquoted, `""`, `"`)
+			}
 		}
 		return unquoted, "?column?"
 	}
@@ -2296,6 +2302,18 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 }
 
 func isSingleQuotedLiteral(s string) bool {
+	if (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'")) && strings.HasSuffix(s, "'") && len(s) >= 3 {
+		for i := 2; i < len(s)-1; i++ {
+			if s[i] == '\'' {
+				if i+1 < len(s)-1 && s[i+1] == '\'' {
+					i++ // escaped quote ''
+					continue
+				}
+				return false // closed before end of string
+			}
+		}
+		return true
+	}
 	if len(s) < 2 {
 		return false
 	}

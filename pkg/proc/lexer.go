@@ -145,6 +145,14 @@ func (l *Lexer) NextToken() Token {
 		tok.Col = tokCol
 		return tok
 	default:
+		if (l.ch == 'N' || l.ch == 'n') && l.peekChar() == '\'' {
+			l.readChar() // skip 'N' or 'n'
+			tok.Type = TokenString
+			tok.Literal = l.readString()
+			tok.Line = tokLine
+			tok.Col = tokCol
+			return tok
+		}
 		if isLetter(l.ch) {
 			ident := l.readIdentifier()
 			upper := strings.ToUpper(ident)

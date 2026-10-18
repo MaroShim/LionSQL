@@ -1,54 +1,58 @@
-# LionSQL CDC (Change Data Capture) & DuckDB Integration Guide
+# LionSQL Change Data Capture (CDC) & DuckDB Integration Guide
 
-LionSQL은 고성능 OLTP 데이터베이스로서 트랜잭션의 신뢰성(ACID)과 초당 16,000+ TPS 이상의 처리량을 최우선으로 보장합니다. 본 문서는 LionSQL의 코어 엔진을 가볍고 안전하게 유지하면서, **외부 분석 애플리케이션(Python, BI 툴, 분석 서버)에서 DuckDB를 임베딩하여 LionSQL의 데이터를 실시간으로 고속 분석하는 분리형(Decoupled) CDC 연동 아키텍처**를 설명합니다.
+LionSQL is an enterprise-grade, high-concurrency embedded OLTP database engine designed to guarantee ACID durability and 16,000+ TPS write throughput. 
+
+This document specifies the **decoupled Change Data Capture (CDC) integration architecture**, enabling external analytics applications (Python, BI dashboards, backend microservices) to embed DuckDB for real-time, sub-millisecond OLAP aggregations while keeping LionSQL's core OLTP engine lightweight, safe, and unaffected.
 
 ---
 
-## 1. 아키텍처 개요 (Decoupled Analytics Architecture)
+## 1. Architecture Overview (Decoupled Analytics Architecture)
 
 ```
-[ OLTP 영역: LionSQL Server ]
-   ├── Port :5433 (PostgreSQL Wire Protocol)
-   ├── Port :1433 (TDS / MSSQL Wire Protocol)
-   └── Port :8090 (HTTP API & CDC Stream)
+[ OLTP Domain: LionSQL Server ]
+   ├── Port :5433 (PostgreSQL Wire Protocol v3)
+   ├── Port :1433 (Microsoft SQL Server TDS 7.x/8.0)
+   └── Port :8090 (HTTP API & Realtime CDC Stream)
           │
-          │ (모든 프로토콜의 커밋 트랜잭션을 포착)
+          │ (Captures committed transactions across all wire protocols)
           ▼
-   [ WAL / CDC Streamer ] ──(초저지연 비동기 스트림)──┐
-                                                        │
-                                                        ▼
-                        [ 분석 영역: 데이터 분석 어플리케이션 ]
-                           ├── Python (FastAPI / Streamlit / Pandas)
-                           └── Go / Node.js 분석 백엔드
-                                  │ (HTTP 스트림 구독: NDJSON / SSE)
-                                  ▼
-                            [ DuckDB (Embedded Library) ]
-                                  │ (인메모리 또는 파일 기반 컬럼 스토어)
-                                  ▼
-                            [ 0.001초 초고속 벡터 집계 / OLAP 쿼리 ]
+   [ WAL / CDC Streamer ] ──(Ultra-low latency async stream)──┐
+                                                               │
+                                                               ▼
+                           [ Analytics Domain: External Application ]
+                              ├── Python (FastAPI / Streamlit / Pandas)
+                              └── Go / Node.js Analytics Microservices
+                                     │ (Subscribes to HTTP Stream: NDJSON / SSE)
+                                     ▼
+                               [ DuckDB (Embedded Engine) ]
+                                     │ (In-memory or single-file columnar store)
+                                     ▼
+                               [ Sub-millisecond Vectorized Aggregations / OLAP ]
 ```
 
-### 왜 분리형 아키텍처인가?
-1. **장애 격리 (Zero Blast Radius)**:
-   - 분석 쿼리가 수천만 건의 데이터를 조인/집계하다가 OOM(메모리 고갈)이 발생해도, LionSQL OLTP 코어 엔진은 영향을 받지 않고 정상 동작합니다.
-2. **단일 바이너리 경량성 유지 (KISS & Golden Rule 15, 36)**:
-   - LionSQL 바이너리에 수십 MB 크기의 C++17 DuckDB 엔진을 얹지 않으므로 빌드 속도와 정적 실행 파일의 순수성이 유지됩니다.
-3. **분석 스케일아웃(Scale-Out)**:
-   - 동일한 LionSQL CDC 엔드포인트를 여러 분석 워커나 데이터 과학자가 각자의 로컬 DuckDB에서 자유롭게 구독할 수 있습니다.
+### Why a Decoupled Architecture?
+
+1. **Failure & Resource Isolation (Zero Blast Radius)**:
+   - Analytical queries performing multi-million row joins or full table scans that cause Out-of-Memory (OOM) conditions never crash or impact the LionSQL OLTP server.
+2. **Lightweight Single Binary (KISS & Golden Rules 15, 36)**:
+   - Avoids embedding heavy C++17 DuckDB dependencies inside the LionSQL static binary, preserving sub-second build times and binary minimalism (<50MB).
+3. **Independent Analytics Scale-Out**:
+   - Multiple independent analytics workers, data science notebooks, or ETL consumers can concurrently subscribe to the same LionSQL CDC endpoint without thread or lock contention in the primary database kernel.
 
 ---
 
-## 2. LionSQL CDC 스트리밍 API 명세
+## 2. LionSQL CDC Streaming API Specification
 
-LionSQL 서버 기동 시 (`:8090` HTTP 활성화), 다음과 같은 실시간 CDC 스트림 엔드포인트가 제공됩니다:
+When the LionSQL server runs with the HTTP service enabled (`:8090` by default), a real-time CDC streaming endpoint is exposed:
 
-- **엔드포인트**: `GET /api/cdc/stream`
-- **쿼리 파라미터**:
-  - `table`: 특정 테이블만 필터링 (예: `?table=orders`, 미지정 시 전체 테이블)
-  - `from_lsn`: 특정 LSN 이후의 변경분부터 재전송 (미지정 시 0, 버퍼 내 과거 이력 자동 재생)
-  - `format`: `ndjson` (기본값, 개행 구분 JSON) 또는 `sse` (Server-Sent Events)
+- **Endpoint**: `GET /api/cdc/stream`
+- **Query Parameters**:
+  - `table`: Filter events for a specific table (e.g. `?table=orders`; omitted to subscribe to all tables)
+  - `from_lsn`: Replay committed changes starting strictly after this Log Sequence Number (LSN) (defaults to `0` or current watermark)
+  - `format`: Payload encoding format (`ndjson` by default, or `sse` for Server-Sent Events)
 
-### 응답 포맷 (NDJSON 예시)
+### Response Payload Format (NDJSON Example)
+
 ```json
 {"lsn":101,"timestamp":1773574800000000000,"table":"orders","op":"INSERT","key":"ORD_001","data":{"id":1,"customer_id":42,"amount":"150.50","status":"COMPLETED"}}
 {"lsn":102,"timestamp":1773574805000000000,"table":"orders","op":"UPDATE","key":"ORD_001","data":{"id":1,"customer_id":42,"amount":"150.50","status":"SHIPPED"},"base_ver":1}
@@ -57,9 +61,9 @@ LionSQL 서버 기동 시 (`:8090` HTTP 활성화), 다음과 같은 실시간 C
 
 ---
 
-## 3. Python + DuckDB 연동 샘플 코드 (`duckdb_cdc_worker.py`)
+## 3. Python + DuckDB Ingestion Worker Example (`duckdb_cdc_worker.py`)
 
-Python 분석 환경에서 추가 라이브러리(Kafka, Debezium 등) 없이 표준 라이브러리와 `duckdb`만으로 LionSQL의 변경 사항을 실시간 반영하는 예제입니다:
+The following complete Python worker consumes the LionSQL CDC stream using only the standard library and `duckdb`, requiring zero external sidecars (no Kafka, no Debezium, no Zookeeper):
 
 ```python
 #!/usr/bin/env python3
@@ -68,10 +72,10 @@ import urllib.request
 import duckdb
 
 def run_cdc_ingestion():
-    # 1. 로컬 DuckDB 연결 (인메모리 또는 파일 기반)
+    # 1. Connect to local DuckDB instance (in-memory or persistent file)
     con = duckdb.connect("analytics.duckdb")
 
-    # 분석 대상 테이블 초기화 (필요 시)
+    # Initialize analytical destination table with primary key
     con.execute("""
         CREATE TABLE IF NOT EXISTS orders (
             id BIGINT PRIMARY KEY,
@@ -83,7 +87,7 @@ def run_cdc_ingestion():
     """)
     print("[DuckDB] Analytics database connected and table prepared.")
 
-    # 2. LionSQL CDC 스트림 연결 (orders 테이블 구독)
+    # 2. Connect to LionSQL CDC stream (subscribing to 'orders' table)
     url = "http://127.0.0.1:8090/api/cdc/stream?table=orders"
     print(f"[CDC Worker] Subscribing to LionSQL CDC stream: {url}")
 
@@ -94,7 +98,7 @@ def run_cdc_ingestion():
                 continue
             line_str = line.decode("utf-8").strip()
             if not line_str or line_str.startswith(":"):
-                continue  # Heartbeat ping
+                continue  # Skip heartbeat ping frames
 
             event = json.loads(line_str)
             if event.get("type") == "ping":
@@ -130,14 +134,14 @@ if __name__ == "__main__":
 
 ---
 
-## 4. 터미널에서 즉시 확인하는 방법 (cURL)
+## 4. Terminal Verification with cURL
 
-서버 기동 후 터미널에서 cURL을 실행하면 커밋되는 모든 변경 이벤트를 실시간으로 확인할 수 있습니다:
+Once the LionSQL server is running, subscribe directly to live mutation events via command-line HTTP streaming:
 
 ```bash
-# 전체 변경 이벤트 스트림 확인
+# Stream all committed table mutation events
 curl -N http://127.0.0.1:8090/api/cdc/stream
 
-# 특정 테이블(users)만 구독
-curl -N "http://127.0.0.1:8090/api/cdc/stream?table=users"
+# Stream changes for a specific table (e.g. accounts) starting from LSN 100
+curl -N "http://127.0.0.1:8090/api/cdc/stream?table=accounts&from_lsn=100"
 ```

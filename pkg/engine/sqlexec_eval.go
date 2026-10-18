@@ -123,8 +123,15 @@ func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
 		return storage.DateTimeValue(time.Now().UTC())
 	}
 
-	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
-		strVal := s[1 : len(s)-1]
+	isNStr := (strings.HasPrefix(s, "N'") || strings.HasPrefix(s, "n'")) && strings.HasSuffix(s, "'") && len(s) >= 3
+	isRegularStr := strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2
+	if isNStr || isRegularStr {
+		var strVal string
+		if isNStr {
+			strVal = s[2 : len(s)-1]
+		} else {
+			strVal = s[1 : len(s)-1]
+		}
 		strVal = strings.ReplaceAll(strVal, "''", "'")
 		if targetType == storage.TypeJSON {
 			return storage.JSONValue(strVal)
@@ -351,7 +358,13 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		strVal := fmt.Sprintf("%v", val)
 		found := false
 		for _, rawItem := range strings.Split(valList, ",") {
-			item := strings.Trim(strings.TrimSpace(rawItem), "'\"")
+			rawItem = strings.TrimSpace(rawItem)
+			var item string
+			if (strings.HasPrefix(rawItem, "N'") || strings.HasPrefix(rawItem, "n'")) && strings.HasSuffix(rawItem, "'") && len(rawItem) >= 3 {
+				item = strings.ReplaceAll(rawItem[2:len(rawItem)-1], "''", "'")
+			} else {
+				item = strings.Trim(rawItem, "'\"")
+			}
 			if strings.EqualFold(strVal, item) ||
 				(isBool && bVal && (item == "1" || strings.EqualFold(item, "true"))) ||
 				(isBool && !bVal && (item == "0" || strings.EqualFold(item, "false"))) {
@@ -408,8 +421,13 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		idx := strings.Index(strings.ToUpper(whereStr), op)
 		if idx != -1 {
 			leftCol := cleanIdentifier(whereStr[:idx])
-			rightVal := strings.TrimSpace(whereStr[idx+len(op):])
-			rightVal = strings.Trim(rightVal, "';\"")
+			rawRight := strings.TrimSpace(whereStr[idx+len(op):])
+			var rightVal string
+			if (strings.HasPrefix(rawRight, "N'") || strings.HasPrefix(rawRight, "n'")) && strings.HasSuffix(rawRight, "'") && len(rawRight) >= 3 {
+				rightVal = strings.ReplaceAll(rawRight[2:len(rawRight)-1], "''", "'")
+			} else {
+				rightVal = strings.Trim(rawRight, "';\"")
+			}
 
 			if leftCol == "1" && rightVal == "1" && op == "=" {
 				return true
@@ -599,7 +617,13 @@ func parseEqualityConditions(where string) map[string]string {
 			if dot := strings.LastIndex(rawCol, "."); dot != -1 {
 				rawCol = rawCol[dot+1:]
 			}
-			val := strings.Trim(strings.TrimSpace(m[2]), "'\"")
+			rawVal := strings.TrimSpace(m[2])
+			var val string
+			if (strings.HasPrefix(rawVal, "N'") || strings.HasPrefix(rawVal, "n'")) && strings.HasSuffix(rawVal, "'") && len(rawVal) >= 3 {
+				val = strings.ReplaceAll(rawVal[2:len(rawVal)-1], "''", "'")
+			} else {
+				val = strings.Trim(rawVal, "'\"")
+			}
 			result[strings.ToLower(rawCol)] = val
 		}
 	}

@@ -20,6 +20,7 @@
 | **`S3-1` ~ `S3-4`** | **오브젝트 스토리지 (Storage)** | `S3-1` ~ `S3-4` | 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 트랙 |
 | **`OBS-1` ~ `OBS-3`** | **관제 및 프로파일링 (Observability)** | `OBS-1` ~ `OBS-3` | Prometheus 메트릭, EXPLAIN ANALYZE, 슬로우 쿼리 웹훅 연동 트랙 |
 | **`SEC-1` ~ `SEC-2`** | **엔터프라이즈 보안 (Security)** | `SEC-1` ~ `SEC-2` | TDS Pre-Login TLS 암호화 협상 및 프로토콜 보안 강화 트랙 |
+| **`LOC-1` ~ `LOC-4`** | **다국어/정렬 (Collation)** | `LOC-1` ~ `LOC-4` | MSSQL Collation/로케일 지원, COLLATE 관용 파싱, 내장 함수 트랙 |
 
 ---
 
@@ -52,6 +53,7 @@
 | **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **신규 등록 (P1)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **신규 등록 (P2)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
+| **P2** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **설계 완료 (백로그 대기)** | [`doc/COLLATION_AND_LOCALE_PLAN.md`](doc/COLLATION_AND_LOCALE_PLAN.md) |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **백로그 등록 (Post-1.0 후보)** | - |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
@@ -244,6 +246,17 @@
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
 | **PERF-1** | 성능/크리티컬패스 | 문장 분할기 및 TDS 파라미터 바인딩 가속 | **완료 (`[x]`)** | `SplitStatements`의 `strings.Builder` 및 매 바이트 O(N^2) 검사를 제거하고 인덱스 슬라이싱(`query[start:i]`) 기반 제로-카피 스캐너로 전면 재작성(16ns/op, 1 alloc). 함수 내부 동적 `regexp.MustCompile` 전역 `var` 승격. `sp_executesql` 1-Pass 단일 스캔 파라미터 바인딩으로 50배 가속(<1µs) 및 재발 방지 3원칙 문서화 완비 (`pkg/engine`, `pkg/wire/tds`, `notes/PITFALLS_AND_TRICKS.md`) |
+
+---
+
+### 3.9. 다국어 로케일 및 정렬 호환 트랙 (Collation & Locale, `LOC-1` ~ `LOC-4`)
+
+| 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
+| :---: | :--- | :--- | :---: | :--- |
+| **LOC-1** | 파서/DDL | DDL 및 쿼리 표현식 내 `COLLATE` 구문 관용 파싱 | **대기 (`[ ]`)** | `CREATE TABLE` 컬럼 정의 및 `WHERE`/`ORDER BY` 내 `COLLATE <name>` 관용 수용 (마이그레이션 DDL 에러 원천 방지, `_BIN`/`_BIN2` 엄격 비교 분기) (`pkg/proc/lexer.go`, `pkg/proc/parser.go`) |
+| **LOC-2** | 설정/와이어 | 동적 Collation 설정 (`--collation`, `config.toml`) | **대기 (`[ ]`)** | 서버 로케일 설정에 따라 TDS `LOGINACK`/`ENVCHANGE` 5바이트 바이너리 토큰(한국어 `0x12, 0x04...` 등) 동적 생성 및 매핑 (`pkg/config`, `pkg/wire/tds`) |
+| **LOC-3** | 함수/시스템 | T-SQL 내장 시스템 함수 `COLLATIONPROPERTY` 신설 | **대기 (`[ ]`)** | `COLLATIONPROPERTY(name, 'CodePage'\|'LCID'\|'ComparisonStyle')` 빌트인 구현 (SSMS, DBeaver, EF Core 스키마 리버스 엔지니어링 호환) (`pkg/proc/builtins_sys.go`) |
+| **LOC-4** | 카탈로그 | 가상 테이블 함수 `::fn_helpcollations()` 구현 | **대기 (`[ ]`)** | 주요 40대 국제/SQL Collation 목록(`name`, `description`)을 반환하는 가상 카탈로그 시스템 함수 연동 (`pkg/catalog/virtual/`) |
 
 ---
 

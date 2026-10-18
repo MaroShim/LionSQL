@@ -31,6 +31,9 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
 
 ### 2.1. Architecture & Core Database Engine
+* [`WHY_TSQL_GO_WIREDTIGER.md`](file:///Users/maro/Projects/LionSQL/doc/WHY_TSQL_GO_WIREDTIGER.md)
+  * Strategic synthesis of the foundational triad: T-SQL procedural VM, Go runtime concurrency, and WiredTiger lock-free B+Tree.
+  * Comprehensive rationale on Zero-Vacuum persistence, zero-RTT stored procedures, counterarguments, and the single static binary form under 100MB.
 * [`FOUNDATIONAL_DESIGN_DECISIONS.md`](file:///Users/maro/Projects/LionSQL/doc/FOUNDATIONAL_DESIGN_DECISIONS.md)
   * Genesis and foundational strategic architectural decisions of LionSQL.
   * Deep dive into early design choices: WiredTiger lock-free B+Tree disk storage, pure-Go OCC in-memory companion engine, Go language runtime concurrency, Microsoft T-SQL procedural core with VDBE bytecode VM, PostgreSQL wire protocol ecosystem reach, embedded HTTP/REST BaaS engine, and Antigravity AI pair-programming engineering methodology.
@@ -112,6 +115,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
 * [`TDS_COMPATIBILITY_REPORT.md`](file:///Users/maro/Projects/LionSQL/doc/TDS_COMPATIBILITY_REPORT.md)
   * Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) 실시간 123개 T-SQL/ORM 호환성 전수 진단 및 갭 분석 종합 보고서 (PASS: 109개 88.6%, 실무 결함 분석 및 해결 과제 수록).
+* [`COLLATION_AND_LOCALE_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/COLLATION_AND_LOCALE_PLAN.md)
+  * Microsoft SQL Server Collation, Locale & Multi-Language architecture and implementation plan (Tolerant `COLLATE` parser, `--collation` dynamic tokens, `COLLATIONPROPERTY`, and zero collation conflict policy).
 
 ---
 
@@ -131,11 +136,11 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 * [`API_REFERENCE.md`](file:///Users/maro/Projects/LionSQL/doc/API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
 * [`CDC_DUCKDB_INTEGRATION.md`](file:///Users/maro/Projects/LionSQL/doc/CDC_DUCKDB_INTEGRATION.md)
-  * LionSQL 실시간 CDC 스트림(`GET /api/cdc/stream`) 및 DuckDB 분리형(Decoupled) HTAP 분석 연동 가이드 (Python & DuckDB 샘플 포함).
+  * Real-time CDC streaming (`GET /api/cdc/stream`) and decoupled HTAP analytical integration guide with DuckDB (includes Python & DuckDB workers).
 * [`SNAPSHOT_ISOLATION_AND_DUCKDB.md`](file:///Users/maro/Projects/LionSQL/doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md)
-  * 스토리지 엔진별(WiredTiger MVCC vs In-Memory OCC) 스냅샷 격리 메커니즘, 스냅샷 동결 시점의 본질적 차이, Vacuum 배제 원리 및 DuckDB 초기 덤프/실시간 CDC 정합성 핸드오버 심층 기술 백서.
+  * Deep-dive technical whitepaper on dual storage engine snapshot isolation (WiredTiger MVCC vs In-Memory OCC), intrinsic snapshot time-point distinctions, Zero-Vacuum architecture, and DuckDB initial sync / real-time CDC consistency cutover.
 * [`S3_PRESIGNED_STORAGE_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/S3_PRESIGNED_STORAGE_PLAN.md)
-  * 패턴 1 S3 Pre-signed URL 직접 업로드 아키텍처 및 구현 계획 (순수 Go SigV4 서명, REST API, T-SQL 내장 함수, CDC 고아 파일 방지).
+  * Pattern 1 S3 Pre-signed URL direct upload architecture and implementation plan (pure Go SigV4 signer, REST API, T-SQL built-in functions, CDC orphan asset cleanup).
 
 ---
 

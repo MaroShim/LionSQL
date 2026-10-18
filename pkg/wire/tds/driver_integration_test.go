@@ -1357,6 +1357,70 @@ func TestDriverIntegration_GoMSSQLDB_RaiserrorAndThrow(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_GoMSSQLDB_NPrefixUnicodeLiterals(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("sqlserver://sa:admin@127.0.0.1:%d?database=master&encrypt=disable", port)
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("Failed to open sqlserver db: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 1. SELECT N'한글유니코드' AS s (Scenario 27 regression prevention)
+	var str string
+	if err := db.QueryRowContext(ctx, "SELECT N'한글유니코드' AS s").Scan(&str); err != nil {
+		t.Fatalf("QueryRow N'한글유니코드' failed: %v", err)
+	}
+	if str != "한글유니코드" {
+		t.Fatalf("expected '한글유니코드', got: %q", str)
+	}
+
+	// 2. SELECT n'소문자n유니코드' AS s
+	if err := db.QueryRowContext(ctx, "SELECT n'소문자n유니코드' AS s").Scan(&str); err != nil {
+		t.Fatalf("QueryRow n'소문자n유니코드' failed: %v", err)
+	}
+	if str != "소문자n유니코드" {
+		t.Fatalf("expected '소문자n유니코드', got: %q", str)
+	}
+
+	// 3. String concatenation with N'...'
+	if err := db.QueryRowContext(ctx, "SELECT N'안녕 ' + N'세계' AS s").Scan(&str); err != nil {
+		t.Fatalf("QueryRow concat failed: %v", err)
+	}
+	if str != "안녕 세계" {
+		t.Fatalf("expected '안녕 세계', got: %q", str)
+	}
+
+	// 4. CRUD with table and WHERE filter using N'...'
+	if _, err := db.ExecContext(ctx, "CREATE TABLE tbl_unicode (id INT PRIMARY KEY, name VARCHAR(100));"); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO tbl_unicode (id, name) VALUES (1, N'홍길동'), (2, N'세종대왕');"); err != nil {
+		t.Fatalf("INSERT with N'...' failed: %v", err)
+	}
+
+	if err := db.QueryRowContext(ctx, "SELECT name FROM tbl_unicode WHERE name = N'홍길동'").Scan(&str); err != nil {
+		t.Fatalf("QueryRow with WHERE = N'홍길동' failed: %v", err)
+	}
+	if str != "홍길동" {
+		t.Fatalf("expected '홍길동', got: %q", str)
+	}
+}
+
+
 
 
 
