@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
+	"sqlion/pkg/planner"
 	"sqlion/pkg/storage"
 )
 
@@ -436,6 +438,7 @@ type IndexNestedLoopJoinIterator struct {
 	inIdx            int
 	outChunk         Chunk
 	outIdx           int
+	innerPlan        *planner.PlanNode
 }
 
 // NewIndexNestedLoopJoinIterator creates a new Index Nested Loop Join operator.
@@ -462,6 +465,11 @@ func NewIndexNestedLoopJoinIterator(outer Iterator, tx storage.Transaction, inne
 // SetFilter sets an optional filter condition evaluated on inner tuples.
 func (n *IndexNestedLoopJoinIterator) SetFilter(cond string) {
 	n.filterCond = strings.TrimSpace(cond)
+}
+
+// SetInnerPlan sets an optional inner PlanNode for profiling inner loop execution.
+func (n *IndexNestedLoopJoinIterator) SetInnerPlan(plan *planner.PlanNode) {
+	n.innerPlan = plan
 }
 
 func (n *IndexNestedLoopJoinIterator) Open(ctx context.Context) error {
@@ -531,6 +539,9 @@ func (n *IndexNestedLoopJoinIterator) nextTuple(ctx context.Context) (Tuple, err
 				}
 
 				n.hasMatch = true
+				if n.innerPlan != nil {
+					n.innerPlan.ActualRows++
+				}
 				if n.joinType == "SEMI" {
 					_ = n.innerCursor.Close()
 					n.innerCursor = nil
@@ -595,9 +606,14 @@ func (n *IndexNestedLoopJoinIterator) nextTuple(ctx context.Context) (Tuple, err
 
 		// Construct index lookup Value
 		stVal := toStorageValFromAny(keyVal)
+		scanStart := time.Now()
 		cur, err := n.tx.IndexScan(n.innerTable, n.innerIndex.Name, &stVal, &stVal)
 		if err != nil {
 			return Tuple{}, err
+		}
+		if n.innerPlan != nil {
+			n.innerPlan.ActualLoops++
+			n.innerPlan.ActualDurationUS += time.Since(scanStart).Microseconds()
 		}
 		n.innerCursor = cur
 	}

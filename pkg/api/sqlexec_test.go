@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -8,6 +9,7 @@ import (
 
 	"sqlion/pkg/api"
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
 	"sqlion/pkg/storage/memengine"
@@ -310,6 +312,36 @@ func TestSQLExecutor_ExplainAndExplainAnalyze(t *testing.T) {
 	if !strings.Contains(planText, "Limit") || !strings.Contains(planText, "Sort") || !strings.Contains(planText, "actual time=") {
 		t.Errorf("expected Limit, Sort and actual metrics in EXPLAIN ANALYZE text, got:\n%s", planText)
 	}
+	if !strings.Contains(planText, "loops=") {
+		t.Errorf("expected loops in EXPLAIN ANALYZE text, got:\n%s", planText)
+	}
+
+	// 4. EXPLAIN (ANALYZE, FORMAT JSON)
+	resJSON, err := server.ExecuteSQL(`EXPLAIN (ANALYZE, FORMAT JSON) SELECT id, name FROM users ORDER BY score DESC LIMIT 2;`)
+	if err != nil || !resJSON.Success {
+		t.Fatalf("EXPLAIN (ANALYZE, FORMAT JSON) failed: %v", err)
+	}
+	if len(resJSON.Rows) == 0 {
+		t.Fatalf("expected rows from EXPLAIN JSON")
+	}
+	rawJSON := resJSON.Rows[0]["QUERY PLAN"].(string)
+	var planRep []planner.PostgresPlanRepresentation
+	if err := json.Unmarshal([]byte(rawJSON), &planRep); err != nil {
+		t.Fatalf("failed to unmarshal Postgres explain JSON: %v, raw: %s", err, rawJSON)
+	}
+	if len(planRep) == 0 {
+		t.Fatalf("expected non-empty plan representation")
+	}
+	root := planRep[0].Plan
+	if root.ActualTotalTime == nil || root.ActualRows == nil || root.ActualLoops == nil {
+		t.Fatalf("expected ActualTotalTime, ActualRows, ActualLoops to be non-nil in JSON plan: %+v", root)
+	}
+	if *root.ActualRows != 2 {
+		t.Errorf("expected root actual rows 2, got %d", *root.ActualRows)
+	}
+	if *root.ActualLoops != 1 {
+		t.Errorf("expected root actual loops 1, got %d", *root.ActualLoops)
+	}
 }
 
 func TestSQLExecutor_HashJoin_InnerAndLeft(t *testing.T) {
@@ -404,6 +436,20 @@ func TestSQLExecutor_IndexNestedLoopJoin(t *testing.T) {
 	}
 	if res.Rows[0]["item"] != "Book" || res.Rows[1]["item"] != "Pen" || res.Rows[2]["item"] != "Laptop" {
 		t.Errorf("unexpected rows returned: %+v", res.Rows)
+	}
+
+	// 3. EXPLAIN ANALYZE shows Nested Loop and actual loops/rows on inner index scan
+	analyzeSQL := `EXPLAIN ANALYZE SELECT c.name, o.item FROM customers c JOIN orders o ON c.id = o.cust_id;`
+	res, err = server.ExecuteSQL(analyzeSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("EXPLAIN ANALYZE failed: %v", err)
+	}
+	planText = ""
+	for _, r := range res.Rows {
+		planText += r["QUERY PLAN"].(string) + "\n"
+	}
+	if !strings.Contains(planText, "Nested Loop") || !strings.Contains(planText, "actual time=") || !strings.Contains(planText, "loops=") {
+		t.Errorf("expected Nested Loop with actual time and loops, got:\n%s", planText)
 	}
 }
 

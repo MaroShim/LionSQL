@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- **Volcano Execution Engine Runtime Profiler for EXPLAIN ANALYZE (`OBS-2`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)**:
+  - Implemented `InstrumentedIterator` in `pkg/execution/instrument.go` wrapping Volcano physical operators, capturing independent per-node `ActualStartupUS`, `ActualDurationUS`, `ActualRows`, and `ActualLoops` metrics across both row-by-row `Next()` and vectorized `NextChunk()` streaming paths.
+  - Implemented sub-microsecond precision profiling with nanosecond accumulation (`totalNanos`), preventing quantization truncation on fast in-memory scans and limit operators.
+  - Wired recursive instrumentation via `BuildInstrumentedExecutor` in `pkg/execution/builder.go`, and integrated inner index probe loop tracking in `IndexNestedLoopJoinIterator` (`SetInnerPlan`).
+  - Integrated instrumented execution into `Coordinator.execExplain` (`pkg/engine/sqlexec_explain.go`) with read-only transaction isolation and resilient fallback to standard execution.
+  - Supported canonical PostgreSQL format for both Text (`(actual time=%.3f..%.3f rows=%d loops=%d)`) and JSON (`Actual Startup Time`, `Actual Total Time`, `Actual Rows`, `Actual Loops`).
+  - Added unit and regression tests in `pkg/execution/instrument_test.go`, `pkg/planner/planner_test.go`, and `pkg/api/sqlexec_test.go`.
 - **Prometheus Extended Observability & OpenTelemetry OTLP JSON Exposition (`OBS-1`) (`pkg/engine`, `pkg/api`)**:
   - Enhanced Prometheus text exposition (`GET /metrics`) with storage engine backend (`sqlion_storage_info{engine="..."}`), replication cluster status (`sqlion_replication_role{role="..."}`, `sqlion_replication_lag_bytes`, `sqlion_replication_current_lsn`), transaction conflict counters (`sqlion_transactions_total{type="conflict"}`), and configured global memory limits (`sqlion_memory_limit_bytes`).
   - Implemented OpenTelemetry OTLP standard JSON endpoints (`GET /v1/metrics`, `GET /api/v1/metrics`) with service and resource attributes (`service.name="lionsql"`, `storage.engine`, `replication.role`) and cumulative/gauge scope metrics.

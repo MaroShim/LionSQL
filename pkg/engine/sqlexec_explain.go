@@ -1,12 +1,14 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"sqlion/pkg/execution"
 	"sqlion/pkg/planner"
 	"sqlion/pkg/proc"
 	"sqlion/pkg/storage"
@@ -232,29 +234,68 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 	}
 
 	if qInfo.IsAnalyze {
-		// Execute query to collect actual metrics
 		execStart := time.Now()
-		selectSQL := innerExplainSQL
-		res, execErr := s.execSelect(selectSQL, execStart, nil)
-		if execErr == nil && res != nil {
-			planTree.ActualRows = int64(len(res.Rows))
-			planTree.ActualDurationUS = res.DurationUS
+		ranVolcano := false
 
-			// Recursively populate actual rows / durations down the tree
-			var populateActuals func(node *planner.PlanNode)
-			populateActuals = func(node *planner.PlanNode) {
-				if node == nil {
-					return
+		// 1. Try running Volcano execution engine with real-time operator instrumentation
+		if session, sessErr := s.engine.NewSession(); sessErr == nil {
+			func() {
+				defer session.Close()
+				if tx, txErr := session.BeginTx(storage.TxOptions{ReadOnly: true}); txErr == nil {
+					defer tx.Rollback()
+
+					execOpts := execution.DefaultExecutorOptions()
+					if s.defaultWorkMem > 0 {
+						execOpts.WorkMem = s.defaultWorkMem
+					}
+
+					it, buildErr := execution.BuildInstrumentedExecutor(planTree, tx, s.engine.GetTable, execOpts)
+					if buildErr == nil && it != nil {
+						ctx := context.Background()
+						if openErr := it.Open(ctx); openErr == nil {
+							defer it.Close()
+							chunk := execution.GetChunk()
+							defer execution.PutChunk(chunk)
+
+							for {
+								pErr := execution.PullChunk(ctx, it, chunk, execution.DefaultChunkSize)
+								if pErr != nil {
+									break
+								}
+							}
+							ranVolcano = true
+						}
+					}
 				}
-				if node.ActualRows == 0 && len(res.Rows) > 0 {
-					node.ActualRows = int64(len(res.Rows))
-					node.ActualDurationUS = res.DurationUS
+			}()
+		}
+
+		// 2. Fallback to execSelect if Volcano execution was not applicable
+		if !ranVolcano || planTree.ActualLoops == 0 {
+			selectSQL := innerExplainSQL
+			res, execErr := s.execSelect(selectSQL, execStart, nil)
+			if execErr == nil && res != nil {
+				planTree.ActualRows = int64(len(res.Rows))
+				planTree.ActualDurationUS = res.DurationUS
+				planTree.ActualLoops = 1
+
+				// Recursively populate actual rows / durations down the tree
+				var populateActuals func(node *planner.PlanNode)
+				populateActuals = func(node *planner.PlanNode) {
+					if node == nil {
+						return
+					}
+					if node.ActualRows == 0 && len(res.Rows) > 0 {
+						node.ActualRows = int64(len(res.Rows))
+						node.ActualDurationUS = res.DurationUS
+						node.ActualLoops = 1
+					}
+					for _, child := range node.Children {
+						populateActuals(child)
+					}
 				}
-				for _, child := range node.Children {
-					populateActuals(child)
-				}
+				populateActuals(planTree)
 			}
-			populateActuals(planTree)
 		}
 	}
 
@@ -326,6 +367,15 @@ func (s *Coordinator) execDMLExplain(dmlSQL string, opts planner.ExplainOptions,
 	}
 
 	planTree := p.BuildDMLPlanNode(dmlType, tableName, whereCond, schema, stats, 1)
+	if opts.Analyze {
+		planTree.ActualLoops = 1
+		planTree.ActualDurationUS = time.Since(start).Microseconds()
+		for _, c := range planTree.Children {
+			c.ActualLoops = 1
+			c.ActualDurationUS = planTree.ActualDurationUS
+			c.ActualRows = c.EstimatedRows
+		}
+	}
 
 	if opts.Format == planner.FormatJSON {
 		jsonStr, err := planner.FormatPostgresPlanJSON(planTree, opts.Analyze)

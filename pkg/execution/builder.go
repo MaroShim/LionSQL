@@ -16,17 +16,30 @@ func BuildExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable Tabl
 	return BuildExecutorWithOptions(plan, tx, getTable, DefaultExecutorOptions())
 }
 
+// BuildInstrumentedExecutor compiles a planner.PlanNode physical plan tree into an executable
+// Volcano Iterator tree where every operator node is wrapped with an InstrumentedIterator for runtime profiling (OBS-2).
+func BuildInstrumentedExecutor(plan *planner.PlanNode, tx storage.Transaction, getTable TableGetter, opts ExecutorOptions) (Iterator, error) {
+	return buildExecutorRecursive(plan, tx, getTable, opts, true)
+}
+
 // BuildExecutorWithOptions compiles a planner.PlanNode physical plan tree into an executable Volcano Iterator with custom memory limits.
 func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, getTable TableGetter, opts ExecutorOptions) (Iterator, error) {
+	return buildExecutorRecursive(plan, tx, getTable, opts, false)
+}
+
+func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getTable TableGetter, opts ExecutorOptions, instrument bool) (Iterator, error) {
 	if plan == nil {
 		return nil, fmt.Errorf("cannot build executor: plan is nil")
 	}
 
+	var op Iterator
+	var err error
+
 	switch plan.Type {
 	case planner.NodeTableScan:
-		schema, err := getTable(plan.Relation)
-		if err != nil {
-			return nil, fmt.Errorf("table scan schema lookup failed for %q: %w", plan.Relation, err)
+		schema, sErr := getTable(plan.Relation)
+		if sErr != nil {
+			return nil, fmt.Errorf("table scan schema lookup failed for %q: %w", plan.Relation, sErr)
 		}
 		var sIter *SeqScanIterator
 		if len(plan.Partitions) > 0 {
@@ -37,12 +50,12 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if opts.Arena != nil {
 			sIter.SetArena(opts.Arena)
 		}
-		return sIter, nil
+		op = sIter
 
 	case planner.NodeIndexScan, planner.NodeIndexOnlyScan:
-		schema, err := getTable(plan.Relation)
-		if err != nil {
-			return nil, fmt.Errorf("index scan schema lookup failed for %q: %w", plan.Relation, err)
+		schema, sErr := getTable(plan.Relation)
+		if sErr != nil {
+			return nil, fmt.Errorf("index scan schema lookup failed for %q: %w", plan.Relation, sErr)
 		}
 
 		low, high := planner.ParseIndexCond(plan.IndexCond, schema)
@@ -52,47 +65,48 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 			it.SetArena(opts.Arena)
 		}
 		if plan.FilterCond != "" {
-			return NewFilterIterator(it, plan.FilterCond), nil
+			op = NewFilterIterator(it, plan.FilterCond)
+		} else {
+			op = it
 		}
-		return it, nil
 
 	case planner.NodeFilter:
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("filter node has no children")
 		}
-		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		child, cErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if cErr != nil {
+			return nil, cErr
 		}
-		return NewFilterIterator(child, plan.FilterCond), nil
+		op = NewFilterIterator(child, plan.FilterCond)
 
 	case planner.NodeProjection:
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("projection node has no children")
 		}
-		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		child, cErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if cErr != nil {
+			return nil, cErr
 		}
-		return NewProjectionIterator(child, plan.Projections), nil
+		op = NewProjectionIterator(child, plan.Projections)
 
 	case planner.NodeLimit:
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("limit node has no children")
 		}
-		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		child, cErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if cErr != nil {
+			return nil, cErr
 		}
-		return NewLimitIterator(child, plan.LimitCount, plan.OffsetCount), nil
+		op = NewLimitIterator(child, plan.LimitCount, plan.OffsetCount)
 
 	case planner.NodeSort:
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("sort node has no children")
 		}
-		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		child, cErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if cErr != nil {
+			return nil, cErr
 		}
 		orderClause := plan.SortKey
 		if plan.SortOrder != "" {
@@ -108,50 +122,59 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if opts.Arena != nil {
 			sIter.SetArena(opts.Arena)
 		}
-		return sIter, nil
+		op = sIter
 
 	case planner.NodeAggregate:
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("aggregate node has no children")
 		}
-		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		child, cErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if cErr != nil {
+			return nil, cErr
 		}
 		aIter := NewAggregateIteratorWithModifier(child, plan.GroupKeys, plan.GroupByModifier, plan.Projections, plan.HavingCond)
 		if opts.Arena != nil {
 			aIter.SetArena(opts.Arena)
 		}
-		return aIter, nil
+		op = aIter
 
 	case planner.NodeWindow:
 		if len(plan.Children) == 0 {
 			return nil, fmt.Errorf("window node has no children")
 		}
-		child, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		child, cErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if cErr != nil {
+			return nil, cErr
 		}
-		return NewWindowIterator(child, plan.WindowDefs), nil
+		op = NewWindowIterator(child, plan.WindowDefs)
 
 	case planner.NodeHashJoin:
 		if len(plan.Children) < 2 {
 			return nil, fmt.Errorf("hash join requires at least 2 children")
 		}
-		leftIter, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		leftIter, lErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if lErr != nil {
+			return nil, lErr
 		}
 
 		// Second child may be NodeHash, whose child is the inner scan
 		var rightIter Iterator
 		if plan.Children[1].Type == planner.NodeHash && len(plan.Children[1].Children) > 0 {
-			rightIter, err = BuildExecutorWithOptions(plan.Children[1].Children[0], tx, getTable, opts)
+			hashChild, hErr := buildExecutorRecursive(plan.Children[1].Children[0], tx, getTable, opts, instrument)
+			if hErr != nil {
+				return nil, hErr
+			}
+			if instrument {
+				rightIter = NewInstrumentedIterator(hashChild, plan.Children[1])
+			} else {
+				rightIter = hashChild
+			}
 		} else {
-			rightIter, err = BuildExecutorWithOptions(plan.Children[1], tx, getTable, opts)
-		}
-		if err != nil {
-			return nil, err
+			var rErr error
+			rightIter, rErr = buildExecutorRecursive(plan.Children[1], tx, getTable, opts, instrument)
+			if rErr != nil {
+				return nil, rErr
+			}
 		}
 
 		leftKey, rightKey := parseJoinCond(plan.HashCond)
@@ -166,19 +189,19 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 		if opts.Arena != nil {
 			hIter.SetArena(opts.Arena)
 		}
-		return hIter, nil
+		op = hIter
 
 	case planner.NodeMergeJoin:
 		if len(plan.Children) < 2 {
 			return nil, fmt.Errorf("merge join requires at least 2 children")
 		}
-		leftIter, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		leftIter, lErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if lErr != nil {
+			return nil, lErr
 		}
-		rightIter, err := BuildExecutorWithOptions(plan.Children[1], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		rightIter, rErr := buildExecutorRecursive(plan.Children[1], tx, getTable, opts, instrument)
+		if rErr != nil {
+			return nil, rErr
 		}
 
 		leftKey, rightKey := parseJoinCond(plan.MergeCond)
@@ -207,22 +230,21 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 			rightIter = sIter
 		}
 
-		mIter := NewMergeJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
-		return mIter, nil
+		op = NewMergeJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
 
 	case planner.NodeNestedLoop:
 		if len(plan.Children) < 2 {
 			return nil, fmt.Errorf("nested loop join requires at least 2 children")
 		}
-		outerIter, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		outerIter, oErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if oErr != nil {
+			return nil, oErr
 		}
 
 		innerPlan := plan.Children[1]
-		innerSchema, err := getTable(innerPlan.Relation)
-		if err != nil {
-			return nil, fmt.Errorf("nested loop inner schema error: %w", err)
+		innerSchema, sErr := getTable(innerPlan.Relation)
+		if sErr != nil {
+			return nil, fmt.Errorf("nested loop inner schema error: %w", sErr)
 		}
 
 		leftKey, _ := parseJoinCond(plan.JoinCond)
@@ -239,38 +261,53 @@ func BuildExecutorWithOptions(plan *planner.PlanNode, tx storage.Transaction, ge
 			if innerPlan.FilterCond != "" {
 				nIter.SetFilter(innerPlan.FilterCond)
 			}
-			return nIter, nil
+			if instrument {
+				nIter.SetInnerPlan(innerPlan)
+			}
+			op = nIter
+		} else {
+			// Fallback to Hash Join if inner index is absent
+			innerScan := NewSeqScanIterator(tx, innerPlan.Relation, innerPlan.Alias, innerSchema)
+			var rIter Iterator = innerScan
+			if instrument {
+				rIter = NewInstrumentedIterator(innerScan, innerPlan)
+			}
+			_, rightKey := parseJoinCond(plan.JoinCond)
+			op = NewHashJoinIterator(outerIter, rIter, plan.JoinType, leftKey, rightKey)
 		}
-
-		// Fallback to Hash Join if inner index is absent
-		innerScan := NewSeqScanIterator(tx, innerPlan.Relation, innerPlan.Alias, innerSchema)
-		_, rightKey := parseJoinCond(plan.JoinCond)
-		return NewHashJoinIterator(outerIter, innerScan, plan.JoinType, leftKey, rightKey), nil
 
 	case planner.NodeSetOp:
 		if len(plan.Children) < 2 {
 			return nil, fmt.Errorf("set operator requires at least 2 children")
 		}
-		leftIter, err := BuildExecutorWithOptions(plan.Children[0], tx, getTable, opts)
-		if err != nil {
-			return nil, err
+		leftIter, lErr := buildExecutorRecursive(plan.Children[0], tx, getTable, opts, instrument)
+		if lErr != nil {
+			return nil, lErr
 		}
-		rightIter, err := BuildExecutorWithOptions(plan.Children[1], tx, getTable, opts)
-		if err != nil {
+		rightIter, rErr := buildExecutorRecursive(plan.Children[1], tx, getTable, opts, instrument)
+		if rErr != nil {
 			_ = leftIter.Close()
-			return nil, err
+			return nil, rErr
 		}
-		setOpType, err := ParseSetOpType(plan.SetOp)
-		if err != nil {
+		setOpType, sErr := ParseSetOpType(plan.SetOp)
+		if sErr != nil {
 			_ = leftIter.Close()
 			_ = rightIter.Close()
-			return nil, err
+			return nil, sErr
 		}
-		return NewSetOpIterator(leftIter, rightIter, setOpType), nil
+		op = NewSetOpIterator(leftIter, rightIter, setOpType)
 
 	default:
 		return nil, fmt.Errorf("unsupported plan node type: %s", plan.Type)
 	}
+
+	if err != nil {
+		return nil, err
+	}
+	if instrument && op != nil {
+		return NewInstrumentedIterator(op, plan), nil
+	}
+	return op, nil
 }
 
 func parseJoinCond(cond string) (string, string) {

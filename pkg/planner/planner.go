@@ -120,7 +120,9 @@ type PlanNode struct {
 	TotalCost        float64              `json:"total_cost"`
 	EstimatedRows    int64                `json:"estimated_rows"`
 	ActualRows       int64                `json:"actual_rows,omitempty"`
+	ActualStartupUS  int64                `json:"actual_startup_us,omitempty"`
 	ActualDurationUS int64                `json:"actual_duration_us,omitempty"`
+	ActualLoops      int64                `json:"actual_loops,omitempty"`
 	Partitions       []string             `json:"partitions,omitempty"`
 	Children         []*PlanNode          `json:"children,omitempty"`
 }
@@ -1515,8 +1517,13 @@ func formatNodeText(node *PlanNode, prefix string, isRoot bool, analyze bool, li
 	sb.WriteString(fmt.Sprintf(" (cost=%.2f..%.2f rows=%d)", node.StartupCost, node.TotalCost, node.EstimatedRows))
 
 	if analyze {
+		startupMs := float64(node.ActualStartupUS) / 1000.0
 		durationMs := float64(node.ActualDurationUS) / 1000.0
-		sb.WriteString(fmt.Sprintf(" (actual time=%.3fms rows=%d)", durationMs, node.ActualRows))
+		loops := node.ActualLoops
+		if loops == 0 {
+			loops = 1
+		}
+		sb.WriteString(fmt.Sprintf(" (actual time=%.3f..%.3f rows=%d loops=%d)", startupMs, durationMs, node.ActualRows, loops))
 	}
 
 	if node.IndexCond != "" {

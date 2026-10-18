@@ -159,9 +159,14 @@ func toPostgresPlanNode(node *PlanNode, analyze bool) PostgresPlanNode {
 	}
 
 	if analyze {
+		startupMs := float64(node.ActualStartupUS) / 1000.0
 		durationMs := float64(node.ActualDurationUS) / 1000.0
 		rows := node.ActualRows
-		loops := int64(1)
+		loops := node.ActualLoops
+		if loops == 0 {
+			loops = 1
+		}
+		pg.ActualStartupTime = &startupMs
 		pg.ActualTotalTime = &durationMs
 		pg.ActualRows = &rows
 		pg.ActualLoops = &loops

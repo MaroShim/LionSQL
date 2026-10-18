@@ -225,7 +225,7 @@ func TestPlanner_AnalyzeOutput(t *testing.T) {
 	lines := planner.FormatPlanText(plan, true)
 	fullText := strings.Join(lines, "\n")
 
-	if !strings.Contains(fullText, "actual time=0.250ms rows=10") {
+	if !strings.Contains(fullText, "actual time=0.000..0.250 rows=10 loops=1") {
 		t.Errorf("expected actual time formatting in plan text, got:\n%s", fullText)
 	}
 }
