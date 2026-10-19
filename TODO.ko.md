@@ -26,6 +26,7 @@
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
 | **`UI-1` ~ `UI-11`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-11` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마, Light 모드 고대비 시인성 개편 |
 | **`SHUTDOWN-1`** | **종료/안정성 (Shutdown)** | `SHUTDOWN-1` | Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 |
+| **`VPERF-1` ~ `VPERF-12`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-12` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
 
@@ -91,6 +92,9 @@
 | **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
+| **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거, Autocommit 세션 재사용, IDENTITY $O(1)$, FK 캐시) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **P1** | **수직성능/Track B** | **TDS & VDBE 핫패스 무할당 가속 (Attention 동기화, `sp_executesql` 플랜캐시, `PacketSize`, `PlanCache` RLock, VDBE 맵 제거) (`VPERF-5` ~ `VPERF-9`)** | `pkg/wire/tds`, `pkg/proc/runtime` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **P2** | **수직성능/Track C** | **엔드투엔드 슬라이스 파이프라인 & 커서 스트리밍 (`RawRows` 직결, OCC 샤드 스트리밍, WiredTiger 단일 커서 Update & Zero-Copy) (`VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
 
@@ -204,6 +208,24 @@
      - `lionsql doctor`에 `Production Security Guard` 진단 항목 신설 (외부 노출 시 FAIL, 로컬호스트 또는 비밀번호 변경 시 OK 판정).
      - `pkg/config/config_test.go` 단위 테스트 100% 검증 통과.
 
+#### 7. TDS 프로토콜 ➔ 코디네이터 ➔ VDBE ➔ 스토리지 전 계층 수직 성능 최적화 (`VPERF-1` ~ `VPERF-12`)
+* **과제 개요**: TDS 네트워크 패킷 수신부(`pkg/wire/tds`)부터 SQL 코디네이터(`pkg/engine`), VDBE 바이트코드 VM(`pkg/proc/runtime`), 튜플 직렬화(`pkg/storage/tuple.go`), 스토리지 엔진(`memengine`, `wiredtiger`)까지 수직 핫패스(Vertical Hot-Path)의 12대 병목을 3단계 트랙으로 제거.
+* **Track A — 스토리지 & 코디네이터 치명적 병목 즉시 해소 (`VPERF-1` ~ `VPERF-4`)**:
+  1. **`VPERF-1` (`pkg/storage/memengine/tx.go`)**: `MEM-3` 메모리 가버너 활성 시 매 쓰기 트랜잭션 `Commit()`마다 호출되어 전역 STW(20~50µs)를 유발하는 `runtime.ReadMemStats` 호출을 원자적 캐시/샘플링 방식으로 교체.
+  2. **`VPERF-2` (`pkg/engine`, `pkg/wire/tds`)**: Autocommit 쿼리(`tryPKLookupBypass`, `execVolcanoSelect`, `execInsert`, `execUpdate`, TDS `handleRPCExecute`)마다 `engine.NewSession()` 생성 및 `Close()`로 인해 WiredTiger 세션별 `WT_CURSOR` 풀이 매번 파괴되는 문제를 `ClientSession.Session`(또는 커넥션별 영속 세션) 재사용으로 해결.
+  3. **`VPERF-3` (`pkg/engine/sqlexec_dml.go`)**: `AUTO_INCREMENT`(`IDENTITY`) 컬럼 보유 테이블에 대한 `execInsert` / `execInsertSelect` 시 매번 전체 테이블을 풀 스캔(`tx.Scan`)하여 `maxID`를 구하는 $O(N)$ 병목을 원자적 시퀀스 조회($O(1)$)로 교체.
+  4. **`VPERF-4` (`pkg/storage/memengine/tx.go`, `table_data.go`)**: `memengine`의 매 `Update` / `Delete`마다 `engine.mu.RLock()`을 획득하고 전체 테이블 맵을 순회하며 역방향 외래키(FK)를 검사하는 오버헤드를 DDL 시점 사전 계산 캐시로 제거.
+* **Track B — TDS & VDBE 핫패스 무할당 가속 (`VPERF-5` ~ `VPERF-9`)**:
+  5. **`VPERF-5` (`pkg/wire/tds/server.go`)**: `runQueryWithAttention`에서 매 `SQLBatch`/`RPC` 쿼리마다 `context.WithCancel`, 채널, 고루틴을 생성하는 오버헤드를 제거하고 리더 고루틴의 직접 취소 훅 호출 방식으로 동기화.
+  6. **`VPERF-6` (`pkg/wire/tds/server.go`)**: `sp_executesql`(ProcID 10)이 파라미터를 문자열로 치환(`buildBoundSQL`) 후 SQL 전체를 재파싱하는 경로를 `BytecodePlanCache` + `executor.RunContext` 바이트코드 직결 패스트패스로 통합.
+  7. **`VPERF-7` (`pkg/wire/tds/packet.go`, `server.go`)**: `WritePacket`의 `4096` 하드코딩을 세션 협상 `PacketSize`(최대 32KB)로 연동하고, 응답 `bytes.Buffer` 재사용 및 `writeUTF16LEDirect` 직접 버퍼 쓰기로 셀당 슬라이스 할당 제거.
+  8. **`VPERF-8` (`pkg/proc/runtime/vm.go`)**: `PlanCache.GetOrCompile` 조회 시 매번 수행되는 `sha256.Sum256` + `hex.EncodeToString` 해싱과 배타적 쓰기 락(`mu.Lock()`) 경합을 원문 문자열 키 및 `RLock` 패스트패스로 개선.
+  9. **`VPERF-9` (`pkg/proc/runtime/vm_dispatcher.go`, `vm.go`)**: VDBE `OpInsert`/`OpUpdate` 시 트리거가 없는 테이블에 대한 무조건적인 `rowMap`/`oldRow`/`newRow` 할당을 생략하고, `execUpdateWhere` 내부 할당 루프의 `buildRowEvalMap` 중복 호출을 루프 외부로 호이스팅.
+* **Track C — 엔드투엔드 슬라이스 파이프라인 & 커서 스트리밍 (`VPERF-10` ~ `VPERF-12`)**:
+  10. **`VPERF-10` (`pkg/engine`, `pkg/wire/tds`)**: `Row -> Tuple -> map[string]any -> TDS Wire`로 이어지는 행당 맵 할당 및 TDS `inferColumnInfos` 문자열 휴리스틱 재추론을 `RawRows` 슬라이스 인덱싱 및 스키마 `ColumnTypes` 전달로 일원화.
+  11. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: `memengine` `Scan()` 호출 시 64개 샤드 전체 키를 단일 슬라이스로 복사 후 `sort.Strings`($O(N \log N)$)를 선행 수행하는 병목을 샤드별 스트리밍 커서로 전환.
+  12. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked`의 이중 커서 획득(읽기 후 재탐색 쓰기)을 단일 커서 내 처리로 통합하고, `getRowLocked`/`WTCursor.Row()`의 `C.GoBytes` 힙 복사를 Zero-Copy 슬라이스 뷰 디코딩으로 최적화.
+
 ---
 
 ## 3. 도메인별 통합 백로그 매트릭스 (Domain Backlog Matrices)
@@ -224,7 +246,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-12`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -245,6 +267,18 @@
 | **P-15** | 스토리지 | WiredTiger 다중 행 배치 CGo 삽입 | **보류 (`[-]`)** | CGo 포인터 세그폴트 및 트랜잭션 롤백 복잡성으로 보류 |
 | **P-16** | 스토리지 | In-Memory OCC Row-Level Atomic CAS 커밋 | **보류 (`[-]`)** | 동시성 엣지 케이스 및 데이터 사일런트 손상 위험으로 보류 |
 | **P-17** | VM | VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt`) | **보류 (`[-]`)** | 바이트코드 점프 타깃(PC) 오프셋 불일치 및 VM 복잡성으로 보류 |
+| **VPERF-1** | 스토리지 | In-Memory OCC 커밋 시 `runtime.ReadMemStats` 전역 STW 제거 | **대기 (`[ ]`)** | 원자적 힙 메모리 캐시/샘플링으로 쓰기 트랜잭션 커밋 STW(20~50µs) 완전 제거 |
+| **VPERF-2** | 코디네이터/WT | Autocommit 쿼리 `ClientSession.Session` 재사용으로 WT 커서 풀 보존 | **대기 (`[ ]`)** | 매 쿼리 `NewSession()`/`Close()` 호출 제거로 CGo 세션 생성 및 `WT_CURSOR` 파괴 방지 |
+| **VPERF-3** | 엔진/DML | `IDENTITY` (`AUTO_INCREMENT`) 삽입 시 전체 테이블 스캔($O(N)$) 제거 | **대기 (`[ ]`)** | `execInsert` 시 `tx.Scan` 풀 스캔을 $O(1)$ 원자적 시퀀스 카운터로 교체 |
+| **VPERF-4** | 스토리지 | In-Memory OCC `Update`/`Delete` 역방향 외래키(FK) 참조 사전 캐싱 | **대기 (`[ ]`)** | 매 수정/삭제마다 `engine.mu.RLock()` 및 전체 테이블 순회 오버헤드 100% 생략 |
+| **VPERF-5** | 와이어/TDS | `runQueryWithAttention` 쿼리당 고루틴 및 채널 생성 제거 | **대기 (`[ ]`)** | 리더 고루틴 직접 취소 훅 연동으로 매 쿼리 고루틴 스폰 및 컨텍스트 채널 할당 제거 |
+| **VPERF-6** | 와이어/TDS | `sp_executesql` (ProcID 10) VDBE `BytecodePlanCache` 직결 | **대기 (`[ ]`)** | 문자열 치환(`buildBoundSQL`) 및 SQL 재파싱 우회, 파라미터 바이트코드 즉시 실행 |
+| **VPERF-7** | 와이어/TDS | 협상된 `PacketSize` 동적 적용 및 `writeUTF16LEDirect` 직접 버퍼 기록 | **대기 (`[ ]`)** | 최대 32KB 패킷 활용으로 `Write` 시스콜 8배 절감 및 셀당 UTF-16LE 슬라이스 할당 제거 |
+| **VPERF-8** | VM/캐시 | `PlanCache.GetOrCompile` SHA-256 해싱 제거 및 `RLock` 패스트패스 | **대기 (`[ ]`)** | 원문 문자열 키 및 읽기 락 조회로 멀티코어 바이트코드 플랜 캐시 락 경합 해소 |
+| **VPERF-9** | VM/DML | VDBE 무트리거 테이블 맵 할당 생략 및 `buildRowEvalMap` 루프 호이스팅 | **대기 (`[ ]`)** | 트리거 미보유 테이블 DML 시 `rowMap`/`oldRow`/`newRow` 할당 생략 및 중복 맵 생성 제거 |
+| **VPERF-10** | 엔진/와이어 | `RawRows` 슬라이스 직결 및 스키마 `ColumnTypes` 전달로 맵/타입 재추론 제거 | **대기 (`[ ]`)** | 행당 `map[string]any` 할당 및 TDS `inferColumnInfos` 문자열 휴리스틱 제거 |
+| **VPERF-11** | 스토리지 | In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 | **대기 (`[ ]`)** | 스캔 시 64개 샤드 전체 키 복사 및 `sort.Strings`($O(N \log N)$) 선행 오버헤드 제거 |
+| **VPERF-12** | 스토리지/WT | WiredTiger `Update` 단일 커서 통합 및 Zero-Copy 슬라이스 뷰 디코딩 | **대기 (`[ ]`)** | `updateLocked` 이중 커서 탐색 제거 및 매 행 조회 시 `C.GoBytes` 힙 복사 제거 |
 
 ---
 
