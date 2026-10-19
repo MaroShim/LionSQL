@@ -168,20 +168,24 @@ go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
 
 Upon startup, the console displays the connection endpoints:
 
-```
-------------------------------------------------------------
- LionSQL - High-Concurrency OLTP & Stored Procedure Server
-------------------------------------------------------------
+```text
+--------------------------------------------------------------------------------
+ LionSQL - High-Concurrency OLTP & Stored Procedure Server (v0.90.0)
+--------------------------------------------------------------------------------
+ [Configuration]  Zero-Config (Built-in Defaults)
  [Web Dashboard]  http://127.0.0.1:8090/_/
  [HTTP API]       http://127.0.0.1:8090/api/health
+ [CDC Stream]     http://127.0.0.1:8090/api/cdc/stream (NDJSON / SSE)
  [Superuser Auth] admin@lionsql.local (JWT Auth: true)
- [Postgres Wire]  psql -h 127.0.0.1 -p 5433 -d postgres (Beekeeper / DBeaver / Navicat / psql)
- [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 -d master (Beekeeper / DBeaver / Navicat / SSMS / Azure Data Studio)
+ [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio
+ [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (PostgreSQL v3 protocol, psql / pgx)
+ [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (TDS 7.x/8.0 protocol, sqlcmd / SSMS)
  [Data Directory] data
  [Storage Engine] wiredtiger
  [Session Pooler] Max Workers: 32, Max Idle Sessions: 64 (No PgBouncer required)
- [Memory Governor] max_memory: Auto (70% of RAM), work_mem: 64MB (Spill-to-disk enabled)
-------------------------------------------------------------
+ [Memory Governor] max_memory: 2867MB (Go runtime GC soft limit), work_mem: 64MB (External Merge Sort & HashJoin guard)
+ [Replication]    Role: PRIMARY, Node:  (HistoryCap: 10000)
+--------------------------------------------------------------------------------
 ```
 
 ### 3. Accessing the Web Studio
