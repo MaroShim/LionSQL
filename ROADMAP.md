@@ -63,8 +63,8 @@ To tag the official **LionSQL 1.0 (2026 Release) / v1.0.0 LTS** release, the dat
    ▼              ▼              ▼              ▼              ▼
 [ Gate 1 ]     [ Gate 2 ]     [ Gate 3 ]     [ Gate 4 ]     [ Gate 5 ]
 Multi-Wire     ACID Durability High           Enterprise     Operational
-Driver Cert    & Zero-Race    Availability   Audit Log      Tooling & CLI
-(100% PASS)    (20k+ TPS)     (Always On)    (PCI-DSS/SOC2) (Hot Backup)
+Driver Cert    & Zero-Race    Availability   Security/Auth  Tooling & CLI
+(100% PASS)    (20k+ TPS)     (Always On)    (TDE & RBAC)   (Hot Backup)
 ```
 
 1. **Multi-Protocol & Driver Conformance (100% PASS)**:
@@ -75,8 +75,9 @@ Driver Cert    & Zero-Race    Availability   Audit Log      Tooling & CLI
 3. **High Availability & Lossless CDC**:
    - Always On automatic failover with highest-LSN promotion and split-brain fencing.
    - Decoupled real-time CDC streaming (`GET /api/cdc/stream`) with lossless transactional outbox forwarding.
-4. **Enterprise Security & Immutable Audit Logging (Current Sprint Focus)**:
-   - Cryptographic SHA-256 hash-chained immutable audit log satisfying PCI-DSS v4.0 Req 10 and SOC 2 Type II compliance ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md)).
+4. **Enterprise Security & Object Governance (100% PASS)**:
+   - TDE Transparent Data Encryption, SQL object-level RBAC (`GRANT`/`REVOKE`/`DENY`), HTTP JWT/API-Key RBAC, and general/slow query logging.
+   - *Note*: Cryptographic SHA-256 hash-chained audit logging (`pkg/audit`) is designated as a Post-1.0 (`v1.1.0`) compliance milestone ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md)).
 5. **Autonomous Operational Tooling**:
    - In-tree declarative schema migration CLI (`lionsql migrate new/up/down/status`).
    - Online non-blocking snapshot hot backup/restore (`POST /api/backup`).
@@ -110,10 +111,11 @@ Driver Cert    & Zero-Race    Availability   Audit Log      Tooling & CLI
   Net 291 lines of redundant socket handshake and setup boilerplate eliminated while preserving 100% test coverage.
 
 ### 3.2. Active Deliverables (Target: Official 1.0 Release Candidate)
-* **Enterprise Cryptographic Immutable Audit Log (`pkg/audit`, `pkg/api`)**:
-  - **Specification**: Defined in master compliance document [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md).
-  - **Architecture**: SHA-256 hash chaining ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$), lock-free MPSC ring buffer, isolated background disk flusher, structured JSON records, and offline cryptographic verification CLI (`lionsql audit verify`).
-  - **Compliance Scope**: PCI-DSS v4.0 Req 10, SOC 2 Type II, HIPAA §164.312(b).
+* **Official 1.0 Release Candidate Sign-off & Polish (`pkg/api`, `pkg/engine`, `pkg/wire`)**:
+  - **Brand Uniformity**: Complete brand standardization to `LionSQL` across webhook headers (`X-LionSQL-*`), JavaScript SDK (`/sdk/lionsql.js`), and system metadata functions.
+  - **Injection & Lifecycle Hardening**: Session variable (`@var`) quote escaping and guaranteed table variable/temporary table cleanup upon session termination.
+  - **Production Security Guards**: Prevent daemon startup on public interfaces (`0.0.0.0`) with default credentials.
+  - **Zero-Race Verification**: 100% pass across all 25 packages under `go test -race ./...`.
 
 ---
 
@@ -138,11 +140,11 @@ The following capabilities represent long-term architectural expansions evaluate
 ```
                   [ Post-1.0 Architectural Evolution ]
                                    │
-         ┌─────────────────────────┼─────────────────────────┐
-         ▼                         ▼                         ▼
-[ v1.1.0: Pure-Go Disk ]   [ v1.1.0: Wasm UDF ]      [ v1.2.0: Parallel OLAP ]
-Pebble / bbolt storage     wazero runtime sandbox    ParallelSeqScan workers
-CGO_ENABLED=0 distribution Safe third-party plugins  Multi-core analytical scans
+         ┌─────────────────────────┼─────────────────────────┬─────────────────────────┐
+         ▼                         ▼                         ▼                         ▼
+[ v1.1.0: Pure-Go Disk ]   [ v1.1.0: Wasm UDF ]      [ v1.1.0: Audit Log ]     [ v1.2.0: Parallel OLAP ]
+Pebble / bbolt storage     wazero runtime sandbox    SHA-256 hash-chained log  ParallelSeqScan workers
+CGO_ENABLED=0 distribution Safe third-party plugins  PCI-DSS v4.0 / SOC2       Multi-core analytical scans
 ```
 
 ### 5.1. Pure-Go Persistent Storage Engine Backend (Pebble / bbolt) (`v1.1.0`)
@@ -153,7 +155,11 @@ CGO_ENABLED=0 distribution Safe third-party plugins  Multi-core analytical scans
 - **Objective**: Embed the pure-Go `wazero` Wasm runtime to execute dynamically loaded WebAssembly scalar functions (`CREATE FUNCTION ... AS WASM`) in isolated memory sandboxes.
 - **Benefit**: Secure, crash-proof execution of untrusted third-party analytical functions.
 
-### 5.3. Multi-Core Parallel Analytical Query Execution (`v1.2.0`)
+### 5.3. Enterprise Cryptographic Immutable Audit Log (`pkg/audit`) (`v1.1.0`)
+- **Objective**: Implement SHA-256 hash-chained tamper-evident audit logging ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$) with lock-free MPSC ring buffers and offline verification CLI (`lionsql audit verify`).
+- **Compliance Scope**: PCI-DSS v4.0 Req 10, SOC 2 Type II, HIPAA §164.312(b) ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md)).
+
+### 5.4. Multi-Core Parallel Analytical Query Execution (`v1.2.0`)
 - **Objective**: Multi-threaded Volcano execution (`ParallelSeqScan`) partitioning large table scans across worker pools.
 - **Benefit**: Accelerated analytical query execution on multi-core servers without impacting concurrent OLTP transactions.
 
@@ -183,9 +189,10 @@ CGO_ENABLED=0 distribution Safe third-party plugins  Multi-core analytical scans
 | **Phase 6** | Selinger DP Large Join Reordering ($N > 4$) | Query Planner | `v1.0.0 LTS` | **Completed** | [`doc/INTERNALS_CBO_VOLCANO.md`](doc/INTERNALS_CBO_VOLCANO.md) |
 | **Phase 6** | Zero-Allocation Memory & Buffer Pooling (P-1 ~ P-14) | Performance | `v1.0.0 LTS` | **Completed** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **Phase 6** | Enterprise Driver Certification (JDBC, ODBC, Python) | Client Ecosystem | `v1.0.0 LTS` | **Completed** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
-| **Phase 6** | **Enterprise Cryptographic Immutable Audit Log** | **Security & Audit** | **`v1.0.0 LTS`** | **Active Focus** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
+| **Phase 6** | Enterprise Security & Object Governance (TDE, RBAC) | Security & Auth | `v1.0.0 LTS` | **Completed** | [`doc/SECURITY.md`](doc/SECURITY.md) |
+| **Post-1.0** | Enterprise Cryptographic Immutable Audit Log | Security & Audit | `v1.1.0` | **Postponed** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **Post-1.0** | Pure-Go Persistent Storage Engine (Pebble / bbolt) | Storage Engine | `v1.1.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#51-pure-go-persistent-storage-engine-backend-pebble--bbolt-v110) |
 | **Post-1.0** | WebAssembly Runtime Sandbox UDF (`wazero`) | Extensibility | `v1.1.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#52-webassembly-runtime-sandbox-udf-wazero-v110) |
-| **Post-1.0** | Multi-Core Parallel Analytical Query Execution | Query Execution | `v1.2.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#53-multi-core-parallel-analytical-query-execution-v120) |
+| **Post-1.0** | Multi-Core Parallel Analytical Query Execution | Query Execution | `v1.2.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#54-multi-core-parallel-analytical-query-execution-v120) |
 | **Spec-Out** | In-Kernel OAuth2 Social Web Login | Auth & BaaS | - | **Spec-Out** | [`doc/ENTERPRISE_AUTHENTICATION_SPI.md`](doc/ENTERPRISE_AUTHENTICATION_SPI.md) |
 | **Spec-Out** | In-Kernel S3 Blob File Storage & Image Resizing | BaaS Storage | - | **Spec-Out** | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md) |
