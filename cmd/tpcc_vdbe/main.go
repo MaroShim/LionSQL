@@ -84,7 +84,7 @@ func main() {
 	}
 
 	fmt.Println("================================================================================")
-	fmt.Println("  SQLion TPC-C Benchmark Suite (Native T-SQL VDBE Bytecode Engine)")
+	fmt.Println("  LionSQL TPC-C Benchmark Suite (Native T-SQL VDBE Bytecode Engine)")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Execution]      Precompiled T-SQL VDBE Bytecode (*proc.Program -> PlanCache)\n")
 	fmt.Printf(" [Storage Engine] %s (WAL fsync: %s, Dir: %s)\n", *engineType, fsyncMode, *dataDir)

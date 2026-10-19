@@ -139,4 +139,4 @@ LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집�
    - 예: `sqlexec_dml.go`에서 SELECT/PIVOT/EXPLAIN/EVAL을 분리하고 순수 DML만 남김.
 6. **문서 명명 및 디렉터리 배치 규약 (Documentation Naming & Directory Conventions)**:
    - 신규 기능 구현, 아키텍처 통합, 리팩토링을 위한 작업 계획/설계 제안 문서는 개발자/AI 핸드오버용 컨텍스트로 분류하여 **반드시 `notes/*_PLAN.md`**에 배치합니다 (예: `notes/UNIFIED_CLI_PLAN.md`, `notes/IMMUTABLE_AUDIT_LOG_PLAN.md`, `notes/S3_PRESIGNED_STORAGE_PLAN.md`, `notes/COLLATION_AND_LOCALE_PLAN.md`, `notes/DOCUMENTATION_CLEANUP_PLAN.md`).
-   - 공식 기술 매뉴얼, 아키텍처 명세서, 가이드 및 호환성 검증 결과 보고서는 **`doc/`** 아래에 배치하며, 검증 문서는 **`doc/*_REPORT.md`** 형식을 유지합니다 (예: `doc/TDS_COMPATIBILITY_REPORT.md`, `doc/PGWIRE_COMPATIBILITY_REPORT.md`, `doc/TEST_VERIFICATION_REPORT.md`).
+   - 공식 기술 매뉴얼, 아키텍처 명세서, 가이드 및 호환성 검증 결과 보고서는 **`doc/`** 아래에 배치하며, 검증 문서는 **`doc/*_REPORT.md`** (한글 문서는 `*.ko.md`) 형식을 유지합니다 (예: `doc/TDS_COMPATIBILITY_REPORT.md`, `doc/PGWIRE_COMPATIBILITY_REPORT.md`, `doc/TEST_VERIFICATION_REPORT.ko.md`).

@@ -26,9 +26,9 @@ func main() {
 	flag.Parse()
 
 	fmt.Println("================================================================================")
-	fmt.Println("  SQLion High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)")
+	fmt.Println("  LionSQL High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)")
 	fmt.Println("================================================================================")
-	fmt.Printf(" [Target]         Stored Procedure (T-SQL -> Goja Bytecode Plan Cache -> ACID Tx)\n")
+	fmt.Printf(" [Target]         Stored Procedure (T-SQL -> Native VDBE Bytecode -> ACID Tx)\n")
 	fmt.Printf(" [Storage Engine] %s (Dir: %s)\n", *engineType, *dataDir)
 	fmt.Printf(" [Accounts]       %d accounts (Initial balance: 1,000,000 each)\n", *numAccounts)
 	fmt.Printf(" [Concurrency]    %d concurrent workers\n", *numWorkers)

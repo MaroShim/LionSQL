@@ -145,7 +145,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ---
 
 ### 2.5. Operations, Security & Benchmarks
-* [`TEST_VERIFICATION_REPORT.md`](file:///Users/maro/Projects/LionSQL/doc/TEST_VERIFICATION_REPORT.md)
+* [`TEST_VERIFICATION_REPORT.ko.md`](file:///Users/maro/Projects/LionSQL/doc/TEST_VERIFICATION_REPORT.ko.md)
   * LionSQL 코어 엔진 13대 핵심 기능 영역(CBO 힌트/커버링 인덱스, JSON 표현식 B-Tree 인덱스, SQL RBAC, 스키마 마이그레이션 CLI, 롤링 파티셔닝 등) 전수 실시간 검증 및 기술 딥다이브 종합 보고서 (100% PASS).
 * [`OPERATIONS.md`](file:///Users/maro/Projects/LionSQL/doc/OPERATIONS.md)
   * Production deployment guidelines, CLI flags, configuration parameters, and graceful shutdown.
