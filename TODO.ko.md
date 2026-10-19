@@ -24,7 +24,7 @@
 | **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
 | **`AUTH-1`** | **인증/토큰교환 (Auth)** | `AUTH-1` | 클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) 트랙 |
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
-| **`UI-1` ~ `UI-4`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-4` | 모던 Toast 알림, 반응형 햄버거 메뉴, 브랜드 정돈, 실시간 검색 필터 |
+| **`UI-1` ~ `UI-6`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-6` | 모던 Toast 알림, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 안전 가드 |
 
 ---
 
@@ -67,6 +67,8 @@
 | **P1** | **UI/UX** | **Web Studio 네이티브 `alert()` ➔ 모던 Toast 알림 전면 교체 (`UI-1`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/UX** | **Web Studio 반응형 레이아웃 및 사이드바 햄버거 토글 (`UI-2`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/브랜드** | **Web Studio 브랜드 네이밍(`SQLion` ➔ `LionSQL`) 정돈 및 검색 필터 (`UI-3`, `UI-4`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/UX** | **Web Studio 비밀번호 표시/숨기기(Eye Toggle) 버튼 지원 (`UI-5`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/안전성** | **Drop Table 실수 방지용 테이블명 일치 확인 모달 가드레일 (`UI-6`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 
@@ -279,6 +281,23 @@
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
 | **PREP-1** | 와이어/안정성 | 세션별 Prepared Statement Bounded LRU 캐시 | **완료 (`[x]`)** | PGWire(`PreparedStatementCache`) 및 TDS(`TdsPreparedStatementCache`)에 세션당 최대 256개 상한 Bounded LRU 캐시 메커니즘을 적용하여, DBeaver/GORM/HikariCP 등 장기 유지 커넥션에서의 메모리 누수 및 OOM 원천 차단 (Golden Rule 23 준수, 25개 패키지 레이스 검증 100% 통과) (`pkg/wire/server.go`, `pkg/wire/tds/server.go`) |
+
+---
+
+### 3.11. HTTP API 하드닝 및 Web Studio 고도화 트랙 (`HTTP-1` ~ `HTTP-4`, `UI-1` ~ `UI-6`)
+
+| 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
+| :---: | :--- | :--- | :---: | :--- |
+| **HTTP-1** | 와이어/보안 | 글로벌 CORS 미들웨어 & OPTIONS Preflight 지원 | **완료 (`[x]`)** | 웹 프론트엔드 및 서드파티 통합용 글로벌 CORS 미들웨어 완비 (`Access-Control-Allow-Origin`, `Methods`, `Headers`), OPTIONS 요청 시 204 No Content 즉시 응답 (`pkg/api/middleware.go`) |
+| **HTTP-2** | 와이어/성능 | HTTP Gzip 응답 압축 핸들러 | **완료 (`[x]`)** | `Accept-Encoding: gzip` 지원으로 대용량 JSON 쿼리 결과 및 스키마 메타데이터 전송량 70~80% 절감 (`pkg/api/middleware.go`) |
+| **HTTP-3** | 보안/리소스 | 요청 본문 크기 상한 가드 (Max Body Limit 32MB) | **완료 (`[x]`)** | 악의적인 초대용량 페이로드 전송으로 인한 OOM 사살 방지를 위해 `http.MaxBytesReader` 32MB 상한 가드 적용 (Golden Rule 23 준수, `pkg/api/middleware.go`) |
+| **HTTP-4** | 와이어/보안 | 보안 강화 HTTP 응답 헤더 일괄 탑재 | **완료 (`[x]`)** | `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` 표준 보안 헤더 전역 주입 (`pkg/api/middleware.go`) |
+| **UI-1** | UI/UX | 네이티브 `alert()` ➔ 모던 Toast 알림 전면 전환 | **완료 (`[x]`)** | 동기식 브라우저 UI 블로킹을 유발하는 구형 `alert()` 13개를 세련된 비동기 플로팅 Toast 알림(`showToast`)으로 전면 전환 (`pkg/ui/dashboard.html`) |
+| **UI-2** | UI/UX | 모바일/태블릿 반응형 레이아웃 및 햄버거 메뉴 | **완료 (`[x]`)** | 모바일/태블릿(900px 이하) 뷰포트에서 사이드바 자동 축소 및 햄버거 토글 메뉴 지원 (`pkg/ui/dashboard.html`) |
+| **UI-3** | UI/브랜드 | Web Studio 브랜드 네이밍(`LionSQL`) 정돈 | **완료 (`[x]`)** | 웹 콘솔 내 잔재 브랜드 표기를 `LionSQL`로 정돈 및 기본 관리자 계정 `admin@lionsql.local` 일원화 (`pkg/ui/dashboard.html`) |
+| **UI-4** | UI/생산성 | 사이드바 실시간 테이블/프로시저 빠른 검색 필터 | **완료 (`[x]`)** | 수십~수백 개의 테이블 및 저장 프로시저를 즉시 타이핑하여 인라인 필터링하는 빠른 검색창(`onSidebarQuickSearch`) 완비 (`pkg/ui/dashboard.html`) |
+| **UI-5** | UI/UX | 패스워드 표시/숨기기(Eye Toggle) 버튼 지원 | **완료 (`[x]`)** | 로그인 모달 및 SMTP 설정의 패스워드 입력창에 마이크로 인터랙션 Eye 토글 버튼을 추가하여 입력 편의성 및 오타 방지 지원 (`pkg/ui/dashboard.html`) |
+| **UI-6** | UI/안전성 | Drop Table 실수 방지용 테이블명 일치 확인 모달 가드레일 | **완료 (`[x]`)** | 단순 브라우저 confirm 대신 대상 테이블명을 직접 타이핑해야만 삭제 버튼이 활성화되는 안전 가드레일 모달(`#drop-table-modal`) 구현 (GitHub/Supabase 스타일 오타/실수 원천 방지) (`pkg/ui/dashboard.html`) |
 
 ---
 

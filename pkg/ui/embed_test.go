@@ -100,3 +100,30 @@ func TestReplicationMonitoringElements(t *testing.T) {
 	}
 }
 
+func TestDropTableConfirmationModal(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`id="drop-table-modal"`,
+		`id="drop-table-target-name"`,
+		`id="drop-table-prompt-name"`,
+		`id="drop-table-confirm-input"`,
+		`id="btn-confirm-drop-table"`,
+		`closeDropTableModal()`,
+		`onDropTableInputChange(`,
+		`executeDropTable()`,
+		`pendingDropTableName`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q", snippet)
+		}
+	}
+}
+
+
