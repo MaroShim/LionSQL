@@ -410,6 +410,15 @@ func (d *Doctor) checkSecurityAndCryptography() {
 	} else {
 		d.addResult(cat, "Authentication Service", "PBKDF2/SHA256 password hashing & token validation ready", "OK", nil)
 	}
+
+	// 6.3 Production Security Guard (PROD-SEC-1)
+	if err := d.cfg.ValidateSecurityGuard(); err != nil {
+		d.addResult(cat, "Production Security Guard", fmt.Sprintf("Default credentials on non-loopback interface: %v", err), "FAIL", err)
+	} else if d.cfg.Auth.AdminPass == "1234567890" {
+		d.addResult(cat, "Production Security Guard", "Default administrator credentials permitted on localhost loopback only", "OK", nil)
+	} else {
+		d.addResult(cat, "Production Security Guard", "Custom administrator credentials configured", "OK", nil)
+	}
 }
 
 // PrintReport formats and prints the diagnostic report to standard output.

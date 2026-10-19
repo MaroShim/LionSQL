@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -256,12 +257,82 @@ func ApplyEnvOverrides(cfg *Config) {
 	if cfg == nil {
 		return
 	}
-	if v := os.Getenv("SQLION_WORK_MEM"); v != "" {
+	if v := os.Getenv("LIONSQL_WORK_MEM"); v != "" {
+		cfg.Resources.WorkMem = v
+	} else if v := os.Getenv("SQLION_WORK_MEM"); v != "" {
 		cfg.Resources.WorkMem = v
 	}
-	if v := os.Getenv("SQLION_MAX_MEMORY"); v != "" {
+	if v := os.Getenv("LIONSQL_MAX_MEMORY"); v != "" {
+		cfg.Resources.MaxMemory = v
+	} else if v := os.Getenv("SQLION_MAX_MEMORY"); v != "" {
 		cfg.Resources.MaxMemory = v
 	}
+	if v := os.Getenv("LIONSQL_ADMIN_PASS"); v != "" {
+		cfg.Auth.AdminPass = v
+	} else if v := os.Getenv("SQLION_ADMIN_PASS"); v != "" {
+		cfg.Auth.AdminPass = v
+	}
+	if v := os.Getenv("LIONSQL_ADMIN_EMAIL"); v != "" {
+		cfg.Auth.AdminEmail = v
+	} else if v := os.Getenv("SQLION_ADMIN_EMAIL"); v != "" {
+		cfg.Auth.AdminEmail = v
+	}
+}
+
+// IsLoopbackHost checks whether the specified address or host is bound strictly to a loopback interface.
+// If addr is empty, it returns true (indicating a disabled or inactive service).
+func IsLoopbackHost(addr string) bool {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return true
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = addr
+	}
+	host = strings.TrimSpace(host)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		return false
+	}
+	if strings.EqualFold(host, "localhost") || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	return false
+}
+
+// NonLoopbackServiceAddresses returns a list of active network services (e.g. "HTTP (0.0.0.0:8090)")
+// that are bound to non-loopback (public or external) interfaces.
+func (c *Config) NonLoopbackServiceAddresses() []string {
+	var addrs []string
+	if c.Network.IsHTTPEnabled() && !IsLoopbackHost(c.Network.HTTPAddr) {
+		addrs = append(addrs, fmt.Sprintf("HTTP (%s)", c.Network.HTTPAddr))
+	}
+	if c.Network.IsPGEnabled() && !IsLoopbackHost(c.Network.PGAddr) {
+		addrs = append(addrs, fmt.Sprintf("PostgreSQL Wire (%s)", c.Network.PGAddr))
+	}
+	if c.Network.IsTDSEnabled() && !IsLoopbackHost(c.Network.TDSAddr) {
+		addrs = append(addrs, fmt.Sprintf("TDS/MSSQL Wire (%s)", c.Network.TDSAddr))
+	}
+	return addrs
+}
+
+// ValidateSecurityGuard enforces production safety rules (PROD-SEC-1).
+// The default superuser password ("1234567890") is strictly permitted ONLY
+// when all active network listeners are bound exclusively to loopback addresses (127.0.0.1, localhost).
+// If any service binds to an external interface (e.g. 0.0.0.0) with default password, it returns an error.
+func (c *Config) ValidateSecurityGuard() error {
+	if c.Auth.AdminPass != "1234567890" && strings.TrimSpace(c.Auth.AdminPass) != "" {
+		return nil
+	}
+	externalServices := c.NonLoopbackServiceAddresses()
+	if len(externalServices) > 0 {
+		return fmt.Errorf("insecure default administrator password ('1234567890') is prohibited when binding to external/non-loopback interfaces: %s", strings.Join(externalServices, ", "))
+	}
+	return nil
 }
 
 // WriteToFileAtomic writes configuration to disk via a temporary swap file and atomic rename.

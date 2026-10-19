@@ -290,12 +290,61 @@ func runServer(args []string) error {
 		return nil
 	}
 
+	// Inquiries and shutdown commands (-status, -stop)
+	if !*isChildWorker {
+		if *statusFlag || *stopFlag {
+			if handleDaemonCommands(
+				false,
+				*stopFlag,
+				*statusFlag,
+				false,
+				cfg.Server.DataDir,
+				resolvedPidFile,
+				resolvedLogFile,
+				cfg.Network.HTTPAddr,
+				cfg.Network.PGAddr,
+				cfg.Network.TDSAddr,
+				cfg.Server.Engine,
+			) {
+				return nil
+			}
+		}
+	}
+
+	// 5. Production Security Guard (PROD-SEC-1):
+	// Default superuser password ("1234567890") is strictly permitted ONLY on loopback (127.0.0.1, localhost).
+	// If bound to 0.0.0.0 or any external interface with the default password, abort startup immediately.
+	if *backupTarget == "" && *restoreSource == "" && *archiveWalFile == "" {
+		if err := cfg.ValidateSecurityGuard(); err != nil {
+			fmt.Println()
+			fmt.Println("================================================================================")
+			fmt.Println(" [LionSQL Production Security Guard] Server Startup Aborted")
+			fmt.Println("================================================================================")
+			fmt.Printf(" Error: %v\n\n", err)
+			fmt.Println(" LionSQL permits zero-config default credentials only on local loopback (127.0.0.1).")
+			fmt.Println(" When exposing services to external/public networks, you must provide a secure password.")
+			fmt.Println()
+			fmt.Println(" How to fix:")
+			fmt.Println("   1. Specify a custom password via CLI flag:")
+			fmt.Println("      lionsql serve -admin-pass=\"<secure-password>\" ...")
+			fmt.Println("   2. Or set via environment variable:")
+			fmt.Println("      export LIONSQL_ADMIN_PASS=\"<secure-password>\"")
+			fmt.Println("   3. Or set in lionsql.json:")
+			fmt.Println("      \"auth\": { \"admin_pass\": \"<secure-password>\" }")
+			fmt.Println("   4. Or bind strictly to 127.0.0.1 if external access is not required:")
+			fmt.Println("      lionsql serve -http=127.0.0.1:8090 -pg=127.0.0.1:5433 -tds=127.0.0.1:1433")
+			fmt.Println("================================================================================")
+			fmt.Println()
+			os.Exit(1)
+		}
+	}
+
 	// Handle daemon commands if not running as internal worker
 	if !*isChildWorker {
 		if handleDaemonCommands(
 			daemon,
-			*stopFlag,
-			*statusFlag,
+			false,
+			false,
 			*restartFlag,
 			cfg.Server.DataDir,
 			resolvedPidFile,
@@ -787,8 +836,9 @@ func runServer(args []string) error {
 		}
 		if cfg.Auth.AdminPass == "1234567890" {
 			fmt.Println("--------------------------------------------------------------------------------")
-			fmt.Println(" [SECURITY WARNING] Default administrator credentials in use (admin@lionsql.local / 1234567890).")
-			fmt.Println("                    Please change your password immediately before production deployment!")
+			fmt.Println(" [SECURITY NOTICE] Default administrator credentials active on localhost (127.0.0.1).")
+			fmt.Println("                   (admin@lionsql.local / 1234567890)")
+			fmt.Println("                   Set -admin-pass or LIONSQL_ADMIN_PASS before exposing to external networks.")
 		}
 		fmt.Println("--------------------------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")

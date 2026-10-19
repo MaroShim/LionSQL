@@ -250,4 +250,107 @@ func TestTLSAndLogging_IsEnabled(t *testing.T) {
 	}
 }
 
+func TestIsLoopbackHost(t *testing.T) {
+	testCases := []struct {
+		addr     string
+		expected bool
+	}{
+		{"127.0.0.1:8090", true},
+		{"127.0.0.1", true},
+		{"localhost:8090", true},
+		{"localhost", true},
+		{"127.0.0.2:5433", true},
+		{"[::1]:1433", true},
+		{"::1", true},
+		{"", true}, // disabled service
+		{"   ", true},
+		{"0.0.0.0:8090", false},
+		{"0.0.0.0", false},
+		{":8090", false},
+		{"[::]:8090", false},
+		{"::", false},
+		{"192.168.1.100:8090", false},
+		{"10.0.0.1:5433", false},
+		{"example.com:1433", false},
+	}
+
+	for _, tc := range testCases {
+		res := config.IsLoopbackHost(tc.addr)
+		if res != tc.expected {
+			t.Errorf("IsLoopbackHost(%q) = %v; expected %v", tc.addr, res, tc.expected)
+		}
+	}
+}
+
+func TestValidateSecurityGuard(t *testing.T) {
+	// 1. Default config (127.0.0.1 loopback) with default password (1234567890) -> Allowed
+	cfg := config.DefaultConfig()
+	if err := cfg.ValidateSecurityGuard(); err != nil {
+		t.Errorf("expected default loopback config to be allowed, got error: %v", err)
+	}
+
+	// 2. HTTP listening on 0.0.0.0 with default password -> Prohibited
+	cfgHTTP0000 := config.DefaultConfig()
+	cfgHTTP0000.Network.HTTPAddr = "0.0.0.0:8090"
+	if err := cfgHTTP0000.ValidateSecurityGuard(); err == nil {
+		t.Errorf("expected error when HTTP is bound to 0.0.0.0 with default password, got nil")
+	}
+
+	// 3. PG listening on :5433 with default password -> Prohibited
+	cfgPGWildcard := config.DefaultConfig()
+	cfgPGWildcard.Network.PGAddr = ":5433"
+	if err := cfgPGWildcard.ValidateSecurityGuard(); err == nil {
+		t.Errorf("expected error when PG is bound to :5433 with default password, got nil")
+	}
+
+	// 4. TDS listening on 192.168.1.5:1433 with default password -> Prohibited
+	cfgTDSExternal := config.DefaultConfig()
+	cfgTDSExternal.Network.TDSAddr = "192.168.1.5:1433"
+	if err := cfgTDSExternal.ValidateSecurityGuard(); err == nil {
+		t.Errorf("expected error when TDS is bound to external IP with default password, got nil")
+	}
+
+	// 5. External interface with custom password -> Allowed
+	cfgCustomPass := config.DefaultConfig()
+	cfgCustomPass.Network.HTTPAddr = "0.0.0.0:8090"
+	cfgCustomPass.Network.PGAddr = "0.0.0.0:5433"
+	cfgCustomPass.Network.TDSAddr = "0.0.0.0:1433"
+	cfgCustomPass.Auth.AdminPass = "MySecureEnterpriseSecret123!"
+	if err := cfgCustomPass.ValidateSecurityGuard(); err != nil {
+		t.Errorf("expected external binding with custom password to be allowed, got error: %v", err)
+	}
+
+	// 6. External interface with disabled HTTP/PG/TDS -> Allowed
+	cfgDisabled := config.DefaultConfig()
+	cfgDisabled.Network.HTTPAddr = ""
+	cfgDisabled.Network.PGAddr = ""
+	cfgDisabled.Network.TDSAddr = ""
+	if err := cfgDisabled.ValidateSecurityGuard(); err != nil {
+		t.Errorf("expected disabled network services to be allowed, got error: %v", err)
+	}
+}
+
+func TestApplyEnvOverrides_AdminCredentials(t *testing.T) {
+	// LIONSQL_ADMIN_PASS
+	os.Setenv("LIONSQL_ADMIN_PASS", "EnvPass999")
+	defer os.Unsetenv("LIONSQL_ADMIN_PASS")
+
+	cfg := config.DefaultConfig()
+	config.ApplyEnvOverrides(cfg)
+	if cfg.Auth.AdminPass != "EnvPass999" {
+		t.Errorf("expected AdminPass 'EnvPass999', got %q", cfg.Auth.AdminPass)
+	}
+
+	// SQLION_ADMIN_PASS fallback
+	os.Unsetenv("LIONSQL_ADMIN_PASS")
+	os.Setenv("SQLION_ADMIN_PASS", "LegacyEnvPass888")
+	defer os.Unsetenv("SQLION_ADMIN_PASS")
+
+	cfg2 := config.DefaultConfig()
+	config.ApplyEnvOverrides(cfg2)
+	if cfg2.Auth.AdminPass != "LegacyEnvPass888" {
+		t.Errorf("expected AdminPass 'LegacyEnvPass888', got %q", cfg2.Auth.AdminPass)
+	}
+}
+
 

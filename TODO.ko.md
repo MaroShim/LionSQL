@@ -89,7 +89,7 @@
 | **P1** | **스토리지/생명주기** | **세션 종료 및 연결 리셋 시 테이블 변수(`TableVars`) 및 임시 테이블 누수 완전 해제 (`SESS-CLEAN-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P1** | **브랜드/정합성** | **웹훅 헤더(`X-LionSQL-*`), SDK 엔드포인트/클래스명, 시스템 변수 잔여 `SQLion` 완전 정돈 (`BRAND-UNIFY-1`)** | `pkg/api`, `pkg/proc`, `pkg/engine`, `pkg/wire` | **대기 (Queue)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
-| **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **대기 (Queue)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
@@ -196,8 +196,13 @@
   4. **[D] 1.0 릴리즈 게이트 4 기준 일치화 및 문서 권한 정규화 (`REL-ALIGN-1`, 완료 `[x]`)**:
      - `ROADMAP.md` Gate 4를 엔터프라이즈 보안 및 거버넌스(TDE, RBAC, 감사 추적)로 1.0 충족 확정하고 암호학적 불변 감사 로그(`pkg/audit`)를 Post-1.0(`v1.1.0`)으로 연기 일원화.
      - `doc/README.md`, `doc/REFERENCE_MANUAL.ko.md` 파일 퍼미션 `0644` 정규화 완료 (Golden Rule 5).
-  5. **[E] 외부 인터페이스 바인딩 시 프로덕션 보안 가드레일 (`PROD-SEC-1`, 대기)**:
-     - 외부 노출 인터페이스(`0.0.0.0`) 바인딩 시 기본 비밀번호(`1234567890`) 기동 차단 또는 난수 생성 가드레일.
+  5. **[E] 외부 인터페이스 바인딩 시 프로덕션 보안 가드레일 (`PROD-SEC-1`, 완료 `[x]`)**:
+     - `pkg/config`: `IsLoopbackHost`, `NonLoopbackServiceAddresses`, `ValidateSecurityGuard` 구현.
+     - `127.0.0.1` / `localhost` 바인딩일 때만 기본 비밀번호(`1234567890`) 허용 (Zero-config 편의성 유지).
+     - `0.0.0.0`, `:port`, 공용 IP 등 외부 노출 인터페이스 바인딩 시 기본 비밀번호 기동 즉각 차단 및 조치 가이드라인 출력 (`os.Exit(1)`).
+     - 환경 변수 `LIONSQL_ADMIN_PASS` 및 `SQLION_ADMIN_PASS` 지원 추가.
+     - `lionsql doctor`에 `Production Security Guard` 진단 항목 신설 (외부 노출 시 FAIL, 로컬호스트 또는 비밀번호 변경 시 OK 판정).
+     - `pkg/config/config_test.go` 단위 테스트 100% 검증 통과.
 
 ---
 
