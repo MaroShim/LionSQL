@@ -40,6 +40,7 @@ const (
 	OpDelete        WALOpType = "DELETE"
 	OpTruncateTable WALOpType = "TRUNCATE_TABLE"
 	OpDropPartition WALOpType = "DROP_PARTITION"
+	OpAlterTable    WALOpType = "ALTER_TABLE"
 )
 
 // WALOp represents a single atomic row or DDL mutation.
@@ -51,6 +52,7 @@ type WALOp struct {
 	Record      storage.Record       `json:"record,omitempty" msgpack:"record,omitempty"`
 	BaseVer     int64                `json:"base_ver,omitempty" msgpack:"base_ver,omitempty"`
 	Schema      *storage.TableSchema `json:"schema,omitempty" msgpack:"schema,omitempty"`
+	Column      *storage.Column      `json:"column,omitempty" msgpack:"column,omitempty"`
 	IndexSchema *storage.IndexSchema `json:"index_schema,omitempty" msgpack:"index_schema,omitempty"`
 	IndexName   string               `json:"index_name,omitempty" msgpack:"index_name,omitempty"`
 }

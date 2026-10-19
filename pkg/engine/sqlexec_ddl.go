@@ -26,6 +26,7 @@ var (
 	reDropView          = regexp.MustCompile(`(?is)^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(.+)$`)
 	reIfExistsView      = regexp.MustCompile(`(?i)^DROP\s+VIEW\s+IF\s+EXISTS`)
 	reDropPartition     = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+([^\s]+)\s+DROP\s+PARTITION\s+['"]?([^'";\s]+)['"]?\s*$`)
+	reAddColumn         = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+([^\s]+)\s+ADD\s+(?:COLUMN\s+)?([^\s]+)\s+([^\s,(]+(?:\s*\([^)]*\))?)(.*)$`)
 	reCreateStats       = regexp.MustCompile(`(?is)^CREATE\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
 	reDropStatsOn       = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
 	reDropStats         = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
@@ -970,6 +971,78 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			Command:    "ALTER TABLE",
 			DurationUS: time.Since(start).Microseconds(),
 			Messages:   []string{fmt.Sprintf("Partition %q dropped from table %q", partitionName, tableName)},
+		}, nil
+	}
+
+	// 2. ALTER TABLE <table> ADD [COLUMN] <col_name> <data_type> ...
+	if m := reAddColumn.FindStringSubmatch(cleaned); len(m) >= 4 {
+		tableName := cleanIdentifier(m[1])
+		colName := cleanIdentifier(m[2])
+		rawType := strings.ToUpper(strings.TrimSpace(m[3]))
+		rest := ""
+		if len(m) > 4 {
+			rest = strings.TrimSpace(m[4])
+		}
+
+		// RBAC Check
+		if err := s.checkTableAccess(cs, tableName, auth.PrivUpdate); err != nil {
+			return nil, err
+		}
+
+		baseType := rawType
+		if idx := strings.Index(baseType, "("); idx != -1 {
+			baseType = strings.TrimSpace(baseType[:idx])
+		}
+		dataType := parseSQLDataType(baseType)
+
+		precision := 0
+		scale := 0
+		if dataType == storage.TypeDecimal {
+			precision = 18
+			scale = 2
+			decRe := regexp.MustCompile(`(?i)\b(?:DECIMAL|NUMERIC)\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\)`)
+			if dm := decRe.FindStringSubmatch(m[3]); len(dm) > 1 {
+				if p, err := strconv.Atoi(dm[1]); err == nil {
+					precision = p
+				}
+				if len(dm) > 2 && dm[2] != "" {
+					if sc, err := strconv.Atoi(dm[2]); err == nil {
+						scale = sc
+					}
+				}
+			}
+		}
+
+		restUpper := strings.ToUpper(rest)
+		isNotNull := strings.Contains(restUpper, "NOT NULL")
+		nullable := !isNotNull
+
+		defaultExpr := ""
+		defRe := regexp.MustCompile(`(?i)\bDEFAULT\s+(\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\'[^']*\'|\d+)`)
+		if dm := defRe.FindStringSubmatch(rest); len(dm) > 1 {
+			defaultExpr = cleanDefaultExpr(dm[1])
+		}
+
+		col := &storage.Column{
+			Name:      colName,
+			Type:      dataType,
+			Nullable:  nullable,
+			Precision: precision,
+			Scale:     scale,
+			Default:   defaultExpr,
+		}
+
+		if err := s.engine.AddColumn(tableName, col); err != nil {
+			return nil, err
+		}
+
+		s.InvalidatePKBypassCache()
+
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Column %q added to table %q", colName, tableName)},
 		}, nil
 	}
 

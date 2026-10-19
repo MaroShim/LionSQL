@@ -16,10 +16,18 @@ type ColumnDTO struct {
 	Nullable   bool   `json:"nullable"`
 }
 
+type ForeignKeyDTO struct {
+	Name          string   `json:"name"`
+	ChildColumns  []string `json:"child_columns"`
+	ParentTable   string   `json:"parent_table"`
+	ParentColumns []string `json:"parent_columns"`
+}
+
 type TableSchemaDTO struct {
-	Name    string      `json:"name"`
-	Columns []ColumnDTO `json:"columns"`
-	DDL     string      `json:"ddl"`
+	Name        string          `json:"name"`
+	Columns     []ColumnDTO     `json:"columns"`
+	ForeignKeys []ForeignKeyDTO `json:"foreign_keys,omitempty"`
+	DDL         string          `json:"ddl"`
 }
 
 func toTableDTO(t *storage.TableSchema) TableSchemaDTO {
@@ -44,11 +52,23 @@ func toTableDTO(t *storage.TableSchema) TableSchemaDTO {
 		}
 		colDefs = append(colDefs, def)
 	}
+
+	var fks []ForeignKeyDTO
+	for _, fk := range t.ForeignKeys {
+		fks = append(fks, ForeignKeyDTO{
+			Name:          fk.Name,
+			ChildColumns:  fk.ChildColumns,
+			ParentTable:   fk.ParentTable,
+			ParentColumns: fk.ParentColumns,
+		})
+	}
+
 	ddl := fmt.Sprintf("CREATE TABLE %s (\n%s\n);", t.Name, strings.Join(colDefs, ",\n"))
 	return TableSchemaDTO{
-		Name:    t.Name,
-		Columns: cols,
-		DDL:     ddl,
+		Name:        t.Name,
+		Columns:     cols,
+		ForeignKeys: fks,
+		DDL:         ddl,
 	}
 }
 

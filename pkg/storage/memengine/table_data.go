@@ -263,5 +263,17 @@ func (td *TableData) removePartitionKey(partID, pk string) {
 	}
 }
 
+func (td *TableData) addColumnValues(val storage.Value) {
+	td.ensureShardsInit()
+	for i := 0; i < numTableShards; i++ {
+		sh := &td.shards[i]
+		sh.mu.Lock()
+		for k, r := range sh.rows {
+			sh.rows[k] = storage.Row{Values: append(r.Values, val)}
+		}
+		sh.mu.Unlock()
+	}
+}
+
 // Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence and WAL (AOF) logging.
 // Options defines Redis-style AOF and RDB persistence configuration.

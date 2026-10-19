@@ -674,6 +674,74 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 	return res, nil
 }
 
+func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	tbl, exists := e.tables[tableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	for _, c := range tbl.Columns {
+		if strings.EqualFold(c.Name, col.Name) {
+			return fmt.Errorf("column %q already exists in table %q", col.Name, tableName)
+		}
+	}
+
+	oldSchema := *tbl
+	tbl.Columns = append(tbl.Columns, *col)
+
+	// Rewrite any existing records with the new column layout
+	var sess *C.WT_SESSION
+	if ret := C.go_wt_open_session(e.conn, &sess); ret == 0 {
+		defer C.go_wt_session_close(sess)
+		uri := C.CString(fmt.Sprintf("table:%s", tableName))
+		defer C.free(unsafe.Pointer(uri))
+
+		var cur *C.WT_CURSOR
+		if C.go_wt_open_cursor(sess, uri, &cur) == 0 {
+			defer C.go_wt_cursor_close(cur)
+			type rowUpdate struct {
+				key  string
+				data []byte
+			}
+			var updates []rowUpdate
+			for C.go_wt_cursor_next(cur) == 0 {
+				var pKey *C.char
+				var pData unsafe.Pointer
+				var sz C.size_t
+				if C.go_wt_cursor_get_key(cur, &pKey) == 0 && C.go_wt_cursor_get_val_raw(cur, &pData, &sz) == 0 && pData != nil {
+					rec, err := decodeRecord(&oldSchema, C.GoBytes(pData, C.int(sz)))
+					if err == nil {
+						rec[col.Name] = storage.NullValue(col.Type)
+						newBytes, err := storage.EncodeTuple(tbl, rec)
+						if err == nil {
+							updates = append(updates, rowUpdate{key: C.GoString(pKey), data: newBytes})
+						}
+					}
+				}
+			}
+			for _, u := range updates {
+				cKey := C.CString(u.key)
+				C.go_wt_cursor_update_raw(cur, cKey, unsafe.Pointer(&u.data[0]), C.size_t(len(u.data)))
+				C.free(unsafe.Pointer(cKey))
+			}
+		}
+	}
+
+	if err := e.saveCatalog(); err != nil {
+		return err
+	}
+
+	e.recordWALLocked([]memengine.WALOp{{
+		Type:   memengine.OpAlterTable,
+		Table:  tableName,
+		Column: col,
+	}})
+	return nil
+}
+
 func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()

@@ -315,6 +315,10 @@
 | **UI-9** | UI/DX | API Preview 모달 LionSQL 공식 SDK (`sqlion.js`) 전용 코드 탭 신설 | **완료 (`[x]`)** | curl, Fetch, Python에 이어 공식 TypeScript/JavaScript SDK 탭(`db.collection(...)`) 추가 완비 (`pkg/ui/dashboard.html`) |
 | **UI-10** | UI/테마 | Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 | **완료 (`[x]`)** | CSS 변수 기반 클린 라이트 모드 지원, 사이드바/모바일 테마 토글 버튼, 로컬 스토리지 테마 영속화 및 `Cache-Control: no-cache` 헤더 완비 (`pkg/ui`, `pkg/api/server.go`) |
 | **UI-11** | UI/가시성 | Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) | **완료 (`[x]`)** | Light 모드 전반의 파스텔톤 저시인성 색상 전면 퇴출. Drop Table Confirmation 모달의 연분홍 텍스트를 딥 버건디(`--alert-danger-text: #991b1b`) 및 볼드 레드(`--alert-danger-strong: #b91c1c`)로 전환(7:1 대비비 확보), ID 컬럼 노란색 텍스트를 선명한 딥 블루(`--pk-val-color: #1d4ed8`)로 개편, Developer API Preview 모달 미선택 탭 버튼의 검은색 텍스트/어두운 배경 겹침 현상을 클린 화이트 배경(`--tab-inactive-bg: #ffffff`) 및 고대비 텍스트(`--tab-inactive-color: #334155`)로 개선, 모든 에러 모달(`create-table-error`, `create-cron-error`, `create-webhook-error` 등)을 `.alert-danger-box`와 `.btn-danger-subtle`로 단일화, 동적 JS 테이블 렌더러의 인라인 하드코딩 스타일을 시맨틱 배지 클래스로 완전 교체 (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`) |
+| **UI-DDL-1** | UI/DDL | 스키마 뷰 비주얼 컬럼 추가 GUI (`+ Add Column` 모달) 및 ALTER TABLE 연동 | **완료 (`[x]`)** | `Schema & DDL` 서브뷰에 `+ Add Column` 모달 연동. 스토리지 엔진 인터페이스(`storage.Engine`)에 `AddColumn` 정의 및 In-Memory OCC / WiredTiger B+Tree 튜플 리라이트 구현, `ALTER TABLE <table> ADD [COLUMN]` SQL 파서/실행기 완비 (`pkg/storage`, `pkg/engine`, `pkg/ui`) |
+| **UI-REALTIME-1** | UI/CDC | 실시간 CDC / SSE 스트림 인스펙터 뷰어 및 라이브 피드 | **완료 (`[x]`)** | 사이드바 `Realtime Live Stream` 전용 뷰 신설. `/api/realtime` SSE와 직결하여 200건 Bounded 링버퍼 기반 실시간 DML 변경 이벤트 카드 스트림, 액션 배지(CREATE, UPDATE, DELETE, DDL), 테이블/액션 필터, 실시간 검색, 스트림 일시정지/재개 및 JSON 복사 지원 (`pkg/ui/dashboard.html`) |
+| **UI-DATA-1** | UI/데이터 | 레코드 테이블 다중 행 선택 대량 작업 (일괄 삭제, CSV/JSON 내보내기) 및 외래키(FK) 릴레이션 팝업 점프 | **완료 (`[x]`)** | 레코드 체크박스 다중 선택 기반 일괄 삭제(`DELETE`) 및 선택 레코드 CSV/JSON 내보내기 완비. 스키마 외래키 메타데이터(`TableSchemaDTO.ForeignKeys`) 및 네이밍 휴리스틱 연동으로 FK 컬럼 링크(`↗`) 클릭 시 부모 레코드 정보 팝업 모달(`#fk-relation-modal`) 표시 및 원클릭 부모 테이블 이동 지원 (`pkg/api`, `pkg/ui`) |
+| **UI-LOGS-1** | UI/관측성 | 실시간 HTTP API 요청 활동 로그 뷰어 (Activity Logs) | **완료 (`[x]`)** | 인입되는 HTTP API 요청(Method, Path, Status, Latency, IP)을 200건 Bounded 링버퍼(Golden Rule 23)에 무할당 추적하는 `RequestActivityLogger` 및 미들웨어 신설. `GET /api/logs/requests` 엔드포인트와 사이드바 `Request Logs` 화면, 자동 갱신(3s)/일시정지, 메서드/상태코드/검색 필터 및 원클릭 로그 초기화 지원 (`pkg/api`, `pkg/ui`) |
 
 ---
 
@@ -399,24 +403,25 @@
 
 
 ### 4.6. Web Studio (Port 8090) Post-1.0 고도화 백로그 (Supabase & PocketBase 벤치마킹)
-1.0 코어 릴리스의 핵심 목표(고성능 T-SQL OLTP 엔진 안정화) 완결 후, 웹 관리자 경험(DX)을 글로벌 BaaS 수준으로 극대화하기 위해 이관된 5대 Web Studio 기능입니다:
+웹 관리자 경험(DX)을 글로벌 BaaS 수준으로 극대화하기 위한 백로그 중 4대 과제(`UI-DDL-1`, `UI-REALTIME-1`, `UI-DATA-1`, `UI-LOGS-1`)는 1.0 프로덕션 버전에 완결(`[x]`) 반영되었으며, Monaco/CodeMirror 에디터 고도화 과제(`UI-SQL-1`)는 1.0 이후 단계로 연기되었습니다:
 
-* **실시간 CDC / SSE 스트림 인스펙터 뷰어 (`UI-REALTIME-1`)**:
-  - 엔진의 `/api/cdc/stream` 및 `/api/realtime` (SSE) 엔드포인트와 브라우저 `EventSource`를 직결하여 실시간 DML 변경 이벤트 카드 스트림 및 JSON Diff를 시각화.
-* **스키마 뷰 내 비주얼 컬럼 추가 GUI (`UI-DDL-1`)**:
-  - `Schema & DDL` 서브뷰에 `+ Add Column` 모달을 연동하여 SQL 타이핑 없이 컬럼명, 타입, 제약조건을 입력받아 `ALTER TABLE ... ADD ...` 실행.
-* **레코드 테이블 다중 행 선택 대량 작업 및 외래키 릴레이션 팝업 점프 (`UI-DATA-1`)**:
-  - 레코드 그리드 체크박스를 통한 일괄 삭제/내보내기 및 외래키(FK) 컬럼 클릭 시 부모 레코드 정보 팝업 모달 표시.
-* **SQL Query Studio 에디터 강화 (`UI-SQL-1`)**:
+* [x] **실시간 CDC / SSE 스트림 인스펙터 뷰어 (`UI-REALTIME-1`)**: 완료 (`[x]`). 사이드바 `Realtime Live Stream` 전용 화면, 200건 링버퍼 카드 스트림, 실시간 테이블/액션 필터 및 JSON 페이로드 복사 지원.
+* [x] **스키마 뷰 내 비주얼 컬럼 추가 GUI (`UI-DDL-1`)**: 완료 (`[x]`). `+ Add Column` 모달 연동, In-Memory OCC 및 WiredTiger B+Tree 튜플 리라이트, `ALTER TABLE ... ADD ...` DDL 엔진 연동.
+* [x] **레코드 테이블 다중 행 선택 대량 작업 및 외래키 릴레이션 팝업 점프 (`UI-DATA-1`)**: 완료 (`[x]`). 일괄 삭제, 선택 레코드 CSV/JSON 내보내기, FK 릴레이션 팝업 모달(`#fk-relation-modal`) 및 부모 테이블 원클릭 이동.
+* [x] **실시간 HTTP API 요청 로그 뷰어 (`UI-LOGS-1`)**: 완료 (`[x]`). 200건 Bounded 링버퍼 기반 `RequestActivityLogger`, `GET /api/logs/requests`, 사이드바 `Request Logs` 화면, 자동 갱신(3s), 메서드/상태/경로 필터 및 초기화.
+* [ ] **SQL Query Studio 에디터 강화 (`UI-SQL-1`) (Post-1.0 연기)**:
   - CodeMirror/Monaco 결합 구문 컬러링, T-SQL 키워드 자동완성, 실행 쿼리 히스토리(History) 패널 및 Volcano 실행 계획 계층형 트리 뷰 시각화.
-* **실시간 HTTP API 요청 로그 뷰어 (`UI-LOGS-1`)**:
-  - 인입되는 HTTP API 요청(Method, Path, Status, Latency, IP)의 최근 이력을 실시간 모니터링할 수 있는 전용 Activity Logs 화면 구축.
 
 ---
 
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **Web Studio 4대 생산성/관측성 기능 완결 (`UI-DDL-1`, `UI-REALTIME-1`, `UI-DATA-1`, `UI-LOGS-1`) (`pkg/storage`, `pkg/engine`, `pkg/api`, `pkg/ui`)**:
+  - `UI-DDL-1`: 스키마 서브뷰에 `+ Add Column` 비주얼 모달 연동. `storage.Engine` 인터페이스에 `AddColumn` 정의, In-Memory OCC의 테이블 컬럼 추가 및 WAL(`OpAlterTable`) 로깅/재생, WiredTiger의 커서 스캔 및 튜플 리라이트(`C.go_wt_cursor_update_raw`), DDL 파서(`ALTER TABLE <table> ADD [COLUMN] ...`) 완비.
+  - `UI-REALTIME-1`: 사이드바 `Realtime Live Stream` 전용 화면 신설. `/api/realtime` SSE와 직결하여 200건 Bounded 링버퍼 기반 실시간 DML 변경 이벤트 카드 스트림, 액션 배지(CREATE, UPDATE, DELETE, DDL), 테이블/액션 필터, 실시간 검색, 스트림 일시정지/재개 및 JSON 복사 지원.
+  - `UI-DATA-1`: 레코드 그리드 다중 행 선택 기반 일괄 삭제(`deleteSelectedRecords`) 및 선택 레코드 CSV/JSON 다운로드(`exportSelectedRecords`). 스키마 외래키 메타데이터(`TableSchemaDTO.ForeignKeys`) 및 네이밍 휴리스틱 연동으로 FK 컬럼 링크(`↗`) 클릭 시 부모 레코드 정보 팝업 모달(`#fk-relation-modal`) 표시 및 부모 테이블 점프 지원.
+  - `UI-LOGS-1`: 인입되는 HTTP API 요청(Method, Path, Status, Latency, IP)을 200건 Bounded 링버퍼(Golden Rule 23)에 추적하는 `RequestActivityLogger` 및 미들웨어 신설. `GET /api/logs/requests` 엔드포인트와 사이드바 `Request Logs` 화면, 3초 주기 자동 갱신 및 일시정지, 메서드/상태코드/검색 필터 및 로그 초기화 완비.
 - [x] **Web Studio Developer API Preview 모달 고도화 (동적 스키마 페이로드 & LionSQL SDK 탭) (`UI-8`, `UI-9`) (`pkg/ui`)**:
   - 테이블별 스키마 컬럼 메타데이터(`tablesList`)를 분석하여 자동 증분 PK는 제외하고, 데이터 타입(INT, VARCHAR, DECIMAL, DATETIME, JSON, BOOL)과 컬럼 의미에 맞춘 현실적인 더미 JSON 페이로드(`getDummyRecordForTable`) 및 PK/필터 샘플(`getPrimaryKeySample`, `getFilterSample`)을 동적으로 생성.
   - cURL, Fetch, Python, Go 탭과 함께 LionSQL 공식 SDK (`sqlion.js`) 전용 `import SQLion` 및 `db.collection('table').getList/getOne/create/query` 템플릿 탭(`api-lang-sdk`) 신설.

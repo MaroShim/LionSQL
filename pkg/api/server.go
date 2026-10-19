@@ -53,6 +53,7 @@ type Server struct {
 	replication *replication.Manager
 	cdcStreamer      *cdc.Streamer
 	outboxDispatcher *cdc.OutboxDispatcher
+	requestLogger    *RequestActivityLogger
 	startTime        time.Time
 }
 
@@ -95,6 +96,7 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 		mailer:      mailer,
 		coordinator: coord,
 		mux:         http.NewServeMux(),
+		requestLogger: NewRequestActivityLogger(200),
 		startTime:   time.Now(),
 	}
 	s.executor.SetTableGetter(eng.GetTable)
@@ -388,9 +390,9 @@ func (s *Server) GetActiveQueries() []ActiveQueryInfo {
 	return s.coordinator.GetActiveQueries()
 }
 
-// Handler returns the HTTP handler wrapped with CORS, security headers, and gzip compression middlewares.
+// Handler returns the HTTP handler wrapped with request logging, CORS, security headers, and gzip compression middlewares.
 func (s *Server) Handler() http.Handler {
-	return gzipMiddleware(corsAndSecurityMiddleware(s.mux))
+	return requestLoggingMiddleware(s.requestLogger, gzipMiddleware(corsAndSecurityMiddleware(s.mux)))
 }
 
 // ServeHTTP implements http.Handler for direct HTTP serving.
@@ -549,6 +551,10 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /api/mail/logs", s.wrapSuperuser(s.handleGetMailLogs))
 	s.mux.HandleFunc("DELETE /api/mail/logs", s.wrapSuperuser(s.handleDeleteMailLogs))
 	s.mux.HandleFunc("POST /api/auth/request-password-reset", s.handleRequestPasswordReset)
+
+	// HTTP API Request Activity Logs
+	s.mux.HandleFunc("GET /api/logs/requests", s.wrapSuperuser(s.handleGetRequestLogs))
+	s.mux.HandleFunc("DELETE /api/logs/requests", s.wrapSuperuser(s.handleClearRequestLogs))
 
 	// Official Client SDK Static Distribution
 	s.mux.HandleFunc("GET /sdk/sqlion.js", s.handleServeSDKJS)

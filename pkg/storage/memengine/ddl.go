@@ -482,3 +482,31 @@ func (e *Engine) ListTables() ([]*storage.TableSchema, error) {
 	return result, nil
 }
 
+func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	td, exists := e.tables[tableName]
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	for _, c := range td.Schema.Columns {
+		if strings.EqualFold(c.Name, col.Name) {
+			return fmt.Errorf("column %q already exists in table %q", col.Name, tableName)
+		}
+	}
+
+	td.Schema.Columns = append(td.Schema.Columns, *col)
+	td.addColumnValues(storage.NullValue(col.Type))
+
+	if _, err := e.recordWALLocked([]WALOp{{
+		Type:   OpAlterTable,
+		Table:  tableName,
+		Column: col,
+	}}); err != nil {
+		return err
+	}
+	return nil
+}
+

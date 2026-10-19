@@ -843,5 +843,6 @@ type Engine interface {
 	TruncateTable(tableName string) error
 	DropPartition(tableName, partitionName string) error
 	GetPartitions(tableName string) ([]PartitionInfo, error)
+	AddColumn(tableName string, col *Column) error
 }
 

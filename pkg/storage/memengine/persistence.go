@@ -70,6 +70,11 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			e.tables[op.Schema.Name] = td
 		case OpDropTable:
 			delete(e.tables, op.Table)
+		case OpAlterTable:
+			if td, exists := e.tables[op.Table]; exists && op.Column != nil {
+				td.Schema.Columns = append(td.Schema.Columns, *op.Column)
+				td.addColumnValues(storage.NullValue(op.Column.Type))
+			}
 		case OpTruncateTable:
 			if td, exists := e.tables[op.Table]; exists {
 				td.truncateShardsLocked()

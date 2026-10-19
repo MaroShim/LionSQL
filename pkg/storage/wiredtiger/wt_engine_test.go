@@ -939,3 +939,85 @@ func TestWiredTiger_SessionCloseAfterEngineClose_NoPanic(t *testing.T) {
 	}
 }
 
+func TestWiredTiger_AddColumn(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_add_col_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	tbl := &storage.TableSchema{
+		Name: "products",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "title", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(tbl); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx.Insert("products", storage.Record{
+		"id":    storage.IntValue(100),
+		"title": storage.StringValue("Laptop"),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// Add new column 'price' FLOAT
+	newCol := &storage.Column{
+		Name:     "price",
+		Type:     storage.TypeFloat,
+		Nullable: true,
+	}
+	if err := eng.AddColumn("products", newCol); err != nil {
+		t.Fatalf("AddColumn failed: %v", err)
+	}
+
+	// Verify schema in engine
+	tSchema, err := eng.GetTable("products")
+	if err != nil {
+		t.Fatalf("GetTable failed: %v", err)
+	}
+	if len(tSchema.Columns) != 3 {
+		t.Fatalf("expected 3 columns, got %d", len(tSchema.Columns))
+	}
+
+	// Read existing row
+	tx2, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx 2 failed: %v", err)
+	}
+	defer tx2.Rollback()
+
+	rec, err := tx2.Get("products", storage.IntValue(100))
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if rec["title"].String() != "Laptop" {
+		t.Fatalf("expected title 'Laptop', got %v", rec["title"])
+	}
+	if !rec["price"].IsNull {
+		t.Fatalf("expected NULL price for existing row, got %v", rec["price"])
+	}
+}
+

@@ -82,3 +82,7 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 	return nil, fmt.Errorf("wiredtiger storage engine not enabled")
 }
 
+func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
+	return fmt.Errorf("wiredtiger storage engine not enabled")
+}
+

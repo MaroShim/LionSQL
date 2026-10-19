@@ -41,6 +41,10 @@ func TestDashboardMenuOrderAndContent(t *testing.T) {
 		`Settings / Mail`,
 		`data-view="replication"`,
 		`Replication (HA)`,
+		`data-view="realtime"`,
+		`Realtime Live Stream`,
+		`data-view="logs"`,
+		`Request Logs`,
 	}
 
 	lastIdx := 0
@@ -240,6 +244,124 @@ func TestLightModeHighContrastStyles(t *testing.T) {
 		}
 	}
 }
+
+func TestAddColumnModal_UI_DDL_1(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`id="btn-open-add-col"`,
+		`openAddColumnModal()`,
+		`id="add-column-modal"`,
+		`id="add-col-name"`,
+		`id="add-col-type"`,
+		`id="add-col-nullable"`,
+		`id="add-col-default"`,
+		`id="btn-submit-add-col"`,
+		`handleAddColumnSubmit(event)`,
+		`ALTER TABLE`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q for UI-DDL-1", snippet)
+		}
+	}
+}
+
+func TestRealtimeInspector_UI_REALTIME_1(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`data-view="realtime"`,
+		`id="view-realtime"`,
+		`id="realtime-status-pill"`,
+		`id="btn-realtime-pause"`,
+		`id="realtime-filter-table"`,
+		`id="realtime-filter-action"`,
+		`id="realtime-search-input"`,
+		`id="realtime-feed-container"`,
+		`handleIncomingRealtimeEvent`,
+		`renderRealtimeFeed()`,
+		`toggleRealtimeStreamPause()`,
+		`copyEventPayload`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q for UI-REALTIME-1", snippet)
+		}
+	}
+}
+
+func TestBulkExportAndFKJump_UI_DATA_1(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`id="btn-batch-delete"`,
+		`id="btn-batch-export-csv"`,
+		`id="btn-batch-export-json"`,
+		`exportSelectedRecords('csv')`,
+		`exportSelectedRecords('json')`,
+		`id="fk-relation-modal"`,
+		`id="btn-fk-jump-table"`,
+		`openFKRelationModal`,
+		`closeFKRelationModal`,
+		`jumpToFKParentTable`,
+		`currentLoadedRecords`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q for UI-DATA-1", snippet)
+		}
+	}
+}
+
+func TestRequestLogsViewer_UI_LOGS_1(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`data-view="logs"`,
+		`id="view-logs"`,
+		`id="logs-count-badge"`,
+		`id="logs-live-indicator"`,
+		`id="btn-logs-pause"`,
+		`id="btn-logs-clear"`,
+		`id="logs-filter-query"`,
+		`id="logs-filter-method"`,
+		`id="logs-filter-status"`,
+		`id="logs-filter-limit"`,
+		`id="logs-table-body"`,
+		`loadRequestLogs`,
+		`clearRequestLogs`,
+		`toggleLogsPause`,
+		`/api/logs/requests`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q for UI-LOGS-1", snippet)
+		}
+	}
+}
+
+
 
 
 

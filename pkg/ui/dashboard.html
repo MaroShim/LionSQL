@@ -809,6 +809,14 @@
         <span>Replication (HA)</span>
         <span id="nav-ha-badge" class="badge badge-muted" style="font-size:0.65rem;">HA</span>
       </button>
+      <button class="nav-btn" data-view="realtime" onclick="switchView('realtime')">
+        <span>Realtime Live Stream</span>
+        <span id="nav-realtime-badge" class="badge badge-success" style="font-size:0.65rem;">LIVE</span>
+      </button>
+      <button class="nav-btn" data-view="logs" onclick="switchView('logs')">
+        <span>Request Logs</span>
+        <span id="nav-logs-badge" class="badge" style="font-size:0.65rem; background: var(--code-bg); color: var(--text-muted); border: 1px solid var(--border);">LOGS</span>
+      </button>
     </nav>
     <div style="padding: 12px 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
       <button class="btn btn-secondary" style="width: 100%; font-size: 0.75rem; padding: 6px; display: flex; align-items: center; justify-content: center; gap: 6px;" onclick="downloadDatabaseBackup()">
@@ -1013,9 +1021,14 @@
             <button class="btn btn-api-preview" style="padding: 6px 12px; font-size: 0.8rem;" onclick="openAPIPreviewModal()">&lt;/&gt; API Preview</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('csv')">Export CSV</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('json')">Export JSON</button>
-            <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="openImportCSVModal()">Import CSV</button>
             <button id="btn-batch-delete" class="btn btn-danger-subtle" style="display: none; padding: 6px 12px; font-size: 0.8rem;" onclick="deleteSelectedRecords()">
               Delete Selected (<span id="selected-count">0</span>)
+            </button>
+            <button id="btn-batch-export-csv" class="btn btn-secondary" style="display: none; padding: 6px 10px; font-size: 0.8rem;" onclick="exportSelectedRecords('csv')">
+              Export Selected (CSV)
+            </button>
+            <button id="btn-batch-export-json" class="btn btn-secondary" style="display: none; padding: 6px 10px; font-size: 0.8rem;" onclick="exportSelectedRecords('json')">
+              Export Selected (JSON)
             </button>
             <button id="btn-add-row" class="btn" style="background: var(--success); padding: 6px 14px; font-size: 0.8rem;" onclick="openCreateRecordModal()">+ Add Row</button>
           </div>
@@ -1059,9 +1072,12 @@
 
       <!-- Subview: Schema & DDL -->
       <div id="subview-schema" class="card" style="margin-top: 15px; display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
           <h3 id="schema-table-title" style="font-size: 1.1rem; color: var(--text);">Schema Structure</h3>
-          <span id="schema-columns-count" style="font-size: 0.8rem; color: var(--text-muted);">0 columns</span>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span id="schema-columns-count" style="font-size: 0.8rem; color: var(--text-muted);">0 columns</span>
+            <button id="btn-open-add-col" class="btn" style="background: var(--primary); font-size: 0.8rem; padding: 4px 12px;" onclick="openAddColumnModal()">+ Add Column</button>
+          </div>
         </div>
         <div style="overflow-x: auto;">
           <table id="schema-columns-table">
@@ -1637,6 +1653,152 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       </div>
     </div>
 
+    <!-- View: Realtime Stream / CDC Inspector (UI-REALTIME-1) -->
+    <div id="view-realtime" style="display: none;">
+      <div class="header-bar">
+        <div>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <h2>Realtime Live Stream & CDC Inspector</h2>
+            <span id="realtime-status-pill" class="badge badge-success" style="font-size: 0.72rem; padding: 3px 8px;">CONNECTED</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Inspect live database mutation events (INSERT, UPDATE, DELETE, DDL) streamed over SSE (/api/realtime) with instant visual cards and JSON payload inspection.
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button id="btn-realtime-pause" class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 12px;" onclick="toggleRealtimeStreamPause()">Pause Stream</button>
+          <button class="btn btn-secondary" style="font-size: 0.8rem; padding: 6px 12px;" onclick="clearRealtimeFeed()">Clear Feed</button>
+        </div>
+      </div>
+
+      <!-- Realtime Filter & Stats Bar -->
+      <div class="card" style="margin-top: 15px; padding: 15px;">
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Filter Table:</label>
+            <select id="realtime-filter-table" style="width: auto; margin: 0; padding: 5px 10px; font-size: 0.8rem;" onchange="applyRealtimeFilter()">
+              <option value="">All Tables</option>
+            </select>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Action:</label>
+            <select id="realtime-filter-action" style="width: auto; margin: 0; padding: 5px 10px; font-size: 0.8rem;" onchange="applyRealtimeFilter()">
+              <option value="">All Actions</option>
+              <option value="create">create (INSERT)</option>
+              <option value="update">update (UPDATE)</option>
+              <option value="delete">delete (DELETE)</option>
+              <option value="create_table">create_table (DDL)</option>
+              <option value="drop_table">drop_table (DDL)</option>
+            </select>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 6px; flex: 1; min-width: 180px;">
+            <input type="text" id="realtime-search-input" placeholder="Search event payload / ID..." style="margin: 0; padding: 5px 10px; font-size: 0.8rem;" oninput="applyRealtimeFilter()" />
+          </div>
+
+          <div style="display: flex; gap: 16px; margin-left: auto; font-size: 0.8rem; color: var(--text-muted); align-items: center;">
+            <div>Events: <strong id="realtime-events-count" style="color: var(--primary);">0</strong></div>
+            <div>Showing: <strong id="realtime-visible-count" style="color: var(--text);">0</strong></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Stream Feed Container -->
+      <div id="realtime-feed-container" style="display: flex; flex-direction: column; gap: 10px; margin-top: 15px;">
+        <div id="realtime-empty-card" class="card" style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+          <div style="font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: 6px;">Listening for Realtime Database Mutations</div>
+          <div style="font-size: 0.82rem; max-width: 460px; margin: 0 auto; line-height: 1.5;">
+            Perform any INSERT, UPDATE, DELETE, or DDL operation via REST API, Web Studio, PostgreSQL (:5433), or TDS (:1433) to see live streamed event cards in real-time.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- View: Request Logs (Activity Viewer) -->
+    <div id="view-logs" style="display: none;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--text);">Request Activity Logs</h2>
+          <span id="logs-count-badge" class="badge" style="background: var(--code-bg); color: var(--text-muted); border: 1px solid var(--border);">0 requests</span>
+          <span id="logs-live-indicator" style="display: inline-flex; align-items: center; gap: 5px; font-size: 0.75rem; color: var(--success);">
+            <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--success); animation: pulse 2s infinite;"></span>
+            Auto-refresh (3s)
+          </span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+          <button id="btn-logs-pause" class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="toggleLogsPause()">Pause</button>
+          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="loadRequestLogs()">Refresh Now</button>
+          <button id="btn-logs-clear" class="btn btn-danger-subtle" style="padding: 6px 12px; font-size: 0.8rem;" onclick="clearRequestLogs()">Clear Logs</button>
+        </div>
+      </div>
+
+      <!-- Controls & Filter Bar -->
+      <div class="card" style="padding: 12px 16px; margin-bottom: 16px;">
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 200px;">
+            <input type="text" id="logs-filter-query" placeholder="Filter by endpoint path or IP address..." oninput="onLogsFilterChange()" style="margin: 0; padding: 7px 12px; font-size: 0.85rem;" />
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 0.78rem; color: var(--text-muted);">Method:</span>
+            <select id="logs-filter-method" onchange="onLogsFilterChange()" style="width: auto; margin: 0; padding: 6px 10px; font-size: 0.82rem;">
+              <option value="ALL">All Methods</option>
+              <option value="GET">GET</option>
+              <option value="POST">POST</option>
+              <option value="PUT">PUT</option>
+              <option value="PATCH">PATCH</option>
+              <option value="DELETE">DELETE</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 0.78rem; color: var(--text-muted);">Status:</span>
+            <select id="logs-filter-status" onchange="onLogsFilterChange()" style="width: auto; margin: 0; padding: 6px 10px; font-size: 0.82rem;">
+              <option value="ALL">All Status</option>
+              <option value="2XX">2xx Success</option>
+              <option value="3XX">3xx Redirect</option>
+              <option value="4XX">4xx Client Error</option>
+              <option value="5XX">5xx Server Error</option>
+              <option value="ERR">All Errors (4xx/5xx)</option>
+            </select>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span style="font-size: 0.78rem; color: var(--text-muted);">Limit:</span>
+            <select id="logs-filter-limit" onchange="loadRequestLogs()" style="width: auto; margin: 0; padding: 6px 10px; font-size: 0.82rem;">
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Logs Table -->
+      <div class="card" style="padding: 0; overflow: hidden;">
+        <div style="max-height: 580px; overflow-y: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 0.82rem; text-align: left;">
+            <thead>
+              <tr style="background: var(--code-bg); border-bottom: 1px solid var(--border); color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase;">
+                <th style="padding: 10px 14px; width: 100px;">Time</th>
+                <th style="padding: 10px 14px; width: 85px;">Method</th>
+                <th style="padding: 10px 14px; width: 75px;">Status</th>
+                <th style="padding: 10px 14px; width: 95px;">Latency</th>
+                <th style="padding: 10px 14px;">Path / Endpoint</th>
+                <th style="padding: 10px 14px; width: 140px;">Client IP</th>
+              </tr>
+            </thead>
+            <tbody id="logs-table-body">
+              <tr>
+                <td colspan="6" style="text-align: center; padding: 32px; color: var(--text-muted);">
+                  Loading request activity...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </main>
 
   <!-- Create Cron Job Modal Overlay -->
@@ -1857,6 +2019,63 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     </div>
   </div>
 
+  <!-- Modal: Add Column (UI-DDL-1) -->
+  <div id="add-column-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+        <div>
+          <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--text);">Add New Column</h3>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+            Visually append a new column to <strong id="add-col-target-table" style="color: var(--primary);"></strong> via ALTER TABLE.
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeAddColumnModal()">✕</button>
+      </div>
+      <div id="add-column-error" class="alert-danger-box" style="display: none; padding: 8px 12px; margin-bottom: 14px;"></div>
+      
+      <form onsubmit="handleAddColumnSubmit(event)">
+        <div style="margin-bottom: 14px;">
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Column Name *</label>
+          <input type="text" id="add-col-name" placeholder="e.g. status, phone, is_verified" required style="margin: 0;" />
+        </div>
+
+        <div style="margin-bottom: 14px;">
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Data Type *</label>
+          <select id="add-col-type" style="margin: 0;">
+            <option value="VARCHAR(255)">VARCHAR(255) - Text String</option>
+            <option value="TEXT">TEXT - Long Character String</option>
+            <option value="INT">INT - 32-bit Integer</option>
+            <option value="BIGINT">BIGINT - 64-bit Large Integer</option>
+            <option value="FLOAT">FLOAT - 64-bit Floating Point</option>
+            <option value="DECIMAL(18,2)">DECIMAL(18,2) - Precise Numeric / Currency</option>
+            <option value="BOOL">BOOL - Boolean Flag (true/false)</option>
+            <option value="DATETIME">DATETIME - Date & Time Timestamp</option>
+            <option value="DATE">DATE - Calendar Date</option>
+            <option value="JSON">JSON - Structured Document / Object</option>
+            <option value="UUID">UUID - 128-bit Universally Unique Identifier</option>
+          </select>
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-bottom: 14px; align-items: center;">
+          <label style="display: flex; align-items: center; gap: 6px; font-size: 0.82rem; cursor: pointer; color: var(--text);">
+            <input type="checkbox" id="add-col-nullable" checked style="width: 16px; height: 16px; margin: 0; accent-color: var(--primary);" />
+            Nullable (Allow NULL values)
+          </label>
+        </div>
+
+        <div style="margin-bottom: 20px;">
+          <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600; display: block; margin-bottom: 4px;">Default Value (Optional)</label>
+          <input type="text" id="add-col-default" placeholder="e.g. 'active', 0, CURRENT_TIMESTAMP" style="margin: 0;" />
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+          <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeAddColumnModal()">Cancel</button>
+          <button type="submit" id="btn-submit-add-col" class="btn" style="flex: 1; background: var(--primary);">Add Column</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Create Record (+ Add Row) Modal Overlay -->
   <div id="create-record-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card modal-card-lg">
@@ -1983,6 +2202,24 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     </div>
   </div>
 
+  <!-- Foreign Key Referenced Record Modal -->
+  <div id="fk-relation-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-card" style="max-width: 580px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+        <h3 id="fk-modal-title" style="font-size: 1.1rem; font-weight: 700; color: var(--text);">Referenced Record</h3>
+        <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeFKRelationModal()">✕</button>
+      </div>
+      <div id="fk-modal-subtitle" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 14px;"></div>
+      <div id="fk-modal-body" style="max-height: 380px; overflow-y: auto; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px; margin-bottom: 16px;">
+        <!-- Record details rendered dynamically -->
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: space-between; align-items: center;">
+        <button id="btn-fk-jump-table" type="button" class="btn" style="background: var(--primary); font-size: 0.85rem;" onclick="jumpToFKParentTable()">View Full Table ↗</button>
+        <button type="button" class="btn btn-secondary" style="font-size: 0.85rem;" onclick="closeFKRelationModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     function showToast(message, type = 'info') {
       let toastType = 'info';
@@ -2101,6 +2338,8 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     let currentTableSubView = 'records';
     let replicationPollTimer = null;
     let currentReplicationData = null;
+    let logsPollTimer = null;
+    let logsIsPaused = false;
 
     function switchView(view) {
       if (window.innerWidth <= 900) {
@@ -2114,6 +2353,10 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         clearInterval(replicationPollTimer);
         replicationPollTimer = null;
       }
+      if (logsPollTimer && view !== 'logs') {
+        clearInterval(logsPollTimer);
+        logsPollTimer = null;
+      }
 
       document.querySelectorAll('.nav-btn').forEach(b => {
         if (b.getAttribute('data-view') === view) {
@@ -2122,7 +2365,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           b.classList.remove('active');
         }
       });
-      const views = ['apikeys', 'query', 'tables', 'procedures', 'webhooks', 'crons', 'mail', 'sdk', 'replication'];
+      const views = ['apikeys', 'query', 'tables', 'procedures', 'webhooks', 'crons', 'mail', 'sdk', 'replication', 'realtime', 'logs'];
       views.forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
@@ -2147,6 +2390,12 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         replicationPollTimer = setInterval(() => {
           loadReplicationStatus(true);
         }, 3000);
+      } else if (view === 'realtime') {
+        populateRealtimeTableFilter();
+        renderRealtimeFeed();
+      } else if (view === 'logs') {
+        loadRequestLogs();
+        startLogsPolling();
       } else if (view === 'query') {
         const input = document.getElementById('sql-query-input');
         if (input) input.focus();
@@ -3076,16 +3325,23 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
     // --- Table Management & Selection State ---
     let selectedRecordPks = new Set();
+    let currentLoadedRecords = [];
 
     function updateBatchDeleteUI() {
       const btn = document.getElementById('btn-batch-delete');
+      const btnExportCsv = document.getElementById('btn-batch-export-csv');
+      const btnExportJson = document.getElementById('btn-batch-export-json');
       const countSpan = document.getElementById('selected-count');
       if (!btn || !countSpan) return;
       if (selectedRecordPks.size > 0) {
         btn.style.display = 'inline-block';
+        if (btnExportCsv) btnExportCsv.style.display = 'inline-block';
+        if (btnExportJson) btnExportJson.style.display = 'inline-block';
         countSpan.innerText = selectedRecordPks.size;
       } else {
         btn.style.display = 'none';
+        if (btnExportCsv) btnExportCsv.style.display = 'none';
+        if (btnExportJson) btnExportJson.style.display = 'none';
       }
     }
 
@@ -3154,6 +3410,52 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       updateBatchDeleteUI();
       showToast(`Deleted ${successCount} record(s)${failCount > 0 ? `, ${failCount} failed` : ''}`, failCount > 0);
       loadRecords();
+    }
+
+    function exportSelectedRecords(format) {
+      const tbl = document.getElementById('table-select').value || 'records';
+      if (selectedRecordPks.size === 0) {
+        showToast('No records selected for export', true);
+        return;
+      }
+      const tableSchema = tablesList.find(t => t.name === tbl);
+      let pkColName = 'id';
+      if (tableSchema && tableSchema.columns) {
+        const pkCol = tableSchema.columns.find(c => c.primary_key);
+        if (pkCol) pkColName = pkCol.name;
+        else if (tableSchema.columns.length > 0) pkColName = tableSchema.columns[0].name;
+      }
+
+      const selected = currentLoadedRecords.filter(r => {
+        const pkVal = r[pkColName] !== undefined && r[pkColName] !== null ? String(r[pkColName]) : '';
+        return selectedRecordPks.has(pkVal);
+      });
+
+      if (selected.length === 0) {
+        showToast('No matching records found to export', true);
+        return;
+      }
+
+      const filename = `${tbl}_selected_${selected.length}.${format}`;
+      if (format === 'json') {
+        const blob = new Blob([JSON.stringify(selected, null, 2)], { type: 'application/json' });
+        downloadBlob(blob, filename);
+      } else {
+        const cols = Object.keys(selected[0]);
+        const csvRows = [cols.join(',')];
+        selected.forEach(r => {
+          const line = cols.map(c => {
+            const val = r[c];
+            if (val === null || val === undefined) return '';
+            const str = String(val).replace(/"/g, '""');
+            return `"${str}"`;
+          }).join(',');
+          csvRows.push(line);
+        });
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+        downloadBlob(blob, filename);
+      }
+      showToast(`Exported ${selected.length} selected record(s) as ${format.toUpperCase()}`);
     }
 
     async function loadTables(selectTableName) {
@@ -3291,6 +3593,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         const countBadge = document.getElementById('records-count-badge');
 
         const records = data.records || [];
+        currentLoadedRecords = records;
         recordsTotalItems = data.totalItems !== undefined ? data.totalItems : records.length;
         recordsTotalPages = data.totalPages !== undefined ? data.totalPages : 1;
         recordsCurrentPage = data.page !== undefined ? data.page : 1;
@@ -3334,6 +3637,12 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           if (colDef) {
             tagHtml = `<span class="col-header-tag ${colDef.primary_key ? 'col-pk-tag' : ''}">${colDef.type}</span>`;
           }
+          if (tableSchema && tableSchema.foreign_keys) {
+            const fk = tableSchema.foreign_keys.find(f => f.column_name === c);
+            if (fk) {
+              tagHtml += `<span class="col-header-tag" style="background:rgba(59,130,246,0.15); color:var(--primary); border-color:var(--primary);" title="FK -> ${escapeHtml(fk.referenced_table)}.${escapeHtml(fk.referenced_column)}">FK</span>`;
+            }
+          }
           let sortIcon = '';
           if (recordsSortColumn === c) {
             sortIcon = '<span class="sort-icon">▲</span>';
@@ -3361,9 +3670,36 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               const val = r[c];
               const isPK = (c === pkColName);
               const valStr = (val === null || val === undefined) ? '' : String(val);
-              const displayHtml = (val === null || val === undefined)
-                ? '<span style="color:var(--text-muted); font-style:italic;">NULL</span>'
-                : (isPK ? `<span class="cell-pk-val">${escapeHtml(valStr)}</span>` : escapeHtml(valStr));
+
+              // Detect foreign key linkage
+              let refTable = '';
+              let refCol = 'id';
+              if (tableSchema && tableSchema.foreign_keys) {
+                const fkDef = tableSchema.foreign_keys.find(fk => fk.column_name === c);
+                if (fkDef) {
+                  refTable = fkDef.referenced_table;
+                  refCol = fkDef.referenced_column || 'id';
+                }
+              }
+              if (!refTable && c.endsWith('_id') && c.length > 3) {
+                const prefix = c.slice(0, -3);
+                if (tablesList.some(t => t.name === prefix)) {
+                  refTable = prefix;
+                } else if (tablesList.some(t => t.name === prefix + 's')) {
+                  refTable = prefix + 's';
+                }
+              }
+
+              let displayHtml = '';
+              if (val === null || val === undefined) {
+                displayHtml = '<span style="color:var(--text-muted); font-style:italic;">NULL</span>';
+              } else if (isPK) {
+                displayHtml = `<span class="cell-pk-val">${escapeHtml(valStr)}</span>`;
+              } else if (refTable && valStr) {
+                displayHtml = `<span class="cell-fk-val" style="font-family:monospace; font-weight:600;">${escapeHtml(valStr)}</span> <a href="javascript:void(0)" class="fk-jump-link" onclick="event.stopPropagation(); openFKRelationModal('${escapeHtml(refTable)}', '${escapeHtml(refCol)}', '${escapeHtml(valStr)}')" style="color:var(--primary); font-size:0.75rem; text-decoration:none; margin-left:3px; opacity:0.85; font-weight:700;" title="Jump to referenced ${escapeHtml(refTable)} (${escapeHtml(refCol)})">↗</a>`;
+              } else {
+                displayHtml = escapeHtml(valStr);
+              }
 
               if (isPK) {
                 rowHtml += `<td title="Primary Key (Read-Only)">${displayHtml}</td>`;
@@ -3579,6 +3915,89 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       } catch (err) {
         errBox.innerText = 'Network error: ' + err;
         errBox.style.display = 'block';
+      }
+    }
+
+    // --- Add Column Modal Logic (UI-DDL-1) ---
+    function openAddColumnModal() {
+      const sel = document.getElementById('table-select');
+      const tbl = sel ? sel.value : currentTable;
+      if (!tbl) {
+        showToast('Please select a table first', 'error');
+        return;
+      }
+      document.getElementById('add-col-target-table').innerText = tbl;
+      document.getElementById('add-col-name').value = '';
+      document.getElementById('add-col-type').value = 'VARCHAR(255)';
+      document.getElementById('add-col-nullable').checked = true;
+      document.getElementById('add-col-default').value = '';
+      document.getElementById('add-column-error').style.display = 'none';
+      document.getElementById('add-column-modal').style.display = 'flex';
+      setTimeout(() => document.getElementById('add-col-name').focus(), 50);
+    }
+
+    function closeAddColumnModal() {
+      document.getElementById('add-column-modal').style.display = 'none';
+    }
+
+    async function handleAddColumnSubmit(e) {
+      if (e) e.preventDefault();
+      const sel = document.getElementById('table-select');
+      const tbl = sel ? sel.value : currentTable;
+      if (!tbl) return;
+
+      const colName = document.getElementById('add-col-name').value.trim();
+      const colType = document.getElementById('add-col-type').value;
+      const nullable = document.getElementById('add-col-nullable').checked;
+      const defVal = document.getElementById('add-col-default').value.trim();
+      const errBox = document.getElementById('add-column-error');
+      const submitBtn = document.getElementById('btn-submit-add-col');
+
+      if (!colName) {
+        errBox.innerText = 'Column name is required.';
+        errBox.style.display = 'block';
+        return;
+      }
+
+      errBox.style.display = 'none';
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerText = 'Adding...';
+      }
+
+      let sql = `ALTER TABLE ${tbl} ADD COLUMN ${colName} ${colType}`;
+      if (!nullable) {
+        sql += ' NOT NULL';
+      }
+      if (defVal) {
+        sql += ` DEFAULT ${defVal}`;
+      }
+      sql += ';';
+
+      try {
+        const res = await authFetch('/api/sql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: sql })
+        });
+        const out = await res.json();
+        if (out.error) {
+          errBox.innerText = 'Failed: ' + out.error;
+          errBox.style.display = 'block';
+        } else {
+          showToast(`Column '${colName}' added successfully to '${tbl}'!`, 'success');
+          closeAddColumnModal();
+          await loadTables(tbl);
+          switchTableSubView('schema');
+        }
+      } catch (err) {
+        errBox.innerText = 'Network error: ' + err;
+        errBox.style.display = 'block';
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerText = 'Add Column';
+        }
       }
     }
 
@@ -4119,13 +4538,20 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               badge.style.background = '#064e3b';
               badge.title = 'Realtime SSE connected';
             }
+            const pill = document.getElementById('realtime-status-pill');
+            if (pill) {
+              pill.className = 'badge badge-success';
+              pill.innerText = 'CONNECTED';
+            }
           });
 
           realtimeEventSource.addEventListener('record_change', (e) => {
             try {
               const ev = JSON.parse(e.data);
-              const currentTable = document.getElementById('table-select').value;
-              
+              handleIncomingRealtimeEvent(ev);
+
+              const sel = document.getElementById('table-select');
+              const currentTable = sel ? sel.value : '';
               if (ev.action === 'create_table' || ev.action === 'drop_table') {
                 loadTables();
                 showToast(`[Realtime] Table list updated (${ev.action})`);
@@ -4144,9 +4570,150 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               badge.style.color = '';
               badge.style.background = '';
             }
+            const pill = document.getElementById('realtime-status-pill');
+            if (pill) {
+              pill.className = 'badge badge-danger';
+              pill.innerText = 'DISCONNECTED';
+            }
           };
         } catch (_) {}
       }
+    }
+
+    // --- Realtime Stream Inspector Logic (UI-REALTIME-1) ---
+    let realtimeEventsBuffer = [];
+    let realtimeStreamPaused = false;
+    const MAX_REALTIME_EVENTS = 200;
+
+    function handleIncomingRealtimeEvent(ev) {
+      if (!ev) return;
+      const eventItem = {
+        id: 'ev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+        action: ev.action || 'unknown',
+        table: ev.table || '',
+        recordId: ev.id !== undefined ? ev.id : (ev.record && ev.record.id !== undefined ? ev.record.id : ''),
+        record: ev.record || null,
+        time: ev.time || Date.now(),
+        raw: ev
+      };
+
+      if (!realtimeStreamPaused) {
+        realtimeEventsBuffer.unshift(eventItem);
+        if (realtimeEventsBuffer.length > MAX_REALTIME_EVENTS) {
+          realtimeEventsBuffer.pop();
+        }
+        renderRealtimeFeed();
+      }
+    }
+
+    function toggleRealtimeStreamPause() {
+      realtimeStreamPaused = !realtimeStreamPaused;
+      const btn = document.getElementById('btn-realtime-pause');
+      if (btn) {
+        btn.innerText = realtimeStreamPaused ? 'Resume Stream' : 'Pause Stream';
+        btn.style.borderColor = realtimeStreamPaused ? 'var(--alert-warning-border)' : '';
+        btn.style.color = realtimeStreamPaused ? 'var(--alert-warning-title)' : '';
+      }
+    }
+
+    function clearRealtimeFeed() {
+      realtimeEventsBuffer = [];
+      renderRealtimeFeed();
+    }
+
+    function applyRealtimeFilter() {
+      renderRealtimeFeed();
+    }
+
+    function renderRealtimeFeed() {
+      const feedContainer = document.getElementById('realtime-feed-container');
+      const countEl = document.getElementById('realtime-events-count');
+      const visEl = document.getElementById('realtime-visible-count');
+      if (!feedContainer) return;
+
+      if (countEl) countEl.innerText = realtimeEventsBuffer.length;
+
+      const tblFilter = document.getElementById('realtime-filter-table') ? document.getElementById('realtime-filter-table').value.toLowerCase() : '';
+      const actFilter = document.getElementById('realtime-filter-action') ? document.getElementById('realtime-filter-action').value.toLowerCase() : '';
+      const searchTxt = document.getElementById('realtime-search-input') ? document.getElementById('realtime-search-input').value.toLowerCase() : '';
+
+      const filtered = realtimeEventsBuffer.filter(item => {
+        if (tblFilter && item.table.toLowerCase() !== tblFilter) return false;
+        if (actFilter && item.action.toLowerCase() !== actFilter) return false;
+        if (searchTxt) {
+          const jsonStr = JSON.stringify(item.raw).toLowerCase();
+          if (!jsonStr.includes(searchTxt)) return false;
+        }
+        return true;
+      });
+
+      if (visEl) visEl.innerText = filtered.length;
+
+      if (filtered.length === 0) {
+        feedContainer.innerHTML = `
+          <div id="realtime-empty-card" class="card" style="text-align: center; padding: 40px 20px; color: var(--text-muted);">
+            <div style="font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: 6px;">${realtimeEventsBuffer.length === 0 ? 'Listening for Realtime Database Mutations' : 'No matching events for current filters'}</div>
+            <div style="font-size: 0.82rem; max-width: 460px; margin: 0 auto; line-height: 1.5;">
+              ${realtimeEventsBuffer.length === 0 ? 'Perform any INSERT, UPDATE, DELETE, or DDL operation via REST API, Web Studio, PostgreSQL (:5433), or TDS (:1433) to see live streamed event cards in real-time.' : 'Try clearing filters or search keywords to view buffered events.'}
+            </div>
+          </div>`;
+        return;
+      }
+
+      let html = '';
+      filtered.forEach(item => {
+        let badgeClass = 'badge badge-muted';
+        const act = item.action.toLowerCase();
+        if (act === 'create' || act === 'insert') badgeClass = 'badge badge-success';
+        else if (act === 'update') badgeClass = 'badge badge-info';
+        else if (act === 'delete') badgeClass = 'badge badge-danger';
+        else if (act.includes('table')) badgeClass = 'badge badge-purple';
+
+        const timeStr = new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
+        const prettyJSON = escapeHtml(JSON.stringify(item.raw, null, 2));
+
+        html += `
+          <div class="card" style="padding: 14px 18px; transition: border-color 0.2s;">
+            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span class="${badgeClass}" style="font-size: 0.75rem; text-transform: uppercase; font-weight: 700;">${item.action}</span>
+                <span style="font-weight: 700; color: var(--text); font-size: 0.95rem;">${item.table || '(system)'}</span>
+                ${item.recordId !== '' ? `<span class="badge" style="background: var(--code-bg); border: 1px solid var(--border); color: var(--pk-val-color); font-family: monospace;">#${item.recordId}</span>` : ''}
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px; font-size: 0.78rem; color: var(--text-muted);">
+                <span>${timeStr}</span>
+                <button class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.72rem;" onclick="copyEventPayload('${item.id}')">Copy JSON</button>
+              </div>
+            </div>
+            <div style="margin-top: 10px;">
+              <pre id="payload-${item.id}" class="console-box" style="margin: 0; padding: 10px 14px; max-height: 160px; font-size: 0.78rem; color: var(--text); background: var(--code-bg); line-height: 1.4;">${prettyJSON}</pre>
+            </div>
+          </div>`;
+      });
+
+      feedContainer.innerHTML = html;
+    }
+
+    function copyEventPayload(eventId) {
+      const el = document.getElementById('payload-' + eventId);
+      if (el) {
+        navigator.clipboard.writeText(el.innerText).then(() => {
+          showToast('Event payload copied to clipboard!', 'success');
+        });
+      }
+    }
+
+    function populateRealtimeTableFilter() {
+      const sel = document.getElementById('realtime-filter-table');
+      if (!sel) return;
+      const currentVal = sel.value;
+      let opts = '<option value="">All Tables</option>';
+      if (tablesList && tablesList.length > 0) {
+        tablesList.forEach(t => {
+          opts += `<option value="${escapeHtml(t.name)}" ${t.name === currentVal ? 'selected' : ''}>${escapeHtml(t.name)}</option>`;
+        });
+      }
+      sel.innerHTML = opts;
     }
 
     // --- Developer API Preview Modal & Code Generator ---
@@ -5135,6 +5702,249 @@ console.log('Rows:', queryResult.rows);`;
       } else {
         badge.textContent = 'HA';
         badge.className = 'badge badge-muted';
+      }
+    }
+
+    // --- Foreign Key Referenced Record Modal Logic ---
+    let currentFKTarget = { table: '', col: '', val: '' };
+
+    function closeFKRelationModal() {
+      const modal = document.getElementById('fk-relation-modal');
+      if (modal) modal.style.display = 'none';
+    }
+
+    async function openFKRelationModal(refTable, refCol, val) {
+      currentFKTarget = { table: refTable, col: refCol, val: val };
+      const modal = document.getElementById('fk-relation-modal');
+      const title = document.getElementById('fk-modal-title');
+      const subtitle = document.getElementById('fk-modal-subtitle');
+      const body = document.getElementById('fk-modal-body');
+      const jumpBtn = document.getElementById('btn-fk-jump-table');
+
+      if (!modal || !body) return;
+      modal.style.display = 'flex';
+      if (title) title.innerText = `Referenced Record: ${refTable}`;
+      if (subtitle) subtitle.innerHTML = `Linked by <code style="color:var(--primary); font-weight:600;">${escapeHtml(refCol)} = ${escapeHtml(val)}</code>`;
+      if (jumpBtn) jumpBtn.innerText = `Jump to ${refTable} Table ↗`;
+      body.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 18px;">Loading referenced record...</div>';
+
+      try {
+        const res = await authFetch(`/api/tables/${encodeURIComponent(refTable)}/records?search=${encodeURIComponent(val)}&perPage=5`);
+        if (!res.ok) {
+          body.innerHTML = `<div style="color: var(--alert-danger-color); padding: 8px;">Failed to load referenced record (${res.statusText}).</div>`;
+          return;
+        }
+        const data = await res.json();
+        const records = data.records || [];
+        const record = records.find(r => String(r[refCol]) === String(val)) || (records.length > 0 ? records[0] : null);
+
+        if (!record) {
+          body.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 18px;">No matching record found in table <strong>${escapeHtml(refTable)}</strong> with ${escapeHtml(refCol)} = "${escapeHtml(val)}".</div>`;
+          return;
+        }
+
+        let kvHtml = '<table style="width: 100%; border-collapse: collapse; font-size: 0.82rem;">';
+        for (const [k, v] of Object.entries(record)) {
+          const valDisplay = (v === null || v === undefined) ? '<span style="color:var(--text-muted); font-style:italic;">NULL</span>' : escapeHtml(String(v));
+          const isMatched = (k === refCol);
+          kvHtml += `
+            <tr style="border-bottom: 1px solid var(--border); ${isMatched ? 'background: rgba(59, 130, 246, 0.08); font-weight:600;' : ''}">
+              <td style="padding: 6px 8px; width: 35%; color: var(--text-muted); font-family: monospace;">${escapeHtml(k)}</td>
+              <td style="padding: 6px 8px; color: var(--text); word-break: break-all;">${valDisplay}</td>
+            </tr>`;
+        }
+        kvHtml += '</table>';
+        body.innerHTML = kvHtml;
+      } catch (err) {
+        body.innerHTML = `<div style="color: var(--alert-danger-color); padding: 8px;">Error loading record: ${escapeHtml(String(err))}</div>`;
+      }
+    }
+
+    function jumpToFKParentTable() {
+      if (!currentFKTarget.table) return;
+      closeFKRelationModal();
+      const sel = document.getElementById('table-select');
+      if (sel) {
+        sel.value = currentFKTarget.table;
+        onTableChange(currentFKTarget.table);
+        const searchInput = document.getElementById('records-search-input');
+        if (searchInput && currentFKTarget.val) {
+          searchInput.value = currentFKTarget.val;
+          onSearchInput(currentFKTarget.val);
+        }
+      }
+    }
+
+    // --- Request Activity Logs (UI-LOGS-1) Logic ---
+    let logsFilterDebounce = null;
+
+    function startLogsPolling() {
+      if (logsPollTimer) clearInterval(logsPollTimer);
+      logsPollTimer = setInterval(() => {
+        if (!logsIsPaused) {
+          loadRequestLogs(true);
+        }
+      }, 3000);
+    }
+
+    function stopLogsPolling() {
+      if (logsPollTimer) {
+        clearInterval(logsPollTimer);
+        logsPollTimer = null;
+      }
+    }
+
+    function toggleLogsPause() {
+      logsIsPaused = !logsIsPaused;
+      const btn = document.getElementById('btn-logs-pause');
+      const indicator = document.getElementById('logs-live-indicator');
+      if (logsIsPaused) {
+        if (btn) btn.innerText = 'Resume';
+        if (indicator) {
+          indicator.innerHTML = '<span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--warning);"></span> Paused';
+          indicator.style.color = 'var(--warning)';
+        }
+      } else {
+        if (btn) btn.innerText = 'Pause';
+        if (indicator) {
+          indicator.innerHTML = '<span style="display:inline-block; width:7px; height:7px; border-radius:50%; background:var(--success); animation:pulse 2s infinite;"></span> Auto-refresh (3s)';
+          indicator.style.color = 'var(--success)';
+        }
+        loadRequestLogs();
+      }
+    }
+
+    function onLogsFilterChange() {
+      if (logsFilterDebounce) clearTimeout(logsFilterDebounce);
+      logsFilterDebounce = setTimeout(() => {
+        loadRequestLogs();
+      }, 200);
+    }
+
+    async function loadRequestLogs(silent = false) {
+      const qInput = document.getElementById('logs-filter-query');
+      const mSelect = document.getElementById('logs-filter-method');
+      const sSelect = document.getElementById('logs-filter-status');
+      const lSelect = document.getElementById('logs-filter-limit');
+      const tbody = document.getElementById('logs-table-body');
+      const countBadge = document.getElementById('logs-count-badge');
+      const navBadge = document.getElementById('nav-logs-badge');
+
+      const params = new URLSearchParams();
+      if (lSelect) params.set('limit', lSelect.value);
+      if (mSelect && mSelect.value !== 'ALL') params.set('method', mSelect.value);
+      if (sSelect && sSelect.value !== 'ALL') params.set('status', sSelect.value);
+      if (qInput && qInput.value.trim()) params.set('search', qInput.value.trim());
+
+      try {
+        const res = await authFetch('/api/logs/requests?' + params.toString());
+        if (!res.ok) {
+          if (!silent && tbody) {
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--alert-danger-color);">Failed to load request logs (${res.statusText})</td></tr>`;
+          }
+          return;
+        }
+
+        const data = await res.json();
+        const logs = data.logs || [];
+        const total = data.total !== undefined ? data.total : logs.length;
+
+        if (countBadge) countBadge.innerText = `${total} requests`;
+        if (navBadge) navBadge.innerText = `${total}`;
+
+        if (!tbody) return;
+        if (logs.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6" style="text-align: center; padding: 36px 16px; color: var(--text-muted);">
+                No matching request activity recorded.
+              </td>
+            </tr>`;
+          return;
+        }
+
+        tbody.innerHTML = logs.map(entry => {
+          const t = new Date(entry.timestamp);
+          const timeStr = isNaN(t.getTime()) ? '' : t.toTimeString().split(' ')[0] + '.' + String(t.getMilliseconds()).padStart(3, '0');
+
+          // Method badge color
+          let methodBg = 'rgba(59, 130, 246, 0.15)';
+          let methodColor = '#3b82f6';
+          if (entry.method === 'POST') {
+            methodBg = 'rgba(16, 185, 129, 0.15)';
+            methodColor = '#10b981';
+          } else if (entry.method === 'PUT' || entry.method === 'PATCH') {
+            methodBg = 'rgba(245, 158, 11, 0.15)';
+            methodColor = '#f59e0b';
+          } else if (entry.method === 'DELETE') {
+            methodBg = 'rgba(239, 68, 68, 0.15)';
+            methodColor = '#ef4444';
+          }
+
+          // Status badge color
+          let statusBg = 'rgba(16, 185, 129, 0.15)';
+          let statusColor = '#10b981';
+          if (entry.status >= 300 && entry.status < 400) {
+            statusBg = 'rgba(59, 130, 246, 0.15)';
+            statusColor = '#3b82f6';
+          } else if (entry.status >= 400 && entry.status < 500) {
+            statusBg = 'rgba(245, 158, 11, 0.15)';
+            statusColor = '#f59e0b';
+          } else if (entry.status >= 500) {
+            statusBg = 'rgba(239, 68, 68, 0.15)';
+            statusColor = '#ef4444';
+          }
+
+          // Latency formatting
+          let latStr = entry.duration_ms < 1.0 
+            ? `${(entry.duration_ms * 1000).toFixed(0)}µs`
+            : `${entry.duration_ms.toFixed(2)}ms`;
+          let latColor = entry.duration_ms > 100.0 ? '#ef4444' : (entry.duration_ms > 20.0 ? '#f59e0b' : 'var(--text-muted)');
+
+          return `
+            <tr style="border-bottom: 1px solid var(--border); font-family: monospace;">
+              <td style="padding: 8px 14px; color: var(--text-muted); font-size: 0.78rem;">${escapeHtml(timeStr)}</td>
+              <td style="padding: 8px 14px;">
+                <span style="display:inline-block; padding: 2px 6px; border-radius: 4px; font-weight:700; font-size: 0.72rem; background: ${methodBg}; color: ${methodColor};">
+                  ${escapeHtml(entry.method)}
+                </span>
+              </td>
+              <td style="padding: 8px 14px;">
+                <span style="display:inline-block; padding: 2px 6px; border-radius: 4px; font-weight:700; font-size: 0.72rem; background: ${statusBg}; color: ${statusColor};">
+                  ${entry.status}
+                </span>
+              </td>
+              <td style="padding: 8px 14px; color: ${latColor}; font-weight: 600; font-size: 0.78rem;">
+                ${escapeHtml(latStr)}
+              </td>
+              <td style="padding: 8px 14px; color: var(--text); word-break: break-all; font-size: 0.8rem;">
+                ${escapeHtml(entry.path)}
+              </td>
+              <td style="padding: 8px 14px; color: var(--text-muted); font-size: 0.78rem;">
+                ${escapeHtml(entry.client_ip || '-')}
+              </td>
+            </tr>`;
+        }).join('');
+
+      } catch (err) {
+        if (!silent && tbody) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align: center; padding: 24px; color: var(--alert-danger-color);">Network error: ${escapeHtml(String(err))}</td></tr>`;
+        }
+      }
+    }
+
+    async function clearRequestLogs() {
+      if (!confirm('Are you sure you want to clear all recorded request activity logs?')) return;
+      try {
+        const res = await authFetch('/api/logs/requests', { method: 'DELETE' });
+        if (res.ok) {
+          showToast('Request logs cleared successfully', 'success');
+          loadRequestLogs();
+        } else {
+          showToast('Failed to clear request logs', 'error');
+        }
+      } catch (err) {
+        showToast('Network error: ' + err, 'error');
       }
     }
 
