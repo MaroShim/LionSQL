@@ -60,7 +60,7 @@ LionSQL 서버가 기동되면 HTTP 관리 포트(기본값: TCP `8090`)에서 W
 - **갱신 주기 선택기**: `5초`, `10초`, `30초`, `60초` 단위로 백그라운드 갱신 주기를 자유롭게 조정할 수 있습니다.
 
 ### 2.3. 클라이언트 연결 가이드 패널
-DBeaver, TablePlus, Beekeeper Studio, sqlcmd, psql 등 외부 클라이언트 연동에 필요한 주소와 포트 정보가 카드 형태로 제공되며, 복사 버튼을 통해 즉시 클립보드로 가져올 수 있습니다.
+DBeaver, Beekeeper Studio, DbGate, sqlcmd, psql 등 외부 클라이언트 연동에 필요한 주소와 포트 정보가 카드 형태로 제공되며, 복사 버튼을 통해 즉시 클립보드로 가져올 수 있습니다.
 - **PostgreSQL Wire Protocol**: `localhost:5433` (기본 사용자: `admin`, 데이터베이스: `lionsql`)
 - **Microsoft SQL Server TDS**: `localhost:1433` (기본 사용자: `sa`, 데이터베이스: `master`)
 - **HTTP REST & BaaS**: `localhost:8090` (Bearer Token 인증)
