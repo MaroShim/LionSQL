@@ -549,7 +549,7 @@
   - `pkg/execution/project.go`: `projectTuple`에서 자식 튜플을 사전 구체화하고, 컬럼 탐색 시 한정된 표현식(`f.expr`, 예: `o.amount`, `u.name`)을 비한정 별칭(`f.alias`)보다 먼저 조회하도록 우선순위를 바로잡아 동일 컬럼명 섀도잉 문제 완전 해소.
   - `pkg/wire/driver_integration_test.go` 및 `pkg/wire/driver_integration_wt_test.go` (`TestDriverIntegration_WiredTiger_RelationalJoin`)에 lib/pq 기반 E2E 조인 통합 테스트를 추가하여 PGWire 57개 전 시나리오 100.0% PASS 달성.
 - [x] **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`) (`cmd/lionsql`, `cmd/server`, `pkg/config`)**:
-  - `pkg/config/version.go`: LionSQL 릴리스 버전의 단일 소스 오브 트루스(SSOT)로 `const Version = "0.90"` 정립.
+  - `pkg/config/version.go`: LionSQL 릴리스 버전의 단일 소스 오브 트루스(SSOT)로 `const Version = "0.90.0"` 정립.
   - `pkg/config/config.go`: 기본 관리자 계정을 `admin@lionsql.local`로 단일화, `-auth` 기본값을 `true`(Secure by Default)로 강화, 슬로우 쿼리 임계치(`ThresholdMS`) 기본값을 `100.0ms`로 상향.
   - 설정 파일 자동 탐색을 `lionsql.json`으로 단일화하고, 레거시 `sqlion.json` 감지 시 보안 설정 오염을 방지하기 위해 자동 폴백 없이 경고를 출력하고 무시하는 방어 로직 적용.
   - `cmd/lionsql`: PocketBase/CockroachDB 스타일 단일 바이너리 모델 적용. 인자가 없거나 플래그로 시작할 경우 서버를 즉시 포그라운드로 기동(`lionsql`, `lionsql -dir=./data`)하고, `serve`, `start`, `stop`, `restart`, `status`, `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version` 등 현대적 서브커맨드 완비.

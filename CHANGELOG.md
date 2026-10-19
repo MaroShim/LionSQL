@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.90.0] - 2026-10-19
+
 ### Added
 - **Comprehensive Web Studio User Manual (`doc/WEB_STUDIO_GUIDE.ko.md`)**: Published dedicated, full-scope user guide and reference manual covering access & authentication, overview dashboard & real-time monitoring, table & schema management (DDL viewer, safe drop confirmation), data grid & CRUD operations, CSV/JSON import/export, SQL console & EXPLAIN plan visualization, Developer API Preview (cURL, Fetch, Web SDK), live query & audit logs viewer, and hot backup/restore.
 - **Web Studio Production Feature Suite (`UI-DDL-1`, `UI-REALTIME-1`, `UI-DATA-1`, `UI-LOGS-1`) (`pkg/storage`, `pkg/engine`, `pkg/api`, `pkg/ui`)**:
@@ -37,11 +39,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Unified Single Binary CLI & Operational Lifecycle (`UNIFY-CLI`) (`cmd/lionsql`, `cmd/server`, `pkg/config`)**:
   - Consolidated server and CLI tools into a single autonomous binary (`bin/lionsql`), adopting the modern PocketBase/CockroachDB CLI model where running without arguments or with flags defaults immediately to starting the server in foreground (`lionsql`, `lionsql -dir=./data`).
   - Added modern first-class subcommands: `serve`, `start` (daemon), `stop`, `restart`, `status`, `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, and `version`.
-  - Added authoritative single source of truth for release versioning in `pkg/config/version.go` (`const Version = "0.90"`).
+  - Added authoritative single source of truth for release versioning in `pkg/config/version.go` (`const Version = "0.90.0"`).
   - Converted `cmd/server/main.go` into a lightweight, backward-compatible delegation wrapper emitting deprecation guidance (`[LionSQL Notice] 'bin/server' is deprecated...`) and passing all arguments directly to `bin/lionsql`.
   - Added startup security warning banner reminder (`[SECURITY WARNING]`) when default administrative superuser credentials (`1234567890`) remain in use.
 
 ### Fixed
+- **Virtual Catalog Database Standardization (`CATALOG-CLEANUP`) (`pkg/catalog/virtual`, `pkg/engine`)**:
+  - Removed legacy `sqlion` database across virtual catalog and SQL engine to strictly standardize on protocol canonical catalogs: `postgres` (OID: 1) for PGWire and `master` (database_id: 1) for TDS.
+  - Aligned database listing metadata (`pg_database`, `INFORMATION_SCHEMA.SCHEMATA`, `sys.databases`) to present only official protocol databases in third-party database GUI clients (Beekeeper Studio, DBeaver, Navicat).
+- **Long-Lived SSE Stream Timeout & Latency Profiling Immunity (`SSE-STREAM-1`) (`cmd/lionsql`, `pkg/api`)**:
+  - Replaced global HTTP `WriteTimeout: 15s` with `ReadHeaderTimeout: 15s` and `IdleTimeout: 60s`, preventing forced SSE disconnections.
+  - Added explicit `rc.SetWriteDeadline(time.Time{})` in `/api/realtime` and `/api/cdc/stream` handlers to ensure infinite keep-alive streaming.
+  - Excluded streaming endpoints from the HTTP request activity logger to prevent artificially skewed 15+ second latency averages in the Web Studio monitor.
 - **Graceful Shutdown Race Condition & WiredTiger SIGSEGV Prevention (`SHUTDOWN-1`) (`pkg/wire/server.go`, `pkg/storage/wiredtiger/wt_engine.go`, `pkg/storage/wiredtiger/wt_engine_test.go`)**:
   - Fixed a race condition where PGWire client connection handler goroutines exiting during shutdown invoked session close on a WiredTiger connection that was concurrently being closed or already freed by the engine shutdown coordinator, triggering a CGO segmentation fault (`SIGSEGV: addr=0xad0`).
   - Added `sync.WaitGroup` lifecycle tracking and a 1-second bounded drain in `pkg/wire/server.go` (`wire.Server.Close()`), ensuring all active connection handlers and their deferred session releases complete before `wireServer.Close()` returns.
@@ -64,7 +73,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Version Single-Source-of-Truth Synchronization (`pkg/api`, `pkg/backup`, `pkg/ui`)**:
   - Synchronized `GET /api/health` JSON response to use `config.Version` instead of legacy hardcoded `"0.7.0"`.
   - Synchronized backup and WAL archive manifest metadata (`backup.go`, `wal_archive.go`) to reference `config.Version`.
-  - Updated Web Studio dashboard HTML SDK download badge to dynamically reflect `v0.90`.
+  - Updated Web Studio dashboard HTML SDK download badge to dynamically reflect `v0.90.0`.
 
 ### Changed
 - **Branding & Global Security Defaults (`UNIFY-CLI`) (`pkg/config`, `pkg/api`, `pkg/engine`, `pkg/ui`)**:
