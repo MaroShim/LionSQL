@@ -11,6 +11,7 @@ import (
 	"sqlion/pkg/auth"
 	"sqlion/pkg/catalog"
 	"sqlion/pkg/cdc"
+	"sqlion/pkg/config"
 	"sqlion/pkg/engine"
 	"sqlion/pkg/execution"
 	"sqlion/pkg/planner"
@@ -425,7 +426,7 @@ func (s *Server) routes() {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status":  "ok",
-			"version": "0.7.0",
+			"version": config.Version,
 			"engine":  engineType,
 		})
 	})

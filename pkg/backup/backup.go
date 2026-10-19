@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"sqlion/pkg/catalog"
+	"sqlion/pkg/config"
 	"sqlion/pkg/storage"
 )
 
@@ -67,7 +68,7 @@ func CreateBackup(w io.Writer, eng storage.Engine, cat *catalog.Catalog) (*Manif
 	defer os.RemoveAll(tmpDir)
 
 	manifest := &Manifest{
-		Version:      "0.7.0",
+		Version:      config.Version,
 		CreatedAt:    startTime,
 		TablesCount:  len(tables),
 		Tables:       make([]TableSummary, 0, len(tables)),

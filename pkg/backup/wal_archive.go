@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"sqlion/pkg/config"
 	"sqlion/pkg/storage/memengine"
 )
 
@@ -253,7 +254,7 @@ func (a *WALArchiver) updateManifestLocked(newSeg ArchivedSegment) error {
 		_ = json.Unmarshal(data, &manifest)
 	}
 
-	manifest.Version = "0.7.0"
+	manifest.Version = config.Version
 	manifest.LastArchived = time.Now().UTC()
 
 	// Append or update segment
