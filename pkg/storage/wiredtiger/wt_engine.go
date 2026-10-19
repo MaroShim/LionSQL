@@ -210,6 +210,7 @@ type Engine struct {
 	stopCh      chan struct{}
 	bgWg        sync.WaitGroup
 	closed      bool
+	connClosed  atomic.Bool
 	sessMu      sync.Mutex
 	sessions    map[*WTSession]struct{}
 }
@@ -363,6 +364,7 @@ func (e *Engine) Open(dir string) error {
 
 	e.conn = conn
 	e.closed = false
+	e.connClosed.Store(false)
 
 	e.loadCatalog()
 
@@ -419,10 +421,25 @@ func (e *Engine) Close() error {
 
 	e.bgWg.Wait()
 
+	// Drain and close any remaining active sessions while e.conn is still valid
+	e.sessMu.Lock()
+	activeSessions := make([]*WTSession, 0, len(e.sessions))
+	for s := range e.sessions {
+		activeSessions = append(activeSessions, s)
+	}
+	e.sessMu.Unlock()
+
+	for _, s := range activeSessions {
+		_ = s.Close()
+	}
+
 	e.syncMu.Lock()
 	defer e.syncMu.Unlock()
 	e.mu.Lock()
 	defer e.mu.Unlock()
+
+	// Mark connection closed so any concurrent or deferred session close safely no-ops
+	e.connClosed.Store(true)
 
 	ret := C.go_wt_close(e.conn)
 	e.conn = nil
@@ -737,7 +754,7 @@ func (e *Engine) NewSession() (storage.Session, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if e.closed || e.conn == nil {
+	if e.closed || e.connClosed.Load() || e.conn == nil {
 		return nil, fmt.Errorf("engine is closed")
 	}
 
@@ -831,6 +848,13 @@ func (s *WTSession) Close() error {
 	}
 	s.allCursors = nil
 	s.cursorPool = nil
+
+	// If the parent engine connection has already been closed or is being closed,
+	// bypass C.go_wt_session_close to prevent dereferencing freed connection memory (SIGSEGV).
+	if s.engine.connClosed.Load() {
+		s.sess = nil
+		return nil
+	}
 
 	ret := C.go_wt_session_close(s.sess)
 	s.sess = nil

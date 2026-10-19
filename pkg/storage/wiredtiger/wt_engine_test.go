@@ -904,3 +904,38 @@ func TestWiredTiger_DuplicatePrimaryKey_ErrKeyExists(t *testing.T) {
 	}
 }
 
+func TestWiredTiger_SessionCloseAfterEngineClose_NoPanic(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_teardown_race_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+
+	// Open multiple sessions concurrently
+	sessions := make([]storage.Session, 10)
+	for i := 0; i < len(sessions); i++ {
+		sess, err := eng.NewSession()
+		if err != nil {
+			t.Fatalf("NewSession failed: %v", err)
+		}
+		sessions[i] = sess
+	}
+
+	// Close engine first while sessions are still open
+	if err := eng.Close(); err != nil {
+		t.Fatalf("Close failed: %v", err)
+	}
+
+	// Ensure closing sessions AFTER eng.Close() is completely safe (no SIGSEGV / panic)
+	for i, sess := range sessions {
+		if err := sess.Close(); err != nil {
+			t.Errorf("sess[%d].Close failed unexpectedly: %v", i, err)
+		}
+	}
+}
+

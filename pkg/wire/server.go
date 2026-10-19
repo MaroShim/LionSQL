@@ -50,6 +50,7 @@ type Server struct {
 	closed      bool
 	clientConns           map[net.Conn]struct{}
 	maxPreparedPerSession int
+	wg                    sync.WaitGroup
 }
 
 // NewServer creates a new PostgreSQL wire protocol server.
@@ -180,6 +181,7 @@ func (s *Server) Start() error {
 	}
 	s.listener = l
 
+	s.wg.Add(1)
 	go s.acceptLoop()
 	return nil
 }
@@ -194,11 +196,11 @@ func (s *Server) Addr() net.Addr {
 	return nil
 }
 
-// Close terminates the listener and active connections.
+// Close gracefully terminates the listener and active connections within a 1-second bounded timeout.
 func (s *Server) Close() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.closed {
+		s.mu.Unlock()
 		return nil
 	}
 	s.closed = true
@@ -209,10 +211,24 @@ func (s *Server) Close() error {
 	for c := range s.clientConns {
 		_ = c.Close()
 	}
+	s.mu.Unlock()
+
+	waitCh := make(chan struct{})
+	go func() {
+		s.wg.Wait()
+		close(waitCh)
+	}()
+
+	select {
+	case <-waitCh:
+	case <-time.After(1 * time.Second):
+	}
+
 	return err
 }
 
 func (s *Server) acceptLoop() {
+	defer s.wg.Done()
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
@@ -242,11 +258,13 @@ func (s *Server) acceptLoop() {
 		s.clientConns[conn] = struct{}{}
 		s.mu.Unlock()
 
+		s.wg.Add(1)
 		go func(c net.Conn) {
 			defer func() {
 				s.mu.Lock()
 				delete(s.clientConns, c)
 				s.mu.Unlock()
+				s.wg.Done()
 			}()
 			s.handleConnection(c)
 		}(conn)
