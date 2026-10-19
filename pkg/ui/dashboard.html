@@ -279,10 +279,144 @@
       color: #38bdf8;
       font-weight: bold;
     }
+
+    /* Toast Notification System */
+    #toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 99999;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .toast-msg {
+      pointer-events: auto;
+      min-width: 280px;
+      max-width: 420px;
+      padding: 12px 18px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.4), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      animation: toast-slide-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      transition: opacity 0.3s, transform 0.3s;
+    }
+    .toast-msg.toast-success {
+      background: #064e3b;
+      border: 1px solid #10b981;
+      color: #6ee7b7;
+    }
+    .toast-msg.toast-error {
+      background: #4c0519;
+      border: 1px solid #f43f5e;
+      color: #fecdd3;
+    }
+    .toast-msg.toast-info {
+      background: #1e293b;
+      border: 1px solid #38bdf8;
+      color: #bae6fd;
+    }
+    .toast-close {
+      background: transparent;
+      border: none;
+      color: inherit;
+      font-size: 1.1rem;
+      cursor: pointer;
+      opacity: 0.7;
+      padding: 0 4px;
+      line-height: 1;
+    }
+    .toast-close:hover { opacity: 1; }
+    @keyframes toast-slide-in {
+      from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes toast-fade-out {
+      from { opacity: 1; transform: translateY(0); }
+      to { opacity: 0; transform: translateY(-10px); }
+    }
+
+    /* Responsive Mobile & Tablet Layout */
+    .mobile-header {
+      display: none;
+      background: var(--sidebar);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .mobile-hamburger-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 1.1rem;
+      cursor: pointer;
+    }
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(2px);
+      z-index: 9998;
+    }
+    @media (max-width: 900px) {
+      body {
+        flex-direction: column;
+        height: auto;
+        overflow-y: auto;
+      }
+      .mobile-header {
+        display: flex;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+      }
+      aside {
+        position: fixed;
+        top: 0;
+        left: -280px;
+        width: 280px;
+        height: 100vh;
+        z-index: 9999;
+        box-shadow: 4px 0 20px rgba(0,0,0,0.5);
+        transition: left 0.25s ease;
+      }
+      aside.sidebar-open {
+        left: 0;
+      }
+      .sidebar-backdrop.active {
+        display: block;
+      }
+      main {
+        padding: 15px;
+        overflow: visible;
+      }
+      .grid-2 {
+        grid-template-columns: 1fr !important;
+      }
+    }
   </style>
 </head>
 <body>
-  <aside>
+  <div id="toast-container"></div>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
+  <div class="mobile-header">
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <button class="mobile-hamburger-btn" onclick="toggleSidebar()" aria-label="Toggle navigation menu">&#9776;</button>
+      <span style="font-weight: 700; font-size: 1.05rem;">LionSQL</span>
+    </div>
+    <span class="badge">OLTP + SP</span>
+  </div>
+  <aside id="main-sidebar">
     <div class="logo">
       <span>LionSQL</span>
       <span class="badge">OLTP + SP</span>
@@ -302,6 +436,9 @@
         <span class="badge" style="background:#047857; color:#6ee7b7; font-size:0.65rem;">Active</span>
       </div>
       <button id="auth-action-btn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem; width: 100%;" onclick="logout()">Sign Out</button>
+    </div>
+    <div style="padding: 10px 14px 4px 14px;">
+      <input type="text" id="sidebar-quick-search" placeholder="Filter tables & views..." style="margin: 0; padding: 6px 10px; font-size: 0.78rem; background: #090d16; border-radius: 6px;" oninput="onSidebarQuickSearch(this.value)" />
     </div>
     <nav>
       <button class="nav-btn active" data-view="tables" onclick="switchView('tables')">
@@ -901,7 +1038,7 @@ END;</textarea>
               </div>
               <div style="flex: 1;">
                 <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">From Name:</label>
-                <input type="text" id="mail-from-name" placeholder="SQLion Notifications" style="margin-top: 4px;" />
+                <input type="text" id="mail-from-name" placeholder="LionSQL Notifications" style="margin-top: 4px;" />
               </div>
             </div>
 
@@ -922,7 +1059,7 @@ END;</textarea>
         <div class="card">
           <h3 style="font-size: 1rem; margin-bottom: 14px;">Send Test Email</h3>
           <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.5; margin-bottom: 16px;">
-            Verify your SMTP connection by sending an immediate transactional test message using SQLion's built-in welcome template.
+            Verify your SMTP connection by sending an immediate transactional test message using LionSQL's built-in welcome template.
           </p>
           <div style="margin-bottom: 12px;">
             <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Destination Email:</label>
@@ -979,7 +1116,7 @@ END;</textarea>
       <div class="card" style="margin-top: 20px;">
         <h3 style="font-size: 1rem; margin-bottom: 12px; color: #93c5fd;">1. Quick Installation & CDN Inclusion</h3>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
-          Load the SDK directly from your running SQLion server without npm dependencies:
+          Load the SDK directly from your running LionSQL server without npm dependencies:
         </p>
         <pre class="console-box" style="color: #6ee7b7; padding: 12px; font-size: 0.82rem;">&lt;script src="/sdk/sqlion.js"&gt;&lt;/script&gt;
 &lt;script&gt;
@@ -1138,15 +1275,15 @@ const procRes = await client.exec('TransferFunds', {
               <h3 style="font-size: 1.05rem; font-weight: 600;">Autonomous Single-Node Engine</h3>
             </div>
             <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 6px; line-height: 1.5;">
-              High-Availability (HA) replication streaming is not enabled on this instance. SQLion is currently running as an autonomous standalone database with local ACID durability.
+              High-Availability (HA) replication streaming is not enabled on this instance. LionSQL is currently running as an autonomous standalone database with local ACID durability.
             </div>
             <div style="margin-top: 14px; background: #090d16; border: 1px solid var(--border); border-radius: 6px; padding: 12px;">
               <div style="font-size: 0.75rem; font-weight: 600; color: #93c5fd; margin-bottom: 6px;">How to Start High-Availability Replication Topology:</div>
               <pre style="font-size: 0.75rem; color: #cbd5e1; line-height: 1.5; margin: 0; font-family: monospace;"># 1. Primary Node (Single Writer)
-./bin/server --port=8090 --pg-port=5433 --tds-port=1433 --rep-role=primary --rep-node=primary-1
+lionsql serve --http=127.0.0.1:8090 --pg=127.0.0.1:5433 --tds=127.0.0.1:1433 --rep-role=primary --rep-node=primary-1
 
 # 2. Secondary Replica Node (Read-Only Scale-Out)
-./bin/server --port=8091 --pg-port=5434 --tds-port=1434 --rep-role=replica --rep-node=replica-1 --rep-primary=http://127.0.0.1:8090</pre>
+lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --rep-role=replica --rep-node=replica-1 --replica-of=http://127.0.0.1:8090</pre>
             </div>
           </div>
         </div>
@@ -1155,7 +1292,7 @@ const procRes = await client.exec('TransferFunds', {
       <!-- Replication Architecture Invariant Reference Card -->
       <div class="card" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">
         <div style="font-weight: 600; color: #f8fafc; margin-bottom: 4px;">High Availability Architecture Invariant: 1-Writer Multi-Reader Topology</div>
-        SQLion prioritizes vertical scale-up hardware saturation with 1-Writer Multi-Reader physical WAL replication. Readers never block writers and writers never block readers. All write transactions execute strictly on the authoritative Primary node, while Replicas stream and replay physical WAL records with sub-millisecond latency.
+        LionSQL prioritizes vertical scale-up hardware saturation with 1-Writer Multi-Reader physical WAL replication. Readers never block writers and writers never block readers. All write transactions execute strictly on the authoritative Primary node, while Replicas stream and replay physical WAL records with sub-millisecond latency.
       </div>
     </div>
 
@@ -1237,7 +1374,7 @@ const procRes = await client.exec('TransferFunds', {
         <input type="url" id="webhook-url" required placeholder="https://hooks.slack.com/... or https://api.mycompany.com/webhook" style="margin-top: 4px; margin-bottom: 12px;" />
 
         <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">HMAC-SHA256 Secret (Optional):</label>
-        <input type="text" id="webhook-secret" placeholder="Optional secret for X-SQLion-Signature header" style="margin-top: 4px; margin-bottom: 20px; font-family: monospace;" />
+        <input type="text" id="webhook-secret" placeholder="Optional secret for X-LionSQL-Signature header" style="margin-top: 4px; margin-bottom: 20px; font-family: monospace;" />
 
         <div style="display: flex; gap: 10px;">
           <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeCreateWebhookModal()">Cancel</button>
@@ -1412,7 +1549,7 @@ const procRes = await client.exec('TransferFunds', {
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <div>
           <h3 style="font-size: 1.15rem; font-weight: 700; color: #818cf8;">Developer API Preview</h3>
-          <div style="font-size: 0.75rem; color: var(--text-muted);">Ready-to-use code snippets for integrating with SQLion REST API.</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">Ready-to-use code snippets for integrating with LionSQL REST API.</div>
         </div>
         <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeAPIPreviewModal()">✕</button>
       </div>
@@ -1470,6 +1607,52 @@ const procRes = await client.exec('TransferFunds', {
   <div id="toast" style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; display: none; z-index: 10000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); border: 1px solid var(--border);"></div>
 
   <script>
+    function showToast(message, type = 'info') {
+      let container = document.getElementById('toast-container');
+      if (!container) {
+        container = document.createElement('div');
+        container.id = 'toast-container';
+        document.body.appendChild(container);
+      }
+      const toast = document.createElement('div');
+      toast.className = `toast-msg toast-${type}`;
+      const msgSpan = document.createElement('span');
+      msgSpan.textContent = String(message);
+      const closeBtn = document.createElement('button');
+      closeBtn.className = 'toast-close';
+      closeBtn.innerHTML = '&times;';
+      closeBtn.onclick = () => toast.remove();
+      toast.appendChild(msgSpan);
+      toast.appendChild(closeBtn);
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.animation = 'toast-fade-out 0.3s forwards';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function toggleSidebar() {
+      const aside = document.getElementById('main-sidebar');
+      const backdrop = document.getElementById('sidebar-backdrop');
+      if (aside) aside.classList.toggle('sidebar-open');
+      if (backdrop) backdrop.classList.toggle('active');
+    }
+
+    function onSidebarQuickSearch(query) {
+      const q = (query || '').toLowerCase().trim();
+      const tableRows = document.querySelectorAll('#tables-list-tbody tr');
+      tableRows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+      const procRows = document.querySelectorAll('#procs-list-tbody tr');
+      procRows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+    }
+
     let proceduresList = [];
     let tablesList = [];
     let currentTableSubView = 'records';
@@ -1477,6 +1660,13 @@ const procRes = await client.exec('TransferFunds', {
     let currentReplicationData = null;
 
     function switchView(view) {
+      if (window.innerWidth <= 900) {
+        const aside = document.getElementById('main-sidebar');
+        const backdrop = document.getElementById('sidebar-backdrop');
+        if (aside) aside.classList.remove('sidebar-open');
+        if (backdrop) backdrop.classList.remove('active');
+      }
+
       if (replicationPollTimer) {
         clearInterval(replicationPollTimer);
         replicationPollTimer = null;
@@ -2148,7 +2338,7 @@ const procRes = await client.exec('TransferFunds', {
     function saveSQLFavorite() {
       const sql = document.getElementById('sql-query-input').value.trim();
       if (!sql) {
-        alert('Cannot save an empty query snippet.');
+        showToast('Cannot save an empty query snippet.', 'error');
         return;
       }
       const name = prompt('Enter a name for this favorite query snippet:', sql.substring(0, 30));
@@ -2158,14 +2348,14 @@ const procRes = await client.exec('TransferFunds', {
       list.push({ name: name.trim(), sql: sql });
       saveSQLFavoritesToStorage(list);
       renderSQLFavoritesDropdown();
-      showToast(`Saved snippet "${name.trim()}"`);
+      showToast(`Saved snippet "${name.trim()}"`, 'success');
     }
 
     function deleteSQLFavorite() {
       const sel = document.getElementById('sql-favorites-select');
       const idx = sel.value;
       if (idx === '' || idx === undefined) {
-        alert('Please select a saved snippet to delete.');
+        showToast('Please select a saved snippet to delete.', 'error');
         return;
       }
       const list = loadSQLFavorites();
@@ -2973,7 +3163,7 @@ const procRes = await client.exec('TransferFunds', {
     async function dropCurrentTable() {
       const tbl = document.getElementById('table-select').value;
       if (!tbl) {
-        alert('Please select a table to drop.');
+        showToast('Please select a table to drop.', 'error');
         return;
       }
       if (!confirm(`Are you sure you want to permanently DROP table '${tbl}'?\nAll data in this table will be erased!`)) {
@@ -2983,14 +3173,14 @@ const procRes = await client.exec('TransferFunds', {
       try {
         const res = await authFetch(`/api/tables/${tbl}`, { method: 'DELETE' });
         if (res.ok) {
-          showToast(`Table '${tbl}' dropped successfully!`);
+          showToast(`Table '${tbl}' dropped successfully!`, 'success');
           loadTables();
         } else {
           const data = await res.json();
-          showToast(`Error dropping table: ${data.error || 'unknown error'}`, true);
+          showToast(`Error dropping table: ${data.error || 'unknown error'}`, 'error');
         }
       } catch (err) {
-        showToast(`Network error: ${err}`, true);
+        showToast(`Network error: ${err}`, 'error');
       }
     }
 
@@ -2998,7 +3188,7 @@ const procRes = await client.exec('TransferFunds', {
     function openCreateRecordModal() {
       const tbl = document.getElementById('table-select').value;
       if (!tbl) {
-        alert('Please select a table first');
+        showToast('Please select a table first', 'error');
         return;
       }
       const tableSchema = tablesList.find(t => t.name === tbl);
@@ -3157,19 +3347,19 @@ const procRes = await client.exec('TransferFunds', {
         });
         const out = await res.json();
         if (res.ok) {
-          alert(`Procedure '${out.name}' registered successfully!`);
+          showToast(`Procedure '${out.name}' registered successfully!`, 'success');
           loadProcedures();
         } else {
-          alert(`Error: ${out.error}`);
+          showToast(`Error: ${out.error}`, 'error');
         }
       } catch (err) {
-        alert(err);
+        showToast(String(err), 'error');
       }
     }
 
     async function executeProcedure() {
       const name = document.getElementById('proc-select').value;
-      if (!name) return alert('Select a procedure first');
+      if (!name) return showToast('Select a procedure first', 'error');
       const proc = proceduresList.find(p => p.name === name);
       const args = {};
       if (proc && proc.params) {
@@ -3190,8 +3380,14 @@ const procRes = await client.exec('TransferFunds', {
         });
         const out = await res.json();
         outBox.innerText = JSON.stringify(out, null, 2);
+        if (res.ok) {
+          showToast(`Procedure '${name}' executed successfully!`, 'success');
+        } else {
+          showToast(`Procedure execution failed: ${out.error || 'error'}`, 'error');
+        }
       } catch (err) {
         outBox.innerText = 'Execution error: ' + err;
+        showToast('Execution error: ' + err, 'error');
       }
     }
 
@@ -3199,10 +3395,10 @@ const procRes = await client.exec('TransferFunds', {
       try {
         const res = await authFetch('/api/seed', { method: 'POST' });
         const out = await res.json();
-        alert(out.message || 'Sample seeded!');
+        showToast(out.message || 'Sample seeded successfully!', 'success');
         loadTables();
       } catch (err) {
-        alert(err);
+        showToast(String(err), 'error');
       }
     }
 
@@ -3396,7 +3592,7 @@ const procRes = await client.exec('TransferFunds', {
       const input = document.getElementById('created-key-token');
       input.select();
       document.execCommand('copy');
-      alert('API Key copied to clipboard!');
+      showToast('API Key copied to clipboard!', 'success');
     }
 
     async function revokeAPIKey(id) {
@@ -3406,13 +3602,14 @@ const procRes = await client.exec('TransferFunds', {
       try {
         const res = await authFetch(`/api/keys/${id}`, { method: 'DELETE' });
         if (res.ok) {
+          showToast(`API Key ${id} revoked successfully!`, 'success');
           loadAPIKeys();
         } else {
           const data = await res.json();
-          alert('Error: ' + data.error);
+          showToast('Error: ' + data.error, 'error');
         }
       } catch (err) {
-        alert('Network error: ' + err);
+        showToast('Network error: ' + err, 'error');
       }
     }
 

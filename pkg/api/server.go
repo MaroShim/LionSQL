@@ -388,14 +388,14 @@ func (s *Server) GetActiveQueries() []ActiveQueryInfo {
 	return s.coordinator.GetActiveQueries()
 }
 
-// Handler returns the HTTP handler.
+// Handler returns the HTTP handler wrapped with CORS, security headers, and gzip compression middlewares.
 func (s *Server) Handler() http.Handler {
-	return s.mux
+	return gzipMiddleware(corsAndSecurityMiddleware(s.mux))
 }
 
 // ServeHTTP implements http.Handler for direct HTTP serving.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	s.mux.ServeHTTP(w, r)
+	s.Handler().ServeHTTP(w, r)
 }
 
 func (s *Server) routes() {

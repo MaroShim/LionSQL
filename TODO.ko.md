@@ -23,6 +23,8 @@
 | **`LOC-1` ~ `LOC-4`** | **다국어/정렬 (Collation)** | `LOC-1` ~ `LOC-4` | MSSQL Collation/로케일 지원, COLLATE 관용 파싱, 내장 함수 트랙 |
 | **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
 | **`AUTH-1`** | **인증/토큰교환 (Auth)** | `AUTH-1` | 클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) 트랙 |
+| **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
+| **`UI-1` ~ `UI-4`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-4` | 모던 Toast 알림, 반응형 햄버거 메뉴, 브랜드 정돈, 실시간 검색 필터 |
 
 ---
 
@@ -59,6 +61,12 @@
 | **P2** | **실행/조인** | **관계형 조인 시 우측 자식 컬럼 프로젝션 누락 보강 (`PG-COMPAT-3`)** | `pkg/execution` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P3** | **다국어/정렬** | **MSSQL Collation/로케일 지원 및 `COLLATE` 관용 파싱 (`LOC-1` ~ `LOC-4`)** | `pkg/proc`, `pkg/engine`, `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | [`notes/COLLATION_AND_LOCALE_PLAN.md`](notes/COLLATION_AND_LOCALE_PLAN.md) |
 | **P1** | **와이어/HTTP** | **HTTP REST & Web Management (포트 8090) 8대 기능 전수 검증 및 실측 E2E 테스트 스위트 (`HTTP-TEST-1`)** | `pkg/api`, `doc/HTTP_API_FUNCTIONALITY_REPORT.md` | **완료 (`[x]`)** | [`doc/HTTP_API_FUNCTIONALITY_REPORT.md`](doc/HTTP_API_FUNCTIONALITY_REPORT.md) |
+| **P1** | **와이어/보안** | **글로벌 CORS 미들웨어 & OPTIONS Preflight 지원 (`HTTP-1`)** | `pkg/api` | **완료 (`[x]`)** | - |
+| **P1** | **와이어/성능** | **HTTP Gzip 응답 압축 핸들러 (`HTTP-2`)** | `pkg/api` | **완료 (`[x]`)** | - |
+| **P1** | **보안/리소스** | **요청 본문 상한 가드(32MB) 및 보안 응답 헤더 하드닝 (`HTTP-3`, `HTTP-4`)** | `pkg/api` | **완료 (`[x]`)** | - |
+| **P1** | **UI/UX** | **Web Studio 네이티브 `alert()` ➔ 모던 Toast 알림 전면 교체 (`UI-1`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/UX** | **Web Studio 반응형 레이아웃 및 사이드바 햄버거 토글 (`UI-2`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/브랜드** | **Web Studio 브랜드 네이밍(`SQLion` ➔ `LionSQL`) 정돈 및 검색 필터 (`UI-3`, `UI-4`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 
