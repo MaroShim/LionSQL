@@ -2,6 +2,10 @@
 
 High-Concurrency Embedded OLTP Database Engine & Multi-Protocol Stored Procedure Server
 
+[![Version](https://img.shields.io/badge/version-v0.90.0--feature--freeze-blue.svg)](CHANGELOG.md)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
+[![Go Report](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev)
+
 (한국어 문서는 [README.ko.md](README.ko.md)를 참조하세요.)
 
 ---
@@ -118,7 +122,7 @@ LionSQL's core capabilities are organized across five foundational architectural
 - **Auto-Generated RESTful Records CRUD API**:
   Instant zero-code REST endpoints (`/api/records/:table`) for all database tables upon creation, advanced boolean URL query filter engine (`filter`), multi-column sorting (`sort`), pagination, and schema-aware JSON typing.
 - **Embedded Web Management Studio (Port 8090)**:
-  Zero-install browser dashboard served at `http://localhost:8090/_/`, spreadsheet-style table viewer with inline cell editing, dynamic schema-matched Developer API Preview code generator (LionSQL SDK, cURL, Fetch, Python, Go), interactive SQL Query Studio with visual VDBE disassembler, realtime Server-Sent Events (SSE) live sync, and granular API Key / Superuser JWT management.
+  Zero-install browser dashboard served at `http://localhost:8090/_/`, featuring spreadsheet-style table viewer with inline cell editing, dynamic schema-matched Developer API Preview code generator (LionSQL SDK, cURL, Fetch, Python, Go), interactive SQL Query Studio with visual VDBE disassembler, Realtime Live Stream SSE viewer (`/api/realtime`), Request Activity Logs latency profiler (`/api/logs/requests`), visual dynamic column addition modal (`+ Add Column`), multi-row bulk exports (CSV/JSON), foreign key interactive jump links (`↗`), and granular API Key / Superuser JWT management.
 - **Official Universal JavaScript & TypeScript Client SDK**:
   PocketBase-compatible client (`sqlion.js`, `sqlion.d.ts`) served directly by the standalone executable (`GET /sdk/sqlion.js`), supporting Web Browsers, Node.js (v18+), Bun, Deno, and Edge runtimes.
 - **Declarative Row-Level Security (RLS) & Asynchronous Webhooks**:
@@ -141,21 +145,29 @@ LionSQL's core capabilities are organized across five foundational architectural
 #### Build Command
 
 ```bash
-# Build production server with WiredTiger support
-go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server
+# Build production single binary with WiredTiger support
+go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
 
-# Build pure-Go server (Zero Cgo dependency, runs everywhere)
-go build -buildvcs=false -o bin/server ./cmd/server
+# Build pure-Go single binary (Zero Cgo dependency, runs everywhere)
+go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
 ```
 
 ### 2. Starting the Server
 
 ```bash
-# Start LionSQL with default ports and WiredTiger storage (creates 'data' directory)
-./bin/server
+# Start LionSQL in foreground (default, creates 'data' directory)
+./bin/lionsql
 
-# Or start with the pure-Go in-memory engine (zero Cgo required)
-./bin/server -engine=memory
+# Or start with pure-Go in-memory engine (zero Cgo required)
+./bin/lionsql -engine=memory
+
+# Or start as a background daemon with live-logging
+./bin/lionsql start -dev
+
+# Inspect status, restart, or stop daemon
+./bin/lionsql status
+./bin/lionsql restart -dev
+./bin/lionsql stop
 ```
 
 Upon startup, the console displays the connection endpoints:
@@ -167,12 +179,12 @@ Upon startup, the console displays the connection endpoints:
  [Web Dashboard]  http://127.0.0.1:8090/_/
  [HTTP API]       http://127.0.0.1:8090/api/health
  [Superuser Auth] admin@lionsql.local (JWT Auth: true)
- [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (Beekeeper / DBeaver / DbGate / psql)
- [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (Beekeeper / DBeaver / DbGate / Azure Data Studio / pymssql)
+ [Postgres Wire]  psql -h 127.0.0.1 -p 5433 -d postgres (Beekeeper / DBeaver / Navicat / psql)
+ [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 -d master (Beekeeper / DBeaver / Navicat / SSMS / Azure Data Studio)
  [Data Directory] data
  [Storage Engine] wiredtiger
  [Session Pooler] Max Workers: 32, Max Idle Sessions: 64 (No PgBouncer required)
- [Memory Governor] work_mem: 64MB (External Merge Sort spill-to-disk enabled)
+ [Memory Governor] max_memory: Auto (70% of RAM), work_mem: 64MB (Spill-to-disk enabled)
 ------------------------------------------------------------
 ```
 
@@ -191,7 +203,7 @@ The Web Studio provides immediate visual table inspection, real-time query execu
 ### Connecting via `psql` (PostgreSQL Client)
 
 ```bash
-psql -h 127.0.0.1 -p 5433 -U admin
+psql -h 127.0.0.1 -p 5433 -U admin -d postgres
 ```
 
 ```sql
@@ -209,7 +221,7 @@ SHOW work_mem;
 ### Connecting via `sqlcmd` (MSSQL Client)
 
 ```bash
-sqlcmd -S 127.0.0.1,1433 -U admin
+sqlcmd -S 127.0.0.1,1433 -U admin -d master
 ```
 
 ```sql
@@ -222,10 +234,10 @@ GO
 
 ```bash
 -- High-speed data export to CSV
-psql -h 127.0.0.1 -p 5433 -c "\copy accounts to 'accounts.csv' with (format csv, header)"
+psql -h 127.0.0.1 -p 5433 -d postgres -c "\copy accounts to 'accounts.csv' with (format csv, header)"
 
 -- High-speed data import from CSV
-psql -h 127.0.0.1 -p 5433 -c "\copy accounts from 'accounts.csv' with (format csv, header)"
+psql -h 127.0.0.1 -p 5433 -d postgres -c "\copy accounts from 'accounts.csv' with (format csv, header)"
 ```
 
 ---
@@ -246,7 +258,7 @@ import (
 )
 
 func main() {
-	dsn := "postgres://admin:1234567890@127.0.0.1:5433/lionsql?sslmode=disable"
+	dsn := "postgres://admin:1234567890@127.0.0.1:5433/postgres?sslmode=disable"
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		log.Fatal(err)
@@ -359,32 +371,52 @@ run();
 | `-auth` | `false` | Enforce JWT authentication on protected REST endpoints |
 | `-seed` | `true` | Seed sample accounts and `TransferFunds` procedure on startup |
 
-### Background Daemon Controls
+### Unified CLI & Daemon Controls
 
-LionSQL can run as a background service without third-party daemon wrappers:
+LionSQL provides a modern, unified CLI with first-class lifecycle commands:
 
 ```bash
-# Start LionSQL in the background
-./bin/server -d
+# Foreground execution (default)
+./bin/lionsql                   # Start immediately using ./data
+./bin/lionsql serve -dir=./data # Explicit serve subcommand
 
-# Check daemon status and PID
-./bin/server -status
+# Background daemon management
+./bin/lionsql start -dev        # Start daemon in background (creates lionsql.pid & lionsql.log)
+./bin/lionsql status            # Inspect daemon status and PID
+./bin/lionsql restart -dev      # Graceful restart daemon
+./bin/lionsql stop              # Graceful stop daemon
 
-# Restart the running daemon
-./bin/server -restart
+# Operational subcommands
+./bin/lionsql version           # Display engine version and build tags
+./bin/lionsql doctor            # Verify environment, ports, and permissions
+./bin/lionsql init-config       # Generate default lionsql.json configuration file
+./bin/lionsql sql "SELECT 1"    # Quick interactive query execution
+```
 
-# Stop the daemon gracefully
-./bin/server -stop
+### Declarative Schema Migrations CLI (`lionsql migrate`)
+
+```bash
+# Create a new timestamped migration pair (.up.sql / .down.sql)
+./bin/lionsql migrate new create_users_table
+
+# Apply all pending migrations atomically
+./bin/lionsql migrate up -data=./data
+
+# Roll back the most recent migration step
+./bin/lionsql migrate down -steps=1 -data=./data
+
+# View migration deployment status
+./bin/lionsql migrate status -data=./data
 ```
 
 ### Backup & Restore Operations
 
 ```bash
 # Offline or CLI-driven snapshot hot backup to target archive
-./bin/server -dir=data -backup=/backups/lionsql-snapshot.tar.gz
+./bin/lionsql backup -dir=data -target=/backups/lionsql-snapshot.tar.gz
 
 # Restore database from archive
-./bin/server -dir=data -restore=/backups/lionsql-snapshot.tar.gz
+./bin/lionsql restore -dir=data -source=/backups/lionsql-snapshot.tar.gz
 
 # Online live backup download via curl while server is running
 curl -OJ http://127.0.0.1:8090/api/backup
@@ -476,7 +508,9 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
 1. **Compilation (Build)**:
    ```bash
    go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
-   go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
+   go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
+   go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
+   go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
    ```
 2. **Deterministic Race-Free Verification (Test)**:
    ```bash

@@ -2,6 +2,10 @@
 
 고동시성 임베디드 OLTP 데이터베이스 엔진 및 다중 프로토콜 저장 프로시저 서버
 
+[![Version](https://img.shields.io/badge/version-v0.90.0--feature--freeze-blue.svg)](CHANGELOG.md)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
+[![Go Report](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev)
+
 (English documentation is available at [README.md](README.md).)
 
 ---
@@ -118,7 +122,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 - **자동 생성 RESTful Records CRUD API**:
   테이블 생성 즉시 무코드 RESTful 엔드포인트(`/api/records/:table`) 자동 활성화, 정교한 URL 불리언 필터 엔진(`filter`), 다중 컬럼 정렬(`sort`), 페이지네이션, JSON 직렬화 지원.
 - **내장 웹 관리 스튜디오 (Web Studio, 포트 8090)**:
-  브라우저 관리자 대시보드 (`/_/`), 스프레드시트 인라인 셀 편집기, 테이블 스키마 연동 동적 API Preview 코드 생성기 (LionSQL SDK, cURL, Fetch, Python, Go), SQL 쿼리 에디터, VDBE 바이트코드 디스어셈블러, 실시간 Server-Sent Events (SSE) 동기화, 슈퍼유저 및 API Key 관리.
+  브라우저 관리자 대시보드 (`/_/`), 스프레드시트 인라인 셀 편집기, 테이블 스키마 연동 동적 API Preview 코드 생성기 (LionSQL SDK, cURL, Fetch, Python, Go), SQL 쿼리 에디터, VDBE 바이트코드 디스어셈블러, 실시간 라이브 스트림 SSE 뷰어 (`/api/realtime`), 실시간 HTTP 요청 활동 로그 및 레이턴시 프로파일러 (`/api/logs/requests`), 시각적 컬럼 추가 DDL 모달 (`+ Add Column`), 다중 행 일괄 내보내기(CSV/JSON), 외래키 연관 테이블 점프(`↗`), 슈퍼유저 및 API Key 관리.
 - **공식 범용 JavaScript & TypeScript 클라이언트 SDK**:
   서버 바이너리가 직접 호스팅하는 PocketBase 스타일 SDK (`GET /sdk/sqlion.js`, `sqlion.d.ts`), 웹 브라우저, Node.js, Bun, Deno, Edge 런타임 지원.
 - **선언적 행 수준 보안 (RLS) & 비동기 웹훅**:
@@ -141,24 +145,29 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 #### 빌드 커맨드
 
 ```bash
-# WiredTiger 스토리지를 지원하는 프로덕션 서버 바이너리 빌드
-go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server
-
-# 순수 Go 인메모리 엔진 전용 바이너리 빌드 (Cgo 의존성 제로, 어디서나 실행 가능)
-go build -buildvcs=false -o bin/server ./cmd/server
-
-# 선언적 스키마 마이그레이션 CLI 도구 빌드
+# WiredTiger 스토리지를 지원하는 프로덕션 단일 바이너리 빌드
 go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
+
+# 순수 Go 인메모리 엔진 전용 단일 바이너리 빌드 (Cgo 의존성 제로, 어디서나 실행 가능)
+go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
 ```
 
 ### 3.2. 서버 기동
 
 ```bash
-# 기본 설정(포트 5433, 1433, 8090) 및 WiredTiger 스토리지로 기동 ('data' 디렉터리 자동 생성)
-./bin/server
+# 기본 설정(포트 5433, 1433, 8090)으로 포그라운드 기동 ('data' 디렉터리 자동 생성)
+./bin/lionsql
 
 # 또는 순수 Go 인메모리 엔진으로 기동 (Cgo 라이브러리 불필요)
-./bin/server -engine=memory
+./bin/lionsql -engine=memory
+
+# 또는 실시간 로깅 지원 백그라운드 데몬으로 기동
+./bin/lionsql start -dev
+
+# 데몬 상태 확인, 재기동 또는 정상 종료
+./bin/lionsql status
+./bin/lionsql restart -dev
+./bin/lionsql stop
 ```
 
 서버 기동 시 콘솔에 접속 엔드포인트 정보가 출력됩니다:
@@ -170,12 +179,12 @@ go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
  [Web Dashboard]  http://127.0.0.1:8090/_/
  [HTTP API]       http://127.0.0.1:8090/api/health
  [Superuser Auth] admin@lionsql.local (JWT Auth: true)
- [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (Beekeeper / DBeaver / DbGate / psql)
- [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (Beekeeper / DBeaver / DbGate / Azure Data Studio / pymssql)
+ [Postgres Wire]  psql -h 127.0.0.1 -p 5433 -d postgres (Beekeeper / DBeaver / Navicat / psql)
+ [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 -d master (Beekeeper / DBeaver / Navicat / SSMS / Azure Data Studio)
  [Data Directory] data
  [Storage Engine] wiredtiger
  [Session Pooler] Max Workers: 32, Max Idle Sessions: 64 (No PgBouncer required)
- [Memory Governor] work_mem: 64MB (External Merge Sort spill-to-disk enabled)
+ [Memory Governor] max_memory: Auto (70% of RAM), work_mem: 64MB (디스크 스필 외부 정렬 활성화)
 ------------------------------------------------------------
 ```
 
@@ -194,7 +203,7 @@ http://127.0.0.1:8090/_/
 ### `psql` (PostgreSQL 공식 클라이언트) 접속
 
 ```bash
-psql -h 127.0.0.1 -p 5433 -U admin
+psql -h 127.0.0.1 -p 5433 -U admin -d postgres
 ```
 
 ```sql
@@ -212,7 +221,7 @@ SHOW work_mem;
 ### `sqlcmd` (Microsoft SQL Server 클라이언트) 접속
 
 ```bash
-sqlcmd -S 127.0.0.1,1433 -U admin
+sqlcmd -S 127.0.0.1,1433 -U admin -d master
 ```
 
 ```sql
@@ -225,10 +234,10 @@ GO
 
 ```bash
 -- CSV 파일로 초고속 데이터 내보내기 (Export)
-psql -h 127.0.0.1 -p 5433 -c "\copy accounts to 'accounts.csv' with (format csv, header)"
+psql -h 127.0.0.1 -p 5433 -d postgres -c "\copy accounts to 'accounts.csv' with (format csv, header)"
 
 -- CSV 파일에서 초고속 데이터 가져오기 (Import)
-psql -h 127.0.0.1 -p 5433 -c "\copy accounts from 'accounts.csv' with (format csv, header)"
+psql -h 127.0.0.1 -p 5433 -d postgres -c "\copy accounts from 'accounts.csv' with (format csv, header)"
 ```
 
 ---
@@ -249,7 +258,7 @@ import (
 )
 
 func main() {
-	dsn := "postgres://admin:1234567890@127.0.0.1:5433/lionsql?sslmode=disable"
+	dsn := "postgres://admin:1234567890@127.0.0.1:5433/postgres?sslmode=disable"
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
 		log.Fatal(err)
@@ -362,22 +371,26 @@ run();
 | `-auth` | `false` | 보호된 REST 엔드포인트에 대한 JWT 인증 강제 여부 |
 | `-seed` | `true` | 기동 시 데모 계좌 데이터 및 `TransferFunds` 프로시저 시드 생성 |
 
-### 백그라운드 데몬 제어
+### 통합 CLI 및 백그라운드 데몬 제어
 
-별도의 외부 데몬 래퍼 없이 단일 명령어로 백그라운드 구동이 가능합니다:
+LionSQL은 일급 라이프사이클 서브커맨드를 지원하는 현대적 통합 CLI를 제공합니다:
 
 ```bash
-# 백그라운드 데몬으로 기동
-./bin/server -d
+# 기본 포그라운드 실행
+./bin/lionsql                   # ./data 디렉터리를 사용하여 즉시 실행
+./bin/lionsql serve -dir=./data # 명시적 서버 실행 서브커맨드
 
-# 데몬 실행 상태 및 PID 확인
-./bin/server -status
+# 백그라운드 데몬 관리
+./bin/lionsql start -dev        # 백그라운드 데몬 기동 (lionsql.pid 및 lionsql.log 자동 생성)
+./bin/lionsql status            # 데몬 구동 상태 및 PID 확인
+./bin/lionsql restart -dev      # 데몬 무중단 재기동
+./bin/lionsql stop              # 데몬 정상 종료 (Graceful Shutdown)
 
-# 실행 중인 데몬 무중단 재기동
-./bin/server -restart
-
-# 데몬 정상 종료 (Graceful Shutdown)
-./bin/server -stop
+# 운영 및 진단 서브커맨드
+./bin/lionsql version           # 엔진 버전 및 빌드 태그 확인
+./bin/lionsql doctor            # 환경, 네트워크 포트, 디렉터리 권한 사전 진단
+./bin/lionsql init-config       # 기본 lionsql.json 설정 템플릿 생성
+./bin/lionsql sql "SELECT 1"    # 빠른 대화형 원라인 쿼리 실행
 ```
 
 ### 스키마 마이그레이션 CLI (`lionsql migrate`)
@@ -400,10 +413,10 @@ run();
 
 ```bash
 # 지정된 아카이브 파일로 오프라인/CLI 스냅샷 핫 백업 수행
-./bin/server -dir=data -backup=/backups/lionsql-snapshot.tar.gz
+./bin/lionsql backup -dir=data -target=/backups/lionsql-snapshot.tar.gz
 
 # 아카이브로부터 데이터베이스 복원
-./bin/server -dir=data -restore=/backups/lionsql-snapshot.tar.gz
+./bin/lionsql restore -dir=data -source=/backups/lionsql-snapshot.tar.gz
 
 # 서버 기동 중 curl 명령어를 통한 온라인 라이브 백업 스트림 다운로드
 curl -OJ http://127.0.0.1:8090/api/backup
@@ -497,8 +510,9 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
 1. **컴파일 무결성 검증 (Build)**:
    ```bash
    go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
+   go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
    go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
-   go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
+   go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
    ```
 2. **결정론적 데이터 레이스 무결성 검증 (Test)**:
    ```bash
