@@ -140,11 +140,11 @@ LionSQL integrates a native, standalone 1-Writer Multi-Reader High Availability 
 ### 7.1. Server CLI Configuration
 - **Primary Node**:
   ```bash
-  ./bin/server --port=5433 --tds-port=1433 --http-port=8090 --data-dir=data/primary --node-id=node-primary
+  ./bin/lionsql --port=5433 --tds-port=1433 --http-port=8090 --data-dir=data/primary --node-id=node-primary
   ```
 - **Secondary Replica Node**:
   ```bash
-  ./bin/server --port=5434 --tds-port=1434 --http-port=8091 --data-dir=data/replica1 --node-id=node-replica1 --replica-of=http://localhost:8090
+  ./bin/lionsql --port=5434 --tds-port=1434 --http-port=8091 --data-dir=data/replica1 --node-id=node-replica1 --replica-of=http://localhost:8090
   ```
 
 ### 7.2. Replication Management REST Endpoints

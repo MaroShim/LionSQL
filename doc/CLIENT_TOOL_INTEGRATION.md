@@ -6,12 +6,12 @@ This document provides a comprehensive integration and connectivity guide for GU
 
 ## 1. Multi-Protocol Overview & Default Ports
 
-LionSQL acts as a zero-external-dependency database engine that concurrently serves both PostgreSQL and Microsoft SQL Server clients out of a single static executable (`bin/server`).
+LionSQL acts as a zero-external-dependency database engine that concurrently serves both PostgreSQL and Microsoft SQL Server clients out of a single static executable (`bin/lionsql`).
 
 | Protocol | Default Port | Default Superuser | Password | Database Name | Standard Client Ecosystem |
 |---|---|---|---|---|---|
-| **PostgreSQL v3** | `5433` (TCP) | `postgres` (or `admin`) | Any / Empty (Dev) | `sqlion` (or `default`) | Beekeeper Studio, DBeaver, pgAdmin, psql, lib/pq, pgx |
-| **Microsoft SQL Server (TDS 7.x/8.0)** | `1433` (TCP) | `sa` (or `admin`) | Any / Empty (Dev) | `sqlion` (or `master`) | Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, go-mssqldb, pymssql |
+| **PostgreSQL v3** | `5433` (TCP) | `postgres` (or `admin`) | Any / Empty (Dev) | `postgres` | Beekeeper Studio, DBeaver, Navicat, pgAdmin, psql, lib/pq, pgx |
+| **Microsoft SQL Server (TDS 7.x/8.0)** | `1433` (TCP) | `sa` (or `admin`) | Any / Empty (Dev) | `master` | Beekeeper Studio, DBeaver, Navicat, Azure Data Studio, SSMS, go-mssqldb, pymssql |
 | **HTTP REST & Studio** | `8090` (TCP) | `admin@lionsql.local` | `1234567890` | `lionsql` | Embedded Web Studio (`/_/`), curl, OpenAPI, fetch |
 
 > Note: LionSQL enforces **Instance-Based Database Isolation** (GEMINI.md Section 3). Each server process hosts exactly one isolated database catalog per data directory (`--data-dir`).
@@ -31,7 +31,7 @@ Beekeeper Studio can connect to LionSQL in either **PostgreSQL** or **SQL Server
    - **Port**: `5433`
    - **User**: `postgres`
    - **Password**: Leave empty or enter any string.
-   - **Default Database**: `sqlion`
+   - **Default Database**: `postgres`
    - **SSL**: `Disable` (unless LionSQL was started with `-tls` and `-require-ssl`).
 3. Click **Test** and **Connect**.
 4. Supported features:
@@ -47,7 +47,7 @@ Beekeeper Studio can connect to LionSQL in either **PostgreSQL** or **SQL Server
    - **Port**: `1433`
    - **User**: `sa`
    - **Password**: Leave empty or enter any string.
-   - **Database**: `sqlion` (or `master`)
+   - **Database**: `master`
    - **Encrypt**: `Disable` (or uncheck `Trust Server Certificate` / encryption requirement unless `-tls` is active).
 3. Click **Connect**.
 4. Supported features:
@@ -64,7 +64,7 @@ Beekeeper Studio can connect to LionSQL in either **PostgreSQL** or **SQL Server
 2. Settings:
    - **Host**: `localhost`
    - **Port**: `5433`
-   - **Database**: `sqlion`
+   - **Database**: `postgres`
    - **Authentication**: `Database Native`
    - **Username**: `postgres`
 3. Driver Properties:
@@ -76,7 +76,7 @@ Beekeeper Studio can connect to LionSQL in either **PostgreSQL** or **SQL Server
 2. Settings:
    - **Host**: `localhost`
    - **Port**: `1433`
-   - **Database**: `sqlion`
+   - **Database**: `master`
    - **Authentication**: `SQL Server Authentication`
    - **Username**: `sa`
 3. Driver Properties:
@@ -91,7 +91,7 @@ Beekeeper Studio can connect to LionSQL in either **PostgreSQL** or **SQL Server
 1. Connection Type: `Microsoft SQL Server`.
 2. Parameters:
    - **Server**: `127.0.0.1,1433`
-   - **Database**: `sqlion`
+   - **Database**: `master`
    - **Authentication Type**: `SQL Login`
    - **User Name**: `sa`
    - **Password**: (any)
@@ -110,7 +110,7 @@ DbGate is an open-source database manager that supports connecting to LionSQL vi
    - **Server / Host**: `127.0.0.1`
    - **Port**: `5433`
    - **User**: `postgres`
-   - **Database**: `sqlion`
+   - **Database**: `postgres`
    - **Password**: (leave blank or any string)
 3. Connect.
 
@@ -121,7 +121,7 @@ DbGate is an open-source database manager that supports connecting to LionSQL vi
    - **Port**: `1433`
    - **User**: `sa`
    - **Password**: (leave blank or any string)
-   - **Database**: `sqlion`
+   - **Database**: `master`
    - **Encrypt**: `No`
 3. Connect.
 4. Features:
@@ -140,10 +140,10 @@ Connect non-interactively or interactively via standard PostgreSQL CLI:
 
 ```bash
 # Interactive terminal session
-psql -h 127.0.0.1 -p 5433 -U postgres -d sqlion
+psql -h 127.0.0.1 -p 5433 -U postgres -d postgres
 
 # One-shot query execution
-psql -h 127.0.0.1 -p 5433 -U postgres -d sqlion -c "SELECT * FROM customers;"
+psql -h 127.0.0.1 -p 5433 -U postgres -d postgres -c "SELECT * FROM customers;"
 ```
 
 Supported meta-commands in `psql`:
@@ -158,10 +158,10 @@ Connect via standard Microsoft command-line utilities:
 
 ```bash
 # Interactive sqlcmd session
-sqlcmd -S 127.0.0.1,1433 -U sa -P 12345678 -d sqlion
+sqlcmd -S 127.0.0.1,1433 -U sa -P 12345678 -d master
 
 # Command execution
-sqlcmd -S 127.0.0.1,1433 -U sa -d sqlion -Q "SELECT @@VERSION; SELECT * FROM customers;"
+sqlcmd -S 127.0.0.1,1433 -U sa -d master -Q "SELECT @@VERSION; SELECT * FROM customers;"
 ```
 
 ---
@@ -185,7 +185,7 @@ import (
 
 func main() {
     ctx := context.Background()
-    conn, err := pgx.Connect(ctx, "postgres://postgres:secret@127.0.0.1:5433/sqlion?sslmode=disable")
+    conn, err := pgx.Connect(ctx, "postgres://postgres:secret@127.0.0.1:5433/postgres?sslmode=disable")
     if err != nil {
         log.Fatalf("Unable to connect to database: %v", err)
     }
@@ -221,7 +221,7 @@ import (
 )
 
 func main() {
-    connStr := "sqlserver://sa:secret@127.0.0.1:1433?database=sqlion&encrypt=disable"
+    connStr := "sqlserver://sa:secret@127.0.0.1:1433?database=master&encrypt=disable"
     db, err := sql.Open("sqlserver", connStr)
     if err != nil {
         log.Fatalf("Error opening connection: %v", err)
@@ -257,7 +257,7 @@ conn = psycopg2.connect(
     port=5433,
     user="postgres",
     password="",
-    dbname="sqlion",
+    dbname="postgres",
     sslmode="disable"
 )
 cur = conn.cursor()
@@ -278,7 +278,7 @@ conn = pymssql.connect(
     port=1433,
     user="sa",
     password="",
-    database="sqlion"
+    database="master"
 )
 cursor = conn.cursor(as_dict=True)
 cursor.execute("SELECT customer_id, name, balance FROM customers;")
@@ -299,7 +299,7 @@ import java.sql.Statement;
 
 public class App {
     public static void main(String[] args) throws Exception {
-        String url = "jdbc:postgresql://127.0.0.1:5433/sqlion?sslmode=disable";
+        String url = "jdbc:postgresql://127.0.0.1:5433/postgres?sslmode=disable";
         try (Connection conn = DriverManager.getConnection(url, "postgres", "")) {
             try (Statement stmt = conn.createStatement()) {
                 ResultSet rs = stmt.executeQuery("SELECT id, holder, balance FROM accounts;");
@@ -321,7 +321,7 @@ Standard ODBC connection string for `psqlODBC` / `unixODBC`:
 Driver = PostgreSQL Unicode
 Server = 127.0.0.1
 Port = 5433
-Database = sqlion
+Database = postgres
 Username = postgres
 Password = 
 SSLmode = disable
@@ -388,7 +388,7 @@ GUI clients often format table data pagination queries using T-SQL-specific synt
 
 | Issue / Error Symptom | Root Cause | Solution |
 |---|---|---|
-| `connection refused on :5433 or :1433` | LionSQL process is not running or listening on standard ports. | Run `./bin/server -engine wiredtiger -dir ./data` and check `lsof -i :5433 -i :1433`. |
+| `connection refused on :5433 or :1433` | LionSQL process is not running or listening on standard ports. | Run `./bin/lionsql` (or `./bin/lionsql start -dev`) and check `lsof -i :5433 -i :1433`. |
 | `encryption required but server does not support TLS` | Client driver requested strict SSL/TLS, but LionSQL was started in plaintext mode. | Set `sslmode=disable` (PG) or `encrypt=disable` (TDS) in connection parameters, or launch LionSQL with `-tls -tls-cert <cert> -tls-key <key>`. |
 | `USE <dbname> statement failed` | LionSQL intentionally excludes `USE <dbname>` syntax (GEMINI.md Section 3). | Connect directly to the target database in the initial connection string; deploy separate process instances for separate databases. |
 | `table not found: dbo.mytable` | Schema prefix `dbo.` was not parsed. | Ensure running LionSQL version with updated `cleanIdent` that strips `dbo.` and `public.` schema prefixes automatically. |

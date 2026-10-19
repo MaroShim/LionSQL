@@ -6,7 +6,7 @@ LionSQL is architected as an **autonomous, high-concurrency embedded OLTP databa
 
 To maximize ecosystem reach, LionSQL exposes multiple database network listeners concurrently from its single static executable:
 - **TDS 7.x/8.0 Protocol** (Default TCP `:1433`): Native Microsoft SQL Server tools, SSMS, Azure Data Studio, `go-mssqldb`.
-- **PostgreSQL Wire Protocol v3** (Default TCP `:5433`): `psql`, `pgx/v5`, `lib/pq`, DBeaver, TablePlus, DataGrip, GORM, Prisma.
+- **PostgreSQL Wire Protocol v3** (Default TCP `:5433`): `psql`, `pgx/v5`, `lib/pq`, DBeaver, Beekeeper Studio, Navicat, DataGrip, GORM, Prisma.
 - **MySQL Client/Server Protocol** (Planned TCP `:3306`): `mysql` CLI, Navicat, MySQL Workbench, `go-sql-driver/mysql`, PHP/Python MySQL drivers.
 - **HTTP / REST & Web Studio** (Default TCP `:8090`): Web dashboard, health probes, automated REST API.
 
@@ -94,7 +94,7 @@ To maintain engineering discipline, every wire protocol implementation in LionSQ
 ### 4.1. Current State (Production-Ready)
 - Layer 1 (Wire Protocol): 100% complete. Extended query protocol, binary formatting, and session pool integration verified across `pgx/v5`, `lib/pq`, and `psql`.
 - Layer 2 (Catalog Handshake): 30+ virtual system tables (`pg_class`, `pg_attribute`, `pg_namespace`, `pg_type`, `pg_index`, `pg_constraint`, `pg_proc`, `pg_stat_user_tables`) fully virtualized.
-- Verified Client Tools: DBeaver, TablePlus, DataGrip, DbGate, HeidiSQL.
+- Verified Client Tools: DBeaver, Beekeeper Studio, Navicat, DataGrip, DbGate, HeidiSQL.
 
 ### 4.2. Implementation Stopping Criteria
 To preserve architectural purity, PostgreSQL support shall halt after implementing the following high-value ergonomics:

@@ -192,7 +192,7 @@ set -e
 /usr/local/bin/lionsql migrate up -data=/data -dir=/migrations -engine=wiredtiger
 
 # Launch database server daemon
-exec /usr/local/bin/server --data-dir=/data --port=5433 --tds-port=1433 --http-port=8090
+exec /usr/local/bin/lionsql serve --data-dir=/data --port=5433 --tds-port=1433 --http-port=8090
 ```
 
 ### 5.2. Kubernetes InitContainer Pattern

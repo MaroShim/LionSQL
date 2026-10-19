@@ -26,10 +26,10 @@
   * 플랫폼별 릴리즈 아카이브 다운로드 및 압축 해제
   * 실행 권한 부여 및 시스템 경로 등록
 * **2.2. 소스 코드에서 빌드하기**
-  * 순수 Go 정적 바이너리 빌드 (`go build ./cmd/server`)
-  * WiredTiger Cgo 활성화 빌드 (`go build -tags wiredtiger ./cmd/server`)
+  * 순수 Go 정적 바이너리 빌드 (`go build ./cmd/lionsql`)
+  * WiredTiger Cgo 활성화 빌드 (`go build -tags wiredtiger ./cmd/lionsql`)
 * **2.3. 첫 번째 서버 기동 및 상태 확인**
-  * 기본 설정으로 기동하기 (`./bin/server`)
+  * 기본 설정으로 기동하기 (`./bin/lionsql`)
   * 기동 배너 확인 및 헬스체크 엔드포인트 검증 (`http://127.0.0.1:8090/api/health`)
 * **2.4. 빠른 둘러보기 (Quick Tour)**
   * 테이블 생성, 데이터 삽입 및 조회

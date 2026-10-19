@@ -124,7 +124,7 @@ Lists the databases hosted by the current LionSQL instance.
 
 | Column Name | Data Type | Nullable | Description |
 |---|---|---|---|
-| `name` | `VARCHAR(128)` | NO | Database name (`'sqlion'`). |
+| `name` | `VARCHAR(128)` | NO | Database name (`'master'` for TDS, `'postgres'` for PGWire). |
 | `database_id` | `INTEGER` | NO | Internal database numeric identifier (`1`). |
 | `create_date` | `VARCHAR(32)` | NO | Instance initialization timestamp. |
 | `state_desc` | `VARCHAR(32)` | NO | Current availability state; returns `'ONLINE'`. |

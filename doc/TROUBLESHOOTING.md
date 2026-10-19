@@ -25,7 +25,7 @@ Another process (or an existing instance of PostgreSQL or LionSQL) is already bo
    ```
 2. Terminate the stale process, or assign alternative ports using CLI flags:
    ```bash
-   ./bin/server -pg=127.0.0.1:5434 -tds=127.0.0.1:1434 -http=127.0.0.1:8091
+   ./bin/lionsql -pg=127.0.0.1:5434 -tds=127.0.0.1:1434 -http=127.0.0.1:8091
    ```
 
 ---
@@ -53,7 +53,7 @@ Another process (or an existing instance of PostgreSQL or LionSQL) is already bo
    - Linux: `sudo apt-get install -y libwiredtiger-dev`
 3. If native libraries are unavailable in your environment, switch to the pure-Go engine:
    ```bash
-   ./bin/server -engine=memory
+   ./bin/lionsql -engine=memory
    ```
 
 ---
@@ -131,7 +131,7 @@ The query's accumulated sorting buffer exceeded the configured `work_mem` limit,
    ```
    Or set server-wide via CLI flag:
    ```bash
-   ./bin/server -work-mem=128MB
+   ./bin/lionsql -work-mem=128MB
    ```
 
 ---
@@ -148,21 +148,21 @@ psql: error: connection to server at "127.0.0.1", port 5433 failed: server does 
 #### Resolution
 LionSQL serves unencrypted wire protocol internally, intended to run behind a TLS-terminating reverse proxy (Nginx/Caddy) or private VPC. Specify `sslmode=disable`:
 ```bash
-psql "host=127.0.0.1 port=5433 user=admin dbname=sqlion sslmode=disable"
+psql "host=127.0.0.1 port=5433 user=admin dbname=postgres sslmode=disable"
 ```
 
 ---
 
-### 4.2. DBeaver / DataGrip Connection Setup
+### 4.2. DBeaver / Beekeeper Studio Connection Setup
 
 #### PostgreSQL Protocol:
 1. Create a new connection with driver **PostgreSQL**.
-2. Host: `127.0.0.1`, Port: `5433`, Database: `sqlion`, User: `admin`.
+2. Host: `127.0.0.1`, Port: `5433`, Database: `postgres`, User: `admin`.
 3. In **Driver Properties** or **SSL**, set `ssl=false` (`sslmode=disable`).
 
 #### Microsoft SQL Server (TDS) Protocol:
 1. Create a new connection with driver **Microsoft SQL Server**.
-2. Host: `127.0.0.1`, Port: `1433`, Database: `sqlion`, User: `admin`.
+2. Host: `127.0.0.1`, Port: `1433`, Database: `master`, User: `admin`.
 3. In **Driver Properties**, set `encrypt=false` and `trustServerCertificate=true`.
 
 ---
@@ -188,6 +188,6 @@ curl -X POST http://127.0.0.1:8090/api/restore \
 ```
 Or via CLI:
 ```bash
-./bin/server -dir=data -restore=backups/prod.tar.gz
+./bin/lionsql restore -dir=data -source=backups/prod.tar.gz
 ```
 *(CLI restore defaults to `DropExisting: true`)*.

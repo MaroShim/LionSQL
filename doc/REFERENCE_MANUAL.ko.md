@@ -7,7 +7,7 @@
 ## 목차 (Table of Contents)
 
 ### 제1장. 명령행 인터페이스 (CLI Reference)
-* **1.1. 서버 메인 바이너리 (`bin/server`)**
+* **1.1. 통합 단일 바이너리 (`bin/lionsql`)**
   * 기동 및 네트워크 옵션: `-http`, `-pg`, `-tds`
   * 스토리지 및 엔진 옵션: `-dir`, `-engine`, `-ephemeral`, `-seed`
   * 리소스 및 거버너 옵션: `-work-mem`, `-max-workers`, `-max-idle-sessions`

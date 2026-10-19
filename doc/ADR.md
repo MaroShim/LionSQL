@@ -375,7 +375,7 @@ Embed a lightweight, zero-dependency Web Studio directly inside the binary (`pkg
    - One-click database backup download and snapshot restore.
 
 ### Consequences
-- **Positive**: Unmatched developer experience. Launching `./bin/server` immediately provides a fully operational database studio accessible via any browser at `http://localhost:8090/_/`.
+- **Positive**: Unmatched developer experience. Launching `./bin/lionsql` immediately provides a fully operational database studio accessible via any browser at `http://localhost:8090/_/`.
 - **Negative**: Frontend dashboard code is bundled into the Go binary.
 
 ---
@@ -393,7 +393,9 @@ Formally mandate the **3-Stage Verification Pipeline** across all code changes:
 1. **Stage 1 (Build)**:
    ```bash
    go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
-   go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
+   go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
+   go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
+   go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
    ```
    Validates strict type-checking, Cgo bindings, and compile invariants.
 2. **Stage 2 (Test with Race Detector)**:

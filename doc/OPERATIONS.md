@@ -27,21 +27,21 @@ $$\text{Total Memory} \approx \text{WiredTiger Cache} + (\text{Active Workers} \
 
 ### 2.1. Linux Systemd Service (Recommended for Bare-Metal & VMs)
 
-Create `/etc/systemd/system/sqlion.service`:
+Create `/etc/systemd/system/lionsql.service`:
 
 ```ini
 [Unit]
 Description=LionSQL High-Concurrency OLTP Database Server
 After=network.target local-fs.target
-Documentation=https://github.com/sqlion/sqlion
+Documentation=https://github.com/lionsql/lionsql
 
 [Service]
 Type=simple
-User=sqlion
-Group=sqlion
-WorkingDirectory=/var/lib/sqlion
-ExecStart=/usr/local/bin/sqlion \
-    -dir=/var/lib/sqlion/data \
+User=lionsql
+Group=lionsql
+WorkingDirectory=/var/lib/lionsql
+ExecStart=/usr/local/bin/lionsql \
+    -dir=/var/lib/lionsql/data \
     -engine=wiredtiger \
     -http=127.0.0.1:8090 \
     -pg=0.0.0.0:5433 \
@@ -68,8 +68,8 @@ WantedBy=multi-user.target
 Enable and start the service:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now sqlion
-sudo systemctl status sqlion
+sudo systemctl enable --now lionsql
+sudo systemctl status lionsql
 ```
 
 ---
@@ -83,16 +83,16 @@ FROM golang:1.22-bookworm AS builder
 WORKDIR /app
 COPY . .
 RUN apt-get update && apt-get install -y libwiredtiger-dev
-RUN go build -tags wiredtiger -buildvcs=false -o /bin/sqlion ./cmd/server
+RUN go build -tags wiredtiger -buildvcs=false -o /bin/lionsql ./cmd/lionsql
 
 FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y libwiredtiger0 ca-certificates curl && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /bin/sqlion /usr/local/bin/sqlion
+COPY --from=builder /bin/lionsql /usr/local/bin/lionsql
 
 EXPOSE 8090 5433 1433
 VOLUME ["/data"]
 
-ENTRYPOINT ["/usr/local/bin/sqlion"]
+ENTRYPOINT ["/usr/local/bin/lionsql"]
 CMD ["-dir=/data", "-http=0.0.0.0:8090", "-pg=0.0.0.0:5433", "-tds=0.0.0.0:1433"]
 ```
 
@@ -102,18 +102,18 @@ Run via Docker Compose:
 version: '3.8'
 
 services:
-  sqlion:
-    image: sqlion:latest
-    container_name: sqlion-db
+  lionsql:
+    image: lionsql:latest
+    container_name: lionsql-db
     restart: unless-stopped
     ports:
       - "8090:8090"
       - "5433:5433"
       - "1433:1433"
     volumes:
-      - sqlion-data:/data
+      - lionsql-data:/data
     environment:
-      - SQLION_AUTH=true
+      - LIONSQL_AUTH=true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8090/api/health"]
       interval: 10s
@@ -121,7 +121,7 @@ services:
       retries: 3
 
 volumes:
-  sqlion-data:
+  lionsql-data:
 ```
 
 ---
@@ -132,16 +132,16 @@ LionSQL includes native daemon lifecycle commands without external process wrapp
 
 ```bash
 # 1. Start as background daemon
-./bin/server -d -dir=/var/lib/sqlion/data
+./bin/lionsql start -dev -dir=/var/lib/lionsql/data
 
 # 2. Check running daemon status and PID
-./bin/server -status -dir=/var/lib/sqlion/data
+./bin/lionsql status -dir=/var/lib/lionsql/data
 
 # 3. Graceful restart (re-reads configuration, preserves active data)
-./bin/server -restart -dir=/var/lib/sqlion/data
+./bin/lionsql restart -dev -dir=/var/lib/lionsql/data
 
 # 4. Stop running daemon cleanly
-./bin/server -stop -dir=/var/lib/sqlion/data
+./bin/lionsql stop -dir=/var/lib/lionsql/data
 ```
 
 ### Clean Teardown & Signal Handling
@@ -157,15 +157,15 @@ When receiving `SIGTERM` or `SIGINT`:
 
 ### 4.1. Automated Daily Snapshot Backup via Cron
 
-Create `/etc/cron.daily/sqlion-backup`:
+Create `/etc/cron.daily/lionsql-backup`:
 
 ```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
-BACKUP_DIR="/var/backups/sqlion"
+BACKUP_DIR="/var/backups/lionsql"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-TARGET_FILE="${BACKUP_DIR}/sqlion_backup_${TIMESTAMP}.tar.gz"
+TARGET_FILE="${BACKUP_DIR}/lionsql_backup_${TIMESTAMP}.tar.gz"
 
 mkdir -p "${BACKUP_DIR}"
 
@@ -173,12 +173,12 @@ mkdir -p "${BACKUP_DIR}"
 curl -fsS -OJ http://127.0.0.1:8090/api/backup > "${TARGET_FILE}"
 
 # Retention: Delete backups older than 14 days
-find "${BACKUP_DIR}" -name "sqlion_backup_*.tar.gz" -type f -mtime +14 -delete
+find "${BACKUP_DIR}" -name "lionsql_backup_*.tar.gz" -type f -mtime +14 -delete
 ```
 
 Ensure permissions:
 ```bash
-chmod +x /etc/cron.daily/sqlion-backup
+chmod +x /etc/cron.daily/lionsql-backup
 ```
 
 ---
@@ -188,16 +188,16 @@ chmod +x /etc/cron.daily/sqlion-backup
 In the event of hardware failure or catastrophic corruption:
 
 1. Provision a clean host and install the LionSQL binary.
-2. Retrieve the latest backup archive (`sqlion_backup_YYYYMMDD_HHMMSS.tar.gz`).
+2. Retrieve the latest backup archive (`lionsql_backup_YYYYMMDD_HHMMSS.tar.gz`).
 3. Restore using the CLI utility:
    ```bash
-   /usr/local/bin/sqlion \
-       -dir=/var/lib/sqlion/data \
-       -restore=/var/backups/sqlion/sqlion_backup_latest.tar.gz
+   /usr/local/bin/lionsql restore \
+       -dir=/var/lib/lionsql/data \
+       -source=/var/backups/lionsql/lionsql_backup_latest.tar.gz
    ```
 4. Start the server service:
    ```bash
-   sudo systemctl start sqlion
+   sudo systemctl start lionsql
    ```
 5. Verify health:
    ```bash
@@ -291,9 +291,9 @@ LionSQL enforces a **1-Writer Multi-Reader High-Availability Architecture** (GEM
 Start the primary node with a unique node identifier:
 
 ```bash
-/usr/local/bin/sqlion \
+/usr/local/bin/lionsql \
     -node-id=prod-primary-01 \
-    -dir=/var/lib/sqlion/data \
+    -dir=/var/lib/lionsql/data \
     -engine=wiredtiger \
     -http=0.0.0.0:8090 \
     -pg=0.0.0.0:5433 \
@@ -305,10 +305,10 @@ Start the primary node with a unique node identifier:
 Launch one or more secondary replicas pointing to the primary's HTTP address via `-replica-of`:
 
 ```bash
-/usr/local/bin/sqlion \
+/usr/local/bin/lionsql \
     -node-id=prod-replica-01 \
     -replica-of=http://primary-host.internal:8090 \
-    -dir=/var/lib/sqlion/replica_data \
+    -dir=/var/lib/lionsql/replica_data \
     -engine=wiredtiger \
     -http=0.0.0.0:8090 \
     -pg=0.0.0.0:5433 \

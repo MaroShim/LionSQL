@@ -7,7 +7,7 @@
 - **Client Tooling**: Native Go `net/http.Client` over live TCP sockets, Realtime Stream Readers, Official JavaScript/TypeScript SDK distribution
 - **Scope**:
   - Root Navigation & Web Studio Dashboard (`/_/`)
-  - Engine Health & Version Single-Source-of-Truth (`/api/health`, v0.90)
+  - Engine Health & Version Single-Source-of-Truth (`/api/health`, v0.90.0)
   - Authentication, JWT Session Lifecycle & API Key RBAC (`/api/auth/*`, `/api/keys`)
   - PocketBase-Compatible Declarative Table DDL (`/api/tables/*`)
   - Auto-Generated RESTful Records CRUD, Pagination & Dynamic Filtering (`/api/records/*`)
@@ -37,7 +37,7 @@
 
 | ID | Domain / Category | Scenarios | PASS | FAIL | Pass Rate | Key Architectural Capabilities & Observations |
 | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
-| **1** | **Health, Version & Redirection** | 3 | 3 | 0 | **100.0%** | Root path `GET /` cleanly redirects (302 Found) to Web Studio (`/_/`). `GET /api/health` accurately reports engine status (`In-Memory OCC` / `WiredTiger`) and unified version (`0.90`). `GET /api/pool/stats` exposes connection pool and worker state. |
+| **1** | **Health, Version & Redirection** | 3 | 3 | 0 | **100.0%** | Root path `GET /` cleanly redirects (302 Found) to Web Studio (`/_/`). `GET /api/health` accurately reports engine status (`In-Memory OCC` / `WiredTiger`) and unified version (`0.90.0`). `GET /api/pool/stats` exposes connection pool and worker state. |
 | **2** | **Web Studio & Client SDK** | 3 | 3 | 0 | **100.0%** | Embedded Web Studio dashboard HTML served with `text/html; charset=utf-8`. JavaScript client SDK (`/sdk/sqlion.js`) and TypeScript declarations (`/sdk/sqlion.d.ts`) statically distributed from kernel binary (`embed.FS`) with HTTP caching headers. |
 | **3** | **Authentication & RBAC Security** | 6 | 6 | 0 | **100.0%** | Protected endpoints strictly enforce 401 Unauthorized when unauthenticated. Superuser login (`admin@lionsql.local`) issues cryptographic JWT tokens. Invalid passwords rejected. Role profile introspection (`/api/auth/me`) verified. Admin-scoped API Keys created (`POST /api/keys`) and validated via `X-API-Key` headers. |
 | **4** | **Table Schema & Metadata DDL** | 4 | 4 | 0 | **100.0%** | Dynamic table schema creation (`POST /api/tables`) with primary keys and constraints. Catalog reflection (`GET /api/tables`). Column metadata inspection (`GET /api/tables/:name/schema`). Schema lifecycle validated via creation and subsequent dropping (`DELETE /api/tables/:name`). |
@@ -53,7 +53,7 @@
 
 ### 3.1 Health, Version & Redirection
 - **TC-HTTP-01 [PASS]**: `GET /` -> HTTP 302 Found, `Location: /_/`
-- **TC-HTTP-02 [PASS]**: `GET /api/health` -> HTTP 200 OK, `status: "ok"`, `version: "0.90"`, `engine: "In-Memory OCC"`
+- **TC-HTTP-02 [PASS]**: `GET /api/health` -> HTTP 200 OK, `status: "ok"`, `version: "0.90.0"`, `engine: "In-Memory OCC"`
 - **TC-HTTP-03 [PASS]**: `GET /api/pool/stats` -> HTTP 200 OK, `active_workers`, `idle_sessions`, `max_workers`
 
 ### 3.2 Web Studio & Client SDK

@@ -75,7 +75,7 @@ A rigorous architectural evaluation must confront skepticism. LionSQL counters t
 
 LionSQL's most compelling technological intersection is the **seamless union of the PostgreSQL Wire Protocol (Port 5433) with the T-SQL Procedural Virtual Machine**:
 
-- Global developers and frameworks connect to Port `5433` using their existing standard tooling (`psql`, DBeaver, TablePlus) and language drivers (`pgx`, GORM, Prisma, psycopg2, Npgsql).
+- Global developers and frameworks connect to Port `5433` using their existing standard tooling (`psql`, DBeaver, Beekeeper Studio) and language drivers (`pgx`, GORM, Prisma, psycopg2, Npgsql).
 - Rather than navigating PostgreSQL's cumbersome PL/pgSQL, clients invoke **mature, expressive T-SQL stored procedures, triggers, and table variables**, executed in microseconds via VDBE bytecode.
 - This cross-protocol bridge provides a unique value proposition: the universal reach of PostgreSQL's driver ecosystem combined with the transactional power of Microsoft SQL Server's procedural runtime.
 

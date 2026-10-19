@@ -392,38 +392,38 @@ LionSQL embeds a PocketBase-style administration dashboard (`pkg/ui/dashboard.ht
 
 ```bash
 # Standard startup with WiredTiger engine (default)
-./bin/server -http=127.0.0.1:8090 -pg=127.0.0.1:5433 -tds=127.0.0.1:1433 -dir=data
+./bin/lionsql -http=127.0.0.1:8090 -pg=127.0.0.1:5433 -tds=127.0.0.1:1433 -dir=data
 
 # Pure-Go in-memory engine (zero Cgo dependency)
-./bin/server -engine=memory -http=127.0.0.1:8090 -dir=data
+./bin/lionsql -engine=memory -http=127.0.0.1:8090 -dir=data
 
 # Configure query memory governor budget
-./bin/server -work-mem=128MB -max-workers=32 -max-idle-sessions=128
+./bin/lionsql -work-mem=128MB -max-workers=32 -max-idle-sessions=128
 
 # Daemon mode lifecycle controls
-./bin/server -d               # Start daemon in background
-./bin/server -status          # Check running daemon status and PID
-./bin/server -restart         # Restart running daemon cleanly
-./bin/server -stop            # Stop daemon gracefully
+./bin/lionsql start -dev        # Start daemon in background
+./bin/lionsql status            # Check running daemon status and PID
+./bin/lionsql restart -dev      # Restart running daemon cleanly
+./bin/lionsql stop              # Stop daemon gracefully
 ```
 
 ### 4.2. Backup & Restore Operations
 
 ```bash
 # Offline or CLI-driven snapshot hot backup
-./bin/server -dir=data -backup=/backups/sqlion-snapshot.tar.gz
+./bin/lionsql backup -dir=data -target=/backups/lionsql-snapshot.tar.gz
 
 # Restore database from archive
-./bin/server -dir=data -restore=/backups/sqlion-snapshot.tar.gz
+./bin/lionsql restore -dir=data -source=/backups/lionsql-snapshot.tar.gz
 
 # Online live backup via curl
 curl -OJ http://127.0.0.1:8090/api/backup
 
 # Bulk copy import via psql
-psql -h 127.0.0.1 -p 5433 -c "\copy accounts from 'accounts.csv' with (format csv, header)"
+psql -h 127.0.0.1 -p 5433 -d postgres -c "\copy accounts from 'accounts.csv' with (format csv, header)"
 
 # Bulk copy export via psql
-psql -h 127.0.0.1 -p 5433 -c "\copy accounts to 'accounts.csv' with (format csv, header)"
+psql -h 127.0.0.1 -p 5433 -d postgres -c "\copy accounts to 'accounts.csv' with (format csv, header)"
 ```
 
 ---
@@ -435,7 +435,9 @@ All feature development, bug fixes, and refactorings must strictly satisfy the p
 1. **Stage 1: Compilation Integrity (Build)**
    ```bash
    go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
-   go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
+   go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
+   go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
+   go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
    ```
 2. **Stage 2: Race-Free Test Verification (Test)**
    ```bash

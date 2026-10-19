@@ -29,7 +29,7 @@
 | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
 | **1. Connection & Handshake** | 3 | 3 | 0 | 0 | **100.0%** | `lib/pq`, `pgx/v5`, multi-database credential auth all pass seamlessly. |
 | **2. Session Config (SET/SHOW)** | 14 | 14 | 0 | 0 | **100.0%** | `client_encoding`, `standard_conforming_strings`, `search_path`, `extra_float_digits`, `application_name`, `timezone`, `DateStyle`, `DISCARD ALL` all 100% compliant. |
-| **3. Virtual PG Catalog** | 11 | 11 | 0 | 0 | **100.0%** | `pg_namespace`, `pg_type`, `pg_class`, `pg_attribute`, `pg_am`, `pg_database`, `information_schema.tables`, `columns` fully supported for DBeaver/TablePlus. |
+| **3. Virtual PG Catalog** | 11 | 11 | 0 | 0 | **100.0%** | `pg_namespace`, `pg_type`, `pg_class`, `pg_attribute`, `pg_am`, `pg_database`, `information_schema.tables`, `columns` fully supported for DBeaver/Beekeeper Studio. |
 | **4. Extended Query ($1..$n)** | 5 | 5 | 0 | 0 | **100.0%** | Typed parameters, prepared statement reuse, parameter math, and untyped `$1` wire evaluation all 100% compliant. |
 | **5. DDL, DML & CRUD Cycle** | 9 | 9 | 0 | 0 | **100.0%** | `CREATE`, `INSERT`, parameterized `SELECT`, `UPDATE`, `DELETE`, and duplicate PK constraint validation fully operational. |
 | **6. ACID Transactions** | 2 | 2 | 0 | 0 | **100.0%** | Explicit `BEGIN` -> `COMMIT` and `BEGIN` -> `ROLLBACK` fully isolated and durable. |
@@ -77,7 +77,7 @@
 ## 4. Conclusion & 1.0 Hardening Assessment
 
 LionSQL's PostgreSQL wire listener (:5433) demonstrates **flawless production-grade readiness (100.0% Pass Rate across all 57 test scenarios)**.
-All GUI introspection queries (DBeaver, TablePlus, psql), core ORM query patterns (`LIMIT/OFFSET`, `IN`, `BETWEEN`, `EXPLAIN ANALYZE`, Transactions), and multi-table relational joins with both In-Memory and WiredTiger storage backends work out of the box with zero external dependencies.
+All GUI introspection queries (DBeaver, Beekeeper Studio, Navicat, psql), core ORM query patterns (`LIMIT/OFFSET`, `IN`, `BETWEEN`, `EXPLAIN ANALYZE`, Transactions), and multi-table relational joins with both In-Memory and WiredTiger storage backends work out of the box with zero external dependencies.
 
 **Recommendation**: Maintain **Strict Feature Freeze (Scope Lock)** for 1.0. All discovered PGWire defects (`PG-COMPAT-1`, `PG-COMPAT-2`, and `PG-COMPAT-3`) are 100% resolved and verified.
 
