@@ -464,7 +464,7 @@ func execDbGateMSSQLObjectSelect(src Source, sql string) (*Result, error) {
 		allRows = append(allRows, map[string]any{
 			"objectId":   1000 + tIdx,
 			"modifyDate": defaultDate,
-			"type":       "U",
+			"type":       "U ",
 			"pureName":   t.Name,
 			"schemaName": "dbo",
 		})
@@ -475,7 +475,7 @@ func execDbGateMSSQLObjectSelect(src Source, sql string) (*Result, error) {
 		allRows = append(allRows, map[string]any{
 			"objectId":   2000 + vIdx,
 			"modifyDate": defaultDate,
-			"type":       "V",
+			"type":       "V ",
 			"pureName":   v.Name,
 			"schemaName": "dbo",
 		})
@@ -486,7 +486,7 @@ func execDbGateMSSQLObjectSelect(src Source, sql string) (*Result, error) {
 		allRows = append(allRows, map[string]any{
 			"objectId":   3000 + pIdx,
 			"modifyDate": defaultDate,
-			"type":       "P",
+			"type":       "P ",
 			"pureName":   p.Name,
 			"schemaName": "dbo",
 		})
@@ -611,7 +611,7 @@ func execDBeaverMSSQLAllObjectsSelect(src Source, sql string) (*Result, error) {
 			"principal_id":        nil,
 			"schema_id":           1,
 			"parent_object_id":    0,
-			"type":                "U",
+			"type":                "U ",
 			"type_desc":           "USER_TABLE",
 			"create_date":         defaultDate,
 			"modify_date":         defaultDate,
@@ -631,7 +631,7 @@ func execDBeaverMSSQLAllObjectsSelect(src Source, sql string) (*Result, error) {
 			"principal_id":        nil,
 			"schema_id":           1,
 			"parent_object_id":    0,
-			"type":                "V",
+			"type":                "V ",
 			"type_desc":           "VIEW",
 			"create_date":         defaultDate,
 			"modify_date":         defaultDate,

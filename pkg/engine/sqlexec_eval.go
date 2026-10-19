@@ -366,6 +366,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				item = strings.Trim(rawItem, "'\"")
 			}
 			if strings.EqualFold(strVal, item) ||
+				strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(item, " ")) ||
 				(isBool && bVal && (item == "1" || strings.EqualFold(item, "true"))) ||
 				(isBool && !bVal && (item == "0" || strings.EqualFold(item, "false"))) {
 				found = true
@@ -475,7 +476,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 						return !bVal
 					}
 				}
-				return strings.EqualFold(strVal, rightVal)
+				return strings.EqualFold(strVal, rightVal) || strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(rightVal, " "))
 			case "!=", "<>":
 				if isBool {
 					if rightVal == "1" || strings.EqualFold(rightVal, "true") {
@@ -485,7 +486,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 						return bVal
 					}
 				}
-				return !strings.EqualFold(strVal, rightVal)
+				return !strings.EqualFold(strVal, rightVal) && !strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(rightVal, " "))
 			case ">":
 				n1, err1 := strconv.ParseFloat(strVal, 64)
 				n2, err2 := strconv.ParseFloat(rightVal, 64)

@@ -1162,7 +1162,7 @@ func TestCoordinator_SSMS_VirtualCatalogQueries(t *testing.T) {
 	}
 	foundUsersTable := false
 	for _, r := range resAllObj.Rows {
-		if r["name"] == "users" && r["type"] == "U" {
+		if r["name"] == "users" && (r["type"] == "U " || r["type"] == "U") {
 			foundUsersTable = true
 			break
 		}

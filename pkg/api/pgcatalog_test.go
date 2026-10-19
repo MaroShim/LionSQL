@@ -690,7 +690,7 @@ where o.type in ('U', 'V', 'P', 'IF', 'FN', 'TF', 'TR')
 	if len(modRes.Rows) != 1 {
 		t.Fatalf("expected 1 object row, got %d", len(modRes.Rows))
 	}
-	if modRes.Rows[0]["pureName"] != "users" || modRes.Rows[0]["schemaName"] != "dbo" || modRes.Rows[0]["type"] != "U" {
+	if modRes.Rows[0]["pureName"] != "users" || modRes.Rows[0]["schemaName"] != "dbo" || (modRes.Rows[0]["type"] != "U " && modRes.Rows[0]["type"] != "U") {
 		t.Fatalf("unexpected mod row: %+v", modRes.Rows[0])
 	}
 	if modRes.Rows[0]["objectId"] != 1000 {

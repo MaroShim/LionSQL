@@ -2217,7 +2217,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 		nullable := true
 
 		lowerCol := strings.ToLower(colName)
-		if lowerCol == "create_date" || lowerCol == "modify_date" {
+		if lowerCol == "create_date" || lowerCol == "modify_date" || lowerCol == "createdate" || lowerCol == "modifydate" {
 			colType = TypeDateTimeN
 			colSize = 8
 		} else if strings.Contains(lowerCol, "datetimeoffset") || strings.Contains(lowerCol, "offset") {
@@ -2244,6 +2244,12 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 		} else if strings.HasSuffix(lowerCol, "guid") || strings.HasSuffix(lowerCol, "uuid") || lowerCol == "uniqueidentifier" {
 			colType = TypeGuid
 			colSize = 16
+		} else if lowerCol == "object_id" || lowerCol == "objectid" || lowerCol == "column_id" || lowerCol == "columnid" || lowerCol == "schema_id" || lowerCol == "schemaid" || lowerCol == "parent_object_id" || lowerCol == "parentobjectid" || lowerCol == "principal_id" || lowerCol == "principalid" || lowerCol == "index_id" || lowerCol == "indexid" {
+			colType = TypeIntN
+			colSize = 4
+		} else if lowerCol == "type" {
+			colType = TypeVarChar
+			colSize = 2
 		}
 
 		// Scan non-null sample values from rows
@@ -2253,6 +2259,9 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 				case int, int64, int32, int16, int8:
 					colType = TypeIntN
 					colSize = 8
+					if lowerCol == "object_id" || lowerCol == "objectid" || lowerCol == "column_id" || lowerCol == "columnid" || lowerCol == "schema_id" || lowerCol == "schemaid" || lowerCol == "parent_object_id" || lowerCol == "parentobjectid" || lowerCol == "principal_id" || lowerCol == "principalid" || lowerCol == "index_id" || lowerCol == "indexid" {
+						colSize = 4
+					}
 				case float64, float32:
 					colType = TypeFltN
 					colSize = 8
@@ -2272,7 +2281,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 						colType = TypeTimeN
 						colSize = 5
 						scale = 7
-					} else if lowerCol == "getdate" || lowerCol == "now" || lowerCol == "current_timestamp" || lowerCol == "getutcdate" || lowerCol == "sysdatetime" || lowerCol == "sysutcdatetime" || lowerCol == "create_date" || lowerCol == "modify_date" || strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") || lowerCol == "created" || lowerCol == "modified" {
+					} else if lowerCol == "getdate" || lowerCol == "now" || lowerCol == "current_timestamp" || lowerCol == "getutcdate" || lowerCol == "sysdatetime" || lowerCol == "sysutcdatetime" || lowerCol == "create_date" || lowerCol == "modify_date" || lowerCol == "createdate" || lowerCol == "modifydate" || strings.HasSuffix(lowerCol, "datetime") || strings.HasSuffix(lowerCol, "timestamp") || lowerCol == "created" || lowerCol == "modified" {
 						colType = TypeDateTimeN
 						colSize = 8
 					} else if strings.HasSuffix(lowerCol, "date") {
@@ -2286,7 +2295,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 					if isUUIDString(val) {
 						colType = TypeGuid
 						colSize = 16
-					} else if isDateString(val) && lowerCol != "create_date" && lowerCol != "modify_date" {
+					} else if isDateString(val) && lowerCol != "create_date" && lowerCol != "modify_date" && lowerCol != "createdate" && lowerCol != "modifydate" {
 						colType = TypeDateN
 						colSize = 3
 					} else if isTimeString(val) {
@@ -2297,6 +2306,9 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 						colType = TypeDateTimeOffsetN
 						colSize = 10
 						scale = 7
+					} else if lowerCol == "type" {
+						colType = TypeVarChar
+						colSize = 2
 					} else if colType != TypeDateTimeN && colType != TypeDateTime2N && colType != TypeDateN && colType != TypeTimeN && colType != TypeDateTimeOffsetN && colType != TypeGuid {
 						if len(val) > 4000 || strings.Contains(lowerCol, "max") || strings.Contains(lowerCol, "lob") {
 							colType = TypeNVarChar
