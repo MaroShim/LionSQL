@@ -115,7 +115,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
 * [`TDS_COMPATIBILITY_REPORT.md`](file:///Users/maro/Projects/LionSQL/doc/TDS_COMPATIBILITY_REPORT.md)
   * Comprehensive Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) live compatibility verification report across 123 enterprise T-SQL/ORM scenarios (**99.2% practical compatibility rate**: 122/123 passing).
-* [`COLLATION_AND_LOCALE_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/COLLATION_AND_LOCALE_PLAN.md)
+* [`../notes/COLLATION_AND_LOCALE_PLAN.md`](file:///Users/maro/Projects/LionSQL/notes/COLLATION_AND_LOCALE_PLAN.md)
   * Microsoft SQL Server Collation, Locale & Multi-Language architecture and implementation plan (Tolerant `COLLATE` parser, `--collation` dynamic tokens, `COLLATIONPROPERTY`, and zero collation conflict policy).
 
 ---
@@ -165,6 +165,10 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
 * [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/LionSQL/doc/TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.
+* [`../notes/UNIFIED_CLI_PLAN.md`](file:///Users/maro/Projects/LionSQL/notes/UNIFIED_CLI_PLAN.md)
+  * PocketBase/CockroachDB style single-binary CLI unification architecture and lifecycle execution plan.
+* [`../notes/DOCUMENTATION_CLEANUP_PLAN.md`](file:///Users/maro/Projects/LionSQL/notes/DOCUMENTATION_CLEANUP_PLAN.md)
+  * 4-Stage comprehensive technical documentation cleanup and synchronization master plan for v0.90.0 Feature Freeze.
 * [`ROADMAP.md`](file:///Users/maro/Projects/LionSQL/ROADMAP.md)
   * Versioned milestone progression from single-node OLTP to Always On HA and decoupled HTAP.
 * [`TODO.ko.md`](file:///Users/maro/Projects/LionSQL/TODO.ko.md)
