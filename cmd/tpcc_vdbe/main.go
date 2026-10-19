@@ -747,7 +747,7 @@ func printTPCCReport(elapsed time.Duration, no, pay, osStat, del, sl *txStats) {
 	overallTPS := float64(totalCommitted) / elapsedSec
 
 	fmt.Println("\n================================================================================")
-	fmt.Println("  SQLion TPC-C Benchmark Results (VDBE Bytecode Virtual Machine)")
+	fmt.Println("  LionSQL TPC-C Benchmark Results (VDBE Bytecode Virtual Machine)")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Throughput - tpmC]   %10.2f New-Order Transactions/Minute\n", tpmC)
 	fmt.Printf(" [Overall TPS]          %10.2f Transactions/Second (All 5 Tx types)\n", overallTPS)

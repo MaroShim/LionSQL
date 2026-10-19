@@ -56,7 +56,7 @@ func main() {
 	flag.Parse()
 
 	fmt.Println("================================================================================")
-	fmt.Println("  SQLion Industry-Standard TPC-C Benchmark Suite")
+	fmt.Println("  LionSQL Industry-Standard TPC-C Benchmark Suite")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Storage Engine] %s (Dir: %s)\n", *engineType, *dataDir)
 	fmt.Printf(" [Scale Factor]   %d Warehouses (%d Items, %d Customers/District)\n", *numWarehouses, *numItems, *numCustPerDist)
@@ -658,7 +658,7 @@ func printTPCCReport(elapsed time.Duration, no, pay, osStat, del, sl *txStats) {
 	totalTPS := float64(totalCompleted) / elapsedSec
 
 	fmt.Println("\n================================================================================")
-	fmt.Println("  SQLion TPC-C Benchmark Executive Summary")
+	fmt.Println("  LionSQL TPC-C Benchmark Executive Summary")
 	fmt.Println("================================================================================")
 	fmt.Printf(" Execution Time:     %v\n", elapsed.Round(time.Millisecond))
 	fmt.Printf(" Total Transactions: %d completed (%d attempted, %d retried, %d final aborts)\n", totalCompleted, totalAttempts, totalRetries, totalAborts)

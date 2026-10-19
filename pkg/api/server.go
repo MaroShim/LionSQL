@@ -557,8 +557,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("DELETE /api/logs/requests", s.wrapSuperuser(s.handleClearRequestLogs))
 
 	// Official Client SDK Static Distribution
-	s.mux.HandleFunc("GET /sdk/sqlion.js", s.handleServeSDKJS)
-	s.mux.HandleFunc("GET /sdk/sqlion.d.ts", s.handleServeSDKDTS)
+	s.mux.HandleFunc("GET /sdk/lionsql.js", s.handleServeSDKJS)
+	s.mux.HandleFunc("GET /sdk/lionsql.d.ts", s.handleServeSDKDTS)
 }
 
 func (s *Server) wrapSuperuser(next http.HandlerFunc) http.HandlerFunc {

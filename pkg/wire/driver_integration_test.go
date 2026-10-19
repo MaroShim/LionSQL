@@ -77,11 +77,11 @@ func TestDriverIntegration_LibPQ_QueryBasic(t *testing.T) {
 	}
 
 	var msg string
-	if err := db.QueryRowContext(ctx, "SELECT 'Hello SQLion'").Scan(&msg); err != nil {
+	if err := db.QueryRowContext(ctx, "SELECT 'Hello LionSQL'").Scan(&msg); err != nil {
 		t.Fatalf("QueryRow string failed: %v", err)
 	}
-	if msg != "Hello SQLion" {
-		t.Fatalf("expected 'Hello SQLion', got %q", msg)
+	if msg != "Hello LionSQL" {
+		t.Fatalf("expected 'Hello LionSQL', got %q", msg)
 	}
 }
 

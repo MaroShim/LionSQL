@@ -757,10 +757,10 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 		return storage.IntValue(int64(f.lastError)), true
 	}
 	if strings.EqualFold(name, "@@SERVERNAME") || strings.EqualFold(clean, "SERVERNAME") || strings.EqualFold(clean, "@SERVERNAME") {
-		return storage.StringValue("SQLION"), true
+		return storage.StringValue("LIONSQL"), true
 	}
 	if strings.EqualFold(name, "@@VERSION") || strings.EqualFold(clean, "VERSION") || strings.EqualFold(clean, "@VERSION") {
-		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine"), true
+		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - LionSQL Engine"), true
 	}
 	if strings.EqualFold(name, "@@IDENTITY") || strings.EqualFold(clean, "IDENTITY") || strings.EqualFold(clean, "@IDENTITY") || strings.EqualFold(name, "SCOPE_IDENTITY") || strings.EqualFold(clean, "SCOPE_IDENTITY") {
 		if f.lastIdentity > 0 {

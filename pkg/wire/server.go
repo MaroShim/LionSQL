@@ -619,7 +619,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 	// Bind authenticated user to session
 	s.coordinator.SetSessionUser(sessID, username)
 
-	_ = WriteParameterStatus(conn, "server_version", "15.0 (SQLion)")
+	_ = WriteParameterStatus(conn, "server_version", "15.0 (LionSQL)")
 	_ = WriteParameterStatus(conn, "server_encoding", "UTF8")
 	_ = WriteParameterStatus(conn, "client_encoding", "UTF8")
 	_ = WriteParameterStatus(conn, "application_name", startupParams["application_name"])
@@ -1511,7 +1511,7 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		if writeRowDesc {
 			_ = WriteRowDescription(conn, cols)
 		}
-		_ = WriteDataRow(conn, []string{"PostgreSQL 15.0 (SQLion OLTP & Stored Procedure Server)"})
+		_ = WriteDataRow(conn, []string{"PostgreSQL 15.0 (LionSQL OLTP & Stored Procedure Server)"})
 		_ = WriteCommandComplete(conn, "SELECT 1")
 		return
 	}

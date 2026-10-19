@@ -331,7 +331,7 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 	case "SYSUTCDATETIME()", "SYSUTCDATETIME":
 		return time.Now().UTC(), "sysutcdatetime"
 	case "@@VERSION":
-		return "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine", "@@version"
+		return "Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - LionSQL Engine", "@@version"
 	case "@@SPID":
 		if cs != nil && cs.SPID > 0 {
 			return int64(cs.SPID), "@@spid"

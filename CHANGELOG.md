@@ -12,7 +12,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Session Table Variable & Temporary Table Lifecycle Cleanup (`pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go`)**: Ensured all physical table variables (`__tv_*`) and temporary tables are cleanly dropped from the storage engine on `CloseSession` (including `default` session on `Coordinator.Close`) and on connection pool resets (`DISCARD ALL`, `RESET ALL`).
 
 ### Added
+- **Production Superuser Security Guardrail (`PROD-SEC-1`) (`cmd/lionsql`, `cmd/server`)**: Enforced production safety guard that actively blocks server startup when binding to non-localhost / external interfaces (e.g. `0.0.0.0` or public IP) with the default administrative superuser password (`1234567890`), requiring explicit password change (`admin_password`) or localhost-only binding (`127.0.0.1`).
 - **1.0 Pre-Release Architecture Review Report (`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`)**: Documented comprehensive technical feedback and 5-point action plan covering brand consolidation, escape vulnerability fixes, query execution paths, and production security guards before 1.0 LTS release.
+
+### Changed
+- **Brand Unification & Clean SDK Standard (`BRAND-UNIFY-1`) (`pkg/api`, `pkg/ui`, `pkg/wire`, `pkg/proc`, `cmd/tpcc`, `cmd/lionsql`)**: Standardized all remaining branding to LionSQL across JavaScript/TypeScript Web SDK (`lionsql.js`, `lionsql.d.ts`, `class LionSQL`), webhook & CDC outbox HTTP headers (`X-LionSQL-Signature`, `X-LionSQL-Event`, `X-LionSQL-Delivery`), wire protocol server version and banners (PostgreSQL v3 `15.0 (LionSQL)`, TDS 7.x/8.0 `LionSQL Engine`, `@@SERVERNAME: LIONSQL`), and diagnostic probe files. Cleanly eliminated legacy `sqlion` aliases per 1.0 production specification.
 
 ## [0.90.0] - 2026-10-19
 

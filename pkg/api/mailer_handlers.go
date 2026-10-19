@@ -51,7 +51,7 @@ func (s *Server) handleTestMail(w http.ResponseWriter, r *http.Request) {
 
 	err := s.mailer.SendTemplate(req.To, "welcome", map[string]interface{}{
 		"UserName": req.To,
-		"AppName":  "SQLion Test Email",
+		"AppName":  "LionSQL Test Email",
 	})
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]interface{}{
@@ -116,7 +116,7 @@ func (s *Server) handleRequestPasswordReset(w http.ResponseWriter, r *http.Reque
 		_ = s.mailer.SendTemplate(req.Email, "password_reset", map[string]interface{}{
 			"Token":     resetToken,
 			"ActionURL": actionURL,
-			"AppName":   "SQLion",
+			"AppName":   "LionSQL",
 		})
 	}
 

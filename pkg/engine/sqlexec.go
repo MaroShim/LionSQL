@@ -701,7 +701,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			case "transaction_isolation", "default_transaction_isolation", "transaction_isolation_level":
 				valStr = "read committed"
 			case "server_version":
-				valStr = "15.0 (SQLion)"
+				valStr = "15.0 (LionSQL)"
 			case "server_encoding", "client_encoding":
 				valStr = "UTF8"
 			case "timezone", "time_zone":

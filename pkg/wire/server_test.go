@@ -204,8 +204,8 @@ func TestWire_HandshakeAndSelectVersion(t *testing.T) {
 	if len(rows) == 0 {
 		t.Fatalf("Expected at least one data row for SELECT version()")
 	}
-	if !strings.Contains(string(rows[0]), "SQLion") {
-		t.Errorf("Expected version to contain SQLion, got: %s", string(rows[0]))
+	if !strings.Contains(string(rows[0]), "LionSQL") {
+		t.Errorf("Expected version to contain LionSQL, got: %s", string(rows[0]))
 	}
 }
 

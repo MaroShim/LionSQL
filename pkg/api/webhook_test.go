@@ -155,14 +155,14 @@ func TestWebhook_DispatchDeliveryAndHMAC(t *testing.T) {
 	if receivedHeader.Get("X-Custom-Env") != "testing" {
 		t.Errorf("expected X-Custom-Env header 'testing', got %q", receivedHeader.Get("X-Custom-Env"))
 	}
-	if receivedHeader.Get("X-SQLion-Event") != "create" {
-		t.Errorf("expected X-SQLion-Event 'create', got %q", receivedHeader.Get("X-SQLion-Event"))
+	if receivedHeader.Get("X-LionSQL-Event") != "create" {
+		t.Errorf("expected X-LionSQL-Event 'create', got %q", receivedHeader.Get("X-LionSQL-Event"))
 	}
 
 	// 2. Verify HMAC Signature
-	sigHeader := receivedHeader.Get("X-SQLion-Signature")
+	sigHeader := receivedHeader.Get("X-LionSQL-Signature")
 	if sigHeader == "" {
-		t.Fatalf("expected X-SQLion-Signature header")
+		t.Fatalf("expected X-LionSQL-Signature header")
 	}
 	mac := hmac.New(sha256.New, []byte(secretKey))
 	mac.Write(receivedBody)

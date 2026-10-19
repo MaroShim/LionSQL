@@ -700,12 +700,12 @@ func TestBuiltin_GroupsA_Through_F(t *testing.T) {
 		t.Errorf("SCHEMA_NAME expected 'dbo', got %q", schName.SVal)
 	}
 	dbName := EvalBuiltin("DB_NAME", nil)
-	if dbName.SVal != "SQLion" {
-		t.Errorf("DB_NAME expected 'SQLion', got %q", dbName.SVal)
+	if dbName.SVal != "LionSQL" {
+		t.Errorf("DB_NAME expected 'LionSQL', got %q", dbName.SVal)
 	}
 	appName := EvalBuiltin("APP_NAME", nil)
-	if appName.SVal != "SQLion" {
-		t.Errorf("APP_NAME expected 'SQLion', got %q", appName.SVal)
+	if appName.SVal != "LionSQL" {
+		t.Errorf("APP_NAME expected 'LionSQL', got %q", appName.SVal)
 	}
 
 	// ----------------------------------------------------
@@ -995,8 +995,8 @@ func TestBuiltin_TSQLExpansions(t *testing.T) {
 	if ver := EvalBuiltin("@@VERSION", nil); !strings.Contains(ver.SVal, "Microsoft SQL Server") {
 		t.Errorf("@@VERSION expected SQL Server header, got %q", ver.SVal)
 	}
-	if srv := EvalBuiltin("@@SERVERNAME", nil); srv.SVal != "SQLION" {
-		t.Errorf("@@SERVERNAME expected 'SQLION', got %q", srv.SVal)
+	if srv := EvalBuiltin("@@SERVERNAME", nil); srv.SVal != "LIONSQL" {
+		t.Errorf("@@SERVERNAME expected 'LIONSQL', got %q", srv.SVal)
 	}
 	if spid := EvalBuiltin("@@SPID", nil); spid.IVal != 51 {
 		t.Errorf("@@SPID expected 51, got %d", spid.IVal)

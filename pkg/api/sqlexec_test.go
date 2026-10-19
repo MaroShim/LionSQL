@@ -1036,7 +1036,7 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 		{"SHOW search_path;", "search_path", `"$user", public`},
 		{"SHOW transaction_isolation;", "transaction_isolation", "read committed"},
 		{"SHOW timezone;", "timezone", "UTC"},
-		{"SHOW server_version;", "server_version", "15.0 (SQLion)"},
+		{"SHOW server_version;", "server_version", "15.0 (LionSQL)"},
 		{"SHOW max_connections;", "max_connections", "100"},
 	}
 	for _, sq := range showQueries {

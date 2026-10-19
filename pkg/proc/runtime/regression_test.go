@@ -235,7 +235,7 @@ BEGIN
     SET @t = TRIM(@raw_str);
     SET @len = LEN(@t);
     SET @sub = SUBSTRING(@t, 1, 4);
-    SET @rep = REPLACE(@t, 'World', 'SQLion');
+    SET @rep = REPLACE(@t, 'World', 'LionSQL');
 
     SET @abs_val = ABS(@val);
     SET @rnd = ROUND(@val);
@@ -269,7 +269,7 @@ END;
 		"hello world",
 		"Hello World",
 		"Hell",
-		"Hello SQLion",
+		"Hello LionSQL",
 	}
 	for i, expected := range expectedLogs {
 		if i >= len(res.Logs) || !strings.Contains(res.Logs[i], expected) {

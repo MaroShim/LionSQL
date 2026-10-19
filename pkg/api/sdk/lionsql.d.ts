@@ -1,8 +1,8 @@
 /**
- * SQLion JavaScript / TypeScript Client SDK Type Definitions
+ * LionSQL JavaScript / TypeScript Client SDK Type Definitions
  */
 
-export interface SQLionOptions {
+export interface LionSQLOptions {
   token?: string;
   auth?: string;
   headers?: Record<string, string>;
@@ -40,7 +40,7 @@ export interface RealtimeMessage<T = any> {
 }
 
 export declare class RecordService<T = any> {
-  constructor(client: SQLion, collectionName: string);
+  constructor(client: LionSQL, collectionName: string);
   getList(page?: number, perPage?: number, options?: ListOptions): Promise<ListResult<T>>;
   getFullList(options?: ListOptions): Promise<T[]>;
   getOne(id: string | number, options?: ListOptions): Promise<T>;
@@ -55,7 +55,7 @@ export declare class RecordService<T = any> {
 }
 
 export declare class AuthService {
-  constructor(client: SQLion);
+  constructor(client: LionSQL);
   login(email: string, password: string): Promise<{ token: string; user: any }>;
   logout(): Promise<void>;
   me(): Promise<{ id: string; email: string; role: string }>;
@@ -63,26 +63,26 @@ export declare class AuthService {
 }
 
 export declare class RealtimeService {
-  constructor(client: SQLion);
+  constructor(client: LionSQL);
   connect(): void;
   subscribe(topic: string, callback: (msg: RealtimeMessage) => void): () => void;
   unsubscribe(topic: string): void;
 }
 
-export declare class SQLionError extends Error {
+export declare class LionSQLError extends Error {
   status: number;
   data: any;
   constructor(status: number, message: string, data?: any);
 }
 
-export default class SQLion {
+export default class LionSQL {
   baseUrl: string;
   token: string;
   headers: Record<string, string>;
   auth: AuthService;
   realtime: RealtimeService;
 
-  constructor(baseUrl?: string, options?: SQLionOptions);
+  constructor(baseUrl?: string, options?: LionSQLOptions);
   setToken(token: string): this;
   readonly isAuth: boolean;
   collection<T = any>(name: string): RecordService<T>;

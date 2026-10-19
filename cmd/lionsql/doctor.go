@@ -118,8 +118,8 @@ func (d *Doctor) checkFilesystemSafety() {
 	d.addResult(cat, "Data Directory Path", fmt.Sprintf("%s (0755 normalized)", dataDir), "OK", nil)
 
 	// Atomic Probe: Write, Read, Delete
-	probeFile := filepath.Join(dataDir, fmt.Sprintf(".sqlion_doctor_probe_%d.tmp", time.Now().UnixNano()))
-	probeData := []byte("SQLion Doctor Filesystem Integrity Probe 0x53514C")
+	probeFile := filepath.Join(dataDir, fmt.Sprintf(".lionsql_doctor_probe_%d.tmp", time.Now().UnixNano()))
+	probeData := []byte("LionSQL Doctor Filesystem Integrity Probe 0x4C494F4E")
 
 	start := time.Now()
 	if err := os.WriteFile(probeFile, probeData, 0644); err != nil {
@@ -169,7 +169,7 @@ func (d *Doctor) checkNetworkPorts() {
 			continue
 		}
 
-		// Port is in use: check if active SQLion instance owns it
+		// Port is in use: check if active LionSQL instance owns it
 		pidFile := d.cfg.Server.PIDFile
 		if pidFile == "" {
 			pidFile = filepath.Join(d.cfg.Server.DataDir, "lionsql.pid")

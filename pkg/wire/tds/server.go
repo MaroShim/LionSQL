@@ -708,7 +708,7 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 			if needsAuth {
 				if _, err := authSvc.AuthenticateLogin(sess.UserName, sess.Password); err != nil {
 					errMsg := fmt.Sprintf("Login failed for user '%s'.", sess.UserName)
-					errToken := BuildError(18456, 1, 14, errMsg, "SQLion", "", 1)
+					errToken := BuildError(18456, 1, 14, errMsg, "LionSQL", "", 1)
 					doneToken := BuildDone(TokenDone, DoneError, 0, 0)
 
 					var errResp bytes.Buffer
@@ -725,7 +725,7 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 	var resp bytes.Buffer
 
 	// 1. LOGINACK token (0xAD)
-	loginAck := BuildLoginAck("SQLion", 15, 0, 2000)
+	loginAck := BuildLoginAck("LionSQL", 15, 0, 2000)
 	resp.Write(loginAck)
 
 	// 2. ENVCHANGE for Database (0xE3)
@@ -2406,7 +2406,7 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 			{Name: "versionText", Type: TypeNVarChar, Size: 128, Nullable: false},
 		}
 		vals := []any{
-			"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine",
+			"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - LionSQL Engine",
 			"15.0.2000.5",
 			int32(3),
 			"SQL Server 2019",
@@ -2431,7 +2431,7 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 			{Name: colName, Type: TypeNVarChar, Size: 4000, Nullable: false},
 		}
 		vals := []any{
-			"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - SQLion Engine",
+			"Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - LionSQL Engine",
 		}
 		return cols, vals, true
 	}

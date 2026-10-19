@@ -180,7 +180,7 @@ func (w *WebhookSink) Publish(ctx context.Context, msg *OutboxMessage) error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "SQLion-Outbox-Dispatcher/1.0")
+	req.Header.Set("User-Agent", "LionSQL-Outbox-Dispatcher/1.0")
 
 	if w.authToken != "" {
 		req.Header.Set("Authorization", "Bearer "+w.authToken)
@@ -189,7 +189,7 @@ func (w *WebhookSink) Publish(ctx context.Context, msg *OutboxMessage) error {
 		req.Header.Set(k, v)
 	}
 	for k, v := range msg.Headers {
-		req.Header.Set("X-SQLion-"+k, v)
+		req.Header.Set("X-LionSQL-"+k, v)
 	}
 
 	resp, err := w.httpClient.Do(req)

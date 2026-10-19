@@ -20,7 +20,7 @@ func TestMailer_SendAndTemplate(t *testing.T) {
 		Username:  "mailer@example.com",
 		Password:  "secret-pwd",
 		FromEmail: "no-reply@example.com",
-		FromName:  "SQLion Notifications",
+		FromName:  "LionSQL Notifications",
 		Enabled:   true,
 	}
 
@@ -57,7 +57,7 @@ func TestMailer_SendAndTemplate(t *testing.T) {
 	// 2. Template Send: password_reset
 	err = mailer.SendTemplate("bob@example.com", "password_reset", map[string]interface{}{
 		"ActionURL": "https://app.example.com/reset?token=xyz123",
-		"AppName":   "SQLion Test",
+		"AppName":   "LionSQL Test",
 	})
 	if err != nil {
 		t.Fatalf("SendTemplate failed: %v", err)

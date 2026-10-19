@@ -387,15 +387,15 @@ func (d *WebhookDispatcher) deliverWithRetry(wh *Webhook, payload map[string]any
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("User-Agent", "SQLion-Webhook/1.0")
-		req.Header.Set("X-SQLion-Event", eventName)
-		req.Header.Set("X-SQLion-Delivery", delivery.ID)
+		req.Header.Set("User-Agent", "LionSQL-Webhook/1.0")
+		req.Header.Set("X-LionSQL-Event", eventName)
+		req.Header.Set("X-LionSQL-Delivery", delivery.ID)
 
 		if wh.Secret != "" {
 			mac := hmac.New(sha256.New, []byte(wh.Secret))
 			mac.Write(bodyBytes)
 			signature := hex.EncodeToString(mac.Sum(nil))
-			req.Header.Set("X-SQLion-Signature", "sha256="+signature)
+			req.Header.Set("X-LionSQL-Signature", "sha256="+signature)
 		}
 
 		for k, v := range wh.Headers {
@@ -494,7 +494,7 @@ func (d *WebhookDispatcher) TestPing(id string) (*WebhookDelivery, error) {
 	testPayload := map[string]any{
 		"event":     "test",
 		"table":     cpy.Table,
-		"message":   "SQLion test ping notification",
+		"message":   "LionSQL test ping notification",
 		"timestamp": time.Now().UnixMilli(),
 	}
 

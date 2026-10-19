@@ -87,7 +87,7 @@
 | **P1** | **문서/릴리스** | **v0.90.0 기능 동결 4단계 문서 전수 정돈 마스터 플랜 (`DOC-CLEANUP`)** | `CHANGELOG.md`, `README.md`, `doc/`, `ROADMAP.md` | **완료 (`[x]`)** | [`notes/DOCUMENTATION_CLEANUP_PLAN.md`](notes/DOCUMENTATION_CLEANUP_PLAN.md) |
 | **P1** | **보안/변수치환** | **세션 변수(`@var`) 치환 시 작은따옴표 이스케이프 및 인젝션 방어 (`SEC-ESC-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P1** | **스토리지/생명주기** | **세션 종료 및 연결 리셋 시 테이블 변수(`TableVars`) 및 임시 테이블 누수 완전 해제 (`SESS-CLEAN-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
-| **P1** | **브랜드/정합성** | **웹훅 헤더(`X-LionSQL-*`), SDK 엔드포인트/클래스명, 시스템 변수 잔여 `SQLion` 완전 정돈 (`BRAND-UNIFY-1`)** | `pkg/api`, `pkg/proc`, `pkg/engine`, `pkg/wire` | **대기 (Queue)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P1** | **브랜드/정합성** | **웹훅 헤더(`X-LionSQL-*`), SDK 엔드포인트/클래스명, 시스템 변수 잔여 `SQLion` 완전 정돈 (`BRAND-UNIFY-1`)** | `pkg/api`, `pkg/proc`, `pkg/engine`, `pkg/wire` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
@@ -189,10 +189,10 @@
   2. **[B] 테이블 변수(`TableVars`) 및 임시 테이블 생명주기 완전 정리 (`SESS-CLEAN-1`, 완료 `[x]`)**:
      - 세션 종료(`CloseSession`) 및 코디네이터 종료(`Close`) 시 `default` 세션을 포함하여 모든 `__tv_*` 물리 테이블 즉시 드롭.
      - 커넥션 풀 리셋(`DISCARD ALL`, `RESET ALL`) 실행 시 할당된 세션 임시 테이블과 테이블 변수를 물리 드롭하여 스토리지 누수 원천 차단.
-  3. **[C] 웹훅 헤더, SDK 엔드포인트 및 잔여 `SQLion` 브랜드 완전 정돈 (`BRAND-UNIFY-1`, 대기)**:
-     - `pkg/api/webhook.go` 내 웹훅 헤더를 `X-LionSQL-Signature`, `X-LionSQL-Event`로 정돈 (하위 호환 `X-SQLion-*` 병행).
-     - `/sdk/lionsql.js` 엔드포인트 및 `window.LionSQL` 클래스 별칭 신설.
-     - `DB_NAME()`, `APP_NAME()`, `SHOW server_version`, `SELECT @@VERSION`의 엔진 명칭을 `LionSQL`로 통일.
+  3. **[C] 웹훅 헤더, SDK 엔드포인트 및 잔여 `SQLion` 브랜드 완전 정돈 (`BRAND-UNIFY-1`, 완료 `[x]`)**:
+     - `pkg/api/webhook.go`, `pkg/cdc/outbox_sinks.go`: 웹훅 헤더를 `X-LionSQL-Signature`, `X-LionSQL-Event`, `X-LionSQL-Delivery` 및 `LionSQL-Webhook/1.0`으로 완전 전환.
+     - `pkg/api/sdk/`: `sqlion.js` 및 `sqlion.d.ts`를 `lionsql.js` 및 `lionsql.d.ts`로 정식 전환, 엔드포인트 `/sdk/lionsql.js` 신설 및 `class LionSQL`로 완전 일원화 (하위 호환 별칭 없이 단일화).
+     - `DB_NAME()`, `APP_NAME()`, `SHOW server_version`, `SELECT @@VERSION`, TDS `BuildLoginAck`, `BuildError`, PG Wire ParameterStatus, TLS 인증서 Organization의 잔여 명칭을 `LionSQL`로 완전 일원화.
   4. **[D] 1.0 릴리즈 게이트 4 기준 일치화 및 문서 권한 정규화 (`REL-ALIGN-1`, 완료 `[x]`)**:
      - `ROADMAP.md` Gate 4를 엔터프라이즈 보안 및 거버넌스(TDE, RBAC, 감사 추적)로 1.0 충족 확정하고 암호학적 불변 감사 로그(`pkg/audit`)를 Post-1.0(`v1.1.0`)으로 연기 일원화.
      - `doc/README.md`, `doc/REFERENCE_MANUAL.ko.md` 파일 퍼미션 `0644` 정규화 완료 (Golden Rule 5).

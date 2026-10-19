@@ -123,8 +123,8 @@ END
 	if len(res2.Logs[4]) != 36 || !strings.Contains(res2.Logs[4], "-") {
 		t.Errorf("Expected valid UUID string, got %s", res2.Logs[4])
 	}
-	if res2.Logs[5] != "SQLION" {
-		t.Errorf("Expected @@SERVERNAME 'SQLION', got %s", res2.Logs[5])
+	if res2.Logs[5] != "LIONSQL" {
+		t.Errorf("Expected @@SERVERNAME 'LIONSQL', got %s", res2.Logs[5])
 	}
 }
 

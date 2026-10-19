@@ -256,7 +256,7 @@ func (m *Mailer) SendTemplate(to, templateName string, data map[string]interface
 		data = make(map[string]interface{})
 	}
 	if _, ok := data["AppName"]; !ok {
-		data["AppName"] = "SQLion Database"
+		data["AppName"] = "LionSQL Database"
 	}
 
 	subjTmpl, err := template.New("subj").Parse(tmplDef.Subject)

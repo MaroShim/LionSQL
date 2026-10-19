@@ -1467,7 +1467,7 @@ END;</textarea>
             Universal PocketBase-compatible client for Web Browsers, Node.js, Bun, Deno, and Edge functions.
           </div>
         </div>
-        <a href="/sdk/sqlion.js" download="sqlion.js" class="btn" style="background: #0284c7;">Download sqlion.js (v0.90.0)</a>
+        <a href="/sdk/lionsql.js" download="lionsql.js" class="btn" style="background: #0284c7;">Download lionsql.js (v1.0.0)</a>
       </div>
 
       <div class="card" style="margin-top: 20px;">
@@ -1475,9 +1475,9 @@ END;</textarea>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
           Load the SDK directly from your running LionSQL server without npm dependencies:
         </p>
-        <pre class="console-box" style="color: var(--console-text); padding: 12px; font-size: 0.82rem;">&lt;script src="/sdk/sqlion.js"&gt;&lt;/script&gt;
+        <pre class="console-box" style="color: var(--console-text); padding: 12px; font-size: 0.82rem;">&lt;script src="/sdk/lionsql.js"&gt;&lt;/script&gt;
 &lt;script&gt;
-  const client = new SQLion('http://127.0.0.1:8090', { auth: 'YOUR_API_KEY' });
+  const client = new LionSQL('http://127.0.0.1:8090', { auth: 'YOUR_API_KEY' });
 &lt;/script&gt;</pre>
       </div>
 
@@ -4916,9 +4916,9 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       if (previewLang === 'sdk') {
         if (previewEndpoint === 'list') {
           code = `// 1. Initialize LionSQL client and list records with pagination, filter & sort
-import SQLion from './sdk/sqlion.js';
+import LionSQL from './sdk/lionsql.js';
 
-const db = new SQLion('${host}');
+const db = new LionSQL('${host}');
 db.setToken('<API_KEY>');
 
 const result = await db.collection('${currentTable}').getList(1, 20, {
@@ -4930,27 +4930,27 @@ console.log('Total items:', result.totalItems);
 console.log('Records:', result.records);`;
         } else if (previewEndpoint === 'get') {
           code = `// 2. Fetch single record by primary key
-import SQLion from './sdk/sqlion.js';
+import LionSQL from './sdk/lionsql.js';
 
-const db = new SQLion('${host}');
+const db = new LionSQL('${host}');
 db.setToken('<API_KEY>');
 
 const record = await db.collection('${currentTable}').getOne(${pkSample});
 console.log('Fetched record:', record);`;
         } else if (previewEndpoint === 'create') {
           code = `// 3. Insert record into ${currentTable} (schema-matched fields)
-import SQLion from './sdk/sqlion.js';
+import LionSQL from './sdk/lionsql.js';
 
-const db = new SQLion('${host}');
+const db = new LionSQL('${host}');
 db.setToken('<API_KEY>');
 
 const newRecord = await db.collection('${currentTable}').create(${jsonIndented});
 console.log('Created record:', newRecord);`;
         } else if (previewEndpoint === 'sql') {
           code = `// 4. Execute direct T-SQL query via LionSQL SDK
-import SQLion from './sdk/sqlion.js';
+import LionSQL from './sdk/lionsql.js';
 
-const db = new SQLion('${host}');
+const db = new LionSQL('${host}');
 db.setToken('<API_KEY>');
 
 const queryResult = await db.query("SELECT TOP 20 * FROM ${currentTable} ORDER BY 1 DESC");

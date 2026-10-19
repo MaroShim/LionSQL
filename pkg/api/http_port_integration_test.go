@@ -172,33 +172,33 @@ func TestHTTPPort_FunctionalityIntegration(t *testing.T) {
 			t.Errorf("Web Studio UI HTML does not mention LionSQL")
 		}
 
-		// 2.2 JavaScript Client SDK: GET /sdk/sqlion.js
-		resp, err = client.Get(baseURL + "/sdk/sqlion.js")
+		// 2.2 JavaScript Client SDK: GET /sdk/lionsql.js
+		resp, err = client.Get(baseURL + "/sdk/lionsql.js")
 		if err != nil {
-			t.Fatalf("GET /sdk/sqlion.js failed: %v", err)
+			t.Fatalf("GET /sdk/lionsql.js failed: %v", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("GET /sdk/sqlion.js expected 200 OK, got %d", resp.StatusCode)
+			t.Fatalf("GET /sdk/lionsql.js expected 200 OK, got %d", resp.StatusCode)
 		}
 		jsBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			t.Fatalf("failed to read SDK js body: %v", err)
 		}
-		if !strings.Contains(string(jsBody), "class SQLion") {
-			t.Errorf("SDK js does not contain class SQLion")
+		if !strings.Contains(string(jsBody), "class LionSQL") {
+			t.Errorf("SDK js does not contain class LionSQL")
 		}
 
-		// 2.3 TypeScript Definitions: GET /sdk/sqlion.d.ts
-		resp, err = client.Get(baseURL + "/sdk/sqlion.d.ts")
+		// 2.3 TypeScript Definitions: GET /sdk/lionsql.d.ts
+		resp, err = client.Get(baseURL + "/sdk/lionsql.d.ts")
 		if err != nil {
-			t.Fatalf("GET /sdk/sqlion.d.ts failed: %v", err)
+			t.Fatalf("GET /sdk/lionsql.d.ts failed: %v", err)
 		}
 		defer func() { _ = resp.Body.Close() }()
 
 		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("GET /sdk/sqlion.d.ts expected 200 OK, got %d", resp.StatusCode)
+			t.Fatalf("GET /sdk/lionsql.d.ts expected 200 OK, got %d", resp.StatusCode)
 		}
 	})
 

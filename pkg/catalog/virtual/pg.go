@@ -1330,7 +1330,7 @@ func generatePgSettings(src Source, whereClause string) ([]string, []map[string]
 		desc     string
 		vartype  string
 	}{
-		{"server_version", "15.0 (SQLion)", "Preset Options", "Shows the server version.", "string"},
+		{"server_version", "15.0 (LionSQL)", "Preset Options", "Shows the server version.", "string"},
 		{"server_version_num", "150000", "Preset Options", "Shows the server version as an integer.", "integer"},
 		{"client_encoding", "UTF8", "Client Connection Defaults / Locale and Formatting", "Sets the client's character set encoding.", "string"},
 		{"server_encoding", "UTF8", "Client Connection Defaults / Locale and Formatting", "Shows the server (database) character set encoding.", "string"},

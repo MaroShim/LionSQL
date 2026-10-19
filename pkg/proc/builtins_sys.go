@@ -368,13 +368,13 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.IntValue(1)
 
 	case "DB_NAME":
-		return storage.StringValue("SQLion")
+		return storage.StringValue("LionSQL")
 
 	case "DB_ID":
 		return storage.IntValue(1)
 
 	case "APP_NAME":
-		return storage.StringValue("SQLion")
+		return storage.StringValue("LionSQL")
 
 	case "IDENT_CURRENT":
 		return storage.IntValue(1)
@@ -412,10 +412,10 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.IntValue(1)
 
 	case "@@VERSION", "VERSION":
-		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) / SQLion Embedded Engine")
+		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) / LionSQL Embedded Engine")
 
 	case "@@SERVERNAME":
-		return storage.StringValue("SQLION")
+		return storage.StringValue("LIONSQL")
 
 	case "@@SPID", "SPID":
 		return storage.IntValue(51)
