@@ -63,8 +63,12 @@ func TestHandler(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rr.Code)
 	}
 
-	if !bytes.Contains(rr.Body.Bytes(), []byte("SQLion")) {
-		t.Errorf("expected response to contain SQLion brand")
+	if cc := rr.Header().Get("Cache-Control"); !strings.Contains(cc, "no-cache") {
+		t.Errorf("expected Cache-Control header to contain 'no-cache', got %q", cc)
+	}
+
+	if !bytes.Contains(rr.Body.Bytes(), []byte("LionSQL")) {
+		t.Errorf("expected response to contain LionSQL brand")
 	}
 }
 
@@ -172,6 +176,32 @@ func TestAPIPreviewEnhancements(t *testing.T) {
 		}
 	}
 }
+
+func TestThemeToggleUI(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`data-theme="light"`,
+		`id="theme-toggle-btn"`,
+		`id="theme-toggle-icon"`,
+		`id="theme-toggle-label"`,
+		`toggleTheme()`,
+		`initTheme()`,
+		`applyTheme(`,
+		`lionsql_theme`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q", snippet)
+		}
+	}
+}
+
 
 
 

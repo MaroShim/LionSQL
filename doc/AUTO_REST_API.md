@@ -354,3 +354,23 @@ eventSource.onmessage = (e) => {
 };
 ```
 Whenever a record is created, modified, or deleted via `/api/records/:table`, LionSQL broadcasts the event instantaneously to all connected subscribers.
+
+---
+
+## 8. Developer API Preview in Web Studio
+
+LionSQL Web Studio (accessible at `http://127.0.0.1:8090/_/`) features a built-in **Developer API Preview** modal (`</> API Preview` button on every table view). It provides instant, copy-paste ready code tailored to the currently selected table:
+
+### Key Capabilities:
+1. **Dynamic Schema-Aware Payloads**:
+   - The code generator inspects the live schema columns of the current table.
+   - Auto-increment primary keys are omitted from insert payloads.
+   - Fields are pre-populated with semantically realistic, type-matched dummy values (`INT`, `VARCHAR`, `DECIMAL`, `DATETIME`, `JSON`, `BOOLEAN`).
+2. **Multi-Language & SDK Support**:
+   - **LionSQL SDK (JS/TS)**: Generates native `import SQLion from './sdk/sqlion.js'` and `db.collection('table').getList() / getOne() / create() / query()` snippets.
+   - **cURL**: Shell commands with complete URL parameters, auth headers, and JSON payloads.
+   - **JavaScript (Fetch)**: Standard browser/Node `fetch()` API calls with error handling.
+   - **Python**: Python `requests` library snippets.
+   - **Go**: Idiomatic Go standard library `net/http` code with request creation and payload buffers.
+3. **One-Click Clipboard Copy**: Click `📋 Copy Code` to copy the generated snippet directly to your IDE or terminal.
+

@@ -118,7 +118,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 - **자동 생성 RESTful Records CRUD API**:
   테이블 생성 즉시 무코드 RESTful 엔드포인트(`/api/records/:table`) 자동 활성화, 정교한 URL 불리언 필터 엔진(`filter`), 다중 컬럼 정렬(`sort`), 페이지네이션, JSON 직렬화 지원.
 - **내장 웹 관리 스튜디오 (Web Studio, 포트 8090)**:
-  브라우저 관리자 대시보드 (`/_/`), 스프레드시트 인라인 셀 편집기, SQL 쿼리 에디터, VDBE 바이트코드 디스어셈블러, 실시간 Server-Sent Events (SSE) 동기화, 슈퍼유저 및 API Key 관리.
+  브라우저 관리자 대시보드 (`/_/`), 스프레드시트 인라인 셀 편집기, 테이블 스키마 연동 동적 API Preview 코드 생성기 (LionSQL SDK, cURL, Fetch, Python, Go), SQL 쿼리 에디터, VDBE 바이트코드 디스어셈블러, 실시간 Server-Sent Events (SSE) 동기화, 슈퍼유저 및 API Key 관리.
 - **공식 범용 JavaScript & TypeScript 클라이언트 SDK**:
   서버 바이너리가 직접 호스팅하는 PocketBase 스타일 SDK (`GET /sdk/sqlion.js`, `sqlion.d.ts`), 웹 브라우저, Node.js, Bun, Deno, Edge 런타임 지원.
 - **선언적 행 수준 보안 (RLS) & 비동기 웹훅**:

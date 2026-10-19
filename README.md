@@ -118,7 +118,7 @@ LionSQL's core capabilities are organized across five foundational architectural
 - **Auto-Generated RESTful Records CRUD API**:
   Instant zero-code REST endpoints (`/api/records/:table`) for all database tables upon creation, advanced boolean URL query filter engine (`filter`), multi-column sorting (`sort`), pagination, and schema-aware JSON typing.
 - **Embedded Web Management Studio (Port 8090)**:
-  Zero-install browser dashboard served at `http://localhost:8090/_/`, spreadsheet-style table viewer with inline cell editing, interactive SQL Query Studio with visual VDBE disassembler, realtime Server-Sent Events (SSE) live sync, and granular API Key / Superuser JWT management.
+  Zero-install browser dashboard served at `http://localhost:8090/_/`, spreadsheet-style table viewer with inline cell editing, dynamic schema-matched Developer API Preview code generator (LionSQL SDK, cURL, Fetch, Python, Go), interactive SQL Query Studio with visual VDBE disassembler, realtime Server-Sent Events (SSE) live sync, and granular API Key / Superuser JWT management.
 - **Official Universal JavaScript & TypeScript Client SDK**:
   PocketBase-compatible client (`sqlion.js`, `sqlion.d.ts`) served directly by the standalone executable (`GET /sdk/sqlion.js`), supporting Web Browsers, Node.js (v18+), Bun, Deno, and Edge runtimes.
 - **Declarative Row-Level Security (RLS) & Asynchronous Webhooks**:

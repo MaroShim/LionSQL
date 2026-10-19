@@ -345,3 +345,16 @@ const accounts = JSON.parse(rows[0]["JSON_F52E2B61-18A1-11d1-B105-00805F49916B"]
 console.log(accounts); // Array of formatted JSON objects
 ```
 
+---
+
+## 10. Instant Code Generation via Web Studio Developer API Preview
+
+When exploring tables in the LionSQL Web Studio (`http://127.0.0.1:8090/_/`), click the **`</> API Preview`** button on any table view. 
+
+The studio automatically analyzes your table's columns and generates ready-to-run **LionSQL SDK (JS/TS)**, **cURL**, **Fetch**, **Python**, and **Go** code snippets with:
+- Correct collection names pre-filled: `db.collection('tableName')`
+- Schema-matched insert payloads with realistic types and sample values
+- Dynamic primary key lookup samples and query filter presets
+- One-click clipboard copy (`📋 Copy Code`)
+
+

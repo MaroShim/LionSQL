@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LionSQL Admin Dashboard</title>
+  <script>(function(){try{const t=localStorage.getItem('lionsql_theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(_){}})();</script>
   <style>
     :root {
       --bg: #0f172a;
@@ -3591,9 +3592,11 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     }
 
     async function seedSampleData() {
-      // 1. Client-side guard check for existing tables
-      if (tablesList && tablesList.length > 0) {
-        showToast(`Cannot seed sample data: database already contains ${tablesList.length} table(s). Sample data can only be seeded on a clean, empty database.`, 'error');
+      // 1. Client-side guard check for existing tables (cached list or DOM select)
+      const sel = document.getElementById('table-select');
+      const tableCount = (tablesList && tablesList.length > 0) ? tablesList.length : ((sel && sel.options.length > 1) ? (sel.options.length - 1) : 0);
+      if (tableCount > 0) {
+        showToast(`Cannot seed sample data: database already contains ${tableCount} table(s). Sample data can only be seeded on a clean, empty database.`, 'error');
         return;
       }
 
@@ -4863,6 +4866,7 @@ console.log('Rows:', queryResult.rows);`;
     }
 
     // Init
+    initTheme();
     loadEngineInfo();
     checkAuthSession();
     loadAPIKeys();
