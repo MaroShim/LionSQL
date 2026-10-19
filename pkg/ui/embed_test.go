@@ -206,6 +206,38 @@ func TestThemeToggleUI(t *testing.T) {
 	}
 }
 
+func TestLightModeHighContrastStyles(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`--alert-danger-text`,
+		`--alert-danger-strong`,
+		`--btn-danger-bg`,
+		`--btn-danger-color`,
+		`.btn-danger-subtle`,
+		`.alert-danger-box`,
+		`.badge-success`,
+		`.badge-danger`,
+		`.badge-warning`,
+		`.badge-info`,
+		`.badge-purple`,
+		`.badge-muted`,
+		`class="alert-danger-box"`,
+		`var(--alert-danger-strong)`,
+		`var(--pk-val-color)`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain contrast snippet %q", snippet)
+		}
+	}
+}
+
 
 
 

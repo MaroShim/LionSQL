@@ -36,6 +36,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added startup security warning banner reminder (`[SECURITY WARNING]`) when default administrative superuser credentials (`1234567890`) remain in use.
 
 ### Fixed
+- **Web Studio UI Light Mode High-Contrast & Readability Overhaul (`UI-11`) (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`)**:
+  - Eliminated low-contrast pastel washouts across all modals, badges, alerts, and tables in Light Mode, achieving full WCAG AAA compliant contrast ratios (>= 7:1).
+  - Overhauled Drop Table Confirmation modal warning box and prompt text from illegible pastel pink (`#fca5a5`) to semantic alert tokens with deep burgundy text (`--alert-danger-text: #991b1b`) and bold crimson prompt highlight (`--alert-danger-strong: #b91c1c`).
+  - Replaced low-contrast yellow primary key (`id`) table values and tags with authoritative, crisp high-contrast blue tokens (`--pk-val-color: #1d4ed8` in Light Mode, `#60a5fa` in Dark Mode).
+  - Standardized all error and alert banners (`create-table-error`, `login-error`, `create-key-error`, `create-cron-error`, `create-webhook-error`, `import-csv-error`, `promote-replica-modal`) on `.alert-danger-box` and `.btn-danger-subtle`.
+  - Converted all JavaScript dynamic table renderers (`renderWebhookDeliveries`, `renderCrons`, `renderMailLogs`, `renderReplicasTable`, `renderReplicationStandalone`, `updateReplicationSidebarBadge`) from hardcoded inline styles to theme-aware semantic classes (`.badge-success`, `.badge-danger`, `.badge-warning`, `.badge-info`, `.badge-purple`, `.badge-muted`).
 - **Version Single-Source-of-Truth Synchronization (`pkg/api`, `pkg/backup`, `pkg/ui`)**:
   - Synchronized `GET /api/health` JSON response to use `config.Version` instead of legacy hardcoded `"0.7.0"`.
   - Synchronized backup and WAL archive manifest metadata (`backup.go`, `wal_archive.go`) to reference `config.Version`.

@@ -24,7 +24,7 @@
 | **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
 | **`AUTH-1`** | **인증/토큰교환 (Auth)** | `AUTH-1` | 클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) 트랙 |
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
-| **`UI-1` ~ `UI-10`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-10` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마 |
+| **`UI-1` ~ `UI-11`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-11` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마, Light 모드 고대비 시인성 개편 |
 
 ---
 
@@ -73,6 +73,7 @@
 | **P1** | **UI/DX** | **API Preview 모달 테이블 스키마 기반 동적 더미 페이로드 생성 (`UI-8`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/DX** | **API Preview 모달 LionSQL 공식 SDK (`sqlion.js`) 전용 코드 탭 신설 (`UI-9`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/테마** | **Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 (`UI-10`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | - |
+| **P1** | **UI/가시성** | **Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) (`UI-11`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P2** | **UI/실시간** | **Web Studio 실시간 CDC / SSE 스트림 인스펙터 뷰어 (`UI-REALTIME-1`)** | `pkg/ui`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | - |
 | **P2** | **UI/DDL** | **Web Studio 스키마 뷰 내 비주얼 컬럼 추가 GUI (`+ Add Column`) (`UI-DDL-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
 | **P2** | **UI/데이터** | **레코드 테이블 다중 행 선택 대량 작업 (Bulk Action) & 외래키(FK) 릴레이션 팝업 점프 (`UI-DATA-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
@@ -293,7 +294,7 @@
 
 ---
 
-### 3.11. HTTP API 하드닝 및 Web Studio 고도화 트랙 (`HTTP-1` ~ `HTTP-4`, `UI-1` ~ `UI-10`)
+### 3.11. HTTP API 하드닝 및 Web Studio 고도화 트랙 (`HTTP-1` ~ `HTTP-4`, `UI-1` ~ `UI-11`)
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -310,7 +311,8 @@
 | **UI-7** | UI/데이터 | Sample Data Seed 빈 DB 사전 검증 가드 및 원자적 피드백 | **완료 (`[x]`)** | 기존 테이블 보유 시 409 Conflict 차단 및 명확한 에러 안내, 빈 DB 시 원자적 트랜잭션 씨딩 및 첫 테이블(`accounts`) 자동 선택 로드 완비 (`pkg/api/handlers_records.go`, `pkg/ui/dashboard.html`) |
 | **UI-8** | UI/DX | API Preview 모달 테이블 스키마 기반 동적 더미 페이로드 생성 | **완료 (`[x]`)** | 테이블 컬럼 타입(INT, VARCHAR, FLOAT, BOOL, DATETIME)별 최적화된 동적 샘플 페이로드 생성 및 단건/배치 탭 지원 (`pkg/ui/dashboard.html`) |
 | **UI-9** | UI/DX | API Preview 모달 LionSQL 공식 SDK (`sqlion.js`) 전용 코드 탭 신설 | **완료 (`[x]`)** | curl, Fetch, Python에 이어 공식 TypeScript/JavaScript SDK 탭(`db.collection(...)`) 추가 완비 (`pkg/ui/dashboard.html`) |
-| **UI-10** | UI/테마 | Web Studio Light / Dark 모드 테마 전환, PK 시인성 강화 및 캐시 방지 | **완료 (`[x]`)** | CSS 변수 기반 클린 라이트 모드 지원, 라이트 모드 내 PK(`id`) 노란색 텍스트 저시인성 해소(`.cell-pk-val` 딥 앰버 전환) 및 컬럼 태그/호버 콘트라스트 전면 개선, 사이드바/모바일 테마 토글 버튼, 로컬 스토리지 테마 영속화 및 `Cache-Control: no-cache` 헤더 완비 (`pkg/ui`, `pkg/api/server.go`) |
+| **UI-10** | UI/테마 | Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 | **완료 (`[x]`)** | CSS 변수 기반 클린 라이트 모드 지원, 사이드바/모바일 테마 토글 버튼, 로컬 스토리지 테마 영속화 및 `Cache-Control: no-cache` 헤더 완비 (`pkg/ui`, `pkg/api/server.go`) |
+| **UI-11** | UI/가시성 | Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) | **완료 (`[x]`)** | Light 모드 전반의 파스텔톤 저시인성 색상 전면 퇴출. Drop Table Confirmation 모달의 연분홍 텍스트를 딥 버건디(`--alert-danger-text: #991b1b`) 및 볼드 레드(`--alert-danger-strong: #b91c1c`)로 전환(7:1 대비비 확보), ID 컬럼 노란색 텍스트를 선명한 딥 블루(`--pk-val-color: #1d4ed8`)로 개편, 모든 에러 모달(`create-table-error`, `create-cron-error`, `create-webhook-error` 등)을 `.alert-danger-box`와 `.btn-danger-subtle`로 단일화, 동적 JS 테이블 렌더러의 인라인 하드코딩 스타일을 시맨틱 배지 클래스(`.badge-success`, `.badge-danger`, `.badge-warning`, `.badge-info` 등)로 완전 교체 (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`) |
 
 ---
 

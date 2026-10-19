@@ -12,6 +12,7 @@
       --card: #1e293b;
       --card-shadow: none;
       --border: #334155;
+      --border-subtle: #243044;
       --text: #f8fafc;
       --text-muted: #94a3b8;
       --primary: #3b82f6;
@@ -26,19 +27,79 @@
       --nav-hover: #334155;
       --console-text: #38bdf8;
       --auth-box-bg: #162032;
+
+      /* Semantic Badges */
       --badge-bg: #1e3a8a;
       --badge-color: #60a5fa;
+      --badge-success-bg: #064e3b;
+      --badge-success-color: #6ee7b7;
+      --badge-success-border: #047857;
+      --badge-danger-bg: #7f1d1d;
+      --badge-danger-color: #fca5a5;
+      --badge-danger-border: #991b1b;
+      --badge-warning-bg: #78350f;
+      --badge-warning-color: #fde047;
+      --badge-warning-border: #92400e;
+      --badge-info-bg: #1e3a8a;
+      --badge-info-color: #93c5fd;
+      --badge-info-border: #1d4ed8;
+      --badge-purple-bg: #4c1d95;
+      --badge-purple-color: #c4b5fd;
+      --badge-purple-border: #6d28d9;
+      --badge-muted-bg: #374151;
+      --badge-muted-color: #9ca3af;
+      --badge-muted-border: #4b5563;
+
+      /* Alert Boxes (Danger, Warning, Success) */
+      --alert-danger-bg: rgba(127, 29, 29, 0.35);
+      --alert-danger-border: #991b1b;
+      --alert-danger-text: #fca5a5;
+      --alert-danger-icon-bg: #7f1d1d;
+      --alert-danger-icon-color: #fecaca;
+      --alert-danger-code-bg: #450a0a;
+      --alert-danger-code-text: #fecaca;
+      --alert-danger-strong: #f87171;
+
+      --alert-success-bg: rgba(6, 78, 59, 0.35);
+      --alert-success-border: #059669;
+      --alert-success-text: #a7f3d0;
+      --alert-success-title: #6ee7b7;
+      --alert-success-code-bg: #022c22;
+      --alert-success-code-text: #34d399;
+
+      --alert-warning-bg: rgba(217, 119, 6, 0.15);
+      --alert-warning-border: #d97706;
+      --alert-warning-text: #fde68a;
+      --alert-warning-title: #fbbf24;
+      --alert-warning-code-text: #93c5fd;
+
+      /* Buttons (Secondary danger / revoke / drop) */
+      --btn-danger-bg: #450a0a;
+      --btn-danger-color: #fca5a5;
+      --btn-danger-border: #991b1b;
+      --btn-danger-hover: #7f1d1d;
+      --btn-action-delete-color: #f87171;
+
+      /* Column Tags & Types */
       --col-tag-bg: #334155;
       --col-tag-color: #94a3b8;
-      --pk-tag-bg: #854d0e;
-      --pk-tag-color: #fef08a;
-      --pk-tag-border: transparent;
-      --pk-val-color: #fde047;
+      --pk-tag-bg: rgba(59, 130, 246, 0.2);
+      --pk-tag-color: #93c5fd;
+      --pk-tag-border: #2563eb;
+      --pk-val-color: #60a5fa;
+      --type-badge-bg: #0f172a;
+      --type-badge-border: #334155;
+      --type-badge-color: #38bdf8;
+
       --th-hover-bg: #1e293b;
       --th-hover-color: #ffffff;
       --row-hover-bg: rgba(255, 255, 255, 0.03);
       --user-email-color: #6ee7b7;
       --panel-box-bg: #0f172a;
+
+      /* Links & Code */
+      --code-snippet-color: #e2e8f0;
+      --link-accent: #60a5fa;
     }
     html[data-theme="light"] {
       --bg: #f8fafc;
@@ -46,6 +107,7 @@
       --card: #ffffff;
       --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
       --border: #e2e8f0;
+      --border-subtle: #f1f5f9;
       --text: #0f172a;
       --text-muted: #64748b;
       --primary: #2563eb;
@@ -53,26 +115,86 @@
       --success: #059669;
       --danger: #dc2626;
       --code-bg: #f1f5f9;
-      --th-bg: #f1f5f9;
-      --tr-even: #f8fafc;
+      --th-bg: #f8fafc;
+      --tr-even: #fbfcfe;
       --btn-secondary-bg: #e2e8f0;
       --btn-secondary-hover: #cbd5e1;
       --nav-hover: #f1f5f9;
       --console-text: #0284c7;
       --auth-box-bg: #f8fafc;
+
+      /* Semantic Badges - High Contrast WCAG AAA */
       --badge-bg: #dbeafe;
       --badge-color: #1d4ed8;
+      --badge-success-bg: #dcfce7;
+      --badge-success-color: #15803d;
+      --badge-success-border: #86efac;
+      --badge-danger-bg: #fee2e2;
+      --badge-danger-color: #b91c1c;
+      --badge-danger-border: #fca5a5;
+      --badge-warning-bg: #fef3c7;
+      --badge-warning-color: #b45309;
+      --badge-warning-border: #fcd34d;
+      --badge-info-bg: #e0f2fe;
+      --badge-info-color: #0369a1;
+      --badge-info-border: #7dd3fc;
+      --badge-purple-bg: #f3e8ff;
+      --badge-purple-color: #7e22ce;
+      --badge-purple-border: #d8b4fe;
+      --badge-muted-bg: #f1f5f9;
+      --badge-muted-color: #475569;
+      --badge-muted-border: #cbd5e1;
+
+      /* Alert Boxes (Danger, Warning, Success) */
+      --alert-danger-bg: #fef2f2;
+      --alert-danger-border: #f87171;
+      --alert-danger-text: #991b1b;
+      --alert-danger-icon-bg: #fee2e2;
+      --alert-danger-icon-color: #dc2626;
+      --alert-danger-code-bg: #fee2e2;
+      --alert-danger-code-text: #991b1b;
+      --alert-danger-strong: #b91c1c;
+
+      --alert-success-bg: #f0fdf4;
+      --alert-success-border: #86efac;
+      --alert-success-text: #166534;
+      --alert-success-title: #15803d;
+      --alert-success-code-bg: #dcfce7;
+      --alert-success-code-text: #14532d;
+
+      --alert-warning-bg: #fffbeb;
+      --alert-warning-border: #fcd34d;
+      --alert-warning-text: #92400e;
+      --alert-warning-title: #b45309;
+      --alert-warning-code-text: #0369a1;
+
+      /* Buttons (Secondary danger / revoke / drop) */
+      --btn-danger-bg: #fee2e2;
+      --btn-danger-color: #b91c1c;
+      --btn-danger-border: #fca5a5;
+      --btn-danger-hover: #fecaca;
+      --btn-action-delete-color: #dc2626;
+
+      /* Column Tags & Types */
       --col-tag-bg: #e2e8f0;
       --col-tag-color: #475569;
-      --pk-tag-bg: #fef3c7;
-      --pk-tag-color: #92400e;
-      --pk-tag-border: #fde68a;
-      --pk-val-color: #b45309;
+      --pk-tag-bg: #eff6ff;
+      --pk-tag-color: #1d4ed8;
+      --pk-tag-border: #bfdbfe;
+      --pk-val-color: #1d4ed8;
+      --type-badge-bg: #f1f5f9;
+      --type-badge-border: #cbd5e1;
+      --type-badge-color: #0369a1;
+
       --th-hover-bg: #e2e8f0;
       --th-hover-color: #0f172a;
       --row-hover-bg: rgba(0, 0, 0, 0.03);
       --user-email-color: #047857;
       --panel-box-bg: #f8fafc;
+
+      /* Links & Code */
+      --code-snippet-color: #1e293b;
+      --link-accent: #2563eb;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -269,8 +391,8 @@
       transition: color 0.15s, background 0.15s;
     }
     .password-toggle-btn:hover {
-      color: #38bdf8;
-      background: rgba(56, 189, 248, 0.1);
+      color: var(--primary);
+      background: rgba(59, 130, 246, 0.1);
     }
     .user-pill {
       display: flex;
@@ -288,8 +410,86 @@
       border-radius: 4px;
       font-weight: 700;
     }
-    .role-admin { background: #1e3a8a; color: #93c5fd; }
-    .role-readonly { background: #064e3b; color: #6ee7b7; }
+    .role-admin { background: var(--badge-info-bg); color: var(--badge-info-color); border: 1px solid var(--badge-info-border); }
+    .role-readonly { background: var(--badge-success-bg); color: var(--badge-success-color); border: 1px solid var(--badge-success-border); }
+
+    /* Semantic Badges */
+    .badge-success {
+      background: var(--badge-success-bg) !important;
+      color: var(--badge-success-color) !important;
+      border: 1px solid var(--badge-success-border) !important;
+    }
+    .badge-danger {
+      background: var(--badge-danger-bg) !important;
+      color: var(--badge-danger-color) !important;
+      border: 1px solid var(--badge-danger-border) !important;
+    }
+    .badge-warning {
+      background: var(--badge-warning-bg) !important;
+      color: var(--badge-warning-color) !important;
+      border: 1px solid var(--badge-warning-border) !important;
+    }
+    .badge-info {
+      background: var(--badge-info-bg) !important;
+      color: var(--badge-info-color) !important;
+      border: 1px solid var(--badge-info-border) !important;
+    }
+    .badge-purple {
+      background: var(--badge-purple-bg) !important;
+      color: var(--badge-purple-color) !important;
+      border: 1px solid var(--badge-purple-border) !important;
+    }
+    .badge-muted {
+      background: var(--badge-muted-bg) !important;
+      color: var(--badge-muted-color) !important;
+      border: 1px solid var(--badge-muted-border) !important;
+    }
+
+    /* Semantic Buttons */
+    .btn-danger-subtle {
+      background: var(--btn-danger-bg) !important;
+      color: var(--btn-danger-color) !important;
+      border: 1px solid var(--btn-danger-border) !important;
+      transition: background 0.15s;
+    }
+    .btn-danger-subtle:hover {
+      background: var(--btn-danger-hover) !important;
+    }
+
+    /* Alert / Callout Boxes */
+    .alert-danger-box {
+      background: var(--alert-danger-bg);
+      border: 1px solid var(--alert-danger-border);
+      border-radius: 6px;
+      padding: 12px;
+      font-size: 0.82rem;
+      color: var(--alert-danger-text);
+      line-height: 1.5;
+    }
+    .alert-danger-box code {
+      background: var(--alert-danger-code-bg);
+      color: var(--alert-danger-code-text);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+    }
+    .alert-danger-box strong {
+      color: var(--alert-danger-strong);
+    }
+    .alert-success-box {
+      background: var(--alert-success-bg);
+      border: 1px solid var(--alert-success-border);
+      border-radius: 8px;
+      padding: 15px;
+      color: var(--alert-success-text);
+    }
+    .alert-warning-box {
+      background: var(--alert-warning-bg);
+      border: 1px solid var(--alert-warning-border);
+      border-radius: 8px;
+      padding: 15px;
+      color: var(--alert-warning-text);
+    }
 
     /* Spreadsheet Inline Editing & PocketBase Aesthetics */
     .editable-cell {
@@ -398,19 +598,22 @@
       transition: opacity 0.3s, transform 0.3s;
     }
     .toast-msg.toast-success {
-      background: #064e3b;
-      border: 1px solid #10b981;
-      color: #6ee7b7;
+      background: var(--alert-success-bg);
+      border: 1px solid var(--alert-success-border);
+      color: var(--alert-success-title);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
     .toast-msg.toast-error {
-      background: #4c0519;
-      border: 1px solid #f43f5e;
-      color: #fecdd3;
+      background: var(--alert-danger-bg);
+      border: 1px solid var(--alert-danger-border);
+      color: var(--alert-danger-strong);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
     .toast-msg.toast-info {
-      background: #1e293b;
-      border: 1px solid #38bdf8;
-      color: #bae6fd;
+      background: var(--badge-info-bg);
+      border: 1px solid var(--badge-info-border);
+      color: var(--badge-info-color);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
     .toast-close {
       background: transparent;
@@ -515,8 +718,8 @@
     <div class="logo">
       <span>LionSQL</span>
       <span class="badge">OLTP + SP</span>
-      <span id="realtime-badge" style="margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:0.65rem; color:#6ee7b7; background:#064e3b; padding:2px 6px; border-radius:9999px; border:1px solid #10b981;">
-        <span style="width:5px; height:5px; border-radius:50%; background:#10b981;"></span> Live
+      <span id="realtime-badge" style="margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:0.65rem; color:var(--success); background:var(--alert-success-bg); padding:2px 6px; border-radius:9999px; border:1px solid var(--alert-success-border);">
+        <span style="width:5px; height:5px; border-radius:50%; background:var(--success);"></span> Live
       </span>
     </div>
     <div id="auth-status-box" style="padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--auth-box-bg);">
@@ -528,7 +731,7 @@
             <div style="font-size: 0.68rem; color: var(--text-muted);">Superuser</div>
           </div>
         </div>
-        <span class="badge" style="background:#047857; color:#6ee7b7; font-size:0.65rem;">Active</span>
+        <span class="badge badge-success" style="font-size:0.65rem;">Active</span>
       </div>
       <button id="auth-action-btn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem; width: 100%;" onclick="logout()">Sign Out</button>
     </div>
@@ -554,23 +757,23 @@
       </button>
       <button class="nav-btn" data-view="query" onclick="switchView('query')">
         <span>SQL Query Studio</span>
-        <span class="badge" style="background:#047857; color:#6ee7b7;">SQL</span>
+        <span class="badge badge-success">SQL</span>
       </button>
       <button class="nav-btn" data-view="apikeys" onclick="switchView('apikeys')">
         <span>Auth & API Keys</span>
-        <span class="badge" style="background:#4338ca; color:#c7d2fe;">AUTH</span>
+        <span class="badge badge-purple">AUTH</span>
       </button>
       <button class="nav-btn" data-view="sdk" onclick="switchView('sdk')">
         <span>Client SDK</span>
-        <span class="badge" style="background:#0284c7; color:#bae6fd; font-size:0.65rem;">JS/TS</span>
+        <span class="badge badge-info" style="font-size:0.65rem;">JS/TS</span>
       </button>
       <button class="nav-btn" data-view="mail" onclick="switchView('mail')">
         <span>Settings / Mail</span>
-        <span class="badge" style="background:#854d0e; color:#fef08a; font-size:0.65rem;">SMTP</span>
+        <span class="badge badge-warning" style="font-size:0.65rem;">SMTP</span>
       </button>
       <button class="nav-btn" data-view="replication" onclick="switchView('replication')">
         <span>Replication (HA)</span>
-        <span id="nav-ha-badge" class="badge" style="background:#1e293b; color:#94a3b8; font-size:0.65rem;">HA</span>
+        <span id="nav-ha-badge" class="badge badge-muted" style="font-size:0.65rem;">HA</span>
       </button>
     </nav>
     <div style="padding: 12px 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">
@@ -583,7 +786,7 @@
       <input type="file" id="backup-file-input" accept=".tar.gz,.tgz" style="display: none;" onchange="handleBackupFileUpload(event)" />
     </div>
     <div style="padding: 12px 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
-      <div>Engine: <span id="engine-type" style="color: #60a5fa; font-weight: 600;">Detecting...</span></div>
+      <div>Engine: <span id="engine-type" style="color: var(--primary); font-weight: 600;">Detecting...</span></div>
       <button id="theme-toggle-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; display: flex; align-items: center; gap: 6px; border-radius: 6px;" onclick="toggleTheme()" title="Toggle Theme (Light / Dark)">
         <span id="theme-toggle-icon"></span>
         <span id="theme-toggle-label">Theme</span>
@@ -605,11 +808,11 @@
       </div>
 
       <!-- Created Key Banner Alert -->
-      <div id="key-created-alert" style="display: none; background: #064e3b; border: 1px solid #10b981; border-radius: 8px; padding: 15px; margin-top: 20px;">
-        <div style="font-size: 0.9rem; font-weight: 700; color: #6ee7b7; margin-bottom: 6px;">New API Key Generated!</div>
-        <div style="font-size: 0.8rem; color: #a7f3d0; margin-bottom: 8px;">Copy this secret key now. It will not be shown again:</div>
+      <div id="key-created-alert" class="alert-success-box" style="display: none; margin-top: 20px;">
+        <div style="font-size: 0.9rem; font-weight: 700; color: var(--alert-success-title); margin-bottom: 6px;">New API Key Generated!</div>
+        <div style="font-size: 0.8rem; color: var(--alert-success-text); margin-bottom: 8px;">Copy this secret key now. It will not be shown again:</div>
         <div style="display: flex; gap: 8px; align-items: center;">
-          <input type="text" id="created-key-token" readonly style="margin: 0; background: #022c22; color: #34d399; font-family: monospace; font-size: 0.9rem;" />
+          <input type="text" id="created-key-token" readonly style="margin: 0; background: var(--alert-success-code-bg); color: var(--alert-success-code-text); font-family: monospace; font-size: 0.9rem;" />
           <button class="btn" onclick="copyCreatedKey()">Copy</button>
         </div>
       </div>
@@ -641,7 +844,7 @@
         <div>
           <h2>SQL Query Studio</h2>
           <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
-            Execute standard SQL queries (DDL, DML, DQL) and T-SQL statements directly. Shortcut: <kbd style="background:#334155; padding:2px 5px; border-radius:3px;">Ctrl</kbd>+<kbd style="background:#334155; padding:2px 5px; border-radius:3px;">Enter</kbd>
+            Execute standard SQL queries (DDL, DML, DQL) and T-SQL statements directly. Shortcut: <kbd style="background:var(--btn-secondary-bg); color:var(--text); padding:2px 5px; border-radius:3px; border:1px solid var(--border);">Ctrl</kbd>+<kbd style="background:var(--btn-secondary-bg); color:var(--text); padding:2px 5px; border-radius:3px; border:1px solid var(--border);">Enter</kbd>
           </div>
         </div>
         <div style="display: flex; gap: 8px;">
@@ -655,7 +858,7 @@
       <!-- Quick SQL Templates -->
       <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 15px; align-items: center;">
         <span style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Templates:</span>
-        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; background: #2e1065; color: #c4b5fd; border-color: #6d28d9;" onclick="setTemplate('explain_bytecode')">EXPLAIN BYTECODE</button>
+        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; background: var(--badge-purple-bg); color: var(--badge-purple-color); border: 1px solid var(--badge-purple-border);" onclick="setTemplate('explain_bytecode')">EXPLAIN BYTECODE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('create')">CREATE TABLE</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('insert')">INSERT</button>
         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="setTemplate('select')">SELECT *</button>
@@ -687,7 +890,7 @@
             <select id="sql-favorites-select" style="width: auto; margin: 0; padding: 4px 8px; font-size: 0.78rem;" onchange="onSelectSQLFavorite(this.value)">
               <option value="">-- Saved Snippets (0) --</option>
             </select>
-            <button type="button" class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem; background: #065f46; color: #a7f3d0;" title="Save current query as favorite" onclick="saveSQLFavorite()">★ Save Favorite</button>
+            <button type="button" class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem; background: var(--badge-success-bg); color: var(--badge-success-color); border: 1px solid var(--badge-success-border);" title="Save current query as favorite" onclick="saveSQLFavorite()">★ Save Favorite</button>
             <button type="button" class="btn btn-secondary" style="padding: 3px 8px; font-size: 0.75rem;" title="Delete selected favorite" onclick="deleteSQLFavorite()">Delete</button>
           </div>
         </div>
@@ -712,8 +915,8 @@
         <div id="vdbe-disassembler-view" style="display: none; margin-bottom: 12px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 0.8rem; font-weight: 700; color: #a78bfa; text-transform: uppercase; letter-spacing: 0.05em;">VDBE Bytecode Disassembly</span>
-              <span id="vdbe-program-badge" style="font-size: 0.72rem; background: #2e1065; color: #c4b5fd; padding: 2px 8px; border-radius: 4px; border: 1px solid #6d28d9;"></span>
+              <span style="font-size: 0.8rem; font-weight: 700; color: var(--badge-purple-color); text-transform: uppercase; letter-spacing: 0.05em;">VDBE Bytecode Disassembly</span>
+              <span id="vdbe-program-badge" class="badge badge-purple" style="font-size: 0.72rem; padding: 2px 8px;"></span>
             </div>
             <button class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.72rem;" onclick="copyBytecodeToClipboard()">Copy Disassembly</button>
           </div>
@@ -755,7 +958,7 @@
           <option value="">-- Select Table --</option>
         </select>
         <button class="btn btn-secondary" onclick="loadTables()">Refresh</button>
-        <button id="btn-drop-table" class="btn btn-secondary" style="background: #450a0a; color: #fca5a5; border-color: #991b1b;" onclick="dropCurrentTable()">Drop Table</button>
+        <button id="btn-drop-table" class="btn btn-secondary btn-danger-subtle" onclick="dropCurrentTable()">Drop Table</button>
 
         <div style="display: flex; gap: 6px; margin-left: auto;">
           <button id="btn-sub-records" class="btn" onclick="switchTableSubView('records')">Data Records</button>
@@ -777,7 +980,7 @@
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('csv')">Export CSV</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="exportCurrentTable('json')">Export JSON</button>
             <button class="btn btn-secondary" style="padding: 6px 10px; font-size: 0.8rem;" onclick="openImportCSVModal()">Import CSV</button>
-            <button id="btn-batch-delete" class="btn" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 6px 12px; font-size: 0.8rem;" onclick="deleteSelectedRecords()">
+            <button id="btn-batch-delete" class="btn btn-danger-subtle" style="display: none; padding: 6px 12px; font-size: 0.8rem;" onclick="deleteSelectedRecords()">
               Delete Selected (<span id="selected-count">0</span>)
             </button>
             <button id="btn-add-row" class="btn" style="background: var(--success); padding: 6px 14px; font-size: 0.8rem;" onclick="openCreateRecordModal()">+ Add Row</button>
@@ -855,7 +1058,7 @@
             </div>
           </div>
           <div style="display: flex; gap: 8px;">
-            <button class="btn btn-secondary" style="font-size: 0.8rem; color: #f87171;" onclick="resetTableRules()">Clear Rules (Public)</button>
+            <button class="btn btn-secondary btn-danger-subtle" style="font-size: 0.8rem;" onclick="resetTableRules()">Clear Rules (Public)</button>
             <button class="btn" style="background: var(--success); font-size: 0.8rem;" onclick="saveTableRules()">Save Rules</button>
           </div>
         </div>
@@ -875,7 +1078,7 @@
           <div style="display: flex; flex-direction: column; gap: 14px;">
             <div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <label style="font-size: 0.82rem; font-weight: 600; color: #6ee7b7;">List Rule (GET /api/tables/:name)</label>
+                <label style="font-size: 0.82rem; font-weight: 600; color: var(--success);">List Rule (GET /api/tables/:name)</label>
                 <span style="font-size: 0.72rem; color: var(--text-muted);">Injected as WHERE filter into query</span>
               </div>
               <input type="text" id="rls-rule-list" placeholder="e.g. owner_id = @auth.id || @auth.role = 'admin'" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
@@ -883,7 +1086,7 @@
 
             <div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <label style="font-size: 0.82rem; font-weight: 600; color: #93c5fd;">View Rule (GET /api/tables/:name/:id)</label>
+                <label style="font-size: 0.82rem; font-weight: 600; color: var(--primary);">View Rule (GET /api/tables/:name/:id)</label>
                 <span style="font-size: 0.72rem; color: var(--text-muted);">Evaluated against target record</span>
               </div>
               <input type="text" id="rls-rule-view" placeholder="e.g. is_public = 1 || owner_id = @auth.id" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
@@ -891,7 +1094,7 @@
 
             <div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <label style="font-size: 0.82rem; font-weight: 600; color: #fde047;">Create Rule (POST /api/tables/:name)</label>
+                <label style="font-size: 0.82rem; font-weight: 600; color: var(--alert-warning-title);">Create Rule (POST /api/tables/:name)</label>
                 <span style="font-size: 0.72rem; color: var(--text-muted);">Evaluated on incoming payload</span>
               </div>
               <input type="text" id="rls-rule-create" placeholder="e.g. @auth.id != '' &amp;&amp; owner_id = @auth.id" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
@@ -899,7 +1102,7 @@
 
             <div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <label style="font-size: 0.82rem; font-weight: 600; color: #fb923c;">Update Rule (PATCH /api/tables/:name/:id)</label>
+                <label style="font-size: 0.82rem; font-weight: 600; color: var(--alert-warning-title);">Update Rule (PATCH /api/tables/:name/:id)</label>
                 <span style="font-size: 0.72rem; color: var(--text-muted);">Evaluated against existing record before update</span>
               </div>
               <input type="text" id="rls-rule-update" placeholder="e.g. owner_id = @auth.id || @auth.role = 'admin'" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
@@ -907,7 +1110,7 @@
 
             <div>
               <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
-                <label style="font-size: 0.82rem; font-weight: 600; color: #f87171;">Delete Rule (DELETE /api/tables/:name/:id)</label>
+                <label style="font-size: 0.82rem; font-weight: 600; color: var(--danger);">Delete Rule (DELETE /api/tables/:name/:id)</label>
                 <span style="font-size: 0.72rem; color: var(--text-muted);">Evaluated against existing record before deletion</span>
               </div>
               <input type="text" id="rls-rule-delete" placeholder="e.g. owner_id = @auth.id || @auth.role = 'admin'" style="margin: 0; font-family: monospace; font-size: 0.82rem;" />
@@ -918,10 +1121,10 @@
         <!-- Help Token Reference -->
         <div style="margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border); font-size: 0.78rem; color: var(--text-muted); line-height: 1.6;">
           <strong style="color: var(--text);">Available Auth Variables:</strong>
-          <span style="margin-left: 6px;"><code style="color:#6ee7b7;">@auth.id</code> (User ID)</span>,
-          <span style="margin-left: 6px;"><code style="color:#93c5fd;">@auth.role</code> (Role e.g. 'admin')</span>,
-          <span style="margin-left: 6px;"><code style="color:#fde047;">@auth.email</code> (Email address)</span>,
-          <span style="margin-left: 6px;"><code style="color:#c084fc;">@auth.tenant_id</code> (Tenant ID)</span>.
+          <span style="margin-left: 6px;"><code style="color:var(--success);">@auth.id</code> (User ID)</span>,
+          <span style="margin-left: 6px;"><code style="color:var(--primary);">@auth.role</code> (Role e.g. 'admin')</span>,
+          <span style="margin-left: 6px;"><code style="color:var(--alert-warning-title);">@auth.email</code> (Email address)</span>,
+          <span style="margin-left: 6px;"><code style="color:var(--badge-purple-color);">@auth.tenant_id</code> (Tenant ID)</span>.
           <br>
           <em>Operators supported: <code>=</code>, <code>!=</code>, <code>&gt;</code>, <code>&gt;=</code>, <code>&lt;</code>, <code>&lt;=</code>, <code>&amp;&amp;</code>, <code>||</code>.</em>
         </div>
@@ -975,7 +1178,7 @@ END;</textarea>
           </button>
 
           <h4 style="font-size: 0.85rem; margin-top: 15px; color: var(--text-muted);">Compiled VDBE Bytecode (Executed by Virtual Machine):</h4>
-          <pre id="proc-js-preview" class="console-box" style="margin-top: 8px; color: #a5f3fc; max-height: 180px;">// Bytecode disassembly will appear here</pre>
+          <pre id="proc-js-preview" class="console-box" style="margin-top: 8px; max-height: 180px;">// Bytecode disassembly will appear here</pre>
 
           <h4 style="font-size: 0.85rem; margin-top: 15px; color: var(--text-muted);">Execution Result & Logs:</h4>
         <div id="console-output" class="console-box" style="margin-top: 8px;">Ready.</div>
@@ -1030,7 +1233,7 @@ END;</textarea>
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="loadWebhookDeliveries()">Refresh Log</button>
-            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; color: #f87171;" onclick="clearWebhookDeliveries()">Clear History</button>
+            <button class="btn btn-secondary btn-danger-subtle" style="padding: 4px 10px; font-size: 0.75rem;" onclick="clearWebhookDeliveries()">Clear History</button>
           </div>
         </div>
         <div style="overflow-x: auto;">
@@ -1182,7 +1385,7 @@ END;</textarea>
           </div>
           <div style="display: flex; gap: 8px;">
             <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="loadMailLogs()">Refresh Log</button>
-            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; color: #f87171;" onclick="clearMailLogs()">Clear Log</button>
+            <button class="btn btn-secondary btn-danger-subtle" style="padding: 4px 10px; font-size: 0.75rem;" onclick="clearMailLogs()">Clear Log</button>
           </div>
         </div>
         <div style="overflow-x: auto;">
@@ -1218,22 +1421,22 @@ END;</textarea>
       </div>
 
       <div class="card" style="margin-top: 20px;">
-        <h3 style="font-size: 1rem; margin-bottom: 12px; color: #93c5fd;">1. Quick Installation & CDN Inclusion</h3>
+        <h3 style="font-size: 1rem; margin-bottom: 12px; color: var(--primary);">1. Quick Installation & CDN Inclusion</h3>
         <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 8px;">
           Load the SDK directly from your running LionSQL server without npm dependencies:
         </p>
-        <pre class="console-box" style="color: #6ee7b7; padding: 12px; font-size: 0.82rem;">&lt;script src="/sdk/sqlion.js"&gt;&lt;/script&gt;
+        <pre class="console-box" style="color: var(--console-text); padding: 12px; font-size: 0.82rem;">&lt;script src="/sdk/sqlion.js"&gt;&lt;/script&gt;
 &lt;script&gt;
   const client = new SQLion('http://127.0.0.1:8090', { auth: 'YOUR_API_KEY' });
 &lt;/script&gt;</pre>
       </div>
 
       <div class="card" style="margin-top: 15px;">
-        <h3 style="font-size: 1rem; margin-bottom: 12px; color: #c4b5fd;">2. Core API Usage Examples</h3>
+        <h3 style="font-size: 1rem; margin-bottom: 12px; color: var(--badge-purple-color);">2. Core API Usage Examples</h3>
         <div class="grid-2">
           <div>
-            <h4 style="font-size: 0.85rem; color: #fde047; margin-bottom: 6px;">Records CRUD & Filtering</h4>
-            <pre class="console-box" style="color: #e2e8f0; font-size: 0.78rem; line-height: 1.5; padding: 10px;">// 1. Paginated & Filtered Query
+            <h4 style="font-size: 0.85rem; color: var(--alert-warning-title); margin-bottom: 6px;">Records CRUD & Filtering</h4>
+            <pre class="console-box" style="color: var(--text); font-size: 0.78rem; line-height: 1.5; padding: 10px;">// 1. Paginated & Filtered Query
 const res = await client.collection('customers').getList(1, 20, {
   filter: 'balance > 500 && status = "active"',
   sort: '-created_at'
@@ -1251,8 +1454,8 @@ await client.collection('customers').update(newRow.id, { balance: 2000 });
 await client.collection('customers').delete(newRow.id);</pre>
           </div>
           <div>
-            <h4 style="font-size: 0.85rem; color: #6ee7b7; margin-bottom: 6px;">Realtime Live SSE & T-SQL Procedures</h4>
-            <pre class="console-box" style="color: #e2e8f0; font-size: 0.78rem; line-height: 1.5; padding: 10px;">// 1. Subscribe to Live Record Changes
+            <h4 style="font-size: 0.85rem; color: var(--success); margin-bottom: 6px;">Realtime Live SSE & T-SQL Procedures</h4>
+            <pre class="console-box" style="color: var(--text); font-size: 0.78rem; line-height: 1.5; padding: 10px;">// 1. Subscribe to Live Record Changes
 const unsubscribe = client.collection('customers').subscribe((e) => {
   console.log('Live Event:', e.action, e.record);
 });
@@ -1291,46 +1494,46 @@ const procRes = await client.exec('TransferFunds', {
 
       <!-- Overview Metric Cards Grid -->
       <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
-        <div class="card" style="padding: 16px; border-left: 4px solid #3b82f6;">
+        <div class="card" style="padding: 16px; border-left: 4px solid var(--primary);">
           <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Cluster Role</div>
           <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
-            <span id="ha-role-badge" class="badge" style="font-size: 0.9rem; padding: 4px 10px; background: #064e3b; color: #6ee7b7;">--</span>
+            <span id="ha-role-badge" class="badge badge-success" style="font-size: 0.9rem; padding: 4px 10px;">--</span>
           </div>
           <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">
-            Node ID: <code id="ha-node-id" style="color: #93c5fd; font-weight: 600;">--</code>
+            Node ID: <code id="ha-node-id" style="color: var(--link-accent); font-weight: 600;">--</code>
             <span style="margin: 0 4px;">&bull;</span>
-            Term: <code id="ha-term" style="color: #cbd5e1; font-weight: 600;">--</code>
+            Term: <code id="ha-term" style="color: var(--text-muted); font-weight: 600;">--</code>
           </div>
         </div>
 
-        <div class="card" style="padding: 16px; border-left: 4px solid #10b981;">
+        <div class="card" style="padding: 16px; border-left: 4px solid var(--success);">
           <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Current LSN</div>
-          <div style="margin-top: 8px; font-size: 1.4rem; font-weight: 700; font-family: monospace; color: #f8fafc;" id="ha-current-lsn">--</div>
+          <div style="margin-top: 8px; font-size: 1.4rem; font-weight: 700; font-family: monospace; color: var(--text);" id="ha-current-lsn">--</div>
           <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">Physical WAL Sequence Offset</div>
         </div>
 
-        <div class="card" style="padding: 16px; border-left: 4px solid #8b5cf6;">
+        <div class="card" style="padding: 16px; border-left: 4px solid var(--badge-purple-color);">
           <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Access Permission</div>
           <div style="margin-top: 8px; display: flex; align-items: center; gap: 8px;">
-            <span id="ha-access-mode" class="badge" style="font-size: 0.85rem; padding: 4px 10px; background: #1e3a8a; color: #93c5fd;">--</span>
+            <span id="ha-access-mode" class="badge badge-info" style="font-size: 0.85rem; padding: 4px 10px;">--</span>
           </div>
           <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);" id="ha-access-desc">ACID Mutation &amp; OCC Validation</div>
         </div>
 
-        <div class="card" style="padding: 16px; border-left: 4px solid #f59e0b;">
+        <div class="card" style="padding: 16px; border-left: 4px solid var(--alert-warning-title);">
           <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;" id="ha-peer-title">Topology Target</div>
-          <div style="margin-top: 8px; font-size: 1.1rem; font-weight: 600; color: #f8fafc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="ha-peer-value">--</div>
+          <div style="margin-top: 8px; font-size: 1.1rem; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" id="ha-peer-value">--</div>
           <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);" id="ha-peer-desc">Topology Link</div>
         </div>
       </div>
 
       <!-- Replica Promotion Action Card (Visible only when role is REPLICA) -->
-      <div id="ha-replica-action-card" class="card" style="display: none; border: 1px solid #d97706; background: rgba(217, 119, 6, 0.08); padding: 20px;">
+      <div id="ha-replica-action-card" class="card alert-warning-box" style="display: none; padding: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
           <div>
-            <div style="font-size: 1rem; font-weight: 700; color: #fde68a;">Replica Failover Promotion</div>
-            <div style="font-size: 0.8rem; color: #cbd5e1; margin-top: 4px;">
-              This instance is actively replicating as a read-only secondary replica. Promoting it will detach from upstream primary (<code id="ha-replica-upstream-url" style="color: #93c5fd;">--</code>) and switch this instance to an authoritative read-write Primary node.
+            <div style="font-size: 1rem; font-weight: 700; color: var(--alert-warning-title);">Replica Failover Promotion</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+              This instance is actively replicating as a read-only secondary replica. Promoting it will detach from upstream primary (<code id="ha-replica-upstream-url" style="color: var(--alert-warning-code-text);">--</code>) and switch this instance to an authoritative read-write Primary node.
             </div>
           </div>
           <button class="btn" style="background: #d97706; padding: 8px 18px; font-size: 0.85rem; white-space: nowrap;" onclick="openPromoteModal()">
@@ -1348,7 +1551,7 @@ const procRes = await client.exec('TransferFunds', {
               Live stream subscribers receiving physical WAL updates.
             </div>
           </div>
-          <span id="ha-replicas-count-badge" class="badge" style="background: #1e3a8a; color: #93c5fd; font-size: 0.75rem; padding: 4px 8px;">0 Replicas</span>
+          <span id="ha-replicas-count-badge" class="badge badge-info" style="font-size: 0.75rem; padding: 4px 8px;">0 Replicas</span>
         </div>
         <div style="overflow-x: auto;">
           <table style="margin-top: 8px;">
@@ -1371,19 +1574,19 @@ const procRes = await client.exec('TransferFunds', {
       </div>
 
       <!-- Standalone Mode Explanatory Card (Visible when replication is not configured/enabled) -->
-      <div id="ha-standalone-card" class="card" style="display: none; border-left: 4px solid #64748b;">
+      <div id="ha-standalone-card" class="card" style="display: none; border-left: 4px solid var(--border);">
         <div style="display: flex; align-items: flex-start; gap: 16px;">
           <div>
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span class="badge" style="background: #334155; color: #cbd5e1; font-size: 0.75rem;">STANDALONE</span>
+              <span class="badge badge-muted" style="font-size: 0.75rem;">STANDALONE</span>
               <h3 style="font-size: 1.05rem; font-weight: 600;">Autonomous Single-Node Engine</h3>
             </div>
             <div style="font-size: 0.82rem; color: var(--text-muted); margin-top: 6px; line-height: 1.5;">
               High-Availability (HA) replication streaming is not enabled on this instance. LionSQL is currently running as an autonomous standalone database with local ACID durability.
             </div>
-            <div style="margin-top: 14px; background: #090d16; border: 1px solid var(--border); border-radius: 6px; padding: 12px;">
-              <div style="font-size: 0.75rem; font-weight: 600; color: #93c5fd; margin-bottom: 6px;">How to Start High-Availability Replication Topology:</div>
-              <pre style="font-size: 0.75rem; color: #cbd5e1; line-height: 1.5; margin: 0; font-family: monospace;"># 1. Primary Node (Single Writer)
+            <div style="margin-top: 14px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px;">
+              <div style="font-size: 0.75rem; font-weight: 600; color: var(--link-accent); margin-bottom: 6px;">How to Start High-Availability Replication Topology:</div>
+              <pre style="font-size: 0.75rem; color: var(--text); line-height: 1.5; margin: 0; font-family: monospace;"># 1. Primary Node (Single Writer)
 lionsql serve --http=127.0.0.1:8090 --pg=127.0.0.1:5433 --tds=127.0.0.1:1433 --rep-role=primary --rep-node=primary-1
 
 # 2. Secondary Replica Node (Read-Only Scale-Out)
@@ -1395,7 +1598,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
       <!-- Replication Architecture Invariant Reference Card -->
       <div class="card" style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.6;">
-        <div style="font-weight: 600; color: #f8fafc; margin-bottom: 4px;">High Availability Architecture Invariant: 1-Writer Multi-Reader Topology</div>
+        <div style="font-weight: 600; color: var(--text); margin-bottom: 4px;">High Availability Architecture Invariant: 1-Writer Multi-Reader Topology</div>
         LionSQL prioritizes vertical scale-up hardware saturation with 1-Writer Multi-Reader physical WAL replication. Readers never block writers and writers never block readers. All write transactions execute strictly on the authoritative Primary node, while Replicas stream and replay physical WAL records with sub-millisecond latency.
       </div>
     </div>
@@ -1412,7 +1615,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         </div>
         <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeCreateCronModal()">✕</button>
       </div>
-      <div id="create-cron-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <div id="create-cron-error" class="alert-danger-box" style="display: none; padding: 8px 12px; margin-bottom: 14px;"></div>
       <form onsubmit="handleCreateCronSubmit(event)">
         <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Job Name:</label>
         <input type="text" id="cron-name" required placeholder="e.g. Nightly Log Purge" style="margin-top: 4px; margin-bottom: 12px;" />
@@ -1456,7 +1659,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         </div>
         <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeCreateWebhookModal()">✕</button>
       </div>
-      <div id="create-webhook-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <div id="create-webhook-error" class="alert-danger-box" style="display: none; padding: 8px 12px; margin-bottom: 14px;"></div>
       <form onsubmit="handleCreateWebhookSubmit(event)">
         <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Webhook Name:</label>
         <input type="text" id="webhook-name" required placeholder="e.g. Slack Orders Notification" style="margin-top: 4px; margin-bottom: 12px;" />
@@ -1498,7 +1701,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           <div style="font-size: 0.75rem; color: var(--text-muted);">Superuser Authentication</div>
         </div>
       </div>
-      <div id="login-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <div id="login-error" class="alert-danger-box" style="display: none; padding: 8px 12px; margin-bottom: 14px;"></div>
       <form onsubmit="handleLoginSubmit(event)">
         <label style="font-size: 0.8rem; color: var(--text-muted);">Administrator Email:</label>
         <input type="email" id="login-email" value="admin@lionsql.local" required placeholder="admin@lionsql.local" autocomplete="username" />
@@ -1520,7 +1723,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
   <div id="create-key-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <h3 style="font-size: 1.1rem; margin-bottom: 15px;">Create API Key</h3>
-      <div id="create-key-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <div id="create-key-error" class="alert-danger-box" style="display: none; padding: 8px 12px; margin-bottom: 14px;"></div>
       <form onsubmit="handleCreateKeySubmit(event)">
         <label style="font-size: 0.8rem; color: var(--text-muted);">Key Name / Description:</label>
         <input type="text" id="key-name-input" required placeholder="e.g. mobile-app, payment-service" />
@@ -1544,31 +1747,31 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
   <!-- Drop Table Confirmation Modal Overlay (Safety Guardrail) -->
   <div id="drop-table-modal" class="modal-overlay" style="display: none;">
-    <div class="modal-card" style="max-width: 460px; border-color: #991b1b;">
+    <div class="modal-card" style="max-width: 460px; border-color: var(--alert-danger-border);">
       <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
-        <div style="background: #7f1d1d; width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fca5a5;">
+        <div style="background: var(--alert-danger-icon-bg); width: 34px; height: 34px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--alert-danger-icon-color);">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         </div>
         <div>
-          <h3 style="font-size: 1.15rem; font-weight: 700; color: #f87171;">Drop Table Confirmation</h3>
+          <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--alert-danger-strong);">Drop Table Confirmation</h3>
           <div style="font-size: 0.75rem; color: var(--text-muted);">Irreversible Database Operation</div>
         </div>
       </div>
       
-      <div style="background: rgba(127, 29, 29, 0.25); border: 1px solid #7f1d1d; border-radius: 6px; padding: 12px; margin-bottom: 16px; font-size: 0.82rem; color: #fca5a5; line-height: 1.5;">
-        This action <strong>cannot be undone</strong>. This will permanently drop table <code id="drop-table-target-name" style="background: #450a0a; padding: 2px 6px; border-radius: 4px; color: #fecaca; font-weight: 700;"></code> and erase all associated records, schema, and indexes.
+      <div class="alert-danger-box" style="margin-bottom: 16px;">
+        This action <strong>cannot be undone</strong>. This will permanently drop table <code id="drop-table-target-name"></code> and erase all associated records, schema, and indexes.
       </div>
 
       <div style="margin-bottom: 16px;">
         <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 6px;">
-          Please type <strong id="drop-table-prompt-name" style="color: #f87171;"></strong> to confirm:
+          Please type <strong id="drop-table-prompt-name" style="color: var(--alert-danger-strong);"></strong> to confirm:
         </label>
         <input type="text" id="drop-table-confirm-input" placeholder="Type table name here" autocomplete="off" spellcheck="false" style="font-family: monospace;" oninput="onDropTableInputChange(this.value)" onkeydown="if(event.key === 'Enter' && !document.getElementById('btn-confirm-drop-table').disabled) executeDropTable();" />
       </div>
 
       <div style="display: flex; gap: 10px; margin-top: 20px;">
         <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="closeDropTableModal()">Cancel</button>
-        <button id="btn-confirm-drop-table" type="button" class="btn" style="flex: 1; background: #991b1b; color: #fff; opacity: 0.45; cursor: not-allowed;" disabled onclick="executeDropTable()">Drop Table</button>
+        <button id="btn-confirm-drop-table" type="button" class="btn" style="flex: 1; background: var(--danger); color: #fff; opacity: 0.45; cursor: not-allowed;" disabled onclick="executeDropTable()">Drop Table</button>
       </div>
     </div>
   </div>
@@ -1583,7 +1786,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         </div>
         <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeCreateTableModal()">✕</button>
       </div>
-      <div id="create-table-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <div id="create-table-error" class="alert-danger-box" style="display: none; padding: 8px 12px; margin-bottom: 14px;"></div>
       <form onsubmit="handleCreateTableSubmit(event)">
         <div style="margin-bottom: 16px;">
           <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Table Name:</label>
@@ -1595,7 +1798,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
             <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Columns / Fields:</label>
             <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="addColumnBuilderRow()">+ Add Field</button>
           </div>
-          <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: #0c1220;">
+          <div style="max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: var(--code-bg);">
             <table style="width: 100%; margin-top: 0; font-size: 0.8rem;">
               <thead>
                 <tr>
@@ -1630,7 +1833,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         </div>
         <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeCreateRecordModal()">✕</button>
       </div>
-      <div id="create-record-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <div id="create-record-error" class="alert-danger-box" style="display: none; padding: 8px 12px; margin-bottom: 14px;"></div>
       <form onsubmit="handleCreateRecordSubmit(event)">
         <div id="create-record-fields-container" style="max-height: 360px; overflow-y: auto; padding-right: 4px;">
         </div>
@@ -1652,23 +1855,23 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         </div>
         <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeImportCSVModal()">✕</button>
       </div>
-      <div id="import-csv-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
+      <div id="import-csv-error" class="alert-danger-box" style="display: none; padding: 8px 12px; margin-bottom: 14px;"></div>
       
       <!-- Drag & Drop Zone -->
-      <div id="csv-drop-zone" style="border: 2px dashed #475569; border-radius: 8px; padding: 30px; text-align: center; background: #0c1220; cursor: pointer; transition: all 0.2s;" onclick="document.getElementById('csv-file-input').click()" ondragover="handleCSVDragOver(event)" ondragleave="handleCSVDragLeave(event)" ondrop="handleCSVFileDrop(event)">
+      <div id="csv-drop-zone" style="border: 2px dashed var(--border); border-radius: 8px; padding: 30px; text-align: center; background: var(--panel-box-bg); cursor: pointer; transition: all 0.2s;" onclick="document.getElementById('csv-file-input').click()" ondragover="handleCSVDragOver(event)" ondragleave="handleCSVDragLeave(event)" ondrop="handleCSVFileDrop(event)">
         <div style="font-size: 1.8rem; margin-bottom: 8px;">📥</div>
-        <div style="font-size: 0.95rem; font-weight: 600; color: #94a3b8;">Drop CSV file here or click to browse</div>
-        <div style="font-size: 0.75rem; color: #64748b; margin-top: 4px;">Supports comma-separated UTF-8 (.csv) with header row</div>
+        <div style="font-size: 0.95rem; font-weight: 600; color: var(--text);">Drop CSV file here or click to browse</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Supports comma-separated UTF-8 (.csv) with header row</div>
         <input type="file" id="csv-file-input" accept=".csv,text/csv" style="display: none;" onchange="handleCSVFileSelected(event)" />
       </div>
 
       <!-- Preview Section -->
       <div id="csv-preview-section" style="display: none; margin-top: 16px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-          <div style="font-size: 0.8rem; font-weight: 600; color: #cbd5e1;">File Preview: <span id="csv-file-name" style="color: #60a5fa;"></span> (<span id="csv-row-count"></span> rows)</div>
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--text);">File Preview: <span id="csv-file-name" style="color: var(--primary);"></span> (<span id="csv-row-count"></span> rows)</div>
           <button type="button" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.7rem;" onclick="resetCSVImport()">Change File</button>
         </div>
-        <div style="max-height: 180px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: #090d16;">
+        <div style="max-height: 180px; overflow: auto; border: 1px solid var(--border); border-radius: 6px; background: var(--code-bg);">
           <table id="csv-preview-table" style="font-size: 0.75rem; margin-top: 0;">
             <thead><tr id="csv-preview-thead"></tr></thead>
             <tbody id="csv-preview-tbody"></tbody>
@@ -1688,7 +1891,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     <div class="modal-card" style="width: 740px; max-width: 94vw; box-sizing: border-box;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
         <div>
-          <h3 style="font-size: 1.15rem; font-weight: 700; color: #818cf8;">Developer API Preview</h3>
+          <h3 style="font-size: 1.15rem; font-weight: 700; color: var(--primary);">Developer API Preview</h3>
           <div style="font-size: 0.75rem; color: var(--text-muted);">Ready-to-use code snippets for integrating with LionSQL REST API.</div>
         </div>
         <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closeAPIPreviewModal()">✕</button>
@@ -1716,11 +1919,11 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
       <!-- Snippet Code Box (Fixed height to prevent vertical jitter) -->
       <div style="position: relative;">
-        <pre id="api-code-snippet" style="background: #090d16; border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: monospace; font-size: 0.8rem; color: #e2e8f0; overflow-y: auto; height: 280px; min-height: 280px; max-height: 280px; box-sizing: border-box; white-space: pre-wrap; line-height: 1.4;"></pre>
+        <pre id="api-code-snippet" style="background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: monospace; font-size: 0.8rem; color: var(--text); overflow-y: auto; height: 280px; min-height: 280px; max-height: 280px; box-sizing: border-box; white-space: pre-wrap; line-height: 1.4;"></pre>
       </div>
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
-        <span style="font-size: 0.75rem; color: #64748b;">API Key: <code id="api-preview-key-hint" style="color: #93c5fd;">SQLION_API_KEY</code> (Bearer token)</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">API Key: <code id="api-preview-key-hint" style="color: var(--primary);">SQLION_API_KEY</code> (Bearer token)</span>
         <button type="button" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="closeAPIPreviewModal()">Close</button>
       </div>
     </div>
@@ -1730,12 +1933,12 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
   <div id="promote-replica-modal" class="modal-overlay" style="display: none;">
     <div class="modal-card" style="max-width: 480px;">
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-        <h3 style="font-size: 1.1rem; font-weight: 700; color: #f59e0b;">Promote Node to Primary</h3>
+        <h3 style="font-size: 1.1rem; font-weight: 700; color: var(--alert-warning-title);">Promote Node to Primary</h3>
         <button type="button" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.8rem;" onclick="closePromoteModal()">✕</button>
       </div>
-      <div style="font-size: 0.85rem; color: #cbd5e1; line-height: 1.5; margin-bottom: 16px;">
-        Are you sure you want to promote this replica to an active <strong style="color: #6ee7b7;">PRIMARY</strong> node?
-        <div style="margin-top: 10px; padding: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 6px; font-size: 0.78rem; color: #fca5a5;">
+      <div style="font-size: 0.85rem; color: var(--text); line-height: 1.5; margin-bottom: 16px;">
+        Are you sure you want to promote this replica to an active <strong style="color: var(--success);">PRIMARY</strong> node?
+        <div class="alert-danger-box" style="margin-top: 10px; padding: 10px; font-size: 0.78rem;">
           This instance will become writeable, detach from its upstream primary, and begin accepting direct mutation statements.
         </div>
       </div>
@@ -1745,9 +1948,6 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       </div>
     </div>
   </div>
-
-  <!-- Floating Toast Notification -->
-  <div id="toast" style="position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; display: none; z-index: 10000; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); border: 1px solid var(--border);"></div>
 
   <script>
     function showToast(message, type = 'info') {
@@ -2124,16 +2324,16 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       let rowsHtml = '';
       t.columns.forEach((col, idx) => {
         const pkBadge = col.primary_key 
-          ? '<span style="background:#854d0e; color:#fef08a; font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:700;">PRIMARY KEY</span>' 
+          ? '<span class="badge badge-warning" style="font-size:0.75rem; padding:2px 6px; font-weight:700;">PRIMARY KEY</span>' 
           : '<span style="color:var(--text-muted); font-size:0.8rem;">-</span>';
         const nullBadge = col.nullable 
-          ? '<span style="color:#94a3b8; font-size:0.8rem;">Nullable</span>' 
-          : '<span style="background:#1e3a8a; color:#93c5fd; font-size:0.75rem; padding:2px 6px; border-radius:4px; font-weight:600;">NOT NULL</span>';
-        const typeBadge = `<span style="background:#0f172a; border:1px solid #334155; color:#38bdf8; font-family:monospace; font-size:0.8rem; padding:2px 6px; border-radius:4px;">${col.type}</span>`;
+          ? '<span style="color:var(--text-muted); font-size:0.8rem;">Nullable</span>' 
+          : '<span class="badge badge-info" style="font-size:0.75rem; padding:2px 6px; font-weight:600;">NOT NULL</span>';
+        const typeBadge = `<span style="background:var(--type-badge-bg); border:1px solid var(--type-badge-border); color:var(--type-badge-color); font-family:monospace; font-size:0.8rem; padding:2px 6px; border-radius:4px;">${col.type}</span>`;
 
         rowsHtml += `<tr>
           <td style="color:var(--text-muted); font-size:0.8rem;">${idx + 1}</td>
-          <td style="font-weight:600; color:#f8fafc;">${col.name}</td>
+          <td style="font-weight:600; color:var(--text);">${col.name}</td>
           <td>${typeBadge}</td>
           <td>${pkBadge}</td>
           <td>${nullBadge}</td>
@@ -2262,30 +2462,30 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       for (const rawLine of lines) {
         const line = String(rawLine).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         if (line.startsWith('=== Program:')) {
-          html += `<div style="color:#38bdf8; font-weight:700; font-size:0.95rem; border-bottom:1px solid #334155; padding-bottom:4px; margin-bottom:4px;">${line}</div>`;
+          html += `<div style="color:var(--primary); font-weight:700; font-size:0.95rem; border-bottom:1px solid var(--border); padding-bottom:4px; margin-bottom:4px;">${line}</div>`;
         } else if (line.startsWith('Registers:')) {
-          html += `<div style="color:#94a3b8; font-size:0.8rem; margin-bottom:6px;">${line}</div>`;
+          html += `<div style="color:var(--text-muted); font-size:0.8rem; margin-bottom:6px;">${line}</div>`;
         } else if (line.startsWith('--- Constants ---') || line.startsWith('--- Instructions ---')) {
-          html += `<div style="color:#f59e0b; font-weight:600; text-transform:uppercase; margin-top:8px; margin-bottom:4px; letter-spacing:0.04em;">${line}</div>`;
+          html += `<div style="color:var(--alert-warning-title); font-weight:600; text-transform:uppercase; margin-top:8px; margin-bottom:4px; letter-spacing:0.04em;">${line}</div>`;
         } else if (line.trim().startsWith('[')) {
-          html += `<div style="color:#a3e635; padding-left:12px;">${line}</div>`;
+          html += `<div style="color:var(--success); padding-left:12px;">${line}</div>`;
         } else {
           let formatted = line;
-          formatted = formatted.replace(/^(\s*)(\d{4}:)/, '$1<span style="color:#64748b;">$2</span>');
+          formatted = formatted.replace(/^(\s*)(\d{4}:)/, '$1<span style="color:var(--text-muted);">$2</span>');
           for (const op of opcodes) {
             const re = new RegExp(`\\b(${op})\\b`);
             if (re.test(formatted)) {
-              let opColor = '#c084fc';
-              if (['JUMP','JUMP_IF_FALSE','JUMP_IF_TRUE','RETURN','HALT'].includes(op)) opColor = '#f43f5e';
-              else if (['REL_QUERY','INDEX_SCAN','SCAN','GET'].includes(op)) opColor = '#38bdf8';
-              else if (['INSERT','UPDATE','DELETE','UPDATE_WHERE','DELETE_WHERE','SELECT_INTO'].includes(op)) opColor = '#34d399';
-              else if (['TX_BEGIN','TX_COMMIT','TX_ROLLBACK'].includes(op)) opColor = '#fbbf24';
+              let opColor = 'var(--badge-purple-color)';
+              if (['JUMP','JUMP_IF_FALSE','JUMP_IF_TRUE','RETURN','HALT'].includes(op)) opColor = 'var(--danger)';
+              else if (['REL_QUERY','INDEX_SCAN','SCAN','GET'].includes(op)) opColor = 'var(--primary)';
+              else if (['INSERT','UPDATE','DELETE','UPDATE_WHERE','DELETE_WHERE','SELECT_INTO'].includes(op)) opColor = 'var(--success)';
+              else if (['TX_BEGIN','TX_COMMIT','TX_ROLLBACK'].includes(op)) opColor = 'var(--alert-warning-title)';
               formatted = formatted.replace(re, `<span style="color:${opColor}; font-weight:700;">$1</span>`);
               break;
             }
           }
-          formatted = formatted.replace(/([ABC]:-?\d+)/g, '<span style="color:#fb923c;">$1</span>');
-          formatted = formatted.replace(/(;.*)$/, '<span style="color:#6ee7b7; font-style:italic;">$1</span>');
+          formatted = formatted.replace(/([ABC]:-?\d+)/g, '<span style="color:var(--alert-warning-title);">$1</span>');
+          formatted = formatted.replace(/(;.*)$/, '<span style="color:var(--success); font-style:italic;">$1</span>');
           html += `<div style="padding-left:12px;">${formatted}</div>`;
         }
       }
@@ -2350,9 +2550,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           if (vdbeView) vdbeView.style.display = 'none';
           if (tableContainer) tableContainer.style.display = 'block';
           bannerEl.style.display = 'block';
-          bannerEl.style.background = '#7f1d1d';
-          bannerEl.style.color = '#fca5a5';
-          bannerEl.style.border = '1px solid #ef4444';
+          bannerEl.className = 'alert-danger-box';
           bannerEl.innerText = 'Error: ' + out.error;
           metaEl.innerText = `Failed in ${durationMs}ms`;
           tableEl.innerHTML = '<thead><tr><th>Error</th></tr></thead><tbody><tr><td>' + out.error + '</td></tr></tbody>';
@@ -2360,9 +2558,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           lastQueryResult = out;
           if (exportActions) exportActions.style.display = (out.columns && out.columns.length > 0) ? 'flex' : 'none';
           bannerEl.style.display = 'block';
-          bannerEl.style.background = '#064e3b';
-          bannerEl.style.color = '#6ee7b7';
-          bannerEl.style.border = '1px solid #10b981';
+          bannerEl.className = 'alert-success-box';
           
           const isBytecode = (out.command === 'EXPLAIN BYTECODE') || (out.columns && out.columns.length === 1 && out.columns[0] === 'Bytecode');
           let statusText = 'Query executed successfully.';
@@ -2432,9 +2628,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       } catch (err) {
         metaEl.innerText = 'Network error';
         bannerEl.style.display = 'block';
-        bannerEl.style.background = '#7f1d1d';
-        bannerEl.style.color = '#fca5a5';
-        bannerEl.style.border = '1px solid #ef4444';
+        bannerEl.className = 'alert-danger-box';
         bannerEl.innerText = 'Failed to execute: ' + err;
       }
     }
@@ -3286,7 +3480,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           <input type="checkbox" class="builder-col-notnull" ${isNotNull ? 'checked' : ''} style="margin: 0; width: 16px; height: 16px; accent-color: var(--primary);" />
         </td>
         <td style="padding: 4px 6px; text-align: center;">
-          <button type="button" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.75rem; background: #450a0a; color: #fca5a5;" onclick="this.closest('tr').remove()">✕</button>
+          <button type="button" class="btn btn-secondary btn-danger-subtle" style="padding: 2px 6px; font-size: 0.75rem;" onclick="this.closest('tr').remove()">✕</button>
         </td>
       `;
       tbody.appendChild(tr);
@@ -3441,7 +3635,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
         const isPK = col.primary_key;
         const pkBadge = isPK ? ' <span class="col-header-tag col-pk-tag">PRIMARY KEY</span>' : '';
-        const reqBadge = (!col.nullable && !isPK) ? ' <span style="color:#ef4444; font-size:0.75rem;">* Required</span>' : '';
+        const reqBadge = (!col.nullable && !isPK) ? ' <span style="color:var(--danger); font-size:0.75rem;">* Required</span>' : '';
         const label = `<label style="font-size:0.8rem; color:var(--text-muted); font-weight:600; display:block; margin-bottom:4px;">
           ${escapeHtml(col.name)} <span class="col-header-tag">${col.type}</span>${pkBadge}${reqBadge}
         </label>`;
@@ -3767,7 +3961,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       try {
         const res = await authFetch('/api/keys');
         if (!res.ok) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#fca5a5;">Requires Superuser authentication</td></tr>';
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:var(--alert-danger-strong);">Requires Superuser authentication</td></tr>';
           return;
         }
         const keys = await res.json();
@@ -3778,22 +3972,22 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         let html = '';
         keys.forEach(k => {
           const roleClass = (k.role === 'admin') ? 'role-badge role-admin' : 'role-badge role-readonly';
-          const tables = (k.allowed_tables && k.allowed_tables.length > 0) ? k.allowed_tables.join(', ') : '<span style="color:#6ee7b7; font-weight:600;">* (All tables)</span>';
+          const tables = (k.allowed_tables && k.allowed_tables.length > 0) ? k.allowed_tables.join(', ') : '<span style="color:var(--success); font-weight:600;">* (All tables)</span>';
           const dateStr = new Date(k.created_at).toLocaleString();
           html += `<tr>
-            <td style="font-family:monospace; color:#94a3b8; font-size:0.8rem;">${k.id}</td>
-            <td style="font-weight:600; color:#f8fafc;">${k.name}</td>
+            <td style="font-family:monospace; color:var(--text-muted); font-size:0.8rem;">${k.id}</td>
+            <td style="font-weight:600; color:var(--text);">${k.name}</td>
             <td><span class="${roleClass}">${k.role.toUpperCase()}</span></td>
             <td style="font-family:monospace; font-size:0.8rem;">${tables}</td>
             <td style="font-size:0.8rem; color:var(--text-muted);">${dateStr}</td>
             <td style="text-align: right;">
-              <button class="btn btn-secondary" style="padding:4px 8px; font-size:0.75rem; background:#7f1d1d; color:#fca5a5;" onclick="revokeAPIKey('${k.id}')">Revoke</button>
+              <button class="btn btn-secondary btn-danger-subtle" style="padding:4px 8px; font-size:0.75rem;" onclick="revokeAPIKey('${k.id}')">Revoke</button>
             </td>
           </tr>`;
         });
         tbody.innerHTML = html;
       } catch (err) {
-        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:#fca5a5;">Error: ${err}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--alert-danger-strong);">Error: ${err}</td></tr>`;
       }
     }
 
@@ -4235,12 +4429,12 @@ console.log('Rows:', queryResult.rows);`;
       }
 
       tbody.innerHTML = items.map(wh => {
-        const evts = (wh.events || []).map(e => `<span class="badge" style="background:#1e293b; color:#93c5fd; margin-right:4px;">${escapeHtml(e)}</span>`).join('');
+        const evts = (wh.events || []).map(e => `<span class="badge badge-info" style="margin-right:4px;">${escapeHtml(e)}</span>`).join('');
         const statusBadge = wh.enabled ? 
-          '<span class="badge" style="background:#064e3b; color:#6ee7b7;">Active</span>' : 
-          '<span class="badge" style="background:#374151; color:#9ca3af;">Disabled</span>';
+          '<span class="badge badge-success">Active</span>' : 
+          '<span class="badge badge-muted">Disabled</span>';
         const hmacBadge = wh.secret ? 
-          '<span class="badge" style="background:#4c1d95; color:#c4b5fd;">HMAC-SHA256</span>' : 
+          '<span class="badge badge-purple">HMAC-SHA256</span>' : 
           '<span style="color:var(--text-muted); font-size:0.75rem;">None</span>';
 
         return `<tr>
@@ -4248,14 +4442,14 @@ console.log('Rows:', queryResult.rows);`;
             <div style="font-weight:600; color:var(--text);">${escapeHtml(wh.name)}</div>
             <div style="font-size:0.7rem; color:var(--text-muted); font-family:monospace;">${escapeHtml(wh.id)}</div>
           </td>
-          <td><code style="color:#f59e0b;">${escapeHtml(wh.table)}</code></td>
+          <td><code style="color:var(--console-text);">${escapeHtml(wh.table)}</code></td>
           <td>${evts}</td>
           <td><div style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:monospace; font-size:0.78rem;" title="${escapeHtml(wh.url)}">${escapeHtml(wh.url)}</div></td>
           <td>${hmacBadge}</td>
           <td>${statusBadge}</td>
           <td style="text-align:right;">
             <button class="btn btn-secondary" style="padding:3px 8px; font-size:0.72rem; margin-right:4px;" onclick="testWebhook('${escapeHtml(wh.id)}')">⚡ Test</button>
-            <button class="btn btn-secondary" style="padding:3px 8px; font-size:0.72rem; color:#f87171;" onclick="deleteWebhook('${escapeHtml(wh.id)}')">Delete</button>
+            <button class="btn btn-secondary btn-danger-subtle" style="padding:3px 8px; font-size:0.72rem;" onclick="deleteWebhook('${escapeHtml(wh.id)}')">Delete</button>
           </td>
         </tr>`;
       }).join('');
@@ -4377,14 +4571,14 @@ console.log('Rows:', queryResult.rows);`;
 
       tbody.innerHTML = items.map(del => {
         const statusBadge = del.success ? 
-          `<span class="badge" style="background:#064e3b; color:#6ee7b7;">HTTP ${del.status_code}</span>` : 
-          `<span class="badge" style="background:#7f1d1d; color:#fca5a5;">HTTP ${del.status_code || 'ERR'}</span>`;
+          `<span class="badge badge-success">HTTP ${del.status_code}</span>` : 
+          `<span class="badge badge-danger">HTTP ${del.status_code || 'ERR'}</span>`;
         const dateStr = new Date(del.timestamp).toLocaleTimeString();
 
         return `<tr>
           <td style="font-family:monospace; font-size:0.75rem; color:var(--text-muted);">${escapeHtml(del.id)}</td>
           <td><span style="font-weight:600;">${escapeHtml(del.webhook_name || del.webhook_id)}</span></td>
-          <td><span class="badge" style="background:#1e293b; color:#93c5fd;">${escapeHtml(del.event)}</span></td>
+          <td><span class="badge badge-info">${escapeHtml(del.event)}</span></td>
           <td><code>${escapeHtml(del.table)}</code></td>
           <td>${statusBadge}</td>
           <td style="font-size:0.75rem; color:var(--text-muted);">${del.duration_ms}ms (att: ${del.attempt_count})</td>
@@ -4435,16 +4629,16 @@ console.log('Rows:', queryResult.rows);`;
       }
 
       tbody.innerHTML = items.map(job => {
-        let statusBadge = '<span class="badge" style="background:#374151; color:#9ca3af;">Pending</span>';
+        let statusBadge = '<span class="badge badge-muted">Pending</span>';
         if (job.last_status === 'success') {
-          statusBadge = '<span class="badge" style="background:#064e3b; color:#6ee7b7;">Success</span>';
+          statusBadge = '<span class="badge badge-success">Success</span>';
         } else if (job.last_status === 'error') {
-          statusBadge = `<span class="badge" style="background:#7f1d1d; color:#fca5a5;" title="${escapeHtml(job.last_error || '')}">Error</span>`;
+          statusBadge = `<span class="badge badge-danger" title="${escapeHtml(job.last_error || '')}">Error</span>`;
         }
 
         const typeBadge = job.command_type === 'procedure' ?
-          '<span class="badge" style="background:#4c1d95; color:#c4b5fd;">PROCEDURE</span>' :
-          '<span class="badge" style="background:#1e293b; color:#93c5fd;">SQL</span>';
+          '<span class="badge badge-purple">PROCEDURE</span>' :
+          '<span class="badge badge-info">SQL</span>';
 
         const lastRunStr = job.last_run ? new Date(job.last_run).toLocaleTimeString() + ` (${job.last_duration_ms}ms)` : 'Never';
 
@@ -4453,14 +4647,14 @@ console.log('Rows:', queryResult.rows);`;
             <div style="font-weight:600; color:var(--text);">${escapeHtml(job.name)}</div>
             <div style="font-size:0.7rem; color:var(--text-muted); font-family:monospace;">${escapeHtml(job.id)}</div>
           </td>
-          <td><code style="color:#f59e0b; background:#1e293b; padding:2px 6px; border-radius:4px;">${escapeHtml(job.schedule)}</code></td>
+          <td><code style="color:var(--pk-val-color); background:var(--code-bg); padding:2px 6px; border-radius:4px; border:1px solid var(--border);">${escapeHtml(job.schedule)}</code></td>
           <td>${typeBadge}</td>
           <td><div style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family:monospace; font-size:0.78rem;" title="${escapeHtml(job.command)}">${escapeHtml(job.command)}</div></td>
           <td>${statusBadge}</td>
           <td style="font-size:0.75rem; color:var(--text-muted);">${lastRunStr}</td>
           <td style="text-align:right;">
             <button class="btn btn-secondary" style="padding:3px 8px; font-size:0.72rem; margin-right:4px;" onclick="runCronNow('${escapeHtml(job.id)}')">⚡ Run Now</button>
-            <button class="btn btn-secondary" style="padding:3px 8px; font-size:0.72rem; color:#f87171;" onclick="deleteCron('${escapeHtml(job.id)}')">Delete</button>
+            <button class="btn btn-secondary btn-danger-subtle" style="padding:3px 8px; font-size:0.72rem;" onclick="deleteCron('${escapeHtml(job.id)}')">Delete</button>
           </td>
         </tr>`;
       }).join('');
@@ -4638,13 +4832,13 @@ console.log('Rows:', queryResult.rows);`;
 
       tbody.innerHTML = items.map(l => {
         const statusBadge = l.success ?
-          '<span class="badge" style="background:#064e3b; color:#6ee7b7;">Sent</span>' :
-          `<span class="badge" style="background:#7f1d1d; color:#fca5a5;" title="${escapeHtml(l.error || '')}">Failed</span>`;
+          '<span class="badge badge-success">Sent</span>' :
+          `<span class="badge badge-danger" title="${escapeHtml(l.error || '')}">Failed</span>`;
         const dateStr = new Date(l.timestamp).toLocaleTimeString();
 
         return `<tr>
           <td style="font-family:monospace; font-size:0.75rem; color:var(--text-muted);">${escapeHtml(l.id)}</td>
-          <td><code style="color:#93c5fd;">${escapeHtml(l.to)}</code></td>
+          <td><code style="color:var(--link-accent);">${escapeHtml(l.to)}</code></td>
           <td>${escapeHtml(l.subject)}</td>
           <td>${statusBadge}</td>
           <td style="font-size:0.75rem; color:var(--text-muted);">${l.duration_ms}ms</td>
@@ -4754,13 +4948,15 @@ console.log('Rows:', queryResult.rows);`;
       if (data.role === 'PRIMARY') {
         if (roleBadge) {
           roleBadge.textContent = 'PRIMARY';
-          roleBadge.style.background = '#064e3b';
-          roleBadge.style.color = '#6ee7b7';
+          roleBadge.className = 'badge badge-success';
+          roleBadge.style.background = '';
+          roleBadge.style.color = '';
         }
         if (accessBadge) {
           accessBadge.textContent = 'Read / Write';
-          accessBadge.style.background = '#1e3a8a';
-          accessBadge.style.color = '#93c5fd';
+          accessBadge.className = 'badge badge-info';
+          accessBadge.style.background = '';
+          accessBadge.style.color = '';
         }
         if (accessDesc) accessDesc.textContent = 'Authoritative ACID Mutations & OCC Validation';
 
@@ -4779,18 +4975,20 @@ console.log('Rows:', queryResult.rows);`;
       } else if (data.role === 'REPLICA') {
         if (roleBadge) {
           roleBadge.textContent = 'REPLICA';
-          roleBadge.style.background = '#854d0e';
-          roleBadge.style.color = '#fef08a';
+          roleBadge.className = 'badge badge-warning';
+          roleBadge.style.background = '';
+          roleBadge.style.color = '';
         }
         if (accessBadge) {
           accessBadge.textContent = 'Read-Only';
-          accessBadge.style.background = '#854d0e';
-          accessBadge.style.color = '#fef08a';
+          accessBadge.className = 'badge badge-warning';
+          accessBadge.style.background = '';
+          accessBadge.style.color = '';
         }
         if (accessDesc) accessDesc.textContent = 'Strict Write Guard (Snapshot Queries Only)';
 
         if (peerTitle) peerTitle.textContent = 'Upstream Primary';
-        if (peerValue) peerValue.innerHTML = `<code style="color: #93c5fd; font-size: 0.9rem;">${escapeHtml(data.primary_url || '--')}</code>`;
+        if (peerValue) peerValue.innerHTML = `<code style="color: var(--link-accent); font-size: 0.9rem;">${escapeHtml(data.primary_url || '--')}</code>`;
         if (peerDesc) peerDesc.textContent = 'Physical WAL streaming source';
 
         if (primaryCard) primaryCard.style.display = 'none';
@@ -4813,23 +5011,23 @@ console.log('Rows:', queryResult.rows);`;
       tbody.innerHTML = replicas.map(r => {
         let stateBadge = '';
         if (r.state === 'STREAMING') {
-          stateBadge = '<span class="badge" style="background:#064e3b; color:#6ee7b7;">STREAMING</span>';
+          stateBadge = '<span class="badge badge-success">STREAMING</span>';
         } else if (r.state === 'CATCHING_UP') {
-          stateBadge = '<span class="badge" style="background:#854d0e; color:#fef08a;">CATCHING_UP</span>';
+          stateBadge = '<span class="badge badge-warning">CATCHING_UP</span>';
         } else {
-          stateBadge = `<span class="badge" style="background:#7f1d1d; color:#fca5a5;">${escapeHtml(r.state || 'DISCONNECTED')}</span>`;
+          stateBadge = `<span class="badge badge-danger">${escapeHtml(r.state || 'DISCONNECTED')}</span>`;
         }
 
         const lagDisplay = (r.replication_lag === 0) ?
-          '<span style="color:#10b981; font-weight:600;">0 (Up to date)</span>' :
-          `<span style="color:#f59e0b; font-weight:600;">${r.replication_lag} LSN</span>`;
+          '<span style="color:var(--badge-success-color); font-weight:600;">0 (Up to date)</span>' :
+          `<span style="color:var(--badge-warning-color); font-weight:600;">${r.replication_lag} LSN</span>`;
 
         const heartbeatStr = r.last_heartbeat ? new Date(r.last_heartbeat).toLocaleTimeString() : '--';
         const connectedStr = r.connected_at ? new Date(r.connected_at).toLocaleString() : '--';
 
         return `<tr>
-          <td><code style="color:#93c5fd; font-weight:600;">${escapeHtml(r.node_id)}</code></td>
-          <td><code style="color:#cbd5e1;">${escapeHtml(r.remote_addr)}</code></td>
+          <td><code style="color:var(--link-accent); font-weight:600;">${escapeHtml(r.node_id)}</code></td>
+          <td><code style="color:var(--text-muted);">${escapeHtml(r.remote_addr)}</code></td>
           <td>${stateBadge}</td>
           <td style="font-family:monospace; font-size:0.85rem;">${r.acked_lsn}</td>
           <td>${lagDisplay}</td>
@@ -4851,8 +5049,9 @@ console.log('Rows:', queryResult.rows);`;
       const roleBadge = document.getElementById('ha-role-badge');
       if (roleBadge) {
         roleBadge.textContent = 'STANDALONE';
-        roleBadge.style.background = '#334155';
-        roleBadge.style.color = '#cbd5e1';
+        roleBadge.className = 'badge badge-muted';
+        roleBadge.style.background = '';
+        roleBadge.style.color = '';
       }
 
       const nodeIdEl = document.getElementById('ha-node-id');
@@ -4864,8 +5063,9 @@ console.log('Rows:', queryResult.rows);`;
       const accessBadge = document.getElementById('ha-access-mode');
       if (accessBadge) {
         accessBadge.textContent = 'Read / Write';
-        accessBadge.style.background = '#1e3a8a';
-        accessBadge.style.color = '#93c5fd';
+        accessBadge.className = 'badge badge-info';
+        accessBadge.style.background = '';
+        accessBadge.style.color = '';
       }
 
       const accessDesc = document.getElementById('ha-access-desc');
@@ -4885,18 +5085,17 @@ console.log('Rows:', queryResult.rows);`;
       const badge = document.getElementById('nav-ha-badge');
       if (!badge) return;
 
+      badge.style.background = '';
+      badge.style.color = '';
       if (role === 'PRIMARY') {
         badge.textContent = 'PRIMARY';
-        badge.style.background = '#064e3b';
-        badge.style.color = '#6ee7b7';
+        badge.className = 'badge badge-success';
       } else if (role === 'REPLICA') {
         badge.textContent = 'REPLICA';
-        badge.style.background = '#854d0e';
-        badge.style.color = '#fef08a';
+        badge.className = 'badge badge-warning';
       } else {
         badge.textContent = 'HA';
-        badge.style.background = '#1e293b';
-        badge.style.color = '#94a3b8';
+        badge.className = 'badge badge-muted';
       }
     }
 
