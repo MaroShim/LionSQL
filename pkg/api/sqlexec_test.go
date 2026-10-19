@@ -821,7 +821,7 @@ func TestSQLExecutor_VirtualCatalogViews(t *testing.T) {
 	if err != nil || !res.Success {
 		t.Fatalf("query sys.databases failed: %v", err)
 	}
-	if len(res.Rows) < 2 {
+	if len(res.Rows) != 1 || res.Rows[0]["name"] != "master" {
 		t.Fatalf("unexpected sys.databases: %+v", res.Rows)
 	}
 }
@@ -982,8 +982,8 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 	if fmt.Sprintf("%v", res.Rows[0]["num"]) != "1" {
 		t.Fatalf("expected num=1, got %v", res.Rows[0]["num"])
 	}
-	if res.Rows[0]["db"] != "sqlion" {
-		t.Fatalf("expected db=sqlion, got %v", res.Rows[0]["db"])
+	if res.Rows[0]["db"] != "postgres" {
+		t.Fatalf("expected db=postgres, got %v", res.Rows[0]["db"])
 	}
 	if res.Rows[0]["schema"] != "dbo" {
 		t.Fatalf("expected schema=dbo, got %v", res.Rows[0]["schema"])
@@ -1054,7 +1054,7 @@ func TestSQLExecutor_ScalarSelect_SessionSettings_VirtualCatalog(t *testing.T) {
 
 	// 6. pg_catalog views
 	res, err = server.ExecuteSQL("SELECT datname, oid FROM pg_catalog.pg_database;")
-	if err != nil || !res.Success || len(res.Rows) < 2 {
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["datname"] != "postgres" {
 		t.Fatalf("pg_database query failed: %v, rows: %+v", err, res.Rows)
 	}
 
@@ -1133,7 +1133,7 @@ func TestSQLExecutor_BuiltinSystemStoredProcedures(t *testing.T) {
 
 	// 3. sp_spaceused (database and table)
 	res, err = server.ExecuteSQL("EXEC sp_spaceused;")
-	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["database_name"] != "sqlion" {
+	if err != nil || !res.Success || len(res.Rows) != 1 || res.Rows[0]["database_name"] != "master" {
 		t.Fatalf("EXEC sp_spaceused failed: %v", err)
 	}
 
@@ -1510,7 +1510,7 @@ func TestSQLExecutor_DBCCCommands(t *testing.T) {
 	if err != nil || !res.Success {
 		t.Fatalf("DBCC CHECKDB failed: %v", err)
 	}
-	if len(res.Rows) != 1 || res.Rows[0]["Database"] != "sqlion" {
+	if len(res.Rows) != 1 || res.Rows[0]["Database"] != "postgres" {
 		t.Fatalf("unexpected DBCC CHECKDB results: %+v", res.Rows)
 	}
 	msgJoined := strings.Join(res.Messages, " ")
@@ -1519,7 +1519,7 @@ func TestSQLExecutor_DBCCCommands(t *testing.T) {
 	}
 
 	// 4. DBCC SHRINKDATABASE
-	res, err = server.ExecuteSessionSQL(sessID, "DBCC SHRINKDATABASE (sqlion);")
+	res, err = server.ExecuteSessionSQL(sessID, "DBCC SHRINKDATABASE (master);")
 	if err != nil || !res.Success {
 		t.Fatalf("DBCC SHRINKDATABASE failed: %v", err)
 	}

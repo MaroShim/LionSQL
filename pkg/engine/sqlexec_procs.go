@@ -457,7 +457,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 
 		cols := []string{"database_name", "database_size", "unallocated space"}
 		rows := []map[string]any{{
-			"database_name":     "sqlion",
+			"database_name":     "master",
 			"database_size":     "16.00 MB",
 			"unallocated space": "4.00 MB",
 		}}
@@ -481,6 +481,10 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 			if sess.Tx != nil {
 				cmdStr = "TRANSACTION ACTIVE"
 			}
+			sessDb := sess.Database
+			if sessDb == "" {
+				sessDb = "master"
+			}
 			sess.Mu.Unlock()
 			rows = append(rows, map[string]any{
 				"spid":       idx,
@@ -489,7 +493,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 				"loginame":   "sa",
 				"hostname":   "localhost",
 				"blk":        "0",
-				"dbname":     "sqlion",
+				"dbname":     sessDb,
 				"cmd":        cmdStr,
 				"request_id": int64(0),
 			})
@@ -504,7 +508,7 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 				"loginame":   "sa",
 				"hostname":   "localhost",
 				"blk":        "0",
-				"dbname":     "sqlion",
+				"dbname":     "master",
 				"cmd":        "SELECT",
 				"request_id": int64(0),
 			})

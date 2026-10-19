@@ -278,7 +278,7 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 	upper := strings.ToUpper(trimmed)
 
 	// Builtin system / database functions
-	currDB := "sqlion"
+	currDB := "postgres"
 	if cs != nil {
 		cs.Mu.Lock()
 		if cs.Database != "" {
@@ -299,7 +299,7 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 	case "CURRENT_USER", "USER", "SESSION_USER":
 		return "postgres", "current_user"
 	case "VERSION()":
-		return "PostgreSQL 15.0 (SQLion OLTP & Stored Procedure Server)", "version"
+		return "PostgreSQL 15.0 (LionSQL OLTP & Stored Procedure Server)", "version"
 	case "DB_NAME()", "DB_NAME":
 		return currDB, "db_name"
 	case "DB_ID()", "DB_ID":
@@ -308,7 +308,7 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 		if cs != nil && strings.HasPrefix(cs.ID, "tds-") {
 			return "master", "original_db_name"
 		}
-		return "sqlion", "original_db_name"
+		return "postgres", "original_db_name"
 	case "SCHEMA_NAME()", "SCHEMA_NAME":
 		return "dbo", "schema_name"
 	case "PG_BACKEND_PID()", "PG_BACKEND_PID":

@@ -1261,13 +1261,13 @@ func TestTolerantUseDatabase(t *testing.T) {
 	cat := catalog.New(eng)
 	coord := engine.NewCoordinator(cat, eng, engine.Config{})
 
-	// 1. Initial state defaults to sqlion for generic sessions, master for TDS sessions
+	// 1. Initial state defaults to postgres for generic sessions, master for TDS sessions
 	res, err := coord.ExecuteSessionSQL("sess-db-1", "SELECT DB_NAME() AS db, CURRENT_DATABASE() AS cdb, DB_ID() AS id;")
 	if err != nil {
 		t.Fatalf("initial SELECT DB_NAME() failed: %v", err)
 	}
-	if len(res.Rows) != 1 || res.Rows[0]["db"] != "sqlion" || res.Rows[0]["cdb"] != "sqlion" {
-		t.Fatalf("expected default database sqlion, got: %v", res.Rows)
+	if len(res.Rows) != 1 || res.Rows[0]["db"] != "postgres" || res.Rows[0]["cdb"] != "postgres" {
+		t.Fatalf("expected default database postgres, got: %v", res.Rows)
 	}
 
 	resTds, err := coord.ExecuteSessionSQL("tds-db-1", "SELECT DB_NAME() AS db, CURRENT_DATABASE() AS cdb;")

@@ -300,7 +300,7 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 	}
 	c.spidCounter++
 
-	defaultDB := "sqlion"
+	defaultDB := "postgres"
 	if strings.HasPrefix(id, "tds-") {
 		defaultDB = "master"
 	}

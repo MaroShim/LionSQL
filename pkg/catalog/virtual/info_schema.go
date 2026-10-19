@@ -43,7 +43,7 @@ func generateInfoSchemaTables(src Source, whereClause string) ([]string, []map[s
 	var allRows []map[string]any
 	for _, t := range tables {
 		allRows = append(allRows, map[string]any{
-			"table_catalog":                "sqlion",
+			"table_catalog":                "postgres",
 			"table_schema":                 defSchema,
 			"table_name":                   t.Name,
 			"table_type":                   "BASE TABLE",
@@ -60,7 +60,7 @@ func generateInfoSchemaTables(src Source, whereClause string) ([]string, []map[s
 	// Also include views
 	for _, v := range src.ListViews() {
 		allRows = append(allRows, map[string]any{
-			"table_catalog":                "sqlion",
+			"table_catalog":                "postgres",
 			"table_schema":                 "public",
 			"table_name":                   v.Name,
 			"table_type":                   "VIEW",
@@ -137,7 +137,7 @@ func generateInfoSchemaColumns(src Source, whereClause string) ([]string, []map[
 				dtPrec = 0
 			}
 			allRows = append(allRows, map[string]any{
-				"table_catalog":            "sqlion",
+				"table_catalog":            "postgres",
 				"table_schema":             defSchema,
 				"table_name":               t.Name,
 				"column_name":              c.Name,
@@ -162,7 +162,7 @@ func generateInfoSchemaColumns(src Source, whereClause string) ([]string, []map[
 				"domain_catalog":           nil,
 				"domain_schema":            nil,
 				"domain_name":              nil,
-				"udt_catalog":              "sqlion",
+				"udt_catalog":              "postgres",
 				"udt_schema":               "pg_catalog",
 				"udt_name":                 dataType,
 				"scope_catalog":            nil,
@@ -194,10 +194,10 @@ func generateInfoSchemaSchemata(src Source, whereClause string) ([]string, []map
 		"default_character_set_name", "sql_path",
 	}
 	allRows := []map[string]any{
-		{"catalog_name": "sqlion", "schema_name": "dbo", "schema_owner": "sa", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
-		{"catalog_name": "sqlion", "schema_name": "public", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
-		{"catalog_name": "sqlion", "schema_name": "information_schema", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
-		{"catalog_name": "sqlion", "schema_name": "pg_catalog", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
+		{"catalog_name": "postgres", "schema_name": "dbo", "schema_owner": "sa", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
+		{"catalog_name": "postgres", "schema_name": "public", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
+		{"catalog_name": "postgres", "schema_name": "information_schema", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
+		{"catalog_name": "postgres", "schema_name": "pg_catalog", "schema_owner": "postgres", "default_character_set_catalog": nil, "default_character_set_schema": nil, "default_character_set_name": nil, "sql_path": nil},
 	}
 	return columns, allRows
 }
@@ -233,10 +233,10 @@ func generateInfoSchemaRoutines(src Source, whereClause string) ([]string, []map
 	if src != nil {
 		for _, p := range src.ListProcedures() {
 			allRows = append(allRows, map[string]any{
-				"specific_catalog":   "sqlion",
+				"specific_catalog":   "postgres",
 				"specific_schema":    defSchema,
 				"specific_name":      p.Name,
-				"routine_catalog":    "sqlion",
+				"routine_catalog":    "postgres",
 				"routine_schema":     defSchema,
 				"routine_name":       p.Name,
 				"routine_type":       "PROCEDURE",
@@ -273,7 +273,7 @@ func generateInfoSchemaParameters(src Source, whereClause string) ([]string, []m
 			for i, param := range p.Params {
 				dtName := pgTypeName(param.Type)
 				allRows = append(allRows, map[string]any{
-					"specific_catalog":         "sqlion",
+					"specific_catalog":         "postgres",
 					"specific_schema":          defSchema,
 					"specific_name":            p.Name,
 					"ordinal_position":         i + 1,
@@ -317,10 +317,10 @@ func generateInfoSchemaTableConstraints(src Source, whereClause string) ([]strin
 		}
 		if hasPK {
 			allRows = append(allRows, map[string]any{
-				"constraint_catalog": "sqlion",
+				"constraint_catalog": "postgres",
 				"constraint_schema":  "public",
 				"constraint_name":    fmt.Sprintf("%s_pkey", t.Name),
-				"table_catalog":      "sqlion",
+				"table_catalog":      "postgres",
 				"table_schema":       "public",
 				"table_name":         t.Name,
 				"constraint_type":    "PRIMARY KEY",
@@ -336,10 +336,10 @@ func generateInfoSchemaTableConstraints(src Source, whereClause string) ([]strin
 				continue
 			}
 			allRows = append(allRows, map[string]any{
-				"constraint_catalog": "sqlion",
+				"constraint_catalog": "postgres",
 				"constraint_schema":  "public",
 				"constraint_name":    idx.Name,
-				"table_catalog":      "sqlion",
+				"table_catalog":      "postgres",
 				"table_schema":       "public",
 				"table_name":         t.Name,
 				"constraint_type":    "UNIQUE",
@@ -352,10 +352,10 @@ func generateInfoSchemaTableConstraints(src Source, whereClause string) ([]strin
 		// FOREIGN KEY
 		for _, fk := range t.ForeignKeys {
 			allRows = append(allRows, map[string]any{
-				"constraint_catalog": "sqlion",
+				"constraint_catalog": "postgres",
 				"constraint_schema":  "public",
 				"constraint_name":    fk.Name,
-				"table_catalog":      "sqlion",
+				"table_catalog":      "postgres",
 				"table_schema":       "public",
 				"table_name":         t.Name,
 				"constraint_type":    "FOREIGN KEY",
@@ -383,10 +383,10 @@ func generateInfoSchemaKeyColumnUsage(src Source, whereClause string) ([]string,
 		for cIdx, c := range t.Columns {
 			if c.PrimaryKey {
 				allRows = append(allRows, map[string]any{
-					"constraint_catalog":            "sqlion",
+					"constraint_catalog":            "postgres",
 					"constraint_schema":             "public",
 					"constraint_name":               fmt.Sprintf("%s_pkey", t.Name),
-					"table_catalog":                 "sqlion",
+					"table_catalog":                 "postgres",
 					"table_schema":                  "public",
 					"table_name":                    t.Name,
 					"column_name":                   c.Name,
@@ -405,10 +405,10 @@ func generateInfoSchemaKeyColumnUsage(src Source, whereClause string) ([]string,
 				for cIdx, c := range t.Columns {
 					if strings.EqualFold(c.Name, idxCol) {
 						allRows = append(allRows, map[string]any{
-							"constraint_catalog":            "sqlion",
+							"constraint_catalog":            "postgres",
 							"constraint_schema":             "public",
 							"constraint_name":               idx.Name,
-							"table_catalog":                 "sqlion",
+							"table_catalog":                 "postgres",
 							"table_schema":                  "public",
 							"table_name":                    t.Name,
 							"column_name":                   c.Name,
@@ -426,10 +426,10 @@ func generateInfoSchemaKeyColumnUsage(src Source, whereClause string) ([]string,
 				for cIdx, c := range t.Columns {
 					if strings.EqualFold(c.Name, fkCol) {
 						allRows = append(allRows, map[string]any{
-							"constraint_catalog":            "sqlion",
+							"constraint_catalog":            "postgres",
 							"constraint_schema":             "public",
 							"constraint_name":               fk.Name,
-							"table_catalog":                 "sqlion",
+							"table_catalog":                 "postgres",
 							"table_schema":                  "public",
 							"table_name":                    t.Name,
 							"column_name":                   c.Name,
@@ -456,10 +456,10 @@ func generateInfoSchemaReferentialConstraints(src Source, whereClause string) ([
 	for _, t := range tables {
 		for _, fk := range t.ForeignKeys {
 			allRows = append(allRows, map[string]any{
-				"constraint_catalog":        "sqlion",
+				"constraint_catalog":        "postgres",
 				"constraint_schema":         "public",
 				"constraint_name":           fk.Name,
-				"unique_constraint_catalog": "sqlion",
+				"unique_constraint_catalog": "postgres",
 				"unique_constraint_schema":  "public",
 				"unique_constraint_name":    fmt.Sprintf("%s_pkey", fk.ParentTable),
 				"match_option":              "NONE",
@@ -483,11 +483,11 @@ func generateInfoSchemaConstraintColumnUsage(src Source, whereClause string) ([]
 		for _, c := range t.Columns {
 			if c.PrimaryKey {
 				allRows = append(allRows, map[string]any{
-					"table_catalog":      "sqlion",
+					"table_catalog":      "postgres",
 					"table_schema":       "public",
 					"table_name":         t.Name,
 					"column_name":        c.Name,
-					"constraint_catalog": "sqlion",
+					"constraint_catalog": "postgres",
 					"constraint_schema":  "public",
 					"constraint_name":    fmt.Sprintf("%s_pkey", t.Name),
 				})
@@ -497,11 +497,11 @@ func generateInfoSchemaConstraintColumnUsage(src Source, whereClause string) ([]
 		for _, fk := range t.ForeignKeys {
 			for _, refCol := range fk.ParentColumns {
 				allRows = append(allRows, map[string]any{
-					"table_catalog":      "sqlion",
+					"table_catalog":      "postgres",
 					"table_schema":       "public",
 					"table_name":         fk.ParentTable,
 					"column_name":        refCol,
-					"constraint_catalog": "sqlion",
+					"constraint_catalog": "postgres",
 					"constraint_schema":  "public",
 					"constraint_name":    fk.Name,
 				})
@@ -522,7 +522,7 @@ func generateInfoSchemaViews(src Source, whereClause string) ([]string, []map[st
 	if src != nil {
 		for _, v := range src.ListViews() {
 			allRows = append(allRows, map[string]any{
-				"table_catalog":              "sqlion",
+				"table_catalog":              "postgres",
 				"table_schema":               "public",
 				"table_name":                 v.Name,
 				"view_definition":            v.Query,

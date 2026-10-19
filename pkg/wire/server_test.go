@@ -128,7 +128,7 @@ func authenticatePGClient(t *testing.T, srv *Server, user, password string) (boo
 
 	go srv.handleConnection(serverConn)
 
-	params := map[string]string{"user": user, "database": "sqlion"}
+	params := map[string]string{"user": user, "database": "postgres"}
 	var payload []byte
 	for k, v := range params {
 		payload = append(payload, []byte(k)...)

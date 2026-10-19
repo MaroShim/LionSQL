@@ -788,22 +788,6 @@ func generatePgDatabase(src Source, whereClause string) ([]string, []map[string]
 	allRows := []map[string]any{
 		{
 			"oid":           1,
-			"datname":       "sqlion",
-			"datdba":        10,
-			"encoding":      6,
-			"datcollate":    "en_US.utf8",
-			"datctype":      "en_US.utf8",
-			"datistemplate": false,
-			"datallowconn":  true,
-			"datconnlimit":  -1,
-			"datlastsysoid": 14000,
-			"datfrozenxid":  726,
-			"datminmxid":    1,
-			"dattablespace": 1663,
-			"datacl":        nil,
-		},
-		{
-			"oid":           2,
 			"datname":       "postgres",
 			"datdba":        10,
 			"encoding":      6,
@@ -1586,12 +1570,12 @@ func generatePgStatActivity(src Source, whereClause string) ([]string, []map[str
 	allRows := []map[string]any{
 		{
 			"datid":            1,
-			"datname":          "sqlion",
+			"datname":          "postgres",
 			"pid":              1,
 			"leader_pid":       nil,
 			"usesysid":         10,
 			"usename":          "postgres",
-			"application_name": "sqlion",
+			"application_name": "lionsql",
 			"client_addr":      nil,
 			"client_hostname":  nil,
 			"client_port":      -1,
