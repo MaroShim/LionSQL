@@ -7,6 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- **Session Variable Quote Escaping (`pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go`)**: Fixed single quote unescaping in `ParseSessionVarValue` and implemented proper doubled single quote (`''`) escaping during `@var` query substitution to prevent SQL syntax errors and injection vulnerabilities.
+- **Session Table Variable & Temporary Table Lifecycle Cleanup (`pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go`)**: Ensured all physical table variables (`__tv_*`) and temporary tables are cleanly dropped from the storage engine on `CloseSession` (including `default` session on `Coordinator.Close`) and on connection pool resets (`DISCARD ALL`, `RESET ALL`).
+
+### Added
+- **1.0 Pre-Release Architecture Review Report (`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`)**: Documented comprehensive technical feedback and 5-point action plan covering brand consolidation, escape vulnerability fixes, query execution paths, and production security guards before 1.0 LTS release.
+
 ## [0.90.0] - 2026-10-19
 
 ### Added

@@ -325,10 +325,12 @@ func ParseSessionVarValue(s string) any {
 		return false
 	}
 	if strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'") && len(s) >= 2 {
-		return s[1 : len(s)-1]
+		inner := s[1 : len(s)-1]
+		return strings.ReplaceAll(inner, "''", "'")
 	}
 	if strings.HasPrefix(s, "\"") && strings.HasSuffix(s, "\"") && len(s) >= 2 {
-		return s[1 : len(s)-1]
+		inner := s[1 : len(s)-1]
+		return strings.ReplaceAll(inner, "\"\"", "\"")
 	}
 	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
 		return n

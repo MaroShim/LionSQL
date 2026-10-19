@@ -1316,4 +1316,107 @@ SELECT id, title FROM t_use_demo WHERE id = 100;
 	}
 }
 
+func TestCoordinator_SessionVarQuoteEscaping(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	_, err := coord.ExecuteSQL("CREATE TABLE test_quotes (id INT PRIMARY KEY, title VARCHAR(100));")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	sessID := "sess-quote-test"
+	defer coord.CloseSession(sessID)
+
+	// Set string variable with single quote: O'Reilly Media
+	_, err = coord.ExecuteSessionSQL(sessID, "SET @author = 'O''Reilly Media';")
+	if err != nil {
+		t.Fatalf("SET @author failed: %v", err)
+	}
+
+	// Insert using @author substitution
+	_, err = coord.ExecuteSessionSQL(sessID, "INSERT INTO test_quotes (id, title) VALUES (1, @author);")
+	if err != nil {
+		t.Fatalf("INSERT with session variable failed: %v", err)
+	}
+
+	// Query using @author substitution
+	res, err := coord.ExecuteSessionSQL(sessID, "SELECT title FROM test_quotes WHERE title = @author;")
+	if err != nil {
+		t.Fatalf("SELECT with session variable failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["title"] != "O'Reilly Media" {
+		t.Fatalf("unexpected query result: %+v", res.Rows)
+	}
+}
+
+func TestCoordinator_TableVarSessionLifecycleAndCleanup(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := engine.NewCoordinator(cat, eng, engine.DefaultConfig())
+	defer coord.Close()
+
+	sessID := "sess-tblvar-test"
+
+	// 1. Declare table variable in session
+	declSQL := "DECLARE @my_items TABLE (id INT, name VARCHAR(50));"
+	res, err := coord.ExecuteSessionSQL(sessID, declSQL)
+	if err != nil || !res.Success {
+		t.Fatalf("DECLARE TABLE variable failed: %v", err)
+	}
+
+	physTable := fmt.Sprintf("__tv_%s_my_items", sessID)
+	// Verify physical table exists in storage engine
+	if _, err := eng.GetTable(physTable); err != nil {
+		t.Fatalf("expected physical table %s to exist, got error: %v", physTable, err)
+	}
+
+	// Insert and select into table variable
+	_, err = coord.ExecuteSessionSQL(sessID, "INSERT INTO @my_items VALUES (10, 'Widget A');")
+	if err != nil {
+		t.Fatalf("INSERT into @my_items failed: %v", err)
+	}
+
+	res, err = coord.ExecuteSessionSQL(sessID, "SELECT * FROM @my_items;")
+	if err != nil || len(res.Rows) != 1 || res.Rows[0]["name"] != "Widget A" {
+		t.Fatalf("SELECT from @my_items failed: %+v", res)
+	}
+
+	// 2. Close session and verify physical table is cleanly dropped
+	coord.CloseSession(sessID)
+
+	if _, err := eng.GetTable(physTable); err == nil {
+		t.Fatalf("expected physical table %s to be dropped on CloseSession, but it still exists", physTable)
+	}
+
+	// 3. Test DISCARD ALL cleanup
+	sessID2 := "sess-discard-test"
+	defer coord.CloseSession(sessID2)
+
+	_, err = coord.ExecuteSessionSQL(sessID2, "DECLARE @temp_items TABLE (id INT);")
+	if err != nil {
+		t.Fatalf("DECLARE @temp_items failed: %v", err)
+	}
+	physTable2 := fmt.Sprintf("__tv_%s_temp_items", sessID2)
+	if _, err := eng.GetTable(physTable2); err != nil {
+		t.Fatalf("expected physical table %s to exist, got error: %v", physTable2, err)
+	}
+
+	// Issue DISCARD ALL
+	res, err = coord.ExecuteSessionSQL(sessID2, "DISCARD ALL;")
+	if err != nil || !res.Success {
+		t.Fatalf("DISCARD ALL failed: %v", err)
+	}
+
+	if _, err := eng.GetTable(physTable2); err == nil {
+		t.Fatalf("expected physical table %s to be dropped on DISCARD ALL, but it still exists", physTable2)
+	}
+}
+
 

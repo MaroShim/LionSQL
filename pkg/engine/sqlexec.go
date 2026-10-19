@@ -457,6 +457,24 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 0.045 Connection Pool Reset: DISCARD ALL / RESET ALL / DEALLOCATE ALL / UNLISTEN *
 	if strings.HasPrefix(upper, "DISCARD ") || upper == "RESET ALL" || strings.HasPrefix(upper, "DEALLOCATE ALL") || strings.HasPrefix(upper, "UNLISTEN ") {
+		if cs != nil {
+			cs.Mu.Lock()
+			if s.engine != nil {
+				for _, physTable := range cs.TableVars {
+					_ = s.engine.DropTable(physTable)
+				}
+				for _, tempTbl := range cs.TempTables {
+					_ = s.engine.DropTable(tempTbl)
+				}
+			}
+			cs.TableVars = nil
+			cs.TempTables = nil
+			cs.TempTableMap = nil
+			if strings.HasPrefix(upper, "DISCARD ALL") || upper == "RESET ALL" || strings.HasPrefix(upper, "DEALLOCATE ALL") {
+				cs.PreparedStmts = nil
+			}
+			cs.Mu.Unlock()
+		}
 		return &QueryResult{
 			Success:    true,
 			Command:    "RESET",
@@ -910,10 +928,19 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 		for _, k := range keys {
 			v := cs.Vars[k]
-			varRep := fmt.Sprintf("'%v'", v)
-			switch v.(type) {
-			case int, int64, int32, float64, float32, bool:
-				varRep = fmt.Sprintf("%v", v)
+			var varRep string
+			switch val := v.(type) {
+			case nil:
+				varRep = "NULL"
+			case int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32, bool:
+				varRep = fmt.Sprintf("%v", val)
+			case string:
+				escaped := strings.ReplaceAll(val, "'", "''")
+				varRep = fmt.Sprintf("'%s'", escaped)
+			default:
+				sVal := fmt.Sprintf("%v", val)
+				escaped := strings.ReplaceAll(sVal, "'", "''")
+				varRep = fmt.Sprintf("'%s'", escaped)
 			}
 			trimmed = substituteParamOutsideQuotes(trimmed, k, varRep)
 		}

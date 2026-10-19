@@ -85,6 +85,8 @@
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 | **P1** | **문서/릴리스** | **v0.90.0 기능 동결 4단계 문서 전수 정돈 마스터 플랜 (`DOC-CLEANUP`)** | `CHANGELOG.md`, `README.md`, `doc/`, `ROADMAP.md` | **완료 (`[x]`)** | [`notes/DOCUMENTATION_CLEANUP_PLAN.md`](notes/DOCUMENTATION_CLEANUP_PLAN.md) |
+| **P1** | **보안/변수치환** | **세션 변수(`@var`) 치환 시 작은따옴표 이스케이프 및 인젝션 방어 (`SEC-ESC-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P1** | **스토리지/생명주기** | **세션 종료 및 연결 리셋 시 테이블 변수(`TableVars`) 및 임시 테이블 누수 완전 해제 (`SESS-CLEAN-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
 

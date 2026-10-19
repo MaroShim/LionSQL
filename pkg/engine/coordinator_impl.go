@@ -325,12 +325,14 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 
 // CloseSession gracefully closes and unregisters a client session.
 func (c *Coordinator) CloseSession(id string) {
-	if id == "" || id == "default" {
+	if id == "" {
 		return
 	}
+	isDefault := (id == "default")
+
 	c.sessMu.Lock()
 	cs, exists := c.sessions[id]
-	if exists {
+	if exists && !isDefault {
 		delete(c.sessions, id)
 	}
 	c.sessMu.Unlock()
@@ -376,10 +378,12 @@ func (c *Coordinator) CloseSession(id string) {
 			cs.Tx = nil
 		}
 		storageSess := cs.Session
-		cs.Session = nil
+		if !isDefault {
+			cs.Session = nil
+		}
 		cs.Mu.Unlock()
 
-		if storageSess != nil {
+		if storageSess != nil && !isDefault {
 			if c.pool != nil {
 				c.pool.ReleaseSession(storageSess)
 			} else {
@@ -523,6 +527,23 @@ func (c *Coordinator) Close() error {
 	for _, id := range sessIDs {
 		c.CloseSession(id)
 	}
+
+	// Ensure default session is completely closed and released
+	c.sessMu.Lock()
+	if defCs, ok := c.sessions["default"]; ok && defCs != nil {
+		defCs.Mu.Lock()
+		if defCs.Session != nil {
+			if c.pool != nil {
+				c.pool.ReleaseSession(defCs.Session)
+			} else {
+				_ = defCs.Session.Close()
+			}
+			defCs.Session = nil
+		}
+		defCs.Mu.Unlock()
+		delete(c.sessions, "default")
+	}
+	c.sessMu.Unlock()
 
 	var errs []error
 	if c.autoAnalyzer != nil {
