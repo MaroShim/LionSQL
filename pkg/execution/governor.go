@@ -107,13 +107,22 @@ func FormatMemSize(bytes int64) string {
 	if bytes >= 1024*1024*1024 && bytes%(1024*1024*1024) == 0 {
 		return fmt.Sprintf("%dGB", bytes/(1024*1024*1024))
 	}
-	if bytes >= 1024*1024 && bytes%(1024*1024) == 0 {
+	if bytes >= 1024*1024 {
 		return fmt.Sprintf("%dMB", bytes/(1024*1024))
 	}
-	if bytes >= 1024 && bytes%1024 == 0 {
+	if bytes >= 1024 {
 		return fmt.Sprintf("%dkB", bytes/1024)
 	}
 	return fmt.Sprintf("%dB", bytes)
+}
+
+// FormatMemMB formats bytes into a clean MB representation (e.g. "11468MB", "4096MB").
+func FormatMemMB(bytes int64) string {
+	mb := bytes / (1024 * 1024)
+	if mb <= 0 && bytes > 0 {
+		mb = 1
+	}
+	return fmt.Sprintf("%dMB", mb)
 }
 
 // DefaultMaxMemoryRatio is the default ratio (70%) of total physical RAM allocated to LionSQL.

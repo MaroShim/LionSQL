@@ -58,6 +58,7 @@ func resolveDefaultDataDirFromExe(exePath string) string {
 // runServer parses flags from args and executes the LionSQL server.
 func runServer(args []string) error {
 	fs := flag.NewFlagSet("lionsql", flag.ContinueOnError)
+	fs.Usage = printUsage
 
 	httpAddr := fs.String("http", "127.0.0.1:8090", "HTTP service address (set to empty to disable)")
 	pgAddr := fs.String("pg", "127.0.0.1:5433", "PostgreSQL wire protocol listen address (set to empty to disable)")
@@ -749,17 +750,14 @@ func runServer(args []string) error {
 			fmt.Println(" [HTTP API]       Disabled (opted out)")
 		}
 		fmt.Printf(" [Superuser Auth] %s (JWT Auth: %v)\n", cfg.Auth.AdminEmail, cfg.Auth.Enabled)
-		if cfg.Auth.AdminPass == "1234567890" {
-			fmt.Println(" [SECURITY WARNING] Default administrator credentials in use (admin@lionsql.local / 1234567890).")
-			fmt.Println("                    Please change your password immediately before production deployment!")
-		}
+		fmt.Println(" [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / TablePlus / Azure Data Studio")
 		if wireServer != nil && strings.Contains(cfg.Network.PGAddr, ":") {
-			fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (Beekeeper / DBeaver / DbGate / psql)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
+			fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (PostgreSQL v3 protocol, psql / pgx)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
 		} else {
 			fmt.Println(" [Postgres Wire]  Disabled (opted out)")
 		}
 		if tdsServer != nil && strings.Contains(cfg.Network.TDSAddr, ":") {
-			fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (Beekeeper / DBeaver / DbGate / Azure Data Studio / pymssql)\n", strings.Split(cfg.Network.TDSAddr, ":")[1])
+			fmt.Printf(" [TDS / MSSQL]    sqlcmd -S 127.0.0.1,%s (TDS 7.x/8.0 protocol, sqlcmd / SSMS)\n", strings.Split(cfg.Network.TDSAddr, ":")[1])
 		} else {
 			fmt.Println(" [TDS / MSSQL]    Disabled (opted out)")
 		}
@@ -767,7 +765,7 @@ func runServer(args []string) error {
 		fmt.Printf(" [Storage Engine] %s\n", cfg.Server.Engine)
 		stats := server.Pool().Stats()
 		fmt.Printf(" [Session Pooler] Max Workers: %d, Max Idle Sessions: %d (No PgBouncer required)\n", stats.MaxWorkers, stats.MaxIdleSessions)
-		fmt.Printf(" [Memory Governor] max_memory: %s (Go runtime GC soft limit), work_mem: %s (External Merge Sort & HashJoin guard)\n", execution.FormatMemSize(execution.GetGlobalMemoryLimit()), execution.FormatMemSize(server.DefaultWorkMem()))
+		fmt.Printf(" [Memory Governor] max_memory: %s (Go runtime GC soft limit), work_mem: %s (External Merge Sort & HashJoin guard)\n", execution.FormatMemMB(execution.GetGlobalMemoryLimit()), execution.FormatMemSize(server.DefaultWorkMem()))
 		if server.SlowQueries().LogFilePath() != "" {
 			fmt.Printf(" [Slow Query Log] %s (Threshold: %v)\n", server.SlowQueries().LogFilePath(), server.SlowQueries().Threshold())
 		}
@@ -786,6 +784,11 @@ func runServer(args []string) error {
 		}
 		if cfg.Logging.DevMode {
 			fmt.Println(" [Developer Mode] Enabled (-dev: Real-time Wire Query & Error Tracing)")
+		}
+		if cfg.Auth.AdminPass == "1234567890" {
+			fmt.Println("------------------------------------------------------------")
+			fmt.Println(" [SECURITY WARNING] Default administrator credentials in use (admin@lionsql.local / 1234567890).")
+			fmt.Println("                    Please change your password immediately before production deployment!")
 		}
 		fmt.Println("------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")
