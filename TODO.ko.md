@@ -555,5 +555,10 @@
   - `cmd/lionsql`: PocketBase/CockroachDB 스타일 단일 바이너리 모델 적용. 인자가 없거나 플래그로 시작할 경우 서버를 즉시 포그라운드로 기동(`lionsql`, `lionsql -dir=./data`)하고, `serve`, `start`, `stop`, `restart`, `status`, `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version` 등 현대적 서브커맨드 완비.
   - `cmd/server`: 하위 호환성을 위해 `[LionSQL Notice] 'bin/server' is deprecated...` 안내를 출력하고 `bin/lionsql`로 투명하게 실행을 위임하는 경량 래퍼로 전환.
   - 서버 배너 및 기본 관리자 비밀번호(`1234567890`) 사용 시 `[SECURITY WARNING]` 리마인드 경고 출력 로직 탑재.
+- [x] **실시간 SSE 스트림(`/api/realtime`, `/api/cdc/stream`) 요청 로깅 제외 및 HTTP Server WriteTimeout 개선 (`pkg/api`, `cmd/lionsql`, `pkg/ui`)**:
+  - `cmd/lionsql/server.go`: `http.Server`의 고정 `WriteTimeout: 15s` 설정을 `ReadHeaderTimeout` 및 `IdleTimeout`으로 교체하여 Go 표준 웹 서버가 15초마다 SSE 영구 연결을 강제 종료하던 문제 해소.
+  - `pkg/api/realtime.go`: `http.NewResponseController`를 통해 SSE 스트림의 WriteDeadline을 해제하여 영구 Keep-Alive 스트리밍 보장.
+  - `pkg/api/request_logger.go`: `/api/realtime` 및 `/api/cdc/stream`과 같은 영구 스트리밍 채널은 단발성 REST API 지연 시간 통계 왜곡을 방지하기 위해 요청 로거 기록 대상에서 제외.
+  - `pkg/ui/dashboard.html`: Request Log UI에서 스트리밍 요청 수명이 유입될 경우 빨간색 에러 지연 시간(`#ef4444`) 대신 하늘색 스트림 뱃지(`(stream)`)로 렌더링하도록 안전 보강.
 
 
