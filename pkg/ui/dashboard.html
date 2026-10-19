@@ -5936,10 +5936,19 @@ console.log('Rows:', queryResult.rows);`;
           }
 
           // Latency formatting
-          let latStr = entry.duration_ms < 1.0 
-            ? `${(entry.duration_ms * 1000).toFixed(0)}µs`
-            : `${entry.duration_ms.toFixed(2)}ms`;
-          let latColor = entry.duration_ms > 100.0 ? '#ef4444' : (entry.duration_ms > 20.0 ? '#f59e0b' : 'var(--text-muted)');
+          const isStream = entry.path && (entry.path.startsWith('/api/realtime') || entry.path.startsWith('/api/cdc/stream'));
+          let latStr, latColor;
+          if (isStream) {
+            latStr = entry.duration_ms >= 1000
+              ? `${(entry.duration_ms / 1000).toFixed(1)}s (stream)`
+              : `${entry.duration_ms.toFixed(0)}ms (stream)`;
+            latColor = '#38bdf8';
+          } else {
+            latStr = entry.duration_ms < 1.0 
+              ? `${(entry.duration_ms * 1000).toFixed(0)}µs`
+              : `${entry.duration_ms.toFixed(2)}ms`;
+            latColor = entry.duration_ms > 100.0 ? '#ef4444' : (entry.duration_ms > 20.0 ? '#f59e0b' : 'var(--text-muted)');
+          }
 
           return `
             <tr style="border-bottom: 1px solid var(--border); font-family: monospace;">

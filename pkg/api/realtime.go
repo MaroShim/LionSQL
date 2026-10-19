@@ -126,6 +126,10 @@ func (s *Server) handleRealtimeStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("X-Accel-Buffering", "no")
 
+	// Disable write deadline for persistent SSE stream
+	rc := http.NewResponseController(w)
+	_ = rc.SetWriteDeadline(time.Time{})
+
 	// Send initial connection greeting
 	initMsg, _ := json.Marshal(map[string]any{
 		"status": "connected",

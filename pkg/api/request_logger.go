@@ -169,6 +169,12 @@ func requestLoggingMiddleware(logger *RequestActivityLogger, next http.Handler) 
 			return
 		}
 
+		// Skip persistent streaming connections (SSE / CDC) to avoid skewing latency metrics
+		if strings.HasPrefix(path, "/api/realtime") || strings.HasPrefix(path, "/api/cdc/stream") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
 		// Only log /api/ requests (ignore static assets and web studio bundles)
 		if !strings.HasPrefix(path, "/api/") {
 			next.ServeHTTP(w, r)

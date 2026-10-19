@@ -649,10 +649,10 @@ func runServer(args []string) error {
 	var httpServer *http.Server
 	if cfg.Network.IsHTTPEnabled() {
 		httpServer = &http.Server{
-			Addr:         cfg.Network.HTTPAddr,
-			Handler:      server.Handler(),
-			ReadTimeout:  15 * time.Second,
-			WriteTimeout: 15 * time.Second,
+			Addr:              cfg.Network.HTTPAddr,
+			Handler:           server.Handler(),
+			ReadHeaderTimeout: 15 * time.Second,
+			IdleTimeout:       60 * time.Second,
 		}
 	}
 
@@ -750,7 +750,7 @@ func runServer(args []string) error {
 			fmt.Println(" [HTTP API]       Disabled (opted out)")
 		}
 		fmt.Printf(" [Superuser Auth] %s (JWT Auth: %v)\n", cfg.Auth.AdminEmail, cfg.Auth.Enabled)
-		fmt.Println(" [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / TablePlus / Azure Data Studio")
+		fmt.Println(" [Supported GUI]  DBeaver / Beekeeper Studio / DbGate / Azure Data Studio")
 		if wireServer != nil && strings.Contains(cfg.Network.PGAddr, ":") {
 			fmt.Printf(" [Postgres Wire]  psql -h 127.0.0.1 -p %s (PostgreSQL v3 protocol, psql / pgx)\n", strings.Split(cfg.Network.PGAddr, ":")[1])
 		} else {
