@@ -214,9 +214,491 @@
 
 ---
 
-### 제10장. 부록: 세부 기술 문서 및 참조 안내 (Appendix: Technical Documentation Index)
+## 제1장. 명령행 인터페이스 (CLI Reference)
 
-본 레퍼런스 매뉴얼에서 다루는 각 서브시스템의 심층 설계, 내부 구조, 구현 알고리즘 및 벤치마크 결과는 아래의 세부 기술 문서(`doc/`)에서 상세히 확인하실 수 있습니다.
+### 1.1. 단일 바이너리(`bin/lionsql`) 명령 구조
+
+LionSQL은 서브커맨드 패턴을 채택하여 다양한 운영 작업을 단일 실행 파일로 수행합니다:
+
+```bash
+lionsql [command] [flags...]
+```
+
+| 서브커맨드 | 설명 | 주요 플래그 |
+| :--- | :--- | :--- |
+| `[serve]` (기본) | 서버를 포그라운드 대화형 모드로 기동 (명령어 생략 시 기본 동작) | `-dir`, `-http`, `-pg`, `-tds`, `-dev`, `-max-memory` |
+| `start` | 서버를 백그라운드 데몬 프로세스로 기동 (PID/Log 파일 관리) | `-dev`, `-dir` |
+| `stop` | 실행 중인 백그라운드 데몬 프로세스를 안전하게 종료 (`SIGTERM`) | `-dir` |
+| `restart` | 백그라운드 데몬을 무중단으로 안전하게 재기동 | `-dev`, `-dir` |
+| `status` | 현재 실행 중인 데몬의 PID, 포트, 구동 상태를 출력 | `-dir` |
+| `doctor` | 데이터 디렉토리 무결성, WAL LSN, 포트 충돌, 디스크 여유량 진단 | `-dir` |
+| `init-config` | 기본값이 설정된 `lionsql.json` 설정 파일 템플릿 생성 | `-out` (기본값: `lionsql.json`) |
+| `migrate` | 선언적 스키마 마이그레이션 도구 (`new`, `up`, `down`, `status`) | `-dir`, `-steps` |
+| `sql` | CLI 터미널에서 즉시 SQL 쿼리를 실행하는 경량 쿼리 도구 | `-query`, `-dir` |
+| `backup` | 가동 중인 데이터베이스의 온라인 무중단 스냅샷 백업 아카이브 생성 | `-dir`, `-out` (e.g. `backup.tar.gz`) |
+| `restore` | 백업 아카이브(`.tar.gz`)를 지정된 디렉토리에 복원 | `-dir`, `-in` (e.g. `backup.tar.gz`) |
+| `version` | 엔진 릴리즈 버전(`0.90.0`), 컴파일 환경, Git 커밋 해시 출력 | - |
+
+---
+
+### 1.2. 전역 CLI 플래그 사양
+
+모든 플래그는 `-flag` 또는 `--flag` 형태로 전달할 수 있습니다:
+
+```
+NETWORK FLAGS:
+  -http <addr>           HTTP REST 엔진 및 Web Studio 리스너 주소 (기본값: :8090, 비활성화: "")
+  -pg <addr>             PostgreSQL Wire Protocol v3 리스너 주소 (기본값: :5433, 비활성화: "")
+  -tds <addr>            MS SQL Server TDS 7.x/8.0 리스너 주소 (기본값: :1433, 비활성화: "")
+  -tls                   전송 계층 보안(TLS/SSL) 암호화 활성화 (기본값: false)
+  -tls-cert <path>       TLS 공개 인증서 파일 경로 (e.g. /etc/ssl/server.crt)
+  -tls-key <path>        TLS 개인키 파일 경로 (e.g. /etc/ssl/server.key)
+  -require-ssl           비암호화 일반 텍스트 연결 차단 및 SSL 연결 강제 (기본값: false)
+
+STORAGE FLAGS:
+  -dir <path>            데이터베이스 물리 저장소 디렉토리 경로 (기본값: data)
+  -engine <name>         스토리지 백엔드 선택: wiredtiger, memory (기본값: wiredtiger)
+  -ephemeral             디스크 I/O를 100% 차단하는 순수 인메모리 휘발성 모드 (기본값: false)
+  -auto-seed             데이터 디렉토리가 비어있을 때 샘플 E-Commerce 시드 데이터 자동 주입 (기본값: false)
+
+RESOURCE & GOVERNOR FLAGS:
+  -max-memory <size>     글로벌 힙 메모리 상한선 (단위: MB/GB, e.g. 2GB, 4096MB)
+                         (기본값: 호스트 물리 RAM의 70% 자동 감지)
+  -work-mem <size>       연산자당 정렬/해시 조인 작업 메모리 예산 (기본값: 64MB)
+  -max-workers <int>     동시 클라이언트 요청을 처리할 고루틴 워커 풀 상한 (기본값: 256)
+  -max-idle-sessions <n> 유휴 세션 커넥션 풀 유지 상한 (기본값: 64)
+
+SECURITY & AUTH FLAGS:
+  -auth                  인증 및 권한 인가 활성화 (기본값: true, 개발 시 비활성화: -auth=false)
+  -admin-email <email>   기본 관리자 이메일 계정 (기본값: admin@lionsql.local)
+  -admin-pass <secret>   기본 관리자 로그인 비밀번호 (기본값: 1234567890)
+  -jwt-secret <secret>   REST API 인증 토큰 서명용 HMAC-SHA256 시크릿 (미지정 시 자동 생성)
+
+LOGGING FLAGS:
+  -dev                   개발자 실시간 컬러풀 쿼리 트레이싱 모드 활성화 (기본값: false)
+  -slow-log <path>       슬로우 쿼리 전용 로그 파일 경로 (기본값: data/slow_queries.log)
+  -slow-threshold-ms <n> 슬로우 쿼리 판정 실행 시간 임계치 (기본값: 100.0 ms)
+  -general-log <path>    모든 인바운드 SQL 문장을 기록할 감사 로그 파일 경로 (기본값: "")
+
+REPLICATION FLAGS:
+  -replica-of <url>      지정된 Primary 노드에 접속하여 WAL을 수신받는 Replica 모드 기동 (e.g. http://10.0.0.1:8090)
+  -node-id <id>          클러스터 내 고유 노드 식별자 (기본값: node-1)
+  -auto-failover         Primary 장애 시 Replica 노드의 자동 승격 활성화 (기본값: false)
+  -peers <urls>          하트비트 교환을 위한 피어 노드 목록 (쉼표 구분)
+  -heartbeat-timeout-ms  리더 장애 판단 타임아웃 (기본값: 3000 ms)
+```
+
+---
+
+### 1.3. 벤치마크 도구 CLI 사양 (`bin/bench`, `bin/tpcc_vdbe`)
+
+* **`bin/bench` (고동시성 OLTP 마이크로 벤치마크)**:
+  - `-accounts <int>`: 초기 고객 계좌 수 (기본값: `10000`)
+  - `-workers <int>`: 동시 클라이언트 워커 수 (기본값: `100`)
+  - `-ops <int>`: 실행할 총 원자적 이체 트랜잭션 수 (기본값: `50000`)
+  - `-engine <name>`: 스토리지 엔진 (`wiredtiger`, `memory`)
+* **`bin/tpcc_vdbe` (공식 TPC-C T-SQL VDBE 벤치마크)**:
+  - `-warehouses <int>`: TPC-C 규모 계수 (Warehouse 수, 기본값: `2`)
+  - `-workers <int>`: 동시 클라이언트 워커 수 (기본값: `20`)
+  - `-duration <time>`: 벤치마크 지속 시간 (e.g. `10s`, `1m`, `5m`)
+  - `-fsync <policy>`: WAL 디스크 동기화 정책 (`everysec`, `always`, `off`)
+
+---
+
+### 1.4. 종료 코드 및 프로세스 시그널
+
+* **종료 코드 (Exit Codes)**:
+  - `0`: 정상 종료 (`SIGINT`, `SIGTERM`, 또는 `./bin/lionsql stop` 수신 완결)
+  - `1`: 일반 런타임 오류 (포트 바인딩 실패, 스토리지 파일 잠금 실패)
+  - `2`: 잘못된 CLI 플래그 또는 문법 오류
+* **POSIX 시그널 처리 규약 (골든 룰 4)**:
+  - `SIGINT` / `SIGTERM`: 즉시 수락 후 신규 인바운드 연결 차단 ➔ 실행 중인 쿼리 드레인 ➔ WiredTiger/AOF 플러시 ➔ 1.5초 이내에 안전 종료. 1.5초 초과 시 자체 `SIGKILL` 에스컬레이션.
+  - `SIGHUP`: 로그 파일 디스크립터 재오픈 및 설정 파일 리로드.
+
+---
+
+## 제2장. 설정 파일 사양 (Configuration File Reference)
+
+### 2.1. `lionsql.json` 스키마 및 키 상세 정의
+
+```json
+{
+  "server": {
+    "engine": "wiredtiger",           // "wiredtiger" | "memory"
+    "data_dir": "data",               // 데이터 파일 디렉토리 경로
+    "ephemeral": false,               // 디스크 I/O 배제 순수 인메모리 여부
+    "auto_seed": false,               // 빈 DB 자동 시드 여부
+    "pid_file": "data/lionsql.pid"    // 데몬 프로세스 ID 파일 경로
+  },
+  "network": {
+    "http_addr": ":8090",             // HTTP REST & Web Studio 바인딩 주소
+    "pg_addr": ":5433",               // PostgreSQL v3 바인딩 주소
+    "tds_addr": ":1433",              // MS SQL Server TDS 바인딩 주소
+    "tls": {
+      "enabled": false,               // TLS 활성화 여부
+      "cert_file": "",                // X.509 인증서 PEM 파일
+      "key_file": "",                 // 개인키 PEM 파일
+      "require_ssl": false            // 비암호화 연결 거부 여부
+    }
+  },
+  "auth": {
+    "enabled": true,                  // 보안 인증 활성화 여부
+    "admin_email": "admin@lionsql.local", // 기본 관리자 이메일
+    "admin_pass": "",                 // 관리자 비밀번호 (미지정 시 자동 유지)
+    "jwt_secret": ""                  // JWT 서명 키 (미지정 시 난수 생성)
+  },
+  "resources": {
+    "max_memory": "",                 // 글로벌 힙 메모리 상한 (예: "2GB", "4096MB", 빈값: 70% RAM)
+    "work_mem": "64MB",               // 연산자당 메모리 예산 (기본값: "64MB")
+    "max_workers": 256,               // 고루틴 워커 풀 상한
+    "max_idle_sessions": 64           // 유휴 세션 커넥션 풀 상한
+  },
+  "logging": {
+    "dev_mode": false,                // 개발자 콘솔 실시간 로깅 모드
+    "slow_query": {
+      "enabled": true,                // 슬로우 쿼리 로깅 활성화
+      "threshold_ms": 100.0,          // 슬로우 쿼리 판정 기준 (100.0ms)
+      "file": "data/slow_queries.log" // 슬로우 쿼리 로그 파일
+    },
+    "general_query": {
+      "enabled": false,               // 전수 쿼리 감사 로깅 활성화
+      "file": "data/general_query.log"// 감사 로그 파일 경로
+    }
+  },
+  "replication": {
+    "enabled": false,                 // 복제 서브시스템 활성화
+    "role": "PRIMARY",                // "PRIMARY" | "REPLICA"
+    "node_id": "node-1",              // 클러스터 노드 고유 식별자
+    "primary_url": "",                // Replica일 때 대상 Primary HTTP URL
+    "auto_failover": false,           // 자동 장애 조치 승격 활성화
+    "peers": [],                      // Raft/Gossip 피어 URL 목록
+    "self_url": "",                   // 노드 본인의 공용 주소
+    "heartbeat_timeout_ms": 3000      // 하트비트 타임아웃
+  }
+}
+```
+
+---
+
+## 제3장. 데이터 타입 및 리터럴 (Data Types & Literals Reference)
+
+LionSQL은 Microsoft SQL Server T-SQL 및 ANSI/PostgreSQL 표준 데이터 타입을 광범위하게 지원합니다:
+
+| 데이터 타입 | 물리 저장 바이트 | 유효 범위 및 기술 사양 | 리터럴 표기 예시 |
+| :--- | :---: | :--- | :--- |
+| **`TINYINT`** | 1 Byte | $0 \sim 255$ (부호 없는 8비트 정수) | `255`, `0` |
+| **`SMALLINT`** | 2 Bytes | $-32,768 \sim 32,767$ (부호 있는 16비트 정수) | `-100`, `32000` |
+| **`INT` / `INTEGER`** | 4 Bytes | $-2,147,483,648 \sim 2,147,483,647$ (32비트 정수) | `1001`, `0` |
+| **`BIGINT`** | 8 Bytes | $-9.22 \times 10^{18} \sim 9.22 \times 10^{18}$ (64비트 정수) | `9223372036854775807` |
+| **`FLOAT` / `REAL`** | 8 Bytes | 64비트 IEEE 754 배정밀도 부동소수점 | `3.141592`, `-0.001` |
+| **`DECIMAL(p, s)`** | 가변 길이 | 최대 38자리 고정밀 수치 ($p$: 전체 자리수, $s$: 소수점 자리수) | `12345.67`, `CAST('99.9' AS DECIMAL(10,2))` |
+| **`VARCHAR(n)`** | 가변 길이 | 최대 8,000자 가변 길이 ASCII/UTF-8 문자열 | `'Hello World'`, `'LionSQL'` |
+| **`NVARCHAR(n)`** | 가변 길이 | 유니코드 UTF-16LE / UTF-8 문자열 (N-prefix 지원) | `N'안녕하세요'`, `N'LionSQL'` |
+| **`TEXT`** | 가변 길이 | 최대 2GB 무제한 대용량 텍스트 (PLP 청킹 스트리밍) | `'Very long text...'` |
+| **`DATE`** | 4 Bytes | `0001-01-01` ~ `9999-12-31` (년-월-일) | `'2026-10-19'` |
+| **`TIME`** | 8 Bytes | `00:00:00.000` ~ `23:59:59.999` (밀리초 정밀도 시:분:초) | `'17:30:00'` |
+| **`DATETIME`** | 8 Bytes | `1753-01-01` ~ `9999-12-31` (밀리초 정밀도 일시) | `'2026-10-19 17:30:00'` |
+| **`BIT` / `BOOLEAN`** | 1 Byte | `0` (FALSE) 또는 `1` (TRUE) | `1`, `0`, `TRUE`, `FALSE` |
+| **`UUID`** | 16 Bytes | 128비트 범용 고유 식별자 (RFC 4122 / UUIDv7 지원) | `'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11'` |
+| **`JSON`** | 가변 길이 | 유효한 JSON 형식 텍스트 검증 및 B-Tree 함수형 인덱싱 | `'{"name": "Alice", "score": 95}'` |
+
+---
+
+## 제4장. SQL 구문 및 명령문 사양 (SQL Statement Reference)
+
+### 4.1. 데이터 정의어 (DDL)
+
+```sql
+-- 1. 테이블 생성 (IDENTITY, CHECK, FOREIGN KEY, NOT NULL, DEFAULT 지원)
+CREATE TABLE schema_name.table_name (
+    id INT IDENTITY(1,1) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    age INT CHECK (age >= 0),
+    balance DECIMAL(18,2) DEFAULT 0.00,
+    created_at DATETIME DEFAULT GETDATE(),
+    CONSTRAINT fk_ref FOREIGN KEY (parent_id) REFERENCES parent(id) ON DELETE CASCADE
+);
+
+-- 2. 컬럼 추가 (비파괴적 원자적 DDL)
+ALTER TABLE table_name ADD column_name VARCHAR(200) DEFAULT 'N/A';
+
+-- 3. 테이블 완전 삭제 및 절단
+DROP TABLE [IF EXISTS] table_name;
+TRUNCATE TABLE table_name;
+
+-- 4. 인덱스 생성 및 삭제 (커버링 인덱스 INCLUDE 지원)
+CREATE [UNIQUE] INDEX index_name ON table_name(col1 [ASC|DESC], col2) [INCLUDE (col3, col4)];
+DROP INDEX index_name [ON table_name];
+
+-- 5. T-SQL 저장 프로시저 정의 및 삭제
+CREATE PROCEDURE proc_name
+    @param1 INT,
+    @param2 VARCHAR(50) OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    -- 비즈니스 로직
+END;
+DROP PROCEDURE [IF EXISTS] proc_name;
+```
+
+---
+
+### 4.2. 데이터 조작어 (DML)
+
+```sql
+-- 1. 기본 SELECT (TOP, DISTINCT, 별칭 지원)
+SELECT [TOP (n) [PERCENT]] [DISTINCT] col1 AS alias1, col2
+FROM table_name [WITH (INDEX(index_name))]
+WHERE condition
+GROUP BY col1 HAVING aggregate_condition
+ORDER BY col1 [ASC|DESC]
+OFFSET n ROWS FETCH NEXT m ROWS ONLY;
+
+-- 2. INSERT (단일 행, 다중 행, DEFAULT VALUES)
+INSERT INTO table_name (col1, col2) VALUES ('Val1', 100), ('Val2', 200);
+INSERT INTO table_name DEFAULT VALUES;
+
+-- 3. UPDATE (조인 갱신 및 수식 연산 지원)
+UPDATE table_name
+SET col1 = 'NewVal', balance = balance + 500
+WHERE id = 10;
+
+-- 4. DELETE
+DELETE FROM table_name WHERE created_at < '2026-01-01';
+
+-- 5. SELECT INTO (변수 바인딩)
+SELECT balance INTO @user_bal FROM accounts WHERE id = 1;
+```
+
+---
+
+### 4.3. 세션 및 트랜잭션 제어어 (TCL / SCL)
+
+```sql
+-- 트랜잭션
+BEGIN TRANSACTION [transaction_name];
+COMMIT TRANSACTION;
+ROLLBACK TRANSACTION;
+
+-- 세션 환경 설정
+USE <database>;                         -- 관용적 가상 No-Op 수용 (master / postgres 동기화)
+SET NOCOUNT ON;                         -- 행 영향 카운트 토큰 방출 억제
+SET work_mem = '128MB';                 -- 세션별 정렬/조인 메모리 예산 상향
+SET TRANSACTION ISOLATION LEVEL READ COMMITTED;
+```
+
+---
+
+## 제5장. 연산자 및 내장 함수 사양 (Functions & Operators Reference)
+
+### 5.1. 연산자 요약
+* **산술**: `+`, `-`, `*`, `/`, `%`
+* **비교**: `=`, `<>`, `!=`, `<`, `<=`, `>`, `>=`
+* **논리**: `AND`, `OR`, `NOT`, `IS NULL`, `IS NOT NULL`, `IN (...)`, `BETWEEN ... AND ...`
+* **문자열 연결**: `+` (T-SQL 호환), `||` (ANSI 호환)
+* **패턴 매칭**: `LIKE 'prefix%'`, `LIKE '%contain%'`, `NOT LIKE '_a%'`
+
+---
+
+### 5.2. 핵심 내장 함수 목록
+
+| 함수 서명 | 분류 | 설명 | 반환 예시 |
+| :--- | :---: | :--- | :--- |
+| `COALESCE(v1, v2, ...)` | 조건부 | 첫 번째 Non-NULL 값을 반환 | `COALESCE(NULL, 'Default')` ➔ `'Default'` |
+| `ISNULL(check, repl)` | T-SQL | check가 NULL이면 repl을 반환 | `ISNULL(val, 0)` |
+| `NULLIF(v1, v2)` | 조건부 | v1과 v2가 같으면 NULL 반환 | `NULLIF(10, 10)` ➔ `NULL` |
+| `COUNT(*)`, `SUM(c)` | 집계 | 건수 및 합계 계산 | `COUNT(*)`, `SUM(amount)` |
+| `ROW_NUMBER() OVER (...)` | 윈도우 | 파티션/정렬 기준 단조 증가 일련번호 부여 | `1, 2, 3...` |
+| `RANK() OVER (...)` | 윈도우 | 동순위 건너뛰기 순위 부여 | `1, 2, 2, 4...` |
+| `PERCENTILE_CONT(p)` | 분석 | T-Digest 기반 스트리밍 연속 분위수 계산 | `PERCENTILE_CONT(0.99) WITHIN GROUP (...)` |
+| `LEN(str)` | 문자열 | 문자열의 글자 수 반환 (후행 공백 제외) | `LEN('LionSQL ')` ➔ `7` |
+| `SUBSTRING(s, start, len)` | 문자열 | 1-based 인덱스 기준 부분 문자열 추출 | `SUBSTRING('LionSQL', 1, 4)` ➔ `'Lion'` |
+| `STRING_SPLIT(str, sep)` | 테이블 | 구분자 기준 분할 테이블 반환 함수 (TVF) | `SELECT value FROM STRING_SPLIT('a,b,c', ',')` |
+| `GETDATE()` | 일시 | 현재 데이터베이스 서버 로컬 일시 | `2026-10-19 17:30:00` |
+| `DATEADD(part, n, date)`| 일시 | 지정된 날짜 부분(year, month, day) 가감 | `DATEADD(day, 7, GETDATE())` |
+| `DATEDIFF(part, d1, d2)`| 일시 | 두 일시 간의 차이 계산 | `DATEDIFF(day, '2026-01-01', '2026-01-10')` ➔ `9` |
+| `CAST(expr AS type)` | 변환 | 명시적 데이터 타입 캐스팅 | `CAST('100' AS INT)` ➔ `100` |
+| `CONVERT(type, expr)` | 변환 | T-SQL 호환 데이터 변환 | `CONVERT(VARCHAR, GETDATE(), 120)` |
+| `NEWID7()` | 식별자 | 시간 순 정렬 가능한 IETF RFC 9562 Monotonic UUIDv7 | `0192a5b6-7c8d-7e9f-8a0b-1c2d3e4f5a6b` |
+| `DB_NAME()` | 메타 | 현재 세션의 가상 데이터베이스명 반환 | `'postgres'` 또는 `'master'` |
+
+---
+
+## 제6장. 가상 카탈로그 뷰 및 메타데이터 사양 (System Catalogs Reference)
+
+LionSQL은 외부 GUI 관리 도구(DBeaver, Beekeeper Studio, Navicat, SSMS)와의 100% 매끄러운 스키마 탐색을 위해 3대 주요 시스템 카탈로그 뷰를 메모리 상에서 가상화(Virtual Catalog)하여 제공합니다:
+
+### 6.1. MS SQL Server 호환 카탈로그 (`sys.*`)
+
+* **`sys.databases`**:
+  - `name`: 가상 기본 데이터베이스명 (`master`)
+  - `database_id`: 고정값 `1`
+  - `compatibility_level`: `150` (SQL Server 2019 호환)
+* **`sys.master_files`**:
+  - `database_id`: `1`, `type_desc`: `'ROWS'`, `name`: `'master'`, `physical_name`: `'data/master.mdf'`
+* **`sys.tables`**:
+  - `name`: 테이블 이름, `object_id`: 고유 테이블 ID, `schema_id`: `1` (`dbo`), `type`: `'U'` (User Table)
+* **`sys.columns`**:
+  - `object_id`: 테이블 ID, `name`: 컬럼명, `column_id`: 1-based 순번, `system_type_id`: 데이터 타입 코드, `max_length`: 최대 바이트 길이, `is_nullable`: Null 허용 여부, `is_identity`: 자동증가 Identity 여부
+* **`sys.indexes` & `sys.index_columns`**:
+  - `object_id`: 테이블 ID, `name`: 인덱스명, `index_id`: 1(PK/Clustered) 또는 2+(Secondary), `is_unique`: 고유 인덱스 여부, `is_primary_key`: 기본키 여부
+
+---
+
+### 6.2. ANSI / ISO 호환 카탈로그 (`INFORMATION_SCHEMA.*`)
+
+* **`INFORMATION_SCHEMA.TABLES`**:
+  - `TABLE_CATALOG`: `'postgres'` (TDS에서는 `'master'`)
+  - `TABLE_SCHEMA`: `'public'` (TDS에서는 `'dbo'`)
+  - `TABLE_NAME`: 테이블 명칭
+  - `TABLE_TYPE`: `'BASE TABLE'` 또는 `'VIEW'`
+* **`INFORMATION_SCHEMA.COLUMNS`**:
+  - `COLUMN_NAME`, `ORDINAL_POSITION`, `COLUMN_DEFAULT`, `IS_NULLABLE`, `DATA_TYPE`, `CHARACTER_MAXIMUM_LENGTH`, `NUMERIC_PRECISION`, `NUMERIC_SCALE`
+* **`INFORMATION_SCHEMA.KEY_COLUMN_USAGE` & `REFERENTIAL_CONSTRAINTS`**:
+  - 외래키 참조 관계 및 기본키 컬럼 목록을 외부 ORM/도구에 정확히 제공
+
+---
+
+### 6.3. PostgreSQL 호환 카탈로그 (`pg_catalog.*`)
+
+* **`pg_catalog.pg_database`**:
+  - `datname`: `'postgres'` (레거시 `sqlion`을 완전 제거하고 단일 DB 정립)
+  - `datdba`: `10`, `encoding`: `6` (UTF-8), `datcollate`: `'C'`, `datctype`: `'C'`
+* **`pg_catalog.pg_class`**:
+  - `relname`: 테이블/인덱스 명칭, `relnamespace`: `2200` (`public`), `relkind`: `'r'`(Table) 또는 `'i'`(Index)
+* **`pg_catalog.pg_attribute`**:
+  - `attrelid`: 테이블 OID, `attname`: 컬럼명, `atttypid`: PostgreSQL 내부 OID(int4: 23, varchar: 1043 등), `attnum`: 컬럼 번호, `attnotnull`: Not Null 여부
+* **`pg_catalog.pg_stat_activity`**:
+  - `pid`: 세션 ID, `datname`: `'postgres'`, `usename`: `'admin'`, `state`: `'idle'` 또는 `'active'`, `query`: 현재 실행 쿼리
+
+---
+
+## 제7장. REST API 및 웹 스튜디오 사양 (REST API Reference)
+
+LionSQL의 모든 HTTP 엔드포인트는 기본 포트 `:8090`에서 서비스되며, JSON 기반 페이로드를 사용합니다.
+
+### 7.1. 시스템 및 실시간 관제
+
+| 메소드 & 엔드포인트 | 인증 필요 | 설명 및 반환 포맷 |
+| :--- | :---: | :--- |
+| `GET /api/health` | No | 서버 헬스체크. `{"status":"ok","version":"0.90.0","engine":"wiredtiger"}` |
+| `GET /api/version` | No | 엔진 릴리즈 버전 및 컴파일 메타데이터 반환 |
+| `GET /api/metrics` | No | Prometheus 스크랩 규격 텍스트 포맷 (QPS, 메모리 힙, 연결 수) |
+| `GET /api/realtime` | No | Server-Sent Events (SSE) 실시간 성능/활동 모니터링 영구 스트림 |
+
+### 7.2. 인증 및 세션 관리
+
+| 메소드 & 엔드포인트 | 설명 | 요청 본문 및 반환값 |
+| :--- | :--- | :--- |
+| `POST /api/auth/login` | 관리자 로그인 및 JWT 발급 | **Body**: `{"email":"admin@lionsql.local","password":"secret"}`<br>**Response**: `{"token":"ey...", "expires_in": 86400}` |
+| `POST /api/auth/refresh` | 만료 전 JWT 토큰 갱신 | **Header**: `Authorization: Bearer <TOKEN>` |
+
+### 7.3. SQL 및 테이블/레코드 CRUD
+
+| 메소드 & 엔드포인트 | 인증 필요 | 설명 및 사용 예시 |
+| :--- | :---: | :--- |
+| `POST /api/sql` | Yes | 임의 T-SQL/SQL 쿼리 실행. `{"query":"SELECT * FROM accounts"}` |
+| `GET /api/tables` | No | 모든 테이블 목록 및 스키마 메타데이터 반환 |
+| `POST /api/tables/:table/columns` | Yes | 비파괴적 컬럼 추가 DDL API. `{"name":"phone","type":"VARCHAR(50)"}` |
+| `GET /api/records/:table` | No | 테이블 데이터 페이지네이션 및 필터링 (`?page=1&perPage=20&sort=-id`) |
+| `POST /api/records/:table` | Yes | 단일 레코드 생성. `{"holder_name":"John", "balance": 1000}` |
+| `PUT /api/records/:table` | Yes | 레코드 갱신 (기본키 기준 수정). `{"id": 1, "balance": 2000}` |
+| `DELETE /api/records/:table` | Yes | 레코드 삭제. `{"id": 1}` |
+
+### 7.4. 활동 감사 및 슬로우 쿼리 로그
+
+* **`GET /api/logs/requests`**:
+  - 최근 500건의 인바운드 HTTP 및 SQL 활동 로그 링 버퍼 조회.
+  - 응답 필드: `timestamp`, `method`, `path`, `client_ip`, `status`, `latency_us`, `query`
+* **`GET /api/slow-queries`**:
+  - 임계치(`100ms`)를 초과한 모든 슬로우 쿼리 내역 및 실행 통계 반환.
+
+### 7.5. 백업, 복제 및 프로시저 원격 호출
+
+* **`POST /api/procs/exec`**: 저장 프로시저 원격 RPC 호출 (`{"name":"TransferMoney","params":{"from_id":1,"to_id":2,"amount":500}}`).
+* **`POST /api/backup`**: 온라인 무중단 핫 백업 `.tar.gz` 바이너리 스트리밍 다운로드.
+* **`POST /api/restore`**: 멀티파트 폼 데이터로 `.tar.gz` 백업 파일 업로드 및 전체 복원.
+* **`GET /api/replication/status`**: 노드 역할(`PRIMARY` / `REPLICA`), LSN 상태, 복제 지연 시간 반환.
+* **`POST /api/replication/promote`**: Replica 노드를 즉시 새 Primary로 수동 승격.
+
+---
+
+## 제8장. 와이어 프로토콜 기술 사양 (Wire Protocol Specifications)
+
+### 8.1. PostgreSQL Wire Protocol v3 사양 (`TCP :5433`)
+
+LionSQL은 공식 PostgreSQL 클라이언트 라이브러리와 바이너리 수준에서 프레임을 교환합니다:
+
+1. **연결 및 인증 단계 (Startup & Authentication)**:
+   - 클라이언트 `StartupMessage` (포맷: 패킷 길이, 프로토콜 버전 `196608` [3.0], 파라미터 쌍 `user`, `database`).
+   - 서버가 `AuthenticationCleartextPassword` (`'R'`, code `3`) 또는 `AuthenticationOk` (`'R'`, code `0`) 방출.
+   - 서버 환경 파라미터 송출: `server_version=14.0 (LionSQL v0.90.0)`, `client_encoding=UTF8`.
+   - `ReadyForQuery` (`'Z'`) 방출로 세션 준비 완료.
+2. **단순 쿼리 프로토콜 (Simple Query Protocol)**:
+   - 클라이언트 `Query` (`'Q'`) ➔ 서버 `RowDescription` (`'T'`) ➔ 다중 `DataRow` (`'D'`) ➔ `CommandComplete` (`'C'`) ➔ `ReadyForQuery` (`'Z'`).
+3. **확장 쿼리 프로토콜 (Extended Query Protocol)**:
+   - `Parse` (`'P'`): SQL 문장 컴파일 및 Statement 캐싱.
+   - `Bind` (`'B'`): 매개변수($1, $2) 바이너리 디코딩 및 Portal 생성.
+   - `Execute` (`'E'`): 지정된 최대 행 수(`max_rows`)만큼 Volcano Iterator 반복 실행.
+   - `Sync` (`'S'`): 트랜잭션 경계 확정 및 `ReadyForQuery` 반환.
+
+---
+
+### 8.2. Microsoft SQL Server TDS 7.x / 8.0 Protocol 사양 (`TCP :1433`)
+
+1. **사전 로그인 협상 (Pre-Login Handshake)**:
+   - 패킷 타입: `0x12` (`Pre-Login`).
+   - 서버 버전(`Version: 15.0.2000`), 암호화 미지원 플래그(`Encryption: ENCRYPT_NOT_SUP`), 인스턴스 토큰 교환.
+2. **로그인 단계 (Login7)**:
+   - 패킷 타입: `0x10` (`Login7`).
+   - 클라이언트 호스트명, 사용자명(`sa`), 암호(TDS 고유 비트 시프트 스크램블), 데이터베이스(`master`) 수신.
+   - 검증 성공 시 `ENVCHANGE (0xE3)` 토큰으로 데이터베이스 컨텍스트 동기화 후 `LOGINACK (0xAD)` 및 `DONE (0xFD)` 방출.
+3. **토큰 스트림 구조 (Tabular Data Stream)**:
+   - `COLMETADATA (0x81)`: 결과셋의 컬럼 수, 컬럼명, 데이터 타입(INT4, VARCHAR, DATETIME) 메타데이터.
+   - `ROW (0xD1)`: 일반 행 데이터 바이너리 직렬화.
+   - `NBCROW (0xD2)`: Null Bitmap 기반 압축 행 (Null 컬럼의 데이터 페이로드를 완전히 생략하여 네트워크 대역폭 최적화).
+   - `DONE (0xFD)`: 배치 명령 완료 및 영향받은 행 수(Row Count) 방출.
+   - `ERROR (0xAA)`: 예외 발생 시 에러 번호, 심각도(Severity), 상태 코드, 에러 메시지 방출.
+
+---
+
+## 제9장. 에러 코드 및 진단 레퍼런스 (Error Codes & Diagnostics)
+
+### 9.1. LionSQL 표준 에러 및 ANSI SQLSTATE 매핑표
+
+| 내부 에러 코드 | ANSI SQLSTATE | 표준 영문 에러 메시지 | 원인 및 해결 조치 |
+| :--- | :---: | :--- | :--- |
+| `ERR_TABLE_NOT_FOUND` | `42P01` | `table does not exist` | 지정한 테이블이 존재하지 않음. 테이블명 대소문자 확인 |
+| `ERR_COLUMN_NOT_FOUND` | `42703` | `column does not exist` | 컬럼명이 올바르지 않음. 스키마 확인 |
+| `ERR_UNIQUE_VIOLATION` | `23505` | `unique constraint violation: duplicate key` | PRIMARY KEY 또는 UNIQUE 인덱스 중복 삽입 시 발생 |
+| `ERR_WRITE_CONFLICT` | `40001` | `serialization failure: write-write conflict` | OCC 동시성 충돌. 트랜잭션 재시도(Retry) 필요 |
+| `ERR_MEMORY_BUDGET` | `53200` | `hash join memory budget exceeded: ... > work_mem` | 조인 연산자가 `work_mem` 초과. 필터 조건 추가 또는 work_mem 상향 |
+| `ERR_STORAGE_FULL` | `53200` | `table data limit exceeded: memory limit exceeded` | 인메모리 엔진 힙 상한(`--max-memory`) 도달. 오래된 데이터 정리 |
+| `ERR_FOREIGN_KEY` | `23503` | `foreign key violation: referenced key not found` | 외래키 무결성 위반. 부모 테이블의 대상 행 존재 여부 확인 |
+| `ERR_SYNTAX_ERROR` | `42601` | `syntax error in SQL statement` | SQL/T-SQL 구문 문법 오류 |
+| `ERR_CONNECTION_LOST` | `08006` | `connection failure: client aborted` | 클라이언트 소켓 강제 단절 또는 타임아웃 |
+
+---
+
+### 9.2. TDS 에러 심각도 레벨 (TDS Severity Levels)
+
+* **Severity 1 ~ 10 (정보 및 경고)**: `PRINT` 문장 출력, 비정상적이지 않은 알림 (클라이언트 연결 유지).
+* **Severity 11 ~ 16 (사용자 실행 오류)**: 제약조건 위반, 문법 오류, `RAISERROR` 사용자 예외 (해당 배치만 중단).
+* **Severity 17 ~ 19 (리소스 부족 오류)**: `work_mem` 초과, 메모리 거버너 차단 (세션 롤백).
+* **Severity 20 ~ 25 (시스템 치명 오류)**: 스토리지 I/O 장애, 프로세스 손상 (연결 즉시 강제 종료).
+
+---
+
+### 9.3. PostgreSQL 오류 심각도 (PG Error Severity)
+
+* **`NOTICE`**: DDL 자동 캐스케이드 알림, 정보성 메시지.
+* **`WARNING`**: 트랜잭션 블록 외부에서의 롤백 시도 등 경고.
+* **`ERROR`**: 쿼리 실패, 제약조건 위반 (트랜잭션이 Aborted 상태로 전이되며 `ROLLBACK` 요구).
+* **`FATAL`**: 인증 실패, 관리자 강제 종료 (클라이언트 연결 닫힘).
+* **`PANIC`**: 시스템 비정상 종료.
+
+---
 
 #### 10.1. 아키텍처 및 스토리지 엔진 내부 구조 (Architecture & Storage Internals)
 * [`ARCHITECTURE.md`](file:///Users/maro/Projects/LionSQL/doc/ARCHITECTURE.md)
