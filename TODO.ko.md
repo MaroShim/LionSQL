@@ -310,7 +310,7 @@
 | **UI-7** | UI/데이터 | Sample Data Seed 빈 DB 사전 검증 가드 및 원자적 피드백 | **완료 (`[x]`)** | 기존 테이블 보유 시 409 Conflict 차단 및 명확한 에러 안내, 빈 DB 시 원자적 트랜잭션 씨딩 및 첫 테이블(`accounts`) 자동 선택 로드 완비 (`pkg/api/handlers_records.go`, `pkg/ui/dashboard.html`) |
 | **UI-8** | UI/DX | API Preview 모달 테이블 스키마 기반 동적 더미 페이로드 생성 | **완료 (`[x]`)** | 테이블 컬럼 타입(INT, VARCHAR, FLOAT, BOOL, DATETIME)별 최적화된 동적 샘플 페이로드 생성 및 단건/배치 탭 지원 (`pkg/ui/dashboard.html`) |
 | **UI-9** | UI/DX | API Preview 모달 LionSQL 공식 SDK (`sqlion.js`) 전용 코드 탭 신설 | **완료 (`[x]`)** | curl, Fetch, Python에 이어 공식 TypeScript/JavaScript SDK 탭(`db.collection(...)`) 추가 완비 (`pkg/ui/dashboard.html`) |
-| **UI-10** | UI/테마 | Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 | **완료 (`[x]`)** | CSS 변수 기반 클린 라이트 모드 지원, 사이드바/모바일 테마 토글 버튼 탑재, 로컬 스토리지 테마 영속화 및 `Cache-Control: no-cache` 헤더로 브라우저 구버전 캐싱 원천 차단 (`pkg/ui`, `pkg/api/server.go`) |
+| **UI-10** | UI/테마 | Web Studio Light / Dark 모드 테마 전환, PK 시인성 강화 및 캐시 방지 | **완료 (`[x]`)** | CSS 변수 기반 클린 라이트 모드 지원, 라이트 모드 내 PK(`id`) 노란색 텍스트 저시인성 해소(`.cell-pk-val` 딥 앰버 전환) 및 컬럼 태그/호버 콘트라스트 전면 개선, 사이드바/모바일 테마 토글 버튼, 로컬 스토리지 테마 영속화 및 `Cache-Control: no-cache` 헤더 완비 (`pkg/ui`, `pkg/api/server.go`) |
 
 ---
 

@@ -193,6 +193,10 @@ func TestThemeToggleUI(t *testing.T) {
 		`initTheme()`,
 		`applyTheme(`,
 		`lionsql_theme`,
+		`--pk-val-color`,
+		`.cell-pk-val`,
+		`--pk-tag-bg`,
+		`--col-tag-bg`,
 	}
 
 	for _, snippet := range requiredSnippets {

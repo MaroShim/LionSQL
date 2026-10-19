@@ -10,6 +10,7 @@
       --bg: #0f172a;
       --sidebar: #1e293b;
       --card: #1e293b;
+      --card-shadow: none;
       --border: #334155;
       --text: #f8fafc;
       --text-muted: #94a3b8;
@@ -27,11 +28,23 @@
       --auth-box-bg: #162032;
       --badge-bg: #1e3a8a;
       --badge-color: #60a5fa;
+      --col-tag-bg: #334155;
+      --col-tag-color: #94a3b8;
+      --pk-tag-bg: #854d0e;
+      --pk-tag-color: #fef08a;
+      --pk-tag-border: transparent;
+      --pk-val-color: #fde047;
+      --th-hover-bg: #1e293b;
+      --th-hover-color: #ffffff;
+      --row-hover-bg: rgba(255, 255, 255, 0.03);
+      --user-email-color: #6ee7b7;
+      --panel-box-bg: #0f172a;
     }
     html[data-theme="light"] {
       --bg: #f8fafc;
       --sidebar: #ffffff;
       --card: #ffffff;
+      --card-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.08), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
       --border: #e2e8f0;
       --text: #0f172a;
       --text-muted: #64748b;
@@ -40,8 +53,8 @@
       --success: #059669;
       --danger: #dc2626;
       --code-bg: #f1f5f9;
-      --th-bg: #f8fafc;
-      --tr-even: #f1f5f9;
+      --th-bg: #f1f5f9;
+      --tr-even: #f8fafc;
       --btn-secondary-bg: #e2e8f0;
       --btn-secondary-hover: #cbd5e1;
       --nav-hover: #f1f5f9;
@@ -49,6 +62,17 @@
       --auth-box-bg: #f8fafc;
       --badge-bg: #dbeafe;
       --badge-color: #1d4ed8;
+      --col-tag-bg: #e2e8f0;
+      --col-tag-color: #475569;
+      --pk-tag-bg: #fef3c7;
+      --pk-tag-color: #92400e;
+      --pk-tag-border: #fde68a;
+      --pk-val-color: #b45309;
+      --th-hover-bg: #e2e8f0;
+      --th-hover-color: #0f172a;
+      --row-hover-bg: rgba(0, 0, 0, 0.03);
+      --user-email-color: #047857;
+      --panel-box-bg: #f8fafc;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -77,8 +101,8 @@
       gap: 10px;
     }
     .badge {
-      background: #1e3a8a;
-      color: #60a5fa;
+      background: var(--badge-bg);
+      color: var(--badge-color);
       font-size: 0.7rem;
       padding: 2px 6px;
       border-radius: 4px;
@@ -126,6 +150,7 @@
     .card {
       background: var(--card);
       border: 1px solid var(--border);
+      box-shadow: var(--card-shadow);
       border-radius: 8px;
       padding: 20px;
     }
@@ -251,7 +276,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      background: #0f172a;
+      background: var(--panel-box-bg);
       border: 1px solid var(--border);
       padding: 4px 10px;
       border-radius: 20px;
@@ -281,10 +306,10 @@
       box-sizing: border-box;
       padding: 4px 8px;
       margin: 0;
-      background: #090d16;
+      background: var(--code-bg);
       border: 1px solid var(--primary);
       border-radius: 4px;
-      color: #fff;
+      color: var(--text);
       font-family: inherit;
       font-size: 0.85rem;
       outline: none;
@@ -301,16 +326,24 @@
       font-size: 0.65rem;
       padding: 1px 5px;
       border-radius: 3px;
-      background: #334155;
-      color: #94a3b8;
+      background: var(--col-tag-bg);
+      color: var(--col-tag-color);
+      border: 1px solid var(--border);
       font-family: monospace;
       font-weight: 500;
       margin-left: 6px;
     }
     .col-pk-tag {
-      background: #854d0e;
-      color: #fef08a;
+      background: var(--pk-tag-bg) !important;
+      color: var(--pk-tag-color) !important;
+      border: 1px solid var(--pk-tag-border) !important;
       font-weight: 700;
+    }
+    .cell-pk-val {
+      color: var(--pk-val-color);
+      font-weight: 700;
+      font-family: monospace;
+      letter-spacing: -0.02em;
     }
     .modal-card-lg {
       max-width: 680px;
@@ -319,21 +352,21 @@
       background: rgba(59, 130, 246, 0.16) !important;
     }
     .record-row:hover {
-      background: rgba(255, 255, 255, 0.03);
+      background: var(--row-hover-bg);
     }
     .sortable-th {
       cursor: pointer;
       user-select: none;
-      transition: background 0.15s;
+      transition: background 0.15s, color 0.15s;
     }
     .sortable-th:hover {
-      background: #1e293b !important;
-      color: #fff !important;
+      background: var(--th-hover-bg) !important;
+      color: var(--th-hover-color) !important;
     }
     .sort-icon {
       font-size: 0.7rem;
       margin-left: 5px;
-      color: #38bdf8;
+      color: var(--console-text);
       font-weight: bold;
     }
 
@@ -486,12 +519,12 @@
         <span style="width:5px; height:5px; border-radius:50%; background:#10b981;"></span> Live
       </span>
     </div>
-    <div id="auth-status-box" style="padding: 12px 16px; border-bottom: 1px solid var(--border); background: #162032;">
+    <div id="auth-status-box" style="padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--auth-box-bg);">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
         <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
           <div style="width: 26px; height: 26px; border-radius: 6px; background: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; color: #fff; flex-shrink: 0;">A</div>
           <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            <div id="current-user-email" style="color: #6ee7b7; font-weight: 600; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">admin@lionsql.local</div>
+            <div id="current-user-email" style="color: var(--user-email-color); font-weight: 600; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">admin@lionsql.local</div>
             <div style="font-size: 0.68rem; color: var(--text-muted);">Superuser</div>
           </div>
         </div>
@@ -500,7 +533,7 @@
       <button id="auth-action-btn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem; width: 100%;" onclick="logout()">Sign Out</button>
     </div>
     <div style="padding: 10px 14px 4px 14px;">
-      <input type="text" id="sidebar-quick-search" placeholder="Filter tables & views..." style="margin: 0; padding: 6px 10px; font-size: 0.78rem; background: #090d16; border-radius: 6px;" oninput="onSidebarQuickSearch(this.value)" />
+      <input type="text" id="sidebar-quick-search" placeholder="Filter tables & views..." style="margin: 0; padding: 6px 10px; font-size: 0.78rem; background: var(--code-bg); border-radius: 6px;" oninput="onSidebarQuickSearch(this.value)" />
     </div>
     <nav>
       <button class="nav-btn active" data-view="tables" onclick="switchView('tables')">
@@ -684,7 +717,7 @@
             </div>
             <button class="btn btn-secondary" style="padding: 3px 10px; font-size: 0.72rem;" onclick="copyBytecodeToClipboard()">Copy Disassembly</button>
           </div>
-          <div id="vdbe-assembly-listing" style="background: #0f172a; border: 1px solid #334155; border-radius: 6px; padding: 14px; font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.82rem; line-height: 1.6; overflow-x: auto; max-height: 480px; white-space: pre; color: #e2e8f0;"></div>
+          <div id="vdbe-assembly-listing" style="background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 14px; font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; font-size: 0.82rem; line-height: 1.6; overflow-x: auto; max-height: 480px; white-space: pre; color: var(--text);"></div>
         </div>
 
         <div id="query-result-table-container" style="overflow-x: auto; max-height: 400px;">
@@ -736,7 +769,7 @@
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px;">
           <div style="display: flex; align-items: center; gap: 12px;">
             <h3 id="current-table-title" style="font-size: 1.1rem; color: var(--text);">Records</h3>
-            <span id="records-count-badge" style="font-size: 0.8rem; color: var(--text-muted); background: #0f172a; padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);">0 records</span>
+            <span id="records-count-badge" style="font-size: 0.8rem; color: var(--text-muted); background: var(--code-bg); padding: 2px 8px; border-radius: 4px; border: 1px solid var(--border);">0 records</span>
             <span style="font-size: 0.75rem; color: var(--text-muted);">Double-click any cell to edit inline (Enter to save, Esc to cancel)</span>
           </div>
           <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
@@ -809,7 +842,7 @@
         </div>
 
         <h4 style="font-size: 0.85rem; margin-top: 20px; margin-bottom: 8px; color: var(--text-muted);">Auto-Generated DDL Definition:</h4>
-        <pre id="schema-ddl-box" class="console-box" style="color: #a5f3fc; max-height: 180px;">-- DDL preview will appear here</pre>
+        <pre id="schema-ddl-box" class="console-box" style="color: var(--console-text); max-height: 180px;">-- DDL preview will appear here</pre>
       </div>
 
       <!-- Subview: Security Rules (RLS) -->
@@ -828,8 +861,8 @@
         </div>
 
         <!-- Presets -->
-        <div style="background: #0f172a; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
-          <div style="font-size: 0.8rem; font-weight: 600; color: #93c5fd; margin-bottom: 8px;">Quick Security Presets:</div>
+        <div style="background: var(--panel-box-bg); border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; margin-bottom: 16px;">
+          <div style="font-size: 0.8rem; font-weight: 600; color: var(--primary); margin-bottom: 8px;">Quick Security Presets:</div>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
             <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 8px;" onclick="applyRlsPreset('owner_only')">Owner Only (@auth.id)</button>
             <button class="btn btn-secondary" style="font-size: 0.75rem; padding: 3px 8px;" onclick="applyRlsPreset('admin_only')">Admin Only (@auth.role = 'admin')</button>
@@ -3102,7 +3135,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
               const valStr = (val === null || val === undefined) ? '' : String(val);
               const displayHtml = (val === null || val === undefined)
                 ? '<span style="color:var(--text-muted); font-style:italic;">NULL</span>'
-                : (isPK ? `<span style="color:#fef08a; font-weight:600;">${escapeHtml(valStr)}</span>` : escapeHtml(valStr));
+                : (isPK ? `<span class="cell-pk-val">${escapeHtml(valStr)}</span>` : escapeHtml(valStr));
 
               if (isPK) {
                 rowHtml += `<td title="Primary Key (Read-Only)">${displayHtml}</td>`;
