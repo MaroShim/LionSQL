@@ -1,37 +1,41 @@
 # LionSQL Reference Manual
 
-이 문서는 LionSQL 데이터베이스 엔진의 모든 명령어, 설정값, SQL 구문 및 문법 규격, 데이터 타입, 시스템 내장 함수, 가상 카탈로그 뷰, REST API 엔드포인트 및 와이어 프로토콜 사양을 총망라하는 **레퍼런스 매뉴얼(Reference Manual)** 목차 및 골격입니다.
+이 문서는 LionSQL 데이터베이스 엔진의 모든 명령어, 설정값, SQL 구문 및 문법 규격, 데이터 타입, 시스템 내장 함수, 가상 카탈로그 뷰, REST API 엔드포인트 및 와이어 프로토콜 사양을 총망라하는 **공식 레퍼런스 매뉴얼(Reference Manual)**입니다.
 
 ---
 
 ## 목차 (Table of Contents)
 
 ### 제1장. 명령행 인터페이스 (CLI Reference)
-* **1.1. 통합 단일 바이너리 (`bin/lionsql`)**
-  * 기동 및 네트워크 옵션: `-http`, `-pg`, `-tds`
-  * 스토리지 및 엔진 옵션: `-dir`, `-engine`, `-ephemeral`, `-seed`
-  * 리소스 및 거버너 옵션: `-work-mem`, `-max-workers`, `-max-idle-sessions`
-  * 보안 및 인증 옵션: `-auth`, `-admin-email`, `-admin-pass`, `-tls`, `-tls-cert`, `-tls-key`, `-require-ssl`
-  * 로깅 및 데몬 옵션: `-dev`, `-slow-log`, `-slow-threshold`, `-general-log`, `-daemon`, `-pidfile`
-  * 관리 서브커맨드/액션: `-status`, `-stop`, `-restart`, `-backup`, `-restore`, `-version`, `-help`
-* **1.2. 벤치마크 및 검증 도구 (`bin/bench`, `bin/tpcc_vdbe`)**
-  * TPC-C 하네스 옵션: `-warehouses`, `-clients`, `-duration`, `-engine`
-  * 마이크로 벤치마크 옵션: `-tx`, `-ops`
-* **1.3. 종료 코드 및 프로세스 시그널 (Exit Codes & Signals)**
-  * 표준 종료 코드 명세
-  * POSIX 시그널 핸들링: `SIGINT`, `SIGTERM` (1.5초 graceful shutdown), `SIGHUP`
+* **1.1. 단일 바이너리(`bin/lionsql`) 명령 구조**
+  * 포그라운드 대화형 기동: `lionsql [serve] [flags...]`
+  * 백그라운드 데몬 제어: `lionsql start [-dev]`, `stop`, `restart [-dev]`, `status`
+  * 관리 및 도구 서브커맨드: `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version`
+* **1.2. 전역 CLI 플래그 사양**
+  * 네트워크 리스너: `-http`, `-pg`, `-tds`, `-tls`, `-tls-cert`, `-tls-key`, `-require-ssl`
+  * 스토리지 백엔드: `-dir`, `-engine` (`wiredtiger`, `memory`), `-ephemeral`, `-auto-seed`
+  * 리소스 거버너: `-max-memory` (`<size>` e.g. `2GB`, `4096MB`, 기본값: 물리 RAM의 70%), `-work-mem` (기본값: `64MB`), `-max-workers`, `-max-idle-sessions`
+  * 보안 및 인증: `-auth` (기본값: `true`), `-admin-email`, `-admin-pass`, `-jwt-secret`
+  * 로깅 및 트레이싱: `-dev`, `-slow-log`, `-slow-threshold-ms` (기본값: `100.0ms`), `-general-log`
+  * 고가용성 복제: `-replica-of`, `-node-id`, `-peers`, `-self-url`, `-auto-failover`, `-heartbeat-timeout-ms`
+* **1.3. 벤치마크 및 스트레스 테스트 도구 (`bin/bench`, `bin/tpcc_vdbe`)**
+  * TPC-C VDBE 하네스: `-warehouses`, `-workers`, `-duration`, `-engine`, `-fsync` (`everysec`, `always`, `off`)
+  * OLTP 마이크로 벤치마크: `-accounts`, `-workers`, `-ops`, `-engine`
+* **1.4. 종료 코드 및 프로세스 시그널 (Exit Codes & POSIX Signals)**
+  * 표준 종료 코드 정의 (0: 정상 종료, 1: 일반 오류, 2: 설정 오류)
+  * POSIX 시그널 처리: `SIGINT`, `SIGTERM` (1.5초 이내 단계별 Graceful Shutdown), `SIGHUP`
 
 ---
 
 ### 제2장. 설정 파일 사양 (Configuration File Reference)
 * **2.1. `lionsql.json` 전체 스키마 명세**
-* **2.2. 섹션별 설정 키 상세**
+* **2.2. 섹션별 상세 설정 키**
   * `Server`: `engine`, `data_dir`, `ephemeral`, `auto_seed`, `pid_file`
   * `Network`: `http_addr`, `pg_addr`, `tds_addr`, `tls` (`enabled`, `cert_file`, `key_file`, `require_ssl`)
-  * `Auth`: `enabled`, `admin_email`, `admin_pass`, `jwt_secret`
-  * `Resources`: `work_mem`, `max_workers`, `max_idle_sessions`
-  * `Logging`: `dev_mode`, `slow_query` (`enabled`, `threshold_ms`, `file`), `general_query` (`enabled`, `file`)
-  * `Replication`: `enabled`, `role`, `node_id`, `primary_url`, `history_cap`
+  * `Auth`: `enabled`, `admin_email` (기본: `admin@lionsql.local`), `admin_pass`, `jwt_secret`
+  * `Resources`: `max_memory` (기본: 70% RAM), `work_mem` (기본: `64MB`), `max_workers`, `max_idle_sessions`
+  * `Logging`: `dev_mode`, `slow_query` (`enabled`, `threshold_ms`: `100.0`, `file`), `general_query` (`enabled`, `file`)
+  * `Replication`: `enabled`, `role`, `node_id`, `primary_url`, `auto_failover`, `peers`, `self_url`, `heartbeat_timeout_ms`
 
 ---
 
@@ -52,15 +56,15 @@
   * `BIT` / `BOOLEAN`: 0 (FALSE) 또는 1 (TRUE)
 * **3.5. 바이너리 및 식별자 데이터 타입 (Binary & UUID Types)**
   * `VARBINARY(n)` / `BYTEA`: 가변 길이 원시 바이트 열
-  * `UNIQUEIDENTIFIER` / `UUID`: 128비트 범용 고유 식별자 (RFC 4122)
+  * `UNIQUEIDENTIFIER` / `UUID`: 128비트 범용 고유 식별자 (RFC 4122 / UUIDv7)
 * **3.6. 반정형 데이터 타입 (Semi-Structured Types)**
-  * `JSON`: JSON 텍스트 검증 및 인덱싱 지원
+  * `JSON`: JSON 텍스트 검증 및 B-Tree 인덱싱 지원
 
 ---
 
 ### 제4장. SQL 구문 및 명령문 사양 (SQL Statement Reference)
 * **4.1. 데이터 정의어 (DDL: Data Definition Language)**
-  * `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`
+  * `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `TRUNCATE TABLE`
   * `CREATE INDEX`, `DROP INDEX`
   * `CREATE VIEW`, `DROP VIEW`
   * `CREATE PROCEDURE`, `ALTER PROCEDURE`, `DROP PROCEDURE`
@@ -87,6 +91,7 @@
   * `ROLLBACK TRANSACTION` / `ROLLBACK TRAN`
   * `SAVE TRANSACTION <savepoint>` / `ROLLBACK TO <savepoint>`
 * **4.5. 세션 및 환경 제어어 (SCL: Session Control Language)**
+  * `USE <database>`: 관용적 가상 No-Op 처리 및 TDS 환경 동기화
   * `SET NOCOUNT ON/OFF`
   * `SET ANSI_NULLS ON/OFF`
   * `SET QUOTED_IDENTIFIER ON/OFF`
@@ -112,14 +117,15 @@
   * `COALESCE(val1, val2, ...)`
   * `ISNULL(check_expr, replacement_value)`
   * `NULLIF(expr1, expr2)`
-* **5.3. 집계 함수 (Aggregate Functions)**
+* **5.3. 집계 및 분석 함수 (Aggregate & Analytical Functions)**
   * `COUNT(*)`, `COUNT(col)`, `COUNT(DISTINCT col)`
   * `SUM(col)`, `AVG(col)`, `MIN(col)`, `MAX(col)`
+  * 윈도우 함수: `ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`
   * 백분위수 및 분위수 분석 함수: `PERCENTILE_CONT`, `PERCENTILE_DISC`
 * **5.4. 문자열 함수 (String Functions)**
   * `LEN()`, `DATALENGTH()`, `SUBSTRING()`, `LEFT()`, `RIGHT()`
   * `LTRIM()`, `RTRIM()`, `TRIM()`, `UPPER()`, `LOWER()`
-  * `REPLACE()`, `CONCAT()`, `QUOTENAME()`, `CHARINDEX()`
+  * `REPLACE()`, `CONCAT()`, `QUOTENAME()`, `CHARINDEX()`, `STRING_SPLIT()`
 * **5.5. 수치 및 수학 함수 (Math Functions)**
   * `ABS()`, `ROUND()`, `CEILING()`, `FLOOR()`, `POWER()`, `SQRT()`, `SIGN()`
 * **5.6. 날짜 및 시간 함수 (Date/Time Functions)**
@@ -132,46 +138,54 @@
   * `@@VERSION`, `@@SPID`, `@@TRANCOUNT`, `@@IDENTITY`, `@@ROWCOUNT`
   * `SCOPE_IDENTITY()`, `SCHEMA_NAME([id])`, `SCHEMA_ID([name])`
   * `OBJECT_ID([name])`, `OBJECT_NAME([id])`, `SERVERPROPERTY([property])`
+  * `DB_NAME()`, `CURRENT_DATABASE()`
 
 ---
 
 ### 제6장. 가상 카탈로그 뷰 및 메타데이터 사양 (System Catalogs Reference)
 * **6.1. MS SQL Server 호환 카탈로그 (`sys.*`)**
+  * `sys.databases`: `master` 단일 카탈로그 및 `master.mdf` 메타데이터
   * `sys.tables`, `sys.columns`, `sys.indexes`, `sys.index_columns`
-  * `sys.objects`, `sys.schemas`, `sys.databases`, `sys.partitions`
+  * `sys.objects`, `sys.schemas`, `sys.partitions`, `sys.master_files`
   * `sys.types`, `sys.default_constraints`, `sys.computed_columns`, `sys.extended_properties`
 * **6.2. ANSI / ISO 호환 카탈로그 (`INFORMATION_SCHEMA.*`)**
-  * `INFORMATION_SCHEMA.TABLES`
+  * `INFORMATION_SCHEMA.TABLES` (기본 카탈로그 `postgres`)
   * `INFORMATION_SCHEMA.COLUMNS`
   * `INFORMATION_SCHEMA.TABLE_CONSTRAINTS`
   * `INFORMATION_SCHEMA.KEY_COLUMN_USAGE`
   * `INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS`
 * **6.3. PostgreSQL 호환 카탈로그 (`pg_catalog.*`)**
+  * `pg_catalog.pg_database`: `postgres` 단일 데이터베이스 노출
   * `pg_catalog.pg_class`, `pg_attribute`, `pg_type`, `pg_index`
-  * `pg_catalog.pg_constraint`, `pg_namespace`, `pg_database`, `pg_proc`
+  * `pg_catalog.pg_constraint`, `pg_namespace`, `pg_proc`, `pg_stat_activity`
   * 가상 시스템 함수: `current_schema()`, `current_setting()`, `version()`
 
 ---
 
 ### 제7장. REST API 및 웹 스튜디오 사양 (REST API Reference)
-* **7.1. 시스템 및 상태 엔드포인트**
-  * `GET /api/health`: 서버 상태 및 핑
-  * `GET /api/version`: 바이너리 빌드 버전 및 커밋 해시
-  * `GET /api/metrics`: 실시간 동시성, QPS, 연결 풀 통계
+* **7.1. 시스템 및 실시간 관제 엔드포인트**
+  * `GET /api/health`: 서버 상태 및 헬스체크 핑
+  * `GET /api/version`: 엔진 릴리즈 버전(`0.90.0`) 및 빌드 정보
+  * `GET /api/metrics`: Prometheus 호환 실시간 동시성, QPS, 힙 메모리 지표
+  * `GET /api/realtime`: Server-Sent Events (SSE) 실시간 성능 및 쿼리 스트림
 * **7.2. 인증 및 세션 관리 엔드포인트**
   * `POST /api/auth/login`: 관리자 이메일/비밀번호 인증 및 JWT 발급
   * `POST /api/auth/refresh`: JWT 갱신
-* **7.3. SQL 및 데이터 조작 엔드포인트**
+* **7.3. SQL 및 테이블/레코드 CRUD 엔드포인트**
   * `POST /api/sql`: 임의 T-SQL/SQL 쿼리 실행
   * `GET /api/tables`: 테이블 목록 및 컬럼 메타데이터
-  * `GET /api/records`: 테이블 레코드 페이지네이션 및 필터링
-  * `POST /api/records`, `PUT /api/records`, `DELETE /api/records`: 레코드 CRUD
-* **7.4. 저장 프로시저 호출 엔드포인트**
-  * `POST /api/procs/exec`: 매개변수 기반 저장 프로시저 원격 RPC 호출
-* **7.5. 백업 및 재해 복구 엔드포인트**
+  * `POST /api/tables/:table/columns`: 비파괴적 컬럼 추가 DDL API
+  * `GET /api/records/:table`: 테이블 레코드 페이지네이션, 검색 및 필터링
+  * `POST /api/records/:table`, `PUT /api/records/:table`, `DELETE /api/records/:table`: 단건/벌크 CRUD
+* **7.4. 활동 감사 및 슬로우 쿼리 로깅 엔드포인트**
+  * `GET /api/logs/requests`: 최근 500건의 HTTP/SQL 활동 요청 감사 로그
+  * `GET /api/slow-queries`: 임계치(`100ms`) 초과 슬로우 쿼리 내역
+* **7.5. 저장 프로시저 호출 엔드포인트**
+  * `POST /api/procs/exec`: 매개변수 바인딩 기반 저장 프로시저 원격 RPC 호출
+* **7.6. 백업 및 재해 복구 엔드포인트**
   * `POST /api/backup`: 온라인 핫 백업 `.tar.gz` 스트리밍 다운로드
   * `POST /api/restore`: 백업 아카이브 업로드 및 전체 복원
-* **7.6. 고가용성 복제 관리 엔드포인트**
+* **7.7. 고가용성 복제 관리 엔드포인트**
   * `GET /api/replication/status`: 복제 역할(Primary/Replica) 및 LSN 상태
   * `GET /api/replication/stream`: Replica 대상 WAL 스트리밍 연결 (Server-Sent Events)
   * `POST /api/replication/promote`: Replica 노드의 Primary 무중단 승격
@@ -180,11 +194,13 @@
 
 ### 제8장. 와이어 프로토콜 기술 사양 (Wire Protocol Specifications)
 * **8.1. PostgreSQL Wire Protocol v3 사양**
+  * 포트: `5433` (기본 데이터베이스 `postgres`)
   * 지원 패킷: StartupMessage, SSLRequest, PasswordMessage, Query, Parse, Bind, Execute, Describe, Sync, Flush, Terminate
   * 지원 응답: AuthenticationOk, ReadyForQuery, RowDescription, DataRow, CommandComplete, ErrorResponse, NoticeResponse
 * **8.2. Microsoft SQL Server TDS 7.x / 8.0 Protocol 사양**
+  * 포트: `1433` (기본 데이터베이스 `master`)
   * 패킷 타입: `0x01` (SQLBatch), `0x02` (PreTDS7Login), `0x03` (RPC), `0x04` (Tabular), `0x06` (Attention), `0x0E` (TransactionManager), `0x10` (Login7)
-  * 데이터 토큰: `COLMETADATA` (`0x81`), `ROW` (`0xD1`), `DONE` (`0xFD`), `DONEPROC` (`0xFE`), `ENVCHANGE` (`0xE3`), `ERROR` (`0xAA`), `INFO` (`0xAB`), `RETURNSTATUS` (`0x79`), `RETURNVALUE` (`0xAC`)
+  * 데이터 토큰: `COLMETADATA` (`0x81`), `ROW` (`0xD1`), `NBCROW` (`0xD2`), `DONE` (`0xFD`), `DONEPROC` (`0xFE`), `ENVCHANGE` (`0xE3`), `ERROR` (`0xAA`), `INFO` (`0xAB`), `RETURNSTATUS` (`0x79`), `RETURNVALUE` (`0xAC`)
 
 ---
 
@@ -194,7 +210,7 @@
 * **9.2. TDS 에러 코드 및 심각도 (TDS Error Numbers & Severity)**
   * Severity 1~10 (Informational / Warnings), Severity 11~16 (User Execution Errors), Severity 17~25 (System Fatal Errors)
 * **9.3. PostgreSQL 에러 코드 및 오류 수준 (PG Error Severity & SQLSTATE)**
-  * `08000` (Connection Exception), `23505` (Unique Violation), `40001` (Serialization Failure / Write Conflict), `42P01` (Undefined Table)
+  * `08000` (Connection Exception), `23505` (Unique Violation), `40001` (Serialization Failure / Write Conflict), `42P01` (Undefined Table), `53200` (Out of Memory / Storage Capacity Limit Exceeded)
 
 ---
 
