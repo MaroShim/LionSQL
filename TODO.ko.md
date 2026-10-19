@@ -84,6 +84,7 @@
 | **P3** | **문서/가이드** | **Web Studio 전체 기능 상세 사용자 설명서 신설 (`DOC-UI-1`)** | `doc/WEB_STUDIO_GUIDE.ko.md` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
+| **P1** | **문서/릴리스** | **v0.90.0 기능 동결 4단계 문서 전수 정돈 마스터 플랜 (`DOC-CLEANUP`)** | `CHANGELOG.md`, `README.md`, `doc/`, `ROADMAP.md` | **완료 (`[x]`)** | [`notes/DOCUMENTATION_CLEANUP_PLAN.md`](notes/DOCUMENTATION_CLEANUP_PLAN.md) |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
 
@@ -565,5 +566,11 @@
   - `pkg/engine/sqlexec_dbcc.go`: `sys.databases` 및 `sys.master_files`에서 `sqlion` 항목을 완전 삭제하고 MSSQL 표준 `master` 단일 DB 및 master 파일만 노출하도록 정돈.
   - `pkg/catalog/virtual/info_schema.go`: `information_schema`의 `table_catalog`, `catalog_name` 등을 `postgres`로 일원화.
   - `pkg/engine/coordinator_impl.go`, `sqlexec_select.go`, `sqlexec_procs.go`: 세션 기본 데이터베이스를 PGWire/제네릭은 `postgres`, TDS는 `master`로 단일화하여 Beekeeper, DBeaver 등 외부 도구에서 단일 카탈로그 UX 완비.
+- [x] **v0.90.0 기능 동결 4단계 문서 전수 정돈 마스터 플랜 (`DOC-CLEANUP`) (`CHANGELOG.md`, `README.md`, `doc/`, `ROADMAP.md`, `notes/`)**:
+  - `CHANGELOG.md`: `[0.90.0] - 2026-10-19` 공식 릴리스 블록 확정 (글로벌 메모리 거버너 `MEM-1`, 단일 CLI `UNIFY-CLI`, Web Studio 실시간 스트림/로그/DDL 모달, 단일 카탈로그 표준화 등 Keep a Changelog 표준 정돈).
+  - 루트 `README.md` & `README.ko.md`: `v0.90.0 Feature Freeze` 배지 도입, 단일 바이너리 `./bin/lionsql` 포그라운드/데몬/관리 CLI 전면 반영, 4대 Web Studio 신규 뷰 및 외부 클라이언트 DSN 일원화.
+  - `doc/` 디렉터리 레거시 전수 정돈: `sqlion` ➔ `postgres`/`master` 단일 카탈로그 일원화, 미지원 TablePlus 언급 삭제 및 Beekeeper/DBeaver/Navicat 표준화, 구형 `./bin/server` ➔ `./bin/lionsql` 실행 명령 치환.
+  - `ROADMAP.md`: Phase 1~5 전체 완료 및 Phase 6 `v0.90.0 Feature Freeze` 달성 상태 동기화, v1.0.0 LTS(Phase 7) 마일스톤 정립.
+  - `notes/DOCUMENTATION_CLEANUP_PLAN.md`: 4단계 작업 현황 및 검증 결과 100% 완료(`[x]`) 상태 기록.
 
 

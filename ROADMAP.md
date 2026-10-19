@@ -24,11 +24,14 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 [ Phase 4: Ecosystem & VDBE Acceleration ] v0.13.0 - v0.15.0 [COMPLETED]
   pgx/v5 Pipelining + Multi-Tool Interop + VDBE Opcode Specialization (21k TPS)
 
-[ Phase 5: Enterprise Governance ] ──────► v0.16.0 - v0.19.0 [COMPLETED]
-  Engine Decoupling (pkg/engine) + Group Commit + RBAC + CBO DP Join Order
+[ Phase 5: Enterprise Governance ] ──────► v0.16.0 - v0.24.0 [COMPLETED]
+  Engine Decoupling (pkg/engine) + Group Commit + RBAC + CBO DP Join Order + Prepared LRU Cache
 
-[ Phase 6: Production Hardening ] ───────► v1.0.0 LTS (2026 Release) [ACTIVE FOCUS]
-  Always On Failover + Decoupled CDC/DuckDB + Immutable Audit Log + Driver Cert
+[ Phase 6: Production Hardening & Feature Freeze ] ► v0.90.0 [COMPLETED - FEATURE FREEZE]
+  Unified CLI (lionsql) + Web Studio Suite + Memory Governor + Protocol Gateways (postgres/master)
+
+[ Phase 7: Official 1.0 Release ] ────────► v1.0.0 LTS (2026 Release) [RELEASE CANDIDATE STAGE]
+  Always On Failover + Decoupled CDC/DuckDB + Certified Drivers + Final Documentation & Polish
 
 [ Future Horizons ] ─────────────────────► v1.1.0 - v1.2.0+  [PLANNED]
   Pure-Go Pebble/bbolt Storage + Wasm Sandbox UDF + Multi-Core Parallel OLAP
@@ -42,8 +45,9 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 2** | `v0.9.0` - `v0.10.0` | **SQL & Analytical Depth, Aggregations & Views**<br>Window functions, T-Digest quantiles, in-engine log operators (GREP/AWK), savepoints, views. | **100% Completed** |
 | **Phase 3** | `v0.11.0` - `v0.12.0` | **Replication, Official Drivers & Zero-Allocation**<br>1-Writer multi-reader WAL streaming replication, official driver compatibility, buffer pooling. | **100% Completed** |
 | **Phase 4** | `v0.13.0` - `v0.15.0` | **Modern Ecosystem, GUI Tool Interop & VDBE Acceleration**<br>pgx/v5 pipelining, DBeaver/SSMS interop, UUIDv7, VDBE opcode specialization (21k TPS peak). | **100% Completed** |
-| **Phase 5** | `v0.16.0` - `v0.19.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI. | **100% Completed** |
-| **Phase 6** | `v1.0.0 LTS`<br>**(2026 Release)** | **Always On HA, Decoupled HTAP & Production Hardening**<br>Automatic failover, decoupled CDC to DuckDB, zero-alloc bind, certified drivers, immutable audit log. | **95% (Active)** |
+| **Phase 5** | `v0.16.0` - `v0.24.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI, prepared LRU cache. | **100% Completed** |
+| **Phase 6** | `v0.90.0` | **Production Hardening & Feature Freeze Milestone**<br>Single-binary CLI (`lionsql`), Web Studio production suite, global memory governor, single-DB catalog standardization. | **100% Completed<br>(Feature Freeze)** |
+| **Phase 7** | `v1.0.0 LTS`<br>**(2026 Release)** | **Official 1.0 Production Release & Long-Term Support**<br>Always On HA, decoupled HTAP, driver certification, zero-race verification, release candidate sign-off. | **Release Candidate<br>Preparation** |
 | **Horizons** | `v1.1.0+` | **Post-1.0 Architectural Extensions**<br>Pure-Go persistent storage backend, Wasm UDF sandbox (`wazero`), multi-core parallel OLAP scans. | **Planned** |
 
 ---
@@ -94,10 +98,18 @@ Driver Cert    & Zero-Race    Availability   Audit Log      Tooling & CLI
   Direct binary bind parameter decoding (P-14), `WT_CURSOR` pooling/reset (P-8), OCC workspace map pooling (P-11), Volcano chunk streaming (P-12), and zero-alloc virtual catalog pre-filtering (`containsFold`).
 * **Multi-Language Driver Certification Harness (`pkg/wire`, `pkg/wire/tds`)**:
   Hermetic integration test suites for Python (`psycopg3`, `pymssql`), Go (`pgx`, `mssql`), JDBC, and ODBC.
+* **Single Standalone Binary & Unified CLI (`cmd/lionsql`, `UNIFY-CLI`)**:
+  Consolidated CLI tools and server daemon under `bin/lionsql` with first-class subcommands (`serve`, `start`, `stop`, `restart`, `status`, `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version`).
+* **Web Studio Production Feature Suite (`pkg/storage`, `pkg/engine`, `pkg/api`, `pkg/ui`)**:
+  Added Realtime Live Stream SSE viewer (`/api/realtime`), Request Activity Logs latency profiler (`/api/logs/requests`), Visual Column Addition DDL modal (`+ Add Column`), multi-row bulk exports (CSV/JSON), and foreign key interactive jump links (`↗`).
+* **Global Memory Governor & Query Circuit Breaker (`pkg/config`, `pkg/execution`, `cmd/server`)**:
+  Implemented dynamic physical RAM budgeting (`max_memory`, 70% of RAM) and query-level `work_mem: 64MB` circuit breakers in hash joins and external merge sort pipelines to eliminate OS OOM kills.
+* **Protocol Catalog Database Standardization (`pkg/catalog/virtual`, `pkg/engine`)**:
+  Eliminated legacy `sqlion` database across virtual catalog and engine to strictly standardize on protocol-native single database namespaces: `postgres` for PGWire and `master` for TDS.
 * **Test Suite Boilerplate Diet (`pkg/wire`, `pkg/api`)**:
   Net 291 lines of redundant socket handshake and setup boilerplate eliminated while preserving 100% test coverage.
 
-### 3.2. Active Deliverable (Target: Next Sprint Kickoff)
+### 3.2. Active Deliverables (Target: Official 1.0 Release Candidate)
 * **Enterprise Cryptographic Immutable Audit Log (`pkg/audit`, `pkg/api`)**:
   - **Specification**: Defined in master compliance document [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md).
   - **Architecture**: SHA-256 hash chaining ($H_n = \text{SHA256}(H_{n-1} \parallel R_n)$), lock-free MPSC ring buffer, isolated background disk flusher, structured JSON records, and offline cryptographic verification CLI (`lionsql audit verify`).
