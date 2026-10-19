@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Hardened default security response headers: `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, and `Referrer-Policy: strict-origin-when-cross-origin`.
 - **Web Studio Management UI/UX Modernization (`UI-1` ~ `UI-4`) (`pkg/ui/dashboard.html`)**:
   - Replaced all 13 legacy blocking browser `alert()` popups with a modern, non-intrusive Toast notification component (`showToast`) featuring emerald success, rose error, and slide-in/fade-out animations.
+  - Added password visibility eye toggle button (`togglePasswordVisibility`) with inline SVG eye/eye-off icons to login modal and SMTP settings.
   - Added responsive layout support (`@media (max-width: 900px)`) with mobile sticky navigation bar and drawer hamburger toggle (`toggleSidebar`), ensuring clean readability and horizontal scrolling on laptops and split-screen windows.
   - Added real-time instant search filter (`#sidebar-quick-search` / `onSidebarQuickSearch`) in the sidebar for immediate filtering across large table and stored procedure catalogs.
   - Fully eliminated legacy brand references (`SQLion` ➔ `LionSQL`, `X-LionSQL-Signature`, `lionsql serve` CLI commands).

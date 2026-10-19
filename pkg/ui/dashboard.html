@@ -190,6 +190,31 @@
       padding: 30px;
       box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5);
     }
+    .password-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+    .password-toggle-btn {
+      position: absolute;
+      right: 10px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      border-radius: 4px;
+      transition: color 0.15s, background 0.15s;
+    }
+    .password-toggle-btn:hover {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.1);
+    }
     .user-pill {
       display: flex;
       align-items: center;
@@ -1027,7 +1052,12 @@ END;</textarea>
               </div>
               <div style="flex: 1;">
                 <label style="font-size: 0.8rem; color: var(--text-muted); font-weight: 600;">Password:</label>
-                <input type="password" id="mail-password" placeholder="Leave empty to keep existing" style="margin-top: 4px;" />
+                <div class="password-wrapper">
+                  <input type="password" id="mail-password" placeholder="Leave empty to keep existing" style="margin-top: 4px; padding-right: 38px;" />
+                  <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('mail-password', this)" aria-label="Show password" title="Toggle password visibility">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1400,7 +1430,12 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         <input type="email" id="login-email" value="admin@lionsql.local" required placeholder="admin@lionsql.local" autocomplete="username" />
         
         <label style="font-size: 0.8rem; color: var(--text-muted);">Password:</label>
-        <input type="password" id="login-password" value="1234567890" required placeholder="Password" autocomplete="current-password" />
+        <div class="password-wrapper">
+          <input type="password" id="login-password" value="1234567890" required placeholder="Password" autocomplete="current-password" style="padding-right: 38px;" />
+          <button type="button" class="password-toggle-btn" onclick="togglePasswordVisibility('login-password', this)" aria-label="Show password" title="Toggle password visibility">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+          </button>
+        </div>
         
         <button type="submit" class="btn" style="width: 100%; margin-top: 10px; padding: 10px; font-size: 0.9rem;">Sign In</button>
       </form>
@@ -1630,6 +1665,25 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         toast.style.animation = 'toast-fade-out 0.3s forwards';
         setTimeout(() => toast.remove(), 300);
       }, 3500);
+    }
+
+    function togglePasswordVisibility(inputId, btn) {
+      const input = document.getElementById(inputId);
+      if (!input) return;
+      const isPassword = input.type === 'password';
+      input.type = isPassword ? 'text' : 'password';
+
+      if (isPassword) {
+        // Now visible: show Eye-Slash (Hide) icon
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>`;
+        btn.setAttribute('aria-label', 'Hide password');
+        btn.setAttribute('title', 'Hide password');
+      } else {
+        // Now hidden: show Eye (Show) icon
+        btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>`;
+        btn.setAttribute('aria-label', 'Show password');
+        btn.setAttribute('title', 'Show password');
+      }
     }
 
     function toggleSidebar() {
