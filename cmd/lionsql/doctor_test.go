@@ -9,7 +9,7 @@ import (
 )
 
 func TestDoctor_RunDiagnostics(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_doctor_test_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_doctor_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestDoctor_RunDiagnostics(t *testing.T) {
 }
 
 func TestDoctor_RunDoctorFunc(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_doctor_func_test_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_doctor_func_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}

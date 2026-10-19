@@ -149,7 +149,7 @@ func TestRBAC_TablePermissionsGrantRevokeDeny(t *testing.T) {
 
 func TestRBAC_UnifiedSuperuserLogins(t *testing.T) {
 	svc := auth.NewAuthService(auth.Config{})
-	_, err := svc.EnsureDefaultSuperuser("admin@sqlion.local", "SuperSecret123!")
+	_, err := svc.EnsureDefaultSuperuser("admin@lionsql.local", "SuperSecret123!")
 	if err != nil {
 		t.Fatalf("EnsureDefaultSuperuser failed: %v", err)
 	}
@@ -175,7 +175,7 @@ func TestRBAC_UnifiedSuperuserLogins(t *testing.T) {
 	}
 
 	// Superuser HTTP authentication must now work with new password
-	su, _, err := svc.Authenticate("admin@sqlion.local", "NewSecret456!")
+	su, _, err := svc.Authenticate("admin@lionsql.local", "NewSecret456!")
 	if err != nil || su == nil {
 		t.Fatalf("HTTP Superuser authenticate failed after AlterLoginPassword: %v", err)
 	}
@@ -214,7 +214,7 @@ func (m *mockExternalProvider) Authenticate(username, password string) (*auth.Lo
 
 func TestRBAC_ExternalAuthProvider(t *testing.T) {
 	svc := auth.NewAuthService(auth.Config{})
-	_, _ = svc.EnsureDefaultSuperuser("admin@sqlion.local", "MasterPass!")
+	_, _ = svc.EnsureDefaultSuperuser("admin@lionsql.local", "MasterPass!")
 
 	mockLDAP := &mockExternalProvider{
 		users: map[string]string{

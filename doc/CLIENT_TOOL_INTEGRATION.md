@@ -12,7 +12,7 @@ LionSQL acts as a zero-external-dependency database engine that concurrently ser
 |---|---|---|---|---|---|
 | **PostgreSQL v3** | `5433` (TCP) | `postgres` (or `admin`) | Any / Empty (Dev) | `sqlion` (or `default`) | Beekeeper Studio, DBeaver, pgAdmin, psql, lib/pq, pgx |
 | **Microsoft SQL Server (TDS 7.x/8.0)** | `1433` (TCP) | `sa` (or `admin`) | Any / Empty (Dev) | `sqlion` (or `master`) | Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, go-mssqldb, pymssql |
-| **HTTP REST & Studio** | `8090` (TCP) | `admin@sqlion.local` | `1234567890` | `sqlion` | Embedded Web Studio (`/_/`), curl, OpenAPI, fetch |
+| **HTTP REST & Studio** | `8090` (TCP) | `admin@lionsql.local` | `1234567890` | `lionsql` | Embedded Web Studio (`/_/`), curl, OpenAPI, fetch |
 
 > Note: LionSQL enforces **Instance-Based Database Isolation** (GEMINI.md Section 3). Each server process hosts exactly one isolated database catalog per data directory (`--data-dir`).
 

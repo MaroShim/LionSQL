@@ -52,7 +52,7 @@
 | **P3** | **도구호환/카탈로그** | **레거시 메타데이터 저장 프로시저 (`sp_tables`, `sp_columns`) 빌트인 구현 (`TDS-COMPAT-5`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **타입/와이어** | **`GETDATE()` 및 타임스탬프 함수의 네이티브 DATETIME 바이너리 직렬화 (`TDS-TYPE-1`)** | `pkg/engine`, `pkg/proc`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
 | **P3** | **KISS/실행통합** | **3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) (`KISS-5`)** | `pkg/engine`, `pkg/execution` | **Post-1.0 연기 (Postponed)** | - |
-| **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **설계 완료 (착수 준비)** | [`notes/UNIFIED_CLI_PLAN.md`](notes/UNIFIED_CLI_PLAN.md) |
+| **P1** | **KISS/단일바이너리** | **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`)** | `cmd/lionsql`, `cmd/server` | **완료 (`[x]`)** | [`notes/UNIFIED_CLI_PLAN.md`](notes/UNIFIED_CLI_PLAN.md) |
 | **P1** | **와이어/디코딩** | **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 (`PG-COMPAT-1`)** | `pkg/wire` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **엔진/무결성** | **기본키(PK) 중복 삽입 시 Unique Violation 에러 방출 (`PG-COMPAT-2`)** | `pkg/engine`, `pkg/storage` | **완료 (`[x]`)** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **P1** | **와이어/안정성** | **Prepared Statement 메모리 방어용 Bounded LRU 캐시 (`PREP-1`)** | `pkg/wire`, `pkg/wire/tds` | **완료 (`[x]`)** | - |
@@ -466,4 +466,12 @@
   - `pkg/execution/join.go` & `pkg/execution/merge_join.go`: `mergeTuplesWithArena`, `mergeTuplesWithNullsAndArena`, `mergeNullsWithTupleAndArena` 등 조인 튜플 병합 직전 좌/우측 튜플에 대해 `Materialize()`를 필수 호출하여 미조회 컬럼의 `NULL` 유실을 방지.
   - `pkg/execution/project.go`: `projectTuple`에서 자식 튜플을 사전 구체화하고, 컬럼 탐색 시 한정된 표현식(`f.expr`, 예: `o.amount`, `u.name`)을 비한정 별칭(`f.alias`)보다 먼저 조회하도록 우선순위를 바로잡아 동일 컬럼명 섀도잉 문제 완전 해소.
   - `pkg/wire/driver_integration_test.go` 및 `pkg/wire/driver_integration_wt_test.go` (`TestDriverIntegration_WiredTiger_RelationalJoin`)에 lib/pq 기반 E2E 조인 통합 테스트를 추가하여 PGWire 57개 전 시나리오 100.0% PASS 달성.
+- [x] **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`) (`cmd/lionsql`, `cmd/server`, `pkg/config`)**:
+  - `pkg/config/version.go`: LionSQL 릴리스 버전의 단일 소스 오브 트루스(SSOT)로 `const Version = "0.90"` 정립.
+  - `pkg/config/config.go`: 기본 관리자 계정을 `admin@lionsql.local`로 단일화, `-auth` 기본값을 `true`(Secure by Default)로 강화, 슬로우 쿼리 임계치(`ThresholdMS`) 기본값을 `100.0ms`로 상향.
+  - 설정 파일 자동 탐색을 `lionsql.json`으로 단일화하고, 레거시 `sqlion.json` 감지 시 보안 설정 오염을 방지하기 위해 자동 폴백 없이 경고를 출력하고 무시하는 방어 로직 적용.
+  - `cmd/lionsql`: PocketBase/CockroachDB 스타일 단일 바이너리 모델 적용. 인자가 없거나 플래그로 시작할 경우 서버를 즉시 포그라운드로 기동(`lionsql`, `lionsql -dir=./data`)하고, `serve`, `start`, `stop`, `restart`, `status`, `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version` 등 현대적 서브커맨드 완비.
+  - `cmd/server`: 하위 호환성을 위해 `[LionSQL Notice] 'bin/server' is deprecated...` 안내를 출력하고 `bin/lionsql`로 투명하게 실행을 위임하는 경량 래퍼로 전환.
+  - 서버 배너 및 기본 관리자 비밀번호(`1234567890`) 사용 시 `[SECURITY WARNING]` 리마인드 경고 출력 로직 탑재.
+
 

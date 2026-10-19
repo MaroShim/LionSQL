@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SQLion Admin Dashboard</title>
+  <title>LionSQL Admin Dashboard</title>
   <style>
     :root {
       --bg: #0f172a;
@@ -284,7 +284,7 @@
 <body>
   <aside>
     <div class="logo">
-      <span>SQLion</span>
+      <span>LionSQL</span>
       <span class="badge">OLTP + SP</span>
       <span id="realtime-badge" style="margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:0.65rem; color:#6ee7b7; background:#064e3b; padding:2px 6px; border-radius:9999px; border:1px solid #10b981;">
         <span style="width:5px; height:5px; border-radius:50%; background:#10b981;"></span> Live
@@ -295,7 +295,7 @@
         <div style="display: flex; align-items: center; gap: 8px; overflow: hidden;">
           <div style="width: 26px; height: 26px; border-radius: 6px; background: #3b82f6; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.8rem; color: #fff; flex-shrink: 0;">A</div>
           <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            <div id="current-user-email" style="color: #6ee7b7; font-weight: 600; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">admin@sqlion.local</div>
+            <div id="current-user-email" style="color: #6ee7b7; font-weight: 600; font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">admin@lionsql.local</div>
             <div style="font-size: 0.68rem; color: var(--text-muted);">Superuser</div>
           </div>
         </div>
@@ -1253,14 +1253,14 @@ const procRes = await client.exec('TransferFunds', {
       <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
         <div style="background: var(--primary); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">S</div>
         <div>
-          <h2 style="font-size: 1.2rem; font-weight: 700;">SQLion Studio Login</h2>
+          <h2 style="font-size: 1.2rem; font-weight: 700;">LionSQL Studio Login</h2>
           <div style="font-size: 0.75rem; color: var(--text-muted);">Superuser Authentication</div>
         </div>
       </div>
       <div id="login-error" style="display: none; background: #7f1d1d; color: #fca5a5; padding: 8px 12px; border-radius: 6px; font-size: 0.8rem; margin-bottom: 14px;"></div>
       <form onsubmit="handleLoginSubmit(event)">
         <label style="font-size: 0.8rem; color: var(--text-muted);">Administrator Email:</label>
-        <input type="email" id="login-email" value="admin@sqlion.local" required placeholder="admin@sqlion.local" autocomplete="username" />
+        <input type="email" id="login-email" value="admin@lionsql.local" required placeholder="admin@lionsql.local" autocomplete="username" />
         
         <label style="font-size: 0.8rem; color: var(--text-muted);">Password:</label>
         <input type="password" id="login-password" value="1234567890" required placeholder="Password" autocomplete="current-password" />

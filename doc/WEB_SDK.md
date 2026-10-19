@@ -130,7 +130,7 @@ console.log('Aggregates:', result.rows);
 
 ```javascript
 // Superuser login
-const authData = await client.auth.login('admin@sqlion.local', 'password');
+const authData = await client.auth.login('admin@lionsql.local', 'password');
 console.log('Logged in as:', authData.user.email);
 console.log('Token:', client.token);
 

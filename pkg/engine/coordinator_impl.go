@@ -77,7 +77,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	}
 	if cfg.AuthService == nil {
 		cfg.AuthService = auth.NewAuthService(auth.Config{})
-		_, _ = cfg.AuthService.EnsureDefaultSuperuser("admin@sqlion.local", "1234567890")
+		_, _ = cfg.AuthService.EnsureDefaultSuperuser("admin@lionsql.local", "1234567890")
 	}
 
 	cache := runtime.NewPlanCache()

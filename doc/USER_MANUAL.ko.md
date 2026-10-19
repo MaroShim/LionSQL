@@ -40,8 +40,8 @@
 
 ### 제3장. 서버 운영 및 설정 관리 (Configuration & Operation)
 * **3.1. 설정 우선순위 계층 구조**
-  * CLI 플래그 > JSON 설정 파일(`sqlion.json`) > 내장 기본값
-* **3.2. 설정 파일(`sqlion.json`) 구성 및 예시**
+  * CLI 플래그 > JSON 설정 파일(`lionsql.json`) > 내장 기본값
+* **3.2. 설정 파일(`lionsql.json`) 구성 및 예시**
   * `server`, `network`, `auth`, `resources`, `logging`, `replication` 섹션 가이드
 * **3.3. 네트워크 리스너 및 포트 관리**
   * 웹 관리 스튜디오 & REST API (기본 `:8090`)

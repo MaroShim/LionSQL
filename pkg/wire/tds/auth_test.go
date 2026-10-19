@@ -145,7 +145,7 @@ func TestTDS_AuthenticationEnforcement(t *testing.T) {
 	cat := catalog.New(eng)
 
 	authSvc := auth.NewAuthService(auth.Config{})
-	_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "UnifiedMasterSecret999!")
+	_, _ = authSvc.EnsureDefaultSuperuser("admin@lionsql.local", "UnifiedMasterSecret999!")
 
 	coord := engine.NewCoordinator(cat, eng, engine.Config{
 		AuthService: authSvc,

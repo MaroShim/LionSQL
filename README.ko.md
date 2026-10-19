@@ -169,7 +169,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
 ------------------------------------------------------------
  [Web Dashboard]  http://127.0.0.1:8090/_/
  [HTTP API]       http://127.0.0.1:8090/api/health
- [Superuser Auth] admin@sqlion.local (JWT Auth: false)
+ [Superuser Auth] admin@lionsql.local (JWT Auth: true)
  [Postgres Wire]  psql -h 127.0.0.1 -p 5433 (Beekeeper / DBeaver / DbGate / psql)
  [TDS / MSSQL]    sqlcmd -S 127.0.0.1,1433 (Beekeeper / DBeaver / DbGate / Azure Data Studio / pymssql)
  [Data Directory] data

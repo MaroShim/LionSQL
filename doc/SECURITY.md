@@ -85,7 +85,7 @@ sudo ufw allow from 10.0.1.0/24 to any port 8090 proto tcp
 If you discover a security vulnerability in LionSQL, please report it responsibly rather than opening a public issue.
 
 ### Reporting Procedure
-- **Email**: Send detailed reproduction steps, proof-of-concept scripts, and affected versions to `security@sqlion.local` (or create a private GitHub Security Advisory).
+- **Email**: Send detailed reproduction steps, proof-of-concept scripts, and affected versions to `security@lionsql.local` (or create a private GitHub Security Advisory).
 - **Response Timeline**:
   - Initial acknowledgement: Within 24 hours.
   - Triage and impact assessment: Within 48 hours.

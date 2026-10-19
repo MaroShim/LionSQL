@@ -114,8 +114,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Multi-protocol catalog interceptors, schema discovery routing, and pagination normalization (`OFFSET FETCH` / `TOP`).
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
 * [`TDS_COMPATIBILITY_REPORT.md`](file:///Users/maro/Projects/LionSQL/doc/TDS_COMPATIBILITY_REPORT.md)
-  * Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) 실시간 123개 T-SQL/ORM 호환성 전수 진단 및 갭 분석 종합 보고서 (PASS: 109개 88.6%, 실무 결함 분석 및 해결 과제 수록).
-* [`../notes/COLLATION_AND_LOCALE_PLAN.md`](file:///Users/maro/Projects/LionSQL/notes/COLLATION_AND_LOCALE_PLAN.md)
+  * Comprehensive Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) live compatibility verification report across 123 enterprise T-SQL/ORM scenarios (**99.2% practical compatibility rate**: 122/123 passing).
+* [`COLLATION_AND_LOCALE_PLAN.md`](file:///Users/maro/Projects/LionSQL/doc/COLLATION_AND_LOCALE_PLAN.md)
   * Microsoft SQL Server Collation, Locale & Multi-Language architecture and implementation plan (Tolerant `COLLATE` parser, `--collation` dynamic tokens, `COLLATIONPROPERTY`, and zero collation conflict policy).
 
 ---

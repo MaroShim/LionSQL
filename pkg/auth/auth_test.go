@@ -28,18 +28,18 @@ func TestAuth_TokenLifecycleAndRevocation(t *testing.T) {
 		TokenDuration: 2 * time.Second,
 	})
 
-	user, err := svc.EnsureDefaultSuperuser("admin@sqlion.local", "mypassword")
+	user, err := svc.EnsureDefaultSuperuser("admin@lionsql.local", "mypassword")
 	if err != nil {
 		t.Fatalf("EnsureDefaultSuperuser failed: %v", err)
 	}
 
 	// 1. Authenticate
-	u, token, err := svc.Authenticate("admin@sqlion.local", "mypassword")
+	u, token, err := svc.Authenticate("admin@lionsql.local", "mypassword")
 	if err != nil {
 		t.Fatalf("Authenticate failed: %v", err)
 	}
-	if u.Email != "admin@sqlion.local" {
-		t.Fatalf("Expected email admin@sqlion.local, got %s", u.Email)
+	if u.Email != "admin@lionsql.local" {
+		t.Fatalf("Expected email admin@lionsql.local, got %s", u.Email)
 	}
 
 	// 2. Validate token
@@ -78,7 +78,7 @@ func TestAuth_TokenLifecycleAndRevocation(t *testing.T) {
 	}
 
 	// New login must issue working token with new token_key
-	_, newToken, err := svc.Authenticate("admin@sqlion.local", "mypassword")
+	_, newToken, err := svc.Authenticate("admin@lionsql.local", "mypassword")
 	if err != nil {
 		t.Fatalf("Authenticate after revocation failed: %v", err)
 	}
@@ -92,12 +92,12 @@ func TestAuth_TokenExpiration(t *testing.T) {
 		TokenDuration: 1 * time.Second,
 	})
 
-	_, err := svc.EnsureDefaultSuperuser("fast@sqlion.local", "password")
+	_, err := svc.EnsureDefaultSuperuser("fast@lionsql.local", "password")
 	if err != nil {
 		t.Fatalf("Ensure failed: %v", err)
 	}
 
-	_, token, err := svc.Authenticate("fast@sqlion.local", "password")
+	_, token, err := svc.Authenticate("fast@lionsql.local", "password")
 	if err != nil {
 		t.Fatalf("Auth failed: %v", err)
 	}

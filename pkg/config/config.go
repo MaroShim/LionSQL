@@ -143,7 +143,7 @@ func DefaultConfig() *Config {
 			AutoSeed: false,
 		},
 		Outbox: OutboxConfig{
-			TopicPrefix: "sqlion.",
+			TopicPrefix: "lionsql.",
 		},
 		Replication: ReplicationConfig{
 			Enabled:    true,
@@ -160,8 +160,8 @@ func DefaultConfig() *Config {
 			},
 		},
 		Auth: AuthConfig{
-			Enabled:    false,
-			AdminEmail: "admin@sqlion.local",
+			Enabled:    true,
+			AdminEmail: "admin@lionsql.local",
 			AdminPass:  "1234567890",
 		},
 		Resources: ResourcesConfig{
@@ -172,7 +172,7 @@ func DefaultConfig() *Config {
 		Logging: LoggingConfig{
 			SlowQuery: SlowQueryLogConfig{
 				File:        "",
-				ThresholdMS: 50.0,
+				ThresholdMS: 100.0,
 			},
 			GeneralQuery: GeneralQueryLogConfig{
 				File: "",
@@ -197,7 +197,9 @@ func LoadFromFile(filePath string) (*Config, error) {
 }
 
 // AutoDiscoverConfig attempts to locate an existing config file or falls back to defaults.
-// Precedence: explicitPath > ./sqlion.json > <dataDir>/sqlion.json > Built-in Defaults.
+// Precedence: explicitPath > ./lionsql.json > <dataDir>/lionsql.json > Built-in Defaults.
+// To prevent security issues, legacy 'sqlion.json' is never silently loaded; if found,
+// a warning is printed to stderr and the file is ignored.
 // Applies environment variable overrides as per Golden Rule 37.
 func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, error) {
 	var resCfg *Config
@@ -210,19 +212,33 @@ func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, e
 		}
 		resCfg = cfg
 		resPath = explicitPath
-	} else if fi, err := os.Stat("sqlion.json"); err == nil && !fi.IsDir() {
-		cfg, err := LoadFromFile("sqlion.json")
+	} else if fi, err := os.Stat("lionsql.json"); err == nil && !fi.IsDir() {
+		cfg, err := LoadFromFile("lionsql.json")
 		if err == nil {
 			resCfg = cfg
-			resPath = "sqlion.json"
+			resPath = "lionsql.json"
 		}
 	} else if dataDir != "" {
-		dataConfig := filepath.Join(dataDir, "sqlion.json")
+		dataConfig := filepath.Join(dataDir, "lionsql.json")
 		if fi, err := os.Stat(dataConfig); err == nil && !fi.IsDir() {
 			cfg, err := LoadFromFile(dataConfig)
 			if err == nil {
 				resCfg = cfg
 				resPath = dataConfig
+			}
+		}
+	}
+
+	// Security guard: detect legacy sqlion.json and warn user, but do NOT silently load it
+	if resPath == "" {
+		legacyLocations := []string{"sqlion.json"}
+		if dataDir != "" {
+			legacyLocations = append(legacyLocations, filepath.Join(dataDir, "sqlion.json"))
+		}
+		for _, leg := range legacyLocations {
+			if fi, err := os.Stat(leg); err == nil && !fi.IsDir() {
+				fmt.Fprintf(os.Stderr, "[LionSQL WARNING] Found legacy configuration file %q. For security reasons, it is ignored. Please rename it to 'lionsql.json'.\n", leg)
+				break
 			}
 		}
 	}

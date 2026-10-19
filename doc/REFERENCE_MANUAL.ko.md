@@ -24,7 +24,7 @@
 ---
 
 ### 제2장. 설정 파일 사양 (Configuration File Reference)
-* **2.1. `sqlion.json` 전체 스키마 명세**
+* **2.1. `lionsql.json` 전체 스키마 명세**
 * **2.2. 섹션별 설정 키 상세**
   * `Server`: `engine`, `data_dir`, `ephemeral`, `auto_seed`, `pid_file`
   * `Network`: `http_addr`, `pg_addr`, `tds_addr`, `tls` (`enabled`, `cert_file`, `key_file`, `require_ssl`)

@@ -58,7 +58,7 @@ type Server struct {
 // NewServer initializes a new Server with default in-memory auth service.
 func NewServer(cat *catalog.Catalog, eng storage.Engine) *Server {
 	authSvc := auth.NewAuthService(auth.Config{})
-	_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "1234567890")
+	_, _ = authSvc.EnsureDefaultSuperuser("admin@lionsql.local", "1234567890")
 	return NewServerWithAuth(cat, eng, authSvc, false)
 }
 
@@ -66,7 +66,7 @@ func NewServer(cat *catalog.Catalog, eng storage.Engine) *Server {
 func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.AuthService, enableAuth bool) *Server {
 	if authSvc == nil {
 		authSvc = auth.NewAuthService(auth.Config{})
-		_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "1234567890")
+		_, _ = authSvc.EnsureDefaultSuperuser("admin@lionsql.local", "1234567890")
 	}
 	cache := runtime.NewPlanCache()
 	broker := NewRealtimeBroker()

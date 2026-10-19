@@ -19,7 +19,7 @@ Authenticates a superuser and issues a signed JWT token.
 - **Request Body**:
   ```json
   {
-    "email": "admin@sqlion.local",
+    "email": "admin@lionsql.local",
     "password": "your-password"
   }
   ```
@@ -29,7 +29,7 @@ Authenticates a superuser and issues a signed JWT token.
     "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
     "user": {
       "id": "usr-01",
-      "email": "admin@sqlion.local",
+      "email": "admin@lionsql.local",
       "role": "superuser"
     }
   }

@@ -7,6 +7,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- **Unified Single Binary CLI & Operational Lifecycle (`UNIFY-CLI`) (`cmd/lionsql`, `cmd/server`, `pkg/config`)**:
+  - Consolidated server and CLI tools into a single autonomous binary (`bin/lionsql`), adopting the modern PocketBase/CockroachDB CLI model where running without arguments or with flags defaults immediately to starting the server in foreground (`lionsql`, `lionsql -dir=./data`).
+  - Added modern first-class subcommands: `serve`, `start` (daemon), `stop`, `restart`, `status`, `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, and `version`.
+  - Added authoritative single source of truth for release versioning in `pkg/config/version.go` (`const Version = "0.90"`).
+  - Converted `cmd/server/main.go` into a lightweight, backward-compatible delegation wrapper emitting deprecation guidance (`[LionSQL Notice] 'bin/server' is deprecated...`) and passing all arguments directly to `bin/lionsql`.
+  - Added startup security warning banner reminder (`[SECURITY WARNING]`) when default administrative superuser credentials (`1234567890`) remain in use.
+
+### Changed
+- **Branding & Global Security Defaults (`UNIFY-CLI`) (`pkg/config`, `pkg/api`, `pkg/engine`, `pkg/ui`)**:
+  - Standardized all superuser accounts, documentation, and UI templates on `admin@lionsql.local` (replacing `admin@sqlion.local`).
+  - Strengthened default REST authentication policy to `auth.enabled: true` (Secure by Default).
+  - Increased slow query recording threshold default from `50.0ms` to `100.0ms` (`cfg.Logging.SlowQuery.ThresholdMS`).
+  - Standardized configuration file discovery strictly on `lionsql.json` and PID files on `lionsql.pid` / `lionsql.log`.
+  - Implemented strict legacy configuration rejection: detection of `sqlion.json` emits a warning and is ignored without silent fallback to prevent configuration hijacking.
+
 ### Fixed
 - **Multi-Table Relational JOIN Column Resolution & LazyTuple Decoding (`PG-COMPAT-3` / `PG-ORM-9`) (`pkg/execution`, `pkg/wire`)**:
   - Implemented `Tuple.Materialize()` in `pkg/execution/iterator.go` to force decoding of underlying `storage.LazyTuple` (used by the WiredTiger engine) into the `Values` slice before merging tuples or evaluating projections, resolving an issue where unprojected columns in joined relations evaluated to `nil`/`NULL`.

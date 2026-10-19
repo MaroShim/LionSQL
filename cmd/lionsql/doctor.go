@@ -172,10 +172,10 @@ func (d *Doctor) checkNetworkPorts() {
 		// Port is in use: check if active SQLion instance owns it
 		pidFile := d.cfg.Server.PIDFile
 		if pidFile == "" {
-			pidFile = filepath.Join(d.cfg.Server.DataDir, "sqlion.pid")
+			pidFile = filepath.Join(d.cfg.Server.DataDir, "lionsql.pid")
 		}
 		if pid, rErr := readPidFile(pidFile); rErr == nil && isProcessAlive(pid) {
-			d.addResult(cat, p.name, fmt.Sprintf("%s (active, bound by SQLion PID %d)", p.addr, pid), "OK", nil)
+			d.addResult(cat, p.name, fmt.Sprintf("%s (active, bound by LionSQL PID %d)", p.addr, pid), "OK", nil)
 		} else {
 			d.addResult(cat, p.name, fmt.Sprintf("%s (port in use: %v)", p.addr, err), "WARN", nil)
 		}
@@ -416,7 +416,7 @@ func (d *Doctor) checkSecurityAndCryptography() {
 func (d *Doctor) PrintReport() {
 	fmt.Println()
 	fmt.Println("================================================================================")
-	fmt.Println("                  SQLion System Diagnostic Utility (--doctor)                   ")
+	fmt.Println("                  LionSQL System Diagnostic Utility (--doctor)                   ")
 	fmt.Println("================================================================================")
 
 	currentCat := ""
@@ -457,7 +457,7 @@ func (d *Doctor) PrintReport() {
 	} else if warnings > 0 {
 		fmt.Println("[WARN] System check passed with non-fatal warnings.")
 	} else {
-		fmt.Println("[PASS] All system checks passed. SQLion is healthy and ready for operation.")
+		fmt.Println("[PASS] All system checks passed. LionSQL is healthy and ready for operation.")
 	}
 	fmt.Println("================================================================================")
 	fmt.Println()

@@ -240,7 +240,7 @@ func TestAPI_AuthWorkflow(t *testing.T) {
 
 	// 3. Login with wrong password should fail with 401
 	badLoginPayload, _ := json.Marshal(map[string]string{
-		"email":    "admin@sqlion.local",
+		"email":    "admin@lionsql.local",
 		"password": "wrongpassword",
 	})
 	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(badLoginPayload))
@@ -252,7 +252,7 @@ func TestAPI_AuthWorkflow(t *testing.T) {
 
 	// 4. Login with default credentials
 	loginPayload, _ := json.Marshal(map[string]string{
-		"email":    "admin@sqlion.local",
+		"email":    "admin@lionsql.local",
 		"password": "1234567890",
 	})
 	req = httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))
@@ -270,8 +270,8 @@ func TestAPI_AuthWorkflow(t *testing.T) {
 	if loginResp.Token == "" {
 		t.Fatalf("Expected non-empty token")
 	}
-	if loginResp.Record["email"] != "admin@sqlion.local" {
-		t.Fatalf("Expected email admin@sqlion.local, got %v", loginResp.Record["email"])
+	if loginResp.Record["email"] != "admin@lionsql.local" {
+		t.Fatalf("Expected email admin@lionsql.local, got %v", loginResp.Record["email"])
 	}
 
 	// 5. Access protected endpoint with Bearer token
@@ -341,7 +341,7 @@ func TestAPI_APIKeysWorkflow(t *testing.T) {
 
 	// 1. Login as Superuser
 	loginPayload, _ := json.Marshal(map[string]string{
-		"email":    "admin@sqlion.local",
+		"email":    "admin@lionsql.local",
 		"password": "1234567890",
 	})
 	req := httptest.NewRequest(http.MethodPost, "/api/auth/login", bytes.NewReader(loginPayload))

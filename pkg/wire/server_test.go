@@ -703,7 +703,7 @@ func TestWire_PasswordAuthentication(t *testing.T) {
 		if ok {
 			coord.SetAuthService(authSvc, true)
 		}
-		_, _ = authSvc.EnsureDefaultSuperuser("admin@sqlion.local", "SuperUnifiedPass99!")
+		_, _ = authSvc.EnsureDefaultSuperuser("admin@lionsql.local", "SuperUnifiedPass99!")
 
 		// 3.1: user=postgres with correct superuser password must succeed
 		if ok, err := authenticatePGClient(t, srv, "postgres", "SuperUnifiedPass99!"); !ok {

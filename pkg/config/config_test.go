@@ -29,8 +29,14 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.Network.TDSAddr != "127.0.0.1:1433" {
 		t.Errorf("expected tds_addr '127.0.0.1:1433', got %q", cfg.Network.TDSAddr)
 	}
-	if cfg.Logging.SlowQuery.ThresholdMS != 50.0 {
-		t.Errorf("expected threshold_ms 50.0, got %v", cfg.Logging.SlowQuery.ThresholdMS)
+	if cfg.Logging.SlowQuery.ThresholdMS != 100.0 {
+		t.Errorf("expected threshold_ms 100.0, got %v", cfg.Logging.SlowQuery.ThresholdMS)
+	}
+	if !cfg.Auth.Enabled {
+		t.Errorf("expected auth enabled by default")
+	}
+	if cfg.Auth.AdminEmail != "admin@lionsql.local" {
+		t.Errorf("expected admin email 'admin@lionsql.local', got %q", cfg.Auth.AdminEmail)
 	}
 }
 
@@ -82,7 +88,7 @@ func TestWriteToFileAtomic_AndReload(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	targetPath := filepath.Join(tmpDir, "sub", "sqlion.json")
+	targetPath := filepath.Join(tmpDir, "sub", "lionsql.json")
 	cfg := config.DefaultConfig()
 	cfg.Server.DataDir = "atomic_dir"
 	cfg.Network.HTTPAddr = "127.0.0.1:8888"
@@ -119,8 +125,8 @@ func TestAutoDiscoverConfig(t *testing.T) {
 		t.Fatalf("expected default config fallback, got path=%q, err=%v", path, err)
 	}
 
-	// 2. When dataDir has sqlion.json
-	dataConfig := filepath.Join(tmpDir, "sqlion.json")
+	// 2. When dataDir has lionsql.json
+	dataConfig := filepath.Join(tmpDir, "lionsql.json")
 	customJSON := `{"server":{"engine":"memory"}}`
 	if err := os.WriteFile(dataConfig, []byte(customJSON), 0644); err != nil {
 		t.Fatalf("write dataConfig failed: %v", err)
@@ -129,6 +135,32 @@ func TestAutoDiscoverConfig(t *testing.T) {
 	cfg, path, err = config.AutoDiscoverConfig("", tmpDir)
 	if err != nil || path != dataConfig || cfg.Server.Engine != "memory" {
 		t.Errorf("auto-discovery from dataDir failed: path=%s, engine=%s, err=%v", path, cfg.Server.Engine, err)
+	}
+}
+
+func TestAutoDiscoverConfig_StrictLegacyIgnore(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "sqlion_legacy_ignore_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	// When legacy sqlion.json exists in dataDir, it must NOT be loaded (security guard against config poisoning)
+	legacyConfig := filepath.Join(tmpDir, "sqlion.json")
+	customJSON := `{"server":{"engine":"memory"}}`
+	if err := os.WriteFile(legacyConfig, []byte(customJSON), 0644); err != nil {
+		t.Fatalf("write legacyConfig failed: %v", err)
+	}
+
+	cfg, path, err := config.AutoDiscoverConfig("", tmpDir)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if path != "" {
+		t.Errorf("expected empty path for legacy sqlion.json, got %q", path)
+	}
+	if cfg.Server.Engine != "wiredtiger" {
+		t.Errorf("expected default engine 'wiredtiger', got %q", cfg.Server.Engine)
 	}
 }
 
@@ -155,7 +187,7 @@ func TestNetworkConfig_OptOut(t *testing.T) {
 	}
 	defer os.RemoveAll(tmpDir)
 
-	jsonPath := filepath.Join(tmpDir, "sqlion.json")
+	jsonPath := filepath.Join(tmpDir, "lionsql.json")
 	customJSON := `{
 		"network": {
 			"http_addr": "",
