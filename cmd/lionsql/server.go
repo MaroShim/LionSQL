@@ -733,9 +733,9 @@ func runServer(args []string) error {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
-		fmt.Println("------------------------------------------------------------")
+		fmt.Println("--------------------------------------------------------------------------------")
 		fmt.Printf(" LionSQL - High-Concurrency OLTP & Stored Procedure Server (v%s)\n", config.Version)
-		fmt.Println("------------------------------------------------------------")
+		fmt.Println("--------------------------------------------------------------------------------")
 		if loadedConfigPath != "" {
 			fmt.Printf(" [Configuration]  %s (JSON Config File)\n", loadedConfigPath)
 		} else {
@@ -786,11 +786,11 @@ func runServer(args []string) error {
 			fmt.Println(" [Developer Mode] Enabled (-dev: Real-time Wire Query & Error Tracing)")
 		}
 		if cfg.Auth.AdminPass == "1234567890" {
-			fmt.Println("------------------------------------------------------------")
+			fmt.Println("--------------------------------------------------------------------------------")
 			fmt.Println(" [SECURITY WARNING] Default administrator credentials in use (admin@lionsql.local / 1234567890).")
 			fmt.Println("                    Please change your password immediately before production deployment!")
 		}
-		fmt.Println("------------------------------------------------------------")
+		fmt.Println("--------------------------------------------------------------------------------")
 		fmt.Println("Press Ctrl+C to stop server")
 
 		if httpServer != nil {

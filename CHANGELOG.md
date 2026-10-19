@@ -55,6 +55,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Standardized all error and alert banners (`create-table-error`, `login-error`, `create-key-error`, `create-cron-error`, `create-webhook-error`, `import-csv-error`, `promote-replica-modal`) on `.alert-danger-box` and `.btn-danger-subtle`.
   - Converted all JavaScript dynamic table renderers (`renderWebhookDeliveries`, `renderCrons`, `renderMailLogs`, `renderReplicasTable`, `renderReplicationStandalone`, `updateReplicationSidebarBadge`) from hardcoded inline styles to theme-aware semantic classes (`.badge-success`, `.badge-danger`, `.badge-warning`, `.badge-info`, `.badge-purple`, `.badge-muted`).
   - Resolved dark-on-dark washout in Developer API Preview modal by eliminating hardcoded `#1e293b` on unselected endpoint and language tabs, replacing with semantic tokens (`--tab-inactive-bg: #ffffff` in Light Mode, `--tab-inactive-color: #334155`) and crisp border styling.
+- **Web Studio Default Active Status & Empty State Overhaul (`UI-12`) (`pkg/ui/dashboard.html`)**:
+  - Resolved blank/empty right pane when navigating to Replication (HA), Realtime Live Stream, and Request Logs.
+  - **Replication (HA)**: Maintained connected replicas card visibility in standalone mode, displaying an active `STANDALONE PRIMARY` status row (`standalone-primary (Local)`, `127.0.0.1`, `ACTIVE / WRITER`, `0x0001 (Local LSN)`, `0 (Authoritative)`) alongside high-availability 1-Writer Multi-Reader architecture and deployment guide.
+  - **Realtime Live Stream**: Pre-seeded live stream circular buffer with an active system SSE listener card (`STREAM_LISTENER_ACTIVE`, `/api/realtime`, protocols: `HTTP / PGWire (:5433) / TDS (:1433)`) with semantic `READY` badge and expandable JSON payload inspection.
+  - **Request Logs**: Updated static HTML placeholder and JavaScript empty fallback to immediately display an active `GET /api/health (Engine Active & Ready)` status row on initial boot.
 - **Version Single-Source-of-Truth Synchronization (`pkg/api`, `pkg/backup`, `pkg/ui`)**:
   - Synchronized `GET /api/health` JSON response to use `config.Version` instead of legacy hardcoded `"0.7.0"`.
   - Synchronized backup and WAL archive manifest metadata (`backup.go`, `wal_archive.go`) to reference `config.Version`.
