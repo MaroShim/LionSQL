@@ -647,7 +647,22 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
-	// 1. Create accounts table if not exists
+	// 0. Safety invariant: Seed sample data is only permitted on an empty database
+	tables, err := s.engine.ListTables()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to check existing tables: %w", err))
+		return
+	}
+	if len(tables) > 0 {
+		names := make([]string, 0, len(tables))
+		for _, t := range tables {
+			names = append(names, t.Name)
+		}
+		writeError(w, http.StatusConflict, fmt.Errorf("sample data can only be seeded on an empty database; %d table(s) already exist: %s", len(tables), strings.Join(names, ", ")))
+		return
+	}
+
+	// 1. Create accounts table
 	accountsSchema := &storage.TableSchema{
 		Name: "accounts",
 		Columns: []storage.Column{
@@ -656,9 +671,12 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 			{Name: "balance", Type: storage.TypeInt, Nullable: false},
 		},
 	}
-	_ = s.engine.CreateTable(accountsSchema)
+	if err := s.engine.CreateTable(accountsSchema); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to create 'accounts' table: %w", err))
+		return
+	}
 
-	// 2. Create customers table if not exists
+	// 2. Create customers table
 	customersSchema := &storage.TableSchema{
 		Name: "customers",
 		Columns: []storage.Column{
@@ -668,9 +686,12 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 			{Name: "status", Type: storage.TypeVarChar, Nullable: false},
 		},
 	}
-	_ = s.engine.CreateTable(customersSchema)
+	if err := s.engine.CreateTable(customersSchema); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to create 'customers' table: %w", err))
+		return
+	}
 
-	// 3. Insert sample rows
+	// 3. Insert sample rows within a single atomic ACID transaction
 	session, err := s.engine.NewSession()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err)
@@ -683,50 +704,43 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	defer tx.Rollback()
 
-	_ = tx.Insert("accounts", storage.Record{
-		"id":      storage.IntValue(1),
-		"holder":  storage.StringValue("Alice"),
-		"balance": storage.IntValue(1000),
-	})
-	_ = tx.Insert("accounts", storage.Record{
-		"id":      storage.IntValue(2),
-		"holder":  storage.StringValue("Bob"),
-		"balance": storage.IntValue(500),
-	})
+	accountsRecords := []storage.Record{
+		{"id": storage.IntValue(1), "holder": storage.StringValue("Alice"), "balance": storage.IntValue(1000)},
+		{"id": storage.IntValue(2), "holder": storage.StringValue("Bob"), "balance": storage.IntValue(500)},
+	}
+	for _, rec := range accountsRecords {
+		if err := tx.Insert("accounts", rec); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to insert record into 'accounts': %w", err))
+			return
+		}
+	}
 
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(1),
-		"name":    storage.StringValue("Alice"),
-		"balance": storage.FloatValue(1000.5),
-		"status":  storage.StringValue("active"),
-	})
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(2),
-		"name":    storage.StringValue("Bob"),
-		"balance": storage.FloatValue(450.0),
-		"status":  storage.StringValue("pending"),
-	})
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(3),
-		"name":    storage.StringValue("Charlie"),
-		"balance": storage.FloatValue(800.0),
-		"status":  storage.StringValue("active"),
-	})
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(4),
-		"name":    storage.StringValue("Diana"),
-		"balance": storage.FloatValue(200.0),
-		"status":  storage.StringValue("inactive"),
-	})
-	_ = tx.Insert("customers", storage.Record{
-		"id":      storage.IntValue(5),
-		"name":    storage.StringValue("Evan"),
-		"balance": storage.FloatValue(600.0),
-		"status":  storage.StringValue("active"),
-	})
+	customerRecords := []storage.Record{
+		{"id": storage.IntValue(1), "name": storage.StringValue("Alice"), "balance": storage.FloatValue(1000.5), "status": storage.StringValue("active")},
+		{"id": storage.IntValue(2), "name": storage.StringValue("Bob"), "balance": storage.FloatValue(450.0), "status": storage.StringValue("pending")},
+		{"id": storage.IntValue(3), "name": storage.StringValue("Charlie"), "balance": storage.FloatValue(800.0), "status": storage.StringValue("active")},
+		{"id": storage.IntValue(4), "name": storage.StringValue("Diana"), "balance": storage.FloatValue(200.0), "status": storage.StringValue("inactive")},
+		{"id": storage.IntValue(5), "name": storage.StringValue("Evan"), "balance": storage.FloatValue(600.0), "status": storage.StringValue("active")},
+	}
+	for _, rec := range customerRecords {
+		if err := tx.Insert("customers", rec); err != nil {
+			writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to insert record into 'customers': %w", err))
+			return
+		}
+	}
 
-	_ = tx.Commit()
+	if err := tx.Commit(); err != nil {
+		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to commit sample data transaction: %w", err))
+		return
+	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"message": "Sample accounts and customers tables seeded successfully!"})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success": true,
+		"message": "Sample tables ('accounts', 'customers') seeded successfully with 7 records!",
+		"tables":  []string{"accounts", "customers"},
+		"records": 7,
+	})
 }
+

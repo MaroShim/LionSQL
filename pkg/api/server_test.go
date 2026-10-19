@@ -930,3 +930,42 @@ func TestAPI_ExecuteSQL_FormatArray(t *testing.T) {
 		t.Fatalf("expected 2 items, got %d", len(arrResp2))
 	}
 }
+
+func TestAPI_SeedOnNonEmptyDatabase_ReturnsConflict(t *testing.T) {
+	srv := setupTestServer()
+
+	// 1. First seed on empty database -> Should succeed (200 OK)
+	req1 := httptest.NewRequest(http.MethodPost, "/api/seed", nil)
+	rec1 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec1, req1)
+
+	if rec1.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK on first seed, got %d: %s", rec1.Code, rec1.Body.String())
+	}
+
+	var successResp map[string]any
+	if err := json.Unmarshal(rec1.Body.Bytes(), &successResp); err != nil {
+		t.Fatalf("failed to decode seed response: %v", err)
+	}
+	if successResp["success"] != true {
+		t.Errorf("expected success=true, got %v", successResp["success"])
+	}
+
+	// 2. Second seed on non-empty database -> Must fail with 409 Conflict
+	req2 := httptest.NewRequest(http.MethodPost, "/api/seed", nil)
+	rec2 := httptest.NewRecorder()
+	srv.Handler().ServeHTTP(rec2, req2)
+
+	if rec2.Code != http.StatusConflict {
+		t.Fatalf("expected 409 Conflict on non-empty seed, got %d: %s", rec2.Code, rec2.Body.String())
+	}
+
+	var errResp map[string]string
+	if err := json.Unmarshal(rec2.Body.Bytes(), &errResp); err != nil {
+		t.Fatalf("failed to decode error response: %v", err)
+	}
+	if !strings.Contains(errResp["error"], "empty database") {
+		t.Errorf("expected error message to mention 'empty database', got: %s", errResp["error"])
+	}
+}
+

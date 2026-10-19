@@ -24,7 +24,7 @@
 | **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
 | **`AUTH-1`** | **인증/토큰교환 (Auth)** | `AUTH-1` | 클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) 트랙 |
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
-| **`UI-1` ~ `UI-6`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-6` | 모던 Toast 알림, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 안전 가드 |
+| **`UI-1` ~ `UI-7`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-7` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드 |
 
 ---
 
@@ -69,6 +69,7 @@
 | **P1** | **UI/브랜드** | **Web Studio 브랜드 네이밍(`SQLion` ➔ `LionSQL`) 정돈 및 검색 필터 (`UI-3`, `UI-4`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/UX** | **Web Studio 비밀번호 표시/숨기기(Eye Toggle) 버튼 지원 (`UI-5`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/안전성** | **Drop Table 실수 방지용 테이블명 일치 확인 모달 가드레일 (`UI-6`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/데이터** | **Sample Data Seed 빈 DB 사전 검증 가드 및 원자적 피드백 (`UI-7`)** | `pkg/api`, `pkg/ui` | **완료 (`[x]`)** | - |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 
@@ -284,7 +285,7 @@
 
 ---
 
-### 3.11. HTTP API 하드닝 및 Web Studio 고도화 트랙 (`HTTP-1` ~ `HTTP-4`, `UI-1` ~ `UI-6`)
+### 3.11. HTTP API 하드닝 및 Web Studio 고도화 트랙 (`HTTP-1` ~ `HTTP-4`, `UI-1` ~ `UI-7`)
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -298,6 +299,7 @@
 | **UI-4** | UI/생산성 | 사이드바 실시간 테이블/프로시저 빠른 검색 필터 | **완료 (`[x]`)** | 수십~수백 개의 테이블 및 저장 프로시저를 즉시 타이핑하여 인라인 필터링하는 빠른 검색창(`onSidebarQuickSearch`) 완비 (`pkg/ui/dashboard.html`) |
 | **UI-5** | UI/UX | 패스워드 표시/숨기기(Eye Toggle) 버튼 지원 | **완료 (`[x]`)** | 로그인 모달 및 SMTP 설정의 패스워드 입력창에 마이크로 인터랙션 Eye 토글 버튼을 추가하여 입력 편의성 및 오타 방지 지원 (`pkg/ui/dashboard.html`) |
 | **UI-6** | UI/안전성 | Drop Table 실수 방지용 테이블명 일치 확인 모달 가드레일 | **완료 (`[x]`)** | 단순 브라우저 confirm 대신 대상 테이블명을 직접 타이핑해야만 삭제 버튼이 활성화되는 안전 가드레일 모달(`#drop-table-modal`) 구현 (GitHub/Supabase 스타일 오타/실수 원천 방지) (`pkg/ui/dashboard.html`) |
+| **UI-7** | UI/데이터 | Sample Data Seed 빈 DB 사전 검증 가드 및 원자적 피드백 | **완료 (`[x]`)** | 기존 테이블 보유 시 409 Conflict 차단 및 명확한 에러 안내, 빈 DB 시 원자적 트랜잭션 씨딩 및 첫 테이블(`accounts`) 자동 선택 로드 완비 (`pkg/api/handlers_records.go`, `pkg/ui/dashboard.html`) |
 
 ---
 
