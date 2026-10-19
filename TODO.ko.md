@@ -560,5 +560,10 @@
   - `pkg/api/realtime.go`: `http.NewResponseController`를 통해 SSE 스트림의 WriteDeadline을 해제하여 영구 Keep-Alive 스트리밍 보장.
   - `pkg/api/request_logger.go`: `/api/realtime` 및 `/api/cdc/stream`과 같은 영구 스트리밍 채널은 단발성 REST API 지연 시간 통계 왜곡을 방지하기 위해 요청 로거 기록 대상에서 제외.
   - `pkg/ui/dashboard.html`: Request Log UI에서 스트리밍 요청 수명이 유입될 경우 빨간색 에러 지연 시간(`#ef4444`) 대신 하늘색 스트림 뱃지(`(stream)`)로 렌더링하도록 안전 보강.
+- [x] **레거시 가상 DB(`sqlion`) 제거 및 와이어 프로토콜별 표준 단일 DB 정립 (`pkg/catalog/virtual`, `pkg/engine`)**:
+  - `pkg/catalog/virtual/pg.go`: `pg_database` 목록에서 레거시 `sqlion`을 완전 제거하고 PostgreSQL 표준 `postgres` 단일 DB만 노출하도록 정돈. `pg_stat_activity`의 기본 datname도 `postgres`로 갱신.
+  - `pkg/engine/sqlexec_dbcc.go`: `sys.databases` 및 `sys.master_files`에서 `sqlion` 항목을 완전 삭제하고 MSSQL 표준 `master` 단일 DB 및 master 파일만 노출하도록 정돈.
+  - `pkg/catalog/virtual/info_schema.go`: `information_schema`의 `table_catalog`, `catalog_name` 등을 `postgres`로 일원화.
+  - `pkg/engine/coordinator_impl.go`, `sqlexec_select.go`, `sqlexec_procs.go`: 세션 기본 데이터베이스를 PGWire/제네릭은 `postgres`, TDS는 `master`로 단일화하여 Beekeeper, DBeaver 등 외부 도구에서 단일 카탈로그 UX 완비.
 
 
