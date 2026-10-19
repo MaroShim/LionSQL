@@ -48,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Replaced low-contrast yellow primary key (`id`) table values and tags with authoritative, crisp high-contrast blue tokens (`--pk-val-color: #1d4ed8` in Light Mode, `#60a5fa` in Dark Mode).
   - Standardized all error and alert banners (`create-table-error`, `login-error`, `create-key-error`, `create-cron-error`, `create-webhook-error`, `import-csv-error`, `promote-replica-modal`) on `.alert-danger-box` and `.btn-danger-subtle`.
   - Converted all JavaScript dynamic table renderers (`renderWebhookDeliveries`, `renderCrons`, `renderMailLogs`, `renderReplicasTable`, `renderReplicationStandalone`, `updateReplicationSidebarBadge`) from hardcoded inline styles to theme-aware semantic classes (`.badge-success`, `.badge-danger`, `.badge-warning`, `.badge-info`, `.badge-purple`, `.badge-muted`).
+  - Resolved dark-on-dark washout in Developer API Preview modal by eliminating hardcoded `#1e293b` on unselected endpoint and language tabs, replacing with semantic tokens (`--tab-inactive-bg: #ffffff` in Light Mode, `--tab-inactive-color: #334155`) and crisp border styling.
 - **Version Single-Source-of-Truth Synchronization (`pkg/api`, `pkg/backup`, `pkg/ui`)**:
   - Synchronized `GET /api/health` JSON response to use `config.Version` instead of legacy hardcoded `"0.7.0"`.
   - Synchronized backup and WAL archive manifest metadata (`backup.go`, `wal_archive.go`) to reference `config.Version`.

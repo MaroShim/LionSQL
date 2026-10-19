@@ -229,6 +229,9 @@ func TestLightModeHighContrastStyles(t *testing.T) {
 		`class="alert-danger-box"`,
 		`var(--alert-danger-strong)`,
 		`var(--pk-val-color)`,
+		`--tab-inactive-bg`,
+		`--tab-inactive-color`,
+		`.tab-btn`,
 	}
 
 	for _, snippet := range requiredSnippets {

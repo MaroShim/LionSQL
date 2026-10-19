@@ -100,6 +100,12 @@
       /* Links & Code */
       --code-snippet-color: #e2e8f0;
       --link-accent: #60a5fa;
+
+      /* Tab Buttons (API Preview & Modals) */
+      --tab-inactive-bg: #1e293b;
+      --tab-inactive-color: #94a3b8;
+      --tab-inactive-border: var(--border);
+      --tab-inactive-hover: #334155;
     }
     html[data-theme="light"] {
       --bg: #f8fafc;
@@ -195,6 +201,12 @@
       /* Links & Code */
       --code-snippet-color: #1e293b;
       --link-accent: #2563eb;
+
+      /* Tab Buttons (API Preview & Modals) */
+      --tab-inactive-bg: #ffffff;
+      --tab-inactive-color: #334155;
+      --tab-inactive-border: #cbd5e1;
+      --tab-inactive-hover: #f1f5f9;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -303,6 +315,28 @@
       background: #4f46e5;
       border-color: #a5b4fc;
       box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+    }
+    .tab-btn {
+      background: var(--tab-inactive-bg);
+      color: var(--tab-inactive-color);
+      border: 1px solid var(--tab-inactive-border);
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover {
+      background: var(--tab-inactive-hover);
+      color: var(--text);
+    }
+    .tab-btn.active-ep {
+      background: var(--primary) !important;
+      color: #ffffff !important;
+      border-color: var(--primary) !important;
+    }
+    .tab-btn.active-lang {
+      background: #4f46e5 !important;
+      color: #ffffff !important;
+      border-color: #818cf8 !important;
     }
     table {
       width: 100%;
@@ -1899,20 +1933,20 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
       <!-- Endpoint Selector Tabs -->
       <div style="display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap;">
-        <button id="api-ep-list" class="btn btn-secondary active-lang" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600;" onclick="selectPreviewEndpoint('list')">GET /api/tables/{name}/records</button>
-        <button id="api-ep-get" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600;" onclick="selectPreviewEndpoint('get')">GET /api/tables/{name}/records/{id}</button>
-        <button id="api-ep-create" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600;" onclick="selectPreviewEndpoint('create')">POST /api/tables/{name}/records</button>
-        <button id="api-ep-sql" class="btn btn-secondary" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600;" onclick="selectPreviewEndpoint('sql')">POST /api/query (T-SQL)</button>
+        <button id="api-ep-list" class="btn tab-btn active-ep" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600;" onclick="selectPreviewEndpoint('list')">GET /api/tables/{name}/records</button>
+        <button id="api-ep-get" class="btn tab-btn" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600;" onclick="selectPreviewEndpoint('get')">GET /api/tables/{name}/records/{id}</button>
+        <button id="api-ep-create" class="btn tab-btn" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600;" onclick="selectPreviewEndpoint('create')">POST /api/tables/{name}/records</button>
+        <button id="api-ep-sql" class="btn tab-btn" style="padding: 5px 10px; font-size: 0.78rem; font-weight: 600;" onclick="selectPreviewEndpoint('sql')">POST /api/query (T-SQL)</button>
       </div>
 
       <!-- Language Selector Tabs -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
         <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-          <button id="api-lang-sdk" class="btn btn-secondary active-lang" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('sdk')">LionSQL SDK</button>
-          <button id="api-lang-curl" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('curl')">cURL</button>
-          <button id="api-lang-js" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('js')">JavaScript (Fetch)</button>
-          <button id="api-lang-python" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('python')">Python</button>
-          <button id="api-lang-go" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('go')">Go</button>
+          <button id="api-lang-sdk" class="btn tab-btn active-lang" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('sdk')">LionSQL SDK</button>
+          <button id="api-lang-curl" class="btn tab-btn" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('curl')">cURL</button>
+          <button id="api-lang-js" class="btn tab-btn" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('js')">JavaScript (Fetch)</button>
+          <button id="api-lang-python" class="btn tab-btn" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('python')">Python</button>
+          <button id="api-lang-go" class="btn tab-btn" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="selectPreviewLang('go')">Go</button>
         </div>
         <button type="button" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; font-weight: 600;" onclick="copyAPISnippet()">📋 Copy Code</button>
       </div>
@@ -2918,14 +2952,14 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
     function handleCSVDragOver(e) {
       e.preventDefault();
-      document.getElementById('csv-drop-zone').style.borderColor = '#3b82f6';
-      document.getElementById('csv-drop-zone').style.background = '#1e293b';
+      document.getElementById('csv-drop-zone').style.borderColor = 'var(--primary)';
+      document.getElementById('csv-drop-zone').style.background = 'var(--card)';
     }
 
     function handleCSVDragLeave(e) {
       e.preventDefault();
-      document.getElementById('csv-drop-zone').style.borderColor = '#475569';
-      document.getElementById('csv-drop-zone').style.background = '#0c1220';
+      document.getElementById('csv-drop-zone').style.borderColor = 'var(--border)';
+      document.getElementById('csv-drop-zone').style.background = 'var(--panel-box-bg)';
     }
 
     function handleCSVFileDrop(e) {
@@ -4105,9 +4139,10 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           realtimeEventSource.onerror = () => {
             const badge = document.getElementById('realtime-badge');
             if (badge) {
-              badge.style.borderColor = '#64748b';
-              badge.style.color = '#94a3b8';
-              badge.style.background = '#1e293b';
+              badge.className = 'badge badge-muted';
+              badge.style.borderColor = '';
+              badge.style.color = '';
+              badge.style.background = '';
             }
           };
         } catch (_) {}
@@ -4141,13 +4176,15 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         const btn = document.getElementById(`api-ep-${k}`);
         if (btn) {
           if (k === ep) {
-            btn.style.background = '#3b82f6';
-            btn.style.color = '#fff';
-            btn.style.borderColor = '#60a5fa';
+            btn.classList.add('active-ep');
+            btn.style.background = 'var(--primary)';
+            btn.style.color = '#ffffff';
+            btn.style.borderColor = 'var(--primary)';
           } else {
-            btn.style.background = '#1e293b';
-            btn.style.color = 'var(--text)';
-            btn.style.borderColor = 'var(--border)';
+            btn.classList.remove('active-ep');
+            btn.style.background = 'var(--tab-inactive-bg)';
+            btn.style.color = 'var(--tab-inactive-color)';
+            btn.style.borderColor = 'var(--tab-inactive-border)';
           }
         }
       });
@@ -4160,13 +4197,15 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         const btn = document.getElementById(`api-lang-${k}`);
         if (btn) {
           if (k === lang) {
+            btn.classList.add('active-lang');
             btn.style.background = '#4f46e5';
-            btn.style.color = '#fff';
+            btn.style.color = '#ffffff';
             btn.style.borderColor = '#818cf8';
           } else {
-            btn.style.background = '#1e293b';
-            btn.style.color = 'var(--text)';
-            btn.style.borderColor = 'var(--border)';
+            btn.classList.remove('active-lang');
+            btn.style.background = 'var(--tab-inactive-bg)';
+            btn.style.color = 'var(--tab-inactive-color)';
+            btn.style.borderColor = 'var(--tab-inactive-border)';
           }
         }
       });
