@@ -12,9 +12,8 @@ High-Concurrency Embedded OLTP Database Engine & Multi-Protocol Stored Procedure
 
 ## Overview
 
-LionSQL is an enterprise-grade, high-concurrency embedded relational database engine written in Go and Cgo (WiredTiger). Designed with the simplicity of PocketBase and the operational power of enterprise relational engines, LionSQL is delivered as a **single standalone executable** with zero external dependencies.
+LionSQL is a high-performance, embedded OLTP database engine that natively compiles and executes Microsoft SQL Server T-SQL stored procedures and complex business logic on a sub-microsecond VDBE bytecode virtual machine, while simultaneously offering broad compatibility with PostgreSQL SQL dialects and the standard PGWire v3 protocol. It comes fully equipped with a built-in web management studio for real-time telemetry and schema administration, as well as an integrated goroutine connection pooler capable of handling tens of thousands of concurrent connections—eliminating the need for additional software to achieve a complete operational environment. Packaging this complete enterprise feature set into a single, ultra-compact static binary under 100MB (currently ~50MB) with zero external dependencies, LionSQL delivers blazing-fast transaction throughput of tens of thousands of transactions per second with predictable sub-millisecond latency and non-blocking snapshot isolation.
 
-LionSQL seamlessly integrates multi-protocol wire access (PostgreSQL v3 and Microsoft SQL Server TDS), an embedded web administration dashboard, a native T-SQL stored procedure bytecode virtual machine, a cost-based query optimizer (CBO), and a built-in goroutine connection pooler that eliminates the need for external tools like PgBouncer.
 
 ```
                     +------------------------------------------+
