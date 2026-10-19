@@ -76,11 +76,12 @@
 | **P1** | **UI/테마** | **Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 (`UI-10`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | - |
 | **P1** | **UI/가시성** | **Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) (`UI-11`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **종료/안정성** | **Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 (`SHUTDOWN-1`)** | `pkg/wire`, `pkg/storage/wiredtiger` | **완료 (`[x]`)** | - |
-| **P2** | **UI/실시간** | **Web Studio 실시간 CDC / SSE 스트림 인스펙터 뷰어 (`UI-REALTIME-1`)** | `pkg/ui`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | - |
-| **P2** | **UI/DDL** | **Web Studio 스키마 뷰 내 비주얼 컬럼 추가 GUI (`+ Add Column`) (`UI-DDL-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
-| **P2** | **UI/데이터** | **레코드 테이블 다중 행 선택 대량 작업 (Bulk Action) & 외래키(FK) 릴레이션 팝업 점프 (`UI-DATA-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
-| **P3** | **UI/SQL** | **SQL Query Studio 에디터 강화 (CodeMirror/Monaco 문법 강조, 자동완성 & 쿼리 히스토리) (`UI-SQL-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
-| **P3** | **UI/관제** | **실시간 HTTP API 요청 로그 뷰어 (Activity / Request Logs) (`UI-LOGS-1`)** | `pkg/ui`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | - |
+| **P2** | **UI/실시간** | **Web Studio 실시간 자동 갱신(Auto-Refresh) 토글 및 주기 선택기 (`UI-REALTIME-1`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |
+| **P2** | **UI/DDL** | **Web Studio 스키마 DDL 뷰어 (SQL `CREATE TABLE` 및 JSON 내보내기/복사) (`UI-DDL-1`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |
+| **P2** | **UI/데이터** | **CSV / JSON 데이터 가져오기(Import) 및 내보내기(Export) 모달 (`UI-DATA-1`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |
+| **P3** | **UI/SQL** | **SQL Query Studio 에디터 강화 (CodeMirror/Monaco 문법 강조, 자동완성) (`UI-SQL-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
+| **P3** | **UI/관제** | **실시간 쿼리 및 HTTP API 요청 감사 로그 뷰어 (`UI-LOGS-1`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |
+| **P3** | **문서/가이드** | **Web Studio 전체 기능 상세 사용자 설명서 신설 (`DOC-UI-1`)** | `doc/WEB_STUDIO_GUIDE.ko.md` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 

@@ -74,10 +74,11 @@
   * CLI: `sqlcmd -S 127.0.0.1,1433 -U sa -P secret`
   * GUI 도구: DbGate, Azure Data Studio, SSMS 연결 가이드
   * 연결 시 스키마 및 가상 카탈로그(`dbo`, `sys.*`) 연동 주의사항
-* **4.3. 내장 웹 스튜디오(Web Studio) 활용**
+* **4.3. 내장 웹 스튜디오(Web Studio) 활용** ([상세 사용 설명서](file:///Users/maro/Projects/SQLion/doc/WEB_STUDIO_GUIDE.ko.md))
   * 브라우저 기반 GUI 접속 (`http://127.0.0.1:8090/_/`)
-  * 테이블 뷰어, 실시간 쿼리 에디터, 실행 계획(EXPLAIN) 시각화
-  * 원클릭 핫 백업/복원 인터페이스
+  * 실시간 모니터링, 테이블 스키마 및 DDL 뷰어, 데이터 가져오기/내보내기 (CSV/JSON)
+  * 실시간 쿼리 및 감사 로그 뷰어, Developer API 프리뷰 (cURL/Fetch/SDK)
+  * 테이블 뷰어, 실시간 쿼리 에디터, 실행 계획(EXPLAIN) 시각화, 원클릭 핫 백업/복원 인터페이스
 * **4.4. 프로그래밍 언어별 드라이버 연동 레시피**
   * Go: `database/sql` (`lib/pq`, `pgx/v5`, `go-mssqldb`)
   * Python: `psycopg2`, `psycopg3`, `pymssql`, SQLAlchemy
