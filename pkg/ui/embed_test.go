@@ -360,9 +360,33 @@ func TestRequestLogsViewer_UI_LOGS_1(t *testing.T) {
 		}
 	}
 }
+func TestDashboardViewSeparationAndStructure(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
 
+	// Ensure view-sdk is closed before view-replication begins
+	sdkIdx := strings.Index(html, `id="view-sdk"`)
+	repIdx := strings.Index(html, `id="view-replication"`)
+	realtimeIdx := strings.Index(html, `id="view-realtime"`)
+	logsIdx := strings.Index(html, `id="view-logs"`)
 
+	if sdkIdx == -1 || repIdx == -1 || realtimeIdx == -1 || logsIdx == -1 {
+		t.Fatalf("missing one or more view containers in dashboard HTML")
+	}
 
+	if !(sdkIdx < repIdx && repIdx < realtimeIdx && realtimeIdx < logsIdx) {
+		t.Fatalf("views order is unexpected: sdk=%d rep=%d realtime=%d logs=%d", sdkIdx, repIdx, realtimeIdx, logsIdx)
+	}
 
-
+	// Between view-sdk and view-replication there must be a closing </div> for view-sdk
+	snippetBetween := html[sdkIdx:repIdx]
+	openDivs := strings.Count(snippetBetween, "<div")
+	closeDivs := strings.Count(snippetBetween, "</div>")
+	if openDivs != closeDivs {
+		t.Errorf("unbalanced <div> tags in view-sdk section: %d open vs %d close (view-replication would be nested)", openDivs, closeDivs)
+	}
+}
 
