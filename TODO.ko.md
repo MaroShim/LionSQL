@@ -75,7 +75,7 @@
 | **P1** | **UI/DX** | **API Preview 모달 LionSQL 공식 SDK (`sqlion.js`) 전용 코드 탭 신설 (`UI-9`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/테마** | **Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 (`UI-10`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | - |
 | **P1** | **UI/가시성** | **Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) (`UI-11`)** | `pkg/ui` | **완료 (`[x]`)** | - |
-| **P1** | **종료/안정성** | **Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 (`SHUTDOWN-1`)** | `pkg/wire`, `pkg/storage/wiredtiger` | **완료 (`[x]`)** | [`notes/SHUTDOWN_RACE_CONDITION_ANALYSIS.md`](notes/SHUTDOWN_RACE_CONDITION_ANALYSIS.md) |
+| **P1** | **종료/안정성** | **Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 (`SHUTDOWN-1`)** | `pkg/wire`, `pkg/storage/wiredtiger` | **완료 (`[x]`)** | - |
 | **P2** | **UI/실시간** | **Web Studio 실시간 CDC / SSE 스트림 인스펙터 뷰어 (`UI-REALTIME-1`)** | `pkg/ui`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | - |
 | **P2** | **UI/DDL** | **Web Studio 스키마 뷰 내 비주얼 컬럼 추가 GUI (`+ Add Column`) (`UI-DDL-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
 | **P2** | **UI/데이터** | **레코드 테이블 다중 행 선택 대량 작업 (Bulk Action) & 외래키(FK) 릴레이션 팝업 점프 (`UI-DATA-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
@@ -322,7 +322,7 @@
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
-| **SHUTDOWN-1** | 종료/안정성 | Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 | **완료 (`[x]`)** | PGWire 클라이언트 핸들러 고루틴 종료 시점과 스토리지 엔진 커넥션 해제(`C.go_wt_close`) 간 Use-After-Free 경쟁 상태(SIGSEGV addr=0xad0) 완전 해소. `pkg/wire/server.go`에 `sync.WaitGroup` 수명주기 추적 및 1초 상한 Bounded Drain 동기화 도입, `pkg/storage/wiredtiger/wt_engine.go`의 `Engine.Close()`에서 활성 세션 사전 일괄 소멸(Drain) 및 `WTSession.Close()`에 `connClosed` atomic 가드레일을 적용하여 셧다운 시 100% 무결점 종료 보장 (`pkg/wire/server.go`, `pkg/storage/wiredtiger/wt_engine.go`, `notes/SHUTDOWN_RACE_CONDITION_ANALYSIS.md`) |
+| **SHUTDOWN-1** | 종료/안정성 | Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 | **완료 (`[x]`)** | PGWire 클라이언트 핸들러 고루틴 종료 시점과 스토리지 엔진 커넥션 해제(`C.go_wt_close`) 간 Use-After-Free 경쟁 상태(SIGSEGV addr=0xad0) 완전 해소. `pkg/wire/server.go`에 `sync.WaitGroup` 수명주기 추적 및 1초 상한 Bounded Drain 동기화 도입, `pkg/storage/wiredtiger/wt_engine.go`의 `Engine.Close()`에서 활성 세션 사전 일괄 소멸(Drain) 및 `WTSession.Close()`에 `connClosed` atomic 가드레일을 적용하여 셧다운 시 100% 무결점 종료 보장 (`pkg/wire/server.go`, `pkg/storage/wiredtiger/wt_engine.go`) |
 
 ---
 

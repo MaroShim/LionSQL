@@ -36,7 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added startup security warning banner reminder (`[SECURITY WARNING]`) when default administrative superuser credentials (`1234567890`) remain in use.
 
 ### Fixed
-- **Graceful Shutdown Race Condition & WiredTiger SIGSEGV Prevention (`SHUTDOWN-1`) (`pkg/wire/server.go`, `pkg/storage/wiredtiger/wt_engine.go`, `pkg/storage/wiredtiger/wt_engine_test.go`, `notes/SHUTDOWN_RACE_CONDITION_ANALYSIS.md`)**:
+- **Graceful Shutdown Race Condition & WiredTiger SIGSEGV Prevention (`SHUTDOWN-1`) (`pkg/wire/server.go`, `pkg/storage/wiredtiger/wt_engine.go`, `pkg/storage/wiredtiger/wt_engine_test.go`)**:
   - Fixed a race condition where PGWire client connection handler goroutines exiting during shutdown invoked session close on a WiredTiger connection that was concurrently being closed or already freed by the engine shutdown coordinator, triggering a CGO segmentation fault (`SIGSEGV: addr=0xad0`).
   - Added `sync.WaitGroup` lifecycle tracking and a 1-second bounded drain in `pkg/wire/server.go` (`wire.Server.Close()`), ensuring all active connection handlers and their deferred session releases complete before `wireServer.Close()` returns.
   - Added active session pre-drain in `pkg/storage/wiredtiger/wt_engine.go` (`Engine.Close()`) to cleanly close all active `WTSession`s before `C.go_wt_close(e.conn)`.
