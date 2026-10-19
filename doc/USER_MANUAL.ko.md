@@ -265,47 +265,60 @@ LionSQL은 경량 임베디드 설계로 인해 매우 낮은 하드웨어 사�
 
 ### 2.1. 사전 빌드 바이너리 설치
 
-공식 릴리즈 아카이브를 다운로드하여 즉시 실행할 수 있습니다:
+LionSQL은 외부 공유 라이브러리나 런타임 설치가 필요 없는 자체 완비형 단일 정적 바이너리로 배포됩니다. 운영체제 및 아키텍처에 맞는 릴리즈 아카이브를 다운로드하여 즉시 사용할 수 있습니다.
 
+#### 1. 운영체제별 아카이브 다운로드 및 설치
+* **macOS (Apple Silicon M1/M2/M3/M4, ARM64)**:
+  ```bash
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0/lionsql-v0.90.0-darwin-arm64.tar.gz
+  tar -xzf lionsql-v0.90.0-darwin-arm64.tar.gz
+  chmod +x lionsql
+  sudo mv lionsql /usr/local/bin/
+  ```
+* **Linux (Ubuntu / Debian / RHEL / Rocky, x86_64)**:
+  ```bash
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0/lionsql-v0.90.0-linux-amd64.tar.gz
+  tar -xzf lionsql-v0.90.0-linux-amd64.tar.gz
+  chmod +x lionsql
+  sudo mv lionsql /usr/local/bin/
+  ```
+* **Linux (ARM64 / AWS Graviton)**:
+  ```bash
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0/lionsql-v0.90.0-linux-arm64.tar.gz
+  tar -xzf lionsql-v0.90.0-linux-arm64.tar.gz
+  chmod +x lionsql
+  sudo mv lionsql /usr/local/bin/
+  ```
+
+#### 2. 바이너리 무결성 및 버전 확인
+설치 후 터미널에서 버전을 조회하여 정상 동작 여부를 확인합니다:
 ```bash
-# 1. 아카이브 다운로드 및 압축 해제 (예: macOS ARM64)
-tar -xzf lionsql-v0.90.0-darwin-arm64.tar.gz
-
-# 2. 실행 권한 부여
-chmod +x lionsql
-
-# 3. 시스템 전역 경로로 이동 (선택 사항)
-sudo mv lionsql /usr/local/bin/
-
-# 4. 버전 확인
-lionsql version
-```
-
-출력 예시:
-```
-LionSQL Server v0.90.0 (darwin/arm64)
-Built with Go: go1.24.0 (wiredtiger enabled)
-Commit: a3b34a8 (Feature Freeze Milestone)
+$ lionsql version
+LionSQL v0.90.0 (darwin/arm64) [tags: wiredtiger]
+Git Commit: 477a4cb6
+Go Version: go1.24.0
+Build Date: 2026-10-19T08:30:00Z
+Storage Backends: WiredTiger MVCC, In-Memory OCC
 ```
 
 ---
 
 ### 2.2. 소스 코드에서 빌드하기
 
-LionSQL 저장소를 복제한 후 Go 도구 체인을 사용하여 1분 이내에 빌드할 수 있습니다:
+LionSQL 저장소를 복제한 후 표준 Go 도구 체인을 사용하여 자체 컴파일할 수 있습니다.
 
 ```bash
-# 저장소 복제
+# 1. 저장소 복제
 git clone https://github.com/your-org/lionsql.git
 cd lionsql
 
-# A. 영속 디스크 MVCC(WiredTiger) 지원 정적 바이너리 빌드 (권장 프로덕션)
-go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
+# 2. 영속 디스크 MVCC(WiredTiger) 지원 정적 바이너리 컴파일 (프로덕션 권장)
+go build -tags wiredtiger -buildvcs=false -ldflags="-s -w" -o bin/lionsql ./cmd/lionsql
 
-# B. C 컴파일러 없는 순수 Go 인메모리 바이너리 빌드
+# 3. CGO 없는 순수 Go 인메모리 바이너리 컴파일 (극단적 배포 경량화)
 go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
 
-# C. 벤치마크 도구 일괄 빌드
+# 4. 벤치마크 및 적합성 검증 도구 빌드
 go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
 go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
 ```
@@ -340,30 +353,28 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
 ================================================================================
 ```
 
-별도의 터미널 창에서 헬스체크 엔드포인트를 호출하여 기동을 검증합니다:
+별도의 터미널 창에서 헬스체크 엔드포인트를 호출하여 기동 상태를 즉시 검증합니다:
 ```bash
-curl -s http://127.0.0.1:8090/api/health
-```
-응답:
-```json
+$ curl -s http://127.0.0.1:8090/api/health
 {"status":"ok","version":"0.90.0","engine":"wiredtiger","uptime_seconds":5}
 ```
 
 ---
 
-### 2.4. 빠른 둘러보기 (Quick Tour)
+### 2.4. 단계별 빠른 둘러보기 (Quick Tour Step-by-Step)
 
-#### 1단계: 웹 스튜디오(Web Studio) 접속
-웹 브라우저를 열고 `http://127.0.0.1:8090/_/`에 접속합니다.
-- 기본 관리자 이메일: `admin@lionsql.local`
-- 기본 비밀번호: `1234567890` (서버 배너에 안내된 초기값)
-로그인하면 모던한 대시보드와 함께 테이블 탐색기, 실시간 Live Stream 모니터링, SQL 쿼리 에디터가 나타납니다.
+#### 1단계: 내장 웹 스튜디오(Web Studio) 접속 및 대시보드 확인
+1. 웹 브라우저를 열고 `http://127.0.0.1:8090/_/`에 접속합니다.
+2. 기본 관리자 계정으로 로그인합니다:
+   - **이메일**: `admin@lionsql.local`
+   - **비밀번호**: `1234567890` (최초 실행 후 변경 권장)
+3. 대시보드 상단에서 실시간 SSE 스트림에 기반한 QPS 게이지, 활성 워커 수, 힙 메모리 사용량을 확인합니다.
 
-#### 2단계: 첫 번째 테이블 생성 및 데이터 삽입 (SQL Query Studio)
-SQL 에디터 창 또는 `psql` / `sqlcmd`에서 아래 쿼리를 실행합니다:
+#### 2단계: 첫 번째 관계형 테이블 생성 (SQL Studio)
+웹 스튜디오 좌측 메뉴의 **SQL Studio**로 이동하거나 터미널의 `psql` / `sqlcmd`에서 아래 DDL 구문을 실행합니다:
 
 ```sql
--- 1. 고객 계좌 테이블 생성
+-- 고객 계좌 테이블 생성
 CREATE TABLE accounts (
     id INT IDENTITY(1,1) PRIMARY KEY,
     holder_name VARCHAR(100) NOT NULL,
@@ -372,17 +383,39 @@ CREATE TABLE accounts (
     created_at DATETIME DEFAULT GETDATE()
 );
 
--- 2. 초기 데이터 삽입
+-- 검색 성능 최적화를 위한 복합 인덱스 생성
+CREATE INDEX idx_accounts_name_bal ON accounts (holder_name, balance);
+```
+
+#### 3단계: 초기 레코드 삽입 및 조회
+```sql
+-- 3건의 샘플 레코드 삽입
 INSERT INTO accounts (holder_name, email, balance) VALUES 
 ('Alice Smith', 'alice@example.com', 150000.00),
 ('Bob Jones', 'bob@example.com', 250000.00),
 ('Charlie Brown', 'charlie@example.com', 50000.00);
 
--- 3. 데이터 조회
-SELECT * FROM accounts WHERE balance >= 100000.00;
+-- 고액 잔액 보유 고객 조회
+SELECT id, holder_name, email, balance 
+FROM accounts 
+WHERE balance >= 100000.00
+ORDER BY balance DESC;
 ```
 
-#### 3단계: T-SQL 저장 프로시저 정의 및 원자적 이체 실행
+#### 4단계: 비파괴적 실시간 컬럼 추가 (`+ Add Column`)
+LionSQL은 운영 중인 테이블에 락 경합 없이 실시간으로 컬럼을 추가할 수 있습니다:
+1. 웹 스튜디오 좌측의 **Tables** 탭에서 `accounts` 테이블을 클릭합니다.
+2. 테이블 헤더 우측의 `+ Add Column` 버튼을 누릅니다.
+3. 팝업 모달에서 필드 정보를 입력합니다:
+   - **Column Name**: `phone_number`
+   - **Data Type**: `VARCHAR(30)`
+   - **Default Value**: `'N/A'`
+   - **Nullable**: `Yes`
+4. **Save**를 누르면 서버 재기동이나 테이블 재작성 없이 서브밀리초 단위로 스키마가 확장됩니다.
+
+#### 5단계: T-SQL 저장 프로시저 정의 및 원자적 이체 실행
+비즈니스 로직을 데이터베이스 커널 내부에서 트랜잭션으로 안전하게 캡슐화합니다:
+
 ```sql
 CREATE PROCEDURE TransferMoney
     @from_id INT,
@@ -390,12 +423,14 @@ CREATE PROCEDURE TransferMoney
     @amount DECIMAL(18,2)
 AS
 BEGIN
+    SET NOCOUNT ON;
     DECLARE @current_bal DECIMAL(18,2);
+    
     SELECT balance INTO @current_bal FROM accounts WHERE id = @from_id;
-
+    
     IF @current_bal < @amount
     BEGIN
-        RAISERROR('Insufficient funds in sender account', 16, 1);
+        RAISERROR('잔액이 부족하여 이체를 완료할 수 없습니다.', 16, 1);
         RETURN -1;
     END
 
@@ -406,13 +441,17 @@ BEGIN
 END;
 ```
 
-프로시저 실행:
+프로시저 호출 및 잔액 변동 검증:
 ```sql
 EXEC TransferMoney @from_id = 1, @to_id = 2, @amount = 50000.00;
 
--- 잔액 변동 확인
-SELECT id, holder_name, balance FROM accounts;
+SELECT id, holder_name, balance FROM accounts WHERE id IN (1, 2);
 ```
+
+#### 6단계: Developer API Preview 모달에서 SDK 코드 활용
+1. 웹 스튜디오 테이블 목록에서 `accounts` 테이블 우측의 `API` 버튼을 클릭합니다.
+2. 해당 테이블과 통신할 수 있는 cURL, Vanilla JavaScript `fetch()`, TypeScript Web SDK 코드가 동적으로 생성되어 표시됩니다.
+3. 복사 버튼을 눌러 프론트엔드나 백엔드 애플리케이션에 즉시 붙여넣어 통신할 수 있습니다.
 
 ---
 
@@ -424,10 +463,10 @@ LionSQL은 12-Factor App 원칙과 엔지니어링 골든 룰 37에 따라 엄�
 
 $$\text{CLI Flags} \;>\; \text{Environment Variables} \;>\; \text{Config File (lionsql.json)} \;>\; \text{Built-in Defaults}$$
 
-1. **CLI Flags**: 명령어 실행 시 명시적으로 지정한 옵션이 최우선순위를 가집니다 (예: `-http=:9000`).
-2. **Environment Variables**: `LIONSQL_` 접두사를 가진 환경 변수가 두 번째 우선순위입니다 (예: `LIONSQL_HTTP_ADDR=:9000`).
-3. **Config File (`lionsql.json`)**: 데이터 디렉토리 또는 `-config`로 지정된 JSON 설정 파일.
-4. **Built-in Defaults**: 아무것도 지정하지 않았을 때 적용되는 안전한 하드코딩 기본값 (포트 8090/5433/1433, RAM 70% 메모리 상한).
+* **CLI Flags**: 명령어 실행 시 명시적으로 지정한 옵션이 최우선순위를 가집니다 (예: `-http=:9000`).
+* **Environment Variables**: `LION_` 접두사를 가진 환경 변수가 두 번째 우선순위입니다 (예: `LION_HTTP_ADDR=:9000`).
+* **Config File (`lionsql.json`)**: 데이터 디렉토리 또는 `-config`로 지정된 JSON 설정 파일.
+* **Built-in Defaults**: 아무것도 지정하지 않았을 때 적용되는 안전한 하드코딩 기본값 (포트 8090/5433/1433, RAM 70% 메모리 상한).
 
 ---
 
@@ -436,10 +475,10 @@ $$\text{CLI Flags} \;>\; \text{Environment Variables} \;>\; \text{Config File (l
 기본 설정 파일 템플릿을 생성하려면 아래 명령을 실행합니다:
 
 ```bash
-./bin/lionsql init-config -out=lionsql.json
+lionsql init-config -out=lionsql.json
 ```
 
-생성된 `lionsql.json` 구조 및 상세 설명:
+생성된 `lionsql.json`의 전체 구조:
 
 ```json
 {
@@ -448,7 +487,8 @@ $$\text{CLI Flags} \;>\; \text{Environment Variables} \;>\; \text{Config File (l
     "data_dir": "data",
     "ephemeral": false,
     "auto_seed": false,
-    "pid_file": "data/lionsql.pid"
+    "pid_file": "data/lionsql.pid",
+    "graceful_timeout_seconds": 1.5
   },
   "network": {
     "http_addr": ":8090",
@@ -465,13 +505,15 @@ $$\text{CLI Flags} \;>\; \text{Environment Variables} \;>\; \text{Config File (l
     "enabled": true,
     "admin_email": "admin@lionsql.local",
     "admin_pass": "",
-    "jwt_secret": ""
+    "jwt_secret": "",
+    "jwt_expiry_hours": 72
   },
   "resources": {
     "max_memory": "",
     "work_mem": "64MB",
     "max_workers": 256,
-    "max_idle_sessions": 64
+    "max_idle_sessions": 64,
+    "memory_pressure_threshold_pct": 85
   },
   "logging": {
     "dev_mode": false,
@@ -492,7 +534,7 @@ $$\text{CLI Flags} \;>\; \text{Environment Variables} \;>\; \text{Config File (l
     "primary_url": "",
     "auto_failover": false,
     "peers": [],
-    "self_url": "",
+    "heartbeat_interval_ms": 1000,
     "heartbeat_timeout_ms": 3000
   }
 }
@@ -503,7 +545,6 @@ $$\text{CLI Flags} \;>\; \text{Environment Variables} \;>\; \text{Config File (l
 ### 3.3. 네트워크 리스너 및 포트 관리
 
 LionSQL은 단일 프로세스 내에서 3개의 네트워크 리스너를 병렬로 관리합니다:
-
 * **`:8090` (Web Studio & REST API)**: 관리자 웹 UI 및 자동 생성 REST API 서빙.
 * **`:5433` (PostgreSQL Wire Protocol)**: 기존 5432 포트와의 충돌을 피하기 위해 기본 `5433`을 사용합니다.
 * **`:1433` (MS SQL Server TDS)**: 표준 SQL Server 포트인 `1433`을 사용합니다.
@@ -513,79 +554,106 @@ LionSQL은 단일 프로세스 내에서 3개의 네트워크 리스너를 병�
 
 ```bash
 # TDS(1433)와 HTTP(8090)는 끄고 PostgreSQL(5433) 포트만 열기
-./bin/lionsql -tds="" -http="" -pg=":5433"
+lionsql serve -tds="" -http="" -pg=":5433"
 ```
 
 ---
 
-### 3.4. 단일 바이너리 수명주기 관리 (Lifecycle Commands)
+### 3.4. 단일 바이너리 수명주기 관리 완벽 워크스루 (Lifecycle Commands)
 
 `lionsql`은 데몬화(Daemonization)를 위해 외부 도구(`systemd`, `supervisord`, `nohup`) 없이 자체 수명주기 제어 명령을 제공합니다:
 
 ```bash
-# 1. 백그라운드 데몬으로 안전 기동 (data/lionsql.pid 및 data/lionsql.log 자동 생성)
-./bin/lionsql start
+# 1. 백그라운드 데몬으로 기동 (PID 및 로그 자동 관리)
+$ lionsql start -dir data
+LionSQL daemon started successfully. (PID: 99777)
+Logs redirected to: data/lionsql.log
+Web Studio URL: http://localhost:8090
+PostgreSQL v3: localhost:5433
+MS SQL Server TDS: localhost:1433
 
-# 2. 개발자 실시간 트레이싱 모드로 데몬 기동
-./bin/lionsql start -dev
+# 2. 현재 실행 중인 데몬 상태 점검
+$ lionsql status -dir data
+LionSQL Server Status: RUNNING
+----------------------------------------
+PID               : 99777
+Data Directory    : /Users/maro/Projects/SQLion/data
+Storage Backend   : wiredtiger (Disk B+Tree MVCC)
+HTTP / Studio     : 127.0.0.1:8090 (HEALTHY)
+PostgreSQL v3     : 127.0.0.1:5433 (LISTENING)
+MS SQL Server TDS : 127.0.0.1:1433 (LISTENING)
+Uptime            : 1h 24m 12s
+Heap Allocated    : 142.5 MB / Max: 2867.0 MB (5.0%)
+Active Workers    : 6 / 256
 
-# 3. 현재 실행 중인 데몬 상태 점검
-./bin/lionsql status
+# 3. 무중단 안전 재기동 (Active Session 안전 드레인 후 신규 인스턴스 승격)
+$ lionsql restart -dir data
+Stopping LionSQL daemon (PID: 99777)... Done.
+LionSQL daemon started successfully. (PID: 101234)
 
-# 4. 무중단 안전 재기동 (기존 프로세스에 SIGTERM 전송 후 새 인스턴스 승격)
-./bin/lionsql restart -dev
+# 4. 데몬 안전 종료 (진행 중인 트랜잭션 플러시 후 1.5초 내 정상 종료)
+$ lionsql stop -dir data
+Stopping LionSQL daemon (PID: 101234)...
+LionSQL daemon (PID: 101234) stopped cleanly.
 
-# 5. 데몬 안전 종료 (진행 중인 트랜잭션 드레인 후 1.5초 내 정상 종료)
-./bin/lionsql stop
-
-# 6. 데이터베이스 무결성 및 스토리지 진단
-./bin/lionsql doctor -dir=./data
-```
-
-`status` 실행 시 출력 화면:
-```
-============================================================
-  LionSQL Server Daemon Status
-============================================================
- State:       RUNNING (Active)
- Process ID:  99777
- PID File:    data/lionsql.pid
- Log File:    data/lionsql.log
- Web UI:      http://127.0.0.1:8090/_/
- Postgres:    psql -h 127.0.0.1 -p 5433
- TDS / MSSQL: sqlcmd -S 127.0.0.1,1433
-============================================================
+# 5. 데이터 무결성 및 시스템 환경 진단
+$ lionsql doctor -dir data
+Checking LionSQL Environment & Storage Integrity...
+[OK] Data directory permissions: rwxr-xr-x (data)
+[OK] Free disk space: 42.8 GB available
+[OK] TCP Port 8090 (HTTP/Studio): AVAILABLE
+[OK] TCP Port 5433 (PGWire): AVAILABLE
+[OK] TCP Port 1433 (TDS): AVAILABLE
+[OK] Catalog schema integrity: PASSED
+[OK] WAL LSN continuity check: PASSED
+Overall Result: HEALTHY (0 errors, 0 warnings)
 ```
 
 ---
 
-### 3.5. 스토리지 엔진 선택 및 데이터 디렉토리
+### 3.5. 스토리지 엔진 선택 및 실무 워크로드 레시피
 
-* **WiredTiger MVCC 디스크 엔진 (`-engine=wiredtiger`, 기본값)**:
-  - 디스크 기반의 락프리 B+Tree와 WAL 저널링을 제공합니다.
-  - 비정상적인 전원 차단이나 프로세스 강제 사살(`kill -9`) 시에도 ACID 복구와 데이터 무손실을 보장합니다.
-  - 실무 운영 환경의 기본 선택지입니다.
-* **Pure-Go In-Memory OCC 엔진 (`-engine=memory`)**:
-  - 모든 데이터를 힙 메모리의 Concurrent SkipList에 유지하며, 168,000+ TPS의 극단적인 처리량을 달성합니다.
-  - `-dir`를 지정하면 Redis 스타일로 `wal.aof`와 주기적 RDB 스냅샷(`tables.json`)을 디스크에 기록합니다.
-  - `-ephemeral` 플래그를 추가하면 디스크 I/O를 100% 차단하는 순수 휘발성 모드로 동작하여 통합 테스트 및 CI 파이프라인에 최적입니다.
+자세한 분석은 [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md) 문서를 참조하십시오. 실무에서 가장 빈번한 4대 실행 레시피는 다음과 같습니다:
+
+#### 레시피 1: 초고속 로컬 테스트 및 CI 파이프라인 (In-Memory Ephemeral)
+```bash
+lionsql serve -engine memory -ephemeral -fsync off -max-memory 2GB
+```
+* 디스크 파일 I/O를 100% 차단하고 순수 RAM에서 25,000+ TPS로 초고속 단위 테스트를 수행합니다.
+
+#### 레시피 2: 표준 엔터프라이즈 프로덕션 OLTP (권장 기본값)
+```bash
+lionsql start -dir /var/lib/lionsql/data -engine wiredtiger -fsync everysec -max-memory 4GB
+```
+* 1초 주기 WAL 플러시와 WiredTiger MVCC B+Tree를 통해 12,000~16,800+ TPS와 1초 RPO 안전성을 동시에 확보합니다.
+
+#### 레시피 3: 절대 무손실 금융 코어 원장 (Strict Zero-Loss)
+```bash
+lionsql start -dir /var/lib/lionsql/data -engine wiredtiger -fsync always -max-workers 128
+```
+* 커밋마다 물리적 `F_FULLFSYNC` 배리어와 Leader/Follower Group Commit을 강제하여 RPO=0 무손실을 달성합니다.
+
+#### 레시피 4: 대용량 데이터 마이그레이션 및 야간 정산 배치
+```bash
+lionsql serve -dir /var/lib/lionsql/data -engine wiredtiger -work-mem 256MB -max-memory 16GB
+```
+* 정렬 작업 메모리를 256MB로 확장하여 디스크 임시 파일 분할(External Sort)을 방지하고 100% 인메모리로 처리합니다.
 
 ---
 
-### 3.6. 글로벌 메모리 거버너 및 리소스 튜닝
+### 3.6. 글로벌 메모리 거버너 실무 튜닝
 
-LionSQL은 Go 애플리케이션의 고질적 문제인 무제한 메모리 증가로 인한 **OS OOM Killer 사살을 원천 차단**하기 위해 2단계 방어 체계를 가집니다:
+LionSQL은 프로세스가 OS OOM Killer에 의해 강제 종료되는 것을 원천 차단하기 위해 2단계 방어 체계를 가집니다:
 
 1. **글로벌 힙 메모리 상한제 (`--max-memory`)**:
    - 설정하지 않을 경우 **호스트 물리 RAM의 70%**를 자동 계산하여 상한선으로 책정합니다 (예: 4GB RAM ➔ 2,867MB).
    - Go 1.19+의 `debug.SetMemoryLimit` 프리미티브와 직결되어, 메모리가 상한에 근접하면 런타임 GC가 사전에 능동적으로 메모리를 회수합니다.
 2. **해시 조인 Fail-Fast 회로 차단기 (`--work-mem`)**:
    - 정렬 및 조인 연산자당 메모리 예산(기본값: `64MB`)을 초과하는 대용량 카테시안 곱이나 비정상 쿼리가 유입될 경우, 75µs 이내에 `hash join memory budget exceeded` 에러를 반환하며 즉각 중단합니다.
-   - 단 하나의 악성 쿼리가 시스템 전체를 OOM으로 다운시키는 사태를 완벽히 격리 방어합니다.
 
 ---
 
-### 3.7. 로깅 및 진단 모드
+### 3.7. 로깅 및 모니터링 실무
 
 * **개발자 트레이싱 모드 (`-dev`)**:
   - 인바운드 쿼리, 실행 계획 비용, 파서 폴백 발생 여부, 연결 핸드셰이크를 콘솔에 실시간으로 컬러풀하게 출력합니다.
@@ -598,47 +666,60 @@ LionSQL은 Go 애플리케이션의 고질적 문제인 무제한 메모리 증�
 
 ## 제4장. 클라이언트 도구 및 생태계 연동 (Client Tool Integration)
 
-### 4.1. PostgreSQL 표준 클라이언트 연결
+LionSQL은 단일 엔진 내에서 3대 인터페이스(PostgreSQL Wire Protocol v3, Microsoft SQL Server TDS 7.x/8.0, HTTP REST & Web Studio)를 동시 서비스하므로, 기존의 데이터베이스 관리 도구 및 애플리케이션 라이브러리를 코드 수정 없이 그대로 연동할 수 있습니다.
 
-LionSQL은 PostgreSQL Wire Protocol v3 규격을 지원하므로, 기존 PostgreSQL CLI 도구로 완벽히 접속할 수 있습니다:
+---
+
+### 4.1. PostgreSQL 표준 클라이언트 연결 (`psql`)
+
+LionSQL은 PGWire v3 프레임을 완벽히 지원하며, 표준 `psql`을 통해 대화형 데이터베이스 터미널을 이용할 수 있습니다.
 
 ```bash
-# 기본 데이터베이스 postgres, 포트 5433으로 접속
+# 기본 접속 명령어 (기본 포트: 5433, 데이터베이스: postgres)
 psql -h 127.0.0.1 -p 5433 -U admin dbname=postgres
 ```
-* **인증 암호**: 서버 배너에 출력된 관리자 비밀번호 입력 (기본값: `1234567890`)
-* **단일 카탈로그 표준**: 데이터베이스 이름은 반드시 `postgres`를 지정합니다 (`sys.databases`나 `pg_database`에 단일 DB로 노출됨).
+* **인증 암호**: 관리자 비밀번호 (기본값: `1234567890`)
+* **단일 카탈로그 표준**: 데이터베이스 이름은 반드시 `postgres`를 지정해야 합니다 (레거시 `sqlion`은 완전 제거되었습니다).
 
-주요 유용한 메타 커맨드:
+#### 실무 유용한 `psql` 메타 커맨드 활용:
 ```sql
--- 테이블 목록 확인 (\dt)
+-- 1. 현재 접속 세션의 테이블 목록 조회
 \dt
 
--- 테이블 상세 스키마 확인 (\d <table_name>)
-\d accounts
+-- 2. 특정 테이블의 상세 컬럼 및 인덱스 스키마 확인
+\d+ accounts
 
--- 서버 버전 및 와이어 프로토콜 상태 확인
+-- 3. 보조 인덱스 목록만 조회
+\di
+
+-- 4. 쿼리 실행 소요 시간 밀리초 실시간 측정 활성화
+\timing on
+
+-- 5. 확장 행 출력 모드 (컬럼이 많은 경우 가로 스크롤 방지)
+\x auto
+
+-- 6. 서버 버전 확인
 SELECT version();
 ```
 
 ---
 
-### 4.2. MS SQL Server 표준 클라이언트 연결
+### 4.2. MS SQL Server 표준 클라이언트 연결 (`sqlcmd`)
 
-LionSQL은 Microsoft SQL Server의 TDS 7.x/8.0 프로토콜을 네이티브 구현하고 있습니다:
+Microsoft의 공식 CLI 도구인 `sqlcmd`를 사용하여 T-SQL 스크립트 실행 및 프로시저 관리가 가능합니다.
 
 ```bash
-# 기본 데이터베이스 master, 포트 1433으로 접속
+# 기본 접속 명령어 (기본 포트: 1433, 데이터베이스: master)
 sqlcmd -S 127.0.0.1,1433 -U sa -P 1234567890 -d master
 ```
 
-주요 T-SQL 배치 쿼리 실행 예시:
+#### T-SQL 배치 쿼리 실행 예시:
 ```sql
-1> SELECT name, database_id FROM sys.databases;
+1> SELECT name, database_id, compatibility_level FROM sys.databases;
 2> GO
-name       database_id
----------- -----------
-master               1
+name       database_id compatibility_level
+---------- ----------- -------------------
+master               1                 150
 
 (1 rows affected)
 1> EXEC sp_tables;
@@ -648,52 +729,53 @@ TABLE_QUALIFIER TABLE_OWNER TABLE_NAME TABLE_TYPE
 master          dbo         accounts   TABLE     
 
 (1 rows affected)
+1> QUIT
 ```
 
 ---
 
 ### 4.3. 검증된 그래픽(GUI) 데이터베이스 도구 연동
 
-LionSQL 코어 엔지니어링 팀에서 100% 정상 작동을 실측 검증한 6대 도구의 연결 가이드입니다:
+LionSQL 엔지니어링 팀에서 100% 정상 작동을 실측 검증한 6대 도구의 연결 가이드입니다:
 
 #### 1. Beekeeper Studio (강력 추천 도구)
-* **연결 방식 A (PostgreSQL Driver)**:
-  - Connection Type: `PostgreSQL`
-  - Host: `127.0.0.1`, Port: `5433`, User: `admin`, Password: `...`, Database: `postgres`
-* **연결 방식 B (SQL Server Driver)**:
-  - Connection Type: `SQL Server`
-  - Host: `127.0.0.1`, Port: `1433`, User: `sa`, Password: `...`, Database: `master`
-  - Encrypt: `false` (또는 Trust Server Certificate 활성화)
+* **PostgreSQL 모드**:
+  - **Connection Type**: `PostgreSQL`
+  - **Host**: `127.0.0.1`, **Port**: `5433`, **User**: `admin`, **Password**: `1234567890`, **Database**: `postgres`
+* **SQL Server 모드**:
+  - **Connection Type**: `SQL Server`
+  - **Host**: `127.0.0.1`, **Port**: `1433`, **User**: `sa`, **Password**: `1234567890`, **Database**: `master`
+  - **SSL**: `Disabled` (또는 Trust Server Certificate 활성화)
 
 #### 2. DBeaver Universal Database Tool
-* Driver: `PostgreSQL` 또는 `Microsoft SQL Server`
-* Host: `localhost`, Port: `5433` (PG) 또는 `1433` (TDS)
-* Database: `postgres` (PG) 또는 `master` (TDS)
-* **주의**: DBeaver가 접속 시 실행하는 `USE <dbname>` 또는 `SET extra_float_digits` 구문은 LionSQL에서 관용적 가상 No-Op(Tolerant No-Op)로 무오류 즉시 수용되므로 에러 없이 스키마 트리가 펼쳐집니다.
+* **드라이버 선택**: `PostgreSQL` 또는 `Microsoft SQL Server`
+* **연결 정보**: `localhost:5433` (PG) 또는 `localhost:1433` (TDS)
+* **카탈로그 호환성**:
+  - DBeaver가 접속 시 실행하는 메타데이터 쿼리(`USE <dbname>`, `SET extra_float_digits`)는 LionSQL의 가상 카탈로그 레이어에서 관용적 가상 No-Op(Tolerant No-Op)로 무오류 즉시 수용되어 스키마 트리가 완벽하게 렌더링됩니다.
 
-#### 3. Navicat Premium / Navicat for PostgreSQL
-* Connection: `PostgreSQL`
-* Host: `localhost`, Port: `5433`, Initial Database: `postgres`, User: `admin`
+#### 3. Navicat Premium
+* **Connection Type**: `PostgreSQL`
+* **Host**: `localhost`, **Port**: `5433`, **Database**: `postgres`, **User**: `admin`
 
-#### 4. Azure Data Studio & SSMS
-* Server: `127.0.0.1,1433` (포트 번호는 쉼표로 구분)
-* Authentication: `SQL Server Authentication`
-* User name: `sa`, Password: `...`
-* Database: `master`
-* Trust server certificate: `True`
+#### 4. Azure Data Studio & SQL Server Management Studio (SSMS)
+* **Server**: `127.0.0.1,1433` (포트 번호는 쉼표로 구분)
+* **Authentication**: `SQL Server Authentication`
+* **Login**: `sa`, **Password**: `1234567890`
+* **Database**: `master`
+* **Options**: `Trust server certificate = True`
 
 ---
 
 ### 4.4. 내장 웹 스튜디오(Web Studio) 완벽 활용
 
-외부 GUI 도구를 설치할 필요 없이 웹 브라우저(`http://127.0.0.1:8090/_/`)만으로 전체 데이터베이스를 관리할 수 있습니다:
+별도의 클라이언트 소프트웨어 설치 없이 웹 브라우저(`http://localhost:8090/_/`)만으로 데이터베이스의 모든 기능을 시각적으로 제어할 수 있습니다.
 
-1. **실시간 SSE 라이브 스트림 (`/api/realtime`)**:
+1. **실시간 SSE 라이브 스트림 대시보드 (`/api/realtime`)**:
    - 상단 헤더의 `Live Sync` 배지를 통해 실시간 QPS, 힙 메모리 사용률, 활성 고루틴 워커 수를 1초 주기로 스트리밍 차트로 확인합니다.
 2. **실시간 요청 활동 감사 로그 뷰어 (`/api/logs/requests`)**:
    - `Logs` 탭에서 인입되는 모든 HTTP REST 및 SQL 쿼리의 메소드, 엔드포인트, 클라이언트 IP, HTTP 상태 코드, 소요 시간(Latency)을 마이크로초 단위로 추적합니다.
    - 100ms 초과 슬로우 쿼리는 빨간색 뱃지(`#ef4444`)로 하이라이트됩니다.
-3. **비파괴적 컬럼 추가 DDL 모달 (`+ Add Column`)**:
+3. **비파괴적 실시간 컬럼 추가 DDL 모달 (`+ Add Column`)**:
    - 테이블 뷰어에서 `+ Add Column` 버튼을 클릭하면, 서버 재시작 없이 실시간으로 테이블 스키마에 컬럼을 추가합니다.
    - 컬럼명, 데이터 타입(`INT`, `VARCHAR`, `DATETIME`, `DECIMAL`), Null 허용 여부, 기본값을 폼으로 입력하면 즉시 반영됩니다.
 4. **테이블 데이터 뷰어 & 다중 행 벌크 내보내기/가져오기**:
@@ -702,14 +784,17 @@ LionSQL 코어 엔지니어링 팀에서 100% 정상 작동을 실측 검증한 
    - 외래키 컬럼 옆의 점프 링크(`↗`)를 누르면 참조 중인 부모 테이블의 대상 행으로 즉시 화면이 전환됩니다.
 5. **Developer API Preview 모달**:
    - 각 테이블 행의 `API` 버튼을 누르면 해당 테이블을 조회/생성/수정하기 위한 **cURL 명령어, 바닐라 JavaScript `fetch()`, 그리고 LionSQL 공식 Web SDK (`sqlion.js`)** 연동 코드가 동적으로 생성되어 복사할 수 있습니다.
-6. **라이트 / 다크 테마 고대비(WCAG AAA) 지원**:
+6. **SQL Query Studio & EXPLAIN 시각화**:
+   - 문법 강조가 적용된 에디터에서 자유롭게 SQL을 실행하고 결과를 테이블/JSON으로 조회합니다.
+   - `EXPLAIN` 버튼을 눌러 CBO가 선택한 인덱스 스캔 및 조인 전략을 시각적으로 검증할 수 있습니다.
+7. **라이트 / 다크 테마 고대비(WCAG AAA) 지원**:
    - 우측 상단의 테마 토글(달/해 아이콘)로 즉시 전환되며, 라이트 모드에서도 높은 시인성의 보더와 배지가 적용됩니다.
 
 ---
 
 ### 4.5. 프로그래밍 언어별 공식 드라이버 연동 레시피
 
-#### Go (`database/sql` + `lib/pq` / `go-mssqldb`)
+#### 1. Go (`database/sql` + `lib/pq` / `pgx`)
 ```go
 package main
 
@@ -722,7 +807,7 @@ import (
 )
 
 func main() {
-	connStr := "host=127.0.0.1 port=5433 user=admin password=secret dbname=postgres sslmode=disable"
+	connStr := "host=127.0.0.1 port=5433 user=admin password=1234567890 dbname=postgres sslmode=disable"
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
 		log.Fatal(err)
@@ -738,7 +823,7 @@ func main() {
 }
 ```
 
-#### Python (`psycopg2` / `SQLAlchemy`)
+#### 2. Python (`psycopg2` / `SQLAlchemy`)
 ```python
 import psycopg2
 
@@ -746,17 +831,18 @@ conn = psycopg2.connect(
     host="127.0.0.1",
     port=5433,
     user="admin",
-    password="secret",
+    password="1234567890",
     dbname="postgres"
 )
 cursor = conn.cursor()
-cursor.execute("SELECT id, holder_name, balance FROM accounts WHERE balance > %s", (100000,))
+cursor.execute("SELECT id, holder_name, balance FROM accounts WHERE balance > %s", (100000.0,))
 for row in cursor.fetchall():
-    print(f"ID: {row[0]}, Name: {row[1]}, Balance: {row[2]}")
+    print(f"ID: {row[0]}, Holder: {row[1]}, Balance: ${row[2]:,.2f}")
+
 conn.close()
 ```
 
-#### Node.js / TypeScript (`pg`)
+#### 3. Node.js / TypeScript (`pg`)
 ```typescript
 import { Client } from 'pg';
 
@@ -764,17 +850,44 @@ const client = new Client({
   host: '127.0.0.1',
   port: 5433,
   user: 'admin',
-  password: 'secret',
+  password: '1234567890',
   database: 'postgres',
 });
 
-async function run() {
+async function main() {
   await client.connect();
   const res = await client.query('SELECT * FROM accounts WHERE id = $1', [1]);
-  console.log(res.rows[0]);
+  console.log('Result:', res.rows[0]);
   await client.end();
 }
-run();
+
+main().catch(console.error);
+```
+
+#### 4. Java / Spring Boot (`application.yml`)
+```yaml
+spring:
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5433/postgres
+    username: admin
+    password: "1234567890"
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.format_sql: true
+```
+
+#### 5. C# / .NET Core (`appsettings.json` + `Npgsql` / `SqlClient`)
+```json
+{
+  "ConnectionStrings": {
+    "LionSqlPostgres": "Host=127.0.0.1;Port=5433;Username=admin;Password=1234567890;Database=postgres",
+    "LionSqlMssql": "Server=127.0.0.1,1433;Database=master;User Id=sa;Password=1234567890;TrustServerCertificate=True"
+  }
+}
 ```
 
 ---
@@ -783,180 +896,247 @@ run();
 
 ### 5.1. 스키마 설계 및 데이터 타입
 
-LionSQL은 표준 SQL 및 T-SQL DDL을 완벽히 지원합니다:
+LionSQL은 전자상거래, 핀테크, 엔터프라이즈 SaaS에 요구되는 강력한 데이터 무결성 제약조건을 네이티브로 지원합니다.
 
 ```sql
+-- 1. 고객 주문 테이블
 CREATE TABLE orders (
     order_id INT IDENTITY(1001, 1) PRIMARY KEY,
     customer_id INT NOT NULL,
     order_date DATETIME DEFAULT GETDATE(),
-    status VARCHAR(20) DEFAULT 'PENDING',
-    total_amount DECIMAL(18, 2) NOT NULL,
+    status VARCHAR(20) DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'PAID', 'SHIPPED', 'CANCELLED')),
+    total_amount DECIMAL(18, 2) NOT NULL CHECK (total_amount >= 0.00),
     notes TEXT,
     CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) 
         REFERENCES accounts(id) ON DELETE RESTRICT
 );
+
+-- 2. 주문 상세 품목 테이블
+CREATE TABLE order_items (
+    item_id INT IDENTITY(1, 1) PRIMARY KEY,
+    order_id INT NOT NULL,
+    product_name VARCHAR(150) NOT NULL,
+    unit_price DECIMAL(18, 2) NOT NULL,
+    quantity INT NOT NULL CHECK (quantity > 0),
+    subtotal DECIMAL(18, 2) NOT NULL,
+    CONSTRAINT fk_items_order FOREIGN KEY (order_id) 
+        REFERENCES orders(order_id) ON DELETE CASCADE
+);
 ```
-* **`IDENTITY(seed, increment)`**: 자동 증가 단조 수치 기본키를 정의합니다.
-* **외래키 제약조건**: 부모 테이블 행 삭제 시 `RESTRICT`, `CASCADE`, `SET NULL` 정책을 원자적으로 강제합니다.
+* **`IDENTITY(seed, increment)`**: 자동 증가 단조 수치 기본 키를 생성합니다.
+* **외래 키 연쇄 동작 (`ON DELETE CASCADE`)**: 주문 부모 행이 삭제되면 소속 품목들이 단일 트랜잭션 내에서 원자적으로 함께 삭제됩니다.
+* **체크 제약조건 (`CHECK`)**: 잘못된 음수 금액이나 유효하지 않은 주문 상태의 삽입을 원천 차단합니다.
 
 ---
 
 ### 5.2. 인덱스 설계 및 검색 최적화 전략
 
-LionSQL은 디스크 B+Tree 및 인메모리 SkipList 보조 인덱스를 지원합니다:
+LionSQL은 디스크 B+Tree 및 인메모리 SkipList 보조 인덱스를 지원하며, I/O 비용을 획기적으로 줄이는 고급 인덱싱 옵션을 제공합니다:
 
 ```sql
--- 1. 단일 컬럼 보조 인덱스
+-- 1. 고객별 주문 조회를 위한 단일 보조 인덱스
 CREATE INDEX idx_orders_customer ON orders(customer_id);
 
--- 2. 고유(Unique) 인덱스 (중복 삽입 시 Unique Violation 23505 에러 발생)
-CREATE UNIQUE INDEX uq_accounts_email ON accounts(email);
+-- 2. 상태별/일자별 정렬 조회를 위한 복합(Composite) 인덱스
+-- (카디널리티가 높거나 일치 검색에 주로 쓰이는 컬럼을 좌측에 배치)
+CREATE INDEX idx_orders_status_date ON orders(status, order_date DESC);
 
--- 3. 복합(Composite) 인덱스
-CREATE INDEX idx_orders_status_date ON orders(status, order_date);
-
--- 4. 커버링 인덱스 (Covering Index with INCLUDE)
-CREATE INDEX idx_orders_cust_inc ON orders(customer_id) INCLUDE (total_amount, status);
+-- 3. 커버링 인덱스 (Covering Index with INCLUDE)
+-- 리프 노드에 total_amount와 status를 비키 컬럼으로 포함하여 메인 테이블 조회(Bookmark Lookup) 제거
+CREATE INDEX idx_orders_covering ON orders(customer_id) INCLUDE (total_amount, status);
 ```
-* **커버링 인덱스 (`INCLUDE`)**: 인덱스 리프 노드에 프로젝션 대상 컬럼을 함께 저장하여, 메인 테이블 힙(Heap) 조회를 완전히 생략(Index-Only Scan)함으로써 I/O 비용을 대폭 절감합니다.
+
+#### 커버링 인덱스 최적화 원리:
+아래 쿼리를 실행할 때 옵티마이저는 `idx_orders_covering`만 스캔하고 메인 테이블 힙(Heap) 페이지를 전혀 읽지 않는 **Index-Only Scan**을 선택하므로 성능이 최대 5~10배 향상됩니다:
+```sql
+SELECT customer_id, total_amount, status 
+FROM orders 
+WHERE customer_id = 101;
+```
 
 ---
 
 ### 5.3. 트랜잭션과 동시성 제어 (ACID & Concurrency)
 
-LionSQL은 **Non-blocking Snapshot Isolation / Read Committed** 격리수준을 제공합니다:
-* **읽기는 쓰기를 막지 않고, 쓰기는 읽기를 막지 않습니다**: 공유 읽기 락(S-Lock)이 없으므로 대용량 SELECT 쿼리가 실행 중이어도 INSERT/UPDATE가 지연 없이 실행됩니다.
-* **원자적 트랜잭션 제어**:
+LionSQL은 전통적인 2PL(Two-Phase Locking)의 락 경합을 배제하고 **Non-blocking Snapshot Isolation / Read Committed** 격리 수준을 보장합니다:
+* **비차단 읽기**: `SELECT` 쿼리는 어떠한 락도 획득하지 않으며, 백그라운드에서 대량의 `UPDATE`/`INSERT`가 실행 중이어도 스냅샷으로부터 일관된 데이터를 즉시 반환합니다.
+* **트랜잭션 원자성**:
   ```sql
   BEGIN TRANSACTION;
   
-  UPDATE accounts SET balance = balance - 10000 WHERE id = 1;
-  UPDATE accounts SET balance = balance + 10000 WHERE id = 2;
+  UPDATE accounts SET balance = balance - 10000.00 WHERE id = 1;
+  UPDATE accounts SET balance = balance + 10000.00 WHERE id = 2;
   
-  COMMIT TRANSACTION; -- 또는 예외 시 ROLLBACK TRANSACTION;
+  COMMIT TRANSACTION; -- 충돌 발생 시 자동 롤백
   ```
-* **직렬화 충돌(`40001`)과 낙관적 동시성 제어(OCC)**:
-  - 인메모리 OCC 엔진에서 두 개 이상의 동시 트랜잭션이 동일한 행을 수정하려 할 경우, 먼저 커밋한 트랜잭션이 성공하고 뒤늦은 트랜잭션은 `40001 (write conflict)` 에러를 수신합니다.
-  - 애플리케이션에서는 지수 백오프(Exponential Backoff)를 적용하여 2~3회 재시도(Retry)하는 패턴을 권장합니다.
+
+#### OCC 직렬화 충돌(`40001`)과 재시도(Retry) 패턴:
+인메모리 OCC 스토리지 환경에서 두 트랜잭션이 동일한 행을 동시에 수정하면 나중에 도달한 커밋이 `40001 (ErrWriteConflict)` 에러를 발생시킵니다. 애플리케이션에서는 지수 백오프를 갖춘 재시도 루프를 적용해야 합니다:
+
+```go
+// Go 애플리케이션에서의 지수 백오프 재시도 표준 패턴
+func executeWithRetry(db *sql.DB, query string, maxRetries int) error {
+	var err error
+	for i := 0; i < maxRetries; i++ {
+		_, err = db.Exec(query)
+		if err == nil {
+			return nil
+		}
+		// 40001 충돌 에러 확인 시 백오프 대기 후 재시도
+		if strings.Contains(err.Error(), "40001") || strings.Contains(err.Error(), "write conflict") {
+			time.Sleep(time.Duration(10*(1<<i)) * time.Millisecond)
+			continue
+		}
+		return err // 기타 에러는 즉시 반환
+	}
+	return fmt.Errorf("transaction aborted after %d retries: %w", maxRetries, err)
+}
+```
 
 ---
 
-### 5.4. 관계형 쿼리 작성 가이드
+### 5.4. 관계형 쿼리 및 분석 윈도우 함수
 
 ```sql
--- 1. 조인 및 집계 쿼리
+-- 1. 다중 조인 및 집계 질의
 SELECT 
     a.holder_name,
     COUNT(o.order_id) AS total_orders,
-    COALESCE(SUM(o.total_amount), 0.00) AS grand_total
+    COALESCE(SUM(o.total_amount), 0.00) AS gross_spend
 FROM accounts a
 LEFT JOIN orders o ON a.id = o.customer_id
 WHERE a.balance > 0
 GROUP BY a.holder_name
 HAVING COUNT(o.order_id) >= 1
-ORDER BY grand_total DESC;
+ORDER BY gross_spend DESC;
 
--- 2. T-SQL / ANSI 페이징 쿼리 (OFFSET ... FETCH)
-SELECT order_id, order_date, total_amount
-FROM orders
-ORDER BY order_date DESC
-OFFSET 20 ROWS FETCH NEXT 10 ROWS ONLY;
+-- 2. 분석 윈도우 함수 (고객별 구매 순위 부여)
+SELECT 
+    customer_id,
+    order_id,
+    total_amount,
+    ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY total_amount DESC) AS spend_rank
+FROM orders;
 
--- 3. 공통 테이블 표현식 (Common Table Expression, CTE)
-WITH HighValueOrders AS (
-    SELECT customer_id, total_amount
+-- 3. 공통 테이블 표현식 (CTE)과 ANSI 페이징
+WITH VipOrders AS (
+    SELECT customer_id, total_amount, order_date
     FROM orders
-    WHERE total_amount >= 100000.00
+    WHERE total_amount >= 50000.00
 )
-SELECT a.holder_name, h.total_amount
-FROM HighValueOrders h
-JOIN accounts a ON h.customer_id = a.id;
+SELECT a.holder_name, v.total_amount, v.order_date
+FROM VipOrders v
+INNER JOIN accounts a ON v.customer_id = a.id
+ORDER BY v.order_date DESC
+OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY;
 ```
 
 ---
 
 ### 5.5. T-SQL 저장 프로시저 및 비즈니스 로직 작성
 
-LionSQL은 SQLite 스타일의 VDBE 바이트코드 가상 머신을 통해 T-SQL 프로시저를 네이티브 속도로 컴파일 실행합니다:
+LionSQL은 SQLite 스타일의 VDBE 바이트코드 가상 머신을 통해 T-SQL 프로시저를 네이티브 속도로 컴파일 실행합니다.
 
 ```sql
-CREATE PROCEDURE ProcessMonthlyFee
-    @fee_rate DECIMAL(5,2)
+CREATE PROCEDURE ProcessOrderPayment
+    @order_id INT,
+    @customer_id INT,
+    @payment_amount DECIMAL(18,2),
+    @new_balance DECIMAL(18,2) OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON;
     
-    DECLARE @acc_id INT;
-    DECLARE @bal DECIMAL(18,2);
-    DECLARE @fee DECIMAL(18,2);
+    DECLARE @user_bal DECIMAL(18,2);
     
-    -- 커서를 이용한 행 단위 안전 순회
-    DECLARE acc_cursor CURSOR FOR
-        SELECT id, balance FROM accounts WHERE balance > 0;
-        
-    OPEN acc_cursor;
-    FETCH NEXT FROM acc_cursor INTO @acc_id, @bal;
+    -- 1. 고객 계좌 잔액 확인
+    SELECT balance INTO @user_bal FROM accounts WHERE id = @customer_id;
     
-    WHILE @@FETCH_STATUS = 0
+    IF @user_bal < @payment_amount
     BEGIN
-        SET @fee = @bal * (@fee_rate / 100.0);
-        
-        BEGIN TRY
-            UPDATE accounts SET balance = balance - @fee WHERE id = @acc_id;
-        END TRY
-        BEGIN CATCH
-            PRINT 'Failed to deduct fee for account: ' + CAST(@acc_id AS VARCHAR);
-        END CATCH
-        
-        FETCH NEXT FROM acc_cursor INTO @acc_id, @bal;
+        RAISERROR('고객 계좌 잔액이 결제 금액보다 부족합니다.', 16, 1);
+        RETURN -1;
     END
     
-    CLOSE acc_cursor;
-    DEALLOCATE acc_cursor;
-    
-    RETURN 0;
+    BEGIN TRY
+        -- 2. 원자적 잔액 차감 및 주문 상태 갱신
+        UPDATE accounts SET balance = balance - @payment_amount WHERE id = @customer_id;
+        UPDATE orders SET status = 'PAID' WHERE order_id = @order_id;
+        
+        -- 3. OUTPUT 파라미터 반환
+        SELECT balance INTO @new_balance FROM accounts WHERE id = @customer_id;
+        
+        RETURN 0;
+    END TRY
+    BEGIN CATCH
+        PRINT '결제 처리 중 예외 발생: ' + ERROR_MESSAGE();
+        RETURN -2;
+    END CATCH
 END;
+```
+
+#### 프로시저 호출 및 OUTPUT 파라미터 수신:
+```sql
+DECLARE @rem_bal DECIMAL(18,2);
+EXEC ProcessOrderPayment 
+    @order_id = 1001, 
+    @customer_id = 1, 
+    @payment_amount = 45000.00, 
+    @new_balance = @rem_bal OUTPUT;
+
+SELECT @rem_bal AS updated_balance;
 ```
 
 ---
 
 ### 5.6. 선언적 스키마 마이그레이션 도구 (`lionsql migrate`)
 
-LionSQL은 단일 실행 파일 내에 마이그레이션 툴체인을 내장하고 있습니다:
+LionSQL 바이너리는 마이그레이션 툴체인을 내장하고 있어 외부 마이그레이션 라이브러리가 필요하지 않습니다:
 
 ```bash
-# 1. 새 마이그레이션 SQL 파일 생성
-./bin/lionsql migrate new add_products_table
-# -> migrations/20261019_173000_add_products_table.sql 생성
+# 1. 새 마이그레이션 파일 생성 (타임스탬프 파일 자동 생성)
+$ lionsql migrate new add_products_table
+Created migration files:
+  migrations/20261019_173000_add_products_table.up.sql
+  migrations/20261019_173000_add_products_table.down.sql
 
-# 2. 미적용 마이그레이션 일괄 적용
-./bin/lionsql migrate up -dir=./data
+# 2. 미적용 상향 마이그레이션 일괄 적용
+$ lionsql migrate up -dir=./data
+Applying migration: 20261019_173000_add_products_table... Applied successfully.
 
-# 3. 현재 마이그레이션 적용 상태 점검
-./bin/lionsql migrate status -dir=./data
+# 3. 현재 마이그레이션 상태 확인
+$ lionsql migrate status -dir=./data
+Applied Migrations:
+  [X] 20261019_173000_add_products_table (Applied at: 2026-10-19 17:31:00)
 
-# 4. 가장 최근 마이그레이션 1건 롤백
-./bin/lionsql migrate down -dir=./data
+# 4. 가장 최근 마이그레이션 1단계 롤백
+$ lionsql migrate down -dir=./data -steps=1
+Rolling back migration: 20261019_173000_add_products_table... Rolled back cleanly.
 ```
-마이그레이션 이력은 내부 `_migrations` 시스템 테이블에 원자적 트랜잭션으로 안전하게 기록됩니다.
 
 ---
 
-### 5.7. 웹 Backend-as-a-Service (BaaS) 기능 활용
+### 5.7. 무설정 자동 REST API 활용 (Backend-as-a-Service)
 
-LionSQL은 웹/모바일 프론트엔드가 백엔드 서버 없이 직접 통신할 수 있는 PocketBase 스타일의 REST API를 자동 제공합니다:
+LionSQL은 테이블이 정의되면 별도의 백엔드 코드 작성 없이 즉시 사용할 수 있는 리소스 CRUD REST API를 제공합니다:
 
 ```bash
-# 1. 레코드 목록 조회 (필터링 및 페이징)
-curl -s "http://127.0.0.1:8090/api/records/accounts?page=1&perPage=10&sort=-balance"
+# 1. 레코드 목록 조회 (필터링, 페이징 및 정렬)
+curl -s "http://127.0.0.1:8090/api/records/accounts?page=1&perPage=10&sort=-balance&filter=balance>50000"
 
 # 2. 새 레코드 생성 (JSON)
 curl -X POST "http://127.0.0.1:8090/api/records/accounts" \
+  -H "Authorization: Bearer <ADMIN_JWT>" \
   -H "Content-Type: application/json" \
   -d '{"holder_name":"Diana Prince","email":"diana@amazon.com","balance":500000.00}'
 
-# 3. 실시간 변경 감지 (Server-Sent Events)
+# 3. 레코드 부분 갱신 (ID 기준)
+curl -X PUT "http://127.0.0.1:8090/api/records/accounts" \
+  -H "Authorization: Bearer <ADMIN_JWT>" \
+  -H "Content-Type: application/json" \
+  -d '{"id":1,"balance":175000.00}'
+
+# 4. 실시간 Server-Sent Events 변경 스트림 구독
 curl -N "http://127.0.0.1:8090/api/realtime"
 ```
 
@@ -966,76 +1146,135 @@ curl -N "http://127.0.0.1:8090/api/realtime"
 
 ### 6.1. 쿼리 성능 분석 및 비용 기반 옵티마이저 (CBO)
 
-쿼리가 느리거나 인덱스를 타지 않을 때는 `EXPLAIN` 및 `EXPLAIN ANALYZE`로 쿼리 실행 계획을 점검합니다:
+LionSQL은 쿼리 파싱 후 비용 기반 최적화기(CBO)를 거쳐 가장 적은 I/O와 CPU를 소모하는 최적의 실행 계획을 수립합니다.
 
+#### 1. 실행 계획 확인: `EXPLAIN`
+실제 쿼리를 실행하지 않고 논리적/물리적 계획과 추정 비용을 확인합니다:
 ```sql
--- 1. 논리적 실행 계획 및 추정 비용 확인
-EXPLAIN SELECT * FROM orders WHERE customer_id = 1;
-
--- 2. 실제 실행 시간(Profiling) 및 튜플 수 실측 확인
-EXPLAIN ANALYZE SELECT * FROM orders WHERE customer_id = 1;
+EXPLAIN SELECT * FROM orders WHERE customer_id = 101 AND status = 'PAID';
+```
+출력 결과:
+```text
+-> IndexScan on orders using idx_orders_covering (cost=0.15..4.25 rows=3)
+   Index Cond: (customer_id = 101)
+   Filter: (status = 'PAID')
 ```
 
-출력 예시:
+#### 2. 실측 프로파일링: `EXPLAIN ANALYZE`
+실제 쿼리를 실행하여 실제 소요 시간(actual time)과 반환 행 수(actual rows)를 측정합니다:
+```sql
+EXPLAIN ANALYZE SELECT * FROM orders WHERE customer_id = 101;
 ```
--> IndexScan on orders using idx_orders_customer (cost=0.15..8.20 rows=5) (actual time=0.042ms rows=5 loops=1)
-   Filter: (customer_id = 1)
-Planning Time: 0.125 ms
-Execution Time: 0.058 ms
+출력 결과:
+```text
+-> IndexScan on orders using idx_orders_covering (cost=0.15..4.25 rows=3) (actual time=0.038ms rows=3 loops=1)
+   Index Cond: (customer_id = 101)
+Planning Time: 0.082 ms
+Execution Time: 0.045 ms
 ```
 
-* **통계 수집**: 대량의 데이터 삽입/삭제 후에는 아래 명령으로 64버킷 등고 히스토그램을 갱신합니다:
-  ```sql
-  ANALYZE TABLE orders;
-  ```
+#### 3. 통계 정보 수집 (`ANALYZE TABLE`)
+대량의 데이터 적재 또는 삭제 후에는 옵티마이저의 64-버킷 등고 히스토그램을 최신 상태로 갱신해야 올바른 인덱스가 선택됩니다:
+```sql
+ANALYZE TABLE orders;
+ANALYZE TABLE order_items;
+```
+
+#### 4. 인덱스 힌트 강제 (`WITH (INDEX(...))`)
+옵티마이저의 선택을 우회하여 특정 인덱스를 강제 지정할 수 있습니다:
+```sql
+SELECT * FROM orders WITH (INDEX(idx_orders_customer)) WHERE customer_id = 101;
+```
 
 ---
 
 ### 6.2. 온라인 핫 백업 및 재해 복구 (Backup & Restore)
 
-LionSQL은 가동 중인 데이터베이스를 중단하지 않고 일관된 스냅샷 아카이브(`.tar.gz`)로 즉시 백업합니다:
+LionSQL은 데이터베이스 서비스 중단(Downtime) 없이 일관된 스냅샷 아카이브(`.tar.gz`)를 생성하는 온라인 핫 백업 기능을 제공합니다.
 
+#### 1. CLI 로컬 온라인 백업
 ```bash
-# 1. CLI를 통한 로컬 온라인 백업
-./bin/lionsql backup -dir=./data -out=backup_20261019.tar.gz
+$ lionsql backup -dir=./data -out=/backups/lionsql_backup_20261019.tar.gz
+Initiating online storage checkpoint... Done.
+Archiving data directory to /backups/lionsql_backup_20261019.tar.gz...
+Backup completed successfully. (Size: 45.2 MB, Checkpoint LSN: 1849300)
+```
 
-# 2. HTTP REST API를 통한 원격 스트리밍 백업 다운로드
+#### 2. 원격 HTTP REST 백업 다운로드
+```bash
 curl -s -X POST "http://127.0.0.1:8090/api/backup" \
   -H "Authorization: Bearer <ADMIN_JWT_TOKEN>" \
   --output remote_backup.tar.gz
-
-# 3. 데이터베이스 완전 복원 (Restore)
-./bin/lionsql restore -dir=./data_restored -in=backup_20261019.tar.gz
 ```
+
+#### 3. 백업 아카이브 복원 (Restore)
+새로운 서버 또는 대상 디렉토리에 백업을 복원합니다:
+```bash
+$ lionsql restore -dir=/var/lib/lionsql/data_restored -in=/backups/lionsql_backup_20261019.tar.gz
+Validating backup archive integrity... Valid.
+Extracting archive contents to /var/lib/lionsql/data_restored... Done.
+Verifying storage headers and catalog checksums... OK.
+Database restore completed successfully.
+```
+> [!CAUTION]
+> 데이터 덮어쓰기 사고를 방지하기 위해 복원 대상 디렉토리는 반드시 비어 있거나 새로 생성된 경로여야 합니다.
 
 ---
 
-### 6.3. 고가용성(HA) 및 읽기 분산 복제 (Replication)
+### 6.3. 고가용성(HA) 및 읽기 분산 복제 실습 (Replication)
 
-LionSQL은 복잡한 분산 코디네이터(Zookeeper, etcd) 없이 **1-Writer Multi-Reader 비동기/반동기 WAL 복제**를 지원합니다:
+LionSQL은 단일 라이터(Primary)와 다중 리더(Replica)로 구성되는 **1-Writer Multi-Reader 비동기/반동기 WAL 복제**를 지원합니다.
+
+#### 로컬 2노드 복제 클러스터 구성 실습:
 
 ```bash
-# 1. Primary 노드 기동 (포트 8090/5433/1433)
-./bin/lionsql start -dir=./data_primary -node-id=primary-1
+# 1. Primary 노드 기동 (포트: HTTP 8090, PG 5433, TDS 1433)
+$ lionsql start -dir=./data_primary -node-id=primary-node
 
-# 2. Replica 노드 기동 (포트 8091/5434/1434, Primary에 연결)
-./bin/lionsql start -dir=./data_replica \
-  -http=:8091 -pg=:5434 -tds=:1434 \
-  -node-id=replica-1 \
-  -replica-of=http://127.0.0.1:8090 \
-  -auto-failover=true
+# 2. Replica 노드 기동 (포트: HTTP 8091, PG 5434, TDS 1434)
+# Primary에 연결하여 WAL 실시간 스트리밍 수신 및 자동 승격(Auto-Failover) 활성화
+$ lionsql start -dir=./data_replica \
+    -http=:8091 -pg=:5434 -tds=:1434 \
+    -node-id=replica-node-1 \
+    -replica-of=http://127.0.0.1:8090 \
+    -auto-failover=true
+
+# 3. Replica 복제 상태 확인
+$ curl -s http://127.0.0.1:8091/api/replication/status
+{
+  "role": "REPLICA",
+  "node_id": "replica-node-1",
+  "primary_url": "http://127.0.0.1:8090",
+  "synced_lsn": 1849300,
+  "replication_lag_ms": 2.5
+}
 ```
-* **Auto-Failover**: Primary 노드가 3초(`heartbeat-timeout-ms`) 이상 무응답일 경우, 최신 LSN을 보유한 Replica가 새 Primary로 자동 승격되어 읽기/쓰기 서비스를 무중단 승계합니다.
+
+#### 무중단 장애 조치(Failover) 및 승격(Promotion):
+* **자동 장애 조치(Auto-Failover)**: Primary 노드가 3초(`-heartbeat-timeout-ms`) 이상 무응답일 경우, 최신 LSN을 보유한 Replica가 새 Primary로 자동 승격되어 쓰기 서비스를 개시합니다.
+* **수동 승격 명령**:
+  ```bash
+  curl -X POST "http://127.0.0.1:8091/api/replication/promote" \
+    -H "Authorization: Bearer <ADMIN_JWT_TOKEN>"
+  ```
 
 ---
 
 ### 6.4. 엔터프라이즈 보안 및 네트워크 암호화
 
-운영 환경에서는 공용 인터넷 노출을 방지하고 전송 계층 암호화를 활성화해야 합니다:
+프로덕션 환경에서는 공용 인터넷 노출을 방지하고 전송 계층 암호화를 활성화해야 합니다:
 
+#### 1. 자체 서명 TLS 인증서 생성 (개발/스테이징)
 ```bash
-# TLS 인증서를 적용하여 암호화 통신 강제
-./bin/lionsql start -dir=./data \
+openssl req -x509 -newkey rsa:4096 -nodes \
+  -keyout /etc/ssl/lionsql.key \
+  -out /etc/ssl/lionsql.crt \
+  -days 365 -subj "/CN=lionsql.local"
+```
+
+#### 2. TLS 암호화 강제 기동
+```bash
+lionsql start -dir=/var/lib/lionsql/data \
   -tls=true \
   -tls-cert=/etc/ssl/lionsql.crt \
   -tls-key=/etc/ssl/lionsql.key \
@@ -1047,15 +1286,22 @@ LionSQL은 복잡한 분산 코디네이터(Zookeeper, etcd) 없이 **1-Writer M
 
 ### 6.5. 장애 진단 및 문제 해결 (Troubleshooting)
 
-| 현상 | 원인 | 해결 방법 |
-| :--- | :--- | :--- |
-| `bind: address already in use` | 이전 프로세스가 정상 종료되지 않고 포트를 점유 중 | `./bin/lionsql status`로 기존 PID 확인 후 `./bin/lionsql stop` 실행. 필요 시 `kill $(cat data/lionsql.pid)` |
-| `hash join memory budget exceeded` | 대용량 카테시안 곱 조인으로 메모리 거버너 발동 | 쿼리에 적절한 `WHERE` 필터를 부여하거나, 세션 레벨에서 `SET work_mem = '128MB'`로 상향 조정 |
-| `write conflict (SQLSTATE 40001)` | 인메모리 OCC에서 동일 행 동시 수정 충돌 | 애플리케이션 드라이버 레벨에서 10~50ms 지수 백오프 재시도 로직 적용 |
-| `Database connection failed` | 레거시 데이터베이스명(`sqlion`) 지정 오류 | 단일 카탈로그 표준에 맞추어 PGWire는 `postgres`, TDS는 `master`를 지정 |
+실무 운영 중 발생할 수 있는 주요 상황과 해결 방법입니다:
 
-시스템 전반의 상태를 한눈에 진단하려면:
+| 현상 및 에러 메시지 | 원인 분석 | 해결 조치 |
+| :--- | :--- | :--- |
+| `bind: address already in use` | 이전 프로세스가 정상 종료되지 않고 포트를 점유 중 | `lionsql status -dir data`로 기존 PID 확인 후 `lionsql stop` 실행. 필요 시 `kill -9 <PID>` 후 재기동 |
+| `hash join memory budget exceeded` | 대용량 카테시안 곱 또는 인덱스 부재 조인으로 `work_mem` 초과 | 쿼리에 적절한 `WHERE` 필터를 부여하거나, 세션 레벨에서 `SET work_mem = '128MB'`로 상향 조정 |
+| `serialization failure: write-write conflict (40001)` | 인메모리 OCC 또는 MVCC에서 동일 행 동시 수정 경합 | 애플리케이션 드라이버 레벨에서 10~50ms 지수 백오프 재시도(Retry) 로직 적용 |
+| `password authentication failed (28P01)` | 잘못된 관리자 이메일 또는 비밀번호 | 기동 시 지정한 `-admin-email`과 `-admin-pass` 확인 또는 `lionsql.json` 설정 검증 |
+| `Database connection failed` | 레거시 데이터베이스명(`sqlion`) 지정 오류 | 단일 카탈로그 표준에 맞추어 PGWire는 `postgres`, TDS는 `master`를 지정 |
+| `disk space low warning` | 데이터 디렉토리 여유 공간이 1GB 미만으로 감소 | 오래된 백업 파일 정리, 로그 파일 로테이션, 또는 상위 디스크 볼륨 확장 |
+| `TLS handshake failed` | 인증서 만료 또는 도메인 불일치 | 인증서 파일 경로 및 유효기간 확인, 클라이언트 측 `TrustServerCertificate=True` 검토 |
+| `table limit exceeded: memory limit exceeded` | 인메모리 힙 상한(`--max-memory`) 도달 | 불필요한 테이블 데이터 삭제 또는 `-max-memory` 플래그 상향 조정 |
+
+#### 시스템 종합 환경 진단:
 ```bash
-./bin/lionsql doctor -dir=./data
+$ lionsql doctor -dir=./data
 ```
-데이터 파일 정합성, WAL 체크포인트 LSN, 포트 점유 여부, 디스크 여유 공간이 즉시 출력됩니다.
+데이터 파일 정합성, WAL 체크포인트 LSN, 포트 점유 여부, OS 파일 디스크립터 한도, 디스크 여유 공간이 5개 영역으로 정밀 진단되어 출력됩니다.
+
