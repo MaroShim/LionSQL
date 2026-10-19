@@ -24,7 +24,7 @@
 | **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
 | **`AUTH-1`** | **인증/토큰교환 (Auth)** | `AUTH-1` | 클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) 트랙 |
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
-| **`UI-1` ~ `UI-7`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-7` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드 |
+| **`UI-1` ~ `UI-9`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-9` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭 |
 
 ---
 
@@ -70,6 +70,13 @@
 | **P1** | **UI/UX** | **Web Studio 비밀번호 표시/숨기기(Eye Toggle) 버튼 지원 (`UI-5`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/안전성** | **Drop Table 실수 방지용 테이블명 일치 확인 모달 가드레일 (`UI-6`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/데이터** | **Sample Data Seed 빈 DB 사전 검증 가드 및 원자적 피드백 (`UI-7`)** | `pkg/api`, `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/DX** | **API Preview 모달 테이블 스키마 기반 동적 더미 페이로드 생성 (`UI-8`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/DX** | **API Preview 모달 LionSQL 공식 SDK (`sqlion.js`) 전용 코드 탭 신설 (`UI-9`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P2** | **UI/실시간** | **Web Studio 실시간 CDC / SSE 스트림 인스펙터 뷰어 (`UI-REALTIME-1`)** | `pkg/ui`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | - |
+| **P2** | **UI/DDL** | **Web Studio 스키마 뷰 내 비주얼 컬럼 추가 GUI (`+ Add Column`) (`UI-DDL-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
+| **P2** | **UI/데이터** | **레코드 테이블 다중 행 선택 대량 작업 (Bulk Action) & 외래키(FK) 릴레이션 팝업 점프 (`UI-DATA-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
+| **P3** | **UI/SQL** | **SQL Query Studio 에디터 강화 (CodeMirror/Monaco 문법 강조, 자동완성 & 쿼리 히스토리) (`UI-SQL-1`)** | `pkg/ui` | **Post-1.0 백로그 (Postponed)** | - |
+| **P3** | **UI/관제** | **실시간 HTTP API 요청 로그 뷰어 (Activity / Request Logs) (`UI-LOGS-1`)** | `pkg/ui`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | - |
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 
@@ -374,11 +381,30 @@
 | **런타임 비대화/복잡도** | **Wasm UDF 샌드박스 (`wazero`)** | 다국어 UDF 격리 실행 가상머신 | **과도한 런타임 복잡도 & 불필요성**: 이미 Go Native SPI(`proc.RegisterScalarFunction`, <5ns)로 UDF가 완벽히 동작함. DB 커널 내부에 Wasm 인터프리터를 내장하는 것은 바이너리 크기 및 메모리 관리 복잡도만 키우며 실무적 수요가 극히 희박함. | **공식 스펙-아웃 확정 (Spec-Out, 향후 아이디어 검토)** |
 | **아키텍처 불변식 충돌** | **멀티코어 병렬 OLAP 스캔 (`P-10`)** | 대규모 분석 쿼리 멀티코어 풀스캔 | **HTAP 아키텍처 불변식 충돌**: LionSQL은 분석 쿼리를 OLTP 커널에서 무겁게 돌리는 대신, **트랜잭션 커밋 CDC 스트리밍으로 임베디드 DuckDB에 마이크로 배치 적재**하는 아키텍처(`GEMINI.md` 8.4절)를 확립함. OLTP 엔진에서 고루틴 대량 생성 병렬 스캔을 돌리는 것은 코어 엔진 격리 원칙에 위배됨. | **스펙-아웃 권고 (Spec-Out)** |
 
+
+### 4.6. Web Studio (Port 8090) Post-1.0 고도화 백로그 (Supabase & PocketBase 벤치마킹)
+1.0 코어 릴리스의 핵심 목표(고성능 T-SQL OLTP 엔진 안정화) 완결 후, 웹 관리자 경험(DX)을 글로벌 BaaS 수준으로 극대화하기 위해 이관된 5대 Web Studio 기능입니다:
+
+* **실시간 CDC / SSE 스트림 인스펙터 뷰어 (`UI-REALTIME-1`)**:
+  - 엔진의 `/api/cdc/stream` 및 `/api/realtime` (SSE) 엔드포인트와 브라우저 `EventSource`를 직결하여 실시간 DML 변경 이벤트 카드 스트림 및 JSON Diff를 시각화.
+* **스키마 뷰 내 비주얼 컬럼 추가 GUI (`UI-DDL-1`)**:
+  - `Schema & DDL` 서브뷰에 `+ Add Column` 모달을 연동하여 SQL 타이핑 없이 컬럼명, 타입, 제약조건을 입력받아 `ALTER TABLE ... ADD ...` 실행.
+* **레코드 테이블 다중 행 선택 대량 작업 및 외래키 릴레이션 팝업 점프 (`UI-DATA-1`)**:
+  - 레코드 그리드 체크박스를 통한 일괄 삭제/내보내기 및 외래키(FK) 컬럼 클릭 시 부모 레코드 정보 팝업 모달 표시.
+* **SQL Query Studio 에디터 강화 (`UI-SQL-1`)**:
+  - CodeMirror/Monaco 결합 구문 컬러링, T-SQL 키워드 자동완성, 실행 쿼리 히스토리(History) 패널 및 Volcano 실행 계획 계층형 트리 뷰 시각화.
+* **실시간 HTTP API 요청 로그 뷰어 (`UI-LOGS-1`)**:
+  - 인입되는 HTTP API 요청(Method, Path, Status, Latency, IP)의 최근 이력을 실시간 모니터링할 수 있는 전용 Activity Logs 화면 구축.
+
 ---
 
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
+- [x] **Web Studio Developer API Preview 모달 고도화 (동적 스키마 페이로드 & LionSQL SDK 탭) (`UI-8`, `UI-9`) (`pkg/ui`)**:
+  - 테이블별 스키마 컬럼 메타데이터(`tablesList`)를 분석하여 자동 증분 PK는 제외하고, 데이터 타입(INT, VARCHAR, DECIMAL, DATETIME, JSON, BOOL)과 컬럼 의미에 맞춘 현실적인 더미 JSON 페이로드(`getDummyRecordForTable`) 및 PK/필터 샘플(`getPrimaryKeySample`, `getFilterSample`)을 동적으로 생성.
+  - cURL, Fetch, Python, Go 탭과 함께 LionSQL 공식 SDK (`sqlion.js`) 전용 `import SQLion` 및 `db.collection('table').getList/getOne/create/query` 템플릿 탭(`api-lang-sdk`) 신설.
+  - 단위 테스트 `TestAPIPreviewEnhancements` 추가 및 100% PASS 검증 완료.
 - [x] **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 및 스키마 OID 캐싱 (`PG-COMPAT-1`) (`pkg/wire`)**:
   - `PreparedStatement` 구조체에 분석된 `ColumnNames []string`, `ColumnOIDs []int32` 필드를 신설하고 `writeSchemaDescription`에서 분석된 메타데이터를 캐싱하여 Describe와 Execute 단계의 OID 규약을 100% 동기화.
   - `buildPreviewSQL`에서 산술 연산자가 없는 단독 파라미터(`SELECT $1`, `$1, $2`)의 프리뷰 치환 기본값을 PostgreSQL 표준 규격에 따라 TEXT(`'sample'`)로 정의하여, 미지정 파라미터가 OID 23(4바이트 정수)으로 오인된 뒤 가변길이 문자열(3바이트 `"100"`)로 전송되어 `lib/pq` 클라이언트 패닉을 유발하던 결함 원천 해결.

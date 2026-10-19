@@ -147,5 +147,31 @@ func TestSeedSampleDataUI(t *testing.T) {
 	}
 }
 
+func TestAPIPreviewEnhancements(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`id="api-preview-modal"`,
+		`id="api-lang-sdk"`,
+		`LionSQL SDK`,
+		`getDummyRecordForTable`,
+		`getPrimaryKeySample`,
+		`getFilterSample`,
+		`db.collection`,
+		`openAPIPreviewModal()`,
+		`closeAPIPreviewModal()`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q", snippet)
+		}
+	}
+}
+
 
 

@@ -17,6 +17,37 @@
       --success: #10b981;
       --danger: #ef4444;
       --code-bg: #090d16;
+      --th-bg: #0f172a;
+      --tr-even: #182234;
+      --btn-secondary-bg: #334155;
+      --btn-secondary-hover: #475569;
+      --nav-hover: #334155;
+      --console-text: #38bdf8;
+      --auth-box-bg: #162032;
+      --badge-bg: #1e3a8a;
+      --badge-color: #60a5fa;
+    }
+    html[data-theme="light"] {
+      --bg: #f8fafc;
+      --sidebar: #ffffff;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --success: #059669;
+      --danger: #dc2626;
+      --code-bg: #f1f5f9;
+      --th-bg: #f8fafc;
+      --tr-even: #f1f5f9;
+      --btn-secondary-bg: #e2e8f0;
+      --btn-secondary-hover: #cbd5e1;
+      --nav-hover: #f1f5f9;
+      --console-text: #0284c7;
+      --auth-box-bg: #f8fafc;
+      --badge-bg: #dbeafe;
+      --badge-color: #1d4ed8;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -73,7 +104,7 @@
       justify-content: space-between;
       transition: all 0.15s;
     }
-    .nav-btn:hover { background: #334155; color: var(--text); }
+    .nav-btn:hover { background: var(--nav-hover); color: var(--text); }
     .nav-btn.active { background: var(--primary); color: #fff; font-weight: 600; }
     main {
       flex: 1;
@@ -110,10 +141,10 @@
     }
     .btn:hover { background: var(--primary-hover); }
     .btn-secondary {
-      background: #334155;
+      background: var(--btn-secondary-bg);
       color: var(--text);
     }
-    .btn-secondary:hover { background: #475569; }
+    .btn-secondary:hover { background: var(--btn-secondary-hover); }
     .btn-api-preview {
       background: #6366f1;
       color: #ffffff;
@@ -136,8 +167,8 @@
       padding: 10px 14px;
       text-align: left;
     }
-    th { background: #0f172a; color: var(--text-muted); font-weight: 600; }
-    tr:nth-child(even) { background: #182234; }
+    th { background: var(--th-bg); color: var(--text-muted); font-weight: 600; }
+    tr:nth-child(even) { background: var(--tr-even); }
     textarea, input, select {
       width: 100%;
       background: var(--code-bg);
@@ -164,7 +195,7 @@
       padding: 15px;
       font-family: monospace;
       font-size: 0.85rem;
-      color: #38bdf8;
+      color: var(--console-text);
       white-space: pre-wrap;
       max-height: 250px;
       overflow-y: auto;
@@ -439,7 +470,12 @@
       <button class="mobile-hamburger-btn" onclick="toggleSidebar()" aria-label="Toggle navigation menu">&#9776;</button>
       <span style="font-weight: 700; font-size: 1.05rem;">LionSQL</span>
     </div>
-    <span class="badge">OLTP + SP</span>
+    <div style="display: flex; align-items: center; gap: 8px;">
+      <button class="btn btn-secondary mobile-theme-btn" style="padding: 4px 8px; font-size: 0.72rem; display: flex; align-items: center; gap: 4px;" onclick="toggleTheme()" aria-label="Toggle Theme">
+        <span class="mobile-theme-icon"></span>
+      </button>
+      <span class="badge">OLTP + SP</span>
+    </div>
   </div>
   <aside id="main-sidebar">
     <div class="logo">
@@ -512,8 +548,12 @@
       </button>
       <input type="file" id="backup-file-input" accept=".tar.gz,.tgz" style="display: none;" onchange="handleBackupFileUpload(event)" />
     </div>
-    <div style="padding: 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border);">
-      Engine: <span id="engine-type" style="color: #60a5fa; font-weight: 600;">Detecting...</span>
+    <div style="padding: 12px 15px; font-size: 0.75rem; color: var(--text-muted); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between;">
+      <div>Engine: <span id="engine-type" style="color: #60a5fa; font-weight: 600;">Detecting...</span></div>
+      <button id="theme-toggle-btn" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem; display: flex; align-items: center; gap: 6px; border-radius: 6px;" onclick="toggleTheme()" title="Toggle Theme (Light / Dark)">
+        <span id="theme-toggle-icon"></span>
+        <span id="theme-toggle-label">Theme</span>
+      </button>
     </div>
   </aside>
 
@@ -1630,9 +1670,10 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
       <!-- Language Selector Tabs -->
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-        <div style="display: flex; gap: 6px;">
-          <button id="api-lang-curl" class="btn btn-secondary active-lang" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('curl')">cURL</button>
-          <button id="api-lang-js" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('js')">JavaScript</button>
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <button id="api-lang-sdk" class="btn btn-secondary active-lang" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('sdk')">LionSQL SDK</button>
+          <button id="api-lang-curl" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('curl')">cURL</button>
+          <button id="api-lang-js" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('js')">JavaScript (Fetch)</button>
           <button id="api-lang-python" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('python')">Python</button>
           <button id="api-lang-go" class="btn btn-secondary" style="padding: 4px 10px; font-size: 0.75rem;" onclick="selectPreviewLang('go')">Go</button>
         </div>
@@ -1674,6 +1715,15 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
   <script>
     function showToast(message, type = 'info') {
+      let toastType = 'info';
+      if (type === true || type === 'error') {
+        toastType = 'error';
+      } else if (type === false || type === 'success') {
+        toastType = 'success';
+      } else if (typeof type === 'string' && type) {
+        toastType = type;
+      }
+
       let container = document.getElementById('toast-container');
       if (!container) {
         container = document.createElement('div');
@@ -1681,7 +1731,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         document.body.appendChild(container);
       }
       const toast = document.createElement('div');
-      toast.className = `toast-msg toast-${type}`;
+      toast.className = `toast-msg toast-${toastType}`;
       const msgSpan = document.createElement('span');
       msgSpan.textContent = String(message);
       const closeBtn = document.createElement('button');
@@ -1695,7 +1745,45 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       setTimeout(() => {
         toast.style.animation = 'toast-fade-out 0.3s forwards';
         setTimeout(() => toast.remove(), 300);
-      }, 3500);
+      }, 4000);
+    }
+
+    // --- Theme Management (Light / Dark Mode) ---
+    function initTheme() {
+      const savedTheme = localStorage.getItem('lionsql_theme') || 'dark';
+      applyTheme(savedTheme);
+    }
+
+    function applyTheme(theme) {
+      if (theme === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+      } else {
+        document.documentElement.removeAttribute('data-theme');
+      }
+      localStorage.setItem('lionsql_theme', theme);
+      updateThemeButtons(theme);
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') === 'light' ? 'light' : 'dark';
+      const next = current === 'light' ? 'dark' : 'light';
+      applyTheme(next);
+      showToast(`Switched to ${next === 'light' ? 'Light' : 'Dark'} mode`, 'info');
+    }
+
+    function updateThemeButtons(theme) {
+      const isLight = theme === 'light';
+      const sunSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`;
+      const moonSvg = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>`;
+
+      const iconEl = document.getElementById('theme-toggle-icon');
+      const labelEl = document.getElementById('theme-toggle-label');
+      if (iconEl) iconEl.innerHTML = isLight ? moonSvg : sunSvg;
+      if (labelEl) labelEl.textContent = isLight ? 'Dark' : 'Light';
+
+      document.querySelectorAll('.mobile-theme-icon').forEach(el => {
+        el.innerHTML = isLight ? moonSvg : sunSvg;
+      });
     }
 
     function togglePasswordVisibility(inputId, btn) {
@@ -2463,21 +2551,6 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
-    }
-
-    let toastTimeout = null;
-    function showToast(msg, isError = false) {
-      const toast = document.getElementById('toast');
-      if (!toast) return;
-      toast.innerText = msg;
-      toast.style.background = isError ? '#7f1d1d' : '#064e3b';
-      toast.style.color = isError ? '#fca5a5' : '#6ee7b7';
-      toast.style.borderColor = isError ? '#ef4444' : '#10b981';
-      toast.style.display = 'block';
-      if (toastTimeout) clearTimeout(toastTimeout);
-      toastTimeout = setTimeout(() => {
-        toast.style.display = 'none';
-      }, 3200);
     }
 
     // --- Data Export & Import Handlers ---
@@ -3810,14 +3883,16 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     }
 
     // --- Developer API Preview Modal & Code Generator ---
+    // --- Developer API Preview Modal & Code Generator ---
     let previewEndpoint = 'list';
-    let previewLang = 'curl';
+    let previewLang = 'sdk';
 
     function openAPIPreviewModal() {
       const modal = document.getElementById('api-preview-modal');
       if (modal) {
         modal.style.display = 'flex';
-        renderAPICodeSnippet();
+        selectPreviewEndpoint(previewEndpoint);
+        selectPreviewLang(previewLang);
       }
     }
 
@@ -3849,7 +3924,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
     function selectPreviewLang(lang) {
       previewLang = lang;
-      ['curl', 'js', 'python', 'go'].forEach(k => {
+      ['sdk', 'curl', 'js', 'python', 'go'].forEach(k => {
         const btn = document.getElementById(`api-lang-${k}`);
         if (btn) {
           if (k === lang) {
@@ -3866,51 +3941,200 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       renderAPICodeSnippet();
     }
 
+    function getDummyRecordForTable(tblName) {
+      const t = (typeof tablesList !== 'undefined' ? tablesList : []).find(item => item.name === tblName);
+      if (!t || !t.columns || t.columns.length === 0) {
+        return { name: "Sample Item", balance: 1000 };
+      }
+      const payload = {};
+      t.columns.forEach(col => {
+        const name = col.name;
+        const lowerName = name.toLowerCase();
+        const lowerType = (col.type || '').toLowerCase();
+
+        // Skip auto-incrementing / serial primary key columns in insert payload
+        if (col.primary_key && (lowerName === 'id' || lowerType.includes('int') || lowerType.includes('serial'))) {
+          return;
+        }
+
+        if (lowerType.includes('int') || lowerType.includes('serial')) {
+          if (lowerName.includes('balance') || lowerName.includes('price') || lowerName.includes('amount') || lowerName.includes('cost') || lowerName.includes('salary')) {
+            payload[name] = 1000;
+          } else if (lowerName.includes('age') || lowerName.includes('count') || lowerName.includes('qty') || lowerName.includes('quantity')) {
+            payload[name] = 10;
+          } else if (lowerName.includes('id') && !col.primary_key) {
+            payload[name] = 1;
+          } else {
+            payload[name] = 1;
+          }
+        } else if (lowerType.includes('bool') || lowerType.includes('bit')) {
+          payload[name] = true;
+        } else if (lowerType.includes('float') || lowerType.includes('double') || lowerType.includes('decimal') || lowerType.includes('numeric') || lowerType.includes('real')) {
+          payload[name] = 99.5;
+        } else if (lowerType.includes('date') || lowerType.includes('time')) {
+          payload[name] = new Date().toISOString();
+        } else if (lowerType.includes('json')) {
+          payload[name] = { active: true, tag: "sample" };
+        } else {
+          if (lowerName.includes('email')) {
+            payload[name] = "user@example.com";
+          } else if (lowerName.includes('phone')) {
+            payload[name] = "010-1234-5678";
+          } else if (lowerName.includes('name') || lowerName.includes('title')) {
+            payload[name] = "Sample " + name;
+          } else if (lowerName.includes('status')) {
+            payload[name] = "active";
+          } else if (lowerName.includes('role')) {
+            payload[name] = "user";
+          } else if (lowerName.includes('desc') || lowerName.includes('note') || lowerName.includes('comment')) {
+            payload[name] = "Sample description text";
+          } else {
+            payload[name] = "test_" + name;
+          }
+        }
+      });
+
+      if (Object.keys(payload).length === 0) {
+        payload["name"] = "Sample " + tblName;
+      }
+      return payload;
+    }
+
+    function getPrimaryKeySample(tblName) {
+      const t = (typeof tablesList !== 'undefined' ? tablesList : []).find(item => item.name === tblName);
+      if (t && t.columns) {
+        const pk = t.columns.find(c => c.primary_key);
+        if (pk) {
+          const lowerType = (pk.type || '').toLowerCase();
+          if (lowerType.includes('uuid') || lowerType.includes('char') || lowerType.includes('text')) {
+            return '"rec_1a2b3c4d"';
+          }
+        }
+      }
+      return '1';
+    }
+
+    function getFilterSample(tblName) {
+      const t = (typeof tablesList !== 'undefined' ? tablesList : []).find(item => item.name === tblName);
+      if (t && t.columns) {
+        const numericCol = t.columns.find(c => {
+          const lt = (c.type || '').toLowerCase();
+          return (lt.includes('int') || lt.includes('decimal') || lt.includes('float') || lt.includes('numeric')) && !c.primary_key;
+        });
+        if (numericCol) {
+          return `${numericCol.name}>500`;
+        }
+        const textCol = t.columns.find(c => {
+          const lt = (c.type || '').toLowerCase();
+          return (lt.includes('varchar') || lt.includes('text') || lt.includes('char')) && !c.primary_key;
+        });
+        if (textCol) {
+          return `${textCol.name}='active'`;
+        }
+        const pk = t.columns.find(c => c.primary_key);
+        if (pk) {
+          return `${pk.name}>0`;
+        }
+      }
+      return 'id>0';
+    }
+
     function renderAPICodeSnippet() {
       const currentTable = document.getElementById('table-select')?.value || 'users';
       const host = window.location.origin || 'http://localhost:8090';
       const codeEl = document.getElementById('api-code-snippet');
       if (!codeEl) return;
 
+      const dummyPayload = getDummyRecordForTable(currentTable);
+      const jsonCompact = JSON.stringify(dummyPayload);
+      const jsonIndented = JSON.stringify(dummyPayload, null, 2);
+      const pkSample = getPrimaryKeySample(currentTable);
+      const pkRaw = pkSample.replace(/^"|"$/g, '');
+      const filterSample = getFilterSample(currentTable);
+
       let code = '';
 
-      if (previewLang === 'curl') {
+      if (previewLang === 'sdk') {
         if (previewEndpoint === 'list') {
-          code = `# 1. List records with pagination, sort & filter\ncurl -X GET "${host}/api/records/${currentTable}?filter=balance>500&sort=-id&page=1&limit=20" \\\n  -H "Authorization: Bearer <API_KEY>"`;
+          code = `// 1. Initialize LionSQL client and list records with pagination, filter & sort
+import SQLion from './sdk/sqlion.js';
+
+const db = new SQLion('${host}');
+db.setToken('<API_KEY>');
+
+const result = await db.collection('${currentTable}').getList(1, 20, {
+  filter: '${filterSample}',
+  sort: '-id'
+});
+
+console.log('Total items:', result.totalItems);
+console.log('Records:', result.records);`;
         } else if (previewEndpoint === 'get') {
-          code = `# 2. Get single record by primary key (ID: 1)\ncurl -X GET "${host}/api/records/${currentTable}/1" \\\n  -H "Authorization: Bearer <API_KEY>"`;
+          code = `// 2. Fetch single record by primary key
+import SQLion from './sdk/sqlion.js';
+
+const db = new SQLion('${host}');
+db.setToken('<API_KEY>');
+
+const record = await db.collection('${currentTable}').getOne(${pkSample});
+console.log('Fetched record:', record);`;
         } else if (previewEndpoint === 'create') {
-          code = `# 3. Insert record into ${currentTable}\ncurl -X POST "${host}/api/records/${currentTable}" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"name": "Alice", "balance": 1000}'`;
+          code = `// 3. Insert record into ${currentTable} (schema-matched fields)
+import SQLion from './sdk/sqlion.js';
+
+const db = new SQLion('${host}');
+db.setToken('<API_KEY>');
+
+const newRecord = await db.collection('${currentTable}').create(${jsonIndented});
+console.log('Created record:', newRecord);`;
+        } else if (previewEndpoint === 'sql') {
+          code = `// 4. Execute direct T-SQL query via LionSQL SDK
+import SQLion from './sdk/sqlion.js';
+
+const db = new SQLion('${host}');
+db.setToken('<API_KEY>');
+
+const queryResult = await db.query("SELECT TOP 20 * FROM ${currentTable} ORDER BY 1 DESC");
+console.log('Columns:', queryResult.columns);
+console.log('Rows:', queryResult.rows);`;
+        }
+      } else if (previewLang === 'curl') {
+        if (previewEndpoint === 'list') {
+          code = `# 1. List records with pagination, sort & filter\ncurl -X GET "${host}/api/records/${currentTable}?filter=${filterSample}&sort=-id&page=1&limit=20" \\\n  -H "Authorization: Bearer <API_KEY>"`;
+        } else if (previewEndpoint === 'get') {
+          code = `# 2. Get single record by primary key (ID: ${pkRaw})\ncurl -X GET "${host}/api/records/${currentTable}/${pkRaw}" \\\n  -H "Authorization: Bearer <API_KEY>"`;
+        } else if (previewEndpoint === 'create') {
+          code = `# 3. Insert record into ${currentTable}\ncurl -X POST "${host}/api/records/${currentTable}" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '${jsonCompact}'`;
         } else if (previewEndpoint === 'sql') {
           code = `# 4. Execute direct T-SQL query via REST\ncurl -X POST "${host}/api/sql" \\\n  -H "Authorization: Bearer <API_KEY>" \\\n  -H "Content-Type: application/json" \\\n  -d '{"sql": "SELECT * FROM ${currentTable} WHERE id = 1"}'`;
         }
       } else if (previewLang === 'js') {
         if (previewEndpoint === 'list') {
-          code = `// List records with filter, sort & pagination\nconst response = await fetch("${host}/api/records/${currentTable}?filter=balance>500&sort=-id&page=1&limit=20", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst result = await response.json();\nconsole.log(result.records);`;
+          code = `// List records with filter, sort & pagination via Fetch API\nconst response = await fetch("${host}/api/records/${currentTable}?filter=${filterSample}&sort=-id&page=1&limit=20", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst result = await response.json();\nconsole.log(result.records);`;
         } else if (previewEndpoint === 'get') {
-          code = `// Get single record\nconst response = await fetch("${host}/api/records/${currentTable}/1", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst record = await response.json();\nconsole.log(record);`;
+          code = `// Get single record\nconst response = await fetch("${host}/api/records/${currentTable}/${pkRaw}", {\n  headers: {\n    "Authorization": "Bearer <API_KEY>"\n  }\n});\nconst record = await response.json();\nconsole.log(record);`;
         } else if (previewEndpoint === 'create') {
-          code = `// Insert record\nconst response = await fetch("${host}/api/records/${currentTable}", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ name: "Alice", balance: 1000 })\n});\nconst result = await response.json();\nconsole.log(result);`;
+          code = `// Insert record into ${currentTable}\nconst payload = ${jsonIndented};\n\nconst response = await fetch("${host}/api/records/${currentTable}", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify(payload)\n});\nconst result = await response.json();\nconsole.log(result);`;
         } else if (previewEndpoint === 'sql') {
           code = `// Execute T-SQL query\nconst response = await fetch("${host}/api/sql", {\n  method: "POST",\n  headers: {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n  },\n  body: JSON.stringify({ sql: "SELECT * FROM ${currentTable}" })\n});\nconst data = await response.json();\nconsole.log(data);`;
         }
       } else if (previewLang === 'python') {
         if (previewEndpoint === 'list') {
-          code = `import requests\n\nurl = "${host}/api/records/${currentTable}"\nheaders = {"Authorization": "Bearer <API_KEY>"}\nparams = {"filter": "balance>500", "sort": "-id", "page": 1, "limit": 20}\n\nres = requests.get(url, headers=headers, params=params)\nprint(res.json())`;
+          code = `import requests\n\nurl = "${host}/api/records/${currentTable}"\nheaders = {"Authorization": "Bearer <API_KEY>"}\nparams = {"filter": "${filterSample}", "sort": "-id", "page": 1, "limit": 20}\n\nres = requests.get(url, headers=headers, params=params)\nprint(res.json())`;
         } else if (previewEndpoint === 'get') {
-          code = `import requests\n\nurl = "${host}/api/records/${currentTable}/1"\nheaders = {"Authorization": "Bearer <API_KEY>"}\n\nres = requests.get(url, headers=headers)\nprint(res.json())`;
+          code = `import requests\n\nurl = "${host}/api/records/${currentTable}/${pkRaw}"\nheaders = {"Authorization": "Bearer <API_KEY>"}\n\nres = requests.get(url, headers=headers)\nprint(res.json())`;
         } else if (previewEndpoint === 'create') {
-          code = `import requests\n\nurl = "${host}/api/records/${currentTable}"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = {"name": "Alice", "balance": 1000}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
+          code = `import requests\n\nurl = "${host}/api/records/${currentTable}"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = ${JSON.stringify(dummyPayload, null, 4)}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
         } else if (previewEndpoint === 'sql') {
           code = `import requests\n\nurl = "${host}/api/sql"\nheaders = {\n    "Authorization": "Bearer <API_KEY>",\n    "Content-Type": "application/json"\n}\npayload = {"sql": "SELECT * FROM ${currentTable}"}\n\nres = requests.post(url, headers=headers, json=payload)\nprint(res.json())`;
         }
       } else if (previewLang === 'go') {
         if (previewEndpoint === 'list') {
-          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/records/${currentTable}?filter=balance>500&sort=-id&page=1&limit=20", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/records/${currentTable}?filter=${filterSample}&sort=-id&page=1&limit=20", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
         } else if (previewEndpoint === 'get') {
-          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/records/${currentTable}/1", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+          code = `package main\n\nimport (\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\treq, _ := http.NewRequest("GET", "${host}/api/records/${currentTable}/${pkRaw}", nil)\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
         } else if (previewEndpoint === 'create') {
-          code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`{"name":"Alice","balance":1000}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/records/${currentTable}", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
+          code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`${jsonCompact}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/records/${currentTable}", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
         } else if (previewEndpoint === 'sql') {
           code = `package main\n\nimport (\n\t"bytes"\n\t"fmt"\n\t"io"\n\t"net/http"\n)\n\nfunc main() {\n\tpayload := []byte(\`{"sql":"SELECT * FROM ${currentTable}"}\`)\n\treq, _ := http.NewRequest("POST", "${host}/api/sql", bytes.NewBuffer(payload))\n\treq.Header.Set("Authorization", "Bearer <API_KEY>")\n\treq.Header.Set("Content-Type", "application/json")\n\n\tresp, err := http.DefaultClient.Do(req)\n\tif err != nil {\n\t\tpanic(err)\n\t}\n\tdefer resp.Body.Close()\n\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}`;
         }
