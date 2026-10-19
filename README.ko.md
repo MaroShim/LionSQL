@@ -73,61 +73,58 @@ LionSQL은 Microsoft SQL Server의 T-SQL 저장 프로시저(Stored Procedure)�
 
 LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습니다:
 
-### 2.1. 코어 엔진 & 쿼리 가상 머신 (Core Engine & Virtual Machine Architecture)
-- **단일 VDBE 가상 머신 아키텍처 통합 (Unified VDBE Virtual Machine)**:
-  대화형 독립 쿼리(`SELECT`, `INSERT`, `UPDATE`, `DELETE`)와 저장 프로시저가 정확히 동일한 레지스터 기반 VDBE 가상 머신에서 통합 실행됩니다 (`proc.CompileQuery`, `proc.CompileStatement` ➔ `s.executor.ExecuteInTx`). 관계형 반복자(`OpRelQuery`), 인덱스 스캔(`OpIndexScan`), DML 연산(`OpInsert/Update/Delete`)을 단일 가상 머신으로 일원화하고 `EXPLAIN BYTECODE <sql>` 디스어셈블러를 지원합니다.
-- **프리페어드 스테이트먼트 VDBE 바이트코드 캐싱**:
-  PGWire 및 TDS 리스너 모두 파라미터화된 쿼리(`$1`, `$2` 및 `@p1`, `@p2`)를 준비(Prepare) 단계에서 VDBE `*proc.Program` 바이트코드로 직접 컴파일하여 쿼리 재파싱 및 문자열 조작 오버헤드를 100% 바이패스합니다.
-- **이중 파서 아키텍처 및 자동 폴백 (Dual-Parser Strategy)**:
-  - **1차 고속 경로**: 고주파 쿼리를 위한 무할당(Zero-alloc) Native Pratt 파서 (마이크로초 미만 파싱 지연).
-  - **2차 전체 스펙 폴백**: 대괄호 이스케이프(`[dbo].[Table]`), `WITH RECOMPILE` 등 벤더 고유 고급 구문 인입 시 공식 Microsoft T-SQL ANTLR4 파서가 자동 호출되어 100% 호환성을 보장합니다.
+### 2.1. 코어 엔진 & 쿼리 가상 머신
+- **통합 VDBE 가상 머신 아키텍처**:
+  단순 쿼리(`SELECT`, `INSERT`, `UPDATE`, `DELETE`)와 복잡한 저장 프로시저를 동일한 레지스터 기반 VDBE 가상 머신에서 통합 실행합니다. 쿼리 실행 계획 디스어셈블러(`EXPLAIN BYTECODE`)를 지원합니다.
+- **프리페어드 스테이트먼트 바이트코드 캐싱**:
+  파라미터화된 쿼리를 준비 단계에서 바이트코드로 직접 컴파일 및 캐싱하여, 반복 실행 시 쿼리 재파싱 오버헤드를 완전히 제거합니다.
+- **이중 파서 아키텍처 및 자동 폴백**:
+  - **초고속 경로**: 고주파 쿼리를 위한 마이크로초 미만 지연의 자체 Pratt 파서
+  - **전체 스펙 폴백**: 대괄호 이스케이프, 벤더 확장 옵션 등 복잡한 구문 인입 시 공식 Microsoft T-SQL 파서로 자동 폴백하여 완벽한 호환성을 보장
 - **Volcano 관계형 파이프라인 & 메모리 거버너**:
-  조합 가능한 반복자 파이프라인(`SeqScan`, `IndexScan`, `Filter`, `Project`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `WindowIterator`, `CTE WITH`)과 1,024건 단위 청크 스트리밍을 제공하며, `work_mem` 초과 시 N-way Min-Heap 외부 머지 소트(External Merge Sort)로 디스크 자동 스필을 수행합니다.
-- **비용 기반 최적화기 (Cost-Based Optimizer, CBO)**:
-  `ANALYZE TABLE <name>` 통계 수집(카디널리티, NDV, 64-버킷 균등 깊이 히스토그램), 다중 컬럼 확장 통계(`C-5`), MCV 최빈값 목록(`C-7`), 그리고 5개 이상 다중 테이블 조인을 서브밀리초로 최적화하는 Selinger DP 조인 순서 최적화기(`B-4`)를 내장했습니다.
+  Hash Join, Index Scan, GroupBy 등 조합 가능한 반복자 파이프라인과 스트리밍 배치를 제공하며, 대용량 정렬 시 메모리 한도를 초과하면 외부 머지 소트로 안전하게 디스크에 스필합니다.
+- **비용 기반 최적화기 (CBO)**:
+  테이블 통계(카디널리티, 고유값 수, 히스토그램)와 다중 컬럼 확장 통계를 기반으로 다중 테이블 조인 순서를 최적화하여 가장 효율적인 실행 계획을 수립합니다.
 
-### 2.2. 초고성능 스토리지 & ACID 트랜잭션 (Storage Engines & ACID Concurrency)
-- **초고성능 이중 스토리지 백엔드 & TPC-C 벤치마크**:
-  - **In-Memory OCC 엔진**: 세밀한 테이블 단위 스트라이프 락, 순수 Go 동시성 SkipList 보조 인덱스, 무할당 트랜잭션/청크 풀링을 통해 Go Native API 기준 **28,000+ TPS** (763,000+ tpmC), 컴파일된 T-SQL VDBE 바이트코드 VM 기준 **20,000+ TPS** (541,000+ tpmC)를 달성.
-  - **WiredTiger (기본 스토리지 엔진)**: 해저드 포인터 기반 Cgo 락프리 B+Tree, 스키마 인식 컴팩트 바이너리 튜플 코덱, 커서 풀링(P-8)을 통해 컴파일된 T-SQL VDBE 환경에서 완전한 ACID 내구성을 유지하며 **16,800+ TPS** (457,000+ tpmC) 달성.
-- **WiredTiger 기본 엔진 채택 배경 및 차별점 (Zero-Vacuum & Lock-Free MVCC)**:
-  - **Zero-Vacuum & 팽창 방지 MVCC (No Table Bloat)**: 다중 버전(MVCC) 업데이트 체인(`WT_UPDATE`)이 메모리(RAM)에서만 유지되며, 체크포인트 및 캐시 방출(Reconciliation) 시점에 최신 커밋 버전만 디스크에 기록합니다. PostgreSQL과 같은 별도의 `VACUUM` 프로세스, Autovacuum I/O 폭풍, 테이블 팽창(Table Bloat)이 원천적으로 발생하지 않습니다. (상세 원리는 [doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md](doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md) 및 [doc/INTERNALS_STORAGE.md](doc/INTERNALS_STORAGE.md) 참조).
-  - **예측 가능한 초저지연 (Predictable Low-Latency)**: RocksDB/Pebble과 같은 LSM-Tree 엔진에서 발생하는 대규모 백그라운드 Compaction 정체 현상 없이, Hazard Pointer 기반 락프리 B+Tree로 일관된 서브 밀리초 응답성을 보장합니다.
-  - **비차단 스냅샷 격리 (Non-Blocking Snapshot Isolation)**: 읽기가 쓰기를 결코 차단하지 않고, 쓰기 역시 읽기를 차단하지 않습니다. 장시간 소요되는 백업, 대용량 분석(DuckDB 연동, 덤프) 중에도 초당 16,000건 이상의 OLTP 트랜잭션 쓰기가 무중단 처리됩니다.
-  - **듀얼 백엔드 시너지**: 프로덕션에서는 WiredTiger의 견고한 NVMe ACID 내구성을 활용하고, 빠른 CI/CD 테스트 및 경량 로컬 환경에서는 Cgo 의존성 없는 Pure-Go In-Memory OCC 엔진(`-engine=memory`)을 자유롭게 전환하여 사용할 수 있습니다.
-- **비차단 온라인 스냅샷 핫 백업 (Hot Backup)**:
-  활성 OLTP 트래픽을 차단하거나 쓰기 락을 걸지 않고, 읽기 전용 스냅샷 트랜잭션을 통해 실시간 `.tar.gz` 백업 아카이브 생성. CLI(`-backup`, `-restore`), REST API(`/api/backup`, `/api/restore`), Web Studio UI 전반에서 원클릭으로 지원됩니다.
-- **1-Writer 다중 리더 고가용성 복제 (HA Replication)**:
-  단일 Primary 노드에서 복제본으로 선형 WAL 스트리밍(`GET /api/replication/stream`)을 통한 클러스터 확장, 엄격한 읽기 전용 모드 강제, 무중단 승격 API(`POST /api/replication/promote`) 및 Always On 스타일 자동 장애 조치(Auto-Failover) 지원.
+### 2.2. 고성능 스토리지 & ACID 트랜잭션
+- **이중 스토리지 백엔드**:
+  - **In-Memory OCC 엔진**: 동시성 SkipList 인덱스와 낙관적 동시성 제어(OCC)를 기반으로 초당 20,000건 이상의 초고속 트랜잭션을 처리합니다.
+  - **WiredTiger MVCC 디스크 엔진**: 락프리 B+Tree 구조로 완전한 ACID 내구성을 보장하며 초당 16,000건 이상의 트랜잭션을 안정적으로 처리합니다.
+- **테이블 팽창 없는 무중단 MVCC**:
+  다중 버전 업데이트 체인을 메모리에서 관리하여 최신 커밋 버전만 디스크에 기록하므로, 별도의 Vacuum 프로세스나 테이블 팽창(Bloat)으로 인한 성능 저하가 발생하지 않습니다.
+- **비차단 스냅샷 격리 (Snapshot Isolation)**:
+  읽기와 쓰기가 서로를 차단하지 않아, 장시간 소요되는 분석 쿼리나 백업 작업 중에도 온라인 트랜잭션 쓰기가 중단 없이 처리됩니다.
+- **비차단 온라인 스냅샷 핫 백업**:
+  활성 트랜잭션을 중단하지 않고 실시간 압축 백업 아카이브를 생성합니다. CLI, REST API, 웹 어드민에서 원클릭으로 지원됩니다.
+- **고가용성 복제 (HA Replication)**:
+  Primary 노드에서 복제본으로의 실시간 WAL 스트리밍 복제 및 무중단 장애 조치(Failover)를 지원합니다.
 
-### 2.3. 다중 와이어 프로토콜 & 연결 관리 (Wire Protocols & Connection Pooling)
-- **동시 다중 와이어 프로토콜 (Dual Wire Protocols)**:
-  - **PostgreSQL v3 프로토콜 (포트 5433)**: `psql`, PostgreSQL JDBC (`pgjdbc`), `psqlODBC`, DBeaver, GORM, Prisma, asyncpg, pgx와 완벽 호환. SSL/TLS 암호화 연결, 바이너리 바인드 파라미터 직접 디코딩(P-14), Extended Query Protocol(`Parse`, `Bind`, `Execute`, `Sync`)을 지원합니다.
-  - **Microsoft SQL Server TDS 7.x/8.0 프로토콜 (포트 1433)**: `sqlcmd`, SSMS, Azure Data Studio, `pymssql`, `go-mssqldb`와 완벽 호환. RPC 프리페어드 스테이트먼트 파이프라인(`sp_prepare`, `sp_execute`, `sp_prepexec`), TDS 7.3 특수 타입 바이너리 직렬화, 단일 프레임 버퍼 풀링(시스템 콜 50% 절감)을 지원합니다.
+### 2.3. 다중 와이어 프로토콜 & 연결 관리
+- **동시 다중 와이어 프로토콜**:
+  - **PostgreSQL v3 프로토콜 (포트 5433)**: `psql`, DBeaver, GORM, Prisma, pgx 등 표준 PostgreSQL 도구 및 ORM과 완벽 호환되며, SSL/TLS 보안 연결과 파라미터 바인딩을 지원합니다.
+  - **Microsoft SQL Server TDS 프로토콜 (포트 1433)**: `sqlcmd`, SSMS, Azure Data Studio 등 기존 MSSQL 생태계 도구와 즉시 연동되며, RPC 프리페어드 파이프라인을 지원합니다.
 - **내장 Goroutine 커넥션 풀러**:
-  가벼운 Go 고루틴 기반으로 10,000개 이상의 동시 클라이언트 연결을 효율적으로 처리하며, 내부 세션 재사용 메커니즘을 통해 PgBouncer 등의 외부 풀러가 불필요합니다.
+  경량 Go 고루틴 기반으로 10,000개 이상의 동시 클라이언트 연결을 효율적으로 처리하여 외부 커넥션 풀러 없이도 연결 병목을 해소합니다.
 
-### 2.4. 엔터프라이즈 T-SQL 절차적 런타임 (Enterprise T-SQL Procedural Runtime)
-- **엔터프라이즈 T-SQL 저장 프로시저 및 UDF**:
-  `CREATE PROCEDURE`, `CREATE FUNCTION` (스칼라 및 테이블 반환 함수 TVF), `CREATE TRIGGER` (`AFTER`, `INSTEAD OF`)를 완벽 지원합니다.
-- **가상 델타 테이블 & 제어 흐름문**:
-  트리거 실행을 위한 가상 델타 테이블(`INSERTED`, `DELETED`), 제어 흐름문(`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO` 및 라벨, `PRINT`, `RAISERROR`), 지역 변수(`@var`), 테이블 변수(`DECLARE @table TABLE`), 세션 변수, 커서(Cursor) 지원.
+### 2.4. 엔터프라이즈 T-SQL 절차적 런타임
+- **저장 프로시저, 함수 및 트리거**:
+  `CREATE PROCEDURE`, 스칼라 및 테이블 반환 함수(TVF), `AFTER` 및 `INSTEAD OF` 트리거를 지원합니다.
+- **제어 흐름문 & 변수**:
+  조건문(`IF...ELSE`), 반복문(`WHILE`), 예외 처리(`TRY...CATCH`), 로컬 변수(`@var`), 테이블 변수, 세션 변수, 커서(Cursor)를 폭넓게 지원합니다.
 - **풍부한 SQL 확장 기능**:
-  윈도우 함수(`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB 추출 연산자(`->`, `->>`, `JSON_VALUE`), 외래키 및 CASCADE 연쇄 동작, `TRUNCATE TABLE`, `SELECT ... INTO`, `STRING_SPLIT` TVF, `DBCC` 진단 명령.
+  윈도우 함수(`ROW_NUMBER`, `RANK` 등), JSON 추출 함수, 외래키 및 CASCADE 연쇄 동작, `TRUNCATE TABLE`, `SELECT ... INTO`를 완벽 지원합니다.
 
-### 2.5. 풀스택 BaaS & 모던 웹 개발자 환경 (Backend-as-a-Service & Modern Web Stack)
-- **단일 독립 실행형 정적 바이너리 (Single Standalone Executable)**:
-  데이터베이스 커널, 다중 와이어 프로토콜 서버, HTTP REST API, 내장 웹 관리 스튜디오(Go `embed.FS`)가 단일 정적 실행 파일로 빌드되어 외부 의존성(JVM, Node.js 등)이 전혀 없습니다.
-- **자동 생성 RESTful Records CRUD API**:
-  테이블 생성 즉시 무코드 RESTful 엔드포인트(`/api/records/:table`) 자동 활성화, 정교한 URL 불리언 필터 엔진(`filter`), 다중 컬럼 정렬(`sort`), 페이지네이션, JSON 직렬화 지원.
-- **내장 웹 관리 스튜디오 (Web Studio, 포트 8090)**:
-  브라우저 관리자 대시보드 (`/_/`), 스프레드시트 인라인 셀 편집기, 테이블 스키마 연동 동적 API Preview 코드 생성기 (LionSQL SDK, cURL, Fetch, Python, Go), SQL 쿼리 에디터, VDBE 바이트코드 디스어셈블러, 실시간 라이브 스트림 SSE 뷰어 (`/api/realtime`), 실시간 HTTP 요청 활동 로그 및 레이턴시 프로파일러 (`/api/logs/requests`), 시각적 컬럼 추가 DDL 모달 (`+ Add Column`), 다중 행 일괄 내보내기(CSV/JSON), 외래키 연관 테이블 점프(`↗`), 슈퍼유저 및 API Key 관리.
-- **공식 범용 JavaScript & TypeScript 클라이언트 SDK**:
-  서버 바이너리가 직접 호스팅하는 PocketBase 스타일 SDK (`GET /sdk/sqlion.js`, `sqlion.d.ts`), 웹 브라우저, Node.js, Bun, Deno, Edge 런타임 지원.
-- **선언적 행 수준 보안 (RLS) & 비동기 웹훅**:
-  동적 `@auth` 컨텍스트 치환 기반 테이블 접근 제어, HMAC-SHA256 무결성 서명 및 지수 백오프 재시도를 지원하는 비차단 비동기 웹훅 디스패처.
-- **내장 크론 잡 스케줄러 & SMTP 메일러**:
-  표준 5필드 크론 자동화 스케줄러, TLS/STARTTLS 지원 순수 Go SMTP 메일러 및 트랜잭셔널 HTML 이메일 템플릿 내장.
+### 2.5. 웹 관리 스튜디오 & 개발자 환경
+- **단일 독립 실행형 바이너리**:
+  DB 엔진, 프로토콜 리스너, REST API, 웹 관리 도구가 단 하나의 정적 파일로 빌드되어 외부 런타임 의존성이 전혀 없습니다.
+- **내장 웹 관리 스튜디오 (포트 8090)**:
+  브라우저 대시보드(`/_/`), 테이블 스키마 탐색기, 데이터 그리드 편집기, SQL 쿼리 콘솔, 실시간 스트림 뷰어, 요청 활동 로그를 기본 제공합니다.
+- **자동 생성 RESTful CRUD API**:
+  테이블 생성 즉시 REST API 엔드포인트가 자동 활성화되며, 불리언 필터링, 정렬, 페이지네이션을 지원합니다.
+- **JavaScript & TypeScript 클라이언트 SDK**:
+  서버 바이너리에서 직접 제공하는 경량 SDK를 통해 브라우저, Node.js, Bun, Deno 등에서 간편하게 연동할 수 있습니다.
+- **행 수준 보안 (RLS) & 자동화 도구**:
+  사용자 인증 기반 데이터 접근 제어(RLS), 이벤트 웹훅, 크론 자동화 스케줄러, SMTP 이메일 발송 기능을 내장합니다.
 
 ---
 

@@ -74,60 +74,57 @@ LionSQL is a high-performance, embedded OLTP database engine that natively compi
 LionSQL's core capabilities are organized across five foundational architectural pillars:
 
 ### 1. Core Engine & Virtual Machine Architecture
-- **Single-Engine VDBE Virtual Machine Unification**:
-  Interactive standalone queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and stored procedures execute on the exact same register-based VDBE Virtual Machine (`proc.CompileQuery`, `proc.CompileStatement` ➔ `s.executor.ExecuteInTx`). Relational execution (`OpRelQuery`), secondary index scans (`OpIndexScan`), and DML mutations (`OpInsert`, `OpUpdate`, `OpDelete`) are unified on a single VM with `EXPLAIN BYTECODE <sql>` disassembly verification.
-- **Prepared Statement VDBE Bytecode Caching**:
-  Both PGWire and TDS listeners compile parameterized queries (`$1`, `$2` and `@p1`, `@p2`) directly into VDBE `*proc.Program` bytecode during preparation. Subsequent executions run precompiled bytecode directly, completely bypassing query re-parsing and string manipulation.
+- **Unified VDBE Virtual Machine**:
+  Both interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and stored procedures execute on the exact same register-based VDBE virtual machine, complete with bytecode disassembly support (`EXPLAIN BYTECODE`).
+- **Prepared Statement Bytecode Caching**:
+  Parameterized queries are compiled directly into bytecode during preparation and cached, completely eliminating query re-parsing overhead on subsequent executions.
 - **Dual-Parser Architecture with Automatic Fallback**:
-  - **Primary Fast-Path**: Zero-allocation Native Pratt parser achieving sub-microsecond parsing for high-frequency queries.
-  - **Secondary Full-Spec Fallback**: Official Microsoft T-SQL ANTLR4 grammar parser invoked automatically on advanced syntax (bracket escapes, `WITH RECOMPILE`, vendor options).
+  - **Ultra Fast-Path**: In-house zero-allocation Pratt parser delivering sub-microsecond parsing for high-frequency queries.
+  - **Full-Spec Fallback**: Official Microsoft T-SQL parser invoked automatically on advanced syntax (bracket escapes, vendor options) to ensure 100% grammar compatibility.
 - **Volcano Relational Pipeline & Memory Governor**:
-  Composable iterator execution (`SeqScan`, `IndexScan`, `Filter`, `Project`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`, `WindowIterator`, `CTE WITH`) with 1,024-tuple batch chunk streaming. Includes `work_mem` memory governor that automatically spills sorted chunks to disk and performs an N-way Min-Heap streaming external merge sort.
+  Composable iterator execution (Hash Join, Index Scan, GroupBy) with streaming batches, featuring an automatic disk spill to external merge sort when query memory limits are exceeded.
 - **Cost-Based Optimizer (CBO)**:
-  `ANALYZE TABLE <name>` statistics collection (row counts, distinct values `NDV`, 64-bucket equi-depth histograms), multi-column extended statistics (`C-5`), MCV skew list statistics (`C-7`), and Selinger dynamic programming join reordering (`B-4`) for sub-millisecond planning on complex multi-table joins.
+  Leverages table statistics (cardinality, distinct counts, histograms) and multi-column extended statistics to optimize join orders and generate efficient execution plans.
 
 ### 2. High-Performance Storage & ACID Concurrency
-- **High-Performance Storage Backends & TPC-C Benchmark**:
-  - **In-Memory OCC Engine**: Fine-grained table-level striped locking, pure-Go concurrent SkipList secondary indexes, and zero-allocation transaction/chunk pooling delivering **28,000+ TPS** (763,000+ tpmC) via Go Native API and **20,000+ TPS** (541,000+ tpmC) on compiled T-SQL VDBE Bytecode Virtual Machine with sub-millisecond median latency.
-  - **WiredTiger (Default Engine)**: Cgo-backed lock-free B+Tree with hazard pointers, schema-aware compact binary tuple codec, and cursor pooling delivering **16,800+ TPS** (457,000+ tpmC) on compiled T-SQL VDBE under full ACID durability.
-- **Why WiredTiger as Default Storage Engine? (Zero-Vacuum & Lock-Free MVCC)**:
-  - **Zero-Vacuum & Bloat-Free MVCC**: Multi-version update chains (`WT_UPDATE`) reside strictly in RAM and are cleaned on-the-fly during checkpoint/eviction reconciliation. Completely eliminates PostgreSQL-style table bloat, dead-tuple chains, and Autovacuum I/O storms. (See [doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md](doc/SNAPSHOT_ISOLATION_AND_DUCKDB.md) and [doc/INTERNALS_STORAGE.md](doc/INTERNALS_STORAGE.md)).
-  - **Predictable Low Latency**: Hazard Pointer lock-free in-memory B+Tree avoids LSM-Tree (RocksDB/Pebble) write stalls, heavy write amplification, and compaction tail-latency spikes.
-  - **True Non-Blocking Snapshot Isolation**: Readers never block writers and writers never block readers. Long-running backups, CSV exports, and DuckDB analytical loads never stall active OLTP transactions.
-  - **Dual Engine Synergy**: Use WiredTiger for heavy production workloads with NVMe ACID saturation; switch to pure-Go In-Memory OCC (`-engine=memory`) for zero-Cgo, cross-platform builds, CI/CD, and serverless environments.
-- **Online Non-Blocking Snapshot Hot Backup**:
-  Live, point-in-time `.tar.gz` database backups captured via read-only snapshot transactions without blocking writers or interrupting active OLTP traffic. Accessible via CLI (`-backup`, `-restore`), REST API (`/api/backup`, `/api/restore`), and Web Studio UI.
-- **1-Writer Multi-Reader High-Availability Replication**:
-  Cluster scaling via linear WAL streaming (`GET /api/replication/stream`) from single primary writer to secondary read replicas, enforcing strict read-only execution, zero-downtime failover promotion (`POST /api/replication/promote`), and Always On style automatic failover.
+- **Dual Storage Backends**:
+  - **In-Memory OCC Engine**: Delivers 20,000+ TPS based on concurrent SkipList indexes and Optimistic Concurrency Control.
+  - **WiredTiger MVCC Disk Engine**: Delivers 16,000+ TPS with full ACID durability backed by lock-free B+Trees.
+- **Bloat-Free MVCC without Vacuum**:
+  Multi-version update chains are maintained in memory and only latest committed versions are written to disk, completely eliminating table bloat and Autovacuum I/O storms.
+- **Non-Blocking Snapshot Isolation**:
+  Readers never block writers and writers never block readers, ensuring long-running analytical queries or backups never stall online transaction processing.
+- **Non-Blocking Online Snapshot Hot Backup**:
+  Captures live, compressed `.tar.gz` database backups without interrupting active transaction traffic. Supported seamlessly via CLI, REST API, and Web Studio.
+- **High-Availability Replication**:
+  Supports real-time WAL stream replication from Primary to Replicas with zero-downtime failover.
 
 ### 3. Dual Wire Protocols & Connection Pooling
 - **Concurrent Dual Wire Protocols**:
-  - **PostgreSQL v3 Protocol (Port 5433)**: Certified compatible with `psql`, PostgreSQL JDBC (`pgjdbc`), `psqlODBC`, DBeaver, GORM, Prisma, asyncpg, and pgx. Supports SSL/TLS encryption, direct binary bind value decoding (P-14), and Extended Query Protocol (`Parse`, `Bind`, `Execute`, `Sync`).
-  - **Microsoft SQL Server TDS 7.x/8.0 Protocol (Port 1433)**: Compatible with `sqlcmd`, SSMS, Azure Data Studio, `pymssql`, and `go-mssqldb`. Supports RPC prepared statement pipeline (`sp_prepare`, `sp_execute`, `sp_prepexec`), TDS 7.3 binary date/time/UUID serialization, and single-frame buffer pooling halving write syscalls.
+  - **PostgreSQL v3 Protocol (Port 5433)**: Fully compatible with `psql`, DBeaver, GORM, Prisma, and pgx, supporting SSL/TLS encryption and binary parameter binding.
+  - **Microsoft SQL Server TDS Protocol (Port 1433)**: Instantly compatible with SSMS, Azure Data Studio, `sqlcmd`, and MSSQL drivers, supporting RPC prepared execution.
 - **Built-in Goroutine Connection Pooler**:
-  Handles 10,000+ simultaneous client connections over lightweight Go goroutines. Internal worker pool and session reuse eliminate the need for PgBouncer or external connection poolers.
+  Handles 10,000+ simultaneous connections over lightweight Go goroutines, eliminating connection bottlenecks without external poolers.
 
 ### 4. Enterprise T-SQL Procedural Runtime
-- **Enterprise T-SQL Stored Procedures & UDFs**:
-  Full support for `CREATE PROCEDURE`, `CREATE FUNCTION` (scalar and table-valued), and `CREATE TRIGGER` (`AFTER`, `INSTEAD OF`).
-- **Virtual Delta Tables & Control Flow**:
-  Virtual delta tables (`INSERTED` and `DELETED`) for trigger execution, control flow (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO` & labels, `PRINT`, `RAISERROR`), local variables (`@var`), table variables (`DECLARE @table TABLE`), session variables, and cursors.
+- **Stored Procedures, Functions & Triggers**:
+  Full support for `CREATE PROCEDURE`, scalar and Table-Valued Functions (TVF), and `AFTER` / `INSTEAD OF` triggers.
+- **Control Flow & Variables**:
+  Supports conditional branching (`IF...ELSE`), loops (`WHILE`), exception handling (`TRY...CATCH`), local variables (`@var`), table variables, session variables, and cursors.
 - **Rich SQL Extensions**:
-  Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB extraction operators (`->`, `->>`, `JSON_VALUE`), Foreign Keys with cascading actions, `TRUNCATE TABLE`, `SELECT ... INTO`, `STRING_SPLIT` TVF, and `DBCC` diagnostics.
+  Window functions (`ROW_NUMBER`, `RANK`), JSON extraction functions, foreign keys with cascading actions, `TRUNCATE TABLE`, and `SELECT ... INTO`.
 
-### 5. Backend-as-a-Service (BaaS) & Modern Web Stack
+### 5. Web Management Studio & Developer Experience
 - **Single Standalone Executable**:
-  Ships as a single static binary embedding the database kernel, wire protocol servers, HTTP API, and web management studio via Go `embed.FS`. No runtime dependencies, JVM, or Node.js required.
-- **Auto-Generated RESTful Records CRUD API**:
-  Instant zero-code REST endpoints (`/api/records/:table`) for all database tables upon creation, advanced boolean URL query filter engine (`filter`), multi-column sorting (`sort`), pagination, and schema-aware JSON typing.
+  Database kernel, wire protocol listeners, REST API, and web studio packaged into a single static executable with zero external runtime dependencies.
 - **Embedded Web Management Studio (Port 8090)**:
-  Zero-install browser dashboard served at `http://localhost:8090/_/`, featuring spreadsheet-style table viewer with inline cell editing, dynamic schema-matched Developer API Preview code generator (LionSQL SDK, cURL, Fetch, Python, Go), interactive SQL Query Studio with visual VDBE disassembler, Realtime Live Stream SSE viewer (`/api/realtime`), Request Activity Logs latency profiler (`/api/logs/requests`), visual dynamic column addition modal (`+ Add Column`), multi-row bulk exports (CSV/JSON), foreign key interactive jump links (`↗`), and granular API Key / Superuser JWT management.
-- **Official Universal JavaScript & TypeScript Client SDK**:
-  PocketBase-compatible client (`sqlion.js`, `sqlion.d.ts`) served directly by the standalone executable (`GET /sdk/sqlion.js`), supporting Web Browsers, Node.js (v18+), Bun, Deno, and Edge runtimes.
-- **Declarative Row-Level Security (RLS) & Asynchronous Webhooks**:
-  Dynamic `@auth` context token substitution for table access rules, non-blocking webhook dispatcher with HMAC-SHA256 payload integrity signatures, exponential backoff retries, and delivery audit ring buffers.
-- **Embedded Cron Jobs Scheduler & SMTP Mailer**:
-  Non-blocking 5-field cron automation scheduler, pure-Go SMTP client with TLS/STARTTLS support, and built-in transactional HTML email templates.
+  Zero-install browser dashboard (`/_/`) featuring visual schema explorer, inline data grid editor, SQL query console, real-time event stream viewer, and request activity logs.
+- **Auto-Generated RESTful CRUD API**:
+  Instant REST endpoints generated automatically for all tables upon creation, with boolean filtering, sorting, and pagination.
+- **JavaScript & TypeScript Client SDK**:
+  Lightweight client SDK served directly by the standalone executable, supporting Browsers, Node.js, Bun, and Deno.
+- **Row-Level Security (RLS) & Automation**:
+  Authentication-based data access control (RLS), asynchronous webhooks, 5-field cron automation scheduler, and built-in SMTP mailer.
 
 ---
 
