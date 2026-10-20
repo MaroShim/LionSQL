@@ -58,7 +58,7 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			return nil, fmt.Errorf("index scan schema lookup failed for %q: %w", plan.Relation, sErr)
 		}
 
-		low, high := planner.ParseIndexCond(plan.IndexCond, schema)
+		low, high := planner.ParseIndexCond(plan.IndexCond, schema, plan.IndexName)
 		it := NewIndexScanIterator(tx, plan.Relation, plan.Alias, plan.IndexName, low, high, schema)
 		it.IndexOnly = (plan.Type == planner.NodeIndexOnlyScan)
 		if opts.Arena != nil {

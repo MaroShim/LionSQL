@@ -2,6 +2,7 @@ package planner
 
 import (
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -359,7 +360,7 @@ func FindIndexAndBounds(schema *storage.TableSchema, whereClause string) (*stora
 
 // ParseIndexCond parses an index condition string (which can be a single condition or AND-separated conditions)
 // and returns the lower and upper bounds for an index scan.
-func ParseIndexCond(cond string, schema *storage.TableSchema) (*storage.Value, *storage.Value) {
+func ParseIndexCond(cond string, schema *storage.TableSchema, targetIndexName ...string) (*storage.Value, *storage.Value) {
 	cond = strings.Trim(strings.TrimSpace(cond), "()")
 	if cond == "" {
 		return nil, nil
@@ -385,40 +386,95 @@ func ParseIndexCond(cond string, schema *storage.TableSchema) (*storage.Value, *
 	// 2. Parse general WHERE conditions (supporting =, >=, >, <=, <, BETWEEN)
 	eqColVals, rangeCols := ParseWhereConditions(cond)
 
-	// If there are equality conditions
-	for colName, valStr := range eqColVals {
-		if schema != nil {
-			if colMeta, _, found := schema.FindColumn(colName); found && colMeta != nil {
-				parsed := ParseValueToType(valStr, colMeta.Type)
-				return &parsed, &parsed
+	// Helper to extract bounds for a specific column
+	extractColBounds := func(colName string) (*storage.Value, *storage.Value, bool) {
+		lowerCol := strings.ToLower(colName)
+		if valStr, ok := eqColVals[lowerCol]; ok {
+			if schema != nil {
+				if colMeta, _, found := schema.FindColumn(colName); found && colMeta != nil {
+					parsed := ParseValueToType(valStr, colMeta.Type)
+					return &parsed, &parsed, true
+				}
+			}
+			v := storage.StringValue(valStr)
+			return &v, &v, true
+		}
+		if r, ok := rangeCols[lowerCol]; ok && r != nil {
+			var lowVal, highVal *storage.Value
+			var colType storage.DataType = storage.TypeVarChar
+			if schema != nil {
+				if colMeta, _, found := schema.FindColumn(colName); found && colMeta != nil {
+					colType = colMeta.Type
+				}
+			}
+			if r.HasMin {
+				v := ParseValueToType(r.MinVal, colType)
+				lowVal = &v
+			}
+			if r.HasMax {
+				v := ParseValueToType(r.MaxVal, colType)
+				highVal = &v
+			}
+			if lowVal != nil || highVal != nil {
+				return lowVal, highVal, true
 			}
 		}
-		v := storage.StringValue(valStr)
-		return &v, &v
+		return nil, nil, false
 	}
 
-	// If there are range conditions
-	for colName, r := range rangeCols {
-		if r == nil {
-			continue
-		}
-		var lowVal, highVal *storage.Value
-		var colType storage.DataType = storage.TypeVarChar
-		if schema != nil {
-			if colMeta, _, found := schema.FindColumn(colName); found && colMeta != nil {
-				colType = colMeta.Type
+	// A. If targetIndexName is explicitly specified, prioritize columns of that index
+	if len(targetIndexName) > 0 && targetIndexName[0] != "" && schema != nil {
+		var targetIdx *storage.IndexSchema
+		if idx, _, found := schema.FindIndex(targetIndexName[0]); found && idx != nil {
+			targetIdx = idx
+		} else {
+			for i := range schema.Indexes {
+				if strings.EqualFold(schema.Indexes[i].Name, targetIndexName[0]) {
+					targetIdx = &schema.Indexes[i]
+					break
+				}
 			}
 		}
-		if r.HasMin {
-			v := ParseValueToType(r.MinVal, colType)
-			lowVal = &v
+		if targetIdx != nil {
+			for _, col := range targetIdx.Columns {
+				if low, high, found := extractColBounds(col); found {
+					return low, high
+				}
+			}
 		}
-		if r.HasMax {
-			v := ParseValueToType(r.MaxVal, colType)
-			highVal = &v
+	}
+
+	// B. If schema has indexes, prioritize columns belonging to indexes
+	if schema != nil && len(schema.Indexes) > 0 {
+		for i := range schema.Indexes {
+			for _, col := range schema.Indexes[i].Columns {
+				if low, high, found := extractColBounds(col); found {
+					return low, high
+				}
+			}
 		}
-		if lowVal != nil || highVal != nil {
-			return lowVal, highVal
+	}
+
+	// C. Deterministic fallback: sort column names to prevent random map iteration
+	eqCols := make([]string, 0, len(eqColVals))
+	for colName := range eqColVals {
+		eqCols = append(eqCols, colName)
+	}
+	sort.Strings(eqCols)
+	for _, colName := range eqCols {
+		if low, high, found := extractColBounds(colName); found {
+			return low, high
+		}
+	}
+
+	rangeColNames := make([]string, 0, len(rangeCols))
+	for colName := range rangeCols {
+		rangeColNames = append(rangeColNames, colName)
+	}
+	sort.Strings(rangeColNames)
+	for _, colName := range rangeColNames {
+		if low, high, found := extractColBounds(colName); found {
+			return low, high
 		}
 	}
 
