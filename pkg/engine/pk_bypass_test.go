@@ -28,15 +28,15 @@ func setupTestCoordinatorWithTable(t *testing.T) (*Coordinator, storage.Engine) 
 	}
 
 	// Insert test data
-	_, err = coord.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice', 'alice@sqlion.local', 30)")
+	_, err = coord.ExecuteSQL("INSERT INTO users VALUES (1, 'Alice', 'alice@lionsql.local', 30)")
 	if err != nil {
 		t.Fatalf("failed to insert Alice: %v", err)
 	}
-	_, err = coord.ExecuteSQL("INSERT INTO users VALUES (2, 'Bob', 'bob@sqlion.local', 25)")
+	_, err = coord.ExecuteSQL("INSERT INTO users VALUES (2, 'Bob', 'bob@lionsql.local', 25)")
 	if err != nil {
 		t.Fatalf("failed to insert Bob: %v", err)
 	}
-	_, err = coord.ExecuteSQL("INSERT INTO users VALUES (3, 'Charlie', 'charlie@sqlion.local', 40)")
+	_, err = coord.ExecuteSQL("INSERT INTO users VALUES (3, 'Charlie', 'charlie@lionsql.local', 40)")
 	if err != nil {
 		t.Fatalf("failed to insert Charlie: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestPKLookupBypass_IntPK(t *testing.T) {
 	if !res.Success || len(res.Rows) != 1 {
 		t.Fatalf("expected 1 row, got %+v", res)
 	}
-	if res.Rows[0]["name"] != "Bob" || res.Rows[0]["email"] != "bob@sqlion.local" {
+	if res.Rows[0]["name"] != "Bob" || res.Rows[0]["email"] != "bob@lionsql.local" {
 		t.Errorf("unexpected projected row: %+v", res.Rows[0])
 	}
 	if _, hasAge := res.Rows[0]["age"]; hasAge {

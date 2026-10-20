@@ -982,7 +982,7 @@ func TestCoordinator_DBeaverCatalogQueries(t *testing.T) {
 	}
 
 	// 2. DBeaver PostgreSQL pg_shdescription join query
-	resShDesc, err := coord.ExecuteSQL("select description from pg_shdescription join pg_database on objoid = pg_database.oid where datname = 'sqlion'")
+	resShDesc, err := coord.ExecuteSQL("select description from pg_shdescription join pg_database on objoid = pg_database.oid where datname = 'postgres'")
 	if err != nil {
 		t.Fatalf("pg_shdescription join query failed: %v", err)
 	}
@@ -1023,9 +1023,9 @@ ORDER BY 2`
 	}
 
 	// 5. DBeaver SQL Server sys.all_objects query
-	qObj := `SELECT o.*,ep.value as description,t.is_external FROM sqlion.sys.all_objects o
-LEFT OUTER JOIN sqlion.sys.extended_properties ep ON ep.class=1 AND ep.major_id=o.object_id AND ep.minor_id=0 AND ep.name='MS_Description'
-LEFT OUTER JOIN sqlion.sys.tables t ON t.object_id=o.object_id
+	qObj := `SELECT o.*,ep.value as description,t.is_external FROM lionsql.sys.all_objects o
+LEFT OUTER JOIN lionsql.sys.extended_properties ep ON ep.class=1 AND ep.major_id=o.object_id AND ep.minor_id=0 AND ep.name='MS_Description'
+LEFT OUTER JOIN lionsql.sys.tables t ON t.object_id=o.object_id
 WHERE o.type IN ('U','S','V','TT') AND o.schema_id = 1`
 	resObj, err := coord.ExecuteSQL(qObj)
 	if err != nil {
@@ -1044,11 +1044,11 @@ WHERE o.type IN ('U','S','V','TT') AND o.schema_id = 1`
 
 	// 6. DBeaver SQL Server Table Size & Rows query
 	qSize := `SELECT t.name, p.rows, SUM(a.total_pages) * 8 AS totalSize, SUM(a.used_pages) * 8 AS usedSize
-FROM sqlion.sys.tables t
-INNER JOIN sqlion.sys.indexes i ON t.OBJECT_ID = i.object_id
-INNER JOIN sqlion.sys.partitions p ON i.object_id = p.OBJECT_ID AND i.index_id = p.index_id
-INNER JOIN sqlion.sys.allocation_units a ON p.partition_id = a.container_id
-LEFT OUTER JOIN sqlion.sys.schemas s ON t.schema_id = s.schema_id
+FROM lionsql.sys.tables t
+INNER JOIN lionsql.sys.indexes i ON t.OBJECT_ID = i.object_id
+INNER JOIN lionsql.sys.partitions p ON i.object_id = p.OBJECT_ID AND i.index_id = p.index_id
+INNER JOIN lionsql.sys.allocation_units a ON p.partition_id = a.container_id
+LEFT OUTER JOIN lionsql.sys.schemas s ON t.schema_id = s.schema_id
 WHERE t.schema_id =  1
 AND t.object_id= 1000
 GROUP BY t.name, p.rows`

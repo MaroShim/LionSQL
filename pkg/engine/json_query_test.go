@@ -183,9 +183,9 @@ func TestJSON_ExpressionIndex(t *testing.T) {
 	}
 
 	_, err = coord.ExecuteSQL(`INSERT INTO users VALUES 
-		(1, '{"city": "Seoul", "email": "alice@sqlion.org", "nested": {"country": "KR"}}'),
-		(2, '{"city": "Busan", "email": "bob@sqlion.org", "nested": {"country": "KR"}}'),
-		(3, '{"city": "Tokyo", "email": "charlie@sqlion.org", "nested": {"country": "JP"}}');`)
+		(1, '{"city": "Seoul", "email": "alice@lionsql.org", "nested": {"country": "KR"}}'),
+		(2, '{"city": "Busan", "email": "bob@lionsql.org", "nested": {"country": "KR"}}'),
+		(3, '{"city": "Tokyo", "email": "charlie@lionsql.org", "nested": {"country": "JP"}}');`)
 	if err != nil {
 		t.Fatalf("INSERT failed: %v", err)
 	}
@@ -259,9 +259,9 @@ func TestJSON_ExpressionIndex(t *testing.T) {
 	}
 
 	// Insert duplicate email -> MUST fail with unique violation
-	_, err = coord.ExecuteSQL(`INSERT INTO users VALUES (4, '{"city": "Incheon", "email": "alice@sqlion.org"}');`)
+	_, err = coord.ExecuteSQL(`INSERT INTO users VALUES (4, '{"city": "Incheon", "email": "alice@lionsql.org"}');`)
 	if err == nil {
-		t.Fatalf("expected unique violation on duplicate email alice@sqlion.org, but insert succeeded")
+		t.Fatalf("expected unique violation on duplicate email alice@lionsql.org, but insert succeeded")
 	}
 
 	// Insert documents without email (NULL key) -> MUST succeed (multiple NULLs allowed in unique index)
@@ -275,7 +275,7 @@ func TestJSON_ExpressionIndex(t *testing.T) {
 	}
 
 	// 5. Test UPDATE synchronization in expression index
-	_, err = coord.ExecuteSQL(`UPDATE users SET doc = '{"city": "Suwon", "email": "alice_new@sqlion.org"}' WHERE id = 1;`)
+	_, err = coord.ExecuteSQL(`UPDATE users SET doc = '{"city": "Suwon", "email": "alice_new@lionsql.org"}' WHERE id = 1;`)
 	if err != nil {
 		t.Fatalf("UPDATE failed: %v", err)
 	}
