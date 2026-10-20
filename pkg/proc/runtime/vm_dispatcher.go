@@ -1043,10 +1043,26 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 		f.rowCount = int64(len(rows))
 
 		if queryData != nil && queryData.IntoVar != "" && len(rows) > 0 {
-			for _, v := range rows[0] {
-				f.setVar(queryData.IntoVar, toStorageValue(v))
-				break
+			var val any
+			if len(cols) > 0 {
+				if v, ok := rows[0][cols[0]]; ok {
+					val = v
+				} else {
+					for k, v := range rows[0] {
+						if strings.EqualFold(k, cols[0]) {
+							val = v
+							break
+						}
+					}
+				}
 			}
+			if val == nil && len(cols) == 0 {
+				for _, v := range rows[0] {
+					val = v
+					break
+				}
+			}
+			f.setVar(queryData.IntoVar, toStorageValue(val))
 		}
 		if inst.A >= 0 && int(inst.A) < len(f.regs) {
 			f.regs[inst.A] = storage.IntValue(int64(len(rows)))
@@ -1125,10 +1141,26 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 		f.rowCount = int64(len(rows))
 
 		if data.IntoVar != "" && len(rows) > 0 {
-			for _, v := range rows[0] {
-				f.setVar(data.IntoVar, toStorageValue(v))
-				break
+			var val any
+			if len(cols) > 0 {
+				if v, ok := rows[0][cols[0]]; ok {
+					val = v
+				} else {
+					for k, v := range rows[0] {
+						if strings.EqualFold(k, cols[0]) {
+							val = v
+							break
+						}
+					}
+				}
 			}
+			if val == nil && len(cols) == 0 {
+				for _, v := range rows[0] {
+					val = v
+					break
+				}
+			}
+			f.setVar(data.IntoVar, toStorageValue(val))
 		}
 		if inst.A >= 0 && int(inst.A) < len(f.regs) {
 			f.regs[inst.A] = storage.IntValue(int64(len(rows)))
