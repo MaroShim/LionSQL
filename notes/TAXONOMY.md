@@ -80,6 +80,12 @@
 | **`BUG-PROC-SIMPLE-CASE-1`** | **단순 CASE 문(Simple CASE) 파싱 및 컴파일 보장 (Simple CASE Bug)** | `BUG-PROC-SIMPLE-CASE-1` | `CaseExpr`에 `Operand` 필드 신설 및 VDBE 피연산자-조건값 비교 분기 바이트코드 방출 |
 | **`BUG-EVAL-NEQ-NULL-1`** | **evalRowBinaryOp 불일치 비교 NULL 3가 논리 보장 (Eval NEQ NULL Bug)** | `BUG-EVAL-NEQ-NULL-1` | `TokenNeq` 연산자 NULL 피연산자 시 `nil`(UNKNOWN) 반환으로 WHERE 절 누수 원천 차단 |
 | **`BUG-DATEADD-NULL-1`** | **DATEADD/EOMONTH 증분 NULL 시 NULL 정규 반환 (DateAdd NULL Bug)** | `BUG-DATEADD-NULL-1` | 증분 파라미터 NULL 검사 및 NULL 즉시 반환, 미지원 datepart 에러 정규화 |
+| **`BUG-VM-INSERT-DEFAULT-1`** | **VDBE OpInsert 상수 리터럴 기본값 주입 보장 (VM Insert Default Bug)** | `BUG-VM-INSERT-DEFAULT-1` | 6대 내장 함수 외 상수 리터럴 기본값(`DEFAULT 0`, `DEFAULT 'active'`) 누락 및 NULL 삽입 해결 |
+| **`BUG-VM-DML-COL-CASE-1`** | **VDBE DML 컬럼명 대소문자 정규화 및 값 보존 (VM DML Col Case Bug)** | `BUG-VM-DML-COL-CASE-1` | Record 컬럼 대소문자 차이로 인한 `RecordToRow`/`updateLocked` 값 유실 및 NULL 삽입 해결 |
+| **`BUG-DML-PK-RANDOM-GUESS-1`** | **DML/DDL PK 식별 실패 시 임의 순회 행 훼손 방지 (DML PK Guess Bug)** | `BUG-DML-PK-RANDOM-GUESS-1` | `Values[0]` 및 `for range rec` 무작위 순회 완전 삭제, 공식 PK 엄격 조회로 엉뚱한 행 훼손 원천 차단 |
+| **`BUG-AUTH-ADMIN-PW-BYPASS-1`** | **내장 슈퍼유저 비밀번호 인증 완전 우회 백도어 해결 (Auth Admin PW Bypass Bug)** | `BUG-AUTH-ADMIN-PW-BYPASS-1` | PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무암호 로그인 우회 차단 |
+| **`BUG-UPDATE-SET-COMMA-SPLIT-1`** | **코디네이터 UPDATE SET 절 쉼표 오절단 방지 (Update Set Comma Bug)** | `BUG-UPDATE-SET-COMMA-SPLIT-1` | 따옴표 및 괄호 상태 추적 토큰 분해기로 문자열 리터럴/함수 인자 콤마 오분해 및 수식 파괴 해결 |
+| **`BUG-EVAL-IN-COMMA-SPLIT-1`** | **WHERE IN 절 문자열 리터럴 쉼표 오절단 방지 (Eval IN Comma Bug)** | `BUG-EVAL-IN-COMMA-SPLIT-1` | 따옴표 상태 인식 스마트 IN 분해기로 콤마 포함 문자열 리터럴 절단 및 매칭 영구 실패 해결 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---

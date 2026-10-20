@@ -185,6 +185,12 @@
 | **P1** | **프로시저/파서** | **단순 CASE 문(`CASE @val WHEN 1 THEN ...`) 미지원으로 인한 구문 파싱 및 컴파일 실패 결함 해결 (`BUG-PROC-SIMPLE-CASE-1`)** | `pkg/proc/parser_expr.go`, `pkg/proc/ast.go`, `pkg/proc/compiler.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **프로시저/평가** | **`evalRowBinaryOp` 불일치 비교(`<>`, `!=`) 시 NULL 3가 논리 위반으로 인한 NULL 행 무단 통과 결함 해결 (`BUG-EVAL-NEQ-NULL-1`)** | `pkg/proc/eval.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **프로시저/날짜함수** | **`DATEADD`/`EOMONTH` 증분 파라미터 NULL 전달 시 0 대체로 날짜 미변조 반환 결함 해결 (`BUG-DATEADD-NULL-1`)** | `pkg/proc/builtins_date.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **프로시저/스토리지** | **VDBE `OpInsert` 상수 리터럴 기본값(DEFAULT) 누락 및 NULL 강제 삽입 결함 해결 (`BUG-VM-INSERT-DEFAULT-1`)** | `pkg/proc/runtime/vm_dispatcher.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **프로시저/대소문자** | **VDBE DML 컬럼명 대소문자 불일치 시 `RecordToRow`/`updateLocked` 값 유실 및 NULL 삽입 결함 해결 (`BUG-VM-DML-COL-CASE-1`)** | `pkg/proc/runtime/vm_dispatcher.go`, `pkg/storage/tuple.go`, `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **VDBE 및 DML/DDL에서 PK 컬럼 미식별 시 임의 컬럼 무작위 순회(`Values[0]`, `range rec`) 행 파괴 결함 해결 (`BUG-DML-PK-RANDOM-GUESS-1`)** | `pkg/proc/runtime/vm.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_ddl.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **와이어/보안** | **PGWire 및 TDS에서 슈퍼유저(`sa`, `postgres`, `admin`) 비밀번호 인증 완전 우회 백도어 결함 해결 (`BUG-AUTH-ADMIN-PW-BYPASS-1`)** | `pkg/wire/server.go`, `pkg/wire/tds/server.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/DML** | **코디네이터 `UPDATE` SET 절 쉼표 단순 분해로 인한 문자열 리터럴 및 함수 인자 쉼표 파괴 결함 해결 (`BUG-UPDATE-SET-COMMA-SPLIT-1`)** | `pkg/engine/sqlexec_dml.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/조건평가** | **코디네이터 `WHERE IN (...)` 쉼표 단순 분해로 인한 쉼표 포함 문자열 리터럴 절단 및 매칭 실패 결함 해결 (`BUG-EVAL-IN-COMMA-SPLIT-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -321,8 +327,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 66대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-DATEADD-NULL-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락 등으로 인해 발생하는 66대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 72대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-EVAL-IN-COMMA-SPLIT-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, 쉼표 오절단 등으로 인해 발생하는 72대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -522,6 +528,24 @@
   66. **`BUG-DATEADD-NULL-1` (`pkg/proc/builtins_date.go:567-584, 635-645`)**:
      - `DATEADD` 및 `EOMONTH`에서 증분 파라미터(`n`, `monthsToAdd`)의 NULL 여부를 검사하지 않아, `DATEADD(day, NULL, '2026-01-01')`이나 `EOMONTH(date, NULL)` 호출 시 `n=0`으로 오판되어 NULL 대신 원본 날짜를 그대로 반환하는 결함.
      - 인자 목록 중 하나라도 NULL일 경우 표준 규격에 따라 `storage.NullValue`를 즉시 정규 반환하도록 수정.
+  67. **`BUG-VM-INSERT-DEFAULT-1` (`pkg/proc/runtime/vm_dispatcher.go:611-626`)**:
+     - VDBE `OpInsert`에서 기본값(`DEFAULT`) 평가 시 6종의 하드코딩된 날짜/UUID 함수(`NEWID()`, `GETDATE()` 등)만 switch로 검사하고, `DEFAULT 0`, `DEFAULT 'active'`, `DEFAULT 1.0` 등 상수 리터럴 기본값을 전면 무시하여 생략된 컬럼에 `NULL`이 강제 삽입되던 결함.
+     - 상수 리터럴 기본값 표현식 및 수식 평가 파이프라인을 연동하여 스키마 기본값 100% 정상 주입 보장.
+  68. **`BUG-VM-DML-COL-CASE-1` (`pkg/proc/runtime/vm_dispatcher.go:598-608, 665-671`, `pkg/storage/tuple.go:63`, `pkg/storage/memengine/tx.go:502-508`)**:
+     - VDBE `OpInsert` 및 `OpUpdate`에서 AST 컬럼명을 그대로 `rec[col] = stVal`, `rec[a.Column] = stVal`로 맵에 대입하고, `RecordToRow` 및 `updateLocked`에서는 스키마 컬럼명(`col.Name`)으로 엄격 대소문자 조회를 수행하여, 쿼리 컬럼 대소문자가 스키마와 다를 경우(`INSERT INTO t (Name) ...` vs 스키마 `name`) 값이 유실되거나 NULL이 삽입/업데이트되던 결함.
+     - DML Record 생성 및 스토리지 레코드 변환 시 스키마 공식 컬럼명으로 정규화 또는 대소문자 무관 탐색 보장.
+  69. **`BUG-DML-PK-RANDOM-GUESS-1` (`pkg/proc/runtime/vm.go:940-945, 1076-1081`, `pkg/engine/sqlexec_dml.go:1071-1078, 1228-1235`, `pkg/engine/sqlexec_ddl.go:349, 363-366`)**:
+     - VDBE(`execUpdateWhere`, `execDeleteWhere`), 코디네이터(`execUpdate`, `execDelete`), DDL(`TRUNCATE TABLE`)에서 대상 행의 PK를 식별하지 못할 때 `row.Values[0]`으로 임의 추측하거나 Go 맵의 `for _, v := range rec { pkVal = v; break }` 무작위 순회로 첫 번째 컬럼 값을 PK로 임의 간주하여 무관한 엉뚱한 행을 갱신/삭제/트렁케이트하던 치명적 무결성 결함.
+     - 임의 컬럼 추측 및 무작위 Go 맵 순회를 완전 삭제하고, 스키마 공식 기본키(`schema.PrimaryKeyColumn()`)를 엄격 조회하며 미지정 시 에러를 반환하도록 정규화.
+  70. **`BUG-AUTH-ADMIN-PW-BYPASS-1` (`pkg/wire/server.go:561-565`, `pkg/wire/tds/server.go:702-706`)**:
+     - 글로벌 인증 플래그가 비활성화된 상태에서 PGWire 및 TDS 리스너가 `authSvc.GetLogin(user)`로 등록된 계정 비밀번호 해시가 존재함에도 `if !auth.IsBuiltinAdminLogin(user) { needsPassword = true }`를 두어, `sa`, `postgres`, `admin` 등 슈퍼유저 계정에 명시적 비밀번호가 설정되어 있어도 패스워드 검증 없이 무조건 무암호 접속을 허용하던 보안 백도어 결함.
+     - 관리자가 슈퍼유저 비밀번호를 설정(`login.PasswordHash != ""`)한 경우 내장 관리자 계정이라도 반드시 비밀번호 인증을 거치도록 보안 가드레일 수정.
+  71. **`BUG-UPDATE-SET-COMMA-SPLIT-1` (`pkg/engine/sqlexec_dml.go:1045-1052`)**:
+     - 코디네이터 `execUpdate`에서 SET 절을 `strings.Split(setClause, ",")`로 단순 콤마 분해하여, `SET note = 'hello, world'`와 같은 문자열 리터럴 내부 콤마나 `SET full_name = CONCAT(first, ', ', last)` 등 함수 인자 내부 콤마까지 절단되어 수식이 파괴되고 컬럼 대입이 유실되던 결함.
+     - 따옴표 및 괄호 중첩 상태를 추적하는 정밀 SQL 절 토큰 분해기를 적용하여 콤마 오절단 방지.
+  72. **`BUG-EVAL-IN-COMMA-SPLIT-1` (`pkg/engine/sqlexec_eval.go:360`)**:
+     - 조건 평가기 `evaluateWhereCondition`의 `IN (...)` 절에서 `strings.Split(valList, ",")`로 리스트를 단순 분해하여, `WHERE city IN ('Seoul, KR', 'Tokyo, JP')`와 같이 콤마를 포함한 문자열 리터럴이 `'Seoul`, `KR'`로 쪼개져 IN 조건 매칭이 영구 실패하던 결함.
+     - 문자열 리터럴 이스케이프 및 따옴표 상태를 인식하는 스마트 IN 리스트 분해기 도입으로 정합성 보장.
 
 ---
 
@@ -543,7 +567,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-DATEADD-NULL-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EVAL-IN-COMMA-SPLIT-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -613,6 +637,12 @@
 | **BUG-PROC-SIMPLE-CASE-1** | 프로시저/파서 | 단순 CASE 문(`CASE @val WHEN 1 THEN ...`) 미지원 구문 파싱/컴파일 실패 해결 | **대기 (`[ ]`)** | `CaseExpr`에 `Operand` 필드 신설 및 VDBE 피연산자-조건값 비교 분기 바이트코드 방출 |
 | **BUG-EVAL-NEQ-NULL-1** | 프로시저/평가 | `evalRowBinaryOp` 불일치 비교(`<>`, `!=`) 시 NULL 3가 논리 위반 통과 해결 | **대기 (`[ ]`)** | `TokenNeq` 연산자 NULL 피연산자 시 `nil`(UNKNOWN) 반환으로 WHERE 절 누수 원천 차단 |
 | **BUG-DATEADD-NULL-1** | 프로시저/날짜함수 | `DATEADD`/`EOMONTH` 증분 파라미터 NULL 전달 시 0 대체 날짜 반환 해결 | **대기 (`[ ]`)** | 증분 파라미터 NULL 검사 및 NULL 즉시 반환, 미지원 datepart 에러 정규화 |
+| **BUG-VM-INSERT-DEFAULT-1** | 프로시저/스토리지 | VDBE `OpInsert` 상수 리터럴 기본값(DEFAULT) 누락 및 NULL 삽입 해결 | **대기 (`[ ]`)** | 상수 리터럴 기본값 및 표현식 평가 파이프라인 연동으로 스키마 기본값 100% 정상 주입 |
+| **BUG-VM-DML-COL-CASE-1** | 프로시저/대소문자 | VDBE DML 컬럼명 대소문자 불일치 시 `RecordToRow`/`updateLocked` 값 유실 해결 | **대기 (`[ ]`)** | DML Record 생성 및 스토리지 레코드 변환 시 공식 컬럼명 정규화로 값 유실 방지 |
+| **BUG-DML-PK-RANDOM-GUESS-1** | 엔진/무결성 | VDBE 및 DML/DDL에서 PK 컬럼 미식별 시 임의 컬럼 무작위 순회 행 파괴 해결 | **대기 (`[ ]`)** | 임의 컬럼 추측 및 무작위 Go 맵 순회 완전 삭제, 공식 PK 엄격 조회로 엉뚱한 행 훼손 원천 차단 |
+| **BUG-AUTH-ADMIN-PW-BYPASS-1** | 와이어/보안 | PGWire 및 TDS 슈퍼유저(`sa`, `postgres`, `admin`) 비밀번호 인증 완전 우회 해결 | **대기 (`[ ]`)** | 비밀번호 설정 계정 대상 내장 관리자 예외 우회 차단 및 필수 인증 강제 적용 |
+| **BUG-UPDATE-SET-COMMA-SPLIT-1** | 엔진/DML | 코디네이터 `UPDATE` SET 절 쉼표 단순 분해로 인한 문자열/함수 쉼표 파괴 해결 | **대기 (`[ ]`)** | 따옴표 및 괄호 중첩 상태 추적 SQL 토큰 분해기 적용으로 쉼표 오절단 방지 |
+| **BUG-EVAL-IN-COMMA-SPLIT-1** | 엔진/조건평가 | 코디네이터 `WHERE IN (...)` 쉼표 단순 분해로 인한 쉼표 포함 문자열 절단 해결 | **대기 (`[ ]`)** | 리터럴 이스케이프 및 따옴표 상태 인식 스마트 IN 분해기로 조건 매칭 정합성 보장 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
