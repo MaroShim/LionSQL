@@ -121,6 +121,13 @@
 | **`BUG-API-JSON-DECIMAL-PRECISION-LOSS-1`** | **HTTP API 레코드 직렬화 시 DECIMAL 실수 부동소수점 정밀도 손실 방지 (API Decimal Loss Bug)** | `BUG-API-JSON-DECIMAL-PRECISION-LOSS-1` | `strconv.ParseFloat` 변환을 제거하고 정밀 문자열 또는 `json.Number`로 직렬화하여 금융 데이터 왜곡 방지 |
 | **`BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1`** | **0건 파생테이블 Columns[0] 임의 PK 지정 및 제약 파괴 방지 (Derived Table PK Bug)** | `BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1` | 0건 반환 시 임의 컬럼 PK 승격을 중단하고 항상 가상 기본키(`_dt_row_id`)를 부여하여 스키마 정합성 보장 |
 | **`BUG-PITR-DDL-SILENT-SWALLOW-1`** | **PITR WAL 재생 시 DDL 실행 에러 침묵 및 복구 실패 은폐 방지 (PITR DDL Swallow Bug)** | `BUG-PITR-DDL-SILENT-SWALLOW-1` | DDL 실행 실패(`CreateTable`, `DropTable` 등) 시 에러 즉시 전파로 후속 데이터 파괴 및 복구 왜곡 방지 |
+| **`BUG-STORAGE-TABLE-CASE-SENSITIVITY-1`** | **스토리지 엔진 테이블명 대소문자 미구분 맵 조회 실패 및 중복 생성 방지 (Storage Table Case Bug)** | `BUG-STORAGE-TABLE-CASE-SENSITIVITY-1` | MemEngine/WiredTiger의 `e.tables` 원시 맵 조회를 대소문자 무시 정규화(`EqualFold` / `ToLower`)하여 `ErrTableNotFound` 및 동명이인 테이블 방어 |
+| **`BUG-EXEC-AGG-DISTINCT-IGNORED-1`** | **AggregateIterator DISTINCT 집계 무시 및 전체 행 집계 왜곡 방지 (Agg Distinct Ignored Bug)** | `BUG-EXEC-AGG-DISTINCT-IGNORED-1` | 정규식 `(?:DISTINCT\s+)?` 일치 시 `isDistinct` 플래그 보존 및 `groupAccumulator` 고유값 셋 추적으로 중복 집계 왜곡 차단 |
+| **`BUG-COORD-AGG-MIN-MAX-NON-NUMERIC-NIL-1`** | **코디네이터 집계 MIN/MAX 비숫자형 파싱 실패 시 NULL 반환 방지 (Coord Agg MinMax Bug)** | `BUG-COORD-AGG-MIN-MAX-NON-NUMERIC-NIL-1` | `strconv.ParseFloat` 전용 파싱을 문자열/일시/불리언 비교 인터페이스로 확장하여 문자열 및 날짜 컬럼의 극값 유실 해결 |
+| **`BUG-PGWIRE-PREP-EXEC-TX-BYPASS-1`** | **PGWire 사전 컴파일 바이트코드 실행 시 트랜잭션 우회 방지 (PGWire Prep Tx Bypass Bug)** | `BUG-PGWIRE-PREP-EXEC-TX-BYPASS-1` | `handleExecute` 패스트패스에서 신규 독립 세션(`NewSession`) 강제 생성을 중단하고 활성 세션 컨텍스트 및 트랜잭션 바인딩 |
+| **`BUG-WIRE-PG-PARAM-SUBSTITUTION-INJECTION-1`** | **PGWire 파라미터 치환 시 재귀 치환 왜곡 및 숫자형 문자열 따옴표 탈락 방지 (PG Param Substitute Bug)** | `BUG-WIRE-PG-PARAM-SUBSTITUTION-INJECTION-1` | `strings.ReplaceAll` 대신 단일 패스 토큰화 치환 적용 및 파라미터 실제 데이터 타입 보존으로 파라미터 재귀 오염 해결 |
+| **`BUG-CATALOG-OBJECT-PERSISTENCE-OMISSION-1`** | **서버 재기동 시 프로시저/함수/뷰/트리거 영구 증발 방지 (Catalog Object Persistence Bug)** | `BUG-CATALOG-OBJECT-PERSISTENCE-OMISSION-1` | 인메모리 맵 보관 객체들을 WAL 레코드 또는 `catalog_objects.json`으로 영속화하여 데이터베이스 재시작 후 메타데이터 복원 보장 |
+| **`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`** | **WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug)** | `BUG-WT-UNIQUE-INDEX-UNENFORCED-1` | `insertLocked`/`updateLocked` 시 유니크 인덱스 제약 검증 및 `IndexScan`의 풀 테이블 스캔 폴백을 B-Tree 커서 검색으로 개편 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
