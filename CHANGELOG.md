@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Group 2 Unified SQL Abstraction Remediation (14 Critical Engine/Storage/Wire Bugs)**:
+  - `BUG-STORAGE-UPDATE-CASE-1`: Normalized column keys against table schema in `memengine` and `wiredtiger` `updateLocked` to eliminate silent update omissions under mixed casing.
+  - `BUG-VM-DML-COL-CASE-1`: Normalized VDBE `OpInsert` and `OpUpdate` column names using schema metadata to prevent NULL value overwrites.
+  - `BUG-INDEX-KEY-CASE-1`: Extracted secondary index keys case-insensitively via unified `storage.ExtractIndexKeyFromRecord`.
+  - `BUG-WT-UNIQUE-INDEX-UNENFORCED-1`: Enforced WiredTiger secondary unique index constraints via lock-free cursor pre-checks (`checkUniqueIndexesLocked`).
+  - `BUG-FK-CASE-1`: Enabled case-insensitive parent column lookups in `memengine` `findMatchingChildPKsUnderLock` to prevent illegitimate parent deletions.
+  - `BUG-FK-CHILD-CASE-1`: Applied `childRecord.Get` in `validateForeignKeysUnderLock` to prevent bogus foreign key insertions.
+  - `BUG-WT-FK-1`: Built full foreign key integrity verification and `ON DELETE CASCADE/RESTRICT` cascading in the WiredTiger CGO backend.
+  - `BUG-FK-PARENT-TABLE-CASE-1`: Guaranteed case-insensitive parent and child table resolution across DDL and transaction validations.
+  - `BUG-TDS-ROW-CASE-1`: Added case-insensitive column resolution (`getRowValueCaseInsensitive`) to `WriteRowDirect` and `WriteNBCRowDirect` in TDS token serialization.
+  - `BUG-SELECT-AGG-CASE-1`: Guaranteed case-insensitive `GROUP BY` grouping and aggregate argument evaluation in the coordinator.
+  - `BUG-COORD-AGG-MIN-MAX-NON-NUMERIC-NIL-1`: Added generic non-numeric value comparison (`compareAggValues`) to coordinator MIN/MAX aggregates.
+  - `BUG-EXEC-AGG-DISTINCT-IGNORED-1`: Preserved the DISTINCT flag in parser and Volcano `AggregateIterator` with per-group deduplication caching.
+  - `BUG-JOIN-IDX-1`: Replaced arbitrary `Indexes[0]` selection with safe HashJoin fallback when join conditions lack matching indexes.
+  - `BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1`: Integrated `findColumnStats` into `EstimateSelectivity` for case-insensitive column histogram lookups.
 - **Session Variable Quote Escaping (`pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go`)**: Fixed single quote unescaping in `ParseSessionVarValue` and implemented proper doubled single quote (`''`) escaping during `@var` query substitution to prevent SQL syntax errors and injection vulnerabilities.
 - **Session Table Variable & Temporary Table Lifecycle Cleanup (`pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go`)**: Ensured all physical table variables (`__tv_*`) and temporary tables are cleanly dropped from the storage engine on `CloseSession` (including `default` session on `Coordinator.Close`) and on connection pool resets (`DISCARD ALL`, `RESET ALL`).
 
