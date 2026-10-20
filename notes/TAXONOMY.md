@@ -63,6 +63,7 @@
 | **`BUG-INDEX-KEY-CASE-1`** | **세컨더리 인덱스 키 추출 대소문자 정규화 (Index Key Case Bug)** | `BUG-INDEX-KEY-CASE-1` | `extractIndexKey`의 대소문자 미정규화로 인한 세컨더리 인덱스 NULL 오염 및 스캔 0건 결함 해결 |
 | **`BUG-FK-PARENT-TABLE-CASE-1`** | **외래키 부모 테이블 대소문자 정규화 (FK Parent Table Case Bug)** | `BUG-FK-PARENT-TABLE-CASE-1` | 부모 테이블 대소문자 불일치 시 `ON DELETE RESTRICT` 및 외래키 연쇄 검사 완전 우회 결함 해결 |
 | **`BUG-PLANNER-ORDERBY-1`** | **CBO/SetOp 다중 정렬 키 콤마 잔존 해결 (Planner OrderBy Bug)** | `BUG-PLANNER-ORDERBY-1` | CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존(`"a,"`)으로 인한 플랜 왜곡 해결 |
+| **`BUG-WT-SWEEP-1`** | **WiredTiger 60분 유휴 세션 경고 방지 및 세션 리셋 (WT Sweep Server Bug)** | `BUG-WT-SWEEP-1` | `startPeriodicSync` 고아 세션 상시 점유 제거, `session->reset` 바인딩 및 `SessionPool` TTL 리퍼 연동 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
