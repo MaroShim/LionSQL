@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestSQLRow_GetCaseInsensitiveAndAlias(t *testing.T) {

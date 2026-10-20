@@ -7,10 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/auth"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/auth"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/storage/memengine"
 )
 
 func obfuscateTestPassword(pw string) []byte {

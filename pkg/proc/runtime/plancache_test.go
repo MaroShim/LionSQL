@@ -3,8 +3,8 @@ package runtime_test
 import (
 	"testing"
 
-	"sqlion/pkg/proc/runtime"
-	_ "sqlion/pkg/proc/parser/antlr"
+	"lionsql/pkg/proc/runtime"
+	_ "lionsql/pkg/proc/parser/antlr"
 )
 
 func TestPlanCache_BoundedLRU(t *testing.T) {

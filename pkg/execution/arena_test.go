@@ -5,9 +5,9 @@ import (
 	"io"
 	"testing"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 func TestArena_ExecutionIntegration(t *testing.T) {

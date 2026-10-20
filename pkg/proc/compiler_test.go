@@ -5,8 +5,8 @@ import (
 	"testing"
 	"unsafe"
 
-	"sqlion/pkg/proc"
-	_ "sqlion/pkg/proc/parser/antlr"
+	"lionsql/pkg/proc"
+	_ "lionsql/pkg/proc/parser/antlr"
 )
 
 func TestCompiler_ProcedureBytecode(t *testing.T) {

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/auth"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/auth"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 var (

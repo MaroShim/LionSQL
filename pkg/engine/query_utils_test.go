@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/engine"
+	"lionsql/pkg/engine"
 )
 
 func TestSplitStatements_Basic(t *testing.T) {

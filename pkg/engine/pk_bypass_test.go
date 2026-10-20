@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func setupTestCoordinatorWithTable(t *testing.T) (*Coordinator, storage.Engine) {

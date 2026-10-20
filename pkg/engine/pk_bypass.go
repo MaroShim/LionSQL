@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/auth"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/auth"
+	"lionsql/pkg/storage"
 )
 
 // PKLookupPlan stores compiled plan metadata for direct storage bypass.

@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage"
 )
 
 // RestoreOptions configures database restore behavior.

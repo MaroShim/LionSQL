@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestMailer_SendAndTemplate(t *testing.T) {

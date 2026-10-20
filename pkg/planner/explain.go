@@ -6,7 +6,7 @@ import (
 	"regexp"
 	"strings"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // ExplainFormat defines the output format for EXPLAIN queries.

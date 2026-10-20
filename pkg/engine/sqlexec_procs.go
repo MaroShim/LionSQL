@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 // unwrapSQLString removes SQL quote delimiters and unescapes double single-quotes.

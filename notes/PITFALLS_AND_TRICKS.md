@@ -16,8 +16,8 @@
   pkg/proc/parser/antlr (ASTBuilder 구현, init()에서 SPI 등록)
   ```
 * **주의점**:
-  * `pkg/proc` 내부 코드에서 절대 `sqlion/pkg/proc/parser/antlr`을 import하지 마십시오. Go 컴파일러가 즉시 순환 참조 에러(`import cycle not allowed`)를 냅니다.
-  * ANTLR 폴백 기능이 동작해야 하는 바이너리(`cmd/server`, `cmd/bench` 등)나 테스트에서는 `import _ "sqlion/pkg/proc/parser/antlr"`를 명시하여 ANTLR의 `init()`이 실행되도록 해야 합니다.
+  * `pkg/proc` 내부 코드에서 절대 `lionsql/pkg/proc/parser/antlr`을 import하지 마십시오. Go 컴파일러가 즉시 순환 참조 에러(`import cycle not allowed`)를 냅니다.
+  * ANTLR 폴백 기능이 동작해야 하는 바이너리(`cmd/server`, `cmd/bench` 등)나 테스트에서는 `import _ "lionsql/pkg/proc/parser/antlr"`를 명시하여 ANTLR의 `init()`이 실행되도록 해야 합니다.
 
 ---
 

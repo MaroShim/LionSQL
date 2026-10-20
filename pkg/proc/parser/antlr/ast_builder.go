@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 func init() {

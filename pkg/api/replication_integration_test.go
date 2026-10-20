@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/replication"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/replication"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestReplication_ServerIntegration(t *testing.T) {

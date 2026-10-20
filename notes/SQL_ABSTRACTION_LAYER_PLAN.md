@@ -96,7 +96,7 @@ In the coordinator DML and evaluation layer (`sqlexec_dml.go`, `sqlexec_eval.go`
 ```go
 package engine
 
-import "sqlion/pkg/storage"
+import "lionsql/pkg/storage"
 
 // SQLRow encapsulates a query or execution row, providing case-insensitive,
 // table-alias-aware column access without raw Go map iteration hazards.

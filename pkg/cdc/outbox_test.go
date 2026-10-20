@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/cdc"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/cdc"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestOutboxDispatcher_GeneralCDCToMemorySink(t *testing.T) {

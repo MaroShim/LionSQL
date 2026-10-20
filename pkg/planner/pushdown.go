@@ -3,8 +3,8 @@ package planner
 import (
 	"strings"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 // ColumnRef represents an extracted column reference from a predicate.

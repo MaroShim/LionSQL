@@ -3,8 +3,8 @@ package proc_test
 import (
 	"testing"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 func TestParseSQL_GeneralSelect(t *testing.T) {

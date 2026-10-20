@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestEphemeralEngine_ZeroDiskArtifacts(t *testing.T) {

@@ -3,7 +3,7 @@ package api
 import (
 	"time"
 
-	"sqlion/pkg/engine"
+	"lionsql/pkg/engine"
 )
 
 // Compatibility aliases for components that now live in pkg/engine.

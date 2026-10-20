@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/replication"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/replication"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestWALBroadcaster_SubscribeAndBroadcast(t *testing.T) {

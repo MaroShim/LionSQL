@@ -3,9 +3,9 @@ package api_test
 import (
 	"testing"
 
-	"sqlion/pkg/api"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/api"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestExtendedDataTypes_DDL_DML_EndToEnd(t *testing.T) {

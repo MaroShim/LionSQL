@@ -3,8 +3,8 @@ package parser_test
 import (
 	"testing"
 
-	"sqlion/pkg/proc"
-	parser "sqlion/pkg/proc/parser/antlr"
+	"lionsql/pkg/proc"
+	parser "lionsql/pkg/proc/parser/antlr"
 )
 
 func TestParseTSql_ValidQueries(t *testing.T) {

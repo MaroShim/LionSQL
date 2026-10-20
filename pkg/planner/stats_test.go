@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
 )
 
 func TestTableStats_SelectivityEstimation(t *testing.T) {

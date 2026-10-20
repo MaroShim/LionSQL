@@ -11,12 +11,12 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/auth"
-	"sqlion/pkg/catalog/virtual"
-	"sqlion/pkg/execution"
-	"sqlion/pkg/planner"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/auth"
+	"lionsql/pkg/catalog/virtual"
+	"lionsql/pkg/execution"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {

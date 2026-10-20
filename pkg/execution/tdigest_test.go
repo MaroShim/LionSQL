@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"sqlion/pkg/execution"
+	"lionsql/pkg/execution"
 )
 
 func TestPercentile_ExactCalculations(t *testing.T) {

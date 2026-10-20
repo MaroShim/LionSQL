@@ -1,7 +1,7 @@
 package engine
 
 import (
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // NormalizeRecordKeys returns a new Record where all keys that match schema columns

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func modifyJSONByPath(doc, path string, newVal storage.Value) (string, error) {

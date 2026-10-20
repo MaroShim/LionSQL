@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestSkipList_BasicCRUD(t *testing.T) {

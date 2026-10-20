@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	"sqlion/pkg/execution"
-	"sqlion/pkg/planner"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/execution"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 // ExecutionResult captures the output and metrics of a procedure, function, or query execution.

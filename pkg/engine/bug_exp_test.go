@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestRegression_BUG_EXP_1_ExplainSubqueryCaseInsensitiveCols(t *testing.T) {

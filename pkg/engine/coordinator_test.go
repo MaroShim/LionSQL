@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/replication"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/replication"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestCoordinator_DirectExecutionLifecycle(t *testing.T) {

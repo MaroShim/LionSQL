@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 type ColumnDTO struct {

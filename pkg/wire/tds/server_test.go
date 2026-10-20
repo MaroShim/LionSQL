@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage/memengine"
 )
 
 func setupTestServer(t *testing.T) *Server {

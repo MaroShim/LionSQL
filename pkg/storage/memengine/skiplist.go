@@ -5,7 +5,7 @@ import (
 	"math/rand/v2"
 	"sync"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 const (

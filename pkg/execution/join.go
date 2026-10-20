@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
 )
 
 type hashMatch struct {

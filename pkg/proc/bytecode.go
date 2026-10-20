@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // OpCode represents an operation code for the SQLion T-SQL Bytecode Virtual Machine.

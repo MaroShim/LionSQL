@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 // handleCatch checks the active catchStack on error, routing execution to the catch handler if present.

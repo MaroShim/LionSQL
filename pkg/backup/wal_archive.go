@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"sqlion/pkg/config"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/config"
+	"lionsql/pkg/storage/memengine"
 )
 
 // ArchivedSegment records metadata for an archived WAL log segment.

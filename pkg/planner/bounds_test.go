@@ -3,7 +3,7 @@ package planner
 import (
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestBounds_ParseWhereConditions(t *testing.T) {

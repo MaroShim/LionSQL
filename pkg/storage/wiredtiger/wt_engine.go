@@ -188,8 +188,8 @@ import (
 	"time"
 	"unsafe"
 
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // Engine implements storage.Engine via the WiredTiger C API.

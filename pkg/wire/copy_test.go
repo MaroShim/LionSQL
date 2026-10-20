@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestParseCopyStmt(t *testing.T) {

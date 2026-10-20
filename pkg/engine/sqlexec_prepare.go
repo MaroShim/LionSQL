@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 // execPrepare parses and compiles PREPARE statement into a cached session PreparedStatement.

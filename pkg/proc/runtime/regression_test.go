@@ -6,11 +6,11 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/proc"
-	antlrParser "sqlion/pkg/proc/parser/antlr"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/proc"
+	antlrParser "lionsql/pkg/proc/parser/antlr"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // setupRegressionDB populates a rich schema with products, orders, and customer accounts for testing.

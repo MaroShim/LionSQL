@@ -3,7 +3,7 @@ package planner_test
 import (
 	"testing"
 
-	"sqlion/pkg/planner"
+	"lionsql/pkg/planner"
 )
 
 func TestFindTopLevelSetOps_Basic(t *testing.T) {

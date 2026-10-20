@@ -3,9 +3,9 @@ package virtual_test
 import (
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/catalog/virtual"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/catalog/virtual"
+	"lionsql/pkg/storage"
 )
 
 type mockSource struct {

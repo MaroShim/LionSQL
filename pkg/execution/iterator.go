@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // ColumnIndexMap provides O(1) integer offset mapping for column names, aliases, and table prefixes.

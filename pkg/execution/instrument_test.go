@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 type mockIterator struct {

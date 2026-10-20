@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"strings"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 func (s *Server) handleListProcs(w http.ResponseWriter, r *http.Request) {

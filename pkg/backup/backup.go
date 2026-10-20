@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/config"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/config"
+	"lionsql/pkg/storage"
 )
 
 // Manifest contains metadata about a backup archive.

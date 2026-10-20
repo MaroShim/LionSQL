@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // ProcedureFallbackParser represents a pluggable parser invoked when the primary Pratt parser fails.

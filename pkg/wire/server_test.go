@@ -10,11 +10,11 @@ import (
 	"sync"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func setupTestWireServer(t *testing.T) (*Server, storage.Engine, *catalog.Catalog) {

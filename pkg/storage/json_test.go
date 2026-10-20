@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestJSON_IsValidJSON(t *testing.T) {

@@ -13,9 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sqlion/pkg/backup"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/backup"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // ReplicationClient streams and replays WAL records from the primary node.

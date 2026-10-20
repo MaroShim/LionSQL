@@ -18,12 +18,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sqlion/pkg/auth"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/auth"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
 )
 
 // Server implements a native Microsoft SQL Server TDS 7.x/8.0 wire protocol listener.

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // OpType represents the mutation operation in the CDC stream.

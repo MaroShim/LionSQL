@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestTdsPreparedStatementCache_BasicOperations(t *testing.T) {

@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/backup"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/execution"
+	"lionsql/pkg/backup"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/execution"
 )
 
 type execSQLReq struct {

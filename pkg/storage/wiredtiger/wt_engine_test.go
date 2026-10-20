@@ -10,11 +10,11 @@ import (
 	"sync"
 	"testing"
 
-	"sqlion/pkg/backup"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/backup"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestWiredTigerWALHookAndReplay(t *testing.T) {

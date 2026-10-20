@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
-		"sqlion/pkg/catalog/virtual"
-	"sqlion/pkg/execution"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/replication"
-	"sqlion/pkg/storage"
+		"lionsql/pkg/catalog/virtual"
+	"lionsql/pkg/execution"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/replication"
+	"lionsql/pkg/storage"
 )
 
 // QueryResult represents the outcome of a SQL statement execution (aliased from engine.QueryResult).

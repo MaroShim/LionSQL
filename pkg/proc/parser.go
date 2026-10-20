@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // Precedence levels for Pratt parsing

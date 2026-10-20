@@ -4,8 +4,8 @@ import (
 	"reflect"
 	"testing"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
 )
 
 func TestPrunePartitions_Monthly(t *testing.T) {

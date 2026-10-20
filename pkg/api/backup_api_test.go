@@ -12,8 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestAPI_BackupAndRestoreStream(t *testing.T) {

@@ -3,10 +3,10 @@ package runtime_test
 import (
 	"testing"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestRegression_BUG_VM_INTO_1_DeterministicColumnBinding(t *testing.T) {

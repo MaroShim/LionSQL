@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"sqlion/pkg/config"
+	"lionsql/pkg/config"
 )
 
 func TestDefaultConfig(t *testing.T) {

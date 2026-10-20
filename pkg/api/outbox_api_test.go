@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/api"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/cdc"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/api"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/cdc"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestOutboxAPI_StatusEndpoint(t *testing.T) {

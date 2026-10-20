@@ -6,8 +6,8 @@ import (
 	"io"
 	"strings"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/proc"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
 )
 
 type projField struct {

@@ -6,7 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage/memengine"
 )
 
 // AutoAnalyzeConfig holds threshold settings for background statistics updates.

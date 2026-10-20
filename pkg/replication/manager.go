@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // Config configures the availability group replication manager.

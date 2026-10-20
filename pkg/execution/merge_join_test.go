@@ -6,8 +6,8 @@ import (
 	"io"
 	"testing"
 
-	"sqlion/pkg/execution"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/execution"
+	"lionsql/pkg/storage"
 )
 
 // mockSortedIterator provides in-memory mock tuples with a schema and ColIndexMap.

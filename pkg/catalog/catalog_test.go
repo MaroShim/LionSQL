@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestCatalog_TableStats(t *testing.T) {

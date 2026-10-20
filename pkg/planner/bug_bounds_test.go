@@ -3,7 +3,7 @@ package planner
 import (
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestRegression_BUG_BOUNDS_1_ParseIndexCondMultiPredicateDeterministic(t *testing.T) {

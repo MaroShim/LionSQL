@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"sqlion/pkg/proc"
+	"lionsql/pkg/proc"
 )
 
 var (

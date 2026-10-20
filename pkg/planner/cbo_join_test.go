@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
 )
 
 func TestCBOJoinOrderOptimization_SmallTableFirst(t *testing.T) {

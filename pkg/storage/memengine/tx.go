@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func (e *Engine) NewSession() (storage.Session, error) {

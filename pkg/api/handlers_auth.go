@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"strings"
 
-	"sqlion/pkg/auth"
+	"lionsql/pkg/auth"
 )
 
 type createAPIKeyReq struct {

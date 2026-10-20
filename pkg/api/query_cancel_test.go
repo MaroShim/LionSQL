@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/api"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/api"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 func setupTestServerWithLoopProc(t *testing.T) (*api.Server, func()) {

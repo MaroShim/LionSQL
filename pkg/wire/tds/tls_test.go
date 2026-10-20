@@ -9,9 +9,9 @@ import (
 	"sync"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
-	"sqlion/pkg/wire"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/wire"
 )
 
 // setupTLSTestServer initializes an in-memory storage engine and a TDS server with TLS configured.

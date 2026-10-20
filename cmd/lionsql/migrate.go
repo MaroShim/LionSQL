@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"sqlion/pkg/migrate"
+	"lionsql/pkg/migrate"
 )
 
 func runMigrate(args []string) error {

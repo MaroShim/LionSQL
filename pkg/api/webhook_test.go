@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 type mockRoundTripper func(req *http.Request) (*http.Response, error)

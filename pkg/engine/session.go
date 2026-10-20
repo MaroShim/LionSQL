@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 // PreparedStatement stores compiled bytecode and parameter definitions for repeated execution.

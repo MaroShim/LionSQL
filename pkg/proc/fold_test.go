@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/proc"
+	"lionsql/pkg/proc"
 )
 
 func parseExprStr(t *testing.T, s string) proc.Expr {

@@ -8,11 +8,11 @@ import (
 	"strings"
 	"text/tabwriter"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
-	"sqlion/pkg/storage/wiredtiger"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/storage/wiredtiger"
 )
 
 func runSQL(args []string) error {

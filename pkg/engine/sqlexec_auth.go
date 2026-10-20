@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/auth"
+	"lionsql/pkg/auth"
 )
 
 var (

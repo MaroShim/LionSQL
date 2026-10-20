@@ -3,9 +3,9 @@ package engine_test
 import (
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/storage/memengine"
 )
 
 // TestRegression_BUG_RECORD_1_DML verifies that INSERT and UPDATE with mixed-case column names

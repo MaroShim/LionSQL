@@ -14,11 +14,11 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/auth"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/cdc"
-	"sqlion/pkg/config"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/auth"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/cdc"
+	"lionsql/pkg/config"
+	"lionsql/pkg/storage/memengine"
 )
 
 // TestHTTPPort_FunctionalityIntegration performs an end-to-end integration test

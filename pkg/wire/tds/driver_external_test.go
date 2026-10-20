@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
-	"sqlion/pkg/wire/tds"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/wire/tds"
 )
 
 func TestExternalDriver_Python_PyMSSQL(t *testing.T) {

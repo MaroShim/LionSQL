@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/api"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/api"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestSessionPool_AcquireReleaseAndStats(t *testing.T) {

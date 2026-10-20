@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
 )
 
 // TableGetter fetches TableSchema by table name.

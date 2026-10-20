@@ -5,10 +5,10 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/api"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/api"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestExplain_FormatJSON_VisualDBeaverCompatibility(t *testing.T) {

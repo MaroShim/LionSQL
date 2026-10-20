@@ -12,9 +12,9 @@ import (
 
 	mssql "github.com/microsoft/go-mssqldb"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
-	"sqlion/pkg/wire/tds"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/wire/tds"
 )
 
 func TestDriverIntegration_GoMSSQLDB_Ping(t *testing.T) {

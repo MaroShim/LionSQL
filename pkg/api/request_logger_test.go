@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestRequestActivityLogger_BoundedCapacity(t *testing.T) {

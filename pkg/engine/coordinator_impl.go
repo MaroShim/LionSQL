@@ -8,15 +8,15 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sqlion/pkg/auth"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/execution"
-	"sqlion/pkg/planner"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/replication"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/auth"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/execution"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/replication"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // Config defines options for initializing a Coordinator.

@@ -10,8 +10,8 @@ import (
 	"time"
 	"unicode"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
 )
 
 var (

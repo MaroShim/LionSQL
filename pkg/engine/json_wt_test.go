@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/storage/wiredtiger"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/storage/wiredtiger"
 )
 
 func TestJSON_WiredTigerQueries(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"sqlion/pkg/planner"
+	"lionsql/pkg/planner"
 )
 
 // InstrumentedIterator wraps a Volcano Iterator and profiles runtime performance

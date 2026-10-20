@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // StripLeadingComments removes leading SQL line comments (--) and block comments (/* */) as well as whitespace.

@@ -3,7 +3,7 @@ package memengine
 import (
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // TestGroup2_StorageUpdateCase tests BUG-STORAGE-UPDATE-CASE-1

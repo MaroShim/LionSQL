@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
 )
 
 func TestPushdown_ExtractColumnRefs(t *testing.T) {

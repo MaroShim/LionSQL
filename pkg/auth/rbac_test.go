@@ -3,7 +3,7 @@ package auth_test
 import (
 	"testing"
 
-	"sqlion/pkg/auth"
+	"lionsql/pkg/auth"
 )
 
 func TestRBAC_LoginAndUserLifecycle(t *testing.T) {

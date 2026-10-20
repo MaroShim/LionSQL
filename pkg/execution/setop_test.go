@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"sqlion/pkg/execution"
+	"lionsql/pkg/execution"
 )
 
 func collectTuples(t *testing.T, it execution.Iterator) []map[string]any {

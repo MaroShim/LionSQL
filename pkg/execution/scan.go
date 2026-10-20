@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // SeqScanIterator scans a table sequentially row-by-row or in vectorized chunks directly from a storage.Cursor.

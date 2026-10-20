@@ -9,7 +9,7 @@ import (
 	"strings"
 	"unicode"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func computeSoundex(s string) string {

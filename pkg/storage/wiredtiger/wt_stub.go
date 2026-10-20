@@ -5,8 +5,8 @@ package wiredtiger
 import (
 	"fmt"
 
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // Engine is a stub implementation when WiredTiger is not compiled in.

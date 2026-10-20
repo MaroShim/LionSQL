@@ -10,15 +10,15 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/auth"
-	"sqlion/pkg/config"
-	"sqlion/pkg/proc"
-	_ "sqlion/pkg/proc/parser/antlr"
-	procruntime "sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
-	"sqlion/pkg/storage/wiredtiger"
-	"sqlion/pkg/wire"
+	"lionsql/pkg/auth"
+	"lionsql/pkg/config"
+	"lionsql/pkg/proc"
+	_ "lionsql/pkg/proc/parser/antlr"
+	procruntime "lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/storage/wiredtiger"
+	"lionsql/pkg/wire"
 )
 
 // CheckResult records the status of an individual diagnostic probe.

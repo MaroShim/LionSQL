@@ -12,7 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // FsyncPolicy defines the disk synchronization frequency for AOF logs.

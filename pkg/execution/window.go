@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"sqlion/pkg/planner"
+	"lionsql/pkg/planner"
 )
 
 // WindowIterator evaluates SQL window functions over partitions of materialized rows.

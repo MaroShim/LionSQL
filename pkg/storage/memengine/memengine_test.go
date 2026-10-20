@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func createTestSchema() *storage.TableSchema {

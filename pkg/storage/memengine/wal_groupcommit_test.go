@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func newTestRecord(lsn int64) WALRecord {

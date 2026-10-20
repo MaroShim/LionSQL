@@ -3,9 +3,9 @@ package engine
 import (
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestEvalUpdateExprCaseInsensitivity(t *testing.T) {

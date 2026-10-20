@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage/memengine"
 )
 
 // WALBroadcaster manages real-time WAL stream fan-out to connected secondary replicas.

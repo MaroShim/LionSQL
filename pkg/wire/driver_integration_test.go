@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
-	"sqlion/pkg/wire"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/wire"
 )
 
 func startTestPostgresServer(t *testing.T) (*wire.Server, int) {

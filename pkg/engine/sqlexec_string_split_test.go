@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestStringSplit_Basic(t *testing.T) {

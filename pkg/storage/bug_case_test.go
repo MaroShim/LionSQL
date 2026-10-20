@@ -3,7 +3,7 @@ package storage_test
 import (
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // TestRegression_BUG_CASE_1 verifies that TableSchema.FindColumn and FindIndex

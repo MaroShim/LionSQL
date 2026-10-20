@@ -3,7 +3,7 @@ package memengine
 import (
 	"sync"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 type IndexEntry struct {

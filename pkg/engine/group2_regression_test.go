@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
 )
 
 // TestGroup2_AggCaseAndMinMaxNonNumeric tests BUG-SELECT-AGG-CASE-1 and BUG-COORD-AGG-MIN-MAX-NON-NUMERIC-NIL-1

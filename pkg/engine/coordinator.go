@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"sqlion/pkg/auth"
+	"lionsql/pkg/auth"
 )
 
 // QueryResult represents the outcome of a SQL statement execution.

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestSecondaryIndex_LifecycleAndUniqueConstraint(t *testing.T) {

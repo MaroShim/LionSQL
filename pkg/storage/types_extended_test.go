@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestTypeUUID_ParsingAndComparison(t *testing.T) {

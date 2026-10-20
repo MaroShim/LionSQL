@@ -3,8 +3,8 @@ package engine
 import (
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestEvaluateSingleConditionMap_WhereInCaseInsensitive(t *testing.T) {

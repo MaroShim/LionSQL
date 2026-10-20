@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // ScalarFunction represents an in-process native Go scalar function callback.

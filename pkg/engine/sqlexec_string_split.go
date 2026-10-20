@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/planner"
-	"sqlion/pkg/proc"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
 )
 
 var (

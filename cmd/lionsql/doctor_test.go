@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"sqlion/pkg/config"
+	"lionsql/pkg/config"
 )
 
 func TestDoctor_RunDiagnostics(t *testing.T) {

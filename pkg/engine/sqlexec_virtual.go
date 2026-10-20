@@ -4,9 +4,9 @@ import (
 	"sort"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/catalog/virtual"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/catalog/virtual"
+	"lionsql/pkg/storage"
 )
 
 var _ virtual.Source = (*Coordinator)(nil)

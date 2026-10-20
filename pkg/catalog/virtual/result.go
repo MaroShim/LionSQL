@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"sqlion/pkg/proc"
+	"lionsql/pkg/proc"
 )
 
 var (

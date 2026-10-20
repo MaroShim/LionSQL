@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"sqlion/pkg/config"
+	"lionsql/pkg/config"
 )
 
 func printUsage() {

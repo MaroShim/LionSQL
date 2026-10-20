@@ -7,12 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/api"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/planner"
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/api"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestSQLExecutor_DDL_DML_DQL(t *testing.T) {

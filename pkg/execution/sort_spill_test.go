@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"sqlion/pkg/execution"
+	"lionsql/pkg/execution"
 )
 
 type mockTupleIterator struct {

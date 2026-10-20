@@ -5,10 +5,10 @@ import (
 	"io"
 	"testing"
 
-	"sqlion/pkg/execution"
-	"sqlion/pkg/planner"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/execution"
+	"lionsql/pkg/planner"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // TestGroup2_AggregateIteratorDistinct tests BUG-EXEC-AGG-DISTINCT-IGNORED-1

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/execution"
+	"lionsql/pkg/execution"
 )
 
 func TestGovernor_EstimateTupleSize(t *testing.T) {

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/backup"
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/backup"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestWALArchiver_Lifecycle(t *testing.T) {

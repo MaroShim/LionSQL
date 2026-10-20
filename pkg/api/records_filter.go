@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // FilterExpr represents a boolean predicate evaluated against a record row.

@@ -13,9 +13,9 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/wiredtiger"
-	"sqlion/pkg/wire"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/wiredtiger"
+	"lionsql/pkg/wire"
 )
 
 func TestDriverIntegration_WiredTiger_RelationalJoin(t *testing.T) {

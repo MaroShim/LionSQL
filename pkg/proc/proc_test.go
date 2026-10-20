@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func setupBank(t *testing.T) (storage.Engine, storage.Session) {

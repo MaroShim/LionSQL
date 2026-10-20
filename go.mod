@@ -1,4 +1,4 @@
-module sqlion
+module lionsql
 
 go 1.26
 

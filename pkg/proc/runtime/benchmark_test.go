@@ -6,10 +6,10 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func BenchmarkTransferFunds(b *testing.B) {

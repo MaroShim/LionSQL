@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // DefaultWorkMem defines the default memory budget per query execution operator (64MB).

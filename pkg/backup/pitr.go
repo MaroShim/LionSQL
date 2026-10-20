@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // ErrPITRTargetReached is a sentinel error signaling that the target recovery point was reached.

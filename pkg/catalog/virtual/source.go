@@ -1,8 +1,8 @@
 package virtual
 
 import (
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage"
 )
 
 // Source provides schema and catalog metadata to virtual catalog join interceptors.

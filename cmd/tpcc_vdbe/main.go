@@ -14,11 +14,11 @@ import (
 	"syscall"
 	"time"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
-	"sqlion/pkg/storage/wiredtiger"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/storage/wiredtiger"
 )
 
 type txStats struct {

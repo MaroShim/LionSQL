@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 // NodeType represents the operational type of an execution plan node.

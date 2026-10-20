@@ -5,9 +5,9 @@ import (
 	"os"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/engine"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/engine"
+	"lionsql/pkg/storage/memengine"
 )
 
 func setupTestCoordinator(t *testing.T) engine.SQLCoordinator {

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"sqlion/pkg/proc/runtime"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/storage/memengine"
 )
 
 type exprCase struct {

@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // SetOpType defines the relational set operation variant.

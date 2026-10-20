@@ -13,9 +13,9 @@ import (
 	"syscall"
 	"time"
 
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
-	"sqlion/pkg/storage/wiredtiger"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
+	"lionsql/pkg/storage/wiredtiger"
 )
 
 type txStats struct {

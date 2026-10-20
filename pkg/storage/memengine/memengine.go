@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // CurrentHeapBytes returns the current live heap memory allocated in bytes via runtime/metrics.

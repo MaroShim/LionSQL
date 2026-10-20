@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/catalog/virtual"
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog/virtual"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 // --- T-SQL Database Console Commands (DBCC) ---

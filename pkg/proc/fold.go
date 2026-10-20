@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 // IsDeterministicFunction reports whether the named built-in function produces identical results given identical arguments.

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"sqlion/pkg/storage"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestCDC_RecordToMap(t *testing.T) {

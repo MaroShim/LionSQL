@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func (e *Engine) CreateTable(schema *storage.TableSchema) error {

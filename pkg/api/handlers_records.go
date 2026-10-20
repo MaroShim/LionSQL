@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func getTableName(r *http.Request) string {

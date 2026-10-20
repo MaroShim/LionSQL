@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/memengine"
 )
 
 func TestRLS_TokenSubstitutionAndEvaluation(t *testing.T) {

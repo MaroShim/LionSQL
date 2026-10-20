@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"sqlion/pkg/storage"
+	"lionsql/pkg/storage"
 )
 
 func TestDecimal_BasicParsingAndString(t *testing.T) {

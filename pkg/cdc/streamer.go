@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sqlion/pkg/storage/memengine"
+	"lionsql/pkg/storage/memengine"
 )
 
 // Streamer coordinates CDC event ingestion, ring-buffer caching, and real-time streaming.

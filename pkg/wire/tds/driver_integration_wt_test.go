@@ -13,9 +13,9 @@ import (
 
 	_ "github.com/microsoft/go-mssqldb"
 
-	"sqlion/pkg/catalog"
-	"sqlion/pkg/storage/wiredtiger"
-	"sqlion/pkg/wire/tds"
+	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage/wiredtiger"
+	"lionsql/pkg/wire/tds"
 )
 
 func TestDriverIntegration_WiredTiger_TruncateTable(t *testing.T) {

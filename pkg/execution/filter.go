@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"sqlion/pkg/proc"
-	"sqlion/pkg/storage"
+	"lionsql/pkg/proc"
+	"lionsql/pkg/storage"
 )
 
 // FilterIterator evaluates a filter condition (WHERE or HAVING) over tuples streamed from a child iterator in row-by-row or vectorized chunk mode.
