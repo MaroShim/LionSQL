@@ -100,6 +100,13 @@
 | **`BUG-PIVOT-COUNT-NULL-1`** | **PIVOT COUNT 집계 시 빈 카테고리 0 정규 반환 (Pivot Count NULL Bug)** | `BUG-PIVOT-COUNT-NULL-1` | `COUNT` 집계에 대해 빈 그룹 시 `0`을 정규 방출하도록 보강 |
 | **`BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1`** | **FOR JSON PATH 테이블 별칭 중첩 객체 오해석 방지 (For JSON Alias Bug)** | `BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1` | 테이블 별칭과 컬럼 별칭 구분으로 순수 컬럼 프로젝션 시 불필요 래핑 제거 |
 | **`BUG-DDL-COMPOSITE-PK-PARSE-1`** | **CREATE TABLE 복합 기본키 콤마 분해 및 스키마 보존 (DDL Composite PK Bug)** | `BUG-DDL-COMPOSITE-PK-PARSE-1` | 괄호 내부 콤마 분해 루프로 선언된 모든 복합 PK 컬럼 플래그 정상 부여 |
+| **`BUG-AUTH-RBAC-ROLE-GRANT-IGNORE-1`** | **RBAC 사용자 커스텀 롤 테이블 권한 전수 누락 방지 (RBAC Role Grant Bug)** | `BUG-AUTH-RBAC-ROLE-GRANT-IGNORE-1` | `HasTablePermission`에서 내장 롤만 검사하고 사용자 소속 커스텀 롤(`u.Roles`) 권한 누락으로 인한 인가 실패 해결 |
+| **`BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1`** | **WHERE 절 이스케이프 따옴표 및 대괄호 식별자 AND 오절단 방지 (Planner Split AND Bug)** | `BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1` | `splitAndConditions`의 중첩 따옴표(`''`) 및 대괄호 식별자 미인식으로 인한 WHERE 조건 파괴 및 플래너 에러 해결 |
+| **`BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1`** | **SkipList 유니크 인덱스 재인덱싱 시 커버링 컬럼 복사본 갱신 방지 (SkipList Unique Include Bug)** | `BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1` | `curr.Items` 값 복사 순회(`for _, item`)로 인한 커버링 컬럼(`IncludeValues`) 갱신 누락 및 인덱스 조회 왜곡 해결 |
+| **`BUG-MEM-SHARD-INIT-RACE-1`** | **TableData 샤드 지연 초기화 동시성 경쟁 런타임 패닉 방지 (MemEngine Shard Init Race Bug)** | `BUG-MEM-SHARD-INIT-RACE-1` | `ensureShardsInit`의 락 없는 맵 초기화로 인한 동시 읽기 시 `fatal error: concurrent map writes` 크래시 방지 (`sync.Once`) |
+| **`BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`** | **TODATETIMEOFFSET 정수 분 단위 오프셋 시간 오해석 방지 (ToDateTimeOffset Mins Bug)** | `BUG-DATE-TODATETIMEOFFSET-INT-MINS-1` | T-SQL 규격 정수 오프셋(분 단위)을 시간 단위로 60배 왜곡 포맷팅하던 `parseOffsetLocation` 파싱 정합성 보장 |
+| **`BUG-CATALOG-FK-MULTI-COL-ACTIONS-1`** | **가상 카탈로그 복합 외래키 쉼표 병합 및 액션 왜곡 방지 (Catalog Multi Col FK Bug)** | `BUG-CATALOG-FK-MULTI-COL-ACTIONS-1` | `execDbGateMSSQLForeignKeySelect` 복합 외래키 단일 행 쉼표 결합 및 CASCADE/SET NULL 액션 누락 방지 |
+| **`BUG-VM-DML-PK-NOT-FOUND-CRASH-1`** | **VDBE OpUpdate/OpDelete PK 미존재 시 ErrKeyNotFound 예외 크래시 방지 (VM DML PK Not Found Bug)** | `BUG-VM-DML-PK-NOT-FOUND-CRASH-1` | VDBE 단일 PK 수정/삭제 시 대상 행 미존재 시 에러 중단 대신 표준 SQL 규격 준수 0건 처리(`@@ROWCOUNT = 0`) 보장 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---

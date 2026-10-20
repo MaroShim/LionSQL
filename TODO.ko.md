@@ -205,6 +205,13 @@
 | **P1** | **엔진/PIVOT** | **`PIVOT`의 `COUNT` 집계 시 매칭 행 없는 카테고리 0 대신 NULL 반환 결함 해결 (`BUG-PIVOT-COUNT-NULL-1`)** | `pkg/engine/sqlexec_pivot.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **엔진/FOR_JSON** | **`FOR JSON PATH`에서 테이블 별칭(`u.col`)을 중첩 객체 경로로 오판하는 결함 해결 (`BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1`)** | `pkg/engine/sqlexec_pivot.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/DDL** | **테이블 레벨 `PRIMARY KEY (col1, col2)` 콤마 미분해로 인한 복합 PK 파괴 결함 해결 (`BUG-DDL-COMPOSITE-PK-PARSE-1`)** | `pkg/engine/sqlexec_ddl.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **보안/RBAC** | **RBAC `HasTablePermission`에서 사용자 소속 커스텀 역할(`u.Roles`) 권한 검사 누락 결함 해결 (`BUG-AUTH-RBAC-ROLE-GRANT-IGNORE-1`)** | `pkg/auth/rbac.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **플래너/조건분해** | **`splitAndConditions`의 이스케이프 따옴표(`''`) 및 대괄호 식별자(`[col AND val]`) AND 오절단 결함 해결 (`BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1`)** | `pkg/planner/decorrelate.go`, `pkg/planner/pushdown.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/스키플리스트** | **SkipList 유니크 인덱스 재인덱싱 시 `for _, item` 값 복사 순회로 커버링 컬럼 갱신 유실 결함 해결 (`BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1`)** | `pkg/storage/memengine/skiplist.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/동시성** | **`TableData.ensureShardsInit` 락 없는 맵 초기화로 인한 동시 읽기 트랜잭션 런타임 패닉 결함 해결 (`BUG-MEM-SHARD-INIT-RACE-1`)** | `pkg/storage/memengine/table_data.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **함수/날짜시간** | **`TODATETIMEOFFSET`의 정수 분(Minute) 단위 오프셋을 시간(Hour)으로 60배 왜곡 처리하는 결함 해결 (`BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`)** | `pkg/proc/builtins_date.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **카탈로그/메타데이터** | **가상 카탈로그의 복합 외래키 쉼표 병합(`"col1, col2"`) 및 CASCADE 액션 누락 결함 해결 (`BUG-CATALOG-FK-MULTI-COL-ACTIONS-1`)** | `pkg/catalog/virtual/mssql.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **VM/DML** | **VDBE `OpUpdate`/`OpDelete` 단일 PK 행 미존재 시 `ErrKeyNotFound` 치명적 프로시저 중단 결함 해결 (`BUG-VM-DML-PK-NOT-FOUND-CRASH-1`)** | `pkg/proc/runtime/vm_dispatcher.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -341,8 +348,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 86대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-DDL-COMPOSITE-PK-PARSE-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단 등으로 인해 발생하는 86대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 93대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-VM-DML-PK-NOT-FOUND-CRASH-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단, RBAC 커스텀 롤 누락, 따옴표 이스케이프 분해 파괴, 샤드 초기화 경쟁 크래시, VDBE 미존재 PK 크래시 등으로 인해 발생하는 93대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -602,6 +609,27 @@
   86. **`BUG-DDL-COMPOSITE-PK-PARSE-1` (`pkg/engine/sqlexec_ddl.go:89-98`)**:
      - `CREATE TABLE` 시 테이블 레벨 복합 기본키(`PRIMARY KEY (col1, col2)`) 구문을 파싱할 때 괄호 내부를 콤마로 분해하지 않고 `"col1, col2"` 전체를 단일 컬럼명으로 취급하여 어떤 컬럼도 PK로 매칭되지 못하고, 결국 첫 번째 컬럼(`Columns[0]`)만 임의 PK로 지정되어 복합 PK 테이블 스키마가 파괴되던 결함.
      - 괄호 내부 콤마 분해 루프를 적용하여 선언된 모든 복합 PK 컬럼에 `PrimaryKey = true` 플래그 정상 부여.
+  87. **`BUG-AUTH-RBAC-ROLE-GRANT-IGNORE-1` (`pkg/auth/rbac.go:371-432`)**:
+     - `HasTablePermission`이 하드코딩된 내장 역할(`db_owner`, `db_datareader`, `db_datawriter`), 사용자 개별 권한(`normUser`), 및 `public` 권한만 검사하고, 사용자가 부여받은 사용자 정의 데이터베이스 롤(`u.Roles`)을 전혀 검사하지 않아 커스텀 롤에 부여된 모든 테이블 권한(`GRANT ... TO role_name`)이 해당 롤 소속 사용자에게 무효화되던 치명적 인가 결함.
+     - `u.Roles`의 모든 커스텀 역할에 대해 `checkSubject(r)`를 순회 검사하여 역할 기반 테이블 권한 정상 부여.
+  88. **`BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1` (`pkg/planner/decorrelate.go:429-434`, `pkg/planner/pushdown.go:172`)**:
+     - `splitAndConditions`가 연속 작은따옴표 이스케이프(`''`)나 대괄호 식별자(`[col AND val]`)를 인식하지 못하고, 따옴표를 단순 토글 처리하여 문자열 리터럴 내부나 식별자 내부에 `AND`가 포함된 경우 조건을 경계 밖으로 무단 절단하여 WHERE 절 문법을 파괴하던 플래너 결함.
+     - `''` 이스케이프 연속 토큰 건너뛰기 및 대괄호(`[...]`) 깊이 추적을 보강하여 조건 절단 방어.
+  89. **`BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1` (`pkg/storage/memengine/skiplist.go:86-90`)**:
+     - `SkipList.Insert`에서 유니크 인덱스의 기존 키 갱신 시 `for _, item := range curr.Items` 값 복사 순회를 수행하며 `item.IncludeValues = inc`를 대입하여, 실제 슬라이스 원소(`curr.Items[i]`)가 전혀 갱신되지 못하고 커버링 인덱스 데이터가 유실/과거값으로 방치되던 결함.
+     - 비유니크 분기와 동일하게 인덱스 인덱싱(`curr.Items[i].IncludeValues = inc`)으로 수정하여 커버링 인덱스 갱신 보장.
+  90. **`BUG-MEM-SHARD-INIT-RACE-1` (`pkg/storage/memengine/table_data.go:87-116, 120`)**:
+     - `TableData.ensureShardsInit()`이 뮤텍스 락 없이 `td.initShards()`를 호출하여, 기동 후나 역직렬화 직후 복수의 동시 읽기 트랜잭션이 `getRowAndVer` 또는 `hasKey`를 호출할 때 `td.shards[sIdx].rows` 맵에 동시 쓰기를 발생시켜 `fatal error: concurrent map writes` 런타임 크래시를 유발하던 결함.
+     - `sync.Once`를 적용하여 샤드 지연 초기화의 원자적/멱등적 단 1회 실행 보장.
+  91. **`BUG-DATE-TODATETIMEOFFSET-INT-MINS-1` (`pkg/proc/builtins_date.go:441-458, 733`)**:
+     - T-SQL 표준 규격에서 `TODATETIMEOFFSET(dt, tz)`의 두 번째 인자가 정수일 경우 '분(Minute)' 단위 오프셋(예: `60` = 1시간 = `+01:00`, `-120` = -2시간)을 의미함에도 불구하고, `parseOffsetLocation`이 콜론이 없는 경우 이를 시간(`hours`)으로 취급하여 `60`을 `+60:00`(60시간)으로 60배 왜곡 변환하던 결함.
+     - 인자가 정수형 문자열(콜론 미포함)일 경우 분 단위 오프셋으로 정규 변환하도록 보정.
+  92. **`BUG-CATALOG-FK-MULTI-COL-ACTIONS-1` (`pkg/catalog/virtual/mssql.go:369-375`)**:
+     - `execDbGateMSSQLForeignKeySelect`가 복합 외래키 컬럼들을 단일 행에 콤마(`strings.Join(..., ", ")`)로 결합하고, `updateAction`과 `deleteAction`을 무조건 `"NO ACTION"`으로 하드코딩하여 클라이언트(DbGate, SSMS, DBeaver) 스키마 분석 시 복합 외래키가 단일 이상 컬럼(`"col1, col2"`)으로 인식되고 실제 `CASCADE`/`SET NULL` 제약이 은폐되던 결함.
+     - 복합 외래키 컬럼 쌍마다 개별 메타데이터 행 방출 및 `fk.OnUpdate.String()`, `fk.OnDelete.String()` 실측 액션 바인딩.
+  93. **`BUG-VM-DML-PK-NOT-FOUND-CRASH-1` (`pkg/proc/runtime/vm_dispatcher.go:671, 719`)**:
+     - VDBE 컴파일러가 최적화한 단일 PK 기반 `OpUpdate` 및 `OpDelete` 실행 시, 스토리지 계층(`f.tx.Update`, `f.tx.Delete`)이 반환한 `storage.ErrKeyNotFound`를 정상적인 0건 매칭(`@@ROWCOUNT = 0`)으로 처리하지 않고 치명적 런타임 에러로 판단하여 프로시저를 강제 중단(Catch 점프)시키던 SQL 규격 위반 결함.
+     - `ErrKeyNotFound` 수신 시 에러 전파 대신 `f.rowCount = 0` 설정 후 정상 완료로 분기.
 
 ---
 
@@ -713,6 +741,13 @@
 | **BUG-PIVOT-COUNT-NULL-1** | 엔진/PIVOT | `PIVOT`의 `COUNT` 집계 시 매칭 행 없는 카테고리 NULL 반환 해결 | **대기 (`[ ]`)** | `COUNT` 집계에 대해 빈 그룹 시 `0`을 정규 방출하도록 보강 |
 | **BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1** | 엔진/FOR_JSON | `FOR JSON PATH`에서 테이블 별칭(`u.col`) 중첩 객체 오해석 해결 | **대기 (`[ ]`)** | 테이블 별칭과 컬럼 별칭 구분으로 순수 컬럼 프로젝션 시 불필요 래핑 제거 |
 | **BUG-DDL-COMPOSITE-PK-PARSE-1** | 엔진/DDL | 테이블 레벨 `PRIMARY KEY (col1, col2)` 콤마 미분해 복합 PK 파괴 해결 | **대기 (`[ ]`)** | 괄호 내부 콤마 분해 루프로 선언된 모든 복합 PK 컬럼 플래그 정상 부여 |
+| **BUG-AUTH-RBAC-ROLE-GRANT-IGNORE-1** | 보안/RBAC | RBAC `HasTablePermission`에서 사용자 커스텀 롤 테이블 권한 누락 해결 | **대기 (`[ ]`)** | 사용자 소속 커스텀 롤(`u.Roles`) 권한 순회 검사로 역할 기반 테이블 접근 제어 보장 |
+| **BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1** | 플래너/파싱 | `splitAndConditions`의 이스케이프 따옴표 및 대괄호 식별자 AND 오절단 해결 | **대기 (`[ ]`)** | 따옴표 이스케이프 및 대괄호 인식으로 WHERE 조건 구문 파괴 방지 |
+| **BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1** | 스토리지/인덱스 | SkipList 유니크 인덱스 재인덱싱 시 값 복사로 인한 커버링 컬럼 갱신 유실 해결 | **대기 (`[ ]`)** | 슬라이스 직접 인덱싱 대입(`curr.Items[i].IncludeValues`)으로 커버링 데이터 최신화 보장 |
+| **BUG-MEM-SHARD-INIT-RACE-1** | 스토리지/동시성 | `TableData.ensureShardsInit` 락 없는 맵 초기화 동시 읽기 크래시 해결 | **대기 (`[ ]`)** | `sync.Once` 기반 멱등적 1회 초기화로 동시 읽기 트랜잭션 맵 경쟁 원천 방지 |
+| **BUG-DATE-TODATETIMEOFFSET-INT-MINS-1** | 함수/날짜시간 | `TODATETIMEOFFSET`의 정수 분(Minute) 단위 오프셋 60배 시간 왜곡 해결 | **대기 (`[ ]`)** | 콜론 없는 정수 오프셋을 분 단위 오프셋으로 정규 해석하여 표준 SQL 시간 축 보장 |
+| **BUG-CATALOG-FK-MULTI-COL-ACTIONS-1** | 카탈로그/메타 | 가상 카탈로그 복합 외래키 쉼표 병합 및 CASCADE 액션 누락 해결 | **대기 (`[ ]`)** | 복합 FK 컬럼 단위 개별 행 방출 및 실측 `OnUpdate`/`OnDelete` 액션 바인딩 |
+| **BUG-VM-DML-PK-NOT-FOUND-CRASH-1** | VM/DML | VDBE `OpUpdate`/`OpDelete` PK 미존재 시 `ErrKeyNotFound` 프로시저 크래시 해결 | **대기 (`[ ]`)** | 키 미존재 시 에러 중단 대신 표준 SQL 규격 0건 처리(`@@ROWCOUNT = 0`) 보장 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
