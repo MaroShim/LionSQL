@@ -32,6 +32,10 @@
 | **`BUG-ARITH-1`** | **수식 0 초기화 방지 (Arithmetic Bug)** | `BUG-ARITH-1` | `evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색으로 컬럼 0 리셋 방지 |
 | **`BUG-UPSERT-1`** | **Upsert 충돌 정합성 (Upsert Bug)** | `BUG-UPSERT-1` | `ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 |
 | **`BUG-WHERE-1`** | **WHERE IN 절 정합성 (WHERE IN Bug)** | `BUG-WHERE-1` | `evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 |
+| **`BUG-VM-INTO-1`** | **VDBE 변수대입 무작위 순회 방지 (IntoVar Bug)** | `BUG-VM-INTO-1` | VDBE `SELECT ... INTO @var` 무작위 맵 순회 제거 및 `cols[0]` 결정론적 바인딩 |
+| **`BUG-SUBQ-1`** | **스칼라 서브쿼리 무작위 반환 방지 (Subquery Bug)** | `BUG-SUBQ-1` | 스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 |
+| **`BUG-BOUNDS-1`** | **인덱스 바운드 무작위 추출 방지 (Index Bound Bug)** | `BUG-BOUNDS-1` | `ParseIndexCond` 무작위 맵 순회 제거 및 인덱스 대상 컬럼 바운드 정밀 매칭 |
+| **`BUG-EXP-1`** | **EXPLAIN 서브쿼리 무작위 치환 방지 (Explain Bug)** | `BUG-EXP-1` | `EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 서브쿼리 컬럼 키 정합 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
@@ -102,8 +106,12 @@
 | **P1** | **엔진/대소문자** | **`TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 (`BUG-CASE-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/무결성** | **DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 유실 및 NULL 삽입 방지 (`BUG-RECORD-1`)** | `pkg/engine/sqlexec_dml.go`, `pkg/storage/tuple.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수식/무결성** | **`evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색으로 컬럼 0 강제 리셋 방지 (`BUG-ARITH-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **VDBE `SELECT ... INTO @var` 무작위 맵 순회 제거 및 `cols[0]` 결정론적 바인딩 (`BUG-VM-INTO-1`)** | `pkg/proc/runtime/vm_dispatcher.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 (`BUG-SUBQ-1`)** | `pkg/proc/eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **플래너/인덱스** | **`ParseIndexCond` 무작위 맵 순회 제거 및 인덱스 대상 컬럼 바운드 정밀 매칭 (`BUG-BOUNDS-1`)** | `pkg/planner/bounds.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **엔진/Upsert** | **`ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 (`BUG-UPSERT-1`)** | `pkg/engine/sqlexec_dml.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **엔진/조회** | **`evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 (`BUG-WHERE-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **엔진/옵티마이저** | **`EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 서브쿼리 컬럼 키 정합 (`BUG-EXP-1`)** | `pkg/engine/sqlexec_explain.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -240,8 +248,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성 및 대소문자 정합성 6대 치명적 결함 전수 조치 (`BUG-PK-1`, `BUG-CASE-1`, `BUG-RECORD-1`, `BUG-ARITH-1`, `BUG-UPSERT-1`, `BUG-WHERE-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec`)으로 인해 발생하는 6대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성 및 무작위 맵 순회 10대 치명적 결함 전수 조치 (`BUG-PK-1`, `BUG-CASE-1`, `BUG-RECORD-1`, `BUG-ARITH-1`, `BUG-UPSERT-1`, `BUG-WHERE-1`, `BUG-VM-INTO-1`, `BUG-SUBQ-1`, `BUG-BOUNDS-1`, `BUG-EXP-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`)으로 인해 발생하는 10대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -261,6 +269,18 @@
   6. **`BUG-WHERE-1` (`pkg/engine/sqlexec_eval.go:339`)**:
      - `evaluateSingleConditionMap`의 다른 조건들과 달리 `WHERE col IN (...)` 블록에서만 대소문자 무관 루프가 누락되어 쿼리 결과가 0건으로 누락되던 결함.
      - `strings.EqualFold` 대소문자 무관 탐색 루프 보강.
+  7. **`BUG-VM-INTO-1` (`pkg/proc/runtime/vm_dispatcher.go:1046, 1128`)**:
+     - VDBE `SELECT ... INTO @var` 및 `OpIndexScan INTO @var` 처리 시 `for _, v := range rows[0] { break }` 무작위 맵 순회로 변수에 프로젝션된 첫 번째 컬럼이 아닌 엉뚱한 임의의 컬럼 값이 대입되던 결함.
+     - `cols[0]` 프로젝션 명칭을 통한 결정론적 조회(`toStorageValue(rows[0][cols[0]])`)로 수정.
+  8. **`BUG-SUBQ-1` (`pkg/proc/eval.go:316-318`)**:
+     - 스칼라 서브쿼리 수식 평가 시 `cols[0]` 조회가 실패할 경우 `for _, v := range firstRow { return v, nil }` 무작위 맵 순회로 임의 컬럼 값이 서브쿼리 결과로 반환되던 결함.
+     - `cols[0]` 대소문자 무관 탐색 및 무작위 순회 완전 삭제.
+  9. **`BUG-BOUNDS-1` (`pkg/planner/bounds.go:389`)**:
+     - Volcano `IndexScanIterator` 생성 시 `ParseIndexCond`가 `for colName, valStr := range eqColVals { return &parsed, &parsed }` 무작위 맵 순회를 수행하여, 다중 등호 조건 시 인덱스 컬럼과 무관한 임의의 컬럼 값으로 인덱스를 검색하여 결과가 파괴되던 결함.
+     - 대상 인덱스 컬럼과의 정합성 매칭으로 수정.
+  10. **`BUG-EXP-1` (`pkg/engine/sqlexec_explain.go:703, 723, 760`)**:
+     - `EXPLAIN` 서브쿼리 평탄화 시 `for _, v := range r { break }` 무작위 맵 순회로 서브쿼리 IN 리스트 및 스칼라 비교 연산자에 엉뚱한 컬럼 값이 대입되던 결함.
+     - `innerRes.Columns[0]` 대소문자 무관 매칭 및 무작위 순회 완전 삭제.
 
 ---
 
@@ -282,7 +302,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1`, `BUG-CASE-1`, `BUG-RECORD-1`, `BUG-ARITH-1`, `BUG-UPSERT-1`, `BUG-WHERE-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1`, `BUG-CASE-1`, `BUG-RECORD-1`, `BUG-ARITH-1`, `BUG-UPSERT-1`, `BUG-WHERE-1`, `BUG-VM-INTO-1`, `BUG-SUBQ-1`, `BUG-BOUNDS-1`, `BUG-EXP-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -292,6 +312,10 @@
 | **BUG-ARITH-1** | 수식/무결성 | `evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색 보장 | **대기 (`[ ]`)** | `SET price = Price + 10` 수식 평가 시 레코드 컬럼명 대소문자 차이로 0으로 리셋되는 결함 해결 |
 | **BUG-UPSERT-1** | 엔진/Upsert | `ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 | **대기 (`[ ]`)** | 충돌 컬럼 비교 시 대소문자 차이로 인한 매칭 실패 및 중복 키 예외 방지 |
 | **BUG-WHERE-1** | 엔진/조회 | `evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 | **대기 (`[ ]`)** | `WHERE col IN (...)` 조건 평가 시 대소문자 불일치로 무조건 false가 반환되던 버그 수정 |
+| **BUG-VM-INTO-1** | VM/무결성 | VDBE `SELECT ... INTO @var` 무작위 맵 순회 제거 및 `cols[0]` 결정론적 바인딩 | **대기 (`[ ]`)** | `for _, v := range rows[0]` 맵 순회 제거로 변수에 프로젝션 첫 번째 컬럼 값의 결정론적 대입 보장 |
+| **BUG-SUBQ-1** | 프로시저/수식 | 스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 | **대기 (`[ ]`)** | `for _, v := range firstRow` 맵 순회 제거 및 `cols[0]` 정규 매칭으로 임의 컬럼 반환 방지 |
+| **BUG-BOUNDS-1** | 플래너/인덱스 | `ParseIndexCond` 무작위 맵 순회 제거 및 대상 인덱스 컬럼 바운드 정밀 매칭 | **대기 (`[ ]`)** | `eqColVals` 맵 무작위 순회로 엉뚱한 컬럼 조건값으로 인덱스가 스캔되던 치명적 플래닝 결함 해결 |
+| **BUG-EXP-1** | 엔진/옵티마이저 | `EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 컬럼 키 정합 | **대기 (`[ ]`)** | `r (map[string]any)` 무작위 순회 제거로 `EXPLAIN` 실행 계획 텍스트의 엉뚱한 컬럼 값 대입 방지 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
