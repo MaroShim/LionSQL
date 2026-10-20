@@ -159,6 +159,10 @@
 | **P1** | **와이어/PGWire** | **PGWire `writeSchemaDescription` 및 `inferColumnOIDs`의 단순 문자열 분해로 인한 OID 왜곡 방지 (`BUG-PGWIRE-DESCRIBE-1`)** | `pkg/wire/server.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **프로시저/컴파일러** | **VDBE 파서 및 컴파일러에서 `FROM` 없는 스칼라 서브쿼리 nil 패닉 및 다중 컬럼 침묵 버림 방지 (`BUG-VM-SUBQ-NIL-1`)** | `pkg/proc/parser_expr.go`, `pkg/proc/compiler.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **카탈로그/정렬** | **가상 카탈로그 및 DBCC `ORDER BY` 다중 정렬 시 `strings.Fields` 콤마 잔존으로 인한 정렬 무력화 방지 (`BUG-CATALOG-ORDERBY-1`)** | `pkg/catalog/virtual/result.go`, `pkg/engine/sqlexec_dbcc.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/WiredTiger** | **WiredTiger `IndexScanDesc` 미구현 스텁으로 인한 역순 정렬 파괴 결함 해결 (`BUG-WT-INDEX-DESC-1`)** | `pkg/storage/wiredtiger/wt_engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/CTE** | **CTE 구체화 시 첫 번째 컬럼 임의 PK 강제 및 전체 VARCHAR(255) 타입 파괴 결함 해결 (`BUG-CTE-MATERIALIZE-1`)** | `pkg/engine/sqlexec_explain.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **와이어/TDS** | **TDS 프로토콜 행 직렬화 시 대소문자 엄격 일치로 인한 광범위한 NULL 변조 결함 해결 (`BUG-TDS-ROW-CASE-1`)** | `pkg/wire/tds/token.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **카탈로그/파싱** | **가상 카탈로그 `cleanIdentifier`의 3-part/4-part 식별자 파싱 파괴 결함 해결 (`BUG-CATALOG-IDENT-1`)** | `pkg/catalog/virtual/result.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -418,6 +422,18 @@
   40. **`BUG-CATALOG-ORDERBY-1` (`pkg/catalog/virtual/result.go:34`, `pkg/engine/sqlexec_dbcc.go:310`)**:
      - `sys.tables` 등 가상 뷰 및 DBCC 명령에서 `strings.Fields(orderByClause)`로 정렬 컬럼을 파싱하여 다중 컬럼 정렬 시 `orderCol`에 콤마가 포함(`"col1,"`)되어 정렬이 완전히 무력화되던 결함.
      - 콤마 분해 및 개별 컬럼 트림 적용.
+  41. **`BUG-WT-INDEX-DESC-1` (`pkg/storage/wiredtiger/wt_engine.go:1532-1534`)**:
+     - `WTTx.IndexScanDesc`가 커서를 역방향으로 순회하지 않고 정방향 `tx.IndexScan`을 그대로 반환하는 스텁으로 작성되어 있어, WiredTiger에서 `ORDER BY col DESC` 인덱스 쿼리 시 사후 정렬이 생략되어 오름차순(ASC)으로 반대 결과를 반환하던 결함.
+     - WiredTiger 커서 역방향 순회 연동 또는 슬라이스 반전 적용.
+  42. **`BUG-CTE-MATERIALIZE-1` (`pkg/engine/sqlexec_explain.go:862-868`)**:
+     - CTE 구체화 임시 테이블(`#__cte_*`) 생성 시 `if i == 0 { pk = " PRIMARY KEY" }`로 첫 번째 컬럼을 멋대로 PK로 선언하여 중복 값이 있을 때 `duplicate key violation` 에러로 실패하고, 모든 컬럼을 `VARCHAR(255)`로 선언해 데이터 타입을 파괴하던 결함.
+     - 임의 PK 지정 제거 및 원본 쿼리 데이터 타입 메타데이터 보존.
+  43. **`BUG-TDS-ROW-CASE-1` (`pkg/wire/tds/token.go:774, 912, 923`)**:
+     - TDS의 `WriteRowDirect`와 `WriteNBCRowDirect`가 `row[col.Name]` 엄격 일치 조회만 수행하여, 행 맵의 키와 컬럼명의 대소문자가 다를 때 `val`이 `nil`이 되어 실제 데이터가 존재함에도 MSSQL 클라이언트에 NULL을 전송하던 결함.
+     - `strings.EqualFold` 대소문자 무관 행 값 매칭 적용.
+  44. **`BUG-CATALOG-IDENT-1` (`pkg/catalog/virtual/result.go:372`)**:
+     - 가상 카탈로그 `cleanIdentifier`에서 `strings.Index(s, ".")`를 사용하여 첫 번째 점을 기준으로 슬라이스함으로써, `[master].[sys].[tables]`와 같은 3-part/4-part 쿼리 시 `sys].[tables`라는 깨진 문자열이 남아 카탈로그 조회가 깨지던 결함.
+     - 점 단위 분할 후 최종 식별자 정규 트림 적용.
 
 ---
 
@@ -439,7 +455,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1` ~ `BUG-JOIN-PARSE-1`, `BUG-TABLE-CASE-1` ~ `BUG-COPY-PK-1`, `BUG-STR-NULL-1` ~ `BUG-PGWIRE-PARAM-1`, `BUG-APPLY-REGEX-1` ~ `BUG-CATALOG-ORDERBY-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1` ~ `BUG-JOIN-PARSE-1`, `BUG-TABLE-CASE-1` ~ `BUG-COPY-PK-1`, `BUG-STR-NULL-1` ~ `BUG-PGWIRE-PARAM-1`, `BUG-APPLY-REGEX-1` ~ `BUG-CATALOG-IDENT-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -483,6 +499,10 @@
 | **BUG-PGWIRE-DESCRIBE-1** | 와이어/PGWire | PGWire `writeSchemaDescription`/`inferColumnOIDs` 단순 문자열 분해 OID 왜곡 방지 | **대기 (`[ ]`)** | 쿼리를 FROM/콤마로 단순 분해하여 서브쿼리 및 함수 콤마가 파괴되고 OID 25로 왜곡되는 결함 해결 |
 | **BUG-VM-SUBQ-NIL-1** | 프로시저/VM | VDBE 파서/컴파일러 `FROM` 없는 스칼라 서브쿼리 nil 패닉 및 다중 컬럼 침묵 버림 방지 | **대기 (`[ ]`)** | `(SELECT 1)` 등 FROM 없는 서브쿼리 nil 포인터 패닉 제거 및 다중 컬럼 서브쿼리 문법 에러 반환 |
 | **BUG-CATALOG-ORDERBY-1** | 카탈로그/정렬 | 가상 카탈로그 및 DBCC `ORDER BY` 다중 정렬 시 콤마 잔존으로 인한 정렬 무력화 방지 | **대기 (`[ ]`)** | `strings.Fields` 분해로 인해 `orderCol`에 콤마가 남아(`"col1,"`) 카탈로그 정렬이 무력화되던 결함 해결 |
+| **BUG-WT-INDEX-DESC-1** | 스토리지/WT | WiredTiger `IndexScanDesc` 미구현 스텁으로 인한 역순 정렬 파괴 결함 해결 | **대기 (`[ ]`)** | `WTTx.IndexScanDesc` 정방향 스캔 반환 결함 수정으로 `ORDER BY DESC` 인덱스 스캔 역정렬 보장 |
+| **BUG-CTE-MATERIALIZE-1** | 엔진/CTE | CTE 구체화 시 첫 번째 컬럼 임의 PK 강제 및 전체 VARCHAR(255) 타입 파괴 해결 | **대기 (`[ ]`)** | 임의 PK 선언으로 인한 중복 키 위반 에러 방지 및 원본 쿼리 데이터 타입 메타데이터 보존 |
+| **BUG-TDS-ROW-CASE-1** | 와이어/TDS | TDS 프로토콜 행 직렬화 시 대소문자 엄격 일치로 인한 광범위한 NULL 변조 결함 해결 | **대기 (`[ ]`)** | `WriteRowDirect`/`WriteNBCRowDirect` 대소문자 무관 탐색 지원으로 올바른 데이터 전송 보장 |
+| **BUG-CATALOG-IDENT-1** | 카탈로그/파싱 | 가상 카탈로그 `cleanIdentifier`의 3-part/4-part 식별자 파싱 파괴 결함 해결 | **대기 (`[ ]`)** | 점 단위 분할 후 최종 식별자 정규 트림 적용으로 `[master].[sys].[tables]` 정상 인식 보장 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |

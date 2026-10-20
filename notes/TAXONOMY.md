@@ -54,6 +54,10 @@
 | **`BUG-PGWIRE-DESCRIBE-1`** | **PGWire Describe 단순 문자열 분해 OID 왜곡 방지 (PGWire Describe Bug)** | `BUG-PGWIRE-DESCRIBE-1` | 쿼리를 FROM/콤마로 단순 분해하여 서브쿼리 및 함수 콤마가 파괴되고 OID 25로 왜곡되는 결함 해결 |
 | **`BUG-VM-SUBQ-NIL-1`** | **VDBE 스칼라 서브쿼리 nil 패닉 및 컬럼 침묵 버림 방지 (VM Subquery Nil Bug)** | `BUG-VM-SUBQ-NIL-1` | `(SELECT 1)` 등 FROM 없는 서브쿼리 nil 포인터 패닉 제거 및 다중 컬럼 서브쿼리 문법 에러 반환 |
 | **`BUG-CATALOG-ORDERBY-1`** | **가상 카탈로그 ORDER BY 콤마 잔존 정렬 무력화 방지 (Catalog Order By Bug)** | `BUG-CATALOG-ORDERBY-1` | `strings.Fields` 분해로 인해 `orderCol`에 콤마가 남아(`"col1,"`) 카탈로그 정렬이 무력화되던 결함 해결 |
+| **`BUG-WT-INDEX-DESC-1`** | **WiredTiger IndexScanDesc 역정렬 스텁 결함 해결 (WT Index Desc Bug)** | `BUG-WT-INDEX-DESC-1` | `WTTx.IndexScanDesc` 정방향 스캔 반환 결함 수정으로 `ORDER BY DESC` 인덱스 스캔 역정렬 보장 |
+| **`BUG-CTE-MATERIALIZE-1`** | **CTE 임의 PK 강제 및 VARCHAR 타입 파괴 해결 (CTE Materialize Bug)** | `BUG-CTE-MATERIALIZE-1` | 첫 번째 컬럼 임의 PK 선언으로 인한 중복 키 에러 방지 및 원본 쿼리 데이터 타입 메타데이터 보존 |
+| **`BUG-TDS-ROW-CASE-1`** | **TDS 행 직렬화 대소문자 정규화 (TDS Row Case Bug)** | `BUG-TDS-ROW-CASE-1` | `WriteRowDirect`/`WriteNBCRowDirect` 대소문자 무관 탐색 지원으로 올바른 데이터 전송 보장 |
+| **`BUG-CATALOG-IDENT-1`** | **가상 카탈로그 3-part/4-part 식별자 파싱 결함 해결 (Catalog Ident Bug)** | `BUG-CATALOG-IDENT-1` | 점 단위 분할 후 최종 식별자 정규 트림 적용으로 `[master].[sys].[tables]` 정상 인식 보장 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
