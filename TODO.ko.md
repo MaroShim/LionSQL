@@ -26,7 +26,12 @@
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
 | **`UI-1` ~ `UI-11`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-11` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마, Light 모드 고대비 시인성 개편 |
 | **`SHUTDOWN-1`** | **종료/안정성 (Shutdown)** | `SHUTDOWN-1` | Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 |
-| **`BUG-PK-1`** | **무결성 결함 수정 (Integrity Bug)** | `BUG-PK-1` | `execUpdate`/`execDelete` 기본키 컬럼 동적 해석 (`schema.PrimaryKeyColumn()`) 및 맵 순회 왜곡 방지 |
+| **`BUG-PK-1`** | **무결성 결함 수정 (Integrity Bug)** | `BUG-PK-1` | `execUpdate`/`execDelete`/`execTruncate` 및 VDBE의 PK 동적 해석 및 맵 순회 왜곡 방지 |
+| **`BUG-CASE-1`** | **컬럼 대소문자 정규화 (Case-Insensitive)** | `BUG-CASE-1` | `TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 |
+| **`BUG-RECORD-1`** | **사일런트 유실 방지 (Silent Loss Bug)** | `BUG-RECORD-1` | DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 유실 및 NULL 삽입 방지 |
+| **`BUG-ARITH-1`** | **수식 0 초기화 방지 (Arithmetic Bug)** | `BUG-ARITH-1` | `evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색으로 컬럼 0 리셋 방지 |
+| **`BUG-UPSERT-1`** | **Upsert 충돌 정합성 (Upsert Bug)** | `BUG-UPSERT-1` | `ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 |
+| **`BUG-WHERE-1`** | **WHERE IN 절 정합성 (WHERE IN Bug)** | `BUG-WHERE-1` | `evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
@@ -93,7 +98,12 @@
 | **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
-| **P1** | **엔진/무결성** | **비-`id` 기본키 테이블의 `UPDATE`/`DELETE` 시 Go 맵 무작위 순회로 엉뚱한 행 삭제/수정 방지 (`BUG-PK-1`)** | `pkg/engine/sqlexec_dml.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **비-`id` 기본키 테이블 및 VDBE의 `UPDATE`/`DELETE` 시 Go 맵 무작위 순회로 엉뚱한 행 삭제/수정 방지 (`BUG-PK-1`)** | `pkg/engine`, `pkg/proc/runtime` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/대소문자** | **`TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 (`BUG-CASE-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 유실 및 NULL 삽입 방지 (`BUG-RECORD-1`)** | `pkg/engine/sqlexec_dml.go`, `pkg/storage/tuple.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **수식/무결성** | **`evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색으로 컬럼 0 강제 리셋 방지 (`BUG-ARITH-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **엔진/Upsert** | **`ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 (`BUG-UPSERT-1`)** | `pkg/engine/sqlexec_dml.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **엔진/조회** | **`evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 (`BUG-WHERE-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -210,10 +220,8 @@
      - `lionsql doctor`에 `Production Security Guard` 진단 항목 신설 (외부 노출 시 FAIL, 로컬호스트 또는 비밀번호 변경 시 OK 판정).
      - `pkg/config/config_test.go` 단위 테스트 100% 검증 통과.
 
-#### 7. TDS 프로토콜 ➔ 코디네이터 ➔ VDBE ➔ 스토리지 전 계층 수직 성능 최적화 및 무결성 보강 (`VPERF-1` ~ `VPERF-14`, `BUG-PK-1`)
-* **과제 개요**: TDS 네트워크 패킷 수신부(`pkg/wire/tds`)부터 SQL 코디네이터(`pkg/engine`), VDBE 바이트코드 VM(`pkg/proc/runtime`), 스토리지 엔진(`memengine`, `wiredtiger`)까지 수직 핫패스(Vertical Hot-Path)의 병목을 제거하고 비-`id` 기본키 테이블의 치명적 무결성 결함을 해소.
-* **치명적 무결성 결함 즉시 조치 (`BUG-PK-1`)**:
-  - **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`)**: `execUpdate` 및 `execDelete`에서 대상 행 식별 시 `rec["id"]`를 하드코딩하고, 없을 시 Go `map[string]storage.Value`를 무작위 순회(`for _, v := range rec`)하여 첫 번째 임의 컬럼 값을 PK로 오인하는 치명적 데이터 무결성 결함. 비-`id` 기본키(예: `user_id`, `order_no`) 테이블에서 조건에 맞지 않는 엉뚱한 행이 갱신/삭제되는 문제를 방지하기 위해 루프 진입 전 `schema.PrimaryKeyColumn()`을 조회하여 정확한 PK 컬럼명을 사용하도록 수정.
+#### 7. TDS 프로토콜 ➔ 코디네이터 ➔ VDBE ➔ 스토리지 전 계층 수직 성능 최적화 (`VPERF-1` ~ `VPERF-14`)
+* **과제 개요**: TDS 네트워크 패킷 수신부(`pkg/wire/tds`)부터 SQL 코디네이터(`pkg/engine`), VDBE 바이트코드 VM(`pkg/proc/runtime`), 스토리지 엔진(`memengine`, `wiredtiger`)까지 수직 핫패스(Vertical Hot-Path)의 병목을 전면 제거.
 * **Track A — 스토리지 & 코디네이터 치명적 병목 즉시 해소 (`VPERF-1` ~ `VPERF-4`)**:
   1. **`VPERF-1` (`pkg/storage/memengine/tx.go`, `memengine.go`, 완료 `[x]`)**: `MEM-3` 메모리 가버너 활성 시 매 쓰기 트랜잭션 `Commit()`마다 런타임 메트릭스 및 슬라이스 힙 할당을 수행하던 병목을 원자적 캐시(`cachedHeapBytes`) 및 128회 주기 샘플링(`commitCounter`) 방식으로 교체하여 커밋 핫패스 $O(1)$(1~2ns) 무할당 전환 완료.
   2. **`VPERF-2` (`pkg/engine`, `pkg/wire/tds`)**: Autocommit 쿼리(`tryPKLookupBypass`, `execVolcanoSelect`, `execInsert`, `execUpdate`, TDS `handleRPCExecute`)마다 `engine.NewSession()` 생성 및 `Close()`로 인해 WiredTiger 세션별 `WT_CURSOR` 풀이 매번 파괴되는 문제를 `ClientSession.Session`(또는 커넥션별 영속 세션) 재사용으로 해결.
@@ -231,6 +239,28 @@
   12. **`VPERF-10` (`pkg/engine`, `pkg/wire/tds`)**: `Row -> Tuple -> map[string]any -> TDS Wire` 맵 제거 및 `RawRows` 슬라이스 직결 (전체 프로토콜/엔진 공용 구조체 영향 최소화를 위해 v1.1.0 이관).
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
+
+#### 8. 데이터 무결성 및 대소문자 정합성 6대 치명적 결함 전수 조치 (`BUG-PK-1`, `BUG-CASE-1`, `BUG-RECORD-1`, `BUG-ARITH-1`, `BUG-UPSERT-1`, `BUG-WHERE-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec`)으로 인해 발생하는 6대 치명적 무결성 결함을 원천 해결.
+* **세부 결함 명세 및 수락 기준**:
+  1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
+     - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
+     - `schema.PrimaryKeyColumn()`을 통해 실제 PK 컬럼명을 정규 조회하고, 무작위 순회 코드를 완전 삭제하여 PK를 식별할 수 없는 경우 안전하게 에러를 반환.
+  2. **`BUG-CASE-1` (`pkg/storage/engine.go:317`)**:
+     - `TableSchema.FindColumn`이 `s.Columns[i].Name == name` 엄격 비교로 작성되어 DML, DDL, MERGE, ON CONFLICT, PK 바이패스, 복합 인덱스 범위 플래너에서 대소문자 불일치 시 컬럼 조회 실패를 초래하던 결함.
+     - `strings.EqualFold`를 적용하여 대소문자 무관 탐색을 보장.
+  3. **`BUG-RECORD-1` (`pkg/engine/sqlexec_dml.go:415, 1080`, `pkg/storage/tuple.go:63`)**:
+     - `execUpdate`, `execInsert`에서 DML Record 맵을 구성할 때 쿼리 원문 `colName`(예: `"Name"`)을 키로 저장하여, 스토리지 병합 후 `RecordToRow`가 스키마 컬럼(`"name"`)만 읽어 업데이트 값이 사일런트 유실(Silent Loss)되거나 NULL로 삽입되던 결함.
+     - `rec[colSchema.Name] = ...`으로 스키마 공식 컬럼명으로 정규화하여 저장하고, `RecordToRow`에서도 대소문자 방어 로직 추가.
+  4. **`BUG-ARITH-1` (`pkg/engine/sqlexec_eval.go:925`)**:
+     - `evalUpdateExpr`에서 `SET price = Price + 10`과 같은 수식 평가 시 `rec[colName]` 대소문자 불일치로 조회가 실패하면 `parseLiteralValue`로 떨어져 컬럼 값이 0으로 강제 리셋되던 결함.
+     - `rec` 조회 시 대소문자 무관 탐색을 보장하여 정상 연산 값 반환.
+  5. **`BUG-UPSERT-1` (`pkg/engine/sqlexec_dml.go:492, 841`)**:
+     - `execInsert` 및 `execInsertSelect`의 `ON CONFLICT (col)` 충돌 행 검사 시 `r[cc]`와 `rec[cc]`가 대소문자 차이로 매칭에 실패하여 중복 키 위반 에러가 발생하던 결함.
+     - 충돌 컬럼을 스키마 공식 명칭으로 정규화하고 대소문자 무관 비교 적용.
+  6. **`BUG-WHERE-1` (`pkg/engine/sqlexec_eval.go:339`)**:
+     - `evaluateSingleConditionMap`의 다른 조건들과 달리 `WHERE col IN (...)` 블록에서만 대소문자 무관 루프가 누락되어 쿼리 결과가 0건으로 누락되던 결함.
+     - `strings.EqualFold` 대소문자 무관 탐색 루프 보강.
 
 ---
 
@@ -252,11 +282,16 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1`, `BUG-CASE-1`, `BUG-RECORD-1`, `BUG-ARITH-1`, `BUG-UPSERT-1`, `BUG-WHERE-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
-| **BUG-PK-1** | 엔진/무결성 | `execUpdate`/`execDelete` PK 컬럼 동적 해석 (`schema.PrimaryKeyColumn()`) | **대기 (`[ ]`)** | 비-`id` 기본키 테이블에서 Go 맵 무작위 순회로 엉뚱한 행이 갱신/삭제되는 치명적 정합성 결함 원천 해결 |
+| **BUG-PK-1** | 엔진/무결성 | `execUpdate`/`execDelete`/`execTruncate` 및 VDBE PK 동적 해석 | **대기 (`[ ]`)** | 비-`id` 기본키 테이블에서 Go 맵 무작위 순회로 엉뚱한 행이 갱신/삭제되는 치명적 정합성 결함 원천 해결 |
+| **BUG-CASE-1** | 엔진/대소문자 | `TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 | **대기 (`[ ]`)** | 컬럼 대소문자 불일치로 인한 DML/MERGE/인덱스 조회 실패 및 타입 추론 왜곡 100% 방지 |
+| **BUG-RECORD-1** | 엔진/무결성 | DML Record 컬럼명 정규화(`colSchema.Name`)로 사일런트 유실 방지 | **대기 (`[ ]`)** | Record 컬럼명 불일치로 `RecordToRow`가 업데이트 값을 무시하고 구값을 보존하거나 NULL 삽입하는 결함 해결 |
+| **BUG-ARITH-1** | 수식/무결성 | `evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색 보장 | **대기 (`[ ]`)** | `SET price = Price + 10` 수식 평가 시 레코드 컬럼명 대소문자 차이로 0으로 리셋되는 결함 해결 |
+| **BUG-UPSERT-1** | 엔진/Upsert | `ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 | **대기 (`[ ]`)** | 충돌 컬럼 비교 시 대소문자 차이로 인한 매칭 실패 및 중복 키 예외 방지 |
+| **BUG-WHERE-1** | 엔진/조회 | `evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 | **대기 (`[ ]`)** | `WHERE col IN (...)` 조건 평가 시 대소문자 불일치로 무조건 false가 반환되던 버그 수정 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
