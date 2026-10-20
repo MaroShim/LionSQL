@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
@@ -986,12 +987,6 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 		s.executor.Cache().PutByName(procName, prog)
 	}
 
-	session, err := s.engine.NewSession()
-	if err != nil {
-		return nil, err
-	}
-	defer session.Close()
-
 	argMap := make(map[string]any)
 	for i, arg := range args {
 		arg = strings.TrimSpace(arg)
@@ -1024,12 +1019,50 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 		}
 	}
 
-	res, err := s.executor.RunContext(ctx, prog, procName, argMap, session)
+	var res *runtime.ExecutionResult
+	var activeTx storage.Transaction
+	var sess storage.Session
+	if cs != nil {
+		cs.Mu.Lock()
+		activeTx = cs.Tx
+		sess = cs.Session
+		cs.Mu.Unlock()
+	}
+
+	if activeTx != nil {
+		res, err = s.executor.ExecuteInTxWithSessionContext(ctx, prog, argMap, activeTx, sess, nil)
+	} else {
+		var session storage.Session
+		var shouldClose bool
+		if sess != nil {
+			session = sess
+		} else {
+			session, err = s.engine.NewSession()
+			if err != nil {
+				return nil, err
+			}
+			shouldClose = true
+		}
+		if shouldClose {
+			defer session.Close()
+		}
+		res, err = s.executor.RunContext(ctx, prog, procName, argMap, session)
+	}
 	if err != nil {
 		if errors.Is(err, context.Canceled) || (ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled)) {
 			return nil, fmt.Errorf("canceling statement due to user request")
 		}
 		return nil, fmt.Errorf("procedure execution error: %w", err)
+	}
+
+	if res != nil && res.LastIdentity > 0 && cs != nil {
+		cs.Mu.Lock()
+		if cs.Vars == nil {
+			cs.Vars = make(map[string]any)
+		}
+		cs.Vars["identity"] = res.LastIdentity
+		cs.Vars["@@identity"] = res.LastIdentity
+		cs.Mu.Unlock()
 	}
 
 	messages := make([]string, 0)

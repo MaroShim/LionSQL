@@ -700,6 +700,32 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 		}
 	}
 
+	fillVal := storage.NullValue(col.Type)
+	if strings.TrimSpace(col.Default) != "" {
+		fillVal = storage.ParseLiteralDefault(col.Default, col.Type)
+	}
+
+	// Check if table has existing rows when column is NOT NULL without default
+	if !col.Nullable && strings.TrimSpace(col.Default) == "" {
+		hasRows := false
+		var chkSess *C.WT_SESSION
+		if ret := C.go_wt_open_session(e.conn, &chkSess); ret == 0 {
+			uri := C.CString(fmt.Sprintf("table:%s", tableName))
+			var chkCur *C.WT_CURSOR
+			if C.go_wt_open_cursor(chkSess, uri, &chkCur) == 0 {
+				if C.go_wt_cursor_next(chkCur) == 0 {
+					hasRows = true
+				}
+				C.go_wt_cursor_close(chkCur)
+			}
+			C.free(unsafe.Pointer(uri))
+			C.go_wt_session_close(chkSess)
+		}
+		if hasRows {
+			return fmt.Errorf("cannot add NOT NULL column %q with no default value to non-empty table %q", col.Name, tableName)
+		}
+	}
+
 	oldSchema := *tbl
 	tbl.Columns = append(tbl.Columns, *col)
 
@@ -725,7 +751,7 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 				if C.go_wt_cursor_get_key(cur, &pKey) == 0 && C.go_wt_cursor_get_val_raw(cur, &pData, &sz) == 0 && pData != nil {
 					rec, err := decodeRecord(&oldSchema, C.GoBytes(pData, C.int(sz)))
 					if err == nil {
-						rec[col.Name] = storage.NullValue(col.Type)
+						rec[col.Name] = fillVal
 						newBytes, err := storage.EncodeTuple(tbl, rec)
 						if err == nil {
 							updates = append(updates, rowUpdate{key: C.GoString(pKey), data: newBytes})

@@ -401,8 +401,14 @@ func (e *Executor) ExecuteInTx(prog *proc.Program, params map[string]any, tx sto
 
 // ExecuteInTxContext executes a program within an existing transaction and cancellation context.
 func (e *Executor) ExecuteInTxContext(ctx context.Context, prog *proc.Program, params map[string]any, tx storage.Transaction, transientTables map[string][]map[string]any) (*ExecutionResult, error) {
+	return e.ExecuteInTxWithSessionContext(ctx, prog, params, tx, nil, transientTables)
+}
+
+// ExecuteInTxWithSessionContext executes a program within an existing transaction, optional session, and cancellation context.
+func (e *Executor) ExecuteInTxWithSessionContext(ctx context.Context, prog *proc.Program, params map[string]any, tx storage.Transaction, session storage.Session, transientTables map[string][]map[string]any) (*ExecutionResult, error) {
 	start := time.Now()
 	frame := e.newFrame(prog, tx)
+	frame.session = session
 	frame.ctx = ctx
 	defer e.releaseFrame(frame)
 

@@ -496,8 +496,16 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 		}
 	}
 
+	if !col.Nullable && strings.TrimSpace(col.Default) == "" && td.rowCount() > 0 {
+		return fmt.Errorf("cannot add NOT NULL column %q with no default value to non-empty table %q", col.Name, tableName)
+	}
+
 	td.Schema.Columns = append(td.Schema.Columns, *col)
-	td.addColumnValues(storage.NullValue(col.Type))
+	fillVal := storage.NullValue(col.Type)
+	if strings.TrimSpace(col.Default) != "" {
+		fillVal = storage.ParseLiteralDefault(col.Default, col.Type)
+	}
+	td.addColumnValues(fillVal)
 
 	if _, err := e.recordWALLocked([]WALOp{{
 		Type:   OpAlterTable,

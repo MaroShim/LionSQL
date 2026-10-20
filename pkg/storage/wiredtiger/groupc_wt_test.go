@@ -257,3 +257,85 @@ func TestGroupC_BUG_WT_SWEEP_1(t *testing.T) {
 		t.Fatalf("Expected 1 active session, got %d", stats.ActiveSessions)
 	}
 }
+
+// TestGroupD_WT_BUG_ADD_COL_NOT_NULL_1 verifies that WiredTiger rejects adding NOT NULL column
+// without DEFAULT on non-empty tables and populates default value when provided.
+func TestGroupD_WT_BUG_ADD_COL_NOT_NULL_1(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_add_not_null_test_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(filepath.Join(tmpDir, "db")); err != nil {
+		t.Fatalf("failed to open WT engine: %v", err)
+	}
+	defer eng.Close()
+
+	tbl := &storage.TableSchema{
+		Name: "items",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(tbl); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx.Insert("items", storage.Record{
+		"id":   storage.IntValue(1),
+		"name": storage.StringValue("ItemA"),
+	}); err != nil {
+		t.Fatalf("Insert failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// 1. Adding NOT NULL without DEFAULT to non-empty table must fail
+	notNullCol := &storage.Column{
+		Name:     "price",
+		Type:     storage.TypeInt,
+		Nullable: false,
+	}
+	if err := eng.AddColumn("items", notNullCol); err == nil {
+		t.Fatalf("expected error adding NOT NULL column with no default, got nil")
+	}
+
+	// 2. Adding NOT NULL with DEFAULT must succeed and populate existing records
+	defaultCol := &storage.Column{
+		Name:     "price",
+		Type:     storage.TypeInt,
+		Nullable: false,
+		Default:  "99",
+	}
+	if err := eng.AddColumn("items", defaultCol); err != nil {
+		t.Fatalf("AddColumn with DEFAULT failed: %v", err)
+	}
+
+	tx2, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx 2 failed: %v", err)
+	}
+	defer tx2.Rollback()
+
+	rec, err := tx2.Get("items", storage.IntValue(1))
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if rec["price"].IVal != 99 {
+		t.Fatalf("expected price=99, got: %v", rec["price"])
+	}
+}

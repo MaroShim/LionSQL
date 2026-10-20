@@ -1280,48 +1280,75 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
 	}
 
-	candidatePKs := idxData.ScanRange(low, high)
+	if tx.opts.ReadOnly || (len(tx.local[tableName]) == 0 && len(tx.deleted[tableName]) == 0) {
+		candidatePKs := idxData.ScanRange(low, high)
+		tx.engine.mu.RUnlock()
+		return &memCursor{
+			tx:        tx,
+			tableName: tableName,
+			td:        td,
+			keys:      candidatePKs,
+			idx:       -1,
+		}, nil
+	}
+
+	candidateEntries := idxData.ScanRangeEntries(low, high)
 	tx.engine.mu.RUnlock()
 
-	pks := make([]string, 0, len(candidatePKs))
-	seen := make(map[string]bool, len(candidatePKs))
+	type indexScanItem struct {
+		pk     string
+		idxKey storage.Value
+	}
 
-	for _, pk := range candidatePKs {
+	items := make([]indexScanItem, 0, len(candidateEntries))
+	seen := make(map[string]bool, len(candidateEntries))
+
+	for _, entry := range candidateEntries {
+		pk := entry.PK
 		if seen[pk] {
 			continue
 		}
 		seen[pk] = true
 
-		if !tx.opts.ReadOnly {
-			if tx.isLocallyDeleted(tableName, pk) {
-				continue
-			}
-
-			if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
-				idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
-				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-					pks = append(pks, pk)
-				}
-				continue
-			}
+		if tx.isLocallyDeleted(tableName, pk) {
+			continue
 		}
 
-		pks = append(pks, pk)
+		if locRow, inLocal := tx.getLocal(tableName, pk); inLocal {
+			idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
+			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+				items = append(items, indexScanItem{pk: pk, idxKey: idxVal})
+			}
+			continue
+		}
+
+		items = append(items, indexScanItem{pk: pk, idxKey: entry.Key})
 	}
 
-	if !tx.opts.ReadOnly {
-		if localRows, ok := tx.local[tableName]; ok {
-			for pk, locRow := range localRows {
-				if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
-					continue
-				}
-				idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
-				if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
-					pks = append(pks, pk)
-					seen[pk] = true
-				}
+	if localRows, ok := tx.local[tableName]; ok {
+		for pk, locRow := range localRows {
+			if seen[pk] || tx.isLocallyDeleted(tableName, pk) {
+				continue
+			}
+			seen[pk] = true
+			idxVal := extractIndexKeyFromRowWithSchema(&td.Schema, locRow, &idxData.Schema)
+			if (low == nil || idxVal.Compare(*low) >= 0) && (high == nil || idxVal.Compare(*high) <= 0) {
+				items = append(items, indexScanItem{pk: pk, idxKey: idxVal})
 			}
 		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		cmp := items[i].idxKey.Compare(items[j].idxKey)
+		if cmp != 0 {
+			return cmp < 0
+		}
+		return items[i].pk < items[j].pk
+	})
+
+	pks := make([]string, len(items))
+	for i, item := range items {
+		pks[i] = item.pk
 	}
 
 	return &memCursor{
@@ -1471,6 +1498,16 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 				}
 			}
 		}
+	}
+
+	if !tx.opts.ReadOnly && (len(tx.local[tableName]) > 0 || len(tx.deleted[tableName]) > 0) {
+		sort.Slice(pks, func(i, j int) bool {
+			cmp := keyMap[pks[i]].key.Compare(keyMap[pks[j]].key)
+			if cmp != 0 {
+				return cmp < 0
+			}
+			return pks[i] < pks[j]
+		})
 	}
 
 	resolver := func(pk string) (storage.Record, bool) {

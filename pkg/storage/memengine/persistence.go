@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"lionsql/pkg/storage"
@@ -73,7 +74,11 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 		case OpAlterTable:
 			if td, exists := e.tables[op.Table]; exists && op.Column != nil {
 				td.Schema.Columns = append(td.Schema.Columns, *op.Column)
-				td.addColumnValues(storage.NullValue(op.Column.Type))
+				fillVal := storage.NullValue(op.Column.Type)
+				if strings.TrimSpace(op.Column.Default) != "" {
+					fillVal = storage.ParseLiteralDefault(op.Column.Default, op.Column.Type)
+				}
+				td.addColumnValues(fillVal)
 			}
 		case OpTruncateTable:
 			if td, exists := e.tables[op.Table]; exists {

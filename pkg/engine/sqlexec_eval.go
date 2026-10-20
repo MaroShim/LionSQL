@@ -523,69 +523,89 @@ func (s *Coordinator) findIndexAndBounds(schema *storage.TableSchema, whereClaus
 }
 
 
-func isIndexDescendingOrder(orderByClause string, idx *storage.IndexSchema, eqColVals map[string]string) bool {
-	if orderByClause == "" || idx == nil {
-		return false
+type orderColInfo struct {
+	col string
+	dir string // "ASC" or "DESC"
+}
+
+func parseOrderByClause(orderByClause string) []orderColInfo {
+	if strings.TrimSpace(orderByClause) == "" {
+		return nil
 	}
 	items := strings.Split(orderByClause, ",")
-	if len(items) == 0 {
-		return false
+	var result []orderColInfo
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		parts := strings.Fields(item)
+		if len(parts) == 0 {
+			continue
+		}
+		col := strings.ToLower(cleanIdentifier(parts[0]))
+		dir := "ASC"
+		if len(parts) > 1 {
+			dir = strings.ToUpper(parts[1])
+		}
+		result = append(result, orderColInfo{col: col, dir: dir})
 	}
-	first := strings.TrimSpace(items[0])
-	parts := strings.Fields(first)
-	if len(parts) < 2 {
-		return false
+	return result
+}
+
+func getRemainingIndexColumns(idx *storage.IndexSchema, eqColVals map[string]string) []string {
+	if idx == nil {
+		return nil
 	}
-	col := strings.ToLower(cleanIdentifier(parts[0]))
-	dir := strings.ToUpper(parts[1])
-	if dir != "DESC" {
-		return false
-	}
+	var remaining []string
 	for _, idxCol := range idx.Columns {
 		idxColLower := strings.ToLower(idxCol)
 		if eqColVals != nil && eqColVals[idxColLower] != "" {
 			continue // fixed by equality condition
 		}
-		if col == idxColLower {
-			return true
-		}
-		break
+		remaining = append(remaining, idxColLower)
 	}
-	return false
+	return remaining
+}
+
+func isIndexDescendingOrder(orderByClause string, idx *storage.IndexSchema, eqColVals map[string]string) bool {
+	orderItems := parseOrderByClause(orderByClause)
+	if len(orderItems) == 0 || idx == nil {
+		return false
+	}
+	remaining := getRemainingIndexColumns(idx, eqColVals)
+	if len(orderItems) > len(remaining) {
+		return false
+	}
+	for i, ord := range orderItems {
+		if ord.dir != "DESC" {
+			return false
+		}
+		if ord.col != remaining[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func isIndexAscendingOrder(orderByClause string, idx *storage.IndexSchema, eqColVals map[string]string) bool {
-	if orderByClause == "" || idx == nil {
+	orderItems := parseOrderByClause(orderByClause)
+	if len(orderItems) == 0 || idx == nil {
 		return false
 	}
-	items := strings.Split(orderByClause, ",")
-	if len(items) == 0 {
+	remaining := getRemainingIndexColumns(idx, eqColVals)
+	if len(orderItems) > len(remaining) {
 		return false
 	}
-	first := strings.TrimSpace(items[0])
-	parts := strings.Fields(first)
-	if len(parts) == 0 {
-		return false
-	}
-	col := strings.ToLower(cleanIdentifier(parts[0]))
-	dir := "ASC"
-	if len(parts) > 1 {
-		dir = strings.ToUpper(parts[1])
-	}
-	if dir != "ASC" {
-		return false
-	}
-	for _, idxCol := range idx.Columns {
-		idxColLower := strings.ToLower(idxCol)
-		if eqColVals != nil && eqColVals[idxColLower] != "" {
-			continue // fixed by equality condition
+	for i, ord := range orderItems {
+		if ord.dir != "ASC" {
+			return false
 		}
-		if col == idxColLower {
-			return true
+		if ord.col != remaining[i] {
+			return false
 		}
-		break
 	}
-	return false
+	return true
 }
 
 // execIndexSelect attempts to execute a simple SELECT using a composite or single-column index scan.
