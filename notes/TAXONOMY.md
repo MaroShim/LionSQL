@@ -58,6 +58,11 @@
 | **`BUG-CTE-MATERIALIZE-1`** | **CTE 임의 PK 강제 및 VARCHAR 타입 파괴 해결 (CTE Materialize Bug)** | `BUG-CTE-MATERIALIZE-1` | 첫 번째 컬럼 임의 PK 선언으로 인한 중복 키 에러 방지 및 원본 쿼리 데이터 타입 메타데이터 보존 |
 | **`BUG-TDS-ROW-CASE-1`** | **TDS 행 직렬화 대소문자 정규화 (TDS Row Case Bug)** | `BUG-TDS-ROW-CASE-1` | `WriteRowDirect`/`WriteNBCRowDirect` 대소문자 무관 탐색 지원으로 올바른 데이터 전송 보장 |
 | **`BUG-CATALOG-IDENT-1`** | **가상 카탈로그 3-part/4-part 식별자 파싱 결함 해결 (Catalog Ident Bug)** | `BUG-CATALOG-IDENT-1` | 점 단위 분할 후 최종 식별자 정규 트림 적용으로 `[master].[sys].[tables]` 정상 인식 보장 |
+| **`BUG-PROJ-CAST-AS-1`** | **수식 내 AS 오분해 방지 (Project Cast AS Bug)** | `BUG-PROJ-CAST-AS-1` | `CAST(x AS INT)` 등 수식 내부 `" AS "` 오분해로 인한 표현식 절단 및 NULL 반환 결함 해결 |
+| **`BUG-DECORRELATE-TRIM-1`** | **비상관화 and 접미 단순 Trim 결함 해결 (Decorrelate Trim Bug)** | `BUG-DECORRELATE-TRIM-1` | `removeClause`에서 `"and"` 단순 슬라이스로 `Poland` ➔ `Pol` 등 리터럴 손상 방지 토큰 경계 검사 적용 |
+| **`BUG-INDEX-KEY-CASE-1`** | **세컨더리 인덱스 키 추출 대소문자 정규화 (Index Key Case Bug)** | `BUG-INDEX-KEY-CASE-1` | `extractIndexKey`의 대소문자 미정규화로 인한 세컨더리 인덱스 NULL 오염 및 스캔 0건 결함 해결 |
+| **`BUG-FK-PARENT-TABLE-CASE-1`** | **외래키 부모 테이블 대소문자 정규화 (FK Parent Table Case Bug)** | `BUG-FK-PARENT-TABLE-CASE-1` | 부모 테이블 대소문자 불일치 시 `ON DELETE RESTRICT` 및 외래키 연쇄 검사 완전 우회 결함 해결 |
+| **`BUG-PLANNER-ORDERBY-1`** | **CBO/SetOp 다중 정렬 키 콤마 잔존 해결 (Planner OrderBy Bug)** | `BUG-PLANNER-ORDERBY-1` | CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존(`"a,"`)으로 인한 플랜 왜곡 해결 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---

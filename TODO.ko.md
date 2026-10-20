@@ -163,6 +163,11 @@
 | **P1** | **엔진/CTE** | **CTE 구체화 시 첫 번째 컬럼 임의 PK 강제 및 전체 VARCHAR(255) 타입 파괴 결함 해결 (`BUG-CTE-MATERIALIZE-1`)** | `pkg/engine/sqlexec_explain.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **와이어/TDS** | **TDS 프로토콜 행 직렬화 시 대소문자 엄격 일치로 인한 광범위한 NULL 변조 결함 해결 (`BUG-TDS-ROW-CASE-1`)** | `pkg/wire/tds/token.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **카탈로그/파싱** | **가상 카탈로그 `cleanIdentifier`의 3-part/4-part 식별자 파싱 파괴 결함 해결 (`BUG-CATALOG-IDENT-1`)** | `pkg/catalog/virtual/result.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **실행/프로젝션** | **`CAST(expr AS type)` 수식 내 `" AS "` 오분해로 인한 전 행 NULL 반환 결함 해결 (`BUG-PROJ-CAST-AS-1`)** | `pkg/execution/project.go`, `pkg/wire/server.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **플래너/서브쿼리** | **서브쿼리 비상관화 시 `"and"` 접미 단순 Trim으로 인한 문자열 리터럴 절단 훼손 해결 (`BUG-DECORRELATE-TRIM-1`)** | `pkg/planner/decorrelate.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/인덱스** | **`extractIndexKey`의 대소문자 미정규화로 인한 세컨더리 인덱스 NULL 오염 결함 해결 (`BUG-INDEX-KEY-CASE-1`)** | `pkg/storage/memengine/ddl.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/외래키** | **FK 부모 테이블명 대소문자 불일치 시 `ON DELETE RESTRICT` 완전 우회 삭제 허용 결함 해결 (`BUG-FK-PARENT-TABLE-CASE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **플래너/정렬** | **CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존 플랜 왜곡 해결 (`BUG-PLANNER-ORDERBY-1`)** | `pkg/planner/planner.go`, `pkg/planner/setop.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -434,6 +439,21 @@
   44. **`BUG-CATALOG-IDENT-1` (`pkg/catalog/virtual/result.go:372`)**:
      - 가상 카탈로그 `cleanIdentifier`에서 `strings.Index(s, ".")`를 사용하여 첫 번째 점을 기준으로 슬라이스함으로써, `[master].[sys].[tables]`와 같은 3-part/4-part 쿼리 시 `sys].[tables`라는 깨진 문자열이 남아 카탈로그 조회가 깨지던 결함.
      - 점 단위 분할 후 최종 식별자 정규 트림 적용.
+  45. **`BUG-PROJ-CAST-AS-1` (`pkg/execution/project.go:82`, `pkg/wire/server.go:1106`)**:
+     - `ProjectionIterator`에서 `" AS "` 문자열을 괄호 중첩 검사 없이 단순 검색하여 `CAST(expr AS type)` 수식 내부의 `" AS "`를 별칭 구분자로 오인해 수식을 두 동강 내고(`"CAST(price"`, `"INT)"`) 결과 행에 NULL을 반환하던 결함.
+     - 괄호 중첩 깊이 인식 기반 최상위 `AS` 별칭 분해 적용.
+  46. **`BUG-DECORRELATE-TRIM-1` (`pkg/planner/decorrelate.go:501-508, 473`)**:
+     - `removeClause`에서 `strings.TrimSuffix(before, "and")` 단순 슬라이스로 인해 `country = 'Poland'` 등 `"and"`로 끝나는 리터럴의 뒷부분을 잘라(`'Pol'`) 문법 에러 및 조건 훼손을 유발하고, `findKeywordIndex`의 따옴표 미추적으로 리터럴 내 키워드를 오인하던 결함.
+     - 토큰 경계 검사 및 따옴표 상태 추적 적용.
+  47. **`BUG-INDEX-KEY-CASE-1` (`pkg/storage/memengine/ddl.go:172, 211, 222`)**:
+     - `extractIndexKey`에서 `rec[c]` 맵 조회가 대소문자 차이로 실패할 경우 키를 `TypeUnknown` NULL 또는 `"NULL"`로 기록하여 세컨더리 인덱스를 영구 오염시키고 차후 인덱스 조회를 0건으로 만드는 결함.
+     - `strings.EqualFold` 대소문자 무관 레코드 컬럼 탐색 보장.
+  48. **`BUG-FK-PARENT-TABLE-CASE-1` (`pkg/storage/memengine/tx.go:932`)**:
+     - `tx.engine.tables[fk.ParentTable]` 맵 조회가 대소문자 불일치로 실패할 경우 부모 컬럼 목록이 비어 `rowMatchesFK`가 모든 자식에 대해 false를 반환함으로써 부모 삭제를 무단 허용하던 결함.
+     - 대소문자 무관 테이블 탐색으로 정규 부모 스키마 조회 보장.
+  49. **`BUG-PLANNER-ORDERBY-1` (`pkg/planner/planner.go:1327`, `pkg/planner/setop.go:326`)**:
+     - CBO 플래너 및 SetOp 플래너가 `strings.Fields(OrderByClause)`로 정렬 키를 파싱하여 다중 컬럼 정렬 시 `SortKey`에 콤마가 포함(`"a,"`)되고 후속 컬럼이 버려져 실행 계획 텍스트 및 정렬 플랜 노드가 왜곡되던 결함.
+     - 콤마 분해 기반 다중 컬럼 정렬 키 정합화.
 
 ---
 
@@ -455,7 +475,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1` ~ `BUG-JOIN-PARSE-1`, `BUG-TABLE-CASE-1` ~ `BUG-COPY-PK-1`, `BUG-STR-NULL-1` ~ `BUG-PGWIRE-PARAM-1`, `BUG-APPLY-REGEX-1` ~ `BUG-CATALOG-IDENT-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1` ~ `BUG-JOIN-PARSE-1`, `BUG-TABLE-CASE-1` ~ `BUG-COPY-PK-1`, `BUG-STR-NULL-1` ~ `BUG-PGWIRE-PARAM-1`, `BUG-APPLY-REGEX-1` ~ `BUG-PLANNER-ORDERBY-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -503,6 +523,11 @@
 | **BUG-CTE-MATERIALIZE-1** | 엔진/CTE | CTE 구체화 시 첫 번째 컬럼 임의 PK 강제 및 전체 VARCHAR(255) 타입 파괴 해결 | **대기 (`[ ]`)** | 임의 PK 선언으로 인한 중복 키 위반 에러 방지 및 원본 쿼리 데이터 타입 메타데이터 보존 |
 | **BUG-TDS-ROW-CASE-1** | 와이어/TDS | TDS 프로토콜 행 직렬화 시 대소문자 엄격 일치로 인한 광범위한 NULL 변조 결함 해결 | **대기 (`[ ]`)** | `WriteRowDirect`/`WriteNBCRowDirect` 대소문자 무관 탐색 지원으로 올바른 데이터 전송 보장 |
 | **BUG-CATALOG-IDENT-1** | 카탈로그/파싱 | 가상 카탈로그 `cleanIdentifier`의 3-part/4-part 식별자 파싱 파괴 결함 해결 | **대기 (`[ ]`)** | 점 단위 분할 후 최종 식별자 정규 트림 적용으로 `[master].[sys].[tables]` 정상 인식 보장 |
+| **BUG-PROJ-CAST-AS-1** | 실행/프로젝션 | `CAST(expr AS type)` 수식 내 `" AS "` 오분해로 인한 전 행 NULL 반환 결함 해결 | **대기 (`[ ]`)** | 괄호 중첩 인식 분해로 `CAST` 수식 절단 방지 및 올바른 값 프로젝션 보장 |
+| **BUG-DECORRELATE-TRIM-1** | 플래너/서브쿼리 | 서브쿼리 비상관화 시 `"and"` 접미 단순 Trim으로 인한 문자열 리터럴 절단 훼손 해결 | **대기 (`[ ]`)** | `Poland` ➔ `Pol` 등 리터럴 손상 방지 토큰 경계 검사 및 따옴표 상태 추적 적용 |
+| **BUG-INDEX-KEY-CASE-1** | 스토리지/인덱스 | `extractIndexKey`의 대소문자 미정규화로 인한 세컨더리 인덱스 NULL 오염 결함 해결 | **대기 (`[ ]`)** | 대소문자 무관 레코드 컬럼 조회로 세컨더리 인덱스 NULL 오염 및 스캔 0건 누락 방지 |
+| **BUG-FK-PARENT-TABLE-CASE-1** | 스토리지/외래키 | FK 부모 테이블명 대소문자 불일치 시 `ON DELETE RESTRICT` 완전 우회 삭제 허용 해결 | **대기 (`[ ]`)** | 대소문자 무관 테이블 탐색으로 정규 부모 스키마 조회 및 외래키 연쇄/제한 100% 보장 |
+| **BUG-PLANNER-ORDERBY-1** | 플래너/정렬 | CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존 플랜 왜곡 해결 | **대기 (`[ ]`)** | 다중 컬럼 정렬 키 정합화로 `NodeSort` 플랜 노드 및 EXPLAIN 계획 텍스트 왜곡 방지 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
