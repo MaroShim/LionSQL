@@ -119,7 +119,7 @@
 | **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
-| **P1** | **엔진/무결성** | **비-`id` 기본키 테이블 및 VDBE의 `UPDATE`/`DELETE` 시 Go 맵 무작위 순회로 엉뚱한 행 삭제/수정 방지 (`BUG-PK-1`)** | `pkg/engine`, `pkg/proc/runtime` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **비-`id` 기본키 테이블 및 VDBE의 `UPDATE`/`DELETE` 시 Go 맵 무작위 순회로 엉뚱한 행 삭제/수정 방지 (`BUG-PK-1`)** | `pkg/engine`, `pkg/proc/runtime` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/대소문자** | **`TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 (`BUG-CASE-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/무결성** | **DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 유실 및 NULL 삽입 방지 (`BUG-RECORD-1`)** | `pkg/engine/sqlexec_dml.go`, `pkg/storage/tuple.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수식/무결성** | **`evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색으로 컬럼 0 강제 리셋 방지 (`BUG-ARITH-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
@@ -725,7 +725,7 @@
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
-| **BUG-PK-1** | 엔진/무결성 | `execUpdate`/`execDelete`/`execTruncate` 및 VDBE PK 동적 해석 | **대기 (`[ ]`)** | 비-`id` 기본키 테이블에서 Go 맵 무작위 순회로 엉뚱한 행이 갱신/삭제되는 치명적 정합성 결함 원천 해결 |
+| **BUG-PK-1** | 엔진/무결성 | `execUpdate`/`execDelete`/`execTruncate` 및 VDBE PK 동적 해석 | **완료 (`[x]`)** | 비-`id` 기본키 테이블에서 Go 맵 무작위 순회로 엉뚱한 행이 갱신/삭제되는 치명적 정합성 결함 원천 해결 |
 | **BUG-CASE-1** | 엔진/대소문자 | `TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 | **대기 (`[ ]`)** | 컬럼 대소문자 불일치로 인한 DML/MERGE/인덱스 조회 실패 및 타입 추론 왜곡 100% 방지 |
 | **BUG-RECORD-1** | 엔진/무결성 | DML Record 컬럼명 정규화(`colSchema.Name`)로 사일런트 유실 방지 | **대기 (`[ ]`)** | Record 컬럼명 불일치로 `RecordToRow`가 업데이트 값을 무시하고 구값을 보존하거나 NULL 삽입하는 결함 해결 |
 | **BUG-ARITH-1** | 수식/무결성 | `evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색 보장 | **대기 (`[ ]`)** | `SET price = Price + 10` 수식 평가 시 레코드 컬럼명 대소문자 차이로 0으로 리셋되는 결함 해결 |

@@ -928,6 +928,16 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 							hasPk = true
 							break
 						}
+						for k, v := range rec {
+							if strings.EqualFold(k, c.Name) {
+								pkVal = v
+								hasPk = true
+								break
+							}
+						}
+						if hasPk {
+							break
+						}
 					}
 				}
 			}
@@ -936,12 +946,6 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			if v, ok := rec["id"]; ok {
 				pkVal = v
 				hasPk = true
-			} else {
-				for _, v := range rec {
-					pkVal = v
-					hasPk = true
-					break
-				}
 			}
 		}
 
@@ -1064,6 +1068,16 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 							hasPk = true
 							break
 						}
+						for k, v := range rec {
+							if strings.EqualFold(k, c.Name) {
+								pkVal = v
+								hasPk = true
+								break
+							}
+						}
+						if hasPk {
+							break
+						}
 					}
 				}
 			}
@@ -1072,12 +1086,6 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 			if v, ok := rec["id"]; ok {
 				pkVal = v
 				hasPk = true
-			} else {
-				for _, v := range rec {
-					pkVal = v
-					hasPk = true
-					break
-				}
 			}
 		}
 		if hasPk {

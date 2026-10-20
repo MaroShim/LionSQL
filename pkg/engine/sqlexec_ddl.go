@@ -356,14 +356,15 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 							pks = append(pks, v)
 							continue
 						}
+						for k, v := range rec {
+							if strings.EqualFold(k, pkColName) {
+								pks = append(pks, v)
+								continue
+							}
+						}
 					}
 					if v, ok := rec["id"]; ok {
 						pks = append(pks, v)
-					} else {
-						for _, v := range rec {
-							pks = append(pks, v)
-							break
-						}
 					}
 				}
 			}
