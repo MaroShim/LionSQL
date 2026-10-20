@@ -55,6 +55,9 @@ type SQLCoordinator interface {
 	// GetSessionTxStatus returns PostgreSQL transaction status byte ('I', 'T', 'E').
 	GetSessionTxStatus(id string) byte
 
+	// GetSession returns the active ClientSession by ID, or nil if not found.
+	GetSession(id string) *ClientSession
+
 	// SetSessionUser updates the active user principal on an interactive session for RBAC.
 	SetSessionUser(id, user string)
 

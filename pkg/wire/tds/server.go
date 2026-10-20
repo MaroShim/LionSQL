@@ -1028,17 +1028,58 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 			paramMap[atName] = p.Value
 		}
 
-		session, err := s.engine.NewSession()
-		if err == nil {
-			defer session.Close()
-			res, err := s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
+		var cs *engine.ClientSession
+		if s.coordinator != nil && sess.SessionID != "" {
+			cs = s.coordinator.GetSession(sess.SessionID)
+		}
+
+		var res *runtime.ExecutionResult
+		var runErr error
+
+		if cs != nil {
+			cs.Mu.Lock()
+			if cs.TxFailed {
+				cs.Mu.Unlock()
+				var buf bytes.Buffer
+				buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
+				buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+				_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+				return
+			}
+			if cs.Tx != nil {
+				res, runErr = s.executor.ExecuteInTxWithSessionContext(ctx, prep.Program, paramMap, cs.Tx, cs.Session, nil)
+				if runErr != nil {
+					cs.TxFailed = true
+				}
+			}
+			cs.Mu.Unlock()
+		}
+
+		if (cs == nil || cs.Tx == nil) && runErr == nil {
+			session, err := s.engine.NewSession()
 			if err == nil {
-				s.respondExecutionResult(conn, res, sess, nil)
-				return
+				defer session.Close()
+				res, runErr = s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
+			} else {
+				runErr = err
 			}
-			if ctx.Err() != nil {
-				return
-			}
+		}
+
+		if cs != nil && cs.Tx != nil && runErr != nil {
+			var buf bytes.Buffer
+			num, state, sev, msg := extractTdsErrorInfo(runErr)
+			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
+			buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			return
+		}
+
+		if runErr == nil && res != nil {
+			s.respondExecutionResult(conn, res, sess, nil)
+			return
+		}
+		if ctx.Err() != nil {
+			return
 		}
 	}
 
@@ -1111,19 +1152,60 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 			paramMap[atName] = p.Value
 		}
 
-		session, err := s.engine.NewSession()
-		if err == nil {
-			defer session.Close()
-			res, err := s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
+		var cs *engine.ClientSession
+		if s.coordinator != nil && sess.SessionID != "" {
+			cs = s.coordinator.GetSession(sess.SessionID)
+		}
+
+		var res *runtime.ExecutionResult
+		var runErr error
+
+		if cs != nil {
+			cs.Mu.Lock()
+			if cs.TxFailed {
+				cs.Mu.Unlock()
+				var buf bytes.Buffer
+				buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
+				buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+				_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+				return
+			}
+			if cs.Tx != nil {
+				res, runErr = s.executor.ExecuteInTxWithSessionContext(ctx, prep.Program, paramMap, cs.Tx, cs.Session, nil)
+				if runErr != nil {
+					cs.TxFailed = true
+				}
+			}
+			cs.Mu.Unlock()
+		}
+
+		if (cs == nil || cs.Tx == nil) && runErr == nil {
+			session, err := s.engine.NewSession()
 			if err == nil {
-				s.respondExecutionResult(conn, res, sess, func(buf *bytes.Buffer) {
-					buf.Write(BuildReturnValueInt(1, "@handle", handle))
-				})
-				return
+				defer session.Close()
+				res, runErr = s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
+			} else {
+				runErr = err
 			}
-			if ctx.Err() != nil {
-				return
-			}
+		}
+
+		if cs != nil && cs.Tx != nil && runErr != nil {
+			var buf bytes.Buffer
+			num, state, sev, msg := extractTdsErrorInfo(runErr)
+			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
+			buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			return
+		}
+
+		if runErr == nil && res != nil {
+			s.respondExecutionResult(conn, res, sess, func(buf *bytes.Buffer) {
+				buf.Write(BuildReturnValueInt(1, "@handle", handle))
+			})
+			return
+		}
+		if ctx.Err() != nil {
+			return
 		}
 	}
 
@@ -1202,17 +1284,50 @@ func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *Connec
 		return
 	}
 
-	stmt, _ := rpc.Params[0].Value.(string)
+	var stmt string
 	var paramsDecl string
 	var boundParams []RPCParam
 
-	if len(rpc.Params) > 1 {
-		if str, ok := rpc.Params[1].Value.(string); ok {
-			paramsDecl = str
+	stmtFound := false
+	paramsFound := false
+
+	// First pass: check for named @stmt and @params
+	for _, p := range rpc.Params {
+		name := strings.ToLower(strings.TrimSpace(p.Name))
+		if name == "@stmt" {
+			if str, ok := p.Value.(string); ok {
+				stmt = str
+				stmtFound = true
+			}
+		} else if name == "@params" {
+			if str, ok := p.Value.(string); ok {
+				paramsDecl = str
+				paramsFound = true
+			}
 		}
-		if len(rpc.Params) > 2 {
-			boundParams = rpc.Params[2:]
+	}
+
+	// Second pass: if not found by name, assign positionally
+	for i, p := range rpc.Params {
+		name := strings.ToLower(strings.TrimSpace(p.Name))
+		if name == "@stmt" || name == "@params" {
+			continue
 		}
+		if !stmtFound && (name == "" && i == 0) {
+			if str, ok := p.Value.(string); ok {
+				stmt = str
+				stmtFound = true
+				continue
+			}
+		}
+		if !paramsFound && (name == "" && i == 1) {
+			if str, ok := p.Value.(string); ok {
+				paramsDecl = str
+				paramsFound = true
+				continue
+			}
+		}
+		boundParams = append(boundParams, p)
 	}
 
 	execSQL := s.buildBoundSQL(stmt, paramsDecl, boundParams)

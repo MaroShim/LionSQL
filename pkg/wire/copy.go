@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"lionsql/pkg/engine"
 	"lionsql/pkg/storage"
 )
 
@@ -135,15 +137,59 @@ func ParseCopyStmt(query string) (*CopyStmt, error) {
 	// Custom delimiter
 	if dIdx := strings.Index(upperOptions, "DELIMITER "); dIdx != -1 {
 		dSub := strings.TrimSpace(rest[dIdx+10:])
-		dSub = strings.Trim(dSub, "(),; ")
-		dSub = strings.Trim(dSub, "'\"")
-		if len(dSub) > 0 {
-			if dSub == "\\t" {
-				stmt.Delimiter = '\t'
+		if len(dSub) > 1 && (dSub[0] == 'E' || dSub[0] == 'e') && (dSub[1] == '\'' || dSub[1] == '"') {
+			dSub = dSub[1:]
+		}
+		var delimStr string
+		if len(dSub) > 0 && (dSub[0] == '\'' || dSub[0] == '"') {
+			quote := dSub[0]
+			closeIdx := strings.IndexByte(dSub[1:], quote)
+			if closeIdx != -1 {
+				delimStr = dSub[1 : closeIdx+1]
 			} else {
-				stmt.Delimiter = rune(dSub[0])
+				delimStr = dSub[1:]
+			}
+		} else {
+			endIdx := strings.IndexAny(dSub, " \t\r\n,);")
+			if endIdx != -1 {
+				delimStr = dSub[:endIdx]
+			} else {
+				delimStr = dSub
 			}
 		}
+		if delimStr == "\\t" {
+			stmt.Delimiter = '\t'
+		} else if delimStr == "\\n" {
+			stmt.Delimiter = '\n'
+		} else if len(delimStr) > 0 {
+			stmt.Delimiter = []rune(delimStr)[0]
+		}
+	}
+
+	// Custom NULL representation
+	if nIdx := strings.Index(upperOptions, "NULL "); nIdx != -1 {
+		nSub := strings.TrimSpace(rest[nIdx+5:])
+		if strings.HasPrefix(strings.ToUpper(nSub), "AS ") {
+			nSub = strings.TrimSpace(nSub[3:])
+		}
+		var nullStr string
+		if len(nSub) > 0 && (nSub[0] == '\'' || nSub[0] == '"') {
+			quote := nSub[0]
+			closeIdx := strings.IndexByte(nSub[1:], quote)
+			if closeIdx != -1 {
+				nullStr = nSub[1 : closeIdx+1]
+			} else {
+				nullStr = nSub[1:]
+			}
+		} else {
+			endIdx := strings.IndexAny(nSub, " \t\r\n,);")
+			if endIdx != -1 {
+				nullStr = nSub[:endIdx]
+			} else {
+				nullStr = nSub
+			}
+		}
+		stmt.NullStr = nullStr
 	}
 
 	return stmt, nil
@@ -165,11 +211,18 @@ func cleanIdentifier(s string) string {
 	return strings.TrimSpace(s)
 }
 
+func (s *Server) writeReady(conn net.Conn, sessID string) error {
+	if s.coordinator != nil && sessID != "" {
+		return WriteReadyForQueryStatus(conn, s.coordinator.GetSessionTxStatus(sessID))
+	}
+	return WriteReadyForQuery(conn)
+}
+
 func (s *Server) handleCopy(conn net.Conn, query string, sessID string) {
 	stmt, err := ParseCopyStmt(query)
 	if err != nil {
 		_ = WriteError(conn, err.Error())
-		_ = WriteReadyForQuery(conn)
+		_ = s.writeReady(conn, sessID)
 		return
 	}
 
@@ -198,7 +251,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 	}
 	if err != nil || tbl == nil {
 		_ = WriteError(conn, fmt.Sprintf("relation %q does not exist", stmt.TableName))
-		_ = WriteReadyForQuery(conn)
+		_ = s.writeReady(conn, sessID)
 		return
 	}
 
@@ -219,7 +272,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			}
 			if !found {
 				_ = WriteError(conn, fmt.Sprintf("column %q of relation %q does not exist", colName, tbl.Name))
-				_ = WriteReadyForQuery(conn)
+				_ = s.writeReady(conn, sessID)
 				return
 			}
 			targetCols = append(targetCols, *col)
@@ -258,7 +311,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		} else if msgType == MsgCopyFail {
 			errMsg := string(bytes.TrimRight(payload, "\x00"))
 			_ = WriteError(conn, fmt.Sprintf("COPY from stdin cancelled: %s", errMsg))
-			_ = WriteReadyForQuery(conn)
+			_ = s.writeReady(conn, sessID)
 			return
 		} else {
 			break
@@ -274,7 +327,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		parsed, err := r.ReadAll()
 		if err != nil {
 			_ = WriteError(conn, fmt.Sprintf("malformed CSV stream: %v", err))
-			_ = WriteReadyForQuery(conn)
+			_ = s.writeReady(conn, sessID)
 			return
 		}
 		if stmt.Header && len(parsed) > 0 {
@@ -283,7 +336,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			rows = parsed
 		}
 	} else {
-		// Tab-separated text format
+		// Tab-separated or delimited text format
 		scanner := bufio.NewScanner(&dataBuf)
 		for scanner.Scan() {
 			line := scanner.Text()
@@ -293,28 +346,57 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			if strings.TrimSpace(line) == "" {
 				continue
 			}
-			fields := strings.Split(line, string(stmt.Delimiter))
+			fields := splitCopyTextLine(line, stmt.Delimiter)
 			rows = append(rows, fields)
 		}
 	}
 
-	// 6. Insert rows inside an ACID transaction
-	sess, err := s.engine.NewSession()
-	if err != nil {
-		_ = WriteError(conn, fmt.Sprintf("failed to open session: %v", err))
-		_ = WriteReadyForQuery(conn)
-		return
+	// 6. Resolve execution context (active transaction vs autocommit)
+	var (
+		tx        storage.Transaction
+		inTx      bool
+		localSess storage.Session
+	)
+
+	var cs *engine.ClientSession
+	if s.coordinator != nil && sessID != "" {
+		cs = s.coordinator.GetSession(sessID)
 	}
-	defer sess.Close()
+
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.TxFailed {
+			cs.Mu.Unlock()
+			_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
+			_ = s.writeReady(conn, sessID)
+			return
+		}
+		if cs.Tx != nil {
+			tx = cs.Tx
+			inTx = true
+		}
+		cs.Mu.Unlock()
+	}
+
+	if !inTx {
+		var err error
+		localSess, err = s.engine.NewSession()
+		if err != nil {
+			_ = WriteError(conn, fmt.Sprintf("failed to open session: %v", err))
+			_ = s.writeReady(conn, sessID)
+			return
+		}
+		defer localSess.Close()
+
+		tx, err = localSess.BeginTx(storage.TxOptions{})
+		if err != nil {
+			_ = WriteError(conn, fmt.Sprintf("failed to begin transaction: %v", err))
+			_ = s.writeReady(conn, sessID)
+			return
+		}
+	}
 
 	pkCol, _ := tbl.PrimaryKeyColumn()
-
-	tx, err := sess.BeginTx(storage.TxOptions{})
-	if err != nil {
-		_ = WriteError(conn, fmt.Sprintf("failed to begin transaction: %v", err))
-		_ = WriteReadyForQuery(conn)
-		return
-	}
 
 	var insertedCount int64
 	for rowIdx, fields := range rows {
@@ -322,10 +404,27 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		for i, col := range targetCols {
 			if i < len(fields) {
 				raw := strings.TrimSpace(fields[i])
-				if (stmt.Format == FormatText && raw == "\\N") || (stmt.Format == FormatCSV && raw == "" && col.Nullable && !col.PrimaryKey) {
+				if (stmt.Format == FormatText && raw == "\\N") || (stmt.NullStr != "" && raw == stmt.NullStr) || (stmt.Format == FormatCSV && raw == "" && col.Nullable && !col.PrimaryKey) {
 					rec[col.Name] = storage.NullValue(col.Type)
 				} else {
-					rec[col.Name] = parseFieldVal(raw, col.Type)
+					fieldVal := raw
+					if stmt.Format == FormatText {
+						fieldVal = unescapeCopyText(raw)
+					}
+					v, err := parseFieldVal(fieldVal, col)
+					if err != nil {
+						if inTx && cs != nil {
+							cs.Mu.Lock()
+							cs.TxFailed = true
+							cs.Mu.Unlock()
+						} else if !inTx {
+							_ = tx.Rollback()
+						}
+						_ = WriteError(conn, fmt.Sprintf("line %d, column %q: %v", rowIdx+1, col.Name, err))
+						_ = s.writeReady(conn, sessID)
+						return
+					}
+					rec[col.Name] = v
 				}
 			} else {
 				rec[col.Name] = storage.NullValue(col.Type)
@@ -343,23 +442,31 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 		}
 
 		if err := tx.Insert(tbl.Name, rec); err != nil {
-			_ = tx.Rollback()
+			if inTx && cs != nil {
+				cs.Mu.Lock()
+				cs.TxFailed = true
+				cs.Mu.Unlock()
+			} else if !inTx {
+				_ = tx.Rollback()
+			}
 			_ = WriteError(conn, fmt.Sprintf("line %d: %v", rowIdx+1, err))
-			_ = WriteReadyForQuery(conn)
+			_ = s.writeReady(conn, sessID)
 			return
 		}
 		insertedCount++
 	}
 
-	if err := tx.Commit(); err != nil {
-		_ = WriteError(conn, fmt.Sprintf("failed to commit COPY transaction: %v", err))
-		_ = WriteReadyForQuery(conn)
-		return
+	if !inTx {
+		if err := tx.Commit(); err != nil {
+			_ = WriteError(conn, fmt.Sprintf("failed to commit COPY transaction: %v", err))
+			_ = s.writeReady(conn, sessID)
+			return
+		}
 	}
 
 	// 7. Complete command
 	_ = WriteCommandComplete(conn, fmt.Sprintf("COPY %d", insertedCount))
-	_ = WriteReadyForQuery(conn)
+	_ = s.writeReady(conn, sessID)
 }
 
 func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
@@ -380,7 +487,7 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 	}
 	if err != nil || tbl == nil {
 		_ = WriteError(conn, fmt.Sprintf("relation %q does not exist", stmt.TableName))
-		_ = WriteReadyForQuery(conn)
+		_ = s.writeReady(conn, sessID)
 		return
 	}
 
@@ -400,7 +507,7 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 			}
 			if !found {
 				_ = WriteError(conn, fmt.Sprintf("column %q does not exist", colName))
-				_ = WriteReadyForQuery(conn)
+				_ = s.writeReady(conn, sessID)
 				return
 			}
 			targetCols = append(targetCols, *col)
@@ -409,22 +516,51 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 		targetCols = tbl.Columns
 	}
 
-	// 3. Open snapshot read-only transaction
-	sess, err := s.engine.NewSession()
-	if err != nil {
-		_ = WriteError(conn, fmt.Sprintf("failed to open session: %v", err))
-		_ = WriteReadyForQuery(conn)
-		return
-	}
-	defer sess.Close()
+	// 3. Resolve execution context (active transaction vs read-only snapshot)
+	var (
+		tx        storage.Transaction
+		inTx      bool
+		localSess storage.Session
+	)
 
-	tx, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
-	if err != nil {
-		_ = WriteError(conn, fmt.Sprintf("failed to begin snapshot transaction: %v", err))
-		_ = WriteReadyForQuery(conn)
-		return
+	var cs *engine.ClientSession
+	if s.coordinator != nil && sessID != "" {
+		cs = s.coordinator.GetSession(sessID)
 	}
-	defer tx.Rollback()
+
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.TxFailed {
+			cs.Mu.Unlock()
+			_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
+			_ = s.writeReady(conn, sessID)
+			return
+		}
+		if cs.Tx != nil {
+			tx = cs.Tx
+			inTx = true
+		}
+		cs.Mu.Unlock()
+	}
+
+	if !inTx {
+		var err error
+		localSess, err = s.engine.NewSession()
+		if err != nil {
+			_ = WriteError(conn, fmt.Sprintf("failed to open session: %v", err))
+			_ = s.writeReady(conn, sessID)
+			return
+		}
+		defer localSess.Close()
+
+		tx, err = localSess.BeginTx(storage.TxOptions{ReadOnly: true})
+		if err != nil {
+			_ = WriteError(conn, fmt.Sprintf("failed to begin snapshot transaction: %v", err))
+			_ = s.writeReady(conn, sessID)
+			return
+		}
+		defer tx.Rollback()
+	}
 
 	// 4. Send CopyOutResponse ('H')
 	if err := WriteCopyOutResponse(conn, len(targetCols), 0); err != nil {
@@ -457,7 +593,7 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 	cur, err := tx.Scan(tbl.Name)
 	if err != nil {
 		_ = WriteError(conn, fmt.Sprintf("failed to scan table: %v", err))
-		_ = WriteReadyForQuery(conn)
+		_ = s.writeReady(conn, sessID)
 		return
 	}
 	defer cur.Close()
@@ -488,7 +624,7 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 			fields := make([]string, len(targetCols))
 			for i, c := range targetCols {
 				if val, exists := rec[c.Name]; exists && !val.IsNull {
-					fields[i] = val.String()
+					fields[i] = escapeCopyText(val.String(), stmt.Delimiter)
 				} else {
 					fields[i] = "\\N"
 				}
@@ -512,35 +648,167 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 	// 7. Complete COPY TO STDOUT stream
 	_ = WriteCopyDone(conn)
 	_ = WriteCommandComplete(conn, fmt.Sprintf("COPY %d", rowCount))
-	_ = WriteReadyForQuery(conn)
+	_ = s.writeReady(conn, sessID)
 }
 
-func parseFieldVal(raw string, targetType storage.DataType) storage.Value {
-	switch targetType {
+func escapeCopyText(val string, delim rune) string {
+	var sb strings.Builder
+	sb.Grow(len(val))
+	for _, r := range val {
+		switch r {
+		case '\\':
+			sb.WriteString(`\\`)
+		case '\n':
+			sb.WriteString(`\n`)
+		case '\r':
+			sb.WriteString(`\r`)
+		case '\t':
+			sb.WriteString(`\t`)
+		case delim:
+			sb.WriteRune('\\')
+			sb.WriteRune(delim)
+		default:
+			sb.WriteRune(r)
+		}
+	}
+	return sb.String()
+}
+
+func unescapeCopyText(val string) string {
+	if !strings.ContainsRune(val, '\\') {
+		return val
+	}
+	var sb strings.Builder
+	sb.Grow(len(val))
+	runes := []rune(val)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '\\' && i+1 < len(runes) {
+			i++
+			switch runes[i] {
+			case 'n':
+				sb.WriteRune('\n')
+			case 'r':
+				sb.WriteRune('\r')
+			case 't':
+				sb.WriteRune('\t')
+			case 'b':
+				sb.WriteRune('\b')
+			case 'f':
+				sb.WriteRune('\f')
+			case 'v':
+				sb.WriteRune('\v')
+			case '\\':
+				sb.WriteRune('\\')
+			default:
+				sb.WriteRune(runes[i])
+			}
+		} else {
+			sb.WriteRune(runes[i])
+		}
+	}
+	return sb.String()
+}
+
+func splitCopyTextLine(line string, delim rune) []string {
+	var fields []string
+	var cur strings.Builder
+	runes := []rune(line)
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if r == '\\' && i+1 < len(runes) {
+			cur.WriteRune(r)
+			i++
+			cur.WriteRune(runes[i])
+		} else if r == delim {
+			fields = append(fields, cur.String())
+			cur.Reset()
+		} else {
+			cur.WriteRune(r)
+		}
+	}
+	fields = append(fields, cur.String())
+	return fields
+}
+
+func parseFieldVal(raw string, col storage.Column) (storage.Value, error) {
+	switch col.Type {
 	case storage.TypeInt:
 		if i, err := strconv.ParseInt(raw, 10, 64); err == nil {
-			return storage.IntValue(i)
+			return storage.IntValue(i), nil
 		}
-		if f, err := strconv.ParseFloat(raw, 64); err == nil {
-			return storage.IntValue(int64(f))
+		if f, err := strconv.ParseFloat(raw, 64); err == nil && f == float64(int64(f)) {
+			return storage.IntValue(int64(f)), nil
 		}
-		return storage.IntValue(0)
+		return storage.NullValue(storage.TypeInt), fmt.Errorf("invalid input syntax for type integer: %q", raw)
 	case storage.TypeFloat:
-		if f, err := strconv.ParseFloat(raw, 64); err == nil {
-			return storage.FloatValue(f)
+		f, err := strconv.ParseFloat(raw, 64)
+		if err != nil {
+			return storage.NullValue(storage.TypeFloat), fmt.Errorf("invalid input syntax for type float: %q", raw)
 		}
-		return storage.FloatValue(0)
+		return storage.FloatValue(f), nil
 	case storage.TypeBool:
 		low := strings.ToLower(raw)
-		return storage.BoolValue(low == "t" || low == "true" || low == "1" || low == "y")
+		if low == "t" || low == "true" || low == "1" || low == "y" || low == "yes" {
+			return storage.BoolValue(true), nil
+		}
+		if low == "f" || low == "false" || low == "0" || low == "n" || low == "no" {
+			return storage.BoolValue(false), nil
+		}
+		return storage.NullValue(storage.TypeBool), fmt.Errorf("invalid input syntax for type boolean: %q", raw)
 	case storage.TypeDateTime:
-		for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02"} {
+		for _, layout := range []string{
+			time.RFC3339Nano,
+			time.RFC3339,
+			"2006-01-02 15:04:05.999999999",
+			"2006-01-02 15:04:05",
+			"2006-01-02T15:04:05",
+			"2006-01-02",
+		} {
 			if t, err := time.Parse(layout, raw); err == nil {
-				return storage.DateTimeValue(t)
+				return storage.DateTimeValue(t), nil
 			}
 		}
-		return storage.DateTimeValue(time.Now())
+		return storage.NullValue(storage.TypeDateTime), fmt.Errorf("invalid input syntax for type timestamp: %q", raw)
+	case storage.TypeDate:
+		t, err := storage.ParseDate(raw)
+		if err != nil {
+			return storage.NullValue(storage.TypeDate), fmt.Errorf("invalid input syntax for type date: %q", raw)
+		}
+		return storage.DateValue(t), nil
+	case storage.TypeTime:
+		t, _, err := storage.ParseTime(raw)
+		if err != nil {
+			return storage.NullValue(storage.TypeTime), fmt.Errorf("invalid input syntax for type time: %q", raw)
+		}
+		return storage.TimeValue(t), nil
+	case storage.TypeDecimal:
+		dec, err := storage.ParseDecimal(raw)
+		if err != nil {
+			return storage.NullValue(storage.TypeDecimal), fmt.Errorf("invalid input syntax for type numeric: %q", raw)
+		}
+		if col.Scale > 0 {
+			dec = dec.Rescale(int32(col.Scale))
+		}
+		return storage.DecimalValueFromDecimal(dec), nil
+	case storage.TypeUUID:
+		norm, err := storage.ParseUUID(raw)
+		if err != nil {
+			return storage.NullValue(storage.TypeUUID), fmt.Errorf("invalid input syntax for type uuid: %q", raw)
+		}
+		return storage.UUIDValue(norm), nil
+	case storage.TypeBinary:
+		b, err := storage.ParseBinaryBytes(raw)
+		if err != nil {
+			return storage.NullValue(storage.TypeBinary), fmt.Errorf("invalid input syntax for type bytea: %q", raw)
+		}
+		return storage.BinaryValue(b), nil
+	case storage.TypeJSON:
+		var js any
+		if err := json.Unmarshal([]byte(raw), &js); err != nil {
+			return storage.NullValue(storage.TypeJSON), fmt.Errorf("invalid input syntax for type json: %q", raw)
+		}
+		return storage.JSONValue(raw), nil
 	default:
-		return storage.StringValue(raw)
+		return storage.StringValue(raw), nil
 	}
 }

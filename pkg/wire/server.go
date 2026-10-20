@@ -960,41 +960,35 @@ func decodeBinaryParam(b []byte, oid int32) string {
 }
 
 func buildPreviewSQL(query string, paramTypes []int32) string {
-	matches := pgParamRe.FindAllStringSubmatch(query, -1)
-	if len(matches) == 0 {
-		return query
-	}
-	res := query
-	for _, m := range matches {
-		if len(m) == 2 {
-			idx, err := strconv.Atoi(m[1])
-			if err == nil {
-				paramOID := int32(0)
-				if idx-1 < len(paramTypes) {
-					paramOID = paramTypes[idx-1]
-				}
-				replacement := "1"
-				switch paramOID {
-				case 23, 20, 21:
-					replacement = "1"
-				case 701, 700, 1700:
-					replacement = "1.0"
-				case 16:
-					replacement = "true"
-				case 25, 1043:
-					replacement = "'sample'"
-				default:
-					if strings.ContainsAny(query, "+-*/") {
-						replacement = "1"
-					} else {
-						replacement = "'sample'"
-					}
-				}
-				res = strings.ReplaceAll(res, m[0], replacement)
-			}
+	return pgParamRe.ReplaceAllStringFunc(query, func(match string) string {
+		sub := pgParamRe.FindStringSubmatch(match)
+		if len(sub) != 2 {
+			return match
 		}
-	}
-	return res
+		idx, err := strconv.Atoi(sub[1])
+		if err != nil {
+			return match
+		}
+		paramOID := int32(0)
+		if idx-1 >= 0 && idx-1 < len(paramTypes) {
+			paramOID = paramTypes[idx-1]
+		}
+		switch paramOID {
+		case 23, 20, 21:
+			return "1"
+		case 701, 700, 1700:
+			return "1.0"
+		case 16:
+			return "true"
+		case 25, 1043:
+			return "'sample'"
+		default:
+			if strings.ContainsAny(query, "+-*/") {
+				return "1"
+			}
+			return "'sample'"
+		}
+	})
 }
 
 func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *PreparedStatementCache, portals map[string]*Portal) {
@@ -1107,30 +1101,36 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 					if colName == "" {
 						continue
 					}
-					if _, alias, hasAs := sqlutil.SplitAsAlias(colName); hasAs {
-						colName = alias
+					var outColName string
+					lookupName := colName
+					if expr, alias, hasAs := sqlutil.SplitAsAlias(colName); hasAs {
+						outColName = cleanColumnIdentifier(alias)
+						lookupName = cleanColumnIdentifier(expr)
+					} else {
+						outColName = cleanColumnIdentifier(colName)
+						lookupName = outColName
 					}
-						var colType storage.DataType = storage.TypeVarChar
-						found := false
-						for _, c := range tbl.Columns {
-							if strings.EqualFold(c.Name, colName) {
-								colType = c.Type
-								colName = c.Name
-								found = true
-								break
-							}
+
+					var colType storage.DataType = storage.TypeVarChar
+					found := false
+					for _, c := range tbl.Columns {
+						if strings.EqualFold(c.Name, lookupName) || strings.EqualFold(c.Name, colName) {
+							colType = c.Type
+							found = true
+							break
 						}
-						var oid int32 = 25
-						if found {
-							oid = typeToPgOID(colType)
-						} else if strings.HasPrefix(strings.ToUpper(colName), "COUNT") {
-							oid = 20 // int8
-						}
-						cols = append(cols, ColumnMeta{
-							Name:     colName,
-							DataType: oid,
-						})
 					}
+					var oid int32 = 25
+					if found {
+						oid = typeToPgOID(colType)
+					} else if strings.HasPrefix(strings.ToUpper(lookupName), "COUNT") {
+						oid = 20 // int8
+					}
+					cols = append(cols, ColumnMeta{
+						Name:     outColName,
+						DataType: oid,
+					})
+				}
 					if len(cols) > 0 {
 						recordCols(cols)
 						_ = WriteRowDescription(conn, cols)
@@ -1581,6 +1581,16 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 	_ = WriteCommandComplete(conn, formatPgCommandComplete(cmd, res.RowsAffected, len(res.Rows)))
 }
 
+func cleanColumnIdentifier(s string) string {
+	s = strings.TrimSpace(s)
+	if strings.Contains(s, ".") {
+		parts := strings.Split(s, ".")
+		s = parts[len(parts)-1]
+	}
+	s = strings.Trim(s, "[]\"'`")
+	return strings.TrimSpace(s)
+}
+
 func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow map[string]any) []int32 {
 	oids := make([]int32, len(colNames))
 	var tbl *storage.TableSchema
@@ -1590,6 +1600,7 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 		tblField := sqlutil.SplitTopLevelTokens(afterFrom)
 		if len(tblField) > 0 {
 			tblName := strings.Trim(tblField[0], ";, ")
+			tblName = cleanColumnIdentifier(tblName)
 			t, err := s.engine.GetTable(tblName)
 			if err != nil {
 				t, err = s.engine.GetTable(strings.ToLower(tblName))
@@ -1602,20 +1613,24 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 
 	for i, colName := range colNames {
 		var oid int32 = 0
+		cleanCol := cleanColumnIdentifier(colName)
 		if tbl != nil {
 			for _, c := range tbl.Columns {
-				if strings.EqualFold(c.Name, colName) {
+				if strings.EqualFold(c.Name, cleanCol) || strings.EqualFold(c.Name, colName) {
 					oid = typeToPgOID(c.Type)
 					break
 				}
 			}
 		}
 		if oid == 0 {
-			upperCol := strings.ToUpper(colName)
+			upperCol := strings.ToUpper(cleanCol)
 			if strings.HasPrefix(upperCol, "COUNT") {
 				oid = 20 // int8
 			} else if sampleRow != nil {
 				val := getRowValue(sampleRow, colName)
+				if val == nil {
+					val = getRowValue(sampleRow, cleanCol)
+				}
 				if val != nil {
 					oid = inferPgOID(val)
 				}
@@ -1850,15 +1865,26 @@ func inferPgOID(v any) int32 {
 	if v == nil {
 		return 25 // text
 	}
-	switch v := v.(type) {
+	switch val := v.(type) {
+	case int8, int16, uint8, uint16:
+		return 21 // int2
 	case int, int32:
 		return 23 // int4
+	case uint, uint32:
+		return 20 // int8
 	case int64:
-		if v >= -2147483648 && v <= 2147483647 {
+		if val >= -2147483648 && val <= 2147483647 {
 			return 23 // int4
 		}
 		return 20 // int8
-	case float32, float64:
+	case uint64:
+		if val <= 2147483647 {
+			return 23 // int4
+		}
+		return 20 // int8
+	case float32:
+		return 700 // float4
+	case float64:
 		return 701 // float8
 	case bool:
 		return 16 // bool
@@ -1866,6 +1892,39 @@ func inferPgOID(v any) int32 {
 		return 1114 // timestamp
 	case []byte:
 		return 17 // bytea
+	case storage.Decimal:
+		return 1700 // numeric
+	case *storage.Decimal:
+		return 1700 // numeric
+	case storage.Value:
+		if val.IsNull {
+			return typeToPgOID(val.Type)
+		}
+		switch val.Type {
+		case storage.TypeInt:
+			if val.IVal >= -2147483648 && val.IVal <= 2147483647 {
+				return 23
+			}
+			return 20
+		case storage.TypeFloat:
+			return 701
+		case storage.TypeBool:
+			return 16
+		case storage.TypeDateTime:
+			return 1114
+		case storage.TypeDate:
+			return 1082
+		case storage.TypeTime:
+			return 1083
+		case storage.TypeDecimal:
+			return 1700
+		case storage.TypeUUID:
+			return 2950
+		case storage.TypeBinary:
+			return 17
+		default:
+			return 25
+		}
 	default:
 		return 25 // text
 	}

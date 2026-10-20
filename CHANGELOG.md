@@ -14,6 +14,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `UI-13`: Streamlined Web Studio branding and navigation titles (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`): standardized top-left branding on `LionSQL Studio` and removed the redundant `OLTP + SP` badge, while stripping the `Studio` suffix from all sub-feature sidebar buttons and view header titles (`SQL Query`, `Tables & Records`, `Stored Procedures`).
 
 ### Fixed
+- **Engine Review Remediation (Review Loop Batch 1)**:
+  - `REV-ENG-001`: Allowed `INTO` keyword omission in `reDmlInsertValues` (`pkg/engine/sqlexec_dml.go`) to comply with standard SQL/T-SQL `INSERT <table> VALUES (...)` syntax, preventing syntax errors in VDBE bypass and fallback paths.
+  - `REV-ENG-002`: Corrected misleading error message in `execDelete` (`pkg/engine/sqlexec_dml.go`) from "identify row for update" to "identify row for delete".
+  - `REV-ENG-003`: Normalized whitespace handling for `UPSERT` queries with `reDmlUpsertPrefix` and updated `ExecuteSQL` router (`pkg/engine/sqlexec.go`) to accurately match `INSERT`/`UPSERT`/`UPDATE`/`DELETE` queries with tabs and arbitrary whitespace.
 - **Group A MemEngine Storage, Concurrency, Unique Index & WAL Recovery Remediation (6 Critical Engine Defects)**:
   - `BUG-MEM-SHARD-INIT-RACE-1`: Replaced unguarded boolean check in `TableData.ensureShardsInit` (`pkg/storage/memengine/table_data.go`) with thread-safe `sync.Once` lazy initialization, eliminating concurrent map read/write data races and panics during multi-threaded queries.
   - `BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1`: Corrected SkipList unique index re-indexing in `pkg/storage/memengine/skiplist.go` to assign covering column values directly via slice indexing (`curr.Items[i].IncludeValues = inc`) rather than discarding updates on a value-copy loop variable.

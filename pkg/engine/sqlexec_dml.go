@@ -15,7 +15,8 @@ import (
 var (
 	reDmlInsertCheck  = regexp.MustCompile(`(?is)^(?:INSERT|UPSERT)(?:\s+INTO)?\s+([^\s(]+)`)
 	reDmlInsertSelect = regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+(\(?\s*SELECT\s+.*)$`)
-	reDmlInsertValues = regexp.MustCompile(`(?is)^INSERT\s+INTO\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+VALUES\s*(.*)$`)
+	reDmlInsertValues = regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+VALUES\s*(.*)$`)
+	reDmlUpsertPrefix = regexp.MustCompile(`(?is)^UPSERT(?:\s+INTO)?\s+`)
 	reDmlUpdateCheck  = regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)`)
 	reDmlUpdate       = regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
 	reDmlDeleteCheck  = regexp.MustCompile(`(?is)^DELETE(?:\s+FROM)?\s+([^\s;]+)`)
@@ -242,14 +243,10 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
-	isUpsert := strings.HasPrefix(strings.ToUpper(cleaned), "UPSERT")
+	isUpsert := reDmlUpsertPrefix.MatchString(cleaned)
 	insertSQL := cleaned
 	if isUpsert {
-		if strings.HasPrefix(strings.ToUpper(cleaned), "UPSERT INTO ") {
-			insertSQL = "INSERT INTO " + cleaned[len("UPSERT INTO "):]
-		} else if strings.HasPrefix(strings.ToUpper(cleaned), "UPSERT ") {
-			insertSQL = "INSERT INTO " + cleaned[len("UPSERT "):]
-		}
+		insertSQL = "INSERT INTO " + cleaned[len(reDmlUpsertPrefix.FindString(cleaned)):]
 	}
 
 	// Branch: INSERT INTO ... SELECT
@@ -1245,7 +1242,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			if isEphemeral {
 				_ = tx.Rollback()
 			}
-			return nil, fmt.Errorf("table %q has no primary key to identify row for update", tableName)
+			return nil, fmt.Errorf("table %q has no primary key to identify row for delete", tableName)
 		}
 
 		if hasPK {

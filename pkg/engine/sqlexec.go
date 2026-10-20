@@ -1108,8 +1108,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 5. DML: INSERT INTO / UPSERT
-	if strings.HasPrefix(upper, "INSERT INTO") || strings.HasPrefix(upper, "INSERT ") ||
-		strings.HasPrefix(upper, "UPSERT INTO") || strings.HasPrefix(upper, "UPSERT ") {
+	if reDmlInsertCheck.MatchString(trimmed) {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1128,7 +1127,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 7. DML: UPDATE
-	if strings.HasPrefix(upper, "UPDATE ") {
+	if reDmlUpdateCheck.MatchString(trimmed) {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1136,7 +1135,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 8. DML: DELETE
-	if strings.HasPrefix(upper, "DELETE FROM") || strings.HasPrefix(upper, "DELETE ") {
+	if reDmlDeleteCheck.MatchString(trimmed) {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1144,7 +1143,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 9. DML: MERGE INTO
-	if strings.HasPrefix(upper, "MERGE INTO") || strings.HasPrefix(upper, "MERGE ") {
+	if strings.HasPrefix(upper, "MERGE") && len(trimmed) > 5 && (trimmed[5] == ' ' || trimmed[5] == '\t' || trimmed[5] == '\n') {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
