@@ -42,6 +42,8 @@
    - `sqlexec_eval.go`, `sqlexec_dml.go`, `sqlexec_select.go`, `sqlexec_dbcc.go`, `sqlexec_merge.go` 내 6개소 수동 루프 300여 라인 전면 제거 및 대체.
    - 단위 테스트(`tokenizer_test.go`, `rev_eng_test.go`) 및 100% 레이스 프리 통과 검증 완수.
 2. **Phase 2: `ARCH-DML-1` (DML Parser & Dispatcher 추상화)**
+   - **사전 점검 (완료)**: 리팩토링 전 현재 동작을 고정하는 특성화 테스트 `pkg/engine/dml_characterization_test.go` 추가 (INSERT 25건, UPDATE 17건, DELETE 13건). 키워드 생략(`INTO`/`FROM`), 대소문자, 탭/개행, 대괄호/큰따옴표 식별자, 리터럴 내부 키워드/괄호/쉼표, 다중 행 VALUES, `OUTPUT`/`UPSERT`/`ON CONFLICT`/`INSERT...SELECT`(정규식 전용 경로) 및 에러 케이스를 포함합니다. 새 파서는 이 테스트를 그대로 통과해야 합니다.
+   - **사전 점검 발견 사항**: `reDmlUpdate`가 `SET` 절을 지연 매칭(`.*?`)하여 문자열 리터럴 내부의 `WHERE`에서 절을 분할하고, 에러 없이 0건 갱신 후 성공을 반환함 (`REV-ENG-006`, `OUTPUT` 경로 한정). 해당 케이스는 `knownBug`로 추적 중이며 `ARCH-DML-1` 완료 시 마커를 제거해야 테스트가 통과합니다.
    - `pkg/engine/dml_parser.go` 신설: 키워드 생략, 공백 변형에 면역인 1-Pass DML 디스패처 구축.
    - 복잡한 10여 개 DML 정규식 전면 삭제.
 3. **Phase 3: `ARCH-EVAL-1` (통합 산술 및 연산자 평가 계층)**
