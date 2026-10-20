@@ -332,30 +332,13 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 		}
 	}
 
+	row := NewSQLRow(rec)
+
 	if m := reEvalInClause.FindStringSubmatch(whereStr); len(m) == 4 {
 		colName := cleanIdentifier(m[1])
 		isNot := strings.TrimSpace(m[2]) != ""
 		valList := m[3]
-		val, ok := rec[colName]
-		if !ok {
-			if idx := strings.Index(colName, "."); idx != -1 {
-				val, ok = rec[colName[idx+1:]]
-			}
-		}
-		if !ok {
-			for k, v := range rec {
-				if strings.EqualFold(k, colName) {
-					val, ok = v, true
-					break
-				}
-				if idx := strings.Index(colName, "."); idx != -1 {
-					if strings.EqualFold(k, colName[idx+1:]) {
-						val, ok = v, true
-						break
-					}
-				}
-			}
-		}
+		val, ok := row.Get(colName)
 		if !ok || val == nil {
 			return false
 		}
@@ -396,38 +379,12 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 	upperWhere := strings.ToUpper(whereStr)
 	if strings.HasSuffix(upperWhere, " IS NOT NULL") {
 		colName := cleanIdentifier(whereStr[:len(whereStr)-len(" IS NOT NULL")])
-		val, ok := rec[colName]
-		if !ok {
-			if idx := strings.Index(colName, "."); idx != -1 {
-				val, ok = rec[colName[idx+1:]]
-			}
-		}
-		if !ok {
-			for k, v := range rec {
-				if strings.EqualFold(k, colName) {
-					val, ok = v, true
-					break
-				}
-			}
-		}
+		val, ok := row.Get(colName)
 		return ok && val != nil
 	}
 	if strings.HasSuffix(upperWhere, " IS NULL") {
 		colName := cleanIdentifier(whereStr[:len(whereStr)-len(" IS NULL")])
-		val, ok := rec[colName]
-		if !ok {
-			if idx := strings.Index(colName, "."); idx != -1 {
-				val, ok = rec[colName[idx+1:]]
-			}
-		}
-		if !ok {
-			for k, v := range rec {
-				if strings.EqualFold(k, colName) {
-					val, ok = v, true
-					break
-				}
-			}
-		}
+		val, ok := row.Get(colName)
 		return !ok || val == nil
 	}
 
@@ -451,20 +408,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				return false
 			}
 
-			val, ok := rec[leftCol]
-			if !ok {
-				if dotIdx := strings.Index(leftCol, "."); dotIdx != -1 {
-					val, ok = rec[leftCol[dotIdx+1:]]
-				}
-			}
-			if !ok {
-				for k, v := range rec {
-					if strings.EqualFold(k, leftCol) {
-						val, ok = v, true
-						break
-					}
-				}
-			}
+			val, ok := row.Get(leftCol)
 			if !ok {
 				return false
 			}
@@ -920,7 +864,7 @@ func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema
 		}
 
 		if targetRec != nil {
-			if sv, ok := targetRec[p.column]; ok {
+			if sv, ok := targetRec.Get(p.column); ok {
 				val = formatStorageValue(sv)
 			}
 		}
@@ -936,22 +880,7 @@ func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 		op := m[2]
 		numStr := m[3]
 
-		var curVal storage.Value
-		var found bool
-		if v, ok := rec[colName]; ok {
-			curVal = v
-			found = true
-		} else {
-			for k, v := range rec {
-				if strings.EqualFold(k, colName) {
-					curVal = v
-					found = true
-					break
-				}
-			}
-		}
-
-		if found && !curVal.IsNull {
+		if curVal, ok := rec.Get(colName); ok && !curVal.IsNull {
 			switch targetType {
 			case storage.TypeInt:
 				curInt := curVal.IVal

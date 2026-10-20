@@ -479,21 +479,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			pkCol, _ := schema.PrimaryKeyColumn()
 
 			if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
-				var targetVal storage.Value
-				var hasTarget bool
-				if tv, ok := rec[pkCol.Name]; ok {
-					targetVal = tv
-					hasTarget = true
-				} else {
-					for k, v := range rec {
-						if strings.EqualFold(k, pkCol.Name) {
-							targetVal = v
-							hasTarget = true
-							break
-						}
-					}
-				}
-				if hasTarget {
+				if targetVal, ok := rec.Get(pkCol.Name); ok {
 					if ex, err := tx.Get(tableName, targetVal); err == nil && ex != nil {
 						existingRec = ex
 						existingPk = targetVal
@@ -510,36 +496,8 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						}
 						matched := true
 						for _, cc := range conflictCols {
-							var rv storage.Value
-							ok1 := false
-							if v, ok := r[cc]; ok {
-								rv = v
-								ok1 = true
-							} else {
-								for k, v := range r {
-									if strings.EqualFold(k, cc) {
-										rv = v
-										ok1 = true
-										break
-									}
-								}
-							}
-
-							var iv storage.Value
-							ok2 := false
-							if v, ok := rec[cc]; ok {
-								iv = v
-								ok2 = true
-							} else {
-								for k, v := range rec {
-									if strings.EqualFold(k, cc) {
-										iv = v
-										ok2 = true
-										break
-									}
-								}
-							}
-
+							rv, ok1 := r.Get(cc)
+							iv, ok2 := rec.Get(cc)
 							if !ok1 || !ok2 || rv.Compare(iv) != 0 {
 								matched = false
 								break
@@ -548,16 +506,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						if matched {
 							existingRec = r
 							if pkCol != nil {
-								if v, ok := r[pkCol.Name]; ok {
-									existingPk = v
-								} else {
-									for k, v := range r {
-										if strings.EqualFold(k, pkCol.Name) {
-											existingPk = v
-											break
-										}
-									}
-								}
+								existingPk, _ = r.Get(pkCol.Name)
 							}
 							break
 						}
@@ -592,7 +541,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						}
 					}
 
-					updatedRec := cloneRecord(existingRec)
+					updatedRec := existingRec.Clone()
 					assignments := onConflict.assignments
 					if len(assignments) == 0 {
 						// CockroachDB / SQLion UPSERT default: update all non-PK columns
@@ -600,15 +549,8 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 							if c.PrimaryKey {
 								continue
 							}
-							if newVal, ok := rec[c.Name]; ok {
-								updatedRec[c.Name] = newVal
-							} else {
-								for k, v := range rec {
-									if strings.EqualFold(k, c.Name) {
-										updatedRec[c.Name] = v
-										break
-									}
-								}
+							if newVal, ok := rec.Get(c.Name); ok {
+								updatedRec.Set(c.Name, newVal)
 							}
 						}
 					} else {
@@ -892,21 +834,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			pkCol, _ := schema.PrimaryKeyColumn()
 
 			if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
-				var targetVal storage.Value
-				var hasTarget bool
-				if tv, ok := rec[pkCol.Name]; ok {
-					targetVal = tv
-					hasTarget = true
-				} else {
-					for k, v := range rec {
-						if strings.EqualFold(k, pkCol.Name) {
-							targetVal = v
-							hasTarget = true
-							break
-						}
-					}
-				}
-				if hasTarget {
+				if targetVal, ok := rec.Get(pkCol.Name); ok {
 					if ex, err := tx.Get(tableName, targetVal); err == nil && ex != nil {
 						existingRec = ex
 						existingPk = targetVal
@@ -923,36 +851,8 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						}
 						matched := true
 						for _, cc := range conflictCols {
-							var rv storage.Value
-							ok1 := false
-							if v, ok := r[cc]; ok {
-								rv = v
-								ok1 = true
-							} else {
-								for k, v := range r {
-									if strings.EqualFold(k, cc) {
-										rv = v
-										ok1 = true
-										break
-									}
-								}
-							}
-
-							var iv storage.Value
-							ok2 := false
-							if v, ok := rec[cc]; ok {
-								iv = v
-								ok2 = true
-							} else {
-								for k, v := range rec {
-									if strings.EqualFold(k, cc) {
-										iv = v
-										ok2 = true
-										break
-									}
-								}
-							}
-
+							rv, ok1 := r.Get(cc)
+							iv, ok2 := rec.Get(cc)
 							if !ok1 || !ok2 || rv.Compare(iv) != 0 {
 								matched = false
 								break
@@ -961,16 +861,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						if matched {
 							existingRec = r
 							if pkCol != nil {
-								if v, ok := r[pkCol.Name]; ok {
-									existingPk = v
-								} else {
-									for k, v := range r {
-										if strings.EqualFold(k, pkCol.Name) {
-											existingPk = v
-											break
-										}
-									}
-								}
+								existingPk, _ = r.Get(pkCol.Name)
 							}
 							break
 						}
@@ -1005,22 +896,15 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						}
 					}
 
-					updatedRec := cloneRecord(existingRec)
+					updatedRec := existingRec.Clone()
 					assignments := onConflict.assignments
 					if len(assignments) == 0 {
 						for _, c := range schema.Columns {
 							if c.PrimaryKey {
 								continue
 							}
-							if newVal, ok := rec[c.Name]; ok {
-								updatedRec[c.Name] = newVal
-							} else {
-								for k, v := range rec {
-									if strings.EqualFold(k, c.Name) {
-										updatedRec[c.Name] = v
-										break
-									}
-								}
+							if newVal, ok := rec.Get(c.Name); ok {
+								updatedRec.Set(c.Name, newVal)
 							}
 						}
 					} else {
@@ -1200,21 +1084,13 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		var pkVal storage.Value
 		var hasPK bool
 		if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
-			if v, ok := rec[pkCol.Name]; ok {
+			if v, ok := rec.Get(pkCol.Name); ok {
 				pkVal = v
 				hasPK = true
-			} else {
-				for k, v := range rec {
-					if strings.EqualFold(k, pkCol.Name) {
-						pkVal = v
-						hasPK = true
-						break
-					}
-				}
 			}
 		}
 		if !hasPK {
-			if v, ok := rec["id"]; ok {
+			if v, ok := rec.Get("id"); ok {
 				pkVal = v
 				hasPK = true
 			}
@@ -1239,11 +1115,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		}
 
 		if hasPK {
-			origClone := make(storage.Record, len(rec))
-			for k, v := range rec {
-				origClone[k] = v
-			}
-			toUpdate = append(toUpdate, updateEntry{pk: pkVal, rec: recUpdates, orig: origClone})
+			toUpdate = append(toUpdate, updateEntry{pk: pkVal, rec: recUpdates, orig: rec.Clone()})
 		}
 	}
 
@@ -1379,21 +1251,13 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		var pkVal storage.Value
 		var hasPK bool
 		if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
-			if v, ok := rec[pkCol.Name]; ok {
+			if v, ok := rec.Get(pkCol.Name); ok {
 				pkVal = v
 				hasPK = true
-			} else {
-				for k, v := range rec {
-					if strings.EqualFold(k, pkCol.Name) {
-						pkVal = v
-						hasPK = true
-						break
-					}
-				}
 			}
 		}
 		if !hasPK {
-			if v, ok := rec["id"]; ok {
+			if v, ok := rec.Get("id"); ok {
 				pkVal = v
 				hasPK = true
 			}
@@ -1406,11 +1270,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		}
 
 		if hasPK {
-			origClone := make(storage.Record, len(rec))
-			for k, v := range rec {
-				origClone[k] = v
-			}
-			toDelete = append(toDelete, deleteEntry{pk: pkVal, orig: origClone})
+			toDelete = append(toDelete, deleteEntry{pk: pkVal, orig: rec.Clone()})
 		}
 	}
 
