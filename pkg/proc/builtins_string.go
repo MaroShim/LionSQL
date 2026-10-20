@@ -314,7 +314,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "LEN", "LENGTH":
 		if len(args) == 0 || args[0].IsNull {
-			return storage.IntValue(0)
+			return storage.NullValue(storage.TypeInt)
 		}
 		return storage.IntValue(int64(len([]rune(valToString(args[0])))))
 
@@ -337,19 +337,19 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "UPPER":
 		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		return storage.StringValue(strings.ToUpper(valToString(args[0])))
 
 	case "LOWER":
 		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		return storage.StringValue(strings.ToLower(valToString(args[0])))
 
 	case "TRIM":
-		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
+		if len(args) == 0 || args[0].IsNull || (len(args) >= 2 && args[1].IsNull) {
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		if len(args) == 1 {
 			return storage.StringValue(strings.TrimSpace(valToString(args[0])))
@@ -362,19 +362,19 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "LTRIM":
 		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		return storage.StringValue(strings.TrimLeft(valToString(args[0]), " \t\r\n"))
 
 	case "RTRIM":
 		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		return storage.StringValue(strings.TrimRight(valToString(args[0]), " \t\r\n"))
 
 	case "LEFT":
-		if len(args) < 2 || args[0].IsNull {
-			return storage.StringValue("")
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		runes := []rune(valToString(args[0]))
 		n := int(args[1].IVal)
@@ -387,8 +387,8 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue(string(runes[:n]))
 
 	case "RIGHT":
-		if len(args) < 2 || args[0].IsNull {
-			return storage.StringValue("")
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		runes := []rune(valToString(args[0]))
 		n := int(args[1].IVal)
@@ -401,8 +401,8 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue(string(runes[len(runes)-n:]))
 
 	case "SUBSTRING", "SUBSTR":
-		if len(args) < 3 || args[0].IsNull {
-			return storage.StringValue("")
+		if len(args) < 3 || args[0].IsNull || args[1].IsNull || args[2].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		runes := []rune(valToString(args[0]))
 		start := int(args[1].IVal) - 1 // T-SQL is 1-indexed
@@ -423,8 +423,8 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue(string(runes[start:end]))
 
 	case "REPLACE":
-		if len(args) < 3 || args[0].IsNull {
-			return storage.StringValue("")
+		if len(args) < 3 || args[0].IsNull || args[1].IsNull || args[2].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		str := valToString(args[0])
 		oldSub := valToString(args[1])
@@ -433,7 +433,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "REVERSE":
 		if len(args) == 0 || args[0].IsNull {
-			return storage.StringValue("")
+			return storage.NullValue(storage.TypeVarChar)
 		}
 		runes := []rune(valToString(args[0]))
 		for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
@@ -442,8 +442,8 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue(string(runes))
 
 	case "CHARINDEX":
-		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
-			return storage.IntValue(0)
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull || (len(args) >= 3 && args[2].IsNull) {
+			return storage.NullValue(storage.TypeInt)
 		}
 		sub := valToString(args[0])
 		target := valToString(args[1])
@@ -498,7 +498,10 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue(b.String())
 
 	case "SPACE":
-		if len(args) == 0 || args[0].IsNull || args[0].IVal <= 0 {
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		if args[0].IVal <= 0 {
 			return storage.StringValue("")
 		}
 		n := int(args[0].IVal)
@@ -508,7 +511,10 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		return storage.StringValue(strings.Repeat(" ", n))
 
 	case "REPLICATE", "REPEAT":
-		if len(args) < 2 || args[0].IsNull || args[1].IsNull || args[1].IVal <= 0 {
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		if args[1].IVal <= 0 {
 			return storage.StringValue("")
 		}
 		str := valToString(args[0])
@@ -662,7 +668,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "STRPOS":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
-			return storage.IntValue(0)
+			return storage.NullValue(storage.TypeInt)
 		}
 		target := valToString(args[0])
 		sub := valToString(args[1])

@@ -1096,7 +1096,14 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 				targetCol = colSchema.Name
 				targetType = colSchema.Type
 			}
-			recUpdates[targetCol] = evalUpdateExpr(exprStr, rec, targetType)
+			val, err := evalUpdateExpr(exprStr, rec, targetType)
+			if err != nil {
+				if isEphemeral && tx != nil {
+					_ = tx.Rollback()
+				}
+				return nil, err
+			}
+			recUpdates[targetCol] = val
 		}
 
 		if hasPK {

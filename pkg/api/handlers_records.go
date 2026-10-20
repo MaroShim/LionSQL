@@ -48,14 +48,19 @@ func recordToJSONMap(rec storage.Record, schema *storage.TableSchema) map[string
 			case storage.TypeBool:
 				row[col.Name] = v.BVal
 			case storage.TypeDecimal:
-				f, err := strconv.ParseFloat(v.String(), 64)
-				if err == nil {
-					row[col.Name] = f
+				row[col.Name] = json.Number(v.String())
+			case storage.TypeDateTime:
+				row[col.Name] = v.TVal.Format(time.RFC3339)
+			case storage.TypeDate:
+				row[col.Name] = v.TVal.Format("2006-01-02")
+			case storage.TypeTime:
+				row[col.Name] = v.TVal.Format("15:04:05")
+			default:
+				if v.SVal != "" {
+					row[col.Name] = v.SVal
 				} else {
 					row[col.Name] = v.String()
 				}
-			default:
-				row[col.Name] = v.SVal
 			}
 		}
 		return row
@@ -71,6 +76,14 @@ func recordToJSONMap(rec storage.Record, schema *storage.TableSchema) map[string
 				row[k] = v.FVal
 			case storage.TypeBool:
 				row[k] = v.BVal
+			case storage.TypeDecimal:
+				row[k] = json.Number(v.String())
+			case storage.TypeDateTime:
+				row[k] = v.TVal.Format(time.RFC3339)
+			case storage.TypeDate:
+				row[k] = v.TVal.Format("2006-01-02")
+			case storage.TypeTime:
+				row[k] = v.TVal.Format("15:04:05")
 			default:
 				row[k] = v.String()
 			}

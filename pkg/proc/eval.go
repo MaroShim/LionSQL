@@ -344,11 +344,8 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return strings.EqualFold(fmt.Sprintf("%v", left), fmt.Sprintf("%v", right)), nil
 
 	case TokenNeq:
-		if left == nil && right == nil {
-			return false, nil
-		}
 		if left == nil || right == nil {
-			return true, nil
+			return nil, nil
 		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)

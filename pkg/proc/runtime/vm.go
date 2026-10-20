@@ -852,7 +852,10 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				newRowMap[k] = v
 			}
 			for _, a := range data.Assignments {
-				vAny, _ := proc.EvalRowExpr(a.Value, rowCtx, nil)
+				vAny, err := proc.EvalRowExpr(a.Value, rowCtx, nil)
+				if err != nil {
+					return 0, err
+				}
 				stVal := toStorageValue(vAny)
 				recUpdates[a.Column] = stVal
 				newRowMap[a.Column] = valToAny(stVal)
@@ -943,11 +946,12 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		for _, assign := range data.Assignments {
 			rowContext := f.buildRowEvalMap(rowMap)
 			val, err := proc.EvalRowExpr(assign.Value, rowContext, nil)
-			if err == nil {
-				stVal := toStorageValue(val)
-				recUpdates[assign.Column] = stVal
-				newRowMap[assign.Column] = valToAny(stVal)
+			if err != nil {
+				return 0, err
 			}
+			stVal := toStorageValue(val)
+			recUpdates[assign.Column] = stVal
+			newRowMap[assign.Column] = valToAny(stVal)
 		}
 
 		if hasPk {

@@ -427,23 +427,49 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 					case aggSum:
 						if isDecValue(val) {
 							dec, _ := tryDecimal(val)
-							acc.isDecimal[fIdx] = true
+							if !acc.isDecimal[fIdx] {
+								acc.isDecimal[fIdx] = true
+								if acc.sums[fIdx] != 0 {
+									existingDec := storage.NewDecimalFromFloat(acc.sums[fIdx], 4)
+									acc.decSums[fIdx] = acc.decSums[fIdx].Add(existingDec)
+									acc.sums[fIdx] = 0
+								}
+							}
 							cur := acc.decSums[fIdx]
 							acc.decSums[fIdx] = cur.Add(dec)
 						} else {
 							fVal, _ := toFloat64(val)
-							acc.sums[fIdx] += fVal
+							if acc.isDecimal[fIdx] {
+								dec := storage.NewDecimalFromFloat(fVal, 4)
+								cur := acc.decSums[fIdx]
+								acc.decSums[fIdx] = cur.Add(dec)
+							} else {
+								acc.sums[fIdx] += fVal
+							}
 						}
 						acc.counts[fIdx]++
 					case aggAvg:
 						if isDecValue(val) {
 							dec, _ := tryDecimal(val)
-							acc.isDecimal[fIdx] = true
+							if !acc.isDecimal[fIdx] {
+								acc.isDecimal[fIdx] = true
+								if acc.sums[fIdx] != 0 {
+									existingDec := storage.NewDecimalFromFloat(acc.sums[fIdx], 4)
+									acc.decSums[fIdx] = acc.decSums[fIdx].Add(existingDec)
+									acc.sums[fIdx] = 0
+								}
+							}
 							cur := acc.decSums[fIdx]
 							acc.decSums[fIdx] = cur.Add(dec)
 						} else {
 							fVal, _ := toFloat64(val)
-							acc.sums[fIdx] += fVal
+							if acc.isDecimal[fIdx] {
+								dec := storage.NewDecimalFromFloat(fVal, 4)
+								cur := acc.decSums[fIdx]
+								acc.decSums[fIdx] = cur.Add(dec)
+							} else {
+								acc.sums[fIdx] += fVal
+							}
 						}
 						acc.counts[fIdx]++
 					case aggMin:

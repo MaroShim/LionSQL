@@ -855,78 +855,184 @@ func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema
 	return row, cols
 }
 
-func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataType) storage.Value {
-	if m := reEvalArithExpr.FindStringSubmatch(exprStr); len(m) == 4 {
-		colName := cleanIdentifier(m[1])
-		op := m[2]
-		numStr := m[3]
+func findArithmeticOp(s string) (int, byte) {
+	inQuote := false
+	var quoteChar byte
+	bracketDepth := 0
+	parenDepth := 0
 
-		if curVal, ok := rec.Get(colName); ok && !curVal.IsNull {
-			switch targetType {
-			case storage.TypeInt:
-				curInt := curVal.IVal
-				delta, err := strconv.ParseInt(numStr, 10, 64)
-				if err == nil {
-					switch op {
-					case "+":
-						return storage.IntValue(curInt + delta)
-					case "-":
-						return storage.IntValue(curInt - delta)
-					case "*":
-						return storage.IntValue(curInt * delta)
-					case "/":
-						if delta != 0 {
-							return storage.IntValue(curInt / delta)
-						}
+	addSubIdx := -1
+	var addSubOp byte
+	mulDivIdx := -1
+	var mulDivOp byte
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inQuote {
+			if ch == quoteChar {
+				inQuote = false
+			}
+			continue
+		}
+		switch ch {
+		case '\'', '"', '`':
+			inQuote = true
+			quoteChar = ch
+		case '[':
+			bracketDepth++
+		case ']':
+			if bracketDepth > 0 {
+				bracketDepth--
+			}
+		case '(':
+			parenDepth++
+		case ')':
+			if parenDepth > 0 {
+				parenDepth--
+			}
+		case '+', '-':
+			if bracketDepth == 0 && parenDepth == 0 && i > 0 {
+				prev := s[i-1]
+				if prev != 'e' && prev != 'E' && prev != '+' && prev != '-' && prev != '*' && prev != '/' {
+					addSubIdx = i
+					addSubOp = ch
+				}
+			}
+		case '*', '/':
+			if bracketDepth == 0 && parenDepth == 0 && i > 0 {
+				mulDivIdx = i
+				mulDivOp = ch
+			}
+		}
+	}
+
+	if addSubIdx != -1 {
+		return addSubIdx, addSubOp
+	}
+	if mulDivIdx != -1 {
+		return mulDivIdx, mulDivOp
+	}
+	return -1, 0
+}
+
+func resolveOperand(token string, rec storage.Record) (storage.Value, bool) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return storage.NullValue(storage.TypeVarChar), false
+	}
+	clean := cleanIdentifier(token)
+	if val, ok := rec.Get(clean); ok {
+		return val, true
+	}
+	if i, err := strconv.ParseInt(token, 10, 64); err == nil {
+		return storage.IntValue(i), true
+	}
+	if f, err := strconv.ParseFloat(token, 64); err == nil {
+		return storage.FloatValue(f), true
+	}
+	return storage.NullValue(storage.TypeVarChar), false
+}
+
+func toNumeric(val storage.Value) (float64, int64, bool) {
+	if val.IsNull {
+		return 0, 0, false
+	}
+	switch val.Type {
+	case storage.TypeInt:
+		return float64(val.IVal), val.IVal, true
+	case storage.TypeFloat:
+		return val.FVal, int64(val.FVal), true
+	case storage.TypeDecimal:
+		f, err := strconv.ParseFloat(val.String(), 64)
+		if err == nil {
+			return f, int64(f), true
+		}
+		return 0, 0, false
+	case storage.TypeVarChar:
+		s := strings.TrimSpace(val.SVal)
+		if i, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return float64(i), i, true
+		}
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return f, int64(f), true
+		}
+		return 0, 0, false
+	default:
+		return 0, 0, false
+	}
+}
+
+func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataType) (storage.Value, error) {
+	exprStr = strings.TrimSpace(exprStr)
+	if opIdx, op := findArithmeticOp(exprStr); opIdx != -1 {
+		leftStr := strings.TrimSpace(exprStr[:opIdx])
+		rightStr := strings.TrimSpace(exprStr[opIdx+1:])
+
+		leftVal, ok1 := resolveOperand(leftStr, rec)
+		rightVal, ok2 := resolveOperand(rightStr, rec)
+		if ok1 && ok2 {
+			if leftVal.IsNull || rightVal.IsNull {
+				return storage.NullValue(targetType), nil
+			}
+			leftF, leftI, num1 := toNumeric(leftVal)
+			rightF, rightI, num2 := toNumeric(rightVal)
+			if num1 && num2 {
+				if op == '/' {
+					if rightF == 0 {
+						return storage.NullValue(targetType), fmt.Errorf("divide by zero error encountered")
 					}
 				}
-			case storage.TypeFloat:
-				curFloat := curVal.FVal
-				if curVal.Type == storage.TypeInt {
-					curFloat = float64(curVal.IVal)
-				}
-				delta, err := strconv.ParseFloat(numStr, 64)
-				if err == nil {
+				switch targetType {
+				case storage.TypeInt:
+					var res int64
 					switch op {
-					case "+":
-						return storage.FloatValue(curFloat + delta)
-					case "-":
-						return storage.FloatValue(curFloat - delta)
-					case "*":
-						return storage.FloatValue(curFloat * delta)
-					case "/":
-						if delta != 0 {
-							return storage.FloatValue(curFloat / delta)
-						}
+					case '+':
+						res = leftI + rightI
+					case '-':
+						res = leftI - rightI
+					case '*':
+						res = leftI * rightI
+					case '/':
+						res = leftI / rightI
 					}
-				}
-			case storage.TypeDecimal:
-				curFloat := curVal.FVal
-				if curVal.Type == storage.TypeInt {
-					curFloat = float64(curVal.IVal)
-				}
-				delta, err := strconv.ParseFloat(numStr, 64)
-				if err == nil {
+					return storage.IntValue(res), nil
+				case storage.TypeFloat:
 					var res float64
 					switch op {
-					case "+":
-						res = curFloat + delta
-					case "-":
-						res = curFloat - delta
-					case "*":
-						res = curFloat * delta
-					case "/":
-						if delta != 0 {
-							res = curFloat / delta
-						}
+					case '+':
+						res = leftF + rightF
+					case '-':
+						res = leftF - rightF
+					case '*':
+						res = leftF * rightF
+					case '/':
+						res = leftF / rightF
 					}
-					return storage.DecimalValue(strconv.FormatFloat(res, 'f', 2, 64))
+					return storage.FloatValue(res), nil
+				case storage.TypeDecimal:
+					var res float64
+					switch op {
+					case '+':
+						res = leftF + rightF
+					case '-':
+						res = leftF - rightF
+					case '*':
+						res = leftF * rightF
+					case '/':
+						res = leftF / rightF
+					}
+					return storage.DecimalValue(strconv.FormatFloat(res, 'f', 2, 64)), nil
 				}
 			}
 		}
 	}
 
-	return parseLiteralValue(exprStr, targetType)
+	clean := cleanIdentifier(exprStr)
+	if val, ok := rec.Get(clean); ok {
+		return val, nil
+	}
+
+	return parseLiteralValue(exprStr, targetType), nil
 }
 
 // -----------------------------------------------------------------------------

@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Group 5 Type Coercion, NULL 3-Valued Logic & Scalar Function Remediation (13 Critical Storage/Builtins/Eval/VM Bugs)**:
+  - `BUG-STORAGE-CMP-INT-FLOAT-1`: Supported automatic numeric coercion in `storage.Value.Compare` between `TypeInt` and `TypeFloat`, fixing range scan inversions and point lookup anomalies (e.g., `IntValue(100) < FloatValue(200.5)`).
+  - `BUG-STORAGE-CMP-DATETIME-STR-1`: Supported bi-directional date/datetime coercion with string literals in `storage.Value.Compare` and `storage.Value.Equal`, preventing comparison reversals and 0-row query results.
+  - `BUG-STORAGE-EQUAL-FLOAT-STR-1`: Replaced string formatting allocation in `storage.Value.Equal` for `TypeFloat` with native IEEE-754 and epsilon precision comparison (`math.Abs(v1 - v2) < 1e-9`).
+  - `BUG-STR-NULL-1`: Restored SQL-standard NULL propagation across string built-in functions (`UPPER`, `LOWER`, `TRIM`, `LTRIM`, `RTRIM`, `LEFT`, `RIGHT`, `SUBSTRING`, `REPLACE`, `REVERSE`, `LEN`, `SPACE`, `REPLICATE`).
+  - `BUG-STR-CHARINDEX-NULL-ZERO-1`: Restored SQL three-valued logic for `CHARINDEX` and `STRPOS` when receiving NULL arguments, returning `NULL` instead of `0`.
+  - `BUG-DATEADD-NULL-1`: Enforced NULL propagation in `DATEADD` and `EOMONTH` when receiving NULL increments or NULL dates, eliminating silent fallback to 0.
+  - `BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`: Interpreted colon-less integer time zone offsets in `TODATETIMEOFFSET` as total minutes (e.g. `-120` -> `-02:00`, `+330` -> `+05:30`), resolving a 60x hour distortion.
+  - `BUG-EVAL-NEQ-NULL-1`: Enforced SQL three-valued logic in `evalRowBinaryOp` for inequality comparisons (`<>`, `!=`) by returning `(nil, nil)` on NULL operands, preventing NULL rows from leaking into WHERE clauses.
+  - `BUG-ARITH-EXPR-ZERO-1`: Introduced robust operator splitting and operand resolution in `evalUpdateExpr`, supporting bracketed column identifiers (e.g., `[Price] + 10`), constant-leading arithmetic (`10 + [Price]`), and column-to-column expressions (`salary + bonus`).
+  - `BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`: Added explicit divide-by-zero detection (`divide by zero error encountered`) in coordinator `UPDATE` and VDBE VM `OpUpdate`/`OpUpdateWhere`, preventing silent zero resets and rollback failures.
+  - `BUG-AGG-MIXED-NUM-DEC-1`: Preserved integer and float sums during Volcano `AggregateIterator` execution when mixed with Decimal values in the same group, dynamically promoting and accumulating into `decSums`.
+  - `BUG-API-JSON-DATETIME-EMPTY-STR-1`: Initialized `DateTimeValue.SVal` with ISO-8601 formatting and enforced RFC3339 serialization in REST API record handlers, preventing empty string (`""`) emissions.
+  - `BUG-API-JSON-DECIMAL-PRECISION-LOSS-1`: Serialized DECIMAL values as `json.Number` in REST API handlers, eliminating floating-point IEEE-754 precision loss during JSON marshalling.
 - **Group 4 Tokenization, Comma Parsing & Smart Split Remediation (15 Critical Engine/Parser/Planner/Wire Bugs)**:
   - `SQL-TOKENIZER-1`: Established zero-allocation unified SQL clause tokenizer abstraction (`pkg/sqlutil`) with quotes (`'`, `"`, `''`), bracket identifier (`[...]`), comment (`--`, `/* */`), and nested parenthesis depth tracking.
   - `BUG-SPLIT-VALUES-1`: Handled commas inside functions (e.g. `COALESCE(a, b)`) and strings in `INSERT INTO ... VALUES` without column count mismatch.

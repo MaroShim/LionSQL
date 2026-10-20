@@ -15,24 +15,24 @@ func TestEvalUpdateExprCaseInsensitivity(t *testing.T) {
 	}
 
 	// 1. Lowercase reference to uppercase column
-	v1 := evalUpdateExpr("price + 20", rec, storage.TypeInt)
-	if v1.IsNull || v1.IVal != 120 {
-		t.Fatalf("expected 120, got %+v", v1)
+	v1, err1 := evalUpdateExpr("price + 20", rec, storage.TypeInt)
+	if err1 != nil || v1.IsNull || v1.IVal != 120 {
+		t.Fatalf("expected 120, got %+v (err: %v)", v1, err1)
 	}
 
 	// 2. Uppercase reference to lowercase column
 	rec2 := storage.Record{
 		"price": storage.IntValue(50),
 	}
-	v2 := evalUpdateExpr("PRICE * 3", rec2, storage.TypeInt)
-	if v2.IsNull || v2.IVal != 150 {
-		t.Fatalf("expected 150, got %+v", v2)
+	v2, err2 := evalUpdateExpr("PRICE * 3", rec2, storage.TypeInt)
+	if err2 != nil || v2.IsNull || v2.IVal != 150 {
+		t.Fatalf("expected 150, got %+v (err: %v)", v2, err2)
 	}
 
 	// 3. Float arithmetic with mixed case
-	v3 := evalUpdateExpr("rate + 0.5", rec, storage.TypeFloat)
-	if v3.IsNull || v3.FVal != 2.0 {
-		t.Fatalf("expected 2.0, got %+v", v3)
+	v3, err3 := evalUpdateExpr("rate + 0.5", rec, storage.TypeFloat)
+	if err3 != nil || v3.IsNull || v3.FVal != 2.0 {
+		t.Fatalf("expected 2.0, got %+v (err: %v)", v3, err3)
 	}
 }
 

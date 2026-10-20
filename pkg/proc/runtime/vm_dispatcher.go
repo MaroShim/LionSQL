@@ -676,7 +676,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
 		rec := make(storage.Record)
 		for _, a := range data.Assignments {
-			valAny, _ := proc.EvalRowExpr(a.Value, rowCtx, nil)
+			valAny, err := proc.EvalRowExpr(a.Value, rowCtx, nil)
+			if err != nil {
+				return f.handleCatch(err, pc)
+			}
 			colName := a.Column
 			if tableSchema != nil {
 				if colSchema, _, ok := tableSchema.FindColumn(colName); ok {

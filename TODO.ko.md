@@ -143,7 +143,7 @@
 | **P1** | **엔진/DML** | **`INSERT ... VALUES` 튜플 수식 내 콤마 분해 정합성 보장 (`BUG-SPLIT-VALUES-1`)** | `pkg/engine/sqlexec_eval.go`, `pkg/engine/sqlexec_dml.go` | **완료 (`[x]`)** | - |
 | **P2** | **엔진/MERGE** | **MERGE 문 `UPDATE SET` 절 다중 인자 수식 콤마 분해 사일런트 유실 방지 (`BUG-MERGE-SET-1`)** | `pkg/engine/sqlexec_merge.go` | **완료 (`[x]`)** | - |
 | **P2** | **와이어/COPY** | **PGWire `COPY FROM` 시 정수 기본키 `0`의 타임스탬프 위조 방지 (`BUG-COPY-PK-1`)** | `pkg/wire/copy.go` | **완료 (`[x]`)** | - |
-| **P1** | **프로시저/내장함수** | **`UPPER`/`LOWER`/`TRIM`/`REPLACE` 등 문자열 함수 NULL 입력 시 NULL 정규 반환 (`BUG-STR-NULL-1`)** | `pkg/proc/builtins_string.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **프로시저/내장함수** | **`UPPER`/`LOWER`/`TRIM`/`REPLACE` 등 문자열 함수 NULL 입력 시 NULL 정규 반환 (`BUG-STR-NULL-1`)** | `pkg/proc/builtins_string.go` | **완료 (`[x]`)** | - |
 | **P1** | **프로시저/VM** | **VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 정규화로 업데이트 사일런트 유실 방지 (`BUG-VM-UPDATE-1`)** | `pkg/proc/runtime/vm_dispatcher.go`, `pkg/proc/runtime/vm.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/MemEngine** | **MemEngine 자식 행 삽입 시 대소문자 불일치로 가짜 외래키 삽입 허용 결함 수정 (`BUG-FK-CHILD-CASE-1`)** | `pkg/storage/memengine/tx.go` | **완료 (`[x]`)** | - |
 | **P2** | **와이어/PGWire** | **PGWire 파라미터 미리보기 시 단순 문자열 치환으로 `$10` 깨짐 방지 (`BUG-PGWIRE-PARAM-1`)** | `pkg/wire/server.go` | **진행 대기 (`[ ]`)** | - |
@@ -177,23 +177,23 @@
 | **P1** | **프로시저/파라미터** | **`parseSpParamDeclarations` 콤마 단순 분해로 인한 `DECIMAL(10, 2)` 파라미터 파괴 결함 해결 (`BUG-SP-PARAM-DECIMAL-1`)** | `pkg/engine/sqlexec_procs.go` | **완료 (`[x]`)** | - |
 | **P2** | **프로시저/파라미터** | **`cleanOutputSuffix` 경계 미검사로 인한 `@timeout` 등 `OUT` 접미 변수명 절단 훼손 결함 해결 (`BUG-SP-EXEC-SUFFIX-OUT-1`)** | `pkg/engine/sqlexec_procs.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/MemEngine** | **`IndexScan` 트랜잭션 내 로컬 삽입 행 무작위 맵 순회 및 정렬 누락으로 인한 인덱스 순서 파괴 결함 해결 (`BUG-MEM-INDEX-LOCAL-ORDER-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
-| **P1** | **스토리지/비교연산** | **`storage.Value.Compare` 정수-실수(Int-Float) 상호 타입 강제변환 누락으로 인한 비교 역전 결함 해결 (`BUG-STORAGE-CMP-INT-FLOAT-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/비교연산** | **`storage.Value.Compare` 정수-실수(Int-Float) 상호 타입 강제변환 누락으로 인한 비교 역전 결함 해결 (`BUG-STORAGE-CMP-INT-FLOAT-1`)** | `pkg/storage/engine.go` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/파생테이블** | **`resolveDerivedTables`의 `SELECT *` 조인 시 타 테이블 프로젝션 완전 증발 결함 해결 (`BUG-DERIVED-JOIN-STAR-1`)** | `pkg/engine/sqlexec_derived.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/DDL** | **`splitColumnDefs` 따옴표 미추적으로 인한 DEFAULT 문자열 내 콤마/괄호 스키마 파괴 결함 해결 (`BUG-DDL-SPLIT-QUOTE-1`)** | `pkg/engine/sqlexec_ddl.go` | **완료 (`[x]`)** | - |
-| **P1** | **엔진/산술수식** | **`evalUpdateExpr` 정규식 경직성으로 인한 대괄호/다중컬럼/상수선행 산술식 0 리셋 결함 해결 (`BUG-ARITH-EXPR-ZERO-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/산술수식** | **`evalUpdateExpr` 정규식 경직성으로 인한 대괄호/다중컬럼/상수선행 산술식 0 리셋 결함 해결 (`BUG-ARITH-EXPR-ZERO-1`)** | `pkg/engine/sqlexec_eval.go` | **완료 (`[x]`)** | - |
 | **P2** | **스토리지/인덱스** | **`DropIndex` 대소문자 불일치 시 `td.Indexes` 맵 미삭제로 인한 좀비 인덱스 잔존 결함 해결 (`BUG-DROP-INDEX-CASE-1`)** | `pkg/storage/memengine/ddl.go` | **진행 대기 (`[ ]`)** | - |
-| **P1** | **실행/집계** | **Volcano `AggregateIterator`에서 동일 그룹 내 Decimal-정수 혼합 시 정수 합계 전량 유실 결함 해결 (`BUG-AGG-MIXED-NUM-DEC-1`)** | `pkg/execution/aggregate.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **실행/집계** | **Volcano `AggregateIterator`에서 동일 그룹 내 Decimal-정수 혼합 시 정수 합계 전량 유실 결함 해결 (`BUG-AGG-MIXED-NUM-DEC-1`)** | `pkg/execution/aggregate.go` | **완료 (`[x]`)** | - |
 | **P1** | **프로시저/파서** | **단순 CASE 문(`CASE @val WHEN 1 THEN ...`) 미지원으로 인한 구문 파싱 및 컴파일 실패 결함 해결 (`BUG-PROC-SIMPLE-CASE-1`)** | `pkg/proc/parser_expr.go`, `pkg/proc/ast.go`, `pkg/proc/compiler.go` | **진행 대기 (`[ ]`)** | - |
-| **P1** | **프로시저/평가** | **`evalRowBinaryOp` 불일치 비교(`<>`, `!=`) 시 NULL 3가 논리 위반으로 인한 NULL 행 무단 통과 결함 해결 (`BUG-EVAL-NEQ-NULL-1`)** | `pkg/proc/eval.go` | **진행 대기 (`[ ]`)** | - |
-| **P2** | **프로시저/날짜함수** | **`DATEADD`/`EOMONTH` 증분 파라미터 NULL 전달 시 0 대체로 날짜 미변조 반환 결함 해결 (`BUG-DATEADD-NULL-1`)** | `pkg/proc/builtins_date.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **프로시저/평가** | **`evalRowBinaryOp` 불일치 비교(`<>`, `!=`) 시 NULL 3가 논리 위반으로 인한 NULL 행 무단 통과 결함 해결 (`BUG-EVAL-NEQ-NULL-1`)** | `pkg/proc/eval.go` | **완료 (`[x]`)** | - |
+| **P2** | **프로시저/날짜함수** | **`DATEADD`/`EOMONTH` 증분 파라미터 NULL 전달 시 0 대체로 날짜 미변조 반환 결함 해결 (`BUG-DATEADD-NULL-1`)** | `pkg/proc/builtins_date.go` | **완료 (`[x]`)** | - |
 | **P1** | **프로시저/스토리지** | **VDBE `OpInsert` 상수 리터럴 기본값(DEFAULT) 누락 및 NULL 강제 삽입 결함 해결 (`BUG-VM-INSERT-DEFAULT-1`)** | `pkg/proc/runtime/vm_dispatcher.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **프로시저/대소문자** | **VDBE DML 컬럼명 대소문자 불일치 시 `RecordToRow`/`updateLocked` 값 유실 및 NULL 삽입 결함 해결 (`BUG-VM-DML-COL-CASE-1`)** | `pkg/proc/runtime/vm_dispatcher.go`, `pkg/storage/tuple.go`, `pkg/storage/memengine/tx.go` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/무결성** | **VDBE 및 DML/DDL에서 PK 컬럼 미식별 시 임의 컬럼 무작위 순회(`Values[0]`, `range rec`) 행 파괴 결함 해결 (`BUG-DML-PK-RANDOM-GUESS-1`)** | `pkg/proc/runtime/vm.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_ddl.go` | **완료 (`[x]`)** | - |
 | **P1** | **와이어/보안** | **PGWire 및 TDS에서 슈퍼유저(`sa`, `postgres`, `admin`) 비밀번호 인증 완전 우회 백도어 결함 해결 (`BUG-AUTH-ADMIN-PW-BYPASS-1`)** | `pkg/wire/server.go`, `pkg/wire/tds/server.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/DML** | **코디네이터 `UPDATE` SET 절 쉼표 단순 분해로 인한 문자열 리터럴 및 함수 인자 쉼표 파괴 결함 해결 (`BUG-UPDATE-SET-COMMA-SPLIT-1`)** | `pkg/engine/sqlexec_dml.go` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/조건평가** | **코디네이터 `WHERE IN (...)` 쉼표 단순 분해로 인한 쉼표 포함 문자열 리터럴 절단 및 매칭 실패 결함 해결 (`BUG-EVAL-IN-COMMA-SPLIT-1`)** | `pkg/engine/sqlexec_eval.go` | **완료 (`[x]`)** | - |
-| **P1** | **스토리지/비교연산** | **`Value.Compare` 날짜/시간-문자열(`DateTime`-`VarChar`) 상호 변환 누락으로 인한 비교 역전 결함 해결 (`BUG-STORAGE-CMP-DATETIME-STR-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
-| **P2** | **스토리지/동등비교** | **`Value.Equal` 실수(Float) 6자리 고정 문자열 포맷팅으로 인한 오판 및 힙 할당 결함 해결 (`BUG-STORAGE-EQUAL-FLOAT-STR-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/비교연산** | **`Value.Compare` 날짜/시간-문자열(`DateTime`-`VarChar`) 상호 변환 누락으로 인한 비교 역전 결함 해결 (`BUG-STORAGE-CMP-DATETIME-STR-1`)** | `pkg/storage/engine.go` | **완료 (`[x]`)** | - |
+| **P2** | **스토리지/동등비교** | **`Value.Equal` 실수(Float) 6자리 고정 문자열 포맷팅으로 인한 오판 및 힙 할당 결함 해결 (`BUG-STORAGE-EQUAL-FLOAT-STR-1`)** | `pkg/storage/engine.go` | **완료 (`[x]`)** | - |
 | **P1** | **스토리지/MemEngine** | **트랜잭션 커밋 시 테이블 대소문자 불일치로 인한 사일런트 쓰기 증발 결함 해결 (`BUG-MEM-TX-TABLE-CASE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **스토리지/인덱스** | **MemEngine `IndexScan` 인덱스명 대소문자 엄격 일치로 인한 조회 실패 결함 해결 (`BUG-MEM-TX-INDEX-CASE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/MERGE** | **`MERGE` 문의 `WHEN NOT MATCHED THEN INSERT` IDENTITY 기본키 누락 및 실패 결함 해결 (`BUG-MERGE-IDENTITY-PK-1`)** | `pkg/engine/sqlexec_merge.go` | **진행 대기 (`[ ]`)** | - |
@@ -210,7 +210,7 @@
 | **P1** | **플래너/조건분해** | **`splitAndConditions`의 이스케이프 따옴표(`''`) 및 대괄호 식별자(`[col AND val]`) AND 오절단 결함 해결 (`BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1`)** | `pkg/planner/decorrelate.go`, `pkg/planner/pushdown.go` | **완료 (`[x]`)** | - |
 | **P1** | **스토리지/스키플리스트** | **SkipList 유니크 인덱스 재인덱싱 시 `for _, item` 값 복사 순회로 커버링 컬럼 갱신 유실 결함 해결 (`BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1`)** | `pkg/storage/memengine/skiplist.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/동시성** | **`TableData.ensureShardsInit` 락 없는 맵 초기화로 인한 동시 읽기 트랜잭션 런타임 패닉 결함 해결 (`BUG-MEM-SHARD-INIT-RACE-1`)** | `pkg/storage/memengine/table_data.go` | **진행 대기 (`[ ]`)** | - |
-| **P2** | **함수/날짜시간** | **`TODATETIMEOFFSET`의 정수 분(Minute) 단위 오프셋을 시간(Hour)으로 60배 왜곡 처리하는 결함 해결 (`BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`)** | `pkg/proc/builtins_date.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **함수/날짜시간** | **`TODATETIMEOFFSET`의 정수 분(Minute) 단위 오프셋을 시간(Hour)으로 60배 왜곡 처리하는 결함 해결 (`BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`)** | `pkg/proc/builtins_date.go` | **완료 (`[x]`)** | - |
 | **P2** | **카탈로그/메타데이터** | **가상 카탈로그의 복합 외래키 쉼표 병합(`"col1, col2"`) 및 CASCADE 액션 누락 결함 해결 (`BUG-CATALOG-FK-MULTI-COL-ACTIONS-1`)** | `pkg/catalog/virtual/mssql.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **VM/DML** | **VDBE `OpUpdate`/`OpDelete` 단일 PK 행 미존재 시 `ErrKeyNotFound` 치명적 프로시저 중단 결함 해결 (`BUG-VM-DML-PK-NOT-FOUND-CRASH-1`)** | `pkg/proc/runtime/vm_dispatcher.go` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/프로시저** | **`execProcedureCall`에서 활성 트랜잭션(`cs.Tx`) 무시 및 독립 세션 자동 커밋으로 인한 원자성 파괴 해결 (`BUG-EXEC-PROC-TX-BYPASS-1`)** | `pkg/engine/sqlexec_procs.go` | **진행 대기 (`[ ]`)** | - |
@@ -218,13 +218,13 @@
 | **P2** | **와이어/TDS** | **TDS `handleRPCExecuteSQL`에서 파라미터명 미인식으로 인한 `@stmt`/`@params` 도치 결함 해결 (`BUG-TDS-RPC-PARAM-NAME-ORDER-1`)** | `pkg/wire/tds/server.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **파서/문법** | **Pratt 파서 `parseCase`에서 Simple CASE (`CASE expr WHEN ...`) 피연산자 누락 및 문법 거부 해결 (`BUG-PARSER-SIMPLE-CASE-OMISSION-1`)** | `pkg/proc/parser_expr.go`, `pkg/proc/ast.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **엔진/정렬** | **PIVOT 및 UNPIVOT `ORDER BY` 절 쉼표 분해 왜곡으로 인한 정렬 키 파괴 및 방향 무력화 해결 (`BUG-PIVOT-ORDER-BY-SPLIT-1`)** | `pkg/engine/sqlexec_pivot.go` | **완료 (`[x]`)** | - |
-| **P1** | **엔진/DML** | **코디네이터 `UPDATE` 산술식 평가 시 0으로 나누기 및 컬럼 간 연산 시 문자열 폴백 데이터 변조 해결 (`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/DML** | **코디네이터 `UPDATE` 산술식 평가 시 0으로 나누기 및 컬럼 간 연산 시 문자열 폴백 데이터 변조 해결 (`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`)** | `pkg/engine/sqlexec_eval.go` | **완료 (`[x]`)** | - |
 | **P1** | **스토리지/WAL** | **WAL 충돌 복구 시 `OpCreateTable` 인라인 인덱스 초기화 누락으로 인한 인덱스 갱신 중단 해결 (`BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1`)** | `pkg/storage/memengine/persistence.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **실행/윈도우** | **윈도우 함수 `ORDER BY` 시 `RANGE` 피어 구간 미확장으로 인한 동순위 행 누적 집계 왜곡 해결 (`BUG-WINDOW-RANGE-PEER-EVAL-1`)** | `pkg/execution/window.go`, `pkg/planner/planner.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/OCC** | **단일 트랜잭션 내 다중 유니크 인덱스 충돌 행 커밋 시 에러 침묵 및 중복 데이터 영구 삽입 해결 (`BUG-OCC-COMMIT-INTRA-TX-UNIQUE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/OCC** | **MemEngine `updateLocked`에서 유니크 인덱스 제약 검증 완전 누락 결함 해결 (`BUG-OCC-UPDATE-UNIQUE-CHECK-OMISSION-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
-| **P1** | **API/직렬화** | **HTTP REST API 레코드 조회 시 DATETIME/DATE/TIME 컬럼 빈 문자열(`""`) 반환 결함 해결 (`BUG-API-JSON-DATETIME-EMPTY-STR-1`)** | `pkg/api/handlers_records.go`, `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
-| **P2** | **API/정밀도** | **HTTP REST API 레코드 직렬화 시 DECIMAL 컬럼 float64 변환 부동소수점 오차 결함 해결 (`BUG-API-JSON-DECIMAL-PRECISION-LOSS-1`)** | `pkg/api/handlers_records.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **API/직렬화** | **HTTP REST API 레코드 조회 시 DATETIME/DATE/TIME 컬럼 빈 문자열(`""`) 반환 결함 해결 (`BUG-API-JSON-DATETIME-EMPTY-STR-1`)** | `pkg/api/handlers_records.go`, `pkg/storage/engine.go` | **완료 (`[x]`)** | - |
+| **P2** | **API/정밀도** | **HTTP REST API 레코드 직렬화 시 DECIMAL 컬럼 float64 변환 부동소수점 오차 결함 해결 (`BUG-API-JSON-DECIMAL-PRECISION-LOSS-1`)** | `pkg/api/handlers_records.go` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/파생테이블** | **0건 반환 파생테이블에서 임의의 `Columns[0]`을 PK로 승격하여 후속 쿼리 실패 초래하는 결함 해결 (`BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1`)** | `pkg/engine/sqlexec_derived.go` | **완료 (`[x]`)** | - |
 | **P1** | **백업/PITR** | **Point-in-Time Recovery 시 DDL 실행 실패 에러 침묵(`_ =`)으로 인한 복구 실패 은폐 해결 (`BUG-PITR-DDL-SILENT-SWALLOW-1`)** | `pkg/backup/pitr.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/식별자** | **스토리지 엔진 테이블명 대소문자 미구분 맵 조회 실패 및 중복 테이블 생성 결함 해결 (`BUG-STORAGE-TABLE-CASE-SENSITIVITY-1`)** | `pkg/storage/memengine/ddl.go`, `pkg/storage/wiredtiger/wt_engine.go` | **진행 대기 (`[ ]`)** | - |
@@ -237,7 +237,7 @@
 | **P1** | **실행/조인** | **복합 조인 조건 '=' 분해 파괴로 인한 빈 문자열 해시 매칭 및 무제한 카테시안 곱 결함 해결 (`BUG-EXEC-BUILDER-JOIN-COND-SPLIT-1`)** | `pkg/execution/builder.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/임시테이블** | **세션 임시테이블 스냅샷/WAL 영속화 및 재기동 후 영구 고아 객체 누수 결함 해결 (`BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1`)** | `pkg/storage/memengine/persistence.go`, `pkg/storage/wiredtiger/wt_engine.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/MERGE** | **MERGE 구문 내 `WHEN NOT MATCHED` 신규 삽입 행이 `NOT MATCHED BY SOURCE`에 의해 즉각 자가 삭제되는 결함 해결 (`BUG-MERGE-NOT-MATCHED-SOURCE-SELF-DESTRUCT-1`)** | `pkg/engine/sqlexec_merge.go` | **진행 대기 (`[ ]`)** | - |
-| **P1** | **함수/문자열** | **`CHARINDEX` 및 `STRPOS`의 NULL 인자 수신 시 0 반환 삼치논리 파괴 결함 해결 (`BUG-STR-CHARINDEX-NULL-ZERO-1`)** | `pkg/proc/builtins_string.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **함수/문자열** | **`CHARINDEX` 및 `STRPOS`의 NULL 인자 수신 시 0 반환 삼치논리 파괴 결함 해결 (`BUG-STR-CHARINDEX-NULL-ZERO-1`)** | `pkg/proc/builtins_string.go` | **완료 (`[x]`)** | - |
 | **P1** | **플래너/CBO** | **CBO 선택도 추정 시 컬럼명 대소문자 불일치로 인한 통계 탐색 실패 및 0.33 추락 결함 해결 (`BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1`)** | `pkg/planner/stats.go` | **완료 (`[x]`)** | - |
 | **P1** | **플래너/비상관화** | **OR 조건 분기 내 서브쿼리 불법 SEMI 조인 변환 및 `removeClause`의 식별자 절단 결함 해결 (`BUG-PLANNER-DECORRELATE-OR-SUBQUERY-CORRUPT-1`)** | `pkg/planner/decorrelate.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **백업/복원** | **백업 아카이브 생성 및 복원 시 뷰(View) 메타데이터 전무 누락으로 인한 영구 유실 결함 해결 (`BUG-BACKUP-RESTORE-VIEW-OMISSION-1`)** | `pkg/backup/backup.go`, `pkg/backup/restore.go` | **진행 대기 (`[ ]`)** | - |
@@ -749,7 +749,7 @@
 | **BUG-SPLIT-VALUES-1** | 엔진/DML | `INSERT ... VALUES` 튜플 수식 내 콤마 분해 정합성 보장 | **완료 (`[x]`)** | `splitValues`의 괄호 깊이 추적으로 `COALESCE(a, b)` 등 다중 인자 함수 사용 시 컬럼 수 불일치 에러 방지 |
 | **BUG-MERGE-SET-1** | 엔진/MERGE | MERGE 문 `UPDATE SET` 절 다중 인자 수식 콤마 분해 사일런트 유실 방지 | **완료 (`[x]`)** | `parseSetPairs` 괄호 고려 토큰 분해로 수식 내 콤마 분해 시 후속 구문 사일런트 유실 방지 |
 | **BUG-COPY-PK-1** | 와이어/COPY | PGWire `COPY FROM` 시 정수 기본키 `0`의 타임스탬프 위조 방지 | **완료 (`[x]`)** | PK `id=0`을 미지정으로 오해하여 현재 Unix 에포크 타임스탬프로 위조 덮어쓰기하는 결함 해결 |
-| **BUG-STR-NULL-1** | 프로시저/내장함수 | `UPPER`/`LOWER`/`TRIM`/`REPLACE` 등 문자열 함수 NULL 입력 시 NULL 정규 반환 | **대기 (`[ ]`)** | 문자열 함수에 NULL 입력 시 빈 문자열("") 또는 0 반환 및 REPLACE 변조 방지 |
+| **BUG-STR-NULL-1** | 프로시저/내장함수 | `UPPER`/`LOWER`/`TRIM`/`REPLACE` 등 문자열 함수 NULL 입력 시 NULL 정규 반환 | **완료 (`[x]`)** | 문자열 함수에 NULL 입력 시 빈 문자열("") 또는 0 반환 및 REPLACE 변조 방지 |
 | **BUG-VM-UPDATE-1** | VM/무결성 | VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 정규화로 업데이트 사일런트 유실 방지 | **대기 (`[ ]`)** | VDBE UPDATE 시 컬럼명 대소문자 차이로 인해 스토리지 병합에서 무시되고 구값이 유지되는 결함 해결 |
 | **BUG-FK-CHILD-CASE-1** | 스토리지/Mem | MemEngine 자식 행 삽입 시 대소문자 불일치로 가짜 외래키 삽입 허용 결함 수정 | **완료 (`[x]`)** | `childRecord[cCol]` 대소문자 불일치로 외래키 만족으로 오판되어 유효하지 않은 FK 삽입 허용 해결 |
 | **BUG-PGWIRE-PARAM-1** | 와이어/PGWire | PGWire 파라미터 미리보기 시 단순 문자열 치환으로 `$10` 깨짐 방지 | **대기 (`[ ]`)** | `$10` 이상의 다중 파라미터가 `$1` 단순 치환으로 잘려 파라미터 프리뷰가 실패하는 결함 해결 |
@@ -783,23 +783,23 @@
 | **BUG-SP-PARAM-DECIMAL-1** | 프로시저/파라미터 | `parseSpParamDeclarations` 콤마 분해로 인한 `DECIMAL(10, 2)` 파라미터 파괴 해결 | **완료 (`[x]`)** | 괄호 중첩 추적으로 복합 데이터 타입 파라미터 선언문 절단 및 유령 파라미터 생성 방지 |
 | **BUG-SP-EXEC-SUFFIX-OUT-1** | 프로시저/파라미터 | `cleanOutputSuffix` 경계 미검사로 인한 `@timeout` 등 `OUT` 접미 변수명 절단 해결 | **대기 (`[ ]`)** | 선행 공백/단어 경계 검사로 변수명 접미사 오절단 방지 및 변수 바인딩 정합성 보장 |
 | **BUG-MEM-INDEX-LOCAL-ORDER-1** | 스토리지/Mem | MemEngine `IndexScan` 로컬 삽입 행 무작위 맵 순회 및 정렬 누락 해결 | **대기 (`[ ]`)** | 트랜잭션 로컬 삽입 행 인덱스 키 추출 후 병합 정렬로 인덱스 스캔 순서 보장 |
-| **BUG-STORAGE-CMP-INT-FLOAT-1** | 스토리지/비교 | `storage.Value.Compare` Int-Float 상호 타입 강제변환 누락 비교 역전 해결 | **대기 (`[ ]`)** | `Int <-> Float` 상호 수치 강제변환으로 `IntValue(100) > FloatValue(200.5)` 왜곡 방지 |
+| **BUG-STORAGE-CMP-INT-FLOAT-1** | 스토리지/비교 | `storage.Value.Compare` Int-Float 상호 타입 강제변환 누락 비교 역전 해결 | **완료 (`[x]`)** | `Int <-> Float` 상호 수치 강제변환으로 `IntValue(100) > FloatValue(200.5)` 왜곡 방지 |
 | **BUG-DERIVED-JOIN-STAR-1** | 엔진/파생테이블 | `resolveDerivedTables`의 `SELECT *` 조인 시 타 테이블 프로젝션 증발 해결 | **대기 (`[ ]`)** | 조인 내 타 테이블 프로젝션 보존 및 합성 PK 제거 시 올바른 SELECT * 정규화 |
 | **BUG-DDL-SPLIT-QUOTE-1** | 엔진/DDL | `splitColumnDefs` 따옴표 미추적으로 인한 DEFAULT 문자열 콤마/괄호 파괴 해결 | **완료 (`[x]`)** | 따옴표 상태 추적으로 `DEFAULT 'hello, world'`, `DEFAULT '('` 스키마 왜곡 방지 |
-| **BUG-ARITH-EXPR-ZERO-1** | 엔진/산술수식 | `evalUpdateExpr` 정규식 경직성으로 인한 대괄호/다중컬럼/상수선행 산술식 0 리셋 해결 | **대기 (`[ ]`)** | `[Price] + 10`, `a + b`, `10 + a` 등 유연한 수식 평가기 도입으로 0 리셋 방지 |
+| **BUG-ARITH-EXPR-ZERO-1** | 엔진/산술수식 | `evalUpdateExpr` 정규식 경직성으로 인한 대괄호/다중컬럼/상수선행 산술식 0 리셋 해결 | **완료 (`[x]`)** | `[Price] + 10`, `a + b`, `10 + a` 등 유연한 수식 평가기 도입으로 0 리셋 방지 |
 | **BUG-DROP-INDEX-CASE-1** | 스토리지/인덱스 | `DropIndex` 대소문자 불일치 시 `td.Indexes` 맵 미삭제 좀비 인덱스 잔존 해결 | **대기 (`[ ]`)** | 정규화된 인덱스 공식 명칭(`foundIdx.Name`) 삭제로 메모리 누수 및 좀비 인덱스 방지 |
-| **BUG-AGG-MIXED-NUM-DEC-1** | 실행/집계 | Volcano `AggregateIterator` 동일 그룹 내 Decimal-정수 혼합 시 정수 합계 유실 해결 | **대기 (`[ ]`)** | 그룹 내 Decimal 출현 시 비-Decimal 수치 Decimal 변환 및 합산으로 수치 누락 방지 |
+| **BUG-AGG-MIXED-NUM-DEC-1** | 실행/집계 | Volcano `AggregateIterator` 동일 그룹 내 Decimal-정수 혼합 시 정수 합계 유실 해결 | **완료 (`[x]`)** | 그룹 내 Decimal 출현 시 비-Decimal 수치 Decimal 변환 및 합산으로 수치 누락 방지 |
 | **BUG-PROC-SIMPLE-CASE-1** | 프로시저/파서 | 단순 CASE 문(`CASE @val WHEN 1 THEN ...`) 미지원 구문 파싱/컴파일 실패 해결 | **대기 (`[ ]`)** | `CaseExpr`에 `Operand` 필드 신설 및 VDBE 피연산자-조건값 비교 분기 바이트코드 방출 |
-| **BUG-EVAL-NEQ-NULL-1** | 프로시저/평가 | `evalRowBinaryOp` 불일치 비교(`<>`, `!=`) 시 NULL 3가 논리 위반 통과 해결 | **대기 (`[ ]`)** | `TokenNeq` 연산자 NULL 피연산자 시 `nil`(UNKNOWN) 반환으로 WHERE 절 누수 원천 차단 |
-| **BUG-DATEADD-NULL-1** | 프로시저/날짜함수 | `DATEADD`/`EOMONTH` 증분 파라미터 NULL 전달 시 0 대체 날짜 반환 해결 | **대기 (`[ ]`)** | 증분 파라미터 NULL 검사 및 NULL 즉시 반환, 미지원 datepart 에러 정규화 |
+| **BUG-EVAL-NEQ-NULL-1** | 프로시저/평가 | `evalRowBinaryOp` 불일치 비교(`<>`, `!=`) 시 NULL 3가 논리 위반 통과 해결 | **완료 (`[x]`)** | `TokenNeq` 연산자 NULL 피연산자 시 `nil`(UNKNOWN) 반환으로 WHERE 절 누수 원천 차단 |
+| **BUG-DATEADD-NULL-1** | 프로시저/날짜함수 | `DATEADD`/`EOMONTH` 증분 파라미터 NULL 전달 시 0 대체 날짜 반환 해결 | **완료 (`[x]`)** | 증분 파라미터 NULL 검사 및 NULL 즉시 반환, 미지원 datepart 에러 정규화 |
 | **BUG-VM-INSERT-DEFAULT-1** | 프로시저/스토리지 | VDBE `OpInsert` 상수 리터럴 기본값(DEFAULT) 누락 및 NULL 삽입 해결 | **대기 (`[ ]`)** | 상수 리터럴 기본값 및 표현식 평가 파이프라인 연동으로 스키마 기본값 100% 정상 주입 |
 | **BUG-VM-DML-COL-CASE-1** | 프로시저/대소문자 | VDBE DML 컬럼명 대소문자 불일치 시 `RecordToRow`/`updateLocked` 값 유실 해결 | **완료 (`[x]`)** | DML Record 생성 및 스토리지 레코드 변환 시 공식 컬럼명 정규화로 값 유실 방지 |
 | **BUG-DML-PK-RANDOM-GUESS-1** | 엔진/무결성 | VDBE 및 DML/DDL에서 PK 컬럼 미식별 시 임의 컬럼 무작위 순회 행 파괴 해결 | **완료 (`[x]`)** | 임의 컬럼 추측 및 무작위 Go 맵 순회 완전 삭제, 공식 PK 엄격 조회로 엉뚱한 행 훼손 원천 차단 |
 | **BUG-AUTH-ADMIN-PW-BYPASS-1** | 와이어/보안 | PGWire 및 TDS 슈퍼유저(`sa`, `postgres`, `admin`) 비밀번호 인증 완전 우회 해결 | **대기 (`[ ]`)** | 비밀번호 설정 계정 대상 내장 관리자 예외 우회 차단 및 필수 인증 강제 적용 |
 | **BUG-UPDATE-SET-COMMA-SPLIT-1** | 엔진/DML | 코디네이터 `UPDATE` SET 절 쉼표 단순 분해로 인한 문자열/함수 쉼표 파괴 해결 | **완료 (`[x]`)** | 따옴표 및 괄호 중첩 상태 추적 SQL 토큰 분해기 적용으로 쉼표 오절단 방지 |
 | **BUG-EVAL-IN-COMMA-SPLIT-1** | 엔진/조건평가 | 코디네이터 `WHERE IN (...)` 쉼표 단순 분해로 인한 쉼표 포함 문자열 절단 해결 | **완료 (`[x]`)** | 리터럴 이스케이프 및 따옴표 상태 인식 스마트 IN 분해기로 조건 매칭 정합성 보장 |
-| **BUG-STORAGE-CMP-DATETIME-STR-1** | 스토리지/비교연산 | `Value.Compare` DateTime-VarChar 상호 변환 누락 비교 역전 해결 | **대기 (`[ ]`)** | 날짜/시간과 문자열 간의 상호 파싱/강제변환으로 올바른 시간 축 비교 보장 |
-| **BUG-STORAGE-EQUAL-FLOAT-STR-1** | 스토리지/동등비교 | `Value.Equal` 실수 6자리 고정 문자열 포맷팅 오판 및 힙 할당 해결 | **대기 (`[ ]`)** | 문자열 포맷팅 제거 및 네이티브 부동소수점 비트/엡실론 비교로 단일화 |
+| **BUG-STORAGE-CMP-DATETIME-STR-1** | 스토리지/비교연산 | `Value.Compare` DateTime-VarChar 상호 변환 누락 비교 역전 해결 | **완료 (`[x]`)** | 날짜/시간과 문자열 간의 상호 파싱/강제변환으로 올바른 시간 축 비교 보장 |
+| **BUG-STORAGE-EQUAL-FLOAT-STR-1** | 스토리지/동등비교 | `Value.Equal` 실수 6자리 고정 문자열 포맷팅 오판 및 힙 할당 해결 | **완료 (`[x]`)** | 문자열 포맷팅 제거 및 네이티브 부동소수점 비트/엡실론 비교로 단일화 |
 | **BUG-MEM-TX-TABLE-CASE-1** | 스토리지/MemEngine | 트랜잭션 커밋 시 테이블 대소문자 불일치 사일런트 쓰기 증발 해결 | **대기 (`[ ]`)** | 변경 레코드 테이블명 스키마 공식 명칭 정규화 및 대소문자 무관 탐색 보장 |
 | **BUG-MEM-TX-INDEX-CASE-1** | 스토리지/인덱스 | MemEngine `IndexScan` 인덱스명 대소문자 불일치 인덱스 조회 실패 해결 | **대기 (`[ ]`)** | 인덱스 맵 탐색 1차 실패 시 대소문자 무관 탐색 보강으로 인덱스 히트 보장 |
 | **BUG-MERGE-IDENTITY-PK-1** | 엔진/MERGE | `MERGE` 문의 `WHEN NOT MATCHED THEN INSERT` IDENTITY PK 누락 실패 해결 | **대기 (`[ ]`)** | MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화 연동 |
@@ -816,7 +816,7 @@
 | **BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1** | 플래너/파싱 | `splitAndConditions`의 이스케이프 따옴표 및 대괄호 식별자 AND 오절단 해결 | **완료 (`[x]`)** | 따옴표 이스케이프 및 대괄호 인식으로 WHERE 조건 구문 파괴 방지 |
 | **BUG-MEM-SKIPLIST-UNIQUE-INCLUDE-COPY-1** | 스토리지/인덱스 | SkipList 유니크 인덱스 재인덱싱 시 값 복사로 인한 커버링 컬럼 갱신 유실 해결 | **대기 (`[ ]`)** | 슬라이스 직접 인덱싱 대입(`curr.Items[i].IncludeValues`)으로 커버링 데이터 최신화 보장 |
 | **BUG-MEM-SHARD-INIT-RACE-1** | 스토리지/동시성 | `TableData.ensureShardsInit` 락 없는 맵 초기화 동시 읽기 크래시 해결 | **대기 (`[ ]`)** | `sync.Once` 기반 멱등적 1회 초기화로 동시 읽기 트랜잭션 맵 경쟁 원천 방지 |
-| **BUG-DATE-TODATETIMEOFFSET-INT-MINS-1** | 함수/날짜시간 | `TODATETIMEOFFSET`의 정수 분(Minute) 단위 오프셋 60배 시간 왜곡 해결 | **대기 (`[ ]`)** | 콜론 없는 정수 오프셋을 분 단위 오프셋으로 정규 해석하여 표준 SQL 시간 축 보장 |
+| **BUG-DATE-TODATETIMEOFFSET-INT-MINS-1** | 함수/날짜시간 | `TODATETIMEOFFSET`의 정수 분(Minute) 단위 오프셋 60배 시간 왜곡 해결 | **완료 (`[x]`)** | 콜론 없는 정수 오프셋을 분 단위 오프셋으로 정규 해석하여 표준 SQL 시간 축 보장 |
 | **BUG-CATALOG-FK-MULTI-COL-ACTIONS-1** | 카탈로그/메타 | 가상 카탈로그 복합 외래키 쉼표 병합 및 CASCADE 액션 누락 해결 | **대기 (`[ ]`)** | 복합 FK 컬럼 단위 개별 행 방출 및 실측 `OnUpdate`/`OnDelete` 액션 바인딩 |
 | **BUG-VM-DML-PK-NOT-FOUND-CRASH-1** | VM/DML | VDBE `OpUpdate`/`OpDelete` PK 미존재 시 `ErrKeyNotFound` 프로시저 크래시 해결 | **완료 (`[x]`)** | 키 미존재 시 에러 중단 대신 표준 SQL 규격 0건 처리(`@@ROWCOUNT = 0`) 보장 |
 | **BUG-EXEC-PROC-TX-BYPASS-1** | 엔진/프로시저 | `execProcedureCall` 활성 트랜잭션 무시 및 독립 세션 자동 커밋 해결 | **대기 (`[ ]`)** | `cs.Tx` 트랜잭션 공유 바인딩으로 프로시저 내 수정 사항 트랜잭션 일관성 보장 |
@@ -824,13 +824,14 @@
 | **BUG-TDS-RPC-PARAM-NAME-ORDER-1** | 와이어/TDS | TDS `sp_executesql` 파라미터명 미인식 순서 왜곡 오류 해결 | **대기 (`[ ]`)** | `p.Name` 검사 기반 `@stmt` 및 `@params` 정확한 식별 바인딩 보장 |
 | **BUG-PARSER-SIMPLE-CASE-OMISSION-1** | 파서/문법 | Pratt 파서 Simple CASE (`CASE expr WHEN ...`) 피연산자 누락 거부 해결 | **대기 (`[ ]`)** | 단순 CASE 피연산자 파싱 및 `CaseExpr.Operand` AST 필드/평가기 연동 완비 |
 | **BUG-PIVOT-ORDER-BY-SPLIT-1** | 엔진/정렬 | PIVOT/UNPIVOT `ORDER BY` 절 쉼표 분해 왜곡 및 정렬 무력화 해결 | **완료 (`[x]`)** | 스마트 정렬 토큰 분해기로 다중 정렬 키 콤마 분리 및 방향 보존 |
-| **BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1** | 엔진/DML | 코디네이터 `UPDATE` 산술식 0 나누기 및 컬럼 간 연산 시 문자열 폴백 해결 | **대기 (`[ ]`)** | 0 나누기 예외 처리 및 컬럼 간 연산 지원으로 데이터 사일런트 변조 차단 |
+| **BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1** | 엔진/DML | 코디네이터 `UPDATE` 산술식 0 나누기 및 컬럼 간 연산 시 문자열 폴백 해결 | **완료 (`[x]`)** | 0 나누기 예외 처리 및 컬럼 간 연산 지원으로 데이터 사일런트 변조 차단 |
 | **BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1** | 스토리지/WAL | WAL 복구 시 `OpCreateTable` 인라인 인덱스 등록 누락 해결 | **대기 (`[ ]`)** | 충돌 복구 시 `op.Schema.Indexes` 순회 초기화로 인덱스 갱신 누락 방지 |
 | **BUG-WINDOW-RANGE-PEER-EVAL-1** | 실행/윈도우 | 윈도우 함수 `ORDER BY` 시 `RANGE` 피어 구간 미확장 누적 집계 왜곡 해결 | **대기 (`[ ]`)** | `RANGE` 모드 피어 구간 확장으로 동순위 행 간 표준 일치 집계값 산출 보장 |
 | **BUG-OCC-COMMIT-INTRA-TX-UNIQUE-1** | 스토리지/OCC | 단일 트랜잭션 내 다중 유니크 충돌 행 커밋 시 에러 침묵 및 영구 삽입 해결 | **대기 (`[ ]`)** | `tx.changes` 내부 상호 유니크 충돌 사전 검증 및 커밋 단계 에러 즉시 전파 |
 | **BUG-OCC-UPDATE-UNIQUE-CHECK-OMISSION-1** | 스토리지/OCC | MemEngine `updateLocked`에서 유니크 인덱스 제약 검증 누락 해결 | **대기 (`[ ]`)** | 레코드 수정 시점 대상 유니크 인덱스 및 로컬 변경본 대상 충돌 사전 검증 |
-| **BUG-API-JSON-DATETIME-EMPTY-STR-1** | API/직렬화 | HTTP REST API 레코드 조회 시 DATETIME/DATE/TIME 빈 문자열(`""`) 반환 해결 | **대기 (`[ ]`)** | `v.SVal` 직접 참조 제거 및 `v.String()` / `v.TVal` 기반 ISO-8601 포맷팅 일원화 |
-| **BUG-API-JSON-DECIMAL-PRECISION-LOSS-1** | API/정밀도 | HTTP REST API 레코드 직렬화 시 DECIMAL 컬럼 float64 변환 오차 해결 | **대기 (`[ ]`)** | `strconv.ParseFloat` 제거 및 고정소수점 문자열/`json.Number` 직렬화 보장 |
+| **BUG-API-JSON-DATETIME-EMPTY-STR-1** | API/직렬화 | HTTP REST API 레코드 조회 시 DATETIME/DATE/TIME 빈 문자열(`""`) 반환 해결 | **완료 (`[x]`)** | `v.SVal` 직접 참조 제거 및 `v.String()` / `v.TVal` 기반 ISO-8601 포맷팅 일원화 |
+| **BUG-API-JSON-DECIMAL-PRECISION-LOSS-1** | API/정밀도 | HTTP REST API 레코드 직렬화 시 DECIMAL 컬럼 float64 변환 오차 해결 | **완료 (`[x]`)** | `strconv.ParseFloat` 제거 및 고정소수점 문자열/`json.Number` 직렬화 보장 |
+| **BUG-STR-CHARINDEX-NULL-ZERO-1** | 함수/문자열 | `CHARINDEX` 및 `STRPOS`의 NULL 인자 수신 시 0 반환 삼치논리 파괴 결함 해결 | **완료 (`[x]`)** | NULL 인자 수신 시 즉각 `NullValue` 정규 반환으로 SQL 표준 삼치논리 복원 |
 | **BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1** | 엔진/파생테이블 | 0건 반환 파생테이블에서 임의의 `Columns[0]`을 PK로 승격하는 결함 해결 | **완료 (`[x]`)** | 0건 반환 시 임의 컬럼 PK 승격 방지 및 합성 가상 기본키(`_dt_row_id`) 부여 |
 | **BUG-PITR-DDL-SILENT-SWALLOW-1** | 백업/PITR | Point-in-Time Recovery 시 DDL 실행 실패 에러 침묵(`_ =`) 은폐 해결 | **대기 (`[ ]`)** | DDL 호출 에러 즉시 반환 및 롤백 연동으로 복구 실패 시 정밀 진단 보장 |
 | **BUG-WT-UNIQUE-INDEX-UNENFORCED-1** | 스토리지/WT | WiredTiger 보조 유니크 인덱스 제약 검증 누락 및 순차 스캔 결함 해결 | **완료 (`[x]`)** | 보조 인덱스 생성 시 유니크 인덱스 제약 위반 선행 검증 및 행 삽입/수정 시 중복 키 방어 |

@@ -139,28 +139,28 @@ func evalDateDiff(part string, t1, t2 time.Time) storage.Value {
 	}
 }
 
-func evalDateAdd(part string, n int64, t time.Time) time.Time {
+func evalDateAdd(part string, n int64, t time.Time) (time.Time, bool) {
 	switch part {
 	case "year":
-		return t.AddDate(int(n), 0, 0)
+		return t.AddDate(int(n), 0, 0), true
 	case "quarter":
-		return t.AddDate(0, int(n*3), 0)
+		return t.AddDate(0, int(n*3), 0), true
 	case "month":
-		return t.AddDate(0, int(n), 0)
-	case "day":
-		return t.AddDate(0, 0, int(n))
+		return t.AddDate(0, int(n), 0), true
+	case "day", "dayofyear", "weekday":
+		return t.AddDate(0, 0, int(n)), true
 	case "week":
-		return t.AddDate(0, 0, int(n*7))
+		return t.AddDate(0, 0, int(n*7)), true
 	case "hour":
-		return t.Add(time.Duration(n) * time.Hour)
+		return t.Add(time.Duration(n) * time.Hour), true
 	case "minute":
-		return t.Add(time.Duration(n) * time.Minute)
+		return t.Add(time.Duration(n) * time.Minute), true
 	case "second":
-		return t.Add(time.Duration(n) * time.Second)
+		return t.Add(time.Duration(n) * time.Second), true
 	case "millisecond":
-		return t.Add(time.Duration(n) * time.Millisecond)
+		return t.Add(time.Duration(n) * time.Millisecond), true
 	default:
-		return t
+		return t, false
 	}
 }
 
@@ -447,6 +447,17 @@ func parseOffsetLocation(s string) *time.Location {
 	} else if strings.HasPrefix(s, "+") {
 		s = s[1:]
 	}
+	if !strings.Contains(s, ":") {
+		totalMins, _ := strconv.Atoi(s)
+		totalMins *= sign
+		hours := totalMins / 60
+		mins := totalMins % 60
+		if mins < 0 {
+			mins = -mins
+		}
+		sec := totalMins * 60
+		return time.FixedZone(fmt.Sprintf("%+03d:%02d", hours, mins), sec)
+	}
 	parts := strings.Split(s, ":")
 	hours, _ := strconv.Atoi(parts[0])
 	mins := 0
@@ -564,7 +575,7 @@ func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 		return evalDateDiff(part, t1, t2)
 
 	case "DATEADD":
-		if len(args) < 3 || args[2].IsNull {
+		if len(args) < 3 || args[1].IsNull || args[2].IsNull {
 			return storage.NullValue(storage.TypeVarChar)
 		}
 		part := normalizeDatePart(valToString(args[0]))
@@ -574,13 +585,18 @@ func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 		} else if args[1].Type == storage.TypeVarChar {
 			if parsedN, err := strconv.ParseInt(strings.TrimSpace(args[1].SVal), 10, 64); err == nil {
 				n = parsedN
+			} else {
+				return storage.NullValue(storage.TypeVarChar)
 			}
 		}
 		t, ok := parseDateValue(args[2])
 		if !ok {
 			return storage.NullValue(storage.TypeVarChar)
 		}
-		res := evalDateAdd(part, n, t)
+		res, ok := evalDateAdd(part, n, t)
+		if !ok {
+			return storage.NullValue(storage.TypeVarChar)
+		}
 		return storage.StringValue(res.Format("2006-01-02 15:04:05"))
 
 	case "DATETRUNC", "DATE_TRUNC":
@@ -627,12 +643,15 @@ func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 		if len(args) == 0 || args[0].IsNull {
 			return storage.NullValue(storage.TypeVarChar)
 		}
+		if len(args) >= 2 && args[1].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
 		t, ok := parseDateValue(args[0])
 		if !ok {
 			return storage.NullValue(storage.TypeVarChar)
 		}
 		monthsToAdd := 0
-		if len(args) >= 2 && !args[1].IsNull {
+		if len(args) >= 2 {
 			if args[1].Type == storage.TypeInt {
 				monthsToAdd = int(args[1].IVal)
 			} else if args[1].Type == storage.TypeFloat {

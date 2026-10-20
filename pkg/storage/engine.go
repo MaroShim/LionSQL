@@ -504,7 +504,12 @@ func BoolValueFromAny(v Value) Value {
 }
 
 func DateTimeValue(v time.Time) Value {
-	return Value{Type: TypeDateTime, TVal: v}
+	return Value{
+		Type: TypeDateTime,
+		TVal: v,
+		SVal: v.Format("2006-01-02 15:04:05"),
+		IVal: v.Unix(),
+	}
 }
 
 func JSONValue(v string) Value {
@@ -695,6 +700,33 @@ func (v Value) Equal(other Value) bool {
 		}
 		return (other.BVal && v.IVal == 1) || (!other.BVal && v.IVal == 0)
 	}
+	if (v.Type == TypeInt && other.Type == TypeFloat) || (v.Type == TypeFloat && other.Type == TypeInt) {
+		var f1, f2 float64
+		if v.Type == TypeInt {
+			f1 = float64(v.IVal)
+			f2 = other.FVal
+		} else {
+			f1 = v.FVal
+			f2 = float64(other.IVal)
+		}
+		return f1 == f2 || math.Abs(f1-f2) < 1e-9
+	}
+	if v.Type == TypeDateTime && other.Type == TypeVarChar {
+		if oDt, err := DateTimeValueFromAny(other); err == nil && !oDt.IsNull {
+			return v.TVal.Equal(oDt.TVal)
+		}
+	} else if v.Type == TypeVarChar && other.Type == TypeDateTime {
+		if vDt, err := DateTimeValueFromAny(v); err == nil && !vDt.IsNull {
+			return vDt.TVal.Equal(other.TVal)
+		}
+	}
+	if v.Type == TypeDate && other.Type == TypeVarChar {
+		oDate := DateValueFromString(other.SVal)
+		return v.TVal.Equal(oDate.TVal)
+	} else if v.Type == TypeVarChar && other.Type == TypeDate {
+		vDate := DateValueFromString(v.SVal)
+		return vDate.TVal.Equal(other.TVal)
+	}
 	if v.Type != other.Type {
 		return false
 	}
@@ -704,7 +736,7 @@ func (v Value) Equal(other Value) bool {
 	case TypeVarChar, TypeJSON:
 		return v.SVal == other.SVal
 	case TypeFloat:
-		return fmt.Sprintf("%f", v.FVal) == fmt.Sprintf("%f", other.FVal)
+		return v.FVal == other.FVal || math.Abs(v.FVal-other.FVal) < 1e-9
 	case TypeBool:
 		return v.BVal == other.BVal
 	case TypeDateTime:
@@ -768,6 +800,38 @@ func (v Value) Compare(other Value) int {
 			return 1
 		}
 		return 0
+	}
+	if (v.Type == TypeInt && other.Type == TypeFloat) || (v.Type == TypeFloat && other.Type == TypeInt) {
+		var f1, f2 float64
+		if v.Type == TypeInt {
+			f1 = float64(v.IVal)
+			f2 = other.FVal
+		} else {
+			f1 = v.FVal
+			f2 = float64(other.IVal)
+		}
+		if f1 < f2 {
+			return -1
+		} else if f1 > f2 {
+			return 1
+		}
+		return 0
+	}
+	if v.Type == TypeDateTime && other.Type == TypeVarChar {
+		if oDt, err := DateTimeValueFromAny(other); err == nil && !oDt.IsNull {
+			return v.Compare(oDt)
+		}
+	} else if v.Type == TypeVarChar && other.Type == TypeDateTime {
+		if vDt, err := DateTimeValueFromAny(v); err == nil && !vDt.IsNull {
+			return vDt.Compare(other)
+		}
+	}
+	if v.Type == TypeDate && other.Type == TypeVarChar {
+		oDate := DateValueFromString(other.SVal)
+		return v.Compare(oDate)
+	} else if v.Type == TypeVarChar && other.Type == TypeDate {
+		vDate := DateValueFromString(v.SVal)
+		return vDate.Compare(other)
 	}
 	if v.Type == TypeUUID || v.Type == TypeBinary || v.Type == TypeDate || v.Type == TypeTime {
 		return CompareExtendedValues(v, other)
