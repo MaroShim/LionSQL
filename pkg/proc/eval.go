@@ -312,6 +312,11 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			if v, ok := firstRow[cols[0]]; ok {
 				return v, nil
 			}
+			for k, v := range firstRow {
+				if strings.EqualFold(k, cols[0]) {
+					return v, nil
+				}
+			}
 		}
 		for _, v := range firstRow {
 			return v, nil
