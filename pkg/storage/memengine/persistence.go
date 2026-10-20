@@ -68,6 +68,12 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 				Partitions: make(map[string]map[string]struct{}),
 			}
 			td.initShards()
+			for _, idx := range op.Schema.Indexes {
+				td.Indexes[idx.Name] = &IndexData{
+					Schema:  idx,
+					Entries: make([]IndexEntry, 0),
+				}
+			}
 			e.tables[op.Schema.Name] = td
 		case OpDropTable:
 			delete(e.tables, op.Table)

@@ -584,6 +584,40 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		}
 	}
 
+	// Validate unique index constraints on updated record
+	td.mu.RLock()
+	for _, idxData := range td.Indexes {
+		if idxData.Schema.Unique {
+			keyVal := extractIndexKeyFromRecord(updated, &idxData.Schema)
+			if !keyVal.IsNull {
+				existing := idxData.ScanRange(&keyVal, &keyVal)
+				for _, epk := range existing {
+					if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+						td.mu.RUnlock()
+						return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+					}
+				}
+			}
+		}
+	}
+	td.mu.RUnlock()
+
+	if localRows, ok := tx.local[tableName]; ok {
+		for epk, locRow := range localRows {
+			if epk != pkKey && !tx.isLocallyDeleted(tableName, epk) {
+				for _, idx := range schema.Indexes {
+					if idx.Unique {
+						keyVal := extractIndexKeyFromRecord(updated, &idx)
+						locVal := extractIndexKeyFromRowWithSchema(&schema, locRow, &idx)
+						if !keyVal.IsNull && !locVal.IsNull && keyVal.Equal(locVal) {
+							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
+						}
+					}
+				}
+			}
+		}
+	}
+
 	// Validate foreign keys on the updated record
 	if len(schema.ForeignKeys) > 0 {
 		if err := tx.validateForeignKeysUnderLock(tableName, updated, &schema); err != nil {
@@ -1630,6 +1664,8 @@ func (tx *Transaction) Commit() error {
 	defer unlockAll()
 
 	// 5. Verify OCC version conflicts and unique constraints
+	seenUniqueKeys := make(map[string]map[string]string) // table+":"+idxName -> encodedKey -> pk
+
 	for _, ch := range tx.changes {
 		td, exists := sqlutil.MapGetFold(tx.engine.tables, ch.table)
 		if !exists {
@@ -1646,6 +1682,16 @@ func (tx *Transaction) Commit() error {
 				if idxData.Schema.Unique {
 					keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 					if !keyVal.IsNull {
+						mapID := td.Schema.Name + ":" + idxData.Schema.Name
+						if seenUniqueKeys[mapID] == nil {
+							seenUniqueKeys[mapID] = make(map[string]string)
+						}
+						encodedKey := keyVal.String()
+						if otherPK, collides := seenUniqueKeys[mapID][encodedKey]; collides && otherPK != ch.key {
+							return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+						}
+						seenUniqueKeys[mapID][encodedKey] = ch.key
+
 						existing := idxData.ScanRange(&keyVal, &keyVal)
 						for _, epk := range existing {
 							if epk != ch.key {
@@ -1664,6 +1710,16 @@ func (tx *Transaction) Commit() error {
 					if idxData.Schema.Unique {
 						keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 						if !keyVal.IsNull {
+							mapID := td.Schema.Name + ":" + idxData.Schema.Name
+							if seenUniqueKeys[mapID] == nil {
+								seenUniqueKeys[mapID] = make(map[string]string)
+							}
+							encodedKey := keyVal.String()
+							if otherPK, collides := seenUniqueKeys[mapID][encodedKey]; collides && otherPK != ch.key {
+								return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idxData.Schema.Name)
+							}
+							seenUniqueKeys[mapID][encodedKey] = ch.key
+
 							existing := idxData.ScanRange(&keyVal, &keyVal)
 							for _, epk := range existing {
 								if epk != ch.key {
@@ -1730,7 +1786,9 @@ func (tx *Transaction) Commit() error {
 			for _, idxData := range td.Indexes {
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
-				_ = idxData.Insert(newKey, ch.key, incVals)
+				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
+					return err
+				}
 			}
 		case changeUpdate:
 			sh.rows[ch.key] = ch.row
@@ -1759,7 +1817,9 @@ func (tx *Transaction) Commit() error {
 				}
 				newKey := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 				incVals := extractIncludeValuesFromRow(&td.Schema, ch.row, idxData.Schema.IncludeCols)
-				_ = idxData.Insert(newKey, ch.key, incVals)
+				if err := idxData.Insert(newKey, ch.key, incVals); err != nil {
+					return err
+				}
 			}
 		case changeDelete:
 			delete(sh.rows, ch.key)

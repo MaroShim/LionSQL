@@ -306,15 +306,19 @@ func (w *WALWriter) Close() error {
 }
 
 // ReplayWAL reads an existing AOF file and applies all records via applyFn.
-// Supports both high-speed binary MessagePack frames and legacy JSON line fallback.
+// Supports high-speed binary MessagePack frames and automatically recovers from torn writes at the tail.
 func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 	cleanPath := filepath.Clean(path)
-	file, err := os.Open(cleanPath)
+	file, err := os.OpenFile(cleanPath, os.O_RDWR, 0644)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return 0, nil
 		}
-		return 0, err
+		// Fallback to read-only open if write permissions are restricted
+		file, err = os.Open(cleanPath)
+		if err != nil {
+			return 0, err
+		}
 	}
 	defer file.Close()
 
@@ -324,6 +328,7 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 	}
 
 	var maxLSN int64
+	var validOffset int64
 
 	// Binary MessagePack length-prefixed frames
 	reader := bufio.NewReaderSize(file, 64*1024)
@@ -336,32 +341,41 @@ func ReplayWAL(path string, applyFn func(rec WALRecord) error) (int64, error) {
 			break
 		}
 		if err != nil {
-			return maxLSN, fmt.Errorf("error reading WAL frame header: %w", err)
+			break
 		}
 
 		frameLen := binary.BigEndian.Uint32(lenBuf[:])
-		if frameLen == 0 || frameLen > 64*1024*1024 { // Cap at 64MB per tx batch
-			return maxLSN, fmt.Errorf("invalid WAL frame length %d at frame %d", frameLen, frameIdx)
+		if frameLen == 0 || frameLen > 64*1024*1024 { // Cap at 64MB per tx batch; torn/corrupt length
+			break
 		}
 
 		payload := make([]byte, frameLen)
 		if _, err := io.ReadFull(reader, payload); err != nil {
-			return maxLSN, fmt.Errorf("truncated WAL frame payload at frame %d: %w", frameIdx, err)
+			// Torn write in payload: fewer bytes than frameLen available
+			break
 		}
 
 		var rec WALRecord
 		if err := UnmarshalMsgPack(payload, &rec); err != nil {
-			return maxLSN, fmt.Errorf("failed to decode MessagePack WAL frame %d: %w", frameIdx, err)
+			// Torn write or corrupted payload at tail
+			break
+		}
+
+		if err := applyFn(rec); err != nil {
+			return maxLSN, fmt.Errorf("failed to apply MessagePack WAL record (LSN=%d, frame=%d): %w", rec.LSN, frameIdx, err)
 		}
 
 		frameIdx++
 		if rec.LSN > maxLSN {
 			maxLSN = rec.LSN
 		}
+		validOffset += int64(4 + frameLen)
+	}
 
-		if err := applyFn(rec); err != nil {
-			return maxLSN, fmt.Errorf("failed to apply MessagePack WAL record (LSN=%d, frame=%d): %w", rec.LSN, frameIdx, err)
-		}
+	// If a torn write left truncated garbage at the tail of the WAL file,
+	// truncate the file back to the last known valid record boundary.
+	if stat.Size() > validOffset {
+		_ = file.Truncate(validOffset)
 	}
 
 	return maxLSN, nil

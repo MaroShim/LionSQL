@@ -66,6 +66,7 @@ type TableData struct {
 	mu         sync.RWMutex                   // Table-level RW lock for DDL (DROP, TRUNCATE) and table-wide schema changes
 	partMu     sync.RWMutex                   // Lock for partition metadata
 	shards     [numTableShards]tableShard
+	initOnce   sync.Once
 	shardsInit bool
 	Schema     storage.TableSchema            `json:"schema"`
 	Rows       map[string]storage.Row         `json:"rows,omitempty"`     // For snapshot persistence & backward compatibility
@@ -85,9 +86,10 @@ func hashShard(key string) int {
 }
 
 func (td *TableData) initShards() {
-	if td.shardsInit {
-		return
-	}
+	td.initOnce.Do(td.initShardsInternal)
+}
+
+func (td *TableData) initShardsInternal() {
 	for i := 0; i < numTableShards; i++ {
 		if td.shards[i].rows == nil {
 			td.shards[i].rows = make(map[string]storage.Row)
@@ -111,9 +113,7 @@ func (td *TableData) initShards() {
 }
 
 func (td *TableData) ensureShardsInit() {
-	if !td.shardsInit {
-		td.initShards()
-	}
+	td.initOnce.Do(td.initShardsInternal)
 }
 
 func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
