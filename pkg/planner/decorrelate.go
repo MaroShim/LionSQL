@@ -35,6 +35,9 @@ func (p *Planner) decorrelateExists(q *QueryInfo, tableExists func(string) bool)
 		if !found {
 			break
 		}
+		if isInsideOrBranch(q.WhereClause, mStart, mEnd) {
+			break
+		}
 
 		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
 		_, subTbl, subAlias, subWhere, ok := parseInnerSelectWithProj(innerSQL)
@@ -122,6 +125,9 @@ func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) {
 	for {
 		mStart, mEnd, prefix, innerSQL, found := findSubqueryParen(q.WhereClause, inRe)
 		if !found {
+			break
+		}
+		if isInsideOrBranch(q.WhereClause, mStart, mEnd) {
 			break
 		}
 
@@ -420,15 +426,29 @@ func splitAndConditions(where string) []string {
 
 func findKeywordIndex(s string, kw string) int {
 	depth := 0
+	inQuote := false
 	kwUpper := strings.ToUpper(kw)
 	n := len(kw)
 	for i := 0; i <= len(s)-n; i++ {
 		c := s[i]
+		if c == '\'' {
+			if inQuote && i+1 < len(s) && s[i+1] == '\'' {
+				i++
+				continue
+			}
+			inQuote = !inQuote
+			continue
+		}
+		if inQuote {
+			continue
+		}
 		if c == '(' {
 			depth++
 			continue
 		} else if c == ')' {
-			depth--
+			if depth > 0 {
+				depth--
+			}
 			continue
 		}
 		if depth == 0 && (i == 0 || isSpaceOrParen(s[i-1])) {
@@ -442,18 +462,52 @@ func findKeywordIndex(s string, kw string) int {
 	return -1
 }
 
+func trimKeywordSuffix(s, kw string) string {
+	s = strings.TrimSpace(s)
+	n := len(kw)
+	if len(s) < n {
+		return s
+	}
+	if strings.EqualFold(s[len(s)-n:], kw) {
+		if len(s) == n {
+			return ""
+		}
+		prev := s[len(s)-n-1]
+		if isSpaceOrParen(prev) {
+			return strings.TrimSpace(s[:len(s)-n])
+		}
+	}
+	return s
+}
+
+func trimKeywordPrefix(s, kw string) string {
+	s = strings.TrimSpace(s)
+	n := len(kw)
+	if len(s) < n {
+		return s
+	}
+	if strings.EqualFold(s[:n], kw) {
+		if len(s) == n {
+			return ""
+		}
+		next := s[n]
+		if isSpaceOrParen(next) {
+			return strings.TrimSpace(s[n:])
+		}
+	}
+	return s
+}
+
 func removeClause(where string, start, end int) string {
 	before := strings.TrimSpace(where[:start])
 	after := strings.TrimSpace(where[end:])
 
-	before = strings.TrimSuffix(before, "AND")
-	before = strings.TrimSuffix(before, "and")
-	before = strings.TrimSuffix(before, "And")
+	before = trimKeywordSuffix(before, "AND")
+	before = trimKeywordSuffix(before, "OR")
 	before = strings.TrimSpace(before)
 
-	after = strings.TrimPrefix(after, "AND")
-	after = strings.TrimPrefix(after, "and")
-	after = strings.TrimPrefix(after, "And")
+	after = trimKeywordPrefix(after, "AND")
+	after = trimKeywordPrefix(after, "OR")
 	after = strings.TrimSpace(after)
 
 	if before != "" && after != "" {
@@ -463,6 +517,86 @@ func removeClause(where string, start, end int) string {
 		return before
 	}
 	return after
+}
+
+func isInsideOrBranch(where string, start, end int) bool {
+	if start < 0 || end > len(where) || start > end {
+		return true
+	}
+
+	// 1. Direct adjacent connectors
+	before := strings.TrimSpace(where[:start])
+	if trimKeywordSuffix(before, "OR") != before {
+		return true
+	}
+	after := strings.TrimSpace(where[end:])
+	if trimKeywordPrefix(after, "OR") != after {
+		return true
+	}
+
+	// 2. Find enclosing parenthesis boundaries and nesting depth of [start, end]
+	depthAtStart := 0
+	scopeStart := 0
+	inQuote := false
+
+	for i := 0; i < start; i++ {
+		c := where[i]
+		if c == '\'' {
+			if inQuote && i+1 < len(where) && where[i+1] == '\'' {
+				i++
+				continue
+			}
+			inQuote = !inQuote
+			continue
+		}
+		if inQuote {
+			continue
+		}
+		if c == '(' {
+			depthAtStart++
+			scopeStart = i + 1
+		} else if c == ')' {
+			if depthAtStart > 0 {
+				depthAtStart--
+				if depthAtStart == 0 {
+					scopeStart = 0
+				}
+			}
+		}
+	}
+
+	scopeEnd := len(where)
+	d := depthAtStart
+	inQuote = false
+	for i := end; i < len(where); i++ {
+		c := where[i]
+		if c == '\'' {
+			if inQuote && i+1 < len(where) && where[i+1] == '\'' {
+				i++
+				continue
+			}
+			inQuote = !inQuote
+			continue
+		}
+		if inQuote {
+			continue
+		}
+		if c == '(' {
+			d++
+		} else if c == ')' {
+			if d == depthAtStart {
+				scopeEnd = i
+				break
+			}
+			if d > 0 {
+				d--
+			}
+		}
+	}
+
+	// 3. In where[scopeStart:scopeEnd], check if 'OR' exists at the same scope depth
+	scopeStr := where[scopeStart:scopeEnd]
+	return findKeywordIndex(scopeStr, "OR") != -1
 }
 
 func isIdent(s string) bool {

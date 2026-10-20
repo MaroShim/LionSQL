@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lionsql/pkg/planner"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -84,27 +85,29 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 
 	// Defensive check: verify key orientation between left and right iterators.
 	// If right relation contains leftKey but does NOT contain rightKey, swap them.
-	if rMap := h.right.ColIndexMap(); rMap != nil {
-		rightCol := h.rightKey
-		if idx := strings.Index(rightCol, "."); idx != -1 {
-			rightCol = rightCol[idx+1:]
-		}
-		leftCol := h.leftKey
-		if idx := strings.Index(leftCol, "."); idx != -1 {
-			leftCol = leftCol[idx+1:]
-		}
+	if !strings.Contains(h.rightKey, ",") && !strings.Contains(h.leftKey, ",") {
+		if rMap := h.right.ColIndexMap(); rMap != nil {
+			rightCol := h.rightKey
+			if idx := strings.Index(rightCol, "."); idx != -1 {
+				rightCol = rightCol[idx+1:]
+			}
+			leftCol := h.leftKey
+			if idx := strings.Index(leftCol, "."); idx != -1 {
+				leftCol = leftCol[idx+1:]
+			}
 
-		_, hasRight := rMap.Index(h.rightKey)
-		if !hasRight {
-			_, hasRight = rMap.Index(rightCol)
-		}
-		_, hasLeft := rMap.Index(h.leftKey)
-		if !hasLeft {
-			_, hasLeft = rMap.Index(leftCol)
-		}
+			_, hasRight := rMap.Index(h.rightKey)
+			if !hasRight {
+				_, hasRight = rMap.Index(rightCol)
+			}
+			_, hasLeft := rMap.Index(h.leftKey)
+			if !hasLeft {
+				_, hasLeft = rMap.Index(leftCol)
+			}
 
-		if hasLeft && !hasRight {
-			h.leftKey, h.rightKey = h.rightKey, h.leftKey
+			if hasLeft && !hasRight {
+				h.leftKey, h.rightKey = h.rightKey, h.leftKey
+			}
 		}
 	}
 
@@ -162,24 +165,9 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				h.matchedRight = append(h.matchedRight, false)
 			}
 
-			keyVal, found := lookupVal(tuple, h.rightKey)
-			if !found || keyVal == nil {
+			kStr, found := extractTupleKey(tuple, h.rightKey, h.arena)
+			if !found {
 				continue
-			}
-			var kStr string
-			if sVal, ok := keyVal.(string); ok {
-				if h.arena != nil {
-					kStr = h.arena.AllocString(sVal)
-				} else {
-					kStr = sVal
-				}
-			} else {
-				formatted := fmt.Sprintf("%v", keyVal)
-				if h.arena != nil {
-					kStr = h.arena.AllocString(formatted)
-				} else {
-					kStr = formatted
-				}
 			}
 			h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
 		}
@@ -279,15 +267,9 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 		h.matchIdx = 0
 		h.emittedAny = false
 
-		keyVal, found := lookupVal(probeTuple, h.leftKey)
 		hasMatch := false
-		if found && keyVal != nil {
-			var kStr string
-			if sVal, ok := keyVal.(string); ok {
-				kStr = sVal
-			} else {
-				kStr = fmt.Sprintf("%v", keyVal)
-			}
+		kStr, found := extractTupleKey(probeTuple, h.leftKey, nil)
+		if found {
 			if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
 				hasMatch = true
 				h.currentMatches = matches
@@ -794,4 +776,50 @@ func toStorageValFromAny(v any) storage.Value {
 	default:
 		return storage.StringValue(fmt.Sprintf("%v", val))
 	}
+}
+
+func extractTupleKey(t Tuple, key string, arena *storage.Arena) (string, bool) {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "", false
+	}
+	if !strings.Contains(key, ",") {
+		keyVal, found := lookupVal(t, key)
+		if !found || keyVal == nil {
+			return "", false
+		}
+		var kStr string
+		if sVal, ok := keyVal.(string); ok {
+			kStr = sqlutil.CanonicalIdent(sVal)
+		} else {
+			kStr = sqlutil.CanonicalIdent(fmt.Sprintf("%v", keyVal))
+		}
+		if arena != nil {
+			return arena.AllocString(kStr), true
+		}
+		return kStr, true
+	}
+
+	parts := strings.Split(key, ",")
+	var buf strings.Builder
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		val, found := lookupVal(t, part)
+		if !found || val == nil {
+			return "", false
+		}
+		if i > 0 {
+			buf.WriteByte('\x00')
+		}
+		if sVal, ok := val.(string); ok {
+			buf.WriteString(sqlutil.CanonicalIdent(sVal))
+		} else {
+			buf.WriteString(sqlutil.CanonicalIdent(fmt.Sprintf("%v", val)))
+		}
+	}
+	res := buf.String()
+	if arena != nil {
+		return arena.AllocString(res), true
+	}
+	return res, true
 }

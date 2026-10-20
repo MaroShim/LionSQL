@@ -301,8 +301,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 
 	frame := winDef.Frame
 	if frame == nil && len(winDef.OrderByKeys) > 0 {
-		// ANSI SQL default with ORDER BY: ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+		// ANSI SQL default with ORDER BY: RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
 		frame = &planner.WindowFrame{
+			Unit:  planner.FrameRange,
 			Start: planner.FrameBound{Type: planner.FrameUnboundedPreceding},
 			End:   planner.FrameBound{Type: planner.FrameCurrentRow},
 		}
@@ -391,7 +392,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 	total := len(indices)
 	for i := 0; i < total; i++ {
 		rowIdx := indices[i]
-		startK, endK := getFrameBounds(frame, i, total)
+		startK, endK := getFrameBounds(frame, i, total, w.rows, indices, winDef.OrderByKeys)
 		if endK < startK {
 			if fn == "COUNT" {
 				winValues[rowIdx] = int64(0)
@@ -477,7 +478,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 	}
 }
 
-func getFrameBounds(frame *planner.WindowFrame, i, total int) (int, int) {
+func getFrameBounds(frame *planner.WindowFrame, i, total int, rows []Tuple, indices []int, orderKeys []planner.SortKeyDef) (int, int) {
 	if frame == nil {
 		return 0, total - 1
 	}
@@ -522,6 +523,20 @@ func getFrameBounds(frame *planner.WindowFrame, i, total int) (int, int) {
 		endIdx = 0
 	}
 
+	// SQL standard RANGE mode: expand peer rows having identical ORDER BY values
+	if frame.Unit == planner.FrameRange && len(orderKeys) > 0 && len(rows) > 0 && len(indices) == total && i >= 0 && i < total {
+		if frame.Start.Type == planner.FrameCurrentRow {
+			for startIdx > 0 && sameSortKeys(rows[indices[startIdx-1]], rows[indices[i]], orderKeys) {
+				startIdx--
+			}
+		}
+		if frame.End.Type == planner.FrameCurrentRow {
+			for endIdx+1 < total && sameSortKeys(rows[indices[endIdx+1]], rows[indices[i]], orderKeys) {
+				endIdx++
+			}
+		}
+	}
+
 	return startIdx, endIdx
 }
 
@@ -529,7 +544,7 @@ func sameSortKeys(t1, t2 Tuple, orderKeys []planner.SortKeyDef) bool {
 	for _, ord := range orderKeys {
 		v1 := t1.Get(ord.Column)
 		v2 := t2.Get(ord.Column)
-		if compareAny(v1, v2) != 0 {
+		if CompareValues(v1, v2) != 0 {
 			return false
 		}
 	}

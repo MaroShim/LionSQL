@@ -2,6 +2,7 @@ package execution
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"lionsql/pkg/planner"
@@ -318,16 +319,51 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 	return op, nil
 }
 
+func isColumnIdent(s string) bool {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return false
+	}
+	// String literal
+	if (strings.HasPrefix(s, "'") && strings.HasSuffix(s, "'")) ||
+		(strings.HasPrefix(s, "N'") && strings.HasSuffix(s, "'")) {
+		return false
+	}
+	// Numeric literal
+	if _, err := strconv.ParseFloat(s, 64); err == nil {
+		return false
+	}
+	// Boolean/NULL literals
+	lower := strings.ToLower(s)
+	if lower == "null" || lower == "true" || lower == "false" {
+		return false
+	}
+	// Operator characters that indicate an expression rather than an identifier
+	if strings.ContainsAny(s, "+*/%^") {
+		return false
+	}
+	return true
+}
+
 // ParseJoinCond extracts left and right join keys from an equijoin condition expression.
 func ParseJoinCond(cond string) (string, string) {
 	conds := sqlutil.SplitAndConditions(cond)
+	var leftKeys, rightKeys []string
 	for _, c := range conds {
 		l, r := sqlutil.SplitJoinCond(c)
-		if l != "" && r != "" {
-			return l, r
+		if l != "" && r != "" && isColumnIdent(l) && isColumnIdent(r) {
+			leftKeys = append(leftKeys, l)
+			rightKeys = append(rightKeys, r)
 		}
 	}
-	return sqlutil.SplitJoinCond(cond)
+	if len(leftKeys) > 0 {
+		return strings.Join(leftKeys, ", "), strings.Join(rightKeys, ", ")
+	}
+	l, r := sqlutil.SplitJoinCond(cond)
+	if l != "" && r != "" && isColumnIdent(l) && isColumnIdent(r) {
+		return l, r
+	}
+	return "", ""
 }
 
 func isPlanSortedOnKey(plan *planner.PlanNode, key string) bool {

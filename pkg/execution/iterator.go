@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -541,7 +542,9 @@ func CompareValues(a, b any) int {
 			}
 		}
 		vb := fmt.Sprintf("%v", b)
-		return strings.Compare(va, vb)
+		cA := sqlutil.CanonicalIdent(va)
+		cB := sqlutil.CanonicalIdent(vb)
+		return strings.Compare(cA, cB)
 	case bool:
 		if vb, ok := b.(bool); ok {
 			if !va && vb {

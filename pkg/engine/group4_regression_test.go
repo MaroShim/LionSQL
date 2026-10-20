@@ -312,8 +312,8 @@ func TestGroup4_MergeSet_CommaInStringsAndFunctions(t *testing.T) {
 func TestGroup4_JoinParse_MultiCond(t *testing.T) {
 	cond := "a.id = b.id AND a.tenant_id = b.tenant_id"
 	l, r := execution.ParseJoinCond(cond)
-	if l != "a.id" || r != "b.id" {
-		t.Fatalf("expected a.id = b.id, got %q = %q", l, r)
+	if l != "a.id, a.tenant_id" || r != "b.id, b.tenant_id" {
+		t.Fatalf("expected composite keys \"a.id, a.tenant_id\" = \"b.id, b.tenant_id\", got %q = %q", l, r)
 	}
 }
 

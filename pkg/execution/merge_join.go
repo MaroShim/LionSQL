@@ -213,15 +213,14 @@ func (m *MergeJoinIterator) Next(ctx context.Context) (Tuple, error) {
 			}
 
 			// Finished current buffer for m.curLeft. Advance Left.
-			prevLeftKey, _ := lookupVal(m.curLeft, m.leftKey)
+			prevLeft := m.curLeft
 			if err := m.advanceLeft(ctx); err != nil {
 				return Tuple{}, err
 			}
 
-			// If the newly advanced Left tuple has the exact same key as prevLeftKey, replay buffer!
+			// If the newly advanced Left tuple has the exact same key as prevLeft, replay buffer!
 			if !m.leftEOF {
-				newLeftKey, found := lookupVal(m.curLeft, m.leftKey)
-				if found && newLeftKey != nil && CompareValues(newLeftKey, prevLeftKey) == 0 {
+				if sameJoinKey(m.curLeft, prevLeft, m.leftKey) {
 					m.bufIdx = 0
 					continue
 				}
@@ -265,11 +264,10 @@ func (m *MergeJoinIterator) Next(ctx context.Context) (Tuple, error) {
 		}
 
 		// 5. Both streams have active tuples: compare keys
-		vLeft, foundLeft := lookupVal(m.curLeft, m.leftKey)
-		vRight, foundRight := lookupVal(m.curRight, m.rightKey)
+		cmp, validLeft, validRight := compareJoinKeys(m.curLeft, m.leftKey, m.curRight, m.rightKey)
 
 		// SQL equality rules: NULL never equals NULL in join predicates
-		if !foundLeft || vLeft == nil {
+		if !validLeft {
 			lTuple := m.curLeft
 			if err := m.advanceLeft(ctx); err != nil {
 				return Tuple{}, err
@@ -283,7 +281,7 @@ func (m *MergeJoinIterator) Next(ctx context.Context) (Tuple, error) {
 			continue
 		}
 
-		if !foundRight || vRight == nil {
+		if !validRight {
 			rTuple := m.curRight
 			if err := m.advanceRight(ctx); err != nil {
 				return Tuple{}, err
@@ -294,7 +292,6 @@ func (m *MergeJoinIterator) Next(ctx context.Context) (Tuple, error) {
 			continue
 		}
 
-		cmp := CompareValues(vLeft, vRight)
 		if cmp < 0 {
 			// curLeft < curRight: Left has no match on Right
 			lTuple := m.curLeft
@@ -320,9 +317,24 @@ func (m *MergeJoinIterator) Next(ctx context.Context) (Tuple, error) {
 			continue
 		} else {
 			// cmp == 0: MATCH!
+			if m.joinType == "SEMI" {
+				lTuple := m.curLeft
+				if err := m.advanceLeft(ctx); err != nil {
+					return Tuple{}, err
+				}
+				return lTuple, nil
+			}
+
+			if m.joinType == "ANTI" {
+				if err := m.advanceLeft(ctx); err != nil {
+					return Tuple{}, err
+				}
+				continue
+			}
+
 			// Buffer all contiguous Right tuples that share this identical key.
 			m.bufferedRight = []Tuple{m.curRight}
-			targetKey := vRight
+			targetRight := m.curRight
 
 			for {
 				nextRight, err := m.right.Next(ctx)
@@ -334,8 +346,7 @@ func (m *MergeJoinIterator) Next(ctx context.Context) (Tuple, error) {
 					}
 					return Tuple{}, err
 				}
-				nrKey, found := lookupVal(nextRight, m.rightKey)
-				if found && nrKey != nil && CompareValues(nrKey, targetKey) == 0 {
+				if sameJoinKey(nextRight, targetRight, m.rightKey) {
 					m.bufferedRight = append(m.bufferedRight, nextRight)
 				} else {
 					m.curRight = nextRight
@@ -395,4 +406,61 @@ func (m *MergeJoinIterator) ColIndexMap() *ColumnIndexMap {
 		m.colIndexMap = MergeColumnIndexMaps(m.left.ColIndexMap(), m.right.ColIndexMap())
 	}
 	return m.colIndexMap
+}
+
+func compareJoinKeys(left Tuple, leftKey string, right Tuple, rightKey string) (cmp int, validLeft bool, validRight bool) {
+	if !strings.Contains(leftKey, ",") && !strings.Contains(rightKey, ",") {
+		vLeft, foundL := lookupVal(left, leftKey)
+		vRight, foundR := lookupVal(right, rightKey)
+		validLeft = foundL && vLeft != nil
+		validRight = foundR && vRight != nil
+		if !validLeft || !validRight {
+			return 0, validLeft, validRight
+		}
+		return CompareValues(vLeft, vRight), true, true
+	}
+
+	leftParts := strings.Split(leftKey, ",")
+	rightParts := strings.Split(rightKey, ",")
+	if len(leftParts) != len(rightParts) {
+		return 0, false, false
+	}
+	validLeft = true
+	validRight = true
+	for i := range leftParts {
+		vL, fL := lookupVal(left, strings.TrimSpace(leftParts[i]))
+		vR, fR := lookupVal(right, strings.TrimSpace(rightParts[i]))
+		if !fL || vL == nil {
+			validLeft = false
+		}
+		if !fR || vR == nil {
+			validRight = false
+		}
+		if !validLeft || !validRight {
+			return 0, validLeft, validRight
+		}
+		c := CompareValues(vL, vR)
+		if c != 0 {
+			return c, true, true
+		}
+	}
+	return 0, true, true
+}
+
+func sameJoinKey(t1, t2 Tuple, key string) bool {
+	if !strings.Contains(key, ",") {
+		v1, f1 := lookupVal(t1, key)
+		v2, f2 := lookupVal(t2, key)
+		return f1 && f2 && v1 != nil && v2 != nil && CompareValues(v1, v2) == 0
+	}
+	parts := strings.Split(key, ",")
+	for _, p := range parts {
+		col := strings.TrimSpace(p)
+		v1, f1 := lookupVal(t1, col)
+		v2, f2 := lookupVal(t2, col)
+		if !f1 || !f2 || v1 == nil || v2 == nil || CompareValues(v1, v2) != 0 {
+			return false
+		}
+	}
+	return true
 }

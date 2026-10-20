@@ -54,6 +54,14 @@ const (
 	FrameUnboundedFollowing
 )
 
+// FrameUnit defines the unit of the window frame (ROWS or RANGE).
+type FrameUnit int
+
+const (
+	FrameRows FrameUnit = iota
+	FrameRange
+)
+
 // FrameBound defines a single frame boundary.
 type FrameBound struct {
 	Type   FrameBoundType `json:"type"`
@@ -62,6 +70,7 @@ type FrameBound struct {
 
 // WindowFrame defines a window frame specification (e.g. ROWS BETWEEN 1 PRECEDING AND 1 FOLLOWING).
 type WindowFrame struct {
+	Unit  FrameUnit  `json:"unit"`
 	Start FrameBound `json:"start"`
 	End   FrameBound `json:"end"`
 }
@@ -1709,10 +1718,13 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 func parseWindowFrame(frameStr string) *WindowFrame {
 	s := strings.TrimSpace(frameStr)
 	sUpper := strings.ToUpper(s)
+	unit := FrameRows
 	if strings.HasPrefix(sUpper, "ROWS ") {
+		unit = FrameRows
 		s = strings.TrimSpace(s[5:])
 		sUpper = strings.TrimSpace(sUpper[5:])
 	} else if strings.HasPrefix(sUpper, "RANGE ") {
+		unit = FrameRange
 		s = strings.TrimSpace(s[6:])
 		sUpper = strings.TrimSpace(sUpper[6:])
 	} else {
@@ -1732,7 +1744,7 @@ func parseWindowFrame(frameStr string) *WindowFrame {
 		if !ok1 || !ok2 {
 			return nil
 		}
-		return &WindowFrame{Start: startBound, End: endBound}
+		return &WindowFrame{Unit: unit, Start: startBound, End: endBound}
 	}
 
 	// Shorthand: e.g. ROWS UNBOUNDED PRECEDING, ROWS 5 PRECEDING, ROWS CURRENT ROW
@@ -1741,6 +1753,7 @@ func parseWindowFrame(frameStr string) *WindowFrame {
 		return nil
 	}
 	return &WindowFrame{
+		Unit:  unit,
 		Start: startBound,
 		End:   FrameBound{Type: FrameCurrentRow},
 	}
