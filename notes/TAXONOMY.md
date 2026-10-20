@@ -128,6 +128,13 @@
 | **`BUG-WIRE-PG-PARAM-SUBSTITUTION-INJECTION-1`** | **PGWire 파라미터 치환 시 재귀 치환 왜곡 및 숫자형 문자열 따옴표 탈락 방지 (PG Param Substitute Bug)** | `BUG-WIRE-PG-PARAM-SUBSTITUTION-INJECTION-1` | `strings.ReplaceAll` 대신 단일 패스 토큰화 치환 적용 및 파라미터 실제 데이터 타입 보존으로 파라미터 재귀 오염 해결 |
 | **`BUG-CATALOG-OBJECT-PERSISTENCE-OMISSION-1`** | **서버 재기동 시 프로시저/함수/뷰/트리거 영구 증발 방지 (Catalog Object Persistence Bug)** | `BUG-CATALOG-OBJECT-PERSISTENCE-OMISSION-1` | 인메모리 맵 보관 객체들을 WAL 레코드 또는 `catalog_objects.json`으로 영속화하여 데이터베이스 재시작 후 메타데이터 복원 보장 |
 | **`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`** | **WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 및 색인 누락 방지 (WT Unique Index Bug)** | `BUG-WT-UNIQUE-INDEX-UNENFORCED-1` | `insertLocked`/`updateLocked` 시 유니크 인덱스 제약 검증 및 `IndexScan`의 풀 테이블 스캔 폴백을 B-Tree 커서 검색으로 개편 |
+| **`BUG-EXEC-BUILDER-JOIN-COND-SPLIT-1`** | **복합 조인 조건 '=' 분해 파괴 및 무제한 카테시안 곱 왜곡 방지 (Join Cond Split Bug)** | `BUG-EXEC-BUILDER-JOIN-COND-SPLIT-1` | `parseJoinCond`에서 다중 복합 조건(`k1=v1 AND k2=v2`) 지원으로 빈 문자열("") 해시 매칭 및 카테시안 왜곡 해결 |
+| **`BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1`** | **세션 임시테이블 스냅샷/WAL 영속화 및 재기동 후 영구 누수 방지 (Temp Table Persist Bug)** | `BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1` | `saveDiskLocked` 및 WAL 재생 시 `__temp_*` / `__tv_*` 필터링으로 종료 세션 임시 객체의 영구 카탈로그 오염 차단 |
+| **`BUG-MERGE-NOT-MATCHED-SOURCE-SELF-DESTRUCT-1`** | **MERGE 구문 내 신규 삽입 행의 SOURCE 미일치 오인 즉각 삭제 방지 (Merge Self Destruct Bug)** | `BUG-MERGE-NOT-MATCHED-SOURCE-SELF-DESTRUCT-1` | `WHEN NOT MATCHED` 삽입 행의 `matchedTargetKeys` 등록으로 동일 MERGE 문 내 `NOT MATCHED BY SOURCE`의 자가 삭제 방어 |
+| **`BUG-STR-CHARINDEX-NULL-ZERO-1`** | **CHARINDEX/STRPOS의 NULL 인자 수신 시 0 반환 삼치논리 왜곡 방지 (CharIndex NULL Zero Bug)** | `BUG-STR-CHARINDEX-NULL-ZERO-1` | `CHARINDEX`와 `STRPOS`에서 NULL 인자 입력 시 0(검색실패) 대신 `NULL` 정상 전파로 ANSI/T-SQL 삼치논리 정합성 보장 |
+| **`BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1`** | **CBO 선택도 추정 시 컬럼명 대소문자 불일치 0.33 휴리스틱 추락 방지 (CBO Selectivity Case Bug)** | `BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1` | `EstimateSelectivity`의 `ts.Columns` 직접 맵 조회를 `findColumnStats`로 대체하여 대소문자 무관 통계 조회 보장 |
+| **`BUG-PLANNER-DECORRELATE-OR-SUBQUERY-CORRUPT-1`** | **OR 조건 하위 서브쿼리 불법 SEMI 조인 변환 및 'and' 식별자 파괴 방지 (Subquery Decorrelate Bug)** | `BUG-PLANNER-DECORRELATE-OR-SUBQUERY-CORRUPT-1` | OR 분기 내 서브쿼리 무단 변환 차단 및 `removeClause`의 경계 인식 토큰화로 `brand` 등 컬럼명 절단 및 문법 오류 해결 |
+| **`BUG-BACKUP-RESTORE-VIEW-OMISSION-1`** | **백업 아카이브 생성 및 복원 시 뷰(View) 메타데이터 전무 누락 방지 (Backup Restore View Bug)** | `BUG-BACKUP-RESTORE-VIEW-OMISSION-1` | `CreateBackup`/`RestoreBackup`에 `catalog/views.json` 직렬화 및 복원 파이프라인을 추가하여 뷰 정의 영구 유실 방어 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
