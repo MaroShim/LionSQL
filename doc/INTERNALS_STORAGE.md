@@ -184,7 +184,7 @@ When the `wal.aof` file exceeds threshold (default 64MB):
 
 ---
 
-## 4. Value Representation, Fast-Paths & Ephemeral Mode (v0.11.0)
+## 4. Value Representation, Type Lattice, Synthetic Identity & Ephemeral Mode
 
 ### 4.1. `storage.Value` Integer Fast-Paths
 Point lookups, primary key equality tests, and SkipList index searches account for the highest frequency operations in OLTP workloads. LionSQL optimizes `storage.Value`:
@@ -200,7 +200,24 @@ Point lookups, primary key equality tests, and SkipList index searches account f
 - **`Value.String` Formatting**:
   Replaces `fmt.Sprintf` reflection on hot paths with `strconv.FormatInt(v.IVal, 10)` and `strconv.FormatBool(v.BVal)`.
 
-### 4.2. In-Memory Ephemeral Engine Mode (`--ephemeral`)
+### 4.2. Type Promotion Lattice (`storage.CoerceBinaryValues`)
+Heterogeneous type comparisons across engine routines (joins, predicates, sorting) adhere to the canonical SQL type promotion lattice via `storage.CoerceBinaryValues(a, b Value) (Value, Value, bool)`:
+- **Promotion Precedence**:
+  - `Decimal > Float > Int > Bool`
+  - `DateTime / Date > VarChar` (with ISO/RFC format parsing)
+- **Epsilon Float Equality**: Floating-point comparisons utilize `CompareFloatEpsilon(f1, f2, 1e-9)` to guard against binary floating-point drift across CPU architectures.
+- **Symmetric Comparison Simplification**: Heterogeneous type handling in `Value.Equal` and `Value.Compare` executes `CoerceBinaryValues` upfront, eliminating duplicate switch branches and asymmetric comparison bugs.
+
+### 4.3. Synthetic Primary Key Abstraction (`storage.SyntheticPK`)
+Tables defined without an explicit primary key, derived tables, and common table expressions (CTEs) synthesize a hidden row identifier:
+- **Synthetic Identifiers**:
+  - `SyntheticPKRowID` (`_row_id`): Implicit primary key for PK-less user tables.
+  - `SyntheticPKDerivedTable` (`_dt_row_id`): Synthetic identity column for materialized derived tables.
+  - `SyntheticPKCTE` (`_cte_row_id`): Synthetic identity column for materialized CTE results.
+- **Standardized Properties**: Factory function `NewSyntheticPKColumn(kind SyntheticPKKind) Column` creates columns with uniform properties (`PrimaryKey: true`, `Identity: true`, `Nullable: false`, `TypeInt`).
+- **Identity Inspection & Stripping**: `IsSyntheticPKName(name)`, `IsSyntheticPKColumn(col)`, and `StripSyntheticPKColumns(cols)` unify column classification and ensure internal identity columns are cleanly stripped prior to user result serialization.
+
+### 4.4. In-Memory Ephemeral Engine Mode (`--ephemeral`)
 For testing, embedded caches, and ephemeral compute pods, LionSQL supports pure in-memory operation:
 - Invoked via `--ephemeral` flag or `ephemeral: true` configuration.
 - Completely suppresses WAL/AOF log disk writes, background fsyncs, and table snapshot creation.

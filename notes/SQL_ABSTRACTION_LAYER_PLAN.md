@@ -141,17 +141,63 @@ At the entry point of the Coordinator (`execInsert`, `execUpdate`, `execDelete`,
   - In SQL 3VL, a row passes a `WHERE` filter **if and only if** the predicate evaluates to `TRUE`. Predicates evaluating to `FALSE` or `UNKNOWN` (NULL) are rejected.
   - Fixes all `WHERE col <> 'val'` and `WHERE NOT IN (...)` leakages.
 
+### 3.5. Type Promotion Lattice (`pkg/storage/coerce.go`)
+
+Historically, type comparisons across heterogeneous operands in `Value.Equal` and `Value.Compare` relied on 150+ lines of ad-hoc nested switch statements that were duplicated, error-prone, and prone to asymmetric behavior (e.g. `Int vs Float` behaving differently from `Float vs Int`).
+
+LionSQL formalizes a canonical SQL type promotion lattice via `storage.CoerceBinaryValues(a, b Value) (Value, Value, bool)`:
+- **Precedence Hierarchy**:
+  - `Decimal > Float > Int > Bool`
+  - `DateTime / Date > VarChar` (with automatic ISO/RFC parsing)
+- **Epsilon Floating-Point Comparison**: `CompareFloatEpsilon(f1, f2, 1e-9)` guarantees deterministic floating-point equality across architectures.
+- **Symmetric Simplification**: Both `Value.Equal` and `Value.Compare` invoke `CoerceBinaryValues` upfront on heterogeneous types, reducing comparison logic to a single unified path per type.
+
+### 3.6. Synthetic Primary Key Abstraction (`pkg/storage/synthetic_pk.go`)
+
+Materialized derived tables, CTEs, and tables created without explicit primary keys previously synthesized ad-hoc `_row_id` or `_dt_row_id` columns with inconsistent properties (`AutoIncrement` vs `Identity`), and scattered hardcoded string checks (`col == "_row_id" || col == "_dt_row_id"`) across the query planner, projection runner, and VDBE virtual machine.
+
+LionSQL standardizes synthetic row identities through `storage.SyntheticPK`:
+- **Standardized Kinds & Constants**:
+  - `SyntheticPKRowID` (`_row_id`): Default synthetic PK for PK-less user tables.
+  - `SyntheticPKDerivedTable` (`_dt_row_id`): Synthetic PK for materialized derived tables.
+  - `SyntheticPKCTE` (`_cte_row_id`): Synthetic PK for recursive/non-recursive CTE result tables.
+- **Factory API**: `NewSyntheticPKColumn(kind SyntheticPKKind) Column` enforces `PrimaryKey: true`, `Identity: true`, `Nullable: false`, and `TypeInt`.
+- **Classification Functions**:
+  - `IsSyntheticPKName(colName string) bool`: Case-insensitive check covering all canonical synthetic PK names.
+  - `IsSyntheticPKColumn(col Column) bool`: Verifies both naming and column flags.
+  - `StripSyntheticPKColumns(cols []Column) []Column`: Reusable projection utility stripping hidden identity columns before client serialization.
+
+### 3.7. Strict NULL Functional Decorators (`pkg/proc/strict.go`)
+
+In ANSI SQL and T-SQL, standard scalar built-ins adhere to strict NULL propagation (`RETURNS NULL ON NULL INPUT`). Previously, every built-in function implementation repeated manual guard blocks (`if args[0].IsNull || args[1].IsNull { return NullValue(...) }`), resulting in redundant boilerplate and occasional missed null-checks (`BUG-65`, `BUG-66`).
+
+LionSQL introduces higher-order functional decorators in `pkg/proc`:
+- **`proc.Strict(targetType, fn)`**: Wraps any multi-argument scalar function, automatically returning `NullValue(targetType)` if any argument is NULL (`HasAnyNull(args)`).
+- **`proc.StrictUnary(targetType, fn)`**: Zero-allocation wrapper for single-operand operations (e.g. `ABS`, `LEN`, `UPPER`, `LOWER`).
+- **`proc.StrictBinary(targetType, fn)`**: Specialized wrapper for two-operand operations (e.g. `ROUND`, `POWER`, `CONCAT`).
+- **`proc.RegisterStrictScalarFunction(name, targetType, fn)`**: Convenient registration helper combining `proc.RegisterScalarFunction` and `proc.Strict`.
+- **Utility Predicates**: `HasAnyNull(args []storage.Value) bool` and `HasNullAt(args []storage.Value, idx int) bool` for defensive boundary-guarded argument inspection.
+
+### 3.8. Case-Insensitive Identifier & Map Abstraction (`pkg/sqlutil/casing.go`)
+
+To permanently resolve case-sensitivity mismatches between client queries, catalogs, and storage engines (`BUG-TABLE-CASE-1`, `BUG-STORAGE-TABLE-CASE-SENSITIVITY-1`, etc.), LionSQL provides a zero-allocation casing utility layer:
+- **`CanonicalIdent(name string) string`**: Normalizes identifiers (lowercase, trimmed).
+- **`EqualFoldIdent(a, b string) bool`**: Direct case-insensitive equality without heap allocations.
+- **`CIMap[V any]`**: Type-safe generic map with case-insensitive key semantics.
+- **`MapGetFold` / `MapSetFold` / `MapDeleteFold`**: Safe case-insensitive operations for legacy `map[string]V` structures during progressive migration.
+
 ---
 
 ## 4. Implementation Phases & Milestones
 
-| Phase | Component | Key Tasks | Verification Gate |
-| :---: | :--- | :--- | :--- |
-| **Phase 1** | **`pkg/storage`** | Implement `storage/record.go` (`Get`, `Set`, `FirstValue`, `SortedKeys`, `ToRow`). | Unit tests in `pkg/storage/record_test.go` covering mixed case, sorted order, and deterministic lookups. |
-| **Phase 2** | **`pkg/engine`** | Implement `pkg/engine/sql_row.go` and `boundary_normalizer.go`. | Unit tests in `pkg/engine/sql_row_test.go` verifying case-insensitivity, alias resolution, and canonicalization. |
-| **Phase 3** | **Coordinator DML Refactoring** | Migrate `sqlexec_dml.go` (`execUpdate`, `execDelete`, `execInsert`, `execMerge`, `execUpsert`) to use `Record.Get/Set` and boundary normalization. | Integration tests across DML suite; verify zero random map iteration. |
-| **Phase 4** | **Coordinator Eval & Subqueries** | Migrate `sqlexec_eval.go` and `sqlexec_explain.go` to use `SQLRow` and deterministic `GetFirst`. | Regression suite verification; verify `evalUpdateExpr` and subquery flattening parity. |
-| **Phase 5** | **Full Battery Verification** | Run full 3-Stage Pipeline across all packages with `-race`. | `go test -tags wiredtiger -race ./...` 100% PASS with 0 data races. |
+| Phase | Component | Key Tasks | Verification Gate | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **Phase 1** | **`pkg/storage`** | Implement `storage/record.go` (`Get`, `Set`, `FirstValue`, `SortedKeys`, `ToRow`). | Unit tests in `pkg/storage/record_test.go` covering mixed case, sorted order, and deterministic lookups. | **Completed** |
+| **Phase 2** | **`pkg/engine`** | Implement `pkg/engine/sql_row.go` and `boundary_normalizer.go`. | Unit tests in `pkg/engine/sql_row_test.go` verifying case-insensitivity, alias resolution, and canonicalization. | **Completed** |
+| **Phase 3** | **Coordinator DML Refactoring** | Migrate `sqlexec_dml.go` (`execUpdate`, `execDelete`, `execInsert`, `execMerge`, `execUpsert`) to use `Record.Get/Set` and boundary normalization. | Integration tests across DML suite; verify zero random map iteration. | **Completed** |
+| **Phase 4** | **Coordinator Eval & Subqueries** | Migrate `sqlexec_eval.go` and `sqlexec_explain.go` to use `SQLRow` and deterministic `GetFirst`. | Regression suite verification; verify `evalUpdateExpr` and subquery flattening parity. | **Completed** |
+| **Phase 5** | **Common Casing Abstraction** | Implement `pkg/sqlutil/casing.go` (`CanonicalIdent`, `EqualFoldIdent`, `CIMap`). Fix Group 6 defects. | `pkg/sqlutil/casing_test.go` & regression suite 100% PASS. | **Completed** (`e274c3e`) |
+| **Phase 6** | **Core Abstractions (Lattice, Strict, Synthetic PK)** | Implement `coerce.go`, `strict.go`, and `synthetic_pk.go`. Refactor engine comparisons, VM, and DDL. | Full 3-stage pipeline; `go test -tags wiredtiger -race ./...` 0 data races. | **Completed** (`2d2d88a`) |
 
 ---
 

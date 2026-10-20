@@ -671,5 +671,42 @@ Standardize on **Decoupled CDC Event Streaming** and explicitly **Spec Out** POS
 - **Negative**: Introduces millisecond-level asynchronous replication lag between OLTP commit and DuckDB ingestion.
 - **Compliance**: Adheres to Golden Rule 14 (Platform Primitives First), Golden Rule 15 (KISS), and `GEMINI.md` Section 8.4.
 
+---
+
+## ADR-025: Unified SQL Abstraction Layer - Type Promotion Lattice, Strict NULL Propagation, and Synthetic Row Identity
+
+### Status
+Accepted
+
+### Context
+During engine hardening and defect remediation, repetitive boilerplate and ad-hoc Go type handling across engine subsystems created architectural liabilities:
+1. **Heterogeneous Type Comparisons**: `Value.Equal` and `Value.Compare` relied on 150+ lines of duplicated nested switch statements across type combinations (`Int vs Float`, `Float vs Int`, `Decimal`, `VarChar` vs `Date`), leading to maintenance friction and asymmetric comparison behaviors.
+2. **Redundant NULL Guarding**: Built-in scalar functions repeatedly implemented manual guard blocks (`if args[0].IsNull || args[1].IsNull { return NullValue(...) }`), causing boilerplate bloat and risking omitted checks.
+3. **Ad-Hoc Synthetic Primary Keys**: Materialized derived tables, CTEs, and PK-less user tables generated arbitrary synthetic row identifiers (`_row_id`, `_dt_row_id`, `_cte_row_id`) with inconsistent properties (`AutoIncrement` vs `Identity`) and scattered hardcoded string comparisons (`col == "_row_id" || col == "_dt_row_id"`).
+4. **Case Sensitivity Discrepancies**: Raw Go `map[string]T` lookups caused casing mismatch defects across catalogs, DML routines, and storage engines.
+
+### Decision
+Standardize four core abstractions forming the Unified SQL Abstraction Layer:
+1. **Canonical Type Promotion Lattice (`storage.CoerceBinaryValues`)**:
+   - Establish formal SQL precedence (`Decimal > Float > Int > Bool`, `DateTime/Date > VarChar`).
+   - Implement `CompareFloatEpsilon(f1, f2, 1e-9)` to guarantee deterministic floating-point comparisons across CPU architectures.
+   - Execute `CoerceBinaryValues` upfront in both `Value.Equal` and `Value.Compare`, collapsing heterogeneous comparison paths into symmetric, unified logic.
+2. **Strict NULL Functional Decorators (`proc.Strict`)**:
+   - Implement higher-order decorators (`Strict`, `StrictUnary`, `StrictBinary`, `RegisterStrictScalarFunction`) enforcing ANSI SQL strict null propagation (`RETURNS NULL ON NULL INPUT`).
+   - Standardize boundary-checked argument inspection via `HasAnyNull(args)` and `HasNullAt(args, idx)`.
+3. **Synthetic Row Identity Abstraction (`storage.SyntheticPK`)**:
+   - Define a unified taxonomy (`SyntheticPKKind`: `SyntheticPKRowID`, `SyntheticPKDerivedTable`, `SyntheticPKCTE`) with standardized column names (`_row_id`, `_dt_row_id`, `_cte_row_id`).
+   - Centralize column construction via `NewSyntheticPKColumn(kind)` enforcing `PrimaryKey: true`, `Identity: true`, `Nullable: false`, and `TypeInt`.
+   - Provide centralized classification and projection stripping functions (`IsSyntheticPKName`, `IsSyntheticPKColumn`, `StripSyntheticPKColumns`).
+4. **Case-Insensitive Identifier & Map Layer (`pkg/sqlutil/casing.go`)**:
+   - Standardize identifier normalization via `CanonicalIdent(name)` and allocation-free comparison via `EqualFoldIdent(a, b)`.
+   - Provide generic `CIMap[V]` and `MapGetFold` / `MapSetFold` helpers for safe identifier resolution across catalogs and storage layers.
+
+### Consequences
+- **Positive**: Eliminates 200+ lines of duplicated comparison and NULL-guarding boilerplate; guarantees symmetric heterogeneous comparisons and deterministic float equality; unifies synthetic primary key metadata across parser, query planner, and VDBE; resolves case-sensitivity defects across the engine.
+- **Negative**: Requires new scalar functions and synthetic column generators to adhere to the standardized helper APIs.
+- **Compliance**: Adheres to Golden Rule 11 (Defensive Indexing & Overflow Guard), Golden Rule 15 (Radical KISS, DRY & Deletion-First), Golden Rule 19 (Modular Interface Abstraction), and `notes/SQL_ABSTRACTION_LAYER_PLAN.md`.
+
+
 
 
