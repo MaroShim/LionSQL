@@ -31,6 +31,12 @@
 | **`BUG-VM-COMP-IDX-1`** | **VDBE 복합 인덱스 인코딩 정합성 (VM Composite Index Bug)** | `BUG-VM-COMP-IDX-1` | VDBE VM에서 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 스캔하여 0건 반환되는 결함 수정 |
 | **`BUG-ORDER-BY-SPLIT-1`** | **ORDER BY 다중 컬럼 및 대소문자 정합성 (Order By Bug)** | `BUG-ORDER-BY-SPLIT-1` | `strings.Fields` 분해로 인한 다중 정렬 누락, 콤마 포함 시 DESC 무력화 및 대소문자 미매칭 무력화 원천 해결 |
 | **`BUG-JOIN-PARSE-1`** | **조인 조건 단순 Split 파싱 결함 수정 (Join Parse Bug)** | `BUG-JOIN-PARSE-1` | `strings.Split(cond, "=")` 다중 조건 분해 실패 시 빈 컬럼명 전달 및 PGWire FROM 분해 오작동 방지 |
+| **`BUG-TABLE-CASE-1`** | **테이블명 대소문자 무관 탐색 보장 (Table Case Bug)** | `BUG-TABLE-CASE-1` | `GetTable`/`DropTable` 맵 엄격 일치로 테이블 미인식 에러 방지 (`EqualFold` 폴백 보장) |
+| **`BUG-WT-FK-1`** | **WiredTiger 외래키 무결성 검증 구축 (WT FK Bug)** | `BUG-WT-FK-1` | WiredTiger `Insert`/`Update`/`Delete` 시 외래키 참조 무결성 검사 및 CASCADE/RESTRICT 완전 연동 |
+| **`BUG-FK-CASE-1`** | **외래키 부모 컬럼 대소문자 정규화 (FK Case Bug)** | `BUG-FK-CASE-1` | `findMatchingChildPKsUnderLock` 대소문자 불일치로 자식 참조 0건 오판 및 부모 삭제 허용 결함 수정 |
+| **`BUG-SPLIT-VALUES-1`** | **VALUES 튜플 중첩 수식 콤마 분해 정합성 (Split Values Bug)** | `BUG-SPLIT-VALUES-1` | `splitValues` 괄호 깊이(`depth`) 추적으로 `COALESCE(a, b)` 등 다중 인자 함수 사용 시 컬럼 수 불일치 에러 방지 |
+| **`BUG-MERGE-SET-1`** | **MERGE SET 절 다중 인자 수식 보존 (Merge Set Bug)** | `BUG-MERGE-SET-1` | `parseSetPairs` 괄호 고려 토큰 분해로 `COALESCE` 등 수식 내 콤마 분해 시 후속 구문 사일런트 유실 방지 |
+| **`BUG-COPY-PK-1`** | **COPY FROM 정수 PK 0 보존 (Copy PK Zero Bug)** | `BUG-COPY-PK-1` | PGWire `COPY FROM` 시 정수 기본키 `0`을 미지정으로 오해하여 Unix 에포크 타임스탬프로 위조하는 결함 수정 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---

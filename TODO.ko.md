@@ -43,6 +43,12 @@
 | **`BUG-VM-COMP-IDX-1`** | **VDBE 복합 인덱스 인코딩 정합성 (VM Composite Index Bug)** | `BUG-VM-COMP-IDX-1` | VDBE VM에서 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 스캔하여 0건 반환되는 결함 수정 |
 | **`BUG-ORDER-BY-SPLIT-1`** | **ORDER BY 다중 컬럼 및 대소문자 정합성 (Order By Bug)** | `BUG-ORDER-BY-SPLIT-1` | `strings.Fields` 분해로 인한 다중 정렬 누락, 콤마 포함 시 DESC 무력화 및 대소문자 미매칭 무력화 원천 해결 |
 | **`BUG-JOIN-PARSE-1`** | **조인 조건 단순 Split 파싱 결함 수정 (Join Parse Bug)** | `BUG-JOIN-PARSE-1` | `strings.Split(cond, "=")` 다중 조건 분해 실패 시 빈 컬럼명 전달 및 PGWire FROM 분해 오작동 방지 |
+| **`BUG-TABLE-CASE-1`** | **테이블명 대소문자 무관 탐색 보장 (Table Case Bug)** | `BUG-TABLE-CASE-1` | `GetTable`/`DropTable` 맵 엄격 일치로 테이블 미인식 에러 방지 (`EqualFold` 폴백 보장) |
+| **`BUG-WT-FK-1`** | **WiredTiger 외래키 무결성 검증 구축 (WT FK Bug)** | `BUG-WT-FK-1` | WiredTiger `Insert`/`Update`/`Delete` 시 외래키 참조 무결성 검사 및 CASCADE/RESTRICT 완전 연동 |
+| **`BUG-FK-CASE-1`** | **외래키 부모 컬럼 대소문자 정규화 (FK Case Bug)** | `BUG-FK-CASE-1` | `findMatchingChildPKsUnderLock` 대소문자 불일치로 자식 참조 0건 오판 및 부모 삭제 허용 결함 수정 |
+| **`BUG-SPLIT-VALUES-1`** | **VALUES 튜플 중첩 수식 콤마 분해 정합성 (Split Values Bug)** | `BUG-SPLIT-VALUES-1` | `splitValues` 괄호 깊이(`depth`) 추적으로 `COALESCE(a, b)` 등 다중 인자 함수 사용 시 컬럼 수 불일치 에러 방지 |
+| **`BUG-MERGE-SET-1`** | **MERGE SET 절 다중 인자 수식 보존 (Merge Set Bug)** | `BUG-MERGE-SET-1` | `parseSetPairs` 괄호 고려 토큰 분해로 `COALESCE` 등 수식 내 콤마 분해 시 후속 구문 사일런트 유실 방지 |
+| **`BUG-COPY-PK-1`** | **COPY FROM 정수 PK 0 보존 (Copy PK Zero Bug)** | `BUG-COPY-PK-1` | PGWire `COPY FROM` 시 정수 기본키 `0`을 미지정으로 오해하여 Unix 에포크 타임스탬프로 위조하는 결함 수정 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
@@ -126,6 +132,12 @@
 | **P2** | **프로시저/VM** | **VDBE VM에서 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 스캔하여 0건 반환되는 결함 수정 (`BUG-VM-COMP-IDX-1`)** | `pkg/proc/runtime/vm.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **엔진/정렬** | **`strings.Fields` 분해로 인한 다중 정렬 누락, 콤마 포함 시 DESC 무력화 및 대소문자 미매칭 무력화 원천 해결 (`BUG-ORDER-BY-SPLIT-1`)** | `pkg/catalog/virtual/result.go`, `pkg/engine/sqlexec_select.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **실행/파싱** | **`strings.Split(cond, "=")` 다중 조건 분해 실패 시 빈 컬럼명 전달 및 PGWire FROM 분해 오작동 방지 (`BUG-JOIN-PARSE-1`)** | `pkg/execution/builder.go`, `pkg/wire/server.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/스키마** | **`GetTable`/`DropTable` 대소문자 무관 탐색 보장 (`BUG-TABLE-CASE-1`)** | `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/WiredTiger** | **WiredTiger 스토리지 엔진 외래키(FK) 무결성 검증 및 CASCADE/RESTRICT 구축 (`BUG-WT-FK-1`)** | `pkg/storage/wiredtiger/wt_engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/MemEngine** | **MemEngine 외래키 검사 시 부모 컬럼 대소문자 정규화 (`BUG-FK-CASE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/DML** | **`INSERT ... VALUES` 튜플 수식 내 콤마 분해 정합성 보장 (`BUG-SPLIT-VALUES-1`)** | `pkg/engine/sqlexec_eval.go`, `pkg/engine/sqlexec_dml.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **엔진/MERGE** | **MERGE 문 `UPDATE SET` 절 다중 인자 수식 콤마 분해 사일런트 유실 방지 (`BUG-MERGE-SET-1`)** | `pkg/engine/sqlexec_merge.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **와이어/COPY** | **PGWire `COPY FROM` 시 정수 기본키 `0`의 타임스탬프 위조 방지 (`BUG-COPY-PK-1`)** | `pkg/wire/copy.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -262,8 +274,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 17대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1`, `BUG-SELECT-INTO-PK-1`, `BUG-JOIN-IDX-1`, `BUG-WT-INDEX-COMP-1`, `BUG-VM-COMP-IDX-1`, `BUG-ORDER-BY-SPLIT-1`, `BUG-JOIN-PARSE-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`)으로 인해 발생하는 17대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 23대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1` ~ `BUG-JOIN-PARSE-1`, `BUG-TABLE-CASE-1`, `BUG-WT-FK-1`, `BUG-FK-CASE-1`, `BUG-SPLIT-VALUES-1`, `BUG-MERGE-SET-1`, `BUG-COPY-PK-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판으로 인해 발생하는 23대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -316,6 +328,24 @@
   17. **`BUG-JOIN-PARSE-1` (`pkg/execution/builder.go:315`, `pkg/wire/server.go:1064, 1586`)**:
      - `strings.Split(cond, "=")`로 다중 조건(`a = b AND c = d`) 분해 실패 시 `"", ""`를 반환하여 빈 컬럼명 `" ASC"` 소트 이터레이터를 생성하고, PGWire에서 `strings.Split(upper, "FROM")`로 `valid_from` 컬럼명 등에서 조기 분리되어 테이블명 조회가 파괴되던 결함.
      - 조인 조건 AST 분해 및 PGWire 쿼리 키워드 경계 정규식 기반 정합 분해.
+  18. **`BUG-TABLE-CASE-1` (`pkg/storage/memengine/ddl.go:458`, `pkg/storage/wiredtiger/wt_engine.go:745`)**:
+     - `GetTable(tableName)` 및 `DropTable(tableName)`이 Go 맵의 엄격 일치(`e.tables[tableName]`)로만 작성되어, `CREATE TABLE Users` 후 `SELECT * FROM users` 또는 `INSERT INTO users` 실행 시 `table not found: users` 에러를 반환하는 치명적 대소문자 결함.
+     - 1차 룩업 실패 시 `strings.EqualFold` 순회 또는 소문자 인덱싱을 통해 대소문자 무관 테이블 탐색 보장.
+  19. **`BUG-WT-FK-1` (`pkg/storage/wiredtiger/wt_engine.go:1195-1380`)**:
+     - WiredTiger 스토리지 백엔드의 `Insert`, `Update`, `Delete` 함수에 외래키(FK) 제약조건 검증 및 CASCADE/RESTRICT 처리 로직이 전무하여, 가짜 외래키 삽입 및 참조 부모 행 무단 삭제로 고아 데이터가 무제한 생성되던 치명적 결함.
+     - WiredTiger CGO 트랜잭션 계층에 외래키 참조 무결성 검증 및 부모 행 삭제/갱신 시 연쇄 처리 연동.
+  20. **`BUG-FK-CASE-1` (`pkg/storage/memengine/tx.go:940-946`)**:
+     - `memengine`의 `findMatchingChildPKsUnderLock`에서 `parentRecord[pCol]` 부모 컬럼 조회가 대소문자 차이로 실패하면 "참조 자식 행이 0건"이라고 오판하여 `nil, nil`을 사일런트 반환함으로써, `ON DELETE RESTRICT` 및 CASCADE를 완전 우회하고 부모 행 삭제를 허용하던 결함.
+     - `parentRecord` 룩업 시 `strings.EqualFold` 대소문자 무관 매칭 보장.
+  21. **`BUG-SPLIT-VALUES-1` (`pkg/engine/sqlexec_eval.go:84-106`, `sqlexec_dml.go:405`)**:
+     - `splitValues`가 괄호 중첩 깊이(`depth`)를 계산하지 않고 콤마(`,`)를 단순 분리하여, `INSERT INTO t VALUES (1, COALESCE(a, b))`와 같은 다중 인자 함수 사용 시 내부 콤마에서 쪼개져 "column count does not match value count" 에러를 내던 결함.
+     - 괄호 중첩 깊이(`depth`)를 추적하여 최상위 콤마만 분해하도록 수정.
+  22. **`BUG-MERGE-SET-1` (`pkg/engine/sqlexec_merge.go:646-658`)**:
+     - MERGE 문의 `UPDATE SET` 파싱 시 `strings.Split(s, ",")` 단순 분해로 인해 `SET col = COALESCE(a, 'N/A'), col2 = 1` 등 함수 내 콤마 분해 시 후속 구문이 `=` 미포함으로 조용히 버려지고 문법이 깨지던 결함.
+     - 괄호 중첩을 고려한 토큰 분해 적용으로 다중 인자 수식 보존.
+  23. **`BUG-COPY-PK-1` (`pkg/wire/copy.go:338-342`)**:
+     - PGWire `COPY FROM` 처리 시 `curPK.IVal == 0` 조건을 "PK 미지정"으로 오해하여, 사용자가 적법하게 임포트한 정수 PK `0`을 현재 Unix 에포크 타임스탬프(`time.Now().UnixNano()...`)로 덮어써 데이터를 훼손하던 결함.
+     - 컬럼 누락(`!exists`) 또는 `IsNull`인 경우에만 자동 생성을 허용하고 수치 `0`은 온전히 보존.
 
 ---
 
@@ -337,7 +367,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1`, `BUG-SELECT-INTO-PK-1`, `BUG-JOIN-IDX-1`, `BUG-WT-INDEX-COMP-1`, `BUG-VM-COMP-IDX-1`, `BUG-ORDER-BY-SPLIT-1`, `BUG-JOIN-PARSE-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1` ~ `BUG-JOIN-PARSE-1`, `BUG-TABLE-CASE-1`, `BUG-WT-FK-1`, `BUG-FK-CASE-1`, `BUG-SPLIT-VALUES-1`, `BUG-MERGE-SET-1`, `BUG-COPY-PK-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -358,6 +388,12 @@
 | **BUG-VM-COMP-IDX-1** | VM/인덱스 | VDBE 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 스캔하여 0건 반환되는 결함 수정 | **대기 (`[ ]`)** | 첫 번째 컬럼 일치 시 복합 인덱스를 선택해 비인코딩 스칼라를 전달하여 0건 반환되는 결함 해결 |
 | **BUG-ORDER-BY-SPLIT-1** | 엔진/정렬 | `strings.Fields` 분해로 인한 다중 정렬 누락, 콤마 포함 시 DESC 무력화 및 대소문자 미매칭 해결 | **대기 (`[ ]`)** | 다중 컬럼 정렬 누락 및 `DESC,` 콤마 파싱 에러로 정렬 방향이 반전되거나 대소문자 차이로 정렬이 무력화되는 결함 해결 |
 | **BUG-JOIN-PARSE-1** | 실행/파싱 | `strings.Split(cond, "=")` 다중 조건 분해 실패 시 빈 컬럼명 전달 및 PGWire FROM 분해 오작동 방지 | **대기 (`[ ]`)** | `AND` 포함 다중 조인 조건 분해 실패 시 빈 컬럼명 소트 생성 및 PGWire 키워드 경계 분해 결함 해결 |
+| **BUG-TABLE-CASE-1** | 스토리지/스키마 | `GetTable`/`DropTable` 대소문자 무관 탐색 보장 | **대기 (`[ ]`)** | `e.tables` 맵의 엄격 일치로 인해 대소문자가 다른 테이블 조회 시 `table not found`가 발생하는 결함 해결 |
+| **BUG-WT-FK-1** | 스토리지/WT | WiredTiger 외래키(FK) 무결성 검증 및 CASCADE/RESTRICT 구축 | **대기 (`[ ]`)** | 디스크 모드에서 외래키 검증 부재로 가짜 FK 삽입 및 참조 부모 행 무단 삭제로 고아 데이터가 발생하는 결함 해결 |
+| **BUG-FK-CASE-1** | 스토리지/Mem | MemEngine 외래키 검사 시 부모 컬럼 대소문자 정규화 | **대기 (`[ ]`)** | `parentRecord[pCol]` 대소문자 불일치로 자식 참조가 0건으로 오판되어 부모 삭제가 허용되던 결함 해결 |
+| **BUG-SPLIT-VALUES-1** | 엔진/DML | `INSERT ... VALUES` 튜플 수식 내 콤마 분해 정합성 보장 | **대기 (`[ ]`)** | `splitValues`의 괄호 깊이 추적으로 `COALESCE(a, b)` 등 다중 인자 함수 사용 시 컬럼 수 불일치 에러 방지 |
+| **BUG-MERGE-SET-1** | 엔진/MERGE | MERGE 문 `UPDATE SET` 절 다중 인자 수식 콤마 분해 사일런트 유실 방지 | **대기 (`[ ]`)** | `parseSetPairs` 괄호 고려 토큰 분해로 수식 내 콤마 분해 시 후속 구문 사일런트 유실 방지 |
+| **BUG-COPY-PK-1** | 와이어/COPY | PGWire `COPY FROM` 시 정수 기본키 `0`의 타임스탬프 위조 방지 | **대기 (`[ ]`)** | PK `id=0`을 미지정으로 오해하여 현재 Unix 에포크 타임스탬프로 위조 덮어쓰기하는 결함 해결 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
