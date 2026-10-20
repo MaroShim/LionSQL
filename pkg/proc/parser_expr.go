@@ -316,6 +316,10 @@ func (p *Parser) parsePrefix() Expr {
 			sel, err := p.parseGeneralSelect()
 			if err == nil && sel != nil && p.curTokenIs(TokenRParen) {
 				p.nextToken() // eat )
+				if len(sel.Projections) > 1 {
+					p.addError("subquery must return only one column")
+					return nil
+				}
 				sub := &ScalarSubqueryExpr{
 					Query: sel,
 					Table: sel.From.Name,
@@ -444,6 +448,13 @@ func (p *Parser) parseConvert(try bool) Expr {
 
 func (p *Parser) parseCase() Expr {
 	p.nextToken() // eat CASE
+	var operand Expr
+	if !p.curTokenIs(TokenWhen) {
+		operand = p.parseExpression(precLowest)
+		if operand == nil {
+			return nil
+		}
+	}
 	var whens []CaseWhen
 
 	for p.curTokenIs(TokenWhen) {
@@ -472,8 +483,9 @@ func (p *Parser) parseCase() Expr {
 	p.nextToken() // eat END
 
 	return &CaseExpr{
-		Whens: whens,
-		Else:  elseExpr,
+		Operand: operand,
+		Whens:   whens,
+		Else:    elseExpr,
 	}
 }
 

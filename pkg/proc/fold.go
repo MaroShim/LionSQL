@@ -151,6 +151,9 @@ func FoldConstants(expr Expr) Expr {
 		return e
 
 	case *CaseExpr:
+		if e.Operand != nil {
+			e.Operand = FoldConstants(e.Operand)
+		}
 		if e.Else != nil {
 			e.Else = FoldConstants(e.Else)
 		}
@@ -209,6 +212,9 @@ func isConstantExpr(expr Expr) bool {
 		}
 		return true
 	case *CaseExpr:
+		if e.Operand != nil && !isConstantExpr(e.Operand) {
+			return false
+		}
 		if e.Else != nil && !isConstantExpr(e.Else) {
 			return false
 		}

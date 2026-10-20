@@ -19,6 +19,7 @@ import (
 	"lionsql/pkg/execution"
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -851,14 +852,33 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			for k, v := range oldRowMap {
 				newRowMap[k] = v
 			}
+			var tableSchema *storage.TableSchema
+			if tg := f.executor.getTableGetter(); tg != nil {
+				if schema, err := tg(data.Table); err == nil && schema != nil {
+					tableSchema = schema
+				}
+			}
 			for _, a := range data.Assignments {
 				vAny, err := proc.EvalRowExpr(a.Value, rowCtx, nil)
 				if err != nil {
 					return 0, err
 				}
 				stVal := toStorageValue(vAny)
-				recUpdates[a.Column] = stVal
-				newRowMap[a.Column] = valToAny(stVal)
+				colName := a.Column
+				if tableSchema != nil {
+					if colSchema, _, ok := tableSchema.FindColumn(colName); ok {
+						colName = colSchema.Name
+					}
+				} else {
+					for k := range oldRowMap {
+						if sqlutil.EqualFoldIdent(k, colName) {
+							colName = k
+							break
+						}
+					}
+				}
+				recUpdates.Set(colName, stVal)
+				newRowMap[colName] = valToAny(stVal)
 			}
 			if err := f.tx.Update(data.Table, pkVal, recUpdates); err != nil {
 				return 0, fmt.Errorf("update error on %s: %w", data.Table, err)
@@ -872,21 +892,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	var cursor storage.Cursor
 	var err error
 
-	if idxName, lowExpr, highExpr, ok := f.findMatchingIndex(data.Table, data.WhereExpr); ok {
-		evalCtx := f.buildRowEvalMap(nil)
-		var lowVal, highVal *storage.Value
-		if lowExpr != nil {
-			if v, evalErr := proc.EvalRowExpr(lowExpr, evalCtx, nil); evalErr == nil {
-				sv := toStorageValue(v)
-				lowVal = &sv
-			}
-		}
-		if highExpr != nil {
-			if v, evalErr := proc.EvalRowExpr(highExpr, evalCtx, nil); evalErr == nil {
-				sv := toStorageValue(v)
-				highVal = &sv
-			}
-		}
+	if idxName, lowVal, highVal, ok := f.findMatchingIndex(data.Table, data.WhereExpr); ok {
 		cursor, err = f.tx.IndexScan(data.Table, idxName, lowVal, highVal)
 	}
 
@@ -943,6 +949,13 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			newRowMap[k] = v
 		}
 
+		var tableSchema *storage.TableSchema
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(data.Table); err == nil && schema != nil {
+				tableSchema = schema
+			}
+		}
+
 		for _, assign := range data.Assignments {
 			rowContext := f.buildRowEvalMap(rowMap)
 			val, err := proc.EvalRowExpr(assign.Value, rowContext, nil)
@@ -950,8 +963,21 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				return 0, err
 			}
 			stVal := toStorageValue(val)
-			recUpdates[assign.Column] = stVal
-			newRowMap[assign.Column] = valToAny(stVal)
+			colName := assign.Column
+			if tableSchema != nil {
+				if colSchema, _, ok := tableSchema.FindColumn(colName); ok {
+					colName = colSchema.Name
+				}
+			} else {
+				for k := range rowMap {
+					if sqlutil.EqualFoldIdent(k, colName) {
+						colName = k
+						break
+					}
+				}
+			}
+			recUpdates.Set(colName, stVal)
+			newRowMap[colName] = valToAny(stVal)
 		}
 
 		if hasPk {
@@ -1000,21 +1026,7 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	var cursor storage.Cursor
 	var err error
 
-	if idxName, lowExpr, highExpr, ok := f.findMatchingIndex(data.Table, data.WhereExpr); ok {
-		evalCtx := f.buildRowEvalMap(nil)
-		var lowVal, highVal *storage.Value
-		if lowExpr != nil {
-			if v, evalErr := proc.EvalRowExpr(lowExpr, evalCtx, nil); evalErr == nil {
-				sv := toStorageValue(v)
-				lowVal = &sv
-			}
-		}
-		if highExpr != nil {
-			if v, evalErr := proc.EvalRowExpr(highExpr, evalCtx, nil); evalErr == nil {
-				sv := toStorageValue(v)
-				highVal = &sv
-			}
-		}
+	if idxName, lowVal, highVal, ok := f.findMatchingIndex(data.Table, data.WhereExpr); ok {
 		cursor, err = f.tx.IndexScan(data.Table, idxName, lowVal, highVal)
 	}
 
@@ -1185,7 +1197,33 @@ func (f *VMFrame) isPKCol(tableName, colName string) bool {
 	return strings.EqualFold(clean, "id")
 }
 
-func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (string, proc.Expr, proc.Expr, bool) {
+func extractAllEqConditions(expr proc.Expr) map[string]proc.Expr {
+	res := make(map[string]proc.Expr)
+	var walk func(e proc.Expr)
+	walk = func(e proc.Expr) {
+		if e == nil {
+			return
+		}
+		if bin, ok := e.(*proc.BinaryExpr); ok {
+			if bin.Op == proc.TokenAnd {
+				walk(bin.Left)
+				walk(bin.Right)
+				return
+			}
+			if bin.Op == proc.TokenEq {
+				if colRef, ok := bin.Left.(*proc.ColumnRefExpr); ok {
+					res[sqlutil.CanonicalIdent(colRef.Name)] = bin.Right
+				} else if colRef, ok := bin.Right.(*proc.ColumnRefExpr); ok {
+					res[sqlutil.CanonicalIdent(colRef.Name)] = bin.Left
+				}
+			}
+		}
+	}
+	walk(expr)
+	return res
+}
+
+func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (string, *storage.Value, *storage.Value, bool) {
 	if whereExpr == nil {
 		return "", nil, nil, false
 	}
@@ -1198,6 +1236,44 @@ func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (stri
 		return "", nil, nil, false
 	}
 
+	evalCtx := f.buildRowEvalMap(nil)
+
+	// 1. Check composite indexes when all composite columns have equality conditions
+	eqMap := extractAllEqConditions(whereExpr)
+	if len(eqMap) > 1 {
+		for _, idx := range schema.Indexes {
+			if len(idx.Columns) > 1 {
+				allMatched := true
+				var vals []storage.Value
+				for _, col := range idx.Columns {
+					valExpr, ok := eqMap[sqlutil.CanonicalIdent(col)]
+					if !ok {
+						allMatched = false
+						break
+					}
+					vAny, err := proc.EvalRowExpr(valExpr, evalCtx, nil)
+					if err != nil {
+						allMatched = false
+						break
+					}
+					vals = append(vals, toStorageValue(vAny))
+				}
+				if allMatched && len(vals) == len(idx.Columns) {
+					var sb strings.Builder
+					for i, v := range vals {
+						if i > 0 {
+							sb.WriteByte(0)
+						}
+						sb.WriteString(storage.EncodeIndexKeyPart(v))
+					}
+					encVal := storage.StringValue(sb.String())
+					return idx.Name, &encVal, &encVal, true
+				}
+			}
+		}
+	}
+
+	// 2. Check single-column indexes (len(idx.Columns) == 1) for equality or BETWEEN
 	switch e := whereExpr.(type) {
 	case *proc.BinaryExpr:
 		if e.Op == proc.TokenEq {
@@ -1212,8 +1288,11 @@ func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (stri
 			}
 			if colName != "" && valExpr != nil {
 				for _, idx := range schema.Indexes {
-					if len(idx.Columns) > 0 && strings.EqualFold(idx.Columns[0], colName) {
-						return idx.Name, valExpr, valExpr, true
+					if len(idx.Columns) == 1 && sqlutil.EqualFoldIdent(idx.Columns[0], colName) {
+						if vAny, err := proc.EvalRowExpr(valExpr, evalCtx, nil); err == nil {
+							stVal := toStorageValue(vAny)
+							return idx.Name, &stVal, &stVal, true
+						}
 					}
 				}
 			}
@@ -1222,8 +1301,17 @@ func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (stri
 		if colRef, ok := e.Expr.(*proc.ColumnRefExpr); ok {
 			colName := cleanSymbol(colRef.Name)
 			for _, idx := range schema.Indexes {
-				if len(idx.Columns) > 0 && strings.EqualFold(idx.Columns[0], colName) {
-					return idx.Name, e.Low, e.High, true
+				if len(idx.Columns) == 1 && sqlutil.EqualFoldIdent(idx.Columns[0], colName) {
+					var lowVal, highVal *storage.Value
+					if vLow, err := proc.EvalRowExpr(e.Low, evalCtx, nil); err == nil {
+						sv := toStorageValue(vLow)
+						lowVal = &sv
+					}
+					if vHigh, err := proc.EvalRowExpr(e.High, evalCtx, nil); err == nil {
+						sv := toStorageValue(vHigh)
+						highVal = &sv
+					}
+					return idx.Name, lowVal, highVal, true
 				}
 			}
 		}
@@ -1236,21 +1324,7 @@ func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr) ([]stora
 	var cursor storage.Cursor
 	var err error
 
-	if idxName, lowExpr, highExpr, ok := f.findMatchingIndex(tableName, whereExpr); ok {
-		evalCtx := f.buildRowEvalMap(nil)
-		var lowVal, highVal *storage.Value
-		if lowExpr != nil {
-			if v, evalErr := proc.EvalRowExpr(lowExpr, evalCtx, nil); evalErr == nil {
-				sv := toStorageValue(v)
-				lowVal = &sv
-			}
-		}
-		if highExpr != nil {
-			if v, evalErr := proc.EvalRowExpr(highExpr, evalCtx, nil); evalErr == nil {
-				sv := toStorageValue(v)
-				highVal = &sv
-			}
-		}
+	if idxName, lowVal, highVal, ok := f.findMatchingIndex(tableName, whereExpr); ok {
 		cursor, err = f.tx.IndexScan(tableName, idxName, lowVal, highVal)
 	}
 

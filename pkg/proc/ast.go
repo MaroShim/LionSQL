@@ -482,16 +482,21 @@ type CaseWhen struct {
 	Result    Expr
 }
 
-// CaseExpr represents CASE WHEN ... THEN ... [ELSE ...] END
+// CaseExpr represents CASE [operand] WHEN ... THEN ... [ELSE ...] END
 type CaseExpr struct {
-	Whens []CaseWhen
-	Else  Expr
+	Operand Expr // nil for searched CASE, non-nil for simple CASE
+	Whens   []CaseWhen
+	Else    Expr
 }
 
 func (e *CaseExpr) exprNode() {}
 func (e *CaseExpr) String() string {
 	var b strings.Builder
 	b.WriteString("CASE")
+	if e.Operand != nil {
+		b.WriteString(" ")
+		b.WriteString(e.Operand.String())
+	}
 	for _, w := range e.Whens {
 		b.WriteString(fmt.Sprintf(" WHEN %s THEN %s", w.Condition.String(), w.Result.String()))
 	}
@@ -616,6 +621,9 @@ func (e *ScalarSubqueryExpr) exprNode() {}
 func (e *ScalarSubqueryExpr) String() string {
 	if e.Query != nil {
 		return fmt.Sprintf("(%s)", e.Query.String())
+	}
+	if e.Table == "" {
+		return fmt.Sprintf("(SELECT %s)", e.Column)
 	}
 	if e.Where != nil {
 		return fmt.Sprintf("(SELECT %s FROM %s WHERE %s)", e.Column, e.Table, e.Where.String())

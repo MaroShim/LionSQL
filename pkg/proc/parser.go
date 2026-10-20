@@ -94,6 +94,10 @@ func (p *Parser) peekError(t TokenType) {
 	p.errors = append(p.errors, msg)
 }
 
+func (p *Parser) addError(msg string) {
+	p.errors = append(p.errors, msg)
+}
+
 func (p *Parser) Errors() []string {
 	return p.errors
 }

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"lionsql/pkg/sqlutil"
 )
 
 var (
@@ -357,7 +359,7 @@ func (s *TableSchema) PrimaryKeyColumn() (*Column, error) {
 
 func (s *TableSchema) FindColumn(name string) (*Column, int, bool) {
 	for i := range s.Columns {
-		if strings.EqualFold(s.Columns[i].Name, name) {
+		if sqlutil.EqualFoldIdent(s.Columns[i].Name, name) {
 			return &s.Columns[i], i, true
 		}
 	}
@@ -366,7 +368,7 @@ func (s *TableSchema) FindColumn(name string) (*Column, int, bool) {
 
 func (s *TableSchema) FindIndex(name string) (*IndexSchema, int, bool) {
 	for i := range s.Indexes {
-		if strings.EqualFold(s.Indexes[i].Name, name) {
+		if sqlutil.EqualFoldIdent(s.Indexes[i].Name, name) {
 			return &s.Indexes[i], i, true
 		}
 	}

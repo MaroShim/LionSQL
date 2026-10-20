@@ -241,6 +241,29 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		return isNull, nil
 
 	case *CaseExpr:
+		if e.Operand != nil {
+			opVal, err := EvalRowExpr(e.Operand, row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			opStVal := anyToStorageVal(opVal)
+			if !opStVal.IsNull {
+				for _, w := range e.Whens {
+					condVal, err := EvalRowExpr(w.Condition, row, execSubquery)
+					if err != nil {
+						return nil, err
+					}
+					condStVal := anyToStorageVal(condVal)
+					if !condStVal.IsNull && opStVal.Equal(condStVal) {
+						return EvalRowExpr(w.Result, row, execSubquery)
+					}
+				}
+			}
+			if e.Else != nil {
+				return EvalRowExpr(e.Else, row, execSubquery)
+			}
+			return nil, nil
+		}
 		for _, w := range e.Whens {
 			if EvalBoolExpr(w.Condition, row, execSubquery) {
 				return EvalRowExpr(w.Result, row, execSubquery)
@@ -298,6 +321,9 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		return hasRows, nil
 
 	case *ScalarSubqueryExpr:
+		if e.Query != nil && e.Query.From.Name == "" && len(e.Query.Projections) > 0 && e.Query.Projections[0].Expr != nil {
+			return EvalRowExpr(e.Query.Projections[0].Expr, row, execSubquery)
+		}
 		if execSubquery == nil {
 			return nil, nil
 		}

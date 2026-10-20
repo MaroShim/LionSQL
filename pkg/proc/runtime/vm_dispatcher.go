@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"sort"
 	"strings"
-	"time"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -615,17 +615,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		if tableSchema != nil {
 			for _, col := range tableSchema.Columns {
 				if _, exists := rec[col.Name]; !exists && col.Default != "" {
-					upper := strings.ToUpper(strings.TrimSpace(col.Default))
-					switch upper {
-					case "NEWID7()", "UUIDV7()", "UUID_GENERATE_V7()":
-						rec[col.Name] = storage.Value{Type: storage.TypeUUID, SVal: proc.GenerateUUIDv7()}
-					case "NEWID()", "GEN_RANDOM_UUID()":
-						rec[col.Name] = storage.Value{Type: storage.TypeUUID, SVal: proc.GenerateUUIDv4()}
-					case "GETDATE()", "NOW()", "CURRENT_TIMESTAMP":
-						rec[col.Name] = storage.DateTimeValue(time.Now())
-					case "GETUTCDATE()", "SYSDATETIME()":
-						rec[col.Name] = storage.DateTimeValue(time.Now().UTC())
-					}
+					rec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
 				}
 			}
 		}
@@ -684,6 +674,13 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			if tableSchema != nil {
 				if colSchema, _, ok := tableSchema.FindColumn(colName); ok {
 					colName = colSchema.Name
+				}
+			} else if oldRec != nil {
+				for k := range oldRec {
+					if sqlutil.EqualFoldIdent(k, colName) {
+						colName = k
+						break
+					}
 				}
 			}
 			rec.Set(colName, toStorageValue(valAny))

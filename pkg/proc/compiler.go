@@ -1277,13 +1277,34 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 		r := c.allocReg()
 		var endJumps []int
 
-		for _, w := range e.Whens {
-			condReg, err := c.compileExpr(w.Condition)
+		var opReg int32 = -1
+		if e.Operand != nil {
+			var err error
+			opReg, err = c.compileExpr(e.Operand)
 			if err != nil {
 				return 0, err
 			}
-			jmpNext := c.emit(OpJumpIfFalse, condReg, 0, 0, nil)
-			c.freeReg(1)
+		}
+
+		for _, w := range e.Whens {
+			var jmpNext int
+			if opReg >= 0 {
+				valReg, err := c.compileExpr(w.Condition)
+				if err != nil {
+					return 0, err
+				}
+				cmpReg := c.allocReg()
+				c.emit(OpEq, cmpReg, opReg, valReg, nil)
+				jmpNext = c.emit(OpJumpIfFalse, cmpReg, 0, 0, nil)
+				c.freeReg(2)
+			} else {
+				condReg, err := c.compileExpr(w.Condition)
+				if err != nil {
+					return 0, err
+				}
+				jmpNext = c.emit(OpJumpIfFalse, condReg, 0, 0, nil)
+				c.freeReg(1)
+			}
 
 			resReg, err := c.compileExpr(w.Result)
 			if err != nil {
@@ -1295,6 +1316,10 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			endJmp := c.emit(OpJump, 0, 0, 0, nil)
 			endJumps = append(endJumps, endJmp)
 			c.prog.Instructions[jmpNext].B = int32(c.currentPC())
+		}
+
+		if opReg >= 0 {
+			c.freeReg(1)
 		}
 
 		if e.Else != nil {
@@ -1357,6 +1382,11 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			}
 			tbl = e.Query.From.Name
 			whereVal = e.Query.Where
+		}
+		if tbl == "" {
+			if e.Query != nil && len(e.Query.Projections) > 0 && e.Query.Projections[0].Expr != nil {
+				return c.compileExpr(e.Query.Projections[0].Expr)
+			}
 		}
 		r := c.allocReg()
 		c.emit(OpSelectInto, r, 0, 0, &SelectIntoData{
