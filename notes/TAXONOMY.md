@@ -37,6 +37,10 @@
 | **`BUG-SPLIT-VALUES-1`** | **VALUES 튜플 중첩 수식 콤마 분해 정합성 (Split Values Bug)** | `BUG-SPLIT-VALUES-1` | `splitValues` 괄호 깊이(`depth`) 추적으로 `COALESCE(a, b)` 등 다중 인자 함수 사용 시 컬럼 수 불일치 에러 방지 |
 | **`BUG-MERGE-SET-1`** | **MERGE SET 절 다중 인자 수식 보존 (Merge Set Bug)** | `BUG-MERGE-SET-1` | `parseSetPairs` 괄호 고려 토큰 분해로 `COALESCE` 등 수식 내 콤마 분해 시 후속 구문 사일런트 유실 방지 |
 | **`BUG-COPY-PK-1`** | **COPY FROM 정수 PK 0 보존 (Copy PK Zero Bug)** | `BUG-COPY-PK-1` | PGWire `COPY FROM` 시 정수 기본키 `0`을 미지정으로 오해하여 Unix 에포크 타임스탬프로 위조하는 결함 수정 |
+| **`BUG-STR-NULL-1`** | **문자열 함수 NULL 전파 보장 (String NULL Bug)** | `BUG-STR-NULL-1` | `UPPER`/`LOWER`/`TRIM`/`SUBSTRING`/`REPLACE` 등 NULL 입력 시 빈 문자열/변조 대신 `NULL` 정규 반환 |
+| **`BUG-VM-UPDATE-1`** | **VDBE UPDATE 컬럼명 정규화 (VM Update Silent Loss)** | `BUG-VM-UPDATE-1` | VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 업데이트 사일런트 유실 방지 |
+| **`BUG-FK-CHILD-CASE-1`** | **외래키 자식 컬럼 대소문자 정규화 (FK Child Case Bug)** | `BUG-FK-CHILD-CASE-1` | `checkForeignKeyUnderLock` 대소문자 불일치 시 가짜 외래키 삽입이 무단 허용되는 결함 수정 |
+| **`BUG-PGWIRE-PARAM-1`** | **PGWire 파라미터 경계 인식 치환 (PGWire Param Bug)** | `BUG-PGWIRE-PARAM-1` | 단순 문자열 치환으로 `$10` 이상의 다중 파라미터가 `$1` 치환 시 깨지는 결함 수정 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
