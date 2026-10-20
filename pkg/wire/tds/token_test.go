@@ -526,3 +526,33 @@ func TestTypePLP_LOBEncoding(t *testing.T) {
 		t.Fatalf("expected NBC total length 10000, got %d", nbcTotalLen)
 	}
 }
+
+func TestWriteRowDirect_CaseInsensitive(t *testing.T) {
+	cols := []ColumnInfo{
+		{Name: "UserName", Type: TypeVarChar, Size: 50, Nullable: true},
+		{Name: "Age", Type: TypeIntN, Size: 4, Nullable: true},
+	}
+	// Row map has different casing
+	rowMap := map[string]any{
+		"username": "alice",
+		"AGE":      int64(30),
+	}
+
+	var buf bytes.Buffer
+	WriteRowDirect(&buf, cols, rowMap)
+	res := buf.Bytes()
+	if len(res) == 0 || res[0] != TokenRow {
+		t.Fatalf("expected TokenRow, got %v", res)
+	}
+
+	var nbcBuf bytes.Buffer
+	WriteNBCRowDirect(&nbcBuf, cols, rowMap)
+	nbcRes := nbcBuf.Bytes()
+	if len(nbcRes) == 0 || nbcRes[0] != TokenNBCRow {
+		t.Fatalf("expected TokenNBCRow, got %v", nbcRes)
+	}
+	// Bitmap should have 0 bits set (no NULLs)
+	if nbcRes[1] != 0 {
+		t.Fatalf("expected 0 NULL bits in bitmap, got 0x%02X", nbcRes[1])
+	}
+}

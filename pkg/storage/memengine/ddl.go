@@ -27,8 +27,18 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		}
 		parentTd, exists := e.tables[fk.ParentTable]
 		if !exists {
+			for name, t := range e.tables {
+				if strings.EqualFold(name, fk.ParentTable) {
+					parentTd = t
+					exists = true
+					break
+				}
+			}
+		}
+		if !exists {
 			return fmt.Errorf("%w: referenced parent table %q does not exist", storage.ErrTableNotFound, fk.ParentTable)
 		}
+		fk.ParentTable = parentTd.Schema.Name
 		if len(fk.ParentColumns) == 0 {
 			pkCol, err := parentTd.Schema.PrimaryKeyColumn()
 			if err != nil || pkCol == nil {
@@ -164,20 +174,7 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 }
 
 func extractIndexKeyFromRecord(rec storage.Record, idx *storage.IndexSchema) storage.Value {
-	if idx != nil && idx.IsExpression() {
-		colName := idx.ExprColumn
-		if colName == "" && len(idx.Columns) > 0 {
-			colName = idx.Columns[0]
-		}
-		if docVal, ok := rec[colName]; ok && !docVal.IsNull {
-			return storage.ExtractJSONIndexKey(docVal.String(), idx.ExprPath)
-		}
-		return storage.NullValue(storage.TypeVarChar)
-	}
-	if idx != nil {
-		return extractIndexKey(rec, idx.Columns)
-	}
-	return storage.NullValue(storage.TypeUnknown)
+	return storage.ExtractIndexKeyFromRecord(rec, idx)
 }
 
 func extractIndexKeyFromRowWithSchema(schema *storage.TableSchema, row storage.Row, idx *storage.IndexSchema) storage.Value {
@@ -208,7 +205,7 @@ func extractIndexKey(rec storage.Record, cols []string) storage.Value {
 		return storage.NullValue(storage.TypeUnknown)
 	}
 	if len(cols) == 1 {
-		if v, ok := rec[cols[0]]; ok {
+		if v, ok := rec.Get(cols[0]); ok {
 			return v
 		}
 		return storage.NullValue(storage.TypeUnknown)
@@ -219,7 +216,7 @@ func extractIndexKey(rec storage.Record, cols []string) storage.Value {
 		if i > 0 {
 			sb.WriteByte(0)
 		}
-		if v, ok := rec[c]; ok {
+		if v, ok := rec.Get(c); ok {
 			sb.WriteString(storage.EncodeIndexKeyPart(v))
 		} else {
 			sb.WriteString("NULL")

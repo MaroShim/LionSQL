@@ -358,12 +358,7 @@ func (ts *TableStats) EstimateSelectivity(colName string, op string, valStr stri
 		return 0.33 // Default heuristic fallback when no stats exist
 	}
 
-	cs, exists := ts.Columns[colName]
-	if !exists {
-		if idx := strings.Index(colName, "."); idx != -1 {
-			cs, exists = ts.Columns[colName[idx+1:]]
-		}
-	}
+	cs, exists := ts.findColumnStats(colName)
 	if !exists || cs == nil {
 		return 0.33
 	}

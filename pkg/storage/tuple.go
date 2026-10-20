@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"sync"
 	"time"
 )
@@ -61,20 +60,10 @@ func (s *TableSchema) RecordToRowWithArena(rec Record, arena *Arena) Row {
 		vals = make([]Value, len(s.Columns))
 	}
 	for i, col := range s.Columns {
-		if v, ok := rec[col.Name]; ok {
+		if v, ok := rec.Get(col.Name); ok {
 			vals[i] = v
 		} else {
-			found := false
-			for k, v := range rec {
-				if strings.EqualFold(k, col.Name) {
-					vals[i] = v
-					found = true
-					break
-				}
-			}
-			if !found {
-				vals[i] = NullValue(col.Type)
-			}
+			vals[i] = NullValue(col.Type)
 		}
 	}
 	return Row{Values: vals}
@@ -106,23 +95,34 @@ func (s *TableSchema) ApplyRecordToRow(row Row, rec Record) Row {
 		copy(vals, row.Values)
 	}
 	for i, col := range s.Columns {
-		if v, ok := rec[col.Name]; ok {
+		if v, ok := rec.Get(col.Name); ok {
 			vals[i] = v
-		} else {
-			matched := false
-			for k, v := range rec {
-				if strings.EqualFold(k, col.Name) {
-					vals[i] = v
-					matched = true
-					break
-				}
-			}
-			if !matched && i >= len(row.Values) {
-				vals[i] = NullValue(col.Type)
-			}
+		} else if i >= len(row.Values) {
+			vals[i] = NullValue(col.Type)
 		}
 	}
 	return Row{Values: vals}
+}
+
+// RowMatchesFK checks whether row values for the given columns match the provided target values.
+func (s *TableSchema) RowMatchesFK(row Row, cols []string, vals []Value) bool {
+	if s == nil || len(cols) != len(vals) {
+		return false
+	}
+	for i, col := range cols {
+		_, idx, found := s.FindColumn(col)
+		if !found || idx < 0 || idx >= len(row.Values) {
+			return false
+		}
+		v := row.Values[idx]
+		if v.IsNull || vals[i].IsNull {
+			return false
+		}
+		if !v.Equal(vals[i]) {
+			return false
+		}
+	}
+	return true
 }
 
 // EncodeRow encodes an ordered Row into a compact schema-aware binary tuple.

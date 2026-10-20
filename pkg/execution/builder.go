@@ -247,13 +247,21 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			return nil, fmt.Errorf("nested loop inner schema error: %w", sErr)
 		}
 
-		leftKey, _ := parseJoinCond(plan.JoinCond)
+		leftKey, rightKey := parseJoinCond(plan.JoinCond)
 
 		var innerIdx *storage.IndexSchema
-		if idx, _, found := innerSchema.FindIndex(innerPlan.IndexName); found {
-			innerIdx = idx
-		} else if len(innerSchema.Indexes) > 0 {
-			innerIdx = &innerSchema.Indexes[0]
+		if innerPlan.IndexName != "" {
+			if idx, _, found := innerSchema.FindIndex(innerPlan.IndexName); found {
+				innerIdx = idx
+			}
+		} else if rightKey != "" {
+			for i := range innerSchema.Indexes {
+				idx := &innerSchema.Indexes[i]
+				if len(idx.Columns) > 0 && strings.EqualFold(idx.Columns[0], rightKey) {
+					innerIdx = idx
+					break
+				}
+			}
 		}
 
 		if innerIdx != nil {
@@ -272,7 +280,6 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			if instrument {
 				rIter = NewInstrumentedIterator(innerScan, innerPlan)
 			}
-			_, rightKey := parseJoinCond(plan.JoinCond)
 			op = NewHashJoinIterator(outerIter, rIter, plan.JoinType, leftKey, rightKey)
 		}
 

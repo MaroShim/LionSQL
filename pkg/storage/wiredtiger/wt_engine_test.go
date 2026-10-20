@@ -1021,3 +1021,167 @@ func TestWiredTiger_AddColumn(t *testing.T) {
 	}
 }
 
+func TestWiredTiger_SecondaryUniqueIndexEnforcement(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_unique_idx_*")
+	if err != nil {
+		t.Fatalf("MkdirTemp failed: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	tbl := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "email", Type: storage.TypeVarChar},
+		},
+		Indexes: []storage.IndexSchema{
+			{
+				Name:    "idx_users_email",
+				Columns: []string{"email"},
+				Unique:  true,
+			},
+		},
+	}
+	if err := eng.CreateTable(tbl); err != nil {
+		t.Fatalf("CreateTable failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	tx, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx.Insert("users", storage.Record{
+		"id":    storage.IntValue(1),
+		"email": storage.StringValue("alice@example.com"),
+	}); err != nil {
+		t.Fatalf("Insert 1 failed: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("Commit 1 failed: %v", err)
+	}
+
+	// Insert duplicate email with different id -> must fail with ErrUniqueViolation
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx 2 failed: %v", err)
+	}
+	defer tx2.Rollback()
+	err = tx2.Insert("users", storage.Record{
+		"id":    storage.IntValue(2),
+		"email": storage.StringValue("alice@example.com"),
+	})
+	if err == nil {
+		t.Fatalf("expected unique constraint violation on secondary index, got nil")
+	}
+}
+
+func TestWiredTiger_ForeignKeyIntegrityAndCascade(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_fk_*")
+	if err != nil {
+		t.Fatalf("MkdirTemp failed: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng := New()
+	if err := eng.Open(tmpDir); err != nil {
+		t.Fatalf("Open failed: %v", err)
+	}
+	defer eng.Close()
+
+	authorTbl := &storage.TableSchema{
+		Name: "authors",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+	if err := eng.CreateTable(authorTbl); err != nil {
+		t.Fatalf("CreateTable authors failed: %v", err)
+	}
+
+	bookTbl := &storage.TableSchema{
+		Name: "books",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "author_id", Type: storage.TypeInt},
+		},
+		ForeignKeys: []storage.ForeignKeySchema{
+			{
+				Name:          "fk_book_author",
+				ParentTable:   "authors",
+				ChildColumns:  []string{"author_id"},
+				ParentColumns: []string{"id"},
+				OnDelete:      storage.ActionCascade,
+			},
+		},
+	}
+	if err := eng.CreateTable(bookTbl); err != nil {
+		t.Fatalf("CreateTable books failed: %v", err)
+	}
+
+	sess, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer sess.Close()
+
+	// 1. Invalid foreign key insertion
+	tx1, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx1.Insert("books", storage.Record{"id": storage.IntValue(1), "author_id": storage.IntValue(999)}); err == nil {
+		t.Fatalf("expected FK violation for author_id=999, got nil")
+	}
+	tx1.Rollback()
+
+	// 2. Insert valid author and valid book
+	tx2, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx2.Insert("authors", storage.Record{"id": storage.IntValue(10), "name": storage.StringValue("Tolkien")}); err != nil {
+		t.Fatalf("Insert author failed: %v", err)
+	}
+	if err := tx2.Insert("books", storage.Record{"id": storage.IntValue(100), "author_id": storage.IntValue(10)}); err != nil {
+		t.Fatalf("Insert book failed: %v", err)
+	}
+	if err := tx2.Commit(); err != nil {
+		t.Fatalf("Commit failed: %v", err)
+	}
+
+	// 3. Delete author -> cascades delete to book
+	tx3, err := sess.BeginTx(storage.TxOptions{})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	if err := tx3.Delete("authors", storage.IntValue(10)); err != nil {
+		t.Fatalf("Delete author failed: %v", err)
+	}
+	if err := tx3.Commit(); err != nil {
+		t.Fatalf("Commit delete author failed: %v", err)
+	}
+
+	// 4. Verify book is also deleted
+	tx4, err := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	if err != nil {
+		t.Fatalf("BeginTx failed: %v", err)
+	}
+	defer tx4.Rollback()
+	if _, err := tx4.Get("books", storage.IntValue(100)); err == nil {
+		t.Fatalf("expected book 100 to be cascaded deleted, but it still exists")
+	}
+}
+

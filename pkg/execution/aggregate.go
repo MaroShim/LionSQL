@@ -36,6 +36,7 @@ type aggField struct {
 	rawExpr    string
 	isStar     bool
 	isLiteral  bool
+	isDistinct bool
 	percentile float64
 	parsed     proc.Expr
 }
@@ -51,6 +52,7 @@ type groupAccumulator struct {
 	maxs       map[int]any
 	values     map[int][]float64
 	tDigests   map[int]*TDigest
+	distincts  map[int]map[string]struct{}
 }
 
 // AggregateIterator evaluates GROUP BY, aggregate functions (COUNT, SUM, AVG, MIN, MAX), and HAVING filters.
@@ -108,7 +110,7 @@ func matchColName(a, b string) bool {
 
 func (a *AggregateIterator) parseFields() {
 	countStarRe := regexp.MustCompile(`(?i)^\s*COUNT\s*\(\s*\*\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
-	aggCallRe := regexp.MustCompile(`(?i)^\s*(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*(?:DISTINCT\s+)?([^\)]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+	aggCallRe := regexp.MustCompile(`(?i)^\s*(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*(DISTINCT\s+)?([^\)]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
 	groupingRe := regexp.MustCompile(`(?i)^\s*GROUPING\s*\(\s*([^\)]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
 
 	for _, p := range a.projections {
@@ -127,10 +129,11 @@ func (a *AggregateIterator) parseFields() {
 			continue
 		}
 
-		if m := aggCallRe.FindStringSubmatch(p); len(m) == 4 {
+		if m := aggCallRe.FindStringSubmatch(p); len(m) == 5 {
 			fnName := strings.ToUpper(m[1])
-			arg := strings.Trim(strings.TrimSpace(m[2]), "\"`[]")
-			alias := m[3]
+			isDistinct := len(strings.TrimSpace(m[2])) > 0
+			arg := strings.Trim(strings.TrimSpace(m[3]), "\"`[]")
+			alias := m[4]
 			if alias == "" {
 				alias = strings.ToLower(fnName)
 			}
@@ -150,7 +153,7 @@ func (a *AggregateIterator) parseFields() {
 				fnType = aggMax
 			}
 
-			a.fields = append(a.fields, aggField{fnType: fnType, argCol: arg, alias: alias, rawExpr: rawCall})
+			a.fields = append(a.fields, aggField{fnType: fnType, argCol: arg, alias: alias, isDistinct: isDistinct, rawExpr: rawCall})
 			a.schema = append(a.schema, alias)
 			continue
 		}
@@ -167,14 +170,15 @@ func (a *AggregateIterator) parseFields() {
 			continue
 		}
 
-		medianRe := regexp.MustCompile(`(?i)^\s*MEDIAN\s*\(\s*(?:DISTINCT\s+)?([^\)]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
-		if m := medianRe.FindStringSubmatch(p); len(m) == 3 {
-			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
-			alias := m[2]
+		medianRe := regexp.MustCompile(`(?i)^\s*MEDIAN\s*\(\s*(DISTINCT\s+)?([^\)]+)\s*\)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s*$`)
+		if m := medianRe.FindStringSubmatch(p); len(m) == 4 {
+			isDistinct := len(strings.TrimSpace(m[1])) > 0
+			arg := strings.Trim(strings.TrimSpace(m[2]), "\"`[]")
+			alias := m[3]
 			if alias == "" {
 				alias = "median"
 			}
-			a.fields = append(a.fields, aggField{fnType: aggMedian, argCol: arg, alias: alias, percentile: 0.5, rawExpr: p})
+			a.fields = append(a.fields, aggField{fnType: aggMedian, argCol: arg, alias: alias, isDistinct: isDistinct, percentile: 0.5, rawExpr: p})
 			a.schema = append(a.schema, alias)
 			continue
 		}
@@ -399,6 +403,22 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 					val, ok := lookupVal(tuple, f.argCol)
 					if !ok || val == nil {
 						continue
+					}
+
+					if f.isDistinct {
+						if acc.distincts == nil {
+							acc.distincts = make(map[int]map[string]struct{})
+						}
+						set, exists := acc.distincts[fIdx]
+						if !exists {
+							set = make(map[string]struct{})
+							acc.distincts[fIdx] = set
+						}
+						dKey := fmt.Sprintf("%v", val)
+						if _, seen := set[dKey]; seen {
+							continue
+						}
+						set[dKey] = struct{}{}
 					}
 
 					switch f.fnType {

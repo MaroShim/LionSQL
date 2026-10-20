@@ -599,7 +599,12 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			if i < len(data.ValExprs) {
 				vAny, _ := proc.EvalRowExpr(data.ValExprs[i], evalCtx, nil)
 				stVal := toStorageValue(vAny)
-				rec[col] = stVal
+				if tableSchema != nil {
+					if colSchema, _, ok := tableSchema.FindColumn(col); ok {
+						col = colSchema.Name
+					}
+				}
+				rec.Set(col, stVal)
 				rowMap[col] = valToAny(stVal)
 				if (strings.EqualFold(col, "id") || strings.HasSuffix(strings.ToLower(col), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
 					f.lastIdentity = stVal.IVal
@@ -661,11 +666,24 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			oldRec, _ = f.tx.Get(data.Table, pkVal)
 		}
 
+		var tableSchema *storage.TableSchema
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(data.Table); err == nil && schema != nil {
+				tableSchema = schema
+			}
+		}
+
 		rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
 		rec := make(storage.Record)
 		for _, a := range data.Assignments {
 			valAny, _ := proc.EvalRowExpr(a.Value, rowCtx, nil)
-			rec[a.Column] = toStorageValue(valAny)
+			colName := a.Column
+			if tableSchema != nil {
+				if colSchema, _, ok := tableSchema.FindColumn(colName); ok {
+					colName = colSchema.Name
+				}
+			}
+			rec.Set(colName, toStorageValue(valAny))
 		}
 
 		if err := f.tx.Update(data.Table, pkVal, rec); err != nil {

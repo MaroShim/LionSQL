@@ -1077,6 +1077,12 @@ func (tx *WTTx) getTableLocked(tableName string) (*storage.TableSchema, error) {
 		if tbl, ok := tx.tableCache[tableName]; ok {
 			return tbl, nil
 		}
+		for name, tbl := range tx.tableCache {
+			if strings.EqualFold(name, tableName) {
+				tx.tableCache[tableName] = tbl
+				return tbl, nil
+			}
+		}
 	}
 	tbl, err := tx.sess.engine.GetTable(tableName)
 	if err != nil {
@@ -1174,14 +1180,31 @@ func (tx *WTTx) InsertRow(tableName string, row storage.Row) error {
 }
 
 func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record storage.Record) error {
+	normalized := make(storage.Record, len(record))
+	for k, v := range record {
+		if col, _, ok := tbl.FindColumn(k); ok {
+			normalized.Set(col.Name, v)
+		} else {
+			normalized.Set(k, v)
+		}
+	}
+	record = normalized
+
 	pkCol, err := tbl.PrimaryKeyColumn()
 	if err != nil {
 		return err
 	}
 
-	pkVal, has := record[pkCol.Name]
+	pkVal, has := record.Get(pkCol.Name)
 	if !has || pkVal.IsNull {
 		return fmt.Errorf("%w: missing primary key %s", storage.ErrNotNullViolation, pkCol.Name)
+	}
+
+	if err := tx.checkForeignKeyLocked(tbl, record); err != nil {
+		return err
+	}
+	if err := tx.checkUniqueIndexesLocked(tableName, tbl, pkVal, record); err != nil {
+		return err
 	}
 
 	pkStr := pkVal.String()
@@ -1295,7 +1318,18 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 	}
 
 	for col, val := range record {
-		existing[col] = val
+		if colSchema, _, ok := tbl.FindColumn(col); ok {
+			existing.Set(colSchema.Name, val)
+		} else {
+			existing.Set(col, val)
+		}
+	}
+
+	if err := tx.checkForeignKeyLocked(tbl, existing); err != nil {
+		return err
+	}
+	if err := tx.checkUniqueIndexesLocked(tableName, tbl, pk, existing); err != nil {
+		return err
 	}
 
 	uri := "table:" + tableName
@@ -1363,6 +1397,14 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 		return storage.ErrReadOnlyTransaction
 	}
 
+	return tx.deleteLocked(tableName, pk)
+}
+
+func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
+	if err := tx.checkReferencingFKsOnDeleteLocked(tableName, pk); err != nil {
+		return err
+	}
+
 	var oldData []byte
 	if len(tx.savepoints) > 0 {
 		oldData, _ = tx.getRawBytesLocked(tableName, pk)
@@ -1403,6 +1445,201 @@ func (tx *WTTx) Delete(tableName string, pk storage.Value) error {
 		})
 	}
 
+	return nil
+}
+
+func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSchema, currentPK storage.Value, rec storage.Record) error {
+	for _, idx := range tbl.Indexes {
+		if !idx.Unique {
+			continue
+		}
+		keyVal := storage.ExtractIndexKeyFromRecord(rec, &idx)
+		if keyVal.IsNull {
+			continue
+		}
+		cur, err := tx.scanLocked(tableName)
+		if err != nil {
+			return err
+		}
+		pkCol, _ := tbl.PrimaryKeyColumn()
+		for cur.Next() {
+			rowRec, rErr := cur.Record()
+			if rErr != nil {
+				continue
+			}
+			if pkCol != nil {
+				if rPK, ok := rowRec.Get(pkCol.Name); ok && rPK.Equal(currentPK) {
+					continue
+				}
+			}
+			existingKey := storage.ExtractIndexKeyFromRecord(rowRec, &idx)
+			if !existingKey.IsNull && existingKey.Equal(keyVal) {
+				cur.Close()
+				return fmt.Errorf("%w: duplicate key %q in unique index %q", storage.ErrUniqueViolation, keyVal.String(), idx.Name)
+			}
+		}
+		cur.Close()
+	}
+	return nil
+}
+
+func (tx *WTTx) checkForeignKeyLocked(tbl *storage.TableSchema, childRec storage.Record) error {
+	for _, fk := range tbl.ForeignKeys {
+		childVals := make([]storage.Value, len(fk.ChildColumns))
+		hasNull := false
+		for i, cCol := range fk.ChildColumns {
+			val, ok := childRec.Get(cCol)
+			if !ok || val.IsNull {
+				hasNull = true
+				break
+			}
+			childVals[i] = val
+		}
+		if hasNull {
+			continue
+		}
+
+		pTbl, err := tx.getTableLocked(fk.ParentTable)
+		if err != nil {
+			return fmt.Errorf("%w: referenced table %q not found", storage.ErrTableNotFound, fk.ParentTable)
+		}
+
+		pCols := fk.ParentColumns
+		if len(pCols) == 0 {
+			pkCol, err := pTbl.PrimaryKeyColumn()
+			if err != nil || pkCol == nil {
+				return fmt.Errorf("referenced table %q has no primary key", fk.ParentTable)
+			}
+			pCols = []string{pkCol.Name}
+		}
+
+		parentPkCol, _ := pTbl.PrimaryKeyColumn()
+		if parentPkCol != nil && len(pCols) == 1 && strings.EqualFold(pCols[0], parentPkCol.Name) {
+			_, err := tx.getRawBytesLocked(pTbl.Name, childVals[0])
+			if err != nil {
+				return fmt.Errorf("%w: foreign key %q references non-existent row in %q",
+					storage.ErrForeignKeyViolation, fk.Name, fk.ParentTable)
+			}
+			continue
+		}
+
+		cur, err := tx.scanLocked(pTbl.Name)
+		if err != nil {
+			return err
+		}
+		matched := false
+		for cur.Next() {
+			r, rErr := cur.Row()
+			if rErr == nil && pTbl.RowMatchesFK(r, pCols, childVals) {
+				matched = true
+				break
+			}
+		}
+		cur.Close()
+		if !matched {
+			return fmt.Errorf("%w: foreign key %q references non-existent row in %q",
+				storage.ErrForeignKeyViolation, fk.Name, fk.ParentTable)
+		}
+	}
+	return nil
+}
+
+func (tx *WTTx) checkReferencingFKsOnDeleteLocked(tableName string, pk storage.Value) error {
+	pTbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	oldRec, err := tx.getLocked(tableName, pk)
+	if err != nil {
+		return nil
+	}
+
+	type childRef struct {
+		childTable string
+		fk         storage.ForeignKeySchema
+	}
+	var childRefs []childRef
+	tx.sess.engine.mu.RLock()
+	for childName, td := range tx.sess.engine.tables {
+		for _, fk := range td.ForeignKeys {
+			if strings.EqualFold(fk.ParentTable, tableName) {
+				childRefs = append(childRefs, childRef{childTable: childName, fk: fk})
+			}
+		}
+	}
+	tx.sess.engine.mu.RUnlock()
+
+	for _, cr := range childRefs {
+		cTbl, err := tx.getTableLocked(cr.childTable)
+		if err != nil {
+			continue
+		}
+		cPkCol, err := cTbl.PrimaryKeyColumn()
+		if err != nil {
+			continue
+		}
+
+		pCols := cr.fk.ParentColumns
+		if len(pCols) == 0 {
+			if pkCol, err := pTbl.PrimaryKeyColumn(); err == nil && pkCol != nil {
+				pCols = []string{pkCol.Name}
+			}
+		}
+
+		parentValues := make([]storage.Value, len(pCols))
+		hasNull := false
+		for i, pCol := range pCols {
+			val, ok := oldRec.Get(pCol)
+			if !ok || val.IsNull {
+				hasNull = true
+				break
+			}
+			parentValues[i] = val
+		}
+		if hasNull {
+			continue
+		}
+
+		cur, err := tx.scanLocked(cr.childTable)
+		if err != nil {
+			continue
+		}
+		var matchingPKs []storage.Value
+		for cur.Next() {
+			row, rErr := cur.Row()
+			if rErr == nil && cTbl.RowMatchesFK(row, cr.fk.ChildColumns, parentValues) {
+				_, pkIdx, _ := cTbl.FindColumn(cPkCol.Name)
+				if pkIdx >= 0 && pkIdx < len(row.Values) {
+					matchingPKs = append(matchingPKs, row.Values[pkIdx])
+				}
+			}
+		}
+		cur.Close()
+
+		if len(matchingPKs) > 0 {
+			switch cr.fk.OnDelete {
+			case storage.ActionCascade:
+				for _, cpk := range matchingPKs {
+					if err := tx.deleteLocked(cr.childTable, cpk); err != nil {
+						return err
+					}
+				}
+			case storage.ActionSetNull:
+				for _, cpk := range matchingPKs {
+					nullPatch := make(storage.Record)
+					for _, cCol := range cr.fk.ChildColumns {
+						nullPatch.Set(cCol, storage.NullValue(storage.TypeVarChar))
+					}
+					if err := tx.updateLocked(cr.childTable, cTbl, cpk, nullPatch); err != nil {
+						return err
+					}
+				}
+			default:
+				return fmt.Errorf("%w: cannot delete from %q: referenced by child row in %q",
+					storage.ErrForeignKeyViolation, tableName, cr.childTable)
+			}
+		}
+	}
 	return nil
 }
 
@@ -1476,7 +1713,10 @@ func (tx *WTTx) getRowLocked(tableName string, pk storage.Value) (storage.Row, e
 func (tx *WTTx) Scan(tableName string) (storage.Cursor, error) {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	return tx.scanLocked(tableName)
+}
 
+func (tx *WTTx) scanLocked(tableName string) (storage.Cursor, error) {
 	if tx.closed {
 		return nil, storage.ErrTxClosed
 	}
@@ -1574,20 +1814,7 @@ func (c *wtFilteredIndexCursor) Next() bool {
 }
 
 func (c *wtFilteredIndexCursor) matchesRecord(rec storage.Record) bool {
-	var key storage.Value
-	if c.idx.IsExpression() {
-		colName := c.idx.ExprColumn
-		if colName == "" && len(c.idx.Columns) > 0 {
-			colName = c.idx.Columns[0]
-		}
-		if docVal, ok := rec[colName]; ok && !docVal.IsNull {
-			key = storage.ExtractJSONIndexKey(docVal.String(), c.idx.ExprPath)
-		} else {
-			key = storage.NullValue(storage.TypeVarChar)
-		}
-	} else if len(c.idx.Columns) > 0 {
-		key = rec[c.idx.Columns[0]]
-	}
+	key := storage.ExtractIndexKeyFromRecord(rec, c.idx)
 	if c.low != nil && key.Compare(*c.low) < 0 {
 		return false
 	}
@@ -1783,7 +2010,7 @@ func (tx *WTTx) RollbackTo(name string) error {
 		op := tx.undoLog[i]
 		switch op.kind {
 		case wtUndoDelete:
-			_ = tx.deleteLocked(op.table, op.pk)
+			_ = tx.removeRawLocked(op.table, op.pk)
 		case wtUndoPut:
 			if len(op.oldData) > 0 {
 				_ = tx.putRawBytesLocked(op.table, op.pk, op.oldData)
@@ -1888,7 +2115,7 @@ func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Rec
 	return tx.putRawBytesLocked(tableName, pk, recBytes)
 }
 
-func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
+func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {
 	uri := "table:" + tableName
 	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {

@@ -128,3 +128,43 @@ func (r Record) ToRow(schema *TableSchema) Row {
 	}
 	return schema.RecordToRow(r)
 }
+
+// ExtractIndexKeyFromRecord extracts the index key Value from a Record based on the IndexSchema.
+// It is case-insensitive, prefix-aware, and supports single-column, composite, and expression/JSON indexes.
+func ExtractIndexKeyFromRecord(rec Record, idx *IndexSchema) Value {
+	if idx == nil {
+		return NullValue(TypeUnknown)
+	}
+	if idx.IsExpression() {
+		colName := idx.ExprColumn
+		if colName == "" && len(idx.Columns) > 0 {
+			colName = idx.Columns[0]
+		}
+		if docVal, ok := rec.Get(colName); ok && !docVal.IsNull {
+			return ExtractJSONIndexKey(docVal.String(), idx.ExprPath)
+		}
+		return NullValue(TypeVarChar)
+	}
+	if len(idx.Columns) == 0 {
+		return NullValue(TypeUnknown)
+	}
+	if len(idx.Columns) == 1 {
+		if v, ok := rec.Get(idx.Columns[0]); ok {
+			return v
+		}
+		return NullValue(TypeUnknown)
+	}
+	var sb strings.Builder
+	for i, c := range idx.Columns {
+		if i > 0 {
+			sb.WriteByte(0)
+		}
+		if v, ok := rec.Get(c); ok {
+			sb.WriteString(EncodeIndexKeyPart(v))
+		} else {
+			sb.WriteString("NULL")
+		}
+	}
+	return StringValue(sb.String())
+}
+

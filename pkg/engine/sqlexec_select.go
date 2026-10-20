@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -1933,10 +1932,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 }
 
 type aggItem struct {
-	RawStr   string
-	Alias    string
-	FuncType string // "COUNT", "SUM", "AVG", "MIN", "MAX", "NONE"
-	ArgCol   string
+	RawStr     string
+	Alias      string
+	FuncType   string // "COUNT", "SUM", "AVG", "MIN", "MAX", "NONE"
+	ArgCol     string
+	IsDistinct bool
 }
 
 func parseAggItem(proj string) aggItem {
@@ -1955,30 +1955,70 @@ func parseAggItem(proj string) aggItem {
 	var funcType, argCol string
 	if strings.HasPrefix(upper, "COUNT(") && strings.HasSuffix(upper, ")") {
 		funcType = "COUNT"
-		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[6 : len(rawExpr)-1]))
+		argCol = strings.TrimSpace(rawExpr[6 : len(rawExpr)-1])
 	} else if strings.HasPrefix(upper, "SUM(") && strings.HasSuffix(upper, ")") {
 		funcType = "SUM"
-		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[4 : len(rawExpr)-1]))
+		argCol = strings.TrimSpace(rawExpr[4 : len(rawExpr)-1])
 	} else if strings.HasPrefix(upper, "AVG(") && strings.HasSuffix(upper, ")") {
 		funcType = "AVG"
-		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[4 : len(rawExpr)-1]))
+		argCol = strings.TrimSpace(rawExpr[4 : len(rawExpr)-1])
 	} else if strings.HasPrefix(upper, "MIN(") && strings.HasSuffix(upper, ")") {
 		funcType = "MIN"
-		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[4 : len(rawExpr)-1]))
+		argCol = strings.TrimSpace(rawExpr[4 : len(rawExpr)-1])
 	} else if strings.HasPrefix(upper, "MAX(") && strings.HasSuffix(upper, ")") {
 		funcType = "MAX"
-		argCol = cleanIdentifier(strings.TrimSpace(rawExpr[4 : len(rawExpr)-1]))
+		argCol = strings.TrimSpace(rawExpr[4 : len(rawExpr)-1])
 	} else {
 		funcType = "NONE"
-		argCol = cleanIdentifier(rawExpr)
+		argCol = rawExpr
 	}
 
-	return aggItem{
-		RawStr:   rawExpr,
-		Alias:    alias,
-		FuncType: funcType,
-		ArgCol:   argCol,
+	isDistinct := false
+	if strings.HasPrefix(strings.ToUpper(argCol), "DISTINCT ") {
+		isDistinct = true
+		argCol = strings.TrimSpace(argCol[9:])
 	}
+	argCol = cleanIdentifier(argCol)
+
+	return aggItem{
+		RawStr:     rawExpr,
+		Alias:      alias,
+		FuncType:   funcType,
+		ArgCol:     argCol,
+		IsDistinct: isDistinct,
+	}
+}
+
+func compareAggValues(a, b any) int {
+	if a == nil && b == nil {
+		return 0
+	}
+	if a == nil {
+		return -1
+	}
+	if b == nil {
+		return 1
+	}
+	sa := fmt.Sprintf("%v", a)
+	sb := fmt.Sprintf("%v", b)
+	fa, errA := strconv.ParseFloat(sa, 64)
+	fb, errB := strconv.ParseFloat(sb, 64)
+	if errA == nil && errB == nil {
+		if fa < fb {
+			return -1
+		}
+		if fa > fb {
+			return 1
+		}
+		return 0
+	}
+	if sa < sb {
+		return -1
+	}
+	if sa > sb {
+		return 1
+	}
+	return 0
 }
 
 func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
@@ -2014,18 +2054,10 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 		for _, r := range rows {
 			var keyParts []string
 			keyMap := make(map[string]any)
+			sRow := NewSQLRow(r)
 			for _, gCol := range qInfo.GroupByCols {
 				gClean := cleanIdentifier(gCol)
-				var v any
-				if val, ok := r[gClean]; ok {
-					v = val
-				} else {
-					bare := gClean
-					if idx := strings.Index(gClean, "."); idx != -1 {
-						bare = gClean[idx+1:]
-					}
-					v = r[bare]
-				}
+				v, _ := sRow.Get(gClean)
 				keyParts = append(keyParts, fmt.Sprintf("%v", v))
 				keyMap[gClean] = v
 				if idx := strings.Index(gClean, "."); idx != -1 {
@@ -2061,6 +2093,7 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 
 		for _, item := range items {
 			var val any
+			seenDistinct := make(map[string]struct{})
 			switch item.FuncType {
 			case "COUNT":
 				if item.ArgCol == "*" || item.ArgCol == "" {
@@ -2068,13 +2101,16 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 				} else {
 					var count int64 = 0
 					for _, r := range bucket.rows {
-						v := r[item.ArgCol]
-						if v == nil {
-							if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
-								v = r[item.ArgCol[dotIdx+1:]]
+						sRow := NewSQLRow(r)
+						v, ok := sRow.Get(item.ArgCol)
+						if ok && v != nil && !sRow.IsNull(item.ArgCol) {
+							if item.IsDistinct {
+								dKey := fmt.Sprintf("%v", v)
+								if _, seen := seenDistinct[dKey]; seen {
+									continue
+								}
+								seenDistinct[dKey] = struct{}{}
 							}
-						}
-						if v != nil {
 							count++
 						}
 					}
@@ -2086,13 +2122,16 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 				isDec := false
 				hasVal := false
 				for _, r := range bucket.rows {
-					v := r[item.ArgCol]
-					if v == nil {
-						if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
-							v = r[item.ArgCol[dotIdx+1:]]
+					sRow := NewSQLRow(r)
+					v, ok := sRow.Get(item.ArgCol)
+					if ok && v != nil && !sRow.IsNull(item.ArgCol) {
+						if item.IsDistinct {
+							dKey := fmt.Sprintf("%v", v)
+							if _, seen := seenDistinct[dKey]; seen {
+								continue
+							}
+							seenDistinct[dKey] = struct{}{}
 						}
-					}
-					if v != nil {
 						strVal := fmt.Sprintf("%v", v)
 						if strings.Contains(strVal, ".") {
 							isDec = true
@@ -2109,10 +2148,8 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 				if hasVal {
 					if isDec {
 						val = decSum.String()
-					} else if sum == math.Trunc(sum) {
-						val = int64(sum)
 					} else {
-						val = sum
+						val = decSum.Int64()
 					}
 				} else {
 					val = nil
@@ -2123,13 +2160,16 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 				isDec := false
 				var count int64 = 0
 				for _, r := range bucket.rows {
-					v := r[item.ArgCol]
-					if v == nil {
-						if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
-							v = r[item.ArgCol[dotIdx+1:]]
+					sRow := NewSQLRow(r)
+					v, ok := sRow.Get(item.ArgCol)
+					if ok && v != nil && !sRow.IsNull(item.ArgCol) {
+						if item.IsDistinct {
+							dKey := fmt.Sprintf("%v", v)
+							if _, seen := seenDistinct[dKey]; seen {
+								continue
+							}
+							seenDistinct[dKey] = struct{}{}
 						}
-					}
-					if v != nil {
 						strVal := fmt.Sprintf("%v", v)
 						if strings.Contains(strVal, ".") {
 							isDec = true
@@ -2152,75 +2192,41 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 							val = decSum.String()
 						}
 					} else {
-						avg := sum / float64(count)
-						if avg == math.Trunc(avg) {
-							val = int64(avg)
-						} else {
-							val = avg
-						}
+						val = decSum.Int64() / count
 					}
 				} else {
 					val = nil
 				}
 			case "MIN":
-				var minVal *float64
+				var minVal any
 				for _, r := range bucket.rows {
-					v := r[item.ArgCol]
-					if v == nil {
-						if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
-							v = r[item.ArgCol[dotIdx+1:]]
-						}
-					}
-					if v != nil {
-						if n, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
-							if minVal == nil || n < *minVal {
-								nCopy := n
-								minVal = &nCopy
-							}
+					sRow := NewSQLRow(r)
+					v, ok := sRow.Get(item.ArgCol)
+					if ok && v != nil && !sRow.IsNull(item.ArgCol) {
+						if minVal == nil || compareAggValues(v, minVal) < 0 {
+							minVal = v
 						}
 					}
 				}
-				if minVal != nil {
-					if *minVal == math.Trunc(*minVal) {
-						val = int64(*minVal)
-					} else {
-						val = *minVal
-					}
-				} else {
-					val = nil
-				}
+				val = minVal
 			case "MAX":
-				var maxVal *float64
+				var maxVal any
 				for _, r := range bucket.rows {
-					v := r[item.ArgCol]
-					if v == nil {
-						if dotIdx := strings.Index(item.ArgCol, "."); dotIdx != -1 {
-							v = r[item.ArgCol[dotIdx+1:]]
-						}
-					}
-					if v != nil {
-						if n, err := strconv.ParseFloat(fmt.Sprintf("%v", v), 64); err == nil {
-							if maxVal == nil || n > *maxVal {
-								nCopy := n
-								maxVal = &nCopy
-							}
+					sRow := NewSQLRow(r)
+					v, ok := sRow.Get(item.ArgCol)
+					if ok && v != nil && !sRow.IsNull(item.ArgCol) {
+						if maxVal == nil || compareAggValues(v, maxVal) > 0 {
+							maxVal = v
 						}
 					}
 				}
-				if maxVal != nil {
-					if *maxVal == math.Trunc(*maxVal) {
-						val = int64(*maxVal)
-					} else {
-						val = *maxVal
-					}
-				} else {
-					val = nil
-				}
+				val = maxVal
 			default:
 				if v, ok := bucket.keys[item.ArgCol]; ok {
 					val = v
 				} else if len(bucket.rows) > 0 {
-					val = bucket.rows[0][item.ArgCol]
+					sRow := NewSQLRow(bucket.rows[0])
+					val, _ = sRow.Get(item.ArgCol)
 				}
 			}
 

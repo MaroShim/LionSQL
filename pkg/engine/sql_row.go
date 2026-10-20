@@ -143,6 +143,84 @@ func (r *SQLRow) ToMap() map[string]any {
 	return r.values
 }
 
+// IsNull reports whether the column is missing or represents a NULL value.
+func (r *SQLRow) IsNull(colName string) bool {
+	if r == nil {
+		return true
+	}
+	val, ok := r.Get(colName)
+	if !ok || val == nil {
+		return true
+	}
+	if sv, ok := val.(storage.Value); ok {
+		return sv.IsNull
+	}
+	if s, ok := val.(string); ok && strings.EqualFold(s, "NULL") {
+		return true
+	}
+	return false
+}
+
+// GetString returns the string value of the column if present and non-null.
+func (r *SQLRow) GetString(colName string) (string, bool) {
+	if r == nil || r.IsNull(colName) {
+		return "", false
+	}
+	val, _ := r.Get(colName)
+	if s, ok := val.(string); ok {
+		return s, true
+	}
+	return fmt.Sprintf("%v", val), true
+}
+
+// GetInt returns the int64 value of the column if present and non-null.
+func (r *SQLRow) GetInt(colName string) (int64, bool) {
+	if r == nil || r.IsNull(colName) {
+		return 0, false
+	}
+	val, _ := r.Get(colName)
+	switch v := val.(type) {
+	case int64:
+		return v, true
+	case int:
+		return int64(v), true
+	case int32:
+		return int64(v), true
+	case float64:
+		return int64(v), true
+	case storage.Value:
+		if v.Type == storage.TypeInt {
+			return v.IVal, true
+		}
+		return 0, false
+	}
+	return 0, false
+}
+
+// GetFloat returns the float64 value of the column if present and non-null.
+func (r *SQLRow) GetFloat(colName string) (float64, bool) {
+	if r == nil || r.IsNull(colName) {
+		return 0, false
+	}
+	val, _ := r.Get(colName)
+	switch v := val.(type) {
+	case float64:
+		return v, true
+	case int64:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case storage.Value:
+		if v.Type == storage.TypeFloat {
+			return v.FVal, true
+		}
+		if v.Type == storage.TypeInt {
+			return float64(v.IVal), true
+		}
+	}
+	return 0, false
+}
+
 // ToRecord converts the SQLRow into a storage.Record mapped according to schema.
 func (r *SQLRow) ToRecord(schema *storage.TableSchema) storage.Record {
 	if r == nil || schema == nil {

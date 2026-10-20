@@ -765,13 +765,38 @@ func writePLPValue(buf *bytes.Buffer, payload []byte) {
 	buf.Write(b4[:]) // 0 chunk terminates PLP stream
 }
 
+func getRowValueCaseInsensitive(row map[string]any, colName string) any {
+	if val, ok := row[colName]; ok {
+		return val
+	}
+	bare := colName
+	if idx := strings.Index(colName, "."); idx != -1 {
+		bare = colName[idx+1:]
+		if val, ok := row[bare]; ok {
+			return val
+		}
+	}
+	for k, v := range row {
+		if strings.EqualFold(k, colName) || strings.EqualFold(k, bare) {
+			return v
+		}
+		if kDot := strings.Index(k, "."); kDot != -1 {
+			kBare := k[kDot+1:]
+			if strings.EqualFold(kBare, colName) || strings.EqualFold(kBare, bare) {
+				return v
+			}
+		}
+	}
+	return nil
+}
+
 // WriteRowDirect writes a ROW token (0xD1) directly into destBuf from a row map.
 // It eliminates intermediate []any slice allocations and buffer copy overheads (P-3).
 func WriteRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]any) {
 	destBuf.WriteByte(TokenRow)
 
 	for _, col := range cols {
-		val := row[col.Name]
+		val := getRowValueCaseInsensitive(row, col.Name)
 		if val == nil {
 			switch col.Type {
 			case TypeIntN, TypeFltN, TypeBitN, TypeDateTimeN, TypeDateN, TypeTimeN, TypeDateTime2N, TypeDateTimeOffsetN, TypeGuid:
@@ -909,7 +934,7 @@ func WriteNBCRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]
 	}
 
 	for i := 0; i < numCols; i++ {
-		val := row[cols[i].Name]
+		val := getRowValueCaseInsensitive(row, cols[i].Name)
 		if val == nil {
 			bitmap[i/8] |= 1 << (i % 8)
 		}
@@ -920,7 +945,7 @@ func WriteNBCRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]
 		if (bitmap[i/8] & (1 << (i % 8))) != 0 {
 			continue
 		}
-		val := row[cols[i].Name]
+		val := getRowValueCaseInsensitive(row, cols[i].Name)
 		writeColumnValue(destBuf, cols[i], val)
 	}
 }

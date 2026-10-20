@@ -245,8 +245,23 @@ func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
 	if td, cached := tx.tableCache[tableName]; cached {
 		return td, nil
 	}
+	for name, td := range tx.tableCache {
+		if strings.EqualFold(name, tableName) {
+			tx.tableCache[tableName] = td
+			return td, nil
+		}
+	}
 	tx.engine.mu.RLock()
 	td, exists := tx.engine.tables[tableName]
+	if !exists {
+		for name, t := range tx.engine.tables {
+			if strings.EqualFold(name, tableName) {
+				td = t
+				exists = true
+				break
+			}
+		}
+	}
 	tx.engine.mu.RUnlock()
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
@@ -297,12 +312,22 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	}
 	schema := td.Schema
 
+	normalized := make(storage.Record, len(record))
+	for k, v := range record {
+		if col, _, ok := schema.FindColumn(k); ok {
+			normalized.Set(col.Name, v)
+		} else {
+			normalized.Set(k, v)
+		}
+	}
+	record = normalized
+
 	pkCol, err := schema.PrimaryKeyColumn()
 	if err != nil {
 		return err
 	}
 
-	pkVal, hasPk := record[pkCol.Name]
+	pkVal, hasPk := record.Get(pkCol.Name)
 	if !hasPk || pkVal.IsNull {
 		return fmt.Errorf("%w: missing primary key %q", storage.ErrNotNullViolation, pkCol.Name)
 	}
@@ -500,7 +525,11 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		updated[col] = val
 	}
 	for col, val := range record {
-		updated[col] = val
+		if colSchema, _, ok := schema.FindColumn(col); ok {
+			updated.Set(colSchema.Name, val)
+		} else {
+			updated.Set(col, val)
+		}
 	}
 
 	// Validate columns and types for updated row
@@ -809,7 +838,7 @@ func (tx *Transaction) validateForeignKeysUnderLock(childTable string, record st
 	for _, fk := range schema.ForeignKeys {
 		hasNull := false
 		for _, cCol := range fk.ChildColumns {
-			val, ok := record[cCol]
+			val, ok := record.Get(cCol)
 			if !ok || val.IsNull {
 				hasNull = true
 				break
@@ -835,6 +864,15 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 	tx.engine.mu.RLock()
 	parentTd, ok := tx.engine.tables[fk.ParentTable]
 	if !ok {
+		for name, t := range tx.engine.tables {
+			if strings.EqualFold(name, fk.ParentTable) {
+				parentTd = t
+				ok = true
+				break
+			}
+		}
+	}
+	if !ok {
 		tx.engine.mu.RUnlock()
 		return false, fmt.Errorf("%w: referenced table %q not found", storage.ErrTableNotFound, fk.ParentTable)
 	}
@@ -851,7 +889,7 @@ func (tx *Transaction) parentRecordExistsUnderLock(fk storage.ForeignKeySchema, 
 
 	childVals := make([]storage.Value, len(fk.ChildColumns))
 	for i, cCol := range fk.ChildColumns {
-		val, ok := childRecord[cCol]
+		val, ok := childRecord.Get(cCol)
 		if !ok || val.IsNull {
 			tx.engine.mu.RUnlock()
 			return true, nil
@@ -916,6 +954,15 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 	tx.engine.mu.RLock()
 	childTd, exists := tx.engine.tables[childTable]
 	if !exists {
+		for name, t := range tx.engine.tables {
+			if strings.EqualFold(name, childTable) {
+				childTd = t
+				exists = true
+				break
+			}
+		}
+	}
+	if !exists {
 		tx.engine.mu.RUnlock()
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, childTable)
 	}
@@ -929,7 +976,14 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 
 	pCols := fk.ParentColumns
 	if len(pCols) == 0 {
-		if parentTd, pExists := tx.engine.tables[fk.ParentTable]; pExists {
+		var parentTd *TableData
+		for name, t := range tx.engine.tables {
+			if strings.EqualFold(name, fk.ParentTable) {
+				parentTd = t
+				break
+			}
+		}
+		if parentTd != nil {
 			if pkCol, err := parentTd.Schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
 				pCols = []string{pkCol.Name}
 			}
@@ -938,7 +992,7 @@ func (tx *Transaction) findMatchingChildPKsUnderLock(childTable string, fk stora
 
 	parentValues := make([]storage.Value, len(pCols))
 	for i, pCol := range pCols {
-		val, ok := parentRecord[pCol]
+		val, ok := parentRecord.Get(pCol)
 		if !ok || val.IsNull {
 			tx.engine.mu.RUnlock()
 			return nil, nil
