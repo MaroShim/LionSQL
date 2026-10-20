@@ -93,6 +93,13 @@
 | **`BUG-MERGE-IDENTITY-PK-1`** | **MERGE WHEN NOT MATCHED IDENTITY 자동 채번 보장 (Merge Identity PK Bug)** | `BUG-MERGE-IDENTITY-PK-1` | MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화 연동 |
 | **`BUG-API-CREATE-DEFAULT-1`** | **HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug)** | `BUG-API-CREATE-DEFAULT-1` | 생략된 필드 대상 스키마 기본값(리터럴 및 함수 기본값) 자동 주입으로 400 에러 해결 |
 | **`BUG-CATALOG-MSSQL-REGEX-UNICODE-1`** | **가상 카탈로그 N'...' 리터럴 및 대괄호 식별자 매칭 (Catalog Regex Unicode Bug)** | `BUG-CATALOG-MSSQL-REGEX-UNICODE-1` | `N'...'` 접두사 및 대괄호 허용 견고한 카탈로그 정규식으로 SSMS/DBeaver 전수 덤프 방지 |
+| **`BUG-WIRE-COPY-TX-BYPASS-1`** | **COPY FROM STDIN 트랜잭션 세션 우회 및 독립 자동 커밋 방지 (Copy Tx Bypass Bug)** | `BUG-WIRE-COPY-TX-BYPASS-1` | 활성 세션 컨텍스트 바인딩으로 트랜잭션 범위 내 원자적 COPY 및 롤백 보장 |
+| **`BUG-WIRE-COPY-SILENT-CORRUPT-1`** | **COPY FROM STDIN 파싱 에러 침묵 및 0값/현재시각 변조 방지 (Copy Silent Corrupt Bug)** | `BUG-WIRE-COPY-SILENT-CORRUPT-1` | 파싱 실패 시 명시적 SQL 구문 에러 반환 및 전체 데이터 타입 정밀 파싱 지원 |
+| **`BUG-WIRE-COPY-OUT-UNESCAPED-1`** | **COPY TO STDOUT 텍스트 포맷 탭/줄바꿈 이스케이프 보장 (Copy Out Unescaped Bug)** | `BUG-WIRE-COPY-OUT-UNESCAPED-1` | 표준 PostgreSQL 텍스트 포맷 이스케이프 규칙(`\t`, `\n`, `\\`) 적용으로 덤프 정합성 보장 |
+| **`BUG-EXEC-JOIN-STR-CASE-1`** | **HashJoin/MergeJoin 문자열 조인 키 대소문자 무관 매칭 보장 (Join Str Case Bug)** | `BUG-EXEC-JOIN-STR-CASE-1` | 조인 키 해싱 및 비교 시 대소문자 무관 정규화 적용으로 SQL 표준 조인 매칭 보장 |
+| **`BUG-PIVOT-COUNT-NULL-1`** | **PIVOT COUNT 집계 시 빈 카테고리 0 정규 반환 (Pivot Count NULL Bug)** | `BUG-PIVOT-COUNT-NULL-1` | `COUNT` 집계에 대해 빈 그룹 시 `0`을 정규 방출하도록 보강 |
+| **`BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1`** | **FOR JSON PATH 테이블 별칭 중첩 객체 오해석 방지 (For JSON Alias Bug)** | `BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1` | 테이블 별칭과 컬럼 별칭 구분으로 순수 컬럼 프로젝션 시 불필요 래핑 제거 |
+| **`BUG-DDL-COMPOSITE-PK-PARSE-1`** | **CREATE TABLE 복합 기본키 콤마 분해 및 스키마 보존 (DDL Composite PK Bug)** | `BUG-DDL-COMPOSITE-PK-PARSE-1` | 괄호 내부 콤마 분해 루프로 선언된 모든 복합 PK 컬럼 플래그 정상 부여 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---

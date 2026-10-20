@@ -198,6 +198,13 @@
 | **P1** | **엔진/MERGE** | **`MERGE` 문의 `WHEN NOT MATCHED THEN INSERT` IDENTITY 기본키 누락 및 실패 결함 해결 (`BUG-MERGE-IDENTITY-PK-1`)** | `pkg/engine/sqlexec_merge.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **API/레코드생성** | **HTTP API 레코드 생성 시 `NOT NULL DEFAULT` 컬럼 오판 에러 및 기본값 누락 결함 해결 (`BUG-API-CREATE-DEFAULT-1`)** | `pkg/api/handlers_records.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **카탈로그/정규식** | **가상 카탈로그의 T-SQL 유니코드 리터럴(`N'...'`) 및 대괄호 식별자 정규식 미매칭 결함 해결 (`BUG-CATALOG-MSSQL-REGEX-UNICODE-1`)** | `pkg/catalog/virtual/mssql.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **와이어/COPY** | **`COPY FROM STDIN` 트랜잭션 세션 우회 및 독립 자동 커밋으로 인한 롤백 불가 결함 해결 (`BUG-WIRE-COPY-TX-BYPASS-1`)** | `pkg/wire/copy.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **와이어/무결성** | **`COPY FROM STDIN` 파싱 에러 침묵 및 0값/현재시각(`time.Now()`) 강제 변조 결함 해결 (`BUG-WIRE-COPY-SILENT-CORRUPT-1`)** | `pkg/wire/copy.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **와이어/COPY** | **`COPY TO STDOUT` 텍스트 포맷 탭/줄바꿈(`\t`, `\n`) 이스케이프 누락으로 인한 데이터 왜곡 해결 (`BUG-WIRE-COPY-OUT-UNESCAPED-1`)** | `pkg/wire/copy.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **실행/조인** | **`HashJoin`/`MergeJoin` 문자열 조인 키 대소문자 엄격 일치로 인한 조인 행 누락 결함 해결 (`BUG-EXEC-JOIN-STR-CASE-1`)** | `pkg/execution/join.go`, `pkg/execution/merge_join.go`, `pkg/execution/iterator.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/PIVOT** | **`PIVOT`의 `COUNT` 집계 시 매칭 행 없는 카테고리 0 대신 NULL 반환 결함 해결 (`BUG-PIVOT-COUNT-NULL-1`)** | `pkg/engine/sqlexec_pivot.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **엔진/FOR_JSON** | **`FOR JSON PATH`에서 테이블 별칭(`u.col`)을 중첩 객체 경로로 오판하는 결함 해결 (`BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1`)** | `pkg/engine/sqlexec_pivot.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/DDL** | **테이블 레벨 `PRIMARY KEY (col1, col2)` 콤마 미분해로 인한 복합 PK 파괴 결함 해결 (`BUG-DDL-COMPOSITE-PK-PARSE-1`)** | `pkg/engine/sqlexec_ddl.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -334,8 +341,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 79대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-CATALOG-MSSQL-REGEX-UNICODE-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 쉼표 오절단 등으로 인해 발생하는 79대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 86대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-DDL-COMPOSITE-PK-PARSE-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단 등으로 인해 발생하는 86대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -574,6 +581,27 @@
   79. **`BUG-CATALOG-MSSQL-REGEX-UNICODE-1` (`pkg/catalog/virtual/mssql.go:17-18`)**:
      - 가상 카탈로그의 `reMssqlTableNameEq` 및 `reMssqlSchemaNameEq` 정규식이 일반 문자열(`='...'`)만 기대하여, SSMS/sqlcmd/DBeaver 등 표준 클라이언트가 전송하는 유니코드 리터럴(`WHERE t.name = N'users'`) 및 대괄호 식별자(`WHERE [t].[name] = ...`) 매칭에 실패, 전체 테이블의 메타데이터를 불필요하게 덤프 반환하던 결함.
      - `N'...'` 접두사 및 대괄호 식별자를 허용하는 견고한 카탈로그 정규식으로 고도화.
+  80. **`BUG-WIRE-COPY-TX-BYPASS-1` (`pkg/wire/copy.go:183, 302-358`)**:
+     - `handleCopyIn`이 호출 인자로 전달된 세션 식별자(`sessID`)를 무시하고 독자적인 새 세션을 열어 트랜잭션을 즉시 커밋(`tx.Commit()`)함으로써, 클라이언트가 명시적 트랜잭션 블록(`BEGIN` ... `ROLLBACK`) 내에서 `COPY FROM STDIN`을 실행하더라도 롤백되지 않고 강제 영속화되는 트랜잭션 원자성 파괴 결함.
+     - 활성 세션 컨텍스트 및 트랜잭션 핸들(`cs.Tx`)을 바인딩하여 트랜잭션 범위 내 원자적 COPY 실행 및 롤백 보장.
+  81. **`BUG-WIRE-COPY-SILENT-CORRUPT-1` (`pkg/wire/copy.go:518-545`)**:
+     - `parseFieldVal`이 파싱 에러를 조용히 삼키고 `IntValue(0)`, `FloatValue(0)`, `DateTimeValue(time.Now())` 등 임의의 기본값으로 치환하며, `Decimal`/`UUID`/`Date` 등 기타 데이터 타입을 전부 `StringValue`로 떨어뜨려, `COPY FROM STDIN` 시 잘못된 입력 데이터가 에러 없이 0이나 현재 시각으로 무단 변조되어 저장되는 치명적 데이터 오염 결함.
+     - 파싱 실패 시 명시적 SQL 구문 에러를 클라이언트에 반환하고 전체 데이터 타입 정밀 파싱 지원.
+  82. **`BUG-WIRE-COPY-OUT-UNESCAPED-1` (`pkg/wire/copy.go:488-497`)**:
+     - `handleCopyOut`이 텍스트 포맷 필드를 `strings.Join(fields, delimiter)`로 단순 결합하면서 필드 내 탭(`\t`), 줄바꿈(`\n`, `\r`), 백슬래시(`\\`)를 전혀 이스케이프하지 않아, 탭이나 줄바꿈이 포함된 문자열 데이터 내보내기 시 행/열 경계가 무너져 파일이 손상되고 이후 재가져오기 시 컬럼이 밀리는 결함.
+     - 표준 PostgreSQL 텍스트 포맷 이스케이프 규칙(`\t`, `\n`, `\r`, `\\`)을 적용하여 데이터 덤프 정합성 보장.
+  83. **`BUG-EXEC-JOIN-STR-CASE-1` (`pkg/execution/join.go:184, 291`, `pkg/execution/merge_join.go:297`)**:
+     - `HashJoinIterator`와 `MergeJoinIterator`가 문자열 조인 키 비교 시 Go 맵의 엄격 일치(`hashTable[kStr]`) 및 바이트 단위 `strings.Compare`를 사용하여, 대소문자가 다른 동일 의미의 문자열 키(예: `'admin'` vs `'ADMIN'`)가 일치하지 않는 것으로 판정되어 유효한 조인 결과 행들이 대거 누락되는 결함.
+     - 조인 키 해싱 및 비교 시 대소문자 무관 정규화 키를 적용하여 SQL 표준 조인 매칭 보장.
+  84. **`BUG-PIVOT-COUNT-NULL-1` (`pkg/engine/sqlexec_pivot.go:292-357`)**:
+     - `parsePivotQuery`에서 `len(vals) > 0`일 때만 집계 연산을 수행하고 빈 그룹은 `aggResult = nil`로 방치하여, 매칭 건수가 0건인 카테고리에 대해 표준 SQL 규격인 `0` 대신 `NULL`이 반환되는 집계 왜곡 결함.
+     - `COUNT` 집계에 대해 빈 그룹 시 `0`을 정규 방출하도록 보강.
+  85. **`BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1` (`pkg/engine/sqlexec_pivot.go:1071-1084`)**:
+     - `execForJSONSelect`가 컬럼명에 점(`.`)이 포함되어 있으면 무조건 중첩 JSON 객체 경로로 해석하여, `SELECT u.id, u.name FROM users u FOR JSON PATH`와 같이 테이블 별칭이 붙은 일반 쿼리에서 불필요하게 `{"u": {"id": 1, ...}}` 형태로 래핑되어 출력되는 결함.
+     - 테이블 별칭과 명시적 컬럼 별칭(`AS [path.prop]`)을 구분하여 순수 컬럼 프로젝션 시 불필요한 래핑 객체 생성 방지.
+  86. **`BUG-DDL-COMPOSITE-PK-PARSE-1` (`pkg/engine/sqlexec_ddl.go:89-98`)**:
+     - `CREATE TABLE` 시 테이블 레벨 복합 기본키(`PRIMARY KEY (col1, col2)`) 구문을 파싱할 때 괄호 내부를 콤마로 분해하지 않고 `"col1, col2"` 전체를 단일 컬럼명으로 취급하여 어떤 컬럼도 PK로 매칭되지 못하고, 결국 첫 번째 컬럼(`Columns[0]`)만 임의 PK로 지정되어 복합 PK 테이블 스키마가 파괴되던 결함.
+     - 괄호 내부 콤마 분해 루프를 적용하여 선언된 모든 복합 PK 컬럼에 `PrimaryKey = true` 플래그 정상 부여.
 
 ---
 
@@ -595,7 +623,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-CATALOG-MSSQL-REGEX-UNICODE-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-DDL-COMPOSITE-PK-PARSE-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -678,6 +706,13 @@
 | **BUG-MERGE-IDENTITY-PK-1** | 엔진/MERGE | `MERGE` 문의 `WHEN NOT MATCHED THEN INSERT` IDENTITY PK 누락 실패 해결 | **대기 (`[ ]`)** | MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화 연동 |
 | **BUG-API-CREATE-DEFAULT-1** | API/레코드생성 | HTTP API 레코드 생성 시 `NOT NULL DEFAULT` 컬럼 400 에러 해결 | **대기 (`[ ]`)** | 생략된 필드 대상 스키마 기본값(리터럴 및 함수 기본값) 자동 주입 보강 |
 | **BUG-CATALOG-MSSQL-REGEX-UNICODE-1** | 카탈로그/정규식 | 가상 카탈로그 유니코드 리터럴(`N'...'`) 및 대괄호 정규식 미매칭 해결 | **대기 (`[ ]`)** | `N'...'` 접두사 및 대괄호 허용 견고한 카탈로그 정규식으로 고도화 |
+| **BUG-WIRE-COPY-TX-BYPASS-1** | 와이어/COPY | `COPY FROM STDIN` 트랜잭션 세션 우회 및 독립 자동 커밋 해결 | **대기 (`[ ]`)** | 활성 세션 컨텍스트 바인딩으로 트랜잭션 범위 내 원자적 COPY 및 롤백 보장 |
+| **BUG-WIRE-COPY-SILENT-CORRUPT-1** | 와이어/무결성 | `COPY FROM STDIN` 파싱 에러 침묵 및 0값/현재시각 변조 해결 | **대기 (`[ ]`)** | 파싱 실패 시 명시적 SQL 구문 에러 반환 및 전체 데이터 타입 정밀 파싱 지원 |
+| **BUG-WIRE-COPY-OUT-UNESCAPED-1** | 와이어/COPY | `COPY TO STDOUT` 텍스트 포맷 탭/줄바꿈 이스케이프 누락 해결 | **대기 (`[ ]`)** | 표준 PostgreSQL 텍스트 포맷 이스케이프 규칙(`\t`, `\n`, `\\`) 적용으로 덤프 정합성 보장 |
+| **BUG-EXEC-JOIN-STR-CASE-1** | 실행/조인 | `HashJoin`/`MergeJoin` 문자열 조인 키 대소문자 불일치 누락 해결 | **대기 (`[ ]`)** | 조인 키 해싱 및 비교 시 대소문자 무관 정규화 적용으로 SQL 표준 조인 매칭 보장 |
+| **BUG-PIVOT-COUNT-NULL-1** | 엔진/PIVOT | `PIVOT`의 `COUNT` 집계 시 매칭 행 없는 카테고리 NULL 반환 해결 | **대기 (`[ ]`)** | `COUNT` 집계에 대해 빈 그룹 시 `0`을 정규 방출하도록 보강 |
+| **BUG-FOR-JSON-TABLE-ALIAS-WRAPPER-1** | 엔진/FOR_JSON | `FOR JSON PATH`에서 테이블 별칭(`u.col`) 중첩 객체 오해석 해결 | **대기 (`[ ]`)** | 테이블 별칭과 컬럼 별칭 구분으로 순수 컬럼 프로젝션 시 불필요 래핑 제거 |
+| **BUG-DDL-COMPOSITE-PK-PARSE-1** | 엔진/DDL | 테이블 레벨 `PRIMARY KEY (col1, col2)` 콤마 미분해 복합 PK 파괴 해결 | **대기 (`[ ]`)** | 괄호 내부 콤마 분해 루프로 선언된 모든 복합 PK 컬럼 플래그 정상 부여 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
