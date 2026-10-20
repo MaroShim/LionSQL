@@ -922,7 +922,22 @@ func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 		op := m[2]
 		numStr := m[3]
 
-		if curVal, ok := rec[colName]; ok && !curVal.IsNull {
+		var curVal storage.Value
+		var found bool
+		if v, ok := rec[colName]; ok {
+			curVal = v
+			found = true
+		} else {
+			for k, v := range rec {
+				if strings.EqualFold(k, colName) {
+					curVal = v
+					found = true
+					break
+				}
+			}
+		}
+
+		if found && !curVal.IsNull {
 			switch targetType {
 			case storage.TypeInt:
 				curInt := curVal.IVal
@@ -943,6 +958,9 @@ func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 				}
 			case storage.TypeFloat:
 				curFloat := curVal.FVal
+				if curVal.Type == storage.TypeInt {
+					curFloat = float64(curVal.IVal)
+				}
 				delta, err := strconv.ParseFloat(numStr, 64)
 				if err == nil {
 					switch op {
@@ -957,6 +975,28 @@ func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 							return storage.FloatValue(curFloat / delta)
 						}
 					}
+				}
+			case storage.TypeDecimal:
+				curFloat := curVal.FVal
+				if curVal.Type == storage.TypeInt {
+					curFloat = float64(curVal.IVal)
+				}
+				delta, err := strconv.ParseFloat(numStr, 64)
+				if err == nil {
+					var res float64
+					switch op {
+					case "+":
+						res = curFloat + delta
+					case "-":
+						res = curFloat - delta
+					case "*":
+						res = curFloat * delta
+					case "/":
+						if delta != 0 {
+							res = curFloat / delta
+						}
+					}
+					return storage.DecimalValue(strconv.FormatFloat(res, 'f', 2, 64))
 				}
 			}
 		}
