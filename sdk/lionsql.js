@@ -1,9 +1,9 @@
 /**
- * SQLion Official JavaScript / TypeScript Client SDK
- * PocketBase-compatible high-performance client for SQLion Database.
+ * LionSQL Official JavaScript / TypeScript Client SDK
+ * PocketBase-compatible high-performance client for LionSQL Database.
  * 
  * Supports Browsers, Node.js (v18+), Bun, Deno, and Edge Runtimes.
- * @version 0.7.0
+ * @version 1.0.0
  * @license MIT
  */
 (function (root, factory) {
@@ -12,15 +12,15 @@
   } else if (typeof module === 'object' && module.exports) {
     module.exports = factory();
   } else {
-    root.SQLion = factory();
+    root.LionSQL = factory();
   }
 }(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  class SQLionError extends Error {
+  class LionSQLError extends Error {
     constructor(status, message, data = null) {
       super(message);
-      this.name = 'SQLionError';
+      this.name = 'LionSQLError';
       this.status = status;
       this.data = data;
     }
@@ -236,7 +236,7 @@
               this.subscriptions.get('*').forEach(cb => cb(data));
             }
           } catch (err) {
-            console.error('[SQLion Realtime] Parse error:', err);
+            console.error('[LionSQL Realtime] Parse error:', err);
           }
         };
 
@@ -249,7 +249,7 @@
           this.reconnectTimeout = setTimeout(() => this.connect(), 3000);
         };
       } catch (err) {
-        console.error('[SQLion Realtime] Connection error:', err);
+        console.error('[LionSQL Realtime] Connection error:', err);
       }
     }
 
@@ -280,7 +280,7 @@
     }
   }
 
-  class SQLion {
+  class LionSQL {
     constructor(baseUrl = 'http://127.0.0.1:8090', options = {}) {
       this.baseUrl = baseUrl.replace(/\/$/, '');
       this.token = options.token || options.auth || '';
@@ -364,12 +364,12 @@
 
       if (!res.ok) {
         const msg = json && (json.error || json.message) ? (json.error || json.message) : `HTTP ${res.status} ${res.statusText}`;
-        throw new SQLionError(res.status, msg, json);
+        throw new LionSQLError(res.status, msg, json);
       }
 
       return json;
     }
   }
 
-  return SQLion;
+  return LionSQL;
 }));

@@ -60,28 +60,28 @@ func TestMetrics_PrometheusExposition(t *testing.T) {
 
 	// Verify required Prometheus metrics
 	requiredMetrics := []string{
-		"sqlion_uptime_seconds",
-		"sqlion_active_connections",
-		"sqlion_queries_total",
-		"sqlion_queries_total{command=\"CREATE TABLE\"}",
-		"sqlion_queries_total{command=\"INSERT\"}",
-		"sqlion_queries_total{command=\"SELECT\"}",
-		"sqlion_query_errors_total 1",
-		"sqlion_query_duration_seconds_total",
-		"sqlion_slow_queries_total",
-		"sqlion_transactions_total{type=\"commit\"}",
-		"sqlion_transactions_total{type=\"rollback\"}",
-		"sqlion_transactions_total{type=\"conflict\"}",
-		"sqlion_storage_info{engine=\"memengine\"}",
-		"sqlion_replication_role{role=\"standalone\"}",
-		"sqlion_replication_lag_bytes 0",
-		"sqlion_replication_current_lsn",
-		"sqlion_tables_total 1",
-		"sqlion_plan_cache_hits_total",
-		"sqlion_plan_cache_misses_total",
-		"sqlion_memory_alloc_bytes",
-		"sqlion_memory_sys_bytes",
-		"sqlion_goroutines",
+		"lionsql_uptime_seconds",
+		"lionsql_active_connections",
+		"lionsql_queries_total",
+		"lionsql_queries_total{command=\"CREATE TABLE\"}",
+		"lionsql_queries_total{command=\"INSERT\"}",
+		"lionsql_queries_total{command=\"SELECT\"}",
+		"lionsql_query_errors_total 1",
+		"lionsql_query_duration_seconds_total",
+		"lionsql_slow_queries_total",
+		"lionsql_transactions_total{type=\"commit\"}",
+		"lionsql_transactions_total{type=\"rollback\"}",
+		"lionsql_transactions_total{type=\"conflict\"}",
+		"lionsql_storage_info{engine=\"memengine\"}",
+		"lionsql_replication_role{role=\"standalone\"}",
+		"lionsql_replication_lag_bytes 0",
+		"lionsql_replication_current_lsn",
+		"lionsql_tables_total 1",
+		"lionsql_plan_cache_hits_total",
+		"lionsql_plan_cache_misses_total",
+		"lionsql_memory_alloc_bytes",
+		"lionsql_memory_sys_bytes",
+		"lionsql_goroutines",
 	}
 
 	for _, m := range requiredMetrics {
@@ -121,10 +121,10 @@ func TestMetrics_TransactionCommitAndRollback(t *testing.T) {
 	server.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "sqlion_transactions_total{type=\"commit\"} 1") {
+	if !strings.Contains(body, "lionsql_transactions_total{type=\"commit\"} 1") {
 		t.Errorf("expected commit count 1 in /metrics, got:\n%s", body)
 	}
-	if !strings.Contains(body, "sqlion_transactions_total{type=\"rollback\"} 1") {
+	if !strings.Contains(body, "lionsql_transactions_total{type=\"rollback\"} 1") {
 		t.Errorf("expected rollback count 1 in /metrics, got:\n%s", body)
 	}
 }
@@ -265,7 +265,7 @@ func TestMetrics_ConcurrentAccess(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", rec.Code)
 	}
 	body := rec.Body.String()
-	expectedInserts := fmt.Sprintf("sqlion_queries_total{command=\"INSERT\"} %d", workers*iterations)
+	expectedInserts := fmt.Sprintf("lionsql_queries_total{command=\"INSERT\"} %d", workers*iterations)
 	if !strings.Contains(body, expectedInserts) {
 		t.Errorf("expected %q in /metrics, got:\n%s", expectedInserts, body)
 	}
@@ -355,17 +355,17 @@ func TestMetrics_OpenTelemetryExposition(t *testing.T) {
 		}
 
 		expected := []string{
-			"sqlion.uptime_seconds",
-			"sqlion.active_connections",
-			"sqlion.queries_total",
-			"sqlion.query_errors_total",
-			"sqlion.query_duration_seconds_total",
-			"sqlion.transactions_total",
-			"sqlion.tables_total",
-			"sqlion.memory_alloc_bytes",
-			"sqlion.goroutines",
-			"sqlion.replication_lag_bytes",
-			"sqlion.replication_current_lsn",
+			"lionsql.uptime_seconds",
+			"lionsql.active_connections",
+			"lionsql.queries_total",
+			"lionsql.query_errors_total",
+			"lionsql.query_duration_seconds_total",
+			"lionsql.transactions_total",
+			"lionsql.tables_total",
+			"lionsql.memory_alloc_bytes",
+			"lionsql.goroutines",
+			"lionsql.replication_lag_bytes",
+			"lionsql.replication_current_lsn",
 		}
 		for _, name := range expected {
 			if !metricNames[name] {
@@ -417,7 +417,7 @@ func TestMetrics_TransactionConflict(t *testing.T) {
 	server.ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "sqlion_transactions_total{type=\"conflict\"} 1") {
+	if !strings.Contains(body, "lionsql_transactions_total{type=\"conflict\"} 1") {
 		t.Errorf("expected conflict count 1 in /metrics, got:\n%s", body)
 	}
 }
