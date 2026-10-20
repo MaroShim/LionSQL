@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"sync"
 	"time"
 )
@@ -63,7 +64,17 @@ func (s *TableSchema) RecordToRowWithArena(rec Record, arena *Arena) Row {
 		if v, ok := rec[col.Name]; ok {
 			vals[i] = v
 		} else {
-			vals[i] = NullValue(col.Type)
+			found := false
+			for k, v := range rec {
+				if strings.EqualFold(k, col.Name) {
+					vals[i] = v
+					found = true
+					break
+				}
+			}
+			if !found {
+				vals[i] = NullValue(col.Type)
+			}
 		}
 	}
 	return Row{Values: vals}
@@ -97,8 +108,18 @@ func (s *TableSchema) ApplyRecordToRow(row Row, rec Record) Row {
 	for i, col := range s.Columns {
 		if v, ok := rec[col.Name]; ok {
 			vals[i] = v
-		} else if i >= len(row.Values) {
-			vals[i] = NullValue(col.Type)
+		} else {
+			matched := false
+			for k, v := range rec {
+				if strings.EqualFold(k, col.Name) {
+					vals[i] = v
+					matched = true
+					break
+				}
+			}
+			if !matched && i >= len(row.Values) {
+				vals[i] = NullValue(col.Type)
+			}
 		}
 	}
 	return Row{Values: vals}

@@ -417,10 +417,11 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			if !found {
 				rec[colName] = parseLiteralValue(valStr, storage.TypeVarChar)
 			} else {
+				canonicalName := colSchema.Name
 				if strings.EqualFold(valStr, "DEFAULT") && colSchema.Default != "" {
-					rec[colName] = parseLiteralValue(colSchema.Default, colSchema.Type)
+					rec[canonicalName] = parseLiteralValue(colSchema.Default, colSchema.Type)
 				} else {
-					rec[colName] = parseLiteralValue(valStr, colSchema.Type)
+					rec[canonicalName] = parseLiteralValue(valStr, colSchema.Type)
 				}
 			}
 		}
@@ -1101,10 +1102,12 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		for colName, exprStr := range updatesMap {
 			colSchema, _, found := schema.FindColumn(colName)
 			targetType := storage.TypeVarChar
+			targetCol := colName
 			if found {
+				targetCol = colSchema.Name
 				targetType = colSchema.Type
 			}
-			recUpdates[colName] = evalUpdateExpr(exprStr, rec, targetType)
+			recUpdates[targetCol] = evalUpdateExpr(exprStr, rec, targetType)
 		}
 
 		if hasPK {

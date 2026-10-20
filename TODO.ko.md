@@ -121,7 +121,7 @@
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **P1** | **엔진/무결성** | **비-`id` 기본키 테이블 및 VDBE의 `UPDATE`/`DELETE` 시 Go 맵 무작위 순회로 엉뚱한 행 삭제/수정 방지 (`BUG-PK-1`)** | `pkg/engine`, `pkg/proc/runtime` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/대소문자** | **`TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 (`BUG-CASE-1`)** | `pkg/storage/engine.go` | **완료 (`[x]`)** | - |
-| **P1** | **엔진/무결성** | **DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 유실 및 NULL 삽입 방지 (`BUG-RECORD-1`)** | `pkg/engine/sqlexec_dml.go`, `pkg/storage/tuple.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **DML Record 컬럼명 정규화(`colSchema.Name`)로 `RecordToRow` 업데이트 유실 및 NULL 삽입 방지 (`BUG-RECORD-1`)** | `pkg/engine/sqlexec_dml.go`, `pkg/storage/tuple.go` | **완료 (`[x]`)** | - |
 | **P1** | **수식/무결성** | **`evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색으로 컬럼 0 강제 리셋 방지 (`BUG-ARITH-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/무결성** | **VDBE `SELECT ... INTO @var` 무작위 맵 순회 제거 및 `cols[0]` 결정론적 바인딩 (`BUG-VM-INTO-1`)** | `pkg/proc/runtime/vm_dispatcher.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/무결성** | **스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 (`BUG-SUBQ-1`)** | `pkg/proc/eval.go` | **진행 대기 (`[ ]`)** | - |
@@ -727,7 +727,7 @@
 | :---: | :--- | :--- | :---: | :--- |
 | **BUG-PK-1** | 엔진/무결성 | `execUpdate`/`execDelete`/`execTruncate` 및 VDBE PK 동적 해석 | **완료 (`[x]`)** | 비-`id` 기본키 테이블에서 Go 맵 무작위 순회로 엉뚱한 행이 갱신/삭제되는 치명적 정합성 결함 원천 해결 |
 | **BUG-CASE-1** | 엔진/대소문자 | `TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 | **완료 (`[x]`)** | 컬럼 대소문자 불일치로 인한 DML/MERGE/인덱스 조회 실패 및 타입 추론 왜곡 100% 방지 |
-| **BUG-RECORD-1** | 엔진/무결성 | DML Record 컬럼명 정규화(`colSchema.Name`)로 사일런트 유실 방지 | **대기 (`[ ]`)** | Record 컬럼명 불일치로 `RecordToRow`가 업데이트 값을 무시하고 구값을 보존하거나 NULL 삽입하는 결함 해결 |
+| **BUG-RECORD-1** | 엔진/무결성 | DML Record 컬럼명 정규화(`colSchema.Name`)로 사일런트 유실 방지 | **완료 (`[x]`)** | Record 컬럼명 불일치로 `RecordToRow`가 업데이트 값을 무시하고 구값을 보존하거나 NULL 삽입하는 결함 해결 |
 | **BUG-ARITH-1** | 수식/무결성 | `evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색 보장 | **대기 (`[ ]`)** | `SET price = Price + 10` 수식 평가 시 레코드 컬럼명 대소문자 차이로 0으로 리셋되는 결함 해결 |
 | **BUG-UPSERT-1** | 엔진/Upsert | `ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 | **대기 (`[ ]`)** | 충돌 컬럼 비교 시 대소문자 차이로 인한 매칭 실패 및 중복 키 예외 방지 |
 | **BUG-WHERE-1** | 엔진/조회 | `evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 | **대기 (`[ ]`)** | `WHERE col IN (...)` 조건 평가 시 대소문자 불일치로 무조건 false가 반환되던 버그 수정 |
