@@ -9,6 +9,7 @@ import (
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
+	"lionsql/pkg/storage"
 )
 
 type projField struct {
@@ -46,7 +47,7 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 			var visibleCols []string
 			var hasHidden bool
 			for _, col := range child.Schema() {
-				if strings.EqualFold(col, "_row_id") || strings.EqualFold(col, "_dt_row_id") {
+				if storage.IsSyntheticPKName(col) {
 					hasHidden = true
 					continue
 				}

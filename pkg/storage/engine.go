@@ -689,47 +689,16 @@ func (v Value) Equal(other Value) bool {
 	if v.IsNull != other.IsNull {
 		return false
 	}
-	if v.Type == TypeDecimal || other.Type == TypeDecimal {
-		d1 := v.Decimal()
-		d2 := other.Decimal()
-		return d1.Equal(d2)
-	}
-	if (v.Type == TypeBool && other.Type == TypeInt) || (v.Type == TypeInt && other.Type == TypeBool) {
-		if v.Type == TypeBool {
-			return (v.BVal && other.IVal == 1) || (!v.BVal && other.IVal == 0)
-		}
-		return (other.BVal && v.IVal == 1) || (!other.BVal && v.IVal == 0)
-	}
-	if (v.Type == TypeInt && other.Type == TypeFloat) || (v.Type == TypeFloat && other.Type == TypeInt) {
-		var f1, f2 float64
-		if v.Type == TypeInt {
-			f1 = float64(v.IVal)
-			f2 = other.FVal
-		} else {
-			f1 = v.FVal
-			f2 = float64(other.IVal)
-		}
-		return f1 == f2 || math.Abs(f1-f2) < 1e-9
-	}
-	if v.Type == TypeDateTime && other.Type == TypeVarChar {
-		if oDt, err := DateTimeValueFromAny(other); err == nil && !oDt.IsNull {
-			return v.TVal.Equal(oDt.TVal)
-		}
-	} else if v.Type == TypeVarChar && other.Type == TypeDateTime {
-		if vDt, err := DateTimeValueFromAny(v); err == nil && !vDt.IsNull {
-			return vDt.TVal.Equal(other.TVal)
-		}
-	}
-	if v.Type == TypeDate && other.Type == TypeVarChar {
-		oDate := DateValueFromString(other.SVal)
-		return v.TVal.Equal(oDate.TVal)
-	} else if v.Type == TypeVarChar && other.Type == TypeDate {
-		vDate := DateValueFromString(v.SVal)
-		return vDate.TVal.Equal(other.TVal)
-	}
+
+	// Heterogeneous type coercion via Type Promotion Lattice
 	if v.Type != other.Type {
-		return false
+		if c1, c2, ok := CoerceBinaryValues(v, other); ok {
+			v, other = c1, c2
+		} else {
+			return false
+		}
 	}
+
 	switch v.Type {
 	case TypeInt:
 		return v.IVal == other.IVal
@@ -737,11 +706,11 @@ func (v Value) Equal(other Value) bool {
 		return v.SVal == other.SVal
 	case TypeFloat:
 		return v.FVal == other.FVal || math.Abs(v.FVal-other.FVal) < 1e-9
+	case TypeDecimal:
+		return v.DVal.Equal(other.DVal)
 	case TypeBool:
 		return v.BVal == other.BVal
-	case TypeDateTime:
-		return v.TVal.Equal(other.TVal)
-	case TypeDate:
+	case TypeDateTime, TypeDate:
 		return v.TVal.Equal(other.TVal)
 	case TypeTime:
 		return v.IVal == other.IVal || v.TVal.Equal(other.TVal)
@@ -776,62 +745,11 @@ func (v Value) Compare(other Value) int {
 	if other.IsNull {
 		return 1
 	}
-	if v.Type == TypeDecimal || other.Type == TypeDecimal {
-		d1 := v.Decimal()
-		d2 := other.Decimal()
-		return d1.Cmp(d2)
-	}
-	if (v.Type == TypeBool && other.Type == TypeInt) || (v.Type == TypeInt && other.Type == TypeBool) {
-		var vInt, oInt int64
-		if v.Type == TypeBool {
-			if v.BVal {
-				vInt = 1
-			}
-			oInt = other.IVal
-		} else {
-			vInt = v.IVal
-			if other.BVal {
-				oInt = 1
-			}
+	// Heterogeneous type coercion via Type Promotion Lattice
+	if v.Type != other.Type {
+		if c1, c2, ok := CoerceBinaryValues(v, other); ok {
+			v, other = c1, c2
 		}
-		if vInt < oInt {
-			return -1
-		} else if vInt > oInt {
-			return 1
-		}
-		return 0
-	}
-	if (v.Type == TypeInt && other.Type == TypeFloat) || (v.Type == TypeFloat && other.Type == TypeInt) {
-		var f1, f2 float64
-		if v.Type == TypeInt {
-			f1 = float64(v.IVal)
-			f2 = other.FVal
-		} else {
-			f1 = v.FVal
-			f2 = float64(other.IVal)
-		}
-		if f1 < f2 {
-			return -1
-		} else if f1 > f2 {
-			return 1
-		}
-		return 0
-	}
-	if v.Type == TypeDateTime && other.Type == TypeVarChar {
-		if oDt, err := DateTimeValueFromAny(other); err == nil && !oDt.IsNull {
-			return v.Compare(oDt)
-		}
-	} else if v.Type == TypeVarChar && other.Type == TypeDateTime {
-		if vDt, err := DateTimeValueFromAny(v); err == nil && !vDt.IsNull {
-			return vDt.Compare(other)
-		}
-	}
-	if v.Type == TypeDate && other.Type == TypeVarChar {
-		oDate := DateValueFromString(other.SVal)
-		return v.Compare(oDate)
-	} else if v.Type == TypeVarChar && other.Type == TypeDate {
-		vDate := DateValueFromString(v.SVal)
-		return vDate.Compare(other)
 	}
 	if v.Type == TypeUUID || v.Type == TypeBinary || v.Type == TypeDate || v.Type == TypeTime {
 		return CompareExtendedValues(v, other)
@@ -852,12 +770,9 @@ func (v Value) Compare(other Value) int {
 		}
 		return 0
 	case TypeFloat:
-		if v.FVal < other.FVal {
-			return -1
-		} else if v.FVal > other.FVal {
-			return 1
-		}
-		return 0
+		return CompareFloatEpsilon(v.FVal, other.FVal)
+	case TypeDecimal:
+		return v.DVal.Cmp(other.DVal)
 	case TypeBool:
 		if !v.BVal && other.BVal {
 			return -1

@@ -96,14 +96,7 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 			Columns: make([]storage.Column, 0, len(innerRes.Columns)+1),
 		}
 
-		schema.Columns = append(schema.Columns, storage.Column{
-			Name:       "_dt_row_id",
-			Type:       storage.TypeInt,
-			PrimaryKey: true,
-			Nullable:   false,
-			Identity:   true,
-			Hidden:     true,
-		})
+		schema.Columns = append(schema.Columns, storage.NewSyntheticPKColumn(storage.SyntheticPKDerivedTable))
 
 		for _, colName := range innerRes.Columns {
 			colType := storage.TypeVarChar

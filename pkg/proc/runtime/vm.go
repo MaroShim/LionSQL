@@ -931,7 +931,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			if v, ok := rec.Get("id"); ok {
 				pkVal = v
 				hasPk = true
-			} else if v, ok := rec.Get("_row_id"); ok {
+			} else if v, ok := rec.Get(storage.SyntheticPKRowIDName); ok {
 				pkVal = v
 				hasPk = true
 			}
@@ -1057,7 +1057,7 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 			if v, ok := rec.Get("id"); ok {
 				pkVal = v
 				hasPk = true
-			} else if v, ok := rec.Get("_row_id"); ok {
+			} else if v, ok := rec.Get(storage.SyntheticPKRowIDName); ok {
 				pkVal = v
 				hasPk = true
 			}

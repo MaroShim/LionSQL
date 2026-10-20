@@ -928,14 +928,7 @@ func (s *Coordinator) execSelectInto(targetTable, projections, fromClause string
 
 	needSyntheticPK := (pkColName == "")
 	if needSyntheticPK {
-		schema.Columns = append(schema.Columns, storage.Column{
-			Name:       "_row_id",
-			Type:       storage.TypeInt,
-			PrimaryKey: true,
-			Nullable:   false,
-			Identity:   true,
-			Hidden:     true,
-		})
+		schema.Columns = append(schema.Columns, storage.NewSyntheticPKColumn(storage.SyntheticPKRowID))
 	}
 
 	for _, colName := range selRes.Columns {
@@ -1762,7 +1755,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	isSelectAll := projStr == "*" || projStr == ""
 	if isSelectAll {
 		for _, col := range schema.Columns {
-			if col.Hidden || strings.EqualFold(col.Name, "_row_id") || strings.EqualFold(col.Name, "_dt_row_id") {
+			if col.Hidden || storage.IsSyntheticPKName(col.Name) {
 				continue
 			}
 			selectedCols = append(selectedCols, col.Name)
