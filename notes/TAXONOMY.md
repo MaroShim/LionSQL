@@ -24,6 +24,13 @@
 | **`BUG-SUBQ-1`** | **스칼라 서브쿼리 무작위 반환 방지 (Subquery Bug)** | `BUG-SUBQ-1` | 스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 |
 | **`BUG-BOUNDS-1`** | **인덱스 바운드 무작위 추출 방지 (Index Bound Bug)** | `BUG-BOUNDS-1` | `ParseIndexCond` 무작위 맵 순회 제거 및 인덱스 대상 컬럼 바운드 정밀 매칭 |
 | **`BUG-EXP-1`** | **EXPLAIN 서브쿼리 무작위 치환 방지 (Explain Bug)** | `BUG-EXP-1` | `EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 서브쿼리 컬럼 키 정합 |
+| **`BUG-DDL-PK-1`** | **PK 임의 추측 방지 (DDL PK Guess Bug)** | `BUG-DDL-PK-1` | PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 안티패턴 제거 및 가상 PK(`_row_id`) 보장 |
+| **`BUG-SELECT-INTO-PK-1`** | **SELECT INTO PK 임의 추측 방지 (Select Into PK Bug)** | `BUG-SELECT-INTO-PK-1` | `SELECT INTO` 및 파생 테이블의 일시적 고유 컬럼 임의 PK 지정 및 0건 시 `Columns[0]` PK 지정 제거 |
+| **`BUG-JOIN-IDX-1`** | **조인 인덱스 임의 선택 방지 (Join Index Guess Bug)** | `BUG-JOIN-IDX-1` | `IndexNestedLoopJoin` 구성 시 인덱스 미일치 시 `Indexes[0]`을 임의 선택하여 조인 오염시키는 결함 방지 (Hash Join 안전 전환) |
+| **`BUG-WT-INDEX-COMP-1`** | **WiredTiger 복합 인덱스 정합성 (WT Composite Index Bug)** | `BUG-WT-INDEX-COMP-1` | WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 누락 시 TypeUnknown 0(동일) 판정하는 결함 수정 |
+| **`BUG-VM-COMP-IDX-1`** | **VDBE 복합 인덱스 인코딩 정합성 (VM Composite Index Bug)** | `BUG-VM-COMP-IDX-1` | VDBE VM에서 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 스캔하여 0건 반환되는 결함 수정 |
+| **`BUG-ORDER-BY-SPLIT-1`** | **ORDER BY 다중 컬럼 및 대소문자 정합성 (Order By Bug)** | `BUG-ORDER-BY-SPLIT-1` | `strings.Fields` 분해로 인한 다중 정렬 누락, 콤마 포함 시 DESC 무력화 및 대소문자 미매칭 무력화 원천 해결 |
+| **`BUG-JOIN-PARSE-1`** | **조인 조건 단순 Split 파싱 결함 수정 (Join Parse Bug)** | `BUG-JOIN-PARSE-1` | `strings.Split(cond, "=")` 다중 조건 분해 실패 시 빈 컬럼명 전달 및 PGWire FROM 분해 오작동 방지 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---

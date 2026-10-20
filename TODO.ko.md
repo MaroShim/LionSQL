@@ -36,6 +36,13 @@
 | **`BUG-SUBQ-1`** | **스칼라 서브쿼리 무작위 반환 방지 (Subquery Bug)** | `BUG-SUBQ-1` | 스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 |
 | **`BUG-BOUNDS-1`** | **인덱스 바운드 무작위 추출 방지 (Index Bound Bug)** | `BUG-BOUNDS-1` | `ParseIndexCond` 무작위 맵 순회 제거 및 인덱스 대상 컬럼 바운드 정밀 매칭 |
 | **`BUG-EXP-1`** | **EXPLAIN 서브쿼리 무작위 치환 방지 (Explain Bug)** | `BUG-EXP-1` | `EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 서브쿼리 컬럼 키 정합 |
+| **`BUG-DDL-PK-1`** | **PK 임의 추측 방지 (DDL PK Guess Bug)** | `BUG-DDL-PK-1` | PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 안티패턴 제거 및 가상 PK(`_row_id`) 보장 |
+| **`BUG-SELECT-INTO-PK-1`** | **SELECT INTO PK 임의 추측 방지 (Select Into PK Bug)** | `BUG-SELECT-INTO-PK-1` | `SELECT INTO` 및 파생 테이블의 일시적 고유 컬럼 임의 PK 지정 및 0건 시 `Columns[0]` PK 지정 제거 |
+| **`BUG-JOIN-IDX-1`** | **조인 인덱스 임의 선택 방지 (Join Index Guess Bug)** | `BUG-JOIN-IDX-1` | `IndexNestedLoopJoin` 구성 시 인덱스 미일치 시 `Indexes[0]`을 임의 선택하여 조인 오염시키는 결함 방지 (Hash Join 안전 전환) |
+| **`BUG-WT-INDEX-COMP-1`** | **WiredTiger 복합 인덱스 정합성 (WT Composite Index Bug)** | `BUG-WT-INDEX-COMP-1` | WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 누락 시 TypeUnknown 0(동일) 판정하는 결함 수정 |
+| **`BUG-VM-COMP-IDX-1`** | **VDBE 복합 인덱스 인코딩 정합성 (VM Composite Index Bug)** | `BUG-VM-COMP-IDX-1` | VDBE VM에서 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 스캔하여 0건 반환되는 결함 수정 |
+| **`BUG-ORDER-BY-SPLIT-1`** | **ORDER BY 다중 컬럼 및 대소문자 정합성 (Order By Bug)** | `BUG-ORDER-BY-SPLIT-1` | `strings.Fields` 분해로 인한 다중 정렬 누락, 콤마 포함 시 DESC 무력화 및 대소문자 미매칭 무력화 원천 해결 |
+| **`BUG-JOIN-PARSE-1`** | **조인 조건 단순 Split 파싱 결함 수정 (Join Parse Bug)** | `BUG-JOIN-PARSE-1` | `strings.Split(cond, "=")` 다중 조건 분해 실패 시 빈 컬럼명 전달 및 PGWire FROM 분해 오작동 방지 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
@@ -112,6 +119,13 @@
 | **P2** | **엔진/Upsert** | **`ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 (`BUG-UPSERT-1`)** | `pkg/engine/sqlexec_dml.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **엔진/조회** | **`evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 (`BUG-WHERE-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **엔진/옵티마이저** | **`EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 서브쿼리 컬럼 키 정합 (`BUG-EXP-1`)** | `pkg/engine/sqlexec_explain.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 안티패턴 제거 및 가상 PK(`_row_id`) 보장 (`BUG-DDL-PK-1`)** | `pkg/engine/sqlexec_ddl.go`, `pkg/api/handlers_tables.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/무결성** | **`SELECT INTO` 및 파생 테이블의 일시적 고유 컬럼 임의 PK 지정 및 0건 시 `Columns[0]` PK 지정 제거 (`BUG-SELECT-INTO-PK-1`)** | `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_derived.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **실행/조인** | **`IndexNestedLoopJoin` 구성 시 인덱스 미일치 시 `Indexes[0]`을 임의 선택하여 조인 오염시키는 결함 방지 (Hash Join 안전 전환) (`BUG-JOIN-IDX-1`)** | `pkg/execution/builder.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/WiredTiger** | **WiredTiger 복합 인덱스 스캔 시 첫 번째 컬럼만 비교하고 컬럼 누락 시 TypeUnknown 0(동일) 판정하는 결함 수정 (`BUG-WT-INDEX-COMP-1`)** | `pkg/storage/wiredtiger/wt_engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **프로시저/VM** | **VDBE VM에서 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 스캔하여 0건 반환되는 결함 수정 (`BUG-VM-COMP-IDX-1`)** | `pkg/proc/runtime/vm.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **엔진/정렬** | **`strings.Fields` 분해로 인한 다중 정렬 누락, 콤마 포함 시 DESC 무력화 및 대소문자 미매칭 무력화 원천 해결 (`BUG-ORDER-BY-SPLIT-1`)** | `pkg/catalog/virtual/result.go`, `pkg/engine/sqlexec_select.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **실행/파싱** | **`strings.Split(cond, "=")` 다중 조건 분해 실패 시 빈 컬럼명 전달 및 PGWire FROM 분해 오작동 방지 (`BUG-JOIN-PARSE-1`)** | `pkg/execution/builder.go`, `pkg/wire/server.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -248,8 +262,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성 및 무작위 맵 순회 10대 치명적 결함 전수 조치 (`BUG-PK-1`, `BUG-CASE-1`, `BUG-RECORD-1`, `BUG-ARITH-1`, `BUG-UPSERT-1`, `BUG-WHERE-1`, `BUG-VM-INTO-1`, `BUG-SUBQ-1`, `BUG-BOUNDS-1`, `BUG-EXP-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`)으로 인해 발생하는 10대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 17대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1`, `BUG-SELECT-INTO-PK-1`, `BUG-JOIN-IDX-1`, `BUG-WT-INDEX-COMP-1`, `BUG-VM-COMP-IDX-1`, `BUG-ORDER-BY-SPLIT-1`, `BUG-JOIN-PARSE-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`)으로 인해 발생하는 17대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -281,6 +295,27 @@
   10. **`BUG-EXP-1` (`pkg/engine/sqlexec_explain.go:703, 723, 760`)**:
      - `EXPLAIN` 서브쿼리 평탄화 시 `for _, v := range r { break }` 무작위 맵 순회로 서브쿼리 IN 리스트 및 스칼라 비교 연산자에 엉뚱한 컬럼 값이 대입되던 결함.
      - `innerRes.Columns[0]` 대소문자 무관 매칭 및 무작위 순회 완전 삭제.
+  11. **`BUG-DDL-PK-1` (`pkg/engine/sqlexec_ddl.go:185`, `pkg/api/handlers_tables.go:162`)**:
+     - `CREATE TABLE` 시 사용자가 PK를 지정하지 않은 경우 `if !hasPK && len(schema.Columns) > 0 { schema.Columns[0].PrimaryKey = true }`를 통해 첫 번째 컬럼(예: `created_at` 또는 `category`)을 임의로 Primary Key로 강제 승격시켜, 이후 동일 값의 행 INSERT 시 중복 키 위반 에러를 일으키는 치명적 결함.
+     - 임의 컬럼 PK 승격을 영구 제거하고, 스토리지 내부 가상 PK(`_row_id`)를 투명하게 생성하도록 정규화.
+  12. **`BUG-SELECT-INTO-PK-1` (`pkg/engine/sqlexec_select.go:930-965`, `pkg/engine/sqlexec_derived.go:94-118`)**:
+     - `SELECT ... INTO` 및 파생 테이블 구체화 시, 초기 조회 결과에서 우연히 중복이 없는 컬럼이 있으면 해당 컬럼을 새 테이블의 영구 PK로 임의 지정하거나, 조회 결과가 0건일 때 `selRes.Columns[0]`을 PK로 지정하여 차후 DML 실패를 유발하는 결함.
+     - 원본 테이블의 공식 PK가 보존되지 않은 경우 무조건 합성 PK(`_row_id` / `_dt_row_id`)를 생성하도록 일원화.
+  13. **`BUG-JOIN-IDX-1` (`pkg/execution/builder.go:256`)**:
+     - `IndexNestedLoopJoin` 구성 시 `innerPlan.IndexName`을 찾지 못하면 `else if len(innerSchema.Indexes) > 0 { innerIdx = &innerSchema.Indexes[0] }`로 조인 조건과 무관한 임의의 첫 번째 인덱스(예: `idx_email`)를 가져와 외부 조인 키(예: `user_id = 1001`)로 검색하여 조인 결과를 완전히 파괴하던 결함.
+     - 일치하는 조인 인덱스가 없는 경우 안전하게 `HashJoin` 또는 `MergeJoin`으로 Fallback 전환.
+  14. **`BUG-WT-INDEX-COMP-1` (`pkg/storage/wiredtiger/wt_engine.go:1588-1590, 1617-1620`)**:
+     - WiredTiger `wtFilteredIndexCursor`에서 복합 인덱스 스캔 시 첫 번째 컬럼(`c.idx.Columns[0]`)만 필터링하고 나머지 복합 컬럼을 무시하며, `FindColumn` 실패 시 초기화되지 않은 `storage.Value{}`(TypeUnknown)가 `Compare`에서 0(동일함)을 반환하여 엉뚱한 행이 필터를 통과하던 결함.
+     - 복합 인덱스 키 디코딩 및 미초기화 값의 비교 실패(Fail) 명시화.
+  15. **`BUG-VM-COMP-IDX-1` (`pkg/proc/runtime/vm.go:1232-1237`)**:
+     - VDBE `findMatchingIndex`에서 첫 번째 컬럼만 일치하면 복합 인덱스를 선택하여 스칼라 단일 값을 `tx.IndexScan`에 전달함으로써, `memengine` 복합 인덱스 NUL 인코딩과의 불일치로 인해 0건이 반환되던 결함.
+     - 단일 컬럼 인덱스 우선 매칭 및 복합 인덱스 프리픽스 인코딩 정합성 보장.
+  16. **`BUG-ORDER-BY-SPLIT-1` (`pkg/catalog/virtual/result.go:34`, `pkg/engine/sqlexec_dbcc.go:310`, `pkg/engine/sqlexec_pivot.go:421, 946`, `pkg/engine/sqlexec_select.go:1857, 2253`)**:
+     - `orderParts := strings.Fields(orderByClause)`로 공백 분해하여 다중 컬럼 정렬(`ORDER BY a, b DESC`) 시 `b` 이후가 누락되고, `ORDER BY a DESC, b` 시 `"DESC,"` 콤마로 인해 `EqualFold`가 거짓이 되어 DESC가 ASC로 반전되며, 대소문자 미매칭으로 정렬이 무력화되던 6개 파일 공통 결함.
+     - 표준 토큰 분해기 및 대소문자 무관 다중 정렬 슬라이스 비교기 적용.
+  17. **`BUG-JOIN-PARSE-1` (`pkg/execution/builder.go:315`, `pkg/wire/server.go:1064, 1586`)**:
+     - `strings.Split(cond, "=")`로 다중 조건(`a = b AND c = d`) 분해 실패 시 `"", ""`를 반환하여 빈 컬럼명 `" ASC"` 소트 이터레이터를 생성하고, PGWire에서 `strings.Split(upper, "FROM")`로 `valid_from` 컬럼명 등에서 조기 분리되어 테이블명 조회가 파괴되던 결함.
+     - 조인 조건 AST 분해 및 PGWire 쿼리 키워드 경계 정규식 기반 정합 분해.
 
 ---
 
@@ -302,7 +337,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1`, `BUG-CASE-1`, `BUG-RECORD-1`, `BUG-ARITH-1`, `BUG-UPSERT-1`, `BUG-WHERE-1`, `BUG-VM-INTO-1`, `BUG-SUBQ-1`, `BUG-BOUNDS-1`, `BUG-EXP-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1`, `BUG-SELECT-INTO-PK-1`, `BUG-JOIN-IDX-1`, `BUG-WT-INDEX-COMP-1`, `BUG-VM-COMP-IDX-1`, `BUG-ORDER-BY-SPLIT-1`, `BUG-JOIN-PARSE-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -316,6 +351,13 @@
 | **BUG-SUBQ-1** | 프로시저/수식 | 스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 | **대기 (`[ ]`)** | `for _, v := range firstRow` 맵 순회 제거 및 `cols[0]` 정규 매칭으로 임의 컬럼 반환 방지 |
 | **BUG-BOUNDS-1** | 플래너/인덱스 | `ParseIndexCond` 무작위 맵 순회 제거 및 대상 인덱스 컬럼 바운드 정밀 매칭 | **대기 (`[ ]`)** | `eqColVals` 맵 무작위 순회로 엉뚱한 컬럼 조건값으로 인덱스가 스캔되던 치명적 플래닝 결함 해결 |
 | **BUG-EXP-1** | 엔진/옵티마이저 | `EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 컬럼 키 정합 | **대기 (`[ ]`)** | `r (map[string]any)` 무작위 순회 제거로 `EXPLAIN` 실행 계획 텍스트의 엉뚱한 컬럼 값 대입 방지 |
+| **BUG-DDL-PK-1** | 엔진/무결성 | PK 미지정 테이블 생성 시 `Columns[0]` 임의 PK 승격 제거 및 가상 PK(`_row_id`) 보장 | **대기 (`[ ]`)** | 사용자가 PK 없이 생성한 테이블에 첫 번째 컬럼을 멋대로 PK로 지정하여 이후 중복 INSERT가 거부되는 결함 해결 |
+| **BUG-SELECT-INTO-PK-1** | 엔진/무결성 | `SELECT INTO` 및 파생 테이블의 일시적 고유 컬럼 임의 PK 지정 및 0건 시 PK 지정 제거 | **대기 (`[ ]`)** | 행이 0건이거나 일시적으로 고유한 컬럼을 새 테이블의 영구 PK로 임의 승격시켜 차후 INSERT 실패를 유발하는 결함 해결 |
+| **BUG-JOIN-IDX-1** | 실행/조인 | `IndexNestedLoopJoin` 인덱스 미일치 시 `Indexes[0]` 임의 선택 제거 (Hash Join 안전 전환) | **대기 (`[ ]`)** | 조인 인덱스가 없을 때 엉뚱한 첫 번째 인덱스로 외부 조인 키를 검색하여 조인 데이터가 오염되는 결함 해결 |
+| **BUG-WT-INDEX-COMP-1** | 스토리지/WT | WiredTiger 복합 인덱스 스캔 첫 컬럼만 비교 & TypeUnknown 0(동일) 판정 수정 | **대기 (`[ ]`)** | 복합 인덱스 다중 컬럼 조건 무시 및 컬럼 누락 시 미초기화 Value가 필터를 무단 통과하는 결함 해결 |
+| **BUG-VM-COMP-IDX-1** | VM/인덱스 | VDBE 복합 인덱스를 단일 인덱스로 착각하고 비인코딩 스캔하여 0건 반환되는 결함 수정 | **대기 (`[ ]`)** | 첫 번째 컬럼 일치 시 복합 인덱스를 선택해 비인코딩 스칼라를 전달하여 0건 반환되는 결함 해결 |
+| **BUG-ORDER-BY-SPLIT-1** | 엔진/정렬 | `strings.Fields` 분해로 인한 다중 정렬 누락, 콤마 포함 시 DESC 무력화 및 대소문자 미매칭 해결 | **대기 (`[ ]`)** | 다중 컬럼 정렬 누락 및 `DESC,` 콤마 파싱 에러로 정렬 방향이 반전되거나 대소문자 차이로 정렬이 무력화되는 결함 해결 |
+| **BUG-JOIN-PARSE-1** | 실행/파싱 | `strings.Split(cond, "=")` 다중 조건 분해 실패 시 빈 컬럼명 전달 및 PGWire FROM 분해 오작동 방지 | **대기 (`[ ]`)** | `AND` 포함 다중 조인 조건 분해 실패 시 빈 컬럼명 소트 생성 및 PGWire 키워드 경계 분해 결함 해결 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
