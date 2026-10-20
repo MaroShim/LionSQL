@@ -191,6 +191,13 @@
 | **P1** | **와이어/보안** | **PGWire 및 TDS에서 슈퍼유저(`sa`, `postgres`, `admin`) 비밀번호 인증 완전 우회 백도어 결함 해결 (`BUG-AUTH-ADMIN-PW-BYPASS-1`)** | `pkg/wire/server.go`, `pkg/wire/tds/server.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/DML** | **코디네이터 `UPDATE` SET 절 쉼표 단순 분해로 인한 문자열 리터럴 및 함수 인자 쉼표 파괴 결함 해결 (`BUG-UPDATE-SET-COMMA-SPLIT-1`)** | `pkg/engine/sqlexec_dml.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/조건평가** | **코디네이터 `WHERE IN (...)` 쉼표 단순 분해로 인한 쉼표 포함 문자열 리터럴 절단 및 매칭 실패 결함 해결 (`BUG-EVAL-IN-COMMA-SPLIT-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/비교연산** | **`Value.Compare` 날짜/시간-문자열(`DateTime`-`VarChar`) 상호 변환 누락으로 인한 비교 역전 결함 해결 (`BUG-STORAGE-CMP-DATETIME-STR-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **스토리지/동등비교** | **`Value.Equal` 실수(Float) 6자리 고정 문자열 포맷팅으로 인한 오판 및 힙 할당 결함 해결 (`BUG-STORAGE-EQUAL-FLOAT-STR-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/MemEngine** | **트랜잭션 커밋 시 테이블 대소문자 불일치로 인한 사일런트 쓰기 증발 결함 해결 (`BUG-MEM-TX-TABLE-CASE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **스토리지/인덱스** | **MemEngine `IndexScan` 인덱스명 대소문자 엄격 일치로 인한 조회 실패 결함 해결 (`BUG-MEM-TX-INDEX-CASE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/MERGE** | **`MERGE` 문의 `WHEN NOT MATCHED THEN INSERT` IDENTITY 기본키 누락 및 실패 결함 해결 (`BUG-MERGE-IDENTITY-PK-1`)** | `pkg/engine/sqlexec_merge.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **API/레코드생성** | **HTTP API 레코드 생성 시 `NOT NULL DEFAULT` 컬럼 오판 에러 및 기본값 누락 결함 해결 (`BUG-API-CREATE-DEFAULT-1`)** | `pkg/api/handlers_records.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **카탈로그/정규식** | **가상 카탈로그의 T-SQL 유니코드 리터럴(`N'...'`) 및 대괄호 식별자 정규식 미매칭 결함 해결 (`BUG-CATALOG-MSSQL-REGEX-UNICODE-1`)** | `pkg/catalog/virtual/mssql.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -327,8 +334,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 72대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-EVAL-IN-COMMA-SPLIT-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, 쉼표 오절단 등으로 인해 발생하는 72대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 79대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-CATALOG-MSSQL-REGEX-UNICODE-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 쉼표 오절단 등으로 인해 발생하는 79대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -546,6 +553,27 @@
   72. **`BUG-EVAL-IN-COMMA-SPLIT-1` (`pkg/engine/sqlexec_eval.go:360`)**:
      - 조건 평가기 `evaluateWhereCondition`의 `IN (...)` 절에서 `strings.Split(valList, ",")`로 리스트를 단순 분해하여, `WHERE city IN ('Seoul, KR', 'Tokyo, JP')`와 같이 콤마를 포함한 문자열 리터럴이 `'Seoul`, `KR'`로 쪼개져 IN 조건 매칭이 영구 실패하던 결함.
      - 문자열 리터럴 이스케이프 및 따옴표 상태를 인식하는 스마트 IN 리스트 분해기 도입으로 정합성 보장.
+  73. **`BUG-STORAGE-CMP-DATETIME-STR-1` (`pkg/storage/engine.go:466, 742-772`)**:
+     - `DateTimeValue`가 `TVal`만 설정하고 `SVal`을 빈 문자열로 남겨둠에 따라, `TypeVarChar`와 `TypeDateTime` 상호 비교 시 `Value.Compare`가 미초기화된 0값 시간(`0001-01-01`) 또는 빈 문자열과 비교하여 비교 결과가 역전되고, `WHERE date_col >= '2026-01-01'` 조건 등의 조회가 0건으로 왜곡되던 결함.
+     - `Value.Compare`에 DateTime/Date와 문자열 간의 상호 파싱/강제변환(Coercion)을 보강하여 올바른 시간 축 비교 보장.
+  74. **`BUG-STORAGE-EQUAL-FLOAT-STR-1` (`pkg/storage/engine.go:666`)**:
+     - `Value.Equal`에서 실수(`TypeFloat`) 동등 비교 시 `fmt.Sprintf("%f", v.FVal)`을 호출하여 소수점 6자리까지만 포맷팅 비교함으로써, 7자리 이후가 다른 서로 다른 두 실수가 참으로 판정되고, 핫패스 비교마다 힙 할당을 유발하며, `Compare`($\ne 0$)와 `Equal`($== true$) 간의 불일치가 발생하는 결함.
+     - 문자열 포맷팅을 제거하고 네이티브 부동소수점 비트 또는 엡실론 정밀도 비교로 단일화.
+  75. **`BUG-MEM-TX-TABLE-CASE-1` (`pkg/storage/memengine/tx.go:244, 1479, 1546, 1622`)**:
+     - MemEngine 트랜잭션의 `getTableLocked`, OCC 충돌 검증, 커밋 시 샤드 반영 루프가 `tx.engine.tables[ch.table]` 엄격 대소문자 조회로 작성되어, 등록 시와 다른 대소문자(`Users` vs `users`)로 테이블을 조작한 트랜잭션이 커밋할 때 `if !exists { continue }`로 통과되어 쓰기 데이터가 메모리에 반영되지 않고 사일런트 유실되던 결함.
+     - 변경 레코드(`rowChange`)의 테이블명을 스키마 공식 명칭으로 정규화하고 대소문자 무관 탐색 보장.
+  76. **`BUG-MEM-TX-INDEX-CASE-1` (`pkg/storage/memengine/tx.go:1229`)**:
+     - MemEngine `IndexScan`에서 `td.Indexes[indexName]`으로 엄격 대소문자 조회를 수행하여, 쿼리 또는 플래너가 대소문자가 다른 인덱스명(예: `idx_name` vs `IDX_NAME`)으로 요청할 경우 `storage.ErrIndexNotFound`를 반환하고 쿼리를 실패시키거나 풀스캔으로 강제 후퇴하던 결함.
+     - 인덱스 맵 탐색 시 1차 실패 시 대소문자 무관 순회 탐색을 보강하여 인덱스 히트 보장.
+  77. **`BUG-MERGE-IDENTITY-PK-1` (`pkg/engine/sqlexec_merge.go:180-205`)**:
+     - `MERGE` 문의 `WHEN NOT MATCHED THEN INSERT` 절에서 대상 테이블의 `IDENTITY` 컬럼 자동 생성 처리가 완전히 누락되어, IDENTITY PK 테이블에 MERGE 수행 시 `missing primary key` 에러로 연산이 실패하고, 커밋 후 `@@identity`가 갱신되지 않던 결함.
+     - MERGE INSERT 시 IDENTITY 컬럼 자동 채번 및 세션/테이블 식별자 동기화 파이프라인 연동.
+  78. **`BUG-API-CREATE-DEFAULT-1` (`pkg/api/handlers_records.go:437-462`)**:
+     - HTTP API `POST /api/records/:table` 처리 시 `col.Default`를 검사하지 않아, `NOT NULL DEFAULT ...` 컬럼이 요청 페이로드에서 생략되면 400 에러(`field cannot be null`)로 거부되고, 기본값이 있는 nullable 컬럼은 기본값 대신 `NULL`이 삽입되던 결함.
+     - 누락된 컬럼에 대해 스키마 기본값(리터럴 및 함수 기본값)을 자동 주입하도록 보강.
+  79. **`BUG-CATALOG-MSSQL-REGEX-UNICODE-1` (`pkg/catalog/virtual/mssql.go:17-18`)**:
+     - 가상 카탈로그의 `reMssqlTableNameEq` 및 `reMssqlSchemaNameEq` 정규식이 일반 문자열(`='...'`)만 기대하여, SSMS/sqlcmd/DBeaver 등 표준 클라이언트가 전송하는 유니코드 리터럴(`WHERE t.name = N'users'`) 및 대괄호 식별자(`WHERE [t].[name] = ...`) 매칭에 실패, 전체 테이블의 메타데이터를 불필요하게 덤프 반환하던 결함.
+     - `N'...'` 접두사 및 대괄호 식별자를 허용하는 견고한 카탈로그 정규식으로 고도화.
 
 ---
 
@@ -567,7 +595,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EVAL-IN-COMMA-SPLIT-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-CATALOG-MSSQL-REGEX-UNICODE-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -643,6 +671,13 @@
 | **BUG-AUTH-ADMIN-PW-BYPASS-1** | 와이어/보안 | PGWire 및 TDS 슈퍼유저(`sa`, `postgres`, `admin`) 비밀번호 인증 완전 우회 해결 | **대기 (`[ ]`)** | 비밀번호 설정 계정 대상 내장 관리자 예외 우회 차단 및 필수 인증 강제 적용 |
 | **BUG-UPDATE-SET-COMMA-SPLIT-1** | 엔진/DML | 코디네이터 `UPDATE` SET 절 쉼표 단순 분해로 인한 문자열/함수 쉼표 파괴 해결 | **대기 (`[ ]`)** | 따옴표 및 괄호 중첩 상태 추적 SQL 토큰 분해기 적용으로 쉼표 오절단 방지 |
 | **BUG-EVAL-IN-COMMA-SPLIT-1** | 엔진/조건평가 | 코디네이터 `WHERE IN (...)` 쉼표 단순 분해로 인한 쉼표 포함 문자열 절단 해결 | **대기 (`[ ]`)** | 리터럴 이스케이프 및 따옴표 상태 인식 스마트 IN 분해기로 조건 매칭 정합성 보장 |
+| **BUG-STORAGE-CMP-DATETIME-STR-1** | 스토리지/비교연산 | `Value.Compare` DateTime-VarChar 상호 변환 누락 비교 역전 해결 | **대기 (`[ ]`)** | 날짜/시간과 문자열 간의 상호 파싱/강제변환으로 올바른 시간 축 비교 보장 |
+| **BUG-STORAGE-EQUAL-FLOAT-STR-1** | 스토리지/동등비교 | `Value.Equal` 실수 6자리 고정 문자열 포맷팅 오판 및 힙 할당 해결 | **대기 (`[ ]`)** | 문자열 포맷팅 제거 및 네이티브 부동소수점 비트/엡실론 비교로 단일화 |
+| **BUG-MEM-TX-TABLE-CASE-1** | 스토리지/MemEngine | 트랜잭션 커밋 시 테이블 대소문자 불일치 사일런트 쓰기 증발 해결 | **대기 (`[ ]`)** | 변경 레코드 테이블명 스키마 공식 명칭 정규화 및 대소문자 무관 탐색 보장 |
+| **BUG-MEM-TX-INDEX-CASE-1** | 스토리지/인덱스 | MemEngine `IndexScan` 인덱스명 대소문자 불일치 인덱스 조회 실패 해결 | **대기 (`[ ]`)** | 인덱스 맵 탐색 1차 실패 시 대소문자 무관 탐색 보강으로 인덱스 히트 보장 |
+| **BUG-MERGE-IDENTITY-PK-1** | 엔진/MERGE | `MERGE` 문의 `WHEN NOT MATCHED THEN INSERT` IDENTITY PK 누락 실패 해결 | **대기 (`[ ]`)** | MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화 연동 |
+| **BUG-API-CREATE-DEFAULT-1** | API/레코드생성 | HTTP API 레코드 생성 시 `NOT NULL DEFAULT` 컬럼 400 에러 해결 | **대기 (`[ ]`)** | 생략된 필드 대상 스키마 기본값(리터럴 및 함수 기본값) 자동 주입 보강 |
+| **BUG-CATALOG-MSSQL-REGEX-UNICODE-1** | 카탈로그/정규식 | 가상 카탈로그 유니코드 리터럴(`N'...'`) 및 대괄호 정규식 미매칭 해결 | **대기 (`[ ]`)** | `N'...'` 접두사 및 대괄호 허용 견고한 카탈로그 정규식으로 고도화 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |

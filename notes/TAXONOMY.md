@@ -86,6 +86,13 @@
 | **`BUG-AUTH-ADMIN-PW-BYPASS-1`** | **내장 슈퍼유저 비밀번호 인증 완전 우회 백도어 해결 (Auth Admin PW Bypass Bug)** | `BUG-AUTH-ADMIN-PW-BYPASS-1` | PGWire 및 TDS에서 비밀번호가 설정된 `sa`, `postgres`, `admin`의 무암호 로그인 우회 차단 |
 | **`BUG-UPDATE-SET-COMMA-SPLIT-1`** | **코디네이터 UPDATE SET 절 쉼표 오절단 방지 (Update Set Comma Bug)** | `BUG-UPDATE-SET-COMMA-SPLIT-1` | 따옴표 및 괄호 상태 추적 토큰 분해기로 문자열 리터럴/함수 인자 콤마 오분해 및 수식 파괴 해결 |
 | **`BUG-EVAL-IN-COMMA-SPLIT-1`** | **WHERE IN 절 문자열 리터럴 쉼표 오절단 방지 (Eval IN Comma Bug)** | `BUG-EVAL-IN-COMMA-SPLIT-1` | 따옴표 상태 인식 스마트 IN 분해기로 콤마 포함 문자열 리터럴 절단 및 매칭 영구 실패 해결 |
+| **`BUG-STORAGE-CMP-DATETIME-STR-1`** | **DateTime-VarChar 상호 변환 누락 비교 역전 방지 (Storage Cmp DateTime Bug)** | `BUG-STORAGE-CMP-DATETIME-STR-1` | 날짜/시간과 문자열 간의 상호 파싱/강제변환으로 올바른 시간 축 비교 및 필터 왜곡 해결 |
+| **`BUG-STORAGE-EQUAL-FLOAT-STR-1`** | **실수 6자리 문자열 포맷팅 동등 비교 왜곡 방지 (Storage Equal Float Bug)** | `BUG-STORAGE-EQUAL-FLOAT-STR-1` | 실수 문자열 포맷팅 제거 및 부동소수점 비트/엡실론 비교로 Compare/Equal 정합성 보장 |
+| **`BUG-MEM-TX-TABLE-CASE-1`** | **트랜잭션 커밋 시 테이블 대소문자 사일런트 쓰기 증발 방지 (MemEngine Tx Case Bug)** | `BUG-MEM-TX-TABLE-CASE-1` | 변경 레코드 테이블명 스키마 공식 명칭 정규화로 커밋 시 샤드 미반영 쓰기 유실 차단 |
+| **`BUG-MEM-TX-INDEX-CASE-1`** | **MemEngine IndexScan 인덱스명 대소문자 무관 탐색 보장 (MemEngine Index Case Bug)** | `BUG-MEM-TX-INDEX-CASE-1` | 인덱스 맵 1차 실패 시 대소문자 무관 순회 보강으로 `ErrIndexNotFound` 및 풀스캔 강제 방지 |
+| **`BUG-MERGE-IDENTITY-PK-1`** | **MERGE WHEN NOT MATCHED IDENTITY 자동 채번 보장 (Merge Identity PK Bug)** | `BUG-MERGE-IDENTITY-PK-1` | MERGE INSERT 시 IDENTITY 자동 채번 및 세션/테이블 식별자 동기화 연동 |
+| **`BUG-API-CREATE-DEFAULT-1`** | **HTTP API 레코드 생성 시 NOT NULL DEFAULT 필드 주입 (API Create Default Bug)** | `BUG-API-CREATE-DEFAULT-1` | 생략된 필드 대상 스키마 기본값(리터럴 및 함수 기본값) 자동 주입으로 400 에러 해결 |
+| **`BUG-CATALOG-MSSQL-REGEX-UNICODE-1`** | **가상 카탈로그 N'...' 리터럴 및 대괄호 식별자 매칭 (Catalog Regex Unicode Bug)** | `BUG-CATALOG-MSSQL-REGEX-UNICODE-1` | `N'...'` 접두사 및 대괄호 허용 견고한 카탈로그 정규식으로 SSMS/DBeaver 전수 덤프 방지 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
