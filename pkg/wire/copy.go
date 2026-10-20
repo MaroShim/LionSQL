@@ -332,10 +332,10 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 			}
 		}
 
-		// Auto-generate PK if missing or zero
+		// Auto-generate PK if missing or null
 		if pkCol != nil {
 			curPK, exists := rec[pkCol.Name]
-			if !exists || curPK.IsNull || (pkCol.Type == storage.TypeInt && curPK.IVal == 0) {
+			if !exists || curPK.IsNull {
 				if pkCol.Type == storage.TypeInt {
 					rec[pkCol.Name] = storage.IntValue(time.Now().UnixNano()/int64(time.Millisecond) + insertedCount + 1)
 				}

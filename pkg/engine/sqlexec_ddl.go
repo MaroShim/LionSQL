@@ -173,16 +173,9 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		}
 	}
 
-	// Default first column as PK if none marked
-	hasPK := false
-	for _, c := range schema.Columns {
-		if c.PrimaryKey {
-			hasPK = true
-			break
-		}
-	}
-	if !hasPK && len(schema.Columns) > 0 {
-		schema.Columns[0].PrimaryKey = true
+	// Ensure table has a primary key: if none marked, inject synthetic hidden _row_id
+	if !schema.HasPrimaryKey() {
+		schema.EnsurePrimaryKey("_row_id")
 	}
 
 	if rawPartition != "" {

@@ -41,6 +41,25 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 	}
 
 	if len(projections) == 0 || (len(projections) == 1 && (projections[0] == "" || isWildcard(projections[0]))) {
+		if child != nil {
+			var visibleCols []string
+			var hasHidden bool
+			for _, col := range child.Schema() {
+				if strings.EqualFold(col, "_row_id") || strings.EqualFold(col, "_dt_row_id") {
+					hasHidden = true
+					continue
+				}
+				visibleCols = append(visibleCols, col)
+			}
+			if hasHidden {
+				for _, col := range visibleCols {
+					p.fields = append(p.fields, projField{expr: col, alias: col})
+					p.schema = append(p.schema, col)
+				}
+				p.isSelectAll = false
+				return p
+			}
+		}
 		p.isSelectAll = true
 		return p
 	}

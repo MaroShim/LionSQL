@@ -132,19 +132,31 @@ func (s *Server) handleCreateTable(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var dt storage.DataType
-		switch strings.ToUpper(strings.TrimSpace(c.Type)) {
-		case "INT", "INTEGER", "BIGINT":
+		rawType := strings.ToUpper(strings.TrimSpace(c.Type))
+		baseType := rawType
+		if idx := strings.Index(baseType, "("); idx != -1 {
+			baseType = strings.TrimSpace(baseType[:idx])
+		}
+		switch baseType {
+		case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT":
 			dt = storage.TypeInt
-		case "VARCHAR", "TEXT", "STRING":
+		case "VARCHAR", "TEXT", "STRING", "CHAR", "NVARCHAR", "NCHAR":
 			dt = storage.TypeVarChar
-		case "FLOAT", "DOUBLE", "REAL", "NUMERIC":
+		case "FLOAT", "DOUBLE", "REAL":
 			dt = storage.TypeFloat
+		case "DECIMAL", "NUMERIC", "MONEY":
+			dt = storage.TypeDecimal
 		case "BOOL", "BOOLEAN":
 			dt = storage.TypeBool
-		case "DATETIME", "TIMESTAMP":
+		case "DATETIME", "TIMESTAMP", "DATE", "TIME":
 			dt = storage.TypeDateTime
+		case "UUID", "GUID":
+			dt = storage.TypeUUID
+		case "JSON":
+			dt = storage.TypeJSON
 		default:
-			dt = storage.TypeVarChar
+			writeError(w, http.StatusBadRequest, fmt.Errorf("unsupported column type %q for column %q", c.Type, c.Name))
+			return
 		}
 		if c.PrimaryKey {
 			hasPK = true
@@ -157,14 +169,12 @@ func (s *Server) handleCreateTable(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if !hasPK {
-		// Default to first column as PK if none specified
-		cols[0].PrimaryKey = true
-	}
-
 	schema := &storage.TableSchema{
 		Name:    tableName,
 		Columns: cols,
+	}
+	if !hasPK {
+		schema.EnsurePrimaryKey("_row_id")
 	}
 
 	if err := s.engine.CreateTable(schema); err != nil {

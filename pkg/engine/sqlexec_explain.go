@@ -830,12 +830,30 @@ func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, erro
 		}
 
 		var colDefs []string
-		for i, col := range res.Columns {
-			pk := ""
-			if i == 0 {
-				pk = " PRIMARY KEY"
+		colDefs = append(colDefs, "_cte_row_id INT IDENTITY PRIMARY KEY")
+		for _, col := range res.Columns {
+			colType := "VARCHAR(255)"
+			if len(res.Rows) > 0 {
+				for _, row := range res.Rows {
+					v := row[col]
+					if v != nil {
+						switch v.(type) {
+						case int, int32, int64:
+							colType = "INT"
+						case float32, float64:
+							colType = "FLOAT"
+						case bool:
+							colType = "BOOLEAN"
+						case time.Time:
+							colType = "DATETIME"
+						case storage.Decimal:
+							colType = "DECIMAL(18, 4)"
+						}
+						break
+					}
+				}
 			}
-			colDefs = append(colDefs, fmt.Sprintf("%s VARCHAR(255)%s", col, pk))
+			colDefs = append(colDefs, fmt.Sprintf("%s %s", col, colType))
 		}
 		createSQL := fmt.Sprintf("CREATE TABLE %s (%s);", tempName, strings.Join(colDefs, ", "))
 		if _, err := s.ExecuteSQL(createSQL); err != nil {
@@ -851,7 +869,21 @@ func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, erro
 					if v == nil {
 						valStrs = append(valStrs, "NULL")
 					} else {
-						valStrs = append(valStrs, fmt.Sprintf("'%v'", v))
+						switch val := v.(type) {
+						case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+							valStrs = append(valStrs, fmt.Sprintf("%d", val))
+						case float32, float64:
+							valStrs = append(valStrs, fmt.Sprintf("%f", val))
+						case bool:
+							if val {
+								valStrs = append(valStrs, "1")
+							} else {
+								valStrs = append(valStrs, "0")
+							}
+						default:
+							sVal := fmt.Sprintf("%v", v)
+							valStrs = append(valStrs, fmt.Sprintf("'%s'", strings.ReplaceAll(sVal, "'", "''")))
+						}
 					}
 				}
 				insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, strings.Join(insertCols, ", "), strings.Join(valStrs, ", "))

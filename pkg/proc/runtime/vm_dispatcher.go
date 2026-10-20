@@ -687,6 +687,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		}
 
 		if err := f.tx.Update(data.Table, pkVal, rec); err != nil {
+			if errors.Is(err, storage.ErrKeyNotFound) {
+				f.rowCount = 0
+				return nil
+			}
 			return f.handleCatch(err, pc)
 		}
 		f.rowCount = 1
@@ -735,6 +739,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		}
 
 		if err := f.tx.Delete(data.Table, pkVal); err != nil {
+			if errors.Is(err, storage.ErrKeyNotFound) {
+				f.rowCount = 0
+				return nil
+			}
 			return f.handleCatch(err, pc)
 		}
 		f.rowCount = 1

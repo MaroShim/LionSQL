@@ -925,50 +925,15 @@ func (s *Coordinator) execSelectInto(targetTable, projections, fromClause string
 		}
 	}
 
-	// If no unique PK found from source, check if any projected column is completely unique
-	if pkColName == "" && len(selRes.Rows) > 0 {
-		for _, col := range selRes.Columns {
-			unique := true
-			seen := make(map[string]bool)
-			for _, row := range selRes.Rows {
-				v := row[col]
-				if v == nil {
-					unique = false
-					break
-				}
-				valKey := fmt.Sprintf("%v", v)
-				if seen[valKey] {
-					unique = false
-					break
-				}
-				seen[valKey] = true
-			}
-			if unique {
-				pkColName = col
-				break
-			}
-		}
-	}
-
-	needSyntheticPK := false
-	if pkColName == "" {
-		if len(selRes.Rows) == 0 {
-			if len(selRes.Columns) > 0 {
-				pkColName = selRes.Columns[0]
-			} else {
-				needSyntheticPK = true
-			}
-		} else {
-			needSyntheticPK = true
-		}
-	}
-
+	needSyntheticPK := (pkColName == "")
 	if needSyntheticPK {
 		schema.Columns = append(schema.Columns, storage.Column{
 			Name:       "_row_id",
 			Type:       storage.TypeInt,
 			PrimaryKey: true,
 			Nullable:   false,
+			Identity:   true,
+			Hidden:     true,
 		})
 	}
 
@@ -1796,6 +1761,9 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	isSelectAll := projStr == "*" || projStr == ""
 	if isSelectAll {
 		for _, col := range schema.Columns {
+			if col.Hidden || strings.EqualFold(col.Name, "_row_id") || strings.EqualFold(col.Name, "_dt_row_id") {
+				continue
+			}
 			selectedCols = append(selectedCols, col.Name)
 			projItems = append(projItems, fallbackProjItem{expr: col.Name, alias: col.Name})
 		}

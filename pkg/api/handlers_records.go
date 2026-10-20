@@ -7,10 +7,15 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
+
+	"github.com/google/uuid"
 
 	"lionsql/pkg/storage"
 )
+
+var apiPKCounter atomic.Uint64
 
 func getTableName(r *http.Request) string {
 	if t := r.PathValue("table"); t != "" {
@@ -150,7 +155,12 @@ func (s *Server) handleGetRecords(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	defer tx.Rollback()
+	var committed bool
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
 	cursor, err := tx.Scan(tableName)
 	if err != nil {
@@ -385,7 +395,12 @@ func (s *Server) handleGetSingleRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	defer tx.Rollback()
+	var committed bool
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
 	rec, err := tx.Get(tableName, pkVal)
 	if err != nil {
@@ -431,7 +446,12 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	defer tx.Rollback()
+	var committed bool
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
 	rec := make(storage.Record)
 	for _, col := range schema.Columns {
@@ -447,11 +467,12 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		}
 		if !exists || v == nil {
 			if col.PrimaryKey {
-				// Auto-generate numeric or string ID if not provided
+				// Auto-generate numeric, UUID, or string ID if not provided with guaranteed uniqueness
 				if col.Type == storage.TypeInt {
-					v = time.Now().UnixNano() / int64(time.Millisecond)
-				} else if col.Type == storage.TypeVarChar {
-					v = fmt.Sprintf("%d", time.Now().UnixNano())
+					seq := apiPKCounter.Add(1)
+					v = (time.Now().UnixMicro() * 1000) + int64(seq%1000)
+				} else if col.Type == storage.TypeUUID || col.Type == storage.TypeVarChar {
+					v = uuid.New().String()
 				}
 			} else if !col.Nullable {
 				writeError(w, http.StatusBadRequest, fmt.Errorf("field %q cannot be null", col.Name))
@@ -479,6 +500,7 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	committed = true
 
 	respRow := recordToJSONMap(rec, schema)
 
@@ -529,7 +551,12 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	defer tx.Rollback()
+	var committed bool
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
 	existing, err := tx.Get(tableName, pkVal)
 	if err != nil {
@@ -563,6 +590,7 @@ func (s *Server) handleUpdateRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	committed = true
 
 	respRow := recordToJSONMap(existing, schema)
 
@@ -608,7 +636,12 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	defer tx.Rollback()
+	var committed bool
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
 	existing, err := tx.Get(tableName, pkVal)
 	if err != nil {
@@ -634,6 +667,7 @@ func (s *Server) handleDeleteRecord(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
+	committed = true
 
 	if s.broker != nil {
 		s.broker.Broadcast(RealtimeEvent{
@@ -704,7 +738,12 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err)
 		return
 	}
-	defer tx.Rollback()
+	var committed bool
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
 
 	accountsRecords := []storage.Record{
 		{"id": storage.IntValue(1), "holder": storage.StringValue("Alice"), "balance": storage.IntValue(1000)},
@@ -735,6 +774,7 @@ func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, fmt.Errorf("failed to commit sample data transaction: %w", err))
 		return
 	}
+	committed = true
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"success": true,

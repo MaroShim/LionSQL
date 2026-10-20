@@ -88,6 +88,7 @@ type Column struct {
 	PrimaryKey bool     `json:"primary_key" msgpack:"primary_key"`
 	Nullable   bool     `json:"nullable" msgpack:"nullable"`
 	Identity   bool     `json:"identity,omitempty" msgpack:"identity,omitempty"`
+	Hidden     bool     `json:"hidden,omitempty" msgpack:"hidden,omitempty"`
 	Precision  int      `json:"precision,omitempty" msgpack:"precision,omitempty"`
 	Scale      int      `json:"scale,omitempty" msgpack:"scale,omitempty"`
 	Default    string   `json:"default,omitempty" msgpack:"default,omitempty"`
@@ -303,6 +304,46 @@ func (s *TableSchema) FindForeignKey(name string) (*ForeignKeySchema, int, bool)
 		}
 	}
 	return nil, -1, false
+}
+
+func (s *TableSchema) HasPrimaryKey() bool {
+	if s == nil {
+		return false
+	}
+	for i := range s.Columns {
+		if s.Columns[i].PrimaryKey {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *TableSchema) EnsurePrimaryKey(syntheticColName string) {
+	if s == nil || s.HasPrimaryKey() {
+		return
+	}
+	if syntheticColName == "" {
+		syntheticColName = "_row_id"
+	}
+	s.Columns = append(s.Columns, Column{
+		Name:       syntheticColName,
+		Type:       TypeInt,
+		PrimaryKey: true,
+		Nullable:   false,
+		Identity:   true,
+		Hidden:     true,
+	})
+}
+
+func (s *TableSchema) ResolveRecordPK(rec Record) (Value, bool) {
+	if s == nil || rec == nil {
+		return Value{}, false
+	}
+	pkCol, err := s.PrimaryKeyColumn()
+	if err != nil || pkCol == nil {
+		return Value{}, false
+	}
+	return rec.Get(pkCol.Name)
 }
 
 func (s *TableSchema) PrimaryKeyColumn() (*Column, error) {

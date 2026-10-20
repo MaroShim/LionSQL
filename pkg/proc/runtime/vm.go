@@ -921,29 +921,14 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		var hasPk bool
 		if tg := f.executor.getTableGetter(); tg != nil {
 			if schema, err := tg(data.Table); err == nil && schema != nil {
-				for _, c := range schema.Columns {
-					if c.PrimaryKey {
-						if v, ok := rec[c.Name]; ok {
-							pkVal = v
-							hasPk = true
-							break
-						}
-						for k, v := range rec {
-							if strings.EqualFold(k, c.Name) {
-								pkVal = v
-								hasPk = true
-								break
-							}
-						}
-						if hasPk {
-							break
-						}
-					}
-				}
+				pkVal, hasPk = schema.ResolveRecordPK(rec)
 			}
 		}
 		if !hasPk {
-			if v, ok := rec["id"]; ok {
+			if v, ok := rec.Get("id"); ok {
+				pkVal = v
+				hasPk = true
+			} else if v, ok := rec.Get("_row_id"); ok {
 				pkVal = v
 				hasPk = true
 			}
@@ -1061,29 +1046,14 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 		var hasPk bool
 		if tg := f.executor.getTableGetter(); tg != nil {
 			if schema, err := tg(data.Table); err == nil && schema != nil {
-				for _, c := range schema.Columns {
-					if c.PrimaryKey {
-						if v, ok := rec[c.Name]; ok {
-							pkVal = v
-							hasPk = true
-							break
-						}
-						for k, v := range rec {
-							if strings.EqualFold(k, c.Name) {
-								pkVal = v
-								hasPk = true
-								break
-							}
-						}
-						if hasPk {
-							break
-						}
-					}
-				}
+				pkVal, hasPk = schema.ResolveRecordPK(rec)
 			}
 		}
 		if !hasPk {
-			if v, ok := rec["id"]; ok {
+			if v, ok := rec.Get("id"); ok {
+				pkVal = v
+				hasPk = true
+			} else if v, ok := rec.Get("_row_id"); ok {
 				pkVal = v
 				hasPk = true
 			}

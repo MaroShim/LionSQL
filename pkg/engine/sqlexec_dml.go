@@ -1081,25 +1081,12 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 			continue
 		}
 
-		var pkVal storage.Value
-		var hasPK bool
-		if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
-			if v, ok := rec.Get(pkCol.Name); ok {
-				pkVal = v
-				hasPK = true
-			}
-		}
-		if !hasPK {
-			if v, ok := rec.Get("id"); ok {
-				pkVal = v
-				hasPK = true
-			}
-		}
+		pkVal, hasPK := schema.ResolveRecordPK(rec)
 		if !hasPK {
 			if isEphemeral {
 				_ = tx.Rollback()
 			}
-			return nil, fmt.Errorf("record missing primary key in table %s", tableName)
+			return nil, fmt.Errorf("table %q has no primary key to identify row for update", tableName)
 		}
 
 		recUpdates := make(storage.Record)
@@ -1248,25 +1235,12 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			continue
 		}
 
-		var pkVal storage.Value
-		var hasPK bool
-		if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
-			if v, ok := rec.Get(pkCol.Name); ok {
-				pkVal = v
-				hasPK = true
-			}
-		}
-		if !hasPK {
-			if v, ok := rec.Get("id"); ok {
-				pkVal = v
-				hasPK = true
-			}
-		}
+		pkVal, hasPK := schema.ResolveRecordPK(rec)
 		if !hasPK {
 			if isEphemeral {
 				_ = tx.Rollback()
 			}
-			return nil, fmt.Errorf("record missing primary key in table %s", tableName)
+			return nil, fmt.Errorf("table %q has no primary key to identify row for update", tableName)
 		}
 
 		if hasPK {

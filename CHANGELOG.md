@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Group 3 Primary Key Heuristics, Guessing & Lifecycle Remediation (10 Critical Engine/Storage/Wire Bugs)**:
+  - `BUG-DDL-PK-1`: Eliminated arbitrary `Columns[0]` promotion to Primary Key on PK-less `CREATE TABLE`; introduced clean synthetic `_row_id INT IDENTITY PRIMARY KEY` with `Hidden: true` metadata flag.
+  - `BUG-HTTP-TABLE-PK-1`: Eliminated `cols[0]` promotion in HTTP table creation; normalized parameterized types (e.g. `VARCHAR(100)`) and rejected unsupported types with 400 Bad Request.
+  - `BUG-SELECT-INTO-PK-1`: Eliminated arbitrary unique column or `Columns[0]` PK guessing in `SELECT ... INTO`; assigned synthetic `_row_id` when source lacks a natural primary key.
+  - `BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1`: Eliminated `Columns[0]` promotion in 0-row or duplicate derived tables; always injected synthetic `_dt_row_id INT IDENTITY PRIMARY KEY`.
+  - `BUG-CTE-MATERIALIZE-1`: Eliminated forcing column 0 as PK and `VARCHAR(255)` coercion in materialized CTEs; injected synthetic `_cte_row_id` and preserved underlying query column types.
+  - `BUG-DML-PK-RANDOM-1`: Eliminated guessing `"id"` in coordinator `ExecuteUpdate` and `ExecuteDelete`; resolved primary key via `schema.ResolveRecordPK(rec)`.
+  - `BUG-DML-PK-RANDOM-GUESS-1`: Eliminated guessing `"id"` in VDBE `OpUpdate` and `OpDelete`; resolved primary key via `schema.ResolveRecordPK(rec)`.
+  - `BUG-VM-DML-PK-NOT-FOUND-CRASH-1`: Handled `storage.ErrKeyNotFound` in VDBE `OpUpdate` and `OpDelete` as 0 rows affected (`f.rowCount = 0`, nil error) per standard SQL specification instead of crashing stored procedures.
+  - `BUG-COPY-PK-1`: Preserved integer primary key `0` in PGWire `COPY FROM STDIN` without overwriting with timestamps.
+  - `BUG-API-PK-GEN-1`: Prevented timestamp collisions in HTTP REST record creation by combining microsecond timestamp with atomic counter (`atomic.Uint64`) and UUID fallback, and resolved txPool use-after-free rollback race.
 - **Group 2 Unified SQL Abstraction Remediation (14 Critical Engine/Storage/Wire Bugs)**:
   - `BUG-STORAGE-UPDATE-CASE-1`: Normalized column keys against table schema in `memengine` and `wiredtiger` `updateLocked` to eliminate silent update omissions under mixed casing.
   - `BUG-VM-DML-COL-CASE-1`: Normalized VDBE `OpInsert` and `OpUpdate` column names using schema metadata to prevent NULL value overwrites.

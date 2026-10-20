@@ -89,48 +89,21 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 			return "", createdTables, fmt.Errorf("derived table subquery failed: %s", innerRes.Error)
 		}
 
-		// Find unique column for PK
-		pkColName := ""
-		if len(innerRes.Rows) > 0 {
-			for _, col := range innerRes.Columns {
-				unique := true
-				seen := make(map[string]bool, len(innerRes.Rows))
-				for _, row := range innerRes.Rows {
-					v, ok := row[col]
-					if !ok || v == nil {
-						unique = false
-						break
-					}
-					vStr := fmt.Sprintf("%v", v)
-					if seen[vStr] {
-						unique = false
-						break
-					}
-					seen[vStr] = true
-				}
-				if unique {
-					pkColName = col
-					break
-				}
-			}
-		} else if len(innerRes.Columns) > 0 {
-			pkColName = innerRes.Columns[0]
-		}
-
-		needSyntheticPK := (pkColName == "")
+		// Materialized derived tables always use synthetic _dt_row_id as PK to support duplicates and 0 rows safely
+		needSyntheticPK := true
 		schema := &storage.TableSchema{
 			Name:    tempName,
 			Columns: make([]storage.Column, 0, len(innerRes.Columns)+1),
 		}
 
-		if needSyntheticPK {
-			schema.Columns = append(schema.Columns, storage.Column{
-				Name:       "_dt_row_id",
-				Type:       storage.TypeInt,
-				PrimaryKey: true,
-				Nullable:   false,
-			})
-		}
+		schema.Columns = append(schema.Columns, storage.Column{
+			Name:       "_dt_row_id",
+			Type:       storage.TypeInt,
+			PrimaryKey: true,
+			Nullable:   false,
+			Identity:   true,
+			Hidden:     true,
+		})
 
 		for _, colName := range innerRes.Columns {
 			colType := storage.TypeVarChar
@@ -154,7 +127,7 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 			schema.Columns = append(schema.Columns, storage.Column{
 				Name:       colName,
 				Type:       colType,
-				PrimaryKey: !needSyntheticPK && strings.EqualFold(colName, pkColName),
+				PrimaryKey: false,
 				Nullable:   true,
 			})
 		}
