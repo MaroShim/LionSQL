@@ -8,6 +8,7 @@ import (
 
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 )
 
 type projField struct {
@@ -98,22 +99,19 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 		}
 
 		// Check for [AS] alias: e.g. "col AS alias" or "col alias"
-		aliasIdx := strings.Index(strings.ToUpper(item), " AS ")
-		if aliasIdx != -1 {
-			expr := strings.TrimSpace(item[:aliasIdx])
-			alias := strings.Trim(strings.TrimSpace(item[aliasIdx+4:]), "\"`[]")
+		if expr, alias, hasAs := sqlutil.SplitAsAlias(item); hasAs {
 			addField(expr, alias)
 		} else {
-			parts := strings.Fields(item)
+			parts := sqlutil.SplitTopLevelTokens(item)
 			if len(parts) == 2 && !strings.Contains(parts[0], "(") && !strings.Contains(parts[0], "-") {
-				addField(parts[0], strings.Trim(parts[1], "\"`[]"))
+				addField(parts[0], sqlutil.CleanIdentifier(parts[1]))
 			} else {
 				// Bare expression / column name
 				alias := item
 				if dotIdx := strings.LastIndex(alias, "."); dotIdx != -1 {
 					alias = alias[dotIdx+1:]
 				}
-				alias = strings.Trim(alias, "\"`[]")
+				alias = sqlutil.CleanIdentifier(alias)
 				addField(item, alias)
 			}
 		}

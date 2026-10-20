@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"lionsql/pkg/sqlutil"
 )
 
 // SetOpSegment represents a single query branch within a set operation chain.
@@ -323,11 +325,14 @@ func (p *Planner) BuildSetOpPlan(setQuery *SetOpQuery, buildSubPlan func(subSQL 
 
 	// Apply trailing ORDER BY across the unified result set
 	if setQuery.OrderBy != "" {
-		parts := strings.Fields(setQuery.OrderBy)
-		sortKey := parts[0]
+		sortKey := setQuery.OrderBy
 		sortOrder := "ASC"
-		if len(parts) > 1 && strings.EqualFold(parts[1], "DESC") {
-			sortOrder = "DESC"
+		orderItems := sqlutil.ParseOrderBy(setQuery.OrderBy)
+		if len(orderItems) > 0 {
+			sortKey = orderItems[0].Column
+			if orderItems[0].Desc {
+				sortOrder = "DESC"
+			}
 		}
 		currPlan = &PlanNode{
 			Type:          NodeSort,

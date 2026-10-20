@@ -10,6 +10,7 @@ import (
 
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -82,27 +83,7 @@ func parseValueTuples(s string) []string {
 }
 
 func splitValues(s string) []string {
-	var vals []string
-	var cur strings.Builder
-	inString := false
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '\'' && (i == 0 || s[i-1] != '\\') {
-			inString = !inString
-			cur.WriteByte(c)
-			continue
-		}
-		if !inString && c == ',' {
-			vals = append(vals, strings.TrimSpace(cur.String()))
-			cur.Reset()
-			continue
-		}
-		cur.WriteByte(c)
-	}
-	if cur.Len() > 0 {
-		vals = append(vals, strings.TrimSpace(cur.String()))
-	}
-	return vals
+	return sqlutil.SplitTopLevel(s, ',')
 }
 
 func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
@@ -354,7 +335,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 
 		strVal := fmt.Sprintf("%v", val)
 		found := false
-		for _, rawItem := range strings.Split(valList, ",") {
+		for _, rawItem := range sqlutil.SplitTopLevel(valList, ',') {
 			rawItem = strings.TrimSpace(rawItem)
 			var item string
 			if (strings.HasPrefix(rawItem, "N'") || strings.HasPrefix(rawItem, "n'")) && strings.HasSuffix(rawItem, "'") && len(rawItem) >= 3 {

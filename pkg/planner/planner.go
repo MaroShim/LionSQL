@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -1324,11 +1325,16 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 	// Order By -> Sort Node
 	if q.OrderByClause != "" {
-		sortParts := strings.Fields(q.OrderByClause)
-		sortKey := sortParts[0]
-		sortOrder := "ASC"
-		if len(sortParts) > 1 && strings.EqualFold(sortParts[1], "DESC") {
-			sortOrder = "DESC"
+		sortKey := q.OrderByClause
+		sortOrder := ""
+		orderItems := sqlutil.ParseOrderBy(q.OrderByClause)
+		if len(orderItems) == 1 {
+			sortKey = orderItems[0].Column
+			if orderItems[0].Desc {
+				sortOrder = "DESC"
+			} else {
+				sortOrder = "ASC"
+			}
 		}
 
 		n := float64(currentNode.EstimatedRows)
@@ -1685,19 +1691,15 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 	}
 
 	if orderStr != "" {
-		for _, o := range strings.Split(orderStr, ",") {
-			fields := strings.Fields(strings.TrimSpace(o))
-			if len(fields) > 0 {
-				col := strings.Trim(fields[0], "\"`[]")
-				dir := "ASC"
-				if len(fields) > 1 && strings.EqualFold(fields[1], "DESC") {
-					dir = "DESC"
-				}
-				w.OrderByKeys = append(w.OrderByKeys, SortKeyDef{
-					Column:    col,
-					Direction: dir,
-				})
+		for _, item := range sqlutil.ParseOrderBy(orderStr) {
+			dir := "ASC"
+			if item.Desc {
+				dir = "DESC"
 			}
+			w.OrderByKeys = append(w.OrderByKeys, SortKeyDef{
+				Column:    sqlutil.CleanIdentifier(item.Column),
+				Direction: dir,
+			})
 		}
 	}
 

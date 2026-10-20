@@ -16,6 +16,7 @@ import (
 	"lionsql/pkg/execution"
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -1821,25 +1822,37 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 
 	// 3. Apply ORDER BY if present
 	if orderByClause != "" && len(scannedRows) > 0 {
-		orderParts := strings.Fields(orderByClause)
-		orderCol := cleanIdentifier(orderParts[0])
-		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
-		sort.Slice(scannedRows, func(i, j int) bool {
-			v1 := fmt.Sprintf("%v", scannedRows[i].row[orderCol])
-			v2 := fmt.Sprintf("%v", scannedRows[j].row[orderCol])
-			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
-				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
-					if desc {
-						return n1 > n2
+		orderItems := sqlutil.ParseOrderBy(orderByClause)
+		if len(orderItems) > 0 {
+			sort.Slice(scannedRows, func(i, j int) bool {
+				for _, item := range orderItems {
+					orderCol := cleanIdentifier(item.Column)
+					v1Val := getRowMapVal(scannedRows[i].row, orderCol)
+					v2Val := getRowMapVal(scannedRows[j].row, orderCol)
+					v1 := fmt.Sprintf("%v", v1Val)
+					v2 := fmt.Sprintf("%v", v2Val)
+					if v1 == v2 {
+						continue
 					}
-					return n1 < n2
+					if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
+						if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
+							if n1 == n2 {
+								continue
+							}
+							if item.Desc {
+								return n1 > n2
+							}
+							return n1 < n2
+						}
+					}
+					if item.Desc {
+						return v1 > v2
+					}
+					return v1 < v2
 				}
-			}
-			if desc {
-				return v1 > v2
-			}
-			return v1 < v2
-		})
+				return false
+			})
+		}
 	}
 
 	// 4. Apply OFFSET & LIMIT if present
@@ -1897,6 +1910,28 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		RowsAffected: int64(len(rows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
+}
+
+func getRowMapVal(r map[string]any, col string) any {
+	if v, ok := r[col]; ok {
+		return v
+	}
+	if idx := strings.LastIndex(col, "."); idx != -1 {
+		if v, ok := r[col[idx+1:]]; ok {
+			return v
+		}
+	}
+	for k, v := range r {
+		if strings.EqualFold(k, col) {
+			return v
+		}
+		if idx := strings.LastIndex(col, "."); idx != -1 {
+			if strings.EqualFold(k, col[idx+1:]) {
+				return v
+			}
+		}
+	}
+	return nil
 }
 
 type aggItem struct {
@@ -2224,37 +2259,47 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 
 	// 5. Apply ORDER BY
 	if qInfo.OrderByClause != "" && len(aggRows) > 0 {
-		orderParts := strings.Fields(qInfo.OrderByClause)
-		orderCol := cleanIdentifier(orderParts[0])
-		bareCol := orderCol
-		if idx := strings.Index(bareCol, "."); idx != -1 {
-			bareCol = bareCol[idx+1:]
-		}
-		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
-		sort.SliceStable(aggRows, func(i, j int) bool {
-			v1, ok1 := aggRows[i][orderCol]
-			if !ok1 || v1 == nil {
-				v1 = aggRows[i][bareCol]
-			}
-			v2, ok2 := aggRows[j][orderCol]
-			if !ok2 || v2 == nil {
-				v2 = aggRows[j][bareCol]
-			}
-			s1 := fmt.Sprintf("%v", v1)
-			s2 := fmt.Sprintf("%v", v2)
-			if n1, err1 := strconv.ParseFloat(s1, 64); err1 == nil {
-				if n2, err2 := strconv.ParseFloat(s2, 64); err2 == nil {
-					if desc {
-						return n1 > n2
+		orderItems := sqlutil.ParseOrderBy(qInfo.OrderByClause)
+		if len(orderItems) > 0 {
+			sort.SliceStable(aggRows, func(i, j int) bool {
+				for _, item := range orderItems {
+					orderCol := cleanIdentifier(item.Column)
+					bareCol := orderCol
+					if idx := strings.Index(bareCol, "."); idx != -1 {
+						bareCol = bareCol[idx+1:]
 					}
-					return n1 < n2
+					v1, ok1 := aggRows[i][orderCol]
+					if !ok1 || v1 == nil {
+						v1 = aggRows[i][bareCol]
+					}
+					v2, ok2 := aggRows[j][orderCol]
+					if !ok2 || v2 == nil {
+						v2 = aggRows[j][bareCol]
+					}
+					s1 := fmt.Sprintf("%v", v1)
+					s2 := fmt.Sprintf("%v", v2)
+					if s1 == s2 {
+						continue
+					}
+					if n1, err1 := strconv.ParseFloat(s1, 64); err1 == nil {
+						if n2, err2 := strconv.ParseFloat(s2, 64); err2 == nil {
+							if n1 == n2 {
+								continue
+							}
+							if item.Desc {
+								return n1 > n2
+							}
+							return n1 < n2
+						}
+					}
+					if item.Desc {
+						return s1 > s2
+					}
+					return s1 < s2
 				}
-			}
-			if desc {
-				return s1 > s2
-			}
-			return s1 < s2
-		})
+				return false
+			})
+		}
 	}
 
 	// 6. Apply OFFSET & LIMIT

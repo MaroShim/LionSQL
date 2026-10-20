@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -644,18 +645,15 @@ func parseSingleWhenClause(s string) (mergeClause, error) {
 }
 
 func parseSetPairs(s string) []mergeSetPair {
-	parts := strings.Split(s, ",")
-	var pairs []mergeSetPair
-	for _, p := range parts {
-		kv := strings.SplitN(p, "=", 2)
-		if len(kv) == 2 {
-			pairs = append(pairs, mergeSetPair{
-				column: strings.TrimSpace(kv[0]),
-				expr:   strings.TrimSpace(kv[1]),
-			})
-		}
+	pairs := sqlutil.SplitSetClauses(s)
+	res := make([]mergeSetPair, 0, len(pairs))
+	for _, p := range pairs {
+		res = append(res, mergeSetPair{
+			column: p.Column,
+			expr:    p.Value,
+		})
 	}
-	return pairs
+	return res
 }
 
 func findTopLevelKeyword(s string, kw string) int {

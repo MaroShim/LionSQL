@@ -11,6 +11,7 @@ import (
 	"unicode"
 
 	"lionsql/pkg/planner"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -418,36 +419,46 @@ func (s *Coordinator) execPivotSelect(query string, start time.Time, cs *ClientS
 
 	// 7. Apply ORDER BY if present
 	if pvt.OrderByClause != "" && len(projectedRows) > 0 {
-		orderParts := strings.Fields(pvt.OrderByClause)
-		orderCol := cleanIdentifier(orderParts[0])
-		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
-		sort.Slice(projectedRows, func(i, j int) bool {
-			v1 := projectedRows[i][orderCol]
-			v2 := projectedRows[j][orderCol]
-			if v1 == nil && v2 != nil {
-				return desc
-			}
-			if v1 != nil && v2 == nil {
-				return !desc
-			}
-			if v1 == nil && v2 == nil {
-				return false
-			}
-			f1, err1 := strconv.ParseFloat(fmt.Sprintf("%v", v1), 64)
-			f2, err2 := strconv.ParseFloat(fmt.Sprintf("%v", v2), 64)
-			if err1 == nil && err2 == nil {
-				if desc {
-					return f1 > f2
+		orderItems := sqlutil.ParseOrderBy(pvt.OrderByClause)
+		if len(orderItems) > 0 {
+			sort.Slice(projectedRows, func(i, j int) bool {
+				for _, item := range orderItems {
+					orderCol := cleanIdentifier(item.Column)
+					v1 := projectedRows[i][orderCol]
+					v2 := projectedRows[j][orderCol]
+					if v1 == nil && v2 == nil {
+						continue
+					}
+					if v1 == nil && v2 != nil {
+						return item.Desc
+					}
+					if v1 != nil && v2 == nil {
+						return !item.Desc
+					}
+					f1, err1 := strconv.ParseFloat(fmt.Sprintf("%v", v1), 64)
+					f2, err2 := strconv.ParseFloat(fmt.Sprintf("%v", v2), 64)
+					if err1 == nil && err2 == nil {
+						if f1 == f2 {
+							continue
+						}
+						if item.Desc {
+							return f1 > f2
+						}
+						return f1 < f2
+					}
+					s1 := fmt.Sprintf("%v", v1)
+					s2 := fmt.Sprintf("%v", v2)
+					if s1 == s2 {
+						continue
+					}
+					if item.Desc {
+						return s1 > s2
+					}
+					return s1 < s2
 				}
-				return f1 < f2
-			}
-			s1 := fmt.Sprintf("%v", v1)
-			s2 := fmt.Sprintf("%v", v2)
-			if desc {
-				return s1 > s2
-			}
-			return s1 < s2
-		})
+				return false
+			})
+		}
 	}
 
 	return &QueryResult{
@@ -943,36 +954,46 @@ func (s *Coordinator) execUnpivotSelect(query string, start time.Time, cs *Clien
 
 	// 6. Apply ORDER BY if present
 	if unpvt.OrderByClause != "" && len(projectedRows) > 0 {
-		orderParts := strings.Fields(unpvt.OrderByClause)
-		orderCol := cleanIdentifier(orderParts[0])
-		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
-		sort.Slice(projectedRows, func(i, j int) bool {
-			v1 := projectedRows[i][orderCol]
-			v2 := projectedRows[j][orderCol]
-			if v1 == nil && v2 != nil {
-				return desc
-			}
-			if v1 != nil && v2 == nil {
-				return !desc
-			}
-			if v1 == nil && v2 == nil {
-				return false
-			}
-			f1, err1 := strconv.ParseFloat(fmt.Sprintf("%v", v1), 64)
-			f2, err2 := strconv.ParseFloat(fmt.Sprintf("%v", v2), 64)
-			if err1 == nil && err2 == nil {
-				if desc {
-					return f1 > f2
+		orderItems := sqlutil.ParseOrderBy(unpvt.OrderByClause)
+		if len(orderItems) > 0 {
+			sort.Slice(projectedRows, func(i, j int) bool {
+				for _, item := range orderItems {
+					orderCol := cleanIdentifier(item.Column)
+					v1 := projectedRows[i][orderCol]
+					v2 := projectedRows[j][orderCol]
+					if v1 == nil && v2 == nil {
+						continue
+					}
+					if v1 == nil && v2 != nil {
+						return item.Desc
+					}
+					if v1 != nil && v2 == nil {
+						return !item.Desc
+					}
+					f1, err1 := strconv.ParseFloat(fmt.Sprintf("%v", v1), 64)
+					f2, err2 := strconv.ParseFloat(fmt.Sprintf("%v", v2), 64)
+					if err1 == nil && err2 == nil {
+						if f1 == f2 {
+							continue
+						}
+						if item.Desc {
+							return f1 > f2
+						}
+						return f1 < f2
+					}
+					s1 := fmt.Sprintf("%v", v1)
+					s2 := fmt.Sprintf("%v", v2)
+					if s1 == s2 {
+						continue
+					}
+					if item.Desc {
+						return s1 > s2
+					}
+					return s1 < s2
 				}
-				return f1 < f2
-			}
-			s1 := fmt.Sprintf("%v", v1)
-			s2 := fmt.Sprintf("%v", v2)
-			if desc {
-				return s1 > s2
-			}
-			return s1 < s2
-		})
+				return false
+			})
+		}
 	}
 
 	return &QueryResult{

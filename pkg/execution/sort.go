@@ -9,8 +9,8 @@ import (
 	"io"
 	"os"
 	"sort"
-	"strings"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -79,18 +79,11 @@ func NewSortIterator(child Iterator, orderByClause string) *SortIterator {
 		sortMethod: "quicksort",
 	}
 
-	for _, part := range strings.Split(orderByClause, ",") {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-		fields := strings.Fields(part)
-		key := strings.Trim(fields[0], "\"`[]")
-		desc := false
-		if len(fields) > 1 && strings.EqualFold(fields[1], "DESC") {
-			desc = true
-		}
-		s.items = append(s.items, sortItem{key: key, descending: desc})
+	for _, item := range sqlutil.ParseOrderBy(orderByClause) {
+		s.items = append(s.items, sortItem{
+			key:        sqlutil.CleanIdentifier(item.Column),
+			descending: item.Desc,
+		})
 	}
 
 	return s

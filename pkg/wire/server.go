@@ -23,6 +23,7 @@ import (
 	"lionsql/pkg/engine"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -1060,52 +1061,55 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 	}
 
 	upper := strings.ToUpper(strings.TrimSpace(query))
-	if strings.Contains(upper, "SELECT") && strings.Contains(upper, "FROM") {
-		parts := strings.Split(upper, "FROM")
-		if len(parts) >= 2 {
-			tblField := strings.Fields(parts[1])
-			if len(tblField) > 0 {
-				tblName := strings.Trim(tblField[0], ";, ")
-				tbl, err := s.engine.GetTable(tblName)
-				if err != nil {
-					tbl, err = s.engine.GetTable(strings.ToLower(tblName))
-				}
-				if err != nil {
-					// Search all tables
-					tables, _ := s.engine.ListTables()
-					for _, t := range tables {
-						if strings.EqualFold(t.Name, tblName) {
-							tbl = t
-							err = nil
-							break
-						}
+	fromIdx := sqlutil.FindTopLevelKeyword(query, "FROM")
+	if fromIdx != -1 {
+		selectPart := strings.TrimSpace(query[:fromIdx])
+		if strings.HasPrefix(strings.ToUpper(selectPart), "SELECT") {
+			selectPart = strings.TrimSpace(selectPart[6:])
+		}
+		afterFrom := query[fromIdx+4:]
+		tblField := sqlutil.SplitTopLevelTokens(afterFrom)
+		if len(tblField) > 0 {
+			tblName := strings.Trim(tblField[0], ";, ")
+			tbl, err := s.engine.GetTable(tblName)
+			if err != nil {
+				tbl, err = s.engine.GetTable(strings.ToLower(tblName))
+			}
+			if err != nil {
+				// Search all tables
+				tables, _ := s.engine.ListTables()
+				for _, t := range tables {
+					if strings.EqualFold(t.Name, tblName) {
+						tbl = t
+						err = nil
+						break
 					}
 				}
-				if err == nil && tbl != nil {
-					selectPart := strings.TrimSpace(strings.TrimPrefix(parts[0], "SELECT"))
-					if selectPart == "*" {
-						cols := make([]ColumnMeta, len(tbl.Columns))
-						for i, c := range tbl.Columns {
-							cols[i] = ColumnMeta{
-								Name:     c.Name,
-								DataType: typeToPgOID(c.Type),
-							}
+			}
+			if err == nil && tbl != nil {
+				if selectPart == "*" {
+					cols := make([]ColumnMeta, len(tbl.Columns))
+					for i, c := range tbl.Columns {
+						cols[i] = ColumnMeta{
+							Name:     c.Name,
+							DataType: typeToPgOID(c.Type),
 						}
-						recordCols(cols)
-						_ = WriteRowDescription(conn, cols)
-						return
 					}
+					recordCols(cols)
+					_ = WriteRowDescription(conn, cols)
+					return
+				}
 
-					rawCols := strings.Split(selectPart, ",")
-					var cols []ColumnMeta
-					for _, rawCol := range rawCols {
-						colName := strings.TrimSpace(rawCol)
-						if colName == "" {
-							continue
-						}
-						if asIdx := strings.Index(strings.ToUpper(colName), " AS "); asIdx != -1 {
-							colName = strings.TrimSpace(colName[asIdx+4:])
-						}
+				rawCols := sqlutil.SplitTopLevel(selectPart, ',')
+				var cols []ColumnMeta
+				for _, rawCol := range rawCols {
+					colName := strings.TrimSpace(rawCol)
+					if colName == "" {
+						continue
+					}
+					if _, alias, hasAs := sqlutil.SplitAsAlias(colName); hasAs {
+						colName = alias
+					}
 						var colType storage.DataType = storage.TypeVarChar
 						found := false
 						for _, c := range tbl.Columns {
@@ -1135,7 +1139,6 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 				}
 			}
 		}
-	}
 
 	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
 		if strings.Contains(upper, "VERSION()") {
@@ -1580,21 +1583,19 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 
 func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow map[string]any) []int32 {
 	oids := make([]int32, len(colNames))
-	upper := strings.ToUpper(strings.TrimSpace(query))
 	var tbl *storage.TableSchema
-	if strings.Contains(upper, "SELECT") && strings.Contains(upper, "FROM") {
-		parts := strings.Split(upper, "FROM")
-		if len(parts) >= 2 {
-			tblField := strings.Fields(parts[1])
-			if len(tblField) > 0 {
-				tblName := strings.Trim(tblField[0], ";, ")
-				t, err := s.engine.GetTable(tblName)
-				if err != nil {
-					t, err = s.engine.GetTable(strings.ToLower(tblName))
-				}
-				if err == nil {
-					tbl = t
-				}
+	fromIdx := sqlutil.FindTopLevelKeyword(query, "FROM")
+	if fromIdx != -1 {
+		afterFrom := query[fromIdx+4:]
+		tblField := sqlutil.SplitTopLevelTokens(afterFrom)
+		if len(tblField) > 0 {
+			tblName := strings.Trim(tblField[0], ";, ")
+			t, err := s.engine.GetTable(tblName)
+			if err != nil {
+				t, err = s.engine.GetTable(strings.ToLower(tblName))
+			}
+			if err == nil {
+				tbl = t
 			}
 		}
 	}

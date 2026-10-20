@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 )
 
 var (
@@ -31,25 +32,37 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 
 	// 2. Order by
 	if orderByClause != "" && len(filteredRows) > 0 {
-		orderParts := strings.Fields(orderByClause)
-		orderCol := cleanIdentifier(orderParts[0])
-		desc := len(orderParts) > 1 && strings.EqualFold(orderParts[1], "DESC")
-		sort.Slice(filteredRows, func(i, j int) bool {
-			v1 := fmt.Sprintf("%v", filteredRows[i][orderCol])
-			v2 := fmt.Sprintf("%v", filteredRows[j][orderCol])
-			if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
-				if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
-					if desc {
-						return n1 > n2
+		orderItems := sqlutil.ParseOrderBy(orderByClause)
+		if len(orderItems) > 0 {
+			sort.Slice(filteredRows, func(i, j int) bool {
+				for _, item := range orderItems {
+					orderCol := cleanIdentifier(item.Column)
+					v1Val := getMapValueCaseInsensitive(filteredRows[i], orderCol)
+					v2Val := getMapValueCaseInsensitive(filteredRows[j], orderCol)
+					v1 := fmt.Sprintf("%v", v1Val)
+					v2 := fmt.Sprintf("%v", v2Val)
+					if v1 == v2 {
+						continue
 					}
-					return n1 < n2
+					if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
+						if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
+							if n1 == n2 {
+								continue
+							}
+							if item.Desc {
+								return n1 > n2
+							}
+							return n1 < n2
+						}
+					}
+					if item.Desc {
+						return v1 > v2
+					}
+					return v1 < v2
 				}
-			}
-			if desc {
-				return v1 > v2
-			}
-			return v1 < v2
-		})
+				return false
+			})
+		}
 	}
 
 	// 3. Limit
@@ -190,7 +203,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			return isNot
 		}
 		strVal := fmt.Sprintf("%v", val)
-		items := strings.Split(valList, ",")
+		items := sqlutil.SplitTopLevel(valList, ',')
 		found := false
 		for _, item := range items {
 			item = strings.TrimSpace(strings.Trim(item, "'\""))
@@ -374,4 +387,26 @@ func cleanIdentifier(s string) string {
 	}
 	s = strings.Trim(s, "\"`[]'")
 	return s
+}
+
+func getMapValueCaseInsensitive(rec map[string]any, col string) any {
+	if val, ok := rec[col]; ok {
+		return val
+	}
+	if idx := strings.LastIndex(col, "."); idx != -1 {
+		if val, ok := rec[col[idx+1:]]; ok {
+			return val
+		}
+	}
+	for k, v := range rec {
+		if strings.EqualFold(k, col) {
+			return v
+		}
+		if idx := strings.LastIndex(col, "."); idx != -1 {
+			if strings.EqualFold(k, col[idx+1:]) {
+				return v
+			}
+		}
+	}
+	return nil
 }

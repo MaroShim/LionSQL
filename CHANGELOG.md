@@ -8,6 +8,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Group 4 Tokenization, Comma Parsing & Smart Split Remediation (15 Critical Engine/Parser/Planner/Wire Bugs)**:
+  - `SQL-TOKENIZER-1`: Established zero-allocation unified SQL clause tokenizer abstraction (`pkg/sqlutil`) with quotes (`'`, `"`, `''`), bracket identifier (`[...]`), comment (`--`, `/* */`), and nested parenthesis depth tracking.
+  - `BUG-SPLIT-VALUES-1`: Handled commas inside functions (e.g. `COALESCE(a, b)`) and strings in `INSERT INTO ... VALUES` without column count mismatch.
+  - `BUG-MERGE-SET-1`: Preserved multi-argument expressions and commas in strings in MERGE statement `UPDATE SET` clause via `sqlutil.SplitSetClauses`.
+  - `BUG-UPDATE-SET-SPLIT-1`: Eliminated silent expression loss in coordinator `ExecuteUpdate` `SET` clause when values contain commas in functions or expressions.
+  - `BUG-UPDATE-SET-COMMA-SPLIT-1`: Prevented string literal truncation in coordinator `UPDATE SET` when assigning values containing commas (e.g. `'Seoul, Korea'`).
+  - `BUG-EVAL-IN-COMMA-SPLIT-1`: Prevented condition splitting of string literals with commas inside `WHERE IN (...)` lists via top-level comma splitting.
+  - `BUG-ORDER-BY-SPLIT-1`: Resolved multi-column sort dropping, `DESC,` comma parse errors, and casing failures across coordinator SELECT using `sqlutil.ParseOrderBy`.
+  - `BUG-CATALOG-ORDERBY-1`: Enabled multi-column, case-insensitive, type-aware sorting in virtual catalog and DBCC queries.
+  - `BUG-PLANNER-ORDERBY-1`: Fixed CBO plan node and SetOp trailing `ORDER BY` generation by preserving full multi-column sort keys.
+  - `BUG-PIVOT-ORDER-BY-SPLIT-1`: Supported multi-column sorting with distinct column directions in PIVOT and UNPIVOT queries.
+  - `BUG-DDL-SPLIT-QUOTE-1`: Prevented schema corruption on `CREATE TABLE` when column `DEFAULT` definitions contain commas or parentheses inside quotes (e.g. `'draft, pending'`).
+  - `BUG-DDL-COMPOSITE-PK-PARSE-1`: Correctly parsed all columns in table-level composite primary keys (e.g. `PRIMARY KEY (col1, col2)`).
+  - `BUG-SP-PARAM-DECIMAL-1`: Preserved parameterized types with commas (e.g. `DECIMAL(10, 2)`) in stored procedure parameter declarations without generating phantom parameters.
+  - `BUG-JOIN-PARSE-1`: Supported multi-condition equijoins in `execution.ParseJoinCond` and eliminated false table matching in PGWire schema descriptions on queries containing `SUBSTRING(... FROM ...)`.
+  - `BUG-PLANNER-SPLIT-AND-QUOTE-ESCAPE-1`: Prevented false `AND` splitting inside string literals with escaped quotes (e.g. `'O''Reilly AND Sons'`) and bracket identifiers in planner decorrelation and pushdown.
+  - `BUG-PROJ-CAST-AS-1`: Prevented `CAST(col AS type)` expressions from being truncated at inner `" AS "` keywords during projection schema compilation.
 - **Group 3 Primary Key Heuristics, Guessing & Lifecycle Remediation (10 Critical Engine/Storage/Wire Bugs)**:
   - `BUG-DDL-PK-1`: Eliminated arbitrary `Columns[0]` promotion to Primary Key on PK-less `CREATE TABLE`; introduced clean synthetic `_row_id INT IDENTITY PRIMARY KEY` with `Hidden: true` metadata flag.
   - `BUG-HTTP-TABLE-PK-1`: Eliminated `cols[0]` promotion in HTTP table creation; normalized parameterized types (e.g. `VARCHAR(100)`) and rejected unsupported types with 400 Bad Request.

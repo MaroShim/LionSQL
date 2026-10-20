@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/planner"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -177,9 +178,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			}
 		}
 
-		leftKey, rightKey := parseJoinCond(plan.HashCond)
+		leftKey, rightKey := ParseJoinCond(plan.HashCond)
 		if leftKey == "" && rightKey == "" {
-			leftKey, rightKey = parseJoinCond(plan.JoinCond)
+			leftKey, rightKey = ParseJoinCond(plan.JoinCond)
 		}
 
 		hIter := NewHashJoinIterator(leftIter, rightIter, plan.JoinType, leftKey, rightKey)
@@ -204,9 +205,9 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			return nil, rErr
 		}
 
-		leftKey, rightKey := parseJoinCond(plan.MergeCond)
+		leftKey, rightKey := ParseJoinCond(plan.MergeCond)
 		if leftKey == "" && rightKey == "" {
-			leftKey, rightKey = parseJoinCond(plan.JoinCond)
+			leftKey, rightKey = ParseJoinCond(plan.JoinCond)
 		}
 
 		if !isPlanSortedOnKey(plan.Children[0], leftKey) {
@@ -247,7 +248,7 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			return nil, fmt.Errorf("nested loop inner schema error: %w", sErr)
 		}
 
-		leftKey, rightKey := parseJoinCond(plan.JoinCond)
+		leftKey, rightKey := ParseJoinCond(plan.JoinCond)
 
 		var innerIdx *storage.IndexSchema
 		if innerPlan.IndexName != "" {
@@ -317,13 +318,16 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 	return op, nil
 }
 
-func parseJoinCond(cond string) (string, string) {
-	cond = strings.Trim(strings.TrimSpace(cond), "()")
-	parts := strings.Split(cond, "=")
-	if len(parts) == 2 {
-		return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+// ParseJoinCond extracts left and right join keys from an equijoin condition expression.
+func ParseJoinCond(cond string) (string, string) {
+	conds := sqlutil.SplitAndConditions(cond)
+	for _, c := range conds {
+		l, r := sqlutil.SplitJoinCond(c)
+		if l != "" && r != "" {
+			return l, r
+		}
 	}
-	return "", ""
+	return sqlutil.SplitJoinCond(cond)
 }
 
 func isPlanSortedOnKey(plan *planner.PlanNode, key string) bool {

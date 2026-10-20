@@ -11,6 +11,7 @@ import (
 	"lionsql/pkg/auth"
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -30,6 +31,7 @@ var (
 	reCreateStats       = regexp.MustCompile(`(?is)^CREATE\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
 	reDropStatsOn       = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
 	reDropStats         = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
+	reColDefault        = regexp.MustCompile(`(?i)\bDEFAULT\s+('(?:''|[^'])*'|\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\d+)`)
 )
 
 func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
@@ -87,12 +89,17 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 
 		cUpper := strings.ToUpper(cDefTrimmed)
 		if strings.HasPrefix(cUpper, "PRIMARY KEY") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "PRIMARY KEY")) {
-			// e.g. PRIMARY KEY (id) or CONSTRAINT pk_foo PRIMARY KEY (id)
-			if idx := strings.Index(cDefTrimmed, "("); idx != -1 {
-				pkCol := cleanIdentifier(strings.Trim(cDefTrimmed[idx:], "() "))
-				for i := range schema.Columns {
-					if strings.EqualFold(schema.Columns[i].Name, pkCol) {
-						schema.Columns[i].PrimaryKey = true
+			// e.g. PRIMARY KEY (id) or PRIMARY KEY (col1, col2) or CONSTRAINT pk_foo PRIMARY KEY (col1, col2)
+			if openIdx := strings.Index(cDefTrimmed, "("); openIdx != -1 {
+				if closeIdx := strings.LastIndex(cDefTrimmed, ")"); closeIdx > openIdx {
+					innerCols := cDefTrimmed[openIdx+1 : closeIdx]
+					for _, pkCol := range sqlutil.SplitTopLevel(innerCols, ',') {
+						cleaned := cleanIdentifier(pkCol)
+						for i := range schema.Columns {
+							if strings.EqualFold(schema.Columns[i].Name, cleaned) {
+								schema.Columns[i].PrimaryKey = true
+							}
+						}
 					}
 				}
 			}
@@ -149,8 +156,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT")
 
 		defaultExpr := ""
-		defRe := regexp.MustCompile(`(?i)\bDEFAULT\s+(\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\'[^']*\'|\d+)`)
-		if m := defRe.FindStringSubmatch(cDefTrimmed); len(m) > 1 {
+		if m := reColDefault.FindStringSubmatch(cDefTrimmed); len(m) > 1 {
 			defaultExpr = cleanDefaultExpr(m[1])
 		}
 
@@ -729,35 +735,7 @@ func parseSQLDataType(s string) storage.DataType {
 }
 
 func splitColumnDefs(s string) []string {
-	var defs []string
-	var cur strings.Builder
-	depth := 0
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		switch c {
-		case '(':
-			depth++
-			cur.WriteByte(c)
-		case ')':
-			if depth > 0 {
-				depth--
-			}
-			cur.WriteByte(c)
-		case ',':
-			if depth == 0 {
-				defs = append(defs, strings.TrimSpace(cur.String()))
-				cur.Reset()
-			} else {
-				cur.WriteByte(c)
-			}
-		default:
-			cur.WriteByte(c)
-		}
-	}
-	if cur.Len() > 0 {
-		defs = append(defs, strings.TrimSpace(cur.String()))
-	}
-	return defs
+	return sqlutil.SplitTopLevel(s, ',')
 }
 
 func cleanDefaultExpr(s string) string {

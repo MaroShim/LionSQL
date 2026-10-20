@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lionsql/pkg/auth"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -104,7 +105,7 @@ func parseOnConflict(s string) (*onConflictClause, error) {
 			return nil, fmt.Errorf("malformed ON CONFLICT target columns: missing closing parenthesis")
 		}
 		innerCols := rest[1:closeIdx]
-		for _, c := range strings.Split(innerCols, ",") {
+		for _, c := range sqlutil.SplitTopLevel(innerCols, ',') {
 			cleaned := cleanIdentifier(c)
 			if cleaned != "" {
 				targetCols = append(targetCols, cleaned)
@@ -319,7 +320,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 
 	var targetCols []string
 	if rawCols != "" {
-		for _, c := range strings.Split(rawCols, ",") {
+		for _, c := range sqlutil.SplitTopLevel(rawCols, ',') {
 			targetCols = append(targetCols, cleanIdentifier(c))
 		}
 	} else {
@@ -674,7 +675,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 
 	var targetCols []string
 	if rawCols != "" {
-		for _, c := range strings.Split(rawCols, ",") {
+		for _, c := range sqlutil.SplitTopLevel(rawCols, ',') {
 			cleanedCol := cleanIdentifier(c)
 			if colSchema, _, found := schema.FindColumn(cleanedCol); found {
 				targetCols = append(targetCols, colSchema.Name)
@@ -1055,13 +1056,10 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	}
 	defer cursor.Close()
 
-	setPairs := strings.Split(setClause, ",")
-	updatesMap := make(map[string]string)
+	setPairs := sqlutil.SplitSetClauses(setClause)
+	updatesMap := make(map[string]string, len(setPairs))
 	for _, pair := range setPairs {
-		kv := strings.SplitN(pair, "=", 2)
-		if len(kv) == 2 {
-			updatesMap[cleanIdentifier(kv[0])] = strings.TrimSpace(kv[1])
-		}
+		updatesMap[pair.Column] = pair.Value
 	}
 
 	type updateEntry struct {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -1282,16 +1283,16 @@ func parseSpParamDeclarations(declStr string) []spParamDecl {
 	if declStr == "" {
 		return nil
 	}
-	parts := strings.Split(declStr, ",")
+	parts := sqlutil.SplitTopLevel(declStr, ',')
 	var decls []spParamDecl
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
-		tokens := strings.Fields(p)
+		tokens := sqlutil.SplitTopLevelTokens(p)
 		if len(tokens) >= 1 {
 			name := tokens[0]
 			tp := ""
 			if len(tokens) >= 2 {
-				tp = tokens[1]
+				tp = strings.Join(tokens[1:], " ")
 			}
 			decls = append(decls, spParamDecl{
 				Name: name,

@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"lionsql/pkg/sqlutil"
 )
 
 // DecorrelateSubqueries inspects the query's WHERE clause and transforms correlated or equijoin
@@ -413,61 +415,7 @@ func extractTop(proj string) (limit int64, remaining string, ok bool) {
 }
 
 func splitAndConditions(where string) []string {
-	where = strings.TrimSpace(where)
-	if where == "" {
-		return nil
-	}
-	var conds []string
-	depth := 0
-	inQuote := false
-	var quoteChar rune
-	start := 0
-
-	runes := []rune(where)
-	for i := 0; i < len(runes); i++ {
-		r := runes[i]
-		if inQuote {
-			if r == quoteChar {
-				inQuote = false
-			}
-			continue
-		}
-		if r == '\'' || r == '"' {
-			inQuote = true
-			quoteChar = r
-			continue
-		}
-		if r == '(' {
-			depth++
-			continue
-		}
-		if r == ')' {
-			depth--
-			continue
-		}
-		if depth == 0 && i+3 <= len(runes) {
-			word := string(runes[i : i+3])
-			if strings.EqualFold(word, "AND") {
-				isLeftBoundary := (i == 0 || isSpaceOrParenRune(runes[i-1]))
-				isRightBoundary := (i+3 == len(runes) || isSpaceOrParenRune(runes[i+3]))
-				if isLeftBoundary && isRightBoundary {
-					cond := strings.TrimSpace(string(runes[start:i]))
-					if cond != "" {
-						conds = append(conds, cond)
-					}
-					i += 2
-					start = i + 1
-				}
-			}
-		}
-	}
-	if start < len(runes) {
-		cond := strings.TrimSpace(string(runes[start:]))
-		if cond != "" {
-			conds = append(conds, cond)
-		}
-	}
-	return conds
+	return sqlutil.SplitAndConditions(where)
 }
 
 func findKeywordIndex(s string, kw string) int {
