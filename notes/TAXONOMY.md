@@ -14,6 +14,8 @@
 | **`P-1` ~ `P-5`** | **엔진 성능 (Performance)** | `P-1` ~ `P-5` | 스토리지 I/O, 와이어 프로토콜, 실행 엔진 5대 성능 극대화 트랙 |
 | **`A` ~ `D`** | **CBO 최적화 (Optimizer)** | `A-1` ~ `D-9` | 비용 기반 옵티마이저 4대 기능 트랙 (통계 수집, 조인, 선택도, 운영 제어) |
 | **`S-1` ~ `S-7`** | **SQL 문법 (Syntax)** | `S-1` ~ `S-7` | T-SQL 및 ANSI SQL 7대 문법 호환성 완비 트랙 (전 항목 완료) |
+| **`BUG-PK-1`** | **무결성 결함 수정 (Integrity Bug)** | `BUG-PK-1` | `execUpdate`/`execDelete` 기본키 컬럼 동적 해석 (`schema.PrimaryKeyColumn()`) 및 맵 순회 왜곡 방지 |
+| **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
 
