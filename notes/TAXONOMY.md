@@ -76,6 +76,10 @@
 | **`BUG-DDL-SPLIT-QUOTE-1`** | **CREATE TABLE splitColumnDefs 따옴표 추적 (DDL Split Quote Bug)** | `BUG-DDL-SPLIT-QUOTE-1` | `DEFAULT 'hello, world'` 콤마 및 `DEFAULT '('` 괄호로 인한 컬럼 정의 절단/합쳐짐 해결 |
 | **`BUG-ARITH-EXPR-ZERO-1`** | **UPDATE 산술식 유연성 및 0 리셋 방지 (Arith Expr Zero Bug)** | `BUG-ARITH-EXPR-ZERO-1` | `[Price] + 10`, `a + b`, `10 + a` 등 수식 매칭 실패로 인한 컬럼 0 리셋 방지 |
 | **`BUG-DROP-INDEX-CASE-1`** | **DropIndex 대소문자 정규화 및 좀비 인덱스 방지 (Drop Index Case Bug)** | `BUG-DROP-INDEX-CASE-1` | `td.Indexes` 맵 삭제 시 공식 인덱스 명칭(`foundIdx.Name`) 삭제로 좀비 인덱스 잔존 방지 |
+| **`BUG-AGG-MIXED-NUM-DEC-1`** | **AggregateIterator Decimal-정수 혼합 합계 유실 방지 (Agg Mixed Decimal Bug)** | `BUG-AGG-MIXED-NUM-DEC-1` | 그룹 내 Decimal 출현 시 비-Decimal 수치 Decimal 변환 및 합산으로 수치 누락 방지 |
+| **`BUG-PROC-SIMPLE-CASE-1`** | **단순 CASE 문(Simple CASE) 파싱 및 컴파일 보장 (Simple CASE Bug)** | `BUG-PROC-SIMPLE-CASE-1` | `CaseExpr`에 `Operand` 필드 신설 및 VDBE 피연산자-조건값 비교 분기 바이트코드 방출 |
+| **`BUG-EVAL-NEQ-NULL-1`** | **evalRowBinaryOp 불일치 비교 NULL 3가 논리 보장 (Eval NEQ NULL Bug)** | `BUG-EVAL-NEQ-NULL-1` | `TokenNeq` 연산자 NULL 피연산자 시 `nil`(UNKNOWN) 반환으로 WHERE 절 누수 원천 차단 |
+| **`BUG-DATEADD-NULL-1`** | **DATEADD/EOMONTH 증분 NULL 시 NULL 정규 반환 (DateAdd NULL Bug)** | `BUG-DATEADD-NULL-1` | 증분 파라미터 NULL 검사 및 NULL 즉시 반환, 미지원 datepart 에러 정규화 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
