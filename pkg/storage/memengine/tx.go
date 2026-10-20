@@ -1599,10 +1599,21 @@ func (tx *Transaction) Commit() error {
 			}
 		}
 		if hasInsertOrUpdate {
-			currHeap := CurrentHeapBytes()
+			// Sample heap bytes periodically (every 128 commits) or use atomic cache (VPERF-1)
+			cnt := tx.engine.commitCounter.Add(1)
+			currHeap := tx.engine.cachedHeapBytes.Load()
+			if cnt&127 == 0 || currHeap == 0 {
+				currHeap = CurrentHeapBytes()
+				tx.engine.cachedHeapBytes.Store(currHeap)
+			}
 			if currHeap >= maxLimit {
-				return fmt.Errorf("%w: in-memory engine storage memory limit exceeded (%s >= %s)",
-					storage.ErrTableFull, formatBytes(currHeap), formatBytes(maxLimit))
+				// Re-verify accurately on threshold hit before failing
+				currHeap = CurrentHeapBytes()
+				tx.engine.cachedHeapBytes.Store(currHeap)
+				if currHeap >= maxLimit {
+					return fmt.Errorf("%w: in-memory engine storage memory limit exceeded (%s >= %s)",
+						storage.ErrTableFull, formatBytes(currHeap), formatBytes(maxLimit))
+				}
 			}
 		}
 	}

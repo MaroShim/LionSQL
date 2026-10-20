@@ -15,9 +15,8 @@ import (
 
 // CurrentHeapBytes returns the current live heap memory allocated in bytes via runtime/metrics.
 func CurrentHeapBytes() int64 {
-	sample := make([]metrics.Sample, 1)
-	sample[0].Name = "/memory/classes/heap/objects:bytes"
-	metrics.Read(sample)
+	sample := [1]metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
+	metrics.Read(sample[:])
 	if sample[0].Value.Kind() == metrics.KindUint64 {
 		return int64(sample[0].Value.Uint64())
 	}
@@ -73,6 +72,8 @@ type Engine struct {
 	aofThreshold     int64 // Size threshold in bytes to trigger AOF rewrite compaction
 	changesSinceSave atomic.Int64
 	maxDataBytes     atomic.Int64
+	cachedHeapBytes  atomic.Int64
+	commitCounter    atomic.Uint64
 	walHook          func(rec WALRecord)
 	stopCh           chan struct{}
 	bgWg             sync.WaitGroup
@@ -89,6 +90,9 @@ func (e *Engine) SetMaxDataBytes(bytes int64) {
 		bytes = 0
 	}
 	e.maxDataBytes.Store(bytes)
+	if bytes > 0 {
+		e.cachedHeapBytes.Store(CurrentHeapBytes())
+	}
 }
 
 // MaxDataBytes returns the current maximum capacity limit in bytes (0 if unlimited).

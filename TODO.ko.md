@@ -211,7 +211,7 @@
 #### 7. TDS 프로토콜 ➔ 코디네이터 ➔ VDBE ➔ 스토리지 전 계층 수직 성능 최적화 (`VPERF-1` ~ `VPERF-12`)
 * **과제 개요**: TDS 네트워크 패킷 수신부(`pkg/wire/tds`)부터 SQL 코디네이터(`pkg/engine`), VDBE 바이트코드 VM(`pkg/proc/runtime`), 튜플 직렬화(`pkg/storage/tuple.go`), 스토리지 엔진(`memengine`, `wiredtiger`)까지 수직 핫패스(Vertical Hot-Path)의 12대 병목을 3단계 트랙으로 제거.
 * **Track A — 스토리지 & 코디네이터 치명적 병목 즉시 해소 (`VPERF-1` ~ `VPERF-4`)**:
-  1. **`VPERF-1` (`pkg/storage/memengine/tx.go`)**: `MEM-3` 메모리 가버너 활성 시 매 쓰기 트랜잭션 `Commit()`마다 호출되어 전역 STW(20~50µs)를 유발하는 `runtime.ReadMemStats` 호출을 원자적 캐시/샘플링 방식으로 교체.
+  1. **`VPERF-1` (`pkg/storage/memengine/tx.go`, `memengine.go`, 완료 `[x]`)**: `MEM-3` 메모리 가버너 활성 시 매 쓰기 트랜잭션 `Commit()`마다 런타임 메트릭스 및 슬라이스 힙 할당을 수행하던 병목을 원자적 캐시(`cachedHeapBytes`) 및 128회 주기 샘플링(`commitCounter`) 방식으로 교체하여 커밋 핫패스 $O(1)$(1~2ns) 무할당 전환 완료.
   2. **`VPERF-2` (`pkg/engine`, `pkg/wire/tds`)**: Autocommit 쿼리(`tryPKLookupBypass`, `execVolcanoSelect`, `execInsert`, `execUpdate`, TDS `handleRPCExecute`)마다 `engine.NewSession()` 생성 및 `Close()`로 인해 WiredTiger 세션별 `WT_CURSOR` 풀이 매번 파괴되는 문제를 `ClientSession.Session`(또는 커넥션별 영속 세션) 재사용으로 해결.
   3. **`VPERF-3` (`pkg/engine/sqlexec_dml.go`)**: `AUTO_INCREMENT`(`IDENTITY`) 컬럼 보유 테이블에 대한 `execInsert` / `execInsertSelect` 시 매번 전체 테이블을 풀 스캔(`tx.Scan`)하여 `maxID`를 구하는 $O(N)$ 병목을 원자적 시퀀스 조회($O(1)$)로 교체.
   4. **`VPERF-4` (`pkg/storage/memengine/tx.go`, `table_data.go`)**: `memengine`의 매 `Update` / `Delete`마다 `engine.mu.RLock()`을 획득하고 전체 테이블 맵을 순회하며 역방향 외래키(FK)를 검사하는 오버헤드를 DDL 시점 사전 계산 캐시로 제거.
@@ -267,7 +267,7 @@
 | **P-15** | 스토리지 | WiredTiger 다중 행 배치 CGo 삽입 | **보류 (`[-]`)** | CGo 포인터 세그폴트 및 트랜잭션 롤백 복잡성으로 보류 |
 | **P-16** | 스토리지 | In-Memory OCC Row-Level Atomic CAS 커밋 | **보류 (`[-]`)** | 동시성 엣지 케이스 및 데이터 사일런트 손상 위험으로 보류 |
 | **P-17** | VM | VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt`) | **보류 (`[-]`)** | 바이트코드 점프 타깃(PC) 오프셋 불일치 및 VM 복잡성으로 보류 |
-| **VPERF-1** | 스토리지 | In-Memory OCC 커밋 시 `runtime.ReadMemStats` 전역 STW 제거 | **대기 (`[ ]`)** | 원자적 힙 메모리 캐시/샘플링으로 쓰기 트랜잭션 커밋 STW(20~50µs) 완전 제거 |
+| **VPERF-1** | 스토리지 | In-Memory OCC 커밋 시 `runtime.ReadMemStats` 전역 STW 제거 | **완료 (`[x]`)** | 원자적 힙 메모리 캐시/샘플링(128회 주기)으로 쓰기 트랜잭션 커밋 STW 및 슬라이스 힙 할당 100% 제거 |
 | **VPERF-2** | 코디네이터/WT | Autocommit 쿼리 `ClientSession.Session` 재사용으로 WT 커서 풀 보존 | **대기 (`[ ]`)** | 매 쿼리 `NewSession()`/`Close()` 호출 제거로 CGo 세션 생성 및 `WT_CURSOR` 파괴 방지 |
 | **VPERF-3** | 엔진/DML | `IDENTITY` (`AUTO_INCREMENT`) 삽입 시 전체 테이블 스캔($O(N)$) 제거 | **대기 (`[ ]`)** | `execInsert` 시 `tx.Scan` 풀 스캔을 $O(1)$ 원자적 시퀀스 카운터로 교체 |
 | **VPERF-4** | 스토리지 | In-Memory OCC `Update`/`Delete` 역방향 외래키(FK) 참조 사전 캐싱 | **대기 (`[ ]`)** | 매 수정/삭제마다 `engine.mu.RLock()` 및 전체 테이블 순회 오버헤드 100% 생략 |
