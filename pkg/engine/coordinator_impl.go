@@ -323,6 +323,17 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 	return cs, nil
 }
 
+func (c *Coordinator) acquireSessionForQuery(cs *ClientSession) (storage.Session, func(), error) {
+	if cs != nil && cs.Session != nil {
+		return cs.Session, func() {}, nil
+	}
+	sess, err := c.engine.NewSession()
+	if err != nil {
+		return nil, nil, err
+	}
+	return sess, func() { sess.Close() }, nil
+}
+
 // CloseSession gracefully closes and unregisters a client session.
 func (c *Coordinator) CloseSession(id string) {
 	if id == "" {

@@ -244,8 +244,8 @@
 | **P1** | **플래너/CBO** | **CBO 선택도 추정 시 컬럼명 대소문자 불일치로 인한 통계 탐색 실패 및 0.33 추락 결함 해결 (`BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1`)** | `pkg/planner/stats.go` | **완료 (`[x]`)** | - |
 | **P1** | **플래너/비상관화** | **OR 조건 분기 내 서브쿼리 불법 SEMI 조인 변환 및 `removeClause`의 식별자 절단 결함 해결 (`BUG-PLANNER-DECORRELATE-OR-SUBQUERY-CORRUPT-1`)** | `pkg/planner/decorrelate.go` | **완료 (`[x]`)** | - |
 | **P1** | **백업/복원** | **백업 아카이브 생성 및 복원 시 뷰(View) 메타데이터 전무 누락으로 인한 영구 유실 결함 해결 (`BUG-BACKUP-RESTORE-VIEW-OMISSION-1`)** | `pkg/backup/backup.go`, `pkg/backup/restore.go` | **완료 (`[x]`)** | 백업/복원 시 catalog/views.json 직렬화 및 ViewsCount/ViewsRestored 추적 |
-| **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
-| **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용 [x], IDENTITY $O(1)$ [x], FK 사전 캐싱 [x]) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동 [x], `PlanCache` RLock [x], VDBE 맵 제거 [x], ON CONFLICT 인덱스 스캔 [x], VDBE 루프 카탈로그 호이스팅 [x]) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 
 ### P1 과제 세부 명세 및 수락 기준 (Acceptance Criteria)
@@ -364,15 +364,15 @@
 * **과제 개요**: TDS 네트워크 패킷 수신부(`pkg/wire/tds`)부터 SQL 코디네이터(`pkg/engine`), VDBE 바이트코드 VM(`pkg/proc/runtime`), 스토리지 엔진(`memengine`, `wiredtiger`)까지 수직 핫패스(Vertical Hot-Path)의 병목을 전면 제거.
 * **Track A — 스토리지 & 코디네이터 치명적 병목 즉시 해소 (`VPERF-1` ~ `VPERF-4`)**:
   1. **`VPERF-1` (`pkg/storage/memengine/tx.go`, `memengine.go`, 완료 `[x]`)**: `MEM-3` 메모리 가버너 활성 시 매 쓰기 트랜잭션 `Commit()`마다 런타임 메트릭스 및 슬라이스 힙 할당을 수행하던 병목을 원자적 캐시(`cachedHeapBytes`) 및 128회 주기 샘플링(`commitCounter`) 방식으로 교체하여 커밋 핫패스 $O(1)$(1~2ns) 무할당 전환 완료.
-  2. **`VPERF-2` (`pkg/engine`, `pkg/wire/tds`)**: Autocommit 쿼리(`tryPKLookupBypass`, `execVolcanoSelect`, `execInsert`, `execUpdate`, TDS `handleRPCExecute`)마다 `engine.NewSession()` 생성 및 `Close()`로 인해 WiredTiger 세션별 `WT_CURSOR` 풀이 매번 파괴되는 문제를 `ClientSession.Session`(또는 커넥션별 영속 세션) 재사용으로 해결.
+  2. **`VPERF-2` (`pkg/engine`, `pkg/wire/tds`, 완료 `[x]`)**: Autocommit 쿼리(`tryPKLookupBypass`, `execVolcanoSelect`, `execInsert`, `execUpdate`, TDS `handleRPCExecute`)마다 `engine.NewSession()` 생성 및 `Close()`로 인해 WiredTiger 세션별 `WT_CURSOR` 풀이 매번 파괴되는 문제를 `ClientSession.Session`(또는 커넥션별 영속 세션) 재사용으로 해결.
   3. **`VPERF-3` (`pkg/engine/sqlexec_dml.go`, `sqlexec_ddl.go`, 완료 `[x]`)**: `AUTO_INCREMENT`(`IDENTITY`) 컬럼 보유 테이블에 대한 `execInsert` / `execInsertSelect` 시 매번 전체 테이블을 풀 스캔(`tx.Scan`)하던 $O(N)$ 병목을 코디네이터 메모리 시퀀스 캐시(`GetTableLastIdentity`) 기반 $O(1)$ 즉시 채번으로 교체 및 `TRUNCATE`/`DROP` 시 0 리셋 연동 완료.
-  4. **`VPERF-4` (`pkg/storage/memengine/tx.go:583-591, 741-749`, `table_data.go`)**: `memengine`의 매 `Update` / `Delete`마다 `engine.mu.RLock()`을 획득하고 전체 테이블 맵을 순회하며 역방향 외래키(FK)를 검사하는 오버헤드를 DDL 시점 사전 계산된 역방향 외래키 인덱스 캐시(`referencingFKs`)로 교체하여 $O(1)$ 단락 처리.
+  4. **`VPERF-4` (`pkg/storage/memengine/tx.go`, `memengine.go`, 완료 `[x]`)**: `memengine`의 매 `Update` / `Delete`마다 `engine.mu.RLock()`을 획득하고 전체 테이블 맵을 순회하며 역방향 외래키(FK)를 검사하는 오버헤드를 DDL 시점 사전 계산된 역방향 외래키 인덱스 캐시(`fkCache`)로 교체하여 $O(1)$ 단락 처리.
 * **Track B — TDS & VDBE 저위험 무할당 튜닝 (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)**:
-  5. **`VPERF-7` (`pkg/wire/tds/packet.go`, `server.go`)**: `WritePacket`의 `4096` 하드코딩을 세션 협상 `PacketSize`(최대 32KB)로 연동하고, 응답 `bytes.Buffer` 재사용 및 `writeUTF16LEDirect` 직접 버퍼 쓰기로 셀당 슬라이스 할당 제거.
-  6. **`VPERF-8` (`pkg/proc/runtime/vm.go`)**: `PlanCache.GetOrCompile` 조회 시 매번 수행되는 `sha256.Sum256` + `hex.EncodeToString` 해싱과 배타적 쓰기 락(`mu.Lock()`) 경합을 원문 문자열 키 및 `RLock` 패스트패스로 개선.
-  7. **`VPERF-9` (`pkg/proc/runtime/vm_dispatcher.go`, `vm.go`)**: VDBE `OpInsert`/`OpUpdate` 시 트리거가 없는 테이블에 대한 무조건적인 `rowMap`/`oldRow`/`newRow` 할당을 생략하고, `execUpdateWhere` 내부 할당 루프의 `buildRowEvalMap` 중복 호출을 루프 외부로 호이스팅.
-  8. **`VPERF-13` (`pkg/engine/sqlexec_dml.go:483-509`)**: `INSERT ... ON CONFLICT (col) DO UPDATE/NOTHING` 처리 시 충돌 대상 컬럼에 보조 유니크/B-Tree 인덱스가 존재함에도 불구하고 무조건 $O(N)$ 전체 테이블 스캔(`tx.Scan`)으로 폴백하던 성능 결함을 `schema.FindIndexByColumn` 검사 후 `tx.IndexScan` 단건 룩업으로 즉시 최적화.
-  9. **`VPERF-14` (`pkg/proc/runtime/vm.go:922, 1058`)**: VDBE `execUpdateWhere` 및 `execDeleteWhere`에서 `for cursor.Next()` 행 스캔 루프 내부에서 매 행마다 `tg := f.executor.getTableGetter()` 및 `schema, err := tg(data.Table)` 카탈로그 조회를 반복 수행하여 카탈로그 뮤텍스 락 경합을 유발하던 루프 불변식(Loop Invariant)을 루프 외측으로 1회 호이스팅.
+  5. **`VPERF-7` (`pkg/wire/tds/packet.go`, `token.go`, `server.go`, 완료 `[x]`)**: `WritePacket`의 `4096` 하드코딩을 세션 협상 `PacketSize`(최대 32KB)로 연동하고, 응답 `bytes.Buffer` 재사용 및 `WriteUTF16LEDirect` 직접 버퍼 쓰기로 셀당 슬라이스 할당 제거.
+  6. **`VPERF-8` (`pkg/proc/runtime/vm.go`, 완료 `[x]`)**: `PlanCache.GetOrCompile` 조회 시 매번 수행되는 `sha256.Sum256` + `hex.EncodeToString` 해싱과 배타적 쓰기 락(`mu.Lock()`) 경합을 원문 문자열 키 및 `RLock` 패스트패스로 개선.
+  7. **`VPERF-9` (`pkg/proc/runtime/vm_dispatcher.go`, `vm.go`, 완료 `[x]`)**: VDBE `OpInsert`/`OpUpdate` 시 트리거가 없는 테이블에 대한 무조건적인 `rowMap`/`oldRow`/`newRow` 할당을 생략하고, `execUpdateWhere` 내부 할당 루프의 `buildRowEvalMap` 중복 호출을 루프 외부로 호이스팅.
+  8. **`VPERF-13` (`pkg/engine/sqlexec_dml.go`, 완료 `[x]`)**: `INSERT ... ON CONFLICT (col) DO UPDATE/NOTHING` 처리 시 충돌 대상 컬럼에 보조 유니크/B-Tree 인덱스가 존재함에도 불구하고 무조건 $O(N)$ 전체 테이블 스캔(`tx.Scan`)으로 폴백하던 성능 결함을 `schema.FindIndexByColumn` 검사 후 `tx.IndexScan` 단건 룩업으로 즉시 최적화.
+  9. **`VPERF-14` (`pkg/proc/runtime/vm.go`, 완료 `[x]`)**: VDBE `execUpdateWhere` 및 `execDeleteWhere`에서 `for cursor.Next()` 행 스캔 루프 내부에서 매 행마다 `tg := f.executor.getTableGetter()` 및 `schema, err := tg(data.Table)` 카탈로그 조회를 반복 수행하여 카탈로그 뮤텍스 락 경합을 유발하던 루프 불변식(Loop Invariant)을 루프 외측으로 1회 호이스팅.
 * **Track C — [Post-1.0 (`v1.1.0`) 연기] 고위험 구조 개편 및 스트리밍 (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)**:
   10. **`VPERF-5` (`pkg/wire/tds/server.go`)**: `runQueryWithAttention` 취소 감지 고루틴/채널 제거 (TDS 취소 프로토콜 상태머신 회귀 방지를 위해 v1.1.0 이관).
   11. **`VPERF-6` (`pkg/wire/tds/server.go`)**: `sp_executesql`(ProcID 10) VDBE 직결 (클라이언트 드라이버 RPC 호환성 보호를 위해 v1.1.0 이관).
@@ -859,19 +859,19 @@
 | **P-16** | 스토리지 | In-Memory OCC Row-Level Atomic CAS 커밋 | **보류 (`[-]`)** | 동시성 엣지 케이스 및 데이터 사일런트 손상 위험으로 보류 |
 | **P-17** | VM | VDBE 컬럼 산술 융합 슈퍼 명령어 (`OpIncrColInt`) | **보류 (`[-]`)** | 바이트코드 점프 타깃(PC) 오프셋 불일치 및 VM 복잡성으로 보류 |
 | **VPERF-1** | 스토리지 | In-Memory OCC 커밋 시 `runtime.ReadMemStats` 전역 STW 제거 | **완료 (`[x]`)** | 원자적 힙 메모리 캐시/샘플링(128회 주기)으로 쓰기 트랜잭션 커밋 STW 및 슬라이스 힙 할당 100% 제거 |
-| **VPERF-2** | 코디네이터/WT | Autocommit 쿼리 `ClientSession.Session` 재사용으로 WT 커서 풀 보존 | **대기 (`[ ]`)** | 매 쿼리 `NewSession()`/`Close()` 호출 제거로 CGo 세션 생성 및 `WT_CURSOR` 파괴 방지 |
+| **VPERF-2** | 코디네이터/WT | Autocommit 쿼리 `ClientSession.Session` 재사용으로 WT 커서 풀 보존 | **완료 (`[x]`)** | 매 쿼리 `NewSession()`/`Close()` 호출 제거로 CGo 세션 생성 및 `WT_CURSOR` 파괴 방지 |
 | **VPERF-3** | 엔진/DML | `IDENTITY` (`AUTO_INCREMENT`) 삽입 시 전체 테이블 스캔($O(N)$) 제거 | **완료 (`[x]`)** | `execInsert` 시 `tx.Scan` 풀 스캔을 $O(1)$ 원자적 시퀀스 카운터로 교체 |
-| **VPERF-4** | 스토리지 | In-Memory OCC `Update`/`Delete` 역방향 외래키(FK) 참조 사전 캐싱 | **대기 (`[ ]`)** | 매 수정/삭제마다 `engine.mu.RLock()` 및 전체 테이블 순회 오버헤드 100% 생략 |
+| **VPERF-4** | 스토리지 | In-Memory OCC `Update`/`Delete` 역방향 외래키(FK) 참조 사전 캐싱 | **완료 (`[x]`)** | 매 수정/삭제마다 `engine.mu.RLock()` 및 전체 테이블 순회 오버헤드 100% 생략 |
 | **VPERF-5** | 와이어/TDS | `runQueryWithAttention` 쿼리당 고루틴 및 채널 생성 제거 | **Post-1.0 (`v1.1.0`)** | TDS 취소 프로토콜 상태머신 회귀 방지 위해 v1.1.0 이관 |
 | **VPERF-6** | 와이어/TDS | `sp_executesql` (ProcID 10) VDBE `BytecodePlanCache` 직결 | **Post-1.0 (`v1.1.0`)** | 클라이언트 드라이버 RPC 호환성 보호 위해 v1.1.0 이관 |
-| **VPERF-7** | 와이어/TDS | 협상된 `PacketSize` 동적 적용 및 `writeUTF16LEDirect` 직접 버퍼 기록 | **대기 (`[ ]`)** | 최대 32KB 패킷 활용으로 `Write` 시스콜 8배 절감 및 셀당 UTF-16LE 슬라이스 할당 제거 |
-| **VPERF-8** | VM/캐시 | `PlanCache.GetOrCompile` SHA-256 해싱 제거 및 `RLock` 패스트패스 | **대기 (`[ ]`)** | 원문 문자열 키 및 읽기 락 조회로 멀티코어 바이트코드 플랜 캐시 락 경합 해소 |
-| **VPERF-9** | VM/DML | VDBE 무트리거 테이블 맵 할당 생략 및 `buildRowEvalMap` 루프 호이스팅 | **대기 (`[ ]`)** | 트리거 미보유 테이블 DML 시 `rowMap`/`oldRow`/`newRow` 할당 생략 및 중복 맵 생성 제거 |
+| **VPERF-7** | 와이어/TDS | 협상된 `PacketSize` 동적 적용 및 `WriteUTF16LEDirect` 직접 버퍼 기록 | **완료 (`[x]`)** | 최대 32KB 패킷 활용으로 `Write` 시스콜 8배 절감 및 셀당 UTF-16LE 슬라이스 할당 제거 |
+| **VPERF-8** | VM/캐시 | `PlanCache.GetOrCompile` SHA-256 해싱 제거 및 `RLock` 패스트패스 | **완료 (`[x]`)** | 원문 문자열 키 및 읽기 락 조회로 멀티코어 바이트코드 플랜 캐시 락 경합 해소 |
+| **VPERF-9** | VM/DML | VDBE 무트리거 테이블 맵 할당 생략 및 `buildRowEvalMap` 루프 호이스팅 | **완료 (`[x]`)** | 트리거 미보유 테이블 DML 시 `rowMap`/`oldRow`/`newRow` 할당 생략 및 중복 맵 생성 제거 |
 | **VPERF-10** | 엔진/와이어 | `RawRows` 슬라이스 직결 및 스키마 `ColumnTypes` 전달로 맵/타입 재추론 제거 | **Post-1.0 (`v1.1.0`)** | 전체 프로토콜/엔진 공용 구조체 영향 최소화 위해 v1.1.0 이관 |
 | **VPERF-11** | 스토리지 | In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 | **Post-1.0 (`v1.1.0`)** | 검증된 TPC-C 20k TPS 커서 무결성 보호 위해 v1.1.0 이관 |
 | **VPERF-12** | 스토리지/WT | WiredTiger `Update` 단일 커서 통합 및 Zero-Copy 슬라이스 뷰 디코딩 | **Post-1.0 (`v1.1.0`)** | CGo 포인터 생명주기 세그폴트 위험 차단 위해 v1.1.0 이관 |
-| **VPERF-13** | 엔진/DML | `INSERT ... ON CONFLICT (col)` 보조 인덱스 스캔(`IndexScan`) 연동 | **대기 (`[ ]`)** | 인덱스 보유 컬럼에 대한 Upsert 시 $O(N)$ 전체 테이블 풀 스캔 방지 및 `IndexScan` 즉시 룩업 |
-| **VPERF-14** | VM/DML | VDBE `execUpdateWhere`/`execDeleteWhere` 카탈로그 스키마 조회 호이스팅 | **대기 (`[ ]`)** | `cursor.Next()` 루프 내 매 행마다 발생하던 `getTableGetter()` 및 카탈로그 뮤텍스 락 경합 100% 제거 |
+| **VPERF-13** | 엔진/DML | `INSERT ... ON CONFLICT (col)` 보조 인덱스 스캔(`IndexScan`) 연동 | **완료 (`[x]`)** | 인덱스 보유 컬럼에 대한 Upsert 시 $O(N)$ 전체 테이블 풀 스캔 방지 및 `IndexScan` 즉시 룩업 |
+| **VPERF-14** | VM/DML | VDBE `execUpdateWhere`/`execDeleteWhere` 카탈로그 스키마 조회 호이스팅 | **완료 (`[x]`)** | `cursor.Next()` 루프 내 매 행마다 발생하던 `getTableGetter()` 및 카탈로그 뮤텍스 락 경합 100% 제거 |
 
 ---
 

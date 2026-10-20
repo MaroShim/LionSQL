@@ -626,20 +626,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 	}
 
 	// If this table is referenced by child tables, check if any referenced columns changed
-	type childRef struct {
-		childTable string
-		fk         storage.ForeignKeySchema
-	}
-	var childRefs []childRef
-	tx.engine.mu.RLock()
-	for childName, otherTd := range tx.engine.tables {
-		for _, fk := range otherTd.Schema.ForeignKeys {
-			if strings.EqualFold(fk.ParentTable, tableName) {
-				childRefs = append(childRefs, childRef{childTable: childName, fk: fk})
-			}
-		}
-	}
-	tx.engine.mu.RUnlock()
+	childRefs := tx.engine.GetChildFKRefs(tableName)
 
 	// Stage local update before cascading so that child updates see the new parent row
 	newPkKey := pkKey
@@ -690,7 +677,7 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 
 	// Handle cascading updates to child tables if any parent referenced column changed
 	for _, cr := range childRefs {
-		pCols := cr.fk.ParentColumns
+		pCols := cr.FK.ParentColumns
 		if len(pCols) == 0 {
 			if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
 				pCols = []string{pkCol.Name}
@@ -707,45 +694,45 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		}
 
 		if changed {
-			matchingChildPKs, err := tx.findMatchingChildPKsUnderLock(cr.childTable, cr.fk, base)
+			matchingChildPKs, err := tx.findMatchingChildPKsUnderLock(cr.ChildTable, cr.FK, base)
 			if err != nil {
 				return err
 			}
 			if len(matchingChildPKs) > 0 {
-				switch cr.fk.OnUpdate {
+				switch cr.FK.OnUpdate {
 				case storage.ActionCascade:
 					for _, cpk := range matchingChildPKs {
 						patch := make(storage.Record)
-						for i, cCol := range cr.fk.ChildColumns {
+						for i, cCol := range cr.FK.ChildColumns {
 							pCol := pCols[i]
 							patch[cCol] = updated[pCol]
 						}
-						if err := tx.updateLocked(cr.childTable, cpk, patch, depth+1); err != nil {
+						if err := tx.updateLocked(cr.ChildTable, cpk, patch, depth+1); err != nil {
 							return err
 						}
 					}
 				case storage.ActionSetNull:
 					for _, cpk := range matchingChildPKs {
 						patch := make(storage.Record)
-						for _, cCol := range cr.fk.ChildColumns {
+						for _, cCol := range cr.FK.ChildColumns {
 							colType := storage.TypeVarChar
-							if childTd, ok := tx.engine.tables[cr.childTable]; ok {
+							if childTd, ok := tx.engine.tables[cr.ChildTable]; ok {
 								if col, _, found := childTd.Schema.FindColumn(cCol); found {
 									colType = col.Type
 								}
 							}
 							patch[cCol] = storage.NullValue(colType)
 						}
-						if err := tx.updateLocked(cr.childTable, cpk, patch, depth+1); err != nil {
+						if err := tx.updateLocked(cr.ChildTable, cpk, patch, depth+1); err != nil {
 							return err
 						}
 					}
 				case storage.ActionRestrict, storage.ActionNoAction:
 					return fmt.Errorf("%w: cannot update %q because %q has referencing rows (foreign key %q)",
-						storage.ErrForeignKeyViolation, tableName, cr.childTable, cr.fk.Name)
+						storage.ErrForeignKeyViolation, tableName, cr.ChildTable, cr.FK.Name)
 				default:
 					return fmt.Errorf("%w: cannot update %q because %q has referencing rows (foreign key %q)",
-						storage.ErrForeignKeyViolation, tableName, cr.childTable, cr.fk.Name)
+						storage.ErrForeignKeyViolation, tableName, cr.ChildTable, cr.FK.Name)
 				}
 			}
 		}
@@ -786,57 +773,44 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 	}
 
 	// Find all child tables that have a foreign key referencing tableName
-	type childRef struct {
-		childTable string
-		fk         storage.ForeignKeySchema
-	}
-	var childRefs []childRef
-	tx.engine.mu.RLock()
-	for childName, td := range tx.engine.tables {
-		for _, fk := range td.Schema.ForeignKeys {
-			if strings.EqualFold(fk.ParentTable, tableName) {
-				childRefs = append(childRefs, childRef{childTable: childName, fk: fk})
-			}
-		}
-	}
-	tx.engine.mu.RUnlock()
+	childRefs := tx.engine.GetChildFKRefs(tableName)
 
 	// For each referencing child table, find rows that reference this parent row
 	for _, cr := range childRefs {
-		matchingChildPKs, err := tx.findMatchingChildPKsUnderLock(cr.childTable, cr.fk, base)
+		matchingChildPKs, err := tx.findMatchingChildPKsUnderLock(cr.ChildTable, cr.FK, base)
 		if err != nil {
 			return err
 		}
 		if len(matchingChildPKs) > 0 {
-			switch cr.fk.OnDelete {
+			switch cr.FK.OnDelete {
 			case storage.ActionCascade:
 				for _, cpk := range matchingChildPKs {
-					if err := tx.deleteLocked(cr.childTable, cpk, depth+1); err != nil {
+					if err := tx.deleteLocked(cr.ChildTable, cpk, depth+1); err != nil {
 						return err
 					}
 				}
 			case storage.ActionSetNull:
 				for _, cpk := range matchingChildPKs {
 					nullPatch := make(storage.Record)
-					for _, cCol := range cr.fk.ChildColumns {
+					for _, cCol := range cr.FK.ChildColumns {
 						colType := storage.TypeVarChar
-						if childTd, ok := tx.engine.tables[cr.childTable]; ok {
+						if childTd, ok := tx.engine.tables[cr.ChildTable]; ok {
 							if col, _, found := childTd.Schema.FindColumn(cCol); found {
 								colType = col.Type
 							}
 						}
 						nullPatch[cCol] = storage.NullValue(colType)
 					}
-					if err := tx.updateLocked(cr.childTable, cpk, nullPatch, depth+1); err != nil {
+					if err := tx.updateLocked(cr.ChildTable, cpk, nullPatch, depth+1); err != nil {
 						return err
 					}
 				}
 			case storage.ActionRestrict, storage.ActionNoAction:
 				return fmt.Errorf("%w: cannot delete from %q because %q has referencing rows (foreign key %q)",
-					storage.ErrForeignKeyViolation, tableName, cr.childTable, cr.fk.Name)
+					storage.ErrForeignKeyViolation, tableName, cr.ChildTable, cr.FK.Name)
 			default:
 				return fmt.Errorf("%w: cannot delete from %q because %q has referencing rows (foreign key %q)",
-					storage.ErrForeignKeyViolation, tableName, cr.childTable, cr.fk.Name)
+					storage.ErrForeignKeyViolation, tableName, cr.ChildTable, cr.FK.Name)
 			}
 		}
 	}

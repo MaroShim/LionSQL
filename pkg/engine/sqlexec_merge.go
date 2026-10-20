@@ -353,7 +353,7 @@ func (s *Coordinator) loadMergeSourceRows(parsed *parsedMerge, tx storage.Transa
 	// Case 1: (VALUES (...), (...))
 	valuesRe := regexp.MustCompile(`(?is)^\(\s*VALUES\s*(.*)\)$`)
 	if m := valuesRe.FindStringSubmatch(raw); len(m) > 1 {
-		tuples := parseValueTuples(m[1])
+		tuples := sqlutil.ExtractTopLevelTuples(m[1])
 		cols := parsed.sourceCols
 		var rows []map[string]any
 		for _, tuple := range tuples {

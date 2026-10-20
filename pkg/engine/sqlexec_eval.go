@@ -20,67 +20,6 @@ var (
 	reEvalArithExpr   = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_]+)\s*([\+\-\*\/])\s*([0-9\.]+)\s*$`)
 )
 
-func parseValueTuples(s string) []string {
-	var tuples []string
-	var cur strings.Builder
-	inTuple := false
-	inString := false
-	var quoteChar byte
-	depth := 0
-
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if inString {
-			cur.WriteByte(c)
-			if c == quoteChar {
-				if i+1 < len(s) && s[i+1] == quoteChar {
-					i++
-					cur.WriteByte(s[i])
-					continue
-				}
-				inString = false
-			}
-			continue
-		}
-		if c == '\'' || c == '"' {
-			inString = true
-			quoteChar = c
-			if inTuple {
-				cur.WriteByte(c)
-			}
-			continue
-		}
-
-		if c == '(' {
-			if !inTuple {
-				inTuple = true
-				depth = 1
-				cur.Reset()
-				continue
-			}
-			depth++
-			cur.WriteByte(c)
-			continue
-		}
-		if c == ')' {
-			if inTuple {
-				depth--
-				if depth == 0 {
-					tuples = append(tuples, cur.String())
-					inTuple = false
-					cur.Reset()
-					continue
-				}
-				cur.WriteByte(c)
-			}
-			continue
-		}
-		if inTuple {
-			cur.WriteByte(c)
-		}
-	}
-	return tuples
-}
 
 func splitValues(s string) []string {
 	return sqlutil.SplitTopLevel(s, ',')
@@ -125,63 +64,6 @@ func formatStorageValue(v storage.Value) any {
 	}
 }
 
-func splitLogicalConditions(whereStr string, op string) []string {
-	var parts []string
-	var cur strings.Builder
-	inQuote := false
-	quoteChar := byte(0)
-	parenDepth := 0
-	opLen := len(op)
-	upper := strings.ToUpper(whereStr)
-
-	for i := 0; i < len(whereStr); i++ {
-		ch := whereStr[i]
-		if inQuote {
-			if ch == quoteChar {
-				if i+1 < len(whereStr) && whereStr[i+1] == quoteChar {
-					cur.WriteByte(ch)
-					cur.WriteByte(ch)
-					i++
-					continue
-				}
-				if i == 0 || whereStr[i-1] != '\\' {
-					inQuote = false
-				}
-			}
-			cur.WriteByte(ch)
-		} else {
-			if ch == '\'' || ch == '"' {
-				inQuote = true
-				quoteChar = ch
-				cur.WriteByte(ch)
-			} else if ch == '(' {
-				parenDepth++
-				cur.WriteByte(ch)
-			} else if ch == ')' {
-				if parenDepth > 0 {
-					parenDepth--
-				}
-				cur.WriteByte(ch)
-			} else if parenDepth == 0 && i+opLen <= len(whereStr) && upper[i:i+opLen] == op {
-				part := strings.TrimSpace(cur.String())
-				if part != "" {
-					parts = append(parts, part)
-				}
-				cur.Reset()
-				i += opLen - 1
-			} else {
-				cur.WriteByte(ch)
-			}
-		}
-	}
-	if cur.Len() > 0 {
-		part := strings.TrimSpace(cur.String())
-		if part != "" {
-			parts = append(parts, part)
-		}
-	}
-	return parts
-}
 
 func parseValueToType(s string, t storage.DataType) storage.Value {
 	return planner.ParseValueToType(s, t)
@@ -219,7 +101,7 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 		return proc.EvalBoolExpr(expr, rec, nil)
 	}
 
-	orParts := splitLogicalConditions(whereStr, " OR ")
+	orParts := sqlutil.SplitTopLevelKeyword(whereStr, "OR")
 	if len(orParts) > 1 {
 		for _, part := range orParts {
 			if evaluateWhereConditionMap(rec, part) {
@@ -229,7 +111,7 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 		return false
 	}
 
-	andParts := splitLogicalConditions(whereStr, " AND ")
+	andParts := sqlutil.SplitTopLevelKeyword(whereStr, "AND")
 	if len(andParts) > 1 {
 		for _, part := range andParts {
 			if !evaluateWhereConditionMap(rec, part) {
@@ -734,7 +616,7 @@ type outputProj struct {
 }
 
 func parseOutputClause(raw string) []outputProj {
-	parts := splitScalarProjections(raw)
+	parts := sqlutil.SplitTopLevel(raw, ',')
 	var projs []outputProj
 	for _, p := range parts {
 		p = strings.TrimSpace(p)
@@ -813,69 +695,7 @@ func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema
 	return row, cols
 }
 
-func findArithmeticOp(s string) (int, byte) {
-	inQuote := false
-	var quoteChar byte
-	bracketDepth := 0
-	parenDepth := 0
 
-	addSubIdx := -1
-	var addSubOp byte
-	mulDivIdx := -1
-	var mulDivOp byte
-
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if inQuote {
-			if ch == quoteChar {
-				if i+1 < len(s) && s[i+1] == quoteChar {
-					i++
-					continue
-				}
-				inQuote = false
-			}
-			continue
-		}
-		switch ch {
-		case '\'', '"', '`':
-			inQuote = true
-			quoteChar = ch
-		case '[':
-			bracketDepth++
-		case ']':
-			if bracketDepth > 0 {
-				bracketDepth--
-			}
-		case '(':
-			parenDepth++
-		case ')':
-			if parenDepth > 0 {
-				parenDepth--
-			}
-		case '+', '-':
-			if bracketDepth == 0 && parenDepth == 0 && i > 0 {
-				prev := s[i-1]
-				if prev != 'e' && prev != 'E' && prev != '+' && prev != '-' && prev != '*' && prev != '/' {
-					addSubIdx = i
-					addSubOp = ch
-				}
-			}
-		case '*', '/':
-			if bracketDepth == 0 && parenDepth == 0 && i > 0 {
-				mulDivIdx = i
-				mulDivOp = ch
-			}
-		}
-	}
-
-	if addSubIdx != -1 {
-		return addSubIdx, addSubOp
-	}
-	if mulDivIdx != -1 {
-		return mulDivIdx, mulDivOp
-	}
-	return -1, 0
-}
 
 func resolveOperand(token string, rec storage.Record) (storage.Value, bool) {
 	token = strings.TrimSpace(token)
@@ -926,7 +746,7 @@ func toNumeric(val storage.Value) (float64, int64, bool) {
 
 func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataType) (storage.Value, error) {
 	exprStr = strings.TrimSpace(exprStr)
-	if opIdx, op := findArithmeticOp(exprStr); opIdx != -1 {
+	if opIdx, op := sqlutil.FindTopLevelArithmeticOp(exprStr); opIdx != -1 {
 		leftStr := strings.TrimSpace(exprStr[:opIdx])
 		rightStr := strings.TrimSpace(exprStr[opIdx+1:])
 

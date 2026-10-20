@@ -272,3 +272,63 @@ func TestSplitJoinCond(t *testing.T) {
 		})
 	}
 }
+
+func TestSplitTopLevelKeyword(t *testing.T) {
+	// Keyword in literal or word boundary
+	s := "name = 'O''Reilly AND Sons' AND status = 1 AND band = 'Rock'"
+	parts := SplitTopLevelKeyword(s, "AND")
+	expected := []string{"name = 'O''Reilly AND Sons'", "status = 1", "band = 'Rock'"}
+	if !reflect.DeepEqual(parts, expected) {
+		t.Fatalf("expected %#v, got %#v", expected, parts)
+	}
+
+	// OR splitting
+	s2 := "col1 = 1 OR (col2 = 'OR' AND col3 = 2) OR col4 = 3"
+	parts2 := SplitTopLevelKeyword(s2, "OR")
+	expected2 := []string{"col1 = 1", "(col2 = 'OR' AND col3 = 2)", "col4 = 3"}
+	if !reflect.DeepEqual(parts2, expected2) {
+		t.Fatalf("expected %#v, got %#v", expected2, parts2)
+	}
+}
+
+func TestFindTopLevelKeyword_Advanced(t *testing.T) {
+	s := "SELECT id, 'FROM' AS f FROM tbl WHERE name = 'FROM'"
+	idx := FindTopLevelKeyword(s, "FROM")
+	if idx != 23 { // index of the real 'FROM'
+		t.Fatalf("expected index 23, got %d", idx)
+	}
+
+	s2 := "INSERT INTO t VALUES (1) ON CONFLICT (id) DO NOTHING"
+	idx2 := FindTopLevelKeyword(s2, "ON CONFLICT")
+	if idx2 != 25 {
+		t.Fatalf("expected index 25, got %d", idx2)
+	}
+}
+
+func TestFindTopLevelArithmeticOp(t *testing.T) {
+	// Precedence check: lowest binding (+, -) before (*, /)
+	idx, op := FindTopLevelArithmeticOp("10 + 20 * 30")
+	if idx != 3 || op != '+' {
+		t.Fatalf("expected op '+' at idx 3, got %c at idx %d", op, idx)
+	}
+
+	// Inside string literal
+	idx2, op2 := FindTopLevelArithmeticOp("'10 + 20' * 30")
+	if idx2 != 10 || op2 != '*' {
+		t.Fatalf("expected op '*' at idx 10, got %c at idx %d", op2, idx2)
+	}
+}
+
+func TestExtractTopLevelTuples(t *testing.T) {
+	s := "(1, 'Hello, World'), (2, 'Tuple with (nested) paren'), (3, 'O''Reilly')"
+	tuples := ExtractTopLevelTuples(s)
+	expected := []string{
+		"1, 'Hello, World'",
+		"2, 'Tuple with (nested) paren'",
+		"3, 'O''Reilly'",
+	}
+	if !reflect.DeepEqual(tuples, expected) {
+		t.Fatalf("expected %#v, got %#v", expected, tuples)
+	}
+}
+

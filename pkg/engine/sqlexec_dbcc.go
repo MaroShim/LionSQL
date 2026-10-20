@@ -354,7 +354,7 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 		}
 	} else {
 		asRe := regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
-		for _, c := range splitScalarProjections(projStr) {
+		for _, c := range sqlutil.SplitTopLevel(projStr, ',') {
 			cTrimmed := strings.TrimSpace(c)
 			if cTrimmed == "" {
 				continue

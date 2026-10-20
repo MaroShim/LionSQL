@@ -65,11 +65,11 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	if cs != nil && cs.Tx != nil {
 		tx = cs.Tx
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
 		if err != nil {
@@ -183,95 +183,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}, nil
 }
 
-func hasFromClause(query string) bool {
-	upper := strings.ToUpper(query)
-	inSingleQuote := false
-	inDoubleQuote := false
-	parenDepth := 0
 
-	for i := 0; i < len(upper); i++ {
-		ch := upper[i]
-		if ch == '\'' && !inDoubleQuote {
-			inSingleQuote = !inSingleQuote
-			continue
-		}
-		if ch == '"' && !inSingleQuote {
-			inDoubleQuote = !inDoubleQuote
-			continue
-		}
-		if inSingleQuote || inDoubleQuote {
-			continue
-		}
-		if ch == '(' {
-			parenDepth++
-			continue
-		}
-		if ch == ')' {
-			if parenDepth > 0 {
-				parenDepth--
-			}
-			continue
-		}
-		if parenDepth == 0 {
-			if i+4 <= len(upper) && upper[i:i+4] == "FROM" {
-				before := i == 0 || !isIdentChar(upper[i-1])
-				after := i+4 == len(upper) || !isIdentChar(upper[i+4])
-				if before && after {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-func splitScalarProjections(s string) []string {
-	var res []string
-	var cur strings.Builder
-	inSingleQuote := false
-	inDoubleQuote := false
-	parenDepth := 0
-
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if ch == '\'' && !inDoubleQuote {
-			inSingleQuote = !inSingleQuote
-			cur.WriteByte(ch)
-			continue
-		}
-		if ch == '"' && !inSingleQuote {
-			inDoubleQuote = !inDoubleQuote
-			cur.WriteByte(ch)
-			continue
-		}
-		if inSingleQuote || inDoubleQuote {
-			cur.WriteByte(ch)
-			continue
-		}
-		if ch == '(' {
-			parenDepth++
-			cur.WriteByte(ch)
-			continue
-		}
-		if ch == ')' {
-			if parenDepth > 0 {
-				parenDepth--
-			}
-			cur.WriteByte(ch)
-			continue
-		}
-		if ch == ',' && parenDepth == 0 {
-			res = append(res, strings.TrimSpace(cur.String()))
-			cur.Reset()
-			continue
-		}
-		cur.WriteByte(ch)
-	}
-	if cur.Len() > 0 {
-		res = append(res, strings.TrimSpace(cur.String()))
-	}
-	return res
-}
 
 func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	trimmed := strings.TrimSpace(expr)
@@ -811,7 +723,7 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	}
 
 	rawList := strings.TrimSpace(cleaned[6:])
-	projItems := splitScalarProjections(rawList)
+	projItems := sqlutil.SplitTopLevel(rawList, ',')
 	if len(projItems) == 0 {
 		return nil, fmt.Errorf("no projections specified in SELECT")
 	}
@@ -990,11 +902,11 @@ func (s *Coordinator) execSelectInto(targetTable, projections, fromClause string
 			tx = cs.Tx
 			isEphemeral = false
 		} else {
-			session, err := s.engine.NewSession()
+			session, closeFn, err := s.acquireSessionForQuery(cs)
 			if err != nil {
 				return nil, err
 			}
-			defer session.Close()
+			defer closeFn()
 
 			t, err := session.BeginTx(cs.TxOptions())
 			if err != nil {
@@ -1057,11 +969,11 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 	if cs != nil && cs.Tx != nil {
 		tx = cs.Tx
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {
@@ -1154,11 +1066,11 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 	if cs != nil && cs.Tx != nil {
 		tx = cs.Tx
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
 		if err != nil {
@@ -1426,7 +1338,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	}
 
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
-	if !hasFromClause(cleaned) {
+	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		upperClean := strings.ToUpper(cleaned)
 		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
@@ -1564,7 +1476,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	selectRe := reSelectStmt
 	matches := selectRe.FindStringSubmatch(cleaned)
 	if len(matches) < 3 {
-		if !hasFromClause(cleaned) {
+		if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 			return s.execScalarSelect(cleaned, start, cs)
 		}
 		return nil, fmt.Errorf("invalid or unsupported SELECT syntax")
@@ -1644,11 +1556,11 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	if cs != nil && cs.Tx != nil {
 		tx = cs.Tx
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
 		if err != nil {

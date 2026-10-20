@@ -728,3 +728,296 @@ func isBalanced(s string) bool {
 	}
 	return depth == 0
 }
+
+// SplitTopLevelKeyword splits string s by a standalone keyword (e.g. "AND", "OR") at depth 0,
+// safely skipping string literals ('...', "..."), brackets ([...]), comments, and parentheses ((...)).
+func SplitTopLevelKeyword(s string, kw string) []string {
+	n := len(s)
+	kwLen := len(kw)
+	if n == 0 || kwLen == 0 {
+		return nil
+	}
+
+	upperS := strings.ToUpper(s)
+	upperKw := strings.ToUpper(kw)
+
+	var parts []string
+	start := 0
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+	inLineComment := false
+	inBlockComment := false
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < n && s[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				if i+1 < n && s[i+1] == ']' {
+					i++
+					continue
+				}
+				inBracket = false
+			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+		if ch == '\'' {
+			inSingleQuote = true
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+
+		if depth == 0 && i+kwLen <= n && upperS[i:i+kwLen] == upperKw {
+			beforeOk := i == 0 || isWordBoundary(s[i-1])
+			afterOk := i+kwLen == n || isWordBoundary(s[i+kwLen])
+			if beforeOk && afterOk {
+				part := strings.TrimSpace(s[start:i])
+				if part != "" {
+					parts = append(parts, part)
+				}
+				start = i + kwLen
+				i += kwLen - 1
+			}
+		}
+	}
+
+	if start <= n {
+		part := strings.TrimSpace(s[start:n])
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+
+	return parts
+}
+
+// FindTopLevelArithmeticOp returns the index and operator character of the primary arithmetic operator (+, -, *, /)
+// at depth 0, giving precedence to lowest binding operators (+, -) before (*, /).
+func FindTopLevelArithmeticOp(s string) (int, byte) {
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+
+	addSubIdx := -1
+	var addSubOp byte
+	mulDivIdx := -1
+	var mulDivOp byte
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < len(s) && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < len(s) && s[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				if i+1 < len(s) && s[i+1] == ']' {
+					i++
+					continue
+				}
+				inBracket = false
+			}
+			continue
+		}
+
+		switch ch {
+		case '\'':
+			inSingleQuote = true
+		case '"':
+			inDoubleQuote = true
+		case '[':
+			inBracket = true
+		case '(':
+			depth++
+		case ')':
+			if depth > 0 {
+				depth--
+			}
+		case '+', '-':
+			if depth == 0 && i > 0 {
+				prev := s[i-1]
+				if prev != 'e' && prev != 'E' && prev != '+' && prev != '-' && prev != '*' && prev != '/' {
+					addSubIdx = i
+					addSubOp = ch
+				}
+			}
+		case '*', '/':
+			if depth == 0 && i > 0 {
+				mulDivIdx = i
+				mulDivOp = ch
+			}
+		}
+	}
+
+	if addSubIdx != -1 {
+		return addSubIdx, addSubOp
+	}
+	if mulDivIdx != -1 {
+		return mulDivIdx, mulDivOp
+	}
+	return -1, 0
+}
+
+// ExtractTopLevelTuples extracts raw strings of depth-1 parentheses tuples from VALUES clause, e.g. "(1, 'a'), (2, 'b')".
+func ExtractTopLevelTuples(s string) []string {
+	var tuples []string
+	var cur strings.Builder
+	inTuple := false
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if inSingleQuote {
+			cur.WriteByte(c)
+			if c == '\'' {
+				if i+1 < len(s) && s[i+1] == '\'' {
+					i++
+					cur.WriteByte(s[i])
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			cur.WriteByte(c)
+			if c == '"' {
+				if i+1 < len(s) && s[i+1] == '"' {
+					i++
+					cur.WriteByte(s[i])
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+
+		if c == '\'' {
+			inSingleQuote = true
+			if inTuple {
+				cur.WriteByte(c)
+			}
+			continue
+		}
+		if c == '"' {
+			inDoubleQuote = true
+			if inTuple {
+				cur.WriteByte(c)
+			}
+			continue
+		}
+
+		if c == '(' {
+			if !inTuple {
+				inTuple = true
+				depth = 1
+				cur.Reset()
+				continue
+			}
+			depth++
+			cur.WriteByte(c)
+			continue
+		}
+		if c == ')' {
+			if inTuple {
+				depth--
+				if depth == 0 {
+					tuples = append(tuples, cur.String())
+					inTuple = false
+					cur.Reset()
+					continue
+				}
+				cur.WriteByte(c)
+			}
+			continue
+		}
+		if inTuple {
+			cur.WriteByte(c)
+		}
+	}
+	return tuples
+}

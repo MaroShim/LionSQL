@@ -413,11 +413,11 @@ func (s *Coordinator) tryPKLookupBypass(query string, start time.Time, cs *Clien
 	if cs != nil && cs.Tx != nil {
 		tx = cs.Tx
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, nil, false
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
 		if err != nil {

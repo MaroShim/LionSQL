@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"lionsql/pkg/catalog"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
@@ -124,19 +125,19 @@ func TestRevEng004_IntegerDivideByZeroPanicPrevention(t *testing.T) {
 }
 
 func TestRevEng005_QuoteEscapingInLogicalConditionsAndArith(t *testing.T) {
-	// 1. splitLogicalConditions with SQL quote escape ''
+	// 1. SplitTopLevelKeyword with SQL quote escape ''
 	cond := "name = 'O''Reilly AND Sons' AND status = 1"
-	parts := splitLogicalConditions(cond, " AND ")
+	parts := sqlutil.SplitTopLevelKeyword(cond, "AND")
 	if len(parts) != 2 {
-		t.Fatalf("expected 2 parts from splitLogicalConditions, got %d: %+v", len(parts), parts)
+		t.Fatalf("expected 2 parts from SplitTopLevelKeyword, got %d: %+v", len(parts), parts)
 	}
 	if parts[0] != "name = 'O''Reilly AND Sons'" || parts[1] != "status = 1" {
 		t.Fatalf("unexpected parts: %+v", parts)
 	}
 
-	// 2. findArithmeticOp with SQL quote escape ''
+	// 2. FindTopLevelArithmeticOp with SQL quote escape ''
 	expr := "'price: 10 + 5' + ' total'"
-	idx, op := findArithmeticOp(expr)
+	idx, op := sqlutil.FindTopLevelArithmeticOp(expr)
 	if idx == -1 || op != '+' {
 		t.Fatalf("expected arithmetic op '+' found outside quotes, got idx=%d, op=%c", idx, op)
 	}

@@ -683,11 +683,11 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 		if col.IsPLP || col.Size == -1 {
 			writePLPValue(buf, EncodeUTF16LE(strVal))
 		} else {
-			u16 := EncodeUTF16LE(strVal)
-			var b [2]byte
-			binary.LittleEndian.PutUint16(b[:], uint16(len(u16)))
-			buf.Write(b[:])
-			buf.Write(u16)
+			startLen := buf.Len()
+			buf.WriteByte(0)
+			buf.WriteByte(0)
+			nBytes := WriteUTF16LEDirect(buf, strVal)
+			binary.LittleEndian.PutUint16(buf.Bytes()[startLen:startLen+2], uint16(nBytes))
 		}
 
 	case TypeVarChar:
@@ -732,11 +732,11 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 		if col.IsPLP || col.Size == -1 {
 			writePLPValue(buf, EncodeUTF16LE(strVal))
 		} else {
-			u16 := EncodeUTF16LE(strVal)
-			var b [2]byte
-			binary.LittleEndian.PutUint16(b[:], uint16(len(u16)))
-			buf.Write(b[:])
-			buf.Write(u16)
+			startLen := buf.Len()
+			buf.WriteByte(0)
+			buf.WriteByte(0)
+			nBytes := WriteUTF16LEDirect(buf, strVal)
+			binary.LittleEndian.PutUint16(buf.Bytes()[startLen:startLen+2], uint16(nBytes))
 		}
 	}
 }

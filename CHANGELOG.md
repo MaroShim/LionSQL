@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Performance
+- **Vertical Performance Track (7 Hot-Path Zero-Allocation Optimizations)**:
+  - `VPERF-2`: Reused persistent `ClientSession.Session` for autocommit queries across `tryPKLookupBypass`, `execVolcanoSelect`, `execInsert`, `execUpdate`, and TDS RPC executions, keeping WiredTiger CGO sessions and `WT_CURSOR` pools alive across queries.
+  - `VPERF-4`: Added reverse foreign key cache (`fkCache`) on `memengine.Engine` pre-indexed during DDL, enabling `Update` and `Delete` foreign key validation to exit in $O(1)$ without table scans when parent tables have no child references.
+  - `VPERF-7`: Extended TDS `WritePacketWithSize` to dynamically chunk frames using the negotiated `sess.PacketSize` (up to 32KB), and introduced `WriteUTF16LEDirect` to serialize UTF-16LE strings directly into packet buffers, eliminating per-cell intermediate slice allocations and reducing `Write` syscall overhead.
+  - `VPERF-8`: Replaced SHA-256 hash computation and exclusive write lock contention in `PlanCache.GetOrCompile` (`pkg/proc/runtime/vm.go`) with raw string keys and an `RLock` fast-path for cache hits.
+  - `VPERF-9`: Added `HasTriggers` check in VDBE execution to bypass `rowMap`/`oldRow`/`newRow` allocations in `OpInsert`, `OpUpdate`, and `OpDelete` when tables have no triggers, and hoisted `rowContext` creation out of row loops in `execUpdateWhere`.
+  - `VPERF-13`: Optimized `INSERT ... ON CONFLICT (col)` in `pkg/engine/sqlexec_dml.go` to use `tx.IndexScan` when secondary indexes exist rather than falling back to $O(N)$ full table scans.
+  - `VPERF-14`: Hoisted `tableSchema` and `hasTriggers` lookups out of `for cursor.Next()` row loops in VDBE `execUpdateWhere` and `execDeleteWhere` (`pkg/proc/runtime/vm.go`), eliminating repetitive catalog mutex lock contention.
+
 ### Added
 - `SQL-STRICT-NULL-DECORATOR-1`: Introduced standard SQL strict NULL propagation functional decorators (`Strict`, `StrictUnary`, `StrictBinary`, `RegisterStrictScalarFunction`, `HasAnyNull`, `HasNullAt`) in `pkg/proc/strict.go`.
 - `STORAGE-TYPE-PROMOTION-LATTICE-1`: Introduced unified Type Promotion Lattice and binary coercion engine (`storage.CoerceBinaryValues`, `CompareFloatEpsilon`) in `pkg/storage/coerce.go`, eliminating 150+ lines of ad-hoc heterogeneous type matching in `Value.Equal` and `Value.Compare`.

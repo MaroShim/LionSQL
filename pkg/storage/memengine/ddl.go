@@ -65,6 +65,7 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		}
 	}
 	e.tables[schema.Name] = td
+	e.rebuildFKCacheLocked()
 
 	if _, err := e.recordWALLocked([]WALOp{{
 		Type:   OpCreateTable,
@@ -329,6 +330,7 @@ func (e *Engine) DropTable(tableName string) error {
 	}
 
 	sqlutil.MapDeleteFold(e.tables, tableName)
+	e.rebuildFKCacheLocked()
 	if _, err := e.recordWALLocked([]WALOp{{
 		Type:  OpDropTable,
 		Table: td.Schema.Name,

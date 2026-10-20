@@ -60,12 +60,20 @@ func DefaultOptions(dir string) Options {
 	}
 }
 
+// ChildFKRef stores cached reverse foreign key reference metadata for parent tables.
+type ChildFKRef struct {
+	ChildTable string
+	FK         storage.ForeignKeySchema
+}
+
 // Engine implements an in-memory OCC storage engine with optional Redis-style AOF/RDB durability.
 type Engine struct {
 	mu               sync.RWMutex
 	opts             Options
 	dataDir          string
 	tables           map[string]*TableData
+	fkCacheMu        sync.RWMutex
+	fkCache          map[string][]ChildFKRef
 	wal              *WALWriter
 	fsyncPolicy      FsyncPolicy
 	nextLSN          atomic.Int64
@@ -198,9 +206,36 @@ func (e *Engine) recordWALLocked(ops []WALOp) (WALRecord, error) {
 func New() *Engine {
 	return &Engine{
 		tables:       make(map[string]*TableData),
+		fkCache:      make(map[string][]ChildFKRef),
 		fsyncPolicy:  FsyncEverySec,
 		aofThreshold: 64 * 1024 * 1024, // 64MB default compaction threshold
 	}
+}
+
+func (e *Engine) rebuildFKCacheLocked() {
+	newCache := make(map[string][]ChildFKRef)
+	for childName, td := range e.tables {
+		for _, fk := range td.Schema.ForeignKeys {
+			parentLower := strings.ToLower(fk.ParentTable)
+			newCache[parentLower] = append(newCache[parentLower], ChildFKRef{
+				ChildTable: childName,
+				FK:         fk,
+			})
+		}
+	}
+	e.fkCacheMu.Lock()
+	e.fkCache = newCache
+	e.fkCacheMu.Unlock()
+}
+
+// GetChildFKRefs returns cached foreign key references pointing to parentTable.
+func (e *Engine) GetChildFKRefs(parentTable string) []ChildFKRef {
+	e.fkCacheMu.RLock()
+	defer e.fkCacheMu.RUnlock()
+	if e.fkCache == nil {
+		return nil
+	}
+	return e.fkCache[strings.ToLower(parentTable)]
 }
 
 // Type returns the human-readable storage engine backend name.
@@ -325,6 +360,7 @@ func (e *Engine) OpenWithOptions(opts Options) error {
 				_ = e.rewriteAOFLocked()
 			}
 		}
+		e.rebuildFKCacheLocked()
 	}
 
 	// 4. Start Redis-style background snapshot / compaction timer

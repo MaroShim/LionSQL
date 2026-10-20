@@ -43,52 +43,6 @@ type onConflictClause struct {
 	whereCond   string
 }
 
-func findOnConflictIndex(s string) int {
-	inString := false
-	var quoteChar byte
-	depth := 0
-	upper := strings.ToUpper(s)
-
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if inString {
-			if c == quoteChar {
-				if i+1 < len(s) && s[i+1] == quoteChar {
-					i++
-					continue
-				}
-				inString = false
-			}
-			continue
-		}
-		if c == '\'' || c == '"' {
-			inString = true
-			quoteChar = c
-			continue
-		}
-		if c == '(' {
-			depth++
-			continue
-		}
-		if c == ')' {
-			if depth > 0 {
-				depth--
-			}
-			continue
-		}
-		if depth == 0 && i+11 <= len(s) {
-			if strings.HasPrefix(upper[i:], "ON CONFLICT") {
-				if i == 0 || s[i-1] == ' ' || s[i-1] == '\t' || s[i-1] == '\n' || s[i-1] == ')' {
-					nextIdx := i + 11
-					if nextIdx == len(s) || s[nextIdx] == ' ' || s[nextIdx] == '\t' || s[nextIdx] == '\n' || s[nextIdx] == '(' {
-						return i
-					}
-				}
-			}
-		}
-	}
-	return -1
-}
 
 func parseOnConflict(s string) (*onConflictClause, error) {
 	s = strings.TrimSpace(s)
@@ -277,7 +231,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 
 	var onConflict *onConflictClause
 	valuesPart := rawValues
-	if conflictIdx := findOnConflictIndex(rawValues); conflictIdx != -1 {
+	if conflictIdx := sqlutil.FindTopLevelKeyword(rawValues, "ON CONFLICT"); conflictIdx != -1 {
 		conflictStr := strings.TrimSpace(rawValues[conflictIdx:])
 		valuesPart = strings.TrimSpace(rawValues[:conflictIdx])
 		clause, err := parseOnConflict(conflictStr)
@@ -347,7 +301,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
-	tupleStrings := parseValueTuples(valuesPart)
+	tupleStrings := sqlutil.ExtractTopLevelTuples(valuesPart)
 	if len(tupleStrings) == 0 {
 		return nil, fmt.Errorf("no values supplied in INSERT statement")
 	}
@@ -358,11 +312,11 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		tx = cs.Tx
 		isEphemeral = false
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {
@@ -486,30 +440,67 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			}
 
 			if existingRec == nil && len(conflictCols) > 0 {
-				if cur, err := tx.Scan(tableName); err == nil {
-					for cur.Next() {
-						r, err := cur.Record()
-						if err != nil {
-							continue
-						}
-						matched := true
-						for _, cc := range conflictCols {
-							rv, ok1 := r.Get(cc)
-							iv, ok2 := rec.Get(cc)
-							if !ok1 || !ok2 || rv.Compare(iv) != 0 {
-								matched = false
+				var matchingIdx *storage.IndexSchema
+				for _, idx := range schema.Indexes {
+					if len(idx.Columns) == len(conflictCols) {
+						allMatch := true
+						for ci, colName := range conflictCols {
+							if !strings.EqualFold(idx.Columns[ci], colName) {
+								allMatch = false
 								break
 							}
 						}
-						if matched {
-							existingRec = r
-							if pkCol != nil {
-								existingPk, _ = r.Get(pkCol.Name)
-							}
+						if allMatch {
+							matchingIdx = &idx
 							break
 						}
 					}
-					cur.Close()
+				}
+
+				if matchingIdx != nil && len(conflictCols) == 1 {
+					colName := conflictCols[0]
+					if targetVal, ok := rec.Get(colName); ok {
+						if cur, err := tx.IndexScan(tableName, matchingIdx.Name, &targetVal, &targetVal); err == nil {
+							for cur.Next() {
+								if r, err := cur.Record(); err == nil {
+									existingRec = r
+									if pkCol != nil {
+										existingPk, _ = r.Get(pkCol.Name)
+									}
+									break
+								}
+							}
+							cur.Close()
+						}
+					}
+				}
+
+				if existingRec == nil {
+					if cur, err := tx.Scan(tableName); err == nil {
+						for cur.Next() {
+							r, err := cur.Record()
+							if err != nil {
+								continue
+							}
+							matched := true
+							for _, cc := range conflictCols {
+								rv, ok1 := r.Get(cc)
+								iv, ok2 := rec.Get(cc)
+								if !ok1 || !ok2 || rv.Compare(iv) != 0 {
+									matched = false
+									break
+								}
+							}
+							if matched {
+								existingRec = r
+								if pkCol != nil {
+									existingPk, _ = r.Get(pkCol.Name)
+								}
+								break
+							}
+						}
+						cur.Close()
+					}
 				}
 			}
 
@@ -636,7 +627,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 	}
 
 	var onConflict *onConflictClause
-	if conflictIdx := findOnConflictIndex(selectPart); conflictIdx != -1 {
+	if conflictIdx := sqlutil.FindTopLevelKeyword(selectPart, "ON CONFLICT"); conflictIdx != -1 {
 		conflictStr := strings.TrimSpace(selectPart[conflictIdx:])
 		selectPart = strings.TrimSpace(selectPart[:conflictIdx])
 		clause, err := parseOnConflict(conflictStr)
@@ -728,11 +719,11 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		tx = cs.Tx
 		isEphemeral = false
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {
@@ -841,30 +832,67 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			}
 
 			if existingRec == nil && len(conflictCols) > 0 {
-				if cur, err := tx.Scan(tableName); err == nil {
-					for cur.Next() {
-						r, err := cur.Record()
-						if err != nil {
-							continue
-						}
-						matched := true
-						for _, cc := range conflictCols {
-							rv, ok1 := r.Get(cc)
-							iv, ok2 := rec.Get(cc)
-							if !ok1 || !ok2 || rv.Compare(iv) != 0 {
-								matched = false
+				var matchingIdx *storage.IndexSchema
+				for _, idx := range schema.Indexes {
+					if len(idx.Columns) == len(conflictCols) {
+						allMatch := true
+						for ci, colName := range conflictCols {
+							if !strings.EqualFold(idx.Columns[ci], colName) {
+								allMatch = false
 								break
 							}
 						}
-						if matched {
-							existingRec = r
-							if pkCol != nil {
-								existingPk, _ = r.Get(pkCol.Name)
-							}
+						if allMatch {
+							matchingIdx = &idx
 							break
 						}
 					}
-					cur.Close()
+				}
+
+				if matchingIdx != nil && len(conflictCols) == 1 {
+					colName := conflictCols[0]
+					if targetVal, ok := rec.Get(colName); ok {
+						if cur, err := tx.IndexScan(tableName, matchingIdx.Name, &targetVal, &targetVal); err == nil {
+							for cur.Next() {
+								if r, err := cur.Record(); err == nil {
+									existingRec = r
+									if pkCol != nil {
+										existingPk, _ = r.Get(pkCol.Name)
+									}
+									break
+								}
+							}
+							cur.Close()
+						}
+					}
+				}
+
+				if existingRec == nil {
+					if cur, err := tx.Scan(tableName); err == nil {
+						for cur.Next() {
+							r, err := cur.Record()
+							if err != nil {
+								continue
+							}
+							matched := true
+							for _, cc := range conflictCols {
+								rv, ok1 := r.Get(cc)
+								iv, ok2 := rec.Get(cc)
+								if !ok1 || !ok2 || rv.Compare(iv) != 0 {
+									matched = false
+									break
+								}
+							}
+							if matched {
+								existingRec = r
+								if pkCol != nil {
+									existingPk, _ = r.Get(pkCol.Name)
+								}
+								break
+							}
+						}
+						cur.Close()
+					}
 				}
 			}
 
@@ -1030,11 +1058,11 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		tx = cs.Tx
 		isEphemeral = false
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {
@@ -1199,11 +1227,11 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		tx = cs.Tx
 		isEphemeral = false
 	} else {
-		session, err := s.engine.NewSession()
+		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer session.Close()
+		defer closeFn()
 
 		t, err := session.BeginTx(cs.TxOptions())
 		if err != nil {

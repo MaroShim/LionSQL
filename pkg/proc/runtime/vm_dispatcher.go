@@ -555,7 +555,11 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 	case proc.OpInsert:
 		data := f.aux(inst).(*proc.DMLData)
 		rec := make(storage.Record)
-		rowMap := make(map[string]any)
+		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "INSERT")
+		var rowMap map[string]any
+		if hasTriggers {
+			rowMap = make(map[string]any, len(data.Columns))
+		}
 		evalCtx := f.buildRowEvalMap(nil)
 
 		cols := data.Columns
@@ -605,7 +609,9 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 					}
 				}
 				rec.Set(col, stVal)
-				rowMap[col] = valToAny(stVal)
+				if hasTriggers {
+					rowMap[col] = valToAny(stVal)
+				}
 				if (strings.EqualFold(col, "id") || strings.HasSuffix(strings.ToLower(col), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
 					f.lastIdentity = stVal.IVal
 				}
@@ -627,8 +633,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), pc)
 		}
 		f.rowCount++
-		if err := f.fireTriggers(data.Table, "INSERT", []map[string]any{rowMap}, nil); err != nil {
-			return err
+		if hasTriggers {
+			if err := f.fireTriggers(data.Table, "INSERT", []map[string]any{rowMap}, nil); err != nil {
+				return err
+			}
 		}
 
 	case proc.OpUpdate:
@@ -694,7 +702,8 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return f.handleCatch(err, pc)
 		}
 		f.rowCount = 1
-		if oldRec != nil {
+		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
+		if oldRec != nil && hasTriggers {
 			oldRow := recordToMap(oldRec)
 			newRow := recordToMap(oldRec)
 			for k, v := range rec {
@@ -746,7 +755,8 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return f.handleCatch(err, pc)
 		}
 		f.rowCount = 1
-		if oldRec != nil {
+		hasTriggersDel := f.executor != nil && f.executor.HasTriggers(data.Table, "DELETE")
+		if oldRec != nil && hasTriggersDel {
 			oldRow := recordToMap(oldRec)
 			if err := f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{oldRow}); err != nil {
 				return err

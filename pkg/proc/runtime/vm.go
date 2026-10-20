@@ -86,16 +86,15 @@ func NewPlanCacheWithCapacity(capacity int) *PlanCache {
 
 // GetOrCompile retrieves a cached bytecode program or compiles and caches the T-SQL script with LRU promotion.
 func (c *PlanCache) GetOrCompile(script string) (*proc.Program, error) {
-	h := hashScript(script)
+	key := script
 
-	c.mu.Lock()
-	if elem, exists := c.programs[h]; exists {
-		c.lruList.MoveToFront(elem)
+	c.mu.RLock()
+	if elem, exists := c.programs[key]; exists {
 		prog := elem.Value.(*planCacheEntry).program
-		c.mu.Unlock()
+		c.mu.RUnlock()
 		return prog, nil
 	}
-	c.mu.Unlock()
+	c.mu.RUnlock()
 
 	prog, err := proc.Compile(script)
 	if err != nil {
@@ -106,7 +105,7 @@ func (c *PlanCache) GetOrCompile(script string) (*proc.Program, error) {
 	defer c.mu.Unlock()
 
 	// Double-check under lock in case another goroutine compiled it concurrently
-	if elem, exists := c.programs[h]; exists {
+	if elem, exists := c.programs[key]; exists {
 		c.lruList.MoveToFront(elem)
 		return elem.Value.(*planCacheEntry).program, nil
 	}
@@ -122,10 +121,10 @@ func (c *PlanCache) GetOrCompile(script string) (*proc.Program, error) {
 	}
 
 	elem := c.lruList.PushFront(&planCacheEntry{
-		hash:    h,
+		hash:    key,
 		program: prog,
 	})
-	c.programs[h] = elem
+	c.programs[key] = elem
 	if prog.Name != "" {
 		c.byName[strings.ToLower(cleanSymbol(prog.Name))] = prog
 	}
@@ -284,6 +283,25 @@ func (e *Executor) GetTriggers(tableName string, event string) []*TriggerEntry {
 		}
 	}
 	return nil
+}
+
+// HasTriggers returns true if there is at least one trigger registered for tableName and event.
+func (e *Executor) HasTriggers(tableName, event string) bool {
+	if e == nil {
+		return false
+	}
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	tbl := strings.ToLower(tableName)
+	evt := strings.ToUpper(event)
+
+	if tblMap, ok := e.triggers[tbl]; ok {
+		if trgs, ok := tblMap[evt]; ok && len(trgs) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // VMFrame maintains the execution context for a bytecode invocation.
@@ -910,6 +928,16 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	}
 	defer cursor.Close()
 
+	var tableSchema *storage.TableSchema
+	if f.executor != nil {
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(data.Table); err == nil && schema != nil {
+				tableSchema = schema
+			}
+		}
+	}
+	hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
+
 	type updateItem struct {
 		pk      storage.Value
 		updates storage.Record
@@ -925,8 +953,9 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		}
 		rowMap := recordToMap(rec)
 
+		var rowContext map[string]any
 		if data.WhereExpr != nil {
-			rowContext := f.buildRowEvalMap(rowMap)
+			rowContext = f.buildRowEvalMap(rowMap)
 			if !proc.EvalBoolExpr(data.WhereExpr, rowContext, nil) {
 				continue
 			}
@@ -934,10 +963,8 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 
 		var pkVal storage.Value
 		var hasPk bool
-		if tg := f.executor.getTableGetter(); tg != nil {
-			if schema, err := tg(data.Table); err == nil && schema != nil {
-				pkVal, hasPk = schema.ResolveRecordPK(rec)
-			}
+		if tableSchema != nil {
+			pkVal, hasPk = tableSchema.ResolveRecordPK(rec)
 		}
 		if !hasPk {
 			if v, ok := rec.Get("id"); ok {
@@ -949,21 +976,20 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			}
 		}
 
-		recUpdates := make(storage.Record)
-		newRowMap := make(map[string]any)
-		for k, v := range rowMap {
-			newRowMap[k] = v
+		if rowContext == nil {
+			rowContext = f.buildRowEvalMap(rowMap)
 		}
 
-		var tableSchema *storage.TableSchema
-		if tg := f.executor.getTableGetter(); tg != nil {
-			if schema, err := tg(data.Table); err == nil && schema != nil {
-				tableSchema = schema
+		recUpdates := make(storage.Record, len(data.Assignments))
+		var newRowMap map[string]any
+		if hasTriggers {
+			newRowMap = make(map[string]any, len(rowMap))
+			for k, v := range rowMap {
+				newRowMap[k] = v
 			}
 		}
 
 		for _, assign := range data.Assignments {
-			rowContext := f.buildRowEvalMap(rowMap)
 			val, err := proc.EvalRowExpr(assign.Value, rowContext, nil)
 			if err != nil {
 				return 0, err
@@ -983,31 +1009,42 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				}
 			}
 			recUpdates.Set(colName, stVal)
-			newRowMap[colName] = valToAny(stVal)
+			if hasTriggers {
+				newRowMap[colName] = valToAny(stVal)
+			}
 		}
 
 		if hasPk {
-			toUpdate = append(toUpdate, updateItem{
+			item := updateItem{
 				pk:      pkVal,
 				updates: recUpdates,
-				oldRow:  rowMap,
-				newRow:  newRowMap,
-			})
+			}
+			if hasTriggers {
+				item.oldRow = rowMap
+				item.newRow = newRowMap
+			}
+			toUpdate = append(toUpdate, item)
 		}
 	}
 
 	updatedCount := int64(0)
 	var oldRows []map[string]any
 	var newRows []map[string]any
+	if hasTriggers {
+		oldRows = make([]map[string]any, 0, len(toUpdate))
+		newRows = make([]map[string]any, 0, len(toUpdate))
+	}
 	for _, item := range toUpdate {
 		if err := f.tx.Update(data.Table, item.pk, item.updates); err == nil {
 			updatedCount++
-			oldRows = append(oldRows, item.oldRow)
-			newRows = append(newRows, item.newRow)
+			if hasTriggers {
+				oldRows = append(oldRows, item.oldRow)
+				newRows = append(newRows, item.newRow)
+			}
 		}
 	}
 
-	if len(newRows) > 0 {
+	if hasTriggers && updatedCount > 0 {
 		_ = f.fireTriggers(data.Table, "UPDATE", newRows, oldRows)
 	}
 	return updatedCount, nil
@@ -1044,6 +1081,16 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	}
 	defer cursor.Close()
 
+	var tableSchema *storage.TableSchema
+	if f.executor != nil {
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(data.Table); err == nil && schema != nil {
+				tableSchema = schema
+			}
+		}
+	}
+	hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "DELETE")
+
 	type delItem struct {
 		pk  storage.Value
 		row map[string]any
@@ -1066,10 +1113,8 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 
 		var pkVal storage.Value
 		var hasPk bool
-		if tg := f.executor.getTableGetter(); tg != nil {
-			if schema, err := tg(data.Table); err == nil && schema != nil {
-				pkVal, hasPk = schema.ResolveRecordPK(rec)
-			}
+		if tableSchema != nil {
+			pkVal, hasPk = tableSchema.ResolveRecordPK(rec)
 		}
 		if !hasPk {
 			if v, ok := rec.Get("id"); ok {
@@ -1081,20 +1126,29 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 			}
 		}
 		if hasPk {
-			toDelete = append(toDelete, delItem{pk: pkVal, row: rowMap})
+			item := delItem{pk: pkVal}
+			if hasTriggers {
+				item.row = rowMap
+			}
+			toDelete = append(toDelete, item)
 		}
 	}
 
 	deletedCount := int64(0)
 	var deletedRows []map[string]any
+	if hasTriggers {
+		deletedRows = make([]map[string]any, 0, len(toDelete))
+	}
 	for _, item := range toDelete {
 		if err := f.tx.Delete(data.Table, item.pk); err == nil {
 			deletedCount++
-			deletedRows = append(deletedRows, item.row)
+			if hasTriggers {
+				deletedRows = append(deletedRows, item.row)
+			}
 		}
 	}
 
-	if len(deletedRows) > 0 {
+	if hasTriggers && len(deletedRows) > 0 {
 		_ = f.fireTriggers(data.Table, "DELETE", nil, deletedRows)
 	}
 	return deletedCount, nil

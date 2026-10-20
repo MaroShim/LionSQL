@@ -429,6 +429,14 @@ type ConnectionSession struct {
 	prepared     *TdsPreparedStatementCache
 }
 
+func (sess *ConnectionSession) writePacket(w io.Writer, pType byte, payload []byte) error {
+	pktSize := sess.PacketSize
+	if pktSize == 0 {
+		pktSize = DefaultPacketSize
+	}
+	return WritePacketWithSize(w, pType, sess.SPID, payload, pktSize)
+}
+
 func (s *Server) handleConnection(conn net.Conn) {
 	defer conn.Close()
 
@@ -556,7 +564,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		default:
 			// Fallback: send simple DONE
 			doneBytes := BuildDone(TokenDone, DoneFinal, 0, 0)
-			_ = WritePacket(conn, PacketTabular, sess.SPID, doneBytes)
+			_ = sess.writePacket(conn, PacketTabular, doneBytes)
 		}
 	}
 }
@@ -621,7 +629,7 @@ func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSess
 	// If connection is already wrapped with TLS (e.g. TDS 8.0 direct TLS)
 	if _, isTLS := conn.(*tls.Conn); isTLS {
 		respPayload := BuildPreloginResponse(EncryptOn)
-		if err := WritePacket(conn, PacketTabular, sess.SPID, respPayload); err != nil {
+		if err := sess.writePacket(conn, PacketTabular, respPayload); err != nil {
 			return nil, err
 		}
 		return conn, nil
@@ -667,7 +675,7 @@ func (s *Server) handlePrelogin(conn net.Conn, pkt *Packet, sess *ConnectionSess
 
 	// 1. Respond with PRELOGIN options: Version, Encryption, MARS
 	respPayload := BuildPreloginResponse(serverEncrypt)
-	if err := WritePacket(conn, PacketTabular, sess.SPID, respPayload); err != nil {
+	if err := sess.writePacket(conn, PacketTabular, respPayload); err != nil {
 		return nil, err
 	}
 
@@ -711,7 +719,7 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 					var errResp bytes.Buffer
 					errResp.Write(errToken)
 					errResp.Write(doneToken)
-					_ = WritePacket(conn, PacketTabular, sess.SPID, errResp.Bytes())
+					_ = sess.writePacket(conn, PacketTabular, errResp.Bytes())
 					return
 				}
 			}
@@ -742,7 +750,7 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 	done := BuildDone(TokenDone, DoneFinal, 0, 0)
 	resp.Write(done)
 
-	_ = WritePacket(conn, PacketTabular, sess.SPID, resp.Bytes())
+	_ = sess.writePacket(conn, PacketTabular, resp.Bytes())
 }
 
 func (s *Server) parseLogin7(payload []byte, sess *ConnectionSession) {
@@ -870,7 +878,7 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 	rpc, err := parseRPCRequest(pkt.Payload)
 	if err != nil || rpc == nil {
 		done := BuildDone(TokenDone, DoneFinal, 0, 0)
-		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+		_ = sess.writePacket(conn, PacketTabular, done)
 		return
 	}
 
@@ -927,7 +935,7 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 			s.executeRPCAndRespond(conn, query, sess, nil, ctx)
 		} else {
 			done := BuildDoneProc(DoneFinal, 0, 0)
-			_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+			_ = sess.writePacket(conn, PacketTabular, done)
 		}
 	}
 }
@@ -985,7 +993,7 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 	buf.Write(BuildReturnValueInt(1, "@handle", handle))
 	buf.Write(BuildReturnStatus(0))
 	buf.Write(BuildDoneProc(DoneFinal, 0, 0))
-	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 }
 
 func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession, ctx context.Context) {
@@ -1001,7 +1009,7 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 		buf.Write(BuildError(8179, 1, 16, fmt.Sprintf("Could not find prepared statement with handle %d.", handle), "LionSQL", "", 1))
 		buf.Write(BuildReturnStatus(-1))
 		buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 		return
 	}
 
@@ -1040,7 +1048,7 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 				var buf bytes.Buffer
 				buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
 				buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-				_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+				_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 				return
 			}
 			if cs.Tx != nil {
@@ -1053,12 +1061,19 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 		}
 
 		if (cs == nil || cs.Tx == nil) && runErr == nil {
-			session, err := s.engine.NewSession()
-			if err == nil {
-				defer session.Close()
-				res, runErr = s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
+			var session storage.Session
+			var shouldClose bool
+			if cs != nil && cs.Session != nil {
+				session = cs.Session
 			} else {
-				runErr = err
+				session, _ = s.engine.NewSession()
+				shouldClose = true
+			}
+			if session != nil {
+				if shouldClose {
+					defer session.Close()
+				}
+				res, runErr = s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
 			}
 		}
 
@@ -1067,7 +1082,7 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 			num, state, sev, msg := extractTdsErrorInfo(runErr)
 			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 			buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 			return
 		}
 
@@ -1164,7 +1179,7 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 				var buf bytes.Buffer
 				buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
 				buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-				_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+				_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 				return
 			}
 			if cs.Tx != nil {
@@ -1177,12 +1192,19 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 		}
 
 		if (cs == nil || cs.Tx == nil) && runErr == nil {
-			session, err := s.engine.NewSession()
-			if err == nil {
-				defer session.Close()
-				res, runErr = s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
+			var session storage.Session
+			var shouldClose bool
+			if cs != nil && cs.Session != nil {
+				session = cs.Session
 			} else {
-				runErr = err
+				session, _ = s.engine.NewSession()
+				shouldClose = true
+			}
+			if session != nil {
+				if shouldClose {
+					defer session.Close()
+				}
+				res, runErr = s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
 			}
 		}
 
@@ -1191,7 +1213,7 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 			num, state, sev, msg := extractTdsErrorInfo(runErr)
 			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 			buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 			return
 		}
 
@@ -1257,7 +1279,7 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		buf.Write(BuildDoneProc(doneStatus|DoneCount, 0xC1, rowCount))
 	}
 
-	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 }
 
 func (s *Server) handleRPCUnprepare(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession) {
@@ -1271,13 +1293,13 @@ func (s *Server) handleRPCUnprepare(conn net.Conn, rpc *parsedRPC, sess *Connect
 	var buf bytes.Buffer
 	buf.Write(BuildReturnStatus(0))
 	buf.Write(BuildDoneProc(DoneFinal, 0, 0))
-	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 }
 
 func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *ConnectionSession, ctx context.Context) {
 	if len(rpc.Params) == 0 {
 		done := BuildDoneProc(DoneFinal, 0, 0)
-		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+		_ = sess.writePacket(conn, PacketTabular, done)
 		return
 	}
 
@@ -1340,7 +1362,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		}
 		buf.Write(BuildReturnStatus(0))
 		buf.Write(BuildDoneProc(DoneFinal, 0, 0))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 		return
 	}
 
@@ -1362,7 +1384,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		}
 		buf.Write(BuildReturnStatus(0))
 		buf.Write(BuildDoneProc(doneStatus, 0xC1, 1))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 		if s.DevMode() {
 			colNames := make([]string, len(cols))
 			for i, c := range cols {
@@ -1394,7 +1416,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 		buf.Write(BuildReturnStatus(-1))
 		buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 		return
 	}
 	if s.DevMode() {
@@ -1468,7 +1490,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		buf.Write(BuildDoneProc(doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected)))
 	}
 
-	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 }
 
 func isIdentByte(ch byte) bool {
@@ -2103,14 +2125,14 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 
 func (s *Server) handleAttention(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
 	done := BuildDone(TokenDone, DoneFinal|DoneAttn, 0, 0)
-	_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+	_ = sess.writePacket(conn, PacketTabular, done)
 }
 
 func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *ConnectionSession) {
 	payload := pkt.Payload
 	if len(payload) < 4 {
 		done := BuildDone(TokenDone, DoneFinal, 0, 0)
-		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+		_ = sess.writePacket(conn, PacketTabular, done)
 		return
 	}
 
@@ -2122,7 +2144,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 
 	if len(body) < 2 {
 		done := BuildDone(TokenDone, DoneFinal, 0, 0)
-		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+		_ = sess.writePacket(conn, PacketTabular, done)
 		return
 	}
 
@@ -2134,7 +2156,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
-			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 			return
 		}
 		sess.inTx = true
@@ -2143,7 +2165,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		var buf bytes.Buffer
 		buf.Write(BuildEnvChangeBeginTransaction(sess.txDescriptor))
 		buf.Write(BuildDone(TokenDone, DoneFinal|DoneInXact, 0, 0))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 
 	case 7: // tmCommitXact
 		txDesc := sess.txDescriptor
@@ -2154,14 +2176,14 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
-			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 			return
 		}
 
 		var buf bytes.Buffer
 		buf.Write(BuildEnvChangeCommitTransaction(txDesc))
 		buf.Write(BuildDone(TokenDone, DoneFinal, 0, 0))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 
 	case 8: // tmRollbackXact
 		txDesc := sess.txDescriptor
@@ -2172,18 +2194,18 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
-			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 			return
 		}
 
 		var buf bytes.Buffer
 		buf.Write(BuildEnvChangeRollbackTransaction(txDesc))
 		buf.Write(BuildDone(TokenDone, DoneFinal, 0, 0))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 
 	default:
 		done := BuildDone(TokenDone, DoneFinal, 0, 0)
-		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+		_ = sess.writePacket(conn, PacketTabular, done)
 	}
 }
 
@@ -2191,7 +2213,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 	trimmed := strings.TrimSpace(query)
 	if trimmed == "" {
 		done := BuildDone(TokenDone, DoneFinal, 0, 0)
-		_ = WritePacket(conn, PacketTabular, sess.SPID, done)
+		_ = sess.writePacket(conn, PacketTabular, done)
 		return
 	}
 
@@ -2208,7 +2230,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 			doneStatus |= DoneInXact
 		}
 		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, 0xC1, 1))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 		if s.DevMode() {
 			colNames := make([]string, len(cols))
 			for i, c := range cols {
@@ -2239,7 +2261,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		num, state, sev, msg := extractTdsErrorInfo(err)
 		buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 		buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
-		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 		return
 	}
 	if s.DevMode() {
@@ -2316,7 +2338,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		buf.Write(BuildDone(TokenDone, doneStatus|DoneCount, cmdCode, uint64(res.RowsAffected)))
 	}
 
-	_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
+	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 }
 
 func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {

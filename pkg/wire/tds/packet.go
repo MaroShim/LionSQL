@@ -106,13 +106,29 @@ var tdsFramePool = sync.Pool{
 	},
 }
 
-// WritePacket writes a payload chunked into TDS frames to w with the specified packet type.
-// It bundles the 8-byte TDS header and payload chunk into a single contiguous frame buffer
-// recycled via sync.Pool to execute a single atomic write per packet (halving OS syscall overhead).
+// WritePacket writes a payload chunked into TDS frames to w with the default packet size (4096).
 func WritePacket(w io.Writer, pType byte, spid uint16, payload []byte) error {
-	bufPtr := tdsFramePool.Get().(*[]byte)
-	defer tdsFramePool.Put(bufPtr)
-	frame := *bufPtr
+	return WritePacketWithSize(w, pType, spid, payload, DefaultPacketSize)
+}
+
+// WritePacketWithSize writes a payload chunked into TDS frames to w with the specified packet size.
+// It bundles the 8-byte TDS header and payload chunk into a single contiguous frame buffer.
+// When packetSize == DefaultPacketSize (4096), it reuses buffers via sync.Pool to execute
+// a single atomic write per packet (halving OS syscall overhead).
+func WritePacketWithSize(w io.Writer, pType byte, spid uint16, payload []byte, packetSize uint32) error {
+	if packetSize < 512 || packetSize > 32768 {
+		packetSize = DefaultPacketSize
+	}
+
+	var frame []byte
+	var bufPtr *[]byte
+	if packetSize == DefaultPacketSize {
+		bufPtr = tdsFramePool.Get().(*[]byte)
+		defer tdsFramePool.Put(bufPtr)
+		frame = *bufPtr
+	} else {
+		frame = make([]byte, packetSize)
+	}
 
 	if len(payload) == 0 {
 		frame[0] = pType
@@ -125,7 +141,7 @@ func WritePacket(w io.Writer, pType byte, spid uint16, payload []byte) error {
 		return err
 	}
 
-	maxPayloadPerPacket := DefaultPacketSize - HeaderSize
+	maxPayloadPerPacket := int(packetSize) - HeaderSize
 	var packetID byte = 1
 	offset := 0
 
@@ -161,6 +177,55 @@ func WritePacket(w io.Writer, pType byte, spid uint16, payload []byte) error {
 	}
 
 	return nil
+}
+
+// WriteUTF16LEDirect encodes string s as UTF-16LE directly into buf, avoiding intermediate slice allocations.
+// It returns the number of bytes written.
+func WriteUTF16LEDirect(buf *bytes.Buffer, s string) int {
+	if len(s) == 0 {
+		return 0
+	}
+
+	// ASCII fast-path: check if all characters are 7-bit ASCII
+	isASCII := true
+	for i := 0; i < len(s); i++ {
+		if s[i] >= 0x80 {
+			isASCII = false
+			break
+		}
+	}
+	if isASCII {
+		buf.Grow(len(s) * 2)
+		for i := 0; i < len(s); i++ {
+			buf.WriteByte(s[i])
+			buf.WriteByte(0)
+		}
+		return len(s) * 2
+	}
+
+	// Non-ASCII path: direct encoding without intermediate []rune / []uint16 allocations
+	buf.Grow(len(s) * 2)
+	bytesWritten := 0
+	for _, r := range s {
+		switch {
+		case 0 <= r && r < 0xD800, 0xE000 <= r && r <= 0xFFFF:
+			buf.WriteByte(byte(r))
+			buf.WriteByte(byte(r >> 8))
+			bytesWritten += 2
+		case 0x10000 <= r && r <= 0x10FFFF:
+			r1, r2 := utf16.EncodeRune(r)
+			buf.WriteByte(byte(r1))
+			buf.WriteByte(byte(r1 >> 8))
+			buf.WriteByte(byte(r2))
+			buf.WriteByte(byte(r2 >> 8))
+			bytesWritten += 4
+		default:
+			buf.WriteByte(0xFD)
+			buf.WriteByte(0xFF) // unicode.ReplacementChar (0xFFFD)
+			bytesWritten += 2
+		}
+	}
+	return bytesWritten
 }
 
 // EncodeUTF16LE converts a Go UTF-8 string to a UTF-16LE byte slice.
