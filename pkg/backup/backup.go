@@ -61,7 +61,7 @@ func CreateBackup(w io.Writer, eng storage.Engine, cat *catalog.Catalog) (*Manif
 	}
 
 	// 3. Prepare temp directory for table data streaming
-	tmpDir, err := os.MkdirTemp("", "sqlion-backup-data-*")
+	tmpDir, err := os.MkdirTemp("", "lionsql-backup-data-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create backup temp dir: %w", err)
 	}
@@ -260,7 +260,7 @@ func CreateBackupFile(targetPath string, eng storage.Engine, cat *catalog.Catalo
 		return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)
 	}
 
-	tmpFile, err := os.CreateTemp(dir, "sqlion-backup-*.tmp")
+	tmpFile, err := os.CreateTemp(dir, "lionsql-backup-*.tmp")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary backup file: %w", err)
 	}

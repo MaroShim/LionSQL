@@ -359,7 +359,7 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if strings.TrimSpace(req.Target) == "" {
-		filename := fmt.Sprintf("sqlion-backup-%s.tar.gz", time.Now().Format("20060102-150405"))
+		filename := fmt.Sprintf("lionsql-backup-%s.tar.gz", time.Now().Format("20060102-150405"))
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 		_, _ = backup.CreateBackup(w, s.engine, s.catalog)

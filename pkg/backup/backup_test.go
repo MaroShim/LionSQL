@@ -189,7 +189,7 @@ func TestBackupFileAndRestoreFile(t *testing.T) {
 	eng, cat := setupTestDB(t)
 	defer eng.Close()
 
-	tmpDir, err := os.MkdirTemp("", "sqlion-test-backup-*")
+	tmpDir, err := os.MkdirTemp("", "lionsql-test-backup-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

@@ -50,7 +50,7 @@ func RestoreBackup(r io.Reader, eng storage.Engine, cat *catalog.Catalog, opts R
 	}
 
 	// 1. Unpack tar.gz stream to temporary staging directory
-	tmpDir, err := os.MkdirTemp("", "sqlion-restore-*")
+	tmpDir, err := os.MkdirTemp("", "lionsql-restore-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp restore directory: %w", err)
 	}

@@ -318,7 +318,7 @@ func TestPartition_SecondaryIndex_Consistency(t *testing.T) {
 }
 
 func TestPartition_PersistenceAndReload(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_part_persist_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_part_persist_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

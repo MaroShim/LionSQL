@@ -14,7 +14,7 @@ import (
 )
 
 func TestWALArchiver_Lifecycle(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_archiver_test_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_archiver_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestWALArchiver_Lifecycle(t *testing.T) {
 }
 
 func TestPITR_RestoreToTimestampAndLSN(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_pitr_test_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_pitr_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
