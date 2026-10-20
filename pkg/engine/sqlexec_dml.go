@@ -463,7 +463,13 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		if onConflict != nil {
 			var conflictCols []string
 			if len(onConflict.targetCols) > 0 {
-				conflictCols = onConflict.targetCols
+				for _, tc := range onConflict.targetCols {
+					if colDef, _, found := schema.FindColumn(tc); found && colDef != nil {
+						conflictCols = append(conflictCols, colDef.Name)
+					} else {
+						conflictCols = append(conflictCols, tc)
+					}
+				}
 			} else if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
 				conflictCols = []string{pkCol.Name}
 			}
@@ -473,7 +479,21 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			pkCol, _ := schema.PrimaryKeyColumn()
 
 			if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
-				if targetVal, ok := rec[pkCol.Name]; ok {
+				var targetVal storage.Value
+				var hasTarget bool
+				if tv, ok := rec[pkCol.Name]; ok {
+					targetVal = tv
+					hasTarget = true
+				} else {
+					for k, v := range rec {
+						if strings.EqualFold(k, pkCol.Name) {
+							targetVal = v
+							hasTarget = true
+							break
+						}
+					}
+				}
+				if hasTarget {
 					if ex, err := tx.Get(tableName, targetVal); err == nil && ex != nil {
 						existingRec = ex
 						existingPk = targetVal
@@ -490,8 +510,36 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						}
 						matched := true
 						for _, cc := range conflictCols {
-							rv, ok1 := r[cc]
-							iv, ok2 := rec[cc]
+							var rv storage.Value
+							ok1 := false
+							if v, ok := r[cc]; ok {
+								rv = v
+								ok1 = true
+							} else {
+								for k, v := range r {
+									if strings.EqualFold(k, cc) {
+										rv = v
+										ok1 = true
+										break
+									}
+								}
+							}
+
+							var iv storage.Value
+							ok2 := false
+							if v, ok := rec[cc]; ok {
+								iv = v
+								ok2 = true
+							} else {
+								for k, v := range rec {
+									if strings.EqualFold(k, cc) {
+										iv = v
+										ok2 = true
+										break
+									}
+								}
+							}
+
 							if !ok1 || !ok2 || rv.Compare(iv) != 0 {
 								matched = false
 								break
@@ -500,7 +548,16 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						if matched {
 							existingRec = r
 							if pkCol != nil {
-								existingPk = r[pkCol.Name]
+								if v, ok := r[pkCol.Name]; ok {
+									existingPk = v
+								} else {
+									for k, v := range r {
+										if strings.EqualFold(k, pkCol.Name) {
+											existingPk = v
+											break
+										}
+									}
+								}
 							}
 							break
 						}
@@ -545,6 +602,13 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 							}
 							if newVal, ok := rec[c.Name]; ok {
 								updatedRec[c.Name] = newVal
+							} else {
+								for k, v := range rec {
+									if strings.EqualFold(k, c.Name) {
+										updatedRec[c.Name] = v
+										break
+									}
+								}
 							}
 						}
 					} else {
@@ -812,7 +876,13 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		if onConflict != nil {
 			var conflictCols []string
 			if len(onConflict.targetCols) > 0 {
-				conflictCols = onConflict.targetCols
+				for _, tc := range onConflict.targetCols {
+					if colDef, _, found := schema.FindColumn(tc); found && colDef != nil {
+						conflictCols = append(conflictCols, colDef.Name)
+					} else {
+						conflictCols = append(conflictCols, tc)
+					}
+				}
 			} else if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
 				conflictCols = []string{pkCol.Name}
 			}
@@ -822,7 +892,21 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			pkCol, _ := schema.PrimaryKeyColumn()
 
 			if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
-				if targetVal, ok := rec[pkCol.Name]; ok {
+				var targetVal storage.Value
+				var hasTarget bool
+				if tv, ok := rec[pkCol.Name]; ok {
+					targetVal = tv
+					hasTarget = true
+				} else {
+					for k, v := range rec {
+						if strings.EqualFold(k, pkCol.Name) {
+							targetVal = v
+							hasTarget = true
+							break
+						}
+					}
+				}
+				if hasTarget {
 					if ex, err := tx.Get(tableName, targetVal); err == nil && ex != nil {
 						existingRec = ex
 						existingPk = targetVal
@@ -839,8 +923,36 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						}
 						matched := true
 						for _, cc := range conflictCols {
-							rv, ok1 := r[cc]
-							iv, ok2 := rec[cc]
+							var rv storage.Value
+							ok1 := false
+							if v, ok := r[cc]; ok {
+								rv = v
+								ok1 = true
+							} else {
+								for k, v := range r {
+									if strings.EqualFold(k, cc) {
+										rv = v
+										ok1 = true
+										break
+									}
+								}
+							}
+
+							var iv storage.Value
+							ok2 := false
+							if v, ok := rec[cc]; ok {
+								iv = v
+								ok2 = true
+							} else {
+								for k, v := range rec {
+									if strings.EqualFold(k, cc) {
+										iv = v
+										ok2 = true
+										break
+									}
+								}
+							}
+
 							if !ok1 || !ok2 || rv.Compare(iv) != 0 {
 								matched = false
 								break
@@ -849,7 +961,16 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						if matched {
 							existingRec = r
 							if pkCol != nil {
-								existingPk = r[pkCol.Name]
+								if v, ok := r[pkCol.Name]; ok {
+									existingPk = v
+								} else {
+									for k, v := range r {
+										if strings.EqualFold(k, pkCol.Name) {
+											existingPk = v
+											break
+										}
+									}
+								}
 							}
 							break
 						}
@@ -893,6 +1014,13 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 							}
 							if newVal, ok := rec[c.Name]; ok {
 								updatedRec[c.Name] = newVal
+							} else {
+								for k, v := range rec {
+									if strings.EqualFold(k, c.Name) {
+										updatedRec[c.Name] = v
+										break
+									}
+								}
 							}
 						}
 					} else {
