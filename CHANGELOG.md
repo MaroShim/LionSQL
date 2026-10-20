@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `SQL-STRICT-NULL-DECORATOR-1`: Introduced standard SQL strict NULL propagation functional decorators (`Strict`, `StrictUnary`, `StrictBinary`, `RegisterStrictScalarFunction`, `HasAnyNull`, `HasNullAt`) in `pkg/proc/strict.go`.
 - `STORAGE-TYPE-PROMOTION-LATTICE-1`: Introduced unified Type Promotion Lattice and binary coercion engine (`storage.CoerceBinaryValues`, `CompareFloatEpsilon`) in `pkg/storage/coerce.go`, eliminating 150+ lines of ad-hoc heterogeneous type matching in `Value.Equal` and `Value.Compare`.
 - `STORAGE-SYNTHETIC-PK-ABSTRACTION-1`: Introduced centralized synthetic row identity abstraction (`storage.SyntheticPKKind`, `NewSyntheticPKColumn`, `IsSyntheticPKName`, `HasSyntheticPK`, `SyntheticPKColumn`) in `pkg/storage/synthetic_pk.go`, eliminating scattered magic strings (`_row_id`, `_dt_row_id`, `_cte_row_id`) across DDL, derived tables, CTEs, projection, and VDBE VM.
+- `UI-13`: Streamlined Web Studio branding and navigation titles (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`): standardized top-left branding on `LionSQL Studio` and removed the redundant `OLTP + SP` badge, while stripping the `Studio` suffix from all sub-feature sidebar buttons and view header titles (`SQL Query`, `Tables & Records`, `Stored Procedures`).
 
 ### Fixed
 - **Group D Execution Engine, DDL Constraints, Index Ordering & Procedure Transactions Remediation (4 Critical Integrity Defects)**:

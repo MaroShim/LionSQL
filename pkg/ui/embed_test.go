@@ -32,7 +32,7 @@ func TestDashboardMenuOrderAndContent(t *testing.T) {
 		`data-view="crons"`,
 		`Cron Jobs`,
 		`data-view="query"`,
-		`SQL Query Studio`,
+		`SQL Query`,
 		`data-view="apikeys"`,
 		`Auth & API Keys`,
 		`data-view="sdk"`,

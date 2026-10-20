@@ -739,19 +739,17 @@
   <div class="mobile-header">
     <div style="display: flex; align-items: center; gap: 10px;">
       <button class="mobile-hamburger-btn" onclick="toggleSidebar()" aria-label="Toggle navigation menu">&#9776;</button>
-      <span style="font-weight: 700; font-size: 1.05rem;">LionSQL</span>
+      <span style="font-weight: 700; font-size: 1.05rem;">LionSQL Studio</span>
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
       <button class="btn btn-secondary mobile-theme-btn" style="padding: 4px 8px; font-size: 0.72rem; display: flex; align-items: center; gap: 4px;" onclick="toggleTheme()" aria-label="Toggle Theme">
         <span class="mobile-theme-icon"></span>
       </button>
-      <span class="badge">OLTP + SP</span>
     </div>
   </div>
   <aside id="main-sidebar">
     <div class="logo">
-      <span>LionSQL</span>
-      <span class="badge">OLTP + SP</span>
+      <span>LionSQL Studio</span>
       <span id="realtime-badge" style="margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:0.65rem; color:var(--success); background:var(--alert-success-bg); padding:2px 6px; border-radius:9999px; border:1px solid var(--alert-success-border);">
         <span style="width:5px; height:5px; border-radius:50%; background:var(--success);"></span> Live
       </span>
@@ -790,7 +788,7 @@
         <span id="nav-crons-count">0</span>
       </button>
       <button class="nav-btn" data-view="query" onclick="switchView('query')">
-        <span>SQL Query Studio</span>
+        <span>SQL Query</span>
         <span class="badge badge-success">SQL</span>
       </button>
       <button class="nav-btn" data-view="apikeys" onclick="switchView('apikeys')">
@@ -880,11 +878,11 @@
       </div>
     </div>
 
-    <!-- View: SQL Query Studio -->
+    <!-- View: SQL Query -->
     <div id="view-query" style="display: none;">
       <div class="header-bar">
         <div>
-          <h2>SQL Query Studio</h2>
+          <h2>SQL Query</h2>
           <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
             Execute standard SQL queries (DDL, DML, DQL) and T-SQL statements directly. Shortcut: <kbd style="background:var(--btn-secondary-bg); color:var(--text); padding:2px 5px; border-radius:3px; border:1px solid var(--border);">Ctrl</kbd>+<kbd style="background:var(--btn-secondary-bg); color:var(--text); padding:2px 5px; border-radius:3px; border:1px solid var(--border);">Enter</kbd>
           </div>
@@ -983,14 +981,14 @@
     <div id="view-tables">
       <div class="header-bar">
         <div>
-          <h2>Tables & Records Studio</h2>
+          <h2>Tables & Records</h2>
           <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
             PocketBase-style interactive data management, spreadsheet inline editing, and schema builder.
           </div>
         </div>
         <div style="display: flex; gap: 8px;">
           <button class="btn" style="background: var(--primary);" onclick="openCreateTableModal()">+ New Table</button>
-          <button class="btn btn-secondary" onclick="openInQueryStudio()">Query in Studio</button>
+          <button class="btn btn-secondary" onclick="openInQueryStudio()">SQL Query</button>
           <button id="btn-seed-sample" class="btn btn-secondary" onclick="seedSampleData()">Seed Sample Data</button>
         </div>
       </div>
@@ -1185,7 +1183,7 @@
     <!-- View: Procedures -->
     <div id="view-procedures" style="display: none;">
       <div class="header-bar">
-        <h2>Stored Procedure Studio</h2>
+        <h2>Stored Procedures</h2>
       </div>
 
       <div class="grid-2" style="margin-top: 20px;">
