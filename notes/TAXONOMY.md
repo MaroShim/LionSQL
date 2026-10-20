@@ -64,6 +64,9 @@
 | **`BUG-FK-PARENT-TABLE-CASE-1`** | **외래키 부모 테이블 대소문자 정규화 (FK Parent Table Case Bug)** | `BUG-FK-PARENT-TABLE-CASE-1` | 부모 테이블 대소문자 불일치 시 `ON DELETE RESTRICT` 및 외래키 연쇄 검사 완전 우회 결함 해결 |
 | **`BUG-PLANNER-ORDERBY-1`** | **CBO/SetOp 다중 정렬 키 콤마 잔존 해결 (Planner OrderBy Bug)** | `BUG-PLANNER-ORDERBY-1` | CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존(`"a,"`)으로 인한 플랜 왜곡 해결 |
 | **`BUG-WT-SWEEP-1`** | **WiredTiger 60분 유휴 세션 경고 방지 및 세션 리셋 (WT Sweep Server Bug)** | `BUG-WT-SWEEP-1` | `startPeriodicSync` 고아 세션 상시 점유 제거, `session->reset` 바인딩 및 `SessionPool` TTL 리퍼 연동 |
+| **`BUG-API-PK-GEN-1`** | **HTTP API 레코드 밀리초 PK 충돌 및 UUID 누락 해결 (API PK Gen Bug)** | `BUG-API-PK-GEN-1` | 나노초/카운터 결합 유니크 채번 및 UUID PK 자동 생성 지원으로 PK 충돌 및 NULL 방지 |
+| **`BUG-WAL-TORN-BOOT-1`** | **MemEngine WAL 테일 절단 시 기동 실패 방지 (WAL Torn Write Boot Bug)** | `BUG-WAL-TORN-BOOT-1` | 비정상 종료 시 손상된 미완료 레코드 이전 정상 지점까지 복구 완료 후 트렁케이트하여 정상 기동 보장 |
+| **`BUG-CATALOG-INTERCEPT-BRACKET-1`** | **가상 카탈로그 대괄호 식별자 인터셉트 보장 (Catalog Bracket Bug)** | `BUG-CATALOG-INTERCEPT-BRACKET-1` | 정규화 단계 대괄호 및 스키마 접두사 트림으로 SSMS/sqlcmd 가상 뷰 조인 쿼리 100% 정상 인터셉트 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---

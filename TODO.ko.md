@@ -169,6 +169,9 @@
 | **P1** | **스토리지/외래키** | **FK 부모 테이블명 대소문자 불일치 시 `ON DELETE RESTRICT` 완전 우회 삭제 허용 결함 해결 (`BUG-FK-PARENT-TABLE-CASE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **플래너/정렬** | **CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존 플랜 왜곡 해결 (`BUG-PLANNER-ORDERBY-1`)** | `pkg/planner/planner.go`, `pkg/planner/setop.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/WiredTiger** | **WiredTiger 60분 유휴 세션 방치 sweep-server 경고 방지 및 `session->reset` 연동 (`BUG-WT-SWEEP-1`)** | `pkg/storage/wiredtiger/wt_engine.go`, `pkg/engine/session_pool.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **API/PK생성** | **HTTP API 레코드 생성 시 밀리초 타임스탬프 충돌 및 UUID PK NULL 방치 결함 해결 (`BUG-API-PK-GEN-1`)** | `pkg/api/handlers_records.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/복구** | **MemEngine WAL 테일 절단(Torn Write) 시 기동 실패 방지 및 정상 복구 바운더리 보장 (`BUG-WAL-TORN-BOOT-1`)** | `pkg/storage/memengine/wal.go`, `pkg/storage/memengine/memengine.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **카탈로그/인터셉터** | **가상 카탈로그 조인 인터셉터 대괄호 식별자(`[sys].[tables]`) 인식 누락 테이블 미발견 결함 해결 (`BUG-CATALOG-INTERCEPT-BRACKET-1`)** | `pkg/catalog/virtual/interceptor.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -305,8 +308,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 27대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1` ~ `BUG-JOIN-PARSE-1`, `BUG-TABLE-CASE-1` ~ `BUG-COPY-PK-1`, `BUG-STR-NULL-1`, `BUG-VM-UPDATE-1`, `BUG-FK-CHILD-CASE-1`, `BUG-PGWIRE-PARAM-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락으로 인해 발생하는 27대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 53대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-CATALOG-INTERCEPT-BRACKET-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패 등으로 인해 발생하는 53대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -458,6 +461,15 @@
   50. **`BUG-WT-SWEEP-1` (`pkg/storage/wiredtiger/wt_engine.go:265`, `pkg/engine/session_pool.go:184`)**:
      - `startPeriodicSync` 고아 세션 상시 점유 및 유휴 세션 미회수로 인해 기동 60분 후 WiredTiger `sweep-server`로부터 `Session did not run a sweep for 60 minutes` 경고가 발생하는 결함.
      - `WT_SESSION::reset` CGO 바인딩 및 주기적 세션 리셋, `SessionPool` 유휴 세션 TTL 리퍼 도입으로 60분 와치독 방지.
+  51. **`BUG-API-PK-GEN-1` (`pkg/api/handlers_records.go:449-455`)**:
+     - `CreateRecord`에서 정수 PK 미제공 시 나노초가 아닌 밀리초(`UnixNano() / int64(time.Millisecond)`)로 채번하여 동일 밀리초 내 동시 요청 시 PK 충돌 에러가 발생하고, VarChar/Int 외 타입(예: UUID) 미처리로 `storage.NullValue`가 PK로 강제 삽입되는 결함.
+     - 나노초 타임스탬프 또는 원자적 카운터 결합 유니크 채번 및 UUID PK 자동 생성(`uuid.New().String()`) 보장.
+  52. **`BUG-WAL-TORN-BOOT-1` (`pkg/storage/memengine/wal.go:349`, `pkg/storage/memengine/memengine.go:311`)**:
+     - 시스템 비정상 종료(Crash, 정전)로 인해 WAL 파일의 마지막 레코드가 중간에 잘린(Torn Write) 경우, `ReplayWAL`이 치명적 에러(`truncated WAL frame payload`)를 반환하여 `OpenWithOptions` 엔진 기동 전체를 영구 중단시키는 결함.
+     - 마지막 손상된 미완료 레코드 발견 시 이전 정상 커밋 지점까지 복구 완료 후 트렁케이트하고 정상 기동하도록 무결성 보장 (Golden Rule 1, 8).
+  53. **`BUG-CATALOG-INTERCEPT-BRACKET-1` (`pkg/catalog/virtual/interceptor.go:113-160`)**:
+     - `IsVirtualCatalogJoinQuery`에서 대괄호(`[`와 `]`)를 제거하지 않고 `"SYS.TABLES"`, `"SYS.COLUMNS"` 등의 문자열을 매칭하여, SSMS/sqlcmd 표준 쿼리(`FROM [sys].[tables] t JOIN [sys].[columns] c`) 인입 시 가상 카탈로그 조인 인터셉터가 동작하지 않고 물리 테이블 조회로 떨어져 `table not found` 에러가 발생하는 결함.
+     - 정규화 단계에서 대괄호(`[` 및 `]`) 및 스키마 접두사를 정규 트림하여 가상 카탈로그 조인 쿼리 100% 정상 인터셉트 보장.
 
 ---
 
@@ -479,7 +491,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-EXP-1`, `BUG-DDL-PK-1` ~ `BUG-JOIN-PARSE-1`, `BUG-TABLE-CASE-1` ~ `BUG-COPY-PK-1`, `BUG-STR-NULL-1` ~ `BUG-PGWIRE-PARAM-1`, `BUG-APPLY-REGEX-1` ~ `BUG-WT-SWEEP-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-CATALOG-INTERCEPT-BRACKET-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -533,6 +545,9 @@
 | **BUG-FK-PARENT-TABLE-CASE-1** | 스토리지/외래키 | FK 부모 테이블명 대소문자 불일치 시 `ON DELETE RESTRICT` 완전 우회 삭제 허용 해결 | **대기 (`[ ]`)** | 대소문자 무관 테이블 탐색으로 정규 부모 스키마 조회 및 외래키 연쇄/제한 100% 보장 |
 | **BUG-PLANNER-ORDERBY-1** | 플래너/정렬 | CBO 및 SetOp 플래너 다중 정렬 시 `strings.Fields` 콤마 잔존 플랜 왜곡 해결 | **대기 (`[ ]`)** | 다중 컬럼 정렬 키 정합화로 `NodeSort` 플랜 노드 및 EXPLAIN 계획 텍스트 왜곡 방지 |
 | **BUG-WT-SWEEP-1** | 스토리지/WT | WiredTiger 60분 유휴 세션 방치 sweep-server 경고 방지 및 세션 리셋 연동 | **대기 (`[ ]`)** | `WT_SESSION::reset` CGO 바인딩 및 주기적 세션 리셋, `SessionPool` 유휴 세션 TTL 리퍼 도입 |
+| **BUG-API-PK-GEN-1** | API/PK생성 | HTTP API 레코드 생성 시 밀리초 타임스탬프 충돌 및 UUID PK NULL 방치 해결 | **대기 (`[ ]`)** | 나노초/원자적 카운터 결합 유니크 채번 및 UUID PK 자동 생성 지원으로 PK 충돌 및 NULL 방지 |
+| **BUG-WAL-TORN-BOOT-1** | 스토리지/복구 | MemEngine WAL 테일 절단(Torn Write) 시 기동 실패 방지 및 정상 복구 보장 | **대기 (`[ ]`)** | 비정상 종료 시 손상된 미완료 레코드 이전 정상 지점까지 복구 완료 후 트렁케이트하여 정상 기동 보장 |
+| **BUG-CATALOG-INTERCEPT-BRACKET-1** | 카탈로그/인터셉터 | 가상 카탈로그 대괄호 식별자(`[sys].[tables]`) 누락 테이블 미발견 결함 해결 | **대기 (`[ ]`)** | 정규화 단계 대괄호 및 스키마 접두사 트림으로 SSMS/sqlcmd 가상 뷰 조인 쿼리 100% 정상 인터셉트 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
