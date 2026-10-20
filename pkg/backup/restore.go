@@ -39,6 +39,7 @@ type RestoreResult struct {
 	ProceduresRestored int           `json:"procedures_restored"`
 	FunctionsRestored  int           `json:"functions_restored"`
 	TriggersRestored   int           `json:"triggers_restored"`
+	ViewsRestored      int           `json:"views_restored"`
 	Duration           time.Duration `json:"duration_ms"`
 }
 
@@ -250,6 +251,17 @@ func RestoreBackup(r io.Reader, eng storage.Engine, cat *catalog.Catalog, opts R
 				for _, t := range trigs {
 					_ = cat.RegisterTrigger(t)
 					result.TriggersRestored++
+				}
+			}
+		}
+
+		viewsPath := filepath.Join(tmpDir, "catalog", "views.json")
+		if data, err := os.ReadFile(viewsPath); err == nil {
+			var views []*catalog.View
+			if err := json.Unmarshal(data, &views); err == nil {
+				for _, v := range views {
+					cat.CreateOrReplaceView(v)
+					result.ViewsRestored++
 				}
 			}
 		}

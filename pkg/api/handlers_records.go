@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"lionsql/pkg/engine"
 	"lionsql/pkg/storage"
 )
 
@@ -487,6 +488,9 @@ func (s *Server) handleCreateRecord(w http.ResponseWriter, r *http.Request) {
 				} else if col.Type == storage.TypeUUID || col.Type == storage.TypeVarChar {
 					v = uuid.New().String()
 				}
+			} else if col.Default != "" {
+				rec[col.Name] = engine.ParseLiteralValue(col.Default, col.Type)
+				continue
 			} else if !col.Nullable {
 				writeError(w, http.StatusBadRequest, fmt.Errorf("field %q cannot be null", col.Name))
 				return

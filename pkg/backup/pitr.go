@@ -109,7 +109,9 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 				return err
 			}
 			if op.Schema != nil {
-				_ = eng.CreateTable(op.Schema)
+				if err := eng.CreateTable(op.Schema); err != nil {
+					return fmt.Errorf("pitr apply create table %s failed: %w", op.Table, err)
+				}
 			}
 			if ddlHook != nil {
 				ddlHook(op)
@@ -118,7 +120,9 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			if err := commitTx(); err != nil {
 				return err
 			}
-			_ = eng.DropTable(op.Table)
+			if err := eng.DropTable(op.Table); err != nil && err != storage.ErrTableNotFound {
+				return fmt.Errorf("pitr apply drop table %s failed: %w", op.Table, err)
+			}
 			if ddlHook != nil {
 				ddlHook(op)
 			}
@@ -126,7 +130,9 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			if err := commitTx(); err != nil {
 				return err
 			}
-			_ = eng.TruncateTable(op.Table)
+			if err := eng.TruncateTable(op.Table); err != nil && err != storage.ErrTableNotFound {
+				return fmt.Errorf("pitr apply truncate table %s failed: %w", op.Table, err)
+			}
 			if ddlHook != nil {
 				ddlHook(op)
 			}
@@ -134,7 +140,9 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			if err := commitTx(); err != nil {
 				return err
 			}
-			_ = eng.DropPartition(op.Table, op.Key)
+			if err := eng.DropPartition(op.Table, op.Key); err != nil {
+				return fmt.Errorf("pitr apply drop partition %s.%s failed: %w", op.Table, op.Key, err)
+			}
 			if ddlHook != nil {
 				ddlHook(op)
 			}
@@ -143,7 +151,9 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 				return err
 			}
 			if op.IndexSchema != nil {
-				_ = eng.CreateIndex(op.IndexSchema)
+				if err := eng.CreateIndex(op.IndexSchema); err != nil {
+					return fmt.Errorf("pitr apply create index on %s failed: %w", op.Table, err)
+				}
 			}
 			if ddlHook != nil {
 				ddlHook(op)
@@ -152,7 +162,9 @@ func ApplyWALRecordWithOptions(eng storage.Engine, rec memengine.WALRecord, ddlH
 			if err := commitTx(); err != nil {
 				return err
 			}
-			_ = eng.DropIndex(op.Table, op.IndexName)
+			if err := eng.DropIndex(op.Table, op.IndexName); err != nil && err != storage.ErrTableNotFound {
+				return fmt.Errorf("pitr apply drop index %s on %s failed: %w", op.IndexName, op.Table, err)
+			}
 			if ddlHook != nil {
 				ddlHook(op)
 			}

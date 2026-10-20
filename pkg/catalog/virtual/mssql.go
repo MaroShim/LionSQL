@@ -363,18 +363,49 @@ func execDbGateMSSQLForeignKeySelect(src Source, sql string) (*Result, error) {
 			continue
 		}
 		for _, fk := range t.ForeignKeys {
-			allRows = append(allRows, map[string]any{
-				"schemaName":     "dbo",
-				"pureName":       t.Name,
-				"columnName":     strings.Join(fk.ChildColumns, ", "),
-				"refSchemaName":  "dbo",
-				"refTableName":   fk.ParentTable,
-				"refColumnName":  strings.Join(fk.ParentColumns, ", "),
-				"constraintName": fk.Name,
-				"updateAction":   "NO ACTION",
-				"deleteAction":   "NO ACTION",
-				"objectId":       objID,
-			})
+			upAction := fk.OnUpdate.String()
+			delAction := fk.OnDelete.String()
+			maxCols := len(fk.ChildColumns)
+			if len(fk.ParentColumns) > maxCols {
+				maxCols = len(fk.ParentColumns)
+			}
+			if maxCols == 0 {
+				allRows = append(allRows, map[string]any{
+					"schemaName":     "dbo",
+					"pureName":       t.Name,
+					"columnName":     "",
+					"refSchemaName":  "dbo",
+					"refTableName":   fk.ParentTable,
+					"refColumnName":  "",
+					"constraintName": fk.Name,
+					"updateAction":   upAction,
+					"deleteAction":   delAction,
+					"objectId":       objID,
+				})
+				continue
+			}
+			for i := 0; i < maxCols; i++ {
+				childCol := ""
+				if i < len(fk.ChildColumns) {
+					childCol = fk.ChildColumns[i]
+				}
+				parentCol := ""
+				if i < len(fk.ParentColumns) {
+					parentCol = fk.ParentColumns[i]
+				}
+				allRows = append(allRows, map[string]any{
+					"schemaName":     "dbo",
+					"pureName":       t.Name,
+					"columnName":     childCol,
+					"refSchemaName":  "dbo",
+					"refTableName":   fk.ParentTable,
+					"refColumnName":  parentCol,
+					"constraintName": fk.Name,
+					"updateAction":   upAction,
+					"deleteAction":   delAction,
+					"objectId":       objID,
+				})
+			}
 		}
 	}
 

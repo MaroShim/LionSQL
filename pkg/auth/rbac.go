@@ -283,7 +283,24 @@ func (s *AuthService) GetUser(name string) (*User, error) {
 	return u, nil
 }
 
-// GrantTable grants a privilege on a table to a database user.
+func (s *AuthService) isValidSubjectLocked(subj string) bool {
+	if subj == "public" || subj == "guest" {
+		return true
+	}
+	if _, exists := s.dbUsers[subj]; exists {
+		return true
+	}
+	for _, u := range s.dbUsers {
+		for _, r := range u.Roles {
+			if strings.EqualFold(strings.TrimSpace(r), subj) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// GrantTable grants a privilege on a table to a database user or assigned role.
 func (s *AuthService) GrantTable(user, table string, priv Privilege) error {
 	normUser := strings.ToLower(strings.TrimSpace(user))
 	normTable := strings.ToLower(strings.TrimSpace(table))
@@ -291,7 +308,7 @@ func (s *AuthService) GrantTable(user, table string, priv Privilege) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.dbUsers[normUser]; !exists && normUser != "public" && normUser != "guest" {
+	if !s.isValidSubjectLocked(normUser) {
 		return fmt.Errorf("%w: %s", ErrDBUserNotFound, user)
 	}
 
@@ -306,7 +323,7 @@ func (s *AuthService) GrantTable(user, table string, priv Privilege) error {
 	return nil
 }
 
-// RevokeTable revokes a privilege on a table from a database user.
+// RevokeTable revokes a privilege on a table from a database user or role.
 func (s *AuthService) RevokeTable(user, table string, priv Privilege) error {
 	normUser := strings.ToLower(strings.TrimSpace(user))
 	normTable := strings.ToLower(strings.TrimSpace(table))
@@ -314,7 +331,7 @@ func (s *AuthService) RevokeTable(user, table string, priv Privilege) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.dbUsers[normUser]; !exists && normUser != "public" && normUser != "guest" {
+	if !s.isValidSubjectLocked(normUser) {
 		return fmt.Errorf("%w: %s", ErrDBUserNotFound, user)
 	}
 
@@ -330,7 +347,7 @@ func (s *AuthService) RevokeTable(user, table string, priv Privilege) error {
 	return nil
 }
 
-// DenyTable explicitly denies a privilege on a table to a database user.
+// DenyTable explicitly denies a privilege on a table to a database user or assigned role.
 func (s *AuthService) DenyTable(user, table string, priv Privilege) error {
 	normUser := strings.ToLower(strings.TrimSpace(user))
 	normTable := strings.ToLower(strings.TrimSpace(table))
@@ -338,7 +355,7 @@ func (s *AuthService) DenyTable(user, table string, priv Privilege) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.dbUsers[normUser]; !exists && normUser != "public" && normUser != "guest" {
+	if !s.isValidSubjectLocked(normUser) {
 		return fmt.Errorf("%w: %s", ErrDBUserNotFound, user)
 	}
 
@@ -419,7 +436,21 @@ func (s *AuthService) HasTablePermission(user, table string, priv Privilege) (bo
 		return true, nil
 	}
 
-	// 2. Check public grants
+	// 2. Check user's assigned custom roles (u.Roles)
+	if u != nil && len(u.Roles) > 0 {
+		for _, r := range u.Roles {
+			normRole := strings.ToLower(strings.TrimSpace(r))
+			roleGranted, roleDenied := checkSubject(normRole)
+			if roleDenied {
+				return false, nil // Explicit DENY takes precedence
+			}
+			if roleGranted {
+				return true, nil
+			}
+		}
+	}
+
+	// 3. Check public grants
 	pubGranted, pubDenied := checkSubject("public")
 	if pubDenied {
 		return false, nil

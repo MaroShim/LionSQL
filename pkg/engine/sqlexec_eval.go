@@ -86,6 +86,11 @@ func splitValues(s string) []string {
 	return sqlutil.SplitTopLevel(s, ',')
 }
 
+// ParseLiteralValue parses a literal SQL expression or default value string into a storage.Value.
+func ParseLiteralValue(s string, targetType storage.DataType) storage.Value {
+	return parseLiteralValue(s, targetType)
+}
+
 func parseLiteralValue(s string, targetType storage.DataType) storage.Value {
 	s = strings.TrimSpace(s)
 	if strings.EqualFold(s, "NULL") {

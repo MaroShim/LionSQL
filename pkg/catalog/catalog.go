@@ -136,6 +136,9 @@ func (c *Catalog) RegisterProcedure(proc *Procedure) error {
 		proc.UpdatedAt = now
 	}
 	c.procedures[key] = proc
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -154,6 +157,9 @@ func (c *Catalog) CreateProcedure(proc *Procedure) error {
 	proc.CreatedAt = now
 	proc.UpdatedAt = now
 	c.procedures[key] = proc
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -172,6 +178,9 @@ func (c *Catalog) AlterProcedure(proc *Procedure) error {
 	proc.CreatedAt = existing.CreatedAt
 	proc.UpdatedAt = time.Now()
 	c.procedures[key] = proc
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -212,6 +221,9 @@ func (c *Catalog) DropProcedure(name string) error {
 		return fmt.Errorf("%w: %s", ErrProcNotFound, name)
 	}
 	delete(c.procedures, key)
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -230,6 +242,9 @@ func (c *Catalog) RegisterFunction(fn *Function) error {
 		fn.UpdatedAt = now
 	}
 	c.functions[key] = fn
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -247,6 +262,9 @@ func (c *Catalog) CreateFunction(fn *Function) error {
 	fn.CreatedAt = now
 	fn.UpdatedAt = now
 	c.functions[key] = fn
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -264,6 +282,9 @@ func (c *Catalog) AlterFunction(fn *Function) error {
 	fn.CreatedAt = existing.CreatedAt
 	fn.UpdatedAt = time.Now()
 	c.functions[key] = fn
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -304,6 +325,9 @@ func (c *Catalog) DropFunction(name string) error {
 		return fmt.Errorf("%w: %s", ErrFuncNotFound, name)
 	}
 	delete(c.functions, key)
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -322,6 +346,9 @@ func (c *Catalog) RegisterTrigger(trg *Trigger) error {
 		trg.UpdatedAt = now
 	}
 	c.triggers[key] = trg
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -339,6 +366,9 @@ func (c *Catalog) CreateTrigger(trg *Trigger) error {
 	trg.CreatedAt = now
 	trg.UpdatedAt = now
 	c.triggers[key] = trg
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -412,6 +442,9 @@ func (c *Catalog) DropTrigger(name string) error {
 		return fmt.Errorf("%w: %s", ErrTriggerNotFound, name)
 	}
 	delete(c.triggers, key)
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -470,16 +503,136 @@ func (c *Catalog) InvalidateTableStats(tableName string) {
 	}
 }
 
-// SetPersistenceDir sets the directory where catalog statistics are persisted.
-// If the directory contains existing statistics (cbo_stats.json), they are automatically loaded.
+// CatalogObjects encapsulates serializable catalog metadata objects for persistence.
+type CatalogObjects struct {
+	Procedures []*Procedure `json:"procedures,omitempty"`
+	Functions  []*Function  `json:"functions,omitempty"`
+	Triggers   []*Trigger   `json:"triggers,omitempty"`
+	Views      []*View      `json:"views,omitempty"`
+}
+
+// SetPersistenceDir sets the directory where catalog statistics and metadata objects are persisted.
+// If the directory contains existing statistics (cbo_stats.json) or catalog objects (catalog_objects.json),
+// they are automatically loaded into memory.
 func (c *Catalog) SetPersistenceDir(dir string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	cleanDir := filepath.Clean(dir)
 	c.persistenceDir = cleanDir
+
+	// 1. Load CBO table statistics if present
 	statsFile := filepath.Join(cleanDir, "cbo_stats.json")
 	if _, err := os.Stat(statsFile); err == nil {
-		return c.loadTableStatsFileLocked(statsFile)
+		_ = c.loadTableStatsFileLocked(statsFile)
+	}
+
+	// 2. Load catalog objects (procedures, functions, triggers, views) if present
+	objsFile := filepath.Join(cleanDir, "catalog_objects.json")
+	if _, err := os.Stat(objsFile); err == nil {
+		if err := c.loadObjectsFileLocked(objsFile); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Catalog) listProceduresLocked() []*Procedure {
+	res := make([]*Procedure, 0, len(c.procedures))
+	for _, p := range c.procedures {
+		res = append(res, p)
+	}
+	return res
+}
+
+func (c *Catalog) listFunctionsLocked() []*Function {
+	res := make([]*Function, 0, len(c.functions))
+	for _, f := range c.functions {
+		res = append(res, f)
+	}
+	return res
+}
+
+func (c *Catalog) listTriggersLocked() []*Trigger {
+	res := make([]*Trigger, 0, len(c.triggers))
+	for _, t := range c.triggers {
+		res = append(res, t)
+	}
+	return res
+}
+
+func (c *Catalog) listViewsLocked() []*View {
+	res := make([]*View, 0, len(c.views))
+	for _, v := range c.views {
+		res = append(res, v)
+	}
+	return res
+}
+
+func (c *Catalog) persistObjectsLocked() error {
+	if c.persistenceDir == "" {
+		return nil
+	}
+	cleanDir := filepath.Clean(c.persistenceDir)
+	targetPath := filepath.Join(cleanDir, "catalog_objects.json")
+	if err := os.MkdirAll(cleanDir, 0755); err != nil {
+		return fmt.Errorf("failed to create catalog directory: %w", err)
+	}
+
+	objs := CatalogObjects{
+		Procedures: c.listProceduresLocked(),
+		Functions:  c.listFunctionsLocked(),
+		Triggers:   c.listTriggersLocked(),
+		Views:      c.listViewsLocked(),
+	}
+
+	data, err := json.MarshalIndent(objs, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to serialize catalog objects: %w", err)
+	}
+	data = append(data, '\n')
+
+	tmpPath := fmt.Sprintf("%s.tmp.%d", targetPath, time.Now().UnixNano())
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write temporary catalog objects file: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, targetPath); err != nil {
+		_ = os.Remove(tmpPath)
+		return fmt.Errorf("failed to atomically rename catalog objects file: %w", err)
+	}
+	return nil
+}
+
+func (c *Catalog) loadObjectsFileLocked(targetPath string) error {
+	cleanPath := filepath.Clean(targetPath)
+	data, err := os.ReadFile(cleanPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read catalog objects file: %w", err)
+	}
+
+	var objs CatalogObjects
+	if err := json.Unmarshal(data, &objs); err != nil {
+		return fmt.Errorf("failed to parse catalog objects JSON: %w", err)
+	}
+
+	for _, p := range objs.Procedures {
+		key := strings.ToLower(cleanCatalogIdent(p.Name))
+		c.procedures[key] = p
+	}
+	for _, f := range objs.Functions {
+		key := strings.ToLower(cleanCatalogIdent(f.Name))
+		c.functions[key] = f
+	}
+	for _, t := range objs.Triggers {
+		key := strings.ToLower(cleanCatalogIdent(t.Name))
+		c.triggers[key] = t
+	}
+	for _, v := range objs.Views {
+		key := strings.ToLower(cleanCatalogIdent(v.Name))
+		c.views[key] = v
 	}
 	return nil
 }
@@ -571,6 +724,9 @@ func (c *Catalog) CreateView(v *View) error {
 	v.CreatedAt = now
 	v.UpdatedAt = now
 	c.views[key] = v
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 
@@ -587,6 +743,9 @@ func (c *Catalog) CreateOrReplaceView(v *View) {
 	}
 	v.UpdatedAt = now
 	c.views[key] = v
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 }
 
 // GetView retrieves a view by name.
@@ -610,6 +769,9 @@ func (c *Catalog) DropView(name string) error {
 		return fmt.Errorf("%w: %s", ErrViewNotFound, name)
 	}
 	delete(c.views, key)
+	if c.persistenceDir != "" {
+		_ = c.persistObjectsLocked()
+	}
 	return nil
 }
 

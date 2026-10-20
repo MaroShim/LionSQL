@@ -25,6 +25,7 @@ type Manifest struct {
 	ProceduresCount int            `json:"procedures_count"`
 	FunctionsCount  int            `json:"functions_count"`
 	TriggersCount   int            `json:"triggers_count"`
+	ViewsCount      int            `json:"views_count"`
 	Tables          []TableSummary `json:"tables"`
 }
 
@@ -149,14 +150,17 @@ func CreateBackup(w io.Writer, eng storage.Engine, cat *catalog.Catalog) (*Manif
 	var procs []*catalog.Procedure
 	var funcs []*catalog.Function
 	var trigs []*catalog.Trigger
+	var views []*catalog.View
 	if cat != nil {
 		procs = cat.ListProcedures()
 		funcs = cat.ListFunctions()
 		trigs = cat.ListTriggers()
+		views = cat.ListViews()
 	}
 	manifest.ProceduresCount = len(procs)
 	manifest.FunctionsCount = len(funcs)
 	manifest.TriggersCount = len(trigs)
+	manifest.ViewsCount = len(views)
 
 	// 6. Build tar.gz archive
 	gw := gzip.NewWriter(w)
@@ -210,6 +214,11 @@ func CreateBackup(w io.Writer, eng storage.Engine, cat *catalog.Catalog) (*Manif
 	if trigsBytes, err := json.MarshalIndent(trigs, "", "  "); err == nil {
 		if err := writeTarBytes("catalog/triggers.json", trigsBytes); err != nil {
 			return nil, fmt.Errorf("failed to write triggers to archive: %w", err)
+		}
+	}
+	if viewsBytes, err := json.MarshalIndent(views, "", "  "); err == nil {
+		if err := writeTarBytes("catalog/views.json", viewsBytes); err != nil {
+			return nil, fmt.Errorf("failed to write views to archive: %w", err)
 		}
 	}
 
