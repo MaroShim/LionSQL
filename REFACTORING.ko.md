@@ -1,4 +1,4 @@
-# LionSQL 아키텍처 추상화 및 구조적 리팩토링 트래커 (REFACTOR_TODO.ko.md)
+# LionSQL 아키텍처 추상화 및 구조적 리팩토링 명세 (REFACTORING.ko.md)
 
 본 문서는 단순 대증적 패치(Whack-a-Mole)를 지양하고, 문제의 근본 원인을 제거하기 위해 추진되는 **아키텍처 추상화 계층 도입(Structural Refactoring & Deletion-First)**의 실행 계획과 검증 현황을 관리하는 전용 대시보드입니다.
 

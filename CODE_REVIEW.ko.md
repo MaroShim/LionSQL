@@ -1,4 +1,4 @@
-# LionSQL 코드 리뷰-수정-검증 루프 트래커 (REVIEW_TODO.ko.md)
+# LionSQL 코드 리뷰 및 결함 감사 트래커 (CODE_REVIEW.ko.md)
 
 본 문서는 LionSQL의 전체 코드베이스를 대상으로 진행되는 **정밀 정적 분석 ➔ 이슈 등록 ➔ 회귀 테스트 및 수정 ➔ 3단계 검증(Build & Race-Test & Commit)** 루프의 진행 상황과 백로그를 추적하는 전용 트래커입니다.
 

@@ -4,8 +4,8 @@
 
 > [!NOTE]
 > 중장기 아키텍처 로드맵 및 버전별 마일스톤 릴리스 계획은 [ROADMAP.md](ROADMAP.md)를 참조하세요.
-> 코드 리뷰-수정-검증 루프의 상세 백로그와 진행 현황은 [REVIEW_TODO.ko.md](REVIEW_TODO.ko.md)에서 실시간으로 추적 및 관리됩니다.
-> 구조적 아키텍처 추상화 및 리팩토링 트래커는 [REFACTOR_TODO.ko.md](REFACTOR_TODO.ko.md)를 참조하세요.
+> 코드 리뷰 및 결함 감사 트래커는 [CODE_REVIEW.ko.md](CODE_REVIEW.ko.md)에서 실시간으로 추적 및 관리됩니다.
+> 구조적 아키텍처 추상화 및 리팩토링 명세는 [REFACTORING.ko.md](REFACTORING.ko.md)를 참조하세요.
 > 분류 체계 및 식별 코드 규칙의 전체 명세는 [notes/TAXONOMY.md](notes/TAXONOMY.md)에 상세히 기술되어 있습니다.
 
 ---
