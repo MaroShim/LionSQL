@@ -173,12 +173,20 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		prefixPart := currentSQL[:openParenIdx]
 		suffixPart := currentSQL[matchEnd:]
 		if needSyntheticPK && len(innerRes.Columns) > 0 {
-			if reSelectStarFrom.MatchString(prefixPart) {
-				var qualifiedCols []string
-				for _, col := range innerRes.Columns {
-					qualifiedCols = append(qualifiedCols, fmt.Sprintf("%s.%s", alias, col))
+			// Only rewrite SELECT * if this derived table is the solitary table (no joins or other tables)
+			fromIdx := strings.Index(strings.ToUpper(prefixPart), "FROM")
+			if fromIdx != -1 {
+				afterFrom := strings.TrimSpace(prefixPart[fromIdx+4:])
+				hasJoinOrComma := strings.Contains(strings.ToUpper(prefixPart), "JOIN") ||
+					strings.Contains(strings.ToUpper(suffixPart), "JOIN") ||
+					strings.Contains(prefixPart[fromIdx+4:], ",")
+				if afterFrom == "" && !hasJoinOrComma && reSelectStarFrom.MatchString(prefixPart) {
+					var qualifiedCols []string
+					for _, col := range innerRes.Columns {
+						qualifiedCols = append(qualifiedCols, fmt.Sprintf("%s.%s", alias, col))
+					}
+					prefixPart = reSelectStarFrom.ReplaceAllString(prefixPart, "SELECT "+strings.Join(qualifiedCols, ", ")+" FROM ")
 				}
-				prefixPart = reSelectStarFrom.ReplaceAllString(prefixPart, "SELECT "+strings.Join(qualifiedCols, ", ")+" FROM ")
 			}
 		}
 

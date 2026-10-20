@@ -291,7 +291,15 @@ func (s *Coordinator) execPivotSelect(query string, start time.Time, cs *ClientS
 		for _, targetVal := range pvt.PivotValues {
 			vals := acc.valuesByCol[targetVal]
 			var aggResult any = nil
-			if len(vals) > 0 {
+			if strings.EqualFold(pvt.AggFunc, "COUNT") {
+				count := 0
+				for _, v := range vals {
+					if v != nil {
+						count++
+					}
+				}
+				aggResult = count
+			} else if len(vals) > 0 {
 				switch strings.ToUpper(pvt.AggFunc) {
 				case "SUM":
 					var sum float64
@@ -309,14 +317,6 @@ func (s *Coordinator) execPivotSelect(query string, start time.Time, cs *ClientS
 							aggResult = sum
 						}
 					}
-				case "COUNT":
-					count := 0
-					for _, v := range vals {
-						if v != nil {
-							count++
-						}
-					}
-					aggResult = count
 				case "AVG":
 					var sum float64
 					count := 0
@@ -1064,11 +1064,38 @@ func parseForJSONQuery(query string) (*forJSONOptions, error) {
 	return opts, nil
 }
 
+var reFromOrJoin = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+([a-zA-Z0-9_#\[\].]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_#\[\]]+))?`)
+
+func extractTableAliases(query string) map[string]bool {
+	aliases := make(map[string]bool)
+	matches := reFromOrJoin.FindAllStringSubmatch(query, -1)
+	reservedWords := map[string]bool{
+		"where": true, "on": true, "join": true, "inner": true, "left": true, "right": true,
+		"cross": true, "outer": true, "full": true, "group": true, "order": true, "having": true,
+		"for": true, "limit": true, "offset": true, "as": true, "apply": true,
+	}
+	for _, m := range matches {
+		if len(m) > 1 && m[1] != "" {
+			tbl := strings.ToLower(cleanIdentifier(m[1]))
+			aliases[tbl] = true
+		}
+		if len(m) > 2 && m[2] != "" {
+			aliasCandidate := strings.ToLower(cleanIdentifier(m[2]))
+			if !reservedWords[aliasCandidate] {
+				aliases[aliasCandidate] = true
+			}
+		}
+	}
+	return aliases
+}
+
 func (s *Coordinator) execForJSONSelect(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	opts, err := parseForJSONQuery(query)
 	if err != nil {
 		return nil, err
 	}
+
+	tableAliases := extractTableAliases(opts.BaseQuery)
 
 	// 1. Execute the underlying base SELECT query
 	baseRes, err := s.execSelect(opts.BaseQuery, start, cs)
@@ -1087,8 +1114,16 @@ func (s *Coordinator) execForJSONSelect(query string, start time.Time, cs *Clien
 				continue
 			}
 
-			// Support nested dot notation: e.g. "department.name" -> {"department": {"name": ...}}
 			cleanCol := cleanIdentifier(col)
+			if strings.Contains(cleanCol, ".") {
+				dotParts := strings.Split(cleanCol, ".")
+				// If first segment matches a table name/alias in the query, strip table qualifier
+				if len(dotParts) == 2 && tableAliases[strings.ToLower(dotParts[0])] {
+					cleanCol = dotParts[1]
+				}
+			}
+
+			// Support nested dot notation: e.g. "department.name" -> {"department": {"name": ...}}
 			if strings.Contains(cleanCol, ".") {
 				dotParts := strings.Split(cleanCol, ".")
 				cur := obj

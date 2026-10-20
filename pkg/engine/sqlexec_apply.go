@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"lionsql/pkg/proc"
 )
@@ -189,43 +190,133 @@ func (s *Coordinator) execApplySelect(query string, start time.Time, cs *ClientS
 
 // buildParameterizedApplyQuery substitutes outer row values into the inner subquery or TVF call.
 func buildParameterizedApplyQuery(tbl proc.TableRef, row map[string]any, leftAlias, leftTableName string) (string, error) {
+	// Build replacements map
+	replacements := make(map[string]string)
+	for k, v := range row {
+		lit := formatApplyLiteral(v)
+		normCol := strings.ToLower(cleanIdentifier(k))
+
+		if leftAlias != "" {
+			normAlias := strings.ToLower(cleanIdentifier(leftAlias))
+			replacements[normAlias+"."+normCol] = lit
+			replacements["["+normAlias+"].["+normCol+"]"] = lit
+			replacements["["+normAlias+"]."+normCol] = lit
+			replacements[normAlias+".["+normCol+"]"] = lit
+		}
+		if leftTableName != "" && !strings.EqualFold(leftTableName, leftAlias) {
+			normTbl := strings.ToLower(cleanIdentifier(leftTableName))
+			replacements[normTbl+"."+normCol] = lit
+			replacements["["+normTbl+"].["+normCol+"]"] = lit
+			replacements["["+normTbl+"]."+normCol] = lit
+			replacements[normTbl+".["+normCol+"]"] = lit
+		}
+	}
+
 	if tbl.Subquery != nil {
 		rawSQL := tbl.Subquery.String()
-		// Replace correlated references
-		for k, v := range row {
-			lit := formatApplyLiteral(v)
-			// Replace alias.column
-			if leftAlias != "" {
-				pat := fmt.Sprintf(`(?i)\b%s\.%s\b`, regexp.QuoteMeta(leftAlias), regexp.QuoteMeta(k))
-				rawSQL = getCompiledRegexp(pat).ReplaceAllString(rawSQL, lit)
-			}
-			if leftTableName != "" && leftTableName != leftAlias {
-				pat := fmt.Sprintf(`(?i)\b%s\.%s\b`, regexp.QuoteMeta(leftTableName), regexp.QuoteMeta(k))
-				rawSQL = getCompiledRegexp(pat).ReplaceAllString(rawSQL, lit)
-			}
-		}
-		return rawSQL, nil
+		return replaceCorrelatedTokens(rawSQL, replacements), nil
 	}
 
 	if tbl.IsTVF {
+		// For TVF arguments, also permit bare column references
+		tvfReplacements := make(map[string]string, len(replacements)+len(row)*2)
+		for k, v := range replacements {
+			tvfReplacements[k] = v
+		}
+		for k, v := range row {
+			lit := formatApplyLiteral(v)
+			normCol := strings.ToLower(cleanIdentifier(k))
+			tvfReplacements[normCol] = lit
+			tvfReplacements["["+normCol+"]"] = lit
+		}
+
 		var argStrs []string
 		for _, a := range tbl.TVFArgs {
 			s := a.String()
-			for k, v := range row {
-				lit := formatApplyLiteral(v)
-				if leftAlias != "" {
-					pat := fmt.Sprintf(`(?i)\b%s\.%s\b`, regexp.QuoteMeta(leftAlias), regexp.QuoteMeta(k))
-					s = getCompiledRegexp(pat).ReplaceAllString(s, lit)
-				}
-				patCol := fmt.Sprintf(`(?i)\b%s\b`, regexp.QuoteMeta(k))
-				s = getCompiledRegexp(patCol).ReplaceAllString(s, lit)
-			}
+			s = replaceCorrelatedTokens(s, tvfReplacements)
 			argStrs = append(argStrs, s)
 		}
 		return fmt.Sprintf("SELECT * FROM %s(%s)", tbl.Name, strings.Join(argStrs, ", ")), nil
 	}
 
 	return fmt.Sprintf("SELECT * FROM %s", tbl.Name), nil
+}
+
+// replaceCorrelatedTokens tokenizes input SQL and substitutes identifier references outside string literals.
+func replaceCorrelatedTokens(s string, replacements map[string]string) string {
+	n := len(s)
+	if n == 0 || len(replacements) == 0 {
+		return s
+	}
+
+	var sb strings.Builder
+	sb.Grow(n + 16)
+
+	inSingleQuote := false
+
+	i := 0
+	for i < n {
+		ch := s[i]
+
+		if inSingleQuote {
+			sb.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					sb.WriteByte(s[i+1])
+					i += 2
+					continue
+				}
+				inSingleQuote = false
+			}
+			i++
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			sb.WriteByte(ch)
+			i++
+			continue
+		}
+
+		// Match identifier or qualified identifier (e.g. u.id, [u].[id], id, [id])
+		if ch == '[' || unicode.IsLetter(rune(ch)) || ch == '_' {
+			start := i
+			for i < n {
+				c := s[i]
+				if c == '[' {
+					i++
+					for i < n && s[i] != ']' {
+						i++
+					}
+					if i < n && s[i] == ']' {
+						i++
+					}
+				} else if unicode.IsLetter(rune(c)) || unicode.IsDigit(rune(c)) || c == '_' || c == '.' {
+					i++
+				} else {
+					break
+				}
+			}
+			token := s[start:i]
+			normKey := strings.ToLower(token)
+			normClean := strings.ToLower(cleanIdentifier(token))
+
+			if rep, ok := replacements[normKey]; ok {
+				sb.WriteString(rep)
+			} else if rep, ok := replacements[normClean]; ok {
+				sb.WriteString(rep)
+			} else {
+				sb.WriteString(token)
+			}
+			continue
+		}
+
+		sb.WriteByte(ch)
+		i++
+	}
+
+	return sb.String()
 }
 
 func formatApplyLiteral(v any) string {

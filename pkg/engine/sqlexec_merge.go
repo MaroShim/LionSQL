@@ -59,7 +59,11 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 
 	pkCol, err := targetSchema.PrimaryKeyColumn()
 	if err != nil {
-		return nil, fmt.Errorf("target table %q has no primary key: %w", parsed.targetTable, err)
+		if synCol := targetSchema.SyntheticPKColumn(); synCol != nil {
+			pkCol = synCol
+		} else {
+			return nil, fmt.Errorf("target table %q has no primary key: %w", parsed.targetTable, err)
+		}
 	}
 
 	var tx storage.Transaction
@@ -108,9 +112,36 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		}
 		targetRows = append(targetRows, cloneRecord(rec))
 	}
+	initialTargetCount := len(targetRows)
 
 	matchedTargetKeys := make(map[string]bool)
+	newlyInsertedKeys := make(map[string]bool)
 	var rowsAffected int64
+
+	// Detect identity column on target table
+	var identityCol *storage.Column
+	for i := range targetSchema.Columns {
+		if targetSchema.Columns[i].Identity {
+			identityCol = &targetSchema.Columns[i]
+			break
+		}
+	}
+
+	var maxID int64 = 0
+	if identityCol != nil {
+		if lastID, ok := s.GetTableLastIdentity(targetSchema.Name); ok {
+			maxID = lastID
+		} else {
+			for _, tr := range targetRows {
+				if v, ok := tr[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
+					if v.IVal > maxID {
+						maxID = v.IVal
+					}
+				}
+			}
+			s.SetTableLastIdentity(targetSchema.Name, maxID)
+		}
+	}
 
 	// 3. Process each Source row
 	for _, sRow := range sourceRows {
@@ -181,6 +212,9 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 				cols := clause.insertCols
 				if len(cols) == 0 {
 					for _, c := range targetSchema.Columns {
+						if identityCol != nil && c.Identity && len(clause.insertVals) < len(targetSchema.Columns) {
+							continue
+						}
 						cols = append(cols, c.Name)
 					}
 				}
@@ -200,8 +234,46 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 					newRec[col.Name] = val
 				}
 
+				// Apply column defaults for missing columns
+				for _, col := range targetSchema.Columns {
+					if _, hasCol := newRec[col.Name]; !hasCol && col.Default != "" {
+						newRec[col.Name] = parseLiteralValue(col.Default, col.Type)
+					}
+				}
+
+				// Generate IDENTITY value if column was omitted
+				if identityCol != nil {
+					if _, hasIdent := newRec[identityCol.Name]; !hasIdent {
+						maxID++
+						newRec[identityCol.Name] = storage.IntValue(maxID)
+						if cs != nil {
+							cs.Mu.Lock()
+							cs.Vars["identity"] = maxID
+							cs.Vars["scope_identity"] = maxID
+							cs.Mu.Unlock()
+						}
+						s.SetTableLastIdentity(targetSchema.Name, maxID)
+					} else {
+						if v, ok := newRec[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull {
+							if cs != nil {
+								cs.Mu.Lock()
+								cs.Vars["identity"] = v.IVal
+								cs.Vars["scope_identity"] = v.IVal
+								cs.Mu.Unlock()
+							}
+							s.SetTableLastIdentity(targetSchema.Name, v.IVal)
+							if v.IVal > maxID {
+								maxID = v.IVal
+							}
+						}
+					}
+				}
+
 				if err := tx.Insert(parsed.targetTable, newRec); err != nil {
 					return nil, fmt.Errorf("MERGE INSERT failed: %w", err)
+				}
+				if pkVal, ok := newRec[pkCol.Name]; ok {
+					newlyInsertedKeys[pkVal.String()] = true
 				}
 				targetRows = append(targetRows, newRec)
 				rowsAffected++
@@ -210,15 +282,16 @@ func (s *Coordinator) execMerge(query string, start time.Time, cs *ClientSession
 		}
 	}
 
-	// 4. Process WHEN NOT MATCHED BY SOURCE
+	// 4. Process WHEN NOT MATCHED BY SOURCE (only over rows that existed prior to MERGE execution)
 	for _, clause := range parsed.clauses {
 		if clause.clauseType != mergeNotMatchedSourceDelete && clause.clauseType != mergeNotMatchedSourceUpdate {
 			continue
 		}
-		for idx, tRec := range targetRows {
+		for idx := 0; idx < initialTargetCount; idx++ {
+			tRec := targetRows[idx]
 			pkVal := tRec[pkCol.Name]
 			pkKey := pkVal.String()
-			if matchedTargetKeys[pkKey] {
+			if matchedTargetKeys[pkKey] || newlyInsertedKeys[pkKey] {
 				continue
 			}
 
