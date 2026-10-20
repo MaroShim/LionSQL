@@ -129,7 +129,7 @@
 | **P2** | **엔진/Upsert** | **`ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 (`BUG-UPSERT-1`)** | `pkg/engine/sqlexec_dml.go` | **완료 (`[x]`)** | - |
 | **P2** | **엔진/조회** | **`evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 (`BUG-WHERE-1`)** | `pkg/engine/sqlexec_eval.go` | **완료 (`[x]`)** | - |
 | **P2** | **엔진/옵티마이저** | **`EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 서브쿼리 컬럼 키 정합 (`BUG-EXP-1`)** | `pkg/engine/sqlexec_explain.go` | **완료 (`[x]`)** | - |
-| **P1** | **아키텍처/추상화** | **통합 SQL 추상화 레이어 구축 (`storage.Record` 1급 객체화, `SQLRow`, 경계 정규화) (`SQL-ABSTRACT-1`)** | `pkg/storage`, `pkg/engine` | **진행 중 (`[ ]`)** | [`notes/SQL_ABSTRACTION_LAYER_PLAN.md`](notes/SQL_ABSTRACTION_LAYER_PLAN.md) |
+| **P1** | **아키텍처/추상화** | **통합 SQL 추상화 레이어 구축 (`storage.Record` 1급 객체화, `SQLRow`, 경계 정규화) (`SQL-ABSTRACT-1`)** | `pkg/storage`, `pkg/engine` | **완료 (`[x]`)** | [`notes/SQL_ABSTRACTION_LAYER_PLAN.md`](notes/SQL_ABSTRACTION_LAYER_PLAN.md) |
 | **P1** | **엔진/무결성** | **PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 안티패턴 제거 및 가상 PK(`_row_id`) 보장 (`BUG-DDL-PK-1`)** | `pkg/engine/sqlexec_ddl.go`, `pkg/api/handlers_tables.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/무결성** | **`SELECT INTO` 및 파생 테이블의 일시적 고유 컬럼 임의 PK 지정 및 0건 시 `Columns[0]` PK 지정 제거 (`BUG-SELECT-INTO-PK-1`)** | `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_derived.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **실행/조인** | **`IndexNestedLoopJoin` 구성 시 인덱스 미일치 시 `Indexes[0]`을 임의 선택하여 조인 오염시키는 결함 방지 (Hash Join 안전 전환) (`BUG-JOIN-IDX-1`)** | `pkg/execution/builder.go` | **진행 대기 (`[ ]`)** | - |
