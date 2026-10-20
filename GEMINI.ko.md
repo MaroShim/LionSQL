@@ -209,5 +209,7 @@ LionSQL은 엔터프라이즈급 sub-microsecond 트랜잭션 성능과 자립�
 - [`notes/ENGINEERING_CONTEXT.md`](notes/ENGINEERING_CONTEXT.md): 아키텍처 불변 규칙, 대안 기술 Spec-Out 사유, 협업 엔지니어링 원칙.
 - [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): 순환 참조 방지, wiredtiger 빌드 태그, 샌드박스 네트워크 격리, 소수점 JSON 직렬화, VDBE 트랜잭션 결합.
 - [`TODO.ko.md`](TODO.ko.md): 액티브 엔지니어링 백로그, 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 최근 완료 마일스톤.
+- [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md): 코드 리뷰 및 품질 감사 로그, 결함 수정 및 3단계 파이프라인 검증 추적.
+- [`REFACTORING.ko.md`](REFACTORING.ko.md): 아키텍처 추상화 계층 명세, 모듈 분리 및 Deletion-First 중복 제거 설계도.
 - [`ROADMAP.md`](ROADMAP.md): 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태.
 
