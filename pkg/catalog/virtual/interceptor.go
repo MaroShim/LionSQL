@@ -54,7 +54,9 @@ func containsFold(s, substr string) bool {
 // hasCatalogCandidate quickly checks if sql contains any catalog prefix ("sys.", "pg_", "information_schema.")
 // case-insensitively without heap allocations.
 func hasCatalogCandidate(sql string) bool {
-	return containsFold(sql, "sys.") || containsFold(sql, "pg_") || containsFold(sql, "information_schema.")
+	return containsFold(sql, "sys.") || containsFold(sql, "[sys].") ||
+		containsFold(sql, "pg_") || containsFold(sql, "[pg_") ||
+		containsFold(sql, "information_schema.") || containsFold(sql, "[information_schema].")
 }
 
 // matchAny returns true if s contains any of the provided substrings.
@@ -111,6 +113,7 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	}
 
 	upper := strings.ToUpper(sql)
+	upper = strings.ReplaceAll(strings.ReplaceAll(upper, "[", ""), "]", "")
 
 	if strings.Contains(upper, "SYS.COLUMNS") && matchAny(upper, "JOIN", "SYS.TYPES") {
 		return true
@@ -166,6 +169,7 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 // Execute routes and executes an intercepted virtual catalog join query against the provided Source.
 func Execute(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
+	upper = strings.ReplaceAll(strings.ReplaceAll(upper, "[", ""), "]", "")
 
 	// 1. DbGate SQL Server Primary Keys
 	if strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1") {

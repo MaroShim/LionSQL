@@ -3,6 +3,8 @@ package storage
 import (
 	"sort"
 	"strings"
+
+	"lionsql/pkg/sqlutil"
 )
 
 // Get retrieves a value by column name with case-insensitivity and table-prefix awareness.
@@ -26,14 +28,14 @@ func (r Record) Get(colName string) (Value, bool) {
 			return v, true
 		}
 	}
-	// 3. Case-insensitive match
+	// 3. Case-insensitive and quote-tolerant match
 	for k, v := range r {
-		if strings.EqualFold(k, colName) || strings.EqualFold(k, bare) {
+		if sqlutil.EqualFoldIdent(k, colName) || sqlutil.EqualFoldIdent(k, bare) {
 			return v, true
 		}
 		if kDot := strings.Index(k, "."); kDot != -1 {
 			kBare := k[kDot+1:]
-			if strings.EqualFold(kBare, colName) || strings.EqualFold(kBare, bare) {
+			if sqlutil.EqualFoldIdent(kBare, colName) || sqlutil.EqualFoldIdent(kBare, bare) {
 				return v, true
 			}
 		}
@@ -54,7 +56,7 @@ func (r Record) Set(colName string, val Value) {
 		return
 	}
 	for k := range r {
-		if strings.EqualFold(k, colName) {
+		if sqlutil.EqualFoldIdent(k, colName) {
 			r[k] = val
 			return
 		}
@@ -68,7 +70,7 @@ func (r Record) Delete(colName string) bool {
 		return false
 	}
 	for k := range r {
-		if strings.EqualFold(k, colName) {
+		if sqlutil.EqualFoldIdent(k, colName) {
 			delete(r, k)
 			return true
 		}

@@ -114,7 +114,7 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	targetStr := resolveArgString(args[0], cs)
 	sep := resolveArgString(args[1], cs)
 	if sep == "" {
-		sep = ","
+		return nil, fmt.Errorf("STRING_SPLIT separator cannot be empty")
 	}
 
 	enableOrdinal := false

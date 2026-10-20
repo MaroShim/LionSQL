@@ -188,6 +188,7 @@ import (
 	"time"
 	"unsafe"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
@@ -453,7 +454,7 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if _, exists := e.tables[schema.Name]; exists {
+	if _, exists := sqlutil.MapGetFold(e.tables, schema.Name); exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableExists, schema.Name)
 	}
 	if _, err := schema.PrimaryKeyColumn(); err != nil {
@@ -493,7 +494,8 @@ func (e *Engine) DropTable(tableName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if _, exists := e.tables[tableName]; !exists {
+	tbl, exists := sqlutil.MapGetFold(e.tables, tableName)
+	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
@@ -503,18 +505,18 @@ func (e *Engine) DropTable(tableName string) error {
 	}
 	defer C.go_wt_session_close(sess)
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
+	uri := C.CString(fmt.Sprintf("table:%s", tbl.Name))
 	defer C.free(unsafe.Pointer(uri))
 
 	C.go_wt_session_drop(sess, uri)
 
-	delete(e.tables, tableName)
+	sqlutil.MapDeleteFold(e.tables, tableName)
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
 	e.recordWALLocked([]memengine.WALOp{{
 		Type:  memengine.OpDropTable,
-		Table: tableName,
+		Table: tbl.Name,
 	}})
 	return nil
 }
@@ -523,10 +525,11 @@ func (e *Engine) TruncateTable(tableName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	_, exists := e.tables[tableName]
+	tbl, exists := sqlutil.MapGetFold(e.tables, tableName)
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
+	tableName = tbl.Name
 
 	// Verify no other table has a foreign key referencing this table
 	for otherName, otherSchema := range e.tables {
@@ -573,7 +576,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	tbl, exists := e.tables[tableName]
+	tbl, exists := sqlutil.MapGetFold(e.tables, tableName)
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
@@ -627,7 +630,7 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	tbl, exists := e.tables[tableName]
+	tbl, exists := sqlutil.MapGetFold(e.tables, tableName)
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
@@ -678,7 +681,7 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	tbl, exists := e.tables[tableName]
+	tbl, exists := sqlutil.MapGetFold(e.tables, tableName)
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
@@ -746,7 +749,7 @@ func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	t, exists := e.tables[tableName]
+	t, exists := sqlutil.MapGetFold(e.tables, tableName)
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
@@ -771,7 +774,7 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	t, exists := e.tables[index.TableName]
+	t, exists := sqlutil.MapGetFold(e.tables, index.TableName)
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, index.TableName)
 	}
@@ -786,7 +789,7 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	}
 	e.recordWALLocked([]memengine.WALOp{{
 		Type:        memengine.OpCreateIndex,
-		Table:       index.TableName,
+		Table:       t.Name,
 		IndexSchema: index,
 	}})
 	return nil
@@ -796,7 +799,7 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	t, exists := e.tables[tableName]
+	t, exists := sqlutil.MapGetFold(e.tables, tableName)
 	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}

@@ -1202,11 +1202,17 @@ func unwrapOrVar(val string, cs *ClientSession) string {
 func cleanOutputSuffix(s string) string {
 	s = strings.TrimSpace(s)
 	upper := strings.ToUpper(s)
-	if strings.HasSuffix(upper, "OUTPUT") {
-		return strings.TrimSpace(s[:len(s)-6])
+	if strings.HasSuffix(upper, "OUTPUT") && len(s) > 6 {
+		ch := s[len(s)-7]
+		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+			return strings.TrimSpace(s[:len(s)-6])
+		}
 	}
-	if strings.HasSuffix(upper, "OUT") {
-		return strings.TrimSpace(s[:len(s)-3])
+	if strings.HasSuffix(upper, "OUT") && len(s) > 3 {
+		ch := s[len(s)-4]
+		if ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' {
+			return strings.TrimSpace(s[:len(s)-3])
+		}
 	}
 	return s
 }

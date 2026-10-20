@@ -14,8 +14,8 @@ var (
 	reMssqlObjectIdIn       = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
 	reMssqlObjectIDEq       = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
 	reMssqlParentObjectIdIn = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?parent_object_id\s+in\s*\(([^)]+)\)`)
-	reMssqlTableNameEq      = regexp.MustCompile(`(?is)(?:table_name|c\.name|t\.name|ic\.table_name)\s*=\s*'([^']+)'`)
-	reMssqlSchemaNameEq     = regexp.MustCompile(`(?is)(?:table_schema|s\.name|ic\.table_schema)\s*=\s*'([^']+)'`)
+	reMssqlTableNameEq      = regexp.MustCompile(`(?is)(?:table_name|c\.name|t\.name|ic\.table_name|\[?t\]?\.\[?name\]?|\[?c\]?\.\[?name\]?|\[?table_name\]?)\s*=\s*N?'([^']+)'`)
+	reMssqlSchemaNameEq     = regexp.MustCompile(`(?is)(?:table_schema|s\.name|ic\.table_schema|\[?s\]?\.\[?name\]?|\[?table_schema\]?)\s*=\s*N?'([^']+)'`)
 )
 
 func parseTargetObjectIDs(sql string) map[int]bool {

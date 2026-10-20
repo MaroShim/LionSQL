@@ -8,6 +8,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Fixed
+- **Identifier Casing, Canonical Abstraction & Virtual Catalog Remediation (11 Critical Storage/Engine/Catalog Bugs)**:
+  - `SQL-CASING-ABSTRACTION-1`: Introduced unified identifier casing utilities and generic `sqlutil.CIMap[V]` case-insensitive hash map in `pkg/sqlutil` with `CanonicalIdent`, `EqualFoldIdent`, `MapGetFold`, `MapSetFold`, and `MapDeleteFold`.
+  - `BUG-TABLE-CASE-1`: Ensured case-insensitive and quote-tolerant table lookups in `GetTable` and `DropTable` across `memengine` and `wiredtiger`, preventing `table not found` errors when casing differs.
+  - `BUG-STORAGE-TABLE-CASE-SENSITIVITY-1`: Prevented duplicate case-variant table creation in `CreateTable` via `sqlutil.MapGetFold` existence verification.
+  - `BUG-DROP-INDEX-CASE-1`: Removed indexes by canonical schema name (`foundIdx.Name`) in `DropIndex`, eliminating zombie index leaks in `td.Indexes`.
+  - `BUG-MEM-TX-TABLE-CASE-1`: Normalized table names to canonical schema names in `insertLocked`, `updateLocked`, `deleteLocked` and performed case-insensitive table lookups during `Commit()`, eliminating silent write loss.
+  - `BUG-MEM-TX-INDEX-CASE-1`: Implemented case-insensitive index matching fallback in `memengine.IndexScan` and `IndexOnlyScan`.
+  - `BUG-TUPLE-RECORD-CASE-1`: Enhanced `storage.Record.Get`, `Set`, and `Delete` with `sqlutil.EqualFoldIdent`, ensuring seamless bracketed (`[Price]`), quoted, and case-variant field resolution without NULL value corruption in `RecordToRow`.
+  - `BUG-SP-EXEC-SUFFIX-OUT-1`: Added preceding whitespace and word boundary validation in `cleanOutputSuffix`, preventing variable names ending in "out" (such as `@timeout`, `@layout`, `@shout`) from being truncated.
+  - `BUG-STRING-SPLIT-SEP-1`: Rejected empty string separators in `STRING_SPLIT` with standard SQL error instead of silently replacing them with commas.
+  - `BUG-CATALOG-IDENT-1`: Resolved multi-part identifier parsing corruption (e.g. `[master].[sys].[tables]`) in virtual catalog `cleanIdentifier` by splitting by dot and cleaning the terminal segment.
+  - `BUG-CATALOG-INTERCEPT-BRACKET-1`: Stripped bracketed escaping in `hasCatalogCandidate`, `IsVirtualCatalogJoinQuery`, and `Execute`, enabling 100% intercept fidelity for bracketed queries from SSMS and sqlcmd (e.g. `[sys].[tables]`).
+  - `BUG-CATALOG-MSSQL-REGEX-UNICODE-1`: Enhanced virtual catalog regex patterns (`reMssqlTableNameEq`, `reMssqlSchemaNameEq`) to support Unicode literals (`N'...'`) and bracketed table/column names.
 - **Group 5 Type Coercion, NULL 3-Valued Logic & Scalar Function Remediation (13 Critical Storage/Builtins/Eval/VM Bugs)**:
   - `BUG-STORAGE-CMP-INT-FLOAT-1`: Supported automatic numeric coercion in `storage.Value.Compare` between `TypeInt` and `TypeFloat`, fixing range scan inversions and point lookup anomalies (e.g., `IntValue(100) < FloatValue(200.5)`).
   - `BUG-STORAGE-CMP-DATETIME-STR-1`: Supported bi-directional date/datetime coercion with string literals in `storage.Value.Compare` and `storage.Value.Equal`, preventing comparison reversals and 0-row query results.

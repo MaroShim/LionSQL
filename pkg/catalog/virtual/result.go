@@ -381,12 +381,9 @@ func splitScalarProjections(s string) []string {
 
 func cleanIdentifier(s string) string {
 	s = strings.TrimSpace(s)
-	s = strings.Trim(s, "\"`[]'")
-	if idx := strings.Index(s, "."); idx != -1 {
-		s = s[idx+1:]
-	}
-	s = strings.Trim(s, "\"`[]'")
-	return s
+	parts := strings.Split(s, ".")
+	last := parts[len(parts)-1]
+	return sqlutil.CleanIdentifier(last)
 }
 
 func getMapValueCaseInsensitive(rec map[string]any, col string) any {

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -242,26 +243,11 @@ func (tx *Transaction) CommitTimestamp() int64 {
 
 // getTableLocked retrieves a *TableData, caching it per-transaction to avoid engine.mu RLock contention.
 func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
-	if td, cached := tx.tableCache[tableName]; cached {
+	if td, cached := sqlutil.MapGetFold(tx.tableCache, tableName); cached {
 		return td, nil
 	}
-	for name, td := range tx.tableCache {
-		if strings.EqualFold(name, tableName) {
-			tx.tableCache[tableName] = td
-			return td, nil
-		}
-	}
 	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		for name, t := range tx.engine.tables {
-			if strings.EqualFold(name, tableName) {
-				td = t
-				exists = true
-				break
-			}
-		}
-	}
+	td, exists := sqlutil.MapGetFold(tx.engine.tables, tableName)
 	tx.engine.mu.RUnlock()
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
@@ -310,6 +296,7 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	if err != nil {
 		return err
 	}
+	tableName = td.Schema.Name
 	schema := td.Schema
 
 	normalized := make(storage.Record, len(record))
@@ -508,17 +495,18 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		return fmt.Errorf("foreign key cascade recursion limit exceeded (max 16)")
 	}
 
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	tableName = td.Schema.Name
+	schema := td.Schema
+
 	pkKey := pk.String()
 	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, false)
 	if err != nil {
 		return err
 	}
-
-	td, err := tx.getTableLocked(tableName)
-	if err != nil {
-		return err
-	}
-	schema := td.Schema
 
 	updated := make(storage.Record, len(base))
 	for col, val := range base {
@@ -751,13 +739,15 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 		return fmt.Errorf("foreign key cascade recursion limit exceeded (max 16)")
 	}
 
-	pkKey := pk.String()
-	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, false)
+	td, err := tx.getTableLocked(tableName)
 	if err != nil {
 		return err
 	}
+	tableName = td.Schema.Name
 
-	if _, err := tx.getTableLocked(tableName); err != nil {
+	pkKey := pk.String()
+	base, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, false)
+	if err != nil {
 		return err
 	}
 
@@ -1144,12 +1134,13 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 		return nil, storage.ErrTxClosed
 	}
 
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return nil, err
 	}
+	tableName = td.Schema.Name
+
+	tx.engine.mu.RLock()
 
 	var keys []string
 	if tx.opts.ReadOnly {
@@ -1204,17 +1195,17 @@ func (tx *Transaction) ScanPartitions(tableName string, partitions []string) (st
 		return nil, storage.ErrTxClosed
 	}
 
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return nil, err
 	}
+	tableName = td.Schema.Name
 
 	if !td.Schema.IsPartitioned() {
-		tx.engine.mu.RUnlock()
 		return tx.Scan(tableName)
 	}
+
+	tx.engine.mu.RLock()
 
 	td.partMu.RLock()
 	partSet := make(map[string]bool, len(partitions))
@@ -1273,14 +1264,17 @@ func (tx *Transaction) IndexScan(tableName string, indexName string, low, high *
 		return nil, storage.ErrTxClosed
 	}
 
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return nil, err
 	}
+	tableName = td.Schema.Name
 
+	tx.engine.mu.RLock()
 	idxData, exists := td.Indexes[indexName]
+	if !exists {
+		idxData, exists = sqlutil.MapGetFold(td.Indexes, indexName)
+	}
 	if !exists {
 		tx.engine.mu.RUnlock()
 		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
@@ -1399,14 +1393,17 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 		return nil, storage.ErrTxClosed
 	}
 
-	tx.engine.mu.RLock()
-	td, exists := tx.engine.tables[tableName]
-	if !exists {
-		tx.engine.mu.RUnlock()
-		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return nil, err
 	}
+	tableName = td.Schema.Name
 
+	tx.engine.mu.RLock()
 	idxData, exists := td.Indexes[indexName]
+	if !exists {
+		idxData, exists = sqlutil.MapGetFold(td.Indexes, indexName)
+	}
 	if !exists {
 		tx.engine.mu.RUnlock()
 		return nil, fmt.Errorf("%w: %s on table %s", storage.ErrIndexNotFound, indexName, tableName)
@@ -1531,16 +1528,16 @@ func (tx *Transaction) Commit() error {
 	shardMap := make(map[string]map[int]struct{})
 
 	for _, ch := range tx.changes {
-		td, exists := tx.engine.tables[ch.table]
+		td, exists := sqlutil.MapGetFold(tx.engine.tables, ch.table)
 		if !exists {
 			continue
 		}
-		tableSet[ch.table] = td
+		tableSet[td.Schema.Name] = td
 		sIdx := hashShard(ch.key)
-		if shardMap[ch.table] == nil {
-			shardMap[ch.table] = make(map[int]struct{})
+		if shardMap[td.Schema.Name] == nil {
+			shardMap[td.Schema.Name] = make(map[int]struct{})
 		}
-		shardMap[ch.table][sIdx] = struct{}{}
+		shardMap[td.Schema.Name][sIdx] = struct{}{}
 	}
 
 	tableNames := make([]string, 0, len(tableSet))
@@ -1597,7 +1594,7 @@ func (tx *Transaction) Commit() error {
 
 	// 5. Verify OCC version conflicts and unique constraints
 	for _, ch := range tx.changes {
-		td, exists := tx.engine.tables[ch.table]
+		td, exists := sqlutil.MapGetFold(tx.engine.tables, ch.table)
 		if !exists {
 			continue
 		}
@@ -1674,7 +1671,7 @@ func (tx *Transaction) Commit() error {
 
 	// 6. Apply changes and update secondary indexes atomically
 	for _, ch := range tx.changes {
-		td, exists := tx.engine.tables[ch.table]
+		td, exists := sqlutil.MapGetFold(tx.engine.tables, ch.table)
 		if !exists {
 			continue
 		}
@@ -1764,7 +1761,7 @@ func (tx *Transaction) Commit() error {
 				opType = OpDelete
 			}
 			var rawData []byte
-			if td, ok := tx.engine.tables[ch.table]; ok && ch.kind != changeDelete {
+			if td, ok := sqlutil.MapGetFold(tx.engine.tables, ch.table); ok && ch.kind != changeDelete {
 				var err error
 				rawData, err = storage.EncodeRow(&td.Schema, ch.row)
 				if err != nil {
