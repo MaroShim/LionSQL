@@ -23,6 +23,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `STORAGE-SYNTHETIC-PK-ABSTRACTION-1`: Introduced centralized synthetic row identity abstraction (`storage.SyntheticPKKind`, `NewSyntheticPKColumn`, `IsSyntheticPKName`, `HasSyntheticPK`, `SyntheticPKColumn`) in `pkg/storage/synthetic_pk.go`, eliminating scattered magic strings (`_row_id`, `_dt_row_id`, `_cte_row_id`) across DDL, derived tables, CTEs, projection, and VDBE VM.
 - `UI-13`: Streamlined Web Studio branding and navigation titles (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`): standardized top-left branding on `LionSQL Studio` and removed the redundant `OLTP + SP` badge, while stripping the `Studio` suffix from all sub-feature sidebar buttons and view header titles (`SQL Query`, `Tables & Records`, `Stored Procedures`).
 
+### Refactored
+- `ARCH-LEX-1`: Unified SQL lexical scanning, token extraction, and quote/parenthesis tracking into `pkg/sqlutil` (`SplitTopLevelKeyword`, `FindTopLevelArithmeticOp`, `ExtractTopLevelTuples`, `FindTopLevelKeyword`, `SplitTopLevel`). Eliminated ~300 lines of brittle manual scanner loops and string parsing logic across `pkg/engine/sqlexec_eval.go`, `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_dbcc.go`, and `pkg/engine/sqlexec_merge.go`.
+
 ### Fixed
 - **Group B Wire Protocols & Security Remediation (9 Critical Wire, Protocol & Auth Defects)**:
   - `BUG-AUTH-ADMIN-PW-BYPASS-1`: Removed unconditional password bypass for builtin admin logins (`sa`, `postgres`) across PGWire (`pkg/wire/server.go`) and TDS (`pkg/wire/tds/server.go`), enforcing authentication whenever a password hash is registered.
