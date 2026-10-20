@@ -41,6 +41,19 @@
 | **`BUG-VM-UPDATE-1`** | **VDBE UPDATE 컬럼명 정규화 (VM Update Silent Loss)** | `BUG-VM-UPDATE-1` | VDBE `OpUpdate`/`execUpdateWhere` 컬럼명 대소문자 미정규화로 인한 업데이트 사일런트 유실 방지 |
 | **`BUG-FK-CHILD-CASE-1`** | **외래키 자식 컬럼 대소문자 정규화 (FK Child Case Bug)** | `BUG-FK-CHILD-CASE-1` | `checkForeignKeyUnderLock` 대소문자 불일치 시 가짜 외래키 삽입이 무단 허용되는 결함 수정 |
 | **`BUG-PGWIRE-PARAM-1`** | **PGWire 파라미터 경계 인식 치환 (PGWire Param Bug)** | `BUG-PGWIRE-PARAM-1` | 단순 문자열 치환으로 `$10` 이상의 다중 파라미터가 `$1` 치환 시 깨지는 결함 수정 |
+| **`BUG-APPLY-REGEX-1`** | **CROSS/OUTER APPLY 정규식 및 맵 순회 왜곡 방지 (Apply Regex Bug)** | `BUG-APPLY-REGEX-1` | `buildParameterizedApplyQuery` 단순 정규식 치환 및 무작위 맵 순회로 키워드/리터럴 오염 방지 |
+| **`BUG-STRING-SPLIT-SEP-1`** | **STRING_SPLIT 빈 구분자 콤마 임의 간주 제거 (String Split Sep Bug)** | `BUG-STRING-SPLIT-SEP-1` | 빈 문자열 구분자를 콤마로 멋대로 대체하는 안티패턴 제거 및 표준 규격 에러 반환 |
+| **`BUG-ADD-COL-NOT-NULL-1`** | **기본값 없는 NOT NULL 컬럼 추가 시 NULL 오염 방지 (Add Column Null Bug)** | `BUG-ADD-COL-NOT-NULL-1` | 데이터 존재 테이블에 NOT NULL 컬럼 추가 시 기존 행을 NULL로 채워 무결성을 파괴하는 결함 방지 |
+| **`BUG-DML-PK-RANDOM-1`** | **비-id PK 테이블 DML 시 무작위 컬럼 PK 간주 해결 (DML Random PK Bug)** | `BUG-DML-PK-RANDOM-1` | `ExecuteUpdate`/`ExecuteDelete` 폴백의 `rec["id"]` 하드코딩 및 맵 순회 임의 컬럼 PK 간주 결함 해결 |
+| **`BUG-UPDATE-SET-SPLIT-1`** | **UPDATE SET 절 다중 인자 수식 사일런트 유실 방지 (Update Set Split Bug)** | `BUG-UPDATE-SET-SPLIT-1` | `strings.Split(setClause, ",")` 단순 분해 제거로 다중 인자 함수 및 리터럴 콤마 분해 유실 방지 |
+| **`BUG-HTTP-TABLE-PK-1`** | **HTTP API 테이블 생성 시 임의 PK 승격 제거 (HTTP Table PK Bug)** | `BUG-HTTP-TABLE-PK-1` | `cols[0].PrimaryKey = true` 임의 지정 제거 및 미지원 타입 전달 시 400 에러 정규 반환 |
+| **`BUG-STORAGE-UPDATE-CASE-1`** | **스토리지 Update 레코드 컬럼명 대소문자 정규화 (Storage Update Case Bug)** | `BUG-STORAGE-UPDATE-CASE-1` | `updateLocked`에서 입력 레코드 키를 스키마 컬럼명으로 정규화하여 대소문자 차이 업데이트 유실 방지 |
+| **`BUG-TUPLE-RECORD-CASE-1`** | **RecordToRow 대소문자 일치로 인한 NULL 덮어쓰기 방지 (Tuple Case Bug)** | `BUG-TUPLE-RECORD-CASE-1` | `rec[col.Name]` 엄격 조회로 대소문자가 다른 레코드 입력 시 컬럼 값이 NULL로 훼손되는 결함 해결 |
+| **`BUG-INDEX-SCAN-ORDERBY-1`** | **인덱스 스캔 다중 정렬 무시 및 정렬 누락 방지 (Index Scan Order By Bug)** | `BUG-INDEX-SCAN-ORDERBY-1` | 첫 번째 컬럼만 일치 시 다중 정렬 전체가 만족된 것으로 오판하여 정렬을 건너뛰는 결함 해결 |
+| **`BUG-COPY-DELIM-1`** | **COPY FROM DELIMITER 후속 옵션 따옴표 변조 방지 (Copy Delimiter Bug)** | `BUG-COPY-DELIM-1` | DELIMITER 뒤 후속 옵션 존재 시 닫는 따옴표(`'`)를 구분자로 파싱하여 CSV 파싱이 깨지는 결함 해결 |
+| **`BUG-PGWIRE-DESCRIBE-1`** | **PGWire Describe 단순 문자열 분해 OID 왜곡 방지 (PGWire Describe Bug)** | `BUG-PGWIRE-DESCRIBE-1` | 쿼리를 FROM/콤마로 단순 분해하여 서브쿼리 및 함수 콤마가 파괴되고 OID 25로 왜곡되는 결함 해결 |
+| **`BUG-VM-SUBQ-NIL-1`** | **VDBE 스칼라 서브쿼리 nil 패닉 및 컬럼 침묵 버림 방지 (VM Subquery Nil Bug)** | `BUG-VM-SUBQ-NIL-1` | `(SELECT 1)` 등 FROM 없는 서브쿼리 nil 포인터 패닉 제거 및 다중 컬럼 서브쿼리 문법 에러 반환 |
+| **`BUG-CATALOG-ORDERBY-1`** | **가상 카탈로그 ORDER BY 콤마 잔존 정렬 무력화 방지 (Catalog Order By Bug)** | `BUG-CATALOG-ORDERBY-1` | `strings.Fields` 분해로 인해 `orderCol`에 콤마가 남아(`"col1,"`) 카탈로그 정렬이 무력화되던 결함 해결 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
