@@ -219,6 +219,13 @@
 | **P2** | **엔진/정렬** | **PIVOT 및 UNPIVOT `ORDER BY` 절 쉼표 분해 왜곡으로 인한 정렬 키 파괴 및 방향 무력화 해결 (`BUG-PIVOT-ORDER-BY-SPLIT-1`)** | `pkg/engine/sqlexec_pivot.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/DML** | **코디네이터 `UPDATE` 산술식 평가 시 0으로 나누기 및 컬럼 간 연산 시 문자열 폴백 데이터 변조 해결 (`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/WAL** | **WAL 충돌 복구 시 `OpCreateTable` 인라인 인덱스 초기화 누락으로 인한 인덱스 갱신 중단 해결 (`BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1`)** | `pkg/storage/memengine/persistence.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **실행/윈도우** | **윈도우 함수 `ORDER BY` 시 `RANGE` 피어 구간 미확장으로 인한 동순위 행 누적 집계 왜곡 해결 (`BUG-WINDOW-RANGE-PEER-EVAL-1`)** | `pkg/execution/window.go`, `pkg/planner/planner.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/OCC** | **단일 트랜잭션 내 다중 유니크 인덱스 충돌 행 커밋 시 에러 침묵 및 중복 데이터 영구 삽입 해결 (`BUG-OCC-COMMIT-INTRA-TX-UNIQUE-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/OCC** | **MemEngine `updateLocked`에서 유니크 인덱스 제약 검증 완전 누락 결함 해결 (`BUG-OCC-UPDATE-UNIQUE-CHECK-OMISSION-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **API/직렬화** | **HTTP REST API 레코드 조회 시 DATETIME/DATE/TIME 컬럼 빈 문자열(`""`) 반환 결함 해결 (`BUG-API-JSON-DATETIME-EMPTY-STR-1`)** | `pkg/api/handlers_records.go`, `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **API/정밀도** | **HTTP REST API 레코드 직렬화 시 DECIMAL 컬럼 float64 변환 부동소수점 오차 결함 해결 (`BUG-API-JSON-DECIMAL-PRECISION-LOSS-1`)** | `pkg/api/handlers_records.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/파생테이블** | **0건 반환 파생테이블에서 임의의 `Columns[0]`을 PK로 승격하여 후속 쿼리 실패 초래하는 결함 해결 (`BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1`)** | `pkg/engine/sqlexec_derived.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **백업/PITR** | **Point-in-Time Recovery 시 DDL 실행 실패 에러 침묵(`_ =`)으로 인한 복구 실패 은폐 해결 (`BUG-PITR-DDL-SILENT-SWALLOW-1`)** | `pkg/backup/pitr.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -355,8 +362,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 100대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단, RBAC 커스텀 롤 누락, 따옴표 이스케이프 분해 파괴, 샤드 초기화 경쟁 크래시, VDBE 미존재 PK 크래시, EXEC 프로시저 및 TDS RPC 트랜잭션 우회, Simple CASE 누락, 산술식 0값 변조 등으로 인해 발생하는 100대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 107대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단, RBAC 커스텀 롤 누락, 따옴표 이스케이프 분해 파괴, 샤드 초기화 경쟁 크래시, VDBE 미존재 PK 크래시, EXEC 프로시저 및 TDS RPC 트랜잭션 우회, Simple CASE 누락, 산술식 0값 변조, 윈도우 함수 RANGE 피어 누락, OCC 동일 트랜잭션 유니크 충돌 사일런트 커밋, HTTP API DATETIME 빈 문자열 방출, PITR DDL 에러 침묵 등으로 인해 발생하는 107대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -658,6 +665,27 @@
   100. **`BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1` (`pkg/storage/memengine/persistence.go:61-70`)**:
      - MemEngine의 WAL 복구 루프 `applyWALRecordLocked`에서 `OpCreateTable` 재생 시 `td.Indexes` 맵만 생성하고 `op.Schema.Indexes`에 정의된 인라인 인덱스들을 전혀 등록하지 않아, 크래시 복구 후 생성된 테이블의 인덱스들이 증발하여 후속 WAL의 `OpInsert`/`OpUpdate` 시 인덱스가 갱신되지 못하던 결함.
      - `op.Schema.Indexes`를 순회하며 `td.Indexes`에 각 인덱스 구조체를 정상 인스턴스화하도록 복구 로직 보강.
+  101. **`BUG-WINDOW-RANGE-PEER-EVAL-1` (`pkg/execution/window.go:303-309, 480-510`, `pkg/planner/planner.go:63, 1713`)**:
+     - `WindowIterator`가 `ORDER BY` 지정 시 SQL 표준 기본 프레임인 `RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW`를 `ROWS` 기반 단순 행 인덱스 슬라이딩으로 축소 처리하여, 동순위 피어(Peer) 행들이 동일한 누적 집계값을 갖지 못하고 임의의 행 순서에 따라 서로 다른 누적값을 반환하는 SQL 표준 규격 위반 결함.
+     - `WindowFrame`에 `RANGE` 모드를 명시하고 동순위 키를 가진 피어 행들을 동일 프레임으로 묶어주는 피어 구간 확장 로직 구축.
+  102. **`BUG-OCC-COMMIT-INTRA-TX-UNIQUE-1` (`pkg/storage/memengine/tx.go:1557-1588, 1645, 1674`)**:
+     - `memengine.Transaction.Commit()`의 5단계 OCC 검증이 커밋된 인덱스 데이터만을 상대로 `ScanRange`를 수행하여, 동일 트랜잭션 내부에서 여러 행이 동일한 유니크 키로 삽입/수정될 경우 이를 감지하지 못하고, 6단계 적용 루프에서 `idxData.Insert`가 반환한 유니크 위반 에러를 `_ =`로 침묵시켜 중복 행들이 스토리지에 무단 커밋되던 결함.
+     - `tx.changes` 내부 상호 유니크 키 충돌 사전 검사 및 적용 단계 에러 즉시 전파로 중복 커밋 원천 차단.
+  103. **`BUG-OCC-UPDATE-UNIQUE-CHECK-OMISSION-1` (`pkg/storage/memengine/tx.go:481-568`)**:
+     - `memengine.Transaction.updateLocked` 실행 시 유니크 인덱스 제약 검증이 완전히 누락되어, 행을 수정하여 다른 행의 고유 키와 충돌하더라도 DML 실행 시점에 에러가 발생하지 않고 트랜잭션 커밋 단계까지 오류 감지가 지연되던 결함.
+     - `updateLocked` 시점에 대상 유니크 인덱스 및 로컬 변경본(`tx.local`) 대상 충돌 사전 검증 루프 구축.
+  104. **`BUG-API-JSON-DATETIME-EMPTY-STR-1` (`pkg/api/handlers_records.go:53`, `pkg/storage/engine.go:466`)**:
+     - `DateTimeValue` 생성 시 `SVal`을 비워두는(`""`) 반면, HTTP API의 `recordToJSONMap` 스키마 분기에서 `default: row[col.Name] = v.SVal`을 직접 읽어냄으로써 REST API로 레코드 조회 시 모든 DATETIME/DATE/TIME 컬럼이 빈 문자열(`""`)로 방출되던 일시 데이터 유실 결함.
+     - `v.SVal` 직접 참조 대신 `v.String()` 또는 `v.TVal` 기반 ISO-8601 포맷팅으로 직렬화 수정.
+  105. **`BUG-API-JSON-DECIMAL-PRECISION-LOSS-1` (`pkg/api/handlers_records.go:46-51`)**:
+     - `recordToJSONMap`이 DECIMAL 컬럼을 직렬화할 때 `strconv.ParseFloat(v.String(), 64)`로 무조건 변환하여 부동소수점(`float64`)으로 변환함으로써, 금융/통화 데이터에서 IEEE-754 이진 부동소수점 오차(예: `0.1000000000000000055511...`)가 발생하던 정밀도 파괴 결함.
+     - DECIMAL 컬럼을 고정 소수점 문자열 또는 `json.Number`로 직렬화하여 금융 연산 정밀도 보존.
+  106. **`BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1` (`pkg/engine/sqlexec_derived.go:116-118`)**:
+     - `resolveDerivedTables`에서 서브쿼리 실행 결과가 0건일 때 `Columns[0]`을 임의로 PRIMARY KEY(`PrimaryKey: true, Nullable: false`)로 지정하여, 첫 번째 컬럼이 NULL 허용이거나 중복값을 갖는 경우 파생 테이블 임시 스키마 제약이 파괴되던 결함.
+     - 결과가 0건이거나 고유 컬럼이 확정되지 않은 경우 항상 합성 가상 기본키(`_dt_row_id`)를 부여하도록 일원화.
+  107. **`BUG-PITR-DDL-SILENT-SWALLOW-1` (`pkg/backup/pitr.go:112, 121, 129, 137, 146, 155`)**:
+     - PITR 및 WAL 재생 엔진 `ApplyWALRecordWithOptions`에서 DDL 작업(`CreateTable`, `DropTable`, `TruncateTable`, `DropPartition`, `CreateIndex`, `DropIndex`) 실행 시 발생하는 에러를 `_ =`로 완전히 침묵시켜, 테이블 생성 실패 등 치명적 오류에도 복구가 성공한 것처럼 가장되던 결함.
+     - DDL 호출 에러 즉시 반환 및 롤백 연동으로 복구 실패 시 정밀 진단 보장.
 
 ---
 
@@ -783,6 +811,13 @@
 | **BUG-PIVOT-ORDER-BY-SPLIT-1** | 엔진/정렬 | PIVOT/UNPIVOT `ORDER BY` 절 쉼표 분해 왜곡 및 정렬 무력화 해결 | **대기 (`[ ]`)** | 스마트 정렬 토큰 분해기로 다중 정렬 키 콤마 분리 및 방향 보존 |
 | **BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1** | 엔진/DML | 코디네이터 `UPDATE` 산술식 0 나누기 및 컬럼 간 연산 시 문자열 폴백 해결 | **대기 (`[ ]`)** | 0 나누기 예외 처리 및 컬럼 간 연산 지원으로 데이터 사일런트 변조 차단 |
 | **BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1** | 스토리지/WAL | WAL 복구 시 `OpCreateTable` 인라인 인덱스 등록 누락 해결 | **대기 (`[ ]`)** | 충돌 복구 시 `op.Schema.Indexes` 순회 초기화로 인덱스 갱신 누락 방지 |
+| **BUG-WINDOW-RANGE-PEER-EVAL-1** | 실행/윈도우 | 윈도우 함수 `ORDER BY` 시 `RANGE` 피어 구간 미확장 누적 집계 왜곡 해결 | **대기 (`[ ]`)** | `RANGE` 모드 피어 구간 확장으로 동순위 행 간 표준 일치 집계값 산출 보장 |
+| **BUG-OCC-COMMIT-INTRA-TX-UNIQUE-1** | 스토리지/OCC | 단일 트랜잭션 내 다중 유니크 충돌 행 커밋 시 에러 침묵 및 영구 삽입 해결 | **대기 (`[ ]`)** | `tx.changes` 내부 상호 유니크 충돌 사전 검증 및 커밋 단계 에러 즉시 전파 |
+| **BUG-OCC-UPDATE-UNIQUE-CHECK-OMISSION-1** | 스토리지/OCC | MemEngine `updateLocked`에서 유니크 인덱스 제약 검증 누락 해결 | **대기 (`[ ]`)** | 레코드 수정 시점 대상 유니크 인덱스 및 로컬 변경본 대상 충돌 사전 검증 |
+| **BUG-API-JSON-DATETIME-EMPTY-STR-1** | API/직렬화 | HTTP REST API 레코드 조회 시 DATETIME/DATE/TIME 빈 문자열(`""`) 반환 해결 | **대기 (`[ ]`)** | `v.SVal` 직접 참조 제거 및 `v.String()` / `v.TVal` 기반 ISO-8601 포맷팅 일원화 |
+| **BUG-API-JSON-DECIMAL-PRECISION-LOSS-1** | API/정밀도 | HTTP REST API 레코드 직렬화 시 DECIMAL 컬럼 float64 변환 오차 해결 | **대기 (`[ ]`)** | `strconv.ParseFloat` 제거 및 고정소수점 문자열/`json.Number` 직렬화 보장 |
+| **BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1** | 엔진/파생테이블 | 0건 반환 파생테이블에서 임의의 `Columns[0]`을 PK로 승격하는 결함 해결 | **대기 (`[ ]`)** | 0건 반환 시 임의 컬럼 PK 승격 방지 및 합성 가상 기본키(`_dt_row_id`) 부여 |
+| **BUG-PITR-DDL-SILENT-SWALLOW-1** | 백업/PITR | Point-in-Time Recovery 시 DDL 실행 실패 에러 침묵(`_ =`) 은폐 해결 | **대기 (`[ ]`)** | DDL 호출 에러 즉시 반환 및 롤백 연동으로 복구 실패 시 정밀 진단 보장 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |

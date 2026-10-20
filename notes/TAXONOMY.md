@@ -114,6 +114,13 @@
 | **`BUG-PIVOT-ORDER-BY-SPLIT-1`** | **PIVOT/UNPIVOT ORDER BY 절 쉼표 분해 왜곡 방지 (Pivot Order By Split Bug)** | `BUG-PIVOT-ORDER-BY-SPLIT-1` | `strings.Fields` 대신 스마트 정렬 파서 적용으로 쉼표 포함 정렬 키(`col,`, `DESC,`) 파괴 및 정렬 무력화 해결 |
 | **`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`** | **코디네이터 UPDATE 산술식 미지원 및 0값/타입변조 방지 (Eval Update Arith Bug)** | `BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1` | 0으로 나누기 예외 처리 및 컬럼 간 연산 시 문자열 폴백 방지로 데이터 사일런트 변조 차단 |
 | **`BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1`** | **WAL 복구 시 CREATE TABLE 인라인 인덱스 등록 누락 방지 (WAL Create Table Index Bug)** | `BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1` | `OpCreateTable` 재생 시 `op.Schema.Indexes` 순회 초기화로 충돌 복구 후 인덱스 갱신 누락 해결 |
+| **`BUG-WINDOW-RANGE-PEER-EVAL-1`** | **윈도우 함수 RANGE 피어 프레임 집계 왜곡 방지 (Window Range Peer Bug)** | `BUG-WINDOW-RANGE-PEER-EVAL-1` | `ORDER BY` 시 표준 기본값인 `RANGE` 피어 구간 확장을 구현하여 동순위 행 간 누적 집계 왜곡 해결 |
+| **`BUG-OCC-COMMIT-INTRA-TX-UNIQUE-1`** | **단일 트랜잭션 내 다중 유니크 충돌 사일런트 커밋 방지 (OCC Intra Tx Unique Bug)** | `BUG-OCC-COMMIT-INTRA-TX-UNIQUE-1` | `tx.changes` 내부 상호 유니크 충돌 사전 검증 및 `idxData.Insert` 에러 전파로 중복 커밋 원천 차단 |
+| **`BUG-OCC-UPDATE-UNIQUE-CHECK-OMISSION-1`** | **MemEngine updateLocked 유니크 인덱스 사전 검증 누락 방지 (OCC Update Unique Bug)** | `BUG-OCC-UPDATE-UNIQUE-CHECK-OMISSION-1` | 레코드 수정(`Update`) 시 유니크 인덱스 즉각 검증 로직 추가로 트랜잭션 내 중복 키 갱신 방어 |
+| **`BUG-API-JSON-DATETIME-EMPTY-STR-1`** | **HTTP API 레코드 조회 시 DATETIME 빈 문자열 직렬화 방지 (API JSON DateTime Bug)** | `BUG-API-JSON-DATETIME-EMPTY-STR-1` | `recordToJSONMap`에서 `v.SVal` 대신 `v.String()` / `v.TVal` 정규 포맷팅으로 일시 데이터 유실 해결 |
+| **`BUG-API-JSON-DECIMAL-PRECISION-LOSS-1`** | **HTTP API 레코드 직렬화 시 DECIMAL 실수 부동소수점 정밀도 손실 방지 (API Decimal Loss Bug)** | `BUG-API-JSON-DECIMAL-PRECISION-LOSS-1` | `strconv.ParseFloat` 변환을 제거하고 정밀 문자열 또는 `json.Number`로 직렬화하여 금융 데이터 왜곡 방지 |
+| **`BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1`** | **0건 파생테이블 Columns[0] 임의 PK 지정 및 제약 파괴 방지 (Derived Table PK Bug)** | `BUG-DERIVED-TABLE-PK-GUESS-EMPTY-1` | 0건 반환 시 임의 컬럼 PK 승격을 중단하고 항상 가상 기본키(`_dt_row_id`)를 부여하여 스키마 정합성 보장 |
+| **`BUG-PITR-DDL-SILENT-SWALLOW-1`** | **PITR WAL 재생 시 DDL 실행 에러 침묵 및 복구 실패 은폐 방지 (PITR DDL Swallow Bug)** | `BUG-PITR-DDL-SILENT-SWALLOW-1` | DDL 실행 실패(`CreateTable`, `DropTable` 등) 시 에러 즉시 전파로 후속 데이터 파괴 및 복구 왜곡 방지 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
