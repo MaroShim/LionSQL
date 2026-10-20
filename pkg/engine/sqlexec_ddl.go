@@ -277,6 +277,7 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 	}
 
 	s.InvalidatePKBypassCache()
+	s.SetTableLastIdentity(tableName, 0)
 
 	return &QueryResult{
 		Success:    true,
@@ -375,6 +376,7 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 		}
 
 		s.InvalidatePKBypassCache()
+		s.SetTableLastIdentity(tableName, 0)
 		return &QueryResult{
 			Success:    true,
 			Command:    "TRUNCATE TABLE",
@@ -388,6 +390,7 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 	}
 
 	s.InvalidatePKBypassCache()
+	s.SetTableLastIdentity(tableName, 0)
 
 	return &QueryResult{
 		Success:    true,

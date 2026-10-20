@@ -376,15 +376,20 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 
 	var maxID int64 = 0
 	if identityCol != nil {
-		if cur, err := tx.Scan(tableName); err == nil {
-			for cur.Next() {
-				if r, err := cur.Record(); err == nil {
-					if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-						maxID = v.IVal
+		if lastID, ok := s.GetTableLastIdentity(schema.Name); ok {
+			maxID = lastID
+		} else {
+			if cur, err := tx.Scan(tableName); err == nil {
+				for cur.Next() {
+					if r, err := cur.Record(); err == nil {
+						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+							maxID = v.IVal
+						}
 					}
 				}
+				cur.Close()
 			}
-			cur.Close()
+			s.SetTableLastIdentity(schema.Name, maxID)
 		}
 	}
 
@@ -734,15 +739,20 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 
 	var maxID int64 = 0
 	if identityCol != nil {
-		if cur, err := tx.Scan(tableName); err == nil {
-			for cur.Next() {
-				if r, err := cur.Record(); err == nil {
-					if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
-						maxID = v.IVal
+		if lastID, ok := s.GetTableLastIdentity(schema.Name); ok {
+			maxID = lastID
+		} else {
+			if cur, err := tx.Scan(tableName); err == nil {
+				for cur.Next() {
+					if r, err := cur.Record(); err == nil {
+						if v, ok := r[identityCol.Name]; ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+							maxID = v.IVal
+						}
 					}
 				}
+				cur.Close()
 			}
-			cur.Close()
+			s.SetTableLastIdentity(schema.Name, maxID)
 		}
 	}
 

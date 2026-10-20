@@ -1149,6 +1149,12 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 		tx = nil
 	}
 
+	if execRes.LastIdentity > 0 {
+		if m := reDmlInsertCheck.FindStringSubmatch(cleaned); len(m) > 1 {
+			s.SetTableLastIdentity(cleanIdentifier(m[1]), execRes.LastIdentity)
+		}
+	}
+
 	if cs != nil {
 		cs.Mu.Lock()
 		if execRes.LastIdentity > 0 {

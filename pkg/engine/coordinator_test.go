@@ -218,6 +218,29 @@ func TestCoordinator_InsertIntoSelect(t *testing.T) {
 		t.Fatalf("SET IDENTITY_INSERT OFF failed: %v", err)
 	}
 
+	// 6d. Next auto-identity insert should increment from cached maxID (11 -> 12)
+	res, err = coord.ExecuteSQL(`INSERT INTO dst_identity (info) VALUES ('cached_auto');`)
+	if err != nil || !res.Success {
+		t.Fatalf("INSERT cached_auto failed: %v", err)
+	}
+	idChk2, err := coord.ExecuteSQL(`SELECT seq_id FROM dst_identity WHERE info = 'cached_auto';`)
+	if err != nil || len(idChk2.Rows) != 1 || idChk2.Rows[0]["seq_id"] != int64(12) {
+		t.Fatalf("expected seq_id=12 for cached_auto, got: %+v", idChk2.Rows)
+	}
+
+	// 6e. TRUNCATE TABLE resets identity counter to 0 (VPERF-3)
+	if _, err := coord.ExecuteSQL(`TRUNCATE TABLE dst_identity;`); err != nil {
+		t.Fatalf("TRUNCATE TABLE dst_identity failed: %v", err)
+	}
+	res, err = coord.ExecuteSQL(`INSERT INTO dst_identity (info) VALUES ('first_after_truncate');`)
+	if err != nil || !res.Success {
+		t.Fatalf("INSERT after truncate failed: %v", err)
+	}
+	idChk3, err := coord.ExecuteSQL(`SELECT seq_id FROM dst_identity WHERE info = 'first_after_truncate';`)
+	if err != nil || len(idChk3.Rows) != 1 || idChk3.Rows[0]["seq_id"] != int64(1) {
+		t.Fatalf("expected seq_id=1 after truncate, got: %+v", idChk3.Rows)
+	}
+
 	// 7. Temporary Table Support
 	tempSess := "temp-sess"
 	if _, err := coord.ExecuteSessionSQL(tempSess, `CREATE TABLE #temp_users (uid INT PRIMARY KEY, uname VARCHAR(50));`); err != nil {
