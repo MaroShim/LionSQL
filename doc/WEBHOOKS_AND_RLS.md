@@ -66,7 +66,7 @@ Response:
       "url": "https://api.example.com/webhooks/audit",
       "secret": "my-secret-key",
       "enabled": true,
-      "created_at": "2026-09-29T10:00:00Z"
+      "created_at": "2024-09-29T10:00:00Z"
     }
   ]
 }
@@ -128,7 +128,7 @@ Response:
       "duration_ms": 12,
       "success": true,
       "attempt_count": 1,
-      "timestamp": "2026-09-29T10:05:00Z"
+      "timestamp": "2024-09-29T10:05:00Z"
     }
   ]
 }

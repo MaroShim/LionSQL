@@ -536,8 +536,3 @@ LionSQL incorporates or dynamically links with third-party software components u
   - Licensed under the **GNU General Public License (GPLv2 or GPLv3)**.
   - When LionSQL is built with `-tags wiredtiger`, it links with `libwiredtiger` governed by its respective GPL terms.
 
-### Commercial Dual Licensing & Enterprise Embeddings
-For commercial software development, proprietary in-engine embedding, or enterprise deployments that require custom licensing terms without GPL copyleft obligations:
-- Commercial dual-licensing agreements covering LionSQL's proprietary kernel code are available upon request.
-- Deployments using LionSQL's pure-Go in-memory engine (`-engine=memory`) operate free of Cgo and third-party C library copyleft requirements. Commercial embedding with the WiredTiger storage backend requires a separate commercial WiredTiger license from MongoDB, Inc. or adherence to GPL.
-

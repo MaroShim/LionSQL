@@ -428,9 +428,9 @@ LionSQL 서버를 운영체제 백그라운드 데몬 프로세스로 분기(For
   ```
 * **실행 예시**:
   ```bash
-  $ lionsql backup -out /backups/lionsql_20261019.tar.gz -dir data
+  $ lionsql backup -out /backups/lionsql_20241019.tar.gz -dir data
   Initiating online storage checkpoint... Done.
-  Archiving data directory to /backups/lionsql_20261019.tar.gz...
+  Archiving data directory to /backups/lionsql_20241019.tar.gz...
   Backup completed successfully. (Size: 45.2 MB, Checkpoint LSN: 1849300)
   ```
 
@@ -455,7 +455,7 @@ LionSQL 바이너리의 정식 릴리즈 버전, 빌드 태그, 대상 OS/아키
   LionSQL v0.90.0 (darwin/arm64) [tags: wiredtiger]
   Git Commit: 477a4cb6
   Go Version: go1.24.0
-  Build Date: 2026-10-19T08:30:00Z
+  Build Date: 2024-10-19T08:30:00Z
   Storage Backends: WiredTiger MVCC, In-Memory OCC
   ```
 
@@ -754,10 +754,10 @@ LionSQL은 Microsoft SQL Server T-SQL 및 ANSI/PostgreSQL 표준 데이터 타�
 #### 3. 일시(Date & Time) 데이터 타입
 | 데이터 타입 | 물리 저장 바이트 | 유효 범위 및 정밀도 | 리터럴 표기 예시 |
 | :--- | :---: | :--- | :--- |
-| **`DATE`** | 4 Bytes | `0001-01-01` ~ `9999-12-31` (1일 단위 정밀도) | `'2026-10-19'` |
+| **`DATE`** | 4 Bytes | `0001-01-01` ~ `9999-12-31` (1일 단위 정밀도) | `'2024-10-19'` |
 | **`TIME`** | 8 Bytes | `00:00:00.000000` ~ `23:59:59.999999` (마이크로초 정밀도) | `'17:30:00.123456'` |
-| **`DATETIME`** | 8 Bytes | `1753-01-01 00:00:00` ~ `9999-12-31 23:59:59` (밀리초 정밀도) | `'2026-10-19 17:30:00'` |
-| **`TIMESTAMP`** | 8 Bytes | Unix 에포크 마이크로초 정수 또는 행 버전 토큰 | `'2026-10-19 17:30:00.000'` |
+| **`DATETIME`** | 8 Bytes | `1753-01-01 00:00:00` ~ `9999-12-31 23:59:59` (밀리초 정밀도) | `'2024-10-19 17:30:00'` |
+| **`TIMESTAMP`** | 8 Bytes | Unix 에포크 마이크로초 정수 또는 행 버전 토큰 | `'2024-10-19 17:30:00.000'` |
 
 #### 4. 논리 및 고유 식별자 타입
 | 데이터 타입 | 물리 저장 바이트 | 유효 범위 및 기술 사양 | 리터럴 표기 예시 |
@@ -915,7 +915,7 @@ T-SQL 저장 프로시저를 선언하고 VDBE 바이트코드로 컴파일하�
       SUM(o.total_amount) AS gross_spend
   FROM customers c
   INNER JOIN orders o ON c.customer_id = o.customer_id
-  WHERE o.status = 'COMPLETED' AND o.order_date >= '2026-01-01'
+  WHERE o.status = 'COMPLETED' AND o.order_date >= '2024-01-01'
   GROUP BY c.customer_id, c.name
   HAVING SUM(o.total_amount) >= 1000.00
   ORDER BY gross_spend DESC
@@ -1022,7 +1022,7 @@ LionSQL의 수식 계산 엔진은 ANSI SQL 및 T-SQL 표준 연산자 우선순
 * **반환값**: `VARCHAR` (추출된 부분 문자열)
 * **예제**:
   ```sql
-  SELECT SUBSTRING('2026-10-19', 1, 4); -- 반환값: '2026'
+  SELECT SUBSTRING('2024-10-19', 1, 4); -- 반환값: '2024'
   ```
 
 ##### `CHARINDEX(substring, string_expression [, start_location])`
@@ -1091,7 +1091,7 @@ LionSQL의 수식 계산 엔진은 ANSI SQL 및 T-SQL 표준 연산자 우선순
 * **반환값**: 데이터베이스 서버의 현재 로컬 일시 (`DATETIME`, 밀리초 정밀도)
 * **예제**:
   ```sql
-  SELECT GETDATE(); -- 반환값: 2026-10-19 17:30:00.123
+  SELECT GETDATE(); -- 반환값: 2024-10-19 17:30:00.123
   ```
 
 ##### `DATEADD(datepart, number, date)`
@@ -1100,7 +1100,7 @@ LionSQL의 수식 계산 엔진은 ANSI SQL 및 T-SQL 표준 연산자 우선순
 * **반환값**: 연산된 일시 (`DATETIME`)
 * **예제**:
   ```sql
-  SELECT DATEADD(day, 30, '2026-01-01'); -- 반환값: 2026-01-31 00:00:00
+  SELECT DATEADD(day, 30, '2024-01-01'); -- 반환값: 2024-01-31 00:00:00
   ```
 
 ##### `DATEDIFF(datepart, startdate, enddate)`
@@ -1109,7 +1109,7 @@ LionSQL의 수식 계산 엔진은 ANSI SQL 및 T-SQL 표준 연산자 우선순
 * **반환값**: `BIGINT`
 * **예제**:
   ```sql
-  SELECT DATEDIFF(day, '2026-01-01', '2026-01-10'); -- 반환값: 9
+  SELECT DATEDIFF(day, '2024-01-01', '2024-01-10'); -- 반환값: 9
   ```
 
 ##### `DATEPART(datepart, date)` / `YEAR(date)` / `MONTH(date)` / `DAY(date)`
@@ -1117,7 +1117,7 @@ LionSQL의 수식 계산 엔진은 ANSI SQL 및 T-SQL 표준 연산자 우선순
 * **반환값**: 일시의 특정 부분을 정수(`INT`)로 추출
 * **예제**:
   ```sql
-  SELECT YEAR('2026-10-19'), MONTH('2026-10-19'), DAY('2026-10-19'); -- 2026, 10, 19
+  SELECT YEAR('2024-10-19'), MONTH('2024-10-19'), DAY('2024-10-19'); -- 2024, 10, 19
   ```
 
 ---

@@ -18,7 +18,7 @@ This document establishes the official 4-stage execution plan for comprehensive 
 ## Detailed Action Plan by Stage
 
 ### Stage 1: CHANGELOG.md 0.90.0 Release Block Polish (Completed)
-- [x] Promoted `[Unreleased]` changes to `## [0.90.0] - 2026-10-19`.
+- [x] Promoted `[Unreleased]` changes to `## [0.90.0]`.
 - [x] Added **Global Memory Governor & Query Circuit Breaker (`MEM-1`)** milestone.
 - [x] Aligned version references to `const Version = "0.90.0"` SSOT.
 - [x] Documented virtual catalog standardization (`postgres` on OID 1, `master` on DB ID 1) and long-lived SSE streaming latency isolation.

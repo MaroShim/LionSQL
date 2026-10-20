@@ -575,7 +575,7 @@
      - `evalRowBinaryOp`에서 불일치 비교(`TokenNeq`: `<>`, `!=`) 시 피연산자 중 하나가 `nil`일 때 `true`를 반환하도록 작성되어(`if left == nil || right == nil { return true }`), SQL 3가 논리(3VL)를 위반하고 `WHERE status <> 'completed'` 조건 등에서 NULL 행들이 필터를 무단 통과하는 결함.
      - `TokenNeq` 역시 다른 비교 연산자와 동일하게 NULL 피연산자 시 `nil`(UNKNOWN)을 반환하여 WHERE 절 누수 원천 차단.
   66. **`BUG-DATEADD-NULL-1` (`pkg/proc/builtins_date.go:567-584, 635-645`)**:
-     - `DATEADD` 및 `EOMONTH`에서 증분 파라미터(`n`, `monthsToAdd`)의 NULL 여부를 검사하지 않아, `DATEADD(day, NULL, '2026-01-01')`이나 `EOMONTH(date, NULL)` 호출 시 `n=0`으로 오판되어 NULL 대신 원본 날짜를 그대로 반환하는 결함.
+     - `DATEADD` 및 `EOMONTH`에서 증분 파라미터(`n`, `monthsToAdd`)의 NULL 여부를 검사하지 않아, `DATEADD(day, NULL, '2024-01-01')`이나 `EOMONTH(date, NULL)` 호출 시 `n=0`으로 오판되어 NULL 대신 원본 날짜를 그대로 반환하는 결함.
      - 인자 목록 중 하나라도 NULL일 경우 표준 규격에 따라 `storage.NullValue`를 즉시 정규 반환하도록 수정.
   67. **`BUG-VM-INSERT-DEFAULT-1` (`pkg/proc/runtime/vm_dispatcher.go:611-626`)**:
      - VDBE `OpInsert`에서 기본값(`DEFAULT`) 평가 시 6종의 하드코딩된 날짜/UUID 함수(`NEWID()`, `GETDATE()` 등)만 switch로 검사하고, `DEFAULT 0`, `DEFAULT 'active'`, `DEFAULT 1.0` 등 상수 리터럴 기본값을 전면 무시하여 생략된 컬럼에 `NULL`이 강제 삽입되던 결함.
@@ -596,7 +596,7 @@
      - 조건 평가기 `evaluateWhereCondition`의 `IN (...)` 절에서 `strings.Split(valList, ",")`로 리스트를 단순 분해하여, `WHERE city IN ('Seoul, KR', 'Tokyo, JP')`와 같이 콤마를 포함한 문자열 리터럴이 `'Seoul`, `KR'`로 쪼개져 IN 조건 매칭이 영구 실패하던 결함.
      - 문자열 리터럴 이스케이프 및 따옴표 상태를 인식하는 스마트 IN 리스트 분해기 도입으로 정합성 보장.
   73. **`BUG-STORAGE-CMP-DATETIME-STR-1` (`pkg/storage/engine.go:466, 742-772`)**:
-     - `DateTimeValue`가 `TVal`만 설정하고 `SVal`을 빈 문자열로 남겨둠에 따라, `TypeVarChar`와 `TypeDateTime` 상호 비교 시 `Value.Compare`가 미초기화된 0값 시간(`0001-01-01`) 또는 빈 문자열과 비교하여 비교 결과가 역전되고, `WHERE date_col >= '2026-01-01'` 조건 등의 조회가 0건으로 왜곡되던 결함.
+     - `DateTimeValue`가 `TVal`만 설정하고 `SVal`을 빈 문자열로 남겨둠에 따라, `TypeVarChar`와 `TypeDateTime` 상호 비교 시 `Value.Compare`가 미초기화된 0값 시간(`0001-01-01`) 또는 빈 문자열과 비교하여 비교 결과가 역전되고, `WHERE date_col >= '2024-01-01'` 조건 등의 조회가 0건으로 왜곡되던 결함.
      - `Value.Compare`에 DateTime/Date와 문자열 간의 상호 파싱/강제변환(Coercion)을 보강하여 올바른 시간 축 비교 보장.
   74. **`BUG-STORAGE-EQUAL-FLOAT-STR-1` (`pkg/storage/engine.go:666`)**:
      - `Value.Equal`에서 실수(`TypeFloat`) 동등 비교 시 `fmt.Sprintf("%f", v.FVal)`을 호출하여 소수점 6자리까지만 포맷팅 비교함으로써, 7자리 이후가 다른 서로 다른 두 실수가 참으로 판정되고, 핫패스 비교마다 힙 할당을 유발하며, `Compare`($\ne 0$)와 `Equal`($== true$) 간의 불일치가 발생하는 결함.
@@ -1230,7 +1230,7 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
   - `pkg/catalog/virtual/info_schema.go`: `information_schema`의 `table_catalog`, `catalog_name` 등을 `postgres`로 일원화.
   - `pkg/engine/coordinator_impl.go`, `sqlexec_select.go`, `sqlexec_procs.go`: 세션 기본 데이터베이스를 PGWire/제네릭은 `postgres`, TDS는 `master`로 단일화하여 Beekeeper, DBeaver 등 외부 도구에서 단일 카탈로그 UX 완비.
 - [x] **v0.90.0 기능 동결 4단계 문서 전수 정돈 마스터 플랜 (`DOC-CLEANUP`) (`CHANGELOG.md`, `README.md`, `doc/`, `ROADMAP.md`, `notes/`)**:
-  - `CHANGELOG.md`: `[0.90.0] - 2026-10-19` 공식 릴리스 블록 확정 (글로벌 메모리 거버너 `MEM-1`, 단일 CLI `UNIFY-CLI`, Web Studio 실시간 스트림/로그/DDL 모달, 단일 카탈로그 표준화 등 Keep a Changelog 표준 정돈).
+  - `CHANGELOG.md`: `[0.90.0]` 공식 릴리스 블록 확정 (글로벌 메모리 거버너 `MEM-1`, 단일 CLI `UNIFY-CLI`, Web Studio 실시간 스트림/로그/DDL 모달, 단일 카탈로그 표준화 등 Keep a Changelog 표준 정돈).
   - 루트 `README.md` & `README.ko.md`: `v0.90.0 Feature Freeze` 배지 도입, 단일 바이너리 `./bin/lionsql` 포그라운드/데몬/관리 CLI 전면 반영, 4대 Web Studio 신규 뷰 및 외부 클라이언트 DSN 일원화.
   - `doc/` 디렉터리 레거시 전수 정돈: `sqlion` ➔ `postgres`/`master` 단일 카탈로그 일원화, 미지원 TablePlus 언급 삭제 및 Beekeeper/DBeaver/Navicat 표준화, 구형 `./bin/server` ➔ `./bin/lionsql` 실행 명령 치환.
   - `ROADMAP.md`: Phase 1~5 전체 완료 및 Phase 6 `v0.90.0 Feature Freeze` 달성 상태 동기화, v1.0.0 LTS(Phase 7) 마일스톤 정립.

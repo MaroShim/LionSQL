@@ -79,7 +79,7 @@ Validated SQL Server-specific binary serialization, literal parsing, and token e
 | 41 | 6 String Functions | `SELECT LEN(...), SUBSTRING(...), CHARINDEX(...), UPPER(...), LOWER(...), REPLACE(...)` | **PASS** | 1-based indexing semantics matching MSSQL specification |
 | 42 | 6 Math Functions | `SELECT ABS(-42), ROUND(123.456, 2), CEILING(4.2), FLOOR(4.8), POWER(2, 3), SQRT(16)` | **PASS** | Accurate floating-point arithmetic computation |
 | 43 | Date Component Extractors | `SELECT YEAR(GETDATE()), MONTH(GETDATE()), DAY(GETDATE())` | **PASS** | Integer date component extraction |
-| 44 | Date Arithmetic | `SELECT DATEDIFF(day, '2026-01-01', '2026-01-10'), DATEADD(day, 5, '2026-01-01')` | **PASS** | Interval computation and addition |
+| 44 | Date Arithmetic | `SELECT DATEDIFF(day, '2024-01-01', '2024-01-10'), DATEADD(day, 5, '2024-01-01')` | **PASS** | Interval computation and addition |
 | 45 | Conditional Expressions | `SELECT CASE WHEN 10 > 5 THEN 'Greater' ELSE 'Lesser' END` | **PASS** | Multi-branch conditional branching evaluation |
 
 ---
@@ -204,7 +204,7 @@ Validated SQL Server-specific binary serialization, literal parsing, and token e
 | 100 | Null-Tolerant CONCAT | `SELECT CONCAT('Hello', ' ', NULL, 'World')` | **PASS** | Returns `Hello World` (MSSQL 2012+ standard) |
 | 101 | Addition NULL Propagation | `SELECT 'Hello ' + CAST(NULL AS VARCHAR(10))` | **PASS** | Evaluates to NULL under `CONCAT_NULL_YIELDS_NULL ON` |
 | 102 | CHARINDEX with Offset | `SELECT CHARINDEX('o', 'Hello World', 6)` | **PASS** | Searches starting from index 6, returning 8 |
-| 103 | Date Constructor | `SELECT DATEFROMPARTS(2026, 10, 18)` | **PASS** | Emits structured `2026-10-18` |
+| 103 | Date Constructor | `SELECT DATEFROMPARTS(2024, 10, 18)` | **PASS** | Emits structured `2024-10-18` |
 | 104 | Time Constructor | `SELECT TIMEFROMPARTS(14, 30, 0, 0, 0)` | **TYPE_DIFF** | **[Parity with MSSQL]** Emits valid `TypeTimeN` (0x29). Scanning into Go `time.Time` preserves hour/minute/second; scanning into string formats as RFC3339 `0001-01-01T14:30:00Z` (identical to standard Microsoft SQL Server driver behavior) |
 | 105 | UUID Generation | `SELECT NEWID()` | **PASS** | Generates RFC 4122 GUID |
 | 106 | Ternary IIF Function | `SELECT IIF(10 > 5, 'Yes', 'No')` | **PASS** | Evaluates ternary condition to 'Yes' |

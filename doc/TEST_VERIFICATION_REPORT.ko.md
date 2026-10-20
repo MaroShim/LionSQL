@@ -1,7 +1,7 @@
 # LionSQL 통합 종합 상세 테스트 검증 보고서 (Comprehensive Test Verification & Architecture Master)
 
 - **문서 버전**: 2.0 (Consolidated Master Edition)
-- **작성 일자**: 2026년 10월 17일
+- **작성 일자**: 10월 17일
 - **검증 대상**: LionSQL Embedded High-Concurrency OLTP Database Engine
 - **테스트 환경**: macOS Darwin arm64 (Apple Silicon), Go 1.24+ (`-tags wiredtiger`)
 - **검증 주체**: Antigravity AI Pair Programming Agent & Core Engineering Team
@@ -477,33 +477,33 @@ JSON 데이터 컬럼 내부의 특정 속성을 추출하여 B+Tree 인덱스�
    ```bash
    ./bin/lionsql migrate new create_products_catalog -dir=data/suite_migrations
    # [lionsql] Created migration pair:
-   #   Up:   data/suite_migrations/20261016145527_create_products_catalog.up.sql
-   #   Down: data/suite_migrations/20261016145527_create_products_catalog.down.sql
+   #   Up:   data/suite_migrations/20241016145527_create_products_catalog.up.sql
+   #   Down: data/suite_migrations/20241016145527_create_products_catalog.down.sql
    ```
 2. **배포 전 상태 확인**:
    ```bash
    ./bin/lionsql migrate status -dir=data/suite_migrations -data=data/suite_mig_db -engine=wiredtiger
    # VERSION          NAME                      STATUS    APPLIED AT   DURATION
-   # 20261016145527   create_products_catalog   Pending   -            -
+   # 20241016145527   create_products_catalog   Pending   -            -
    ```
 3. **스키마 반영 (Migrate Up)**:
    ```bash
    ./bin/lionsql migrate up -dir=data/suite_migrations -data=data/suite_mig_db -engine=wiredtiger
    # [lionsql] Applying migrations from data/suite_migrations...
-   #   [20261016145527] create_products_catalog (7ms)
+   #   [20241016145527] create_products_catalog (7ms)
    # [lionsql] Successfully applied 1 migration(s).
    ```
 4. **배포 후 상태 확인**:
    ```bash
    ./bin/lionsql migrate status -dir=data/suite_migrations -data=data/suite_mig_db -engine=wiredtiger
    # VERSION          NAME                      STATUS    APPLIED AT             DURATION
-   # 20261016145527   create_products_catalog   Applied   2026-10-16T14:55:35Z   7ms
+   # 20241016145527   create_products_catalog   Applied   2024-10-16T14:55:35Z   7ms
    ```
 5. **원자적 롤백 (Migrate Down)**:
    ```bash
    ./bin/lionsql migrate down -steps=1 -dir=data/suite_migrations -data=data/suite_mig_db -engine=wiredtiger
    # [lionsql] Rolling back migrations from data/suite_migrations...
-   #   [20261016145527] create_products_catalog (7ms)
+   #   [20241016145527] create_products_catalog (7ms)
    # [lionsql] Successfully rolled back 1 migration(s).
    ```
 - 상태가 다시 `Pending`으로 완벽히 복구됨을 확인.
@@ -522,21 +522,21 @@ JSON 데이터 컬럼 내부의 특정 속성을 추출하여 B+Tree 인덱스�
       temp FLOAT
   ) PARTITION BY toYYYYMM(recorded_at);
   ```
-- 2026년 8월, 9월, 10월, 11월 데이터 삽입 시 4개 월별 파티션이 동적으로 자동 생성됨.
+- 8월, 9월, 10월, 11월 데이터 삽입 시 4개 월별 파티션이 동적으로 자동 생성됨.
 - `SHOW PARTITIONS sensor_telemetry;` 및 `SELECT * FROM system.partitions;` 메타데이터 일치 확인.
 
 #### 13.2 파티션 프루닝 (Partition Pruning)
-- 질의: `EXPLAIN SELECT * FROM sensor_telemetry WHERE recorded_at >= '2026-10-01' AND recorded_at < '2026-11-01';`
+- 질의: `EXPLAIN SELECT * FROM sensor_telemetry WHERE recorded_at >= '2024-10-01' AND recorded_at < '2024-11-01';`
 - 플랜 결과:
   ```
   -> Seq Scan on sensor_telemetry
-     Filter: (recorded_at >= '2026-10-01' AND recorded_at < '2026-11-01')
-     Partitions: [202610]
+     Filter: (recorded_at >= '2024-10-01' AND recorded_at < '2024-11-01')
+     Partitions: [202410]
   ```
-- 전체 4개 파티션 중 10월 파티션(`202610`)만 타겟팅하여 전체 파티션의 75%를 I/O 스캔 대상에서 즉시 프루닝(Pruning)함.
+- 전체 4개 파티션 중 10월 파티션(`202410`)만 타겟팅하여 전체 파티션의 75%를 I/O 스캔 대상에서 즉시 프루닝(Pruning)함.
 
 #### 13.3 O(1) 단일 패스 파티션 파기
-- 명령: `ALTER TABLE sensor_telemetry DROP PARTITION '202608';`
+- 명령: `ALTER TABLE sensor_telemetry DROP PARTITION '202408';`
 - 행 단위 `DELETE` 부하 없이 파티션 메타데이터와 물리 스토리지 포인터만 $O(1)$로 일괄 해제.
 - `SHOW PARTITIONS` 확인 결과 8월 파티션이 즉시 사라지고 3개 파티션만 남음을 검증.
 - **검증 판정**: **PASS**
@@ -758,7 +758,7 @@ wiredtiger_open(path, NULL,
 | **손상된 TDS 패킷 헤더** | 패킷 길이 필드에 허용치 초과 값(`0xFFFF`) 주입 | `pkg/wire/tds` 프레임 크기 경계 가드 레일 (`len <= 4096`) | 패킷 파싱 중단, 경고 로그 기록 후 클라이언트 연결 즉각 격리 |
 | **미인증 로그인 시도** | `sa` 계정에 잘못된 비밀번호 전송 | `authSvc.AuthenticateLogin` 해시 검증 실패 | TDS Error Token 18456 (Severity 14, State 1) 반환 후 세션 종료 |
 | **존재하지 않는 컬럼 참조** | `SELECT nonexistent_col FROM accounts;` | 컴파일 단계 카탈로그 정적 스키마 바인딩 | 파서 컴파일 에러 반환, VDBE 바이트코드 생성 원천 차단 |
-| **잘못된 날짜 포맷팅** | `INSERT ... VALUES ('2026-99-99');` | `builtins_date.go` 파서의 Strict ISO-8601 검증 | 런타임 패닉 없이 `invalid date format` 에러 반환 |
+| **잘못된 날짜 포맷팅** | `INSERT ... VALUES ('2024-99-99');` | `builtins_date.go` 파서의 Strict ISO-8601 검증 | 런타임 패닉 없이 `invalid date format` 에러 반환 |
 | **유효하지 않은 세이브포인트**| 존재하지 않는 세이브포인트로 `ROLLBACK TO sp_bad;`| 세션 세이브포인트 스택 네임스페이스 탐색 | 롤백 거부 에러 반환, 상위 앰비언트 트랜잭션 안전 유지 |
 
 ---

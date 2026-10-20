@@ -80,7 +80,7 @@ lionsql [command] [options...]
 | **`lionsql restore`** | `lionsql restore <source.tar.gz>` | Restores database files, catalog schemas, and WAL state from a snapshot archive. |
 | **`lionsql doctor`** | `lionsql doctor` | Performs environment diagnostics: CPU/RAM budgets, port availability, WiredTiger C library check. |
 | **`lionsql init-config`**| `lionsql init-config [target.json]` | Generates a clean `lionsql.json` configuration template with recommended defaults. |
-| **`lionsql version`** | `lionsql version` *(or `-v`, `--version`)* | Displays release banner: `LionSQL 1.0 (2026 Release) / v1.0.0 LTS`. |
+| **`lionsql version`** | `lionsql version` *(or `-v`, `--version`)* | Displays release banner: `LionSQL 1.0 / v1.0.0 LTS`. |
 
 ---
 

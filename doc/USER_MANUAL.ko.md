@@ -297,7 +297,7 @@ $ lionsql version
 LionSQL v0.90.0 (darwin/arm64) [tags: wiredtiger]
 Git Commit: 477a4cb6
 Go Version: go1.24.0
-Build Date: 2026-10-19T08:30:00Z
+Build Date: 2024-10-19T08:30:00Z
 Storage Backends: WiredTiger MVCC, In-Memory OCC
 ```
 
@@ -1097,21 +1097,21 @@ LionSQL 바이너리는 마이그레이션 툴체인을 내장하고 있어 외�
 # 1. 새 마이그레이션 파일 생성 (타임스탬프 파일 자동 생성)
 $ lionsql migrate new add_products_table
 Created migration files:
-  migrations/20261019_173000_add_products_table.up.sql
-  migrations/20261019_173000_add_products_table.down.sql
+  migrations/20241019_173000_add_products_table.up.sql
+  migrations/20241019_173000_add_products_table.down.sql
 
 # 2. 미적용 상향 마이그레이션 일괄 적용
 $ lionsql migrate up -dir=./data
-Applying migration: 20261019_173000_add_products_table... Applied successfully.
+Applying migration: 20241019_173000_add_products_table... Applied successfully.
 
 # 3. 현재 마이그레이션 상태 확인
 $ lionsql migrate status -dir=./data
 Applied Migrations:
-  [X] 20261019_173000_add_products_table (Applied at: 2026-10-19 17:31:00)
+  [X] 20241019_173000_add_products_table (Applied at: 2024-10-19 17:31:00)
 
 # 4. 가장 최근 마이그레이션 1단계 롤백
 $ lionsql migrate down -dir=./data -steps=1
-Rolling back migration: 20261019_173000_add_products_table... Rolled back cleanly.
+Rolling back migration: 20241019_173000_add_products_table... Rolled back cleanly.
 ```
 
 ---
@@ -1194,9 +1194,9 @@ LionSQL은 데이터베이스 서비스 중단(Downtime) 없이 일관된 스냅
 
 #### 1. CLI 로컬 온라인 백업
 ```bash
-$ lionsql backup -dir=./data -out=/backups/lionsql_backup_20261019.tar.gz
+$ lionsql backup -dir=./data -out=/backups/lionsql_backup_20241019.tar.gz
 Initiating online storage checkpoint... Done.
-Archiving data directory to /backups/lionsql_backup_20261019.tar.gz...
+Archiving data directory to /backups/lionsql_backup_20241019.tar.gz...
 Backup completed successfully. (Size: 45.2 MB, Checkpoint LSN: 1849300)
 ```
 
@@ -1210,7 +1210,7 @@ curl -s -X POST "http://127.0.0.1:8090/api/backup" \
 #### 3. 백업 아카이브 복원 (Restore)
 새로운 서버 또는 대상 디렉토리에 백업을 복원합니다:
 ```bash
-$ lionsql restore -dir=/var/lib/lionsql/data_restored -in=/backups/lionsql_backup_20261019.tar.gz
+$ lionsql restore -dir=/var/lib/lionsql/data_restored -in=/backups/lionsql_backup_20241019.tar.gz
 Validating backup archive integrity... Valid.
 Extracting archive contents to /var/lib/lionsql/data_restored... Done.
 Verifying storage headers and catalog checksums... OK.

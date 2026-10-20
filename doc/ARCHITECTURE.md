@@ -324,7 +324,7 @@ Live Production Engine (Active Reads & Writes)
 [Atomic File Writer (Golden Rule 1)] ─── Write to sqlion-backup-*.tmp ➔ Atomic rename
         │
         ▼
-[Self-Contained Backup Archive: sqlion-backup-20260922-133000.tar.gz]
+[Self-Contained Backup Archive: sqlion-backup-20240922-133000.tar.gz]
 ```
 
 #### Delivery Channels:

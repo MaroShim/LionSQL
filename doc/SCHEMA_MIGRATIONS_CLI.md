@@ -60,8 +60,8 @@ Generates a new timestamped migration pair in the target migrations directory.
   ```bash
   $ lionsql migrate new create_users_table -dir=./migrations
   Created migration files:
-    ./migrations/20261017120000_create_users_table.up.sql
-    ./migrations/20261017120000_create_users_table.down.sql
+    ./migrations/20241017120000_create_users_table.up.sql
+    ./migrations/20241017120000_create_users_table.down.sql
   ```
 
 ### 2.2. `lionsql migrate up`
@@ -80,8 +80,8 @@ Applies all pending migrations in ascending chronological order.
   ```bash
   $ lionsql migrate up -data=/var/lib/lionsql/data -dir=./migrations
   Applying 2 pending migration(s)...
-  Applying 20261017120000_create_users_table... OK (14ms)
-  Applying 20261017120500_add_user_roles... OK (8ms)
+  Applying 20241017120000_create_users_table... OK (14ms)
+  Applying 20241017120500_add_user_roles... OK (8ms)
   Successfully applied 2 migration(s).
   ```
 
@@ -98,7 +98,7 @@ Rolls back previously applied migrations in reverse chronological order.
   ```bash
   $ lionsql migrate down -steps=1 -data=/var/lib/lionsql/data -dir=./migrations
   Rolling back 1 migration(s)...
-  Rolling back 20261017120500_add_user_roles... OK (11ms)
+  Rolling back 20241017120500_add_user_roles... OK (11ms)
   Successfully rolled back 1 migration(s).
   ```
 
@@ -112,9 +112,9 @@ Inspects and prints the status table of all discovered migrations.
 * **Output Sample**:
   ```text
   VERSION         NAME                STATUS   APPLIED AT (UTC)      DURATION
-  20261017120000  create_users_table  APPLIED  2026-10-17 12:01:14   14ms
-  20261017120500  add_user_roles      APPLIED  2026-10-17 12:06:22   8ms
-  20261017121000  create_orders_table PENDING  -                     -
+  20241017120000  create_users_table  APPLIED  2024-10-17 12:01:14   14ms
+  20241017120500  add_user_roles      APPLIED  2024-10-17 12:06:22   8ms
+  20241017121000  create_orders_table PENDING  -                     -
   ```
 
 ### 2.5. `lionsql sql`
@@ -138,7 +138,7 @@ Migration files strictly follow the 14-digit UTC timestamp convention:
 
 ### 3.1. Standard Migration File Example
 
-**`20261017120000_create_accounts.up.sql`**:
+**`20241017120000_create_accounts.up.sql`**:
 ```sql
 -- Migration: create_accounts (Up)
 CREATE TABLE accounts (
@@ -151,7 +151,7 @@ CREATE TABLE accounts (
 CREATE UNIQUE INDEX idx_accounts_email ON accounts (email);
 ```
 
-**`20261017120000_create_accounts.down.sql`**:
+**`20241017120000_create_accounts.down.sql`**:
 ```sql
 -- Migration: create_accounts (Down)
 DROP TABLE IF EXISTS accounts;

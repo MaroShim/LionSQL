@@ -120,7 +120,7 @@ In a database processing 20,000+ OLTP transactions per second, synchronous files
 
 ```
 [ Client Goroutine 1 ] ──┐
-[ Client Goroutine 2 ] ──┼──► [ MPSC Ring Buffer ] ──► [ Async Batch Flusher ] ──► [ audit_20261017.log ]
+[ Client Goroutine 2 ] ──┼──► [ MPSC Ring Buffer ] ──► [ Async Batch Flusher ] ──► [ audit_20241017.log ]
 [ Client Goroutine N ] ──┘     (Capacity: 65,536)        (Sync every 100ms           (Append-Only, 0600)
                                                           or 500 records)
 ```
@@ -216,17 +216,17 @@ Audit logs are stored under the `--data-dir` directory in an isolated `audit/` f
 ```
 <data-dir>/
 ├── audit/
-│   ├── audit_20261017.log          # Daily rotated append-only log file
-│   ├── audit_20261017.log.state    # Checkpoint metadata (Last Sequence, Last Hash)
-│   └── audit_20261016.log          # Sealed previous day log file
+│   ├── audit_20241017.log          # Daily rotated append-only log file
+│   ├── audit_20241017.log.state    # Checkpoint metadata (Last Sequence, Last Hash)
+│   └── audit_20241016.log          # Sealed previous day log file
 ```
 
 ### 7.1. Log File Representation (JSON Lines)
 Each line in `audit_YYYYMMDD.log` is a single valid JSON record followed by a newline:
 
 ```json
-{"seq":1,"ts_ns":1792195200000000000,"timestamp":"2026-10-17T03:00:00.000000000Z","prev_hash":"0000000000000000000000000000000000000000000000000000000000000000","hash":"a8b3c4...","protocol":"internal","client_ip":"127.0.0.1","user":"system","category":"ADMIN","action":"SYSTEM_BOOT","status":"OK","detail":"LionSQL engine started with WiredTiger backend"}
-{"seq":2,"ts_ns":1792195205123456789,"timestamp":"2026-10-17T03:00:05.123456789Z","prev_hash":"a8b3c4...","hash":"f5e2d1...","protocol":"pgwire","client_ip":"192.168.1.50:52134","session_id":"sess-102","user":"alice","category":"AUTH","action":"AUTH_LOGIN_SUCCESS","status":"OK","detail":"Authenticated via SCRAM-SHA-256"}
+{"seq":1,"ts_ns":1792195200000000000,"timestamp":"2024-10-17T03:00:00.000000000Z","prev_hash":"0000000000000000000000000000000000000000000000000000000000000000","hash":"a8b3c4...","protocol":"internal","client_ip":"127.0.0.1","user":"system","category":"ADMIN","action":"SYSTEM_BOOT","status":"OK","detail":"LionSQL engine started with WiredTiger backend"}
+{"seq":2,"ts_ns":1792195205123456789,"timestamp":"2024-10-17T03:00:05.123456789Z","prev_hash":"a8b3c4...","hash":"f5e2d1...","protocol":"pgwire","client_ip":"192.168.1.50:52134","session_id":"sess-102","user":"alice","category":"AUTH","action":"AUTH_LOGIN_SUCCESS","status":"OK","detail":"Authenticated via SCRAM-SHA-256"}
 ```
 
 ---
@@ -253,11 +253,11 @@ To satisfy auditor inspection requirements, LionSQL provides a native verificati
 ```
 [LionSQL Audit Verifier]
 Auditing directory: ./data/audit/
-Files scanned: 2 (audit_20261016.log, audit_20261017.log)
+Files scanned: 2 (audit_20241016.log, audit_20241017.log)
 Total records verified: 142,891
 Chain integrity: 100% VALID (Zero tampering detected)
-Earliest Record: 2026-10-16T00:00:01Z (Seq: 1)
-Latest Record:   2026-10-17T03:30:12Z (Seq: 142891)
+Earliest Record: 2024-10-16T00:00:01Z (Seq: 1)
+Latest Record:   2024-10-17T03:30:12Z (Seq: 142891)
 Final Root Hash: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 Status: PASSED
 ```
@@ -265,7 +265,7 @@ Status: PASSED
 If tampering occurs:
 ```
 [ERROR] Cryptographic Hash Mismatch at Sequence 84,213!
-File: ./data/audit/audit_20261017.log, Line: 1,420
+File: ./data/audit/audit_20241017.log, Line: 1,420
 Recorded Hash:  f5e2d1...
 Recomputed:     7a8b9c...
 Reason: Record payload or PrevHash was modified retroactively!

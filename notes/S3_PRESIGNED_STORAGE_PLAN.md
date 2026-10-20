@@ -111,7 +111,7 @@ Pre-signed URL issuance endpoint accessible by web frontends and the embedded We
     "upload_url": "https://sqlion-assets.s3.ap-northeast-2.amazonaws.com/avatars/user_1001.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&...",
     "public_url": "https://cdn.example.com/avatars/user_1001.png",
     "key": "avatars/user_1001.png",
-    "expires_at": "2026-10-17T01:00:00Z"
+    "expires_at": "2024-10-17T01:00:00Z"
   }
   ```
 
@@ -126,7 +126,7 @@ SELECT S3_PRESIGNED_PUT_URL('avatars/user_1001.png') AS upload_url;
 SELECT S3_PRESIGNED_PUT_URL('my-bucket', 'docs/contract_99.pdf', 300) AS upload_url;
 
 -- 3. Issue GET pre-signed URL for private bucket asset retrieval
-SELECT S3_PRESIGNED_GET_URL('invoices/inv_202610.pdf', 180) AS download_url;
+SELECT S3_PRESIGNED_GET_URL('invoices/inv_202410.pdf', 180) AS download_url;
 ```
 
 ### 3.5 Orphan Object Lifecycle & Cleanup Pipeline (CDC Event-Driven Lifecycle)

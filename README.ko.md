@@ -537,8 +537,3 @@ LionSQL은 다음 오픈 소스 소프트웨어를 통합하거나 동적 링크
   - Copyright (c) Keith Bostic and Michael Cahill.
   - 라이선스: **GNU General Public License (GPLv2 또는 GPLv3)**.
   - `-tags wiredtiger` 플래그로 빌드된 LionSQL 바이너리는 `libwiredtiger`에 링크되며 GPL 카피레프트 조건이 적용됩니다.
-
-### 상용 듀얼 라이선스 및 기업 임베딩 (Commercial Dual Licensing)
-GPL 카피레프트 의무 없이 자체 소프트웨어에 LionSQL을 내장하거나 독점 라이선스가 필요한 기업 고객을 위한 안내:
-- LionSQL의 독자적 코어 엔진 코드에 대한 상용 듀얼 라이선스 계약을 지원합니다.
-- Cgo 의존성이 없는 순수 Go 인메모리 엔진(`-engine=memory`)은 외부 C 라이브러리 카피레프트 제약 없이 상용 임베딩이 가능합니다. WiredTiger 백엔드를 포함한 상용 임베딩의 경우 MongoDB, Inc.의 상용 WiredTiger 라이선스를 취득하거나 GPL 조항을 준수해야 합니다.

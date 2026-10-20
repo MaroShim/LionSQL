@@ -30,7 +30,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 [ Phase 6: Production Hardening & Feature Freeze ] ► v0.90.0 [COMPLETED - FEATURE FREEZE]
   Unified CLI (lionsql) + Web Studio Suite + Memory Governor + Protocol Gateways (postgres/master)
 
-[ Phase 7: Official 1.0 Release ] ────────► v1.0.0 LTS (2026 Release) [RELEASE CANDIDATE STAGE]
+[ Phase 7: Official 1.0 Release ] ────────► v1.0.0 LTS [RELEASE CANDIDATE STAGE]
   Always On Failover + Decoupled CDC/DuckDB + Certified Drivers + Final Documentation & Polish
 
 [ Future Horizons ] ─────────────────────► v1.1.0 - v1.2.0+  [PLANNED]
@@ -47,14 +47,14 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 4** | `v0.13.0` - `v0.15.0` | **Modern Ecosystem, GUI Tool Interop & VDBE Acceleration**<br>pgx/v5 pipelining, DBeaver/SSMS interop, UUIDv7, VDBE opcode specialization (21k TPS peak). | **100% Completed** |
 | **Phase 5** | `v0.16.0` - `v0.24.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI, prepared LRU cache. | **100% Completed** |
 | **Phase 6** | `v0.90.0` | **Production Hardening & Feature Freeze Milestone**<br>Single-binary CLI (`lionsql`), Web Studio production suite, global memory governor, single-DB catalog standardization. | **100% Completed<br>(Feature Freeze)** |
-| **Phase 7** | `v1.0.0 LTS`<br>**(2026 Release)** | **Official 1.0 Production Release & Long-Term Support**<br>Always On HA, decoupled HTAP, driver certification, zero-race verification, release candidate sign-off. | **Release Candidate<br>Preparation** |
+| **Phase 7** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>Always On HA, decoupled HTAP, driver certification, zero-race verification, release candidate sign-off. | **Release Candidate<br>Preparation** |
 | **Horizons** | `v1.1.0+` | **Post-1.0 Architectural Extensions**<br>Pure-Go persistent storage backend, Wasm UDF sandbox (`wazero`), multi-core parallel OLAP scans. | **Planned** |
 
 ---
 
-## 2. LionSQL 1.0 (2026 Release) / v1.0.0 LTS Production Readiness & Exit Criteria
+## 2. LionSQL 1.0 / v1.0.0 LTS Production Readiness & Exit Criteria
 
-To tag the official **LionSQL 1.0 (2026 Release) / v1.0.0 LTS** release, the database engine must satisfy five non-negotiable exit criteria:
+To tag the official **LionSQL 1.0 / v1.0.0 LTS** release, the database engine must satisfy five non-negotiable exit criteria:
 
 ```
                [ LionSQL v1.0.0 LTS Quality Gates ]

@@ -16,7 +16,7 @@ This document systematically records why this foundational triad was selected, h
 
 ```
                      +------------------------------------------+
-                     |         LionSQL 1.0 (2026 Release)       |
+                     |                LionSQL 1.0               |
                      |     (Single Standalone Static Binary)    |
                      +------------------------------------------+
                                           │

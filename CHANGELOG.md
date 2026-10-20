@@ -18,7 +18,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Changed
 - **Brand Unification & Clean SDK Standard (`BRAND-UNIFY-1`) (`pkg/api`, `pkg/ui`, `pkg/wire`, `pkg/proc`, `cmd/tpcc`, `cmd/lionsql`)**: Standardized all remaining branding to LionSQL across JavaScript/TypeScript Web SDK (`lionsql.js`, `lionsql.d.ts`, `class LionSQL`), webhook & CDC outbox HTTP headers (`X-LionSQL-Signature`, `X-LionSQL-Event`, `X-LionSQL-Delivery`), wire protocol server version and banners (PostgreSQL v3 `15.0 (LionSQL)`, TDS 7.x/8.0 `LionSQL Engine`, `@@SERVERNAME: LIONSQL`), and diagnostic probe files. Cleanly eliminated legacy `sqlion` aliases per 1.0 production specification.
 
-## [0.90.0] - 2026-10-19
+## [0.90.0]
 
 ### Added
 - **Documentation Overhaul & README Overview Refinement**: Refined and modernized the executive overview at the very top of both `README.md` and `README.ko.md` to prominently foreground LionSQL's five core architectural pillars: (1) Native Microsoft SQL Server T-SQL and Stored Procedure Execution on VDBE, (2) Broad PostgreSQL Wire Protocol v3 and SQL dialect compatibility, (3) Embedded zero-dependency Web Studio & REST BaaS API, (4) Ultra-compact single static standalone executable (< 100MB, ~50MB), and (5) High-performance OLTP throughput (16k~28k+ TPS) with Non-Blocking Snapshot Isolation.
@@ -108,7 +108,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Defensively hardened `MergeColumnIndexMaps` with fallback `leftLen` boundary calculation when `leftCols` is empty.
   - Added E2E driver integration tests in `pkg/wire/driver_integration_test.go` (`TestDriverIntegration_LibPQ_RelationalJoin`) and `pkg/wire/driver_integration_wt_test.go` (`TestDriverIntegration_WiredTiger_RelationalJoin`), raising PGWire compliance across all 57 test scenarios to 100.0%.
 
-## [0.24.0] - 2026-10-18
+## [0.24.0]
 
 ### Added
 - **Per-Session Prepared Statement Bounded LRU Cache (`PREP-1`) (`pkg/wire`, `pkg/wire/tds`)**:
@@ -230,7 +230,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.23.0] - 2026-10-17
+## [0.23.0]
 
 ### Added
 - **Virtual Catalog Query Interceptor Zero-Alloc Fast Filter & Whitespace-Resilient Matcher (`pkg/catalog/virtual`)**:
@@ -277,7 +277,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.22.0] - 2026-10-16
+## [0.22.0]
 
 ### Added
 - **Volcano Vectorized Batch Chunk Pooling (`P-12`) (`pkg/execution`)**:
@@ -398,7 +398,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.21.0] - 2026-10-15
+## [0.21.0]
 
 ### Added
 - **Semi-Structured JSON Functional Expression Indexing & Built-in Operators (ADR-022) (`pkg/proc`, `pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/engine`)**:
@@ -438,7 +438,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.20.0] - 2026-10-15
+## [0.20.0]
 
 ### Fixed
 - **DBeaver Table Introspection & Sizing Compatibility across PostgreSQL and TDS (`pkg/engine`, `pkg/wire/tds`)**:
@@ -466,7 +466,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented Extended Query Protocol portal batching in `pkg/wire`: parses `maxRows int32` from `Execute ('E')` payloads, streams up to `maxRows` tuples per batch, emits `MsgPortalSuspended ('s')` when rows remain, and emits standard `MsgCommandComplete ('C')` (`SELECT <total>` / `FETCH <count>`) upon completion.
   - Added comprehensive test suites in `pkg/engine/sqlexec_cursor_test.go` (`TestServerSideCursor_DeclareFetchMoveClose`, `TestServerSideCursor_TransactionHoldAndRollback`) and `pkg/wire/server_test.go` (`TestPGWire_ServerSideSQLCursor`, `TestPGWire_ExtendedQueryPortalBatching`).
 - **Tolerant Virtual No-Op `USE <database>` Statement & Dynamic Session Database Synchronization (`pkg/engine`, `pkg/wire/tds`, `pkg/proc/runtime`)**:
-  - Implemented tolerant virtual no-op acceptance for `USE <database>` statements (`USE master`, `USE [SalesDB]`, `USE "Analytics_2026"`, etc.) without syntax errors or multi-database catalog multiplexing overhead, preserving Instance-Level Isolation (Process per Database).
+  - Implemented tolerant virtual no-op acceptance for `USE <database>` statements (`USE master`, `USE [SalesDB]`, `USE "Analytics_DB"`, etc.) without syntax errors or multi-database catalog multiplexing overhead, preserving Instance-Level Isolation (Process per Database).
   - Added session database context tracking in `ClientSession.Database` and `ClientSession.Vars["current_database"]` / `["db_name"]`. Standard sessions default to `"sqlion"`, while TDS sessions default to `"master"`.
   - Seamlessly synchronized scalar functions `DB_NAME()`, `CURRENT_DATABASE()`, `DB_ID()`, and `ORIGINAL_DB_NAME()` across table-less scalar SQL executions, VDBE virtual machine procedure runs (`OpCallBuiltin`), and `ClientSession` state.
   - Implemented official TDS `TokenEnvChange (0xE3)` (`EnvChangeDatabase`) token emission upon executing `USE <database>` over TDS connections, fully satisfying SSMS, DBeaver, and legacy MSSQL migration script requirements.
@@ -580,7 +580,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.19.0] - 2026-10-14
+## [0.19.0]
 
 ### Changed
 - **Documentation Architecture Streamlining & Single Source of Truth (SSOT) Consolidation**:
@@ -706,7 +706,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.18.0] - 2026-10-13
+## [0.18.0]
 
 ### Added
 - **Leader/Follower Group Commit & Concurrency Hardening for memengine WAL (`pkg/storage/memengine`)**:
@@ -725,7 +725,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.17.0] - 2026-10-11
+## [0.17.0]
 
 ### Added
 - **Native T-SQL CAST, CONVERT, TRY_CAST, TRY_CONVERT & PostgreSQL `::` Operator (`pkg/proc`, `pkg/proc/runtime`)**:
@@ -758,7 +758,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.16.0] - 2026-10-10
+## [0.16.0]
 
 ### Added
 - **Complete T-SQL Official Built-in Scalar Function Suite (Groups A~F) (`pkg/proc`, `pkg/proc/runtime`)**:
@@ -817,7 +817,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.15.0] - 2026-10-09
+## [0.15.0]
 
 ### Added
 - **VDBE Local Variable Slot Indexing (`pkg/proc`, `pkg/proc/runtime`)**:
@@ -845,7 +845,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.14.0] - 2026-10-08
+## [0.14.0]
 
 ### Fixed
 - **Deterministic Object ID Assignment & Table Row Count Calculation in Catalog (`pkg/storage/wiredtiger`, `pkg/api`)**:
@@ -890,7 +890,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.13.0] - 2026-10-07
+## [0.13.0]
 
 ### Added
 - **PostgreSQL Modern Driver Compatibility: `pgx/v5` & Pipelining (`pkg/wire`)**:
@@ -919,7 +919,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.12.0] - 2026-10-03
+## [0.12.0]
 
 ### Added
 - **PostgreSQL Official Client Driver Compatibility (`pkg/wire`)**:
@@ -984,7 +984,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.11.0] - 2026-10-02
+## [0.11.0]
 
 ### Added
 - **1-Writer Multi-Reader WAL Replication & High-Availability Server Integration (`cmd/server`, `pkg/replication`, `pkg/api`, `pkg/config`)**:
@@ -1150,7 +1150,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **ClickHouse-Style Auto Rolling Range Partitioning & O(1) Fast Drop Partition (`pkg/storage`, `pkg/planner`, `pkg/execution`, `pkg/api`)**:
   - Implemented intuitive ClickHouse-style range table partitioning via `CREATE TABLE ... PARTITION BY { toYYYYMM(col) | MONTH(col) | toYYYYMMDD(col) | DAY(col) | toYYYY(col) | YEAR(col) | col }`.
   - Added Auto Rolling partition management: partitions are created and tracked dynamically upon row insertion without requiring cumbersome manual partition scheme pre-creation.
-  - Implemented $O(1)$ fast partition dropping via `ALTER TABLE <table_name> DROP PARTITION '<partition_id>'` (e.g. `ALTER TABLE logs DROP PARTITION '202609'`), instantly purging rows and cleaning secondary indexes.
+  - Implemented $O(1)$ fast partition dropping via `ALTER TABLE <table_name> DROP PARTITION '<partition_id>'` (e.g. `ALTER TABLE logs DROP PARTITION 'p_archive'`), instantly purging rows and cleaning secondary indexes.
   - Added Cost-Based Optimizer partition pruning (`PrunePartitions` in `pkg/planner/pruning.go`) that evaluates equality, range (`<`, `<=`, `>`, `>=`), `BETWEEN`, and `IN` predicates on partition columns, skipping non-matching partitions with zero row comparisons.
   - Integrated partition metrics and pruning feedback into `EXPLAIN` text and PostgreSQL `EXPLAIN (FORMAT JSON)` for graphical GUI tools.
   - Added partition introspection via `SHOW PARTITIONS [FROM] <table_name>` and virtual system catalog views `system.partitions` / `sys.partitions`.
@@ -1185,7 +1185,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added DML statement EXPLAIN support (`EXPLAIN INSERT`, `EXPLAIN UPDATE`, `EXPLAIN DELETE`) with `NodeModifyTable` plan trees and primary key index scan resolution.
   - Added unit and regression tests in `pkg/api/explain_test.go`.
 
-## [0.10.0] - 2026-10-01
+## [0.10.0]
 
 ### Changed
 - **Open Source Licensing: GNU General Public License v3 (GPL-3.0-or-later)**:
@@ -1318,7 +1318,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Verifies TLS cryptography (dynamic self-signed certificate generation / keypair validity) and authentication hashing subsystem.
   - Added unit test suite in `cmd/server/doctor_test.go` verifying 100% test pass rate with 0 failures.
 
-## [0.9.0] - 2026-09-30
+## [0.9.0]
 
 ### Performance
 - **Zero-Copy Streaming Cursor (`pkg/storage/memengine`)**:
@@ -1412,7 +1412,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added text dispatchers in `pkg/api/sqlexec.go` for `SAVE TRANSACTION <name>`, `SAVE TRAN <name>`, `SAVEPOINT <name>`, and `ROLLBACK TRANSACTION <name>`, `ROLLBACK TRAN <name>`, `ROLLBACK TO SAVEPOINT <name>`.
   - Extended procedural lexer, parser, AST, compiler, and VDBE virtual machine with `OpTxSavepoint` and `OpTxRollbackTo` to support nested savepoints inside T-SQL stored procedures.
   - Added comprehensive verification test suite in `pkg/api/savepoint_test.go`.
-## [0.8.0] - 2026-09-29
+## [0.8.0]
 
 ### Refactored
 - **Monolithic SQL Execution Engine Decomposition (`pkg/api`)**:
@@ -1500,7 +1500,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Integrated constant folding into Volcano `FilterIterator` (`pkg/execution/filter.go`), short-circuiting tautological conditions (`1=1`, `true`) and unsatisfiable conditions (`1=0`, `false`) in \(O(1)\).
   - Added unit test suite in `pkg/proc/fold_test.go` and end-to-end integration test suite in `pkg/api/constant_folding_test.go`.
 
-## [0.7.0] - 2026-09-28
+## [0.7.0]
 
 ### Added
 - **Prometheus Metrics (`/metrics`) & Slow Query Logging (`pkg/api`)**:
@@ -1701,7 +1701,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added virtual catalog views for SQL Server inspection (`sys.schemas`, `sys.objects`, `sys.views`, `sys.types`), with enhanced column aliases and bracketed/quoted schema normalization (`[dbo].[accounts]`, `[sys].[tables]`, `"pg_catalog"."pg_tables"`).
 ---
 
-## [0.6.0] - 2026-09-23
+## [0.6.0]
 
 ### Added
 - **TPC-C Standard OLTP Benchmark Driver (`cmd/tpcc`, `pkg/storage/memengine`)**:
@@ -1772,7 +1772,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.5.0] - 2026-09-23
+## [0.5.0]
 
 ### Added
 - **Comprehensive Technical Documentation & Architecture Specification Suite**:
@@ -1788,7 +1788,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.4.0] - 2026-09-22
+## [0.4.0]
 
 ### Added
 - **Microsoft SQL Server TDS 7.x/8.0 Wire Protocol**:
@@ -1827,7 +1827,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.3.0] - 2026-09-21
+## [0.3.0]
 
 ### Added
 - **Native VDBE Bytecode Virtual Machine**:
@@ -1849,7 +1849,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.2.0] - 2026-09-18
+## [0.2.0]
 
 ### Added
 - **Official ANTLR4 T-SQL Parser Integration**:
@@ -1870,7 +1870,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.1.0] - 2026-09-15
+## [0.1.0]
 
 ### Added
 - **Initial OLTP Database Engine**:

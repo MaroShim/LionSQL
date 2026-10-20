@@ -14,7 +14,7 @@ LionSQL supports the following core SQL and T-SQL primitive types:
 | `VARCHAR` | `NVARCHAR`, `TEXT`, `STRING` | UTF-8 variable-length string | `'Alice'`, `'Hello World'` | Yes |
 | `FLOAT` | `DOUBLE`, `FLOAT8`, `REAL` | IEEE 754 64-bit float | `3.14159`, `-0.05` | Yes |
 | `BOOL` | `BOOLEAN`, `BIT` | 1-byte boolean flag | `TRUE`, `FALSE`, `1`, `0` | Yes |
-| `DATETIME` | `TIMESTAMP` | RFC3339 UTC timestamp | `'2026-09-22T12:00:00Z'` | Yes |
+| `DATETIME` | `TIMESTAMP` | RFC3339 UTC timestamp | `'2024-09-22T12:00:00Z'` | Yes |
 | `JSON` | `JSONB` | JSON binary representation (`storage.TypeJSON = 6`) | `'{"user":"Alice","score":95}'` | Yes |
 
 ### NULL Semantics
@@ -104,13 +104,13 @@ DROP INDEX idx_employees_dept ON employees;
 ```sql
 -- Single-row insert
 INSERT INTO accounts (id, holder, balance, created_at)
-VALUES (1, 'Alice', 1000, '2026-09-22T10:00:00Z');
+VALUES (1, 'Alice', 1000, '2024-09-22T10:00:00Z');
 
 -- Multi-row insert in a single atomic transaction
 INSERT INTO accounts (id, holder, balance, created_at)
 VALUES 
-    (2, 'Bob', 500, '2026-09-22T10:05:00Z'),
-    (3, 'Charlie', 750, '2026-09-22T10:10:00Z');
+    (2, 'Bob', 500, '2024-09-22T10:05:00Z'),
+    (3, 'Charlie', 750, '2024-09-22T10:10:00Z');
 ```
 
 ### 3.2. UPDATE
@@ -471,7 +471,7 @@ AS
 BEGIN
     -- Log balance updates where delta exceeds 1000
     INSERT INTO audit_log (account_id, old_balance, new_balance, updated_at)
-    SELECT d.id, d.balance, i.balance, '2026-09-22T12:00:00Z'
+    SELECT d.id, d.balance, i.balance, '2024-09-22T12:00:00Z'
     FROM DELETED d
     INNER JOIN INSERTED i ON d.id = i.id
     WHERE i.balance != d.balance;

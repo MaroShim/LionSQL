@@ -72,7 +72,7 @@ Creates a new scoped API key token.
     "token": "sqlion_key_abc123xyz...",
     "role": "readonly",
     "allowed_tables": ["products", "categories"],
-    "created_at": "2026-09-22T10:00:00Z"
+    "created_at": "2024-09-22T10:00:00Z"
   }
   ```
 
@@ -335,7 +335,7 @@ Captures a consistent, live point-in-time snapshot of the database without acqui
       "target": "backups/prod-snapshot.tar.gz",
       "manifest": {
         "version": "0.7.0",
-        "created_at": "2026-09-22T04:30:00Z",
+        "created_at": "2024-09-22T04:30:00Z",
         "tables_count": 3,
         "total_records": 15000,
         "procedures_count": 2
@@ -599,8 +599,8 @@ Returns the replication state, role, committed LSN, and follower statuses.
         "remote_addr": "10.0.0.2:48392",
         "last_acked_lsn": 105398,
         "replication_lag": 2,
-        "connected_at": "2026-10-02T10:00:00Z",
-        "last_ack_at": "2026-10-02T10:14:32Z"
+        "connected_at": "2024-10-02T10:00:00Z",
+        "last_ack_at": "2024-10-02T10:14:32Z"
       }
     ]
   }
