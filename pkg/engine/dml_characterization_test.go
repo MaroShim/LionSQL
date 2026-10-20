@@ -191,8 +191,7 @@ func TestDMLCharacterization_Update(t *testing.T) {
 		{name: "output_clause_without_where", sql: "UPDATE t SET qty = 0 OUTPUT INSERTED.qty;",
 			wantRows: []string{"1|a|0", "2|b|0"}, wantAffected: -1},
 		{name: "output_literal_with_keyword_where", sql: "UPDATE t SET name = 'a WHERE b' OUTPUT INSERTED.id WHERE id = 1;",
-			wantRows: []string{"1|a WHERE b|10", "2|b|20"}, wantAffected: -1,
-			knownBug: "reDmlUpdate lazily splits SET at the first \\s+WHERE\\s+ even inside a string literal"},
+			wantRows: []string{"1|a WHERE b|10", "2|b|20"}, wantAffected: -1},
 
 		{name: "unknown_table_rejected", sql: "UPDATE missing SET qty = 1;",
 			wantErr: true},

@@ -3,24 +3,12 @@ package engine
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
 	"lionsql/pkg/auth"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
-)
-
-var (
-	reDmlInsertCheck  = regexp.MustCompile(`(?is)^(?:INSERT|UPSERT)(?:\s+INTO)?\s+([^\s(]+)`)
-	reDmlInsertSelect = regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+(\(?\s*SELECT\s+.*)$`)
-	reDmlInsertValues = regexp.MustCompile(`(?is)^INSERT(?:\s+INTO)?\s+([^\s(]+)(?:\s*\(([^)]+)\))?(?:\s+OUTPUT\s+(.*?))?\s+VALUES\s*(.*)$`)
-	reDmlUpsertPrefix = regexp.MustCompile(`(?is)^UPSERT(?:\s+INTO)?\s+`)
-	reDmlUpdateCheck  = regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)`)
-	reDmlUpdate       = regexp.MustCompile(`(?is)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
-	reDmlDeleteCheck  = regexp.MustCompile(`(?is)^DELETE(?:\s+FROM)?\s+([^\s;]+)`)
-	reDmlDelete       = regexp.MustCompile(`(?is)^DELETE\s+(?:FROM\s+)?([^\s;]+)(?:\s+OUTPUT\s+(.*?))?(?:\s+WHERE\s+(.*))?$`)
 )
 
 type onConflictAction int
@@ -191,21 +179,18 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
-	if m := reDmlInsertCheck.FindStringSubmatch(cleaned); len(m) >= 2 {
-		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivInsert); err != nil {
+	dml, parseErr := ParseDMLCommand(cleaned)
+	if dml != nil {
+		if err := s.checkTableAccess(cs, cleanIdentifier(dml.Table), auth.PrivInsert); err != nil {
 			return nil, err
 		}
 	}
 
-	isUpsert := reDmlUpsertPrefix.MatchString(cleaned)
-	insertSQL := cleaned
-	if isUpsert {
-		insertSQL = "INSERT INTO " + cleaned[len(reDmlUpsertPrefix.FindString(cleaned)):]
-	}
+	isUpsert := dml != nil && dml.Upsert
 
 	// Branch: INSERT INTO ... SELECT
-	if selMatches := reDmlInsertSelect.FindStringSubmatch(insertSQL); len(selMatches) >= 5 {
-		return s.execInsertSelect(selMatches[1], selMatches[2], selMatches[3], selMatches[4], start, cs)
+	if dml != nil && dml.Select != "" {
+		return s.execInsertSelect(dml.Table, dml.Columns, dml.Output, dml.Select, start, cs)
 	}
 
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause or ON CONFLICT/UPSERT present)
@@ -219,15 +204,14 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
-	matches := reDmlInsertValues.FindStringSubmatch(insertSQL)
-	if len(matches) < 5 {
+	if parseErr != nil || dml == nil {
 		return nil, fmt.Errorf("invalid INSERT INTO syntax")
 	}
 
-	tableName := cleanIdentifier(matches[1])
-	rawCols := matches[2]
-	rawOutput := strings.TrimSpace(matches[3])
-	rawValues := matches[4]
+	tableName := cleanIdentifier(dml.Table)
+	rawCols := dml.Columns
+	rawOutput := dml.Output
+	rawValues := dml.Values
 
 	var onConflict *onConflictClause
 	valuesPart := rawValues
@@ -1018,8 +1002,8 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
-	if m := reDmlUpdateCheck.FindStringSubmatch(cleaned); len(m) >= 2 {
-		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivUpdate); err != nil {
+	if kind, table, ok := dmlHead(cleaned); ok && kind == dmlUpdate {
+		if err := s.checkTableAccess(cs, cleanIdentifier(table), auth.PrivUpdate); err != nil {
 			return nil, err
 		}
 	}
@@ -1031,21 +1015,15 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 			return res, nil
 		}
 	}
-	matches := reDmlUpdate.FindStringSubmatch(cleaned)
-	if len(matches) < 3 {
-		return nil, fmt.Errorf("invalid UPDATE syntax")
+	dml, parseErr := ParseDMLCommand(cleaned)
+	if parseErr != nil {
+		return nil, parseErr
 	}
 
-	tableName := cleanIdentifier(matches[1])
-	setClause := matches[2]
-	rawOutput := ""
-	whereClause := ""
-	if len(matches) > 3 {
-		rawOutput = strings.TrimSpace(matches[3])
-	}
-	if len(matches) > 4 {
-		whereClause = strings.TrimSpace(matches[4])
-	}
+	tableName := cleanIdentifier(dml.Table)
+	setClause := dml.Set
+	rawOutput := dml.Output
+	whereClause := dml.Where
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {
@@ -1188,8 +1166,8 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// RBAC Permission Check
-	if m := reDmlDeleteCheck.FindStringSubmatch(cleaned); len(m) >= 2 {
-		if err := s.checkTableAccess(cs, cleanIdentifier(m[1]), auth.PrivDelete); err != nil {
+	if kind, table, ok := dmlHead(cleaned); ok && kind == dmlDelete {
+		if err := s.checkTableAccess(cs, cleanIdentifier(table), auth.PrivDelete); err != nil {
 			return nil, err
 		}
 	}
@@ -1201,20 +1179,14 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			return res, nil
 		}
 	}
-	matches := reDmlDelete.FindStringSubmatch(cleaned)
-	if len(matches) < 2 {
-		return nil, fmt.Errorf("invalid DELETE syntax")
+	dml, parseErr := ParseDMLCommand(cleaned)
+	if parseErr != nil {
+		return nil, parseErr
 	}
 
-	tableName := cleanIdentifier(matches[1])
-	rawOutput := ""
-	whereClause := ""
-	if len(matches) > 2 {
-		rawOutput = strings.TrimSpace(matches[2])
-	}
-	if len(matches) > 3 {
-		whereClause = strings.TrimSpace(matches[3])
-	}
+	tableName := cleanIdentifier(dml.Table)
+	rawOutput := dml.Output
+	whereClause := dml.Where
 
 	schema, err := s.engine.GetTable(tableName)
 	if err != nil {

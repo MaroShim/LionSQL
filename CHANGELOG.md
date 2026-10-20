@@ -24,9 +24,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `UI-13`: Streamlined Web Studio branding and navigation titles (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`): standardized top-left branding on `LionSQL Studio` and removed the redundant `OLTP + SP` badge, while stripping the `Studio` suffix from all sub-feature sidebar buttons and view header titles (`SQL Query`, `Tables & Records`, `Stored Procedures`).
 
 ### Tests
-- `ARCH-DML-1` pre-check: Added `pkg/engine/dml_characterization_test.go` (55 cases) pinning INSERT/UPDATE/DELETE statement recognition (optional `INTO`/`FROM`, case, tabs/newlines, quoted identifiers, literals containing keywords, multi-row `VALUES`, `OUTPUT`/`UPSERT`/`ON CONFLICT`/`INSERT ... SELECT` regex-only paths, error cases) as the safety net for replacing the `reDml*` regexes. Surfaced `REV-ENG-006` (tracked via a `knownBug` marker).
+- `ARCH-DML-1` pre-check: Added `pkg/engine/dml_characterization_test.go` (55 cases) pinning INSERT/UPDATE/DELETE statement recognition (optional `INTO`/`FROM`, case, tabs/newlines, quoted identifiers, literals containing keywords, multi-row `VALUES`, `OUTPUT`/`UPSERT`/`ON CONFLICT`/`INSERT ... SELECT` regex-only paths, error cases) as the safety net for replacing the `reDml*` regexes. Surfaced `REV-ENG-006`, which was fixed by `ARCH-DML-1` (the `knownBug` marker has been removed).
+- `ARCH-DML-1`: Added `pkg/engine/dml_parser_test.go` covering `ParseDMLCommand` clause splitting (literals, sub-queries, `OUTPUT`/`UPSERT`, error cases).
+
+### Fixed
+- `REV-ENG-006`: `UPDATE ... SET col = 'a WHERE b' OUTPUT ... WHERE ...` no longer splits the `SET` clause at a `WHERE` inside a string literal, which previously updated 0 rows and reported success.
 
 ### Refactored
+- `ARCH-DML-1`: Replaced the eight `reDml*` regexes in `pkg/engine/sqlexec_dml.go` with a token-based one-pass DML parser (`pkg/engine/dml_parser.go`: `DMLStatement`, `ParseDMLCommand`, `dmlHead`) built on `sqlutil.FindTopLevelKeyword`. `execInsert`/`execUpdate`/`execDelete`, the statement routing in `sqlexec.go`, and the last-identity bookkeeping in `sqlexec_select.go` now share it.
 - `ARCH-LEX-1`: Unified SQL lexical scanning, token extraction, and quote/parenthesis tracking into `pkg/sqlutil` (`SplitTopLevelKeyword`, `FindTopLevelArithmeticOp`, `ExtractTopLevelTuples`, `FindTopLevelKeyword`, `SplitTopLevel`). Eliminated ~300 lines of brittle manual scanner loops and string parsing logic across `pkg/engine/sqlexec_eval.go`, `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_dbcc.go`, and `pkg/engine/sqlexec_merge.go`.
 
 ### Fixed

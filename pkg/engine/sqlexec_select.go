@@ -1020,8 +1020,8 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 	}
 
 	if execRes.LastIdentity > 0 {
-		if m := reDmlInsertCheck.FindStringSubmatch(cleaned); len(m) > 1 {
-			s.SetTableLastIdentity(cleanIdentifier(m[1]), execRes.LastIdentity)
+		if kind, table, ok := dmlHead(cleaned); ok && kind == dmlInsert {
+			s.SetTableLastIdentity(cleanIdentifier(table), execRes.LastIdentity)
 		}
 	}
 

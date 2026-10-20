@@ -30,7 +30,7 @@
 | ID | 우선순위 | 영역 | 목표 추상화 계층 | 제거 대상 (Deletion-First) | 상태 | 세부 내용 |
 | :---: | :---: | :---: | :--- | :--- | :---: | :--- |
 | **`ARCH-LEX-1`** | **P1** | Lexical | `pkg/sqlutil/tokenizer.go`<br>• `SplitTopLevelKeyword`<br>• `FindTopLevelArithmeticOp`<br>• `ExtractTopLevelTuples`<br>• `FindTopLevelKeyword`<br>• `SplitTopLevel` | • `sqlexec_eval.go:splitLogicalConditions`<br>• `sqlexec_eval.go:parseValueTuples`<br>• `sqlexec_eval.go:findArithmeticOp`<br>• `sqlexec_select.go:splitScalarProjections`<br>• `sqlexec_select.go:hasFromClause`<br>• `sqlexec_dml.go:findOnConflictIndex` | **`[x]`** | 작은따옴표(`''`), 백슬래시(`\'`), 큰따옴표(`""`), 대괄호(`[...]`), 중첩 괄호(`()`)를 완벽히 지원하는 단일 고속 상태 머신 스캐너 도입 및 300여 라인 수동 파싱 루프 전면 제거 완료 |
-| **`ARCH-DML-1`** | **P1** | Parser | `pkg/engine/dml_parser.go`<br>• `DMLStatement`<br>• `ParseDMLCommand` | • `reDmlInsertValues`<br>• `reDmlInsertCheck`<br>• `reDmlInsertSelect`<br>• `reDmlUpsertPrefix`<br>• `reDmlUpdate`<br>• `reDmlUpdateCheck`<br>• `reDmlDelete`<br>• `reDmlDeleteCheck` | `[ ]` | 10여 개의 복잡하고 취약한 DML 정규식을 전면 폐기하고, 토큰 기반 경량 1-Pass DML 구문 파서 및 디스패처로 일원화 |
+| **`ARCH-DML-1`** | **P1** | Parser | `pkg/engine/dml_parser.go`<br>• `DMLStatement`<br>• `ParseDMLCommand` | • `reDmlInsertValues`<br>• `reDmlInsertCheck`<br>• `reDmlInsertSelect`<br>• `reDmlUpsertPrefix`<br>• `reDmlUpdate`<br>• `reDmlUpdateCheck`<br>• `reDmlDelete`<br>• `reDmlDeleteCheck` | **`[x]`** | 8개의 취약한 DML 정규식을 전면 폐기하고, 토큰 기반 경량 1-Pass DML 구문 파서(`ParseDMLCommand`)로 일원화 완료 |
 | **`ARCH-EVAL-1`** | **P1** | Evaluator | `pkg/engine/evaluator.go`<br>• `EvalBinaryOp`<br>• `CoerceAndCalculate` | • `sqlexec_eval.go:evalUpdateExpr`<br>• `sqlexec_eval.go:toNumeric`<br>• `sqlexec_eval.go:resolveOperand`<br>• 산술 if-switch 분기 80+ 라인 | `[ ]` | `pkg/storage/coerce.go` (Type Promotion Lattice)와 연동하여 float/int 강제 변환 왜곡 및 정수 0 나누기 패닉을 원천 봉쇄하는 통합 연산 엔진 구축 |
 
 ---
@@ -41,7 +41,7 @@
    - `pkg/sqlutil/tokenizer.go`: 범용 고속 토큰 스캐너 상태 머신 구현 (`SplitTopLevelKeyword`, `FindTopLevelArithmeticOp`, `ExtractTopLevelTuples`, `FindTopLevelKeyword`, `SplitTopLevel`).
    - `sqlexec_eval.go`, `sqlexec_dml.go`, `sqlexec_select.go`, `sqlexec_dbcc.go`, `sqlexec_merge.go` 내 6개소 수동 루프 300여 라인 전면 제거 및 대체.
    - 단위 테스트(`tokenizer_test.go`, `rev_eng_test.go`) 및 100% 레이스 프리 통과 검증 완수.
-2. **Phase 2: `ARCH-DML-1` (DML Parser & Dispatcher 추상화)**
+2. **Phase 2: `ARCH-DML-1` (DML Parser & Dispatcher 추상화)** ➔ **완료 (`[x]`)**
    - **사전 점검 (완료)**: 리팩토링 전 현재 동작을 고정하는 특성화 테스트 `pkg/engine/dml_characterization_test.go` 추가 (INSERT 25건, UPDATE 17건, DELETE 13건). 키워드 생략(`INTO`/`FROM`), 대소문자, 탭/개행, 대괄호/큰따옴표 식별자, 리터럴 내부 키워드/괄호/쉼표, 다중 행 VALUES, `OUTPUT`/`UPSERT`/`ON CONFLICT`/`INSERT...SELECT`(정규식 전용 경로) 및 에러 케이스를 포함합니다. 새 파서는 이 테스트를 그대로 통과해야 합니다.
    - **사전 점검 발견 사항**: `reDmlUpdate`가 `SET` 절을 지연 매칭(`.*?`)하여 문자열 리터럴 내부의 `WHERE`에서 절을 분할하고, 에러 없이 0건 갱신 후 성공을 반환함 (`REV-ENG-006`, `OUTPUT` 경로 한정). 해당 케이스는 `knownBug`로 추적 중이며 `ARCH-DML-1` 완료 시 마커를 제거해야 테스트가 통과합니다.
    - `pkg/engine/dml_parser.go` 신설: 키워드 생략, 공백 변형에 면역인 1-Pass DML 디스패처 구축.

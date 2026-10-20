@@ -1108,7 +1108,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 5. DML: INSERT INTO / UPSERT
-	if reDmlInsertCheck.MatchString(trimmed) {
+	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlInsert {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1127,7 +1127,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 7. DML: UPDATE
-	if reDmlUpdateCheck.MatchString(trimmed) {
+	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlUpdate {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1135,7 +1135,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 8. DML: DELETE
-	if reDmlDeleteCheck.MatchString(trimmed) {
+	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlDelete {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
