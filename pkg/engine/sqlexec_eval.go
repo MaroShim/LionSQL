@@ -342,6 +342,20 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				val, ok = rec[colName[idx+1:]]
 			}
 		}
+		if !ok {
+			for k, v := range rec {
+				if strings.EqualFold(k, colName) {
+					val, ok = v, true
+					break
+				}
+				if idx := strings.Index(colName, "."); idx != -1 {
+					if strings.EqualFold(k, colName[idx+1:]) {
+						val, ok = v, true
+						break
+					}
+				}
+			}
+		}
 		if !ok || val == nil {
 			return false
 		}

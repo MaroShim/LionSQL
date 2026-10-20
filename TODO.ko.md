@@ -127,7 +127,7 @@
 | **P1** | **엔진/무결성** | **스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 (`BUG-SUBQ-1`)** | `pkg/proc/eval.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **플래너/인덱스** | **`ParseIndexCond` 무작위 맵 순회 제거 및 인덱스 대상 컬럼 바운드 정밀 매칭 (`BUG-BOUNDS-1`)** | `pkg/planner/bounds.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **엔진/Upsert** | **`ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 (`BUG-UPSERT-1`)** | `pkg/engine/sqlexec_dml.go` | **완료 (`[x]`)** | - |
-| **P2** | **엔진/조회** | **`evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 (`BUG-WHERE-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **엔진/조회** | **`evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 (`BUG-WHERE-1`)** | `pkg/engine/sqlexec_eval.go` | **완료 (`[x]`)** | - |
 | **P2** | **엔진/옵티마이저** | **`EXPLAIN` 서브쿼리 평탄화 시 무작위 맵 순회 제거 및 서브쿼리 컬럼 키 정합 (`BUG-EXP-1`)** | `pkg/engine/sqlexec_explain.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/무결성** | **PK 미지정 테이블 생성 시 `Columns[0]`을 멋대로 PK로 승격하는 안티패턴 제거 및 가상 PK(`_row_id`) 보장 (`BUG-DDL-PK-1`)** | `pkg/engine/sqlexec_ddl.go`, `pkg/api/handlers_tables.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **엔진/무결성** | **`SELECT INTO` 및 파생 테이블의 일시적 고유 컬럼 임의 PK 지정 및 0건 시 `Columns[0]` PK 지정 제거 (`BUG-SELECT-INTO-PK-1`)** | `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_derived.go` | **진행 대기 (`[ ]`)** | - |
@@ -730,7 +730,7 @@
 | **BUG-RECORD-1** | 엔진/무결성 | DML Record 컬럼명 정규화(`colSchema.Name`)로 사일런트 유실 방지 | **완료 (`[x]`)** | Record 컬럼명 불일치로 `RecordToRow`가 업데이트 값을 무시하고 구값을 보존하거나 NULL 삽입하는 결함 해결 |
 | **BUG-ARITH-1** | 수식/무결성 | `evalUpdateExpr` 수식 평가 시 컬럼명 대소문자 무관 탐색 보장 | **완료 (`[x]`)** | `SET price = Price + 10` 수식 평가 시 레코드 컬럼명 대소문자 차이로 0으로 리셋되는 결함 해결 |
 | **BUG-UPSERT-1** | 엔진/Upsert | `ON CONFLICT (col)` 충돌 컬럼 대소문자 정규화로 Upsert 유니크 위반 방지 | **완료 (`[x]`)** | 충돌 컬럼 비교 시 대소문자 차이로 인한 매칭 실패 및 중복 키 예외 방지 |
-| **BUG-WHERE-1** | 엔진/조회 | `evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 | **대기 (`[ ]`)** | `WHERE col IN (...)` 조건 평가 시 대소문자 불일치로 무조건 false가 반환되던 버그 수정 |
+| **BUG-WHERE-1** | 엔진/조회 | `evaluateSingleConditionMap` 내 `WHERE IN (...)` 절 대소문자 무관 탐색 누락 보강 | **완료 (`[x]`)** | `WHERE col IN (...)` 조건 평가 시 대소문자 불일치로 무조건 false가 반환되던 버그 수정 |
 | **BUG-VM-INTO-1** | VM/무결성 | VDBE `SELECT ... INTO @var` 무작위 맵 순회 제거 및 `cols[0]` 결정론적 바인딩 | **대기 (`[ ]`)** | `for _, v := range rows[0]` 맵 순회 제거로 변수에 프로젝션 첫 번째 컬럼 값의 결정론적 대입 보장 |
 | **BUG-SUBQ-1** | 프로시저/수식 | 스칼라 서브쿼리 수식 평가 시 무작위 맵 순회 제거 및 `cols[0]` 대소문자 무관 탐색 | **대기 (`[ ]`)** | `for _, v := range firstRow` 맵 순회 제거 및 `cols[0]` 정규 매칭으로 임의 컬럼 반환 방지 |
 | **BUG-BOUNDS-1** | 플래너/인덱스 | `ParseIndexCond` 무작위 맵 순회 제거 및 대상 인덱스 컬럼 바운드 정밀 매칭 | **대기 (`[ ]`)** | `eqColVals` 맵 무작위 순회로 엉뚱한 컬럼 조건값으로 인덱스가 스캔되던 치명적 플래닝 결함 해결 |
