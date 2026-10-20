@@ -37,9 +37,11 @@
 
 | ID | 우선순위 | 구분 | 파일 및 라인 | 설명 | 상태 | 커밋 / 비고 |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| **REV-ENG-001** | P1 | 버그 | [`pkg/engine/sqlexec_dml.go:18`](pkg/engine/sqlexec_dml.go#L18) | `reDmlInsertValues` 정규식에서 `\s+INTO\s+` 강제로 인해 `INSERT tbl VALUES (...)` 형태 쿼리 파싱 실패 | `[x]` | 정규식 `(?:\s+INTO)?` 선택사항으로 수정 및 라우터 정규식 연동 완료 |
-| **REV-ENG-002** | P3 | 오류 | [`pkg/engine/sqlexec_dml.go:1248`](pkg/engine/sqlexec_dml.go#L1248) | DELETE 실행 중 PK 부재 시 `identify row for update`로 출력되는 복사-붙여넣기 에러 메시지 오류 | `[x]` | `identify row for delete`로 수정 완료 |
-| **REV-ENG-003** | P2 | 취약점 | [`pkg/engine/sqlexec_dml.go:248-253`](pkg/engine/sqlexec_dml.go#L248-L253) | UPSERT 접두사 처리 시 다중 공백이나 탭(`\t`) 처리 미흡으로 치환 누락 가능성 | `[x]` | `reDmlUpsertPrefix` 정규식 도입 및 ExecuteSQL 라우팅 정규화 완료 |
+| **REV-ENG-001** | P1 | 버그 | [`pkg/engine/sqlexec_dml.go:18`](pkg/engine/sqlexec_dml.go#L18) | `reDmlInsertValues` 정규식에서 `\s+INTO\s+` 강제로 인해 `INSERT tbl VALUES (...)` 형태 쿼리 파싱 실패 | `[x]` | 정규식 `(?:\s+INTO)?` 선택사항으로 수정 및 라우터 정규식 연동 완료 (`db57751`) |
+| **REV-ENG-002** | P3 | 오류 | [`pkg/engine/sqlexec_dml.go:1248`](pkg/engine/sqlexec_dml.go#L1248) | DELETE 실행 중 PK 부재 시 `identify row for update`로 출력되는 복사-붙여넣기 에러 메시지 오류 | `[x]` | `identify row for delete`로 수정 완료 (`db57751`) |
+| **REV-ENG-003** | P2 | 취약점 | [`pkg/engine/sqlexec_dml.go:248-253`](pkg/engine/sqlexec_dml.go#L248-L253) | UPSERT 접두사 처리 시 다중 공백이나 탭(`\t`) 처리 미흡으로 치환 누락 가능성 | `[x]` | `reDmlUpsertPrefix` 정규식 도입 및 ExecuteSQL 라우팅 정규화 완료 (`db57751`) |
+| **REV-ENG-004** | P1 | 버그 | [`pkg/engine/sqlexec_eval.go:930-948`](pkg/engine/sqlexec_eval.go#L930-L948) | `evalUpdateExpr` 정수 나눗셈 시 `rightI == 0` 미검사로 인한 `integer divide by zero` 런타임 패닉 위험 | `[x]` | `rightF == 0 \|\| (targetType == TypeInt && rightI == 0)` 검사 및 divide by zero 에러 반환 |
+| **REV-ENG-005** | P2 | 정합성 | [`pkg/engine/sqlexec_eval.go:137-145, 821-826`](pkg/engine/sqlexec_eval.go#L137) | `splitLogicalConditions` 및 `findArithmeticOp`의 SQL 연속 작은따옴표 이스케이프(`''`) 처리 누락 | `[x]` | `quoteChar` 연속 출현 시 이스케이프 건너뛰기 로직 보강 |
 
 ---
 

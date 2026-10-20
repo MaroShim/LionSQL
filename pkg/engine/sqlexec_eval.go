@@ -137,8 +137,16 @@ func splitLogicalConditions(whereStr string, op string) []string {
 	for i := 0; i < len(whereStr); i++ {
 		ch := whereStr[i]
 		if inQuote {
-			if ch == quoteChar && (i == 0 || whereStr[i-1] != '\\') {
-				inQuote = false
+			if ch == quoteChar {
+				if i+1 < len(whereStr) && whereStr[i+1] == quoteChar {
+					cur.WriteByte(ch)
+					cur.WriteByte(ch)
+					i++
+					continue
+				}
+				if i == 0 || whereStr[i-1] != '\\' {
+					inQuote = false
+				}
 			}
 			cur.WriteByte(ch)
 		} else {
@@ -820,6 +828,10 @@ func findArithmeticOp(s string) (int, byte) {
 		ch := s[i]
 		if inQuote {
 			if ch == quoteChar {
+				if i+1 < len(s) && s[i+1] == quoteChar {
+					i++
+					continue
+				}
 				inQuote = false
 			}
 			continue
@@ -928,7 +940,7 @@ func evalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 			rightF, rightI, num2 := toNumeric(rightVal)
 			if num1 && num2 {
 				if op == '/' {
-					if rightF == 0 {
+					if rightF == 0 || (targetType == storage.TypeInt && rightI == 0) {
 						return storage.NullValue(targetType), fmt.Errorf("divide by zero error encountered")
 					}
 				}

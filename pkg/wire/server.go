@@ -18,7 +18,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"lionsql/pkg/auth"
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
 	"lionsql/pkg/proc"
@@ -560,9 +559,7 @@ func (s *Server) handleConnection(conn net.Conn) {
 		if s.coordinator.IsAuthEnabled() {
 			needsPassword = true
 		} else if login, err := authSvc.GetLogin(username); err == nil && login != nil && login.PasswordHash != "" {
-			if !auth.IsBuiltinAdminLogin(username) {
-				needsPassword = true
-			}
+			needsPassword = true
 		}
 	}
 

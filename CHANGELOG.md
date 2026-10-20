@@ -14,6 +14,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `UI-13`: Streamlined Web Studio branding and navigation titles (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`): standardized top-left branding on `LionSQL Studio` and removed the redundant `OLTP + SP` badge, while stripping the `Studio` suffix from all sub-feature sidebar buttons and view header titles (`SQL Query`, `Tables & Records`, `Stored Procedures`).
 
 ### Fixed
+- **Group B Wire Protocols & Security Remediation (9 Critical Wire, Protocol & Auth Defects)**:
+  - `BUG-AUTH-ADMIN-PW-BYPASS-1`: Removed unconditional password bypass for builtin admin logins (`sa`, `postgres`) across PGWire (`pkg/wire/server.go`) and TDS (`pkg/wire/tds/server.go`), enforcing authentication whenever a password hash is registered.
+  - `BUG-COPY-DELIM-1`: Fixed DELIMITER and NULL option parsing in `ParseCopyStmt` (`pkg/wire/copy.go`) to accurately extract custom delimiters (e.g. `;`, `\t`, `|`) and NULL string representations without quote truncation.
+  - `BUG-PGWIRE-PARAM-1`: Updated `buildPreviewSQL` (`pkg/wire/server.go`) to use `pgParamRe.ReplaceAllStringFunc`, preventing parameter collision where `$1` corrupts multi-digit parameters like `$10`.
+  - `BUG-PGWIRE-DESCRIBE-1`: Enhanced `resolveColumnOIDs` and `writeSchemaDescription` (`pkg/wire/server.go`) with `cleanColumnIdentifier` to strip table qualifiers (`u.id` -> `id`) and bracket escaping (`[users].[id]`), and extended `inferPgOID` to support `storage.Value` and `storage.Decimal`.
+  - `BUG-WIRE-COPY-TX-BYPASS-1`: Bound `handleCopyIn` and `handleCopyOut` (`pkg/wire/copy.go`) directly to the active client transaction (`cs.Tx`) when active, preventing premature autocommits and ensuring atomic rollback on `ROLLBACK`.
+  - `BUG-WIRE-COPY-SILENT-CORRUPT-1`: Refactored `parseFieldVal` (`pkg/wire/copy.go`) to return structured syntax errors for unparseable integers, floats, dates, and decimals instead of silently defaulting to 0 or `time.Now()`.
+  - `BUG-WIRE-COPY-OUT-UNESCAPED-1`: Added text format escaping (`escapeCopyText`), unescaping (`unescapeCopyText`), and escaped delimiter splitting (`splitCopyTextLine`) in `pkg/wire/copy.go` to handle `\t`, `\n`, `\r`, and `\\`.
+  - `BUG-TDS-RPC-PREP-TX-BYPASS-1`: Updated TDS RPC prepared statement execution in `handleRPCExecute` and `handleRPCPrepExec` (`pkg/wire/tds/server.go`) to execute within `cs.Tx` using `ExecuteInTxWithSessionContext` when a transaction is active.
+  - `BUG-TDS-RPC-PARAM-NAME-ORDER-1`: Enhanced `handleRPCExecuteSQL` (`pkg/wire/tds/server.go`) to inspect parameter names case-insensitively (`@stmt`, `@params`), properly handling out-of-order or named parameters in `sp_executesql`.
+- **Engine Review Remediation (Review Loop Batch 2)**:
+  - `REV-ENG-004`: Added divisor validation in `evalUpdateExpr` (`pkg/engine/sqlexec_eval.go`) to check `targetType == TypeInt && rightI == 0`, returning explicit divide by zero errors and preventing integer divide by zero runtime panics.
+  - `REV-ENG-005`: Enhanced quote tracking in `splitLogicalConditions` and `findArithmeticOp` (`pkg/engine/sqlexec_eval.go`) to correctly handle SQL consecutive quote escaping (`''`), preventing false-positive condition splitting or operator matching inside escaped string literals.
 - **Engine Review Remediation (Review Loop Batch 1)**:
   - `REV-ENG-001`: Allowed `INTO` keyword omission in `reDmlInsertValues` (`pkg/engine/sqlexec_dml.go`) to comply with standard SQL/T-SQL `INSERT <table> VALUES (...)` syntax, preventing syntax errors in VDBE bypass and fallback paths.
   - `REV-ENG-002`: Corrected misleading error message in `execDelete` (`pkg/engine/sqlexec_dml.go`) from "identify row for update" to "identify row for delete".

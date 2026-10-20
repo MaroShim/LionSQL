@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"lionsql/pkg/catalog"
+	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 )
 
@@ -99,3 +100,48 @@ func TestRevEng003_UpsertWhitespaceNormalization(t *testing.T) {
 		t.Fatalf("unexpected row contents: %+v", res.Rows)
 	}
 }
+
+func TestRevEng004_IntegerDivideByZeroPanicPrevention(t *testing.T) {
+	// Testing evalUpdateExpr when divisor float casts to int64(0)
+	rec := storage.Record{
+		"val": storage.IntValue(100),
+	}
+	// "val / 0.4": 0.4 has rightF=0.4, but int64(0.4) is 0.
+	// Previously this caused integer divide by zero panic on TypeInt!
+	_, err := evalUpdateExpr("val / 0.4", rec, storage.TypeInt)
+	if err == nil {
+		t.Fatalf("expected divide by zero error for integer division by fractional < 1, got nil")
+	}
+	if !strings.Contains(err.Error(), "divide by zero") {
+		t.Fatalf("expected divide by zero error message, got %v", err)
+	}
+
+	// Normal integer divide by 0
+	_, err = evalUpdateExpr("val / 0", rec, storage.TypeInt)
+	if err == nil {
+		t.Fatalf("expected divide by zero error for val / 0, got nil")
+	}
+}
+
+func TestRevEng005_QuoteEscapingInLogicalConditionsAndArith(t *testing.T) {
+	// 1. splitLogicalConditions with SQL quote escape ''
+	cond := "name = 'O''Reilly AND Sons' AND status = 1"
+	parts := splitLogicalConditions(cond, " AND ")
+	if len(parts) != 2 {
+		t.Fatalf("expected 2 parts from splitLogicalConditions, got %d: %+v", len(parts), parts)
+	}
+	if parts[0] != "name = 'O''Reilly AND Sons'" || parts[1] != "status = 1" {
+		t.Fatalf("unexpected parts: %+v", parts)
+	}
+
+	// 2. findArithmeticOp with SQL quote escape ''
+	expr := "'price: 10 + 5' + ' total'"
+	idx, op := findArithmeticOp(expr)
+	if idx == -1 || op != '+' {
+		t.Fatalf("expected arithmetic op '+' found outside quotes, got idx=%d, op=%c", idx, op)
+	}
+	if idx != 16 { // the second +
+		t.Fatalf("expected op index 16, got %d", idx)
+	}
+}
+
