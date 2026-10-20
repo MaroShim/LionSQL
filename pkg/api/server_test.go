@@ -381,13 +381,13 @@ func TestAPI_APIKeysWorkflow(t *testing.T) {
 		Key string `json:"key"`
 	}
 	_ = json.NewDecoder(rec.Body).Decode(&createdKey)
-	if createdKey.Key == "" || !strings.HasPrefix(createdKey.Key, "sqlion_") {
+	if createdKey.Key == "" || !strings.HasPrefix(createdKey.Key, "lionsql_") {
 		t.Fatalf("Expected valid plaintext key, got: %s", createdKey.Key)
 	}
 
 	// 3. Unauthorized API Key request fails
 	req = httptest.NewRequest(http.MethodGet, "/api/tables/accounts/records", nil)
-	req.Header.Set("X-API-Key", "sqlion_invalidsecretkey12345")
+	req.Header.Set("X-API-Key", "lionsql_invalidsecretkey12345")
 	rec = httptest.NewRecorder()
 	srv.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized {
