@@ -38,7 +38,7 @@ func TestAPI_BackupAndRestoreStream(t *testing.T) {
 	if ct := backupRec.Header().Get("Content-Type"); ct != "application/gzip" {
 		t.Errorf("expected Content-Type application/gzip, got %s", ct)
 	}
-	if cd := backupRec.Header().Get("Content-Disposition"); !strings.Contains(cd, "sqlion-backup-") {
+	if cd := backupRec.Header().Get("Content-Disposition"); !strings.Contains(cd, "lionsql-backup-") {
 		t.Errorf("unexpected Content-Disposition: %s", cd)
 	}
 
@@ -109,7 +109,7 @@ func TestAPI_BackupFileAndRestoreFilePath(t *testing.T) {
 		t.Fatalf("Seed failed: %s", seedRec.Body.String())
 	}
 
-	tmpDir, err := os.MkdirTemp("", "sqlion-api-backup-*")
+	tmpDir, err := os.MkdirTemp("", "lionsql-api-backup-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

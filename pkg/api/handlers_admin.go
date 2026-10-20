@@ -343,7 +343,7 @@ func (s *Server) handleClearGeneralQueries(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 	// If GET, or download parameter requested, stream backup directly
 	if r.Method == http.MethodGet || r.URL.Query().Get("download") == "true" || r.URL.Query().Get("download") == "1" {
-		filename := fmt.Sprintf("sqlion-backup-%s.tar.gz", time.Now().Format("20060102-150405"))
+		filename := fmt.Sprintf("lionsql-backup-%s.tar.gz", time.Now().Format("20060102-150405"))
 		w.Header().Set("Content-Type", "application/gzip")
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
 		_, _ = backup.CreateBackup(w, s.engine, s.catalog)
