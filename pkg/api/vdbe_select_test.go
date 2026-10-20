@@ -37,11 +37,11 @@ func TestVDBEScalarSelect(t *testing.T) {
 	}
 
 	// 3. Built-in scalar function evaluation
-	res, err = s.ExecuteSQL("SELECT UPPER('sqlion') AS upper_name;")
+	res, err = s.ExecuteSQL("SELECT UPPER('lionsql') AS upper_name;")
 	if err != nil {
 		t.Fatalf("scalar function select failed: %v", err)
 	}
-	if len(res.Rows) != 1 || res.Rows[0]["upper_name"] != "SQLION" {
+	if len(res.Rows) != 1 || res.Rows[0]["upper_name"] != "LIONSQL" {
 		t.Fatalf("unexpected upper_name result: %+v", res.Rows)
 	}
 

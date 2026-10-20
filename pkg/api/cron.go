@@ -29,7 +29,7 @@ type CronJob struct {
 // CronExecutor is a callback function invoked by the scheduler when a job triggers.
 type CronExecutor func(ctx context.Context, commandType, command string) error
 
-// CronScheduler manages and evaluates recurring cron jobs in SQLion.
+// CronScheduler manages and evaluates recurring cron jobs in LionSQL.
 type CronScheduler struct {
 	mu           sync.RWMutex
 	jobs         map[string]*CronJob

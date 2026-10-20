@@ -79,7 +79,7 @@ func TestSQLExecutor_ConstantFoldingInQueries(t *testing.T) {
 		t.Fatalf("query with UPPER() failed: %v", err)
 	}
 	// Name in DB is 'Alice', but case-insensitive or folded to 'ALICE'
-	// In SQLion string equality is case-insensitive
+	// In LionSQL string equality is case-insensitive
 	if len(resFn.Rows) != 1 || resFn.Rows[0]["name"] != "Alice" {
 		t.Fatalf("expected 1 row for Alice with UPPER(), got %+v", resFn.Rows)
 	}

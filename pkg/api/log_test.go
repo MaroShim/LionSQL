@@ -20,7 +20,7 @@ import (
 )
 
 func TestSlowQuery_FileLoggingAndRotation(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_slowlog_test_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_slowlog_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestSlowQuery_FileLoggingAndRotation(t *testing.T) {
 }
 
 func TestRotatingLogWriter_SizeRotation(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_rotate_test_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_rotate_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestRotatingLogWriter_SizeRotation(t *testing.T) {
 }
 
 func TestGeneralLogger_LifecycleAndEndpoints(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_general_test_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_general_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestGeneralLogger_LifecycleAndEndpoints(t *testing.T) {
 }
 
 func TestSlowAndGeneralLog_ConcurrentAccess(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_log_concurrent_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_log_concurrent_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
