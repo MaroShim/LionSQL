@@ -50,6 +50,13 @@ static int go_wt_session_rollback(WT_SESSION *session, const char *config) {
     return session->rollback_transaction(session, config);
 }
 
+static int go_wt_session_reset(WT_SESSION *session) {
+    if (session == NULL) {
+        return 0;
+    }
+    return session->reset(session);
+}
+
 static int go_wt_session_log_flush_sync(WT_SESSION *session) {
     return session->log_flush(session, "sync=on");
 }
@@ -178,6 +185,7 @@ static int go_wt_cursor_remove_key(WT_CURSOR *cursor, const char *key) {
 import "C"
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -1012,6 +1020,25 @@ func (s *WTSession) resetCursors() {
 	}
 }
 
+// Reset resets all cached cursors and calls WT_SESSION::reset to release resources
+// and prevent sweep-server warnings on idle sessions.
+func (s *WTSession) Reset() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed || s.sess == nil {
+		return nil
+	}
+	for cur := range s.allCursors {
+		C.go_wt_cursor_reset(cur)
+	}
+	ret := C.go_wt_session_reset(s.sess)
+	if ret != 0 {
+		return fmt.Errorf("session_reset failed: code %d", ret)
+	}
+	return nil
+}
+
 func (s *WTSession) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1772,8 +1799,86 @@ func (tx *WTTx) IndexOnlyScan(tableName string, indexName string, low, high *sto
 	return tx.IndexScan(tableName, indexName, low, high)
 }
 
+type wtSliceCursor struct {
+	schema *storage.TableSchema
+	rows   []storage.Row
+	recs   []storage.Record
+	idx    int
+}
+
+func (c *wtSliceCursor) Next() bool {
+	c.idx++
+	if len(c.rows) > 0 {
+		return c.idx < len(c.rows)
+	}
+	return c.idx < len(c.recs)
+}
+
+func (c *wtSliceCursor) Row() (storage.Row, error) {
+	if c.idx >= 0 && c.idx < len(c.rows) {
+		return c.rows[c.idx], nil
+	}
+	if c.idx >= 0 && c.idx < len(c.recs) && c.recs[c.idx] != nil && c.schema != nil {
+		return c.schema.RecordToRow(c.recs[c.idx]), nil
+	}
+	return storage.Row{}, errors.New("cursor out of range")
+}
+
+func (c *wtSliceCursor) Record() (storage.Record, error) {
+	if c.idx >= 0 && c.idx < len(c.recs) && c.recs[c.idx] != nil {
+		return c.recs[c.idx], nil
+	}
+	if c.idx >= 0 && c.idx < len(c.rows) && c.schema != nil {
+		return c.schema.RowToRecord(c.rows[c.idx]), nil
+	}
+	return nil, errors.New("cursor out of range")
+}
+
+func (c *wtSliceCursor) Close() error {
+	c.rows = nil
+	c.recs = nil
+	return nil
+}
+
 func (tx *WTTx) IndexScanDesc(tableName string, indexName string, low, high *storage.Value) (storage.Cursor, error) {
-	return tx.IndexScan(tableName, indexName, low, high)
+	cur, err := tx.IndexScan(tableName, indexName, low, high)
+	if err != nil {
+		return nil, err
+	}
+	defer cur.Close()
+
+	tbl, _ := tx.getTableLocked(tableName)
+	var rows []storage.Row
+	var recs []storage.Record
+
+	for cur.Next() {
+		row, rerr := cur.Row()
+		if rerr == nil && len(row.Values) > 0 {
+			rows = append(rows, row)
+		} else {
+			rec, _ := cur.Record()
+			recs = append(recs, rec)
+		}
+	}
+
+	if len(rows) > 0 {
+		n := len(rows)
+		for i := 0; i < n/2; i++ {
+			rows[i], rows[n-1-i] = rows[n-1-i], rows[i]
+		}
+	} else if len(recs) > 0 {
+		nr := len(recs)
+		for i := 0; i < nr/2; i++ {
+			recs[i], recs[nr-1-i] = recs[nr-1-i], recs[i]
+		}
+	}
+
+	return &wtSliceCursor{
+		schema: tbl,
+		rows:   rows,
+		recs:   recs,
+		idx:    -1,
+	}, nil
 }
 
 type wtFilteredIndexCursor struct {
@@ -1817,7 +1922,15 @@ func (c *wtFilteredIndexCursor) Next() bool {
 }
 
 func (c *wtFilteredIndexCursor) matchesRecord(rec storage.Record) bool {
+	if c.idx == nil {
+		return false
+	}
 	key := storage.ExtractIndexKeyFromRecord(rec, c.idx)
+	if key.IsNull {
+		if (c.low != nil && !c.low.IsNull) || (c.high != nil && !c.high.IsNull) {
+			return false
+		}
+	}
 	if c.low != nil && key.Compare(*c.low) < 0 {
 		return false
 	}
@@ -1828,25 +1941,51 @@ func (c *wtFilteredIndexCursor) matchesRecord(rec storage.Record) bool {
 }
 
 func (c *wtFilteredIndexCursor) matchesRow(row storage.Row) bool {
+	if c.idx == nil || c.schema == nil {
+		return false
+	}
 	var key storage.Value
 	if c.idx.IsExpression() {
 		colName := c.idx.ExprColumn
 		if colName == "" && len(c.idx.Columns) > 0 {
 			colName = c.idx.Columns[0]
 		}
-		if c.schema != nil {
-			if _, colIdx, found := c.schema.FindColumn(colName); found && colIdx >= 0 && colIdx < len(row.Values) {
-				docVal := row.Values[colIdx]
-				if !docVal.IsNull {
-					key = storage.ExtractJSONIndexKey(docVal.String(), c.idx.ExprPath)
-				} else {
-					key = storage.NullValue(storage.TypeVarChar)
-				}
+		if _, colIdx, found := c.schema.FindColumn(colName); found && colIdx >= 0 && colIdx < len(row.Values) {
+			docVal := row.Values[colIdx]
+			if !docVal.IsNull {
+				key = storage.ExtractJSONIndexKey(docVal.String(), c.idx.ExprPath)
+			} else {
+				key = storage.NullValue(storage.TypeVarChar)
 			}
+		} else {
+			return false
 		}
-	} else if len(c.idx.Columns) > 0 && c.schema != nil {
+	} else if len(c.idx.Columns) == 1 {
 		if _, colIdx, found := c.schema.FindColumn(c.idx.Columns[0]); found && colIdx >= 0 && colIdx < len(row.Values) {
 			key = row.Values[colIdx]
+		} else {
+			return false
+		}
+	} else if len(c.idx.Columns) > 1 {
+		var sb strings.Builder
+		for i, cName := range c.idx.Columns {
+			if i > 0 {
+				sb.WriteByte(0)
+			}
+			if _, colIdx, found := c.schema.FindColumn(cName); found && colIdx >= 0 && colIdx < len(row.Values) {
+				sb.WriteString(storage.EncodeIndexKeyPart(row.Values[colIdx]))
+			} else {
+				sb.WriteString("NULL")
+			}
+		}
+		key = storage.StringValue(sb.String())
+	} else {
+		return false
+	}
+
+	if key.IsNull {
+		if (c.low != nil && !c.low.IsNull) || (c.high != nil && !c.high.IsNull) {
+			return false
 		}
 	}
 	if c.low != nil && key.Compare(*c.low) < 0 {
@@ -1909,6 +2048,7 @@ func (tx *WTTx) Commit() error {
 	if ret != 0 {
 		return fmt.Errorf("commit_transaction failed with code %d", ret)
 	}
+	_ = C.go_wt_session_reset(tx.sess.sess)
 
 	if !hasWrites || tx.opts.ReadOnly {
 		tx.commitLSN = tx.snapshotLSN
@@ -1956,6 +2096,7 @@ func (tx *WTTx) Rollback() error {
 	if ret != 0 {
 		return fmt.Errorf("rollback_transaction failed with code %d", ret)
 	}
+	_ = C.go_wt_session_reset(tx.sess.sess)
 	return nil
 }
 

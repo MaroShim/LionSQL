@@ -22,6 +22,7 @@ type PoolConfig struct {
 	MaxWorkers      int           // Maximum concurrent query execution workers
 	MaxIdleSessions int           // Maximum cached idle storage sessions
 	AcquireTimeout  time.Duration // Timeout for waiting for a session from the pool
+	IdleSessionTTL  time.Duration // Maximum idle time before an idle session is reaped (default 30m)
 }
 
 // DefaultPoolConfig returns sensible production defaults for connection pooling.
@@ -34,6 +35,7 @@ func DefaultPoolConfig() PoolConfig {
 		MaxWorkers:      workers,
 		MaxIdleSessions: 64,
 		AcquireTimeout:  10 * time.Second,
+		IdleSessionTTL:  30 * time.Minute,
 	}
 }
 
@@ -51,13 +53,18 @@ type PoolStats struct {
 	WaitDurationNano int64 `json:"wait_duration_ns"`
 }
 
+type idleSessionItem struct {
+	sess     storage.Session
+	idleTime time.Time
+}
+
 // SessionPool manages multiplexed access to storage engine sessions across thousands of client connections.
 type SessionPool struct {
 	engine storage.Engine
 	config PoolConfig
 
 	mu           sync.Mutex
-	idleSessions []storage.Session
+	idleSessions []idleSessionItem
 	semWorkers   chan struct{} // limits concurrent active execution workers
 	closed       bool
 
@@ -85,11 +92,14 @@ func NewSessionPool(eng storage.Engine, cfg PoolConfig) *SessionPool {
 	if cfg.AcquireTimeout <= 0 {
 		cfg.AcquireTimeout = 10 * time.Second
 	}
+	if cfg.IdleSessionTTL <= 0 {
+		cfg.IdleSessionTTL = 30 * time.Minute
+	}
 
 	return &SessionPool{
 		engine:       eng,
 		config:       cfg,
-		idleSessions: make([]storage.Session, 0, cfg.MaxIdleSessions),
+		idleSessions: make([]idleSessionItem, 0, cfg.MaxIdleSessions),
 		semWorkers:   make(chan struct{}, cfg.MaxWorkers),
 	}
 }
@@ -142,14 +152,18 @@ func (p *SessionPool) AcquireSession() (storage.Session, error) {
 		return nil, ErrPoolClosed
 	}
 
-	n := len(p.idleSessions)
-	if n > 0 {
-		sess := p.idleSessions[n-1]
+	for len(p.idleSessions) > 0 {
+		n := len(p.idleSessions)
+		item := p.idleSessions[n-1]
 		p.idleSessions = p.idleSessions[:n-1]
+		if p.config.IdleSessionTTL > 0 && time.Since(item.idleTime) > p.config.IdleSessionTTL {
+			_ = item.sess.Close()
+			continue
+		}
 		p.mu.Unlock()
 		atomic.AddInt64(&p.activeSessions, 1)
 		atomic.AddInt64(&p.totalAcquired, 1)
-		return sess, nil
+		return item.sess, nil
 	}
 	p.mu.Unlock()
 
@@ -173,6 +187,10 @@ func (p *SessionPool) ReleaseSession(sess storage.Session) {
 	atomic.AddInt64(&p.activeSessions, -1)
 	atomic.AddInt64(&p.totalReleased, 1)
 
+	if r, ok := sess.(interface{ Reset() error }); ok {
+		_ = r.Reset()
+	}
+
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -181,7 +199,10 @@ func (p *SessionPool) ReleaseSession(sess storage.Session) {
 		return
 	}
 
-	p.idleSessions = append(p.idleSessions, sess)
+	p.idleSessions = append(p.idleSessions, idleSessionItem{
+		sess:     sess,
+		idleTime: time.Now(),
+	})
 }
 
 // Stats returns a snapshot of current connection pool and worker metrics.
@@ -214,8 +235,8 @@ func (p *SessionPool) Close() error {
 	}
 	p.closed = true
 
-	for _, sess := range p.idleSessions {
-		_ = sess.Close()
+	for _, item := range p.idleSessions {
+		_ = item.sess.Close()
 	}
 	p.idleSessions = nil
 	return nil
