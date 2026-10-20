@@ -107,6 +107,13 @@
 | **`BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`** | **TODATETIMEOFFSET 정수 분 단위 오프셋 시간 오해석 방지 (ToDateTimeOffset Mins Bug)** | `BUG-DATE-TODATETIMEOFFSET-INT-MINS-1` | T-SQL 규격 정수 오프셋(분 단위)을 시간 단위로 60배 왜곡 포맷팅하던 `parseOffsetLocation` 파싱 정합성 보장 |
 | **`BUG-CATALOG-FK-MULTI-COL-ACTIONS-1`** | **가상 카탈로그 복합 외래키 쉼표 병합 및 액션 왜곡 방지 (Catalog Multi Col FK Bug)** | `BUG-CATALOG-FK-MULTI-COL-ACTIONS-1` | `execDbGateMSSQLForeignKeySelect` 복합 외래키 단일 행 쉼표 결합 및 CASCADE/SET NULL 액션 누락 방지 |
 | **`BUG-VM-DML-PK-NOT-FOUND-CRASH-1`** | **VDBE OpUpdate/OpDelete PK 미존재 시 ErrKeyNotFound 예외 크래시 방지 (VM DML PK Not Found Bug)** | `BUG-VM-DML-PK-NOT-FOUND-CRASH-1` | VDBE 단일 PK 수정/삭제 시 대상 행 미존재 시 에러 중단 대신 표준 SQL 규격 준수 0건 처리(`@@ROWCOUNT = 0`) 보장 |
+| **`BUG-EXEC-PROC-TX-BYPASS-1`** | **EXEC 프로시저 호출 시 외부 트랜잭션 세션 우회 및 독립 자동 커밋 방지 (Exec Proc Tx Bypass Bug)** | `BUG-EXEC-PROC-TX-BYPASS-1` | `execProcedureCall`에서 활성 트랜잭션(`cs.Tx`) 공유로 프로시저 내 수정 사항의 트랜잭션 원자성 및 ROLLBACK 보장 |
+| **`BUG-TDS-RPC-PREP-TX-BYPASS-1`** | **TDS RPC 사전 컴파일 플랜 실행 시 세션/트랜잭션 우회 방지 (TDS RPC Prep Tx Bypass Bug)** | `BUG-TDS-RPC-PREP-TX-BYPASS-1` | `sp_execute`/`sp_prepexec` 패스트패스에서 독립 스토리지 세션 대신 세션 컨텍스트 및 `inTx` 트랜잭션 바인딩 |
+| **`BUG-TDS-RPC-PARAM-NAME-ORDER-1`** | **TDS sp_executesql 파라미터명 미인식 순서 왜곡 방지 (TDS RPC Param Name Bug)** | `BUG-TDS-RPC-PARAM-NAME-ORDER-1` | `handleRPCExecuteSQL`에서 파라미터명(`@stmt`, `@params`) 검사로 JDBC/.NET 클라이언트 명명 파라미터 도치 오류 해결 |
+| **`BUG-PARSER-SIMPLE-CASE-OMISSION-1`** | **Pratt 파서 Simple CASE 피연산자 누락 및 문법 거부 방지 (Parser Simple Case Bug)** | `BUG-PARSER-SIMPLE-CASE-OMISSION-1` | `parseCase`에서 `CASE expr WHEN ...` 단순 CASE 피연산자 인식 및 `CaseExpr.Operand` AST 필드 보강 |
+| **`BUG-PIVOT-ORDER-BY-SPLIT-1`** | **PIVOT/UNPIVOT ORDER BY 절 쉼표 분해 왜곡 방지 (Pivot Order By Split Bug)** | `BUG-PIVOT-ORDER-BY-SPLIT-1` | `strings.Fields` 대신 스마트 정렬 파서 적용으로 쉼표 포함 정렬 키(`col,`, `DESC,`) 파괴 및 정렬 무력화 해결 |
+| **`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`** | **코디네이터 UPDATE 산술식 미지원 및 0값/타입변조 방지 (Eval Update Arith Bug)** | `BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1` | 0으로 나누기 예외 처리 및 컬럼 간 연산 시 문자열 폴백 방지로 데이터 사일런트 변조 차단 |
+| **`BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1`** | **WAL 복구 시 CREATE TABLE 인라인 인덱스 등록 누락 방지 (WAL Create Table Index Bug)** | `BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1` | `OpCreateTable` 재생 시 `op.Schema.Indexes` 순회 초기화로 충돌 복구 후 인덱스 갱신 누락 해결 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---

@@ -212,6 +212,13 @@
 | **P2** | **함수/날짜시간** | **`TODATETIMEOFFSET`의 정수 분(Minute) 단위 오프셋을 시간(Hour)으로 60배 왜곡 처리하는 결함 해결 (`BUG-DATE-TODATETIMEOFFSET-INT-MINS-1`)** | `pkg/proc/builtins_date.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **카탈로그/메타데이터** | **가상 카탈로그의 복합 외래키 쉼표 병합(`"col1, col2"`) 및 CASCADE 액션 누락 결함 해결 (`BUG-CATALOG-FK-MULTI-COL-ACTIONS-1`)** | `pkg/catalog/virtual/mssql.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **VM/DML** | **VDBE `OpUpdate`/`OpDelete` 단일 PK 행 미존재 시 `ErrKeyNotFound` 치명적 프로시저 중단 결함 해결 (`BUG-VM-DML-PK-NOT-FOUND-CRASH-1`)** | `pkg/proc/runtime/vm_dispatcher.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/프로시저** | **`execProcedureCall`에서 활성 트랜잭션(`cs.Tx`) 무시 및 독립 세션 자동 커밋으로 인한 원자성 파괴 해결 (`BUG-EXEC-PROC-TX-BYPASS-1`)** | `pkg/engine/sqlexec_procs.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **와이어/TDS** | **TDS RPC 사전 컴파일 플랜 실행 시 독립 스토리지 세션 강제 생성으로 인한 트랜잭션 우회 해결 (`BUG-TDS-RPC-PREP-TX-BYPASS-1`)** | `pkg/wire/tds/server.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **와이어/TDS** | **TDS `handleRPCExecuteSQL`에서 파라미터명 미인식으로 인한 `@stmt`/`@params` 도치 결함 해결 (`BUG-TDS-RPC-PARAM-NAME-ORDER-1`)** | `pkg/wire/tds/server.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **파서/문법** | **Pratt 파서 `parseCase`에서 Simple CASE (`CASE expr WHEN ...`) 피연산자 누락 및 문법 거부 해결 (`BUG-PARSER-SIMPLE-CASE-OMISSION-1`)** | `pkg/proc/parser_expr.go`, `pkg/proc/ast.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **엔진/정렬** | **PIVOT 및 UNPIVOT `ORDER BY` 절 쉼표 분해 왜곡으로 인한 정렬 키 파괴 및 방향 무력화 해결 (`BUG-PIVOT-ORDER-BY-SPLIT-1`)** | `pkg/engine/sqlexec_pivot.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/DML** | **코디네이터 `UPDATE` 산술식 평가 시 0으로 나누기 및 컬럼 간 연산 시 문자열 폴백 데이터 변조 해결 (`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/WAL** | **WAL 충돌 복구 시 `OpCreateTable` 인라인 인덱스 초기화 누락으로 인한 인덱스 갱신 중단 해결 (`BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1`)** | `pkg/storage/memengine/persistence.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -348,8 +355,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 93대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-VM-DML-PK-NOT-FOUND-CRASH-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단, RBAC 커스텀 롤 누락, 따옴표 이스케이프 분해 파괴, 샤드 초기화 경쟁 크래시, VDBE 미존재 PK 크래시 등으로 인해 발생하는 93대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 100대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단, RBAC 커스텀 롤 누락, 따옴표 이스케이프 분해 파괴, 샤드 초기화 경쟁 크래시, VDBE 미존재 PK 크래시, EXEC 프로시저 및 TDS RPC 트랜잭션 우회, Simple CASE 누락, 산술식 0값 변조 등으로 인해 발생하는 100대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -630,6 +637,27 @@
   93. **`BUG-VM-DML-PK-NOT-FOUND-CRASH-1` (`pkg/proc/runtime/vm_dispatcher.go:671, 719`)**:
      - VDBE 컴파일러가 최적화한 단일 PK 기반 `OpUpdate` 및 `OpDelete` 실행 시, 스토리지 계층(`f.tx.Update`, `f.tx.Delete`)이 반환한 `storage.ErrKeyNotFound`를 정상적인 0건 매칭(`@@ROWCOUNT = 0`)으로 처리하지 않고 치명적 런타임 에러로 판단하여 프로시저를 강제 중단(Catch 점프)시키던 SQL 규격 위반 결함.
      - `ErrKeyNotFound` 수신 시 에러 전파 대신 `f.rowCount = 0` 설정 후 정상 완료로 분기.
+  94. **`BUG-EXEC-PROC-TX-BYPASS-1` (`pkg/engine/sqlexec_procs.go:988-992, 1026`)**:
+     - `execProcedureCall`(`EXEC procName @args`) 실행 시 활성 클라이언트 세션의 트랜잭션(`cs.Tx`)을 확인하지 않고 무조건 `s.engine.NewSession()`으로 독립 스토리지를 생성하여 프로시저를 실행함으로써, 선행 트랜잭션 변경사항을 읽지 못하고 프로시저 수정분이 즉시 자동 커밋되어 외부 `ROLLBACK`이 무력화되던 트랜잭션 원자성 파괴 결함.
+     - `cs.Tx` 존재 시 `ExecuteInTxContext`를 통해 상위 활성 트랜잭션을 공유 바인딩하여 트랜잭션 일관성 보장.
+  95. **`BUG-TDS-RPC-PREP-TX-BYPASS-1` (`pkg/wire/tds/server.go:1031-1035, 1114-1117`)**:
+     - TDS 프로토콜 `sp_execute` 및 `sp_prepexec`의 VDBE 사전 컴파일 플랜 실행 경로에서 활성 세션 컨텍스트 및 `inTx` 트랜잭션을 무시하고 매번 독립 `s.engine.NewSession()`을 생성하여 실행함으로써, TDS 트랜잭션 내에서 실행된 준비된 문장이 트랜잭션 외부에서 즉시 영구 커밋되던 결함.
+     - TDS 세션 트랜잭션 상태를 연동하여 트랜잭션 내에서는 활성 트랜잭션 컨텍스트를 경유하도록 개선.
+  96. **`BUG-TDS-RPC-PARAM-NAME-ORDER-1` (`pkg/wire/tds/server.go:1205-1216`)**:
+     - `handleRPCExecuteSQL`(`sp_executesql`)이 파라미터명(`p.Name`)을 검사하지 않고 `rpc.Params[0]`을 `@stmt`, `rpc.Params[1]`을 `@params`로 단정하여, JDBC나 .NET 드라이버가 파라미터 순서를 바꾸어 전달할 때 `@stmt`와 `@params`가 뒤바뀌어 SQL 구문 에러를 유발하던 결함.
+     - `p.Name`의 대소문자 무관 비교를 통해 `@stmt`와 `@params`를 정확히 식별 바인딩하도록 보강.
+  97. **`BUG-PARSER-SIMPLE-CASE-OMISSION-1` (`pkg/proc/parser_expr.go:445-475`, `pkg/proc/ast.go:486`)**:
+     - Pratt 파서의 `parseCase`가 Searched CASE(`CASE WHEN cond THEN ...`)만 파싱하고 `CASE` 바로 뒤에 `TokenWhen`이 오지 않는 Simple CASE(`CASE expr WHEN val THEN ...`)를 만나면 즉시 문법 에러(`nil`)를 반환하며, `CaseExpr` AST에도 피연산자(`Operand`) 필드가 결여되어 있던 결함.
+     - `CASE` 직후 조건식 존재 시 `Operand`로 파싱하고 `CaseExpr`에 피연산자 필드 추가 및 VDBE/평가기 연동.
+  98. **`BUG-PIVOT-ORDER-BY-SPLIT-1` (`pkg/engine/sqlexec_pivot.go:420-425, 946-950`)**:
+     - `PIVOT` 및 `UNPIVOT` 연산자 처리 시 `ORDER BY` 절을 단순 공백 분해(`strings.Fields`)하여, 콤마가 붙은 컬럼명(`"col1,"`)이나 방향 키워드(`"DESC,"`)가 매칭에 실패하여 정렬 방향이 뒤바뀌거나 다중 컬럼 정렬이 완전히 무력화되던 결함.
+     - 스마트 토큰 분해기를 통해 콤마를 분리하고 모든 다중 정렬 컬럼 및 방향을 온전히 반영하도록 수정.
+  99. **`BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1` (`pkg/engine/sqlexec_eval.go:920-965`)**:
+     - 코디네이터 폴백 `evalUpdateExpr`에서 단일 숫자 가감승제 정규식만 매칭하고, 0으로 나누기(`delta == 0`)나 컬럼 간 연산(`salary = salary + bonus`) 발생 시 실패를 무시한 채 `parseLiteralValue`로 떨어져 값을 0으로 만들거나 정수 컬럼에 문자열 값을 대입하여 데이터를 사일런트 변조하던 결함.
+     - 0으로 나누기 시 명시적 예외 반환 및 컬럼 참조 산술식 평가 기능 보강.
+  100. **`BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1` (`pkg/storage/memengine/persistence.go:61-70`)**:
+     - MemEngine의 WAL 복구 루프 `applyWALRecordLocked`에서 `OpCreateTable` 재생 시 `td.Indexes` 맵만 생성하고 `op.Schema.Indexes`에 정의된 인라인 인덱스들을 전혀 등록하지 않아, 크래시 복구 후 생성된 테이블의 인덱스들이 증발하여 후속 WAL의 `OpInsert`/`OpUpdate` 시 인덱스가 갱신되지 못하던 결함.
+     - `op.Schema.Indexes`를 순회하며 `td.Indexes`에 각 인덱스 구조체를 정상 인스턴스화하도록 복구 로직 보강.
 
 ---
 
@@ -748,6 +776,13 @@
 | **BUG-DATE-TODATETIMEOFFSET-INT-MINS-1** | 함수/날짜시간 | `TODATETIMEOFFSET`의 정수 분(Minute) 단위 오프셋 60배 시간 왜곡 해결 | **대기 (`[ ]`)** | 콜론 없는 정수 오프셋을 분 단위 오프셋으로 정규 해석하여 표준 SQL 시간 축 보장 |
 | **BUG-CATALOG-FK-MULTI-COL-ACTIONS-1** | 카탈로그/메타 | 가상 카탈로그 복합 외래키 쉼표 병합 및 CASCADE 액션 누락 해결 | **대기 (`[ ]`)** | 복합 FK 컬럼 단위 개별 행 방출 및 실측 `OnUpdate`/`OnDelete` 액션 바인딩 |
 | **BUG-VM-DML-PK-NOT-FOUND-CRASH-1** | VM/DML | VDBE `OpUpdate`/`OpDelete` PK 미존재 시 `ErrKeyNotFound` 프로시저 크래시 해결 | **대기 (`[ ]`)** | 키 미존재 시 에러 중단 대신 표준 SQL 규격 0건 처리(`@@ROWCOUNT = 0`) 보장 |
+| **BUG-EXEC-PROC-TX-BYPASS-1** | 엔진/프로시저 | `execProcedureCall` 활성 트랜잭션 무시 및 독립 세션 자동 커밋 해결 | **대기 (`[ ]`)** | `cs.Tx` 트랜잭션 공유 바인딩으로 프로시저 내 수정 사항 트랜잭션 일관성 보장 |
+| **BUG-TDS-RPC-PREP-TX-BYPASS-1** | 와이어/TDS | TDS RPC 사전 컴파일 플랜 실행 시 독립 스토리지 세션 트랜잭션 우회 해결 | **대기 (`[ ]`)** | TDS 세션 및 `inTx` 트랜잭션 바인딩으로 원자적 롤백 및 세션 정합성 보장 |
+| **BUG-TDS-RPC-PARAM-NAME-ORDER-1** | 와이어/TDS | TDS `sp_executesql` 파라미터명 미인식 순서 왜곡 오류 해결 | **대기 (`[ ]`)** | `p.Name` 검사 기반 `@stmt` 및 `@params` 정확한 식별 바인딩 보장 |
+| **BUG-PARSER-SIMPLE-CASE-OMISSION-1** | 파서/문법 | Pratt 파서 Simple CASE (`CASE expr WHEN ...`) 피연산자 누락 거부 해결 | **대기 (`[ ]`)** | 단순 CASE 피연산자 파싱 및 `CaseExpr.Operand` AST 필드/평가기 연동 완비 |
+| **BUG-PIVOT-ORDER-BY-SPLIT-1** | 엔진/정렬 | PIVOT/UNPIVOT `ORDER BY` 절 쉼표 분해 왜곡 및 정렬 무력화 해결 | **대기 (`[ ]`)** | 스마트 정렬 토큰 분해기로 다중 정렬 키 콤마 분리 및 방향 보존 |
+| **BUG-DML-EVAL-UPDATE-ARITH-CORRUPT-1** | 엔진/DML | 코디네이터 `UPDATE` 산술식 0 나누기 및 컬럼 간 연산 시 문자열 폴백 해결 | **대기 (`[ ]`)** | 0 나누기 예외 처리 및 컬럼 간 연산 지원으로 데이터 사일런트 변조 차단 |
+| **BUG-MEM-WAL-CREATE-TABLE-INDEX-OMISSION-1** | 스토리지/WAL | WAL 복구 시 `OpCreateTable` 인라인 인덱스 등록 누락 해결 | **대기 (`[ ]`)** | 충돌 복구 시 `op.Schema.Indexes` 순회 초기화로 인덱스 갱신 누락 방지 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |
