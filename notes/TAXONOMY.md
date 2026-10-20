@@ -67,6 +67,10 @@
 | **`BUG-API-PK-GEN-1`** | **HTTP API 레코드 밀리초 PK 충돌 및 UUID 누락 해결 (API PK Gen Bug)** | `BUG-API-PK-GEN-1` | 나노초/카운터 결합 유니크 채번 및 UUID PK 자동 생성 지원으로 PK 충돌 및 NULL 방지 |
 | **`BUG-WAL-TORN-BOOT-1`** | **MemEngine WAL 테일 절단 시 기동 실패 방지 (WAL Torn Write Boot Bug)** | `BUG-WAL-TORN-BOOT-1` | 비정상 종료 시 손상된 미완료 레코드 이전 정상 지점까지 복구 완료 후 트렁케이트하여 정상 기동 보장 |
 | **`BUG-CATALOG-INTERCEPT-BRACKET-1`** | **가상 카탈로그 대괄호 식별자 인터셉트 보장 (Catalog Bracket Bug)** | `BUG-CATALOG-INTERCEPT-BRACKET-1` | 정규화 단계 대괄호 및 스키마 접두사 트림으로 SSMS/sqlcmd 가상 뷰 조인 쿼리 100% 정상 인터셉트 |
+| **`BUG-SELECT-AGG-CASE-1`** | **GROUP BY 및 집계함수 대소문자 정합성 보장 (Select Agg Case Bug)** | `BUG-SELECT-AGG-CASE-1` | `computeAggregates` 행 맵 대소문자 무관 탐색으로 `GROUP BY <nil>` 및 집계함수 NULL 변조 방지 |
+| **`BUG-SP-PARAM-DECIMAL-1`** | **sp_executesql 복합 파라미터 타입 파싱 보존 (SP Param Decimal Bug)** | `BUG-SP-PARAM-DECIMAL-1` | 괄호 중첩 추적으로 `DECIMAL(10, 2)` 등 다중 인자 타입 콤마 분해 절단 및 유령 파라미터 생성 방지 |
+| **`BUG-SP-EXEC-SUFFIX-OUT-1`** | **sp_executesql OUT 접미 변수명 오절단 방지 (SP Suffix OUT Bug)** | `BUG-SP-EXEC-SUFFIX-OUT-1` | `cleanOutputSuffix` 선행 공백/단어 경계 검사로 `@timeout` 등 `OUT` 접미 변수명 3글자 절단 훼손 해결 |
+| **`BUG-MEM-INDEX-LOCAL-ORDER-1`** | **MemEngine 로컬 삽입 행 인덱스 정렬 보장 (MemEngine Index Order Bug)** | `BUG-MEM-INDEX-LOCAL-ORDER-1` | 트랜잭션 로컬 삽입 행 Go 맵 무작위 순회 append 제거 및 인덱스 키 병합 정렬 적용 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
