@@ -123,8 +123,8 @@ func TestAuth_APIKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateAPIKey failed: %v", err)
 	}
-	if !strings.HasPrefix(keyObj.Key, "sqlion_") {
-		t.Fatalf("Expected sqlion_ prefix in key, got %s", keyObj.Key)
+	if !strings.HasPrefix(keyObj.Key, "lionsql_") {
+		t.Fatalf("Expected lionsql_ prefix in key, got %s", keyObj.Key)
 	}
 
 	// 2. Validate API key

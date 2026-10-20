@@ -366,7 +366,7 @@ func (s *AuthService) GetUserByID(id string) (*Superuser, error) {
 }
 
 // CreateAPIKey generates a new API key with the given name, role, and allowed tables.
-// The plaintext key (`sqlion_...`) is returned in key.Key only once.
+// The plaintext key (`lionsql_...`) is returned in key.Key only once.
 func (s *AuthService) CreateAPIKey(name string, role APIKeyRole, allowedTables []string) (*APIKey, error) {
 	if role == "" {
 		role = RoleReadOnly
@@ -375,7 +375,7 @@ func (s *AuthService) CreateAPIKey(name string, role APIKeyRole, allowedTables [
 	defer s.mu.Unlock()
 
 	rawSecret := generateRandomKey(24)
-	plaintextKey := "sqlion_" + rawSecret
+	plaintextKey := "lionsql_" + rawSecret
 	hashedKey := hashSecret(plaintextKey)
 
 	var normTables []string
@@ -404,7 +404,7 @@ func (s *AuthService) CreateAPIKey(name string, role APIKeyRole, allowedTables [
 
 // ValidateAPIKey checks plaintext API key and returns the APIKey entity.
 func (s *AuthService) ValidateAPIKey(plaintextKey string) (*APIKey, error) {
-	if !strings.HasPrefix(plaintextKey, "sqlion_") {
+	if !strings.HasPrefix(plaintextKey, "lionsql_") {
 		return nil, ErrInvalidAPIKey
 	}
 	hashedKey := hashSecret(plaintextKey)
