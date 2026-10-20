@@ -158,7 +158,7 @@ func TestVDBEAtomicityMemEngine(t *testing.T) {
 }
 
 func TestVDBEAtomicityWiredTiger(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_atomicity_wt_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_atomicity_wt_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

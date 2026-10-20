@@ -285,7 +285,7 @@ Implement a query memory limit governor and external merge sort mechanism:
 2. **Tuple Footprint Governor**:
    - Real-time estimation of accumulated memory footprint in `SortIterator`.
 3. **Spill-to-Disk & N-Way Streaming Merge**:
-   - When in-memory tuples exceed `work_mem`, sort the batch and spill it to disk as an atomic temporary run file (`sqlion-sort-run-*.tmp`).
+   - When in-memory tuples exceed `work_mem`, sort the batch and spill it to disk as an atomic temporary run file (`lionsql-sort-run-*.tmp`).
    - On completion of input, merge spilled runs using a streaming N-way Min-Heap (`tupleMergeHeap`).
    - Deterministically delete all temporary files upon iterator `Close()`.
 
@@ -319,7 +319,7 @@ Implement a non-blocking online snapshot hot backup engine (`pkg/backup/`):
    - Creation writes to temporary files first before atomic rename (Golden Rule 1).
 4. **Multi-Channel Interface**:
    - REST API: `GET /api/backup` (direct HTTP streaming download), `POST /api/backup`, `POST /api/restore`.
-   - CLI: `sqlion -dir data -backup snapshot.tar.gz` and `sqlion -dir data -restore snapshot.tar.gz`.
+   - CLI: `lionsql -dir data -backup snapshot.tar.gz` and `lionsql -dir data -restore snapshot.tar.gz`.
    - Web Management Studio: One-click backup download and restore modal.
 
 ### Consequences

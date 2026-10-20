@@ -175,7 +175,7 @@ LionSQL은 테이블이 생성되는 즉시 해당 테이블 전용의 무설정
 2. **Fetch (JavaScript) 탭**:
    - 모던 웹 브라우저, Next.js, Node.js 환경에서 사용 가능한 네이티브 `fetch()` 비동기 코드를 생성합니다.
 3. **LionSQL Web SDK 탭**:
-   - 브라우저 정적 번들로 제공되는 경량 클라이언트 SDK(`sqlion.js`) 메서드 호출 코드를 제공합니다 (`db.records('customers').find()`, `create()`, `update()`, `delete()`).
+   - 브라우저 정적 번들로 제공되는 경량 클라이언트 SDK(`lionsql.js`) 메서드 호출 코드를 제공합니다 (`db.records('customers').find()`, `create()`, `update()`, `delete()`).
 
 ### 7.3. 스키마 맞춤형 페이로드 자동 매핑
 정적 템플릿이 아닌, 현재 선택된 테이블의 실제 컬럼명과 데이터 타입을 분석하여 유효한 기본값(정수형은 `1`, 문자열은 `"샘플텍스트"`, 불리언은 `true` 등)이 채워진 JSON 바디를 자동으로 완성해 줍니다.
@@ -229,7 +229,7 @@ LionSQL Web Studio는 외부 프로덕션 배포 시에도 안전하게 사용�
 
 ### 10.2. 캐시 무효화 및 에셋 신선도 보장
 - Web Studio 메인 HTML(`/_/`)은 `Cache-Control: no-cache, no-store, must-revalidate` 헤더를 통해 브라우저가 이전 버전의 대시보드를 캐싱하지 않고 항상 최신 UI를 로드하도록 보장합니다.
-- JavaScript SDK 에셋(`/sdk/sqlion.js`)은 적절한 유효기간과 ETag를 통해 네트워크 대역폭을 절약합니다.
+- JavaScript SDK 에셋(`/sdk/lionsql.js`)은 적절한 유효기간과 ETag를 통해 네트워크 대역폭을 절약합니다.
 
 ### 10.3. Gzip 고속 압축 전송
 모든 HTML, CSS, JavaScript 응답은 `Accept-Encoding: gzip` 요청에 대해 서버 수준에서 자동으로 gzip 압축되어 전송되므로, 수백 킬로바이트의 단일 페이지 애플리케이션도 수십 밀리초 이내에 로딩됩니다.
@@ -237,7 +237,7 @@ LionSQL Web Studio는 외부 프로덕션 배포 시에도 안전하게 사용�
 ---
 
 ## 관련 참고 문서
-- [LionSQL 전체 사용자 매뉴얼](file:///Users/maro/Projects/SQLion/doc/USER_MANUAL.ko.md)
-- [LionSQL Auto-REST API 가이드](file:///Users/maro/Projects/SQLion/doc/AUTO_REST_API.md)
-- [LionSQL Web SDK 개발자 가이드](file:///Users/maro/Projects/SQLion/doc/WEB_SDK.md)
-- [LionSQL 클라이언트 도구 연동 가이드](file:///Users/maro/Projects/SQLion/doc/CLIENT_TOOL_INTEGRATION.md)
+- [LionSQL 전체 사용자 매뉴얼](file:///Users/maro/Projects/LionSQL/doc/USER_MANUAL.ko.md)
+- [LionSQL Auto-REST API 가이드](file:///Users/maro/Projects/LionSQL/doc/AUTO_REST_API.md)
+- [LionSQL Web SDK 개발자 가이드](file:///Users/maro/Projects/LionSQL/doc/WEB_SDK.md)
+- [LionSQL 클라이언트 도구 연동 가이드](file:///Users/maro/Projects/LionSQL/doc/CLIENT_TOOL_INTEGRATION.md)

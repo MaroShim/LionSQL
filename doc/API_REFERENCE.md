@@ -69,7 +69,7 @@ Creates a new scoped API key token.
   {
     "id": "key-019283",
     "name": "Frontend Public Key",
-    "token": "sqlion_key_abc123xyz...",
+    "token": "lionsql_key_abc123xyz...",
     "role": "readonly",
     "allowed_tables": ["products", "categories"],
     "created_at": "2024-09-22T10:00:00Z"
@@ -320,7 +320,7 @@ Captures a consistent, live point-in-time snapshot of the database without acqui
   ```bash
   curl -OJ http://127.0.0.1:8090/api/backup
   ```
-  Returns `Content-Type: application/gzip` with header `Content-Disposition: attachment; filename="sqlion-backup-YYYYMMDD-HHMMSS.tar.gz"`.
+  Returns `Content-Type: application/gzip` with header `Content-Disposition: attachment; filename="lionsql-backup-YYYYMMDD-HHMMSS.tar.gz"`.
 
 - **Server-Side Target Path**:
   ```bash
@@ -351,7 +351,7 @@ Restores database schemas, indexes, data rows, and catalog stored procedures fro
 - **Multipart Archive File Upload**:
   ```bash
   curl -X POST http://127.0.0.1:8090/api/restore \
-       -F "backup=@/path/to/sqlion-backup.tar.gz"
+       -F "backup=@/path/to/lionsql-backup.tar.gz"
   ```
 - **Server File Path Reference**:
   ```bash
@@ -572,8 +572,8 @@ Dispatches a password reset link to the specified email address using the `passw
 
 LionSQL hosts the official client library directly for zero-dependency browser integration.
 
-- `GET /sdk/sqlion.js`: Universal JavaScript Client SDK bundle (`Content-Type: application/javascript`)
-- `GET /sdk/sqlion.d.ts`: TypeScript Declaration definitions (`Content-Type: text/typescript`)
+- `GET /sdk/lionsql.js`: Universal JavaScript Client SDK bundle (`Content-Type: application/javascript`)
+- `GET /sdk/lionsql.d.ts`: TypeScript Declaration definitions (`Content-Type: text/typescript`)
 
 ---
 

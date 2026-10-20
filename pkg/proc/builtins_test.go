@@ -99,9 +99,9 @@ func TestBuiltin_Strings(t *testing.T) {
 	}
 
 	// CHARINDEX
-	target := storage.StringValue("SQLion Database Engine")
-	if ci := EvalBuiltin("CHARINDEX", []storage.Value{storage.StringValue("Data"), target}); ci.IVal != 8 {
-		t.Errorf("Expected index 8 for 'Data', got %d", ci.IVal)
+	target := storage.StringValue("LionSQL Database Engine")
+	if ci := EvalBuiltin("CHARINDEX", []storage.Value{storage.StringValue("Data"), target}); ci.IVal != 9 {
+		t.Errorf("Expected index 9 for 'Data', got %d", ci.IVal)
 	}
 	if ci := EvalBuiltin("CHARINDEX", []storage.Value{storage.StringValue("xyz"), target}); ci.IVal != 0 {
 		t.Errorf("Expected index 0 for non-existing, got %d", ci.IVal)
@@ -348,8 +348,8 @@ func TestBuiltin_StringAndDateExpansion(t *testing.T) {
 
 	// 2. CHARINDEX
 	ci := EvalBuiltin("CHARINDEX", []storage.Value{
-		storage.StringValue("SQL"),
-		storage.StringValue("Hello SQLion"),
+		storage.StringValue("Lion"),
+		storage.StringValue("Hello LionSQL"),
 	})
 	if ci.IVal != 7 {
 		t.Errorf("CHARINDEX failed: expected 7, got %d", ci.IVal)
@@ -1079,7 +1079,7 @@ func TestBuiltin_AdvancedTSQLFunctions(t *testing.T) {
 	}
 
 	// 5. Metadata & Property Functions
-	if dbProp := EvalBuiltin("DATABASEPROPERTYEX", []storage.Value{storage.StringValue("SQLion"), storage.StringValue("Status")}); dbProp.SVal != "ONLINE" {
+	if dbProp := EvalBuiltin("DATABASEPROPERTYEX", []storage.Value{storage.StringValue("LionSQL"), storage.StringValue("Status")}); dbProp.SVal != "ONLINE" {
 		t.Errorf("DATABASEPROPERTYEX Status expected 'ONLINE', got %q", dbProp.SVal)
 	}
 	if objProp := EvalBuiltin("OBJECTPROPERTY", []storage.Value{storage.IntValue(1), storage.StringValue("IsTable")}); objProp.IVal != 1 {

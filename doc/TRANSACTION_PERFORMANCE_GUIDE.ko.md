@@ -169,4 +169,4 @@
    - OCC 또는 WiredTiger에서 동시 쓰기 경합이 발생하면 클라이언트에 `40001` 에러가 반환됩니다.
    - 애플리케이션 계층에서는 지수 백오프(Exponential Backoff)를 적용한 재시도(Retry) 로직을 갖추어야 합니다.
 3. **디스크 I/O 대기율 감지**:
-   - `GET /api/metrics`를 통해 `sqlion_wal_sync_duration_seconds` 히스토그램을 모니터링하여 물리 디스크 병목을 조기에 진단하십시오.
+   - `GET /api/metrics`를 통해 `lionsql_wal_sync_duration_seconds` 히스토그램을 모니터링하여 물리 디스크 병목을 조기에 진단하십시오.

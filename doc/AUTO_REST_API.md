@@ -328,11 +328,11 @@ print(created.json())
 When authentication is enabled (`-auth` flag):
 1. **API Key Authentication**: Pass key via header:
    ```http
-   X-API-Key: sqlion_key_abc123...
+   X-API-Key: lionsql_key_abc123...
    ```
    or
    ```http
-   Authorization: ApiKey sqlion_key_abc123...
+   Authorization: ApiKey lionsql_key_abc123...
    ```
 2. **Role Enforcement**:
    - `read_only`: Allowed on `GET /api/records/:table` and `GET /api/records/:table/:id`. Write methods (`POST`, `PATCH`, `PUT`, `DELETE`) return `403 Forbidden`.
@@ -367,7 +367,7 @@ LionSQL Web Studio (accessible at `http://127.0.0.1:8090/_/`) features a built-i
    - Auto-increment primary keys are omitted from insert payloads.
    - Fields are pre-populated with semantically realistic, type-matched dummy values (`INT`, `VARCHAR`, `DECIMAL`, `DATETIME`, `JSON`, `BOOLEAN`).
 2. **Multi-Language & SDK Support**:
-   - **LionSQL SDK (JS/TS)**: Generates native `import SQLion from './sdk/sqlion.js'` and `db.collection('table').getList() / getOne() / create() / query()` snippets.
+   - **LionSQL SDK (JS/TS)**: Generates native `import LionSQL from './sdk/lionsql.js'` and `db.collection('table').getList() / getOne() / create() / query()` snippets.
    - **cURL**: Shell commands with complete URL parameters, auth headers, and JSON payloads.
    - **JavaScript (Fetch)**: Standard browser/Node `fetch()` API calls with error handling.
    - **Python**: Python `requests` library snippets.

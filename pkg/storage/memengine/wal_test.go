@@ -11,7 +11,7 @@ import (
 )
 
 func TestMemEngine_WAL_CrashRecoveryWithoutGracefulClose(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_wal_crash_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_wal_crash_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestMemEngine_WAL_CrashRecoveryWithoutGracefulClose(t *testing.T) {
 }
 
 func TestMemEngine_WAL_AOFRewriteAndCompaction(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_aof_rewrite_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_aof_rewrite_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -234,7 +234,7 @@ func TestMemEngine_WAL_AOFRewriteAndCompaction(t *testing.T) {
 }
 
 func TestMemEngine_WAL_FsyncPolicies(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_fsync_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_fsync_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -277,7 +277,7 @@ func TestMemEngine_WAL_FsyncPolicies(t *testing.T) {
 }
 
 func TestMemEngine_SnapshotPersistence_MessagePack(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_mpk_snapshot_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_mpk_snapshot_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -337,7 +337,7 @@ func TestMemEngine_SnapshotPersistence_MessagePack(t *testing.T) {
 }
 
 func TestMemEngine_WAL_CompactBinaryTupleZeroCopy(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_wal_tuple_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_wal_tuple_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

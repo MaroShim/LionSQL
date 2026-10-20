@@ -41,7 +41,7 @@ type DispatcherConfig struct {
 	InitialBackoff time.Duration `json:"initial_backoff"` // Initial retry backoff (default 50ms)
 	MaxBackoff     time.Duration `json:"max_backoff"`     // Maximum retry backoff (default 2s)
 	TableFilter    string        `json:"table_filter"`    // Optional table filter (e.g. "outbox")
-	TopicPrefix    string        `json:"topic_prefix"`    // Prefix for auto-generated topics (default "sqlion.")
+	TopicPrefix    string        `json:"topic_prefix"`    // Prefix for auto-generated topics (default "lionsql.")
 	DedicatedTable bool          `json:"dedicated_table"` // If true, extracts payload/topic from dedicated outbox schema
 }
 
@@ -52,7 +52,7 @@ func DefaultDispatcherConfig() DispatcherConfig {
 		MaxRetries:     5,
 		InitialBackoff: 50 * time.Millisecond,
 		MaxBackoff:     2 * time.Second,
-		TopicPrefix:    "sqlion.",
+		TopicPrefix:    "lionsql.",
 	}
 }
 
@@ -111,7 +111,7 @@ func NewOutboxDispatcher(streamer *Streamer, cfg DispatcherConfig) *OutboxDispat
 		cfg.MaxBackoff = 2 * time.Second
 	}
 	if cfg.TopicPrefix == "" {
-		cfg.TopicPrefix = "sqlion."
+		cfg.TopicPrefix = "lionsql."
 	}
 
 	d := &OutboxDispatcher{
@@ -256,10 +256,10 @@ func (d *OutboxDispatcher) EventToMessage(ev ChangeEvent) (*OutboxMessage, error
 	}
 
 	headers := map[string]string{
-		"x-sqlion-table": ev.Table,
-		"x-sqlion-op":    string(ev.Op),
-		"x-sqlion-lsn":   strconv.FormatInt(ev.LSN, 10),
-		"x-sqlion-ts":    strconv.FormatInt(ev.Timestamp, 10),
+		"x-lionsql-table": ev.Table,
+		"x-lionsql-op":    string(ev.Op),
+		"x-lionsql-lsn":   strconv.FormatInt(ev.LSN, 10),
+		"x-lionsql-ts":    strconv.FormatInt(ev.Timestamp, 10),
 	}
 
 	return &OutboxMessage{
@@ -330,9 +330,9 @@ func (d *OutboxDispatcher) extractDedicatedOutboxMessage(ev ChangeEvent) (*Outbo
 		}
 	}
 
-	headers["x-sqlion-table"] = ev.Table
-	headers["x-sqlion-op"] = string(ev.Op)
-	headers["x-sqlion-lsn"] = strconv.FormatInt(ev.LSN, 10)
+	headers["x-lionsql-table"] = ev.Table
+	headers["x-lionsql-op"] = string(ev.Op)
+	headers["x-lionsql-lsn"] = strconv.FormatInt(ev.LSN, 10)
 
 	return &OutboxMessage{
 		ID:        id,

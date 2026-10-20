@@ -38,7 +38,7 @@
 | ID | Domain / Category | Scenarios | PASS | FAIL | Pass Rate | Key Architectural Capabilities & Observations |
 | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
 | **1** | **Health, Version & Redirection** | 3 | 3 | 0 | **100.0%** | Root path `GET /` cleanly redirects (302 Found) to Web Studio (`/_/`). `GET /api/health` accurately reports engine status (`In-Memory OCC` / `WiredTiger`) and unified version (`0.90.0`). `GET /api/pool/stats` exposes connection pool and worker state. |
-| **2** | **Web Studio & Client SDK** | 3 | 3 | 0 | **100.0%** | Embedded Web Studio dashboard HTML served with `text/html; charset=utf-8`. JavaScript client SDK (`/sdk/sqlion.js`) and TypeScript declarations (`/sdk/sqlion.d.ts`) statically distributed from kernel binary (`embed.FS`) with HTTP caching headers. |
+| **2** | **Web Studio & Client SDK** | 3 | 3 | 0 | **100.0%** | Embedded Web Studio dashboard HTML served with `text/html; charset=utf-8`. JavaScript client SDK (`/sdk/lionsql.js`) and TypeScript declarations (`/sdk/lionsql.d.ts`) statically distributed from kernel binary (`embed.FS`) with HTTP caching headers. |
 | **3** | **Authentication & RBAC Security** | 6 | 6 | 0 | **100.0%** | Protected endpoints strictly enforce 401 Unauthorized when unauthenticated. Superuser login (`admin@lionsql.local`) issues cryptographic JWT tokens. Invalid passwords rejected. Role profile introspection (`/api/auth/me`) verified. Admin-scoped API Keys created (`POST /api/keys`) and validated via `X-API-Key` headers. |
 | **4** | **Table Schema & Metadata DDL** | 4 | 4 | 0 | **100.0%** | Dynamic table schema creation (`POST /api/tables`) with primary keys and constraints. Catalog reflection (`GET /api/tables`). Column metadata inspection (`GET /api/tables/:name/schema`). Schema lifecycle validated via creation and subsequent dropping (`DELETE /api/tables/:name`). |
 | **5** | **Auto-Generated Records CRUD** | 7 | 7 | 0 | **100.0%** | Full CRUD cycle tested on `/api/records/:table`: Single and batch record creation (`POST`), collection listing (`GET`), single record retrieval by ID (`GET /:id`), atomic in-place updates (`PUT`), query string dynamic filtering (`?filter=balance>1000`), and deterministic deletion (`DELETE /:id`). |
@@ -58,8 +58,8 @@
 
 ### 3.2 Web Studio & Client SDK
 - **TC-HTTP-04 [PASS]**: `GET /_/` -> HTTP 200 OK, `Content-Type: text/html; charset=utf-8`, UI bundle contains "LionSQL"
-- **TC-HTTP-05 [PASS]**: `GET /sdk/sqlion.js` -> HTTP 200 OK, `Content-Type: application/javascript; charset=utf-8`, contains `class SQLion`
-- **TC-HTTP-06 [PASS]**: `GET /sdk/sqlion.d.ts` -> HTTP 200 OK, `Content-Type: text/typescript; charset=utf-8`
+- **TC-HTTP-05 [PASS]**: `GET /sdk/lionsql.js` -> HTTP 200 OK, `Content-Type: application/javascript; charset=utf-8`, contains `class LionSQL`
+- **TC-HTTP-06 [PASS]**: `GET /sdk/lionsql.d.ts` -> HTTP 200 OK, `Content-Type: text/typescript; charset=utf-8`
 
 ### 3.3 Authentication & RBAC Security
 - **TC-HTTP-07 [PASS]**: `GET /api/tables` (Unauthenticated) -> HTTP 401 Unauthorized

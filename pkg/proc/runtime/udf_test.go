@@ -184,13 +184,13 @@ END
 	executor := runtime.NewExecutor(cache)
 
 	res, err := executor.Run(fnProg, fnStmt.Name, map[string]any{
-		"Code": "  sqlion_pro_engine  ",
+		"Code": "  lionsql_pro_engine  ",
 	}, session)
 	if err != nil {
 		t.Fatalf("Run UDF failed: %v", err)
 	}
 
-	if val, ok := res.ReturnValue.(string); !ok || val != "SQLION_PRO_ENGINE" {
-		t.Fatalf("expected 'SQLION_PRO_ENGINE', got %v (%T)", res.ReturnValue, res.ReturnValue)
+	if val, ok := res.ReturnValue.(string); !ok || val != "LIONSQL_PRO_ENGINE" {
+		t.Fatalf("expected 'LIONSQL_PRO_ENGINE', got %v (%T)", res.ReturnValue, res.ReturnValue)
 	}
 }

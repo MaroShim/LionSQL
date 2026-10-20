@@ -187,7 +187,7 @@ func (d *Doctor) checkStorageEngines() {
 	cat := "4. Storage Engines Integrity"
 
 	// 4.1 In-Memory OCC Engine
-	memTmp, err := os.MkdirTemp("", "sqlion_doctor_mem_*")
+	memTmp, err := os.MkdirTemp("", "lionsql_doctor_mem_*")
 	if err != nil {
 		d.addResult(cat, "In-Memory OCC Engine", "Failed creating temp dir", "FAIL", err)
 	} else {
@@ -233,7 +233,7 @@ func (d *Doctor) checkStorageEngines() {
 	}
 
 	// 4.2 WiredTiger Storage Engine
-	wtTmp, err := os.MkdirTemp("", "sqlion_doctor_wt_*")
+	wtTmp, err := os.MkdirTemp("", "lionsql_doctor_wt_*")
 	if err != nil {
 		d.addResult(cat, "WiredTiger B+Tree Engine", "Failed creating temp dir", "FAIL", err)
 		return

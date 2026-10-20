@@ -95,7 +95,7 @@ func TestSortIterator_InMemoryFastPath(t *testing.T) {
 }
 
 func TestSortIterator_ExternalMergeSortSpill(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion-spill-test-*")
+	tempDir, err := os.MkdirTemp("", "lionsql-spill-test-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestSortIterator_ExternalMergeSortSpill(t *testing.T) {
 		t.Fatalf("Close failed: %v", err)
 	}
 
-	files, err := filepath.Glob(filepath.Join(tempDir, "sqlion-sort-run-*.tmp"))
+	files, err := filepath.Glob(filepath.Join(tempDir, "lionsql-sort-run-*.tmp"))
 	if err != nil {
 		t.Fatalf("Glob error: %v", err)
 	}
@@ -182,7 +182,7 @@ func TestSortIterator_ExternalMergeSortSpill(t *testing.T) {
 }
 
 func TestSortIterator_DescendingSortSpill(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion-spill-desc-*")
+	tempDir, err := os.MkdirTemp("", "lionsql-spill-desc-*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

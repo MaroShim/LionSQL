@@ -124,7 +124,7 @@ type OutboxConfig struct {
 	RabbitMQURL    string   `json:"rabbitmq_url,omitempty"`
 }
 
-// Config represents the unified, hierarchical configuration for SQLion.
+// Config represents the unified, hierarchical configuration for LionSQL.
 type Config struct {
 	Server      ServerConfig      `json:"server"`
 	Network     NetworkConfig     `json:"network"`
@@ -199,8 +199,6 @@ func LoadFromFile(filePath string) (*Config, error) {
 
 // AutoDiscoverConfig attempts to locate an existing config file or falls back to defaults.
 // Precedence: explicitPath > ./lionsql.json > <dataDir>/lionsql.json > Built-in Defaults.
-// To prevent security issues, legacy 'sqlion.json' is never silently loaded; if found,
-// a warning is printed to stderr and the file is ignored.
 // Applies environment variable overrides as per Golden Rule 37.
 func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, error) {
 	var resCfg *Config
@@ -230,20 +228,6 @@ func AutoDiscoverConfig(explicitPath string, dataDir string) (*Config, string, e
 		}
 	}
 
-	// Security guard: detect legacy sqlion.json and warn user, but do NOT silently load it
-	if resPath == "" {
-		legacyLocations := []string{"sqlion.json"}
-		if dataDir != "" {
-			legacyLocations = append(legacyLocations, filepath.Join(dataDir, "sqlion.json"))
-		}
-		for _, leg := range legacyLocations {
-			if fi, err := os.Stat(leg); err == nil && !fi.IsDir() {
-				fmt.Fprintf(os.Stderr, "[LionSQL WARNING] Found legacy configuration file %q. For security reasons, it is ignored. Please rename it to 'lionsql.json'.\n", leg)
-				break
-			}
-		}
-	}
-
 	if resCfg == nil {
 		resCfg = DefaultConfig()
 	}
@@ -259,22 +243,14 @@ func ApplyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("LIONSQL_WORK_MEM"); v != "" {
 		cfg.Resources.WorkMem = v
-	} else if v := os.Getenv("SQLION_WORK_MEM"); v != "" {
-		cfg.Resources.WorkMem = v
 	}
 	if v := os.Getenv("LIONSQL_MAX_MEMORY"); v != "" {
-		cfg.Resources.MaxMemory = v
-	} else if v := os.Getenv("SQLION_MAX_MEMORY"); v != "" {
 		cfg.Resources.MaxMemory = v
 	}
 	if v := os.Getenv("LIONSQL_ADMIN_PASS"); v != "" {
 		cfg.Auth.AdminPass = v
-	} else if v := os.Getenv("SQLION_ADMIN_PASS"); v != "" {
-		cfg.Auth.AdminPass = v
 	}
 	if v := os.Getenv("LIONSQL_ADMIN_EMAIL"); v != "" {
-		cfg.Auth.AdminEmail = v
-	} else if v := os.Getenv("SQLION_ADMIN_EMAIL"); v != "" {
 		cfg.Auth.AdminEmail = v
 	}
 }

@@ -338,7 +338,7 @@ LionSQL 서버를 운영체제 백그라운드 데몬 프로세스로 분기(For
   LionSQL Server Status: RUNNING
   ----------------------------------------
   PID               : 99777
-  Data Directory    : /Users/maro/Projects/SQLion/data
+  Data Directory    : /Users/maro/Projects/LionSQL/data
   Storage Backend   : wiredtiger (Disk B+Tree MVCC)
   HTTP / Studio     : 127.0.0.1:8090 (HEALTHY)
   PostgreSQL v3     : 127.0.0.1:5433 (LISTENING)
@@ -1404,18 +1404,18 @@ Prometheus 표준 텍스트 포맷으로 QPS, 메모리 힙, 연결 수, 트랜�
 * **응답 헤더**: `Content-Type: text/plain; version=0.0.4`
 * **출력 예시**:
   ```text
-  # HELP sqlion_qps_current Current queries per second.
-  # TYPE sqlion_qps_current gauge
-  sqlion_qps_current 14250.00
-  # HELP sqlion_active_connections Number of active client connections.
-  # TYPE sqlion_active_connections gauge
-  sqlion_active_connections 18
-  # HELP sqlion_heap_bytes Current Go runtime heap alloc bytes.
-  # TYPE sqlion_heap_bytes gauge
-  sqlion_heap_bytes 149422080
-  # HELP sqlion_transactions_committed_total Total committed ACID transactions.
-  # TYPE sqlion_transactions_committed_total counter
-  sqlion_transactions_committed_total 850420
+  # HELP lionsql_qps_current Current queries per second.
+  # TYPE lionsql_qps_current gauge
+  lionsql_qps_current 14250.00
+  # HELP lionsql_active_connections Number of active client connections.
+  # TYPE lionsql_active_connections gauge
+  lionsql_active_connections 18
+  # HELP lionsql_heap_bytes Current Go runtime heap alloc bytes.
+  # TYPE lionsql_heap_bytes gauge
+  lionsql_heap_bytes 149422080
+  # HELP lionsql_transactions_committed_total Total committed ACID transactions.
+  # TYPE lionsql_transactions_committed_total counter
+  lionsql_transactions_committed_total 850420
   ```
 
 #### 4. `GET /api/realtime` (Server-Sent Events 실시간 스트림)
@@ -1734,7 +1734,7 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
 * [`CRON_AND_MAILER.md`](file:///Users/maro/Projects/LionSQL/doc/CRON_AND_MAILER.md)
   * **임베디드 크론 스케줄러 및 트랜잭션 메일러**: 표준 5필드 크론 표현식을 통한 SQL/T-SQL 정기 배치 자동화와 링 버퍼 감사 로그를 갖춘 내장 트랜잭션 HTML SMTP 메일 발송기.
 * [`WEB_SDK.md`](file:///Users/maro/Projects/LionSQL/doc/WEB_SDK.md)
-  * **범용 웹 SDK 및 프론트엔드 연동 가이드**: 브라우저 임베디드 단일 파일 라이브러리(`sqlion.js`, `sqlion.d.ts`), 바닐라 JS, Server-Sent Events(SSE) 실시간 동기화, HTMX 연동 레시피.
+  * **범용 웹 SDK 및 프론트엔드 연동 가이드**: 브라우저 임베디드 단일 파일 라이브러리(`lionsql.js`, `lionsql.d.ts`), 바닐라 JS, Server-Sent Events(SSE) 실시간 동기화, HTMX 연동 레시피.
 * [`API_REFERENCE.md`](file:///Users/maro/Projects/LionSQL/doc/API_REFERENCE.md)
   * **HTTP REST & SSE API 사양서**: 시스템 헬스, 메트릭, 인증(JWT), 테이블 CRUD, 저장 프로시저 원격 호출, 백업/복원, 복제 스트리밍 엔드포인트 상세.
 

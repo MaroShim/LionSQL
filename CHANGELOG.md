@@ -73,7 +73,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **1.0 Pre-Release Architecture Review Report (`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`)**: Documented comprehensive technical feedback and 5-point action plan covering brand consolidation, escape vulnerability fixes, query execution paths, and production security guards before 1.0 LTS release.
 
 ### Changed
-- **Brand Unification & Clean SDK Standard (`BRAND-UNIFY-1`) (`pkg/api`, `pkg/ui`, `pkg/wire`, `pkg/proc`, `cmd/tpcc`, `cmd/lionsql`)**: Standardized all remaining branding to LionSQL across JavaScript/TypeScript Web SDK (`lionsql.js`, `lionsql.d.ts`, `class LionSQL`), webhook & CDC outbox HTTP headers (`X-LionSQL-Signature`, `X-LionSQL-Event`, `X-LionSQL-Delivery`), wire protocol server version and banners (PostgreSQL v3 `15.0 (LionSQL)`, TDS 7.x/8.0 `LionSQL Engine`, `@@SERVERNAME: LIONSQL`), and diagnostic probe files. Cleanly eliminated legacy `sqlion` aliases per 1.0 production specification.
+- **Brand Unification & Clean SDK Standard (`BRAND-UNIFY-1`) (`pkg/api`, `pkg/ui`, `pkg/wire`, `pkg/proc`, `cmd/tpcc`, `cmd/lionsql`)**: Standardized all remaining branding to LionSQL across JavaScript/TypeScript Web SDK (`lionsql.js`, `lionsql.d.ts`, `class LionSQL`), webhook & CDC outbox HTTP headers (`X-LionSQL-Signature`, `X-LionSQL-Event`, `X-LionSQL-Delivery`), wire protocol server version and banners (PostgreSQL v3 `15.0 (LionSQL)`, TDS 7.x/8.0 `LionSQL Engine`, `@@SERVERNAME: LIONSQL`), and diagnostic probe files. Cleanly eliminated legacy `lionsql` aliases per 1.0 production specification.
 
 ## [0.90.0]
 
@@ -94,17 +94,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Web Studio Management UI/UX Modernization & Developer API Preview (`UI-1` ~ `UI-10`) (`pkg/ui/dashboard.html`, `pkg/ui/embed.go`, `pkg/ui/embed_test.go`, `pkg/api/server.go`, `pkg/api/handlers_records.go`)**:
   - Replaced all 13 legacy blocking browser `alert()` popups with a modern, non-intrusive Toast notification component (`showToast`) featuring emerald success, rose error, and slide-in/fade-out animations (`UI-1`).
   - Added responsive layout support (`@media (max-width: 900px)`) with mobile sticky navigation bar and drawer hamburger toggle (`toggleSidebar`), ensuring clean readability and horizontal scrolling on laptops and split-screen windows (`UI-2`).
-  - Fully eliminated legacy brand references (`SQLion` ➔ `LionSQL`, `X-LionSQL-Signature`, `lionsql serve` CLI commands) and standardized administrative account on `admin@lionsql.local` (`UI-3`).
+  - Fully eliminated legacy brand references (`LionSQL`, `X-LionSQL-Signature`, `lionsql serve` CLI commands) and standardized administrative account on `admin@lionsql.local` (`UI-3`).
   - Added real-time instant search filter (`#sidebar-quick-search` / `onSidebarQuickSearch`) in the sidebar for immediate filtering across large table and stored procedure catalogs (`UI-4`).
   - Added password visibility eye toggle button (`togglePasswordVisibility`) with clean inline SVG icons to login modal and SMTP settings for effortless typo inspection (`UI-5`).
   - Implemented interactive Drop Table safety confirmation modal (`#drop-table-modal` / `dropCurrentTable` / `executeDropTable`) requiring the user to type the exact table name before activating the destructive action button, preventing accidental data loss in production (`UI-6`).
   - Hardened sample data seeding (`POST /api/seed` / `seedSampleData()`) with strict empty database validation: rejects seeding with `409 Conflict` and descriptive error toast when user tables already exist, executes atomic ACID transaction seeding on empty databases with success toast, and automatically selects and navigates to the first seeded table (`accounts`) (`UI-7`).
   - Upgraded Developer API Preview modal (`#api-preview-modal` / `openAPIPreviewModal`) with PocketBase-grade dynamic schema awareness: automatically analyzes currently selected table columns (`getDummyRecordForTable`) to exclude auto-increment PKs and generate realistic dummy payloads typed according to column definitions (INT, VARCHAR, DECIMAL, DATETIME, JSON, BOOL) and semantic column names (`UI-8`).
-  - Added first-class LionSQL Official SDK tab (`#api-lang-sdk` / `sqlion.js`) to the Developer API Preview modal, providing instant copy-paste ready code snippets for `import SQLion`, `db.collection('...').getList()`, `.getOne()`, `.create()`, and `db.query()` alongside cURL, Fetch API, Python, and Go (`UI-9`).
+  - Added first-class LionSQL Official SDK tab (`#api-lang-sdk` / `lionsql.js`) to the Developer API Preview modal, providing instant copy-paste ready code snippets for `import LionSQL`, `db.collection('...').getList()`, `.getOne()`, `.create()`, and `db.query()` alongside cURL, Fetch API, Python, and Go (`UI-9`).
   - Added Light / Dark mode theme switcher (`html[data-theme="light"]`, `#theme-toggle-btn`, `toggleTheme()`) with `localStorage` persistence and inline FOUC prevention script, resolved primary key (`id`) yellow text washout by transitioning to high-contrast deep amber (`.cell-pk-val`), refreshed column tags and table hover contrast, and enforced strict `Cache-Control: no-cache, no-store, must-revalidate` headers on `GET /_/` to permanently prevent stale browser caching across daemon updates (`UI-10`).
 - **HTTP REST & Web Management Port 8090 Functional Verification Suite (`HTTP-TEST-1`) (`pkg/api`, `doc/HTTP_API_FUNCTIONALITY_REPORT.md`)**:
   - Implemented end-to-end integration test suite (`pkg/api/http_port_integration_test.go`) over live TCP socket listeners covering 37 comprehensive scenarios across all 8 core domains.
-  - Verified 100% operational pass rate across: System Health/Version SSOT (`GET /api/health`), Web Studio Dashboard UI (`GET /_/`), Static Client SDK Distribution (`GET /sdk/sqlion.js`, `GET /sdk/sqlion.d.ts`), Authentication & API Key RBAC (`/api/auth/*`, `/api/keys`), Declarative Table Schema DDL (`/api/tables/*`), Auto-Generated RESTful Records CRUD & Filtering (`/api/records/*`), SQL Query & T-SQL Stored Procedure Execution (`/api/sql`, `/api/procs/*`), Transactional CDC & Realtime Streaming (`/api/cdc/stream`, `/api/realtime`), Prometheus & OpenTelemetry Metrics (`/metrics`, `/v1/metrics`), and High-Concurrency Multiplexed Traffic (20 parallel workers, 200 concurrent requests, 0 data races).
+  - Verified 100% operational pass rate across: System Health/Version SSOT (`GET /api/health`), Web Studio Dashboard UI (`GET /_/`), Static Client SDK Distribution (`GET /sdk/lionsql.js`, `GET /sdk/lionsql.d.ts`), Authentication & API Key RBAC (`/api/auth/*`, `/api/keys`), Declarative Table Schema DDL (`/api/tables/*`), Auto-Generated RESTful Records CRUD & Filtering (`/api/records/*`), SQL Query & T-SQL Stored Procedure Execution (`/api/sql`, `/api/procs/*`), Transactional CDC & Realtime Streaming (`/api/cdc/stream`, `/api/realtime`), Prometheus & OpenTelemetry Metrics (`/metrics`, `/v1/metrics`), and High-Concurrency Multiplexed Traffic (20 parallel workers, 200 concurrent requests, 0 data races).
   - Authored official comprehensive verification report in `doc/HTTP_API_FUNCTIONALITY_REPORT.md`, achieving complete tripartite port parity alongside PostgreSQL Wire (`:5433`) and TDS MSSQL (`:1433`).
 - **Global Memory Governor & Query Circuit Breaker (`MEM-1`) (`pkg/config`, `pkg/execution`, `cmd/server`)**:
   - Implemented dynamic global memory budget management allocating up to 70% of physical RAM (`max_memory`, auto-detected via OS primitives) and per-query operational memory bounds (`work_mem: 64MB`).
@@ -119,7 +119,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Fixed
 - **Virtual Catalog Database Standardization (`CATALOG-CLEANUP`) (`pkg/catalog/virtual`, `pkg/engine`)**:
-  - Removed legacy `sqlion` database across virtual catalog and SQL engine to strictly standardize on protocol canonical catalogs: `postgres` (OID: 1) for PGWire and `master` (database_id: 1) for TDS.
+  - Removed legacy database namespaces across virtual catalog and SQL engine to strictly standardize on protocol canonical catalogs: `postgres` (OID: 1) for PGWire and `master` (database_id: 1) for TDS.
   - Aligned database listing metadata (`pg_database`, `INFORMATION_SCHEMA.SCHEMATA`, `sys.databases`) to present only official protocol databases in third-party database GUI clients (Beekeeper Studio, DBeaver, Navicat).
 - **Long-Lived SSE Stream Timeout & Latency Profiling Immunity (`SSE-STREAM-1`) (`cmd/lionsql`, `pkg/api`)**:
   - Replaced global HTTP `WriteTimeout: 15s` with `ReadHeaderTimeout: 15s` and `IdleTimeout: 60s`, preventing forced SSE disconnections.
@@ -151,11 +151,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - **Branding & Global Security Defaults (`UNIFY-CLI`) (`pkg/config`, `pkg/api`, `pkg/engine`, `pkg/ui`)**:
-  - Standardized all superuser accounts, documentation, and UI templates on `admin@lionsql.local` (replacing `admin@sqlion.local`).
+  - Standardized all superuser accounts, documentation, and UI templates on `admin@lionsql.local` (standardized on `admin@lionsql.local`).
   - Strengthened default REST authentication policy to `auth.enabled: true` (Secure by Default).
   - Increased slow query recording threshold default from `50.0ms` to `100.0ms` (`cfg.Logging.SlowQuery.ThresholdMS`).
   - Standardized configuration file discovery strictly on `lionsql.json` and PID files on `lionsql.pid` / `lionsql.log`.
-  - Implemented strict legacy configuration rejection: detection of `sqlion.json` emits a warning and is ignored without silent fallback to prevent configuration hijacking.
+  - Implemented strict legacy configuration rejection: detection of `lionsql.json` emits a warning and is ignored without silent fallback to prevent configuration hijacking.
 
 ### Fixed
 - **Multi-Table Relational JOIN Column Resolution & LazyTuple Decoding (`PG-COMPAT-3` / `PG-ORM-9`) (`pkg/execution`, `pkg/wire`)**:
@@ -253,7 +253,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Supported canonical PostgreSQL format for both Text (`(actual time=%.3f..%.3f rows=%d loops=%d)`) and JSON (`Actual Startup Time`, `Actual Total Time`, `Actual Rows`, `Actual Loops`).
   - Added unit and regression tests in `pkg/execution/instrument_test.go`, `pkg/planner/planner_test.go`, and `pkg/api/sqlexec_test.go`.
 - **Prometheus Extended Observability & OpenTelemetry OTLP JSON Exposition (`OBS-1`) (`pkg/engine`, `pkg/api`)**:
-  - Enhanced Prometheus text exposition (`GET /metrics`) with storage engine backend (`sqlion_storage_info{engine="..."}`), replication cluster status (`sqlion_replication_role{role="..."}`, `sqlion_replication_lag_bytes`, `sqlion_replication_current_lsn`), transaction conflict counters (`sqlion_transactions_total{type="conflict"}`), and configured global memory limits (`sqlion_memory_limit_bytes`).
+  - Enhanced Prometheus text exposition (`GET /metrics`) with storage engine backend (`lionsql_storage_info{engine="..."}`), replication cluster status (`lionsql_replication_role{role="..."}`, `lionsql_replication_lag_bytes`, `lionsql_replication_current_lsn`), transaction conflict counters (`lionsql_transactions_total{type="conflict"}`), and configured global memory limits (`lionsql_memory_limit_bytes`).
   - Implemented OpenTelemetry OTLP standard JSON endpoints (`GET /v1/metrics`, `GET /api/v1/metrics`) with service and resource attributes (`service.name="lionsql"`, `storage.engine`, `replication.role`) and cumulative/gauge scope metrics.
   - Added comprehensive test suites in `pkg/api/metrics_test.go` verifying OTLP JSON structure, write-write transaction conflict counting, and extended Prometheus metric exposition.
 - **In-Memory OCC Engine Storage Capacity Limit Guard (`MEM-3`) (`pkg/storage/memengine`, `cmd/server`)**:
@@ -433,7 +433,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
     - Removed `pkg/api/oauth.go`, `pkg/api/handlers_oauth.go`, and `pkg/api/oauth_test.go`.
     - Removed `s.oauth`, `NewOAuthManager`, `OAuth()`, `SetOAuthConfig()`, and routes `/api/auth/oauth2/*`, `/api/settings/oauth2` from `pkg/api/server.go`.
     - Removed `ProvisionOAuthUser`, `GetUserByOAuth`, and OAuth fields from `pkg/auth/auth.go`.
-    - Removed OAuth configuration structs and environment variable bindings (`SQLION_OAUTH_*`) from `pkg/config/config.go`.
+    - Removed OAuth configuration structs and environment variable bindings (`LIONSQL_OAUTH_*`) from `pkg/config/config.go`.
     - Removed OAuth provider login buttons and message event listeners from Web Dashboard modal (`pkg/ui/dashboard.html`).
   - Recorded architectural invariant in `GEMINI.md`, `GEMINI.ko.md` (Section 8.6), and `notes/ENGINEERING_CONTEXT.md` (Section 1.12): enterprise SSO and third-party identity federation are delegated to standard perimeter reverse proxies (Keycloak, OAuth2-Proxy, Nginx) while keeping the database kernel self-contained and attack-surface minimal.
 
@@ -505,7 +505,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 - **Transactional Outbox Broker Dispatcher & Lossless Event Streaming (`pkg/cdc`, `pkg/config`, `pkg/api`, `cmd/server`)**:
   - Implemented `OutboxDispatcher` (`pkg/cdc/outbox.go`) subscribing to transaction-committed CDC event streams and reliably dispatching messages to external message brokers.
-  - Implemented normalized `OutboxMessage` formatting supporting both general CDC table mutation streaming (topic prefix `sqlion.<table_name>`) and dedicated outbox tables (`outbox` / `_outbox`) extracting `topic`, `payload`, `key`, and `headers`.
+  - Implemented normalized `OutboxMessage` formatting supporting both general CDC table mutation streaming (topic prefix `lionsql.<table_name>`) and dedicated outbox tables (`outbox` / `_outbox`) extracting `topic`, `payload`, `key`, and `headers`.
   - Added at-least-once delivery guarantees with atomic checkpoint persistence (`outbox_checkpoint.json`, Golden Rules 1 & 5) tracking `last_ack_lsn` and resuming from last acknowledged LSN upon server restarts.
   - Implemented exponential backoff retry loop (`MaxRetries`, `InitialBackoff`, `MaxBackoff`) and cooperative cancellation.
   - Built-in pluggable message broker sinks (`pkg/cdc/outbox_sinks.go`):
@@ -524,7 +524,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added comprehensive test suites in `pkg/engine/sqlexec_cursor_test.go` (`TestServerSideCursor_DeclareFetchMoveClose`, `TestServerSideCursor_TransactionHoldAndRollback`) and `pkg/wire/server_test.go` (`TestPGWire_ServerSideSQLCursor`, `TestPGWire_ExtendedQueryPortalBatching`).
 - **Tolerant Virtual No-Op `USE <database>` Statement & Dynamic Session Database Synchronization (`pkg/engine`, `pkg/wire/tds`, `pkg/proc/runtime`)**:
   - Implemented tolerant virtual no-op acceptance for `USE <database>` statements (`USE master`, `USE [SalesDB]`, `USE "Analytics_DB"`, etc.) without syntax errors or multi-database catalog multiplexing overhead, preserving Instance-Level Isolation (Process per Database).
-  - Added session database context tracking in `ClientSession.Database` and `ClientSession.Vars["current_database"]` / `["db_name"]`. Standard sessions default to `"sqlion"`, while TDS sessions default to `"master"`.
+  - Added session database context tracking in `ClientSession.Database` and `ClientSession.Vars["current_database"]` / `["db_name"]`. Standard sessions default to `"postgres"`, while TDS sessions default to `"master"`.
   - Seamlessly synchronized scalar functions `DB_NAME()`, `CURRENT_DATABASE()`, `DB_ID()`, and `ORIGINAL_DB_NAME()` across table-less scalar SQL executions, VDBE virtual machine procedure runs (`OpCallBuiltin`), and `ClientSession` state.
   - Implemented official TDS `TokenEnvChange (0xE3)` (`EnvChangeDatabase`) token emission upon executing `USE <database>` over TDS connections, fully satisfying SSMS, DBeaver, and legacy MSSQL migration script requirements.
   - Added regression test suites in `pkg/engine/coordinator_test.go` (`TestTolerantUseDatabase`) and `pkg/wire/tds/server_test.go` (`TestTDS_TolerantUseDatabase`).
@@ -551,7 +551,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented standard OAuth2 authorization and token exchange for Google and GitHub identity providers with zero external dependencies (`pkg/api/oauth.go`, `handlers_oauth.go`).
   - Added REST endpoints: `GET /api/auth/oauth2/providers` (list active providers), `GET /api/auth/oauth2/url` (generate auth redirect URL with CSRF state), `POST /api/auth/oauth2/callback` (SPA / REST client exchange), and `GET /api/auth/oauth2/callback` (browser popup redirect with localStorage synchronization and `postMessage` event dispatching).
   - Implemented automatic superuser provisioning and account linking in `AuthService` (`ProvisionOAuthUser`): automatically provisions new accounts or links existing users by email or provider UID, issuing valid signed HS256 JWT tokens.
-  - Added configuration support via `sqlion.json`, environment variables (`SQLION_OAUTH_GOOGLE_*`, `SQLION_OAUTH_GITHUB_*`), and administrative runtime management endpoints (`GET /api/settings/oauth2`, `PUT /api/settings/oauth2`) with automatic secret masking (`••••••••`).
+  - Added configuration support via `lionsql.json`, environment variables (`LIONSQL_OAUTH_GOOGLE_*`, `LIONSQL_OAUTH_GITHUB_*`), and administrative runtime management endpoints (`GET /api/settings/oauth2`, `PUT /api/settings/oauth2`) with automatic secret masking (`••••••••`).
   - Enhanced embedded Web Studio (`pkg/ui/dashboard.html`) login modal with Google and GitHub social login buttons and popup completion handlers.
   - Added comprehensive hermetic unit tests with mock OAuth2 servers in `pkg/api/oauth_test.go` and `pkg/auth/auth_test.go`.
 - **Replica Node Zero-Allocation Read-Only Transaction Fast-Path (`pkg/engine`, `pkg/storage/memengine`)**:
@@ -700,7 +700,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Implemented ultra-fast SQL template recognition and 64-bit FNV-1a fingerprint hashing in `pkg/engine/pk_bypass.go`.
   - Added zero-overhead bypass path routing simple single-PK point lookups (`SELECT ... FROM tbl WHERE id = ?`) directly to storage engine index lookup (`tx.Get`), bypassing regular Pratt parser, AST allocations, CBO planner, and VDBE bytecode compilation.
   - Added bounded plan cache `pkBypassCache` capped at 2,048 entries with automatic schema version tracking and invalidation on DDL mutations (`InvalidatePKBypassCache`).
-  - Added Prometheus metric `sqlion_pk_bypass_hits_total` to track bypass execution hits.
+  - Added Prometheus metric `lionsql_pk_bypass_hits_total` to track bypass execution hits.
   - Comprehensive support for composite qualifiers (`[db]..[tbl]`), implicit and explicit table aliases, bracketed/quoted identifiers, reverse operands (`WHERE 1 = id`), and `LIMIT 1` / `TOP 1` clauses.
   - Added comprehensive test suite `pkg/engine/pk_bypass_test.go` verifying integer PK, string PK, transaction isolation, non-PK fallback, complex query fallback, and DDL cache invalidation.
 - **Sort-Merge Join (SMJ) Operator & CBO Cost Model (`B-3`) (`pkg/execution`, `pkg/planner`, `pkg/engine`)**:
@@ -757,7 +757,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Migrated the entire SQL execution orchestration subsystem (13 `sqlexec_*.go` files, ~14,150 lines) from `pkg/api` to `pkg/engine`: `sqlexec.go`, `sqlexec_auth.go`, `sqlexec_dbcc.go`, `sqlexec_ddl.go`, `sqlexec_dml.go`, `sqlexec_eval.go`, `sqlexec_explain.go`, `sqlexec_merge.go`, `sqlexec_pgcatalog.go`, `sqlexec_pivot.go`, `sqlexec_prepare.go`, `sqlexec_procs.go`, and `sqlexec_select.go`.
   - Converted execution receivers to `(s *Coordinator)` and deleted transitional `exec_stub.go`.
   - Added `ConvertValue` helper in `pkg/engine/query_utils.go` and deduplicated conversion logic across `handlers_procs.go` and `sqlexec_select.go`.
-  - Completely eliminated `sqlion/pkg/api` imports from `pkg/wire/server.go` and `pkg/wire/tds/server.go`, establishing a strict unidirectional dependency graph (`wire` -> `engine`, `api` -> `engine`).
+  - Completely eliminated `lionsql/pkg/api` imports from `pkg/wire/server.go` and `pkg/wire/tds/server.go`, establishing a strict unidirectional dependency graph (`wire` -> `engine`, `api` -> `engine`).
   - Added `pkg/engine/coordinator_test.go` verifying standalone DDL, DML, DQL, transaction commit/rollback, and cancellation with zero HTTP dependencies.
   - `engine.Coordinator` now solely owns sessions, session pool, metrics, slow/general query loggers, work_mem, and global temp table tracking; `api.Server` delegates to it and maintains 100% backward compatibility for HTTP/studio endpoints and tests.
 
@@ -1046,7 +1046,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 - **1-Writer Multi-Reader WAL Replication & High-Availability Server Integration (`cmd/server`, `pkg/replication`, `pkg/api`, `pkg/config`)**:
   - Integrated the availability group replication manager into the LionSQL standalone server, supporting 1-writer primary nodes and multi-reader secondary replicas.
-  - Added CLI flags `--replica-of <primary_url>` and `--node-id <id>` with corresponding configuration hierarchy mappings in `sqlion.json`.
+  - Added CLI flags `--replica-of <primary_url>` and `--node-id <id>` with corresponding configuration hierarchy mappings in `lionsql.json`.
   - Exposed HTTP endpoints `/api/replication/stream`, `/api/replication/status`, `/api/replication/ack`, `/api/replication/promote`, and `/api/replication/demote`.
   - Enforced strict read-only invariants across all wire protocols and REST endpoints for secondary replicas (`IsReadOnly()` write rejection with `ErrReadOnlyReplica`), guarding DDL (`CREATE/ALTER/DROP/TRUNCATE`), DML (`INSERT/UPDATE/DELETE/MERGE`), and interactive `BEGIN TRANSACTION READ WRITE`.
   - Implemented seamless failover promotion (`Promote()`), instantly transitioning a replica into an active primary node capable of accepting writes.
@@ -1386,8 +1386,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Added
 - **Prometheus `/metrics` Observability & Plan Cache Statistics (`pkg/api`, `pkg/proc`)**:
-  - Enhanced Prometheus `/metrics` endpoint with runtime Go metrics: `sqlion_memory_alloc_bytes`, `sqlion_memory_sys_bytes`, `sqlion_memory_heap_alloc_bytes`, and `sqlion_goroutines`.
-  - Added atomic execution plan cache hit/miss tracking (`sqlion_plan_cache_hits_total`, `sqlion_plan_cache_misses_total`) in `PlanCache` (`pkg/proc/cache.go`).
+  - Enhanced Prometheus `/metrics` endpoint with runtime Go metrics: `lionsql_memory_alloc_bytes`, `lionsql_memory_sys_bytes`, `lionsql_memory_heap_alloc_bytes`, and `lionsql_goroutines`.
+  - Added atomic execution plan cache hit/miss tracking (`lionsql_plan_cache_hits_total`, `lionsql_plan_cache_misses_total`) in `PlanCache` (`pkg/proc/cache.go`).
   - Added test coverage in `pkg/api/metrics_test.go` verifying the exposition of all system and plan cache metrics.
 - **Transaction Savepoints & Partial Rollback (`pkg/storage`, `pkg/api`)**:
   - Implemented multi-transaction savepoint support via `SAVE TRANSACTION <name>`, `SAVE TRAN <name>`, and `SAVEPOINT <name>`.
@@ -1429,9 +1429,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - **Unified JSON Configuration & Deterministic Precedence Hierarchy (`pkg/config`, `cmd/server`)**:
   - Implemented `pkg/config` defining structured, hierarchical configuration schema (`Server`, `Network`, `Auth`, `Resources`, `Logging`) with production-ready zero-config defaults (`DefaultConfig()`).
   - Added atomic config persistence via swap files and atomic rename (`WriteToFileAtomic`) complying with Rule 1 and Rule 89.
-  - Implemented auto-discovery mechanism (`AutoDiscoverConfig`): explicit path > `./sqlion.json` > `<dir>/sqlion.json` > Built-in Defaults (Rule 82, 87).
+  - Implemented auto-discovery mechanism (`AutoDiscoverConfig`): explicit path > `./lionsql.json` > `<dir>/lionsql.json` > Built-in Defaults (Rule 82, 87).
   - Enforced deterministic configuration precedence hierarchy (`flag.Visit`): CLI Arguments > JSON Config File > Built-in Defaults (Rule 88).
-  - Added CLI flags `--config <path>` to specify custom config files and `--init-config [path]` to generate formatted `sqlion.json` template.
+  - Added CLI flags `--config <path>` to specify custom config files and `--init-config [path]` to generate formatted `lionsql.json` template.
   - Added comprehensive unit tests in `pkg/config/config_test.go` covering defaults, partial overlays, atomic writes, and discovery paths.
 - **Slow Query JSON Log File Persistence & General Query Log Engine (`pkg/api`, `cmd/server`)**:
   - Implemented `RotatingLogWriter` (`pkg/api/rotating_logger.go`) providing thread-safe append-only file persistence with bounded size caps (default 5MB) and automatic log rotation (`.1` backup) complying with Rule 40 and Rule 5.
@@ -1486,13 +1486,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added native `sp_executesql` text dispatcher in `pkg/api/sqlexec_procs.go` supporting Unicode literals (`N'...'`), parameter declarations (`@params`), and named (`@id = 1`) or positional parameter bindings.
   - Extended Pratt parser (`pkg/proc/parser.go`), AST (`pkg/proc/ast.go`), bytecode compiler (`pkg/proc/compiler.go`), and VDBE runtime VM (`pkg/proc/runtime/vm.go`) with `OpExecDynamic` to execute dynamic SQL inside stored procedure bodies.
   - Added comprehensive test suite in `pkg/api/dynamic_sql_test.go`.
-- **Official Universal JavaScript & TypeScript Client SDK (`sdk/sqlion.js`, `sdk/sqlion.d.ts`, `pkg/api/sdk.go`)**:
+- **Official Universal JavaScript & TypeScript Client SDK (`sdk/lionsql.js`, `sdk/lionsql.d.ts`, `pkg/api/sdk.go`)**:
   - Implemented zero-dependency, PocketBase-compatible client library for Web Browsers, Node.js (v18+), Bun, Deno, and Edge environments.
   - Provided `client.collection(table)` services with full CRUD methods (`getList`, `getFullList`, `getOne`, `create`, `update`, `replace`, `delete`) and automatic URL query filter building.
   - Implemented real-time Server-Sent Events (SSE) subscriptions via `client.collection(table).subscribe(callback)` with automatic reconnection and topic dispatching.
   - Added native T-SQL stored procedure execution (`client.exec(proc, params)`) and arbitrary SQL querying (`client.query(sql)`).
-  - Included full TypeScript definitions (`sdk/sqlion.d.ts`) supporting generic record typing (`client.collection<Customer>('customers')`).
-  - Embedded static distribution into standalone binary and exposed via `GET /sdk/sqlion.js` and `GET /sdk/sqlion.d.ts`.
+  - Included full TypeScript definitions (`sdk/lionsql.d.ts`) supporting generic record typing (`client.collection<Customer>('customers')`).
+  - Embedded static distribution into standalone binary and exposed via `GET /sdk/lionsql.js` and `GET /sdk/lionsql.d.ts`.
 - **Embedded Cron Jobs Scheduler (`pkg/api/cron.go`, `pkg/api/cron_handlers.go`, `pkg/ui`)**:
   - Implemented embedded, non-blocking `CronScheduler` supporting standard 5-field cron syntax (`min hour dom month dow`, step syntax `*/N`, ranges, and lists).
   - Automated recurring background execution of arbitrary SQL queries and T-SQL stored procedures inside isolated ambient database sessions.
@@ -1862,12 +1862,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Plan visualizer via `EXPLAIN` and `EXPLAIN ANALYZE`.
 - **Query Memory Limit Governor & Spill-to-Disk External Sort**:
   - Operator-level memory budget tracking (`EstimateTupleSize`) governed by `work_mem` (default `64MB`).
-  - Automated spilling of sorted chunks to temporary run files (`sqlion-sort-run-*.tmp`).
+  - Automated spilling of sorted chunks to temporary run files (`lionsql-sort-run-*.tmp`).
   - Streaming N-way Min-Heap merge sort (`tupleMergeHeap`) inside `SortIterator.Next()`.
 - **Online Non-Blocking Snapshot Hot Backup & Restore**:
   - Live point-in-time snapshot isolation captured under read-only transactions without locking tables or pausing concurrent OLTP writes.
   - Self-contained `.tar.gz` archive containing `manifest.json`, `schemas.json`, catalog routines, and compressed data rows.
-  - CLI utilities: `sqlion -dir data -backup <path>` and `-restore <path>`.
+  - CLI utilities: `lionsql -dir data -backup <path>` and `-restore <path>`.
   - HTTP REST endpoints: `GET/POST /api/backup` and `POST /api/restore`.
 - **Built-in Goroutine Connection Pooler (PgBouncer Replacement)**:
   - Go goroutine multiplexing supporting 10,000+ client connections with minimal RAM overhead.

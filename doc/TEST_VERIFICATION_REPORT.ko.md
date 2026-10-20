@@ -794,28 +794,28 @@ nohup ./bin/server -data-dir=./data/prod_db > server.log 2>&1 &
 
 #### Prometheus 표준 모니터링 엔드포인트 (`/metrics`)
 ```
-# HELP sqlion_tps_current Current transactions per second
-# TYPE sqlion_tps_current gauge
-sqlion_tps_current 17834.46
+# HELP lionsql_tps_current Current transactions per second
+# TYPE lionsql_tps_current gauge
+lionsql_tps_current 17834.46
 
-# HELP sqlion_transactions_total Total transactions processed
-# TYPE sqlion_transactions_total counter
-sqlion_transactions_total{type="commit"} 89502
-sqlion_transactions_total{type="rollback"} 0
+# HELP lionsql_transactions_total Total transactions processed
+# TYPE lionsql_transactions_total counter
+lionsql_transactions_total{type="commit"} 89502
+lionsql_transactions_total{type="rollback"} 0
 
-# HELP sqlion_active_sessions Currently connected active sessions
-# TYPE sqlion_active_sessions gauge
-sqlion_active_sessions{protocol="tds"} 16
-sqlion_active_sessions{protocol="pgwire"} 2
-sqlion_active_sessions{protocol="http"} 1
+# HELP lionsql_active_sessions Currently connected active sessions
+# TYPE lionsql_active_sessions gauge
+lionsql_active_sessions{protocol="tds"} 16
+lionsql_active_sessions{protocol="pgwire"} 2
+lionsql_active_sessions{protocol="http"} 1
 
-# HELP sqlion_wal_lsn_current Current Write-Ahead Log Log Sequence Number
-# TYPE sqlion_wal_lsn_current counter
-sqlion_wal_lsn_current 1084200
+# HELP lionsql_wal_lsn_current Current Write-Ahead Log Log Sequence Number
+# TYPE lionsql_wal_lsn_current counter
+lionsql_wal_lsn_current 1084200
 
-# HELP sqlion_memory_rss_bytes Resident memory size in bytes
-# TYPE sqlion_memory_rss_bytes gauge
-sqlion_memory_rss_bytes 29360128
+# HELP lionsql_memory_rss_bytes Resident memory size in bytes
+# TYPE lionsql_memory_rss_bytes gauge
+lionsql_memory_rss_bytes 29360128
 ```
 
 #### 비상 크래시 복구 및 무결성 점검 런북 (Emergency Runbook)

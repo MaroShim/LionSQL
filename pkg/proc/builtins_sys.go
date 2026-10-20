@@ -287,7 +287,7 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		case "INSTANCENAME":
 			return storage.StringValue("MSSQLSERVER")
 		case "MACHINENAME", "SERVERNAME":
-			return storage.StringValue("SQLION")
+			return storage.StringValue("LionSQL")
 		case "COLLATION":
 			return storage.StringValue("SQL_Latin1_General_CP1_CI_AS")
 		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":

@@ -10,7 +10,7 @@ import (
 )
 
 func TestEphemeralEngine_ZeroDiskArtifacts(t *testing.T) {
-	tempDir, err := os.MkdirTemp("", "sqlion_ephemeral_test_*")
+	tempDir, err := os.MkdirTemp("", "lionsql_ephemeral_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

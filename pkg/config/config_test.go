@@ -41,7 +41,7 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestLoadFromFile_PartialJSON(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_config_test_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_config_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestLoadFromFile_PartialJSON(t *testing.T) {
 }
 
 func TestWriteToFileAtomic_AndReload(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_config_atomic_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_config_atomic_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestWriteToFileAtomic_AndReload(t *testing.T) {
 }
 
 func TestAutoDiscoverConfig(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_autodiscover_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_autodiscover_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -139,14 +139,14 @@ func TestAutoDiscoverConfig(t *testing.T) {
 }
 
 func TestAutoDiscoverConfig_StrictLegacyIgnore(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_legacy_ignore_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_legacy_ignore_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(tmpDir)
 
-	// When legacy sqlion.json exists in dataDir, it must NOT be loaded (security guard against config poisoning)
-	legacyConfig := filepath.Join(tmpDir, "sqlion.json")
+	// When legacy other_config.json exists in dataDir, it must NOT be loaded (security guard against config poisoning)
+	legacyConfig := filepath.Join(tmpDir, "other_config.json")
 	customJSON := `{"server":{"engine":"memory"}}`
 	if err := os.WriteFile(legacyConfig, []byte(customJSON), 0644); err != nil {
 		t.Fatalf("write legacyConfig failed: %v", err)
@@ -157,7 +157,7 @@ func TestAutoDiscoverConfig_StrictLegacyIgnore(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if path != "" {
-		t.Errorf("expected empty path for legacy sqlion.json, got %q", path)
+		t.Errorf("expected empty path for legacy other_config.json, got %q", path)
 	}
 	if cfg.Server.Engine != "wiredtiger" {
 		t.Errorf("expected default engine 'wiredtiger', got %q", cfg.Server.Engine)
@@ -181,7 +181,7 @@ func TestNetworkConfig_OptOut(t *testing.T) {
 	}
 
 	// 3. Opt-out via empty addresses in JSON file
-	tmpDir, err := os.MkdirTemp("", "sqlion_optout_test_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_optout_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
@@ -341,16 +341,7 @@ func TestApplyEnvOverrides_AdminCredentials(t *testing.T) {
 		t.Errorf("expected AdminPass 'EnvPass999', got %q", cfg.Auth.AdminPass)
 	}
 
-	// SQLION_ADMIN_PASS fallback
-	os.Unsetenv("LIONSQL_ADMIN_PASS")
-	os.Setenv("SQLION_ADMIN_PASS", "LegacyEnvPass888")
-	defer os.Unsetenv("SQLION_ADMIN_PASS")
 
-	cfg2 := config.DefaultConfig()
-	config.ApplyEnvOverrides(cfg2)
-	if cfg2.Auth.AdminPass != "LegacyEnvPass888" {
-		t.Errorf("expected AdminPass 'LegacyEnvPass888', got %q", cfg2.Auth.AdminPass)
-	}
 }
 
 

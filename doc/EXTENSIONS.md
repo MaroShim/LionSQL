@@ -111,7 +111,7 @@ func GetProcedureFallback() ProcedureFallbackParser
 package myparser
 
 import (
-    "github.com/sqlion/sqlion/pkg/proc"
+    "github.com/lionsql/lionsql/pkg/proc"
 )
 
 func init() {

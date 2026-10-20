@@ -150,7 +150,7 @@ func (s *SortIterator) sortSlice(tuples []Tuple) {
 func (s *SortIterator) spillRun() error {
 	s.sortSlice(s.tuples)
 
-	f, err := os.CreateTemp(s.tempDir, "sqlion-sort-run-*.tmp")
+	f, err := os.CreateTemp(s.tempDir, "lionsql-sort-run-*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create sort spill file: %w", err)
 	}

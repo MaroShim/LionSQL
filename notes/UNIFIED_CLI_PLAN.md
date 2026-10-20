@@ -44,7 +44,7 @@ The unified CLI follows the battle-tested single-binary paradigm established by 
 3. **Standard Administrative Email**:
    - Default superuser email is strictly standardized to `admin@lionsql.local`.
 4. **Strict `lionsql.*` File Naming & Zero Silent Fallback**:
-   - **Config File**: Exclusively searches `--config <path>`, `./lionsql.json`, and `<dir>/lionsql.json`. Legacy `sqlion.json` is **never silently loaded** to eliminate configuration hijacking risks; if detected, a loud warning is emitted while the legacy file is ignored.
+   - **Config File**: Exclusively searches `--config <path>`, `./lionsql.json`, and `<dir>/lionsql.json`. Legacy `lionsql.json` is **never silently loaded** to eliminate configuration hijacking risks; if detected, a loud warning is emitted while the legacy file is ignored.
    - **PID File**: Exclusively `<dir>/lionsql.pid` to avoid killing unintended processes across PID re-allocations.
    - **Log File**: Exclusively `<dir>/lionsql.log`.
    - **Outbox Topic Prefix**: Default `'lionsql.'`.
@@ -162,7 +162,7 @@ All existing server configurations and engine flags are **100% preserved and sup
 
 | Step | Phase | Key Actions | Target Files |
 | :---: | :--- | :--- | :--- |
-| **Step 1** | **Global Defaults & Security Updates** | - Update `admin@sqlion.local` ➔ `admin@lionsql.local`<br>- Update `sqlion.json` ➔ `lionsql.json` (strict without silent fallback)<br>- Update `sqlion.pid`/`log` ➔ `lionsql.pid`/`log`<br>- Update `SlowThresholdMS` to 100.0ms<br>- Update `Auth.Enabled` default to `true` | `pkg/config/config.go`<br>`pkg/config/config_test.go`<br>`pkg/api/`<br>`pkg/auth/` |
+| **Step 1** | **Global Defaults & Security Updates** | - Update `admin@lionsql.local`<br>- Update `lionsql.json` ➔ `lionsql.json` (strict without silent fallback)<br>- Update `lionsql.pid`/`log`<br>- Update `SlowThresholdMS` to 100.0ms<br>- Update `Auth.Enabled` default to `true` | `pkg/config/config.go`<br>`pkg/config/config_test.go`<br>`pkg/api/`<br>`pkg/auth/` |
 | **Step 2** | **CLI Subcommand Router & Dispatcher** | - Implement PocketBase-style dispatcher (no-args/flags ➔ foreground server)<br>- Implement `serve`, `start`, `stop`, `restart`, `status`, `backup`, `restore`, `doctor`, `init-config`, `version` | `cmd/lionsql/main.go` |
 | **Step 3** | **Server & Daemon Logic Migration** | - Port full server runner from `cmd/server/main.go` into `cmd/lionsql/`<br>- Add security warning banner for default admin password<br>- Port daemon fork/stop/status logic to `cmd/lionsql/daemon.go`<br>- Port doctor diagnostics to `cmd/lionsql/doctor.go` | `cmd/lionsql/server.go`<br>`cmd/lionsql/daemon.go`<br>`cmd/lionsql/doctor.go` |
 | **Step 4** | **Legacy Wrapper & Forwarder** | - Refactor `cmd/server/main.go` to lightweight forwarder with deprecation banner | `cmd/server/main.go` |

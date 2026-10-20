@@ -41,7 +41,7 @@ func TestDriverIntegration_GoMSSQLDB_Ping(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
-	t.Logf("Connecting to SQLion TDS server at port %d using official go-mssqldb...", port)
+	t.Logf("Connecting to LionSQL TDS server at port %d using official go-mssqldb...", port)
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("db.PingContext failed: %v", err)
 	}

@@ -85,7 +85,7 @@ endpoint          = "https://s3.ap-northeast-2.amazonaws.com" # MinIO: "http://m
 region            = "ap-northeast-2"
 access_key_id     = "${AWS_ACCESS_KEY_ID}"
 secret_access_key = "${AWS_SECRET_ACCESS_KEY}"
-default_bucket    = "sqlion-assets"
+default_bucket    = "lionsql-assets"
 force_path_style  = false                                     # Set to true for MinIO / local dev
 cdn_base_url      = "https://cdn.example.com"                 # (Optional) Cloudflare / CloudFront CDN public base URL
 ```
@@ -98,7 +98,7 @@ Pre-signed URL issuance endpoint accessible by web frontends and the embedded We
 - **Request Body (JSON)**:
   ```json
   {
-    "bucket": "sqlion-assets",
+    "bucket": "lionsql-assets",
     "key": "avatars/user_1001.png",
     "method": "PUT",
     "expires_in": 600,
@@ -108,7 +108,7 @@ Pre-signed URL issuance endpoint accessible by web frontends and the embedded We
 - **Response Body (JSON)**:
   ```json
   {
-    "upload_url": "https://sqlion-assets.s3.ap-northeast-2.amazonaws.com/avatars/user_1001.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&...",
+    "upload_url": "https://lionsql-assets.s3.ap-northeast-2.amazonaws.com/avatars/user_1001.png?X-Amz-Algorithm=AWS4-HMAC-SHA256&...",
     "public_url": "https://cdn.example.com/avatars/user_1001.png",
     "key": "avatars/user_1001.png",
     "expires_at": "2024-10-17T01:00:00Z"

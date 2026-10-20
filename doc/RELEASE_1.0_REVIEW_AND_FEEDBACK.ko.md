@@ -16,12 +16,12 @@
 
 ## 2. 1.0 릴리즈 직전 5대 핵심 문제점 및 분석
 
-### ① 브랜드/네이밍 분열 (`SQLion` vs `LionSQL`)
-- **현상**: 문서 및 UI 가이드라인상 브랜드 명칭을 `LionSQL`로 단일화했으나, 실제 런타임 코드와 프로토콜 응답에 레거시 `SQLion` 명칭이 남아 있어 문서와 실제 동작이 불일치합니다.
-  - **웹훅 헤더 불일치 (`pkg/api/webhook.go:390-398`)**: 문서와 Web Studio는 `X-LionSQL-Signature`, `X-LionSQL-Event`를 명시하나, 실제 코드는 `X-SQLion-Signature`, `X-SQLion-Event`를 방출함.
-  - **클라이언트 SDK (`pkg/api/sdk/sqlion.js`)**: `/sdk/sqlion.js` 및 `class SQLion`으로 고정되어 있어 `/sdk/lionsql.js` 및 `LionSQL` 클래스 별칭(Alias) 부재.
-  - **시스템 함수/프로토콜 응답**: `DB_NAME()`, `APP_NAME()`, `SHOW server_version`, `SELECT @@VERSION`, TDS `LOGINACK` 서버명 등에 `SQLion` 노출.
-  - **Prometheus 메트릭**: `sqlion_*` 프리픽스 사용 중.
+### ① 브랜드/네이밍 분열 (`LionSQL` vs `LionSQL`)
+- **현상**: 문서 및 UI 가이드라인상 브랜드 명칭을 `LionSQL`로 단일화했으나, 실제 런타임 코드와 프로토콜 응답에 레거시 `LionSQL` 명칭이 남아 있어 문서와 실제 동작이 불일치합니다.
+  - **웹훅 헤더 불일치 (`pkg/api/webhook.go:390-398`)**: 문서와 Web Studio는 `X-LionSQL-Signature`, `X-LionSQL-Event`를 명시하나, 실제 코드는 `X-LionSQL-Signature`, `X-LionSQL-Event`를 방출함.
+  - **클라이언트 SDK (`pkg/api/sdk/lionsql.js`)**: `/sdk/lionsql.js` 및 `class LionSQL`으로 고정되어 있어 `/sdk/lionsql.js` 및 `LionSQL` 클래스 별칭(Alias) 부재.
+  - **시스템 함수/프로토콜 응답**: `DB_NAME()`, `APP_NAME()`, `SHOW server_version`, `SELECT @@VERSION`, TDS `LOGINACK` 서버명 등에 `LionSQL` 노출.
+  - **Prometheus 메트릭**: `lionsql_*` 프리픽스 사용 중.
 
 ### ② 세션 변수(`@var`) 치환 이스케이프 취약점 및 임시 테이블 누수 위험
 - **세션 변수 문자열 치환 시 작은따옴표 미이스케이프 (`pkg/engine/sqlexec.go:911-919`)**:
@@ -49,7 +49,7 @@
    - 세션 변수(`@var`) 치환 시 작은따옴표 이스케이프(`''`) 적용.
    - 세션 종료(`CloseSession`) 시 `TableVars` 물리 테이블 완전 정리 로직 추가.
 2. **Step 2 — 브랜드/헤더 일관성 정돈**:
-   - 웹훅 헤더 `X-LionSQL-*` 적용 (하위 호환용 `X-SQLion-*` 동시 지원).
+   - 웹훅 헤더 `X-LionSQL-*` 적용 (하위 호환용 `X-LionSQL-*` 동시 지원).
    - `/sdk/lionsql.js` 및 `window.LionSQL` SDK 별칭 추가.
 3. **Step 3 — 1.0 로드맵/백로그 출시 기준 일치화 및 파일 권한 정규화**:
    - `ROADMAP.md`와 `TODO.ko.md`의 Gate 4 항목 일치.

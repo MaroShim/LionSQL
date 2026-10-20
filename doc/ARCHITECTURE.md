@@ -165,7 +165,7 @@ type Iterator interface {
 - **`GroupByIterator`**: Hash-based and pre-sorted streaming group aggregations (`COUNT`, `SUM`, `AVG`, `MIN`, `MAX`).
 - **`SortIterator` (with External Merge Sort)**:
   - Tracks accumulated tuple memory footprints against `work_mem`.
-  - When memory exceeds `work_mem`, sorts the in-memory chunk and spills it to a disk run file (`sqlion-sort-run-*.tmp`).
+  - When memory exceeds `work_mem`, sorts the in-memory chunk and spills it to a disk run file (`lionsql-sort-run-*.tmp`).
   - Merges spilled run files and in-memory tuples via an N-way Min-Heap (`tupleMergeHeap`).
   - Deterministically closes and unlinks all temporary run files in `Close()`.
 
@@ -321,10 +321,10 @@ Live Production Engine (Active Reads & Writes)
         └── Compute Summary ───────> manifest.json (Timestamp, row counts, checksums)
         │
         ▼ (Gzip & Tar Stream)
-[Atomic File Writer (Golden Rule 1)] ─── Write to sqlion-backup-*.tmp ➔ Atomic rename
+[Atomic File Writer (Golden Rule 1)] ─── Write to lionsql-backup-*.tmp ➔ Atomic rename
         │
         ▼
-[Self-Contained Backup Archive: sqlion-backup-20240922-133000.tar.gz]
+[Self-Contained Backup Archive: lionsql-backup-20240922-133000.tar.gz]
 ```
 
 #### Delivery Channels:
@@ -332,8 +332,8 @@ Live Production Engine (Active Reads & Writes)
   - `GET /api/backup` & `POST /api/backup`: Direct streaming download as `application/gzip` or server-side disk snapshot via `{"target": "path"}`.
   - `POST /api/restore`: Multipart form upload or file-path restore (`{"source": "path"}`).
 - **CLI Commands**:
-  - `sqlion -dir data -backup backup.tar.gz`
-  - `sqlion -dir data -restore backup.tar.gz`
+  - `lionsql -dir data -backup backup.tar.gz`
+  - `lionsql -dir data -restore backup.tar.gz`
 - **Embedded Web Studio**:
   - One-click backup download button and restore upload modal.
 

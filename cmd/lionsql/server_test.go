@@ -13,13 +13,13 @@ func TestResolveDefaultDataDirFromExe(t *testing.T) {
 	}{
 		{
 			name:     "binary located inside bin folder",
-			exePath:  "/tmp/sqlion_app/bin/lionsql",
-			expected: "/tmp/sqlion_app/data",
+			exePath:  "/tmp/lionsql_app/bin/lionsql",
+			expected: "/tmp/lionsql_app/data",
 		},
 		{
 			name:     "binary located inside nested bin folder",
-			exePath:  "/opt/sqlion/bin/lionsql",
-			expected: "/opt/sqlion/data",
+			exePath:  "/opt/lionsql/bin/lionsql",
+			expected: "/opt/lionsql/data",
 		},
 		{
 			name:     "binary located directly in root or other dir",

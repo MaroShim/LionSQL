@@ -206,7 +206,7 @@ func CleanSchemaPrefix(name string) string {
 	}
 
 	// Multi-part identifiers (e.g. mydb.dbo.accounts, mydb..accounts, server.mydb.dbo.accounts):
-	// Under SQLion's instance-level isolation, database catalog prefixes are stripped,
+	// Under LionSQL's instance-level isolation, database catalog prefixes are stripped,
 	// returning the target table name.
 	if len(cleanedParts) >= 3 || len(parts) >= 3 {
 		return last

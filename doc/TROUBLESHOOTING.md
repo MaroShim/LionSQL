@@ -117,7 +117,7 @@ The Cost-Based Optimizer (CBO) is missing up-to-date column statistics and histo
 ### 3.2. Temporary Spill Files Consuming Disk Space
 
 #### Symptom
-Large queries with `ORDER BY` produce temporary files in `/tmp` matching `sqlion-sort-run-*.tmp`.
+Large queries with `ORDER BY` produce temporary files in `/tmp` matching `lionsql-sort-run-*.tmp`.
 
 #### Cause
 The query's accumulated sorting buffer exceeded the configured `work_mem` limit, triggering an **External Merge Sort** to prevent out-of-memory crashes.

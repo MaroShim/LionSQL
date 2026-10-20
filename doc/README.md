@@ -131,7 +131,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * **Embedded Cron Jobs Scheduler**: Recurring SQL query and T-SQL stored procedure automation with standard 5-field cron syntax.
   * **Embedded SMTP Mailer**: Transactional HTML email templates (`welcome`, `password_reset`, `verification`) and delivery audit ring buffer.
 * [`WEB_SDK.md`](file:///Users/maro/Projects/LionSQL/doc/WEB_SDK.md)
-  * Official universal Web SDK & HTML embedding guide (`sqlion.js`, `sqlion.d.ts`).
+  * Official universal Web SDK & HTML embedding guide (`lionsql.js`, `lionsql.d.ts`).
   * Zero-dependency single-file HTML templates, vanilla `fetch()`, realtime SSE live sync, and HTMX recipes.
 * [`API_REFERENCE.md`](file:///Users/maro/Projects/LionSQL/doc/API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.

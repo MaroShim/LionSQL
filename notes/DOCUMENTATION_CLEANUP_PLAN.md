@@ -10,7 +10,7 @@ This document establishes the official 4-stage execution plan for comprehensive 
 | :---: | :--- | :--- | :---: |
 | **Stage 1** | `CHANGELOG.md` | **0.90.0 Release Block Polish**: Summarize major Feature Freeze deliverables (Single-Binary CLI, Web Studio Realtime Stream/Logs/DDL, Global Memory Governor & Circuit Breaker, CBO & JOIN materialization, Virtual Catalog Single-DB standardization) in Keep a Changelog standard. | **Completed (`[x]`)** |
 | **Stage 2** | `README.md`<br>`README.ko.md` | **Root README Modernization**: Update version headers to `0.90.0 Feature Freeze`, unify CLI commands on `./bin/lionsql` (foreground, daemon, subcommands), feature modern Web Studio views (Realtime Live Stream, Request Logs, Schema DDL Column Addition), align database names (`postgres`, `master`) and verified GUI tools. | **Completed (`[x]`)** |
-| **Stage 3** | `doc/` Directory | **Legacy Term & Configuration Sweep**: Sweep `doc/` directory to replace legacy `dbname=sqlion` with canonical `postgres`/`master`, purge unsupported TablePlus references, convert deprecated `bin/server` / `server -dir` commands to `lionsql`, and sync `v0.90` to `v0.90.0`. | **Completed (`[x]`)** |
+| **Stage 3** | `doc/` Directory | **Legacy Term & Configuration Sweep**: Sweep `doc/` directory to replace legacy `dbname=postgres` with canonical `postgres`/`master`, purge unsupported TablePlus references, convert deprecated `bin/server` / `server -dir` commands to `lionsql`, and sync `v0.90` to `v0.90.0`. | **Completed (`[x]`)** |
 | **Stage 4** | `ROADMAP.md` | **Roadmap Status Synchronization**: Reflect Phase 1~5 completion, Phase 6 v0.90.0 Feature Freeze milestone attainment, and update exit criteria gates towards v1.0.0 LTS production release. | **Completed (`[x]`)** |
 
 ---
@@ -48,7 +48,7 @@ This document establishes the official 4-stage execution plan for comprehensive 
 ---
 
 ### Stage 3: doc/ Directory Legacy Term & Configuration Sweep (Completed)
-- [x] **Database Name Standardization (`sqlion` ➔ `postgres` / `master`)**:
+- [x] **Database Name Standardization (`postgres` / `master`)**:
   - [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md): Updated connection tables and DSN examples across Go, Python, JDBC, and GUI setup cards.
   - [`doc/TROUBLESHOOTING.md`](doc/TROUBLESHOOTING.md): Updated CLI connection troubleshooting examples.
   - [`doc/DATA_DICTIONARY.md`](doc/DATA_DICTIONARY.md): Updated database name description.

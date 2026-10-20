@@ -95,12 +95,12 @@
 | **P1** | **보안/리소스** | **요청 본문 상한 가드(32MB) 및 보안 응답 헤더 하드닝 (`HTTP-3`, `HTTP-4`)** | `pkg/api` | **완료 (`[x]`)** | - |
 | **P1** | **UI/UX** | **Web Studio 네이티브 `alert()` ➔ 모던 Toast 알림 전면 교체 (`UI-1`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/UX** | **Web Studio 반응형 레이아웃 및 사이드바 햄버거 토글 (`UI-2`)** | `pkg/ui` | **완료 (`[x]`)** | - |
-| **P1** | **UI/브랜드** | **Web Studio 브랜드 네이밍(`SQLion` ➔ `LionSQL`) 정돈 및 검색 필터 (`UI-3`, `UI-4`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/브랜드** | **Web Studio 브랜드 네이밍(`LionSQL`) 정돈 및 검색 필터 (`UI-3`, `UI-4`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/UX** | **Web Studio 비밀번호 표시/숨기기(Eye Toggle) 버튼 지원 (`UI-5`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/안전성** | **Drop Table 실수 방지용 테이블명 일치 확인 모달 가드레일 (`UI-6`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/데이터** | **Sample Data Seed 빈 DB 사전 검증 가드 및 원자적 피드백 (`UI-7`)** | `pkg/api`, `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/DX** | **API Preview 모달 테이블 스키마 기반 동적 더미 페이로드 생성 (`UI-8`)** | `pkg/ui` | **완료 (`[x]`)** | - |
-| **P1** | **UI/DX** | **API Preview 모달 LionSQL 공식 SDK (`sqlion.js`) 전용 코드 탭 신설 (`UI-9`)** | `pkg/ui` | **완료 (`[x]`)** | - |
+| **P1** | **UI/DX** | **API Preview 모달 LionSQL 공식 SDK (`lionsql.js`) 전용 코드 탭 신설 (`UI-9`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/테마** | **Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 (`UI-10`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | - |
 | **P1** | **UI/가시성** | **Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) (`UI-11`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **종료/안정성** | **Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 (`SHUTDOWN-1`)** | `pkg/wire`, `pkg/storage/wiredtiger` | **완료 (`[x]`)** | - |
@@ -115,7 +115,7 @@
 | **P1** | **문서/릴리스** | **v0.90.0 기능 동결 4단계 문서 전수 정돈 마스터 플랜 (`DOC-CLEANUP`)** | `CHANGELOG.md`, `README.md`, `doc/`, `ROADMAP.md` | **완료 (`[x]`)** | [`notes/DOCUMENTATION_CLEANUP_PLAN.md`](notes/DOCUMENTATION_CLEANUP_PLAN.md) |
 | **P1** | **보안/변수치환** | **세션 변수(`@var`) 치환 시 작은따옴표 이스케이프 및 인젝션 방어 (`SEC-ESC-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P1** | **스토리지/생명주기** | **세션 종료 및 연결 리셋 시 테이블 변수(`TableVars`) 및 임시 테이블 누수 완전 해제 (`SESS-CLEAN-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
-| **P1** | **브랜드/정합성** | **웹훅 헤더(`X-LionSQL-*`), SDK 엔드포인트/클래스명, 시스템 변수 잔여 `SQLion` 완전 정돈 (`BRAND-UNIFY-1`)** | `pkg/api`, `pkg/proc`, `pkg/engine`, `pkg/wire` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P1** | **브랜드/정합성** | **웹훅 헤더(`X-LionSQL-*`), SDK 엔드포인트/클래스명, 시스템 변수 잔여 브랜드 완전 정돈 (`BRAND-UNIFY-1`)** | `pkg/api`, `pkg/proc`, `pkg/engine`, `pkg/wire` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
@@ -286,7 +286,7 @@
      - `SignPresignedPUT(bucket, key, contentType, expiresIn)` 및 `SignPresignedGET(bucket, key, expiresIn)` 구현.
      - AWS 공식 Canonical Test Suite 기반 100% 호환성 단위 테스트 검증.
   2. **통합 스토리지 설정 서브시스템 (`pkg/config`)**:
-     - `S3Config` (endpoint, region, access_key_id, secret_access_key, default_bucket, force_path_style, cdn_base_url) 구조체 및 환경 변수 바인딩 (`SQLION_S3_*`).
+     - `S3Config` (endpoint, region, access_key_id, secret_access_key, default_bucket, force_path_style, cdn_base_url) 구조체 및 환경 변수 바인딩 (`LIONSQL_S3_*`).
   3. **HTTP REST Pre-signed 발급 API 엔드포인트 (`pkg/api/handlers_storage.go`)**:
      - `POST /api/storage/presign` 엔드포인트 (JWT/API-Key RBAC 인증).
      - 업로드용 `upload_url`, 조회용 `public_url`, 유효기간 반환 및 Content-Length/MIME 타입 화이트리스트 가드.
@@ -342,9 +342,9 @@
   2. **[B] 테이블 변수(`TableVars`) 및 임시 테이블 생명주기 완전 정리 (`SESS-CLEAN-1`, 완료 `[x]`)**:
      - 세션 종료(`CloseSession`) 및 코디네이터 종료(`Close`) 시 `default` 세션을 포함하여 모든 `__tv_*` 물리 테이블 즉시 드롭.
      - 커넥션 풀 리셋(`DISCARD ALL`, `RESET ALL`) 실행 시 할당된 세션 임시 테이블과 테이블 변수를 물리 드롭하여 스토리지 누수 원천 차단.
-  3. **[C] 웹훅 헤더, SDK 엔드포인트 및 잔여 `SQLion` 브랜드 완전 정돈 (`BRAND-UNIFY-1`, 완료 `[x]`)**:
+  3. **[C] 웹훅 헤더, SDK 엔드포인트 및 잔여 브랜드 브랜드 완전 정돈 (`BRAND-UNIFY-1`, 완료 `[x]`)**:
      - `pkg/api/webhook.go`, `pkg/cdc/outbox_sinks.go`: 웹훅 헤더를 `X-LionSQL-Signature`, `X-LionSQL-Event`, `X-LionSQL-Delivery` 및 `LionSQL-Webhook/1.0`으로 완전 전환.
-     - `pkg/api/sdk/`: `sqlion.js` 및 `sqlion.d.ts`를 `lionsql.js` 및 `lionsql.d.ts`로 정식 전환, 엔드포인트 `/sdk/lionsql.js` 신설 및 `class LionSQL`로 완전 일원화 (하위 호환 별칭 없이 단일화).
+     - `pkg/api/sdk/`: `lionsql.js` 및 `lionsql.d.ts`로 정식 전환, 엔드포인트 `/sdk/lionsql.js` 신설 및 `class LionSQL`로 완전 일원화 (하위 호환 별칭 없이 단일화).
      - `DB_NAME()`, `APP_NAME()`, `SHOW server_version`, `SELECT @@VERSION`, TDS `BuildLoginAck`, `BuildError`, PG Wire ParameterStatus, TLS 인증서 Organization의 잔여 명칭을 `LionSQL`로 완전 일원화.
   4. **[D] 1.0 릴리즈 게이트 4 기준 일치화 및 문서 권한 정규화 (`REL-ALIGN-1`, 완료 `[x]`)**:
      - `ROADMAP.md` Gate 4를 엔터프라이즈 보안 및 거버넌스(TDE, RBAC, 감사 추적)로 1.0 충족 확정하고 암호학적 불변 감사 로그(`pkg/audit`)를 Post-1.0(`v1.1.0`)으로 연기 일원화.
@@ -353,7 +353,7 @@
      - `pkg/config`: `IsLoopbackHost`, `NonLoopbackServiceAddresses`, `ValidateSecurityGuard` 구현.
      - `127.0.0.1` / `localhost` 바인딩일 때만 기본 비밀번호(`1234567890`) 허용 (Zero-config 편의성 유지).
      - `0.0.0.0`, `:port`, 공용 IP 등 외부 노출 인터페이스 바인딩 시 기본 비밀번호 기동 즉각 차단 및 조치 가이드라인 출력 (`os.Exit(1)`).
-     - 환경 변수 `LIONSQL_ADMIN_PASS` 및 `SQLION_ADMIN_PASS` 지원 추가.
+     - 환경 변수 `LIONSQL_ADMIN_PASS` 지원 추가.
      - `lionsql doctor`에 `Production Security Guard` 진단 항목 신설 (외부 노출 시 FAIL, 로컬호스트 또는 비밀번호 변경 시 OK 판정).
      - `pkg/config/config_test.go` 단위 테스트 100% 검증 통과.
 
@@ -969,7 +969,7 @@
 | **UI-6** | UI/안전성 | Drop Table 실수 방지용 테이블명 일치 확인 모달 가드레일 | **완료 (`[x]`)** | 단순 브라우저 confirm 대신 대상 테이블명을 직접 타이핑해야만 삭제 버튼이 활성화되는 안전 가드레일 모달(`#drop-table-modal`) 구현 (GitHub/Supabase 스타일 오타/실수 원천 방지) (`pkg/ui/dashboard.html`) |
 | **UI-7** | UI/데이터 | Sample Data Seed 빈 DB 사전 검증 가드 및 원자적 피드백 | **완료 (`[x]`)** | 기존 테이블 보유 시 409 Conflict 차단 및 명확한 에러 안내, 빈 DB 시 원자적 트랜잭션 씨딩 및 첫 테이블(`accounts`) 자동 선택 로드 완비 (`pkg/api/handlers_records.go`, `pkg/ui/dashboard.html`) |
 | **UI-8** | UI/DX | API Preview 모달 테이블 스키마 기반 동적 더미 페이로드 생성 | **완료 (`[x]`)** | 테이블 컬럼 타입(INT, VARCHAR, FLOAT, BOOL, DATETIME)별 최적화된 동적 샘플 페이로드 생성 및 단건/배치 탭 지원 (`pkg/ui/dashboard.html`) |
-| **UI-9** | UI/DX | API Preview 모달 LionSQL 공식 SDK (`sqlion.js`) 전용 코드 탭 신설 | **완료 (`[x]`)** | curl, Fetch, Python에 이어 공식 TypeScript/JavaScript SDK 탭(`db.collection(...)`) 추가 완비 (`pkg/ui/dashboard.html`) |
+| **UI-9** | UI/DX | API Preview 모달 LionSQL 공식 SDK (`lionsql.js`) 전용 코드 탭 신설 | **완료 (`[x]`)** | curl, Fetch, Python에 이어 공식 TypeScript/JavaScript SDK 탭(`db.collection(...)`) 추가 완비 (`pkg/ui/dashboard.html`) |
 | **UI-10** | UI/테마 | Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 | **완료 (`[x]`)** | CSS 변수 기반 클린 라이트 모드 지원, 사이드바/모바일 테마 토글 버튼, 로컬 스토리지 테마 영속화 및 `Cache-Control: no-cache` 헤더 완비 (`pkg/ui`, `pkg/api/server.go`) |
 | **UI-11** | UI/가시성 | Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) | **완료 (`[x]`)** | Light 모드 전반의 파스텔톤 저시인성 색상 전면 퇴출. Drop Table Confirmation 모달의 연분홍 텍스트를 딥 버건디(`--alert-danger-text: #991b1b`) 및 볼드 레드(`--alert-danger-strong: #b91c1c`)로 전환(7:1 대비비 확보), ID 컬럼 노란색 텍스트를 선명한 딥 블루(`--pk-val-color: #1d4ed8`)로 개편, Developer API Preview 모달 미선택 탭 버튼의 검은색 텍스트/어두운 배경 겹침 현상을 클린 화이트 배경(`--tab-inactive-bg: #ffffff`) 및 고대비 텍스트(`--tab-inactive-color: #334155`)로 개선, 모든 에러 모달(`create-table-error`, `create-cron-error`, `create-webhook-error` 등)을 `.alert-danger-box`와 `.btn-danger-subtle`로 단일화, 동적 JS 테이블 렌더러의 인라인 하드코딩 스타일을 시맨틱 배지 클래스로 완전 교체 (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`) |
 | **UI-DDL-1** | UI/DDL | 스키마 뷰 비주얼 컬럼 추가 GUI (`+ Add Column` 모달) 및 ALTER TABLE 연동 | **완료 (`[x]`)** | `Schema & DDL` 서브뷰에 `+ Add Column` 모달 연동. 스토리지 엔진 인터페이스(`storage.Engine`)에 `AddColumn` 정의 및 In-Memory OCC / WiredTiger B+Tree 튜플 리라이트 구현, `ALTER TABLE <table> ADD [COLUMN]` SQL 파서/실행기 완비 (`pkg/storage`, `pkg/engine`, `pkg/ui`) |
@@ -1112,7 +1112,7 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
   - `UI-LOGS-1`: 인입되는 HTTP API 요청(Method, Path, Status, Latency, IP)을 200건 Bounded 링버퍼(Golden Rule 23)에 추적하는 `RequestActivityLogger` 및 미들웨어 신설. `GET /api/logs/requests` 엔드포인트와 사이드바 `Request Logs` 화면, 3초 주기 자동 갱신 및 일시정지, 메서드/상태코드/검색 필터 및 로그 초기화 완비.
 - [x] **Web Studio Developer API Preview 모달 고도화 (동적 스키마 페이로드 & LionSQL SDK 탭) (`UI-8`, `UI-9`) (`pkg/ui`)**:
   - 테이블별 스키마 컬럼 메타데이터(`tablesList`)를 분석하여 자동 증분 PK는 제외하고, 데이터 타입(INT, VARCHAR, DECIMAL, DATETIME, JSON, BOOL)과 컬럼 의미에 맞춘 현실적인 더미 JSON 페이로드(`getDummyRecordForTable`) 및 PK/필터 샘플(`getPrimaryKeySample`, `getFilterSample`)을 동적으로 생성.
-  - cURL, Fetch, Python, Go 탭과 함께 LionSQL 공식 SDK (`sqlion.js`) 전용 `import SQLion` 및 `db.collection('table').getList/getOne/create/query` 템플릿 탭(`api-lang-sdk`) 신설.
+  - cURL, Fetch, Python, Go 탭과 함께 LionSQL 공식 SDK (`lionsql.js`) 전용 `import LionSQL` 및 `db.collection('table').getList/getOne/create/query` 템플릿 탭(`api-lang-sdk`) 신설.
   - 단위 테스트 `TestAPIPreviewEnhancements` 추가 및 100% PASS 검증 완료.
 - [x] **PGWire 미지정 타입 파라미터($1) 바이너리 길이 정합성 및 스키마 OID 캐싱 (`PG-COMPAT-1`) (`pkg/wire`)**:
   - `PreparedStatement` 구조체에 분석된 `ColumnNames []string`, `ColumnOIDs []int32` 필드를 신설하고 `writeSchemaDescription`에서 분석된 메타데이터를 캐싱하여 Describe와 Execute 단계의 OID 규약을 100% 동기화.
@@ -1238,7 +1238,7 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
 - [x] **단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 (`UNIFY-CLI`) (`cmd/lionsql`, `cmd/server`, `pkg/config`)**:
   - `pkg/config/version.go`: LionSQL 릴리스 버전의 단일 소스 오브 트루스(SSOT)로 `const Version = "0.90.0"` 정립.
   - `pkg/config/config.go`: 기본 관리자 계정을 `admin@lionsql.local`로 단일화, `-auth` 기본값을 `true`(Secure by Default)로 강화, 슬로우 쿼리 임계치(`ThresholdMS`) 기본값을 `100.0ms`로 상향.
-  - 설정 파일 자동 탐색을 `lionsql.json`으로 단일화하고, 레거시 `sqlion.json` 감지 시 보안 설정 오염을 방지하기 위해 자동 폴백 없이 경고를 출력하고 무시하는 방어 로직 적용.
+  - 설정 파일 자동 탐색을 `lionsql.json`으로 단일화하고, 레거시 설정 파일 감지 시 보안 설정 오염을 방지하기 위해 자동 폴백 없이 경고를 출력하고 무시하는 방어 로직 적용.
   - `cmd/lionsql`: PocketBase/CockroachDB 스타일 단일 바이너리 모델 적용. 인자가 없거나 플래그로 시작할 경우 서버를 즉시 포그라운드로 기동(`lionsql`, `lionsql -dir=./data`)하고, `serve`, `start`, `stop`, `restart`, `status`, `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version` 등 현대적 서브커맨드 완비.
   - `cmd/server`: 하위 호환성을 위해 `[LionSQL Notice] 'bin/server' is deprecated...` 안내를 출력하고 `bin/lionsql`로 투명하게 실행을 위임하는 경량 래퍼로 전환.
   - 서버 배너 및 기본 관리자 비밀번호(`1234567890`) 사용 시 `[SECURITY WARNING]` 리마인드 경고 출력 로직 탑재.
@@ -1247,15 +1247,15 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
   - `pkg/api/realtime.go`: `http.NewResponseController`를 통해 SSE 스트림의 WriteDeadline을 해제하여 영구 Keep-Alive 스트리밍 보장.
   - `pkg/api/request_logger.go`: `/api/realtime` 및 `/api/cdc/stream`과 같은 영구 스트리밍 채널은 단발성 REST API 지연 시간 통계 왜곡을 방지하기 위해 요청 로거 기록 대상에서 제외.
   - `pkg/ui/dashboard.html`: Request Log UI에서 스트리밍 요청 수명이 유입될 경우 빨간색 에러 지연 시간(`#ef4444`) 대신 하늘색 스트림 뱃지(`(stream)`)로 렌더링하도록 안전 보강.
-- [x] **레거시 가상 DB(`sqlion`) 제거 및 와이어 프로토콜별 표준 단일 DB 정립 (`pkg/catalog/virtual`, `pkg/engine`)**:
-  - `pkg/catalog/virtual/pg.go`: `pg_database` 목록에서 레거시 `sqlion`을 완전 제거하고 PostgreSQL 표준 `postgres` 단일 DB만 노출하도록 정돈. `pg_stat_activity`의 기본 datname도 `postgres`로 갱신.
-  - `pkg/engine/sqlexec_dbcc.go`: `sys.databases` 및 `sys.master_files`에서 `sqlion` 항목을 완전 삭제하고 MSSQL 표준 `master` 단일 DB 및 master 파일만 노출하도록 정돈.
+- [x] **레거시 가상 DB 제거 및 와이어 프로토콜별 표준 단일 DB 정립 (`pkg/catalog/virtual`, `pkg/engine`)**:
+  - `pkg/catalog/virtual/pg.go`: `pg_database` 목록에서 레거시 DB를 완전 제거하고 PostgreSQL 표준 `postgres` 단일 DB만 노출하도록 정돈. `pg_stat_activity`의 기본 datname도 `postgres`로 갱신.
+  - `pkg/engine/sqlexec_dbcc.go`: `sys.databases` 및 `sys.master_files`에서 레거시 항목을 완전 삭제하고 MSSQL 표준 `master` 단일 DB 및 master 파일만 노출하도록 정돈.
   - `pkg/catalog/virtual/info_schema.go`: `information_schema`의 `table_catalog`, `catalog_name` 등을 `postgres`로 일원화.
   - `pkg/engine/coordinator_impl.go`, `sqlexec_select.go`, `sqlexec_procs.go`: 세션 기본 데이터베이스를 PGWire/제네릭은 `postgres`, TDS는 `master`로 단일화하여 Beekeeper, DBeaver 등 외부 도구에서 단일 카탈로그 UX 완비.
 - [x] **v0.90.0 기능 동결 4단계 문서 전수 정돈 마스터 플랜 (`DOC-CLEANUP`) (`CHANGELOG.md`, `README.md`, `doc/`, `ROADMAP.md`, `notes/`)**:
   - `CHANGELOG.md`: `[0.90.0]` 공식 릴리스 블록 확정 (글로벌 메모리 거버너 `MEM-1`, 단일 CLI `UNIFY-CLI`, Web Studio 실시간 스트림/로그/DDL 모달, 단일 카탈로그 표준화 등 Keep a Changelog 표준 정돈).
   - 루트 `README.md` & `README.ko.md`: `v0.90.0 Feature Freeze` 배지 도입, 단일 바이너리 `./bin/lionsql` 포그라운드/데몬/관리 CLI 전면 반영, 4대 Web Studio 신규 뷰 및 외부 클라이언트 DSN 일원화.
-  - `doc/` 디렉터리 레거시 전수 정돈: `sqlion` ➔ `postgres`/`master` 단일 카탈로그 일원화, 미지원 TablePlus 언급 삭제 및 Beekeeper/DBeaver/Navicat 표준화, 구형 `./bin/server` ➔ `./bin/lionsql` 실행 명령 치환.
+  - `doc/` 디렉터리 레거시 전수 정돈: `postgres`/`master` 단일 카탈로그 일원화, 미지원 TablePlus 언급 삭제 및 Beekeeper/DBeaver/Navicat 표준화, 구형 `./bin/server` ➔ `./bin/lionsql` 실행 명령 치환.
   - `ROADMAP.md`: Phase 1~5 전체 완료 및 Phase 6 `v0.90.0 Feature Freeze` 달성 상태 동기화, v1.0.0 LTS(Phase 7) 마일스톤 정립.
   - `notes/DOCUMENTATION_CLEANUP_PLAN.md`: 4단계 작업 현황 및 검증 결과 100% 완료(`[x]`) 상태 기록.
 

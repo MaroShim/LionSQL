@@ -9,7 +9,7 @@ The official **LionSQL Web SDK** provides a PocketBase-compatible, zero-dependen
 ### Option A: Direct CDN / Script Tag (Zero Install)
 Load the SDK directly from your running LionSQL server:
 ```html
-<script src="http://127.0.0.1:8090/sdk/sqlion.js"></script>
+<script src="http://127.0.0.1:8090/sdk/lionsql.js"></script>
 <script>
   const client = new LionSQL('http://127.0.0.1:8090');
 </script>
@@ -17,7 +17,7 @@ Load the SDK directly from your running LionSQL server:
 
 ### Option B: ES Module / NPM / Bundler
 ```javascript
-import LionSQL from './sdk/sqlion.js';
+import LionSQL from './sdk/lionsql.js';
 
 const client = new LionSQL('http://127.0.0.1:8090', {
   token: 'YOUR_JWT_OR_API_KEY' // optional initial token
@@ -172,7 +172,7 @@ await client.collection('customers').saveRules({
 
 ## 8. TypeScript Support
 
-The SDK includes complete TypeScript definitions in `sdk/sqlion.d.ts`. Models can be strongly typed:
+The SDK includes complete TypeScript definitions in `sdk/lionsql.d.ts`. Models can be strongly typed:
 
 ```typescript
 interface Customer {
@@ -273,7 +273,7 @@ This pattern connects directly to LionSQL's built-in Server-Sent Events stream. 
 
   <!-- Load Web SDK directly from LionSQL server (zero npm dependencies) -->
   <script type="module">
-    import LionSQL from 'http://localhost:8090/sdk/sqlion.js';
+    import LionSQL from 'http://localhost:8090/sdk/lionsql.js';
 
     const db = new LionSQL('http://localhost:8090');
 

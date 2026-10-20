@@ -201,7 +201,7 @@ func TestOutboxDispatcher_RetryAndExponentialBackoff(t *testing.T) {
 }
 
 func TestOutboxDispatcher_CheckpointPersistenceAndResume(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_outbox_test_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_outbox_test_*")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}

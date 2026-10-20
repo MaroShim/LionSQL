@@ -141,7 +141,7 @@ func TestCatalog_ProcedureDuplicateCheck(t *testing.T) {
 }
 
 func TestCatalog_TableStatsPersistence(t *testing.T) {
-	tmpDir, err := os.MkdirTemp("", "sqlion_cbo_stats_test_*")
+	tmpDir, err := os.MkdirTemp("", "lionsql_cbo_stats_test_*")
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}

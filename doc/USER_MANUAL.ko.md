@@ -341,7 +341,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
   LionSQL High-Concurrency Embedded OLTP Database Server (v0.90.0)
 ================================================================================
  [Engine Core]    WiredTiger Lock-Free B+Tree MVCC Storage
- [Data Directory] /Users/maro/Projects/SQLion/data
+ [Data Directory] /Users/maro/Projects/LionSQL/data
  [Memory Budget]  2867MB (70% of 4096MB Physical RAM), work_mem: 64MB
  [Web Studio]     http://127.0.0.1:8090/_/ (HTTP REST Engine ready)
  [PostgreSQL]     postgres://admin@127.0.0.1:5433/postgres (PGWire v3)
@@ -577,7 +577,7 @@ $ lionsql status -dir data
 LionSQL Server Status: RUNNING
 ----------------------------------------
 PID               : 99777
-Data Directory    : /Users/maro/Projects/SQLion/data
+Data Directory    : /Users/maro/Projects/LionSQL/data
 Storage Backend   : wiredtiger (Disk B+Tree MVCC)
 HTTP / Studio     : 127.0.0.1:8090 (HEALTHY)
 PostgreSQL v3     : 127.0.0.1:5433 (LISTENING)
@@ -679,7 +679,7 @@ LionSQL은 PGWire v3 프레임을 완벽히 지원하며, 표준 `psql`을 통�
 psql -h 127.0.0.1 -p 5433 -U admin dbname=postgres
 ```
 * **인증 암호**: 관리자 비밀번호 (기본값: `1234567890`)
-* **단일 카탈로그 표준**: 데이터베이스 이름은 반드시 `postgres`를 지정해야 합니다 (레거시 `sqlion`은 완전 제거되었습니다).
+* **단일 카탈로그 표준**: 데이터베이스 이름은 반드시 `postgres`를 지정해야 합니다 (레거시 `lionsql`은 완전 제거되었습니다).
 
 #### 실무 유용한 `psql` 메타 커맨드 활용:
 ```sql
@@ -783,7 +783,7 @@ LionSQL 엔지니어링 팀에서 100% 정상 작동을 실측 검증한 6대 �
    - 체크박스 다중 선택 후 `Export JSON` 또는 `Export CSV`로 원클릭 덤프.
    - 외래키 컬럼 옆의 점프 링크(`↗`)를 누르면 참조 중인 부모 테이블의 대상 행으로 즉시 화면이 전환됩니다.
 5. **Developer API Preview 모달**:
-   - 각 테이블 행의 `API` 버튼을 누르면 해당 테이블을 조회/생성/수정하기 위한 **cURL 명령어, 바닐라 JavaScript `fetch()`, 그리고 LionSQL 공식 Web SDK (`sqlion.js`)** 연동 코드가 동적으로 생성되어 복사할 수 있습니다.
+   - 각 테이블 행의 `API` 버튼을 누르면 해당 테이블을 조회/생성/수정하기 위한 **cURL 명령어, 바닐라 JavaScript `fetch()`, 그리고 LionSQL 공식 Web SDK (`lionsql.js`)** 연동 코드가 동적으로 생성되어 복사할 수 있습니다.
 6. **SQL Query Studio & EXPLAIN 시각화**:
    - 문법 강조가 적용된 에디터에서 자유롭게 SQL을 실행하고 결과를 테이블/JSON으로 조회합니다.
    - `EXPLAIN` 버튼을 눌러 CBO가 선택한 인덱스 스캔 및 조인 전략을 시각적으로 검증할 수 있습니다.
@@ -1294,7 +1294,7 @@ lionsql start -dir=/var/lib/lionsql/data \
 | `hash join memory budget exceeded` | 대용량 카테시안 곱 또는 인덱스 부재 조인으로 `work_mem` 초과 | 쿼리에 적절한 `WHERE` 필터를 부여하거나, 세션 레벨에서 `SET work_mem = '128MB'`로 상향 조정 |
 | `serialization failure: write-write conflict (40001)` | 인메모리 OCC 또는 MVCC에서 동일 행 동시 수정 경합 | 애플리케이션 드라이버 레벨에서 10~50ms 지수 백오프 재시도(Retry) 로직 적용 |
 | `password authentication failed (28P01)` | 잘못된 관리자 이메일 또는 비밀번호 | 기동 시 지정한 `-admin-email`과 `-admin-pass` 확인 또는 `lionsql.json` 설정 검증 |
-| `Database connection failed` | 레거시 데이터베이스명(`sqlion`) 지정 오류 | 단일 카탈로그 표준에 맞추어 PGWire는 `postgres`, TDS는 `master`를 지정 |
+| `Database connection failed` | 레거시 데이터베이스명(`lionsql`) 지정 오류 | 단일 카탈로그 표준에 맞추어 PGWire는 `postgres`, TDS는 `master`를 지정 |
 | `disk space low warning` | 데이터 디렉토리 여유 공간이 1GB 미만으로 감소 | 오래된 백업 파일 정리, 로그 파일 로테이션, 또는 상위 디스크 볼륨 확장 |
 | `TLS handshake failed` | 인증서 만료 또는 도메인 불일치 | 인증서 파일 경로 및 유효기간 확인, 클라이언트 측 `TrustServerCertificate=True` 검토 |
 | `table limit exceeded: memory limit exceeded` | 인메모리 힙 상한(`--max-memory`) 도달 | 불필요한 테이블 데이터 삭제 또는 `-max-memory` 플래그 상향 조정 |

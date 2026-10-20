@@ -35,9 +35,9 @@ BEGIN
 
     SET @p = POWER(2, 4);
     SET @s = CONCAT('Order_', LEFT('123456', 3));
-    SET @sub = SUBSTRING('SQLion Engine', 1, 6);
+    SET @sub = SUBSTRING('LionSQL Engine', 1, 7);
     SET @rev = REVERSE('ABCDE');
-    SET @ci = CHARINDEX('Engine', 'SQLion Engine');
+    SET @ci = CHARINDEX('Engine', 'LionSQL Engine');
 
     PRINT @p;
     PRINT @s;
@@ -56,7 +56,7 @@ END
 		t.Fatalf("Run script1 failed: %v", err)
 	}
 
-	expectedLogs1 := []string{"16", "Order_123", "SQLion", "EDCBA", "8"}
+	expectedLogs1 := []string{"16", "Order_123", "LionSQL", "EDCBA", "9"}
 	if len(res1.Logs) != len(expectedLogs1) {
 		t.Fatalf("Expected %d logs, got %d (%v)", len(expectedLogs1), len(res1.Logs), res1.Logs)
 	}

@@ -13,7 +13,7 @@ func init() {
 	proc.RegisterProcedureFallback(BuildProcedure)
 }
 
-// ASTBuilder traverses an ANTLR T-SQL CST and builds SQLion's executable AST.
+// ASTBuilder traverses an ANTLR T-SQL CST and builds LionSQL's executable AST.
 type ASTBuilder struct {
 	BaseTSqlParserVisitor
 	script string

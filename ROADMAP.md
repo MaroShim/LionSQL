@@ -106,7 +106,7 @@ Driver Cert    & Zero-Race    Availability   Security/Auth  Tooling & CLI
 * **Global Memory Governor & Query Circuit Breaker (`pkg/config`, `pkg/execution`, `cmd/server`)**:
   Implemented dynamic physical RAM budgeting (`max_memory`, 70% of RAM) and query-level `work_mem: 64MB` circuit breakers in hash joins and external merge sort pipelines to eliminate OS OOM kills.
 * **Protocol Catalog Database Standardization (`pkg/catalog/virtual`, `pkg/engine`)**:
-  Eliminated legacy `sqlion` database across virtual catalog and engine to strictly standardize on protocol-native single database namespaces: `postgres` for PGWire and `master` for TDS.
+  Eliminated legacy database namespaces across virtual catalog and engine to strictly standardize on protocol-native single database namespaces: `postgres` for PGWire and `master` for TDS.
 * **Test Suite Boilerplate Diet (`pkg/wire`, `pkg/api`)**:
   Net 291 lines of redundant socket handshake and setup boilerplate eliminated while preserving 100% test coverage.
 

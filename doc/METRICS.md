@@ -86,28 +86,28 @@ When running with Prometheus telemetry enabled, LionSQL exports standard OpenMet
 
 | Metric Name | Type | Description |
 |---|---|---|
-| `sqlion_pool_max_workers` | Gauge | Maximum worker goroutines configured in execution pool. |
-| `sqlion_pool_active_workers` | Gauge | Current number of worker goroutines actively processing queries. |
-| `sqlion_pool_queued_requests` | Gauge | Number of incoming requests waiting for an available worker slot. |
-| `sqlion_pool_idle_sessions` | Gauge | Cached idle database sessions available for immediate reuse. |
+| `lionsql_pool_max_workers` | Gauge | Maximum worker goroutines configured in execution pool. |
+| `lionsql_pool_active_workers` | Gauge | Current number of worker goroutines actively processing queries. |
+| `lionsql_pool_queued_requests` | Gauge | Number of incoming requests waiting for an available worker slot. |
+| `lionsql_pool_idle_sessions` | Gauge | Cached idle database sessions available for immediate reuse. |
 
 ### 4.2 Query Execution Metrics
 
 | Metric Name | Type | Labels | Description |
 |---|---|---|---|
-| `sqlion_queries_total` | Counter | `protocol`, `type`, `status` | Total SQL queries processed (`protocol`: `postgres`, `tds`, `http`; `status`: `success`, `error`). |
-| `sqlion_query_duration_seconds` | Histogram | `protocol`, `type` | Query latency distribution across p50, p90, p99 percentiles. |
-| `sqlion_spill_sort_runs_total` | Counter | - | Number of times sort operations exceeded memory quota and spilled to temporary scratch disk. |
-| `sqlion_memory_governor_rejections_total` | Counter | - | Number of queries rejected due to system memory limit saturation. |
+| `lionsql_queries_total` | Counter | `protocol`, `type`, `status` | Total SQL queries processed (`protocol`: `postgres`, `tds`, `http`; `status`: `success`, `error`). |
+| `lionsql_query_duration_seconds` | Histogram | `protocol`, `type` | Query latency distribution across p50, p90, p99 percentiles. |
+| `lionsql_spill_sort_runs_total` | Counter | - | Number of times sort operations exceeded memory quota and spilled to temporary scratch disk. |
+| `lionsql_memory_governor_rejections_total` | Counter | - | Number of queries rejected due to system memory limit saturation. |
 
 ### 4.3 Storage & Persistence Metrics
 
 | Metric Name | Type | Labels | Description |
 |---|---|---|---|
-| `sqlion_storage_read_bytes_total` | Counter | `engine` | Total bytes read from underlying storage. |
-| `sqlion_storage_write_bytes_total` | Counter | `engine` | Total bytes committed to storage and WAL. |
-| `sqlion_wal_sync_duration_seconds` | Histogram | - | Latency of WAL `fsync` calls to durable disk. |
-| `sqlion_backup_duration_seconds` | Gauge | `type` | Duration of the most recent online snapshot backup pass. |
+| `lionsql_storage_read_bytes_total` | Counter | `engine` | Total bytes read from underlying storage. |
+| `lionsql_storage_write_bytes_total` | Counter | `engine` | Total bytes committed to storage and WAL. |
+| `lionsql_wal_sync_duration_seconds` | Histogram | - | Latency of WAL `fsync` calls to durable disk. |
+| `lionsql_backup_duration_seconds` | Gauge | `type` | Duration of the most recent online snapshot backup pass. |
 
 ---
 
@@ -117,7 +117,7 @@ Add LionSQL as a scrape target in your `prometheus.yml`:
 
 ```yaml
 scrape_configs:
-  - job_name: 'sqlion'
+  - job_name: 'lionsql'
     scrape_interval: 10s
     metrics_path: '/api/pool/stats'
     static_configs:
@@ -133,10 +133,10 @@ scrape_configs:
 
 ```yaml
 groups:
-  - name: sqlion_alerts
+  - name: lionsql_alerts
     rules:
       - alert: LionSQLPoolSaturation
-        expr: sqlion_pool_queued_requests > 10
+        expr: lionsql_pool_queued_requests > 10
         for: 1m
         labels:
           severity: warning
@@ -145,7 +145,7 @@ groups:
           description: "Over 10 requests queued for more than 1 minute on {{ $labels.instance }}."
 
       - alert: LionSQLHighQueryLatencyP99
-        expr: histogram_quantile(0.99, rate(sqlion_query_duration_seconds_bucket[5m])) > 0.5
+        expr: histogram_quantile(0.99, rate(lionsql_query_duration_seconds_bucket[5m])) > 0.5
         for: 2m
         labels:
           severity: warning
@@ -154,7 +154,7 @@ groups:
           description: "99th percentile query latency is {{ $value }}s on {{ $labels.instance }}."
 
       - alert: LionSQLInstanceDown
-        expr: up{job="sqlion"} == 0
+        expr: up{job="lionsql"} == 0
         for: 30s
         labels:
           severity: critical

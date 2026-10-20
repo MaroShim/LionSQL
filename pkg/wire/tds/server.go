@@ -1001,7 +1001,7 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 
 	if !exists {
 		var buf bytes.Buffer
-		buf.Write(BuildError(8179, 1, 16, fmt.Sprintf("Could not find prepared statement with handle %d.", handle), "SQLION", "", 1))
+		buf.Write(BuildError(8179, 1, 16, fmt.Sprintf("Could not find prepared statement with handle %d.", handle), "LionSQL", "", 1))
 		buf.Write(BuildReturnStatus(-1))
 		buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
@@ -1137,7 +1137,7 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 	var buf bytes.Buffer
 
 	for _, msg := range res.Logs {
-		buf.Write(BuildInfo(0, 1, 10, msg, "SQLION", "", 1))
+		buf.Write(BuildInfo(0, 1, 10, msg, "LionSQL", "", 1))
 	}
 
 	if len(res.Columns) > 0 {
@@ -1279,7 +1279,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		}
 		var buf bytes.Buffer
 		num, state, sev, msg := extractTdsErrorInfo(err)
-		buf.Write(BuildError(num, state, sev, msg, "SQLION", "", 1))
+		buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 		buf.Write(BuildReturnStatus(-1))
 		buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
@@ -1294,7 +1294,7 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 	upperCmd := strings.ToUpper(res.Command)
 	if upperCmd == "PRINT" {
 		for _, msg := range res.Messages {
-			buf.Write(BuildInfo(0, 1, 0, msg, "SQLION", "", 1))
+			buf.Write(BuildInfo(0, 1, 0, msg, "LionSQL", "", 1))
 		}
 	}
 	if upperCmd == "BEGIN" {
@@ -2020,7 +2020,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "BEGIN TRANSACTION")
 		if err != nil {
 			var buf bytes.Buffer
-			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
+			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 			return
@@ -2040,7 +2040,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "COMMIT TRANSACTION")
 		if err != nil {
 			var buf bytes.Buffer
-			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
+			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 			return
@@ -2058,7 +2058,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "ROLLBACK TRANSACTION")
 		if err != nil {
 			var buf bytes.Buffer
-			buf.Write(BuildError(50000, 1, 16, err.Error(), "SQLION", "", 1))
+			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
 			buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 			_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 			return
@@ -2125,7 +2125,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		}
 		var buf bytes.Buffer
 		num, state, sev, msg := extractTdsErrorInfo(err)
-		buf.Write(BuildError(num, state, sev, msg, "SQLION", "", 1))
+		buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
 		buf.Write(BuildDone(TokenDone, DoneFinal|DoneError, 0, 0))
 		_ = WritePacket(conn, PacketTabular, sess.SPID, buf.Bytes())
 		return
@@ -2139,7 +2139,7 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 	upperCmd := strings.ToUpper(res.Command)
 	if upperCmd == "PRINT" {
 		for _, msg := range res.Messages {
-			buf.Write(BuildInfo(0, 1, 0, msg, "SQLION", "", 1))
+			buf.Write(BuildInfo(0, 1, 0, msg, "LionSQL", "", 1))
 		}
 	}
 	if upperCmd == "USE" {

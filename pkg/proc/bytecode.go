@@ -8,7 +8,7 @@ import (
 	"lionsql/pkg/storage"
 )
 
-// OpCode represents an operation code for the SQLion T-SQL Bytecode Virtual Machine.
+// OpCode represents an operation code for the LionSQL T-SQL Bytecode Virtual Machine.
 type OpCode uint8
 
 const (

@@ -286,7 +286,7 @@ func main() {
 ### JavaScript / TypeScript (공식 범용 SDK)
 
 ```javascript
-import LionSQL from './sdk/sqlion.js';
+import LionSQL from './sdk/lionsql.js';
 
 const client = new LionSQL('http://127.0.0.1:8090', { auth: 'YOUR_API_KEY' });
 

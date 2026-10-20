@@ -2181,7 +2181,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       </div>
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px;">
-        <span style="font-size: 0.75rem; color: var(--text-muted);">API Key: <code id="api-preview-key-hint" style="color: var(--primary);">SQLION_API_KEY</code> (Bearer token)</span>
+        <span style="font-size: 0.75rem; color: var(--text-muted);">API Key: <code id="api-preview-key-hint" style="color: var(--primary);">LIONSQL_API_KEY</code> (Bearer token)</span>
         <button type="button" class="btn btn-secondary" style="padding: 6px 14px; font-size: 0.85rem;" onclick="closeAPIPreviewModal()">Close</button>
       </div>
     </div>
@@ -2409,7 +2409,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
 
     // Helper: authenticated fetch wrapper with automatic JWT header and 401 interceptor
     async function authFetch(url, options = {}) {
-      const token = localStorage.getItem('sqlion_auth_token');
+      const token = localStorage.getItem('lionsql_auth_token');
       const headers = Object.assign({}, options.headers || {});
       if (token) {
         headers['Authorization'] = 'Bearer ' + token;
@@ -2922,8 +2922,8 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     }
 
     // --- SQL Query History & Favorites ---
-    const SQL_HISTORY_KEY = 'sqlion_query_history_v1';
-    const SQL_FAVORITES_KEY = 'sqlion_query_favorites_v1';
+    const SQL_HISTORY_KEY = 'lionsql_query_history_v1';
+    const SQL_FAVORITES_KEY = 'lionsql_query_favorites_v1';
 
     function loadSQLHistory() {
       try {
@@ -4337,8 +4337,8 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         });
         const data = await res.json();
         if (res.ok && data.token) {
-          localStorage.setItem('sqlion_auth_token', data.token);
-          localStorage.setItem('sqlion_auth_email', data.record.email);
+          localStorage.setItem('lionsql_auth_token', data.token);
+          localStorage.setItem('lionsql_auth_email', data.record.email);
           updateUserDisplay(data.record.email);
           hideLoginModal();
           loadTables();
@@ -4354,7 +4354,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     }
 
     async function logout() {
-      const token = localStorage.getItem('sqlion_auth_token');
+      const token = localStorage.getItem('lionsql_auth_token');
       if (token) {
         try {
           await fetch('/api/auth/logout', {
@@ -4363,8 +4363,8 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           });
         } catch (_) {}
       }
-      localStorage.removeItem('sqlion_auth_token');
-      localStorage.removeItem('sqlion_auth_email');
+      localStorage.removeItem('lionsql_auth_token');
+      localStorage.removeItem('lionsql_auth_email');
       updateUserDisplay(null);
       showLoginModal();
     }
@@ -4388,7 +4388,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     }
 
     async function checkAuthSession() {
-      const token = localStorage.getItem('sqlion_auth_token');
+      const token = localStorage.getItem('lionsql_auth_token');
       if (!token) {
         // Check if server enforces auth by pinging /api/tables
         try {

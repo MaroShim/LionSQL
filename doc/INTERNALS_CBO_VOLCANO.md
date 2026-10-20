@@ -67,7 +67,7 @@ To eliminate Out-Of-Memory (OOM) panics caused by large sorting operations, `Sor
                                ▼
                    ┌───────────────────────────────────┐
                    │ Spill Sorted Run to Disk          │
-                   │ (sqlion-sort-run-*.tmp)           │
+                   │ (lionsql-sort-run-*.tmp)           │
                    └───────────────────────────────────┘
                                │
                                ▼

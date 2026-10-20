@@ -86,7 +86,7 @@ LionSQL maps diverse protocol-specific authentication challenges to the unified 
 | **Microsoft TDS** | Login7 Record | `0xAD LOGINACK` or `0xAA ERROR` | `authService.ValidateUser(user, pass)` |
 | **HTTP / REST** | HTTP Basic Auth | `401 Unauthorized` or `200 OK` | `authService.AuthenticateSuperuser(email, pass)` |
 | **HTTP / Web Studio** | Bearer JWT Token | `Authorization: Bearer <jwt>` | `authService.ValidateToken(token)` |
-| **Machine-to-Machine** | API Key Secret | `X-Api-Key: sqlion_<token>` | `authService.ValidateAPIKey(key)` |
+| **Machine-to-Machine** | API Key Secret | `X-Api-Key: lionsql_<token>` | `authService.ValidateAPIKey(key)` |
 
 ### 3.1. Superuser Parity
 When a cluster is initialized with an administrative identity (e.g. `admin / secret`), that single administrative identity is recognized identically across all wire protocols:
@@ -106,7 +106,7 @@ package ldapprovider
 import (
     "crypto/tls"
     "fmt"
-    "sqlion/pkg/auth"
+    "lionsql/pkg/auth"
     "github.com/go-ldap/ldap/v3"
 )
 
