@@ -545,7 +545,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 					updatedRec := existingRec.Clone()
 					assignments := onConflict.assignments
 					if len(assignments) == 0 {
-						// CockroachDB / SQLion UPSERT default: update all non-PK columns
+						// CockroachDB / LionSQL UPSERT default: update all non-PK columns
 						for _, c := range schema.Columns {
 							if c.PrimaryKey {
 								continue

@@ -353,7 +353,7 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 		}
 		return int64(0), "@@rowcount"
 	case "@@SERVERNAME", "@@SERVICENAME":
-		return "SQLION", "@@servername"
+		return "LionSQL", "@@servername"
 	case "@@OPTIONS":
 		return int64(5432), "@@options"
 	case "@@ERROR", "ERROR_NUMBER()", "ERROR_NUMBER":
@@ -423,7 +423,7 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 		case "INSTANCENAME":
 			return "MSSQLSERVER", "instancename"
 		case "MACHINENAME", "SERVERNAME":
-			return "SQLION", "servername"
+			return "LionSQL", "servername"
 		case "COLLATION":
 			return "SQL_Latin1_General_CP1_CI_AS", "collation"
 		case "ISCLUSTERED", "ISHADRENABLED", "ISINTEGRATEDSECURITYONLY":

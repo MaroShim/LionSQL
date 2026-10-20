@@ -215,7 +215,11 @@ func (s *Coordinator) execDBCC(query string, start time.Time, cs *ClientSession)
 
 		totalAllocErrors := 0
 		totalConsistErrors := 0
-		messages := []string{"DBCC results for 'sqlion'."}
+		dbName := "master"
+		if cs != nil && cs.Database != "" {
+			dbName = cs.Database
+		}
+		messages := []string{fmt.Sprintf("DBCC results for %q.", dbName)}
 
 		for _, tbl := range tables {
 			rowCount := int64(0)
@@ -244,14 +248,9 @@ func (s *Coordinator) execDBCC(query string, start time.Time, cs *ClientSession)
 		}
 
 		messages = append(messages,
-			fmt.Sprintf("CHECKDB found %d allocation errors and %d consistency errors in database 'sqlion'.", totalAllocErrors, totalConsistErrors),
+			fmt.Sprintf("CHECKDB found %d allocation errors and %d consistency errors in database %q.", totalAllocErrors, totalConsistErrors, dbName),
 			"DBCC execution completed. If DBCC printed error messages, contact your system administrator.",
 		)
-
-		dbName := "master"
-		if cs != nil && cs.Database != "" {
-			dbName = cs.Database
-		}
 		return &QueryResult{
 			Success: true,
 			Command: "DBCC",
@@ -940,8 +939,8 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 				"type":               0,
 				"type_desc":          "ROWS",
 				"data_space_id":      1,
-				"name":               "sqlion_data",
-				"physical_name":      "sqlion.mdf",
+				"name":               "lionsql_data",
+				"physical_name":      "lionsql.mdf",
 				"state":              0,
 				"state_desc":         "ONLINE",
 				"size":               2048,
@@ -958,8 +957,8 @@ func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, 
 				"type":               1,
 				"type_desc":          "LOG",
 				"data_space_id":      0,
-				"name":               "sqlion_log",
-				"physical_name":      "sqlion_log.ldf",
+				"name":               "lionsql_log",
+				"physical_name":      "lionsql_log.ldf",
 				"state":              0,
 				"state_desc":         "ONLINE",
 				"size":               1024,
