@@ -396,8 +396,16 @@ func (e *Engine) loadCatalog() {
 	}
 	var tables []*storage.TableSchema
 	if err := json.Unmarshal(data, &tables); err == nil {
+		var hasTemp bool
 		for _, t := range tables {
+			if storage.IsTemporaryTable(t.Name) {
+				hasTemp = true
+				continue
+			}
 			e.tables[t.Name] = t
+		}
+		if hasTemp {
+			_ = e.saveCatalog()
 		}
 	}
 }
@@ -405,6 +413,9 @@ func (e *Engine) loadCatalog() {
 func (e *Engine) saveCatalog() error {
 	list := make([]*storage.TableSchema, 0, len(e.tables))
 	for _, t := range e.tables {
+		if storage.IsTemporaryTable(t.Name) {
+			continue
+		}
 		list = append(list, t)
 	}
 	data, err := json.MarshalIndent(list, "", "  ")
@@ -490,11 +501,13 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
-	e.recordWALLocked([]memengine.WALOp{{
-		Type:   memengine.OpCreateTable,
-		Table:  schema.Name,
-		Schema: schema,
-	}})
+	if !storage.IsTemporaryTable(schema.Name) {
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:   memengine.OpCreateTable,
+			Table:  schema.Name,
+			Schema: schema,
+		}})
+	}
 	return nil
 }
 
@@ -522,10 +535,12 @@ func (e *Engine) DropTable(tableName string) error {
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
-	e.recordWALLocked([]memengine.WALOp{{
-		Type:  memengine.OpDropTable,
-		Table: tbl.Name,
-	}})
+	if !storage.IsTemporaryTable(tbl.Name) {
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:  memengine.OpDropTable,
+			Table: tbl.Name,
+		}})
+	}
 	return nil
 }
 
@@ -573,10 +588,12 @@ func (e *Engine) TruncateTable(tableName string) error {
 		}
 	}
 
-	e.recordWALLocked([]memengine.WALOp{{
-		Type:  memengine.OpTruncateTable,
-		Table: tableName,
-	}})
+	if !storage.IsTemporaryTable(tableName) {
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:  memengine.OpTruncateTable,
+			Table: tableName,
+		}})
+	}
 	return nil
 }
 
@@ -626,11 +643,13 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 		return fmt.Errorf("%w: partition %q in table %q", storage.ErrPartitionNotFound, partitionName, tableName)
 	}
 
-	e.recordWALLocked([]memengine.WALOp{{
-		Type:  memengine.OpDropPartition,
-		Table: tableName,
-		Key:   partitionName,
-	}})
+	if !storage.IsTemporaryTable(tableName) {
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:  memengine.OpDropPartition,
+			Table: tableName,
+			Key:   partitionName,
+		}})
+	}
 	return nil
 }
 
@@ -771,11 +790,13 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 		return err
 	}
 
-	e.recordWALLocked([]memengine.WALOp{{
-		Type:   memengine.OpAlterTable,
-		Table:  tableName,
-		Column: col,
-	}})
+	if !storage.IsTemporaryTable(tableName) {
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:   memengine.OpAlterTable,
+			Table:  tableName,
+			Column: col,
+		}})
+	}
 	return nil
 }
 
@@ -821,11 +842,13 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
-	e.recordWALLocked([]memengine.WALOp{{
-		Type:        memengine.OpCreateIndex,
-		Table:       t.Name,
-		IndexSchema: index,
-	}})
+	if !storage.IsTemporaryTable(t.Name) {
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:        memengine.OpCreateIndex,
+			Table:       t.Name,
+			IndexSchema: index,
+		}})
+	}
 	return nil
 }
 
@@ -847,11 +870,13 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	if err := e.saveCatalog(); err != nil {
 		return err
 	}
-	e.recordWALLocked([]memengine.WALOp{{
-		Type:      memengine.OpDropIndex,
-		Table:     tableName,
-		IndexName: indexName,
-	}})
+	if !storage.IsTemporaryTable(tableName) {
+		e.recordWALLocked([]memengine.WALOp{{
+			Type:      memengine.OpDropIndex,
+			Table:     tableName,
+			IndexName: indexName,
+		}})
+	}
 	return nil
 }
 
@@ -1311,7 +1336,7 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 			kind:  wtUndoDelete,
 		})
 	}
-	if tx.sess.engine.hasHook.Load() {
+	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
 		recCopy := make([]byte, len(recBytes))
 		copy(recCopy, recBytes)
 		tx.walOps = append(tx.walOps, memengine.WALOp{
@@ -1428,7 +1453,7 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 			oldData: oldData,
 		})
 	}
-	if tx.sess.engine.hasHook.Load() {
+	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
 		recCopy := make([]byte, len(recBytes))
 		copy(recCopy, recBytes)
 		tx.walOps = append(tx.walOps, memengine.WALOp{
@@ -1493,7 +1518,7 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 			oldData: oldData,
 		})
 	}
-	if tx.sess.engine.hasHook.Load() {
+	if tx.sess.engine.hasHook.Load() && !storage.IsTemporaryTable(tableName) {
 		tx.walOps = append(tx.walOps, memengine.WALOp{
 			Type:  memengine.OpDelete,
 			Table: tableName,

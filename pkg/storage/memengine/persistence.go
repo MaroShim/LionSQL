@@ -54,6 +54,11 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 		e.nextLSN.Store(rec.LSN)
 	}
 	for _, op := range rec.Ops {
+		if storage.IsTemporaryTable(op.Table) ||
+			(op.Schema != nil && storage.IsTemporaryTable(op.Schema.Name)) ||
+			(op.IndexSchema != nil && storage.IsTemporaryTable(op.IndexSchema.TableName)) {
+			continue
+		}
 		switch op.Type {
 		case OpCreateTable:
 			if op.Schema == nil {
@@ -273,7 +278,16 @@ func (e *Engine) saveDiskLocked() error {
 	}
 	e.diskMu.Lock()
 	defer e.diskMu.Unlock()
-	for _, td := range e.tables {
+
+	persistTables := make(map[string]*TableData)
+	for name, td := range e.tables {
+		if storage.IsTemporaryTable(name) {
+			continue
+		}
+		persistTables[name] = td
+	}
+
+	for _, td := range persistTables {
 		td.syncShardsToMapsLocked()
 		td.mu.Lock()
 		for _, idx := range td.Indexes {
@@ -281,19 +295,19 @@ func (e *Engine) saveDiskLocked() error {
 		}
 		td.mu.Unlock()
 	}
-	tNames := make([]string, 0, len(e.tables))
-	for name := range e.tables {
+	tNames := make([]string, 0, len(persistTables))
+	for name := range persistTables {
 		tNames = append(tNames, name)
 	}
 	sort.Strings(tNames)
 	for _, name := range tNames {
-		td := e.tables[name]
+		td := persistTables[name]
 		td.mu.RLock()
 		td.partMu.RLock()
 	}
-	data, err := MarshalMsgPack(e.tables)
+	data, err := MarshalMsgPack(persistTables)
 	for i := len(tNames) - 1; i >= 0; i-- {
-		td := e.tables[tNames[i]]
+		td := persistTables[tNames[i]]
 		td.partMu.RUnlock()
 		td.mu.RUnlock()
 	}
@@ -326,7 +340,13 @@ func (e *Engine) loadDiskLocked() {
 		return
 	}
 
-	e.tables = loaded
+	e.tables = make(map[string]*TableData)
+	for name, td := range loaded {
+		if storage.IsTemporaryTable(name) {
+			continue
+		}
+		e.tables[name] = td
+	}
 	for _, td := range e.tables {
 		if td.Versions == nil {
 			td.Versions = make(map[string]int64)

@@ -238,7 +238,7 @@
 | **P1** | **카탈로그/영속화** | **서버 재기동 시 인메모리 프로시저/함수/뷰/트리거 메타데이터 영구 유실 결함 해결 (`BUG-CATALOG-OBJECT-PERSISTENCE-OMISSION-1`)** | `pkg/catalog/catalog.go`, `pkg/engine/sqlexec_ddl.go` | **완료 (`[x]`)** | catalog_objects.json 원자적 저장 및 재기동 시 프로시저/함수/뷰/트리거 자동 복원 |
 | **P1** | **스토리지/WiredTiger** | **WiredTiger 스토리지 엔진 보조 유니크 인덱스 제약 검증 누락 및 순차 스캔 결함 해결 (`BUG-WT-UNIQUE-INDEX-UNENFORCED-1`)** | `pkg/storage/wiredtiger/wt_engine.go` | **완료 (`[x]`)** | - |
 | **P1** | **실행/조인** | **복합 조인 조건 '=' 분해 파괴로 인한 빈 문자열 해시 매칭 및 무제한 카테시안 곱 결함 해결 (`BUG-EXEC-BUILDER-JOIN-COND-SPLIT-1`)** | `pkg/execution/builder.go` | **완료 (`[x]`)** | - |
-| **P1** | **스토리지/임시테이블** | **세션 임시테이블 스냅샷/WAL 영속화 및 재기동 후 영구 고아 객체 누수 결함 해결 (`BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1`)** | `pkg/storage/memengine/persistence.go`, `pkg/storage/wiredtiger/wt_engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/임시테이블** | **세션 임시테이블 스냅샷/WAL 영속화 및 재기동 후 영구 고아 객체 누수 결함 해결 (`BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1`)** | `pkg/storage/memengine/persistence.go`, `pkg/storage/wiredtiger/wt_engine.go` | **완료 (`[x]`)** | `storage.IsTemporaryTable` 도입으로 스냅샷 저장 및 WAL 기록/재생 시 임시테이블(`__temp_*`, `__tv_*`) 영속화 원천 차단 |
 | **P1** | **엔진/MERGE** | **MERGE 구문 내 `WHEN NOT MATCHED` 신규 삽입 행이 `NOT MATCHED BY SOURCE`에 의해 즉각 자가 삭제되는 결함 해결 (`BUG-MERGE-NOT-MATCHED-SOURCE-SELF-DESTRUCT-1`)** | `pkg/engine/sqlexec_merge.go` | **완료 (`[x]`)** | NOT MATCHED BY SOURCE 적용 범위를 MERGE 시작 전 기존 행으로 한정하여 신규 삽입 행 자가 삭제 방지 |
 | **P1** | **함수/문자열** | **`CHARINDEX` 및 `STRPOS`의 NULL 인자 수신 시 0 반환 삼치논리 파괴 결함 해결 (`BUG-STR-CHARINDEX-NULL-ZERO-1`)** | `pkg/proc/builtins_string.go` | **완료 (`[x]`)** | - |
 | **P1** | **플래너/CBO** | **CBO 선택도 추정 시 컬럼명 대소문자 불일치로 인한 통계 탐색 실패 및 0.33 추락 결함 해결 (`BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1`)** | `pkg/planner/stats.go` | **완료 (`[x]`)** | - |
@@ -841,6 +841,7 @@
 | **BUG-COORD-AGG-MIN-MAX-NON-NUMERIC-NIL-1** | 엔진/집계 | 코디네이터 집계 `MIN`/`MAX` 비숫자형 파싱 실패 시 NULL 반환 결함 해결 | **완료 (`[x]`)** | 문자열/날짜/불리언 타입에 대한 범용 대소 비교(`compareAggValues`) 적용으로 NULL 변조 방지 |
 | **BUG-EXEC-AGG-DISTINCT-IGNORED-1** | 실행/집계 | `AggregateIterator` DISTINCT 플래그 누락 및 코디네이터 중복 집계 결함 해결 | **완료 (`[x]`)** | DISTINCT 키워드 보존 및 그룹별 중복값 캐싱 필터링으로 표준 집계 정합성 보장 |
 | **BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1** | 플래너/CBO | CBO 선택도 추정 시 컬럼명 대소문자 불일치 통계 탐색 실패 해결 | **완료 (`[x]`)** | `ts.findColumnStats` 대소문자 무관 탐색 연동으로 히스토그램/통계 정상 룩업 보장 |
+| **BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1** | 스토리지/임시테이블 | 세션 임시테이블 스냅샷/WAL 영속화 및 재기동 후 영구 고아 객체 누수 결함 해결 | **완료 (`[x]`)** | `storage.IsTemporaryTable` 기반 스냅샷(`saveDiskLocked`/`saveCatalog`) 및 WAL 기록/재생 필터링으로 임시 객체 카탈로그 오염 차단 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |

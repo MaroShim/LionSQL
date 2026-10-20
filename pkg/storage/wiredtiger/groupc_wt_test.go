@@ -3,6 +3,7 @@
 package wiredtiger
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -337,5 +338,53 @@ func TestGroupD_WT_BUG_ADD_COL_NOT_NULL_1(t *testing.T) {
 	}
 	if rec["price"].IVal != 99 {
 		t.Fatalf("expected price=99, got: %v", rec["price"])
+	}
+}
+
+func TestBugTempTablePersistLeak_WiredTiger(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "wt_temp_table_leak_*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	eng1 := New()
+	if err := eng1.Open(tmpDir); err != nil {
+		t.Fatalf("Open eng1 failed: %v", err)
+	}
+
+	if err := eng1.CreateTable(&storage.TableSchema{
+		Name: "perm_accounts",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable perm_accounts failed: %v", err)
+	}
+
+	if err := eng1.CreateTable(&storage.TableSchema{
+		Name: "__temp_sess9_scratch",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+		},
+	}); err != nil {
+		t.Fatalf("CreateTable __temp_sess9_scratch failed: %v", err)
+	}
+
+	if err := eng1.Close(); err != nil {
+		t.Fatalf("Close eng1 failed: %v", err)
+	}
+
+	eng2 := New()
+	if err := eng2.Open(tmpDir); err != nil {
+		t.Fatalf("Reopen eng2 failed: %v", err)
+	}
+	defer eng2.Close()
+
+	if _, err := eng2.GetTable("perm_accounts"); err != nil {
+		t.Fatalf("expected perm_accounts to survive restart, got err: %v", err)
+	}
+	if _, err := eng2.GetTable("__temp_sess9_scratch"); !errors.Is(err, storage.ErrTableNotFound) {
+		t.Fatalf("expected __temp_sess9_scratch to NOT persist in catalog, got err: %v", err)
 	}
 }

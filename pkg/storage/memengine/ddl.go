@@ -67,12 +67,14 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	e.tables[schema.Name] = td
 	e.rebuildFKCacheLocked()
 
-	if _, err := e.recordWALLocked([]WALOp{{
-		Type:   OpCreateTable,
-		Table:  schema.Name,
-		Schema: schema,
-	}}); err != nil {
-		return err
+	if !storage.IsTemporaryTable(schema.Name) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:   OpCreateTable,
+			Table:  schema.Name,
+			Schema: schema,
+		}}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -138,12 +140,14 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 	td.Indexes[index.Name] = idxData
 	td.Schema.Indexes = append(td.Schema.Indexes, *index)
 
-	if _, err := e.recordWALLocked([]WALOp{{
-		Type:        OpCreateIndex,
-		Table:       index.TableName,
-		IndexSchema: index,
-	}}); err != nil {
-		return err
+	if !storage.IsTemporaryTable(index.TableName) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:        OpCreateIndex,
+			Table:       index.TableName,
+			IndexSchema: index,
+		}}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -165,12 +169,14 @@ func (e *Engine) DropIndex(tableName, indexName string) error {
 	sqlutil.MapDeleteFold(td.Indexes, foundIdx.Name)
 	td.Schema.Indexes = append(td.Schema.Indexes[:idxPos], td.Schema.Indexes[idxPos+1:]...)
 
-	if _, err := e.recordWALLocked([]WALOp{{
-		Type:      OpDropIndex,
-		Table:     tableName,
-		IndexName: indexName,
-	}}); err != nil {
-		return err
+	if !storage.IsTemporaryTable(tableName) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:      OpDropIndex,
+			Table:     tableName,
+			IndexName: indexName,
+		}}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -331,11 +337,13 @@ func (e *Engine) DropTable(tableName string) error {
 
 	sqlutil.MapDeleteFold(e.tables, tableName)
 	e.rebuildFKCacheLocked()
-	if _, err := e.recordWALLocked([]WALOp{{
-		Type:  OpDropTable,
-		Table: td.Schema.Name,
-	}}); err != nil {
-		return err
+	if !storage.IsTemporaryTable(td.Schema.Name) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:  OpDropTable,
+			Table: td.Schema.Name,
+		}}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -371,11 +379,13 @@ func (e *Engine) TruncateTable(tableName string) error {
 	}
 	td.mu.Unlock()
 
-	if _, err := e.recordWALLocked([]WALOp{{
-		Type:  OpTruncateTable,
-		Table: td.Schema.Name,
-	}}); err != nil {
-		return err
+	if !storage.IsTemporaryTable(td.Schema.Name) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:  OpTruncateTable,
+			Table: td.Schema.Name,
+		}}); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -416,12 +426,14 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	// Rebuild keys
 	td.Keys = td.collectKeys(nil)
 
-	if _, err := e.recordWALLocked([]WALOp{{
-		Type:  OpDropPartition,
-		Table: td.Schema.Name,
-		Key:   partitionName,
-	}}); err != nil {
-		return err
+	if !storage.IsTemporaryTable(td.Schema.Name) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:  OpDropPartition,
+			Table: td.Schema.Name,
+			Key:   partitionName,
+		}}); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -509,12 +521,14 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 	}
 	td.addColumnValues(fillVal)
 
-	if _, err := e.recordWALLocked([]WALOp{{
-		Type:   OpAlterTable,
-		Table:  td.Schema.Name,
-		Column: col,
-	}}); err != nil {
-		return err
+	if !storage.IsTemporaryTable(td.Schema.Name) {
+		if _, err := e.recordWALLocked([]WALOp{{
+			Type:   OpAlterTable,
+			Table:  td.Schema.Name,
+			Column: col,
+		}}); err != nil {
+			return err
+		}
 	}
 	return nil
 }

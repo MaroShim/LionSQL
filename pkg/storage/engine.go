@@ -181,6 +181,15 @@ type PartitionInfo struct {
 	RowCount int64  `json:"row_count"`
 }
 
+// IsTemporaryTable returns true if tableName represents a session-isolated temporary table
+// or table variable that should not be persisted across database restarts or WAL logs.
+func IsTemporaryTable(name string) bool {
+	lower := strings.ToLower(name)
+	return strings.HasPrefix(lower, "__temp_") ||
+		strings.HasPrefix(lower, "__tv_") ||
+		strings.HasPrefix(lower, "#")
+}
+
 // TableSchema defines a table structure.
 type TableSchema struct {
 	Name        string             `json:"name"`
@@ -188,6 +197,10 @@ type TableSchema struct {
 	Indexes     []IndexSchema      `json:"indexes,omitempty"`
 	ForeignKeys []ForeignKeySchema `json:"foreign_keys,omitempty"`
 	Partition   *PartitionDef      `json:"partition,omitempty"`
+}
+
+func (s *TableSchema) IsTemporary() bool {
+	return s != nil && IsTemporaryTable(s.Name)
 }
 
 func (s *TableSchema) IsPartitioned() bool {

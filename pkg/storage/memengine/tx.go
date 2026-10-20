@@ -1822,6 +1822,9 @@ func (tx *Transaction) Commit() error {
 	if needWAL && len(tx.changes) > 0 {
 		ops := make([]WALOp, 0, len(tx.changes))
 		for _, ch := range tx.changes {
+			if storage.IsTemporaryTable(ch.table) {
+				continue
+			}
 			var opType WALOpType
 			switch ch.kind {
 			case changeInsert:
@@ -1847,10 +1850,15 @@ func (tx *Transaction) Commit() error {
 				BaseVer: ch.baseVer,
 			})
 		}
-		var err error
-		walRec, walSeq, err = tx.engine.appendWALFrameLocked(ops)
-		if err != nil {
-			return err
+		if len(ops) > 0 {
+			var err error
+			walRec, walSeq, err = tx.engine.appendWALFrameLocked(ops)
+			if err != nil {
+				return err
+			}
+		} else {
+			tx.commitLSN = tx.engine.nextLSN.Add(1)
+			tx.commitTimestamp = time.Now().UnixNano()
 		}
 	} else {
 		if len(tx.changes) > 0 {
@@ -1866,7 +1874,7 @@ func (tx *Transaction) Commit() error {
 	unlockAll()
 
 	// 8. Perform group commit fsync and optional AOF compaction outside shard/table locks
-	if needWAL && len(tx.changes) > 0 {
+	if needWAL && walSeq > 0 {
 		if err := tx.engine.finishWALCommitLocked(walSeq); err != nil {
 			return err
 		}

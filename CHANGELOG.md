@@ -27,6 +27,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `ARCH-LEX-1`: Unified SQL lexical scanning, token extraction, and quote/parenthesis tracking into `pkg/sqlutil` (`SplitTopLevelKeyword`, `FindTopLevelArithmeticOp`, `ExtractTopLevelTuples`, `FindTopLevelKeyword`, `SplitTopLevel`). Eliminated ~300 lines of brittle manual scanner loops and string parsing logic across `pkg/engine/sqlexec_eval.go`, `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_dbcc.go`, and `pkg/engine/sqlexec_merge.go`.
 
 ### Fixed
+- `BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1`: Prevented session-isolated temporary tables (`__temp_*`, `__tv_*`, `#*`) from being persisted to disk snapshots (`saveDiskLocked`, `saveCatalog`) or WAL records across both In-Memory OCC (`pkg/storage/memengine`) and WiredTiger (`pkg/storage/wiredtiger`), eliminating orphaned temporary object leaks across database restarts.
 - **Group B Wire Protocols & Security Remediation (9 Critical Wire, Protocol & Auth Defects)**:
   - `BUG-AUTH-ADMIN-PW-BYPASS-1`: Removed unconditional password bypass for builtin admin logins (`sa`, `postgres`) across PGWire (`pkg/wire/server.go`) and TDS (`pkg/wire/tds/server.go`), enforcing authentication whenever a password hash is registered.
   - `BUG-COPY-DELIM-1`: Fixed DELIMITER and NULL option parsing in `ParseCopyStmt` (`pkg/wire/copy.go`) to accurately extract custom delimiters (e.g. `;`, `\t`, `|`) and NULL string representations without quote truncation.
