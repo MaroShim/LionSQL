@@ -693,16 +693,32 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			} else {
 				var vals []string
 				for _, r := range innerRes.Rows {
+					var rowVal any
+					var found bool
 					if len(innerRes.Columns) > 0 {
 						colKey := innerRes.Columns[0]
 						if v, ok := r[colKey]; ok {
-							vals = append(vals, fmt.Sprintf("'%v'", v))
-							continue
+							rowVal = v
+							found = true
+						} else {
+							for k, v := range r {
+								if strings.EqualFold(k, colKey) {
+									rowVal = v
+									found = true
+									break
+								}
+							}
 						}
 					}
-					for _, v := range r {
-						vals = append(vals, fmt.Sprintf("'%v'", v))
-						break
+					if !found && len(innerRes.Columns) == 0 {
+						for _, v := range r {
+							rowVal = v
+							found = true
+							break
+						}
+					}
+					if found && rowVal != nil {
+						vals = append(vals, fmt.Sprintf("'%v'", rowVal))
 					}
 				}
 				if len(vals) > 0 {
@@ -713,16 +729,32 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			if hasRows {
 				var vals []string
 				for _, r := range innerRes.Rows {
+					var rowVal any
+					var found bool
 					if len(innerRes.Columns) > 0 {
 						colKey := innerRes.Columns[0]
 						if v, ok := r[colKey]; ok {
-							vals = append(vals, formatSubqueryVal(v))
-							continue
+							rowVal = v
+							found = true
+						} else {
+							for k, v := range r {
+								if strings.EqualFold(k, colKey) {
+									rowVal = v
+									found = true
+									break
+								}
+							}
 						}
 					}
-					for _, v := range r {
-						vals = append(vals, formatSubqueryVal(v))
-						break
+					if !found && len(innerRes.Columns) == 0 {
+						for _, v := range r {
+							rowVal = v
+							found = true
+							break
+						}
+					}
+					if found && rowVal != nil {
+						vals = append(vals, formatSubqueryVal(rowVal))
 					}
 				}
 				if len(vals) > 0 {
@@ -754,9 +786,16 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 				colKey := innerRes.Columns[0]
 				if v, ok := r[colKey]; ok && v != nil {
 					foundVal = v
+				} else {
+					for k, v := range r {
+						if strings.EqualFold(k, colKey) && v != nil {
+							foundVal = v
+							break
+						}
+					}
 				}
 			}
-			if foundVal == nil {
+			if foundVal == nil && len(innerRes.Columns) == 0 {
 				for _, v := range r {
 					if v != nil {
 						foundVal = v
