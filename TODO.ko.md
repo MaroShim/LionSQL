@@ -176,6 +176,11 @@
 | **P1** | **프로시저/파라미터** | **`parseSpParamDeclarations` 콤마 단순 분해로 인한 `DECIMAL(10, 2)` 파라미터 파괴 결함 해결 (`BUG-SP-PARAM-DECIMAL-1`)** | `pkg/engine/sqlexec_procs.go` | **진행 대기 (`[ ]`)** | - |
 | **P2** | **프로시저/파라미터** | **`cleanOutputSuffix` 경계 미검사로 인한 `@timeout` 등 `OUT` 접미 변수명 절단 훼손 결함 해결 (`BUG-SP-EXEC-SUFFIX-OUT-1`)** | `pkg/engine/sqlexec_procs.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **스토리지/MemEngine** | **`IndexScan` 트랜잭션 내 로컬 삽입 행 무작위 맵 순회 및 정렬 누락으로 인한 인덱스 순서 파괴 결함 해결 (`BUG-MEM-INDEX-LOCAL-ORDER-1`)** | `pkg/storage/memengine/tx.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **스토리지/비교연산** | **`storage.Value.Compare` 정수-실수(Int-Float) 상호 타입 강제변환 누락으로 인한 비교 역전 결함 해결 (`BUG-STORAGE-CMP-INT-FLOAT-1`)** | `pkg/storage/engine.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/파생테이블** | **`resolveDerivedTables`의 `SELECT *` 조인 시 타 테이블 프로젝션 완전 증발 결함 해결 (`BUG-DERIVED-JOIN-STAR-1`)** | `pkg/engine/sqlexec_derived.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/DDL** | **`splitColumnDefs` 따옴표 미추적으로 인한 DEFAULT 문자열 내 콤마/괄호 스키마 파괴 결함 해결 (`BUG-DDL-SPLIT-QUOTE-1`)** | `pkg/engine/sqlexec_ddl.go` | **진행 대기 (`[ ]`)** | - |
+| **P1** | **엔진/산술수식** | **`evalUpdateExpr` 정규식 경직성으로 인한 대괄호/다중컬럼/상수선행 산술식 0 리셋 결함 해결 (`BUG-ARITH-EXPR-ZERO-1`)** | `pkg/engine/sqlexec_eval.go` | **진행 대기 (`[ ]`)** | - |
+| **P2** | **스토리지/인덱스** | **`DropIndex` 대소문자 불일치 시 `td.Indexes` 맵 미삭제로 인한 좀비 인덱스 잔존 결함 해결 (`BUG-DROP-INDEX-CASE-1`)** | `pkg/storage/memengine/ddl.go` | **진행 대기 (`[ ]`)** | - |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용, IDENTITY $O(1)$ [x], FK 사전 캐싱) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **진행 중 (50% 완료)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동, `PlanCache` RLock, VDBE 맵 제거, ON CONFLICT 인덱스 스캔, VDBE 루프 카탈로그 호이스팅) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **진행 대기 (`[ ]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -312,8 +317,8 @@
   13. **`VPERF-11` (`pkg/storage/memengine/tx.go`)**: In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 (검증된 TPC-C 20k TPS 커서 무결성 보호를 위해 v1.1.0 이관).
   14. **`VPERF-12` (`pkg/storage/wiredtiger/wt_engine.go`)**: WiredTiger `updateLocked` 단일 커서화 및 Zero-Copy `unsafe.Slice` 디코딩 (CGo 포인터 생명주기 세그폴트 위험 차단을 위해 v1.1.0 이관).
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 57대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-MEM-INDEX-LOCAL-ORDER-1`)
-* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, 트랜잭션 로컬 인덱스 순서 파괴 등으로 인해 발생하는 57대 치명적 무결성 결함을 원천 해결.
+#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 62대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-DROP-INDEX-CASE-1`)
+* **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 비교 역전, 파생테이블 조인 프로젝션 유실 등으로 인해 발생하는 62대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
      - `execUpdate`, `execDelete`, `execTruncate`, VDBE `execUpdateWhere`, `execDeleteWhere`에서 PK 미확정 시 `rec["id"]`를 하드코딩하고 Go 맵을 무작위 순회(`for _, v := range rec { break }`)하여 엉뚱한 행을 갱신/삭제하던 치명적 결함.
@@ -486,6 +491,21 @@
   57. **`BUG-MEM-INDEX-LOCAL-ORDER-1` (`pkg/storage/memengine/tx.go:1264-1277`)**:
      - MemEngine `IndexScan` 시 현재 쓰기 트랜잭션에서 삽입된 로컬 행(`tx.local[tableName]`)을 Go 맵 무작위 순회(`for pk, locRow := range localRows`)로 스캔 결과 꼬리에 무조건 `append`하여, 인덱스 키 정렬 순서를 파괴하고 비결정론적 행 순서를 반환하는 치명적 결함.
      - 트랜잭션 로컬 행에 대해 인덱스 키 추출 후 메인 인덱스 스캔 결과와 병합 정렬(Merge-Sort)하여 인덱스 순서 무결성 보장.
+  58. **`BUG-STORAGE-CMP-INT-FLOAT-1` (`pkg/storage/engine.go:734-755`)**:
+     - `storage.Value.Compare`에서 `TypeInt`와 `TypeFloat` 간의 상호 타입 변환 로직이 누락되어, Int-Float 비교 시 미초기화된 0값(`other.IVal` 또는 `other.FVal`)과 직접 비교함으로써 `IntValue(100) > FloatValue(200.5)`가 성립되는 등 비교 연산 및 인덱스 범위 검색이 완전히 역전/왜곡되는 결함.
+     - `Int <-> Float` 상호 비교 시 `float64(v.IVal)` 강제 변환을 선행하여 정확한 수치 비교 보장.
+  59. **`BUG-DERIVED-JOIN-STAR-1` (`pkg/engine/sqlexec_derived.go:210-217`)**:
+     - 파생 테이블이 합성 PK(`_dt_row_id`)를 필요로 할 때, `SELECT *`가 사용된 JOIN 쿼리(`SELECT * FROM orders o JOIN (SELECT ...) d`)에서 `reSelectStarFrom.ReplaceAllString`으로 `SELECT * FROM`을 `SELECT d.col1, d.col2 FROM`으로 덮어써 타 조인 테이블(`orders o`)의 모든 프로젝션 컬럼을 완전히 증발시키는 결함.
+     - 쿼리 내 타 조인 테이블의 존재 여부를 감지하고 원본 테이블 프로젝션(`o.*`)을 보존하도록 정규화.
+  60. **`BUG-DDL-SPLIT-QUOTE-1` (`pkg/engine/sqlexec_ddl.go:737-767`)**:
+     - `splitColumnDefs`가 괄호 중첩만 추적하고 문자열 따옴표를 추적하지 않아, `DEFAULT 'hello, world'`와 같이 문자열 내 콤마 분해 시 후속 구문을 새 컬럼으로 오인하거나 `DEFAULT '('`와 같은 괄호로 인해 `depth`가 영구히 >0으로 남아 이후 모든 컬럼이 1개로 뭉개지는 결함.
+     - 따옴표 상태 추적기를 결합하여 문자열 리터럴 내부의 콤마 및 괄호 무시 보장.
+  61. **`BUG-ARITH-EXPR-ZERO-1` (`pkg/engine/sqlexec_eval.go:19, 920-966`)**:
+     - `evalUpdateExpr`의 정규식이 `col <op> num` 형태만 엄격하게 매칭하여, 대괄호 컬럼(`[Price] + 10`), 다중 컬럼 산술(`subtotal + tax`), 상수 선행(`10 + price`) 수식이 들어왔을 때 매칭에 실패하고 `parseLiteralValue`로 떨어져 대상 컬럼 값을 조용히 `0`으로 리셋하는 결함.
+     - 대괄호 식별자, 다중 컬럼 참조 및 상수 선행 연산식을 포괄하는 유연한 수식 평가기 도입.
+  62. **`BUG-DROP-INDEX-CASE-1` (`pkg/storage/memengine/ddl.go:148-154`)**:
+     - `DropIndex`에서 인덱스 스키마 탐색은 `FindIndex`로 대소문자 무관하게 수행한 뒤, 인덱스 맵 삭제 시 인자로 전달된 원문 대소문자(`delete(td.Indexes, indexName)`)를 사용하여 대소문자가 다를 경우 실제 `td.Indexes`에서 삭제되지 않고 좀비 인덱스로 영구 잔존하는 결함.
+     - 정규화된 공식 인덱스 명칭(`foundIdx.Name`)을 키로 `delete`하여 완벽한 인덱스 정리 보장.
 
 ---
 
@@ -507,7 +527,7 @@
 
 ---
 
-### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-MEM-INDEX-LOCAL-ORDER-1`)
+### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`, `BUG-PK-1` ~ `BUG-DROP-INDEX-CASE-1`)
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -568,6 +588,11 @@
 | **BUG-SP-PARAM-DECIMAL-1** | 프로시저/파라미터 | `parseSpParamDeclarations` 콤마 분해로 인한 `DECIMAL(10, 2)` 파라미터 파괴 해결 | **대기 (`[ ]`)** | 괄호 중첩 추적으로 복합 데이터 타입 파라미터 선언문 절단 및 유령 파라미터 생성 방지 |
 | **BUG-SP-EXEC-SUFFIX-OUT-1** | 프로시저/파라미터 | `cleanOutputSuffix` 경계 미검사로 인한 `@timeout` 등 `OUT` 접미 변수명 절단 해결 | **대기 (`[ ]`)** | 선행 공백/단어 경계 검사로 변수명 접미사 오절단 방지 및 변수 바인딩 정합성 보장 |
 | **BUG-MEM-INDEX-LOCAL-ORDER-1** | 스토리지/Mem | MemEngine `IndexScan` 로컬 삽입 행 무작위 맵 순회 및 정렬 누락 해결 | **대기 (`[ ]`)** | 트랜잭션 로컬 삽입 행 인덱스 키 추출 후 병합 정렬로 인덱스 스캔 순서 보장 |
+| **BUG-STORAGE-CMP-INT-FLOAT-1** | 스토리지/비교 | `storage.Value.Compare` Int-Float 상호 타입 강제변환 누락 비교 역전 해결 | **대기 (`[ ]`)** | `Int <-> Float` 상호 수치 강제변환으로 `IntValue(100) > FloatValue(200.5)` 왜곡 방지 |
+| **BUG-DERIVED-JOIN-STAR-1** | 엔진/파생테이블 | `resolveDerivedTables`의 `SELECT *` 조인 시 타 테이블 프로젝션 증발 해결 | **대기 (`[ ]`)** | 조인 내 타 테이블 프로젝션 보존 및 합성 PK 제거 시 올바른 SELECT * 정규화 |
+| **BUG-DDL-SPLIT-QUOTE-1** | 엔진/DDL | `splitColumnDefs` 따옴표 미추적으로 인한 DEFAULT 문자열 콤마/괄호 파괴 해결 | **대기 (`[ ]`)** | 따옴표 상태 추적으로 `DEFAULT 'hello, world'`, `DEFAULT '('` 스키마 왜곡 방지 |
+| **BUG-ARITH-EXPR-ZERO-1** | 엔진/산술수식 | `evalUpdateExpr` 정규식 경직성으로 인한 대괄호/다중컬럼/상수선행 산술식 0 리셋 해결 | **대기 (`[ ]`)** | `[Price] + 10`, `a + b`, `10 + a` 등 유연한 수식 평가기 도입으로 0 리셋 방지 |
+| **BUG-DROP-INDEX-CASE-1** | 스토리지/인덱스 | `DropIndex` 대소문자 불일치 시 `td.Indexes` 맵 미삭제 좀비 인덱스 잔존 해결 | **대기 (`[ ]`)** | 정규화된 인덱스 공식 명칭(`foundIdx.Name`) 삭제로 메모리 누수 및 좀비 인덱스 방지 |
 | **P-1** | 스토리지 | 배치형 그룹 커밋 & 무경합 Fast-Path | **완료 (`[x]`)** | `FsyncAlways` 지연 100배 단축(0.038ms/op), TPC-C 2.8k TPS 기여 |
 | **P-2** | 디코딩 | 바이너리 튜플 지연 역직렬화 & 커버링 인덱스 | **완료 (`[x]`)** | `SkipTupleColumn`, $O(1)$ `LazyTuple`, Index-Only Scan 100% 힙 바이패스 |
 | **P-3** | 와이어 | 제로카피 와이어 인코딩 & I/O 버퍼 결합 (`PERF-1`) | **완료 (`[x]`)** | `WriteNBCRowDirect` & `WriteRowDirect` 직결, 리플렉션 제거로 행당 **0 B/op, 0 allocs/op (53ns)** 달성 |

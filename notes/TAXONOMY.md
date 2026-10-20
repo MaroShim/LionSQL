@@ -71,6 +71,11 @@
 | **`BUG-SP-PARAM-DECIMAL-1`** | **sp_executesql 복합 파라미터 타입 파싱 보존 (SP Param Decimal Bug)** | `BUG-SP-PARAM-DECIMAL-1` | 괄호 중첩 추적으로 `DECIMAL(10, 2)` 등 다중 인자 타입 콤마 분해 절단 및 유령 파라미터 생성 방지 |
 | **`BUG-SP-EXEC-SUFFIX-OUT-1`** | **sp_executesql OUT 접미 변수명 오절단 방지 (SP Suffix OUT Bug)** | `BUG-SP-EXEC-SUFFIX-OUT-1` | `cleanOutputSuffix` 선행 공백/단어 경계 검사로 `@timeout` 등 `OUT` 접미 변수명 3글자 절단 훼손 해결 |
 | **`BUG-MEM-INDEX-LOCAL-ORDER-1`** | **MemEngine 로컬 삽입 행 인덱스 정렬 보장 (MemEngine Index Order Bug)** | `BUG-MEM-INDEX-LOCAL-ORDER-1` | 트랜잭션 로컬 삽입 행 Go 맵 무작위 순회 append 제거 및 인덱스 키 병합 정렬 적용 |
+| **`BUG-STORAGE-CMP-INT-FLOAT-1`** | **Value.Compare Int-Float 상호 강제변환 보장 (Compare Int-Float Bug)** | `BUG-STORAGE-CMP-INT-FLOAT-1` | `IntValue(100) > FloatValue(200.5)` 등 타입 불일치 비교 시 미초기화 0값 비교 역전 해결 |
+| **`BUG-DERIVED-JOIN-STAR-1`** | **파생테이블 SELECT * 조인 타 테이블 프로젝션 보존 (Derived Join Star Bug)** | `BUG-DERIVED-JOIN-STAR-1` | `resolveDerivedTables`의 `reSelectStarFrom` 교체 시 조인 내 타 테이블 컬럼 증발 방지 |
+| **`BUG-DDL-SPLIT-QUOTE-1`** | **CREATE TABLE splitColumnDefs 따옴표 추적 (DDL Split Quote Bug)** | `BUG-DDL-SPLIT-QUOTE-1` | `DEFAULT 'hello, world'` 콤마 및 `DEFAULT '('` 괄호로 인한 컬럼 정의 절단/합쳐짐 해결 |
+| **`BUG-ARITH-EXPR-ZERO-1`** | **UPDATE 산술식 유연성 및 0 리셋 방지 (Arith Expr Zero Bug)** | `BUG-ARITH-EXPR-ZERO-1` | `[Price] + 10`, `a + b`, `10 + a` 등 수식 매칭 실패로 인한 컬럼 0 리셋 방지 |
+| **`BUG-DROP-INDEX-CASE-1`** | **DropIndex 대소문자 정규화 및 좀비 인덱스 방지 (Drop Index Case Bug)** | `BUG-DROP-INDEX-CASE-1` | `td.Indexes` 맵 삭제 시 공식 인덱스 명칭(`foundIdx.Name`) 삭제로 좀비 인덱스 잔존 방지 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
