@@ -48,6 +48,8 @@ go test -tags wiredtiger -count=1 -v -race ./...
 ```
 Must achieve **100% PASS across all packages with 0 data races**. Flaky tests or thread sanitizer race detections are unacceptable.
 
+For single-test runs (`-run`), build tags, the regression test map, benchmarks, and TPC-C performance regression procedures, see the [Local Testing & Regression Guide](doc/TESTING.md).
+
 ### Stage 3: Conventional Commit (Commit)
 - Use standard Conventional Commits format:
   - `feat(scope): add new capability`

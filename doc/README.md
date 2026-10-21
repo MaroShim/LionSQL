@@ -161,6 +161,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Enterprise cryptographic audit logging architecture and implementation plan (PCI-DSS v4.0 Req 10, SOC 2 Type II, SHA-256 hash chaining, non-blocking MPSC ring buffer, and offline CLI verifier).
 * [`BENCHMARK.md`](file:///Users/maro/Projects/LionSQL/doc/BENCHMARK.md)
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).
+* [`TESTING.md`](TESTING.md)
+  * Local build, test, and regression guide: 3-stage pipeline, `-run` filtering, build tags, regression test map, Go benchmarks, TPC-C performance regression, and A/B comparison procedure.
 * [`MIGRATION.md`](file:///Users/maro/Projects/LionSQL/doc/MIGRATION.md)
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
 * [`TROUBLESHOOTING.md`](file:///Users/maro/Projects/LionSQL/doc/TROUBLESHOOTING.md)

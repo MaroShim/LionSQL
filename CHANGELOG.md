@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Documentation
+- Added `doc/TESTING.md`, a consolidated local build, test, and regression guide covering the 3-stage pipeline, `-run` filtering, build tags and conditional tests, a per-package and per-work-item regression test map, test authoring rules, Go micro-benchmarks, TPC-C performance regression, and an A/B comparison procedure. Linked from `README.md`, `CONTRIBUTING.md`, and `doc/README.md`.
+
 ### Performance
 - **Vertical Performance Track (7 Hot-Path Zero-Allocation Optimizations)**:
   - `VPERF-2`: Reused persistent `ClientSession.Session` for autocommit queries across `tryPKLookupBypass`, `execVolcanoSelect`, `execInsert`, `execUpdate`, and TDS RPC executions, keeping WiredTiger CGO sessions and `WT_CURSOR` pools alive across queries.
