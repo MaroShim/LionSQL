@@ -237,7 +237,7 @@ LionSQL Web Studio는 외부 프로덕션 배포 시에도 안전하게 사용�
 ---
 
 ## 관련 참고 문서
-- [LionSQL 전체 사용자 매뉴얼](file:///Users/maro/Projects/LionSQL/doc/USER_MANUAL.ko.md)
-- [LionSQL Auto-REST API 가이드](file:///Users/maro/Projects/LionSQL/doc/AUTO_REST_API.md)
-- [LionSQL Web SDK 개발자 가이드](file:///Users/maro/Projects/LionSQL/doc/WEB_SDK.md)
-- [LionSQL 클라이언트 도구 연동 가이드](file:///Users/maro/Projects/LionSQL/doc/CLIENT_TOOL_INTEGRATION.md)
+- [LionSQL 전체 사용자 매뉴얼](USER_MANUAL.ko.md)
+- [LionSQL Auto-REST API 가이드](AUTO_REST_API.md)
+- [LionSQL Web SDK 개발자 가이드](WEB_SDK.md)
+- [LionSQL 클라이언트 도구 연동 가이드](CLIENT_TOOL_INTEGRATION.md)
