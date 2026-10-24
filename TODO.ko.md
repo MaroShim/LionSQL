@@ -43,6 +43,7 @@
 | **P2** | **KISS/실행통합** | **코어 엔진 3갈래 쿼리 실행 경로(`sqlexec_select` vs `execution` Iterator vs VDBE) 단일화 및 아키텍처 다이어트 (`KISS-5`)** | `pkg/engine`, `pkg/execution`, `pkg/proc/runtime` | **완료 (`[x]`)** | [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
 | **P2** | **KISS/스캐너통합** | **MERGE, STRING_SPLIT, PROCS 잔여 수동 분할 루프 `sqlutil.Tokenizer` 전면 일원화 (`ARCH-LEX-2`)** | `pkg/sqlutil`, `pkg/engine` | **완료 (`[x]`)** | [`REFACTORING.ko.md`](REFACTORING.ko.md) |
 | **P2** | **와이어/모듈분해** | **TDS 거대 단일 파일(`server.go` 2.6k줄) 관심사별 모듈 분해 (Handshake/RPC/Batch/Server)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | 1.0 안정성 최우선 |
+| **P2** | **스토리지/OCC튜닝** | **In-Memory OCC 성능 튜닝 및 비차단 AOF 압축 7대 최적화 로드맵 (`OCC-PERF-PLAN`)** | `pkg/storage/memengine` | **Post-1.0 연기 (Postponed)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) |
 | **P1** | **KISS/오버스펙** | **T-SQL 디스패처 100% 위치 매핑, SERVERPROPERTY 하이재킹 제거 및 가상 카탈로그 도구 종속성 정돈 (`REFACTOR-OVER-SPECIFICATION-1`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/catalog/virtual` | **완료 (`[x]`)** | [`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`](notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md) |
 | **P1** | **리소스/안정성** | **글로벌 메모리 예산 상한제 및 회로 차단기 (Global Memory Governor & Circuit Breaker)** | `pkg/config`, `pkg/execution`, `cmd/server` | **완료 (`[x]`)** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P1** | **KISS/다이어트** | **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`)** | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
@@ -304,7 +305,7 @@
 | **VPERF-8** | VM/캐시 | `PlanCache.GetOrCompile` SHA-256 해싱 제거 및 `RLock` 패스트패스 | **완료 (`[x]`)** | 원문 문자열 키 및 읽기 락 조회로 멀티코어 바이트코드 플랜 캐시 락 경합 해소 |
 | **VPERF-9** | VM/DML | VDBE 무트리거 테이블 맵 할당 생략 및 `buildRowEvalMap` 루프 호이스팅 | **완료 (`[x]`)** | 트리거 미보유 테이블 DML 시 `rowMap`/`oldRow`/`newRow` 할당 생략 및 중복 맵 생성 제거 |
 | **VPERF-10** | 엔진/와이어 | `RawRows` 슬라이스 직결 및 스키마 `ColumnTypes` 전달로 맵/타입 재추론 제거 | **Post-1.0 (`v1.1.0`)** | 전체 프로토콜/엔진 공용 구조체 영향 최소화 위해 v1.1.0 이관 |
-| **VPERF-11** | 스토리지 | In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 | **Post-1.0 (`v1.1.0`)** | 검증된 TPC-C 20k TPS 커서 무결성 보호 위해 v1.1.0 이관 |
+| **VPERF-11** | 스토리지 | In-Memory OCC `Scan()` 샤드 스트리밍 커서 전환 및 비차단 AOF 압축 (`OCC-PERF-PLAN`) | **Post-1.0 (`v1.1.0`)** | 검증된 TPC-C 20k TPS 커서 무결성 보호 위해 v1.1.0 이관 ([`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md)) |
 | **VPERF-12** | 스토리지/WT | WiredTiger `Update` 단일 커서 통합 및 Zero-Copy 슬라이스 뷰 디코딩 | **Post-1.0 (`v1.1.0`)** | CGo 포인터 생명주기 세그폴트 위험 차단 위해 v1.1.0 이관 |
 | **VPERF-13** | 엔진/DML | `INSERT ... ON CONFLICT (col)` 보조 인덱스 스캔(`IndexScan`) 연동 | **완료 (`[x]`)** | 인덱스 보유 컬럼에 대한 Upsert 시 $O(N)$ 전체 테이블 풀 스캔 방지 및 `IndexScan` 즉시 룩업 |
 | **VPERF-14** | VM/DML | VDBE `execUpdateWhere`/`execDeleteWhere` 카탈로그 스키마 조회 호이스팅 | **완료 (`[x]`)** | `cursor.Next()` 루프 내 매 행마다 발생하던 `getTableGetter()` 및 카탈로그 뮤텍스 락 경합 100% 제거 |

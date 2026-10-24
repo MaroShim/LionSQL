@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- `OCC-PERF-PLAN`: Published in-memory OCC performance tuning plan and root-cause analysis (`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`) diagnosing synchronous AOF compaction freezes, fat `storage.Value` structs, and 8 structural bottlenecks, establishing a prioritized 7-stage optimization roadmap for Post-1.0.
+
 ### Fixed
 - `REV-WIRE-001`: In `pkg/wire/tds/server.go` (`handleRPCExecuteSQL`), eliminated the restrictive `p.Name == "" || name == "@params"` check in the second-pass ordinal slot assignment. Driver-specific names (such as `@parameters`) are now unconditionally assigned to `paramsDecl` on Slot 1, preventing parameter declaration loss and parameter pollution.
 - `REV-WIRE-002`: In `pkg/wire/tds/server.go` (`handleRPCPrepare`, `handleRPCPrepExec`), enforced MS-TDS 2.2.6.6 specification slot rules: 2-parameter invocations (`@handle`, `@statement`) leave `paramsDecl` empty, preventing the SQL query text from leaking into the parameter declaration metadata.
