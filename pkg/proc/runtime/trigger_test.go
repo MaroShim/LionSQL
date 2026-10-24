@@ -338,3 +338,83 @@ END
 		t.Fatalf("expected order 303 to not exist after rollback, but it was found")
 	}
 }
+
+func TestTrigger_UpdateDelete_ThrowAbortsTransaction(t *testing.T) {
+	eng := setupTriggerTestDB(t)
+	defer eng.Close()
+
+	session, err := eng.NewSession()
+	if err != nil {
+		t.Fatalf("NewSession failed: %v", err)
+	}
+	defer session.Close()
+
+	cache := runtime.NewPlanCache()
+	executor := runtime.NewExecutor(cache)
+
+	// Seed an order
+	initTx, _ := session.BeginTx(storage.TxOptions{})
+	_ = initTx.Insert("orders", storage.Record{
+		"id":     storage.IntValue(100),
+		"item":   storage.StringValue("Laptop"),
+		"amount": storage.FloatValue(500.0),
+	})
+	_ = initTx.Commit()
+
+	// 1. Create UPDATE trigger that throws if amount > 1000
+	trgUpdateSQL := `
+CREATE TRIGGER trg_OrdersUpdateCheck
+ON orders
+AFTER UPDATE
+AS
+BEGIN
+    DECLARE @Amt FLOAT;
+    SET @Amt = (SELECT amount FROM inserted);
+    IF @Amt > 1000
+    BEGIN
+        THROW 'Updated amount exceeds limit';
+    END
+END
+`
+	stmt, err := proc.ParseTrigger(trgUpdateSQL)
+	if err != nil {
+		t.Fatalf("Parse trgUpdateSQL failed: %v", err)
+	}
+	prog, err := proc.CompileTrigger(stmt)
+	if err != nil {
+		t.Fatalf("CompileTrigger failed: %v", err)
+	}
+	executor.RegisterTrigger(stmt.Name, stmt.Table, "UPDATE", prog)
+
+	// 2. Execute UPDATE query with WHERE clause (OpUpdateWhere) that triggers THROW
+	updateSQL := `
+CREATE PROCEDURE sp_TestUpdateOrder @Amount FLOAT
+AS
+BEGIN
+    UPDATE orders SET amount = @Amount WHERE item = 'Laptop';
+END;
+`
+	uStmt, _ := proc.Parse(updateSQL)
+	uProg, _ := proc.CompileProcedure(uStmt)
+	cache.PutByName(uStmt.Name, uProg)
+
+	_, err = executor.Run(uProg, uStmt.Name, map[string]any{
+		"Amount": 2000.0,
+	}, session)
+
+	if err == nil {
+		t.Fatalf("REV-PROC-001: expected error from UPDATE trigger THROW, got nil")
+	}
+
+	// Verify update was rolled back
+	checkTx, _ := session.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer checkTx.Rollback()
+	rec, err := checkTx.Get("orders", storage.IntValue(100))
+	if err != nil {
+		t.Fatalf("failed to get order 100: %v", err)
+	}
+	if rec["amount"].FVal != 500.0 {
+		t.Fatalf("expected amount to remain 500.0 after rollback, got %v", rec["amount"].FVal)
+	}
+}
+

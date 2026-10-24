@@ -74,6 +74,33 @@ func TestGroup2_StorageUpdateCase(t *testing.T) {
 	}
 }
 
+func TestStorage_ParsePKValue_Robustness(t *testing.T) {
+	// Valid integers
+	v1 := ParsePKValue("12345", storage.TypeInt)
+	if v1.Type != storage.TypeInt || v1.IVal != 12345 {
+		t.Fatalf("expected IntValue(12345), got %v", v1)
+	}
+
+	// Valid floats
+	v2 := ParsePKValue("3.1415", storage.TypeFloat)
+	if v2.Type != storage.TypeFloat || v2.FVal != 3.1415 {
+		t.Fatalf("expected FloatValue(3.1415), got %v", v2)
+	}
+
+	// Negative values
+	v3 := ParsePKValue("-999", storage.TypeInt)
+	if v3.IVal != -999 {
+		t.Fatalf("expected IntValue(-999), got %v", v3)
+	}
+}
+
+func BenchmarkStorage_ParsePKValue(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = ParsePKValue("1002345", storage.TypeInt)
+	}
+}
+
 // TestGroup2_IndexKeyCase tests BUG-INDEX-KEY-CASE-1
 func TestGroup2_IndexKeyCase(t *testing.T) {
 	e := New()
