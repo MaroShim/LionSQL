@@ -22,8 +22,8 @@
 3. **[`TAXONOMY.ko.md`](TAXONOMY.ko.md)** (한국어)
    - **과제 식별 코드 체계 일람표**: `P1~P3`(우선순위), `P-1~P-5`(성능), `A~D`(CBO 9대 과제), `S-1~S-7`(문법 완비) 종합 정리
 
-4. **[`PROTOCOL_EMULATION_GUIDELINES.md`](PROTOCOL_EMULATION_GUIDELINES.md)**
-   - **다중 프로토콜 에뮬레이션 가이드라인**: TDS 및 PGWire 프로토콜 에뮬레이션 구현 원칙, 패킷/토큰 처리 및 가상 No-Op 호환성 정책
+4. **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
+   - **다중 프로토콜 에뮬레이션 경계 및 스코프**: TDS, PGWire, MySQL 프로토콜 에뮬레이션 범위 및 중단 기준, 패킷/토큰 처리 및 가상 No-Op 호환성 정책
 
 5. **프로젝트 전역 로드맵 및 백로그**:
    - **[`TODO.ko.md`](../TODO.ko.md)**: 액티브 엔지니어링 백로그, 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 최근 완료 마일스톤

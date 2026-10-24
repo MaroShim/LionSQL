@@ -22,8 +22,8 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
 3. **[`TAXONOMY.ko.md`](TAXONOMY.ko.md)** (Korean)
    - **Task Identifier Taxonomy**: Consolidated reference for `P1~P3` (priority tasks), `P-1~P-5` (performance goals), `A~D` (CBO nine core tasks), and `S-1~S-7` (syntax completeness).
 
-4. **[`PROTOCOL_EMULATION_GUIDELINES.md`](PROTOCOL_EMULATION_GUIDELINES.md)**
-   - **Multi-Protocol Emulation Guidelines**: TDS and PGWire wire protocol emulation rules, packet and token handling, and tolerant virtual no-op policies.
+4. **[`PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)**
+   - **Multi-Protocol Emulation Boundaries & Scope**: TDS, PGWire, and MySQL wire protocol emulation boundaries, packet and token handling, and tolerant virtual no-op policies.
 
 5. **Project Roadmap & Backlog**:
    - **[`TODO.ko.md`](../TODO.ko.md)** (Korean): Active engineering backlog, next priority targets (P1, P2, P3), CBO and performance matrices, and recent milestone completions.

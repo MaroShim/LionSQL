@@ -1,4 +1,4 @@
-# LionSQL Engineering Guidelines: Multi-Protocol Emulation Boundaries
+# LionSQL Multi-Protocol Emulation Boundaries & Scope (`notes/PROTOCOL_EMULATION_BOUNDARIES.md`)
 
 ## 1. Overview & Core Architectural Identity
 

@@ -55,7 +55,7 @@ This document establishes the official 4-stage execution plan for comprehensive 
 - [x] **Purge Unsupported TablePlus References**:
   - [`doc/WHY_TSQL_GO_WIREDTIGER.md`](doc/WHY_TSQL_GO_WIREDTIGER.md)
   - [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md)
-  - [`notes/PROTOCOL_EMULATION_GUIDELINES.md`](PROTOCOL_EMULATION_GUIDELINES.md)
+  - [`notes/PROTOCOL_EMULATION_BOUNDARIES.md`](PROTOCOL_EMULATION_BOUNDARIES.md)
   - Standardized on Beekeeper Studio, DBeaver, Navicat.
 - [x] **Executable Command Modernization**:
   - Replaced `./bin/server` with `./bin/lionsql` across operational guides (`doc/OPERATIONS.md`, `doc/SCHEMA_MIGRATIONS_CLI.md`, `doc/ARCHITECTURE.md`, `doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/HIGH_AVAILABILITY.md`, `doc/ADR.md`).

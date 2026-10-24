@@ -104,7 +104,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * **PostgreSQL Wire Protocol v3** (Port `5433`): Simple and Extended Query Protocols (`Parse`, `Bind`, `Execute`, `Sync`), parameter binding, and SSL/TLS.
   * **Microsoft SQL Server TDS 7.x/8.0** (Port `1433`): Prelogin, Login7, RPC packets, and `sp_prepexec` bytecode plan cache connection.
   * Client compatibility matrix (`psql`, DBeaver, GORM, Prisma, `sqlcmd`, SSMS, Azure Data Studio).
-* [`../notes/PROTOCOL_EMULATION_GUIDELINES.md`](../notes/PROTOCOL_EMULATION_GUIDELINES.md)
+* [`../notes/PROTOCOL_EMULATION_BOUNDARIES.md`](../notes/PROTOCOL_EMULATION_BOUNDARIES.md)
   * Multi-protocol emulation boundary specification and architectural stop criteria.
   * Four-Layer Boundary Model: Wire Framing (100%), Virtual Catalog Handshake (90%), Common DML (80%), Dialect Quirks & Procedures (10~20%).
   * PostgreSQL stopping criteria, planned MySQL protocol specifications, and T-SQL single-kernel procedural invariance.
