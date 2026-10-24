@@ -55,8 +55,8 @@ func main() {
 	passFlag := flag.String("password", "1234567890", "Database password")
 	dbFlag := flag.String("database", "", "Database name (default: master for TDS, postgres for PGWire)")
 
-	numWarehouses := flag.Int("warehouses", 2, "Number of warehouses (TPC-C scale factor)")
-	numWorkers := flag.Int("workers", 64, "Number of concurrent client workers")
+	numWarehouses := flag.Int("warehouses", 16, "Number of warehouses (TPC-C scale factor)")
+	numWorkers := flag.Int("workers", 32, "Number of concurrent client workers")
 	durationFlag := flag.Duration("duration", 15*time.Second, "Benchmark duration (e.g. 10s, 30s, 1m)")
 	numItems := flag.Int("items", 1000, "Number of unique items (default: 1000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default: 300)")
@@ -237,7 +237,7 @@ func main() {
 
 				case txType < 96: // 4% Delivery
 					ok, retries := execWithRetry(*maxRetries, rng, func() bool {
-						return runClientDelivery(ctx, db, wID)
+						return runClientDelivery(ctx, db, rng, wID)
 					})
 					statsDelivery.record(time.Since(start), ok, retries)
 
@@ -444,7 +444,6 @@ END;
 	}
 
 	for _, procBody := range procs {
-		_ = db.QueryRow(procBody)
 		_, _ = db.Exec(procBody)
 	}
 
@@ -459,41 +458,104 @@ func seedTPCCData(db *sql.DB, numWarehouses, numItems, numCustPerDist int) error
 		return nil
 	}
 
-	// 1. Items
+	// 1. Items in chunks of 50
 	tx, err := db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	for i := 1; i <= numItems; i++ {
-		_, _ = tx.Exec(fmt.Sprintf("INSERT INTO item (i_id, i_name, i_price, i_data) VALUES (%d, 'item_%d', 10.50, 'data_%d');", i, i, i))
+	for i := 1; i <= numItems; i += 50 {
+		end := i + 50
+		if end > numItems+1 {
+			end = numItems + 1
+		}
+		var sb strings.Builder
+		sb.WriteString("INSERT INTO item (i_id, i_name, i_price, i_data) VALUES ")
+		for j := i; j < end; j++ {
+			if j > i {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(fmt.Sprintf("(%d, 'item_%d', 10.50, 'data_%d')", j, j, j))
+		}
+		sb.WriteByte(';')
+		if _, err := tx.Exec(sb.String()); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return err
 	}
 
-	// 2. Warehouses & Districts & Customers & Stocks
+	// 2. Warehouses & Districts & Customers & Stocks (committed per warehouse)
 	for w := 1; w <= numWarehouses; w++ {
-		_, _ = tx.Exec(fmt.Sprintf("INSERT INTO warehouse (w_id, w_name, w_tax, w_ytd) VALUES (%d, 'wh_%d', 0.0825, 300000.0);", w, w))
+		wTx, err := db.Begin()
+		if err != nil {
+			return err
+		}
+		defer wTx.Rollback()
+
+		if _, err := wTx.Exec(fmt.Sprintf("INSERT INTO warehouse (w_id, w_name, w_tax, w_ytd) VALUES (%d, 'wh_%d', 0.0825, 300000.0);", w, w)); err != nil {
+			return err
+		}
 
 		for d := 1; d <= 10; d++ {
 			dKey := fmt.Sprintf("%d_%d", w, d)
-			_, _ = tx.Exec(fmt.Sprintf("INSERT INTO district (d_key, d_id, d_w_id, d_tax, d_ytd, d_next_o_id) VALUES ('%s', %d, %d, 0.05, 30000.0, 3001);",
-				dKey, d, w))
+			if _, err := wTx.Exec(fmt.Sprintf("INSERT INTO district (d_key, d_id, d_w_id, d_tax, d_ytd, d_next_o_id) VALUES ('%s', %d, %d, 0.05, 30000.0, 3001);",
+				dKey, d, w)); err != nil {
+				return err
+			}
 
-			for c := 1; c <= numCustPerDist; c++ {
-				cKey := fmt.Sprintf("%d_%d_%d", w, d, c)
-				_, _ = tx.Exec(fmt.Sprintf("INSERT INTO customer (c_key, c_id, c_d_id, c_w_id, c_first, c_last, c_balance, c_ytd_payment, c_payment_cnt, c_discount) VALUES ('%s', %d, %d, %d, 'First_%d', 'Last_%d', -10.0, 10.0, 1, 0.05);",
-					cKey, c, d, w, c, c))
+			// Batch customers in chunks of 50
+			for c := 1; c <= numCustPerDist; c += 50 {
+				end := c + 50
+				if end > numCustPerDist+1 {
+					end = numCustPerDist + 1
+				}
+				var sb strings.Builder
+				sb.WriteString("INSERT INTO customer (c_key, c_id, c_d_id, c_w_id, c_first, c_last, c_balance, c_ytd_payment, c_payment_cnt, c_discount) VALUES ")
+				for k := c; k < end; k++ {
+					if k > c {
+						sb.WriteString(", ")
+					}
+					cKey := fmt.Sprintf("%d_%d_%d", w, d, k)
+					sb.WriteString(fmt.Sprintf("('%s', %d, %d, %d, 'First_%d', 'Last_%d', -10.0, 10.0, 1, 0.05)",
+						cKey, k, d, w, k, k))
+				}
+				sb.WriteByte(';')
+				if _, err := wTx.Exec(sb.String()); err != nil {
+					return err
+				}
 			}
 		}
 
-		for i := 1; i <= numItems; i++ {
-			sKey := fmt.Sprintf("%d_%d", w, i)
-			_, _ = tx.Exec(fmt.Sprintf("INSERT INTO stock (s_key, s_i_id, s_w_id, s_quantity, s_ytd, s_order_cnt) VALUES ('%s', %d, %d, 50, 0, 0);",
-				sKey, i, w))
+		// Batch stocks in chunks of 50
+		for i := 1; i <= numItems; i += 50 {
+			end := i + 50
+			if end > numItems+1 {
+				end = numItems + 1
+			}
+			var sb strings.Builder
+			sb.WriteString("INSERT INTO stock (s_key, s_i_id, s_w_id, s_quantity, s_ytd, s_order_cnt) VALUES ")
+			for j := i; j < end; j++ {
+				if j > i {
+					sb.WriteString(", ")
+				}
+				sKey := fmt.Sprintf("%d_%d", w, j)
+				sb.WriteString(fmt.Sprintf("('%s', %d, %d, 50, 0, 0)", sKey, j, w))
+			}
+			sb.WriteByte(';')
+			if _, err := wTx.Exec(sb.String()); err != nil {
+				return err
+			}
+		}
+
+		if err := wTx.Commit(); err != nil {
+			return err
 		}
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 func runClientNewOrder(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID, cID, totalItems int) bool {
@@ -542,11 +604,12 @@ func runClientOrderStatus(ctx context.Context, db *sql.DB, wID, dID, cID int) bo
 	return err == nil
 }
 
-func runClientDelivery(ctx context.Context, db *sql.DB, wID int) bool {
+func runClientDelivery(ctx context.Context, db *sql.DB, rng *rand.Rand, wID int) bool {
+	oID := int64(1000 + rng.Intn(1000000))
 	var sb strings.Builder
 	sb.WriteString("BEGIN TRANSACTION;\n")
 	for d := 1; d <= 10; d++ {
-		noKey := fmt.Sprintf("%d_%d_1001", wID, d)
+		noKey := fmt.Sprintf("%d_%d_%d", wID, d, oID)
 		sb.WriteString(fmt.Sprintf("EXEC TPCC_Delivery @no_key='%s';\n", noKey))
 	}
 	sb.WriteString("COMMIT TRANSACTION;")

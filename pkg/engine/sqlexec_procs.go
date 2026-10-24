@@ -945,6 +945,7 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	for i, arg := range args {
 		arg = strings.TrimSpace(arg)
 		targetParam := ""
+		var paramType storage.DataType = storage.TypeUnknown
 		valStr := arg
 		if eqIdx := strings.IndexByte(arg, '='); eqIdx != -1 {
 			k := strings.TrimSpace(arg[:eqIdx])
@@ -953,17 +954,22 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 			for _, p := range procMeta.Params {
 				if strings.EqualFold(strings.TrimPrefix(p.Name, "@"), k) {
 					targetParam = p.Name
+					paramType = p.Type
 					break
 				}
 			}
 			valStr = v
 		} else if i < len(procMeta.Params) {
 			targetParam = procMeta.Params[i].Name
+			paramType = procMeta.Params[i].Type
 		}
 
 		if targetParam != "" {
+			isQuoted := strings.HasPrefix(valStr, "'") || strings.HasPrefix(valStr, "N'") || strings.HasPrefix(valStr, "n'") || strings.HasPrefix(valStr, "\"")
 			raw := unwrapSQLString(valStr)
-			if num, err := strconv.ParseInt(raw, 10, 64); err == nil {
+			if isQuoted || paramType == storage.TypeVarChar {
+				argMap[targetParam] = raw
+			} else if num, err := strconv.ParseInt(raw, 10, 64); err == nil {
 				argMap[targetParam] = num
 			} else if f, err := strconv.ParseFloat(raw, 64); err == nil {
 				argMap[targetParam] = f

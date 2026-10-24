@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
-- `BENCH-TPCC-CLIENT-2`: Optimized network TPC-C benchmark client (`cmd/tpcc_client/main.go`) with 1-RTT single batch multi-statement execution for New-Order, Delivery, and Stock-Level transactions (collapsing 12 socket round-trips into 1), raised default concurrency from 16 to 64 workers, and added connection pool pre-warming to maximize pipeline saturation across TDS and PGWire protocols.
+- `BENCH-TPCC-CLIENT-2`: Optimized network TPC-C benchmark client (`cmd/tpcc_client/main.go`) with 1-RTT single batch multi-statement execution, tuned default scale factor to 16 warehouses and 32 workers to prevent OCC write conflicts, added 50-row multi-value batch seed insertions (cutting seed time from 30s to <1s), and randomized Delivery order keys.
 - `BENCH-TPCC-CLIENT-1`: Introduced network TPC-C benchmark client binary (`bin/tpcc-client`, `cmd/tpcc_client/`) that connects to active LionSQL instances over standard wire protocols (TDS `:1433` and PGWire `:5433`), executing concurrent transactions (New-Order, Payment, Order-Status, Delivery, Stock-Level), driving real-time TPS metrics in the Web Studio Overview dashboard, and reporting P50/P95/P99 latencies.
 - `OCC-PERF-PLAN`: Published in-memory OCC performance tuning plan and root-cause analysis (`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`) diagnosing synchronous AOF compaction freezes, fat `storage.Value` structs, and 8 structural bottlenecks, establishing a prioritized 7-stage optimization roadmap for Post-1.0.
 - `VPERF-15`: Implemented high-throughput In-Memory OCC 5-point optimizations in `pkg/storage/memengine/`:
@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Measured +15.0% TPC-C throughput improvement (from 12,138 TPS / 324k tpmC to 13,956 TPS / 375k tpmC) and sub-microsecond transfer performance (164,527 TPS).
 
 ### Fixed
+- `BUG-PROC-VARCHAR-NUM-COERCE-1`: In `pkg/engine/sqlexec_procs.go` (`execProcedureCall`), prevented premature numeric coercion (`strconv.ParseFloat`) of quoted string arguments and `VARCHAR`-declared procedure parameters, stopping underscore-delimited string keys (e.g. `'1_1_1001'`) from being distorted into numbers (`111001`) that caused primary key type mismatch errors.
 - `REV-WIRE-001`: In `pkg/wire/tds/server.go` (`handleRPCExecuteSQL`), eliminated the restrictive `p.Name == "" || name == "@params"` check in the second-pass ordinal slot assignment. Driver-specific names (such as `@parameters`) are now unconditionally assigned to `paramsDecl` on Slot 1, preventing parameter declaration loss and parameter pollution.
 - `REV-WIRE-002`: In `pkg/wire/tds/server.go` (`handleRPCPrepare`, `handleRPCPrepExec`), enforced MS-TDS 2.2.6.6 specification slot rules: 2-parameter invocations (`@handle`, `@statement`) leave `paramsDecl` empty, preventing the SQL query text from leaking into the parameter declaration metadata.
 - `REV-WIRE-003`: In `pkg/wire/tds/server.go` (`matchVersionQuery`), tightened the DbGate multi-column interceptor signature to strictly require all 4 tokens (`@@VERSION`, `PRODUCTVERSION`, `ENGINEEDITION`, `VERSIONTEXT`) and standalone single `@@VERSION` probes, preventing arbitrary multi-column queries from being hijacked into hardcoded results.
