@@ -23,6 +23,8 @@ func TestDashboardMenuOrderAndContent(t *testing.T) {
 
 	// Verify menu items exist in the specified order
 	expectedMenuItems := []string{
+		`data-view="overview"`,
+		`Overview`,
 		`data-view="tables"`,
 		`Table & Record`,
 		`data-view="procedures"`,
@@ -387,6 +389,38 @@ func TestDashboardViewSeparationAndStructure(t *testing.T) {
 	closeDivs := strings.Count(snippetBetween, "</div>")
 	if openDivs != closeDivs {
 		t.Errorf("unbalanced <div> tags in view-sdk section: %d open vs %d close (view-replication would be nested)", openDivs, closeDivs)
+	}
+}
+
+func TestOverviewMonitoringElements(t *testing.T) {
+	data, err := IndexHTML()
+	if err != nil {
+		t.Fatalf("failed to read index HTML: %v", err)
+	}
+	html := string(data)
+
+	requiredSnippets := []string{
+		`data-view="overview"`,
+		`id="view-overview"`,
+		`id="overview-live-dot"`,
+		`id="overview-refresh-interval"`,
+		`id="overview-engine"`,
+		`id="overview-sessions"`,
+		`id="overview-tables"`,
+		`id="overview-uptime"`,
+		`id="overview-tps"`,
+		`id="overview-total-tx"`,
+		`loadOverviewMetrics()`,
+		`changeOverviewInterval(`,
+		`startOverviewPolling()`,
+		`/api/overview`,
+		`copyToClipboard(`,
+	}
+
+	for _, snippet := range requiredSnippets {
+		if !strings.Contains(html, snippet) {
+			t.Errorf("expected dashboard HTML to contain snippet %q", snippet)
+		}
 	}
 }
 

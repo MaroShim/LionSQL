@@ -74,6 +74,16 @@ func (m *MetricsCollector) PKBypassHits() int64 {
 	return m.pkBypassHits.Load()
 }
 
+// TransactionsTotal returns total number of committed and rolled back transactions.
+func (m *MetricsCollector) TransactionsTotal() int64 {
+	return m.transactionsCommit.Load() + m.transactionsRollback.Load()
+}
+
+// QueriesTotal returns total number of queries recorded.
+func (m *MetricsCollector) QueriesTotal() int64 {
+	return m.queriesTotal.Load()
+}
+
 // PrometheusServerState carries server-level gauges that are not owned by MetricsCollector.
 type PrometheusServerState struct {
 	StartTime             time.Time

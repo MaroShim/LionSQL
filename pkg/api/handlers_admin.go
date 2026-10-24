@@ -6,11 +6,13 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
 	"lionsql/pkg/backup"
+	"lionsql/pkg/config"
 	"lionsql/pkg/engine"
 	"lionsql/pkg/execution"
 )
@@ -125,6 +127,80 @@ func (s *Server) handleListActiveQueries(w http.ResponseWriter, r *http.Request)
 		"success": true,
 		"queries": active,
 		"total":   len(active),
+	})
+}
+
+func formatUptime(sec float64) string {
+	d := time.Duration(sec) * time.Second
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	s := int(d.Seconds()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %dm %ds", h, m, s)
+	}
+	if m > 0 {
+		return fmt.Sprintf("%dm %ds", m, s)
+	}
+	return fmt.Sprintf("%ds", s)
+}
+
+func (s *Server) handleOverviewStats(w http.ResponseWriter, r *http.Request) {
+	uptimeSec := time.Since(s.startTime).Seconds()
+	if uptimeSec < 1.0 {
+		uptimeSec = 1.0
+	}
+
+	var totalTx int64
+	var totalQueries int64
+	if m := s.Metrics(); m != nil {
+		totalTx = m.TransactionsTotal()
+		totalQueries = m.QueriesTotal()
+	}
+	tps := float64(totalTx) / uptimeSec
+	qps := float64(totalQueries) / uptimeSec
+
+	tableCount := 0
+	engineType := "In-Memory OCC"
+	if s.engine != nil {
+		engineType = s.engine.Type()
+		if tbls, err := s.engine.ListTables(); err == nil {
+			tableCount = len(tbls)
+		}
+	}
+
+	activeSessions := 0
+	if s.coordinator != nil {
+		activeSessions = s.coordinator.SessionCount()
+	}
+
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+
+	repRole := "standalone"
+	if s.replication != nil {
+		repRole = string(s.replication.Status().Role)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"success":            true,
+		"engine":             engineType,
+		"version":            config.Version,
+		"uptime_seconds":     int64(uptimeSec),
+		"uptime_formatted":   formatUptime(uptimeSec),
+		"active_sessions":    activeSessions,
+		"table_count":        tableCount,
+		"total_transactions": totalTx,
+		"total_queries":      totalQueries,
+		"tps":                math.Round(tps*100) / 100,
+		"qps":                math.Round(qps*100) / 100,
+		"memory_alloc_bytes": mem.Alloc,
+		"goroutines":         runtime.NumGoroutine(),
+		"replication_role":   repRole,
+		"client_connections": map[string]string{
+			"pgwire": "localhost:5433",
+			"tds":    "localhost:1433",
+			"http":   "localhost:8090",
+		},
 	})
 }
 

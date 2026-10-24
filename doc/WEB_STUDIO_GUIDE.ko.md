@@ -61,7 +61,7 @@ LionSQL 서버가 기동되면 HTTP 관리 포트(기본값: TCP `8090`)에서 W
 
 ### 2.3. 클라이언트 연결 가이드 패널
 DBeaver, Beekeeper Studio, DbGate, sqlcmd, psql 등 외부 클라이언트 연동에 필요한 주소와 포트 정보가 카드 형태로 제공되며, 복사 버튼을 통해 즉시 클립보드로 가져올 수 있습니다.
-- **PostgreSQL Wire Protocol**: `localhost:5433` (기본 사용자: `admin`, 데이터베이스: `lionsql`)
+- **PostgreSQL Wire Protocol**: `localhost:5433` (기본 사용자: `admin`, 데이터베이스: `postgres`)
 - **Microsoft SQL Server TDS**: `localhost:1433` (기본 사용자: `sa`, 데이터베이스: `master`)
 - **HTTP REST & BaaS**: `localhost:8090` (Bearer Token 인증)
 

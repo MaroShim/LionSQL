@@ -27,7 +27,7 @@
 | **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
 | **`AUTH-1`** | **인증/토큰교환 (Auth)** | `AUTH-1` | 클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) 트랙 |
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
-| **`UI-1` ~ `UI-13`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-13` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마, Light 모드 고대비 시인성 개편, 브랜딩 정돈(LionSQL Studio) 및 서브 뷰 Studio 접미사 제거 |
+| **`UI-1` ~ `UI-14`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-14` | 모던 Toast, 반응형 메뉴, 브랜드 정돈(LionSQL Web Studio), 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마, Light 모드 고대비 시인성 개편, System Overview 대시보드 (`UI-OVERVIEW-1`) |
 | **`SHUTDOWN-1`** | **종료/안정성 (Shutdown)** | `SHUTDOWN-1` | Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 |
 | **`BUG-*`** | **데이터 무결성 결함 아카이브 (107건)** | `BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1` | 107대 결함 전수 조치 완료 내역은 [`notes/BUG_ARCHIVE.ko.md`](notes/BUG_ARCHIVE.ko.md)로 이관하여 아카이브로 관리 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
@@ -80,7 +80,8 @@
 | **P1** | **UI/DX** | **API Preview 모달 LionSQL 공식 SDK (`lionsql.js`) 전용 코드 탭 신설 (`UI-9`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/테마** | **Web Studio Light / Dark 모드 테마 전환 및 Cache-Control 캐시 방지 (`UI-10`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | - |
 | **P1** | **UI/가시성** | **Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) (`UI-11`)** | `pkg/ui` | **완료 (`[x]`)** | - |
-| **P1** | **UI/브랜딩** | **Web Studio 헤더 브랜딩(`LionSQL Studio`, `OLTP+SP` 배지 제거) 및 서브 뷰/내비게이션 `Studio` 접미사 전면 삭제 (`UI-13`)** | `pkg/ui` | **완료 (`[x]`)** | 상단 로고 `LionSQL Studio` 단일화 및 좌측/우측 서브 기능 명칭 정돈 |
+| **P1** | **UI/브랜딩** | **Web Studio 헤더 브랜딩(`LionSQL Web Studio`, `OLTP+SP` 배지 제거) 및 서브 뷰/내비게이션 `Studio` 접미사 전면 삭제 (`UI-13`)** | `pkg/ui` | **완료 (`[x]`)** | 상단 로고 `LionSQL Web Studio` 단일화 및 좌측/우측 서브 기능 명칭 정돈 |
+| **P1** | **UI/개요** | **Web Studio System Overview 대시보드 신설 (Active Sessions, Uptime, Tables, TPS, 와이어 연결 가이드) (`UI-OVERVIEW-1`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) 2절 실구현 및 `/api/overview` 연동 |
 | **P1** | **종료/안정성** | **Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 (`SHUTDOWN-1`)** | `pkg/wire`, `pkg/storage/wiredtiger` | **완료 (`[x]`)** | - |
 | **P2** | **UI/실시간** | **Web Studio 실시간 자동 갱신(Auto-Refresh) 토글 및 주기 선택기 (`UI-REALTIME-1`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |
 | **P2** | **UI/DDL** | **Web Studio 스키마 DDL 뷰어 (SQL `CREATE TABLE` 및 JSON 내보내기/복사) (`UI-DDL-1`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |

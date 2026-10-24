@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>LionSQL Admin Dashboard</title>
+  <title>LionSQL Web Studio</title>
   <script>(function(){try{const t=localStorage.getItem('lionsql_theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(_){}})();</script>
   <style>
     :root {
@@ -739,7 +739,7 @@
   <div class="mobile-header">
     <div style="display: flex; align-items: center; gap: 10px;">
       <button class="mobile-hamburger-btn" onclick="toggleSidebar()" aria-label="Toggle navigation menu">&#9776;</button>
-      <span style="font-weight: 700; font-size: 1.05rem;">LionSQL Studio</span>
+      <span style="font-weight: 700; font-size: 1.05rem;">LionSQL Web Studio</span>
     </div>
     <div style="display: flex; align-items: center; gap: 8px;">
       <button class="btn btn-secondary mobile-theme-btn" style="padding: 4px 8px; font-size: 0.72rem; display: flex; align-items: center; gap: 4px;" onclick="toggleTheme()" aria-label="Toggle Theme">
@@ -749,7 +749,7 @@
   </div>
   <aside id="main-sidebar">
     <div class="logo">
-      <span>LionSQL Studio</span>
+      <span>LionSQL Web Studio</span>
       <span id="realtime-badge" style="margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:0.65rem; color:var(--success); background:var(--alert-success-bg); padding:2px 6px; border-radius:9999px; border:1px solid var(--alert-success-border);">
         <span style="width:5px; height:5px; border-radius:50%; background:var(--success);"></span> Live
       </span>
@@ -771,7 +771,11 @@
       <input type="text" id="sidebar-quick-search" placeholder="Filter tables & views..." style="margin: 0; padding: 6px 10px; font-size: 0.78rem; background: var(--code-bg); border-radius: 6px;" oninput="onSidebarQuickSearch(this.value)" />
     </div>
     <nav>
-      <button class="nav-btn active" data-view="tables" onclick="switchView('tables')">
+      <button class="nav-btn active" data-view="overview" onclick="switchView('overview')">
+        <span>Overview</span>
+        <span class="badge badge-info" style="font-size:0.65rem;">SYS</span>
+      </button>
+      <button class="nav-btn" data-view="tables" onclick="switchView('tables')">
         <span>Table & Record</span>
         <span id="nav-tables-count">0</span>
       </button>
@@ -835,6 +839,139 @@
   </aside>
 
   <main>
+    <!-- View: Overview & System Metrics -->
+    <div id="view-overview">
+      <div class="header-bar">
+        <div>
+          <h2>System Overview &amp; Monitoring</h2>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+            Real-time server health, storage engine metrics, throughput performance, and client connectivity.
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+          <div style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--text-muted);">
+            <span id="overview-live-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
+            <span>Auto-refresh:</span>
+            <select id="overview-refresh-interval" style="margin: 0; padding: 3px 8px; font-size: 0.75rem; background: var(--code-bg); border-radius: 4px;" onchange="changeOverviewInterval(this.value)">
+              <option value="5000" selected>5s</option>
+              <option value="10000">10s</option>
+              <option value="30000">30s</option>
+              <option value="60000">60s</option>
+              <option value="0">Off</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary" style="padding: 6px 12px; font-size: 0.8rem;" onclick="loadOverviewMetrics()">
+            Refresh Now
+          </button>
+        </div>
+      </div>
+
+      <!-- Overview Metric Cards Grid -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-top: 15px;">
+        <div class="card" style="padding: 16px; border-left: 4px solid var(--primary);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Database Engine</div>
+          <div style="margin-top: 8px; font-size: 1.25rem; font-weight: 700; color: var(--primary);" id="overview-engine">Detecting...</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);" id="overview-engine-sub">LionSQL Core Kernel</div>
+        </div>
+
+        <div class="card" style="padding: 16px; border-left: 4px solid var(--success);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Active Sessions</div>
+          <div style="margin-top: 8px; font-size: 1.5rem; font-weight: 700; color: var(--text); font-family: monospace;" id="overview-sessions">--</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">Goroutine Connection Pool</div>
+        </div>
+
+        <div class="card" style="padding: 16px; border-left: 4px solid var(--badge-purple-color);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Tables &amp; Views</div>
+          <div style="margin-top: 8px; font-size: 1.5rem; font-weight: 700; color: var(--text); font-family: monospace;" id="overview-tables">--</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">User Defined Catalogs</div>
+        </div>
+
+        <div class="card" style="padding: 16px; border-left: 4px solid var(--link-accent);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Server Uptime</div>
+          <div style="margin-top: 8px; font-size: 1.35rem; font-weight: 700; color: var(--text);" id="overview-uptime">--</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">Continuous Operating Time</div>
+        </div>
+
+        <div class="card" style="padding: 16px; border-left: 4px solid #f59e0b;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Throughput (TPS)</div>
+          <div style="margin-top: 8px; font-size: 1.5rem; font-weight: 700; color: var(--text); font-family: monospace;" id="overview-tps">--</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">
+            Total Transactions: <span id="overview-total-tx" style="font-weight: 600; color: var(--text);">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Middle Section: Client Connection Guides & Quick Actions -->
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; margin-top: 16px;">
+        <!-- Client Connection Guides -->
+        <div class="card" style="padding: 18px;">
+          <h3 style="font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 4px;">Client Connection Endpoints</h3>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 14px;">Connect via your favorite GUI or CLI database tools.</div>
+          
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <!-- PGWire -->
+            <div style="background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 0.75rem; font-weight: 700; color: #3b82f6;">PostgreSQL Wire Protocol (:5433)</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">psql, DBeaver, Beekeeper, GORM, Prisma (User: admin, DB: postgres)</div>
+              </div>
+              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem;" onclick="copyToClipboard('localhost:5433', 'PGWire host')">Copy :5433</button>
+            </div>
+
+            <!-- TDS -->
+            <div style="background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 0.75rem; font-weight: 700; color: #10b981;">Microsoft SQL Server TDS (:1433)</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">SSMS, Azure Data Studio, sqlcmd (User: sa, DB: master)</div>
+              </div>
+              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem;" onclick="copyToClipboard('localhost:1433', 'TDS host')">Copy :1433</button>
+            </div>
+
+            <!-- HTTP REST -->
+            <div style="background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <div style="font-size: 0.75rem; font-weight: 700; color: #8b5cf6;">HTTP REST &amp; BaaS Engine (:8090)</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 2px;">Universal JSON CRUD, Web SDK, Realtime SSE (Bearer Token)</div>
+              </div>
+              <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem;" onclick="copyToClipboard('http://localhost:8090', 'HTTP REST URL')">Copy URL</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Developer Actions & Seed Data -->
+        <div class="card" style="padding: 18px;">
+          <h3 style="font-size: 1rem; font-weight: 600; color: var(--text); margin-bottom: 4px;">Quick Actions &amp; Tools</h3>
+          <div style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 14px;">Instant shortcuts for development, exploration, and testing.</div>
+
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;">
+              <div>
+                <div style="font-size: 0.82rem; font-weight: 600; color: var(--text);">Seed Sample Database</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">One-click sample tables (customers, accounts) for fresh instances.</div>
+              </div>
+              <button class="btn" style="background: var(--primary); padding: 5px 12px; font-size: 0.75rem;" onclick="seedSampleData()">Seed Data</button>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;">
+              <div>
+                <div style="font-size: 0.82rem; font-weight: 600; color: var(--text);">Interactive SQL Query Studio</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Execute T-SQL statements, DDL, and inspect execution plans.</div>
+              </div>
+              <button class="btn btn-secondary" style="padding: 5px 12px; font-size: 0.75rem;" onclick="switchView('query')">Open SQL</button>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: var(--code-bg); border: 1px solid var(--border); border-radius: 6px;">
+              <div>
+                <div style="font-size: 0.82rem; font-weight: 600; color: var(--text);">Realtime Live Stream Feed</div>
+                <div style="font-size: 0.72rem; color: var(--text-muted);">Watch live database mutation cards streaming in real-time.</div>
+              </div>
+              <button class="btn btn-secondary" style="padding: 5px 12px; font-size: 0.75rem;" onclick="switchView('realtime')">Live Stream</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- View: Auth & API Keys -->
     <div id="view-apikeys" style="display: none;">
       <div class="header-bar">
@@ -978,7 +1115,7 @@
     </div>
 
     <!-- View: Tables -->
-    <div id="view-tables">
+    <div id="view-tables" style="display: none;">
       <div class="header-bar">
         <div>
           <h2>Tables & Records</h2>
@@ -1896,7 +2033,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
         <div style="background: var(--primary); width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.1rem;">S</div>
         <div>
-          <h2 style="font-size: 1.2rem; font-weight: 700;">LionSQL Studio Login</h2>
+          <h2 style="font-size: 1.2rem; font-weight: 700;">LionSQL Web Studio Login</h2>
           <div style="font-size: 0.75rem; color: var(--text-muted);">Superuser Authentication</div>
         </div>
       </div>
@@ -2339,6 +2476,8 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     let proceduresList = [];
     let tablesList = [];
     let currentTableSubView = 'records';
+    let overviewPollTimer = null;
+    let overviewIntervalMs = 5000;
     let replicationPollTimer = null;
     let currentReplicationData = null;
     let logsPollTimer = null;
@@ -2352,6 +2491,10 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         if (backdrop) backdrop.classList.remove('active');
       }
 
+      if (overviewPollTimer && view !== 'overview') {
+        clearInterval(overviewPollTimer);
+        overviewPollTimer = null;
+      }
       if (replicationPollTimer) {
         clearInterval(replicationPollTimer);
         replicationPollTimer = null;
@@ -2368,13 +2511,16 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
           b.classList.remove('active');
         }
       });
-      const views = ['apikeys', 'query', 'tables', 'procedures', 'webhooks', 'crons', 'mail', 'sdk', 'replication', 'realtime', 'logs'];
+      const views = ['overview', 'apikeys', 'query', 'tables', 'procedures', 'webhooks', 'crons', 'mail', 'sdk', 'replication', 'realtime', 'logs'];
       views.forEach(v => {
         const el = document.getElementById('view-' + v);
         if (el) el.style.display = (v === view) ? 'block' : 'none';
       });
 
-      if (view === 'tables') {
+      if (view === 'overview') {
+        loadOverviewMetrics();
+        startOverviewPolling();
+      } else if (view === 'tables') {
         loadTables();
       } else if (view === 'procedures') {
         loadProcedures();
@@ -2403,6 +2549,72 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         const input = document.getElementById('sql-query-input');
         if (input) input.focus();
       }
+    }
+
+    function changeOverviewInterval(val) {
+      overviewIntervalMs = parseInt(val, 10);
+      startOverviewPolling();
+    }
+
+    function startOverviewPolling() {
+      if (overviewPollTimer) {
+        clearInterval(overviewPollTimer);
+        overviewPollTimer = null;
+      }
+      const dot = document.getElementById('overview-live-dot');
+      if (overviewIntervalMs > 0) {
+        if (dot) dot.style.background = '#10b981';
+        overviewPollTimer = setInterval(loadOverviewMetrics, overviewIntervalMs);
+      } else {
+        if (dot) dot.style.background = 'var(--text-muted)';
+      }
+    }
+
+    async function loadOverviewMetrics() {
+      try {
+        const res = await authFetch('/api/overview');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const engEl = document.getElementById('overview-engine');
+        if (engEl) engEl.innerText = data.engine || 'In-Memory OCC';
+
+        const sessEl = document.getElementById('overview-sessions');
+        if (sessEl) sessEl.innerText = (data.active_sessions !== undefined) ? data.active_sessions : '1';
+
+        const tblEl = document.getElementById('overview-tables');
+        if (tblEl) tblEl.innerText = (data.table_count !== undefined) ? data.table_count : '0';
+
+        const upEl = document.getElementById('overview-uptime');
+        if (upEl) upEl.innerText = data.uptime_formatted || (data.uptime_seconds + 's');
+
+        const tpsEl = document.getElementById('overview-tps');
+        if (tpsEl) tpsEl.innerText = (data.tps !== undefined ? data.tps : '0') + ' TPS';
+
+        const txEl = document.getElementById('overview-total-tx');
+        if (txEl) txEl.innerText = Number(data.total_transactions || 0).toLocaleString();
+      } catch (err) {
+        console.error('Failed to load overview metrics:', err);
+      }
+    }
+
+    function copyToClipboard(text, label) {
+      if (!text) return;
+      navigator.clipboard.writeText(text).then(() => {
+        showToast((label || text) + ' copied to clipboard!', 'success');
+      }).catch(() => {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+          document.execCommand('copy');
+          showToast((label || text) + ' copied to clipboard!', 'success');
+        } catch (_) {
+          showToast('Failed to copy to clipboard', 'error');
+        }
+        document.body.removeChild(ta);
+      });
     }
 
     // Helper: authenticated fetch wrapper with automatic JWT header and 401 interceptor
@@ -5999,6 +6211,8 @@ console.log('Rows:', queryResult.rows);`;
     initTheme();
     loadEngineInfo();
     checkAuthSession();
+    loadOverviewMetrics();
+    startOverviewPolling();
     loadAPIKeys();
     loadTables();
     loadProcedures();

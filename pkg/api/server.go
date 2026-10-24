@@ -471,6 +471,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("POST /api/sql", s.wrapAuth(s.handleExecuteSQL, false, ""))
 	s.mux.HandleFunc("POST /api/query/cancel", s.handleQueryCancel)
 	s.mux.HandleFunc("GET /api/queries/active", s.handleListActiveQueries)
+	s.mux.HandleFunc("GET /api/overview", s.wrapAuth(s.handleOverviewStats, false, ""))
 
 	// Prometheus Metrics & OpenTelemetry Observability API
 	s.mux.HandleFunc("GET /metrics", s.handleMetrics)
