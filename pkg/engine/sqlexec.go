@@ -222,7 +222,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		if len(cs.TableVars) > 0 && !reTblVarDecl.MatchString(trimmed) {
 			for varName, physTable := range cs.TableVars {
 				pattern := `(?i)@` + regexp.QuoteMeta(strings.TrimPrefix(varName, "@")) + `\b`
-				trimmed = getCompiledRegexp(pattern).ReplaceAllString(trimmed, physTable)
+				trimmed = getCompiledRegexp(pattern).ReplaceAllString(trimmed, "["+physTable+"]")
 			}
 			upper = strings.ToUpper(trimmed)
 		}

@@ -44,7 +44,7 @@
 | **REV-ENG-005** | P2 | 정합성 | [`pkg/engine/sqlexec_eval.go:137-145, 821-826`](pkg/engine/sqlexec_eval.go#L137) | `splitLogicalConditions` 및 `findArithmeticOp`의 SQL 연속 작은따옴표 이스케이프(`''`) 처리 누락 | `[x]` | `quoteChar` 연속 출현 시 이스케이프 건너뛰기 로직 보강 |
 | **REV-ENG-006** | P2 | 버그 | [`pkg/engine/sqlexec_dml.go:21`](pkg/engine/sqlexec_dml.go#L21) | `UPDATE ... SET col = 'a WHERE b' OUTPUT ... WHERE ...`에서 `reDmlUpdate`가 SET 절을 지연 매칭하여 문자열 리터럴 내부 `WHERE`에서 분할, 에러 없이 0건 갱신 후 성공 반환 (OUTPUT 정규식 경로 한정) | `[x]` | `ARCH-DML-1`에서 정규식 폐기와 함께 해소됨 (`ParseDMLCommand`가 리터럴/괄호를 건너뛰고 최상위 키워드로만 SET/OUTPUT/WHERE 분할). `knownBug` 마커 제거 완료: `TestDMLCharacterization_Update/output_literal_with_keyword_where` |
 | **REV-ENG-007** | P1 | 오버스펙 | [`pkg/engine/sqlexec_procs.go:1263-1295`](pkg/engine/sqlexec_procs.go#L1263) | `sp_executesql` 인자 파싱 시 `@stmt`, `@statement` 등 파라미터 이름을 스위치문으로 검사하여 비표준 이름 전송 시 `default`로 빠져 쿼리 텍스트가 유실되는 오버스펙 결함 | `[x]` | 100% 순수 위치 기반(Slot 0 = statement) 매핑으로 단순화 완료 (`57e51aa`) |
-| **REV-ENG-008** | P2 | 아키텍처 | [`pkg/engine/sqlexec_select.go`](pkg/engine/sqlexec_select.go) | 단순 SELECT를 위해 자체적인 프로젝션/필터링/정렬을 구현하여 `pkg/execution/` 및 `pkg/proc/runtime/` VDBE와 3갈래 중복 실행 경로 유지 부채 (`KISS-5`) | `[ ]` | 단일 실행 경로 단일화 및 아키텍처 다이어트 예정 |
+| **REV-ENG-008** | P2 | 아키텍처 | [`pkg/engine/sqlexec_select.go`](pkg/engine/sqlexec_select.go) | 단순 SELECT를 위해 자체적인 프로젝션/필터링/정렬을 구현하여 `pkg/execution/` 및 `pkg/proc/runtime/` VDBE와 3갈래 중복 실행 경로 유지 부채 (`KISS-5`) | `[x]` | 2-Tier 구조(VDBE Fast-Path + Volcano CBO) 확립 및 1세대 레거시 정규식 스캔 코드 삭제 완료 (ADR: `notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`) |
 
 ---
 

@@ -332,10 +332,19 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		orderByClause = strings.Join(obStrs, ", ")
 	}
 
+	fromTable := stmt.From.Name
+	if stmt.From.IsTVF {
+		var args []string
+		for _, a := range stmt.From.TVFArgs {
+			args = append(args, a.String())
+		}
+		fromTable = fmt.Sprintf("%s(%s)", stmt.From.Name, strings.Join(args, ", "))
+	}
+
 	return &QueryInfo{
 		RawQuery:      stmt.RawSQL,
 		CTEs:          ctes,
-		TableName:     stmt.From.Name,
+		TableName:     fromTable,
 		TableAlias:    stmt.From.Alias,
 		TableHints:    stmt.From.Hints,
 		Join:          joinInfo,

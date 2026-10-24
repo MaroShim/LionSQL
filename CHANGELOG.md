@@ -18,6 +18,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `REV-API-001`: In `pkg/api/handlers_procs.go` (`handleExecProcedure`), added JSON decode error validation on `r.Body`. Malformed request bodies now return HTTP 400 Bad Request with descriptive errors rather than silently executing with empty arguments.
 
 ### Refactored
+- `KISS-5` / `REV-ENG-008`: Consolidated core query execution into a unified 2-tier architecture and eliminated the 1st-generation prototype legacy fallback (Golden Rule 15 KISS & Deletion-First):
+  - Retained the high-performance 2-tier engine: **Tier 1 (VDBE Fast-Path, 0.5~2µs)** for single-table, index-range, and scalar lookups, and **Tier 2 (Volcano CBO, 15~50µs)** for relational algebra, multi-table joins, subqueries, and optimizer hints.
+  - Removed over 350 lines of redundant prototype table-scan code, in-memory sorting, and the legacy `reSelectStmt` regular expression from `pkg/engine/sqlexec_select.go`, leaving an architectural epitaph comment.
+  - Eliminated silent error swallowing when Volcano or Planner encounters invalid queries, immediately returning descriptive SQL errors to users (Golden Rule 7).
+  - Documented full architectural context, trade-offs, and decision invariants in `notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`.
 - `ARCH-EVAL-1`: Unified arithmetic and binary operator evaluation into `pkg/engine/evaluator.go` (Golden Rule 15 KISS, DRY & Deletion-First):
   - Created `EvalBinaryOp`, `CoerceAndCalculate`, `ToNumeric`, `ResolveOperand`, and `EvalUpdateExpr` integrating with `pkg/storage/coerce.go` Type Promotion Lattice (Decimal > Float > Int > Bool) and unified zero-division guards.
   - Eliminated over 120 lines of repetitive arithmetic switch-case blocks, ad-hoc operand resolution, and the unused `reEvalArithExpr` regular expression from `pkg/engine/sqlexec_eval.go`.

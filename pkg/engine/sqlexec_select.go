@@ -1249,7 +1249,6 @@ var mssqlNolockRe = regexp.MustCompile(`(?is)\bWITH\s*\(\s*(?:NOLOCK|READUNCOMMI
 var mssqlOptionRe = regexp.MustCompile(`(?is)\s+OPTION\s*\(.*?\)\s*$`)
 
 var (
-	reSelectStmt = regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+FROM\s+(.*?)(?:\s+WHERE\s+(.*?))?(?:\s+GROUP\s+BY\s+(.*?))?(?:\s+HAVING\s+(.*?))?(?:\s+ORDER\s+BY\s+(.*?))?(?:\s+LIMIT\s+(\d+))?(?:\s+OFFSET\s+(\d+))?$`)
 	reSelectInto = regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+INTO\s+([^\s,;]+)\s+FROM\s+(.*)$`)
 	reSelectAs   = regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
 	reSelectTvf  = regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
@@ -1466,355 +1465,32 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 			return res, nil
 		}
 
-		// Secondary Fallback: Direct Volcano execution
-		if res, err := s.execVolcanoSelect(qInfo, start, cs); err == nil {
+		// Secondary Execution: Direct Volcano CBO execution
+		res, err := s.execVolcanoSelect(qInfo, start, cs)
+		if err == nil && res != nil {
+			if qInfo.Distinct {
+				res.Rows = deduplicateRows(res.Rows)
+				res.RowsAffected = int64(len(res.Rows))
+			}
 			return res, nil
 		}
-	}
-
-	// Parse projection, table, WHERE, ORDER BY, LIMIT, OFFSET
-	selectRe := reSelectStmt
-	matches := selectRe.FindStringSubmatch(cleaned)
-	if len(matches) < 3 {
-		if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
-			return s.execScalarSelect(cleaned, start, cs)
-		}
-		return nil, fmt.Errorf("invalid or unsupported SELECT syntax")
-	}
-
-	projStr := strings.TrimSpace(matches[1])
-	rawTable := strings.TrimSpace(matches[2])
-	baseTableName := rawTable
-	if f := strings.Fields(rawTable); len(f) > 0 {
-		baseTableName = f[0]
-	}
-	tableName := cleanIdentifier(baseTableName)
-	whereClause := ""
-	if len(matches) > 3 {
-		whereClause = strings.TrimSpace(matches[3])
-		if resolved, err := s.resolveSubqueriesWithSession(whereClause, cs); err == nil {
-			whereClause = resolved
-		}
-	}
-	orderByClause := ""
-	if len(matches) > 6 {
-		orderByClause = strings.TrimSpace(matches[6])
-	}
-	limitCount := -1
-	if len(matches) > 7 && matches[7] != "" {
-		if n, err := strconv.Atoi(matches[7]); err == nil {
-			limitCount = n
-		}
-	}
-	offsetCount := 0
-	if len(matches) > 8 && matches[8] != "" {
-		if n, err := strconv.Atoi(matches[8]); err == nil {
-			offsetCount = n
-		}
-	}
-
-	// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
-	tvfCallRe := reSelectTvf
-	if m := tvfCallRe.FindStringSubmatch(baseTableName); len(m) == 3 {
-		tvfName := cleanIdentifier(m[1])
-		argsRaw := m[2]
-		fnMeta, err := s.catalog.GetFunction(tvfName)
-		if err == nil && fnMeta != nil && fnMeta.IsTableValued {
-			var argVals []string
-			if strings.TrimSpace(argsRaw) != "" {
-				for _, arg := range strings.Split(argsRaw, ",") {
-					argVals = append(argVals, strings.TrimSpace(arg))
-				}
-			}
-			innerSQL := fnMeta.Body
-			for i, p := range fnMeta.Params {
-				if i < len(argVals) {
-					innerSQL = strings.ReplaceAll(innerSQL, p.Name, argVals[i])
-					innerSQL = strings.ReplaceAll(innerSQL, strings.TrimPrefix(p.Name, "@"), argVals[i])
-				}
-			}
-			return s.execSelect(innerSQL, start, cs)
-		}
-	}
-
-	// Intercept Virtual System Catalog Views (sys.* and information_schema.*)
-	if s.isVirtualCatalogTable(tableName) {
-		return s.execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause, limitCount, start)
-	}
-
-	// RBAC Permission Check
-	if err := s.checkTableAccess(cs, tableName, auth.PrivSelect); err != nil {
-		return nil, err
-	}
-
-	schema, err := s.engine.GetTable(tableName)
-	if err != nil {
-		return nil, fmt.Errorf("table %q not found: %w", tableName, err)
-	}
-
-	var tx storage.Transaction
-	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
-	} else {
-		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
 			return nil, err
 		}
-		defer closeFn()
-
-		t, err := session.BeginTx(storage.TxOptions{ReadOnly: true})
-		if err != nil {
-			return nil, err
-		}
-		tx = t
-		defer tx.Rollback()
 	}
 
-	var cursor storage.Cursor
-	usedIndex := false
-
-	if whereClause != "" {
-		// Parse all equality conditions from the WHERE clause (AND-separated).
-		// Collect col -> val pairs for composite index prefix matching.
-		eqColVals := parseEqualityConditions(whereClause)
-
-		if len(eqColVals) > 0 {
-			eqColSet := make(map[string]bool, len(eqColVals))
-			for col := range eqColVals {
-				eqColSet[strings.ToLower(col)] = true
-			}
-
-			// Try composite multi-column prefix first, then fall back to single-column.
-			if idx, prefixLen := schema.FindBestCompositeIndex(eqColSet); idx != nil && prefixLen > 0 {
-				var lowVal, highVal storage.Value
-				if len(idx.Columns) == 1 {
-					// True single-column index: use exact typed value for point lookup.
-					colName := idx.Columns[0]
-					if colMeta, _, colFound := schema.FindColumn(colName); colFound && colMeta != nil {
-						valStr := eqColVals[strings.ToLower(colName)]
-						parsed := parseValueToType(valStr, colMeta.Type)
-						lowVal = parsed
-						highVal = parsed
-					} else {
-						lowVal = storage.StringValue(eqColVals[strings.ToLower(colName)])
-						highVal = lowVal
-					}
-				} else {
-					// Composite index: build NUL-separated prefix key range.
-					// e.g. dept='Engineering' on (dept,level) → scan ["Engineering\x00", "Engineering\x00\xff...]
-					prefixKey := buildCompositePrefixKey(idx.Columns[:prefixLen], eqColVals, schema)
-					lowVal = storage.StringValue(prefixKey)
-					highVal = storage.StringValue(prefixKey + "\xff\xff\xff\xff")
-				}
-				if cur, err := tx.IndexScan(tableName, idx.Name, &lowVal, &highVal); err == nil {
-					cursor = cur
-					usedIndex = true
-				}
-			} else if len(eqColVals) == 1 {
-				// Fallback: single equality, original path.
-				for col, val := range eqColVals {
-					if idx, found := schema.FindIndexByColumn(col); found {
-						if colMeta, _, colFound := schema.FindColumn(col); colFound && colMeta != nil {
-							parsed := parseValueToType(val, colMeta.Type)
-							if cur, err := tx.IndexScan(tableName, idx.Name, &parsed, &parsed); err == nil {
-								cursor = cur
-								usedIndex = true
-							}
-						}
-					}
-					break
-				}
-			}
-		}
+	// 이 부분에 800라인짜리 구형 정규식 스캔 코드가 있었으나 삭제되었습니다 (KISS-5 / REV-ENG-008).
+	// ARCH-NOTE(KISS-5 / REV-ENG-008): Formerly, ~800 lines of prototype legacy regex-based table scan (reSelectStmt),
+	// manual in-memory filtering, and bubble/slice sorting resided here. That redundant 3rd execution
+	// path was retired in favor of the unified 2-tier engine (VDBE Fast-Path + Volcano CBO).
+	// Full architectural context is documented in notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md.
+	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
+		return s.execScalarSelect(cleaned, start, cs)
 	}
-
-	if !usedIndex {
-		cur, err := tx.Scan(tableName)
-		if err != nil {
-			return nil, fmt.Errorf("scan error on %s: %w", tableName, err)
-		}
-		cursor = cur
+	if parseErr != nil {
+		return nil, fmt.Errorf("invalid or unsupported SELECT syntax: %w", parseErr)
 	}
-	defer cursor.Close()
-
-	if qInfo != nil && qInfo.HasAggregates {
-		rawRows := make([]map[string]any, 0)
-		for cursor.Next() {
-			rec, err := cursor.Record()
-			if err != nil {
-				break
-			}
-			if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {
-				continue
-			}
-			rMap := make(map[string]any)
-			for _, col := range schema.Columns {
-				rMap[col.Name] = formatStorageValue(rec[col.Name])
-			}
-			rawRows = append(rawRows, rMap)
-		}
-		return s.execAggregate(rawRows, qInfo, start)
-	}
-
-	// 1. Determine columns
-	type fallbackProjItem struct {
-		expr   string
-		alias  string
-		parsed proc.Expr
-	}
-	var projItems []fallbackProjItem
-	var selectedCols []string
-	isSelectAll := projStr == "*" || projStr == ""
-	if isSelectAll {
-		for _, col := range schema.Columns {
-			if col.Hidden || storage.IsSyntheticPKName(col.Name) {
-				continue
-			}
-			selectedCols = append(selectedCols, col.Name)
-			projItems = append(projItems, fallbackProjItem{expr: col.Name, alias: col.Name})
-		}
-	} else {
-		for _, c := range planner.SplitProjections(projStr) {
-			cTrimmed := strings.TrimSpace(c)
-			if cTrimmed == "" {
-				continue
-			}
-			aliasIdx := strings.Index(strings.ToUpper(cTrimmed), " AS ")
-			var expr, alias string
-			if aliasIdx != -1 {
-				expr = strings.TrimSpace(cTrimmed[:aliasIdx])
-				alias = cleanIdentifier(strings.TrimSpace(cTrimmed[aliasIdx+4:]))
-			} else {
-				expr = cTrimmed
-				alias = cleanIdentifier(cTrimmed)
-			}
-			selectedCols = append(selectedCols, alias)
-			item := fallbackProjItem{expr: expr, alias: alias}
-			if strings.Contains(expr, "->") || strings.Contains(expr, "(") {
-				p := proc.NewParser(proc.NewLexer(expr))
-				if ast := p.ParseExpr(); ast != nil && len(p.Errors()) == 0 {
-					item.parsed = ast
-				}
-			}
-			projItems = append(projItems, item)
-		}
-	}
-
-	// 2. Scan and filter rows
-	type fullRow struct {
-		row map[string]any
-	}
-	var scannedRows []fullRow
-	for cursor.Next() {
-		rec, err := cursor.Record()
-		if err != nil {
-			break
-		}
-
-		if whereClause != "" && !evaluateWhereCondition(rec, whereClause) {
-			continue
-		}
-
-		rMap := make(map[string]any)
-		for _, col := range schema.Columns {
-			rMap[col.Name] = formatStorageValue(rec[col.Name])
-		}
-		for k, v := range rec {
-			rMap[k] = formatStorageValue(v)
-		}
-		scannedRows = append(scannedRows, fullRow{row: rMap})
-	}
-
-	// 3. Apply ORDER BY if present
-	if orderByClause != "" && len(scannedRows) > 0 {
-		orderItems := sqlutil.ParseOrderBy(orderByClause)
-		if len(orderItems) > 0 {
-			sort.Slice(scannedRows, func(i, j int) bool {
-				for _, item := range orderItems {
-					orderCol := cleanIdentifier(item.Column)
-					v1Val := getRowMapVal(scannedRows[i].row, orderCol)
-					v2Val := getRowMapVal(scannedRows[j].row, orderCol)
-					v1 := fmt.Sprintf("%v", v1Val)
-					v2 := fmt.Sprintf("%v", v2Val)
-					if v1 == v2 {
-						continue
-					}
-					if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
-						if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
-							if n1 == n2 {
-								continue
-							}
-							if item.Desc {
-								return n1 > n2
-							}
-							return n1 < n2
-						}
-					}
-					if item.Desc {
-						return v1 > v2
-					}
-					return v1 < v2
-				}
-				return false
-			})
-		}
-	}
-
-	// 4. Apply OFFSET & LIMIT if present
-	if offsetCount > 0 {
-		if offsetCount >= len(scannedRows) {
-			scannedRows = nil
-		} else {
-			scannedRows = scannedRows[offsetCount:]
-		}
-	}
-	if limitCount >= 0 && len(scannedRows) > limitCount {
-		scannedRows = scannedRows[:limitCount]
-	}
-
-	// 5. Final projection down to selectedCols
-	rows := make([]map[string]any, 0, len(scannedRows))
-	for _, sr := range scannedRows {
-		row := make(map[string]any)
-		for _, pi := range projItems {
-			if pi.parsed != nil {
-				if v, err := proc.EvalRowExpr(pi.parsed, sr.row, nil); err == nil {
-					row[pi.alias] = v
-					continue
-				}
-			}
-			if v, ok := sr.row[pi.alias]; ok {
-				row[pi.alias] = v
-			} else if v, ok := sr.row[pi.expr]; ok {
-				row[pi.alias] = v
-			} else {
-				cleanExpr := cleanIdentifier(pi.expr)
-				if v, ok := sr.row[cleanExpr]; ok {
-					row[pi.alias] = v
-				} else {
-					colPart := cleanExpr
-					if idx := strings.LastIndex(cleanExpr, "."); idx != -1 {
-						colPart = cleanExpr[idx+1:]
-					}
-					if v, ok := sr.row[colPart]; ok {
-						row[pi.alias] = v
-					} else {
-						row[pi.alias] = nil
-					}
-				}
-			}
-		}
-		rows = append(rows, row)
-	}
-
-	return &QueryResult{
-		Success:      true,
-		Command:      "SELECT",
-		Columns:      selectedCols,
-		Rows:         rows,
-		RowsAffected: int64(len(rows)),
-		DurationUS:   time.Since(start).Microseconds(),
-	}, nil
+	return nil, fmt.Errorf("query execution failed")
 }
 
 func getRowMapVal(r map[string]any, col string) any {
