@@ -1,14 +1,14 @@
-# LionSQL 데이터 무결성 107대 결함 조치 아카이브 (TODO-BUGS.ko.md)
+# LionSQL 데이터 무결성 107대 결함 조치 아카이브 (BUG_ARCHIVE.ko.md)
 
 본 문서는 LionSQL 코드베이스의 안정화, SQL 표준 식별자 대소문자 정규화, 그리고 무작위 순회/임의 추측 안티패턴을 원천 제거하기 위해 추진되었던 **107대 치명적 무결성 결함(`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`) 전수 조치 기록 및 아카이브**입니다.
 
 > [!NOTE]
 > 본 결함 조치 트랙은 초기 코드베이스의 급속한 무결성 안정화를 위해 사용된 중간 방법론(Interim Methodology)이며, 현재 107건 전수 조치 및 100% 회귀 검증(Build & Race-Test)이 완료되었습니다.
 > 이후의 신규 결함 추적, 정적 분석 및 구조적 아키텍처 개편은 다음의 전용 대시보드를 통해 진행됩니다:
-> - **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
-> - **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](REFACTORING.ko.md)
-> - **전체 과제 분류 체계**: [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md)
-> - **활성 엔지니어링 백로그**: [`TODO.ko.md`](TODO.ko.md)
+> - **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](../CODE_REVIEW.ko.md)
+> - **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](../REFACTORING.ko.md)
+> - **전체 과제 분류 체계**: [`TAXONOMY.ko.md`](TAXONOMY.ko.md)
+> - **활성 엔지니어링 백로그**: [`TODO.ko.md`](../TODO.ko.md)
 
 ---
 
@@ -601,9 +601,9 @@
 
 ## 4. 연계 문서 및 진실 공급원 (SSOT)
 
-- **활성 엔지니어링 백로그**: [`TODO.ko.md`](TODO.ko.md)
-- **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
-- **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](REFACTORING.ko.md)
-- **전체 식별 코드 분류 체계**: [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md)
-- **중장기 거시 릴리즈 로드맵**: [`ROADMAP.md`](ROADMAP.md)
+- **활성 엔지니어링 백로그**: [`TODO.ko.md`](../TODO.ko.md)
+- **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](../CODE_REVIEW.ko.md)
+- **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](../REFACTORING.ko.md)
+- **전체 식별 코드 분류 체계**: [`TAXONOMY.ko.md`](TAXONOMY.ko.md)
+- **중장기 거시 릴리즈 로드맵**: [`ROADMAP.md`](../ROADMAP.md)
 

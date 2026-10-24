@@ -6,7 +6,7 @@
 > 중장기 아키텍처 로드맵 및 버전별 마일스톤 릴리스 계획은 [ROADMAP.md](ROADMAP.md)를 참조하세요.
 > 코드 리뷰 및 결함 감사 트래커는 [CODE_REVIEW.ko.md](CODE_REVIEW.ko.md)에서 실시간으로 추적 및 관리됩니다.
 > 구조적 아키텍처 추상화 및 리팩토링 명세는 [REFACTORING.ko.md](REFACTORING.ko.md)를 참조하세요.
-> 과거 107대 데이터 무결성 결함 조치 아카이브는 [TODO-BUGS.ko.md](TODO-BUGS.ko.md)를 참조하세요.
+> 과거 107대 데이터 무결성 결함 조치 아카이브는 [notes/BUG_ARCHIVE.ko.md](notes/BUG_ARCHIVE.ko.md)를 참조하세요.
 > 분류 체계 및 식별 코드 규칙의 전체 명세는 [notes/TAXONOMY.ko.md](notes/TAXONOMY.ko.md)에 상세히 기술되어 있습니다.
 
 ---
@@ -29,7 +29,7 @@
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
 | **`UI-1` ~ `UI-13`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-13` | 모던 Toast, 반응형 메뉴, 브랜드 정돈, 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마, Light 모드 고대비 시인성 개편, 브랜딩 정돈(LionSQL Studio) 및 서브 뷰 Studio 접미사 제거 |
 | **`SHUTDOWN-1`** | **종료/안정성 (Shutdown)** | `SHUTDOWN-1` | Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 |
-| **`BUG-*`** | **데이터 무결성 결함 아카이브 (107건)** | `BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1` | 107대 결함 전수 조치 완료 내역은 [`TODO-BUGS.ko.md`](TODO-BUGS.ko.md)로 이관하여 아카이브로 관리 |
+| **`BUG-*`** | **데이터 무결성 결함 아카이브 (107건)** | `BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1` | 107대 결함 전수 조치 완료 내역은 [`notes/BUG_ARCHIVE.ko.md`](notes/BUG_ARCHIVE.ko.md)로 이관하여 아카이브로 관리 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
@@ -98,7 +98,7 @@
 | **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
-| **P1** | **무결성/결함아카이브** | **데이터 무결성, 대소문자 정합성, 임의 추측 및 맵 순회 107대 결함 전수 조치 완료 (`BUG-107`)** | 전 계층 (`pkg/`) | **완료 (`[x]`)** | 107대 세부 내역 및 증적은 [`TODO-BUGS.ko.md`](TODO-BUGS.ko.md) 참조 |
+| **P1** | **무결성/결함아카이브** | **데이터 무결성, 대소문자 정합성, 임의 추측 및 맵 순회 107대 결함 전수 조치 완료 (`BUG-107`)** | 전 계층 (`pkg/`) | **완료 (`[x]`)** | 107대 세부 내역 및 증적은 [`notes/BUG_ARCHIVE.ko.md`](notes/BUG_ARCHIVE.ko.md) 참조 |
 | **P1** | **수직성능/Track A** | **스토리지 & 코디네이터 치명적 병목 해소 (OCC STW 제거 [x], Autocommit 세션 재사용 [x], IDENTITY $O(1)$ [x], FK 사전 캐싱 [x]) (`VPERF-1` ~ `VPERF-4`)** | `pkg/storage/memengine`, `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **수직성능/Track B** | **TDS & VDBE 저위험 무할당 튜닝 (`PacketSize` 연동 [x], `PlanCache` RLock [x], VDBE 맵 제거 [x], ON CONFLICT 인덱스 스캔 [x], VDBE 루프 카탈로그 호이스팅 [x]) (`VPERF-7` ~ `VPERF-9`, `VPERF-13`, `VPERF-14`)** | `pkg/wire/tds`, `pkg/proc/runtime`, `pkg/engine` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P3** | **수직성능/Track C** | **고위험 구조 개편 및 스트리밍 (Attention 동기화, `sp_executesql` 직결, `RawRows` 파이프라인, OCC 스트리밍, WT Zero-Copy) (`VPERF-5`, `VPERF-6`, `VPERF-10` ~ `VPERF-12`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/storage/memengine`, `pkg/storage/wiredtiger` | **Post-1.0 연기 (`v1.1.0`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
@@ -239,7 +239,7 @@
 * **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단, RBAC 커스텀 롤 누락, 따옴표 이스케이프 분해 파괴, 샤드 초기화 경쟁 크래시, VDBE 미존재 PK 크래시, EXEC 프로시저 및 TDS RPC 트랜잭션 우회, Simple CASE 누락, 산술식 0값 변조, 윈도우 함수 RANGE 피어 누락, OCC 동일 트랜잭션 유니크 충돌 사일런트 커밋, HTTP API DATETIME 빈 문자열 방출, PITR DDL 에러 침묵 등으로 인해 발생하는 107대 치명적 무결성 결함을 원천 해결 완료.
 * **조치 이력 및 세부 내역 아카이브**:
   - 본 107대 결함 트랙은 LionSQL의 데이터 무결성 조기 안정화를 위해 추진된 중간 단계 방법론(Interim Methodology)으로 100% 조치 완료(`[x]`)되었습니다.
-  - 107개 결함의 상세 파일 경로, 버그 발생 원인, 수정 코드 및 증적 일람은 별도의 독립 아카이브 문서인 [**`TODO-BUGS.ko.md`**](TODO-BUGS.ko.md)로 분리 이관되었습니다.
+  - 107개 결함의 상세 파일 경로, 버그 발생 원인, 수정 코드 및 증적 일람은 별도의 독립 아카이브 문서인 [**`notes/BUG_ARCHIVE.ko.md`**](notes/BUG_ARCHIVE.ko.md)로 분리 이관되었습니다.
   - 향후 결함 감사, 정적 분석 및 구조적 리팩토링은 [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md) 및 [`REFACTORING.ko.md`](REFACTORING.ko.md)에서 지속 관리됩니다.
 
 ---
@@ -265,7 +265,7 @@
 ### 3.2. 엔진 성능 및 무할당 풀링 트랙 (`P-1` ~ `P-17`, `VPERF-1` ~ `VPERF-14`)
 
 > [!NOTE]
-> 과거 데이터 무결성 및 대소문자 정합성 107대 결함 조치 내역(`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`)은 전수 완료되어 별도 아카이브인 [**`TODO-BUGS.ko.md`**](TODO-BUGS.ko.md)로 이관되었습니다.
+> 과거 데이터 무결성 및 대소문자 정합성 107대 결함 조치 내역(`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`)은 전수 완료되어 별도 아카이브인 [**`notes/BUG_ARCHIVE.ko.md`**](notes/BUG_ARCHIVE.ko.md)로 이관되었습니다.
 
 | 번호 | 전략 분야 | 핵심 구현 과제 | 상태 | 구현 성과 및 최적화 효과 |
 | :---: | :--- | :--- | :---: | :--- |
@@ -520,7 +520,7 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
 
 ### 5.1. 최근 고성능 최적화 및 안정화 과제
 - [x] **통합 SQL 추상화 레이어 기반 2번 결함군 14건 일괄 해결 (`SQL-ABSTRACT-1`) (`pkg/storage`, `pkg/engine`, `pkg/proc`, `pkg/execution`, `pkg/planner`, `pkg/wire`)**:
-  - `storage.Record` 1급 객체화 및 `Record.Get` 대소문자 무관 탐색을 바탕으로 전 계층 경계 정합성 전면 보강 (세부 14건 결함 조치 내역은 [`TODO-BUGS.ko.md`](TODO-BUGS.ko.md) 참조).
+  - `storage.Record` 1급 객체화 및 `Record.Get` 대소문자 무관 탐색을 바탕으로 전 계층 경계 정합성 전면 보강 (세부 14건 결함 조치 내역은 [`notes/BUG_ARCHIVE.ko.md`](notes/BUG_ARCHIVE.ko.md) 참조).
   - 전용 리그레션 테스트 6개 패키지 신설 및 23개 전 패키지 100% PASS, 0 데이터 레이스 검증 완료.
 - [x] **Web Studio 4대 생산성/관측성 기능 완결 (`UI-DDL-1`, `UI-REALTIME-1`, `UI-DATA-1`, `UI-LOGS-1`) (`pkg/storage`, `pkg/engine`, `pkg/api`, `pkg/ui`)**:
   - `UI-DDL-1`: 스키마 서브뷰에 `+ Add Column` 비주얼 모달 연동. `storage.Engine` 인터페이스에 `AddColumn` 정의, In-Memory OCC의 테이블 컬럼 추가 및 WAL(`OpAlterTable`) 로깅/재생, WiredTiger의 커서 스캔 및 튜플 리라이트(`C.go_wt_cursor_update_raw`), DDL 파서(`ALTER TABLE <table> ADD [COLUMN] ...`) 완비.
