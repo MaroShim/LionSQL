@@ -84,6 +84,23 @@ func TestDynamicSQL_SpExecuteSQL(t *testing.T) {
 		t.Fatalf("unexpected result: %+v", res.Rows)
 	}
 
+	// 2b. Positional fallback with arbitrary driver/client parameter names (@statement, @parameters, @sql)
+	res, err = s.ExecuteSQL("EXEC sp_executesql @statement = N'SELECT * FROM dyn_products WHERE price < @maxPrice', @parameters = N'@maxPrice INT', @maxPrice = 10;")
+	if err != nil {
+		t.Fatalf("sp_executesql with @statement/@parameters failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["title"] != "Pen" {
+		t.Fatalf("unexpected result: %+v", res.Rows)
+	}
+
+	res, err = s.ExecuteSQL("EXEC sp_executesql @sql = N'SELECT * FROM dyn_products WHERE id = @id', @params = N'@id INT', @id = 1;")
+	if err != nil {
+		t.Fatalf("sp_executesql with @sql/@params failed: %v", err)
+	}
+	if len(res.Rows) != 1 || res.Rows[0]["title"] != "Book" {
+		t.Fatalf("unexpected result: %+v", res.Rows)
+	}
+
 	// 3. Positional values (without @name = val)
 	res, err = s.ExecuteSQL("EXEC sp_executesql N'SELECT * FROM dyn_products WHERE id = @id AND price > @minPrice', N'@id INT, @minPrice INT', 1, 10;")
 	if err != nil {

@@ -12,14 +12,17 @@ LionSQL은 단일 정적 바이너리로 다중 프로토콜(PGWire, TDS, HTTP)�
 
 ## 2. 3대 핵심 정돈 대상 및 작업 범위 (Target Scope)
 
-### Phase 1: `pkg/engine/sqlexec_procs.go` T-SQL 파라미터 매핑 단순화
+### Phase 1: `pkg/engine/sqlexec_procs.go` 100% 위치 기반(Positional Slot) 일원화
 * **현상**:
-  - `execSpExecuteSQL`에서 `case "@stmt", "@statement":`, `case "@params", "@parameters":`와 같이 특정 드라이버 전용 별칭을 스위치문에 하드코딩함.
-  - `@sql = 'SELECT 1'`이나 `@query = '...'` 처럼 다른 명칭이 사용될 경우 `default`로 빠져 바인딩 변수로 오인되고 쿼리가 빈 문자열(`""`)로 유실됨.
+  - `execSpExecuteSQL`에서 `case "@stmt", "@statement":`, `case "@params", "@parameters":`와 같이 특정 드라이버 전용 별칭을 스위치문에 하드코딩하거나, 인자에 `=`가 있다는 이유로 첫 번째 인자를 바인드 변수로 오인하여 `default`로 빠져 쿼리가 빈 문자열(`""`)로 유실되는 문제 발생.
+  - SQL Server 커널의 C++ 쿼리 디스패처는 TDS RPC(ProcID 10) 및 내부 호출 시 인자 이름을 역참조하지 않고 **100% 위치(Slot 0 = stmt, Slot 1 = paramsDecl, Slot 2..N = bind values)**로 처리함.
 * **정돈 방향**:
-  - `@statement`, `@parameters` 등의 임의 별칭 하드코딩을 완전히 제거.
-  - 공식 T-SQL 명칭인 `@stmt`, `@params`만 공식 이름으로 매핑.
-  - 이름이 불일치하거나 생략된 경우, 오늘 TDS 레이어에서 검증된 것과 동일하게 **순수 위치 기반(0번째 인자 = statement, 1번째 인자 = paramsDeclaration)**으로 자연스럽게 매핑하도록 정돈.
+  - `@stmt`, `@statement` 등의 파라미터 이름 검사 자체를 오버스펙으로 규정하고 전면 제거.
+  - **100% 순수 위치 기반(Slot Index)**으로 단순화:
+    - `args[0]`은 좌변 이름(`@stmt =`, `@statement =`, `@query =` 등) 유무나 명칭에 관계없이 **무조건 SQL Statement 텍스트**로 추출 (`extractArgValue`).
+    - `args[1]`은 (존재할 경우) 파라미터 선언부 문자열로 추출. 단, 곧바로 바인드 변수가 오는 경우는 바인드 변수로 처리.
+    - `args[2:]`는 바인드 값 목록으로 매핑.
+  - SQL Server 커널 디스패처와 100% 동일한 순수 위치 기반 처리 달성.
 
 ---
 

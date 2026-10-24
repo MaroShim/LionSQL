@@ -101,7 +101,7 @@ func pgTypeMod(t storage.DataType, maxLen int) int {
 	return -1
 }
 
-func execDbGatePrimaryKeySelect(src Source, sql string) (*Result, error) {
+func execPgConstraintPrimaryKeySelect(src Source, sql string) (*Result, error) {
 	targetSchema := "public"
 	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
@@ -135,7 +135,7 @@ func execDbGatePrimaryKeySelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateIndexSelect(src Source, sql string) (*Result, error) {
+func execPgIndexSelect(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	targetSchema := "public"
 
@@ -207,7 +207,7 @@ func execDbGateIndexSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateTriggerSelect(src Source, sql string) (*Result, error) {
+func execPgTriggerSelect(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"schema_name", "pure_name", "table_name", "trigger_name",
 		"timing", "event", "action_statement",
@@ -615,7 +615,7 @@ func execForeignKeySelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execBeekeeperTableSelect(src Source, sql string) (*Result, error) {
+func execInformationSchemaTablesWithPersistenceSelect(src Source, sql string) (*Result, error) {
 	columns := []string{"schema", "name", "tabletype", "parenttype"}
 	var allRows []map[string]any
 

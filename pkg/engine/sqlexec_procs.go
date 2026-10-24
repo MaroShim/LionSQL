@@ -1250,42 +1250,63 @@ func cleanOutputSuffix(s string) string {
 	return s
 }
 
+// extractArgValue extracts the value expression from an argument,
+// stripping any named prefix (e.g. "@stmt = N'...'" -> "N'...'") if present.
+func extractArgValue(arg string, cs *ClientSession) string {
+	arg = strings.TrimSpace(arg)
+	if eqIdx := findTopLevelEquals(arg); eqIdx != -1 {
+		arg = strings.TrimSpace(arg[eqIdx+1:])
+	}
+	return unwrapOrVar(arg, cs)
+}
+
 func (s *Coordinator) execSpExecuteSQL(args []string, start time.Time, cs *ClientSession, ctx context.Context) (*QueryResult, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("sp_executesql requires at least 1 parameter (@stmt)")
 	}
 
-	var stmt string
+	// Positional Slot 0: Statement text (regardless of parameter name: @stmt, @statement, @query, or positional)
+	stmt := extractArgValue(args[0], cs)
+
 	var paramsDecl string
 	namedArgs := make(map[string]string)
 	var posArgs []string
 
-	for _, arg := range args {
+	valArgs := args[1:]
+	if len(valArgs) > 0 {
+		firstVal := strings.TrimSpace(valArgs[0])
+		eqIdx := findTopLevelEquals(firstVal)
+		isParamsDecl := false
+
+		if eqIdx == -1 {
+			// Positional second argument is the parameter declaration string
+			isParamsDecl = true
+		} else {
+			lhs := strings.ToLower(strings.TrimSpace(firstVal[:eqIdx]))
+			// If named, check if it explicitly designates the parameters definition
+			if lhs == "@params" || lhs == "@parameters" || strings.Contains(lhs, "param") {
+				isParamsDecl = true
+			}
+		}
+
+		if isParamsDecl {
+			paramsDecl = extractArgValue(firstVal, cs)
+			valArgs = valArgs[1:]
+		}
+	}
+
+	// Remaining arguments are bind parameters (named or positional)
+	for _, arg := range valArgs {
 		arg = strings.TrimSpace(arg)
 		if eqIdx := findTopLevelEquals(arg); eqIdx != -1 {
 			lhs := strings.TrimSpace(arg[:eqIdx])
 			rhs := strings.TrimSpace(arg[eqIdx+1:])
 			lhsLower := strings.ToLower(lhs)
-
-			switch lhsLower {
-			case "@stmt", "@statement":
-				stmt = unwrapOrVar(rhs, cs)
-			case "@params", "@parameters":
-				paramsDecl = unwrapOrVar(rhs, cs)
-			default:
-				cleanRHS := cleanOutputSuffix(rhs)
-				namedArgs[lhsLower] = formatBoundArgValue(cleanRHS, cs)
-			}
+			cleanRHS := cleanOutputSuffix(rhs)
+			namedArgs[lhsLower] = formatBoundArgValue(cleanRHS, cs)
 		} else {
-			// Positional parameter
-			if stmt == "" {
-				stmt = unwrapOrVar(arg, cs)
-			} else if paramsDecl == "" {
-				paramsDecl = unwrapOrVar(arg, cs)
-			} else {
-				cleanArg := cleanOutputSuffix(arg)
-				posArgs = append(posArgs, formatBoundArgValue(cleanArg, cs))
-			}
+			cleanArg := cleanOutputSuffix(arg)
+			posArgs = append(posArgs, formatBoundArgValue(cleanArg, cs))
 		}
 	}
 

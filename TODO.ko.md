@@ -38,6 +38,7 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 상태 | 관련 기술 문서 |
 | :---: | :---: | :--- | :--- | :---: | :--- |
+| **P1** | **KISS/오버스펙** | **T-SQL 디스패처 100% 위치 매핑, SERVERPROPERTY 하이재킹 제거 및 가상 카탈로그 도구 종속성 정돈 (`REFACTOR-OVER-SPECIFICATION-1`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/catalog/virtual` | **완료 (`[x]`)** | [`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`](notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md) |
 | **P1** | **리소스/안정성** | **글로벌 메모리 예산 상한제 및 회로 차단기 (Global Memory Governor & Circuit Breaker)** | `pkg/config`, `pkg/execution`, `cmd/server` | **완료 (`[x]`)** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P1** | **KISS/다이어트** | **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`)** | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
 | **P3** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **Post-1.0 연기 (Postponed)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |

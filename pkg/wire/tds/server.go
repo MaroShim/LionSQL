@@ -2534,7 +2534,7 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	}
 
 	// 1. DbGate & Modern GUI tool multi-column version & edition detection
-	if strings.Contains(upper, "SERVERPROPERTY") && strings.Contains(upper, "PRODUCTVERSION") && (strings.Contains(upper, "VERSIONTEXT") || strings.Contains(upper, "CASE") || strings.Count(upper, "SERVERPROPERTY") > 1) {
+	if strings.Contains(upper, "SERVERPROPERTY") && strings.Contains(upper, "PRODUCTVERSION") && strings.Contains(upper, "VERSIONTEXT") {
 		cols := []ColumnInfo{
 			{Name: "version", Type: TypeNVarChar, Size: 4000, Nullable: false},
 			{Name: "productVersion", Type: TypeNVarChar, Size: 128, Nullable: false},
@@ -2572,8 +2572,8 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 		return cols, vals, true
 	}
 
-	// 3. Standalone SERVERPROPERTY(...)
-	if strings.Contains(upper, "SERVERPROPERTY") {
+	// 3. Standalone single-expression SERVERPROPERTY(...) probe only
+	if strings.Contains(upper, "SERVERPROPERTY") && !strings.Contains(upper, ",") && !strings.Contains(upper, "FROM") {
 		colName := "property"
 		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
 			alias := strings.TrimSpace(trimmed[asIdx+4:])

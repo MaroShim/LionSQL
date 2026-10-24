@@ -171,129 +171,129 @@ func Execute(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	upper = strings.ReplaceAll(strings.ReplaceAll(upper, "[", ""), "]", "")
 
-	// 1. DbGate SQL Server Primary Keys
+	// 1. SQL Server Primary Keys
 	if strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1") {
-		return execDbGateMSSQLPrimaryKeySelect(src, sql)
+		return execSysIndexesPrimaryKey(src, sql)
 	}
 
-	// 2. DbGate SQL Server Indexes
+	// 2. SQL Server Secondary Indexes
 	if strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "0") {
-		return execDbGateMSSQLIndexSelect(src, sql)
+		return execSysIndexesSecondary(src, sql)
 	}
 
-	// 3. DbGate SQL Server Index Columns
+	// 3. SQL Server Index Columns
 	if strings.Contains(upper, "SYS.INDEX_COLUMNS") {
-		return execDbGateMSSQLIndexColumnSelect(src, sql)
+		return execSysIndexColumns(src, sql)
 	}
 
-	// 4. DbGate & Modern GUI SQL Server column query:
+	// 4. SQL Server Columns joined with types
 	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE")) {
-		return execDbGateMSSQLColumnSelect(src, sql)
+		return execSysColumnsJoinedWithTypes(src, sql)
 	}
 
-	// 5. DbGate SQL Server column comments (MS_Description)
+	// 5. SQL Server Column comments (MS_Description)
 	if strings.Contains(upper, "COLUMNCOMMENT") && strings.Contains(upper, "SYS.COLUMNS") {
-		return execDbGateMSSQLColumnCommentSelect(sql)
+		return execSysColumnsExtendedPropertyComment(sql)
 	}
 
-	// 6. Beekeeper Studio SQL Server column query:
+	// 6. SQL Server Information Schema columns with computed columns
 	if strings.Contains(upper, "INFORMATION_SCHEMA.COLUMNS") && strings.Contains(upper, "SYS.COMPUTED_COLUMNS") {
-		return execBeekeeperMSSQLColumnSelect(src, sql)
+		return execInformationSchemaColumnsWithComputed(src, sql)
 	}
 
-	// 7. DbGate SQL Server Foreign Keys
+	// 7. SQL Server Referential Constraints (Foreign Keys)
 	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") {
-		return execDbGateMSSQLForeignKeySelect(src, sql)
+		return execReferentialConstraintsForeignKey(src, sql)
 	}
 
-	// 8. DbGate SQL Server Table Row Count
+	// 8. SQL Server Table row count & size
 	if strings.Contains(upper, "TABLEROWCOUNT") || (strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.PARTITIONS")) {
-		return execDbGateMSSQLRowCountSelect(src, sql)
+		return execSysTablesRowCount(src, sql)
 	}
 
-	// 9. DbGate SQL Server Parameters
+	// 9. SQL Server Parameters
 	if strings.Contains(upper, "SYS.PARAMETERS") {
-		return execDbGateMSSQLParamSelect(sql)
+		return execSysParameters(sql)
 	}
 
-	// 10. DbGate SQL Server Triggers
+	// 10. SQL Server Triggers
 	if strings.Contains(upper, "TRIGGERNAME") || (strings.Contains(upper, "SYS.OBJECTS") && containsEq(upper, "TYPE", "'TR'")) {
-		return execDbGateMSSQLTriggerSelect(sql)
+		return execSysObjectsTriggers(sql)
 	}
 
-	// 11. DbGate SQL Server SQL Code (loadSqlCode)
+	// 11. SQL Server SQL Code (syscomments)
 	if strings.Contains(upper, "SYS.SYSCOMMENTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "CODETEXT")) {
-		return execDbGateMSSQLLoadSqlCodeSelect(src, sql)
+		return execSysCommentsSqlCode(src, sql)
 	}
 
-	// 12. DbGate SQL Server Programmables
+	// 12. SQL Server Programmables (procedures, functions)
 	if strings.Contains(upper, "SQLOBJECTTYPE") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "('P', 'IF', 'FN', 'TF')")) {
-		return execDbGateMSSQLProgrammablesSelect(src, sql)
+		return execSysObjectsProgrammables(src, sql)
 	}
 
-	// 13. DbGate SQL Server Views
+	// 13. SQL Server Views
 	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && containsEq(upper, "TYPE", "'V'") {
-		return execDbGateMSSQLViewSelect(src, sql)
+		return execSysObjectsViews(src, sql)
 	}
 
-	// 14. DbGate SQL Server Tables (tables.js)
+	// 14. SQL Server Tables metadata
 	if strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.SCHEMAS") && (strings.Contains(upper, "PURENAME") || strings.Contains(upper, "OBJECTCOMMENT")) {
-		return execDbGateMSSQLTableSelect(src, sql)
+		return execSysTablesMetadata(src, sql)
 	}
 
-	// 15. DbGate SQL Server Object Modifications / Master Object List (modifications.js)
+	// 15. SQL Server Master Object metadata
 	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && strings.Contains(upper, "PURENAME") {
-		return execDbGateMSSQLObjectSelect(src, sql)
+		return execSysObjectsMetadata(src, sql)
 	}
 
-	// 16. Beekeeper Studio Postgres table query:
+	// 16. PostgreSQL Information Schema tables with persistence
 	if strings.Contains(upper, "INFORMATION_SCHEMA.TABLES") && strings.Contains(upper, "PG_CLASS") {
-		return execBeekeeperTableSelect(src, sql)
+		return execInformationSchemaTablesWithPersistenceSelect(src, sql)
 	}
 
-	// 17. Constraints: Foreign keys, Primary keys, Unique constraints
+	// 17. PostgreSQL Constraints: Foreign keys, Primary keys, Unique constraints
 	if strings.Contains(upper, "PG_CONSTRAINT") {
 		if strings.Contains(upper, "SRC_TBL") || containsEq(upper, "CONTYPE", "'F'") || strings.Contains(upper, "REF_TABLE") || strings.Contains(upper, "CONFRELID") {
 			return execForeignKeySelect(src, sql)
 		}
-		return execDbGatePrimaryKeySelect(src, sql)
+		return execPgConstraintPrimaryKeySelect(src, sql)
 	}
 
-	// 18. Indexes (DbGate indexes.js, indexcols.js)
+	// 18. PostgreSQL Indexes
 	if strings.Contains(upper, "PG_INDEX") {
-		return execDbGateIndexSelect(src, sql)
+		return execPgIndexSelect(src, sql)
 	}
 
-	// 19. Triggers (DbGate triggers.js)
+	// 19. PostgreSQL Triggers
 	if strings.Contains(upper, "PG_TRIGGER") {
-		return execDbGateTriggerSelect(src, sql)
+		return execPgTriggerSelect(src, sql)
 	}
 
-	// 20. Column metadata query: pg_attribute + pg_class (DbGate columns.js)
+	// 20. PostgreSQL Column metadata query: pg_attribute + pg_class
 	if strings.Contains(upper, "PG_ATTRIBUTE") && strings.Contains(upper, "PG_CLASS") {
 		return execColumnMetadataSelect(src, sql)
 	}
 
-	// 21. Procedure / Function metadata query
+	// 21. PostgreSQL Procedure / Function metadata query
 	if strings.Contains(upper, "PG_PROC") && strings.Contains(upper, "PG_NAMESPACE") {
 		return execProcSelect(src, sql)
 	}
 
-	// 22. DBeaver PostgreSQL pg_shdescription queries
+	// 22. PostgreSQL pg_shdescription queries
 	if strings.Contains(upper, "PG_SHDESCRIPTION") {
 		return execPgShdescriptionSelect(sql)
 	}
 
-	// 23. DBeaver PostgreSQL pg_conversion query
+	// 23. PostgreSQL pg_conversion query
 	if strings.Contains(upper, "PG_CONVERSION") {
 		return execPgConversionSelect(sql)
 	}
 
-	// 24. DBeaver SQL Server sys.all_objects query
+	// 24. SQL Server sys.all_objects query
 	if strings.Contains(upper, "SYS.ALL_OBJECTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "EXTENDED_PROPERTIES")) {
-		return execDBeaverMSSQLAllObjectsSelect(src, sql)
+		return execSysAllObjectsJoined(src, sql)
 	}
 
-	// 25. Class + Namespace: Tables and Views (DbGate tableList.js, views.js, DBeaver)
+	// 25. PostgreSQL Class + Namespace: Tables and Views
 	return execClassSelect(src, sql)
 }

@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
@@ -235,6 +236,36 @@ END
 		if !strings.HasPrefix(res.Logs[i], exp) && res.Logs[i] != exp {
 			t.Errorf("Log[%d] expected %q, got %q", i, exp, res.Logs[i])
 		}
+	}
+}
+
+func TestVM_MultiScalarSelect(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+	sess, _ := eng.NewSession()
+	defer sess.Close()
+	cache := runtime.NewPlanCache()
+	exec := runtime.NewExecutor(cache)
+
+	prog, err := proc.CompileQuery("SELECT SERVERPROPERTY('ProductVersion') AS pv, SERVERPROPERTY('EngineEdition') AS ee")
+	if err != nil {
+		t.Fatalf("CompileQuery failed: %v", err)
+	}
+	tx, _ := sess.BeginTx(storage.TxOptions{ReadOnly: true})
+	defer tx.Rollback()
+	res, err := exec.ExecuteInTx(prog, nil, tx, nil)
+	if err != nil {
+		t.Fatalf("ExecuteInTx failed: %v", err)
+	}
+	if len(res.Columns) != 2 || res.Columns[0] != "pv" || res.Columns[1] != "ee" {
+		t.Fatalf("unexpected columns: %v", res.Columns)
+	}
+	if len(res.Rows) != 1 || len(res.Rows[0]) != 2 {
+		t.Fatalf("unexpected rows: %v", res.Rows)
+	}
+	if res.Rows[0]["pv"] != "15.0.2000.5" || res.Rows[0]["ee"] != int64(3) {
+		t.Fatalf("unexpected row values: %v", res.Rows[0])
 	}
 }
 

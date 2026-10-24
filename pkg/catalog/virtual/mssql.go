@@ -77,7 +77,7 @@ func formatMSSQLDataType(c storage.Column) string {
 	}
 }
 
-func execBeekeeperMSSQLColumnSelect(src Source, sql string) (*Result, error) {
+func execInformationSchemaColumnsWithComputed(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"table_schema", "table_name", "column_name", "ordinal_position",
 		"column_default", "is_nullable", "is_generated", "data_type",
@@ -124,7 +124,7 @@ func execBeekeeperMSSQLColumnSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLColumnSelect(src Source, sql string) (*Result, error) {
+func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"columnName", "dataType", "objectId", "isIdentity",
 		"maxLength", "precision", "scale", "isNullable",
@@ -238,7 +238,7 @@ func execDbGateMSSQLColumnSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLPrimaryKeySelect(src Source, sql string) (*Result, error) {
+func execSysIndexesPrimaryKey(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"objectId", "pureName", "schemaName", "columnName", "constraintName",
 	}
@@ -271,7 +271,7 @@ func execDbGateMSSQLPrimaryKeySelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLIndexSelect(src Source, sql string) (*Result, error) {
+func execSysIndexesSecondary(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"object_id", "constraintName", "indexType", "isUnique",
 		"index_id", "is_unique_constraint", "filterDefinition",
@@ -305,7 +305,7 @@ func execDbGateMSSQLIndexSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLIndexColumnSelect(src Source, sql string) (*Result, error) {
+func execSysIndexColumns(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"object_id", "index_id", "column_id", "columnName", "isDescending", "isIncludedColumn",
 	}
@@ -346,7 +346,7 @@ func execDbGateMSSQLIndexColumnSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLForeignKeySelect(src Source, sql string) (*Result, error) {
+func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"schemaName", "pureName", "columnName", "refSchemaName",
 		"refTableName", "refColumnName", "constraintName",
@@ -415,11 +415,11 @@ func execDbGateMSSQLForeignKeySelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLRowCountSelect(src Source, sql string) (*Result, error) {
+func execSysTablesRowCount(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
-	isDBeaver := strings.Contains(upper, "TOTALSIZE") || strings.Contains(upper, "USEDSIZE")
+	hasStorageSizeCols := strings.Contains(upper, "TOTALSIZE") || strings.Contains(upper, "USEDSIZE")
 	var columns []string
-	if isDBeaver {
+	if hasStorageSizeCols {
 		columns = []string{"name", "rows", "totalSize", "usedSize"}
 	} else {
 		columns = []string{"objectId", "tableRowCount"}
@@ -454,7 +454,7 @@ func execDbGateMSSQLRowCountSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLColumnCommentSelect(sql string) (*Result, error) {
+func execSysColumnsExtendedPropertyComment(sql string) (*Result, error) {
 	columns := []string{"objectId", "columnComment", "columnId"}
 	return &Result{
 		Columns: columns,
@@ -462,7 +462,7 @@ func execDbGateMSSQLColumnCommentSelect(sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLParamSelect(sql string) (*Result, error) {
+func execSysParameters(sql string) (*Result, error) {
 	columns := []string{
 		"parentObjectId", "objectId", "parameterObjectId", "pureName",
 		"parameterName", "dataType", "charMaxLength", "parameterMode",
@@ -474,7 +474,7 @@ func execDbGateMSSQLParamSelect(sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLTriggerSelect(sql string) (*Result, error) {
+func execSysObjectsTriggers(sql string) (*Result, error) {
 	columns := []string{
 		"modifyDate", "objectId", "triggerName", "schemaName",
 		"tableName", "triggerTiming", "eventType", "definition",
@@ -485,7 +485,7 @@ func execDbGateMSSQLTriggerSelect(sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLObjectSelect(src Source, sql string) (*Result, error) {
+func execSysObjectsMetadata(src Source, sql string) (*Result, error) {
 	columns := []string{"objectId", "modifyDate", "type", "pureName", "schemaName"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
@@ -529,7 +529,7 @@ func execDbGateMSSQLObjectSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLTableSelect(src Source, sql string) (*Result, error) {
+func execSysTablesMetadata(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "objectComment"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
@@ -552,7 +552,7 @@ func execDbGateMSSQLTableSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLViewSelect(src Source, sql string) (*Result, error) {
+func execSysObjectsViews(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
@@ -574,7 +574,7 @@ func execDbGateMSSQLViewSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDbGateMSSQLProgrammablesSelect(src Source, sql string) (*Result, error) {
+func execSysObjectsProgrammables(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "sqlObjectType"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
@@ -597,7 +597,7 @@ func execDbGateMSSQLProgrammablesSelect(src Source, sql string) (*Result, error)
 	}, nil
 }
 
-func execDbGateMSSQLLoadSqlCodeSelect(src Source, sql string) (*Result, error) {
+func execSysCommentsSqlCode(src Source, sql string) (*Result, error) {
 	columns := []string{"pureName", "schemaName", "codeText"}
 	var allRows []map[string]any
 
@@ -624,7 +624,7 @@ func execDbGateMSSQLLoadSqlCodeSelect(src Source, sql string) (*Result, error) {
 	}, nil
 }
 
-func execDBeaverMSSQLAllObjectsSelect(src Source, sql string) (*Result, error) {
+func execSysAllObjectsJoined(src Source, sql string) (*Result, error) {
 	columns := []string{
 		"name", "object_id", "principal_id", "schema_id", "parent_object_id",
 		"type", "type_desc", "create_date", "modify_date",
