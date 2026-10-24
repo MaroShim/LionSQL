@@ -7,6 +7,7 @@
 > 코드 리뷰 및 결함 감사 트래커는 [CODE_REVIEW.ko.md](CODE_REVIEW.ko.md)에서 실시간으로 추적 및 관리됩니다.
 > 구조적 아키텍처 추상화 및 리팩토링 명세는 [REFACTORING.ko.md](REFACTORING.ko.md)를 참조하세요.
 > 과거 107대 데이터 무결성 결함 조치 아카이브는 [BUG_ARCHIVE.ko.md](BUG_ARCHIVE.ko.md)를 참조하세요.
+> 과거 P1 세부 구현 요구사항 및 수락 기준 원문은 [notes/TODO_SPEC_ARCHIVE.ko.md](notes/TODO_SPEC_ARCHIVE.ko.md)에 아카이빙되어 있습니다.
 > 분류 체계 및 식별 코드 규칙의 전체 명세는 [notes/TAXONOMY.ko.md](notes/TAXONOMY.ko.md)에 상세히 기술되어 있습니다.
 
 ---
