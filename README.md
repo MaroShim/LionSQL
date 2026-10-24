@@ -1,6 +1,6 @@
 # LionSQL
 
-Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure
+Single-binary, high-concurrency OLTP database server supporting T-SQL and stored procedures
 
 [![Version](https://img.shields.io/badge/version-v0.90.0--beta3-blue.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](README.md)
