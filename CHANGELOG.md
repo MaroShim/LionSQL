@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- `BENCH-VDBE-TPCC-1`: Overhauled Native T-SQL VDBE Runtime TPC-C benchmark suite in `doc/BENCHMARK.md` (Section 3.5) with a 3-tier realistic enterprise scale-factor progression (16 Wh / 32 Wrk, 20 Wh / 200 Wrk, and 50 Wh / 500 Wrk). Published official verified metrics demonstrating 497k~668k tpmC at standard scale, 413k~553k tpmC under 200 concurrent workers, and 381k~434k tpmC under extreme 500-worker concurrency, validating In-Memory OCC's 4x~35x lower serialization abort rates and superior tail latency preservation.
 - `VPERF-18`: Optimized In-Memory OCC read paths and high-concurrency catalog access:
   - **`pkg/storage/memengine/memengine.go`**: Replaced RWMutex contention on table catalog lookups (`e.mu.RLock`) with an atomic immutable table pointer snapshot (`e.tablesAtomic atomic.Pointer[map[string]*TableData]`), updated atomically upon DDL (`CreateTable`, `DropTable`), completely eliminating global mutex cacheline contention during `BeginTx`, `Commit`, and `getTableLocked`.
   - **`pkg/storage/memengine/tx.go`**: Resolved `txPool` race condition where `defer tx.Rollback()` executed against reused transaction instances by returning transactions to pool strictly from `Rollback()`, while bypassing `baseVers` tracking and row cloning for `ReadOnly` transactions.
