@@ -799,7 +799,7 @@
         <span class="badge badge-info" style="font-size:0.65rem;">SYS</span>
       </button>
       <button class="nav-btn" data-view="tables" onclick="switchView('tables')">
-        <span>Table &amp; Record</span>
+        <span>Tables &amp; Records</span>
         <span id="nav-tables-count">0</span>
       </button>
       <button class="nav-btn" data-view="query" onclick="switchView('query')">
@@ -1154,7 +1154,6 @@
         </div>
         <div style="display: flex; gap: 8px;">
           <button class="btn" style="background: var(--primary);" onclick="openCreateTableModal()">+ New Table</button>
-          <button class="btn btn-secondary" onclick="openInQueryStudio()">SQL Query</button>
           <button id="btn-seed-sample" class="btn btn-secondary" onclick="seedSampleData()">Seed Sample Data</button>
         </div>
       </div>
@@ -2678,14 +2677,6 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         if (rlsCard) rlsCard.style.display = 'block';
         loadTableRules();
       }
-    }
-
-    function openInQueryStudio() {
-      const tbl = document.getElementById('table-select').value;
-      if (tbl) {
-        document.getElementById('sql-query-input').value = `SELECT * FROM ${tbl} LIMIT 50;`;
-      }
-      switchView('query');
     }
 
     function loadCurrentTable() {

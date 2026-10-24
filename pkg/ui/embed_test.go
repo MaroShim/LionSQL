@@ -27,7 +27,7 @@ func TestDashboardMenuOrderAndContent(t *testing.T) {
 		`data-view="overview"`,
 		`Overview`,
 		`data-view="tables"`,
-		`Table &amp; Record`,
+		`Tables &amp; Records`,
 		`data-view="query"`,
 		`SQL Query`,
 		`data-view="procedures"`,

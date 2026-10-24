@@ -44,7 +44,7 @@ LionSQL 서버가 기동되면 HTTP 관리 포트(기본값: TCP `8090`)에서 W
 좌측 사이드 패널은 총 12개의 핵심 도구를 작업 흐름에 맞추어 4개의 카테고리로 체계화하여 제공합니다:
 - **DATABASE & QUERY**:
   - `Overview`: 서버 리소스, 가동 시간, 초당 처리량(TPS/QPS) 모니터링
-  - `Table & Record`: 테이블 스키마 설계 및 데이터 CRUD 스프레드시트 그리드
+  - `Tables & Records`: 테이블 스키마 설계 및 데이터 CRUD 스프레드시트 그리드
   - `SQL Query`: 다중 쿼리 실행, T-SQL 배치, 바이트코드 EXPLAIN 실행 계획 분석 콘솔
   - `Stored Procedures`: T-SQL 저장 프로시저 및 스칼라 함수(UDF) 소스 조회 및 즉시 실행
 - **AUTOMATION & STREAM**:

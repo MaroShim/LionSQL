@@ -19,6 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Removed
 - `UI-4`: Removed the misplaced and non-functional `#sidebar-quick-search` input and `onSidebarQuickSearch` JavaScript function from `pkg/ui/dashboard.html`. Cleans up the left sidebar navigation hierarchy and keeps table selection and search cleanly scoped within the Table & Record view.
+- `UI-5`: Removed the redundant `SQL Query` button from the `Tables & Records` header bar and deleted the unused `openInQueryStudio()` JavaScript function in `pkg/ui/dashboard.html`.
+
+### Changed
+- `UI-6`: Unified Web Studio sidebar navigation item label from `Table & Record` to `Tables & Records` in `pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`, and `doc/WEB_STUDIO_GUIDE.ko.md` for consistent naming with the view title.
 
 ### Refactored
 - `ARCH-LEX-2`: Unified residual manual string splitting, keyword scanning, and parenthesis matching loops into `pkg/sqlutil/tokenizer.go` (Golden Rule 15 KISS, DRY & Deletion-First):
