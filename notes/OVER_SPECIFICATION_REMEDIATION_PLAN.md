@@ -1,5 +1,9 @@
 # LionSQL Over-Specification Remediation Plan (`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`)
 
+> [!NOTE]
+> **과제 상태 (Status): 100% 완료 (Completed)**
+> 본 마스터 플랜의 3대 핵심 정돈 과제(Phase 1 `sp_executesql` 순수 위치 기반 일원화, Phase 2 `matchVersionQuery` 하이재킹 제거 및 표준 스칼라 위임, Phase 3 가상 카탈로그 도구명 함수 리팩토링)는 **커밋 `57e51aa`에서 전수 조치 완료([x])**되었습니다.
+
 ## 1. 개요 및 추진 배경 (Overview & Problem Statement)
 
 LionSQL은 단일 정적 바이너리로 다중 프로토콜(PGWire, TDS, HTTP)과 다양한 서드파티 GUI 도구(DBeaver, DbGate, Beekeeper Studio 등)를 지원하는 고동시성 OLTP 엔진입니다.

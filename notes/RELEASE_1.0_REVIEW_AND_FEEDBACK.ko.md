@@ -1,5 +1,10 @@
 # LionSQL 1.0 릴리즈 사전 아키텍처 리뷰 및 종합 피드백 보고서
 
+> [!NOTE]
+> **검토 결과 조치 완료 안내 (Resolution Status)**:
+> 본 보고서는 공식 1.0 릴리스 이전에 진행된 사전 종합 진단서입니다.
+> 본 문서의 제2절에서 지적되었던 **5대 핵심 문제점(브랜드 통일 `BRAND-UNIFY-1`, 세션 변수 이스케이프 `SEC-ESC-1`, 쿼리 3갈래 경로의 2-Tier 단일화 `KISS-5/ARCH-2TIER-1`, 프로덕션 기본 보안 가드레일 `PROD-SEC-1`, 1.0 출시 기준 동기화)**은 **v0.90.0 Betas 스프린트(Beta 1 ~ Beta 3)에서 모두 100% 조치 완료([x])**되었습니다.
+
 ## 1. 개요 (Executive Summary)
 
 본 보고서는 LionSQL의 공식 1.0 LTS(Long-Term Support) 릴리즈를 앞두고, 전체 코드베이스(311개 Go 파일, 약 12.6만 라인의 직접 구현 코드)와 아키텍처, 와이어 프로토콜, 보안 정책, 문서 정합성을 전수 점검하여 도출한 기술적 총평 및 개선 과제 명세서입니다.
@@ -16,12 +21,11 @@
 
 ## 2. 1.0 릴리즈 직전 5대 핵심 문제점 및 분석
 
-### ① 브랜드/네이밍 분열 (`LionSQL` vs `LionSQL`)
-- **현상**: 문서 및 UI 가이드라인상 브랜드 명칭을 `LionSQL`로 단일화했으나, 실제 런타임 코드와 프로토콜 응답에 레거시 `LionSQL` 명칭이 남아 있어 문서와 실제 동작이 불일치합니다.
-  - **웹훅 헤더 불일치 (`pkg/api/webhook.go:390-398`)**: 문서와 Web Studio는 `X-LionSQL-Signature`, `X-LionSQL-Event`를 명시하나, 실제 코드는 `X-LionSQL-Signature`, `X-LionSQL-Event`를 방출함.
-  - **클라이언트 SDK (`pkg/api/sdk/lionsql.js`)**: `/sdk/lionsql.js` 및 `class LionSQL`으로 고정되어 있어 `/sdk/lionsql.js` 및 `LionSQL` 클래스 별칭(Alias) 부재.
-  - **시스템 함수/프로토콜 응답**: `DB_NAME()`, `APP_NAME()`, `SHOW server_version`, `SELECT @@VERSION`, TDS `LOGINACK` 서버명 등에 `LionSQL` 노출.
-  - **Prometheus 메트릭**: `lionsql_*` 프리픽스 사용 중.
+### ① 브랜드/네이밍 분열 (LionSQL vs 레거시 명칭) — [조치 완료: `BRAND-UNIFY-1`]
+- **현상**: 문서 및 UI 가이드라인상 브랜드 명칭을 `LionSQL`로 단일화했으나, 실제 런타임 코드와 프로토콜 응답에 레거시 명칭이 일부 남아 있어 문서와 실제 동작이 불일치함.
+  - **웹훅 헤더 일치화 (`pkg/api/webhook.go`)**: 웹훅 헤더를 `X-LionSQL-Signature`, `X-LionSQL-Event`로 단일화 완료.
+  - **클라이언트 SDK (`pkg/api/sdk/lionsql.js`)**: `/sdk/lionsql.js` 및 `class LionSQL` 일원화 완료.
+  - **시스템 함수/프로토콜 응답**: `DB_NAME()`, `APP_NAME()`, `SHOW server_version`, `SELECT @@VERSION`, TDS `LOGINACK` 서버명을 `LionSQL`로 완전 단일화.
 
 ### ② 세션 변수(`@var`) 치환 이스케이프 취약점 및 임시 테이블 누수 위험
 - **세션 변수 문자열 치환 시 작은따옴표 미이스케이프 (`pkg/engine/sqlexec.go:911-919`)**:

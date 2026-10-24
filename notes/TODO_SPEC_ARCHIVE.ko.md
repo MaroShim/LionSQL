@@ -1,6 +1,6 @@
 # LionSQL Engineering P1 과제 세부 명세 및 수락 기준 아카이브
 
-이 문서는 LionSQL의 `v0.9.0` 스프린트 완료 이전에 [TODO.ko.md](../TODO.ko.md) 제2절 하단에 유지되었던 **P1 핵심 과제별 세부 명세 및 수락 기준(Acceptance Criteria)**의 원문을 보존하는 공식 아카이브 문서입니다.
+이 문서는 LionSQL의 `v0.90.0` 스프린트 완료 이전에 [TODO.ko.md](../TODO.ko.md) 제2절 하단에 유지되었던 **P1 핵심 과제별 세부 명세 및 수락 기준(Acceptance Criteria)**의 원문을 보존하는 공식 아카이브 문서입니다.
 
 > [!NOTE]
 > 활성 엔지니어링 백로그 및 마감 대시보드는 [TODO.ko.md](../TODO.ko.md)를 참조하세요.
