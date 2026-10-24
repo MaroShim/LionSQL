@@ -311,6 +311,10 @@ func (e *Engine) saveDiskLocked() error {
 		td.partMu.RUnlock()
 		td.mu.RUnlock()
 	}
+	// Immediately free the temporary cloned maps so they do not linger in heap and trigger GC pressure.
+	for _, td := range persistTables {
+		td.clearShardsSyncMapsLocked()
+	}
 	if err != nil {
 		return fmt.Errorf("failed to encode tables to MessagePack: %w", err)
 	}

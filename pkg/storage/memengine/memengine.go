@@ -2,6 +2,7 @@ package memengine
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime/metrics"
@@ -177,14 +178,16 @@ func (e *Engine) finishWALCommitLocked(seq int64) error {
 		return err
 	}
 	if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
-		// Guard compaction with atomic CAS so concurrent committers under e.mu.RLock()
-		// do not race in saveDiskLocked() / rewriteAOFLocked().
+		// Guard compaction with atomic CAS so concurrent committers do not trigger duplicate background rewrites.
 		if e.compacting.CompareAndSwap(false, true) {
-			if err := e.rewriteAOFLocked(); err != nil {
-				e.compacting.Store(false)
-				return err
-			}
-			e.compacting.Store(false)
+			e.bgWg.Add(1)
+			go func() {
+				defer e.bgWg.Done()
+				defer e.compacting.Store(false)
+				if err := e.rewriteAOFLocked(); err != nil {
+					log.Printf("[memengine] background AOF rewrite error: %v", err)
+				}
+			}()
 		}
 	}
 	return nil

@@ -219,6 +219,13 @@ func (td *TableData) syncShardsToMapsLocked() {
 	}
 }
 
+func (td *TableData) clearShardsSyncMapsLocked() {
+	td.mu.Lock()
+	td.Rows = nil
+	td.Versions = nil
+	td.mu.Unlock()
+}
+
 func (td *TableData) truncateShardsLocked() {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]

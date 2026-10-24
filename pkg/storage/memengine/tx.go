@@ -118,12 +118,14 @@ const (
 )
 
 type rowChange struct {
-	kind    changeType
-	table   string
-	key     string
-	baseVer int64
-	row     storage.Row
-	rec     storage.Record
+	kind     changeType
+	table    string
+	key      string
+	baseVer  int64
+	row      storage.Row
+	rec      storage.Record
+	td       *TableData
+	shardIdx int
 }
 
 type savepointState struct {
@@ -445,12 +447,14 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 
 	changeKey := tableName + ":" + pkKey
 	tx.changes[changeKey] = rowChange{
-		kind:    changeInsert,
-		table:   tableName,
-		key:     pkKey,
-		baseVer: 0,
-		row:     rowCopy,
-		rec:     recCopy,
+		kind:     changeInsert,
+		table:    tableName,
+		key:      pkKey,
+		baseVer:  0,
+		row:      rowCopy,
+		rec:      recCopy,
+		td:       td,
+		shardIdx: hashShard(pkKey),
 	}
 
 	return nil
@@ -645,21 +649,25 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 		tx.removeLocal(tableName, pkKey)
 		tx.markDeleted(tableName, pkKey)
 		tx.changes[tableName+":"+pkKey] = rowChange{
-			kind:    changeDelete,
-			table:   tableName,
-			key:     pkKey,
-			baseVer: originalBaseVer,
+			kind:     changeDelete,
+			table:    tableName,
+			key:      pkKey,
+			baseVer:  originalBaseVer,
+			td:       td,
+			shardIdx: hashShard(pkKey),
 		}
 
 		tx.putLocal(tableName, newPkKey, updatedRow, 0)
 		tx.unmarkDeleted(tableName, newPkKey)
 		tx.changes[tableName+":"+newPkKey] = rowChange{
-			kind:    changeInsert,
-			table:   tableName,
-			key:     newPkKey,
-			baseVer: 0,
-			row:     updatedRow,
-			rec:     updated,
+			kind:     changeInsert,
+			table:    tableName,
+			key:      newPkKey,
+			baseVer:  0,
+			row:      updatedRow,
+			rec:      updated,
+			td:       td,
+			shardIdx: hashShard(newPkKey),
 		}
 	} else {
 		tx.putLocal(tableName, pkKey, updatedRow, originalBaseVer)
@@ -667,12 +675,14 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 
 		changeKey := tableName + ":" + pkKey
 		tx.changes[changeKey] = rowChange{
-			kind:    changeUpdate,
-			table:   tableName,
-			key:     pkKey,
-			baseVer: originalBaseVer,
-			row:     updatedRow,
-			rec:     updated,
+			kind:     changeUpdate,
+			table:    tableName,
+			key:      pkKey,
+			baseVer:  originalBaseVer,
+			row:      updatedRow,
+			rec:      updated,
+			td:       td,
+			shardIdx: hashShard(pkKey),
 		}
 	}
 
@@ -824,10 +834,12 @@ func (tx *Transaction) deleteLocked(tableName string, pk storage.Value, depth in
 
 	changeKey := tableName + ":" + pkKey
 	tx.changes[changeKey] = rowChange{
-		kind:    changeDelete,
-		table:   tableName,
-		key:     pkKey,
-		baseVer: originalBaseVer,
+		kind:     changeDelete,
+		table:    tableName,
+		key:      pkKey,
+		baseVer:  originalBaseVer,
+		td:       td,
+		shardIdx: hashShard(pkKey),
 	}
 
 	return nil
@@ -1565,27 +1577,29 @@ func (tx *Transaction) Commit() error {
 		return nil
 	}
 
-	// 1. Collect distinct table names affected by this transaction
+	// 1. Collect distinct table names and affected shards using 64-bit masks (zero nested map allocations)
 	type shardRef struct {
 		tableName string
 		shardIdx  int
 		td        *TableData
 	}
 
-	tableSet := make(map[string]*TableData)
-	shardMap := make(map[string]map[int]struct{})
+	tableSet := make(map[string]*TableData, 4)
+	shardMasks := make(map[string]uint64, 4)
 
 	for _, ch := range tx.changes {
-		td, exists := sqlutil.MapGetFold(tx.engine.tables, ch.table)
-		if !exists {
-			continue
+		td := ch.td
+		sIdx := ch.shardIdx
+		if td == nil {
+			var exists bool
+			td, exists = sqlutil.MapGetFold(tx.engine.tables, ch.table)
+			if !exists {
+				continue
+			}
+			sIdx = hashShard(ch.key)
 		}
 		tableSet[td.Schema.Name] = td
-		sIdx := hashShard(ch.key)
-		if shardMap[td.Schema.Name] == nil {
-			shardMap[td.Schema.Name] = make(map[int]struct{})
-		}
-		shardMap[td.Schema.Name][sIdx] = struct{}{}
+		shardMasks[td.Schema.Name] |= (uint64(1) << sIdx)
 	}
 
 	tableNames := make([]string, 0, len(tableSet))
@@ -1597,17 +1611,16 @@ func (tx *Transaction) Commit() error {
 	var neededShards []shardRef
 	for _, tName := range tableNames {
 		td := tableSet[tName]
-		sIndices := make([]int, 0, len(shardMap[tName]))
-		for idx := range shardMap[tName] {
-			sIndices = append(sIndices, idx)
-		}
-		sort.Ints(sIndices) // Canonical Shard Ordering within table (Rule 10)
-		for _, idx := range sIndices {
-			neededShards = append(neededShards, shardRef{
-				tableName: tName,
-				shardIdx:  idx,
-				td:        td,
-			})
+		mask := shardMasks[tName]
+		// Invariant: Iterating bit 0 to 63 naturally guarantees ascending canonical shard order (Rule 10)
+		for sIdx := 0; sIdx < numTableShards; sIdx++ {
+			if (mask & (uint64(1) << sIdx)) != 0 {
+				neededShards = append(neededShards, shardRef{
+					tableName: tName,
+					shardIdx:  sIdx,
+					td:        td,
+				})
+			}
 		}
 	}
 
@@ -1641,14 +1654,19 @@ func (tx *Transaction) Commit() error {
 	defer unlockAll()
 
 	// 5. Verify OCC version conflicts and unique constraints
-	seenUniqueKeys := make(map[string]map[string]string) // table+":"+idxName -> encodedKey -> pk
+	var seenUniqueKeys map[string]map[string]string // lazy allocated only when unique indexes exist
 
 	for _, ch := range tx.changes {
-		td, exists := sqlutil.MapGetFold(tx.engine.tables, ch.table)
-		if !exists {
-			continue
+		td := ch.td
+		sIdx := ch.shardIdx
+		if td == nil {
+			var exists bool
+			td, exists = sqlutil.MapGetFold(tx.engine.tables, ch.table)
+			if !exists {
+				continue
+			}
+			sIdx = hashShard(ch.key)
 		}
-		sIdx := hashShard(ch.key)
 		sh := &td.shards[sIdx]
 		curVer := sh.versions[ch.key]
 		if ch.kind == changeInsert {
@@ -1659,6 +1677,9 @@ func (tx *Transaction) Commit() error {
 				if idxData.Schema.Unique {
 					keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 					if !keyVal.IsNull {
+						if seenUniqueKeys == nil {
+							seenUniqueKeys = make(map[string]map[string]string)
+						}
 						mapID := td.Schema.Name + ":" + idxData.Schema.Name
 						if seenUniqueKeys[mapID] == nil {
 							seenUniqueKeys[mapID] = make(map[string]string)
@@ -1687,6 +1708,9 @@ func (tx *Transaction) Commit() error {
 					if idxData.Schema.Unique {
 						keyVal := extractIndexKeyFromRowWithSchema(&td.Schema, ch.row, &idxData.Schema)
 						if !keyVal.IsNull {
+							if seenUniqueKeys == nil {
+								seenUniqueKeys = make(map[string]map[string]string)
+							}
 							mapID := td.Schema.Name + ":" + idxData.Schema.Name
 							if seenUniqueKeys[mapID] == nil {
 								seenUniqueKeys[mapID] = make(map[string]string)
@@ -1741,11 +1765,16 @@ func (tx *Transaction) Commit() error {
 
 	// 6. Apply changes and update secondary indexes atomically
 	for _, ch := range tx.changes {
-		td, exists := sqlutil.MapGetFold(tx.engine.tables, ch.table)
-		if !exists {
-			continue
+		td := ch.td
+		sIdx := ch.shardIdx
+		if td == nil {
+			var exists bool
+			td, exists = sqlutil.MapGetFold(tx.engine.tables, ch.table)
+			if !exists {
+				continue
+			}
+			sIdx = hashShard(ch.key)
 		}
-		sIdx := hashShard(ch.key)
 		sh := &td.shards[sIdx]
 		oldRow, hadOld := sh.rows[ch.key]
 
@@ -1838,7 +1867,11 @@ func (tx *Transaction) Commit() error {
 				opType = OpDelete
 			}
 			var rawData []byte
-			if td, ok := sqlutil.MapGetFold(tx.engine.tables, ch.table); ok && ch.kind != changeDelete {
+			td := ch.td
+			if td == nil {
+				td, _ = sqlutil.MapGetFold(tx.engine.tables, ch.table)
+			}
+			if td != nil && ch.kind != changeDelete {
 				var err error
 				rawData, err = storage.EncodeRow(&td.Schema, ch.row)
 				if err != nil {

@@ -42,8 +42,8 @@
 | **P1** | **도구호환/검증** | **외부 GUI 클라이언트(DBeaver, DbGate, SSMS) 실전 쿼리 스트레스 및 가상 카탈로그 심층 검증 (`TOOL-AUDIT-1`)** | `pkg/catalog/virtual`, `pkg/wire/tds`, `pkg/wire` | **진행 대기** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
 | **P2** | **KISS/실행통합** | **코어 엔진 3갈래 쿼리 실행 경로(`sqlexec_select` vs `execution` Iterator vs VDBE) 단일화 및 아키텍처 다이어트 (`KISS-5`)** | `pkg/engine`, `pkg/execution`, `pkg/proc/runtime` | **완료 (`[x]`)** | [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
 | **P2** | **KISS/스캐너통합** | **MERGE, STRING_SPLIT, PROCS 잔여 수동 분할 루프 `sqlutil.Tokenizer` 전면 일원화 (`ARCH-LEX-2`)** | `pkg/sqlutil`, `pkg/engine` | **완료 (`[x]`)** | [`REFACTORING.ko.md`](REFACTORING.ko.md) |
+| **P1** | **성능/OCC최적화** | **In-Memory OCC 5대 최적화 (비트마스크 샤드 추적, Table/Shard 캐싱, 지연 유니크셋, 비차단 AOF 압축, 힙 오염 제거) (`VPERF-15`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) |
 | **P2** | **와이어/모듈분해** | **TDS 거대 단일 파일(`server.go` 2.6k줄) 관심사별 모듈 분해 (Handshake/RPC/Batch/Server)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | 1.0 안정성 최우선 |
-| **P2** | **스토리지/OCC튜닝** | **In-Memory OCC 성능 튜닝 및 비차단 AOF 압축 7대 최적화 로드맵 (`OCC-PERF-PLAN`)** | `pkg/storage/memengine` | **Post-1.0 연기 (Postponed)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) |
 | **P1** | **KISS/오버스펙** | **T-SQL 디스패처 100% 위치 매핑, SERVERPROPERTY 하이재킹 제거 및 가상 카탈로그 도구 종속성 정돈 (`REFACTOR-OVER-SPECIFICATION-1`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/catalog/virtual` | **완료 (`[x]`)** | [`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`](notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md) |
 | **P1** | **리소스/안정성** | **글로벌 메모리 예산 상한제 및 회로 차단기 (Global Memory Governor & Circuit Breaker)** | `pkg/config`, `pkg/execution`, `cmd/server` | **완료 (`[x]`)** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P1** | **KISS/다이어트** | **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`)** | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
@@ -309,6 +309,7 @@
 | **VPERF-12** | 스토리지/WT | WiredTiger `Update` 단일 커서 통합 및 Zero-Copy 슬라이스 뷰 디코딩 | **Post-1.0 (`v1.1.0`)** | CGo 포인터 생명주기 세그폴트 위험 차단 위해 v1.1.0 이관 |
 | **VPERF-13** | 엔진/DML | `INSERT ... ON CONFLICT (col)` 보조 인덱스 스캔(`IndexScan`) 연동 | **완료 (`[x]`)** | 인덱스 보유 컬럼에 대한 Upsert 시 $O(N)$ 전체 테이블 풀 스캔 방지 및 `IndexScan` 즉시 룩업 |
 | **VPERF-14** | VM/DML | VDBE `execUpdateWhere`/`execDeleteWhere` 카탈로그 스키마 조회 호이스팅 | **완료 (`[x]`)** | `cursor.Next()` 루프 내 매 행마다 발생하던 `getTableGetter()` 및 카탈로그 뮤텍스 락 경합 100% 제거 |
+| **VPERF-15** | 스토리지/OCC | In-Memory OCC 5대 수직 핫패스 최적화 및 비차단 AOF 압축 | **완료 (`[x]`)** | 비트마스크 샤드 추적으로 중첩 맵 제거, `changeRecord` TableData/ShardIdx 캐싱으로 `MapGetFold` 반복 박멸, 지연 유니크셋, 백그라운드 AOF 압축 및 임시 맵 즉시 해제. TPC-C +15.0% (12.1k ➔ 14.0k TPS, 324k ➔ 375k tpmC), 송금 164.5k TPS 달성 |
 
 ---
 
