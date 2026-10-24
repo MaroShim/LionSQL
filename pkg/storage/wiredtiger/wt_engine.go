@@ -279,6 +279,7 @@ func (e *Engine) startPeriodicSync(stopCh <-chan struct{}) {
 
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
+	lastReset := time.Now()
 
 	for {
 		select {
@@ -289,7 +290,14 @@ func (e *Engine) startPeriodicSync(stopCh <-chan struct{}) {
 				seq := e.writeSeq.Load()
 				if seq > e.syncedSeq.Load() {
 					_ = e.syncUpTo(sess, seq)
+					lastReset = time.Now()
 				}
+			}
+			// Periodic session reset every 5 minutes prevents WiredTiger's internal
+			// sweep-server from emitting 60-minute idle session warnings.
+			if time.Since(lastReset) >= 5*time.Minute {
+				C.go_wt_session_reset(sess)
+				lastReset = time.Now()
 			}
 		}
 	}

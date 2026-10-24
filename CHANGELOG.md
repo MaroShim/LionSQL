@@ -41,6 +41,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `ARCH-DML-1`: Added `pkg/engine/dml_parser_test.go` covering `ParseDMLCommand` clause splitting (literals, sub-queries, `OUTPUT`/`UPSERT`, error cases).
 
 ### Fixed
+- `BUG-WT-SWEEP-2`: Added periodic 5-minute `session->reset` in `startPeriodicSync` background disk sync loop (`pkg/storage/wiredtiger/wt_engine.go`), eliminating WiredTiger 60-minute sweep-server idle session warnings during prolonged idle periods with zero write activity.
 - `REV-ENG-006`: `UPDATE ... SET col = 'a WHERE b' OUTPUT ... WHERE ...` no longer splits the `SET` clause at a `WHERE` inside a string literal, which previously updated 0 rows and reported success.
 
 ### Refactored
