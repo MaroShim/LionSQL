@@ -103,8 +103,8 @@ LionSQL's core capabilities are organized across five foundational architectural
 
 ### 4. High-Performance Storage & ACID Concurrency
 - **Dual Storage Backends**:
-  - **In-Memory OCC Engine**: Delivers 20,000+ TPS based on concurrent SkipList indexes and Optimistic Concurrency Control.
-  - **WiredTiger MVCC Disk Engine**: Delivers 16,000+ TPS with full ACID durability backed by lock-free B+Trees.
+  - **In-Memory OCC Engine**: Delivers 186,000+ TPS (and up to 779k tpmC in TPC-C with an ultra-low 3.6% abort rate) based on concurrent SkipList indexes and Optimistic Concurrency Control.
+  - **WiredTiger MVCC Disk Engine**: Delivers 120,000+ TPS (and up to 833k tpmC in TPC-C) with full ACID durability backed by lock-free B+Trees.
 - **Bloat-Free MVCC without Vacuum**:
   Multi-version update chains are maintained in memory and only latest committed versions are written to disk, completely eliminating table bloat and Autovacuum I/O storms.
 - **Non-Blocking Snapshot Isolation**:
