@@ -239,6 +239,18 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 				"columnComment":      nil,
 				"system_type_id":     int(c.Type),
 				"user_type_id":       int(c.Type),
+				"type":               "U",
+				"type_desc":          "USER_TABLE",
+				"tableName":          t.Name,
+				"table_name":         t.Name,
+				"schemaName":         "dbo",
+				"schema_name":        "dbo",
+				"o.type":             "U",
+				"o.object_id":        objID,
+				"o.name":             t.Name,
+				"u.name":             "dbo",
+				"c.name":             c.Name,
+				"c.object_id":        objID,
 			})
 		}
 	}
