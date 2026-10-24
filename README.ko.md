@@ -73,7 +73,22 @@ LionSQL은 Microsoft SQL Server의 T-SQL & 저장 프로시저(Stored Procedure)
 
 LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습니다:
 
-### 2.1. 코어 엔진 & 쿼리 가상 머신
+### 2.1. 다중 와이어 프로토콜 & 연결 관리
+- **동시 다중 와이어 프로토콜**:
+  - **PostgreSQL v3 프로토콜 (포트 5433)**: `psql`, DBeaver, GORM, Prisma, pgx 등 표준 PostgreSQL 도구 및 ORM과 완벽 호환되며, SSL/TLS 보안 연결과 파라미터 바인딩을 지원합니다.
+  - **Microsoft SQL Server TDS 프로토콜 (포트 1433)**: `sqlcmd`, SSMS, Azure Data Studio 등 기존 MSSQL 생태계 도구와 즉시 연동되며, RPC 프리페어드 파이프라인을 지원합니다.
+- **내장 Goroutine 커넥션 풀러**:
+  경량 Go 고루틴 기반으로 10,000개 이상의 동시 클라이언트 연결을 효율적으로 처리하여 외부 커넥션 풀러 없이도 연결 병목을 해소합니다.
+
+### 2.2. 엔터프라이즈 T-SQL 절차적 런타임
+- **저장 프로시저, 함수 및 트리거**:
+  `CREATE PROCEDURE`, 스칼라 및 테이블 반환 함수(TVF), `AFTER` 및 `INSTEAD OF` 트리거를 지원합니다.
+- **제어 흐름문 & 변수**:
+  조건문(`IF...ELSE`), 반복문(`WHILE`), 예외 처리(`TRY...CATCH`), 로컬 변수(`@var`), 테이블 변수, 세션 변수, 커서(Cursor)를 폭넓게 지원합니다.
+- **풍부한 SQL 확장 기능**:
+  윈도우 함수(`ROW_NUMBER`, `RANK` 등), JSON 추출 함수, 외래키 및 CASCADE 연쇄 동작, `TRUNCATE TABLE`, `SELECT ... INTO`를 완벽 지원합니다.
+
+### 2.3. 코어 엔진 & 쿼리 가상 머신
 - **통합 VDBE 가상 머신 아키텍처**:
   단순 쿼리(`SELECT`, `INSERT`, `UPDATE`, `DELETE`)와 복잡한 저장 프로시저를 동일한 레지스터 기반 VDBE 가상 머신에서 통합 실행합니다. 쿼리 실행 계획 디스어셈블러(`EXPLAIN BYTECODE`)를 지원합니다.
 - **프리페어드 스테이트먼트 바이트코드 캐싱**:
@@ -86,7 +101,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 - **비용 기반 최적화기 (CBO)**:
   테이블 통계(카디널리티, 고유값 수, 히스토그램)와 다중 컬럼 확장 통계를 기반으로 다중 테이블 조인 순서를 최적화하여 가장 효율적인 실행 계획을 수립합니다.
 
-### 2.2. 고성능 스토리지 & ACID 트랜잭션
+### 2.4. 고성능 스토리지 & ACID 트랜잭션
 - **이중 스토리지 백엔드**:
   - **In-Memory OCC 엔진**: 동시성 SkipList 인덱스와 낙관적 동시성 제어(OCC)를 기반으로 초당 20,000건 이상의 초고속 트랜잭션을 처리합니다.
   - **WiredTiger MVCC 디스크 엔진**: 락프리 B+Tree 구조로 완전한 ACID 내구성을 보장하며 초당 16,000건 이상의 트랜잭션을 안정적으로 처리합니다.
@@ -98,21 +113,6 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
   활성 트랜잭션을 중단하지 않고 실시간 압축 백업 아카이브를 생성합니다. CLI, REST API, 웹 어드민에서 원클릭으로 지원됩니다.
 - **고가용성 복제 (HA Replication)**:
   Primary 노드에서 복제본으로의 실시간 WAL 스트리밍 복제 및 무중단 장애 조치(Failover)를 지원합니다.
-
-### 2.3. 다중 와이어 프로토콜 & 연결 관리
-- **동시 다중 와이어 프로토콜**:
-  - **PostgreSQL v3 프로토콜 (포트 5433)**: `psql`, DBeaver, GORM, Prisma, pgx 등 표준 PostgreSQL 도구 및 ORM과 완벽 호환되며, SSL/TLS 보안 연결과 파라미터 바인딩을 지원합니다.
-  - **Microsoft SQL Server TDS 프로토콜 (포트 1433)**: `sqlcmd`, SSMS, Azure Data Studio 등 기존 MSSQL 생태계 도구와 즉시 연동되며, RPC 프리페어드 파이프라인을 지원합니다.
-- **내장 Goroutine 커넥션 풀러**:
-  경량 Go 고루틴 기반으로 10,000개 이상의 동시 클라이언트 연결을 효율적으로 처리하여 외부 커넥션 풀러 없이도 연결 병목을 해소합니다.
-
-### 2.4. 엔터프라이즈 T-SQL 절차적 런타임
-- **저장 프로시저, 함수 및 트리거**:
-  `CREATE PROCEDURE`, 스칼라 및 테이블 반환 함수(TVF), `AFTER` 및 `INSTEAD OF` 트리거를 지원합니다.
-- **제어 흐름문 & 변수**:
-  조건문(`IF...ELSE`), 반복문(`WHILE`), 예외 처리(`TRY...CATCH`), 로컬 변수(`@var`), 테이블 변수, 세션 변수, 커서(Cursor)를 폭넓게 지원합니다.
-- **풍부한 SQL 확장 기능**:
-  윈도우 함수(`ROW_NUMBER`, `RANK` 등), JSON 추출 함수, 외래키 및 CASCADE 연쇄 동작, `TRUNCATE TABLE`, `SELECT ... INTO`를 완벽 지원합니다.
 
 ### 2.5. 웹 관리 스튜디오 & 개발자 환경
 - **단일 독립 실행형 바이너리**:

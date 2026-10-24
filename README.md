@@ -73,7 +73,22 @@ LionSQL is a high-performance, embedded OLTP database engine that natively compi
 
 LionSQL's core capabilities are organized across five foundational architectural pillars:
 
-### 1. Core Engine & Virtual Machine Architecture
+### 1. Dual Wire Protocols & Connection Pooling
+- **Concurrent Dual Wire Protocols**:
+  - **PostgreSQL v3 Protocol (Port 5433)**: Fully compatible with `psql`, DBeaver, GORM, Prisma, and pgx, supporting SSL/TLS encryption and binary parameter binding.
+  - **Microsoft SQL Server TDS Protocol (Port 1433)**: Instantly compatible with SSMS, Azure Data Studio, `sqlcmd`, and MSSQL drivers, supporting RPC prepared execution.
+- **Built-in Goroutine Connection Pooler**:
+  Handles 10,000+ simultaneous connections over lightweight Go goroutines, eliminating connection bottlenecks without external poolers.
+
+### 2. Enterprise T-SQL Procedural Runtime
+- **Stored Procedures, Functions & Triggers**:
+  Full support for `CREATE PROCEDURE`, scalar and Table-Valued Functions (TVF), and `AFTER` / `INSTEAD OF` triggers.
+- **Control Flow & Variables**:
+  Supports conditional branching (`IF...ELSE`), loops (`WHILE`), exception handling (`TRY...CATCH`), local variables (`@var`), table variables, session variables, and cursors.
+- **Rich SQL Extensions**:
+  Window functions (`ROW_NUMBER`, `RANK`), JSON extraction functions, foreign keys with cascading actions, `TRUNCATE TABLE`, and `SELECT ... INTO`.
+
+### 3. Core Engine & Virtual Machine Architecture
 - **Unified VDBE Virtual Machine**:
   Both interactive queries (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) and stored procedures execute on the exact same register-based VDBE virtual machine, complete with bytecode disassembly support (`EXPLAIN BYTECODE`).
 - **Prepared Statement Bytecode Caching**:
@@ -86,7 +101,7 @@ LionSQL's core capabilities are organized across five foundational architectural
 - **Cost-Based Optimizer (CBO)**:
   Leverages table statistics (cardinality, distinct counts, histograms) and multi-column extended statistics to optimize join orders and generate efficient execution plans.
 
-### 2. High-Performance Storage & ACID Concurrency
+### 4. High-Performance Storage & ACID Concurrency
 - **Dual Storage Backends**:
   - **In-Memory OCC Engine**: Delivers 20,000+ TPS based on concurrent SkipList indexes and Optimistic Concurrency Control.
   - **WiredTiger MVCC Disk Engine**: Delivers 16,000+ TPS with full ACID durability backed by lock-free B+Trees.
@@ -98,21 +113,6 @@ LionSQL's core capabilities are organized across five foundational architectural
   Captures live, compressed `.tar.gz` database backups without interrupting active transaction traffic. Supported seamlessly via CLI, REST API, and Web Studio.
 - **High-Availability Replication**:
   Supports real-time WAL stream replication from Primary to Replicas with zero-downtime failover.
-
-### 3. Dual Wire Protocols & Connection Pooling
-- **Concurrent Dual Wire Protocols**:
-  - **PostgreSQL v3 Protocol (Port 5433)**: Fully compatible with `psql`, DBeaver, GORM, Prisma, and pgx, supporting SSL/TLS encryption and binary parameter binding.
-  - **Microsoft SQL Server TDS Protocol (Port 1433)**: Instantly compatible with SSMS, Azure Data Studio, `sqlcmd`, and MSSQL drivers, supporting RPC prepared execution.
-- **Built-in Goroutine Connection Pooler**:
-  Handles 10,000+ simultaneous connections over lightweight Go goroutines, eliminating connection bottlenecks without external poolers.
-
-### 4. Enterprise T-SQL Procedural Runtime
-- **Stored Procedures, Functions & Triggers**:
-  Full support for `CREATE PROCEDURE`, scalar and Table-Valued Functions (TVF), and `AFTER` / `INSTEAD OF` triggers.
-- **Control Flow & Variables**:
-  Supports conditional branching (`IF...ELSE`), loops (`WHILE`), exception handling (`TRY...CATCH`), local variables (`@var`), table variables, session variables, and cursors.
-- **Rich SQL Extensions**:
-  Window functions (`ROW_NUMBER`, `RANK`), JSON extraction functions, foreign keys with cascading actions, `TRUNCATE TABLE`, and `SELECT ... INTO`.
 
 ### 5. Web Management Studio & Developer Experience
 - **Single Standalone Executable**:

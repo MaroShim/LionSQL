@@ -87,48 +87,6 @@ go build -buildvcs=false -o bin/bench ./cmd/bench
 
 ### 3.3. Example Executions
 
-#### Benchmarking WiredTiger (Default Production Disk Engine)
-```bash
-./bin/bench -engine=wiredtiger -accounts=10000 -workers=100 -ops=50000
-```
-
-Verified output:
-```text
-================================================================================
-  LionSQL High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)
-================================================================================
- [Target]         Stored Procedure (T-SQL -> Native VDBE Bytecode -> ACID Tx)
- [Storage Engine] wiredtiger (Dir: data/bench_wt)
- [Accounts]       10000 accounts (Initial balance: 1,000,000 each)
- [Concurrency]    100 concurrent workers
- [Total Ops]      50000 transactions
---------------------------------------------------------------------------------
-Initializing wiredtiger storage engine and seeding 10000 accounts... Done. (Total assets: 10,000,000,000)
-Starting benchmark execution...
-Verifying database ACID integrity across all accounts...
-================================================================================
-                              BENCHMARK RESULTS                                 
-================================================================================
- Total Execution Time:    414.491708ms
- Total Completed Ops:     50,000 transactions
- Successful Transfers:    49,768
- Failed/Rolled Back:      232
---------------------------------------------------------------------------------
- Throughput (TPS):        120629.67 TPS
---------------------------------------------------------------------------------
- Latency (Mean):          589.094µs
- Latency (Median / P50):  26.208µs
- Latency (P90):           86.958µs
- Latency (P95):           250.667µs
- Latency (P99):           4.319666ms
- Latency (Min):           14.042µs
- Latency (Max):           278.21525ms
---------------------------------------------------------------------------------
- ACID Invariant Check:    Initial Sum = 10,000,000,000, Final Sum = 10,000,000,000
- Integrity Verdict:       100% VERIFIED (Zero balance leakage / Exact ACID)
-================================================================================
-```
-
 #### Benchmarking Pure-Go In-Memory OCC Engine
 ```bash
 ./bin/bench -engine=memory -accounts=10000 -workers=100 -ops=50000
@@ -171,16 +129,58 @@ Verifying database ACID integrity across all accounts...
 ================================================================================
 ```
 
+#### Benchmarking WiredTiger (Default Production Disk Engine)
+```bash
+./bin/bench -engine=wiredtiger -accounts=10000 -workers=100 -ops=50000
+```
+
+Verified output:
+```text
+================================================================================
+  LionSQL High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)
+================================================================================
+ [Target]         Stored Procedure (T-SQL -> Native VDBE Bytecode -> ACID Tx)
+ [Storage Engine] wiredtiger (Dir: data/bench_wt)
+ [Accounts]       10000 accounts (Initial balance: 1,000,000 each)
+ [Concurrency]    100 concurrent workers
+ [Total Ops]      50000 transactions
+--------------------------------------------------------------------------------
+Initializing wiredtiger storage engine and seeding 10000 accounts... Done. (Total assets: 10,000,000,000)
+Starting benchmark execution...
+Verifying database ACID integrity across all accounts...
+================================================================================
+                              BENCHMARK RESULTS                                 
+================================================================================
+ Total Execution Time:    414.491708ms
+ Total Completed Ops:     50,000 transactions
+ Successful Transfers:    49,768
+ Failed/Rolled Back:      232
+--------------------------------------------------------------------------------
+ Throughput (TPS):        120629.67 TPS
+--------------------------------------------------------------------------------
+ Latency (Mean):          589.094µs
+ Latency (Median / P50):  26.208µs
+ Latency (P90):           86.958µs
+ Latency (P95):           250.667µs
+ Latency (P99):           4.319666ms
+ Latency (Min):           14.042µs
+ Latency (Max):           278.21525ms
+--------------------------------------------------------------------------------
+ ACID Invariant Check:    Initial Sum = 10,000,000,000, Final Sum = 10,000,000,000
+ Integrity Verdict:       100% VERIFIED (Zero balance leakage / Exact ACID)
+================================================================================
+```
+
 #### Performance Comparison Summary:
 
-| Metric | WiredTiger (Disk MVCC) | In-Memory OCC (Pure-Go Memory) |
+| Metric | In-Memory OCC (Pure-Go Memory) | WiredTiger (Disk MVCC) |
 |---|---|---|
-| **Total Execution Time** | 414.49 ms | **267.71 ms** |
-| **Throughput (TPS)** | **120,629.67 TPS** | **186,766.53 TPS** |
-| **Success Rate** | 99.53% (49,768 passed) | **99.99%** (49,996 passed) |
-| **Median Latency (P50)** | **26.21 µs** | **27.58 µs** |
-| **P95 Latency** | **250.67 µs** | 2.22 ms |
-| **P99 Latency** | **4.32 ms** | 9.75 ms |
+| **Total Execution Time** | **267.71 ms** | 414.49 ms |
+| **Throughput (TPS)** | **186,766.53 TPS** | **120,629.67 TPS** |
+| **Success Rate** | **99.99%** (49,996 passed) | 99.53% (49,768 passed) |
+| **Median Latency (P50)** | **27.58 µs** | **26.21 µs** |
+| **P95 Latency** | 2.22 ms | **250.67 µs** |
+| **P99 Latency** | 9.75 ms | **4.32 ms** |
 | **ACID Integrity Verdict** | 100% VERIFIED | 100% VERIFIED |
 
 ### 3.4. Storage Engine Kernel TPC-C Benchmark (`cmd/tpcc_kernel` / `bin/tpcc-kernel`)
