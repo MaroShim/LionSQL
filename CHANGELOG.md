@@ -7,6 +7,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.9.0-beta5] - 2026-10-25
+
 ### Added
 - `SMOKE-EXT-1`: Implemented self-contained extended integration smoke test suite (`scripts/verify_report.sh`) and usage guide (`scripts/README.md`) verifying all 13 core architecture domains from `notes/TEST_VERIFICATION_REPORT.ko.md` in ~3 seconds across both In-Memory OCC and WiredTiger storage engines (TDS handshake, enterprise T-SQL, TPC-C VDBE stress, 25KB PLP boundary, tri-bridge interoperability, SIGKILL crash durability, HA replication, CDC stream, CBO covering index, JSON expression index, RBAC governance, declarative migrations CLI, and rolling table partitioning).
 - `DOC-ARCHIVE-1`: Relocated 107-defect resolution archive from `notes/` to project root (`BUG_ARCHIVE.ko.md`), updated all relative markdown references across documentation, and standardized all sectional numbering to Arabic digits.
@@ -14,6 +16,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Fixed
 - `BUG-TUPLE-DATETIME-COERCE-1`: Fixed binary tuple serialization in `pkg/storage/tuple.go` (`EncodeRowWithScratch`) to coerce string literals (`TypeVarChar`) into valid `time.Time` values for `TypeDateTime` and `TypeDate` columns, preventing zero timestamp encoding (`UnixNano() = 0` decoding as year 1754) and guaranteeing deterministic partition key generation and partition pruning under WiredTiger.
 - `TOOL-AUDIT-1`: Implemented comprehensive GUI management tool audit, stress testing, and virtual catalog hardening across Microsoft SQL Server TDS (`:1433`) and PostgreSQL Wire (`:5433`) protocols:
+  - Authored architectural audit and verification framework [`notes/TOOL_AUDIT_PLAN.ko.md`](notes/TOOL_AUDIT_PLAN.ko.md) and synchronized [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md).
   - **`pkg/catalog/virtual/mssql.go`**: Normalized all virtual system table results (`execSysTablesMetadata`, `execSysObjectsMetadata`, `execSysObjectsViews`, `execSysObjectsProgrammables`, `execSysColumnsJoinedWithTypes`, `execSysIndexesPrimaryKey`, `execSysIndexesSecondary`, `execSysIndexColumns`, `execReferentialConstraintsForeignKey`, `execSysCommentsSqlCode`) to provide dual naming convention keys (both snake_case standard DMV and camelCase DbGate representations), enabled `FormatResultWithSQL` for SQL Server catalog lookups, and populated `object_id` / `id` keys in `syscomments` / `sys.sql_modules`.
   - **`pkg/catalog/virtual/result.go`**: Introduced `ExtractSQLParts` and `FormatResultWithSQL` to cleanly extract projections, WHERE clauses, and ORDER BY clauses from client catalog SQL, and updated column alias resolution in `FormatResult` to prioritize explicit client aliases (`s.name AS schema_name`) over base column identifiers.
   - **`pkg/catalog/virtual/interceptor.go`**: Broadened catalog pattern matching for `sys.sql_modules`, and loosened `sys.tables` and `sys.objects` cross-join interceptor rules to accept standard SSMS / DBeaver joins (`sys.tables JOIN sys.schemas`) without requiring tool-specific alias tokens.
@@ -21,14 +24,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - **`pkg/wire/tds/tool_audit_test.go`**: Implemented end-to-end integration test suite using official `go-mssqldb` over TCP sockets, validating SSMS DMVs (`SERVERPROPERTY`, `DB_NAME()`, `sys.tables`, `sys.columns`, `sys.indexes`), DbGate 9-step discovery pipeline, DBeaver paged grid queries, Beekeeper bracket syntax, and multi-worker concurrent GUI sessions with simultaneous DML.
   - **`pkg/wire/tool_audit_test.go`**: Implemented end-to-end PGWire integration suite using `lib/pq`, validating DBeaver `pg_class`, `pg_attribute`, `pg_constraint`, and concurrent multi-session stress testing.
   - **`doc/CLIENT_TOOL_INTEGRATION.md`**: Updated Section 5.5 and troubleshooting matrix reflecting client tool audit verification and virtual No-Op `USE <dbname>` synchronization.
+
+### Changed
+- `DOC-REORDER-1`: Reordered Section 3.3 in `doc/BENCHMARK.md` to place In-Memory OCC first (body text, command snippets, console outputs, and table columns) followed by WiredTiger, unifying the left-to-right presentation across Sections 3.3, 3.4, and 3.5. Restructured the 5 Key Features pillars in `README.md` and `README.ko.md` into the user-facing sequence: 1. Dual Wire Protocols ➔ 2. Enterprise T-SQL Runtime ➔ 3. Core Engine & VM ➔ 4. Storage & ACID ➔ 5. Web Studio.
+- `DOC-README-1`: Updated storage engine section in `README.md` and `README.ko.md` with verified 186k/120k TPS in-memory benchmarks and pruned internal agent comments.
+
+---
+
+## [0.9.0-beta4] - 2026-10-24
+
+### Added
+- `BENCH-TPCC-CLIENT-1`: Introduced network TPC-C benchmark client binary (`bin/tpcc-client`, `cmd/tpcc_client/`) that connects to active LionSQL instances over standard wire protocols (TDS `:1433` and PGWire `:5433`), executing concurrent transactions (New-Order, Payment, Order-Status, Delivery, Stock-Level), driving real-time TPS metrics in the Web Studio Overview dashboard, and reporting P50/P95/P99 latencies.
+- `BENCH-TPCC-CLIENT-2`: Optimized network TPC-C benchmark client (`cmd/tpcc_client/main.go`) with 1-RTT single batch multi-statement execution, tuned default scale factor to 16 warehouses and 32 workers to prevent OCC write conflicts, added 50-row multi-value batch seed insertions (cutting seed time from 30s to <1s), and randomized Delivery order keys.
 - `BENCH-VDBE-TPCC-1`: Overhauled Native T-SQL VDBE Runtime TPC-C benchmark suite in `doc/BENCHMARK.md` (Section 3.5) with a 3-tier realistic enterprise scale-factor progression (16 Wh / 32 Wrk, 20 Wh / 200 Wrk, and 50 Wh / 500 Wrk). Published official verified metrics demonstrating 497k~668k tpmC at standard scale, 413k~553k tpmC under 200 concurrent workers, and 381k~434k tpmC under extreme 500-worker concurrency, validating In-Memory OCC's 4x~35x lower serialization abort rates and superior tail latency preservation.
+
+### Performance
 - `VPERF-18`: Optimized In-Memory OCC read paths and high-concurrency catalog access:
   - **`pkg/storage/memengine/memengine.go`**: Replaced RWMutex contention on table catalog lookups (`e.mu.RLock`) with an atomic immutable table pointer snapshot (`e.tablesAtomic atomic.Pointer[map[string]*TableData]`), updated atomically upon DDL (`CreateTable`, `DropTable`), completely eliminating global mutex cacheline contention during `BeginTx`, `Commit`, and `getTableLocked`.
   - **`pkg/storage/memengine/tx.go`**: Resolved `txPool` race condition where `defer tx.Rollback()` executed against reused transaction instances by returning transactions to pool strictly from `Rollback()`, while bypassing `baseVers` tracking and row cloning for `ReadOnly` transactions.
   - **`cmd/tpcc_kernel/main.go`**: Utilized zero-copy `tx.GetRow` across `execOrderStatus`, `execStockLevel`, and `execDelivery` to avoid allocating 21-column Go `Record` maps on existence checks.
   - **`doc/BENCHMARK.md`**: Updated Section 3.4 Storage Engine Kernel TPC-C benchmark results (10 Wh, 100 Workers: In-Memory OCC 779,641 tpmC / 28,881 TPS, WiredTiger 833,595 tpmC / 29,352 TPS) and added an in-depth architectural comparative discussion analyzing fast-fail abort mechanics and Hazard Pointer vs. sharded RWMutex read latency profiles.
-- `BENCH-TPCC-CLIENT-2`: Optimized network TPC-C benchmark client (`cmd/tpcc_client/main.go`) with 1-RTT single batch multi-statement execution, tuned default scale factor to 16 warehouses and 32 workers to prevent OCC write conflicts, added 50-row multi-value batch seed insertions (cutting seed time from 30s to <1s), and randomized Delivery order keys.
-- `BENCH-TPCC-CLIENT-1`: Introduced network TPC-C benchmark client binary (`bin/tpcc-client`, `cmd/tpcc_client/`) that connects to active LionSQL instances over standard wire protocols (TDS `:1433` and PGWire `:5433`), executing concurrent transactions (New-Order, Payment, Order-Status, Delivery, Stock-Level), driving real-time TPS metrics in the Web Studio Overview dashboard, and reporting P50/P95/P99 latencies.
 - `OCC-PERF-PLAN`: Published in-memory OCC performance tuning plan and root-cause analysis (`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`) diagnosing synchronous AOF compaction freezes, fat `storage.Value` structs, and 8 structural bottlenecks, establishing a prioritized 7-stage optimization roadmap for Post-1.0.
 - `VPERF-17`: Accelerated In-Memory OCC hot paths across storage and transaction commit layers:
   - **`pkg/storage`**: Converted `storage.IntValue(v)` and `FloatValue(v)` to pure zero-allocation value types by deferring `*big.Int` instantiation to on-demand `v.Decimal()` invocation, eliminating millions of GC pointer targets and heap allocations per second (Stage 7).
@@ -64,10 +79,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `UI-5`: Removed the redundant `SQL Query` button from the `Tables & Records` header bar and deleted the unused `openInQueryStudio()` JavaScript function in `pkg/ui/dashboard.html`.
 
 ### Changed
-- `DOC-REORDER-1`: Reordered Section 3.3 in `doc/BENCHMARK.md` to place In-Memory OCC first (body text, command snippets, console outputs, and table columns) followed by WiredTiger, unifying the left-to-right presentation across Sections 3.3, 3.4, and 3.5. Restructured the 5 Key Features pillars in `README.md` and `README.ko.md` into the user-facing sequence: 1. Dual Wire Protocols ➔ 2. Enterprise T-SQL Runtime ➔ 3. Core Engine & VM ➔ 4. Storage & ACID ➔ 5. Web Studio.
 - `UI-16`: Separated Web Studio Overview TPS and QPS into two dedicated metric cards forming a balanced 3x2 responsive grid, and replaced lifetime average rate calculation with 3-second instant delta rolling windows (with 3-second auto-refresh default) to reflect real-time benchmark workload without dilution.
 - `UI-6`: Unified Web Studio sidebar navigation item label from `Table & Record` to `Tables & Records` in `pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`, and `doc/WEB_STUDIO_GUIDE.ko.md` for consistent naming with the view title.
 - `UI-15`: Promoted `Overview` to the top-level global home dashboard position above the `DATABASE & QUERY` category divider in `pkg/ui/dashboard.html`, establishing a clear visual hierarchy and scoping `DATABASE & QUERY` strictly to database management tools (`Tables & Records`, `SQL Query`, `Stored Procedures`), with synchronized verification in `pkg/ui/embed_test.go` and `doc/WEB_STUDIO_GUIDE.ko.md`.
+- `BENCH-RENAME-TPCC`: Refactored in-process TPC-C benchmark drivers: renamed `cmd/tpcc` to `cmd/tpcc_kernel` (`bin/tpcc-kernel`) and `cmd/tpcc_vdbe` to `cmd/tpcc_runtime` (`bin/tpcc-runtime`) to accurately distinguish pure storage engine kernel SPI from full-stack T-SQL VDBE virtual machine runtime execution without client wire protocol layers. Synchronized 3-stage pipeline build commands in `GEMINI.md`, test suites, and documentation.
+- `MEM-GOV-65PCT`: Refined dynamic global memory budget calculation in `pkg/execution/governor.go` (`CalculateDefaultMaxMemory`, `GetDefaultMaxMemory`) from flat 70% to `max(Total * 0.50, min(Total * 0.65, Total - 1GB))`. Ensures a guaranteed 1GB RAM reserve for host OS and container overhead on standard nodes, caps LionSQL heap at 65% upper bound on large systems, and enforces a 50% floor guard on low-memory/containerized instances (e.g., 512MB~1GB). Updated CLI flag descriptions (`-max-memory`) in `cmd/lionsql/main.go` and `cmd/lionsql/server.go`, test cases, and documentation.
 
 ### Refactored
 - `ARCH-LEX-2`: Unified residual manual string splitting, keyword scanning, and parenthesis matching loops into `pkg/sqlutil/tokenizer.go` (Golden Rule 15 KISS, DRY & Deletion-First):
@@ -96,19 +112,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - **`pkg/wire/tds/server.go`**: Removed over-broad multi-column hijacking in `matchVersionQuery` (which previously intercepted any query where `SERVERPROPERTY` appeared more than once and collapsed it into 4 hardcoded columns). Multi-column scalar projections now cleanly evaluate via the standard VDBE bytecode engine and return exact projected column names and values.
   - **`pkg/catalog/virtual/`**: Renamed tool-specific handler functions (`execBeekeeperMSSQLColumnSelect`, `execDbGateMSSQLColumnSelect`, `execDbGateMSSQLPrimaryKeySelect`, `execDBeaverMSSQLAllObjectsSelect`, etc.) to objective schema-oriented functions (`execInformationSchemaColumnsWithComputed`, `execSysColumnsJoinedWithTypes`, `execSysIndexesPrimaryKey`, `execSysAllObjectsJoined`, etc.), and converted tool-detection flags (`isDBeaver`) into standard projection-based flags (`hasStorageSizeCols`).
 
-### Changed
-- `BENCH-RENAME-TPCC`: Refactored in-process TPC-C benchmark drivers: renamed `cmd/tpcc` to `cmd/tpcc_kernel` (`bin/tpcc-kernel`) and `cmd/tpcc_vdbe` to `cmd/tpcc_runtime` (`bin/tpcc-runtime`) to accurately distinguish pure storage engine kernel SPI from full-stack T-SQL VDBE virtual machine runtime execution without client wire protocol layers. Synchronized 3-stage pipeline build commands in `GEMINI.md`, test suites, and documentation.
-- `MEM-GOV-65PCT`: Refined dynamic global memory budget calculation in `pkg/execution/governor.go` (`CalculateDefaultMaxMemory`, `GetDefaultMaxMemory`) from flat 70% to `max(Total * 0.50, min(Total * 0.65, Total - 1GB))`. Ensures a guaranteed 1GB RAM reserve for host OS and container overhead on standard nodes, caps LionSQL heap at 65% upper bound on large systems, and enforces a 50% floor guard on low-memory/containerized instances (e.g., 512MB~1GB). Updated CLI flag descriptions (`-max-memory`) in `cmd/lionsql/main.go` and `cmd/lionsql/server.go`, test cases, and documentation.
-
 ### Documentation
 - Authored `doc/RANGE_PARTITIONING.md`, a technical specification for ClickHouse-style Auto Rolling Range Partitioning, $O(1)$ fast partition dropping (`ALTER TABLE DROP PARTITION`), CBO partition pruning (`pkg/planner/pruning.go`), and system introspection views (`SHOW PARTITIONS`, `system.partitions`). Synchronized corresponding guides and DDL specifications in `doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/README.md`, and `doc/README.ko.md`.
-- Replaced machine-specific absolute `file:///Users/maro/Projects/LionSQL/...` links with portable relative links in `doc/README.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/DATA_DICTIONARY.md`, and `doc/WEB_STUDIO_GUIDE.ko.md`, so documentation links resolve on any checkout.
-- Added `doc/TESTING.md`, a consolidated local build, test, and regression guide covering the 3-stage pipeline, `-run` filtering, build tags and conditional tests, a per-package and per-work-item regression test map, test authoring rules, Go micro-benchmarks, TPC-C performance regression, and an A/B comparison procedure. Linked from `README.md`, `CONTRIBUTING.md`, and `doc/README.md`.
-- Restructured `notes/` directory: renamed Korean documentation files to `.ko.md` (`ENGINEERING_CONTEXT.ko.md`, `PITFALLS_AND_TRICKS.ko.md`, `README.ko.md`, `TAXONOMY.ko.md`), authored an English `notes/README.md`, moved and renamed multi-protocol boundaries document to `notes/PROTOCOL_EMULATION_BOUNDARIES.md`, and renamed `ANTLR_PARSER_COMPACT_STRATEGY.md` to `ANTLR_PARSER_COMPACTION_PLAN.md`.
-- Standardized REST API documentation naming: renamed `doc/API_REFERENCE.md` to `doc/REST_API_REFERENCE.md` and `doc/AUTO_REST_API.md` to `doc/REST_API_AUTO_GENERATED.md`, updating all inbound links across documentation and root guides.
-- Replaced machine-specific console output paths in documentation examples (`doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/ARCHITECTURE.md`) with generic relative paths (`./data`, `lionsql/`).
-- Updated `doc/JSON_SPEC_AND_INDEXING.md` Section 7 to a completed implementation status matrix detailing all 5 stages of JSON built-ins, expression B-Tree indexing, CBO optimization, and regression test suites.
-- Consolidated `doc/README.md` by pruning scattered internal `notes/` plan links across subject sections and routing to `notes/README.md` via a dedicated Developer Handover & Backlog section.
+
+---
+
+## [0.9.0-beta3] - 2026-10-21
+
+### Added
+- `CLI-VERSION-1`: Implemented dual-format version and build information reporting for the `lionsql` single-binary CLI (`pkg/config/version.go`, `cmd/lionsql/main.go`, `cmd/lionsql/server.go`, `pkg/api/handlers_admin.go`): Option A multi-line structured report on `version`, `-v`, `-version`, `--version` flags with automatic VCS build time, commit hash (`debug.ReadBuildInfo()`), Go runtime, and wire protocol ports; Option B compact single-line build descriptor `(built: ..., commit: ..., ...) [tags: ...]` displayed by default on foreground server startup (`lionsql`, `lionsql serve`) and usage headers.
+- `UI-14`: Structured Web Studio left sidebar navigation into 4 logical category sections (`DATABASE & QUERY`, `AUTOMATION & STREAM`, `DEVELOPER & ACCESS`, `MONITORING & SYSTEM`) with elegant horizontal divider lines extending to the right of each section title (`.nav-section-title::after`), subtle muted typography to prevent overshadowing functional buttons, optimized workflow ordering (placing `SQL Query` directly alongside `Table & Record` and `Stored Procedures`, grouping real-time CDC streams with webhooks and cron schedulers), responsive scrollbar support, and updated comprehensive menu structure verification in `pkg/ui/embed_test.go` and `doc/WEB_STUDIO_GUIDE.ko.md`.
+- `UI-OVERVIEW-1`: Implemented System Overview and Real-time Monitoring dashboard in Web Studio (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`, `pkg/api/handlers_admin.go`, `pkg/api/overview_test.go`): added primary `Overview` sidebar tab with real-time metric cards (Database Engine, Active Sessions, Tables & Views, Server Uptime, Throughput TPS/total transactions), multi-interval Auto-Refresh controller (5s, 10s, 30s, 60s, Off), client connection guides with one-click clipboard copying (PostgreSQL :5433, TDS :1433, HTTP :8090), quick development actions, and dedicated `GET /api/overview` REST endpoint.
+- `UI-13`: Streamlined Web Studio branding and navigation titles (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`): standardized top-left branding on `LionSQL Studio` and removed the redundant `OLTP + SP` badge, while stripping the `Studio` suffix from all sub-feature sidebar buttons and view header titles (`SQL Query`, `Tables & Records`, `Stored Procedures`).
 
 ### Performance
 - **Vertical Performance Track (7 Hot-Path Zero-Allocation Optimizations)**:
@@ -120,15 +135,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - `VPERF-13`: Optimized `INSERT ... ON CONFLICT (col)` in `pkg/engine/sqlexec_dml.go` to use `tx.IndexScan` when secondary indexes exist rather than falling back to $O(N)$ full table scans.
   - `VPERF-14`: Hoisted `tableSchema` and `hasTriggers` lookups out of `for cursor.Next()` row loops in VDBE `execUpdateWhere` and `execDeleteWhere` (`pkg/proc/runtime/vm.go`), eliminating repetitive catalog mutex lock contention.
 
-### Added
-- `CLI-VERSION-1`: Implemented dual-format version and build information reporting for the `lionsql` single-binary CLI (`pkg/config/version.go`, `cmd/lionsql/main.go`, `cmd/lionsql/server.go`, `pkg/api/handlers_admin.go`): Option A multi-line structured report on `version`, `-v`, `-version`, `--version` flags with automatic VCS build time, commit hash (`debug.ReadBuildInfo()`), Go runtime, and wire protocol ports; Option B compact single-line build descriptor `(built: ..., commit: ..., ...) [tags: ...]` displayed by default on foreground server startup (`lionsql`, `lionsql serve`) and usage headers.
-- `UI-14`: Structured Web Studio left sidebar navigation into 4 logical category sections (`DATABASE & QUERY`, `AUTOMATION & STREAM`, `DEVELOPER & ACCESS`, `MONITORING & SYSTEM`) with elegant horizontal divider lines extending to the right of each section title (`.nav-section-title::after`), subtle muted typography to prevent overshadowing functional buttons, optimized workflow ordering (placing `SQL Query` directly alongside `Table & Record` and `Stored Procedures`, grouping real-time CDC streams with webhooks and cron schedulers), responsive scrollbar support, and updated comprehensive menu structure verification in `pkg/ui/embed_test.go` and `doc/WEB_STUDIO_GUIDE.ko.md`.
-- `UI-OVERVIEW-1`: Implemented System Overview and Real-time Monitoring dashboard in Web Studio (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`, `pkg/api/handlers_admin.go`, `pkg/api/overview_test.go`): added primary `Overview` sidebar tab with real-time metric cards (Database Engine, Active Sessions, Tables & Views, Server Uptime, Throughput TPS/total transactions), multi-interval Auto-Refresh controller (5s, 10s, 30s, 60s, Off), client connection guides with one-click clipboard copying (PostgreSQL :5433, TDS :1433, HTTP :8090), quick development actions, and dedicated `GET /api/overview` REST endpoint.
-- `UI-13`: Standardized Web Studio branding to `LionSQL Web Studio` across sidebar header, mobile navbar, login modal, and browser page title.
-- `SQL-STRICT-NULL-DECORATOR-1`: Introduced standard SQL strict NULL propagation functional decorators (`Strict`, `StrictUnary`, `StrictBinary`, `RegisterStrictScalarFunction`, `HasAnyNull`, `HasNullAt`) in `pkg/proc/strict.go`.
-- `STORAGE-TYPE-PROMOTION-LATTICE-1`: Introduced unified Type Promotion Lattice and binary coercion engine (`storage.CoerceBinaryValues`, `CompareFloatEpsilon`) in `pkg/storage/coerce.go`, eliminating 150+ lines of ad-hoc heterogeneous type matching in `Value.Equal` and `Value.Compare`.
-- `STORAGE-SYNTHETIC-PK-ABSTRACTION-1`: Introduced centralized synthetic row identity abstraction (`storage.SyntheticPKKind`, `NewSyntheticPKColumn`, `IsSyntheticPKName`, `HasSyntheticPK`, `SyntheticPKColumn`) in `pkg/storage/synthetic_pk.go`, eliminating scattered magic strings (`_row_id`, `_dt_row_id`, `_cte_row_id`) across DDL, derived tables, CTEs, projection, and VDBE VM.
-- `UI-13`: Streamlined Web Studio branding and navigation titles (`pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`): standardized top-left branding on `LionSQL Studio` and removed the redundant `OLTP + SP` badge, while stripping the `Studio` suffix from all sub-feature sidebar buttons and view header titles (`SQL Query`, `Tables & Records`, `Stored Procedures`).
+### Refactored
+- `ARCH-DML-1`: Replaced the eight `reDml*` regexes in `pkg/engine/sqlexec_dml.go` with a token-based one-pass DML parser (`pkg/engine/dml_parser.go`: `DMLStatement`, `ParseDMLCommand`, `dmlHead`) built on `sqlutil.FindTopLevelKeyword`. `execInsert`/`execUpdate`/`execDelete`, the statement routing in `sqlexec.go`, and the last-identity bookkeeping in `sqlexec_select.go` now share it.
+- `ARCH-LEX-1`: Unified SQL lexical scanning, token extraction, and quote/parenthesis tracking into `pkg/sqlutil` (`SplitTopLevelKeyword`, `FindTopLevelArithmeticOp`, `ExtractTopLevelTuples`, `FindTopLevelKeyword`, `SplitTopLevel`). Eliminated ~300 lines of brittle manual scanner loops and string parsing logic across `pkg/engine/sqlexec_eval.go`, `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_dbcc.go`, and `pkg/engine/sqlexec_merge.go`.
 
 ### Tests
 - `ARCH-DML-1` pre-check: Added `pkg/engine/dml_characterization_test.go` (55 cases) pinning INSERT/UPDATE/DELETE statement recognition (optional `INTO`/`FROM`, case, tabs/newlines, quoted identifiers, literals containing keywords, multi-row `VALUES`, `OUTPUT`/`UPSERT`/`ON CONFLICT`/`INSERT ... SELECT` regex-only paths, error cases) as the safety net for replacing the `reDml*` regexes. Surfaced `REV-ENG-006`, which was fixed by `ARCH-DML-1` (the `knownBug` marker has been removed).
@@ -138,12 +147,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `BUG-TDS-BEEKEEPER-RPC-STATEMENT-1`: Fixed TDS RPC stored procedure handlers (`handleRPCExecuteSQL`, `handleRPCPrepare`, `handleRPCPrepExec` in `pkg/wire/tds/server.go`) to support standard ordinal positional fallback when parameter names do not match `@stmt` / `@params`. Tedious / `node-mssql` (used by Beekeeper Studio) names its internal query parameter `@statement`, which previously failed the strict `@stmt` check and was skipped during positional assignment. Now, parameter 0 is unconditionally treated as the statement text by position, completely resolving `TypeError: Cannot read properties of undefined (reading 'split')` during Beekeeper Studio's `getVersion()` connection handshake.
 - `BUG-WT-SWEEP-2`: Added periodic 5-minute `session->reset` in `startPeriodicSync` background disk sync loop (`pkg/storage/wiredtiger/wt_engine.go`), eliminating WiredTiger 60-minute sweep-server idle session warnings during prolonged idle periods with zero write activity.
 - `REV-ENG-006`: `UPDATE ... SET col = 'a WHERE b' OUTPUT ... WHERE ...` no longer splits the `SET` clause at a `WHERE` inside a string literal, which previously updated 0 rows and reported success.
-
-### Refactored
-- `ARCH-DML-1`: Replaced the eight `reDml*` regexes in `pkg/engine/sqlexec_dml.go` with a token-based one-pass DML parser (`pkg/engine/dml_parser.go`: `DMLStatement`, `ParseDMLCommand`, `dmlHead`) built on `sqlutil.FindTopLevelKeyword`. `execInsert`/`execUpdate`/`execDelete`, the statement routing in `sqlexec.go`, and the last-identity bookkeeping in `sqlexec_select.go` now share it.
-- `ARCH-LEX-1`: Unified SQL lexical scanning, token extraction, and quote/parenthesis tracking into `pkg/sqlutil` (`SplitTopLevelKeyword`, `FindTopLevelArithmeticOp`, `ExtractTopLevelTuples`, `FindTopLevelKeyword`, `SplitTopLevel`). Eliminated ~300 lines of brittle manual scanner loops and string parsing logic across `pkg/engine/sqlexec_eval.go`, `pkg/engine/sqlexec_select.go`, `pkg/engine/sqlexec_dml.go`, `pkg/engine/sqlexec_dbcc.go`, and `pkg/engine/sqlexec_merge.go`.
-
-### Fixed
 - `BUG-STORAGE-TEMP-TABLE-PERSIST-LEAK-1`: Prevented session-isolated temporary tables (`__temp_*`, `__tv_*`, `#*`) from being persisted to disk snapshots (`saveDiskLocked`, `saveCatalog`) or WAL records across both In-Memory OCC (`pkg/storage/memengine`) and WiredTiger (`pkg/storage/wiredtiger`), eliminating orphaned temporary object leaks across database restarts.
 - **Group B Wire Protocols & Security Remediation (9 Critical Wire, Protocol & Auth Defects)**:
   - `BUG-AUTH-ADMIN-PW-BYPASS-1`: Removed unconditional password bypass for builtin admin logins (`sa`, `postgres`) across PGWire (`pkg/wire/server.go`) and TDS (`pkg/wire/tds/server.go`), enforcing authentication whenever a password hash is registered.
@@ -178,6 +181,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - `BUG-WT-INDEX-COMP-1`: Fixed multi-column composite index scanning in `wtFilteredIndexCursor.matchesRow` and `matchesRecord` by encoding all index columns separated by NUL bytes and explicitly rejecting rows with missing columns, eliminating uninitialized `Value{}` (TypeUnknown) false-positive equality matches.
   - `BUG-WT-INDEX-DESC-1`: Implemented `wtSliceCursor` reverse iterator in `pkg/storage/wiredtiger/wt_engine.go` for `WTTx.IndexScanDesc`, guaranteeing exact descending row ordering for `ORDER BY ... DESC` queries on WiredTiger tables.
   - `BUG-WT-SWEEP-1`: Added `WT_SESSION::reset` CGO binding (`go_wt_session_reset`), invoked session reset upon transaction commit and rollback, and introduced an idle session TTL reaper (`IdleSessionTTL`, default 30m) in `pkg/engine/session_pool.go` to prevent WiredTiger 60-minute sweep-server warnings.
+
+### Documentation
+- Replaced machine-specific absolute `file:///Users/maro/Projects/LionSQL/...` links with portable relative links in `doc/README.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/DATA_DICTIONARY.md`, and `doc/WEB_STUDIO_GUIDE.ko.md`, so documentation links resolve on any checkout.
+- Added `doc/TESTING.md`, a consolidated local build, test, and regression guide covering the 3-stage pipeline, `-run` filtering, build tags and conditional tests, a per-package and per-work-item regression test map, test authoring rules, Go micro-benchmarks, TPC-C performance regression, and an A/B comparison procedure. Linked from `README.md`, `CONTRIBUTING.md`, and `doc/README.md`.
+- Restructured `notes/` directory: renamed Korean documentation files to `.ko.md` (`ENGINEERING_CONTEXT.ko.md`, `PITFALLS_AND_TRICKS.ko.md`, `README.ko.md`, `TAXONOMY.ko.md`), authored an English `notes/README.md`, moved and renamed multi-protocol boundaries document to `notes/PROTOCOL_EMULATION_BOUNDARIES.md`, and renamed `ANTLR_PARSER_COMPACT_STRATEGY.md` to `ANTLR_PARSER_COMPACTION_PLAN.md`.
+- Standardized REST API documentation naming: renamed `doc/API_REFERENCE.md` to `doc/REST_API_REFERENCE.md` and `doc/AUTO_REST_API.md` to `doc/REST_API_AUTO_GENERATED.md`, updating all inbound links across documentation and root guides.
+- Replaced machine-specific console output paths in documentation examples (`doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/ARCHITECTURE.md`) with generic relative paths (`./data`, `lionsql/`).
+- Updated `doc/JSON_SPEC_AND_INDEXING.md` Section 7 to a completed implementation status matrix detailing all 5 stages of JSON built-ins, expression B-Tree indexing, CBO optimization, and regression test suites.
+- Consolidated `doc/README.md` by pruning scattered internal `notes/` plan links across subject sections and routing to `notes/README.md` via a dedicated Developer Handover & Backlog section.
+
+---
+
+## [0.9.0-beta2] - 2026-10-20
+
+### Added
+- `SQL-STRICT-NULL-DECORATOR-1`: Introduced standard SQL strict NULL propagation functional decorators (`Strict`, `StrictUnary`, `StrictBinary`, `RegisterStrictScalarFunction`, `HasAnyNull`, `HasNullAt`) in `pkg/proc/strict.go`.
+- `STORAGE-TYPE-PROMOTION-LATTICE-1`: Introduced unified Type Promotion Lattice and binary coercion engine (`storage.CoerceBinaryValues`, `CompareFloatEpsilon`) in `pkg/storage/coerce.go`, eliminating 150+ lines of ad-hoc heterogeneous type matching in `Value.Equal` and `Value.Compare`.
+- `STORAGE-SYNTHETIC-PK-ABSTRACTION-1`: Introduced centralized synthetic row identity abstraction (`storage.SyntheticPKKind`, `NewSyntheticPKColumn`, `IsSyntheticPKName`, `HasSyntheticPK`, `SyntheticPKColumn`) in `pkg/storage/synthetic_pk.go`, eliminating scattered magic strings (`_row_id`, `_dt_row_id`, `_cte_row_id`) across DDL, derived tables, CTEs, projection, and VDBE VM.
+
+### Performance
+- `VPERF-1`: Eliminated runtime metrics allocation on write commit with atomic heap cache in MemEngine (`pkg/storage/memengine/memengine.go`).
+- `VPERF-3`: Replaced full table scan with cached sequence for IDENTITY insert (`pkg/engine/sqlexec_dml.go`).
+
+### Fixed
 - **Group 3 VDBE Bytecode VM & T-SQL Parser Remediation (5 Critical Integrity & Procedural Defects)**:
   - `BUG-PROC-SIMPLE-CASE-1` & `BUG-PARSER-SIMPLE-CASE-OMISSION-1`: Added `Operand Expr` to AST `CaseExpr`, supported Simple CASE syntax (`CASE expr WHEN val THEN ... [ELSE ...] END`) in Pratt parser `parseCase`, and compiled operand comparison with `OpEq` and heterogeneous type coercion via `storage.Value.Equal`, restoring standard T-SQL simple case evaluation.
   - `BUG-VM-SUBQ-NIL-1`: Resolved nil pointer dereference panics on `sel.From.Name` for FROM-less scalar subqueries (`(SELECT 42)`, `(SELECT @val + 10)`) in parser, compiler, and evaluator by directly evaluating projection expressions, and rejected invalid multi-column scalar subqueries (`(SELECT 1, 2)`).
@@ -274,8 +301,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - `BUG-EXEC-AGG-DISTINCT-IGNORED-1`: Preserved the DISTINCT flag in parser and Volcano `AggregateIterator` with per-group deduplication caching.
   - `BUG-JOIN-IDX-1`: Replaced arbitrary `Indexes[0]` selection with safe HashJoin fallback when join conditions lack matching indexes.
   - `BUG-PLANNER-CBO-SELECTIVITY-CASE-SENSITIVE-1`: Integrated `findColumnStats` into `EstimateSelectivity` for case-insensitive column histogram lookups.
-- **Session Variable Quote Escaping (`pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go`)**: Fixed single quote unescaping in `ParseSessionVarValue` and implemented proper doubled single quote (`''`) escaping during `@var` query substitution to prevent SQL syntax errors and injection vulnerabilities.
-- **Session Table Variable & Temporary Table Lifecycle Cleanup (`pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go`)**: Ensured all physical table variables (`__tv_*`) and temporary tables are cleanly dropped from the storage engine on `CloseSession` (including `default` session on `Coordinator.Close`) and on connection pool resets (`DISCARD ALL`, `RESET ALL`).
+
+---
+
+## [0.9.0-beta1] - 2026-10-19
 
 ### Added
 - **Production Superuser Security Guardrail (`PROD-SEC-1`) (`cmd/lionsql`, `cmd/server`)**: Enforced production safety guard that actively blocks server startup when binding to non-localhost / external interfaces (e.g. `0.0.0.0` or public IP) with the default administrative superuser password (`1234567890`), requiring explicit password change (`admin_password`) or localhost-only binding (`127.0.0.1`).
@@ -284,7 +313,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Changed
 - **Brand Unification & Clean SDK Standard (`BRAND-UNIFY-1`) (`pkg/api`, `pkg/ui`, `pkg/wire`, `pkg/proc`, `cmd/tpcc`, `cmd/lionsql`)**: Standardized all remaining branding to LionSQL across JavaScript/TypeScript Web SDK (`lionsql.js`, `lionsql.d.ts`, `class LionSQL`), webhook & CDC outbox HTTP headers (`X-LionSQL-Signature`, `X-LionSQL-Event`, `X-LionSQL-Delivery`), wire protocol server version and banners (PostgreSQL v3 `15.0 (LionSQL)`, TDS 7.x/8.0 `LionSQL Engine`, `@@SERVERNAME: LIONSQL`), and diagnostic probe files. Cleanly eliminated legacy `lionsql` aliases per 1.0 production specification.
 
-## [0.90.0-feature-freeze]
+### Fixed
+- **Session Variable Quote Escaping (`pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go`)**: Fixed single quote unescaping in `ParseSessionVarValue` and implemented proper doubled single quote (`''`) escaping during `@var` query substitution to prevent SQL syntax errors and injection vulnerabilities.
+- **Session Table Variable & Temporary Table Lifecycle Cleanup (`pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go`)**: Ensured all physical table variables (`__tv_*`) and temporary tables are cleanly dropped from the storage engine on `CloseSession` (including `default` session on `Coordinator.Close`) and on connection pool resets (`DISCARD ALL`, `RESET ALL`).
+
+---
+
+## [0.9.0-feature-freeze] - 2026-10-19
 
 ### Added
 - **Documentation Overhaul & README Overview Refinement**: Refined and modernized the executive overview at the very top of both `README.md` and `README.ko.md` to prominently foreground LionSQL's five core architectural pillars: (1) Native Microsoft SQL Server T-SQL and Stored Procedure Execution on VDBE, (2) Broad PostgreSQL Wire Protocol v3 and SQL dialect compatibility, (3) Embedded zero-dependency Web Studio & REST BaaS API, (4) Ultra-compact single static standalone executable (< 100MB, ~50MB), and (5) High-performance OLTP throughput (16k~28k+ TPS) with Non-Blocking Snapshot Isolation.

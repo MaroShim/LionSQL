@@ -37,6 +37,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Design for Microsoft SQL Server collation and locale support.
    - **[`SQL_ABSTRACTION_LAYER_PLAN.md`](SQL_ABSTRACTION_LAYER_PLAN.md)**: Design for SQL abstraction layer unifying multiple storage backends.
    - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: Memory and binary compaction plan for ANTLR grammar parser.
+   - **[`TOOL_AUDIT_PLAN.ko.md`](TOOL_AUDIT_PLAN.ko.md)** (Korean): GUI client tools (SSMS, DbGate, DBeaver, Beekeeper Studio) query compatibility and virtual catalog audit plan (Completed).
    - **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](OVER_SPECIFICATION_REMEDIATION_PLAN.md)** (Korean): Master remediation plan eliminating tool-specific over-specifications and ad-hoc hardcodings (In Progress).
 
 7. **Completed Reports & Historical Archives**:

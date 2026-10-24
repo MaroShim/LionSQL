@@ -37,6 +37,7 @@
    - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계
    - **[`SQL_ABSTRACTION_LAYER_PLAN.md`](SQL_ABSTRACTION_LAYER_PLAN.md)**: 다중 스토리지 백엔드 통합을 위한 SQL 추상화 계층 설계
    - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: ANTLR 파서 바이너리 및 런타임 메모리 경량화 플랜
+   - **[`TOOL_AUDIT_PLAN.ko.md`](TOOL_AUDIT_PLAN.ko.md)**: 외부 GUI 도구(SSMS, DbGate, DBeaver, Beekeeper Studio) 실전 쿼리 호환성 및 가상 카탈로그 심층 감사/검증 계획서 (완료)
    - **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](OVER_SPECIFICATION_REMEDIATION_PLAN.md)**: 서드파티 도구 종속적 오버스펙 및 하드코딩 전수 정돈 마스터 플랜 (진행 중)
 
 7. **완료된 보고서 및 역사적 아카이브 (Completed Reports & Archives)**:
