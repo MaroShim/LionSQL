@@ -52,7 +52,8 @@
 
 | ID | 우선순위 | 구분 | 파일 및 라인 | 설명 | 상태 | 커밋 / 비고 |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| - | - | - | - | (엔진 완료 후 순차 점검 예정) | - | - |
+| **REV-STOR-001** | P2 | 성능/안전성 | [`pkg/storage/memengine/tx.go:1395, 1399`](pkg/storage/memengine/tx.go#L1395) | `ParsePKValue`에서 기본키 파싱 시 `strconv.ParseInt`/`strconv.ParseFloat` 대신 `fmt.Sscanf` 리플렉션을 사용하여 핫패스 할당 오버헤드가 발생하고 파싱 에러를 무시(`_, _ = fmt.Sscanf(...)`)함 | `[ ]` | `strconv` 기반 제로-할당 변환 및 에러 처리로 개선 예정 |
+| **REV-STOR-002** | P2 | 예외처리 | [`pkg/storage/memengine/memengine.go:360`](pkg/storage/memengine/memengine.go#L360) | In-Memory OCC 엔진 `Open()` 기동 시 AOF 크기가 임계치를 초과할 때 `_ = e.rewriteAOFLocked()`로 초기 컴팩션 에러를 무시(Silent Swallow)하여 손상 가능성 은폐 (Golden Rule 7 위반) | `[ ]` | 에러 로깅 및 안전한 반환 처리 보강 예정 |
 
 ---
 
@@ -60,7 +61,7 @@
 
 | ID | 우선순위 | 구분 | 파일 및 라인 | 설명 | 상태 | 커밋 / 비고 |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| - | - | - | - | (엔진 완료 후 순차 점검 예정) | - | - |
+| **REV-PROC-001** | P1 | 무결성 | [`pkg/proc/runtime/vm.go:910, 1048, 1063, 1152`](pkg/proc/runtime/vm.go#L910) | `vm_dispatcher.go`에서는 트리거 실행 에러를 반환하는 반면, `vm.go` 레거시 경로에서는 `_ = f.fireTriggers(...)`로 트리거 실패 에러를 무시하여 데이터 검증 위반을 침묵 통과시키는 무결성 결함 (Golden Rule 7 위반) | `[ ]` | 트리거 에러 반환 및 트랜잭션 롤백 연동 일원화 예정 |
 
 ---
 
@@ -72,4 +73,6 @@
 | **REV-WIRE-002** | P1 | 결함 | [`pkg/wire/tds/server.go:947-970, 1106-1126`](pkg/wire/tds/server.go#L947) | `handleRPCPrepare` (ProcID 11) 및 `handleRPCPrepExec` (ProcID 13)에서 이름 매핑 루프와 슬라이스 길이 fallback의 혼선으로 비표준 인자명 전송 시 쿼리/선언부 왜곡 위험 | `[ ]` | [MS-TDS] 2.2.6.6 규격 기반 100% Slot Index 매핑으로 단순화 예정 (`TDS-RPC-AUDIT-1`) |
 | **REV-WIRE-003** | P2 | 오버스펙 | [`pkg/wire/tds/server.go:2530-2612`](pkg/wire/tds/server.go#L2530) | `matchVersionQuery`가 DbGate 4컬럼 쿼리 및 단일 `SERVERPROPERTY` 쿼리를 문자열 패턴으로 가로채어 VDBE 내장 스칼라 엔진을 우회하고 인위적 결과셋을 합성하는 오버스펙 잔재 | `[ ]` | 필수 단일 프로브(`@@VERSION`) 제외 정규 VDBE 엔진 위임으로 다이어트 예정 |
 | **REV-WIRE-004** | P1 | 결함 | [`pkg/wire/tds/server.go:2536-2550`](pkg/wire/tds/server.go#L2536) | `matchVersionQuery`에서 `SERVERPROPERTY` 2개 이상 포함 시 임의 쿼리를 강제로 4개 컬럼(`version, productVersion, engineEdition, versionText`)으로 하이재킹하던 치명적 결함 | `[x]` | 다중 컬럼 하이재킹 전면 제거 및 정규 VDBE 스칼라 엔진 위임 완료 (`57e51aa`) |
+| **REV-WIRE-005** | P2 | 결함 | [`pkg/wire/tds/server.go:937`](pkg/wire/tds/server.go#L937) | `handleRPC` default 절에서 미지원 숫자형 `ProcID`(예: `sp_cursoropen` = 2 등) 수신 시 `rpc.ProcName`이 비어 있어 에러 없이 `DoneFinal`을 즉시 반환하여 클라이언트 행(hang) 또는 침묵 오류 유발 위험 | `[ ]` | 미지원 ProcID에 대한 명시적 `TokenError` (Msg 2812) 반환 처리 예정 |
+| **REV-API-001** | P3 | 예외처리 | [`pkg/api/handlers_procs.go:132`](pkg/api/handlers_procs.go#L132) | `handleExecProcedure`에서 `json.NewDecoder(r.Body).Decode(&req)` 에러를 무시(`_ = ...`)하여 잘못된 JSON 요청 본문 전송 시 HTTP 400 Bad Request 대신 빈 인자로 무경고 실행 | `[ ]` | JSON 디코딩 에러 시 HTTP 400 에러 응답 반환 보강 예정 |
 | **REV-CAT-001** | P2 | 안티패턴 | [`pkg/catalog/virtual/mssql.go, interceptor.go`](pkg/catalog/virtual/mssql.go) | 가상 카탈로그 핸들러 명칭에 외부 GUI 도구(`Beekeeper`, `DbGate`, `DBeaver`)를 하드코딩하고 `isDBeaver` 등 도구 탐지 플래그를 사용하던 안티패턴 | `[x]` | 객관적 스키마 함수(`execSysIndexesPrimaryKey`, `hasStorageSizeCols` 등)로 리팩토링 완료 (`57e51aa`) |
