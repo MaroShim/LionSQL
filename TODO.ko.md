@@ -622,9 +622,9 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
   - `pkg/proc/lexer.go`: 렉서 `default` 분기에서 `N'...'` 및 `n'...'` 패턴을 식별자가 아닌 `TokenString`으로 직행 처리하여 파싱 오류 및 토큰 누락 방지.
   - `pkg/engine/sqlexec_select.go` & `sqlexec_eval.go`: `isSingleQuotedLiteral`, `evalScalarExpr`, `parseLiteralValue`, `evaluateSingleConditionMap`에서 `N'...'` 언쿼트 및 WHERE 조건(`=`, `<>`, `IN`) 완벽 수용.
   - 단위/DML 테스트(`TestSQLExecutor_NPrefixUnicodeLiterals`) 및 공식 `go-mssqldb` E2E 통합 테스트(`TestDriverIntegration_GoMSSQLDB_NPrefixUnicodeLiterals`) 100% PASS 검증 완료.
-- [x] **Beekeeper Studio TDS RPC `@statement` / `@parameters` 호환 및 접속 크래시 해결 (`BUG-TDS-BEEKEEPER-RPC-STATEMENT-1`) (`pkg/wire/tds`)**:
-  - `tedious` 및 `node-mssql`이 `sp_executesql` 호출 시 파라미터명으로 `@stmt` 대신 `@statement`, `@params` 대신 `@parameters`를 전송하는 호환성 결함 해결.
-  - TDS RPC 핸들러(`handleRPCExecuteSQL`, `handleRPCPrepare`, `handleRPCPrepExec`)에서 `@statement` 및 `@parameters` 별칭을 지원하여 `SELECT @@VERSION as version` 쿼리가 정상 실행되고 `COLMETADATA`/`ROW` 토큰이 반환되도록 조치. Beekeeper Studio의 `getVersion()` 및 `conn/versionString`에서 발생하던 `TypeError: Cannot read properties of undefined (reading 'split')` 접속 중단 결함 완전 해결.
+- [x] **Beekeeper Studio TDS RPC 파라미터 순서 기반(Positional) 매핑 보강 및 접속 크래시 해결 (`BUG-TDS-BEEKEEPER-RPC-STATEMENT-1`) (`pkg/wire/tds`)**:
+  - `tedious` 및 `node-mssql`이 `sp_executesql` 호출 시 파라미터명으로 `@stmt` 대신 `@statement`를 사용하는 경우, 파라미터명이 불일치해도 0번째 인자를 순서 기반(Positional)으로 정상 수용하도록 매핑 보강.
+  - TDS RPC 핸들러(`handleRPCExecuteSQL`, `handleRPCPrepare`, `handleRPCPrepExec`)에서 `@stmt` 불일치 시 0번째 파라미터를 쿼리문으로 위치 매핑하여 `SELECT @@VERSION as version` 쿼리가 정상 실행되고 `COLMETADATA`/`ROW` 토큰이 반환되도록 조치. Beekeeper Studio의 `getVersion()` 및 `conn/versionString`에서 발생하던 `TypeError: Cannot read properties of undefined (reading 'split')` 접속 중단 결함 완전 해결.
 - [x] **반정형 JSON 표현식 B-Tree 인덱스 & 내장함수 완비 (`ADR-022`)**:
   - `->`, `->>`, `ISJSON`, `JSON_VALUE`, `JSON_QUERY` 지원, `((data->>'key'))` 기능 인덱스 DDL 파싱, CBO 인덱스 스캔 6.5~7.3배 가속.
 - [x] **T-SQL `STRING_SPLIT` 테이블 반환 함수 & 서브쿼리/CROSS APPLY 완비 (`pkg/engine`)**:

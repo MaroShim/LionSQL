@@ -552,7 +552,7 @@ func TestTDS_PreparedStatementRPC(t *testing.T) {
 		t.Fatalf("sp_executesql: expected TokenDoneProc (0xFE)")
 	}
 
-	// 4b. sp_executesql using @statement parameter name (sent by Tedious / Beekeeper Studio)
+	// 4b. sp_executesql positional fallback when client uses non-@stmt parameter name (e.g. @statement)
 	var statementRpcParams bytes.Buffer
 	statementRpcParams.Write(buildNVarCharParam("@statement", false, "SELECT @@VERSION as version;"))
 	respStatement := sendRPC(t, conn, 10, 0, statementRpcParams.Bytes())

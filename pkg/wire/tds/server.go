@@ -946,11 +946,11 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 
 	for i, p := range rpc.Params {
 		name := strings.ToLower(p.Name)
-		if name == "@params" || name == "@parameters" || (name == "" && i == 1) {
+		if name == "@params" || i == 1 {
 			if str, ok := p.Value.(string); ok {
 				paramsDecl = str
 			}
-		} else if name == "@stmt" || name == "@statement" || (name == "" && i == 2) {
+		} else if name == "@stmt" || i == 2 {
 			if str, ok := p.Value.(string); ok {
 				stmt = str
 			}
@@ -1105,11 +1105,11 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 
 	for i, p := range rpc.Params {
 		name := strings.ToLower(p.Name)
-		if name == "@params" || name == "@parameters" || (name == "" && i == 1) {
+		if name == "@params" || i == 1 {
 			if str, ok := p.Value.(string); ok {
 				paramsDecl = str
 			}
-		} else if name == "@stmt" || name == "@statement" || (name == "" && i == 2) {
+		} else if name == "@stmt" || i == 2 {
 			if str, ok := p.Value.(string); ok {
 				stmt = str
 			}
@@ -1310,15 +1310,15 @@ func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *Connec
 	stmtFound := false
 	paramsFound := false
 
-	// First pass: check for named @stmt/@statement and @params/@parameters
+	// First pass: check for explicitly named @stmt and @params
 	for _, p := range rpc.Params {
 		name := strings.ToLower(strings.TrimSpace(p.Name))
-		if name == "@stmt" || name == "@statement" {
+		if name == "@stmt" {
 			if str, ok := p.Value.(string); ok {
 				stmt = str
 				stmtFound = true
 			}
-		} else if name == "@params" || name == "@parameters" {
+		} else if name == "@params" {
 			if str, ok := p.Value.(string); ok {
 				paramsDecl = str
 				paramsFound = true
@@ -1326,21 +1326,23 @@ func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *Connec
 		}
 	}
 
-	// Second pass: if not found by name, assign positionally
+	// Second pass: ordinal positional assignment
+	// In MS SQL Server sp_executesql, parameter 0 is the statement text regardless of
+	// whether the client sent an empty name, @stmt, or an arbitrary driver identifier.
 	for i, p := range rpc.Params {
 		name := strings.ToLower(strings.TrimSpace(p.Name))
-		if name == "@stmt" || name == "@statement" || name == "@params" || name == "@parameters" {
+		if name == "@stmt" || name == "@params" {
 			continue
 		}
-		if !stmtFound && (name == "" && i == 0) {
+		if !stmtFound && i == 0 {
 			if str, ok := p.Value.(string); ok {
 				stmt = str
 				stmtFound = true
 				continue
 			}
 		}
-		if !paramsFound && (name == "" && i == 1) {
-			if str, ok := p.Value.(string); ok {
+		if !paramsFound && i == 1 {
+			if str, ok := p.Value.(string); ok && (p.Name == "" || name == "@params") {
 				paramsDecl = str
 				paramsFound = true
 				continue
