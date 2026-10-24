@@ -270,21 +270,21 @@ LionSQL은 외부 공유 라이브러리나 런타임 설치가 필요 없는 �
 #### 1. 운영체제별 아카이브 다운로드 및 설치
 * **macOS (Apple Silicon M1/M2/M3/M4, ARM64)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0/lionsql-v0.90.0-darwin-arm64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-darwin-arm64.tar.gz
   tar -xzf lionsql-v0.90.0-darwin-arm64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/
   ```
 * **Linux (Ubuntu / Debian / RHEL / Rocky, x86_64)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0/lionsql-v0.90.0-linux-amd64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-linux-amd64.tar.gz
   tar -xzf lionsql-v0.90.0-linux-amd64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/
   ```
 * **Linux (ARM64 / AWS Graviton)**:
   ```bash
-  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0/lionsql-v0.90.0-linux-arm64.tar.gz
+  curl -LO https://github.com/your-org/lionsql/releases/download/v0.90.0-feature-freeze/lionsql-v0.90.0-linux-arm64.tar.gz
   tar -xzf lionsql-v0.90.0-linux-arm64.tar.gz
   chmod +x lionsql
   sudo mv lionsql /usr/local/bin/

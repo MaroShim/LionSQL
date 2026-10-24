@@ -22,7 +22,7 @@ This document establishes the official 4-stage execution plan for comprehensive 
 - [x] Added **Global Memory Governor & Query Circuit Breaker (`MEM-1`)** milestone.
 - [x] Aligned version references to `const Version = "0.90.0"` SSOT.
 - [x] Documented virtual catalog standardization (`postgres` on OID 1, `master` on DB ID 1) and long-lived SSE streaming latency isolation.
-- [x] Tagged git commit as annotated tag `v0.90.0`.
+- [x] Tagged git commit as annotated tag `v0.90.0-feature-freeze`.
 
 ---
 
