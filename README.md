@@ -2,7 +2,8 @@
 
 Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure
 
-[![Version](https://img.shields.io/badge/version-v0.90.0--feature--freeze-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.90.0--beta3-blue.svg)](CHANGELOG.md)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](README.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
 [![Go Report](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev)
 
@@ -116,7 +117,7 @@ LionSQL's core capabilities are organized across five foundational architectural
 
 ### 5. Web Management Studio & Developer Experience
 - **Single Standalone Executable**:
-  Database kernel, wire protocol listeners, REST API, and web studio packaged into a single static executable with zero external runtime dependencies.
+  Database kernel, wire protocol listeners, REST API, and web studio packaged into a single static executable with zero external runtime dependencies (officially supported on macOS and Linux).
 - **Embedded Web Management Studio (Port 8090)**:
   Zero-install browser dashboard (`/_/`) featuring visual schema explorer, inline data grid editor, SQL query console, real-time event stream viewer, and request activity logs.
 - **Auto-Generated RESTful CRUD API**:
@@ -133,6 +134,7 @@ LionSQL's core capabilities are organized across five foundational architectural
 ### 1. Building from Source
 
 #### Prerequisites
+- **Supported Operating Systems**: **macOS**, **Linux** (currently supported; Windows support is planned for a future milestone)
 - Go 1.22 or higher
 - (Optional, for WiredTiger backend) `wiredtiger` development headers and libraries:
   - macOS: `brew install wiredtiger`

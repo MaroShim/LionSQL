@@ -2,7 +2,8 @@
 
 단일 바이너리 고동시성 OLTP 데이터베이스 서버 (T-SQL 및 저장 프로시저 지원) / Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure
 
-[![Version](https://img.shields.io/badge/version-v0.90.0--feature--freeze-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.90.0--beta3-blue.svg)](CHANGELOG.md)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](README.ko.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
 [![Go Report](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev)
 
@@ -116,7 +117,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 
 ### 2.5. 웹 관리 스튜디오 & 개발자 환경
 - **단일 독립 실행형 바이너리**:
-  DB 엔진, 프로토콜 리스너, REST API, 웹 관리 도구가 단 하나의 정적 파일로 빌드되어 외부 런타임 의존성이 전혀 없습니다.
+  DB 엔진, 프로토콜 리스너, REST API, 웹 관리 도구가 단 하나의 정적 파일로 빌드되어 외부 런타임 의존성이 전혀 없습니다 (공식 지원 OS: macOS, Linux).
 - **내장 웹 관리 스튜디오 (포트 8090)**:
   브라우저 대시보드(`/_/`), 테이블 스키마 탐색기, 데이터 그리드 편집기, SQL 쿼리 콘솔, 실시간 스트림 뷰어, 요청 활동 로그를 기본 제공합니다.
 - **자동 생성 RESTful CRUD API**:
@@ -133,6 +134,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 ### 3.1. 소스코드 빌드
 
 #### 사전 요구 사항
+- **지원 운영체제 (OS)**: **macOS**, **Linux** (당분간 macOS 및 Linux x86_64/arm64 환경을 공식 지원하며, Windows 환경은 향후 마일스톤에서 지원 예정)
 - Go 1.22 이상
 - (WiredTiger 백엔드 사용 시 선택 사항) `wiredtiger` 개발 헤더 및 라이브러리:
   - macOS: `brew install wiredtiger`
