@@ -56,7 +56,7 @@ func main() {
 	dbFlag := flag.String("database", "", "Database name (default: master for TDS, postgres for PGWire)")
 
 	numWarehouses := flag.Int("warehouses", 2, "Number of warehouses (TPC-C scale factor)")
-	numWorkers := flag.Int("workers", 16, "Number of concurrent client workers")
+	numWorkers := flag.Int("workers", 64, "Number of concurrent client workers")
 	durationFlag := flag.Duration("duration", 15*time.Second, "Benchmark duration (e.g. 10s, 30s, 1m)")
 	numItems := flag.Int("items", 1000, "Number of unique items (default: 1000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default: 300)")
@@ -177,6 +177,21 @@ func main() {
 	)
 
 	fmt.Println("--------------------------------------------------------------------------------")
+	fmt.Printf("Pre-warming %d worker connections in pool... ", *numWorkers)
+	prewarmCtx, prewarmCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	var prewarmWg sync.WaitGroup
+	for i := 0; i < *numWorkers; i++ {
+		prewarmWg.Add(1)
+		go func() {
+			defer prewarmWg.Done()
+			var dummy int
+			_ = db.QueryRowContext(prewarmCtx, "SELECT 1;").Scan(&dummy)
+		}()
+	}
+	prewarmWg.Wait()
+	prewarmCancel()
+	fmt.Println("Ready.")
+
 	fmt.Printf("Executing TPC-C workload across %d concurrent network workers over wire...\n", *numWorkers)
 	benchStart := time.Now()
 
@@ -488,20 +503,11 @@ func runClientNewOrder(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID
 	oKey := fmt.Sprintf("%d_%d_%d", wID, dID, nextOID)
 	olCnt := 5 + rng.Intn(6) // 5 to 10 order lines
 
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return false
-	}
-	defer tx.Rollback()
+	var sb strings.Builder
+	sb.WriteString("BEGIN TRANSACTION;\n")
+	sb.WriteString(fmt.Sprintf("EXEC TPCC_NewOrderHeader @w_id=%d, @d_key='%s', @c_key='%s', @o_key='%s', @next_o_id=%d, @d_id=%d, @c_id=%d, @ol_cnt=%d;\n",
+		wID, dKey, cKey, oKey, nextOID, dID, cID, olCnt))
 
-	// 1. Header
-	headerSQL := fmt.Sprintf("EXEC TPCC_NewOrderHeader @w_id=%d, @d_key='%s', @c_key='%s', @o_key='%s', @next_o_id=%d, @d_id=%d, @c_id=%d, @ol_cnt=%d;",
-		wID, dKey, cKey, oKey, nextOID, dID, cID, olCnt)
-	if _, err := tx.ExecContext(ctx, headerSQL); err != nil {
-		return false
-	}
-
-	// 2. Order Lines
 	for ol := 1; ol <= olCnt; ol++ {
 		iID := rng.Intn(totalItems) + 1
 		orderQty := rng.Intn(10) + 1
@@ -509,14 +515,13 @@ func runClientNewOrder(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID
 		sKey := fmt.Sprintf("%d_%d", wID, iID)
 		olKey := fmt.Sprintf("%d_%d_%d_%d", wID, dID, nextOID, ol)
 
-		lineSQL := fmt.Sprintf("EXEC TPCC_NewOrderLine @s_key='%s', @i_id=%d, @order_qty=%d, @ol_key='%s', @next_o_id=%d, @d_id=%d, @w_id=%d, @ol=%d, @amount=%f;",
-			sKey, iID, orderQty, olKey, nextOID, dID, wID, ol, olAmount)
-		if _, err := tx.ExecContext(ctx, lineSQL); err != nil {
-			return false
-		}
+		sb.WriteString(fmt.Sprintf("EXEC TPCC_NewOrderLine @s_key='%s', @i_id=%d, @order_qty=%d, @ol_key='%s', @next_o_id=%d, @d_id=%d, @w_id=%d, @ol=%d, @amount=%f;\n",
+			sKey, iID, orderQty, olKey, nextOID, dID, wID, ol, olAmount))
 	}
+	sb.WriteString("COMMIT TRANSACTION;")
 
-	return tx.Commit() == nil
+	_, err := db.ExecContext(ctx, sb.String())
+	return err == nil
 }
 
 func runClientPayment(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID, cID int) bool {
@@ -538,33 +543,28 @@ func runClientOrderStatus(ctx context.Context, db *sql.DB, wID, dID, cID int) bo
 }
 
 func runClientDelivery(ctx context.Context, db *sql.DB, wID int) bool {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return false
-	}
-	defer tx.Rollback()
-
+	var sb strings.Builder
+	sb.WriteString("BEGIN TRANSACTION;\n")
 	for d := 1; d <= 10; d++ {
 		noKey := fmt.Sprintf("%d_%d_1001", wID, d)
-		query := fmt.Sprintf("EXEC TPCC_Delivery @no_key='%s';", noKey)
-		if _, err := tx.ExecContext(ctx, query); err != nil {
-			return false
-		}
+		sb.WriteString(fmt.Sprintf("EXEC TPCC_Delivery @no_key='%s';\n", noKey))
 	}
-	return tx.Commit() == nil
+	sb.WriteString("COMMIT TRANSACTION;")
+
+	_, err := db.ExecContext(ctx, sb.String())
+	return err == nil
 }
 
 func runClientStockLevel(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID, totalItems int) bool {
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
+	var sb strings.Builder
 	for k := 0; k < 5; k++ {
 		iID := rng.Intn(totalItems) + 1
 		sKey := fmt.Sprintf("%d_%d", wID, iID)
-		query := fmt.Sprintf("EXEC TPCC_StockLevel @d_key='%s', @s_key='%s';", dKey, sKey)
-		if _, err := db.ExecContext(ctx, query); err != nil {
-			return false
-		}
+		sb.WriteString(fmt.Sprintf("EXEC TPCC_StockLevel @d_key='%s', @s_key='%s';\n", dKey, sKey))
 	}
-	return true
+	_, err := db.ExecContext(ctx, sb.String())
+	return err == nil
 }
 
 func execWithRetry(maxRetries int, rng *rand.Rand, fn func() bool) (bool, int) {
