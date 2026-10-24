@@ -791,7 +791,7 @@ func runServer(args []string) error {
 
 	go func() {
 		fmt.Println("--------------------------------------------------------------------------------")
-		fmt.Printf(" LionSQL - High-Concurrency OLTP & Stored Procedure Server (v%s)\n", config.Version)
+		fmt.Printf(" LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v%s)\n", config.Version)
 		fmt.Printf(" %s\n", config.CompactVersion())
 		fmt.Println("--------------------------------------------------------------------------------")
 		if loadedConfigPath != "" {

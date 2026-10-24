@@ -1,6 +1,6 @@
 # LionSQL
 
-High-Concurrency Embedded OLTP Database Engine & Multi-Protocol Stored Procedure Server
+Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure
 
 [![Version](https://img.shields.io/badge/version-v0.90.0--feature--freeze-blue.svg)](CHANGELOG.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
@@ -170,7 +170,7 @@ Upon startup, the console displays the connection endpoints:
 
 ```text
 --------------------------------------------------------------------------------
- LionSQL - High-Concurrency OLTP & Stored Procedure Server (v0.90.0)
+ LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.90.0)
 --------------------------------------------------------------------------------
  [Configuration]  Zero-Config (Built-in Defaults)
  [Web Dashboard]  http://127.0.0.1:8090/_/

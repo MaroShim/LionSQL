@@ -11,7 +11,7 @@ import (
 )
 
 func printUsage() {
-	fmt.Printf(`LionSQL - High-Concurrency Embedded OLTP Database Engine & CLI (v%s)
+	fmt.Printf(`LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v%s)
 %s
 
 Usage:

@@ -240,7 +240,7 @@ func TestLionsql_UsageOutput(t *testing.T) {
 	if len(lines) < 2 {
 		t.Fatalf("expected at least 2 lines in usage header, got %d lines", len(lines))
 	}
-	if !strings.Contains(lines[0], "LionSQL - High-Concurrency Embedded OLTP Database Engine & CLI (v0.90.0)") {
+	if !strings.Contains(lines[0], "LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.90.0)") {
 		t.Errorf("expected line 1 to contain title and version, got: %q", lines[0])
 	}
 	if !strings.HasPrefix(lines[1], "(built: ") || !strings.Contains(lines[1], "commit: ") {

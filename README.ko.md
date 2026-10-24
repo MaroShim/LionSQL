@@ -1,6 +1,6 @@
 # LionSQL
 
-고동시성 임베디드 OLTP 데이터베이스 엔진 및 다중 프로토콜 저장 프로시저 서버
+단일 바이너리 고동시성 OLTP 데이터베이스 서버 (T-SQL 및 저장 프로시저 지원) / Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure
 
 [![Version](https://img.shields.io/badge/version-v0.90.0--feature--freeze-blue.svg)](CHANGELOG.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
@@ -170,7 +170,7 @@ go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
 
 ```text
 --------------------------------------------------------------------------------
- LionSQL - High-Concurrency OLTP & Stored Procedure Server (v0.90.0)
+ LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.90.0)
 --------------------------------------------------------------------------------
  [Configuration]  Zero-Config (Built-in Defaults)
  [Web Dashboard]  http://127.0.0.1:8090/_/
