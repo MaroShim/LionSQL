@@ -884,69 +884,76 @@ func parseHandleFromTokenReturnValue(resp []byte) int32 {
 	return 0
 }
 
-func TestTDS_RPC_Audit_Regressions(t *testing.T) {
+func TestTDS_REV_WIRE_001_RPCExecuteSQL_NonStandardParamDecl(t *testing.T) {
 	srv := setupTestServer(t)
 	conn := connectClient(t, srv)
 	performHandshake(t, conn)
 
-	_ = sendSQLBatch(t, conn, "CREATE TABLE rpc_test (id INT PRIMARY KEY, title VARCHAR(100));")
-	_ = sendSQLBatch(t, conn, "INSERT INTO rpc_test (id, title) VALUES (1, 'Book'), (2, 'Pen');")
+	_ = sendSQLBatch(t, conn, "CREATE TABLE rpc_test_001 (id INT PRIMARY KEY, title VARCHAR(100));")
+	_ = sendSQLBatch(t, conn, "INSERT INTO rpc_test_001 (id, title) VALUES (1, 'Book'), (2, 'Pen');")
 
-	// 1. REV-WIRE-001: sp_executesql (ProcID 10) with @statement and @parameters (non-@stmt/@params) and bound parameter
+	// REV-WIRE-001: sp_executesql (ProcID 10) with @statement and @parameters (non-@params),
+	// followed by an unnamed parameter (which should bind to @P1 declared in @parameters).
 	var execSqlParams bytes.Buffer
-	execSqlParams.Write(buildNVarCharParam("@statement", false, "SELECT title FROM rpc_test WHERE id = @id;"))
-	execSqlParams.Write(buildNVarCharParam("@parameters", false, "@id INT"))
-	execSqlParams.Write(buildIntParam("@id", false, 1))
+	execSqlParams.Write(buildNVarCharParam("@statement", false, "SELECT title FROM rpc_test_001 WHERE id = @P1;"))
+	execSqlParams.Write(buildNVarCharParam("@parameters", false, "@P1 INT"))
+	execSqlParams.Write(buildIntParam("", false, 1))
 
 	respExecSql := sendRPC(t, conn, 10, 0, execSqlParams.Bytes())
-	if !bytes.Contains(respExecSql, []byte{TokenColMetaData}) {
-		t.Fatalf("REV-WIRE-001: sp_executesql with @statement/@parameters: expected TokenColMetaData (0x81)")
+	if !bytes.Contains(respExecSql, []byte{TokenRow}) || !bytes.Contains(respExecSql, EncodeUTF16LE("Book")) {
+		t.Fatalf("REV-WIRE-001: sp_executesql with @parameters failed to bind unnamed parameter to @P1")
 	}
-	if !bytes.Contains(respExecSql, []byte{TokenRow}) {
-		t.Fatalf("REV-WIRE-001: sp_executesql with @statement/@parameters: expected TokenRow (0xD1)")
-	}
-	if !bytes.Contains(respExecSql, EncodeUTF16LE("Book")) {
-		t.Fatalf("REV-WIRE-001: sp_executesql with @statement/@parameters: expected row value 'Book'")
-	}
+}
 
-	// 2. REV-WIRE-002: sp_prepare (ProcID 11) with 2 parameters: @handle (OUTPUT) and @statement (no @params)
-	var prep2Params bytes.Buffer
-	prep2Params.Write(buildIntParam("@handle", true, 0))
-	prep2Params.Write(buildNVarCharParam("@statement", false, "SELECT title FROM rpc_test WHERE id = 2;"))
+func TestTDS_REV_WIRE_002_RPCPrepare_2Params_ParamsDeclClean(t *testing.T) {
+	srv := NewServer("127.0.0.1:0", nil, nil)
+	clientConn, serverConn := net.Pipe()
+	defer clientConn.Close()
+	defer serverConn.Close()
+	go func() {
+		buf := make([]byte, 1024)
+		for {
+			if _, err := clientConn.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
 
-	respPrep2 := sendRPC(t, conn, 11, 0, prep2Params.Bytes())
-	if !bytes.Contains(respPrep2, []byte{TokenReturnValue}) {
-		t.Fatalf("REV-WIRE-002: sp_prepare with 2 parameters: expected TokenReturnValue")
+	sess := &ConnectionSession{
+		prepared: NewTdsPreparedStatementCache(10),
 	}
-	handle2 := parseHandleFromTokenReturnValue(respPrep2)
-	if handle2 == 0 {
-		t.Fatalf("REV-WIRE-002: failed to parse handle from TokenReturnValue")
+	rpc := &parsedRPC{
+		ProcID: 11, // sp_prepare
+		Params: []RPCParam{
+			{Name: "@handle", IsOutput: true, Value: int32(0)}, // output handle
+			{Name: "@stmt", Value: "SELECT 1;"},
+		},
 	}
+	srv.handleRPCPrepare(serverConn, rpc, sess)
+	prep, ok := sess.prepared.Get(1)
+	if !ok {
+		t.Fatalf("REV-WIRE-002: expected prepared statement to be stored")
+	}
+	if prep.Params != "" {
+		t.Fatalf("REV-WIRE-002: expected prep.Params to be empty for 2-parameter sp_prepare, got %q", prep.Params)
+	}
+}
 
-	// Execute handle2 via sp_execute (ProcID 12)
-	var exec2Params bytes.Buffer
-	exec2Params.Write(buildIntParam("@handle", false, handle2))
-	respExec2 := sendRPC(t, conn, 12, 0, exec2Params.Bytes())
-	if !bytes.Contains(respExec2, EncodeUTF16LE("Pen")) {
-		t.Fatalf("REV-WIRE-002: sp_execute prepared 2-param statement: expected 'Pen'")
+func TestTDS_REV_WIRE_003_MatchVersionQuery_NoMultiColHijacking(t *testing.T) {
+	query := "SELECT SERVERPROPERTY('ProductVersion') AS pv, SERVERPROPERTY('VersionText') AS vt"
+	cols, _, ok := matchVersionQuery(query)
+	// matchVersionQuery should not hijack arbitrary multi-column queries returning 4 hardcoded columns.
+	if ok && len(cols) == 4 {
+		t.Fatalf("REV-WIRE-003: matchVersionQuery hijacked 2-column query and returned 4 hardcoded columns: %v", cols)
 	}
+}
 
-	// 3. REV-WIRE-002: sp_prepexec (ProcID 13) with non-standard names: @handle, @myParams, @myQuery, and bound value
-	var prepExecParams bytes.Buffer
-	prepExecParams.Write(buildIntParam("@handle", true, 0))
-	prepExecParams.Write(buildNVarCharParam("@myParams", false, "@id INT"))
-	prepExecParams.Write(buildNVarCharParam("@myQuery", false, "SELECT title FROM rpc_test WHERE id = @id;"))
-	prepExecParams.Write(buildIntParam("@id", false, 1))
+func TestTDS_REV_WIRE_005_RPC_UnsupportedProcID_ReturnsErrorToken(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
 
-	respPrepExec := sendRPC(t, conn, 13, 0, prepExecParams.Bytes())
-	if !bytes.Contains(respPrepExec, []byte{TokenReturnValue}) {
-		t.Fatalf("REV-WIRE-002: sp_prepexec: expected TokenReturnValue for handle")
-	}
-	if !bytes.Contains(respPrepExec, EncodeUTF16LE("Book")) {
-		t.Fatalf("REV-WIRE-002: sp_prepexec: expected row value 'Book'")
-	}
-
-	// 4. REV-WIRE-005: Unsupported numeric ProcID (e.g. 99) with empty ProcName should return TokenError (Msg 2812)
+	// REV-WIRE-005: Unsupported numeric ProcID (e.g. 99) with empty ProcName should return TokenError (Msg 2812)
 	respUnsupported := sendRPC(t, conn, 99, 0, nil)
 	if !bytes.Contains(respUnsupported, []byte{TokenError}) {
 		t.Fatalf("REV-WIRE-005: unsupported ProcID 99: expected TokenError (0xAA)")

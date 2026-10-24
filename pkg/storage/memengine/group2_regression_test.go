@@ -1,6 +1,9 @@
 package memengine
 
 import (
+	"bytes"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"lionsql/pkg/storage"
@@ -74,23 +77,60 @@ func TestGroup2_StorageUpdateCase(t *testing.T) {
 	}
 }
 
-func TestStorage_ParsePKValue_Robustness(t *testing.T) {
-	// Valid integers
+func TestStorage_REV_STOR_001_ParsePKValue_RobustnessAndZeroAlloc(t *testing.T) {
+	// 1. Hot-path allocation check: fmt.Sscanf causes 6 allocs/op (120B).
+	// With strconv.ParseInt, this MUST be 0 allocs/op (Golden Rule 24).
+	allocs := testing.AllocsPerRun(100, func() {
+		_ = ParsePKValue("1002345", storage.TypeInt)
+	})
+	if allocs > 0 {
+		t.Fatalf("REV-STOR-001: ParsePKValue hot-path allocates %v allocs/op (expected 0 allocs/op via strconv)", allocs)
+	}
+
+	// 2. Valid integers
 	v1 := ParsePKValue("12345", storage.TypeInt)
 	if v1.Type != storage.TypeInt || v1.IVal != 12345 {
 		t.Fatalf("expected IntValue(12345), got %v", v1)
 	}
 
-	// Valid floats
+	// 3. Valid floats
 	v2 := ParsePKValue("3.1415", storage.TypeFloat)
 	if v2.Type != storage.TypeFloat || v2.FVal != 3.1415 {
 		t.Fatalf("expected FloatValue(3.1415), got %v", v2)
 	}
 
-	// Negative values
+	// 4. Negative values
 	v3 := ParsePKValue("-999", storage.TypeInt)
 	if v3.IVal != -999 {
 		t.Fatalf("expected IntValue(-999), got %v", v3)
+	}
+}
+
+func TestStorage_REV_STOR_002_Open_AOFCompactionErrorPropagated(t *testing.T) {
+	dir := t.TempDir()
+	aofPath := filepath.Join(dir, "appendonly.aof")
+	data := bytes.Repeat([]byte("X"), 200)
+	if err := os.WriteFile(aofPath, data, 0644); err != nil {
+		t.Fatalf("failed to write AOF file: %v", err)
+	}
+
+	// Create tables.mpk.tmp as a directory so that saveDiskLocked's os.WriteFile fails with EISDIR
+	tmpFile := filepath.Join(dir, "tables.mpk.tmp")
+	if err := os.Mkdir(tmpFile, 0755); err != nil {
+		t.Fatalf("failed to mkdir: %v", err)
+	}
+
+	eng := New()
+	defer eng.Close()
+	opts := Options{
+		DataDir:      dir,
+		EnableAOF:    true,
+		AOFThreshold: 100, // triggers rewriteAOFLocked() on startup
+	}
+
+	err := eng.OpenWithOptions(opts)
+	if err == nil {
+		t.Fatalf("REV-STOR-002: expected OpenWithOptions() to return compaction error when rewriteAOFLocked fails on startup, got nil")
 	}
 }
 
