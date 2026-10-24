@@ -185,6 +185,8 @@ func (s *Server) handleOverviewStats(w http.ResponseWriter, r *http.Request) {
 		"success":            true,
 		"engine":             engineType,
 		"version":            config.Version,
+		"build_date":         config.BuildDate,
+		"git_commit":         config.GitCommit,
 		"uptime_seconds":     int64(uptimeSec),
 		"uptime_formatted":   formatUptime(uptimeSec),
 		"active_sessions":    activeSessions,

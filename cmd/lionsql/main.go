@@ -11,7 +11,7 @@ import (
 )
 
 func printUsage() {
-	fmt.Printf(`LionSQL v%s - High-Concurrency Embedded OLTP Database Engine & CLI
+	fmt.Printf(`LionSQL v%s %s - High-Concurrency Embedded OLTP Database Engine & CLI
 
 Usage:
   lionsql <command> [arguments...]
@@ -108,20 +108,23 @@ Examples:
   lionsql doctor                  # Run system health and diagnostic checks
   lionsql init-config             # Create default lionsql.json configuration
   lionsql sql "SELECT 1;"         # Execute one-off SQL statement
-`, config.Version)
+`, config.Version, config.CompactVersion())
 }
 
 func printVersion() {
-	fmt.Printf("LionSQL version v%s\n", config.Version)
-	fmt.Println("Database Engine: LionSQL High-Concurrency Embedded OLTP")
-	fmt.Println("Storage Backends: WiredTiger (Lock-free B+Tree MVCC), In-Memory OCC")
-	fmt.Println("Wire Protocols:   PostgreSQL v3 (:5433), TDS 7.x/8.0 (:1433), HTTP REST (:8090)")
+	fmt.Println(config.DetailedVersion())
 }
 
 func main() {
 	// Intercept help flags immediately
 	if len(os.Args) > 1 && (os.Args[1] == "-h" || os.Args[1] == "-help" || os.Args[1] == "--help" || os.Args[1] == "-?" || os.Args[1] == "help") {
 		printUsage()
+		return
+	}
+
+	// Intercept version flags immediately
+	if len(os.Args) > 1 && (os.Args[1] == "-v" || os.Args[1] == "-version" || os.Args[1] == "--version" || os.Args[1] == "version") {
+		printVersion()
 		return
 	}
 

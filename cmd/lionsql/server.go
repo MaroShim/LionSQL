@@ -119,9 +119,17 @@ func runServer(args []string) error {
 	pidFile := fs.String("pidfile", "", "Path to PID file (default: <dir>/lionsql.pid)")
 	logFile := fs.String("logfile", "", "Path to log file (default: <dir>/lionsql.log)")
 	isChildWorker := fs.Bool("is-child-worker", false, "Internal flag for daemon worker child")
+	var versionFlag bool
+	fs.BoolVar(&versionFlag, "v", false, "Display version and build information")
+	fs.BoolVar(&versionFlag, "version", false, "Display version and build information")
 
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	if versionFlag {
+		printVersion()
+		return nil
 	}
 
 	// 1. Standalone Config Generator (--init-config)
@@ -784,6 +792,7 @@ func runServer(args []string) error {
 	go func() {
 		fmt.Println("--------------------------------------------------------------------------------")
 		fmt.Printf(" LionSQL - High-Concurrency OLTP & Stored Procedure Server (v%s)\n", config.Version)
+		fmt.Printf(" %s\n", config.CompactVersion())
 		fmt.Println("--------------------------------------------------------------------------------")
 		if loadedConfigPath != "" {
 			fmt.Printf(" [Configuration]  %s (JSON Config File)\n", loadedConfigPath)

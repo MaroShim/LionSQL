@@ -190,3 +190,39 @@ func TestLionsql_ErrorHandling(t *testing.T) {
 		t.Fatalf("Expected error for empty SQL query")
 	}
 }
+
+func TestLionsql_VersionOutput(t *testing.T) {
+	out, err := captureStdout(func() error {
+		printVersion()
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("printVersion returned error: %v", err)
+	}
+	expectedStrings := []string{
+		"LionSQL v0.90.0",
+		"Build Time:",
+		"Git Commit:",
+		"Go Runtime:",
+		"Storage Engine:",
+		"Wire Protocols:",
+	}
+	for _, expected := range expectedStrings {
+		if !strings.Contains(out, expected) {
+			t.Errorf("expected version output to contain %q, got:\n%s", expected, out)
+		}
+	}
+
+	// Test -v and -version in runServer
+	for _, flagArg := range []string{"-v", "-version", "--version"} {
+		out, err = captureStdout(func() error {
+			return runServer([]string{flagArg})
+		})
+		if err != nil {
+			t.Fatalf("runServer(%q) returned error: %v", flagArg, err)
+		}
+		if !strings.Contains(out, "LionSQL v0.90.0") {
+			t.Errorf("expected runServer(%q) output to contain 'LionSQL v0.90.0', got:\n%s", flagArg, out)
+		}
+	}
+}
