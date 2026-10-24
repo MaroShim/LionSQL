@@ -245,6 +245,14 @@ func TestLightModeHighContrastStyles(t *testing.T) {
 		`--tab-inactive-bg`,
 		`--tab-inactive-color`,
 		`.tab-btn`,
+		`--nav-sec-db`,
+		`--nav-sec-auto`,
+		`--nav-sec-dev`,
+		`--nav-sec-ops`,
+		`.nav-section-db`,
+		`.nav-section-auto`,
+		`.nav-section-dev`,
+		`.nav-section-ops`,
 	}
 
 	for _, snippet := range requiredSnippets {
