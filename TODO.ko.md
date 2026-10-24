@@ -27,7 +27,7 @@
 | **`PREP-1`** | **준비된 문장 (Prepared)** | `PREP-1` | 세션별 Prepared Statement Bounded LRU 캐시 및 메모리 상한 가드 |
 | **`AUTH-1`** | **인증/토큰교환 (Auth)** | `AUTH-1` | 클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) 트랙 |
 | **`HTTP-1` ~ `HTTP-4`** | **HTTP API 하드닝 (API)** | `HTTP-1` ~ `HTTP-4` | 글로벌 CORS, Gzip 압축, 본문 크기 제한, 보안 헤더 강화 트랙 |
-| **`UI-1` ~ `UI-14`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-14` | 모던 Toast, 반응형 메뉴, 브랜드 정돈(LionSQL Web Studio), 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마, Light 모드 고대비 시인성 개편, System Overview 대시보드 (`UI-OVERVIEW-1`) |
+| **`UI-1` ~ `UI-16`** | **Web Studio UI/UX (UI)** | `UI-1` ~ `UI-16` | 모던 Toast, 반응형 메뉴, 브랜드 정돈(LionSQL Web Studio), 실시간 검색, 비밀번호 토글, Drop Table 가드, Sample Seed 가드, API Preview 동적 스키마 페이로드 및 공식 SDK 탭, Light/Dark 테마, Light 모드 고대비 시인성 개편, System Overview 대시보드 (`UI-OVERVIEW-1`), 최상단 글로벌 홈 독립(`UI-15`), TPS/QPS 독립 카드 분리 및 Instant Delta 실시간 반영(`UI-16`) |
 | **`SHUTDOWN-1`** | **종료/안정성 (Shutdown)** | `SHUTDOWN-1` | Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 |
 | **`BUG-*`** | **데이터 무결성 결함 아카이브 (107건)** | `BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1` | 107대 결함 전수 조치 완료 내역은 [`notes/BUG_ARCHIVE.ko.md`](notes/BUG_ARCHIVE.ko.md)로 이관하여 아카이브로 관리 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
@@ -91,6 +91,7 @@
 | **P1** | **UI/개요** | **Web Studio System Overview 대시보드 신설 (Active Sessions, Uptime, Tables, TPS, 와이어 연결 가이드) (`UI-OVERVIEW-1`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) 2절 실구현 및 `/api/overview` 연동 |
 | **P1** | **UI/네비게이션** | **Web Studio 좌측 사이드 패널 4개 카테고리화(Database, Automation, Developer, Monitoring) 및 우측 구분선(`::after`) 스타일링 (`UI-14`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) 1.4절 반영, 12개 도구 동선 최적화 및 카테고리 우측 수평 구분선 디바이더 정돈 |
 | **P1** | **UI/네비게이션** | **Web Studio 최상단 글로벌 홈(`Overview`) 분리 및 `Database & Query` 카테고리 순수화 (`UI-15`)** | `pkg/ui`, `doc/` | **완료 (`[x]`)** | `Overview`를 카테고리 디바이더 위로 독립시켜 글로벌 시스템 홈으로 정립하고 `Database & Query`는 순수 DB 도구 3종(`Tables & Records`, `SQL Query`, `Stored Procedures`)으로 정돈 |
+| **P1** | **UI/메트릭** | **Web Studio System Overview TPS/QPS 2대 독립 카드 분리 및 Instant Delta 롤링 윈도우 실시간 반영 (`UI-16`)** | `pkg/ui`, `doc/` | **완료 (`[x]`)** | 상단 6대 지표 3x2 대칭 그리드 정돈, TPS와 QPS 독립 카드 분리, 3초 주기 Instant Delta 및 기본 폴링 3초 동기화 |
 | **P1** | **CLI/버전** | **단일 바이너리 CLI 버전/빌드 정보 듀얼 출력 (상세 Option A & 디폴트 기동 Option B) (`CLI-VERSION-1`)** | `pkg/config`, `cmd/lionsql`, `pkg/api` | **완료 (`[x]`)** | `debug.ReadBuildInfo()` VCS 자동 추출, `version`/`-v`/`--version` 상세 리포트 및 디폴트 기동 배너 한 줄 표시 |
 | **P1** | **종료/안정성** | **Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 (`SHUTDOWN-1`)** | `pkg/wire`, `pkg/storage/wiredtiger` | **완료 (`[x]`)** | - |
 | **P2** | **UI/실시간** | **Web Studio 실시간 자동 갱신(Auto-Refresh) 토글 및 주기 선택기 (`UI-REALTIME-1`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |

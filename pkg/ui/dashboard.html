@@ -883,7 +883,8 @@
             <span id="overview-live-dot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span>
             <span>Auto-refresh:</span>
             <select id="overview-refresh-interval" style="margin: 0; padding: 3px 8px; font-size: 0.75rem; background: var(--code-bg); border-radius: 4px;" onchange="changeOverviewInterval(this.value)">
-              <option value="5000" selected>5s</option>
+              <option value="3000" selected>3s</option>
+              <option value="5000">5s</option>
               <option value="10000">10s</option>
               <option value="30000">30s</option>
               <option value="60000">60s</option>
@@ -923,10 +924,18 @@
         </div>
 
         <div class="card" style="padding: 16px; border-left: 4px solid #f59e0b;">
-          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Throughput (TPS)</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Transactions (TPS)</div>
           <div style="margin-top: 8px; font-size: 1.5rem; font-weight: 700; color: var(--text); font-family: monospace;" id="overview-tps">--</div>
           <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">
-            Total Transactions: <span id="overview-total-tx" style="font-weight: 600; color: var(--text);">0</span>
+            Total Committed: <span id="overview-total-tx" style="font-weight: 600; color: var(--text);">0</span>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 16px; border-left: 4px solid #06b6d4;">
+          <div style="font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px;">Queries (QPS)</div>
+          <div style="margin-top: 8px; font-size: 1.5rem; font-weight: 700; color: var(--text); font-family: monospace;" id="overview-qps">--</div>
+          <div style="margin-top: 6px; font-size: 0.75rem; color: var(--text-muted);">
+            Total Executed: <span id="overview-total-queries" style="font-weight: 600; color: var(--text);">0</span>
           </div>
         </div>
       </div>
@@ -2492,7 +2501,8 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
     let tablesList = [];
     let currentTableSubView = 'records';
     let overviewPollTimer = null;
-    let overviewIntervalMs = 5000;
+    let overviewIntervalMs = 3000;
+    let lastOverviewStats = null;
     let replicationPollTimer = null;
     let currentReplicationData = null;
     let logsPollTimer = null;
@@ -2603,11 +2613,49 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         const upEl = document.getElementById('overview-uptime');
         if (upEl) upEl.innerText = data.uptime_formatted || (data.uptime_seconds + 's');
 
+        const now = performance.now();
+        const totalTx = Number(data.total_transactions || 0);
+        const totalQueries = Number(data.total_queries || 0);
+
+        let currentTps = 0;
+        let currentQps = 0;
+
+        if (lastOverviewStats && lastOverviewStats.time) {
+          const dt = (now - lastOverviewStats.time) / 1000.0;
+          if (dt >= 0.5) {
+            const dTx = Math.max(0, totalTx - lastOverviewStats.tx);
+            const dQueries = Math.max(0, totalQueries - lastOverviewStats.queries);
+            currentTps = Math.round(dTx / dt);
+            currentQps = Math.round(dQueries / dt);
+          } else if (lastOverviewStats.lastTps !== undefined) {
+            currentTps = lastOverviewStats.lastTps;
+            currentQps = lastOverviewStats.lastQps;
+          }
+        } else {
+          // Initial baseline load
+          currentTps = Math.round(data.tps || 0);
+          currentQps = Math.round(data.qps || 0);
+        }
+
+        lastOverviewStats = {
+          tx: totalTx,
+          queries: totalQueries,
+          time: now,
+          lastTps: currentTps,
+          lastQps: currentQps
+        };
+
         const tpsEl = document.getElementById('overview-tps');
-        if (tpsEl) tpsEl.innerText = (data.tps !== undefined ? data.tps : '0') + ' TPS';
+        if (tpsEl) tpsEl.innerText = currentTps.toLocaleString() + ' TPS';
 
         const txEl = document.getElementById('overview-total-tx');
-        if (txEl) txEl.innerText = Number(data.total_transactions || 0).toLocaleString();
+        if (txEl) txEl.innerText = totalTx.toLocaleString();
+
+        const qpsEl = document.getElementById('overview-qps');
+        if (qpsEl) qpsEl.innerText = currentQps.toLocaleString() + ' QPS';
+
+        const qryEl = document.getElementById('overview-total-queries');
+        if (qryEl) qryEl.innerText = totalQueries.toLocaleString();
       } catch (err) {
         console.error('Failed to load overview metrics:', err);
       }

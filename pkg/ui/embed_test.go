@@ -419,6 +419,8 @@ func TestOverviewMonitoringElements(t *testing.T) {
 		`id="overview-uptime"`,
 		`id="overview-tps"`,
 		`id="overview-total-tx"`,
+		`id="overview-qps"`,
+		`id="overview-total-queries"`,
 		`loadOverviewMetrics()`,
 		`changeOverviewInterval(`,
 		`startOverviewPolling()`,
