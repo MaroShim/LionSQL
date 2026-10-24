@@ -33,6 +33,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ### Changed
 - `UI-6`: Unified Web Studio sidebar navigation item label from `Table & Record` to `Tables & Records` in `pkg/ui/dashboard.html`, `pkg/ui/embed_test.go`, and `doc/WEB_STUDIO_GUIDE.ko.md` for consistent naming with the view title.
+- `UI-15`: Promoted `Overview` to the top-level global home dashboard position above the `DATABASE & QUERY` category divider in `pkg/ui/dashboard.html`, establishing a clear visual hierarchy and scoping `DATABASE & QUERY` strictly to database management tools (`Tables & Records`, `SQL Query`, `Stored Procedures`), with synchronized verification in `pkg/ui/embed_test.go` and `doc/WEB_STUDIO_GUIDE.ko.md`.
 
 ### Refactored
 - `ARCH-LEX-2`: Unified residual manual string splitting, keyword scanning, and parenthesis matching loops into `pkg/sqlutil/tokenizer.go` (Golden Rule 15 KISS, DRY & Deletion-First):

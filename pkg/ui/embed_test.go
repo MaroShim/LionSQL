@@ -23,9 +23,9 @@ func TestDashboardMenuOrderAndContent(t *testing.T) {
 
 	// Verify menu items and category sections exist in the specified order
 	expectedMenuItems := []string{
-		`Database &amp; Query`,
 		`data-view="overview"`,
 		`Overview`,
+		`Database &amp; Query`,
 		`data-view="tables"`,
 		`Tables &amp; Records`,
 		`data-view="query"`,
