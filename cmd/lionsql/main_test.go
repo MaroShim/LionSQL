@@ -226,3 +226,24 @@ func TestLionsql_VersionOutput(t *testing.T) {
 		}
 	}
 }
+
+func TestLionsql_UsageOutput(t *testing.T) {
+	out, err := captureStdout(func() error {
+		printUsage()
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("printUsage returned error: %v", err)
+	}
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines in usage header, got %d lines", len(lines))
+	}
+	if !strings.Contains(lines[0], "LionSQL - High-Concurrency Embedded OLTP Database Engine & CLI (v0.90.0)") {
+		t.Errorf("expected line 1 to contain title and version, got: %q", lines[0])
+	}
+	if !strings.HasPrefix(lines[1], "(built: ") || !strings.Contains(lines[1], "commit: ") {
+		t.Errorf("expected line 2 to contain compact build info, got: %q", lines[1])
+	}
+}

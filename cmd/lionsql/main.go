@@ -11,7 +11,8 @@ import (
 )
 
 func printUsage() {
-	fmt.Printf(`LionSQL v%s %s - High-Concurrency Embedded OLTP Database Engine & CLI
+	fmt.Printf(`LionSQL - High-Concurrency Embedded OLTP Database Engine & CLI (v%s)
+%s
 
 Usage:
   lionsql <command> [arguments...]
