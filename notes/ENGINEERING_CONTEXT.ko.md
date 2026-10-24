@@ -145,3 +145,7 @@ LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집�
 6. **문서 명명 및 디렉터리 배치 규약 (Documentation Naming & Directory Conventions)**:
    - 신규 기능 구현, 아키텍처 통합, 리팩토링을 위한 작업 계획/설계 제안 문서는 개발자/AI 핸드오버용 컨텍스트로 분류하여 **반드시 `notes/*_PLAN.md`**에 배치합니다 (예: `notes/UNIFIED_CLI_PLAN.md`, `notes/IMMUTABLE_AUDIT_LOG_PLAN.md`, `notes/S3_PRESIGNED_STORAGE_PLAN.md`, `notes/COLLATION_AND_LOCALE_PLAN.md`, `notes/DOCUMENTATION_CLEANUP_PLAN.md`).
    - 공식 기술 매뉴얼, 아키텍처 명세서, 가이드 및 호환성 검증 결과 보고서는 **`doc/`** 아래에 배치하며, 검증 문서는 **`doc/*_REPORT.md`** (한글 문서는 `*.ko.md`) 형식을 유지합니다 (예: `doc/TDS_COMPATIBILITY_REPORT.md`, `doc/PGWIRE_COMPATIBILITY_REPORT.md`, `doc/TEST_VERIFICATION_REPORT.ko.md`).
+7. **문서 무결성 및 역사적 컨텍스트 보존 규율 (Documentation Integrity & No Careless Deletion)**:
+   - 문서에 기록된 논의 배경, 설계 트레이드오프 분석, 과거의 아키텍처 결정 근거는 프로젝트의 핵심 엔지니어링 자산입니다. 문서를 새로 정리하거나 최신화할 때 기존 맥락이나 과거 결론을 임의로 삭제하거나 덮어써서는 안 됩니다.
+   - 새로운 합의, 구현 완료 내역, 또는 진화된 원칙이 발생하면 기존 기록을 지우지 않고 그 아래에 **"해결 완료", "추가 합의 사항", "후속 원칙"** 형태로 덧붙여 의사결정의 역사와 발전 과정을 명확하게 추적할 수 있도록 관리합니다.
+   - 내용 중복 정리가 불가피한 경우에도 과거의 핵심 배경과 기술적 맥락이 유실되지 않도록 엄격히 대조하고 보존해야 합니다.
