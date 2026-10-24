@@ -31,7 +31,7 @@
 | :---: | :---: | :---: | :--- | :--- | :---: | :--- |
 | **`ARCH-LEX-1`** | **P1** | Lexical | `pkg/sqlutil/tokenizer.go`<br>• `SplitTopLevelKeyword`<br>• `FindTopLevelArithmeticOp`<br>• `ExtractTopLevelTuples`<br>• `FindTopLevelKeyword`<br>• `SplitTopLevel` | • `sqlexec_eval.go:splitLogicalConditions`<br>• `sqlexec_eval.go:parseValueTuples`<br>• `sqlexec_eval.go:findArithmeticOp`<br>• `sqlexec_select.go:splitScalarProjections`<br>• `sqlexec_select.go:hasFromClause`<br>• `sqlexec_dml.go:findOnConflictIndex` | **`[x]`** | 작은따옴표(`''`), 백슬래시(`\'`), 큰따옴표(`""`), 대괄호(`[...]`), 중첩 괄호(`()`)를 완벽히 지원하는 단일 고속 상태 머신 스캐너 도입 및 300여 라인 수동 파싱 루프 전면 제거 완료 |
 | **`ARCH-DML-1`** | **P1** | Parser | `pkg/engine/dml_parser.go`<br>• `DMLStatement`<br>• `ParseDMLCommand` | • `reDmlInsertValues`<br>• `reDmlInsertCheck`<br>• `reDmlInsertSelect`<br>• `reDmlUpsertPrefix`<br>• `reDmlUpdate`<br>• `reDmlUpdateCheck`<br>• `reDmlDelete`<br>• `reDmlDeleteCheck` | **`[x]`** | 8개의 취약한 DML 정규식을 전면 폐기하고, 토큰 기반 경량 1-Pass DML 구문 파서(`ParseDMLCommand`)로 일원화 완료 |
-| **`ARCH-EVAL-1`** | **P1** | Evaluator | `pkg/engine/evaluator.go`<br>• `EvalBinaryOp`<br>• `CoerceAndCalculate` | • `sqlexec_eval.go:evalUpdateExpr`<br>• `sqlexec_eval.go:toNumeric`<br>• `sqlexec_eval.go:resolveOperand`<br>• 산술 if-switch 분기 80+ 라인 | `[ ]` | `pkg/storage/coerce.go` (Type Promotion Lattice)와 연동하여 float/int 강제 변환 왜곡 및 정수 0 나누기 패닉을 원천 봉쇄하는 통합 연산 엔진 구축 |
+| **`ARCH-EVAL-1`** | **P1** | Evaluator | `pkg/engine/evaluator.go`<br>• `EvalBinaryOp`<br>• `CoerceAndCalculate`<br>• `EvalUpdateExpr`<br>• `ResolveOperand`<br>• `ToNumeric` | • `sqlexec_eval.go:evalUpdateExpr`<br>• `sqlexec_eval.go:toNumeric`<br>• `sqlexec_eval.go:resolveOperand`<br>• 산술 if-switch 분기 80+ 라인<br>• 미사용 `reEvalArithExpr` 정규식 | **`[x]`** | `pkg/storage/coerce.go` (Type Promotion Lattice)와 연동하여 float/int 강제 변환 왜곡 및 정수 0 나누기 패닉을 원천 봉쇄하는 통합 연산 엔진 구축 완료 |
 
 ---
 
@@ -46,5 +46,8 @@
    - **사전 점검 발견 사항**: `reDmlUpdate`가 `SET` 절을 지연 매칭(`.*?`)하여 문자열 리터럴 내부의 `WHERE`에서 절을 분할하고, 에러 없이 0건 갱신 후 성공을 반환함 (`REV-ENG-006`, `OUTPUT` 경로 한정). 해당 케이스는 `knownBug`로 추적 중이며 `ARCH-DML-1` 완료 시 마커를 제거해야 테스트가 통과합니다.
    - `pkg/engine/dml_parser.go` 신설: 키워드 생략, 공백 변형에 면역인 1-Pass DML 디스패처 구축.
    - 복잡한 10여 개 DML 정규식 전면 삭제.
-3. **Phase 3: `ARCH-EVAL-1` (통합 산술 및 연산자 평가 계층)**
-   - `pkg/engine/evaluator.go` 신설: Type Promotion Lattice 기반 연산자 평가 일원화.
+3. **Phase 3: `ARCH-EVAL-1` (통합 산술 및 연산자 평가 계층)** ➔ **완료 (`[x]`)**
+   - `pkg/engine/evaluator.go` 신설: `EvalBinaryOp`, `CoerceAndCalculate`, `ToNumeric`, `ResolveOperand`, `EvalUpdateExpr` 구축.
+   - `pkg/storage/coerce.go` Type Promotion Lattice(Decimal > Float > Int) 연동 및 0 나누기 방어 가드 일원화.
+   - `sqlexec_eval.go` 내 산재해 있던 중복 연산자 분기 120여 라인 및 미사용 정규식 `reEvalArithExpr` 전면 삭제.
+   - 단위 테스트 `evaluator_test.go` 작성 및 100% 검증 통과.

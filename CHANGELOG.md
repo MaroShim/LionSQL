@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `REV-API-001`: In `pkg/api/handlers_procs.go` (`handleExecProcedure`), added JSON decode error validation on `r.Body`. Malformed request bodies now return HTTP 400 Bad Request with descriptive errors rather than silently executing with empty arguments.
 
 ### Refactored
+- `ARCH-EVAL-1`: Unified arithmetic and binary operator evaluation into `pkg/engine/evaluator.go` (Golden Rule 15 KISS, DRY & Deletion-First):
+  - Created `EvalBinaryOp`, `CoerceAndCalculate`, `ToNumeric`, `ResolveOperand`, and `EvalUpdateExpr` integrating with `pkg/storage/coerce.go` Type Promotion Lattice (Decimal > Float > Int > Bool) and unified zero-division guards.
+  - Eliminated over 120 lines of repetitive arithmetic switch-case blocks, ad-hoc operand resolution, and the unused `reEvalArithExpr` regular expression from `pkg/engine/sqlexec_eval.go`.
+  - Added dedicated unit test suite in `pkg/engine/evaluator_test.go` verifying arithmetic correctness, precision coercion, and divide-by-zero prevention.
 - `REFACTOR-OVER-SPECIFICATION-1`: Systematically eliminated client-specific over-specifications across engine, wire protocols, and virtual catalog (Golden Rule 15 KISS & Deletion-First):
   - **`pkg/engine/sqlexec_procs.go`**: Replaced parameter name branching in `execSpExecuteSQL` with pure positional slot assignment (`extractArgValue(args[0], cs)`), aligning with SQL Server kernel dispatcher semantics where Slot 0 is unconditionally the query statement and Slot 1 is the parameter declaration regardless of driver-specific parameter names (`@stmt`, `@statement`, `@query`).
   - **`pkg/wire/tds/server.go`**: Removed over-broad multi-column hijacking in `matchVersionQuery` (which previously intercepted any query where `SERVERPROPERTY` appeared more than once and collapsed it into 4 hardcoded columns). Multi-column scalar projections now cleanly evaluate via the standard VDBE bytecode engine and return exact projected column names and values.
@@ -211,7 +215,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Changed
 - **Brand Unification & Clean SDK Standard (`BRAND-UNIFY-1`) (`pkg/api`, `pkg/ui`, `pkg/wire`, `pkg/proc`, `cmd/tpcc`, `cmd/lionsql`)**: Standardized all remaining branding to LionSQL across JavaScript/TypeScript Web SDK (`lionsql.js`, `lionsql.d.ts`, `class LionSQL`), webhook & CDC outbox HTTP headers (`X-LionSQL-Signature`, `X-LionSQL-Event`, `X-LionSQL-Delivery`), wire protocol server version and banners (PostgreSQL v3 `15.0 (LionSQL)`, TDS 7.x/8.0 `LionSQL Engine`, `@@SERVERNAME: LIONSQL`), and diagnostic probe files. Cleanly eliminated legacy `lionsql` aliases per 1.0 production specification.
 
-## [0.90.0]
+## [0.90.0-feature-freeze]
 
 ### Added
 - **Documentation Overhaul & README Overview Refinement**: Refined and modernized the executive overview at the very top of both `README.md` and `README.ko.md` to prominently foreground LionSQL's five core architectural pillars: (1) Native Microsoft SQL Server T-SQL and Stored Procedure Execution on VDBE, (2) Broad PostgreSQL Wire Protocol v3 and SQL dialect compatibility, (3) Embedded zero-dependency Web Studio & REST BaaS API, (4) Ultra-compact single static standalone executable (< 100MB, ~50MB), and (5) High-performance OLTP throughput (16k~28k+ TPS) with Non-Blocking Snapshot Isolation.
