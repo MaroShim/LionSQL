@@ -174,6 +174,9 @@ LionSQL은 엔터프라이즈급 sub-microsecond 트랜잭션 성능과 자립�
 10. **Wasm UDF 격리 샌드박스 (`wazero`) 커널 내장 배제 (Spec-Out & Post-1.0 아이디어 탐색)**:
    - 데이터베이스 커널 내부에 별도의 WebAssembly 바이트코드 가상머신(`wazero`)을 내장하는 것은 정적 바이너리 크기 비대화, 런타임 메모리 오버헤드, JIT/Wasm 수명주기 관리 복잡도를 크게 증가시키며, 실제 OLTP 환경에서의 실무 수요도 극히 희박합니다.
    - LionSQL은 이미 초고속 SQLite VDBE 스타일 T-SQL 가상머신(`pkg/proc`)과 제로-할당 Go Native UDF SPI(`proc.RegisterScalarFunction`, <5ns)로 프로시저 및 함수 실행 경로가 일원화되어 있습니다. 불필요한 제3의 런타임 내장은 공식 **스펙-아웃(Spec-Out)**으로 확정하며, 1.0 이후 장기적 아이디어 수준으로만 후보를 탐색합니다.
+11. **복잡 쿼리 전면 VDBE 바이트코드화 배제 & 2-Tier 쿼리 실행 아키텍처 영구 불변 (`ARCH-2TIER-1`)**:
+   - 복잡한 쿼리(다중 테이블 조인, 윈도우 함수, 재귀 CTE, 복합 서브쿼리 등)는 '빠르게 하는 것보다 옳게(Correctness & Modularity) 하는 것'이 절대적으로 우선합니다. SQLite 스타일로 모든 복합 관계대수를 바이트코드 VM으로 번역하려는 시도는 수십만 라인의 컴파일러 비대화, 엣지 케이스 디버깅 난도 폭증, 불필요한 시스템 복잡도를 초래하므로 명시적으로 **Spec Out**합니다.
+   - 단순 OLTP 쿼리는 VDBE 바이트코드(Tier 1, <1µs)로 초고속 처리하고, 복합 관계대수 쿼리는 표준 관계대수 연산자 격리와 디버깅/실행계획 검증(`EXPLAIN ANALYZE`)이 명확한 Volcano CBO 반복자 엔진(Tier 2)으로 처리하는 2-Tier 구조를 영구 불변 규칙으로 확정합니다. 상세 결정 내역은 [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)를 참조합니다.
 
 ---
 
