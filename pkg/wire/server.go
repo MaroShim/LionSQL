@@ -1257,7 +1257,11 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 		}
 
 		// Standard session SQL execution
-		substitutedSQL := substituteParams(portal.Statement.Query, portal.Params)
+		var pTypes []int32
+		if portal.Statement != nil {
+			pTypes = portal.Statement.ParamTypes
+		}
+		substitutedSQL := substituteParams(portal.Statement.Query, portal.Params, pTypes, portal.ParamValues)
 		res, err := s.coordinator.ExecuteSessionSQL(sessID, substitutedSQL)
 		if err != nil {
 			_ = WriteError(conn, err.Error())
@@ -1801,19 +1805,129 @@ func formatColumnValue(val any, oid int32, isBinary bool) []byte {
 	}
 }
 
-func substituteParams(sql string, params []string) string {
+func isPureIntegerString(s string) bool {
+	if s == "" {
+		return false
+	}
+	start := 0
+	if s[0] == '-' || s[0] == '+' {
+		start = 1
+	}
+	if start >= len(s) {
+		return false
+	}
+	if len(s)-start > 1 && s[start] == '0' {
+		return false // Leading zero: formatted string, zip code, or code ID
+	}
+	for i := start; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func isPureFloatString(s string) bool {
+	if s == "" {
+		return false
+	}
+	start := 0
+	if s[0] == '-' || s[0] == '+' {
+		start = 1
+	}
+	if start >= len(s) {
+		return false
+	}
+	dotCount := 0
+	for i := start; i < len(s); i++ {
+		if s[i] == '.' {
+			dotCount++
+			if dotCount > 1 {
+				return false
+			}
+			continue
+		}
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return dotCount == 1 && len(s)-start > 1
+}
+
+func formatParamForSQL(val string, pType int32, sv storage.Value) string {
+	if strings.EqualFold(val, "null") || sv.IsNull {
+		return "NULL"
+	}
+
+	// 1. Check explicit OID type from statement description
+	switch pType {
+	case 20, 21, 23: // INT8, INT2, INT4
+		if i, err := strconv.ParseInt(strings.TrimSpace(val), 10, 64); err == nil {
+			return fmt.Sprintf("%d", i)
+		}
+	case 700, 701, 1700: // FLOAT4, FLOAT8, NUMERIC
+		if f, err := strconv.ParseFloat(strings.TrimSpace(val), 64); err == nil {
+			return fmt.Sprintf("%g", f)
+		}
+	case 16: // BOOL
+		if strings.EqualFold(val, "true") || val == "t" || val == "1" {
+			return "true"
+		} else if strings.EqualFold(val, "false") || val == "f" || val == "0" {
+			return "false"
+		}
+	case 25, 1043, 18, 1042, 1082, 1114, 1184, 2950: // TEXT, VARCHAR, CHAR, BPCHAR, DATE, TIMESTAMP, UUID
+		escaped := strings.ReplaceAll(val, "'", "''")
+		return fmt.Sprintf("'%s'", escaped)
+	}
+
+	// 2. Check decoded storage.Value type
+	switch sv.Type {
+	case storage.TypeInt:
+		return fmt.Sprintf("%d", sv.IVal)
+	case storage.TypeFloat:
+		return fmt.Sprintf("%g", sv.FVal)
+	case storage.TypeBool:
+		if sv.BVal {
+			return "true"
+		}
+		return "false"
+	case storage.TypeVarChar, storage.TypeUUID, storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
+		escaped := strings.ReplaceAll(val, "'", "''")
+		return fmt.Sprintf("'%s'", escaped)
+	}
+
+	// 3. Fallback for un-typed parameters (OID 0)
+	trimmed := strings.TrimSpace(val)
+	if isPureIntegerString(trimmed) {
+		return trimmed
+	}
+	if isPureFloatString(trimmed) {
+		return trimmed
+	}
+	if strings.EqualFold(trimmed, "true") || strings.EqualFold(trimmed, "false") {
+		return trimmed
+	}
+
+	// Default to safely quoted string literal
+	escaped := strings.ReplaceAll(val, "'", "''")
+	return fmt.Sprintf("'%s'", escaped)
+}
+
+func substituteParams(sql string, params []string, paramTypes []int32, paramValues []storage.Value) string {
 	res := sql
 	for i := len(params); i >= 1; i-- {
 		placeholder := fmt.Sprintf("$%d", i)
 		val := params[i-1]
-		if _, err := strconv.ParseFloat(val, 64); err == nil {
-			res = strings.ReplaceAll(res, placeholder, val)
-		} else if strings.EqualFold(val, "true") || strings.EqualFold(val, "false") || strings.EqualFold(val, "null") {
-			res = strings.ReplaceAll(res, placeholder, val)
-		} else {
-			escaped := strings.ReplaceAll(val, "'", "''")
-			res = strings.ReplaceAll(res, placeholder, fmt.Sprintf("'%s'", escaped))
+		var pType int32
+		if i-1 < len(paramTypes) {
+			pType = paramTypes[i-1]
 		}
+		var sv storage.Value
+		if i-1 < len(paramValues) {
+			sv = paramValues[i-1]
+		}
+		formatted := formatParamForSQL(val, pType, sv)
+		res = strings.ReplaceAll(res, placeholder, formatted)
 	}
 	return res
 }

@@ -195,8 +195,14 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			leftCol := cleanIdentifier(whereStr[:idx])
 			rawRight := strings.TrimSpace(whereStr[idx+len(op):])
 			var rightVal string
+			var rightIsQuoted bool
 			if (strings.HasPrefix(rawRight, "N'") || strings.HasPrefix(rawRight, "n'")) && strings.HasSuffix(rawRight, "'") && len(rawRight) >= 3 {
 				rightVal = strings.ReplaceAll(rawRight[2:len(rawRight)-1], "''", "'")
+				rightIsQuoted = true
+			} else if (strings.HasPrefix(rawRight, "'") && strings.HasSuffix(rawRight, "'") && len(rawRight) >= 2) ||
+				(strings.HasPrefix(rawRight, "\"") && strings.HasSuffix(rawRight, "\"") && len(rawRight) >= 2) {
+				rightVal = strings.ReplaceAll(rawRight[1:len(rawRight)-1], "''", "'")
+				rightIsQuoted = true
 			} else {
 				rightVal = strings.Trim(rawRight, "';\"")
 			}
@@ -245,34 +251,45 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 					}
 				}
 				return !strings.EqualFold(strVal, rightVal) && !strings.EqualFold(strings.TrimRight(strVal, " "), strings.TrimRight(rightVal, " "))
-			case ">":
+			case ">", ">=", "<", "<=":
+				isStringCol := false
+				if _, ok := val.(string); ok {
+					isStringCol = true
+				} else if sv, ok := val.(storage.Value); ok && (sv.Type == storage.TypeVarChar || sv.Type == storage.TypeUUID) {
+					isStringCol = true
+				}
+
+				// If it's a string column or explicitly quoted literal, do strict string comparison (no ParseFloat coercion)
+				if isStringCol || rightIsQuoted {
+					cmp := strings.Compare(strVal, rightVal)
+					switch strings.TrimSpace(op) {
+					case ">":
+						return cmp > 0
+					case ">=":
+						return cmp >= 0
+					case "<":
+						return cmp < 0
+					case "<=":
+						return cmp <= 0
+					}
+				}
+
+				// Otherwise numeric comparison
 				n1, err1 := strconv.ParseFloat(strVal, 64)
 				n2, err2 := strconv.ParseFloat(rightVal, 64)
 				if err1 == nil && err2 == nil {
-					return n1 > n2
+					switch strings.TrimSpace(op) {
+					case ">":
+						return n1 > n2
+					case ">=":
+						return n1 >= n2
+					case "<":
+						return n1 < n2
+					case "<=":
+						return n1 <= n2
+					}
 				}
 				return strVal > rightVal
-			case ">=":
-				n1, err1 := strconv.ParseFloat(strVal, 64)
-				n2, err2 := strconv.ParseFloat(rightVal, 64)
-				if err1 == nil && err2 == nil {
-					return n1 >= n2
-				}
-				return strVal >= rightVal
-			case "<":
-				n1, err1 := strconv.ParseFloat(strVal, 64)
-				n2, err2 := strconv.ParseFloat(rightVal, 64)
-				if err1 == nil && err2 == nil {
-					return n1 < n2
-				}
-				return strVal < rightVal
-			case "<=":
-				n1, err1 := strconv.ParseFloat(strVal, 64)
-				n2, err2 := strconv.ParseFloat(rightVal, 64)
-				if err1 == nil && err2 == nil {
-					return n1 <= n2
-				}
-				return strVal <= rightVal
 			case "LIKE", "ILIKE":
 				pat := strings.ReplaceAll(regexp.QuoteMeta(rightVal), "%", ".*")
 				pat = strings.ReplaceAll(pat, "_", ".")

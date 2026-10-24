@@ -1574,35 +1574,7 @@ func parseAggItem(proj string) aggItem {
 }
 
 func compareAggValues(a, b any) int {
-	if a == nil && b == nil {
-		return 0
-	}
-	if a == nil {
-		return -1
-	}
-	if b == nil {
-		return 1
-	}
-	sa := fmt.Sprintf("%v", a)
-	sb := fmt.Sprintf("%v", b)
-	fa, errA := strconv.ParseFloat(sa, 64)
-	fb, errB := strconv.ParseFloat(sb, 64)
-	if errA == nil && errB == nil {
-		if fa < fb {
-			return -1
-		}
-		if fa > fb {
-			return 1
-		}
-		return 0
-	}
-	if sa < sb {
-		return -1
-	}
-	if sa > sb {
-		return 1
-	}
-	return 0
+	return sqlutil.CompareAny(a, b)
 }
 
 func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryInfo, start time.Time) (*QueryResult, error) {
@@ -1857,26 +1829,14 @@ func (s *Coordinator) execAggregate(rows []map[string]any, qInfo *planner.QueryI
 					if !ok2 || v2 == nil {
 						v2 = aggRows[j][bareCol]
 					}
-					s1 := fmt.Sprintf("%v", v1)
-					s2 := fmt.Sprintf("%v", v2)
-					if s1 == s2 {
+					cmp := sqlutil.CompareAny(v1, v2)
+					if cmp == 0 {
 						continue
 					}
-					if n1, err1 := strconv.ParseFloat(s1, 64); err1 == nil {
-						if n2, err2 := strconv.ParseFloat(s2, 64); err2 == nil {
-							if n1 == n2 {
-								continue
-							}
-							if item.Desc {
-								return n1 > n2
-							}
-							return n1 < n2
-						}
-					}
 					if item.Desc {
-						return s1 > s2
+						return cmp > 0
 					}
-					return s1 < s2
+					return cmp < 0
 				}
 				return false
 			})

@@ -537,12 +537,17 @@ func parseArgValue(arg string, cs *ClientSession) any {
 		}
 		return nil
 	}
-	raw := unwrapSQLString(arg)
-	if num, err := strconv.ParseInt(raw, 10, 64); err == nil {
-		return num
+	// 1. Literal context preservation: If explicitly enclosed in quotes, it is 100% a STRING.
+	// Never coerce quoted strings like '00123' or '1_1_1001' into numbers.
+	if (strings.HasPrefix(arg, "'") && strings.HasSuffix(arg, "'") && len(arg) >= 2) ||
+		((strings.HasPrefix(arg, "N'") || strings.HasPrefix(arg, "n'")) && strings.HasSuffix(arg, "'") && len(arg) >= 3) ||
+		(strings.HasPrefix(arg, "\"") && strings.HasSuffix(arg, "\"") && len(arg) >= 2) {
+		return unwrapSQLString(arg)
 	}
-	if f, err := strconv.ParseFloat(raw, 64); err == nil {
-		return f
+
+	raw := unwrapSQLString(arg)
+	if strings.EqualFold(raw, "null") {
+		return nil
 	}
 	if strings.EqualFold(raw, "true") {
 		return true
@@ -550,8 +555,11 @@ func parseArgValue(arg string, cs *ClientSession) any {
 	if strings.EqualFold(raw, "false") {
 		return false
 	}
-	if strings.EqualFold(raw, "null") {
-		return nil
+	if num, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return num
+	}
+	if f, err := strconv.ParseFloat(raw, 64); err == nil {
+		return f
 	}
 	return raw
 }

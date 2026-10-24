@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -490,6 +489,18 @@ func formatStorageVal(v storage.Value) any {
 	}
 }
 
+func toRawString(v any) (string, bool) {
+	switch s := v.(type) {
+	case string:
+		return s, true
+	case storage.Value:
+		if s.Type == storage.TypeVarChar || s.Type == storage.TypeUUID || s.Type == storage.TypeJSON {
+			return s.SVal, true
+		}
+	}
+	return "", false
+}
+
 // CompareValues compares two generic values (scalars, strings, floats, times).
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
 // NULL is ordered smaller than non-NULL.
@@ -504,7 +515,16 @@ func CompareValues(a, b any) int {
 		return 1
 	}
 
-	// Exact Decimal comparison if either value is storage.Decimal
+	// 1. String vs String fast-path (Strict lexicographical comparison: NO float coercion!)
+	sa, isStrA := toRawString(a)
+	sb, isStrB := toRawString(b)
+	if isStrA && isStrB {
+		cA := sqlutil.CanonicalIdent(sa)
+		cB := sqlutil.CanonicalIdent(sb)
+		return strings.Compare(cA, cB)
+	}
+
+	// 2. Exact Decimal comparison if either value is storage.Decimal
 	if isDecValue(a) || isDecValue(b) {
 		if decA, okA := tryDecimal(a); okA {
 			if decB, okB := tryDecimal(b); okB {
@@ -513,7 +533,7 @@ func CompareValues(a, b any) int {
 		}
 	}
 
-	// Universal numeric comparison if both values can be represented as float64
+	// 3. Universal numeric comparison if both values are native numbers
 	if fA, okA := toFloat64(a); okA {
 		if fB, okB := toFloat64(b); okB {
 			if fA < fB {
@@ -646,11 +666,6 @@ func toFloat64(v any) (float64, bool) {
 			return float64(n.IVal), true
 		} else if n.Type == storage.TypeFloat {
 			return n.FVal, true
-		}
-		return 0, false
-	case string:
-		if f, err := strconv.ParseFloat(n, 64); err == nil {
-			return f, true
 		}
 		return 0, false
 	default:

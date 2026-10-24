@@ -254,8 +254,19 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 		idx := strings.Index(strings.ToUpper(cond), op)
 		if idx != -1 {
 			leftCol := strings.TrimSpace(cond[:idx])
-			rightVal := strings.TrimSpace(cond[idx+len(op):])
-			rightVal = strings.Trim(rightVal, "';\"")
+			rawRight := strings.TrimSpace(cond[idx+len(op):])
+			var rightVal string
+			var rightIsQuoted bool
+			if (strings.HasPrefix(rawRight, "N'") || strings.HasPrefix(rawRight, "n'")) && strings.HasSuffix(rawRight, "'") && len(rawRight) >= 3 {
+				rightVal = strings.ReplaceAll(rawRight[2:len(rawRight)-1], "''", "'")
+				rightIsQuoted = true
+			} else if (strings.HasPrefix(rawRight, "'") && strings.HasSuffix(rawRight, "'") && len(rawRight) >= 2) ||
+				(strings.HasPrefix(rawRight, "\"") && strings.HasSuffix(rawRight, "\"") && len(rawRight) >= 2) {
+				rightVal = strings.ReplaceAll(rawRight[1:len(rawRight)-1], "''", "'")
+				rightIsQuoted = true
+			} else {
+				rightVal = strings.Trim(rawRight, "';\"")
+			}
 
 			if leftCol == "1" && rightVal == "1" && op == "=" {
 				return true
@@ -270,7 +281,13 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 			}
 
 			leftStr := fmt.Sprintf("%v", val)
-			cmp := CompareValues(val, parseLiteralValue(rightVal))
+			var parsedRight any
+			if rightIsQuoted {
+				parsedRight = rightVal
+			} else {
+				parsedRight = parseLiteralValue(rightVal)
+			}
+			cmp := CompareValues(val, parsedRight)
 
 			switch op {
 			case "=":
@@ -338,6 +355,28 @@ func lookupVal(t Tuple, col string) (any, bool) {
 	return nil, false
 }
 
+func isPureInteger(s string) bool {
+	if s == "" {
+		return false
+	}
+	start := 0
+	if s[0] == '-' || s[0] == '+' {
+		start = 1
+	}
+	if start >= len(s) {
+		return false
+	}
+	if len(s)-start > 1 && s[start] == '0' {
+		return false // Leading zero means code or formatted string
+	}
+	for i := start; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
+}
+
 func parseLiteralValue(s string) any {
 	s = strings.TrimSpace(s)
 	if strings.EqualFold(s, "NULL") {
@@ -349,14 +388,21 @@ func parseLiteralValue(s string) any {
 	if strings.EqualFold(s, "FALSE") {
 		return false
 	}
-	// Number parsing
-	var n int64
-	if _, err := fmt.Sscanf(s, "%d", &n); err == nil {
-		return n
+	// Number parsing without coercion of formatted strings
+	if isPureInteger(s) {
+		var n int64
+		if _, err := fmt.Sscanf(s, "%d", &n); err == nil {
+			return n
+		}
 	}
-	var f float64
-	if _, err := fmt.Sscanf(s, "%f", &f); err == nil {
-		return f
+	if strings.Count(s, ".") == 1 {
+		if d, err := storage.ParseDecimal(s); err == nil {
+			return d
+		}
+		var f float64
+		if _, err := fmt.Sscanf(s, "%f", &f); err == nil {
+			return f
+		}
 	}
 	return s
 }

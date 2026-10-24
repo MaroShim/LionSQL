@@ -353,6 +353,18 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 	return nil, fmt.Errorf("unsupported AST expression: %T", expr)
 }
 
+func isStringType(v any) (string, bool) {
+	switch s := v.(type) {
+	case string:
+		return s, true
+	case storage.Value:
+		if s.Type == storage.TypeVarChar || s.Type == storage.TypeUUID || s.Type == storage.TypeJSON {
+			return s.SVal, true
+		}
+	}
+	return "", false
+}
+
 func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 	switch op {
 	case TokenEq:
@@ -362,8 +374,18 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return false, nil
 		}
+		if s1, ok1 := isStringType(left); ok1 {
+			if s2, ok2 := isStringType(right); ok2 {
+				return strings.EqualFold(s1, s2), nil
+			}
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
+		if !isNum1 && isNum2 {
+			n1, isNum1 = toArithmeticFloat(left)
+		} else if isNum1 && !isNum2 {
+			n2, isNum2 = toArithmeticFloat(right)
+		}
 		if isNum1 && isNum2 {
 			return n1 == n2, nil
 		}
@@ -373,8 +395,18 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if s1, ok1 := isStringType(left); ok1 {
+			if s2, ok2 := isStringType(right); ok2 {
+				return !strings.EqualFold(s1, s2), nil
+			}
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
+		if !isNum1 && isNum2 {
+			n1, isNum1 = toArithmeticFloat(left)
+		} else if isNum1 && !isNum2 {
+			n2, isNum2 = toArithmeticFloat(right)
+		}
 		if isNum1 && isNum2 {
 			return n1 != n2, nil
 		}
@@ -384,8 +416,18 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if s1, ok1 := isStringType(left); ok1 {
+			if s2, ok2 := isStringType(right); ok2 {
+				return s1 < s2, nil
+			}
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
+		if !isNum1 && isNum2 {
+			n1, isNum1 = toArithmeticFloat(left)
+		} else if isNum1 && !isNum2 {
+			n2, isNum2 = toArithmeticFloat(right)
+		}
 		if isNum1 && isNum2 {
 			return n1 < n2, nil
 		}
@@ -395,8 +437,18 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if s1, ok1 := isStringType(left); ok1 {
+			if s2, ok2 := isStringType(right); ok2 {
+				return s1 <= s2, nil
+			}
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
+		if !isNum1 && isNum2 {
+			n1, isNum1 = toArithmeticFloat(left)
+		} else if isNum1 && !isNum2 {
+			n2, isNum2 = toArithmeticFloat(right)
+		}
 		if isNum1 && isNum2 {
 			return n1 <= n2, nil
 		}
@@ -406,8 +458,18 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if s1, ok1 := isStringType(left); ok1 {
+			if s2, ok2 := isStringType(right); ok2 {
+				return s1 > s2, nil
+			}
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
+		if !isNum1 && isNum2 {
+			n1, isNum1 = toArithmeticFloat(left)
+		} else if isNum1 && !isNum2 {
+			n2, isNum2 = toArithmeticFloat(right)
+		}
 		if isNum1 && isNum2 {
 			return n1 > n2, nil
 		}
@@ -417,8 +479,18 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if s1, ok1 := isStringType(left); ok1 {
+			if s2, ok2 := isStringType(right); ok2 {
+				return s1 >= s2, nil
+			}
+		}
 		n1, isNum1 := toFloat(left)
 		n2, isNum2 := toFloat(right)
+		if !isNum1 && isNum2 {
+			n1, isNum1 = toArithmeticFloat(left)
+		} else if isNum1 && !isNum2 {
+			n2, isNum2 = toArithmeticFloat(right)
+		}
 		if isNum1 && isNum2 {
 			return n1 >= n2, nil
 		}
@@ -443,8 +515,8 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
-		n1, isNum1 := toFloat(left)
-		n2, isNum2 := toFloat(right)
+		n1, isNum1 := toArithmeticFloat(left)
+		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
 			diff := n1 - n2
 			if diff == math.Trunc(diff) {
@@ -458,8 +530,8 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
-		n1, isNum1 := toFloat(left)
-		n2, isNum2 := toFloat(right)
+		n1, isNum1 := toArithmeticFloat(left)
+		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
 			prod := n1 * n2
 			if prod == math.Trunc(prod) {
@@ -473,8 +545,8 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
-		n1, isNum1 := toFloat(left)
-		n2, isNum2 := toFloat(right)
+		n1, isNum1 := toArithmeticFloat(left)
+		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
 			if n2 == 0 {
 				return nil, ErrDivisionByZero
@@ -644,6 +716,18 @@ func anyToStorageVal(v any) storage.Value {
 	}
 }
 
+func toArithmeticFloat(v any) (float64, bool) {
+	if f, ok := toFloat(v); ok {
+		return f, true
+	}
+	if s, ok := v.(string); ok {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+			return f, true
+		}
+	}
+	return 0, false
+}
+
 func toFloat(v any) (float64, bool) {
 	if v == nil {
 		return 0, false
@@ -664,7 +748,11 @@ func toFloat(v any) (float64, bool) {
 			return float64(val.IVal), true
 		} else if val.Type == storage.TypeFloat {
 			return val.FVal, true
+		} else if val.Type == storage.TypeDecimal {
+			return val.Decimal().Float64(), true
 		}
+	case storage.Decimal:
+		return val.Float64(), true
 	case int64:
 		return float64(val), true
 	case int:
@@ -673,10 +761,6 @@ func toFloat(v any) (float64, bool) {
 		return val, true
 	case float32:
 		return float64(val), true
-	case string:
-		if f, err := strconv.ParseFloat(val, 64); err == nil {
-			return f, true
-		}
 	}
 	return 0, false
 }

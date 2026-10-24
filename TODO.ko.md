@@ -45,6 +45,7 @@
 | **P1** | **성능/OCC최적화** | **In-Memory OCC 5대 최적화 (비트마스크 샤드 추적, Table/Shard 캐싱, 지연 유니크셋, 비차단 AOF 압축, 힙 오염 제거) (`VPERF-15`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) |
 | **P1** | **벤치/와이어클라이언트** | **실행 중인 서버 대상 네트워크 TPC-C 벤치마크 클라이언트 구현 (`BENCH-TPCC-CLIENT-1`)** | `cmd/tpcc_client` | **완료 (`[x]`)** | TDS(:1433)/PGWire(:5433) 소켓 접속, 5대 트랜잭션 동시 부하 주입 및 Web Studio 실시간 TPS 연동 완비 |
 | **P1** | **벤치/클라이언트최적화** | **네트워크 TPC-C 클라이언트 1-RTT 단일 배치 전송, 기본 스케일팩터 최적화(16 Warehouses, 32 Workers), 50건 청크 고속 시딩 및 Delivery 키 분산 (`BENCH-TPCC-CLIENT-2`)** | `cmd/tpcc_client` | **완료 (`[x]`)** | New-Order/Delivery/Stock-Level 12회 소켓 핑퐁을 단일 1-RTT 배치로 통합, 16wh/32wk 스케일 최적화로 OCC 충돌 해소 및 7,400+ TPS 달성 |
+| **P1** | **엔진/타입무결성** | **휴리스틱 타입 추론 및 임의 문자열 수치 강제변환 안티패턴 전면 제거 (`REFACTOR-TYPE-GUESS-1`)** | `pkg/sqlutil`, `pkg/engine`, `pkg/execution`, `pkg/proc`, `pkg/wire`, `pkg/api` | **완료 (`[x]`)** | [`notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md) |
 | **P1** | **프로시저/타입무결성** | **T-SQL 프로시저 호출 시 Quoted 문자열 및 `VARCHAR` 파라미터 숫자 오변환 방지 (`BUG-PROC-VARCHAR-NUM-COERCE-1`)** | `pkg/engine` | **완료 (`[x]`)** | `execProcedureCall`에서 따옴표 리터럴 및 `VARCHAR` 정의 파라미터가 `ParseFloat`로 왜곡(1_1_1001 ➔ 111001)되어 New-Order PK 삽입 실패하던 결함 해결 |
 | **P2** | **와이어/모듈분해** | **TDS 거대 단일 파일(`server.go` 2.6k줄) 관심사별 모듈 분해 (Handshake/RPC/Batch/Server)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | 1.0 안정성 최우선 |
 | **P1** | **KISS/오버스펙** | **T-SQL 디스패처 100% 위치 매핑, SERVERPROPERTY 하이재킹 제거 및 가상 카탈로그 도구 종속성 정돈 (`REFACTOR-OVER-SPECIFICATION-1`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/catalog/virtual` | **완료 (`[x]`)** | [`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`](notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md) |
@@ -693,5 +694,11 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
   - `doc/` 디렉터리 레거시 전수 정돈: `postgres`/`master` 단일 카탈로그 일원화, 미지원 TablePlus 언급 삭제 및 Beekeeper/DBeaver/Navicat 표준화, 구형 `./bin/server` ➔ `./bin/lionsql` 실행 명령 치환.
   - `ROADMAP.md`: Phase 1~5 전체 완료 및 Phase 6 `v0.90.0 Feature Freeze` 달성 상태 동기화, v1.0.0 LTS(Phase 7) 마일스톤 정립.
   - `notes/DOCUMENTATION_CLEANUP_PLAN.md`: 4단계 작업 현황 및 검증 결과 100% 완료(`[x]`) 상태 기록.
+- [x] **휴리스틱 타입 추론 및 임의 문자열 수치 강제변환 안티패턴 전면 제거 (`REFACTOR-TYPE-GUESS-1`) (`pkg/sqlutil`, `pkg/engine`, `pkg/execution`, `pkg/proc`, `pkg/wire`, `pkg/api`)**:
+  - `pkg/sqlutil/comparator.go`: 타입 보존형 범용 비교기 `CompareAny(a, b any) int` 신설 및 `ORDER BY`, `MIN`/`MAX`, `PIVOT`, DBCC, 가상 카탈로그 정렬에 전면 적용하여 문자열의 float/int 오변환 및 메모리 할당 제거.
+  - `pkg/engine/sqlexec_prepare.go` & `pkg/wire/server.go`: 명시적 따옴표 리터럴(`'...'`, `N'...'`, `"..."`) 및 파라미터 타입 메타데이터 컨텍스트 보존. 리딩 제로(`'00123'`)나 구분자가 포함된 식별 문자열(`'1_1_1001'`)의 수치 오변환 원천 차단.
+  - `pkg/engine/sqlexec_eval.go`, `pkg/execution/iterator.go`, `pkg/execution/filter.go`: 조건절 및 조인 비교 시 문자열은 사전식 대소 비교(`strings.Compare`)를 수행하도록 수정. `toFloat64`에서 임의 문자열 파싱 케이스 제거 및 `storage.Decimal.Cmp` 정밀도 보존.
+  - `pkg/proc/eval.go`: 관계 연산자(`<`, `>`, `<=`, `>=`, `=`, `<>`)에서 문자열 수치 변환 제거, 산술 연산자(`-`, `*`, `/`)에 한해 제한적으로 수치 변환 허용(`toArithmeticFloat`).
+  - `pkg/engine/type_guessing_regression_test.go`: 사전식 문자열 MIN/MAX, ORDER BY, 범위 WHERE, sp_executesql 파라미터 보존 회귀 테스트 스위트 구축 및 100% PASS 검증 완료.
 
 

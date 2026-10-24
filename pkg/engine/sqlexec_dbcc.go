@@ -5,7 +5,6 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -312,26 +311,16 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 			sort.Slice(filteredRows, func(i, j int) bool {
 				for _, item := range orderItems {
 					orderCol := cleanIdentifier(item.Column)
-					v1 := fmt.Sprintf("%v", filteredRows[i][orderCol])
-					v2 := fmt.Sprintf("%v", filteredRows[j][orderCol])
-					if v1 == v2 {
+					v1 := filteredRows[i][orderCol]
+					v2 := filteredRows[j][orderCol]
+					cmp := sqlutil.CompareAny(v1, v2)
+					if cmp == 0 {
 						continue
 					}
-					if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
-						if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
-							if n1 == n2 {
-								continue
-							}
-							if item.Desc {
-								return n1 > n2
-							}
-							return n1 < n2
-						}
-					}
 					if item.Desc {
-						return v1 > v2
+						return cmp > 0
 					}
-					return v1 < v2
+					return cmp < 0
 				}
 				return false
 			})

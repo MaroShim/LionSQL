@@ -429,32 +429,14 @@ func (s *Coordinator) execPivotSelect(query string, start time.Time, cs *ClientS
 					if v1 == nil && v2 == nil {
 						continue
 					}
-					if v1 == nil && v2 != nil {
-						return item.Desc
-					}
-					if v1 != nil && v2 == nil {
-						return !item.Desc
-					}
-					f1, err1 := strconv.ParseFloat(fmt.Sprintf("%v", v1), 64)
-					f2, err2 := strconv.ParseFloat(fmt.Sprintf("%v", v2), 64)
-					if err1 == nil && err2 == nil {
-						if f1 == f2 {
-							continue
-						}
-						if item.Desc {
-							return f1 > f2
-						}
-						return f1 < f2
-					}
-					s1 := fmt.Sprintf("%v", v1)
-					s2 := fmt.Sprintf("%v", v2)
-					if s1 == s2 {
+					cmp := sqlutil.CompareAny(v1, v2)
+					if cmp == 0 {
 						continue
 					}
 					if item.Desc {
-						return s1 > s2
+						return cmp > 0
 					}
-					return s1 < s2
+					return cmp < 0
 				}
 				return false
 			})
@@ -964,32 +946,14 @@ func (s *Coordinator) execUnpivotSelect(query string, start time.Time, cs *Clien
 					if v1 == nil && v2 == nil {
 						continue
 					}
-					if v1 == nil && v2 != nil {
-						return item.Desc
-					}
-					if v1 != nil && v2 == nil {
-						return !item.Desc
-					}
-					f1, err1 := strconv.ParseFloat(fmt.Sprintf("%v", v1), 64)
-					f2, err2 := strconv.ParseFloat(fmt.Sprintf("%v", v2), 64)
-					if err1 == nil && err2 == nil {
-						if f1 == f2 {
-							continue
-						}
-						if item.Desc {
-							return f1 > f2
-						}
-						return f1 < f2
-					}
-					s1 := fmt.Sprintf("%v", v1)
-					s2 := fmt.Sprintf("%v", v2)
-					if s1 == s2 {
+					cmp := sqlutil.CompareAny(v1, v2)
+					if cmp == 0 {
 						continue
 					}
 					if item.Desc {
-						return s1 > s2
+						return cmp > 0
 					}
-					return s1 < s2
+					return cmp < 0
 				}
 				return false
 			})

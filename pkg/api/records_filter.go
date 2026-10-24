@@ -165,10 +165,6 @@ func toFloat64(v any) (float64, bool) {
 		return float64(n), true
 	case uint64:
 		return float64(n), true
-	case string:
-		if f, err := strconv.ParseFloat(strings.TrimSpace(n), 64); err == nil {
-			return f, true
-		}
 	}
 	return 0, false
 }

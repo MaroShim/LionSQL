@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -39,26 +38,14 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 					orderCol := cleanIdentifier(item.Column)
 					v1Val := getMapValueCaseInsensitive(filteredRows[i], orderCol)
 					v2Val := getMapValueCaseInsensitive(filteredRows[j], orderCol)
-					v1 := fmt.Sprintf("%v", v1Val)
-					v2 := fmt.Sprintf("%v", v2Val)
-					if v1 == v2 {
+					cmp := sqlutil.CompareAny(v1Val, v2Val)
+					if cmp == 0 {
 						continue
 					}
-					if n1, err1 := strconv.ParseFloat(v1, 64); err1 == nil {
-						if n2, err2 := strconv.ParseFloat(v2, 64); err2 == nil {
-							if n1 == n2 {
-								continue
-							}
-							if item.Desc {
-								return n1 > n2
-							}
-							return n1 < n2
-						}
-					}
 					if item.Desc {
-						return v1 > v2
+						return cmp > 0
 					}
-					return v1 < v2
+					return cmp < 0
 				}
 				return false
 			})
