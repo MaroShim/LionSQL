@@ -15,6 +15,9 @@ Single-binary, high-concurrency OLTP database server supporting T-SQL and stored
 
 LionSQL is a high-performance, embedded OLTP database engine that natively compiles and executes Microsoft SQL Server T-SQL & stored procedures and complex business logic on a sub-microsecond VDBE bytecode virtual machine, while simultaneously offering broad compatibility with PostgreSQL SQL dialects and the standard PGWire v3 protocol. It comes fully equipped with a built-in web management studio for real-time telemetry and schema administration, as well as an integrated goroutine connection pooler capable of handling tens of thousands of concurrent connections—eliminating the need for additional software to achieve a complete operational environment. Packaging this complete enterprise feature set into a single, ultra-compact static binary under 100MB (currently ~50MB) with zero external dependencies, LionSQL delivers blazing-fast transaction throughput of tens of thousands of transactions per second with predictable sub-millisecond latency and non-blocking snapshot isolation.
 
+> [!NOTE]
+> **Supported Operating Systems**: LionSQL currently officially supports **macOS** and **Linux** (`x86_64` and `arm64`). Windows support is planned for a future milestone.
+
 
 ```
                     +------------------------------------------+
