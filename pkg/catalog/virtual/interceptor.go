@@ -121,7 +121,7 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	if strings.Contains(upper, "SYS.INDEXES") && matchAny(upper, "JOIN", "IS_PRIMARY_KEY") {
 		return true
 	}
-	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS") {
+	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES") {
 		return true
 	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && matchAny(upper, "JOIN", "SCHEMANAME") {
@@ -221,8 +221,8 @@ func Execute(src Source, sql string) (*Result, error) {
 		return execSysObjectsTriggers(sql)
 	}
 
-	// 11. SQL Server SQL Code (syscomments)
-	if strings.Contains(upper, "SYS.SYSCOMMENTS") || (strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "CODETEXT")) {
+	// 11. SQL Server SQL Code (syscomments / sys.sql_modules)
+	if strings.Contains(upper, "SYS.SYSCOMMENTS") || strings.Contains(upper, "SYS.SQL_MODULES") || (strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "CODETEXT") || strings.Contains(upper, "DEFINITION"))) {
 		return execSysCommentsSqlCode(src, sql)
 	}
 
@@ -237,12 +237,12 @@ func Execute(src Source, sql string) (*Result, error) {
 	}
 
 	// 14. SQL Server Tables metadata
-	if strings.Contains(upper, "SYS.TABLES") && strings.Contains(upper, "SYS.SCHEMAS") && (strings.Contains(upper, "PURENAME") || strings.Contains(upper, "OBJECTCOMMENT")) {
+	if strings.Contains(upper, "SYS.TABLES") && (strings.Contains(upper, "SYS.SCHEMAS") || strings.Contains(upper, "PURENAME") || strings.Contains(upper, "OBJECTCOMMENT")) {
 		return execSysTablesMetadata(src, sql)
 	}
 
 	// 15. SQL Server Master Object metadata
-	if strings.Contains(upper, "SYS.OBJECTS") && strings.Contains(upper, "SYS.SCHEMAS") && strings.Contains(upper, "PURENAME") {
+	if strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "SYS.SCHEMAS") || strings.Contains(upper, "PURENAME")) {
 		return execSysObjectsMetadata(src, sql)
 	}
 

@@ -211,36 +211,44 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 
 			allRows = append(allRows, map[string]any{
 				"columnName":         c.Name,
+				"name":               c.Name,
+				"column_name":        c.Name,
 				"dataType":           dataType,
+				"data_type":          dataType,
+				"type_name":          dataType,
 				"objectId":           objID,
+				"object_id":          objID,
 				"isIdentity":         false,
+				"is_identity":        false,
 				"maxLength":          maxLen,
+				"max_length":         maxLen,
 				"precision":          prec,
 				"scale":              scale,
 				"isNullable":         c.Nullable,
+				"is_nullable":        c.Nullable,
 				"charMaxLength":      charMaxLen,
 				"defaultValue":       nil,
 				"defaultConstraint":  nil,
 				"computedExpression": nil,
 				"isPersisted":        nil,
 				"columnId":           cIdx + 1,
+				"column_id":          cIdx + 1,
 				"numericPrecision":   numPrec,
 				"numericScale":       numScale,
 				"isSparse":           false,
 				"columnComment":      nil,
+				"system_type_id":     int(c.Type),
+				"user_type_id":       int(c.Type),
 			})
 		}
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysIndexesPrimaryKey(src Source, sql string) (*Result, error) {
 	columns := []string{
-		"objectId", "pureName", "schemaName", "columnName", "constraintName",
+		"objectId", "object_id", "pureName", "pure_name", "name", "index_name", "schemaName", "schema_name", "columnName", "column_name", "constraintName", "constraint_name", "is_primary_key", "is_unique", "type_desc", "index_id",
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
@@ -255,26 +263,33 @@ func execSysIndexesPrimaryKey(src Source, sql string) (*Result, error) {
 		for _, c := range t.Columns {
 			if c.PrimaryKey {
 				allRows = append(allRows, map[string]any{
-					"objectId":       objID,
-					"pureName":       t.Name,
-					"schemaName":     "dbo",
-					"columnName":     c.Name,
-					"constraintName": "PK_" + t.Name,
+					"objectId":        objID,
+					"object_id":       objID,
+					"pureName":        t.Name,
+					"pure_name":       t.Name,
+					"name":            "PK_" + t.Name,
+					"index_name":      "PK_" + t.Name,
+					"schemaName":      "dbo",
+					"schema_name":     "dbo",
+					"columnName":      c.Name,
+					"column_name":     c.Name,
+					"constraintName":  "PK_" + t.Name,
+					"constraint_name": "PK_" + t.Name,
+					"is_primary_key":  true,
+					"is_unique":       true,
+					"type_desc":       "CLUSTERED",
+					"index_id":        1,
 				})
 			}
 		}
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysIndexesSecondary(src Source, sql string) (*Result, error) {
 	columns := []string{
-		"object_id", "constraintName", "indexType", "isUnique",
-		"index_id", "is_unique_constraint", "filterDefinition",
+		"object_id", "objectId", "name", "index_name", "constraintName", "constraint_name", "indexType", "type_desc", "isUnique", "is_unique", "is_primary_key", "index_id", "is_unique_constraint", "filterDefinition",
 	}
 
 	targetIDs := parseTargetObjectIDs(sql)
@@ -289,9 +304,16 @@ func execSysIndexesSecondary(src Source, sql string) (*Result, error) {
 		for idxNum, idx := range t.Indexes {
 			allRows = append(allRows, map[string]any{
 				"object_id":            objID,
+				"objectId":             objID,
 				"constraintName":       idx.Name,
+				"constraint_name":      idx.Name,
+				"name":                 idx.Name,
+				"index_name":           idx.Name,
 				"indexType":            "NONCLUSTERED",
+				"type_desc":            "NONCLUSTERED",
 				"isUnique":             idx.Unique,
+				"is_unique":            idx.Unique,
+				"is_primary_key":       false,
 				"index_id":             idxNum + 2,
 				"is_unique_constraint": false,
 				"filterDefinition":     nil,
@@ -299,10 +321,7 @@ func execSysIndexesSecondary(src Source, sql string) (*Result, error) {
 		}
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysIndexColumns(src Source, sql string) (*Result, error) {
@@ -330,9 +349,12 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 				}
 				allRows = append(allRows, map[string]any{
 					"object_id":        objID,
+					"objectId":         objID,
 					"index_id":         idxNum + 2,
 					"column_id":        colID,
 					"columnName":       colName,
+					"column_name":      colName,
+					"name":             colName,
 					"isDescending":     false,
 					"isIncludedColumn": false,
 				})
@@ -340,10 +362,7 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 		}
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, error) {
@@ -371,16 +390,31 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 			}
 			if maxCols == 0 {
 				allRows = append(allRows, map[string]any{
-					"schemaName":     "dbo",
-					"pureName":       t.Name,
-					"columnName":     "",
-					"refSchemaName":  "dbo",
-					"refTableName":   fk.ParentTable,
-					"refColumnName":  "",
-					"constraintName": fk.Name,
-					"updateAction":   upAction,
-					"deleteAction":   delAction,
-					"objectId":       objID,
+					"schemaName":           "dbo",
+					"schema_name":          "dbo",
+					"pureName":             t.Name,
+					"pure_name":            t.Name,
+					"name":                 fk.Name,
+					"columnName":           "",
+					"column_name":          "",
+					"refSchemaName":        "dbo",
+					"ref_schema_name":      "dbo",
+					"refTableName":         fk.ParentTable,
+					"ref_table_name":       fk.ParentTable,
+					"parent_table":         t.Name,
+					"ref_table":            fk.ParentTable,
+					"refColumnName":        "",
+					"ref_column_name":      "",
+					"constraintName":       fk.Name,
+					"constraint_name":      fk.Name,
+					"updateAction":         upAction,
+					"update_action":        upAction,
+					"deleteAction":         delAction,
+					"delete_action":        delAction,
+					"objectId":             objID,
+					"object_id":            objID,
+					"parent_object_id":     objID,
+					"referenced_object_id": 1000,
 				})
 				continue
 			}
@@ -394,25 +428,37 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 					parentCol = fk.ParentColumns[i]
 				}
 				allRows = append(allRows, map[string]any{
-					"schemaName":     "dbo",
-					"pureName":       t.Name,
-					"columnName":     childCol,
-					"refSchemaName":  "dbo",
-					"refTableName":   fk.ParentTable,
-					"refColumnName":  parentCol,
-					"constraintName": fk.Name,
-					"updateAction":   upAction,
-					"deleteAction":   delAction,
-					"objectId":       objID,
+					"schemaName":           "dbo",
+					"schema_name":          "dbo",
+					"pureName":             t.Name,
+					"pure_name":            t.Name,
+					"name":                 fk.Name,
+					"columnName":           childCol,
+					"column_name":          childCol,
+					"refSchemaName":        "dbo",
+					"ref_schema_name":      "dbo",
+					"refTableName":         fk.ParentTable,
+					"ref_table_name":       fk.ParentTable,
+					"parent_table":         t.Name,
+					"ref_table":            fk.ParentTable,
+					"refColumnName":        parentCol,
+					"ref_column_name":      parentCol,
+					"constraintName":       fk.Name,
+					"constraint_name":      fk.Name,
+					"updateAction":         upAction,
+					"update_action":        upAction,
+					"deleteAction":         delAction,
+					"delete_action":        delAction,
+					"objectId":             objID,
+					"object_id":            objID,
+					"parent_object_id":     objID,
+					"referenced_object_id": 1000,
 				})
 			}
 		}
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysTablesRowCount(src Source, sql string) (*Result, error) {
@@ -486,96 +532,130 @@ func execSysObjectsTriggers(sql string) (*Result, error) {
 }
 
 func execSysObjectsMetadata(src Source, sql string) (*Result, error) {
-	columns := []string{"objectId", "modifyDate", "type", "pureName", "schemaName"}
+	columns := []string{"objectId", "object_id", "modifyDate", "modify_date", "createDate", "create_date", "type", "type_desc", "pureName", "pure_name", "name", "schemaName", "schema_name"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
 	tables := src.GetSortedTables()
 	for tIdx, t := range tables {
 		allRows = append(allRows, map[string]any{
-			"objectId":   1000 + tIdx,
-			"modifyDate": defaultDate,
-			"type":       "U ",
-			"pureName":   t.Name,
-			"schemaName": "dbo",
+			"objectId":    1000 + tIdx,
+			"object_id":   1000 + tIdx,
+			"modifyDate":  defaultDate,
+			"modify_date": defaultDate,
+			"createDate":  defaultDate,
+			"create_date": defaultDate,
+			"type":        "U",
+			"type_desc":   "USER_TABLE",
+			"pureName":    t.Name,
+			"pure_name":   t.Name,
+			"name":        t.Name,
+			"schemaName":  "dbo",
+			"schema_name": "dbo",
 		})
 	}
 
 	views := src.GetSortedViews()
 	for vIdx, v := range views {
 		allRows = append(allRows, map[string]any{
-			"objectId":   2000 + vIdx,
-			"modifyDate": defaultDate,
-			"type":       "V ",
-			"pureName":   v.Name,
-			"schemaName": "dbo",
+			"objectId":    2000 + vIdx,
+			"object_id":   2000 + vIdx,
+			"modifyDate":  defaultDate,
+			"modify_date": defaultDate,
+			"createDate":  defaultDate,
+			"create_date": defaultDate,
+			"type":        "V",
+			"type_desc":   "VIEW",
+			"pureName":    v.Name,
+			"pure_name":   v.Name,
+			"name":        v.Name,
+			"schemaName":  "dbo",
+			"schema_name": "dbo",
 		})
 	}
 
 	procs := src.GetSortedProcedures()
 	for pIdx, p := range procs {
 		allRows = append(allRows, map[string]any{
-			"objectId":   3000 + pIdx,
-			"modifyDate": defaultDate,
-			"type":       "P ",
-			"pureName":   p.Name,
-			"schemaName": "dbo",
+			"objectId":    3000 + pIdx,
+			"object_id":   3000 + pIdx,
+			"modifyDate":  defaultDate,
+			"modify_date": defaultDate,
+			"createDate":  defaultDate,
+			"create_date": defaultDate,
+			"type":        "P",
+			"type_desc":   "SQL_STORED_PROCEDURE",
+			"pureName":    p.Name,
+			"pure_name":   p.Name,
+			"name":        p.Name,
+			"schemaName":  "dbo",
+			"schema_name": "dbo",
 		})
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysTablesMetadata(src Source, sql string) (*Result, error) {
-	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "objectComment"}
+	columns := []string{"pureName", "pure_name", "name", "schemaName", "schema_name", "objectId", "object_id", "schema_id", "type", "type_desc", "createDate", "create_date", "modifyDate", "modify_date", "objectComment", "object_comment"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
 	tables := src.GetSortedTables()
 	for tIdx, t := range tables {
 		allRows = append(allRows, map[string]any{
-			"pureName":      t.Name,
-			"schemaName":    "dbo",
-			"objectId":      1000 + tIdx,
-			"createDate":    defaultDate,
-			"modifyDate":    defaultDate,
-			"objectComment": nil,
+			"pureName":       t.Name,
+			"pure_name":      t.Name,
+			"name":           t.Name,
+			"table_name":     t.Name,
+			"schemaName":     "dbo",
+			"schema_name":    "dbo",
+			"objectId":       1000 + tIdx,
+			"object_id":      1000 + tIdx,
+			"schema_id":      1,
+			"type":           "U",
+			"type_desc":      "USER_TABLE",
+			"createDate":     defaultDate,
+			"create_date":    defaultDate,
+			"modifyDate":     defaultDate,
+			"modify_date":    defaultDate,
+			"objectComment":  nil,
+			"object_comment": nil,
 		})
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysObjectsViews(src Source, sql string) (*Result, error) {
-	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate"}
+	columns := []string{"pureName", "pure_name", "name", "schemaName", "schema_name", "objectId", "object_id", "createDate", "create_date", "modifyDate", "modify_date", "type", "type_desc"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
 	views := src.GetSortedViews()
 	for vIdx, v := range views {
 		allRows = append(allRows, map[string]any{
-			"pureName":   v.Name,
-			"schemaName": "dbo",
-			"objectId":   2000 + vIdx,
-			"createDate": defaultDate,
-			"modifyDate": defaultDate,
+			"pureName":    v.Name,
+			"pure_name":   v.Name,
+			"name":        v.Name,
+			"schemaName":  "dbo",
+			"schema_name": "dbo",
+			"objectId":    2000 + vIdx,
+			"object_id":   2000 + vIdx,
+			"createDate":  defaultDate,
+			"create_date": defaultDate,
+			"modifyDate":  defaultDate,
+			"modify_date": defaultDate,
+			"type":        "V",
+			"type_desc":   "VIEW",
 		})
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysObjectsProgrammables(src Source, sql string) (*Result, error) {
-	columns := []string{"pureName", "schemaName", "objectId", "createDate", "modifyDate", "sqlObjectType"}
+	columns := []string{"pureName", "pure_name", "name", "schemaName", "schema_name", "objectId", "object_id", "createDate", "create_date", "modifyDate", "modify_date", "sqlObjectType", "type", "type_desc"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
@@ -583,45 +663,63 @@ func execSysObjectsProgrammables(src Source, sql string) (*Result, error) {
 	for pIdx, p := range procs {
 		allRows = append(allRows, map[string]any{
 			"pureName":      p.Name,
+			"pure_name":     p.Name,
+			"name":          p.Name,
 			"schemaName":    "dbo",
+			"schema_name":   "dbo",
 			"objectId":      3000 + pIdx,
+			"object_id":     3000 + pIdx,
 			"createDate":    defaultDate,
+			"create_date":   defaultDate,
 			"modifyDate":    defaultDate,
+			"modify_date":   defaultDate,
 			"sqlObjectType": "P",
+			"type":          "P",
+			"type_desc":     "SQL_STORED_PROCEDURE",
 		})
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysCommentsSqlCode(src Source, sql string) (*Result, error) {
-	columns := []string{"pureName", "schemaName", "codeText"}
+	columns := []string{"pureName", "pure_name", "name", "schemaName", "schema_name", "codeText", "definition", "text", "object_id", "objectId", "id"}
 	var allRows []map[string]any
 
-	views := src.ListViews()
-	for _, v := range views {
+	views := src.GetSortedViews()
+	for vIdx, v := range views {
 		allRows = append(allRows, map[string]any{
-			"pureName":   v.Name,
-			"schemaName": "dbo",
-			"codeText":   v.Query,
+			"pureName":    v.Name,
+			"pure_name":   v.Name,
+			"name":        v.Name,
+			"schemaName":  "dbo",
+			"schema_name": "dbo",
+			"codeText":    v.Query,
+			"definition":  v.Query,
+			"text":        v.Query,
+			"objectId":    2000 + vIdx,
+			"object_id":   2000 + vIdx,
+			"id":          2000 + vIdx,
 		})
 	}
-	procs := src.ListProcedures()
-	for _, p := range procs {
+	procs := src.GetSortedProcedures()
+	for pIdx, p := range procs {
 		allRows = append(allRows, map[string]any{
-			"pureName":   p.Name,
-			"schemaName": "dbo",
-			"codeText":   p.Body,
+			"pureName":    p.Name,
+			"pure_name":   p.Name,
+			"name":        p.Name,
+			"schemaName":  "dbo",
+			"schema_name": "dbo",
+			"codeText":    p.Body,
+			"definition":  p.Body,
+			"text":        p.Body,
+			"objectId":    3000 + pIdx,
+			"object_id":   3000 + pIdx,
+			"id":          3000 + pIdx,
 		})
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execSysAllObjectsJoined(src Source, sql string) (*Result, error) {

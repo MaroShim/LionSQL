@@ -19,6 +19,39 @@ var (
 	reEvalBetween      = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+(NOT\s+BETWEEN|BETWEEN)\s+(.*?)\s+AND\s+(.*?)\s*$`)
 )
 
+// ExtractSQLParts extracts projStr, whereClause, and orderByClause from a SELECT query.
+func ExtractSQLParts(sql string) (projStr, whereClause, orderByClause string) {
+	upper := strings.ToUpper(sql)
+	projStr = "*"
+	if fromIdx := strings.Index(upper, "FROM"); fromIdx != -1 {
+		selectPart := sql[:fromIdx]
+		if selectIdx := strings.Index(strings.ToUpper(selectPart), "SELECT"); selectIdx != -1 {
+			proj := strings.TrimSpace(selectPart[selectIdx+6:])
+			if proj != "" {
+				projStr = proj
+			}
+		}
+	}
+	if whereIdx := strings.Index(upper, "WHERE"); whereIdx != -1 {
+		rest := sql[whereIdx+5:]
+		if orderIdx := strings.Index(strings.ToUpper(rest), "ORDER BY"); orderIdx != -1 {
+			whereClause = strings.TrimSpace(rest[:orderIdx])
+			orderByClause = strings.TrimSpace(rest[orderIdx+8:])
+		} else {
+			whereClause = strings.TrimSpace(rest)
+		}
+	} else if orderIdx := strings.Index(upper, "ORDER BY"); orderIdx != -1 {
+		orderByClause = strings.TrimSpace(sql[orderIdx+8:])
+	}
+	return projStr, whereClause, orderByClause
+}
+
+// FormatResultWithSQL parses projection, WHERE, and ORDER BY clauses from sql and applies them to allRows.
+func FormatResultWithSQL(columns []string, allRows []map[string]any, sql string) (*Result, error) {
+	projStr, whereClause, orderByClause := ExtractSQLParts(sql)
+	return FormatResult(columns, allRows, projStr, whereClause, orderByClause, -1)
+}
+
 // FormatResult filters, sorts, limits, and projects virtual catalog rows according to the SQL query parts.
 func FormatResult(columns []string, allRows []map[string]any, projStr, whereClause, orderByClause string, limitCount int) (*Result, error) {
 	// 1. Filter rows by whereClause
@@ -112,10 +145,25 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 			if src == "" {
 				src = col
 			}
-			if v, ok := fr[src]; ok {
-				row[col] = v
+			var val any
+			var found bool
+			if v, ok := fr[col]; ok {
+				val = v
+				found = true
 			} else if v, ok := fr[strings.ToLower(col)]; ok {
-				row[col] = v
+				val = v
+				found = true
+			} else if src != "" {
+				if v, ok := fr[src]; ok {
+					val = v
+					found = true
+				} else if v, ok := fr[strings.ToLower(src)]; ok {
+					val = v
+					found = true
+				}
+			}
+			if found {
+				row[col] = val
 			} else {
 				row[col] = nil
 			}

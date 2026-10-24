@@ -382,6 +382,29 @@ GUI clients often format table data pagination queries using T-SQL-specific synt
 - **Bracketed Identifiers (`[dbo].[table]`, `[column]`)**: Cleaned via `cleanIdent` and `ColumnIndexMap.Index`, ensuring zero-overhead field resolution.
 - **Double-Quoted Identifiers (`"column_name"`)**: Fully parsed as `TokenIdent` by the native Pratt parser lexer (`pkg/proc/lexer.go`).
 
+### 5.5. Comprehensive Client Tool Audit & Verification Suite (`TOOL-AUDIT-1`)
+LionSQL includes automated integration suites simulating real-world client queries across both wire protocols:
+- **SSMS Suite (`TestToolAudit_TDS_SSMS_DiscoverySuite`)**:
+  - `SERVERPROPERTY` discovery (`ProductVersion`, `EngineEdition`, `Collation`, `InstanceName`)
+  - `DB_NAME()` and `SCHEMA_NAME()` resolution
+  - `sys.tables` JOIN `sys.schemas` schema tree browsing
+  - `sys.columns` JOIN `sys.types` column introspection with `TYPE_NAME` resolution
+  - `sys.indexes` primary key and secondary index inspection
+  - Data grid browsing via `SELECT TOP <N> * FROM [dbo].[table]`
+- **DbGate Suite (`TestToolAudit_TDS_DbGate_ChoreographedE2E`)**:
+  - 9-step full schema discovery pipeline (`modifications` -> `tables` -> `columns` -> `primaryKeys` -> `indexes` -> `foreignKeys` -> `tableSizes` -> `views` -> `programmables`)
+  - 100% deterministic `objectId` matching between `sys.tables` and `sys.columns`
+  - Paged data browsing via `OFFSET <O> ROWS FETCH NEXT <N> ROWS ONLY`
+- **DBeaver Dual-Protocol Suite**:
+  - TDS: `SERVERPROPERTY('EngineEdition')`, `sys.databases db.*`, `sys.tables t.*`
+  - PGWire: `pg_class` JOIN `pg_namespace`, `pg_attribute` with OID resolution, `pg_constraint` ERD relationships
+- **Beekeeper Studio Suite**:
+  - `SELECT @@VERSION AS version`
+  - `INFORMATION_SCHEMA.COLUMNS` LEFT JOIN `sys.computed_columns`
+  - Bracketed table queries with `[basetbl]` aliases
+- **High-Concurrency Stress Verification**:
+  - Multi-worker concurrent routines executing metadata introspection, paged reads, and simultaneous DML writes without data races (`go test -race`).
+
 ---
 
 ## 6. Troubleshooting Common Connectivity Issues
@@ -390,7 +413,7 @@ GUI clients often format table data pagination queries using T-SQL-specific synt
 |---|---|---|
 | `connection refused on :5433 or :1433` | LionSQL process is not running or listening on standard ports. | Run `./bin/lionsql` (or `./bin/lionsql start -dev`) and check `lsof -i :5433 -i :1433`. |
 | `encryption required but server does not support TLS` | Client driver requested strict SSL/TLS, but LionSQL was started in plaintext mode. | Set `sslmode=disable` (PG) or `encrypt=disable` (TDS) in connection parameters, or launch LionSQL with `-tls -tls-cert <cert> -tls-key <key>`. |
-| `USE <dbname> statement failed` | LionSQL intentionally excludes `USE <dbname>` syntax (GEMINI.md Section 3). | Connect directly to the target database in the initial connection string; deploy separate process instances for separate databases. |
+| `USE <dbname> syntax in client migration scripts` | LionSQL enforces instance-level database isolation (GEMINI.md Section 3). | `USE <dbname>` is accepted as a tolerant virtual No-Op, synchronizing TDS ENVCHANGE (0xE3) and session DB context (`DB_NAME()`, `CURRENT_DATABASE()`) without syntax errors. |
 | `table not found: dbo.mytable` | Schema prefix `dbo.` was not parsed. | Ensure running LionSQL version with updated `cleanIdent` that strips `dbo.` and `public.` schema prefixes automatically. |
 | `table content empty or column mismatch in GUI` | Table `objectId` shuffled due to un-sorted map iteration across catalog queries. | Updated in `wt_engine.go` and `sqlexec_pgcatalog.go` with deterministic `sort.Slice` on table names. Click Refresh in the GUI. |
 | `row count shows 0 for all tables` | Catalog statistics were not yet analyzed. | Dynamic row scanning via `tx.Scan` fallback added in `execDbGateMSSQLRowCountSelect`. |

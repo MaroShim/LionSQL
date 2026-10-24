@@ -1,6 +1,7 @@
 package virtual_test
 
 import (
+	"sort"
 	"testing"
 
 	"lionsql/pkg/catalog"
@@ -50,15 +51,30 @@ func (m *mockSource) GetView(name string) (*catalog.View, error) {
 }
 
 func (m *mockSource) GetSortedTables() []*storage.TableSchema {
-	return m.tables
+	sorted := make([]*storage.TableSchema, len(m.tables))
+	copy(sorted, m.tables)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Name < sorted[j].Name
+	})
+	return sorted
 }
 
 func (m *mockSource) GetSortedViews() []*catalog.View {
-	return m.views
+	sorted := make([]*catalog.View, len(m.views))
+	copy(sorted, m.views)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Name < sorted[j].Name
+	})
+	return sorted
 }
 
 func (m *mockSource) GetSortedProcedures() []*catalog.Procedure {
-	return m.procedures
+	sorted := make([]*catalog.Procedure, len(m.procedures))
+	copy(sorted, m.procedures)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Name < sorted[j].Name
+	})
+	return sorted
 }
 
 func (m *mockSource) GetTableRowCount(name string) int64 {

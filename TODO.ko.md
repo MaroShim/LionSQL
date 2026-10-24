@@ -39,7 +39,7 @@
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 상태 | 관련 기술 문서 |
 | :---: | :---: | :--- | :--- | :---: | :--- |
 | **P1** | **와이어/호환성** | **TDS RPC 핸들러(`sp_prepare`, `sp_prepexec`) 파라미터 이름 의존성 전면 제거 및 100% 위치 매핑 일원화 (`TDS-RPC-AUDIT-1`)** | `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md) |
-| **P1** | **도구호환/검증** | **외부 GUI 클라이언트(DBeaver, DbGate, SSMS) 실전 쿼리 스트레스 및 가상 카탈로그 심층 검증 (`TOOL-AUDIT-1`)** | `pkg/catalog/virtual`, `pkg/wire/tds`, `pkg/wire` | **진행 대기** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
+| **P1** | **도구호환/검증** | **외부 GUI 클라이언트(DBeaver, DbGate, SSMS) 실전 쿼리 스트레스 및 가상 카탈로그 심층 검증 (`TOOL-AUDIT-1`)** | `pkg/catalog/virtual`, `pkg/wire/tds`, `pkg/wire` | **완료 (`[x]`)** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) (SSMS/DbGate/DBeaver/Beekeeper 9단계 E2E 검증, `FormatResultWithSQL` alias/case 정규화, 고동시성 GUI 300회 스트레스 통과) |
 | **P2** | **KISS/실행통합** | **코어 엔진 3갈래 쿼리 실행 경로(`sqlexec_select` vs `execution` Iterator vs VDBE) 단일화 및 아키텍처 다이어트 (`KISS-5`)** | `pkg/engine`, `pkg/execution`, `pkg/proc/runtime` | **완료 (`[x]`)** | [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
 | **P2** | **KISS/스캐너통합** | **MERGE, STRING_SPLIT, PROCS 잔여 수동 분할 루프 `sqlutil.Tokenizer` 전면 일원화 (`ARCH-LEX-2`)** | `pkg/sqlutil`, `pkg/engine` | **완료 (`[x]`)** | [`REFACTORING.ko.md`](REFACTORING.ko.md) |
 | **P1** | **성능/OCC최적화** | **In-Memory OCC 5대 최적화 (비트마스크 샤드 추적, Table/Shard 캐싱, 지연 유니크셋, 비차단 AOF 압축, 힙 오염 제거) (`VPERF-15`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) |
