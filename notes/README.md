@@ -39,6 +39,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: Memory and binary compaction plan for ANTLR grammar parser.
    - **[`TOOL_AUDIT_PLAN.ko.md`](TOOL_AUDIT_PLAN.ko.md)** (Korean): GUI client tools (SSMS, DbGate, DBeaver, Beekeeper Studio) query compatibility and virtual catalog audit plan (Completed).
    - **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](OVER_SPECIFICATION_REMEDIATION_PLAN.md)** (Korean): Master remediation plan eliminating tool-specific over-specifications and ad-hoc hardcodings (In Progress).
+   - **[`BENCHMARK_DIR_SAFETY_PLAN.md`](BENCHMARK_DIR_SAFETY_PLAN.md)** (Korean): Non-destructive benchmark directory lifecycle and data protection master plan (In Progress).
 
 7. **Completed Reports & Historical Archives**:
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)** (Korean): TDS RPC `sp_executesql` parameter resolution regression post-mortem, Beekeeper Studio connection crash root-cause analysis, and pure ordinal positional fallback restoration.

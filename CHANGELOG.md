@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- `BENCH-DIR-SAFETY-1`: Eliminated destructive pre- and post-benchmark `os.RemoveAll(*dataDir)` calls across `cmd/bench`, `cmd/tpcc_runtime`, and `cmd/tpcc_kernel` (`pkg/storage/benchdir.go`). Implemented `storage.PrepareBenchmarkDir`, which treats the user-provided path as a safe parent base directory, creates an exclusively fresh isolated subdirectory (`os.MkdirTemp`), and scopes cleanup strictly to the newly created child directory, completely protecting existing user and database files from accidental deletion. Added `-keep-dir` CLI flag to optionally preserve benchmark data files.
+
 ## [0.90.0-beta3] - 2026-10-25
 
 ### Added

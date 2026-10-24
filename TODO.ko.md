@@ -213,6 +213,11 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
 
 ### 5.1. v0.90.0 Betas (Beta 1 ~ Beta 3) 주요 완성 내역 (2026-10-19 ~ 2026-10-25)
 
+- [x] **벤치마크 디렉토리 안전 라이프사이클 및 기존 데이터 영구 보호 (`BENCH-DIR-SAFETY-1`) (2026-10-25)**:
+  - `cmd/bench`, `cmd/tpcc_runtime`, `cmd/tpcc_kernel`의 파괴적 `os.RemoveAll(*dataDir)` 기동/종료 호출 전면 제거.
+  - 사용자가 전달한 경로를 부모(Base) 디렉토리로 이용하고, `os.MkdirTemp`로 배타적 신규 하위 디렉토리를 생성하여 실행하는 공통 안전 헬퍼 `storage.PrepareBenchmarkDir` 구현.
+  - 사후 정리는 자신이 생성한 하위 폴더에만 한정하여 부모 디렉토리 및 기존 파일 100% 보존, 결과 분석용 `-keep-dir` CLI 옵션 신설 및 `benchdir_test.go` 무결성 검증 완료.
+
 - [x] **13대 핵심 아키텍처 도메인 확장 통합 스모크 테스트 스위트 및 자동화 구현 (`SMOKE-EXT-1`) (2026-10-25)**:
   - `scripts/verify_report.sh` 및 `scripts/README.md` 구축: TDS, T-SQL, TPC-C, 경계조건, 트라이브릿지, 크래시복구, HA, HTAP, CBO, JSON, RBAC, 마이그레이션, 파티셔닝 13개 핵심 도메인 전수 검증.
   - In-Memory OCC 및 WiredTiger 듀얼 백엔드 전반에 걸쳐 ~3초 이내 100% PASS 달성.

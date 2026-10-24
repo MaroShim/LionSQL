@@ -51,6 +51,7 @@ func main() {
 	durationFlag := flag.Duration("duration", 15*time.Second, "Benchmark duration (e.g. 10s, 30s, 1m)")
 	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
 	dataDir := flag.String("dir", "data/tpcc_kernel_wt", "Data directory for WiredTiger backend")
+	keepDir := flag.Bool("keep-dir", false, "Preserve benchmark data directory after completion")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
 	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries with exponential backoff on serialization conflict")
@@ -70,9 +71,14 @@ func main() {
 	var eng storage.Engine
 	switch *engineType {
 	case "wiredtiger":
-		_ = os.RemoveAll(*dataDir)
+		subDir, cleanup, err := storage.PrepareBenchmarkDir(*dataDir, "tpcc_kernel_wt", *keepDir)
+		if err != nil {
+			fmt.Printf("Failed to prepare WiredTiger benchmark directory: %v\n", err)
+			os.Exit(1)
+		}
+		defer cleanup()
 		eng = wiredtiger.New()
-		if err := eng.Open(*dataDir); err != nil {
+		if err := eng.Open(subDir); err != nil {
 			fmt.Printf("Failed to open WiredTiger storage engine: %v\n", err)
 			os.Exit(1)
 		}
@@ -85,9 +91,6 @@ func main() {
 	}
 	defer func() {
 		eng.Close()
-		if *engineType == "wiredtiger" {
-			_ = os.RemoveAll(*dataDir)
-		}
 	}()
 
 	// 2. Create TPC-C Tables

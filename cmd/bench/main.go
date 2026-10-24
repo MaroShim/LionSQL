@@ -24,6 +24,7 @@ func main() {
 	totalOps := flag.Int("ops", 50000, "Total number of transfer transactions to execute")
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	dataDir := flag.String("dir", "data/bench_wt", "Data directory for benchmark storage")
+	keepDir := flag.Bool("keep-dir", false, "Preserve benchmark data directory after completion")
 	flag.Parse()
 	execution.InitRuntimeTuning(0, 0)
 
@@ -42,9 +43,14 @@ func main() {
 	var eng storage.Engine
 	switch *engineType {
 	case "wiredtiger":
-		_ = os.RemoveAll(*dataDir)
+		subDir, cleanup, err := storage.PrepareBenchmarkDir(*dataDir, "bench_wt", *keepDir)
+		if err != nil {
+			fmt.Printf("Failed to prepare benchmark storage directory: %v\n", err)
+			os.Exit(1)
+		}
+		defer cleanup()
 		eng = wiredtiger.New()
-		if err := eng.Open(*dataDir); err != nil {
+		if err := eng.Open(subDir); err != nil {
 			fmt.Printf("Failed to open WiredTiger storage engine: %v. Specify -engine=memory to benchmark in-memory.\n", err)
 			os.Exit(1)
 		}
@@ -57,9 +63,6 @@ func main() {
 	}
 	defer func() {
 		eng.Close()
-		if *engineType == "wiredtiger" {
-			_ = os.RemoveAll(*dataDir)
-		}
 	}()
 
 	_ = eng.CreateTable(&storage.TableSchema{

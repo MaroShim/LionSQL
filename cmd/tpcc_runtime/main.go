@@ -55,6 +55,7 @@ func main() {
 	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
 	fsyncFlag := flag.String("fsync", "everysec", "WAL fsync policy: off (ephemeral), none, everysec (default), always")
 	dataDir := flag.String("dir", "data/tpcc_runtime_wt", "Data directory for WAL/WiredTiger backend")
+	keepDir := flag.Bool("keep-dir", false, "Preserve benchmark data directory after completion")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
 	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries with exponential backoff on serialization conflict")
@@ -99,13 +100,16 @@ func main() {
 	var eng storage.Engine
 	var memEng *memengine.Engine
 	var wtEng *wiredtiger.Engine
-	cleanupDir := false
 	switch *engineType {
 	case "wiredtiger":
-		_ = os.RemoveAll(*dataDir)
-		cleanupDir = true
+		subDir, cleanup, err := storage.PrepareBenchmarkDir(*dataDir, "tpcc_runtime_wt", *keepDir)
+		if err != nil {
+			fmt.Printf("Failed to prepare WiredTiger benchmark directory: %v\n", err)
+			os.Exit(1)
+		}
+		defer cleanup()
 		wtEng = wiredtiger.New()
-		if err := wtEng.Open(*dataDir); err != nil {
+		if err := wtEng.Open(subDir); err != nil {
 			fmt.Printf("Failed to open WiredTiger storage engine: %v\n", err)
 			os.Exit(1)
 		}
@@ -113,10 +117,14 @@ func main() {
 	case "memory":
 		memEng = memengine.New()
 		if enableMemWAL {
-			_ = os.RemoveAll(*dataDir)
-			cleanupDir = true
+			subDir, cleanup, err := storage.PrepareBenchmarkDir(*dataDir, "tpcc_runtime_mem", *keepDir)
+			if err != nil {
+				fmt.Printf("Failed to prepare memory WAL benchmark directory: %v\n", err)
+				os.Exit(1)
+			}
+			defer cleanup()
 			// Seed initial tables with FsyncNone for fast setup, then switch to targetFsyncPolicy
-			opts := memengine.DefaultOptions(*dataDir)
+			opts := memengine.DefaultOptions(subDir)
 			opts.EnableAOF = true
 			opts.EnableRDB = false
 			opts.AOFThreshold = 0
@@ -135,9 +143,6 @@ func main() {
 	}
 	defer func() {
 		eng.Close()
-		if cleanupDir {
-			_ = os.RemoveAll(*dataDir)
-		}
 	}()
 
 	// 2. Create 9 TPC-C Tables

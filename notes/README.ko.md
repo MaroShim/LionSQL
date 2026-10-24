@@ -39,6 +39,7 @@
    - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: ANTLR 파서 바이너리 및 런타임 메모리 경량화 플랜
    - **[`TOOL_AUDIT_PLAN.ko.md`](TOOL_AUDIT_PLAN.ko.md)**: 외부 GUI 도구(SSMS, DbGate, DBeaver, Beekeeper Studio) 실전 쿼리 호환성 및 가상 카탈로그 심층 감사/검증 계획서 (완료)
    - **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](OVER_SPECIFICATION_REMEDIATION_PLAN.md)**: 서드파티 도구 종속적 오버스펙 및 하드코딩 전수 정돈 마스터 플랜 (진행 중)
+   - **[`BENCHMARK_DIR_SAFETY_PLAN.md`](BENCHMARK_DIR_SAFETY_PLAN.md)**: 비파괴 벤치마크 디렉토리 안전 라이프사이클 및 기존 데이터 영구 보호 계획서 (진행 중)
 
 7. **완료된 보고서 및 역사적 아카이브 (Completed Reports & Archives)**:
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**: TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 크래시 원인 규명 및 순수 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.
