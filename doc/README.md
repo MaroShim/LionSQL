@@ -14,11 +14,11 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
        ┌──────────────────┬───────────────┴───────────────┬──────────────────┐
        ▼                  ▼                               ▼                  ▼
 [ Core & Storage ]  [ Query & VM ]             [ Wire Protocols ]    [ BaaS & APIs ]
-- ARCHITECTURE.md   - INTERNALS_VDBE.md        - INTERNALS_WIRE.md   - REST_API_AUTO_GENERATED.md
-- INTERNALS_STOR.md - INTERNALS_CBO_VOLCANO.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
-- TX_CONCURRENCY.md - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
+- ARCHITECTURE.md   - internal/VDBE.md        - internal/WIRE.md   - REST_API_AUTO_GENERATED.md
+- internal/STORAGE.md - internal/CBO_VOLC.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
+- internal/TX_CONC  - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
 - SNAPSHOT_DUCKDB   - LOG_PROC_GREP_AWK.md     - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
-- RECORD_BINARY.md  - EXTENSIONS.md            - PGWIRE_COMPAT_REP   - REST_API_REFERENCE.md
+- internal/RECORD   - EXTENSIONS.md            - PGWIRE_COMPAT_REP   - REST_API_REFERENCE.md
 - DATA_DICTIONARY   - HIGH_AVAIL.md                                  - WEB_SDK.md
 ```
 
@@ -39,23 +39,23 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 * [`FOUNDATIONAL_DESIGN_DECISIONS.md`](FOUNDATIONAL_DESIGN_DECISIONS.md)
   * Genesis and foundational strategic architectural decisions of LionSQL.
   * Deep dive into early design choices: WiredTiger lock-free B+Tree disk storage, pure-Go OCC in-memory companion engine, Go language runtime concurrency, Microsoft T-SQL procedural core with VDBE bytecode VM, PostgreSQL wire protocol ecosystem reach, embedded HTTP/REST BaaS engine, and Antigravity AI pair-programming engineering methodology.
-* [`ZERO_ALLOCATION_ARCHITECTURE.md`](ZERO_ALLOCATION_ARCHITECTURE.md)
+* [`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)
   * Zero-allocation memory architecture, buffer reuse strategies, and GC mitigation enabling 20,000+ TPS (In-Memory OCC) and 16,800+ TPS (WiredTiger).
   * Layer-by-layer breakdown: TDS single-frame pooling, PGWire binary bind direct decoding, zero-alloc ASCII catalog pre-filtering (`containsFold`), VDBE register recycling, Volcano chunk streaming (`TupleChunk` sync.Pool), and WiredTiger `WT_CURSOR` pooling/reset.
 * [`ARCHITECTURE.md`](ARCHITECTURE.md)
   * End-to-end architectural blueprint of LionSQL.
   * Dual-storage backend (Pure-Go OCC memory engine vs WiredTiger lock-free B+Tree with MVCC).
   * Ambient ACID transactions, isolation levels, and goroutine connection pooler.
-* [`INTERNALS_STORAGE.md`](INTERNALS_STORAGE.md)
+* [`internal/STORAGE.md`](internal/STORAGE.md)
   * Deep dive into the storage engine interface contract.
   * SkipList in-memory indexing vs WiredTiger page structures, checkpoints, and write-ahead logging (WAL).
   * Physical storage directory layout, `catalog.json` metadata persistence, `cbo_stats.json`, and secondary index persistence.
-* [`RECORD_BINARY_FORMAT.md`](RECORD_BINARY_FORMAT.md)
+* [`internal/RECORD_BINARY_FORMAT.md`](internal/RECORD_BINARY_FORMAT.md)
   * Schema-Aware Compact Binary Tuple serialization specification (`pkg/storage/tuple.go`).
   * Bit-level layout: `0x01` version header, $\lceil N/8 \rceil$ null bitmap, and dense ZigZag varint payloads.
   * Architectural lineage: PostgreSQL heap tuple `t_bits`, CockroachDB/TiDB KV encoding, and Protobuf varints.
   * WiredTiger B+Tree disk value persistence vs in-memory OCC WAL durability.
-* [`TRANSACTION_CONCURRENCY.md`](TRANSACTION_CONCURRENCY.md)
+* [`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)
   * Transaction isolation and concurrency model specification.
   * Non-blocking snapshot reads and private workspace isolation.
   * In-Memory OCC with monotonic integer versioning vs WiredTiger MVCC with hazard pointers and transaction timestamps.
@@ -72,11 +72,11 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ---
 
 ### 2.2. Query Compilation, Optimization & Virtual Machine
-* [`INTERNALS_VDBE.md`](INTERNALS_VDBE.md)
+* [`internal/VDBE.md`](internal/VDBE.md)
   * SQLite-style register-based Virtual Database Engine (VDBE) architecture.
   * Bytecode opcodes specification (`OpInit`, `OpOpenRead`, `OpIndexScan`, `OpRelQuery`, `OpYield`).
   * `sync.Pool` register reuse and compiled program caching (`*runtime.PlanCache`).
-* [`INTERNALS_CBO_VOLCANO.md`](INTERNALS_CBO_VOLCANO.md)
+* [`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)
   * Volcano iterator pipeline (`SeqScan`, `IndexScan`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`).
   * Cost-Based Optimizer (CBO), selectivity models, and 64-bucket equi-depth histograms.
   * Constant folding, predicate pushdown, and correlated subquery decorrelation (`SEMI`/`ANTI` joins).
@@ -101,7 +101,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ---
 
 ### 2.3. Wire Protocols & Client Compatibility
-* [`INTERNALS_WIRE_PROTOCOLS.md`](INTERNALS_WIRE_PROTOCOLS.md)
+* [`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)
   * **PostgreSQL Wire Protocol v3** (Port `5433`): Simple and Extended Query Protocols (`Parse`, `Bind`, `Execute`, `Sync`), parameter binding, and SSL/TLS.
   * **Microsoft SQL Server TDS 7.x/8.0** (Port `1433`): Prelogin, Login7, RPC packets, and `sp_prepexec` bytecode plan cache connection.
   * Client compatibility matrix (`psql`, DBeaver, GORM, Prisma, `sqlcmd`, SSMS, Azure Data Studio).

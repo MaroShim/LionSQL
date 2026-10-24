@@ -352,7 +352,7 @@ rm -rf /tmp/tpcc_mem /tmp/tpcc_wt
 
 ### Comparing against baselines
 
-Recorded baselines are in `doc/BENCHMARK.md`, `doc/TRANSACTION_CONCURRENCY.md`, and `CHANGELOG.md`. Only compare runs that use the same harness and parameters (for example VDBE, 2 warehouses, 20 workers). Native Go API results and different warehouse counts are not comparable with VDBE 2-warehouse results.
+Recorded baselines are in `doc/BENCHMARK.md`, `doc/internal/TRANSACTION_CONCURRENCY.md`, and `CHANGELOG.md`. Only compare runs that use the same harness and parameters (for example VDBE, 2 warehouses, 20 workers). Native Go API results and different warehouse counts are not comparable with VDBE 2-warehouse results.
 
 Reference VDBE results (2 warehouses, 20 workers):
 
@@ -433,6 +433,6 @@ If a regression is confirmed, bisect by reverting changes one at a time, or use 
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md): contribution rules and the pull request checklist.
 - [BENCHMARK.md](BENCHMARK.md): recorded benchmark results and methodology.
-- [TRANSACTION_CONCURRENCY.md](TRANSACTION_CONCURRENCY.md): concurrency model and benchmark history.
+- [internal/TRANSACTION_CONCURRENCY.md](internal/TRANSACTION_CONCURRENCY.md): concurrency model and benchmark history.
 - [TEST_VERIFICATION_REPORT.ko.md](TEST_VERIFICATION_REPORT.ko.md): past verification results.
-- [ZERO_ALLOCATION_ARCHITECTURE.md](ZERO_ALLOCATION_ARCHITECTURE.md): hot-path allocation rules.
+- [internal/ZERO_ALLOCATION_ARCHITECTURE.md](internal/ZERO_ALLOCATION_ARCHITECTURE.md): hot-path allocation rules.

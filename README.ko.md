@@ -466,13 +466,13 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 
 ### 아키텍처 및 핵심 엔진 명세서
 - **[초기 설계 결정 및 아키텍처 철학](doc/FOUNDATIONAL_DESIGN_DECISIONS.md)**: WiredTiger MVCC, Go 언어 선택, T-SQL VDBE 가상 머신, PGWire 호환성, Antigravity AI 협업 방법론의 기술적 배경.
-- **[Zero-Allocation 메모리 아키텍처](doc/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20k TPS를 달성한 무할당 버퍼 풀링, TDS 프레임 풀링, CGO 커서 재사용, 가상 카탈로그 인터셉터 최적화.
+- **[Zero-Allocation 메모리 아키텍처](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20k TPS를 달성한 무할당 버퍼 풀링, TDS 프레임 풀링, CGO 커서 재사용, 가상 카탈로그 인터셉터 최적화.
 - **[시스템 아키텍처 종합 명세서](doc/ARCHITECTURE.md)**: Volcano 실행기, 이중 파서 디커플링, 이중 스토리지 백엔드 종합 설계.
 - **[아키텍처 결정 기록 (ADR)](doc/ADR.md)**: 프로젝트의 22대 핵심 아키텍처 결정 기록 (ADR-001 ~ ADR-022).
-- **[VDBE 바이트코드 가상 머신 내부 구조](doc/INTERNALS_VDBE.md)**: 레지스터 할당, ISA 명령어 셋, 절차적 런타임 실행 메커니즘.
-- **[스토리지 엔진 내부 구조 (WiredTiger & Memory OCC)](doc/INTERNALS_STORAGE.md)**: 락프리 B+Tree, 해저드 포인터, OCC 검증, AOF 로그 압축.
-- **[비용 기반 최적화기 (CBO) & Volcano 파이프라인](doc/INTERNALS_CBO_VOLCANO.md)**: 균등 깊이 히스토그램, 비용 모델, 외부 머지 소트.
-- **[다중 와이어 프로토콜 내부 구조](doc/INTERNALS_WIRE_PROTOCOLS.md)**: PostgreSQL v3, TDS 7.x/8.0 바이너리 프레이밍 및 고루틴 커넥션 풀러.
+- **[VDBE 바이트코드 가상 머신 내부 구조](doc/internal/VDBE.md)**: 레지스터 할당, ISA 명령어 셋, 절차적 런타임 실행 메커니즘.
+- **[스토리지 엔진 내부 구조 (WiredTiger & Memory OCC)](doc/internal/STORAGE.md)**: 락프리 B+Tree, 해저드 포인터, OCC 검증, AOF 로그 압축.
+- **[비용 기반 최적화기 (CBO) & Volcano 파이프라인](doc/internal/CBO_VOLCANO.md)**: 균등 깊이 히스토그램, 비용 모델, 외부 머지 소트.
+- **[다중 와이어 프로토콜 내부 구조](doc/internal/WIRE_PROTOCOLS.md)**: PostgreSQL v3, TDS 7.x/8.0 바이너리 프레이밍 및 고루틴 커넥션 풀러.
 - **[가상 시스템 카탈로그 및 데이터 딕셔너리](doc/DATA_DICTIONARY.md)**: 시스템 뷰(`sys.*`, `information_schema.*`), 데이터 타입, 클라이언트 도구 인터셉터.
 - **[고가용성 및 재해 복구 아키텍처](doc/HIGH_AVAILABILITY.md)**: 1-Writer 다중 리더 WAL 스트리밍, 장애 조치(Failover) 및 복구 SLA.
 

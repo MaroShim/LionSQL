@@ -423,7 +423,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Advanced WiredTiger disk B+Tree MVCC throughput to **16,814.17 TPS** (457,021.04 tpmC, +13.2% gain) with flat P99 tail latency (New-Order P99 9.46ms), powered by P-8 cursor pooling and P-12 chunk pooling.
 - **Enterprise Architecture & Technical Documentation Suite (`doc/`, `README.ko.md`)**:
   - Authored [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md): genesis and technical rationale behind core architecture (WiredTiger, Go, T-SQL VDBE VM, dual wire listeners, single binary packaging, Antigravity AI pair programming).
-  - Authored [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md): memory layout, buffer pooling (`sync.Pool`), arena slabs, and hot-path GC avoidance strategies (`P-1` ~ `P-14`).
+  - Authored [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md): memory layout, buffer pooling (`sync.Pool`), arena slabs, and hot-path GC avoidance strategies (`P-1` ~ `P-14`).
   - Authored [`doc/ENTERPRISE_AUTHENTICATION_SPI.md`](doc/ENTERPRISE_AUTHENTICATION_SPI.md): unified superuser model, `AuthProvider` SPI interface, LDAP/AD directory architecture, and perimeter proxy security topology.
   - Authored [`doc/SCHEMA_MIGRATIONS_CLI.md`](doc/SCHEMA_MIGRATIONS_CLI.md): declarative schema migrations guide, `lionsql migrate` workflow, and zero-downtime deployment patterns.
   - Authored [`doc/AUDIT_LOG_SPECIFICATION.md`](doc/AUDIT_LOG_SPECIFICATION.md): enterprise immutable cryptographic audit log specification (HMAC-SHA256 hash chains, tamper-evident verification, GDPR/HIPAA/SOX compliance).
@@ -1047,8 +1047,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 - **Technical Documentation & Architecture Decision Records (`doc/`, `notes/`)**:
   - Authored `doc/CLIENT_TOOL_INTEGRATION.md`: Comprehensive connection and integration guide for Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, `psql`, `sqlcmd`, and programming language drivers (Go, Python, Node.js, C#, Rust, Java).
-  - Authored `doc/TRANSACTION_CONCURRENCY.md`: Complete specification for non-blocking snapshot reads, In-Memory OCC vs WiredTiger MVCC concurrency models, private workspace isolation, and VDBE transaction coupling (`exec.RunInTx`).
-  - Authored `doc/RECORD_BINARY_FORMAT.md`: Schema-aware compact binary tuple storage format specification.
+  - Authored `doc/internal/TRANSACTION_CONCURRENCY.md`: Complete specification for non-blocking snapshot reads, In-Memory OCC vs WiredTiger MVCC concurrency models, private workspace isolation, and VDBE transaction coupling (`exec.RunInTx`).
+  - Authored `doc/internal/RECORD_BINARY_FORMAT.md`: Schema-aware compact binary tuple storage format specification.
   - Added ADR-019 (Schema-Aware Compact Binary Tuple Storage Codec), ADR-020 (Multi-Protocol Virtual Catalog Interceptor Strategy), and ADR-021 (Open Source Licensing Strategy: GPL-3.0-or-later) to `doc/ADR.md`.
   - Documented Go map iteration non-determinism landmine and mitigation strategies in `notes/PITFALLS_AND_TRICKS.md` (Section 10) and `doc/CLIENT_TOOL_INTEGRATION.md`.
   - Adopted GNU General Public License v3 (`LICENSE`).

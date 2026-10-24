@@ -33,7 +33,7 @@ Supported naming conventions include dot notation (`sys.tables`, `information_sc
 ```
 
 > [!NOTE]
-> While catalog queries are emulated dynamically through virtual views, physical schema definitions and optimizer statistics are persisted to disk via `catalog.json` and `cbo_stats.json` in the instance data directory. For low-level details on physical directory layouts, atomic persistence, and secondary index structures, see [`INTERNALS_STORAGE.md`](INTERNALS_STORAGE.md#5-physical-storage-directory-layout-metadata--secondary-index-persistence).
+> While catalog queries are emulated dynamically through virtual views, physical schema definitions and optimizer statistics are persisted to disk via `catalog.json` and `cbo_stats.json` in the instance data directory. For low-level details on physical directory layouts, atomic persistence, and secondary index structures, see [`internal/STORAGE.md`](internal/STORAGE.md#5-physical-storage-directory-layout-metadata--secondary-index-persistence).
 
 ---
 

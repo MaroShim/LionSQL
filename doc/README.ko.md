@@ -14,11 +14,11 @@
        ┌──────────────────┬───────────────┴───────────────┬──────────────────┐
        ▼                  ▼                               ▼                  ▼
 [ 코어 및 스토리지 ] [ 쿼리 및 VDBE VM ]             [ 와이어 프로토콜 ]    [ BaaS 및 API ]
-- ARCHITECTURE.md   - INTERNALS_VDBE.md        - INTERNALS_WIRE.md   - REST_API_AUTO_GENERATED.md
-- INTERNALS_STOR.md - INTERNALS_CBO_VOLCANO.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
-- TX_CONCURRENCY.md - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
+- ARCHITECTURE.md   - internal/VDBE.md        - internal/WIRE.md   - REST_API_AUTO_GENERATED.md
+- internal/STORAGE.md - internal/CBO_VOLC.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
+- internal/TX_CONC  - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
 - SNAPSHOT_DUCKDB   - LOG_PROC_GREP_AWK.md     - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
-- RECORD_BINARY.md  - EXTENSIONS.md            - PGWIRE_COMPAT_REP   - REST_API_REFERENCE.md
+- internal/RECORD   - EXTENSIONS.md            - PGWIRE_COMPAT_REP   - REST_API_REFERENCE.md
 - DATA_DICTIONARY   - HIGH_AVAIL.md                                  - WEB_SDK.md
 ```
 
@@ -41,23 +41,23 @@
 * [`FOUNDATIONAL_DESIGN_DECISIONS.md`](FOUNDATIONAL_DESIGN_DECISIONS.md)
   * LionSQL의 태동과 창립 전략적 아키텍처 결정 기록.
   * WiredTiger 락프리 B+Tree, Pure-Go In-Memory OCC 엔진, Go 런타임 동시성, VDBE 바이트코드 VM 기반 T-SQL 코어, PGWire 에코시스템 호환성, 임베디드 HTTP/REST BaaS 엔진 및 Antigravity AI 페어 프로그래밍 개발 방법론 심층 분석.
-* [`ZERO_ALLOCATION_ARCHITECTURE.md`](ZERO_ALLOCATION_ARCHITECTURE.md)
+* [`internal/ZERO_ALLOCATION_ARCHITECTURE.md`](internal/ZERO_ALLOCATION_ARCHITECTURE.md)
   * In-Memory OCC 20,000+ TPS 및 WiredTiger 16,800+ TPS를 달성하기 위한 제로 할당 메모리 아키텍처, 버퍼 재사용 전략 및 GC 완화 기법.
   * 계층별 분석: TDS 단일 프레임 풀링, PGWire 바이너리 바인드 직접 디코딩, 카탈로그 제로-할당 ASCII 사전 필터링(`containsFold`), VDBE 레지스터 재활용, Volcano 청크 스트리밍(`TupleChunk` sync.Pool), WiredTiger `WT_CURSOR` 풀링/리셋.
 * [`ARCHITECTURE.md`](ARCHITECTURE.md)
   * LionSQL 전 계층 엔드투엔드 아키텍처 청사진.
   * 듀얼 스토리지 백엔드(Pure-Go OCC 메모리 엔진 vs WiredTiger 락프리 B+Tree MVCC).
   * 앰비언트 ACID 트랜잭션, 격리 수준, 고루틴 커넥션 풀러.
-* [`INTERNALS_STORAGE.md`](INTERNALS_STORAGE.md)
+* [`internal/STORAGE.md`](internal/STORAGE.md)
   * 스토리지 엔진 인터페이스 규약 딥다이브.
   * SkipList 인메모리 인덱싱 vs WiredTiger 페이지 구조, 체크포인트 및 WAL 지속성 메커니즘.
   * 물리적 스토리지 디렉터리 레이아웃, `catalog.json` 메타데이터 영속화, `cbo_stats.json` 및 보조 인덱스 저장 구조.
-* [`RECORD_BINARY_FORMAT.md`](RECORD_BINARY_FORMAT.md)
+* [`internal/RECORD_BINARY_FORMAT.md`](internal/RECORD_BINARY_FORMAT.md)
   * 스키마 인식형 콤팩트 바이너리 튜플 직렬화 명세 (`pkg/storage/tuple.go`).
   * 비트 단위 레이아웃: `0x01` 버전 헤더, $\lceil N/8 \rceil$ NULL 비트맵, 고밀도 ZigZag varint 페이로드.
   * PostgreSQL 힙 튜플 `t_bits`, CockroachDB/TiDB KV 인코딩, Protobuf varint 계보 비교.
   * WiredTiger B+Tree 디스크 레코드 저장 vs In-Memory OCC WAL 지속성 비교.
-* [`TRANSACTION_CONCURRENCY.md`](TRANSACTION_CONCURRENCY.md)
+* [`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)
   * 트랜잭션 격리 수준 및 동시성 제어 모델 명세서.
   * 논블로킹 스냅샷 읽기 및 프라이빗 워크스페이스 격리.
   * 단조 증가 정수 버전을 사용하는 In-Memory OCC vs 해저드 포인터와 타임스탬프를 갖춘 WiredTiger MVCC.
@@ -74,11 +74,11 @@
 ---
 
 ### 2.2. 쿼리 컴파일, 최적화 및 가상 머신 (Query Engine & VM)
-* [`INTERNALS_VDBE.md`](INTERNALS_VDBE.md)
+* [`internal/VDBE.md`](internal/VDBE.md)
   * SQLite 스타일 레지스터 기반 가상 데이터베이스 엔진(VDBE) 아키텍처.
   * 바이트코드 명령어 셋 명세 (`OpInit`, `OpOpenRead`, `OpIndexScan`, `OpRelQuery`, `OpYield`).
   * `sync.Pool` 레지스터 재사용 및 컴파일된 실행 계획 캐싱 (`*runtime.PlanCache`).
-* [`INTERNALS_CBO_VOLCANO.md`](INTERNALS_CBO_VOLCANO.md)
+* [`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)
   * Volcano 반복자 실행 파이프라인 (`SeqScan`, `IndexScan`, `HashJoin`, `IndexNestedLoopJoin`, `GroupBy`).
   * 비용 기반 옵티마이저(CBO), 선택도 모델, 64-버킷 균등 깊이 히스토그램.
   * 상수 폴딩, 조건 푸시다운, 상관 서브쿼리 비상관화 (`SEMI`/`ANTI` 조인 변환).
@@ -103,7 +103,7 @@
 ---
 
 ### 2.3. 와이어 프로토콜 및 클라이언트 호환성 (Wire Protocols & Clients)
-* [`INTERNALS_WIRE_PROTOCOLS.md`](INTERNALS_WIRE_PROTOCOLS.md)
+* [`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)
   * **PostgreSQL Wire Protocol v3** (포트 `5433`): Simple/Extended 쿼리 프로토콜 (`Parse`, `Bind`, `Execute`, `Sync`), 파라미터 바인딩, SSL/TLS.
   * **Microsoft SQL Server TDS 7.x/8.0** (포트 `1433`): Prelogin, Login7, RPC 패킷, `sp_prepexec` 바이트코드 플랜 캐시 연동.
   * 클라이언트 호환성 매트릭스 (`psql`, DBeaver, GORM, Prisma, `sqlcmd`, SSMS, Azure Data Studio).

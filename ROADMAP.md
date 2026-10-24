@@ -169,25 +169,25 @@ CGO_ENABLED=0 distribution Safe third-party plugins  PCI-DSS v4.0 / SOC2       M
 
 | Milestone | Deliverable / Task | Domain | Target Release | Status | Technical Documentation |
 | :---: | :--- | :---: | :---: | :---: | :--- |
-| **Phase 1** | Dual Wire Listeners (PGWire :5433, TDS :1433) | Wire Protocols | `v0.1.0` | **Completed** | [`doc/INTERNALS_WIRE_PROTOCOLS.md`](doc/INTERNALS_WIRE_PROTOCOLS.md) |
-| **Phase 1** | Dual Storage Engines (WiredTiger + In-Memory OCC) | Storage Engine | `v0.2.0` | **Completed** | [`doc/INTERNALS_STORAGE.md`](doc/INTERNALS_STORAGE.md) |
-| **Phase 1** | Register-Based VDBE Virtual Machine | Execution & VM | `v0.4.0` | **Completed** | [`doc/INTERNALS_VDBE.md`](doc/INTERNALS_VDBE.md) |
-| **Phase 1** | Cost-Based Optimizer (CBO) & Histograms | Query Planner | `v0.6.0` | **Completed** | [`doc/INTERNALS_CBO_VOLCANO.md`](doc/INTERNALS_CBO_VOLCANO.md) |
+| **Phase 1** | Dual Wire Listeners (PGWire :5433, TDS :1433) | Wire Protocols | `v0.1.0` | **Completed** | [`doc/internal/WIRE_PROTOCOLS.md`](doc/internal/WIRE_PROTOCOLS.md) |
+| **Phase 1** | Dual Storage Engines (WiredTiger + In-Memory OCC) | Storage Engine | `v0.2.0` | **Completed** | [`doc/internal/STORAGE.md`](doc/internal/STORAGE.md) |
+| **Phase 1** | Register-Based VDBE Virtual Machine | Execution & VM | `v0.4.0` | **Completed** | [`doc/internal/VDBE.md`](doc/internal/VDBE.md) |
+| **Phase 1** | Cost-Based Optimizer (CBO) & Histograms | Query Planner | `v0.6.0` | **Completed** | [`doc/internal/CBO_VOLCANO.md`](doc/internal/CBO_VOLCANO.md) |
 | **Phase 2** | Window Functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`) | SQL Analytics | `v0.9.0` | **Completed** | [`doc/EXTENSIONS.md`](doc/EXTENSIONS.md) |
 | **Phase 2** | Streaming Tail Quantiles (`PERCENTILE_CONT`, T-Digest) | SQL Analytics | `v0.10.0` | **Completed** | [`doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md`](doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md) |
 | **Phase 3** | 1-Writer Multi-Reader WAL Replication & Promotion | High Availability | `v0.11.0` | **Completed** | [`doc/HIGH_AVAILABILITY.md`](doc/HIGH_AVAILABILITY.md) |
 | **Phase 3** | Official Drivers Compatibility (`go-mssqldb`, `lib/pq`) | Client Ecosystem | `v0.12.0` | **Completed** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
-| **Phase 4** | PostgreSQL `pgx/v5` & Extended Batch Pipelining | Wire Protocols | `v0.13.0` | **Completed** | [`doc/INTERNALS_WIRE_PROTOCOLS.md`](doc/INTERNALS_WIRE_PROTOCOLS.md) |
+| **Phase 4** | PostgreSQL `pgx/v5` & Extended Batch Pipelining | Wire Protocols | `v0.13.0` | **Completed** | [`doc/internal/WIRE_PROTOCOLS.md`](doc/internal/WIRE_PROTOCOLS.md) |
 | **Phase 4** | IETF RFC 9562 Monotonic UUIDv7 (`NEWID7()`) | Data Types | `v0.14.0` | **Completed** | [`doc/REFERENCE_MANUAL.ko.md`](doc/REFERENCE_MANUAL.ko.md) |
 | **Phase 4** | VDBE Instruction Optimization (21k TPS Peak) | Execution & VM | `v0.15.0` | **Completed** | [`doc/BENCHMARK.md`](doc/BENCHMARK.md) |
 | **Phase 5** | Core Architecture Decoupling (`pkg/engine`) | Architecture | `v0.16.0` | **Completed** | [`doc/ARCHITECTURE.md`](doc/ARCHITECTURE.md) |
-| **Phase 5** | Storage WAL Group Commit ($100\times$ Fsync Speedup) | Storage Engine | `v0.17.0` | **Completed** | [`doc/INTERNALS_STORAGE.md`](doc/INTERNALS_STORAGE.md) |
+| **Phase 5** | Storage WAL Group Commit ($100\times$ Fsync Speedup) | Storage Engine | `v0.17.0` | **Completed** | [`doc/internal/STORAGE.md`](doc/internal/STORAGE.md) |
 | **Phase 5** | Granular SQL Object-Level RBAC (`GRANT/REVOKE`) | Security & Auth | `v0.18.0` | **Completed** | [`doc/SECURITY.md`](doc/SECURITY.md) |
 | **Phase 5** | Declarative Schema Migration CLI (`lionsql migrate`) | BaaS & Tooling | `v0.19.0` | **Completed** | [`doc/SCHEMA_MIGRATIONS_CLI.md`](doc/SCHEMA_MIGRATIONS_CLI.md) |
 | **Phase 6** | Always On Style Automatic Failover & Leader Election | High Availability | `v1.0.0 LTS` | **Completed** | [`doc/HIGH_AVAILABILITY.md`](doc/HIGH_AVAILABILITY.md) |
 | **Phase 6** | Decoupled Real-Time CDC & Transactional Outbox | Events & HTAP | `v1.0.0 LTS` | **Completed** | [`doc/CDC_DUCKDB_INTEGRATION.md`](doc/CDC_DUCKDB_INTEGRATION.md) |
-| **Phase 6** | Selinger DP Large Join Reordering ($N > 4$) | Query Planner | `v1.0.0 LTS` | **Completed** | [`doc/INTERNALS_CBO_VOLCANO.md`](doc/INTERNALS_CBO_VOLCANO.md) |
-| **Phase 6** | Zero-Allocation Memory & Buffer Pooling (P-1 ~ P-14) | Performance | `v1.0.0 LTS` | **Completed** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **Phase 6** | Selinger DP Large Join Reordering ($N > 4$) | Query Planner | `v1.0.0 LTS` | **Completed** | [`doc/internal/CBO_VOLCANO.md`](doc/internal/CBO_VOLCANO.md) |
+| **Phase 6** | Zero-Allocation Memory & Buffer Pooling (P-1 ~ P-14) | Performance | `v1.0.0 LTS` | **Completed** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **Phase 6** | Enterprise Driver Certification (JDBC, ODBC, Python) | Client Ecosystem | `v1.0.0 LTS` | **Completed** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
 | **Phase 6** | Enterprise Security & Object Governance (TDE, RBAC) | Security & Auth | `v1.0.0 LTS` | **Completed** | [`doc/SECURITY.md`](doc/SECURITY.md) |
 | **Post-1.0** | Enterprise Cryptographic Immutable Audit Log | Security & Audit | `v1.1.0` | **Postponed** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |

@@ -1693,11 +1693,11 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
 #### 10.1. 아키텍처 및 스토리지 엔진 내부 구조 (Architecture & Storage Internals)
 * [`ARCHITECTURE.md`](ARCHITECTURE.md)
   * **전체 아키텍처 청사진**: 듀얼 스토리지 엔진(인메모리 OCC vs WiredTiger B+Tree), 듀얼 파서 전략(Pratt fast-path + ANTLR4 fallback), VDBE 바이트코드 가상 머신, 고성능 고루틴 연결 풀러, 다중 와이어 프로토콜 단일 바이너리 통합 아키텍처 개요.
-* [`INTERNALS_STORAGE.md`](INTERNALS_STORAGE.md)
+* [`internal/STORAGE.md`](internal/STORAGE.md)
   * **스토리지 엔진 인터페이스 규격**: `Engine`, `Tx`, `Cursor` 핵심 계약 명세. Concurrent SkipList 인메모리 인덱싱 구조와 WiredTiger B+Tree 페이지 레이아웃, 체크포인트 및 WAL(Write-Ahead Logging) 내구성 설계.
-* [`RECORD_BINARY_FORMAT.md`](RECORD_BINARY_FORMAT.md)
+* [`internal/RECORD_BINARY_FORMAT.md`](internal/RECORD_BINARY_FORMAT.md)
   * **바이너리 튜플 직렬화 규격**: 스키마 기반 압축 바이너리 튜플 포맷(`pkg/storage/tuple.go`). `0x01` 버전 헤더, $\lceil N/8 \rceil$ 널 비트맵, 지그재그 가변 길이 정수 인코딩 및 디스크/WAL 저장 공간 절감 설계.
-* [`TRANSACTION_CONCURRENCY.md`](TRANSACTION_CONCURRENCY.md)
+* [`internal/TRANSACTION_CONCURRENCY.md`](internal/TRANSACTION_CONCURRENCY.md)
   * **트랜잭션 격리 및 동시성 제어**: Non-blocking Snapshot Isolation / Read Committed 모델. 인메모리 OCC 버전 충돌 검증, WiredTiger MVCC 해저드 포인터 및 VDBE 트랜잭션 커플링(`exec.RunInTx`) 규약.
 * [`DATA_DICTIONARY.md`](DATA_DICTIONARY.md)
   * **데이터 딕셔너리 및 시스템 카탈로그**: 스키마 메타데이터 영속성 레이아웃, 시스템 테이블 및 가상 뷰(`sys.*`, `INFORMATION_SCHEMA.*`, `pg_catalog.*`)의 매핑 및 해석 원리.
@@ -1707,9 +1707,9 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * **아키텍처 결정 레코드 (Architectural Decision Records)**: VDBE 통합, 듀얼 파서 폴백, 단일 바이너리 배포, 단일 라이터 복제, 컴팩트 튜플 코덱, 다중 프로토콜 카탈로그 가로채기 등 핵심 설계 결정 및 트레이드오프 기록 (ADR-001 ~ ADR-021).
 
 #### 10.2. 쿼리 컴파일러, 최적화 및 실행 엔진 (Query Engine & VM Internals)
-* [`INTERNALS_VDBE.md`](INTERNALS_VDBE.md)
+* [`internal/VDBE.md`](internal/VDBE.md)
   * **바이트코드 가상 머신 (VDBE)**: SQLite 스타일의 레지스터 기반 VDBE 가상 머신 아키텍처. 핵심 바이트코드 Opcode 사양, `sync.Pool` 레지스터 재사용, 핫루프 최적화 및 컴파일된 플랜 캐시(`*runtime.PlanCache`) 운용.
-* [`INTERNALS_CBO_VOLCANO.md`](INTERNALS_CBO_VOLCANO.md)
+* [`internal/CBO_VOLCANO.md`](internal/CBO_VOLCANO.md)
   * **비용 기반 최적화기 및 볼케이노 반복자**: Volcano Iterator 파이프라인, 비용 기반 쿼리 최적화기(CBO), 64-버킷 등고 히스토그램 기반 선택도 모델, 상수 폴딩, 조건절 푸시다운, `work_mem` 초과 시 디스크 외부 정렬(External Merge Sort) 스필 메커니즘.
 * [`TSQL_REFERENCE.md`](TSQL_REFERENCE.md)
   * **T-SQL 구문 및 문법 종합 레퍼런스**: Microsoft SQL Server 호환 저장 프로시저, 스칼라 및 인라인 테이블 반환 함수(TVF), DML 트리거(`INSERTED`/`DELETED`), 제어문(`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`), 커서 문법 가이드.
@@ -1721,7 +1721,7 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * **엔진 내장 로그 및 텍스트 처리 연산자**: Unix 파이프라인 친화적인 `GREP`, `AWK`, `SPLIT_PART` 연산자, 제로카피 푸시다운 정규식 필터링 및 비정형 로그 분석 파이프라인.
 
 #### 10.3. 와이어 프로토콜 및 클라이언트 호환성 (Protocols & Tool Integration)
-* [`INTERNALS_WIRE_PROTOCOLS.md`](INTERNALS_WIRE_PROTOCOLS.md)
+* [`internal/WIRE_PROTOCOLS.md`](internal/WIRE_PROTOCOLS.md)
   * **와이어 프로토콜 구현 상세**: PostgreSQL Wire Protocol v3(포트 5433) Simple/Extended 프로토콜 패킷 핸들링과 MS SQL Server TDS 7.x/8.0(포트 1433) Prelogin, Login7, RPC, `sp_prepexec` 플랜 캐시 연동 구조.
 * [`CLIENT_TOOL_INTEGRATION.md`](CLIENT_TOOL_INTEGRATION.md)
   * **GUI/CLI 도구 연동 및 카탈로그 가로채기**: Beekeeper Studio, DBeaver, DbGate, Azure Data Studio, SSMS, `psql`, `sqlcmd` 연동 가이드. 도구별 메타데이터 쿼리 가로채기(Catalog Interception), 페이지네이션 변환 및 프로그래밍 언어 드라이버 연결 문자열 가이드.

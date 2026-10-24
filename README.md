@@ -474,10 +474,10 @@ Start here for a complete subject-based directory of all architectural blueprint
 ### Core Architecture & Internals Specifications
 - **[System Architecture Specification](doc/ARCHITECTURE.md)**: Exhaustive technical specification covering Volcano iterators, dual-parser decoupling, and storage backends.
 - **[Architecture Decision Records (ADRs)](doc/ADR.md)**: Historical log of 18 foundational architectural decisions (ADR-001 through ADR-018).
-- **[VDBE Bytecode Virtual Machine Internals](doc/INTERNALS_VDBE.md)**: Register allocation, opcode instruction set architecture (ISA), and procedural execution.
-- **[Storage Engine Mechanics (WiredTiger & Memory OCC)](doc/INTERNALS_STORAGE.md)**: Lock-free B+Trees, hazard pointers, OCC validation, and AOF log compaction.
-- **[Cost-Based Optimizer & Volcano Pipeline Internals](doc/INTERNALS_CBO_VOLCANO.md)**: Equi-depth histograms, physical cost formulas, and external merge sort.
-- **[Multi-Wire Protocol Internals](doc/INTERNALS_WIRE_PROTOCOLS.md)**: Binary framing for PostgreSQL v3, TDS 7.x/8.0, and goroutine connection pooler.
+- **[VDBE Bytecode Virtual Machine Internals](doc/internal/VDBE.md)**: Register allocation, opcode instruction set architecture (ISA), and procedural execution.
+- **[Storage Engine Mechanics (WiredTiger & Memory OCC)](doc/internal/STORAGE.md)**: Lock-free B+Trees, hazard pointers, OCC validation, and AOF log compaction.
+- **[Cost-Based Optimizer & Volcano Pipeline Internals](doc/internal/CBO_VOLCANO.md)**: Equi-depth histograms, physical cost formulas, and external merge sort.
+- **[Multi-Wire Protocol Internals](doc/internal/WIRE_PROTOCOLS.md)**: Binary framing for PostgreSQL v3, TDS 7.x/8.0, and goroutine connection pooler.
 - **[Virtual System Catalog & Data Dictionary](doc/DATA_DICTIONARY.md)**: System views (`sys.*`, `information_schema.*`), data types, and tool compatibility.
 - **[High Availability & Disaster Recovery](doc/HIGH_AVAILABILITY.md)**: Multi-node replication topology, 1-writer multi-reader WAL streaming, failover, and recovery SLAs.
 - **[Extension & Driver Development Guide](doc/EXTENSIONS.md)**: Dual-track UDFs (Go native SPI + Wasm sandbox), pluggable storage engines, and fallback parsers.
