@@ -1,7 +1,6 @@
 package memengine
 
 import (
-	"bytes"
 	"os"
 	"path/filepath"
 	"testing"
@@ -108,11 +107,34 @@ func TestStorage_REV_STOR_001_ParsePKValue_RobustnessAndZeroAlloc(t *testing.T) 
 
 func TestStorage_REV_STOR_002_Open_AOFCompactionErrorPropagated(t *testing.T) {
 	dir := t.TempDir()
-	aofPath := filepath.Join(dir, "appendonly.aof")
-	data := bytes.Repeat([]byte("X"), 200)
-	if err := os.WriteFile(aofPath, data, 0644); err != nil {
-		t.Fatalf("failed to write AOF file: %v", err)
+	aofPath := filepath.Join(dir, "wal.aof")
+
+	// Write valid WAL records so ReplayWAL doesn't truncate them as garbage
+	walWriter, err := NewWALWriter(aofPath, FsyncNone)
+	if err != nil {
+		t.Fatalf("failed to create WAL writer: %v", err)
 	}
+	rec1 := WALRecord{
+		LSN:  1,
+		TxID: 1,
+		Ops: []WALOp{
+			{Type: OpInsert, Table: "t1", Key: "1", Record: storage.Record{"id": storage.IntValue(1)}},
+		},
+	}
+	if err := walWriter.Append(rec1); err != nil {
+		t.Fatalf("failed to append WAL record: %v", err)
+	}
+	rec2 := WALRecord{
+		LSN:  2,
+		TxID: 2,
+		Ops: []WALOp{
+			{Type: OpInsert, Table: "t1", Key: "2", Record: storage.Record{"id": storage.IntValue(2)}},
+		},
+	}
+	if err := walWriter.Append(rec2); err != nil {
+		t.Fatalf("failed to append WAL record: %v", err)
+	}
+	_ = walWriter.Close()
 
 	// Create tables.mpk.tmp as a directory so that saveDiskLocked's os.WriteFile fails with EISDIR
 	tmpFile := filepath.Join(dir, "tables.mpk.tmp")
@@ -125,10 +147,10 @@ func TestStorage_REV_STOR_002_Open_AOFCompactionErrorPropagated(t *testing.T) {
 	opts := Options{
 		DataDir:      dir,
 		EnableAOF:    true,
-		AOFThreshold: 100, // triggers rewriteAOFLocked() on startup
+		AOFThreshold: 50, // smaller than WAL file size to trigger rewriteAOFLocked() on startup
 	}
 
-	err := eng.OpenWithOptions(opts)
+	err = eng.OpenWithOptions(opts)
 	if err == nil {
 		t.Fatalf("REV-STOR-002: expected OpenWithOptions() to return compaction error when rewriteAOFLocked fails on startup, got nil")
 	}

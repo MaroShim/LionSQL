@@ -3,6 +3,7 @@ package memengine
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -1391,13 +1392,15 @@ func (tx *Transaction) IndexScanDesc(tableName string, indexName string, low, hi
 func ParsePKValue(s string, dt storage.DataType) storage.Value {
 	switch dt {
 	case storage.TypeInt:
-		var n int64
-		_, _ = fmt.Sscanf(s, "%d", &n)
-		return storage.IntValue(n)
+		if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+			return storage.Value{Type: storage.TypeInt, IVal: n, FVal: float64(n)}
+		}
+		return storage.Value{Type: storage.TypeInt}
 	case storage.TypeFloat:
-		var f float64
-		_, _ = fmt.Sscanf(s, "%f", &f)
-		return storage.FloatValue(f)
+		if f, err := strconv.ParseFloat(s, 64); err == nil {
+			return storage.Value{Type: storage.TypeFloat, FVal: f, IVal: int64(f)}
+		}
+		return storage.Value{Type: storage.TypeFloat}
 	case storage.TypeDecimal:
 		return storage.DecimalValue(s)
 	case storage.TypeBool:

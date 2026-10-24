@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -129,7 +130,12 @@ func (s *Server) handleExecProc(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req execProcReq
-	_ = json.NewDecoder(r.Body).Decode(&req)
+	if r.Body != nil {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil && !errors.Is(err, io.EOF) {
+			writeError(w, http.StatusBadRequest, fmt.Errorf("malformed JSON body: %w", err))
+			return
+		}
+	}
 	if req.Args == nil {
 		req.Args = make(map[string]any)
 	}

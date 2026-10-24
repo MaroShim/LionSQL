@@ -38,7 +38,7 @@
 
 | 우선순위 | 영역 | 핵심 과제 | 대상 위치 | 상태 | 관련 기술 문서 |
 | :---: | :---: | :--- | :--- | :---: | :--- |
-| **P1** | **와이어/호환성** | **TDS RPC 핸들러(`sp_prepare`, `sp_prepexec`) 파라미터 이름 의존성 전면 제거 및 100% 위치 매핑 일원화 (`TDS-RPC-AUDIT-1`)** | `pkg/wire/tds` | **진행 대기** | [`notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md) |
+| **P1** | **와이어/호환성** | **TDS RPC 핸들러(`sp_prepare`, `sp_prepexec`) 파라미터 이름 의존성 전면 제거 및 100% 위치 매핑 일원화 (`TDS-RPC-AUDIT-1`)** | `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md) |
 | **P1** | **도구호환/검증** | **외부 GUI 클라이언트(DBeaver, DbGate, SSMS) 실전 쿼리 스트레스 및 가상 카탈로그 심층 검증 (`TOOL-AUDIT-1`)** | `pkg/catalog/virtual`, `pkg/wire/tds`, `pkg/wire` | **진행 대기** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
 | **P2** | **KISS/실행통합** | **코어 엔진 3갈래 쿼리 실행 경로(`sqlexec_select` vs `execution` Iterator vs VDBE) 단일화 및 아키텍처 다이어트 (`KISS-5`)** | `pkg/engine`, `pkg/execution`, `pkg/proc/runtime` | **진행 대기** | - |
 | **P1** | **KISS/오버스펙** | **T-SQL 디스패처 100% 위치 매핑, SERVERPROPERTY 하이재킹 제거 및 가상 카탈로그 도구 종속성 정돈 (`REFACTOR-OVER-SPECIFICATION-1`)** | `pkg/engine`, `pkg/wire/tds`, `pkg/catalog/virtual` | **완료 (`[x]`)** | [`notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md`](notes/OVER_SPECIFICATION_REMEDIATION_PLAN.md) |

@@ -357,7 +357,9 @@ func (e *Engine) OpenWithOptions(opts Options) error {
 
 			// If AOF is already larger than threshold on startup, compact it
 			if e.aofThreshold > 0 && e.wal.Size() > e.aofThreshold {
-				_ = e.rewriteAOFLocked()
+				if err := e.rewriteAOFLocked(); err != nil {
+					return fmt.Errorf("failed to compact AOF on startup: %w", err)
+				}
 			}
 		}
 		e.rebuildFKCacheLocked()

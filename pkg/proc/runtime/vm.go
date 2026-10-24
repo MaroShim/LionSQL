@@ -907,7 +907,9 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			if err := f.tx.Update(data.Table, pkVal, recUpdates); err != nil {
 				return 0, fmt.Errorf("update error on %s: %w", data.Table, err)
 			}
-			_ = f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRowMap}, []map[string]any{oldRowMap})
+			if err := f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRowMap}, []map[string]any{oldRowMap}); err != nil {
+				return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+			}
 			return 1, nil
 		}
 		return 0, nil
@@ -1045,7 +1047,9 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	}
 
 	if hasTriggers && updatedCount > 0 {
-		_ = f.fireTriggers(data.Table, "UPDATE", newRows, oldRows)
+		if err := f.fireTriggers(data.Table, "UPDATE", newRows, oldRows); err != nil {
+			return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+		}
 	}
 	return updatedCount, nil
 }
@@ -1060,7 +1064,9 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 			if err := f.tx.Delete(data.Table, pkVal); err != nil {
 				return 0, fmt.Errorf("delete error on %s: %w", data.Table, err)
 			}
-			_ = f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{recordToMap(oldRec)})
+			if err := f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{recordToMap(oldRec)}); err != nil {
+				return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+			}
 			return 1, nil
 		}
 		return 0, nil
@@ -1149,7 +1155,9 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	}
 
 	if hasTriggers && len(deletedRows) > 0 {
-		_ = f.fireTriggers(data.Table, "DELETE", nil, deletedRows)
+		if err := f.fireTriggers(data.Table, "DELETE", nil, deletedRows); err != nil {
+			return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+		}
 	}
 	return deletedCount, nil
 }

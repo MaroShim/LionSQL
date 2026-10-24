@@ -934,6 +934,14 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 			}
 			s.executeRPCAndRespond(conn, query, sess, nil, ctx)
 		} else {
+			if rpc.ProcID != 0 && rpc.ProcName == "" {
+				var buf bytes.Buffer
+				buf.Write(BuildError(2812, 1, 16, fmt.Sprintf("Could not find stored procedure 'ProcID %d'.", rpc.ProcID), "LionSQL", "", 1))
+				buf.Write(BuildReturnStatus(-1))
+				buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+				_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+				return
+			}
 			done := BuildDoneProc(DoneFinal, 0, 0)
 			_ = sess.writePacket(conn, PacketTabular, done)
 		}
@@ -944,28 +952,32 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 	var paramsDecl string
 	var stmt string
 
-	for i, p := range rpc.Params {
-		name := strings.ToLower(p.Name)
-		if name == "@params" || i == 1 {
-			if str, ok := p.Value.(string); ok {
-				paramsDecl = str
-			}
-		} else if name == "@stmt" || i == 2 {
-			if str, ok := p.Value.(string); ok {
-				stmt = str
-			}
-		}
-	}
-	if stmt == "" && len(rpc.Params) >= 3 {
-		if str, ok := rpc.Params[1].Value.(string); ok && paramsDecl == "" {
-			paramsDecl = str
-		}
-		if str, ok := rpc.Params[2].Value.(string); ok {
-			stmt = str
-		}
-	} else if stmt == "" && len(rpc.Params) == 2 {
+	if len(rpc.Params) == 2 {
 		if str, ok := rpc.Params[1].Value.(string); ok {
 			stmt = str
+		}
+	} else if len(rpc.Params) >= 3 {
+		for _, p := range rpc.Params {
+			name := strings.ToLower(strings.TrimSpace(p.Name))
+			if name == "@params" {
+				if str, ok := p.Value.(string); ok {
+					paramsDecl = str
+				}
+			} else if name == "@stmt" {
+				if str, ok := p.Value.(string); ok {
+					stmt = str
+				}
+			}
+		}
+		if paramsDecl == "" {
+			if str, ok := rpc.Params[1].Value.(string); ok {
+				paramsDecl = str
+			}
+		}
+		if stmt == "" {
+			if str, ok := rpc.Params[2].Value.(string); ok {
+				stmt = str
+			}
 		}
 	}
 
@@ -1103,24 +1115,32 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 	var paramsDecl string
 	var stmt string
 
-	for i, p := range rpc.Params {
-		name := strings.ToLower(p.Name)
-		if name == "@params" || i == 1 {
-			if str, ok := p.Value.(string); ok {
+	if len(rpc.Params) == 2 {
+		if str, ok := rpc.Params[1].Value.(string); ok {
+			stmt = str
+		}
+	} else if len(rpc.Params) >= 3 {
+		for _, p := range rpc.Params {
+			name := strings.ToLower(strings.TrimSpace(p.Name))
+			if name == "@params" {
+				if str, ok := p.Value.(string); ok {
+					paramsDecl = str
+				}
+			} else if name == "@stmt" {
+				if str, ok := p.Value.(string); ok {
+					stmt = str
+				}
+			}
+		}
+		if paramsDecl == "" {
+			if str, ok := rpc.Params[1].Value.(string); ok {
 				paramsDecl = str
 			}
-		} else if name == "@stmt" || i == 2 {
-			if str, ok := p.Value.(string); ok {
+		}
+		if stmt == "" {
+			if str, ok := rpc.Params[2].Value.(string); ok {
 				stmt = str
 			}
-		}
-	}
-	if stmt == "" && len(rpc.Params) >= 3 {
-		if str, ok := rpc.Params[1].Value.(string); ok && paramsDecl == "" {
-			paramsDecl = str
-		}
-		if str, ok := rpc.Params[2].Value.(string); ok {
-			stmt = str
 		}
 	}
 
@@ -1342,7 +1362,7 @@ func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *Connec
 			}
 		}
 		if !paramsFound && i == 1 {
-			if str, ok := p.Value.(string); ok && (p.Name == "" || name == "@params") {
+			if str, ok := p.Value.(string); ok {
 				paramsDecl = str
 				paramsFound = true
 				continue
@@ -2533,8 +2553,8 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 		return nil, nil, false
 	}
 
-	// 1. DbGate & Modern GUI tool multi-column version & edition detection
-	if strings.Contains(upper, "SERVERPROPERTY") && strings.Contains(upper, "PRODUCTVERSION") && strings.Contains(upper, "VERSIONTEXT") {
+	// 1. DbGate 4-column version & edition detection query (requires @@VERSION, PRODUCTVERSION, ENGINEEDITION, and VERSIONTEXT)
+	if strings.Contains(upper, "@@VERSION") && strings.Contains(upper, "PRODUCTVERSION") && strings.Contains(upper, "ENGINEEDITION") && strings.Contains(upper, "VERSIONTEXT") {
 		cols := []ColumnInfo{
 			{Name: "version", Type: TypeNVarChar, Size: 4000, Nullable: false},
 			{Name: "productVersion", Type: TypeNVarChar, Size: 128, Nullable: false},
@@ -2550,8 +2570,8 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 		return cols, vals, true
 	}
 
-	// 2. Standard @@VERSION
-	if strings.Contains(upper, "@@VERSION") {
+	// 2. Standard standalone single @@VERSION probe
+	if strings.Contains(upper, "@@VERSION") && !strings.Contains(upper, ",") && !strings.Contains(upper, "FROM") {
 		colName := "version"
 		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
 			alias := strings.TrimSpace(trimmed[asIdx+4:])

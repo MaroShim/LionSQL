@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Fixed
+- `REV-WIRE-001`: In `pkg/wire/tds/server.go` (`handleRPCExecuteSQL`), eliminated the restrictive `p.Name == "" || name == "@params"` check in the second-pass ordinal slot assignment. Driver-specific names (such as `@parameters`) are now unconditionally assigned to `paramsDecl` on Slot 1, preventing parameter declaration loss and parameter pollution.
+- `REV-WIRE-002`: In `pkg/wire/tds/server.go` (`handleRPCPrepare`, `handleRPCPrepExec`), enforced MS-TDS 2.2.6.6 specification slot rules: 2-parameter invocations (`@handle`, `@statement`) leave `paramsDecl` empty, preventing the SQL query text from leaking into the parameter declaration metadata.
+- `REV-WIRE-003`: In `pkg/wire/tds/server.go` (`matchVersionQuery`), tightened the DbGate multi-column interceptor signature to strictly require all 4 tokens (`@@VERSION`, `PRODUCTVERSION`, `ENGINEEDITION`, `VERSIONTEXT`) and standalone single `@@VERSION` probes, preventing arbitrary multi-column queries from being hijacked into hardcoded results.
+- `REV-WIRE-005`: In `pkg/wire/tds/server.go` (`handleRPC`), added explicit `TokenError` (Msg 2812: `Could not find stored procedure 'ProcID %d'.`) and `DoneFinal|DoneError` responses when an unsupported numeric `ProcID` is requested with an empty procedure name, replacing silent `DoneFinal` success responses.
+- `REV-STOR-001`: In `pkg/storage/memengine/tx.go` (`ParsePKValue`), replaced `fmt.Sscanf` reflection with zero-allocation `strconv.ParseInt` and `strconv.ParseFloat`, dropping heap allocations from 6 allocs/op (120B) to 0 allocs/op and eliminating silent parse error swallowing.
+- `REV-STOR-002`: In `pkg/storage/memengine/memengine.go` (`OpenWithOptions`), ceased ignoring initial AOF rewrite errors (`_ = e.rewriteAOFLocked()`). Startup compaction failures now return clean errors to prevent running on uncompactable or corrupted files.
+- `REV-PROC-001`: In `pkg/proc/runtime/vm.go` (`execUpdateWhere`, `execDeleteWhere`), added proper error checking and propagation for `f.fireTriggers(...)`. Trigger validation failures (such as `THROW` or rule violations) now abort the statement and return errors rather than silently succeeding.
+- `REV-API-001`: In `pkg/api/handlers_procs.go` (`handleExecProcedure`), added JSON decode error validation on `r.Body`. Malformed request bodies now return HTTP 400 Bad Request with descriptive errors rather than silently executing with empty arguments.
+
 ### Refactored
 - `REFACTOR-OVER-SPECIFICATION-1`: Systematically eliminated client-specific over-specifications across engine, wire protocols, and virtual catalog (Golden Rule 15 KISS & Deletion-First):
   - **`pkg/engine/sqlexec_procs.go`**: Replaced parameter name branching in `execSpExecuteSQL` with pure positional slot assignment (`extractArgValue(args[0], cs)`), aligning with SQL Server kernel dispatcher semantics where Slot 0 is unconditionally the query statement and Slot 1 is the parameter declaration regardless of driver-specific parameter names (`@stmt`, `@statement`, `@query`).
