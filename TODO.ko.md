@@ -82,7 +82,7 @@
 | **P1** | **UI/가시성** | **Web Studio Light 모드 고대비 시인성 개편 (경고창/배지/모달/ID 컬럼 WCAG AAA 정합) (`UI-11`)** | `pkg/ui` | **완료 (`[x]`)** | - |
 | **P1** | **UI/브랜딩** | **Web Studio 헤더 브랜딩(`LionSQL Web Studio`, `OLTP+SP` 배지 제거) 및 서브 뷰/내비게이션 `Studio` 접미사 전면 삭제 (`UI-13`)** | `pkg/ui` | **완료 (`[x]`)** | 상단 로고 `LionSQL Web Studio` 단일화 및 좌측/우측 서브 기능 명칭 정돈 |
 | **P1** | **UI/개요** | **Web Studio System Overview 대시보드 신설 (Active Sessions, Uptime, Tables, TPS, 와이어 연결 가이드) (`UI-OVERVIEW-1`)** | `pkg/ui`, `pkg/api` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) 2절 실구현 및 `/api/overview` 연동 |
-| **P1** | **UI/네비게이션** | **Web Studio 좌측 사이드 패널 4개 카테고리화(Database, Automation, Developer, Monitoring) 및 카테고리별 색상 구분 (`UI-14`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) 1.4절 반영, 12개 도구 동선 최적화 및 테마별 4색 인디케이터 스타일링 |
+| **P1** | **UI/네비게이션** | **Web Studio 좌측 사이드 패널 4개 카테고리화(Database, Automation, Developer, Monitoring) 및 우측 구분선(`::after`) 스타일링 (`UI-14`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) 1.4절 반영, 12개 도구 동선 최적화 및 카테고리 우측 수평 구분선 디바이더 정돈 |
 | **P1** | **종료/안정성** | **Graceful Shutdown 시 WiredTiger CGO SIGSEGV 방지 및 PGWire 드레인 동기화 (`SHUTDOWN-1`)** | `pkg/wire`, `pkg/storage/wiredtiger` | **완료 (`[x]`)** | - |
 | **P2** | **UI/실시간** | **Web Studio 실시간 자동 갱신(Auto-Refresh) 토글 및 주기 선택기 (`UI-REALTIME-1`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |
 | **P2** | **UI/DDL** | **Web Studio 스키마 DDL 뷰어 (SQL `CREATE TABLE` 및 JSON 내보내기/복사) (`UI-DDL-1`)** | `pkg/ui` | **완료 (`[x]`)** | [`doc/WEB_STUDIO_GUIDE.ko.md`](doc/WEB_STUDIO_GUIDE.ko.md) |

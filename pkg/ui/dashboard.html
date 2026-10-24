@@ -106,12 +106,6 @@
       --tab-inactive-color: #94a3b8;
       --tab-inactive-border: var(--border);
       --tab-inactive-hover: #334155;
-
-      /* Left Sidebar Category Section Titles */
-      --nav-sec-db: #60a5fa;
-      --nav-sec-auto: #34d399;
-      --nav-sec-dev: #c084fc;
-      --nav-sec-ops: #fb923c;
     }
     html[data-theme="light"] {
       --bg: #f8fafc;
@@ -213,12 +207,6 @@
       --tab-inactive-color: #334155;
       --tab-inactive-border: #cbd5e1;
       --tab-inactive-hover: #f1f5f9;
-
-      /* Left Sidebar Category Section Titles - High Contrast WCAG AAA */
-      --nav-sec-db: #1d4ed8;
-      --nav-sec-auto: #047857;
-      --nav-sec-dev: #6d28d9;
-      --nav-sec-ops: #c2410c;
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -264,40 +252,27 @@
       scrollbar-width: thin;
     }
     .nav-section-title {
-      font-size: 0.66rem;
+      font-size: 0.65rem;
       font-weight: 700;
+      color: var(--text-muted);
       text-transform: uppercase;
       letter-spacing: 0.08em;
-      padding: 14px 10px 5px 10px;
+      padding: 16px 10px 6px 10px;
       user-select: none;
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 10px;
+      white-space: nowrap;
+      opacity: 0.8;
     }
-    .nav-section-title::before {
+    .nav-section-title::after {
       content: "";
-      width: 5px;
-      height: 5px;
-      border-radius: 50%;
-      background: currentColor;
-      display: inline-block;
-      flex-shrink: 0;
-      opacity: 0.9;
+      flex: 1;
+      height: 1px;
+      background: var(--border);
     }
     .nav-section-title:first-child {
       padding-top: 4px;
-    }
-    .nav-section-db {
-      color: var(--nav-sec-db);
-    }
-    .nav-section-auto {
-      color: var(--nav-sec-auto);
-    }
-    .nav-section-dev {
-      color: var(--nav-sec-dev);
-    }
-    .nav-section-ops {
-      color: var(--nav-sec-ops);
     }
     .nav-btn {
       background: transparent;
@@ -821,7 +796,7 @@
       <input type="text" id="sidebar-quick-search" placeholder="Filter tables & views..." style="margin: 0; padding: 6px 10px; font-size: 0.78rem; background: var(--code-bg); border-radius: 6px;" oninput="onSidebarQuickSearch(this.value)" />
     </div>
     <nav>
-      <div class="nav-section-title nav-section-db">Database &amp; Query</div>
+      <div class="nav-section-title">Database &amp; Query</div>
       <button class="nav-btn active" data-view="overview" onclick="switchView('overview')">
         <span>Overview</span>
         <span class="badge badge-info" style="font-size:0.65rem;">SYS</span>
@@ -839,7 +814,7 @@
         <span id="nav-procs-count">0</span>
       </button>
 
-      <div class="nav-section-title nav-section-auto">Automation &amp; Stream</div>
+      <div class="nav-section-title">Automation &amp; Stream</div>
       <button class="nav-btn" data-view="realtime" onclick="switchView('realtime')">
         <span>Realtime Live Stream</span>
         <span id="nav-realtime-badge" class="badge badge-success" style="font-size:0.65rem;">LIVE</span>
@@ -853,7 +828,7 @@
         <span id="nav-crons-count">0</span>
       </button>
 
-      <div class="nav-section-title nav-section-dev">Developer &amp; Access</div>
+      <div class="nav-section-title">Developer &amp; Access</div>
       <button class="nav-btn" data-view="apikeys" onclick="switchView('apikeys')">
         <span>Auth &amp; API Keys</span>
         <span class="badge badge-purple">AUTH</span>
@@ -863,7 +838,7 @@
         <span class="badge badge-info" style="font-size:0.65rem;">JS/TS</span>
       </button>
 
-      <div class="nav-section-title nav-section-ops">Monitoring &amp; System</div>
+      <div class="nav-section-title">Monitoring &amp; System</div>
       <button class="nav-btn" data-view="logs" onclick="switchView('logs')">
         <span>Request Logs</span>
         <span id="nav-logs-badge" class="badge" style="font-size:0.65rem; background: var(--code-bg); color: var(--text-muted); border: 1px solid var(--border);">LOGS</span>
