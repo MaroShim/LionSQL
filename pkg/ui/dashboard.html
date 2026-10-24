@@ -792,9 +792,6 @@
       </div>
       <button id="auth-action-btn" class="btn btn-secondary" style="padding: 4px 8px; font-size: 0.72rem; width: 100%;" onclick="logout()">Sign Out</button>
     </div>
-    <div style="padding: 10px 14px 4px 14px;">
-      <input type="text" id="sidebar-quick-search" placeholder="Filter tables & views..." style="margin: 0; padding: 6px 10px; font-size: 0.78rem; background: var(--code-bg); border-radius: 6px;" oninput="onSidebarQuickSearch(this.value)" />
-    </div>
     <nav>
       <div class="nav-section-title">Database &amp; Query</div>
       <button class="nav-btn active" data-view="overview" onclick="switchView('overview')">
@@ -2489,20 +2486,6 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       const backdrop = document.getElementById('sidebar-backdrop');
       if (aside) aside.classList.toggle('sidebar-open');
       if (backdrop) backdrop.classList.toggle('active');
-    }
-
-    function onSidebarQuickSearch(query) {
-      const q = (query || '').toLowerCase().trim();
-      const tableRows = document.querySelectorAll('#tables-list-tbody tr');
-      tableRows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = (!q || text.includes(q)) ? '' : 'none';
-      });
-      const procRows = document.querySelectorAll('#procs-list-tbody tr');
-      procRows.forEach(row => {
-        const text = row.textContent.toLowerCase();
-        row.style.display = (!q || text.includes(q)) ? '' : 'none';
-      });
     }
 
     let proceduresList = [];

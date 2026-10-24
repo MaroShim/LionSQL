@@ -17,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `REV-PROC-001`: In `pkg/proc/runtime/vm.go` (`execUpdateWhere`, `execDeleteWhere`), added proper error checking and propagation for `f.fireTriggers(...)`. Trigger validation failures (such as `THROW` or rule violations) now abort the statement and return errors rather than silently succeeding.
 - `REV-API-001`: In `pkg/api/handlers_procs.go` (`handleExecProcedure`), added JSON decode error validation on `r.Body`. Malformed request bodies now return HTTP 400 Bad Request with descriptive errors rather than silently executing with empty arguments.
 
+### Removed
+- `UI-4`: Removed the misplaced and non-functional `#sidebar-quick-search` input and `onSidebarQuickSearch` JavaScript function from `pkg/ui/dashboard.html`. Cleans up the left sidebar navigation hierarchy and keeps table selection and search cleanly scoped within the Table & Record view.
+
 ### Refactored
 - `ARCH-LEX-2`: Unified residual manual string splitting, keyword scanning, and parenthesis matching loops into `pkg/sqlutil/tokenizer.go` (Golden Rule 15 KISS, DRY & Deletion-First):
   - Added `FindAllTopLevelKeyword`, `FindMatchingParen`, and exported `FindTopLevelChar` in `pkg/sqlutil/tokenizer.go` with full support for single/double quotes, escaped quotes (`''`, `""`), brackets (`[...]`), comments (`--`, `/* */`), and nested parentheses.

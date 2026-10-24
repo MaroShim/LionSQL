@@ -403,7 +403,7 @@
 | **UI-1** | UI/UX | 네이티브 `alert()` ➔ 모던 Toast 알림 전면 전환 | **완료 (`[x]`)** | 동기식 브라우저 UI 블로킹을 유발하는 구형 `alert()` 13개를 세련된 비동기 플로팅 Toast 알림(`showToast`)으로 전면 전환 (`pkg/ui/dashboard.html`) |
 | **UI-2** | UI/UX | 모바일/태블릿 반응형 레이아웃 및 햄버거 메뉴 | **완료 (`[x]`)** | 모바일/태블릿(900px 이하) 뷰포트에서 사이드바 자동 축소 및 햄버거 토글 메뉴 지원 (`pkg/ui/dashboard.html`) |
 | **UI-3** | UI/브랜드 | Web Studio 브랜드 네이밍(`LionSQL`) 정돈 | **완료 (`[x]`)** | 웹 콘솔 내 잔재 브랜드 표기를 `LionSQL`로 정돈 및 기본 관리자 계정 `admin@lionsql.local` 일원화 (`pkg/ui/dashboard.html`) |
-| **UI-4** | UI/생산성 | 사이드바 실시간 테이블/프로시저 빠른 검색 필터 | **완료 (`[x]`)** | 수십~수백 개의 테이블 및 저장 프로시저를 즉시 타이핑하여 인라인 필터링하는 빠른 검색창(`onSidebarQuickSearch`) 완비 (`pkg/ui/dashboard.html`) |
+| **UI-4** | UI/생산성 | 사이드바 실시간 테이블/프로시저 빠른 검색 필터 | **정돈 완료 (`[x]`)** | 도입 초기 사이드바 최상단에 배치되었으나 실테이블 미연동 및 사이드바 위계 왜곡을 유발하던 레거시 `#sidebar-quick-search` 및 `onSidebarQuickSearch`를 전면 삭제하고, Table & Record 뷰 중심의 직관적 검색/선택 구조로 정돈 완료 (`pkg/ui/dashboard.html`) |
 | **UI-5** | UI/UX | 패스워드 표시/숨기기(Eye Toggle) 버튼 지원 | **완료 (`[x]`)** | 로그인 모달 및 SMTP 설정의 패스워드 입력창에 마이크로 인터랙션 Eye 토글 버튼을 추가하여 입력 편의성 및 오타 방지 지원 (`pkg/ui/dashboard.html`) |
 | **UI-6** | UI/안전성 | Drop Table 실수 방지용 테이블명 일치 확인 모달 가드레일 | **완료 (`[x]`)** | 단순 브라우저 confirm 대신 대상 테이블명을 직접 타이핑해야만 삭제 버튼이 활성화되는 안전 가드레일 모달(`#drop-table-modal`) 구현 (GitHub/Supabase 스타일 오타/실수 원천 방지) (`pkg/ui/dashboard.html`) |
 | **UI-7** | UI/데이터 | Sample Data Seed 빈 DB 사전 검증 가드 및 원자적 피드백 | **완료 (`[x]`)** | 기존 테이블 보유 시 409 Conflict 차단 및 명확한 에러 안내, 빈 DB 시 원자적 트랜잭션 씨딩 및 첫 테이블(`accounts`) 자동 선택 로드 완비 (`pkg/api/handlers_records.go`, `pkg/ui/dashboard.html`) |
