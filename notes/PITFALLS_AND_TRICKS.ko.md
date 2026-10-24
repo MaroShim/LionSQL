@@ -192,5 +192,26 @@
   3. **엔드-투-엔드 할당 회귀 벤치마크 의무화 (Allocation-Tracking Benchmark Discipline)**:
      - 쿼리 프론트엔드 및 파라미터 바인딩 경로에는 반드시 `b.ReportAllocs()`를 동반한 벤치마크(`BenchmarkSplitStatements`, `BenchmarkTDS_BuildBoundSQL`)를 배치하여, CI 및 개발 검증 시 쿼리당 메모리 할당량(`B/op`, `allocs/op`)이 회귀(Regression)하지 않도록 결정론적으로 감시함.
 
+---
+
+## 14. TDS RPC `sp_executesql` 파라미터 해석과 순수 위치 기반(Ordinal Positional) 폴백의 불변식
+
+* **상황**:
+  * TDS 프로토콜에서 Prepared Statement 및 파라미터 바인딩을 고도화한 이후, Beekeeper Studio 접속 시 `TypeError: Cannot read properties of undefined (reading 'split')` 예외가 발생하며 연결이 전면 실패함 (DBeaver, DbGate, Go 공식 드라이버는 정상).
+* **문제 메커니즘**:
+  * `sp_executesql`(ProcID 10) 호출 시 공식 파라미터명은 `@stmt`임. 대부분의 드라이버는 이름을 생략(`""`)하거나 `@stmt`를 전송하지만, Node.js `tedious`(Beekeeper Studio)는 풀네임인 `@statement`를 전송함.
+  * 서버의 2-Pass 파서에서 2차 위치 매핑 조건으로 `!stmtFound && (name == "" && i == 0)`를 두어, `name`이 `""`가 아니라는 이유로 위치 매핑까지 거부함.
+  * 결과적으로 쿼리가 빈 문자열(`""`)로 처리되어 `COLMETADATA`/`ROW` 없이 `DONEPROC(0)`만 반환되었고, 클라이언트의 `getVersion()`이 `undefined`를 받아 크래시가 발생함.
+* **아키텍처적 교훈 (이전 버전의 올바른 설계)**:
+  * 이전 버전은 파라미터 이름을 아예 무시하고(`_ = paramName`) 첫 번째 문자열 값을 쿼리로 취급하여 `sp_executesql` 본연의 위치 기반 매핑을 이미 올바르게 수행하고 있었음.
+  * 리팩토링 과정에서 `name == ""`라는 불필요하고 경직된 가정을 추가하여 기존의 올바른 설계를 퇴행(리그레션)시켰던 것임.
+* **해결 및 영구 불변식 (Engineering Invariants)**:
+  1. **순수 위치 기반 매핑(Ordinal Positional Fallback)의 절대 우선권**:
+     - `sp_executesql`은 엔진 C++ 디스패처로 직결되는 특수 프로시저임.
+     - 1차에서 공식 명칭(`@stmt`, `@params`)과 일치하지 않는 경우, 클라이언트가 이름을 생략했든(`""`) 임의의 식별자(`@statement`, `@sql`)를 붙였든 상관없이 **0번째 인자(`i == 0`)는 무조건 실행할 쿼리문으로 위치 매핑**해야 함.
+  2. **특정 드라이버 전용 하드코딩 배제 (Golden Rule #15 KISS / Anti-Over-Engineering)**:
+     - `@statement`, `@parameters` 같은 특정 라이브러리의 임의 식별자를 코드 레벨에 하드코딩하지 말고, 표준적인 위치 기반 폴백 메커니즘 하나로 단순하게 해결해야 함.
+     - 상세 분석은 [`notes/TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)를 참조.
+
 
 
