@@ -1,4 +1,4 @@
-# LionSQL Task Identification Code Taxonomy & Catalog (`notes/TAXONOMY.md`)
+# LionSQL Task Identification Code Taxonomy & Catalog (`notes/TAXONOMY.ko.md`)
 
 이 문서는 LionSQL 프로젝트 전반에서 과제 관리, 로드맵 추적, 커밋 메시지 식별용으로 사용되는 **전체 식별 코드 체계(Taxonomy)와 도메인별 과제 일람표**입니다.
 
@@ -215,6 +215,6 @@ LionSQL 네이티브 파서 및 바이트코드 엔진에서 공식 지원하는
 
 - **액티브 백로그 및 단기 우선순위**: [`TODO.ko.md`](../TODO.ko.md)
 - **중장기 거시 릴리즈 로드맵 (Phase 1~6)**: [`ROADMAP.md`](../ROADMAP.md)
-- **엔지니어링 불변식 및 개발 규약**: [`notes/ENGINEERING_CONTEXT.md`](ENGINEERING_CONTEXT.md)
-- **실전 개발 함정 및 디커플링 패턴**: [`notes/PITFALLS_AND_TRICKS.md`](PITFALLS_AND_TRICKS.md)
+- **엔지니어링 불변식 및 개발 규약**: [`notes/ENGINEERING_CONTEXT.ko.md`](ENGINEERING_CONTEXT.ko.md)
+- **실전 개발 함정 및 디커플링 패턴**: [`notes/PITFALLS_AND_TRICKS.ko.md`](PITFALLS_AND_TRICKS.ko.md)
 - **아키텍처 설계 문서**: [`doc/ARCHITECTURE.md`](../doc/ARCHITECTURE.md)

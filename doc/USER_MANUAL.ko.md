@@ -341,7 +341,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
   LionSQL High-Concurrency Embedded OLTP Database Server (v0.90.0)
 ================================================================================
  [Engine Core]    WiredTiger Lock-Free B+Tree MVCC Storage
- [Data Directory] /Users/maro/Projects/LionSQL/data
+ [Data Directory] ./data
  [Memory Budget]  2867MB (70% of 4096MB Physical RAM), work_mem: 64MB
  [Web Studio]     http://127.0.0.1:8090/_/ (HTTP REST Engine ready)
  [PostgreSQL]     postgres://admin@127.0.0.1:5433/postgres (PGWire v3)
@@ -577,7 +577,7 @@ $ lionsql status -dir data
 LionSQL Server Status: RUNNING
 ----------------------------------------
 PID               : 99777
-Data Directory    : /Users/maro/Projects/LionSQL/data
+Data Directory    : ./data
 Storage Backend   : wiredtiger (Disk B+Tree MVCC)
 HTTP / Studio     : 127.0.0.1:8090 (HEALTHY)
 PostgreSQL v3     : 127.0.0.1:5433 (LISTENING)

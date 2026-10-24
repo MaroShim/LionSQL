@@ -1,6 +1,6 @@
 # LionSQL 통합 종합 상세 테스트 검증 보고서 (Comprehensive Test Verification & Architecture Master)
 
-- **문서 버전**: 2.0 (Consolidated Master Edition)
+- **문서 버전**: 1.0 (Consolidated Master Edition)
 - **작성 일자**: 10월 17일
 - **검증 대상**: LionSQL Embedded High-Concurrency OLTP Database Engine
 - **테스트 환경**: macOS Darwin arm64 (Apple Silicon), Go 1.24+ (`-tags wiredtiger`)

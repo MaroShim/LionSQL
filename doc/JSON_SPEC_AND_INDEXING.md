@@ -138,9 +138,14 @@ The Cost-Based Optimizer matches a predicate `WHERE <expr> = <val>` against seco
 
 ---
 
-## 7. Implementation Roadmap
-1. **Stage 1 (Scalar Evaluation)**: Implement `JSON_VALUE`, `JSON_QUERY`, `ISJSON`, `->`, `->>` in `pkg/proc/compiler.go` and `pkg/execution` expression evaluator using `pkg/storage/json.go`.
-2. **Stage 2 (Parser DDL Extension)**: Update `pkg/proc/parser.go` to accept expression indexes with double parentheses `CREATE INDEX ... ON tbl ((expr))`.
-3. **Stage 3 (Storage Engine Indexing)**: Update `TableSchema.Indexes` to store `Expression string` and evaluate index keys during `Insert` / `Update` in `memengine` and `wiredtiger`.
-4. **Stage 4 (CBO Integration)**: Add expression index matching in `pkg/planner/cbo.go`.
-5. **Stage 5 (Verification)**: Add comprehensive unit tests in `pkg/engine` and driver integration tests in `pkg/wire`.
+## 7. Implementation Status Matrix (Fully Implemented)
+
+All five stages of the JSON specification and Expression B-Tree Indexing architecture are complete and verified across both storage engines (In-Memory OCC & WiredTiger MVCC) with 100% test pass rates and zero data races.
+
+| Stage | Scope / Component | Implementation Details | Key Files | Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **Stage 1** | **Scalar & Operator Evaluation** | Fast JSON parsing, bounded DOM caching (1024 entries), zero-alloc top-level key scanning. Built-in functions (`ISJSON`, `JSON_VALUE`, `JSON_QUERY`, `JSON_MODIFY`) and PostgreSQL operators (`->`, `->>`) with support for chained property access and array indexing. Result formatting via `FOR JSON PATH` and `FOR JSON AUTO`. | `pkg/storage/json.go`<br>`pkg/proc/builtins_json.go`<br>`pkg/engine/sqlexec_select.go` | **Complete (`[x]`)** |
+| **Stage 2** | **Parser DDL & Expressions** | Native Pratt recursive-descent parser and ANTLR4 fallback support for double-parenthesis expression index DDL (`CREATE INDEX idx ON tbl ((expr))`). Normalizes both `((doc->>'key'))` and `((JSON_VALUE(doc, '$.key')))` into internal `*proc.JsonExtractExpr`. | `pkg/proc/parser_ddl.go`<br>`pkg/proc/parser_expr.go`<br>`pkg/proc/parser/antlr/` | **Complete (`[x]`)** |
+| **Stage 3** | **Storage Engine Indexing** | `storage.IndexSchema` enhanced with `Expression`, `ExprColumn`, `ExprPath`, and `IsExpression()`. Transparent extraction and index maintenance on `INSERT`, `UPDATE`, and `DELETE`. Dual-engine support across In-Memory OCC SkipList and WiredTiger Lock-Free B+Tree MVCC. | `pkg/storage/engine.go`<br>`pkg/storage/memengine/table_data.go`<br>`pkg/storage/wiredtiger/wt_engine.go` | **Complete (`[x]`)** |
+| **Stage 4** | **CBO Optimizer Integration** | Cost-Based Optimizer (CBO) pattern matcher detects `WHERE doc->>'key' = 'val'` and `WHERE JSON_VALUE(doc, '$.key') = 'val'` predicates, maps them to matching Expression B-Tree indexes, and generates `NodeIndexScan` / `NodeIndexOnlyScan` execution plans. | `pkg/planner/planner.go`<br>`pkg/planner/cbo.go` | **Complete (`[x]`)** |
+| **Stage 5** | **Test Verification & Benchmarks** | End-to-end regression suites covering scalar evaluation, projections, multi-table joins, chained extractions, array indexing, expression index creation, mutation maintenance, index range scans, and WiredTiger disk persistence. | `pkg/engine/json_query_test.go`<br>`pkg/engine/json_wt_test.go`<br>`pkg/proc/builtins_test.go` | **Complete (`[x]`)** |

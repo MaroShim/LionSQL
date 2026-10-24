@@ -1,4 +1,4 @@
-# LionSQL Engineering Context & Architectural Invariants (`notes/ENGINEERING_CONTEXT.md`)
+# LionSQL Engineering Context & Architectural Invariants (`notes/ENGINEERING_CONTEXT.ko.md`)
 
 이 문서는 LionSQL의 설계 원칙, 확립된 핵심 불변식(Invariants), 의도적으로 배제(Spec-Out)한 대안들의 이유, 그리고 사용자가 요구하는 엄격한 엔지니어링 및 협업 규약을 설명합니다.
 

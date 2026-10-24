@@ -338,7 +338,7 @@ LionSQL 서버를 운영체제 백그라운드 데몬 프로세스로 분기(For
   LionSQL Server Status: RUNNING
   ----------------------------------------
   PID               : 99777
-  Data Directory    : /Users/maro/Projects/LionSQL/data
+  Data Directory    : ./data
   Storage Backend   : wiredtiger (Disk B+Tree MVCC)
   HTTP / Studio     : 127.0.0.1:8090 (HEALTHY)
   PostgreSQL v3     : 127.0.0.1:5433 (LISTENING)
@@ -1727,7 +1727,7 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * **GUI/CLI 도구 연동 및 카탈로그 가로채기**: Beekeeper Studio, DBeaver, DbGate, Azure Data Studio, SSMS, `psql`, `sqlcmd` 연동 가이드. 도구별 메타데이터 쿼리 가로채기(Catalog Interception), 페이지네이션 변환 및 프로그래밍 언어 드라이버 연결 문자열 가이드.
 
 #### 10.4. BaaS 기능, 웹 SDK 및 REST API (BaaS, SDK & APIs)
-* [`AUTO_REST_API.md`](AUTO_REST_API.md)
+* [`REST_API_AUTO_GENERATED.md`](REST_API_AUTO_GENERATED.md)
   * **무설정 자동 REST API**: PocketBase 스타일의 `/api/records/:table` CRUD 엔드포인트 자동 생성, URL 쿼리 연산자, 정렬, 페이징 필터링 사양.
 * [`WEBHOOKS_AND_RLS.md`](WEBHOOKS_AND_RLS.md)
   * **웹훅 디스패처 및 행 수준 보안 (RLS)**: 비동기 워커 풀과 HMAC 서명 기반 웹훅 발송, 테이블별 선언적 행 수준 보안 규칙(`@auth.id`, `@auth.role` 토큰 치환) 적용 가이드.
@@ -1735,7 +1735,7 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * **임베디드 크론 스케줄러 및 트랜잭션 메일러**: 표준 5필드 크론 표현식을 통한 SQL/T-SQL 정기 배치 자동화와 링 버퍼 감사 로그를 갖춘 내장 트랜잭션 HTML SMTP 메일 발송기.
 * [`WEB_SDK.md`](WEB_SDK.md)
   * **범용 웹 SDK 및 프론트엔드 연동 가이드**: 브라우저 임베디드 단일 파일 라이브러리(`lionsql.js`, `lionsql.d.ts`), 바닐라 JS, Server-Sent Events(SSE) 실시간 동기화, HTMX 연동 레시피.
-* [`API_REFERENCE.md`](API_REFERENCE.md)
+* [`REST_API_REFERENCE.md`](REST_API_REFERENCE.md)
   * **HTTP REST & SSE API 사양서**: 시스템 헬스, 메트릭, 인증(JWT), 테이블 CRUD, 저장 프로시저 원격 호출, 백업/복원, 복제 스트리밍 엔드포인트 상세.
 
 #### 10.5. 운영, 보안, 성능 및 문제 해결 (Operations, Security & Performance)
@@ -1761,9 +1761,9 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 도메인별 대기 백로그 및 최근 마일스톤 트래커.
 * [`CHANGELOG.md`](../CHANGELOG.md)
   * 버전별 릴리즈 변경 내역 및 기능 추가/수정 기록 (Keep a Changelog 표준).
-* [`notes/ENGINEERING_CONTEXT.md`](../notes/ENGINEERING_CONTEXT.md)
+* [`notes/ENGINEERING_CONTEXT.ko.md`](../notes/ENGINEERING_CONTEXT.ko.md)
   * 아키텍처 불변 규칙, 대안 기술 Spec-Out 사유, 협업 엔지니어링 원칙.
-* [`notes/PITFALLS_AND_TRICKS.md`](../notes/PITFALLS_AND_TRICKS.md)
+* [`notes/PITFALLS_AND_TRICKS.ko.md`](../notes/PITFALLS_AND_TRICKS.ko.md)
   * 순환 참조 방지, wiredtiger 빌드 태그, 샌드박스 네트워크 격리, 소수점 JSON 직렬화 등 개발 시 주의점.
 
 

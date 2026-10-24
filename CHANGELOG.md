@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Documentation
 - Replaced machine-specific absolute `file:///Users/maro/Projects/LionSQL/...` links with portable relative links in `doc/README.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/DATA_DICTIONARY.md`, and `doc/WEB_STUDIO_GUIDE.ko.md`, so documentation links resolve on any checkout.
 - Added `doc/TESTING.md`, a consolidated local build, test, and regression guide covering the 3-stage pipeline, `-run` filtering, build tags and conditional tests, a per-package and per-work-item regression test map, test authoring rules, Go micro-benchmarks, TPC-C performance regression, and an A/B comparison procedure. Linked from `README.md`, `CONTRIBUTING.md`, and `doc/README.md`.
+- Restructured `notes/` directory: renamed Korean documentation files to `.ko.md` (`ENGINEERING_CONTEXT.ko.md`, `PITFALLS_AND_TRICKS.ko.md`, `README.ko.md`, `TAXONOMY.ko.md`), authored an English `notes/README.md`, moved `PROTOCOL_EMULATION_GUIDELINES.md` to `notes/`, and renamed `ANTLR_PARSER_COMPACT_STRATEGY.md` to `ANTLR_PARSER_COMPACTION_PLAN.md`.
+- Standardized REST API documentation naming: renamed `doc/API_REFERENCE.md` to `doc/REST_API_REFERENCE.md` and `doc/AUTO_REST_API.md` to `doc/REST_API_AUTO_GENERATED.md`, updating all inbound links across documentation and root guides.
+- Replaced machine-specific console output paths in documentation examples (`doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/ARCHITECTURE.md`) with generic relative paths (`./data`, `lionsql/`).
+- Updated `doc/JSON_SPEC_AND_INDEXING.md` Section 7 to a completed implementation status matrix detailing all 5 stages of JSON built-ins, expression B-Tree indexing, CBO optimization, and regression test suites.
 
 ### Performance
 - **Vertical Performance Track (7 Hot-Path Zero-Allocation Optimizations)**:

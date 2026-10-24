@@ -1,6 +1,6 @@
 # LionSQL Local Testing and Regression Guide
 
-This guide explains how to build, test, and regression-check LionSQL on a local machine. It consolidates the commands that were previously scattered across `CONTRIBUTING.md`, `README.md`, `GEMINI.md`, and `notes/ENGINEERING_CONTEXT.md`.
+This guide explains how to build, test, and regression-check LionSQL on a local machine. It consolidates the commands that were previously scattered across `CONTRIBUTING.md`, `README.md`, `GEMINI.md`, and `notes/ENGINEERING_CONTEXT.ko.md`.
 
 - [1. Prerequisites](#1-prerequisites)
 - [2. The 3-Stage Verification Pipeline](#2-the-3-stage-verification-pipeline)

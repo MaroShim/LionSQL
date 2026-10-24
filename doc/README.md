@@ -12,11 +12,11 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
        ┌──────────────────┬───────────────┴───────────────┬──────────────────┐
        ▼                  ▼                               ▼                  ▼
 [ Core & Storage ]  [ Query & VM ]             [ Wire Protocols ]    [ BaaS & APIs ]
-- ARCHITECTURE.md   - INTERNALS_VDBE.md        - INTERNALS_WIRE.md   - AUTO_REST_API.md
+- ARCHITECTURE.md   - INTERNALS_VDBE.md        - INTERNALS_WIRE.md   - REST_API_AUTO_GENERATED.md
 - INTERNALS_STOR.md - INTERNALS_CBO_VOLCANO.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
 - TX_CONCURRENCY.md - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
 - SNAPSHOT_DUCKDB   - LOG_PROC_GREP_AWK.md     - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
-- RECORD_BINARY.md  - EXTENSIONS.md            - TEST_VERIF_REPORT   - API_REFERENCE.md
+- RECORD_BINARY.md  - EXTENSIONS.md            - TEST_VERIF_REPORT   - REST_API_REFERENCE.md
 - DATA_DICTIONARY   - HIGH_AVAIL.md                                  - WEB_SDK.md
 ```
 
@@ -86,7 +86,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Complete Microsoft T-SQL syntax compatibility guide.
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
-* [`../notes/ANTLR_PARSER_COMPACT_STRATEGY.md`](../notes/ANTLR_PARSER_COMPACT_STRATEGY.md)
+* [`../notes/ANTLR_PARSER_COMPACTION_PLAN.md`](../notes/ANTLR_PARSER_COMPACTION_PLAN.md)
   * Technical roadmap and phased strategy for slimming down the generated T-SQL ANTLR4 parser (`pkg/proc/parser/antlr/`).
   * Analysis of 267k-line generated code, unused listener pruning, grammar subsetting, ATN packing, and long-term Native Pratt Parser unification.
 * [`EXTENSIONS.md`](EXTENSIONS.md)
@@ -104,7 +104,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * **PostgreSQL Wire Protocol v3** (Port `5433`): Simple and Extended Query Protocols (`Parse`, `Bind`, `Execute`, `Sync`), parameter binding, and SSL/TLS.
   * **Microsoft SQL Server TDS 7.x/8.0** (Port `1433`): Prelogin, Login7, RPC packets, and `sp_prepexec` bytecode plan cache connection.
   * Client compatibility matrix (`psql`, DBeaver, GORM, Prisma, `sqlcmd`, SSMS, Azure Data Studio).
-* [`PROTOCOL_EMULATION_GUIDELINES.md`](PROTOCOL_EMULATION_GUIDELINES.md)
+* [`../notes/PROTOCOL_EMULATION_GUIDELINES.md`](../notes/PROTOCOL_EMULATION_GUIDELINES.md)
   * Multi-protocol emulation boundary specification and architectural stop criteria.
   * Four-Layer Boundary Model: Wire Framing (100%), Virtual Catalog Handshake (90%), Common DML (80%), Dialect Quirks & Procedures (10~20%).
   * PostgreSQL stopping criteria, planned MySQL protocol specifications, and T-SQL single-kernel procedural invariance.
@@ -121,7 +121,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ---
 
 ### 2.4. Backend-as-a-Service (BaaS), REST & Client SDKs
-* [`AUTO_REST_API.md`](AUTO_REST_API.md)
+* [`REST_API_AUTO_GENERATED.md`](REST_API_AUTO_GENERATED.md)
   * PocketBase-style instant zero-code RESTful CRUD endpoints (`/api/records/:table`).
   * Advanced URL query engine: comparisons, pattern matching (`LIKE`), string containment (`~`), multi-column sorting, and pagination.
 * [`WEBHOOKS_AND_RLS.md`](WEBHOOKS_AND_RLS.md)
@@ -133,7 +133,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 * [`WEB_SDK.md`](WEB_SDK.md)
   * Official universal Web SDK & HTML embedding guide (`lionsql.js`, `lionsql.d.ts`).
   * Zero-dependency single-file HTML templates, vanilla `fetch()`, realtime SSE live sync, and HTMX recipes.
-* [`API_REFERENCE.md`](API_REFERENCE.md)
+* [`REST_API_REFERENCE.md`](REST_API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
 * [`CDC_DUCKDB_INTEGRATION.md`](CDC_DUCKDB_INTEGRATION.md)
   * Real-time CDC streaming (`GET /api/cdc/stream`) and decoupled HTAP analytical integration guide with DuckDB (includes Python & DuckDB workers).

@@ -353,7 +353,7 @@ LionSQL embeds a PocketBase-style administration dashboard (`pkg/ui/dashboard.ht
 ## 3. Directory Layout & Module Structure
 
 ```
-/Users/maro/Projects/LionSQL/
+lionsql/
 ├── bin/                       # Compiled binaries (server, bench)
 ├── cmd/
 │   ├── server/                # Server entry point, CLI flags, daemon control

@@ -6,7 +6,7 @@
 > 중장기 아키텍처 로드맵 및 버전별 마일스톤 릴리스 계획은 [ROADMAP.md](ROADMAP.md)를 참조하세요.
 > 코드 리뷰 및 결함 감사 트래커는 [CODE_REVIEW.ko.md](CODE_REVIEW.ko.md)에서 실시간으로 추적 및 관리됩니다.
 > 구조적 아키텍처 추상화 및 리팩토링 명세는 [REFACTORING.ko.md](REFACTORING.ko.md)를 참조하세요.
-> 분류 체계 및 식별 코드 규칙의 전체 명세는 [notes/TAXONOMY.md](notes/TAXONOMY.md)에 상세히 기술되어 있습니다.
+> 분류 체계 및 식별 코드 규칙의 전체 명세는 [notes/TAXONOMY.ko.md](notes/TAXONOMY.ko.md)에 상세히 기술되어 있습니다.
 
 ---
 
@@ -66,7 +66,7 @@
 | **P1** | **리소스/안정성** | **글로벌 메모리 예산 상한제 및 회로 차단기 (Global Memory Governor & Circuit Breaker)** | `pkg/config`, `pkg/execution`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P1** | **KISS/다이어트** | **미사용 구형 JS 트랜스파일러 및 `JSCode` 잔재 완전 제거 (`KISS-1`)** | `pkg/proc`, `pkg/catalog`, `cmd/` | **완료 (`[x]`)** | [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md) |
 | **P3** | **보안/감사** | **불변 엔터프라이즈 감사 로그 (Enterprise Immutable Audit Log)** | `pkg/audit`, `pkg/api`, `cmd/lionsql` | **Post-1.0 연기 (Postponed)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
-| **P1** | **성능/크리티컬패스** | **크리티컬 패스 분할기, TDS 파라미터 바인딩, Row 스트리밍 및 UTF-16LE 변환 가속 (`PERF-1`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md) |
+| **P1** | **성능/크리티컬패스** | **크리티컬 패스 분할기, TDS 파라미터 바인딩, Row 스트리밍 및 UTF-16LE 변환 가속 (`PERF-1`)** | `pkg/engine`, `pkg/wire/tds` | **완료 (`[x]`)** | [`notes/PITFALLS_AND_TRICKS.ko.md`](notes/PITFALLS_AND_TRICKS.ko.md) |
 | **P2** | **스토리지/가드** | **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`)** | `pkg/storage/memengine`, `cmd/server` | **완료 (`[x]`)** | [`doc/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/ZERO_ALLOCATION_ARCHITECTURE.md) |
 | **P2** | **KISS/중복제거** | **가상 PG 카탈로그 생성기 중복 단일화 (`KISS-2`)** | `pkg/engine`, `pkg/catalog/virtual` | **완료 (`[x]`)** | - |
 | **P2** | **KISS/파서통합** | **`sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 (`KISS-3`)** | `pkg/engine`, `pkg/proc` | **Post-1.0 연기 (Postponed)** | - |
@@ -317,7 +317,7 @@
      - ASCII Fast-Path 도입으로 쿼리/메타데이터 송수신 시 중간 `[]rune`, `[]uint16` 슬라이스 제거.
      - **`EncodeUTF16LE_ASCII`: 121.9 ns/op, 192 B/op, 1 allocs/op** (3회 ➔ 1회 할당).
      - **`DecodeUTF16LE_ASCII`: 266.3 ns/op, 96 B/op, 1 allocs/op** (3회 ➔ 1회 할당).
-* **재발 방지 3대 불변 원칙 수립**: [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md) 13절에 유틸리티 침투 경계, 크리티컬 패스 정규식/바이트 빌더 금지, 벤치마크 미러링 불변 원칙 영구 명문화.
+* **재발 방지 3대 불변 원칙 수립**: [`notes/PITFALLS_AND_TRICKS.ko.md`](notes/PITFALLS_AND_TRICKS.ko.md) 13절에 유틸리티 침투 경계, 크리티컬 패스 정규식/바이트 빌더 금지, 벤치마크 미러링 불변 원칙 영구 명문화.
 
 #### 5. EXPLAIN ANALYZE Volcano 런타임 실행 프로파일러 완결 (`OBS-2`) (`pkg/planner`, `pkg/execution`, `pkg/engine`)
 * **과제 개요**: 기존 평면적 전체 쿼리 소요 시간 복사 방식을 탈피하고, Volcano 반복자(Iterator) 계층 구조에 결합된 실시간 연산자 단위 프로파일러 구축 (완료 `[x]`).
@@ -934,7 +934,7 @@
 
 | 번호 | 영역 | 핵심 구현 과제 | 상태 | 구현 목표 및 기술 명세 |
 | :---: | :--- | :--- | :---: | :--- |
-| **PERF-1** | 성능/크리티컬패스 | 문장 분할기 및 TDS 파라미터 바인딩 가속 | **완료 (`[x]`)** | `SplitStatements`의 `strings.Builder` 및 매 바이트 O(N^2) 검사를 제거하고 인덱스 슬라이싱(`query[start:i]`) 기반 제로-카피 스캐너로 전면 재작성(16ns/op, 1 alloc). 함수 내부 동적 `regexp.MustCompile` 전역 `var` 승격. `sp_executesql` 1-Pass 단일 스캔 파라미터 바인딩으로 50배 가속(<1µs) 및 재발 방지 3원칙 문서화 완비 (`pkg/engine`, `pkg/wire/tds`, `notes/PITFALLS_AND_TRICKS.md`) |
+| **PERF-1** | 성능/크리티컬패스 | 문장 분할기 및 TDS 파라미터 바인딩 가속 | **완료 (`[x]`)** | `SplitStatements`의 `strings.Builder` 및 매 바이트 O(N^2) 검사를 제거하고 인덱스 슬라이싱(`query[start:i]`) 기반 제로-카피 스캐너로 전면 재작성(16ns/op, 1 alloc). 함수 내부 동적 `regexp.MustCompile` 전역 `var` 승격. `sp_executesql` 1-Pass 단일 스캔 파라미터 바인딩으로 50배 가속(<1µs) 및 재발 방지 3원칙 문서화 완비 (`pkg/engine`, `pkg/wire/tds`, `notes/PITFALLS_AND_TRICKS.ko.md`) |
 
 ---
 
@@ -1139,7 +1139,7 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
   - **[C] TDS 파라미터 바인딩 O(N) 단일 패스 치환기**: 바이트 스캐너 기반 1-Pass 치환으로 **923.1 ns/op (50배 가속, 서브마이크로초)** 달성.
   - **[D] TDS Row 스트리밍 직렬화 및 리플렉션 제거**: `WriteRowDirect` 도입으로 행 직렬화 시 **53.49 ns/op, 0 B/op, 0 allocs/op (힙 할당 0건)** 달성 및 `binary.Write` 리플렉션 100% 박멸.
   - **[E] UTF-16LE / UTF-8 제로-할당 변환**: ASCII Fast-Path 및 `strings.Builder` 스트리밍으로 중간 `[]rune`/`[]uint16` 제거 (**인코딩 121.9ns, 디코딩 266.3ns, 각각 1 allocs/op**).
-  - **재발 방지 3대 불변 원칙 수립**: [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md) 13절에 명문화.
+  - **재발 방지 3대 불변 원칙 수립**: [`notes/PITFALLS_AND_TRICKS.ko.md`](notes/PITFALLS_AND_TRICKS.ko.md) 13절에 명문화.
 - [x] **In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 (`KISS-4`) (`pkg/storage/memengine`)**:
   - `SkipList` 구조체에서 `rnd *rand.Rand` 포인터 및 `rndMu sync.Mutex` 락을 완전히 제거하고 Go 1.22+ `math/rand/v2`로 전환.
   - `Insert()` 수행 중 발생하던 불필요한 이중 락킹(`sl.mu` + `sl.rndMu`) 및 시드 초기화 비용을 제거하여 락-프리/제로-할당 난수 레벨 결정 구현.

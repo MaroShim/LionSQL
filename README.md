@@ -466,10 +466,10 @@ Start here for a complete subject-based directory of all architectural blueprint
 
 ### Backend-as-a-Service (BaaS) & Developer APIs
 - **[Official Web SDK & HTML Embedding Guide](doc/WEB_SDK.md)**: Universal zero-dependency client library and HTML embedding patterns for Web, Node.js, Bun, and Deno.
-- **[Auto-Generated RESTful CRUD API](doc/AUTO_REST_API.md)**: Zero-code `/api/records/:table` endpoints with rich boolean filter expressions.
+- **[Auto-Generated RESTful CRUD API](doc/REST_API_AUTO_GENERATED.md)**: Zero-code `/api/records/:table` endpoints with rich boolean filter expressions.
 - **[Webhooks & Row-Level Security (RLS)](doc/WEBHOOKS_AND_RLS.md)**: Non-blocking mutation webhooks with HMAC signatures and declarative `@auth` access rules.
 - **[Cron Jobs Scheduler & SMTP Mailer](doc/CRON_AND_MAILER.md)**: Embedded 5-field cron automation and transactional HTML email dispatching.
-- **[HTTP REST API & Realtime SSE Specification](doc/API_REFERENCE.md)**: OpenAPI-style endpoint documentation and JavaScript EventSource examples.
+- **[HTTP REST API & Realtime SSE Specification](doc/REST_API_REFERENCE.md)**: OpenAPI-style endpoint documentation and JavaScript EventSource examples.
 
 ### Core Architecture & Internals Specifications
 - **[System Architecture Specification](doc/ARCHITECTURE.md)**: Exhaustive technical specification covering Volcano iterators, dual-parser decoupling, and storage backends.

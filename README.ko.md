@@ -478,10 +478,10 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 
 ### BaaS 및 개발자 API
 - **[공식 Web SDK 및 HTML 임베딩 가이드](doc/WEB_SDK.md)**: 웹 브라우저, Node.js, Bun, Deno 환경을 위한 무의존성 범용 SDK 가이드.
-- **[자동 생성 RESTful CRUD API](doc/AUTO_REST_API.md)**: 풍부한 불리언 필터 표현식을 지원하는 `/api/records/:table` 명세.
+- **[자동 생성 RESTful CRUD API](doc/REST_API_AUTO_GENERATED.md)**: 풍부한 불리언 필터 표현식을 지원하는 `/api/records/:table` 명세.
 - **[웹훅 및 행 수준 보안 (RLS)](doc/WEBHOOKS_AND_RLS.md)**: 비차단 웹훅 디스패처, HMAC 서명, 선언적 `@auth` 보안 규칙.
 - **[크론 잡 스케줄러 및 SMTP 메일러](doc/CRON_AND_MAILER.md)**: 5필드 크론 자동화 및 HTML 이메일 발송 엔진.
-- **[HTTP REST API 및 실시간 SSE 명세서](doc/API_REFERENCE.md)**: OpenAPI 스타일의 전체 엔드포인트 명세 및 SSE 예제.
+- **[HTTP REST API 및 실시간 SSE 명세서](doc/REST_API_REFERENCE.md)**: OpenAPI 스타일의 전체 엔드포인트 명세 및 SSE 예제.
 
 ### 운영 및 사용자 가이드
 - **[공식 사용자 매뉴얼](doc/USER_MANUAL.ko.md)**: 설치, 기동, 클라이언트 연동, 개발 및 운영 전 과정을 안내하는 공식 사용자 매뉴얼.
