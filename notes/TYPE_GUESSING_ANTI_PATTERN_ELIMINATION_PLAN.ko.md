@@ -5,7 +5,7 @@
 - **상태**: Draft ➔ Review Pending
 - **작성일자**: 2026-10-24
 - **대상 패키지**: `pkg/engine`, `pkg/wire`, `pkg/catalog/virtual`, `pkg/api`, `pkg/sqlutil`
-- **관련 규칙**: Golden Rule 14 (Platform Primitives First), Golden Rule 15 (Radical KISS & DRY), Golden Rule 7 (Explicit Error Visibility), [`notes/BUG_ARCHIVE.ko.md`](notes/BUG_ARCHIVE.ko.md)
+- **관련 규칙**: Golden Rule 14 (Platform Primitives First), Golden Rule 15 (Radical KISS & DRY), Golden Rule 7 (Explicit Error Visibility), [`../BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)
 
 ---
 

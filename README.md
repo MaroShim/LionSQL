@@ -518,6 +518,16 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
    go test -tags wiredtiger -count=1 -v -race ./...
    ```
    Requires 100% PASS across all packages with **0 data races**.
+
+   - **Extended Integration Smoke Test**:
+     Verifies all 13 core architecture domains from [`notes/TEST_VERIFICATION_REPORT.ko.md`](notes/TEST_VERIFICATION_REPORT.ko.md) in ~3 seconds (see [`scripts/README.md`](scripts/README.md)):
+     ```bash
+     # Default run (In-Memory OCC)
+     ./scripts/verify_report.sh
+
+     # WiredTiger persistent B+Tree engine run
+     ./scripts/verify_report.sh --engine=wiredtiger
+     ```
 3. **Commit Integrity**:
    - Conventional Commits format (`feat`, `fix`, `docs`, `refactor`, `test`).
    - Zero decorative emojis in code, logs, comments, and commit messages.

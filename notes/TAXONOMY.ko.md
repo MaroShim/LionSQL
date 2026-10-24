@@ -14,7 +14,7 @@
 | **`P-1` ~ `P-5`** | **엔진 성능 (Performance)** | `P-1` ~ `P-5` | 스토리지 I/O, 와이어 프로토콜, 실행 엔진 5대 성능 극대화 트랙 |
 | **`A` ~ `D`** | **CBO 최적화 (Optimizer)** | `A-1` ~ `D-9` | 비용 기반 옵티마이저 4대 기능 트랙 (통계 수집, 조인, 선택도, 운영 제어) |
 | **`S-1` ~ `S-7`** | **SQL 문법 (Syntax)** | `S-1` ~ `S-7` | T-SQL 및 ANSI SQL 7대 문법 호환성 완비 트랙 (전 항목 완료) |
-| **`BUG-*`** | **데이터 무결성 결함 아카이브 (107건)** | `BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1` | 데이터 무결성 107대 결함 조치 내역은 [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)에서 아카이브로 관리 |
+| **`BUG-*`** | **데이터 무결성 결함 아카이브 (107건)** | `BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1` | 데이터 무결성 107대 결함 조치 내역은 [`../BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)에서 아카이브로 관리 |
 | **`VPERF-1` ~ `VPERF-14`** | **수직 핫패스 최적화 (Vertical Perf)** | `VPERF-1` ~ `VPERF-14` | TDS 와이어 프로토콜 ➔ 코디네이터 ➔ VDBE VM ➔ 스토리지 엔진(OCC/WiredTiger) 전 계층 수직 성능 최적화 트랙 |
 
 ---
@@ -94,7 +94,7 @@ LionSQL 네이티브 파서 및 바이트코드 엔진에서 공식 지원하는
 ## 6. 연계 문서 및 진실 공급원 (SSOT)
 
 - **액티브 백로그 및 단기 우선순위**: [`TODO.ko.md`](../TODO.ko.md)
-- **과거 데이터 무결성 107대 결함 조치 아카이브**: [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)
+- **과거 데이터 무결성 107대 결함 조치 아카이브**: [`../BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)
 - **코드 리뷰 및 감사 트래커**: [`CODE_REVIEW.ko.md`](../CODE_REVIEW.ko.md)
 - **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](../REFACTORING.ko.md)
 - **중장기 거시 릴리즈 로드맵 (Phase 1~6)**: [`ROADMAP.md`](../ROADMAP.md)

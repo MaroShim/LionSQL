@@ -519,6 +519,16 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
    go test -tags wiredtiger -count=1 -v -race ./...
    ```
    모든 패키지에서 100% PASS를 달성해야 하며, **데이터 레이스(Data Race)가 0건**이어야 합니다.
+
+   - **확장 통합 스모크 테스트 (Extended Smoke Test)**:
+     [`notes/TEST_VERIFICATION_REPORT.ko.md`](notes/TEST_VERIFICATION_REPORT.ko.md)의 13대 핵심 아키텍처 도메인을 약 3초 만에 일괄 자동 검증합니다 ([`scripts/README.md`](scripts/README.md) 참조):
+     ```bash
+     # 1. 기본 실행 (In-Memory OCC 초고속 검증)
+     ./scripts/verify_report.sh
+
+     # 2. WiredTiger B+Tree 영속 엔진 기반 전체 검증
+     ./scripts/verify_report.sh --engine=wiredtiger
+     ```
 3. **커밋 무결성 규약 (Commit)**:
    - Conventional Commits 형식 준수 (`feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`).
    - 모든 코드, 로그, 주석, 문서, 커밋 메시지에서 장식용 이모지를 엄격히 배제하고 엔지니어링 톤을 유지합니다.

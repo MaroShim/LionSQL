@@ -5,10 +5,10 @@
 > [!NOTE]
 > 본 결함 조치 트랙은 초기 코드베이스의 급속한 무결성 안정화를 위해 사용된 중간 방법론(Interim Methodology)이며, 현재 107건 전수 조치 및 100% 회귀 검증(Build & Race-Test)이 완료되었습니다.
 > 이후의 신규 결함 추적, 정적 분석 및 구조적 아키텍처 개편은 다음의 전용 대시보드를 통해 진행됩니다:
-> - **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](../CODE_REVIEW.ko.md)
-> - **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](../REFACTORING.ko.md)
-> - **전체 과제 분류 체계**: [`TAXONOMY.ko.md`](TAXONOMY.ko.md)
-> - **활성 엔지니어링 백로그**: [`TODO.ko.md`](../TODO.ko.md)
+> - **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
+> - **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](REFACTORING.ko.md)
+> - **전체 과제 분류 체계**: [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md)
+> - **활성 엔지니어링 백로그**: [`TODO.ko.md`](TODO.ko.md)
 
 ---
 
@@ -142,7 +142,7 @@
 
 ## 2. 107대 결함 세부 원인 분석 및 해결 명세 (Detailed Action Records)
 
-#### 8. 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 107대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`)
+### 2.1 데이터 무결성, 대소문자 정합성, 임의 추측 및 무작위 맵 순회 107대 치명적 결함 전수 조치 (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`)
 * **과제 개요**: SQL 표준의 식별자 대소문자 무관성(Case-insensitivity)과 Go 맵/스칼라의 대소문자 엄격 비교 불일치, 그리고 식별자/인덱스 조회 실패 시의 취약한 무작위 순회 폴백(`for _, v := range rec/row/map { break }`) 및 첫 번째 요소 임의 대입(`[0]`), 외래키 무검증/오판, NULL 전파 누락, WAL 복구 절단 처리 실패, Int-Float 및 DateTime-VarChar 비교 역전, 파생테이블 조인 프로젝션 유실, 혼합타입 집계합 누락, 기본값(DEFAULT) 누락, 관리자 인증 우회, MERGE IDENTITY 누락, 복합 PK 파싱 절단, COPY 프로토콜 세션 우회 및 데이터 변조, 쉼표 오절단, RBAC 커스텀 롤 누락, 따옴표 이스케이프 분해 파괴, 샤드 초기화 경쟁 크래시, VDBE 미존재 PK 크래시, EXEC 프로시저 및 TDS RPC 트랜잭션 우회, Simple CASE 누락, 산술식 0값 변조, 윈도우 함수 RANGE 피어 누락, OCC 동일 트랜잭션 유니크 충돌 사일런트 커밋, HTTP API DATETIME 빈 문자열 방출, PITR DDL 에러 침묵 등으로 인해 발생하는 107대 치명적 무결성 결함을 원천 해결.
 * **세부 결함 명세 및 수락 기준**:
   1. **`BUG-PK-1` (`pkg/engine/sqlexec_dml.go:1071, 1228`, `sqlexec_ddl.go:363`, `pkg/proc/runtime/vm.go:940, 1076`)**:
@@ -601,9 +601,9 @@
 
 ## 4. 연계 문서 및 진실 공급원 (SSOT)
 
-- **활성 엔지니어링 백로그**: [`TODO.ko.md`](../TODO.ko.md)
-- **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](../CODE_REVIEW.ko.md)
-- **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](../REFACTORING.ko.md)
-- **전체 식별 코드 분류 체계**: [`TAXONOMY.ko.md`](TAXONOMY.ko.md)
-- **중장기 거시 릴리즈 로드맵**: [`ROADMAP.md`](../ROADMAP.md)
+- **활성 엔지니어링 백로그**: [`TODO.ko.md`](TODO.ko.md)
+- **코드 리뷰 및 결함 감사 트래커**: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
+- **아키텍처 추상화 및 리팩토링 명세**: [`REFACTORING.ko.md`](REFACTORING.ko.md)
+- **전체 식별 코드 분류 체계**: [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md)
+- **중장기 거시 릴리즈 로드맵**: [`ROADMAP.md`](ROADMAP.md)
 

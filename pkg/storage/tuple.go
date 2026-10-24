@@ -194,11 +194,23 @@ func EncodeRowToBuffer(schema *TableSchema, row Row, buf []byte) ([]byte, error)
 			}
 
 		case TypeDateTime:
-			binary.LittleEndian.PutUint64(scratch[:8], uint64(val.TVal.UnixNano()))
+			tVal := val.TVal
+			if tVal.IsZero() && val.SVal != "" {
+				if t, err := parseTimeFromValue(val); err == nil {
+					tVal = t
+				}
+			}
+			binary.LittleEndian.PutUint64(scratch[:8], uint64(tVal.UnixNano()))
 			buf = append(buf, scratch[:8]...)
 
 		case TypeDate:
-			binary.LittleEndian.PutUint64(scratch[:8], uint64(val.TVal.Unix()))
+			tVal := val.TVal
+			if tVal.IsZero() && val.SVal != "" {
+				if t, err := parseTimeFromValue(val); err == nil {
+					tVal = t
+				}
+			}
+			binary.LittleEndian.PutUint64(scratch[:8], uint64(tVal.Unix()))
 			buf = append(buf, scratch[:8]...)
 
 		case TypeTime:

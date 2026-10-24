@@ -53,6 +53,14 @@
 6. OLTP 트랜잭션 CDC 스트림을 인메모리 **DuckDB** 벡터화 엔진으로 파이프라이닝하는 **디커플드 HTAP 분석**.
 7. 비용 기반 옵티마이저(CBO), 반정형 JSON B-Tree 함수형 인덱스, SQL RBAC 권한 통제, 선언적 마이그레이션 CLI, 시계열 롤링 테이블 파티셔닝.
 
+> [!TIP]
+> **자동화 스모크 테스트 실행**:
+> 본 보고서에 기술된 13대 도메인은 [`scripts/verify_report.sh`](../scripts/verify_report.sh)를 통해 단 3초 만에 일괄 자동 회귀 검증할 수 있습니다 ([`scripts/README.md`](../scripts/README.md) 참조):
+> ```bash
+> ./scripts/verify_report.sh                    # In-Memory OCC 엔진 기준 13대 도메인 자동 검증
+> ./scripts/verify_report.sh --engine=wiredtiger # WiredTiger 디스크 B+Tree 엔진 기준 13대 도메인 자동 검증
+> ```
+
 ---
 
 ## 2. 테스트 환경 및 시스템 아키텍처 스펙
