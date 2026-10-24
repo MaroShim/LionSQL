@@ -53,6 +53,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 	if rec.LSN > e.nextLSN.Load() {
 		e.nextLSN.Store(rec.LSN)
 	}
+	hasDDL := false
 	for _, op := range rec.Ops {
 		if storage.IsTemporaryTable(op.Table) ||
 			(op.Schema != nil && storage.IsTemporaryTable(op.Schema.Name)) ||
@@ -64,6 +65,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			if op.Schema == nil {
 				continue
 			}
+			hasDDL = true
 			td := &TableData{
 				Schema:     *op.Schema,
 				Rows:       make(map[string]storage.Row),
@@ -81,6 +83,7 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 			e.tables[op.Schema.Name] = td
 		case OpDropTable:
+			hasDDL = true
 			delete(e.tables, op.Table)
 		case OpAlterTable:
 			if td, exists := e.tables[op.Table]; exists && op.Column != nil {
@@ -247,6 +250,9 @@ func (e *Engine) applyWALRecordLocked(rec WALRecord) error {
 			}
 		}
 	}
+	if hasDDL {
+		e.rebuildFKCacheLocked()
+	}
 	return nil
 }
 
@@ -376,5 +382,6 @@ func (e *Engine) loadDiskLocked() {
 			}
 		}
 	}
+	e.rebuildFKCacheLocked()
 }
 

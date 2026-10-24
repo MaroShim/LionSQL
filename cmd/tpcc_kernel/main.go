@@ -408,7 +408,7 @@ func execNewOrder(sess storage.Session, rng *rand.Rand, wID, dID, cID, totalItem
 	defer tx.Rollback()
 
 	// 1. Get warehouse tax
-	_, err = tx.Get("warehouse", storage.IntValue(int64(wID)))
+	_, err = tx.GetRow("warehouse", storage.IntValue(int64(wID)))
 	if err != nil {
 		return false
 	}
@@ -574,7 +574,7 @@ func execOrderStatus(sess storage.Session, wID, dID, cID int) bool {
 	defer tx.Rollback()
 
 	cKey := fmt.Sprintf("%d_%d_%d", wID, dID, cID)
-	if _, err := tx.Get("customer", storage.StringValue(cKey)); err != nil {
+	if _, err := tx.GetRow("customer", storage.StringValue(cKey)); err != nil {
 		return false
 	}
 
@@ -592,7 +592,7 @@ func execDelivery(sess storage.Session, wID int) bool {
 	// Process oldest new_order across districts
 	for d := 1; d <= 10; d++ {
 		noKey := fmt.Sprintf("%d_%d_1001", wID, d)
-		if _, err := tx.Get("new_order", storage.StringValue(noKey)); err == nil {
+		if _, err := tx.GetRow("new_order", storage.StringValue(noKey)); err == nil {
 			_ = tx.Delete("new_order", storage.StringValue(noKey))
 		}
 	}
@@ -609,7 +609,7 @@ func execStockLevel(sess storage.Session, rng *rand.Rand, wID, dID, totalItems i
 	defer tx.Rollback()
 
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
-	if _, err := tx.Get("district", storage.StringValue(dKey)); err != nil {
+	if _, err := tx.GetRow("district", storage.StringValue(dKey)); err != nil {
 		return false
 	}
 
@@ -617,7 +617,7 @@ func execStockLevel(sess storage.Session, rng *rand.Rand, wID, dID, totalItems i
 	for k := 0; k < 5; k++ {
 		iID := rng.Intn(totalItems) + 1
 		sKey := fmt.Sprintf("%d_%d", wID, iID)
-		_, _ = tx.Get("stock", storage.StringValue(sKey))
+		_, _ = tx.GetRow("stock", storage.StringValue(sKey))
 	}
 
 	return tx.Commit() == nil

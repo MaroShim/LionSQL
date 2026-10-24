@@ -73,6 +73,7 @@ type Engine struct {
 	opts             Options
 	dataDir          string
 	tables           map[string]*TableData
+	tablesAtomic     atomic.Pointer[map[string]*TableData]
 	fkCacheMu        sync.RWMutex
 	fkCache          map[string][]ChildFKRef
 	wal              *WALWriter
@@ -87,6 +88,7 @@ type Engine struct {
 	stopCh           chan struct{}
 	bgWg             sync.WaitGroup
 	closed           bool
+	isClosed         atomic.Bool
 	compacting       atomic.Bool
 	diskMu           sync.Mutex
 	walOrderMu       sync.Mutex
@@ -207,12 +209,24 @@ func (e *Engine) recordWALLocked(ops []WALOp) (WALRecord, error) {
 
 // New creates a new in-memory storage engine.
 func New() *Engine {
-	return &Engine{
+	e := &Engine{
 		tables:       make(map[string]*TableData),
 		fkCache:      make(map[string][]ChildFKRef),
 		fsyncPolicy:  FsyncEverySec,
 		aofThreshold: 64 * 1024 * 1024, // 64MB default compaction threshold
 	}
+	e.syncTablesAtomicLocked()
+	return e
+}
+
+// syncTablesAtomicLocked creates an immutable copy of e.tables and stores it into tablesAtomic.
+// Caller MUST hold e.mu.Lock() or be in initialization.
+func (e *Engine) syncTablesAtomicLocked() {
+	clone := make(map[string]*TableData, len(e.tables))
+	for k, v := range e.tables {
+		clone[k] = v
+	}
+	e.tablesAtomic.Store(&clone)
 }
 
 func (e *Engine) rebuildFKCacheLocked() {
@@ -229,6 +243,8 @@ func (e *Engine) rebuildFKCacheLocked() {
 	e.fkCacheMu.Lock()
 	e.fkCache = newCache
 	e.fkCacheMu.Unlock()
+
+	e.syncTablesAtomicLocked()
 }
 
 // GetChildFKRefs returns cached foreign key references pointing to parentTable.
@@ -320,6 +336,7 @@ func (e *Engine) OpenWithOptions(opts Options) error {
 	defer e.mu.Unlock()
 
 	e.closed = false
+	e.isClosed.Store(false)
 	e.opts = opts
 	e.fsyncPolicy = opts.FsyncPolicy
 	if opts.AOFThreshold > 0 {
@@ -386,6 +403,7 @@ func (e *Engine) Close() error {
 		return nil
 	}
 	e.closed = true
+	e.isClosed.Store(true)
 
 	stopCh := e.stopCh
 	e.stopCh = nil

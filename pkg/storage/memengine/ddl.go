@@ -322,6 +322,9 @@ func (e *Engine) DropTable(tableName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
+	td.mu.Lock()
+	defer td.mu.Unlock()
+
 	// Verify no other table has a foreign key referencing this table
 	for otherName, otherTd := range e.tables {
 		if strings.EqualFold(otherName, td.Schema.Name) {

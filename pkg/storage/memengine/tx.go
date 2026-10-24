@@ -27,10 +27,7 @@ type Session struct {
 }
 
 func (s *Session) BeginTx(opts storage.TxOptions) (storage.Transaction, error) {
-	s.engine.mu.RLock()
-	defer s.engine.mu.RUnlock()
-
-	if s.engine.closed {
+	if s.engine.isClosed.Load() {
 		return nil, fmt.Errorf("engine is closed")
 	}
 
@@ -174,46 +171,6 @@ func (tx *Transaction) releaseToPoolLocked() {
 		return
 	}
 	tx.inPool = true
-	if tx.tableCache != nil {
-		if len(tx.tableCache) > 64 {
-			tx.tableCache = nil
-		} else {
-			clear(tx.tableCache)
-		}
-	}
-	if tx.baseVers != nil {
-		for _, m := range tx.baseVers {
-			clear(m)
-		}
-		clear(tx.baseVers)
-	}
-	if tx.local != nil {
-		for _, m := range tx.local {
-			clear(m)
-		}
-		clear(tx.local)
-	}
-	if tx.deleted != nil {
-		for _, m := range tx.deleted {
-			clear(m)
-		}
-		clear(tx.deleted)
-	}
-	if tx.changes != nil {
-		if len(tx.changes) > 1024 {
-			tx.changes = nil
-		} else {
-			clear(tx.changes)
-		}
-	}
-	if tx.savepoints != nil {
-		if len(tx.savepoints) > 16 {
-			tx.savepoints = nil
-		} else {
-			clear(tx.savepoints)
-		}
-	}
-	tx.spNames = tx.spNames[:0]
 	txPool.Put(tx)
 }
 
@@ -245,19 +202,19 @@ func (tx *Transaction) CommitTimestamp() int64 {
 	return tx.commitTimestamp
 }
 
-// getTableLocked retrieves a *TableData, caching it per-transaction to avoid engine.mu RLock contention.
+// getTableLocked retrieves a *TableData, caching it per-transaction using an atomic snapshot to eliminate engine.mu RLock contention.
 func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
 	if td, cached := sqlutil.MapGetFold(tx.tableCache, tableName); cached {
 		return td, nil
 	}
-	tx.engine.mu.RLock()
-	td, exists := sqlutil.MapGetFold(tx.engine.tables, tableName)
-	tx.engine.mu.RUnlock()
-	if !exists {
-		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	snap := tx.engine.tablesAtomic.Load()
+	if snap != nil {
+		if td, exists := sqlutil.MapGetFold(*snap, tableName); exists {
+			tx.tableCache[tableName] = td
+			return td, nil
+		}
 	}
-	tx.tableCache[tableName] = td
-	return td, nil
+	return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 }
 
 func (tx *Transaction) Insert(tableName string, record storage.Record) error {
@@ -1081,7 +1038,7 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 	pkKey := pk.String()
 	clone := !tx.opts.ReadOnly
 	rec, ver, err := tx.getRecordAndVerUnderLock(tableName, pkKey, clone)
-	if err == nil {
+	if err == nil && !tx.opts.ReadOnly {
 		tx.setBaseVer(tableName, pkKey, ver)
 	}
 	return rec, err
@@ -1098,7 +1055,7 @@ func (tx *Transaction) GetRow(tableName string, pk storage.Value) (storage.Row, 
 	pkKey := pk.String()
 	clone := !tx.opts.ReadOnly
 	row, ver, err := tx.getRowAndVerUnderLock(tableName, pkKey, clone)
-	if err == nil {
+	if err == nil && !tx.opts.ReadOnly {
 		tx.setBaseVer(tableName, pkKey, ver)
 	}
 	return row, err
@@ -1572,7 +1529,6 @@ func (tx *Transaction) Commit() error {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
-	defer tx.releaseToPoolLocked()
 
 	if tx.opts.ReadOnly || len(tx.changes) == 0 {
 		return nil
@@ -1592,9 +1548,9 @@ func (tx *Transaction) Commit() error {
 		td := ch.td
 		sIdx := ch.shardIdx
 		if td == nil {
-			var exists bool
-			td, exists = sqlutil.MapGetFold(tx.engine.tables, ch.table)
-			if !exists {
+			var err error
+			td, err = tx.getTableLocked(ch.table)
+			if err != nil {
 				continue
 			}
 			sIdx = hashShard(ch.key)
@@ -1625,11 +1581,7 @@ func (tx *Transaction) Commit() error {
 		}
 	}
 
-	// 2. Acquire shared read lock on engine catalog to resolve table pointers
-	tx.engine.mu.RLock()
-	defer tx.engine.mu.RUnlock()
-
-	// 3. Acquire Intent-Shared RLock on affected tables (prevents concurrent DDL DROP/TRUNCATE)
+	// 2. Acquire Intent-Shared RLock on affected tables (prevents concurrent DDL DROP/TRUNCATE)
 	for _, tName := range tableNames {
 		tableSet[tName].mu.RLock()
 	}
@@ -1682,9 +1634,9 @@ func (tx *Transaction) Commit() error {
 		td := ch.td
 		sIdx := ch.shardIdx
 		if td == nil {
-			var exists bool
-			td, exists = sqlutil.MapGetFold(tx.engine.tables, ch.table)
-			if !exists {
+			var err error
+			td, err = tx.getTableLocked(ch.table)
+			if err != nil {
 				continue
 			}
 			sIdx = hashShard(ch.key)
@@ -1791,9 +1743,9 @@ func (tx *Transaction) Commit() error {
 		td := ch.td
 		sIdx := ch.shardIdx
 		if td == nil {
-			var exists bool
-			td, exists = sqlutil.MapGetFold(tx.engine.tables, ch.table)
-			if !exists {
+			var err error
+			td, err = tx.getTableLocked(ch.table)
+			if err != nil {
 				continue
 			}
 			sIdx = hashShard(ch.key)
@@ -1890,7 +1842,7 @@ func (tx *Transaction) Commit() error {
 			if rawData == nil && ch.kind != changeDelete {
 				td := ch.td
 				if td == nil {
-					td, _ = sqlutil.MapGetFold(tx.engine.tables, ch.table)
+					td, _ = tx.getTableLocked(ch.table)
 				}
 				if td != nil {
 					rawData, _ = storage.EncodeRow(&td.Schema, ch.row)
@@ -1943,11 +1895,11 @@ func (tx *Transaction) Rollback() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
-	if tx.closed {
+	if tx.inPool {
 		return storage.ErrTxClosed
 	}
 	tx.closed = true
-	defer tx.releaseToPoolLocked()
+	tx.releaseToPoolLocked()
 	return nil
 }
 
