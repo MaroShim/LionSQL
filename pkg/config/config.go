@@ -68,6 +68,7 @@ type ResourcesConfig struct {
 	MaxIdleSessions int    `json:"max_idle_sessions"`
 	WorkMem         string `json:"work_mem"`
 	MaxMemory       string `json:"max_memory"`
+	GCPercent       int    `json:"gc_percent,omitempty"`
 }
 
 // SlowQueryLogConfig defines criteria and destination for slow queries.
@@ -169,6 +170,7 @@ func DefaultConfig() *Config {
 			MaxWorkers:      0, // NumCPU * 4
 			MaxIdleSessions: 64,
 			WorkMem:         "64MB",
+			GCPercent:       200,
 		},
 		Logging: LoggingConfig{
 			SlowQuery: SlowQueryLogConfig{

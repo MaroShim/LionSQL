@@ -559,17 +559,14 @@ func runServer(args []string) error {
 		server.SetPoolConfig(poolCfg)
 	}
 
-	// Memory Governor: Global memory budget (GOMEMLIMIT) & operator work_mem
+	// Memory Governor: Global memory budget (GOMEMLIMIT), GOGC (default 200) & operator work_mem
 	var maxMemBytes int64
 	if cfg.Resources.MaxMemory != "" {
 		if bytes, err := execution.ParseMemSize(cfg.Resources.MaxMemory); err == nil && bytes > 0 {
 			maxMemBytes = bytes
 		}
 	}
-	if maxMemBytes <= 0 {
-		maxMemBytes = execution.GetDefaultMaxMemory()
-	}
-	execution.SetGlobalMemoryLimit(maxMemBytes)
+	execution.InitRuntimeTuning(maxMemBytes, cfg.Resources.GCPercent)
 
 	if cfg.Resources.WorkMem != "" {
 		if bytes, err := execution.ParseMemSize(cfg.Resources.WorkMem); err == nil && bytes > 0 {

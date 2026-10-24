@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"lionsql/pkg/execution"
 	"lionsql/pkg/storage"
 	"lionsql/pkg/storage/memengine"
 	"lionsql/pkg/storage/wiredtiger"
@@ -54,6 +55,7 @@ func main() {
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
 	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries with exponential backoff on serialization conflict")
 	flag.Parse()
+	execution.InitRuntimeTuning(0, 0)
 
 	fmt.Println("================================================================================")
 	fmt.Println("  LionSQL TPC-C Benchmark Suite (Storage Engine Kernel - tpcc-kernel)")

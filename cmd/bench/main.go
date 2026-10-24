@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"lionsql/pkg/execution"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/storage"
@@ -24,6 +25,7 @@ func main() {
 	engineType := flag.String("engine", "wiredtiger", "Storage engine backend (wiredtiger, memory)")
 	dataDir := flag.String("dir", "data/bench_wt", "Data directory for benchmark storage")
 	flag.Parse()
+	execution.InitRuntimeTuning(0, 0)
 
 	fmt.Println("================================================================================")
 	fmt.Println("  LionSQL High-Concurrency OLTP Benchmark (TransferFunds Stored Procedure)")

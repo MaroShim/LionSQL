@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"lionsql/pkg/execution"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/storage"
@@ -58,6 +59,7 @@ func main() {
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
 	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries with exponential backoff on serialization conflict")
 	flag.Parse()
+	execution.InitRuntimeTuning(0, 0)
 
 	fsyncMode := strings.ToLower(strings.TrimSpace(*fsyncFlag))
 	if fsyncMode == "" {

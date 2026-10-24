@@ -43,6 +43,7 @@
 | **P2** | **KISS/실행통합** | **코어 엔진 3갈래 쿼리 실행 경로(`sqlexec_select` vs `execution` Iterator vs VDBE) 단일화 및 아키텍처 다이어트 (`KISS-5`)** | `pkg/engine`, `pkg/execution`, `pkg/proc/runtime` | **완료 (`[x]`)** | [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
 | **P2** | **KISS/스캐너통합** | **MERGE, STRING_SPLIT, PROCS 잔여 수동 분할 루프 `sqlutil.Tokenizer` 전면 일원화 (`ARCH-LEX-2`)** | `pkg/sqlutil`, `pkg/engine` | **완료 (`[x]`)** | [`REFACTORING.ko.md`](REFACTORING.ko.md) |
 | **P1** | **성능/OCC최적화** | **In-Memory OCC 5대 최적화 (비트마스크 샤드 추적, Table/Shard 캐싱, 지연 유니크셋, 비차단 AOF 압축, 힙 오염 제거) (`VPERF-15`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) |
+| **P1** | **성능/GC튜닝** | **Go 런타임 메모리 거버너 연동 GOGC 디폴트 최적화(GOGC=200 + GOMEMLIMIT) 및 벤치마크/서버 전면 적용 (`VPERF-16`)** | `pkg/execution`, `pkg/config`, `cmd/` | **완료 (`[x]`)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) Stage 2 |
 | **P1** | **벤치/와이어클라이언트** | **실행 중인 서버 대상 네트워크 TPC-C 벤치마크 클라이언트 구현 (`BENCH-TPCC-CLIENT-1`)** | `cmd/tpcc_client` | **완료 (`[x]`)** | TDS(:1433)/PGWire(:5433) 소켓 접속, 5대 트랜잭션 동시 부하 주입 및 Web Studio 실시간 TPS 연동 완비 |
 | **P1** | **벤치/클라이언트최적화** | **네트워크 TPC-C 클라이언트 1-RTT 단일 배치 전송, 기본 스케일팩터 최적화(16 Warehouses, 32 Workers), 50건 청크 고속 시딩 및 Delivery 키 분산 (`BENCH-TPCC-CLIENT-2`)** | `cmd/tpcc_client` | **완료 (`[x]`)** | New-Order/Delivery/Stock-Level 12회 소켓 핑퐁을 단일 1-RTT 배치로 통합, 16wh/32wk 스케일 최적화로 OCC 충돌 해소 및 7,400+ TPS 달성 |
 | **P1** | **엔진/타입무결성** | **휴리스틱 타입 추론 및 임의 문자열 수치 강제변환 안티패턴 전면 제거 (`REFACTOR-TYPE-GUESS-1`)** | `pkg/sqlutil`, `pkg/engine`, `pkg/execution`, `pkg/proc`, `pkg/wire`, `pkg/api` | **완료 (`[x]`)** | [`notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md) |
@@ -700,5 +701,10 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
   - `pkg/engine/sqlexec_eval.go`, `pkg/execution/iterator.go`, `pkg/execution/filter.go`: 조건절 및 조인 비교 시 문자열은 사전식 대소 비교(`strings.Compare`)를 수행하도록 수정. `toFloat64`에서 임의 문자열 파싱 케이스 제거 및 `storage.Decimal.Cmp` 정밀도 보존.
   - `pkg/proc/eval.go`: 관계 연산자(`<`, `>`, `<=`, `>=`, `=`, `<>`)에서 문자열 수치 변환 제거, 산술 연산자(`-`, `*`, `/`)에 한해 제한적으로 수치 변환 허용(`toArithmeticFloat`).
   - `pkg/engine/type_guessing_regression_test.go`: 사전식 문자열 MIN/MAX, ORDER BY, 범위 WHERE, sp_executesql 파라미터 보존 회귀 테스트 스위트 구축 및 100% PASS 검증 완료.
+- [x] **Go 런타임 메모리 거버너 연동 GOGC 디폴트 최적화 (`VPERF-16`) (`pkg/execution`, `pkg/config`, `cmd/`)**:
+  - `pkg/execution/governor.go`: `DefaultGCPercent = 200`, `SetGlobalGCPercent(percent)` 및 `InitRuntimeTuning(maxMemoryBytes, gcPercent)` 신설. 사용자 환경 변수 `GOGC`를 우선 존중하되, 미설정 시 기본값을 `200`으로 상향 설정하여 빈번한 힙 스캔으로 인한 CPU 낭비 방지.
+  - `pkg/config/config.go`: `ResourcesConfig.GCPercent` 필드 추가 (기본값 `200`).
+  - `cmd/lionsql`, `cmd/bench`, `cmd/tpcc_runtime`, `cmd/tpcc_kernel`: 기동 시 `InitRuntimeTuning`을 호출하여 GOMEMLIMIT 소프트 메모리 상한과 결합된 고효율 GC 스케줄링 적용.
+  - T-SQL VDBE 런타임 TPC-C 벤치마크 결과: 13,956 TPS (375k tpmC) ➔ **17,150.86 TPS (454k tpmC)**로 **+22.9%** 처리량 향상 달성.
 
 

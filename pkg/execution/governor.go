@@ -14,6 +14,11 @@ import (
 // DefaultWorkMem defines the default memory budget per query execution operator (64MB).
 const DefaultWorkMem int64 = 64 * 1024 * 1024
 
+// DefaultGCPercent defines the default Go runtime GC percentage (200).
+// Tuning GOGC to 200 relaxes frequent, CPU-wasting GC cycles during in-memory OLTP workloads,
+// while SetGlobalMemoryLimit (GOMEMLIMIT) bounds overall heap memory to prevent OOM.
+const DefaultGCPercent = 200
+
 // ExecutorOptions controls memory budgets and scratch space for query operators.
 type ExecutorOptions struct {
 	WorkMem int64          `json:"work_mem"`
@@ -176,4 +181,30 @@ func SetGlobalMemoryLimit(bytes int64) int64 {
 // GetGlobalMemoryLimit returns the currently configured Go runtime soft heap memory limit.
 func GetGlobalMemoryLimit() int64 {
 	return debug.SetMemoryLimit(-1)
+}
+
+// SetGlobalGCPercent configures the Go runtime GC target percentage (debug.SetGCPercent).
+// If percent <= 0, it falls back to DefaultGCPercent (200).
+// If the environment variable GOGC is explicitly set, it respects the user's environment variable.
+func SetGlobalGCPercent(percent int) int {
+	if percent <= 0 {
+		percent = DefaultGCPercent
+	}
+	if env := strings.TrimSpace(os.Getenv("GOGC")); env != "" {
+		if p, err := strconv.Atoi(env); err == nil && p > 0 {
+			percent = p
+		}
+	}
+	return debug.SetGCPercent(percent)
+}
+
+// InitRuntimeTuning configures the Go runtime soft memory limit and GC target percentage.
+// By default, GOGC is set to DefaultGCPercent (200) to minimize unnecessary GC cycles during OLTP spikes,
+// while relying on SetGlobalMemoryLimit (GOMEMLIMIT) to bound total heap consumption.
+func InitRuntimeTuning(maxMemoryBytes int64, gcPercent int) {
+	SetGlobalGCPercent(gcPercent)
+	if maxMemoryBytes <= 0 {
+		maxMemoryBytes = GetDefaultMaxMemory()
+	}
+	SetGlobalMemoryLimit(maxMemoryBytes)
 }

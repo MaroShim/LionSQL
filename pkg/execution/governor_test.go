@@ -192,3 +192,21 @@ func TestGovernor_HashJoinCircuitBreaker(t *testing.T) {
 		t.Errorf("expected positive build memory, got %d", hj2.BuildMemory())
 	}
 }
+
+func TestGovernor_SetGlobalGCPercentAndInitRuntimeTuning(t *testing.T) {
+	oldGC := execution.SetGlobalGCPercent(0) // Should set default (200)
+	defer execution.SetGlobalGCPercent(oldGC)
+
+	// Ensure setting custom value works
+	prev := execution.SetGlobalGCPercent(150)
+	if prev != execution.DefaultGCPercent {
+		t.Errorf("expected previous GC percent %d, got %d", execution.DefaultGCPercent, prev)
+	}
+
+	// Test InitRuntimeTuning with custom max memory and gc percent
+	execution.InitRuntimeTuning(128*1024*1024, 250)
+	currMem := execution.GetGlobalMemoryLimit()
+	if currMem != 128*1024*1024 {
+		t.Errorf("expected memory limit 128MB, got %d", currMem)
+	}
+}
