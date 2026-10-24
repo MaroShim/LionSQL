@@ -27,7 +27,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 [ Phase 5: Enterprise Governance ] ──────► v0.16.0 - v0.24.0 [COMPLETED]
   Engine Decoupling (pkg/engine) + Group Commit + RBAC + CBO DP Join Order + Prepared LRU Cache
 
-[ Phase 6: Production Hardening & Feature Freeze ] ► v0.90.0 (Betas 1~3) [COMPLETED]
+[ Phase 6: Production Hardening & Feature Freeze ] ► v0.90.0 (Betas 0~3) [COMPLETED]
   Unified CLI (lionsql) + Web Studio Suite + Memory Governor + OCC Tuning + TDS Positional + 2-Tier Engine
 
 [ Phase 7: Official 1.0 Release ] ────────► v1.0.0 LTS [READY FOR RELEASE]
@@ -46,7 +46,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 | **Phase 3** | `v0.11.0` - `v0.12.0` | **Replication, Official Drivers & Zero-Allocation**<br>1-Writer multi-reader WAL streaming replication, official driver compatibility, buffer pooling. | **100% Completed** |
 | **Phase 4** | `v0.13.0` - `v0.15.0` | **Modern Ecosystem, GUI Tool Interop & VDBE Acceleration**<br>pgx/v5 pipelining, DBeaver/SSMS interop, UUIDv7, VDBE opcode specialization (21k TPS peak). | **100% Completed** |
 | **Phase 5** | `v0.16.0` - `v0.24.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI, prepared LRU cache. | **100% Completed** |
-| **Phase 6** | `v0.90.0`<br>(Betas 1~3) | **Production Hardening & Feature Freeze Milestone**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine, 13-domain smoke suite. | **100% Completed** |
+| **Phase 6** | `v0.90.0`<br>(Betas 0~3) | **Production Hardening & Feature Freeze Milestone**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine, 13-domain smoke suite. | **100% Completed** |
 | **Phase 7** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>Always On HA, decoupled HTAP, driver certification, zero-race verification, release sign-off. | **Ready for Release** |
 | **Horizons** | `v1.1.0+` | **Post-1.0 Architectural Extensions**<br>Pure-Go persistent storage backend, Wasm UDF sandbox (`wazero`), multi-core parallel OLAP scans. | **Planned** |
 
@@ -86,9 +86,9 @@ Driver Cert    & Zero-Race    Availability   Security/Auth  Tooling & CLI
 
 ## 3. Completed Milestone: Phase 6 (v0.90.0 Feature Freeze & Hardening Suite)
 
-Phase 6 represents the comprehensive production hardening and feature freeze milestone (`v0.90.0`), encompassing the `v0.90.0-feature-freeze` baseline through `v0.90.0-beta1`, `v0.90.0-beta2`, and `v0.90.0-beta3`:
+Phase 6 represents the comprehensive production hardening and feature freeze milestone (`v0.90.0`), encompassing the `v0.90.0-beta0` (Feature Freeze baseline) through `v0.90.0-beta1`, `v0.90.0-beta2`, and `v0.90.0-beta3`:
 
-### 3.1. Core Architectural Deliverables Completed in v0.90.0 Feature Freeze
+### 3.1. Core Architectural Deliverables Completed in v0.90.0-beta0 (Feature Freeze)
 * **Always On Style Automatic Failover & Leader Election (`pkg/replication`)**:
   Highest-LSN precedence rule, monotonic leader terms, automated replica promotion, and split-brain fencing.
 * **Decoupled Real-Time CDC & Transactional Outbox (`pkg/cdc`, `pkg/storage`)**:

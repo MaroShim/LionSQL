@@ -37,7 +37,7 @@
 
 ## 2. v0.90.0 릴리스 스프린트 마감 현황 (100% Completed)
 
-LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-feature-freeze`부터 `v0.90.0-beta1`, `v0.90.0-beta2`, `v0.90.0-beta3`)에서 진행된 핵심 안정화, 도구 호환성, 성능 최적화, 무결성 과제가 **100% 완료([x])**되어 스프린트가 공식 마감되었습니다.
+LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기준점)부터 `v0.90.0-beta1`, `v0.90.0-beta2`, `v0.90.0-beta3`)에서 진행된 핵심 안정화, 도구 호환성, 성능 최적화, 무결성 과제가 **100% 완료([x])**되어 스프린트가 공식 마감되었습니다.
 
 5대 프로덕션 릴리스 품질 관문(Gate 1: 다중 와이어 드라이버 100% 인증, Gate 2: ACID 및 Zero-Race 20k TPS, Gate 3: Always On HA 및 CDC, Gate 4: 엔터프라이즈 보안 TDE/RBAC, Gate 5: 운영 도구 및 단일 CLI)이 모두 충족되었습니다.
 
@@ -250,7 +250,7 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-feature-freeze`부터 `v0.9
 - [x] **과거 107대 데이터 무결성 결함 전수 조치 및 아카이빙 (`DOC-ARCHIVE-1`) (2026-10-20)**:
   - 107대 결함 조치 내역을 루트 [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)로 이관 및 아라비아 숫자 넘버링 정돈 완료.
 
-### 5.2. v0.90.0 Feature Freeze 주요 완성 내역 (2026-10-19 이전)
+### 5.2. v0.90.0-beta0 Feature Freeze 주요 완성 내역 (2026-10-19 이전)
 
 - [x] **통합 SQL 추상화 레이어 기반 결함군 일괄 해결 (`SQL-ABSTRACT-1`)**:
   - `storage.Record` 1급 객체화 및 `Record.Get` 대소문자 무관 탐색을 바탕으로 전 계층 경계 정합성 전면 보강.

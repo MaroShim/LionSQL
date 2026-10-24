@@ -302,7 +302,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.90.0-feature-freeze] - 2026-10-19
+## [0.90.0-beta0] - 2026-10-19 (Feature Freeze Baseline)
 
 ### Added
 - **Documentation Overhaul & README Overview Refinement**: Refined and modernized the executive overview at the very top of both `README.md` and `README.ko.md` to prominently foreground LionSQL's five core architectural pillars: (1) Native Microsoft SQL Server T-SQL and Stored Procedure Execution on VDBE, (2) Broad PostgreSQL Wire Protocol v3 and SQL dialect compatibility, (3) Embedded zero-dependency Web Studio & REST BaaS API, (4) Ultra-compact single static standalone executable (< 100MB, ~50MB), and (5) High-performance OLTP throughput (16k~28k+ TPS) with Non-Blocking Snapshot Isolation.
