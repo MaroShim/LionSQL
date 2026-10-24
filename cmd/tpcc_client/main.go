@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"lionsql/pkg/execution"
+
 	_ "github.com/lib/pq"
 	_ "github.com/microsoft/go-mssqldb"
 )
@@ -49,11 +51,11 @@ func (s *txStats) record(d time.Duration, ok bool, retryCount int) {
 
 func main() {
 	hostFlag := flag.String("host", "127.0.0.1", "Target database host")
-	portFlag := flag.Int("port", 1433, "Target database port (1433 for TDS, 5433 for Postgres)")
-	protoFlag := flag.String("protocol", "tds", "Wire protocol: tds (SQL Server / MS-TDS) or postgres (PGWire)")
+	portFlag := flag.Int("port", 1433, "Target database port (default: 1433 for TDS, 5433 for Postgres)")
+	protoFlag := flag.String("protocol", "tds", "Wire protocol: tds (default: SQL Server / MS-TDS) or postgres (PGWire)")
 	userFlag := flag.String("user", "sa", "Database user (default: sa for TDS, postgres for PGWire)")
 	passFlag := flag.String("password", "1234567890", "Database password")
-	dbFlag := flag.String("database", "", "Database name (default: master for TDS, postgres for PGWire)")
+	dbFlag := flag.String("database", "master", "Database name (default: master for TDS, postgres for PGWire)")
 
 	numWarehouses := flag.Int("warehouses", 16, "Number of warehouses (TPC-C scale factor)")
 	numWorkers := flag.Int("workers", 32, "Number of concurrent client workers")
@@ -63,14 +65,27 @@ func main() {
 	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries on conflict")
 	setupFlag := flag.Bool("setup", true, "Automatically setup schemas, stored procedures, and initial seed data")
 	flag.Parse()
+	execution.InitRuntimeTuning(0, 0)
 
 	protocol := strings.ToLower(strings.TrimSpace(*protoFlag))
+	if protocol == "" {
+		protocol = "tds"
+	}
 	if protocol == "pg" || protocol == "pgwire" {
 		protocol = "postgres"
 	}
 	if protocol != "tds" && protocol != "postgres" {
 		fmt.Printf("Unknown protocol %q. Choose 'tds' or 'postgres'.\n", *protoFlag)
 		os.Exit(1)
+	}
+
+	targetPort := *portFlag
+	if targetPort <= 0 {
+		if protocol == "tds" {
+			targetPort = 1433
+		} else {
+			targetPort = 5433
+		}
 	}
 
 	database := *dbFlag
@@ -80,10 +95,18 @@ func main() {
 		} else {
 			database = "postgres"
 		}
+	} else if database == "master" && protocol == "postgres" {
+		database = "postgres"
 	}
 
 	user := *userFlag
-	if user == "sa" && protocol == "postgres" {
+	if user == "" {
+		if protocol == "tds" {
+			user = "sa"
+		} else {
+			user = "postgres"
+		}
+	} else if user == "sa" && protocol == "postgres" {
 		user = "postgres"
 	}
 
@@ -97,20 +120,20 @@ func main() {
 		u := &url.URL{
 			Scheme:   "sqlserver",
 			User:     url.UserPassword(user, *passFlag),
-			Host:     fmt.Sprintf("%s:%d", *hostFlag, *portFlag),
+			Host:     fmt.Sprintf("%s:%d", *hostFlag, targetPort),
 			RawQuery: query.Encode(),
 		}
 		dsn = u.String()
 	} else {
 		driverName = "postgres"
 		dsn = fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-			*hostFlag, *portFlag, user, *passFlag, database)
+			*hostFlag, targetPort, user, *passFlag, database)
 	}
 
 	fmt.Println("================================================================================")
 	fmt.Println("  LionSQL TPC-C Network Benchmark Client (tpcc-client)")
 	fmt.Println("================================================================================")
-	fmt.Printf(" [Target Endpoint] %s:%d (Protocol: %s, DB: %s, User: %s)\n", *hostFlag, *portFlag, protocol, database, user)
+	fmt.Printf(" [Target Endpoint] %s:%d (Protocol: %s, DB: %s, User: %s)\n", *hostFlag, targetPort, protocol, database, user)
 	fmt.Printf(" [Scale Factor]    %d Warehouses (%d Items, %d Customers/District)\n", *numWarehouses, *numItems, *numCustPerDist)
 	fmt.Printf(" [Concurrency]     %d Concurrent Network Client Workers\n", *numWorkers)
 	fmt.Printf(" [Duration]        %v\n", *durationFlag)

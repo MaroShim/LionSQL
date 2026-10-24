@@ -44,6 +44,7 @@
 | **P2** | **KISS/스캐너통합** | **MERGE, STRING_SPLIT, PROCS 잔여 수동 분할 루프 `sqlutil.Tokenizer` 전면 일원화 (`ARCH-LEX-2`)** | `pkg/sqlutil`, `pkg/engine` | **완료 (`[x]`)** | [`REFACTORING.ko.md`](REFACTORING.ko.md) |
 | **P1** | **성능/OCC최적화** | **In-Memory OCC 5대 최적화 (비트마스크 샤드 추적, Table/Shard 캐싱, 지연 유니크셋, 비차단 AOF 압축, 힙 오염 제거) (`VPERF-15`)** | `pkg/storage/memengine` | **완료 (`[x]`)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) |
 | **P1** | **성능/GC튜닝** | **Go 런타임 메모리 거버너 연동 GOGC 디폴트 최적화(GOGC=200 + GOMEMLIMIT) 및 벤치마크/서버 전면 적용 (`VPERF-16`)** | `pkg/execution`, `pkg/config`, `cmd/` | **완료 (`[x]`)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) Stage 2 |
+| **P1** | **성능/OCC수직최적화** | **In-Memory OCC 3대 핫패스 고속화 (IntValue/FloatValue 0-Alloc 지연생성, 락 외부 사전 WAL 인코딩, 샤드 엔트리 단일 맵화) (`VPERF-17`)** | `pkg/storage`, `pkg/storage/memengine` | **완료 (`[x]`)** | [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md) Stage 4 & 7 |
 | **P1** | **벤치/와이어클라이언트** | **실행 중인 서버 대상 네트워크 TPC-C 벤치마크 클라이언트 구현 (`BENCH-TPCC-CLIENT-1`)** | `cmd/tpcc_client` | **완료 (`[x]`)** | TDS(:1433)/PGWire(:5433) 소켓 접속, 5대 트랜잭션 동시 부하 주입 및 Web Studio 실시간 TPS 연동 완비 |
 | **P1** | **벤치/클라이언트최적화** | **네트워크 TPC-C 클라이언트 1-RTT 단일 배치 전송, 기본 스케일팩터 최적화(16 Warehouses, 32 Workers), 50건 청크 고속 시딩 및 Delivery 키 분산 (`BENCH-TPCC-CLIENT-2`)** | `cmd/tpcc_client` | **완료 (`[x]`)** | New-Order/Delivery/Stock-Level 12회 소켓 핑퐁을 단일 1-RTT 배치로 통합, 16wh/32wk 스케일 최적화로 OCC 충돌 해소 및 7,400+ TPS 달성 |
 | **P1** | **엔진/타입무결성** | **휴리스틱 타입 추론 및 임의 문자열 수치 강제변환 안티패턴 전면 제거 (`REFACTOR-TYPE-GUESS-1`)** | `pkg/sqlutil`, `pkg/engine`, `pkg/execution`, `pkg/proc`, `pkg/wire`, `pkg/api` | **완료 (`[x]`)** | [`notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](notes/TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md) |
@@ -706,5 +707,11 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
   - `pkg/config/config.go`: `ResourcesConfig.GCPercent` 필드 추가 (기본값 `200`).
   - `cmd/lionsql`, `cmd/bench`, `cmd/tpcc_runtime`, `cmd/tpcc_kernel`: 기동 시 `InitRuntimeTuning`을 호출하여 GOMEMLIMIT 소프트 메모리 상한과 결합된 고효율 GC 스케줄링 적용.
   - T-SQL VDBE 런타임 TPC-C 벤치마크 결과: 13,956 TPS (375k tpmC) ➔ **17,150.86 TPS (454k tpmC)**로 **+22.9%** 처리량 향상 달성.
+- [x] **In-Memory OCC 3대 핫패스 수직 고속화 (`VPERF-17`) (`pkg/storage`, `pkg/storage/memengine`, `cmd/tpcc_client`)**:
+  - `pkg/storage/engine.go`: `storage.IntValue(v)` 및 `FloatValue(v)`의 즉시 `*big.Int` 힙 할당을 제거하고 `v.Decimal()` 호출 시 온디맨드 지연 생성으로 전환하여 수백만 건의 정수/실수 연산을 0-Allocation 값 타입으로 경량화 (Stage 7).
+  - `pkg/storage/memengine/tx.go`: 샤드 익스클루시브 락 획득 전 단계에서 MessagePack 행 직렬화(`storage.EncodeRow`)를 사전 완료(`walData`)하여 락 보유 시간을 최소화하고 멀티코어 커밋 충돌을 원천 억제 (Stage 4).
+  - `pkg/storage/memengine/table_data.go`: 각 샤드의 `rows map`과 `versions map`을 `entries map[string]shardEntry (ver, row)` 단일 맵으로 통합하여 단건 조회/커밋 시 해시 계산 및 맵 룩업/업데이트 횟수를 50% 절감하고 L1/L2 캐시 히트율 극대화.
+  - `cmd/tpcc_client`: 기본 접속 포트/프로토콜을 TDS(`1433`, `master`, `sa`)로 정돈 및 `InitRuntimeTuning` 런타임 최적화 연동.
+  - TPC-C VDBE 런타임 벤치마크: **18,037.88 TPS / 479,183.25 tpmC** 달성 (트랜잭션 충돌 중단율 2.25% ➔ 1.96% 감소, New-Order P50 지연시간 0.73ms ➔ 0.63ms 단축).
 
 

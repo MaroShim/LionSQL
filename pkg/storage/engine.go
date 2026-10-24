@@ -481,7 +481,7 @@ func (v Value) Bytes() []byte {
 }
 
 func IntValue(v int64) Value {
-	return Value{Type: TypeInt, IVal: v, FVal: float64(v), DVal: NewDecimalFromInt(v, 0)}
+	return Value{Type: TypeInt, IVal: v, FVal: float64(v)}
 }
 
 func StringValue(v string) Value {
@@ -489,7 +489,7 @@ func StringValue(v string) Value {
 }
 
 func FloatValue(v float64) Value {
-	return Value{Type: TypeFloat, FVal: v, IVal: int64(v), DVal: NewDecimalFromFloat(v, 4)}
+	return Value{Type: TypeFloat, FVal: v, IVal: int64(v)}
 }
 
 func BoolValue(v bool) Value {
@@ -722,7 +722,7 @@ func (v Value) Equal(other Value) bool {
 	case TypeFloat:
 		return v.FVal == other.FVal || math.Abs(v.FVal-other.FVal) < 1e-9
 	case TypeDecimal:
-		return v.DVal.Equal(other.DVal)
+		return v.Decimal().Equal(other.Decimal())
 	case TypeBool:
 		return v.BVal == other.BVal
 	case TypeDateTime, TypeDate:
@@ -787,7 +787,7 @@ func (v Value) Compare(other Value) int {
 	case TypeFloat:
 		return CompareFloatEpsilon(v.FVal, other.FVal)
 	case TypeDecimal:
-		return v.DVal.Cmp(other.DVal)
+		return v.Decimal().Cmp(other.Decimal())
 	case TypeBool:
 		if !v.BVal && other.BVal {
 			return -1

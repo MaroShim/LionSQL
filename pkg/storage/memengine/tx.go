@@ -126,6 +126,7 @@ type rowChange struct {
 	rec      storage.Record
 	td       *TableData
 	shardIdx int
+	walData  []byte
 }
 
 type savepointState struct {
@@ -1633,6 +1634,27 @@ func (tx *Transaction) Commit() error {
 		tableSet[tName].mu.RLock()
 	}
 
+	// 3.1 Pre-encode WAL payloads BEFORE acquiring shard exclusive locks (Stage 4 Out-of-Lock WAL Encoding)
+	// Eliminates CPU-heavy MsgPack row serialization while table shards are locked.
+	needWAL := (tx.engine.wal != nil || tx.engine.walHook != nil)
+	if needWAL && len(tx.changes) > 0 {
+		for chKey, ch := range tx.changes {
+			if storage.IsTemporaryTable(ch.table) || ch.kind == changeDelete {
+				continue
+			}
+			td := ch.td
+			if td == nil {
+				td = tableSet[ch.table]
+			}
+			if td != nil {
+				if rawData, err := storage.EncodeRow(&td.Schema, ch.row); err == nil {
+					ch.walData = rawData
+					tx.changes[chKey] = ch
+				}
+			}
+		}
+	}
+
 	// 4. Acquire exclusive lock on each affected shard in strict canonical order
 	for i := range neededShards {
 		neededShards[i].td.shards[neededShards[i].shardIdx].mu.Lock()
@@ -1668,9 +1690,10 @@ func (tx *Transaction) Commit() error {
 			sIdx = hashShard(ch.key)
 		}
 		sh := &td.shards[sIdx]
-		curVer := sh.versions[ch.key]
+		entry, exists := sh.entries[ch.key]
+		curVer := entry.ver
 		if ch.kind == changeInsert {
-			if _, exists := sh.rows[ch.key]; exists {
+			if exists {
 				return storage.ErrSerializationFailure
 			}
 			for _, idxData := range td.Indexes {
@@ -1776,12 +1799,12 @@ func (tx *Transaction) Commit() error {
 			sIdx = hashShard(ch.key)
 		}
 		sh := &td.shards[sIdx]
-		oldRow, hadOld := sh.rows[ch.key]
+		oldEntry, hadOld := sh.entries[ch.key]
+		oldRow := oldEntry.row
 
 		switch ch.kind {
 		case changeInsert:
-			sh.rows[ch.key] = ch.row
-			sh.versions[ch.key] = 1
+			sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
 			if td.Schema.IsPartitioned() {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row); err == nil {
 					td.partMu.Lock()
@@ -1797,8 +1820,7 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		case changeUpdate:
-			sh.rows[ch.key] = ch.row
-			sh.versions[ch.key] = ch.baseVer + 1
+			sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
 			if td.Schema.IsPartitioned() {
 				var oldPartID, newPartID string
 				if hadOld {
@@ -1828,8 +1850,7 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		case changeDelete:
-			delete(sh.rows, ch.key)
-			delete(sh.versions, ch.key)
+			delete(sh.entries, ch.key)
 			if td.Schema.IsPartitioned() && hadOld {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
 					td.partMu.Lock()
@@ -1848,7 +1869,6 @@ func (tx *Transaction) Commit() error {
 
 	// 7. Assign monotonic LSN and append WAL frame while shard locks are still held
 	// so causal row version order and LSN order in the WAL file strictly match.
-	needWAL := (tx.engine.wal != nil || tx.engine.walHook != nil)
 	var walRec WALRecord
 	var walSeq int64
 	if needWAL && len(tx.changes) > 0 {
@@ -1866,16 +1886,14 @@ func (tx *Transaction) Commit() error {
 			case changeDelete:
 				opType = OpDelete
 			}
-			var rawData []byte
-			td := ch.td
-			if td == nil {
-				td, _ = sqlutil.MapGetFold(tx.engine.tables, ch.table)
-			}
-			if td != nil && ch.kind != changeDelete {
-				var err error
-				rawData, err = storage.EncodeRow(&td.Schema, ch.row)
-				if err != nil {
-					rawData = nil
+			rawData := ch.walData
+			if rawData == nil && ch.kind != changeDelete {
+				td := ch.td
+				if td == nil {
+					td, _ = sqlutil.MapGetFold(tx.engine.tables, ch.table)
+				}
+				if td != nil {
+					rawData, _ = storage.EncodeRow(&td.Schema, ch.row)
 				}
 			}
 			ops = append(ops, WALOp{

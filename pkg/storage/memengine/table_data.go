@@ -54,11 +54,15 @@ func (idx *IndexData) SyncEntries() {
 
 const numTableShards = 64
 
+type shardEntry struct {
+	ver int64
+	row storage.Row
+}
+
 type tableShard struct {
-	mu       sync.RWMutex
-	rows     map[string]storage.Row
-	versions map[string]int64
-	_pad     [32]byte
+	mu      sync.RWMutex
+	entries map[string]shardEntry
+	_pad    [40]byte
 }
 
 // TableData stores rows in memory for a single table with fine-grained sharded OCC version tracking and secondary indexes.
@@ -91,22 +95,18 @@ func (td *TableData) initShards() {
 
 func (td *TableData) initShardsInternal() {
 	for i := 0; i < numTableShards; i++ {
-		if td.shards[i].rows == nil {
-			td.shards[i].rows = make(map[string]storage.Row)
-		}
-		if td.shards[i].versions == nil {
-			td.shards[i].versions = make(map[string]int64)
+		if td.shards[i].entries == nil {
+			td.shards[i].entries = make(map[string]shardEntry)
 		}
 	}
 	if len(td.Rows) > 0 {
 		for k, r := range td.Rows {
 			sIdx := hashShard(k)
-			td.shards[sIdx].rows[k] = r
-			if td.Versions != nil {
-				td.shards[sIdx].versions[k] = td.Versions[k]
-			} else {
-				td.shards[sIdx].versions[k] = 1
+			ver := int64(1)
+			if td.Versions != nil && td.Versions[k] > 0 {
+				ver = td.Versions[k]
 			}
+			td.shards[sIdx].entries[k] = shardEntry{ver: ver, row: r}
 		}
 	}
 	td.shardsInit = true
@@ -121,10 +121,12 @@ func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.RLock()
-	r, ok := sh.rows[pk]
-	v := sh.versions[pk]
+	entry, ok := sh.entries[pk]
 	sh.mu.RUnlock()
-	return r, v, ok
+	if !ok {
+		return storage.Row{}, 0, false
+	}
+	return entry.row, entry.ver, true
 }
 
 func (td *TableData) hasKey(pk string) bool {
@@ -132,7 +134,7 @@ func (td *TableData) hasKey(pk string) bool {
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.RLock()
-	_, ok := sh.rows[pk]
+	_, ok := sh.entries[pk]
 	sh.mu.RUnlock()
 	return ok
 }
@@ -142,8 +144,7 @@ func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.Lock()
-	sh.rows[pk] = row
-	sh.versions[pk] = ver
+	sh.entries[pk] = shardEntry{ver: ver, row: row}
 	sh.mu.Unlock()
 }
 
@@ -152,11 +153,12 @@ func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.Lock()
-	oldRow, hadOld := sh.rows[pk]
-	delete(sh.rows, pk)
-	delete(sh.versions, pk)
+	entry, hadOld := sh.entries[pk]
+	if hadOld {
+		delete(sh.entries, pk)
+	}
 	sh.mu.Unlock()
-	return oldRow, hadOld
+	return entry.row, hadOld
 }
 
 func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
@@ -164,8 +166,8 @@ func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.RLock()
-		for k, r := range sh.rows {
-			if !fn(k, r) {
+		for k, entry := range sh.entries {
+			if !fn(k, entry.row) {
 				sh.mu.RUnlock()
 				return
 			}
@@ -180,7 +182,7 @@ func (td *TableData) rowCount() int64 {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.RLock()
-		total += int64(len(sh.rows))
+		total += int64(len(sh.entries))
 		sh.mu.RUnlock()
 	}
 	return total
@@ -192,7 +194,7 @@ func (td *TableData) collectKeys(filter func(pk string) bool) []string {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.RLock()
-		for k := range sh.rows {
+		for k := range sh.entries {
 			if filter == nil || filter(k) {
 				keys = append(keys, k)
 			}
@@ -211,9 +213,9 @@ func (td *TableData) syncShardsToMapsLocked() {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.RLock()
-		for k, r := range sh.rows {
-			td.Rows[k] = r
-			td.Versions[k] = sh.versions[k]
+		for k, entry := range sh.entries {
+			td.Rows[k] = entry.row
+			td.Versions[k] = entry.ver
 		}
 		sh.mu.RUnlock()
 	}
@@ -230,8 +232,7 @@ func (td *TableData) truncateShardsLocked() {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.Lock()
-		sh.rows = make(map[string]storage.Row)
-		sh.versions = make(map[string]int64)
+		sh.entries = make(map[string]shardEntry)
 		sh.mu.Unlock()
 	}
 	td.Rows = make(map[string]storage.Row)
@@ -275,8 +276,11 @@ func (td *TableData) addColumnValues(val storage.Value) {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.Lock()
-		for k, r := range sh.rows {
-			sh.rows[k] = storage.Row{Values: append(r.Values, val)}
+		for k, entry := range sh.entries {
+			sh.entries[k] = shardEntry{
+				ver: entry.ver,
+				row: storage.Row{Values: append(entry.row.Values, val)},
+			}
 		}
 		sh.mu.Unlock()
 	}
