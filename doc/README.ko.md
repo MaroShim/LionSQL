@@ -64,6 +64,9 @@
   * VDBE 트랜잭션 결합(`exec.RunInTx`)과 벤치마크 단일 트랜잭션 원자성 원칙.
 * [`DATA_DICTIONARY.md`](DATA_DICTIONARY.md)
   * 시스템 카탈로그, 시스템 테이블, 스키마 메타데이터 영속화 및 가상 카탈로그 뷰(`sys.tables`, `INFORMATION_SCHEMA`).
+* [`RANGE_PARTITIONING.md`](RANGE_PARTITIONING.md)
+  * ClickHouse 스타일 시계열 자동 롤링 레인지 파티셔닝 및 $O(1)$ 초고속 파티션 파기.
+  * 수동 생성 없는 동적 파티션 수명주기(`toYYYYMM`, `MONTH`, `toYYYYMMDD`, `DAY`, `toYYYY`, `YEAR`), CBO 파티션 프루닝을 통한 디스크 I/O 70%+ 절감, `EXPLAIN` 시각화 및 시스템 뷰(`system.partitions`).
 * [`HIGH_AVAILABILITY.md`](HIGH_AVAILABILITY.md)
   * 크래시 안전성, 체크포인팅, AOF 압축 및 무중단 온라인 핫 백업/복원 파이프라인.
 * [`STORAGE_ENCRYPTION_GUIDE.md`](STORAGE_ENCRYPTION_GUIDE.md)

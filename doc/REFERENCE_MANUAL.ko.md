@@ -66,7 +66,9 @@
 
 ### 제4장. SQL 구문 및 명령문 사양 (SQL Statement Reference)
 * **4.1. 데이터 정의어 (DDL: Data Definition Language)**
-  * `CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`, `TRUNCATE TABLE`
+  * `CREATE TABLE` (자동 롤링 `PARTITION BY` 지원), `ALTER TABLE` (`DROP PARTITION` 지원)
+  * `SHOW PARTITIONS` (파티션 현황 및 행 수 조회)
+  * `DROP TABLE`, `TRUNCATE TABLE`
   * `CREATE INDEX`, `DROP INDEX`
   * `CREATE VIEW`, `DROP VIEW`
   * `CREATE PROCEDURE`, `ALTER PROCEDURE`, `DROP PROCEDURE`
@@ -803,7 +805,7 @@ LionSQL의 스토리지 엔진(인메모리 OCC 및 WiredTiger)은 디스크 용
 ### 4.1. 데이터 정의어 (DDL)
 
 #### 1. `CREATE TABLE` (테이블 정의)
-데이터베이스에 새로운 물리 테이블 스키마를 정의합니다. 기본 키(PRIMARY KEY), 단조 증가 자동 번호(IDENTITY), 체크 제약조건(CHECK), 외래 키(FOREIGN KEY) 연쇄 동작을 완벽히 지원합니다.
+데이터베이스에 새로운 물리 테이블 스키마를 정의합니다. 기본 키(PRIMARY KEY), 단조 증가 자동 번호(IDENTITY), 체크 제약조건(CHECK), 외래 키(FOREIGN KEY) 연쇄 동작 및 **ClickHouse 스타일 시계열 자동 롤링 파티셔닝(`PARTITION BY`)**을 완벽히 지원합니다.
 
 * **구문(BNF)**:
   ```sql
@@ -818,10 +820,18 @@ LionSQL의 스토리지 엔진(인메모리 OCC 및 WiredTiger)은 디스크 용
       [CONSTRAINT constraint_name FOREIGN KEY (col1, ...) REFERENCES ref_table(ref_col1, ...)
           [ON DELETE {CASCADE | SET NULL | NO ACTION}]
           [ON UPDATE {CASCADE | NO ACTION}]]
-  );
+  ) [PARTITION BY partition_expression];
   ```
+
+* **파티션 표현식 (`PARTITION BY`) 지원 함수**:
+  * `toYYYYMM(col)` 또는 `MONTH(col)`: `YYYYMM` 형식(예: `202610`) 월 단위 자동 롤링 파티셔닝
+  * `toYYYYMMDD(col)` 또는 `DAY(col)`: `YYYYMMDD` 형식(예: `20261024`) 일 단위 자동 롤링 파티셔닝
+  * `toYYYY(col)` 또는 `YEAR(col)`: `YYYY` 형식(예: `2026`) 연 단위 자동 파티셔닝
+  * `<column_name>`: 문자열/정수 컬럼 값 기반 범주형/테넌트별 파티셔닝
+
 * **실행 예시**:
   ```sql
+  -- 표준 주문 테이블
   CREATE TABLE orders (
       order_id INT IDENTITY(1,1) PRIMARY KEY,
       customer_id INT NOT NULL,
@@ -831,21 +841,56 @@ LionSQL의 스토리지 엔진(인메모리 OCC 및 WiredTiger)은 디스크 용
       CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) 
           REFERENCES customers(customer_id) ON DELETE CASCADE
   );
+
+  -- 시계열 자동 롤링 파티셔닝 테이블 (월 단위)
+  CREATE TABLE audit_logs (
+      id INT PRIMARY KEY,
+      created_at DATETIME NOT NULL,
+      user_id VARCHAR(50),
+      action VARCHAR(100)
+  ) PARTITION BY toYYYYMM(created_at);
   ```
 
-#### 2. `ALTER TABLE` (테이블 스키마 변경)
-기존 테이블에 신규 컬럼을 추가하거나 기존 컬럼을 제거합니다. LionSQL의 메타데이터 카탈로그는 원자적 카탈로그 스왑을 통해 락 경합 없이 서브밀리초 단위로 컬럼을 추가합니다.
+#### 2. `ALTER TABLE` (테이블 스키마 변경 및 파티션 삭제)
+기존 테이블에 신규 컬럼을 추가하거나 기존 컬럼을 제거하며, 만료된 시계열 파티션을 $O(1)$ 속도로 일괄 파기합니다.
 
 * **구문**:
   ```sql
   ALTER TABLE table_name ADD column_name data_type [DEFAULT default_value] [NOT NULL];
   ALTER TABLE table_name DROP COLUMN column_name;
+  ALTER TABLE table_name DROP PARTITION 'partition_id';
   ```
 * **실행 예시**:
   ```sql
   ALTER TABLE customers ADD phone_number VARCHAR(30) DEFAULT 'N/A';
   ALTER TABLE customers DROP COLUMN legacy_fax;
+
+  -- 2026년 8월 파티션 O(1) 초고속 물리 삭제 (보조 인덱스 자동 정리)
+  ALTER TABLE audit_logs DROP PARTITION '202608';
   ```
+
+#### 2.1. `SHOW PARTITIONS` (파티션 목록 및 행 수 확인)
+파티셔닝된 테이블의 물리 파티션 식별자와 현재 실시간 적재 행 수를 즉시 조회합니다.
+
+* **구문**:
+  ```sql
+  SHOW PARTITIONS [FROM] table_name;
+  ```
+* **실행 예시**:
+  ```sql
+  SHOW PARTITIONS audit_logs;
+  ```
+* **출력 결과**:
+  ```
+  +------------+-----------+-----------+
+  | table_name | partition | row_count |
+  +------------+-----------+-----------+
+  | audit_logs | 202608    | 15200     |
+  | audit_logs | 202609    | 340500    |
+  | audit_logs | 202610    | 412000    |
+  +------------+-----------+-----------+
+  ```
+  *(동일한 정보는 `SELECT * FROM system.partitions WHERE table_name = 'audit_logs';` 가상 뷰를 통해서도 SQL 쿼리가 가능합니다.)*
 
 #### 3. `DROP TABLE` / `TRUNCATE TABLE` (테이블 삭제 및 절단)
 * **`DROP TABLE`**: 테이블 메타데이터와 물리 데이터 파일을 완전히 파기합니다.

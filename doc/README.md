@@ -62,6 +62,9 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * VDBE transaction coupling (`exec.RunInTx`) and benchmark transaction fidelity.
 * [`DATA_DICTIONARY.md`](DATA_DICTIONARY.md)
   * System catalogs, system tables, schema metadata persistence, and virtual catalog views (`sys.tables`, `INFORMATION_SCHEMA`).
+* [`RANGE_PARTITIONING.md`](RANGE_PARTITIONING.md)
+  * ClickHouse-style Auto Rolling Range Partitioning and $O(1)$ fast partition dropping.
+  * Zero-management dynamic partition lifecycle (`toYYYYMM`, `MONTH`, `toYYYYMMDD`, `DAY`, `toYYYY`, `YEAR`), CBO partition pruning with 70%+ I/O reduction, graphical `EXPLAIN` visualization, and system catalog views (`system.partitions`).
 * [`HIGH_AVAILABILITY.md`](HIGH_AVAILABILITY.md)
   * Crash safety, checkpointing, AOF compaction, and online hot backup/restore pipelines.
 * [`STORAGE_ENCRYPTION_GUIDE.md`](STORAGE_ENCRYPTION_GUIDE.md)
