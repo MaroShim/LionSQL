@@ -116,11 +116,12 @@
 | **P3** | **프로토콜/보안** | **TDS 8.0 / Pre-Login SSL/TLS 암호화 핸드셰이크 보강 (`SEC-1`)** | `pkg/wire/tds` | **Post-1.0 연기 (Postponed)** | - |
 | **P3** | **인증/토큰교환** | **클라이언트 사이드 OIDC 토큰 교환 (Client-Side Token Exchange) (`AUTH-1`)** | `pkg/auth`, `pkg/api` | **Post-1.0 백로그 (Postponed)** | `GEMINI.md` 8.6절 |
 | **P1** | **문서/릴리스** | **v0.90.0 기능 동결 4단계 문서 전수 정돈 마스터 플랜 (`DOC-CLEANUP`)** | `CHANGELOG.md`, `README.md`, `doc/`, `ROADMAP.md` | **완료 (`[x]`)** | [`notes/DOCUMENTATION_CLEANUP_PLAN.md`](notes/DOCUMENTATION_CLEANUP_PLAN.md) |
-| **P1** | **보안/변수치환** | **세션 변수(`@var`) 치환 시 작은따옴표 이스케이프 및 인젝션 방어 (`SEC-ESC-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
-| **P1** | **스토리지/생명주기** | **세션 종료 및 연결 리셋 시 테이블 변수(`TableVars`) 및 임시 테이블 누수 완전 해제 (`SESS-CLEAN-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
-| **P1** | **브랜드/정합성** | **웹훅 헤더(`X-LionSQL-*`), SDK 엔드포인트/클래스명, 시스템 변수 잔여 브랜드 완전 정돈 (`BRAND-UNIFY-1`)** | `pkg/api`, `pkg/proc`, `pkg/engine`, `pkg/wire` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
-| **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
-| **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P3** | **문서/다국어** | **`doc/` 내 잔여 한글 문서(`USER_MANUAL`, `REFERENCE_MANUAL`, `PERFORMANCE_GUIDE`, `WEB_STUDIO_GUIDE`) 공식 영문판 작성 및 상호 링크 (`DOC-EN-1`)** | `doc/` | **Post-1.0 백로그 (Postponed)** | `USER_MANUAL.ko.md`, `REFERENCE_MANUAL.ko.md`, `TRANSACTION_PERFORMANCE_GUIDE.ko.md`, `WEB_STUDIO_GUIDE.ko.md` |
+| **P1** | **보안/변수치환** | **세션 변수(`@var`) 치환 시 작은따옴표 이스케이프 및 인젝션 방어 (`SEC-ESC-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/query_utils.go` | **완료 (`[x]`)** | [`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P1** | **스토리지/생명주기** | **세션 종료 및 연결 리셋 시 테이블 변수(`TableVars`) 및 임시 테이블 누수 완전 해제 (`SESS-CLEAN-1`)** | `pkg/engine/sqlexec.go`, `pkg/engine/coordinator_impl.go` | **완료 (`[x]`)** | [`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P1** | **브랜드/정합성** | **웹훅 헤더(`X-LionSQL-*`), SDK 엔드포인트/클래스명, 시스템 변수 잔여 브랜드 완전 정돈 (`BRAND-UNIFY-1`)** | `pkg/api`, `pkg/proc`, `pkg/engine`, `pkg/wire` | **완료 (`[x]`)** | [`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P1** | **문서/출시정합성** | **`ROADMAP.md`와 `TODO.ko.md` 1.0 Gate 4 출시 기준 일치화 및 문서 권한(`0644`) 정규화 (`REL-ALIGN-1`)** | `ROADMAP.md`, `TODO.ko.md`, `doc/` | **완료 (`[x]`)** | [`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
+| **P2** | **보안/운영가드** | **외부 인터페이스 바인딩(`0.0.0.0`) 시 기본 패스워드 사용 차단 및 프로덕션 기동 가드레일 (`PROD-SEC-1`)** | `cmd/lionsql`, `pkg/config` | **완료 (`[x]`)** | [`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md) |
 | **P3** | **보안/감사** | **엔터프라이즈 암호학적 불변 감사 로그 서브시스템 구축 (`AUDIT-LOG-1`)** | `pkg/audit` | **Post-1.0 연기 (`v1.1.0`)** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **P1** | **엔진/무결성** | **비-`id` 기본키 테이블 및 VDBE의 `UPDATE`/`DELETE` 시 Go 맵 무작위 순회로 엉뚱한 행 삭제/수정 방지 (`BUG-PK-1`)** | `pkg/engine`, `pkg/proc/runtime` | **완료 (`[x]`)** | - |
 | **P1** | **엔진/대소문자** | **`TableSchema.FindColumn`의 `strings.EqualFold` 대소문자 무관 탐색 보장 (`BUG-CASE-1`)** | `pkg/storage/engine.go` | **완료 (`[x]`)** | - |
@@ -336,7 +337,7 @@
      - Text 형식: `(cost=0.00..0.00 rows=10 width=0) (actual time=0.000..0.250 rows=10 loops=1)`
      - JSON 형식: `"Actual Startup Time"`, `"Actual Total Time"`, `"Actual Rows"`, `"Actual Loops"` 완전 직렬화.
 
-#### 6. LionSQL 1.0 릴리즈 사전 점검 및 정합성 액션 플랜 (`doc/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`)
+#### 6. LionSQL 1.0 릴리즈 사전 점검 및 정합성 액션 플랜 (`notes/RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`)
 * **과제 개요**: 1.0 LTS 정식 출시를 앞두고 실시된 전수 아키텍처 리뷰에서 도출된 핵심 개선 과제 (보안 이스케이프, 임시 객체 누수, 브랜드 단일화, 릴리즈 게이트 일치화).
 * **세부 과제 및 진행 현황**:
   1. **[A] 세션 변수(`@var`) 치환 시 작은따옴표 이스케이프 (`SEC-ESC-1`, 완료 `[x]`)**:
