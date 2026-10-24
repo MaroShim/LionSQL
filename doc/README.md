@@ -1,5 +1,7 @@
 # LionSQL Technical Documentation Directory
 
+> [한국어 문서 (Korean Version)](README.ko.md)
+
 Welcome to the comprehensive technical documentation for **LionSQL**—a high-concurrency embedded OLTP database engine and modern Backend-as-a-Service (BaaS) packaged as a single standalone executable.
 
 ---
@@ -16,7 +18,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 - INTERNALS_STOR.md - INTERNALS_CBO_VOLCANO.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
 - TX_CONCURRENCY.md - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
 - SNAPSHOT_DUCKDB   - LOG_PROC_GREP_AWK.md     - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
-- RECORD_BINARY.md  - EXTENSIONS.md            - TEST_VERIF_REPORT   - REST_API_REFERENCE.md
+- RECORD_BINARY.md  - EXTENSIONS.md            - PGWIRE_COMPAT_REP   - REST_API_REFERENCE.md
 - DATA_DICTIONARY   - HIGH_AVAIL.md                                  - WEB_SDK.md
 ```
 
@@ -62,6 +64,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * System catalogs, system tables, schema metadata persistence, and virtual catalog views (`sys.tables`, `INFORMATION_SCHEMA`).
 * [`HIGH_AVAILABILITY.md`](HIGH_AVAILABILITY.md)
   * Crash safety, checkpointing, AOF compaction, and online hot backup/restore pipelines.
+* [`STORAGE_ENCRYPTION_GUIDE.md`](STORAGE_ENCRYPTION_GUIDE.md)
+  * Transparent Data Encryption (TDE) architecture for WiredTiger storage engine (AES-256-CBC, PBKDF2 key derivation, zero data-at-rest leaks).
 * [`ADR.md`](ADR.md)
   * Architectural Decision Records capturing foundational design tradeoffs (VDBE unification, dual-parser fallback, single-binary distribution, HA replication, dual-track UDFs, compact binary tuple codec, multi-protocol catalog interception, GPL v3 licensing, hybrid JSON expression B-Tree indexing: ADR-001 through ADR-022).
 
@@ -108,10 +112,14 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
 * [`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)
   * Comprehensive Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) live compatibility verification report across 123 enterprise T-SQL/ORM scenarios (**99.2% practical compatibility rate**: 122/123 passing).
+* [`PGWIRE_COMPATIBILITY_REPORT.md`](PGWIRE_COMPATIBILITY_REPORT.md)
+  * Comprehensive PostgreSQL Wire Protocol v3 (Port `5433`) live compatibility verification report across ORM frameworks and GUI tools.
 
 ---
 
 ### 2.4. Backend-as-a-Service (BaaS), REST & Client SDKs
+* [`WEB_STUDIO_GUIDE.ko.md`](WEB_STUDIO_GUIDE.ko.md)
+  * Complete browser-based all-in-one Web Studio guide: schema modeling, data grid CRUD, SQL query console, live query audit logs, and hot backup/restore.
 * [`REST_API_AUTO_GENERATED.md`](REST_API_AUTO_GENERATED.md)
   * PocketBase-style instant zero-code RESTful CRUD endpoints (`/api/records/:table`).
   * Advanced URL query engine: comparisons, pattern matching (`LIKE`), string containment (`~`), multi-column sorting, and pagination.
@@ -126,6 +134,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Zero-dependency single-file HTML templates, vanilla `fetch()`, realtime SSE live sync, and HTMX recipes.
 * [`REST_API_REFERENCE.md`](REST_API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
+* [`HTTP_API_FUNCTIONALITY_REPORT.md`](HTTP_API_FUNCTIONALITY_REPORT.md)
+  * End-to-end verification report of the HTTP REST engine, OpenAPI endpoints, SSE real-time streaming, and developer API preview.
 * [`CDC_DUCKDB_INTEGRATION.md`](CDC_DUCKDB_INTEGRATION.md)
   * Real-time CDC streaming (`GET /api/cdc/stream`) and decoupled HTAP analytical integration guide with DuckDB (includes Python & DuckDB workers).
 * [`SNAPSHOT_ISOLATION_AND_DUCKDB.md`](SNAPSHOT_ISOLATION_AND_DUCKDB.md)
@@ -134,8 +144,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ---
 
 ### 2.5. Operations, Security & Benchmarks
-* [`TEST_VERIFICATION_REPORT.ko.md`](TEST_VERIFICATION_REPORT.ko.md)
-  * LionSQL 코어 엔진 13대 핵심 기능 영역(CBO 힌트/커버링 인덱스, JSON 표현식 B-Tree 인덱스, SQL RBAC, 스키마 마이그레이션 CLI, 롤링 파티셔닝 등) 전수 실시간 검증 및 기술 딥다이브 종합 보고서 (100% PASS).
+* [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md)
+  * Transaction performance, latency-durability trade-offs, and workload-specific parameter tuning guide (Ultra low-latency in-memory cache to zero-loss financial ledger).
 * [`OPERATIONS.md`](OPERATIONS.md)
   * Production deployment guidelines, CLI flags, configuration parameters, and graceful shutdown.
 * [`SCHEMA_MIGRATIONS_CLI.md`](SCHEMA_MIGRATIONS_CLI.md)
