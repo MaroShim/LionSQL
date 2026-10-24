@@ -376,7 +376,7 @@
 | **KISS-2** | KISS/중복제거 | 가상 PG 카탈로그 및 information_schema 생성기 중복 단일화 | **완료 (`[x]`)** | `pkg/engine/sqlexec_pgcatalog.go`(1,102줄) 및 `sqlexec_info_schema.go`(588줄)를 완전 삭제하고 `pkg/catalog/virtual/`(`pg.go`, `info_schema.go`)로 일원화. `sqlexec_dbcc.go`는 `virtual.IsPgCatalogTable` 및 `virtual.ExecPgCatalogSelect`를 호출하도록 위임하여 순수 중복 제거 및 단일 책임 원칙(SRP) 완비 |
 | **KISS-3** | KISS/파서통합 | `sqlexec` 하위 정규식 파싱 계층 제거 및 AST 파서 일원화 | **연기 (Postponed)** | `sqlexec_eval.go`, `sqlexec_pivot.go` 등의 정규식 분할 로직을 `pkg/proc` Pratt AST 소비로 통합하는 과제로, 25개 패키지 및 E2E 드라이버 호환성 회귀 방지를 위해 Post-1.0으로 연기 |
 | **KISS-4** | KISS/자료구조 | In-Memory SkipList 내부 뮤텍스 락 제거 및 Go 표준 PRNG 간소화 | **완료 (`[x]`)** | `pkg/storage/memengine/skiplist.go`의 `rndMu sync.Mutex` 및 `rnd *rand.Rand`를 완전 삭제하고 Go 표준 `math/rand/v2`로 전환하여 이중 락 중첩 제거 및 락-프리/제로-할당 난수 생성 구현 완비 |
-| **KISS-5** | KISS/실행통합 | 3갈래 쿼리 실행 경로 단일화 (`sqlexec_select` ➔ `execution` Iterator) | **연기 (Postponed)** | `sqlexec_select.go`(2,308줄)의 인메모리 조인/소팅 인터프리터를 `pkg/execution` Iterator로 통합하는 과제로, 단일 테이블 패스트패스 및 TPC-C 20k TPS 성능 안정성 유지를 위해 Post-1.0으로 연기 |
+| **KISS-5** | KISS/실행통합 | 3갈래 쿼리 실행 경로 단일화 및 2-Tier 영구 아키텍처 확정 | **완료 (`[x]`)** | 단순 OLTP는 Tier 1 고속 직결, 복합 쿼리는 Tier 2 Volcano CBO로 정돈하고 상호 중복 경로 제거 및 2-Tier 실행 아키텍처 영구 불변 규칙(`ARCH-2TIER-1`) 확정 완료 ([notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)) |
 
 ---
 
