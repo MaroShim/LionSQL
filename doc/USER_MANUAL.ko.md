@@ -60,7 +60,7 @@
   * 고속 인메모리 OCC 스토리지 (`--engine=memory`, `--ephemeral`)
   * WAL/AOF 영속성 및 자동 스냅샷 컴팩션 주기 설정
 * **3.6. 글로벌 메모리 거버너 및 리소스 튜닝**
-  * 시스템 물리 RAM 70% 자동 감지 및 런타임 상한제 (`--max-memory`)
+  * 시스템 물리 RAM 65% 동적 산정 및 런타임 상한제 (`--max-memory`)
   * 대용량 해시 조인 Fail-Fast 회로 차단기(Circuit Breaker) 동작 원리
   * 연산자별 작업 메모리 할당 (`--work-mem=64MB`)
   * 고루틴 연결 풀러: 최대 워커 수 및 유휴 세션 수 제한
@@ -183,7 +183,7 @@ LionSQL은 이러한 양극단의 장점을 단일 바이너리에 결합하여,
 4. **마이크로초 T-SQL VDBE 바이트코드 가상 머신**:
    - T-SQL 저장 프로시저 및 복합 쿼리를 사전 컴파일하여 레지스터 기반 VDBE 가상 머신에서 서브마이크로초 단위로 실행합니다.
 5. **글로벌 메모리 거버너 및 회로 차단기 (Memory Governor & Circuit Breaker)**:
-   - 시스템 물리 RAM의 70%를 상한선으로 자동 책정하고, 대용량 해시 조인이나 카테시안 곱 쿼리 발생 시 75µs 이내에 Fail-Fast 차단하여 OS OOM Killer로부터 프로세스를 영구 보호합니다.
+   - 시스템 물리 RAM의 65%를 상한선(1GB OS 예비 + 50% 하한 가드)으로 자동 책정하고, 대용량 해시 조인이나 카테시안 곱 쿼리 발생 시 75µs 이내에 Fail-Fast 차단하여 OS OOM Killer로부터 프로세스를 영구 보호합니다.
 
 ---
 
@@ -254,7 +254,7 @@ LionSQL은 경량 임베디드 설계로 인해 매우 낮은 하드웨어 사�
 | 구분 | 최소 요구 사양 | 권장 프로덕션 사양 |
 | :--- | :--- | :--- |
 | **CPU** | 1 Core (x86_64 또는 ARM64) | 4 Core 이상 (Apple Silicon M 시리즈, Intel/AMD 최신 멀티코어) |
-| **RAM** | 512 MB (기본 work_mem 64MB) | 4 GB 이상 (물리 메모리의 70%를 글로벌 거버너 예산으로 자동 할당) |
+| **RAM** | 512 MB (기본 work_mem 64MB) | 4 GB 이상 (물리 메모리의 65%를 글로벌 거버너 예산으로 자동 할당) |
 | **디스크** | 100 MB 여유 공간 (바이너리 약 50MB) | NVMe SSD (초당 수만 건의 WAL Group Commit I/O 보장) |
 | **운영체제** | macOS 12+ (Darwin ARM64 / x86_64)<br>Linux (Ubuntu 20.04+, RHEL 8+, Alpine/Debian)<br>Windows 10 / Server 2019+ | Linux LTS (Ubuntu 22.04 LTS / 24.04 LTS x86_64 or ARM64) |
 | **Go 컴파일러** | Go 1.22 이상 (소스 빌드 시) | Go 1.24 이상 |
@@ -342,7 +342,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
 ================================================================================
  [Engine Core]    WiredTiger Lock-Free B+Tree MVCC Storage
  [Data Directory] ./data
- [Memory Budget]  2867MB (70% of 4096MB Physical RAM), work_mem: 64MB
+ [Memory Budget]  2662MB (65% of 4096MB Physical RAM), work_mem: 64MB
  [Web Studio]     http://127.0.0.1:8090/_/ (HTTP REST Engine ready)
  [PostgreSQL]     postgres://admin@127.0.0.1:5433/postgres (PGWire v3)
  [SQL Server]     sqlcmd -S 127.0.0.1,1433 -U sa -d master (TDS 7.x/8.0)
@@ -466,7 +466,7 @@ $$\text{CLI Flags} \;>\; \text{Environment Variables} \;>\; \text{Config File (l
 * **CLI Flags**: 명령어 실행 시 명시적으로 지정한 옵션이 최우선순위를 가집니다 (예: `-http=:9000`).
 * **Environment Variables**: `LION_` 접두사를 가진 환경 변수가 두 번째 우선순위입니다 (예: `LION_HTTP_ADDR=:9000`).
 * **Config File (`lionsql.json`)**: 데이터 디렉토리 또는 `-config`로 지정된 JSON 설정 파일.
-* **Built-in Defaults**: 아무것도 지정하지 않았을 때 적용되는 안전한 하드코딩 기본값 (포트 8090/5433/1433, RAM 70% 메모리 상한).
+* **Built-in Defaults**: 아무것도 지정하지 않았을 때 적용되는 안전한 하드코딩 기본값 (포트 8090/5433/1433, RAM 65% 동적 메모리 상한).
 
 ---
 
@@ -646,7 +646,7 @@ lionsql serve -dir /var/lib/lionsql/data -engine wiredtiger -work-mem 256MB -max
 LionSQL은 프로세스가 OS OOM Killer에 의해 강제 종료되는 것을 원천 차단하기 위해 2단계 방어 체계를 가집니다:
 
 1. **글로벌 힙 메모리 상한제 (`--max-memory`)**:
-   - 설정하지 않을 경우 **호스트 물리 RAM의 70%**를 자동 계산하여 상한선으로 책정합니다 (예: 4GB RAM ➔ 2,867MB).
+   - 설정하지 않을 경우 **호스트 물리 RAM의 65%**를 자동 계산(1GB OS 예비 및 50% 하한 가드 적용)하여 상한선으로 책정합니다 (예: 4GB RAM ➔ 2,662MB).
    - Go 1.19+의 `debug.SetMemoryLimit` 프리미티브와 직결되어, 메모리가 상한에 근접하면 런타임 GC가 사전에 능동적으로 메모리를 회수합니다.
 2. **해시 조인 Fail-Fast 회로 차단기 (`--work-mem`)**:
    - 정렬 및 조인 연산자당 메모리 예산(기본값: `64MB`)을 초과하는 대용량 카테시안 곱이나 비정상 쿼리가 유입될 경우, 75µs 이내에 `hash join memory budget exceeded` 에러를 반환하며 즉각 중단합니다.

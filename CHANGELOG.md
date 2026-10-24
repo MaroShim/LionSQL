@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Changed
+- `MEM-GOV-65PCT`: Refined dynamic global memory budget calculation in `pkg/execution/governor.go` (`CalculateDefaultMaxMemory`, `GetDefaultMaxMemory`) from flat 70% to `max(Total * 0.50, min(Total * 0.65, Total - 1GB))`. Ensures a guaranteed 1GB RAM reserve for host OS and container overhead on standard nodes, caps LionSQL heap at 65% upper bound on large systems, and enforces a 50% floor guard on low-memory/containerized instances (e.g., 512MB~1GB). Updated CLI flag descriptions (`-max-memory`) in `cmd/lionsql/main.go` and `cmd/lionsql/server.go`, test cases, and documentation.
+
 ### Documentation
 - Replaced machine-specific absolute `file:///Users/maro/Projects/LionSQL/...` links with portable relative links in `doc/README.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/DATA_DICTIONARY.md`, and `doc/WEB_STUDIO_GUIDE.ko.md`, so documentation links resolve on any checkout.
 - Added `doc/TESTING.md`, a consolidated local build, test, and regression guide covering the 3-stage pipeline, `-run` filtering, build tags and conditional tests, a per-package and per-work-item regression test map, test authoring rules, Go micro-benchmarks, TPC-C performance regression, and an A/B comparison procedure. Linked from `README.md`, `CONTRIBUTING.md`, and `doc/README.md`.

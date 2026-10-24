@@ -64,9 +64,9 @@ func TestGovernor_PhysicalMemoryAndDefaultMaxMemory(t *testing.T) {
 	}
 
 	defMax := execution.GetDefaultMaxMemory()
-	expectedRatio := int64(float64(phys) * execution.DefaultMaxMemoryRatio)
-	if defMax != expectedRatio {
-		t.Errorf("expected default max memory %d, got %d", expectedRatio, defMax)
+	expected := execution.CalculateDefaultMaxMemory(phys)
+	if defMax != expected {
+		t.Errorf("expected default max memory %d, got %d", expected, defMax)
 	}
 
 	// Test soft limit configuration
@@ -82,6 +82,73 @@ func TestGovernor_PhysicalMemoryAndDefaultMaxMemory(t *testing.T) {
 
 	// Restore limit
 	execution.SetGlobalMemoryLimit(oldLimit)
+}
+
+func TestGovernor_CalculateDefaultMaxMemory_SimulatedRAM(t *testing.T) {
+	const (
+		mb = int64(1024 * 1024)
+		gb = int64(1024 * 1024 * 1024)
+	)
+
+	expectedRatio := func(ram int64) int64 {
+		return int64(float64(ram) * execution.DefaultMaxMemoryRatio)
+	}
+
+	tests := []struct {
+		name     string
+		totalRAM int64
+		expected int64
+	}{
+		{
+			name:     "Fallback on non-positive RAM",
+			totalRAM: 0,
+			expected: 4 * gb,
+		},
+		{
+			name:     "512MB RAM - 50% floor guard activates",
+			totalRAM: 512 * mb,
+			expected: 256 * mb, // max(256MB, min(332.8MB, -512MB)) -> 256MB
+		},
+		{
+			name:     "1GB RAM - 50% floor guard activates",
+			totalRAM: 1 * gb,
+			expected: 512 * mb, // max(512MB, min(665MB, 0MB)) -> 512MB
+		},
+		{
+			name:     "2GB RAM - 1GB reserve leaves 1GB (50%)",
+			totalRAM: 2 * gb,
+			expected: 1 * gb, // max(1GB, min(1.3GB, 1GB)) -> 1GB
+		},
+		{
+			name:     "4GB RAM - 65% upper bound activates",
+			totalRAM: 4 * gb,
+			expected: expectedRatio(4 * gb), // 2.6GB (Total - 1GB is 3GB > 2.6GB)
+		},
+		{
+			name:     "8GB RAM - 65% upper bound activates",
+			totalRAM: 8 * gb,
+			expected: expectedRatio(8 * gb), // 5.2GB
+		},
+		{
+			name:     "16GB RAM - 65% upper bound activates",
+			totalRAM: 16 * gb,
+			expected: expectedRatio(16 * gb), // 10.4GB
+		},
+		{
+			name:     "64GB RAM - 65% upper bound activates",
+			totalRAM: 64 * gb,
+			expected: expectedRatio(64 * gb), // 41.6GB
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			actual := execution.CalculateDefaultMaxMemory(tc.totalRAM)
+			if actual != tc.expected {
+				t.Errorf("CalculateDefaultMaxMemory(%d) = %d, expected %d", tc.totalRAM, actual, tc.expected)
+			}
+		})
+	}
 }
 
 func TestGovernor_HashJoinCircuitBreaker(t *testing.T) {

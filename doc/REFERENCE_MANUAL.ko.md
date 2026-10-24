@@ -14,7 +14,7 @@
 * **1.2. 전역 CLI 플래그 사양**
   * 네트워크 리스너: `-http`, `-pg`, `-tds`, `-tls`, `-tls-cert`, `-tls-key`, `-require-ssl`
   * 스토리지 백엔드: `-dir`, `-engine` (`wiredtiger`, `memory`), `-ephemeral`, `-auto-seed`
-  * 리소스 거버너: `-max-memory` (`<size>` e.g. `2GB`, `4096MB`, 기본값: 물리 RAM의 70%), `-work-mem` (기본값: `64MB`), `-max-workers`, `-max-idle-sessions`
+  * 리소스 거버너: `-max-memory` (`<size>` e.g. `2GB`, `4096MB`, 기본값: 물리 RAM의 65%), `-work-mem` (기본값: `64MB`), `-max-workers`, `-max-idle-sessions`
   * 보안 및 인증: `-auth` (기본값: `true`), `-admin-email`, `-admin-pass`, `-jwt-secret`
   * 로깅 및 트레이싱: `-dev`, `-slow-log`, `-slow-threshold-ms` (기본값: `100.0ms`), `-general-log`
   * 고가용성 복제: `-replica-of`, `-node-id`, `-peers`, `-self-url`, `-auto-failover`, `-heartbeat-timeout-ms`
@@ -33,7 +33,7 @@
   * `Server`: `engine`, `data_dir`, `ephemeral`, `auto_seed`, `pid_file`
   * `Network`: `http_addr`, `pg_addr`, `tds_addr`, `tls` (`enabled`, `cert_file`, `key_file`, `require_ssl`)
   * `Auth`: `enabled`, `admin_email` (기본: `admin@lionsql.local`), `admin_pass`, `jwt_secret`
-  * `Resources`: `max_memory` (기본: 70% RAM), `work_mem` (기본: `64MB`), `max_workers`, `max_idle_sessions`
+  * `Resources`: `max_memory` (기본: 65% RAM), `work_mem` (기본: `64MB`), `max_workers`, `max_idle_sessions`
   * `Logging`: `dev_mode`, `slow_query` (`enabled`, `threshold_ms`: `100.0`, `file`), `general_query` (`enabled`, `file`)
   * `Replication`: `enabled`, `role`, `node_id`, `primary_url`, `auto_failover`, `peers`, `self_url`, `heartbeat_timeout_ms`
 * **2.3. 옵션 조합별 트랜잭션 성능 및 워크로드 프로파일 요약**
@@ -251,7 +251,7 @@ lionsql [command] [flags...]
   | `-engine` | string | `wiredtiger` | 기본 스토리지 백엔드 선택 (`wiredtiger` 또는 `memory`) |
   | `-ephemeral` | bool | `false` | 디스크 파일 I/O를 100% 배제하는 초고속 순수 인메모리 휘발성 모드 |
   | `-dev` | bool | `false` | 개발자 모드 활성화 (SQL 쿼리 파싱/실행 계획 상세 콘솔 컬러 출력) |
-  | `-max-memory` | string | `""` | 엔진 글로벌 메모리 상한 (예: `2GB`, `4096MB`). 빈 값일 경우 호스트 물리 RAM의 70%로 자동 제한 |
+  | `-max-memory` | string | `""` | 엔진 글로벌 메모리 상한 (예: `2GB`, `4096MB`). 빈 값일 경우 호스트 물리 RAM의 65%로 자동 제한 |
   | `-work-mem` | string | `64MB` | 연산자당 정렬(External Sort) 및 해시 조인 작업 메모리 예산 |
   | `-max-workers` | int | `256` | 클라이언트 요청을 병렬 처리할 고루틴 워커 풀(Worker Pool)의 최대 크기 |
   | `-max-idle-sessions` | int | `64` | 유휴 상태로 유지할 세션 커넥션 풀의 최대 허용 개수 |
@@ -479,7 +479,7 @@ LionSQL 바이너리의 정식 릴리즈 버전, 빌드 태그, 대상 OS/아키
 | `-ephemeral` | bool | `false` | `LION_EPHEMERAL` | 디스크 파일 I/O를 배제하는 순수 인메모리 휘발성 모드 |
 | `-auto-seed` | bool | `false` | `LION_AUTO_SEED` | 최초 실행 시 E-Commerce 샘플 데이터셋 자동 생성 |
 | **자원 및 거버너** | | | | |
-| `-max-memory` | string | `""` | `LION_MAX_MEMORY` | 엔진 글로벌 메모리 상한 (예: `2GB`, `4096MB`). 미지정 시 시스템 가용 RAM의 70% |
+| `-max-memory` | string | `""` | `LION_MAX_MEMORY` | 엔진 글로벌 메모리 상한 (예: `2GB`, `4096MB`). 미지정 시 시스템 가용 RAM의 65% |
 | `-work-mem` | string | `64MB` | `LION_WORK_MEM` | 단일 연산자(External Merge Sort, Hash Join)의 메모리 예산 |
 | `-max-workers` | int | `256` | `LION_MAX_WORKERS` | 비동기 고루틴 워커 풀의 최대 동시 워커 수 |
 | `-max-idle-sessions` | int | `64` | `LION_MAX_IDLE_SESSIONS` | 풀에 보관할 유휴 세션 연결 수 |
@@ -674,7 +674,7 @@ $$\text{CLI Flags} > \text{Environment Variables} > \text{Config File (lionsql.j
 * **`jwt_expiry_hours`** (int): 발급된 JWT 세션 토큰의 유효 기간(시간 단위, 기본값: `72`).
 
 #### 4. `resources` 섹션 (메모리 거버너 및 커넥션 풀링)
-* **`max_memory`** (string): 엔진 전체 프로세스가 사용할 수 있는 힙 메모리의 절대 상한선 (예: `"2GB"`, `"4096MB"`). 비어 있을 경우 호스트 물리 메모리의 70%를 상한선으로 자동 산정합니다.
+* **`max_memory`** (string): 엔진 전체 프로세스가 사용할 수 있는 힙 메모리의 절대 상한선 (예: `"2GB"`, `"4096MB"`). 비어 있을 경우 호스트 물리 메모리의 65%(1GB OS 예비 및 50% 하한 가드)를 상한선으로 자동 산정합니다.
 * **`work_mem`** (string): 정렬(External Sort), 인덱스 빌드, 해시 조인 시 단일 쿼리 연산자가 사용할 수 있는 인메모리 버퍼 예산 (기본값: `"64MB"`).
 * **`max_workers`** (int): 클라이언트 요청을 처리하기 위해 동시에 가동할 수 있는 고루틴 워커 풀의 크기 (기본값: `256`).
 * **`max_idle_sessions`** (int): 유휴 상태로 대기할 수 있는 클라이언트 세션 풀의 최대 크기 (기본값: `64`).

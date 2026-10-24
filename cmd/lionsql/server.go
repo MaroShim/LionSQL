@@ -77,7 +77,7 @@ func runServer(args []string) error {
 	maxWorkers := fs.Int("max-workers", 0, "Max concurrent query execution workers (default: NumCPU * 4)")
 	maxIdleSessions := fs.Int("max-idle-sessions", 64, "Max idle storage sessions to retain in pool")
 	workMemStr := fs.String("work-mem", "64MB", "Default memory budget per query operator (e.g. 64MB, 128MB)")
-	maxMemoryStr := fs.String("max-memory", "", "Maximum global heap memory budget (default: 70% of physical RAM, e.g. 2GB, 4GB)")
+	maxMemoryStr := fs.String("max-memory", "", "Maximum global heap memory budget (default: 65% of physical RAM, e.g. 2GB, 4GB)")
 	enableTLS := fs.Bool("tls", false, "Enable SSL/TLS encrypted connections for PostgreSQL and TDS wire protocols")
 	tlsCert := fs.String("tls-cert", "", "Path to TLS certificate file")
 	tlsKey := fs.String("tls-key", "", "Path to TLS private key file")

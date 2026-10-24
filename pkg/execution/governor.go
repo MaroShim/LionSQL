@@ -125,21 +125,43 @@ func FormatMemMB(bytes int64) string {
 	return fmt.Sprintf("%dMB", mb)
 }
 
-// DefaultMaxMemoryRatio is the default ratio (70%) of total physical RAM allocated to LionSQL.
-const DefaultMaxMemoryRatio float64 = 0.70
+// DefaultMaxMemoryRatio is the default upper-bound ratio (65%) of total physical RAM allocated to LionSQL.
+const DefaultMaxMemoryRatio float64 = 0.65
+
+// MinOSReservedMemory is the memory buffer reserved for host OS / container overhead (1GB).
+const MinOSReservedMemory int64 = 1024 * 1024 * 1024
+
+// MinMemoryRatioFloor is the minimum floor ratio (50%) to guarantee workable database headroom on low-memory systems.
+const MinMemoryRatioFloor float64 = 0.50
 
 // GetPhysicalMemory returns the host or container total physical RAM in bytes.
 func GetPhysicalMemory() int64 {
 	return getPlatformPhysicalMemory()
 }
 
-// GetDefaultMaxMemory returns 70% of detected physical RAM.
-func GetDefaultMaxMemory() int64 {
-	mem := GetPhysicalMemory()
-	if mem <= 0 {
+// CalculateDefaultMaxMemory computes the dynamic global memory budget given total physical RAM in bytes:
+// max(Total * 0.50, min(Total * 0.65, Total - 1GB))
+func CalculateDefaultMaxMemory(totalMem int64) int64 {
+	if totalMem <= 0 {
 		return 4 * 1024 * 1024 * 1024
 	}
-	return int64(float64(mem) * DefaultMaxMemoryRatio)
+	upper := int64(float64(totalMem) * DefaultMaxMemoryRatio)
+	minusReserve := totalMem - MinOSReservedMemory
+	budget := upper
+	if minusReserve < budget {
+		budget = minusReserve
+	}
+	floor := int64(float64(totalMem) * MinMemoryRatioFloor)
+	if budget < floor {
+		budget = floor
+	}
+	return budget
+}
+
+// GetDefaultMaxMemory returns dynamic global memory budget calculated from detected physical RAM:
+// max(Total * 0.50, min(Total * 0.65, Total - 1GB))
+func GetDefaultMaxMemory() int64 {
+	return CalculateDefaultMaxMemory(GetPhysicalMemory())
 }
 
 // SetGlobalMemoryLimit configures the Go runtime soft heap memory limit (debug.SetMemoryLimit).

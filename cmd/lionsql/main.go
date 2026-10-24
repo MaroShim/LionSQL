@@ -52,7 +52,7 @@ Options by Category (옵션 상세):
     -config <path>         Path to JSON configuration file (auto-detects ./lionsql.json)
 
   [Memory & Performance]
-    -max-memory <size>     Global heap memory budget in MB/GB (default: 70%% of physical RAM, e.g. 4096MB)
+    -max-memory <size>     Global heap memory budget in MB/GB (default: 65%% of physical RAM, e.g. 4096MB)
     -work-mem <size>       Memory budget per query operator (default: 64MB, e.g. 64MB, 128MB)
     -max-workers <N>       Max concurrent query execution workers (default: NumCPU * 4)
     -max-idle-sessions <N> Max idle storage sessions retained in pool (default: 64)

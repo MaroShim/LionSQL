@@ -113,10 +113,10 @@
 * **핵심 아키텍처 및 구현 요구사항**:
   1. **`--max-memory` 글로벌 CLI 플래그 및 환경 설정 도입**:
      - `--max-memory` (예: `2GB`, `4GB`) 플래그 및 `resources.max_memory` 설정 연동.
-     - 미설정 시 기본값: **호스트 시스템 물리 메모리(RAM)의 70%** 자동 계산 적용 (cgroups/sysctl/OS 메모리 자동 감지).
+     - 미설정 시 기본값: **호스트 시스템 물리 메모리(RAM)의 65%** (1GB OS 예비 및 50% 하한 가드) 자동 계산 적용 (cgroups/sysctl/OS 메모리 자동 감지).
   2. **Go 런타임 플랫폼 프리미티브 연동 (`debug.SetMemoryLimit`)**:
      - Go 1.19+ `debug.SetMemoryLimit`을 호출하여 힙 메모리가 상한에 근접할 시 Go 런타임 GC가 사전에 능동적으로 메모리를 회수하도록 보장 (Golden Rule 14).
-     - 서버 기동 배너에 실시간 적용 메모리 예산 로깅 (`[Memory Governor] max_memory: X.XGB (70% of RAM), work_mem: 64MB`).
+     - 서버 기동 배너에 실시간 적용 메모리 예산 로깅 (`[Memory Governor] max_memory: X.XGB (65% of RAM), work_mem: 64MB`).
   3. **대량 조인(`HashJoinIterator`) Fail-Fast 회로 차단기 (Circuit Breaker)**:
      - 복잡한 디스크 스필러 오버엔지니어링(YAGNI, Golden Rule 15)을 배제하고, Build 단계에서 `buildMemory > workMem` 도달 시 즉시 안전한 중단 및 에러 반환 (`hash join memory budget exceeded: ... > work_mem`).
      - 비정상적인 카테시안 조인 또는 초대용량 해시 조인으로부터 다른 정상 OLTP 쿼리들을 완벽히 격리 보호.
@@ -567,7 +567,7 @@ v0.90.0 Feature Freeze(기능 동결) 원칙에 따라, 25개 패키지 및 120�
 - [x] **In-Memory OCC 엔진 데이터 용량 한도 가드 (`MEM-3`) (`pkg/storage/memengine`, `cmd/server`)**:
   - `runtime/metrics` 기반 Zero-STW 힙 모니터링 및 `--max-memory` 연동, 용량 초과 시 `storage.ErrTableFull (SQLSTATE 53200)` 조기 반환으로 OOM 방지.
 - [x] **글로벌 메모리 예산 상한제 및 대량 조인 회로 차단기 (`pkg/config`, `pkg/execution`, `cmd/server`)**:
-  - 호스트/컨테이너 물리 메모리 자동 감지(Darwin `sysctl`, Linux cgroups v1/v2 및 `/proc/meminfo`) 기반 시스템 RAM의 70%를 기본 글로벌 상한으로 자동 계산 및 적용.
+  - 호스트/컨테이너 물리 메모리 자동 감지(Darwin `sysctl`, Linux cgroups v1/v2 및 `/proc/meminfo`) 기반 시스템 RAM의 65% 상한선(1GB OS 예비 및 50% 하한 가드)을 기본 글로벌 상한으로 자동 계산 및 적용.
   - Go 런타임 플랫폼 프리미티브 연동 (`debug.SetMemoryLimit` / GOMEMLIMIT)으로 힙 메모리 상한 근접 시 능동적 사전 GC 트리거 및 OS OOM Killer 사살 방지.
   - 대량 해시 조인(`HashJoinIterator`) 빌드 단계에서 `buildMemory > workMem` 초과 시 Fail-Fast 회로 차단기(`hash join memory budget exceeded`) 가동으로 비정상 쿼리 즉시 차단 및 타 세션 OLTP 격리 보호.
 - [x] **테스트 스위트 중복 보일러플레이트 대규모 슬림화 (Net -291줄) (`pkg/wire`, `pkg/api`)**:

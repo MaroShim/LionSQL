@@ -104,7 +104,7 @@ Driver Cert    & Zero-Race    Availability   Security/Auth  Tooling & CLI
 * **Web Studio Production Feature Suite (`pkg/storage`, `pkg/engine`, `pkg/api`, `pkg/ui`)**:
   Added Realtime Live Stream SSE viewer (`/api/realtime`), Request Activity Logs latency profiler (`/api/logs/requests`), Visual Column Addition DDL modal (`+ Add Column`), multi-row bulk exports (CSV/JSON), and foreign key interactive jump links (`↗`).
 * **Global Memory Governor & Query Circuit Breaker (`pkg/config`, `pkg/execution`, `cmd/server`)**:
-  Implemented dynamic physical RAM budgeting (`max_memory`, 70% of RAM) and query-level `work_mem: 64MB` circuit breakers in hash joins and external merge sort pipelines to eliminate OS OOM kills.
+  Implemented dynamic physical RAM budgeting (`max_memory`, 65% upper bound with 1GB OS reserve and 50% floor guard) and query-level `work_mem: 64MB` circuit breakers in hash joins and external merge sort pipelines to eliminate OS OOM kills.
 * **Protocol Catalog Database Standardization (`pkg/catalog/virtual`, `pkg/engine`)**:
   Eliminated legacy database namespaces across virtual catalog and engine to strictly standardize on protocol-native single database namespaces: `postgres` for PGWire and `master` for TDS.
 * **Test Suite Boilerplate Diet (`pkg/wire`, `pkg/api`)**:
