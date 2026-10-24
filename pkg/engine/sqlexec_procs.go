@@ -78,53 +78,7 @@ func ParseProcArgs(raw string) (string, []string) {
 		return procName, nil
 	}
 
-	var args []string
-	var cur strings.Builder
-	inQuote := false
-	quoteChar := byte(0)
-
-	for i := 0; i < len(rem); i++ {
-		ch := rem[i]
-		if !inQuote {
-			if ch == '\'' || ch == '"' {
-				inQuote = true
-				quoteChar = ch
-				cur.WriteByte(ch)
-				continue
-			}
-			if (ch == 'N' || ch == 'n') && i+1 < len(rem) && rem[i+1] == '\'' {
-				inQuote = true
-				quoteChar = '\''
-				cur.WriteByte(ch)
-				cur.WriteByte('\'')
-				i++
-				continue
-			}
-			if ch == ',' {
-				args = append(args, strings.TrimSpace(cur.String()))
-				cur.Reset()
-				continue
-			}
-			cur.WriteByte(ch)
-		} else {
-			if ch == quoteChar {
-				if i+1 < len(rem) && rem[i+1] == quoteChar {
-					cur.WriteByte(ch)
-					cur.WriteByte(ch)
-					i++
-					continue
-				}
-				inQuote = false
-				cur.WriteByte(ch)
-				continue
-			}
-			cur.WriteByte(ch)
-		}
-	}
-	if cur.Len() > 0 {
-		args = append(args, strings.TrimSpace(cur.String()))
-	}
-
+	args := sqlutil.SplitTopLevel(rem, ',')
 	return procName, args
 }
 
@@ -1088,51 +1042,8 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 }
 
 func splitConcatenationOutsideQuotes(s string) []string {
-	var parts []string
-	var cur strings.Builder
-	inQuote := false
-	quoteChar := byte(0)
-
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if !inQuote {
-			if ch == '\'' || ch == '"' {
-				inQuote = true
-				quoteChar = ch
-				cur.WriteByte(ch)
-				continue
-			}
-			if (ch == 'N' || ch == 'n') && i+1 < len(s) && s[i+1] == '\'' {
-				inQuote = true
-				quoteChar = '\''
-				cur.WriteByte(ch)
-				cur.WriteByte('\'')
-				i++
-				continue
-			}
-			if ch == '+' {
-				parts = append(parts, cur.String())
-				cur.Reset()
-				continue
-			}
-			cur.WriteByte(ch)
-		} else {
-			if ch == quoteChar {
-				if i+1 < len(s) && s[i+1] == quoteChar {
-					cur.WriteByte(ch)
-					cur.WriteByte(ch)
-					i++
-					continue
-				}
-				inQuote = false
-			}
-			cur.WriteByte(ch)
-		}
-	}
-	if cur.Len() > 0 {
-		parts = append(parts, cur.String())
-	}
-	if len(parts) == 0 {
+	parts := sqlutil.SplitTopLevel(s, '+')
+	if len(parts) == 0 && s != "" {
 		return []string{s}
 	}
 	return parts
@@ -1184,36 +1095,7 @@ func (s *Coordinator) execDynamicStringExec(args []string, start time.Time, cs *
 }
 
 func findTopLevelEquals(s string) int {
-	inQuote := false
-	quoteChar := byte(0)
-	for i := 0; i < len(s); i++ {
-		ch := s[i]
-		if !inQuote {
-			if ch == '\'' || ch == '"' {
-				inQuote = true
-				quoteChar = ch
-				continue
-			}
-			if (ch == 'N' || ch == 'n') && i+1 < len(s) && s[i+1] == '\'' {
-				inQuote = true
-				quoteChar = '\''
-				i++
-				continue
-			}
-			if ch == '=' {
-				return i
-			}
-		} else {
-			if ch == quoteChar {
-				if i+1 < len(s) && s[i+1] == quoteChar {
-					i++
-					continue
-				}
-				inQuote = false
-			}
-		}
-	}
-	return -1
+	return sqlutil.FindTopLevelChar(s, '=')
 }
 
 func unwrapOrVar(val string, cs *ClientSession) string {

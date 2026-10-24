@@ -32,6 +32,7 @@
 | **`ARCH-LEX-1`** | **P1** | Lexical | `pkg/sqlutil/tokenizer.go`<br>• `SplitTopLevelKeyword`<br>• `FindTopLevelArithmeticOp`<br>• `ExtractTopLevelTuples`<br>• `FindTopLevelKeyword`<br>• `SplitTopLevel` | • `sqlexec_eval.go:splitLogicalConditions`<br>• `sqlexec_eval.go:parseValueTuples`<br>• `sqlexec_eval.go:findArithmeticOp`<br>• `sqlexec_select.go:splitScalarProjections`<br>• `sqlexec_select.go:hasFromClause`<br>• `sqlexec_dml.go:findOnConflictIndex` | **`[x]`** | 작은따옴표(`''`), 백슬래시(`\'`), 큰따옴표(`""`), 대괄호(`[...]`), 중첩 괄호(`()`)를 완벽히 지원하는 단일 고속 상태 머신 스캐너 도입 및 300여 라인 수동 파싱 루프 전면 제거 완료 |
 | **`ARCH-DML-1`** | **P1** | Parser | `pkg/engine/dml_parser.go`<br>• `DMLStatement`<br>• `ParseDMLCommand` | • `reDmlInsertValues`<br>• `reDmlInsertCheck`<br>• `reDmlInsertSelect`<br>• `reDmlUpsertPrefix`<br>• `reDmlUpdate`<br>• `reDmlUpdateCheck`<br>• `reDmlDelete`<br>• `reDmlDeleteCheck` | **`[x]`** | 8개의 취약한 DML 정규식을 전면 폐기하고, 토큰 기반 경량 1-Pass DML 구문 파서(`ParseDMLCommand`)로 일원화 완료 |
 | **`ARCH-EVAL-1`** | **P1** | Evaluator | `pkg/engine/evaluator.go`<br>• `EvalBinaryOp`<br>• `CoerceAndCalculate`<br>• `EvalUpdateExpr`<br>• `ResolveOperand`<br>• `ToNumeric` | • `sqlexec_eval.go:evalUpdateExpr`<br>• `sqlexec_eval.go:toNumeric`<br>• `sqlexec_eval.go:resolveOperand`<br>• 산술 if-switch 분기 80+ 라인<br>• 미사용 `reEvalArithExpr` 정규식 | **`[x]`** | `pkg/storage/coerce.go` (Type Promotion Lattice)와 연동하여 float/int 강제 변환 왜곡 및 정수 0 나누기 패닉을 원천 봉쇄하는 통합 연산 엔진 구축 완료 |
+| **`ARCH-LEX-2`** | **P2** | Lexical | `pkg/sqlutil/tokenizer.go`<br>• `FindAllTopLevelKeyword`<br>• `FindTopLevelChar`<br>• `FindMatchingParen` | • `sqlexec_merge.go:findTopLevelKeyword`<br>• `sqlexec_merge.go:findAllTopLevelKeyword`<br>• `sqlexec_string_split.go:findMatchingParen`<br>• `sqlexec_string_split.go:parseStringSplitArgs`<br>• `sqlexec_procs.go:splitExecParams`<br>• `sqlexec_procs.go:splitConcatenationOutsideQuotes`<br>• `sqlexec_procs.go:findTopLevelEquals`<br>• `query_utils.go:SplitDeclarations` | **`[x]`** | MERGE, STRING_SPLIT, PROCS, QUERY_UTILS 내 잔여 수동 분할 루프 및 인용부호 스캐너 200여 라인 전면 삭제 및 `sqlutil.Tokenizer` 표준 API 일원화 완료 |
 
 ---
 
@@ -51,3 +52,10 @@
    - `pkg/storage/coerce.go` Type Promotion Lattice(Decimal > Float > Int) 연동 및 0 나누기 방어 가드 일원화.
    - `sqlexec_eval.go` 내 산재해 있던 중복 연산자 분기 120여 라인 및 미사용 정규식 `reEvalArithExpr` 전면 삭제.
    - 단위 테스트 `evaluator_test.go` 작성 및 100% 검증 통과.
+4. **Phase 4: `ARCH-LEX-2` (잔여 파서 `tokenizer.go` 전면 일원화 및 중복 루프 제거)** ➔ **완료 (`[x]`)**
+   - `pkg/sqlutil/tokenizer.go`: `FindAllTopLevelKeyword`, `FindTopLevelChar`, `FindMatchingParen` 공통 API 확충 및 단위 테스트 완비.
+   - `sqlexec_merge.go`: 자체 구현되었던 `findTopLevelKeyword`, `findAllTopLevelKeyword`, `isWordBoundary` 등 50여 라인 삭제 및 `sqlutil` 대체.
+   - `sqlexec_string_split.go`: 40여 라인 수동 파싱 루프 삭제 및 `sqlutil.SplitTopLevel`, `sqlutil.FindMatchingParen` 연동.
+   - `sqlexec_procs.go`: `splitExecParams`, `splitConcatenationOutsideQuotes`, `findTopLevelEquals` 등 120여 라인 수동 인용부호 스캐너 삭제 및 `sqlutil` 일원화.
+   - `query_utils.go`: `SplitDeclarations` 50여 라인 루프 삭제 및 `sqlutil.SplitTopLevel` 일원화.
+   - 총 250여 라인의 취약한 중복 인용부호/괄호 분할 루프를 전면 제거하고 단일 토크나이저 상태머신으로 통일.

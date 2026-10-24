@@ -506,7 +506,7 @@ func parseMergeQuery(query string) (*parsedMerge, error) {
 	}
 
 	// Find top-level USING
-	usingIdx := findTopLevelKeyword(rest, "USING")
+	usingIdx := sqlutil.FindTopLevelKeyword(rest, "USING")
 	if usingIdx < 0 {
 		return nil, fmt.Errorf("missing USING clause in MERGE")
 	}
@@ -518,7 +518,7 @@ func parseMergeQuery(query string) (*parsedMerge, error) {
 	targetTable, targetAlias := parseTableAlias(targetPart)
 
 	// Find top-level ON
-	onIdx := findTopLevelKeyword(afterUsing, "ON")
+	onIdx := sqlutil.FindTopLevelKeyword(afterUsing, "ON")
 	if onIdx < 0 {
 		return nil, fmt.Errorf("missing ON clause in MERGE")
 	}
@@ -530,7 +530,7 @@ func parseMergeQuery(query string) (*parsedMerge, error) {
 	sourceRaw, sourceAlias, sourceCols := parseSourcePart(sourcePart)
 
 	// Find top-level WHEN
-	whenIdx := findTopLevelKeyword(afterOn, "WHEN")
+	whenIdx := sqlutil.FindTopLevelKeyword(afterOn, "WHEN")
 	if whenIdx < 0 {
 		return nil, fmt.Errorf("missing WHEN clauses in MERGE")
 	}
@@ -573,19 +573,7 @@ func parseSourcePart(s string) (sourceRaw, sourceAlias string, sourceCols []stri
 	s = strings.TrimSpace(s)
 	if strings.HasPrefix(s, "(") {
 		// Parenthesized subquery or VALUES
-		depth := 0
-		endIdx := -1
-		for i := 0; i < len(s); i++ {
-			if s[i] == '(' {
-				depth++
-			} else if s[i] == ')' {
-				depth--
-				if depth == 0 {
-					endIdx = i
-					break
-				}
-			}
-		}
+		endIdx := sqlutil.FindMatchingParen(s, 0)
 		if endIdx != -1 {
 			sourceRaw = s[:endIdx+1]
 			rem := strings.TrimSpace(s[endIdx+1:])
@@ -594,7 +582,7 @@ func parseSourcePart(s string) (sourceRaw, sourceAlias string, sourceCols []stri
 			if m := re.FindStringSubmatch(rem); len(m) > 1 {
 				sourceAlias = cleanIdentifier(m[1])
 				if len(m) > 2 && strings.TrimSpace(m[2]) != "" {
-					colParts := strings.Split(m[2], ",")
+					colParts := sqlutil.SplitTopLevel(m[2], ',')
 					for _, c := range colParts {
 						sourceCols = append(sourceCols, cleanIdentifier(c))
 					}
@@ -610,7 +598,7 @@ func parseSourcePart(s string) (sourceRaw, sourceAlias string, sourceCols []stri
 
 func parseWhenClauses(s string) ([]mergeClause, error) {
 	// Split by top-level "WHEN "
-	indices := findAllTopLevelKeyword(s, "WHEN")
+	indices := sqlutil.FindAllTopLevelKeyword(s, "WHEN")
 	if len(indices) == 0 {
 		return nil, fmt.Errorf("no WHEN clauses found")
 	}
@@ -642,7 +630,7 @@ func parseSingleWhenClause(s string) (mergeClause, error) {
 
 	rem := strings.TrimSpace(s[len("WHEN "):])
 
-	thenIdx := findTopLevelKeyword(rem, "THEN")
+	thenIdx := sqlutil.FindTopLevelKeyword(rem, "THEN")
 	if thenIdx < 0 {
 		return cl, fmt.Errorf("missing THEN in WHEN clause: %s", s)
 	}
@@ -727,57 +715,6 @@ func parseSetPairs(s string) []mergeSetPair {
 		})
 	}
 	return res
-}
-
-func findTopLevelKeyword(s string, kw string) int {
-	indices := findAllTopLevelKeyword(s, kw)
-	if len(indices) == 0 {
-		return -1
-	}
-	return indices[0]
-}
-
-func findAllTopLevelKeyword(s string, kw string) []int {
-	var indices []int
-	kwLen := len(kw)
-	upper := strings.ToUpper(s)
-	depth := 0
-
-	for i := 0; i <= len(s)-kwLen; i++ {
-		ch := s[i]
-		if ch == '(' {
-			depth++
-			continue
-		} else if ch == ')' {
-			if depth > 0 {
-				depth--
-			}
-			continue
-		} else if ch == '\'' || ch == '"' {
-			quote := ch
-			i++
-			for i < len(s) && s[i] != quote {
-				i++
-			}
-			continue
-		}
-
-		if depth == 0 && upper[i:i+kwLen] == kw {
-			// check boundary
-			prevOk := (i == 0) || isWordBoundary(s[i-1])
-			nextOk := (i+kwLen == len(s)) || isWordBoundary(s[i+kwLen])
-			if prevOk && nextOk {
-				indices = append(indices, i)
-				i += kwLen - 1
-			}
-		}
-	}
-
-	return indices
-}
-
-func isWordBoundary(b byte) bool {
-	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == '(' || b == ')' || b == ';' || b == ','
 }
 
 func stripQualifier(col string) string {

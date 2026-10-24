@@ -92,7 +92,7 @@ func parseOnConflict(s string) (*onConflictClause, error) {
 	setBody := strings.TrimSpace(afterUpdate[3:])
 	whereCond := ""
 
-	whereIdx := findTopLevelKeyword(setBody, "WHERE")
+	whereIdx := sqlutil.FindTopLevelKeyword(setBody, "WHERE")
 	if whereIdx != -1 {
 		whereCond = strings.TrimSpace(setBody[whereIdx+5:])
 		setBody = strings.TrimSpace(setBody[:whereIdx])

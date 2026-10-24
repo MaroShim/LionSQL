@@ -18,6 +18,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - `REV-API-001`: In `pkg/api/handlers_procs.go` (`handleExecProcedure`), added JSON decode error validation on `r.Body`. Malformed request bodies now return HTTP 400 Bad Request with descriptive errors rather than silently executing with empty arguments.
 
 ### Refactored
+- `ARCH-LEX-2`: Unified residual manual string splitting, keyword scanning, and parenthesis matching loops into `pkg/sqlutil/tokenizer.go` (Golden Rule 15 KISS, DRY & Deletion-First):
+  - Added `FindAllTopLevelKeyword`, `FindMatchingParen`, and exported `FindTopLevelChar` in `pkg/sqlutil/tokenizer.go` with full support for single/double quotes, escaped quotes (`''`, `""`), brackets (`[...]`), comments (`--`, `/* */`), and nested parentheses.
+  - Replaced manual 50-line `findTopLevelKeyword` and `findAllTopLevelKeyword` loops in `pkg/engine/sqlexec_merge.go` with standard `sqlutil` tokenizer APIs.
+  - Replaced ad-hoc 38-line `findMatchingParen` and `parseStringSplitArgs` loops in `pkg/engine/sqlexec_string_split.go` with `sqlutil.FindMatchingParen` and `sqlutil.SplitTopLevel`.
+  - Replaced manual quote-scanning loops in `pkg/engine/sqlexec_procs.go` (`splitExecParams`, `splitConcatenationOutsideQuotes`, `findTopLevelEquals`) with standard `sqlutil.SplitTopLevel` and `sqlutil.FindTopLevelChar`, deleting over 120 lines of redundant code.
+  - Replaced manual 49-line `SplitDeclarations` loop in `pkg/engine/query_utils.go` with `sqlutil.SplitTopLevel(s, ',')`.
+  - Added dedicated unit tests `TestFindAllTopLevelKeyword` and `TestFindTopLevelChar` in `pkg/sqlutil/tokenizer_test.go`.
 - `KISS-5` / `REV-ENG-008`: Consolidated core query execution into a unified 2-tier architecture and eliminated the 1st-generation prototype legacy fallback (Golden Rule 15 KISS & Deletion-First):
   - Retained the high-performance 2-tier engine: **Tier 1 (VDBE Fast-Path, 0.5~2µs)** for single-table, index-range, and scalar lookups, and **Tier 2 (Volcano CBO, 15~50µs)** for relational algebra, multi-table joins, subqueries, and optimizer hints.
   - Removed over 350 lines of redundant prototype table-scan code, in-memory sorting, and the legacy `reSelectStmt` regular expression from `pkg/engine/sqlexec_select.go`, leaving an architectural epitaph comment.

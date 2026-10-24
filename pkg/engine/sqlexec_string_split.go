@@ -9,6 +9,7 @@ import (
 
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 )
 
 var (
@@ -265,47 +266,11 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 }
 
 func findMatchingParen(s string, openIdx int) int {
-	depth := 0
-	inQuote := false
-	for i := openIdx; i < len(s); i++ {
-		ch := s[i]
-		if ch == '\'' {
-			inQuote = !inQuote
-		} else if !inQuote {
-			if ch == '(' {
-				depth++
-			} else if ch == ')' {
-				depth--
-				if depth == 0 {
-					return i
-				}
-			}
-		}
-	}
-	return -1
+	return sqlutil.FindMatchingParen(s, openIdx)
 }
 
 func parseStringSplitArgs(argsRaw string) []string {
-	var args []string
-	inQuote := false
-	start := 0
-	for i := 0; i < len(argsRaw); i++ {
-		ch := argsRaw[i]
-		if ch == '\'' {
-			if inQuote && i+1 < len(argsRaw) && argsRaw[i+1] == '\'' {
-				i++
-				continue
-			}
-			inQuote = !inQuote
-		} else if ch == ',' && !inQuote {
-			args = append(args, strings.TrimSpace(argsRaw[start:i]))
-			start = i + 1
-		}
-	}
-	if start <= len(argsRaw) {
-		args = append(args, strings.TrimSpace(argsRaw[start:]))
-	}
-	return args
+	return sqlutil.SplitTopLevel(argsRaw, ',')
 }
 
 func resolveArgString(arg string, cs *ClientSession) string {

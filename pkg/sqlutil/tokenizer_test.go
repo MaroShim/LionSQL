@@ -332,3 +332,34 @@ func TestExtractTopLevelTuples(t *testing.T) {
 	}
 }
 
+func TestFindAllTopLevelKeyword(t *testing.T) {
+	s := "WHEN MATCHED THEN UPDATE SET a = 1 WHEN NOT MATCHED THEN INSERT (a) VALUES (2)"
+	indices := FindAllTopLevelKeyword(s, "WHEN")
+	if len(indices) != 2 || indices[0] != 0 || indices[1] != 35 {
+		t.Fatalf("expected [0, 35], got %v", indices)
+	}
+
+	// Inside string literal and comments
+	s2 := "SELECT 'WHEN NOT' /* WHEN */ WHEN MATCHED"
+	indices2 := FindAllTopLevelKeyword(s2, "WHEN")
+	if len(indices2) != 1 || indices2[0] != 29 {
+		t.Fatalf("expected [29], got %v", indices2)
+	}
+}
+
+func TestFindTopLevelChar(t *testing.T) {
+	s := "col = 'val = 1' AND b = 2"
+	idx := FindTopLevelChar(s, '=')
+	if idx != 4 {
+		t.Fatalf("expected idx 4, got %d", idx)
+	}
+
+	// Inside parenthesis
+	s2 := "(a = 1) = true"
+	idx2 := FindTopLevelChar(s2, '=')
+	if idx2 != 8 {
+		t.Fatalf("expected idx 8, got %d", idx2)
+	}
+}
+
+

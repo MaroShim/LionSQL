@@ -417,7 +417,7 @@ func SplitSetClauses(setClause string) []SetPair {
 			continue
 		}
 
-		eqIdx := findTopLevelChar(p, '=')
+		eqIdx := FindTopLevelChar(p, '=')
 		if eqIdx != -1 {
 			col := strings.TrimSpace(p[:eqIdx])
 			val := strings.TrimSpace(p[eqIdx+1:])
@@ -518,24 +518,39 @@ func SplitAsAlias(item string) (expr string, alias string, hasAs bool) {
 	return item, "", false
 }
 
-// FindTopLevelKeyword finds the byte index of a keyword (e.g. "FROM") in s where:
-// 1. It is outside single/double quotes, brackets, and parentheses (depth == 0).
-// 2. It is flanked by word boundaries (spaces, punctuation, or string start/end).
-// Returns -1 if not found.
-func FindTopLevelKeyword(s string, keyword string) int {
+// FindAllTopLevelKeyword returns all starting byte indices of standalone keyword in s
+// occurring at depth 0 outside single/double quotes, brackets, comments, and parentheses.
+func FindAllTopLevelKeyword(s string, keyword string) []int {
 	kLen := len(keyword)
 	n := len(s)
-	if n < kLen {
-		return -1
+	if n < kLen || kLen == 0 {
+		return nil
 	}
 
+	var indices []int
 	depth := 0
 	inSingleQuote := false
 	inDoubleQuote := false
 	inBracket := false
+	inLineComment := false
+	inBlockComment := false
 
 	for i := 0; i <= n-kLen; i++ {
 		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
 
 		if inSingleQuote {
 			if ch == '\'' {
@@ -568,6 +583,18 @@ func FindTopLevelKeyword(s string, keyword string) int {
 			continue
 		}
 
+		// Check start of comments or quotes outside any quote/bracket
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
 		if ch == '\'' {
 			inSingleQuote = true
 			continue
@@ -597,13 +624,26 @@ func FindTopLevelKeyword(s string, keyword string) int {
 				leftOk := (i == 0 || isWordBoundary(s[i-1]))
 				rightOk := (i+kLen == n || isWordBoundary(s[i+kLen]))
 				if leftOk && rightOk {
-					return i
+					indices = append(indices, i)
+					i += kLen - 1
 				}
 			}
 		}
 	}
 
-	return -1
+	return indices
+}
+
+// FindTopLevelKeyword finds the byte index of a keyword (e.g. "FROM") in s where:
+// 1. It is outside single/double quotes, brackets, and parentheses (depth == 0).
+// 2. It is flanked by word boundaries (spaces, punctuation, or string start/end).
+// Returns -1 if not found.
+func FindTopLevelKeyword(s string, keyword string) int {
+	indices := FindAllTopLevelKeyword(s, keyword)
+	if len(indices) == 0 {
+		return -1
+	}
+	return indices[0]
 }
 
 // SplitJoinCond splits a simple or parenthesized join condition (e.g. "a.id = b.id", "(a.id = b.id)")
@@ -621,7 +661,7 @@ func SplitJoinCond(cond string) (string, string) {
 		}
 	}
 
-	eqIdx := findTopLevelChar(cond, '=')
+	eqIdx := FindTopLevelChar(cond, '=')
 	if eqIdx != -1 {
 		left := strings.TrimSpace(cond[:eqIdx])
 		right := strings.TrimSpace(cond[eqIdx+1:])
@@ -637,7 +677,8 @@ func CleanIdentifier(s string) string {
 	return strings.Trim(s, "\"`'[]")
 }
 
-func findTopLevelChar(s string, target byte) int {
+// FindTopLevelChar finds the byte index of target in s outside quotes, brackets, and parentheses (depth == 0).
+func FindTopLevelChar(s string, target byte) int {
 	n := len(s)
 	depth := 0
 	inSingleQuote := false
@@ -727,6 +768,109 @@ func isBalanced(s string) bool {
 		}
 	}
 	return depth == 0
+}
+
+// FindMatchingParen finds the index of the matching closing parenthesis ')' for the '(' at openIdx,
+// safely skipping quotes ('...', "..."), brackets ([...]), comments, and nested parentheses.
+// Returns -1 if no matching parenthesis is found.
+func FindMatchingParen(s string, openIdx int) int {
+	n := len(s)
+	if openIdx < 0 || openIdx >= n || s[openIdx] != '(' {
+		return -1
+	}
+
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+	inLineComment := false
+	inBlockComment := false
+
+	for i := openIdx; i < n; i++ {
+		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < n && s[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				if i+1 < n && s[i+1] == ']' {
+					i++
+					continue
+				}
+				inBracket = false
+			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			depth--
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+
+	return -1
 }
 
 // SplitTopLevelKeyword splits string s by a standalone keyword (e.g. "AND", "OR") at depth 0,
