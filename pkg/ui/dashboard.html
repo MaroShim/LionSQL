@@ -243,19 +243,34 @@
       font-weight: 600;
     }
     nav {
-      padding: 15px 10px;
+      padding: 10px 10px 16px 10px;
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 3px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+    }
+    .nav-section-title {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 14px 10px 4px 10px;
+      user-select: none;
+      opacity: 0.85;
+    }
+    .nav-section-title:first-child {
+      padding-top: 4px;
     }
     .nav-btn {
       background: transparent;
       border: none;
       color: var(--text-muted);
-      padding: 10px 14px;
+      padding: 8px 12px;
       border-radius: 6px;
-      font-size: 0.9rem;
+      font-size: 0.88rem;
       text-align: left;
       cursor: pointer;
       display: flex;
@@ -771,17 +786,28 @@
       <input type="text" id="sidebar-quick-search" placeholder="Filter tables & views..." style="margin: 0; padding: 6px 10px; font-size: 0.78rem; background: var(--code-bg); border-radius: 6px;" oninput="onSidebarQuickSearch(this.value)" />
     </div>
     <nav>
+      <div class="nav-section-title">Database &amp; Query</div>
       <button class="nav-btn active" data-view="overview" onclick="switchView('overview')">
         <span>Overview</span>
         <span class="badge badge-info" style="font-size:0.65rem;">SYS</span>
       </button>
       <button class="nav-btn" data-view="tables" onclick="switchView('tables')">
-        <span>Table & Record</span>
+        <span>Table &amp; Record</span>
         <span id="nav-tables-count">0</span>
+      </button>
+      <button class="nav-btn" data-view="query" onclick="switchView('query')">
+        <span>SQL Query</span>
+        <span class="badge badge-success">SQL</span>
       </button>
       <button class="nav-btn" data-view="procedures" onclick="switchView('procedures')">
         <span>Stored Procedures</span>
         <span id="nav-procs-count">0</span>
+      </button>
+
+      <div class="nav-section-title">Automation &amp; Stream</div>
+      <button class="nav-btn" data-view="realtime" onclick="switchView('realtime')">
+        <span>Realtime Live Stream</span>
+        <span id="nav-realtime-badge" class="badge badge-success" style="font-size:0.65rem;">LIVE</span>
       </button>
       <button class="nav-btn" data-view="webhooks" onclick="switchView('webhooks')">
         <span>Web Hooks</span>
@@ -791,33 +817,29 @@
         <span>Cron Jobs</span>
         <span id="nav-crons-count">0</span>
       </button>
-      <button class="nav-btn" data-view="query" onclick="switchView('query')">
-        <span>SQL Query</span>
-        <span class="badge badge-success">SQL</span>
-      </button>
+
+      <div class="nav-section-title">Developer &amp; Access</div>
       <button class="nav-btn" data-view="apikeys" onclick="switchView('apikeys')">
-        <span>Auth & API Keys</span>
+        <span>Auth &amp; API Keys</span>
         <span class="badge badge-purple">AUTH</span>
       </button>
       <button class="nav-btn" data-view="sdk" onclick="switchView('sdk')">
         <span>Client SDK</span>
         <span class="badge badge-info" style="font-size:0.65rem;">JS/TS</span>
       </button>
-      <button class="nav-btn" data-view="mail" onclick="switchView('mail')">
-        <span>Settings / Mail</span>
-        <span class="badge badge-warning" style="font-size:0.65rem;">SMTP</span>
+
+      <div class="nav-section-title">Monitoring &amp; System</div>
+      <button class="nav-btn" data-view="logs" onclick="switchView('logs')">
+        <span>Request Logs</span>
+        <span id="nav-logs-badge" class="badge" style="font-size:0.65rem; background: var(--code-bg); color: var(--text-muted); border: 1px solid var(--border);">LOGS</span>
       </button>
       <button class="nav-btn" data-view="replication" onclick="switchView('replication')">
         <span>Replication (HA)</span>
         <span id="nav-ha-badge" class="badge badge-muted" style="font-size:0.65rem;">HA</span>
       </button>
-      <button class="nav-btn" data-view="realtime" onclick="switchView('realtime')">
-        <span>Realtime Live Stream</span>
-        <span id="nav-realtime-badge" class="badge badge-success" style="font-size:0.65rem;">LIVE</span>
-      </button>
-      <button class="nav-btn" data-view="logs" onclick="switchView('logs')">
-        <span>Request Logs</span>
-        <span id="nav-logs-badge" class="badge" style="font-size:0.65rem; background: var(--code-bg); color: var(--text-muted); border: 1px solid var(--border);">LOGS</span>
+      <button class="nav-btn" data-view="mail" onclick="switchView('mail')">
+        <span>Settings / Mail</span>
+        <span class="badge badge-warning" style="font-size:0.65rem;">SMTP</span>
       </button>
     </nav>
     <div style="padding: 12px 15px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px;">

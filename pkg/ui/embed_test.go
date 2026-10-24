@@ -21,32 +21,39 @@ func TestDashboardMenuOrderAndContent(t *testing.T) {
 		t.Errorf("HTML should not contain 'PocketBase Style Single Binary'")
 	}
 
-	// Verify menu items exist in the specified order
+	// Verify menu items and category sections exist in the specified order
 	expectedMenuItems := []string{
+		`Database &amp; Query`,
 		`data-view="overview"`,
 		`Overview`,
 		`data-view="tables"`,
-		`Table & Record`,
+		`Table &amp; Record`,
+		`data-view="query"`,
+		`SQL Query`,
 		`data-view="procedures"`,
 		`Stored Procedures`,
+
+		`Automation &amp; Stream`,
+		`data-view="realtime"`,
+		`Realtime Live Stream`,
 		`data-view="webhooks"`,
 		`Web Hooks`,
 		`data-view="crons"`,
 		`Cron Jobs`,
-		`data-view="query"`,
-		`SQL Query`,
+
+		`Developer &amp; Access`,
 		`data-view="apikeys"`,
-		`Auth & API Keys`,
+		`Auth &amp; API Keys`,
 		`data-view="sdk"`,
 		`Client SDK`,
-		`data-view="mail"`,
-		`Settings / Mail`,
-		`data-view="replication"`,
-		`Replication (HA)`,
-		`data-view="realtime"`,
-		`Realtime Live Stream`,
+
+		`Monitoring &amp; System`,
 		`data-view="logs"`,
 		`Request Logs`,
+		`data-view="replication"`,
+		`Replication (HA)`,
+		`data-view="mail"`,
+		`Settings / Mail`,
 	}
 
 	lastIdx := 0

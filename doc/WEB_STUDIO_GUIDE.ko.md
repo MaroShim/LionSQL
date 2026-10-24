@@ -40,6 +40,25 @@ LionSQL 서버가 기동되면 HTTP 관리 포트(기본값: TCP `8090`)에서 W
 - **시스템 선호도 자동 반영**: 사용자의 OS 또는 브라우저 테마 설정을 자동으로 감지하여 초기 테마를 구성합니다.
 - **고대비 가독성 보장**: 라이트 모드에서도 기본키(PK) 뱃지, 경고 알림창, 비활성 탭 글자색, 삭제 확인창 텍스트가 명확하게 식별되도록 CSS 변수 기반 고대비 컬러 팔레트가 적용되어 있습니다.
 
+### 1.4. 좌측 사이드 패널 네비게이션 체계 (4개 카테고리)
+좌측 사이드 패널은 총 12개의 핵심 도구를 작업 흐름에 맞추어 4개의 카테고리로 체계화하여 제공합니다:
+- **DATABASE & QUERY**:
+  - `Overview`: 서버 리소스, 가동 시간, 초당 처리량(TPS/QPS) 모니터링
+  - `Table & Record`: 테이블 스키마 설계 및 데이터 CRUD 스프레드시트 그리드
+  - `SQL Query`: 다중 쿼리 실행, T-SQL 배치, 바이트코드 EXPLAIN 실행 계획 분석 콘솔
+  - `Stored Procedures`: T-SQL 저장 프로시저 및 스칼라 함수(UDF) 소스 조회 및 즉시 실행
+- **AUTOMATION & STREAM**:
+  - `Realtime Live Stream`: 웹소켓/SSE 기반 실시간 테이블 변경(CDC) 이벤트 스트리밍 모니터
+  - `Web Hooks`: INSERT, UPDATE, DELETE 변경 시 외부 엔드포인트를 호출하는 웹훅 관리
+  - `Cron Jobs`: 정기적 SQL 실행, 데이터 집계, 백업을 위한 내장 분초 단위 크론 스케줄러
+- **DEVELOPER & ACCESS**:
+  - `Auth & API Keys`: 사용자 계정 발급, RBAC 역할(Admin, Read-Only) 부여 및 API Key 관리
+  - `Client SDK`: JavaScript/TypeScript 클라이언트 라이브러리 연동 및 언어별 REST API 코드 스니펫
+- **MONITORING & SYSTEM**:
+  - `Request Logs`: 실시간 HTTP 요청/응답 처리 시간(Latency), 상태 코드, Remote IP 감사 로그 뷰어
+  - `Replication (HA)`: Primary/Replica 복제 토폴로지, LSN 동기화 지연 및 Failover 상태 점검
+  - `Settings / Mail`: 내장 SMTP 발송 엔진 설정, 이메일 템플릿 테스트 및 시스템 환경 확인
+
 ---
 
 ## 2. 개요 대시보드 및 실시간 모니터링
