@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- `BENCH-TPCC-CLIENT-1`: Introduced network TPC-C benchmark client binary (`bin/tpcc-client`, `cmd/tpcc_client/`) that connects to active LionSQL instances over standard wire protocols (TDS `:1433` and PGWire `:5433`), executing concurrent transactions (New-Order, Payment, Order-Status, Delivery, Stock-Level), driving real-time TPS metrics in the Web Studio Overview dashboard, and reporting P50/P95/P99 latencies.
 - `OCC-PERF-PLAN`: Published in-memory OCC performance tuning plan and root-cause analysis (`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`) diagnosing synchronous AOF compaction freezes, fat `storage.Value` structs, and 8 structural bottlenecks, establishing a prioritized 7-stage optimization roadmap for Post-1.0.
 - `VPERF-15`: Implemented high-throughput In-Memory OCC 5-point optimizations in `pkg/storage/memengine/`:
   - **Bitmask Shard Tracking**: Replaced nested maps (`shardMap map[string]map[int]struct{}`) and sorting slices with a single `uint64` bitmask per table, eliminating map allocations and guaranteeing canonical ascending shard lock ordering via bit iteration.
