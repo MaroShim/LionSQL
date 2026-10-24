@@ -14,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Standardized REST API documentation naming: renamed `doc/API_REFERENCE.md` to `doc/REST_API_REFERENCE.md` and `doc/AUTO_REST_API.md` to `doc/REST_API_AUTO_GENERATED.md`, updating all inbound links across documentation and root guides.
 - Replaced machine-specific console output paths in documentation examples (`doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/ARCHITECTURE.md`) with generic relative paths (`./data`, `lionsql/`).
 - Updated `doc/JSON_SPEC_AND_INDEXING.md` Section 7 to a completed implementation status matrix detailing all 5 stages of JSON built-ins, expression B-Tree indexing, CBO optimization, and regression test suites.
+- Consolidated `doc/README.md` by pruning scattered internal `notes/` plan links across subject sections and routing to `notes/README.md` via a dedicated Developer Handover & Backlog section.
 
 ### Performance
 - **Vertical Performance Track (7 Hot-Path Zero-Allocation Optimizations)**:

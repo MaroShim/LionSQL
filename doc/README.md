@@ -86,9 +86,6 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Complete Microsoft T-SQL syntax compatibility guide.
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
-* [`../notes/ANTLR_PARSER_COMPACTION_PLAN.md`](../notes/ANTLR_PARSER_COMPACTION_PLAN.md)
-  * Technical roadmap and phased strategy for slimming down the generated T-SQL ANTLR4 parser (`pkg/proc/parser/antlr/`).
-  * Analysis of 267k-line generated code, unused listener pruning, grammar subsetting, ATN packing, and long-term Native Pratt Parser unification.
 * [`EXTENSIONS.md`](EXTENSIONS.md)
   * Advanced SQL capabilities: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB operators, CTEs, Foreign Keys with cascading actions, and Dual-Track UDF architecture (Go native SPI + Wasm sandbox).
 * [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](PERCENTILE_AND_QUANTILE_ANALYTICS.md)
@@ -104,10 +101,6 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * **PostgreSQL Wire Protocol v3** (Port `5433`): Simple and Extended Query Protocols (`Parse`, `Bind`, `Execute`, `Sync`), parameter binding, and SSL/TLS.
   * **Microsoft SQL Server TDS 7.x/8.0** (Port `1433`): Prelogin, Login7, RPC packets, and `sp_prepexec` bytecode plan cache connection.
   * Client compatibility matrix (`psql`, DBeaver, GORM, Prisma, `sqlcmd`, SSMS, Azure Data Studio).
-* [`../notes/PROTOCOL_EMULATION_BOUNDARIES.md`](../notes/PROTOCOL_EMULATION_BOUNDARIES.md)
-  * Multi-protocol emulation boundary specification and architectural stop criteria.
-  * Four-Layer Boundary Model: Wire Framing (100%), Virtual Catalog Handshake (90%), Common DML (80%), Dialect Quirks & Procedures (10~20%).
-  * PostgreSQL stopping criteria, planned MySQL protocol specifications, and T-SQL single-kernel procedural invariance.
 * [`CLIENT_TOOL_INTEGRATION.md`](CLIENT_TOOL_INTEGRATION.md)
   * Comprehensive GUI & CLI client tool connection and integration guide.
   * Tested client matrix: Beekeeper Studio, DBeaver Universal Database Tool, Azure Data Studio, SSMS, `psql`, and `sqlcmd`.
@@ -115,8 +108,6 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
 * [`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)
   * Comprehensive Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) live compatibility verification report across 123 enterprise T-SQL/ORM scenarios (**99.2% practical compatibility rate**: 122/123 passing).
-* [`../notes/COLLATION_AND_LOCALE_PLAN.md`](../notes/COLLATION_AND_LOCALE_PLAN.md)
-  * Microsoft SQL Server Collation, Locale & Multi-Language architecture and implementation plan (Tolerant `COLLATE` parser, `--collation` dynamic tokens, `COLLATIONPROPERTY`, and zero collation conflict policy).
 
 ---
 
@@ -139,8 +130,6 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Real-time CDC streaming (`GET /api/cdc/stream`) and decoupled HTAP analytical integration guide with DuckDB (includes Python & DuckDB workers).
 * [`SNAPSHOT_ISOLATION_AND_DUCKDB.md`](SNAPSHOT_ISOLATION_AND_DUCKDB.md)
   * Deep-dive technical whitepaper on dual storage engine snapshot isolation (WiredTiger MVCC vs In-Memory OCC), intrinsic snapshot time-point distinctions, Zero-Vacuum architecture, and DuckDB initial sync / real-time CDC consistency cutover.
-* [`../notes/S3_PRESIGNED_STORAGE_PLAN.md`](../notes/S3_PRESIGNED_STORAGE_PLAN.md)
-  * Pattern 1 S3 Pre-signed URL direct upload architecture and implementation plan (pure Go SigV4 signer, REST API, T-SQL built-in functions, CDC orphan asset cleanup).
 
 ---
 
@@ -157,8 +146,6 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Authentication models, JWT lifecycle, API key role scoping, and network encryption.
 * [`ENTERPRISE_AUTHENTICATION_SPI.md`](ENTERPRISE_AUTHENTICATION_SPI.md)
   * Pluggable `AuthProvider` SPI for corporate directory services (LDAP/AD/PAM), multi-protocol identity convergence, and perimeter proxy security architecture.
-* [`../notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](../notes/IMMUTABLE_AUDIT_LOG_PLAN.md)
-  * Enterprise cryptographic audit logging architecture and implementation plan (PCI-DSS v4.0 Req 10, SOC 2 Type II, SHA-256 hash chaining, non-blocking MPSC ring buffer, and offline CLI verifier).
 * [`BENCHMARK.md`](BENCHMARK.md)
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).
 * [`TESTING.md`](TESTING.md)
@@ -167,14 +154,16 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.
-* [`../notes/UNIFIED_CLI_PLAN.md`](../notes/UNIFIED_CLI_PLAN.md)
-  * PocketBase/CockroachDB style single-binary CLI unification architecture and lifecycle execution plan.
-* [`../notes/DOCUMENTATION_CLEANUP_PLAN.md`](../notes/DOCUMENTATION_CLEANUP_PLAN.md)
-  * 4-Stage comprehensive technical documentation cleanup and synchronization master plan for v0.90.0 Feature Freeze.
-* [`ROADMAP.md`](../ROADMAP.md)
+
+---
+
+### 2.6. Developer Handover, Engineering Notes & Backlog
+* [`../notes/README.md`](../notes/README.md)
+  * Engineering context, core architectural invariants, landmines/pitfalls, and domain execution plans (`*_PLAN.md`).
+* [`../ROADMAP.md`](../ROADMAP.md)
   * Versioned milestone progression from single-node OLTP to Always On HA and decoupled HTAP.
-* [`TODO.ko.md`](../TODO.ko.md)
+* [`../TODO.ko.md`](../TODO.ko.md)
   * Daily actionable engineering backlog and task status tracker.
-* [`CHANGELOG.md`](../CHANGELOG.md)
+* [`../CHANGELOG.md`](../CHANGELOG.md)
   * Release history and detailed changelogs following Keep a Changelog standard.
 
