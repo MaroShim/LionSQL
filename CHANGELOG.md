@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-## [0.9.0-beta3] - 2026-10-25
+## [0.90.0-beta3] - 2026-10-25
 
 ### Added
 - `SMOKE-EXT-1`: Implemented self-contained extended integration smoke test suite (`scripts/verify_report.sh`) and usage guide (`scripts/README.md`) verifying all 13 core architecture domains from `notes/TEST_VERIFICATION_REPORT.ko.md` in ~3 seconds across both In-Memory OCC and WiredTiger storage engines (TDS handshake, enterprise T-SQL, TPC-C VDBE stress, 25KB PLP boundary, tri-bridge interoperability, SIGKILL crash durability, HA replication, CDC stream, CBO covering index, JSON expression index, RBAC governance, declarative migrations CLI, and rolling table partitioning).
@@ -107,7 +107,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.9.0-beta2] - 2026-10-21
+## [0.90.0-beta2] - 2026-10-21
 
 ### Added
 - `CLI-VERSION-1`: Implemented dual-format version and build information reporting for the `lionsql` single-binary CLI (`pkg/config/version.go`, `cmd/lionsql/main.go`, `cmd/lionsql/server.go`, `pkg/api/handlers_admin.go`): Option A multi-line structured report on `version`, `-v`, `-version`, `--version` flags with automatic VCS build time, commit hash (`debug.ReadBuildInfo()`), Go runtime, and wire protocol ports; Option B compact single-line build descriptor `(built: ..., commit: ..., ...) [tags: ...]` displayed by default on foreground server startup (`lionsql`, `lionsql serve`) and usage headers.
@@ -183,7 +183,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.9.0-beta1] - 2026-10-20
+## [0.90.0-beta1] - 2026-10-20
 
 ### Added
 - **Production Superuser Security Guardrail (`PROD-SEC-1`) (`cmd/lionsql`, `cmd/server`)**: Enforced production safety guard that actively blocks server startup when binding to non-localhost / external interfaces (e.g. `0.0.0.0` or public IP) with the default administrative superuser password (`1234567890`), requiring explicit password change (`admin_password`) or localhost-only binding (`127.0.0.1`).
@@ -302,7 +302,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ---
 
-## [0.9.0-feature-freeze] - 2026-10-19
+## [0.90.0-feature-freeze] - 2026-10-19
 
 ### Added
 - **Documentation Overhaul & README Overview Refinement**: Refined and modernized the executive overview at the very top of both `README.md` and `README.ko.md` to prominently foreground LionSQL's five core architectural pillars: (1) Native Microsoft SQL Server T-SQL and Stored Procedure Execution on VDBE, (2) Broad PostgreSQL Wire Protocol v3 and SQL dialect compatibility, (3) Embedded zero-dependency Web Studio & REST BaaS API, (4) Ultra-compact single static standalone executable (< 100MB, ~50MB), and (5) High-performance OLTP throughput (16k~28k+ TPS) with Non-Blocking Snapshot Isolation.

@@ -35,9 +35,9 @@
 
 ---
 
-## 2. v0.9.0 릴리스 스프린트 마감 현황 (100% Completed)
+## 2. v0.90.0 릴리스 스프린트 마감 현황 (100% Completed)
 
-LionSQL의 `v0.9.0` 릴리스 스프린트(`v0.9.0-feature-freeze`부터 `v0.9.0-beta1`, `v0.9.0-beta2`, `v0.9.0-beta3`)에서 진행된 핵심 안정화, 도구 호환성, 성능 최적화, 무결성 과제가 **100% 완료([x])**되어 스프린트가 공식 마감되었습니다.
+LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-feature-freeze`부터 `v0.90.0-beta1`, `v0.90.0-beta2`, `v0.90.0-beta3`)에서 진행된 핵심 안정화, 도구 호환성, 성능 최적화, 무결성 과제가 **100% 완료([x])**되어 스프린트가 공식 마감되었습니다.
 
 5대 프로덕션 릴리스 품질 관문(Gate 1: 다중 와이어 드라이버 100% 인증, Gate 2: ACID 및 Zero-Race 20k TPS, Gate 3: Always On HA 및 CDC, Gate 4: 엔터프라이즈 보안 TDE/RBAC, Gate 5: 운영 도구 및 단일 CLI)이 모두 충족되었습니다.
 
@@ -143,7 +143,7 @@ LionSQL의 `v0.9.0` 릴리스 스프린트(`v0.9.0-feature-freeze`부터 `v0.9.0
 | :---: | :---: | :--- | :--- | :---: | :--- |
 | **`REL-1.0-TAG`** | 릴리스/태그 | **`v1.0.0` 정식 릴리스 태그 생성 및 GitHub Release 배포** | Git Tag `v1.0.0`, GitHub Release | **준비 완료 (Ready)** | 5대 관문 전수 통과 상태에서 공식 1.0 LTS 태그 선언 |
 | **`REL-1.0-BIN`** | 빌드/패키징 | **멀티플랫폼(Linux amd64/arm64, macOS, Windows) 정적 단일 바이너리 릴리스 빌드** | `bin/lionsql-*`, `Dockerfile` | **준비 완료 (Ready)** | CGo static linking / Darwin arm64 / Linux x86_64 배포 아티팩트 |
-| **`REL-1.0-DOC`** | 문서/안내 | **공식 LionSQL 1.0 릴리스 노트 발행 및 사용자 마이그레이션 가이드 배포** | `CHANGELOG.md`, `README.md` | **준비 완료 (Ready)** | 0.9.0 베타 결실 및 1.0 프로덕션 사양 공표 |
+| **`REL-1.0-DOC`** | 문서/안내 | **공식 LionSQL 1.0 릴리스 노트 발행 및 사용자 마이그레이션 가이드 배포** | `CHANGELOG.md`, `README.md` | **준비 완료 (Ready)** | 0.90.0 베타 결실 및 1.0 프로덕션 사양 공표 |
 
 ### 3.2. Post-1.0 (`v1.1.0+`) 로드맵 과제 대기열 (Postponed Queue)
 
@@ -211,7 +211,7 @@ LionSQL의 `v0.9.0` 릴리스 스프린트(`v0.9.0-feature-freeze`부터 `v0.9.0
 
 ## 5. 최근 완료 마일스톤 상세 이력 (Recent Completed History)
 
-### 5.1. v0.9.0 Betas (Beta 1 ~ Beta 3) 주요 완성 내역 (2026-10-19 ~ 2026-10-25)
+### 5.1. v0.90.0 Betas (Beta 1 ~ Beta 3) 주요 완성 내역 (2026-10-19 ~ 2026-10-25)
 
 - [x] **13대 핵심 아키텍처 도메인 확장 통합 스모크 테스트 스위트 및 자동화 구현 (`SMOKE-EXT-1`) (2026-10-25)**:
   - `scripts/verify_report.sh` 및 `scripts/README.md` 구축: TDS, T-SQL, TPC-C, 경계조건, 트라이브릿지, 크래시복구, HA, HTAP, CBO, JSON, RBAC, 마이그레이션, 파티셔닝 13개 핵심 도메인 전수 검증.
@@ -250,7 +250,7 @@ LionSQL의 `v0.9.0` 릴리스 스프린트(`v0.9.0-feature-freeze`부터 `v0.9.0
 - [x] **과거 107대 데이터 무결성 결함 전수 조치 및 아카이빙 (`DOC-ARCHIVE-1`) (2026-10-20)**:
   - 107대 결함 조치 내역을 루트 [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)로 이관 및 아라비아 숫자 넘버링 정돈 완료.
 
-### 5.2. v0.9.0 Feature Freeze 주요 완성 내역 (2026-10-19 이전)
+### 5.2. v0.90.0 Feature Freeze 주요 완성 내역 (2026-10-19 이전)
 
 - [x] **통합 SQL 추상화 레이어 기반 결함군 일괄 해결 (`SQL-ABSTRACT-1`)**:
   - `storage.Record` 1급 객체화 및 `Record.Get` 대소문자 무관 탐색을 바탕으로 전 계층 경계 정합성 전면 보강.

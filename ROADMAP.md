@@ -12,10 +12,10 @@ This document defines the overarching architectural trajectory, versioned milest
 LionSQL follows an evolutionary roadmap designed to scale single-node hardware to its physical limits while maintaining zero-dependency single-binary distribution:
 
 ```
-[ Phase 1: Core Foundation ] ────────────► v0.1.0 - v0.6.0   [COMPLETED]
+[ Phase 1: Core Foundation ] ────────────► v0.1.0 - v0.8.0   [COMPLETED]
   Dual Wire Protocols (PGWire/TDS) + Dual Storage (WiredTiger/OCC) + VDBE Bytecode VM
 
-[ Phase 2: SQL & Analytical Depth ] ─────► v0.7.0 - v0.10.0  [COMPLETED]
+[ Phase 2: SQL & Analytical Depth ] ─────► v0.9.0 - v0.10.0  [COMPLETED]
   Window Functions + T-Digest Quantiles + Log Operators + Savepoints + Views
 
 [ Phase 3: Replication & Drivers ] ──────► v0.11.0 - v0.12.0 [COMPLETED]
@@ -27,7 +27,7 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 [ Phase 5: Enterprise Governance ] ──────► v0.16.0 - v0.24.0 [COMPLETED]
   Engine Decoupling (pkg/engine) + Group Commit + RBAC + CBO DP Join Order + Prepared LRU Cache
 
-[ Phase 6: Production Hardening & Feature Freeze ] ► v0.9.0 (Betas 1~3) [COMPLETED]
+[ Phase 6: Production Hardening & Feature Freeze ] ► v0.90.0 (Betas 1~3) [COMPLETED]
   Unified CLI (lionsql) + Web Studio Suite + Memory Governor + OCC Tuning + TDS Positional + 2-Tier Engine
 
 [ Phase 7: Official 1.0 Release ] ────────► v1.0.0 LTS [READY FOR RELEASE]
@@ -41,12 +41,12 @@ LionSQL follows an evolutionary roadmap designed to scale single-node hardware t
 
 | Milestone | Target Version | Focus & Core Deliverables | Completion Status |
 | :---: | :---: | :--- | :---: |
-| **Phase 1** | `v0.1.0` - `v0.6.0` | **Core Foundation & Virtual Machine Architecture**<br>Dual wire protocols (:5433, :1433), dual storage engines, SQLite-style VDBE VM, CBO histograms. | **100% Completed** |
-| **Phase 2** | `v0.7.0` - `v0.10.0` | **SQL & Analytical Depth, Aggregations & Views**<br>Window functions, T-Digest quantiles, in-engine log operators (GREP/AWK), savepoints, views. | **100% Completed** |
+| **Phase 1** | `v0.1.0` - `v0.8.0` | **Core Foundation & Virtual Machine Architecture**<br>Dual wire protocols (:5433, :1433), dual storage engines, SQLite-style VDBE VM, CBO histograms. | **100% Completed** |
+| **Phase 2** | `v0.9.0` - `v0.10.0` | **SQL & Analytical Depth, Aggregations & Views**<br>Window functions, T-Digest quantiles, in-engine log operators (GREP/AWK), savepoints, views. | **100% Completed** |
 | **Phase 3** | `v0.11.0` - `v0.12.0` | **Replication, Official Drivers & Zero-Allocation**<br>1-Writer multi-reader WAL streaming replication, official driver compatibility, buffer pooling. | **100% Completed** |
 | **Phase 4** | `v0.13.0` - `v0.15.0` | **Modern Ecosystem, GUI Tool Interop & VDBE Acceleration**<br>pgx/v5 pipelining, DBeaver/SSMS interop, UUIDv7, VDBE opcode specialization (21k TPS peak). | **100% Completed** |
 | **Phase 5** | `v0.16.0` - `v0.24.0` | **Enterprise Governance, Security & Engine Decoupling**<br>Layer separation (`pkg/engine`), WAL group commit, RBAC, CBO DP join ordering, migrations CLI, prepared LRU cache. | **100% Completed** |
-| **Phase 6** | `v0.9.0`<br>(Betas 1~3) | **Production Hardening & Feature Freeze Milestone**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine, 13-domain smoke suite. | **100% Completed** |
+| **Phase 6** | `v0.90.0`<br>(Betas 1~3) | **Production Hardening & Feature Freeze Milestone**<br>Single-binary CLI (`lionsql`), Web Studio suite, memory governor, OCC 5-point tuning, TDS positional mapping, 2-Tier query engine, 13-domain smoke suite. | **100% Completed** |
 | **Phase 7** | `v1.0.0 LTS` | **Official 1.0 Production Release & Long-Term Support**<br>Always On HA, decoupled HTAP, driver certification, zero-race verification, release sign-off. | **Ready for Release** |
 | **Horizons** | `v1.1.0+` | **Post-1.0 Architectural Extensions**<br>Pure-Go persistent storage backend, Wasm UDF sandbox (`wazero`), multi-core parallel OLAP scans. | **Planned** |
 
@@ -84,11 +84,11 @@ Driver Cert    & Zero-Race    Availability   Security/Auth  Tooling & CLI
 
 ---
 
-## 3. Completed Milestone: Phase 6 (v0.9.0 Feature Freeze & Hardening Suite)
+## 3. Completed Milestone: Phase 6 (v0.90.0 Feature Freeze & Hardening Suite)
 
-Phase 6 represents the comprehensive production hardening and feature freeze milestone (`v0.9.0`), encompassing the `v0.9.0-feature-freeze` baseline through `v0.9.0-beta1`, `v0.9.0-beta2`, and `v0.9.0-beta3`:
+Phase 6 represents the comprehensive production hardening and feature freeze milestone (`v0.90.0`), encompassing the `v0.90.0-feature-freeze` baseline through `v0.90.0-beta1`, `v0.90.0-beta2`, and `v0.90.0-beta3`:
 
-### 3.1. Core Architectural Deliverables Completed in v0.9.0 Feature Freeze
+### 3.1. Core Architectural Deliverables Completed in v0.90.0 Feature Freeze
 * **Always On Style Automatic Failover & Leader Election (`pkg/replication`)**:
   Highest-LSN precedence rule, monotonic leader terms, automated replica promotion, and split-brain fencing.
 * **Decoupled Real-Time CDC & Transactional Outbox (`pkg/cdc`, `pkg/storage`)**:
@@ -110,7 +110,7 @@ Phase 6 represents the comprehensive production hardening and feature freeze mil
 * **Protocol Catalog Database Standardization (`pkg/catalog/virtual`, `pkg/engine`)**:
   Eliminated legacy database namespaces across virtual catalog and engine to strictly standardize on protocol-native single database namespaces: `postgres` for PGWire and `master` for TDS.
 
-### 3.2. Production Hardening & Defect Remediation Completed in v0.9.0 Betas (Beta 1 ~ Beta 3)
+### 3.2. Production Hardening & Defect Remediation Completed in v0.90.0 Betas (Beta 1 ~ Beta 3)
 * **Brand Uniformity & Identity (`BRAND-UNIFY-1`)**:
   Complete brand standardization to `LionSQL` across CLI, Web Studio, headers (`X-LionSQL-*`), SDK (`/sdk/lionsql.js`), and system metadata functions.
 * **Injection, Security & Lifecycle Hardening**:
@@ -127,7 +127,7 @@ Phase 6 represents the comprehensive production hardening and feature freeze mil
   100% PASS across all 25 packages under `go test -race ./...` and 107 historical integrity defects resolved and archived ([`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)).
 
 ### 3.3. Phase 7: Official 1.0 LTS Release Readiness
-With all Phase 6 deliverables and 0.9.0 beta hardening items completed, all 5 Production Readiness Quality Gates are verified and passed. LionSQL is fully staged for official `v1.0.0 LTS` tagging and production distribution.
+With all Phase 6 deliverables and 0.90.0 beta hardening items completed, all 5 Production Readiness Quality Gates are verified and passed. LionSQL is fully staged for official `v1.0.0 LTS` tagging and production distribution.
 
 ---
 
@@ -196,18 +196,18 @@ CGO_ENABLED=0 distribution Safe third-party plugins  PCI-DSS v4.0 / SOC2       M
 | **Phase 5** | Storage WAL Group Commit ($100\times$ Fsync Speedup) | Storage Engine | `v0.17.0` | **Completed** | [`doc/internal/STORAGE.md`](doc/internal/STORAGE.md) |
 | **Phase 5** | Granular SQL Object-Level RBAC (`GRANT/REVOKE`) | Security & Auth | `v0.18.0` | **Completed** | [`doc/SECURITY.md`](doc/SECURITY.md) |
 | **Phase 5** | Declarative Schema Migration CLI (`lionsql migrate`) | BaaS & Tooling | `v0.19.0` | **Completed** | [`doc/SCHEMA_MIGRATIONS_CLI.md`](doc/SCHEMA_MIGRATIONS_CLI.md) |
-| **Phase 6** | Always On Style Automatic Failover & Leader Election | High Availability | `v0.9.0` | **Completed** | [`doc/HIGH_AVAILABILITY.md`](doc/HIGH_AVAILABILITY.md) |
-| **Phase 6** | Decoupled Real-Time CDC & Transactional Outbox | Events & HTAP | `v0.9.0` | **Completed** | [`doc/CDC_DUCKDB_INTEGRATION.md`](doc/CDC_DUCKDB_INTEGRATION.md) |
-| **Phase 6** | Selinger DP Large Join Reordering ($N > 4$) | Query Planner | `v0.9.0` | **Completed** | [`doc/internal/CBO_VOLCANO.md`](doc/internal/CBO_VOLCANO.md) |
-| **Phase 6** | Zero-Allocation Memory & Buffer Pooling (P-1 ~ P-14) | Performance | `v0.9.0` | **Completed** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
-| **Phase 6** | Enterprise Driver Certification (JDBC, ODBC, Python) | Client Ecosystem | `v0.9.0` | **Completed** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
-| **Phase 6** | Enterprise Security & Object Governance (TDE, RBAC) | Security & Auth | `v0.9.0` | **Completed** | [`doc/SECURITY.md`](doc/SECURITY.md) |
-| **Phase 6** | Single Standalone Binary CLI & Web Studio Suite | Tooling & UI | `v0.9.0` | **Completed** | [`notes/UNIFIED_CLI_PLAN.md`](notes/UNIFIED_CLI_PLAN.md) |
-| **Phase 6** | Global Memory Governor & Circuit Breakers | Resource Mgmt | `v0.9.0` | **Completed** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
-| **Phase 6** | TDS RPC Positional Mapping & Tool Audit (`TOOL-AUDIT-1`) | Wire Protocols | `v0.9.0` | **Completed** | [`notes/TOOL_AUDIT_PLAN.ko.md`](notes/TOOL_AUDIT_PLAN.ko.md) |
-| **Phase 6** | 2-Tier Query Execution Architecture (`KISS-5`, `ARCH-2TIER-1`) | Query Engine | `v0.9.0` | **Completed** | [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
-| **Phase 6** | In-Memory OCC 5-Point Tuning (`VPERF-15` ~ `VPERF-18`) | Storage Engine | `v0.9.0` | **Completed** | [`doc/BENCHMARK.md`](doc/BENCHMARK.md) |
-| **Phase 6** | 13-Domain Extended Integration Smoke Suite (`SMOKE-EXT-1`) | Quality & Testing | `v0.9.0` | **Completed** | [`scripts/README.md`](scripts/README.md) |
+| **Phase 6** | Always On Style Automatic Failover & Leader Election | High Availability | `v0.90.0` | **Completed** | [`doc/HIGH_AVAILABILITY.md`](doc/HIGH_AVAILABILITY.md) |
+| **Phase 6** | Decoupled Real-Time CDC & Transactional Outbox | Events & HTAP | `v0.90.0` | **Completed** | [`doc/CDC_DUCKDB_INTEGRATION.md`](doc/CDC_DUCKDB_INTEGRATION.md) |
+| **Phase 6** | Selinger DP Large Join Reordering ($N > 4$) | Query Planner | `v0.90.0` | **Completed** | [`doc/internal/CBO_VOLCANO.md`](doc/internal/CBO_VOLCANO.md) |
+| **Phase 6** | Zero-Allocation Memory & Buffer Pooling (P-1 ~ P-14) | Performance | `v0.90.0` | **Completed** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **Phase 6** | Enterprise Driver Certification (JDBC, ODBC, Python) | Client Ecosystem | `v0.90.0` | **Completed** | [`doc/CLIENT_TOOL_INTEGRATION.md`](doc/CLIENT_TOOL_INTEGRATION.md) |
+| **Phase 6** | Enterprise Security & Object Governance (TDE, RBAC) | Security & Auth | `v0.90.0` | **Completed** | [`doc/SECURITY.md`](doc/SECURITY.md) |
+| **Phase 6** | Single Standalone Binary CLI & Web Studio Suite | Tooling & UI | `v0.90.0` | **Completed** | [`notes/UNIFIED_CLI_PLAN.md`](notes/UNIFIED_CLI_PLAN.md) |
+| **Phase 6** | Global Memory Governor & Circuit Breakers | Resource Mgmt | `v0.90.0` | **Completed** | [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md) |
+| **Phase 6** | TDS RPC Positional Mapping & Tool Audit (`TOOL-AUDIT-1`) | Wire Protocols | `v0.90.0` | **Completed** | [`notes/TOOL_AUDIT_PLAN.ko.md`](notes/TOOL_AUDIT_PLAN.ko.md) |
+| **Phase 6** | 2-Tier Query Execution Architecture (`KISS-5`, `ARCH-2TIER-1`) | Query Engine | `v0.90.0` | **Completed** | [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md) |
+| **Phase 6** | In-Memory OCC 5-Point Tuning (`VPERF-15` ~ `VPERF-18`) | Storage Engine | `v0.90.0` | **Completed** | [`doc/BENCHMARK.md`](doc/BENCHMARK.md) |
+| **Phase 6** | 13-Domain Extended Integration Smoke Suite (`SMOKE-EXT-1`) | Quality & Testing | `v0.90.0` | **Completed** | [`scripts/README.md`](scripts/README.md) |
 | **Phase 7** | Official v1.0.0 LTS Production Release & Sign-off | Release & Packaging | `v1.0.0 LTS` | **Ready for Release** | [`CHANGELOG.md`](CHANGELOG.md) |
 | **Post-1.0** | Enterprise Cryptographic Immutable Audit Log | Security & Audit | `v1.1.0` | **Postponed** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **Post-1.0** | Pure-Go Persistent Storage Engine (Pebble / bbolt) | Storage Engine | `v1.1.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#51-pure-go-persistent-storage-engine-backend-pebble--bbolt-v110) |
