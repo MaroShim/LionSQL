@@ -946,11 +946,11 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 
 	for i, p := range rpc.Params {
 		name := strings.ToLower(p.Name)
-		if name == "@params" || (name == "" && i == 1) {
+		if name == "@params" || name == "@parameters" || (name == "" && i == 1) {
 			if str, ok := p.Value.(string); ok {
 				paramsDecl = str
 			}
-		} else if name == "@stmt" || (name == "" && i == 2) {
+		} else if name == "@stmt" || name == "@statement" || (name == "" && i == 2) {
 			if str, ok := p.Value.(string); ok {
 				stmt = str
 			}
@@ -1105,11 +1105,11 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 
 	for i, p := range rpc.Params {
 		name := strings.ToLower(p.Name)
-		if name == "@params" || (name == "" && i == 1) {
+		if name == "@params" || name == "@parameters" || (name == "" && i == 1) {
 			if str, ok := p.Value.(string); ok {
 				paramsDecl = str
 			}
-		} else if name == "@stmt" || (name == "" && i == 2) {
+		} else if name == "@stmt" || name == "@statement" || (name == "" && i == 2) {
 			if str, ok := p.Value.(string); ok {
 				stmt = str
 			}
@@ -1310,15 +1310,15 @@ func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *Connec
 	stmtFound := false
 	paramsFound := false
 
-	// First pass: check for named @stmt and @params
+	// First pass: check for named @stmt/@statement and @params/@parameters
 	for _, p := range rpc.Params {
 		name := strings.ToLower(strings.TrimSpace(p.Name))
-		if name == "@stmt" {
+		if name == "@stmt" || name == "@statement" {
 			if str, ok := p.Value.(string); ok {
 				stmt = str
 				stmtFound = true
 			}
-		} else if name == "@params" {
+		} else if name == "@params" || name == "@parameters" {
 			if str, ok := p.Value.(string); ok {
 				paramsDecl = str
 				paramsFound = true
@@ -1329,7 +1329,7 @@ func (s *Server) handleRPCExecuteSQL(conn net.Conn, rpc *parsedRPC, sess *Connec
 	// Second pass: if not found by name, assign positionally
 	for i, p := range rpc.Params {
 		name := strings.ToLower(strings.TrimSpace(p.Name))
-		if name == "@stmt" || name == "@params" {
+		if name == "@stmt" || name == "@statement" || name == "@params" || name == "@parameters" {
 			continue
 		}
 		if !stmtFound && (name == "" && i == 0) {

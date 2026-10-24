@@ -552,6 +552,20 @@ func TestTDS_PreparedStatementRPC(t *testing.T) {
 		t.Fatalf("sp_executesql: expected TokenDoneProc (0xFE)")
 	}
 
+	// 4b. sp_executesql using @statement parameter name (sent by Tedious / Beekeeper Studio)
+	var statementRpcParams bytes.Buffer
+	statementRpcParams.Write(buildNVarCharParam("@statement", false, "SELECT @@VERSION as version;"))
+	respStatement := sendRPC(t, conn, 10, 0, statementRpcParams.Bytes())
+	if !bytes.Contains(respStatement, []byte{TokenColMetaData}) {
+		t.Fatalf("sp_executesql with @statement: expected TokenColMetaData (0x81)")
+	}
+	if !bytes.Contains(respStatement, []byte{TokenRow}) {
+		t.Fatalf("sp_executesql with @statement: expected TokenRow (0xD1)")
+	}
+	if !bytes.Contains(respStatement, []byte{TokenDoneProc}) {
+		t.Fatalf("sp_executesql with @statement: expected TokenDoneProc (0xFE)")
+	}
+
 	// 5. sp_unprepare (ProcID 15): Unprepare handle
 	var unprepParams bytes.Buffer
 	unprepParams.Write(buildIntParam("@handle", false, handle))
