@@ -184,7 +184,7 @@ LionSQL은 엔터프라이즈급 sub-microsecond 트랜잭션 성능과 자립�
 
 1. **빌드 (Build)**:
    ```bash
-   go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+   go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
    ```
 2. **테스트 (Race-Free 무결성 검증)**:
    ```bash

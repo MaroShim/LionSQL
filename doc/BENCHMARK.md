@@ -124,19 +124,19 @@ ACID Integrity Audit: Initial 10,000,000,000 == Final 10,000,000,000 (PASSED)
 ./bin/bench -engine=memory -accounts=10000 -workers=100 -ops=50000
 ```
 
-### 3.4. Standard TPC-C OLTP Benchmark (`cmd/tpcc`)
+### 3.4. Storage Engine Kernel TPC-C Benchmark (`cmd/tpcc_kernel` / `bin/tpcc-kernel`)
 
-LionSQL includes a native, in-tree TPC-C benchmark suite (`cmd/tpcc/main.go`) modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`) executing the standard workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level).
+LionSQL includes an in-tree storage engine kernel TPC-C benchmark suite (`cmd/tpcc_kernel/main.go`) modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`) executing the standard workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level). It tests storage layer SPI CRUD transactions directly without SQL parsing or bytecode execution overhead.
 
 ```bash
-# Build TPC-C benchmark binary
-go build -tags wiredtiger -buildvcs=false -o bin/tpcc ./cmd/tpcc
+# Build storage engine kernel benchmark binary
+go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 
 # Run TPC-C benchmark on In-Memory OCC Engine
-./bin/tpcc -engine=memory -warehouses=10 -workers=100 -duration=10s -max-retries=3
+./bin/tpcc-kernel -engine=memory -warehouses=10 -workers=100 -duration=10s -max-retries=3
 
 # Run TPC-C benchmark on WiredTiger Engine
-./bin/tpcc -engine=wiredtiger -warehouses=10 -workers=100 -duration=10s -max-retries=3
+./bin/tpcc-kernel -engine=wiredtiger -warehouses=10 -workers=100 -duration=10s -max-retries=3
 ```
 
 #### Official Verified Results:
@@ -149,19 +149,19 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc ./cmd/tpcc
 | **Average Latency** | **0.20 ms** | **0.79 ms** | **1.82 ms** |
 | **P95 Latency** | **0.48 ms** | **2.87 ms** | **4.25 ms** |
 
-### 3.5. Native T-SQL VDBE Bytecode TPC-C Benchmark (`cmd/tpcc_vdbe`)
+### 3.5. Native T-SQL VDBE Runtime TPC-C Benchmark (`cmd/tpcc_runtime` / `bin/tpcc-runtime`)
 
-LionSQL also provides a full-stack T-SQL Stored Procedure TPC-C benchmark (`cmd/tpcc_vdbe/main.go`). Unlike `cmd/tpcc` which tests direct storage engine transaction APIs, `cmd/tpcc_vdbe` models all TPC-C operations as compiled Microsoft T-SQL stored procedures (`TPCC_NewOrderHeader`, `TPCC_NewOrderLine`, `TPCC_Payment`, `TPCC_OrderStatus`, `TPCC_Delivery`, `TPCC_StockLevel`) precompiled into VDBE bytecode (`*proc.Program`), cached in `PlanCache`, and executed on the virtual machine (`executor.Run`).
+LionSQL also provides a full-stack T-SQL Stored Procedure TPC-C runtime benchmark (`cmd/tpcc_runtime/main.go`). Unlike `cmd/tpcc_kernel` which tests direct storage engine transaction APIs, `cmd/tpcc_runtime` models all TPC-C operations as compiled Microsoft T-SQL stored procedures (`TPCC_NewOrderHeader`, `TPCC_NewOrderLine`, `TPCC_Payment`, `TPCC_OrderStatus`, `TPCC_Delivery`, `TPCC_StockLevel`) precompiled into VDBE bytecode (`*proc.Program`), cached in `PlanCache`, and executed on the virtual machine (`executor.Run`).
 
 ```bash
-# Build TPC-C VDBE benchmark binary
-go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+# Build TPC-C VDBE runtime benchmark binary
+go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
 
-# Run T-SQL VDBE Bytecode Benchmark on In-Memory OCC Engine (2 Warehouses, 20 Workers, 15s)
-./bin/tpcc_vdbe --engine=memory --warehouses=2 --workers=20 --duration=15s
+# Run T-SQL VDBE Runtime Benchmark on In-Memory OCC Engine (2 Warehouses, 20 Workers, 15s)
+./bin/tpcc-runtime --engine=memory --warehouses=2 --workers=20 --duration=15s
 
-# Run T-SQL VDBE Bytecode Benchmark on WiredTiger Engine
-./bin/tpcc_vdbe --engine=wiredtiger --warehouses=2 --workers=20 --duration=15s
+# Run T-SQL VDBE Runtime Benchmark on WiredTiger Engine
+./bin/tpcc-runtime --engine=wiredtiger --warehouses=2 --workers=20 --duration=15s
 ```
 
 #### Official Verified VDBE Results:

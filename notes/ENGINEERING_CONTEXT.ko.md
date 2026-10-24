@@ -124,7 +124,7 @@ LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집�
      ```bash
      go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
      go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
-     go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+     go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
      go test -tags wiredtiger -count=1 -race <modified_packages>
      ```
 2. **이모지 절대 배제 (Golden Rule 19)**:

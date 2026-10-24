@@ -321,7 +321,8 @@ go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
 
 # 4. 벤치마크 및 적합성 검증 도구 빌드
 go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench
-go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
+go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 ```
 
 ---

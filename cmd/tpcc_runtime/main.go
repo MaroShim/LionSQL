@@ -53,7 +53,7 @@ func main() {
 	durationFlag := flag.Duration("duration", 15*time.Second, "Benchmark duration (e.g. 10s, 30s, 1m)")
 	engineType := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
 	fsyncFlag := flag.String("fsync", "everysec", "WAL fsync policy: off (ephemeral), none, everysec (default), always")
-	dataDir := flag.String("dir", "data/tpcc_vdbe_wt", "Data directory for WAL/WiredTiger backend")
+	dataDir := flag.String("dir", "data/tpcc_runtime_wt", "Data directory for WAL/WiredTiger backend")
 	numItems := flag.Int("items", 1000, "Number of unique items (default 1000 for fast setup, full spec: 100000)")
 	numCustPerDist := flag.Int("customers", 300, "Customers per district (default 300 for fast setup, full spec: 3000)")
 	maxRetries := flag.Int("max-retries", 3, "Maximum transaction retries with exponential backoff on serialization conflict")
@@ -84,7 +84,7 @@ func main() {
 	}
 
 	fmt.Println("================================================================================")
-	fmt.Println("  LionSQL TPC-C Benchmark Suite (Native T-SQL VDBE Bytecode Engine)")
+	fmt.Println("  LionSQL TPC-C Benchmark Suite (T-SQL VDBE Runtime Engine - tpcc-runtime)")
 	fmt.Println("================================================================================")
 	fmt.Printf(" [Execution]      Precompiled T-SQL VDBE Bytecode (*proc.Program -> PlanCache)\n")
 	fmt.Printf(" [Storage Engine] %s (WAL fsync: %s, Dir: %s)\n", *engineType, fsyncMode, *dataDir)

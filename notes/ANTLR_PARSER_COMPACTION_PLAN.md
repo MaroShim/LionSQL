@@ -131,7 +131,7 @@ The optimization strategy is divided into four sequential, low-risk phases:
 ## 4. Verification & Safety Guardrails
 
 Any modification to grammar files or generated code must adhere strictly to the **3-Stage Pipeline**:
-1. **Compilation**: Complete rebuild of `bin/server`, `bin/bench`, and `bin/tpcc_vdbe` (`go build -tags wiredtiger`).
+1. **Compilation**: Complete rebuild of `bin/server`, `bin/bench`, and `bin/tpcc-runtime` (`go build -tags wiredtiger`).
 2. **Regression Parity**:
    ```bash
    go test -tags wiredtiger -v -run TestProcedureRegression pkg/proc/runtime/...

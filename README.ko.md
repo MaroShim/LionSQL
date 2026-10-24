@@ -512,7 +512,7 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
    go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
    go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
    go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
-   go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+   go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
    ```
 2. **결정론적 데이터 레이스 무결성 검증 (Test)**:
    ```bash

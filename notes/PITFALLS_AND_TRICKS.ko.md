@@ -180,7 +180,7 @@
   * **초기 배경**: `SplitStatements`는 본래 서버 기동 시 1회성 마이그레이션/시드 파일(`scripts/demo_seed.sql`)을 분할 실행하기 위해 작성된 단순 유틸리티였음. 당시에는 1회성이었으므로 `strings.Builder`에 한 글자씩 누적하며 매 바이트마다 `cur.String()`과 `strings.ToUpper`를 돌려 프로시저 헤더를 판별하는 O(N^2) 구현이 용인되었음.
   * **잠식 과정 (Creep)**: 이후 엔진 쿼리 파이프라인 단일화 과정에서 `ExecuteSessionSQLContext(query)`의 최상단 관문으로 `splitStatements(query)`가 연결되면서, **초당 수만 번 실행되는 OLTP 최전선 핫패스**로 무심코 승격되어 버림.
   * **정규식 동적 컴파일 누적**: `execSelect` 내부의 `selectRe`, `selectIntoRe`와 `sp_executesql`의 파라미터 치환(`substituteParamOutsideQuotes`)에서 매 쿼리/매 파라미터마다 `regexp.MustCompile`을 호출하여, 스토리지 코어가 수 마이크로초에 끝낸 쿼리 앞단에서 수십~수백 마이크로초와 수십 KB의 GC 쓰레기(Garbage)가 양산됨.
-  * **마스킹 원인**: 인-프로세스 VDBE 마이크로 벤치마크(`cmd/bench`, `cmd/tpcc_vdbe`)는 네트워크 와이어 및 SQL 프론트엔드를 바이패스하고 `exec.RunInTx(prog)`를 직접 호출했기 때문에, 이 병목이 사전에 조기 포착되지 못함.
+  * **마스킹 원인**: 인-프로세스 VDBE 마이크로 벤치마크(`cmd/bench`, `cmd/tpcc_runtime`)는 네트워크 와이어 및 SQL 프론트엔드를 바이패스하고 `exec.RunInTx(prog)`를 직접 호출했기 때문에, 이 병목이 사전에 조기 포착되지 못함.
 
 * **재발 방지 3대 엔지니어링 원칙 (Recurrence Prevention Invariants)**:
   1. **유틸리티의 핫패스 승격 금지 및 무할당 감사 (No Utility Promotion without Hot-Path Audit)**:

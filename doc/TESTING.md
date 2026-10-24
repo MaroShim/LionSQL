@@ -59,7 +59,7 @@ Every code change must pass these stages in order before it is committed.
 go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
 go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
 go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
-go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
 ```
 
 ### Stage 2: Test with the race detector
@@ -73,7 +73,7 @@ go test -tags wiredtiger -count=1 -race ./...
 - Add `-v` for per-test output. Without it, only package-level `ok` and `FAIL` lines are printed.
 - A full run takes roughly 2 minutes on the reference host.
 
-Expected output is `ok` for every package. Packages without tests print `[no test files]`, which is normal (`cmd/bench`, `cmd/server`, `cmd/tpcc`, `scratch`).
+Expected output is `ok` for every package. Packages without tests print `[no test files]`, which is normal (`cmd/bench`, `cmd/server`, `cmd/tpcc_kernel`, `scratch`).
 
 ### Stage 3: Commit
 
@@ -217,7 +217,7 @@ go test -tags wiredtiger -count=1 -v ./pkg/wire/... 2>&1 | grep -E "^(=== RUN|--
 | `pkg/sqlutil` | Shared SQL tokenizer and scanning helpers, identifier casing. |
 | `pkg/config`, `pkg/migrate`, `pkg/ui` | Configuration, schema migrations, embedded web studio. |
 | `cmd/lionsql` | CLI, doctor command, server start-up. |
-| `cmd/tpcc_vdbe` | TPC-C atomicity test for the VDBE harness. |
+| `cmd/tpcc_runtime` | TPC-C atomicity test for the VDBE runtime harness. |
 
 ---
 
@@ -313,11 +313,11 @@ Do not run benchmarks together with `-race`. The race detector changes timing an
 
 ## 9. TPC-C Performance Regression
 
-`cmd/tpcc_vdbe` runs a TPC-C workload through precompiled VDBE bytecode. Build it first (Stage 1), then run:
+`cmd/tpcc_runtime` runs a TPC-C workload through precompiled VDBE bytecode. Build it first (Stage 1), then run:
 
 ```bash
-./bin/tpcc_vdbe -engine memory     -duration 30s -dir /tmp/tpcc_mem
-./bin/tpcc_vdbe -engine wiredtiger -duration 30s -dir /tmp/tpcc_wt
+./bin/tpcc-runtime -engine memory     -duration 30s -dir /tmp/tpcc_mem
+./bin/tpcc-runtime -engine wiredtiger -duration 30s -dir /tmp/tpcc_wt
 ```
 
 ### Flags
@@ -332,7 +332,7 @@ Do not run benchmarks together with `-race`. The race detector changes timing an
 | `-items` | `1000` | Unique items (full spec is 100000). |
 | `-fsync` | `everysec` | WAL fsync policy: `off`, `none`, `everysec`, `always`. |
 | `-max-retries` | `3` | Retries with backoff on serialization conflict. |
-| `-dir` | `data/tpcc_vdbe_wt` | Data directory. Use a fresh `/tmp` path for each run. |
+| `-dir` | `data/tpcc_runtime_wt` | Data directory. Use a fresh `/tmp` path for each run. |
 
 Delete the data directory between runs so each run starts from a clean seed:
 
@@ -374,10 +374,10 @@ A single 10 second run is not evidence of a regression. Performance numbers vary
 
 ### Atomicity test
 
-`cmd/tpcc_vdbe/atomicity_test.go` verifies that each business transaction runs inside a single ACID transaction boundary. It runs as part of the normal suite:
+`cmd/tpcc_runtime/atomicity_test.go` verifies that each business transaction runs inside a single ACID transaction boundary. It runs as part of the normal suite:
 
 ```bash
-go test -tags wiredtiger -count=1 -race -v ./cmd/tpcc_vdbe
+go test -tags wiredtiger -count=1 -race -v ./cmd/tpcc_runtime
 ```
 
 ---
@@ -389,10 +389,10 @@ Use this to find out whether a change caused a performance regression. It builds
 ```bash
 # 1. Build the baseline in a separate worktree
 git worktree add /tmp/lionsql_base <BASELINE_COMMIT>
-(cd /tmp/lionsql_base && go build -tags wiredtiger -buildvcs=false -o /tmp/tpcc_base ./cmd/tpcc_vdbe)
+(cd /tmp/lionsql_base && go build -tags wiredtiger -buildvcs=false -o /tmp/tpcc_base ./cmd/tpcc_runtime)
 
 # 2. Build the current tree
-go build -tags wiredtiger -buildvcs=false -o /tmp/tpcc_head ./cmd/tpcc_vdbe
+go build -tags wiredtiger -buildvcs=false -o /tmp/tpcc_head ./cmd/tpcc_runtime
 
 # 3. Alternate runs so drift affects both equally
 for i in 1 2 3; do

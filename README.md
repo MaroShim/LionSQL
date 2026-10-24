@@ -511,7 +511,7 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
    go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
    go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
    go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
-   go build -tags wiredtiger -buildvcs=false -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
+   go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
    ```
 2. **Deterministic Race-Free Verification (Test)**:
    ```bash

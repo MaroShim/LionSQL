@@ -18,9 +18,10 @@
   * 보안 및 인증: `-auth` (기본값: `true`), `-admin-email`, `-admin-pass`, `-jwt-secret`
   * 로깅 및 트레이싱: `-dev`, `-slow-log`, `-slow-threshold-ms` (기본값: `100.0ms`), `-general-log`
   * 고가용성 복제: `-replica-of`, `-node-id`, `-peers`, `-self-url`, `-auto-failover`, `-heartbeat-timeout-ms`
-* **1.3. 벤치마크 및 스트레스 테스트 도구 (`bin/bench`, `bin/tpcc_vdbe`)**
-  * TPC-C VDBE 하네스: `-warehouses`, `-workers`, `-duration`, `-engine`, `-fsync` (`everysec`, `always`, `off`)
-  * OLTP 마이크로 벤치마크: `-accounts`, `-workers`, `-ops`, `-engine`
+* **1.3. 벤치마크 및 스트레스 테스트 도구 (`bin/bench`, `bin/tpcc-runtime`, `bin/tpcc-kernel`)**
+  * TPC-C VDBE 런타임 하네스 (`bin/tpcc-runtime`): `-warehouses`, `-workers`, `-duration`, `-engine`, `-fsync` (`everysec`, `always`, `off`)
+  * 스토리지 커널 하네스 (`bin/tpcc-kernel`): `-warehouses`, `-workers`, `-duration`, `-engine`
+  * OLTP 마이크로 벤치마크 (`bin/bench`): `-accounts`, `-workers`, `-ops`, `-engine`
 * **1.4. 종료 코드 및 프로세스 시그널 (Exit Codes & POSIX Signals)**
   * 표준 종료 코드 정의 (0: 정상 종료, 1: 일반 오류, 2: 설정 오류)
   * POSIX 시그널 처리: `SIGINT`, `SIGTERM` (1.5초 이내 단계별 Graceful Shutdown), `SIGHUP`
@@ -525,9 +526,9 @@ LionSQL은 골든 룰 2(Panic Recovery) 및 골든 룰 4(Clean Teardown)를 준�
 
 ---
 
-### 1.5. 벤치마크 및 부하 검증 CLI 사양 (`bin/bench`, `bin/tpcc_vdbe`)
+### 1.5. 벤치마크 및 부하 검증 CLI 사양 (`bin/bench`, `bin/tpcc-runtime`, `bin/tpcc-kernel`)
 
-LionSQL 소스 트리는 고동시성 OLTP 성능과 TPC-C 트랜잭션 적합성을 검증하기 위한 2개의 독립 벤치마크 바이너리를 제공합니다.
+LionSQL 소스 트리는 고동시성 OLTP 성능과 TPC-C 트랜잭션 적합성을 검증하기 위한 3개의 독립 벤치마크 바이너리를 제공합니다.
 
 #### 1. `bin/bench` (고동시성 계좌 이체 OLTP 마이크로 벤치마크)
 * **목적**: 10,000개 이상의 계좌 간 무작위 자금 이체 트랜잭션을 수만 번 동시 실행하여 OCC/MVCC 충돌 처리량과 TPS를 측정합니다.
@@ -542,17 +543,25 @@ LionSQL 소스 트리는 고동시성 OLTP 성능과 TPC-C 트랜잭션 적합�
   ./bin/bench -workers 200 -ops 100000 -engine wiredtiger
   ```
 
-#### 2. `bin/tpcc_vdbe` (공식 TPC-C T-SQL VDBE 벤치마크)
-* **목적**: New-Order, Payment, Order-Status 등 표준 TPC-C 비즈니스 트랜잭션을 단일 VDBE 바이트코드 프로그램(`exec.RunInTx`)으로 구동하여 완전한 ACID 원자성을 검증합니다.
+#### 2. `bin/tpcc-runtime` (공식 TPC-C T-SQL VDBE 런타임 벤치마크)
+* **목적**: New-Order, Payment, Order-Status 등 표준 TPC-C 비즈니스 트랜잭션을 T-SQL 저장 프로시저로 작성하고 단일 VDBE 바이트코드 프로그램(`exec.RunInTx`)으로 구동하여 완전한 ACID 원자성을 검증합니다.
 * **주요 플래그**:
   - `-warehouses <int>`: TPC-C 규모 계수 (Warehouse 수, 기본값: `2`)
   - `-workers <int>`: 동시 클라이언트 워커 수 (기본값: `20`)
-  - `-duration <duration>`: 벤치마크 실행 시간 (예: `30s`, `2m`, 기본값: `10s`)
+  - `-duration <duration>`: 벤치마크 실행 시간 (예: `30s`, `2m`, 기본값: `15s`)
   - `-fsync <mode>`: WAL 디스크 동기화 모드 (`everysec`: 1초마다 동기화, `always`: 커밋마다 fsync, `off`: OS 버퍼링)
 * **실행 예시**:
   ```bash
-  go build -tags wiredtiger -o bin/tpcc_vdbe ./cmd/tpcc_vdbe
-  ./bin/tpcc_vdbe -warehouses 5 -workers 50 -duration 1m -fsync everysec
+  go build -tags wiredtiger -o bin/tpcc-runtime ./cmd/tpcc_runtime
+  ./bin/tpcc-runtime -warehouses 5 -workers 50 -duration 1m -fsync everysec
+  ```
+
+#### 3. `bin/tpcc-kernel` (스토리지 엔진 커널 TPC-C 벤치마크)
+* **목적**: SQL 컴파일 및 VDBE 가상머신 오버헤드 없이 스토리지 레이어 SPI(`storage.Tx`) CRUD를 직접 호출하여 순수 스토리지 백엔드(OCC 및 WiredTiger B+Tree)의 원시 동시성 한계치를 측정합니다.
+* **실행 예시**:
+  ```bash
+  go build -tags wiredtiger -o bin/tpcc-kernel ./cmd/tpcc_kernel
+  ./bin/tpcc-kernel -warehouses 10 -workers 100 -duration 10s
   ```
 
 ---

@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Changed
+- `BENCH-RENAME-TPCC`: Refactored in-process TPC-C benchmark drivers: renamed `cmd/tpcc` to `cmd/tpcc_kernel` (`bin/tpcc-kernel`) and `cmd/tpcc_vdbe` to `cmd/tpcc_runtime` (`bin/tpcc-runtime`) to accurately distinguish pure storage engine kernel SPI from full-stack T-SQL VDBE virtual machine runtime execution without client wire protocol layers. Synchronized 3-stage pipeline build commands in `GEMINI.md`, test suites, and documentation.
 - `MEM-GOV-65PCT`: Refined dynamic global memory budget calculation in `pkg/execution/governor.go` (`CalculateDefaultMaxMemory`, `GetDefaultMaxMemory`) from flat 70% to `max(Total * 0.50, min(Total * 0.65, Total - 1GB))`. Ensures a guaranteed 1GB RAM reserve for host OS and container overhead on standard nodes, caps LionSQL heap at 65% upper bound on large systems, and enforces a 50% floor guard on low-memory/containerized instances (e.g., 512MB~1GB). Updated CLI flag descriptions (`-max-memory`) in `cmd/lionsql/main.go` and `cmd/lionsql/server.go`, test cases, and documentation.
 
 ### Documentation
