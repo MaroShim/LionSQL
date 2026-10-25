@@ -16,6 +16,42 @@ const (
 	detachedProcess         = 0x00000008
 )
 
+var (
+	modwinmm            = syscall.NewLazyDLL("winmm.dll")
+	procTimeBeginPeriod = modwinmm.NewProc("timeBeginPeriod")
+	procTimeEndPeriod   = modwinmm.NewProc("timeEndPeriod")
+)
+
+func init() {
+	// Request 1ms timer resolution on Windows to prevent 15.6ms scheduler sleep quantums.
+	// In Windows 10 (2004+) and Windows 11, timeBeginPeriod is per-process isolated.
+	_ = timeBeginPeriod(1)
+}
+
+// timeBeginPeriod requests a minimum timer resolution for the current process.
+func timeBeginPeriod(period uint32) error {
+	if err := procTimeBeginPeriod.Find(); err != nil {
+		return err
+	}
+	r, _, _ := procTimeBeginPeriod.Call(uintptr(period))
+	if r != 0 {
+		return syscall.Errno(r)
+	}
+	return nil
+}
+
+// timeEndPeriod clears a previously set minimum timer resolution.
+func timeEndPeriod(period uint32) error {
+	if err := procTimeEndPeriod.Find(); err != nil {
+		return err
+	}
+	r, _, _ := procTimeEndPeriod.Call(uintptr(period))
+	if r != 0 {
+		return syscall.Errno(r)
+	}
+	return nil
+}
+
 // isProcessAlive returns true if the process with the given PID is currently active on Windows.
 func isProcessAlive(pid int) bool {
 	if pid <= 0 {

@@ -62,7 +62,7 @@ LionSQL의 `v0.90.0` 릴리스 스프린트(`v0.90.0-beta0`(Feature Freeze 기�
 | **`PREP-1`** | Prepared Statement 메모리 방어용 세션별 Bounded LRU 캐시 | `pkg/wire`, `pkg/wire/tds` | **완료 (`[x]`)** | 256개 상한 LRU, 장기 커넥션 OOM 원천 차단 |
 | **`UNIFY-CLI`** | 단일 바이너리(`lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 | `cmd/lionsql`, `cmd/server` | **완료 (`[x]`)** | [`notes/UNIFIED_CLI_PLAN.md`](notes/UNIFIED_CLI_PLAN.md) |
 | **`CLI-VERSION-1`** | 단일 바이너리 CLI 버전/빌드 정보 듀얼 출력 (상세 Option A & 디폴트 기동 Option B) | `pkg/config`, `cmd/lionsql`, `pkg/api` | **완료 (`[x]`)** | `debug.ReadBuildInfo()` VCS 자동 추출, `version`/`-v`/`--version` 리포트 |
-| **`CLI-WINDOWS-DAEMON-1`** | `daemon.go` 플랫폼별 모듈 분리(`daemon_unix.go`, `daemon_windows.go`) 및 Windows 정적 단일 바이너리(`bin/lionsql.exe`) 빌드 활성화 | `cmd/lionsql` | **완료 (`[x]`)** | [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.md`](notes/WINDOWS_DAEMON_AND_BUILD_PLAN.md) |
+| **`CLI-WINDOWS-DAEMON-1`** | `daemon.go` 플랫폼 분리(`daemon_unix.go`, `daemon_windows.go`), 1ms 고해상도 타이머 및 Windows 바이너리(`bin/lionsql.exe`) 빌드 활성화 | `cmd/lionsql` | **완료 (`[x]`)** | [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md) |
 
 ### 2.2. 스토리지 엔진 & OCC 수직 성능 최적화 트랙
 
