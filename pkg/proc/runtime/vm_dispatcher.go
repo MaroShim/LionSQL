@@ -659,16 +659,64 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
 
-		var oldRec storage.Record
-		if !isTransientTable(data.Table) {
-			oldRec, _ = f.tx.Get(data.Table, pkVal)
-		}
-
 		var tableSchema *storage.TableSchema
 		if tg := f.executor.getTableGetter(); tg != nil {
 			if schema, err := tg(data.Table); err == nil && schema != nil {
 				tableSchema = schema
 			}
+		}
+
+		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
+
+		// Fast-path Direct Row Update: bypass Record map allocations when no triggers exist
+		if !isTransientTable(data.Table) && tableSchema != nil && !hasTriggers {
+			oldRow, err := f.tx.GetRow(data.Table, pkVal)
+			if err != nil {
+				if errors.Is(err, storage.ErrKeyNotFound) {
+					f.rowCount = 0
+					return nil
+				}
+				return f.handleCatch(err, pc)
+			}
+
+			if len(oldRow.Values) == len(tableSchema.Columns) {
+				rowCtx := make(map[string]any, len(f.evalCtx)+len(tableSchema.Columns)*2)
+				for k, v := range f.evalCtx {
+					rowCtx[k] = v
+				}
+				for i, col := range tableSchema.Columns {
+					valAny := valToAny(oldRow.Values[i])
+					rowCtx[col.Name] = valAny
+					rowCtx[strings.ToLower(col.Name)] = valAny
+				}
+
+				updatedRow := storage.Row{Values: make([]storage.Value, len(oldRow.Values))}
+				copy(updatedRow.Values, oldRow.Values)
+				for _, a := range data.Assignments {
+					valAny, err := proc.EvalRowExpr(a.Value, rowCtx, nil)
+					if err != nil {
+						return f.handleCatch(err, pc)
+					}
+					if _, colIdx, ok := tableSchema.FindColumn(a.Column); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
+						updatedRow.Values[colIdx] = toStorageValue(valAny)
+					}
+				}
+
+				if err := f.tx.UpdateRow(data.Table, pkVal, updatedRow); err != nil {
+					if errors.Is(err, storage.ErrKeyNotFound) {
+						f.rowCount = 0
+						return nil
+					}
+					return f.handleCatch(err, pc)
+				}
+				f.rowCount = 1
+				return nil
+			}
+		}
+
+		var oldRec storage.Record
+		if !isTransientTable(data.Table) {
+			oldRec, _ = f.tx.Get(data.Table, pkVal)
 		}
 
 		rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
@@ -702,7 +750,6 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return f.handleCatch(err, pc)
 		}
 		f.rowCount = 1
-		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
 		if oldRec != nil && hasTriggers {
 			oldRow := recordToMap(oldRec)
 			newRow := recordToMap(oldRec)

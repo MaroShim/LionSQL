@@ -79,6 +79,7 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 | **REV-PROC-002** | P2 | Performance/GC| [`pkg/proc/runtime/vm.go:170`](pkg/proc/runtime/vm.go#L170) | Allocating VM stack frames and register slices per query. Recycled via `sync.Pool` (`VMFrame`) with pre-resolved slots. | `[x]` | `VPERF-1`~`VPERF-5` |
 | **REV-PROC-003** | P2 | Zero-Copy | [`cmd/tpcc_kernel/main.go:140`](cmd/tpcc_kernel/main.go#L140) | Allocating 21-column Go `Record` maps on simple existence checks. Replaced with zero-copy `tx.GetRow` verification. | `[x]` | `VPERF-18` |
 | **REV-PROC-004** | P2 | Decoupling | [`pkg/proc/parser.go:30`](pkg/proc/parser.go#L30) | Tight coupling and circular import risks between Pratt parser and ANTLR4. Decoupled via `ProcedureFallbackParser` SPI. | `[x]` | `PROC-FALLBACK-1` |
+| **REV-PROC-005** | P1 | Performance/GC| [`pkg/proc/runtime/vm_dispatcher.go:642, 1056`](pkg/proc/runtime/vm_dispatcher.go#L642) | VM executing 4-5 map allocations on `OpUpdate` and traversing Volcano CBO iterator tree on single-row `SELECT INTO`. Resolved via `GetRow`/`UpdateRow` direct paths and Point-Lookup Shortcut. | `[x]` | `VPERF-19` |
 
 ---
 

@@ -79,6 +79,7 @@
 | **REV-PROC-002** | P2 | 성능/할당 | [`pkg/proc/runtime/vm.go:170-210`](pkg/proc/runtime/vm.go#L170) | T-SQL 프로시저 및 대화형 쿼리 실행마다 VM 스택 프레임, 레지스터, 변수 맵을 힙에 신규 할당하여 GC 병목 유발 | `[x]` | `sync.Pool` 기반 `VMFrame` 레지스터/슬롯 재활용 및 핫패스 슬롯 직접 색인(`OpSlotDirect`) 완료 (`VPERF-1`~`VPERF-5`) |
 | **REV-PROC-003** | P2 | 성능/제로카피 | [`cmd/tpcc_kernel/main.go:140-180`](cmd/tpcc_kernel/main.go#L140) | 단순 행 존재 여부 확인 및 컬럼 검증 시 21개 컬럼 Go `Record` 맵을 무조건 생성하여 CPU 낭비 | `[x]` | 제로-카피 `tx.GetRow` API를 도입하여 맵 언패킹 없이 원시 튜플 직접 검증 완료 (`VPERF-18`) |
 | **REV-PROC-004** | P2 | 아키텍처 | [`pkg/proc/parser.go:30-60`](pkg/proc/parser.go#L30) | 공식 ANTLR4 T-SQL 파서 패키지와 Pratt 파서 간의 순환 참조 위험 및 과도한 결합 | `[x]` | `ProcedureFallbackParser` SPI 인터페이스를 정의하여 런타임 플러그형 등록으로 분리 완료 (`PROC-FALLBACK-1`) |
+| **REV-PROC-005** | P1 | 성능/할당 | [`pkg/proc/runtime/vm_dispatcher.go:642, 1056`](pkg/proc/runtime/vm_dispatcher.go#L642) | VDBE `OpUpdate` 및 `SELECT INTO` 실행 시 매번 4~5개의 Map 할당과 풀스택 Volcano CBO 이터레이터 순회로 인한 VM 런타임 지연 | `[x]` | `GetRow`/`UpdateRow` 직결 패스 및 단일 PK 점조회 Volcano 바이패스(Point-Lookup Shortcut) 구현 완료 (`VPERF-19`) |
 
 ---
 

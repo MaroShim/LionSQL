@@ -692,6 +692,15 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		return nil, nil, fmt.Errorf("table %q not found: %w", leftTable, err)
 	}
 
+	// Fast-path Point-Lookup Shortcut: bypass Volcano CBO and iterators for single-row PK lookups
+	if f.tx != nil && len(qInfo.Joins) == 0 && qInfo.Join == nil && len(qInfo.GroupByCols) == 0 &&
+		!qInfo.HasAggregates && !qInfo.Distinct && len(qInfo.WindowDefs) == 0 && len(qInfo.CTEs) == 0 &&
+		qInfo.OrderByClause == "" && leftSchema.HasPrimaryKey() {
+		if rows, cols, ok := tryPointLookup(f.tx, qInfo, leftSchema); ok {
+			return rows, cols, nil
+		}
+	}
+
 	rightSchemas := make(map[string]*storage.TableSchema)
 	var joins []*planner.JoinInfo
 	if len(qInfo.Joins) > 0 {
@@ -1852,4 +1861,83 @@ func cleanSymbol(name string) string {
 		return cleaned[dot+1:]
 	}
 	return cleaned
+}
+
+func tryPointLookup(tx storage.Transaction, qInfo *planner.QueryInfo, schema *storage.TableSchema) ([]map[string]any, []string, bool) {
+	where := strings.TrimSpace(qInfo.WhereClause)
+	if where == "" {
+		return nil, nil, false
+	}
+	upper := strings.ToUpper(where)
+	if strings.Contains(upper, " AND ") || strings.Contains(upper, " OR ") ||
+		strings.Contains(upper, " LIKE ") || strings.Contains(upper, " IN ") ||
+		strings.Contains(upper, " BETWEEN ") || strings.Contains(where, "<") ||
+		strings.Contains(where, ">") || strings.Contains(where, "!") {
+		return nil, nil, false
+	}
+
+	parts := strings.Split(where, "=")
+	if len(parts) != 2 {
+		return nil, nil, false
+	}
+
+	colPart := strings.TrimSpace(parts[0])
+	valPart := strings.TrimSpace(parts[1])
+
+	pkCol, err := schema.PrimaryKeyColumn()
+	if err != nil || pkCol == nil {
+		return nil, nil, false
+	}
+
+	if !sqlutil.EqualFoldIdent(cleanSymbol(colPart), pkCol.Name) {
+		if sqlutil.EqualFoldIdent(cleanSymbol(valPart), pkCol.Name) {
+			colPart, valPart = valPart, colPart
+		} else {
+			return nil, nil, false
+		}
+	}
+
+	var pkVal storage.Value
+	if strings.HasPrefix(valPart, "'") && strings.HasSuffix(valPart, "'") && len(valPart) >= 2 {
+		sVal := valPart[1 : len(valPart)-1]
+		sVal = strings.ReplaceAll(sVal, "''", "'")
+		pkVal = storage.StringValue(sVal)
+	} else if iVal, err := strconv.ParseInt(valPart, 10, 64); err == nil {
+		pkVal = storage.IntValue(iVal)
+	} else {
+		return nil, nil, false
+	}
+
+	row, err := tx.GetRow(schema.Name, pkVal)
+	if err != nil {
+		if errors.Is(err, storage.ErrKeyNotFound) {
+			return nil, qInfo.Projections, true
+		}
+		return nil, nil, false
+	}
+
+	if len(row.Values) == 0 {
+		return nil, qInfo.Projections, true
+	}
+
+	rowMap := make(map[string]any, len(qInfo.Projections))
+	cols := make([]string, 0, len(qInfo.Projections))
+	for _, proj := range qInfo.Projections {
+		projClean := cleanSymbol(proj)
+		if projClean == "*" {
+			for i, col := range schema.Columns {
+				if i < len(row.Values) {
+					rowMap[col.Name] = valToAny(row.Values[i])
+					cols = append(cols, col.Name)
+				}
+			}
+			break
+		}
+		if col, idx, ok := schema.FindColumn(projClean); ok && idx >= 0 && idx < len(row.Values) {
+			rowMap[col.Name] = valToAny(row.Values[idx])
+			cols = append(cols, col.Name)
+		}
+	}
+
+	return []map[string]any{rowMap}, cols, true
 }

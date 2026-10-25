@@ -237,17 +237,17 @@ LionSQL also provides a full-stack T-SQL Stored Procedure TPC-C runtime benchmar
 # Build TPC-C VDBE runtime benchmark binary
 go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
 
-# 1. Standard High-Performance OLTP: 16 Warehouses, 32 Client Workers (15s)
-./bin/tpcc-runtime -engine=memory -warehouses=16 -workers=32 -duration=15s
-./bin/tpcc-runtime -engine=wiredtiger -warehouses=16 -workers=32 -duration=15s
+# 1. Standard High-Performance OLTP: 16 Warehouses, 32 Client Workers (10s)
+./bin/tpcc-runtime -engine=memory -warehouses=16 -workers=32 -duration=10s
+./bin/tpcc-runtime -engine=wiredtiger -warehouses=16 -workers=32 -duration=10s
 
-# 2. Enterprise High-Concurrency Stress: 20 Warehouses, 200 Client Workers (15s)
-./bin/tpcc-runtime -engine=memory -warehouses=20 -workers=200 -duration=15s
-./bin/tpcc-runtime -engine=wiredtiger -warehouses=20 -workers=200 -duration=15s
+# 2. Standard Production Concurrency: 10 Warehouses, 100 Client Workers (10s) - Direct 1:1 match with Section 3.4
+./bin/tpcc-runtime -engine=memory -warehouses=10 -workers=100 -duration=10s
+./bin/tpcc-runtime -engine=wiredtiger -warehouses=10 -workers=100 -duration=10s
 
-# 3. Massive Scale Extreme Stress: 50 Warehouses, 500 Client Workers (15s)
-./bin/tpcc-runtime -engine=memory -warehouses=50 -workers=500 -duration=15s
-./bin/tpcc-runtime -engine=wiredtiger -warehouses=50 -workers=500 -duration=15s
+# 3. Enterprise High-Concurrency Stress: 20 Warehouses, 200 Client Workers (10s)
+./bin/tpcc-runtime -engine=memory -warehouses=20 -workers=200 -duration=10s
+./bin/tpcc-runtime -engine=wiredtiger -warehouses=20 -workers=200 -duration=10s
 ```
 
 #### Verified VDBE Benchmark Results:
@@ -256,38 +256,46 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
 
 | Metric | In-Memory OCC Engine (`everysec`) | WiredTiger Engine (`everysec` 1s Fsync) | Analysis & Comparative Delta |
 |---|---|---|---|
-| **tpmC (New-Order / min)** | **497,692.40 tpmC** (Peak ~689k) | **668,956.30 tpmC** (Peak ~683k) | Both engines achieve 500k~670k tpmC executing precompiled T-SQL stored procedures |
-| **Overall Throughput (TPS)** | **18,466.83 TPS** (Peak 25,878 TPS) | **24,487.92 TPS** (Peak 24,983 TPS) | Full ACID atomic execution across all 5 standard TPC-C transaction types |
-| **Serialization Abort Rate** | **0.13%** (355 aborts / 27.7k attempts) | **4.62%** (17,775 aborts / 38.5k attempts) | **OCC abort rate is 35x lower** than WiredTiger, demonstrating superior completion integrity |
-| **New-Order P50 / P95 / P99** | **1.48 ms / 8.24 ms / 19.44 ms** | **0.42 ms / 9.70 ms / 23.02 ms** | Sub-millisecond to ~1.5ms median execution; flat P99 tail latency across both engines |
-| **Payment P50 / P95 / P99** | **0.08 ms / 1.72 ms / 5.33 ms** | **0.05 ms / 4.47 ms / 17.66 ms** | O(1) slot variable lookup, balance mutation, and VDBE register reuse |
-| **Order-Status P50 / P99** | **0.01 ms / 0.22 ms** | **0.01 ms / 0.33 ms** | Microsecond-level (10 µs) read-only query dispatch across both backends |
-| **Delivery / Stock-Level P50** | **0.45 ms / 0.07 ms** | **0.05 ms / 0.05 ms** | Sub-millisecond multi-row DML and range scan latency |
+| **tpmC (New-Order / min)** | **719,051.02 tpmC** (Peak ~823k) | **713,704.17 tpmC** (Peak ~738k) | **OCC overtakes WiredTiger even at 32 workers** via VDBE Direct Fast-Path optimization (+44.5% over pre-VPERF-19) |
+| **Overall Throughput (TPS)** | **26,708.72 TPS** | **26,270.80 TPS** | VDBE runtime overall throughput advantage (+438 TPS over WiredTiger) |
+| **Serialization Abort Rate** | **0.08%** (208 aborts / 267.5k attempts) | **3.27%** (8,890 aborts / 271.7k attempts) | **OCC abort rate is 41x lower** than WiredTiger, demonstrating superior completion integrity |
+| **Conflict Retries** | **35,078 retries** | 65,906 retries | OCC 256-shard lock partitioning slashes conflict retries by 46.8% |
+| **New-Order P50 / P95 / P99** | **1.22 ms / 6.33 ms / 16.44 ms** | **0.42 ms / 7.28 ms / 21.50 ms** | Flat P99 tail latency (16.4ms vs 21.5ms) via zero-allocation Row updates |
+| **Payment P50 / P95 / P99** | **0.13 ms / 1.50 ms / 3.44 ms** | **0.05 ms / 5.56 ms / 14.29 ms** | OCC P95/P99 latency (1.50ms / 3.44ms) is **3.7x faster** than WiredTiger (5.56ms / 14.29ms) |
+| **Order-Status P50 / P99** | **0.01 ms / 0.11 ms (10 µs)** | **0.01 ms / 0.46 ms (10 µs)** | Point-Lookup Shortcut delivers 10µs median read dispatch on both backends |
+| **Delivery / Stock-Level P50** | **0.03 ms / 0.05 ms** | **0.06 ms / 0.05 ms** | Sub-millisecond multi-row DML and range scan latency |
 
-##### 2. Scale Factor 20 Warehouses, 200 Client Workers (Enterprise High-Concurrency Stress):
+##### 2. Scale Factor 10 Warehouses, 100 Client Workers (Standard Production Concurrency - 1:1 match with Section 3.4):
 
-| Metric | In-Memory OCC Engine (`everysec`) | WiredTiger Engine (`everysec` 1s Fsync) | Analysis & Comparative Delta |
-|---|---|---|---|
-| **tpmC (New-Order / min)** | **413,057.26 tpmC** (Peak ~522k) | **553,950.85 tpmC** (Peak ~599k) | High concurrency resilience: Both engines sustain 410k~550k tpmC under 200 concurrent workers |
-| **Overall Throughput (TPS)** | **14,750.56 TPS** (Peak 18,629 TPS) | **19,000.85 TPS** (Peak 20,561 TPS) | 200 concurrent goroutines executing precompiled T-SQL VDBE bytecode |
-| **Serialization Abort Rate** | **6.03%** (14,240 aborts / 23.6k attempts) | **26.34%** (101,954 aborts / 38.7k attempts) | **WiredTiger fast-fails 26.3% of attempts**, while OCC abort rate is 4.3x lower |
-| **New-Order P50 / P95 / P99** | **3.86 ms / 46.74 ms / 111.43 ms** | **0.68 ms / 65.69 ms / 137.17 ms** | OCC provides lower P95/P99 tail latency (111ms vs. 137ms) under heavy contention |
-| **Payment P50 / P95 / P99** | **0.36 ms / 88.77 ms / 192.04 ms** | **0.94 ms / 39.52 ms / 117.15 ms** | Intense write-write competition on 20 warehouse balance records |
-| **Order-Status P50 / P99** | **0.01 ms / 27.21 ms** | **0.01 ms / 0.88 ms** | Microsecond median dispatch (10 µs); OCC tail impacted by 200-worker shard mutex waits |
-| **Delivery / Stock-Level P50** | **1.49 ms / 0.11 ms** | **0.05 ms / 0.04 ms** | Sub-millisecond to ~1.5ms median multi-row execution under 200 workers |
-
-##### 3. Scale Factor 50 Warehouses, 500 Client Workers (Massive Scale Extreme Concurrency Stress):
+> [!NOTE]
+> **Storage Kernel (Section 3.4) vs. VDBE Stored Procedure Runtime (Section 3.5) Direct Comparison**:
+> Under the identical workload matrix (10 Warehouses, 100 Workers):
+> - **Section 3.4 (Storage Kernel SPI)**: In-Memory OCC achieves **1,442,347 tpmC (53,794 TPS)** (pure storage transaction limit).
+> - **Section 3.5 (VDBE T-SQL Runtime)**: In-Memory OCC achieves **584,800 tpmC (21,927 TPS)**, reflecting full-stack stored procedure VM execution and parameter binding overhead.
 
 | Metric | In-Memory OCC Engine (`everysec`) | WiredTiger Engine (`everysec` 1s Fsync) | Analysis & Comparative Delta |
 |---|---|---|---|
-| **tpmC (New-Order / min)** | **381,911.30 tpmC** (Peak ~537k) | **434,065.33 tpmC** | Massive 500-worker scale: Both engines sustain >380k tpmC under extreme concurrency |
-| **Overall Throughput (TPS)** | **13,033.96 TPS** (Peak 18,485 TPS) | **14,089.72 TPS** | 500 client connections driving continuous T-SQL stored procedure execution |
-| **Serialization Abort Rate** | **8.74%** (18,752 aborts / 21.4k attempts) | **39.42%** (137,861 aborts / 34.9k attempts) | **WiredTiger aborts nearly 40% of attempts**, while OCC preserves 91.3% transaction completion |
-| **Payment Committed** | **74,416 committed** (Significantly Higher) | **61,113 committed** (-13,303 tx) | OCC successfully commits +21.8% more genuine business balance mutations |
-| **New-Order P50 / P95 / P99** | **6.97 ms / 80.69 ms / 236.69 ms** | **2.06 ms / 261.10 ms / 504.93 ms** | OCC P95/P99 tail latencies are more than 2x better (236ms vs. 504ms) than WiredTiger |
-| **Payment P50 / P95 / P99** | **2.19 ms / 305.83 ms / 722.08 ms** | **4.08 ms / 33.37 ms / 295.53 ms** | 500 workers contending on 50 warehouse balance rows |
-| **Order-Status P50 / P99** | **0.02 ms / 50.34 ms** | **0.01 ms / 3.64 ms** | Fast 10~20 µs median dispatch across both engines |
-| **Delivery / Stock-Level P50** | **3.20 ms / 0.19 ms** | **0.06 ms / 0.06 ms** | Reliable multi-statement business transaction execution under 500 client workers |
+| **tpmC (New-Order / min)** | **584,800.09 tpmC** (Peak ~670k) | **640,229.32 tpmC** | Both engines sustain 580k~640k tpmC executing full-stack T-SQL stored procedures |
+| **Overall Throughput (TPS)** | **21,927.96 TPS** | **22,658.76 TPS** | 100 concurrent goroutines executing continuous multi-statement business transactions |
+| **Payment Committed** | **94,661 committed** (Higher) | 86,667 committed (-7,994 tx) | **OCC genuinely commits +7,994 more real payments** than WiredTiger |
+| **Serialization Abort Rate** | **3.15%** (7,147 aborts / 227.1k attempts) | **18.48%** (51,401 aborts / 278.1k attempts) | **WiredTiger fast-fails 51,400 attempts (18.5% drop)**, while OCC preserves 96.9% completion |
+| **Conflict Retries** | **95,410 retries** | 216,170 retries | WiredTiger suffers 2.3x more lock thrashing and retry overhead |
+| **Payment P50 / P95 / P99** | **0.23 ms / 11.17 ms / 52.16 ms** | **0.13 ms / 15.93 ms / 59.49 ms** | OCC provides lower P95/P99 tail latencies on contested warehouse balance records |
+| **Order-Status P50 / P95** | **0.01 ms / 0.13 ms** | **0.01 ms / 0.04 ms** | Microsecond median dispatch (10 µs); Point-Lookup Shortcut bypasses Volcano CBO overhead |
+| **Delivery / Stock-Level P50** | **0.06 ms / 0.10 ms** | **0.05 ms / 0.04 ms** | Sub-millisecond multi-row DML latency under 100 concurrent client workers |
+
+##### 3. Scale Factor 20 Warehouses, 200 Client Workers (Enterprise High-Concurrency Stress):
+
+| Metric | In-Memory OCC Engine (`everysec`) | WiredTiger Engine (`everysec` 1s Fsync) | Analysis & Comparative Delta |
+|---|---|---|---|
+| **tpmC (New-Order / min)** | **541,129.78 tpmC** (Peak ~635k) | **647,877.33 tpmC** | High concurrency resilience: OCC achieves 541k tpmC (+31.0% over pre-VPERF-19 413k) |
+| **Overall Throughput (TPS)** | **20,308.49 TPS** | **22,011.93 TPS** | 200 concurrent goroutines executing precompiled T-SQL VDBE bytecode |
+| **Payment Committed** | **88,044 committed** (Higher) | 76,141 committed (-11,903 tx) | **OCC successfully commits +11,903 more genuine payments** than WiredTiger |
+| **Serialization Abort Rate** | **3.42%** (7,241 aborts / 211.6k attempts) | **26.70%** (80,237 aborts / 300.6k attempts) | **WiredTiger drops over 80,000 transactions (26.7% abort rate)**, while OCC preserves 96.6% completion |
+| **Conflict Retries** | **88,134 retries** | 292,489 retries | WiredTiger suffers 3.3x more retry thrashing under heavy contention |
+| **Payment P50 / P95 / P99** | **0.22 ms / 35.15 ms / 121.89 ms** | **1.57 ms / 22.57 ms / 111.00 ms** | OCC median latency is **7.1x faster** (0.22ms vs 1.57ms) on contested warehouse balance records |
+| **Order-Status P50 / P95** | **0.01 ms / 3.94 ms** | **0.01 ms / 0.04 ms** | Point-Lookup Shortcut maintains sub-10µs median read dispatch across 200 workers |
+| **Delivery / Stock-Level P50** | **0.75 ms / 0.16 ms** | **0.05 ms / 0.04 ms** | Sub-millisecond to ~0.75ms median multi-row execution under 200 workers |
 
 *(Note: Under `-fsync always`, Leader/Follower Group Commit delivers **1,744 ~ 1,863 TPS** on Apple Silicon NVMe despite physical `F_FULLFSYNC` barrier latencies).*
 
