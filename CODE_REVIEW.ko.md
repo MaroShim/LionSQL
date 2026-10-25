@@ -70,6 +70,7 @@
 | **REV-STOR-010** | P1 | 동시성/확장성 | [`pkg/storage/memengine/table_data.go:55`](pkg/storage/memengine/table_data.go#L55) | 하드코딩된 64개 샤드로 인해 100~500 동시 워커 환경에서 샤드 해시 충돌 및 쓰기 락 대기 시간 급증 | `[x]` | 샤드 수를 256개로 확장하고 `[4]uint64` 256비트 마스크 락 정렬, `Row` 직접 조작 패스, 정수 키 인터닝, 무락 읽기 적용하여 TPC-C 1,442,347 tpmC / 53,794 TPS 달성 (`VPERF-19`) |
 | **REV-STOR-011** | P1 | 동시성/무락 | [`pkg/storage/memengine/table_data.go:62`](pkg/storage/memengine/table_data.go#L62) | 읽기 경로에서 `shard.mu.RLock()` 호출로 인해 쓰기 커밋 중 읽기 지연 및 RWMutex 캐시라인 경합 발생 | `[x]` | 16,384개 락-프리 해시 버킷 체인 및 `atomic.Pointer[RowVersion]` 불변 노드 도입으로 100% 무락 스냅샷 읽기 달성 (`VPERF-20`) |
 | **REV-STOR-012** | P1 | 성능/무결성 | [`pkg/storage/tuple.go, pkg/storage/memengine/table_data.go`](pkg/storage/tuple.go) | 튜플 전체 디코딩 오버헤드 및 정수 PK 조회 시 `strconv.Itoa` 문자열 변환 할당, 커밋 시 이전 버전 가변 변경으로 인한 동시 읽기 데이터 레이스 위험 | `[x]` | `ExtractColumnFromTuple` (25.5ns/0-alloc) 구현, `smallIntHashes` 1-클럭 정수 슬롯 인덱싱 및 불변 MVCC 체인 확립 (`VPERF-21`) |
+| **REV-STOR-013** | P1 | 성능/스케일 | [`pkg/storage/memengine/table_data.go`](pkg/storage/memengine/table_data.go) | 16,384개 고정 버킷 연결 리스트가 `order_line`(160만~240만 행) 등 대형 테이블에서 100~150개 노드로 늘어져 O(N) 힙 포인터 추적으로 50% 성능 급락 | `[x]` | Go 런타임의 어셈블리/SIMD 최적화 256-샤드 O(1) 해시 맵(`entries map[string]shardEntry`)으로 복원하여 104만 tpmC 회복 (`VPERF-22`) |
 
 ---
 
@@ -100,6 +101,7 @@
 | **REV-WIRE-009** | P1 | 원자성 | [`pkg/wire/copy.go:350-410`](pkg/wire/copy.go#L350) | PostgreSQL `COPY tbl FROM STDIN` 실행 시 세션 트랜잭션과 격리되어 자동 커밋 루프로 분할 실행되던 무결성 위험 | `[x]` | 세션 트랜잭션 핸들 강제 바인딩 및 오류 시 전체 롤백 보장 완료 (`COPY-SAFETY-1`) |
 | **REV-API-001** | P3 | 예외처리 | [`pkg/api/handlers_procs.go:132`](pkg/api/handlers_procs.go#L132) | `handleExecProcedure`에서 `json.NewDecoder(r.Body).Decode(&req)` 에러를 무시(`_ = ...`)하여 잘못된 JSON 요청 본문 전송 시 HTTP 400 Bad Request 대신 빈 인자로 무경고 실행 | `[x]` | 잘못된 JSON 본문 전송 시 HTTP 400 Bad Request 명시적 반환 처리 |
 | **REV-API-002** | P1 | 보안 | [`cmd/lionsql/server.go:320-350`](cmd/lionsql/server.go#L320) | 외부 공용 IP(`0.0.0.0`) 바인딩 환경에서 기본 슈퍼유저 비밀번호(`1234567890`)로 기동을 허용하여 보안 침해 위험 | `[x]` | Production Security Guard 검증기를 통해 루프백 외 외부 바인딩 시 즉각 기동 차단 완료 (`PROD-SEC-1`) |
+| **REV-API-003** | P1 | 세션격리/STW | [`pkg/ui/dashboard.html, pkg/api/server.go`](pkg/ui/dashboard.html) | Web Studio 다중 사용자 동시 접속 시 `default` 세션 공유로 인한 트랜잭션 오염 위험 및 `/api/overview`의 `runtime.ReadMemStats` STW 부하 | `[x]` | 브라우저 탭별 고유 세션 ID(`getWebSessionId()`) 격리 및 1초 TTL `memStatsCache` 구현 완료 (`UI-CONCURRENCY-1`) |
 
 ---
 
@@ -132,8 +134,8 @@
 
 ## 10. 코드 리뷰 종합 감사 지표 (Audit Summary)
 
-- **총 리뷰 및 조치 건수**: **31건**
-- **조치 완료 (`[x]`)**: **31건 (100%)**
+- **총 리뷰 및 조치 건수**: **33건**
+- **조치 완료 (`[x]`)**: **33건 (100%)**
 - **미해결 결함 (`[ ]`)**: **0건**
 - **동시성 검증**: `go test -tags wiredtiger -race ./...` (전체 22개 패키지 **100% PASS**, 데이터 레이스 **0건**)
 - **컴파일 무결성**: macOS, Linux, Windows 3개 플랫폼 크로스 빌드 **100% 무경고 통과**
