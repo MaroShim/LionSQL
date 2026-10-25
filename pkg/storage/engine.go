@@ -361,6 +361,15 @@ func (s *TableSchema) ResolveRecordPK(rec Record) (Value, bool) {
 	return rec.Get(pkCol.Name)
 }
 
+func (s *TableSchema) PrimaryKeyIndex() int {
+	for i := range s.Columns {
+		if s.Columns[i].PrimaryKey {
+			return i
+		}
+	}
+	return -1
+}
+
 func (s *TableSchema) PrimaryKeyColumn() (*Column, error) {
 	for i := range s.Columns {
 		if s.Columns[i].PrimaryKey {
@@ -650,12 +659,23 @@ func (v Value) Decimal() Decimal {
 	return ZeroDecimal(0)
 }
 
+var smallIntStrs [100001]string
+
+func init() {
+	for i := 0; i <= 100000; i++ {
+		smallIntStrs[i] = strconv.Itoa(i)
+	}
+}
+
 func (v Value) String() string {
 	if v.IsNull {
 		return "NULL"
 	}
 	switch v.Type {
 	case TypeInt:
+		if v.IVal >= 0 && v.IVal <= 100000 {
+			return smallIntStrs[v.IVal]
+		}
 		return strconv.FormatInt(v.IVal, 10)
 	case TypeVarChar, TypeJSON:
 		return v.SVal

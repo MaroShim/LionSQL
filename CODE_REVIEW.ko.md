@@ -67,6 +67,7 @@
 | **REV-STOR-007** | P2 | 동시성/교착 | [`pkg/storage/memengine/tx.go:120-160`](pkg/storage/memengine/tx.go#L120) | 샤드 락 획득 순서를 정렬하기 위해 중첩 맵과 슬라이스 할당을 반복하여 힙 압력 및 정렬 오버헤드 발생 | `[x]` | 테이블당 `uint64` 단일 비트마스크 순회로 정렬 할당 0바이트화 및 정규 오름차순 교착 방지 락 획득 보장 (`VPERF-15`) |
 | **REV-STOR-008** | P1 | 지연시간 | [`pkg/storage/memengine/memengine.go:410-440`](pkg/storage/memengine/memengine.go#L410) | 트랜잭션 커밋 완료 경로(`finishWALCommitLocked`)에서 동기적으로 `rewriteAOFLocked()`를 실행하여 100~500ms STW 프리징 발생 | `[x]` | AOF 재작성 컴팩션을 `sync.WaitGroup`으로 보호되는 비동기 백그라운드 고루틴으로 오프로드 (`VPERF-15`) |
 | **REV-STOR-009** | P1 | 데이터안전성 | [`pkg/storage/benchdir.go:1-47`](pkg/storage/benchdir.go) | 벤치마크 및 런타임 종료 시 사용자가 지정한 상위 데이터 디렉토리에 대해 `os.RemoveAll(*dataDir)`를 무조건 실행하여 사용자 원본 파일 삭제 위험 | `[x]` | `storage.PrepareBenchmarkDir` 도입으로 전용 격리 하위 디렉토리 생성 및 해당 자식 디렉토리만 안전 삭제 (`BENCH-DIR-SAFETY-1`) |
+| **REV-STOR-010** | P1 | 동시성/확장성 | [`pkg/storage/memengine/table_data.go:55`](pkg/storage/memengine/table_data.go#L55) | 하드코딩된 64개 샤드로 인해 100~500 동시 워커 환경에서 샤드 해시 충돌 및 쓰기 락 대기 시간 급증 | `[x]` | 샤드 수를 256개로 확장하고 `[4]uint64` 256비트 마스크 락 정렬, `Row` 직접 조작 패스, 정수 키 인터닝, 무락 읽기 적용하여 TPC-C 1,442,347 tpmC / 53,794 TPS 달성 (`VPERF-19`) |
 
 ---
 
@@ -128,8 +129,8 @@
 
 ## 10. 코드 리뷰 종합 감사 지표 (Audit Summary)
 
-- **총 리뷰 및 조치 건수**: **30건**
-- **조치 완료 (`[x]`)**: **30건 (100%)**
+- **총 리뷰 및 조치 건수**: **31건**
+- **조치 완료 (`[x]`)**: **31건 (100%)**
 - **미해결 결함 (`[ ]`)**: **0건**
 - **동시성 검증**: `go test -tags wiredtiger -race ./...` (전체 22개 패키지 **100% PASS**, 데이터 레이스 **0건**)
 - **컴파일 무결성**: macOS, Linux, Windows 3개 플랫폼 크로스 빌드 **100% 무경고 통과**

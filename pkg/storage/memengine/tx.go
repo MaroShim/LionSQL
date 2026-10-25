@@ -133,15 +133,27 @@ type savepointState struct {
 	changes  map[string]rowChange
 }
 
+type shardRef struct {
+	tableName string
+	shardIdx  int
+	td        *TableData
+}
+
+type shardMask [numTableShards / 64]uint64
+
 var txPool = sync.Pool{
 	New: func() any {
 		return &Transaction{
-			tableCache: make(map[string]*TableData, 4),
-			baseVers:   make(map[string]map[string]int64, 4),
-			local:      make(map[string]map[string]storage.Row, 4),
-			deleted:    make(map[string]map[string]bool, 4),
-			changes:    make(map[string]rowChange, 16),
-			savepoints: make(map[string]savepointState, 2),
+			tableCache:   make(map[string]*TableData, 4),
+			baseVers:     make(map[string]map[string]int64, 4),
+			local:        make(map[string]map[string]storage.Row, 4),
+			deleted:      make(map[string]map[string]bool, 4),
+			changes:      make(map[string]rowChange, 16),
+			savepoints:   make(map[string]savepointState, 2),
+			tableSet:     make(map[string]*TableData, 4),
+			shardMasks:   make(map[string]shardMask, 4),
+			tableNames:   make([]string, 0, 4),
+			neededShards: make([]shardRef, 0, 16),
 		}
 	},
 }
@@ -162,6 +174,10 @@ type Transaction struct {
 	tableCache        map[string]*TableData             // Cached table metadata pointers per transaction
 	savepoints        map[string]savepointState
 	spNames           []string
+	tableSet          map[string]*TableData
+	shardMasks        map[string]shardMask
+	tableNames        []string
+	neededShards      []shardRef
 	closed            bool
 	inPool            bool
 }
@@ -217,6 +233,17 @@ func (tx *Transaction) getTableLocked(tableName string) (*TableData, error) {
 	return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 }
 
+// getTableReadOnly retrieves a *TableData without acquiring tx.mu or engine.mu, safe for ReadOnly transactions.
+func (tx *Transaction) getTableReadOnly(tableName string) (*TableData, error) {
+	snap := tx.engine.tablesAtomic.Load()
+	if snap != nil {
+		if td, exists := sqlutil.MapGetFold(*snap, tableName); exists {
+			return td, nil
+		}
+	}
+	return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+}
+
 func (tx *Transaction) Insert(tableName string, record storage.Record) error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
@@ -247,6 +274,36 @@ func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 		return err
 	}
 	schema := td.Schema
+
+	// Fast-path for tables without secondary indexes, foreign keys, or partitioning
+	if len(schema.Indexes) == 0 && len(schema.ForeignKeys) == 0 && !schema.IsPartitioned() {
+		pkIdx := schema.PrimaryKeyIndex()
+		if pkIdx >= 0 && pkIdx < len(row.Values) {
+			pkVal := row.Values[pkIdx]
+			if !pkVal.IsNull {
+				pkKey := pkVal.String()
+				if tx.isLocallyDeleted(schema.Name, pkKey) {
+				} else if _, inLocal := tx.getLocal(schema.Name, pkKey); inLocal {
+					return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, schema.Name)
+				} else if td.hasKey(pkKey) {
+					return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, schema.Name)
+				}
+				rowClone := cloneRow(row)
+				tx.putLocal(schema.Name, pkKey, rowClone, 0)
+				tx.unmarkDeleted(schema.Name, pkKey)
+				tx.changes[schema.Name+":"+pkKey] = rowChange{
+					kind:     changeInsert,
+					table:    schema.Name,
+					key:      pkKey,
+					baseVer:  0,
+					row:      rowClone,
+					td:       td,
+					shardIdx: hashShard(pkKey),
+				}
+				return nil
+			}
+		}
+	}
 
 	rec := schema.RowToRecord(row)
 	return tx.insertLocked(tableName, rec)
@@ -448,6 +505,31 @@ func (tx *Transaction) UpdateRow(tableName string, pk storage.Value, row storage
 		return err
 	}
 	schema := td.Schema
+
+	// Fast-path for tables without secondary indexes, foreign keys, child FK refs, or partitioning
+	if len(schema.Indexes) == 0 && len(schema.ForeignKeys) == 0 && len(tx.engine.GetChildFKRefs(schema.Name)) == 0 && !schema.IsPartitioned() {
+		pkKey := pk.String()
+		_, ver, err := tx.getRowAndVerUnderLock(schema.Name, pkKey, false)
+		if err != nil {
+			return err
+		}
+		tx.setBaseVer(schema.Name, pkKey, ver)
+		originalBaseVer := tx.getBaseVer(schema.Name, pkKey)
+
+		rowClone := cloneRow(row)
+		tx.putLocal(schema.Name, pkKey, rowClone, originalBaseVer)
+		tx.unmarkDeleted(schema.Name, pkKey)
+		tx.changes[schema.Name+":"+pkKey] = rowChange{
+			kind:     changeUpdate,
+			table:    schema.Name,
+			key:      pkKey,
+			baseVer:  originalBaseVer,
+			row:      rowClone,
+			td:       td,
+			shardIdx: hashShard(pkKey),
+		}
+		return nil
+	}
 
 	rec := schema.RowToRecord(row)
 	return tx.updateLocked(tableName, pk, rec, 0)
@@ -1028,6 +1110,25 @@ func valuesEqual(a, b storage.Value) bool {
 }
 
 func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, error) {
+	if tx.opts.ReadOnly {
+		tx.mu.Lock()
+		closed := tx.closed
+		tx.mu.Unlock()
+		if closed {
+			return nil, storage.ErrTxClosed
+		}
+		td, err := tx.getTableReadOnly(tableName)
+		if err != nil {
+			return nil, err
+		}
+		pkKey := pk.String()
+		row, _, exists := td.getRowAndVer(pkKey)
+		if !exists {
+			return nil, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+		}
+		return td.Schema.RowToRecord(row), nil
+	}
+
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
@@ -1045,6 +1146,25 @@ func (tx *Transaction) Get(tableName string, pk storage.Value) (storage.Record, 
 }
 
 func (tx *Transaction) GetRow(tableName string, pk storage.Value) (storage.Row, error) {
+	if tx.opts.ReadOnly {
+		tx.mu.Lock()
+		closed := tx.closed
+		tx.mu.Unlock()
+		if closed {
+			return storage.Row{}, storage.ErrTxClosed
+		}
+		td, err := tx.getTableReadOnly(tableName)
+		if err != nil {
+			return storage.Row{}, err
+		}
+		pkKey := pk.String()
+		row, _, exists := td.getRowAndVer(pkKey)
+		if !exists {
+			return storage.Row{}, fmt.Errorf("%w: key %q in table %q", storage.ErrKeyNotFound, pkKey, tableName)
+		}
+		return row, nil
+	}
+
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
 
@@ -1535,14 +1655,18 @@ func (tx *Transaction) Commit() error {
 	}
 
 	// 1. Collect distinct table names and affected shards using 64-bit masks (zero nested map allocations)
-	type shardRef struct {
-		tableName string
-		shardIdx  int
-		td        *TableData
+	if tx.tableSet == nil {
+		tx.tableSet = make(map[string]*TableData, 4)
+	} else {
+		clear(tx.tableSet)
 	}
-
-	tableSet := make(map[string]*TableData, 4)
-	shardMasks := make(map[string]uint64, 4)
+	if tx.shardMasks == nil {
+		tx.shardMasks = make(map[string]shardMask, 4)
+	} else {
+		clear(tx.shardMasks)
+	}
+	tx.tableNames = tx.tableNames[:0]
+	tx.neededShards = tx.neededShards[:0]
 
 	for _, ch := range tx.changes {
 		td := ch.td
@@ -1555,24 +1679,24 @@ func (tx *Transaction) Commit() error {
 			}
 			sIdx = hashShard(ch.key)
 		}
-		tableSet[td.Schema.Name] = td
-		shardMasks[td.Schema.Name] |= (uint64(1) << sIdx)
+		tx.tableSet[td.Schema.Name] = td
+		m := tx.shardMasks[td.Schema.Name]
+		m[sIdx/64] |= (uint64(1) << (sIdx % 64))
+		tx.shardMasks[td.Schema.Name] = m
 	}
 
-	tableNames := make([]string, 0, len(tableSet))
-	for name := range tableSet {
-		tableNames = append(tableNames, name)
+	for name := range tx.tableSet {
+		tx.tableNames = append(tx.tableNames, name)
 	}
-	sort.Strings(tableNames) // Strict Lock Hierarchy to prevent deadlocks (Rule 10)
+	sort.Strings(tx.tableNames) // Strict Lock Hierarchy to prevent deadlocks (Rule 10)
 
-	var neededShards []shardRef
-	for _, tName := range tableNames {
-		td := tableSet[tName]
-		mask := shardMasks[tName]
-		// Invariant: Iterating bit 0 to 63 naturally guarantees ascending canonical shard order (Rule 10)
+	for _, tName := range tx.tableNames {
+		td := tx.tableSet[tName]
+		mask := tx.shardMasks[tName]
+		// Invariant: Iterating bit 0 to numTableShards-1 naturally guarantees ascending canonical shard order (Rule 10)
 		for sIdx := 0; sIdx < numTableShards; sIdx++ {
-			if (mask & (uint64(1) << sIdx)) != 0 {
-				neededShards = append(neededShards, shardRef{
+			if (mask[sIdx/64] & (uint64(1) << (sIdx % 64))) != 0 {
+				tx.neededShards = append(tx.neededShards, shardRef{
 					tableName: tName,
 					shardIdx:  sIdx,
 					td:        td,
@@ -1582,8 +1706,8 @@ func (tx *Transaction) Commit() error {
 	}
 
 	// 2. Acquire Intent-Shared RLock on affected tables (prevents concurrent DDL DROP/TRUNCATE)
-	for _, tName := range tableNames {
-		tableSet[tName].mu.RLock()
+	for _, tName := range tx.tableNames {
+		tx.tableSet[tName].mu.RLock()
 	}
 
 	// 3.1 Pre-encode WAL payloads BEFORE acquiring shard exclusive locks (Stage 4 Out-of-Lock WAL Encoding)
@@ -1596,7 +1720,7 @@ func (tx *Transaction) Commit() error {
 			}
 			td := ch.td
 			if td == nil {
-				td = tableSet[ch.table]
+				td = tx.tableSet[ch.table]
 			}
 			if td != nil {
 				if rawData, err := storage.EncodeRow(&td.Schema, ch.row); err == nil {
@@ -1608,8 +1732,8 @@ func (tx *Transaction) Commit() error {
 	}
 
 	// 4. Acquire exclusive lock on each affected shard in strict canonical order
-	for i := range neededShards {
-		neededShards[i].td.shards[neededShards[i].shardIdx].mu.Lock()
+	for i := range tx.neededShards {
+		tx.neededShards[i].td.shards[tx.neededShards[i].shardIdx].mu.Lock()
 	}
 
 	var unlocked bool
@@ -1618,11 +1742,11 @@ func (tx *Transaction) Commit() error {
 			return
 		}
 		unlocked = true
-		for i := len(neededShards) - 1; i >= 0; i-- {
-			neededShards[i].td.shards[neededShards[i].shardIdx].mu.Unlock()
+		for i := len(tx.neededShards) - 1; i >= 0; i-- {
+			tx.neededShards[i].td.shards[tx.neededShards[i].shardIdx].mu.Unlock()
 		}
-		for i := len(tableNames) - 1; i >= 0; i-- {
-			tableSet[tableNames[i]].mu.RUnlock()
+		for i := len(tx.tableNames) - 1; i >= 0; i-- {
+			tx.tableSet[tx.tableNames[i]].mu.RUnlock()
 		}
 	}
 	defer unlockAll()

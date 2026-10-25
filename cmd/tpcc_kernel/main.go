@@ -418,45 +418,45 @@ func execNewOrder(sess storage.Session, rng *rand.Rand, wID, dID, cID, totalItem
 
 	// 2. Get and increment district next order ID
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
-	distRec, err := tx.Get("district", storage.StringValue(dKey))
+	distRow, err := tx.GetRow("district", storage.StringValue(dKey))
 	if err != nil {
 		return false
 	}
-	nextOID := distRec["d_next_o_id"].IVal
-	distRec["d_next_o_id"] = storage.IntValue(nextOID + 1)
-	if err := tx.Update("district", storage.StringValue(dKey), distRec); err != nil {
+	nextOID := distRow.Values[5].IVal
+	distRow.Values[5] = storage.IntValue(nextOID + 1)
+	if err := tx.UpdateRow("district", storage.StringValue(dKey), distRow); err != nil {
 		return false
 	}
 
 	// 3. Get customer discount
 	cKey := fmt.Sprintf("%d_%d_%d", wID, dID, cID)
-	custRec, err := tx.Get("customer", storage.StringValue(cKey))
+	custRow, err := tx.GetRow("customer", storage.StringValue(cKey))
 	if err != nil {
 		return false
 	}
-	discount := custRec["c_discount"].FVal
+	discount := custRow.Values[9].FVal
 
 	// 4. Insert orders and new_order
 	oKey := fmt.Sprintf("%d_%d_%d", wID, dID, nextOID)
 	olCnt := int64(rng.Intn(6) + 5) // 5 to 10 lines
-	if err := tx.Insert("orders", storage.Record{
-		"o_key":       storage.StringValue(oKey),
-		"o_id":        storage.IntValue(nextOID),
-		"o_d_id":      storage.IntValue(int64(dID)),
-		"o_w_id":      storage.IntValue(int64(wID)),
-		"o_c_id":      storage.IntValue(int64(cID)),
-		"o_carrier_id": storage.IntValue(0),
-		"o_ol_cnt":    storage.IntValue(olCnt),
-	}); err != nil {
+	if err := tx.InsertRow("orders", storage.Row{Values: []storage.Value{
+		storage.StringValue(oKey),
+		storage.IntValue(nextOID),
+		storage.IntValue(int64(dID)),
+		storage.IntValue(int64(wID)),
+		storage.IntValue(int64(cID)),
+		storage.IntValue(0),
+		storage.IntValue(olCnt),
+	}}); err != nil {
 		return false
 	}
 
-	if err := tx.Insert("new_order", storage.Record{
-		"no_key":  storage.StringValue(oKey),
-		"no_o_id": storage.IntValue(nextOID),
-		"no_d_id": storage.IntValue(int64(dID)),
-		"no_w_id": storage.IntValue(int64(wID)),
-	}); err != nil {
+	if err := tx.InsertRow("new_order", storage.Row{Values: []storage.Value{
+		storage.StringValue(oKey),
+		storage.IntValue(nextOID),
+		storage.IntValue(int64(dID)),
+		storage.IntValue(int64(wID)),
+	}}); err != nil {
 		return false
 	}
 
@@ -465,41 +465,41 @@ func execNewOrder(sess storage.Session, rng *rand.Rand, wID, dID, cID, totalItem
 		iID := rng.Intn(totalItems) + 1
 		sKey := fmt.Sprintf("%d_%d", wID, iID)
 
-		itemRec, err := tx.Get("item", storage.IntValue(int64(iID)))
+		itemRow, err := tx.GetRow("item", storage.IntValue(int64(iID)))
 		if err != nil {
 			return false
 		}
-		itemPrice := itemRec["i_price"].FVal
+		itemPrice := itemRow.Values[2].FVal
 
-		stockRec, err := tx.Get("stock", storage.StringValue(sKey))
+		stockRow, err := tx.GetRow("stock", storage.StringValue(sKey))
 		if err != nil {
 			return false
 		}
-		qty := stockRec["s_quantity"].IVal
+		qty := stockRow.Values[3].IVal
 		orderQty := int64(rng.Intn(5) + 1)
 		if qty >= orderQty+10 {
 			qty -= orderQty
 		} else {
 			qty = qty - orderQty + 91
 		}
-		stockRec["s_quantity"] = storage.IntValue(qty)
-		stockRec["s_ytd"] = storage.IntValue(stockRec["s_ytd"].IVal + orderQty)
-		stockRec["s_order_cnt"] = storage.IntValue(stockRec["s_order_cnt"].IVal + 1)
-		if err := tx.Update("stock", storage.StringValue(sKey), stockRec); err != nil {
+		stockRow.Values[3] = storage.IntValue(qty)
+		stockRow.Values[4] = storage.IntValue(stockRow.Values[4].IVal + orderQty)
+		stockRow.Values[5] = storage.IntValue(stockRow.Values[5].IVal + 1)
+		if err := tx.UpdateRow("stock", storage.StringValue(sKey), stockRow); err != nil {
 			return false
 		}
 
 		lineAmount := float64(orderQty) * itemPrice * (1.0 - discount)
 		olKey := fmt.Sprintf("%d_%d_%d_%d", wID, dID, nextOID, ol)
-		if err := tx.Insert("order_line", storage.Record{
-			"ol_key":    storage.StringValue(olKey),
-			"ol_o_id":   storage.IntValue(nextOID),
-			"ol_d_id":   storage.IntValue(int64(dID)),
-			"ol_w_id":   storage.IntValue(int64(wID)),
-			"ol_number": storage.IntValue(int64(ol)),
-			"ol_i_id":   storage.IntValue(int64(iID)),
-			"ol_amount": storage.FloatValue(lineAmount),
-		}); err != nil {
+		if err := tx.InsertRow("order_line", storage.Row{Values: []storage.Value{
+			storage.StringValue(olKey),
+			storage.IntValue(nextOID),
+			storage.IntValue(int64(dID)),
+			storage.IntValue(int64(wID)),
+			storage.IntValue(int64(ol)),
+			storage.IntValue(int64(iID)),
+			storage.FloatValue(lineAmount),
+		}}); err != nil {
 			return false
 		}
 	}
@@ -518,50 +518,50 @@ func execPayment(sess storage.Session, rng *rand.Rand, wID, dID, cID int) bool {
 	amount := float64(rng.Intn(50000)+100) / 100.0 // $1.00 to $500.00
 
 	// 1. Update warehouse YTD
-	wRec, err := tx.Get("warehouse", storage.IntValue(int64(wID)))
+	wRow, err := tx.GetRow("warehouse", storage.IntValue(int64(wID)))
 	if err != nil {
 		return false
 	}
-	wRec["w_ytd"] = storage.FloatValue(wRec["w_ytd"].FVal + amount)
-	if err := tx.Update("warehouse", storage.IntValue(int64(wID)), wRec); err != nil {
+	wRow.Values[3] = storage.FloatValue(wRow.Values[3].FVal + amount)
+	if err := tx.UpdateRow("warehouse", storage.IntValue(int64(wID)), wRow); err != nil {
 		return false
 	}
 
 	// 2. Update district YTD
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
-	dRec, err := tx.Get("district", storage.StringValue(dKey))
+	dRow, err := tx.GetRow("district", storage.StringValue(dKey))
 	if err != nil {
 		return false
 	}
-	dRec["d_ytd"] = storage.FloatValue(dRec["d_ytd"].FVal + amount)
-	if err := tx.Update("district", storage.StringValue(dKey), dRec); err != nil {
+	dRow.Values[4] = storage.FloatValue(dRow.Values[4].FVal + amount)
+	if err := tx.UpdateRow("district", storage.StringValue(dKey), dRow); err != nil {
 		return false
 	}
 
 	// 3. Update customer balance
 	cKey := fmt.Sprintf("%d_%d_%d", wID, dID, cID)
-	cRec, err := tx.Get("customer", storage.StringValue(cKey))
+	cRow, err := tx.GetRow("customer", storage.StringValue(cKey))
 	if err != nil {
 		return false
 	}
-	cRec["c_balance"] = storage.FloatValue(cRec["c_balance"].FVal - amount)
-	cRec["c_ytd_payment"] = storage.FloatValue(cRec["c_ytd_payment"].FVal + amount)
-	cRec["c_payment_cnt"] = storage.IntValue(cRec["c_payment_cnt"].IVal + 1)
-	if err := tx.Update("customer", storage.StringValue(cKey), cRec); err != nil {
+	cRow.Values[6] = storage.FloatValue(cRow.Values[6].FVal - amount)
+	cRow.Values[7] = storage.FloatValue(cRow.Values[7].FVal + amount)
+	cRow.Values[8] = storage.IntValue(cRow.Values[8].IVal + 1)
+	if err := tx.UpdateRow("customer", storage.StringValue(cKey), cRow); err != nil {
 		return false
 	}
 
 	// 4. Insert history record
 	hID := fmt.Sprintf("h_%d_%d_%d_%d", wID, dID, cID, time.Now().UnixNano())
-	if err := tx.Insert("history", storage.Record{
-		"h_id":     storage.StringValue(hID),
-		"h_c_id":   storage.IntValue(int64(cID)),
-		"h_c_d_id": storage.IntValue(int64(dID)),
-		"h_c_w_id": storage.IntValue(int64(wID)),
-		"h_d_id":   storage.IntValue(int64(dID)),
-		"h_w_id":   storage.IntValue(int64(wID)),
-		"h_amount": storage.FloatValue(amount),
-	}); err != nil {
+	if err := tx.InsertRow("history", storage.Row{Values: []storage.Value{
+		storage.StringValue(hID),
+		storage.IntValue(int64(cID)),
+		storage.IntValue(int64(dID)),
+		storage.IntValue(int64(wID)),
+		storage.IntValue(int64(dID)),
+		storage.IntValue(int64(wID)),
+		storage.FloatValue(amount),
+	}}); err != nil {
 		return false
 	}
 

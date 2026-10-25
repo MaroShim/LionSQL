@@ -52,7 +52,7 @@ func (idx *IndexData) SyncEntries() {
 	}
 }
 
-const numTableShards = 64
+const numTableShards = 256
 
 type shardEntry struct {
 	ver int64
@@ -62,7 +62,7 @@ type shardEntry struct {
 type tableShard struct {
 	mu      sync.RWMutex
 	entries map[string]shardEntry
-	_pad    [40]byte
+	_pad    [32]byte
 }
 
 // TableData stores rows in memory for a single table with fine-grained sharded OCC version tracking and secondary indexes.
