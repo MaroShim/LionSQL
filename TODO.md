@@ -68,7 +68,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 
 | Task Code | Domain | Key Architecture Deliverable | Target Packages | Target Release | Reference Document |
 | :---: | :---: | :--- | :--- | :---: | :--- |
-| **`OCC-HYPER-1`**| Storage/OCC | **In-Memory OCC Hyper-Scale 2M tpmC & Lock-Free Snapshot (Phase 1: 1.44M tpmC Delivered)** | `pkg/storage/memengine` | `v1.1.0` | [`notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md`](notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md) |
+| **`OCC-HYPER-1`**| Storage/OCC | **In-Memory OCC Hyper-Scale 2M tpmC & Lock-Free Snapshot (Phase 1, 1.5, 2 Delivered)** | `pkg/storage/memengine` | `v1.1.0` | [`notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md`](notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md) |
 | **`R-6`** | Architecture/API | **Module Interface Abstraction & Protocol Boundary Decoupling** | `pkg/engine`, `pkg/wire`, `pkg/api` | `v1.1.0` | [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md) |
 | **`AUDIT-LOG-1`** | Security/Audit | **Cryptographic SHA-256 Immutable Audit Logging Subsystem** | `pkg/audit`, `cmd/lionsql` | `v1.1.0` | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **`TDS-MOD-1`** | Wire/Refactor | **TDS Monolith (`server.go` 2.6k lines) Decomposition** | `pkg/wire/tds` | `v1.1.0` | Post-1.0 Refactoring |

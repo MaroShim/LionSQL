@@ -1897,12 +1897,9 @@ func (tx *Transaction) Commit() error {
 
 		switch ch.kind {
 		case changeInsert:
-			newVer := &RowVersion{ver: 1, commitTS: tx.commitTimestamp, row: ch.row}
+			newVer := &RowVersion{ver: 1, commitTS: tx.commitTimestamp, row: ch.row, rawTuple: ch.walData}
 			if node != nil {
 				newVer.prev = oldVer
-				if oldVer != nil {
-					oldVer.prev = nil
-				}
 				node.header.head.Store(newVer)
 			} else {
 				sh.insertNodeLocked(ch.key, newVer)
@@ -1922,11 +1919,8 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		case changeUpdate:
-			newVer := &RowVersion{ver: ch.baseVer + 1, commitTS: tx.commitTimestamp, row: ch.row}
-			if oldVer != nil {
-				newVer.prev = oldVer
-				oldVer.prev = nil
-			}
+			newVer := &RowVersion{ver: ch.baseVer + 1, commitTS: tx.commitTimestamp, row: ch.row, rawTuple: ch.walData}
+			newVer.prev = oldVer
 			if node != nil {
 				node.header.head.Store(newVer)
 			} else {
@@ -1963,9 +1957,6 @@ func (tx *Transaction) Commit() error {
 		case changeDelete:
 			if node != nil {
 				delVer := &RowVersion{ver: ch.baseVer + 1, commitTS: tx.commitTimestamp, deleted: true, prev: oldVer}
-				if oldVer != nil {
-					oldVer.prev = nil
-				}
 				sh.deleteNodeLocked(ch.key, delVer)
 			}
 			if td.Schema.IsPartitioned() && hadOld {

@@ -63,6 +63,7 @@ type RowVersion struct {
 	ver      int64
 	commitTS int64
 	row      storage.Row
+	rawTuple []byte
 	deleted  bool
 	prev     *RowVersion
 }
@@ -199,6 +200,18 @@ func (td *TableData) ensureShardsInit() {
 	td.initOnce.Do(td.initShardsInternal)
 }
 
+func (td *TableData) resolveRow(v *RowVersion) storage.Row {
+	if len(v.row.Values) > 0 {
+		return v.row
+	}
+	if len(v.rawTuple) > 0 {
+		if r, err := storage.DecodeTupleToRow(&td.Schema, v.rawTuple); err == nil {
+			return r
+		}
+	}
+	return v.row
+}
+
 func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
 	td.ensureShardsInit()
 	sIdx := hashShard(pk)
@@ -210,7 +223,7 @@ func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
 	if v == nil || v.deleted {
 		return storage.Row{}, 0, false
 	}
-	return v.row, v.ver, true
+	return td.resolveRow(v), v.ver, true
 }
 
 func (td *TableData) hasKey(pk string) bool {
@@ -272,7 +285,7 @@ func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
 			for n := sh.buckets[b].Load(); n != nil; n = n.next {
 				v := n.header.head.Load()
 				if v != nil && !v.deleted {
-					if !fn(n.key, v.row) {
+					if !fn(n.key, td.resolveRow(v)) {
 						return
 					}
 				}
@@ -329,7 +342,7 @@ func (td *TableData) syncShardsToMapsLocked() {
 			for n := sh.buckets[b].Load(); n != nil; n = n.next {
 				v := n.header.head.Load()
 				if v != nil && !v.deleted {
-					td.Rows[n.key] = v.row
+					td.Rows[n.key] = td.resolveRow(v)
 					td.Versions[n.key] = v.ver
 				}
 			}
