@@ -58,3 +58,19 @@ LionSQL 초기 기동 후 실습용 전자상거래/ERP 예제 데이터베이�
 # 또는 서버 기동 시 -seed 플래그 사용:
 ./bin/lionsql serve -seed
 ```
+
+---
+
+## 3. 원클릭 릴리스 자동화 파이프라인 (`scripts/release.sh`)
+
+버전 SSOT 동기화, 커밋 로그 수집, Keep a Changelog 분류, 크로스 컴파일(Unix 및 Windows `.exe`), Git Tag 생성 및 GitHub 원격 푸시를 한 번에 원자적으로 수행하는 릴리스 도구입니다.
+
+상세한 아키텍처 및 동작 원리는 **[`doc/RELEASE_AUTOMATION_GUIDE.ko.md`](../doc/RELEASE_AUTOMATION_GUIDE.ko.md)**를 참조하십시오.
+
+```bash
+# 1. 릴리스 미리보기 (Dry-Run)
+./scripts/release.sh v0.90.0-beta4 --dry-run
+
+# 2. 정식 릴리스 수행 (빌드 -> CHANGELOG/버전 갱신 -> 커밋 -> 태깅 -> GitHub 푸시)
+./scripts/release.sh v0.90.0-beta4
+```

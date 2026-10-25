@@ -167,6 +167,8 @@
   * 로컬 빌드, 테스트 및 회귀 검증 가이드: 3단계 파이프라인, `-run` 필터링, 빌드 태그, 패키지별 회귀 테스트 맵, Go 마이크로 벤치마크, TPC-C 성능 회귀 측정, A/B 비교 절차.
 * [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 LionSQL로의 데이터베이스 이전 절차.
+* [`RELEASE_AUTOMATION_GUIDE.ko.md`](RELEASE_AUTOMATION_GUIDE.ko.md)
+  * 원클릭 릴리스 자동화 파이프라인(`scripts/release.sh`), 4대 SSOT 버전 동기화, Keep a Changelog 분류, Windows .exe 크로스 컴파일 및 태깅 가이드.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * 일반적인 운영 에러, 연결 진단 기법 및 장애 디버깅 가이드.
 

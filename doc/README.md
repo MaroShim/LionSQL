@@ -165,6 +165,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Local build, test, and regression guide: 3-stage pipeline, `-run` filtering, build tags, regression test map, Go benchmarks, TPC-C performance regression, and A/B comparison procedure.
 * [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
+* [`RELEASE_AUTOMATION_GUIDE.ko.md`](RELEASE_AUTOMATION_GUIDE.ko.md)
+  * One-click release automation pipeline (`scripts/release.sh`), 4-location SSOT version sync, Keep a Changelog classification, Windows .exe cross-compilation, and tagging guide.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.
 
