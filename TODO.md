@@ -68,6 +68,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 
 | Task Code | Domain | Key Architecture Deliverable | Target Packages | Target Release | Reference Document |
 | :---: | :---: | :--- | :--- | :---: | :--- |
+| **`S-MYSQL-1`** | Syntax/DX | **MySQL-Style Concise Syntax Ergonomics (`DESC`, `SHOW TABLES`, Backtick, Grid `EXPLAIN`)** | `pkg/proc`, `pkg/engine` | `v1.1.0` | [`notes/MYSQL_SYNTAX_ERGONOMICS_COMPATIBILITY_PLAN.ko.md`](notes/MYSQL_SYNTAX_ERGONOMICS_COMPATIBILITY_PLAN.ko.md) |
 | **`PROC-CURSOR-1`**| Proc/T-SQL | **T-SQL Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility** | `pkg/proc`, `pkg/proc/runtime` | `v1.1.0` | [`notes/FORWARD_ONLY_CURSOR_COMPATIBILITY_PLAN.ko.md`](notes/FORWARD_ONLY_CURSOR_COMPATIBILITY_PLAN.ko.md) |
 | **`WEB-SPA-1`** | Web/Hosting | **Self-Contained SPA Web Server & Native DB Integration (`--app`, `--public`)** | `pkg/api`, `cmd/lionsql` | `v1.1.0` | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |
 | **`OCC-HYPER-2`**| Storage/OCC | **In-Memory OCC Compact Arena Memory Compaction (5x Higher Density)** | `pkg/storage/memengine`, `pkg/storage` | `v1.1.0` | [`notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md`](notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md) |
