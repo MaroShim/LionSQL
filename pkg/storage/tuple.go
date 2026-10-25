@@ -689,3 +689,93 @@ func DecodeTuple(schema *TableSchema, data []byte) (Record, error) {
 	}
 	return schema.RowToRecord(row), nil
 }
+
+// ExtractColumnFromTuple extracts a single column value from a compact binary tuple
+// without decoding the entire row or allocating any value slice.
+func ExtractColumnFromTuple(schema *TableSchema, data []byte, targetColIdx int) (Value, error) {
+	if schema == nil {
+		return Value{}, errors.New("nil table schema")
+	}
+	if targetColIdx < 0 || targetColIdx >= len(schema.Columns) {
+		return Value{}, errors.New("column index out of range")
+	}
+	if len(data) < 1 {
+		return Value{}, ErrTupleBufferTooShort
+	}
+	if data[0] != TupleCodecVersion {
+		return Value{}, fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+	}
+
+	numCols := len(schema.Columns)
+	nullBitmapLen := (numCols + 7) / 8
+	if len(data) < 1+nullBitmapLen {
+		return Value{}, ErrTupleBufferTooShort
+	}
+
+	// 1. Fast check null bitmap
+	isNull := (data[1+targetColIdx/8] & (1 << (targetColIdx % 8))) != 0
+	if isNull {
+		return NullValue(schema.Columns[targetColIdx].Type), nil
+	}
+
+	// 2. Skip preceding non-null columns
+	offset := 1 + nullBitmapLen
+	for i := 0; i < targetColIdx; i++ {
+		priorNull := (data[1+i/8] & (1 << (i % 8))) != 0
+		if priorNull {
+			continue
+		}
+		nextOffset, err := SkipTupleColumn(schema.Columns[i].Type, data, offset)
+		if err != nil {
+			return Value{}, err
+		}
+		offset = nextOffset
+	}
+
+	// 3. Decode only target column
+	val, _, err := DecodeTupleValue(schema.Columns[targetColIdx].Type, data, offset)
+	return val, err
+}
+
+// DecodeTupleIntoValues decodes a compact binary tuple directly into the destination slice dest,
+// avoiding heap slice allocations.
+func DecodeTupleIntoValues(schema *TableSchema, data []byte, dest []Value) error {
+	if schema == nil {
+		return errors.New("nil table schema")
+	}
+	if len(data) < 1 {
+		return ErrTupleBufferTooShort
+	}
+	if data[0] != TupleCodecVersion {
+		return fmt.Errorf("%w: got 0x%02x, expected 0x%02x", ErrInvalidTupleHeader, data[0], TupleCodecVersion)
+	}
+
+	numCols := len(schema.Columns)
+	if len(dest) < numCols {
+		return errors.New("dest slice capacity too short for schema columns")
+	}
+	nullBitmapLen := (numCols + 7) / 8
+	if len(data) < 1+nullBitmapLen {
+		return ErrTupleBufferTooShort
+	}
+
+	bitmap := data[1 : 1+nullBitmapLen]
+	offset := 1 + nullBitmapLen
+
+	for i, col := range schema.Columns {
+		isNull := (bitmap[i/8] & (1 << (i % 8))) != 0
+		if isNull {
+			dest[i] = NullValue(col.Type)
+			continue
+		}
+
+		v, nextOffset, err := DecodeTupleValue(col.Type, data, offset)
+		if err != nil {
+			return fmt.Errorf("%w at col %d (%s)", err, i, col.Name)
+		}
+		dest[i] = v
+		offset = nextOffset
+	}
+
+	return nil
+}

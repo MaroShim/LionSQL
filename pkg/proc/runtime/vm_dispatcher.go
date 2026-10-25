@@ -697,8 +697,19 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 					if err != nil {
 						return f.handleCatch(err, pc)
 					}
-					if _, colIdx, ok := tableSchema.FindColumn(a.Column); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
-						updatedRow.Values[colIdx] = toStorageValue(valAny)
+					if col, colIdx, ok := tableSchema.FindColumn(a.Column); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
+						stVal := toStorageValue(valAny)
+						if col.Type == storage.TypeFloat && stVal.Type == storage.TypeInt {
+							stVal = storage.FloatValue(float64(stVal.IVal))
+						} else if col.Type == storage.TypeInt && stVal.Type == storage.TypeFloat && stVal.FVal == float64(int64(stVal.FVal)) {
+							stVal = storage.IntValue(int64(stVal.FVal))
+						} else if col.Type == storage.TypeDecimal && (stVal.Type == storage.TypeInt || stVal.Type == storage.TypeFloat || stVal.Type == storage.TypeVarChar) {
+							stVal = storage.DecimalValue(stVal.String())
+							if col.Scale > 0 {
+								stVal = storage.DecimalValueFromDecimal(stVal.DVal.Rescale(int32(col.Scale)))
+							}
+						}
+						updatedRow.Values[colIdx] = stVal
 					}
 				}
 

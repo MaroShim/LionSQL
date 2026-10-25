@@ -379,6 +379,13 @@ func BenchmarkLazyTuple_SelectiveVsFullDecode(b *testing.B) {
 			_ = v.IVal
 		}
 	})
+
+	b.Run("ExtractColumnDirect", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			v, _ := ExtractColumnFromTuple(schema, data, 4)
+			_ = v.IVal
+		}
+	})
 }
 
 func TestTupleCodec_BoolNumericCoercion(t *testing.T) {
@@ -417,5 +424,69 @@ func TestTupleCodec_BoolNumericCoercion(t *testing.T) {
 		t.Errorf("expected is_verified to be false TypeBool, got %v (%+v)", ver.Type, ver)
 	}
 }
+
+func TestExtractColumnFromTuple_And_DecodeInto(t *testing.T) {
+	schema := &TableSchema{
+		Name: "test_extract",
+		Columns: []Column{
+			{Name: "id", Type: TypeInt, PrimaryKey: true},
+			{Name: "name", Type: TypeVarChar},
+			{Name: "balance", Type: TypeFloat},
+			{Name: "tag", Type: TypeVarChar, Nullable: true},
+			{Name: "score", Type: TypeInt},
+		},
+	}
+
+	row := Row{
+		Values: []Value{
+			IntValue(42),
+			StringValue("Antigravity"),
+			FloatValue(12345.67),
+			NullValue(TypeVarChar),
+			IntValue(999),
+		},
+	}
+
+	data, err := EncodeRow(schema, row)
+	if err != nil {
+		t.Fatalf("EncodeRow failed: %v", err)
+	}
+
+	// Test ExtractColumnFromTuple
+	v0, err := ExtractColumnFromTuple(schema, data, 0)
+	if err != nil || v0.IVal != 42 {
+		t.Fatalf("Extract col 0 failed: %v, val: %v", err, v0)
+	}
+
+	v1, err := ExtractColumnFromTuple(schema, data, 1)
+	if err != nil || v1.SVal != "Antigravity" {
+		t.Fatalf("Extract col 1 failed: %v, val: %v", err, v1)
+	}
+
+	v2, err := ExtractColumnFromTuple(schema, data, 2)
+	if err != nil || v2.FVal != 12345.67 {
+		t.Fatalf("Extract col 2 failed: %v, val: %v", err, v2)
+	}
+
+	v3, err := ExtractColumnFromTuple(schema, data, 3)
+	if err != nil || !v3.IsNull {
+		t.Fatalf("Extract col 3 failed: %v, val: %v (expected null)", err, v3)
+	}
+
+	v4, err := ExtractColumnFromTuple(schema, data, 4)
+	if err != nil || v4.IVal != 999 {
+		t.Fatalf("Extract col 4 failed: %v, val: %v", err, v4)
+	}
+
+	// Test DecodeTupleIntoValues
+	dest := make([]Value, len(schema.Columns))
+	if err := DecodeTupleIntoValues(schema, data, dest); err != nil {
+		t.Fatalf("DecodeTupleIntoValues failed: %v", err)
+	}
+	if dest[0].IVal != 42 || dest[1].SVal != "Antigravity" || dest[2].FVal != 12345.67 || !dest[3].IsNull || dest[4].IVal != 999 {
+		t.Fatalf("DecodeTupleIntoValues mismatch: %+v", dest)
+	}
+}
+
 
 

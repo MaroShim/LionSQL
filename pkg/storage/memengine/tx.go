@@ -285,7 +285,7 @@ func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 				if tx.isLocallyDeleted(schema.Name, pkKey) {
 				} else if _, inLocal := tx.getLocal(schema.Name, pkKey); inLocal {
 					return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, schema.Name)
-				} else if td.hasKey(pkKey) {
+				} else if (pkVal.Type == storage.TypeInt && td.hasKeyInt(pkVal.IVal)) || td.hasKey(pkKey) {
 					return fmt.Errorf("%w: key %q in table %q", storage.ErrKeyExists, pkKey, schema.Name)
 				}
 				rowClone := cloneRow(row)
@@ -508,15 +508,36 @@ func (tx *Transaction) UpdateRow(tableName string, pk storage.Value, row storage
 
 	// Fast-path for tables without secondary indexes, foreign keys, child FK refs, or partitioning
 	if len(schema.Indexes) == 0 && len(schema.ForeignKeys) == 0 && len(tx.engine.GetChildFKRefs(schema.Name)) == 0 && !schema.IsPartitioned() {
-		pkKey := pk.String()
-		_, ver, err := tx.getRowAndVerUnderLock(schema.Name, pkKey, false)
-		if err != nil {
-			return err
+		var ver int64
+		var pkKey string
+		if pk.Type == storage.TypeInt && !pk.IsNull {
+			pkKey = strconv.FormatInt(pk.IVal, 10)
+			var err error
+			_, ver, err = tx.getRowAndVerIntUnderLock(schema.Name, pk.IVal, false)
+			if err != nil {
+				return err
+			}
+		} else {
+			pkKey = pk.String()
+			var err error
+			_, ver, err = tx.getRowAndVerUnderLock(schema.Name, pkKey, false)
+			if err != nil {
+				return err
+			}
 		}
 		tx.setBaseVer(schema.Name, pkKey, ver)
 		originalBaseVer := tx.getBaseVer(schema.Name, pkKey)
 
 		rowClone := cloneRow(row)
+		for i, col := range schema.Columns {
+			if i < len(rowClone.Values) && rowClone.Values[i].Type != col.Type && !rowClone.Values[i].IsNull {
+				if col.Type == storage.TypeFloat && rowClone.Values[i].Type == storage.TypeInt {
+					rowClone.Values[i] = storage.FloatValue(float64(rowClone.Values[i].IVal))
+				} else if col.Type == storage.TypeInt && rowClone.Values[i].Type == storage.TypeFloat && rowClone.Values[i].FVal == float64(int64(rowClone.Values[i].FVal)) {
+					rowClone.Values[i] = storage.IntValue(int64(rowClone.Values[i].FVal))
+				}
+			}
+		}
 		tx.putLocal(schema.Name, pkKey, rowClone, originalBaseVer)
 		tx.unmarkDeleted(schema.Name, pkKey)
 		tx.changes[schema.Name+":"+pkKey] = rowChange{
@@ -1157,6 +1178,13 @@ func (tx *Transaction) GetRow(tableName string, pk storage.Value) (storage.Row, 
 		if err != nil {
 			return storage.Row{}, err
 		}
+		if pk.Type == storage.TypeInt && !pk.IsNull {
+			row, _, exists := td.getRowAndVerInt(pk.IVal)
+			if !exists {
+				return storage.Row{}, fmt.Errorf("%w: key %d in table %q", storage.ErrKeyNotFound, pk.IVal, tableName)
+			}
+			return row, nil
+		}
 		pkKey := pk.String()
 		row, _, exists := td.getRowAndVer(pkKey)
 		if !exists {
@@ -1172,13 +1200,54 @@ func (tx *Transaction) GetRow(tableName string, pk storage.Value) (storage.Row, 
 		return storage.Row{}, storage.ErrTxClosed
 	}
 
-	pkKey := pk.String()
 	clone := !tx.opts.ReadOnly
+	if pk.Type == storage.TypeInt && !pk.IsNull {
+		row, ver, err := tx.getRowAndVerIntUnderLock(tableName, pk.IVal, clone)
+		if err == nil && !tx.opts.ReadOnly {
+			pkKey := strconv.FormatInt(pk.IVal, 10)
+			tx.setBaseVer(tableName, pkKey, ver)
+		}
+		return row, err
+	}
+
+	pkKey := pk.String()
 	row, ver, err := tx.getRowAndVerUnderLock(tableName, pkKey, clone)
 	if err == nil && !tx.opts.ReadOnly {
 		tx.setBaseVer(tableName, pkKey, ver)
 	}
 	return row, err
+}
+
+func (tx *Transaction) getRowAndVerIntUnderLock(tableName string, intKey int64, clone bool) (storage.Row, int64, error) {
+	pkKey := strconv.FormatInt(intKey, 10)
+	if !tx.opts.ReadOnly {
+		if tx.isLocallyDeleted(tableName, pkKey) {
+			return storage.Row{}, 0, fmt.Errorf("%w: key %d in table %q", storage.ErrKeyNotFound, intKey, tableName)
+		}
+
+		if row, found := tx.getLocal(tableName, pkKey); found {
+			ver := tx.getBaseVer(tableName, pkKey)
+			if clone {
+				return cloneRow(row), ver, nil
+			}
+			return row, ver, nil
+		}
+	}
+
+	td, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return storage.Row{}, 0, err
+	}
+	row, ver, exists := td.getRowAndVerInt(intKey)
+
+	if !exists {
+		return storage.Row{}, 0, fmt.Errorf("%w: key %d in table %q", storage.ErrKeyNotFound, intKey, tableName)
+	}
+
+	if clone {
+		return cloneRow(row), ver, nil
+	}
+	return row, ver, nil
 }
 
 func (tx *Transaction) getRowAndVerUnderLock(tableName, pkKey string, clone bool) (storage.Row, int64, error) {

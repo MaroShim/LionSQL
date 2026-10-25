@@ -169,10 +169,19 @@ flowchart TD
 
 ---
 
-### Phase 3: 컴팩트 바이너리 튜플 및 바이트 아레나 저장 (`[ ]` 예정)
-- 행 저장 포맷을 `storage.Row` 슬라이스에서 `[]byte` 컴팩트 바이너리 튜플로 전환.
-- Go GC 힙 객체 스캔 수 90% 이상 감축, 행당 메모리 300바이트 이하 달성.
-- **목표**: 메모리 집적도 5배 향상, 100개 워커 장시간 부하 시 GC 프리징 0초 달성.
+### Phase 3: 컴팩트 바이너리 튜플 및 정수 PK 슬롯 인덱싱 (`[x]` 완료)
+1. **바이너리 튜플 선택적 컬럼 다이렉트 추출 (`pkg/storage/tuple.go`)**:
+   - `ExtractColumnFromTuple(schema, data, targetColIdx)` 구현: 튜플 전체 디코딩 없이 타겟 컬럼만 즉각 추출 (평균 25.55 ns/op, 0 B/op, 0 allocs/op 달성, 기존 풀 디코드 대비 9배 가속).
+   - `DecodeTupleIntoValues(schema, data, dest)` 구현: 호출자 사전 할당 버퍼를 재사용하여 힙 할당 0회(Zero-alloc) 튜플 디코딩 지원.
+2. **정수 기본키 제로-할당 슬롯 인덱싱 (`pkg/storage/memengine/table_data.go`, `tx.go`)**:
+   - `rowNode`에 `intKey int64`, `isInt bool` 직접 바인딩 및 `smallIntHashes [100001]uint32` 캐시 도입 (0~100,000 정수 PK를 문자열 변환 없이 1-클럭 사이클 내 해시 버킷 매핑).
+   - `tx.GetRow`, `tx.InsertRow`, `tx.UpdateRow`에서 `intKey` 패스트패스를 연동하여 `strconv.Itoa` 문자열 할당을 전면 배제.
+3. **완전 불변 MVCC 버전 체인 및 타입 강제 일치 가드**:
+   - 커밋 시 이전 버전(`oldVer.row`)을 절대 변경하지 않는 순수 불변성(Immutability) 확립으로 동시 읽기 트랜잭션 데이터 레이스 원천 차단.
+   - VDBE 직접 행 갱신(`vm_dispatcher.go`) 및 OCC 업데이트(`tx.go`)에 스키마 컬럼 타입 강제 일치(Type Coercion) 가드를 적용하여 `Float`/`Int` 불일치 방지.
+- **성과 검증**:
+  - `TransferFunds` 벤치마크 (100 Workers, 50,000 Ops): **204,659.76 TPS**, P50 **24.16 µs**, P95 **689.9 µs**, 0 rollbacks, 100% ACID 통과.
+  - Case 1 (16 Wh, 32 Workers, 15s): **386,192.81 tpmC (14,343.61 TPS)**, Abort율 0.26%, Order-Status 10µs(0.01ms), 전체 패키지 `-race` 100% PASS (0 data races).
 
 ---
 

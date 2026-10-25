@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"strconv"
 	"sync"
 	"sync/atomic"
 
@@ -76,6 +77,8 @@ type RowHeader struct {
 // rowNode is a singly-linked node in a lock-free bucket chain.
 type rowNode struct {
 	key    string
+	intKey int64
+	isInt  bool
 	header RowHeader
 	next   *rowNode
 }
@@ -96,12 +99,26 @@ func (sh *tableShard) getNode(key string) *rowNode {
 	return nil
 }
 
+func (sh *tableShard) getNodeInt(intKey int64) *rowNode {
+	bIdx := hashBucketInt(intKey)
+	for n := sh.buckets[bIdx].Load(); n != nil; n = n.next {
+		if n.isInt && n.intKey == intKey {
+			return n
+		}
+	}
+	return nil
+}
+
 func (sh *tableShard) insertNodeLocked(key string, ver *RowVersion) *rowNode {
 	bIdx := hashBucket(key)
 	oldHead := sh.buckets[bIdx].Load()
 	newNode := &rowNode{
 		key:  key,
 		next: oldHead,
+	}
+	if iVal, err := strconv.ParseInt(key, 10, 64); err == nil {
+		newNode.isInt = true
+		newNode.intKey = iVal
 	}
 	newNode.header.head.Store(ver)
 	sh.buckets[bIdx].Store(newNode)
@@ -160,6 +177,14 @@ type TableData struct {
 	Partitions map[string]map[string]struct{} `json:"partitions,omitempty"`
 }
 
+var smallIntHashes [100001]uint32
+
+func init() {
+	for i := 0; i <= 100000; i++ {
+		smallIntHashes[i] = hashKey(strconv.Itoa(i))
+	}
+}
+
 func hashKey(key string) uint32 {
 	var h uint32 = 2166136261
 	for i := 0; i < len(key); i++ {
@@ -169,12 +194,27 @@ func hashKey(key string) uint32 {
 	return h
 }
 
+func hashKeyInt(intKey int64) uint32 {
+	if intKey >= 0 && intKey <= 100000 {
+		return smallIntHashes[intKey]
+	}
+	return hashKey(strconv.FormatInt(intKey, 10))
+}
+
 func hashShard(key string) int {
 	return int(hashKey(key) & (numTableShards - 1))
 }
 
+func hashShardInt(intKey int64) int {
+	return int(hashKeyInt(intKey) & (numTableShards - 1))
+}
+
 func hashBucket(key string) int {
 	return int((hashKey(key) >> 8) & (numBucketsPerShard - 1))
+}
+
+func hashBucketInt(intKey int64) int {
+	return int((hashKeyInt(intKey) >> 8) & (numBucketsPerShard - 1))
 }
 
 func (td *TableData) initShards() {
@@ -226,10 +266,35 @@ func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
 	return td.resolveRow(v), v.ver, true
 }
 
+func (td *TableData) getRowAndVerInt(intKey int64) (storage.Row, int64, bool) {
+	td.ensureShardsInit()
+	sIdx := hashShardInt(intKey)
+	n := td.shards[sIdx].getNodeInt(intKey)
+	if n == nil {
+		return storage.Row{}, 0, false
+	}
+	v := n.header.head.Load()
+	if v == nil || v.deleted {
+		return storage.Row{}, 0, false
+	}
+	return td.resolveRow(v), v.ver, true
+}
+
 func (td *TableData) hasKey(pk string) bool {
 	td.ensureShardsInit()
 	sIdx := hashShard(pk)
 	n := td.shards[sIdx].getNode(pk)
+	if n == nil {
+		return false
+	}
+	v := n.header.head.Load()
+	return v != nil && !v.deleted
+}
+
+func (td *TableData) hasKeyInt(intKey int64) bool {
+	td.ensureShardsInit()
+	sIdx := hashShardInt(intKey)
+	n := td.shards[sIdx].getNodeInt(intKey)
 	if n == nil {
 		return false
 	}
