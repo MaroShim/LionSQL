@@ -185,6 +185,10 @@ Verifying database ACID integrity across all accounts...
 
 ### 3.4. Storage Engine Kernel TPC-C Benchmark (`cmd/tpcc_kernel` / `bin/tpcc-kernel`)
 
+> [!NOTE]
+> **TPC-C Benchmark Scope & Fair Use Disclaimer**  
+> The workloads presented in Section 3.4 (Storage Kernel SPI) and Section 3.5 (VDBE Runtime) are modeled after standard TPC-C specifications and are **not official, audited TPC Results** under the TPC Benchmark™ Fair Use Policy. Section 3.4 isolates storage transaction throughput while Section 3.5 evaluates full-stack T-SQL bytecode execution. Both benchmarks are designed strictly for comparative architectural evaluation (In-Memory OCC vs. WiredTiger) and continuous regression tracking.
+
 LionSQL includes an in-tree storage engine kernel TPC-C benchmark suite (`cmd/tpcc_kernel/main.go`) modeling the full 9 standard relational tables (`warehouse`, `district`, `customer`, `history`, `new_order`, `orders`, `order_line`, `item`, `stock`) executing the standard workload mix (45% New-Order, 43% Payment, 4% Order-Status, 4% Delivery, 4% Stock-Level). It tests storage layer SPI CRUD transactions directly without SQL parsing or bytecode execution overhead.
 
 ```bash
@@ -198,7 +202,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 ./bin/tpcc-kernel -engine=wiredtiger -warehouses=10 -workers=100 -duration=10s -max-retries=3
 ```
 
-#### Official Verified Results:
+#### Verified Engineering Benchmark Results:
 
 | Metric | In-Memory OCC Engine (10 Wh, 100 Wrk) | WiredTiger Engine (Disk MVCC: 10 Wh, 100 Wrk) |
 |---|---|---|
@@ -244,7 +248,7 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
 ./bin/tpcc-runtime -engine=wiredtiger -warehouses=50 -workers=500 -duration=15s
 ```
 
-#### Official Verified VDBE Results:
+#### Verified VDBE Benchmark Results:
 
 ##### 1. Scale Factor 16 Warehouses, 32 Client Workers (Standard High-Performance OLTP):
 
