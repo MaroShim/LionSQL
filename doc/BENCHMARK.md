@@ -205,20 +205,18 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 
 #### Verified Engineering Benchmark Results:
 
-| Metric | In-Memory OCC Engine (10 Wh, 100 Wrk, 15s) | WiredTiger Engine (Disk MVCC: 10 Wh, 100 Wrk, 15s) | Analysis & Comparative Delta |
-|---|---|---|---|
-| **Peak Throughput (1s)** | **3,193,300 tpmC / 118,928 TPS** | 902,400 tpmC / 32,500 TPS | OCC demonstrates 3.5x higher burst saturation |
-| **Sustained tpmC (15s Avg)** | **1,046,121.81 tpmC** | 833,595.29 tpmC | **OCC achieves +25.5% higher sustained throughput** than WiredTiger |
-| **Overall Throughput (TPS)** | **39,020.28 TPS** | 29,352.93 TPS | **+9,667 TPS higher** than WiredTiger disk MVCC |
-| **Total Committed Transactions** | **594,141 committed** | 358,680 committed | **OCC successfully commits +235,461 more transactions (+65.6%)** |
-| **New-Order Committed** | **265,479 committed** (97.6%) | 139,099 committed (89.7%) | **OCC commits +126,380 more genuine new orders** (+90.9% increase) |
-| **Payment Committed** | **256,281 committed** (98.3%) | 113,589 committed (78.3%) | **OCC commits +142,692 more genuine business payments** (+125.6% increase) |
-| **Final Abort Rate (Overall)** | **1.83%** (11,074 final aborts / 605.2k) | **14.67%** (50,532 aborts / 409.2k) | **WiredTiger abort rate is 8.0x higher** (dropping over 50,000 transactions) |
-| **Order-Status Avg / P95 Latency** | **0.23 ms / 0.01 ms (10 µs)** | 0.04 ms / 0.01 ms | 256-shard OCC delivers sub-10µs P95 point reads with 0 aborts |
-| **Stock-Level Avg / P95 Latency** | **0.37 ms / 1.35 ms** | 0.13 ms / 0.04 ms | Parallel multi-item reads with 0 aborts |
-| **Delivery Avg / P95 Latency** | **0.52 ms / 2.33 ms** | 0.12 ms / 0.09 ms | Sub-millisecond queue pop execution with 0 aborts |
-| **New-Order Avg / P95 Latency** | **1.39 ms / 6.63 ms** | 2.93 ms / 18.71 ms | **OCC P95 (6.63ms) is 2.8x faster** than WiredTiger (18.71ms) |
-| **Payment Avg / P95 Latency** | **0.73 ms / 3.62 ms** | 3.62 ms / 22.25 ms | **OCC P95 (3.62ms) is 6.1x faster** than WiredTiger (22.25ms) |
+| Metric | In-Memory OCC Engine (10 Wh, 100 Wrk, 15s) | WiredTiger Engine (Disk MVCC: 10 Wh, 100 Wrk, 15s) |
+|---|---|---|
+| **tpmC** (New-Order / min) | **1,046,121.81 tpmC** | 833,595.29 tpmC |
+| **Overall Throughput** | **39,020.28 TPS** | 29,352.93 TPS |
+| **New-Order Success Rate** | **97.56%** (265,479 committed / 272,124 attempted) | 89.71% (139,099 committed / 155,049 attempted) |
+| **Payment Committed** | **256,281 committed** | 113,589 committed |
+| **Final Abort Rate (Overall)** | **1.83%** (11,074 final aborts / 605,215 attempted) | 14.67% (50,532 aborts / 409,212 attempted) |
+| **New-Order Avg / P95 Latency** | **1.39 ms / 6.63 ms** | 2.93 ms / 18.71 ms |
+| **Payment Avg / P95 Latency** | **0.73 ms / 3.62 ms** | 3.62 ms / 22.25 ms |
+| **Order-Status Avg / P95 Latency** | **0.23 ms / 0.01 ms** | 0.04 ms / 0.01 ms |
+| **Stock-Level Avg / P95 Latency** | **0.37 ms / 1.35 ms** | 0.13 ms / 0.04 ms |
+| **Delivery Avg / P95 Latency** | **0.52 ms / 2.33 ms** | 0.12 ms / 0.09 ms |
 
 #### Architectural Discussion & Comparative Analysis:
 
