@@ -207,18 +207,18 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-kernel ./cmd/tpcc_kernel
 
 | Metric | In-Memory OCC Engine (10 Wh, 100 Wrk, 15s) | WiredTiger Engine (Disk MVCC: 10 Wh, 100 Wrk, 15s) | Analysis & Comparative Delta |
 |---|---|---|---|
-| **Peak Throughput (1s)** | **2,477,058 tpmC / 92,006 TPS** | 902,400 tpmC / 32,500 TPS | OCC demonstrates 2.7x higher burst saturation |
-| **Sustained tpmC (15s Avg)** | **610,339.55 tpmC** | 833,595.29 tpmC | Fully atomic ACID multi-table execution |
-| **Overall Throughput (TPS)** | **22,540.53 TPS** | 29,352.93 TPS | Direct storage kernel SPI CRUD without SQL parsing overhead |
-| **Total Committed Transactions** | **338,589 committed** | 358,680 committed | Sustained continuous high-volume transactional mutation |
-| **New-Order Committed** | **152,802 committed** (98.1%) | 139,099 committed (89.7%) | **OCC commits +13,703 more genuine new orders** than WiredTiger |
-| **Payment Committed** | **144,453 committed** (96.6%) | 113,589 committed (78.3%) | **OCC commits +30,864 more genuine business payments** |
-| **Final Abort Rate (Overall)** | **2.32%** (8,049 final aborts / 346.6k) | **14.67%** (50,532 aborts / 409.2k) | **WiredTiger abort rate is 6.3x higher** (dropping 50k transactions) |
-| **Order-Status Avg / P95 Latency** | **0.00 ms / 0.00 ms (Zero-Lock)** | 0.04 ms / 0.01 ms | 16,384 lock-free buckets deliver instant sub-microsecond reads |
-| **Stock-Level Avg / P95 Latency** | **0.01 ms / 0.01 ms (10 µs)** | 0.13 ms / 0.04 ms | Zero-Lock parallel snapshot reads with 0 aborts |
-| **Delivery Avg / P95 Latency** | **0.07 ms / 0.07 ms (70 µs)** | 0.12 ms / 0.09 ms | Sub-100µs atomic queue pop execution with 0 aborts |
-| **New-Order Avg / P95 Latency** | **2.67 ms / 11.65 ms** | 2.93 ms / 18.71 ms | OCC P95 is 1.6x faster than WiredTiger disk B-Tree |
-| **Payment Avg / P95 Latency** | **2.50 ms / 11.96 ms** | 3.62 ms / 22.25 ms | OCC P95 is 1.9x faster than WiredTiger disk B-Tree |
+| **Peak Throughput (1s)** | **3,193,300 tpmC / 118,928 TPS** | 902,400 tpmC / 32,500 TPS | OCC demonstrates 3.5x higher burst saturation |
+| **Sustained tpmC (15s Avg)** | **1,046,121.81 tpmC** | 833,595.29 tpmC | **OCC achieves +25.5% higher sustained throughput** than WiredTiger |
+| **Overall Throughput (TPS)** | **39,020.28 TPS** | 29,352.93 TPS | **+9,667 TPS higher** than WiredTiger disk MVCC |
+| **Total Committed Transactions** | **594,141 committed** | 358,680 committed | **OCC successfully commits +235,461 more transactions (+65.6%)** |
+| **New-Order Committed** | **265,479 committed** (97.6%) | 139,099 committed (89.7%) | **OCC commits +126,380 more genuine new orders** (+90.9% increase) |
+| **Payment Committed** | **256,281 committed** (98.3%) | 113,589 committed (78.3%) | **OCC commits +142,692 more genuine business payments** (+125.6% increase) |
+| **Final Abort Rate (Overall)** | **1.83%** (11,074 final aborts / 605.2k) | **14.67%** (50,532 aborts / 409.2k) | **WiredTiger abort rate is 8.0x higher** (dropping over 50,000 transactions) |
+| **Order-Status Avg / P95 Latency** | **0.23 ms / 0.01 ms (10 µs)** | 0.04 ms / 0.01 ms | 256-shard OCC delivers sub-10µs P95 point reads with 0 aborts |
+| **Stock-Level Avg / P95 Latency** | **0.37 ms / 1.35 ms** | 0.13 ms / 0.04 ms | Parallel multi-item reads with 0 aborts |
+| **Delivery Avg / P95 Latency** | **0.52 ms / 2.33 ms** | 0.12 ms / 0.09 ms | Sub-millisecond queue pop execution with 0 aborts |
+| **New-Order Avg / P95 Latency** | **1.39 ms / 6.63 ms** | 2.93 ms / 18.71 ms | **OCC P95 (6.63ms) is 2.8x faster** than WiredTiger (18.71ms) |
+| **Payment Avg / P95 Latency** | **0.73 ms / 3.62 ms** | 3.62 ms / 22.25 ms | **OCC P95 (3.62ms) is 6.1x faster** than WiredTiger (22.25ms) |
 
 #### Architectural Discussion & Comparative Analysis:
 
@@ -258,48 +258,48 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
 
 | Metric | In-Memory OCC Engine (`everysec`) | WiredTiger Engine (`everysec` 1s Fsync) | Analysis & Comparative Delta |
 |---|---|---|---|
-| **tpmC (New-Order / min)** | **386,192.81 tpmC** (Peak ~755k) | **691,081.95 tpmC** (Peak ~707k) | Both engines sustain hundreds of thousands of tpmC executing precompiled T-SQL stored procedures |
-| **Overall Throughput (TPS)** | **14,343.61 TPS** (Peak ~28.2k) | **25,476.14 TPS** (Peak ~26.0k) | Full ACID atomic execution across all 5 standard TPC-C transaction types |
-| **Serialization Abort Rate** | **0.26%** (556 aborts / 215.8k attempts) | **2.99%** (11,778 aborts / 394.2k attempts) | **OCC abort rate is 12x lower** than WiredTiger, demonstrating superior completion integrity |
-| **Conflict Retries** | **35,544 retries** | 91,170 retries | Lock-free hash bucket indexing slashes conflict retries by 61.0% |
-| **New-Order P50 / P95 / P99** | **1.39 ms / 13.54 ms / 42.50 ms** | **0.42 ms / 7.18 ms / 20.64 ms** | Sub-millisecond to ~1.4ms median execution; flat tail latency across both engines |
-| **Payment P50 / P95 / P99** | **0.21 ms / 4.20 ms / 18.69 ms** | **0.06 ms / 5.88 ms / 14.49 ms** | **OCC Payment P95 (4.20ms) is faster** than WiredTiger (5.88ms) with 0 aborts |
-| **Order-Status P50 / P95** | **0.01 ms / 0.04 ms (10 µs)** | **0.01 ms / 0.04 ms (10 µs)** | Point-Lookup Shortcut delivers 10µs median read dispatch across both backends |
-| **Delivery / Stock-Level P50** | **0.03 ms / 0.02 ms** | **0.06 ms / 0.05 ms** | Sub-millisecond multi-row DML and range scan latency |
+| **tpmC (New-Order / min)** | **603,241.04 tpmC** (Peak ~805k) | **691,081.95 tpmC** (Peak ~707k) | Both engines sustain 600k~700k tpmC executing precompiled T-SQL stored procedures |
+| **Overall Throughput (TPS)** | **22,294.49 TPS** (Peak ~29.8k) | **25,476.14 TPS** (Peak ~26.0k) | Full ACID atomic execution across all 5 standard TPC-C transaction types |
+| **Serialization Abort Rate** | **0.08%** (260 aborts / 335.0k attempts) | **2.99%** (11,778 aborts / 394.2k attempts) | **OCC abort rate is 37x lower** than WiredTiger, demonstrating superior completion integrity |
+| **Conflict Retries** | **44,210 retries** | 91,170 retries | 256-shard lock partitioning slashes conflict retries by 51.5% |
+| **New-Order P50 / P95 / P99** | **1.22 ms / 6.43 ms / 17.65 ms** | **0.42 ms / 7.18 ms / 20.64 ms** | **OCC P95 (6.43ms) and P99 (17.65ms) tail latencies are lower** than WiredTiger |
+| **Payment P50 / P95 / P99** | **0.13 ms / 1.55 ms / 3.63 ms** | **0.06 ms / 5.88 ms / 14.49 ms** | **OCC Payment P95 (1.55ms) and P99 (3.63ms) is 3.8x ~ 4.0x faster** than WiredTiger |
+| **Order-Status P50 / P95** | **0.01 ms / 0.03 ms (10 µs)** | **0.01 ms / 0.04 ms (10 µs)** | Point-Lookup Shortcut delivers 10µs median read dispatch across both backends |
+| **Delivery / Stock-Level P50** | **0.03 ms / 0.05 ms** | **0.06 ms / 0.05 ms** | Sub-millisecond multi-row DML and range scan latency |
 
 ##### 2. Scale Factor 10 Warehouses, 100 Client Workers (Standard Production Concurrency - 1:1 match with Section 3.4):
 
 > [!NOTE]
 > **Storage Kernel (Section 3.4) vs. VDBE Stored Procedure Runtime (Section 3.5) Direct Comparison**:
 > Under the identical workload matrix (10 Warehouses, 100 Workers):
-> - **Section 3.4 (Storage Kernel SPI)**: In-Memory OCC achieves **610,339 tpmC (22,540 TPS)** (pure storage transaction limit).
-> - **Section 3.5 (VDBE T-SQL Runtime)**: In-Memory OCC achieves **361,613 tpmC (13,213 TPS)**, reflecting full-stack stored procedure VM execution and parameter binding overhead.
+> - **Section 3.4 (Storage Kernel SPI)**: In-Memory OCC achieves **1,046,121 tpmC (39,020 TPS)** (pure storage transaction limit).
+> - **Section 3.5 (VDBE T-SQL Runtime)**: In-Memory OCC achieves **536,541 tpmC (20,007 TPS)**, reflecting full-stack stored procedure VM execution and parameter binding overhead.
 
 | Metric | In-Memory OCC Engine (`everysec`) | WiredTiger Engine (`everysec` 1s Fsync) | Analysis & Comparative Delta |
 |---|---|---|---|
-| **tpmC (New-Order / min)** | **361,613.10 tpmC** (Peak ~636k) | **620,137.97 tpmC** (Peak ~670k) | High concurrency T-SQL stored procedure execution |
-| **Overall Throughput (TPS)** | **13,213.49 TPS** (Peak ~23.4k) | **21,945.09 TPS** | 100 concurrent client workers executing multi-statement business transactions |
-| **Total Committed Transactions**| **198,375 committed** (95.1% success)| 329,290 committed | Near 200k fully durable completed transactions within 15 seconds |
-| **Serialization Abort Rate** | **4.86%** (10,130 aborts / 208.5k attempts) | **18.58%** (75,124 aborts / 404.4k attempts) | **WiredTiger drops 75,100 attempts (18.6% drop)**, while OCC preserves 95.1% completion |
-| **Conflict Retries** | **101,164 retries** | 314,691 retries | WiredTiger suffers 3.1x more lock thrashing and retry overhead |
-| **New-Order P50 / P95 / P99** | **2.33 ms / 34.37 ms / 116.56 ms** | **0.59 ms / 24.85 ms / 60.87 ms** | Contended warehouse row updates |
-| **Payment P50 / P95 / P99** | **0.45 ms / 36.77 ms / 126.29 ms** | **0.14 ms / 17.10 ms / 57.05 ms** | Sub-millisecond median payment balance mutations |
-| **Order-Status P50 / P95** | **0.01 ms / 0.04 ms (10 µs)** | **0.01 ms / 0.04 ms (10 µs)** | Microsecond median dispatch (10 µs); Point-Lookup Shortcut bypasses Volcano CBO overhead |
-| **Delivery / Stock-Level P50** | **0.03 ms / 0.02 ms** | **0.05 ms / 0.04 ms** | Sub-millisecond multi-row DML latency under 100 concurrent client workers |
+| **tpmC (New-Order / min)** | **536,541.35 tpmC** (Peak ~680k) | **620,137.97 tpmC** (Peak ~670k) | High concurrency T-SQL stored procedure execution |
+| **Overall Throughput (TPS)** | **20,007.57 TPS** (Peak ~25.1k) | **21,945.09 TPS** | 100 concurrent client workers executing multi-statement business transactions |
+| **Total Committed Transactions**| **300,784 committed** (96.9% success)| 329,290 committed | Over 300k fully durable completed transactions within 15 seconds |
+| **Serialization Abort Rate** | **3.12%** (9,692 aborts / 310.4k attempts) | **18.58%** (75,124 aborts / 404.4k attempts) | **WiredTiger drops 75,100 attempts (18.6% drop)**, while OCC preserves 96.9% completion |
+| **Conflict Retries** | **129,052 retries** | 314,691 retries | WiredTiger suffers 2.4x more lock thrashing and retry overhead |
+| **New-Order P50 / P95 / P99** | **2.53 ms / 27.95 ms / 70.60 ms** | **0.59 ms / 24.85 ms / 60.87 ms** | Contended warehouse row updates |
+| **Payment P50 / P95 / P99** | **0.23 ms / 11.35 ms / 53.49 ms** | **0.14 ms / 17.10 ms / 57.05 ms** | **OCC Payment P95 (11.35ms) is 1.5x faster** than WiredTiger (17.10ms) |
+| **Order-Status P50 / P95** | **0.01 ms / 0.17 ms (10 µs)** | **0.01 ms / 0.04 ms (10 µs)** | Microsecond median dispatch (10 µs); Point-Lookup Shortcut bypasses Volcano CBO overhead |
+| **Delivery / Stock-Level P50** | **0.06 ms / 0.08 ms** | **0.05 ms / 0.04 ms** | Sub-millisecond multi-row DML latency under 100 concurrent client workers |
 
 ##### 3. Scale Factor 20 Warehouses, 200 Client Workers (Enterprise High-Concurrency Stress):
 
 | Metric | In-Memory OCC Engine (`everysec`) | WiredTiger Engine (`everysec` 1s Fsync) | Analysis & Comparative Delta |
 |---|---|---|---|
-| **tpmC (New-Order / min)** | **347,990.96 tpmC** (Peak ~675k) | **602,393.96 tpmC** (Peak ~634k) | High concurrency stress resilience: OCC maintains ~350k tpmC under 200 workers |
-| **Overall Throughput (TPS)** | **12,572.34 TPS** (Peak ~24.3k) | **20,770.82 TPS** | 200 concurrent client workers executing precompiled T-SQL VDBE bytecode |
-| **Total Committed Transactions**| **188,991 committed** (94.5% success)| 311,700 committed | 189k completed transactions with strict ACID durability |
-| **Serialization Abort Rate** | **5.54%** (11,088 aborts / 200.0k attempts) | **26.82%** (114,297 aborts / 426.0k attempts) | **WiredTiger drops over 114,000 transactions (26.8% abort rate)**, while OCC preserves 94.5% completion |
-| **Conflict Retries** | **99,119 retries** | 413,001 retries | WiredTiger suffers 4.2x more retry thrashing under heavy contention |
-| **New-Order P50 / P95 / P99** | **3.61 ms / 62.12 ms / 227.85 ms** | **0.66 ms / 51.27 ms / 144.08 ms** | Contended multi-step business transactions |
-| **Payment P50 / P95 / P99** | **0.61 ms / 97.63 ms / 294.50 ms** | **1.28 ms / 18.06 ms / 117.34 ms** | Sub-millisecond median payment balance update latency |
-| **Order-Status P50 / P95** | **0.01 ms / 0.05 ms (10 µs)** | **0.01 ms / 0.04 ms (10 µs)** | Point-Lookup Shortcut maintains sub-10µs median read dispatch across 200 workers |
-| **Delivery / Stock-Level P50** | **0.04 ms / 0.03 ms** | **0.05 ms / 0.04 ms** | Sub-millisecond to ~0.04ms median multi-row execution under 200 workers |
+| **tpmC (New-Order / min)** | **492,701.97 tpmC** (Peak ~615k) | **602,393.96 tpmC** (Peak ~634k) | High concurrency stress resilience: OCC maintains ~500k tpmC under 200 workers |
+| **Overall Throughput (TPS)** | **18,380.25 TPS** (Peak ~23.0k) | **20,770.82 TPS** | 200 concurrent client workers executing precompiled T-SQL VDBE bytecode |
+| **Total Committed Transactions**| **276,777 committed** (96.7% success)| 311,700 committed | 276k completed transactions with strict ACID durability |
+| **Serialization Abort Rate** | **3.33%** (9,526 aborts / 286.3k attempts) | **26.82%** (114,297 aborts / 426.0k attempts) | **WiredTiger drops over 114,000 transactions (26.8% abort rate)**, while OCC preserves 96.7% completion |
+| **Conflict Retries** | **115,940 retries** | 413,001 retries | WiredTiger suffers 3.6x more retry thrashing under heavy contention |
+| **New-Order P50 / P95 / P99** | **4.36 ms / 63.62 ms / 149.95 ms** | **0.66 ms / 51.27 ms / 144.08 ms** | Contended multi-step business transactions |
+| **Payment P50 / P95 / P99** | **0.21 ms / 34.05 ms / 135.37 ms** | **1.28 ms / 18.06 ms / 117.34 ms** | **OCC median latency is 6x faster** (0.21ms vs 1.28ms) on warehouse balance records |
+| **Order-Status P50 / P95** | **0.01 ms / 5.49 ms (10 µs)** | **0.01 ms / 0.04 ms (10 µs)** | Point-Lookup Shortcut maintains sub-10µs median read dispatch across 200 workers |
+| **Delivery / Stock-Level P50** | **0.60 ms / 0.17 ms** | **0.05 ms / 0.04 ms** | Sub-millisecond to ~0.60ms median multi-row execution under 200 workers |
 
 *(Note: Under `-fsync always`, Leader/Follower Group Commit delivers **1,744 ~ 1,863 TPS** on Apple Silicon NVMe despite physical `F_FULLFSYNC` barrier latencies).*
 
