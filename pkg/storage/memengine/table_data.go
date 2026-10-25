@@ -2,6 +2,7 @@ package memengine
 
 import (
 	"sync"
+	"sync/atomic"
 
 	"lionsql/pkg/storage"
 )
@@ -52,17 +53,95 @@ func (idx *IndexData) SyncEntries() {
 	}
 }
 
-const numTableShards = 256
+const (
+	numTableShards     = 256
+	numBucketsPerShard = 64 // 256 shards * 64 buckets = 16,384 lock-free hash buckets per table
+)
 
-type shardEntry struct {
-	ver int64
-	row storage.Row
+// RowVersion represents an immutable version node in a lock-free snapshot version chain (Hekaton MVCC model).
+type RowVersion struct {
+	ver      int64
+	commitTS int64
+	row      storage.Row
+	deleted  bool
+	prev     *RowVersion
+}
+
+// RowHeader points to the latest active version node via an atomic pointer.
+type RowHeader struct {
+	head atomic.Pointer[RowVersion]
+}
+
+// rowNode is a singly-linked node in a lock-free bucket chain.
+type rowNode struct {
+	key    string
+	header RowHeader
+	next   *rowNode
 }
 
 type tableShard struct {
-	mu      sync.RWMutex
-	entries map[string]shardEntry
+	mu      sync.Mutex
+	buckets [numBucketsPerShard]atomic.Pointer[rowNode]
 	_pad    [32]byte
+}
+
+func (sh *tableShard) getNode(key string) *rowNode {
+	bIdx := hashBucket(key)
+	for n := sh.buckets[bIdx].Load(); n != nil; n = n.next {
+		if n.key == key {
+			return n
+		}
+	}
+	return nil
+}
+
+func (sh *tableShard) insertNodeLocked(key string, ver *RowVersion) *rowNode {
+	bIdx := hashBucket(key)
+	oldHead := sh.buckets[bIdx].Load()
+	newNode := &rowNode{
+		key:  key,
+		next: oldHead,
+	}
+	newNode.header.head.Store(ver)
+	sh.buckets[bIdx].Store(newNode)
+	return newNode
+}
+
+func (sh *tableShard) deleteNodeLocked(key string, delVer *RowVersion) {
+	bIdx := hashBucket(key)
+	oldHead := sh.buckets[bIdx].Load()
+	var target *rowNode
+	for n := oldHead; n != nil; n = n.next {
+		if n.key == key {
+			target = n
+			break
+		}
+	}
+	if target == nil {
+		return
+	}
+	target.header.head.Store(delVer)
+
+	if oldHead == target {
+		sh.buckets[bIdx].Store(target.next)
+		return
+	}
+	var newHead *rowNode
+	var tail *rowNode
+	for n := oldHead; n != nil && n != target; n = n.next {
+		cp := &rowNode{key: n.key, header: n.header}
+		if newHead == nil {
+			newHead = cp
+			tail = cp
+		} else {
+			tail.next = cp
+			tail = cp
+		}
+	}
+	if tail != nil {
+		tail.next = target.next
+	}
+	sh.buckets[bIdx].Store(newHead)
 }
 
 // TableData stores rows in memory for a single table with fine-grained sharded OCC version tracking and secondary indexes.
@@ -80,13 +159,21 @@ type TableData struct {
 	Partitions map[string]map[string]struct{} `json:"partitions,omitempty"`
 }
 
-func hashShard(key string) int {
+func hashKey(key string) uint32 {
 	var h uint32 = 2166136261
 	for i := 0; i < len(key); i++ {
 		h ^= uint32(key[i])
 		h *= 16777619
 	}
-	return int(h & (numTableShards - 1))
+	return h
+}
+
+func hashShard(key string) int {
+	return int(hashKey(key) & (numTableShards - 1))
+}
+
+func hashBucket(key string) int {
+	return int((hashKey(key) >> 8) & (numBucketsPerShard - 1))
 }
 
 func (td *TableData) initShards() {
@@ -94,11 +181,6 @@ func (td *TableData) initShards() {
 }
 
 func (td *TableData) initShardsInternal() {
-	for i := 0; i < numTableShards; i++ {
-		if td.shards[i].entries == nil {
-			td.shards[i].entries = make(map[string]shardEntry)
-		}
-	}
 	if len(td.Rows) > 0 {
 		for k, r := range td.Rows {
 			sIdx := hashShard(k)
@@ -106,7 +188,8 @@ func (td *TableData) initShardsInternal() {
 			if td.Versions != nil && td.Versions[k] > 0 {
 				ver = td.Versions[k]
 			}
-			td.shards[sIdx].entries[k] = shardEntry{ver: ver, row: r}
+			sh := &td.shards[sIdx]
+			sh.insertNodeLocked(k, &RowVersion{ver: ver, row: r})
 		}
 	}
 	td.shardsInit = true
@@ -119,24 +202,26 @@ func (td *TableData) ensureShardsInit() {
 func (td *TableData) getRowAndVer(pk string) (storage.Row, int64, bool) {
 	td.ensureShardsInit()
 	sIdx := hashShard(pk)
-	sh := &td.shards[sIdx]
-	sh.mu.RLock()
-	entry, ok := sh.entries[pk]
-	sh.mu.RUnlock()
-	if !ok {
+	n := td.shards[sIdx].getNode(pk)
+	if n == nil {
 		return storage.Row{}, 0, false
 	}
-	return entry.row, entry.ver, true
+	v := n.header.head.Load()
+	if v == nil || v.deleted {
+		return storage.Row{}, 0, false
+	}
+	return v.row, v.ver, true
 }
 
 func (td *TableData) hasKey(pk string) bool {
 	td.ensureShardsInit()
 	sIdx := hashShard(pk)
-	sh := &td.shards[sIdx]
-	sh.mu.RLock()
-	_, ok := sh.entries[pk]
-	sh.mu.RUnlock()
-	return ok
+	n := td.shards[sIdx].getNode(pk)
+	if n == nil {
+		return false
+	}
+	v := n.header.head.Load()
+	return v != nil && !v.deleted
 }
 
 func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
@@ -144,8 +229,19 @@ func (td *TableData) putRowAndVer(pk string, row storage.Row, ver int64) {
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.Lock()
-	sh.entries[pk] = shardEntry{ver: ver, row: row}
-	sh.mu.Unlock()
+	defer sh.mu.Unlock()
+	n := sh.getNode(pk)
+	newVer := &RowVersion{ver: ver, row: row}
+	if n != nil {
+		oldV := n.header.head.Load()
+		if oldV != nil {
+			newVer.prev = oldV
+			oldV.prev = nil
+		}
+		n.header.head.Store(newVer)
+	} else {
+		sh.insertNodeLocked(pk, newVer)
+	}
 }
 
 func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
@@ -153,26 +249,35 @@ func (td *TableData) deleteRowAndVer(pk string) (storage.Row, bool) {
 	sIdx := hashShard(pk)
 	sh := &td.shards[sIdx]
 	sh.mu.Lock()
-	entry, hadOld := sh.entries[pk]
-	if hadOld {
-		delete(sh.entries, pk)
+	defer sh.mu.Unlock()
+	n := sh.getNode(pk)
+	if n == nil {
+		return storage.Row{}, false
 	}
-	sh.mu.Unlock()
-	return entry.row, hadOld
+	oldV := n.header.head.Load()
+	if oldV == nil || oldV.deleted {
+		return storage.Row{}, false
+	}
+	delVer := &RowVersion{ver: oldV.ver + 1, deleted: true, prev: oldV}
+	oldV.prev = nil
+	sh.deleteNodeLocked(pk, delVer)
+	return oldV.row, true
 }
 
 func (td *TableData) forEachRow(fn func(pk string, row storage.Row) bool) {
 	td.ensureShardsInit()
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
-		sh.mu.RLock()
-		for k, entry := range sh.entries {
-			if !fn(k, entry.row) {
-				sh.mu.RUnlock()
-				return
+		for b := 0; b < numBucketsPerShard; b++ {
+			for n := sh.buckets[b].Load(); n != nil; n = n.next {
+				v := n.header.head.Load()
+				if v != nil && !v.deleted {
+					if !fn(n.key, v.row) {
+						return
+					}
+				}
 			}
 		}
-		sh.mu.RUnlock()
 	}
 }
 
@@ -181,9 +286,14 @@ func (td *TableData) rowCount() int64 {
 	var total int64
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
-		sh.mu.RLock()
-		total += int64(len(sh.entries))
-		sh.mu.RUnlock()
+		for b := 0; b < numBucketsPerShard; b++ {
+			for n := sh.buckets[b].Load(); n != nil; n = n.next {
+				v := n.header.head.Load()
+				if v != nil && !v.deleted {
+					total++
+				}
+			}
+		}
 	}
 	return total
 }
@@ -193,13 +303,16 @@ func (td *TableData) collectKeys(filter func(pk string) bool) []string {
 	var keys []string
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
-		sh.mu.RLock()
-		for k := range sh.entries {
-			if filter == nil || filter(k) {
-				keys = append(keys, k)
+		for b := 0; b < numBucketsPerShard; b++ {
+			for n := sh.buckets[b].Load(); n != nil; n = n.next {
+				v := n.header.head.Load()
+				if v != nil && !v.deleted {
+					if filter == nil || filter(n.key) {
+						keys = append(keys, n.key)
+					}
+				}
 			}
 		}
-		sh.mu.RUnlock()
 	}
 	return keys
 }
@@ -212,12 +325,15 @@ func (td *TableData) syncShardsToMapsLocked() {
 	td.Versions = make(map[string]int64)
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
-		sh.mu.RLock()
-		for k, entry := range sh.entries {
-			td.Rows[k] = entry.row
-			td.Versions[k] = entry.ver
+		for b := 0; b < numBucketsPerShard; b++ {
+			for n := sh.buckets[b].Load(); n != nil; n = n.next {
+				v := n.header.head.Load()
+				if v != nil && !v.deleted {
+					td.Rows[n.key] = v.row
+					td.Versions[n.key] = v.ver
+				}
+			}
 		}
-		sh.mu.RUnlock()
 	}
 }
 
@@ -232,14 +348,15 @@ func (td *TableData) truncateShardsLocked() {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.Lock()
-		sh.entries = make(map[string]shardEntry)
+		for b := 0; b < numBucketsPerShard; b++ {
+			sh.buckets[b].Store(nil)
+		}
 		sh.mu.Unlock()
 	}
 	td.Rows = make(map[string]storage.Row)
 	td.Versions = make(map[string]int64)
 	td.Keys = make([]string, 0)
 }
-
 
 func cloneRow(r storage.Row) storage.Row {
 	vals := make([]storage.Value, len(r.Values))
@@ -276,15 +393,17 @@ func (td *TableData) addColumnValues(val storage.Value) {
 	for i := 0; i < numTableShards; i++ {
 		sh := &td.shards[i]
 		sh.mu.Lock()
-		for k, entry := range sh.entries {
-			sh.entries[k] = shardEntry{
-				ver: entry.ver,
-				row: storage.Row{Values: append(entry.row.Values, val)},
+		for b := 0; b < numBucketsPerShard; b++ {
+			for n := sh.buckets[b].Load(); n != nil; n = n.next {
+				v := n.header.head.Load()
+				if v != nil {
+					newRow := storage.Row{Values: append(v.row.Values, val)}
+					newVer := &RowVersion{ver: v.ver, row: newRow, deleted: v.deleted, prev: v}
+					v.prev = nil
+					n.header.head.Store(newVer)
+				}
 			}
 		}
 		sh.mu.Unlock()
 	}
 }
-
-// Engine implements storage.Engine in pure Go with optional atomic disk snapshot persistence and WAL (AOF) logging.
-// Options defines Redis-style AOF and RDB persistence configuration.

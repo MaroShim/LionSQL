@@ -68,6 +68,7 @@
 | **REV-STOR-008** | P1 | 지연시간 | [`pkg/storage/memengine/memengine.go:410-440`](pkg/storage/memengine/memengine.go#L410) | 트랜잭션 커밋 완료 경로(`finishWALCommitLocked`)에서 동기적으로 `rewriteAOFLocked()`를 실행하여 100~500ms STW 프리징 발생 | `[x]` | AOF 재작성 컴팩션을 `sync.WaitGroup`으로 보호되는 비동기 백그라운드 고루틴으로 오프로드 (`VPERF-15`) |
 | **REV-STOR-009** | P1 | 데이터안전성 | [`pkg/storage/benchdir.go:1-47`](pkg/storage/benchdir.go) | 벤치마크 및 런타임 종료 시 사용자가 지정한 상위 데이터 디렉토리에 대해 `os.RemoveAll(*dataDir)`를 무조건 실행하여 사용자 원본 파일 삭제 위험 | `[x]` | `storage.PrepareBenchmarkDir` 도입으로 전용 격리 하위 디렉토리 생성 및 해당 자식 디렉토리만 안전 삭제 (`BENCH-DIR-SAFETY-1`) |
 | **REV-STOR-010** | P1 | 동시성/확장성 | [`pkg/storage/memengine/table_data.go:55`](pkg/storage/memengine/table_data.go#L55) | 하드코딩된 64개 샤드로 인해 100~500 동시 워커 환경에서 샤드 해시 충돌 및 쓰기 락 대기 시간 급증 | `[x]` | 샤드 수를 256개로 확장하고 `[4]uint64` 256비트 마스크 락 정렬, `Row` 직접 조작 패스, 정수 키 인터닝, 무락 읽기 적용하여 TPC-C 1,442,347 tpmC / 53,794 TPS 달성 (`VPERF-19`) |
+| **REV-STOR-011** | P1 | 동시성/무락 | [`pkg/storage/memengine/table_data.go:62`](pkg/storage/memengine/table_data.go#L62) | 읽기 경로에서 `shard.mu.RLock()` 호출로 인해 쓰기 커밋 중 읽기 지연 및 RWMutex 캐시라인 경합 발생 | `[x]` | 16,384개 락-프리 해시 버킷 체인 및 `atomic.Pointer[RowVersion]` 불변 노드 도입으로 100% 무락 스냅샷 읽기 달성 (`VPERF-20`) |
 
 ---
 

@@ -68,6 +68,7 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 | **REV-STOR-008** | P1 | STW Freeze | [`pkg/storage/memengine/memengine.go:410`](pkg/storage/memengine/memengine.go#L410) | Synchronous AOF compaction inside commit path causing 100~500ms freezes. Offloaded to background worker goroutine. | `[x]` | `VPERF-15` |
 | **REV-STOR-009** | P1 | Data Safety | [`pkg/storage/benchdir.go:1`](pkg/storage/benchdir.go) | Destructive `os.RemoveAll(*dataDir)` deleting user parent directories. Implemented isolated subdirectory sandbox `PrepareBenchmarkDir`. | `[x]` | `BENCH-DIR-SAFETY-1` |
 | **REV-STOR-010** | P1 | Concurrency | [`pkg/storage/memengine/table_data.go:55`](pkg/storage/memengine/table_data.go#L55) | Static 64-shard bottleneck causing hash collisions under high worker counts. Expanded to 256 shards with `[4]uint64` bitmask ordering, direct `Row` mutation fast-paths, integer key interning, and zero-lock reads, achieving 1,442,347 tpmC / 53,794 TPS. | `[x]` | `VPERF-19` |
+| **REV-STOR-011** | P1 | Lock-Free | [`pkg/storage/memengine/table_data.go:62`](pkg/storage/memengine/table_data.go#L62) | Readers acquiring `shard.mu.RLock()` causing read latency stalls during write commits. Implemented 16,384 lock-free hash buckets and `atomic.Pointer[RowVersion]` nodes. | `[x]` | `VPERF-20` |
 
 ---
 

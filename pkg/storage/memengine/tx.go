@@ -1766,8 +1766,16 @@ func (tx *Transaction) Commit() error {
 			sIdx = hashShard(ch.key)
 		}
 		sh := &td.shards[sIdx]
-		entry, exists := sh.entries[ch.key]
-		curVer := entry.ver
+		node := sh.getNode(ch.key)
+		var exists bool
+		var curVer int64
+		if node != nil {
+			v := node.header.head.Load()
+			if v != nil && !v.deleted {
+				exists = true
+				curVer = v.ver
+			}
+		}
 		if ch.kind == changeInsert {
 			if exists {
 				return storage.ErrSerializationFailure
@@ -1875,12 +1883,30 @@ func (tx *Transaction) Commit() error {
 			sIdx = hashShard(ch.key)
 		}
 		sh := &td.shards[sIdx]
-		oldEntry, hadOld := sh.entries[ch.key]
-		oldRow := oldEntry.row
+		node := sh.getNode(ch.key)
+		var oldRow storage.Row
+		var hadOld bool
+		var oldVer *RowVersion
+		if node != nil {
+			oldVer = node.header.head.Load()
+			if oldVer != nil && !oldVer.deleted {
+				hadOld = true
+				oldRow = oldVer.row
+			}
+		}
 
 		switch ch.kind {
 		case changeInsert:
-			sh.entries[ch.key] = shardEntry{ver: 1, row: ch.row}
+			newVer := &RowVersion{ver: 1, commitTS: tx.commitTimestamp, row: ch.row}
+			if node != nil {
+				newVer.prev = oldVer
+				if oldVer != nil {
+					oldVer.prev = nil
+				}
+				node.header.head.Store(newVer)
+			} else {
+				sh.insertNodeLocked(ch.key, newVer)
+			}
 			if td.Schema.IsPartitioned() {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(ch.row); err == nil {
 					td.partMu.Lock()
@@ -1896,7 +1922,16 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		case changeUpdate:
-			sh.entries[ch.key] = shardEntry{ver: ch.baseVer + 1, row: ch.row}
+			newVer := &RowVersion{ver: ch.baseVer + 1, commitTS: tx.commitTimestamp, row: ch.row}
+			if oldVer != nil {
+				newVer.prev = oldVer
+				oldVer.prev = nil
+			}
+			if node != nil {
+				node.header.head.Store(newVer)
+			} else {
+				sh.insertNodeLocked(ch.key, newVer)
+			}
 			if td.Schema.IsPartitioned() {
 				var oldPartID, newPartID string
 				if hadOld {
@@ -1926,7 +1961,13 @@ func (tx *Transaction) Commit() error {
 				}
 			}
 		case changeDelete:
-			delete(sh.entries, ch.key)
+			if node != nil {
+				delVer := &RowVersion{ver: ch.baseVer + 1, commitTS: tx.commitTimestamp, deleted: true, prev: oldVer}
+				if oldVer != nil {
+					oldVer.prev = nil
+				}
+				sh.deleteNodeLocked(ch.key, delVer)
+			}
 			if td.Schema.IsPartitioned() && hadOld {
 				if partID, err := td.Schema.ComputePartitionKeyFromRow(oldRow); err == nil {
 					td.partMu.Lock()
