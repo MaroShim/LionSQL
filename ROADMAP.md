@@ -3,7 +3,7 @@
 This document defines the overarching architectural trajectory, versioned milestones, release criteria, and strategic horizons of **LionSQL**—a high-concurrency embedded OLTP database engine and multi-protocol stored procedure server.
 
 > [!NOTE]
-> For active daily engineering tasks, prioritized sprint backlogs, and detailed implementation histories, refer to the operational backlog in [TODO.ko.md](TODO.ko.md).
+> For active daily engineering tasks, prioritized sprint backlogs, and detailed implementation histories, refer to the operational backlog in [TODO.md](TODO.md).
 
 ---
 

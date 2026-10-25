@@ -501,7 +501,7 @@ Start here for a complete subject-based directory of all architectural blueprint
 - **[Database Migration Guide](doc/MIGRATION.md)**: Procedures for migrating from PostgreSQL, MSSQL, SQLite, and MySQL.
 - **[Security Policy & Threat Model](doc/SECURITY.md)**: RBAC access control, SQL injection immunity, and vulnerability disclosure.
 - **[Engineering Roadmap & Milestones](ROADMAP.md)**: Versioned engineering milestones from single-node OLTP to Always On HA and decoupled HTAP.
-- **[Actionable Engineering Backlog (TODO.ko.md)](TODO.ko.md)**: Immediate, daily task backlog and prioritized operational execution tracker.
+- **[Actionable Engineering Backlog (TODO.md)](TODO.md)**: Immediate, daily task backlog and prioritized operational execution tracker.
 - **[Developer & AI Handover Context Notes](notes/README.md)**: Shared brain, engineering invariants, why alternatives were spec'd out, fragile landmines, and upcoming refactoring context.
 - **[Troubleshooting, Error Diagnostics & FAQ](doc/TROUBLESHOOTING.md)**: Port conflicts, serialization conflicts, slow query tuning, and client driver setup.
 - **[Contributing & Development Guide](CONTRIBUTING.md)**: Engineering standards, 3-stage verification pipeline, and pull request checklist.

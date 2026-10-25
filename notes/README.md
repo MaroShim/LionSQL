@@ -13,7 +13,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **Engineering Philosophies & Collaboration Protocols**: Absolute rules including the 3-stage verification pipeline (`Build` -> `Test -race` -> `Commit`), no decorative emojis, radical KISS/YAGNI, and file splitting guidelines.
    - **Core Technology Stack**: VDBE bytecode virtual machine, dual-parser architecture, dual-track UDF execution, and multi-wire protocols.
 
-2. **[`PITFALLS_AND_TRICKS.ko.md`](PITFALLS_AND_TRICKS.ko.md)** (Korean)
+2. **[`PITFALLS_AND_TRICKS.md`](PITFALLS_AND_TRICKS.md)**
    - **Landmines & Fragile Spots**: Sensitive implementation details across the codebase.
    - **Circular Import Immunity**: SPI pluggable registration decoupling `pkg/proc` from ANTLR4 fallback parsers.
    - **Sandbox & Network Isolation**: Guidelines for local loopback sockets and HTTP mock testing under sandbox constraints.
@@ -26,7 +26,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **Multi-Protocol Emulation Boundaries & Scope**: TDS, PGWire, and MySQL wire protocol emulation boundaries, packet and token handling, and tolerant virtual no-op policies.
 
 5. **Project Roadmap & Backlog**:
-   - **[`TODO.ko.md`](../TODO.ko.md)** (Korean): Active engineering backlog, next priority targets (P1, P2, P3), CBO and performance matrices, and recent milestone completions.
+   - **[`TODO.md`](../TODO.md)**: Active engineering backlog, next priority targets (P1, P2, P3), CBO and performance matrices, and recent milestone completions.
    - **[`ROADMAP.md`](../ROADMAP.md)**: Macro-level release milestones (Phases 1-6), architectural direction, and phase completion status.
 
 6. **Domain Architecture & Execution Plans**:

@@ -99,10 +99,10 @@ When releasing or bumping versions, synchronize all four locations in lockstep:
 1. `pkg/config/version.go` (`const Version = "..."`)
 2. `CHANGELOG.md`
 3. `README.md` and `README.ko.md`
-4. `TODO.ko.md`
+4. `TODO.md`
 
-### Continuous Backlog Discipline (`TODO.ko.md` Auto-Sync)
-When new requirements, ADRs, or implementation plans are agreed upon in conversation, proactively register them in `TODO.ko.md` (Section 1 Priority Table and Section 2 Domain Backlog). Upon verification pass, immediately mark completed (`[x]`).
+### Continuous Backlog Discipline (`TODO.md` Auto-Sync)
+When new requirements, ADRs, or implementation plans are agreed upon in conversation, proactively register them in `TODO.md` (Section 1 Priority Table and Section 2 Domain Backlog). Upon verification pass, immediately mark completed (`[x]`).
 
 ### Documentation Naming & Language Suffix Invariance (`*.ko.md`)
 - **Korean Markdown Files**: Any markdown document with Korean body text must strictly use the **`*.ko.md`** extension (e.g. `notes/*_PLAN.ko.md`, `doc/*_GUIDE.ko.md`, `README.ko.md`).
@@ -118,11 +118,11 @@ When new requirements, ADRs, or implementation plans are agreed upon in conversa
 ## 5. Developer & AI Handover Context Index (`notes/`)
 For deep architectural context, negative knowledge, and historical postmortems, consult the persistent knowledge base:
 - [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md): Core invariants, detailed spec-out rationales, and engineering philosophies.
-- [`notes/PITFALLS_AND_TRICKS.ko.md`](notes/PITFALLS_AND_TRICKS.ko.md): Circular import prevention, CGo tags, sandbox isolation, Decimal JSON safety.
+- [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): Circular import prevention, CGo tags, sandbox isolation, Decimal JSON safety.
 - [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md): Complete task identification taxonomy (`P1~P3`, `VPERF-1~18`, `A~D`).
 - [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md): 2-Tier query engine specification.
 - [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md): OCC 7-stage tuning roadmap.
 - [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md): Windows daemon decoupling and 1ms timer architecture.
 - [`notes/README.md`](notes/README.md) / [`notes/README.ko.md`](notes/README.ko.md): Master index of all completed architecture plans.
-- [`TODO.ko.md`](TODO.ko.md): Active operational engineering dashboard.
+- [`TODO.md`](TODO.md): Active operational engineering dashboard.
 - [`ROADMAP.md`](ROADMAP.md): Strategic release horizons and milestone gates.

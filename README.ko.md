@@ -506,7 +506,7 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 - **[모니터링 및 메트릭 가이드](doc/METRICS.md)**: Prometheus 시계열 메트릭, 슬로우 쿼리 추적, Grafana 대시보드 연동.
 - **[문제 해결 및 에러 진단 FAQ](doc/TROUBLESHOOTING.md)**: 포트 충돌, 직렬화 충돌, 성능 지연 튜닝.
 - **[엔지니어링 로드맵 (ROADMAP.md)](ROADMAP.md)**: 단일 노드 OLTP부터 Always On HA 및 HTAP 분리 분석까지의 마일스톤.
-- **[실행 중인 엔지니어링 백로그 (TODO.ko.md)](TODO.ko.md)**: 일 단위 활성 개발 과제 및 우선순위 트래커.
+- **[실행 중인 엔지니어링 백로그 (TODO.md)](TODO.md)**: 일 단위 활성 개발 과제 및 우선순위 트래커.
 - **[변경 이력 (CHANGELOG.md)](CHANGELOG.md)**: Keep a Changelog 표준을 준수하는 버전별 릴리스 노트.
 
 ---
