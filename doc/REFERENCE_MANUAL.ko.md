@@ -1769,9 +1769,9 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * **T-SQL 구문 및 문법 종합 레퍼런스**: Microsoft SQL Server 호환 저장 프로시저, 스칼라 및 인라인 테이블 반환 함수(TVF), DML 트리거(`INSERTED`/`DELETED`), 제어문(`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`), 커서 문법 가이드.
 * [`EXTENSIONS.md`](EXTENSIONS.md)
   * **SQL 확장 및 UDF 아키텍처**: 윈도우 함수(`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), CTE(Common Table Expressions), 외래 키 연쇄 동작, Go 네이티브 SPI 및 WebAssembly(Wasm) 샌드박스 기반 이원화 사용자 정의 함수(UDF) 확장 규격.
-* [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](PERCENTILE_AND_QUANTILE_ANALYTICS.md)
+* [`PERCENTILE_ANALYTICS.md`](PERCENTILE_ANALYTICS.md)
   * **백분위수 및 스트리밍 분위수 분석 함수**: `PERCENTILE_CONT`, `PERCENTILE_DISC`, ANSI `WITHIN GROUP (ORDER BY ...)`, `MEDIAN`, T-Digest 기반 스트리밍 근사 분위수(`APPROX_PERCENTILE`) 알고리즘 명세.
-* [`LOG_PROCESSING_GREP_AWK.md`](LOG_PROCESSING_GREP_AWK.md)
+* [`LOG_PROCESSING_GUIDE.md`](LOG_PROCESSING_GUIDE.md)
   * **엔진 내장 로그 및 텍스트 처리 연산자**: Unix 파이프라인 친화적인 `GREP`, `AWK`, `SPLIT_PART` 연산자, 제로카피 푸시다운 정규식 필터링 및 비정형 로그 분석 파이프라인.
 
 #### 10.3. 와이어 프로토콜 및 클라이언트 호환성 (Protocols & Tool Integration)
@@ -1781,7 +1781,7 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * **GUI/CLI 도구 연동 및 카탈로그 가로채기**: Beekeeper Studio, DBeaver, DbGate, Azure Data Studio, SSMS, `psql`, `sqlcmd` 연동 가이드. 도구별 메타데이터 쿼리 가로채기(Catalog Interception), 페이지네이션 변환 및 프로그래밍 언어 드라이버 연결 문자열 가이드.
 
 #### 10.4. BaaS 기능, 웹 SDK 및 REST API (BaaS, SDK & APIs)
-* [`REST_API_AUTO_GENERATED.md`](REST_API_AUTO_GENERATED.md)
+* [`REST_API_RECORDS_GUIDE.md`](REST_API_RECORDS_GUIDE.md)
   * **무설정 자동 REST API**: PocketBase 스타일의 `/api/records/:table` CRUD 엔드포인트 자동 생성, URL 쿼리 연산자, 정렬, 페이징 필터링 사양.
 * [`WEBHOOKS_AND_RLS.md`](WEBHOOKS_AND_RLS.md)
   * **웹훅 디스패처 및 행 수준 보안 (RLS)**: 비동기 워커 풀과 HMAC 서명 기반 웹훅 발송, 테이블별 선언적 행 수준 보안 규칙(`@auth.id`, `@auth.role` 토큰 치환) 적용 가이드.
@@ -1803,7 +1803,7 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * **보안 아키텍처 및 권한 제어**: 내장 관리자 계정, JWT 수명 주기, API 키 기반 역할 스코핑, TLS/SSL 전송 계층 암호화.
 * [`BENCHMARK.md`](BENCHMARK.md)
   * **성능 벤치마크 및 검증 방법론**: TPC-C 벤치마크 측정 결과, pgbench 및 T-SQL 저장 프로시저 마이크로 벤치마크 처리량(TPS)과 지연 시간 프로파일.
-* [`MIGRATION.md`](MIGRATION.md)
+* [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * **이기종 데이터베이스 마이그레이션 가이드**: PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 데이터 스키마 및 레코드를 LionSQL으로 이전하는 절차.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * **장애 진단 및 문제 해결 가이드**: 포트 충돌, 권한 오류, 와이어 패킷 협상 실패, 트랜잭션 직렬화 충돌(`40001`), 클라이언트 캐시 무효화 등 빈발 오류 해결 방법.

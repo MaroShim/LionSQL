@@ -474,7 +474,7 @@ Start here for a complete subject-based directory of all architectural blueprint
 
 ### Backend-as-a-Service (BaaS) & Developer APIs
 - **[Official Web SDK & HTML Embedding Guide](doc/WEB_SDK.md)**: Universal zero-dependency client library and HTML embedding patterns for Web, Node.js, Bun, and Deno.
-- **[Auto-Generated RESTful CRUD API](doc/REST_API_AUTO_GENERATED.md)**: Zero-code `/api/records/:table` endpoints with rich boolean filter expressions.
+- **[Auto-Generated RESTful CRUD API](doc/REST_API_RECORDS_GUIDE.md)**: Zero-code `/api/records/:table` endpoints with rich boolean filter expressions.
 - **[Webhooks & Row-Level Security (RLS)](doc/WEBHOOKS_AND_RLS.md)**: Non-blocking mutation webhooks with HMAC signatures and declarative `@auth` access rules.
 - **[Cron Jobs Scheduler & SMTP Mailer](doc/CRON_AND_MAILER.md)**: Embedded 5-field cron automation and transactional HTML email dispatching.
 - **[HTTP REST API & Realtime SSE Specification](doc/REST_API_REFERENCE.md)**: OpenAPI-style endpoint documentation and JavaScript EventSource examples.
@@ -492,13 +492,13 @@ Start here for a complete subject-based directory of all architectural blueprint
 
 ### User Guides & Operations
 - **[T-SQL & SQL Syntax Reference Guide](doc/TSQL_REFERENCE.md)**: Complete language reference for procedures, triggers, UDFs, TVFs, and queries.
-- **[Percentile & Quantile Analytics](doc/PERCENTILE_AND_QUANTILE_ANALYTICS.md)**: Continuous/discrete quantiles (`PERCENTILE_CONT`, `PERCENTILE_DISC`), `MEDIAN`, and streaming `APPROX_PERCENTILE` (T-Digest).
-- **[In-Engine Text & Log Analytics](doc/LOG_PROCESSING_GREP_AWK.md)**: Zero-copy `GREP`, `REGEXP_LIKE`, and `AWK` / `SPLIT_PART` filter and extraction operators.
+- **[Percentile & Quantile Analytics](doc/PERCENTILE_ANALYTICS.md)**: Continuous/discrete quantiles (`PERCENTILE_CONT`, `PERCENTILE_DISC`), `MEDIAN`, and streaming `APPROX_PERCENTILE` (T-Digest).
+- **[In-Engine Text & Log Analytics](doc/LOG_PROCESSING_GUIDE.md)**: Zero-copy `GREP`, `REGEXP_LIKE`, and `AWK` / `SPLIT_PART` filter and extraction operators.
 - **[Observability, Metrics & Telemetry Guide](doc/METRICS.md)**: Prometheus time-series metrics, health probes, alerting rules, and Grafana integration.
 - **[Production Deployment & Operations Runbook](doc/OPERATIONS.md)**: Systemd services, Docker deployment, 1-writer replication failover, and security hardening.
 - **[Performance Tuning & Benchmark Guide](doc/BENCHMARK.md)**: High-concurrency banking benchmark harness, TPS measurement, and memory tuning.
 - **[Local Testing & Regression Guide](doc/TESTING.md)**: Build and test pipeline, running single tests, build tags, regression test map, and TPC-C performance regression procedure.
-- **[Database Migration Guide](doc/MIGRATION.md)**: Procedures for migrating from PostgreSQL, MSSQL, SQLite, and MySQL.
+- **[Database Migration Guide](doc/DATABASE_MIGRATION_GUIDE.md)**: Procedures for migrating from PostgreSQL, MSSQL, SQLite, and MySQL.
 - **[Security Policy & Threat Model](doc/SECURITY.md)**: RBAC access control, SQL injection immunity, and vulnerability disclosure.
 - **[Engineering Roadmap & Milestones](ROADMAP.md)**: Versioned engineering milestones from single-node OLTP to Always On HA and decoupled HTAP.
 - **[Actionable Engineering Backlog (TODO.md)](TODO.md)**: Immediate, daily task backlog and prioritized operational execution tracker.

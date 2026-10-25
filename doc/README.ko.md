@@ -14,10 +14,10 @@
        ┌──────────────────┬───────────────┴───────────────┬──────────────────┐
        ▼                  ▼                               ▼                  ▼
 [ 코어 및 스토리지 ] [ 쿼리 및 VDBE VM ]             [ 와이어 프로토콜 ]    [ BaaS 및 API ]
-- ARCHITECTURE.md   - internal/VDBE.md        - internal/WIRE.md   - REST_API_AUTO_GENERATED.md
+- ARCHITECTURE.md   - internal/VDBE.md        - internal/WIRE.md   - REST_API_RECORDS_GUIDE.md
 - internal/STORAGE.md - internal/CBO_VOLC.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
-- internal/TX_CONC  - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
-- SNAPSHOT_DUCKDB   - LOG_PROC_GREP_AWK.md     - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
+- internal/TX_CONC  - PERCENTILE_ANALYTICS.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
+- SNAPSHOT_ISOLATION - LOG_PROCESSING_GUIDE.md - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
 - internal/RECORD   - EXTENSIONS.md            - PGWIRE_COMPAT_REP   - REST_API_REFERENCE.md
 - DATA_DICTIONARY   - HIGH_AVAIL.md                                  - WEB_SDK.md
 ```
@@ -97,9 +97,9 @@
   * 제어 흐름문 (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, 커서).
 * [`EXTENSIONS.md`](EXTENSIONS.md)
   * 고급 SQL 확장 기능: 윈도우 함수 (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB 연산자, CTE 재귀 쿼리, 외래키 캐스케이드 액션, 듀얼 트랙 UDF 아키텍처.
-* [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](PERCENTILE_AND_QUANTILE_ANALYTICS.md)
+* [`PERCENTILE_ANALYTICS.md`](PERCENTILE_ANALYTICS.md)
   * 연속/이산 분위수 함수 (`PERCENTILE_CONT`, `PERCENTILE_DISC`), ANSI `WITHIN GROUP (ORDER BY ...)`, `MEDIAN`, 스트리밍 근사 분위수 (`APPROX_PERCENTILE` via T-Digest).
-* [`LOG_PROCESSING_GREP_AWK.md`](LOG_PROCESSING_GREP_AWK.md)
+* [`LOG_PROCESSING_GUIDE.md`](LOG_PROCESSING_GUIDE.md)
   * 엔진 내장 텍스트 및 로그 처리 연산자 (`GREP`, `AWK`, `SPLIT_PART`).
   * 제로 카피 푸시다운 필터링, 정형 토큰 추출, 스키마리스 로그 분석.
 
@@ -125,7 +125,7 @@
 ### 2.4. Backend-as-a-Service (BaaS), REST 및 클라이언트 SDK
 * [`WEB_STUDIO_GUIDE.ko.md`](WEB_STUDIO_GUIDE.ko.md)
   * 브라우저 기반 내장 올인원 Web Studio 가이드: 스키마 모델링, 데이터 그리드 CRUD, SQL 쿼리 콘솔, 실시간 쿼리 감사 로그, 핫 백업/복원.
-* [`REST_API_AUTO_GENERATED.md`](REST_API_AUTO_GENERATED.md)
+* [`REST_API_RECORDS_GUIDE.md`](REST_API_RECORDS_GUIDE.md)
   * PocketBase 스타일의 무설정 즉시 생성 RESTful CRUD 엔드포인트 (`/api/records/:table`).
   * 고급 URL 쿼리 엔진: 비교 연산자, 패턴 매칭(`LIKE`), 문자열 포함(`~`), 다중 컬럼 정렬, 페이징.
 * [`WEBHOOKS_AND_RLS.md`](WEBHOOKS_AND_RLS.md)
@@ -139,11 +139,11 @@
   * 무의존성 단일 파일 템플릿, 바닐라 `fetch()`, 실시간 Server-Sent Events(SSE) 라이브 싱크, HTMX 연동 레시피.
 * [`REST_API_REFERENCE.md`](REST_API_REFERENCE.md)
   * 시스템 헬스, 인증, 메트릭, 테이블 CRUD, 프로시저 실행 등 전 엔드포인트를 포괄하는 HTTP REST API 및 실시간 SSE 종합 명세서.
-* [`HTTP_API_FUNCTIONALITY_REPORT.md`](HTTP_API_FUNCTIONALITY_REPORT.md)
+* [`REST_API_COMPATIBILITY_REPORT.md`](REST_API_COMPATIBILITY_REPORT.md)
   * HTTP REST 엔진, OpenAPI 엔드포인트, 실시간 SSE 스트리밍, 개발자 API 프리뷰 종합 기능 실측 검증 보고서.
 * [`CDC_DUCKDB_INTEGRATION.md`](CDC_DUCKDB_INTEGRATION.md)
   * 실시간 CDC 스트리밍(`GET /api/cdc/stream`) 및 DuckDB와의 비결합형 HTAP 분석 연동 가이드 (Python 및 DuckDB 워커 구현 포함).
-* [`SNAPSHOT_ISOLATION_AND_DUCKDB.md`](SNAPSHOT_ISOLATION_AND_DUCKDB.md)
+* [`SNAPSHOT_ISOLATION_ARCHITECTURE.md`](SNAPSHOT_ISOLATION_ARCHITECTURE.md)
   * 듀얼 스토리지 엔진 스냅샷 격리(WiredTiger MVCC vs In-Memory OCC), 고유 스냅샷 시점 차이, Zero-Vacuum 아키텍처 및 DuckDB 초기 동기화/CDC 정합성 컷오버 기술 백서.
 
 ---
@@ -153,7 +153,7 @@
   * 트랜잭션 성능, 지연시간-내구성 트레이드오프 및 워크로드별 옵션 튜닝 가이드 (초저지연 인메모리 캐시부터 무손실 금융 원장까지).
 * [`OPERATIONS.md`](OPERATIONS.md)
   * 프로덕션 배포 가이드라인, CLI 플래그, 환경 설정 파라미터 및 안전한 정상 종료(Graceful Shutdown).
-* [`SCHEMA_MIGRATIONS_CLI.md`](SCHEMA_MIGRATIONS_CLI.md)
+* [`SCHEMA_MIGRATION_GUIDE.md`](SCHEMA_MIGRATION_GUIDE.md)
   * 선언적 스키마 마이그레이션 툴체인 (`lionsql migrate new/up/down/status`), 타임스탬프 버전 관리, 원자적 트랜잭션 DDL 안전성, CI/CD 및 쿠버네티스 패턴.
 * [`METRICS.md`](METRICS.md)
   * Prometheus 메트릭 (`/metrics`) 및 슬로우 쿼리 로깅 (`/api/slow-queries`).
@@ -165,7 +165,7 @@
   * 성능 벤치마크 (TPC-C, pgbench, 읽기/쓰기 지연 시간, 동시성 스케일링 측정치).
 * [`TESTING.md`](TESTING.md)
   * 로컬 빌드, 테스트 및 회귀 검증 가이드: 3단계 파이프라인, `-run` 필터링, 빌드 태그, 패키지별 회귀 테스트 맵, Go 마이크로 벤치마크, TPC-C 성능 회귀 측정, A/B 비교 절차.
-* [`MIGRATION.md`](MIGRATION.md)
+* [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 LionSQL로의 데이터베이스 이전 절차.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * 일반적인 운영 에러, 연결 진단 기법 및 장애 디버깅 가이드.

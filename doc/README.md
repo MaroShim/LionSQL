@@ -14,10 +14,10 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
        ┌──────────────────┬───────────────┴───────────────┬──────────────────┐
        ▼                  ▼                               ▼                  ▼
 [ Core & Storage ]  [ Query & VM ]             [ Wire Protocols ]    [ BaaS & APIs ]
-- ARCHITECTURE.md   - internal/VDBE.md        - internal/WIRE.md   - REST_API_AUTO_GENERATED.md
+- ARCHITECTURE.md   - internal/VDBE.md        - internal/WIRE.md   - REST_API_RECORDS_GUIDE.md
 - internal/STORAGE.md - internal/CBO_VOLC.md - TSQL_REFERENCE.md   - WEBHOOKS_AND_RLS.md
-- internal/TX_CONC  - PERCENTILE_AND_QUANT.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
-- SNAPSHOT_DUCKDB   - LOG_PROC_GREP_AWK.md     - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
+- internal/TX_CONC  - PERCENTILE_ANALYTICS.md  - CLIENT_TOOL_INT.md  - CRON_AND_MAILER.md
+- SNAPSHOT_ISOLATION - LOG_PROCESSING_GUIDE.md - TDS_COMPAT_REPORT   - CDC_DUCKDB_INT.md
 - internal/RECORD   - EXTENSIONS.md            - PGWIRE_COMPAT_REP   - REST_API_REFERENCE.md
 - DATA_DICTIONARY   - HIGH_AVAIL.md                                  - WEB_SDK.md
 ```
@@ -95,9 +95,9 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
 * [`EXTENSIONS.md`](EXTENSIONS.md)
   * Advanced SQL capabilities: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB operators, CTEs, Foreign Keys with cascading actions, and Dual-Track UDF architecture (Go native SPI + Wasm sandbox).
-* [`PERCENTILE_AND_QUANTILE_ANALYTICS.md`](PERCENTILE_AND_QUANTILE_ANALYTICS.md)
+* [`PERCENTILE_ANALYTICS.md`](PERCENTILE_ANALYTICS.md)
   * Continuous and discrete quantiles (`PERCENTILE_CONT`, `PERCENTILE_DISC`), ANSI `WITHIN GROUP (ORDER BY ...)`, `MEDIAN`, and streaming approximate quantiles (`APPROX_PERCENTILE` via T-Digest).
-* [`LOG_PROCESSING_GREP_AWK.md`](LOG_PROCESSING_GREP_AWK.md)
+* [`LOG_PROCESSING_GUIDE.md`](LOG_PROCESSING_GUIDE.md)
   * In-engine text & log processing operators (`GREP`, `AWK`, `SPLIT_PART`).
   * Zero-copy pushdown filtering, structured token extraction, and schema-free log analytics.
 
@@ -123,7 +123,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ### 2.4. Backend-as-a-Service (BaaS), REST & Client SDKs
 * [`WEB_STUDIO_GUIDE.ko.md`](WEB_STUDIO_GUIDE.ko.md)
   * Complete browser-based all-in-one Web Studio guide: schema modeling, data grid CRUD, SQL query console, live query audit logs, and hot backup/restore.
-* [`REST_API_AUTO_GENERATED.md`](REST_API_AUTO_GENERATED.md)
+* [`REST_API_RECORDS_GUIDE.md`](REST_API_RECORDS_GUIDE.md)
   * PocketBase-style instant zero-code RESTful CRUD endpoints (`/api/records/:table`).
   * Advanced URL query engine: comparisons, pattern matching (`LIKE`), string containment (`~`), multi-column sorting, and pagination.
 * [`WEBHOOKS_AND_RLS.md`](WEBHOOKS_AND_RLS.md)
@@ -137,11 +137,11 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Zero-dependency single-file HTML templates, vanilla `fetch()`, realtime SSE live sync, and HTMX recipes.
 * [`REST_API_REFERENCE.md`](REST_API_REFERENCE.md)
   * Complete HTTP REST API and Server-Sent Events (SSE) specification across all endpoints.
-* [`HTTP_API_FUNCTIONALITY_REPORT.md`](HTTP_API_FUNCTIONALITY_REPORT.md)
+* [`REST_API_COMPATIBILITY_REPORT.md`](REST_API_COMPATIBILITY_REPORT.md)
   * End-to-end verification report of the HTTP REST engine, OpenAPI endpoints, SSE real-time streaming, and developer API preview.
 * [`CDC_DUCKDB_INTEGRATION.md`](CDC_DUCKDB_INTEGRATION.md)
   * Real-time CDC streaming (`GET /api/cdc/stream`) and decoupled HTAP analytical integration guide with DuckDB (includes Python & DuckDB workers).
-* [`SNAPSHOT_ISOLATION_AND_DUCKDB.md`](SNAPSHOT_ISOLATION_AND_DUCKDB.md)
+* [`SNAPSHOT_ISOLATION_ARCHITECTURE.md`](SNAPSHOT_ISOLATION_ARCHITECTURE.md)
   * Deep-dive technical whitepaper on dual storage engine snapshot isolation (WiredTiger MVCC vs In-Memory OCC), intrinsic snapshot time-point distinctions, Zero-Vacuum architecture, and DuckDB initial sync / real-time CDC consistency cutover.
 
 ---
@@ -151,7 +151,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Transaction performance, latency-durability trade-offs, and workload-specific parameter tuning guide (Ultra low-latency in-memory cache to zero-loss financial ledger).
 * [`OPERATIONS.md`](OPERATIONS.md)
   * Production deployment guidelines, CLI flags, configuration parameters, and graceful shutdown.
-* [`SCHEMA_MIGRATIONS_CLI.md`](SCHEMA_MIGRATIONS_CLI.md)
+* [`SCHEMA_MIGRATION_GUIDE.md`](SCHEMA_MIGRATION_GUIDE.md)
   * Declarative schema migration toolchain (`lionsql migrate new/up/down/status`), timestamp versioning, atomic transactional DDL safety, and CI/CD/Kubernetes patterns.
 * [`METRICS.md`](METRICS.md)
   * Prometheus metrics (`/metrics`) and slow query logging (`/api/slow-queries`).
@@ -163,7 +163,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).
 * [`TESTING.md`](TESTING.md)
   * Local build, test, and regression guide: 3-stage pipeline, `-run` filtering, build tags, regression test map, Go benchmarks, TPC-C performance regression, and A/B comparison procedure.
-* [`MIGRATION.md`](MIGRATION.md)
+* [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.

@@ -125,7 +125,7 @@ Drops the specified table and its secondary indexes.
 
 ### 2.2. Records CRUD (Auto-Generated RESTful Endpoints)
 
-LionSQL automatically exposes standard RESTful CRUD endpoints for every table. For detailed documentation on filtering operators, nested expressions, and client SDK integration, see [Auto-Generated RESTful API Guide](REST_API_AUTO_GENERATED.md).
+LionSQL automatically exposes standard RESTful CRUD endpoints for every table. For detailed documentation on filtering operators, nested expressions, and client SDK integration, see [Auto-Generated RESTful Records Guide](REST_API_RECORDS_GUIDE.md).
 
 #### `GET /api/records/:table` (or `/api/tables/:name/records`)
 Fetches records with built-in query filtering, multi-column sorting, pagination, and full-text search.

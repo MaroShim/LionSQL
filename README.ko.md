@@ -486,7 +486,7 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 
 ### BaaS 및 개발자 API
 - **[공식 Web SDK 및 HTML 임베딩 가이드](doc/WEB_SDK.md)**: 웹 브라우저, Node.js, Bun, Deno 환경을 위한 무의존성 범용 SDK 가이드.
-- **[자동 생성 RESTful CRUD API](doc/REST_API_AUTO_GENERATED.md)**: 풍부한 불리언 필터 표현식을 지원하는 `/api/records/:table` 명세.
+- **[자동 생성 RESTful CRUD API](doc/REST_API_RECORDS_GUIDE.md)**: 풍부한 불리언 필터 표현식을 지원하는 `/api/records/:table` 명세.
 - **[웹훅 및 행 수준 보안 (RLS)](doc/WEBHOOKS_AND_RLS.md)**: 비차단 웹훅 디스패처, HMAC 서명, 선언적 `@auth` 보안 규칙.
 - **[크론 잡 스케줄러 및 SMTP 메일러](doc/CRON_AND_MAILER.md)**: 5필드 크론 자동화 및 HTML 이메일 발송 엔진.
 - **[HTTP REST API 및 실시간 SSE 명세서](doc/REST_API_REFERENCE.md)**: OpenAPI 스타일의 전체 엔드포인트 명세 및 SSE 예제.
@@ -494,13 +494,13 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 ### 운영 및 사용자 가이드
 - **[공식 사용자 매뉴얼](doc/USER_MANUAL.ko.md)**: 설치, 기동, 클라이언트 연동, 개발 및 운영 전 과정을 안내하는 공식 사용자 매뉴얼.
 - **[공식 레퍼런스 매뉴얼](doc/REFERENCE_MANUAL.ko.md)**: CLI 플래그, 설정 파일, SQL 문법, 함수, API 전체를 총망라한 레퍼런스 매뉴얼.
-- **[선언적 스키마 마이그레이션 CLI 가이드](doc/SCHEMA_MIGRATIONS_CLI.md)**: `lionsql migrate` 명령어, 버전 관리 규약, CI/CD 및 쿠버네티스 패턴.
+- **[선언적 스키마 마이그레이션 CLI 가이드](doc/SCHEMA_MIGRATION_GUIDE.md)**: `lionsql migrate` 명령어, 버전 관리 규약, CI/CD 및 쿠버네티스 패턴.
 - **[엔터프라이즈 인증 SPI 및 디렉터리 연동](doc/ENTERPRISE_AUTHENTICATION_SPI.md)**: `AuthProvider` SPI, LDAP/Active Directory 연동, 경계 보안 아키텍처.
 - **[불변 감사 로그 아키텍처 및 구현 계획](notes/IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0, SOC 2 Type II 대응 SHA-256 해시 체이닝 감사 로그.
 - **[T-SQL 및 SQL 구문 레퍼런스 가이드](doc/TSQL_REFERENCE.md)**: 프로시저, 함수, 트리거, 제어 흐름문 전체 언어 레퍼런스.
 - **[클라이언트 도구 연동 가이드](doc/CLIENT_TOOL_INTEGRATION.md)**: DBeaver, SSMS, Azure Data Studio, Beekeeper, JDBC, ODBC 연동 가이드.
 - **[성능 튜닝 및 벤치마크 가이드](doc/BENCHMARK.md)**: 고동시성 뱅킹 벤치마크, TPS 측정치, 메모리 튜닝 가이드.
-- **[데이터베이스 마이그레이션 가이드](doc/MIGRATION.md)**: PostgreSQL, Microsoft SQL Server, SQLite, MySQL로부터의 데이터 이전 절차.
+- **[데이터베이스 마이그레이션 가이드](doc/DATABASE_MIGRATION_GUIDE.md)**: PostgreSQL, Microsoft SQL Server, SQLite, MySQL로부터의 데이터 이전 절차.
 - **[보안 정책 및 위협 모델](doc/SECURITY.md)**: RBAC 접근 제어, SQL 인젝션 방어, 취약점 대응 정책.
 - **[프로덕션 운영 및 배포 런북](doc/OPERATIONS.md)**: Systemd 서비스 등록, Docker 배포, 고가용성 복제 운용.
 - **[모니터링 및 메트릭 가이드](doc/METRICS.md)**: Prometheus 시계열 메트릭, 슬로우 쿼리 추적, Grafana 대시보드 연동.

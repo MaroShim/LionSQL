@@ -207,7 +207,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Replaced machine-specific absolute `file:///Users/maro/Projects/LionSQL/...` links with portable relative links in `doc/README.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/DATA_DICTIONARY.md`, and `doc/WEB_STUDIO_GUIDE.ko.md`, so documentation links resolve on any checkout.
 - Added `doc/TESTING.md`, a consolidated local build, test, and regression guide covering the 3-stage pipeline, `-run` filtering, build tags and conditional tests, a per-package and per-work-item regression test map, test authoring rules, Go micro-benchmarks, TPC-C performance regression, and an A/B comparison procedure. Linked from `README.md`, `CONTRIBUTING.md`, and `doc/README.md`.
 - Restructured `notes/` directory: renamed Korean documentation files to `.ko.md` (`ENGINEERING_CONTEXT.ko.md`, `PITFALLS_AND_TRICKS.ko.md`, `README.ko.md`, `TAXONOMY.ko.md`), authored an English `notes/README.md`, moved and renamed multi-protocol boundaries document to `notes/PROTOCOL_EMULATION_BOUNDARIES.md`, and renamed `ANTLR_PARSER_COMPACT_STRATEGY.md` to `ANTLR_PARSER_COMPACTION_PLAN.md`.
-- Standardized REST API documentation naming: renamed `doc/API_REFERENCE.md` to `doc/REST_API_REFERENCE.md` and `doc/AUTO_REST_API.md` to `doc/REST_API_AUTO_GENERATED.md`, updating all inbound links across documentation and root guides.
+- Standardized REST API documentation naming: renamed `doc/API_REFERENCE.md` to `doc/REST_API_REFERENCE.md` and `doc/AUTO_REST_API.md` to `doc/REST_API_RECORDS_GUIDE.md`, updating all inbound links across documentation and root guides.
 - Replaced machine-specific console output paths in documentation examples (`doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/ARCHITECTURE.md`) with generic relative paths (`./data`, `lionsql/`).
 - Updated `doc/JSON_INDEXING_GUIDE.md` Section 7 to a completed implementation status matrix detailing all 5 stages of JSON built-ins, expression B-Tree indexing, CBO optimization, and regression test suites.
 - Consolidated `doc/README.md` by pruning scattered internal `notes/` plan links across subject sections and routing to `notes/README.md` via a dedicated Developer Handover & Backlog section.
@@ -360,10 +360,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Upgraded Developer API Preview modal (`#api-preview-modal` / `openAPIPreviewModal`) with PocketBase-grade dynamic schema awareness: automatically analyzes currently selected table columns (`getDummyRecordForTable`) to exclude auto-increment PKs and generate realistic dummy payloads typed according to column definitions (INT, VARCHAR, DECIMAL, DATETIME, JSON, BOOL) and semantic column names (`UI-8`).
   - Added first-class LionSQL Official SDK tab (`#api-lang-sdk` / `lionsql.js`) to the Developer API Preview modal, providing instant copy-paste ready code snippets for `import LionSQL`, `db.collection('...').getList()`, `.getOne()`, `.create()`, and `db.query()` alongside cURL, Fetch API, Python, and Go (`UI-9`).
   - Added Light / Dark mode theme switcher (`html[data-theme="light"]`, `#theme-toggle-btn`, `toggleTheme()`) with `localStorage` persistence and inline FOUC prevention script, resolved primary key (`id`) yellow text washout by transitioning to high-contrast deep amber (`.cell-pk-val`), refreshed column tags and table hover contrast, and enforced strict `Cache-Control: no-cache, no-store, must-revalidate` headers on `GET /_/` to permanently prevent stale browser caching across daemon updates (`UI-10`).
-- **HTTP REST & Web Management Port 8090 Functional Verification Suite (`HTTP-TEST-1`) (`pkg/api`, `doc/HTTP_API_FUNCTIONALITY_REPORT.md`)**:
+- **HTTP REST & Web Management Port 8090 Functional Verification Suite (`HTTP-TEST-1`) (`pkg/api`, `doc/REST_API_COMPATIBILITY_REPORT.md`)**:
   - Implemented end-to-end integration test suite (`pkg/api/http_port_integration_test.go`) over live TCP socket listeners covering 37 comprehensive scenarios across all 8 core domains.
   - Verified 100% operational pass rate across: System Health/Version SSOT (`GET /api/health`), Web Studio Dashboard UI (`GET /_/`), Static Client SDK Distribution (`GET /sdk/lionsql.js`, `GET /sdk/lionsql.d.ts`), Authentication & API Key RBAC (`/api/auth/*`, `/api/keys`), Declarative Table Schema DDL (`/api/tables/*`), Auto-Generated RESTful Records CRUD & Filtering (`/api/records/*`), SQL Query & T-SQL Stored Procedure Execution (`/api/sql`, `/api/procs/*`), Transactional CDC & Realtime Streaming (`/api/cdc/stream`, `/api/realtime`), Prometheus & OpenTelemetry Metrics (`/metrics`, `/v1/metrics`), and High-Concurrency Multiplexed Traffic (20 parallel workers, 200 concurrent requests, 0 data races).
-  - Authored official comprehensive verification report in `doc/HTTP_API_FUNCTIONALITY_REPORT.md`, achieving complete tripartite port parity alongside PostgreSQL Wire (`:5433`) and TDS MSSQL (`:1433`).
+  - Authored official comprehensive verification report in `doc/REST_API_COMPATIBILITY_REPORT.md`, achieving complete tripartite port parity alongside PostgreSQL Wire (`:5433`) and TDS MSSQL (`:1433`).
 - **Global Memory Governor & Query Circuit Breaker (`MEM-1`) (`pkg/config`, `pkg/execution`, `cmd/server`)**:
   - Implemented dynamic global memory budget management allocating up to 70% of physical RAM (`max_memory`, auto-detected via OS primitives) and per-query operational memory bounds (`work_mem: 64MB`).
   - Added reactive memory circuit breaker in hash joins and external sort pipelines that halts runaway queries exceeding system bounds with descriptive SQLSTATE errors instead of triggering OS OOM-killer panics.
@@ -574,7 +574,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Authored [`doc/FOUNDATIONAL_DESIGN_DECISIONS.md`](doc/FOUNDATIONAL_DESIGN_DECISIONS.md): genesis and technical rationale behind core architecture (WiredTiger, Go, T-SQL VDBE VM, dual wire listeners, single binary packaging, Antigravity AI pair programming).
   - Authored [`doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md`](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md): memory layout, buffer pooling (`sync.Pool`), arena slabs, and hot-path GC avoidance strategies (`P-1` ~ `P-14`).
   - Authored [`doc/ENTERPRISE_AUTHENTICATION_SPI.md`](doc/ENTERPRISE_AUTHENTICATION_SPI.md): unified superuser model, `AuthProvider` SPI interface, LDAP/AD directory architecture, and perimeter proxy security topology.
-  - Authored [`doc/SCHEMA_MIGRATIONS_CLI.md`](doc/SCHEMA_MIGRATIONS_CLI.md): declarative schema migrations guide, `lionsql migrate` workflow, and zero-downtime deployment patterns.
+  - Authored [`doc/SCHEMA_MIGRATION_GUIDE.md`](doc/SCHEMA_MIGRATION_GUIDE.md): declarative schema migrations guide, `lionsql migrate` workflow, and zero-downtime deployment patterns.
   - Authored [`doc/AUDIT_LOG_SPECIFICATION.md`](doc/AUDIT_LOG_SPECIFICATION.md): enterprise immutable cryptographic audit log specification (HMAC-SHA256 hash chains, tamper-evident verification, GDPR/HIPAA/SOX compliance).
   - Authored [`README.ko.md`](README.ko.md): comprehensive Korean documentation covering architecture, features, wire protocols, CLI, benchmarks, and production quickstart.
 
@@ -1290,7 +1290,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Added ADR-017 (1-Writer Multi-Reader High-Availability Replication Topology) and ADR-018 (Dual-Track UDF Architecture: Native Go In-Process SPI & WebAssembly Sandbox) in `doc/ADR.md`.
   - Added Section 12 for WAL replication endpoints (`/api/replication/stream`, `/api/replication/status`, `/api/replication/ack`, `/api/replication/promote`, `/api/replication/demote`) in `doc/API_REFERENCE.md`.
   - Added Section 7 for 1-Writer Multi-Reader High-Availability Cluster Operations and Failover Runbook in `doc/OPERATIONS.md`.
-  - Updated root `README.md` and `doc/README.md` with replication CLI flags (`--replica-of`, `--node-id`, `--ephemeral`), endpoint reference tables, and links to `TODO.md` and `PERCENTILE_AND_QUANTILE_ANALYTICS.md`.
+  - Updated root `README.md` and `doc/README.md` with replication CLI flags (`--replica-of`, `--node-id`, `--ephemeral`), endpoint reference tables, and links to `TODO.md` and `PERCENTILE_ANALYTICS.md`.
   - Updated system architecture diagram and module directory layout in `doc/ARCHITECTURE.md`.
 - **Web SDK & HTML Embedding Guide (`doc/WEB_SDK.md`)**:
   - Renamed `doc/SDK.md` to `doc/WEB_SDK.md` to explicitly represent the web frontend and browser embedding capabilities.
@@ -2138,7 +2138,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - Realtime Server-Sent Events (SSE) data change stream (`/api/realtime`) with live web UI synchronization.
   - Superuser authentication, JWT revocation, and granular API key management.
 - **Core Architecture & Operational Documentation Suite**:
-  - `doc/ARCHITECTURE.md`, `doc/ADR.md` (ADR-001 ~ ADR-014), `doc/TSQL_REFERENCE.md`, `doc/API_REFERENCE.md`, `doc/OPERATIONS.md`, `doc/BENCHMARK.md`, `doc/INTERNALS_*.md`, `doc/SECURITY.md`, `doc/MIGRATION.md`, `doc/ROADMAP.md`, `doc/TROUBLESHOOTING.md`.
+  - `doc/ARCHITECTURE.md`, `doc/ADR.md` (ADR-001 ~ ADR-014), `doc/TSQL_REFERENCE.md`, `doc/API_REFERENCE.md`, `doc/OPERATIONS.md`, `doc/BENCHMARK.md`, `doc/INTERNALS_*.md`, `doc/SECURITY.md`, `doc/DATABASE_MIGRATION_GUIDE.md`, `doc/ROADMAP.md`, `doc/TROUBLESHOOTING.md`.
 
 ---
 
