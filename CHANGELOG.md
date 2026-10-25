@@ -209,7 +209,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Restructured `notes/` directory: renamed Korean documentation files to `.ko.md` (`ENGINEERING_CONTEXT.ko.md`, `PITFALLS_AND_TRICKS.ko.md`, `README.ko.md`, `TAXONOMY.ko.md`), authored an English `notes/README.md`, moved and renamed multi-protocol boundaries document to `notes/PROTOCOL_EMULATION_BOUNDARIES.md`, and renamed `ANTLR_PARSER_COMPACT_STRATEGY.md` to `ANTLR_PARSER_COMPACTION_PLAN.md`.
 - Standardized REST API documentation naming: renamed `doc/API_REFERENCE.md` to `doc/REST_API_REFERENCE.md` and `doc/AUTO_REST_API.md` to `doc/REST_API_AUTO_GENERATED.md`, updating all inbound links across documentation and root guides.
 - Replaced machine-specific console output paths in documentation examples (`doc/USER_MANUAL.ko.md`, `doc/REFERENCE_MANUAL.ko.md`, `doc/ARCHITECTURE.md`) with generic relative paths (`./data`, `lionsql/`).
-- Updated `doc/JSON_SPEC_AND_INDEXING.md` Section 7 to a completed implementation status matrix detailing all 5 stages of JSON built-ins, expression B-Tree indexing, CBO optimization, and regression test suites.
+- Updated `doc/JSON_INDEXING_GUIDE.md` Section 7 to a completed implementation status matrix detailing all 5 stages of JSON built-ins, expression B-Tree indexing, CBO optimization, and regression test suites.
 - Consolidated `doc/README.md` by pruning scattered internal `notes/` plan links across subject sections and routing to `notes/README.md` via a dedicated Developer Handover & Backlog section.
 
 ---

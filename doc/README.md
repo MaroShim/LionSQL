@@ -84,8 +84,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Cost-Based Optimizer (CBO), selectivity models, and 64-bucket equi-depth histograms.
   * Constant folding, predicate pushdown, and correlated subquery decorrelation (`SEMI`/`ANTI` joins).
   * `work_mem` memory governor and disk-spilling external merge sort.
-* [`JSON_SPEC_AND_INDEXING.md`](JSON_SPEC_AND_INDEXING.md)
-  * Semi-structured JSON document querying and expression B-Tree indexing specification.
+* [`JSON_INDEXING_GUIDE.md`](JSON_INDEXING_GUIDE.md)
+  * Semi-structured JSON document querying and expression B-Tree indexing guide.
   * Comparative architectural analysis across PostgreSQL, MySQL 8.0, and Microsoft SQL Server.
   * Dual-protocol AST normalization (`*proc.JsonExtractExpr`), `JSON_VALUE`, `JSON_QUERY`, `ISJSON`, and PostgreSQL `->` / `->>` operators.
   * Single-statement functional B-Tree index DDL (`CREATE INDEX ... ON tbl ((data->>'key'))`) and CBO index matching.

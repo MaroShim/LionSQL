@@ -1,4 +1,4 @@
-# JSON Functions & Expression Indexing Specification
+# JSON & Expression Indexing Guide
 
 ## 1. Overview & Architectural Motivation
 Modern web applications, microservices, and Backend-as-a-Service (BaaS) frameworks (e.g. Supabase, PocketBase, Prisma, Next.js) increasingly adopt semi-structured document patterns where relational tables store JSON payloads alongside primary relational keys.

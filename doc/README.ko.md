@@ -86,8 +86,8 @@
   * 비용 기반 옵티마이저(CBO), 선택도 모델, 64-버킷 균등 깊이 히스토그램.
   * 상수 폴딩, 조건 푸시다운, 상관 서브쿼리 비상관화 (`SEMI`/`ANTI` 조인 변환).
   * `work_mem` 메모리 거버너 및 디스크 외부 머지 소트.
-* [`JSON_SPEC_AND_INDEXING.md`](JSON_SPEC_AND_INDEXING.md)
-  * 반정형 JSON 문서 쿼리 및 표현식 B-Tree 인덱싱 명세 및 구현 완료 매트릭스.
+* [`JSON_INDEXING_GUIDE.md`](JSON_INDEXING_GUIDE.md)
+  * 반정형 JSON 문서 쿼리 및 표현식 B-Tree 인덱싱 가이드 및 구현 완료 매트릭스.
   * PostgreSQL, MySQL 8.0, Microsoft SQL Server 문법 비교 분석.
   * 듀얼 프로토콜 AST 정규화(`*proc.JsonExtractExpr`), `JSON_VALUE`, `JSON_QUERY`, `ISJSON`, PostgreSQL `->` / `->>` 연산자.
   * 단일 문장 함수형 B-Tree 인덱스 DDL(`CREATE INDEX ... ON tbl ((data->>'key'))`) 및 CBO 인덱스 매칭.

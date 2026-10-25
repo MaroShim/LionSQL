@@ -620,7 +620,7 @@ Adopt **Hybrid Expression B-Tree Indexing** as LionSQL's canonical JSON index ar
 ### Consequences
 - **Positive**: Frictionless single-statement indexing for both PostgreSQL and MSSQL clients; reuses existing high-throughput B+Tree storage without write amplification.
 - **Negative**: Queries searching arbitrary, unspecified JSON keys across deeply nested documents cannot leverage index acceleration without explicitly creating an expression index for that path.
-- **Compliance**: Adheres to Golden Rule 15 (Radical KISS, DRY & Deletion-First), Rule 19 (Modular Interface Abstraction), and `doc/JSON_SPEC_AND_INDEXING.md`.
+- **Compliance**: Adheres to Golden Rule 15 (Radical KISS, DRY & Deletion-First), Rule 19 (Modular Interface Abstraction), and `doc/JSON_INDEXING_GUIDE.md`.
 
 ---
 
