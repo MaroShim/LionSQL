@@ -60,11 +60,15 @@ flowchart TD
 3. **`README.md` & `README.ko.md`**:
    * 최상단 버전 배지 SVG URL(`https://img.shields.io/badge/version-v...-blue.svg`)을 갱신합니다. (하이픈은 Shields.io 규약에 맞춰 `--`로 이스케이프)
 
-### [Step 5] 원스톱 Git Commit, Tagging & Push
+### [Step 5] 원스톱 Git Commit, Tagging, Push & GitHub Release 발행
 1. 변경된 파일(`CHANGELOG.md`, `version.go`, `README.md`, `README.ko.md`)을 스테이징.
 2. `chore(release): bump version to <tag>` 커밋 생성.
 3. 주석 달린 Git Tag(`git tag -a <tag> -m "Release <tag>"`) 생성.
 4. 원격 GitHub 저장소(`origin`)로 브랜치 커밋과 태그를 동시에 푸시. (`--no-push` 플래그로 푸시 생략 가능)
+5. **GitHub Release 및 바이너리 Assets 자동 발행**:
+   - `gh` CLI 로그인 세션을 감지하여 GitHub 공식 릴리스 페이지(`https://github.com/MaroShim/LionSQL/releases`)에 신규 릴리스를 즉시 발행합니다.
+   - 추출된 Changelog를 릴리스 본문으로 등록하며, `beta`/`rc` 태그인 경우 `--prerelease` 플래그를 자동 적용합니다.
+   - 컴파일된 실행 파일 3종(`bin/lionsql`, `bin/lionsql.exe`, `bin/lionsql-arm64.exe`)을 다운로드용 자산(Release Assets)으로 자동 첨부합니다.
 
 ---
 
@@ -83,6 +87,7 @@ flowchart TD
 | **`--dry-run`** | 파일을 실제로 수정하거나 커밋/태깅하지 않고, 수집된 커밋과 CHANGELOG 미리보기만 출력합니다. | 릴리스 전 변경 사항을 사전 점검할 때 |
 | **`--skip-tests`** | 빌드 및 `go test` 검증 단계를 건너뜁니다. | 사전에 이미 테스트를 모두 통과하여 빠른 배포를 원할 때 |
 | **`--no-push`** | 로컬에서 버전 파일 갱신, 커밋, 태깅까지 수행하되, GitHub 푸시는 건너뜁니다. | 로컬에서 최종 확인 후 수동으로 원격에 올리고 싶을 때 |
+| **`--skip-github-release`** | Git 커밋과 태그 푸시는 수행하되, `gh` CLI를 통한 GitHub Release 발행은 생략합니다. | GitHub 웹페이지 공식 릴리스는 별도로 발행하고 싶을 때 |
 
 ---
 

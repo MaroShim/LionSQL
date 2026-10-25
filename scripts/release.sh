@@ -47,6 +47,7 @@ cd "${ROOT_DIR}"
 DRY_RUN=false
 SKIP_TESTS=false
 NO_PUSH=false
+SKIP_GH_RELEASE=false
 TARGET_INPUT=""
 
 # Parse arguments
@@ -61,13 +62,17 @@ for arg in "$@"; do
         --no-push)
             NO_PUSH=true
             ;;
+        --skip-github-release|--no-gh-release)
+            SKIP_GH_RELEASE=true
+            ;;
         -h|--help)
             echo -e "${CLR_BOLD}Usage:${CLR_RESET} ./scripts/release.sh <version> [options]"
             echo ""
             echo "Options:"
-            echo "  --dry-run     Preview changelog and version updates without applying"
-            echo "  --skip-tests  Skip build and test verification pipeline"
-            echo "  --no-push     Create commit and tag locally without pushing to origin"
+            echo "  --dry-run              Preview changelog and version updates without applying"
+            echo "  --skip-tests           Skip build and test verification pipeline"
+            echo "  --no-push              Create commit and tag locally without pushing to origin"
+            echo "  --skip-github-release  Do not create GitHub Release via gh CLI"
             exit 0
             ;;
         -*)
@@ -280,6 +285,10 @@ if [ "${DRY_RUN}" = true ]; then
     echo -e "${CLR_YELLOW}[DRY-RUN] Would update pkg/config/version.go:${CLR_RESET}"
     echo "  const Version = \"${VER}\""
     echo -e "${CLR_YELLOW}[DRY-RUN] Would update README badges to: v${SHIELD_VER}${CLR_RESET}"
+    if [ "${SKIP_GH_RELEASE}" = false ] && command -v gh >/dev/null 2>&1; then
+        echo -e "${CLR_YELLOW}[DRY-RUN] Would create GitHub Release:${CLR_RESET}"
+        echo "  gh release create ${TAG} --title \"LionSQL ${TAG}\" [assets: bin/lionsql, bin/lionsql.exe, bin/lionsql-arm64.exe]"
+    fi
     echo ""
     echo -e "${CLR_GREEN}Dry run completed successfully. No files were modified.${CLR_RESET}"
     exit 0
@@ -344,6 +353,31 @@ else
     git push origin HEAD
     git push origin "${TAG}"
     echo -e "${CLR_GREEN}Pushed successfully to origin (branch + ${TAG})${CLR_RESET}"
+
+    # 5.3. Create GitHub Release via gh CLI if available and authenticated
+    if [ "${SKIP_GH_RELEASE}" = false ]; then
+        if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+            echo -e "Creating GitHub Release via gh CLI..."
+            PRERELEASE_OPT=""
+            if [[ "${TAG}" =~ (beta|alpha|rc) ]]; then
+                PRERELEASE_OPT="--prerelease"
+            fi
+
+            ASSETS=()
+            [ -f "bin/lionsql" ] && ASSETS+=("bin/lionsql")
+            [ -f "bin/lionsql.exe" ] && ASSETS+=("bin/lionsql.exe")
+            [ -f "bin/lionsql-arm64.exe" ] && ASSETS+=("bin/lionsql-arm64.exe")
+
+            gh release create "${TAG}" \
+                --title "LionSQL ${TAG}" \
+                --notes "${RELEASE_NOTES}" \
+                ${PRERELEASE_OPT} \
+                "${ASSETS[@]}"
+            echo -e "${CLR_GREEN}GitHub Release published: https://github.com/MaroShim/LionSQL/releases/tag/${TAG}${CLR_RESET}"
+        else
+            echo -e "${CLR_YELLOW}Note: GitHub CLI (gh) not logged in. Skipped GitHub Release creation.${CLR_RESET}"
+        fi
+    fi
 fi
 
 echo ""
