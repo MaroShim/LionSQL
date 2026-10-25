@@ -36,6 +36,7 @@
    - **[`TOOL_AUDIT_PLAN.ko.md`](TOOL_AUDIT_PLAN.ko.md)**: 외부 GUI 도구(SSMS, DbGate, DBeaver, Beekeeper Studio) 실전 쿼리 호환성 및 가상 카탈로그 심층 감사/검증 계획서 (완료)
    - **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](OVER_SPECIFICATION_REMEDIATION_PLAN.md)**: 서드파티 도구 종속적 오버스펙 및 하드코딩 전수 정돈 마스터 플랜 (완료)
    - **[`BENCHMARK_DIR_SAFETY_PLAN.md`](BENCHMARK_DIR_SAFETY_PLAN.md)**: 비파괴 벤치마크 디렉토리 안전 라이프사이클 및 기존 데이터 영구 보호 계획서 (완료)
+   - **[`WINDOWS_DAEMON_AND_BUILD_PLAN.md`](WINDOWS_DAEMON_AND_BUILD_PLAN.md)**: Windows 플랫폼 데몬 분리 및 크로스 컴파일 빌드 계획서 (완료)
    - **[`TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md)**: 엔진 및 프로토콜 전반의 휴리스틱 타입 추론 및 강제 수치변환 안티패턴 전면 제거 마스터 플랜 (완료)
    - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 확정 명세서 (완료)
    - **[`IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md)**: In-Memory OCC 7단계 심층 성능 튜닝 및 락프리 압축 로드맵 (Post-1.0 계획)

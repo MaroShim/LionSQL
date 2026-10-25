@@ -3,7 +3,7 @@
 단일 바이너리 고동시성 OLTP 데이터베이스 서버 (T-SQL 및 저장 프로시저 지원) / Single-binary, high-concurrency OLTP database server supporting T-SQL and stored procedures
 
 [![Version](https://img.shields.io/badge/version-v0.90.0--beta3-blue.svg)](CHANGELOG.md)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](README.ko.md)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](README.ko.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
 [![Go Report](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev)
 
@@ -16,7 +16,7 @@
 LionSQL은 Microsoft SQL Server의 T-SQL & 저장 프로시저(Stored Procedure)와 복잡한 비즈니스 로직을 네이티브 VDBE 가상 머신에서 마이크로초 단위로 고속 실행하며, 동시에 광범위한 PostgreSQL SQL 방언 및 와이어 프로토콜(PGWire v3) 호환성을 제공하는 고성능 임베디드 OLTP 데이터베이스 엔진입니다. 시스템 모니터링과 데이터 조작을 위한 실시간 웹 관리 어드민(Web Studio)과 수만 개 동시 연결을 감당하는 커넥션 풀러까지 내장하고 있어, 추가 소프트웨어 없이도 완전한 데이터베이스 운영 환경을 갖출 수 있습니다. 이 모든 엔터프라이즈 기능을 100MB 미만(약 50MB)의 극히 가벼운 단일 독립 정적 바이너리 하나에 집약하여, 초당 수만 건의 빠른 트랜잭션을 비차단 스냅샷 격리와 예측 가능한 초저지연으로 처리합니다.
 
 > [!NOTE]
-> **공식 지원 운영체제 (OS)**: LionSQL은 현재 **macOS** 및 **Linux** (`x86_64` 및 `arm64`) 환경을 공식 지원합니다. (Windows 환경은 향후 마일스톤에서 지원 예정)
+> **공식 지원 운영체제 (OS)**: LionSQL은 **macOS** 및 **Linux** (`x86_64` 및 `arm64`) 환경을 공식 지원합니다. Windows 환경용 독립 정적 바이너리(`bin/lionsql.exe`, 순수 Go 인메모리 OCC 엔진) 빌드도 제공됩니다.
 
 
 ```
@@ -137,7 +137,7 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 ### 3.1. 소스코드 빌드
 
 #### 사전 요구 사항
-- **지원 운영체제 (OS)**: **macOS**, **Linux** (당분간 macOS 및 Linux x86_64/arm64 환경을 공식 지원하며, Windows 환경은 향후 마일스톤에서 지원 예정)
+- **지원 운영체제 (OS)**: **macOS**, **Linux** (공식 지원), **Windows** (단독 바이너리 빌드 지원)
 - Go 1.22 이상
 - (WiredTiger 백엔드 사용 시 선택 사항) `wiredtiger` 개발 헤더 및 라이브러리:
   - macOS: `brew install wiredtiger`
@@ -146,11 +146,14 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 #### 빌드 커맨드
 
 ```bash
-# WiredTiger 스토리지를 지원하는 프로덕션 단일 바이너리 빌드
+# WiredTiger 스토리지를 지원하는 프로덕션 단일 바이너리 빌드 (macOS / Linux)
 go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
 
 # 순수 Go 인메모리 엔진 전용 단일 바이너리 빌드 (Cgo 의존성 제로, 어디서나 실행 가능)
 go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
+
+# Windows 독립 정적 바이너리 빌드 (Cgo 의존성 제로)
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.exe ./cmd/lionsql
 ```
 
 ### 3.2. 서버 기동

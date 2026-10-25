@@ -3,7 +3,7 @@
 Single-binary, high-concurrency OLTP database server supporting T-SQL and stored procedures
 
 [![Version](https://img.shields.io/badge/version-v0.90.0--beta3-blue.svg)](CHANGELOG.md)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](README.md)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](README.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
 [![Go Report](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev)
 
@@ -16,7 +16,7 @@ Single-binary, high-concurrency OLTP database server supporting T-SQL and stored
 LionSQL is a high-performance, embedded OLTP database engine that natively compiles and executes Microsoft SQL Server T-SQL & stored procedures and complex business logic on a sub-microsecond VDBE bytecode virtual machine, while simultaneously offering broad compatibility with PostgreSQL SQL dialects and the standard PGWire v3 protocol. It comes fully equipped with a built-in web management studio for real-time telemetry and schema administration, as well as an integrated goroutine connection pooler capable of handling tens of thousands of concurrent connections—eliminating the need for additional software to achieve a complete operational environment. Packaging this complete enterprise feature set into a single, ultra-compact static binary under 100MB (currently ~50MB) with zero external dependencies, LionSQL delivers blazing-fast transaction throughput of tens of thousands of transactions per second with predictable sub-millisecond latency and non-blocking snapshot isolation.
 
 > [!NOTE]
-> **Supported Operating Systems**: LionSQL currently officially supports **macOS** and **Linux** (`x86_64` and `arm64`). Windows support is planned for a future milestone.
+> **Supported Operating Systems**: LionSQL officially supports **macOS** and **Linux** (`x86_64` and `arm64`). Standalone single-binary builds for **Windows** (`bin/lionsql.exe`, in-memory OCC engine) are also available.
 
 
 ```
@@ -137,7 +137,7 @@ LionSQL's core capabilities are organized across five foundational architectural
 ### 1. Building from Source
 
 #### Prerequisites
-- **Supported Operating Systems**: **macOS**, **Linux** (currently supported; Windows support is planned for a future milestone)
+- **Supported Operating Systems**: **macOS**, **Linux** (officially supported), **Windows** (standalone binary available)
 - Go 1.22 or higher
 - (Optional, for WiredTiger backend) `wiredtiger` development headers and libraries:
   - macOS: `brew install wiredtiger`
@@ -146,11 +146,14 @@ LionSQL's core capabilities are organized across five foundational architectural
 #### Build Command
 
 ```bash
-# Build production single binary with WiredTiger support
+# Build production single binary with WiredTiger support (macOS / Linux)
 go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
 
 # Build pure-Go single binary (Zero Cgo dependency, runs everywhere)
 go build -buildvcs=false -o bin/lionsql ./cmd/lionsql
+
+# Build Windows standalone binary (Zero Cgo dependency)
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.exe ./cmd/lionsql
 ```
 
 ### 2. Starting the Server

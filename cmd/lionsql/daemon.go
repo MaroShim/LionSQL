@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -76,16 +75,6 @@ func readPidFile(pidFile string) (int, error) {
 	return pid, nil
 }
 
-func isProcessAlive(pid int) bool {
-	if pid <= 0 {
-		return false
-	}
-	err := syscall.Kill(pid, 0)
-	if err == nil || err == syscall.EPERM {
-		return true
-	}
-	return false
-}
 
 func checkDaemonStatus(pidFile, logFile, httpAddr, pgAddr, tdsAddr string) {
 	pid, err := readPidFile(pidFile)
@@ -131,8 +120,8 @@ func stopDaemon(pidFile string) {
 
 	fmt.Printf("[LionSQL] Terminating daemon process %d...\n", pid)
 
-	// 1. Send graceful SIGTERM directly via syscall
-	_ = syscall.Kill(pid, syscall.SIGTERM)
+	// 1. Send graceful SIGTERM directly via platform helper
+	_ = killProcessGraceful(pid)
 
 	// 2. Poll for termination up to 3.0 seconds
 	deadline := time.Now().Add(3000 * time.Millisecond)
@@ -148,7 +137,7 @@ func stopDaemon(pidFile string) {
 	// 3. Escalate to SIGKILL if still alive after timeout (Golden Rule 4)
 	if !stopped && isProcessAlive(pid) {
 		fmt.Println("[LionSQL] Process did not terminate within timeout. Sending SIGKILL...")
-		_ = syscall.Kill(pid, syscall.SIGKILL)
+		_ = killProcessForce(pid)
 		for i := 0; i < 20; i++ {
 			if !isProcessAlive(pid) {
 				stopped = true
@@ -202,9 +191,7 @@ func startDaemon(pidFile, logFile, dataDir, httpAddr, pgAddr, tdsAddr, engineTyp
 	cmd := exec.Command(os.Args[0], childArgs...)
 	cmd.Stdout = logFd
 	cmd.Stderr = logFd
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid: true, // Detach process from terminal session
-	}
+	setDaemonSysProcAttr(cmd)
 
 	if err := cmd.Start(); err != nil {
 		fmt.Printf("[LionSQL] Failed to launch daemon process: %v\n", err)

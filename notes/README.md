@@ -36,6 +36,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`TOOL_AUDIT_PLAN.ko.md`](TOOL_AUDIT_PLAN.ko.md)** (Korean): GUI client tools (SSMS, DbGate, DBeaver, Beekeeper Studio) query compatibility and virtual catalog audit plan (Completed).
    - **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](OVER_SPECIFICATION_REMEDIATION_PLAN.md)** (Korean): Master remediation plan eliminating tool-specific over-specifications and ad-hoc hardcodings (Completed).
    - **[`BENCHMARK_DIR_SAFETY_PLAN.md`](BENCHMARK_DIR_SAFETY_PLAN.md)** (Korean): Non-destructive benchmark directory lifecycle and data protection master plan (Completed).
+   - **[`WINDOWS_DAEMON_AND_BUILD_PLAN.md`](WINDOWS_DAEMON_AND_BUILD_PLAN.md)** (Korean): Windows platform daemon decoupling and cross-compilation build plan (Completed).
    - **[`TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md)** (Korean): Master plan eliminating heuristic type coercion anti-patterns across engine and wire protocols (Completed).
    - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)** (Korean): Permanent 2-tier query execution architecture specification (Completed).
    - **[`IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md)**: In-Memory OCC 7-stage deep performance tuning and lock-free compaction roadmap (Post-1.0 Roadmap).
