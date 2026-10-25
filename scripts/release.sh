@@ -164,8 +164,17 @@ if [ "${SKIP_TESTS}" = true ]; then
     echo -e "${CLR_YELLOW}Skipping test pipeline (--skip-tests specified).${CLR_RESET}"
 else
     echo -e "Compiling core binaries..."
+    # 1. Native Unix binary with WiredTiger
     go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
-    echo -e "${CLR_GREEN}Build OK: bin/lionsql${CLR_RESET}"
+    echo -e "${CLR_GREEN}Build OK: bin/lionsql (Unix/Native)${CLR_RESET}"
+
+    # 2. Windows Standalone Binaries (.exe, pure-Go in-memory engine, 1ms timer)
+    echo -e "Compiling Windows standalone binaries (.exe)..."
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.exe ./cmd/lionsql
+    echo -e "${CLR_GREEN}Build OK: bin/lionsql.exe (Windows x86_64)${CLR_RESET}"
+
+    CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -buildvcs=false -o bin/lionsql-arm64.exe ./cmd/lionsql
+    echo -e "${CLR_GREEN}Build OK: bin/lionsql-arm64.exe (Windows ARM64)${CLR_RESET}"
 
     echo -e "Running core unit tests..."
     go test -tags wiredtiger -count=1 ./pkg/config/... ./pkg/storage/...
@@ -341,3 +350,8 @@ echo ""
 echo -e "${CLR_CYAN}======================================================================${CLR_RESET}"
 echo -e "${CLR_GREEN}${CLR_BOLD}Release ${TAG} Successfully Completed!${CLR_RESET}"
 echo -e "${CLR_CYAN}======================================================================${CLR_RESET}"
+echo -e "Compiled Binaries in bin/:"
+echo -e "  - ${CLR_BOLD}bin/lionsql${CLR_RESET} (Unix/macOS/Linux with WiredTiger)"
+echo -e "  - ${CLR_BOLD}bin/lionsql.exe${CLR_RESET} (Windows x86_64 Standalone)"
+echo -e "  - ${CLR_BOLD}bin/lionsql-arm64.exe${CLR_RESET} (Windows ARM64 Standalone)"
+echo ""
