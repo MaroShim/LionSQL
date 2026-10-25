@@ -1061,13 +1061,15 @@
           <h2>SQL Query</h2>
           <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
             Execute standard SQL queries (DDL, DML, DQL) and T-SQL statements directly. Shortcut: <kbd style="background:var(--btn-secondary-bg); color:var(--text); padding:2px 5px; border-radius:3px; border:1px solid var(--border);">Ctrl</kbd>+<kbd style="background:var(--btn-secondary-bg); color:var(--text); padding:2px 5px; border-radius:3px; border:1px solid var(--border);">Enter</kbd>
+            <span id="session-badge" style="margin-left: 10px; font-family: monospace; font-size: 0.75rem; color: var(--badge-purple-color); background: var(--badge-purple-bg); padding: 2px 6px; border-radius: 4px;"></span>
           </div>
         </div>
         <div style="display: flex; gap: 8px;">
           <button class="btn btn-secondary" style="background: #7c3aed; color: white;" onclick="explainBytecode()">Explain Bytecode</button>
           <button class="btn btn-secondary" style="background: #3b82f6; color: white;" onclick="explainQuery(false)">Explain Plan</button>
           <button class="btn btn-secondary" style="background: #d97706; color: white;" onclick="explainQuery(true)">Explain Analyze</button>
-          <button class="btn" style="background: var(--success);" onclick="executeSQLQuery()">Run Query</button>
+          <button id="btn-cancel-query" class="btn btn-secondary" style="background: var(--danger); color: white; display: none;" onclick="cancelSQLQuery()">Cancel</button>
+          <button id="btn-run-query" class="btn" style="background: var(--success);" onclick="executeSQLQuery()">Run Query</button>
         </div>
       </div>
 
@@ -2571,6 +2573,8 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         loadRequestLogs();
         startLogsPolling();
       } else if (view === 'query') {
+        const badge = document.getElementById('session-badge');
+        if (badge) badge.innerText = 'Session: ' + getWebSessionId();
         const input = document.getElementById('sql-query-input');
         if (input) input.focus();
       }
@@ -2678,6 +2682,17 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         }
         document.body.removeChild(ta);
       });
+    }
+
+    // Helper: get or initialize a browser-tab isolated unique session ID
+    function getWebSessionId() {
+      let sess = sessionStorage.getItem('lionsql_tab_session_id');
+      if (!sess) {
+        const rand = Math.random().toString(36).substring(2, 9);
+        sess = 'web-sess-' + Date.now().toString(36) + '-' + rand;
+        sessionStorage.setItem('lionsql_tab_session_id', sess);
+      }
+      return sess;
     }
 
     // Helper: authenticated fetch wrapper with automatic JWT header and 401 interceptor
@@ -3070,6 +3085,24 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       executeSQLQuery();
     }
 
+    async function cancelSQLQuery() {
+      try {
+        const res = await authFetch('/api/query/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: getWebSessionId() })
+        });
+        const out = await res.json();
+        if (out.canceled) {
+          showToast('Query cancellation signaled.', 'info');
+        } else {
+          showToast('No active query running for this session.', 'info');
+        }
+      } catch (err) {
+        showToast('Cancel request failed: ' + err, 'error');
+      }
+    }
+
     async function executeSQLQuery() {
       const sql = document.getElementById('sql-query-input').value.trim();
       if (!sql) return;
@@ -3079,6 +3112,13 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
       const tableEl = document.getElementById('query-result-table');
       const msgSec = document.getElementById('query-messages-section');
       const msgBox = document.getElementById('query-messages-box');
+      const runBtn = document.getElementById('btn-run-query');
+      const cancelBtn = document.getElementById('btn-cancel-query');
+      const sessBadge = document.getElementById('session-badge');
+
+      if (sessBadge) sessBadge.innerText = 'Session: ' + getWebSessionId();
+      if (runBtn) runBtn.disabled = true;
+      if (cancelBtn) cancelBtn.style.display = 'inline-block';
 
       metaEl.innerText = 'Executing...';
       bannerEl.style.display = 'none';
@@ -3087,7 +3127,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         const res = await authFetch('/api/sql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: sql })
+          body: JSON.stringify({ query: sql, session_id: getWebSessionId() })
         });
         const out = await res.json();
 
@@ -3183,6 +3223,9 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         bannerEl.style.display = 'block';
         bannerEl.className = 'alert-danger-box';
         bannerEl.innerText = 'Failed to execute: ' + err;
+      } finally {
+        if (runBtn) runBtn.disabled = false;
+        if (cancelBtn) cancelBtn.style.display = 'none';
       }
     }
 
@@ -4248,7 +4291,7 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         const res = await authFetch('/api/sql', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ query: sql })
+          body: JSON.stringify({ query: sql, session_id: getWebSessionId() })
         });
         const out = await res.json();
         if (out.error) {

@@ -144,6 +144,30 @@ func formatUptime(sec float64) string {
 	return fmt.Sprintf("%ds", s)
 }
 
+func (s *Server) getCachedMemStats() (uint64, int) {
+	s.memCache.mu.RLock()
+	if time.Since(s.memCache.lastUpdate) < time.Second {
+		alloc := s.memCache.allocBytes
+		goroutines := s.memCache.goroutines
+		s.memCache.mu.RUnlock()
+		return alloc, goroutines
+	}
+	s.memCache.mu.RUnlock()
+
+	s.memCache.mu.Lock()
+	defer s.memCache.mu.Unlock()
+	if time.Since(s.memCache.lastUpdate) < time.Second {
+		return s.memCache.allocBytes, s.memCache.goroutines
+	}
+
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+	s.memCache.allocBytes = mem.Alloc
+	s.memCache.goroutines = runtime.NumGoroutine()
+	s.memCache.lastUpdate = time.Now()
+	return s.memCache.allocBytes, s.memCache.goroutines
+}
+
 func (s *Server) handleOverviewStats(w http.ResponseWriter, r *http.Request) {
 	uptimeSec := time.Since(s.startTime).Seconds()
 	if uptimeSec < 1.0 {
@@ -173,8 +197,7 @@ func (s *Server) handleOverviewStats(w http.ResponseWriter, r *http.Request) {
 		activeSessions = s.coordinator.SessionCount()
 	}
 
-	var mem runtime.MemStats
-	runtime.ReadMemStats(&mem)
+	allocBytes, goroutines := s.getCachedMemStats()
 
 	repRole := "standalone"
 	if s.replication != nil {
@@ -195,8 +218,8 @@ func (s *Server) handleOverviewStats(w http.ResponseWriter, r *http.Request) {
 		"total_queries":      totalQueries,
 		"tps":                math.Round(tps*100) / 100,
 		"qps":                math.Round(qps*100) / 100,
-		"memory_alloc_bytes": mem.Alloc,
-		"goroutines":         runtime.NumGoroutine(),
+		"memory_alloc_bytes": allocBytes,
+		"goroutines":         goroutines,
 		"replication_role":   repRole,
 		"client_connections": map[string]string{
 			"pgwire": "localhost:5433",

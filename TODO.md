@@ -50,7 +50,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 3. **Query Engine & 2-Tier CBO**: 2-Tier query engine consolidation (Tier 1 VDBE with direct row updates and point-lookup shortcut, Tier 2 Volcano CBO), Sort-Merge Join iterator (`MergeJoinIterator`), dynamic programming join enumeration, covering index-only scans, and expression functional indexes.
 4. **Reliability, Security & Lifecycle**: Windows cross-platform daemon decoupling (`daemon_windows.go`, `daemon_unix.go`), Windows 1ms high-resolution timer (`timeBeginPeriod(1)` via `winmm.dll`), graceful shutdown with 1.5s bounded drain deadline, and PBKDF2/SHA-256 authentication.
 5. **Benchmarks & Integration Suites**: Network TPC-C benchmark client (`cmd/tpcc_client`), 3-tier VDBE TPC-C progression (603k tpmC), and 13-domain extended smoke test suite (`scripts/verify_report.sh`).
-6. **Web Studio & Observability**: Embedded Web Studio dashboard (`/_/`), 6-metric Overview panel with instant delta, real-time SSE stream, Prometheus text `/metrics` and OTLP `/v1/metrics`, and `EXPLAIN ANALYZE` execution profiler.
+6. **Web Studio & Observability**: Embedded Web Studio dashboard (`/_/`), browser tab-isolated client sessions (`getWebSessionId()`) eliminating cross-user transaction pollution (`UI-CONCURRENCY-1`), 1-second cached memory stats eliminating `ReadMemStats` STW overhead under concurrent polling, 6-metric Overview panel with instant delta, real-time SSE stream, Prometheus text `/metrics` and OTLP `/v1/metrics`, and `EXPLAIN ANALYZE` execution profiler.
 
 ---
 

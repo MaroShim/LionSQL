@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"lionsql/pkg/auth"
@@ -35,6 +36,13 @@ type ClientSession = engine.ClientSession
 // PreparedStatement stores compiled bytecode and parameter definitions (aliased from engine.PreparedStatement).
 type PreparedStatement = engine.PreparedStatement
 
+type memStatsCache struct {
+	mu         sync.RWMutex
+	allocBytes uint64
+	goroutines int
+	lastUpdate time.Time
+}
+
 // Server provides the PocketBase-style HTTP API and Embedded Web Dashboard.
 type Server struct {
 	catalog     *catalog.Catalog
@@ -55,6 +63,7 @@ type Server struct {
 	outboxDispatcher *cdc.OutboxDispatcher
 	requestLogger    *RequestActivityLogger
 	startTime        time.Time
+	memCache         memStatsCache
 }
 
 // NewServer initializes a new Server with default in-memory auth service.
