@@ -39,17 +39,17 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | Quality Gate | Description | Verified Status |
 | :--- | :--- | :---: |
 | **Gate 1: Multi-Wire Compatibility** | TDS (SSMS, DBeaver, Beekeeper, sqlcmd) & PGWire v3 (psql) live query parity | **100% PASS (`[x]`)** |
-| **Gate 2: ACID & Zero-Race Concurrency** | In-Memory OCC 779k tpmC / WiredTiger 833k tpmC, 0 data races under `-race` | **100% PASS (`[x]`)** |
+| **Gate 2: ACID & Zero-Race Concurrency** | In-Memory OCC 1,046k tpmC / WiredTiger 833k tpmC, 0 data races under `-race` | **100% PASS (`[x]`)** |
 | **Gate 3: High Availability & CDC** | 1-Writer Multi-Reader WAL replication streaming, real-time CDC, live failover | **100% PASS (`[x]`)** |
 | **Gate 4: Enterprise Security & Governance** | SQL RBAC Default Deny, TLS dynamic certificates, heap memory governor circuit breaker | **100% PASS (`[x]`)** |
 | **Gate 5: Unified Binary & Operational Tools**| Single executable (`lionsql`), Web Studio suite, Windows standalone (`lionsql.exe`, 1ms timer) | **100% PASS (`[x]`)** |
 
 ### Core Tracks Delivered in v0.90.0:
 1. **Wire Protocols & Tool Interoperability**: TDS RPC 100% ordinal positional parameter mapping (`TDS-RPC-AUDIT-1`), Unicode N-prefix UTF-16LE fix, anonymous VDBE procedural block execution (`IF/WHILE`), legacy metadata procedures (`sp_tables`, `sp_columns`), and session bounded prepared statement LRU cache (`PREP-1`).
-2. **Storage Engines & OCC Vertical Performance**: Atomic table snapshot catalog replacing RWMutex (`VPERF-18`), out-of-lock WAL MessagePack pre-encoding (`VPERF-17`), single shard entry consolidation (`VPERF-17`), zero-copy row checking, and non-destructive benchmark directory isolation (`BENCH-DIR-SAFETY-1`).
-3. **Query Engine & 2-Tier CBO**: 2-Tier query engine consolidation (Tier 1 VDBE, Tier 2 Volcano CBO), Sort-Merge Join iterator (`MergeJoinIterator`), dynamic programming join enumeration, covering index-only scans, and expression functional indexes.
+2. **Storage Engines & OCC Vertical Performance**: Hyper-scale 256-shard partitioning, 64B cacheline padding, 256-bit lock ordering, small int string interning, zero-alloc `InsertRow`/`UpdateRow` fast-paths (`VPERF-19`), selective column tuple extraction (`VPERF-21`), 256-shard O(1) hash map restoration (`VPERF-22`), delivering **1,046,121 tpmC (39,020 TPS)** in storage kernel and **603,241 tpmC (22,294 TPS)** in VDBE runtime.
+3. **Query Engine & 2-Tier CBO**: 2-Tier query engine consolidation (Tier 1 VDBE with direct row updates and point-lookup shortcut, Tier 2 Volcano CBO), Sort-Merge Join iterator (`MergeJoinIterator`), dynamic programming join enumeration, covering index-only scans, and expression functional indexes.
 4. **Reliability, Security & Lifecycle**: Windows cross-platform daemon decoupling (`daemon_windows.go`, `daemon_unix.go`), Windows 1ms high-resolution timer (`timeBeginPeriod(1)` via `winmm.dll`), graceful shutdown with 1.5s bounded drain deadline, and PBKDF2/SHA-256 authentication.
-5. **Benchmarks & Integration Suites**: Network TPC-C benchmark client (`cmd/tpcc_client`), 3-tier VDBE TPC-C progression (497k~668k tpmC), and 13-domain extended smoke test suite (`scripts/verify_report.sh`).
+5. **Benchmarks & Integration Suites**: Network TPC-C benchmark client (`cmd/tpcc_client`), 3-tier VDBE TPC-C progression (603k tpmC), and 13-domain extended smoke test suite (`scripts/verify_report.sh`).
 6. **Web Studio & Observability**: Embedded Web Studio dashboard (`/_/`), 6-metric Overview panel with instant delta, real-time SSE stream, Prometheus text `/metrics` and OTLP `/v1/metrics`, and `EXPLAIN ANALYZE` execution profiler.
 
 ---
@@ -68,7 +68,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 
 | Task Code | Domain | Key Architecture Deliverable | Target Packages | Target Release | Reference Document |
 | :---: | :---: | :--- | :--- | :---: | :--- |
-| **`OCC-HYPER-1`**| Storage/OCC | **In-Memory OCC Hyper-Scale 2M tpmC & Lock-Free Snapshot (Phase 1, 1.5, 2, 3 Delivered)** | `pkg/storage/memengine`, `pkg/storage` | `v1.1.0` | [`notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md`](notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md) |
+| **`OCC-HYPER-2`**| Storage/OCC | **In-Memory OCC Compact Arena Memory Compaction (5x Higher Density)** | `pkg/storage/memengine`, `pkg/storage` | `v1.1.0` | [`notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md`](notes/IN_MEMORY_OCC_BEAT_WIREDTIGER_PLAN.ko.md) |
 | **`R-6`** | Architecture/API | **Module Interface Abstraction & Protocol Boundary Decoupling** | `pkg/engine`, `pkg/wire`, `pkg/api` | `v1.1.0` | [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md) |
 | **`AUDIT-LOG-1`** | Security/Audit | **Cryptographic SHA-256 Immutable Audit Logging Subsystem** | `pkg/audit`, `cmd/lionsql` | `v1.1.0` | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
 | **`TDS-MOD-1`** | Wire/Refactor | **TDS Monolith (`server.go` 2.6k lines) Decomposition** | `pkg/wire/tds` | `v1.1.0` | Post-1.0 Refactoring |
