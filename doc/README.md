@@ -93,6 +93,9 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Complete Microsoft T-SQL syntax compatibility guide.
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
+* [`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md) (Korean)
+  * Multi-dialect SQL compatibility and developer ergonomics guide.
+  * MySQL-style developer ergonomics (backticks, `DESC`, `SHOW TABLES`), multi-dialect built-in functions Best 7 (`IFNULL`, `CURDATE`, `MOD`, `TRUNC`, `INSTR`, etc.), and T-SQL Fast Forward-Only Read-Only Cursors (`PROC-CURSOR-1`).
 * [`EXTENSIONS.md`](EXTENSIONS.md)
   * Advanced SQL capabilities: Window functions (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB operators, CTEs, Foreign Keys with cascading actions, and Dual-Track UDF architecture (Go native SPI + Wasm sandbox).
 * [`PERCENTILE_ANALYTICS.md`](PERCENTILE_ANALYTICS.md)

@@ -95,6 +95,9 @@
   * 완전한 Microsoft T-SQL 문법 호환성 가이드.
   * 저장 프로시저, 사용자 정의 함수(스칼라 및 TVF), 트리거(`INSERTED`/`DELETED` 델타 테이블).
   * 제어 흐름문 (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, 커서).
+* [`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md)
+  * LionSQL 다중 방언 SQL 호환성 및 개발자 편의 문법 가이드.
+  * MySQL 스타일 손끝 편의 문법(백틱 ` ` `, `DESC`, `SHOW TABLES`), 다중 방언 내장 함수 Best 7(`IFNULL`, `CURDATE`, `MOD`, `TRUNC`, `INSTR` 등), T-SQL 단방향 읽기 전용 커서(`PROC-CURSOR-1`).
 * [`EXTENSIONS.md`](EXTENSIONS.md)
   * 고급 SQL 확장 기능: 윈도우 함수 (`ROW_NUMBER`, `RANK`, `LEAD`, `LAG`), JSON/JSONB 연산자, CTE 재귀 쿼리, 외래키 캐스케이드 액션, 듀얼 트랙 UDF 아키텍처.
 * [`PERCENTILE_ANALYTICS.md`](PERCENTILE_ANALYTICS.md)
