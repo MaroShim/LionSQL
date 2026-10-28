@@ -1514,6 +1514,9 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 	}
 
 	if ret := C.go_wt_cursor_remove_key(cur, cKey); ret != 0 {
+		if ret == C.WT_NOTFOUND {
+			return nil
+		}
 		return fmt.Errorf("cursor_remove failed with code %d", ret)
 	}
 
