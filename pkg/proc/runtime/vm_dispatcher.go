@@ -962,25 +962,36 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 				table:     data.Table,
 				columns:   data.Columns,
 				whereExpr: data.WhereExpr,
+				orderBy:   data.OrderBy,
 				idx:       0,
+				isOpen:    false,
 			}
 		case string:
 			curName := cleanSymbol(data)
-			if cur, exists := f.cursors[curName]; exists {
-				rows, err := f.scanCursorRows(cur.table, cur.whereExpr)
-				if err != nil {
-					return err
-				}
-				cur.rows = rows
-				cur.idx = 0
+			cur, exists := f.cursors[curName]
+			if !exists {
+				return fmt.Errorf("cursor %s does not exist", curName)
 			}
+			rows, cols, err := f.scanCursorRows(cur.table, cur.whereExpr, cur.columns)
+			if err != nil {
+				return err
+			}
+			if len(cur.orderBy) > 0 && len(rows) > 1 {
+				f.sortCursorRows(rows, cur.orderBy)
+			}
+			cur.rows = rows
+			if len(cols) > 0 {
+				cur.columns = cols
+			}
+			cur.idx = 0
+			cur.isOpen = true
 		}
 
 	case proc.OpCursorFetch:
 		data := f.aux(inst).(*proc.CursorData)
 		curName := cleanSymbol(data.Name)
 		cur, exists := f.cursors[curName]
-		if !exists || cur.idx >= len(cur.rows) {
+		if !exists || !cur.isOpen || cur.idx >= len(cur.rows) {
 			f.fetchStatus = -1
 		} else {
 			row := cur.rows[cur.idx]
@@ -992,7 +1003,18 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 					if v, ok := row[col]; ok {
 						f.setVar(varName, v)
 					} else {
-						f.setVar(varName, storage.NullValue(storage.TypeUnknown))
+						// Case-insensitive fallback
+						found := false
+						for rk, rv := range row {
+							if strings.EqualFold(rk, col) {
+								f.setVar(varName, rv)
+								found = true
+								break
+							}
+						}
+						if !found {
+							f.setVar(varName, storage.NullValue(storage.TypeUnknown))
+						}
 					}
 				}
 			}
@@ -1001,12 +1023,19 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 	case proc.OpCursorClose:
 		curName := cleanSymbol(f.aux(inst).(string))
 		if cur, exists := f.cursors[curName]; exists {
-			cur.idx = len(cur.rows)
+			cur.isOpen = false
+			cur.rows = nil // immediately release row buffer memory (Golden Rule 20, 23)
+			cur.idx = 0
+		} else {
+			return fmt.Errorf("cursor %s does not exist", curName)
 		}
 
 	case proc.OpCursorDealloc:
 		curName := cleanSymbol(f.aux(inst).(string))
-		delete(f.cursors, curName)
+		if cur, exists := f.cursors[curName]; exists {
+			cur.rows = nil
+			delete(f.cursors, curName)
+		}
 
 	case proc.OpCallBuiltin:
 		callData := f.aux(inst).(*proc.CallData)

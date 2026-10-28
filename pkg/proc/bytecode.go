@@ -348,6 +348,7 @@ type CursorData struct {
 	Table     string
 	Columns   []string
 	WhereExpr Expr
+	OrderBy   []OrderByItem
 	IntoVars  []string
 }
 

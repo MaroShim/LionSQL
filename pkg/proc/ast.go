@@ -680,6 +680,7 @@ type DeclareCursorStmt struct {
 	Table   string
 	Columns []string
 	Where   Expr
+	OrderBy []OrderByItem
 }
 
 func (s *DeclareCursorStmt) stmtNode() {}

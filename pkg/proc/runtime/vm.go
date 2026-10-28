@@ -335,8 +335,10 @@ type cursorState struct {
 	table     string
 	columns   []string
 	whereExpr proc.Expr
+	orderBy   []proc.OrderByItem
 	rows      []storage.Record
 	idx       int
+	isOpen    bool
 }
 
 // Run executes a precompiled bytecode program with ambient transaction semantics.
@@ -1397,7 +1399,7 @@ func (f *VMFrame) findMatchingIndex(tableName string, whereExpr proc.Expr) (stri
 	return "", nil, nil, false
 }
 
-func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr) ([]storage.Record, error) {
+func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr, userCols []string) ([]storage.Record, []string, error) {
 	var cursor storage.Cursor
 	var err error
 
@@ -1408,7 +1410,7 @@ func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr) ([]stora
 	if cursor == nil || err != nil {
 		cursor, err = f.tx.Scan(tableName)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 	defer cursor.Close()
@@ -1431,7 +1433,52 @@ func (f *VMFrame) scanCursorRows(tableName string, whereExpr proc.Expr) ([]stora
 		}
 		result = append(result, cp)
 	}
-	return result, nil
+
+	cols := userCols
+	if len(cols) == 0 || (len(cols) == 1 && cols[0] == "*") {
+		if f.executor != nil {
+			if tg := f.executor.getTableGetter(); tg != nil {
+				if schema, err := tg(tableName); err == nil && schema != nil {
+					cols = make([]string, len(schema.Columns))
+					for i, c := range schema.Columns {
+						cols[i] = c.Name
+					}
+				}
+			}
+		}
+		if (len(cols) == 0 || (len(cols) == 1 && cols[0] == "*")) && len(result) > 0 {
+			cols = make([]string, 0, len(result[0]))
+			for k := range result[0] {
+				cols = append(cols, k)
+			}
+			sort.Strings(cols)
+		}
+	}
+
+	return result, cols, nil
+}
+
+func (f *VMFrame) sortCursorRows(rows []storage.Record, orderBy []proc.OrderByItem) {
+	sort.SliceStable(rows, func(i, j int) bool {
+		rA := rows[i]
+		rB := rows[j]
+		mapA := f.buildRowEvalMap(recordToMap(rA))
+		mapB := f.buildRowEvalMap(recordToMap(rB))
+		for _, ob := range orderBy {
+			rawA, _ := proc.EvalRowExpr(ob.Expr, mapA, nil)
+			rawB, _ := proc.EvalRowExpr(ob.Expr, mapB, nil)
+			valA := toStorageValue(rawA)
+			valB := toStorageValue(rawB)
+			cmp := valA.Compare(valB)
+			if cmp != 0 {
+				if ob.Desc {
+					return cmp > 0
+				}
+				return cmp < 0
+			}
+		}
+		return false
+	})
 }
 
 func (f *VMFrame) buildRowEvalMap(row map[string]any) map[string]any {

@@ -136,6 +136,7 @@ func isSysBuiltin(name string) bool {
 		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "PWDENCRYPT", "PWDCOMPARE",
 		"@@VERSION", "VERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
 		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS", "@@NESTLEVEL", "NESTLEVEL",
+		"@@FETCH_STATUS", "FETCH_STATUS",
 		"@@CPU_BUSY", "@@IO_BUSY", "@@IDLE",
 		"HASHBYTES", "CHECKSUM", "BINARY_CHECKSUM":
 		return true
@@ -428,6 +429,9 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 
 	case "@@TRANCOUNT", "TRANCOUNT":
 		return storage.IntValue(0)
+
+	case "@@FETCH_STATUS", "FETCH_STATUS":
+		return storage.IntValue(-1)
 
 	case "@@LOCK_TIMEOUT", "LOCK_TIMEOUT":
 		return storage.IntValue(-1)

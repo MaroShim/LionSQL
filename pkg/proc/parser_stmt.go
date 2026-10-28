@@ -131,10 +131,7 @@ func (p *Parser) parseDeallocate() (Statement, error) {
 
 func (p *Parser) parseFetch() (Statement, error) {
 	p.nextToken() // eat FETCH
-	if p.curTokenIs(TokenNext) {
-		p.nextToken()
-	}
-	if p.curTokenIs(TokenFrom) {
+	for p.curTokenIs(TokenNext) || p.curTokenIs(TokenFrom) || strings.EqualFold(p.curToken.Literal, "GLOBAL") || strings.EqualFold(p.curToken.Literal, "LOCAL") {
 		p.nextToken()
 	}
 	curName := p.curToken.Literal
@@ -305,15 +302,43 @@ func (p *Parser) parseBlock() (Statement, error) {
 	return &BlockStmt{Statements: stmts}, nil
 }
 
+func isCursorModifier(lit string) bool {
+	upper := strings.ToUpper(lit)
+	switch upper {
+	case "LOCAL", "GLOBAL", "FORWARD_ONLY", "FAST_FORWARD", "READ_ONLY",
+		"STATIC", "DYNAMIC", "KEYSET", "SCROLL", "INSENSITIVE", "TYPE_WARNING":
+		return true
+	default:
+		return false
+	}
+}
+
 func (p *Parser) parseDeclare() (Statement, error) {
 	p.nextToken() // eat DECLARE
 
-	// Check if this is DECLARE @name / name CURSOR FOR SELECT ...
+	// Check if this is DECLARE @name / name [LOCAL|GLOBAL] [FORWARD_ONLY...] CURSOR ...
 	name := p.curToken.Literal
 	p.nextToken()
 
+	isCursor := false
 	if p.curTokenIs(TokenCursor) {
+		isCursor = true
 		p.nextToken() // eat CURSOR
+	} else if isCursorModifier(p.curToken.Literal) {
+		for isCursorModifier(p.curToken.Literal) {
+			p.nextToken()
+			if p.curTokenIs(TokenCursor) {
+				isCursor = true
+				p.nextToken() // eat CURSOR
+				break
+			}
+		}
+	}
+
+	if isCursor {
+		for isCursorModifier(p.curToken.Literal) {
+			p.nextToken()
+		}
 		if !p.curTokenIs(TokenFor) {
 			return nil, fmt.Errorf("expected FOR after CURSOR, got %s", p.curToken.Literal)
 		}
@@ -328,6 +353,8 @@ func (p *Parser) parseDeclare() (Statement, error) {
 		for !p.curTokenIs(TokenFrom) && !p.curTokenIs(TokenEOF) {
 			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenAsterisk) {
 				cols = append(cols, p.curToken.Literal)
+				p.nextToken()
+			} else {
 				p.nextToken()
 			}
 			if p.curTokenIs(TokenComma) {
@@ -349,6 +376,30 @@ func (p *Parser) parseDeclare() (Statement, error) {
 			whereExpr = p.parseExpression(precLowest)
 		}
 
+		var orderBy []OrderByItem
+		if p.curTokenIs(TokenOrder) {
+			p.nextToken() // eat ORDER
+			if p.curTokenIs(TokenBy) {
+				p.nextToken() // eat BY
+			}
+			for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+				oExpr := p.parseExpression(precLowest)
+				desc := false
+				if p.curTokenIs(TokenDesc) {
+					desc = true
+					p.nextToken()
+				} else if p.curTokenIs(TokenAsc) {
+					p.nextToken()
+				}
+				orderBy = append(orderBy, OrderByItem{Expr: oExpr, Desc: desc})
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				} else {
+					break
+				}
+			}
+		}
+
 		if p.curTokenIs(TokenSemicolon) {
 			p.nextToken()
 		}
@@ -358,6 +409,7 @@ func (p *Parser) parseDeclare() (Statement, error) {
 			Table:   tblName,
 			Columns: cols,
 			Where:   whereExpr,
+			OrderBy: orderBy,
 		}, nil
 	}
 

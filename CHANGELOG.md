@@ -8,6 +8,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- `PROC-CURSOR-1`: Implemented T-SQL Fast Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility:
+  - **T-SQL Cursor Lifecycle (`pkg/proc/parser_stmt.go`, `runtime/vm_dispatcher.go`, `runtime/cursor_test.go`)**: Fully implemented 5 core procedural cursor statements: `DECLARE <name> CURSOR FOR <query>`, `OPEN <name>`, `FETCH NEXT FROM <name> INTO @vars...`, `CLOSE <name>`, and `DEALLOCATE <name>`.
+  - **Tolerant Modifiers No-Op Support**: Permissively accept standard T-SQL cursor modifiers (`LOCAL`, `GLOBAL`, `FORWARD_ONLY`, `FAST_FORWARD`, `READ_ONLY`, `STATIC`) converging transparently into fast single-pass forward iteration.
+  - **`SELECT *` Projection Expansion & In-Cursor `ORDER BY`**: Dynamically resolve table schema columns on `SELECT *` cursor declarations and deterministically sort materialized cursor records when `ORDER BY` clauses are specified.
+  - **Accurate `@@FETCH_STATUS` State Transition**: Maintain strict SQL Server semantics for `@@FETCH_STATUS` (`0` on row fetch success, `-1` on EOF or past-end/unopened/closed cursor), including immediate `-1` for empty result sets.
+  - **Zero-Leak Memory Reclaim (Golden Rule 20, 23)**: `CLOSE <name>` immediately nulls out and discards the materialized row buffer (`cur.rows = nil`), eliminating GC pressure during long-running cursor batch procedures.
 - `S-MYSQL-1-P1`: Implemented MySQL-Style Concise Syntax Ergonomics Phase 1 Quick-Wins:
   - **Backtick Identifier Quoting (`pkg/proc/lexer.go`, `lexer_test.go`)**: Extended Pratt parser lexer to tokenize MySQL backtick-quoted identifiers (`` `table` ``, `` `db`.`tbl`.`col` ``, `` `user``name` ``) identically to ANSI quotes (`"..."`) and T-SQL brackets (`[...]`).
   - **Concise Schema Inspection (`DESC` / `DESCRIBE <table>`)**: Added instant 6-column tabular column metadata view (`Field`, `Type`, `Null`, `Key`, `Default`, `Extra`) with PK/Index mapping and auto-increment detection across `pkg/engine/sqlexec.go`, `sqlexec_ddl.go`, and `sqlexec_explain.go`.

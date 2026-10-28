@@ -866,6 +866,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			Table:     s.Table,
 			Columns:   s.Columns,
 			WhereExpr: s.Where,
+			OrderBy:   s.OrderBy,
 		})
 		return nil
 
