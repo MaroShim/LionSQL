@@ -121,7 +121,7 @@ For deep architectural context, negative knowledge, and historical postmortems, 
 - [`notes/PITFALLS_AND_TRICKS.md`](notes/PITFALLS_AND_TRICKS.md): Circular import prevention, CGo tags, sandbox isolation, Decimal JSON safety.
 - [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md): Complete task identification taxonomy (`P1~P3`, `VPERF-1~18`, `A~D`).
 - [`notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](notes/QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md): 2-Tier query engine specification.
-- [`notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md`](notes/IN_MEMORY_OCC_PERFORMANCE_TUNING_PLAN.md): OCC 7-stage tuning roadmap.
+- [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md): In-Memory OCC performance optimization history, WiredTiger beat roadmap, and 104k tpmC architecture.
 - [`notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](notes/WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md): Windows daemon decoupling and 1ms timer architecture.
 - [`notes/README.md`](notes/README.md) / [`notes/README.ko.md`](notes/README.ko.md): Master index of all completed architecture plans.
 - [`TODO.md`](TODO.md): Active operational engineering dashboard.
