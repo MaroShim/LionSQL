@@ -40,6 +40,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md)** (Korean): Master plan eliminating heuristic type coercion anti-patterns across engine and wire protocols (Completed).
    - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)** (Korean): Permanent 2-tier query execution architecture specification (Completed).
    - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC performance optimization history, WiredTiger beat roadmap, 104k tpmC architecture, and post-1.0 memory compaction (OCC-HYPER-2).
+   - **[`TPCC_CLIENT_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](TPCC_CLIENT_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): End-to-end network client optimization, prepared statement parameterization, dedicated worker connection binding, and 40x throughput leap (113k tpmC) plan (Completed).
    - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: Architecture for SHA-256 hash-chained immutable audit logging for PCI-DSS v4.0 / SOC 2 compliance (Post-1.0 / v1.1.0).
    - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Design for Microsoft SQL Server collation and locale support (Post-1.0 / v1.1.0).
    - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: Memory and binary compaction plan for ANTLR grammar parser (Post-1.0 Roadmap).

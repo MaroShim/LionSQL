@@ -117,6 +117,7 @@ func main() {
 		query := url.Values{}
 		query.Add("database", database)
 		query.Add("encrypt", "disable")
+		query.Add("packet size", "32768")
 		u := &url.URL{
 			Scheme:   "sqlserver",
 			User:     url.UserPassword(user, *passFlag),
@@ -225,6 +226,15 @@ func main() {
 			defer wg.Done()
 			rng := rand.New(rand.NewSource(time.Now().UnixNano() + int64(wid)*1000))
 
+			conn, err := db.Conn(ctx)
+			if err != nil {
+				return
+			}
+			defer conn.Close()
+
+			stmts := prepareWorkerStmts(ctx, conn, protocol)
+			defer stmts.close()
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -242,31 +252,31 @@ func main() {
 				switch {
 				case txType < 45: // 45% New-Order
 					ok, retries := execWithRetry(*maxRetries, rng, func() bool {
-						return runClientNewOrder(ctx, db, rng, wID, dID, cID, *numItems)
+						return runClientNewOrder(ctx, conn, stmts, rng, wID, dID, cID, *numItems)
 					})
 					statsNewOrder.record(time.Since(start), ok, retries)
 
 				case txType < 88: // 43% Payment
 					ok, retries := execWithRetry(*maxRetries, rng, func() bool {
-						return runClientPayment(ctx, db, rng, wID, dID, cID)
+						return runClientPayment(ctx, conn, stmts, rng, wID, dID, cID)
 					})
 					statsPayment.record(time.Since(start), ok, retries)
 
 				case txType < 92: // 4% Order-Status
 					ok, retries := execWithRetry(*maxRetries, rng, func() bool {
-						return runClientOrderStatus(ctx, db, wID, dID, cID)
+						return runClientOrderStatus(ctx, conn, stmts, wID, dID, cID)
 					})
 					statsOrderStatus.record(time.Since(start), ok, retries)
 
 				case txType < 96: // 4% Delivery
 					ok, retries := execWithRetry(*maxRetries, rng, func() bool {
-						return runClientDelivery(ctx, db, rng, wID)
+						return runClientDelivery(ctx, conn, stmts, rng, wID)
 					})
 					statsDelivery.record(time.Since(start), ok, retries)
 
 				default: // 4% Stock-Level
 					ok, retries := execWithRetry(*maxRetries, rng, func() bool {
-						return runClientStockLevel(ctx, db, rng, wID, dID, *numItems)
+						return runClientStockLevel(ctx, conn, stmts, rng, wID, dID, *numItems)
 					})
 					statsStockLevel.record(time.Since(start), ok, retries)
 				}
@@ -581,12 +591,111 @@ func seedTPCCData(db *sql.DB, numWarehouses, numItems, numCustPerDist int) error
 	return nil
 }
 
-func runClientNewOrder(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID, cID, totalItems int) bool {
+type workerStmts struct {
+	stmtPayment     *sql.Stmt
+	stmtOrderStatus *sql.Stmt
+	stmtStockLevel  *sql.Stmt
+	stmtDelivery    *sql.Stmt
+	stmtHeader      *sql.Stmt
+	stmtLine        *sql.Stmt
+}
+
+func (ws *workerStmts) close() {
+	if ws.stmtPayment != nil {
+		ws.stmtPayment.Close()
+	}
+	if ws.stmtOrderStatus != nil {
+		ws.stmtOrderStatus.Close()
+	}
+	if ws.stmtStockLevel != nil {
+		ws.stmtStockLevel.Close()
+	}
+	if ws.stmtDelivery != nil {
+		ws.stmtDelivery.Close()
+	}
+	if ws.stmtHeader != nil {
+		ws.stmtHeader.Close()
+	}
+	if ws.stmtLine != nil {
+		ws.stmtLine.Close()
+	}
+}
+
+func placeholder(protocol string, idx int) string {
+	if protocol == "postgres" {
+		return fmt.Sprintf("$%d", idx)
+	}
+	return "?"
+}
+
+func prepareWorkerStmts(ctx context.Context, conn *sql.Conn, protocol string) *workerStmts {
+	ws := &workerStmts{}
+
+	paySQL := fmt.Sprintf("EXEC TPCC_Payment @w_id=%s, @d_key=%s, @c_key=%s, @amount=%s;",
+		placeholder(protocol, 1), placeholder(protocol, 2), placeholder(protocol, 3), placeholder(protocol, 4))
+	ws.stmtPayment, _ = conn.PrepareContext(ctx, paySQL)
+
+	osSQL := fmt.Sprintf("EXEC TPCC_OrderStatus @c_key=%s;", placeholder(protocol, 1))
+	ws.stmtOrderStatus, _ = conn.PrepareContext(ctx, osSQL)
+
+	slSQL := fmt.Sprintf("EXEC TPCC_StockLevel @d_key=%s, @s_key=%s;",
+		placeholder(protocol, 1), placeholder(protocol, 2))
+	ws.stmtStockLevel, _ = conn.PrepareContext(ctx, slSQL)
+
+	delSQL := fmt.Sprintf("EXEC TPCC_Delivery @no_key=%s;", placeholder(protocol, 1))
+	ws.stmtDelivery, _ = conn.PrepareContext(ctx, delSQL)
+
+	hSQL := fmt.Sprintf("EXEC TPCC_NewOrderHeader @w_id=%s, @d_key=%s, @c_key=%s, @o_key=%s, @next_o_id=%s, @d_id=%s, @c_id=%s, @ol_cnt=%s;",
+		placeholder(protocol, 1), placeholder(protocol, 2), placeholder(protocol, 3), placeholder(protocol, 4),
+		placeholder(protocol, 5), placeholder(protocol, 6), placeholder(protocol, 7), placeholder(protocol, 8))
+	ws.stmtHeader, _ = conn.PrepareContext(ctx, hSQL)
+
+	lSQL := fmt.Sprintf("EXEC TPCC_NewOrderLine @s_key=%s, @i_id=%s, @order_qty=%s, @ol_key=%s, @next_o_id=%s, @d_id=%s, @w_id=%s, @ol=%s, @amount=%s;",
+		placeholder(protocol, 1), placeholder(protocol, 2), placeholder(protocol, 3), placeholder(protocol, 4),
+		placeholder(protocol, 5), placeholder(protocol, 6), placeholder(protocol, 7), placeholder(protocol, 8), placeholder(protocol, 9))
+	ws.stmtLine, _ = conn.PrepareContext(ctx, lSQL)
+
+	return ws
+}
+
+func runClientNewOrder(ctx context.Context, conn *sql.Conn, stmts *workerStmts, rng *rand.Rand, wID, dID, cID, totalItems int) bool {
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
 	cKey := fmt.Sprintf("%d_%d_%d", wID, dID, cID)
 	nextOID := int64(1000 + rng.Intn(1000000))
 	oKey := fmt.Sprintf("%d_%d_%d", wID, dID, nextOID)
 	olCnt := 5 + rng.Intn(6) // 5 to 10 order lines
+
+	if stmts != nil && stmts.stmtHeader != nil && stmts.stmtLine != nil {
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return false
+		}
+		defer tx.Rollback()
+
+		txH := tx.Stmt(stmts.stmtHeader)
+		_, errH := txH.ExecContext(ctx, wID, dKey, cKey, oKey, nextOID, dID, cID, olCnt)
+		txH.Close()
+		if errH != nil {
+			return false
+		}
+
+		txL := tx.Stmt(stmts.stmtLine)
+		for ol := 1; ol <= olCnt; ol++ {
+			iID := rng.Intn(totalItems) + 1
+			orderQty := rng.Intn(10) + 1
+			olAmount := float64(orderQty) * 10.50
+			sKey := fmt.Sprintf("%d_%d", wID, iID)
+			olKey := fmt.Sprintf("%d_%d_%d_%d", wID, dID, nextOID, ol)
+
+			if _, err := txL.ExecContext(ctx, sKey, iID, orderQty, olKey, nextOID, dID, wID, ol, olAmount); err != nil {
+				txL.Close()
+				return false
+			}
+		}
+		txL.Close()
+
+		return tx.Commit() == nil
+	}
 
 	var sb strings.Builder
 	sb.WriteString("BEGIN TRANSACTION;\n")
@@ -605,30 +714,60 @@ func runClientNewOrder(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID
 	}
 	sb.WriteString("COMMIT TRANSACTION;")
 
-	_, err := db.ExecContext(ctx, sb.String())
+	_, err := conn.ExecContext(ctx, sb.String())
 	return err == nil
 }
 
-func runClientPayment(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID, cID int) bool {
+func runClientPayment(ctx context.Context, conn *sql.Conn, stmts *workerStmts, rng *rand.Rand, wID, dID, cID int) bool {
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
 	cKey := fmt.Sprintf("%d_%d_%d", wID, dID, cID)
 	amount := float64(rng.Intn(50000)+100) / 100.0 // $1.00 to $500.00
 
+	if stmts != nil && stmts.stmtPayment != nil {
+		_, err := stmts.stmtPayment.ExecContext(ctx, wID, dKey, cKey, amount)
+		return err == nil
+	}
+
 	query := fmt.Sprintf("EXEC TPCC_Payment @w_id=%d, @d_key='%s', @c_key='%s', @amount=%f;",
 		wID, dKey, cKey, amount)
-	_, err := db.ExecContext(ctx, query)
+	_, err := conn.ExecContext(ctx, query)
 	return err == nil
 }
 
-func runClientOrderStatus(ctx context.Context, db *sql.DB, wID, dID, cID int) bool {
+func runClientOrderStatus(ctx context.Context, conn *sql.Conn, stmts *workerStmts, wID, dID, cID int) bool {
 	cKey := fmt.Sprintf("%d_%d_%d", wID, dID, cID)
+	if stmts != nil && stmts.stmtOrderStatus != nil {
+		_, err := stmts.stmtOrderStatus.ExecContext(ctx, cKey)
+		return err == nil
+	}
 	query := fmt.Sprintf("EXEC TPCC_OrderStatus @c_key='%s';", cKey)
-	_, err := db.ExecContext(ctx, query)
+	_, err := conn.ExecContext(ctx, query)
 	return err == nil
 }
 
-func runClientDelivery(ctx context.Context, db *sql.DB, rng *rand.Rand, wID int) bool {
+func runClientDelivery(ctx context.Context, conn *sql.Conn, stmts *workerStmts, rng *rand.Rand, wID int) bool {
 	oID := int64(1000 + rng.Intn(1000000))
+
+	if stmts != nil && stmts.stmtDelivery != nil {
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return false
+		}
+		defer tx.Rollback()
+
+		txD := tx.Stmt(stmts.stmtDelivery)
+		for d := 1; d <= 10; d++ {
+			noKey := fmt.Sprintf("%d_%d_%d", wID, d, oID)
+			if _, err := txD.ExecContext(ctx, noKey); err != nil {
+				txD.Close()
+				return false
+			}
+		}
+		txD.Close()
+
+		return tx.Commit() == nil
+	}
+
 	var sb strings.Builder
 	sb.WriteString("BEGIN TRANSACTION;\n")
 	for d := 1; d <= 10; d++ {
@@ -637,19 +776,31 @@ func runClientDelivery(ctx context.Context, db *sql.DB, rng *rand.Rand, wID int)
 	}
 	sb.WriteString("COMMIT TRANSACTION;")
 
-	_, err := db.ExecContext(ctx, sb.String())
+	_, err := conn.ExecContext(ctx, sb.String())
 	return err == nil
 }
 
-func runClientStockLevel(ctx context.Context, db *sql.DB, rng *rand.Rand, wID, dID, totalItems int) bool {
+func runClientStockLevel(ctx context.Context, conn *sql.Conn, stmts *workerStmts, rng *rand.Rand, wID, dID, totalItems int) bool {
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
+
+	if stmts != nil && stmts.stmtStockLevel != nil {
+		for k := 0; k < 5; k++ {
+			iID := rng.Intn(totalItems) + 1
+			sKey := fmt.Sprintf("%d_%d", wID, iID)
+			if _, err := stmts.stmtStockLevel.ExecContext(ctx, dKey, sKey); err != nil {
+				return false
+			}
+		}
+		return true
+	}
+
 	var sb strings.Builder
 	for k := 0; k < 5; k++ {
 		iID := rng.Intn(totalItems) + 1
 		sKey := fmt.Sprintf("%d_%d", wID, iID)
 		sb.WriteString(fmt.Sprintf("EXEC TPCC_StockLevel @d_key='%s', @s_key='%s';\n", dKey, sKey))
 	}
-	_, err := db.ExecContext(ctx, sb.String())
+	_, err := conn.ExecContext(ctx, sb.String())
 	return err == nil
 }
 

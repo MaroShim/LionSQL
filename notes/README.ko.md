@@ -40,6 +40,7 @@
    - **[`TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md)**: 엔진 및 프로토콜 전반의 휴리스틱 타입 추론 및 강제 수치변환 안티패턴 전면 제거 마스터 플랜 (완료)
    - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 확정 명세서 (완료)
    - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).
+   - **[`TPCC_CLIENT_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](TPCC_CLIENT_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: 네트워크 TPC-C 클라이언트 종단 최적화, Precompiled Prepared Statement 파라미터화, 워커 전용 커넥션 바인딩 및 40배 성능 도약(113k tpmC) 플랜 (완료)
    - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0 / SOC 2 규제 대응 SHA-256 해시 체이닝 불변 감사 로그 서브시스템 설계 (Post-1.0 / v1.1.0)
    - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계 (Post-1.0 / v1.1.0)
    - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: ANTLR 파서 바이너리 및 런타임 메모리 경량화 플랜 (Post-1.0 계획)

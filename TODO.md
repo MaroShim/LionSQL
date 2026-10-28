@@ -63,6 +63,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`REL-1.0-TAG`** | Release/Tag | **Official `v1.0.0` Production Tag & GitHub Release** | Git Tag `v1.0.0`, GitHub Release | **Ready** |
 | **`REL-1.0-BIN`** | Build/Pkg | **Multi-Platform Production Binaries (macOS, Linux, Windows)** | `bin/lionsql*`, `Dockerfile` | **Ready** |
 | **`REL-1.0-DOC`** | Docs/Release| **Official 1.0 Release Notes & User Migration Guide** | `CHANGELOG.md`, `README.md` | **Ready** |
+| **`PERF-TPCC-CLIENT`**| Bench/Wire | **`tpcc-client` Parameterized Prepared Stmts & Dedicated Conn Optimization** | `cmd/tpcc_client/main.go` | **Completed (`[x]`, 113k tpmC)** |
 
 ### 3.2. Post-1.0 (`v1.1.0+`) Roadmap Queue
 
