@@ -8,6 +8,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- `S-MYSQL-1-P1`: Implemented MySQL-Style Concise Syntax Ergonomics Phase 1 Quick-Wins:
+  - **Backtick Identifier Quoting (`pkg/proc/lexer.go`, `lexer_test.go`)**: Extended Pratt parser lexer to tokenize MySQL backtick-quoted identifiers (`` `table` ``, `` `db`.`tbl`.`col` ``, `` `user``name` ``) identically to ANSI quotes (`"..."`) and T-SQL brackets (`[...]`).
+  - **Concise Schema Inspection (`DESC` / `DESCRIBE <table>`)**: Added instant 6-column tabular column metadata view (`Field`, `Type`, `Null`, `Key`, `Default`, `Extra`) with PK/Index mapping and auto-increment detection across `pkg/engine/sqlexec.go`, `sqlexec_ddl.go`, and `sqlexec_explain.go`.
+  - **Intuitive Catalog Exploration (`SHOW TABLES` & `SHOW DATABASES`)**: Added support for `SHOW TABLES` (and `SHOW FULL TABLES`) listing non-temporary database tables, and `SHOW DATABASES` / `SHOW SCHEMAS` for catalog exploration.
 - `FUNC-DIALECT-7`: Implemented High-ROI Multi-Dialect Builtin Functions Best 7 across PostgreSQL, MySQL, and Oracle dialect ergonomics:
   - `IFNULL(expr, fallback)` & `NVL(expr, fallback)`: MySQL & Oracle null-coalescing aliases mapped to system `ISNULL`/`COALESCE` logic in `pkg/proc/builtins_sys.go`.
   - `CURDATE()` / `CURRENT_DATE`: Zero-argument current calendar date evaluated as `storage.TypeDate` in `pkg/proc/builtins_date.go`.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1043,6 +1044,138 @@ func (s *Coordinator) execShowPartitions(tableName string, start time.Time) (*Qu
 		Success:      true,
 		Command:      "SHOW PARTITIONS",
 		Columns:      []string{"partition", "table", "row_count"},
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Coordinator) execDescTable(tableName string, start time.Time) (*QueryResult, error) {
+	schema, err := s.engine.GetTable(tableName)
+	if err != nil {
+		return nil, fmt.Errorf("table %q not found", tableName)
+	}
+
+	cols := []string{"Field", "Type", "Null", "Key", "Default", "Extra"}
+	rows := make([]map[string]any, 0, len(schema.Columns))
+
+	for _, col := range schema.Columns {
+		typeStr := col.Type.String()
+		if col.Type == storage.TypeDecimal && col.Precision > 0 {
+			typeStr = fmt.Sprintf("DECIMAL(%d,%d)", col.Precision, col.Scale)
+		}
+
+		nullStr := "NO"
+		if col.Nullable {
+			nullStr = "YES"
+		}
+
+		keyStr := ""
+		if col.PrimaryKey {
+			keyStr = "PRI"
+		} else {
+			for _, idx := range schema.Indexes {
+				for _, c := range idx.Columns {
+					if strings.EqualFold(c, col.Name) {
+						if idx.Unique {
+							keyStr = "UNI"
+						} else if keyStr == "" {
+							keyStr = "MUL"
+						}
+						break
+					}
+				}
+				if keyStr == "UNI" {
+					break
+				}
+			}
+		}
+
+		var defaultVal any = nil
+		if col.Default != "" {
+			defaultVal = col.Default
+		}
+
+		extraStr := ""
+		if col.Identity {
+			extraStr = "auto_increment"
+		}
+
+		row := map[string]any{
+			"Field":   col.Name,
+			"Type":    typeStr,
+			"Null":    nullStr,
+			"Key":     keyStr,
+			"Default": defaultVal,
+			"Extra":   extraStr,
+		}
+		rows = append(rows, row)
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "DESCRIBE",
+		Columns:      cols,
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Coordinator) execShowTables(cs *ClientSession, start time.Time) (*QueryResult, error) {
+	tables, err := s.engine.ListTables()
+	if err != nil {
+		return nil, err
+	}
+
+	dbName := "lionsql"
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.Database != "" {
+			dbName = cs.Database
+		}
+		cs.Mu.Unlock()
+	}
+
+	colName := "Tables_in_" + dbName
+	var tableNames []string
+	for _, t := range tables {
+		if !t.IsTemporary() {
+			tableNames = append(tableNames, t.Name)
+		}
+	}
+	sort.Strings(tableNames)
+
+	rows := make([]map[string]any, 0, len(tableNames))
+	for _, name := range tableNames {
+		rows = append(rows, map[string]any{
+			colName: name,
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SHOW TABLES",
+		Columns:      []string{colName},
+		Rows:         rows,
+		RowsAffected: int64(len(rows)),
+		DurationUS:   time.Since(start).Microseconds(),
+	}, nil
+}
+
+func (s *Coordinator) execShowDatabases(start time.Time) (*QueryResult, error) {
+	dbs := []string{"lionsql", "master", "tempdb", "model", "msdb"}
+	rows := make([]map[string]any, 0, len(dbs))
+	for _, db := range dbs {
+		rows = append(rows, map[string]any{
+			"Database": db,
+		})
+	}
+
+	return &QueryResult{
+		Success:      true,
+		Command:      "SHOW DATABASES",
+		Columns:      []string{"Database"},
 		Rows:         rows,
 		RowsAffected: int64(len(rows)),
 		DurationUS:   time.Since(start).Microseconds(),

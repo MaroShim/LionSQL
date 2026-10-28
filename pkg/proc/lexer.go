@@ -138,6 +138,12 @@ func (l *Lexer) NextToken() Token {
 		tok.Line = tokLine
 		tok.Col = tokCol
 		return tok
+	case '`':
+		tok.Type = TokenIdent
+		tok.Literal = l.readBacktickIdentifier()
+		tok.Line = tokLine
+		tok.Col = tokCol
+		return tok
 	case '@':
 		tok.Type = TokenVariable
 		tok.Literal = l.readVariable()
@@ -231,15 +237,19 @@ func (l *Lexer) readBracketedIdentifier() string {
 				l.readBracketedIdentifier()
 			} else if l.ch == '"' {
 				l.readQuotedIdentifier()
+			} else if l.ch == '`' {
+				l.readBacktickIdentifier()
 			} else if isLetter(l.ch) {
 				l.readIdentifier()
 			}
-		} else if l.peekChar() == '[' || l.peekChar() == '"' || isLetter(l.peekChar()) || l.peekChar() == '*' {
+		} else if l.peekChar() == '[' || l.peekChar() == '"' || l.peekChar() == '`' || isLetter(l.peekChar()) || l.peekChar() == '*' {
 			l.readChar() // eat '.'
 			if l.ch == '[' {
 				l.readBracketedIdentifier()
 			} else if l.ch == '"' {
 				l.readQuotedIdentifier()
+			} else if l.ch == '`' {
+				l.readBacktickIdentifier()
 			} else if l.ch == '*' {
 				l.readChar() // eat '*'
 			} else {
@@ -282,12 +292,72 @@ func (l *Lexer) readQuotedIdentifier() string {
 				return b.String() + ".." + l.readQuotedIdentifier()
 			} else if l.ch == '[' {
 				return b.String() + ".." + l.readBracketedIdentifier()
+			} else if l.ch == '`' {
+				return b.String() + ".." + l.readBacktickIdentifier()
 			} else if isLetter(l.ch) {
 				return b.String() + ".." + l.readIdentifier()
 			}
-		} else if l.peekChar() == '"' || l.peekChar() == '[' || isLetter(l.peekChar()) || l.peekChar() == '*' {
+		} else if l.peekChar() == '"' || l.peekChar() == '[' || l.peekChar() == '`' || isLetter(l.peekChar()) || l.peekChar() == '*' {
 			l.readChar() // eat '.'
 			if l.ch == '"' {
+				return b.String() + "." + l.readQuotedIdentifier()
+			} else if l.ch == '[' {
+				return b.String() + "." + l.readBracketedIdentifier()
+			} else if l.ch == '`' {
+				return b.String() + "." + l.readBacktickIdentifier()
+			} else if l.ch == '*' {
+				l.readChar() // eat '*'
+				return b.String() + ".*"
+			} else {
+				return b.String() + "." + l.readIdentifier()
+			}
+		} else {
+			break
+		}
+	}
+	return b.String()
+}
+
+func (l *Lexer) readBacktickIdentifier() string {
+	l.readChar() // skip initial '`'
+	var b strings.Builder
+	for {
+		if l.ch == 0 {
+			break
+		}
+		if l.ch == '`' {
+			if l.peekChar() == '`' {
+				// Escaped backtick ``
+				b.WriteByte('`')
+				l.readChar()
+				l.readChar()
+				continue
+			}
+			l.readChar() // skip closing backtick
+			break
+		}
+		b.WriteByte(l.ch)
+		l.readChar()
+	}
+	// Check if dot-qualified e.g. `dbo`.`customers`
+	for l.ch == '.' {
+		if l.peekChar() == '.' {
+			l.readChar() // eat '.'
+			l.readChar() // eat second '.'
+			if l.ch == '`' {
+				return b.String() + ".." + l.readBacktickIdentifier()
+			} else if l.ch == '"' {
+				return b.String() + ".." + l.readQuotedIdentifier()
+			} else if l.ch == '[' {
+				return b.String() + ".." + l.readBracketedIdentifier()
+			} else if isLetter(l.ch) {
+				return b.String() + ".." + l.readIdentifier()
+			}
+		} else if l.peekChar() == '`' || l.peekChar() == '"' || l.peekChar() == '[' || isLetter(l.peekChar()) || l.peekChar() == '*' {
+			l.readChar() // eat '.'
+			if l.ch == '`' {
+				return b.String() + "." + l.readBacktickIdentifier()
+			} else if l.ch == '"' {
 				return b.String() + "." + l.readQuotedIdentifier()
 			} else if l.ch == '[' {
 				return b.String() + "." + l.readBracketedIdentifier()
@@ -318,17 +388,21 @@ func (l *Lexer) readIdentifier() string {
 				l.readBracketedIdentifier()
 			} else if l.ch == '"' {
 				l.readQuotedIdentifier()
+			} else if l.ch == '`' {
+				l.readBacktickIdentifier()
 			} else if isLetter(l.ch) {
 				for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
 					l.readChar()
 				}
 			}
-		} else if isLetter(l.peekChar()) || isDigit(l.peekChar()) || l.peekChar() == '_' || l.peekChar() == '[' || l.peekChar() == '"' || l.peekChar() == '*' {
+		} else if isLetter(l.peekChar()) || isDigit(l.peekChar()) || l.peekChar() == '_' || l.peekChar() == '[' || l.peekChar() == '"' || l.peekChar() == '`' || l.peekChar() == '*' {
 			l.readChar() // eat '.'
 			if l.ch == '[' {
 				l.readBracketedIdentifier()
 			} else if l.ch == '"' {
 				l.readQuotedIdentifier()
+			} else if l.ch == '`' {
+				l.readBacktickIdentifier()
 			} else if l.ch == '*' {
 				l.readChar() // eat '*'
 			} else {

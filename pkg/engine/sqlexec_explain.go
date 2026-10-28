@@ -64,6 +64,14 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 	}
 
 	innerUpper := strings.ToUpper(strings.TrimSpace(innerExplainSQL))
+	if !strings.ContainsAny(innerExplainSQL, " \t\r\n();") {
+		cleanedTable := cleanIdentifier(innerExplainSQL)
+		if cleanedTable != "" {
+			if _, err := s.engine.GetTable(cleanedTable); err == nil {
+				return s.execDescTable(cleanedTable, start)
+			}
+		}
+	}
 	if strings.HasPrefix(innerUpper, "INSERT ") || strings.HasPrefix(innerUpper, "UPDATE ") || strings.HasPrefix(innerUpper, "DELETE ") {
 		return s.execDMLExplain(innerExplainSQL, opts, start)
 	}

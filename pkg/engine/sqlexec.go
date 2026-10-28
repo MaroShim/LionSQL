@@ -23,9 +23,12 @@ var (
 	reTblVarDecl   = regexp.MustCompile(`(?is)^DECLARE\s+@[a-zA-Z0-9_]+\s+TABLE\b`)
 	reKillCmd      = regexp.MustCompile(`(?is)^KILL\s+(\d+)(?:\s+WITH\s+STATUSONLY)?$`)
 	reUseCmd       = regexp.MustCompile(`(?is)^USE\s+(?:\[([^\]]+)\]|"([^"]+)"|'([^']+)'|([a-zA-Z0-9_.-]+))\s*;?$`)
-	reSetConfig    = regexp.MustCompile(`(?is)^(?:SESSION\s+)?([a-zA-Z0-9_]+)\s*(?:TO|=)\s*(.*)$`)
-	reShowParts    = regexp.MustCompile(`(?is)^SHOW\s+PARTITIONS(?:\s+FROM)?\s+([^\s;]+)\s*;?$`)
-	reShowParam    = regexp.MustCompile(`(?is)^SHOW\s+(.*?)\s*;?$`)
+	reSetConfig     = regexp.MustCompile(`(?is)^(?:SESSION\s+)?([a-zA-Z0-9_]+)\s*(?:TO|=)\s*(.*)$`)
+	reShowParts     = regexp.MustCompile(`(?is)^SHOW\s+PARTITIONS(?:\s+FROM)?\s+([^\s;]+)\s*;?$`)
+	reShowTables    = regexp.MustCompile(`(?is)^SHOW\s+(?:FULL\s+)?TABLES(?:\s+(?:FROM|IN)\s+([^\s;]+))?\s*;?$`)
+	reShowDatabases = regexp.MustCompile(`(?is)^SHOW\s+(?:DATABASES|SCHEMAS)\s*;?$`)
+	reDescTable     = regexp.MustCompile(`(?is)^(?:DESC|DESCRIBE)\s+([^\s;]+)\s*;?$`)
+	reShowParam     = regexp.MustCompile(`(?is)^SHOW\s+(.*?)\s*;?$`)
 	reSelectSysVar = regexp.MustCompile(`(?is)^SELECT\s+@@([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
 	reTblVarCreate = regexp.MustCompile(`(?is)^DECLARE\s+(@[a-zA-Z0-9_]+)\s+TABLE\s*\((.*)\)\s*;?$`)
 	reSetVar       = regexp.MustCompile(`(?is)^SET\s+@([a-zA-Z0-9_]+)\s*(?::=|=)\s*(.*)$`)
@@ -663,6 +666,21 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 				DurationUS: time.Since(start).Microseconds(),
 			}, nil
 		}
+	}
+
+	// 0.048 DESC / DESCRIBE <table>
+	if m := reDescTable.FindStringSubmatch(trimmed); len(m) == 2 {
+		return s.execDescTable(cleanIdentifier(m[1]), start)
+	}
+
+	// 0.049 SHOW TABLES
+	if reShowTables.MatchString(trimmed) {
+		return s.execShowTables(cs, start)
+	}
+
+	// 0.0495 SHOW DATABASES / SCHEMAS
+	if reShowDatabases.MatchString(trimmed) {
+		return s.execShowDatabases(start)
 	}
 
 	// 0.05 SHOW PARTITIONS [FROM] <table>
