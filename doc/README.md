@@ -121,7 +121,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ---
 
 ### 2.4. Backend-as-a-Service (BaaS), REST & Client SDKs
-* [`WEB_STUDIO_GUIDE.ko.md`](WEB_STUDIO_GUIDE.ko.md)
+* [`WEB_STUDIO_GUIDE.md`](WEB_STUDIO_GUIDE.md) ([한국어](WEB_STUDIO_GUIDE.ko.md))
   * Complete browser-based all-in-one Web Studio guide: schema modeling, data grid CRUD, SQL query console, live query audit logs, and hot backup/restore.
 * [`REST_API_RECORDS_GUIDE.md`](REST_API_RECORDS_GUIDE.md)
   * PocketBase-style instant zero-code RESTful CRUD endpoints (`/api/records/:table`).

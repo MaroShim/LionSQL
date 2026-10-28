@@ -202,7 +202,7 @@ Open your browser and navigate to:
 ```
 http://127.0.0.1:8090/_/
 ```
-The Web Studio provides immediate visual table inspection, real-time query execution, stored procedure inspection, and one-click database backup/restore.
+The Web Studio provides immediate visual table inspection, real-time query execution, stored procedure inspection, and one-click database backup/restore. See the [Web Studio User Guide](doc/WEB_STUDIO_GUIDE.md) for full operational instructions.
 
 ---
 

@@ -123,7 +123,7 @@
 ---
 
 ### 2.4. Backend-as-a-Service (BaaS), REST 및 클라이언트 SDK
-* [`WEB_STUDIO_GUIDE.ko.md`](WEB_STUDIO_GUIDE.ko.md)
+* [`WEB_STUDIO_GUIDE.ko.md`](WEB_STUDIO_GUIDE.ko.md) ([English](WEB_STUDIO_GUIDE.md))
   * 브라우저 기반 내장 올인원 Web Studio 가이드: 스키마 모델링, 데이터 그리드 CRUD, SQL 쿼리 콘솔, 실시간 쿼리 감사 로그, 핫 백업/복원.
 * [`REST_API_RECORDS_GUIDE.md`](REST_API_RECORDS_GUIDE.md)
   * PocketBase 스타일의 무설정 즉시 생성 RESTful CRUD 엔드포인트 (`/api/records/:table`).
