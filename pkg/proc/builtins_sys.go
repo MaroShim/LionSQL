@@ -126,7 +126,7 @@ func parseObjectPieces(s string) []string {
 
 func isSysBuiltin(name string) bool {
 	switch name {
-	case "ISNULL", "COALESCE", "NULLIF", "ISNUMERIC", "IIF", "CHOOSE", "GREATEST", "LEAST",
+	case "ISNULL", "COALESCE", "NULLIF", "IFNULL", "NVL", "ISNUMERIC", "IIF", "CHOOSE", "GREATEST", "LEAST",
 		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID",
 		"SCOPE_IDENTITY", "SERVERPROPERTY",
 		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
@@ -148,7 +148,7 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 	switch upper {
 	// 4. Conditional & Logical Functions
 	// ----------------------------------------------------
-	case "ISNULL", "COALESCE":
+	case "ISNULL", "COALESCE", "IFNULL", "NVL":
 		for _, a := range args {
 			if !a.IsNull {
 				return a

@@ -12,6 +12,7 @@ import (
 func isMathBuiltin(name string) bool {
 	switch name {
 	case "ABS", "ROUND", "CEILING", "CEIL", "FLOOR", "POWER", "SQRT", "SQUARE", "SIGN", "PI",
+		"MOD", "TRUNC", "TRUNCATE",
 		"EXP", "LOG", "LOG10", "SIN", "COS", "TAN", "COT", "ASIN", "ACOS", "ATAN", "ATN2", "DEGREES", "RADIANS", "RAND", "RANDOM",
 		"BIT_COUNT", "GET_BIT", "SET_BIT", "LEFT_SHIFT", "RIGHT_SHIFT":
 		return true
@@ -34,6 +35,51 @@ func evalMathBuiltin(upper string, args []storage.Value) storage.Value {
 				return storage.IntValue(int64(absVal))
 			}
 			return storage.FloatValue(absVal)
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "MOD":
+		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
+			return storage.NullValue(storage.TypeInt)
+		}
+		if args[0].Type == storage.TypeInt && args[1].Type == storage.TypeInt {
+			if args[1].IVal == 0 {
+				return storage.NullValue(storage.TypeInt)
+			}
+			return storage.IntValue(args[0].IVal % args[1].IVal)
+		}
+		n1, ok1 := toFloatNum(args[0])
+		n2, ok2 := toFloatNum(args[1])
+		if ok1 && ok2 {
+			if n2 == 0 {
+				return storage.NullValue(storage.TypeFloat)
+			}
+			rem := math.Mod(n1, n2)
+			if rem == math.Trunc(rem) {
+				return storage.IntValue(int64(rem))
+			}
+			return storage.FloatValue(rem)
+		}
+		return storage.NullValue(storage.TypeFloat)
+
+	case "TRUNC", "TRUNCATE":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeFloat)
+		}
+		if n, ok := toFloatNum(args[0]); ok {
+			decimals := 0
+			if len(args) >= 2 && !args[1].IsNull {
+				decimals = int(args[1].IVal)
+				if args[1].Type == storage.TypeFloat {
+					decimals = int(args[1].FVal)
+				}
+			}
+			factor := math.Pow(10, float64(decimals))
+			truncated := math.Trunc(n*factor) / factor
+			if decimals == 0 {
+				return storage.IntValue(int64(truncated))
+			}
+			return storage.FloatValue(truncated)
 		}
 		return storage.NullValue(storage.TypeFloat)
 

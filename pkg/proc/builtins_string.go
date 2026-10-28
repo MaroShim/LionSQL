@@ -2,6 +2,7 @@ package proc
 
 import (
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"regexp"
@@ -218,7 +219,7 @@ func isStringBuiltin(name string) bool {
 		"LEFT", "RIGHT", "SUBSTRING", "SUBSTR", "REPLACE", "REVERSE", "CHARINDEX", "SPACE", "REPLICATE", "REPEAT", "STUFF",
 		"PARSENAME", "STRING_ESCAPE", "FORMATMESSAGE",
 		"PATINDEX", "UNICODE", "NCHAR", "SOUNDEX", "DIFFERENCE", "TRANSLATE", "FORMAT",
-		"STRPOS", "MD5", "LPAD", "RPAD", "OCTET_LENGTH", "BIT_LENGTH", "INITCAP", "TO_CHAR",
+		"STRPOS", "INSTR", "MD5", "SHA256", "HEX", "UNHEX", "LPAD", "RPAD", "OCTET_LENGTH", "BIT_LENGTH", "INITCAP", "TO_CHAR",
 		"GREP", "REGEXP_LIKE", "AWK", "SPLIT_PART":
 		return true
 	default:
@@ -666,7 +667,7 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		return storage.StringValue(valToString(args[0]))
 
-	case "STRPOS":
+	case "STRPOS", "INSTR":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {
 			return storage.NullValue(storage.TypeInt)
 		}
@@ -689,6 +690,35 @@ func evalStringBuiltin(upper string, args []storage.Value) storage.Value {
 		data := []byte(valToString(args[0]))
 		h := md5.Sum(data)
 		return storage.StringValue(hex.EncodeToString(h[:]))
+
+	case "SHA256":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		data := []byte(valToString(args[0]))
+		h := sha256.Sum256(data)
+		return storage.StringValue(hex.EncodeToString(h[:]))
+
+	case "HEX":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		if args[0].Type == storage.TypeInt {
+			return storage.StringValue(strings.ToUpper(strconv.FormatInt(args[0].IVal, 16)))
+		}
+		str := valToString(args[0])
+		return storage.StringValue(strings.ToUpper(hex.EncodeToString([]byte(str))))
+
+	case "UNHEX":
+		if len(args) == 0 || args[0].IsNull {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		str := strings.TrimSpace(valToString(args[0]))
+		b, err := hex.DecodeString(str)
+		if err != nil {
+			return storage.NullValue(storage.TypeVarChar)
+		}
+		return storage.StringValue(string(b))
 
 	case "LPAD":
 		if len(args) < 2 || args[0].IsNull || args[1].IsNull {

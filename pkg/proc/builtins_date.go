@@ -474,6 +474,7 @@ func parseOffsetLocation(s string) *time.Location {
 func isDateBuiltin(name string) bool {
 	switch name {
 	case "GETDATE", "NOW", "CURRENT_TIMESTAMP", "GETUTCDATE", "SYSDATETIME", "SYSUTCDATETIME", "SYSDATETIMEOFFSET",
+		"CURDATE", "CURRENT_DATE", "CURTIME", "CURRENT_TIME",
 		"YEAR", "MONTH", "DAY", "DATEPART", "DATE_PART", "EXTRACT", "DATENAME", "DATEDIFF", "DATEDIFF_BIG", "DATEADD", "EOMONTH", "ISDATE",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
 		"DATEFROMPARTS", "TIMEFROMPARTS", "DATETIMEFROMPARTS", "SMALLDATETIMEFROMPARTS", "TO_DATE", "TO_TIMESTAMP",
@@ -488,6 +489,12 @@ func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 	switch upper {
 	case "GETDATE", "NOW", "CURRENT_TIMESTAMP":
 		return storage.DateTimeValue(time.Now())
+
+	case "CURDATE", "CURRENT_DATE":
+		return storage.DateValue(time.Now())
+
+	case "CURTIME", "CURRENT_TIME":
+		return storage.TimeValue(time.Now())
 
 	case "GETUTCDATE":
 		return storage.DateTimeValue(time.Now().UTC())

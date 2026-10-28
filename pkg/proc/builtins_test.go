@@ -1154,6 +1154,109 @@ func TestBuiltin_AdvancedTSQLFunctions(t *testing.T) {
 	}
 }
 
+func TestBuiltin_DialectBest7(t *testing.T) {
+	// 1. IFNULL & NVL
+	if v := EvalBuiltin("IFNULL", []storage.Value{storage.NullValue(storage.TypeVarChar), storage.StringValue("fallback")}); v.SVal != "fallback" {
+		t.Errorf("IFNULL(NULL, 'fallback') expected 'fallback', got %q", v.SVal)
+	}
+	if v := EvalBuiltin("IFNULL", []storage.Value{storage.StringValue("primary"), storage.StringValue("fallback")}); v.SVal != "primary" {
+		t.Errorf("IFNULL('primary', 'fallback') expected 'primary', got %q", v.SVal)
+	}
+	if v := EvalBuiltin("NVL", []storage.Value{storage.NullValue(storage.TypeInt), storage.IntValue(42)}); v.IVal != 42 {
+		t.Errorf("NVL(NULL, 42) expected 42, got %d", v.IVal)
+	}
+	if v := EvalBuiltin("NVL", []storage.Value{storage.IntValue(100), storage.IntValue(42)}); v.IVal != 100 {
+		t.Errorf("NVL(100, 42) expected 100, got %d", v.IVal)
+	}
+
+	// 2. CURDATE & CURRENT_DATE
+	for _, fn := range []string{"CURDATE", "CURRENT_DATE"} {
+		cd := EvalBuiltin(fn, nil)
+		if cd.Type != storage.TypeDate || cd.TVal.IsZero() {
+			t.Errorf("%s() expected valid date, got %v", fn, cd)
+		}
+		if cd.String() != time.Now().Format("2006-01-02") {
+			t.Errorf("%s() formatted date mismatch: got %q, want %q", fn, cd.String(), time.Now().Format("2006-01-02"))
+		}
+	}
+
+	// 3. CURTIME & CURRENT_TIME
+	for _, fn := range []string{"CURTIME", "CURRENT_TIME"} {
+		ct := EvalBuiltin(fn, nil)
+		if ct.Type != storage.TypeTime || ct.TVal.IsZero() {
+			t.Errorf("%s() expected valid time, got %v", fn, ct)
+		}
+	}
+
+	// 4. MOD
+	if m := EvalBuiltin("MOD", []storage.Value{storage.IntValue(10), storage.IntValue(3)}); m.IVal != 1 {
+		t.Errorf("MOD(10, 3) expected 1, got %d", m.IVal)
+	}
+	if m := EvalBuiltin("MOD", []storage.Value{storage.FloatValue(10.5), storage.FloatValue(3.0)}); m.FVal != 1.5 {
+		t.Errorf("MOD(10.5, 3.0) expected 1.5, got %v", m.FVal)
+	}
+	if m := EvalBuiltin("MOD", []storage.Value{storage.IntValue(10), storage.IntValue(0)}); !m.IsNull {
+		t.Errorf("MOD(10, 0) expected NULL on div by zero, got %v", m)
+	}
+
+	// 5. TRUNC & TRUNCATE
+	for _, fn := range []string{"TRUNC", "TRUNCATE"} {
+		t1 := EvalBuiltin(fn, []storage.Value{storage.FloatValue(123.456), storage.IntValue(2)})
+		if t1.FVal != 123.45 {
+			t.Errorf("%s(123.456, 2) expected 123.45, got %v", fn, t1.FVal)
+		}
+		t2 := EvalBuiltin(fn, []storage.Value{storage.FloatValue(123.456), storage.IntValue(0)})
+		if t2.FVal != 123.0 {
+			t.Errorf("%s(123.456, 0) expected 123, got %v", fn, t2.FVal)
+		}
+		t3 := EvalBuiltin(fn, []storage.Value{storage.FloatValue(123.456)})
+		if t3.FVal != 123.0 {
+			t.Errorf("%s(123.456) expected 123, got %v", fn, t3.FVal)
+		}
+	}
+
+	// 6. INSTR
+	if idx := EvalBuiltin("INSTR", []storage.Value{storage.StringValue("hello world"), storage.StringValue("world")}); idx.IVal != 7 {
+		t.Errorf("INSTR('hello world', 'world') expected 7, got %d", idx.IVal)
+	}
+	if idx := EvalBuiltin("INSTR", []storage.Value{storage.StringValue("hello world"), storage.StringValue("xyz")}); idx.IVal != 0 {
+		t.Errorf("INSTR('hello world', 'xyz') expected 0, got %d", idx.IVal)
+	}
+
+	// 7. SHA256, HEX, UNHEX
+	sha := EvalBuiltin("SHA256", []storage.Value{storage.StringValue("hello")})
+	wantSha := "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+	if sha.SVal != wantSha {
+		t.Errorf("SHA256('hello') expected %q, got %q", wantSha, sha.SVal)
+	}
+
+	hexStr := EvalBuiltin("HEX", []storage.Value{storage.StringValue("LionSQL")})
+	if hexStr.SVal != "4C696F6E53514C" {
+		t.Errorf("HEX('LionSQL') expected '4C696F6E53514C', got %q", hexStr.SVal)
+	}
+	hexInt := EvalBuiltin("HEX", []storage.Value{storage.IntValue(255)})
+	if hexInt.SVal != "FF" {
+		t.Errorf("HEX(255) expected 'FF', got %q", hexInt.SVal)
+	}
+
+	unhex := EvalBuiltin("UNHEX", []storage.Value{storage.StringValue("4C696F6E53514C")})
+	if unhex.SVal != "LionSQL" {
+		t.Errorf("UNHEX('4C696F6E53514C') expected 'LionSQL', got %q", unhex.SVal)
+	}
+
+	// Builtin recognition check
+	best7 := []string{
+		"IFNULL", "NVL", "CURDATE", "CURRENT_DATE", "CURTIME", "CURRENT_TIME",
+		"MOD", "TRUNC", "TRUNCATE", "INSTR", "SHA256", "HEX", "UNHEX",
+	}
+	for _, fn := range best7 {
+		if !IsBuiltinFunction(fn) {
+			t.Errorf("Expected IsBuiltinFunction(%q) to be true", fn)
+		}
+	}
+}
+
+
 
 
 

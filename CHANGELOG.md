@@ -7,6 +7,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- `FUNC-DIALECT-7`: Implemented High-ROI Multi-Dialect Builtin Functions Best 7 across PostgreSQL, MySQL, and Oracle dialect ergonomics:
+  - `IFNULL(expr, fallback)` & `NVL(expr, fallback)`: MySQL & Oracle null-coalescing aliases mapped to system `ISNULL`/`COALESCE` logic in `pkg/proc/builtins_sys.go`.
+  - `CURDATE()` / `CURRENT_DATE`: Zero-argument current calendar date evaluated as `storage.TypeDate` in `pkg/proc/builtins_date.go`.
+  - `CURTIME()` / `CURRENT_TIME`: Zero-argument current wall-clock time evaluated as `storage.TypeTime` in `pkg/proc/builtins_date.go`.
+  - `MOD(n, m)`: Integer and floating-point modulo arithmetic operator with division-by-zero null safety in `pkg/proc/builtins_math.go`.
+  - `TRUNC(x [, d])` & `TRUNCATE(x [, d])`: Truncation functions with optional decimal places in `pkg/proc/builtins_math.go`.
+  - `INSTR(str, substr)`: 1-based substring index search function compatible with MySQL & Oracle in `pkg/proc/builtins_string.go`.
+  - `SHA256(str)`: Cryptographic SHA-256 digest returning a 64-character lowercase hex string in `pkg/proc/builtins_string.go`.
+  - `HEX(val)` & `UNHEX(str)`: Hexadecimal encoding and decoding utilities supporting both string binary encoding and integer hex conversion in `pkg/proc/builtins_string.go`.
+
 ## [0.90.0-beta3] - 2026-10-25
 
 ### Added
