@@ -1,8 +1,8 @@
 # LionSQL 서버 파이프라인(TDS to File System) 종단 최적화 마스터 플랜
 
 > - **최초 작성일**: 2026-10-29
-> - **문서 상태**: Approved (실행 대기)
-> - **연관 과제 ID**: `PERF-SERVER-PIPELINE`
+> - **문서 상태**: Approved (Pre-1.0 착수 대기)
+> - **연관 과제 ID**: `PERF-SERVER-PIPELINE-P1-P2` (Pre-1.0), `PERF-SERVER-PIPELINE-P3-P4` (Post-1.0)
 > - **적용 대상**: `pkg/wire/tds/`, `pkg/engine/`, `pkg/proc/`, `pkg/storage/wiredtiger/`, `pkg/storage/memengine/`
 
 ---
