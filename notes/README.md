@@ -49,6 +49,6 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)** (Korean): TDS RPC `sp_executesql` parameter resolution regression post-mortem, Beekeeper Studio connection crash root-cause analysis, and pure ordinal positional fallback restoration.
    - **[`BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)** (Korean): 107 data integrity defect resolutions archive and interim methodology records (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
    - **[`TEST_VERIFICATION_REPORT.ko.md`](TEST_VERIFICATION_REPORT.ko.md)** (Korean): Automated test suite verification report and race detection diagnostics.
-   - **[`PROJECT_STATUS_ASSESSMENT.ko.md`](PROJECT_STATUS_ASSESSMENT.ko.md)** (Korean): Architectural maturity, technical debt resolution status, and benchmark report.
+   - **[`archive/PROJECT_STATUS_ASSESSMENT.ko.md`](archive/PROJECT_STATUS_ASSESSMENT.ko.md)** (Korean): Historical architectural maturity, technical debt resolution status, and benchmark report.
    - **[`RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md)** (Korean): Release 1.0 architecture review, code audit, and feedback records.
    - **[`LIONSQL_DEEP_CODE_REVIEW.ko.md`](LIONSQL_DEEP_CODE_REVIEW.ko.md)** (Korean): Deep code review and subsystem architecture audit across all 390 source files (~350k lines).
