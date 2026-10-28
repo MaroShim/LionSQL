@@ -168,18 +168,19 @@ echo -e "${CLR_BLUE}[2/5] Running Verification Pipeline...${CLR_RESET}"
 if [ "${SKIP_TESTS}" = true ]; then
     echo -e "${CLR_YELLOW}Skipping test pipeline (--skip-tests specified).${CLR_RESET}"
 else
-    echo -e "Compiling core binaries..."
-    # 1. Native Unix binary with WiredTiger
-    go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql
-    echo -e "${CLR_GREEN}Build OK: bin/lionsql (Unix/Native)${CLR_RESET}"
+    echo -e "Compiling 3 official release binaries..."
+    # 1. macOS Apple Silicon (arm64)
+    go build -tags wiredtiger -buildvcs=false -o bin/lionsql-darwin-arm64 ./cmd/lionsql
+    cp bin/lionsql-darwin-arm64 bin/lionsql
+    echo -e "${CLR_GREEN}Build OK: bin/lionsql-darwin-arm64 (macOS Apple Silicon)${CLR_RESET}"
 
-    # 2. Windows Standalone Binaries (.exe, pure-Go in-memory engine, 1ms timer)
-    echo -e "Compiling Windows standalone binaries (.exe)..."
-    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql.exe ./cmd/lionsql
-    echo -e "${CLR_GREEN}Build OK: bin/lionsql.exe (Windows x86_64)${CLR_RESET}"
+    # 2. Linux amd64 (Pure Go Zero-Cgo)
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-linux-amd64 ./cmd/lionsql
+    echo -e "${CLR_GREEN}Build OK: bin/lionsql-linux-amd64 (Linux x86_64)${CLR_RESET}"
 
-    CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -buildvcs=false -o bin/lionsql-arm64.exe ./cmd/lionsql
-    echo -e "${CLR_GREEN}Build OK: bin/lionsql-arm64.exe (Windows ARM64)${CLR_RESET}"
+    # 3. Windows amd64 (Pure Go Zero-Cgo, 1ms timer)
+    CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -buildvcs=false -o bin/lionsql-windows-amd64.exe ./cmd/lionsql
+    echo -e "${CLR_GREEN}Build OK: bin/lionsql-windows-amd64.exe (Windows x86_64)${CLR_RESET}"
 
     echo -e "Running core unit tests..."
     go test -tags wiredtiger -count=1 ./pkg/config/... ./pkg/storage/...
@@ -287,7 +288,7 @@ if [ "${DRY_RUN}" = true ]; then
     echo -e "${CLR_YELLOW}[DRY-RUN] Would update README badges to: v${SHIELD_VER}${CLR_RESET}"
     if [ "${SKIP_GH_RELEASE}" = false ] && command -v gh >/dev/null 2>&1; then
         echo -e "${CLR_YELLOW}[DRY-RUN] Would create GitHub Release:${CLR_RESET}"
-        echo "  gh release create ${TAG} --title \"LionSQL ${TAG}\" [assets: bin/lionsql, bin/lionsql.exe, bin/lionsql-arm64.exe]"
+        echo "  gh release create ${TAG} --title \"LionSQL ${TAG}\" [assets: bin/lionsql-darwin-arm64, bin/lionsql-linux-amd64, bin/lionsql-windows-amd64.exe]"
     fi
     echo ""
     echo -e "${CLR_GREEN}Dry run completed successfully. No files were modified.${CLR_RESET}"
@@ -364,9 +365,9 @@ else
             fi
 
             ASSETS=()
-            [ -f "bin/lionsql" ] && ASSETS+=("bin/lionsql")
-            [ -f "bin/lionsql.exe" ] && ASSETS+=("bin/lionsql.exe")
-            [ -f "bin/lionsql-arm64.exe" ] && ASSETS+=("bin/lionsql-arm64.exe")
+            [ -f "bin/lionsql-darwin-arm64" ] && ASSETS+=("bin/lionsql-darwin-arm64")
+            [ -f "bin/lionsql-linux-amd64" ] && ASSETS+=("bin/lionsql-linux-amd64")
+            [ -f "bin/lionsql-windows-amd64.exe" ] && ASSETS+=("bin/lionsql-windows-amd64.exe")
 
             gh release create "${TAG}" \
                 --title "LionSQL ${TAG}" \
@@ -384,8 +385,8 @@ echo ""
 echo -e "${CLR_CYAN}======================================================================${CLR_RESET}"
 echo -e "${CLR_GREEN}${CLR_BOLD}Release ${TAG} Successfully Completed!${CLR_RESET}"
 echo -e "${CLR_CYAN}======================================================================${CLR_RESET}"
-echo -e "Compiled Binaries in bin/:"
-echo -e "  - ${CLR_BOLD}bin/lionsql${CLR_RESET} (Unix/macOS/Linux with WiredTiger)"
-echo -e "  - ${CLR_BOLD}bin/lionsql.exe${CLR_RESET} (Windows x86_64 Standalone)"
-echo -e "  - ${CLR_BOLD}bin/lionsql-arm64.exe${CLR_RESET} (Windows ARM64 Standalone)"
+echo -e "Compiled 3 Official Release Binaries in bin/:"
+echo -e "  - ${CLR_BOLD}bin/lionsql-darwin-arm64${CLR_RESET} (macOS Apple Silicon)"
+echo -e "  - ${CLR_BOLD}bin/lionsql-linux-amd64${CLR_RESET} (Linux x86_64)"
+echo -e "  - ${CLR_BOLD}bin/lionsql-windows-amd64.exe${CLR_RESET} (Windows x86_64)"
 echo ""

@@ -33,15 +33,15 @@ flowchart TD
 * **이전 태그 탐색 (`git describe --tags --abbrev=0`)**:
   * 직전 릴리스 태그(예: `v0.90.0-beta3`)를 자동으로 감지하여 커밋 비교 범위(`PREV_TAG..HEAD`)를 설정합니다.
 
-### [Step 2] 검증 파이프라인 및 크로스 컴파일 (Build & Test)
+### [Step 2] 검증 파이프라인 및 3대 공식 타깃 크로스 컴파일 (Build & Test)
 * **컴파일 및 단위 테스트**:
-  * `go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql`
   * `go test -tags wiredtiger -count=1 ./pkg/config/... ./pkg/storage/...`
   * 테스트 실패 시 배포를 즉시 중단합니다. (`--skip-tests` 플래그로 생략 가능)
-* **Windows 정적 바이너리 크로스 컴파일**:
-  * Windows 사용자를 위한 독립 실행 파일 2종을 Cgo 의존성 없이 순수 Go로 즉시 빌드합니다:
-    * `CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o bin/lionsql.exe ./cmd/lionsql`
-    * `CGO_ENABLED=0 GOOS=windows GOARCH=arm64 go build -o bin/lionsql-arm64.exe ./cmd/lionsql`
+* **3대 공식 플랫폼 정적 바이너리 컴파일**:
+  * 각 OS 및 CPU 아키텍처가 명확히 분리된 3종의 공식 바이너리를 빌드합니다:
+    1. **`bin/lionsql-darwin-arm64`**: macOS Apple Silicon (M1/M2/M3/M4, WiredTiger MVCC)
+    2. **`bin/lionsql-linux-amd64`**: Linux x86_64 표준 서버 (Pure Go Zero-Cgo, OCC)
+    3. **`bin/lionsql-windows-amd64.exe`**: Windows x86_64 (Pure Go Zero-Cgo, 1ms 고해상도 타이머)
 
 ### [Step 3] Git Log 수집 및 변경 로그 카테고리화
 `git log ${PREV_TAG}..HEAD`의 커밋 메시지를 역순(시간순)으로 파싱하여 Conventional Commits 규약에 맞춰 섹션을 자동 구성합니다:
@@ -68,7 +68,7 @@ flowchart TD
 5. **GitHub Release 및 바이너리 Assets 자동 발행**:
    - `gh` CLI 로그인 세션을 감지하여 GitHub 공식 릴리스 페이지(`https://github.com/MaroShim/LionSQL/releases`)에 신규 릴리스를 즉시 발행합니다.
    - 추출된 Changelog를 릴리스 본문으로 등록하며, `beta`/`rc` 태그인 경우 `--prerelease` 플래그를 자동 적용합니다.
-   - 컴파일된 실행 파일 3종(`bin/lionsql`, `bin/lionsql.exe`, `bin/lionsql-arm64.exe`)을 다운로드용 자산(Release Assets)으로 자동 첨부합니다.
+   - 컴파일된 공식 실행 파일 3종(`bin/lionsql-darwin-arm64`, `bin/lionsql-linux-amd64`, `bin/lionsql-windows-amd64.exe`)을 다운로드용 자산(Release Assets)으로 자동 첨부합니다.
 
 ---
 
