@@ -60,7 +60,9 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 
 | Task Code | Domain | Core Milestone Deliverable | Target Output | Status |
 | :---: | :---: | :--- | :--- | :---: |
-| **`PERF-SERVER-PIPELINE-P1-P2`**| Server/IO | **Server Pipeline Optimization: Phase 1 (TDS Syscall Coalescing, 32KB sync.Pool, Session Pinning) + Phase 2 (Zero-Alloc RPC Param Binding)** | `pkg/wire/tds/`, `pkg/engine/`, `pkg/proc/` | **Pending (Pre-1.0 Active)** |
+| **`PERF-SERVER-PIPELINE-P1-P2`**| Server/IO | **Server Pipeline Optimization: Phase 1 (TDS Syscall Coalescing, 32KB sync.Pool, Session Pinning) + Phase 2 (Zero-Alloc RPC Param Binding)** | `pkg/wire/tds/`, `pkg/engine/`, `pkg/proc/` | **Pending (Active S1)** |
+| **`S-MYSQL-1-P1`** | Syntax/DX | **MySQL-Style Concise Syntax Ergonomics (Phase 1 Quick-Wins: `DESC`, `SHOW TABLES`, Backtick ` ` `, `NOW()`, `IFNULL()`)** | `pkg/proc/lexer.go`, `pkg/engine`, `pkg/proc/runtime` | **Pending (Active S2)** |
+| **`PROC-CURSOR-1`**| Proc/T-SQL | **T-SQL Fast Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility (5 Core Stmts + EOF)** | `pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/runtime` | **Pending (Active S3)** |
 | **`PERF-TPCC-CLIENT`**| Bench/Wire | **`tpcc-client` Parameterized Prepared Stmts & Dedicated Conn Optimization** | `cmd/tpcc_client/main.go` | **Completed (`[x]`, 113k tpmC)** |
 | **`REL-1.0-TAG`** | Release/Tag | **Official `v1.0.0` Production Tag & GitHub Release** | Git Tag `v1.0.0`, GitHub Release | **Ready** |
 | **`REL-1.0-BIN`** | Build/Pkg | **Multi-Platform Production Binaries (macOS, Linux, Windows)** | `bin/lionsql*`, `Dockerfile` | **Ready** |
@@ -70,8 +72,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 
 | Task Code | Domain | Key Architecture Deliverable | Target Packages | Target Release | Reference Document |
 | :---: | :---: | :--- | :--- | :---: | :--- |
-| **`S-MYSQL-1`** | Syntax/DX | **MySQL-Style Concise Syntax Ergonomics (`DESC`, `SHOW TABLES`, Backtick, Grid `EXPLAIN`)** | `pkg/proc`, `pkg/engine` | `v1.1.0` | [`notes/MYSQL_SYNTAX_ERGONOMICS_COMPATIBILITY_PLAN.ko.md`](notes/MYSQL_SYNTAX_ERGONOMICS_COMPATIBILITY_PLAN.ko.md) |
-| **`PROC-CURSOR-1`**| Proc/T-SQL | **T-SQL Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility** | `pkg/proc`, `pkg/proc/runtime` | `v1.1.0` | [`notes/FORWARD_ONLY_CURSOR_COMPATIBILITY_PLAN.ko.md`](notes/FORWARD_ONLY_CURSOR_COMPATIBILITY_PLAN.ko.md) |
+| **`S-MYSQL-1-P2-P3`**| Syntax/DX | **MySQL Advanced Syntax: Phase 2 (Tabular Grid `EXPLAIN`) + Phase 3 (`INSERT ... ON DUPLICATE KEY UPDATE`)** | `pkg/proc`, `pkg/engine` | `v1.1.0` | [`notes/MYSQL_SYNTAX_ERGONOMICS_COMPATIBILITY_PLAN.ko.md`](notes/MYSQL_SYNTAX_ERGONOMICS_COMPATIBILITY_PLAN.ko.md) |
 | **`WEB-SPA-1`** | Web/Hosting | **Self-Contained SPA Web Server & Native DB Integration (`--app`, `--public`)** | `pkg/api`, `cmd/lionsql` | `v1.1.0` | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |
 | **`OCC-HYPER-2`**| Storage/OCC | **In-Memory OCC Compact Arena Memory Compaction (5x Higher Density)** | `pkg/storage/memengine`, `pkg/storage` | `v1.1.0` | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
 | **`PERF-SERVER-PIPELINE-P3-P4`**| Server/IO | **Vertical Server Pipeline Optimization: Phase 3 (Pinned Cursors) + Phase 4 (WAL Fallocate & Adaptive Group Commit)** | `pkg/storage/wiredtiger`, `pkg/storage` | `v1.1.0` | [`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |

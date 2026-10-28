@@ -1,6 +1,11 @@
 # LionSQL T-SQL 단방향 읽기 전용 커서(Forward-Only Cursor) 호환성 플랜 (`notes/FORWARD_ONLY_CURSOR_COMPATIBILITY_PLAN.ko.md`)
 
-## 1. 개요 및 배경 (Executive Summary & Background)
+> - **최초 작성일**: 2026-10-25
+> - **문서 상태**: Approved (Pre-1.0 Active S3)
+> - **연관 과제 ID**: `PROC-CURSOR-1`
+> - **적용 대상**: `pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/runtime/`
+
+---
 
 ### 1.1. 문제 제기: 레거시 T-SQL 마이그레이션의 최대 장벽
 엔터프라이즈 환경에서 Microsoft SQL Server(T-SQL) 저장 프로시저를 타 엔진(LionSQL)으로 마이그레이션하거나 검증할 때, 개발자와 DBA가 가장 먼저 마주치는 심리적·기술적 단절점은 **커서(Cursor) 구문의 구문 오류(Syntax Error)**입니다:

@@ -1,6 +1,11 @@
 # LionSQL 개발자 경험(DX) 강화를 위한 단촐한 MySQL 스타일 편의 문법 호환성 플랜 (`notes/MYSQL_SYNTAX_ERGONOMICS_COMPATIBILITY_PLAN.ko.md`)
 
-## 1. 개요 및 비전 (Executive Summary & Vision)
+> - **최초 작성일**: 2026-10-25
+> - **문서 상태**: Approved (Phase 1: Pre-1.0 Active S2 / Phase 2~3: Post-1.0)
+> - **연관 과제 ID**: `S-MYSQL-1-P1` (Pre-1.0), `S-MYSQL-1-P2-P3` (Post-1.0)
+> - **적용 대상**: `pkg/proc/lexer.go`, `pkg/engine/`, `pkg/proc/runtime/`
+
+---
 
 > **"코어 엔진은 고성능 T-SQL VDBE와 OCC로 달리되, 개발자 손끝은 MySQL처럼 단촐하고 직관적이어야 한다."**
 
