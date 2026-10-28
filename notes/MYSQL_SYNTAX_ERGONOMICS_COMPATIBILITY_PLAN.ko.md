@@ -78,10 +78,14 @@ Microsoft SQL Server(T-SQL)와 PostgreSQL은 엔터프라이즈 기능이 강력
   * 기본키 또는 고유(Unique) 제약조건 충돌 발생 시, 에러를 내지 않고 `UPDATE` 절의 대입식을 원자적으로 실행.
   * 조회수 증가, 사용자 세션 갱신, 멱등(Idempotent) 이벤트 처리에 필수적.
 
-### 2.6. 직관적 편의 스칼라 함수 알리아스
-* `NOW()` ➔ `GETDATE()` 내부 자동 매핑
-* `CURDATE()` ➔ `CAST(GETDATE() AS DATE)` 매핑
-* `IFNULL(expr, alt)` ➔ `ISNULL(expr, alt)` 매핑
+### 2.6. 초가성비 다중 방언 스칼라 함수 Best 7 (`FUNC-DIALECT-7`)
+1. **NULL 제어**: `IFNULL(expr, alt)` (MySQL), `NVL(expr, alt)` (Oracle) ➔ `ISNULL(expr, alt)` 매핑
+2. **날짜**: `CURDATE()`, `CURRENT_DATE` ➔ `'YYYY-MM-DD'` 순수 날짜 문자열/객체 반환 (ANSI/MySQL)
+3. **시간**: `CURTIME()`, `CURRENT_TIME` ➔ `'HH:MM:SS'` 순수 시간 반환 (ANSI/MySQL)
+4. **수학**: `MOD(n, m)` ➔ `n % m` 나머지 함수 매핑 (ANSI/Oracle/MySQL)
+5. **절삭**: `TRUNC(x, d)`, `TRUNCATE(x, d)` ➔ 지정 소수점 자릿수 버림 (Oracle/MySQL)
+6. **문자열**: `INSTR(str, sub)` ➔ `CHARINDEX(sub, str)` 역순 인자 매핑 (Oracle/MySQL/SQLite)
+7. **해시/인코딩**: `SHA256(str)` (단방향 해시), `HEX(str)` / `UNHEX(hex)` (16진수 인코딩/디코딩)
 
 ---
 

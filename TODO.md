@@ -61,8 +61,9 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | Task Code | Domain | Core Milestone Deliverable | Target Output | Status |
 | :---: | :---: | :--- | :--- | :---: |
 | **`PERF-SERVER-PIPELINE-P1-P2`**| Server/IO | **Server Pipeline Optimization: Phase 1 (TDS Syscall Coalescing, 32KB sync.Pool, Session Pinning) + Phase 2 (Zero-Alloc RPC Param Binding)** | `pkg/wire/tds/`, `pkg/engine/`, `pkg/proc/` | **Pending (Active S1)** |
-| **`S-MYSQL-1-P1`** | Syntax/DX | **MySQL-Style Concise Syntax Ergonomics (Phase 1 Quick-Wins: `DESC`, `SHOW TABLES`, Backtick ` ` `, `NOW()`, `IFNULL()`)** | `pkg/proc/lexer.go`, `pkg/engine`, `pkg/proc/runtime` | **Pending (Active S2)** |
-| **`PROC-CURSOR-1`**| Proc/T-SQL | **T-SQL Fast Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility (5 Core Stmts + EOF)** | `pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/runtime` | **Pending (Active S3)** |
+| **`S-MYSQL-1-P1`** | Syntax/DX | **MySQL-Style Concise Syntax Ergonomics (Phase 1 Quick-Wins: `DESC`, `SHOW TABLES`, Backtick ` ` `)** | `pkg/proc/lexer.go`, `pkg/engine`, `pkg/proc/runtime` | **Pending (Active S2)** |
+| **`FUNC-DIALECT-7`** | SQL/Builtin | **High-ROI Multi-Dialect Builtin Functions Best 7 (`IFNULL`/`NVL`, `CURDATE`/`CURRENT_DATE`, `CURTIME`/`CURRENT_TIME`, `MOD`, `TRUNC`/`TRUNCATE`, `INSTR`, `SHA256`/`HEX`/`UNHEX`)** | `pkg/proc/builtins_*.go` | **Pending (Active S3)** |
+| **`PROC-CURSOR-1`**| Proc/T-SQL | **T-SQL Fast Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility (5 Core Stmts + EOF)** | `pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/runtime` | **Pending (Active S4)** |
 | **`PERF-TPCC-CLIENT`**| Bench/Wire | **`tpcc-client` Parameterized Prepared Stmts & Dedicated Conn Optimization** | `cmd/tpcc_client/main.go` | **Completed (`[x]`, 113k tpmC)** |
 | **`REL-1.0-TAG`** | Release/Tag | **Official `v1.0.0` Production Tag & GitHub Release** | Git Tag `v1.0.0`, GitHub Release | **Ready** |
 | **`REL-1.0-BIN`** | Build/Pkg | **Multi-Platform Production Binaries (macOS, Linux, Windows)** | `bin/lionsql*`, `Dockerfile` | **Ready** |
