@@ -110,8 +110,9 @@ When new requirements, ADRs, or implementation plans are agreed upon in conversa
 
 ### Unconditional `/plan` Disk-First Persistence Discipline
 1. **`/plan` Direct Persistence**: When invoked with `/plan` or tasked with architectural design, the resulting plan must be **unconditionally persisted immediately to disk in `notes/`** (`notes/*_PLAN.ko.md` for Korean, `notes/*_PLAN.md` for English).
-2. **No Memory-Only Retention**: Never leave plan specifications solely in ephemeral conversation memory or UI-only artifacts.
-3. **Manual Pruning**: AI agents must never unilaterally delete plan documents; pruning and archival remain strictly at user discretion.
+2. **Initial Creation Date Header**: Always include the initial creation date (and status metadata) at the top of the PLAN document right below the title H1 (e.g. `> - **최초 작성일**: YYYY-MM-DD` / `> - **Created**: YYYY-MM-DD`).
+3. **No Memory-Only Retention**: Never leave plan specifications solely in ephemeral conversation memory or UI-only artifacts.
+4. **Manual Pruning**: AI agents must never unilaterally delete plan documents; pruning and archival remain strictly at user discretion.
 
 ---
 

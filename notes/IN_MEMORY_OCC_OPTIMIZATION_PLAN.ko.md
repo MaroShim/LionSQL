@@ -1,5 +1,9 @@
 # In-Memory OCC 엔진 성능 최적화 역사 및 초격차 아키텍처 백서 (`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`)
 
+> - **최초 작성일**: 2026-10-20 (1세대 최적화 로드맵), 2026-10-25 (2세대 초격차 혁신안)
+> - **최종 통합일**: 2026-10-29
+> - **상태**: 1~2세대 구현 완료 (`1,046,121 tpmC`), 3세대 `OCC-HYPER-2` 진행 예정 (`v1.1.0`)
+>
 > 본 문서는 LionSQL의 인메모리 낙관적 동시성 제어(OCC, Optimistic Concurrency Control) 엔진(`pkg/storage/memengine/`)의 성능 진화 역사, 8대 구조적 병목 진단, 디스크 엔진(WiredTiger) 역전 위기 극복 과정, 그리고 104만 tpmC 달성 및 Post-1.0 메모리 5배 압축 로드맵을 체계적으로 집대성한 엔지니어링 아키텍처 백서입니다.
 
 ---
