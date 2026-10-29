@@ -40,6 +40,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   - **Fast-Path Global Aggregation (`pkg/execution/aggregate.go`)**: Dedicated zero-overhead single-pass loop for queries without `GROUP BY` keys, eliminating `strings.Builder` and string map lookups on every row.
   - **Measured Performance Surge**: Cut SSB Q1.1 memory allocations by **87.2% (10.08 MB ➔ 1.29 MB)** and slashed latency by **2.59x (9.53 ms ➔ 3.68 ms)**, with total 4-flight benchmark execution time reduced by ~30%.
 
+### Fixed
+- `AUDIT-EXPR-1`: Resolved Nested Arithmetic Expression Handling in Window and Sort Operators with Deep Assertion Testing:
+  - **Window Function Expression Evaluation (`pkg/execution/window.go`)**: Fixed `<nil>` return bug when evaluating expressions like `SUM(price * qty) OVER (...)` or `PERCENTILE_CONT(score / 100.0)`. Added `parseWindowExpr` and `getValFromRow` utilizing `EvalTupleExpr` for arbitrary nested expressions.
+  - **Pre-Parsed Expressions in Sort Iterator (`pkg/execution/sort.go`)**: Pre-parsed `ORDER BY` expression keys (`parsed proc.Expr`) during `NewSortIterator` initialization, bypassing lexer/parser creation during $O(N \log N)$ tuple comparisons.
+  - **Comprehensive Operator Deep Assertion Test Suite (`pkg/execution/nested_expr_test.go`)**: Implemented rigorous value-level tests verifying exact cell results across Aggregate (`SUM(a*b)`), Having (`HAVING SUM(a*b) > ...`), Sort (`ORDER BY a*b DESC`), Filter (`WHERE (a*b) + c > ...`), and Window (`SUM(price*qty) OVER (PARTITION BY ... ORDER BY ...)`).
+
 ## [0.90.0-beta3] - 2026-10-25
 
 ### Added

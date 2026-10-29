@@ -9,7 +9,9 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
@@ -17,6 +19,7 @@ import (
 type sortItem struct {
 	key        string
 	descending bool
+	parsed     proc.Expr
 }
 
 // tupleMergeHeap implements container/heap.Interface for N-way merge of sorted run files.
@@ -80,9 +83,19 @@ func NewSortIterator(child Iterator, orderByClause string) *SortIterator {
 	}
 
 	for _, item := range sqlutil.ParseOrderBy(orderByClause) {
+		cleanKey := sqlutil.CleanIdentifier(item.Column)
+		var parsed proc.Expr
+		if strings.ContainsAny(cleanKey, " +-*/%()") || strings.Contains(cleanKey, "->") {
+			p := proc.NewParser(proc.NewLexer(cleanKey))
+			e := p.ParseExpr()
+			if e != nil && len(p.Errors()) == 0 {
+				parsed = e
+			}
+		}
 		s.items = append(s.items, sortItem{
-			key:        sqlutil.CleanIdentifier(item.Column),
+			key:        cleanKey,
 			descending: item.Desc,
+			parsed:     parsed,
 		})
 	}
 
@@ -125,8 +138,14 @@ func (s *SortIterator) PeakMemory() int64 {
 
 func (s *SortIterator) compareTuples(tA, tB Tuple) int {
 	for _, item := range s.items {
-		vA, _ := lookupVal(tA, item.key)
-		vB, _ := lookupVal(tB, item.key)
+		var vA, vB any
+		if item.parsed != nil {
+			vA, _ = EvalTupleExpr(tA, item.parsed)
+			vB, _ = EvalTupleExpr(tB, item.parsed)
+		} else {
+			vA, _ = lookupVal(tA, item.key)
+			vB, _ = lookupVal(tB, item.key)
+		}
 		cmp := CompareValues(vA, vB)
 		if cmp != 0 {
 			if item.descending {

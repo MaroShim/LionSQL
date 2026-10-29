@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"fmt"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -91,7 +92,16 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		}
 
 	case *proc.BinaryExpr:
-		return evalTupleBinaryExpr(t, e)
+		res, ok := evalTupleBinaryExpr(t, e)
+		if ok {
+			return res, true
+		}
+		// Fallback for complex binary expressions (e.g. JSON operators ->, ->>, etc.)
+		res, err := proc.EvalRowExpr(e, t.ToEvalMap(), nil)
+		if err == nil {
+			return res, true
+		}
+		return nil, false
 
 	case *proc.BetweenExpr:
 		val, ok := EvalTupleExpr(t, e.Expr)
@@ -103,8 +113,8 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		if !okL || !okH || low == nil || high == nil {
 			return e.Not, true
 		}
-		cmpLow := compareAny(val, low)
-		cmpHigh := compareAny(val, high)
+		cmpLow := CompareValues(val, low)
+		cmpHigh := CompareValues(val, high)
 		inRange := cmpLow >= 0 && cmpHigh <= 0
 		if e.Not {
 			return !inRange, true
@@ -119,7 +129,7 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		found := false
 		for _, item := range e.List {
 			itemVal, okItem := EvalTupleExpr(t, item)
-			if okItem && compareAny(val, itemVal) == 0 {
+			if okItem && CompareValues(val, itemVal) == 0 {
 				found = true
 				break
 			}
@@ -275,17 +285,52 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 
 	// 2. Comparison Operators (=, ==, !=, <>, <, <=, >, >=)
 	case proc.TokenEq:
-		return compareAny(left, right) == 0, true
+		return CompareValues(left, right) == 0, true
 	case proc.TokenNeq:
-		return compareAny(left, right) != 0, true
+		return CompareValues(left, right) != 0, true
 	case proc.TokenLt:
-		return compareAny(left, right) < 0, true
+		return CompareValues(left, right) < 0, true
 	case proc.TokenLte:
-		return compareAny(left, right) <= 0, true
+		return CompareValues(left, right) <= 0, true
 	case proc.TokenGt:
-		return compareAny(left, right) > 0, true
+		return CompareValues(left, right) > 0, true
 	case proc.TokenGte:
-		return compareAny(left, right) >= 0, true
+		return CompareValues(left, right) >= 0, true
+
+	// 3. JSON Extract Operators (->, ->>)
+	case proc.TokenJSONExtract:
+		docStr := fmt.Sprintf("%v", left)
+		switch r := right.(type) {
+		case int:
+			res, ok := storage.ExtractJSON(docStr, r)
+			return res, ok
+		case int64:
+			res, ok := storage.ExtractJSON(docStr, int(r))
+			return res, ok
+		case float64:
+			res, ok := storage.ExtractJSON(docStr, int(r))
+			return res, ok
+		default:
+			res, ok := storage.ExtractJSON(docStr, fmt.Sprintf("%v", right))
+			return res, ok
+		}
+
+	case proc.TokenJSONExtractText:
+		docStr := fmt.Sprintf("%v", left)
+		switch r := right.(type) {
+		case int:
+			res, ok := storage.ExtractJSONText(docStr, r)
+			return res, ok
+		case int64:
+			res, ok := storage.ExtractJSONText(docStr, int(r))
+			return res, ok
+		case float64:
+			res, ok := storage.ExtractJSONText(docStr, int(r))
+			return res, ok
+		default:
+			res, ok := storage.ExtractJSONText(docStr, fmt.Sprintf("%v", right))
+			return res, ok
+		}
 	}
 
 	return nil, false
@@ -295,10 +340,21 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 func EvalTupleBoolExpr(t Tuple, expr proc.Expr) bool {
 	res, ok := EvalTupleExpr(t, expr)
 	if !ok || res == nil {
-		return false
+		return proc.EvalBoolExpr(expr, t.ToEvalMap(), nil)
 	}
 	if b, ok := res.(bool); ok {
 		return b
 	}
-	return false
+	switch v := res.(type) {
+	case int64:
+		return v != 0
+	case int:
+		return v != 0
+	case float64:
+		return v != 0.0
+	case string:
+		return len(v) > 0 && !strings.EqualFold(v, "false") && v != "0"
+	default:
+		return true
+	}
 }

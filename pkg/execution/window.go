@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
 )
 
 // WindowIterator evaluates SQL window functions over partitions of materialized rows.
@@ -98,7 +99,7 @@ func (w *WindowIterator) Open(ctx context.Context) error {
 					for _, ord := range winDef.OrderByKeys {
 						vi := ti.Get(ord.Column)
 						vj := tj.Get(ord.Column)
-						cmp := compareAny(vi, vj)
+						cmp := CompareValues(vi, vj)
 						if cmp == 0 {
 							continue
 						}
@@ -245,6 +246,30 @@ func (w *WindowIterator) computeWindowFunction(winDef planner.WindowDef, indices
 	}
 }
 
+func parseWindowExpr(col string) proc.Expr {
+	if col == "" || col == "*" || !strings.ContainsAny(col, " +-*/%()->") {
+		return nil
+	}
+	p := proc.NewParser(proc.NewLexer(col))
+	if expr := p.ParseExpr(); expr != nil && len(p.Errors()) == 0 {
+		return expr
+	}
+	return nil
+}
+
+func getValFromRow(t Tuple, col string, parsed proc.Expr) any {
+	if val, ok := t.GetOK(col); ok {
+		return val
+	}
+	if parsed != nil {
+		if val, ok := EvalTupleExpr(t, parsed); ok {
+			return val
+		}
+	}
+	val, _ := lookupVal(t, col)
+	return val
+}
+
 func (w *WindowIterator) computeWindowPercentile(winDef planner.WindowDef, indices []int, winValues []any) {
 	fn := strings.ToUpper(winDef.Function)
 	targetCol := ""
@@ -253,6 +278,7 @@ func (w *WindowIterator) computeWindowPercentile(winDef planner.WindowDef, indic
 	if len(winDef.Args) > 0 {
 		targetCol = winDef.Args[0]
 	}
+	parsedExpr := parseWindowExpr(targetCol)
 	if len(winDef.Args) > 1 {
 		if p, err := strconv.ParseFloat(winDef.Args[1], 64); err == nil {
 			percentile = p
@@ -261,7 +287,7 @@ func (w *WindowIterator) computeWindowPercentile(winDef planner.WindowDef, indic
 
 	var vals []float64
 	for _, rowIdx := range indices {
-		if v := w.rows[rowIdx].Get(targetCol); v != nil {
+		if v := getValFromRow(w.rows[rowIdx], targetCol, parsedExpr); v != nil {
 			if f, ok := toFloat64(v); ok {
 				vals = append(vals, f)
 			}
@@ -298,6 +324,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 	if len(winDef.Args) > 0 {
 		targetCol = winDef.Args[0]
 	}
+	parsedExpr := parseWindowExpr(targetCol)
 
 	frame := winDef.Frame
 	if frame == nil && len(winDef.OrderByKeys) > 0 {
@@ -315,7 +342,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 		case "COUNT":
 			cnt := int64(0)
 			for _, rowIdx := range indices {
-				if targetCol == "" || targetCol == "*" || w.rows[rowIdx].Get(targetCol) != nil {
+				if targetCol == "" || targetCol == "*" || getValFromRow(w.rows[rowIdx], targetCol, parsedExpr) != nil {
 					cnt++
 				}
 			}
@@ -326,7 +353,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			sum := float64(0)
 			hasVal := false
 			for _, rowIdx := range indices {
-				if v := w.rows[rowIdx].Get(targetCol); v != nil {
+				if v := getValFromRow(w.rows[rowIdx], targetCol, parsedExpr); v != nil {
 					if f, ok := toFloat64(v); ok {
 						sum += f
 						hasVal = true
@@ -344,7 +371,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			sum := float64(0)
 			count := 0
 			for _, rowIdx := range indices {
-				if v := w.rows[rowIdx].Get(targetCol); v != nil {
+				if v := getValFromRow(w.rows[rowIdx], targetCol, parsedExpr); v != nil {
 					if f, ok := toFloat64(v); ok {
 						sum += f
 						count++
@@ -361,9 +388,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 		case "MIN":
 			var minVal any = nil
 			for _, rowIdx := range indices {
-				v := w.rows[rowIdx].Get(targetCol)
+				v := getValFromRow(w.rows[rowIdx], targetCol, parsedExpr)
 				if v != nil {
-					if minVal == nil || compareAny(v, minVal) < 0 {
+					if minVal == nil || CompareValues(v, minVal) < 0 {
 						minVal = v
 					}
 				}
@@ -374,9 +401,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 		case "MAX":
 			var maxVal any = nil
 			for _, rowIdx := range indices {
-				v := w.rows[rowIdx].Get(targetCol)
+				v := getValFromRow(w.rows[rowIdx], targetCol, parsedExpr)
 				if v != nil {
-					if maxVal == nil || compareAny(v, maxVal) > 0 {
+					if maxVal == nil || CompareValues(v, maxVal) > 0 {
 						maxVal = v
 					}
 				}
@@ -407,7 +434,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			cnt := int64(0)
 			for k := startK; k <= endK; k++ {
 				kRowIdx := indices[k]
-				if targetCol == "" || targetCol == "*" || w.rows[kRowIdx].Get(targetCol) != nil {
+				if targetCol == "" || targetCol == "*" || getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr) != nil {
 					cnt++
 				}
 			}
@@ -418,7 +445,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			hasVal := false
 			for k := startK; k <= endK; k++ {
 				kRowIdx := indices[k]
-				if v := w.rows[kRowIdx].Get(targetCol); v != nil {
+				if v := getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr); v != nil {
 					if f, ok := toFloat64(v); ok {
 						sum += f
 						hasVal = true
@@ -436,7 +463,7 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			count := 0
 			for k := startK; k <= endK; k++ {
 				kRowIdx := indices[k]
-				if v := w.rows[kRowIdx].Get(targetCol); v != nil {
+				if v := getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr); v != nil {
 					if f, ok := toFloat64(v); ok {
 						sum += f
 						count++
@@ -453,9 +480,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			var minVal any = nil
 			for k := startK; k <= endK; k++ {
 				kRowIdx := indices[k]
-				v := w.rows[kRowIdx].Get(targetCol)
+				v := getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr)
 				if v != nil {
-					if minVal == nil || compareAny(v, minVal) < 0 {
+					if minVal == nil || CompareValues(v, minVal) < 0 {
 						minVal = v
 					}
 				}
@@ -466,9 +493,9 @@ func (w *WindowIterator) computeWindowAggregate(winDef planner.WindowDef, indice
 			var maxVal any = nil
 			for k := startK; k <= endK; k++ {
 				kRowIdx := indices[k]
-				v := w.rows[kRowIdx].Get(targetCol)
+				v := getValFromRow(w.rows[kRowIdx], targetCol, parsedExpr)
 				if v != nil {
-					if maxVal == nil || compareAny(v, maxVal) > 0 {
+					if maxVal == nil || CompareValues(v, maxVal) > 0 {
 						maxVal = v
 					}
 				}
@@ -549,38 +576,6 @@ func sameSortKeys(t1, t2 Tuple, orderKeys []planner.SortKeyDef) bool {
 		}
 	}
 	return true
-}
-
-func compareAny(a, b any) int {
-	if a == nil && b == nil {
-		return 0
-	}
-	if a == nil {
-		return -1
-	}
-	if b == nil {
-		return 1
-	}
-
-	f1, isNum1 := toFloat64(a)
-	f2, isNum2 := toFloat64(b)
-	if isNum1 && isNum2 {
-		if f1 < f2 {
-			return -1
-		} else if f1 > f2 {
-			return 1
-		}
-		return 0
-	}
-
-	s1 := fmt.Sprintf("%v", a)
-	s2 := fmt.Sprintf("%v", b)
-	if s1 < s2 {
-		return -1
-	} else if s1 > s2 {
-		return 1
-	}
-	return 0
 }
 
 func (w *WindowIterator) Next(ctx context.Context) (Tuple, error) {
