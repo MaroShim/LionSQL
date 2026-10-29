@@ -32,7 +32,7 @@ LionSQL은 TPC-C 벤치마크를 통해 스토리지 커널(1.0M~1.4M tpmC) 및 
   └─ 3.2. 순수 읽기 쿼리의 트랜잭션 및 WAL 완전 우회
        │
 [Phase 4: WAL & 디스크 파일 시스템 I/O]
-  ├─ 4.1. WAL 세그먼트 파일 공간 사전 할당 (fallocate / F_PREALLOCATE)
+  ├─ 4.1. [Spec-Out] WAL 세그먼트 파일 공간 사전 할당 (WiredTiger 100MB 기본 동작과 중복)
   └─ 4.2. 적응형 마이크로초 그룹 커밋 배칭 (Adaptive Group Commit)
 ```
 
@@ -116,22 +116,22 @@ LionSQL은 TPC-C 벤치마크를 통해 스토리지 커널(1.0M~1.4M tpmC) 및 
 
 ### Phase 4: WAL & 디스크 파일 시스템 I/O 최적화
 
-#### 4.1. WAL 세그먼트 파일 공간 사전 할당 (`fallocate` / `fcntl F_PREALLOCATE`)
-- **현상 및 문제점**:
-  - WAL 파일에 로그를 추가 기록(append)할 때마다 파일 크기가 증가하여, OS 파일 시스템(APFS, ext4, XFS)이 동기식 Inode 메타데이터(크기, 익스텐트) 갱신 저널링을 수행함.
-- **구현 내용**:
-  - WAL 파일 세그먼트 생성 시 64MB 단위로 디스크 블록을 사전 할당(`posix_fallocate` 또는 macOS `fcntl(fd, F_PREALLOCATE)`).
-  - 커밋 경로에서 파일 크기 변경에 따른 파일 시스템 저널링 I/O를 배제하고 순수 데이터 블록 쓰기만 발생하도록 보장.
-- **검증 기준**:
-  - 디스크 I/O 대기 시간(iowait) 감소 및 안정적인 커밋 쓰기 지연 시간 확보.
+#### 4.1. [Spec-Out] WAL 세그먼트 파일 공간 사전 할당 (`fallocate` / `fcntl F_PREALLOCATE`)
+- **결정**: **영구 Spec-Out (제외)**
+- **제외 사유**:
+  - WiredTiger 스토리지 엔진은 C 레벨 기본값으로 `log=(file_max=100MB,prealloc=true)`을 통해 **100MB 세그먼트 로그 파일을 이미 백그라운드에서 자동 사전 할당 및 순환 재사용**하고 있음.
+  - 외부 Go 코드에서 별도로 OS 종속적인 `fallocate` / `F_PREALLOCATE`를 호출하는 것은 100% 중복(Redundant)이며, 플랫폼별 파일 유효 길이(EOF) 추적 복잡성만 초래하므로 **Radical KISS 및 Deletion-First 원칙(Golden Rule 15)**에 따라 영구 제외.
 
 #### 4.2. 적응형 마이크로초 그룹 커밋 배칭 (Adaptive Group Commit)
 - **현상 및 문제점**:
-  - `-fsync always` 모드에서 첫 번째 커밋 스레드가 도착 즉시 `log_flush(sync=on)` 및 물리 플러시를 수행하여 배칭 기회 상실.
+  - `-fsync always` 모드에서 첫 번째 커밋 스레드가 도착 즉시 `log_flush(sync=on)` 및 물리 플러시를 수행하여 동시 도착 트랜잭션의 배칭 기회를 상실함.
 - **구현 내용**:
-  - 첫 번째 리더 스레드가 10~30µs 동안 적응형 대기(Adaptive Yield)하며 뒤이어 도착하는 트랜잭션을 그룹화하여 단 1회의 하드웨어 배리어(`F_FULLFSYNC`)로 일괄 플러시.
+  - 첫 번째 리더(Leader) 스레드가 10~30µs 동안 적응형 대기(Adaptive Yield)하며 뒤이어 도착하는 팔로워(Follower) 트랜잭션들의 WAL 레코드를 단일 버퍼에 그룹화한 뒤, **단 1회의 물리 하드웨어 배리어(`F_FULLFSYNC` / `fsync`)로 일괄 플러시**.
+  - **`fsync always` 이론적 무결성 검증**:
+    - 리더와 모든 팔로워 트랜잭션은 물리 `fsync`가 디스크 컨트롤러에서 성공적으로 완료될 때까지 **클라이언트에게 커밋 성공(`SUCCESS`) 응답을 결코 반환하지 않고 대기(Block)**함.
+    - 클라이언트가 성공 응답을 수신하는 시점에는 모든 변경 데이터가 이미 비휘발성 디스크에 영구 기록되어 있으므로, **ACID의 지속성(Durability) 및 `fsync always`의 무손실 보장 원칙에 1%도 위배되지 않음** (MySQL InnoDB, PostgreSQL, SQLite WAL 표준 그룹 커밋과 동일 메커니즘).
 - **검증 기준**:
-  - `-fsync always` 환경에서 물리 디스크 배리어 빈도 1/5 수준 감소 및 TPS 2~3배 향상.
+  - `-fsync always` 환경에서 물리 디스크 배리어 빈도 1/5 수준 감소 및 TPS 2~3배 향상 (단 1건의 커밋 유실도 발생하지 않음).
 
 ---
 
