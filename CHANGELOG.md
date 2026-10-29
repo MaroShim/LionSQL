@@ -7,21 +7,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-### Added
-- add comprehensive Gitea mock data seeder covering users, orgs, repos, issues, labels, milestones, branches, commits, PRs, reviews, merges, and releases (scripts/seed_gitea_mock_data.go)
-- support MSSQL UPDATE and DELETE FROM source table syntax in Pratt parser and DML parser
-- support aggregate function and keyword aliases after AS in SELECT projections
-- support table-qualified wildcard projections (table.*) in multi-table joins to eliminate column collisions
-
-### Fixed
-- resolve XORM GetIndexes interception collision on sys.columns queries with collation_name
-- resolve composite index boundary parsing unmatched parentheses trap in bounds normalizer
-- resolve variable assignment cleanSymbol prefix stripping in VDBE storage dispatch
-
-
 ## [0.90.0-beta4] - 2026-10-29
 
 ### Added
+- add comprehensive Gitea mock data seeder covering users, orgs, repos, issues, labels, milestones, branches, commits, PRs, reviews, merges, and releases (scripts/seed_gitea_mock_data.go) (50c646f)
+- support MSSQL UPDATE and DELETE FROM source table syntax in Pratt parser and DML parser (50c646f)
+- support aggregate function and keyword aliases after AS in SELECT projections (50c646f)
+- support table-qualified wildcard projections (table.*) in multi-table joins to eliminate column collisions (50c646f)
 - implement web studio tab session isolation and overview memory caching (UI-CONCURRENCY-1) (9d9fc46)
 - add automated release and changelog grouping pipeline (scripts/release.sh) (8552b67)
 - add Windows .exe cross-compilation targets to release pipeline (2c1719b)
@@ -41,6 +33,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support assignment aliasing, default_is_null bool scan, and fn_helpcollations (ORM-MIGRATE-3) (bb0d159)
 
 ### Fixed
+- auto-resolve default wire port by protocol in tpcc-client (2bbf665)
+- resolve XORM GetIndexes interception collision on sys.columns queries with collation_name (50c646f)
+- resolve composite index boundary parsing unmatched parentheses trap in bounds normalizer (50c646f)
+- resolve variable assignment cleanSymbol prefix stripping in VDBE storage dispatch (50c646f)
 - treat WT_NOTFOUND as no-op in cursor_remove rather than error (ccd1ce2)
 - make changelog insertion compatible with BSD awk on macOS (44f89fc)
 
@@ -48,6 +44,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - optimize tpcc-client with dedicated conns and prepared stmts (113k tpmC) (f5b8424)
 
 ### Documentation
+- author postmortem report on ORM SQL compatibility and test blind spots (notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) (d2f4ffa)
+- author Gitea integration milestone report and update index (GITEA-MILESTONE-1) (bbd9f72)
+- register Gitea milestone deliverable and backlog in TODO dashboard (ce9e08b)
+- register PERF-PGWIRE-1 and PERF-COMPLEX-QUERY-2 in TODO dashboard (f65084b)
 - establish self-contained SPA web server and native DB plan (WEB-SPA-1) (f149ad5)
 - update code review trackers with REV-STOR-013 and REV-API-003 (8f0a442)
 - append architectural paradox analysis to single-page HTML web server plan (3f7fc11)
