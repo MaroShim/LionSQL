@@ -12,6 +12,7 @@ bin/
 
 # Data directories
 data/
+data_backup*/
 *.db
 *.log
 *.wt
