@@ -925,6 +925,13 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execDeallocate(trimmed, start, cs)
 	}
 
+	// 0.27 Conditional DDL statements: IF [NOT] EXISTS (...) <DDL>, IF OBJECT_ID(...) <DDL>
+	if strings.HasPrefix(upper, "IF ") || strings.HasPrefix(upper, "IF\t") || strings.HasPrefix(upper, "IF\n") {
+		if res, handled, err := s.tryExecConditionalDDL(trimmed, start, cs); handled {
+			return res, err
+		}
+	}
+
 	// 0.28 Control-flow & Anonymous Blocks: IF ... ELSE, WHILE ..., BEGIN ... END
 	if strings.HasPrefix(upper, "IF ") || strings.HasPrefix(upper, "WHILE ") ||
 		(strings.HasPrefix(upper, "BEGIN ") && !isBeginTransaction(trimmed[5:])) {

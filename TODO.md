@@ -67,6 +67,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`FUNC-DIALECT-7`** | SQL/Builtin | **High-ROI Multi-Dialect Builtin Functions Best 7 (`IFNULL`/`NVL`, `CURDATE`/`CURRENT_DATE`, `CURTIME`/`CURRENT_TIME`, `MOD`, `TRUNC`/`TRUNCATE`, `INSTR`, `SHA256`/`HEX`/`UNHEX`)** | `pkg/proc/builtins_*.go` | **Completed (`[x]`)** |
 | **`PROC-CURSOR-1`**| Proc/T-SQL | **T-SQL Fast Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility (5 Core Stmts + EOF)** | `pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/runtime` | **Completed (`[x]`)** |
 | **`PERF-TPCC-CLIENT`**| Bench/Wire | **`tpcc-client` Parameterized Prepared Stmts & Dedicated Conn Optimization** | `cmd/tpcc_client/main.go` | **Completed (`[x]`, 113k tpmC)** |
+| **`ORM-MIGRATE-1`**| Syntax/ORM | **Conditional DDL Support for ORM Migrations (Gitea/XORM/GORM: `IF NOT EXISTS ... DDL`, `sysobjects` `xtype`)** | `pkg/engine/`, `pkg/proc/` | **Completed (`[x]`)** |
 
 ### 3.2. Post-0.90.0 Roadmap Queue
 

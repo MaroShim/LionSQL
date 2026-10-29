@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- support conditional DDL statements (IF [NOT] EXISTS ... DDL, IF OBJECT_ID ... DDL) for ORM migrations (Gitea/XORM)
+- add legacy sysobjects columns (id, uid, xtype) and trailing-space-tolerant string comparison
+
 ## [0.90.0-beta4] - 2026-10-29
 
 ### Added

@@ -376,7 +376,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		}
 		if s1, ok1 := isStringType(left); ok1 {
 			if s2, ok2 := isStringType(right); ok2 {
-				return strings.EqualFold(s1, s2), nil
+				return strings.EqualFold(s1, s2) || strings.EqualFold(strings.TrimRight(s1, " "), strings.TrimRight(s2, " ")), nil
 			}
 		}
 		n1, isNum1 := toFloat(left)
