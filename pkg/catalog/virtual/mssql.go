@@ -13,12 +13,22 @@ import (
 var (
 	reMssqlObjectIdIn       = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
 	reMssqlObjectIDEq       = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
+	reMssqlObjectIdCallEq   = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*(?:[a-z0-9_]+\.)*object_id\s*\(\s*N?'([^']+)'(?:\s*,\s*N?'[^']+')?\s*\)`)
 	reMssqlParentObjectIdIn = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?parent_object_id\s+in\s*\(([^)]+)\)`)
 	reMssqlTableNameEq      = regexp.MustCompile(`(?is)(?:table_name|c\.name|t\.name|ic\.table_name|\[?t\]?\.\[?name\]?|\[?c\]?\.\[?name\]?|\[?table_name\]?)\s*=\s*N?'([^']+)'`)
 	reMssqlSchemaNameEq     = regexp.MustCompile(`(?is)(?:table_schema|s\.name|ic\.table_schema|\[?s\]?\.\[?name\]?|\[?table_schema\]?)\s*=\s*N?'([^']+)'`)
 )
 
-func parseTargetObjectIDs(sql string) map[int]bool {
+func cleanTargetTableName(raw string) string {
+	s := strings.TrimSpace(raw)
+	s = strings.Trim(s, "[]\"'`")
+	if idx := strings.LastIndex(s, "."); idx != -1 {
+		s = s[idx+1:]
+	}
+	return strings.Trim(strings.TrimSpace(s), "[]\"'`")
+}
+
+func parseTargetObjectIDs(sql string, src Source) map[int]bool {
 	if m := reMssqlObjectIdIn.FindStringSubmatch(sql); len(m) == 2 {
 		res := make(map[int]bool)
 		for _, part := range strings.Split(m[1], ",") {
@@ -34,6 +44,26 @@ func parseTargetObjectIDs(sql string) map[int]bool {
 	if m := reMssqlObjectIDEq.FindStringSubmatch(sql); len(m) == 2 {
 		if id, err := strconv.Atoi(m[1]); err == nil {
 			return map[int]bool{id: true}
+		}
+	}
+	if m := reMssqlObjectIdCallEq.FindStringSubmatch(sql); len(m) == 2 {
+		targetName := cleanTargetTableName(m[1])
+		if src != nil {
+			for tIdx, t := range src.GetSortedTables() {
+				if strings.EqualFold(t.Name, targetName) {
+					return map[int]bool{1000 + tIdx: true}
+				}
+			}
+		}
+	}
+	if m := reMssqlTableNameEq.FindStringSubmatch(sql); len(m) == 2 {
+		targetName := cleanTargetTableName(m[1])
+		if src != nil {
+			for tIdx, t := range src.GetSortedTables() {
+				if strings.EqualFold(t.Name, targetName) {
+					return map[int]bool{1000 + tIdx: true}
+				}
+			}
 		}
 	}
 	return nil
@@ -133,7 +163,7 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 		"numericPrecision", "numericScale", "isSparse", "columnComment",
 	}
 
-	targetIDs := parseTargetObjectIDs(sql)
+	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
@@ -209,30 +239,53 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 				maxLen = -1
 			}
 
+			isPKVal := int64(0)
+			if c.PrimaryKey {
+				isPKVal = int64(1)
+			}
+			var icColID any = nil
+			if c.PrimaryKey {
+				icColID = int64(cIdx + 1)
+			}
+
 			allRows = append(allRows, map[string]any{
 				"columnName":         c.Name,
 				"name":               c.Name,
 				"column_name":        c.Name,
+				"a.name":             c.Name,
+				"b.name":             dataType,
+				"c.name":             c.Name,
 				"dataType":           dataType,
 				"data_type":          dataType,
 				"type_name":          dataType,
+				"ctype":              dataType,
 				"objectId":           objID,
 				"object_id":          objID,
+				"a.object_id":        objID,
+				"c.object_id":        objID,
 				"isIdentity":         false,
 				"is_identity":        false,
-				"maxLength":          maxLen,
-				"max_length":         maxLen,
-				"precision":          prec,
-				"scale":              scale,
+				"maxLength":          int64(maxLen),
+				"max_length":         int64(maxLen),
+				"a.max_length":       int64(maxLen),
+				"precision":          int64(prec),
+				"a.precision":        int64(prec),
+				"scale":              int64(scale),
+				"a.scale":            int64(scale),
 				"isNullable":         c.Nullable,
 				"is_nullable":        c.Nullable,
+				"a.is_nullable":      c.Nullable,
+				"nullable":           c.Nullable,
 				"charMaxLength":      charMaxLen,
 				"defaultValue":       nil,
 				"defaultConstraint":  nil,
+				"vdefault":           "",
 				"computedExpression": nil,
 				"isPersisted":        nil,
-				"columnId":           cIdx + 1,
-				"column_id":          cIdx + 1,
+				"columnId":           int64(cIdx + 1),
+				"column_id":          int64(cIdx + 1),
+				"a.column_id":        int64(cIdx + 1),
+				"ic.column_id":       icColID,
 				"numericPrecision":   numPrec,
 				"numericScale":       numScale,
 				"isSparse":           false,
@@ -249,8 +302,8 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 				"o.object_id":        objID,
 				"o.name":             t.Name,
 				"u.name":             "dbo",
-				"c.name":             c.Name,
-				"c.object_id":        objID,
+				"is_primary_key":     c.PrimaryKey,
+				"is_pk":              isPKVal,
 			})
 		}
 	}
@@ -263,7 +316,7 @@ func execSysIndexesPrimaryKey(src Source, sql string) (*Result, error) {
 		"objectId", "object_id", "pureName", "pure_name", "name", "index_name", "schemaName", "schema_name", "columnName", "column_name", "constraintName", "constraint_name", "is_primary_key", "is_unique", "type_desc", "index_id",
 	}
 
-	targetIDs := parseTargetObjectIDs(sql)
+	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
@@ -304,7 +357,7 @@ func execSysIndexesSecondary(src Source, sql string) (*Result, error) {
 		"object_id", "objectId", "name", "index_name", "constraintName", "constraint_name", "indexType", "type_desc", "isUnique", "is_unique", "is_primary_key", "index_id", "is_unique_constraint", "filterDefinition",
 	}
 
-	targetIDs := parseTargetObjectIDs(sql)
+	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
@@ -341,7 +394,7 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 		"object_id", "index_id", "column_id", "columnName", "isDescending", "isIncludedColumn",
 	}
 
-	targetIDs := parseTargetObjectIDs(sql)
+	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
@@ -384,7 +437,7 @@ func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, erro
 		"updateAction", "deleteAction", "objectId",
 	}
 
-	targetIDs := parseTargetObjectIDs(sql)
+	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
 
@@ -483,7 +536,7 @@ func execSysTablesRowCount(src Source, sql string) (*Result, error) {
 		columns = []string{"objectId", "tableRowCount"}
 	}
 
-	targetIDs := parseTargetObjectIDs(sql)
+	targetIDs := parseTargetObjectIDs(sql, src)
 	tables := src.GetSortedTables()
 	var allRows []map[string]any
 

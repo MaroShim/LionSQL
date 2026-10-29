@@ -6,8 +6,8 @@ import (
 )
 
 func TestVersion_CompactAndDetailed(t *testing.T) {
-	if Version != "0.90.0" {
-		t.Fatalf("expected version 0.90.0, got %s", Version)
+	if !strings.HasPrefix(Version, "0.90.0") {
+		t.Fatalf("expected version prefix 0.90.0, got %s", Version)
 	}
 
 	compact := CompactVersion()
@@ -23,7 +23,7 @@ func TestVersion_CompactAndDetailed(t *testing.T) {
 
 	detailed := DetailedVersion()
 	expectedSnippets := []string{
-		"LionSQL v0.90.0",
+		"LionSQL v" + Version,
 		"Build Time:",
 		"Git Commit:",
 		"Go Runtime:",

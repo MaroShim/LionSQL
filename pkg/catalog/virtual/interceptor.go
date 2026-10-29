@@ -171,23 +171,25 @@ func Execute(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
 	upper = strings.ReplaceAll(strings.ReplaceAll(upper, "[", ""), "]", "")
 
+	fromColumns := strings.Contains(upper, "FROM SYS.COLUMNS") || strings.Contains(upper, "FROM SYS.ALL_COLUMNS")
+
 	// 1. SQL Server Primary Keys
-	if strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1") {
+	if !fromColumns && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "1") {
 		return execSysIndexesPrimaryKey(src, sql)
 	}
 
 	// 2. SQL Server Secondary Indexes
-	if strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "0") {
+	if !fromColumns && strings.Contains(upper, "SYS.INDEXES") && containsEq(upper, "IS_PRIMARY_KEY", "0") {
 		return execSysIndexesSecondary(src, sql)
 	}
 
 	// 3. SQL Server Index Columns
-	if strings.Contains(upper, "SYS.INDEX_COLUMNS") {
+	if !fromColumns && strings.Contains(upper, "SYS.INDEX_COLUMNS") {
 		return execSysIndexColumns(src, sql)
 	}
 
 	// 4. SQL Server Columns joined with types
-	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE")) {
+	if strings.Contains(upper, "SYS.COLUMNS") && (strings.Contains(upper, "SYS.TYPES") || strings.Contains(upper, "ISIDENTITY") || strings.Contains(upper, "IS_IDENTITY") || strings.Contains(upper, "DATATYPE") || strings.Contains(upper, "MAX_LENGTH")) {
 		return execSysColumnsJoinedWithTypes(src, sql)
 	}
 

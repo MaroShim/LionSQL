@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ### Added
 - support conditional DDL statements (IF [NOT] EXISTS ... DDL, IF OBJECT_ID ... DDL) for ORM migrations (Gitea/XORM)
 - add legacy sysobjects columns (id, uid, xtype) and trailing-space-tolerant string comparison
+- support XORM MSSQL column introspection query pattern joining sys.columns, sys.types, sys.indexes, and sys.syscomments
+- ensure int64 non-null scanning compatibility for sys.columns max_length, precision, scale, and column_id
 
 ## [0.90.0-beta4] - 2026-10-29
 

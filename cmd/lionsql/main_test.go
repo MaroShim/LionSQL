@@ -2,11 +2,14 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"lionsql/pkg/config"
 )
 
 func captureStdout(fn func() error) (string, error) {
@@ -240,7 +243,8 @@ func TestLionsql_UsageOutput(t *testing.T) {
 	if len(lines) < 2 {
 		t.Fatalf("expected at least 2 lines in usage header, got %d lines", len(lines))
 	}
-	if !strings.Contains(lines[0], "LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v0.90.0)") {
+	expectedTitle := fmt.Sprintf("LionSQL - Single binary High-Concurrency OLTP Database Server with T-SQL & Stored Procedure (v%s)", config.Version)
+	if !strings.Contains(lines[0], expectedTitle) {
 		t.Errorf("expected line 1 to contain title and version, got: %q", lines[0])
 	}
 	if !strings.HasPrefix(lines[1], "(built: ") || !strings.Contains(lines[1], "commit: ") {

@@ -125,7 +125,7 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 				}
 			}
 			rawCol := strings.ToLower(cleanIdentifier(colExpr))
-			if strings.Contains(rawCol, ".") {
+			if !strings.Contains(colExpr, " ") && !strings.Contains(colExpr, "(") && strings.Contains(rawCol, ".") {
 				rawCol = rawCol[strings.LastIndex(rawCol, ".")+1:]
 			}
 			outName := alias
@@ -133,7 +133,7 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 				outName = rawCol
 			}
 			selectedCols = append(selectedCols, outName)
-			colSourceMap[outName] = rawCol
+			colSourceMap[outName] = colExpr
 		}
 	}
 
@@ -165,7 +165,22 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 			if found {
 				row[col] = val
 			} else {
-				row[col] = nil
+				upperSrc := strings.ToUpper(src)
+				if strings.Contains(upperSrc, "CASE WHEN") && (strings.Contains(upperSrc, "IC.COLUMN_ID") || strings.Contains(upperSrc, "PRIMARY")) {
+					isPK := false
+					if pk, ok := fr["is_primary_key"].(bool); ok && pk {
+						isPK = true
+					}
+					if isPK {
+						row[col] = int64(1)
+					} else {
+						row[col] = int64(0)
+					}
+				} else if strings.Contains(upperSrc, "REPLACE") && strings.Contains(upperSrc, "ISNULL") {
+					row[col] = ""
+				} else {
+					row[col] = nil
+				}
 			}
 		}
 		finalRows = append(finalRows, row)
@@ -184,6 +199,18 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 	}
 	if whereStr == "1=0" || whereStr == "1 = 0" || strings.EqualFold(whereStr, "NOT 1=1") || strings.EqualFold(whereStr, "NOT 1 = 1") {
 		return false
+	}
+
+	if m := reMssqlObjectIdCallEq.FindStringSubmatch(whereStr); len(m) == 2 {
+		targetName := cleanTargetTableName(m[1])
+		tbl := getMapValueCaseInsensitive(rec, "tableName")
+		if tbl == nil {
+			tbl = getMapValueCaseInsensitive(rec, "table_name")
+		}
+		if tbl != nil {
+			return strings.EqualFold(fmt.Sprintf("%v", tbl), targetName)
+		}
+		return true
 	}
 
 	p := proc.NewParser(proc.NewLexer(whereStr))
