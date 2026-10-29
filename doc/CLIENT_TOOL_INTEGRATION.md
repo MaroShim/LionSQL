@@ -16,6 +16,17 @@ LionSQL acts as a zero-external-dependency database engine that concurrently ser
 
 > Note: LionSQL enforces **Instance-Based Database Isolation** (GEMINI.md Section 3). Each server process hosts exactly one isolated database catalog per data directory (`--data-dir`).
 
+### 1.1. Recommended Protocol Selection Strategy
+
+> [!TIP]
+> **Use PostgreSQL Wire Protocol (`:5433`) as the Default Application Protocol**
+> Even when executing **Microsoft T-SQL stored procedures** (`EXEC sp_name @p1=$1;`), **PostgreSQL Wire (`:5433`) is strongly recommended** as the primary application protocol:
+>
+> 1. **Higher Throughput & Lower Latency**: PGWire uses a lightweight frame structure (1-byte opcode + 4-byte length) and pipelines extended query messages (`Bind` + `Execute` + `Sync`) in a single TCP transmission. Live benchmarks demonstrate **141,122 tpmC / 5,177 TPS** over PGWire vs **126k~138k tpmC / 4,672~5,112 TPS** over TDS.
+> 2. **Driver Maturity & Zero-Quirk Connectivity**: PGWire drivers (`pgx/v5`, `lib/pq`, `psycopg3`, `node-postgres`, `asyncpg`, `npgsql`) are exceptionally mature, universal across all platforms, and require no proprietary Microsoft encryption trust negotiation or connection string parameters (`TrustServerCertificate=true`).
+> 3. **Full T-SQL Parity**: LionSQL executes T-SQL grammar, stored procedures, control flow (`IF`, `WHILE`), and batch scripts transparently across PGWire. Stored procedures are NOT restricted to TDS.
+> 4. **When to Use TDS (`:1433`)**: Reserve TDS primarily for legacy Microsoft toolchains (SSMS, Azure Data Studio, legacy .NET `System.Data.SqlClient`, older Dapper/EF workflows locked to MSSQL connection strings).
+
 ---
 
 ## 2. GUI Client Configuration

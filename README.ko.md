@@ -84,6 +84,10 @@ LionSQL의 핵심 기능은 5대 아키텍처 축으로 체계화되어 있습�
 - **내장 Goroutine 커넥션 풀러**:
   경량 Go 고루틴 기반으로 10,000개 이상의 동시 클라이언트 연결을 효율적으로 처리하여 외부 커넥션 풀러 없이도 연결 병목을 해소합니다.
 
+> [!TIP]
+> **애플리케이션 권장 프로토콜: PostgreSQL Wire (`:5433`)**
+> LionSQL은 두 프로토콜을 동시에 완벽 지원하지만, **T-SQL 저장 프로시저(`EXEC sp_name @p1=$1;`)를 실행하는 환경에서도 일반 애플리케이션 연결에는 PGWire(:5433) 사용을 강력히 권장합니다.** PGWire는 Microsoft TDS의 무거운 바이너리 RPC 스트림 대비 프레임 오버헤드가 극히 적고 확장 쿼리 파이프라이닝(`Bind`+`Execute`+`Sync`)을 단일 TCP 패킷으로 일괄 처리하여 실측 처리량이 더 높으며(141,000+ tpmC / 5,170+ TPS), Go (`pgx`, `lib/pq`), Node.js, Python, Java 등 전 언어 생태계에서 인증서 신뢰 이슈 없는 성숙한 드라이버를 제공합니다. TDS(:1433)는 주로 SSMS, Azure Data Studio, 레거시 .NET `SqlClient` 등 Microsoft 전용 도구 연동에 사용하는 것이 이상적입니다.
+
 ### 2.2. 엔터프라이즈 T-SQL 절차적 런타임
 - **저장 프로시저, 함수 및 트리거**:
   `CREATE PROCEDURE`, 스칼라 및 테이블 반환 함수(TVF), `AFTER` 및 `INSTEAD OF` 트리거를 지원합니다.

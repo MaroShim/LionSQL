@@ -210,6 +210,7 @@ CGO_ENABLED=0 distribution Safe third-party plugins  PCI-DSS v4.0 / SOC2       M
 | **Phase 6** | 13-Domain Extended Integration Smoke Suite (`SMOKE-EXT-1`) | Quality & Testing | `v0.90.0` | **Completed** | [`scripts/README.md`](scripts/README.md) |
 | **Phase 7** | Official v1.0.0 LTS Production Release & Sign-off | Release & Packaging | `v1.0.0 LTS` | **Ready for Release** | [`CHANGELOG.md`](CHANGELOG.md) |
 | **Post-1.0** | Enterprise Cryptographic Immutable Audit Log | Security & Audit | `v1.1.0` | **Postponed** | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
+| **Post-1.0** | PostgreSQL Wire Protocol Micro-Optimizations (`PERF-PGWIRE-1`) | Wire Protocols | `v1.1.0` | **Planned** | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **Post-1.0** | Pure-Go Persistent Storage Engine (Pebble / bbolt) | Storage Engine | `v1.1.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#51-pure-go-persistent-storage-engine-backend-pebble--bbolt-v110) |
 | **Post-1.0** | WebAssembly Runtime Sandbox UDF (`wazero`) | Extensibility | `v1.1.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#52-webassembly-runtime-sandbox-udf-wazero-v110) |
 | **Post-1.0** | Multi-Core Parallel Analytical Query Execution | Query Execution | `v1.2.0` | **Postponed** | [`doc/ROADMAP.md`](ROADMAP.md#54-multi-core-parallel-analytical-query-execution-v120) |

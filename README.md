@@ -84,6 +84,10 @@ LionSQL's core capabilities are organized across five foundational architectural
 - **Built-in Goroutine Connection Pooler**:
   Handles 10,000+ simultaneous connections over lightweight Go goroutines, eliminating connection bottlenecks without external poolers.
 
+> [!TIP]
+> **Recommended Application Protocol: PostgreSQL Wire (`:5433`)**
+> While LionSQL faithfully serves both protocols, **PGWire (`:5433`) is strongly recommended as the default application protocol**, even when executing T-SQL stored procedures (`EXEC sp_name @p1=$1;`). PGWire's lightweight framing and single-packet pipelining (`Parse` + `Bind` + `Execute` + `Sync`) deliver higher raw network throughput (141,000+ tpmC / 5,170+ TPS) with lower serialization latency than Microsoft TDS RPC streams, while offering universal, zero-quirk driver support across Go (`pgx`, `lib/pq`), Node.js, Python, Java, and Rust. TDS (`:1433`) is primarily intended for legacy Microsoft tooling (SSMS, Azure Data Studio, legacy .NET `SqlClient`).
+
 ### 2. Enterprise T-SQL Procedural Runtime
 - **Stored Procedures, Functions & Triggers**:
   Full support for `CREATE PROCEDURE`, scalar and Table-Valued Functions (TVF), and `AFTER` / `INSTEAD OF` triggers.
