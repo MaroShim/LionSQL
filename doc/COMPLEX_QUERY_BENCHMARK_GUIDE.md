@@ -234,11 +234,11 @@ SQLite       ██████████████████████�
 2. **Exploding Code Complexity & Violation of KISS Single-Binary Simplicity**:  
    Re-implementing vectorized type systems (`Int64Vector`, `Float64Vector`), null bitmap masks, and columnar operators violates LionSQL's foundational design as a lightweight, autonomous embedded OLTP engine (YAGNI).
 
-### 7.2. Pragmatic High-Throughput Roadmap
+### 7.2. Pragmatic High-Throughput Status & Roadmap
 LionSQL accelerates complex analytical queries to sub-50ms latencies while preserving row-store simplicity through three targeted enhancements:
-* **1,024-Row Vectorized Chunk Streaming (`ChunkedIterator`, `PullChunk`)**: Reduces upper/lower operator dynamic interface dispatch overhead by a factor of 1,024.
-* **Flat Open-Addressing Hash Joins**: Replaces Go runtime maps with contiguous memory slice-backed linear open-addressing integer hash tables for cache-line locality.
-* **Direct Slot Index Projection**: Completely bypasses string-based column name lookups during expression evaluation in favor of pre-resolved tuple register offsets.
+* **1,024-Row Vectorized Chunk Streaming (`ChunkedIterator`, `PullChunk`) [Completed]**: Already implemented across `SeqScan`, `Filter`, `HashJoin`, `Aggregate`, and `Sort` operators, reducing dynamic interface dispatch overhead by a factor of 1,024.
+* **Flat Open-Addressing Hash Joins [Upcoming Roadmap]**: Replaces Go runtime maps with contiguous memory slice-backed linear open-addressing integer hash tables for CPU cache-line locality.
+* **Direct Slot Index Projection [Upcoming Roadmap]**: Completely bypasses string-based column name lookups during expression evaluation in favor of pre-resolved tuple register offsets.
 
 ---
 
