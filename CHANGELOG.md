@@ -7,18 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-### Added
-- support conditional DDL statements (IF [NOT] EXISTS ... DDL, IF OBJECT_ID ... DDL) for ORM migrations (Gitea/XORM)
-- add legacy sysobjects columns (id, uid, xtype) and trailing-space-tolerant string comparison
-- support XORM MSSQL column introspection query pattern joining sys.columns, sys.types, sys.indexes, and sys.syscomments
-- ensure int64 non-null scanning compatibility for sys.columns max_length, precision, scale, and column_id
-- support MSSQL T-SQL assignment aliasing ("alias" = <expr>) and boolean scan compatibility for default_is_null
-- add sys.fn_helpcollations() virtual table function and bracketed LIKE pattern escape ([_], [%])
-- add tolerant ALTER DATABASE no-op execution for database collation migrations
-
 ## [0.90.0-beta4] - 2026-10-29
 
 ### Added
+- support conditional DDL statements (IF [NOT] EXISTS ... DDL, IF OBJECT_ID ... DDL) for ORM migrations (ORM-MIGRATE-1) (f847837)
+- add legacy sysobjects columns (id, uid, xtype) and trailing-space-tolerant string comparison (f847837)
+- support XORM MSSQL column introspection query pattern joining sys.columns, sys.types, sys.indexes, and sys.syscomments (ORM-MIGRATE-2) (aa95620)
+- ensure int64 non-null scanning compatibility for sys.columns max_length, precision, scale, and column_id (aa95620)
+- support MSSQL T-SQL assignment aliasing ("alias" = <expr>) and boolean scan compatibility for default_is_null (ORM-MIGRATE-3) (bb0d159)
+- add sys.fn_helpcollations() virtual table function and bracketed LIKE pattern escape ([_], [%]) (bb0d159)
+- add tolerant ALTER DATABASE no-op execution for database collation migrations (bb0d159)
 - implement web studio tab session isolation and overview memory caching (UI-CONCURRENCY-1) (9d9fc46)
 - add automated release and changelog grouping pipeline (scripts/release.sh) (8552b67)
 - add Windows .exe cross-compilation targets to release pipeline (2c1719b)
@@ -42,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - optimize tpcc-client with dedicated conns and prepared stmts (113k tpmC) (f5b8424)
 
 ### Documentation
+- author Gitea integration and enterprise ORM compatibility milestone report (doc/GITEA_INTEGRATION_MILESTONE.ko.md)
 - establish self-contained SPA web server and native DB plan (WEB-SPA-1) (f149ad5)
 - update code review trackers with REV-STOR-013 and REV-API-003 (8f0a442)
 - append architectural paradox analysis to single-page HTML web server plan (3f7fc11)

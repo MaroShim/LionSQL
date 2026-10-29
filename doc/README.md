@@ -116,6 +116,9 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Tested client matrix: Beekeeper Studio, DBeaver Universal Database Tool, Azure Data Studio, SSMS, `psql`, and `sqlcmd`.
   * Multi-protocol catalog interceptors, schema discovery routing, and pagination normalization (`OFFSET FETCH` / `TOP`).
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
+* [`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
+  * Full initialization and production startup milestone report for Gitea (Go full-stack Git platform) and XORM (MSSQL dialect) across 116 tables.
+  * Architectural analysis of conditional DDL, joined column metadata routing, T-SQL assignment aliasing, and `sys.fn_helpcollations()`.
 * [`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)
   * Comprehensive Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) live compatibility verification report across 123 enterprise T-SQL/ORM scenarios (**99.2% practical compatibility rate**: 122/123 passing).
 * [`PGWIRE_COMPATIBILITY_REPORT.md`](PGWIRE_COMPATIBILITY_REPORT.md)

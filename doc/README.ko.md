@@ -118,6 +118,9 @@
   * 검증된 클라이언트: Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, `psql`, `sqlcmd`.
   * 멀티 프로토콜 카탈로그 인터셉터, 스키마 탐색 라우팅, 페이지네이션 정규화 (`OFFSET FETCH` / `TOP`).
   * 주요 프로그래밍 언어 드라이버 연결 문자열 및 커넥션 풀 가이드 (Go, Python, Node.js, C#, Rust, Java).
+* [`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
+  * Gitea(Go 풀스택 Git 플랫폼) 및 XORM(MSSQL 방언) 완전 초기화 및 116개 테이블 프로덕션 기동 마일스톤 보고서.
+  * 조건부 DDL, 복합 조인 컬럼 메타데이터 라우팅, T-SQL 대입식 별칭 및 `sys.fn_helpcollations()` 연동 분석.
 * [`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)
   * Microsoft SQL Server TDS 7.x/8.0 (포트 `1433`) 123개 엔터프라이즈 T-SQL/ORM 시나리오 실측 호환성 검증 보고서 (**실무 호환율 99.2%**: 122/123 PASS).
 * [`PGWIRE_COMPATIBILITY_REPORT.md`](PGWIRE_COMPATIBILITY_REPORT.md)
