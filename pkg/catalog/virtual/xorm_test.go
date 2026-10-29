@@ -125,3 +125,95 @@ where a.object_id = object_id('user')`
 		t.Errorf("expected name column to have is_pk = 0, got %v", nameRow[isPKCol])
 	}
 }
+
+func TestXORMMSSQL_GetColumnsExact_AndCollation(t *testing.T) {
+	userTbl := &storage.TableSchema{
+		Name: "user",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true, Nullable: false},
+			{Name: "name", Type: storage.TypeVarChar, Precision: 50, Nullable: false},
+		},
+	}
+	src := &mockVirtualSource{
+		tables: []*storage.TableSchema{userTbl},
+	}
+
+	// 1. Exact query from xorm-io/xorm dialects/mssql.go GetColumns()
+	qCols := `select a.name as name, b.name as ctype,a.max_length,a.precision,a.scale,a.is_nullable as nullable,
+		  "default_is_null" = (CASE WHEN c.text is null THEN 1 ELSE 0 END),
+	      replace(replace(isnull(c.text,''),'(',''),')','') as vdefault,
+		  ISNULL(p.is_primary_key, 0), a.is_identity as is_identity
+          from sys.columns a 
+		  left join sys.types b on a.user_type_id=b.user_type_id
+          left join sys.syscomments c on a.default_object_id=c.id
+		  LEFT OUTER JOIN (SELECT i.object_id, ic.column_id, i.is_primary_key
+			FROM sys.indexes i
+		  LEFT JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+			WHERE i.is_primary_key = 1
+		) as p on p.object_id = a.object_id AND p.column_id = a.column_id
+          where a.object_id=object_id('user')`
+
+	if !virtual.IsVirtualCatalogJoinQuery(qCols) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match exact GetColumns query")
+	}
+
+	resCols, err := virtual.Execute(src, qCols)
+	if err != nil {
+		t.Fatalf("virtual.Execute failed: %v", err)
+	}
+
+	if len(resCols.Columns) != 10 {
+		t.Fatalf("expected 10 columns, got %d: %v", len(resCols.Columns), resCols.Columns)
+	}
+	if resCols.Columns[6] != "default_is_null" {
+		t.Fatalf("expected column 6 to be 'default_is_null', got %q", resCols.Columns[6])
+	}
+	if len(resCols.Rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(resCols.Rows))
+	}
+
+	// Verify simulated rows.Scan(&name, &ctype, &maxLen, &precision, &scale, &nullable, &defaultIsNull, &vdefault, &isPK, &isIncrement)
+	for i, r := range resCols.Rows {
+		defVal, ok := r["default_is_null"]
+		if !ok || defVal == nil {
+			t.Fatalf("row %d: default_is_null must not be nil, got %+v", i, r)
+		}
+		if bVal, ok := defVal.(bool); !ok || !bVal {
+			t.Fatalf("row %d: default_is_null must be true (bool), got %T (%v)", i, defVal, defVal)
+		}
+	}
+
+	// Verify PK indicator on column 8
+	pkCol := resCols.Columns[8]
+	if resCols.Rows[0][pkCol] != int64(1) {
+		t.Errorf("expected id row pkCol to be 1, got %v", resCols.Rows[0][pkCol])
+	}
+	if resCols.Rows[1][pkCol] != int64(0) {
+		t.Errorf("expected name row pkCol to be 0, got %v", resCols.Rows[1][pkCol])
+	}
+
+	// 2. Collation discovery query: SELECT * FROM sys.fn_helpcollations() WHERE name LIKE '%[_]CS[_]AS%'
+	qColl := `SELECT * FROM sys.fn_helpcollations() WHERE name LIKE '%[_]CS[_]AS%'`
+	if !virtual.IsVirtualCatalogJoinQuery(qColl) {
+		t.Fatalf("expected IsVirtualCatalogJoinQuery to match fn_helpcollations query")
+	}
+
+	resColl, err := virtual.Execute(src, qColl)
+	if err != nil {
+		t.Fatalf("fn_helpcollations failed: %v", err)
+	}
+	if len(resColl.Rows) == 0 {
+		t.Fatalf("expected fn_helpcollations to return matching collations, got 0 rows")
+	}
+	foundExpected := false
+	for _, r := range resColl.Rows {
+		collName, _ := r["name"].(string)
+		if collName == "Latin1_General_CS_AS" {
+			foundExpected = true
+			break
+		}
+	}
+	if !foundExpected {
+		t.Errorf("expected Latin1_General_CS_AS in fn_helpcollations results, got: %+v", resColl.Rows)
+	}
+}

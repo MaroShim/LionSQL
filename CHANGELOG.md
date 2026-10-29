@@ -12,6 +12,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - add legacy sysobjects columns (id, uid, xtype) and trailing-space-tolerant string comparison
 - support XORM MSSQL column introspection query pattern joining sys.columns, sys.types, sys.indexes, and sys.syscomments
 - ensure int64 non-null scanning compatibility for sys.columns max_length, precision, scale, and column_id
+- support MSSQL T-SQL assignment aliasing ("alias" = <expr>) and boolean scan compatibility for default_is_null
+- add sys.fn_helpcollations() virtual table function and bracketed LIKE pattern escape ([_], [%])
+- add tolerant ALTER DATABASE no-op execution for database collation migrations
 
 ## [0.90.0-beta4] - 2026-10-29
 

@@ -121,7 +121,7 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	if strings.Contains(upper, "SYS.INDEXES") && matchAny(upper, "JOIN", "IS_PRIMARY_KEY") {
 		return true
 	}
-	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES") {
+	if matchAny(upper, "SYS.INDEX_COLUMNS", "SYS.ALL_OBJECTS", "SYS.SYSCOMMENTS", "SYS.SQL_MODULES", "FN_HELPCOLLATIONS") {
 		return true
 	}
 	if strings.Contains(upper, "INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS") && matchAny(upper, "JOIN", "SCHEMANAME") {
@@ -246,6 +246,11 @@ func Execute(src Source, sql string) (*Result, error) {
 	// 15. SQL Server Master Object metadata
 	if strings.Contains(upper, "SYS.OBJECTS") && (strings.Contains(upper, "SYS.SCHEMAS") || strings.Contains(upper, "PURENAME")) {
 		return execSysObjectsMetadata(src, sql)
+	}
+
+	// 15.5. SQL Server Collation List: fn_helpcollations()
+	if strings.Contains(upper, "FN_HELPCOLLATIONS") {
+		return execFnHelpCollations(sql)
 	}
 
 	// 16. PostgreSQL Information Schema tables with persistence

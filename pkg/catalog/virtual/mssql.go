@@ -304,11 +304,38 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 				"u.name":             "dbo",
 				"is_primary_key":     c.PrimaryKey,
 				"is_pk":              isPKVal,
+				"default_is_null":    true,
+				"defaultIsNull":      true,
+				"isnull(p.is_primary_key, 0)": isPKVal,
 			})
 		}
 	}
 
 	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execFnHelpCollations(sql string) (*Result, error) {
+	columns := []string{"name", "description"}
+	allRows := []map[string]any{
+		{"name": "Latin1_General_CS_AS", "description": "Latin1-General, case-sensitive, accent-sensitive, kanatype-insensitive, width-insensitive"},
+		{"name": "Latin1_General_CI_AS", "description": "Latin1-General, case-insensitive, accent-sensitive, kanatype-insensitive, width-insensitive"},
+		{"name": "SQL_Latin1_General_CP1_CS_AS", "description": "SQL Server collation, code page 1252, case-sensitive, accent-sensitive"},
+		{"name": "SQL_Latin1_General_CP1_CI_AS", "description": "SQL Server collation, code page 1252, case-insensitive, accent-sensitive"},
+	}
+
+	projStr := "*"
+	upper := strings.ToUpper(sql)
+	if idxFrom := strings.Index(upper, "FROM"); idxFrom != -1 {
+		idxSel := strings.Index(upper, "SELECT")
+		if idxSel != -1 && idxSel < idxFrom {
+			projStr = strings.TrimSpace(sql[idxSel+6 : idxFrom])
+		}
+	}
+	whereClause := ""
+	if idxWhere := strings.Index(upper, "WHERE"); idxWhere != -1 {
+		whereClause = strings.TrimSpace(sql[idxWhere+5:])
+	}
+	return FormatResult(columns, allRows, projStr, whereClause, "", -1)
 }
 
 func execSysIndexesPrimaryKey(src Source, sql string) (*Result, error) {

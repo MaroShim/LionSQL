@@ -211,3 +211,62 @@ END`
 		t.Fatalf("expected successful execution, got: %+v", res)
 	}
 }
+
+func TestXORM_CollationAndIntrospectionE2E(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, DefaultConfig())
+	defer coord.Close()
+
+	// 1. Create a table
+	_, err := coord.ExecuteSQL("CREATE TABLE [users] (id BIGINT PRIMARY KEY, name VARCHAR(50))")
+	if err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	// 2. ALTER DATABASE CURRENT COLLATE (tolerant no-op)
+	alterRes, err := coord.ExecuteSQL("ALTER DATABASE CURRENT COLLATE Latin1_General_CS_AS")
+	if err != nil || !alterRes.Success {
+		t.Fatalf("ALTER DATABASE CURRENT COLLATE failed: %v, res: %+v", err, alterRes)
+	}
+
+	// 3. fn_helpcollations() query
+	collRes, err := coord.ExecuteSQL("SELECT * FROM sys.fn_helpcollations() WHERE name LIKE '%[_]CS[_]AS%'")
+	if err != nil || !collRes.Success {
+		t.Fatalf("fn_helpcollations query failed: %v", err)
+	}
+	if len(collRes.Rows) == 0 {
+		t.Fatalf("expected at least 1 collation row, got 0")
+	}
+
+	// 4. Exact XORM GetColumns() query
+	qGetCols := `select a.name as name, b.name as ctype,a.max_length,a.precision,a.scale,a.is_nullable as nullable,
+		  "default_is_null" = (CASE WHEN c.text is null THEN 1 ELSE 0 END),
+	      replace(replace(isnull(c.text,''),'(',''),')','') as vdefault,
+		  ISNULL(p.is_primary_key, 0), a.is_identity as is_identity
+          from sys.columns a 
+		  left join sys.types b on a.user_type_id=b.user_type_id
+          left join sys.syscomments c on a.default_object_id=c.id
+		  LEFT OUTER JOIN (SELECT i.object_id, ic.column_id, i.is_primary_key
+			FROM sys.indexes i
+		  LEFT JOIN sys.index_columns ic ON ic.object_id = i.object_id AND ic.index_id = i.index_id
+			WHERE i.is_primary_key = 1
+		) as p on p.object_id = a.object_id AND p.column_id = a.column_id
+          where a.object_id=object_id('users')`
+
+	colsRes, err := coord.ExecuteSQL(qGetCols)
+	if err != nil || !colsRes.Success {
+		t.Fatalf("XORM GetColumns query failed: %v", err)
+	}
+	if len(colsRes.Rows) != 2 {
+		t.Fatalf("expected 2 columns for users, got %d", len(colsRes.Rows))
+	}
+	if colsRes.Columns[6] != "default_is_null" {
+		t.Fatalf("expected column index 6 to be 'default_is_null', got %q", colsRes.Columns[6])
+	}
+	for i, r := range colsRes.Rows {
+		if r["default_is_null"] != true {
+			t.Fatalf("row %d: expected default_is_null=true, got %v (%T)", i, r["default_is_null"], r["default_is_null"])
+		}
+	}
+}

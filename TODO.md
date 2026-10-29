@@ -69,6 +69,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`PERF-TPCC-CLIENT`**| Bench/Wire | **`tpcc-client` Parameterized Prepared Stmts & Dedicated Conn Optimization** | `cmd/tpcc_client/main.go` | **Completed (`[x]`, 113k tpmC)** |
 | **`ORM-MIGRATE-1`**| Syntax/ORM | **Conditional DDL Support for ORM Migrations (Gitea/XORM/GORM: `IF NOT EXISTS ... DDL`, `sysobjects` `xtype`)** | `pkg/engine/`, `pkg/proc/` | **Completed (`[x]`)** |
 | **`ORM-MIGRATE-2`**| Catalog/ORM | **MSSQL Virtual Catalog XORM Column Introspection Routing & `max_length` Int64 Scan Safety** | `pkg/catalog/virtual/` | **Completed (`[x]`)** |
+| **`ORM-MIGRATE-3`**| Catalog/ORM | **T-SQL Assignment Aliasing (`alias = expr`), XORM `default_is_null` Bool Scan Safety, `sys.fn_helpcollations()`, and Tolerant `ALTER DATABASE`** | `pkg/catalog/virtual/`, `pkg/proc/`, `pkg/engine/` | **Completed (`[x]`)** |
 
 ### 3.2. Post-0.90.0 Roadmap Queue
 

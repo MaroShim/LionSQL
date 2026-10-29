@@ -1132,6 +1132,16 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execAlterTable(trimmed, start, cs)
 	}
 
+	// 4.35 DDL: ALTER DATABASE (tolerant no-op for Collation/Options)
+	if strings.HasPrefix(upper, "ALTER DATABASE") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER DATABASE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Command(s) completed successfully."},
+		}, nil
+	}
+
 	// 5. DML: INSERT INTO / UPSERT
 	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlInsert {
 		if err := s.checkWriteAllowed(); err != nil {

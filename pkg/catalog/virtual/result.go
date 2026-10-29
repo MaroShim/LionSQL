@@ -114,7 +114,10 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 			}
 			alias := ""
 			colExpr := cTrimmed
-			if m := reProjAs.FindStringSubmatch(cTrimmed); len(m) == 3 {
+			if a, expr, ok := parseTopLevelAssignment(cTrimmed); ok {
+				alias = a
+				colExpr = expr
+			} else if m := reProjAs.FindStringSubmatch(cTrimmed); len(m) == 3 {
 				colExpr = strings.TrimSpace(m[1])
 				alias = cleanIdentifier(m[2])
 			} else {
@@ -166,7 +169,10 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 				row[col] = val
 			} else {
 				upperSrc := strings.ToUpper(src)
-				if strings.Contains(upperSrc, "CASE WHEN") && (strings.Contains(upperSrc, "IC.COLUMN_ID") || strings.Contains(upperSrc, "PRIMARY")) {
+				upperCol := strings.ToUpper(col)
+				if (strings.Contains(upperSrc, "CASE WHEN") && (strings.Contains(upperSrc, "IC.COLUMN_ID") || strings.Contains(upperSrc, "PRIMARY"))) ||
+					strings.Contains(upperSrc, "ISNULL(P.IS_PRIMARY_KEY") ||
+					strings.Contains(upperCol, "PRIMARY_KEY") || strings.Contains(upperCol, "IS_PK") {
 					isPK := false
 					if pk, ok := fr["is_primary_key"].(bool); ok && pk {
 						isPK = true
@@ -176,6 +182,9 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 					} else {
 						row[col] = int64(0)
 					}
+				} else if (strings.Contains(upperSrc, "CASE WHEN") && strings.Contains(upperSrc, "TEXT IS NULL")) ||
+					upperCol == "DEFAULT_IS_NULL" {
+					row[col] = true
 				} else if strings.Contains(upperSrc, "REPLACE") && strings.Contains(upperSrc, "ISNULL") {
 					row[col] = ""
 				} else {
@@ -441,8 +450,32 @@ func splitScalarProjections(s string) []string {
 	return res
 }
 
+func parseTopLevelAssignment(s string) (alias string, colExpr string, ok bool) {
+	eqIdx := sqlutil.FindTopLevelChar(s, '=')
+	if eqIdx == -1 {
+		return "", s, false
+	}
+	left := strings.TrimSpace(s[:eqIdx])
+	right := strings.TrimSpace(s[eqIdx+1:])
+	if left == "" || right == "" {
+		return "", s, false
+	}
+	upperLeft := strings.ToUpper(left)
+	if strings.HasPrefix(upperLeft, "CASE") || strings.HasPrefix(upperLeft, "WHEN") {
+		return "", s, false
+	}
+	cleaned := sqlutil.CleanIdentifier(left)
+	if strings.Contains(cleaned, " ") && !strings.HasPrefix(left, "[") && !strings.HasPrefix(left, "\"") && !strings.HasPrefix(left, "'") {
+		return "", s, false
+	}
+	return cleaned, right, true
+}
+
 func cleanIdentifier(s string) string {
 	s = strings.TrimSpace(s)
+	if strings.Contains(s, "(") || strings.Contains(s, " ") {
+		return sqlutil.CleanIdentifier(s)
+	}
 	parts := strings.Split(s, ".")
 	last := parts[len(parts)-1]
 	return sqlutil.CleanIdentifier(last)
