@@ -72,7 +72,6 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 All code modifications, refactorings, and feature additions must strictly pass all 3 stages in order before committing:
 1. **Build**:
    ```bash
-   go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
    go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
    go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
    go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime

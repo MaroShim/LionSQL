@@ -136,7 +136,7 @@ LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집�
    - **문서 수정 예외 규약**: 설정이나 런타임에 영향을 주지 않는 순수 마크다운(`.md`) 및 텍스트 문서 수정 시에는 불필요한 빌드/테스트 단계를 생략하고 바로 커밋합니다.
    - 명령어:
      ```bash
-     go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
+     go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
      go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
      go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
      go test -tags wiredtiger -count=1 -race <modified_packages>

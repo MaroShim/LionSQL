@@ -56,7 +56,6 @@ Every code change must pass these stages in order before it is committed.
 ### Stage 1: Build
 
 ```bash
-go build -tags wiredtiger -buildvcs=false -o bin/server ./cmd/server && \
 go build -tags wiredtiger -buildvcs=false -o bin/lionsql ./cmd/lionsql && \
 go build -tags wiredtiger -buildvcs=false -o bin/bench ./cmd/bench && \
 go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
@@ -73,7 +72,7 @@ go test -tags wiredtiger -count=1 -race ./...
 - Add `-v` for per-test output. Without it, only package-level `ok` and `FAIL` lines are printed.
 - A full run takes roughly 2 minutes on the reference host.
 
-Expected output is `ok` for every package. Packages without tests print `[no test files]`, which is normal (`cmd/bench`, `cmd/server`, `cmd/tpcc_kernel`, `scratch`).
+Expected output is `ok` for every package. Packages without tests print `[no test files]`, which is normal (`cmd/bench`, `cmd/tpcc_kernel`, `scratch`).
 
 ### Stage 3: Commit
 

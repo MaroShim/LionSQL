@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Removed
+- **Legacy Forwarder Binary (`cmd/server`)**: Completely removed the deprecated `cmd/server/main.go` and `bin/server` wrapper, fully standardizing all database operations, server lifecycle, and CLI utilities onto the single unified standalone binary `bin/lionsql` per Golden Rule 15 (Radical KISS, YAGNI, and single-binary primacy).
+
 ### Added
 - `BENCH-SSB-1`: Implemented Star Schema Benchmark (SSB) Suite & Standalone CLI Tool for Volcano Complex Query Engine:
   - **Star Schema Schema & Flight Queries (`pkg/execution/ssb_test.go`, `cmd/ssb/main.go`)**: Implemented complete 5-table star schema (`customer`, `supplier`, `part`, `date`, `lineorder`) with deterministic pseudo-random data generation matching official SSB specifications.
