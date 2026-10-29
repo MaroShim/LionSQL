@@ -155,7 +155,7 @@ func (f *FilterIterator) evaluate(t Tuple) bool {
 	}
 
 	if f.hasParsed && f.parsed != nil {
-		return proc.EvalBoolExpr(f.parsed, t.ToEvalMap(), nil)
+		return EvalTupleBoolExpr(t, f.parsed)
 	}
 
 	return EvalConditionTuple(t, f.condition)
@@ -341,13 +341,12 @@ func lookupVal(t Tuple, col string) (any, bool) {
 		}
 	}
 
-	// If column contains operators (e.g. ->, ->>) or functions (e.g. JSON_VALUE)
-	if strings.Contains(col, "->") || strings.Contains(col, "(") {
+	// If column contains operators (e.g. ->, ->>, +, -, *, /, %) or functions (e.g. JSON_VALUE)
+	if strings.ContainsAny(col, " +-*/%()") || strings.Contains(col, "->") {
 		p := proc.NewParser(proc.NewLexer(col))
 		expr := p.ParseExpr()
 		if expr != nil && len(p.Errors()) == 0 {
-			res, err := proc.EvalRowExpr(expr, t.ToEvalMap(), nil)
-			if err == nil {
+			if res, ok := EvalTupleExpr(t, expr); ok {
 				return res, true
 			}
 		}

@@ -153,7 +153,7 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 			continue
 		}
 		if f.parsed != nil {
-			if res, err := proc.EvalRowExpr(f.parsed, tuple.ToEvalMap(), nil); err == nil {
+			if res, ok := EvalTupleExpr(tuple, f.parsed); ok {
 				vals[i] = res
 				continue
 			}

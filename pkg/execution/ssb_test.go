@@ -181,6 +181,10 @@ func TestSSB_FlightQueries(t *testing.T) {
 	if len(res1.Rows) == 0 {
 		t.Fatalf("Q1.1 returned 0 rows")
 	}
+	if rev, ok := res1.Rows[0]["revenue"]; !ok || rev == nil {
+		t.Fatalf("Q1.1 returned nil revenue: %+v", res1.Rows[0])
+	}
+	t.Logf("Q1.1 verified revenue: %v", res1.Rows[0]["revenue"])
 
 	// Q2.1
 	q2 := `SELECT SUM(lo_revenue) AS sum_rev, d_year, p_brand1
@@ -232,6 +236,12 @@ func TestSSB_FlightQueries(t *testing.T) {
 		t.Fatalf("Q4.1 failed: %v", err)
 	}
 	t.Logf("Q4.1 returned %d profit breakdown rows", len(res4.Rows))
+	if len(res4.Rows) > 0 {
+		if profit, ok := res4.Rows[0]["profit"]; !ok || profit == nil {
+			t.Fatalf("Q4.1 returned nil profit: %+v", res4.Rows[0])
+		}
+		t.Logf("Q4.1 verified profit row[0]: %+v", res4.Rows[0])
+	}
 }
 
 func BenchmarkSSB_Q1_1(b *testing.B) {

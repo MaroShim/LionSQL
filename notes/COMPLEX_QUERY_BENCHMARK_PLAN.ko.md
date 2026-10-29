@@ -258,3 +258,26 @@ ORDER BY d_year, c_nation;
    - 차원 테이블(`customer`, `supplier`, `part`, `date`)의 WHERE 필터가 먼저 적용되어 해시 테이블 빌드 크기가 작으므로, 4자 조인인 Q4.1도 SF 0.001 기준 ~5ms 수준으로 매우 기민하게 동작함을 실측 확인.
 3. **저장소 엔진 비교**:
    - In-Memory OCC 엔진이 WiredTiger 엔진 대비 인메모리 포인터 디레퍼런싱의 이점으로 약 **1.9배~2.1배 빠른 처리 속도**를 보임.
+
+### 8.4. `PERF-COMPLEX-QUERY-1` 최적화 후 성능 비교 (Before vs After)
+
+`pkg/execution/eval.go` 다이렉트 튜플 AST 평가기 도입 및 사전 컴파일 집계식, 글로벌 단일 집계 최적화 적용 후 실측 결과:
+
+#### 1. 마이크로 벤치마크 (SF 0.001) 개선율
+| 대상 쿼리 | 최적화 전 (Before) | 최적화 후 (After) | 지연시간 개선율 | 메모리 할당 절감률 | 비고 |
+| :--- | :---: | :---: | :---: | :---: | :--- |
+| **`BenchmarkSSB_Q1_1`** | 9.53 ms / 10.08 MB / 86k allocs | **3.43 ms / 1.32 MB / 40k allocs** | **2.78배 단축 (64% 감소)** | **86.9% 절감 (10MB ➔ 1.3MB)** | 수식 계산 정상화 (nil ➔ 107,502) |
+| **`BenchmarkSSB_Q2_1`** | 4.92 ms / 2.27 MB / 50k allocs | **4.98 ms / 2.29 MB / 50k allocs** | 동등 수준 유지 | - | 2자 조인 & 그룹핑 |
+| **`BenchmarkSSB_Q3_1`** | 6.55 ms / 3.44 MB / 68k allocs | **5.65 ms / 2.40 MB / 57k allocs** | **1.16배 단축** | **30.2% 절감** | 3자 조인 (Filter 언박싱 제거 효과) |
+| **`BenchmarkSSB_Q4_1`** | 5.11 ms / 2.46 MB / 50k allocs | **5.13 ms / 2.44 MB / 50k allocs** | 동등 수준 유지 | - | profit 수식 정상화 (nil ➔ 701) |
+
+#### 2. CLI `bin/ssb` 실측 지연시간 비교
+* **Scale Factor 0.001 (In-Memory OCC)**:
+  - Q1.1: 9.93 ms ➔ **3.56 ms** (**2.79배 가속**)
+  - 총 비행 시간: 26.92 ms ➔ **19.62 ms** (**27.1% 단축**)
+* **Scale Factor 0.001 (WiredTiger MVCC)**:
+  - Q1.1: 17.26 ms ➔ **6.94 ms** (**2.48배 가속**)
+  - 총 비행 시간: 51.63 ms ➔ **40.37 ms** (**21.8% 단축**)
+* **Scale Factor 0.010 (In-Memory OCC, ~60,000 Fact 행)**:
+  - Q1.1: 81.50 ms ➔ **32.85 ms** (**2.48배 가속**)
+  - 총 비행 시간: 206.12 ms ➔ **166.75 ms** (**19.1% 단축**)

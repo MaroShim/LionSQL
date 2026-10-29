@@ -61,6 +61,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | Task Code | Domain | Core Milestone Deliverable | Target Output | Status |
 | :---: | :---: | :--- | :--- | :---: |
 | **`PERF-SERVER-PIPELINE-P1-P2`**| Server/IO | **Server Pipeline Optimization: Phase 1 (TDS Syscall Coalescing, 32KB sync.Pool, Session Pinning) + Phase 2 (Zero-Alloc RPC Param Binding)** | `pkg/wire/tds/`, `pkg/engine/`, `pkg/proc/` | **Pending (Active S1)** |
+| **`PERF-COMPLEX-QUERY-1`** | Exec/Volcano | **Complex Query Zero-Alloc Tuning & Arithmetic Aggregates (Pre-parsed AST, Slot-Index Arithmetic, Fast Non-Grouped Agg)** | `pkg/execution/` | **Completed (`[x]`, 2.6x faster, 87% less RAM)** |
 | **`S-MYSQL-1-P1`** | Syntax/DX | **MySQL-Style Concise Syntax Ergonomics (Phase 1 Quick-Wins: `DESC`, `SHOW TABLES`, Backtick ` ` `)** | `pkg/proc/lexer.go`, `pkg/engine`, `pkg/proc/runtime` | **Completed (`[x]`)** |
 | **`FUNC-DIALECT-7`** | SQL/Builtin | **High-ROI Multi-Dialect Builtin Functions Best 7 (`IFNULL`/`NVL`, `CURDATE`/`CURRENT_DATE`, `CURTIME`/`CURRENT_TIME`, `MOD`, `TRUNC`/`TRUNCATE`, `INSTR`, `SHA256`/`HEX`/`UNHEX`)** | `pkg/proc/builtins_*.go` | **Completed (`[x]`)** |
 | **`PROC-CURSOR-1`**| Proc/T-SQL | **T-SQL Fast Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility (5 Core Stmts + EOF)** | `pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/runtime` | **Completed (`[x]`)** |
