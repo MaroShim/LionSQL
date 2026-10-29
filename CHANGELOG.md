@@ -8,6 +8,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- `BENCH-SSB-1`: Implemented Star Schema Benchmark (SSB) Suite & Standalone CLI Tool for Volcano Complex Query Engine:
+  - **Star Schema Schema & Flight Queries (`pkg/execution/ssb_test.go`, `cmd/ssb/main.go`)**: Implemented complete 5-table star schema (`customer`, `supplier`, `part`, `date`, `lineorder`) with deterministic pseudo-random data generation matching official SSB specifications.
+  - **Standard SSB Flight Queries (Q1.1, Q2.1, Q3.1, Q4.1)**: Added standard OLAP query flight suite testing selective fact filtering, 2-way join with grouping, 3-way join regional trade drilldowns, and 4-way full star schema joins with manufacturer profit breakdowns.
+  - **Standalone Benchmarking CLI Binary (`bin/ssb`)**: Packaged into high-performance CLI utility supporting configurable scale factors (`-sf 0.001` ~ `1.0`), iteration counts, warmup cycles, and pluggable storage backends (`-engine memory` and `-engine wiredtiger`).
+  - **Volcano Execution Architecture Roadmap (`notes/VOLCANO_COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`)**: Documented comparative benchmarks against DuckDB, ClickHouse, PostgreSQL, and SQLite, establishing LionSQL Volcano engine latency targets and a phased roadmap for hash join vectorization, adaptive hash tables, and JIT/SIMD acceleration.
 - `PROC-CURSOR-1`: Implemented T-SQL Fast Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility:
   - **T-SQL Cursor Lifecycle (`pkg/proc/parser_stmt.go`, `runtime/vm_dispatcher.go`, `runtime/cursor_test.go`)**: Fully implemented 5 core procedural cursor statements: `DECLARE <name> CURSOR FOR <query>`, `OPEN <name>`, `FETCH NEXT FROM <name> INTO @vars...`, `CLOSE <name>`, and `DEALLOCATE <name>`.
   - **Tolerant Modifiers No-Op Support**: Permissively accept standard T-SQL cursor modifiers (`LOCAL`, `GLOBAL`, `FORWARD_ONLY`, `FAST_FORWARD`, `READ_ONLY`, `STATIC`) converging transparently into fast single-pass forward iteration.
