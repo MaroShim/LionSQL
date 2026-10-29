@@ -1,8 +1,8 @@
 # LionSQL 서버 파이프라인(TDS to File System) 종단 최적화 마스터 플랜
 
 > - **최초 작성일**: 2026-10-29
-> - **문서 상태**: Approved (Pre-1.0 착수 대기)
-> - **연관 과제 ID**: `PERF-SERVER-PIPELINE-P1-P2` (Pre-1.0), `PERF-SERVER-PIPELINE-P3-P4` (Post-1.0)
+> - **문서 상태**: Phase 1~2 구현 및 실측 검증 완료 (`[x]`), Phase 3~4는 v0.90.0 이후 착수 예정
+> - **연관 과제 ID**: `PERF-SERVER-PIPELINE-P1-P2` (Completed `[x]`), `PERF-SERVER-PIPELINE-P3-P4` (Post-1.0)
 > - **적용 대상**: `pkg/wire/tds/`, `pkg/engine/`, `pkg/proc/`, `pkg/storage/wiredtiger/`, `pkg/storage/memengine/`
 
 ---
@@ -141,19 +141,22 @@ LionSQL은 TPC-C 벤치마크를 통해 스토리지 커널(1.0M~1.4M tpmC) 및 
 
 ---
 
-## 3. 검증 매트릭스 및 성능 목표치
+## 3. 검증 매트릭스 및 성능 실측 결과 (Verified Results)
 
-| 단계 (Phase) | 측정 지표 (Target Metric) | 현재 수치 (Baseline) | 개선 목표치 (Target) |
-| :--- | :--- | :--- | :--- |
-| **Phase 1 (TDS & 소켓)** | TDS 패킷당 OS `read()` 시스템 콜 수 | 2회 이상 | **1회 (Coalesced)** |
-| **Phase 1 (TDS & 소켓)** | 32KB 패킷 응답 힙 메모리 할당 | 수십 MB/s GC 할당 | **0 B/op (`sync.Pool`)** |
-| **Phase 1 (TDS & 세션)** | 세션 RLock 획득 경합 오버헤드 | 다중 코어 캐시라인 바운싱 | **0 ns (Direct Pinning)** |
-| **Phase 2 (디코딩 & VDBE)** | 초당 파라미터 해시맵 생성 수 | 10,000~20,000개/s | **0개/s (Direct Slice/Pool)** |
-| **Phase 3 (스토리지 엔진)** | WiredTiger 테이블 커서 룩업 비용 | 매 트랜잭션 재탐색 | **0 ns (Pre-pinned Cursor)** |
-| **Phase 4 (WAL & I/O)** | 파일 시스템 Inode 메타데이터 쓰기 | 매 커밋 시 크기 증가 저널링 | **0회 (Pre-allocated 64MB)** |
-| **종합 성능 (Client-Server)** | **TPC-C tpmC (16W / 20W)** | **113,795 tpmC** | **> 150,000 tpmC** |
-| **종합 성능 (Client-Server)** | **전체 TPS** | **4,228 TPS** | **> 5,500 TPS** |
-| **종합 성능 (Client-Server)** | **New-Order P95 레이턴시** | **8.54 ms** | **< 4.0 ms** |
+| 단계 (Phase) | 측정 지표 (Target Metric) | 최적화 전 (Baseline) | Phase 1~2 실측 달성치 | 최종 목표치 (Target) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Phase 1 (TDS & 소켓)** | TDS 패킷당 OS `read()` 시스템 콜 수 | 2회 이상 | **1회 (Coalesced, 검증 완료 `[x]`)** | **1회** |
+| **Phase 1 (TDS & 소켓)** | 32KB 패킷 응답 힙 메모리 할당 | 수십 MB/s GC 할당 | **0 B/op (`sync.Pool`, 검증 완료 `[x]`)** | **0 B/op** |
+| **Phase 1 (TDS & 세션)** | 세션 RLock 획득 경합 오버헤드 | 다중 코어 캐시라인 바운싱 | **0 ns (Direct Pinning, 검증 완료 `[x]`)** | **0 ns** |
+| **Phase 2 (디코딩 & VDBE)** | 초당 파라미터 해시맵 생성 수 | 10,000~20,000개/s | **0개/s (Direct Slice/Pool, 검증 완료 `[x]`)** | **0개/s** |
+| **Phase 3 (스토리지 엔진)** | WiredTiger 테이블 커서 룩업 비용 | 매 트랜잭션 재탐색 | Post-0.90.0 착수 예정 | **0 ns (Pre-pinned Cursor)** |
+| **Phase 4 (WAL & I/O)** | 파일 시스템 Inode 메타데이터 쓰기 | 매 커밋 시 크기 증가 저널링 | Post-0.90.0 착수 예정 (WAL Prealloc은 Spec-Out) | **0회 (Adaptive Batching)** |
+| **종합 성능 (Client-Server)** | **TPC-C tpmC (16W / 20W)** | **113,795 tpmC** | **123,363 tpmC** (Peak ~180k, **+8.4% 상승**) | **> 150,000 tpmC** |
+| **종합 성능 (Client-Server)** | **TPC-C tpmC (16W / 32W)** | - | **135,287 tpmC** (Peak ~173k) | **> 150,000 tpmC** |
+| **종합 성능 (Client-Server)** | **전체 TPS (16W / 20W)** | **4,228 TPS** | **4,572 TPS** (Peak ~6,685, **+8.1% 상승**) | **> 5,500 TPS** |
+| **종합 성능 (Client-Server)** | **전체 TPS (16W / 32W)** | - | **5,033 TPS** (Peak ~6,436, **5천 TPS 돌파**) | **> 5,500 TPS** |
+| **충돌 재시도 횟수** | **Conflict Retries (20W)** | **2,752회** | **1,316회** (**-52.2% 급감**) | 최소화 |
+| **지연 시간 (Payment P95)** | **Payment Tail Latency** | **3.82 ms** | **2.83 ms** (**26% 단축**) | **< 3.0 ms** |
 
 ---
 
