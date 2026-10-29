@@ -51,7 +51,7 @@ func (s *txStats) record(d time.Duration, ok bool, retryCount int) {
 
 func main() {
 	hostFlag := flag.String("host", "127.0.0.1", "Target database host")
-	portFlag := flag.Int("port", 1433, "Target database port (default: 1433 for TDS, 5433 for Postgres)")
+	portFlag := flag.Int("port", 0, "Target database port (default: 1433 for TDS, 5433 for Postgres)")
 	protoFlag := flag.String("protocol", "tds", "Wire protocol: tds (default: SQL Server / MS-TDS) or postgres (PGWire)")
 	userFlag := flag.String("user", "sa", "Database user (default: sa for TDS, postgres for PGWire)")
 	passFlag := flag.String("password", "1234567890", "Database password")
@@ -86,6 +86,8 @@ func main() {
 		} else {
 			targetPort = 5433
 		}
+	} else if targetPort == 1433 && protocol == "postgres" {
+		targetPort = 5433
 	}
 
 	database := *dbFlag
