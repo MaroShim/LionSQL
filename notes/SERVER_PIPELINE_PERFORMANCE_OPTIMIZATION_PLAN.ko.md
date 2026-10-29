@@ -28,8 +28,8 @@ LionSQL은 TPC-C 벤치마크를 통해 스토리지 커널(1.0M~1.4M tpmC) 및 
   └─ 2.2. 이름 기반 프로시저 호출의 Direct PlanCache 바이트코드 디스패치
        │
 [Phase 3: 스토리지 엔진 & 커서 캐싱]
-  ├─ 3.1. WiredTiger 세션 내 핫 테이블 커서 고정 (Pinned Table Cursors)
-  └─ 3.2. 순수 읽기 쿼리의 트랜잭션 및 WAL 완전 우회
+  ├─ 3.1. WiredTiger 세션 레벨 범용 LRU 커서 캐시 (LRU Bounded Cursor Cache)
+  └─ 3.2. 순수 읽기 쿼리의 트랜잭션 및 WAL 완전 우회 (컴파일러 자동 감지 & ReadOnly 힌트)
        │
 [Phase 4: WAL & 디스크 파일 시스템 I/O]
   ├─ 4.1. [Spec-Out] WAL 세그먼트 파일 공간 사전 할당 (WiredTiger 100MB 기본 동작과 중복)
@@ -96,19 +96,25 @@ LionSQL은 TPC-C 벤치마크를 통해 스토리지 커널(1.0M~1.4M tpmC) 및 
 
 ### Phase 3: 스토리지 엔진 & 커서 캐싱 최적화
 
-#### 3.1. WiredTiger 세션 내 핫 테이블 커서 고정 (Pinned Table Cursors)
+#### 3.1. WiredTiger 세션 레벨 범용 LRU 커서 캐시 (LRU Bounded Cursor Cache)
 - **현상 및 문제점**:
-  - 트랜잭션 수명주기 동안 테이블 커서를 매번 열고 닫거나 리셋(`C.go_wt_session_reset`)하는 과정에서 내부 btree/schema 검색 오버헤드 발생.
+  - 트랜잭션 수명주기 동안 반복 쿼리에서 B+Tree 테이블 커서를 매번 열고 닫거나 리셋(`C.go_wt_session_reset`)하는 과정에서 내부 btree/schema 검색 CGO 오버헤드가 발생함.
 - **구현 내용**:
-  - TPC-C와 같은 핫 트랜잭션에 대해 9개 핵심 테이블 커서를 `WTTx` 세션 내에 Pre-open 상태로 핀(Pin) 고정.
+  - 특정 벤치마크 테이블 이름을 하드코딩하는 치팅(Benchmark Targeting) 방식을 전면 배제하고, SQLite/WiredTiger 자체 `cursor_cache` 표준 패턴에 따라 **세션별 최근 접근한 상위 N개(예: 16개) B+Tree 커서를 LRU 기반으로 재사용하는 범용 유한 커서 풀(Bounded Pool)** 구축.
+  - 트랜잭션 커밋/롤백 시 커서를 파괴하지 않고 `reset` 상태로 풀에 반환하여 핸들 재할당 CGO 오버헤드를 제로화.
 - **검증 기준**:
-  - WiredTiger CGO 경계 호출 빈도 및 CPU 오버헤드 감소 확인.
+  - WiredTiger CGO 커서 오픈 호출 빈도 80% 이상 감소 및 임의 테이블 워크로드 대상 일반성 검증.
 
-#### 3.2. 순수 읽기 쿼리의 트랜잭션 및 WAL 완전 우회
+#### 3.2. 순수 읽기 쿼리의 트랜잭션 및 WAL 완전 우회 (컴파일러 자동 감지 & ReadOnly 힌트)
 - **현상 및 문제점**:
-  - `Order-Status`, `Stock-Level` 등 단순 읽기 작업도 트랜잭션 컨텍스트를 경유하여 세션 할당 및 정리 비용 소모.
+  - 단순 포인트 조회나 집계 읽기 작업(`SELECT`)도 불필요하게 쓰기 가능한 트랜잭션 컨텍스트를 경유하여 세션 할당 및 정리 비용을 소모함.
 - **구현 내용**:
-  - VDBE 바이트코드 컴파일 타임에 쓰기 op-code가 없음을 감지하거나 ReadOnly 힌트가 있을 경우, 트랜잭션 래퍼 없이 OCC 샤드 직접 읽기(Point-Lookup Shortcut) 또는 WiredTiger Snapshot Cursor 읽기만 수행하도록 분기.
+  - **1) VDBE 컴파일러의 정적 분석 자동 감지 (Zero-Hint Primary)**:
+    - 쿼리 내에 쓰기 opcode(`OpInsert`, `OpUpdate`, `OpDelete`, `OpTxBegin`) 및 부수 효과를 가진 함수가 없음을 파서/컴파일러 단계에서 감지하여 `prog.IsReadOnly = true`를 자동으로 태깅. 사용자가 힌트를 쓰지 않아도 트랜잭션 래퍼 없이 OCC 샤드 직접 읽기(Point-Lookup Shortcut) 또는 WiredTiger Snapshot Cursor 읽기만 수행하도록 분기.
+  - **2) 사용자 명시적 ReadOnly 힌트 수용 (Explicit Hints)**:
+    - **T-SQL 표준 힌트**: `SELECT ... OPTION (READ ONLY)`, `SELECT ... WITH (READONLY)`
+    - **옵티마이저 주석 힌트**: `SELECT /*+ READ_ONLY */ ...`
+    - **트랜잭션/세션 레벨 선언**: `BEGIN TRANSACTION READ ONLY;`, `SET TRANSACTION READ ONLY;`
 - **검증 기준**:
   - 읽기 쿼리 평균 지연 시간 0.2ms 이하 유지 및 불필요한 트랜잭션 롤백 카운터 0 유지.
 
