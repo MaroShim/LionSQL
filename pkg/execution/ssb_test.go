@@ -281,3 +281,59 @@ func BenchmarkSSB_Q2_1(b *testing.B) {
 		_ = res
 	}
 }
+
+func BenchmarkSSB_Q3_1(b *testing.B) {
+	coord, eng := setupSSBDatabase(b, 0.001) // ~6,000 rows
+	defer eng.Close()
+	defer coord.Close()
+
+	q := `SELECT c_nation, s_nation, d_year, SUM(lo_revenue) AS revenue
+	FROM lineorder
+	JOIN customer ON lo_custkey = c_custkey
+	JOIN supplier ON lo_suppkey = s_suppkey
+	JOIN date ON lo_orderdate = d_datekey
+	WHERE c_region = 'ASIA'
+	  AND s_region = 'ASIA'
+	  AND d_year >= 1992 AND d_year <= 1997
+	GROUP BY c_nation, s_nation, d_year
+	ORDER BY d_year ASC, revenue DESC;`
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		res, err := coord.ExecuteSQL(q)
+		if err != nil {
+			b.Fatalf("Q3.1 benchmark error: %v", err)
+		}
+		_ = res
+	}
+}
+
+func BenchmarkSSB_Q4_1(b *testing.B) {
+	coord, eng := setupSSBDatabase(b, 0.001) // ~6,000 rows
+	defer eng.Close()
+	defer coord.Close()
+
+	q := `SELECT d_year, c_nation, SUM(lo_revenue - lo_supplycost) AS profit
+	FROM lineorder
+	JOIN customer ON lo_custkey = c_custkey
+	JOIN supplier ON lo_suppkey = s_suppkey
+	JOIN part ON lo_partkey = p_partkey
+	JOIN date ON lo_orderdate = d_datekey
+	WHERE c_region = 'AMERICA'
+	  AND s_region = 'AMERICA'
+	  AND (p_mfgr = 'MFGR#1' OR p_mfgr = 'MFGR#2')
+	GROUP BY d_year, c_nation
+	ORDER BY d_year, c_nation;`
+
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		res, err := coord.ExecuteSQL(q)
+		if err != nil {
+			b.Fatalf("Q4.1 benchmark error: %v", err)
+		}
+		_ = res
+	}
+}
+
