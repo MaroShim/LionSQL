@@ -102,6 +102,33 @@ func SplitOnAnd(where string) []string {
 	return parts
 }
 
+// stripEnclosingParens removes matched outer parenthesis layers without damaging split sub-expressions.
+func stripEnclosingParens(s string) string {
+	for {
+		s = strings.TrimSpace(s)
+		if !strings.HasPrefix(s, "(") || !strings.HasSuffix(s, ")") {
+			return s
+		}
+		depth := 0
+		closedEarly := false
+		for i := 0; i < len(s)-1; i++ {
+			if s[i] == '(' {
+				depth++
+			} else if s[i] == ')' {
+				depth--
+				if depth == 0 {
+					closedEarly = true
+					break
+				}
+			}
+		}
+		if closedEarly {
+			return s
+		}
+		s = s[1 : len(s)-1]
+	}
+}
+
 // ParseWhereConditions extracts equality conditions and range conditions from a WHERE clause.
 // Returns eqs: map[col_name]value_string, ranges: map[col_name]*IndexRangeCond.
 func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRangeCond) {
@@ -114,7 +141,7 @@ func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRan
 	}
 
 	for _, part := range parts {
-		part = strings.TrimSpace(part)
+		part = stripEnclosingParens(strings.TrimSpace(part))
 		if m := eqBoundRe.FindStringSubmatch(part); len(m) == 3 {
 			col := CleanIdentifier(m[1])
 			eqs[col] = cleanVal(m[2])
@@ -361,7 +388,7 @@ func FindIndexAndBounds(schema *storage.TableSchema, whereClause string) (*stora
 // ParseIndexCond parses an index condition string (which can be a single condition or AND-separated conditions)
 // and returns the lower and upper bounds for an index scan.
 func ParseIndexCond(cond string, schema *storage.TableSchema, targetIndexName ...string) (*storage.Value, *storage.Value) {
-	cond = strings.Trim(strings.TrimSpace(cond), "()")
+	cond = stripEnclosingParens(strings.TrimSpace(cond))
 	if cond == "" {
 		return nil, nil
 	}
@@ -436,6 +463,22 @@ func ParseIndexCond(cond string, schema *storage.TableSchema, targetIndexName ..
 			}
 		}
 		if targetIdx != nil {
+			if len(targetIdx.Columns) > 1 {
+				var prefixCols []string
+				for _, col := range targetIdx.Columns {
+					if _, ok := eqColVals[strings.ToLower(col)]; ok {
+						prefixCols = append(prefixCols, col)
+					} else {
+						break
+					}
+				}
+				if len(prefixCols) > 0 {
+					prefixKey := BuildCompositePrefixKey(prefixCols, eqColVals, schema)
+					lowVal := storage.StringValue(prefixKey)
+					highVal := storage.StringValue(prefixKey + "\xff\xff\xff\xff")
+					return &lowVal, &highVal
+				}
+			}
 			for _, col := range targetIdx.Columns {
 				if low, high, found := extractColBounds(col); found {
 					return low, high

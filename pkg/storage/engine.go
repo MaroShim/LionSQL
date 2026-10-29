@@ -397,12 +397,11 @@ func (s *TableSchema) FindIndex(name string) (*IndexSchema, int, bool) {
 	return nil, -1, false
 }
 
+// FindIndexByColumn finds an index whose leading indexed column matches colName.
 func (s *TableSchema) FindIndexByColumn(colName string) (*IndexSchema, bool) {
 	for i := range s.Indexes {
-		for _, col := range s.Indexes[i].Columns {
-			if strings.EqualFold(col, colName) {
-				return &s.Indexes[i], true
-			}
+		if len(s.Indexes[i].Columns) > 0 && strings.EqualFold(s.Indexes[i].Columns[0], colName) {
+			return &s.Indexes[i], true
 		}
 	}
 	return nil, false

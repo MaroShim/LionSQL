@@ -1993,6 +1993,17 @@ func (c *wtFilteredIndexCursor) matchesRecord(rec storage.Record) bool {
 			return false
 		}
 	}
+	if len(c.idx.Columns) > 1 && ((c.low != nil && c.low.Type != storage.TypeVarChar) || (c.high != nil && c.high.Type != storage.TypeVarChar)) {
+		if firstVal, ok := rec.Get(c.idx.Columns[0]); ok {
+			if c.low != nil && firstVal.Compare(*c.low) < 0 {
+				return false
+			}
+			if c.high != nil && firstVal.Compare(*c.high) > 0 {
+				return false
+			}
+			return true
+		}
+	}
 	if c.low != nil && key.Compare(*c.low) < 0 {
 		return false
 	}
@@ -2048,6 +2059,18 @@ func (c *wtFilteredIndexCursor) matchesRow(row storage.Row) bool {
 	if key.IsNull {
 		if (c.low != nil && !c.low.IsNull) || (c.high != nil && !c.high.IsNull) {
 			return false
+		}
+	}
+	if len(c.idx.Columns) > 1 && ((c.low != nil && c.low.Type != storage.TypeVarChar) || (c.high != nil && c.high.Type != storage.TypeVarChar)) {
+		if _, colIdx, found := c.schema.FindColumn(c.idx.Columns[0]); found && colIdx >= 0 && colIdx < len(row.Values) {
+			firstVal := row.Values[colIdx]
+			if c.low != nil && firstVal.Compare(*c.low) < 0 {
+				return false
+			}
+			if c.high != nil && firstVal.Compare(*c.high) > 0 {
+				return false
+			}
+			return true
 		}
 	}
 	if c.low != nil && key.Compare(*c.low) < 0 {

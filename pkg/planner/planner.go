@@ -1094,12 +1094,19 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		if chosenCovering {
 			nodeType = NodeIndexOnlyScan
 		}
+		indexCondStr := chosenCond
+		if chosenVal != "" {
+			indexCondStr = fmt.Sprintf("(%s %s %s)", chosenCol, chosenOp, chosenVal)
+		} else if !strings.HasPrefix(indexCondStr, "(") {
+			indexCondStr = fmt.Sprintf("(%s)", indexCondStr)
+		}
+
 		scanNode = &PlanNode{
 			Type:          nodeType,
 			Relation:      q.TableName,
 			Alias:         q.TableAlias,
 			IndexName:     chosenIndex.Name,
-			IndexCond:     fmt.Sprintf("(%s %s %s)", chosenCol, chosenOp, chosenVal),
+			IndexCond:     indexCondStr,
 			StartupCost:   0.25,
 			TotalCost:     chosenCost,
 			EstimatedRows: chosenEstRows,
@@ -1107,7 +1114,18 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 		var remainingPrimary []string
 		for _, c := range pushdownRes.PrimaryConds {
-			if c != chosenCond {
+			cTrimmed := strings.ToLower(cleanIdent(c))
+			isUsedInIndex := false
+			if chosenIndex != nil {
+				for _, col := range chosenIndex.Columns {
+					colLower := strings.ToLower(col)
+					if strings.Contains(cTrimmed, colLower) && (strings.Contains(c, "=") || strings.Contains(c, "==")) {
+						isUsedInIndex = true
+						break
+					}
+				}
+			}
+			if !isUsedInIndex && c != chosenCond {
 				remainingPrimary = append(remainingPrimary, c)
 			}
 		}

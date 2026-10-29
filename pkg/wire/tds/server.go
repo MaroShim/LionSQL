@@ -937,7 +937,7 @@ func (sess *ConnectionSession) buildRow(cols []ColumnInfo, values []any) []byte 
 func (sess *ConnectionSession) writeRowDirect(destBuf *bytes.Buffer, cols []ColumnInfo, row map[string]any, scratchVals []any) {
 	if sess != nil && sess.TDSVersion >= 0x73000000 {
 		for _, col := range cols {
-			if row[col.Name] == nil {
+			if getRowValueCaseInsensitive(row, col.Name) == nil {
 				WriteNBCRowDirect(destBuf, cols, row)
 				return
 			}
@@ -2051,6 +2051,8 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 	case TypeVarChar: // 0xA7 (also TypeBigVarChar)
 		var maxLen uint16
 		_ = binary.Read(r, binary.LittleEndian, &maxLen)
+		var collation [5]byte
+		_, _ = io.ReadFull(r, collation[:])
 		if maxLen == 0xFFFF {
 			var plpLen uint64
 			if err := binary.Read(r, binary.LittleEndian, &plpLen); err != nil {
@@ -2076,8 +2078,6 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 			}
 			return plpBuf.String(), nil
 		}
-		var collation [5]byte
-		_, _ = io.ReadFull(r, collation[:])
 		var valLen uint16
 		if err := binary.Read(r, binary.LittleEndian, &valLen); err != nil {
 			return nil, err
@@ -2094,6 +2094,8 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 	case TypeNVarChar: // 0xE7
 		var maxLen uint16
 		_ = binary.Read(r, binary.LittleEndian, &maxLen)
+		var collation [5]byte
+		_, _ = io.ReadFull(r, collation[:])
 		if maxLen == 0xFFFF {
 			var plpLen uint64
 			if err := binary.Read(r, binary.LittleEndian, &plpLen); err != nil {
@@ -2119,8 +2121,6 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 			}
 			return DecodeUTF16LE(plpBuf.Bytes()), nil
 		}
-		var collation [5]byte
-		_, _ = io.ReadFull(r, collation[:])
 		var valLen uint16
 		if err := binary.Read(r, binary.LittleEndian, &valLen); err != nil {
 			return nil, err
@@ -2137,6 +2137,31 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 	case TypeBigBinary, TypeBigVarBin: // 0xAD, 0xA5
 		var maxLen uint16
 		_ = binary.Read(r, binary.LittleEndian, &maxLen)
+		if maxLen == 0xFFFF {
+			var plpLen uint64
+			if err := binary.Read(r, binary.LittleEndian, &plpLen); err != nil {
+				return nil, err
+			}
+			if plpLen == 0xFFFFFFFFFFFFFFFF {
+				return nil, nil
+			}
+			var plpBuf bytes.Buffer
+			for {
+				var chunkLen uint32
+				if err := binary.Read(r, binary.LittleEndian, &chunkLen); err != nil {
+					return nil, err
+				}
+				if chunkLen == 0 {
+					break
+				}
+				chunk := make([]byte, chunkLen)
+				if _, err := io.ReadFull(r, chunk); err != nil {
+					return nil, err
+				}
+				plpBuf.Write(chunk)
+			}
+			return plpBuf.Bytes(), nil
+		}
 		var valLen uint16
 		if err := binary.Read(r, binary.LittleEndian, &valLen); err != nil {
 			return nil, err
@@ -2149,6 +2174,195 @@ func readRPCValue(r *bytes.Reader, typeByte byte) (any, error) {
 			return nil, err
 		}
 		return buf, nil
+
+	case TypeGuid: // 0x24
+		_, _ = r.ReadByte() // maxLen (16)
+		actualLen, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if actualLen == 0 {
+			return nil, nil
+		}
+		buf := make([]byte, actualLen)
+		if _, err := io.ReadFull(r, buf); err != nil {
+			return nil, err
+		}
+		if len(buf) == 16 {
+			return fmt.Sprintf("%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
+				buf[3], buf[2], buf[1], buf[0],
+				buf[5], buf[4],
+				buf[7], buf[6],
+				buf[8], buf[9],
+				buf[10], buf[11], buf[12], buf[13], buf[14], buf[15]), nil
+		}
+		return string(buf), nil
+
+	case TypeDateN: // 0x28
+		actualLen, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if actualLen == 0 {
+			return nil, nil
+		}
+		var buf [3]byte
+		if _, err := io.ReadFull(r, buf[:]); err != nil {
+			return nil, err
+		}
+		days := int(buf[0]) | int(buf[1])<<8 | int(buf[2])<<16
+		t := time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, days)
+		return t.Format("2006-01-02"), nil
+
+	case TypeTimeN: // 0x29
+		_, _ = r.ReadByte() // scale
+		actualLen, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if actualLen == 0 {
+			return nil, nil
+		}
+		buf := make([]byte, actualLen)
+		if _, err := io.ReadFull(r, buf); err != nil {
+			return nil, err
+		}
+		return string(buf), nil
+
+	case TypeDateTime2N: // 0x2A
+		_, _ = r.ReadByte() // scale
+		actualLen, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if actualLen == 0 {
+			return nil, nil
+		}
+		buf := make([]byte, actualLen)
+		if _, err := io.ReadFull(r, buf); err != nil {
+			return nil, err
+		}
+		if actualLen >= 6 {
+			dateBytes := buf[actualLen-3:]
+			days := int(dateBytes[0]) | int(dateBytes[1])<<8 | int(dateBytes[2])<<16
+			d := time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, days)
+			return d.Format("2006-01-02 15:04:05"), nil
+		}
+		return string(buf), nil
+
+	case TypeDateTimeOffsetN: // 0x2B
+		_, _ = r.ReadByte() // scale
+		actualLen, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if actualLen == 0 {
+			return nil, nil
+		}
+		buf := make([]byte, actualLen)
+		if _, err := io.ReadFull(r, buf); err != nil {
+			return nil, err
+		}
+		return string(buf), nil
+
+	case TypeDateTime4: // 0x3A
+		var days, mins uint16
+		_ = binary.Read(r, binary.LittleEndian, &days)
+		_ = binary.Read(r, binary.LittleEndian, &mins)
+		t := epoch1900.AddDate(0, 0, int(days)).Add(time.Duration(mins) * time.Minute)
+		return t.Format("2006-01-02 15:04:05"), nil
+
+	case TypeDateTime: // 0x3D
+		var days int32
+		var ticks uint32
+		_ = binary.Read(r, binary.LittleEndian, &days)
+		_ = binary.Read(r, binary.LittleEndian, &ticks)
+		t := epoch1900.AddDate(0, 0, int(days)).Add(time.Duration(float64(ticks)*10.0/3.0) * time.Millisecond)
+		return t.Format("2006-01-02 15:04:05"), nil
+
+	case TypeDateTimeN: // 0x6F
+		_, _ = r.ReadByte() // maxLen
+		actualLen, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if actualLen == 0 {
+			return nil, nil
+		}
+		if actualLen == 4 {
+			var days, mins uint16
+			_ = binary.Read(r, binary.LittleEndian, &days)
+			_ = binary.Read(r, binary.LittleEndian, &mins)
+			t := epoch1900.AddDate(0, 0, int(days)).Add(time.Duration(mins) * time.Minute)
+			return t.Format("2006-01-02 15:04:05"), nil
+		}
+		var days int32
+		var ticks uint32
+		_ = binary.Read(r, binary.LittleEndian, &days)
+		_ = binary.Read(r, binary.LittleEndian, &ticks)
+		t := epoch1900.AddDate(0, 0, int(days)).Add(time.Duration(float64(ticks)*10.0/3.0) * time.Millisecond)
+		return t.Format("2006-01-02 15:04:05"), nil
+
+	case TypeDecimalN, TypeNumericN: // 0x6A, 0x6C
+		_, _ = r.ReadByte() // maxLen
+		_, _ = r.ReadByte() // precision
+		scale, _ := r.ReadByte()
+		actualLen, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if actualLen == 0 {
+			return nil, nil
+		}
+		sign, _ := r.ReadByte()
+		intBytes := make([]byte, actualLen-1)
+		_, _ = io.ReadFull(r, intBytes)
+		var intVal uint64
+		for i := len(intBytes) - 1; i >= 0; i-- {
+			intVal = (intVal << 8) | uint64(intBytes[i])
+		}
+		fVal := float64(intVal)
+		for s := 0; s < int(scale); s++ {
+			fVal /= 10.0
+		}
+		if sign == 0 {
+			fVal = -fVal
+		}
+		return fVal, nil
+
+	case TypeMoney: // 0x3C
+		var high int32
+		var low uint32
+		_ = binary.Read(r, binary.LittleEndian, &high)
+		_ = binary.Read(r, binary.LittleEndian, &low)
+		val := (int64(high) << 32) | int64(low)
+		return float64(val) / 10000.0, nil
+
+	case TypeMoney4: // 0x7A
+		var v int32
+		_ = binary.Read(r, binary.LittleEndian, &v)
+		return float64(v) / 10000.0, nil
+
+	case TypeMoneyN: // 0x6E
+		_, _ = r.ReadByte() // maxLen
+		actualLen, err := r.ReadByte()
+		if err != nil {
+			return nil, err
+		}
+		if actualLen == 0 {
+			return nil, nil
+		}
+		if actualLen == 4 {
+			var v int32
+			_ = binary.Read(r, binary.LittleEndian, &v)
+			return float64(v) / 10000.0, nil
+		}
+		var high int32
+		var low uint32
+		_ = binary.Read(r, binary.LittleEndian, &high)
+		_ = binary.Read(r, binary.LittleEndian, &low)
+		val := (int64(high) << 32) | int64(low)
+		return float64(val) / 10000.0, nil
 
 	default:
 		return nil, nil
@@ -2497,8 +2711,13 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 			}
 		}
 
+		cleanCol := CleanTDSColumnName(colName)
+		if cleanCol == "" {
+			cleanCol = colName
+		}
+
 		cols[i] = ColumnInfo{
-			Name:     colName,
+			Name:     cleanCol,
 			Type:     colType,
 			Size:     colSize,
 			Scale:    scale,

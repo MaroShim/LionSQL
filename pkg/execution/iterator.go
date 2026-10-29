@@ -15,29 +15,57 @@ import (
 
 // ColumnIndexMap provides O(1) integer offset mapping for column names, aliases, and table prefixes.
 type ColumnIndexMap struct {
-	indices map[string]int
-	cols    []string
+	indices   map[string]int
+	cols      []string
+	tableCols map[string][]string
+}
+
+// TableColumns returns the unqualified column names belonging to the specified table/alias.
+func (m *ColumnIndexMap) TableColumns(table string) []string {
+	if m == nil || m.tableCols == nil {
+		return nil
+	}
+	clean := strings.ToLower(cleanIdentifierParts(table))
+	return m.tableCols[clean]
 }
 
 // NewColumnIndexMap builds a ColumnIndexMap from a TableSchema and optional alias.
 func NewColumnIndexMap(schema *storage.TableSchema, alias string) *ColumnIndexMap {
 	m := &ColumnIndexMap{
-		indices: make(map[string]int),
+		indices:   make(map[string]int),
+		tableCols: make(map[string][]string),
 	}
 	if schema != nil {
 		m.cols = make([]string, len(schema.Columns))
+		cleanAlias := cleanIdentifierParts(alias)
+		cleanSchema := cleanIdentifierParts(schema.Name)
+		colNames := make([]string, len(schema.Columns))
 		for i, c := range schema.Columns {
 			m.cols[i] = c.Name
+			cleanCol := cleanIdentifierParts(c.Name)
+			colNames[i] = cleanCol
 			m.indices[c.Name] = i
 			m.indices[strings.ToLower(c.Name)] = i
+			m.indices[cleanCol] = i
+			m.indices[strings.ToLower(cleanCol)] = i
 			if alias != "" {
 				m.indices[alias+"."+c.Name] = i
 				m.indices[strings.ToLower(alias+"."+c.Name)] = i
+				m.indices[cleanAlias+"."+cleanCol] = i
+				m.indices[strings.ToLower(cleanAlias+"."+cleanCol)] = i
 			}
 			if schema.Name != "" && schema.Name != alias {
 				m.indices[schema.Name+"."+c.Name] = i
 				m.indices[strings.ToLower(schema.Name+"."+c.Name)] = i
+				m.indices[cleanSchema+"."+cleanCol] = i
+				m.indices[strings.ToLower(cleanSchema+"."+cleanCol)] = i
 			}
+		}
+		if cleanSchema != "" {
+			m.tableCols[strings.ToLower(cleanSchema)] = colNames
+		}
+		if cleanAlias != "" {
+			m.tableCols[strings.ToLower(cleanAlias)] = colNames
 		}
 	}
 	return m
@@ -50,17 +78,33 @@ func NewColumnIndexMapFromCols(cols []string) *ColumnIndexMap {
 		cols:    cols,
 	}
 	for i, c := range cols {
+		cleanCol := strings.Trim(c, "[]\"'`")
 		m.indices[c] = i
 		m.indices[strings.ToLower(c)] = i
+		m.indices[cleanCol] = i
+		m.indices[strings.ToLower(cleanCol)] = i
 		if dotIdx := strings.Index(c, "."); dotIdx != -1 {
 			bare := c[dotIdx+1:]
+			cleanBare := strings.Trim(bare, "[]\"'`")
 			if _, exists := m.indices[bare]; !exists {
 				m.indices[bare] = i
 				m.indices[strings.ToLower(bare)] = i
 			}
+			if _, exists := m.indices[cleanBare]; !exists {
+				m.indices[cleanBare] = i
+				m.indices[strings.ToLower(cleanBare)] = i
+			}
 		}
 	}
 	return m
+}
+
+func cleanIdentifierParts(name string) string {
+	parts := strings.Split(name, ".")
+	for i, p := range parts {
+		parts[i] = strings.Trim(strings.TrimSpace(p), "[]\"'`")
+	}
+	return strings.Join(parts, ".")
 }
 
 // Index returns the slice offset for a given column name or prefix.
@@ -73,7 +117,7 @@ func (m *ColumnIndexMap) Index(name string) (int, bool) {
 		idx, ok = m.indices[strings.ToLower(name)]
 	}
 	if !ok {
-		cleaned := strings.Trim(name, "[]\"'`")
+		cleaned := cleanIdentifierParts(name)
 		if cleaned != name {
 			idx, ok = m.indices[cleaned]
 			if !ok {
@@ -382,12 +426,16 @@ func MergeColumnIndexMaps(left, right *ColumnIndexMap) *ColumnIndexMap {
 	combinedCols = append(combinedCols, rightCols...)
 
 	m := &ColumnIndexMap{
-		indices: make(map[string]int),
-		cols:    combinedCols,
+		indices:   make(map[string]int),
+		cols:      combinedCols,
+		tableCols: make(map[string][]string),
 	}
 	if left != nil {
 		for k, idx := range left.indices {
 			m.indices[k] = idx
+		}
+		for k, v := range left.tableCols {
+			m.tableCols[k] = v
 		}
 	}
 	leftLen := len(leftCols)
@@ -407,6 +455,9 @@ func MergeColumnIndexMaps(left, right *ColumnIndexMap) *ColumnIndexMap {
 			} else if _, exists := m.indices[k]; !exists {
 				m.indices[k] = leftLen + idx
 			}
+		}
+		for k, v := range right.tableCols {
+			m.tableCols[k] = v
 		}
 	}
 	return m

@@ -450,6 +450,15 @@ func TestPlanner_MultiTableChainedJoins(t *testing.T) {
 		"p":        paymentStats,
 	}
 
+	pl := planner.NewPlanner()
+	qInfo, err := pl.ParseSelect("SELECT issue_id, count(*) as count FROM [comment] WHERE [issue_id] IN (49) AND (type = 22) GROUP BY issue_id")
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+	if qInfo.TableName != "comment" && qInfo.TableName != "[comment]" {
+		t.Fatalf("unexpected TableName: %q", qInfo.TableName)
+	}
+
 	plan := p.BuildMultiJoinPlanWithStats(q3, userSchema, userStats, rSchemas, rStats)
 	if plan == nil {
 		t.Fatal("expected non-nil multi-join plan")

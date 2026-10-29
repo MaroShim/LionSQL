@@ -217,7 +217,11 @@ func splitOutputWhere(body string) (head, output, where string) {
 		output = strings.TrimSpace(body[outIdx+len("OUTPUT") : end])
 		end = outIdx
 	}
-	return strings.TrimSpace(body[:end]), output, where
+	head = strings.TrimSpace(body[:end])
+	if fromIdx := sqlutil.FindTopLevelKeyword(head, "FROM"); fromIdx != -1 {
+		head = strings.TrimSpace(head[:fromIdx])
+	}
+	return head, output, where
 }
 
 func parseInsertBody(st *DMLStatement, sc *dmlScanner) error {

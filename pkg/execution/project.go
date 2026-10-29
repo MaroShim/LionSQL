@@ -42,7 +42,7 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 		child: child,
 	}
 
-	if len(projections) == 0 || (len(projections) == 1 && (projections[0] == "" || isWildcard(projections[0]))) {
+	if len(projections) == 0 || (len(projections) == 1 && (projections[0] == "" || strings.TrimSpace(projections[0]) == "*")) {
 		if child != nil {
 			var visibleCols []string
 			var hasHidden bool
@@ -81,9 +81,40 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 	for _, item := range projections {
 		item = strings.TrimSpace(item)
 		if isWildcard(item) {
-			if child != nil {
-				for _, col := range child.Schema() {
-					addField(col, col)
+			prefix := ""
+			if dot := strings.Index(item, "."); dot != -1 {
+				prefix = strings.TrimSpace(item[:dot])
+			}
+			if prefix == "" || prefix == "*" {
+				if child != nil {
+					for _, col := range child.Schema() {
+						addField(col, col)
+					}
+				}
+			} else {
+				cleanPrefix := sqlutil.CleanIdentifier(prefix)
+				var tblCols []string
+				if child != nil && child.ColIndexMap() != nil {
+					tblCols = child.ColIndexMap().TableColumns(cleanPrefix)
+				}
+				if len(tblCols) > 0 {
+					for _, col := range tblCols {
+						addField(cleanPrefix+"."+col, col)
+					}
+				} else if child != nil {
+					matchedAny := false
+					for _, col := range child.Schema() {
+						if strings.HasPrefix(strings.ToLower(col), strings.ToLower(cleanPrefix)+".") {
+							colName := col[len(cleanPrefix)+1:]
+							addField(col, colName)
+							matchedAny = true
+						}
+					}
+					if !matchedAny {
+						for _, col := range child.Schema() {
+							addField(col, col)
+						}
+					}
 				}
 			}
 			continue

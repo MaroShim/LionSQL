@@ -19,28 +19,121 @@ var (
 	reEvalBetween      = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+(NOT\s+BETWEEN|BETWEEN)\s+(.*?)\s+AND\s+(.*?)\s*$`)
 )
 
+func findTopLevelKeyword(s, kw string) int {
+	depth := 0
+	inQuote := false
+	var quoteChar byte
+	kwUpper := strings.ToUpper(kw)
+	nKw := len(kw)
+	n := len(s)
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+		if inQuote {
+			if ch == quoteChar {
+				inQuote = false
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			inQuote = true
+			quoteChar = ch
+			continue
+		}
+		if ch == '(' || ch == '[' {
+			depth++
+			continue
+		}
+		if ch == ')' || ch == ']' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+		if depth == 0 && i+nKw <= n {
+			beforeOk := (i == 0) || isWhitespaceOrPunctByte(s[i-1])
+			afterOk := (i+nKw == n) || isWhitespaceOrPunctByte(s[i+nKw])
+			if beforeOk && afterOk && strings.EqualFold(s[i:i+nKw], kwUpper) {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func isWhitespaceOrPunctByte(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\n' || b == '\r' || b == ',' || b == ';' || b == '(' || b == ')'
+}
+
+func parseImplicitAlias(s string) (alias, colExpr string, ok bool) {
+	s = strings.TrimSpace(s)
+	if strings.HasSuffix(s, ")") || strings.HasSuffix(s, "]") {
+		return "", s, false
+	}
+	depth := 0
+	inQuote := false
+	var quoteChar byte
+	lastSpaceIdx := -1
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inQuote {
+			if ch == quoteChar {
+				inQuote = false
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			inQuote = true
+			quoteChar = ch
+			continue
+		}
+		if ch == '(' || ch == '[' {
+			depth++
+			continue
+		}
+		if ch == ')' || ch == ']' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+		if depth == 0 && (ch == ' ' || ch == '\t') {
+			lastSpaceIdx = i
+		}
+	}
+
+	if lastSpaceIdx > 0 {
+		expr := strings.TrimSpace(s[:lastSpaceIdx])
+		potentialAlias := strings.TrimSpace(s[lastSpaceIdx+1:])
+		if potentialAlias != "" && !strings.ContainsAny(potentialAlias, " ()[],.") {
+			return cleanIdentifier(potentialAlias), expr, true
+		}
+	}
+	return "", s, false
+}
+
 // ExtractSQLParts extracts projStr, whereClause, and orderByClause from a SELECT query.
 func ExtractSQLParts(sql string) (projStr, whereClause, orderByClause string) {
-	upper := strings.ToUpper(sql)
 	projStr = "*"
-	if fromIdx := strings.Index(upper, "FROM"); fromIdx != -1 {
+	if fromIdx := findTopLevelKeyword(sql, "FROM"); fromIdx != -1 {
 		selectPart := sql[:fromIdx]
-		if selectIdx := strings.Index(strings.ToUpper(selectPart), "SELECT"); selectIdx != -1 {
+		if selectIdx := findTopLevelKeyword(selectPart, "SELECT"); selectIdx != -1 {
 			proj := strings.TrimSpace(selectPart[selectIdx+6:])
 			if proj != "" {
 				projStr = proj
 			}
 		}
 	}
-	if whereIdx := strings.Index(upper, "WHERE"); whereIdx != -1 {
+	if whereIdx := findTopLevelKeyword(sql, "WHERE"); whereIdx != -1 {
 		rest := sql[whereIdx+5:]
-		if orderIdx := strings.Index(strings.ToUpper(rest), "ORDER BY"); orderIdx != -1 {
+		if orderIdx := findTopLevelKeyword(rest, "ORDER BY"); orderIdx != -1 {
 			whereClause = strings.TrimSpace(rest[:orderIdx])
 			orderByClause = strings.TrimSpace(rest[orderIdx+8:])
 		} else {
 			whereClause = strings.TrimSpace(rest)
 		}
-	} else if orderIdx := strings.Index(upper, "ORDER BY"); orderIdx != -1 {
+	} else if orderIdx := findTopLevelKeyword(sql, "ORDER BY"); orderIdx != -1 {
 		orderByClause = strings.TrimSpace(sql[orderIdx+8:])
 	}
 	return projStr, whereClause, orderByClause
@@ -120,12 +213,9 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 			} else if m := reProjAs.FindStringSubmatch(cTrimmed); len(m) == 3 {
 				colExpr = strings.TrimSpace(m[1])
 				alias = cleanIdentifier(m[2])
-			} else {
-				fields := strings.Fields(cTrimmed)
-				if len(fields) == 2 && !strings.Contains(fields[1], "(") {
-					colExpr = fields[0]
-					alias = cleanIdentifier(fields[1])
-				}
+			} else if a, expr, ok := parseImplicitAlias(cTrimmed); ok {
+				alias = a
+				colExpr = expr
 			}
 			rawCol := strings.ToLower(cleanIdentifier(colExpr))
 			if !strings.Contains(colExpr, " ") && !strings.Contains(colExpr, "(") && strings.Contains(rawCol, ".") {

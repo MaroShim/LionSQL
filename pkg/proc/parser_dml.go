@@ -218,6 +218,14 @@ func (p *Parser) parseUpdate() (Statement, error) {
 
 	outputCols := p.parseOutputCols()
 
+	// MSSQL allows UPDATE <table> SET ... [FROM <source_table_or_join>] [WHERE ...]
+	if p.curTokenIs(TokenFrom) {
+		p.nextToken()
+		for !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			p.nextToken()
+		}
+	}
+
 	var whereExpr Expr
 	if p.curTokenIs(TokenWhere) {
 		p.nextToken()
@@ -261,6 +269,14 @@ func (p *Parser) parseDelete() (Statement, error) {
 	p.nextToken()
 
 	outputCols := p.parseOutputCols()
+
+	// MSSQL allows UPDATE <table> SET ... [FROM <source_table_or_join>] [WHERE ...]
+	if p.curTokenIs(TokenFrom) {
+		p.nextToken()
+		for !p.curTokenIs(TokenWhere) && !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			p.nextToken()
+		}
+	}
 
 	var whereExpr Expr
 	if p.curTokenIs(TokenWhere) {
@@ -493,7 +509,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 		alias := ""
 		if p.curTokenIs(TokenAs) {
 			p.nextToken() // eat AS
-			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenString) {
+			if !isReservedAfterProjection(p.curToken.Type) {
 				alias = cleanSchemaPrefix(p.curToken.Literal)
 				p.nextToken()
 			}

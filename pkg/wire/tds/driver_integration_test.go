@@ -1575,3 +1575,441 @@ func TestDriverIntegration_Scenario65_AdHocWhile(t *testing.T) {
 	}
 }
 
+func TestDriverIntegration_Scenario66_GiteaUserInsert(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	createTableSQL := `CREATE TABLE [user] (
+		[id] INT IDENTITY(1,1) PRIMARY KEY,
+		[lower_name] VARCHAR(255),
+		[name] VARCHAR(255),
+		[full_name] VARCHAR(255),
+		[email] VARCHAR(255),
+		[keep_email_private] BIT,
+		[email_notifications_preference] VARCHAR(20),
+		[passwd] VARCHAR(255),
+		[passwd_hash_algo] VARCHAR(255),
+		[must_change_password] BIT,
+		[login_type] INT,
+		[login_source] INT,
+		[login_name] VARCHAR(255),
+		[type] INT,
+		[location] VARCHAR(255),
+		[website] VARCHAR(255),
+		[rands] VARCHAR(32),
+		[salt] VARCHAR(32),
+		[language] VARCHAR(5),
+		[description] VARCHAR(255),
+		[created_unix] INT,
+		[updated_unix] INT,
+		[last_login_unix] INT,
+		[last_repo_visibility] BIT,
+		[max_repo_creation] INT,
+		[is_active] BIT,
+		[is_admin] BIT,
+		[is_restricted] BIT,
+		[allow_git_hook] BIT,
+		[allow_import_local] BIT,
+		[allow_create_organization] BIT,
+		[prohibit_login] BIT,
+		[avatar] VARCHAR(2048),
+		[avatar_email] VARCHAR(255),
+		[use_custom_avatar] BIT,
+		[num_followers] INT,
+		[num_following] INT,
+		[num_stars] INT,
+		[num_repos] INT,
+		[num_teams] INT,
+		[num_members] INT,
+		[visibility] INT,
+		[repo_admin_change_team_access] BIT,
+		[diff_view_style] VARCHAR(255),
+		[theme] VARCHAR(255),
+		[keep_activity_private] BIT
+	);`
+
+	if _, err := db.ExecContext(ctx, createTableSQL); err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+
+	insertSQL := `INSERT INTO [user] ([lower_name],[name],[full_name],[email],[keep_email_private],[email_notifications_preference],[passwd],[passwd_hash_algo],[must_change_password],[login_type],[login_source],[login_name],[type],[location],[website],[rands],[salt],[language],[description],[created_unix],[updated_unix],[last_login_unix],[last_repo_visibility],[max_repo_creation],[is_active],[is_admin],[is_restricted],[allow_git_hook],[allow_import_local],[allow_create_organization],[prohibit_login],[avatar],[avatar_email],[use_custom_avatar],[num_followers],[num_following],[num_stars],[num_repos],[num_teams],[num_members],[visibility],[repo_admin_change_team_access],[diff_view_style],[theme],[keep_activity_private]) OUTPUT Inserted.[id] VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+
+	var newID int64
+	row := db.QueryRowContext(ctx, insertSQL,
+		"alice", "alice", "", "alice@example.com", false, "enabled",
+		"60c666b5ffbfb92da4940bb3e3ce871e6a0c7b9261e0be6e1d240f5ff71b6a2270d8c207042ba2bc53581f81a06450204bcf",
+		"pbkdf2$50000$50", false, 0, 0, "", 0, "", "",
+		"1e556af7e3d35aa19e1641a0908220df", "35618da2b15689ca7088247525da6536", "", "",
+		1793268847, 1793268847, 0, false, -1, true, false, false, false, false, true, false,
+		"avatar_val", "alice@example.com", false, 0, 0, 0, 0, 0, 0, 0, false, "", "gitea-auto", false,
+	)
+	if err := row.Scan(&newID); err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
+	t.Logf("Inserted user ID: %d", newID)
+
+	// Now check if email, passwd, is_active are populated
+	var email, passwd string
+	var isActive bool
+	checkRow := db.QueryRowContext(ctx, `SELECT email, passwd, is_active FROM [user] WHERE id = ?`, newID)
+	if err := checkRow.Scan(&email, &passwd, &isActive); err != nil {
+		t.Fatalf("scan check row failed: %v", err)
+	}
+	t.Logf("Got: email=%q, passwd=%q, isActive=%v", email, passwd, isActive)
+	if email != "alice@example.com" {
+		t.Fatalf("expected email 'alice@example.com', got %q", email)
+	}
+	if !isActive {
+		t.Fatalf("expected isActive=true, got false")
+	}
+}
+
+func TestDriverIntegration_Scenario67_GiteaRepoInsertAndGet(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	createSQL := `CREATE TABLE [repository] (
+		[id] INT IDENTITY(1,1) PRIMARY KEY,
+		[owner_id] INT,
+		[name] VARCHAR(255)
+	);`
+	if _, err := db.ExecContext(ctx, createSQL); err != nil {
+		t.Fatalf("create table failed: %v", err)
+	}
+
+	insertSQL := `INSERT INTO [repository] ([owner_id],[name]) OUTPUT Inserted.[id] VALUES (?,?)`
+	var newID int64
+	row := db.QueryRowContext(ctx, insertSQL, 9, "lion-engine")
+	if err := row.Scan(&newID); err != nil {
+		t.Fatalf("insert failed: %v", err)
+	}
+	t.Logf("Inserted repo ID: %d", newID)
+
+	var fetchedID, ownerID int64
+	var name string
+	selectSQL := `SELECT [id], [owner_id], [name] FROM [repository] WHERE [id] = ?`
+	rows, err := db.QueryContext(ctx, selectSQL, newID)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatalf("columns failed: %v", err)
+	}
+	expectedCols := []string{"id", "owner_id", "name"}
+	if len(cols) != len(expectedCols) {
+		t.Fatalf("expected %d columns, got %d: %v", len(expectedCols), len(cols), cols)
+	}
+	for i, c := range cols {
+		if c != expectedCols[i] {
+			t.Fatalf("expected col %d to be %q, got %q", i, expectedCols[i], c)
+		}
+	}
+
+	if !rows.Next() {
+		t.Fatalf("expected 1 row, got 0")
+	}
+	if err := rows.Scan(&fetchedID, &ownerID, &name); err != nil {
+		t.Fatalf("scan failed: %v", err)
+	}
+	t.Logf("Fetched repo: ID=%d, OwnerID=%d, Name=%q, Cols=%v", fetchedID, ownerID, name, cols)
+
+	if fetchedID != newID {
+		t.Fatalf("expected fetchedID=%d, got %d", newID, fetchedID)
+	}
+}
+
+func TestDriverIntegration_Scenario68_MergeMultilineWhitespace(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err = db.ExecContext(ctx, `CREATE TABLE merge_target (id INT PRIMARY KEY, max_index INT);`)
+	if err != nil {
+		t.Fatalf("create target table failed: %v", err)
+	}
+	_, err = db.ExecContext(ctx, `INSERT INTO merge_target (id, max_index) VALUES (1, 10);`)
+	if err != nil {
+		t.Fatalf("insert target failed: %v", err)
+	}
+
+	// Test Gitea exact MERGE syntax with WITH (HOLDLOCK) AS target and multiline WHEN MATCHED
+	mergeSQL := `
+MERGE INTO merge_target WITH (HOLDLOCK) AS target
+USING (SELECT 1 AS group_id) AS source
+(group_id)
+ON target.id = source.group_id
+WHEN MATCHED
+	THEN UPDATE
+			SET max_index = max_index + 1
+WHEN NOT MATCHED
+	THEN INSERT (id, max_index)
+			VALUES (1, 1);
+`
+
+	res, err := db.ExecContext(ctx, mergeSQL)
+	if err != nil {
+		t.Fatalf("MERGE with multiline whitespace failed: %v", err)
+	}
+	aff, _ := res.RowsAffected()
+	if aff != 1 {
+		t.Fatalf("expected 1 row affected, got %d", aff)
+	}
+
+	var maxIndex int
+	err = db.QueryRowContext(ctx, "SELECT max_index FROM merge_target WHERE id = 1;").Scan(&maxIndex)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if maxIndex != 11 {
+		t.Fatalf("expected max_index=11, got %d", maxIndex)
+	}
+
+	// Test NOT MATCHED branch with new key 2
+	mergeSQL2 := `
+MERGE INTO merge_target WITH (HOLDLOCK) AS target
+USING (SELECT 2 AS group_id) AS source
+(group_id)
+ON target.id = source.group_id
+WHEN MATCHED
+	THEN UPDATE
+			SET max_index = max_index + 1
+WHEN NOT MATCHED
+	THEN INSERT (id, max_index)
+			VALUES (2, 1);
+`
+	_, err = db.ExecContext(ctx, mergeSQL2)
+	if err != nil {
+		t.Fatalf("MERGE NOT MATCHED failed: %v", err)
+	}
+
+	var maxIndex2 int
+	err = db.QueryRowContext(ctx, "SELECT max_index FROM merge_target WHERE id = 2;").Scan(&maxIndex2)
+	if err != nil {
+		t.Fatalf("select 2 failed: %v", err)
+	}
+	if maxIndex2 != 1 {
+		t.Fatalf("expected max_index2=1, got %d", maxIndex2)
+	}
+}
+
+func TestDriverIntegration_Scenario69_GiteaBranchSelect(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	createSQL := `CREATE TABLE [branch] (
+		[id] BIGINT IDENTITY(1,1) PRIMARY KEY,
+		[repo_id] BIGINT,
+		[name] VARCHAR(255),
+		[commit_id] VARCHAR(40),
+		[commit_message] TEXT,
+		[pusher_id] BIGINT,
+		[is_deleted] BIT,
+		[deleted_by_id] BIGINT,
+		[deleted_unix] BIGINT,
+		[commit_time] BIGINT,
+		[created_unix] BIGINT,
+		[updated_unix] BIGINT
+	);
+	CREATE UNIQUE INDEX [UQE_branch_s] ON [branch] ([repo_id], [name]);
+	CREATE INDEX [IDX_branch_is_deleted] ON [branch] ([is_deleted]);
+	`
+	if _, err := db.ExecContext(ctx, createSQL); err != nil {
+		t.Fatalf("create table branch failed: %v", err)
+	}
+
+	insertSQL := `INSERT INTO [branch] ([repo_id], [name], [commit_id], [commit_message], [pusher_id], [is_deleted], [deleted_by_id], [deleted_unix], [commit_time], [created_unix], [updated_unix])
+		VALUES (9, 'main', 'abcdef1234567890abcdef1234567890abcdef12', 'Initial commit', 1, 0, 0, 0, 1730000000, 1730000000, 1730000000);`
+	if _, err := db.ExecContext(ctx, insertSQL); err != nil {
+		t.Fatalf("insert branch failed: %v", err)
+	}
+
+	querySQL := `SELECT [id], [repo_id], [name], [commit_id], [commit_message], [pusher_id], [is_deleted], [deleted_by_id], [deleted_unix], [commit_time], [created_unix], [updated_unix] FROM [branch] WHERE [repo_id] = ? ORDER BY is_deleted ASC, commit_time DESC, name ASC`
+
+	rows, err := db.QueryContext(ctx, querySQL, int64(9))
+	if err != nil {
+		t.Fatalf("query branch failed: %v", err)
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatalf("columns failed: %v", err)
+	}
+	t.Logf("Columns returned: %v", cols)
+
+	var id, repoID, pusherID, deletedByID, deletedUnix, commitTime, createdUnix, updatedUnix int64
+	var name, commitID, commitMessage string
+	var isDeleted bool
+
+	if !rows.Next() {
+		t.Fatalf("expected 1 row from branch query, got 0")
+	}
+
+	if err := rows.Scan(&id, &repoID, &name, &commitID, &commitMessage, &pusherID, &isDeleted, &deletedByID, &deletedUnix, &commitTime, &createdUnix, &updatedUnix); err != nil {
+		t.Fatalf("scan branch row failed: %v", err)
+	}
+
+	t.Logf("Scanned branch: id=%d, repo_id=%d, name=%q, isDeleted=%v, commit_time=%d", id, repoID, name, isDeleted, commitTime)
+	if id != 1 || repoID != 9 || name != "main" {
+		t.Fatalf("unexpected branch data: id=%d, repo_id=%d, name=%s", id, repoID, name)
+	}
+
+	querySQL2 := `SELECT [id], [repo_id], [name], [commit_id], [commit_message], [pusher_id], [is_deleted], [deleted_by_id], [deleted_unix], [commit_time], [created_unix], [updated_unix] FROM [branch] WHERE (repo_id=?) AND (name=?) ORDER BY [id] ASC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY`
+	rows2, err := db.QueryContext(ctx, querySQL2, int64(9), "main")
+	if err != nil {
+		t.Fatalf("query branch 2 failed: %v", err)
+	}
+	defer rows2.Close()
+	if !rows2.Next() {
+		t.Fatalf("expected 1 row from branch query 2, got 0")
+	}
+}
+
+func TestDriverIntegration_RepoJoinUser(t *testing.T) {
+	eng := memengine.New()
+	defer eng.Close()
+	cat := catalog.New(eng)
+
+	srv := tds.NewServer("127.0.0.1:0", cat, eng)
+	if err := srv.Start(); err != nil {
+		t.Fatalf("Failed to start TDS server: %v", err)
+	}
+	defer srv.Close()
+
+	port := srv.Addr().(*net.TCPAddr).Port
+	connStr := fmt.Sprintf("server=127.0.0.1;port=%d;database=master;user id=sa;password=secret;encrypt=disable;connection timeout=3", port)
+
+	db, err := sql.Open("sqlserver", connStr)
+	if err != nil {
+		t.Fatalf("sql.Open failed: %v", err)
+	}
+	defer db.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	if _, err := db.ExecContext(ctx, "CREATE TABLE [user] ([id] BIGINT PRIMARY KEY, [lower_name] VARCHAR(255), [name] VARCHAR(255))"); err != nil {
+		t.Fatalf("create user failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "CREATE TABLE [repository] ([id] BIGINT PRIMARY KEY, [owner_id] BIGINT, [owner_name] VARCHAR(255), [lower_name] VARCHAR(255), [name] VARCHAR(255))"); err != nil {
+		t.Fatalf("create repo failed: %v", err)
+	}
+
+	if _, err := db.ExecContext(ctx, "INSERT INTO [user] ([id], [lower_name], [name]) VALUES (9, 'lionsql-core', 'lionsql-core')"); err != nil {
+		t.Fatalf("insert user failed: %v", err)
+	}
+	if _, err := db.ExecContext(ctx, "INSERT INTO [repository] ([id], [owner_id], [owner_name], [lower_name], [name]) VALUES (9, 9, 'lionsql-core', 'lion-docs', 'lion-docs')"); err != nil {
+		t.Fatalf("insert repo failed: %v", err)
+	}
+
+	q := `SELECT repository.* FROM [repository] INNER JOIN [user] ON [user].id = repository.owner_id WHERE (repository.lower_name = ?) AND ([user].lower_name = ?) ORDER BY [repository].[id] ASC OFFSET 0 ROWS FETCH NEXT 1 ROWS ONLY`
+	rows, err := db.QueryContext(ctx, q, "lion-docs", "lionsql-core")
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		t.Fatalf("cols failed: %v", err)
+	}
+	t.Logf("Cols returned: %v", cols)
+
+	if !rows.Next() {
+		t.Fatalf("expected 1 row, got 0")
+	}
+
+	dest := make([]any, len(cols))
+	destPtrs := make([]any, len(cols))
+	for i := range dest {
+		destPtrs[i] = &dest[i]
+	}
+	if err := rows.Scan(destPtrs...); err != nil {
+		t.Fatalf("scan failed: %v", err)
+	}
+	for i, col := range cols {
+		t.Logf("Col %d (%s) = %v (%T)", i, col, dest[i], dest[i])
+	}
+}
+
+
+
+

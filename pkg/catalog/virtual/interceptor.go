@@ -183,6 +183,11 @@ func Execute(src Source, sql string) (*Result, error) {
 		return execSysIndexesSecondary(src, sql)
 	}
 
+	// 2.5. SQL Server XORM GetIndexes (sys.indexes + sys.index_columns + sys.columns)
+	if !fromColumns && strings.Contains(upper, "SYS.INDEXES") && strings.Contains(upper, "SYS.INDEX_COLUMNS") && strings.Contains(upper, "SYS.COLUMNS") {
+		return execXORMIndexes(src, sql)
+	}
+
 	// 3. SQL Server Index Columns
 	if !fromColumns && strings.Contains(upper, "SYS.INDEX_COLUMNS") {
 		return execSysIndexColumns(src, sql)

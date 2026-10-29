@@ -911,10 +911,17 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 							colName = p.Expr.String()
 						}
 					}
-					cols = append(cols, colName)
+					cleanName := cleanSymbol(colName)
+					if cleanName == "" {
+						cleanName = colName
+					}
+					cols = append(cols, cleanName)
 
 					vAny, _ := proc.EvalRowExpr(p.Expr, rowCtx, nil)
-					outRow[colName] = vAny
+					outRow[cleanName] = vAny
+					if colName != cleanName {
+						outRow[colName] = vAny
+					}
 					if strings.HasPrefix(colName, "@") {
 						f.setVar(colName, toStorageValue(vAny))
 					}
@@ -932,7 +939,11 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 							colName = p.Expr.String()
 						}
 					}
-					cols = append(cols, colName)
+					cleanName := cleanSymbol(colName)
+					if cleanName == "" {
+						cleanName = colName
+					}
+					cols = append(cols, cleanName)
 				}
 			}
 		}

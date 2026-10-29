@@ -765,8 +765,26 @@ func writePLPValue(buf *bytes.Buffer, payload []byte) {
 	buf.Write(b4[:]) // 0 chunk terminates PLP stream
 }
 
+// CleanTDSColumnName removes brackets, quotes, and table prefixes from column names
+// so that driver metadata and ORM field binders receive clean identifier names.
+func CleanTDSColumnName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return name
+	}
+	name = strings.Trim(name, "[]\"'`")
+	if dot := strings.LastIndex(name, "."); dot != -1 {
+		name = strings.Trim(name[dot+1:], "[]\"'`")
+	}
+	return name
+}
+
 func getRowValueCaseInsensitive(row map[string]any, colName string) any {
 	if val, ok := row[colName]; ok {
+		return val
+	}
+	cleanCol := CleanTDSColumnName(colName)
+	if val, ok := row[cleanCol]; ok {
 		return val
 	}
 	bare := colName
@@ -777,12 +795,12 @@ func getRowValueCaseInsensitive(row map[string]any, colName string) any {
 		}
 	}
 	for k, v := range row {
-		if strings.EqualFold(k, colName) || strings.EqualFold(k, bare) {
+		if strings.EqualFold(k, colName) || strings.EqualFold(k, bare) || strings.EqualFold(CleanTDSColumnName(k), cleanCol) {
 			return v
 		}
 		if kDot := strings.Index(k, "."); kDot != -1 {
 			kBare := k[kDot+1:]
-			if strings.EqualFold(kBare, colName) || strings.EqualFold(kBare, bare) {
+			if strings.EqualFold(kBare, colName) || strings.EqualFold(kBare, bare) || strings.EqualFold(CleanTDSColumnName(kBare), cleanCol) {
 				return v
 			}
 		}

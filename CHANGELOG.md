@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- add comprehensive Gitea mock data seeder covering users, orgs, repos, issues, labels, milestones, branches, commits, PRs, reviews, merges, and releases (scripts/seed_gitea_mock_data.go)
+- support MSSQL UPDATE and DELETE FROM source table syntax in Pratt parser and DML parser
+- support aggregate function and keyword aliases after AS in SELECT projections
+- support table-qualified wildcard projections (table.*) in multi-table joins to eliminate column collisions
+
+### Fixed
+- resolve XORM GetIndexes interception collision on sys.columns queries with collation_name
+- resolve composite index boundary parsing unmatched parentheses trap in bounds normalizer
+- resolve variable assignment cleanSymbol prefix stripping in VDBE storage dispatch
+
+
 ## [0.90.0-beta4] - 2026-10-29
 
 ### Added

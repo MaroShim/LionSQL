@@ -418,6 +418,14 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 			ExprPath:    stmt.ExprPath,
 		}
 		if err := s.engine.CreateIndex(idxSchema); err != nil {
+			if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+				return &QueryResult{
+					Success:    true,
+					Command:    "CREATE INDEX",
+					Messages:   []string{fmt.Sprintf("Index %q already exists on table %q.", stmt.Name, stmt.Table)},
+					DurationUS: time.Since(start).Microseconds(),
+				}, nil
+			}
 			return nil, err
 		}
 		msg := fmt.Sprintf("Index %q created successfully on table %q.", stmt.Name, stmt.Table)
@@ -475,6 +483,14 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 	}
 
 	if err := s.engine.CreateIndex(idxSchema); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			return &QueryResult{
+				Success:    true,
+				Command:    "CREATE INDEX",
+				Messages:   []string{fmt.Sprintf("Index %q already exists on table %q.", indexName, tableName)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
 		return nil, err
 	}
 

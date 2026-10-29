@@ -247,6 +247,10 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 			if c.PrimaryKey {
 				icColID = int64(cIdx + 1)
 			}
+			var collName any = nil
+			if c.Type == storage.TypeVarChar {
+				collName = "SQL_Latin1_General_CP1_CI_AS"
+			}
 
 			allRows = append(allRows, map[string]any{
 				"columnName":         c.Name,
@@ -255,6 +259,8 @@ func execSysColumnsJoinedWithTypes(src Source, sql string) (*Result, error) {
 				"a.name":             c.Name,
 				"b.name":             dataType,
 				"c.name":             c.Name,
+				"collation_name":     collName,
+				"a.collation_name":   collName,
 				"dataType":           dataType,
 				"data_type":          dataType,
 				"type_name":          dataType,
@@ -455,6 +461,40 @@ func execSysIndexColumns(src Source, sql string) (*Result, error) {
 	}
 
 	return FormatResultWithSQL(columns, allRows, sql)
+}
+
+func execXORMIndexes(src Source, sql string) (*Result, error) {
+	columns := []string{"INDEX_NAME", "COLUMN_NAME", "IS_UNIQUE"}
+	targetTable := ""
+	upper := strings.ToUpper(sql)
+	if idx := strings.Index(upper, "OBJECT_NAME"); idx != -1 {
+		rem := sql[idx:]
+		if eqIdx := strings.Index(rem, "="); eqIdx != -1 {
+			targetVal := strings.TrimSpace(rem[eqIdx+1:])
+			targetVal = strings.Trim(targetVal, "';\" \t\r\n")
+			targetTable = cleanIdentifier(targetVal)
+		}
+	}
+
+	tables := src.GetSortedTables()
+	var allRows []map[string]any
+
+	for _, t := range tables {
+		if targetTable != "" && !strings.EqualFold(t.Name, targetTable) {
+			continue
+		}
+		for _, idx := range t.Indexes {
+			for _, colName := range idx.Columns {
+				allRows = append(allRows, map[string]any{
+					"INDEX_NAME":  idx.Name,
+					"COLUMN_NAME": colName,
+					"IS_UNIQUE":   idx.Unique,
+				})
+			}
+		}
+	}
+
+	return FormatResult(columns, allRows, "*", "", "", -1)
 }
 
 func execReferentialConstraintsForeignKey(src Source, sql string) (*Result, error) {

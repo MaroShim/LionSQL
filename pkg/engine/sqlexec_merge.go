@@ -556,6 +556,21 @@ func parseMergeQuery(query string) (*parsedMerge, error) {
 }
 
 func parseTableAlias(s string) (table, alias string) {
+	s = strings.TrimSpace(s)
+	// Strip hints like WITH (HOLDLOCK) or WITH(HOLDLOCK)
+	upper := strings.ToUpper(s)
+	if idx := strings.Index(upper, "WITH"); idx != -1 && (idx == 0 || s[idx-1] == ' ' || s[idx-1] == '\t') {
+		beforeWith := strings.TrimSpace(s[:idx])
+		afterWith := strings.TrimSpace(s[idx+len("WITH"):])
+		if endParen := strings.Index(afterWith, ")"); endParen != -1 {
+			rem := strings.TrimSpace(afterWith[endParen+1:])
+			if rem != "" {
+				s = beforeWith + " " + rem
+			} else {
+				s = beforeWith
+			}
+		}
+	}
 	parts := strings.Fields(s)
 	if len(parts) == 0 {
 		return "", ""
@@ -673,13 +688,17 @@ func parseSingleWhenClause(s string) (mergeClause, error) {
 		} else {
 			cl.clauseType = mergeMatchedDelete
 		}
-	} else if strings.HasPrefix(upperAction, "UPDATE SET ") {
+	} else if strings.HasPrefix(upperAction, "UPDATE") {
+		setIdx := sqlutil.FindTopLevelKeyword(actionPart, "SET")
+		if setIdx < 0 {
+			return cl, fmt.Errorf("missing SET in UPDATE action: %s", actionPart)
+		}
 		if cl.clauseType == mergeNotMatchedSourceDelete {
 			cl.clauseType = mergeNotMatchedSourceUpdate
 		} else {
 			cl.clauseType = mergeMatchedUpdate
 		}
-		setStr := strings.TrimSpace(actionPart[len("UPDATE SET "):])
+		setStr := strings.TrimSpace(actionPart[setIdx+len("SET"):])
 		pairs := parseSetPairs(setStr)
 		cl.setPairs = pairs
 	} else if strings.HasPrefix(upperAction, "INSERT") {

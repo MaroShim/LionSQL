@@ -71,6 +71,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`ORM-MIGRATE-2`**| Catalog/ORM | **MSSQL Virtual Catalog XORM Column Introspection Routing & `max_length` Int64 Scan Safety** | `pkg/catalog/virtual/` | **Completed (`[x]`)** |
 | **`ORM-MIGRATE-3`**| Catalog/ORM | **T-SQL Assignment Aliasing (`alias = expr`), XORM `default_is_null` Bool Scan Safety, `sys.fn_helpcollations()`, and Tolerant `ALTER DATABASE`** | `pkg/catalog/virtual/`, `pkg/proc/`, `pkg/engine/` | **Completed (`[x]`)** |
 | **`GITEA-MILESTONE-1`**| Doc/Milestone | **Enterprise ORM & Production Gitea Live Integration Milestone Architecture Report** | `doc/GITEA_INTEGRATION_MILESTONE.ko.md` | **Completed (`[x]`)** |
+| **`GITEA-MOCK-SEED-1`** | ORM/Kernel | **Comprehensive Gitea Mock Data Seeder & Kernel DML Compatibility (UPDATE/DELETE FROM, Table-Qualified Projection, Keyword Aliases, Composite Bounds)** | `scripts/seed_gitea_mock_data.go`, `pkg/proc/`, `pkg/engine/`, `pkg/execution/`, `pkg/planner/` | **Completed (`[x]`)** |
 
 ### 3.2. Post-0.90.0 Roadmap Queue
 
