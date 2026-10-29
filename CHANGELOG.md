@@ -7,6 +7,68 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+## [0.90.0-beta4] - 2026-10-29
+
+### Added
+- implement web studio tab session isolation and overview memory caching (UI-CONCURRENCY-1) (9d9fc46)
+- add automated release and changelog grouping pipeline (scripts/release.sh) (8552b67)
+- add Windows .exe cross-compilation targets to release pipeline (2c1719b)
+- integrate GitHub Release creation with downloadable assets in release pipeline (7ddae99)
+- standardize 3 official release targets (macOS arm64, Linux amd64, Windows amd64) (5f45d2a)
+- add high-ROI multi-dialect built-in functions Best 7 (FUNC-DIALECT-7) (6faa57f)
+- add MySQL-style concise syntax ergonomics Phase 1 (S-MYSQL-1-P1) (a077766)
+- add T-SQL fast forward-only read-only cursor and FETCH_STATUS (PROC-CURSOR-1) (f007249)
+- add Star Schema Benchmark (SSB) suite and CLI tool (BENCH-SSB-1) (a272ba0)
+- record SSB complex query performance baseline metrics (576e9de)
+- implement zero-alloc tuple AST evaluator and arithmetic aggregate optimization (PERF-COMPLEX-QUERY-1) (4635253)
+- implement operator nested expression audit and deep assertion test suite (AUDIT-EXPR-1) (119f5a1)
+- implement socket read coalescing, 32KB packet sync.Pool, and session pinning (PERF-SERVER-PIPELINE-P1) (81d6587)
+- implement zero-alloc RPC parameter binding and direct PlanCache dispatch (PERF-SERVER-PIPELINE-P2) (95822f3)
+
+### Fixed
+- treat WT_NOTFOUND as no-op in cursor_remove rather than error (ccd1ce2)
+- make changelog insertion compatible with BSD awk on macOS (44f89fc)
+
+### Performance
+- optimize tpcc-client with dedicated conns and prepared stmts (113k tpmC) (f5b8424)
+
+### Documentation
+- establish self-contained SPA web server and native DB plan (WEB-SPA-1) (f149ad5)
+- update code review trackers with REV-STOR-013 and REV-API-003 (8f0a442)
+- append architectural paradox analysis to single-page HTML web server plan (3f7fc11)
+- establish T-SQL forward-only read-only cursor plan (PROC-CURSOR-1) (978df7b)
+- establish MySQL-style syntax ergonomics compatibility plan (S-MYSQL-1) (7cd76d7)
+- rename JSON spec to JSON indexing guide for naming consistency (396aa9b)
+- standardize document naming conventions across doc directory (3972c9f)
+- author release automation pipeline guide (doc/RELEASE_AUTOMATION_GUIDE.ko.md) (339c6ea)
+- author English Web Studio user guide (doc/WEB_STUDIO_GUIDE.md) (74d4a2d)
+- consolidate in-memory OCC tuning and optimization roadmap into unified whitepaper (notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) (c339d5f)
+- archive deep code review report and register in notes index (3c9e613)
+- archive historical PROJECT_STATUS_ASSESSMENT.ko.md to notes/archive/ (52d8522)
+- establish rule for initial creation date header in PLAN documents (f0fd919)
+- document client-server TPC-C benchmark results (113k tpmC) (ba8c89e)
+- add server pipeline performance optimization plan (TDS to file system) (cd98b38)
+- schedule Phase 1 & 2 server pipeline optimization for pre-1.0 release (54210b5)
+- schedule Phase 1 & 2 pipeline, MySQL DX Phase 1, and T-SQL Cursor for 1.0 (84e0c81)
+- add FUNC-DIALECT-7 high-ROI built-in functions to 1.0 queue (4d900bb)
+- add SQL compatibility and ergonomics guide draft (pending implementation) (b159a51)
+- add DuckDB-style friendly SQL ergonomics plan (EXCLUDE, FROM, GROUP BY ALL) (4e94b43)
+- expand DuckDB friendly SQL plan to full catalog with Phase 1 priority (4655b84)
+- adjust active sprint to v0.90.0 and focus on implementation tasks (06ff5f0)
+- spec-out WAL fallocate due to WiredTiger 100MB preallocation (a2d2273)
+- refine server pipeline Phase 3 with generic LRU cursor cache and ReadOnly hint specs (ac12e33)
+- spec-out pure columnar vectorization engine in favor of row-chunk optimizations (b9e5719)
+- streamline complex query benchmark plan title and filename (39a2675)
+- update SSB post-optimization benchmark measurements and SF scaling metrics (3cb99be)
+- append cross-DBMS comparative benchmark matrix and architectural analysis to section 8.5 (d5f1e51)
+- add official Star Schema Benchmark guide and cross-DBMS comparison in doc/ (0cd9d2c)
+- add English edition of Star Schema Benchmark guide in doc/ (c4338c1)
+- clarify ChunkedIterator completed status in benchmark guides (359b567)
+- update verified TPC-C network benchmark metrics after server pipeline optimization (135k tpmC, 5k TPS) (97e4bcc)
+
+### Changed
+- remove deprecated cmd/server wrapper and bin/server binary (5d7a94a)
+
 ### Removed
 - **Legacy Forwarder Binary (`cmd/server`)**: Completely removed the deprecated `cmd/server/main.go` and `bin/server` wrapper, fully standardizing all database operations, server lifecycle, and CLI utilities onto the single unified standalone binary `bin/lionsql` per Golden Rule 15 (Radical KISS, YAGNI, and single-binary primacy).
 

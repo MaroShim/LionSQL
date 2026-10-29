@@ -2,7 +2,7 @@
 
 단일 바이너리 고동시성 OLTP 데이터베이스 서버 (T-SQL 및 저장 프로시저 지원) / Single-binary, high-concurrency OLTP database server supporting T-SQL and stored procedures
 
-[![Version](https://img.shields.io/badge/version-v0.90.0--beta3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v0.90.0--beta4-blue.svg)](CHANGELOG.md)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](README.ko.md)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-green.svg)](LICENSE)
 [![Go Report](https://img.shields.io/badge/go-1.22+-00ADD8.svg)](https://go.dev)
