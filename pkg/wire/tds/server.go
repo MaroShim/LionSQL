@@ -1,6 +1,7 @@
 package tds
 
 import (
+	"bufio"
 	"bytes"
 	"container/list"
 	"context"
@@ -413,20 +414,39 @@ type parsedRPC struct {
 
 // ConnectionSession holds state for a single active TDS client connection.
 type ConnectionSession struct {
-	SPID         uint16
-	SessionID    string
-	HostName     string
-	UserName     string
-	Password     string
-	AppName      string
-	Database     string
-	PacketSize   uint32
-	TDSVersion   uint32
-	inTx         bool
-	txDescriptor uint64
-	prepMu       sync.Mutex
-	prepCounter  int32
-	prepared     *TdsPreparedStatementCache
+	SPID          uint16
+	SessionID     string
+	HostName      string
+	UserName      string
+	Password      string
+	AppName       string
+	Database      string
+	PacketSize    uint32
+	TDSVersion    uint32
+	inTx          bool
+	txDescriptor  uint64
+	prepMu        sync.Mutex
+	prepCounter   int32
+	prepared      *TdsPreparedStatementCache
+	clientSession *engine.ClientSession
+}
+
+var tdsReaderPool = sync.Pool{
+	New: func() any {
+		return bufio.NewReaderSize(nil, 8192)
+	},
+}
+
+func (s *Server) getClientSession(sess *ConnectionSession) *engine.ClientSession {
+	if sess.clientSession != nil {
+		return sess.clientSession
+	}
+	if s.coordinator != nil && sess.SessionID != "" {
+		cs := s.coordinator.GetSession(sess.SessionID)
+		sess.clientSession = cs
+		return cs
+	}
+	return nil
 }
 
 func (sess *ConnectionSession) writePacket(w io.Writer, pType byte, payload []byte) error {
@@ -503,8 +523,15 @@ func (s *Server) handleConnection(conn net.Conn) {
 	}
 
 	go func() {
+		br := tdsReaderPool.Get().(*bufio.Reader)
+		br.Reset(conn)
+		defer func() {
+			br.Reset(nil)
+			tdsReaderPool.Put(br)
+		}()
+
 		for {
-			p, err := ReadPacket(conn)
+			p, err := ReadPacket(br)
 			if err != nil {
 				select {
 				case <-stopChan:
@@ -725,6 +752,7 @@ func (s *Server) handleLogin7(conn net.Conn, pkt *Packet, sess *ConnectionSessio
 			}
 		}
 		s.coordinator.SetSessionUser(sess.SessionID, sess.UserName)
+		sess.clientSession = s.coordinator.GetSession(sess.SessionID)
 	}
 
 	var resp bytes.Buffer
@@ -1045,10 +1073,7 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 			paramMap[atName] = p.Value
 		}
 
-		var cs *engine.ClientSession
-		if s.coordinator != nil && sess.SessionID != "" {
-			cs = s.coordinator.GetSession(sess.SessionID)
-		}
+		cs := s.getClientSession(sess)
 
 		var res *runtime.ExecutionResult
 		var runErr error
@@ -1184,10 +1209,7 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 			paramMap[atName] = p.Value
 		}
 
-		var cs *engine.ClientSession
-		if s.coordinator != nil && sess.SessionID != "" {
-			cs = s.coordinator.GetSession(sess.SessionID)
-		}
+		cs := s.getClientSession(sess)
 
 		var res *runtime.ExecutionResult
 		var runErr error

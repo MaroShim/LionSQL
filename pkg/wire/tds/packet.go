@@ -99,11 +99,67 @@ func ReadPacket(r io.Reader) (*Packet, error) {
 	}, nil
 }
 
-var tdsFramePool = sync.Pool{
-	New: func() any {
-		b := make([]byte, DefaultPacketSize)
-		return &b
-	},
+var (
+	tdsFramePool4K = sync.Pool{
+		New: func() any {
+			b := make([]byte, 4096)
+			return &b
+		},
+	}
+	tdsFramePool8K = sync.Pool{
+		New: func() any {
+			b := make([]byte, 8192)
+			return &b
+		},
+	}
+	tdsFramePool16K = sync.Pool{
+		New: func() any {
+			b := make([]byte, 16384)
+			return &b
+		},
+	}
+	tdsFramePool32K = sync.Pool{
+		New: func() any {
+			b := make([]byte, 32768)
+			return &b
+		},
+	}
+)
+
+func getFrameBuffer(size uint32) (*[]byte, []byte) {
+	switch {
+	case size <= 4096:
+		ptr := tdsFramePool4K.Get().(*[]byte)
+		return ptr, (*ptr)[:size]
+	case size <= 8192:
+		ptr := tdsFramePool8K.Get().(*[]byte)
+		return ptr, (*ptr)[:size]
+	case size <= 16384:
+		ptr := tdsFramePool16K.Get().(*[]byte)
+		return ptr, (*ptr)[:size]
+	case size <= 32768:
+		ptr := tdsFramePool32K.Get().(*[]byte)
+		return ptr, (*ptr)[:size]
+	default:
+		b := make([]byte, size)
+		return nil, b
+	}
+}
+
+func putFrameBuffer(size uint32, ptr *[]byte) {
+	if ptr == nil {
+		return
+	}
+	switch {
+	case size <= 4096:
+		tdsFramePool4K.Put(ptr)
+	case size <= 8192:
+		tdsFramePool8K.Put(ptr)
+	case size <= 16384:
+		tdsFramePool16K.Put(ptr)
+	case size <= 32768:
+		tdsFramePool32K.Put(ptr)
+	}
 }
 
 // WritePacket writes a payload chunked into TDS frames to w with the default packet size (4096).
@@ -113,21 +169,16 @@ func WritePacket(w io.Writer, pType byte, spid uint16, payload []byte) error {
 
 // WritePacketWithSize writes a payload chunked into TDS frames to w with the specified packet size.
 // It bundles the 8-byte TDS header and payload chunk into a single contiguous frame buffer.
-// When packetSize == DefaultPacketSize (4096), it reuses buffers via sync.Pool to execute
+// It utilizes tiered sync.Pools (4K, 8K, 16K, 32K) to eliminate heap allocations and execute
 // a single atomic write per packet (halving OS syscall overhead).
 func WritePacketWithSize(w io.Writer, pType byte, spid uint16, payload []byte, packetSize uint32) error {
 	if packetSize < 512 || packetSize > 32768 {
 		packetSize = DefaultPacketSize
 	}
 
-	var frame []byte
-	var bufPtr *[]byte
-	if packetSize == DefaultPacketSize {
-		bufPtr = tdsFramePool.Get().(*[]byte)
-		defer tdsFramePool.Put(bufPtr)
-		frame = *bufPtr
-	} else {
-		frame = make([]byte, packetSize)
+	bufPtr, frame := getFrameBuffer(packetSize)
+	if bufPtr != nil {
+		defer putFrameBuffer(packetSize, bufPtr)
 	}
 
 	if len(payload) == 0 {
