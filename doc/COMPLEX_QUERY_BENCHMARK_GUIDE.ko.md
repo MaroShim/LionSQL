@@ -1,5 +1,7 @@
 # LionSQL 복합 쿼리 벤치마크 및 성능 가이드 (SSB Star Schema & Cross-DBMS)
 
+> [English Version](COMPLEX_QUERY_BENCHMARK_GUIDE.md)
+
 > [!NOTE]
 > 본 문서는 LionSQL의 2계층 Volcano CBO 복합 쿼리 엔진 성능, Star Schema Benchmark(SSB) 4대 비행 쿼리 명세, 독립형 벤치마크 CLI(`bin/ssb`) 사용법, 그리고 타 대표 DBMS(DuckDB, PostgreSQL, SQLite)와의 객관적 실측 성능 비교를 제공하는 공식 기술 가이드입니다.
 > 
