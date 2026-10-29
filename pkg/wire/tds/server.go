@@ -449,6 +449,115 @@ func (s *Server) getClientSession(sess *ConnectionSession) *engine.ClientSession
 	return nil
 }
 
+var tdsParamMapPool = sync.Pool{
+	New: func() any {
+		return make(map[string]any, 32)
+	},
+}
+
+func getParamMap() map[string]any {
+	return tdsParamMapPool.Get().(map[string]any)
+}
+
+func putParamMap(m map[string]any) {
+	if m == nil {
+		return
+	}
+	clear(m)
+	tdsParamMapPool.Put(m)
+}
+
+func cleanProcedureName(name string) string {
+	name = strings.TrimSpace(name)
+	if dotIdx := strings.LastIndex(name, "."); dotIdx != -1 {
+		name = name[dotIdx+1:]
+	}
+	return strings.Trim(name, "[]\"`")
+}
+
+func (s *Server) executeVDBEPreparedFastPath(
+	ctx context.Context,
+	conn net.Conn,
+	prog *proc.Program,
+	boundParams []RPCParam,
+	sess *ConnectionSession,
+	extraTokens func(*bytes.Buffer),
+) bool {
+	paramMap := getParamMap()
+	defer putParamMap(paramMap)
+
+	for i, p := range boundParams {
+		if p.Name != "" {
+			cleanName := strings.TrimPrefix(p.Name, "@")
+			paramMap[cleanName] = p.Value
+			paramMap["@"+cleanName] = p.Value
+		}
+		pIdx := i + 1
+		pName, atName := getParamNames(pIdx)
+		paramMap[pName] = p.Value
+		paramMap[atName] = p.Value
+	}
+
+	cs := s.getClientSession(sess)
+	var res *runtime.ExecutionResult
+	var runErr error
+
+	if cs != nil {
+		cs.Mu.Lock()
+		if cs.TxFailed {
+			cs.Mu.Unlock()
+			var buf bytes.Buffer
+			buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
+			buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+			return true
+		}
+		if cs.Tx != nil {
+			res, runErr = s.executor.ExecuteInTxWithSessionContext(ctx, prog, paramMap, cs.Tx, cs.Session, nil)
+			if runErr != nil {
+				cs.TxFailed = true
+			}
+		}
+		cs.Mu.Unlock()
+	}
+
+	if (cs == nil || cs.Tx == nil) && runErr == nil {
+		var session storage.Session
+		var shouldClose bool
+		if cs != nil && cs.Session != nil {
+			session = cs.Session
+		} else {
+			session, _ = s.engine.NewSession()
+			shouldClose = true
+		}
+		if session != nil {
+			if shouldClose {
+				defer session.Close()
+			}
+			res, runErr = s.executor.RunContext(ctx, prog, "TdsPrepared", paramMap, session)
+		}
+	}
+
+	if cs != nil && cs.Tx != nil && runErr != nil {
+		var buf bytes.Buffer
+		num, state, sev, msg := extractTdsErrorInfo(runErr)
+		buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
+		buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+		return true
+	}
+
+	if runErr == nil && res != nil {
+		s.respondExecutionResult(conn, res, sess, extraTokens)
+		return true
+	}
+	if ctx.Err() != nil {
+		return true
+	}
+
+	return false
+}
+
 func (sess *ConnectionSession) writePacket(w io.Writer, pType byte, payload []byte) error {
 	pktSize := sess.PacketSize
 	if pktSize == 0 {
@@ -947,6 +1056,19 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 		s.handleRPCUnprepare(conn, rpc, sess)
 	default:
 		if rpc.ProcName != "" {
+			procName := cleanProcedureName(rpc.ProcName)
+			if s.catalog != nil {
+				if pMeta, err := s.catalog.GetProcedure(procName); err == nil && pMeta != nil && pMeta.Body != "" {
+					if cache := s.BytecodePlanCache(); cache != nil {
+						if prog, err := cache.GetOrCompile(pMeta.Body); err == nil && prog != nil {
+							if s.executeVDBEPreparedFastPath(ctx, conn, prog, rpc.Params, sess, nil) {
+								return
+							}
+						}
+					}
+				}
+			}
+
 			query := fmt.Sprintf("EXEC %s", rpc.ProcName)
 			if len(rpc.Params) > 0 {
 				var argStrs []string
@@ -1060,74 +1182,7 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 
 	// Fast-path: Execute via precompiled VDBE bytecode Program if available
 	if prep.Program != nil {
-		paramMap := make(map[string]any, len(boundParams)*2)
-		for i, p := range boundParams {
-			if p.Name != "" {
-				cleanName := strings.TrimPrefix(p.Name, "@")
-				paramMap[cleanName] = p.Value
-				paramMap["@"+cleanName] = p.Value
-			}
-			pIdx := i + 1
-			pName, atName := getParamNames(pIdx)
-			paramMap[pName] = p.Value
-			paramMap[atName] = p.Value
-		}
-
-		cs := s.getClientSession(sess)
-
-		var res *runtime.ExecutionResult
-		var runErr error
-
-		if cs != nil {
-			cs.Mu.Lock()
-			if cs.TxFailed {
-				cs.Mu.Unlock()
-				var buf bytes.Buffer
-				buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
-				buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-				_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
-				return
-			}
-			if cs.Tx != nil {
-				res, runErr = s.executor.ExecuteInTxWithSessionContext(ctx, prep.Program, paramMap, cs.Tx, cs.Session, nil)
-				if runErr != nil {
-					cs.TxFailed = true
-				}
-			}
-			cs.Mu.Unlock()
-		}
-
-		if (cs == nil || cs.Tx == nil) && runErr == nil {
-			var session storage.Session
-			var shouldClose bool
-			if cs != nil && cs.Session != nil {
-				session = cs.Session
-			} else {
-				session, _ = s.engine.NewSession()
-				shouldClose = true
-			}
-			if session != nil {
-				if shouldClose {
-					defer session.Close()
-				}
-				res, runErr = s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
-			}
-		}
-
-		if cs != nil && cs.Tx != nil && runErr != nil {
-			var buf bytes.Buffer
-			num, state, sev, msg := extractTdsErrorInfo(runErr)
-			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
-			buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
-			return
-		}
-
-		if runErr == nil && res != nil {
-			s.respondExecutionResult(conn, res, sess, nil)
-			return
-		}
-		if ctx.Err() != nil {
+		if s.executeVDBEPreparedFastPath(ctx, conn, prep.Program, boundParams, sess, nil) {
 			return
 		}
 	}
@@ -1196,76 +1251,9 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 
 	// Fast-path: Execute via precompiled VDBE bytecode Program if available
 	if prep.Program != nil {
-		paramMap := make(map[string]any, len(boundParams)*2)
-		for i, p := range boundParams {
-			if p.Name != "" {
-				cleanName := strings.TrimPrefix(p.Name, "@")
-				paramMap[cleanName] = p.Value
-				paramMap["@"+cleanName] = p.Value
-			}
-			pIdx := i + 1
-			pName, atName := getParamNames(pIdx)
-			paramMap[pName] = p.Value
-			paramMap[atName] = p.Value
-		}
-
-		cs := s.getClientSession(sess)
-
-		var res *runtime.ExecutionResult
-		var runErr error
-
-		if cs != nil {
-			cs.Mu.Lock()
-			if cs.TxFailed {
-				cs.Mu.Unlock()
-				var buf bytes.Buffer
-				buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
-				buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-				_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
-				return
-			}
-			if cs.Tx != nil {
-				res, runErr = s.executor.ExecuteInTxWithSessionContext(ctx, prep.Program, paramMap, cs.Tx, cs.Session, nil)
-				if runErr != nil {
-					cs.TxFailed = true
-				}
-			}
-			cs.Mu.Unlock()
-		}
-
-		if (cs == nil || cs.Tx == nil) && runErr == nil {
-			var session storage.Session
-			var shouldClose bool
-			if cs != nil && cs.Session != nil {
-				session = cs.Session
-			} else {
-				session, _ = s.engine.NewSession()
-				shouldClose = true
-			}
-			if session != nil {
-				if shouldClose {
-					defer session.Close()
-				}
-				res, runErr = s.executor.RunContext(ctx, prep.Program, "TdsPrepared", paramMap, session)
-			}
-		}
-
-		if cs != nil && cs.Tx != nil && runErr != nil {
-			var buf bytes.Buffer
-			num, state, sev, msg := extractTdsErrorInfo(runErr)
-			buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))
-			buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
-			return
-		}
-
-		if runErr == nil && res != nil {
-			s.respondExecutionResult(conn, res, sess, func(buf *bytes.Buffer) {
-				buf.Write(BuildReturnValueInt(1, "@handle", handle))
-			})
-			return
-		}
-		if ctx.Err() != nil {
+		if s.executeVDBEPreparedFastPath(ctx, conn, prep.Program, boundParams, sess, func(buf *bytes.Buffer) {
+			buf.Write(BuildReturnValueInt(1, "@handle", handle))
+		}) {
 			return
 		}
 	}
