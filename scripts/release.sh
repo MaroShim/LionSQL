@@ -297,14 +297,17 @@ fi
 
 # 4.1. Update CHANGELOG.md
 # Reads existing ## [Unreleased], inserts new section below, leaves clean ## [Unreleased]
+NOTES_TMP="$(mktemp)"
+printf "%s\n" "${RELEASE_NOTES}" > "${NOTES_TMP}"
 TEMP_CHANGELOG="$(mktemp)"
-awk -v new_section="${RELEASE_NOTES}" '
-BEGIN { in_unreleased = 0; inserted = 0; }
+awk -v notes_file="${NOTES_TMP}" '
 /^## \[Unreleased\]/ {
     print $0;
     print "";
-    print new_section;
-    inserted = 1;
+    while ((getline line < notes_file) > 0) {
+        print line;
+    }
+    close(notes_file);
     next;
 }
 {
@@ -313,6 +316,7 @@ BEGIN { in_unreleased = 0; inserted = 0; }
 ' "${CHANGELOG_FILE}" > "${TEMP_CHANGELOG}"
 
 mv "${TEMP_CHANGELOG}" "${CHANGELOG_FILE}"
+rm -f "${NOTES_TMP}"
 echo -e "Updated: ${CLR_BOLD}CHANGELOG.md${CLR_RESET}"
 
 # 4.2. Update pkg/config/version.go
