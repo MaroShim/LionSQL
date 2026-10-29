@@ -1,4 +1,4 @@
-# LionSQL 복합 쿼리 & Volcano 엔진 성능 튜닝 벤치마크 플랜 (SSB & Mini TPC-H) (`notes/VOLCANO_COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`)
+# LionSQL 복합 쿼리 성능 튜닝 벤치마크 플랜 (SSB & Mini TPC-H) (`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-10-29
 > - **문서 상태**: Approved (Active Roadmap)
@@ -210,7 +210,7 @@ ORDER BY d_year, c_nation;
 
 ## 7. 검증 체크리스트 및 작업 순서
 
-- [ ] **Step 1**: `notes/VOLCANO_COMPLEX_QUERY_BENCHMARK_PLAN.ko.md` 플랜 디스크 영구 저장 및 `TODO.md` 등록 (`[x]`).
-- [ ] **Step 2**: `pkg/execution/ssb_bench_test.go` 및 데이터 생성기 구현 (SF 0.001 / 0.01).
-- [ ] **Step 3**: `cmd/ssb/main.go` 독립 실행형 벤치마크 CLI 작성 및 컴파일 파이프라인 연동.
+- [x] **Step 1**: `notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md` 플랜 디스크 영구 저장 및 `TODO.md` 등록 (`[x]`).
+- [x] **Step 2**: `pkg/execution/ssb_test.go` 및 데이터 생성기 구현 (SF 0.001 / 0.01).
+- [x] **Step 3**: `cmd/ssb/main.go` 독립 실행형 벤치마크 CLI 작성 및 컴파일 파이프라인 연동.
 - [ ] **Step 4**: `go test -bench BenchmarkSSB` 성능 베이스라인 측정 및 결과 기록.
