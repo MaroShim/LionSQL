@@ -62,6 +62,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 9. **In-Kernel Real-Time Slow-Query Webhooks (`OBS-3`)**: Outbound HTTP calls inside the kernel are rejected; telemetry routes through Prometheus (`/metrics`) and OTLP.
 10. **In-Kernel Wasm UDF Sandbox (`wazero`)**: Avoids binary bloat and JIT overhead; leverages zero-allocation Go Native UDF SPI (`RegisterScalarFunction`).
 11. **Total Bytecode Translation for Complex Queries (`ARCH-2TIER-1`)**: Complex relational algebra (joins, window functions, CTEs) routes to the Volcano CBO engine (Tier 2); simple OLTP routes to VDBE bytecode (Tier 1).
+12. **Pure Columnar Vectorization Engine Full Rewrite**: Avoids extreme code complexity and row-store I/O physical limits; standardizes on 1,024-row chunk streaming (`ChunkedIterator`) and zero-unboxing slot optimizations.
 
 ---
 

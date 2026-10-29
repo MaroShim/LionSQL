@@ -118,6 +118,15 @@
 
 ---
 
+### ⑯ 순수 컬럼 지향 벡터화 엔진 전면 도입 배제 (Spec-Out)
+* **결정 사항**: DuckDB, ClickHouse와 같은 순수 컬럼 지향 벡터화 엔진(Pure Columnar Engine)으로의 전면 재작성을 영구 배제(Spec-Out)함.
+* **배제 이유 & 맥락**:
+  1. **Row 저장소의 물리적 스캔 I/O 한계**: LionSQL은 In-Memory OCC 및 WiredTiger 기반의 Row 지향 OLTP 엔진임. 메모리에서 1,024개 행을 컬럼으로 전치(Row-to-Column Pivot)하더라도, 스토리지 스캔 단계에서 모든 컬럼을 읽어야 하므로 컬럼형 DBMS의 핵심인 디스크/메모리 I/O 대역폭 절감 효과가 발생하지 않음.
+  2. **KISS 원칙 및 코드 복잡도 급증 방지**: 데이터 타입별 `ColumnVector` 슬라이스, NULL 비트맵, 벡터화 표현식 평가기 등 수만 라인의 중복 계층 추가는 임베디드 OLTP 엔진으로서 과도한 오버엔지니어링(YAGNI)임.
+  3. **실용적 대안**: 이미 구축된 1,024개 행 단위 배치 스트리밍(`ChunkedIterator`, `PullChunk`) 파이프라인을 유지하며, 핫패스 `any` 인터페이스 언박싱 제거 및 연산자 해시 테이블 슬라이스 최적화로 복잡 쿼리 목표 지연시간을 달성함 ([`notes/VOLCANO_COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](VOLCANO_COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)).
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:

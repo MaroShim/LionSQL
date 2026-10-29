@@ -107,6 +107,29 @@ LionSQL은 **Row 기반 무락(Lock-Free) 인메모리 OCC & WiredTiger B+Tree �
 | **SF 0.1 (표준 로컬 튜닝)** | 600,000 행 | **< 18 ms** | **< 45 ms** | **< 75 ms** | **< 110 ms** |
 | **SF 1.0 (엔터프라이즈 검증)** | 6,000,000 행 | **< 150 ms** | **< 350 ms** | **< 600 ms** | **< 900 ms** |
 
+### 4.3. 순수 컬럼 지향 벡터화 엔진 전면 도입 배제 (Explicit Spec-Out) 및 실용적 최적화 방향
+
+> [!IMPORTANT]
+> **아키텍처 불변 결정 (Spec-Out Invariant)**:
+> DuckDB나 ClickHouse와 같은 **"순수 컬럼 지향 벡터화 엔진(Pure Columnar Vectorization Engine)"으로의 전면 재작성은 영구 배제(Spec-Out)**합니다.
+
+#### 1. 영구 배제(Spec-Out) 사유 및 아키텍처 제약 사항
+1. **스캔 I/O 절감 불가 (Row 저장소의 물리적 한계)**:
+   - DuckDB는 스토리지 자체가 컬럼형으로 저장되어 있어 100개 컬럼 중 쿼리에 필요한 2개 컬럼만 선택적으로 읽음으로써 디스크/메모리 I/O 대역폭을 98% 절감합니다.
+   - LionSQL은 In-Memory OCC 및 WiredTiger 기반의 **Row-oriented OLTP 스토리지**입니다. 메모리에서 1,024개 행을 컬럼 벡터로 전치(Row-to-Column Pivot)하는 기법(CockroachDB 방식)을 쓰더라도, 최초 스캔 단계에서 모든 로우 튜플을 읽어야 하므로 컬럼형 DBMS의 핵심인 **스캔 I/O 절감 효과가 발생하지 않습니다**.
+2. **코드 복잡도 급증 및 단일 바이너리 KISS 원칙 위배**:
+   - 데이터 타입별 `Int64Vector`, `Float64Vector`, `StringVector`, NULL 비트맵 마스크, 벡터화된 표현식 평가기를 Go로 처음부터 재구현할 경우 수만 라인의 중복 계층이 발생합니다.
+   - 이는 LionSQL의 핵심 정체성인 **"단일 바이너리의 가볍고 단순한 고성능 임베디드 OLTP 엔진"**에 정면으로 위배되는 과도한 오버엔지니어링(YAGNI)입니다.
+
+#### 2. LionSQL이 채택한 실용적 접근 (Pragmatic Approach)
+1. **기존 1,024개 행 배치(`ChunkedIterator`, `PullChunk`) 파이프라인 유지**:
+   - 이미 완성된 1,024개 배치 스트리밍을 통해 가상 함수 디스패치(`Next()`) 호출 오버헤드를 이미 1/1,024 수준으로 억제했습니다.
+2. **핫패스 `any` 인터페이스 언박싱 및 동적 맵 룩업 제거**:
+   - `Tuple.Get("col")`의 문자열 맵 해시 조회 대신, 쿼리 계획 시점에 고정된 컬럼 슬롯 인덱스(`int`) 직접 접근 및 zero-allocation 타입 단언 최적화.
+3. **연산자 전용 Flat 해시 테이블 & 슬라이스 캐싱**:
+   - `HashJoinIterator` 조인 키 비교 시 Go 빈 인터페이스 비교 대신 64비트 정수 해시 배열(`[]uint64`) 직접 비교 및 `sync.Pool` 버퍼 완전 재사용.
+   - 이를 통해 순수 컬럼 벡터 엔진을 도입하지 않고도 Row-Store 엔진으로서 목표 지연시간(SF 1.0 <150ms~900ms)을 안정적으로 달성합니다.
+
 ---
 
 ## 5. SSB 스키마 및 대표 4대 Flight 쿼리 명세
