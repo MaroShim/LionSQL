@@ -166,6 +166,8 @@
   * 엔터프라이즈 디렉터리 서비스(LDAP/AD/PAM) 연동을 위한 플러그형 `AuthProvider` SPI, 멀티 프로토콜 계정 통합, 경계 프록시 보안 아키텍처.
 * [`BENCHMARK.md`](BENCHMARK.md)
   * 성능 벤치마크 (TPC-C, pgbench, 읽기/쓰기 지연 시간, 동시성 스케일링 측정치).
+* [`COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md`](COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md)
+  * Star Schema Benchmark(SSB) 복합 분석 쿼리 및 Volcano CBO 엔진 성능 가이드, CLI 사용법(`bin/ssb`), 타 대표 DBMS(DuckDB, PostgreSQL, SQLite) 실측 성능 비교 및 아키텍처 분석.
 * [`TESTING.md`](TESTING.md)
   * 로컬 빌드, 테스트 및 회귀 검증 가이드: 3단계 파이프라인, `-run` 필터링, 빌드 태그, 패키지별 회귀 테스트 맵, Go 마이크로 벤치마크, TPC-C 성능 회귀 측정, A/B 비교 절차.
 * [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)

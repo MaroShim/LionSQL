@@ -164,6 +164,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Pluggable `AuthProvider` SPI for corporate directory services (LDAP/AD/PAM), multi-protocol identity convergence, and perimeter proxy security architecture.
 * [`BENCHMARK.md`](BENCHMARK.md)
   * Performance benchmarks (TPC-C, pgbench, read/write latencies, concurrency scaling).
+* [`COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md`](COMPLEX_QUERY_BENCHMARK_GUIDE.ko.md)
+  * Star Schema Benchmark (SSB) complex analytical query and Volcano CBO engine benchmark guide, CLI usage (`bin/ssb`), cross-DBMS performance comparison (DuckDB, PostgreSQL, SQLite), and architectural analysis.
 * [`TESTING.md`](TESTING.md)
   * Local build, test, and regression guide: 3-stage pipeline, `-run` filtering, build tags, regression test map, Go benchmarks, TPC-C performance regression, and A/B comparison procedure.
 * [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
