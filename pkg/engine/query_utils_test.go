@@ -82,6 +82,16 @@ func TestSplitStatements_QuotesAndComments(t *testing.T) {
 			input:    "SELECT 1 /* block comment; here */; SELECT 2;",
 			expected: []string{"SELECT 1 /* block comment; here */", "SELECT 2"},
 		},
+		{
+			name:     "semicolon in dollar quotes",
+			input:    "DO $$\nBEGIN\n  SELECT 1;\nEND;\n$$; SELECT 2;",
+			expected: []string{"DO $$\nBEGIN\n  SELECT 1;\nEND;\n$$", "SELECT 2"},
+		},
+		{
+			name:     "semicolon in tagged dollar quotes",
+			input:    "CREATE FUNCTION foo() AS $body$\nBEGIN\n  RETURN 1;\nEND;\n$body$; SELECT 2;",
+			expected: []string{"CREATE FUNCTION foo() AS $body$\nBEGIN\n  RETURN 1;\nEND;\n$body$", "SELECT 2"},
+		},
 	}
 
 	for _, tc := range tests {

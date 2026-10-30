@@ -175,6 +175,7 @@ func WriteReadyForQuery(w io.Writer) error {
 type ColumnMeta struct {
 	Name     string
 	DataType int32 // pg oid
+	Format   int16 // 0 = text, 1 = binary
 }
 
 // WriteRowDescription sends RowDescription message.
@@ -234,7 +235,7 @@ func WriteRowDescription(w io.Writer, cols []ColumnMeta) error {
 		offset += 2
 		binary.BigEndian.PutUint32(buf[offset:], 0xFFFFFFFF)       // type modifier (-1: no modifier)
 		offset += 4
-		binary.BigEndian.PutUint16(buf[offset:], 0)                // format text
+		binary.BigEndian.PutUint16(buf[offset:], uint16(c.Format)) // format (0 = text, 1 = binary)
 		offset += 2
 	}
 

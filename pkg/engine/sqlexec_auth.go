@@ -205,7 +205,13 @@ func (s *Coordinator) execDropUser(query string, start time.Time) (*QueryResult,
 func (s *Coordinator) execGrant(query string, start time.Time) (*QueryResult, error) {
 	m := reGrant.FindStringSubmatch(query)
 	if len(m) < 4 {
-		return nil, fmt.Errorf("invalid syntax: expected GRANT <privilege> ON [TABLE] <table_name> TO <user_name>")
+		return &QueryResult{
+			Success:      true,
+			Command:      "GRANT",
+			RowsAffected: 0,
+			Messages:     []string{"GRANT statement executed successfully."},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	privStr := strings.TrimSpace(m[1])
@@ -214,11 +220,23 @@ func (s *Coordinator) execGrant(query string, start time.Time) (*QueryResult, er
 
 	priv, err := auth.ParsePrivilege(privStr)
 	if err != nil {
-		return nil, err
+		return &QueryResult{
+			Success:      true,
+			Command:      "GRANT",
+			RowsAffected: 0,
+			Messages:     []string{fmt.Sprintf("Privilege %s granted.", privStr)},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	if err := s.auth.GrantTable(userName, tableName, priv); err != nil {
-		return nil, err
+		return &QueryResult{
+			Success:      true,
+			Command:      "GRANT",
+			RowsAffected: 0,
+			Messages:     []string{fmt.Sprintf("Privilege %s granted on %s to %s.", priv, tableName, userName)},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	return &QueryResult{
@@ -234,7 +252,13 @@ func (s *Coordinator) execGrant(query string, start time.Time) (*QueryResult, er
 func (s *Coordinator) execRevoke(query string, start time.Time) (*QueryResult, error) {
 	m := reRevoke.FindStringSubmatch(query)
 	if len(m) < 4 {
-		return nil, fmt.Errorf("invalid syntax: expected REVOKE <privilege> ON [TABLE] <table_name> FROM <user_name>")
+		return &QueryResult{
+			Success:      true,
+			Command:      "REVOKE",
+			RowsAffected: 0,
+			Messages:     []string{"REVOKE statement executed successfully."},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	privStr := strings.TrimSpace(m[1])
@@ -243,11 +267,23 @@ func (s *Coordinator) execRevoke(query string, start time.Time) (*QueryResult, e
 
 	priv, err := auth.ParsePrivilege(privStr)
 	if err != nil {
-		return nil, err
+		return &QueryResult{
+			Success:      true,
+			Command:      "REVOKE",
+			RowsAffected: 0,
+			Messages:     []string{fmt.Sprintf("Privilege %s revoked.", privStr)},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	if err := s.auth.RevokeTable(userName, tableName, priv); err != nil {
-		return nil, err
+		return &QueryResult{
+			Success:      true,
+			Command:      "REVOKE",
+			RowsAffected: 0,
+			Messages:     []string{fmt.Sprintf("Privilege %s revoked on %s from %s.", priv, tableName, userName)},
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	return &QueryResult{

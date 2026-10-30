@@ -26,10 +26,26 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		if fk.ChildTable == "" {
 			fk.ChildTable = schema.Name
 		}
+
+		// Check for self-referencing foreign key first
+		if strings.EqualFold(fk.ParentTable, schema.Name) ||
+			strings.EqualFold(cleanTablePrefix(fk.ParentTable), cleanTablePrefix(schema.Name)) {
+			fk.ParentTable = schema.Name
+			if len(fk.ParentColumns) == 0 {
+				pkCol, err := schema.PrimaryKeyColumn()
+				if err != nil || pkCol == nil {
+					return fmt.Errorf("referenced parent table %q has no primary key", fk.ParentTable)
+				}
+				fk.ParentColumns = []string{pkCol.Name}
+			}
+			continue
+		}
+
 		parentTd, exists := e.tables[fk.ParentTable]
 		if !exists {
 			for name, t := range e.tables {
-				if strings.EqualFold(name, fk.ParentTable) {
+				if strings.EqualFold(name, fk.ParentTable) ||
+					strings.EqualFold(cleanTablePrefix(name), cleanTablePrefix(fk.ParentTable)) {
 					parentTd = t
 					exists = true
 					break
@@ -85,8 +101,19 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 
 	td, exists := e.tables[index.TableName]
 	if !exists {
+		for name, t := range e.tables {
+			if strings.EqualFold(name, index.TableName) ||
+				strings.EqualFold(cleanTablePrefix(name), cleanTablePrefix(index.TableName)) {
+				td = t
+				exists = true
+				break
+			}
+		}
+	}
+	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, index.TableName)
 	}
+	index.TableName = td.Schema.Name
 
 	if _, _, exists := td.Schema.FindIndex(index.Name); exists {
 		return fmt.Errorf("%w: %s", storage.ErrIndexExists, index.Name)
@@ -98,8 +125,21 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 		if colName == "" && len(index.Columns) > 0 {
 			colName = index.Columns[0]
 		}
-		if _, _, found := td.Schema.FindColumn(colName); !found {
-			return fmt.Errorf("%w: column %s on table %s", storage.ErrColumnNotFound, colName, index.TableName)
+		if colName != "" {
+			if _, _, found := td.Schema.FindColumn(colName); !found {
+				// For functional expression indexes, allow if column exists in table under normalized name
+				foundCol := false
+				for _, c := range td.Schema.Columns {
+					if strings.EqualFold(c.Name, colName) || strings.EqualFold(cleanTablePrefix(c.Name), cleanTablePrefix(colName)) {
+						foundCol = true
+						break
+					}
+				}
+				if !foundCol {
+					// Fall back to tolerant expression index registration
+					index.ExprColumn = ""
+				}
+			}
 		}
 	} else {
 		for _, colName := range index.Columns {
@@ -477,6 +517,15 @@ func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
 
 	td, exists := sqlutil.MapGetFold(e.tables, tableName)
 	if !exists {
+		for name, t := range e.tables {
+			if strings.EqualFold(cleanTablePrefix(name), cleanTablePrefix(tableName)) {
+				td = t
+				exists = true
+				break
+			}
+		}
+	}
+	if !exists {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 	cp := td.Schema
@@ -535,4 +584,28 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 	}
 	return nil
 }
+
+func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.TableSchema) error) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	td, exists := sqlutil.MapGetFold(e.tables, tableName)
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	if err := mutator(&td.Schema); err != nil {
+		return err
+	}
+	return nil
+}
+
+func cleanTablePrefix(s string) string {
+	s = strings.Trim(strings.TrimSpace(s), "[]\"'`")
+	if idx := strings.LastIndex(s, "."); idx != -1 {
+		return strings.Trim(s[idx+1:], "[]\"'`")
+	}
+	return s
+}
+
 

@@ -115,3 +115,29 @@ func TestTypeTime_ParsingAndComparison(t *testing.T) {
 		t.Errorf("expected 09:15:00 < 14:30:15")
 	}
 }
+
+func TestDateTimeValueFromAny_VariousFormats(t *testing.T) {
+	cases := []string{
+		"2026-10-30 08:13:02.52834Z",
+		"2026-10-30 13:48:11.123456 +0900 KST m=+0.012345678",
+		"2026-10-30 13:48:11.123456 +0900",
+		"2026-10-30 13:48:11.123456+09:00",
+		"2026-10-30T13:48:11.123456Z",
+		"2026-10-30 13:48:11",
+		"2026-10-30",
+	}
+
+	for _, c := range cases {
+		v := storage.StringValue(c)
+		dt, err := storage.DateTimeValueFromAny(v)
+		if err != nil {
+			t.Errorf("expected success parsing %q, got error: %v", c, err)
+		}
+		if dt.Type != storage.TypeDateTime {
+			t.Errorf("expected TypeDateTime for %q, got %v", c, dt.Type)
+		}
+		if dt.TVal.Year() != 2026 || dt.TVal.Month() != 10 || dt.TVal.Day() != 30 {
+			t.Errorf("unexpected date components for %q: %v", c, dt.TVal)
+		}
+	}
+}

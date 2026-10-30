@@ -161,6 +161,8 @@ func SplitStatements(query string) []string {
 	start := 0
 	inQuote := false
 	quoteChar := byte(0)
+	inDollarQuote := false
+	dollarTag := ""
 	inLineComment := false
 	inBlockComment := false
 	blockDepth := 0
@@ -185,6 +187,14 @@ func SplitStatements(query string) []string {
 			continue
 		}
 
+		if inDollarQuote {
+			if strings.HasPrefix(query[i:], dollarTag) {
+				inDollarQuote = false
+				i += len(dollarTag) - 1
+			}
+			continue
+		}
+
 		if inQuote {
 			if ch == quoteChar && (i == 0 || query[i-1] != '\\') {
 				inQuote = false
@@ -197,6 +207,27 @@ func SplitStatements(query string) []string {
 			quoteChar = ch
 			needHeaderCheck = false
 			continue
+		}
+
+		if ch == '$' {
+			// Check for dollar-quoted string: $tag$ or $$
+			if endIdx := strings.IndexByte(query[i+1:], '$'); endIdx != -1 {
+				tag := query[i : i+1+endIdx+1]
+				isValidTag := true
+				for k := 1; k < len(tag)-1; k++ {
+					if !IsIdentChar(tag[k]) {
+						isValidTag = false
+						break
+					}
+				}
+				if isValidTag {
+					inDollarQuote = true
+					dollarTag = tag
+					i += len(tag) - 1
+					needHeaderCheck = false
+					continue
+				}
+			}
 		}
 
 		if ch == '-' && i+1 < n && query[i+1] == '-' {

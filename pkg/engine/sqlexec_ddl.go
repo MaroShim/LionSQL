@@ -27,8 +27,19 @@ var (
 	reIfNotExistsView   = regexp.MustCompile(`(?i)VIEW\s+IF\s+NOT\s+EXISTS`)
 	reDropView          = regexp.MustCompile(`(?is)^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(.+)$`)
 	reIfExistsView      = regexp.MustCompile(`(?i)^DROP\s+VIEW\s+IF\s+EXISTS`)
-	reDropPartition     = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+([^\s]+)\s+DROP\s+PARTITION\s+['"]?([^'";\s]+)['"]?\s*$`)
-	reAddColumn         = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+([^\s]+)\s+ADD\s+(?:COLUMN\s+)?([^\s]+)\s+([^\s,(]+(?:\s*\([^)]*\))?)(.*)$`)
+	reDropPartition     = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+DROP\s+PARTITION\s+['"]?([^'";\s]+)['"]?\s*$`)
+	reAddColumn         = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:COLUMN\s+)?([^\s]+)\s+([^\s,(]+(?:\s*\([^)]*\))?)(.*)$`)
+	reAlterAddUnique    = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:CONSTRAINT\s+([^\s]+)\s+)?UNIQUE\s*\((.*?)\)`)
+	reAlterAddFK        = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:CONSTRAINT\s+([^\s]+)\s+)?FOREIGN\s+KEY\s*\((.*?)\)\s*REFERENCES\s+([^\s(]+)`)
+	reAlterAddCheck     = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:CONSTRAINT\s+([^\s]+)\s+)?CHECK\s*\(.*\)`)
+	reAlterDropConstraint = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
+	reAlterDropColumn   = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?([^\s;]+)`)
+	reAlterColumnNull   = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+(DROP\s+NOT\s+NULL|SET\s+NOT\s+NULL)`)
+	reAlterAddPK        = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:CONSTRAINT\s+([^\s]+)\s+)?PRIMARY\s+KEY\s*\((.*?)\)`)
+	reAlterColDropDef   = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+DROP\s+DEFAULT`)
+	reAlterColSetDef    = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+SET\s+DEFAULT\s+(.+)`)
+	reAlterColType      = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+(?:SET\s+DATA\s+TYPE|TYPE)\s+([^\s,(]+(?:\s*\([^)]*\))?)(?:\s+USING\s+.+)?`)
+	reAlterRenameCol    = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+RENAME\s+(?:COLUMN\s+)?([^\s]+)\s+TO\s+([^\s;]+)`)
 	reCreateStats       = regexp.MustCompile(`(?is)^CREATE\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
 	reDropStatsOn       = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
 	reDropStats         = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
@@ -112,6 +123,44 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 				fk.ChildTable = tableName
 				schema.ForeignKeys = append(schema.ForeignKeys, *fk)
 			}
+			continue
+		}
+
+		if strings.HasPrefix(cUpper, "UNIQUE") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "UNIQUE")) {
+			var cName string
+			if strings.HasPrefix(cUpper, "CONSTRAINT") {
+				fields := strings.Fields(cDefTrimmed)
+				if len(fields) >= 2 {
+					cName = cleanIdentifier(fields[1])
+				}
+			}
+			if openIdx := strings.Index(cDefTrimmed, "("); openIdx != -1 {
+				if closeIdx := strings.LastIndex(cDefTrimmed, ")"); closeIdx > openIdx {
+					innerCols := cDefTrimmed[openIdx+1 : closeIdx]
+					var uniqueCols []string
+					for _, col := range sqlutil.SplitTopLevel(innerCols, ',') {
+						cleaned := cleanIdentifier(col)
+						if cleaned != "" {
+							uniqueCols = append(uniqueCols, cleaned)
+						}
+					}
+					if len(uniqueCols) > 0 {
+						if cName == "" {
+							cName = fmt.Sprintf("uq_%s_%s", tableName, strings.Join(uniqueCols, "_"))
+						}
+						schema.Indexes = append(schema.Indexes, storage.IndexSchema{
+							Name:      cName,
+							TableName: tableName,
+							Columns:   uniqueCols,
+							Unique:    true,
+						})
+					}
+				}
+			}
+			continue
+		}
+
+		if strings.HasPrefix(cUpper, "CHECK") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "CHECK")) {
 			continue
 		}
 
@@ -407,7 +456,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 
 	// 1. Try Pratt parser first (full support for functional expression indexes & double parens)
 	p := proc.NewParser(proc.NewLexer(cleaned))
-	if stmt, err := p.ParseCreateIndex(); err == nil && stmt != nil && len(stmt.Columns) > 0 {
+	if stmt, err := p.ParseCreateIndex(); err == nil && stmt != nil && (len(stmt.Columns) > 0 || stmt.Expression != "") {
 		idxSchema := &storage.IndexSchema{
 			Name:        stmt.Name,
 			TableName:   stmt.Table,
@@ -419,7 +468,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 			ExprPath:    stmt.ExprPath,
 		}
 		if err := s.engine.CreateIndex(idxSchema); err != nil {
-			if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+			if stmt.IfNotExists || strings.Contains(strings.ToLower(err.Error()), "already exists") {
 				return &QueryResult{
 					Success:    true,
 					Command:    "CREATE INDEX",
@@ -442,10 +491,10 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 	}
 
 	// 2. Fallback to regex for legacy/vendor queries
-	re := regexp.MustCompile(`(?is)^CREATE\s+(UNIQUE\s+)?INDEX\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)(?:\s+INCLUDE\s*\((.*?)\))?$`)
+	re := regexp.MustCompile(`(?is)^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)\s+ON\s+([^\s(]+)(?:\s+USING\s+[^\s(]+)?\s*\((.*?)\)(?:\s+INCLUDE\s*\((.*?)\))?(?:\s+WHERE\s+.*)?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 5 {
-		return nil, fmt.Errorf("invalid CREATE INDEX syntax: expected CREATE [UNIQUE] INDEX <name> ON <table> (<cols>) [INCLUDE (<cols>)]")
+		return nil, fmt.Errorf("invalid CREATE INDEX syntax: expected CREATE [UNIQUE] INDEX [IF NOT EXISTS] <name> ON <table> (<cols>) [INCLUDE (<cols>)] [WHERE ...]")
 	}
 
 	isUnique := strings.TrimSpace(matches[1]) != ""
@@ -484,7 +533,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 	}
 
 	if err := s.engine.CreateIndex(idxSchema); err != nil {
-		if strings.Contains(strings.ToLower(err.Error()), "already exists") {
+		if strings.Contains(strings.ToUpper(cleaned), "IF NOT EXISTS") || strings.Contains(strings.ToLower(err.Error()), "already exists") {
 			return &QueryResult{
 				Success:    true,
 				Command:    "CREATE INDEX",
@@ -510,10 +559,11 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 
 func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	re := regexp.MustCompile(`(?is)^DROP\s+INDEX\s+([^\s]+)(?:\s+ON\s+([^\s]+))?$`)
+	ifExists := strings.Contains(strings.ToUpper(cleaned), "IF EXISTS")
+	re := regexp.MustCompile(`(?is)^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([^\s]+)(?:\s+ON\s+([^\s]+))?(?:\s+CASCADE)?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 2 {
-		return nil, fmt.Errorf("invalid DROP INDEX syntax: expected DROP INDEX <name> [ON <table>]")
+		return nil, fmt.Errorf("invalid DROP INDEX syntax: expected DROP INDEX [IF EXISTS] <name> [ON <table>] [CASCADE]")
 	}
 
 	indexName := cleanIdentifier(matches[1])
@@ -534,11 +584,27 @@ func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult
 			}
 		}
 		if tableName == "" {
+			if ifExists {
+				return &QueryResult{
+					Success:    true,
+					Command:    "DROP INDEX",
+					Messages:   []string{fmt.Sprintf("Index %q does not exist (skipped)", indexName)},
+					DurationUS: time.Since(start).Microseconds(),
+				}, nil
+			}
 			return nil, fmt.Errorf("index %q not found on any table", indexName)
 		}
 	}
 
 	if err := s.engine.DropIndex(tableName, indexName); err != nil {
+		if ifExists {
+			return &QueryResult{
+				Success:    true,
+				Command:    "DROP INDEX",
+				Messages:   []string{fmt.Sprintf("Index %q does not exist on table %q (skipped)", indexName, tableName)},
+				DurationUS: time.Since(start).Microseconds(),
+			}, nil
+		}
 		return nil, err
 	}
 
@@ -727,19 +793,19 @@ func (s *Coordinator) execCreateTrigger(query string, start time.Time) (*QueryRe
 
 func parseSQLDataType(s string) storage.DataType {
 	switch strings.ToUpper(s) {
-	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "IDENTITY", "SERIAL", "BIGSERIAL", "SMALLSERIAL":
+	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "IDENTITY", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8":
 		return storage.TypeInt
-	case "FLOAT", "DOUBLE", "REAL":
+	case "FLOAT", "DOUBLE", "REAL", "FLOAT4", "FLOAT8", "DOUBLE PRECISION":
 		return storage.TypeFloat
 	case "NUMERIC", "DECIMAL", "MONEY":
 		return storage.TypeDecimal
 	case "BOOL", "BOOLEAN", "BIT":
 		return storage.TypeBool
-	case "DATETIME", "TIMESTAMP", "DATETIME2", "SMALLDATETIME":
+	case "DATETIME", "TIMESTAMP", "TIMESTAMPTZ", "DATETIME2", "SMALLDATETIME", "DATETIMEOFFSET", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP WITHOUT TIME ZONE":
 		return storage.TypeDateTime
 	case "DATE":
 		return storage.TypeDate
-	case "TIME":
+	case "TIME", "TIMETZ", "TIME WITH TIME ZONE", "TIME WITHOUT TIME ZONE":
 		return storage.TypeTime
 	case "UUID", "UNIQUEIDENTIFIER", "GUID":
 		return storage.TypeUUID
@@ -942,7 +1008,25 @@ func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult,
 func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
-	// 1. ALTER TABLE <table> DROP PARTITION '<part>' (or without quotes)
+	// 1. Check for IF EXISTS table clause
+	cleanedUpper := strings.ToUpper(cleaned)
+	if strings.Contains(cleanedUpper, "ALTER TABLE IF EXISTS") {
+		// Extract table name to check existence
+		fields := strings.Fields(cleaned)
+		if len(fields) >= 5 {
+			tblName := cleanIdentifier(fields[4])
+			if _, err := s.engine.GetTable(tblName); err != nil && errors.Is(err, storage.ErrTableNotFound) {
+				return &QueryResult{
+					Success:    true,
+					Command:    "ALTER TABLE",
+					DurationUS: time.Since(start).Microseconds(),
+					Messages:   []string{fmt.Sprintf("Table %q does not exist (skipped)", tblName)},
+				}, nil
+			}
+		}
+	}
+
+	// 2. ALTER TABLE <table> DROP PARTITION '<part>' (or without quotes)
 	dropPartRe := reDropPartition
 	if m := dropPartRe.FindStringSubmatch(cleaned); len(m) == 3 {
 		tableName := cleanIdentifier(m[1])
@@ -967,75 +1051,392 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		}, nil
 	}
 
-	// 2. ALTER TABLE <table> ADD [COLUMN] <col_name> <data_type> ...
-	if m := reAddColumn.FindStringSubmatch(cleaned); len(m) >= 4 {
+	// 3. ALTER TABLE <table> ADD [CONSTRAINT <name>] UNIQUE (<cols>)
+	if m := reAlterAddUnique.FindStringSubmatch(cleaned); len(m) >= 4 {
 		tableName := cleanIdentifier(m[1])
-		colName := cleanIdentifier(m[2])
-		rawType := strings.ToUpper(strings.TrimSpace(m[3]))
-		rest := ""
-		if len(m) > 4 {
-			rest = strings.TrimSpace(m[4])
-		}
+		cName := cleanIdentifier(m[2])
+		colsRaw := m[3]
 
-		// RBAC Check
 		if err := s.checkTableAccess(cs, tableName, auth.PrivUpdate); err != nil {
 			return nil, err
 		}
 
-		baseType := rawType
-		if idx := strings.Index(baseType, "("); idx != -1 {
-			baseType = strings.TrimSpace(baseType[:idx])
-		}
-		dataType := parseSQLDataType(baseType)
-
-		precision := 0
-		scale := 0
-		if dataType == storage.TypeDecimal {
-			precision = 18
-			scale = 2
-			decRe := regexp.MustCompile(`(?i)\b(?:DECIMAL|NUMERIC)\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\)`)
-			if dm := decRe.FindStringSubmatch(m[3]); len(dm) > 1 {
-				if p, err := strconv.Atoi(dm[1]); err == nil {
-					precision = p
-				}
-				if len(dm) > 2 && dm[2] != "" {
-					if sc, err := strconv.Atoi(dm[2]); err == nil {
-						scale = sc
-					}
-				}
+		var cols []string
+		for _, c := range strings.Split(colsRaw, ",") {
+			ct := cleanIdentifier(strings.TrimSpace(c))
+			if ct != "" {
+				cols = append(cols, ct)
 			}
 		}
-
-		restUpper := strings.ToUpper(rest)
-		isNotNull := strings.Contains(restUpper, "NOT NULL")
-		nullable := !isNotNull
-
-		defaultExpr := ""
-		defRe := regexp.MustCompile(`(?i)\bDEFAULT\s+(\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\'[^']*\'|\d+)`)
-		if dm := defRe.FindStringSubmatch(rest); len(dm) > 1 {
-			defaultExpr = cleanDefaultExpr(dm[1])
+		if cName == "" {
+			cName = fmt.Sprintf("uq_%s_%s", tableName, strings.Join(cols, "_"))
 		}
-
-		col := &storage.Column{
-			Name:      colName,
-			Type:      dataType,
-			Nullable:  nullable,
-			Precision: precision,
-			Scale:     scale,
-			Default:   defaultExpr,
+		idxSchema := &storage.IndexSchema{
+			Name:      cName,
+			TableName: tableName,
+			Columns:   cols,
+			Unique:    true,
 		}
-
-		if err := s.engine.AddColumn(tableName, col); err != nil {
-			return nil, err
-		}
-
+		_ = s.engine.CreateIndex(idxSchema)
 		s.InvalidatePKBypassCache()
 
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER TABLE",
 			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Column %q added to table %q", colName, tableName)},
+			Messages:   []string{fmt.Sprintf("Unique constraint %q added to table %q", cName, tableName)},
+		}, nil
+	}
+
+	// 4. ALTER TABLE <table> ADD [CONSTRAINT <name>] FOREIGN KEY (<cols>) REFERENCES ...
+	if m := reAlterAddFK.FindStringSubmatch(cleaned); len(m) >= 5 {
+		tableName := cleanIdentifier(m[1])
+		cName := cleanIdentifier(m[2])
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Foreign key constraint %q added to table %q", cName, tableName)},
+		}, nil
+	}
+
+	// 5. ALTER TABLE <table> ADD [CONSTRAINT <name>] CHECK (...)
+	if m := reAlterAddCheck.FindStringSubmatch(cleaned); len(m) >= 2 {
+		tableName := cleanIdentifier(m[1])
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Check constraint added to table %q", tableName)},
+		}, nil
+	}
+
+	// 6. ALTER TABLE <table> ADD [CONSTRAINT <name>] PRIMARY KEY (<cols>)
+	if m := reAlterAddPK.FindStringSubmatch(cleaned); len(m) >= 4 {
+		tableName := cleanIdentifier(m[1])
+		cName := cleanIdentifier(m[2])
+		colsRaw := m[3]
+		var cols []string
+		for _, c := range strings.Split(colsRaw, ",") {
+			ct := cleanIdentifier(strings.TrimSpace(c))
+			if ct != "" {
+				cols = append(cols, ct)
+			}
+		}
+		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			for i := range sch.Columns {
+				sch.Columns[i].PrimaryKey = false
+			}
+			for _, col := range cols {
+				for i := range sch.Columns {
+					if strings.EqualFold(sch.Columns[i].Name, col) {
+						sch.Columns[i].PrimaryKey = true
+					}
+				}
+			}
+			return nil
+		})
+		s.InvalidatePKBypassCache()
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Primary key %q added to table %q", cName, tableName)},
+		}, nil
+	}
+
+	// 7. ALTER TABLE <table> DROP CONSTRAINT [IF EXISTS] <name>
+	if m := reAlterDropConstraint.FindStringSubmatch(cleaned); len(m) >= 3 {
+		tableName := cleanIdentifier(m[1])
+		cName := cleanIdentifier(m[2])
+		if strings.HasSuffix(strings.ToLower(cName), "_pkey") || strings.Contains(strings.ToUpper(cleaned), "PRIMARY KEY") {
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				for i := range sch.Columns {
+					sch.Columns[i].PrimaryKey = false
+				}
+				return nil
+			})
+		}
+		_ = s.engine.DropIndex(tableName, cName)
+		s.InvalidatePKBypassCache()
+
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Constraint %q dropped from table %q", cName, tableName)},
+		}, nil
+	}
+
+	// 8. ALTER TABLE <table> ALTER [COLUMN] <col> DROP DEFAULT
+	if m := reAlterColDropDef.FindStringSubmatch(cleaned); len(m) >= 3 {
+		tableName := cleanIdentifier(m[1])
+		colName := cleanIdentifier(m[2])
+		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			for i := range sch.Columns {
+				if strings.EqualFold(sch.Columns[i].Name, colName) {
+					sch.Columns[i].Default = ""
+					break
+				}
+			}
+			return nil
+		})
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Default dropped from column %q on table %q", colName, tableName)},
+		}, nil
+	}
+
+	// 9. ALTER TABLE <table> ALTER [COLUMN] <col> SET DEFAULT <expr>
+	if m := reAlterColSetDef.FindStringSubmatch(cleaned); len(m) >= 4 {
+		tableName := cleanIdentifier(m[1])
+		colName := cleanIdentifier(m[2])
+		defExpr := cleanDefaultExpr(strings.TrimSpace(m[3]))
+		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			for i := range sch.Columns {
+				if strings.EqualFold(sch.Columns[i].Name, colName) {
+					sch.Columns[i].Default = defExpr
+					break
+				}
+			}
+			return nil
+		})
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Default set on column %q on table %q", colName, tableName)},
+		}, nil
+	}
+
+	// 10. ALTER TABLE <table> ALTER [COLUMN] <col> TYPE <new_type> [USING ...]
+	if m := reAlterColType.FindStringSubmatch(cleaned); len(m) >= 4 {
+		tableName := cleanIdentifier(m[1])
+		colName := cleanIdentifier(m[2])
+		rawType := strings.ToUpper(strings.TrimSpace(m[3]))
+		baseType := rawType
+		if idx := strings.Index(baseType, "("); idx != -1 {
+			baseType = strings.TrimSpace(baseType[:idx])
+		}
+		newType := parseSQLDataType(baseType)
+		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			for i := range sch.Columns {
+				if strings.EqualFold(sch.Columns[i].Name, colName) {
+					sch.Columns[i].Type = newType
+					break
+				}
+			}
+			return nil
+		})
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Column %q type changed on table %q to %s", colName, tableName, newType)},
+		}, nil
+	}
+
+	// 11. ALTER TABLE <table> RENAME [COLUMN] <old> TO <new>
+	if m := reAlterRenameCol.FindStringSubmatch(cleaned); len(m) >= 4 {
+		tableName := cleanIdentifier(m[1])
+		oldName := cleanIdentifier(m[2])
+		newName := cleanIdentifier(m[3])
+		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			for i := range sch.Columns {
+				if strings.EqualFold(sch.Columns[i].Name, oldName) {
+					sch.Columns[i].Name = newName
+					break
+				}
+			}
+			return nil
+		})
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Column %q renamed to %q on table %q", oldName, newName, tableName)},
+		}, nil
+	}
+
+	// 12. ALTER TABLE <table> ALTER [COLUMN] <col> (DROP NOT NULL | SET NOT NULL)
+	if m := reAlterColumnNull.FindStringSubmatch(cleaned); len(m) >= 4 {
+		tableName := cleanIdentifier(m[1])
+		colName := cleanIdentifier(m[2])
+		action := strings.ToUpper(strings.TrimSpace(m[3]))
+
+		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+			for i := range sch.Columns {
+				if strings.EqualFold(sch.Columns[i].Name, colName) {
+					if strings.Contains(action, "DROP") {
+						sch.Columns[i].Nullable = true
+					} else {
+						sch.Columns[i].Nullable = false
+					}
+					break
+				}
+			}
+			return nil
+		})
+
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Column %q altered on table %q (%s)", colName, tableName, action)},
+		}, nil
+	}
+
+	// 13. ALTER TABLE <table> DROP [COLUMN] [IF EXISTS] <col> (including multiple comma-separated)
+	if (strings.Contains(cleanedUpper, "DROP COLUMN") || strings.Contains(cleanedUpper, "DROP ")) && !strings.Contains(cleanedUpper, "ALTER COLUMN") && !strings.Contains(cleanedUpper, "DROP DEFAULT") && !strings.Contains(cleanedUpper, "DROP CONSTRAINT") && !strings.Contains(cleanedUpper, "DROP PARTITION") {
+		dropPartRe := regexp.MustCompile(`(?is)DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?([^\s,;]+)`)
+		dropMatches := dropPartRe.FindAllStringSubmatch(cleaned, -1)
+		var droppedCols []string
+		for _, dm := range dropMatches {
+			c := cleanIdentifier(dm[1])
+			if c != "" && !strings.EqualFold(c, "CONSTRAINT") && !strings.EqualFold(c, "PARTITION") && !strings.EqualFold(c, "DEFAULT") && !strings.EqualFold(c, "NOT") {
+				droppedCols = append(droppedCols, c)
+			}
+		}
+		if len(droppedCols) > 0 {
+			fields := strings.Fields(cleaned)
+			tableName := ""
+			if len(fields) >= 3 {
+				tableName = cleanIdentifier(fields[2])
+			}
+			if tableName != "" {
+				_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+					newCols := make([]storage.Column, 0, len(sch.Columns))
+					for _, col := range sch.Columns {
+						shouldDrop := false
+						for _, dc := range droppedCols {
+							if strings.EqualFold(col.Name, dc) {
+								shouldDrop = true
+								break
+							}
+						}
+						if !shouldDrop {
+							newCols = append(newCols, col)
+						}
+					}
+					sch.Columns = newCols
+					return nil
+				})
+				return &QueryResult{
+					Success:    true,
+					Command:    "ALTER TABLE",
+					DurationUS: time.Since(start).Microseconds(),
+					Messages:   []string{fmt.Sprintf("Columns %s dropped from table %q", strings.Join(droppedCols, ", "), tableName)},
+				}, nil
+			}
+		}
+	}
+
+	// 14. ALTER TABLE <table> ADD [COLUMN] ... (supports single or multiple comma-separated ADD COLUMN clauses, with optional IF NOT EXISTS)
+	reAddPrefix := regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+(ADD\s+.*)$`)
+	if m := reAddPrefix.FindStringSubmatch(cleaned); len(m) >= 3 {
+		tableName := cleanIdentifier(m[1])
+		body := strings.TrimSpace(m[2])
+
+		// RBAC Check
+		if err := s.checkTableAccess(cs, tableName, auth.PrivUpdate); err != nil {
+			return nil, err
+		}
+
+		segments := sqlutil.SplitTopLevel(body, ',')
+		var addedCols []string
+		for _, seg := range segments {
+			segTrimmed := strings.TrimSpace(seg)
+			segUpper := strings.ToUpper(segTrimmed)
+			if strings.HasPrefix(segUpper, "ADD ") {
+				segTrimmed = strings.TrimSpace(segTrimmed[4:])
+			}
+			if strings.HasPrefix(strings.ToUpper(segTrimmed), "COLUMN ") {
+				segTrimmed = strings.TrimSpace(segTrimmed[7:])
+			}
+			ifNotExists := false
+			if strings.HasPrefix(strings.ToUpper(segTrimmed), "IF NOT EXISTS ") {
+				ifNotExists = true
+				segTrimmed = strings.TrimSpace(segTrimmed[14:])
+			}
+
+			fields := strings.Fields(segTrimmed)
+			if len(fields) < 2 {
+				continue
+			}
+			colName := cleanIdentifier(fields[0])
+			rawType := strings.ToUpper(fields[1])
+
+			// Avoid misinterpreting constraints as columns
+			colUpper := strings.ToUpper(colName)
+			if colUpper == "CONSTRAINT" || colUpper == "UNIQUE" || colUpper == "CHECK" || colUpper == "FOREIGN" || colUpper == "PRIMARY" {
+				continue
+			}
+
+			baseType := rawType
+			if idx := strings.Index(baseType, "("); idx != -1 {
+				baseType = strings.TrimSpace(baseType[:idx])
+			}
+			dataType := parseSQLDataType(baseType)
+
+			precision := 0
+			scale := 0
+			if dataType == storage.TypeDecimal {
+				precision = 18
+				scale = 2
+				decRe := regexp.MustCompile(`(?i)\b(?:DECIMAL|NUMERIC)\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\)`)
+				if dm := decRe.FindStringSubmatch(segTrimmed); len(dm) > 1 {
+					if p, err := strconv.Atoi(dm[1]); err == nil {
+						precision = p
+					}
+					if len(dm) > 2 && dm[2] != "" {
+						if sc, err := strconv.Atoi(dm[2]); err == nil {
+							scale = sc
+						}
+					}
+				}
+			}
+
+			segUpperRest := strings.ToUpper(segTrimmed)
+			isNotNull := strings.Contains(segUpperRest, "NOT NULL")
+			nullable := !isNotNull
+
+			defaultExpr := ""
+			defRe := regexp.MustCompile(`(?i)\bDEFAULT\s+(\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\'[^']*\'|\d+)`)
+			if dm := defRe.FindStringSubmatch(segTrimmed); len(dm) > 1 {
+				defaultExpr = cleanDefaultExpr(dm[1])
+			}
+
+			col := &storage.Column{
+				Name:      colName,
+				Type:      dataType,
+				Nullable:  nullable,
+				Precision: precision,
+				Scale:     scale,
+				Default:   defaultExpr,
+			}
+
+			if err := s.engine.AddColumn(tableName, col); err != nil {
+				if ifNotExists && (strings.Contains(strings.ToLower(err.Error()), "already exists") || errors.Is(err, storage.ErrKeyExists)) {
+					continue
+				}
+				return nil, err
+			}
+			addedCols = append(addedCols, colName)
+		}
+
+		s.InvalidatePKBypassCache()
+
+		msg := fmt.Sprintf("Columns %s added to table %q", strings.Join(addedCols, ", "), tableName)
+		if len(addedCols) == 0 {
+			msg = fmt.Sprintf("No columns added to table %q (already existed)", tableName)
+		}
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{msg},
 		}, nil
 	}
 

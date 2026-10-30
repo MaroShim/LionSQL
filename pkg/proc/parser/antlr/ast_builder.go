@@ -148,24 +148,26 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 
 func parseDataTypeString(s string) storage.DataType {
 	switch strings.ToUpper(s) {
-	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL":
+	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8":
 		return storage.TypeInt
-	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR":
+	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "BPCHAR":
 		return storage.TypeVarChar
-	case "FLOAT", "DECIMAL", "DOUBLE", "NUMERIC":
+	case "FLOAT", "DECIMAL", "DOUBLE", "NUMERIC", "REAL", "FLOAT4", "FLOAT8":
 		return storage.TypeFloat
 	case "BIT", "BOOL", "BOOLEAN":
 		return storage.TypeBool
-	case "DATETIME", "TIMESTAMP":
+	case "DATETIME", "TIMESTAMP", "TIMESTAMPTZ", "DATETIME2", "SMALLDATETIME", "DATETIMEOFFSET":
 		return storage.TypeDateTime
 	case "DATE":
 		return storage.TypeDate
-	case "TIME":
+	case "TIME", "TIMETZ":
 		return storage.TypeTime
-	case "UUID", "UNIQUEIDENTIFIER":
+	case "UUID", "UNIQUEIDENTIFIER", "GUID":
 		return storage.TypeUUID
-	case "VARBINARY", "BINARY", "BYTEA":
+	case "VARBINARY", "BINARY", "BYTEA", "BLOB", "IMAGE":
 		return storage.TypeBinary
+	case "JSON", "JSONB":
+		return storage.TypeJSON
 	default:
 		return storage.TypeVarChar
 	}

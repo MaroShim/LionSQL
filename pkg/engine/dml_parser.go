@@ -160,6 +160,7 @@ func scanDMLHead(sql string) (*DMLStatement, *dmlScanner, bool) {
 		save := sc.pos
 		if sc.keyword(optional) && sc.skipSpace() > 0 {
 			if st.Table = sc.ident(); st.Table != "" {
+				sc.skipTableAlias(st.kind)
 				return st, sc, true
 			}
 		}
@@ -168,7 +169,41 @@ func scanDMLHead(sql string) (*DMLStatement, *dmlScanner, bool) {
 	if st.Table = sc.ident(); st.Table == "" {
 		return nil, nil, false
 	}
+	sc.skipTableAlias(st.kind)
 	return st, sc, true
+}
+
+func (sc *dmlScanner) skipTableAlias(kind dmlKind) {
+	if kind != dmlUpdate && kind != dmlDelete {
+		return
+	}
+	save := sc.pos
+	if sc.skipSpace() == 0 {
+		sc.pos = save
+		return
+	}
+	if sc.keyword("AS") && sc.skipSpace() > 0 {
+		_ = sc.ident()
+		return
+	}
+	sc.pos = save
+	_ = sc.skipSpace()
+	nextWord := sc.ident()
+	upperWord := strings.ToUpper(nextWord)
+	if upperWord == "SET" || upperWord == "WHERE" || upperWord == "OUTPUT" || upperWord == "RETURNING" || nextWord == "" {
+		sc.pos = save
+		return
+	}
+	saveAfterWord := sc.pos
+	_ = sc.skipSpace()
+	saveFollow := sc.pos
+	followWord := strings.ToUpper(sc.ident())
+	sc.pos = saveFollow
+	if followWord == "SET" || followWord == "WHERE" || followWord == "OUTPUT" || followWord == "RETURNING" {
+		sc.pos = saveAfterWord
+		return
+	}
+	sc.pos = save
 }
 
 // dmlHead reports the kind and raw table token of a DML statement without

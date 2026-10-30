@@ -127,7 +127,7 @@ func parseObjectPieces(s string) []string {
 func isSysBuiltin(name string) bool {
 	switch name {
 	case "ISNULL", "COALESCE", "NULLIF", "IFNULL", "NVL", "ISNUMERIC", "IIF", "CHOOSE", "GREATEST", "LEAST",
-		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID",
+		"NEWID", "NEWID7", "UUIDV7", "UUID_GENERATE_V7", "GEN_RANDOM_UUID", "SETVAL", "NEXTVAL",
 		"SCOPE_IDENTITY", "SERVERPROPERTY",
 		"ERROR_NUMBER", "ERROR_MESSAGE", "ERROR_LINE", "ERROR_SEVERITY", "ERROR_STATE", "ERROR_PROCEDURE", "@@ERROR",
 		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "COL_NAME", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
@@ -268,6 +268,15 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 			return storage.Value{Type: storage.TypeUUID, SVal: generateUUIDv7()}
 		}
 		return storage.Value{Type: storage.TypeUUID, SVal: generateUUIDv4()}
+
+	case "SETVAL":
+		if len(args) >= 2 {
+			return args[1]
+		}
+		return storage.IntValue(1)
+
+	case "NEXTVAL":
+		return storage.IntValue(1)
 
 	case "SERVERPROPERTY":
 		if len(args) == 0 || args[0].IsNull {

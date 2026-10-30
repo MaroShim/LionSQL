@@ -961,6 +961,8 @@ type CreateIndexStmt struct {
 	Columns     []string
 	IncludeCols []string
 	Unique      bool
+	IfNotExists bool
+	WhereClause string
 	Expression  string
 	ExprColumn  string
 	ExprPath    string

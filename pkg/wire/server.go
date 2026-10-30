@@ -6,6 +6,7 @@ import (
 	"container/list"
 	"crypto/tls"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"log"
@@ -997,6 +998,16 @@ func decodeTextParamValue(s string, oid int32) storage.Value {
 		} else if strings.EqualFold(s, "false") || s == "f" || s == "0" {
 			return storage.BoolValue(false)
 		}
+	case 1114, 1184: // TIMESTAMP, TIMESTAMPTZ
+		if dt, err := storage.DateTimeValueFromAny(storage.StringValue(s)); err == nil && !dt.IsNull {
+			return dt
+		}
+	case 1082: // DATE
+		if d, err := storage.ParseDate(s); err == nil {
+			return storage.DateValue(d)
+		}
+	case 2950: // UUID
+		return storage.UUIDValue(strings.TrimSpace(s))
 	case 0: // Untyped parameter (lib/pq default)
 		trimmed := strings.TrimSpace(s)
 		if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
@@ -1093,7 +1104,7 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 			return
 		}
 		_ = WriteParameterDescription(conn, stmt.ParamTypes)
-		s.writeSchemaDescription(conn, stmt.Query, stmt.ParamTypes, stmt)
+		s.writeSchemaDescription(conn, stmt.Query, stmt.ParamTypes, stmt, nil)
 	} else if targetType == 'P' {
 		portal, exists := portals[targetName]
 		if !exists {
@@ -1106,13 +1117,25 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 			paramTypes = portal.Statement.ParamTypes
 			stmt = portal.Statement
 		}
-		s.writeSchemaDescription(conn, portal.Statement.Query, paramTypes, stmt)
+		s.writeSchemaDescription(conn, portal.Statement.Query, paramTypes, stmt, portal.ResultFormats)
 	} else {
 		_ = WriteNoData(conn)
 	}
 }
 
-func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes []int32, stmt *PreparedStatement) {
+func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes []int32, stmt *PreparedStatement, resultFormats []int16) {
+	applyFormats := func(cols []ColumnMeta) {
+		for i := range cols {
+			fmtCode := int16(0)
+			if len(resultFormats) == 1 && resultFormats[0] == 1 {
+				fmtCode = 1
+			} else if i < len(resultFormats) && resultFormats[i] == 1 {
+				fmtCode = 1
+			}
+			cols[i].Format = fmtCode
+		}
+	}
+
 	recordCols := func(cols []ColumnMeta) {
 		if stmt != nil && len(cols) > 0 {
 			stmt.ColumnNames = make([]string, len(cols))
@@ -1133,6 +1156,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			}
 			cols[i] = ColumnMeta{Name: name, DataType: oid}
 		}
+		applyFormats(cols)
 		_ = WriteRowDescription(conn, cols)
 		return
 	}
@@ -1189,6 +1213,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 				}
 				if len(cols) > 0 {
 					recordCols(cols)
+					applyFormats(cols)
 					_ = WriteRowDescription(conn, cols)
 					return
 				}
@@ -1232,6 +1257,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 						}
 					}
 					recordCols(cols)
+					applyFormats(cols)
 					_ = WriteRowDescription(conn, cols)
 					return
 				}
@@ -1275,6 +1301,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 				}
 					if len(cols) > 0 {
 						recordCols(cols)
+						applyFormats(cols)
 						_ = WriteRowDescription(conn, cols)
 						return
 					}
@@ -1286,6 +1313,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		if strings.Contains(upper, "VERSION()") {
 			cols := []ColumnMeta{{Name: "version", DataType: 25}}
 			recordCols(cols)
+			applyFormats(cols)
 			_ = WriteRowDescription(conn, cols)
 			return
 		}
@@ -1301,6 +1329,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i]}
 			}
 			recordCols(cols)
+			applyFormats(cols)
 			_ = WriteRowDescription(conn, cols)
 			return
 		}
@@ -1340,6 +1369,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 						}
 						colMetas[i] = ColumnMeta{Name: c, DataType: oid}
 					}
+					applyFormats(colMetas)
 					_ = WriteRowDescription(conn, colMetas)
 					return
 				}
@@ -1743,7 +1773,13 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		if writeRowDesc {
 			cols := make([]ColumnMeta, len(res.Columns))
 			for i, c := range res.Columns {
-				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i]}
+				fmtCode := int16(0)
+				if len(resultFormats) == 1 && resultFormats[0] == 1 {
+					fmtCode = 1
+				} else if i < len(resultFormats) && resultFormats[i] == 1 {
+					fmtCode = 1
+				}
+				cols[i] = ColumnMeta{Name: c, DataType: colOIDs[i], Format: fmtCode}
 			}
 			_ = WriteRowDescription(bw, cols)
 		}
@@ -1859,7 +1895,20 @@ func formatColumnValue(val any, oid int32, isBinary bool) []byte {
 		return nil
 	}
 	if !isBinary {
-		return []byte(fmt.Sprintf("%v", val))
+		switch v := val.(type) {
+		case storage.Value:
+			if v.IsNull {
+				return nil
+			}
+			return []byte(v.String())
+		case *storage.Value:
+			if v == nil || v.IsNull {
+				return nil
+			}
+			return []byte(v.String())
+		default:
+			return []byte(fmt.Sprintf("%v", val))
+		}
 	}
 	switch oid {
 	case 23: // INT4
@@ -1969,12 +2018,29 @@ func formatColumnValue(val any, oid int32, isBinary bool) []byte {
 		switch v := val.(type) {
 		case time.Time:
 			t = v
-		default:
-			parsed, err := time.Parse(time.RFC3339, fmt.Sprintf("%v", val))
-			if err != nil {
-				parsed, _ = time.Parse("2006-01-02 15:04:05", fmt.Sprintf("%v", val))
+		case storage.Value:
+			if v.Type == storage.TypeDateTime {
+				t = v.TVal
+			} else {
+				if parsed, err := storage.DateTimeValueFromAny(v); err == nil && !parsed.IsNull {
+					t = parsed.TVal
+				}
 			}
-			t = parsed
+		case *storage.Value:
+			if v != nil {
+				if v.Type == storage.TypeDateTime {
+					t = v.TVal
+				} else {
+					if parsed, err := storage.DateTimeValueFromAny(*v); err == nil && !parsed.IsNull {
+						t = parsed.TVal
+					}
+				}
+			}
+		default:
+			sv := storage.StringValue(fmt.Sprintf("%v", val))
+			if parsed, err := storage.DateTimeValueFromAny(sv); err == nil && !parsed.IsNull {
+				t = parsed.TVal
+			}
 		}
 		pgEpoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 		micros := t.UTC().Sub(pgEpoch).Microseconds()
@@ -1995,6 +2061,32 @@ func formatColumnValue(val any, oid int32, isBinary bool) []byte {
 		b := make([]byte, 4)
 		binary.BigEndian.PutUint32(b, uint32(days))
 		return b
+	case 2950: // UUID (16 bytes binary)
+		var uuidStr string
+		switch v := val.(type) {
+		case storage.Value:
+			uuidStr = v.String()
+		case *storage.Value:
+			if v != nil {
+				uuidStr = v.String()
+			}
+		case string:
+			uuidStr = v
+		case []byte:
+			if len(v) == 16 {
+				return v
+			}
+			uuidStr = string(v)
+		default:
+			uuidStr = fmt.Sprintf("%v", val)
+		}
+		cleanHex := strings.ReplaceAll(strings.Trim(strings.TrimSpace(uuidStr), "'\"{}"), "-", "")
+		if len(cleanHex) == 32 {
+			if decoded, err := hex.DecodeString(cleanHex); err == nil {
+				return decoded
+			}
+		}
+		return []byte(uuidStr)
 	case 25, 1043: // TEXT, VARCHAR
 		return []byte(fmt.Sprintf("%v", val))
 	default:
@@ -2226,7 +2318,7 @@ func typeToPgOID(t storage.DataType) int32 {
 	case storage.TypeBool:
 		return 16 // BOOL
 	case storage.TypeDateTime:
-		return 1114 // TIMESTAMP
+		return 1184 // TIMESTAMPTZ
 	case storage.TypeDate:
 		return 1082 // DATE
 	case storage.TypeTime:
@@ -2283,7 +2375,7 @@ func inferPgOID(v any) int32 {
 	case bool:
 		return 16 // bool
 	case time.Time:
-		return 1114 // timestamp
+		return 1184 // timestamptz
 	case []byte:
 		return 17 // bytea
 	case storage.Decimal:
@@ -2305,7 +2397,7 @@ func inferPgOID(v any) int32 {
 		case storage.TypeBool:
 			return 16
 		case storage.TypeDateTime:
-			return 1114
+			return 1184
 		case storage.TypeDate:
 			return 1082
 		case storage.TypeTime:

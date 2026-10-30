@@ -78,6 +78,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`PERF-FASTPATH-PING`** | Wire/Perf | **Zero-Parsing Connection-Pool Healthcheck Fast-Path (`SELECT 1` / `SELECT 1;` direct static payload dispatch for PGWire and TDS listeners)** | `pkg/wire/server.go`, `pkg/wire/tds/server.go` | **Completed (`[x]`)** |
 | **`PERF-PGWIRE-PREP-TX`**| Wire/Perf | **PGWire PreparedStatement In-Transaction VDBE Bytecode Direct Binding (Eliminate `substituteParams` string reconstruction & SQL re-parsing under active `BEGIN`)** | `pkg/wire/server.go`, `pkg/engine/` | In Progress (`[-]`) |
 | **`BENCH-TPCC-RPC`** | Bench/RPC | **TPC-C Stored Procedure RPC Single-Roundtrip Network Benchmark (`EXEC TPCC_NewOrder`, `TPCC_DeliveryBatch`, `TPCC_StockLevelBatch` 1-roundtrip direct RPC execution)** | `cmd/tpcc_client/main.go`, `doc/BENCHMARK.md` | **Completed (`[x]`, verified OCC 193.8k~236.6k & WiredTiger 136.8k~143.8k sustained tpmC across 16w32w/10w100w/20w200w 10s)** |
+| **`IOTA-ERP-1`** | PGWire/ERP | **Enterprise Go ERP iota-sdk Integration via PostgreSQL Wire Protocol (TCP :5433) (sql-migrate, gorp_migrations Timestamp Safety, 47 Schema Migrations & Server Verification)** | `pkg/storage/`, `pkg/wire/`, `pkg/engine/` | **Completed (`[x]`)** - [`notes/IOTA_ERP_INTEGRATION_PLAN.ko.md`](notes/IOTA_ERP_INTEGRATION_PLAN.ko.md) |
 
 ### 3.2. Post-0.90.0 Roadmap Queue
 

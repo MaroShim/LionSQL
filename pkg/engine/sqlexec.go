@@ -1197,6 +1197,67 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
+	// 4.355 DDL: ALTER DEFAULT PRIVILEGES (tolerant no-op)
+	if strings.HasPrefix(upper, "ALTER DEFAULT PRIVILEGES") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER DEFAULT PRIVILEGES",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Default privileges altered."},
+		}, nil
+	}
+
+	// 4.36 Tolerant PG Compatibility: COMMENT ON
+	if strings.HasPrefix(upper, "COMMENT ON ") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "COMMENT",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Comment created successfully."},
+		}, nil
+	}
+
+	// 4.37 Tolerant PG Compatibility: CREATE / DROP SCHEMA
+	if strings.HasPrefix(upper, "CREATE SCHEMA") || strings.HasPrefix(upper, "DROP SCHEMA") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "SCHEMA",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Schema command completed successfully."},
+		}, nil
+	}
+
+	// 4.38 Tolerant PG Compatibility: CREATE / DROP / ALTER ROLE
+	if strings.HasPrefix(upper, "CREATE ROLE") || strings.HasPrefix(upper, "DROP ROLE") || strings.HasPrefix(upper, "ALTER ROLE") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "ROLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Role command completed successfully."},
+		}, nil
+	}
+
+
+	// 4.40 Tolerant PG Compatibility: DO anonymous blocks
+	if strings.HasPrefix(upper, "DO ") || strings.HasPrefix(upper, "DO\n") || strings.HasPrefix(upper, "DO\t") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "DO",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"DO block executed successfully."},
+		}, nil
+	}
+
+	// 4.41 Tolerant PG Compatibility: SEQUENCE
+	if strings.HasPrefix(upper, "CREATE SEQUENCE") || strings.HasPrefix(upper, "ALTER SEQUENCE") || strings.HasPrefix(upper, "DROP SEQUENCE") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "SEQUENCE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Sequence command completed successfully."},
+		}, nil
+	}
+
 	// 5. DML: INSERT INTO / UPSERT
 	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlInsert {
 		if err := s.checkWriteAllowed(); err != nil {

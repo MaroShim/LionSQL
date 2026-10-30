@@ -430,6 +430,18 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 	}
 	p.nextToken()
 
+	ifNotExists := false
+	if p.curTokenIs(TokenIf) || strings.EqualFold(p.curToken.Literal, "IF") {
+		p.nextToken()
+		if strings.EqualFold(p.curToken.Literal, "NOT") {
+			p.nextToken()
+		}
+		if p.curTokenIs(TokenExists) || strings.EqualFold(p.curToken.Literal, "EXISTS") {
+			p.nextToken()
+			ifNotExists = true
+		}
+	}
+
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected index name")
 	}
@@ -447,6 +459,14 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 	tblName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
+	// Optional USING <method> (e.g. USING GIN, USING BTREE, USING HASH, USING BRIN)
+	if strings.EqualFold(p.curToken.Literal, "USING") {
+		p.nextToken() // eat USING
+		if p.curTokenIs(TokenIdent) {
+			p.nextToken() // eat method
+		}
+	}
+
 	if !p.curTokenIs(TokenLParen) {
 		return nil, fmt.Errorf("expected ( in CREATE INDEX")
 	}
@@ -459,7 +479,7 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 
 	isExpr := p.curTokenIs(TokenLParen) ||
 		(p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "JSON_VALUE")) ||
-		(p.curTokenIs(TokenIdent) && (p.peekTokenIs(TokenJSONExtract) || p.peekTokenIs(TokenJSONExtractText)))
+		(p.curTokenIs(TokenIdent) && (p.peekTokenIs(TokenLParen) || p.peekTokenIs(TokenJSONExtract) || p.peekTokenIs(TokenJSONExtractText)))
 
 	if isExpr {
 		expr := p.parseExpression(precLowest)
@@ -484,6 +504,9 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 			if p.curTokenIs(TokenIdent) {
 				cols = append(cols, cleanSchemaPrefix(p.curToken.Literal))
 				p.nextToken()
+				if p.curTokenIs(TokenAsc) || p.curTokenIs(TokenDesc) || strings.EqualFold(p.curToken.Literal, "ASC") || strings.EqualFold(p.curToken.Literal, "DESC") {
+					p.nextToken()
+				}
 			}
 			if p.curTokenIs(TokenComma) {
 				p.nextToken()
@@ -518,6 +541,17 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 		}
 	}
 
+	whereClause := ""
+	if p.curTokenIs(TokenWhere) || strings.EqualFold(p.curToken.Literal, "WHERE") {
+		p.nextToken()
+		var whereTokens []string
+		for !p.curTokenIs(TokenSemicolon) && !p.curTokenIs(TokenEOF) {
+			whereTokens = append(whereTokens, p.curToken.Literal)
+			p.nextToken()
+		}
+		whereClause = strings.Join(whereTokens, " ")
+	}
+
 	if p.curTokenIs(TokenSemicolon) {
 		p.nextToken()
 	}
@@ -528,6 +562,8 @@ func (p *Parser) ParseCreateIndex() (*CreateIndexStmt, error) {
 		Columns:     cols,
 		IncludeCols: includeCols,
 		Unique:      isUnique,
+		IfNotExists: ifNotExists,
+		WhereClause: whereClause,
 		Expression:  exprStr,
 		ExprColumn:  exprCol,
 		ExprPath:    exprPath,

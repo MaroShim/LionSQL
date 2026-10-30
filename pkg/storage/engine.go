@@ -284,12 +284,38 @@ func parseTimeFromValue(val Value) (time.Time, error) {
 		return t, nil
 	case TypeVarChar:
 		str := strings.TrimSpace(val.SVal)
+		if idx := strings.Index(str, " m="); idx != -1 {
+			str = strings.TrimSpace(str[:idx])
+		}
 		layouts := []string{
+			time.RFC3339Nano,
+			time.RFC3339,
+			"2006-01-02 15:04:05.999999999Z07:00",
+			"2006-01-02 15:04:05.999999999Z",
+			"2006-01-02 15:04:05.999999999 -0700 MST",
+			"2006-01-02 15:04:05.999999999 -0700",
+			"2006-01-02 15:04:05.999999999-07:00",
+			"2006-01-02 15:04:05.999999999 -07:00",
+			"2006-01-02 15:04:05.999999999-07",
+			"2006-01-02 15:04:05.999999999",
+			"2006-01-02 15:04:05.999999 -0700 MST",
+			"2006-01-02 15:04:05.999999 -0700",
+			"2006-01-02 15:04:05.999999-07:00",
+			"2006-01-02 15:04:05.999999 -07:00",
+			"2006-01-02 15:04:05.999999-07",
+			"2006-01-02 15:04:05.999999",
+			"2006-01-02 15:04:05Z07:00",
+			"2006-01-02 15:04:05Z",
+			"2006-01-02 15:04:05 -0700 MST",
+			"2006-01-02 15:04:05 -0700",
+			"2006-01-02 15:04:05-07:00",
+			"2006-01-02 15:04:05 -07:00",
+			"2006-01-02 15:04:05-07",
 			"2006-01-02 15:04:05",
 			"2006-01-02 15:04:05.000000",
+			"2006-01-02 15:04:05.000",
 			"2006-01-02T15:04:05",
 			"2006-01-02T15:04:05Z07:00",
-			time.RFC3339,
 			"2006-01-02",
 			"2006/01/02",
 			"20060102",
@@ -898,5 +924,6 @@ type Engine interface {
 	DropPartition(tableName, partitionName string) error
 	GetPartitions(tableName string) ([]PartitionInfo, error)
 	AddColumn(tableName string, col *Column) error
+	AlterTable(tableName string, mutator func(schema *TableSchema) error) error
 }
 

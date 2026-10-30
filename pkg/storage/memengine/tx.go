@@ -430,8 +430,8 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 			} else if col.Type == storage.TypeDateTime && (val.Type == storage.TypeVarChar || val.Type == storage.TypeDate) {
 				dt, err := storage.DateTimeValueFromAny(val)
 				if err != nil {
-					return fmt.Errorf("%w: column %q expects %s, got %s",
-						storage.ErrInvalidDataType, col.Name, col.Type, val.Type)
+					return fmt.Errorf("%w: column %q expects %s, got %s: %v",
+						storage.ErrInvalidDataType, col.Name, col.Type, val.Type, err)
 				}
 				record[col.Name] = dt
 			} else {

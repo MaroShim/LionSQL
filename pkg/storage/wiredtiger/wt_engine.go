@@ -808,11 +808,43 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 	return nil
 }
 
+func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.TableSchema) error) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	t, exists := sqlutil.MapGetFold(e.tables, tableName)
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	}
+
+	if err := mutator(t); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (e *Engine) GetTable(tableName string) (*storage.TableSchema, error) {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
 	t, exists := sqlutil.MapGetFold(e.tables, tableName)
+	if !exists {
+		for name, tbl := range e.tables {
+			cleanA := strings.Trim(strings.TrimSpace(name), "[]\"'`")
+			if idx := strings.LastIndex(cleanA, "."); idx != -1 {
+				cleanA = strings.Trim(cleanA[idx+1:], "[]\"'`")
+			}
+			cleanB := strings.Trim(strings.TrimSpace(tableName), "[]\"'`")
+			if idx := strings.LastIndex(cleanB, "."); idx != -1 {
+				cleanB = strings.Trim(cleanB[idx+1:], "[]\"'`")
+			}
+			if strings.EqualFold(cleanA, cleanB) {
+				t = tbl
+				exists = true
+				break
+			}
+		}
+	}
 	if !exists {
 		return nil, fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
@@ -839,8 +871,26 @@ func (e *Engine) CreateIndex(index *storage.IndexSchema) error {
 
 	t, exists := sqlutil.MapGetFold(e.tables, index.TableName)
 	if !exists {
+		for name, tbl := range e.tables {
+			cleanA := strings.Trim(strings.TrimSpace(name), "[]\"'`")
+			if idx := strings.LastIndex(cleanA, "."); idx != -1 {
+				cleanA = strings.Trim(cleanA[idx+1:], "[]\"'`")
+			}
+			cleanB := strings.Trim(strings.TrimSpace(index.TableName), "[]\"'`")
+			if idx := strings.LastIndex(cleanB, "."); idx != -1 {
+				cleanB = strings.Trim(cleanB[idx+1:], "[]\"'`")
+			}
+			if strings.EqualFold(cleanA, cleanB) {
+				t = tbl
+				exists = true
+				break
+			}
+		}
+	}
+	if !exists {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, index.TableName)
 	}
+	index.TableName = t.Name
 
 	if _, _, exists := t.FindIndex(index.Name); exists {
 		return fmt.Errorf("%w: %s", storage.ErrIndexExists, index.Name)
