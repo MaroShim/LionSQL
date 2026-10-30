@@ -1004,3 +1004,71 @@ func TestPGWire_BinaryBindDirectValueDecoding(t *testing.T) {
 	}
 }
 
+func TestPGWire_FastPathPingAndSocketPool(t *testing.T) {
+	// 1. Helper unit tests for isSelectOne
+	if !isSelectOne("SELECT 1") {
+		t.Errorf("expected isSelectOne('SELECT 1') to be true")
+	}
+	if !isSelectOne("SELECT  1") {
+		t.Errorf("expected isSelectOne('SELECT  1') to be true")
+	}
+	if isSelectOne("SELECT 1 AS ok") {
+		t.Errorf("expected isSelectOne('SELECT 1 AS ok') to be false")
+	}
+	if isSelectOne("SELECT 10") {
+		t.Errorf("expected isSelectOne('SELECT 10') to be false")
+	}
+	if isSelectOne("SELECT 1 + 1") {
+		t.Errorf("expected isSelectOne('SELECT 1 + 1') to be false")
+	}
+
+	// 2. Buffer pool recycling test
+	var dummy bytes.Buffer
+	bw := getBufioWriter(&dummy)
+	_, _ = bw.WriteString("hello world")
+	_ = bw.Flush()
+	if dummy.String() != "hello world" {
+		t.Fatalf("expected 'hello world', got %q", dummy.String())
+	}
+	putBufioWriter(bw)
+
+	var dummy2 bytes.Buffer
+	bw2 := getBufioWriter(&dummy2)
+	_, _ = bw2.WriteString("second call")
+	_ = bw2.Flush()
+	if dummy2.String() != "second call" {
+		t.Fatalf("expected 'second call', got %q", dummy2.String())
+	}
+	putBufioWriter(bw2)
+
+	// 3. Live server query tests
+	srv, _, _ := setupTestWireServer(t)
+	conn := connectPGClient(t, srv)
+
+	// Test SELECT 1 simple query fast-path
+	queries := []string{"SELECT 1", "SELECT 1;", "select 1", "  SELECT   1  ; "}
+	for _, q := range queries {
+		cleaned := stripSQLComments(q)
+		trimmed := strings.TrimRight(strings.TrimSpace(cleaned), ";")
+		upper := strings.ToUpper(strings.TrimSpace(trimmed))
+		if !isSelectOne(upper) {
+			t.Fatalf("query %q should match isSelectOne", q)
+		}
+
+		rows := sendPGQuery(t, conn, q)
+		if len(rows) != 1 {
+			t.Fatalf("expected 1 row for %q, got %d", q, len(rows))
+		}
+		// DataRow payload format: colCount (int16) + colLen (int32) + bytes
+		colCount := binary.BigEndian.Uint16(rows[0][:2])
+		if colCount != 1 {
+			t.Fatalf("expected 1 column, got %d", colCount)
+		}
+		colLen := binary.BigEndian.Uint32(rows[0][2:6])
+		val := string(rows[0][6 : 6+colLen])
+		if val != "1" {
+			t.Fatalf("expected '1', got %q", val)
+		}
+	}
+}
+

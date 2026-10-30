@@ -960,6 +960,58 @@ func TestTDS_REV_WIRE_005_RPC_UnsupportedProcID_ReturnsErrorToken(t *testing.T) 
 	}
 }
 
+func TestTDS_FastPathPing(t *testing.T) {
+	// 1. Helper unit tests
+	if !isTdsSelectOne("SELECT 1") {
+		t.Errorf("expected isTdsSelectOne('SELECT 1') to be true")
+	}
+	if !isTdsSelectOne("SELECT 1;") {
+		t.Errorf("expected isTdsSelectOne('SELECT 1;') to be true")
+	}
+	if !isTdsSelectOne("  select   1  ; ") {
+		t.Errorf("expected isTdsSelectOne('  select   1  ; ') to be true")
+	}
+	if isTdsSelectOne("SELECT 1 AS val") {
+		t.Errorf("expected isTdsSelectOne('SELECT 1 AS val') to be false")
+	}
+	if isTdsSelectOne("SELECT 10") {
+		t.Errorf("expected isTdsSelectOne('SELECT 10') to be false")
+	}
+
+	// 2. Integration test via SQLBatch
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	payload := sendSQLBatch(t, conn, "SELECT 1;")
+	if !bytes.Contains(payload, []byte{TokenColMetaData}) {
+		t.Fatalf("expected TokenColMetaData (0x81) in SELECT 1 response")
+	}
+	if !bytes.Contains(payload, []byte{TokenRow}) {
+		t.Fatalf("expected TokenRow (0xD1) in SELECT 1 response")
+	}
+	if !bytes.Contains(payload, []byte{TokenDone}) {
+		t.Fatalf("expected TokenDone (0xFD) in SELECT 1 response")
+	}
+
+	// 3. Integration test via sp_executesql RPC
+	var rpcParams bytes.Buffer
+	rpcParams.Write(buildNVarCharParam("@stmt", false, "SELECT 1;"))
+	rpcPayload := sendRPC(t, conn, 10, 0, rpcParams.Bytes())
+	if !bytes.Contains(rpcPayload, []byte{TokenColMetaData}) {
+		t.Fatalf("expected TokenColMetaData (0x81) in RPC SELECT 1 response")
+	}
+	if !bytes.Contains(rpcPayload, []byte{TokenRow}) {
+		t.Fatalf("expected TokenRow (0xD1) in RPC SELECT 1 response")
+	}
+	if !bytes.Contains(rpcPayload, []byte{TokenDoneInProc}) {
+		t.Fatalf("expected TokenDoneInProc (0xFF) in RPC SELECT 1 response")
+	}
+	if !bytes.Contains(rpcPayload, []byte{TokenDoneProc}) {
+		t.Fatalf("expected TokenDoneProc (0xFE) in RPC SELECT 1 response")
+	}
+}
+
 
 
 

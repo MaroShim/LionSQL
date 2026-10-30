@@ -1398,6 +1398,19 @@ func (s *Server) executeRPCAndRespond(conn net.Conn, query string, sess *Connect
 		return
 	}
 
+	// Fast-path ping / health check for SELECT 1 via sp_executesql
+	if isTdsSelectOne(trimmed) && extraTokens == nil {
+		if s.DevMode() {
+			log.Printf("[DEV][TDS][FastPathPingRPC] query=%s inTx=%v", trimmed, sess.inTx)
+		}
+		payload := tdsSelect1RPCPayloadNonTx
+		if sess.inTx {
+			payload = tdsSelect1RPCPayloadInTx
+		}
+		_ = sess.writePacket(conn, PacketTabular, payload)
+		return
+	}
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -2463,6 +2476,19 @@ func (s *Server) executeQueryAndRespond(conn net.Conn, query string, sess *Conne
 		return
 	}
 
+	// Fast-path ping / health check for SELECT 1
+	if isTdsSelectOne(trimmed) {
+		if s.DevMode() {
+			log.Printf("[DEV][TDS][FastPathPing] query=%s inTx=%v", trimmed, sess.inTx)
+		}
+		payload := tdsSelect1PayloadNonTx
+		if sess.inTx {
+			payload = tdsSelect1PayloadInTx
+		}
+		_ = sess.writePacket(conn, PacketTabular, payload)
+		return
+	}
+
 	// System function / version short-circuit
 	if cols, vals, ok := matchVersionQuery(trimmed); ok {
 		if s.DevMode() {
@@ -2876,4 +2902,53 @@ func extractTdsErrorInfo(err error) (int32, byte, byte, string) {
 		return num, state, sev, err.Error()
 	}
 	return 50000, 1, 16, err.Error()
+}
+
+var (
+	tdsSelect1PayloadNonTx    []byte
+	tdsSelect1PayloadInTx     []byte
+	tdsSelect1RPCPayloadNonTx []byte
+	tdsSelect1RPCPayloadInTx  []byte
+)
+
+func init() {
+	cols := []ColumnInfo{{Name: "", Type: TypeIntN, Size: 4, Nullable: false}}
+	meta := BuildColMetaData(cols)
+	row := (&ConnectionSession{}).buildRow(cols, []any{int32(1)})
+
+	// SQLBatch responses
+	var b1 bytes.Buffer
+	b1.Write(meta)
+	b1.Write(row)
+	b1.Write(BuildDone(TokenDone, DoneFinal|DoneCount, 0xC1, 1))
+	tdsSelect1PayloadNonTx = b1.Bytes()
+
+	var b2 bytes.Buffer
+	b2.Write(meta)
+	b2.Write(row)
+	b2.Write(BuildDone(TokenDone, DoneFinal|DoneInXact|DoneCount, 0xC1, 1))
+	tdsSelect1PayloadInTx = b2.Bytes()
+
+	// RPC (sp_executesql) responses
+	var b3 bytes.Buffer
+	b3.Write(meta)
+	b3.Write(row)
+	b3.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+	b3.Write(BuildReturnStatus(0))
+	b3.Write(BuildDoneProc(DoneFinal, 0xC1, 1))
+	tdsSelect1RPCPayloadNonTx = b3.Bytes()
+
+	var b4 bytes.Buffer
+	b4.Write(meta)
+	b4.Write(row)
+	b4.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, 1))
+	b4.Write(BuildReturnStatus(0))
+	b4.Write(BuildDoneProc(DoneFinal|DoneInXact, 0xC1, 1))
+	tdsSelect1RPCPayloadInTx = b4.Bytes()
+}
+
+func isTdsSelectOne(query string) bool {
+	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
+	fields := strings.Fields(trimmed)
+	return len(fields) == 2 && strings.EqualFold(fields[0], "SELECT") && fields[1] == "1"
 }

@@ -31,6 +31,37 @@ type pgActiveConn struct {
 	secretKey uint32
 }
 
+var bufioWriterPool = sync.Pool{
+	New: func() any {
+		return bufio.NewWriterSize(nil, 32768)
+	},
+}
+
+func getBufioWriter(w io.Writer) *bufio.Writer {
+	bw := bufioWriterPool.Get().(*bufio.Writer)
+	bw.Reset(w)
+	return bw
+}
+
+func putBufioWriter(bw *bufio.Writer) {
+	bw.Reset(nil)
+	bufioWriterPool.Put(bw)
+}
+
+var select1SimpleQueryResponse = func() []byte {
+	var buf bytes.Buffer
+	cols := []ColumnMeta{{Name: "?column?", DataType: 23}}
+	_ = WriteRowDescription(&buf, cols)
+	_ = WriteDataRow(&buf, []string{"1"})
+	_ = WriteCommandComplete(&buf, "SELECT 1")
+	return buf.Bytes()
+}()
+
+func isSelectOne(upper string) bool {
+	fields := strings.Fields(upper)
+	return len(fields) == 2 && fields[0] == "SELECT" && fields[1] == "1"
+}
+
 // Server implements a PostgreSQL Wire Protocol v3 listener.
 type Server struct {
 	addr        string
@@ -730,6 +761,16 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 		} else {
 			_ = WriteCommandComplete(conn, "ROLLBACK")
 		}
+		return
+	}
+
+	// Fast-Path for connection-pool health-checks (SELECT 1 / SELECT 1;)
+	if isSelectOne(upper) {
+		if s.coordinator.GetSessionTxStatus(sessID) == 'E' {
+			_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
+			return
+		}
+		_, _ = conn.Write(select1SimpleQueryResponse)
 		return
 	}
 
@@ -1462,7 +1503,8 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 		colOIDs = s.resolveColumnOIDs(queryForOIDs, res.Columns, sampleRow)
 	}
 
-	bw := bufio.NewWriterSize(conn, 32768)
+	bw := getBufioWriter(conn)
+	defer putBufioWriter(bw)
 	scratchRowBytes := make([][]byte, len(res.Columns))
 	for _, row := range batchRows {
 		for i, colName := range res.Columns {
@@ -1504,7 +1546,8 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 			colOIDs = s.resolveColumnOIDs(query, res.Columns, sampleRow)
 		}
 
-		bw := bufio.NewWriterSize(conn, 32768)
+		bw := getBufioWriter(conn)
+		defer putBufioWriter(bw)
 		scratchRowBytes := make([][]byte, len(res.Columns))
 		for _, row := range res.Rows {
 			for i, colName := range res.Columns {
@@ -1658,6 +1701,21 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		return
 	}
 
+	// Healthcheck / ping short-circuit (SELECT 1)
+	if isSelectOne(strings.TrimRight(upper, ";")) {
+		if s.coordinator.GetSessionTxStatus(sessID) == 'E' {
+			_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
+			return
+		}
+		cols := []ColumnMeta{{Name: "?column?", DataType: 23}}
+		if writeRowDesc {
+			_ = WriteRowDescription(conn, cols)
+		}
+		_ = WriteDataRow(conn, []string{"1"})
+		_ = WriteCommandComplete(conn, "SELECT 1")
+		return
+	}
+
 	if sessID == "" {
 		sessID = "default"
 	}
@@ -1680,7 +1738,8 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		}
 		colOIDs := s.resolveColumnOIDs(query, res.Columns, sampleRow)
 
-		bw := bufio.NewWriterSize(conn, 32768)
+		bw := getBufioWriter(conn)
+		defer putBufioWriter(bw)
 		if writeRowDesc {
 			cols := make([]ColumnMeta, len(res.Columns))
 			for i, c := range res.Columns {

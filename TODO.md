@@ -74,6 +74,8 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`GITEA-MOCK-SEED-1`** | ORM/Kernel | **Comprehensive Gitea Mock Data Seeder & Kernel DML Compatibility (UPDATE/DELETE FROM, Table-Qualified Projection, Keyword Aliases, Composite Bounds)** | `scripts/seed_gitea_mock_data.go`, `pkg/proc/`, `pkg/engine/`, `pkg/execution/`, `pkg/planner/` | **Completed (`[x]`)** |
 | **`GITEA-PGWIRE-1`** | PGWire/ORM | **Production Gitea Live Integration via PostgreSQL Wire Protocol (TCP :5433) (BIGSERIAL DDL, RETURNING DML, pg_indexes View, Single-Pass Param Substitution, Quoted Numeric Decoding)** | `pkg/wire/`, `pkg/engine/`, `pkg/storage/`, `pkg/catalog/` | **Completed (`[x]`, 100% Gitea Web UI, User Auth, Org/Repo/PR/Release Mock Seeding)** |
 | **`PERF-PGWIRE-1`** | Wire/Perf | **PostgreSQL & TDS Direct Transaction Fast-Path Binding (`BEGIN`/`COMMIT`/`ROLLBACK` Zero-Overhead Direct Session Hook & Message Loop Buffer Reuse)** | `pkg/wire/`, `pkg/wire/tds/`, `pkg/engine/` | **Completed (`[x]`)** - [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
+| **`PERF-WIRE-SOCKET-POOL`** | Wire/Perf | **PGWire 32KB Socket Output Buffer Reuse (`sync.Pool` pooling for `bufio.Writer` in `writeExecutionResult`, `handleExecute`, `runAndWriteQueryWithFormats`)** | `pkg/wire/server.go` | **Completed (`[x]`)** |
+| **`PERF-FASTPATH-PING`** | Wire/Perf | **Zero-Parsing Connection-Pool Healthcheck Fast-Path (`SELECT 1` / `SELECT 1;` direct static payload dispatch for PGWire and TDS listeners)** | `pkg/wire/server.go`, `pkg/wire/tds/server.go` | **Completed (`[x]`)** |
 
 ### 3.2. Post-0.90.0 Roadmap Queue
 
