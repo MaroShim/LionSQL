@@ -76,6 +76,8 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`PERF-PGWIRE-1`** | Wire/Perf | **PostgreSQL & TDS Direct Transaction Fast-Path Binding (`BEGIN`/`COMMIT`/`ROLLBACK` Zero-Overhead Direct Session Hook & Message Loop Buffer Reuse)** | `pkg/wire/`, `pkg/wire/tds/`, `pkg/engine/` | **Completed (`[x]`)** - [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **`PERF-WIRE-SOCKET-POOL`** | Wire/Perf | **PGWire 32KB Socket Output Buffer Reuse (`sync.Pool` pooling for `bufio.Writer` in `writeExecutionResult`, `handleExecute`, `runAndWriteQueryWithFormats`)** | `pkg/wire/server.go` | **Completed (`[x]`)** |
 | **`PERF-FASTPATH-PING`** | Wire/Perf | **Zero-Parsing Connection-Pool Healthcheck Fast-Path (`SELECT 1` / `SELECT 1;` direct static payload dispatch for PGWire and TDS listeners)** | `pkg/wire/server.go`, `pkg/wire/tds/server.go` | **Completed (`[x]`)** |
+| **`PERF-PGWIRE-PREP-TX`**| Wire/Perf | **PGWire PreparedStatement In-Transaction VDBE Bytecode Direct Binding (Eliminate `substituteParams` string reconstruction & SQL re-parsing under active `BEGIN`)** | `pkg/wire/server.go`, `pkg/engine/` | In Progress (`[-]`) |
+| **`BENCH-TPCC-RPC`** | Bench/RPC | **TPC-C Stored Procedure RPC Single-Roundtrip Network Benchmark (`EXEC TPCC_NewOrder`, `TPCC_DeliveryBatch`, `TPCC_StockLevelBatch` 1-roundtrip direct RPC execution)** | `cmd/tpcc_client/main.go`, `doc/BENCHMARK.md` | **Completed (`[x]`, verified 169.1k ~ 193.6k sustained / 247.3k peak tpmC across 10w/20w/32w)** |
 
 ### 3.2. Post-0.90.0 Roadmap Queue
 

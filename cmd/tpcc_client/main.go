@@ -425,12 +425,138 @@ BEGIN
     SELECT s_quantity INTO @qty FROM stock WHERE s_key = @s_key;
 END;
 `,
+		"TPCC_StockLevelBatch": `
+CREATE PROCEDURE TPCC_StockLevelBatch
+    @d_key VARCHAR,
+    @s1 VARCHAR,
+    @s2 VARCHAR,
+    @s3 VARCHAR,
+    @s4 VARCHAR,
+    @s5 VARCHAR
+AS
+BEGIN
+    DECLARE @next_o INT;
+    DECLARE @qty INT;
+    SELECT d_next_o_id INTO @next_o FROM district WHERE d_key = @d_key;
+    SELECT s_quantity INTO @qty FROM stock WHERE s_key = @s1;
+    SELECT s_quantity INTO @qty FROM stock WHERE s_key = @s2;
+    SELECT s_quantity INTO @qty FROM stock WHERE s_key = @s3;
+    SELECT s_quantity INTO @qty FROM stock WHERE s_key = @s4;
+    SELECT s_quantity INTO @qty FROM stock WHERE s_key = @s5;
+END;
+`,
 		"TPCC_Delivery": `
 CREATE PROCEDURE TPCC_Delivery
     @no_key VARCHAR
 AS
 BEGIN
     DELETE FROM new_order WHERE no_key = @no_key;
+END;
+`,
+		"TPCC_DeliveryBatch": `
+CREATE PROCEDURE TPCC_DeliveryBatch
+    @k1 VARCHAR, @k2 VARCHAR, @k3 VARCHAR, @k4 VARCHAR, @k5 VARCHAR,
+    @k6 VARCHAR, @k7 VARCHAR, @k8 VARCHAR, @k9 VARCHAR, @k10 VARCHAR
+AS
+BEGIN
+    DELETE FROM new_order WHERE no_key = @k1;
+    DELETE FROM new_order WHERE no_key = @k2;
+    DELETE FROM new_order WHERE no_key = @k3;
+    DELETE FROM new_order WHERE no_key = @k4;
+    DELETE FROM new_order WHERE no_key = @k5;
+    DELETE FROM new_order WHERE no_key = @k6;
+    DELETE FROM new_order WHERE no_key = @k7;
+    DELETE FROM new_order WHERE no_key = @k8;
+    DELETE FROM new_order WHERE no_key = @k9;
+    DELETE FROM new_order WHERE no_key = @k10;
+END;
+`,
+		"TPCC_NewOrder": `
+CREATE PROCEDURE TPCC_NewOrder
+    @w_id INT,
+    @d_key VARCHAR,
+    @c_key VARCHAR,
+    @o_key VARCHAR,
+    @next_o_id INT,
+    @d_id INT,
+    @c_id INT,
+    @ol_cnt INT,
+    @s_key1 VARCHAR, @i_id1 INT, @qty1 INT, @ol_key1 VARCHAR, @amt1 FLOAT,
+    @s_key2 VARCHAR, @i_id2 INT, @qty2 INT, @ol_key2 VARCHAR, @amt2 FLOAT,
+    @s_key3 VARCHAR, @i_id3 INT, @qty3 INT, @ol_key3 VARCHAR, @amt3 FLOAT,
+    @s_key4 VARCHAR, @i_id4 INT, @qty4 INT, @ol_key4 VARCHAR, @amt4 FLOAT,
+    @s_key5 VARCHAR, @i_id5 INT, @qty5 INT, @ol_key5 VARCHAR, @amt5 FLOAT,
+    @s_key6 VARCHAR, @i_id6 INT, @qty6 INT, @ol_key6 VARCHAR, @amt6 FLOAT,
+    @s_key7 VARCHAR, @i_id7 INT, @qty7 INT, @ol_key7 VARCHAR, @amt7 FLOAT,
+    @s_key8 VARCHAR, @i_id8 INT, @qty8 INT, @ol_key8 VARCHAR, @amt8 FLOAT,
+    @s_key9 VARCHAR, @i_id9 INT, @qty9 INT, @ol_key9 VARCHAR, @amt9 FLOAT,
+    @s_key10 VARCHAR, @i_id10 INT, @qty10 INT, @ol_key10 VARCHAR, @amt10 FLOAT
+AS
+BEGIN
+    DECLARE @w_tax FLOAT;
+    DECLARE @c_discount FLOAT;
+    SELECT w_tax INTO @w_tax FROM warehouse WHERE w_id = @w_id;
+    UPDATE district SET d_next_o_id = d_next_o_id + 1 WHERE d_key = @d_key;
+    SELECT c_discount INTO @c_discount FROM customer WHERE c_key = @c_key;
+    INSERT INTO orders (o_key, o_id, o_d_id, o_w_id, o_c_id, o_carrier_id, o_ol_cnt)
+    VALUES (@o_key, @next_o_id, @d_id, @w_id, @c_id, 0, @ol_cnt);
+    INSERT INTO new_order (no_key, no_o_id, no_d_id, no_w_id)
+    VALUES (@o_key, @next_o_id, @d_id, @w_id);
+
+    UPDATE stock SET s_quantity = s_quantity - @qty1, s_ytd = s_ytd + @qty1, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key1;
+    INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+    VALUES (@ol_key1, @next_o_id, @d_id, @w_id, 1, @i_id1, @amt1);
+
+    UPDATE stock SET s_quantity = s_quantity - @qty2, s_ytd = s_ytd + @qty2, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key2;
+    INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+    VALUES (@ol_key2, @next_o_id, @d_id, @w_id, 2, @i_id2, @amt2);
+
+    UPDATE stock SET s_quantity = s_quantity - @qty3, s_ytd = s_ytd + @qty3, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key3;
+    INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+    VALUES (@ol_key3, @next_o_id, @d_id, @w_id, 3, @i_id3, @amt3);
+
+    UPDATE stock SET s_quantity = s_quantity - @qty4, s_ytd = s_ytd + @qty4, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key4;
+    INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+    VALUES (@ol_key4, @next_o_id, @d_id, @w_id, 4, @i_id4, @amt4);
+
+    UPDATE stock SET s_quantity = s_quantity - @qty5, s_ytd = s_ytd + @qty5, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key5;
+    INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+    VALUES (@ol_key5, @next_o_id, @d_id, @w_id, 5, @i_id5, @amt5);
+
+    IF @ol_cnt >= 6
+    BEGIN
+        UPDATE stock SET s_quantity = s_quantity - @qty6, s_ytd = s_ytd + @qty6, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key6;
+        INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+        VALUES (@ol_key6, @next_o_id, @d_id, @w_id, 6, @i_id6, @amt6);
+    END;
+
+    IF @ol_cnt >= 7
+    BEGIN
+        UPDATE stock SET s_quantity = s_quantity - @qty7, s_ytd = s_ytd + @qty7, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key7;
+        INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+        VALUES (@ol_key7, @next_o_id, @d_id, @w_id, 7, @i_id7, @amt7);
+    END;
+
+    IF @ol_cnt >= 8
+    BEGIN
+        UPDATE stock SET s_quantity = s_quantity - @qty8, s_ytd = s_ytd + @qty8, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key8;
+        INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+        VALUES (@ol_key8, @next_o_id, @d_id, @w_id, 8, @i_id8, @amt8);
+    END;
+
+    IF @ol_cnt >= 9
+    BEGIN
+        UPDATE stock SET s_quantity = s_quantity - @qty9, s_ytd = s_ytd + @qty9, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key9;
+        INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+        VALUES (@ol_key9, @next_o_id, @d_id, @w_id, 9, @i_id9, @amt9);
+    END;
+
+    IF @ol_cnt >= 10
+    BEGIN
+        UPDATE stock SET s_quantity = s_quantity - @qty10, s_ytd = s_ytd + @qty10, s_order_cnt = s_order_cnt + 1 WHERE s_key = @s_key10;
+        INSERT INTO order_line (ol_key, ol_o_id, ol_d_id, ol_w_id, ol_number, ol_i_id, ol_amount)
+        VALUES (@ol_key10, @next_o_id, @d_id, @w_id, 10, @i_id10, @amt10);
+    END;
 END;
 `,
 		"TPCC_NewOrderHeader": `
@@ -598,8 +724,7 @@ type workerStmts struct {
 	stmtOrderStatus *sql.Stmt
 	stmtStockLevel  *sql.Stmt
 	stmtDelivery    *sql.Stmt
-	stmtHeader      *sql.Stmt
-	stmtLine        *sql.Stmt
+	stmtNewOrder    *sql.Stmt
 }
 
 func (ws *workerStmts) close() {
@@ -615,11 +740,8 @@ func (ws *workerStmts) close() {
 	if ws.stmtDelivery != nil {
 		ws.stmtDelivery.Close()
 	}
-	if ws.stmtHeader != nil {
-		ws.stmtHeader.Close()
-	}
-	if ws.stmtLine != nil {
-		ws.stmtLine.Close()
+	if ws.stmtNewOrder != nil {
+		ws.stmtNewOrder.Close()
 	}
 }
 
@@ -640,22 +762,35 @@ func prepareWorkerStmts(ctx context.Context, conn *sql.Conn, protocol string) *w
 	osSQL := fmt.Sprintf("EXEC TPCC_OrderStatus @c_key=%s;", placeholder(protocol, 1))
 	ws.stmtOrderStatus, _ = conn.PrepareContext(ctx, osSQL)
 
-	slSQL := fmt.Sprintf("EXEC TPCC_StockLevel @d_key=%s, @s_key=%s;",
-		placeholder(protocol, 1), placeholder(protocol, 2))
+	slSQL := fmt.Sprintf("EXEC TPCC_StockLevelBatch @d_key=%s, @s1=%s, @s2=%s, @s3=%s, @s4=%s, @s5=%s;",
+		placeholder(protocol, 1), placeholder(protocol, 2), placeholder(protocol, 3), placeholder(protocol, 4), placeholder(protocol, 5), placeholder(protocol, 6))
 	ws.stmtStockLevel, _ = conn.PrepareContext(ctx, slSQL)
 
-	delSQL := fmt.Sprintf("EXEC TPCC_Delivery @no_key=%s;", placeholder(protocol, 1))
+	var delArgs []string
+	for i := 1; i <= 10; i++ {
+		delArgs = append(delArgs, fmt.Sprintf("@k%d=%s", i, placeholder(protocol, i)))
+	}
+	delSQL := fmt.Sprintf("EXEC TPCC_DeliveryBatch %s;", strings.Join(delArgs, ", "))
 	ws.stmtDelivery, _ = conn.PrepareContext(ctx, delSQL)
 
-	hSQL := fmt.Sprintf("EXEC TPCC_NewOrderHeader @w_id=%s, @d_key=%s, @c_key=%s, @o_key=%s, @next_o_id=%s, @d_id=%s, @c_id=%s, @ol_cnt=%s;",
-		placeholder(protocol, 1), placeholder(protocol, 2), placeholder(protocol, 3), placeholder(protocol, 4),
-		placeholder(protocol, 5), placeholder(protocol, 6), placeholder(protocol, 7), placeholder(protocol, 8))
-	ws.stmtHeader, _ = conn.PrepareContext(ctx, hSQL)
-
-	lSQL := fmt.Sprintf("EXEC TPCC_NewOrderLine @s_key=%s, @i_id=%s, @order_qty=%s, @ol_key=%s, @next_o_id=%s, @d_id=%s, @w_id=%s, @ol=%s, @amount=%s;",
-		placeholder(protocol, 1), placeholder(protocol, 2), placeholder(protocol, 3), placeholder(protocol, 4),
-		placeholder(protocol, 5), placeholder(protocol, 6), placeholder(protocol, 7), placeholder(protocol, 8), placeholder(protocol, 9))
-	ws.stmtLine, _ = conn.PrepareContext(ctx, lSQL)
+	noParams := []string{
+		"@w_id", "@d_key", "@c_key", "@o_key", "@next_o_id", "@d_id", "@c_id", "@ol_cnt",
+	}
+	for i := 1; i <= 10; i++ {
+		noParams = append(noParams,
+			fmt.Sprintf("@s_key%d", i),
+			fmt.Sprintf("@i_id%d", i),
+			fmt.Sprintf("@qty%d", i),
+			fmt.Sprintf("@ol_key%d", i),
+			fmt.Sprintf("@amt%d", i),
+		)
+	}
+	var noArgs []string
+	for i, p := range noParams {
+		noArgs = append(noArgs, fmt.Sprintf("%s=%s", p, placeholder(protocol, i+1)))
+	}
+	noSQL := fmt.Sprintf("EXEC TPCC_NewOrder %s;", strings.Join(noArgs, ", "))
+	ws.stmtNewOrder, _ = conn.PrepareContext(ctx, noSQL)
 
 	return ws
 }
@@ -667,36 +802,42 @@ func runClientNewOrder(ctx context.Context, conn *sql.Conn, stmts *workerStmts, 
 	oKey := fmt.Sprintf("%d_%d_%d", wID, dID, nextOID)
 	olCnt := 5 + rng.Intn(6) // 5 to 10 order lines
 
-	if stmts != nil && stmts.stmtHeader != nil && stmts.stmtLine != nil {
-		tx, err := conn.BeginTx(ctx, nil)
-		if err != nil {
-			return false
-		}
-		defer tx.Rollback()
+	if stmts != nil && stmts.stmtNewOrder != nil {
+		args := make([]any, 8+10*5)
+		args[0] = wID
+		args[1] = dKey
+		args[2] = cKey
+		args[3] = oKey
+		args[4] = nextOID
+		args[5] = dID
+		args[6] = cID
+		args[7] = olCnt
 
-		txH := tx.Stmt(stmts.stmtHeader)
-		_, errH := txH.ExecContext(ctx, wID, dKey, cKey, oKey, nextOID, dID, cID, olCnt)
-		txH.Close()
-		if errH != nil {
-			return false
-		}
+		for ol := 1; ol <= 10; ol++ {
+			base := 8 + (ol-1)*5
+			if ol <= olCnt {
+				iID := rng.Intn(totalItems) + 1
+				orderQty := rng.Intn(10) + 1
+				olAmount := float64(orderQty) * 10.50
+				sKey := fmt.Sprintf("%d_%d", wID, iID)
+				olKey := fmt.Sprintf("%d_%d_%d_%d", wID, dID, nextOID, ol)
 
-		txL := tx.Stmt(stmts.stmtLine)
-		for ol := 1; ol <= olCnt; ol++ {
-			iID := rng.Intn(totalItems) + 1
-			orderQty := rng.Intn(10) + 1
-			olAmount := float64(orderQty) * 10.50
-			sKey := fmt.Sprintf("%d_%d", wID, iID)
-			olKey := fmt.Sprintf("%d_%d_%d_%d", wID, dID, nextOID, ol)
-
-			if _, err := txL.ExecContext(ctx, sKey, iID, orderQty, olKey, nextOID, dID, wID, ol, olAmount); err != nil {
-				txL.Close()
-				return false
+				args[base] = sKey
+				args[base+1] = iID
+				args[base+2] = orderQty
+				args[base+3] = olKey
+				args[base+4] = olAmount
+			} else {
+				args[base] = ""
+				args[base+1] = 0
+				args[base+2] = 0
+				args[base+3] = ""
+				args[base+4] = 0.0
 			}
 		}
-		txL.Close()
 
-		return tx.Commit() == nil
+		_, err := stmts.stmtNewOrder.ExecContext(ctx, args...)
+		return err == nil
 	}
 
 	var sb strings.Builder
@@ -751,23 +892,12 @@ func runClientDelivery(ctx context.Context, conn *sql.Conn, stmts *workerStmts, 
 	oID := int64(1000 + rng.Intn(1000000))
 
 	if stmts != nil && stmts.stmtDelivery != nil {
-		tx, err := conn.BeginTx(ctx, nil)
-		if err != nil {
-			return false
-		}
-		defer tx.Rollback()
-
-		txD := tx.Stmt(stmts.stmtDelivery)
+		args := make([]any, 10)
 		for d := 1; d <= 10; d++ {
-			noKey := fmt.Sprintf("%d_%d_%d", wID, d, oID)
-			if _, err := txD.ExecContext(ctx, noKey); err != nil {
-				txD.Close()
-				return false
-			}
+			args[d-1] = fmt.Sprintf("%d_%d_%d", wID, d, oID)
 		}
-		txD.Close()
-
-		return tx.Commit() == nil
+		_, err := stmts.stmtDelivery.ExecContext(ctx, args...)
+		return err == nil
 	}
 
 	var sb strings.Builder
@@ -786,14 +916,14 @@ func runClientStockLevel(ctx context.Context, conn *sql.Conn, stmts *workerStmts
 	dKey := fmt.Sprintf("%d_%d", wID, dID)
 
 	if stmts != nil && stmts.stmtStockLevel != nil {
+		args := make([]any, 6)
+		args[0] = dKey
 		for k := 0; k < 5; k++ {
 			iID := rng.Intn(totalItems) + 1
-			sKey := fmt.Sprintf("%d_%d", wID, iID)
-			if _, err := stmts.stmtStockLevel.ExecContext(ctx, dKey, sKey); err != nil {
-				return false
-			}
+			args[k+1] = fmt.Sprintf("%d_%d", wID, iID)
 		}
-		return true
+		_, err := stmts.stmtStockLevel.ExecContext(ctx, args...)
+		return err == nil
 	}
 
 	var sb strings.Builder

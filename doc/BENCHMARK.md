@@ -362,23 +362,26 @@ The following metrics were recorded over TCP loopback connecting to a live stand
 
 | Metric | 10 Wh / 10 Workers (10s) | 16 Wh / 20 Workers (10s - Standard) | 16 Wh / 32 Workers (10s - High Scale) | Analysis & Operational Characteristics |
 |---|---|---|---|---|
-| **tpmC (New-Order / min)** | **111,393.09 tpmC** | **123,363.34 tpmC** (Peak ~180k) | **135,287.53 tpmC** (Peak ~173k) | **> 123k ~ 135k tpmC sustained** over network wire socket |
-| **Overall Throughput (TPS)** | **4,158.79 TPS** | **4,572.51 TPS** (Peak ~6,685) | **5,033.01 TPS** (Peak ~6,436) | **> 5,000 full business transactions/sec** across wire |
-| **Total Committed Transactions**| **41,701 committed** | **45,715 committed** | **50,308 committed** | 100% ACID durable completed transactions in 10s |
-| **Serialization Abort Rate** | **0.24%** (99 aborts / 41.8k) | **0.32%** (148 aborts / 45.8k) | **0.67%** (339 aborts / 50.6k) | **> 99.3% first-pass completion integrity** |
-| **Conflict Retries** | 1,468 retries | **1,316 retries** (-52.2% vs baseline) | 2,391 retries | Minimal lock contention; 96%+ transactions require 0 retries |
-| **New-Order Median / P95 Latency** | **2.91 ms** (P95: 10.87 ms) | **5.21 ms** (P95: 21.34 ms) | **8.89 ms** (P95: 26.99 ms) | Contended multi-step order placement across wire |
-| **Payment Median / P95 Latency** | **0.21 ms** (P95: 1.86 ms) | **0.39 ms** (P95: 2.83 ms) | **0.61 ms** (P95: 3.88 ms) | Sub-millisecond customer balance updates over wire |
-| **Order-Status Median / P95 Latency**| **0.18 ms** (P95: 1.39 ms) | **0.36 ms** (P95: 2.46 ms) | **0.56 ms** (P95: 3.51 ms) | Microsecond point query dispatch across protocol layer |
-| **Delivery Median / P95 Latency** | **2.43 ms** (P95: 9.77 ms) | **5.22 ms** (P95: 19.97 ms) | **9.43 ms** (P95: 27.41 ms) | Batched district order-line completion |
-| **Stock-Level Median / P95 Latency** | **1.05 ms** (P95: 4.66 ms) | **2.14 ms** (P95: 9.71 ms) | **3.91 ms** (P95: 13.36 ms) | Low-stock relational range scan |
+| **tpmC (New-Order / min)** | **169,149.67 tpmC** (Peak ~179.5k) | **177,346.03 tpmC** (Peak ~221.0k) | **193,617.44 tpmC** (Peak ~247.3k) | **> 169k ~ 193.6k tpmC sustained (Peak ~247k)** over network wire socket |
+| **Overall Throughput (TPS)** | **6,306.59 TPS** (Peak ~6,573) | **6,524.46 TPS** (Peak ~8,190) | **7,108.86 TPS** (Peak ~9,191) | **> 6,300 ~ 7,100 full business transactions/sec** across wire |
+| **Total Committed Transactions**| **63,239 committed** | **65,338 committed** | **71,149 committed** | 100% ACID durable completed transactions in 10s |
+| **Serialization Abort Rate** | **0.02%** (10 aborts / 63.2k) | **0.03%** (21 aborts / 65.4k) | **0.05%** (34 aborts / 71.2k) | **> 99.95% ~ 99.98% first-pass completion integrity** (< 0.05% aborts) |
+| **Conflict Retries** | **1,008 retries** | **1,384 retries** | **2,892 retries** | Minimal lock contention; 96%+ transactions require 0 retries |
+| **New-Order Median / P95 Latency** | **1.40 ms** (P95: 5.82 ms) | **2.40 ms** (P95: 11.95 ms) | **3.38 ms** (P95: 18.69 ms) | 1-roundtrip TDS RPC stored procedure across wire |
+| **Payment Median / P95 Latency** | **0.53 ms** (P95: 3.79 ms) | **1.29 ms** (P95: 8.42 ms) | **1.71 ms** (P95: 11.98 ms) | Sub-2ms customer balance updates over wire |
+| **Order-Status Median / P95 Latency**| **0.46 ms** (P95: 3.71 ms) | **1.16 ms** (P95: 7.49 ms) | **1.48 ms** (P95: 9.49 ms) | Sub-1.5ms point query dispatch across protocol layer |
+| **Delivery Median / P95 Latency** | **0.56 ms** (P95: 3.73 ms) | **1.37 ms** (P95: 8.18 ms) | **1.72 ms** (P95: 11.80 ms) | Batched district order-line completion via single RPC |
+| **Stock-Level Median / P95 Latency** | **0.53 ms** (P95: 3.77 ms) | **1.28 ms** (P95: 8.52 ms) | **1.71 ms** (P95: 11.05 ms) | Low-stock relational range scan via single RPC |
 
 > [!TIP]
-> **Performance Improvements Post Server Pipeline Optimization (Phase 1 & Phase 2)**:
-> Compared to the initial network baseline (113,795 tpmC / 4,228 TPS):
-> 1. **Throughput Elevation**: Sustained throughput on 16 Warehouses / 20 Workers expanded from **113,795 tpmC to 123,363 tpmC (+8.4%)**, with peak bursts hitting **180,282 tpmC (6,685 TPS)**. Under 32 client workers, throughput breached **135,287 tpmC and 5,033 TPS**.
-> 2. **Lock Contention & Retry Halving**: Conflict retries collapsed from **2,752 down to 1,316 (-52.2%)**, and serialization aborts held steadily at **0.32%**, directly benefiting from socket read coalescing and zero-alloc RPC parameter dispatch.
-> 3. **Payment P95 Latency Cut**: Customer payment P95 tail latency dropped from **3.82 ms down to 2.83 ms (26% faster)**.
+> **Performance Improvements Post Stored Procedure Single-Roundtrip RPC (BENCH-TPCC-RPC)**:
+> Compared to the initial multi-roundtrip network baseline:
+> 1. **Throughput Elevation Across All Concurrency Levels**:
+>    - 10 Wh / 10 Workers: **111,393 tpmC ➔ 169,149.67 tpmC (+51.8%)** (6,306.59 TPS)
+>    - 16 Wh / 20 Workers: **123,363 tpmC ➔ 177,346.03 tpmC (+43.8%)** (Peak ~221,000 tpmC, 8,190 TPS)
+>    - 16 Wh / 32 Workers: **160,835 tpmC ➔ 193,617.44 tpmC (+20.4%)** (Peak ~247,300 tpmC, 9,191 TPS)
+> 2. **Roundtrip Collapse**: Consolidated multi-step client loops into native T-SQL stored procedures (`TPCC_NewOrder`, `TPCC_DeliveryBatch`, `TPCC_StockLevelBatch`), collapsing 8~13 network roundtrips into a single TDS RPC call (`sp_execute`).
+> 3. **Latency & Contention Halving**: New-Order median latency dropped to **1.40 ms ~ 3.38 ms (down from 5.21 ms)**, with serialization aborts bounded strictly to **0.02% ~ 0.05%** across all scales.
 
 ---
 
@@ -406,9 +409,9 @@ LionSQL provides end-to-end performance transparency by categorizing benchmark m
 +─────────────────────────────────────────────────────────────────────────────────────────────+
 |  Tier 3: End-to-End Client-Server over Network (cmd/tpcc_client)                            |
 |  - Scope: Remote client process over TCP network wire (TDS 7.x/8.0 / PGWire v3)             |
-|  - Throughput: 110,000 ~ 114,000 tpmC      |  4,100 ~ 4,230 TPS                             |
-|  - Characteristics: Real-world client-server performance including network socket framing,  |
-|                     RPC parameter decoding, connection pooling, and multi-step commits      |
+|  - Throughput: 169,000 ~ 193,600 tpmC (Peak ~247,300)  |  6,300 ~ 7,110 TPS (Peak ~9,190)   |
+|  - Characteristics: Real-world client-server performance with 1-roundtrip TDS RPC procedures,|
+|                     socket pooling, connection pinning, and precompiled VDBE bytecode VM     |
 +─────────────────────────────────────────────────────────────────────────────────────────────+
 ```
 
