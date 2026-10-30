@@ -63,6 +63,7 @@ To preserve sub-microsecond latency and single-binary simplicity, the following 
 10. **In-Kernel Wasm UDF Sandbox (`wazero`)**: Avoids binary bloat and JIT overhead; leverages zero-allocation Go Native UDF SPI (`RegisterScalarFunction`).
 11. **Total Bytecode Translation for Complex Queries (`ARCH-2TIER-1`)**: Complex relational algebra (joins, window functions, CTEs) routes to the Volcano CBO engine (Tier 2); simple OLTP routes to VDBE bytecode (Tier 1).
 12. **Pure Columnar Vectorization Engine Full Rewrite**: Avoids extreme code complexity and row-store I/O physical limits; standardizes on 1,024-row chunk streaming (`ChunkedIterator`) and zero-unboxing slot optimizations.
+13. **MySQL-Specific DML Extensions (`ON DUPLICATE KEY UPDATE`, Comma-based `LIMIT offset, count`) (`S-MYSQL-1-P3`)**: Permanently excluded. PostgreSQL `ON CONFLICT DO UPDATE` and standard ANSI/MSSQL `MERGE` are already complete; adding MySQL DML splits OCC/MVCC conflict handling into 3 divergent paths and introduces parser grammar ambiguities.
 
 ---
 

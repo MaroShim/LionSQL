@@ -127,6 +127,15 @@
 
 ---
 
+### ⑰ MySQL 독자적 DML 및 비표준 문법 영구 배제 (Spec-Out)
+* **결정 사항**: MySQL의 독자적 DML 확장인 `INSERT ... ON DUPLICATE KEY UPDATE` 및 콤마 기반 역순 페이징 문법 `LIMIT offset, count`의 엔진 도입을 영구 배제(Spec-Out)함.
+* **배제 이유 & 맥락**:
+  1. **트랜잭션 충돌 검증 로직의 3중 분기 방지 (엔진 복잡도 폭증 차단)**: LionSQL은 이미 PostgreSQL의 `ON CONFLICT DO UPDATE`와 ANSI/MSSQL 표준 `MERGE` 체계를 완전히 갖추고 있음. 여기에 MySQL 독자의 `ON DUPLICATE KEY UPDATE`까지 파서와 DML 실행기에 추가할 경우, 스토리지 엔진의 OCC/MVCC 충돌 검증 및 락 제어 경로가 3개로 분기되어 유지보수 불가능한 블로트웨어(Bloatware)가 됨.
+  2. **파서 모호성(Ambiguity) 및 쿼리 충돌 방지**: 표준 ANSI 및 PostgreSQL은 `LIMIT count OFFSET offset` 형식을 취함. MySQL의 `LIMIT 10, 20` (10번째부터 20개)과 같은 콤마 기반 문법을 허용하면 파서의 문법적 모호성이 발생하고 표준 SQL과의 심각한 충돌 위험이 생김.
+  3. **실용적 호환 범위 (Where to Stop)**: `IFNULL`, `NOW()`, `TINYINT` 등 파서/실행기 복잡도를 해치지 않는 가벼운 스칼라 함수/타입 별칭(Phase 1)과 Tabular Grid 형태의 `EXPLAIN` 출력(`S-MYSQL-EXPLAIN`)까지만 지원하며, 비표준 DML은 영구 차단함.
+
+---
+
 ## 2. 사용자의 엔지니어링 철학 및 협업 규약
 
 LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집니다:
