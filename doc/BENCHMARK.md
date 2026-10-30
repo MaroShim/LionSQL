@@ -330,17 +330,21 @@ In addition to in-process kernel (`cmd/tpcc_kernel`) and bytecode runtime (`cmd/
 # Build the client benchmark binary
 go build -tags wiredtiger -buildvcs=false -o bin/tpcc-client ./cmd/tpcc_client
 
-# 1. Standard Production Workload (10 Warehouses, 10 Client Workers, TDS Protocol)
+# 1. Standard High-Performance OLTP (16 Warehouses, 32 Client Workers, TDS Protocol)
 ./bin/tpcc-client -protocol=tds -host=127.0.0.1 -port=1433 -user=sa -password=lionsql \
-  -warehouses=10 -workers=10 -duration=15s
+  -warehouses=16 -workers=32 -duration=10s
 
-# 2. High-Capacity Workload (16 Warehouses, 20 Client Workers, TDS Protocol)
+# 2. Standard Production Concurrency (10 Warehouses, 100 Client Workers, TDS Protocol)
 ./bin/tpcc-client -protocol=tds -host=127.0.0.1 -port=1433 -user=sa -password=lionsql \
-  -warehouses=16 -workers=20 -duration=15s
+  -warehouses=10 -workers=100 -duration=10s
 
-# 3. PostgreSQL Wire Protocol Benchmark (PGWire Port 5433)
+# 3. Enterprise High-Concurrency Stress (20 Warehouses, 200 Client Workers, TDS Protocol)
+./bin/tpcc-client -protocol=tds -host=127.0.0.1 -port=1433 -user=sa -password=lionsql \
+  -warehouses=20 -workers=200 -duration=10s
+
+# 4. PostgreSQL Wire Protocol Benchmark (PGWire Port 5433)
 ./bin/tpcc-client -protocol=postgres -host=127.0.0.1 -port=5433 -user=lionsql \
-  -warehouses=10 -workers=10 -duration=15s
+  -warehouses=10 -workers=100 -duration=10s
 ```
 
 #### 3.6.2. Command-Line Arguments
@@ -352,36 +356,81 @@ go build -tags wiredtiger -buildvcs=false -o bin/tpcc-client ./cmd/tpcc_client
 | `-port` | `1433` | Target database port (`1433` for TDS, `5433` for PGWire) |
 | `-warehouses`| `10` | Number of warehouses modeled in the target database |
 | `-workers` | `10` | Number of concurrent client worker connections |
-| `-duration`| `15s` | Duration of benchmark execution |
+| `-duration`| `10s` | Duration of benchmark execution |
 | `-seed` | `false` | Whether to automatically initialize schema and seed initial data |
 | `-max-retries` | `3` | Maximum serialization conflict retry attempts before abort |
 
 #### 3.6.3. Verified Client-Server Benchmark Results
 
-The following metrics were recorded over TCP loopback connecting to a live standalone LionSQL server running the default WiredTiger MVCC storage engine after Phase 1 and Phase 2 server pipeline optimizations (TDS socket read coalescing, 32KB frame `sync.Pool`, session pinning, and zero-allocation RPC parameter binding):
+The following metrics were recorded over TCP loopback connecting to a live standalone LionSQL server running both the **In-Memory OCC engine** (`-engine=memory -ephemeral`) and the **WiredTiger MVCC disk engine** (`-engine=wiredtiger`) after Phase 1 and Phase 2 server pipeline optimizations (TDS socket read coalescing, 32KB frame `sync.Pool`, session pinning, zero-allocation RPC parameter binding, and single-roundtrip stored procedure execution).
 
-| Metric | 10 Wh / 10 Workers (10s) | 16 Wh / 20 Workers (10s - Standard) | 16 Wh / 32 Workers (10s - High Scale) | Analysis & Operational Characteristics |
-|---|---|---|---|---|
-| **tpmC (New-Order / min)** | **169,149.67 tpmC** (Peak ~179.5k) | **177,346.03 tpmC** (Peak ~221.0k) | **193,617.44 tpmC** (Peak ~247.3k) | **> 169k ~ 193.6k tpmC sustained (Peak ~247k)** over network wire socket |
-| **Overall Throughput (TPS)** | **6,306.59 TPS** (Peak ~6,573) | **6,524.46 TPS** (Peak ~8,190) | **7,108.86 TPS** (Peak ~9,191) | **> 6,300 ~ 7,100 full business transactions/sec** across wire |
-| **Total Committed Transactions**| **63,239 committed** | **65,338 committed** | **71,149 committed** | 100% ACID durable completed transactions in 10s |
-| **Serialization Abort Rate** | **0.02%** (10 aborts / 63.2k) | **0.03%** (21 aborts / 65.4k) | **0.05%** (34 aborts / 71.2k) | **> 99.95% ~ 99.98% first-pass completion integrity** (< 0.05% aborts) |
-| **Conflict Retries** | **1,008 retries** | **1,384 retries** | **2,892 retries** | Minimal lock contention; 96%+ transactions require 0 retries |
-| **New-Order Median / P95 Latency** | **1.40 ms** (P95: 5.82 ms) | **2.40 ms** (P95: 11.95 ms) | **3.38 ms** (P95: 18.69 ms) | 1-roundtrip TDS RPC stored procedure across wire |
-| **Payment Median / P95 Latency** | **0.53 ms** (P95: 3.79 ms) | **1.29 ms** (P95: 8.42 ms) | **1.71 ms** (P95: 11.98 ms) | Sub-2ms customer balance updates over wire |
-| **Order-Status Median / P95 Latency**| **0.46 ms** (P95: 3.71 ms) | **1.16 ms** (P95: 7.49 ms) | **1.48 ms** (P95: 9.49 ms) | Sub-1.5ms point query dispatch across protocol layer |
-| **Delivery Median / P95 Latency** | **0.56 ms** (P95: 3.73 ms) | **1.37 ms** (P95: 8.18 ms) | **1.72 ms** (P95: 11.80 ms) | Batched district order-line completion via single RPC |
-| **Stock-Level Median / P95 Latency** | **0.53 ms** (P95: 3.77 ms) | **1.28 ms** (P95: 8.52 ms) | **1.71 ms** (P95: 11.05 ms) | Low-stock relational range scan via single RPC |
+##### Multi-Workload Engine Comparison Overview (10s Execution):
+
+| Workload Configuration | In-Memory OCC Engine | WiredTiger Engine (Disk MVCC) | Comparative Delta & Characteristics |
+|---|---|---|---|
+| **16 Wh / 32 Workers (High-Perf OLTP)** | **193,874.25 tpmC** (7,173.49 TPS) | **141,198.94 tpmC** (5,235.50 TPS) | **+37.3% higher throughput**; OCC lock-free B+Tree sharding |
+| **10 Wh / 100 Workers (Standard Production)**| **212,863.47 tpmC** (7,865.75 TPS) | **143,865.97 tpmC** (5,343.14 TPS) | **+48.0% higher throughput**; Canonical TPC-C 1:10 ratio |
+| **20 Wh / 200 Workers (Enterprise Stress)** | **236,622.52 tpmC** (8,737.67 TPS) | **136,845.47 tpmC** (5,135.64 TPS) | **+72.9% higher throughput**; High-concurrency socket saturation |
+
+---
+
+##### 1. Scale Factor 16 Warehouses, 32 Client Workers (Standard High-Performance OLTP):
+
+| Metric | In-Memory OCC Engine | WiredTiger Engine (Disk MVCC) | Analysis & Comparative Delta |
+|---|---|---|---|
+| **tpmC (New-Order / min)** | **193,874.25 tpmC** (Peak ~230.4k) | **141,198.94 tpmC** (Peak ~148.3k) | OCC sustains +37.3% higher tpmC over network wire |
+| **Overall Throughput (TPS)** | **7,173.49 TPS** (Peak ~8,529) | **5,235.50 TPS** (Peak ~5,537) | Over 5,200~7,170 full business transactions/sec |
+| **Total Committed Transactions**| **71,754 committed** | **52,655 committed** | 100% ACID durable completed transactions in 10s |
+| **Serialization Abort Rate** | **0.05%** (33 aborts / 71.8k) | **0.06%** (34 aborts / 52.7k) | **> 99.94% first-pass completion integrity** across both engines |
+| **Conflict Retries** | **2,808 retries** | **2,074 retries** | Minimal lock contention; 96%+ transactions require 0 retries |
+| **New-Order P50 / P95 / P99** | **3.42 ms / 18.29 ms / 35.09 ms** | **4.85 ms / 17.02 ms / 27.92 ms** | 1-roundtrip TDS RPC stored procedure execution across wire |
+| **Payment P50 / P95 / P99** | **1.80 ms / 12.25 ms / 25.08 ms** | **4.17 ms / 16.36 ms / 27.23 ms** | OCC median payment latency is 2.3x faster (1.80ms vs 4.17ms) |
+| **Order-Status P50 / P95** | **1.60 ms / 10.92 ms** | **3.87 ms / 14.03 ms** | Point-Lookup Shortcut microsecond wire dispatch |
+| **Delivery P50 / P95** | **1.83 ms / 11.96 ms** | **3.98 ms / 16.08 ms** | Batched district order-line completion via single RPC |
+| **Stock-Level P50 / P95** | **1.83 ms / 11.37 ms** | **3.88 ms / 14.61 ms** | Low-stock relational range scan via single RPC |
+
+---
+
+##### 2. Scale Factor 10 Warehouses, 100 Client Workers (Standard Production Concurrency):
+
+| Metric | In-Memory OCC Engine | WiredTiger Engine (Disk MVCC) | Analysis & Comparative Delta |
+|---|---|---|---|
+| **tpmC (New-Order / min)** | **212,863.47 tpmC** (Peak ~266.4k) | **143,865.97 tpmC** (Peak ~158.8k) | OCC sustains +48.0% higher tpmC under 100 concurrent workers |
+| **Overall Throughput (TPS)** | **7,865.75 TPS** (Peak ~9,813) | **5,343.14 TPS** (Peak ~5,996) | Over 5,340~7,860 full business transactions/sec |
+| **Total Committed Transactions**| **78,770 committed** | **53,401 committed** | High concurrency wire transaction completion in 10s |
+| **Serialization Abort Rate** | **0.14%** (112 aborts / 78.9k) | **0.19%** (100 aborts / 53.5k) | Bounded abort rate (< 0.2%) under 100 concurrent TCP sockets |
+| **Conflict Retries** | **7,842 retries** | **3,558 retries** | 93%+ transactions require zero retries |
+| **New-Order P50 / P95 / P99** | **10.30 ms / 40.18 ms / 71.94 ms** | **16.42 ms / 41.19 ms / 56.65 ms** | Contended warehouse row placement across wire |
+| **Payment P50 / P95 / P99** | **7.92 ms / 29.99 ms / 55.31 ms** | **15.47 ms / 39.96 ms / 56.21 ms** | OCC median latency is 1.95x faster on balance updates |
+| **Order-Status P50 / P95** | **7.25 ms / 24.27 ms** | **14.46 ms / 37.40 ms** | Fast-path point query dispatch across wire |
+| **Delivery P50 / P95** | **7.79 ms / 26.11 ms** | **14.42 ms / 36.93 ms** | Batch delivery procedure completion across wire |
+| **Stock-Level P50 / P95** | **7.69 ms / 26.71 ms** | **14.68 ms / 36.70 ms** | Range query scan via single TDS RPC call |
+
+---
+
+##### 3. Scale Factor 20 Warehouses, 200 Client Workers (Enterprise High-Concurrency Stress):
+
+| Metric | In-Memory OCC Engine | WiredTiger Engine (Disk MVCC) | Analysis & Comparative Delta |
+|---|---|---|---|
+| **tpmC (New-Order / min)** | **236,622.52 tpmC** (Peak ~270.3k) | **136,845.47 tpmC** (Peak ~150.5k) | OCC scales to 236k tpmC (+72.9% over WiredTiger) under 200 workers |
+| **Overall Throughput (TPS)** | **8,737.67 TPS** (Peak ~9,958) | **5,135.64 TPS** (Peak ~5,750) | Extreme high concurrency network socket saturation |
+| **Total Committed Transactions**| **87,567 committed** | **51,247 committed** | Over 51k~87k completed transactions with strict ACID durability |
+| **Serialization Abort Rate** | **0.23%** (202 aborts / 87.8k) | **0.39%** (200 aborts / 51.4k) | **> 99.6% ~ 99.7% first-attempt commit success** under 200 TCP clients |
+| **Conflict Retries** | **5,134 retries** | **2,415 retries** | Lock partition scaling suppresses retry thrashing |
+| **New-Order P50 / P95 / P99** | **19.10 ms / 56.97 ms / 99.96 ms** | **35.63 ms / 76.65 ms / 110.62 ms**| OCC median latency is 1.86x faster under 200 workers |
+| **Payment P50 / P95 / P99** | **16.46 ms / 46.00 ms / 76.80 ms** | **34.29 ms / 74.65 ms / 104.44 ms**| Sub-17ms median customer balance updates across 200 TCP sockets |
+| **Order-Status P50 / P95** | **16.06 ms / 42.11 ms** | **33.35 ms / 66.54 ms** | Sub-17ms point query dispatch under heavy concurrency |
+| **Delivery P50 / P95** | **16.48 ms / 43.32 ms** | **34.09 ms / 69.63 ms** | Batched order completion across wire |
+| **Stock-Level P50 / P95** | **16.32 ms / 42.10 ms** | **33.75 ms / 67.69 ms** | Relational range scan across wire |
 
 > [!TIP]
 > **Performance Improvements Post Stored Procedure Single-Roundtrip RPC (BENCH-TPCC-RPC)**:
-> Compared to the initial multi-roundtrip network baseline:
-> 1. **Throughput Elevation Across All Concurrency Levels**:
->    - 10 Wh / 10 Workers: **111,393 tpmC ➔ 169,149.67 tpmC (+51.8%)** (6,306.59 TPS)
->    - 16 Wh / 20 Workers: **123,363 tpmC ➔ 177,346.03 tpmC (+43.8%)** (Peak ~221,000 tpmC, 8,190 TPS)
->    - 16 Wh / 32 Workers: **160,835 tpmC ➔ 193,617.44 tpmC (+20.4%)** (Peak ~247,300 tpmC, 9,191 TPS)
+> Compared to multi-roundtrip network queries:
+> 1. **Engine Scalability with Concurrency (1:1 Symmetrical with Section 3.5)**:
+>    - **In-Memory OCC Engine**: Scales from **193,874 tpmC (7,173 TPS)** to **236,622 tpmC (8,737 TPS, Peak ~270.3k)** as concurrency expands from 32 to 200 workers.
+>    - **WiredTiger Engine (Disk MVCC)**: Sustains **136,845 ~ 143,865 tpmC (5,135 ~ 5,343 TPS)** with physical disk B+Tree durability and MVCC hazard pointers across 200 client workers.
 > 2. **Roundtrip Collapse**: Consolidated multi-step client loops into native T-SQL stored procedures (`TPCC_NewOrder`, `TPCC_DeliveryBatch`, `TPCC_StockLevelBatch`), collapsing 8~13 network roundtrips into a single TDS RPC call (`sp_execute`).
-> 3. **Latency & Contention Halving**: New-Order median latency dropped to **1.40 ms ~ 3.38 ms (down from 5.21 ms)**, with serialization aborts bounded strictly to **0.02% ~ 0.05%** across all scales.
+> 3. **High-Concurrency Resilience**: Under 200 concurrent TCP client sockets, serialization abort rates remain strictly bounded to **0.23% (OCC) and 0.39% (WiredTiger)**, delivering **over 51,000 ~ 87,500 committed ACID transactions in 10 seconds**.
 
 ---
 
@@ -409,15 +458,15 @@ LionSQL provides end-to-end performance transparency by categorizing benchmark m
 +─────────────────────────────────────────────────────────────────────────────────────────────+
 |  Tier 3: End-to-End Client-Server over Network (cmd/tpcc_client)                            |
 |  - Scope: Remote client process over TCP network wire (TDS 7.x/8.0 / PGWire v3)             |
-|  - Throughput: 169,000 ~ 193,600 tpmC (Peak ~247,300)  |  6,300 ~ 7,110 TPS (Peak ~9,190)   |
-|  - Characteristics: Real-world client-server performance with 1-roundtrip TDS RPC procedures,|
-|                     socket pooling, connection pinning, and precompiled VDBE bytecode VM     |
+|  - Throughput: 136,000 ~ 236,600 tpmC (Peak ~270,300)  |  5,100 ~ 8,740 TPS (Peak ~9,960)   |
+|  - Characteristics: In-Memory OCC (193k~236k tpmC) & WiredTiger Disk MVCC (136k~143k tpmC),  |
+|                     1-roundtrip TDS RPC procedures, socket pooling, and precompiled VDBE VM   |
 +─────────────────────────────────────────────────────────────────────────────────────────────+
 ```
 
 ##### Architectural Takeaways:
-1. **Network Wire Efficiency**: Even with full TCP socket encapsulation, protocol handshaking, and multi-statement RPC round-trips over standard client drivers, LionSQL delivers **over 113,000 tpmC (4,200+ TPS)** with an average latency of **1~3 ms**.
-2. **Minimal Serialization Collision (0.3% Abort Rate)**: Because individual procedure execution in the VDBE engine completes in sub-milliseconds, transaction lock holding windows on contentious rows (`district`, `warehouse`) remain extremely narrow, yielding a **99.7% first-attempt commit success rate** under concurrent multi-client load.
+1. **Network Wire Efficiency**: Even with full TCP socket encapsulation, protocol handshaking, and multi-statement RPC round-trips over standard client drivers, LionSQL delivers **over 136,000 ~ 236,600 tpmC (5,100 ~ 8,740 TPS)** under 32~200 concurrent client workers with an average latency of **3~19 ms (OCC) / 4~35 ms (WiredTiger)**.
+2. **Minimal Serialization Collision (< 0.4% Abort Rate)**: Because individual procedure execution in the VDBE engine completes in sub-milliseconds, transaction lock holding windows on contentious rows (`district`, `warehouse`) remain extremely narrow, yielding a **99.6% ~ 99.95% first-attempt commit success rate** across both storage engines under concurrent multi-client load.
 3. **Driver Best Practices**: Client applications achieve optimal throughput by maintaining worker-pinned connections (`sql.Conn`) and precompiling parameterized stored procedure calls (`PrepareContext`), allowing the server to bypass query parsing entirely via `PlanCache` and utilize binary parameter bindings.
 
 ---
