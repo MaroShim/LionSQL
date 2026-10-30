@@ -205,6 +205,112 @@ func (s *Coordinator) ExecuteSessionSQL(sessionID string, query string) (*QueryR
 	return s.ExecuteSessionSQLContext(context.Background(), sessionID, query)
 }
 
+// BeginSessionTx starts a transaction on the given session directly without query parsing overhead.
+func (s *Coordinator) BeginSessionTx(sessionID string, opts storage.TxOptions) error {
+	cs, err := s.GetOrCreateSession(sessionID)
+	if err != nil {
+		return err
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.Tx != nil {
+		return fmt.Errorf("transaction already active on session %s", cs.ID)
+	}
+	if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
+		opts.ReadOnly = true
+	}
+	if s.IsReadOnly() {
+		opts.ReadOnly = true
+	}
+	tx, err := cs.Session.BeginTx(opts)
+	if err != nil {
+		return fmt.Errorf("failed to start transaction: %w", err)
+	}
+	cs.Tx = tx
+	cs.TxFailed = false
+	return nil
+}
+
+// CommitSessionTx commits the active transaction on the given session directly without query parsing overhead.
+func (s *Coordinator) CommitSessionTx(sessionID string) error {
+	cs, err := s.GetOrCreateSession(sessionID)
+	if err != nil {
+		return err
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.Tx == nil {
+		return fmt.Errorf("no active transaction to commit on session %s", cs.ID)
+	}
+
+	// In PostgreSQL mode (sessions prefixed with "pg-"), if transaction has failed, COMMIT is converted to ROLLBACK
+	if cs.TxFailed && strings.HasPrefix(cs.ID, "pg-") {
+		_ = cs.Tx.Rollback()
+		cs.Tx = nil
+		cs.TxFailed = false
+		if cs.Cursors != nil {
+			cs.Cursors = make(map[string]*SessionCursor)
+		}
+		if s.Metrics() != nil {
+			s.Metrics().RecordTransaction("rollback")
+		}
+		return nil
+	}
+
+	err = cs.Tx.Commit()
+	cs.Tx = nil
+	cs.TxFailed = false
+	// Close non-WITH HOLD cursors on COMMIT
+	if cs.Cursors != nil {
+		for name, cur := range cs.Cursors {
+			if !cur.WithHold {
+				delete(cs.Cursors, name)
+			}
+		}
+	}
+	if err != nil {
+		if s.Metrics() != nil {
+			if errors.Is(err, storage.ErrSerializationFailure) {
+				s.Metrics().RecordTransaction("conflict")
+			} else {
+				s.Metrics().RecordTransaction("rollback")
+			}
+		}
+		return fmt.Errorf("commit error: %w", err)
+	}
+	if s.Metrics() != nil {
+		s.Metrics().RecordTransaction("commit")
+	}
+	return nil
+}
+
+// RollbackSessionTx rolls back the active transaction on the given session directly without query parsing overhead.
+func (s *Coordinator) RollbackSessionTx(sessionID string) error {
+	cs, err := s.GetOrCreateSession(sessionID)
+	if err != nil {
+		return err
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.Tx == nil {
+		return fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
+	}
+	err = cs.Tx.Rollback()
+	cs.Tx = nil
+	cs.TxFailed = false
+	// Close all cursors on ROLLBACK (per PostgreSQL specification)
+	if cs.Cursors != nil {
+		cs.Cursors = make(map[string]*SessionCursor)
+	}
+	if err != nil {
+		return fmt.Errorf("rollback error: %w", err)
+	}
+	if s.Metrics() != nil {
+		s.Metrics().RecordTransaction("rollback")
+	}
+	return nil
+}
+
 func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*QueryResult, error) {
 	start := time.Now()
 	trimmed := strings.TrimSpace(query)
@@ -293,18 +399,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		strings.HasPrefix(upper, "START TRANSACTION")
 
 	if isBeginTx {
-		cs.Mu.Lock()
-		defer cs.Mu.Unlock()
-		if cs.Tx != nil {
-			return nil, fmt.Errorf("transaction already active on session %s", cs.ID)
-		}
 		opts := storage.TxOptions{}
-		if ro, ok := cs.Vars["transaction_read_only"].(bool); ok && ro {
-			opts.ReadOnly = true
-		}
-		if s.IsReadOnly() {
-			opts.ReadOnly = true
-		}
 		if strings.Contains(upper, "READ ONLY") {
 			opts.ReadOnly = true
 		} else if strings.Contains(upper, "READ WRITE") {
@@ -313,12 +408,9 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}
 			opts.ReadOnly = false
 		}
-		tx, err := cs.Session.BeginTx(opts)
-		if err != nil {
-			return nil, fmt.Errorf("failed to start transaction: %w", err)
+		if err := s.BeginSessionTx(cs.ID, opts); err != nil {
+			return nil, err
 		}
-		cs.Tx = tx
-		cs.TxFailed = false
 		return &QueryResult{
 			Success:    true,
 			Command:    "BEGIN",
@@ -328,34 +420,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	if strings.HasPrefix(upper, "COMMIT") {
-		cs.Mu.Lock()
-		defer cs.Mu.Unlock()
-		if cs.Tx == nil {
-			return nil, fmt.Errorf("no active transaction to commit on session %s", cs.ID)
-		}
-		err := cs.Tx.Commit()
-		cs.Tx = nil
-		cs.TxFailed = false
-		// Close non-WITH HOLD cursors on COMMIT
-		if cs.Cursors != nil {
-			for name, cur := range cs.Cursors {
-				if !cur.WithHold {
-					delete(cs.Cursors, name)
-				}
-			}
-		}
-		if err != nil {
-			if s.Metrics() != nil {
-				if errors.Is(err, storage.ErrSerializationFailure) {
-					s.Metrics().RecordTransaction("conflict")
-				} else {
-					s.Metrics().RecordTransaction("rollback")
-				}
-			}
-			return nil, fmt.Errorf("commit error: %w", err)
-		}
-		if s.Metrics() != nil {
-			s.Metrics().RecordTransaction("commit")
+		if err := s.CommitSessionTx(cs.ID); err != nil {
+			return nil, err
 		}
 		return &QueryResult{
 			Success:    true,
@@ -408,12 +474,6 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	if strings.HasPrefix(upper, "ROLLBACK") {
-		cs.Mu.Lock()
-		defer cs.Mu.Unlock()
-		if cs.Tx == nil {
-			return nil, fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
-		}
-
 		var spName string
 		if rest, ok := trimAnyPrefix(upper, trimmed, "ROLLBACK WORK TO SAVEPOINT ", "ROLLBACK TO SAVEPOINT ", "ROLLBACK TO "); ok {
 			spName = cleanSavepointName(rest)
@@ -425,6 +485,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		if spName != "" {
+			cs.Mu.Lock()
+			defer cs.Mu.Unlock()
+			if cs.Tx == nil {
+				return nil, fmt.Errorf("no active transaction to rollback on session %s", cs.ID)
+			}
 			err := cs.Tx.RollbackTo(spName)
 			if err != nil {
 				return nil, fmt.Errorf("rollback to savepoint error: %w", err)
@@ -437,18 +502,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			}, nil
 		}
 
-		err := cs.Tx.Rollback()
-		cs.Tx = nil
-		cs.TxFailed = false
-		// Close all cursors on ROLLBACK (per PostgreSQL specification)
-		if cs.Cursors != nil {
-			cs.Cursors = make(map[string]*SessionCursor)
-		}
-		if err != nil {
-			return nil, fmt.Errorf("rollback error: %w", err)
-		}
-		if s.Metrics() != nil {
-			s.Metrics().RecordTransaction("rollback")
+		if err := s.RollbackSessionTx(cs.ID); err != nil {
+			return nil, err
 		}
 		return &QueryResult{
 			Success:    true,

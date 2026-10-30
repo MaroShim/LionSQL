@@ -73,12 +73,12 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`GITEA-MILESTONE-1`**| Doc/Milestone | **Enterprise ORM & Production Gitea Live Integration Milestone Architecture Report** | `notes/GITEA_INTEGRATION_MILESTONE.ko.md` | **Completed (`[x]`)** |
 | **`GITEA-MOCK-SEED-1`** | ORM/Kernel | **Comprehensive Gitea Mock Data Seeder & Kernel DML Compatibility (UPDATE/DELETE FROM, Table-Qualified Projection, Keyword Aliases, Composite Bounds)** | `scripts/seed_gitea_mock_data.go`, `pkg/proc/`, `pkg/engine/`, `pkg/execution/`, `pkg/planner/` | **Completed (`[x]`)** |
 | **`GITEA-PGWIRE-1`** | PGWire/ORM | **Production Gitea Live Integration via PostgreSQL Wire Protocol (TCP :5433) (BIGSERIAL DDL, RETURNING DML, pg_indexes View, Single-Pass Param Substitution, Quoted Numeric Decoding)** | `pkg/wire/`, `pkg/engine/`, `pkg/storage/`, `pkg/catalog/` | **Completed (`[x]`, 100% Gitea Web UI, User Auth, Org/Repo/PR/Release Mock Seeding)** |
+| **`PERF-PGWIRE-1`** | Wire/Perf | **PostgreSQL & TDS Direct Transaction Fast-Path Binding (`BEGIN`/`COMMIT`/`ROLLBACK` Zero-Overhead Direct Session Hook & Message Loop Buffer Reuse)** | `pkg/wire/`, `pkg/wire/tds/`, `pkg/engine/` | **Completed (`[x]`)** - [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 
 ### 3.2. Post-0.90.0 Roadmap Queue
 
 | Task Code | Domain | Key Architecture Deliverable | Target Packages | Target Release | Reference Document |
 | :---: | :---: | :--- | :--- | :---: | :--- |
-| **`PERF-PGWIRE-1`** | Wire/PGWire | **PostgreSQL Wire Protocol Micro-Optimizations (Socket Read Coalescing `bufio.Reader` sync.Pool, Single-Pass Parameter Placeholder Scanner, Direct Bytecode Transaction Binding)** | `pkg/wire/server.go` | `v1.1.0` | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
 | **`PERF-COMPLEX-QUERY-2`**| Exec/Volcano | **Complex Query Flat Hash Join & Direct Slot Projection (Open-Addressing Integer Hash Table, Sub-50ms Target)** | `pkg/execution/hash_join.go`, `pkg/execution/eval.go` | `v1.1.0` | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
 | **`BENCH-TPCH-1`** | Planner/CBO | **Mini TPC-H Benchmark Suite (Q1, Q3, Q4, Q6, Q9) & CBO Subquery Decorrelation (`EXISTS`/`IN` -> Semi-Join)** | `pkg/planner/`, `pkg/execution/`, `cmd/tpch/` | `v1.1.0` | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
 | **`BENCH-SSB-1`** | Bench/Volcano | **Star Schema Benchmark (SSB) Suite for Volcano Query Optimization & Operator Zero-Alloc Tuning** | `pkg/execution`, `cmd/ssb` | `v1.1.0` | **Completed (`[x]`)** - [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |

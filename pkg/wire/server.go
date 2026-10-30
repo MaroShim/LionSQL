@@ -636,8 +636,8 @@ func (s *Server) handleConnection(conn net.Conn) {
 	portals := make(map[string]*Portal)
 
 	// 3. Message Loop
+	msgHeader := make([]byte, 5)
 	for {
-		msgHeader := make([]byte, 5)
 		if _, err := io.ReadFull(conn, msgHeader); err != nil {
 			return
 		}
@@ -701,6 +701,38 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 	defer func() {
 		_ = WriteReadyForQueryStatus(conn, s.coordinator.GetSessionTxStatus(sessID))
 	}()
+
+	cleaned := stripSQLComments(query)
+	trimmed := strings.TrimRight(strings.TrimSpace(cleaned), ";")
+	upper := strings.ToUpper(strings.TrimSpace(trimmed))
+
+	// Fast-Path for simple transaction control commands
+	switch upper {
+	case "BEGIN", "START TRANSACTION", "BEGIN WORK", "BEGIN TRANSACTION":
+		if err := s.coordinator.BeginSessionTx(sessID, storage.TxOptions{}); err != nil {
+			_ = WriteError(conn, err.Error())
+		} else {
+			_ = WriteCommandComplete(conn, "BEGIN")
+		}
+		return
+
+	case "COMMIT", "END", "COMMIT TRANSACTION", "COMMIT WORK":
+		if err := s.coordinator.CommitSessionTx(sessID); err != nil {
+			_ = WriteError(conn, err.Error())
+		} else {
+			_ = WriteCommandComplete(conn, "COMMIT")
+		}
+		return
+
+	case "ROLLBACK", "ABORT", "ROLLBACK TRANSACTION", "ROLLBACK WORK":
+		if err := s.coordinator.RollbackSessionTx(sessID); err != nil {
+			_ = WriteError(conn, err.Error())
+		} else {
+			_ = WriteCommandComplete(conn, "ROLLBACK")
+		}
+		return
+	}
+
 	s.runAndWriteQuery(conn, query, true, sessID)
 }
 
@@ -1334,6 +1366,40 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			pTypes = portal.Statement.ParamTypes
 		}
 		substitutedSQL := substituteParams(portal.Statement.Query, portal.Params, pTypes, portal.ParamValues)
+
+		// Fast-Path for simple transaction control commands
+		cleaned := stripSQLComments(substitutedSQL)
+		trimmed := strings.TrimRight(strings.TrimSpace(cleaned), ";")
+		upper := strings.ToUpper(strings.TrimSpace(trimmed))
+		switch upper {
+		case "BEGIN", "START TRANSACTION", "BEGIN WORK", "BEGIN TRANSACTION":
+			if err := s.coordinator.BeginSessionTx(sessID, storage.TxOptions{}); err != nil {
+				_ = WriteError(conn, err.Error())
+				return
+			}
+			_ = WriteCommandComplete(conn, "BEGIN")
+			portal.Executed = true
+			return
+
+		case "COMMIT", "END", "COMMIT TRANSACTION", "COMMIT WORK":
+			if err := s.coordinator.CommitSessionTx(sessID); err != nil {
+				_ = WriteError(conn, err.Error())
+				return
+			}
+			_ = WriteCommandComplete(conn, "COMMIT")
+			portal.Executed = true
+			return
+
+		case "ROLLBACK", "ABORT", "ROLLBACK TRANSACTION", "ROLLBACK WORK":
+			if err := s.coordinator.RollbackSessionTx(sessID); err != nil {
+				_ = WriteError(conn, err.Error())
+				return
+			}
+			_ = WriteCommandComplete(conn, "ROLLBACK")
+			portal.Executed = true
+			return
+		}
+
 		res, err := s.coordinator.ExecuteSessionSQL(sessID, substitutedSQL)
 		if err != nil {
 			_ = WriteError(conn, err.Error())

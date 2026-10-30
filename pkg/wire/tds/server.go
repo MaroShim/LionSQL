@@ -2397,7 +2397,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 	rqType := binary.LittleEndian.Uint16(body[:2])
 	switch rqType {
 	case 5: // tmBeginXact
-		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "BEGIN TRANSACTION")
+		err := s.coordinator.BeginSessionTx(sess.SessionID, storage.TxOptions{})
 		if err != nil {
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
@@ -2417,7 +2417,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		txDesc := sess.txDescriptor
 		sess.inTx = false
 		sess.txDescriptor = 0
-		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "COMMIT TRANSACTION")
+		err := s.coordinator.CommitSessionTx(sess.SessionID)
 		if err != nil {
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))
@@ -2435,7 +2435,7 @@ func (s *Server) handleTransactionManager(conn net.Conn, pkt *Packet, sess *Conn
 		txDesc := sess.txDescriptor
 		sess.inTx = false
 		sess.txDescriptor = 0
-		_, err := s.coordinator.ExecuteSessionSQL(sess.SessionID, "ROLLBACK TRANSACTION")
+		err := s.coordinator.RollbackSessionTx(sess.SessionID)
 		if err != nil {
 			var buf bytes.Buffer
 			buf.Write(BuildError(50000, 1, 16, err.Error(), "LionSQL", "", 1))

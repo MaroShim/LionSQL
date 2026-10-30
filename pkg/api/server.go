@@ -358,6 +358,21 @@ func (s *Server) ExecuteSessionSQLContext(ctx context.Context, sessionID string,
 	return s.coordinator.ExecuteSessionSQLContext(ctx, sessionID, query)
 }
 
+// BeginSessionTx starts an interactive transaction on the specified session directly without query parsing overhead.
+func (s *Server) BeginSessionTx(sessionID string, opts storage.TxOptions) error {
+	return s.coordinator.BeginSessionTx(sessionID, opts)
+}
+
+// CommitSessionTx commits the active transaction on the specified session directly.
+func (s *Server) CommitSessionTx(sessionID string) error {
+	return s.coordinator.CommitSessionTx(sessionID)
+}
+
+// RollbackSessionTx rolls back the active transaction on the specified session directly.
+func (s *Server) RollbackSessionTx(sessionID string) error {
+	return s.coordinator.RollbackSessionTx(sessionID)
+}
+
 // GetOrCreateSession returns or registers a persistent client session.
 func (s *Server) GetOrCreateSession(id string) (*ClientSession, error) {
 	return s.coordinator.GetOrCreateSession(id)

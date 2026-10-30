@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Performance
+- implement zero-overhead transaction fast-path binding for BEGIN, COMMIT, and ROLLBACK in PGWire and TDS listeners (PERF-PGWIRE-1)
+- reuse 5-byte message header buffer across connection message loop in PGWire server
+
 ## [0.90.0-beta4] - 2026-10-30
 
 ### Added

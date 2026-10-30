@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"lionsql/pkg/auth"
+	"lionsql/pkg/storage"
 )
 
 // QueryResult represents the outcome of a SQL statement execution.
@@ -39,6 +40,15 @@ type SQLCoordinator interface {
 
 	// ExecuteSessionSQLContext runs SQL statements within a specific client session and cancellation context.
 	ExecuteSessionSQLContext(ctx context.Context, sessionID string, query string) (*QueryResult, error)
+
+	// BeginSessionTx starts an interactive transaction on the specified session directly without query parsing overhead.
+	BeginSessionTx(sessionID string, opts storage.TxOptions) error
+
+	// CommitSessionTx commits the active transaction on the specified session directly.
+	CommitSessionTx(sessionID string) error
+
+	// RollbackSessionTx rolls back the active transaction on the specified session directly.
+	RollbackSessionTx(sessionID string) error
 
 	// CloseSession gracefully closes and unregisters a client session.
 	CloseSession(id string)
