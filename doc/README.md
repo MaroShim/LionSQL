@@ -116,6 +116,9 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Tested client matrix: Beekeeper Studio, DBeaver Universal Database Tool, Azure Data Studio, SSMS, `psql`, and `sqlcmd`.
   * Multi-protocol catalog interceptors, schema discovery routing, and pagination normalization (`OFFSET FETCH` / `TOP`).
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
+* [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md)
+  * Official operational integration guide for running Gitea on LionSQL across dual wire protocols.
+  * Comprehensive setup for PostgreSQL Wire Protocol (Port `5433`) and Microsoft SQL Server TDS (Port `1433`), headless zero-UI auto-migration, complete API mock data seeding, and production tuning best practices.
 * [`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
   * Full initialization and production startup milestone report for Gitea (Go full-stack Git platform) and XORM (MSSQL dialect) across 116 tables.
   * Architectural analysis of conditional DDL, joined column metadata routing, T-SQL assignment aliasing, and `sys.fn_helpcollations()`.

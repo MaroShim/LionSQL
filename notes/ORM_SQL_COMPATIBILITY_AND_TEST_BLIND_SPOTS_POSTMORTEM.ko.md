@@ -160,3 +160,90 @@ LionSQL은 14만 tpmC에 달하는 TPC-C 벤치마크, SSB 복합 분석 쿼리 
 
 ### 4.4. 조인 프로젝션 테이블 한정 격리 보장
 - `SELECT *`와 `SELECT table.*`를 엄격히 분리하여, 테이블 한정자가 붙은 와일드카드는 해당 테이블의 스키마 컬럼 슬라이스만 선별 방출(`ColumnIndexMap.tableCols`)함으로써 조인 테이블 간 동명 컬럼 충돌로 인한 덮어쓰기 오염을 원천 차단한다.
+
+---
+
+## 5. 부록: PostgreSQL Wire Protocol (PGWire :5433) 실전 연동 사후 분석
+
+TDS(`:1433`) 프로토콜을 통한 Gitea XORM 연동 안정화 이후, 동일한 Gitea 애플리케이션의 데이터베이스 백엔드를 **PostgreSQL Wire Protocol v3 (`DB_TYPE = postgres`, TCP `:5433`)**로 전환하여 검증하는 과정에서 노출된 2차 사각지대와 프로토콜 레벨 결함 분석이다.
+
+### 5.1. 비밀번호 해시 속 `$5` 오치환 및 인증 런타임 패닉 (Parameter Substitution Corruption)
+
+#### 1) 현상 및 근본 원인 (Root Cause)
+- **현상**: 관리자 계정 `bob` 생성 후 Web UI 및 API 로그인 시 Gitea 프로세스가 `runtime error: invalid memory address or nil pointer dereference`를 내며 강제 종료(SIGSEGV).
+- **근본 원인**:
+  - Gitea는 기본 비밀번호 해싱 알고리즘으로 PBKDF2를 사용하며, 비밀번호 해시 알고리즘 식별 문자열을 `pbkdf2$50000$50` 형태로 DB에 보관한다.
+  - LionSQL PGWire 서버(`pkg/wire/server.go`)의 파라미터 치환기(`substituteParams`)는 전통적인 순차 `strings.ReplaceAll(res, fmt.Sprintf("$%d", i+1), formatted)`을 사용했다:
+    ```go
+    // 결함 코드: 문자열 리터럴 영역을 무시하고 전체 쿼리에서 단순 치환
+    for i := len(params) - 1; i >= 0; i-- {
+        res = strings.ReplaceAll(res, fmt.Sprintf("$%d", i+1), formattedParams[i])
+    }
+    ```
+  - Gitea가 `INSERT INTO "user" (..., passwd_hash_algo, is_admin, ...) VALUES (..., $8, $26, ...)` 쿼리를 실행했을 때, 파라미터 $8로 전달된 `'pbkdf2$50000$50'` 문자열이 먼저 쿼리 본문에 주입되었다.
+  - 뒤이어 5번째 파라미터(`$5`, `keep_email_private = false`)를 치환하는 루프가 돌면서, **이미 주입된 비밀번호 해시 문자열 내부의 `$5`를 탐지하여 `false`로 치환**해 버렸다:
+    ```sql
+    -- 오염된 결과: $5가 치환되어 따옴표와 불리언이 뒤섞임
+    'pbkdf2'false'0000'false'0'
+    ```
+  - 인증 시 Gitea가 이 오염된 문자열을 읽어 `hash.Parse(u.PasswdHashAlgo)`를 호출했고, 파서가 알고리즘을 인식하지 못해 `nil`을 반환했으나 Gitea 내부에서 `nil` 검사 없이 역참조하여 패닉이 발생했다.
+- **테스트 사각지대 (Blind Spot)**:
+  - 기존 단위 테스트의 파라미터 값들은 `100`, `'Alice'`, `'2026-01-01'`처럼 내부에 달러 기호(`$`)를 포함하지 않는 일반 텍스트/숫자 위주였다.
+  - 달러 기호(`$`)가 파라미터 치환 문법인 PostgreSQL 프로토콜에서, 데이터 값 자체에 `$1`, `$2`와 유사한 패턴(예: PBKDF2/Argon2 해시, 정규표현식, 통화 기호, 쉘 스크립트)이 포함될 수 있다는 점을 간과했다.
+- **해결 방안 (Defensive Architecture)**:
+  - 문자열 리터럴(`'...'`), 라인 주석(`-- ...`), 블록 주석(`/* ... */`)의 시작과 끝을 완벽하게 추적하는 **단일 패스(Single-Pass) 인용구 인식 스캐너**를 구현하여 문자열 내부의 `$` 기호는 파라미터 치환 대상에서 완전히 격리했다.
+
+---
+
+### 5.2. Untyped 파라미터(OID 0)와 스토리지 레코드 강제 변환 결함 (모든 숫자 컬럼 0 초기화)
+
+#### 1) 현상 및 근본 원인 (Root Cause)
+- **현상**: Gitea 조직(`lionsql-core`) 생성 후 저장소 생성 API(`POST /org/lionsql-core/repos`)를 호출하면 조직을 찾을 수 없다며 `404 Not Found` 에러 반환.
+- **근본 원인**:
+  - Gitea는 조직 조회를 위해 `SELECT ... FROM "user" WHERE "type" = 1 AND lower_name = 'lionsql-core'`를 실행한다. (Gitea 데이터 모델에서 일반 사용자는 `type = 0`, 조직은 `type = 1`).
+  - 그러나 실제 LionSQL DB에 저장된 `lionsql-core` 레코드를 확인한 결과, `type: 0`, `created_unix: 0`, `updated_unix: 0`, `max_repo_creation: 0` 등 **모든 정수형 컬럼이 모조리 0으로 저장**되어 있었다.
+  - 연쇄 원인은 두 레이어에 걸쳐 존재했다:
+    1. **드라이버 레벨 OID 0 (Untyped)**: Go 표준 드라이버(`lib/pq`)는 파라미터화된 쿼리 실행 시 각 파라미터의 OID를 명시하지 않고 기본값 `0`으로 전송한다. LionSQL의 `decodeTextParamValue`는 `oid == 0`일 때 값을 무조건 문자열(`storage.StringValue`)로 처리했고, `formatParamForSQL`은 이를 인용된 문자열(`'1'`, `'1793321845'`)로 쿼리에 주입했다.
+    2. **리터럴 파서의 정수 강제 변환 누락**: 쿼리 실행 엔진의 `ParseLiteralDefault(s, targetType)`는 `s`가 `'1'`처럼 따옴표로 감싸진 문자열이면, 대상 컬럼의 타입(`targetType == TypeInt`)을 무시하고 무조건 `StringValue("1")`를 반환했다:
+       ```go
+       // 결함 코드: targetType이 TypeInt임에도 따옴표가 있으면 StringValue 반환
+       if isNStr || isRegularStr {
+           ...
+           if targetType == TypeJSON { return JSONValue(strVal) }
+           if targetType == TypeUUID { return UUIDValue(strVal) }
+           return StringValue(strVal) // TypeInt, TypeFloat 누락!
+       }
+       ```
+    3. 스토리지 엔진(WiredTiger / MemEngine) 레코드 인코더는 컬럼 정의가 `TypeInt`이면 레코드 값의 `IVal` 필드를 직접 읽어 직렬화하는데, `Type`이 `TypeVarChar`였기 때문에 `IVal`의 기본 제로값인 `0`이 저장되었다.
+- **테스트 사각지대 (Blind Spot)**:
+  - 정수형 컬럼에 숫자를 넣을 때 인간은 `INSERT INTO t (val) VALUES (1)`처럼 따옴표 없이 숫자를 작성한다.
+  - 그러나 ORM과 PGWire 드라이버의 Extended Query 바인딩 경로를 거치면 모든 파라미터가 텍스트 포맷으로 전달되고, 파라미터 치환 과정에서 인용 문자열(`'1'`)로 변환될 수 있다. SQL 표준상 `INT` 컬럼에 `'123'` 문자열 리터럴을 대입하는 것은 유효한 묵시적 형변환이어야 함에도 이를 누락했다.
+- **해결 방안 (Defensive Architecture)**:
+  - `decodeTextParamValue`에서 `oid == 0`인 경우 문자열이 순수 정수(`strconv.ParseInt`) 또는 부동소수점이면 즉시 `IntValue`/`FloatValue`로 디코딩하도록 보강.
+  - `ParseLiteralDefault`에서 인용된 문자열(`'...'`)이라 하더라도 `targetType`이 `TypeInt`, `TypeFloat`, `TypeDecimal`인 경우 문자열 내부 값을 정수/실수로 파싱하여 대상 타입의 `storage.Value`로 반환하도록 완전화.
+
+---
+
+### 5.3. DML `RETURNING`과 PGWire Describe 메시지 불일치
+
+#### 1) 현상 및 근본 원인 (Root Cause)
+- **현상**: Gitea XORM의 테이블 초기화 중 `sql: expected 0 destination arguments in Scan, not 1` 에러와 함께 기동 실패.
+- **근본 원인**:
+  - Gitea는 기본 키 자동 생성 후 ID를 가져오기 위해 PostgreSQL 고유의 `INSERT INTO <table> (...) VALUES (...) RETURNING "id"` 구문을 실행한다.
+  - Go 드라이버(`lib/pq`)는 실행 전 Describe 단계를 통해 결과셋의 스키마를 요구한다.
+  - 당시 LionSQL PGWire 서버는 단순 `INSERT`로 인식하여 결과 컬럼이 없다는 의미의 `WriteNoData` 메시지를 응답했다. 드라이버는 반환 컬럼이 0개라고 기대했으나, 실제 실행 후 1개의 ID 행이 반환되어 `Scan(&id)` 단계에서 컬럼 수 불일치 에러를 발생시켰다.
+- **해결 방안 (Defensive Architecture)**:
+  - DML 파서에 `RETURNING` 구문 파싱을 공식 추가하고, PGWire `writeSchemaDescription`에서 `RETURNING` 절이 감지되면 대상 테이블의 스키마를 조회하여 정확한 컬럼 메타데이터(`WriteRowDescription`)를 사전 방출하도록 구현.
+
+---
+
+### 5.4. 요약 및 멀티 와이어 통합 교훈
+
+| 문제 영역 | 현상 | 근본 원인 | 재발 방지 엔지니어링 표준 |
+| :--- | :--- | :--- | :--- |
+| **파라미터 치환** | 비밀번호 해시 파손 및 로그인 패닉 | `strings.ReplaceAll`이 문자열 리터럴 내부의 `$5`를 탐지 | 단일 패스 인용구/주석 인식 파라미터 스캐너 필수화 |
+| **타입 변환** | 조직 `type=1` 및 생성 시각이 `0`으로 저장 | Untyped 파라미터의 문자열 래핑 및 리터럴 파서의 정수 변환 누락 | `ParseLiteralDefault`의 문자열 ➔ 숫자 묵시적 강제 변환 보장 |
+| **프로토콜 Describe** | `RETURNING` 실행 시 `Scan` 목적지 인자 불일치 | `Describe` 단계에서 `RETURNING` 컬럼 메타데이터 대신 `NoData` 방출 | DML `RETURNING` 감지 시 즉시 `RowDescription` 방출 파이프라인 수립 |
+| **카탈로그 인터셉터** | 외래키 조회와 컬럼 메타데이터 조회의 충돌 | 복합 조인 쿼리의 시스템 뷰 이름 단순 부분 문자열 매칭 | `SRC_TBL`, `CONTYPE = 'F'` 등 엄격한 WHERE 조건 가드 적용 |
+
+어제의 TDS와 오늘의 PGWire 연동을 거치며 입증되었듯이, **드라이버와 ORM은 인간 프로그래머가 절대로 작성하지 않을 비정형적이고 극단적인 경로(달러 기호 포함 리터럴, Untyped 문자열 파라미터 바인딩, 무조건적 괄호 감싸기)를 끊임없이 경유**한다. LionSQL은 이러한 실제 프로덕션 워크로드를 방어벽으로 흡수함으로써 진정한 멀티 와이어 엔터프라이즈 데이터베이스 엔진으로 완성되었다.

@@ -118,6 +118,9 @@
   * 검증된 클라이언트: Beekeeper Studio, DBeaver, Azure Data Studio, SSMS, `psql`, `sqlcmd`.
   * 멀티 프로토콜 카탈로그 인터셉터, 스키마 탐색 라우팅, 페이지네이션 정규화 (`OFFSET FETCH` / `TOP`).
   * 주요 프로그래밍 언어 드라이버 연결 문자열 및 커넥션 풀 가이드 (Go, Python, Node.js, C#, Rust, Java).
+* [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md)
+  * LionSQL 기반 Gitea 구축 및 운영 공식 실전 연동 가이드.
+  * PostgreSQL Wire Protocol(포트 `5433`) 및 Microsoft SQL Server TDS(포트 `1433`) 듀얼 모드 설정, 헤드리스 무인 자동 마이그레이션, 모의 데이터 종합 시딩, 스토리지 엔진 선택 및 프로덕션 운영 튜닝 모범 사례.
 * [`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
   * Gitea(Go 풀스택 Git 플랫폼) 및 XORM(MSSQL 방언) 완전 초기화 및 116개 테이블 프로덕션 기동 마일스톤 보고서.
   * 조건부 DDL, 복합 조인 컬럼 메타데이터 라우팅, T-SQL 대입식 별칭 및 `sys.fn_helpcollations()` 연동 분석.
