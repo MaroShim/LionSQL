@@ -7,19 +7,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
-### Added
-- support BIGSERIAL, SERIAL, and SMALLSERIAL autoincrement primary key DDL in Pratt parser and DDL executor (GITEA-PGWIRE-1)
-- support PostgreSQL DML RETURNING clause evaluation and RowDescription schema propagation in PGWire server (GITEA-PGWIRE-1)
-- implement pg_catalog.pg_indexes virtual catalog view for ORM index introspection (GITEA-PGWIRE-1)
-
-### Fixed
-- prevent string literal parameter corruption by implementing single-pass quote-aware scanner in PGWire parameter substitution
-- fix virtual catalog join interception ordering to prioritize pg_attribute column introspection over foreign keys
-- decode untyped PGWire parameters (OID 0) to numeric types and coerce quoted string literals to integer/float/decimal in ParseLiteralDefault
-
-## [0.90.0-beta4] - 2026-10-29
+## [0.90.0-beta4] - 2026-10-30
 
 ### Added
+- support BIGSERIAL, SERIAL, and SMALLSERIAL autoincrement primary key DDL in Pratt parser and DDL executor (GITEA-PGWIRE-1) (65e8549)
+- support PostgreSQL DML RETURNING clause evaluation and RowDescription schema propagation in PGWire server (GITEA-PGWIRE-1) (65e8549)
+- implement pg_catalog.pg_indexes virtual catalog view for ORM index introspection (GITEA-PGWIRE-1) (65e8549)
 - add comprehensive Gitea mock data seeder covering users, orgs, repos, issues, labels, milestones, branches, commits, PRs, reviews, merges, and releases (scripts/seed_gitea_mock_data.go) (50c646f)
 - support MSSQL UPDATE and DELETE FROM source table syntax in Pratt parser and DML parser (50c646f)
 - support aggregate function and keyword aliases after AS in SELECT projections (50c646f)
@@ -43,6 +36,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support assignment aliasing, default_is_null bool scan, and fn_helpcollations (ORM-MIGRATE-3) (bb0d159)
 
 ### Fixed
+- prevent string literal parameter corruption by implementing single-pass quote-aware scanner in PGWire parameter substitution (65e8549)
+- fix virtual catalog join interception ordering to prioritize pg_attribute column introspection over foreign keys (65e8549)
+- decode untyped PGWire parameters (OID 0) to numeric types and coerce quoted string literals to integer/float/decimal in ParseLiteralDefault (65e8549)
 - auto-resolve default wire port by protocol in tpcc-client (2bbf665)
 - resolve XORM GetIndexes interception collision on sys.columns queries with collation_name (50c646f)
 - resolve composite index boundary parsing unmatched parentheses trap in bounds normalizer (50c646f)
@@ -54,7 +50,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - optimize tpcc-client with dedicated conns and prepared stmts (113k tpmC) (f5b8424)
 
 ### Documentation
-- author postmortem report on ORM SQL compatibility and test blind spots (notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) (d2f4ffa)
+- author official Gitea dual-protocol (TDS & PGWire) integration and production tuning guide (doc/GITEA_INTEGRATION_GUIDE.ko.md) (ab20199)
+- author postmortem report on ORM SQL compatibility and test blind spots with Section 5 PGWire findings (notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) (d2f4ffa, ab20199)
+- record permanent architectural spec-out decisions for MySQL DML extensions (GEMINI.md, TODO.md, notes/ENGINEERING_CONTEXT.ko.md) (78061cb)
 - author Gitea integration milestone report and update index (GITEA-MILESTONE-1) (bbd9f72)
 - register Gitea milestone deliverable and backlog in TODO dashboard (ce9e08b)
 - register PERF-PGWIRE-1 and PERF-COMPLEX-QUERY-2 in TODO dashboard (f65084b)
