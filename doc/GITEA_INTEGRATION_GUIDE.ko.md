@@ -9,7 +9,7 @@
 >   - **Microsoft SQL Server TDS 7.x/8.0** (기본 TCP `:1433`)
 > - **참조 문서**:
 >   - 아키텍처 포스트모템: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](../notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)
->   - 마일스톤 보고서: [`doc/GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
+>   - 마일스톤 보고서: [`notes/GITEA_INTEGRATION_MILESTONE.ko.md`](../notes/GITEA_INTEGRATION_MILESTONE.ko.md)
 
 ---
 
