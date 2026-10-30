@@ -49,10 +49,14 @@
    - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계 (Post-1.0 / v1.1.0)
    - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: ANTLR 파서 바이너리 및 런타임 메모리 경량화 플랜 (Post-1.0 계획)
    - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**: Gitea XORM 실전 연동 중 노출된 DML/와일드카드/키워드 별칭 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 사후 분석 보고서 (Postmortem).
-   - **[`GITEA_PGWIRE_INTEGRATION_TEST_PLAN.ko.md`](GITEA_PGWIRE_INTEGRATION_TEST_PLAN.ko.md)**: Gitea PostgreSQL Wire Protocol (TCP `:5433`) 실전 연동 검증 및 호환성 강화 계획서 (진행 중).
+   - **[`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)**: Gitea 풀스택 Git 플랫폼 듀얼 프로토콜(TDS :1433 & PGWire :5433) 연동 및 116개 테이블 실전 E2E 검증 완료 마일스톤 보고서 (완료).
+   - **[`IOTA_ERP_INTEGRATION_PLAN.ko.md`](IOTA_ERP_INTEGRATION_PLAN.ko.md)**: 우즈베키스탄 IOTA SDK Go ERP 시스템 LionSQL PGWire v3 실전 연동 및 47개 마이그레이션 관통 계획서 (완료).
+   - **[`IOTA_ERP_INTEGRATION_MILESTONE.ko.md`](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)**: IOTA SDK Go ERP 연동, `pgx/v5` 엄격한 바이너리 프로토콜 완비 및 47개 스키마 순차 마이그레이션 100% 관통 마일스톤 보고서 (완료).
    - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고)
 
 7. **완료된 보고서 및 역사적 아카이브 (Completed Reports & Archives)**:
+   - **[`../doc/GITEA_INTEGRATION_GUIDE.ko.md`](../doc/GITEA_INTEGRATION_GUIDE.ko.md)** ([English](../doc/GITEA_INTEGRATION_GUIDE.md)): LionSQL 기반 Gitea 듀얼 프로토콜 구축 및 프로덕션 운영 공식 매뉴얼.
+   - **[`../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md`](../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md)** ([English](../doc/IOTA_ERP_INTEGRATION_GUIDE.md)): LionSQL 기반 IOTA-SDK Go ERP 구축 및 프로덕션 운영 공식 매뉴얼.
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**: TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 크래시 원인 규명 및 순수 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.
    - **[`BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)**: 데이터 무결성 107대 결함 조치 아카이브 및 중간 방법론 이력 (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
    - **[`TEST_VERIFICATION_REPORT.ko.md`](TEST_VERIFICATION_REPORT.ko.md)**: 단위 및 통합 테스트 스위트 회귀 검증 및 무경쟁(Race-Free) 진단 보고서.

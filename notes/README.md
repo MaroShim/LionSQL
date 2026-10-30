@@ -49,14 +49,17 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Design for Microsoft SQL Server collation and locale support (Post-1.0 / v1.1.0).
    - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: Memory and binary compaction plan for ANTLR grammar parser (Post-1.0 Roadmap).
    - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)** (Korean): Root cause analysis of DML/wildcard/keyword alias defects exposed during Gitea XORM live integration and architectural postmortem on "Human SQL vs Machine-Generated ORM SQL" test blind spots.
-   - **[`GITEA_PGWIRE_INTEGRATION_TEST_PLAN.ko.md`](GITEA_PGWIRE_INTEGRATION_TEST_PLAN.ko.md)** (Korean): Live integration test and compatibility hardening execution plan for Gitea over PostgreSQL Wire Protocol (TCP `:5433`) (Active).
+   - **[`GITEA_INTEGRATION_MILESTONE.md`](GITEA_INTEGRATION_MILESTONE.md)** ([Korean](GITEA_INTEGRATION_MILESTONE.ko.md)): Gitea dual-protocol (TDS :1433 & PGWire :5433) live integration and 116 production tables full E2E lifecycle verification milestone report.
+   - **[`IOTA_ERP_INTEGRATION_PLAN.ko.md`](IOTA_ERP_INTEGRATION_PLAN.ko.md)** (Korean): IOTA SDK Go ERP system live integration over PostgreSQL Wire Protocol (TCP `:5433`) and 47 schema migrations execution plan (Completed).
+   - **[`IOTA_ERP_INTEGRATION_MILESTONE.md`](IOTA_ERP_INTEGRATION_MILESTONE.md)** ([Korean](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)): IOTA SDK Go ERP integration, strict `pgx/v5` binary wire protocol compliance, and 47 schema migrations execution milestone report (Completed).
    - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
 
 7. **Completed Reports & Historical Archives**:
+   - **[`../doc/GITEA_INTEGRATION_GUIDE.md`](../doc/GITEA_INTEGRATION_GUIDE.md)** ([Korean](../doc/GITEA_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying Gitea on LionSQL with dual-protocol support.
+   - **[`../doc/IOTA_ERP_INTEGRATION_GUIDE.md`](../doc/IOTA_ERP_INTEGRATION_GUIDE.md)** ([Korean](../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying IOTA-SDK Go ERP on LionSQL.
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)** (Korean): TDS RPC `sp_executesql` parameter resolution regression post-mortem, Beekeeper Studio connection crash root-cause analysis, and pure ordinal positional fallback restoration.
    - **[`BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)** (Korean): 107 data integrity defect resolutions archive and interim methodology records (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
    - **[`TEST_VERIFICATION_REPORT.ko.md`](TEST_VERIFICATION_REPORT.ko.md)** (Korean): Automated test suite verification report and race detection diagnostics.
    - **[`archive/PROJECT_STATUS_ASSESSMENT.ko.md`](archive/PROJECT_STATUS_ASSESSMENT.ko.md)** (Korean): Historical architectural maturity, technical debt resolution status, and benchmark report.
    - **[`RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md)** (Korean): Release 1.0 architecture review, code audit, and feedback records.
    - **[`LIONSQL_DEEP_CODE_REVIEW.ko.md`](LIONSQL_DEEP_CODE_REVIEW.ko.md)** (Korean): Deep code review and subsystem architecture audit across all 390 source files (~350k lines).
-   - **[`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)** (Korean): Gitea (Go full-stack Git platform) and XORM (MSSQL dialect) full initialization and 116 production tables startup milestone report (conditional DDL, joined column catalog routing, T-SQL assignment aliasing, and `sys.fn_helpcollations()`).
