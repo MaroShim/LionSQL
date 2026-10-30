@@ -72,6 +72,7 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`ORM-MIGRATE-3`**| Catalog/ORM | **T-SQL Assignment Aliasing (`alias = expr`), XORM `default_is_null` Bool Scan Safety, `sys.fn_helpcollations()`, and Tolerant `ALTER DATABASE`** | `pkg/catalog/virtual/`, `pkg/proc/`, `pkg/engine/` | **Completed (`[x]`)** |
 | **`GITEA-MILESTONE-1`**| Doc/Milestone | **Enterprise ORM & Production Gitea Live Integration Milestone Architecture Report** | `doc/GITEA_INTEGRATION_MILESTONE.ko.md` | **Completed (`[x]`)** |
 | **`GITEA-MOCK-SEED-1`** | ORM/Kernel | **Comprehensive Gitea Mock Data Seeder & Kernel DML Compatibility (UPDATE/DELETE FROM, Table-Qualified Projection, Keyword Aliases, Composite Bounds)** | `scripts/seed_gitea_mock_data.go`, `pkg/proc/`, `pkg/engine/`, `pkg/execution/`, `pkg/planner/` | **Completed (`[x]`)** |
+| **`GITEA-PGWIRE-1`** | PGWire/ORM | **Production Gitea Live Integration via PostgreSQL Wire Protocol (TCP :5433) (BIGSERIAL DDL, RETURNING DML, pg_indexes View, Single-Pass Param Substitution, Quoted Numeric Decoding)** | `pkg/wire/`, `pkg/engine/`, `pkg/storage/`, `pkg/catalog/` | **Completed (`[x]`, 100% Gitea Web UI, User Auth, Org/Repo/PR/Release Mock Seeding)** |
 
 ### 3.2. Post-0.90.0 Roadmap Queue
 

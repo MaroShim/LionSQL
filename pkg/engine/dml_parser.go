@@ -199,18 +199,26 @@ func ParseDMLCommand(sql string) (*DMLStatement, error) {
 	}
 }
 
-// splitOutputWhere splits `[OUTPUT <out>] [WHERE <cond>]` (as it appears after
+// splitOutputWhere splits `[OUTPUT <out>] [WHERE <cond>] [RETURNING <out>]` (as it appears after
 // the target / SET clause) at top-level keywords. head is the text before the
 // first clause keyword.
 func splitOutputWhere(body string) (head, output, where string) {
 	whereIdx := sqlutil.FindTopLevelKeyword(body, "WHERE")
 	outIdx := sqlutil.FindTopLevelKeyword(body, "OUTPUT")
+	retIdx := sqlutil.FindTopLevelKeyword(body, "RETURNING")
+
 	if outIdx != -1 && whereIdx != -1 && outIdx > whereIdx {
 		outIdx = -1 // OUTPUT only counts before WHERE
 	}
+
 	end := len(body)
+	if retIdx != -1 && (whereIdx == -1 || retIdx > whereIdx) {
+		output = strings.TrimSpace(body[retIdx+len("RETURNING"):])
+		end = retIdx
+	}
+
 	if whereIdx != -1 {
-		where = strings.TrimSpace(body[whereIdx+len("WHERE"):])
+		where = strings.TrimSpace(body[whereIdx+len("WHERE") : end])
 		end = whereIdx
 	}
 	if outIdx != -1 {
@@ -258,7 +266,13 @@ func parseInsertBody(st *DMLStatement, sc *dmlScanner) error {
 	rs := &dmlScanner{s: rest}
 	if rs.keyword("VALUES") {
 		rs.skipSpace()
-		st.Values = rs.s[rs.pos:]
+		valPart := rs.s[rs.pos:]
+		if retIdx := sqlutil.FindTopLevelKeyword(valPart, "RETURNING"); retIdx != -1 {
+			st.Values = strings.TrimSpace(valPart[:retIdx])
+			st.Output = strings.TrimSpace(valPart[retIdx+len("RETURNING"):])
+		} else {
+			st.Values = valPart
+		}
 		return nil
 	}
 	probe := rest
@@ -266,7 +280,12 @@ func parseInsertBody(st *DMLStatement, sc *dmlScanner) error {
 		probe = strings.TrimSpace(probe[1:])
 	}
 	if len(probe) > 6 && strings.EqualFold(probe[:6], "SELECT") && (isDMLSpace(probe[6]) || probe[6] == '(' || probe[6] == '*') {
-		st.Select = rest
+		if retIdx := sqlutil.FindTopLevelKeyword(rest, "RETURNING"); retIdx != -1 {
+			st.Select = strings.TrimSpace(rest[:retIdx])
+			st.Output = strings.TrimSpace(rest[retIdx+len("RETURNING"):])
+		} else {
+			st.Select = rest
+		}
 		return nil
 	}
 	return fmt.Errorf("invalid INSERT INTO syntax")

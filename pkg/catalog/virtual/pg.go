@@ -10,8 +10,8 @@ import (
 )
 
 var (
-	reGuiNspnameEq     = regexp.MustCompile(`(?is)n\.nspname\s*=\s*'([^']+)'`)
-	reGuiRelnameEq     = regexp.MustCompile(`(?is)(?:pgc|c)\.relname\s*=\s*'([^']+)'`)
+	reGuiNspnameEq     = regexp.MustCompile(`(?is)(?:n\.nspname|s\.table_schema)\s*=\s*'([^']+)'`)
+	reGuiRelnameEq     = regexp.MustCompile(`(?is)(?:pgc|c|s)\.(?:relname|table_name)\s*=\s*'([^']+)'`)
 	reGuiSrcRelnameEq  = regexp.MustCompile(`(?is)src_tbl\.relname\s*=\s*'([^']+)'`)
 	reGuiSrcNspnameEq  = regexp.MustCompile(`(?is)src_ns\.nspname\s*=\s*'([^']+)'`)
 	reGuiTableSchemaEq = regexp.MustCompile(`(?is)table_schema\s*=\s*'([^']+)'`)
@@ -475,7 +475,8 @@ func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 		"attnum", "atttypid", "data_type", "is_nullable",
 		"char_max_length", "character_maximum_length",
 		"numeric_precision", "numeric_scale",
-		"default_value", "column_default", "column_comment",
+		"default_value", "column_default", "column_comment", "description",
+		"primarykey", "uniquekey",
 	}
 
 	var allRows []map[string]any
@@ -505,14 +506,38 @@ func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 				numPrec = int64(32)
 				numScale = int64(0)
 			}
+			isPK := c.PrimaryKey
+			isUnique := c.PrimaryKey
+			for _, idx := range t.Indexes {
+				if idx.Unique && len(idx.Columns) == 1 && strings.EqualFold(idx.Columns[0], c.Name) {
+					isUnique = true
+					break
+				}
+			}
+			var defVal any = nil
+			if c.Default != "" {
+				defVal = c.Default
+			}
 			allRows = append(allRows, map[string]any{
 				"schema_name":              targetSchema,
 				"pure_name":                t.Name,
 				"table_name":               t.Name,
+				"relname":                  t.Name,
+				"c.relname":                t.Name,
+				"relkind":                  "r",
+				"c.relkind":                "r",
+				"nspname":                  targetSchema,
+				"n.nspname":                targetSchema,
+				"table_schema":             targetSchema,
+				"s.table_schema":           targetSchema,
+				"s.table_name":             t.Name,
 				"postgres_table_id":        toid,
 				"column_name":              c.Name,
+				"attname":                  c.Name,
+				"f.attname":                c.Name,
 				"postgres_column_id":       int16(i + 1),
 				"attnum":                   int16(i + 1),
+				"f.attnum":                 int16(i + 1),
 				"atttypid":                 oid,
 				"data_type":                dtName,
 				"is_nullable":              isNullable,
@@ -520,17 +545,17 @@ func execColumnMetadataSelect(src Source, sql string) (*Result, error) {
 				"character_maximum_length": maxLen,
 				"numeric_precision":        numPrec,
 				"numeric_scale":            numScale,
-				"default_value":            nil,
-				"column_default":           nil,
+				"default_value":            defVal,
+				"column_default":           defVal,
 				"column_comment":           nil,
+				"description":              nil,
+				"primarykey":               isPK,
+				"uniquekey":                isUnique,
 			})
 		}
 	}
 
-	return &Result{
-		Columns: columns,
-		Rows:    allRows,
-	}, nil
+	return FormatResultWithSQL(columns, allRows, sql)
 }
 
 func execForeignKeySelect(src Source, sql string) (*Result, error) {
@@ -750,6 +775,7 @@ func init() {
 	regPG("pg_type", generatePgType)
 	regPG("pg_constraint", generatePgConstraint)
 	regPG("pg_index", generatePgIndex)
+	regPG("pg_indexes", generatePgIndexes)
 	regPG("pg_roles", generatePgRoles)
 	regPG("pg_user", generatePgUser)
 	regPG("pg_am", generatePgAm)
@@ -1253,6 +1279,54 @@ func generatePgIndex(src Source, whereClause string) ([]string, []map[string]any
 				"indpred":        nil,
 			})
 			idxOID++
+		}
+	}
+	return columns, allRows
+}
+
+func generatePgIndexes(src Source, whereClause string) ([]string, []map[string]any) {
+	columns := []string{"schemaname", "tablename", "indexname", "tablespace", "indexdef"}
+	tables, _ := src.ListTables()
+	var allRows []map[string]any
+
+	for _, t := range tables {
+		// Implicit PK index
+		var pkCols []string
+		for _, c := range t.Columns {
+			if c.PrimaryKey {
+				pkCols = append(pkCols, fmt.Sprintf("%q", c.Name))
+			}
+		}
+		if len(pkCols) > 0 {
+			pkName := t.Name + "_pkey"
+			indexdef := fmt.Sprintf("CREATE UNIQUE INDEX %s ON %s USING btree (%s)", pkName, t.Name, strings.Join(pkCols, ", "))
+			allRows = append(allRows, map[string]any{
+				"schemaname": "public",
+				"tablename":  t.Name,
+				"indexname":  pkName,
+				"tablespace": nil,
+				"indexdef":   indexdef,
+			})
+		}
+
+		// Explicit indexes
+		for _, idx := range t.Indexes {
+			var idxCols []string
+			for _, col := range idx.Columns {
+				idxCols = append(idxCols, fmt.Sprintf("%q", col))
+			}
+			uniq := ""
+			if idx.Unique {
+				uniq = "UNIQUE "
+			}
+			indexdef := fmt.Sprintf("CREATE %sINDEX %s ON %s USING btree (%s)", uniq, idx.Name, t.Name, strings.Join(idxCols, ", "))
+			allRows = append(allRows, map[string]any{
+				"schemaname": "public",
+				"tablename":  t.Name,
+				"indexname":  idx.Name,
+				"tablespace": nil,
+				"indexdef":   indexdef,
+			})
 		}
 	}
 	return columns, allRows

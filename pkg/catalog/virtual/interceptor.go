@@ -265,10 +265,17 @@ func Execute(src Source, sql string) (*Result, error) {
 
 	// 17. PostgreSQL Constraints: Foreign keys, Primary keys, Unique constraints
 	if strings.Contains(upper, "PG_CONSTRAINT") {
-		if strings.Contains(upper, "SRC_TBL") || containsEq(upper, "CONTYPE", "'F'") || strings.Contains(upper, "REF_TABLE") || strings.Contains(upper, "CONFRELID") {
+		if strings.Contains(upper, "SRC_TBL") || containsEq(upper, "CONTYPE", "'F'") || strings.Contains(upper, "REF_TABLE") {
 			return execForeignKeySelect(src, sql)
 		}
-		return execPgConstraintPrimaryKeySelect(src, sql)
+		if !strings.Contains(upper, "PG_ATTRIBUTE") {
+			return execPgConstraintPrimaryKeySelect(src, sql)
+		}
+	}
+
+	// 18. PostgreSQL Column metadata query: pg_attribute
+	if strings.Contains(upper, "PG_ATTRIBUTE") {
+		return execColumnMetadataSelect(src, sql)
 	}
 
 	// 18. PostgreSQL Indexes

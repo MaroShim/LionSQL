@@ -7,6 +7,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- support BIGSERIAL, SERIAL, and SMALLSERIAL autoincrement primary key DDL in Pratt parser and DDL executor (GITEA-PGWIRE-1)
+- support PostgreSQL DML RETURNING clause evaluation and RowDescription schema propagation in PGWire server (GITEA-PGWIRE-1)
+- implement pg_catalog.pg_indexes virtual catalog view for ORM index introspection (GITEA-PGWIRE-1)
+
+### Fixed
+- prevent string literal parameter corruption by implementing single-pass quote-aware scanner in PGWire parameter substitution
+- fix virtual catalog join interception ordering to prioritize pg_attribute column introspection over foreign keys
+- decode untyped PGWire parameters (OID 0) to numeric types and coerce quoted string literals to integer/float/decimal in ParseLiteralDefault
+
 ## [0.90.0-beta4] - 2026-10-29
 
 ### Added

@@ -110,6 +110,23 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 			strVal = s[1 : len(s)-1]
 		}
 		strVal = strings.ReplaceAll(strVal, "''", "'")
+		if targetType == TypeInt {
+			trimmed := strings.TrimSpace(strVal)
+			if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+				return IntValue(i)
+			}
+			if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
+				return IntValue(int64(f))
+			}
+		}
+		if targetType == TypeFloat {
+			if f, err := strconv.ParseFloat(strings.TrimSpace(strVal), 64); err == nil {
+				return FloatValue(f)
+			}
+		}
+		if targetType == TypeDecimal {
+			return DecimalValue(strings.TrimSpace(strVal))
+		}
 		if targetType == TypeJSON {
 			return JSONValue(strVal)
 		}

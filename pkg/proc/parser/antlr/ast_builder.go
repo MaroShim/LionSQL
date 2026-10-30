@@ -148,7 +148,7 @@ func (b *ASTBuilder) VisitCreate_or_alter_procedure(ctx *Create_or_alter_procedu
 
 func parseDataTypeString(s string) storage.DataType {
 	switch strings.ToUpper(s) {
-	case "INT", "INTEGER", "BIGINT":
+	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL":
 		return storage.TypeInt
 	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR":
 		return storage.TypeVarChar

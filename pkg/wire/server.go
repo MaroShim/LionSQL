@@ -924,6 +924,19 @@ func decodeTextParamValue(s string, oid int32) storage.Value {
 		} else if strings.EqualFold(s, "false") || s == "f" || s == "0" {
 			return storage.BoolValue(false)
 		}
+	case 0: // Untyped parameter (lib/pq default)
+		trimmed := strings.TrimSpace(s)
+		if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+			return storage.IntValue(i)
+		}
+		if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
+			return storage.FloatValue(f)
+		}
+		if strings.EqualFold(trimmed, "true") {
+			return storage.BoolValue(true)
+		} else if strings.EqualFold(trimmed, "false") {
+			return storage.BoolValue(false)
+		}
 	}
 	return storage.StringValue(s)
 }
@@ -1049,6 +1062,65 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 		_ = WriteRowDescription(conn, cols)
 		return
+	}
+
+	if retIdx := sqlutil.FindTopLevelKeyword(query, "RETURNING"); retIdx != -1 {
+		retPart := strings.TrimSpace(query[retIdx+len("RETURNING"):])
+		if dml, err := engine.ParseDMLCommand(query); err == nil && dml != nil {
+			cleanTbl := cleanColumnIdentifier(dml.Table)
+			tbl, err := s.engine.GetTable(cleanTbl)
+			if err != nil {
+				tables, _ := s.engine.ListTables()
+				for _, t := range tables {
+					if strings.EqualFold(t.Name, cleanTbl) {
+						tbl = t
+						break
+					}
+				}
+			}
+			if tbl != nil {
+				rawCols := sqlutil.SplitTopLevel(retPart, ',')
+				var cols []ColumnMeta
+				for _, rawCol := range rawCols {
+					colName := strings.TrimSpace(rawCol)
+					if colName == "" {
+						continue
+					}
+					var outColName string
+					lookupName := colName
+					if expr, alias, hasAs := sqlutil.SplitAsAlias(colName); hasAs {
+						outColName = cleanColumnIdentifier(alias)
+						lookupName = cleanColumnIdentifier(expr)
+					} else {
+						outColName = cleanColumnIdentifier(colName)
+						lookupName = outColName
+					}
+
+					var colType storage.DataType = storage.TypeInt
+					found := false
+					for _, c := range tbl.Columns {
+						if strings.EqualFold(c.Name, lookupName) {
+							colType = c.Type
+							found = true
+							break
+						}
+					}
+					var oid int32 = 20
+					if found {
+						oid = typeToPgOID(colType)
+					}
+					cols = append(cols, ColumnMeta{
+						Name:     outColName,
+						DataType: oid,
+					})
+				}
+				if len(cols) > 0 {
+					recordCols(cols)
+					_ = WriteRowDescription(conn, cols)
+					return
+				}
+			}
+		}
 	}
 
 	upper := strings.ToUpper(strings.TrimSpace(query))
@@ -1914,22 +1986,108 @@ func formatParamForSQL(val string, pType int32, sv storage.Value) string {
 }
 
 func substituteParams(sql string, params []string, paramTypes []int32, paramValues []storage.Value) string {
-	res := sql
-	for i := len(params); i >= 1; i-- {
-		placeholder := fmt.Sprintf("$%d", i)
-		val := params[i-1]
+	n := len(sql)
+	if n == 0 || len(params) == 0 {
+		return sql
+	}
+
+	// Pre-format parameters once
+	formattedParams := make([]string, len(params))
+	for i := 0; i < len(params); i++ {
+		val := params[i]
 		var pType int32
-		if i-1 < len(paramTypes) {
-			pType = paramTypes[i-1]
+		if i < len(paramTypes) {
+			pType = paramTypes[i]
 		}
 		var sv storage.Value
-		if i-1 < len(paramValues) {
-			sv = paramValues[i-1]
+		if i < len(paramValues) {
+			sv = paramValues[i]
 		}
-		formatted := formatParamForSQL(val, pType, sv)
-		res = strings.ReplaceAll(res, placeholder, formatted)
+		formattedParams[i] = formatParamForSQL(val, pType, sv)
 	}
-	return res
+
+	var b strings.Builder
+	b.Grow(n + len(params)*16)
+
+	inString := false
+	var quoteChar byte
+
+	for i := 0; i < n; {
+		ch := sql[i]
+
+		if inString {
+			b.WriteByte(ch)
+			if ch == quoteChar {
+				// Handle escaped quote: ''
+				if i+1 < n && sql[i+1] == quoteChar {
+					b.WriteByte(sql[i+1])
+					i += 2
+					continue
+				}
+				inString = false
+			}
+			i++
+			continue
+		}
+
+		// String literal start
+		if ch == '\'' {
+			inString = true
+			quoteChar = ch
+			b.WriteByte(ch)
+			i++
+			continue
+		}
+
+		// Line comment (-- ...)
+		if ch == '-' && i+1 < n && sql[i+1] == '-' {
+			b.WriteByte(ch)
+			b.WriteByte(sql[i+1])
+			i += 2
+			for i < n && sql[i] != '\n' {
+				b.WriteByte(sql[i])
+				i++
+			}
+			continue
+		}
+
+		// Block comment (/* ... */)
+		if ch == '/' && i+1 < n && sql[i+1] == '*' {
+			b.WriteByte(ch)
+			b.WriteByte(sql[i+1])
+			i += 2
+			for i < n {
+				if sql[i] == '*' && i+1 < n && sql[i+1] == '/' {
+					b.WriteByte('*')
+					b.WriteByte('/')
+					i += 2
+					break
+				}
+				b.WriteByte(sql[i])
+				i++
+			}
+			continue
+		}
+
+		// Dollar parameter: $1, $2, ...
+		if ch == '$' && i+1 < n && sql[i+1] >= '1' && sql[i+1] <= '9' {
+			j := i + 1
+			for j < n && sql[j] >= '0' && sql[j] <= '9' {
+				j++
+			}
+			numStr := sql[i+1 : j]
+			if idx, err := strconv.Atoi(numStr); err == nil && idx >= 1 && idx <= len(formattedParams) {
+				b.WriteString(formattedParams[idx-1])
+				i = j
+				continue
+			}
+		}
+
+		b.WriteByte(ch)
+		i++
+	}
+
+	return b.String()
 }
 
 func typeToPgOID(t storage.DataType) int32 {

@@ -152,9 +152,10 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			}
 		}
 
+		isSerial := rawType == "SERIAL" || rawType == "BIGSERIAL" || rawType == "SMALLSERIAL"
 		isPK := strings.Contains(cUpper, "PRIMARY KEY")
-		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK
-		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT")
+		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK || isSerial
+		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT") || isSerial
 
 		defaultExpr := ""
 		if m := reColDefault.FindStringSubmatch(cDefTrimmed); len(m) > 1 {
@@ -726,7 +727,7 @@ func (s *Coordinator) execCreateTrigger(query string, start time.Time) (*QueryRe
 
 func parseSQLDataType(s string) storage.DataType {
 	switch strings.ToUpper(s) {
-	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "IDENTITY":
+	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "IDENTITY", "SERIAL", "BIGSERIAL", "SMALLSERIAL":
 		return storage.TypeInt
 	case "FLOAT", "DOUBLE", "REAL":
 		return storage.TypeFloat

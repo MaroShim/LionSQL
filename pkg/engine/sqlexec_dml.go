@@ -193,8 +193,8 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		return s.execInsertSelect(dml.Table, dml.Columns, dml.Output, dml.Select, start, cs)
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause or ON CONFLICT/UPSERT present)
-	hasOutput := strings.Contains(strings.ToUpper(cleaned), " OUTPUT ")
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT/RETURNING clause or ON CONFLICT/UPSERT present)
+	hasOutput := (dml != nil && dml.Output != "") || strings.Contains(strings.ToUpper(cleaned), " OUTPUT ") || strings.Contains(strings.ToUpper(cleaned), " RETURNING ")
 	hasConflict := strings.Contains(strings.ToUpper(cleaned), "ON CONFLICT") || isUpsert
 	if !hasOutput && !hasConflict {
 		if res, err := s.execVBDEDML("INSERT", cleaned, start, cs); err == nil {
