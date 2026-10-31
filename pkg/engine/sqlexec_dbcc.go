@@ -410,44 +410,7 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 }
 
 func (s *Coordinator) isVirtualCatalogTable(tableName string) bool {
-	lower := strings.ToLower(cleanIdentifier(tableName))
-	// Delegate pg_catalog.* and information_schema.* to the dedicated handler.
-	if virtual.IsPgCatalogTable(lower) {
-		return true
-	}
-	switch lower {
-	case "sys.tables", "systables", "sys_tables",
-		"sys.columns", "syscolumns", "sys_columns",
-		"sys.indexes", "sysindexes", "sys_indexes",
-		"sys.databases", "sysdatabases", "sys_databases",
-		"sys.procedures", "sysprocedures", "sys_procedures",
-		"sys.table_stats", "systablestats", "sys_table_stats",
-		"sys.column_stats", "syscolumnstats", "sys_column_stats",
-		"sys.schemas", "sysschemas", "sys_schemas",
-		"sys.objects", "sysobjects", "sys_objects",
-		"sys.views", "sysviews", "sys_views",
-		"sys.types", "systypes", "sys_types",
-		"sys.partitions", "system.partitions", "syspartitions", "sys_partitions",
-		"sys.computed_columns", "syscomputedcolumns", "sys_computed_columns",
-		"sys.triggers", "systriggers", "sys_triggers",
-		"sys.foreign_keys", "sysforeignkeys", "sys_foreign_keys",
-		"sys.foreign_key_columns", "sysforeignkeycolumns", "sys_foreign_key_columns",
-		"sys.configurations", "sysconfigurations", "sys_configurations",
-		"sys.dm_exec_sessions", "sysdmexecsessions", "sys_dm_exec_sessions",
-		"sys.dm_exec_connections", "sysdmexecconnections", "sys_dm_exec_connections",
-		"sys.database_principals", "sysdatabaseprincipals", "sys_database_principals",
-		"sys.server_principals", "sysserverprincipals", "sys_server_principals",
-		"sys.dm_os_sys_info", "sysdmosysinfo", "sys_dm_os_sys_info",
-		"sys.endpoints", "sysendpoints", "sys_endpoints",
-		"sys.database_files", "sysdatabasefiles", "sys_database_files",
-		"sys.master_files", "sysmasterfiles", "sys_master_files",
-		"sys.all_objects", "sysallobjects", "sys_all_objects",
-		"sys.all_columns", "sysallcolumns", "sys_all_columns",
-		"sys.all_views", "sysallviews", "sys_all_views":
-		return true
-	default:
-		return false
-	}
+	return virtual.IsVirtualTable(tableName)
 }
 
 func (s *Coordinator) execVirtualCatalogSelect(tableName, projStr, whereClause, orderByClause string, limitCount int, start time.Time) (*QueryResult, error) {

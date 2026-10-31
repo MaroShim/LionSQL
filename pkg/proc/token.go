@@ -149,9 +149,13 @@ const (
 	TokenApply
 	TokenOption
 	TokenNolock
+	TokenReturning
+	TokenConflict
 )
 
 var keywords = map[string]TokenType{
+	"RETURNING":     TokenReturning,
+	"CONFLICT":      TokenConflict,
 	"CAST":          TokenCast,
 	"TRY_CAST":      TokenTryCast,
 	"CONVERT":       TokenConvert,

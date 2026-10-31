@@ -2,6 +2,8 @@ package virtual
 
 import (
 	"strings"
+
+	"lionsql/pkg/proc"
 )
 
 // containsFold returns true if s contains substr (case-insensitive for ASCII).
@@ -110,6 +112,21 @@ func IsVirtualCatalogJoinQuery(sql string) bool {
 	// Zero-alloc fast-path: reject non-catalog queries before string allocation.
 	if !hasCatalogCandidate(sql) {
 		return false
+	}
+
+	// Structural AST verification: ensure query actually references a virtual catalog table
+	qc := proc.ExtractQueryCharacteristics(sql)
+	if len(qc.TargetTables) > 0 {
+		hasVirtual := false
+		for _, t := range qc.TargetTables {
+			if IsVirtualTable(t) {
+				hasVirtual = true
+				break
+			}
+		}
+		if !hasVirtual {
+			return false
+		}
 	}
 
 	upper := strings.ToUpper(sql)

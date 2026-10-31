@@ -60,13 +60,15 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 스택: Rust + Diesel ORM / PGWire (`TCP :5433`)
 - 47개 Diesel ORM 마이그레이션 100% 자동 완주, 29개 테이블 생성, 복합 기본 키 `ON CONFLICT DO UPDATE`, 8바이트 Timestamp OID 1114 인코딩, KDF/JWT/비밀번호 사이퍼 CRUD/동기화 E2E 무오류 통과 (Vaultwarden 소스 수정 0줄)
 
-### [ ] 2.3 `ROUTING-AST-CATALOG-1` 심볼 테이블 & AST 기반 쿼리 라우팅 리팩토링 — **[1순위 착수 예정]**
+### [x] 2.3 `ROUTING-AST-CATALOG-1` 심볼 테이블 & AST 기반 쿼리 라우팅 리팩토링 — **[완료 (Pass)]**
 - 계획서: [`notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)
-- 목표: 45개의 `strings.Contains`/`regexp` 문자열 휴리스틱 완전 삭제 및 C 언어 typedef 심볼 테이블 방식 AST/카탈로그 판별 도입
+- 회귀 테스트: `pkg/wire/routing_ast_test.go`, `pkg/proc/characteristics_test.go`
+- 45개의 `strings.Contains`/`regexp` 문자열 휴리스틱 완전 삭제 완료
+- C 언어 typedef 심볼 테이블 방식의 AST 특성 추출기(`proc.ExtractQueryCharacteristics`) 및 카탈로그 심볼 조회(`virtual.IsVirtualTable`) 도입
 - `canCompileToVDBE`, `isVirtualCatalogQuery`, `virtual.IsVirtualCatalogJoinQuery`, `resolveColumnOIDs` 구조적 정상화
 - False Positive (유사 테이블명 오인) 및 False Negative (리터럴/주석 키워드로 인한 VDBE 차단) 100% 원천 해결
 
-### [ ] 2.4 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[2순위]**
+### [ ] 2.4 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[1순위 착수 예정]**
 - 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
 - 대시보드 쿼리 생성기 및 스키마 인트로스펙션 검증
 

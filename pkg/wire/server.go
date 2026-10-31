@@ -811,36 +811,26 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 
 var pgParamRe = regexp.MustCompile(`\$(\d+)`)
 
-func isVirtualCatalogQuery(query string) bool {
-	upper := strings.ToUpper(query)
-	if strings.Contains(upper, "SYS.") || strings.Contains(upper, "INFORMATION_SCHEMA.") || strings.Contains(upper, "PG_CATALOG.") {
-		return true
-	}
-	// Check common pg_* catalog tables
-	if strings.Contains(upper, "PG_TABLES") || strings.Contains(upper, "PG_CLASS") ||
-		strings.Contains(upper, "PG_NAMESPACE") || strings.Contains(upper, "PG_ATTRIBUTE") ||
-		strings.Contains(upper, "PG_TYPE") || strings.Contains(upper, "PG_INDEX") ||
-		strings.Contains(upper, "PG_INDEXES") || strings.Contains(upper, "PG_DATABASE") ||
-		strings.Contains(upper, "PG_DESCRIPTION") || strings.Contains(upper, "PG_SETTINGS") ||
-		strings.Contains(upper, "PG_AM") || strings.Contains(upper, "PG_ROLES") ||
-		strings.Contains(upper, "PG_USER") || strings.Contains(upper, "PG_STAT_") {
-		return true
+func isVirtualCatalogQuery(query string, qc proc.QueryCharacteristics) bool {
+	for _, tbl := range qc.TargetTables {
+		if virtual.IsVirtualTable(tbl) {
+			return true
+		}
 	}
 	return virtual.IsVirtualCatalogJoinQuery(query)
 }
 
-func canCompileToVDBE(query string) bool {
-	upper := strings.ToUpper(query)
+func canCompileToVDBE(query string, qc proc.QueryCharacteristics) bool {
 	// Bypass virtual catalog tables (must route to virtual catalog views)
-	if isVirtualCatalogQuery(query) {
+	if isVirtualCatalogQuery(query, qc) {
 		return false
 	}
 	// Bypass OUTPUT / RETURNING clauses (must route to sqlexec engine for returning rows)
-	if strings.Contains(upper, "RETURNING") || strings.Contains(upper, "OUTPUT") {
+	if qc.HasReturning || qc.HasOutput {
 		return false
 	}
 	// Bypass ON CONFLICT / UPSERT (handled by sqlexec_dml UPSERT engine)
-	if strings.Contains(upper, "ON CONFLICT") {
+	if qc.HasOnConflict {
 		return false
 	}
 	return true
@@ -892,7 +882,8 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 		ParamTypes: paramTypes,
 	}
 
-	if canCompileToVDBE(queryStr) {
+	qc := proc.ExtractQueryCharacteristics(queryStr)
+	if canCompileToVDBE(queryStr, qc) {
 		if prog, err := s.compileQueryToProgram(queryStr); err == nil && prog != nil {
 			prep.Program = prog
 		}
@@ -1306,11 +1297,9 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		if strings.HasPrefix(strings.ToUpper(selectPart), "DISTINCT") {
 			selectPart = strings.TrimSpace(selectPart[8:])
 		}
-		afterFrom := query[fromIdx+4:]
-		tblField := sqlutil.SplitTopLevelTokens(afterFrom)
-		if len(tblField) > 0 {
-			tblName := strings.Trim(tblField[0], ";, ()")
-			tblName = cleanColumnIdentifier(tblName)
+		qc := proc.ExtractQueryCharacteristics(query)
+		if len(qc.TargetTables) > 0 {
+			tblName := cleanColumnIdentifier(qc.TargetTables[0])
 			tbl, err := s.engine.GetTable(tblName)
 			if err != nil {
 				tbl, err = s.engine.GetTable(strings.ToLower(tblName))
@@ -1327,7 +1316,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 				}
 			}
 			if err == nil && tbl != nil {
-				if selectPart == "*" && !strings.Contains(strings.ToUpper(afterFrom), "JOIN") {
+				if selectPart == "*" && !qc.HasJoin {
 					var cols []ColumnMeta
 					for _, c := range tbl.Columns {
 						if c.Hidden || storage.IsSyntheticPKName(c.Name) {
@@ -1353,7 +1342,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 						continue
 					}
 					if colName == "*" {
-						if strings.Contains(strings.ToUpper(afterFrom), "JOIN") {
+						if qc.HasJoin {
 							canResolveStatic = false
 							break
 						}
@@ -1401,16 +1390,21 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 							break
 						}
 					}
-					if !found && strings.Contains(strings.ToUpper(afterFrom), "JOIN") {
+					if !found && qc.HasJoin {
 						tables, _ := s.engine.ListTables()
 						for _, jt := range tables {
-							if strings.Contains(strings.ToLower(afterFrom), strings.ToLower(jt.Name)) {
-								for _, c := range jt.Columns {
-									if strings.EqualFold(c.Name, lookupName) {
-										colType = c.Type
-										found = true
-										break
+							for _, target := range qc.TargetTables {
+								if strings.EqualFold(jt.Name, cleanColumnIdentifier(target)) {
+									for _, c := range jt.Columns {
+										if strings.EqualFold(c.Name, lookupName) {
+											colType = c.Type
+											found = true
+											break
+										}
 									}
+								}
+								if found {
+									break
 								}
 							}
 							if found {
@@ -1993,30 +1987,13 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 	oids := make([]int32, len(colNames))
 	tables := make([]*storage.TableSchema, 0)
 
-	fromIdx := sqlutil.FindTopLevelKeyword(query, "FROM")
-	if fromIdx != -1 {
-		afterFrom := query[fromIdx+4:]
-		tblField := sqlutil.SplitTopLevelTokens(afterFrom)
-		if len(tblField) > 0 {
-			tblName := strings.Trim(tblField[0], ";, ()")
-			tblName = cleanColumnIdentifier(tblName)
-			t, err := s.engine.GetTable(tblName)
-			if err != nil {
-				t, err = s.engine.GetTable(strings.ToLower(tblName))
-			}
-			if err == nil {
-				tables = append(tables, t)
-			}
-		}
-	}
-
-	reJoinTable := regexp.MustCompile(`(?i)\bJOIN\s+([^\s(]+)`)
-	for _, jm := range reJoinTable.FindAllStringSubmatch(query, -1) {
-		jtName := cleanColumnIdentifier(jm[1])
-		if jt, err := s.engine.GetTable(jtName); err == nil {
-			tables = append(tables, jt)
-		} else if jt, err := s.engine.GetTable(strings.ToLower(jtName)); err == nil {
-			tables = append(tables, jt)
+	qc := proc.ExtractQueryCharacteristics(query)
+	for _, tblName := range qc.TargetTables {
+		cleanTbl := cleanColumnIdentifier(tblName)
+		if t, err := s.engine.GetTable(cleanTbl); err == nil {
+			tables = append(tables, t)
+		} else if t, err := s.engine.GetTable(strings.ToLower(cleanTbl)); err == nil {
+			tables = append(tables, t)
 		}
 	}
 

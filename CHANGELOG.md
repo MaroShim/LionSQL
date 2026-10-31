@@ -42,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - fix TDS inferColumnInfos colSize for 'type' columns to prevent go-mssqldb slice bounds panic
 
 ### Refactored
+- replace 45 fragile raw string substring and regexp heuristics across query routing, virtual catalog interception, and PGWire OID resolution with structural AST characteristics (proc.ExtractQueryCharacteristics) and catalog symbol table resolution (virtual.IsVirtualTable) (ROUTING-AST-CATALOG-1)
 - encapsulate ClientSession internal mutex and transaction state with high-level methods (ExecuteProgram, IsTxFailed, MarkTxFailed, InTransaction, GetActiveTx, TxStatus) and eliminate raw cs.Mu.Lock across PGWire and TDS listeners (R-6-P1)
 - normalize server coordinator lifecycle by instantiating engine.Coordinator as core instance and directly injecting it into PGWire, TDS, and HTTP listeners (R-6-P3)
 
