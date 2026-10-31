@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add cmd/soaktest long-duration soak test tool (steady mixed PGWire workload, RSS/FD/disk/p99 trend verdict, balance invariant and acknowledged-commit integrity check) (DURA-SOAK-1)
 - complete Casdoor IAM/SSO/OIDC dual-protocol integration across PGWire (:5433) and MSSQL TDS (:1433) (44 XORM tables, Casbin policies, OIDC/JWKS, and Auth REST API) (CASDOOR-INTEGRATION-1)
 - support composite primary keys (`PRIMARY KEY (col1, col2, ...)`) in WiredTiger and In-Memory OCC storage engines via `\x1f` unit-separator physical key composition
 - tokenize unquoted `0x` hex binary literals in T-SQL Pratt lexer and decode `"0x..."` strings as TDS `TypeBigVarBin` (`0xA5`) raw bytes for XORM `VARBINARY` JSON serialization
