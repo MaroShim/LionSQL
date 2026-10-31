@@ -95,11 +95,11 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [ ] 3.6 `WEB-SPA-1` 단일 바이너리 내장 SPA 웹 서버 호스팅
 - `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))
 
-### [ ] 3.7 `R-6` 모듈 인터페이스 추상화 및 경계 디커플링
-- 엔진/와이어/API 계층 간 인터페이스 계약 분리 ([`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md))
-
-### [ ] 3.8 `TDS-MOD-1` TDS 모놀리스 분할 리팩토링
-- `pkg/wire/tds/server.go` (2.9k 라인) 모놀리스 파일 기능별 모듈화
+### [ ] 3.7 `R-6` 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링)
+- 상세 계획: [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md)
+- [ ] **Phase 1 (`R-6-P1`)**: `ClientSession` 내부 락 및 상태 은닉 (와이어의 `cs.Mu.Lock()` 직접 침범 제거, `ExecutePreparedStatement` 세션 일원화)
+- [ ] **Phase 2 (`TDS-MOD-1`)**: TDS 모놀리스(`server.go` 2.9k 라인) 4개 파일 분할 및 와이어 구조체 내 `storage`/`catalog` 직접 참조 제거
+- [ ] **Phase 3 (`R-6-P3`)**: 서버 기동 시 `Coordinator` 최상위 인스턴스화 및 3대 리스너(PG, TDS, HTTP) 대등 주입 (역할 전도 해소)
 
 ### [ ] 3.9 기타 엔터프라이즈 기능 확장
 - [ ] `AUDIT-LOG-1`: 암호화 SHA-256 불변 감사 로그 서브시스템 ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
