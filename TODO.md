@@ -46,12 +46,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 > 마스터 플랜: [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md)  
 > 방식: 각 앱의 실제 마이그레이션 및 실운영 쿼리를 통과시키며 커널 호환성을 검증합니다. (계획 순서 준수)
 
-### [ ] 2.1 `INTEG-ANSWER-1` Apache Answer (Q&A 지식베이스) — **[1순위 착수 예정]**
-- 상세 계획: [`notes/ANSWER_INTEGRATION_PLAN.ko.md`](notes/ANSWER_INTEGRATION_PLAN.ko.md)
+### [x] 2.1 `INTEG-ANSWER-1` Apache Answer (Q&A 지식베이스) — **[완료 (Pass)]**
+- 연동 보고서: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](notes/ANSWER_INTEGRATION_REPORT.ko.md)
+- 운영 가이드: [`doc/ANSWER_INTEGRATION_GUIDE.ko.md`](doc/ANSWER_INTEGRATION_GUIDE.ko.md) / [`doc/ANSWER_INTEGRATION_GUIDE.md`](doc/ANSWER_INTEGRATION_GUIDE.md)
 - 스택: Go + XORM / PGWire (`TCP :5433`)
-- 마이그레이션 및 질의/답변/태그/투표 코어 워크플로 E2E 검증
+- 35개 테이블 스키마 자동 생성, VDBE 다중 행 배치 Identity 키 자동 발급, 관리자 로그인, 질문/답변 E2E 100% 무오류 완료 (Answer 소스 수정 0줄)
 
-### [ ] 2.2 `INTEG-VAULTWARDEN-1` Vaultwarden (비밀번호 관리) — **[2순위]**
+### [ ] 2.2 `INTEG-VAULTWARDEN-1` Vaultwarden (비밀번호 관리) — **[1순위 착수 예정]**
 - 스택: Rust + Diesel ORM / PGWire (`TCP :5433`)
 - 암호화 볼트 동기화, Bitwarden 공식 클라이언트 연동 검증
 

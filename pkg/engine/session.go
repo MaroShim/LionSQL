@@ -254,6 +254,9 @@ func (cs *ClientSession) ExecuteProgram(
 	eng storage.Engine,
 	stmtLabel string,
 ) (res *runtime.ExecutionResult, txAborted bool, err error) {
+	if cs != nil && strings.HasPrefix(cs.ID, "pg-") && paramMap != nil {
+		paramMap["identity_insert_all"] = true
+	}
 	if cs == nil {
 		if eng == nil || exec == nil {
 			return nil, false, fmt.Errorf("storage engine or executor not configured")

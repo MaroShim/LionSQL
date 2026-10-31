@@ -22,6 +22,7 @@ import (
 	"unicode/utf8"
 
 	"lionsql/pkg/catalog"
+	"lionsql/pkg/catalog/virtual"
 	"lionsql/pkg/engine"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
@@ -145,6 +146,11 @@ func (s *Server) SetCoordinator(coord engine.SQLCoordinator) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.coordinator = coord
+	if coord != nil && s.executor != nil {
+		if ip, ok := coord.(runtime.IdentityProvider); ok {
+			s.executor.SetIdentityProvider(ip)
+		}
+	}
 }
 
 // SetBytecodePlanCache sets or replaces the bytecode plan cache and updates the executor.
@@ -158,6 +164,11 @@ func (s *Server) SetBytecodePlanCache(cache *runtime.PlanCache) {
 	s.executor = runtime.NewExecutor(cache)
 	if s.engine != nil {
 		s.executor.SetTableGetter(s.engine.GetTable)
+	}
+	if s.coordinator != nil {
+		if ip, ok := s.coordinator.(runtime.IdentityProvider); ok {
+			s.executor.SetIdentityProvider(ip)
+		}
 	}
 }
 
@@ -800,6 +811,41 @@ func (s *Server) handleSimpleQuery(conn net.Conn, query string, sessID string) {
 
 var pgParamRe = regexp.MustCompile(`\$(\d+)`)
 
+func isVirtualCatalogQuery(query string) bool {
+	upper := strings.ToUpper(query)
+	if strings.Contains(upper, "SYS.") || strings.Contains(upper, "INFORMATION_SCHEMA.") || strings.Contains(upper, "PG_CATALOG.") {
+		return true
+	}
+	// Check common pg_* catalog tables
+	if strings.Contains(upper, "PG_TABLES") || strings.Contains(upper, "PG_CLASS") ||
+		strings.Contains(upper, "PG_NAMESPACE") || strings.Contains(upper, "PG_ATTRIBUTE") ||
+		strings.Contains(upper, "PG_TYPE") || strings.Contains(upper, "PG_INDEX") ||
+		strings.Contains(upper, "PG_INDEXES") || strings.Contains(upper, "PG_DATABASE") ||
+		strings.Contains(upper, "PG_DESCRIPTION") || strings.Contains(upper, "PG_SETTINGS") ||
+		strings.Contains(upper, "PG_AM") || strings.Contains(upper, "PG_ROLES") ||
+		strings.Contains(upper, "PG_USER") || strings.Contains(upper, "PG_STAT_") {
+		return true
+	}
+	return virtual.IsVirtualCatalogJoinQuery(query)
+}
+
+func canCompileToVDBE(query string) bool {
+	upper := strings.ToUpper(query)
+	// Bypass virtual catalog tables (must route to virtual catalog views)
+	if isVirtualCatalogQuery(query) {
+		return false
+	}
+	// Bypass OUTPUT / RETURNING clauses (must route to sqlexec engine for returning rows)
+	if strings.Contains(upper, "RETURNING") || strings.Contains(upper, "OUTPUT") {
+		return false
+	}
+	// Bypass ON CONFLICT / UPSERT (handled by sqlexec_dml UPSERT engine)
+	if strings.Contains(upper, "ON CONFLICT") {
+		return false
+	}
+	return true
+}
+
 func (s *Server) compileQueryToProgram(query string) (*proc.Program, error) {
 	translated := pgParamRe.ReplaceAllString(query, "@p$1")
 	if cache := s.BytecodePlanCache(); cache != nil {
@@ -846,8 +892,10 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 		ParamTypes: paramTypes,
 	}
 
-	if prog, err := s.compileQueryToProgram(queryStr); err == nil && prog != nil {
-		prep.Program = prog
+	if canCompileToVDBE(queryStr) {
+		if prog, err := s.compileQueryToProgram(queryStr); err == nil && prog != nil {
+			prep.Program = prog
+		}
 	}
 
 	statements.Put(stmtName, prep)
@@ -1504,6 +1552,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 				paramMap[dollarName] = anyVal
 			}
 
+			paramMap["identity_insert_all"] = true
 			cs := s.coordinator.GetSession(sessID)
 			execRes, txAborted, execErr := cs.ExecuteProgram(context.Background(), portal.Statement.Program, s.executor, paramMap, s.engine, "PGWirePrepared")
 			putParamMap(paramMap)

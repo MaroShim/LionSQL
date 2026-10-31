@@ -89,6 +89,11 @@ func (s *Server) SetCoordinator(coord engine.SQLCoordinator) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.coordinator = coord
+	if coord != nil && s.executor != nil {
+		if ip, ok := coord.(runtime.IdentityProvider); ok {
+			s.executor.SetIdentityProvider(ip)
+		}
+	}
 }
 
 // SetBytecodePlanCache sets or replaces the bytecode plan cache and updates the executor.
@@ -102,6 +107,11 @@ func (s *Server) SetBytecodePlanCache(cache *runtime.PlanCache) {
 	s.executor = runtime.NewExecutor(cache)
 	if s.engine != nil {
 		s.executor.SetTableGetter(s.engine.GetTable)
+	}
+	if s.coordinator != nil {
+		if ip, ok := s.coordinator.(runtime.IdentityProvider); ok {
+			s.executor.SetIdentityProvider(ip)
+		}
 	}
 }
 

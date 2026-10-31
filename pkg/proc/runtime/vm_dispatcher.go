@@ -564,10 +564,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 
 		cols := data.Columns
 		var tableSchema *storage.TableSchema
+		var identityCol *storage.Column
 		if tg := f.executor.getTableGetter(); tg != nil {
 			if schema, err := tg(data.Table); err == nil && schema != nil {
 				tableSchema = schema
-				var identityCol *storage.Column
 				for idx := range schema.Columns {
 					if schema.Columns[idx].Identity {
 						identityCol = &schema.Columns[idx]
@@ -628,6 +628,53 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			for _, col := range tableSchema.Columns {
 				if _, exists := rec[col.Name]; !exists && col.Default != "" {
 					rec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
+				}
+			}
+		}
+
+		if identityCol != nil {
+			if val, exists := rec.Get(identityCol.Name); exists && !val.IsNull && val.Type == storage.TypeInt {
+				tableName := tableSchema.Name
+				if f.executor != nil {
+					if lastID, ok := f.executor.GetLastIdentity(tableName); !ok || val.IVal > lastID {
+						f.executor.SetLastIdentity(tableName, val.IVal)
+					}
+				}
+				f.lastIdentity = val.IVal
+				if f.vars != nil {
+					f.vars["identity"] = storage.IntValue(val.IVal)
+					f.vars["scope_identity"] = storage.IntValue(val.IVal)
+				}
+			} else if !exists || val.IsNull {
+				tableName := tableSchema.Name
+				var nextID int64 = 1
+				if f.executor != nil {
+					if lastID, ok := f.executor.GetLastIdentity(tableName); ok {
+						nextID = lastID + 1
+					} else {
+						var maxID int64 = 0
+						if cur, err := f.tx.Scan(data.Table); err == nil {
+							for cur.Next() {
+								if r, err := cur.Record(); err == nil {
+									if v, ok := r.Get(identityCol.Name); ok && v.Type == storage.TypeInt && !v.IsNull && v.IVal > maxID {
+										maxID = v.IVal
+									}
+								}
+							}
+							cur.Close()
+						}
+						nextID = maxID + 1
+					}
+					f.executor.SetLastIdentity(tableName, nextID)
+				}
+				rec.Set(identityCol.Name, storage.IntValue(nextID))
+				if hasTriggers {
+					rowMap[identityCol.Name] = nextID
+				}
+				f.lastIdentity = nextID
+				if f.vars != nil {
+					f.vars["identity"] = storage.IntValue(nextID)
+					f.vars["scope_identity"] = storage.IntValue(nextID)
 				}
 			}
 		}

@@ -168,14 +168,23 @@ func (c *PlanCache) Clear() {
 	c.byName = make(map[string]*proc.Program)
 }
 
+// IdentityProvider defines the interface for reading and updating table identity/sequence values.
+type IdentityProvider interface {
+	GetTableLastIdentity(tableName string) (int64, bool)
+	SetTableLastIdentity(tableName string, id int64)
+}
+
 // Executor manages execution of compiled stored procedures, functions, and triggers within ambient ACID transactions.
 type Executor struct {
-	cache       *PlanCache
-	mu          sync.RWMutex
-	udfs        map[string]*UDFEntry
-	triggers    map[string]map[string][]*TriggerEntry // table (lower) -> event (upper) -> entries
-	framePool   sync.Pool
-	tableGetter execution.TableGetter
+	cache          *PlanCache
+	mu             sync.RWMutex
+	udfs           map[string]*UDFEntry
+	triggers       map[string]map[string][]*TriggerEntry // table (lower) -> event (upper) -> entries
+	framePool      sync.Pool
+	tableGetter    execution.TableGetter
+	identProvider  IdentityProvider
+	identMu        sync.RWMutex
+	lastIdentities map[string]int64
 }
 
 // NewExecutor creates a procedure and trigger executor.
@@ -184,9 +193,10 @@ func NewExecutor(cache *PlanCache) *Executor {
 		cache = NewPlanCache()
 	}
 	return &Executor{
-		cache:    cache,
-		udfs:     make(map[string]*UDFEntry),
-		triggers: make(map[string]map[string][]*TriggerEntry),
+		cache:          cache,
+		udfs:           make(map[string]*UDFEntry),
+		triggers:       make(map[string]map[string][]*TriggerEntry),
+		lastIdentities: make(map[string]int64),
 		framePool: sync.Pool{
 			New: func() any {
 				return &VMFrame{
@@ -202,6 +212,47 @@ func NewExecutor(cache *PlanCache) *Executor {
 			},
 		},
 	}
+}
+
+// SetIdentityProvider registers an external IdentityProvider (such as Coordinator).
+func (e *Executor) SetIdentityProvider(p IdentityProvider) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.identProvider = p
+}
+
+// GetLastIdentity retrieves the last generated identity value for a table.
+func (e *Executor) GetLastIdentity(tableName string) (int64, bool) {
+	e.mu.RLock()
+	p := e.identProvider
+	e.mu.RUnlock()
+	if p != nil {
+		return p.GetTableLastIdentity(tableName)
+	}
+	e.identMu.RLock()
+	defer e.identMu.RUnlock()
+	if e.lastIdentities == nil {
+		return 0, false
+	}
+	v, ok := e.lastIdentities[strings.ToLower(tableName)]
+	return v, ok
+}
+
+// SetLastIdentity records the last generated identity value for a table.
+func (e *Executor) SetLastIdentity(tableName string, id int64) {
+	e.mu.RLock()
+	p := e.identProvider
+	e.mu.RUnlock()
+	if p != nil {
+		p.SetTableLastIdentity(tableName, id)
+		return
+	}
+	e.identMu.Lock()
+	defer e.identMu.Unlock()
+	if e.lastIdentities == nil {
+		e.lastIdentities = make(map[string]int64)
+	}
+	e.lastIdentities[strings.ToLower(tableName)] = id
 }
 
 // SetTableGetter configures the schema lookup function for relational queries.

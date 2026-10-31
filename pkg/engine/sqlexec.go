@@ -998,7 +998,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	if len(cs.Vars) > 0 {
 		keys := make([]string, 0, len(cs.Vars))
 		for k := range cs.Vars {
-			if strings.HasPrefix(k, "@") {
+			if strings.HasPrefix(k, "@") && !strings.HasPrefix(k, "@@") {
 				keys = append(keys, k)
 			}
 		}

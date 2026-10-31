@@ -108,6 +108,7 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 	}
 
 	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
+	executor.SetIdentityProvider(coord)
 	type walHookAdder interface {
 		AddWALHook(fn func(rec memengine.WALRecord))
 	}
