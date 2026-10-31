@@ -68,12 +68,15 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - `canCompileToVDBE`, `isVirtualCatalogQuery`, `virtual.IsVirtualCatalogJoinQuery`, `resolveColumnOIDs` 구조적 정상화
 - False Positive (유사 테이블명 오인) 및 False Negative (리터럴/주석 키워드로 인한 VDBE 차단) 100% 원천 해결
 
-### [ ] 2.4 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[1순위 착수]**
-- 계획서: [`notes/METABASE_INTEGRATION_PLAN.ko.md`](notes/METABASE_INTEGRATION_PLAN.ko.md)
+### [x] 2.4 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[완료 (Pass)]**
+- 연동 계획서: [`notes/METABASE_INTEGRATION_PLAN.ko.md`](notes/METABASE_INTEGRATION_PLAN.ko.md)
+- 연동 보고서: [`notes/METABASE_INTEGRATION_REPORT.ko.md`](notes/METABASE_INTEGRATION_REPORT.ko.md)
+- 운영 가이드: [`doc/METABASE_INTEGRATION_GUIDE.ko.md`](doc/METABASE_INTEGRATION_GUIDE.ko.md) / [`doc/METABASE_INTEGRATION_GUIDE.md`](doc/METABASE_INTEGRATION_GUIDE.md)
+- 회귀 테스트: `pkg/engine/metabase_compat_test.go`
 - 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
-- 데이터 소스 등록(PGWire `:5433` & TDS `:1433`), 스키마 동기화(Sync/Fingerprint), 비주얼 쿼리 빌더(GROUP BY/JOIN/시계열), 대시보드 검증
+- 데이터 소스 등록(PGWire `:5433` & TDS `:1433`) 100% 무오류 통과, 스키마 인트로스펙션(테이블/컬럼/외래키/인덱스 350ms 내 완료), 비주얼 쿼리 빌더(MBQL 다중 테이블 파생 조인, COUNT/SUM 집계, `date_trunc` 시계열) 및 Native SQL 완벽 동작 검증 (Metabase 순정 컨테이너 소스 수정 0줄)
 
-### [ ] 2.5 `INTEG-UMAMI-1` Umami (웹 애널리틱스) — **[3순위]**
+### [ ] 2.5 `INTEG-UMAMI-1` Umami (웹 애널리틱스) — **[1순위 착수]**
 - 스택: Next.js + Prisma ORM / PGWire (`TCP :5433`)
 - 시계열 이벤트 집계 쿼리 호환성 검증
 

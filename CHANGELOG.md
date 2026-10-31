@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- complete Metabase BI dual-protocol integration across PGWire (:5433, org.postgresql.Driver) and MSSQL TDS (:1433, com.microsoft.sqlserver.jdbc.SQLServerDriver) with 100% schema sync, MBQL visual query builder, multi-table derived joins, and native SQL support (INTEG-METABASE-1)
+- support Microsoft JDBC Driver metadata temp table multi-statement batches (DECLARE @temp TABLE / INSERT INTO @temp EXEC sp_columns_170 / SELECT ... FROM @temp) and implement sp_pkeys, sp_fkeys stored procedures
 - complete Vaultwarden password manager integration over PGWire (:5433, 47 Diesel ORM migrations, composite primary keys, cipher and folder CRUD, sync API) (INTEG-VAULTWARDEN-1)
 - complete Apache Answer Q&A knowledge-base platform integration over PGWire (:5433, 35 tables, XORM migrations, admin login, question/answer E2E) (INTEG-ANSWER-1)
 - implement IdentityProvider SPI in VDBE execution runtime and synchronize table identity counters across VDBE and SQL coordinator
@@ -23,6 +25,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- support quoted identifiers (double quotes, backticks, brackets) in derived table subquery alias extraction to prevent AS keyword duplication
+- map hyphenated aliases (table-name, database-type, database-position, pk?) in virtual catalog projection mapping to underlying schema fields
+- support bracketed aliases and HAS_PERMS_BY_NAME in sys.objects metadata queries for official SQL Server JDBC drivers
 - split and execute multi-action compound ALTER TABLE statements sequentially
 - handle whitespace and newline formatting in ADD COLUMN DDL statements
 - support parenthesized ANSI joins in FROM clauses (e.g. FROM ("t1" JOIN "t2"))

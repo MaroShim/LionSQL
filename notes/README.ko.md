@@ -49,6 +49,7 @@
      - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고).
 
 7. **마일스톤 실전 검증 보고서 및 포스트모텀 (Integration Reports & Postmortems)**:
+   - **[`METABASE_INTEGRATION_REPORT.ko.md`](METABASE_INTEGRATION_REPORT.ko.md)**: Metabase BI 듀얼 프로토콜(PGWire :5433 & TDS :1433) 연동, 스키마 인트로스펙션, MBQL 비주얼 쿼리 빌더 다중 테이블 파생 조인, COUNT/SUM 집계, 시계열 분석 및 Native SQL 100% 무오류 검증 보고서.
    - **[`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md)**: Vaultwarden (Rust + Diesel ORM) 47개 마이그레이션 완주, 복합 PK upsert, 8바이트 Timestamp 인코딩 및 Bitwarden REST API E2E 100% 검증 보고서.
    - **[`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md)**: Apache Answer Q&A 플랫폼 35개 테이블 생성, VDBE 다중 행 배치 Identity 키 자동 발급 및 REST API E2E 검증 보고서.
    - **[`GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)**: Gitea 풀스택 Git 플랫폼 듀얼 프로토콜(TDS :1433 & PGWire :5433) 연동 및 116개 테이블 실전 E2E 검증 완료 보고서.

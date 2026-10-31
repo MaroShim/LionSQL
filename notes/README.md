@@ -49,6 +49,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
      - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
 
 7. **Production Integration Reports & Postmortems**:
+   - **[`METABASE_INTEGRATION_REPORT.ko.md`](METABASE_INTEGRATION_REPORT.ko.md)** (Korean): Metabase BI dual-protocol (PGWire :5433 & TDS :1433) live integration, schema introspection, MBQL visual query builder multi-table derived joins, COUNT/SUM aggregations, time-series analysis, and native SQL 100% verification report.
    - **[`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md)** (Korean): Vaultwarden (Rust + Diesel ORM) 47 migrations execution, composite PK upsert, 8-byte timestamp encoding, and Bitwarden REST API E2E verification report.
    - **[`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md)** (Korean): Apache Answer Q&A platform 35 tables creation, VDBE multi-row batch identity generation, and REST API E2E verification report.
    - **[`GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)** (Korean): Gitea dual-protocol (TDS :1433 & PGWire :5433) live integration and 116 production tables full E2E lifecycle verification report.

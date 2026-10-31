@@ -664,7 +664,7 @@ func execSysObjectsTriggers(sql string) (*Result, error) {
 }
 
 func execSysObjectsMetadata(src Source, sql string) (*Result, error) {
-	columns := []string{"objectId", "object_id", "modifyDate", "modify_date", "createDate", "create_date", "type", "type_desc", "pureName", "pure_name", "name", "schemaName", "schema_name"}
+	columns := []string{"objectId", "object_id", "modifyDate", "modify_date", "createDate", "create_date", "type", "type_desc", "pureName", "pure_name", "name", "schemaName", "schema_name", "schema", "table", "s.name", "o.name", "role", "select", "update", "insert", "delete"}
 	defaultDate := time.Now().UTC().Truncate(time.Second)
 	var allRows []map[string]any
 
@@ -684,6 +684,16 @@ func execSysObjectsMetadata(src Source, sql string) (*Result, error) {
 			"name":        t.Name,
 			"schemaName":  "dbo",
 			"schema_name": "dbo",
+			"schema":      "dbo",
+			"table":       t.Name,
+			"s.name":      "dbo",
+			"o.name":      t.Name,
+			"schema_id":   1,
+			"role":        nil,
+			"select":      1,
+			"update":      1,
+			"insert":      1,
+			"delete":      1,
 		})
 	}
 
@@ -703,6 +713,16 @@ func execSysObjectsMetadata(src Source, sql string) (*Result, error) {
 			"name":        v.Name,
 			"schemaName":  "dbo",
 			"schema_name": "dbo",
+			"schema":      "dbo",
+			"table":       v.Name,
+			"s.name":      "dbo",
+			"o.name":      v.Name,
+			"schema_id":   1,
+			"role":        nil,
+			"select":      1,
+			"update":      1,
+			"insert":      1,
+			"delete":      1,
 		})
 	}
 
@@ -722,6 +742,16 @@ func execSysObjectsMetadata(src Source, sql string) (*Result, error) {
 			"name":        p.Name,
 			"schemaName":  "dbo",
 			"schema_name": "dbo",
+			"schema":      "dbo",
+			"table":       p.Name,
+			"s.name":      "dbo",
+			"o.name":      p.Name,
+			"schema_id":   1,
+			"role":        nil,
+			"select":      1,
+			"update":      1,
+			"insert":      1,
+			"delete":      1,
 		})
 	}
 

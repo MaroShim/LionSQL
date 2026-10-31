@@ -1437,6 +1437,19 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 	}
 
+	if strings.HasPrefix(upper, "SHOW ") {
+		if res, err := s.coordinator.ExecuteSessionSQL("default", query); err == nil && len(res.Columns) > 0 {
+			cols := make([]ColumnMeta, len(res.Columns))
+			for i, c := range res.Columns {
+				cols[i] = ColumnMeta{Name: c, DataType: 25}
+			}
+			recordCols(cols)
+			applyFormats(cols)
+			_ = WriteRowDescription(conn, cols)
+			return
+		}
+	}
+
 	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
 		if strings.Contains(upper, "VERSION()") {
 			cols := []ColumnMeta{{Name: "version", DataType: 25}}

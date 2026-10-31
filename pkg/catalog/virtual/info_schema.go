@@ -42,6 +42,9 @@ func generateInfoSchemaTables(src Source, whereClause string) ([]string, []map[s
 	tables, _ := src.ListTables()
 	var allRows []map[string]any
 	for _, t := range tables {
+		if storage.IsTemporaryTable(t.Name) || strings.HasPrefix(t.Name, "__") || strings.HasPrefix(t.Name, "#") {
+			continue
+		}
 		allRows = append(allRows, map[string]any{
 			"table_catalog":                "postgres",
 			"table_schema":                 defSchema,
@@ -103,7 +106,11 @@ func generateInfoSchemaColumns(src Source, whereClause string) ([]string, []map[
 	tables, _ := src.ListTables()
 	var allRows []map[string]any
 	for _, t := range tables {
+		if storage.IsTemporaryTable(t.Name) || strings.HasPrefix(t.Name, "__") || strings.HasPrefix(t.Name, "#") {
+			continue
+		}
 		for i, c := range t.Columns {
+			isPK := c.PrimaryKey
 			nullable := "YES"
 			if !c.Nullable {
 				nullable = "NO"
@@ -144,6 +151,8 @@ func generateInfoSchemaColumns(src Source, whereClause string) ([]string, []map[
 				"ordinal_position":         i + 1,
 				"column_default":           nil,
 				"is_nullable":              nullable,
+				"is_primary_key":           isPK,
+				"pk?":                      isPK,
 				"data_type":                dataType,
 				"character_maximum_length": charMaxLen,
 				"character_octet_length":   charMaxLen,

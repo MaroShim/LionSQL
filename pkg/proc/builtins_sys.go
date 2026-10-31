@@ -133,6 +133,7 @@ func isSysBuiltin(name string) bool {
 		"OBJECT_ID", "OBJECT_NAME", "COL_LENGTH", "COL_NAME", "SCHEMA_NAME", "SCHEMA_ID", "DB_NAME", "DB_ID", "APP_NAME", "IDENT_CURRENT",
 		"DATABASEPROPERTYEX", "OBJECTPROPERTY", "COLUMNPROPERTY", "INDEXPROPERTY", "OBJECT_SCHEMA_NAME", "TYPE_ID", "TYPE_NAME",
 		"HOST_NAME", "HOST_ID", "CURRENT_USER", "USER_NAME", "SUSER_NAME", "SUSER_SNAME", "USER_ID", "SUSER_ID",
+		"CURRENT_SCHEMA", "CURRENT_SCHEMAS", "CURRENT_DATABASE",
 		"IS_SRVROLEMEMBER", "IS_MEMBER", "HAS_PERMS_BY_NAME", "PWDENCRYPT", "PWDCOMPARE",
 		"@@VERSION", "VERSION", "@@SERVERNAME", "@@SPID", "SPID", "@@MAX_CONNECTIONS", "@@LANGUAGE",
 		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS", "@@NESTLEVEL", "NESTLEVEL",
@@ -385,8 +386,14 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 		}
 		return storage.IntValue(1)
 
-	case "DB_NAME":
+	case "DB_NAME", "CURRENT_DATABASE":
 		return storage.StringValue("LionSQL")
+
+	case "CURRENT_SCHEMA":
+		return storage.StringValue("public")
+
+	case "CURRENT_SCHEMAS":
+		return storage.StringValue("{public}")
 
 	case "DB_ID":
 		return storage.IntValue(1)

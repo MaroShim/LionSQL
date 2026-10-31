@@ -130,6 +130,14 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 		cs.Mu.Unlock()
 	}()
 
+	if isJdbcMetadataBatch(query) {
+		res, err := s.execJdbcMetadataBatch(query, overallStart, cs)
+		if err == nil {
+			lastRes = res
+			return lastRes, nil
+		}
+	}
+
 	if len(stmts) == 0 {
 		lastRes = &QueryResult{Success: true, Command: "EMPTY"}
 		return lastRes, nil

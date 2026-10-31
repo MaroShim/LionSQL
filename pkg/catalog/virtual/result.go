@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -11,9 +12,9 @@ import (
 )
 
 var (
-	reProjAs           = regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
+	reProjAs           = regexp.MustCompile("(?is)^(.*?)\\s+AS\\s+([a-zA-Z0-9_#$]+|\"[^\"]+\"|`[^`]+`|\\[[^\\]]+\\])$")
 	reEvalInClause     = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+(NOT\s+IN|IN)\s*\((.*?)\)\s*$`)
-	reEvalBinaryOp     = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE|ILIKE|NOT\s+ILIKE)\s*(.*?)\s*$`)
+	reEvalBinaryOp     = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE|ILIKE|NOT\s+ILIKE|!~\*|!~|~\*|~)\s*(.*?)\s*$`)
 	reEvalIsNull       = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+IS\s+NULL\s*$`)
 	reEvalIsNotNull    = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+IS\s+NOT\s+NULL\s*$`)
 	reEvalBetween      = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+(NOT\s+BETWEEN|BETWEEN)\s+(.*?)\s+AND\s+(.*?)\s*$`)
@@ -106,8 +107,19 @@ func parseImplicitAlias(s string) (alias, colExpr string, ok bool) {
 	if lastSpaceIdx > 0 {
 		expr := strings.TrimSpace(s[:lastSpaceIdx])
 		potentialAlias := strings.TrimSpace(s[lastSpaceIdx+1:])
-		if potentialAlias != "" && !strings.ContainsAny(potentialAlias, " ()[],.") {
-			return cleanIdentifier(potentialAlias), expr, true
+		if potentialAlias != "" {
+			if strings.HasPrefix(potentialAlias, "[") && strings.HasSuffix(potentialAlias, "]") && len(potentialAlias) > 2 {
+				return cleanIdentifier(potentialAlias), expr, true
+			}
+			if strings.HasPrefix(potentialAlias, "`") && strings.HasSuffix(potentialAlias, "`") && len(potentialAlias) > 2 {
+				return cleanIdentifier(potentialAlias), expr, true
+			}
+			if strings.HasPrefix(potentialAlias, "\"") && strings.HasSuffix(potentialAlias, "\"") && len(potentialAlias) > 2 {
+				return cleanIdentifier(potentialAlias), expr, true
+			}
+			if !strings.ContainsAny(potentialAlias, " ()[],.") {
+				return cleanIdentifier(potentialAlias), expr, true
+			}
 		}
 	}
 	return "", s, false
@@ -246,21 +258,69 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 			} else if v, ok := fr[strings.ToLower(col)]; ok {
 				val = v
 				found = true
+			} else if v, ok := fr[strings.ReplaceAll(strings.ToLower(col), "-", "_")]; ok {
+				val = v
+				found = true
 			} else if src != "" {
+				cleanedSrc := cleanIdentifier(src)
 				if v, ok := fr[src]; ok {
 					val = v
 					found = true
 				} else if v, ok := fr[strings.ToLower(src)]; ok {
 					val = v
 					found = true
+				} else if v, ok := fr[cleanedSrc]; ok {
+					val = v
+					found = true
+				} else if v, ok := fr[strings.ToLower(cleanedSrc)]; ok {
+					val = v
+					found = true
 				}
 			}
-			if found {
-				row[col] = val
-			} else {
+
+			if !found {
 				upperSrc := strings.ToUpper(src)
 				upperCol := strings.ToUpper(col)
-				if (strings.Contains(upperSrc, "CASE WHEN") && (strings.Contains(upperSrc, "IC.COLUMN_ID") || strings.Contains(upperSrc, "PRIMARY"))) ||
+				if upperCol == "DATABASE-TYPE" || strings.Contains(upperSrc, "UDT_NAME") || strings.Contains(upperSrc, "TYPNAME") {
+					if dt, ok := fr["data_type"]; ok && dt != nil {
+						val = dt
+						found = true
+					} else if udt, ok := fr["udt_name"]; ok && udt != nil {
+						val = udt
+						found = true
+					}
+				} else if upperCol == "DATABASE-POSITION" || strings.Contains(upperSrc, "ORDINAL_POSITION - 1") || strings.Contains(upperSrc, "ATTNUM - 1") {
+					if ord, ok := fr["ordinal_position"]; ok && ord != nil {
+						switch n := ord.(type) {
+						case int:
+							val = n - 1
+						case int64:
+							val = n - 1
+						case int32:
+							val = n - 1
+						}
+						found = true
+					} else if att, ok := fr["attnum"]; ok && att != nil {
+						switch n := att.(type) {
+						case int:
+							val = n - 1
+						case int64:
+							val = n - 1
+						case int32:
+							val = n - 1
+						}
+						found = true
+					}
+				} else if upperCol == "PK?" {
+					isPK := false
+					if pk, ok := fr["is_primary_key"].(bool); ok && pk {
+						isPK = true
+					} else if pk, ok := fr["pk?"].(bool); ok && pk {
+						isPK = true
+					}
+					val = isPK
+					found = true
+				} else if (strings.Contains(upperSrc, "CASE WHEN") && (strings.Contains(upperSrc, "IC.COLUMN_ID") || strings.Contains(upperSrc, "PRIMARY"))) ||
 					strings.Contains(upperSrc, "ISNULL(P.IS_PRIMARY_KEY") ||
 					strings.Contains(upperCol, "PRIMARY_KEY") || strings.Contains(upperCol, "IS_PK") {
 					isPK := false
@@ -268,18 +328,56 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 						isPK = true
 					}
 					if isPK {
-						row[col] = int64(1)
+						val = int64(1)
 					} else {
-						row[col] = int64(0)
+						val = int64(0)
 					}
+					found = true
+				} else if upperCol == "DATABASE-REQUIRED" {
+					if isNull, ok := fr["is_nullable"].(string); ok {
+						val = (strings.ToUpper(isNull) == "NO")
+						found = true
+					}
+				} else if upperCol == "DATABASE-IS-NULLABLE" {
+					if isNull, ok := fr["is_nullable"].(string); ok {
+						val = (strings.ToUpper(isNull) == "YES")
+						found = true
+					}
+				} else if upperCol == "DATABASE-IS-AUTO-INCREMENT" {
+					val = false
+					if isIdent, ok := fr["is_identity"].(string); ok {
+						val = (strings.ToUpper(isIdent) == "YES")
+					}
+					found = true
+				} else if upperCol == "DATABASE-IS-GENERATED" {
+					val = false
+					found = true
+				} else if upperCol == "DATABASE-DEFAULT" {
+					val = fr["column_default"]
+					found = true
+				} else if upperCol == "FIELD-COMMENT" {
+					val = fr["comment"]
+					found = true
 				} else if (strings.Contains(upperSrc, "CASE WHEN") && strings.Contains(upperSrc, "TEXT IS NULL")) ||
 					upperCol == "DEFAULT_IS_NULL" {
-					row[col] = true
+					val = true
+					found = true
 				} else if strings.Contains(upperSrc, "REPLACE") && strings.Contains(upperSrc, "ISNULL") {
-					row[col] = ""
-				} else {
-					row[col] = nil
+					val = ""
+					found = true
+				} else if strings.Contains(upperSrc, "HAS_PERMS_BY_NAME") {
+					val = 1
+					found = true
+				} else if upperSrc == "NULL" {
+					val = nil
+					found = true
 				}
+			}
+
+			if found {
+				row[col] = val
+			} else {
+				row[col] = nil
 			}
 		}
 		finalRows = append(finalRows, row)
@@ -404,7 +502,21 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 	if m := reEvalBinaryOp.FindStringSubmatch(whereStr); len(m) == 4 {
 		colName := cleanIdentifier(m[1])
 		op := strings.ToUpper(strings.TrimSpace(m[2]))
-		target := strings.TrimSpace(strings.Trim(m[3], "'\""))
+		rawTarget := strings.TrimSpace(m[3])
+		target := strings.TrimSpace(strings.Trim(rawTarget, "'\""))
+
+		// Handle Join conditions (e.g. "c"."relnamespace" = "n"."oid" or "n"."oid" = "c"."relnamespace")
+		targetCol := cleanIdentifier(rawTarget)
+		if op == "=" {
+			if (colName == "relnamespace" || strings.HasSuffix(colName, "relnamespace")) &&
+				(targetCol == "oid" || strings.HasSuffix(targetCol, "oid") || targetCol == "relnamespace") {
+				return true
+			}
+			if (targetCol == "relnamespace" || strings.HasSuffix(targetCol, "relnamespace")) &&
+				(colName == "oid" || strings.HasSuffix(colName, "oid") || colName == "relnamespace") {
+				return true
+			}
+		}
 
 		val, ok := rec[colName]
 		if !ok {
@@ -413,7 +525,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			}
 		}
 		if !ok || val == nil {
-			return op == "!=" || op == "<>"
+			return op == "!=" || op == "<>" || op == "!~" || op == "!~*"
 		}
 
 		strVal := fmt.Sprintf("%v", val)
@@ -422,6 +534,42 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			return strings.EqualFold(strVal, target)
 		case "!=", "<>":
 			return !strings.EqualFold(strVal, target)
+		case "~", "~*":
+			rePat := target
+			if op == "~*" {
+				rePat = "(?i)" + rePat
+			}
+			re, err := regexp.Compile(rePat)
+			if err != nil {
+				return false
+			}
+			return re.MatchString(strVal)
+		case "!~", "!~*":
+			rePat := target
+			if op == "!~*" {
+				rePat = "(?i)" + rePat
+			}
+			re, err := regexp.Compile(rePat)
+			if err != nil {
+				return false
+			}
+			return !re.MatchString(strVal)
+		case ">", ">=", "<", "<=":
+			if n1, err1 := strconv.ParseFloat(strVal, 64); err1 == nil {
+				if n2, err2 := strconv.ParseFloat(target, 64); err2 == nil {
+					switch op {
+					case ">":
+						return n1 > n2
+					case ">=":
+						return n1 >= n2
+					case "<":
+						return n1 < n2
+					case "<=":
+						return n1 <= n2
+					}
+				}
+			}
+			return false
 		case "LIKE", "ILIKE":
 			pattern := strings.ReplaceAll(regexp.QuoteMeta(target), "%", ".*")
 			pattern = strings.ReplaceAll(pattern, "_", ".")

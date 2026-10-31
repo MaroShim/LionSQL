@@ -883,6 +883,108 @@ func (s *Coordinator) execBuiltinSystemProc(procLower string, rawArgs []string, 
 			RowsAffected: int64(len(rows)),
 			DurationUS:   time.Since(start).Microseconds(),
 		}, nil
+
+	case "sp_pkeys":
+		params := parseProcParams(rawArgs, []string{"@table_name", "@table_owner", "@table_qualifier"})
+		dbName := "master"
+		if cs != nil && cs.Database != "" {
+			dbName = cs.Database
+		}
+		if q, ok := params["@table_qualifier"]; ok && q != "" && !strings.EqualFold(q, "null") {
+			dbName = cleanTableNameParam(q)
+		}
+
+		tblParam := cleanTableNameParam(params["@table_name"])
+		cols := []string{
+			"TABLE_QUALIFIER",
+			"TABLE_OWNER",
+			"TABLE_NAME",
+			"COLUMN_NAME",
+			"KEY_SEQ",
+			"PK_NAME",
+		}
+		var rows []map[string]any
+
+		if tblParam != "" && !strings.EqualFold(tblParam, "null") {
+			tbl, err := s.engine.GetTable(tblParam)
+			if err == nil && tbl != nil {
+				seq := 1
+				for _, c := range tbl.Columns {
+					if c.PrimaryKey {
+						rows = append(rows, map[string]any{
+							"TABLE_QUALIFIER": dbName,
+							"TABLE_OWNER":     "dbo",
+							"TABLE_NAME":      tbl.Name,
+							"COLUMN_NAME":     c.Name,
+							"KEY_SEQ":         seq,
+							"PK_NAME":         "PK_" + tbl.Name,
+						})
+						seq++
+					}
+				}
+			}
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXEC",
+			Columns:      cols,
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
+
+	case "sp_fkeys":
+		params := parseProcParams(rawArgs, []string{"@pktable_name", "@pktable_owner", "@pktable_qualifier", "@fktable_name", "@fktable_owner", "@fktable_qualifier"})
+		dbName := "master"
+		if cs != nil && cs.Database != "" {
+			dbName = cs.Database
+		}
+		pkParam := cleanTableNameParam(params["@pktable_name"])
+		fkParam := cleanTableNameParam(params["@fktable_name"])
+
+		cols := []string{
+			"PKTABLE_QUALIFIER", "PKTABLE_OWNER", "PKTABLE_NAME", "PKCOLUMN_NAME",
+			"FKTABLE_QUALIFIER", "FKTABLE_OWNER", "FKTABLE_NAME", "FKCOLUMN_NAME",
+			"KEY_SEQ", "UPDATE_RULE", "DELETE_RULE", "FK_NAME", "PK_NAME", "DEFERRABILITY",
+		}
+		var rows []map[string]any
+		tables, _ := s.engine.ListTables()
+		for _, t := range tables {
+			for _, fk := range t.ForeignKeys {
+				if pkParam != "" && !strings.EqualFold(pkParam, "null") && !strings.EqualFold(fk.ParentTable, pkParam) {
+					continue
+				}
+				if fkParam != "" && !strings.EqualFold(fkParam, "null") && !strings.EqualFold(t.Name, fkParam) {
+					continue
+				}
+				rows = append(rows, map[string]any{
+					"PKTABLE_QUALIFIER": dbName,
+					"PKTABLE_OWNER":     "dbo",
+					"PKTABLE_NAME":      fk.ParentTable,
+					"PKCOLUMN_NAME":     strings.Join(fk.ParentColumns, ","),
+					"FKTABLE_QUALIFIER": dbName,
+					"FKTABLE_OWNER":     "dbo",
+					"FKTABLE_NAME":      t.Name,
+					"FKCOLUMN_NAME":     strings.Join(fk.ChildColumns, ","),
+					"KEY_SEQ":           1,
+					"UPDATE_RULE":       3,
+					"DELETE_RULE":       3,
+					"FK_NAME":           fk.Name,
+					"PK_NAME":           "PK_" + fk.ParentTable,
+					"DEFERRABILITY":     7,
+				})
+			}
+		}
+
+		return &QueryResult{
+			Success:      true,
+			Command:      "EXEC",
+			Columns:      cols,
+			Rows:         rows,
+			RowsAffected: int64(len(rows)),
+			DurationUS:   time.Since(start).Microseconds(),
+		}, nil
 	}
 
 	return nil, fmt.Errorf("unrecognized system stored procedure: %s", procLower)
@@ -909,7 +1011,7 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	switch procLower {
 	case "sp_executesql":
 		return s.execSpExecuteSQL(args, start, cs, ctx)
-	case "sp_help", "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename", "sp_tables", "sp_columns":
+	case "sp_help", "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename", "sp_tables", "sp_columns", "sp_pkeys", "sp_fkeys":
 		return s.execBuiltinSystemProc(procLower, args, start, cs)
 	}
 

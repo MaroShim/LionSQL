@@ -14,7 +14,7 @@ var (
 	derivedTableCounter int64
 	reDerivedCheck      = regexp.MustCompile(`(?is)\b(?:FROM|JOIN)\s*\(\s*SELECT\b`)
 	reDerivedMatch      = regexp.MustCompile(`(?is)\b(FROM|JOIN|INNER\s+JOIN|LEFT\s+JOIN|LEFT\s+OUTER\s+JOIN|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|CROSS\s+JOIN|FULL\s+JOIN|FULL\s+OUTER\s+JOIN)\s*\(\s*SELECT\b`)
-	reDerivedAlias      = regexp.MustCompile(`(?is)^\s*(?:AS\s+)?([a-zA-Z0-9_#]+)`)
+	reDerivedAlias      = regexp.MustCompile(`(?is)^\s*(?:AS\s+)?([a-zA-Z0-9_#]+|"[^"]+"|\` + "`" + `[^` + "`" + `]+` + "`" + `|\[[^\]]+\])`)
 	reSelectStarFrom    = regexp.MustCompile(`(?i)\bSELECT\s+\*\s+FROM\b`)
 )
 
