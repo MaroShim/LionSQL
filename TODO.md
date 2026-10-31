@@ -122,6 +122,16 @@ Planned order: Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost.
 
 Excluded: Keycloak (decided not to pursue).
 
+### 3.4. Durability & Reliability Verification
+
+Plan: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
+
+| Task Code | Domain | Key Deliverable | Target | Status |
+| :---: | :---: | :--- | :--- | :---: |
+| **`DURA-KILL-1`** | Reliability | **Kill -9 crash recovery test (ack ledger vs recovered state oracle, 5,000 rounds per engine, DDL/checkpoint/WAL-corruption variants)** | `cmd/crashtest/` | Pending (`[ ]`) |
+| **`DURA-SOAK-1`** | Reliability | **24h to 72h soak test (RSS/goroutine/FD/disk/latency trend judgement, pprof snapshots on violation)** | `cmd/soaktest/` | Pending (`[ ]`) |
+| **`DURA-DOGFOOD-1`** | Reliability | **Dogfooding in shadow mode (Vaultwarden/Umami/Answer, then Gitea), after KILL/SOAK first pass** | operations | Pending (`[ ]`) |
+
 ---
 
 ## 4. Architectural Invariants & Spec-Out Invariants

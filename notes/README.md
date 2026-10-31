@@ -58,6 +58,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`CASDOOR_INTEGRATION_MILESTONE.md`](CASDOOR_INTEGRATION_MILESTONE.md)** ([Korean](CASDOOR_INTEGRATION_MILESTONE.ko.md)): Casdoor 44-table creation, composite primary key (`PRIMARY KEY (owner, name)`) resolution, TDS `VARBINARY` JSON round-trip, and dual-protocol OIDC/RBAC E2E verification milestone report (Completed).
    - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)** (Korean): Master plan for six further real-world app integrations (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost).
    - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)** (Korean): Apache Answer PGWire integration detail plan (first in order).
+   - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean): Durability plan covering kill -9 crash recovery tests, soak tests, and dogfooding.
    - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
 
 7. **Completed Reports & Historical Archives**:

@@ -58,6 +58,7 @@
    - **[`CASDOOR_INTEGRATION_MILESTONE.ko.md`](CASDOOR_INTEGRATION_MILESTONE.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK(`PRIMARY KEY (owner, name)`) 지원, TDS `VARBINARY` JSON 직렬화 및 듀얼 프로토콜 OIDC/RBAC E2E 검증 마일스톤 보고서 (완료).
    - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)**: 실전 앱 연동 확장 마스터 플랜 (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost 6종, 기존 4종 연동 자산 기반).
    - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)**: Apache Answer PGWire 연동 상세 계획서 (1순위).
+   - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**: 킬 테스트(크래시 복구), 소크 테스트(장시간 부하), 개밥 먹기 기반 내구성/운영 신뢰성 검증 계획서.
    - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고)
 
 7. **완료된 보고서 및 역사적 아카이브 (Completed Reports & Archives)**:
