@@ -96,7 +96,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))
 
 ### [-] 3.7 `R-6` 세션 캡슐화 및 모듈 디커플링 (Lean 3단계 리팩토링)
-- 상세 계획: [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md)
+- 상세 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
 - [x] **Phase 1 (`R-6-P1`)**: `ClientSession` 내부 락 및 상태 은닉 (와이어의 `cs.Mu.Lock()` 직접 침범 제거, `ExecuteProgram` 세션 일원화)
 - [ ] **Phase 2 (`TDS-MOD-1`)**: TDS 모놀리스(`server.go` 2.9k 라인) 4개 파일 분할 및 와이어 구조체 내 `storage`/`catalog` 직접 참조 제거 (Post-0.90.0 대기)
 - [x] **Phase 3 (`R-6-P3`)**: 서버 기동 시 `Coordinator` 최상위 인스턴스화 및 3대 리스너(PG, TDS, HTTP) 대등 주입 (역할 전도 해소)

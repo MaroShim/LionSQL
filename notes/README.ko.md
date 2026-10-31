@@ -39,7 +39,7 @@
      - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: TDS 네트워크 소켓 수신부터 VDBE 및 WAL 파일 시스템 사전 할당/적응형 그룹 커밋에 이르는 서버 수직 파이프라인 종단 최적화 마스터 플랜 (Phase 3/4 대기).
      - **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**: LionSQL 복합 쿼리 성능 튜닝을 위한 2단계 하이브리드 표준 벤치마크 플랜 (SSB Star Schema & Mini TPC-H 5대 대표 쿼리, DuckDB/ClickHouse 비교 매트릭스).
      - **[`DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)**: DuckDB 스타일의 친화적 SQL 손끝 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`) 도입 마스터 플랜 (Post-1.0 / v1.1.0).
-     - **[`MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md)**: 모듈러 아키텍처 및 계층별 SPI API 계약 설계 계획서.
+     - **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)**: 모듈러 아키텍처 및 세션 캡슐화 리팩토링 계획서.
      - **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 내장 SPA 정적 웹 파일 서빙 엔진 설계 계획서.
      - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0 / SOC 2 규제 대응 SHA-256 해시 체이닝 불변 감사 로그 서브시스템 설계 (Post-1.0 / v1.1.0).
      - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계 (Post-1.0 / v1.1.0).

@@ -1,4 +1,4 @@
-# LionSQL 모듈형 아키텍처 및 세션 캡슐화 린(Lean) 리팩토링 계획서 (`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`)
+# LionSQL 모듈형 아키텍처 리팩토링 계획서 (`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-10-25
 > - **개정일**: 2026-10-31 (과도한 인터페이스 전면 제거 및 린 3단계 계획으로 현실화 개정)

@@ -39,7 +39,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
      - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): Vertical server pipeline optimization from TDS network socket read coalescing to WAL file system fallocate and adaptive group commit (Phase 3/4).
      - **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)** (Korean): 2-stage hybrid benchmark plan for complex query performance tuning (SSB Star Schema & Mini TPC-H Top 5 queries, DuckDB/ClickHouse comparison matrix).
      - **[`DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)** (Korean): DuckDB-style friendly SQL ergonomics master plan (`SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`) (Post-1.0 / v1.1.0).
-     - **[`MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md)** (Korean): Modular architecture and SPI API contracts decoupling storage, execution, and protocol layers.
+     - **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)** (Korean): Modular architecture, session encapsulation, and protocol decoupling plan.
      - **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)** (Korean): Embedded Single Page Application (SPA) static web server architecture.
      - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: Architecture for SHA-256 hash-chained immutable audit logging for PCI-DSS v4.0 / SOC 2 compliance (Post-1.0 / v1.1.0).
      - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Design for Microsoft SQL Server collation and locale support (Post-1.0 / v1.1.0).

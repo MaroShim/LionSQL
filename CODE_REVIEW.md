@@ -5,7 +5,7 @@ This document tracks systematic static analysis, defect auditing, regression tes
 > [!NOTE]
 > - Detailed Korean audit tracker: [`CODE_REVIEW.ko.md`](CODE_REVIEW.ko.md)
 > - Defect resolution archive (107 cases): [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)
-> - Subsystem modular API contract plan: [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md)
+> - Subsystem modular architecture plan: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -128,7 +128,7 @@ All code reviews and bug remediations must strictly pass all 3 stages in order b
 
 | ID | Priority | Category | Target Location | Description & Remediation | Status | Reference |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| **REV-ARCH-001** | P2 | Encapsulation | [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md) | Wire protocol adapters directly accessing storage engine and session mutex locks. Designed `R-6` SPI decoupled contracts. | `[x]` | Post-1.0 (`v1.1.0+`) |
+| **REV-ARCH-001** | P2 | Encapsulation | [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md) | Wire protocol adapters directly accessing storage engine and session mutex locks. Designed `R-6` SPI decoupled contracts. | `[x]` | Post-1.0 (`v1.1.0+`) |
 
 ---
 

@@ -5,7 +5,7 @@
 > [!NOTE]
 > - 영문 요약본: [`CODE_REVIEW.md`](CODE_REVIEW.md)
 > - 결함 조치 아카이브 (107건): [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)
-> - 모듈형 아키텍처 API 계획: [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md)
+> - 모듈형 아키텍처 계획: [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md)
 
 ---
 
@@ -128,7 +128,7 @@
 
 | ID | 우선순위 | 구분 | 파일 및 라인 | 설명 | 상태 | 커밋 / 비고 |
 | :--- | :---: | :---: | :--- | :--- | :---: | :--- |
-| **REV-ARCH-001** | P2 | 결합도/캡슐화 | [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md) | 와이어 프로토콜이 코디네이터 외에 스토리지 엔진 및 `ClientSession` 내부 락(`cs.Mu.Lock()`)을 직접 조작하는 경계 누수 | `[x]` | `R-6` 계획 수립 및 5대 핵심 SPI 인터페이스 명세 완료 (Post-1.0 `v1.1.0+` 로드맵 배치) |
+| **REV-ARCH-001** | P2 | 결합도/캡슐화 | [`notes/MODULAR_ARCHITECTURE_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_PLAN.ko.md) | 와이어 프로토콜이 코디네이터 외에 스토리지 엔진 및 `ClientSession` 내부 락(`cs.Mu.Lock()`)을 직접 조작하는 경계 누수 | `[x]` | `R-6` 계획 수립 및 5대 핵심 SPI 인터페이스 명세 완료 (Post-1.0 `v1.1.0+` 로드맵 배치) |
 
 ---
 
