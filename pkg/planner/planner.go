@@ -667,6 +667,28 @@ func SplitProjections(s string) []string {
 
 // parseFromAndJoins parses the FROM clause and extracts the base table and any number of chained JOINs.
 func parseFromAndJoins(fromClause string) (string, string, []*JoinInfo, error) {
+	fromClause = strings.TrimSpace(fromClause)
+	for strings.HasPrefix(fromClause, "(") && strings.HasSuffix(fromClause, ")") {
+		depth := 0
+		allEnclosed := true
+		for i := 0; i < len(fromClause)-1; i++ {
+			if fromClause[i] == '(' {
+				depth++
+			} else if fromClause[i] == ')' {
+				depth--
+				if depth == 0 {
+					allEnclosed = false
+					break
+				}
+			}
+		}
+		if allEnclosed {
+			fromClause = strings.TrimSpace(fromClause[1 : len(fromClause)-1])
+		} else {
+			break
+		}
+	}
+
 	joinPattern := regexp.MustCompile(`(?is)(?:(INNER|LEFT(?:\s+OUTER)?|RIGHT(?:\s+OUTER)?|FULL(?:\s+OUTER)?)\s+)?JOIN\s+([^\s]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s+ON\s+([^\s=]+)\s*=\s*([^\s=;]+)`)
 	matches := joinPattern.FindAllStringSubmatchIndex(fromClause, -1)
 	if len(matches) == 0 {
@@ -734,6 +756,7 @@ func parseFromAndJoin(fromClause string) (string, string, *JoinInfo, error) {
 }
 
 func parseTableAndAlias(str string) (string, string) {
+	str = strings.Trim(strings.TrimSpace(str), "()")
 	tokens := strings.Fields(strings.TrimSpace(str))
 	if len(tokens) == 0 {
 		return "", ""

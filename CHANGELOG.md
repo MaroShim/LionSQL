@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- complete Vaultwarden password manager integration over PGWire (:5433, 47 Diesel ORM migrations, composite primary keys, cipher and folder CRUD, sync API) (INTEG-VAULTWARDEN-1)
 - complete Apache Answer Q&A knowledge-base platform integration over PGWire (:5433, 35 tables, XORM migrations, admin login, question/answer E2E) (INTEG-ANSWER-1)
 - implement IdentityProvider SPI in VDBE execution runtime and synchronize table identity counters across VDBE and SQL coordinator
 - add cmd/crashtest kill-9 crash recovery harness with 4-point durability oracle (D1~D4) and DOUBLE_KILL, TORN_WAL_TAIL, and DDL variants across In-Memory OCC and WiredTiger (DURA-KILL-1)
@@ -22,6 +23,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- split and execute multi-action compound ALTER TABLE statements sequentially
+- handle whitespace and newline formatting in ADD COLUMN DDL statements
+- support parenthesized ANSI joins in FROM clauses (e.g. FROM ("t1" JOIN "t2"))
+- resolve composite primary key values in ON CONFLICT DO UPDATE upsert statements
+- evaluate DEFAULT keyword in INSERT column values to default expressions or NULL
+- bind datetime columns to PostgreSQL OID 1114 (TIMESTAMP) with 8-byte binary microsecond encoding and resolve DISTINCT column types
 - auto-generate sequential identity values in VDBE OpInsert during multi-row batch inserts when identity column is omitted
 - bypass VDBE compilation for virtual catalog queries (pg_tables, sys.*) and DML statements with RETURNING, OUTPUT, or ON CONFLICT clauses
 - prevent session variable substitution from textually replacing @@ system variables in SQL queries
@@ -44,6 +51,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - reuse 5-byte message header buffer across connection message loop in PGWire server
 
 ### Documentation
+- author Vaultwarden integration report (notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md) and bilingual deployment guides (doc/VAULTWARDEN_INTEGRATION_GUIDE.ko.md, doc/VAULTWARDEN_INTEGRATION_GUIDE.md)
 - author Apache Answer integration report (notes/ANSWER_INTEGRATION_REPORT.ko.md) and bilingual deployment guides (doc/ANSWER_INTEGRATION_GUIDE.ko.md, doc/ANSWER_INTEGRATION_GUIDE.md)
 - author bilingual Casdoor IAM/SSO integration guides (doc/CASDOOR_INTEGRATION_GUIDE.ko.md, doc/CASDOOR_INTEGRATION_GUIDE.md) and milestone reports (notes/CASDOOR_INTEGRATION_MILESTONE.ko.md, notes/CASDOOR_INTEGRATION_MILESTONE.md)
 - author bilingual Grafana integration guides (doc/GRAFANA_INTEGRATION_GUIDE.ko.md, doc/GRAFANA_INTEGRATION_GUIDE.md) and milestone reports (notes/GRAFANA_INTEGRATION_MILESTONE.ko.md, notes/GRAFANA_INTEGRATION_MILESTONE.md)

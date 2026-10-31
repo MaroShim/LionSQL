@@ -528,8 +528,15 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	}
 
 	// 2. FROM clause
+	fromParens := 0
 	if p.curTokenIs(TokenFrom) {
 		p.nextToken() // eat FROM
+
+		for p.curTokenIs(TokenLParen) && !p.peekTokenIs(TokenSelect) && !p.peekTokenIs(TokenWith) {
+			fromParens++
+			p.nextToken() // eat (
+		}
+
 		if p.curTokenIs(TokenLParen) {
 			p.nextToken() // eat (
 			if p.curTokenIs(TokenSelect) {
@@ -610,6 +617,19 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			fromHints := p.parseTableHints()
 
 			stmt.From = TableRef{Name: tblName, Alias: alias, IsTVF: isTVF, TVFArgs: tvfArgs, Hints: fromHints}
+		}
+
+		for fromParens > 0 && p.curTokenIs(TokenRParen) {
+			p.nextToken() // eat )
+			fromParens--
+			if p.curTokenIs(TokenAs) {
+				p.nextToken()
+				if p.curTokenIs(TokenIdent) {
+					p.nextToken()
+				}
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+				p.nextToken()
+			}
 		}
 	}
 
@@ -725,7 +745,7 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			p.nextToken() // eat JOIN
 		}
 
-		if p.curTokenIs(TokenLParen) {
+		if p.curTokenIs(TokenLParen) && (p.peekTokenIs(TokenSelect) || p.peekTokenIs(TokenWith)) {
 			p.nextToken() // eat (
 			if p.curTokenIs(TokenSelect) {
 				p.nextToken() // eat SELECT
@@ -771,6 +791,12 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				On:    onExpr,
 			})
 		} else {
+			joinParens := 0
+			for p.curTokenIs(TokenLParen) && !p.peekTokenIs(TokenSelect) && !p.peekTokenIs(TokenWith) {
+				joinParens++
+				p.nextToken() // eat (
+			}
+
 			if !p.curTokenIs(TokenIdent) {
 				return nil, fmt.Errorf("expected table name in JOIN, got %s", p.curToken.Literal)
 			}
@@ -797,6 +823,11 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 					return nil, fmt.Errorf("expected ) closing TVF arguments in JOIN")
 				}
 				p.nextToken() // eat )
+			}
+
+			for joinParens > 0 && p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+				joinParens--
 			}
 
 			jAlias := jTbl
@@ -830,6 +861,32 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 				Table: TableRef{Name: jTbl, Alias: jAlias, IsTVF: isTVF, TVFArgs: tvfArgs, Hints: jHints},
 				On:    onExpr,
 			})
+		}
+
+		for fromParens > 0 && p.curTokenIs(TokenRParen) {
+			p.nextToken() // eat )
+			fromParens--
+			if p.curTokenIs(TokenAs) {
+				p.nextToken()
+				if p.curTokenIs(TokenIdent) {
+					p.nextToken()
+				}
+			} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+				p.nextToken()
+			}
+		}
+	}
+
+	for fromParens > 0 && p.curTokenIs(TokenRParen) {
+		p.nextToken() // eat )
+		fromParens--
+		if p.curTokenIs(TokenAs) {
+			p.nextToken()
+			if p.curTokenIs(TokenIdent) {
+				p.nextToken()
+			}
+		} else if p.curTokenIs(TokenIdent) && !isReservedAfterFromOrJoin(p.curToken.Type) {
+			p.nextToken()
 		}
 	}
 

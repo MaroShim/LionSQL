@@ -354,11 +354,19 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			colSchema, _, found := schema.FindColumn(colName)
 			valStr := strings.TrimSpace(vals[i])
 			if !found {
-				rec[colName] = parseLiteralValue(valStr, storage.TypeVarChar)
+				if strings.EqualFold(valStr, "DEFAULT") {
+					rec[colName] = storage.NullValue(storage.TypeVarChar)
+				} else {
+					rec[colName] = parseLiteralValue(valStr, storage.TypeVarChar)
+				}
 			} else {
 				canonicalName := colSchema.Name
-				if strings.EqualFold(valStr, "DEFAULT") && colSchema.Default != "" {
-					rec[canonicalName] = parseLiteralValue(colSchema.Default, colSchema.Type)
+				if strings.EqualFold(valStr, "DEFAULT") {
+					if colSchema.Default != "" {
+						rec[canonicalName] = parseLiteralValue(colSchema.Default, colSchema.Type)
+					} else {
+						rec[canonicalName] = storage.NullValue(colSchema.Type)
+					}
 				} else {
 					rec[canonicalName] = parseLiteralValue(valStr, colSchema.Type)
 				}
@@ -409,6 +417,12 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						conflictCols = append(conflictCols, tc)
 					}
 				}
+			} else if schema.IsCompositePK() {
+				for _, c := range schema.Columns {
+					if c.PrimaryKey {
+						conflictCols = append(conflictCols, c.Name)
+					}
+				}
 			} else if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
 				conflictCols = []string{pkCol.Name}
 			}
@@ -417,7 +431,14 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			var existingPk storage.Value
 			pkCol, _ := schema.PrimaryKeyColumn()
 
-			if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
+			if schema.IsCompositePK() {
+				if pkVal, ok := schema.ResolveRecordPK(rec); ok {
+					if ex, err := tx.Get(tableName, pkVal); err == nil && ex != nil {
+						existingRec = ex
+						existingPk = pkVal
+					}
+				}
+			} else if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
 				if targetVal, ok := rec.Get(pkCol.Name); ok {
 					if ex, err := tx.Get(tableName, targetVal); err == nil && ex != nil {
 						existingRec = ex
@@ -451,7 +472,9 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 							for cur.Next() {
 								if r, err := cur.Record(); err == nil {
 									existingRec = r
-									if pkCol != nil {
+									if pkVal, ok := schema.ResolveRecordPK(r); ok {
+										existingPk = pkVal
+									} else if pkCol != nil {
 										existingPk, _ = r.Get(pkCol.Name)
 									}
 									break
@@ -480,7 +503,9 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 							}
 							if matched {
 								existingRec = r
-								if pkCol != nil {
+								if pkVal, ok := schema.ResolveRecordPK(r); ok {
+									existingPk = pkVal
+								} else if pkCol != nil {
 									existingPk, _ = r.Get(pkCol.Name)
 								}
 								break
@@ -804,6 +829,12 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						conflictCols = append(conflictCols, tc)
 					}
 				}
+			} else if schema.IsCompositePK() {
+				for _, c := range schema.Columns {
+					if c.PrimaryKey {
+						conflictCols = append(conflictCols, c.Name)
+					}
+				}
 			} else if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
 				conflictCols = []string{pkCol.Name}
 			}
@@ -812,7 +843,14 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			var existingPk storage.Value
 			pkCol, _ := schema.PrimaryKeyColumn()
 
-			if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
+			if schema.IsCompositePK() {
+				if pkVal, ok := schema.ResolveRecordPK(rec); ok {
+					if ex, err := tx.Get(tableName, pkVal); err == nil && ex != nil {
+						existingRec = ex
+						existingPk = pkVal
+					}
+				}
+			} else if len(conflictCols) == 1 && pkCol != nil && strings.EqualFold(conflictCols[0], pkCol.Name) {
 				if targetVal, ok := rec.Get(pkCol.Name); ok {
 					if ex, err := tx.Get(tableName, targetVal); err == nil && ex != nil {
 						existingRec = ex
@@ -846,7 +884,9 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 							for cur.Next() {
 								if r, err := cur.Record(); err == nil {
 									existingRec = r
-									if pkCol != nil {
+									if pkVal, ok := schema.ResolveRecordPK(r); ok {
+										existingPk = pkVal
+									} else if pkCol != nil {
 										existingPk, _ = r.Get(pkCol.Name)
 									}
 									break
@@ -875,7 +915,9 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 							}
 							if matched {
 								existingRec = r
-								if pkCol != nil {
+								if pkVal, ok := schema.ResolveRecordPK(r); ok {
+									existingPk = pkVal
+								} else if pkCol != nil {
 									existingPk, _ = r.Get(pkCol.Name)
 								}
 								break

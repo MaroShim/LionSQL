@@ -62,7 +62,7 @@ func generateUUIDv7() string {
 // string literals, and type-specific data parsing.
 func ParseLiteralDefault(s string, targetType DataType) Value {
 	s = strings.TrimSpace(s)
-	if s == "" || strings.EqualFold(s, "NULL") {
+	if s == "" || strings.EqualFold(s, "NULL") || strings.EqualFold(s, "DEFAULT") {
 		return NullValue(targetType)
 	}
 
@@ -97,6 +97,10 @@ func ParseLiteralDefault(s string, targetType DataType) Value {
 	case "GETDATE()", "NOW()", "CURRENT_TIMESTAMP":
 		return DateTimeValue(time.Now())
 	case "GETUTCDATE()", "SYSDATETIME()":
+		return DateTimeValue(time.Now().UTC())
+	}
+
+	if (strings.HasPrefix(upper, "NOW()") || strings.HasPrefix(upper, "CURRENT_TIMESTAMP") || strings.HasPrefix(upper, "GETDATE()")) && strings.Contains(upper, "AT TIME ZONE") {
 		return DateTimeValue(time.Now().UTC())
 	}
 

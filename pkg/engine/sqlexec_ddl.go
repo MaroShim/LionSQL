@@ -45,6 +45,11 @@ var (
 	reDropStatsOn       = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
 	reDropStats         = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
 	reColDefault        = regexp.MustCompile(`(?i)\bDEFAULT\s+('(?:''|[^'])*'|\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\d+)`)
+	reLeadingAdd         = regexp.MustCompile(`(?is)^ADD\s+`)
+	reLeadingColumn      = regexp.MustCompile(`(?is)^COLUMN\s+`)
+	reLeadingIfNotExists = regexp.MustCompile(`(?is)^IF\s+NOT\s+EXISTS\s+`)
+	reAlterTablePrefix   = regexp.MustCompile(`(?is)^(ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+))\s+(.*)$`)
+	reLeadingAction      = regexp.MustCompile(`(?i)^(ADD|DROP|ALTER|RENAME)\b`)
 )
 
 func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
@@ -1025,6 +1030,33 @@ func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult,
 func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
+	// 0. Compound ALTER TABLE with multiple top-level comma-separated actions:
+	// e.g. "ALTER TABLE attachments ALTER COLUMN file_size TYPE BIGINT, ALTER COLUMN file_size SET NOT NULL;"
+	// or "ALTER TABLE sso_users DROP CONSTRAINT ..., ADD CONSTRAINT ..."
+	if m := reAlterTablePrefix.FindStringSubmatch(cleaned); len(m) >= 4 {
+		prefix := m[1]
+		body := strings.TrimSpace(m[3])
+		segments := sqlutil.SplitTopLevel(body, ',')
+		if len(segments) > 1 && reLeadingAction.MatchString(strings.TrimSpace(segments[1])) {
+			var lastRes *QueryResult
+			for _, seg := range segments {
+				segTrimmed := strings.TrimSpace(seg)
+				if segTrimmed == "" {
+					continue
+				}
+				subSQL := prefix + " " + segTrimmed
+				res, err := s.execAlterTable(subSQL, start, cs)
+				if err != nil {
+					return nil, err
+				}
+				lastRes = res
+			}
+			if lastRes != nil {
+				return lastRes, nil
+			}
+		}
+	}
+
 	// 1. Check for IF EXISTS table clause
 	cleanedUpper := strings.ToUpper(cleaned)
 	if strings.Contains(cleanedUpper, "ALTER TABLE IF EXISTS") {
@@ -1381,17 +1413,15 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		var addedCols []string
 		for _, seg := range segments {
 			segTrimmed := strings.TrimSpace(seg)
-			segUpper := strings.ToUpper(segTrimmed)
-			if strings.HasPrefix(segUpper, "ADD ") {
-				segTrimmed = strings.TrimSpace(segTrimmed[4:])
-			}
-			if strings.HasPrefix(strings.ToUpper(segTrimmed), "COLUMN ") {
-				segTrimmed = strings.TrimSpace(segTrimmed[7:])
-			}
+			segTrimmed = reLeadingAdd.ReplaceAllString(segTrimmed, "")
+			segTrimmed = strings.TrimSpace(segTrimmed)
+			segTrimmed = reLeadingColumn.ReplaceAllString(segTrimmed, "")
+			segTrimmed = strings.TrimSpace(segTrimmed)
 			ifNotExists := false
-			if strings.HasPrefix(strings.ToUpper(segTrimmed), "IF NOT EXISTS ") {
+			if reLeadingIfNotExists.MatchString(segTrimmed) {
 				ifNotExists = true
-				segTrimmed = strings.TrimSpace(segTrimmed[14:])
+				segTrimmed = reLeadingIfNotExists.ReplaceAllString(segTrimmed, "")
+				segTrimmed = strings.TrimSpace(segTrimmed)
 			}
 
 			fields := strings.Fields(segTrimmed)

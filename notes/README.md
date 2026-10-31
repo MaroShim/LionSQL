@@ -34,6 +34,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
      - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean): Master plan for crash resilience, kill tests, soak stress tests, and dogfooding.
      - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)** (Korean): Master plan for 6 real-world app integrations (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost).
      - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)** (Korean): Apache Answer PGWire integration detail plan (first in order).
+     - **[`VAULTWARDEN_INTEGRATION_PLAN.ko.md`](VAULTWARDEN_INTEGRATION_PLAN.ko.md)** (Korean): Vaultwarden (Rust + Diesel ORM) PGWire integration detail plan (second in order).
    - **Post-1.0 Architecture & Roadmap Plans**:
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC performance optimization history, WiredTiger beat roadmap, 104k tpmC architecture, and post-1.0 memory compaction (OCC-HYPER-2).
      - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): Vertical server pipeline optimization from TDS network socket read coalescing to WAL file system fallocate and adaptive group commit (Phase 3/4).
@@ -46,6 +47,8 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
      - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
 
 7. **Production Integration Reports & Postmortems**:
+   - **[`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md)** (Korean): Vaultwarden (Rust + Diesel ORM) 47 migrations execution, composite PK upsert, 8-byte timestamp encoding, and Bitwarden REST API E2E verification report.
+   - **[`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md)** (Korean): Apache Answer Q&A platform 35 tables creation, VDBE multi-row batch identity generation, and REST API E2E verification report.
    - **[`GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)** (Korean): Gitea dual-protocol (TDS :1433 & PGWire :5433) live integration and 116 production tables full E2E lifecycle verification report.
    - **[`IOTA_ERP_INTEGRATION_REPORT.ko.md`](IOTA_ERP_INTEGRATION_REPORT.ko.md)** (Korean): IOTA SDK Go ERP integration, strict `pgx/v5` binary wire protocol compliance, and 47 schema migrations execution verification report.
    - **[`GRAFANA_INTEGRATION_REPORT.ko.md`](GRAFANA_INTEGRATION_REPORT.ko.md)** (Korean): Grafana 785 migrations execution, envelope encryption (`BYTEA`), CTE derived table isolation, and dual data source query verification report.

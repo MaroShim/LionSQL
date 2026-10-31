@@ -1303,10 +1303,14 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		if strings.HasPrefix(strings.ToUpper(selectPart), "SELECT") {
 			selectPart = strings.TrimSpace(selectPart[6:])
 		}
+		if strings.HasPrefix(strings.ToUpper(selectPart), "DISTINCT") {
+			selectPart = strings.TrimSpace(selectPart[8:])
+		}
 		afterFrom := query[fromIdx+4:]
 		tblField := sqlutil.SplitTopLevelTokens(afterFrom)
 		if len(tblField) > 0 {
-			tblName := strings.Trim(tblField[0], ";, ")
+			tblName := strings.Trim(tblField[0], ";, ()")
+			tblName = cleanColumnIdentifier(tblName)
 			tbl, err := s.engine.GetTable(tblName)
 			if err != nil {
 				tbl, err = s.engine.GetTable(strings.ToLower(tblName))
@@ -1976,41 +1980,70 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 
 func cleanColumnIdentifier(s string) string {
 	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "()")
 	if strings.Contains(s, ".") {
 		parts := strings.Split(s, ".")
 		s = parts[len(parts)-1]
 	}
-	s = strings.Trim(s, "[]\"'`")
+	s = strings.Trim(s, "[]\"'`()")
 	return strings.TrimSpace(s)
 }
 
 func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow map[string]any) []int32 {
 	oids := make([]int32, len(colNames))
-	var tbl *storage.TableSchema
+	tables := make([]*storage.TableSchema, 0)
+
 	fromIdx := sqlutil.FindTopLevelKeyword(query, "FROM")
 	if fromIdx != -1 {
 		afterFrom := query[fromIdx+4:]
 		tblField := sqlutil.SplitTopLevelTokens(afterFrom)
 		if len(tblField) > 0 {
-			tblName := strings.Trim(tblField[0], ";, ")
+			tblName := strings.Trim(tblField[0], ";, ()")
 			tblName = cleanColumnIdentifier(tblName)
 			t, err := s.engine.GetTable(tblName)
 			if err != nil {
 				t, err = s.engine.GetTable(strings.ToLower(tblName))
 			}
 			if err == nil {
-				tbl = t
+				tables = append(tables, t)
 			}
+		}
+	}
+
+	reJoinTable := regexp.MustCompile(`(?i)\bJOIN\s+([^\s(]+)`)
+	for _, jm := range reJoinTable.FindAllStringSubmatch(query, -1) {
+		jtName := cleanColumnIdentifier(jm[1])
+		if jt, err := s.engine.GetTable(jtName); err == nil {
+			tables = append(tables, jt)
+		} else if jt, err := s.engine.GetTable(strings.ToLower(jtName)); err == nil {
+			tables = append(tables, jt)
 		}
 	}
 
 	for i, colName := range colNames {
 		var oid int32 = 0
 		cleanCol := cleanColumnIdentifier(colName)
-		if tbl != nil {
-			for _, c := range tbl.Columns {
+		for _, t := range tables {
+			for _, c := range t.Columns {
 				if strings.EqualFold(c.Name, cleanCol) || strings.EqualFold(c.Name, colName) {
 					oid = typeToPgOID(c.Type)
+					break
+				}
+			}
+			if oid != 0 {
+				break
+			}
+		}
+		if oid == 0 {
+			allTables, _ := s.engine.ListTables()
+			for _, t := range allTables {
+				for _, c := range t.Columns {
+					if strings.EqualFold(c.Name, cleanCol) || strings.EqualFold(c.Name, colName) {
+						oid = typeToPgOID(c.Type)
+						break
+					}
+				}
+				if oid != 0 {
 					break
 				}
 			}
@@ -2560,7 +2593,7 @@ func typeToPgOID(t storage.DataType) int32 {
 	case storage.TypeBool:
 		return 16 // BOOL
 	case storage.TypeDateTime:
-		return 1184 // TIMESTAMPTZ
+		return 1114 // TIMESTAMP (1114 = timestamp without tz, 1184 = timestamptz)
 	case storage.TypeDate:
 		return 1082 // DATE
 	case storage.TypeTime:
@@ -2653,6 +2686,20 @@ func inferPgOID(v any) int32 {
 		default:
 			return 25
 		}
+	case string:
+		if _, err := time.Parse("2006-01-02 15:04:05.999999", val); err == nil {
+			return 1114
+		}
+		if _, err := time.Parse("2006-01-02 15:04:05", val); err == nil {
+			return 1114
+		}
+		if _, err := time.Parse(time.RFC3339Nano, val); err == nil {
+			return 1114
+		}
+		if _, err := time.Parse(time.RFC3339, val); err == nil {
+			return 1114
+		}
+		return 25 // text
 	default:
 		return 25 // text
 	}

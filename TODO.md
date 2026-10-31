@@ -52,11 +52,15 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 35개 테이블 스키마 자동 생성, VDBE 다중 행 배치 Identity 키 자동 발급, 관리자 로그인, 질문/답변 E2E 100% 무오류 완료 (Answer 소스 수정 0줄)
 
-### [ ] 2.2 `INTEG-VAULTWARDEN-1` Vaultwarden (비밀번호 관리) — **[1순위 착수 예정]**
+### [x] 2.2 `INTEG-VAULTWARDEN-1` Vaultwarden (비밀번호 관리) — **[완료 (Pass)]**
+- 연동 계획서: [`notes/VAULTWARDEN_INTEGRATION_PLAN.ko.md`](notes/VAULTWARDEN_INTEGRATION_PLAN.ko.md)
+- 연동 보고서: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
+- 운영 가이드: [`doc/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](doc/VAULTWARDEN_INTEGRATION_GUIDE.ko.md) / [`doc/VAULTWARDEN_INTEGRATION_GUIDE.md`](doc/VAULTWARDEN_INTEGRATION_GUIDE.md)
+- 회귀 테스트: `pkg/engine/vaultwarden_compat_test.go`
 - 스택: Rust + Diesel ORM / PGWire (`TCP :5433`)
-- 암호화 볼트 동기화, Bitwarden 공식 클라이언트 연동 검증
+- 47개 Diesel ORM 마이그레이션 100% 자동 완주, 29개 테이블 생성, 복합 기본 키 `ON CONFLICT DO UPDATE`, 8바이트 Timestamp OID 1114 인코딩, KDF/JWT/비밀번호 사이퍼 CRUD/동기화 E2E 무오류 통과 (Vaultwarden 소스 수정 0줄)
 
-### [ ] 2.3 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[3순위]**
+### [ ] 2.3 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[1순위 착수 예정]**
 - 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
 - 대시보드 쿼리 생성기 및 스키마 인트로스펙션 검증
 
