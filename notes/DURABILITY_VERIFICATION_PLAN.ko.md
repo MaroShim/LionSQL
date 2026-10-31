@@ -74,6 +74,18 @@
 - 각 엔진에서 연속 5,000 라운드 위반 0건, 모든 시나리오 변형 통과.
 - 발견 결함은 `BUG_ARCHIVE`에 기록하고 회귀 테스트로 승격.
 
+### 3.6. 크래시 복구 도구(`cmd/crashtest`) 구현 및 20라운드 실측 결과 (2026-10-31)
+- **구현 내용**:
+  - 다중 워커 계좌 이체(`crash_accounts`) + 커밋 장부(`crash_ledger`, SHA-256 체크섬 검증) + 동시 DDL(`CREATE/DROP TABLE`) 워크로드 및 4단계 정합성 오라클(D1 커밋 내구성, D2 원자성 `SUM(balance) = 200,000`, D3 PK/체크섬 일관성, D4 복구 가능성) 구현.
+  - 변형 시나리오(`SIGKILL`, `SIGKILL+DOUBLE_KILL` 연속 강제 종료, `SIGKILL+TORN_WAL_TAIL` WAL 꼬리 절단 손상 복구, `SIGTERM` 정상 종료 대조군) 자동 실행 지원.
+- **발견 및 수정한 결함 3건**:
+  1. **WiredTiger 유저 공간 로그 버퍼 유실 (`pkg/storage/wiredtiger/wt_engine.go`)**: 기본 설정에서 `commit_transaction` 직후 `SIGKILL` 수신 시 WiredTiger C 유저 공간 로그 버퍼에 남아 있던 커밋 레코드가 유실되던 문제를 해결하기 위해 `wiredtiger_open`에 `transaction_sync=(enabled=true,method=none)`을 적용하여 커밋 시 OS 파일시스템 버퍼(`write(2)`)로 즉시 플러시되도록 수정하고, `saveCatalog()`에 임시 파일 + 원자적 `os.Rename`(Rule 1)을 적용.
+  2. **PGWire 텍스트 파라미터 과학적 표기법 오인 (`pkg/wire/server.go`)**: `'e'`를 포함한 16진수 체크섬 문자열(예: `"83920194837261e2"`)이나 선행 0 숫자 문자열이 `strconv.ParseFloat` / `strconv.ParseInt`에 의해 부동소수점(`Inf`)이나 정수로 잘못 변환되던 문제를 `isPureIntegerString` / `isPureFloatString` 가드로 해결.
+  3. **`CREATE TABLE` 제약 조건 접두사 충돌 (`pkg/engine/sqlexec_ddl.go`)**: `strings.HasPrefix(cUpper, "CHECK")` 및 `"UNIQUE"`, `"CONSTRAINT"` 단순 접두사 비교로 인해 `checksum`, `checked_at`, `unique_id` 등의 컬럼 정의가 테이블 제약 조건으로 오인되어 스키마에서 누락되던 버그를 토큰 경계 검사로 수정.
+- **엔진별 20라운드 실측 결과**:
+  - **In-Memory OCC (`-engine memory -rounds 20`)**: `20/20 PASS` (`SIGKILL`, `SIGKILL+DOUBLE_KILL`, `SIGKILL+TORN_WAL_TAIL`, `SIGTERM` 전 시나리오 통과, 총 `64,214`건 커밋 트랜잭션 100% 복구, 복구 시간 `42ms~282ms`, 위반 `0`건).
+  - **WiredTiger (`-engine wiredtiger -rounds 20`)**: `20/20 PASS` (`SIGKILL`, `SIGKILL+DOUBLE_KILL`, `SIGTERM` 전 시나리오 통과, 총 `63,931`건 커밋 트랜잭션 100% 복구, 복구 시간 `801ms~842ms`, 위반 `0`건).
+
 ---
 
 ## 4. `DURA-SOAK-1` 소크 테스트 (장시간 부하)

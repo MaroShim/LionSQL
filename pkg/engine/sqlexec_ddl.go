@@ -101,7 +101,14 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 		}
 
 		cUpper := strings.ToUpper(cDefTrimmed)
-		if strings.HasPrefix(cUpper, "PRIMARY KEY") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "PRIMARY KEY")) {
+		tokens := strings.Fields(cDefTrimmed)
+		if len(tokens) == 0 {
+			continue
+		}
+		firstTokUpper := strings.ToUpper(tokens[0])
+		isConstraintClause := firstTokUpper == "CONSTRAINT"
+
+		if strings.HasPrefix(cUpper, "PRIMARY KEY") || (isConstraintClause && strings.Contains(cUpper, "PRIMARY KEY")) {
 			// e.g. PRIMARY KEY (id) or PRIMARY KEY (col1, col2) or CONSTRAINT pk_foo PRIMARY KEY (col1, col2)
 			if openIdx := strings.Index(cDefTrimmed, "("); openIdx != -1 {
 				if closeIdx := strings.LastIndex(cDefTrimmed, ")"); closeIdx > openIdx {
@@ -119,7 +126,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			continue
 		}
 
-		if strings.HasPrefix(cUpper, "FOREIGN KEY") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "FOREIGN KEY")) {
+		if strings.HasPrefix(cUpper, "FOREIGN KEY") || (isConstraintClause && strings.Contains(cUpper, "FOREIGN KEY")) {
 			if fk, ok := parseForeignKeyClause(cDefTrimmed, "", ""); ok {
 				fk.ChildTable = tableName
 				schema.ForeignKeys = append(schema.ForeignKeys, *fk)
@@ -127,13 +134,11 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			continue
 		}
 
-		if strings.HasPrefix(cUpper, "UNIQUE") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "UNIQUE")) {
+		isTableUnique := firstTokUpper == "UNIQUE" || strings.HasPrefix(firstTokUpper, "UNIQUE(") || (isConstraintClause && strings.Contains(cUpper, "UNIQUE"))
+		if isTableUnique {
 			var cName string
-			if strings.HasPrefix(cUpper, "CONSTRAINT") {
-				fields := strings.Fields(cDefTrimmed)
-				if len(fields) >= 2 {
-					cName = cleanIdentifier(fields[1])
-				}
+			if isConstraintClause && len(tokens) >= 2 {
+				cName = cleanIdentifier(tokens[1])
 			}
 			if openIdx := strings.Index(cDefTrimmed, "("); openIdx != -1 {
 				if closeIdx := strings.LastIndex(cDefTrimmed, ")"); closeIdx > openIdx {
@@ -161,11 +166,11 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			continue
 		}
 
-		if strings.HasPrefix(cUpper, "CHECK") || (strings.HasPrefix(cUpper, "CONSTRAINT") && strings.Contains(cUpper, "CHECK")) {
+		isTableCheck := firstTokUpper == "CHECK" || strings.HasPrefix(firstTokUpper, "CHECK(") || (isConstraintClause && strings.Contains(cUpper, "CHECK"))
+		if isTableCheck {
 			continue
 		}
 
-		tokens := strings.Fields(cDefTrimmed)
 		if len(tokens) < 2 {
 			continue
 		}

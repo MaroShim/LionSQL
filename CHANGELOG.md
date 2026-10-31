@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add cmd/crashtest kill-9 crash recovery harness with 4-point durability oracle (D1~D4) and DOUBLE_KILL, TORN_WAL_TAIL, and DDL variants across In-Memory OCC and WiredTiger (DURA-KILL-1)
 - add cmd/soaktest long-duration soak test tool (steady mixed PGWire workload, RSS/FD/disk/p99 trend verdict, balance invariant and acknowledged-commit integrity check) (DURA-SOAK-1)
 - complete Casdoor IAM/SSO/OIDC dual-protocol integration across PGWire (:5433) and MSSQL TDS (:1433) (44 XORM tables, Casbin policies, OIDC/JWKS, and Auth REST API) (CASDOOR-INTEGRATION-1)
 - support composite primary keys (`PRIMARY KEY (col1, col2, ...)`) in WiredTiger and In-Memory OCC storage engines via `\x1f` unit-separator physical key composition
@@ -19,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- enable WiredTiger transaction_sync=(enabled=true,method=none) to flush commit records to OS buffers on commit and make saveCatalog atomic via rename so committed transactions survive SIGKILL (DURA-KILL-1)
+- prevent CREATE TABLE from swallowing columns prefixed with CHECK, UNIQUE, or CONSTRAINT (e.g. checksum, unique_id) as table-level constraints
+- guard PGWire untyped text parameter decoding with strict integer/float lexical checks so hex strings containing 'e' or leading zeros are not misparsed as numbers
 - map WiredTiger WT_ROLLBACK write conflicts to storage.ErrSerializationFailure and report them as PGWire SQLSTATE 40001 instead of XX000 so clients can retry (DURA-SOAK-F1)
 - decouple logical table rename from physical WiredTiger table URI via TableSchema.PhysicalName to prevent EBUSY errors during active transactions
 - evict cached WiredTiger cursors in DropTable and assign unique PhysicalName for temporary tables to eliminate derived table key collisions

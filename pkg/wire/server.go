@@ -1012,11 +1012,15 @@ func decodeTextParamValue(s string, oid int32) storage.Value {
 				return storage.BinaryValue(b)
 			}
 		}
-		if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
-			return storage.IntValue(i)
+		if isPureIntegerString(trimmed) {
+			if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+				return storage.IntValue(i)
+			}
 		}
-		if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
-			return storage.FloatValue(f)
+		if isPureFloatString(trimmed) {
+			if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
+				return storage.FloatValue(f)
+			}
 		}
 		if strings.EqualFold(trimmed, "true") {
 			return storage.BoolValue(true)

@@ -128,7 +128,7 @@ Plan: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION
 
 | Task Code | Domain | Key Deliverable | Target | Status |
 | :---: | :---: | :--- | :--- | :---: |
-| **`DURA-KILL-1`** | Reliability | **Kill -9 crash recovery test (ack ledger vs recovered state oracle, 5,000 rounds per engine, DDL/checkpoint/WAL-corruption variants)** | `cmd/crashtest/` | Pending (`[ ]`) |
+| **`DURA-KILL-1`** | Reliability | **Kill -9 crash recovery test (ack ledger vs recovered state oracle, 5,000 rounds per engine, DDL/checkpoint/WAL-corruption variants)** | `cmd/crashtest/` | In Progress (`[-]`): Tool + variants + 20 rounds/engine (`64k+` tx) verified (`0` violations) |
 | **`DURA-SOAK-1`** | Reliability | **24h to 72h soak test (RSS/goroutine/FD/disk/latency trend judgement, pprof snapshots on violation)** | `cmd/soaktest/` | In Progress (`[-]`): Phase 1 tool + 1h WiredTiger run verified - [`notes/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](notes/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md) |
 | **`DURA-SOAK-F1`** | Reliability | **WiredTiger write-write conflict surfaces as `XX000 cursor_update failed -31800`; map to SQLSTATE `40001` (serialization_failure) so clients can retry** | `pkg/storage/wiredtiger`, `pkg/wire/` | **Completed (`[x]`)** (PGWire only; TDS error 1205 mapping not done) |
 | **`DURA-SOAK-F2`** | Reliability | **Verify RSS growth seen in 40s smoke run (54MB to 79MB, ratio 1.28) is cache warm-up, not a leak, via 1h run** | `cmd/soaktest/` | **Completed (`[x]`)** (Verified in 1h run: WiredTiger `cache_size=500M` populates to ~660MB RSS over 35m and stabilizes around 610MB; added `/metrics` heap/goroutine scraping & cache ceiling baseline) |

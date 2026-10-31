@@ -270,3 +270,47 @@ func TestXORM_CollationAndIntrospectionE2E(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateTable_ConstraintPrefixColumnNames(t *testing.T) {
+	eng := memengine.New()
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, DefaultConfig())
+	defer coord.Close()
+
+	// Regression test: columns whose names begin with CHECK, UNIQUE, or CONSTRAINT
+	// must not be mistakenly swallowed by table-level constraint prefix checks.
+	q := `CREATE TABLE crash_ledger (
+		tx_id BIGINT PRIMARY KEY,
+		checksum VARCHAR(64) NOT NULL,
+		checked_at BIGINT NOT NULL,
+		unique_id VARCHAR(64) NOT NULL,
+		constraint_name VARCHAR(64) NOT NULL,
+		CHECK (tx_id > 0),
+		UNIQUE (unique_id)
+	)`
+	if _, err := coord.ExecuteSQL(q); err != nil {
+		t.Fatalf("CREATE TABLE failed: %v", err)
+	}
+
+	ins := `INSERT INTO crash_ledger (tx_id, checksum, checked_at, unique_id, constraint_name)
+	        VALUES (1, '83920194837261e2', 1700000000, 'uq-001', 'cn-001')`
+	if _, err := coord.ExecuteSQL(ins); err != nil {
+		t.Fatalf("INSERT failed: %v", err)
+	}
+
+	res, err := coord.ExecuteSQL("SELECT tx_id, checksum, checked_at, unique_id, constraint_name FROM crash_ledger WHERE tx_id = 1")
+	if err != nil || !res.Success || len(res.Rows) != 1 {
+		t.Fatalf("SELECT failed: err=%v rows=%d", err, len(res.Rows))
+	}
+	row := res.Rows[0]
+	if row["checksum"] != "83920194837261e2" {
+		t.Fatalf("expected checksum='83920194837261e2', got %v", row["checksum"])
+	}
+	if row["unique_id"] != "uq-001" {
+		t.Fatalf("expected unique_id='uq-001', got %v", row["unique_id"])
+	}
+	if row["constraint_name"] != "cn-001" {
+		t.Fatalf("expected constraint_name='cn-001', got %v", row["constraint_name"])
+	}
+}
+

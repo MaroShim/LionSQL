@@ -374,7 +374,7 @@ func (e *Engine) Open(dir string) error {
 	cHome := C.CString(dir)
 	defer C.free(unsafe.Pointer(cHome))
 
-	cConfig := C.CString("create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)")
+	cConfig := C.CString("create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true),transaction_sync=(enabled=true,method=none)")
 	defer C.free(unsafe.Pointer(cConfig))
 
 	var conn *C.WT_CONNECTION
@@ -434,7 +434,12 @@ func (e *Engine) saveCatalog() error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(e.catalogPath(), data, 0644)
+	target := filepath.Clean(e.catalogPath())
+	tmp := target + ".tmp"
+	if err := os.WriteFile(tmp, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, target)
 }
 
 func (e *Engine) Close() error {
