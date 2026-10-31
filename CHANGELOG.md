@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- complete Umami web analytics platform integration over PGWire (:5433, Next.js 16.4.2, Prisma ORM, 26 migrations, event tracking, and stats aggregation) (INTEG-UMAMI-1)
 - complete Metabase BI dual-protocol integration across PGWire (:5433, org.postgresql.Driver) and MSSQL TDS (:1433, com.microsoft.sqlserver.jdbc.SQLServerDriver) with 100% schema sync, MBQL visual query builder, multi-table derived joins, and native SQL support (INTEG-METABASE-1)
 - support Microsoft JDBC Driver metadata temp table multi-statement batches (DECLARE @temp TABLE / INSERT INTO @temp EXEC sp_columns_170 / SELECT ... FROM @temp) and implement sp_pkeys, sp_fkeys stored procedures
 - complete Vaultwarden password manager integration over PGWire (:5433, 47 Diesel ORM migrations, composite primary keys, cipher and folder CRUD, sync API) (INTEG-VAULTWARDEN-1)
@@ -25,6 +26,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- support PostgreSQL ::type casting and EXISTS expressions in scalar SELECT statements to prevent Prisma can-connect-to-database recursion
+- infer array parameter types for = ANY($1) clauses (OID 1009 _text, OID 1028 _oid) and decode binary array payloads in PGWire
+- allow USING clause in parseDeleteBody and export planner.ParseCTEs for complex CTE-based DELETE statements
+- extract aliases upfront in AggregateIterator.parseFields using sqlutil.SplitAsAlias to preserve aliases with special characters (_count$_all) and evaluate COUNT(*) accurately
+- strip table prefixes in virtual catalog FormatResult to correctly report existing tables to Prisma introspection queries
 - support quoted identifiers (double quotes, backticks, brackets) in derived table subquery alias extraction to prevent AS keyword duplication
 - map hyphenated aliases (table-name, database-type, database-position, pk?) in virtual catalog projection mapping to underlying schema fields
 - support bracketed aliases and HAS_PERMS_BY_NAME in sys.objects metadata queries for official SQL Server JDBC drivers

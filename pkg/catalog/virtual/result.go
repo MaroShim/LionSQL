@@ -14,6 +14,7 @@ import (
 var (
 	reProjAs           = regexp.MustCompile("(?is)^(.*?)\\s+AS\\s+([a-zA-Z0-9_#$]+|\"[^\"]+\"|`[^`]+`|\\[[^\\]]+\\])$")
 	reEvalInClause     = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+(NOT\s+IN|IN)\s*\((.*?)\)\s*$`)
+	reEvalAnyClause    = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s*(=|!=|<>)\s*ANY\s*\((.*?)\)\s*$`)
 	reEvalBinaryOp     = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s*(=|!=|<>|>=|<=|>|<|LIKE|NOT\s+LIKE|ILIKE|NOT\s+ILIKE|!~\*|!~|~\*|~)\s*(.*?)\s*$`)
 	reEvalIsNull       = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+IS\s+NULL\s*$`)
 	reEvalIsNotNull    = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+(?:->>'[^']+')?)\s+IS\s+NOT\s+NULL\s*$`)
@@ -275,6 +276,12 @@ func FormatResult(columns []string, allRows []map[string]any, projStr, whereClau
 				} else if v, ok := fr[strings.ToLower(cleanedSrc)]; ok {
 					val = v
 					found = true
+				} else if dotIdx := strings.LastIndex(cleanedSrc, "."); dotIdx != -1 {
+					colOnly := strings.ToLower(cleanedSrc[dotIdx+1:])
+					if v, ok := fr[colOnly]; ok {
+						val = v
+						found = true
+					}
 				}
 			}
 
@@ -440,7 +447,7 @@ func evaluateWhereConditionMap(rec map[string]any, whereStr string) bool {
 }
 
 func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
-	whereStr = strings.TrimSpace(whereStr)
+	whereStr = strings.TrimRight(strings.TrimSpace(whereStr), ";")
 	if strings.HasPrefix(whereStr, "(") && strings.HasSuffix(whereStr, ")") {
 		inner := strings.TrimSpace(whereStr[1 : len(whereStr)-1])
 		if !strings.Contains(inner, "(") && !strings.Contains(inner, ")") {
@@ -475,6 +482,42 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 			return !found
 		}
 		return found
+	}
+
+	if m := reEvalAnyClause.FindStringSubmatch(whereStr); len(m) == 4 {
+		colName := cleanIdentifier(m[1])
+		op := strings.TrimSpace(m[2])
+		rawList := strings.TrimSpace(m[3])
+		rawList = strings.TrimPrefix(rawList, "ARRAY[")
+		rawList = strings.TrimPrefix(rawList, "array[")
+		rawList = strings.TrimSuffix(rawList, "]")
+		rawList = strings.Trim(rawList, "'\"")
+		rawList = strings.TrimPrefix(rawList, "{")
+		rawList = strings.TrimSuffix(rawList, "}")
+
+		val, ok := rec[colName]
+		if !ok {
+			if idx := strings.Index(colName, "."); idx != -1 {
+				val, ok = rec[colName[idx+1:]]
+			}
+		}
+		if !ok || val == nil {
+			return op == "!=" || op == "<>"
+		}
+		strVal := fmt.Sprintf("%v", val)
+		items := sqlutil.SplitTopLevel(rawList, ',')
+		found := false
+		for _, item := range items {
+			item = strings.TrimSpace(strings.Trim(item, "'\""))
+			if strings.EqualFold(strVal, item) {
+				found = true
+				break
+			}
+		}
+		if op == "=" {
+			return found
+		}
+		return !found
 	}
 
 	if m := reEvalIsNull.FindStringSubmatch(whereStr); len(m) == 2 {

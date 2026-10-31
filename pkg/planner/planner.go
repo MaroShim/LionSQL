@@ -390,7 +390,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		cleaned = strings.TrimSpace(cleaned[8:])
 	}
 
-	ctes, mainSQL := parseCTEs(cleaned)
+	ctes, mainSQL := ParseCTEs(cleaned)
 
 	var projStr, fromClause, whereClause, groupByStr, havingClause, orderByClause string
 	var limitCount int64 = -1
@@ -572,7 +572,8 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	}, nil
 }
 
-func parseCTEs(query string) ([]CTEInfo, string) {
+// ParseCTEs parses common table expressions defined via WITH clause.
+func ParseCTEs(query string) ([]CTEInfo, string) {
 	trimmed := strings.TrimSpace(query)
 	upper := strings.ToUpper(trimmed)
 	if !strings.HasPrefix(upper, "WITH ") {

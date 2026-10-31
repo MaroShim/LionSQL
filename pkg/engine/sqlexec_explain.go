@@ -785,13 +785,8 @@ func formatSubqueryVal(v any) string {
 }
 
 func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, error) {
-	p := s.newPlanner()
-	qInfo, err := p.ParseSelect(query)
-	if err != nil {
-		return nil, fmt.Errorf("parse CTE error: %w", err)
-	}
-
-	if len(qInfo.CTEs) == 0 {
+	ctes, mainSQL := planner.ParseCTEs(query)
+	if len(ctes) == 0 {
 		return s.execSelect(query, start, nil)
 	}
 
@@ -802,27 +797,7 @@ func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, erro
 		}
 	}()
 
-	mainSQL := query
-	upper := strings.ToUpper(query)
-	if strings.HasPrefix(upper, "WITH ") {
-		depth := 0
-		mainSelectIdx := -1
-		for i := 0; i < len(query); i++ {
-			if query[i] == '(' {
-				depth++
-			} else if query[i] == ')' {
-				depth--
-			} else if depth == 0 && strings.HasPrefix(strings.ToUpper(query[i:]), "SELECT") {
-				mainSelectIdx = i
-				break
-			}
-		}
-		if mainSelectIdx != -1 {
-			mainSQL = strings.TrimSpace(query[mainSelectIdx:])
-		}
-	}
-
-	for _, cte := range qInfo.CTEs {
+	for _, cte := range ctes {
 		// 1. Run CTE inner SQL
 		res, err := s.ExecuteSQL(cte.InnerSQL)
 		if err != nil {

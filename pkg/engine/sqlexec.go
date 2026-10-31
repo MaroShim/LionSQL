@@ -1225,13 +1225,22 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	// 4.37 Tolerant PG Compatibility: CREATE / DROP SCHEMA
+	// 4.37 Tolerant PG Compatibility: CREATE / DROP SCHEMA / EXTENSION
 	if strings.HasPrefix(upper, "CREATE SCHEMA") || strings.HasPrefix(upper, "DROP SCHEMA") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "SCHEMA",
 			DurationUS: time.Since(start).Microseconds(),
 			Messages:   []string{"Schema command completed successfully."},
+		}, nil
+	}
+
+	if strings.HasPrefix(upper, "CREATE EXTENSION") || strings.HasPrefix(upper, "DROP EXTENSION") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "CREATE EXTENSION",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Extension command completed successfully."},
 		}, nil
 	}
 

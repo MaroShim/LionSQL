@@ -76,11 +76,18 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
 - 데이터 소스 등록(PGWire `:5433` & TDS `:1433`) 100% 무오류 통과, 스키마 인트로스펙션(테이블/컬럼/외래키/인덱스 350ms 내 완료), 비주얼 쿼리 빌더(MBQL 다중 테이블 파생 조인, COUNT/SUM 집계, `date_trunc` 시계열) 및 Native SQL 완벽 동작 검증 (Metabase 순정 컨테이너 소스 수정 0줄)
 
-### [ ] 2.5 `INTEG-UMAMI-1` Umami (웹 애널리틱스) — **[1순위 착수]**
-- 스택: Next.js + Prisma ORM / PGWire (`TCP :5433`)
-- 시계열 이벤트 집계 쿼리 호환성 검증
+### [x] 2.5 `INTEG-UMAMI-1` Umami (웹 애널리틱스) — **[완료]**
+- 상세 보고서: [`notes/UMAMI_INTEGRATION_REPORT.ko.md`](notes/UMAMI_INTEGRATION_REPORT.ko.md)
+- 운영 가이드: [`doc/UMAMI_INTEGRATION_GUIDE.ko.md`](doc/UMAMI_INTEGRATION_GUIDE.ko.md) / [`doc/UMAMI_INTEGRATION_GUIDE.md`](doc/UMAMI_INTEGRATION_GUIDE.md)
+- 단위 및 회귀 테스트: `pkg/engine/umami_compat_test.go` (`TestUmami_PrismaCanConnectQuery`, `TestUmami_PrismaTableNamespaceQuery`, `TestUmami_CountDerivedTableQuery`)
+- 스택: Next.js 16.4.2 + Prisma ORM / PGWire (`TCP :5433`)
+- Prisma 초기화 26개 마이그레이션(01~26) 100% 무오류 적용, 관리자 인증(`POST /api/auth/login`), 웹사이트 등록(`POST /api/websites`), 웹사이트 목록 조회(`GET /api/websites` 파생 테이블 집계), 웹 분석 이벤트 수집(`POST /api/send`), 통계 분석 쿼리(`GET /api/websites/{id}/stats` 복합 서브쿼리, GROUP BY 1, 2, HAVING, CASE WHEN) 완벽 검증 통과 (Umami 순정 컨테이너 소스 수정 0줄)
 
-### [ ] 2.6 `INTEG-NOCODB-1` NocoDB (노코드 DB 스튜디오) — **[4순위]**
+### [ ] 2.6 `COMPAT-DECLARATIVE-1` 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) — **[백로그]**
+- 대상: 기연동 8개 서비스(Gitea, Vaultwarden, Casdoor, Ghost, Answer, Affine, Metabase, Umami)
+- 목표: 와이어 프로토콜 및 엔진 내 하드코딩된 서비스별 방언/카탈로그 보정 규칙을 선언적 텍스트 파일(YAML/DSL)로 추상화하여, Go 코드 수정 없이 신규 외부 서비스 호환성을 추가/관리할 수 있는 선언적 아키텍처 수립
+
+### [ ] 2.7 `INTEG-NOCODB-1` NocoDB (노코드 DB 스튜디오) — **[다음 순위]**
 - 스택: Node.js + Knex / 듀얼 프로토콜 (PGWire + TDS)
 - 메타데이터 자동 감지 및 스프레드시트 뷰 CRUD 검증
 

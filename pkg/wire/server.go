@@ -833,6 +833,14 @@ func canCompileToVDBE(query string, qc proc.QueryCharacteristics) bool {
 	if qc.HasOnConflict {
 		return false
 	}
+	// Bypass complex relational algebra (joins, subqueries, derived tables) to Tier-2 CBO engine
+	if qc.HasJoin || qc.HasSubquery {
+		return false
+	}
+	upper := strings.ToUpper(query)
+	if strings.Contains(upper, "FROM (") || strings.Contains(upper, "FROM\n(") || strings.Contains(upper, "FROM\t(") {
+		return false
+	}
 	return true
 }
 
@@ -874,6 +882,13 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 		expanded := make([]int32, maxIdx)
 		copy(expanded, paramTypes)
 		paramTypes = expanded
+	}
+	for i, pt := range paramTypes {
+		if pt == 0 {
+			if inferred := inferParamOID(queryStr, i+1); inferred != 0 {
+				paramTypes[i] = inferred
+			}
+		}
 	}
 
 	prep := &PreparedStatement{
@@ -1024,6 +1039,8 @@ func decodeBinaryParamValue(b []byte, oid int32) storage.Value {
 		if len(b) == 16 {
 			return storage.UUIDValue(fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]))
 		}
+	case 1009, 1015, 1002, 1028, 1007, 1005, 1016: // array types: _text, _varchar, _char, _oid, _int4, _int2, _int8
+		return storage.StringValue(decodeBinaryArray(b, oid))
 	default:
 		return storage.BinaryValue(b)
 	}
@@ -1168,6 +1185,13 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 		if !exists {
 			_ = WriteError(conn, fmt.Sprintf("prepared statement %q does not exist", targetName))
 			return
+		}
+		for i, pt := range stmt.ParamTypes {
+			if pt == 0 {
+				if inferred := inferParamOID(stmt.Query, i+1); inferred != 0 {
+					stmt.ParamTypes[i] = inferred
+				}
+			}
 		}
 		_ = WriteParameterDescription(conn, stmt.ParamTypes)
 		s.writeSchemaDescription(conn, stmt.Query, stmt.ParamTypes, stmt, nil)
@@ -1451,7 +1475,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 	}
 
 	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
-		if strings.Contains(upper, "VERSION()") {
+		if isStandaloneVersionQuery(upper) {
 			cols := []ColumnMeta{{Name: "version", DataType: 25}}
 			recordCols(cols)
 			applyFormats(cols)
@@ -1893,7 +1917,7 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 	upper := strings.ToUpper(trimmed)
 
 	// Builtin pg check
-	if strings.Contains(upper, "VERSION()") {
+	if isStandaloneVersionQuery(upper) {
 		cols := []ColumnMeta{{Name: "version", DataType: 25}}
 		if writeRowDesc {
 			_ = WriteRowDescription(conn, cols)
@@ -2039,8 +2063,22 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 			}
 		}
 		if oid == 0 {
+			switch strings.ToLower(cleanCol) {
+			case "oid", "typelem", "typbasetype", "typrelid", "relnamespace", "attrelid", "conrelid":
+				oid = 26
+			case "typlen", "attlen":
+				oid = 21
+			case "typbyval", "typisdefined", "typispreferred", "attnotnull", "condeferrable", "exists":
+				oid = 16
+			case "typtype", "typcategory", "relkind", "contype":
+				oid = 18
+			case "typtypmod", "attnum", "numeric_version":
+				oid = 23
+			}
+		}
+		if oid == 0 {
 			upperCol := strings.ToUpper(cleanCol)
-			if strings.HasPrefix(upperCol, "COUNT") {
+			if strings.Contains(upperCol, "COUNT") {
 				oid = 20 // int8
 			} else if sampleRow != nil {
 				val := getRowValue(sampleRow, colName)
@@ -2058,6 +2096,115 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 		oids[i] = oid
 	}
 	return oids
+}
+
+func isStandaloneVersionQuery(query string) bool {
+	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
+	upper := strings.ToUpper(trimmed)
+	if upper == "SELECT VERSION()" || upper == "SELECT @@VERSION" || upper == "VALUES(VERSION())" {
+		return true
+	}
+	if strings.HasPrefix(upper, "SELECT") && !strings.Contains(upper, ",") && !strings.Contains(upper, "FROM") && !strings.Contains(upper, "WHERE") {
+		fields := strings.Fields(upper)
+		if len(fields) == 2 && (fields[1] == "VERSION()" || fields[1] == "@@VERSION") {
+			return true
+		}
+	}
+	return false
+}
+
+func decodeBinaryArray(b []byte, elemOID int32) string {
+	if len(b) < 12 {
+		return "{}"
+	}
+	r := bytes.NewReader(b)
+	var ndims, hasNull, elemType int32
+	_ = binary.Read(r, binary.BigEndian, &ndims)
+	_ = binary.Read(r, binary.BigEndian, &hasNull)
+	_ = binary.Read(r, binary.BigEndian, &elemType)
+	if ndims == 0 {
+		return "{}"
+	}
+	var dim, lbound int32
+	_ = binary.Read(r, binary.BigEndian, &dim)
+	_ = binary.Read(r, binary.BigEndian, &lbound)
+
+	var elements []string
+	for i := 0; i < int(dim); i++ {
+		var elemLen int32
+		if err := binary.Read(r, binary.BigEndian, &elemLen); err != nil {
+			break
+		}
+		if elemLen == -1 {
+			elements = append(elements, "NULL")
+			continue
+		}
+		elemBytes := make([]byte, elemLen)
+		if _, err := io.ReadFull(r, elemBytes); err != nil {
+			break
+		}
+		elements = append(elements, string(elemBytes))
+	}
+	var sb strings.Builder
+	sb.WriteString("{")
+	for i, el := range elements {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		if el == "NULL" {
+			sb.WriteString("NULL")
+		} else {
+			sb.WriteString("\"" + strings.ReplaceAll(el, "\"", "\\\"") + "\"")
+		}
+	}
+	sb.WriteString("}")
+	return sb.String()
+}
+
+func inferParamOID(query string, paramIndex int) int32 {
+	upper := strings.ToUpper(query)
+	pName := fmt.Sprintf("$%d", paramIndex)
+	idx := strings.Index(upper, pName)
+	if idx != -1 {
+		prefix := strings.TrimSpace(upper[:idx])
+		isAny := false
+		if strings.HasSuffix(prefix, "(") {
+			prefix = strings.TrimSpace(strings.TrimSuffix(prefix, "("))
+		}
+		if strings.HasSuffix(prefix, "ANY") {
+			prefix = strings.TrimSpace(strings.TrimSuffix(prefix, "ANY"))
+			isAny = true
+		}
+		if strings.HasSuffix(prefix, "=") || strings.HasSuffix(prefix, "<>") {
+			prefix = strings.TrimSpace(prefix[:len(prefix)-1])
+			tokens := strings.Fields(prefix)
+			if len(tokens) > 0 {
+				lastToken := tokens[len(tokens)-1]
+				if dotIdx := strings.LastIndex(lastToken, "."); dotIdx != -1 {
+					lastToken = lastToken[dotIdx+1:]
+				}
+				lastToken = strings.Trim(lastToken, "[]\"'`")
+				switch lastToken {
+				case "OID":
+					if isAny {
+						return 1028 // _oid
+					}
+					return 26 // oid
+				case "NSPNAME", "RELNAME", "ATTNAME", "TYPNAME", "NAME":
+					if isAny {
+						return 1009 // _text
+					}
+					return 25 // text
+				case "ID":
+					if isAny {
+						return 1007 // _int4
+					}
+					return 23 // int4
+				}
+			}
+		}
+	}
+	return 0
 }
 
 func getRowValue(row map[string]any, colName string) any {

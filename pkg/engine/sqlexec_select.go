@@ -187,6 +187,53 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 
 func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, string) {
 	trimmed := strings.TrimSpace(expr)
+
+	// Check for PostgreSQL ::type cast operator at top-level
+	var castType string
+	if castIdx := strings.LastIndex(trimmed, "::"); castIdx != -1 {
+		suffix := trimmed[castIdx+2:]
+		if !strings.Contains(suffix, "'") && !strings.Contains(suffix, "\"") && !strings.Contains(suffix, ")") {
+			castType = strings.TrimSpace(strings.ToLower(suffix))
+			trimmed = strings.TrimSpace(trimmed[:castIdx])
+		}
+	}
+
+	val, defAlias := s.evalScalarExprCore(trimmed, cs)
+	if castType != "" {
+		val = applyPgCast(val, castType)
+	}
+	return val, defAlias
+}
+
+func applyPgCast(val any, targetType string) any {
+	if val == nil {
+		return nil
+	}
+	switch strings.ToLower(targetType) {
+	case "integer", "int", "int4", "int8", "bigint", "smallint", "int2":
+		str := fmt.Sprintf("%v", val)
+		if n, err := strconv.ParseInt(str, 10, 64); err == nil {
+			return n
+		}
+		if f, err := strconv.ParseFloat(str, 64); err == nil {
+			return int64(f)
+		}
+	case "float", "float4", "float8", "numeric", "decimal", "real", "double precision":
+		str := fmt.Sprintf("%v", val)
+		if f, err := strconv.ParseFloat(str, 64); err == nil {
+			return f
+		}
+	case "bool", "boolean":
+		str := strings.ToLower(fmt.Sprintf("%v", val))
+		return str == "true" || str == "t" || str == "1" || str == "yes" || str == "on"
+	case "text", "varchar", "char", "bpchar":
+		return fmt.Sprintf("%v", val)
+	}
+	return val
+}
+
+func (s *Coordinator) evalScalarExprCore(expr string, cs *ClientSession) (any, string) {
+	trimmed := strings.TrimSpace(expr)
 	upper := strings.ToUpper(trimmed)
 
 	// Builtin system / database functions
@@ -199,6 +246,19 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 			currDB = "master"
 		}
 		cs.Mu.Unlock()
+	}
+
+	// EXISTS(subquery)
+	if strings.HasPrefix(upper, "EXISTS(") && strings.HasSuffix(upper, ")") {
+		subSQL := strings.TrimSpace(trimmed[len("EXISTS(") : len(trimmed)-1])
+		sessID := "default"
+		if cs != nil {
+			sessID = cs.ID
+		}
+		if res, err := s.ExecuteSessionSQL(sessID, subSQL); err == nil && len(res.Rows) > 0 {
+			return true, "exists"
+		}
+		return false, "exists"
 	}
 
 	switch upper {

@@ -336,7 +336,7 @@ func parseUpdateBody(st *DMLStatement, sc *dmlScanner) error {
 
 func parseDeleteBody(st *DMLStatement, sc *dmlScanner) error {
 	head, out, where := splitOutputWhere(sc.s[sc.pos:])
-	if head != "" {
+	if head != "" && !strings.HasPrefix(strings.ToUpper(head), "USING ") {
 		return fmt.Errorf("invalid DELETE syntax")
 	}
 	st.Output, st.Where = out, where

@@ -145,6 +145,17 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return rightBool, nil
 
 		default:
+			if fn, ok := e.Right.(*FunctionCallExpr); ok && strings.EqualFold(fn.Name, "ANY") && len(fn.Args) == 1 {
+				leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
+				if err != nil {
+					return nil, err
+				}
+				rightVal, err := EvalRowExpr(fn.Args[0], row, execSubquery)
+				if err != nil {
+					return nil, err
+				}
+				return evalRowAnyComparison(e.Op, leftVal, rightVal)
+			}
 			leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
 			if err != nil {
 				return nil, err
@@ -355,6 +366,45 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 	}
 
 	return nil, fmt.Errorf("unsupported AST expression: %T", expr)
+}
+
+func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
+	if leftVal == nil || rightVal == nil {
+		return false, nil
+	}
+	leftStr := fmt.Sprintf("%v", leftVal)
+	var elements []string
+	switch arr := rightVal.(type) {
+	case []string:
+		elements = arr
+	case []any:
+		for _, item := range arr {
+			elements = append(elements, fmt.Sprintf("%v", item))
+		}
+	default:
+		raw := fmt.Sprintf("%v", rightVal)
+		raw = strings.TrimSpace(raw)
+		raw = strings.TrimPrefix(raw, "ARRAY[")
+		raw = strings.TrimPrefix(raw, "array[")
+		raw = strings.TrimSuffix(raw, "]")
+		raw = strings.Trim(raw, "'\"")
+		raw = strings.TrimPrefix(raw, "{")
+		raw = strings.TrimSuffix(raw, "}")
+		for _, item := range strings.Split(raw, ",") {
+			cleaned := strings.TrimSpace(strings.Trim(item, "'\""))
+			if cleaned != "" {
+				elements = append(elements, cleaned)
+			}
+		}
+	}
+
+	for _, elem := range elements {
+		cmp, err := evalRowBinaryOp(op, leftStr, elem)
+		if err == nil && isTruthyValue(cmp) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func isStringType(v any) (string, bool) {

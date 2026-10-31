@@ -13,6 +13,7 @@ type QueryCharacteristics struct {
 	HasOutput     bool     // Contains T-SQL OUTPUT clause
 	HasOnConflict bool     // Contains ON CONFLICT clause
 	HasJoin       bool     // References multiple tables via JOIN
+	HasSubquery   bool     // References subqueries or derived tables (e.g. FROM (SELECT ...))
 }
 
 // ExtractQueryCharacteristics tokenizes the SQL query and extracts structural traits,
@@ -59,6 +60,8 @@ func ExtractQueryCharacteristics(sql string) QueryCharacteristics {
 					qc.StatementType = upper
 				}
 			}
+		} else if !firstSignificant && tok.Type == TokenSelect {
+			qc.HasSubquery = true
 		}
 
 		// 2. Syntax clauses

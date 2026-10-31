@@ -648,12 +648,12 @@ func parseOutputClause(raw string) []outputProj {
 		}
 		source := ""
 		col := expr
-		if dot := strings.Index(expr, "."); dot != -1 {
+		if dot := strings.LastIndex(expr, "."); dot != -1 {
 			prefix := strings.ToUpper(cleanIdentifier(expr[:dot]))
 			if prefix == "INSERTED" || prefix == "DELETED" {
 				source = prefix
-				col = cleanIdentifier(expr[dot+1:])
 			}
+			col = cleanIdentifier(expr[dot+1:])
 		} else {
 			col = cleanIdentifier(col)
 		}
