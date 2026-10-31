@@ -35,7 +35,7 @@
      - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)**: 실전 앱 연동 확장 마스터 플랜 (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost 6종).
      - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)**: Apache Answer PGWire 연동 상세 계획서 (1순위).
      - **[`VAULTWARDEN_INTEGRATION_PLAN.ko.md`](VAULTWARDEN_INTEGRATION_PLAN.ko.md)**: Vaultwarden (Rust + Diesel ORM) PGWire 연동 상세 계획서 (2순위).
-     - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 쿼리 라우팅 리팩토링 계획서 (문자열 휴리스틱 45개 전면 제거).
+     - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 쿼리 라우팅 리팩토링 설계 및 검증 보고서 (문자열 휴리스틱 45개 전면 제거, 527ns 실측, 완료).
    - **Post-1.0 아키텍처 및 장기 로드맵 계획서**:
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).
      - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: TDS 네트워크 소켓 수신부터 VDBE 및 WAL 파일 시스템 사전 할당/적응형 그룹 커밋에 이르는 서버 수직 파이프라인 종단 최적화 마스터 플랜 (Phase 3/4 대기).
