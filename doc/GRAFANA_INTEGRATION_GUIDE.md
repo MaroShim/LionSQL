@@ -9,7 +9,7 @@
 >   - Query Data Source 1: `grafana-postgresql-datasource` (`lib/pq`, TCP `:5433`)
 >   - Query Data Source 2: `mssql` (`github.com/microsoft/go-mssqldb`, TDS 7.x/8.0, TCP `:1433`)
 > - **Related Documents**:
->   - Milestone Report: [`notes/GRAFANA_INTEGRATION_MILESTONE.md`](../notes/GRAFANA_INTEGRATION_MILESTONE.md)
+>   - Verification Report: [`notes/GRAFANA_INTEGRATION_REPORT.ko.md`](../notes/GRAFANA_INTEGRATION_REPORT.ko.md)
 >   - Korean Guide: [`doc/GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md)
 
 ---

@@ -1,4 +1,4 @@
-# LionSQL Grafana 듀얼 프로토콜 연동 및 관측성 플랫폼 호환성 마일스톤 보고서 (`notes/GRAFANA_INTEGRATION_MILESTONE.ko.md`)
+# LionSQL Grafana 듀얼 프로토콜 연동 및 관측성 플랫폼 호환성 실전 검증 보고서 (`notes/GRAFANA_INTEGRATION_REPORT.ko.md`)
 
 > - **문서 버전**: v1.0.0
 > - **최초 작성일**: 2026-10-31
@@ -10,12 +10,10 @@
 > - **연계 핵심 문서**:
 >   - **공식 실전 가이드 (국문)**: [`doc/GRAFANA_INTEGRATION_GUIDE.ko.md`](../doc/GRAFANA_INTEGRATION_GUIDE.ko.md)
 >   - **공식 실전 가이드 (영문)**: [`doc/GRAFANA_INTEGRATION_GUIDE.md`](../doc/GRAFANA_INTEGRATION_GUIDE.md)
->   - **아키텍처 계획서**: [`notes/GRAFANA_INTEGRATION_PLAN.ko.md`](GRAFANA_INTEGRATION_PLAN.ko.md)
->   - **영문 마일스톤 보고서**: [`notes/GRAFANA_INTEGRATION_MILESTONE.md`](GRAFANA_INTEGRATION_MILESTONE.md)
 
 ---
 
-## 1. 개요 및 마일스톤 의의
+## 1. 개요 및 연동 검증 의의
 
 LionSQL은 단일 정적 바이너리로 구동되는 고동시성 임베디드 OLTP 데이터베이스 엔진으로서, Microsoft SQL Server TDS 유선 프로토콜(`:1433`)과 PostgreSQL PGWire v3 프로토콜(`:5433`)을 네이티브로 듀얼 지원합니다.
 

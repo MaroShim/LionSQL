@@ -127,8 +127,8 @@
   * LionSQL 기반 Grafana 내부 메타데이터 백엔드(`:5433`, 785개 마이그레이션) 및 듀얼 SQL 데이터 소스 플러그인(PostgreSQL `:5433` & MSSQL TDS `:1433`) 공식 연동 가이드.
 * [`CASDOOR_INTEGRATION_GUIDE.ko.md`](CASDOOR_INTEGRATION_GUIDE.ko.md) ([English](CASDOOR_INTEGRATION_GUIDE.md))
   * LionSQL 기반 Casdoor IAM/SSO 플랫폼(XORM + Casbin) 듀얼 프로토콜(PostgreSQL `:5433` & MSSQL TDS `:1433`) 공식 연동 가이드.
-* [`../notes/GITEA_INTEGRATION_MILESTONE.ko.md`](../notes/GITEA_INTEGRATION_MILESTONE.ko.md) ([English](../notes/GITEA_INTEGRATION_MILESTONE.md))
-  * Gitea(Go 풀스택 Git 플랫폼) 및 XORM(MSSQL 방언) 완전 초기화 및 116개 테이블 프로덕션 기동 마일스톤 보고서.
+* [`../notes/GITEA_INTEGRATION_REPORT.ko.md`](../notes/GITEA_INTEGRATION_REPORT.ko.md)
+  * Gitea(Go 풀스택 Git 플랫폼) 및 XORM(MSSQL 방언) 완전 초기화 및 116개 테이블 프로덕션 기동 실전 연동 검증 보고서.
   * 조건부 DDL, 복합 조인 컬럼 메타데이터 라우팅, T-SQL 대입식 별칭 및 `sys.fn_helpcollations()` 연동 분석.
 * [`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)
   * Microsoft SQL Server TDS 7.x/8.0 (포트 `1433`) 123개 엔터프라이즈 T-SQL/ORM 시나리오 실측 호환성 검증 보고서 (**실무 호환율 99.2%**: 122/123 PASS).

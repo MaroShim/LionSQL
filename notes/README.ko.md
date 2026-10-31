@@ -45,11 +45,11 @@
      - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계 (Post-1.0 / v1.1.0).
      - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고).
 
-7. **마일스톤 실전 검증 보고서 및 포스트모텀 (Milestones & Postmortems)**:
-   - **[`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)** ([English](GITEA_INTEGRATION_MILESTONE.md)): Gitea 풀스택 Git 플랫폼 듀얼 프로토콜(TDS :1433 & PGWire :5433) 연동 및 116개 테이블 실전 E2E 검증 완료 마일스톤 보고서.
-   - **[`IOTA_ERP_INTEGRATION_MILESTONE.ko.md`](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)** ([English](IOTA_ERP_INTEGRATION_MILESTONE.md)): IOTA SDK Go ERP 연동, `pgx/v5` 엄격한 바이너리 프로토콜 완비 및 47개 스키마 순차 마이그레이션 100% 관통 마일스톤 보고서.
-   - **[`GRAFANA_INTEGRATION_MILESTONE.ko.md`](GRAFANA_INTEGRATION_MILESTONE.ko.md)** ([English](GRAFANA_INTEGRATION_MILESTONE.md)): Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`), CTE 파생 테이블 격리 및 듀얼 데이터 소스 쿼리 검증 마일스톤 보고서.
-   - **[`CASDOOR_INTEGRATION_MILESTONE.ko.md`](CASDOOR_INTEGRATION_MILESTONE.ko.md)** ([English](CASDOOR_INTEGRATION_MILESTONE.md)): Casdoor 44개 테이블 자동 생성, 복합 PK(`PRIMARY KEY (owner, name)`) 지원, TDS `VARBINARY` JSON 직렬화 및 듀얼 프로토콜 OIDC/RBAC E2E 검증 마일스톤 보고서.
+7. **마일스톤 실전 검증 보고서 및 포스트모텀 (Integration Reports & Postmortems)**:
+   - **[`GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)**: Gitea 풀스택 Git 플랫폼 듀얼 프로토콜(TDS :1433 & PGWire :5433) 연동 및 116개 테이블 실전 E2E 검증 완료 보고서.
+   - **[`IOTA_ERP_INTEGRATION_REPORT.ko.md`](IOTA_ERP_INTEGRATION_REPORT.ko.md)**: IOTA SDK Go ERP 연동, `pgx/v5` 엄격한 바이너리 프로토콜 완비 및 47개 스키마 순차 마이그레이션 100% 관통 검증 보고서.
+   - **[`GRAFANA_INTEGRATION_REPORT.ko.md`](GRAFANA_INTEGRATION_REPORT.ko.md)**: Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`), CTE 파생 테이블 격리 및 듀얼 데이터 소스 쿼리 검증 보고서.
+   - **[`CASDOOR_INTEGRATION_REPORT.ko.md`](CASDOOR_INTEGRATION_REPORT.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK(`PRIMARY KEY (owner, name)`) 지원, TDS `VARBINARY` JSON 직렬화 및 듀얼 프로토콜 OIDC/RBAC E2E 검증 보고서.
    - **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**: 1시간 장시간 부하(Soak Test, 72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 매핑 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
    - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**: Gitea XORM 실전 연동 중 노출된 DML/와일드카드/키워드 별칭 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 사후 분석 보고서 (Postmortem).
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**: TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 크래시 원인 규명 및 순수 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.

@@ -1,4 +1,4 @@
-# LionSQL Gitea 연동 및 엔터프라이즈 ORM 호환성 마일스톤 보고서 (`notes/GITEA_INTEGRATION_MILESTONE.ko.md`)
+# LionSQL Gitea 연동 및 엔터프라이즈 ORM 호환성 실전 검증 보고서 (`notes/GITEA_INTEGRATION_REPORT.ko.md`)
 
 > - **작성일**: 2026-10-29 (최종 개정일: 2026-10-30)
 > - **대상 릴리즈**: v0.90.0-beta4

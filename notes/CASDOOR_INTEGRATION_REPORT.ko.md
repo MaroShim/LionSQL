@@ -1,4 +1,4 @@
-# Casdoor 듀얼 프로토콜 연동 마일스톤 리포트 (`CASDOOR-INTEGRATION-1`)
+# Casdoor 듀얼 프로토콜 실전 연동 검증 보고서 (`CASDOOR-INTEGRATION-1`)
 
 > - **최초 작성일**: 2026-10-31
 > - **작업 식별자**: `CASDOOR-INTEGRATION-1`

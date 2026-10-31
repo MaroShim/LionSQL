@@ -5,8 +5,8 @@
 > - **목표**: 오픈소스 Q&A/지식베이스 플랫폼 [Apache Answer](https://github.com/apache/answer)(Go)를 LionSQL의 **PostgreSQL Wire Protocol (`:5433`)** 위에서 소스 수정 없이 완전 기동시키고, 핵심 기능을 E2E 검증
 > - **상태**: 계획 수립 (`Pending`)
 > - **선행 연동 참조**:
->   - Casdoor 마일스톤: [`CASDOOR_INTEGRATION_MILESTONE.ko.md`](CASDOOR_INTEGRATION_MILESTONE.ko.md)
->   - Gitea 마일스톤: [`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
+>   - Casdoor 연동 보고서: [`CASDOOR_INTEGRATION_REPORT.ko.md`](CASDOOR_INTEGRATION_REPORT.ko.md)
+>   - Gitea 연동 보고서: [`GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)
 > - **작업 순서**: 연동 후보 1순위 (Answer ➔ Vaultwarden ➔ Metabase ➔ Umami ➔ NocoDB ➔ Mattermost)
 
 ---
@@ -80,7 +80,7 @@
 
 ### 5단계: 문서화 및 백로그 동기화
 - 실전 가이드: `doc/ANSWER_INTEGRATION_GUIDE.ko.md`, `doc/ANSWER_INTEGRATION_GUIDE.md`
-- 마일스톤 보고서: `notes/ANSWER_INTEGRATION_MILESTONE.ko.md`, `notes/ANSWER_INTEGRATION_MILESTONE.md`
+- 실전 연동 검증 보고서: `notes/ANSWER_INTEGRATION_REPORT.ko.md`
 - `TODO.md`(`INTEG-ANSWER-1` ➔ `[x]`), `CHANGELOG.md`, `notes/README.ko.md`, `notes/README.md` 갱신 후 커밋.
 
 ---

@@ -1,4 +1,4 @@
-# LionSQL IOTA-SDK Go ERP 연동 및 엔터프라이즈 PostgreSQL 호환성 마일스톤 보고서 (`notes/IOTA_ERP_INTEGRATION_MILESTONE.ko.md`)
+# LionSQL IOTA-SDK Go ERP 연동 및 엔터프라이즈 PostgreSQL 호환성 실전 검증 보고서 (`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`)
 
 > - **문서 버전**: v1.0.0
 > - **최초 작성일**: 2026-10-31
@@ -7,11 +7,11 @@
 > - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
 > - **연계 핵심 문서**:
 >   - **공식 실전 가이드**: [`doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md`](../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md)
->   - **Gitea 마일스톤 보고서**: [`notes/GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
+>   - **Gitea 연동 보고서**: [`notes/GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)
 
 ---
 
-## 1. 개요 및 마일스톤 의의
+## 1. 개요 및 연동 검증 의의
 
 LionSQL은 단일 정적 독립 실행형 바이너리로 구동되는 고동시성 OLTP 데이터베이스 엔진으로서, Microsoft SQL Server TDS 유선 프로토콜(`:1433`)과 PostgreSQL PGWire v3 프로토콜(`:5433`)을 네이티브로 듀얼 지원합니다.
 

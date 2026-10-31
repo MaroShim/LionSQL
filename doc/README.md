@@ -125,8 +125,8 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Official integration guide for running Grafana internal metadata backend (`:5433`, 785 migrations) and dual SQL data source plugins (PostgreSQL `:5433` and Microsoft SQL Server TDS `:1433`) on LionSQL.
 * [`CASDOOR_INTEGRATION_GUIDE.md`](CASDOOR_INTEGRATION_GUIDE.md) ([Korean](CASDOOR_INTEGRATION_GUIDE.ko.md))
   * Official dual-protocol integration guide for running Casdoor IAM/SSO (XORM + Casbin) across PostgreSQL Wire Protocol (`:5433`) and Microsoft SQL Server TDS (`:1433`).
-* [`../notes/GITEA_INTEGRATION_MILESTONE.md`](../notes/GITEA_INTEGRATION_MILESTONE.md) ([Korean](../notes/GITEA_INTEGRATION_MILESTONE.ko.md))
-  * Full initialization and production startup milestone report for Gitea (Go full-stack Git platform) and XORM (MSSQL dialect) across 116 tables.
+* [`../notes/GITEA_INTEGRATION_REPORT.ko.md`](../notes/GITEA_INTEGRATION_REPORT.ko.md)
+  * Full initialization and production startup verification report for Gitea (Go full-stack Git platform) and XORM (MSSQL dialect) across 116 tables.
   * Architectural analysis of conditional DDL, joined column metadata routing, T-SQL assignment aliasing, and `sys.fn_helpcollations()`.
 * [`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)
   * Comprehensive Microsoft SQL Server TDS 7.x/8.0 (Port `1433`) live compatibility verification report across 123 enterprise T-SQL/ORM scenarios (**99.2% practical compatibility rate**: 122/123 passing).

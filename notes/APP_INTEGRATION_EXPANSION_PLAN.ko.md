@@ -67,7 +67,7 @@ Casdoor 연동에서 검증된 절차를 표준화한다.
 3. **E2E 검증**: 핵심 사용자 시나리오(로그인, 생성/조회/수정/삭제, 검색, 재기동 후 영속성) 수행.
 4. **결함 수정**: 발견된 이슈는 LionSQL 측에서 수정하고, 이슈마다 `pkg/engine/<app>_compat_test.go` 회귀 테스트 추가. 앱 소스는 수정하지 않는다.
 5. **3-Stage Verification Pipeline**: Build ➔ Test(`go test -tags wiredtiger -count=1 -v -race ./...`, 0 data race) ➔ Commit(Conventional Commits, 이모지 금지).
-6. **문서화**: `doc/<APP>_INTEGRATION_GUIDE.ko.md` / `.md`, `notes/<APP>_INTEGRATION_MILESTONE.ko.md` / `.md`, `TODO.md`, `CHANGELOG.md`, `notes/README.ko.md` / `README.md` 갱신.
+6. **문서화**: `doc/<APP>_INTEGRATION_GUIDE.ko.md` / `.md`, `notes/<APP>_INTEGRATION_REPORT.ko.md`, `TODO.md`, `CHANGELOG.md`, `notes/README.ko.md` / `README.md` 갱신.
 7. **정리**: 임시 디렉토리와 백그라운드 프로세스 제거.
 
 ### 3.1. 앱별 신규 검증 포인트
