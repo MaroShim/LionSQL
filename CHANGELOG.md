@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- complete Casdoor IAM/SSO/OIDC dual-protocol integration across PGWire (:5433) and MSSQL TDS (:1433) (44 XORM tables, Casbin policies, OIDC/JWKS, and Auth REST API) (CASDOOR-INTEGRATION-1)
+- support composite primary keys (`PRIMARY KEY (col1, col2, ...)`) in WiredTiger and In-Memory OCC storage engines via `\x1f` unit-separator physical key composition
+- tokenize unquoted `0x` hex binary literals in T-SQL Pratt lexer and decode `"0x..."` strings as TDS `TypeBigVarBin` (`0xA5`) raw bytes for XORM `VARBINARY` JSON serialization
 - complete Grafana dual-protocol integration across PGWire (:5433 internal backend, 785 migrations) and dual data source plugins (PostgreSQL :5433 & MSSQL TDS :1433) (GRAFANA-INTEGRATION-1)
 - support PostgreSQL advisory lock built-ins (pg_try_advisory_lock, pg_advisory_unlock, etc.) with boolean OID 16 metadata
 - support SQL-standard EXTRACT(field FROM source), EPOCH datepart, and statement_timestamp() / clock_timestamp() built-ins
@@ -25,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - reuse 5-byte message header buffer across connection message loop in PGWire server
 
 ### Documentation
+- author bilingual Casdoor IAM/SSO integration guides (doc/CASDOOR_INTEGRATION_GUIDE.ko.md, doc/CASDOOR_INTEGRATION_GUIDE.md) and milestone reports (notes/CASDOOR_INTEGRATION_MILESTONE.ko.md, notes/CASDOOR_INTEGRATION_MILESTONE.md)
 - author bilingual Grafana integration guides (doc/GRAFANA_INTEGRATION_GUIDE.ko.md, doc/GRAFANA_INTEGRATION_GUIDE.md) and milestone reports (notes/GRAFANA_INTEGRATION_MILESTONE.ko.md, notes/GRAFANA_INTEGRATION_MILESTONE.md)
 - author bilingual IOTA-SDK Go ERP and Gitea integration guides and milestone reports
 

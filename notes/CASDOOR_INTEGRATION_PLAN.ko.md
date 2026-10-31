@@ -3,7 +3,9 @@
 > - **최초 작성일**: 2026-10-31
 > - **과제 식별 코드**: `CASDOOR-INTEGRATION-1`
 > - **목표**: 오픈소스 통합 인증 및 싱글 사인온(IAM / SSO / OIDC / OAuth 2.0 / SAML) 플랫폼인 [Casdoor](https://github.com/casdoor/casdoor)를 LionSQL에 연동하여, **PostgreSQL Wire Protocol (`:5433`)**과 **Microsoft SQL Server TDS (`:1433`)** 양쪽 모두에서 백엔드 RDBMS로 완벽히 동작함을 검증
-> - **상태**: 진행 중 (`In Progress`)
+> - **상태**: 완료 (`Completed`)
+> - **마일스톤 보고서**: [`notes/CASDOOR_INTEGRATION_MILESTONE.ko.md`](CASDOOR_INTEGRATION_MILESTONE.ko.md) / [`notes/CASDOOR_INTEGRATION_MILESTONE.md`](CASDOOR_INTEGRATION_MILESTONE.md)
+> - **운영 가이드**: [`doc/CASDOOR_INTEGRATION_GUIDE.ko.md`](../doc/CASDOOR_INTEGRATION_GUIDE.ko.md) / [`doc/CASDOOR_INTEGRATION_GUIDE.md`](../doc/CASDOOR_INTEGRATION_GUIDE.md)
 > - **참조 문서**:
 >   - Gitea 마일스톤: [`notes/GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
 >   - IOTA ERP 마일스톤: [`notes/IOTA_ERP_INTEGRATION_MILESTONE.ko.md`](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)

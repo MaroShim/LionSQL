@@ -54,12 +54,15 @@
    - **[`IOTA_ERP_INTEGRATION_MILESTONE.ko.md`](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)**: IOTA SDK Go ERP 연동, `pgx/v5` 엄격한 바이너리 프로토콜 완비 및 47개 스키마 순차 마이그레이션 100% 관통 마일스톤 보고서 (완료).
    - **[`GRAFANA_INTEGRATION_PLAN.ko.md`](GRAFANA_INTEGRATION_PLAN.ko.md)**: Grafana 오픈소스 관측성 플랫폼 듀얼 프로토콜(PGWire :5433 내부 백엔드 & MSSQL :1433 / PGWire :5433 데이터 소스) 연동 계획서 (완료).
    - **[`GRAFANA_INTEGRATION_MILESTONE.ko.md`](GRAFANA_INTEGRATION_MILESTONE.ko.md)**: Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`), CTE 파생 테이블 격리 및 듀얼 데이터 소스 쿼리 검증 마일스톤 보고서 (완료).
+   - **[`CASDOOR_INTEGRATION_PLAN.ko.md`](CASDOOR_INTEGRATION_PLAN.ko.md)**: Casdoor 오픈소스 IAM/SSO/OIDC 플랫폼 듀얼 프로토콜(PGWire :5433 & MSSQL TDS :1433) 연동 계획서 (완료).
+   - **[`CASDOOR_INTEGRATION_MILESTONE.ko.md`](CASDOOR_INTEGRATION_MILESTONE.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK(`PRIMARY KEY (owner, name)`) 지원, TDS `VARBINARY` JSON 직렬화 및 듀얼 프로토콜 OIDC/RBAC E2E 검증 마일스톤 보고서 (완료).
    - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고)
 
 7. **완료된 보고서 및 역사적 아카이브 (Completed Reports & Archives)**:
    - **[`../doc/GITEA_INTEGRATION_GUIDE.ko.md`](../doc/GITEA_INTEGRATION_GUIDE.ko.md)** ([English](../doc/GITEA_INTEGRATION_GUIDE.md)): LionSQL 기반 Gitea 듀얼 프로토콜 구축 및 프로덕션 운영 공식 매뉴얼.
    - **[`../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md`](../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md)** ([English](../doc/IOTA_ERP_INTEGRATION_GUIDE.md)): LionSQL 기반 IOTA-SDK Go ERP 구축 및 프로덕션 운영 공식 매뉴얼.
    - **[`../doc/GRAFANA_INTEGRATION_GUIDE.ko.md`](../doc/GRAFANA_INTEGRATION_GUIDE.ko.md)** ([English](../doc/GRAFANA_INTEGRATION_GUIDE.md)): LionSQL 기반 Grafana 구축 및 듀얼 데이터 소스(PGWire & MSSQL TDS) 공식 연동 매뉴얼.
+   - **[`../doc/CASDOOR_INTEGRATION_GUIDE.ko.md`](../doc/CASDOOR_INTEGRATION_GUIDE.ko.md)** ([English](../doc/CASDOOR_INTEGRATION_GUIDE.md)): LionSQL 기반 Casdoor IAM/SSO/OIDC 듀얼 프로토콜(PGWire & MSSQL TDS) 구축 및 프로덕션 운영 공식 매뉴얼.
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**: TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 크래시 원인 규명 및 순수 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.
    - **[`BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)**: 데이터 무결성 107대 결함 조치 아카이브 및 중간 방법론 이력 (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
    - **[`TEST_VERIFICATION_REPORT.ko.md`](TEST_VERIFICATION_REPORT.ko.md)**: 단위 및 통합 테스트 스위트 회귀 검증 및 무경쟁(Race-Free) 진단 보고서.
