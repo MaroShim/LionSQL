@@ -103,6 +103,21 @@ The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` thro
 | **`SEC-1`** | Wire/Security | **TDS 8.0 / Pre-Login SSL/TLS Encryption Handshake Hardening** | `pkg/wire/tds` | `v1.1.0` | MS-TDS 2.2.6.4 Specification |
 | **`AUTH-1`** | Auth/Tokens | **Client-Side OIDC Token Exchange (`POST /api/auth/token-exchange`)** | `pkg/auth`, `pkg/api` | `v1.1.0` | GEMINI.md Section 3.6 |
 
+### 3.3. Next Integration Candidates (Real-World App Verification)
+
+Status: candidates only (`[ ]`), not yet scheduled. Protocol column reflects each app's officially supported backends; verify before starting.
+
+| Task Code | App | Stack / Driver | Target Protocol | Status |
+| :---: | :--- | :--- | :--- | :---: |
+| **`INTEG-ANSWER-1`** | Apache Answer (Q&A / knowledge base) | Go + XORM | PGWire + TDS | Candidate (`[ ]`) |
+| **`INTEG-NOCODB-1`** | NocoDB (no-code DB studio) | Node.js + Knex (`pg`, `tedious`) | PGWire + TDS | Candidate (`[ ]`) |
+| **`INTEG-METABASE-1`** | Metabase (BI dashboards) | JVM + JDBC (`pgjdbc`, `mssql-jdbc`) | PGWire + TDS | Candidate (`[ ]`) |
+| **`INTEG-UMAMI-1`** | Umami (web analytics) | Next.js + Prisma | PGWire (SQL Server support unverified) | Candidate (`[ ]`) |
+| **`INTEG-VAULTWARDEN-1`** | Vaultwarden (password manager) | Rust + Diesel | PGWire (no MSSQL backend) | Candidate (`[ ]`) |
+| **`INTEG-MATTERMOST-1`** | Mattermost (team chat) | Go + sqlx/squirrel | PGWire (no MSSQL backend; expect heavy compatibility work) | Candidate (`[ ]`) |
+
+Excluded: Keycloak (decided not to pursue).
+
 ---
 
 ## 4. Architectural Invariants & Spec-Out Invariants
