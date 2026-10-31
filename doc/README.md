@@ -116,10 +116,16 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Tested client matrix: Beekeeper Studio, DBeaver Universal Database Tool, Azure Data Studio, SSMS, `psql`, and `sqlcmd`.
   * Multi-protocol catalog interceptors, schema discovery routing, and pagination normalization (`OFFSET FETCH` / `TOP`).
   * Programming language driver connection strings and connection pooling guidelines (Go, Python, Node.js, C#, Rust, Java).
-* [`GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md)
+* [`GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md) ([Korean](GITEA_INTEGRATION_GUIDE.ko.md))
   * Official operational integration guide for running Gitea on LionSQL across dual wire protocols.
   * Comprehensive setup for PostgreSQL Wire Protocol (Port `5433`) and Microsoft SQL Server TDS (Port `1433`), headless zero-UI auto-migration, complete API mock data seeding, and production tuning best practices.
-* [`../notes/GITEA_INTEGRATION_MILESTONE.ko.md`](../notes/GITEA_INTEGRATION_MILESTONE.ko.md)
+* [`IOTA_ERP_INTEGRATION_GUIDE.md`](IOTA_ERP_INTEGRATION_GUIDE.md) ([Korean](IOTA_ERP_INTEGRATION_GUIDE.ko.md))
+  * Official integration guide for running IOTA-SDK Go ERP on LionSQL over PostgreSQL Wire Protocol (Port `5433`).
+* [`GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md) ([Korean](GRAFANA_INTEGRATION_GUIDE.ko.md))
+  * Official integration guide for running Grafana internal metadata backend (`:5433`, 785 migrations) and dual SQL data source plugins (PostgreSQL `:5433` and Microsoft SQL Server TDS `:1433`) on LionSQL.
+* [`CASDOOR_INTEGRATION_GUIDE.md`](CASDOOR_INTEGRATION_GUIDE.md) ([Korean](CASDOOR_INTEGRATION_GUIDE.ko.md))
+  * Official dual-protocol integration guide for running Casdoor IAM/SSO (XORM + Casbin) across PostgreSQL Wire Protocol (`:5433`) and Microsoft SQL Server TDS (`:1433`).
+* [`../notes/GITEA_INTEGRATION_MILESTONE.md`](../notes/GITEA_INTEGRATION_MILESTONE.md) ([Korean](../notes/GITEA_INTEGRATION_MILESTONE.ko.md))
   * Full initialization and production startup milestone report for Gitea (Go full-stack Git platform) and XORM (MSSQL dialect) across 116 tables.
   * Architectural analysis of conditional DDL, joined column metadata routing, T-SQL assignment aliasing, and `sys.fn_helpcollations()`.
 * [`TDS_COMPATIBILITY_REPORT.md`](TDS_COMPATIBILITY_REPORT.md)
