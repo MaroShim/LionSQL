@@ -7,9 +7,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [Unreleased]
 
+### Added
+- complete Grafana dual-protocol integration across PGWire (:5433 internal backend, 785 migrations) and dual data source plugins (PostgreSQL :5433 & MSSQL TDS :1433) (GRAFANA-INTEGRATION-1)
+- support PostgreSQL advisory lock built-ins (pg_try_advisory_lock, pg_advisory_unlock, etc.) with boolean OID 16 metadata
+- support SQL-standard EXTRACT(field FROM source), EPOCH datepart, and statement_timestamp() / clock_timestamp() built-ins
+- implement PostgreSQL BYTEA hex escape (\x) round-trip serialization for envelope encryption
+- complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
+
+### Fixed
+- decouple logical table rename from physical WiredTiger table URI via TableSchema.PhysicalName to prevent EBUSY errors during active transactions
+- evict cached WiredTiger cursors in DropTable and assign unique PhysicalName for temporary tables to eliminate derived table key collisions
+- expand wildcard projections (alias.*, *) in PGWire handleDescribe and evaluate bare literal projections in Volcano ProjectionIterator
+- fix TDS inferColumnInfos colSize for 'type' columns to prevent go-mssqldb slice bounds panic
+
 ### Performance
 - implement zero-overhead transaction fast-path binding for BEGIN, COMMIT, and ROLLBACK in PGWire and TDS listeners (PERF-PGWIRE-1)
 - reuse 5-byte message header buffer across connection message loop in PGWire server
+
+### Documentation
+- author bilingual Grafana integration guides (doc/GRAFANA_INTEGRATION_GUIDE.ko.md, doc/GRAFANA_INTEGRATION_GUIDE.md) and milestone reports (notes/GRAFANA_INTEGRATION_MILESTONE.ko.md, notes/GRAFANA_INTEGRATION_MILESTONE.md)
+- author bilingual IOTA-SDK Go ERP and Gitea integration guides and milestone reports
 
 ## [0.90.0-beta4] - 2026-10-30
 

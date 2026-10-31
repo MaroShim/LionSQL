@@ -52,11 +52,14 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`GITEA_INTEGRATION_MILESTONE.md`](GITEA_INTEGRATION_MILESTONE.md)** ([Korean](GITEA_INTEGRATION_MILESTONE.ko.md)): Gitea dual-protocol (TDS :1433 & PGWire :5433) live integration and 116 production tables full E2E lifecycle verification milestone report.
    - **[`IOTA_ERP_INTEGRATION_PLAN.ko.md`](IOTA_ERP_INTEGRATION_PLAN.ko.md)** (Korean): IOTA SDK Go ERP system live integration over PostgreSQL Wire Protocol (TCP `:5433`) and 47 schema migrations execution plan (Completed).
    - **[`IOTA_ERP_INTEGRATION_MILESTONE.md`](IOTA_ERP_INTEGRATION_MILESTONE.md)** ([Korean](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)): IOTA SDK Go ERP integration, strict `pgx/v5` binary wire protocol compliance, and 47 schema migrations execution milestone report (Completed).
+   - **[`GRAFANA_INTEGRATION_PLAN.ko.md`](GRAFANA_INTEGRATION_PLAN.ko.md)** (Korean): Grafana open-source observability platform dual-protocol integration plan (PGWire :5433 internal backend & MSSQL :1433 / PGWire :5433 data sources) (Completed).
+   - **[`GRAFANA_INTEGRATION_MILESTONE.md`](GRAFANA_INTEGRATION_MILESTONE.md)** ([Korean](GRAFANA_INTEGRATION_MILESTONE.ko.md)): Grafana 785 migrations execution, envelope encryption (`BYTEA`), CTE derived table isolation, and dual data source query verification milestone report (Completed).
    - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
 
 7. **Completed Reports & Historical Archives**:
    - **[`../doc/GITEA_INTEGRATION_GUIDE.md`](../doc/GITEA_INTEGRATION_GUIDE.md)** ([Korean](../doc/GITEA_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying Gitea on LionSQL with dual-protocol support.
    - **[`../doc/IOTA_ERP_INTEGRATION_GUIDE.md`](../doc/IOTA_ERP_INTEGRATION_GUIDE.md)** ([Korean](../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying IOTA-SDK Go ERP on LionSQL.
+   - **[`../doc/GRAFANA_INTEGRATION_GUIDE.md`](../doc/GRAFANA_INTEGRATION_GUIDE.md)** ([Korean](../doc/GRAFANA_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying Grafana with dual data sources (PGWire & MSSQL TDS) on LionSQL.
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)** (Korean): TDS RPC `sp_executesql` parameter resolution regression post-mortem, Beekeeper Studio connection crash root-cause analysis, and pure ordinal positional fallback restoration.
    - **[`BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)** (Korean): 107 data integrity defect resolutions archive and interim methodology records (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
    - **[`TEST_VERIFICATION_REPORT.ko.md`](TEST_VERIFICATION_REPORT.ko.md)** (Korean): Automated test suite verification report and race detection diagnostics.

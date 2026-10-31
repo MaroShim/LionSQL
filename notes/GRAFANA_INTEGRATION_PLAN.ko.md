@@ -3,8 +3,10 @@
 > - **최초 작성일**: 2026-10-31
 > - **과제 식별 코드**: `GRAFANA-INTEGRATION-1`
 > - **목표**: 오픈소스 관측성/시각화 표준 플랫폼인 [Grafana](https://github.com/grafana/grafana)를 LionSQL에 연동하여, **내부 메타데이터 DB(PGWire :5433)**와 **듀얼 쿼리 데이터 소스(MSSQL TDS :1433 및 PGWire :5433)**를 동시 검증
-> - **상태**: 진행 중 (`In Progress`)
+> - **상태**: 완료 (`Completed [x]`)
 > - **참조 문서**:
+>   - Grafana 마일스톤 보고서: [`notes/GRAFANA_INTEGRATION_MILESTONE.ko.md`](GRAFANA_INTEGRATION_MILESTONE.ko.md) ([English](GRAFANA_INTEGRATION_MILESTONE.md))
+>   - Grafana 공식 가이드: [`doc/GRAFANA_INTEGRATION_GUIDE.ko.md`](../doc/GRAFANA_INTEGRATION_GUIDE.ko.md) ([English](../doc/GRAFANA_INTEGRATION_GUIDE.md))
 >   - Gitea 마일스톤: [`notes/GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)
 >   - IOTA ERP 마일스톤: [`notes/IOTA_ERP_INTEGRATION_MILESTONE.ko.md`](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)
 
