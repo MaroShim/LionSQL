@@ -26,50 +26,38 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **Multi-Protocol Emulation Boundaries & Scope**: TDS, PGWire, and MySQL wire protocol emulation boundaries, packet and token handling, and tolerant virtual no-op policies.
 
 5. **Project Roadmap & Backlog**:
-   - **[`TODO.md`](../TODO.md)**: Active engineering backlog, next priority targets (P1, P2, P3), CBO and performance matrices, and recent milestone completions.
+   - **[`TODO.md`](../TODO.md)**: Active engineering backlog, next priority targets (Priority 1 Durability Sprint, Priority 2 App Expansion, Priority 3 Post-1.0 Roadmap), and archived milestone completions (M1~M3).
    - **[`ROADMAP.md`](../ROADMAP.md)**: Macro-level release milestones (Phases 1-6), architectural direction, and phase completion status.
 
-6. **Domain Architecture & Execution Plans**:
-   - **[`UNIFIED_CLI_PLAN.md`](UNIFIED_CLI_PLAN.md)**: Master plan for unifying the single binary (`bin/lionsql`) and restructuring CLI lifecycle (Completed).
-   - **[`SQL_ABSTRACTION_LAYER_PLAN.md`](SQL_ABSTRACTION_LAYER_PLAN.md)**: Design for SQL abstraction layer unifying multiple storage backends (Completed).
-   - **[`TOOL_AUDIT_PLAN.ko.md`](TOOL_AUDIT_PLAN.ko.md)** (Korean): GUI client tools (SSMS, DbGate, DBeaver, Beekeeper Studio) query compatibility and virtual catalog audit plan (Completed).
-   - **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](OVER_SPECIFICATION_REMEDIATION_PLAN.md)** (Korean): Master remediation plan eliminating tool-specific over-specifications and ad-hoc hardcodings (Completed).
-   - **[`BENCHMARK_DIR_SAFETY_PLAN.md`](BENCHMARK_DIR_SAFETY_PLAN.md)** (Korean): Non-destructive benchmark directory lifecycle and data protection master plan (Completed).
-   - **[`WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md)** (Korean): Windows platform daemon decoupling, high-resolution timer (timeBeginPeriod), and cross-compilation build plan (Completed).
-   - **[`EXTENDED_SMOKE_TEST_PLAN.md`](EXTENDED_SMOKE_TEST_PLAN.md)** (Korean): 13-domain extended integration smoke test suite architecture plan (Completed).
-   - **[`TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md)** (Korean): Master plan eliminating heuristic type coercion anti-patterns across engine and wire protocols (Completed).
-   - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)** (Korean): Permanent 2-tier query execution architecture specification (Completed).
-   - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC performance optimization history, WiredTiger beat roadmap, 104k tpmC architecture, and post-1.0 memory compaction (OCC-HYPER-2).
-   - **[`TPCC_CLIENT_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](TPCC_CLIENT_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): End-to-end network client optimization, prepared statement parameterization, dedicated worker connection binding, and 40x throughput leap (113k tpmC) plan (Completed).
-   - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): Vertical server pipeline optimization from TDS network socket read coalescing to WAL file system fallocate and adaptive group commit (Approved).
-   - **[`DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)** (Korean): DuckDB-style friendly SQL ergonomics master plan (`SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`) (Post-1.0 / v1.1.0).
-   - **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)** (Korean): 2-stage hybrid benchmark plan for complex query performance tuning (SSB Star Schema & Mini TPC-H Top 5 queries, DuckDB/ClickHouse comparison matrix).
-   - **[`COMPLEX_EXPRESSION_AUDIT_AND_DEEP_TEST_PLAN.ko.md`](COMPLEX_EXPRESSION_AUDIT_AND_DEEP_TEST_PLAN.ko.md)** (Korean): Comprehensive expression audit and deep assertion testing plan across Volcano operators (Aggregate, Sort, Window, Having) (Completed).
-   - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: Architecture for SHA-256 hash-chained immutable audit logging for PCI-DSS v4.0 / SOC 2 compliance (Post-1.0 / v1.1.0).
-   - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Design for Microsoft SQL Server collation and locale support (Post-1.0 / v1.1.0).
-   - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: Memory and binary compaction plan for ANTLR grammar parser (Post-1.0 Roadmap).
-   - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)** (Korean): Root cause analysis of DML/wildcard/keyword alias defects exposed during Gitea XORM live integration and architectural postmortem on "Human SQL vs Machine-Generated ORM SQL" test blind spots.
-   - **[`GITEA_INTEGRATION_MILESTONE.md`](GITEA_INTEGRATION_MILESTONE.md)** ([Korean](GITEA_INTEGRATION_MILESTONE.ko.md)): Gitea dual-protocol (TDS :1433 & PGWire :5433) live integration and 116 production tables full E2E lifecycle verification milestone report.
-   - **[`IOTA_ERP_INTEGRATION_PLAN.ko.md`](IOTA_ERP_INTEGRATION_PLAN.ko.md)** (Korean): IOTA SDK Go ERP system live integration over PostgreSQL Wire Protocol (TCP `:5433`) and 47 schema migrations execution plan (Completed).
-   - **[`IOTA_ERP_INTEGRATION_MILESTONE.md`](IOTA_ERP_INTEGRATION_MILESTONE.md)** ([Korean](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)): IOTA SDK Go ERP integration, strict `pgx/v5` binary wire protocol compliance, and 47 schema migrations execution milestone report (Completed).
-   - **[`GRAFANA_INTEGRATION_PLAN.ko.md`](GRAFANA_INTEGRATION_PLAN.ko.md)** (Korean): Grafana open-source observability platform dual-protocol integration plan (PGWire :5433 internal backend & MSSQL :1433 / PGWire :5433 data sources) (Completed).
-   - **[`GRAFANA_INTEGRATION_MILESTONE.md`](GRAFANA_INTEGRATION_MILESTONE.md)** ([Korean](GRAFANA_INTEGRATION_MILESTONE.ko.md)): Grafana 785 migrations execution, envelope encryption (`BYTEA`), CTE derived table isolation, and dual data source query verification milestone report (Completed).
-   - **[`CASDOOR_INTEGRATION_PLAN.ko.md`](CASDOOR_INTEGRATION_PLAN.ko.md)** (Korean): Casdoor open-source IAM/SSO/OIDC platform dual-protocol integration plan (PGWire :5433 & MSSQL TDS :1433) (Completed).
-   - **[`CASDOOR_INTEGRATION_MILESTONE.md`](CASDOOR_INTEGRATION_MILESTONE.md)** ([Korean](CASDOOR_INTEGRATION_MILESTONE.ko.md)): Casdoor 44-table creation, composite primary key (`PRIMARY KEY (owner, name)`) resolution, TDS `VARBINARY` JSON round-trip, and dual-protocol OIDC/RBAC E2E verification milestone report (Completed).
-   - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)** (Korean): Master plan for six further real-world app integrations (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost).
-   - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)** (Korean): Apache Answer PGWire integration detail plan (first in order).
-   - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean): Durability plan covering kill -9 crash recovery tests, soak tests, and dogfooding.
-   - **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)** (Korean): 1-hour soak test verification report (720k ops, 393.5k commits, SQLSTATE 40001 mapping, and WiredTiger 500MB cache convergence analysis).
-   - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
+6. **Active & Post-1.0 Architecture Plans**:
+   - **Active Sprints (Priority 1 & 2)**:
+     - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean): Master plan for crash resilience, kill tests, soak stress tests, and dogfooding.
+     - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)** (Korean): Master plan for 6 real-world app integrations (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost).
+     - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)** (Korean): Apache Answer PGWire integration detail plan (first in order).
+   - **Post-1.0 Architecture & Roadmap Plans**:
+     - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC performance optimization history, WiredTiger beat roadmap, 104k tpmC architecture, and post-1.0 memory compaction (OCC-HYPER-2).
+     - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)** (Korean): Vertical server pipeline optimization from TDS network socket read coalescing to WAL file system fallocate and adaptive group commit (Phase 3/4).
+     - **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)** (Korean): 2-stage hybrid benchmark plan for complex query performance tuning (SSB Star Schema & Mini TPC-H Top 5 queries, DuckDB/ClickHouse comparison matrix).
+     - **[`DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)** (Korean): DuckDB-style friendly SQL ergonomics master plan (`SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`) (Post-1.0 / v1.1.0).
+     - **[`MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md)** (Korean): Modular architecture and SPI API contracts decoupling storage, execution, and protocol layers.
+     - **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)** (Korean): Embedded Single Page Application (SPA) static web server architecture.
+     - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: Architecture for SHA-256 hash-chained immutable audit logging for PCI-DSS v4.0 / SOC 2 compliance (Post-1.0 / v1.1.0).
+     - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Design for Microsoft SQL Server collation and locale support (Post-1.0 / v1.1.0).
+     - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
 
-7. **Completed Reports & Historical Archives**:
-   - **[`../doc/GITEA_INTEGRATION_GUIDE.md`](../doc/GITEA_INTEGRATION_GUIDE.md)** ([Korean](../doc/GITEA_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying Gitea on LionSQL with dual-protocol support.
-   - **[`../doc/IOTA_ERP_INTEGRATION_GUIDE.md`](../doc/IOTA_ERP_INTEGRATION_GUIDE.md)** ([Korean](../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying IOTA-SDK Go ERP on LionSQL.
-   - **[`../doc/GRAFANA_INTEGRATION_GUIDE.md`](../doc/GRAFANA_INTEGRATION_GUIDE.md)** ([Korean](../doc/GRAFANA_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying Grafana with dual data sources (PGWire & MSSQL TDS) on LionSQL.
-   - **[`../doc/CASDOOR_INTEGRATION_GUIDE.md`](../doc/CASDOOR_INTEGRATION_GUIDE.md)** ([Korean](../doc/CASDOOR_INTEGRATION_GUIDE.ko.md)): Official manual for building and deploying Casdoor IAM/SSO/OIDC on LionSQL with dual-protocol support.
+7. **Production Milestone Reports & Postmortems**:
+   - **[`GITEA_INTEGRATION_MILESTONE.md`](GITEA_INTEGRATION_MILESTONE.md)** ([Korean](GITEA_INTEGRATION_MILESTONE.ko.md)): Gitea dual-protocol (TDS :1433 & PGWire :5433) live integration and 116 production tables full E2E lifecycle verification milestone report.
+   - **[`IOTA_ERP_INTEGRATION_MILESTONE.md`](IOTA_ERP_INTEGRATION_MILESTONE.md)** ([Korean](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)): IOTA SDK Go ERP integration, strict `pgx/v5` binary wire protocol compliance, and 47 schema migrations execution milestone report.
+   - **[`GRAFANA_INTEGRATION_MILESTONE.md`](GRAFANA_INTEGRATION_MILESTONE.md)** ([Korean](GRAFANA_INTEGRATION_MILESTONE.ko.md)): Grafana 785 migrations execution, envelope encryption (`BYTEA`), CTE derived table isolation, and dual data source query verification milestone report.
+   - **[`CASDOOR_INTEGRATION_MILESTONE.md`](CASDOOR_INTEGRATION_MILESTONE.md)** ([Korean](CASDOOR_INTEGRATION_MILESTONE.ko.md)): Casdoor 44-table creation, composite primary key (`PRIMARY KEY (owner, name)`) resolution, TDS `VARBINARY` JSON round-trip, and dual-protocol OIDC/RBAC E2E verification milestone report.
+   - **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)** (Korean): 1-hour soak test verification report (720k ops, 393.5k commits, SQLSTATE 40001 mapping, and WiredTiger 500MB cache convergence analysis).
+   - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)** (Korean): Root cause analysis of DML/wildcard/keyword alias defects exposed during Gitea XORM live integration and architectural postmortem on "Human SQL vs Machine-Generated ORM SQL" test blind spots.
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)** (Korean): TDS RPC `sp_executesql` parameter resolution regression post-mortem, Beekeeper Studio connection crash root-cause analysis, and pure ordinal positional fallback restoration.
+   - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)** (Korean): Permanent 2-tier query execution architecture specification.
    - **[`BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)** (Korean): 107 data integrity defect resolutions archive and interim methodology records (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
    - **[`TEST_VERIFICATION_REPORT.ko.md`](TEST_VERIFICATION_REPORT.ko.md)** (Korean): Automated test suite verification report and race detection diagnostics.
-   - **[`archive/PROJECT_STATUS_ASSESSMENT.ko.md`](archive/PROJECT_STATUS_ASSESSMENT.ko.md)** (Korean): Historical architectural maturity, technical debt resolution status, and benchmark report.
    - **[`RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md)** (Korean): Release 1.0 architecture review, code audit, and feedback records.
    - **[`LIONSQL_DEEP_CODE_REVIEW.ko.md`](LIONSQL_DEEP_CODE_REVIEW.ko.md)** (Korean): Deep code review and subsystem architecture audit across all 390 source files (~350k lines).
+
+8. **Historical Archives (`notes/archive/`)**:
+   - See **[`notes/archive/README.md`](archive/README.md)** for 13 completed historical architectural plans (Windows daemon, over-specification cleanup, forward-only cursors, CLI unification, etc.) and original raw backlogs.

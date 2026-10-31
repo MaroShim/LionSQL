@@ -26,51 +26,38 @@
    - **다중 프로토콜 에뮬레이션 경계 및 스코프**: TDS, PGWire, MySQL 프로토콜 에뮬레이션 범위 및 중단 기준, 패킷/토큰 처리 및 가상 No-Op 호환성 정책
 
 5. **프로젝트 전역 로드맵 및 백로그**:
-   - **[`TODO.md`](../TODO.md)**: 액티브 엔지니어링 백로그, 차기 착수 우선순위 과제(P1, P2, P3), CBO 및 성능 매트릭스, 최근 완료 마일스톤
+   - **[`TODO.md`](../TODO.md)**: 액티브 엔지니어링 백로그, 3계층 우선순위(Priority 1 내구성 스프린트, Priority 2 앱 연동, Priority 3 장기 로드맵) 및 완료 마일스톤(M1~M3)
    - **[`ROADMAP.md`](../ROADMAP.md)**: 거시적 릴리즈 마일스톤(Phase 1~6), 아키텍처 진화 방향, 단계별 구현 완료 상태
 
 6. **도메인별 설계 및 작업 계획서 (Architecture & Execution Plans)**:
-   - **[`UNIFIED_CLI_PLAN.md`](UNIFIED_CLI_PLAN.md)**: 단일 바이너리(`bin/lionsql`) 완전 통합 및 CLI 라이프사이클 재정립 마스터 플랜 (완료)
-   - **[`SQL_ABSTRACTION_LAYER_PLAN.md`](SQL_ABSTRACTION_LAYER_PLAN.md)**: 다중 스토리지 백엔드 통합을 위한 SQL 추상화 계층 설계 (완료)
-   - **[`TOOL_AUDIT_PLAN.ko.md`](TOOL_AUDIT_PLAN.ko.md)**: 외부 GUI 도구(SSMS, DbGate, DBeaver, Beekeeper Studio) 실전 쿼리 호환성 및 가상 카탈로그 심층 감사/검증 계획서 (완료)
-   - **[`OVER_SPECIFICATION_REMEDIATION_PLAN.md`](OVER_SPECIFICATION_REMEDIATION_PLAN.md)**: 서드파티 도구 종속적 오버스펙 및 하드코딩 전수 정돈 마스터 플랜 (완료)
-   - **[`BENCHMARK_DIR_SAFETY_PLAN.md`](BENCHMARK_DIR_SAFETY_PLAN.md)**: 비파괴 벤치마크 디렉토리 안전 라이프사이클 및 기존 데이터 영구 보호 계획서 (완료)
-   - **[`WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md`](WINDOWS_DAEMON_AND_BUILD_PLAN.ko.md)**: Windows 플랫폼 데몬 분리, 고해상도 타이머(timeBeginPeriod) 및 크로스 컴파일 빌드 계획서 (완료)
-   - **[`EXTENDED_SMOKE_TEST_PLAN.md`](EXTENDED_SMOKE_TEST_PLAN.md)**: 13대 핵심 아키텍처 도메인 확장 통합 스모크 테스트 구축 계획서 (완료)
-   - **[`TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md`](TYPE_GUESSING_ANTI_PATTERN_ELIMINATION_PLAN.ko.md)**: 엔진 및 프로토콜 전반의 휴리스틱 타입 추론 및 강제 수치변환 안티패턴 전면 제거 마스터 플랜 (완료)
-   - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 확정 명세서 (완료)
-   - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).
-   - **[`TPCC_CLIENT_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](TPCC_CLIENT_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: 네트워크 TPC-C 클라이언트 종단 최적화, Precompiled Prepared Statement 파라미터화, 워커 전용 커넥션 바인딩 및 40배 성능 도약(113k tpmC) 플랜 (완료)
-   - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: TDS 네트워크 소켓 수신부터 VDBE 및 WAL 파일 시스템 사전 할당/적응형 그룹 커밋에 이르는 서버 수직 파이프라인 종단 최적화 마스터 플랜 (대기)
-   - **[`DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)**: DuckDB 스타일의 친화적 SQL 손끝 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`) 도입 마스터 플랜 (Post-1.0 / v1.1.0).
-   - **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**: LionSQL 복합 쿼리 성능 튜닝을 위한 2단계 하이브리드 표준 벤치마크 플랜 (SSB Star Schema & Mini TPC-H 5대 대표 쿼리, DuckDB/ClickHouse 비교 매트릭스).
-   - **[`COMPLEX_EXPRESSION_AUDIT_AND_DEEP_TEST_PLAN.ko.md`](COMPLEX_EXPRESSION_AUDIT_AND_DEEP_TEST_PLAN.ko.md)**: 복합 연산자(Aggregate, Sort, Window, Having) 중첩 산술식 전수 감사 및 정밀 값 검증(Deep Assertion) 강화 플랜 (완료).
-   - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0 / SOC 2 규제 대응 SHA-256 해시 체이닝 불변 감사 로그 서브시스템 설계 (Post-1.0 / v1.1.0)
-   - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계 (Post-1.0 / v1.1.0)
-   - **[`ANTLR_PARSER_COMPACTION_PLAN.md`](ANTLR_PARSER_COMPACTION_PLAN.md)**: ANTLR 파서 바이너리 및 런타임 메모리 경량화 플랜 (Post-1.0 계획)
-   - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**: Gitea XORM 실전 연동 중 노출된 DML/와일드카드/키워드 별칭 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 사후 분석 보고서 (Postmortem).
-   - **[`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)**: Gitea 풀스택 Git 플랫폼 듀얼 프로토콜(TDS :1433 & PGWire :5433) 연동 및 116개 테이블 실전 E2E 검증 완료 마일스톤 보고서 (완료).
-   - **[`IOTA_ERP_INTEGRATION_PLAN.ko.md`](IOTA_ERP_INTEGRATION_PLAN.ko.md)**: 우즈베키스탄 IOTA SDK Go ERP 시스템 LionSQL PGWire v3 실전 연동 및 47개 마이그레이션 관통 계획서 (완료).
-   - **[`IOTA_ERP_INTEGRATION_MILESTONE.ko.md`](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)**: IOTA SDK Go ERP 연동, `pgx/v5` 엄격한 바이너리 프로토콜 완비 및 47개 스키마 순차 마이그레이션 100% 관통 마일스톤 보고서 (완료).
-   - **[`GRAFANA_INTEGRATION_PLAN.ko.md`](GRAFANA_INTEGRATION_PLAN.ko.md)**: Grafana 오픈소스 관측성 플랫폼 듀얼 프로토콜(PGWire :5433 내부 백엔드 & MSSQL :1433 / PGWire :5433 데이터 소스) 연동 계획서 (완료).
-   - **[`GRAFANA_INTEGRATION_MILESTONE.ko.md`](GRAFANA_INTEGRATION_MILESTONE.ko.md)**: Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`), CTE 파생 테이블 격리 및 듀얼 데이터 소스 쿼리 검증 마일스톤 보고서 (완료).
-   - **[`CASDOOR_INTEGRATION_PLAN.ko.md`](CASDOOR_INTEGRATION_PLAN.ko.md)**: Casdoor 오픈소스 IAM/SSO/OIDC 플랫폼 듀얼 프로토콜(PGWire :5433 & MSSQL TDS :1433) 연동 계획서 (완료).
-   - **[`CASDOOR_INTEGRATION_MILESTONE.ko.md`](CASDOOR_INTEGRATION_MILESTONE.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK(`PRIMARY KEY (owner, name)`) 지원, TDS `VARBINARY` JSON 직렬화 및 듀얼 프로토콜 OIDC/RBAC E2E 검증 마일스톤 보고서 (완료).
-   - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)**: 실전 앱 연동 확장 마스터 플랜 (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost 6종, 기존 4종 연동 자산 기반).
-   - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)**: Apache Answer PGWire 연동 상세 계획서 (1순위).
-   - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**: 킬 테스트(크래시 복구), 소크 테스트(장시간 부하), 개밥 먹기 기반 내구성/운영 신뢰성 검증 계획서.
-   - **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**: 1시간 장시간 부하(Soak Test, 72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 매핑 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
-   - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고)
+   - **액티브 스프린트 (Priority 1 & 2)**:
+     - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**: 킬 테스트(크래시 복구), 소크 테스트(장시간 부하), 개밥 먹기 기반 내구성/운영 신뢰성 검증 계획서.
+     - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)**: 실전 앱 연동 확장 마스터 플랜 (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost 6종).
+     - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)**: Apache Answer PGWire 연동 상세 계획서 (1순위).
+   - **Post-1.0 아키텍처 및 장기 로드맵 계획서**:
+     - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).
+     - **[`SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md)**: TDS 네트워크 소켓 수신부터 VDBE 및 WAL 파일 시스템 사전 할당/적응형 그룹 커밋에 이르는 서버 수직 파이프라인 종단 최적화 마스터 플랜 (Phase 3/4 대기).
+     - **[`COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](COMPLEX_QUERY_BENCHMARK_PLAN.ko.md)**: LionSQL 복합 쿼리 성능 튜닝을 위한 2단계 하이브리드 표준 벤치마크 플랜 (SSB Star Schema & Mini TPC-H 5대 대표 쿼리, DuckDB/ClickHouse 비교 매트릭스).
+     - **[`DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)**: DuckDB 스타일의 친화적 SQL 손끝 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`) 도입 마스터 플랜 (Post-1.0 / v1.1.0).
+     - **[`MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md)**: 모듈러 아키텍처 및 계층별 SPI API 계약 설계 계획서.
+     - **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 내장 SPA 정적 웹 파일 서빙 엔진 설계 계획서.
+     - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0 / SOC 2 규제 대응 SHA-256 해시 체이닝 불변 감사 로그 서브시스템 설계 (Post-1.0 / v1.1.0).
+     - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계 (Post-1.0 / v1.1.0).
+     - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: 클라우드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 연동 설계 (Spec-Out 아키텍처 / 참고).
 
-7. **완료된 보고서 및 역사적 아카이브 (Completed Reports & Archives)**:
-   - **[`../doc/GITEA_INTEGRATION_GUIDE.ko.md`](../doc/GITEA_INTEGRATION_GUIDE.ko.md)** ([English](../doc/GITEA_INTEGRATION_GUIDE.md)): LionSQL 기반 Gitea 듀얼 프로토콜 구축 및 프로덕션 운영 공식 매뉴얼.
-   - **[`../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md`](../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md)** ([English](../doc/IOTA_ERP_INTEGRATION_GUIDE.md)): LionSQL 기반 IOTA-SDK Go ERP 구축 및 프로덕션 운영 공식 매뉴얼.
-   - **[`../doc/GRAFANA_INTEGRATION_GUIDE.ko.md`](../doc/GRAFANA_INTEGRATION_GUIDE.ko.md)** ([English](../doc/GRAFANA_INTEGRATION_GUIDE.md)): LionSQL 기반 Grafana 구축 및 듀얼 데이터 소스(PGWire & MSSQL TDS) 공식 연동 매뉴얼.
-   - **[`../doc/CASDOOR_INTEGRATION_GUIDE.ko.md`](../doc/CASDOOR_INTEGRATION_GUIDE.ko.md)** ([English](../doc/CASDOOR_INTEGRATION_GUIDE.md)): LionSQL 기반 Casdoor IAM/SSO/OIDC 듀얼 프로토콜(PGWire & MSSQL TDS) 구축 및 프로덕션 운영 공식 매뉴얼.
+7. **마일스톤 실전 검증 보고서 및 포스트모텀 (Milestones & Postmortems)**:
+   - **[`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)** ([English](GITEA_INTEGRATION_MILESTONE.md)): Gitea 풀스택 Git 플랫폼 듀얼 프로토콜(TDS :1433 & PGWire :5433) 연동 및 116개 테이블 실전 E2E 검증 완료 마일스톤 보고서.
+   - **[`IOTA_ERP_INTEGRATION_MILESTONE.ko.md`](IOTA_ERP_INTEGRATION_MILESTONE.ko.md)** ([English](IOTA_ERP_INTEGRATION_MILESTONE.md)): IOTA SDK Go ERP 연동, `pgx/v5` 엄격한 바이너리 프로토콜 완비 및 47개 스키마 순차 마이그레이션 100% 관통 마일스톤 보고서.
+   - **[`GRAFANA_INTEGRATION_MILESTONE.ko.md`](GRAFANA_INTEGRATION_MILESTONE.ko.md)** ([English](GRAFANA_INTEGRATION_MILESTONE.md)): Grafana 785개 마이그레이션 완주, 봉투 암호화(`BYTEA`), CTE 파생 테이블 격리 및 듀얼 데이터 소스 쿼리 검증 마일스톤 보고서.
+   - **[`CASDOOR_INTEGRATION_MILESTONE.ko.md`](CASDOOR_INTEGRATION_MILESTONE.ko.md)** ([English](CASDOOR_INTEGRATION_MILESTONE.md)): Casdoor 44개 테이블 자동 생성, 복합 PK(`PRIMARY KEY (owner, name)`) 지원, TDS `VARBINARY` JSON 직렬화 및 듀얼 프로토콜 OIDC/RBAC E2E 검증 마일스톤 보고서.
+   - **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**: 1시간 장시간 부하(Soak Test, 72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 매핑 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
+   - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**: Gitea XORM 실전 연동 중 노출된 DML/와일드카드/키워드 별칭 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 사후 분석 보고서 (Postmortem).
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**: TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 크래시 원인 규명 및 순수 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.
+   - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 확정 명세서.
    - **[`BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)**: 데이터 무결성 107대 결함 조치 아카이브 및 중간 방법론 이력 (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
    - **[`TEST_VERIFICATION_REPORT.ko.md`](TEST_VERIFICATION_REPORT.ko.md)**: 단위 및 통합 테스트 스위트 회귀 검증 및 무경쟁(Race-Free) 진단 보고서.
-   - **[`archive/PROJECT_STATUS_ASSESSMENT.ko.md`](archive/PROJECT_STATUS_ASSESSMENT.ko.md)**: 과거 아키텍처 성숙도, 기술 부채 해결 현황 및 벤치마크 보고서 (아카이브).
    - **[`RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md`](RELEASE_1.0_REVIEW_AND_FEEDBACK.ko.md)**: 1.0 릴리스 대비 아키텍처 감사 및 사전 피드백 이력.
    - **[`LIONSQL_DEEP_CODE_REVIEW.ko.md`](LIONSQL_DEEP_CODE_REVIEW.ko.md)**: 전체 390개 소스 파일(약 35만 라인)에 대한 아키텍처, 서브시스템별 심층 분석 및 엔지니어링 코드 리뷰 보고서.
-   - **[`GITEA_INTEGRATION_MILESTONE.ko.md`](GITEA_INTEGRATION_MILESTONE.ko.md)**: Gitea(Go 풀스택 Git 플랫폼) 및 XORM(MSSQL 방언) 완전 초기화 및 116개 테이블 프로덕션 기동 마일스톤 보고서 (조건부 DDL, 조인 컬럼 카탈로그 라우팅, T-SQL 대입식 별칭 및 `sys.fn_helpcollations()` 구현).
+
+8. **역사적 아카이브 (`notes/archive/`)**:
+   - 100% 구현 완료되어 설계 의도 및 검증 이력을 영구 보존하기 위해 이동된 과거 13개 계획서(Windows 데몬, 오버스펙 제거, Forward-only 커서, 단일 CLI 통합 등) 및 원본 백로그는 **[`notes/archive/README.md`](archive/README.md)**를 참조하십시오.
