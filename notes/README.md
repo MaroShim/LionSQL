@@ -59,6 +59,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)** (Korean): Master plan for six further real-world app integrations (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost).
    - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)** (Korean): Apache Answer PGWire integration detail plan (first in order).
    - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean): Durability plan covering kill -9 crash recovery tests, soak tests, and dogfooding.
+   - **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)** (Korean): 1-hour soak test verification report (720k ops, 393.5k commits, SQLSTATE 40001 mapping, and WiredTiger 500MB cache convergence analysis).
    - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
 
 7. **Completed Reports & Historical Archives**:
