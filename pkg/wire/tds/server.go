@@ -499,46 +499,16 @@ func (s *Server) executeVDBEPreparedFastPath(
 	}
 
 	cs := s.getClientSession(sess)
-	var res *runtime.ExecutionResult
-	var runErr error
-
-	if cs != nil {
-		cs.Mu.Lock()
-		if cs.TxFailed {
-			cs.Mu.Unlock()
-			var buf bytes.Buffer
-			buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
-			buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
-			_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
-			return true
-		}
-		if cs.Tx != nil {
-			res, runErr = s.executor.ExecuteInTxWithSessionContext(ctx, prog, paramMap, cs.Tx, cs.Session, nil)
-			if runErr != nil {
-				cs.TxFailed = true
-			}
-		}
-		cs.Mu.Unlock()
+	res, txAborted, runErr := cs.ExecuteProgram(ctx, prog, s.executor, paramMap, s.engine, "TdsPrepared")
+	if txAborted {
+		var buf bytes.Buffer
+		buf.Write(BuildError(3903, 1, 16, "The current transaction cannot be committed and cannot support operations that write to the log file. Roll back the transaction.", "LionSQL", "", 1))
+		buf.Write(BuildDoneProc(DoneFinal|DoneError, 0, 0))
+		_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
+		return true
 	}
 
-	if (cs == nil || cs.Tx == nil) && runErr == nil {
-		var session storage.Session
-		var shouldClose bool
-		if cs != nil && cs.Session != nil {
-			session = cs.Session
-		} else {
-			session, _ = s.engine.NewSession()
-			shouldClose = true
-		}
-		if session != nil {
-			if shouldClose {
-				defer session.Close()
-			}
-			res, runErr = s.executor.RunContext(ctx, prog, "TdsPrepared", paramMap, session)
-		}
-	}
-
-	if cs != nil && cs.Tx != nil && runErr != nil {
+	if cs != nil && cs.InTransaction() && runErr != nil {
 		var buf bytes.Buffer
 		num, state, sev, msg := extractTdsErrorInfo(runErr)
 		buf.Write(BuildError(num, state, sev, msg, "LionSQL", "", 1))

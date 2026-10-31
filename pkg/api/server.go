@@ -73,8 +73,8 @@ func NewServer(cat *catalog.Catalog, eng storage.Engine) *Server {
 	return NewServerWithAuth(cat, eng, authSvc, false)
 }
 
-// NewServerWithAuth initializes a Server with explicit auth service and enforcement option.
-func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.AuthService, enableAuth bool) *Server {
+// NewServerWithCoordinator initializes an API Server with an explicit Coordinator instance.
+func NewServerWithCoordinator(cat *catalog.Catalog, eng storage.Engine, coord *engine.Coordinator, authSvc *auth.AuthService, enableAuth bool) *Server {
 	if authSvc == nil {
 		authSvc = auth.NewAuthService(auth.Config{})
 		_, _ = authSvc.EnsureDefaultSuperuser("admin@lionsql.local", "1234567890")
@@ -84,29 +84,31 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 	webhooks := NewWebhookDispatcher()
 	webhooks.StartBrokerListener(broker)
 	mailer := NewMailer(SMTPConfig{})
-	coord := engine.NewCoordinator(cat, eng, engine.Config{
-		DefaultWorkMem:   execution.DefaultWorkMem,
-		SlowThreshold:    DefaultSlowQueryThreshold,
-		EnableGeneralLog: false,
-		AuthService:      authSvc,
-		EnableAuth:       enableAuth,
-		PoolConfig:       DefaultPoolConfig(),
-	})
+	if coord == nil {
+		coord = engine.NewCoordinator(cat, eng, engine.Config{
+			DefaultWorkMem:   execution.DefaultWorkMem,
+			SlowThreshold:    DefaultSlowQueryThreshold,
+			EnableGeneralLog: false,
+			AuthService:      authSvc,
+			EnableAuth:       enableAuth,
+			PoolConfig:       DefaultPoolConfig(),
+		})
+	}
 	s := &Server{
-		catalog:     cat,
-		engine:      eng,
-		planCache:   proc.NewPlanCache(),
-		executor:    runtime.NewExecutor(cache),
-		auth:        authSvc,
-		enableAuth:  enableAuth,
-		broker:      broker,
-		webhooks:    webhooks,
-		rls:         NewRLSManager(),
-		mailer:      mailer,
-		coordinator: coord,
-		mux:         http.NewServeMux(),
+		catalog:       cat,
+		engine:        eng,
+		planCache:     proc.NewPlanCache(),
+		executor:      runtime.NewExecutor(cache),
+		auth:          authSvc,
+		enableAuth:    enableAuth,
+		broker:        broker,
+		webhooks:      webhooks,
+		rls:           NewRLSManager(),
+		mailer:        mailer,
+		coordinator:   coord,
+		mux:           http.NewServeMux(),
 		requestLogger: NewRequestActivityLogger(200),
-		startTime:   time.Now(),
+		startTime:     time.Now(),
 	}
 	s.executor.SetTableGetter(eng.GetTable)
 
@@ -126,6 +128,11 @@ func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.A
 
 	s.routes()
 	return s
+}
+
+// NewServerWithAuth initializes a Server with explicit auth service and enforcement option.
+func NewServerWithAuth(cat *catalog.Catalog, eng storage.Engine, authSvc *auth.AuthService, enableAuth bool) *Server {
+	return NewServerWithCoordinator(cat, eng, nil, authSvc, enableAuth)
 }
 
 // SetDefaultWorkMem updates the server-wide default work_mem limit.

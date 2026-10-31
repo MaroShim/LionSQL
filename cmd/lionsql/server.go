@@ -719,12 +719,12 @@ func runServer(args []string) error {
 
 	if pgEnabled {
 		wireServer = wire.NewServerWithCache(cfg.Network.PGAddr, cat, eng, sharedCache)
-		wireServer.SetCoordinator(server)
+		wireServer.SetCoordinator(server.Coordinator())
 		wireServer.SetDevMode(cfg.Logging.DevMode)
 	}
 	if tdsEnabled {
 		tdsServer = tds.NewServerWithCache(cfg.Network.TDSAddr, cat, eng, sharedCache)
-		tdsServer.SetCoordinator(server)
+		tdsServer.SetCoordinator(server.Coordinator())
 		tdsServer.SetDevMode(cfg.Logging.DevMode)
 	}
 

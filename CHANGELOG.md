@@ -29,6 +29,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - expand wildcard projections (alias.*, *) in PGWire handleDescribe and evaluate bare literal projections in Volcano ProjectionIterator
 - fix TDS inferColumnInfos colSize for 'type' columns to prevent go-mssqldb slice bounds panic
 
+### Refactored
+- encapsulate ClientSession internal mutex and transaction state with high-level methods (ExecuteProgram, IsTxFailed, MarkTxFailed, InTransaction, GetActiveTx, TxStatus) and eliminate raw cs.Mu.Lock across PGWire and TDS listeners (R-6-P1)
+- normalize server coordinator lifecycle by instantiating engine.Coordinator as core instance and directly injecting it into PGWire, TDS, and HTTP listeners (R-6-P3)
+
 ### Performance
 - bind PGWire prepared statements directly to VDBE bytecode VM in active transactions via ExecuteInTxWithSessionContext, eliminating substituteParams string reconstruction and SQL re-parsing overhead (PERF-PGWIRE-PREP-TX)
 - implement zero-overhead transaction fast-path binding for BEGIN, COMMIT, and ROLLBACK in PGWire and TDS listeners (PERF-PGWIRE-1)

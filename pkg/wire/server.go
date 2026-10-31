@@ -1505,74 +1505,37 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			}
 
 			cs := s.coordinator.GetSession(sessID)
-			var execRes *runtime.ExecutionResult
-			var execErr error
-			handledDirectly := false
-
-			if cs != nil {
-				cs.Mu.Lock()
-				if cs.TxFailed {
-					cs.Mu.Unlock()
-					putParamMap(paramMap)
-					_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
-					return
-				}
-				if cs.Tx != nil {
-					execRes, execErr = s.executor.ExecuteInTxWithSessionContext(context.Background(), portal.Statement.Program, paramMap, cs.Tx, cs.Session, nil)
-					if execErr != nil {
-						cs.TxFailed = true
-					}
-					handledDirectly = true
-				}
-				cs.Mu.Unlock()
-			}
-
-			if !handledDirectly {
-				var session storage.Session
-				var shouldClose bool
-				if cs != nil && cs.Session != nil {
-					session = cs.Session
-				} else {
-					session, _ = s.engine.NewSession()
-					shouldClose = true
-				}
-				if session != nil {
-					if shouldClose {
-						defer session.Close()
-					}
-					execRes, execErr = s.executor.RunContext(context.Background(), portal.Statement.Program, "PGWirePrepared", paramMap, session)
-					handledDirectly = true
-				}
-			}
-
+			execRes, txAborted, execErr := cs.ExecuteProgram(context.Background(), portal.Statement.Program, s.executor, paramMap, s.engine, "PGWirePrepared")
 			putParamMap(paramMap)
-
-			if handledDirectly {
-				if execErr != nil {
-					if s.DevMode() {
-						log.Printf("[DEV][PGWire][ExecuteVDBEError] query=%s err=%v", portal.Statement.Query, execErr)
-					}
-					_ = WriteError(conn, execErr.Error())
-					return
-				}
-				cmd := portal.Statement.Program.Type
-				if cmd == "" || cmd == "QUERY" || cmd == "INTERACTIVE_QUERY" {
-					cmd = portal.Statement.Query
-				}
-				if len(execRes.Rows) > 0 && (strings.HasPrefix(strings.ToUpper(cmd), "SELECT") || cmd == "") {
-					cmd = "SELECT"
-				}
-				portal.Result = &engine.QueryResult{
-					Success:      true,
-					Command:      cmd,
-					Columns:      execRes.Columns,
-					Rows:         execRes.Rows,
-					RowsAffected: execRes.RowsAffected,
-					Messages:     execRes.Logs,
-				}
-				portal.Pos = 0
-				portal.Executed = true
+			if txAborted {
+				_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
+				return
 			}
+
+			if execErr != nil {
+				if s.DevMode() {
+					log.Printf("[DEV][PGWire][ExecuteVDBEError] query=%s err=%v", portal.Statement.Query, execErr)
+				}
+				_ = WriteError(conn, execErr.Error())
+				return
+			}
+			cmd := portal.Statement.Program.Type
+			if cmd == "" || cmd == "QUERY" || cmd == "INTERACTIVE_QUERY" {
+				cmd = portal.Statement.Query
+			}
+			if len(execRes.Rows) > 0 && (strings.HasPrefix(strings.ToUpper(cmd), "SELECT") || cmd == "") {
+				cmd = "SELECT"
+			}
+			portal.Result = &engine.QueryResult{
+				Success:      true,
+				Command:      cmd,
+				Columns:      execRes.Columns,
+				Rows:         execRes.Rows,
+				RowsAffected: execRes.RowsAffected,
+				Messages:     execRes.Logs,
+			}
+			portal.Pos = 0
+			portal.Executed = true
 		}
 	}
 

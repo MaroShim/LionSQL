@@ -364,18 +364,15 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 	}
 
 	if cs != nil {
-		cs.Mu.Lock()
-		if cs.TxFailed {
-			cs.Mu.Unlock()
+		if cs.IsTxFailed() {
 			_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
 			_ = s.writeReady(conn, sessID)
 			return
 		}
-		if cs.Tx != nil {
-			tx = cs.Tx
+		if actTx, ok := cs.GetActiveTx(); ok {
+			tx = actTx
 			inTx = true
 		}
-		cs.Mu.Unlock()
 	}
 
 	if !inTx {
@@ -414,9 +411,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 					v, err := parseFieldVal(fieldVal, col)
 					if err != nil {
 						if inTx && cs != nil {
-							cs.Mu.Lock()
-							cs.TxFailed = true
-							cs.Mu.Unlock()
+							cs.MarkTxFailed()
 						} else if !inTx {
 							_ = tx.Rollback()
 						}
@@ -443,9 +438,7 @@ func (s *Server) handleCopyIn(conn net.Conn, stmt *CopyStmt, sessID string) {
 
 		if err := tx.Insert(tbl.Name, rec); err != nil {
 			if inTx && cs != nil {
-				cs.Mu.Lock()
-				cs.TxFailed = true
-				cs.Mu.Unlock()
+				cs.MarkTxFailed()
 			} else if !inTx {
 				_ = tx.Rollback()
 			}
@@ -529,18 +522,15 @@ func (s *Server) handleCopyOut(conn net.Conn, stmt *CopyStmt, sessID string) {
 	}
 
 	if cs != nil {
-		cs.Mu.Lock()
-		if cs.TxFailed {
-			cs.Mu.Unlock()
+		if cs.IsTxFailed() {
 			_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
 			_ = s.writeReady(conn, sessID)
 			return
 		}
-		if cs.Tx != nil {
-			tx = cs.Tx
+		if actTx, ok := cs.GetActiveTx(); ok {
+			tx = actTx
 			inTx = true
 		}
-		cs.Mu.Unlock()
 	}
 
 	if !inTx {

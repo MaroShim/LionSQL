@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/storage"
 )
 
@@ -185,4 +186,128 @@ func (cs *ClientSession) UnregisterTempTable(tbl string) {
 		}
 	}
 }
+
+// IsTxFailed reports whether the session's active transaction has aborted ('E' status in PGWire).
+func (cs *ClientSession) IsTxFailed() bool {
+	if cs == nil {
+		return false
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	return cs.TxFailed
+}
+
+// MarkTxFailed marks the session's active transaction as aborted after an execution failure.
+func (cs *ClientSession) MarkTxFailed() {
+	if cs == nil {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	cs.TxFailed = true
+}
+
+// InTransaction reports whether the session is currently in an active transaction block.
+func (cs *ClientSession) InTransaction() bool {
+	if cs == nil {
+		return false
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	return cs.Tx != nil
+}
+
+// GetActiveTx returns the active transaction if one is open.
+func (cs *ClientSession) GetActiveTx() (storage.Transaction, bool) {
+	if cs == nil {
+		return nil, false
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	return cs.Tx, cs.Tx != nil
+}
+
+// TxStatus returns the transaction status indicator for PGWire ('I' = idle, 'T' = in transaction, 'E' = aborted transaction).
+func (cs *ClientSession) TxStatus() byte {
+	if cs == nil {
+		return 'I'
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.TxFailed {
+		return 'E'
+	}
+	if cs.Tx != nil {
+		return 'T'
+	}
+	return 'I'
+}
+
+// ExecuteProgram executes a compiled program in the session's active transaction if present,
+// or in an autocommit session. Mutex synchronization, transaction failure flags, and session
+// life cycles are completely encapsulated within this method.
+func (cs *ClientSession) ExecuteProgram(
+	ctx context.Context,
+	prog *proc.Program,
+	exec *runtime.Executor,
+	paramMap map[string]any,
+	eng storage.Engine,
+	stmtLabel string,
+) (res *runtime.ExecutionResult, txAborted bool, err error) {
+	if cs == nil {
+		if eng == nil || exec == nil {
+			return nil, false, fmt.Errorf("storage engine or executor not configured")
+		}
+		sess, err := eng.NewSession()
+		if err != nil {
+			return nil, false, err
+		}
+		defer sess.Close()
+		res, err = exec.RunContext(ctx, prog, stmtLabel, paramMap, sess)
+		return res, false, err
+	}
+
+	cs.Mu.Lock()
+	if cs.TxFailed {
+		cs.Mu.Unlock()
+		return nil, true, nil
+	}
+
+	if cs.Tx != nil {
+		tx := cs.Tx
+		sess := cs.Session
+		res, err = exec.ExecuteInTxWithSessionContext(ctx, prog, paramMap, tx, sess, nil)
+		if err != nil {
+			cs.TxFailed = true
+		}
+		cs.Mu.Unlock()
+		return res, false, err
+	}
+
+	// Autocommit under existing or temporary session
+	var sess storage.Session
+	var shouldClose bool
+	if cs.Session != nil {
+		sess = cs.Session
+	} else if eng != nil {
+		sess, err = eng.NewSession()
+		if err != nil {
+			cs.Mu.Unlock()
+			return nil, false, err
+		}
+		shouldClose = true
+	}
+	cs.Mu.Unlock()
+
+	if sess != nil {
+		if shouldClose {
+			defer sess.Close()
+		}
+		res, err = exec.RunContext(ctx, prog, stmtLabel, paramMap, sess)
+		return res, false, err
+	}
+
+	return nil, false, fmt.Errorf("no active storage session")
+}
+
 
