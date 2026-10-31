@@ -462,11 +462,17 @@ Following the completion of **`PERF-PGWIRE-PREP-TX`** (PGWire PreparedStatement 
 | **Stock-Level P50 / P95 / P99** | **1.51 ms / 8.73 ms / 14.85 ms** | **2.71 ms / 9.38 ms / 16.16 ms** | Low-stock range scan across wire |
 
 > [!NOTE]
-> **Dual-Protocol Performance Parity**:
-> - **TDS Protocol** (`Section 3.6.3`): 193.8k tpmC (OCC) / 141.2k tpmC (WiredTiger) at 16W / 32 Workers
-> - **PGWire Protocol** (`Section 3.6.4`): 230.0k tpmC (OCC) / 208.5k tpmC (WiredTiger) at 16W / 32 Workers
+> **Dual-Protocol 1:1 Comparative Parity (Identical Hardware & Test Conditions: 16 Warehouses, 32 Workers, 10s Execution)**:
 > 
-> Both wire protocols achieve sub-4ms median New-Order latency and sustain **7,700 ~ 8,500 TPS** over standard TCP sockets, demonstrating that applications connecting via standard PostgreSQL drivers achieve identical high-concurrency OLTP throughput as native Microsoft SQL Server TDS drivers.
+> | Target Engine | TDS Protocol (:1433) | PGWire Protocol (:5433) | Comparative Delta & Parity Analysis |
+> |---|---|---|---|
+> | **In-Memory OCC** | **217,069 tpmC** (8,014 TPS) | **230,025 tpmC** (8,515 TPS) | **+6.0% PGWire advantage** (P50: 3.74ms vs 3.30ms) |
+> | **WiredTiger MVCC** | **188,223 tpmC** (7,002 TPS) | **208,571 tpmC** (7,748 TPS) | **+10.8% PGWire advantage** (P50: 4.09ms vs 3.54ms) |
+> 
+> Under perfectly identical benchmark scale factors, concurrent TCP connections, and business logic execution:
+> 1. **Zero Protocol Discrimination**: Both wire protocols sustain **7,000 ~ 8,500 TPS** and **188,000 ~ 230,000 tpmC** over network TCP sockets.
+> 2. **Slight PGWire Edge**: PGWire v3 exhibits a 6% ~ 11% higher throughput primarily due to its lightweight 5-byte frame binary protocol compared to TDS's more elaborate multi-token stream format (`COLMETADATA`, `NBCROW`, `DONEPROC`) and UTF-16LE conversion overhead.
+> 3. **Application Benefit**: Real-world applications connecting via PostgreSQL drivers (`pgx`, `lib/pq`) achieve identical, if not slightly superior, transaction execution throughput as native Microsoft SQL Server drivers.
 
 ---
 
