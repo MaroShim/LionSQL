@@ -69,6 +69,8 @@ func normalizeDatePart(dp string) string {
 		return "second"
 	case "millisecond", "ms":
 		return "millisecond"
+	case "epoch":
+		return "epoch"
 	default:
 		return s
 	}
@@ -76,6 +78,8 @@ func normalizeDatePart(dp string) string {
 
 func evalDatePart(part string, t time.Time) storage.Value {
 	switch part {
+	case "epoch":
+		return storage.FloatValue(float64(t.UnixNano()) / 1e9)
 	case "year":
 		return storage.IntValue(int64(t.Year()))
 	case "quarter":
@@ -473,7 +477,7 @@ func parseOffsetLocation(s string) *time.Location {
 
 func isDateBuiltin(name string) bool {
 	switch name {
-	case "GETDATE", "NOW", "CURRENT_TIMESTAMP", "GETUTCDATE", "SYSDATETIME", "SYSUTCDATETIME", "SYSDATETIMEOFFSET",
+	case "GETDATE", "NOW", "CURRENT_TIMESTAMP", "STATEMENT_TIMESTAMP", "CLOCK_TIMESTAMP", "TIMEOFDAY", "GETUTCDATE", "SYSDATETIME", "SYSUTCDATETIME", "SYSDATETIMEOFFSET",
 		"CURDATE", "CURRENT_DATE", "CURTIME", "CURRENT_TIME",
 		"YEAR", "MONTH", "DAY", "DATEPART", "DATE_PART", "EXTRACT", "DATENAME", "DATEDIFF", "DATEDIFF_BIG", "DATEADD", "EOMONTH", "ISDATE",
 		"DATETRUNC", "DATE_TRUNC", "DATE_BUCKET", "DATEBUCKET",
@@ -487,8 +491,11 @@ func isDateBuiltin(name string) bool {
 
 func evalDateBuiltin(upper string, args []storage.Value) storage.Value {
 	switch upper {
-	case "GETDATE", "NOW", "CURRENT_TIMESTAMP":
+	case "GETDATE", "NOW", "CURRENT_TIMESTAMP", "STATEMENT_TIMESTAMP", "CLOCK_TIMESTAMP":
 		return storage.DateTimeValue(time.Now())
+
+	case "TIMEOFDAY":
+		return storage.StringValue(time.Now().Format("Mon Jan 02 15:04:05.000000 2006 MST"))
 
 	case "CURDATE", "CURRENT_DATE":
 		return storage.DateValue(time.Now())

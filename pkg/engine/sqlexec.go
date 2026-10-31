@@ -1258,6 +1258,16 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
+	// 4.42 Tolerant PG Compatibility: LOCK TABLE
+	if strings.HasPrefix(upper, "LOCK TABLE ") || strings.HasPrefix(upper, "LOCK ") {
+		return &QueryResult{
+			Success:    true,
+			Command:    "LOCK TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"LOCK TABLE executed successfully."},
+		}, nil
+	}
+
 	// 5. DML: INSERT INTO / UPSERT
 	if kind, _, ok := dmlHead(trimmed); ok && kind == dmlInsert {
 		if err := s.checkWriteAllowed(); err != nil {

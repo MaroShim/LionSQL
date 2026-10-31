@@ -633,6 +633,20 @@ func (s *Coordinator) evalScalarExpr(expr string, cs *ClientSession) (any, strin
 		return false, "pg_is_other_temp_schema"
 	}
 
+	// PostgreSQL Advisory Lock functions (e.g. Grafana / Rails migration runners)
+	if strings.HasPrefix(upper, "PG_TRY_ADVISORY_LOCK(") ||
+		strings.HasPrefix(upper, "PG_TRY_ADVISORY_XACT_LOCK(") {
+		return true, "pg_try_advisory_lock"
+	}
+	if strings.HasPrefix(upper, "PG_ADVISORY_UNLOCK(") ||
+		strings.HasPrefix(upper, "PG_ADVISORY_UNLOCK_ALL(") {
+		return true, "pg_advisory_unlock"
+	}
+	if strings.HasPrefix(upper, "PG_ADVISORY_LOCK(") ||
+		strings.HasPrefix(upper, "PG_ADVISORY_XACT_LOCK(") {
+		return true, "pg_advisory_lock"
+	}
+
 	// Session variable @var
 	if strings.HasPrefix(trimmed, "@") {
 		if cs != nil {
@@ -996,6 +1010,12 @@ func (s *Coordinator) execVBDEDML(command, cleaned string, start time.Time, cs *
 			for k, v := range cs.Vars {
 				params[k] = v
 			}
+		}
+		if strings.HasPrefix(cs.ID, "pg-") {
+			if params == nil {
+				params = make(map[string]any)
+			}
+			params["identity_insert_all"] = true
 		}
 		cs.Mu.Unlock()
 	}

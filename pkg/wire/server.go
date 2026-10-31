@@ -18,6 +18,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/engine"
@@ -880,7 +881,7 @@ func (s *Server) handleBind(conn net.Conn, payload []byte, statements *PreparedS
 			if i < len(stmt.ParamTypes) {
 				pType = stmt.ParamTypes[i]
 			}
-			if isBinary {
+			if isBinary || pType == 17 || !utf8.Valid(valBytes) {
 				stVal := decodeBinaryParamValue(valBytes, pType)
 				paramStorageVals[i] = stVal
 				paramVals[i] = formatParamString(stVal)
@@ -966,17 +967,9 @@ func decodeBinaryParamValue(b []byte, oid int32) storage.Value {
 			return storage.UUIDValue(fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]))
 		}
 	default:
-		if len(b) == 4 {
-			return storage.IntValue(int64(int32(binary.BigEndian.Uint32(b))))
-		} else if len(b) == 8 {
-			return storage.IntValue(int64(binary.BigEndian.Uint64(b)))
-		} else if len(b) == 2 {
-			return storage.IntValue(int64(int16(binary.BigEndian.Uint16(b))))
-		} else if len(b) == 1 {
-			return storage.BoolValue(b[0] != 0)
-		}
+		return storage.BinaryValue(b)
 	}
-	return storage.StringValue(string(b))
+	return storage.BinaryValue(b)
 }
 
 func decodeTextParamValue(s string, oid int32) storage.Value {
@@ -1006,10 +999,19 @@ func decodeTextParamValue(s string, oid int32) storage.Value {
 		if d, err := storage.ParseDate(s); err == nil {
 			return storage.DateValue(d)
 		}
+	case 17: // BYTEA
+		if b, err := storage.ParseBinaryBytes(s); err == nil {
+			return storage.BinaryValue(b)
+		}
 	case 2950: // UUID
 		return storage.UUIDValue(strings.TrimSpace(s))
 	case 0: // Untyped parameter (lib/pq default)
 		trimmed := strings.TrimSpace(s)
+		if strings.HasPrefix(trimmed, "\\x") || strings.HasPrefix(trimmed, "\\X") {
+			if b, err := storage.ParseBinaryBytes(trimmed); err == nil {
+				return storage.BinaryValue(b)
+			}
+		}
 		if i, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
 			return storage.IntValue(i)
 		}
@@ -1043,6 +1045,8 @@ func formatParamString(val storage.Value) string {
 		return val.TVal.Format("2006-01-02 15:04:05.999999")
 	case storage.TypeDate:
 		return val.TVal.Format("2006-01-02")
+	case storage.TypeBinary:
+		return "\\x" + hex.EncodeToString([]byte(val.BinVal))
 	default:
 		return val.String()
 	}
@@ -1248,13 +1252,16 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 				}
 			}
 			if err == nil && tbl != nil {
-				if selectPart == "*" {
-					cols := make([]ColumnMeta, len(tbl.Columns))
-					for i, c := range tbl.Columns {
-						cols[i] = ColumnMeta{
+				if selectPart == "*" && !strings.Contains(strings.ToUpper(afterFrom), "JOIN") {
+					var cols []ColumnMeta
+					for _, c := range tbl.Columns {
+						if c.Hidden || storage.IsSyntheticPKName(c.Name) {
+							continue
+						}
+						cols = append(cols, ColumnMeta{
 							Name:     c.Name,
 							DataType: typeToPgOID(c.Type),
-						}
+						})
 					}
 					recordCols(cols)
 					applyFormats(cols)
@@ -1264,15 +1271,46 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 
 				rawCols := sqlutil.SplitTopLevel(selectPart, ',')
 				var cols []ColumnMeta
+				canResolveStatic := true
 				for _, rawCol := range rawCols {
 					colName := strings.TrimSpace(rawCol)
 					if colName == "" {
 						continue
 					}
+					if colName == "*" {
+						if strings.Contains(strings.ToUpper(afterFrom), "JOIN") {
+							canResolveStatic = false
+							break
+						}
+						for _, c := range tbl.Columns {
+							if c.Hidden || storage.IsSyntheticPKName(c.Name) {
+								continue
+							}
+							cols = append(cols, ColumnMeta{
+								Name:     c.Name,
+								DataType: typeToPgOID(c.Type),
+							})
+						}
+						continue
+					}
+					if strings.HasSuffix(colName, ".*") {
+						for _, c := range tbl.Columns {
+							if c.Hidden || storage.IsSyntheticPKName(c.Name) {
+								continue
+							}
+							cols = append(cols, ColumnMeta{
+								Name:     c.Name,
+								DataType: typeToPgOID(c.Type),
+							})
+						}
+						continue
+					}
 					var outColName string
 					lookupName := colName
+					rawExpr := colName
 					if expr, alias, hasAs := sqlutil.SplitAsAlias(colName); hasAs {
 						outColName = cleanColumnIdentifier(alias)
+						rawExpr = strings.TrimSpace(expr)
 						lookupName = cleanColumnIdentifier(expr)
 					} else {
 						outColName = cleanColumnIdentifier(colName)
@@ -1288,26 +1326,47 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 							break
 						}
 					}
+					if !found && strings.Contains(strings.ToUpper(afterFrom), "JOIN") {
+						tables, _ := s.engine.ListTables()
+						for _, jt := range tables {
+							if strings.Contains(strings.ToLower(afterFrom), strings.ToLower(jt.Name)) {
+								for _, c := range jt.Columns {
+									if strings.EqualFold(c.Name, lookupName) {
+										colType = c.Type
+										found = true
+										break
+									}
+								}
+							}
+							if found {
+								break
+							}
+						}
+					}
 					var oid int32 = 25
 					if found {
 						oid = typeToPgOID(colType)
-					} else if strings.HasPrefix(strings.ToUpper(lookupName), "COUNT") {
+					} else if strings.HasPrefix(strings.ToUpper(lookupName), "COUNT") || strings.HasSuffix(strings.ToUpper(rawExpr), "::BIGINT") || strings.HasSuffix(strings.ToUpper(rawExpr), "::INT8") {
 						oid = 20 // int8
+					} else if _, errInt := strconv.ParseInt(rawExpr, 10, 64); errInt == nil {
+						oid = 23 // int4
+					} else if strings.EqualFold(rawExpr, "true") || strings.EqualFold(rawExpr, "false") {
+						oid = 16 // bool
 					}
 					cols = append(cols, ColumnMeta{
 						Name:     outColName,
 						DataType: oid,
 					})
 				}
-					if len(cols) > 0 {
-						recordCols(cols)
-						applyFormats(cols)
-						_ = WriteRowDescription(conn, cols)
-						return
-					}
+				if canResolveStatic && len(cols) > 0 {
+					recordCols(cols)
+					applyFormats(cols)
+					_ = WriteRowDescription(conn, cols)
+					return
 				}
 			}
 		}
+	}
 
 	if strings.HasPrefix(upper, "SELECT") || strings.HasPrefix(upper, "WITH") {
 		if strings.Contains(upper, "VERSION()") {
@@ -1402,8 +1461,8 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 
 	// 1. If not yet executed, execute the query and cache the result in the portal
 	if !portal.Executed {
-		// Fast-path: Execute via precompiled VDBE bytecode Program if available and full fetch requested
-		if portal.Statement != nil && portal.Statement.Program != nil && maxRows == 0 {
+		// Standard execution via coordinator for full transaction & parameter fidelity
+		if false && portal.Statement != nil && portal.Statement.Program != nil {
 			paramMap := make(map[string]any, len(portal.Params)*3)
 			for i, paramVal := range portal.Params {
 				pIdx := i + 1
@@ -1473,6 +1532,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 
 		res, err := s.coordinator.ExecuteSessionSQL(sessID, substitutedSQL)
 		if err != nil {
+			log.Printf("[DEV][PGWire][ExecuteError] query=%s err=%v", substitutedSQL, err)
 			_ = WriteError(conn, err.Error())
 			return
 		}
@@ -1663,6 +1723,8 @@ func formatPgCommandComplete(command string, rowsAffected int64, rowsCount int) 
 		return "DECLARE CURSOR"
 	case "CLOSE":
 		return "CLOSE CURSOR"
+	case "LOCK":
+		return "LOCK TABLE"
 	default:
 		if firstWord != "" {
 			return firstWord
@@ -1751,9 +1813,7 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 	}
 	res, err := s.coordinator.ExecuteSessionSQL(sessID, trimmed)
 	if err != nil {
-		if s.DevMode() {
-			log.Printf("[DEV][PGWire][Error] query=%s err=%v", trimmed, err)
-		}
+		log.Printf("[DEV][PGWire][Error] query=%s err=%v", trimmed, err)
 		_ = WriteError(conn, err.Error())
 		return
 	}
@@ -1896,16 +1956,77 @@ func formatColumnValue(val any, oid int32, isBinary bool) []byte {
 	}
 	if !isBinary {
 		switch v := val.(type) {
+		case time.Time:
+			if oid == 1184 { // TIMESTAMPTZ
+				return []byte(v.Format("2006-01-02 15:04:05.999999-07"))
+			}
+			return []byte(v.Format("2006-01-02 15:04:05.999999"))
+		case *time.Time:
+			if v == nil {
+				return nil
+			}
+			if oid == 1184 {
+				return []byte(v.Format("2006-01-02 15:04:05.999999-07"))
+			}
+			return []byte(v.Format("2006-01-02 15:04:05.999999"))
 		case storage.Value:
 			if v.IsNull {
 				return nil
+			}
+			if v.Type == storage.TypeDateTime {
+				if oid == 1184 {
+					return []byte(v.TVal.Format("2006-01-02 15:04:05.999999-07"))
+				}
+				return []byte(v.TVal.Format("2006-01-02 15:04:05.999999"))
+			}
+			if oid == 17 || v.Type == storage.TypeBinary {
+				return []byte("\\x" + hex.EncodeToString([]byte(v.BinVal)))
 			}
 			return []byte(v.String())
 		case *storage.Value:
 			if v == nil || v.IsNull {
 				return nil
 			}
+			if v.Type == storage.TypeDateTime {
+				if oid == 1184 {
+					return []byte(v.TVal.Format("2006-01-02 15:04:05.999999-07"))
+				}
+				return []byte(v.TVal.Format("2006-01-02 15:04:05.999999"))
+			}
+			if oid == 17 || v.Type == storage.TypeBinary {
+				return []byte("\\x" + hex.EncodeToString([]byte(v.BinVal)))
+			}
 			return []byte(v.String())
+		case []byte:
+			if oid == 17 {
+				return []byte("\\x" + hex.EncodeToString(v))
+			}
+			return v
+		case string:
+			if oid == 17 {
+				if strings.HasPrefix(v, "0x") || strings.HasPrefix(v, "0X") {
+					return []byte("\\x" + v[2:])
+				}
+				if strings.HasPrefix(v, "\\x") || strings.HasPrefix(v, "\\X") {
+					return []byte(v)
+				}
+				return []byte("\\x" + hex.EncodeToString([]byte(v)))
+			}
+			if strings.HasSuffix(v, " UTC") {
+				if t, err := time.Parse("2006-01-02 15:04:05.999999999 -0700 MST", v); err == nil {
+					if oid == 1184 {
+						return []byte(t.Format("2006-01-02 15:04:05.999999-07"))
+					}
+					return []byte(t.Format("2006-01-02 15:04:05.999999"))
+				}
+				if t, err := time.Parse("2006-01-02 15:04:05 -0700 MST", v); err == nil {
+					if oid == 1184 {
+						return []byte(t.Format("2006-01-02 15:04:05.999999-07"))
+					}
+					return []byte(t.Format("2006-01-02 15:04:05.999999"))
+				}
+			}
+			return []byte(v)
 		default:
 			return []byte(fmt.Sprintf("%v", val))
 		}
@@ -1961,6 +2082,17 @@ func formatColumnValue(val any, oid int32, isBinary bool) []byte {
 	case 17: // BYTEA
 		if b, ok := val.([]byte); ok {
 			return b
+		}
+		if sv, ok := val.(storage.Value); ok && sv.Type == storage.TypeBinary {
+			return []byte(sv.BinVal)
+		}
+		if sv, ok := val.(*storage.Value); ok && sv != nil && sv.Type == storage.TypeBinary {
+			return []byte(sv.BinVal)
+		}
+		if str, ok := val.(string); ok {
+			if b, err := storage.ParseBinaryBytes(str); err == nil {
+				return b
+			}
 		}
 		return []byte(fmt.Sprintf("%v", val))
 	case 16: // BOOL
@@ -2167,6 +2299,12 @@ func formatParamForSQL(val string, pType int32, sv storage.Value) string {
 	case 25, 1043, 18, 1042, 1082, 1114, 1184, 2950: // TEXT, VARCHAR, CHAR, BPCHAR, DATE, TIMESTAMP, UUID
 		escaped := strings.ReplaceAll(val, "'", "''")
 		return fmt.Sprintf("'%s'", escaped)
+	case 17: // BYTEA
+		raw := val
+		if !strings.HasPrefix(raw, "\\x") && !strings.HasPrefix(raw, "0x") {
+			raw = "\\x" + hex.EncodeToString([]byte(val))
+		}
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(raw, "'", "''"))
 	}
 
 	// 2. Check decoded storage.Value type
@@ -2180,6 +2318,8 @@ func formatParamForSQL(val string, pType int32, sv storage.Value) string {
 			return "true"
 		}
 		return "false"
+	case storage.TypeBinary:
+		return fmt.Sprintf("'\\x%s'", hex.EncodeToString([]byte(sv.BinVal)))
 	case storage.TypeVarChar, storage.TypeUUID, storage.TypeDateTime, storage.TypeDate, storage.TypeTime:
 		escaped := strings.ReplaceAll(val, "'", "''")
 		return fmt.Sprintf("'%s'", escaped)
@@ -2187,6 +2327,9 @@ func formatParamForSQL(val string, pType int32, sv storage.Value) string {
 
 	// 3. Fallback for un-typed parameters (OID 0)
 	trimmed := strings.TrimSpace(val)
+	if strings.HasPrefix(trimmed, "\\x") || strings.HasPrefix(trimmed, "\\X") || strings.HasPrefix(trimmed, "0x") || strings.HasPrefix(trimmed, "0X") {
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(trimmed, "'", "''"))
+	}
 	if isPureIntegerString(trimmed) {
 		return trimmed
 	}

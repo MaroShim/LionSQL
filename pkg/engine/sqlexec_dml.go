@@ -250,6 +250,9 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 				identityInsertAllowed = true
 			}
 		}
+		if strings.HasPrefix(cs.ID, "pg-") {
+			identityInsertAllowed = true
+		}
 		cs.Mu.Unlock()
 	}
 
@@ -641,6 +644,9 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			if strings.EqualFold(cur, tableName) {
 				identityInsertAllowed = true
 			}
+		}
+		if strings.HasPrefix(cs.ID, "pg-") {
+			identityInsertAllowed = true
 		}
 		cs.Mu.Unlock()
 	}

@@ -585,6 +585,32 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 	return nil
 }
 
+func (e *Engine) RenameTable(oldName, newName string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	oldClean := cleanTablePrefix(oldName)
+	newClean := cleanTablePrefix(newName)
+
+	td, exists := sqlutil.MapGetFold(e.tables, oldClean)
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, oldClean)
+	}
+	if _, already := sqlutil.MapGetFold(e.tables, newClean); already {
+		return fmt.Errorf("%w: %s", storage.ErrTableExists, newClean)
+	}
+
+	for k := range e.tables {
+		if strings.EqualFold(k, oldClean) {
+			delete(e.tables, k)
+		}
+	}
+
+	td.Schema.Name = newClean
+	e.tables[newClean] = td
+	return nil
+}
+
 func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.TableSchema) error) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()

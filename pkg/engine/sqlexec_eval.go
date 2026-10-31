@@ -57,7 +57,7 @@ func formatStorageValue(v storage.Value) any {
 	case storage.TypeUUID:
 		return v.SVal
 	case storage.TypeBinary:
-		return v.String()
+		return []byte(v.BinVal)
 	default:
 		return v.String()
 	}

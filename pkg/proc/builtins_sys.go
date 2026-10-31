@@ -138,7 +138,10 @@ func isSysBuiltin(name string) bool {
 		"@@TRANCOUNT", "TRANCOUNT", "@@LOCK_TIMEOUT", "LOCK_TIMEOUT", "@@OPTIONS", "OPTIONS", "@@NESTLEVEL", "NESTLEVEL",
 		"@@FETCH_STATUS", "FETCH_STATUS",
 		"@@CPU_BUSY", "@@IO_BUSY", "@@IDLE",
-		"HASHBYTES", "CHECKSUM", "BINARY_CHECKSUM":
+		"HASHBYTES", "CHECKSUM", "BINARY_CHECKSUM",
+		"PG_TRY_ADVISORY_LOCK", "PG_TRY_ADVISORY_XACT_LOCK",
+		"PG_ADVISORY_UNLOCK", "PG_ADVISORY_UNLOCK_ALL",
+		"PG_ADVISORY_LOCK", "PG_ADVISORY_XACT_LOCK":
 		return true
 	default:
 		return false
@@ -149,6 +152,11 @@ func evalSysBuiltin(upper string, args []storage.Value) storage.Value {
 	switch upper {
 	// 4. Conditional & Logical Functions
 	// ----------------------------------------------------
+	case "PG_TRY_ADVISORY_LOCK", "PG_TRY_ADVISORY_XACT_LOCK",
+		"PG_ADVISORY_UNLOCK", "PG_ADVISORY_UNLOCK_ALL",
+		"PG_ADVISORY_LOCK", "PG_ADVISORY_XACT_LOCK":
+		return storage.BoolValue(true)
+
 	case "ISNULL", "COALESCE", "IFNULL", "NVL":
 		for _, a := range args {
 			if !a.IsNull {

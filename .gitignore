@@ -13,6 +13,7 @@ bin/
 # Data directories
 data/
 data_backup*/
+data_grafana/
 *.db
 *.log
 *.wt

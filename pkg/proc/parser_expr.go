@@ -491,6 +491,46 @@ func (p *Parser) parseCase() Expr {
 
 func (p *Parser) parseFunctionCall(name string) Expr {
 	p.nextToken() // eat (
+
+	if strings.EqualFold(name, "EXTRACT") {
+		field := p.curToken.Literal
+		p.nextToken() // eat field token
+		if p.curTokenIs(TokenFrom) {
+			p.nextToken() // eat FROM
+			source := p.parseExpression(precLowest)
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+			}
+			return &FunctionCallExpr{
+				Name: "EXTRACT",
+				Args: []Expr{&LiteralExpr{Val: storage.StringValue(field)}, source},
+			}
+		}
+		var args []Expr
+		args = append(args, &LiteralExpr{Val: storage.StringValue(field)})
+		if p.curTokenIs(TokenComma) {
+			p.nextToken()
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				arg := p.parseExpression(precLowest)
+				if arg != nil {
+					args = append(args, arg)
+				}
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				} else {
+					break
+				}
+			}
+		}
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken() // eat )
+		}
+		return &FunctionCallExpr{
+			Name: "EXTRACT",
+			Args: args,
+		}
+	}
+
 	var args []Expr
 
 	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {

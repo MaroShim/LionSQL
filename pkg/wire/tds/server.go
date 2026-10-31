@@ -2655,7 +2655,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 			colSize = 4
 		} else if lowerCol == "type" {
 			colType = TypeVarChar
-			colSize = 2
+			colSize = 255
 		}
 
 		// Scan non-null sample values from rows
@@ -2714,7 +2714,10 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 						scale = 7
 					} else if lowerCol == "type" {
 						colType = TypeVarChar
-						colSize = 2
+						colSize = 255
+						if len(val) > colSize {
+							colSize = len(val)
+						}
 					} else if colType != TypeDateTimeN && colType != TypeDateTime2N && colType != TypeDateN && colType != TypeTimeN && colType != TypeDateTimeOffsetN && colType != TypeGuid {
 						if len(val) > 4000 || strings.Contains(lowerCol, "max") || strings.Contains(lowerCol, "lob") {
 							colType = TypeNVarChar

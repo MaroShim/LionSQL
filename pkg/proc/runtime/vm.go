@@ -1841,6 +1841,8 @@ func toStorageValue(v any) storage.Value {
 		return storage.StringValue(val)
 	case bool:
 		return storage.BoolValue(val)
+	case []byte:
+		return storage.BinaryValue(val)
 	default:
 		return storage.StringValue(fmt.Sprintf("%v", v))
 	}

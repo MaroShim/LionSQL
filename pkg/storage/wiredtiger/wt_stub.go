@@ -86,6 +86,10 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 	return fmt.Errorf("wiredtiger storage engine not enabled")
 }
 
+func (e *Engine) RenameTable(oldName, newName string) error {
+	return fmt.Errorf("wiredtiger storage engine not enabled")
+}
+
 func (e *Engine) AlterTable(tableName string, mutator func(schema *storage.TableSchema) error) error {
 	return fmt.Errorf("wiredtiger storage engine not enabled")
 }

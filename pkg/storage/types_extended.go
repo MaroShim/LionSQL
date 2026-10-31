@@ -45,6 +45,13 @@ func ParseBinaryBytes(s string) ([]byte, error) {
 		}
 		return hex.DecodeString(hexStr)
 	}
+	if strings.HasPrefix(s, "\\\\x") || strings.HasPrefix(s, "\\\\X") {
+		hexStr := s[3:]
+		if len(hexStr)%2 != 0 {
+			hexStr = "0" + hexStr
+		}
+		return hex.DecodeString(hexStr)
+	}
 	if strings.HasPrefix(s, "\\x") || strings.HasPrefix(s, "\\X") {
 		hexStr := s[2:]
 		if len(hexStr)%2 != 0 {

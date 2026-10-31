@@ -34,6 +34,10 @@ static int go_wt_session_drop(WT_SESSION *session, const char *name) {
     return session->drop(session, name, NULL);
 }
 
+static int go_wt_session_rename(WT_SESSION *session, const char *uri, const char *newuri) {
+    return session->rename(session, uri, newuri, NULL);
+}
+
 static int go_wt_session_truncate(WT_SESSION *session, const char *name) {
     return session->truncate(session, name, NULL, NULL, NULL);
 }
@@ -488,13 +492,28 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 		return err
 	}
 
+	if schema.PhysicalName == "" {
+		phys := schema.Name
+		if storage.IsTemporaryTable(schema.Name) {
+			phys = fmt.Sprintf("%s_%d", schema.Name, time.Now().UnixNano())
+		} else {
+			for _, existing := range e.tables {
+				if strings.EqualFold(existing.PhysicalName, phys) || (existing.PhysicalName == "" && strings.EqualFold(existing.Name, phys)) {
+					phys = fmt.Sprintf("%s_v%d", schema.Name, time.Now().UnixNano())
+					break
+				}
+			}
+		}
+		schema.PhysicalName = phys
+	}
+
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
 		return fmt.Errorf("open_session failed: code %d", ret)
 	}
 	defer C.go_wt_session_close(sess)
 
-	uri := C.CString(fmt.Sprintf("table:%s", schema.Name))
+	uri := C.CString(schema.TableURI())
 	defer C.free(unsafe.Pointer(uri))
 
 	config := C.CString("key_format=S,value_format=u")
@@ -506,10 +525,10 @@ func (e *Engine) CreateTable(schema *storage.TableSchema) error {
 	}
 
 	e.tables[schema.Name] = schema
-	if err := e.saveCatalog(); err != nil {
-		return err
-	}
 	if !storage.IsTemporaryTable(schema.Name) {
+		if err := e.saveCatalog(); err != nil {
+			return err
+		}
 		e.recordWALLocked([]memengine.WALOp{{
 			Type:   memengine.OpCreateTable,
 			Table:  schema.Name,
@@ -528,22 +547,27 @@ func (e *Engine) DropTable(tableName string) error {
 		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
 	}
 
+	e.evictAllCursors(tbl.Name)
+	if tbl.PhysicalName != "" && tbl.PhysicalName != tbl.Name {
+		e.evictAllCursors(tbl.PhysicalName)
+	}
+
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
 		return fmt.Errorf("open_session failed: code %d", ret)
 	}
 	defer C.go_wt_session_close(sess)
 
-	uri := C.CString(fmt.Sprintf("table:%s", tbl.Name))
+	uri := C.CString(tbl.TableURI())
 	defer C.free(unsafe.Pointer(uri))
 
 	C.go_wt_session_drop(sess, uri)
 
 	sqlutil.MapDeleteFold(e.tables, tableName)
-	if err := e.saveCatalog(); err != nil {
-		return err
-	}
 	if !storage.IsTemporaryTable(tbl.Name) {
+		if err := e.saveCatalog(); err != nil {
+			return err
+		}
 		e.recordWALLocked([]memengine.WALOp{{
 			Type:  memengine.OpDropTable,
 			Table: tbl.Name,
@@ -583,7 +607,7 @@ func (e *Engine) TruncateTable(tableName string) error {
 	}
 	defer C.go_wt_session_close(sess)
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
+	uri := C.CString(tbl.TableURI())
 	defer C.free(unsafe.Pointer(uri))
 
 	if ret := C.go_wt_session_truncate(sess, uri); ret != 0 {
@@ -623,7 +647,7 @@ func (e *Engine) DropPartition(tableName, partitionName string) error {
 	}
 	defer C.go_wt_session_close(sess)
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
+	uri := C.CString(tbl.TableURI())
 	defer C.free(unsafe.Pointer(uri))
 
 	var cur *C.WT_CURSOR
@@ -679,7 +703,7 @@ func (e *Engine) GetPartitions(tableName string) ([]storage.PartitionInfo, error
 	}
 	defer C.go_wt_session_close(sess)
 
-	uri := C.CString(fmt.Sprintf("table:%s", tableName))
+	uri := C.CString(tbl.TableURI())
 	defer C.free(unsafe.Pointer(uri))
 
 	var cur *C.WT_CURSOR
@@ -737,7 +761,7 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 		hasRows := false
 		var chkSess *C.WT_SESSION
 		if ret := C.go_wt_open_session(e.conn, &chkSess); ret == 0 {
-			uri := C.CString(fmt.Sprintf("table:%s", tableName))
+			uri := C.CString(tbl.TableURI())
 			var chkCur *C.WT_CURSOR
 			if C.go_wt_open_cursor(chkSess, uri, &chkCur) == 0 {
 				if C.go_wt_cursor_next(chkCur) == 0 {
@@ -760,7 +784,7 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret == 0 {
 		defer C.go_wt_session_close(sess)
-		uri := C.CString(fmt.Sprintf("table:%s", tableName))
+		uri := C.CString(tbl.TableURI())
 		defer C.free(unsafe.Pointer(uri))
 
 		var cur *C.WT_CURSOR
@@ -804,6 +828,46 @@ func (e *Engine) AddColumn(tableName string, col *storage.Column) error {
 			Table:  tableName,
 			Column: col,
 		}})
+	}
+	return nil
+}
+
+func (e *Engine) RenameTable(oldName, newName string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	oldClean := strings.Trim(strings.TrimSpace(oldName), "[]\"'`")
+	if idx := strings.LastIndex(oldClean, "."); idx != -1 {
+		oldClean = strings.Trim(oldClean[idx+1:], "[]\"'`")
+	}
+	newClean := strings.Trim(strings.TrimSpace(newName), "[]\"'`")
+	if idx := strings.LastIndex(newClean, "."); idx != -1 {
+		newClean = strings.Trim(newClean[idx+1:], "[]\"'`")
+	}
+
+	tbl, exists := sqlutil.MapGetFold(e.tables, oldClean)
+	if !exists {
+		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, oldClean)
+	}
+	if _, already := sqlutil.MapGetFold(e.tables, newClean); already {
+		return fmt.Errorf("%w: %s", storage.ErrTableExists, newClean)
+	}
+
+	// Lock down physical table identifier so underlying WiredTiger B-Tree URI never changes
+	if tbl.PhysicalName == "" {
+		tbl.PhysicalName = tbl.Name
+	}
+
+	for k := range e.tables {
+		if strings.EqualFold(k, oldClean) {
+			delete(e.tables, k)
+		}
+	}
+
+	tbl.Name = newClean
+	e.tables[newClean] = tbl
+	if err := e.saveCatalog(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -1347,7 +1411,7 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 	}
 
 	pkStr := pkVal.String()
-	uri := "table:" + tableName
+	uri := tbl.TableURI()
 	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
@@ -1471,7 +1535,7 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 		return err
 	}
 
-	uri := "table:" + tableName
+	uri := tbl.TableURI()
 	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
@@ -1549,7 +1613,12 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 		oldData, _ = tx.getRawBytesLocked(tableName, pk)
 	}
 
-	uri := "table:" + tableName
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+
+	uri := tbl.TableURI()
 	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
@@ -1802,7 +1871,12 @@ func (tx *WTTx) getRawBytesLocked(tableName string, pk storage.Value) ([]byte, e
 		return nil, storage.ErrTxClosed
 	}
 
-	uri := "table:" + tableName
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	uri := tbl.TableURI()
 	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return nil, err
@@ -1863,13 +1937,17 @@ func (tx *WTTx) scanLocked(tableName string) (storage.Cursor, error) {
 		return nil, storage.ErrTxClosed
 	}
 
-	uri := fmt.Sprintf("table:%s", tableName)
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return nil, err
+	}
+
+	uri := tbl.TableURI()
 	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return nil, err
 	}
 
-	tbl, _ := tx.getTableLocked(tableName)
 	return &WTCursor{
 		sess:   tx.sess,
 		uri:    uri,
@@ -2354,7 +2432,11 @@ func (tx *WTTx) ReleaseSavepoint(name string) error {
 }
 
 func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes []byte) error {
-	uri := "table:" + tableName
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	uri := tbl.TableURI()
 	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err
@@ -2395,7 +2477,11 @@ func (tx *WTTx) putLocked(tableName string, pk storage.Value, record storage.Rec
 }
 
 func (tx *WTTx) removeRawLocked(tableName string, pk storage.Value) error {
-	uri := "table:" + tableName
+	tbl, err := tx.getTableLocked(tableName)
+	if err != nil {
+		return err
+	}
+	uri := tbl.TableURI()
 	cur, err := tx.sess.acquireCursor(uri)
 	if err != nil {
 		return err

@@ -192,11 +192,23 @@ func IsTemporaryTable(name string) bool {
 
 // TableSchema defines a table structure.
 type TableSchema struct {
-	Name        string             `json:"name"`
-	Columns     []Column           `json:"columns"`
-	Indexes     []IndexSchema      `json:"indexes,omitempty"`
-	ForeignKeys []ForeignKeySchema `json:"foreign_keys,omitempty"`
-	Partition   *PartitionDef      `json:"partition,omitempty"`
+	Name         string             `json:"name"`
+	PhysicalName string             `json:"physical_name,omitempty"`
+	Columns      []Column           `json:"columns"`
+	Indexes      []IndexSchema      `json:"indexes,omitempty"`
+	ForeignKeys  []ForeignKeySchema `json:"foreign_keys,omitempty"`
+	Partition    *PartitionDef      `json:"partition,omitempty"`
+}
+
+// TableURI returns the WiredTiger table URI ("table:<physical_name>").
+func (s *TableSchema) TableURI() string {
+	if s == nil {
+		return ""
+	}
+	if s.PhysicalName != "" {
+		return "table:" + s.PhysicalName
+	}
+	return "table:" + s.Name
 }
 
 func (s *TableSchema) IsTemporary() bool {
@@ -924,6 +936,7 @@ type Engine interface {
 	DropPartition(tableName, partitionName string) error
 	GetPartitions(tableName string) ([]PartitionInfo, error)
 	AddColumn(tableName string, col *Column) error
+	RenameTable(oldName, newName string) error
 	AlterTable(tableName string, mutator func(schema *TableSchema) error) error
 }
 

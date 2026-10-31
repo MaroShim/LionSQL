@@ -39,6 +39,7 @@ var (
 	reAlterColDropDef   = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+DROP\s+DEFAULT`)
 	reAlterColSetDef    = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+SET\s+DEFAULT\s+(.+)`)
 	reAlterColType      = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+(?:SET\s+DATA\s+TYPE|TYPE)\s+([^\s,(]+(?:\s*\([^)]*\))?)(?:\s+USING\s+.+)?`)
+	reAlterRenameTable  = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+RENAME\s+TO\s+([^\s;]+)`)
 	reAlterRenameCol    = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+RENAME\s+(?:COLUMN\s+)?([^\s]+)\s+TO\s+([^\s;]+)`)
 	reCreateStats       = regexp.MustCompile(`(?is)^CREATE\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
 	reDropStatsOn       = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
@@ -1235,6 +1236,22 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			Command:    "ALTER TABLE",
 			DurationUS: time.Since(start).Microseconds(),
 			Messages:   []string{fmt.Sprintf("Column %q type changed on table %q to %s", colName, tableName, newType)},
+		}, nil
+	}
+
+	// 10b. ALTER TABLE <table> RENAME TO <new>
+	if m := reAlterRenameTable.FindStringSubmatch(cleaned); len(m) >= 3 {
+		tableName := cleanIdentifier(m[1])
+		newName := cleanIdentifier(m[2])
+		if err := s.engine.RenameTable(tableName, newName); err != nil {
+			return nil, err
+		}
+		s.InvalidatePKBypassCache()
+		return &QueryResult{
+			Success:    true,
+			Command:    "ALTER TABLE",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{fmt.Sprintf("Table %q renamed to %q", tableName, newName)},
 		}, nil
 	}
 

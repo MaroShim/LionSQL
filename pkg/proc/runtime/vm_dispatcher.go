@@ -581,6 +581,9 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 						identityInsertAllowed = true
 					}
 				}
+				if val, ok := f.vars["identity_insert_all"]; ok && val.Type == storage.TypeBool && val.BVal {
+					identityInsertAllowed = true
+				}
 
 				if len(cols) == 0 {
 					for _, c := range schema.Columns {
@@ -606,6 +609,9 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 				if tableSchema != nil {
 					if colSchema, _, ok := tableSchema.FindColumn(col); ok {
 						col = colSchema.Name
+						if colSchema.Type != stVal.Type {
+							stVal = proc.ParseLiteralDefault(stVal.String(), colSchema.Type)
+						}
 					}
 				}
 				rec.Set(col, stVal)
