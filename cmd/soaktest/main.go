@@ -35,7 +35,7 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 const initialBalance = 1000
@@ -191,7 +191,7 @@ func run(binPath, engine string, duration, sampleEvery time.Duration, workers, r
 	ctx, cancel := context.WithTimeout(context.Background(), duration)
 	defer cancel()
 
-	var ops, errs, committed, violations atomic.Int64
+	var ops, errs, conflicts, committed, violations atomic.Int64
 	var win window
 	var elog errLog
 	var wg sync.WaitGroup
@@ -238,8 +238,13 @@ func run(binPath, engine string, duration, sampleEvery time.Duration, workers, r
 				win.add(time.Since(start))
 				ops.Add(1)
 				if opErr != nil {
-					errs.Add(1)
-					elog.record(opErr)
+					if isSerializationFailure(opErr) {
+						// Retryable conflict (SQLSTATE 40001): expected under contention.
+						conflicts.Add(1)
+					} else {
+						errs.Add(1)
+						elog.record(opErr)
+					}
 				}
 			}
 		}(w)
@@ -345,6 +350,7 @@ sampling:
 		fmt.Printf("FAIL %d invariant violations observed during run\n", v)
 		failed = true
 	}
+	fmt.Printf("INFO %d retryable serialization conflicts (SQLSTATE 40001)\n", conflicts.Load())
 	if e := errs.Load(); e > 0 {
 		fmt.Printf("INFO %d operation errors out of %d ops\n", e, ops.Load())
 		elog.report()
@@ -395,6 +401,11 @@ func transfer(ctx context.Context, db *sql.DB, rng *rand.Rand, accounts int, log
 		return rollback(tx, err)
 	}
 	return tx.Commit()
+}
+
+func isSerializationFailure(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "40001"
 }
 
 func rollback(tx *sql.Tx, cause error) error {

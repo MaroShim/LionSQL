@@ -1451,7 +1451,7 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 	}
 
 	if ret := C.go_wt_cursor_insert_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
-		return fmt.Errorf("cursor_insert failed with code %d", ret)
+		return wtOpError("cursor_insert", int(ret))
 	}
 
 	tx.hasWrites = true
@@ -1567,7 +1567,7 @@ func (tx *WTTx) updateLocked(tableName string, tbl *storage.TableSchema, pk stor
 	}
 
 	if ret := C.go_wt_cursor_update_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
-		return fmt.Errorf("cursor_update failed with code %d", ret)
+		return wtOpError("cursor_update", int(ret))
 	}
 
 	tx.hasWrites = true
@@ -1640,7 +1640,7 @@ func (tx *WTTx) deleteLocked(tableName string, pk storage.Value) error {
 		if ret == C.WT_NOTFOUND {
 			return nil
 		}
-		return fmt.Errorf("cursor_remove failed with code %d", ret)
+		return wtOpError("cursor_remove", int(ret))
 	}
 
 	tx.hasWrites = true
@@ -2260,7 +2260,7 @@ func (tx *WTTx) Commit() error {
 
 	ret := C.go_wt_session_commit(tx.sess.sess, nil)
 	if ret != 0 {
-		return fmt.Errorf("commit_transaction failed with code %d", ret)
+		return wtOpError("commit_transaction", int(ret))
 	}
 	_ = C.go_wt_session_reset(tx.sess.sess)
 
@@ -2458,7 +2458,7 @@ func (tx *WTTx) putRawBytesLocked(tableName string, pk storage.Value, recBytes [
 
 	if ret := C.go_wt_cursor_update_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
 		if ret := C.go_wt_cursor_insert_raw(cur, cKey, pData, C.size_t(len(recBytes))); ret != 0 {
-			return fmt.Errorf("cursor put failed with code %d", ret)
+			return wtOpError("cursor put", int(ret))
 		}
 	}
 	return nil
@@ -2591,3 +2591,17 @@ func (c *WTCursor) Close() error {
 	}
 	return nil
 }
+
+// wtOpError converts a WiredTiger return code into a Go error. WT_ROLLBACK
+// (a write-write conflict or cache-pressure rollback) is mapped to
+// storage.ErrSerializationFailure so that callers and wire protocols can
+// report it as a retryable serialization failure (SQLSTATE 40001).
+func wtOpError(op string, ret int) error {
+	if ret == wtRollback {
+		return fmt.Errorf("%w (wiredtiger %s code %d)", storage.ErrSerializationFailure, op, ret)
+	}
+	return fmt.Errorf("%s failed with code %d", op, ret)
+}
+
+// wtRollback mirrors the WT_ROLLBACK return code from wiredtiger.h.
+const wtRollback = C.WT_ROLLBACK

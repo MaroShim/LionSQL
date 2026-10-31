@@ -386,7 +386,9 @@ func WriteErrorWithCode(w io.Writer, message string, code string) error {
 func WriteError(w io.Writer, message string) error {
 	code := "XX000"
 	upper := strings.ToUpper(message)
-	if strings.Contains(upper, "NOT FOUND") || strings.Contains(upper, "DOES NOT EXIST") {
+	if strings.Contains(upper, "SERIALIZATION FAILURE") {
+		code = "40001" // serialization_failure (retryable)
+	} else if strings.Contains(upper, "NOT FOUND") || strings.Contains(upper, "DOES NOT EXIST") {
 		code = "42P01" // undefined_table / undefined_relation
 	} else if strings.Contains(upper, "SYNTAX") {
 		code = "42601" // syntax_error

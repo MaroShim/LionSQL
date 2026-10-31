@@ -19,6 +19,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- map WiredTiger WT_ROLLBACK write conflicts to storage.ErrSerializationFailure and report them as PGWire SQLSTATE 40001 instead of XX000 so clients can retry (DURA-SOAK-F1)
 - decouple logical table rename from physical WiredTiger table URI via TableSchema.PhysicalName to prevent EBUSY errors during active transactions
 - evict cached WiredTiger cursors in DropTable and assign unique PhysicalName for temporary tables to eliminate derived table key collisions
 - expand wildcard projections (alias.*, *) in PGWire handleDescribe and evaluate bare literal projections in Volcano ProjectionIterator
