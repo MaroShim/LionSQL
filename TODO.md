@@ -68,9 +68,10 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - `canCompileToVDBE`, `isVirtualCatalogQuery`, `virtual.IsVirtualCatalogJoinQuery`, `resolveColumnOIDs` 구조적 정상화
 - False Positive (유사 테이블명 오인) 및 False Negative (리터럴/주석 키워드로 인한 VDBE 차단) 100% 원천 해결
 
-### [ ] 2.4 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[1순위 착수 예정]**
+### [ ] 2.4 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[1순위 착수]**
+- 계획서: [`notes/METABASE_INTEGRATION_PLAN.ko.md`](notes/METABASE_INTEGRATION_PLAN.ko.md)
 - 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
-- 대시보드 쿼리 생성기 및 스키마 인트로스펙션 검증
+- 데이터 소스 등록(PGWire `:5433` & TDS `:1433`), 스키마 동기화(Sync/Fingerprint), 비주얼 쿼리 빌더(GROUP BY/JOIN/시계열), 대시보드 검증
 
 ### [ ] 2.5 `INTEG-UMAMI-1` Umami (웹 애널리틱스) — **[3순위]**
 - 스택: Next.js + Prisma ORM / PGWire (`TCP :5433`)

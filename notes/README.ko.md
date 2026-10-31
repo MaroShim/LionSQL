@@ -35,6 +35,7 @@
      - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)**: 실전 앱 연동 확장 마스터 플랜 (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost 6종).
      - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)**: Apache Answer PGWire 연동 상세 계획서 (1순위).
      - **[`VAULTWARDEN_INTEGRATION_PLAN.ko.md`](VAULTWARDEN_INTEGRATION_PLAN.ko.md)**: Vaultwarden (Rust + Diesel ORM) PGWire 연동 상세 계획서 (2순위).
+     - **[`METABASE_INTEGRATION_PLAN.ko.md`](METABASE_INTEGRATION_PLAN.ko.md)**: Metabase (JVM/JDBC 듀얼 프로토콜) BI 대시보드 연동 상세 계획서 (3순위).
      - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 쿼리 라우팅 리팩토링 설계 및 검증 보고서 (문자열 휴리스틱 45개 전면 제거, 527ns 실측, 완료).
    - **Post-1.0 아키텍처 및 장기 로드맵 계획서**:
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).
