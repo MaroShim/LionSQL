@@ -903,6 +903,9 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				if tableSchema != nil {
 					if colSchema, _, ok := tableSchema.FindColumn(colName); ok {
 						colName = colSchema.Name
+						if colSchema.Type == storage.TypeBinary && stVal.Type == storage.TypeVarChar {
+							stVal = storage.BinaryValueFromString(stVal.SVal)
+						}
 					}
 				} else {
 					for k := range oldRowMap {
@@ -1012,6 +1015,9 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			if tableSchema != nil {
 				if colSchema, _, ok := tableSchema.FindColumn(colName); ok {
 					colName = colSchema.Name
+					if colSchema.Type == storage.TypeBinary && stVal.Type == storage.TypeVarChar {
+						stVal = storage.BinaryValueFromString(stVal.SVal)
+					}
 				}
 			} else {
 				for k := range rowMap {
@@ -1266,6 +1272,9 @@ func (f *VMFrame) isPKCol(tableName, colName string) bool {
 	clean := cleanSymbol(colName)
 	if tg := f.executor.getTableGetter(); tg != nil {
 		if schema, err := tg(tableName); err == nil && schema != nil {
+			if schema.IsCompositePK() {
+				return false
+			}
 			for _, c := range schema.Columns {
 				if c.PrimaryKey {
 					return strings.EqualFold(c.Name, clean)
@@ -1932,6 +1941,10 @@ func tryPointLookup(tx storage.Transaction, qInfo *planner.QueryInfo, schema *st
 
 	colPart := strings.TrimSpace(parts[0])
 	valPart := strings.TrimSpace(parts[1])
+
+	if schema.IsCompositePK() {
+		return nil, nil, false
+	}
 
 	pkCol, err := schema.PrimaryKeyColumn()
 	if err != nil || pkCol == nil {

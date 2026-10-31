@@ -710,6 +710,12 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 		var raw []byte
 		if b, ok := val.([]byte); ok {
 			raw = b
+		} else if s, ok := val.(string); ok {
+			if decoded, ok := decodeHexBinaryString(s); ok {
+				raw = decoded
+			} else {
+				raw = []byte(s)
+			}
 		} else {
 			raw = []byte(fmt.Sprintf("%v", val))
 		}
@@ -739,6 +745,16 @@ func writeColumnValue(buf *bytes.Buffer, col ColumnInfo, val any) {
 			binary.LittleEndian.PutUint16(buf.Bytes()[startLen:startLen+2], uint16(nBytes))
 		}
 	}
+}
+
+func decodeHexBinaryString(s string) ([]byte, bool) {
+	if len(s) >= 2 && (strings.HasPrefix(s, "0x") || strings.HasPrefix(s, "0X")) && len(s)%2 == 0 {
+		b, err := hex.DecodeString(s[2:])
+		if err == nil {
+			return b, true
+		}
+	}
+	return nil, false
 }
 
 // writePLPValue streams partially length-prefixed LOB payloads per [MS-TDS] 2.2.5.2.

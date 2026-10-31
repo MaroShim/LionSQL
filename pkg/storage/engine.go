@@ -388,9 +388,41 @@ func (s *TableSchema) EnsurePrimaryKey(syntheticColName string) {
 	})
 }
 
+func (s *TableSchema) IsCompositePK() bool {
+	if s == nil {
+		return false
+	}
+	count := 0
+	for i := range s.Columns {
+		if s.Columns[i].PrimaryKey {
+			count++
+			if count > 1 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func (s *TableSchema) ResolveRecordPK(rec Record) (Value, bool) {
 	if s == nil || rec == nil {
 		return Value{}, false
+	}
+	if s.IsCompositePK() {
+		var parts []string
+		for i := range s.Columns {
+			if s.Columns[i].PrimaryKey {
+				v, ok := rec.Get(s.Columns[i].Name)
+				if !ok || v.IsNull {
+					return Value{}, false
+				}
+				parts = append(parts, v.String())
+			}
+		}
+		if len(parts) == 0 {
+			return Value{}, false
+		}
+		return StringValue(strings.Join(parts, "\x1f")), true
 	}
 	pkCol, err := s.PrimaryKeyColumn()
 	if err != nil || pkCol == nil {

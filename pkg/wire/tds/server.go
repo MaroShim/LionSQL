@@ -2698,10 +2698,13 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 						colSize = 8
 					}
 				case string:
-					if isUUIDString(val) {
+					if isUUIDString(val) && lowerCol != "id" {
 						colType = TypeGuid
 						colSize = 16
-					} else if isDateString(val) && lowerCol != "create_date" && lowerCol != "modify_date" && lowerCol != "createdate" && lowerCol != "modifydate" {
+					} else if lowerCol == "create_date" || lowerCol == "modify_date" || lowerCol == "createdate" || lowerCol == "modifydate" {
+						colType = TypeDateTimeN
+						colSize = 8
+					} else if isDateString(val) {
 						colType = TypeDateN
 						colSize = 3
 					} else if isTimeString(val) {
@@ -2718,7 +2721,17 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 						if len(val) > colSize {
 							colSize = len(val)
 						}
-					} else if colType != TypeDateTimeN && colType != TypeDateTime2N && colType != TypeDateN && colType != TypeTimeN && colType != TypeDateTimeOffsetN && colType != TypeGuid {
+					} else if decodedBin, ok := decodeHexBinaryString(val); ok {
+						colType = TypeBigVarBin
+						if len(decodedBin) > 8000 || strings.Contains(lowerCol, "max") || strings.Contains(lowerCol, "lob") {
+							colSize = -1
+						} else if len(decodedBin) > 0 {
+							colSize = len(decodedBin)
+						} else {
+							colSize = 50
+						}
+					} else {
+						scale = 0
 						if len(val) > 4000 || strings.Contains(lowerCol, "max") || strings.Contains(lowerCol, "lob") {
 							colType = TypeNVarChar
 							colSize = -1

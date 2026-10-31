@@ -169,6 +169,11 @@ func (l *Lexer) NextToken() Token {
 			}
 			return tok
 		} else if isDigit(l.ch) {
+			if l.ch == '0' && (l.peekChar() == 'x' || l.peekChar() == 'X') {
+				hexLit := l.readHexLiteral()
+				tok = Token{Type: TokenString, Literal: hexLit, Line: tokLine, Col: tokCol}
+				return tok
+			}
 			lit, isFloat := l.readNumber()
 			if isFloat {
 				tok = Token{Type: TokenFloat, Literal: lit, Line: tokLine, Col: tokCol}
@@ -424,6 +429,16 @@ func (l *Lexer) readVariable() string {
 		l.readChar() // eat second '@' for @@FETCH_STATUS etc
 	}
 	for isLetter(l.ch) || isDigit(l.ch) || l.ch == '_' {
+		l.readChar()
+	}
+	return l.input[startPos:l.pos]
+}
+
+func (l *Lexer) readHexLiteral() string {
+	startPos := l.pos
+	l.readChar() // '0'
+	l.readChar() // 'x' or 'X'
+	for isDigit(l.ch) || (l.ch >= 'a' && l.ch <= 'f') || (l.ch >= 'A' && l.ch <= 'F') {
 		l.readChar()
 	}
 	return l.input[startPos:l.pos]

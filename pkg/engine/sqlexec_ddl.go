@@ -385,13 +385,24 @@ func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *Clien
 
 		var pkColName string
 		var pkColIdx int = -1
-		if pkCol, perr := tbl.PrimaryKeyColumn(); perr == nil && pkCol != nil {
-			pkColName = pkCol.Name
-			_, pkColIdx, _ = tbl.FindColumn(pkColName)
+		isCompPK := tbl.IsCompositePK()
+		if !isCompPK {
+			if pkCol, perr := tbl.PrimaryKeyColumn(); perr == nil && pkCol != nil {
+				pkColName = pkCol.Name
+				_, pkColIdx, _ = tbl.FindColumn(pkColName)
+			}
 		}
 
 		var pks []storage.Value
 		for cur.Next() {
+			if isCompPK {
+				if rec, rcerr := cur.Record(); rcerr == nil {
+					if pkVal, ok := tbl.ResolveRecordPK(rec); ok {
+						pks = append(pks, pkVal)
+					}
+				}
+				continue
+			}
 			row, rerr := cur.Row()
 			if rerr == nil && len(row.Values) > 0 {
 				if pkColIdx >= 0 && pkColIdx < len(row.Values) {

@@ -353,6 +353,10 @@ func (s *Coordinator) tryPKLookupBypass(query string, start time.Time, cs *Clien
 			return nil, nil, false
 		}
 
+		if schema.IsCompositePK() {
+			return nil, nil, false
+		}
+
 		pkCol, err := schema.PrimaryKeyColumn()
 		if err != nil || pkCol == nil {
 			return nil, nil, false

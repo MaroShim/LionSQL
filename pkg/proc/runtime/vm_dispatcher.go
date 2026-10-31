@@ -714,6 +714,8 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 							if col.Scale > 0 {
 								stVal = storage.DecimalValueFromDecimal(stVal.DVal.Rescale(int32(col.Scale)))
 							}
+						} else if col.Type == storage.TypeBinary && stVal.Type == storage.TypeVarChar {
+							stVal = storage.BinaryValueFromString(stVal.SVal)
 						}
 						updatedRow.Values[colIdx] = stVal
 					}
@@ -744,9 +746,13 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 				return f.handleCatch(err, pc)
 			}
 			colName := a.Column
+			stVal := toStorageValue(valAny)
 			if tableSchema != nil {
 				if colSchema, _, ok := tableSchema.FindColumn(colName); ok {
 					colName = colSchema.Name
+					if colSchema.Type == storage.TypeBinary && stVal.Type == storage.TypeVarChar {
+						stVal = storage.BinaryValueFromString(stVal.SVal)
+					}
 				}
 			} else if oldRec != nil {
 				for k := range oldRec {
@@ -756,7 +762,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 					}
 				}
 			}
-			rec.Set(colName, toStorageValue(valAny))
+			rec.Set(colName, stVal)
 		}
 
 		if err := f.tx.Update(data.Table, pkVal, rec); err != nil {

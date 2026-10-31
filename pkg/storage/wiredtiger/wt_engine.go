@@ -1393,14 +1393,18 @@ func (tx *WTTx) insertLocked(tableName string, tbl *storage.TableSchema, record 
 	}
 	record = normalized
 
-	pkCol, err := tbl.PrimaryKeyColumn()
-	if err != nil {
+	if _, err := tbl.PrimaryKeyColumn(); err != nil {
 		return err
 	}
 
-	pkVal, has := record.Get(pkCol.Name)
+	pkVal, has := tbl.ResolveRecordPK(record)
 	if !has || pkVal.IsNull {
-		return fmt.Errorf("%w: missing primary key %s", storage.ErrNotNullViolation, pkCol.Name)
+		pkCol, _ := tbl.PrimaryKeyColumn()
+		colName := ""
+		if pkCol != nil {
+			colName = pkCol.Name
+		}
+		return fmt.Errorf("%w: missing primary key %s", storage.ErrNotNullViolation, colName)
 	}
 
 	if err := tx.checkForeignKeyLocked(tbl, record); err != nil {
@@ -1672,16 +1676,13 @@ func (tx *WTTx) checkUniqueIndexesLocked(tableName string, tbl *storage.TableSch
 		if err != nil {
 			return err
 		}
-		pkCol, _ := tbl.PrimaryKeyColumn()
 		for cur.Next() {
 			rowRec, rErr := cur.Record()
 			if rErr != nil {
 				continue
 			}
-			if pkCol != nil {
-				if rPK, ok := rowRec.Get(pkCol.Name); ok && rPK.Equal(currentPK) {
-					continue
-				}
+			if rPK, ok := tbl.ResolveRecordPK(rowRec); ok && rPK.Equal(currentPK) {
+				continue
 			}
 			existingKey := storage.ExtractIndexKeyFromRecord(rowRec, &idx)
 			if !existingKey.IsNull && existingKey.Equal(keyVal) {

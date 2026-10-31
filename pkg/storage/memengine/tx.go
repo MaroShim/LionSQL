@@ -275,8 +275,8 @@ func (tx *Transaction) InsertRow(tableName string, row storage.Row) error {
 	}
 	schema := td.Schema
 
-	// Fast-path for tables without secondary indexes, foreign keys, or partitioning
-	if len(schema.Indexes) == 0 && len(schema.ForeignKeys) == 0 && !schema.IsPartitioned() {
+	// Fast-path for tables without secondary indexes, foreign keys, composite PKs, or partitioning
+	if len(schema.Indexes) == 0 && len(schema.ForeignKeys) == 0 && !schema.IsPartitioned() && !schema.IsCompositePK() {
 		pkIdx := schema.PrimaryKeyIndex()
 		if pkIdx >= 0 && pkIdx < len(row.Values) {
 			pkVal := row.Values[pkIdx]
@@ -327,14 +327,18 @@ func (tx *Transaction) insertLocked(tableName string, record storage.Record) err
 	}
 	record = normalized
 
-	pkCol, err := schema.PrimaryKeyColumn()
-	if err != nil {
+	if _, err := schema.PrimaryKeyColumn(); err != nil {
 		return err
 	}
 
-	pkVal, hasPk := record.Get(pkCol.Name)
+	pkVal, hasPk := schema.ResolveRecordPK(record)
 	if !hasPk || pkVal.IsNull {
-		return fmt.Errorf("%w: missing primary key %q", storage.ErrNotNullViolation, pkCol.Name)
+		pkCol, _ := schema.PrimaryKeyColumn()
+		colName := ""
+		if pkCol != nil {
+			colName = pkCol.Name
+		}
+		return fmt.Errorf("%w: missing primary key %q", storage.ErrNotNullViolation, colName)
 	}
 
 	pkKey := pkVal.String()
@@ -684,10 +688,8 @@ func (tx *Transaction) updateLocked(tableName string, pk storage.Value, record s
 
 	// Stage local update before cascading so that child updates see the new parent row
 	newPkKey := pkKey
-	if pkCol, err := schema.PrimaryKeyColumn(); err == nil && pkCol != nil {
-		if newPkVal, ok := updated[pkCol.Name]; ok && !newPkVal.IsNull {
-			newPkKey = newPkVal.String()
-		}
+	if newPkVal, ok := schema.ResolveRecordPK(updated); ok && !newPkVal.IsNull {
+		newPkKey = newPkVal.String()
 	}
 
 	tx.setBaseVer(tableName, pkKey, ver)
