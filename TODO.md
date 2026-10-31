@@ -1,143 +1,119 @@
-# LionSQL Engineering Dashboard & Backlog (`TODO.md`)
+# LionSQL Task Backlog & Execution Roadmap (`TODO.md`)
 
 This dashboard tracks active engineering sprint tasks, domain backlog matrices, and milestone completion histories for LionSQL.
 
-> [!NOTE]
-> - Strategic architecture roadmap: [ROADMAP.md](ROADMAP.md)
-> - Defect resolution archive (107 cases): [BUG_ARCHIVE.ko.md](BUG_ARCHIVE.ko.md)
-> - Historical P1 specifications archive: [notes/TODO_SPEC_ARCHIVE.ko.md](notes/TODO_SPEC_ARCHIVE.ko.md)
-> - Taxonomy & task identifier definitions: [notes/TAXONOMY.ko.md](notes/TAXONOMY.ko.md)
+> **Core Architecture & Knowledge Base**:
+> - Strategic Roadmap: [`ROADMAP.md`](ROADMAP.md)
+> - Defect Resolution Archive (107 cases): [`BUG_ARCHIVE.ko.md`](BUG_ARCHIVE.ko.md)
+> - Core Invariants & Engineering Context: [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md)
+> - App Integration Expansion Plan: [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md)
+> - Durability & Reliability Verification Plan: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
+> - Taxonomy & Task Identifier Definitions: [`notes/TAXONOMY.ko.md`](notes/TAXONOMY.ko.md)
+>
+> **Engineering Principles**: 3-Stage Verification Pipeline (Build ➔ Test `-race` ➔ Commit), Zero Decorative Emojis, Radical KISS & Deletion-First.
 
 ---
 
-## 1. Taxonomy Legend
+## Priority 1. 신뢰성 및 내구성 자동화 검증 (Active Sprint: Durability & Reliability)
 
-| Prefix / Code | Domain | Range | Description |
-| :---: | :--- | :---: | :--- |
-| **`P1` ~ `P3`** | **Priority** | `P1` ~ `P3` | Urgency (P1: Active Sprint, P2: Next Sprint, P3: Ecosystem Verification) |
-| **`P-1` ~ `P-17`**| **Performance** | `P-1` ~ `P-17` | Storage, decoding, wire, caching, regex, JSON, and memory pooling tracks |
-| **`R-1` ~ `R-5`** | **Refactoring** | `R-1` ~ `R-5` | Monolith decomposition, SRP, DRY deduplication, virtual view registry |
-| **`A` ~ `D`**     | **CBO Optimizer**| `A-1` ~ `D-9` | Statistics collection (A), Joins (B), Selectivity (C), Runtime controls (D) |
-| **`S-1` ~ `S-7`** | **SQL Syntax** | `S-1` ~ `S-7` | T-SQL and ANSI SQL syntax parity (All 7 completed) |
-| **`S3-1` ~ `S3-4`**| **Object Storage**| `S3-1` ~ `S3-4`| S3 pre-signed URL direct upload and SigV4 signer (Post-1.0) |
-| **`OBS-1` ~ `OBS-3`**| **Observability**| `OBS-1` ~ `OBS-3`| Prometheus metrics, EXPLAIN ANALYZE, query profiler |
-| **`SEC-1` ~ `SEC-2`**| **Security** | `SEC-1` ~ `SEC-2`| TDS Pre-Login TLS negotiation, dynamic certificate engine |
-| **`LOC-1` ~ `LOC-4`**| **Collation** | `LOC-1` ~ `LOC-4`| MSSQL Collation, locale support, COLLATE parsing (Post-1.0) |
-| **`PREP-1`**     | **Prepared Cache**| `PREP-1` | Bounded session LRU cache for prepared statements |
-| **`AUTH-1`**     | **Authentication**| `AUTH-1` | Client-Side OIDC Token Exchange endpoint (Post-1.0) |
-| **`HTTP-1` ~ `HTTP-4`**| **HTTP API** | `HTTP-1` ~ `HTTP-4`| Global CORS, Gzip compression, payload limit (32MB), security headers |
-| **`UI-1` ~ `UI-16`** | **Web Studio** | `UI-1` ~ `UI-16`| Realtime stream, Overview dashboard, dark/light theme, query studio |
-| **`SHUTDOWN-1`** | **Lifecycle** | `SHUTDOWN-1` | Graceful shutdown without WiredTiger CGo SIGSEGV, connection draining |
-| **`VPERF-1` ~ `VPERF-18`**| **Vertical Perf**| `VPERF-1` ~ `VPERF-18`| End-to-end hot-path optimizations (TDS ➔ Coordinator ➔ VDBE ➔ Storage) |
+> 설계 및 실측 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)  
+> 목표: 실제 프로세스 강제 종료(`kill -9`)와 장시간 부하(`soak`) 환경에서 커밋 데이터 손실 0건 및 자원 유계를 입증합니다.
 
----
+### [-] 1.1 `DURA-KILL-1` kill -9 크래시 복구 장기 라운드 검증 (진행 중)
+- [x] **도구 구현 (`cmd/crashtest`)**: 다중 워커 계좌 이체 + SHA-256 커밋 장부(`crash_ledger`) + 4단계 정합성 오라클(D1 커밋 내구성, D2 원자성 `SUM(balance)=200,000`, D3 체크섬 일관성, D4 복구 가능성) 구현
+- [x] **변형 시나리오 구현**: `SIGKILL`, `SIGKILL+DOUBLE_KILL`(복구 중 재크래시 멱등성), `SIGKILL+TORN_WAL_TAIL`(로그 꼬리 절단 손상 복구), `SIGTERM` 대조군
+- [x] **크래시 결함 수정 3건**: WiredTiger 유저 버퍼 유실 방지(`transaction_sync`), `CREATE TABLE` 제약 조건 접두사 충돌(`checksum` 누락 방지), PGWire 텍스트 파라미터 숫자 오인 방지
+- [x] **1차 20라운드 완주**: In-Memory OCC 20/20 PASS (`64,214` tx 복구) & WiredTiger 20/20 PASS (`63,931` tx 복구, 위반 0건)
+- [ ] **장기 라운드 누적 검증**: 500 ~ 5,000 라운드 장기 크래시 복구 무결성 검증
 
-## 2. v0.90.0 Milestone Completion Summary (100% Completed)
+### [-] 1.2 `DURA-SOAK-1` 24h ~ 72h 장기 소크 테스트 (진행 중)
+- [x] **소크 테스트 도구 구현 (`cmd/soaktest`)**: 8 워커 계좌 이체 + Prometheus 지표 수집 + RSS/FD/디스크/p99 추이 자동 판정 엔진
+- [x] **1시간 WiredTiger 스모크 완주 (`notes/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`)**:
+  - `719,970` ops 완주, 커밋 장부 일치(`393,523` 행), 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건)
+  - `open_fds = 28` 완전 고정 (핸들 누수 0), `p99 = 6.23ms` 성능 열화 0
+  - WiredTiger 500MB 캐시 워밍업 분석 완료 및 `/metrics` Go 힙/고루틴 수집 반영
+- [ ] **In-Memory OCC 스모크 소크 검증**: In-Memory 엔진 대상 1시간 소크 테스트 실행
+- [ ] **24시간 ~ 72시간 장기 소크 완주**: 장기 무중단 운영을 통한 극한의 메모리/고루틴/디스크 누수 0 검증
 
-The `v0.90.0` Feature Freeze & Production Hardening sprint (`v0.90.0-beta0` through `v0.90.0-beta3`) is **100% completed (`[x]`)**. All five production exit criteria gates are satisfied:
-
-| Quality Gate | Description | Verified Status |
-| :--- | :--- | :---: |
-| **Gate 1: Multi-Wire Compatibility** | TDS (SSMS, DBeaver, Beekeeper, sqlcmd) & PGWire v3 (psql) live query parity | **100% PASS (`[x]`)** |
-| **Gate 2: ACID & Zero-Race Concurrency** | In-Memory OCC 1,046k tpmC / WiredTiger 833k tpmC, 0 data races under `-race` | **100% PASS (`[x]`)** |
-| **Gate 3: High Availability & CDC** | 1-Writer Multi-Reader WAL replication streaming, real-time CDC, live failover | **100% PASS (`[x]`)** |
-| **Gate 4: Enterprise Security & Governance** | SQL RBAC Default Deny, TLS dynamic certificates, heap memory governor circuit breaker | **100% PASS (`[x]`)** |
-| **Gate 5: Unified Binary & Operational Tools**| Single executable (`lionsql`), Web Studio suite, Windows standalone (`lionsql.exe`, 1ms timer) | **100% PASS (`[x]`)** |
-
-### Core Tracks Delivered in v0.90.0:
-1. **Wire Protocols & Tool Interoperability**: TDS RPC 100% ordinal positional parameter mapping (`TDS-RPC-AUDIT-1`), Unicode N-prefix UTF-16LE fix, anonymous VDBE procedural block execution (`IF/WHILE`), legacy metadata procedures (`sp_tables`, `sp_columns`), and session bounded prepared statement LRU cache (`PREP-1`).
-2. **Storage Engines & OCC Vertical Performance**: Hyper-scale 256-shard partitioning, 64B cacheline padding, 256-bit lock ordering, small int string interning, zero-alloc `InsertRow`/`UpdateRow` fast-paths (`VPERF-19`), selective column tuple extraction (`VPERF-21`), 256-shard O(1) hash map restoration (`VPERF-22`), delivering **1,046,121 tpmC (39,020 TPS)** in storage kernel and **603,241 tpmC (22,294 TPS)** in VDBE runtime.
-3. **Query Engine & 2-Tier CBO**: 2-Tier query engine consolidation (Tier 1 VDBE with direct row updates and point-lookup shortcut, Tier 2 Volcano CBO), Sort-Merge Join iterator (`MergeJoinIterator`), dynamic programming join enumeration, covering index-only scans, and expression functional indexes.
-4. **Reliability, Security & Lifecycle**: Windows cross-platform daemon decoupling (`daemon_windows.go`, `daemon_unix.go`), Windows 1ms high-resolution timer (`timeBeginPeriod(1)` via `winmm.dll`), graceful shutdown with 1.5s bounded drain deadline, and PBKDF2/SHA-256 authentication.
-5. **Benchmarks & Integration Suites**: Network TPC-C benchmark client (`cmd/tpcc_client`), 3-tier VDBE TPC-C progression (603k tpmC), and 13-domain extended smoke test suite (`scripts/verify_report.sh`).
-6. **Web Studio & Observability**: Embedded Web Studio dashboard (`/_/`), browser tab-isolated client sessions (`getWebSessionId()`) eliminating cross-user transaction pollution (`UI-CONCURRENCY-1`), 1-second cached memory stats eliminating `ReadMemStats` STW overhead under concurrent polling, 6-metric Overview panel with instant delta, real-time SSE stream, Prometheus text `/metrics` and OTLP `/v1/metrics`, and `EXPLAIN ANALYZE` execution profiler.
+### [ ] 1.3 `DURA-DOGFOOD-1` 실서비스 섀도 운영 (Dogfooding)
+- [ ] 1단계: 개인용 서비스(Vaultwarden / Umami / Answer)를 LionSQL에 연결해 섀도 모드 운영
+- [ ] 2단계: 프로젝트 자체 서비스(Gitea 등)로 확대 및 일 단위 백업/복원 리허설
 
 ---
 
-## 3. Active Release Queue & Post-1.0 Roadmap
+## Priority 2. 실전 오픈소스 앱 연동 확장 (Application Integration Expansion)
 
-### 3.1. v0.90.0 Active Implementation Queue (Active)
+> 마스터 플랜: [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md)  
+> 방식: 각 앱의 실제 마이그레이션 및 실운영 쿼리를 통과시키며 커널 호환성을 검증합니다. (계획 순서 준수)
 
-| Task Code | Domain | Core Milestone Deliverable | Target Output | Status |
-| :---: | :---: | :--- | :--- | :---: |
-| **`PERF-SERVER-PIPELINE-P1-P2`**| Server/IO | **Server Pipeline Optimization: Phase 1 (TDS Syscall Coalescing, 32KB sync.Pool, Session Pinning) + Phase 2 (Zero-Alloc RPC Param Binding)** | `pkg/wire/tds/`, `pkg/engine/`, `pkg/proc/` | **Completed (`[x]`, verified 123k~135k tpmC, 5,033 TPS, retries -52%)** |
-| **`AUDIT-EXPR-1`** | Exec/Audit | **Comprehensive Operator Nested Expressions Audit & Deep Assertion Test Suite (`nested_expr_test.go`)** | `pkg/execution/` | **Completed (`[x]`)** |
-| **`PERF-COMPLEX-QUERY-1`** | Exec/Volcano | **Complex Query Zero-Alloc Tuning & Arithmetic Aggregates (Pre-parsed AST, Slot-Index Arithmetic, Fast Non-Grouped Agg)** | `pkg/execution/` | **Completed (`[x]`, 2.6x faster, 87% less RAM)** |
-| **`S-MYSQL-1-P1`** | Syntax/DX | **MySQL-Style Concise Syntax Ergonomics (Phase 1 Quick-Wins: `DESC`, `SHOW TABLES`, Backtick ` ` `)** | `pkg/proc/lexer.go`, `pkg/engine`, `pkg/proc/runtime` | **Completed (`[x]`)** |
-| **`FUNC-DIALECT-7`** | SQL/Builtin | **High-ROI Multi-Dialect Builtin Functions Best 7 (`IFNULL`/`NVL`, `CURDATE`/`CURRENT_DATE`, `CURTIME`/`CURRENT_TIME`, `MOD`, `TRUNC`/`TRUNCATE`, `INSTR`, `SHA256`/`HEX`/`UNHEX`)** | `pkg/proc/builtins_*.go` | **Completed (`[x]`)** |
-| **`PROC-CURSOR-1`**| Proc/T-SQL | **T-SQL Fast Forward-Only Read-Only Cursor & `@@FETCH_STATUS` Compatibility (5 Core Stmts + EOF)** | `pkg/proc/lexer.go`, `pkg/proc/parser.go`, `pkg/proc/runtime` | **Completed (`[x]`)** |
-| **`PERF-TPCC-CLIENT`**| Bench/Wire | **`tpcc-client` Parameterized Prepared Stmts & Dedicated Conn Optimization** | `cmd/tpcc_client/main.go` | **Completed (`[x]`, 113k tpmC)** |
-| **`ORM-MIGRATE-1`**| Syntax/ORM | **Conditional DDL Support for ORM Migrations (Gitea/XORM/GORM: `IF NOT EXISTS ... DDL`, `sysobjects` `xtype`)** | `pkg/engine/`, `pkg/proc/` | **Completed (`[x]`)** |
-| **`ORM-MIGRATE-2`**| Catalog/ORM | **MSSQL Virtual Catalog XORM Column Introspection Routing & `max_length` Int64 Scan Safety** | `pkg/catalog/virtual/` | **Completed (`[x]`)** |
-| **`ORM-MIGRATE-3`**| Catalog/ORM | **T-SQL Assignment Aliasing (`alias = expr`), XORM `default_is_null` Bool Scan Safety, `sys.fn_helpcollations()`, and Tolerant `ALTER DATABASE`** | `pkg/catalog/virtual/`, `pkg/proc/`, `pkg/engine/` | **Completed (`[x]`)** |
-| **`GITEA-MILESTONE-1`**| Doc/Milestone | **Enterprise ORM & Production Gitea Live Integration Milestone Architecture Report** | `notes/GITEA_INTEGRATION_MILESTONE.ko.md` | **Completed (`[x]`)** |
-| **`GITEA-MOCK-SEED-1`** | ORM/Kernel | **Comprehensive Gitea Mock Data Seeder & Kernel DML Compatibility (UPDATE/DELETE FROM, Table-Qualified Projection, Keyword Aliases, Composite Bounds)** | `scripts/seed_gitea_mock_data.go`, `pkg/proc/`, `pkg/engine/`, `pkg/execution/`, `pkg/planner/` | **Completed (`[x]`)** |
-| **`GITEA-PGWIRE-1`** | PGWire/ORM | **Production Gitea Live Integration via PostgreSQL Wire Protocol (TCP :5433) (BIGSERIAL DDL, RETURNING DML, pg_indexes View, Single-Pass Param Substitution, Quoted Numeric Decoding)** | `pkg/wire/`, `pkg/engine/`, `pkg/storage/`, `pkg/catalog/` | **Completed (`[x]`, 100% Gitea Web UI, User Auth, Org/Repo/PR/Release Mock Seeding)** |
-| **`PERF-PGWIRE-1`** | Wire/Perf | **PostgreSQL & TDS Direct Transaction Fast-Path Binding (`BEGIN`/`COMMIT`/`ROLLBACK` Zero-Overhead Direct Session Hook & Message Loop Buffer Reuse)** | `pkg/wire/`, `pkg/wire/tds/`, `pkg/engine/` | **Completed (`[x]`)** - [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
-| **`PERF-WIRE-SOCKET-POOL`** | Wire/Perf | **PGWire 32KB Socket Output Buffer Reuse (`sync.Pool` pooling for `bufio.Writer` in `writeExecutionResult`, `handleExecute`, `runAndWriteQueryWithFormats`)** | `pkg/wire/server.go` | **Completed (`[x]`)** |
-| **`PERF-FASTPATH-PING`** | Wire/Perf | **Zero-Parsing Connection-Pool Healthcheck Fast-Path (`SELECT 1` / `SELECT 1;` direct static payload dispatch for PGWire and TDS listeners)** | `pkg/wire/server.go`, `pkg/wire/tds/server.go` | **Completed (`[x]`)** |
-| **`PERF-PGWIRE-PREP-TX`**| Wire/Perf | **PGWire PreparedStatement In-Transaction VDBE Bytecode Direct Binding (Eliminate `substituteParams` string reconstruction & SQL re-parsing under active `BEGIN`)** | `pkg/wire/server.go`, `pkg/wire/prep_tx_test.go` | **Completed (`[x]`)** |
-| **`BENCH-TPCC-RPC`** | Bench/RPC | **TPC-C Stored Procedure RPC Single-Roundtrip Network Benchmark (`EXEC TPCC_NewOrder`, `TPCC_DeliveryBatch`, `TPCC_StockLevelBatch` 1-roundtrip direct RPC execution)** | `cmd/tpcc_client/main.go`, `doc/BENCHMARK.md` | **Completed (`[x]`, verified OCC 193.8k~236.6k & WiredTiger 136.8k~143.8k sustained tpmC across 16w32w/10w100w/20w200w 10s)** |
-| **`IOTA-ERP-1`** | PGWire/ERP | **Enterprise Go ERP iota-sdk Integration via PostgreSQL Wire Protocol (TCP :5433) (sql-migrate, gorp_migrations Timestamp Safety, 47 Schema Migrations & Server Verification)** | `pkg/storage/`, `pkg/wire/`, `pkg/engine/` | **Completed (`[x]`)** - [`notes/IOTA_ERP_INTEGRATION_PLAN.ko.md`](notes/IOTA_ERP_INTEGRATION_PLAN.ko.md) |
-| **`GRAFANA-INTEGRATION-1`** | Wire/Dual | **Grafana Dual-Protocol Integration (Internal Backend PGWire :5433, 785 Migrations & Dual Data Sources: MSSQL TDS :1433 + PGWire :5433)** | `pkg/wire/`, `pkg/wire/tds/`, `pkg/engine/`, `pkg/storage/` | **Completed (`[x]`)** - [`notes/GRAFANA_INTEGRATION_MILESTONE.ko.md`](notes/GRAFANA_INTEGRATION_MILESTONE.ko.md) |
-| **`CASDOOR-INTEGRATION-1`** | Wire/IAM | **Casdoor IAM/SSO Dual-Protocol Integration (XORM + Casbin Backend over PGWire :5433 & MSSQL TDS :1433)** | `pkg/wire/`, `pkg/wire/tds/`, `pkg/engine/`, `pkg/storage/` | **Completed (`[x]`)** - [`notes/CASDOOR_INTEGRATION_MILESTONE.ko.md`](notes/CASDOOR_INTEGRATION_MILESTONE.ko.md) |
+### [ ] 2.1 `INTEG-ANSWER-1` Apache Answer (Q&A 지식베이스) — **[1순위 착수 예정]**
+- 상세 계획: [`notes/ANSWER_INTEGRATION_PLAN.ko.md`](notes/ANSWER_INTEGRATION_PLAN.ko.md)
+- 스택: Go + XORM / PGWire (`TCP :5433`)
+- 마이그레이션 및 질의/답변/태그/투표 코어 워크플로 E2E 검증
 
-### 3.2. Post-0.90.0 Roadmap Queue
+### [ ] 2.2 `INTEG-VAULTWARDEN-1` Vaultwarden (비밀번호 관리) — **[2순위]**
+- 스택: Rust + Diesel ORM / PGWire (`TCP :5433`)
+- 암호화 볼트 동기화, Bitwarden 공식 클라이언트 연동 검증
 
-| Task Code | Domain | Key Architecture Deliverable | Target Packages | Target Release | Reference Document |
-| :---: | :---: | :--- | :--- | :---: | :--- |
-| **`PERF-COMPLEX-QUERY-2`**| Exec/Volcano | **Complex Query Flat Hash Join & Direct Slot Projection (Open-Addressing Integer Hash Table, Sub-50ms Target)** | `pkg/execution/hash_join.go`, `pkg/execution/eval.go` | `v1.1.0` | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
-| **`BENCH-TPCH-1`** | Planner/CBO | **Mini TPC-H Benchmark Suite (Q1, Q3, Q4, Q6, Q9) & CBO Subquery Decorrelation (`EXISTS`/`IN` -> Semi-Join)** | `pkg/planner/`, `pkg/execution/`, `cmd/tpch/` | `v1.1.0` | [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
-| **`BENCH-SSB-1`** | Bench/Volcano | **Star Schema Benchmark (SSB) Suite for Volcano Query Optimization & Operator Zero-Alloc Tuning** | `pkg/execution`, `cmd/ssb` | `v1.1.0` | **Completed (`[x]`)** - [`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md) |
-| **`FRIENDLY-SQL`** | Syntax/DX | **DuckDB-Style Friendly SQL Ergonomics (Phase 1: `EXCLUDE`, `FROM <table>;`, `GROUP BY ALL` / Phase 2: File Direct Query `SELECT FROM 'file.csv'`)** | `pkg/proc/parser.go`, `pkg/engine/`, `pkg/planner/` | `v1.1.0` (Post-1.0 검토) | [`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md) |
-| **`WEB-SPA-1`** | Web/Hosting | **Self-Contained SPA Web Server & Native DB Integration (`--app`, `--public`)** | `pkg/api`, `cmd/lionsql` | `v1.1.0` | [`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md) |
-| **`OCC-HYPER-2`**| Storage/OCC | **In-Memory OCC Compact Arena Memory Compaction (5x Higher Density)** | `pkg/storage/memengine`, `pkg/storage` | `v1.1.0` | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
-| **`PERF-SERVER-PIPELINE-P3-P4`**| Server/IO | **Vertical Server Pipeline Optimization: Phase 3 (Generic LRU Cursors & ReadOnly Auto-Bypass) + Phase 4 (Adaptive Group Commit; WAL Fallocate Spec-Out)** | `pkg/storage/wiredtiger`, `pkg/storage` | `v1.1.0` | [`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md) |
-| **`R-6`** | Architecture/API | **Module Interface Abstraction & Protocol Boundary Decoupling** | `pkg/engine`, `pkg/wire`, `pkg/api` | `v1.1.0` | [`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md) |
-| **`AUDIT-LOG-1`** | Security/Audit | **Cryptographic SHA-256 Immutable Audit Logging Subsystem** | `pkg/audit`, `cmd/lionsql` | `v1.1.0` | [`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md) |
-| **`TDS-MOD-1`** | Wire/Refactor | **TDS Monolith (`server.go` 2.6k lines) Decomposition** | `pkg/wire/tds` | `v1.1.0` | Post-1.0 Refactoring |
-| **`PERF-PGWIRE-1`** | Wire/PGWire | **PostgreSQL Wire Protocol Micro-Optimizations (Socket Read Coalescing `bufio.Reader` sync.Pool, Single-Pass Parameter Placeholder Scanner, Direct Bytecode Transaction Binding)** | `pkg/wire/server.go` | `v1.1.0` | [`doc/PGWIRE_COMPATIBILITY_REPORT.md`](doc/PGWIRE_COMPATIBILITY_REPORT.md) |
-| **`TDS-COMPAT-6`**| Wire/ORM | **Multiple Result Sets (MARS) Streaming (Dapper `QueryMultiple`)** | `pkg/engine`, `pkg/wire/tds` | `v1.1.0` | [`doc/TDS_COMPATIBILITY_REPORT.md`](doc/TDS_COMPATIBILITY_REPORT.md) |
-| **`S3-1` ~ `S3-4`** | Storage/Cloud | **Client-Side S3 Pre-signed URL Direct Upload & SigV4 Signer** | `pkg/storage/s3sign`, `pkg/api` | `v1.1.0` | [`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md) |
-| **`LOC-1` ~ `LOC-4`** | Collation | **MSSQL Collation, Locale Support & `::fn_helpcollations()`** | `pkg/proc`, `pkg/engine` | `v1.1.0` | [`notes/COLLATION_AND_LOCALE_PLAN.md`](notes/COLLATION_AND_LOCALE_PLAN.md) |
-| **`SEC-1`** | Wire/Security | **TDS 8.0 / Pre-Login SSL/TLS Encryption Handshake Hardening** | `pkg/wire/tds` | `v1.1.0` | MS-TDS 2.2.6.4 Specification |
-| **`AUTH-1`** | Auth/Tokens | **Client-Side OIDC Token Exchange (`POST /api/auth/token-exchange`)** | `pkg/auth`, `pkg/api` | `v1.1.0` | GEMINI.md Section 3.6 |
+### [ ] 2.3 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[3순위]**
+- 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
+- 대시보드 쿼리 생성기 및 스키마 인트로스펙션 검증
 
-### 3.3. Next Integration Candidates (Real-World App Verification)
+### [ ] 2.4 `INTEG-UMAMI-1` Umami (웹 애널리틱스) — **[4순위]**
+- 스택: Next.js + Prisma ORM / PGWire (`TCP :5433`)
+- 시계열 이벤트 집계 쿼리 호환성 검증
 
-Status: candidates only (`[ ]`), not yet scheduled. Protocol column reflects each app's officially supported backends; verify before starting.
+### [ ] 2.5 `INTEG-NOCODB-1` NocoDB (노코드 DB 스튜디오) — **[5순위]**
+- 스택: Node.js + Knex / 듀얼 프로토콜 (PGWire + TDS)
+- 메타데이터 자동 감지 및 스프레드시트 뷰 CRUD 검증
 
-| Task Code | App | Stack / Driver | Target Protocol | Status |
-| :---: | :--- | :--- | :--- | :---: |
-| **`INTEG-ANSWER-1`** | Apache Answer (Q&A / knowledge base) | Go + XORM (to confirm) | PGWire only (SQL Server not supported upstream) | Planned (`[ ]`) - [`notes/ANSWER_INTEGRATION_PLAN.ko.md`](notes/ANSWER_INTEGRATION_PLAN.ko.md) |
-| **`INTEG-NOCODB-1`** | NocoDB (no-code DB studio) | Node.js + Knex (`pg`, `tedious`) | PGWire + TDS | Candidate (`[ ]`) |
-| **`INTEG-METABASE-1`** | Metabase (BI dashboards) | JVM + JDBC (`pgjdbc`, `mssql-jdbc`) | PGWire + TDS | Candidate (`[ ]`) |
-| **`INTEG-UMAMI-1`** | Umami (web analytics) | Next.js + Prisma | PGWire (SQL Server support unverified) | Candidate (`[ ]`) |
-| **`INTEG-VAULTWARDEN-1`** | Vaultwarden (password manager) | Rust + Diesel | PGWire (no MSSQL backend) | Candidate (`[ ]`) |
-| **`INTEG-MATTERMOST-1`** | Mattermost (team chat) | Go + sqlx/squirrel | PGWire (no MSSQL backend; expect heavy compatibility work) | Candidate (`[ ]`) |
-
-Master plan: [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md)
-
-Planned order: Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost.
-
-Excluded: Keycloak (decided not to pursue).
-
-### 3.4. Durability & Reliability Verification
-
-Plan: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)
-
-| Task Code | Domain | Key Deliverable | Target | Status |
-| :---: | :---: | :--- | :--- | :---: |
-| **`DURA-KILL-1`** | Reliability | **Kill -9 crash recovery test (ack ledger vs recovered state oracle, 5,000 rounds per engine, DDL/checkpoint/WAL-corruption variants)** | `cmd/crashtest/` | In Progress (`[-]`): Tool + variants + 20 rounds/engine (`64k+` tx) verified (`0` violations) |
-| **`DURA-SOAK-1`** | Reliability | **24h to 72h soak test (RSS/goroutine/FD/disk/latency trend judgement, pprof snapshots on violation)** | `cmd/soaktest/` | In Progress (`[-]`): Phase 1 tool + 1h WiredTiger run verified - [`notes/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](notes/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md) |
-| **`DURA-SOAK-F1`** | Reliability | **WiredTiger write-write conflict surfaces as `XX000 cursor_update failed -31800`; map to SQLSTATE `40001` (serialization_failure) so clients can retry** | `pkg/storage/wiredtiger`, `pkg/wire/` | **Completed (`[x]`)** (PGWire only; TDS error 1205 mapping not done) |
-| **`DURA-SOAK-F2`** | Reliability | **Verify RSS growth seen in 40s smoke run (54MB to 79MB, ratio 1.28) is cache warm-up, not a leak, via 1h run** | `cmd/soaktest/` | **Completed (`[x]`)** (Verified in 1h run: WiredTiger `cache_size=500M` populates to ~660MB RSS over 35m and stabilizes around 610MB; added `/metrics` heap/goroutine scraping & cache ceiling baseline) |
-| **`DURA-DOGFOOD-1`** | Reliability | **Dogfooding in shadow mode (Vaultwarden/Umami/Answer, then Gitea), after KILL/SOAK first pass** | operations | Pending (`[ ]`) |
+### [ ] 2.6 `INTEG-MATTERMOST-1` Mattermost (팀 협업 채팅) — **[6순위]**
+- 스택: Go + `sqlx`/`squirrel` / PGWire (`TCP :5433`)
+- 대규모 팀 채널 및 메시지 인덱싱 검증
 
 ---
 
-## 4. Architectural Invariants & Spec-Out Invariants
-For architectural simplicity and sub-microsecond latency, the following features are permanently **Spec-Out** (detailed rationales in [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) and [`GEMINI.md`](GEMINI.md)):
+## Priority 3. Post-0.90.0 (`v1.1.0`) 아키텍처 로드맵 (Future Engine Roadmap)
+
+> 대상 릴리즈: `v1.1.0` (엔진 최적화 및 프로토콜 리팩토링)
+
+### [ ] 3.1 `PERF-COMPLEX-QUERY-2` Complex Query Flat Hash Join & Direct Slot Projection
+- 오픈 어드레싱 정수 해시 테이블 기반 복합 쿼리 서브 50ms 목표 최적화 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
+
+### [ ] 3.2 `BENCH-TPCH-1` Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation
+- TPC-H Q1, Q3, Q4, Q6, Q9 스위트 및 `EXISTS`/`IN` -> Semi-Join 자동 변환 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
+
+### [ ] 3.3 `OCC-HYPER-2` In-Memory OCC Compact Arena Memory Compaction
+- 인메모리 컴팩트 아레나 메모리 압축을 통한 5배 고밀도화 ([`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md))
+
+### [ ] 3.4 `PERF-SERVER-PIPELINE-P3-P4` 서버 파이프라인 Phase 3/4
+- Generic LRU 커서 및 ReadOnly Auto-Bypass, 적응형 그룹 커밋 ([`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md))
+
+### [ ] 3.5 `FRIENDLY-SQL` DuckDB-Style Friendly SQL 문법 지원
+- `SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`, CSV 파일 직접 조회 ([`notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](notes/DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md))
+
+### [ ] 3.6 `WEB-SPA-1` 단일 바이너리 내장 SPA 웹 서버 호스팅
+- `--app`, `--public` 플래그를 통한 SPA 정적 웹 호스팅 및 네이티브 DB 서빙 ([`notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](notes/SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md))
+
+### [ ] 3.7 `R-6` 모듈 인터페이스 추상화 및 경계 디커플링
+- 엔진/와이어/API 계층 간 인터페이스 계약 분리 ([`notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md`](notes/MODULAR_ARCHITECTURE_API_CONTRACT_PLAN.ko.md))
+
+### [ ] 3.8 `TDS-MOD-1` TDS 모놀리스 분할 리팩토링
+- `pkg/wire/tds/server.go` (2.9k 라인) 모놀리스 파일 기능별 모듈화
+
+### [ ] 3.9 기타 엔터프라이즈 기능 확장
+- [ ] `AUDIT-LOG-1`: 암호화 SHA-256 불변 감사 로그 서브시스템 ([`notes/IMMUTABLE_AUDIT_LOG_PLAN.md`](notes/IMMUTABLE_AUDIT_LOG_PLAN.md))
+- [ ] `TDS-COMPAT-6`: Multiple Result Sets (MARS) 스트리밍 (Dapper `QueryMultiple`)
+- [ ] `S3-1` ~ `S3-4`: 클라이언트 사이드 S3 Pre-signed URL 직접 업로드 및 SigV4 서명기 ([`notes/S3_PRESIGNED_STORAGE_PLAN.md`](notes/S3_PRESIGNED_STORAGE_PLAN.md))
+- [ ] `LOC-1` ~ `LOC-4`: MSSQL Collation 및 로케일 정렬 지원 ([`notes/COLLATION_AND_LOCALE_PLAN.md`](notes/COLLATION_AND_LOCALE_PLAN.md))
+- [ ] `SEC-1` / `AUTH-1`: TDS 8.0 Pre-Login SSL/TLS 핸드셰이크 강화 및 클라이언트 사이드 OIDC 토큰 교환
+
+---
+
+## 4. Architectural Invariants & Spec-Out Invariants (13대 불변 원칙)
+
+To preserve sub-microsecond latency and single-binary simplicity, the following features are permanently **Spec-Out** (detailed rationales preserved in [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md) and [`GEMINI.md`](GEMINI.md)):
+
 1. **Duplicate PL/pgSQL Interpreter**: Stored procedures unify on native T-SQL VDBE VM (`pkg/proc`).
 2. **Legacy XML DML / XQuery**: Standardized on modern JSON functions (`ISJSON`, `JSON_VALUE`) and native Go parsers.
 3. **In-Memory OCC Background Vacuum**: Workspace atomic swap/discard leaves zero dead tuples; vacuum workers rejected.
@@ -151,3 +127,34 @@ For architectural simplicity and sub-microsecond latency, the following features
 11. **Total Bytecode Translation for Complex Queries**: 2-Tier query engine (Tier 1 VDBE, Tier 2 Volcano CBO) invariant.
 12. **Pure Columnar Vectorization Engine Full Rewrite**: Rejected due to Row-storage I/O scan physical limits and single-binary KISS code complexity; standardized on 1,024-row chunk streaming (`ChunkedIterator`, `PullChunk`) and zero-unboxing slot optimizations.
 13. **MySQL-Specific DML & Legacy Tabular EXPLAIN Extensions (`ON DUPLICATE KEY UPDATE`, Comma `LIMIT offset, count`, 8-Column Tabular `EXPLAIN`)**: Permanently Spec-Out. Standard ANSI/MSSQL `MERGE` and PostgreSQL `ON CONFLICT DO UPDATE` already provide full functional coverage without 3-way transactional branching. Flat 8-column tabular `EXPLAIN` flattens and destroys modern hierarchical Volcano CBO plan trees (which even MySQL 8.0 deprecated in favor of `FORMAT=TREE`) and breaks PostgreSQL GUI visualizers. LionSQL standardizes exclusively on modern indented tree text and JSON plan representations, keeping MySQL syntax support strictly at Phase 1 ergonomics (`DESC`, `SHOW TABLES`, backticks).
+
+---
+
+## Completed Milestones Archive (완료된 작업 이력)
+
+### [x] M1. v0.90.0 Feature Freeze & Production Hardening (100% PASS)
+- **Gate 1 (Multi-Wire)**: TDS (SSMS, DBeaver, Beekeeper, sqlcmd) & PGWire v3 (psql) live query parity 100% PASS
+- **Gate 2 (ACID & Concurrency)**: In-Memory OCC 1,046k tpmC / WiredTiger 833k tpmC, 0 data races under `-race`
+- **Gate 3 (HA & CDC)**: 1-Writer Multi-Reader WAL replication streaming, real-time CDC, live failover 100% PASS
+- **Gate 4 (Security & Governance)**: SQL RBAC Default Deny, TLS dynamic certificates, heap memory governor
+- **Gate 5 (Unified Binary)**: Single executable (`lionsql`), Web Studio suite, Windows standalone (`lionsql.exe`, 1ms timer)
+
+### [x] M2. v0.90.0 액티브 스프린트 완료 과제 (18개 전량 완료 아카이브)
+- [x] **`PERF-PGWIRE-PREP-TX`**: PGWire PreparedStatement 트랜잭션 내 VDBE 바이트코드 직접 바인딩 (`ExecuteInTxWithSessionContext`, `substituteParams` 제거, PGWire TPC-C 24.3만 tpmC 달성)
+- [x] **`CASDOOR-INTEGRATION-1`**: Casdoor IAM/SSO 듀얼 프로토콜 연동 (44 XORM 테이블, 복합 PK `\x1f`, `0x` Hex 바이너리)
+- [x] **`GRAFANA-INTEGRATION-1`**: Grafana 듀얼 프로토콜 연동 (내부 메타데이터 PGWire 785개 마이그레이션 완주 + PG/TDS 듀얼 쿼리 데이터소스)
+- [x] **`IOTA-ERP-1`**: iota-sdk Go ERP PGWire 연동 (47개 마이그레이션, binary UUID, TIMESTAMPTZ)
+- [x] **`GITEA-PGWIRE-1` & `GITEA-MOCK-SEED-1`**: Gitea 프로덕션 연동 (BIGSERIAL, RETURNING, pg_indexes, 모의 데이터 시더)
+- [x] **`BENCH-TPCC-RPC` & `PERF-TPCC-CLIENT`**: TPC-C 단일 왕복 RPC 벤치마크 및 클라이언트 최적화 (TDS 236k / PGWire 243k tpmC)
+- [x] **`PERF-SERVER-PIPELINE-P1-P2`**: TDS 파이프라인 최적화 (Syscall Coalescing, 32KB sync.Pool, Zero-Alloc RPC)
+- [x] **`PERF-WIRE-SOCKET-POOL` & `PERF-FASTPATH-PING`**: PGWire 32KB 버퍼 풀링 및 `SELECT 1` 무파싱 핑 패스트패스
+- [x] **`ORM-MIGRATE-1~3`**: 조건부 DDL 지원, XORM 컬럼 인트로스펙션, 할당 에일리어싱(`alias = expr`), `sys.fn_helpcollations()`
+- [x] **`S-MYSQL-1-P1` & `FUNC-DIALECT-7`**: MySQL 편의 문법(`DESC`, `SHOW TABLES`, 백틱) 및 고ROI 빌트인 함수 Best 7
+- [x] **`PROC-CURSOR-1`**: T-SQL Fast Forward-Only 읽기 전용 커서 및 `@@FETCH_STATUS`
+- [x] **`AUDIT-EXPR-1` & `PERF-COMPLEX-QUERY-1`**: 복합 쿼리 중첩 표현식 감사 및 AST 제로할당 평가기 튜닝
+- [x] **`BENCH-SSB-1`**: Star Schema Benchmark (SSB) 스위트 CLI 도구 완성
+
+### [x] M3. 내구성 및 신뢰성 1차 검증 완료 이력
+- [x] **`DURA-SOAK-F1`**: WiredTiger `WT_ROLLBACK`(-31800) 쓰기 충돌을 `storage.ErrSerializationFailure`로 래핑하여 PGWire `SQLSTATE 40001` 매핑
+- [x] **`DURA-SOAK-F2`**: 1시간 소크 실측을 통한 500MB 페이지 캐시 워밍업 분석 및 `/metrics` Go 힙/고루틴 수집과 캐시 상한 기준선 확립
+- [x] **`DURA-KILL-1 (Phase 1)`**: `cmd/crashtest` 하네스 완성, 3대 결함 수정 및 20라운드/엔진 (총 12.8만 건 tx) 강제 종료 복구 100% 무결성 입증
