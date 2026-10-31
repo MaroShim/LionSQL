@@ -30,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - fix TDS inferColumnInfos colSize for 'type' columns to prevent go-mssqldb slice bounds panic
 
 ### Performance
+- bind PGWire prepared statements directly to VDBE bytecode VM in active transactions via ExecuteInTxWithSessionContext, eliminating substituteParams string reconstruction and SQL re-parsing overhead (PERF-PGWIRE-PREP-TX)
 - implement zero-overhead transaction fast-path binding for BEGIN, COMMIT, and ROLLBACK in PGWire and TDS listeners (PERF-PGWIRE-1)
 - reuse 5-byte message header buffer across connection message loop in PGWire server
 
