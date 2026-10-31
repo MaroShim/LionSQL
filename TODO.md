@@ -109,12 +109,14 @@ Status: candidates only (`[ ]`), not yet scheduled. Protocol column reflects eac
 
 | Task Code | App | Stack / Driver | Target Protocol | Status |
 | :---: | :--- | :--- | :--- | :---: |
-| **`INTEG-ANSWER-1`** | Apache Answer (Q&A / knowledge base) | Go + XORM | PGWire + TDS | Candidate (`[ ]`) |
+| **`INTEG-ANSWER-1`** | Apache Answer (Q&A / knowledge base) | Go + XORM (to confirm) | PGWire only (SQL Server not supported upstream) | Planned (`[ ]`) - [`notes/ANSWER_INTEGRATION_PLAN.ko.md`](notes/ANSWER_INTEGRATION_PLAN.ko.md) |
 | **`INTEG-NOCODB-1`** | NocoDB (no-code DB studio) | Node.js + Knex (`pg`, `tedious`) | PGWire + TDS | Candidate (`[ ]`) |
 | **`INTEG-METABASE-1`** | Metabase (BI dashboards) | JVM + JDBC (`pgjdbc`, `mssql-jdbc`) | PGWire + TDS | Candidate (`[ ]`) |
 | **`INTEG-UMAMI-1`** | Umami (web analytics) | Next.js + Prisma | PGWire (SQL Server support unverified) | Candidate (`[ ]`) |
 | **`INTEG-VAULTWARDEN-1`** | Vaultwarden (password manager) | Rust + Diesel | PGWire (no MSSQL backend) | Candidate (`[ ]`) |
 | **`INTEG-MATTERMOST-1`** | Mattermost (team chat) | Go + sqlx/squirrel | PGWire (no MSSQL backend; expect heavy compatibility work) | Candidate (`[ ]`) |
+
+Planned order: Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost.
 
 Excluded: Keycloak (decided not to pursue).
 
