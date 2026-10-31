@@ -56,6 +56,8 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
    - **[`GRAFANA_INTEGRATION_MILESTONE.md`](GRAFANA_INTEGRATION_MILESTONE.md)** ([Korean](GRAFANA_INTEGRATION_MILESTONE.ko.md)): Grafana 785 migrations execution, envelope encryption (`BYTEA`), CTE derived table isolation, and dual data source query verification milestone report (Completed).
    - **[`CASDOOR_INTEGRATION_PLAN.ko.md`](CASDOOR_INTEGRATION_PLAN.ko.md)** (Korean): Casdoor open-source IAM/SSO/OIDC platform dual-protocol integration plan (PGWire :5433 & MSSQL TDS :1433) (Completed).
    - **[`CASDOOR_INTEGRATION_MILESTONE.md`](CASDOOR_INTEGRATION_MILESTONE.md)** ([Korean](CASDOOR_INTEGRATION_MILESTONE.ko.md)): Casdoor 44-table creation, composite primary key (`PRIMARY KEY (owner, name)`) resolution, TDS `VARBINARY` JSON round-trip, and dual-protocol OIDC/RBAC E2E verification milestone report (Completed).
+   - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)** (Korean): Master plan for six further real-world app integrations (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost).
+   - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)** (Korean): Apache Answer PGWire integration detail plan (first in order).
    - **[`S3_PRESIGNED_STORAGE_PLAN.md`](S3_PRESIGNED_STORAGE_PLAN.md)**: Design for direct S3 pre-signed URL uploads and SigV4 client signer integration (Spec-Out Architecture / Reference).
 
 7. **Completed Reports & Historical Archives**:

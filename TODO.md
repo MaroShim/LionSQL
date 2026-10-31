@@ -116,6 +116,8 @@ Status: candidates only (`[ ]`), not yet scheduled. Protocol column reflects eac
 | **`INTEG-VAULTWARDEN-1`** | Vaultwarden (password manager) | Rust + Diesel | PGWire (no MSSQL backend) | Candidate (`[ ]`) |
 | **`INTEG-MATTERMOST-1`** | Mattermost (team chat) | Go + sqlx/squirrel | PGWire (no MSSQL backend; expect heavy compatibility work) | Candidate (`[ ]`) |
 
+Master plan: [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md)
+
 Planned order: Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost.
 
 Excluded: Keycloak (decided not to pursue).
