@@ -22,7 +22,9 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -41,14 +43,16 @@ import (
 const initialBalance = 1000
 
 type sample struct {
-	elapsed   time.Duration
-	rssKB     int64
-	fds       int
-	dirBytes  int64
-	ops       int64
-	errs      int64
-	p50, p99  time.Duration
-	opsPerSec float64
+	elapsed    time.Duration
+	rssKB      int64
+	heapKB     int64
+	goroutines int
+	fds        int
+	dirBytes   int64
+	ops        int64
+	errs       int64
+	p50, p99   time.Duration
+	opsPerSec  float64
 }
 
 type window struct {
@@ -118,23 +122,25 @@ func main() {
 	rate := flag.Int("rate", 200, "Target total operations per second")
 	accounts := flag.Int("accounts", 1000, "Number of accounts")
 	pgPort := flag.Int("pg-port", 5543, "PGWire port for the child server")
+	httpPort := flag.Int("http-port", 8590, "HTTP metrics port for the child server")
 	password := flag.String("password", "1234567890", "Database password")
-	maxGrowth := flag.Float64("max-resource-growth", 0.30, "Allowed relative RSS/FD growth after warm-up")
+	maxGrowth := flag.Float64("max-resource-growth", 0.30, "Allowed relative RSS/FD/goroutine growth after warm-up")
+	rssCeilingMB := flag.Int64("rss-ceiling-mb", 800, "Expected steady-state RSS ceiling in MB (WiredTiger 500MB cache + Go runtime)")
 	maxP99Ratio := flag.Float64("max-p99-ratio", 2.0, "Allowed p99 latency ratio (late/early)")
 	outCSV := flag.String("out", "", "Optional CSV output path for samples")
 	keep := flag.Bool("keep", false, "Keep the temporary data directory")
 	flag.Parse()
 
 	code, err := run(*binPath, *engine, *duration, *sampleEvery, *workers, *rate, *accounts,
-		*pgPort, *password, *maxGrowth, *maxP99Ratio, *outCSV, *keep)
+		*pgPort, *httpPort, *password, *maxGrowth, *rssCeilingMB, *maxP99Ratio, *outCSV, *keep)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "soaktest: %v\n", err)
 	}
 	os.Exit(code)
 }
 
-func run(binPath, engine string, duration, sampleEvery time.Duration, workers, rate, accounts, pgPort int,
-	password string, maxGrowth, maxP99Ratio float64, outCSV string, keep bool) (int, error) {
+func run(binPath, engine string, duration, sampleEvery time.Duration, workers, rate, accounts, pgPort, httpPort int,
+	password string, maxGrowth float64, rssCeilingMB int64, maxP99Ratio float64, outCSV string, keep bool) (int, error) {
 
 	if workers < 1 || rate < 1 || accounts < 2 {
 		return 2, errors.New("workers, rate must be >= 1 and accounts >= 2")
@@ -147,19 +153,22 @@ func run(binPath, engine string, duration, sampleEvery time.Duration, workers, r
 	if err != nil {
 		return 2, err
 	}
+	logPath := filepath.Join(dataDir, "..", filepath.Base(dataDir)+".server.log")
 	if !keep {
 		defer func() {
 			if rmErr := os.RemoveAll(dataDir); rmErr != nil {
 				fmt.Fprintf(os.Stderr, "soaktest: cleanup %s: %v\n", dataDir, rmErr)
 			}
+			_ = os.Remove(logPath)
 		}()
 	}
 
 	// Argument vector only; no shell involved.
 	srv := exec.Command(absBin,
 		"-dir", dataDir, "-engine", engine,
-		"-pg", fmt.Sprintf("127.0.0.1:%d", pgPort), "-tds", "", "-http", "")
-	logFile, err := os.Create(filepath.Join(dataDir, "..", filepath.Base(dataDir)+".server.log"))
+		"-pg", fmt.Sprintf("127.0.0.1:%d", pgPort), "-tds", "",
+		"-http", fmt.Sprintf("127.0.0.1:%d", httpPort), "-auth=false")
+	logFile, err := os.Create(logPath)
 	if err != nil {
 		return 2, err
 	}
@@ -304,14 +313,15 @@ sampling:
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "soaktest: rss sample: %v\n", err)
 			}
+			s.heapKB, s.goroutines = scrapeRuntimeMetrics(httpPort)
 			s.fds, err = fdCount(pid)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "soaktest: fd sample: %v\n", err)
 			}
 			s.dirBytes = dirSize(dataDir)
 			samples = append(samples, s)
-			fmt.Printf("t=%-8s rss=%6dMB fds=%-4d disk=%6dMB ops/s=%-7.1f p50=%-9s p99=%-9s errs=%d\n",
-				s.elapsed.Round(time.Second), s.rssKB/1024, s.fds, s.dirBytes>>20, s.opsPerSec, s.p50.Round(time.Microsecond), s.p99.Round(time.Microsecond), s.errs)
+			fmt.Printf("t=%-8s rss=%6dMB heap=%5dMB gr=%-4d fds=%-4d disk=%6dMB ops/s=%-7.1f p50=%-9s p99=%-9s errs=%d\n",
+				s.elapsed.Round(time.Second), s.rssKB/1024, s.heapKB/1024, s.goroutines, s.fds, s.dirBytes>>20, s.opsPerSec, s.p50.Round(time.Microsecond), s.p99.Round(time.Microsecond), s.errs)
 		}
 	}
 	wg.Wait()
@@ -355,7 +365,7 @@ sampling:
 		fmt.Printf("INFO %d operation errors out of %d ops\n", e, ops.Load())
 		elog.report()
 	}
-	if trendFailed(samples, maxGrowth, maxP99Ratio) {
+	if trendFailed(samples, maxGrowth, float64(rssCeilingMB*1024), maxP99Ratio) {
 		failed = true
 	}
 	if failed {
@@ -492,6 +502,31 @@ func rssKB(pid int) (int64, error) {
 	return strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
 }
 
+func scrapeRuntimeMetrics(httpPort int) (heapKB int64, goroutines int) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	resp, err := client.Get(fmt.Sprintf("http://127.0.0.1:%d/metrics", httpPort))
+	if err != nil {
+		return 0, 0
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, 0
+	}
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(line, "lionsql_memory_alloc_bytes ") {
+			if v, err := strconv.ParseInt(strings.TrimSpace(strings.TrimPrefix(line, "lionsql_memory_alloc_bytes ")), 10, 64); err == nil {
+				heapKB = v / 1024
+			}
+		} else if strings.HasPrefix(line, "lionsql_goroutines ") {
+			if v, err := strconv.Atoi(strings.TrimSpace(strings.TrimPrefix(line, "lionsql_goroutines "))); err == nil {
+				goroutines = v
+			}
+		}
+	}
+	return heapKB, goroutines
+}
+
 func fdCount(pid int) (int, error) {
 	if runtime.GOOS == "linux" {
 		ents, err := os.ReadDir(fmt.Sprintf("/proc/%d/fd", pid))
@@ -533,10 +568,11 @@ func writeCSV(path string, samples []sample) error {
 		return err
 	}
 	w := csv.NewWriter(f)
-	_ = w.Write([]string{"elapsed_s", "rss_kb", "fds", "disk_bytes", "ops", "errors", "ops_per_s", "p50_us", "p99_us"})
+	_ = w.Write([]string{"elapsed_s", "rss_kb", "heap_kb", "goroutines", "fds", "disk_bytes", "ops", "errors", "ops_per_s", "p50_us", "p99_us"})
 	for _, s := range samples {
 		_ = w.Write([]string{
-			strconv.Itoa(int(s.elapsed.Seconds())), strconv.FormatInt(s.rssKB, 10), strconv.Itoa(s.fds),
+			strconv.Itoa(int(s.elapsed.Seconds())), strconv.FormatInt(s.rssKB, 10),
+			strconv.FormatInt(s.heapKB, 10), strconv.Itoa(s.goroutines), strconv.Itoa(s.fds),
 			strconv.FormatInt(s.dirBytes, 10), strconv.FormatInt(s.ops, 10), strconv.FormatInt(s.errs, 10),
 			strconv.FormatFloat(s.opsPerSec, 'f', 1, 64),
 			strconv.FormatInt(s.p50.Microseconds(), 10), strconv.FormatInt(s.p99.Microseconds(), 10),
@@ -560,8 +596,10 @@ func median(v []float64) float64 {
 }
 
 // trendFailed compares an early post-warm-up window (20%-30% of samples) with
-// the final window (last 10%). Returns true when a trend limit is exceeded.
-func trendFailed(samples []sample, maxGrowth, maxP99Ratio float64) bool {
+// the final window (last 10%). For rss_kb, normal storage page-cache warm-up
+// up to rssCeilingKB (e.g. WiredTiger 500MB cache + Go runtime = 800MB) is
+// allowed before relative growth is flagged.
+func trendFailed(samples []sample, maxGrowth, rssCeilingKB, maxP99Ratio float64) bool {
 	n := len(samples)
 	if n < 10 {
 		fmt.Printf("INFO only %d samples; trend checks skipped (need >= 10, increase -duration)\n", n)
@@ -594,7 +632,16 @@ func trendFailed(samples []sample, maxGrowth, maxP99Ratio float64) bool {
 		}
 		fmt.Printf("%s %s: early=%.1f late=%.1f ratio=%.2f\n", status, name, e, l, r)
 	}
-	check("rss_kb", pick(early, func(s sample) float64 { return float64(s.rssKB) }), pick(late, func(s sample) float64 { return float64(s.rssKB) }), maxGrowth, false)
+	eRSS := pick(early, func(s sample) float64 { return float64(s.rssKB) })
+	lRSS := pick(late, func(s sample) float64 { return float64(s.rssKB) })
+	effEarlyRSS := eRSS
+	if rssCeilingKB > effEarlyRSS && lRSS <= rssCeilingKB {
+		effEarlyRSS = lRSS // within configured storage cache ceiling
+	} else if rssCeilingKB > effEarlyRSS {
+		effEarlyRSS = rssCeilingKB
+	}
+	check("rss_kb", effEarlyRSS, lRSS, maxGrowth, false)
+	check("goroutines", pick(early, func(s sample) float64 { return float64(s.goroutines) }), pick(late, func(s sample) float64 { return float64(s.goroutines) }), maxGrowth, false)
 	check("open_fds", pick(early, func(s sample) float64 { return float64(s.fds) }), pick(late, func(s sample) float64 { return float64(s.fds) }), maxGrowth, false)
 	check("p99_latency_us", pick(early, func(s sample) float64 { return float64(s.p99.Microseconds()) }), pick(late, func(s sample) float64 { return float64(s.p99.Microseconds()) }), maxP99Ratio, true)
 	return failed

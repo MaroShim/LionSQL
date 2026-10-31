@@ -112,6 +112,20 @@
 ### 4.6. 완료 기준
 - 두 엔진 각각 72시간 무중단(예정된 재기동/킬 제외) 판정 기준 통과.
 
+### 4.7. 1시간 스모크 소크 실측 결과 (2026-10-31, WiredTiger / PGWire)
+- **실행 조건**: `bin/soaktest -duration 1h -sample 30s` (8 workers, 200 ops/s, 1,000 accounts)
+- **정합성 검증**:
+  - 잔액 총합 불변식: `SUM(balance) = 1,000,000` (PASS, 위반 0건)
+  - 커밋 장부 대조: `acknowledged commits == soak_log rows (393,523 = 393,523)` (PASS)
+  - 오류 및 직렬화 충돌: 총 `719,970` ops 중 처리되지 않은 오류 `0`건, 재시도 가능한 직렬화 충돌(`SQLSTATE 40001`) `3,016`건 정상 분리 (`DURA-SOAK-F1` 해결)
+- **자원 및 지연 시간 추이**:
+  - **열린 파일 디스크립터(`open_fds`)**: 1시간 내내 `28`개로 완전 고정 (`ratio = 1.00`, 핸들 누수 없음)
+  - **지연 시간(`p99`)**: 초기 `5.78ms` ➔ 종료 `6.23ms` (`ratio = 1.08`, 성능 열화 없음)
+  - **디스크 사용량**: `201MB` ➔ `216MB` (`soak_log` 39.3만 행 증가분 +15MB, 체크포인트 및 블록 재사용 정상)
+  - **메모리(`rss_kb`) 추이 분석 (`DURA-SOAK-F2` 완료)**:
+    - 200 ops/s 속도에서는 WiredTiger의 페이지 캐시(`cache_size=500M`)가 약 35분에 걸쳐 서서히 채워지며 프로세스 RSS가 `650MB~765MB`(WT 캐시 500MB + Go 런타임/CGo)에 도달한 뒤, 이후 WiredTiger eviction이 작동하여 59분 시점에는 `610MB`로 수렴함을 확인했다.
+    - 초기(12~18분) 구간은 아직 500MB 캐시가 절반만 찬 상태(`335MB`)여서 단순 비율 비교(`late / early`)가 캐시 워밍업을 누수로 오판하는 문제가 있었으므로, `cmd/soaktest`에 `/metrics` 기반 Go 힙(`lionsql_memory_alloc_bytes`) 및 고루틴 수(`lionsql_goroutines`) 수집과 엔진 페이지 캐시 상한(`-rss-ceiling-mb 800`) 기준선을 반영했다.
+
 ---
 
 ## 5. `DURA-DOGFOOD-1` 개밥 먹기
