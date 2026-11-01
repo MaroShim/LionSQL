@@ -6,11 +6,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"lionsql/pkg/execution"
 	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -784,41 +786,83 @@ func formatSubqueryVal(v any) string {
 	}
 }
 
-func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, error) {
+var cteGlobalSeq uint64
+
+func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	ctes, mainSQL := planner.ParseCTEs(query)
 	if len(ctes) == 0 {
-		return s.execSelect(query, start, nil)
+		return s.execSelect(query, start, cs)
 	}
 
 	var tempTableNames []string
 	defer func() {
 		for _, t := range tempTableNames {
-			_, _ = s.ExecuteSQL(fmt.Sprintf("DROP TABLE %s;", t))
+			_, _ = s.execSingleStatement(cs, fmt.Sprintf("DROP TABLE %s;", t))
 		}
 	}()
 
-	for _, cte := range ctes {
-		// 1. Run CTE inner SQL
-		res, err := s.ExecuteSQL(cte.InnerSQL)
-		if err != nil {
-			return nil, fmt.Errorf("CTE %q execution error: %w", cte.Name, err)
+	for i := range ctes {
+		cte := ctes[i]
+		cteWordRe := getCompiledRegexp(`\b` + regexp.QuoteMeta(cte.Name) + `\b`)
+		isRecursive := cteWordRe.MatchString(cte.InnerSQL)
+
+		var res *QueryResult
+		var recSQL string
+
+		if isRecursive {
+			// Find top-level UNION ALL or UNION
+			unionIdx := sqlutil.FindTopLevelKeyword(cte.InnerSQL, "UNION ALL")
+			unionLen := len("UNION ALL")
+			if unionIdx == -1 {
+				unionIdx = sqlutil.FindTopLevelKeyword(cte.InnerSQL, "UNION")
+				unionLen = len("UNION")
+			}
+			if unionIdx != -1 {
+				baseSQL := strings.TrimSpace(cte.InnerSQL[:unionIdx])
+				recSQL = strings.TrimSpace(cte.InnerSQL[unionIdx+unionLen:])
+				var err error
+				res, err = s.execSingleStatement(cs, baseSQL)
+				if err != nil {
+					return nil, fmt.Errorf("CTE %q base query error: %w", cte.Name, err)
+				}
+			} else {
+				var err error
+				res, err = s.execSingleStatement(cs, cte.InnerSQL)
+				if err != nil {
+					return nil, fmt.Errorf("CTE %q execution error: %w", cte.Name, err)
+				}
+			}
+		} else {
+			var err error
+			res, err = s.execSingleStatement(cs, cte.InnerSQL)
+			if err != nil {
+				return nil, fmt.Errorf("CTE %q execution error: %w", cte.Name, err)
+			}
 		}
 
 		// 2. Materialize into #temp table
-		tempName := fmt.Sprintf("#__cte_%s", cte.Name)
+		tempName := fmt.Sprintf("#__cte_%s_%d", cte.Name, atomic.AddUint64(&cteGlobalSeq, 1))
 		tempTableNames = append(tempTableNames, tempName)
 
 		if len(res.Columns) == 0 {
 			continue
 		}
 
+		var targetCols []string
+		if len(cte.Columns) == len(res.Columns) {
+			targetCols = cte.Columns
+		} else {
+			targetCols = res.Columns
+		}
+
 		var colDefs []string
-		colDefs = append(colDefs, "_cte_row_id INT IDENTITY PRIMARY KEY")
-		for _, col := range res.Columns {
+		colDefs = append(colDefs, "_cte_row_id INT PRIMARY KEY")
+		for idx, col := range targetCols {
+			srcCol := res.Columns[idx]
 			colType := "VARCHAR(255)"
 			if len(res.Rows) > 0 {
 				for _, row := range res.Rows {
-					v := row[col]
+					v := row[srcCol]
 					if v != nil {
 						switch v.(type) {
 						case int, int32, int64:
@@ -839,16 +883,20 @@ func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, erro
 			colDefs = append(colDefs, fmt.Sprintf("%s %s", col, colType))
 		}
 		createSQL := fmt.Sprintf("CREATE TABLE %s (%s);", tempName, strings.Join(colDefs, ", "))
-		if _, err := s.ExecuteSQL(createSQL); err != nil {
+		_, _ = s.execSingleStatement(cs, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tempName))
+		if _, err := s.execSingleStatement(cs, createSQL); err != nil {
 			return nil, fmt.Errorf("materialize CTE %q table error: %w", cte.Name, err)
 		}
 
+		targetColsWithID := append([]string{"_cte_row_id"}, targetCols...)
+		currentTotalRows := 0
+
 		if len(res.Rows) > 0 {
-			var insertCols = res.Columns
 			for _, row := range res.Rows {
-				var valStrs []string
-				for _, col := range insertCols {
-					v := row[col]
+				currentTotalRows++
+				valStrs := []string{fmt.Sprintf("%d", currentTotalRows)}
+				for _, srcCol := range res.Columns {
+					v := row[srcCol]
 					if v == nil {
 						valStrs = append(valStrs, "NULL")
 					} else {
@@ -869,17 +917,65 @@ func (s *Coordinator) execCTE(query string, start time.Time) (*QueryResult, erro
 						}
 					}
 				}
-				insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, strings.Join(insertCols, ", "), strings.Join(valStrs, ", "))
-				if _, err := s.ExecuteSQL(insSQL); err != nil {
+				insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, strings.Join(targetColsWithID, ", "), strings.Join(valStrs, ", "))
+				if _, err := s.execSingleStatement(cs, insSQL); err != nil {
 					return nil, fmt.Errorf("materialize CTE insert error: %w", err)
 				}
 			}
 		}
 
-		// Rewrite occurrences of cte.Name in mainSQL with tempName
-		cteWordRe := getCompiledRegexp(`\b` + regexp.QuoteMeta(cte.Name) + `\b`)
+		// 3. If recursive, iteratively execute recursive step and insert new rows
+		if isRecursive && recSQL != "" && len(res.Rows) > 0 {
+			recSQLWithTemp := cteWordRe.ReplaceAllString(recSQL, tempName)
+			for iter := 0; iter < 100; iter++ {
+				recRes, recErr := s.execSingleStatement(cs, recSQLWithTemp)
+				if recErr != nil || recRes == nil || len(recRes.Rows) == 0 {
+					break
+				}
+				insertedAny := false
+				for _, row := range recRes.Rows {
+					currentTotalRows++
+					valStrs := []string{fmt.Sprintf("%d", currentTotalRows)}
+					for _, srcCol := range res.Columns {
+						v := row[srcCol]
+						if v == nil {
+							valStrs = append(valStrs, "NULL")
+						} else {
+							switch val := v.(type) {
+							case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+								valStrs = append(valStrs, fmt.Sprintf("%d", val))
+							case float32, float64:
+								valStrs = append(valStrs, fmt.Sprintf("%f", val))
+							case bool:
+								if val {
+									valStrs = append(valStrs, "1")
+								} else {
+									valStrs = append(valStrs, "0")
+								}
+							default:
+								sVal := fmt.Sprintf("%v", v)
+								valStrs = append(valStrs, fmt.Sprintf("'%s'", strings.ReplaceAll(sVal, "'", "''")))
+							}
+						}
+					}
+					insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, strings.Join(targetColsWithID, ", "), strings.Join(valStrs, ", "))
+					if _, err := s.execSingleStatement(cs, insSQL); err == nil {
+						insertedAny = true
+						res.Rows = append(res.Rows, row)
+					}
+				}
+				if !insertedAny {
+					break
+				}
+			}
+		}
+
+		// Rewrite occurrences of cte.Name in subsequent CTEs and in mainSQL with tempName
+		for j := i + 1; j < len(ctes); j++ {
+			ctes[j].InnerSQL = cteWordRe.ReplaceAllString(ctes[j].InnerSQL, tempName)
+		}
 		mainSQL = cteWordRe.ReplaceAllString(mainSQL, tempName)
 	}
 
-	return s.ExecuteSQL(mainSQL)
+	return s.execSingleStatement(cs, mainSQL)
 }

@@ -83,11 +83,27 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 스택: Next.js 16.4.2 + Prisma ORM / PGWire (`TCP :5433`)
 - Prisma 초기화 26개 마이그레이션(01~26) 100% 무오류 적용, 관리자 인증(`POST /api/auth/login`), 웹사이트 등록(`POST /api/websites`), 웹사이트 목록 조회(`GET /api/websites` 파생 테이블 집계), 웹 분석 이벤트 수집(`POST /api/send`), 통계 분석 쿼리(`GET /api/websites/{id}/stats` 복합 서브쿼리, GROUP BY 1, 2, HAVING, CASE WHEN) 완벽 검증 통과 (Umami 순정 컨테이너 소스 수정 0줄)
 
-### [ ] 2.6 `COMPAT-DECLARATIVE-1` 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) — **[백로그]**
+### [x] 2.6 `INTEG-WOODPECKER-1` Woodpecker CI (CI/CD 엔진) — **[완료 (Pass)]**
+- 설계 계획서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
+- 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
+- 운영 가이드: [`doc/WOODPECKER_INTEGRATION_GUIDE.ko.md`](doc/WOODPECKER_INTEGRATION_GUIDE.ko.md) / [`doc/WOODPECKER_INTEGRATION_GUIDE.md`](doc/WOODPECKER_INTEGRATION_GUIDE.md)
+- 회귀 테스트: `pkg/engine/woodpecker_compat_test.go`
+- 스택: Go + XORM / PGWire (`TCP :5433`)
+- 19개 테이블, 32개 XORM 마이그레이션 100% 무오류 자동 적용, 서버 헬스체크(`/healthz` 204), 버전 조회(`/version` v3.20.1), 웹 UI 서빙 완벽 동작 검증 (Woodpecker CI 순정 컨테이너 소스 수정 0줄)
+
+### [x] 2.7 `INTEG-VIKUNJA-1` Vikunja (프로젝트 칸반 & To-Do) — **[완료 (Pass)]**
+- 설계 계획서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
+- 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
+- 운영 가이드: [`doc/VIKUNJA_INTEGRATION_GUIDE.ko.md`](doc/VIKUNJA_INTEGRATION_GUIDE.ko.md) / [`doc/VIKUNJA_INTEGRATION_GUIDE.md`](doc/VIKUNJA_INTEGRATION_GUIDE.md)
+- 회귀 테스트: `pkg/engine/vikunja_compat_test.go`
+- 스택: Go + XORM / PGWire (`TCP :5433`)
+- 80개 이상의 XORM 마이그레이션 100% 무오류 자동 적용, 사용자 회원가입(`POST /api/v1/register`), JWT 로그인(`POST /api/v1/login`, 복합 `OR` 술어 처리), 프로젝트 및 4대 뷰(List/Gantt/Table/Kanban) 생성(`PUT /api/v1/projects`), 칸반 태스크 생성 및 상태 변경(`PUT /api/v1/projects/:id/tasks`, `POST /api/v1/tasks/:id`), 재귀 CTE(`WITH RECURSIVE`) 프로젝트 계층 탐색, 웹 UI 서빙 완벽 동작 검증 (Vikunja 순정 컨테이너 소스 수정 0줄)
+
+### [ ] 2.8 `COMPAT-DECLARATIVE-1` 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) — **[백로그]**
 - 대상: 기연동 8개 서비스(Gitea, Vaultwarden, Casdoor, Ghost, Answer, Affine, Metabase, Umami)
 - 목표: 와이어 프로토콜 및 엔진 내 하드코딩된 서비스별 방언/카탈로그 보정 규칙을 선언적 텍스트 파일(YAML/DSL)로 추상화하여, Go 코드 수정 없이 신규 외부 서비스 호환성을 추가/관리할 수 있는 선언적 아키텍처 수립
 
-### [ ] 2.7 `INTEG-NOCODB-1` NocoDB (노코드 DB 스튜디오) — **[다음 순위]**
+### [ ] 2.9 `INTEG-NOCODB-1` NocoDB (노코드 DB 스튜디오) — **[다음 순위]**
 - 스택: Node.js + Knex / 듀얼 프로토콜 (PGWire + TDS)
 - 메타데이터 자동 감지 및 스프레드시트 뷰 CRUD 검증
 

@@ -24,6 +24,7 @@ import (
 	"lionsql/pkg/catalog"
 	"lionsql/pkg/catalog/virtual"
 	"lionsql/pkg/engine"
+	"lionsql/pkg/planner"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
 	"lionsql/pkg/sqlutil"
@@ -883,11 +884,10 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 		copy(expanded, paramTypes)
 		paramTypes = expanded
 	}
+	inferredTypes := s.inferParamTypes(queryStr, len(paramTypes))
 	for i, pt := range paramTypes {
-		if pt == 0 {
-			if inferred := inferParamOID(queryStr, i+1); inferred != 0 {
-				paramTypes[i] = inferred
-			}
+		if pt == 0 && i < len(inferredTypes) && inferredTypes[i] != 0 {
+			paramTypes[i] = inferredTypes[i]
 		}
 	}
 
@@ -1186,11 +1186,10 @@ func (s *Server) handleDescribe(conn net.Conn, payload []byte, statements *Prepa
 			_ = WriteError(conn, fmt.Sprintf("prepared statement %q does not exist", targetName))
 			return
 		}
+		inferredTypes := s.inferParamTypes(stmt.Query, len(stmt.ParamTypes))
 		for i, pt := range stmt.ParamTypes {
-			if pt == 0 {
-				if inferred := inferParamOID(stmt.Query, i+1); inferred != 0 {
-					stmt.ParamTypes[i] = inferred
-				}
+			if pt == 0 && i < len(inferredTypes) && inferredTypes[i] != 0 {
+				stmt.ParamTypes[i] = inferredTypes[i]
 			}
 		}
 		_ = WriteParameterDescription(conn, stmt.ParamTypes)
@@ -1227,6 +1226,9 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 	}
 
 	recordCols := func(cols []ColumnMeta) {
+		if s.DevMode() {
+			log.Printf("[DEV][PGWire][writeSchemaDescription] recording cols=%+v", cols)
+		}
 		if stmt != nil && len(cols) > 0 {
 			stmt.ColumnNames = make([]string, len(cols))
 			stmt.ColumnOIDs = make([]int32, len(cols))
@@ -1312,17 +1314,18 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 	}
 
 	upper := strings.ToUpper(strings.TrimSpace(query))
-	fromIdx := sqlutil.FindTopLevelKeyword(query, "FROM")
-	if fromIdx != -1 {
-		selectPart := strings.TrimSpace(query[:fromIdx])
-		if strings.HasPrefix(strings.ToUpper(selectPart), "SELECT") {
-			selectPart = strings.TrimSpace(selectPart[6:])
-		}
-		if strings.HasPrefix(strings.ToUpper(selectPart), "DISTINCT") {
-			selectPart = strings.TrimSpace(selectPart[8:])
-		}
-		qc := proc.ExtractQueryCharacteristics(query)
-		if len(qc.TargetTables) > 0 {
+	if strings.HasPrefix(upper, "SELECT") && !strings.HasPrefix(upper, "WITH") {
+		fromIdx := sqlutil.FindTopLevelKeyword(query, "FROM")
+		if fromIdx != -1 {
+			selectPart := strings.TrimSpace(query[:fromIdx])
+			if strings.HasPrefix(strings.ToUpper(selectPart), "SELECT") {
+				selectPart = strings.TrimSpace(selectPart[6:])
+			}
+			if strings.HasPrefix(strings.ToUpper(selectPart), "DISTINCT") {
+				selectPart = strings.TrimSpace(selectPart[8:])
+			}
+			qc := proc.ExtractQueryCharacteristics(query)
+			if len(qc.TargetTables) > 0 && !qc.HasSubquery {
 			tblName := cleanColumnIdentifier(qc.TargetTables[0])
 			tbl, err := s.engine.GetTable(tblName)
 			if err != nil {
@@ -1460,6 +1463,7 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			}
 		}
 	}
+}
 
 	if strings.HasPrefix(upper, "SHOW ") {
 		if res, err := s.coordinator.ExecuteSessionSQL("default", query); err == nil && len(res.Columns) > 0 {
@@ -1497,6 +1501,50 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			applyFormats(cols)
 			_ = WriteRowDescription(conn, cols)
 			return
+		}
+
+		// Fallback: extract projected column names from query (or CTE main query)
+		analysisSQL := query
+		if strings.HasPrefix(upper, "WITH") {
+			if _, main := planner.ParseCTEs(query); main != "" {
+				analysisSQL = main
+			}
+		}
+		analysisUpper := strings.ToUpper(strings.TrimSpace(analysisSQL))
+		if strings.HasPrefix(analysisUpper, "SELECT") {
+			if fIdx := sqlutil.FindTopLevelKeyword(analysisSQL, "FROM"); fIdx != -1 {
+				sPart := strings.TrimSpace(analysisSQL[:fIdx])
+				if strings.HasPrefix(strings.ToUpper(sPart), "SELECT") {
+					sPart = strings.TrimSpace(sPart[6:])
+				}
+				if strings.HasPrefix(strings.ToUpper(sPart), "DISTINCT") {
+					sPart = strings.TrimSpace(sPart[8:])
+				}
+				rawCols := sqlutil.SplitTopLevel(sPart, ',')
+				var cols []ColumnMeta
+				for _, rawCol := range rawCols {
+					rawCol = strings.TrimSpace(rawCol)
+					if rawCol == "" {
+						continue
+					}
+					var outColName string
+					if _, alias, hasAs := sqlutil.SplitAsAlias(rawCol); hasAs {
+						outColName = cleanColumnIdentifier(alias)
+					} else {
+						outColName = cleanColumnIdentifier(rawCol)
+					}
+					cols = append(cols, ColumnMeta{
+						Name:     outColName,
+						DataType: 25,
+					})
+				}
+				if len(cols) > 0 {
+					recordCols(cols)
+					applyFormats(cols)
+					_ = WriteRowDescription(conn, cols)
+					return
+				}
+			}
 		}
 	}
 
@@ -1542,6 +1590,9 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 	}
 
+	if s.DevMode() {
+		log.Printf("[DEV][PGWire][writeSchemaDescription] sending WriteNoData for query=%s", query)
+	}
 	_ = WriteNoData(conn)
 }
 
@@ -1590,6 +1641,13 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			paramMap["identity_insert_all"] = true
 			cs := s.coordinator.GetSession(sessID)
 			execRes, txAborted, execErr := cs.ExecuteProgram(context.Background(), portal.Statement.Program, s.executor, paramMap, s.engine, "PGWirePrepared")
+			if s.DevMode() {
+				var rowsAffected int64
+				if execRes != nil {
+					rowsAffected = execRes.RowsAffected
+				}
+				log.Printf("[DEV][PGWire][ExecuteVDBE] query=%s params=%+v rowsAffected=%d err=%v", portal.Statement.Query, paramMap, rowsAffected, execErr)
+			}
 			putParamMap(paramMap)
 			if txAborted {
 				_ = WriteError(conn, "current transaction is aborted, commands ignored until end of transaction block")
@@ -1604,7 +1662,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 				return
 			}
 			cmd := portal.Statement.Program.Type
-			if cmd == "" || cmd == "QUERY" || cmd == "INTERACTIVE_QUERY" {
+			if cmd == "" || cmd == "QUERY" || cmd == "INTERACTIVE_QUERY" || cmd == "DML" || cmd == "BLOCK" {
 				cmd = portal.Statement.Query
 			}
 			if len(execRes.Rows) > 0 && (strings.HasPrefix(strings.ToUpper(cmd), "SELECT") || cmd == "") {
@@ -1669,6 +1727,9 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			log.Printf("[DEV][PGWire][ExecuteError] query=%s err=%v", substitutedSQL, err)
 			_ = WriteError(conn, err.Error())
 			return
+		}
+		if s.DevMode() {
+			log.Printf("[DEV][PGWire][ExecuteFallback] query=%s rows=%d cols=%v rows=%+v", substitutedSQL, len(res.Rows), res.Columns, res.Rows)
 		}
 		portal.Result = res
 		portal.Pos = 0
@@ -1740,6 +1801,9 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			}
 			val := getRowValue(row, colName)
 			scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
+		}
+		if s.DevMode() {
+			log.Printf("[DEV][PGWire][ExecuteDataRows] cols=%v colOIDs=%v formats=%v rowBytes=%+v", res.Columns, colOIDs, portal.ResultFormats, scratchRowBytes)
 		}
 		_ = WriteDataRowBytes(bw, scratchRowBytes)
 	}
@@ -2159,6 +2223,59 @@ func decodeBinaryArray(b []byte, elemOID int32) string {
 	}
 	sb.WriteString("}")
 	return sb.String()
+}
+
+func (s *Server) inferParamTypes(query string, count int) []int32 {
+	oids := make([]int32, count)
+	if s.engine == nil {
+		return oids
+	}
+
+	// 1. Try DML INSERT parameter resolution
+	if dml, err := engine.ParseDMLCommand(query); err == nil && dml != nil {
+		cleanTbl := cleanColumnIdentifier(dml.Table)
+		tbl, _ := s.engine.GetTable(cleanTbl)
+		if tbl == nil {
+			tbl, _ = s.engine.GetTable(strings.ToLower(cleanTbl))
+		}
+		if tbl == nil {
+			allTables, _ := s.engine.ListTables()
+			for _, t := range allTables {
+				if strings.EqualFold(t.Name, cleanTbl) {
+					tbl = t
+					break
+				}
+			}
+		}
+
+		if tbl != nil && dml.Columns != "" && dml.Values != "" {
+			cols := sqlutil.SplitTopLevel(dml.Columns, ',')
+			vals := sqlutil.SplitTopLevel(strings.Trim(dml.Values, "() "), ',')
+			for i, v := range vals {
+				vTrim := strings.TrimSpace(v)
+				if strings.HasPrefix(vTrim, "$") {
+					pIdx, err := strconv.Atoi(vTrim[1:])
+					if err == nil && pIdx >= 1 && pIdx <= count && i < len(cols) {
+						colName := cleanColumnIdentifier(cols[i])
+						for _, c := range tbl.Columns {
+							if strings.EqualFold(c.Name, colName) {
+								oids[pIdx-1] = typeToPgOID(c.Type)
+								break
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 2. For remaining unresolved parameters, use inferParamOID
+	for i := 0; i < count; i++ {
+		if oids[i] == 0 {
+			oids[i] = inferParamOID(query, i+1)
+		}
+	}
+	return oids
 }
 
 func inferParamOID(query string, paramIndex int) int32 {

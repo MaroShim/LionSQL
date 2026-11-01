@@ -1385,7 +1385,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	//     becomes WITH v_engineers AS (SELECT id, name, salary FROM employees WHERE dept='Engineering')
 	//             SELECT name FROM v_engineers WHERE salary > 85000
 	if cteQuery, ok := s.rewriteViewsAsCTE(cleaned); ok {
-		return s.execCTE(cteQuery, start)
+		return s.execCTE(cteQuery, start, cs)
 	}
 
 	// 0. Set Operations: UNION [ALL], INTERSECT, EXCEPT / MINUS

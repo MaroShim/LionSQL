@@ -84,9 +84,10 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 	}
 
 	// Defensive check: verify key orientation between left and right iterators.
-	// If right relation contains leftKey but does NOT contain rightKey, swap them.
 	if !strings.Contains(h.rightKey, ",") && !strings.Contains(h.leftKey, ",") {
-		if rMap := h.right.ColIndexMap(); rMap != nil {
+		rMap := h.right.ColIndexMap()
+		lMap := h.left.ColIndexMap()
+		if rMap != nil {
 			rightCol := h.rightKey
 			if idx := strings.Index(rightCol, "."); idx != -1 {
 				rightCol = rightCol[idx+1:]
@@ -96,16 +97,28 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				leftCol = leftCol[idx+1:]
 			}
 
-			_, hasRight := rMap.Index(h.rightKey)
-			if !hasRight {
-				_, hasRight = rMap.Index(rightCol)
+			_, rHasRight := rMap.Index(h.rightKey)
+			if !rHasRight {
+				_, rHasRight = rMap.Index(rightCol)
 			}
-			_, hasLeft := rMap.Index(h.leftKey)
-			if !hasLeft {
-				_, hasLeft = rMap.Index(leftCol)
+			_, rHasLeft := rMap.Index(h.leftKey)
+			if !rHasLeft {
+				_, rHasLeft = rMap.Index(leftCol)
 			}
 
-			if hasLeft && !hasRight {
+			var lHasLeft, lHasRight bool
+			if lMap != nil {
+				_, lHasLeft = lMap.Index(h.leftKey)
+				if !lHasLeft {
+					_, lHasLeft = lMap.Index(leftCol)
+				}
+				_, lHasRight = lMap.Index(h.rightKey)
+				if !lHasRight {
+					_, lHasRight = lMap.Index(rightCol)
+				}
+			}
+
+			if (rHasLeft && !rHasRight) || (lMap != nil && rHasLeft && lHasRight && !lHasLeft) {
 				h.leftKey, h.rightKey = h.rightKey, h.leftKey
 			}
 		}

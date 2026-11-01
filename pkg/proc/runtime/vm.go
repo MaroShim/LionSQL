@@ -686,18 +686,35 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 	var bindings []varBinding
 
 	for k, v := range f.vars {
-		clean := cleanSymbol(k)
-		varName := "@" + clean
-		lower := strings.ToLower(varName)
-		if seen[lower] {
-			continue
-		}
-		seen[lower] = true
 		valStr := v.String()
 		if v.Type == storage.TypeVarChar {
 			valStr = "'" + strings.ReplaceAll(v.SVal, "'", "''") + "'"
 		}
-		bindings = append(bindings, varBinding{name: varName, val: valStr})
+
+		clean := cleanSymbol(k)
+		if clean != "" {
+			varName := "@" + clean
+			lower := strings.ToLower(varName)
+			if !seen[lower] {
+				seen[lower] = true
+				bindings = append(bindings, varBinding{name: varName, val: valStr})
+			}
+
+			dollarName := "$" + clean
+			lowerDollar := strings.ToLower(dollarName)
+			if !seen[lowerDollar] {
+				seen[lowerDollar] = true
+				bindings = append(bindings, varBinding{name: dollarName, val: valStr})
+			}
+		}
+
+		if strings.HasPrefix(k, "$") {
+			lowerK := strings.ToLower(k)
+			if !seen[lowerK] {
+				seen[lowerK] = true
+				bindings = append(bindings, varBinding{name: k, val: valStr})
+			}
+		}
 	}
 
 	sort.Slice(bindings, func(i, j int) bool {

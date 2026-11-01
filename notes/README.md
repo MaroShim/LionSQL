@@ -36,6 +36,8 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
      - **[`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md)** (Korean): Apache Answer PGWire integration detail plan (first in order).
      - **[`VAULTWARDEN_INTEGRATION_PLAN.ko.md`](VAULTWARDEN_INTEGRATION_PLAN.ko.md)** (Korean): Vaultwarden (Rust + Diesel ORM) PGWire integration detail plan (second in order).
      - **[`METABASE_INTEGRATION_PLAN.ko.md`](METABASE_INTEGRATION_PLAN.ko.md)** (Korean): Metabase (JVM/JDBC dual-protocol) BI dashboard integration detail plan (third in order).
+     - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)** (Korean): Woodpecker CI and Vikunja integration detail plan (Go + XORM stack, completed).
+     - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)** (Korean): Woodpecker CI and Vikunja integration verification report (recursive CTE, composite OR index branch, DML command tag normalization).
      - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)** (Korean): Structural query routing refactoring architecture and verification report using symbol table and AST (eliminated 45 heuristics, 527ns verified, completed).
    - **Post-1.0 Architecture & Roadmap Plans**:
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC performance optimization history, WiredTiger beat roadmap, 104k tpmC architecture, and post-1.0 memory compaction (OCC-HYPER-2).

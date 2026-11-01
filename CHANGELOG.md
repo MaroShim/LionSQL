@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- complete Woodpecker CI integration over PGWire (:5433, Go, XORM, 19 tables, 32 migrations, UI and healthcheck) (INTEG-WOODPECKER-1)
+- complete Vikunja project Kanban and task management integration over PGWire (:5433, Go, XORM, 80+ migrations, recursive CTEs, user registration, JWT auth, and task CRUD) (INTEG-VIKUNJA-1)
+- support PostgreSQL recursive common table expressions (WITH RECURSIVE) with iterative convergence evaluation loop up to depth 100
 - complete Umami web analytics platform integration over PGWire (:5433, Next.js 16.4.2, Prisma ORM, 26 migrations, event tracking, and stats aggregation) (INTEG-UMAMI-1)
 - complete Metabase BI dual-protocol integration across PGWire (:5433, org.postgresql.Driver) and MSSQL TDS (:1433, com.microsoft.sqlserver.jdbc.SQLServerDriver) with 100% schema sync, MBQL visual query builder, multi-table derived joins, and native SQL support (INTEG-METABASE-1)
 - support Microsoft JDBC Driver metadata temp table multi-statement batches (DECLARE @temp TABLE / INSERT INTO @temp EXEC sp_columns_170 / SELECT ... FROM @temp) and implement sp_pkeys, sp_fkeys stored procedures
@@ -26,6 +29,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- normalize PGWire VDBE command completion tags from generic "DML" to "UPDATE/INSERT/DELETE <n>" so XORM and pgx accurately track RowsAffected
+- guard index seek candidate selection against conditions containing " OR " to prevent multi-predicate disjunctions from being misparsed as single-column equality bounds
+- assign globally unique sequence identifiers to CTE materialized tables and bind explicit primary keys to prevent temporary table key collision during concurrent CTE executions
+- isolate CTE prefix from outer queries in Describe row descriptions to prevent intermediate derived table column names from corrupting main query metadata
+- bind dollar parameters ($1, $2, ...) in VM variable binding loop for complex WHERE expressions
 - support PostgreSQL ::type casting and EXISTS expressions in scalar SELECT statements to prevent Prisma can-connect-to-database recursion
 - infer array parameter types for = ANY($1) clauses (OID 1009 _text, OID 1028 _oid) and decode binary array payloads in PGWire
 - allow USING clause in parseDeleteBody and export planner.ParseCTEs for complex CTE-based DELETE statements

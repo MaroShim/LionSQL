@@ -89,6 +89,7 @@ type WindowDef struct {
 // CTEInfo contains metadata for a Common Table Expression.
 type CTEInfo struct {
 	Name     string
+	Columns  []string
 	InnerSQL string
 }
 
@@ -576,11 +577,14 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 func ParseCTEs(query string) ([]CTEInfo, string) {
 	trimmed := strings.TrimSpace(query)
 	upper := strings.ToUpper(trimmed)
-	if !strings.HasPrefix(upper, "WITH ") {
+	if !strings.HasPrefix(upper, "WITH") || len(trimmed) < 5 || (trimmed[4] != ' ' && trimmed[4] != '\t' && trimmed[4] != '\n' && trimmed[4] != '\r') {
 		return nil, trimmed
 	}
 
-	cur := trimmed[5:]
+	cur := strings.TrimSpace(trimmed[4:])
+	if strings.HasPrefix(strings.ToUpper(cur), "RECURSIVE") && len(cur) > 9 && (cur[9] == ' ' || cur[9] == '\t' || cur[9] == '\n' || cur[9] == '\r') {
+		cur = strings.TrimSpace(cur[9:])
+	}
 	var ctes []CTEInfo
 
 	for {
@@ -589,7 +593,19 @@ func ParseCTEs(query string) ([]CTEInfo, string) {
 		if asIdx == -1 {
 			break
 		}
-		cteName := strings.Trim(strings.TrimSpace(cur[:asIdx]), "\"`[]")
+		cteHeader := strings.TrimSpace(cur[:asIdx])
+		cteName := cteHeader
+		var cteCols []string
+		if pIdx := strings.Index(cteHeader, "("); pIdx != -1 {
+			cteName = strings.TrimSpace(cteHeader[:pIdx])
+			if closeIdx := strings.LastIndex(cteHeader, ")"); closeIdx != -1 && closeIdx > pIdx {
+				colsStr := cteHeader[pIdx+1 : closeIdx]
+				for _, c := range strings.Split(colsStr, ",") {
+					cteCols = append(cteCols, strings.Trim(strings.TrimSpace(c), "\"`[]"))
+				}
+			}
+		}
+		cteName = strings.Trim(cteName, "\"`[]")
 		afterAs := strings.TrimSpace(cur[asIdx+3:])
 		if !strings.HasPrefix(afterAs, "(") {
 			break
@@ -616,6 +632,7 @@ func ParseCTEs(query string) ([]CTEInfo, string) {
 		innerSQL := strings.TrimSpace(afterAs[1:closeIdx])
 		ctes = append(ctes, CTEInfo{
 			Name:     cteName,
+			Columns:  cteCols,
 			InnerSQL: innerSQL,
 		})
 
@@ -893,6 +910,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			if chosenIndex != nil {
 				matchedCond := false
 				for _, cond := range pushdownRes.PrimaryConds {
+					if strings.Contains(strings.ToUpper(cond), " OR ") {
+						continue
+					}
 					m := eqRe.FindStringSubmatch(cond)
 					if len(m) == 4 {
 						colName := strings.TrimSpace(m[1])
@@ -925,6 +945,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			eqColVals := make(map[string]string)
 			onlyEqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
 		for _, cond := range pushdownRes.PrimaryConds {
+			if strings.Contains(strings.ToUpper(cond), " OR ") {
+				continue
+			}
 			if m := onlyEqRe.FindStringSubmatch(cond); len(m) == 3 {
 				rawCol := m[1]
 				if dot := strings.Index(rawCol, "."); dot != -1 {
@@ -970,6 +993,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 		// --- Single-column index match (fallback) ---
 		for _, cond := range pushdownRes.PrimaryConds {
+			if strings.Contains(strings.ToUpper(cond), " OR ") {
+				continue
+			}
 			if m := eqRe.FindStringSubmatch(cond); len(m) == 4 {
 				rawCol := m[1]
 				if idxDot := strings.Index(rawCol, "."); idxDot != -1 {
@@ -1252,6 +1278,10 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		if joinList[i].Type != "INNER" {
 			// Non-inner join (e.g., LEFT OUTER JOIN): maintain sequence to preserve NULL-extension semantics
 			join := joinList[i]
+			rSchema := resolveRightSchema(join, rightSchemas)
+			if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema); ok && oriented != nil {
+				join = oriented
+			}
 			currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
 			availableTables[strings.ToLower(cleanIdent(join.Table))] = true
 			if join.Alias != "" {
@@ -1271,6 +1301,10 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		forceOrder := hasQueryHint(q.QueryHints, "FORCE ORDER")
 		if forceOrder || len(innerBlock) <= 1 {
 			for _, join := range innerBlock {
+				rSchema := resolveRightSchema(join, rightSchemas)
+				if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema); ok && oriented != nil {
+					join = oriented
+				}
 				currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
 				availableTables[strings.ToLower(cleanIdent(join.Table))] = true
 				if join.Alias != "" {
@@ -1290,6 +1324,10 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			} else {
 				// Fallback to original order
 				for _, join := range innerBlock {
+					rSchema := resolveRightSchema(join, rightSchemas)
+					if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema); ok && oriented != nil {
+						join = oriented
+					}
 					currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
 					availableTables[strings.ToLower(cleanIdent(join.Table))] = true
 					if join.Alias != "" {
@@ -1850,6 +1888,35 @@ func extractColumnName(key string) string {
 	return cleanIdent(key)
 }
 
+func resolveRightSchema(j *JoinInfo, rightSchemas map[string]*storage.TableSchema) *storage.TableSchema {
+	if rightSchemas == nil || j == nil {
+		return nil
+	}
+	rTable := cleanIdent(j.Table)
+	rAlias := cleanIdent(j.Alias)
+	if s, ok := rightSchemas[j.Table]; ok && s != nil {
+		return s
+	}
+	if s, ok := rightSchemas[rTable]; ok && s != nil {
+		return s
+	}
+	if s, ok := rightSchemas[strings.ToLower(rTable)]; ok && s != nil {
+		return s
+	}
+	if j.Alias != "" {
+		if s, ok := rightSchemas[j.Alias]; ok && s != nil {
+			return s
+		}
+		if s, ok := rightSchemas[rAlias]; ok && s != nil {
+			return s
+		}
+		if s, ok := rightSchemas[strings.ToLower(rAlias)]; ok && s != nil {
+			return s
+		}
+	}
+	return nil
+}
+
 func checkAndOrientJoinKeys(j *JoinInfo, availableTables map[string]bool, rSchema *storage.TableSchema) (*JoinInfo, bool) {
 	candTbl := strings.ToLower(cleanIdent(j.Table))
 	candAlias := strings.ToLower(cleanIdent(j.Alias))
@@ -1939,20 +2006,7 @@ func optimizeJoinOrderDP(
 		if j.Alias != "" {
 			a = strings.ToLower(cleanIdent(j.Alias))
 		}
-		var s *storage.TableSchema
-		if rightSchemas != nil {
-			if sc, ok := rightSchemas[j.Table]; ok && sc != nil {
-				s = sc
-			} else if sc, ok := rightSchemas[cleanIdent(j.Table)]; ok && sc != nil {
-				s = sc
-			} else if sc, ok := rightSchemas[j.Alias]; ok && sc != nil {
-				s = sc
-			} else if a != "" {
-				if sc, ok := rightSchemas[a]; ok && sc != nil {
-					s = sc
-				}
-			}
-		}
+		var s *storage.TableSchema = resolveRightSchema(j, rightSchemas)
 		cands[k] = candInfo{orig: j, table: t, alias: a, schema: s}
 	}
 
@@ -2082,18 +2136,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		rAlias = rTable
 	}
 
-	var rSchema *storage.TableSchema
-	if rightSchemas != nil {
-		if s, ok := rightSchemas[join.Table]; ok && s != nil {
-			rSchema = s
-		} else if s, ok := rightSchemas[rTable]; ok && s != nil {
-			rSchema = s
-		} else if s, ok := rightSchemas[join.Alias]; ok && s != nil {
-			rSchema = s
-		} else if s, ok := rightSchemas[rAlias]; ok && s != nil {
-			rSchema = s
-		}
-	}
+	rSchema := resolveRightSchema(join, rightSchemas)
 
 	var rStat *TableStats
 	if rightStats != nil {
@@ -2131,13 +2174,16 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		if idx, found := rSchema.FindIndexByColumn(rightCol); found {
 			innerIndex = idx
 		} else {
-			leftCol := leftKey
-			if idx := strings.Index(leftCol, "."); idx != -1 {
-				leftCol = leftCol[idx+1:]
-			}
-			if idx, found := rSchema.FindIndexByColumn(leftCol); found {
-				innerIndex = idx
-				leftKey, rightKey = rightKey, leftKey
+			tblL := extractTableQualifier(leftKey)
+			if tblL == "" || tblL == strings.ToLower(rTable) || tblL == strings.ToLower(rAlias) {
+				leftCol := leftKey
+				if idx := strings.Index(leftCol, "."); idx != -1 {
+					leftCol = leftCol[idx+1:]
+				}
+				if idx, found := rSchema.FindIndexByColumn(leftCol); found {
+					innerIndex = idx
+					leftKey, rightKey = rightKey, leftKey
+				}
 			}
 		}
 	}
@@ -2336,10 +2382,20 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 			Children:      []*PlanNode{rScanNode},
 		}
 
+		hjLeftKey := leftKey
+		hjRightKey := rightKey
+		tblL := extractTableQualifier(hjLeftKey)
+		tblR := extractTableQualifier(hjRightKey)
+		candTbl := strings.ToLower(rTable)
+		candAlias := strings.ToLower(rAlias)
+		if tblL == candTbl || tblL == candAlias || (tblR != "" && (tblR != candTbl && tblR != candAlias)) {
+			hjLeftKey, hjRightKey = hjRightKey, hjLeftKey
+		}
+
 		nextNode = &PlanNode{
 			Type:          NodeHashJoin,
 			JoinType:      cleanType,
-			HashCond:      fmt.Sprintf("(%s = %s)", leftKey, rightKey),
+			HashCond:      fmt.Sprintf("(%s = %s)", hjLeftKey, hjRightKey),
 			StartupCost:   hashBuildCost,
 			TotalCost:     hashJoinTotalCost,
 			EstimatedRows: joinEstRows,

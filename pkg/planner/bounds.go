@@ -142,6 +142,9 @@ func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRan
 
 	for _, part := range parts {
 		part = stripEnclosingParens(strings.TrimSpace(part))
+		if strings.Contains(strings.ToUpper(part), " OR ") {
+			continue
+		}
 		if m := eqBoundRe.FindStringSubmatch(part); len(m) == 3 {
 			col := CleanIdentifier(m[1])
 			eqs[col] = cleanVal(m[2])

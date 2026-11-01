@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"lionsql/pkg/planner"
 	"lionsql/pkg/storage"
 )
 
@@ -80,8 +81,21 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		}
 		tempName := fmt.Sprintf("#__dt_%d_%s", counterVal, alias)
 
+		// If the enclosing query defines CTEs (WITH ...), pass the CTE definitions to the inner query
+		// so inner subqueries can reference CTE tables (e.g. Vikunja permission queries).
+		queryToExec := innerSQL
+		trimmedCurrent := strings.TrimSpace(currentSQL)
+		if strings.HasPrefix(strings.ToUpper(trimmedCurrent), "WITH") && len(trimmedCurrent) > 4 && (trimmedCurrent[4] == ' ' || trimmedCurrent[4] == '\t' || trimmedCurrent[4] == '\n' || trimmedCurrent[4] == '\r') {
+			if ctes, mainQ := planner.ParseCTEs(trimmedCurrent); len(ctes) > 0 {
+				ctePrefix := strings.TrimSpace(trimmedCurrent[:len(trimmedCurrent)-len(mainQ)])
+				if ctePrefix != "" && openParenIdx >= len(ctePrefix) {
+					queryToExec = ctePrefix + " " + innerSQL
+				}
+			}
+		}
+
 		// Execute inner SELECT query
-		innerRes, err := s.execSelect(innerSQL, start, cs)
+		innerRes, err := s.execSelect(queryToExec, start, cs)
 		if err != nil {
 			return "", createdTables, fmt.Errorf("derived table subquery error: %w", err)
 		}
@@ -131,14 +145,23 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		createdTables = append(createdTables, tempName)
 
 		if len(innerRes.Rows) > 0 {
-			session, err := s.engine.NewSession()
-			if err != nil {
-				return "", createdTables, err
-			}
-			tx, err := session.BeginTx(storage.TxOptions{})
-			if err != nil {
-				session.Close()
-				return "", createdTables, err
+			var tx storage.Transaction
+			var session storage.Session
+			var shouldCommit bool
+			if cs != nil && cs.Tx != nil {
+				tx = cs.Tx
+			} else {
+				var err error
+				session, err = s.engine.NewSession()
+				if err != nil {
+					return "", createdTables, err
+				}
+				tx, err = session.BeginTx(storage.TxOptions{})
+				if err != nil {
+					session.Close()
+					return "", createdTables, err
+				}
+				shouldCommit = true
 			}
 			for rowIdx, row := range innerRes.Rows {
 				rec := make(storage.Record, len(schema.Columns))
@@ -158,16 +181,20 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 					rec[colSchema.Name] = ConvertValue(v, colSchema.Type)
 				}
 				if err := tx.Insert(tempName, rec); err != nil {
-					_ = tx.Rollback()
-					session.Close()
+					if shouldCommit {
+						_ = tx.Rollback()
+						session.Close()
+					}
 					return "", createdTables, fmt.Errorf("failed to populate derived table %q: %w", tempName, err)
 				}
 			}
-			if err := tx.Commit(); err != nil {
+			if shouldCommit {
+				if err := tx.Commit(); err != nil {
+					session.Close()
+					return "", createdTables, fmt.Errorf("failed to commit derived table %q: %w", tempName, err)
+				}
 				session.Close()
-				return "", createdTables, fmt.Errorf("failed to commit derived table %q: %w", tempName, err)
 			}
-			session.Close()
 		}
 
 		prefixPart := currentSQL[:openParenIdx]
