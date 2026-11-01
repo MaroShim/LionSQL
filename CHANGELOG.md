@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- default to pure AST planner (`proc.ParseSQL` -> `FromAST`) and isolate legacy regex planner fallback behind `--enable-legacy-regex-planner` option (default `false`) (`PLANNER-AST-1`)
+- support `OVER (...)` window clauses on `FunctionCallExpr` and `WithinGroupExpr`, as well as `WITH RECURSIVE` CTE column lists and `UNION ALL` bodies natively in the Pratt AST parser (`PLANNER-AST-1`)
+- implement dynamic root table selection (`optimizeRootTable`) and zero-cardinality fast-fail pruning (`NodeEmpty` / `EmptyIterator`) for large multi-table joins (`OPT-LARGE-JOIN-1`)
 - achieve 100% pass across official SQLite SQLLogicTest suites (`select1.test` through `select5.test`, 10,706 queries in 22.69s) verifying complex multi-table joins, aggregations, and subqueries with zero hash mismatches (DURA-SLT-2)
 - add BFS spanning tree join inference in predicate pushdown to eliminate Cartesian cross-join explosions in implicit comma joins (DURA-SLT-2)
 - add greedy join ordering filter prioritization in CBO planner to collapse intermediate join cardinalities early on large join trees up to 64 tables (DURA-SLT-2)
@@ -77,16 +80,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - fix TDS inferColumnInfos colSize for 'type' columns to prevent go-mssqldb slice bounds panic
 
 ### Refactored
+- eliminate 22 condition, selectivity, partition pruning, and subquery regular expressions across `pkg/planner` (`bounds.go`, `pruning.go`, `stats.go`, `decorrelate.go`, `explain.go`, `planner.go`) in favor of Pratt AST (`proc.Expr`) and lexical token scanners (`PLANNER-AST-2`)
+- eliminate 40 administrative and utility command regular expressions across `pkg/engine` (`sqlexec.go`, `sqlexec_auth.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_string_split.go`, `sqlexec_procs.go`) in favor of lexical token stream parsers (`ENGINE-AST-3`)
+- unify keyword scanning into `pkg/sqlutil` SSOT tokenizer primitives (`ContainsKeyword`, `HasPrefixKeyword`, `FindTopLevelKeyword`), eliminating naive `strings.Contains` keyword matching anti-patterns across planner, engine, wire, and virtual catalog (`COMPAT-TABLE-DRIVEN-1`)
 - replace 45 fragile raw string substring and regexp heuristics across query routing, virtual catalog interception, and PGWire OID resolution with structural AST characteristics (proc.ExtractQueryCharacteristics) and catalog symbol table resolution (virtual.IsVirtualTable) (ROUTING-AST-CATALOG-1)
 - encapsulate ClientSession internal mutex and transaction state with high-level methods (ExecuteProgram, IsTxFailed, MarkTxFailed, InTransaction, GetActiveTx, TxStatus) and eliminate raw cs.Mu.Lock across PGWire and TDS listeners (R-6-P1)
 - normalize server coordinator lifecycle by instantiating engine.Coordinator as core instance and directly injecting it into PGWire, TDS, and HTTP listeners (R-6-P3)
 
 ### Performance
+- defer Sort-Merge Join cost evaluation (`O(N log N)`) in CBO `buildSingleJoinNode` to lazy evaluation, bypassing string slicing and `math.Log2` computations unless a `MERGE JOIN` hint or pre-sorted input is present (`PLANNER-SLIM-1`)
+- optimize Selinger dynamic programming join threshold from 12 to 6 (`MaxJoinDPThreshold = 6`), bounding exponential state space to 64 subsets (<2µs) and switching 7+ table joins immediately to greedy join ordering (`OPT-LARGE-JOIN-1`)
 - bind PGWire prepared statements directly to VDBE bytecode VM in active transactions via ExecuteInTxWithSessionContext, eliminating substituteParams string reconstruction and SQL re-parsing overhead (PERF-PGWIRE-PREP-TX)
 - implement zero-overhead transaction fast-path binding for BEGIN, COMMIT, and ROLLBACK in PGWire and TDS listeners (PERF-PGWIRE-1)
 - reuse 5-byte message header buffer across connection message loop in PGWire server
 
 ### Documentation
+- author planner slimming and pure AST transition design plan (`notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`) and large join optimization plan (`notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`)
+- author Woodpecker CI and Vikunja integration reports (`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`) and bilingual guides (`doc/WOODPECKER_INTEGRATION_GUIDE*.md`, `doc/VIKUNJA_INTEGRATION_GUIDE*.md`)
+- author Metabase BI and Umami integration reports (`notes/METABASE_INTEGRATION_REPORT.ko.md`, `notes/UMAMI_INTEGRATION_REPORT.ko.md`) and bilingual guides (`doc/METABASE_INTEGRATION_GUIDE*.md`, `doc/UMAMI_INTEGRATION_GUIDE*.md`)
 - author Vaultwarden integration report (notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md) and bilingual deployment guides (doc/VAULTWARDEN_INTEGRATION_GUIDE.ko.md, doc/VAULTWARDEN_INTEGRATION_GUIDE.md)
 - author Apache Answer integration report (notes/ANSWER_INTEGRATION_REPORT.ko.md) and bilingual deployment guides (doc/ANSWER_INTEGRATION_GUIDE.ko.md, doc/ANSWER_INTEGRATION_GUIDE.md)
 - author bilingual Casdoor IAM/SSO integration guides (doc/CASDOOR_INTEGRATION_GUIDE.ko.md, doc/CASDOOR_INTEGRATION_GUIDE.md) and milestone reports (notes/CASDOOR_INTEGRATION_MILESTONE.ko.md, notes/CASDOOR_INTEGRATION_MILESTONE.md)
