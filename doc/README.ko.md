@@ -182,6 +182,9 @@
   * Star Schema Benchmark(SSB) 복합 분석 쿼리 및 Volcano CBO 엔진 성능 가이드, CLI 사용법(`bin/ssb`), 타 대표 DBMS(DuckDB, PostgreSQL, SQLite) 실측 성능 비교 및 아키텍처 분석.
 * [`TESTING.md`](TESTING.md)
   * 로컬 빌드, 테스트 및 회귀 검증 가이드: 3단계 파이프라인, `-run` 필터링, 빌드 태그, 패키지별 회귀 테스트 맵, Go 마이크로 벤치마크, TPC-C 성능 회귀 측정, A/B 비교 절차.
+* [`SQLLOGICTEST_GUIDE.ko.md`](SQLLOGICTEST_GUIDE.ko.md) ([English](SQLLOGICTEST_GUIDE.md))
+  * SQLLogicTest (SLT) 1.0 GA 풀세트(40,000+ 쿼리) 공식 사용자 검증 가이드.
+  * 원클릭 다운로드(`scripts/fetch_slt.sh`), 병렬 러너(`bin/sqllogictest`), 인메모리 OCC vs WiredTiger 디스크 MVCC, In-Process vs PGWire TCP 모드 15~20초 고속 검증 절차.
 * [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 LionSQL로의 데이터베이스 이전 절차.
 * [`RELEASE_AUTOMATION_GUIDE.ko.md`](RELEASE_AUTOMATION_GUIDE.ko.md)

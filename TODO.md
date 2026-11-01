@@ -83,6 +83,11 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   - `select5.test`: 1,436 쿼리 (5.67s, 최대 64개 테이블 콤마 조인)
   - 총 10,706개 쿼리 전수 100% 무오류 인증 통과 (소요 시간 22.69s, 0 data races).
   - BFS 기반 Spanning Tree 조인 키 추론(`pushdown.go`) 및 Greedy Join Ordering 필터 우선순위화(`planner.go`)로 최대 64개 테이블 조인 카테시안 폭발 완치.
+- [x] **Phase 2.5 (1.0 GA 풀세트 40,000+ 쿼리 스크립트 및 공식 가이드 완비)**:
+  - 설계 계획서: [`notes/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SET_AND_USER_GUIDE_PLAN.ko.md)
+  - 원클릭 다운로드 스크립트: [`scripts/fetch_slt.sh`](scripts/fetch_slt.sh) (`--suite all|full|evidence|index|random`, 온디맨드 로컬 캐싱 지원)
+  - 공식 사용자 검증 가이드: [`doc/SQLLOGICTEST_GUIDE.ko.md`](doc/SQLLOGICTEST_GUIDE.ko.md) / [`doc/SQLLOGICTEST_GUIDE.md`](doc/SQLLOGICTEST_GUIDE.md)
+  - 고성능 병렬 러너: `bin/sqllogictest` 8코어 병렬 15~20초 완주 파이프라인
 - [ ] **Phase 3 (SQLite 공식 `index` / `random` / `evidence` 스위트 확장)**: 인덱스 복합 스캔, 난수 대수식, 통계적 카디널리티 스트레스 테스트 연동
 - [ ] **Phase 6 (1.0 릴리즈 게이트 통합)**: 1.0 릴리즈 직전 풀 스위트 듀얼 엔진 100% 무오류 인증
 

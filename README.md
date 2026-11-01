@@ -543,11 +543,14 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
      ./scripts/verify_report.sh --engine=wiredtiger
      ```
 
-   - **SQLLogicTest (SLT) Oracle Verification**:
-     Runs full regression across official SQLite test suites (`select1.test` ~ `select5.test`, 10,706 queries) and 33 curated domain suites (see [`notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)):
+   - **SQLLogicTest (SLT) 1.0 GA Full Suite (40,000+ Queries) Oracle Verification**:
+     Runs full regression across official SQLite test suites (`select1~5.test`), specification clauses (`evidence/*`), B-Tree index paths (`index/*`), synthetic fuzzing expressions (`random/*`), and curated edge suites (see [`doc/SQLLOGICTEST_GUIDE.md`](doc/SQLLOGICTEST_GUIDE.md)):
      ```bash
-     # Run official select1~select5 suites (10,706 queries, ~22s)
-     go test -tags wiredtiger -v -run "TestSQLLogicTest_Select[1-5]" ./test/slt/
+     # 1. Fetch 1.0 GA full suite (on-demand caching)
+     ./scripts/fetch_slt.sh
+
+     # 2. 8-core concurrent verification (~15-20s completion)
+     ./bin/sqllogictest -dir test/slt -parallel 8
      ```
 3. **Commit Integrity**:
    - Conventional Commits format (`feat`, `fix`, `docs`, `refactor`, `test`).

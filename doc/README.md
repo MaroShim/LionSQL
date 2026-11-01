@@ -180,6 +180,9 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Star Schema Benchmark (SSB) complex analytical query and Volcano CBO engine benchmark guide, CLI usage (`bin/ssb`), cross-DBMS performance comparison (DuckDB, PostgreSQL, SQLite), and architectural analysis.
 * [`TESTING.md`](TESTING.md)
   * Local build, test, and regression guide: 3-stage pipeline, `-run` filtering, build tags, regression test map, Go benchmarks, TPC-C performance regression, and A/B comparison procedure.
+* [`SQLLOGICTEST_GUIDE.md`](SQLLOGICTEST_GUIDE.md) ([Korean](SQLLOGICTEST_GUIDE.ko.md))
+  * SQLLogicTest (SLT) 1.0 GA Full Suite (40,000+ queries) official user verification guide.
+  * One-click dataset fetcher (`scripts/fetch_slt.sh`), parallel runner (`bin/sqllogictest`), In-Memory OCC vs WiredTiger Disk MVCC, In-Process vs PGWire TCP mode ~15-20s ultra-fast verification.
 * [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
 * [`RELEASE_AUTOMATION_GUIDE.ko.md`](RELEASE_AUTOMATION_GUIDE.ko.md)

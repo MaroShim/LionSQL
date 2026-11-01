@@ -544,11 +544,14 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
      ./scripts/verify_report.sh --engine=wiredtiger
      ```
 
-   - **SQLLogicTest (SLT) 대규모 블랙박스 정합성 오라클 검증**:
-     SQLite 공식 대규모 스위트(`select1.test` ~ `select5.test`, 총 10,706개 쿼리) 및 33개 LionSQL 도메인 스위트 전수 회귀 테스트를 상시 검증합니다 ([`notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md) 참조):
+   - **SQLLogicTest (SLT) 1.0 GA 풀세트 (40,000+ 쿼리) 블랙박스 정합성 오라클 검증**:
+     SQLite 공식 대규모 스위트(`select1~5.test`), 표준 명세(`evidence/*`), B-Tree 인덱스 경로(`index/*`), 난수 대수식/집계(`random/*`) 및 LionSQL 정선 엣지 케이스를 원클릭으로 일괄 검증합니다 (상세 가이드: [`doc/SQLLOGICTEST_GUIDE.ko.md`](doc/SQLLOGICTEST_GUIDE.ko.md)):
      ```bash
-     # SQLLogicTest 공식 select1~select5 (10,706 쿼리, ~22초) 전수 검증
-     go test -tags wiredtiger -v -run "TestSQLLogicTest_Select[1-5]" ./test/slt/
+     # 1. 1.0 GA 공식 풀세트 다운로드 (온디맨드 캐싱)
+     ./scripts/fetch_slt.sh
+
+     # 2. 8코어 병렬 초고속 검증 (약 15~20초 완주)
+     ./bin/sqllogictest -dir test/slt -parallel 8
      ```
 3. **커밋 무결성 규약 (Commit)**:
    - Conventional Commits 형식 준수 (`feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`).
