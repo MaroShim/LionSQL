@@ -50,15 +50,20 @@
 
 ## 2. 세부 수정 설계 (`SLT-FIX-1` ~ `SLT-FIX-4`)
 
-### 2.1 `SLT-FIX-1`: SLT 파서 `onlyif` / `skipif` 조건부 지시자 정식 지원 (`pkg/slt/parser.go`)
-1. **지시자 누적 평가**:
-   - SLT 명세상 하나의 레코드(`statement`, `query`, `halt`) 직전에 여러 줄의 `onlyif <db>` 또는 `skipif <db>`가 연속으로 배치될 수 있습니다.
-   - LionSQL SLT 러너의 기준 타겟 방언은 SQLite 참조 오라클과 호환되는 `"sqlite"` (및 `"postgresql"`, `"lionsql"`)로 정의합니다.
-   - `onlyif <target>`이 등장했을 때 `<target>`이 활성 방언(`sqlite`, `postgresql`, `lionsql`)이 아니면 `skipNext = true`로 설정합니다.
-   - `skipif <target>`이 등장했을 때 `<target>`이 활성 방언(`sqlite`, `postgresql`, `lionsql`)이면 `skipNext = true`로 설정합니다.
-2. **레코드 적용 및 초기화**:
-   - `halt` 도달 시: `skipNext == true`이면 `halt`를 무시하고 `skipNext = false`로 초기화한 뒤 다음 줄 파싱을 계속합니다. `skipNext == false`일 때만 즉시 종료합니다.
-   - `statement` / `query` 도달 시: 블록 본문과 결과 섹션을 정상적으로 끝까지 스캔하여 파일 오프셋을 맞춘 뒤, `skipNext == true`이면 `records` 슬라이스에 추가하지 않고 건너뛰며 `skipNext = false`로 초기화합니다.
+### 2.1 `SLT-FIX-1` & SLT 러너 5대 기술부채 전면 해소 (`pkg/slt/`, `cmd/sqllogictest`)
+1. **지시자 누적 평가 및 다중 `onlyif`/`skipif` OR 시맨틱스 지원**:
+   - `skipNext` 단일 불리언 상태 머신의 한계를 제거하고, `currentOnlyIfs []string`, `currentSkipIfs []string` 지시자 누적 버퍼를 도입합니다.
+   - SQLLogicTest 공식 명세에 따라 하나의 레코드 직전에 여러 개의 `onlyif`가 선언되면 그 중 하나라도 매칭될 때 실행(OR 로직)하며, `skipif`와 매칭되면 스킵 처리합니다.
+   - 평가 후 레코드(`halt`, `statement`, `query`) 소비 시점에 지시자 버퍼를 명시적으로 클리어합니다.
+2. **타겟 방언 설정 추상화 (`ParseOptions`)**:
+   - `pkg/slt/parser.go`에 하드코딩되어 있던 타겟 방언 판별을 `ParseOptions{TargetDialects: ...}` 구조체로 분리하고 `ParseWithOptions`, `ParseFileWithOptions`를 제공합니다.
+   - `cmd/sqllogictest`에 `-target` CLI 플래그(기본값: `"sqlite,lionsql"`)를 신설하여 런타임에 유연하게 설정 가능하도록 지원합니다.
+3. **부동소수점 포맷 표준화 (`FormatCell`)**:
+   - SQLite SQLLogicTest 공식 사양(`sqllogictest.c`)에 따라 실비교 대상 컬럼(`colType == 'R'`) 및 일반 부동소수점(`float64`/`float32`)을 `fmt.Sprintf("%.3f", v)`로 포맷팅하여 부동소수점 반올림 정합성을 일치시킵니다.
+4. **`statement error` 에러 패턴 매칭 엔진**:
+   - `statement error [expected_pattern]` 구문에서 지정된 예상 에러 패턴을 `Record.ExpectedError`에 파싱하고, `slt.RunRecord` 실행 시 실제 에러 메시지와 대소문자 무관 부분 문자열 매칭을 수행합니다.
+5. **다중 컬럼 결과 파서 정밀 토크나이저 (`splitRowFields`)**:
+   - 기존의 휴리스틱 슬라이싱 대신 탭(`\t`), 따옴표(`"..."`, `'...'`), 이스케이프 문자(`\'`, `\"`)를 안전하게 처리하는 문자 단위 토크나이저를 구현하여 공백 포함 문자열 셀 분할 결함을 완치합니다.
 
 ### 2.2 `SLT-FIX-2`: 플래너 중첩 `AND` 평탄화 및 복합 범위 바운드 교집합 (`pkg/planner/bounds.go`, `pkg/planner/planner.go`)
 1. **AST 기반 중첩 `AND` 재귀 평탄화 (`bounds.go`)**:

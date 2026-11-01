@@ -183,19 +183,31 @@ func FormatCell(val any, colType byte) string {
 			return "NULL"
 		}
 		// SLT rounds floats or displays standard representation
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", v)
+		}
+		if colType == 'I' || colType == 'i' {
+			return fmt.Sprintf("%.0f", v)
+		}
 		if v == math.Trunc(v) {
 			return fmt.Sprintf("%.0f", v)
 		}
-		return strconv.FormatFloat(v, 'f', -1, 64)
+		return fmt.Sprintf("%.3f", v)
 	case float32:
 		f := float64(v)
 		if math.IsNaN(f) || math.IsInf(f, 0) {
 			return "NULL"
 		}
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", f)
+		}
+		if colType == 'I' || colType == 'i' {
+			return fmt.Sprintf("%.0f", f)
+		}
 		if f == math.Trunc(f) {
 			return fmt.Sprintf("%.0f", f)
 		}
-		return strconv.FormatFloat(f, 'f', -1, 32)
+		return fmt.Sprintf("%.3f", f)
 	case string:
 		return v
 	case []byte:
@@ -223,6 +235,14 @@ func RunRecord(exec Executor, rec Record) error {
 		_, _, err := exec.Execute(rec.SQL)
 		if err == nil {
 			return fmt.Errorf("[%s:%d] statement error expected failure, but succeeded\nSQL: %s", rec.FilePath, rec.LineNumber, rec.SQL)
+		}
+		if rec.ExpectedError != "" {
+			errStr := strings.ToLower(err.Error())
+			expected := strings.ToLower(rec.ExpectedError)
+			if !strings.Contains(errStr, expected) {
+				return fmt.Errorf("[%s:%d] statement error message mismatch: expected %q, got %q\nSQL: %s",
+					rec.FilePath, rec.LineNumber, rec.ExpectedError, err.Error(), rec.SQL)
+			}
 		}
 		return nil
 

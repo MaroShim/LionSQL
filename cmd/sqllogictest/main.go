@@ -28,8 +28,8 @@ type fileResult struct {
 	queryCount int
 }
 
-func runSingleFile(file string, engineType string, mode string, verbose bool) fileResult {
-	records, err := slt.ParseFile(file)
+func runSingleFile(file string, engineType string, mode string, verbose bool, opts slt.ParseOptions) fileResult {
+	records, err := slt.ParseFileWithOptions(file, opts)
 	if err != nil {
 		return fileResult{
 			file:   file,
@@ -163,7 +163,16 @@ func main() {
 	engineFlag := flag.String("engine", "memory", "Storage engine backend (memory, wiredtiger)")
 	modeFlag := flag.String("mode", "inproc", "Execution mode (inproc, pgwire)")
 	parallelFlag := flag.Int("parallel", 1, "Number of concurrent SLT file workers")
+	targetFlag := flag.String("target", "sqlite,lionsql", "Comma-separated target database dialect tags for onlyif/skipif directives")
 	flag.Parse()
+
+	var targetDialects []string
+	for _, t := range strings.Split(*targetFlag, ",") {
+		if trimmed := strings.TrimSpace(t); trimmed != "" {
+			targetDialects = append(targetDialects, trimmed)
+		}
+	}
+	parseOpts := slt.ParseOptions{TargetDialects: targetDialects}
 
 	var testFiles []string
 	if *fileFlag != "" {
@@ -204,6 +213,7 @@ func main() {
 	fmt.Printf("  [Storage Engine] %s\n", *engineFlag)
 	fmt.Printf("  [Execution Mode] %s\n", *modeFlag)
 	fmt.Printf("  [Parallelism]    %d worker(s)\n", workers)
+	fmt.Printf("  [Target Tags]    %s\n", strings.Join(targetDialects, ", "))
 	fmt.Printf("  [Discovered]     %d test files\n", len(testFiles))
 	fmt.Println("--------------------------------------------------------------------------------")
 
@@ -212,7 +222,7 @@ func main() {
 
 	if workers == 1 {
 		for i, file := range testFiles {
-			res := runSingleFile(file, *engineFlag, *modeFlag, *verboseFlag)
+			res := runSingleFile(file, *engineFlag, *modeFlag, *verboseFlag, parseOpts)
 			results[i] = res
 			if res.failed {
 				fmt.Printf("FAIL  %s (%v) - %d stmts, %d queries\n", res.file, res.dur.Round(time.Millisecond), res.stmtsCount, res.queryCount)
@@ -238,7 +248,7 @@ func main() {
 			go func() {
 				defer wg.Done()
 				for j := range jobs {
-					results[j.idx] = runSingleFile(j.file, *engineFlag, *modeFlag, false)
+					results[j.idx] = runSingleFile(j.file, *engineFlag, *modeFlag, false, parseOpts)
 				}
 			}()
 		}

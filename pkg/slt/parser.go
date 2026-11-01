@@ -41,39 +41,64 @@ type Record struct {
 	ExpectedValues []string // flattened cell-by-cell values
 	ExpectedHash  string
 	ExpectedCount int
+	ExpectedError string   // expected error substring for statement error (if specified)
 	FilePath      string
 	LineNumber    int
 }
 
 var (
-	reStatement = regexp.MustCompile(`(?i)^statement\s+(ok|error)`)
+	reStatement = regexp.MustCompile(`(?i)^statement\s+(ok|error)(?:\s+(.*))?$`)
 	reQuery     = regexp.MustCompile(`(?i)^query\s+([A-Za-z]+)(?:\s+(nosort|rowsort|valuesort))?(?:\s+([a-zA-Z0-9_\-]+))?`)
 	reHash      = regexp.MustCompile(`(?i)^(\d+)\s+values\s+hashing\s+to\s+([a-fA-F0-9]{32})`)
 	reOnlyIf    = regexp.MustCompile(`(?i)^onlyif\s+(\S+)`)
 	reSkipIf    = regexp.MustCompile(`(?i)^skipif\s+(\S+)`)
 )
 
-func isSLTTargetDialect(target string) bool {
-	switch strings.ToLower(strings.TrimSpace(target)) {
-	case "sqlite", "lionsql":
-		return true
-	default:
-		return false
+// ParseOptions controls parser behavior such as target database dialect filtering.
+type ParseOptions struct {
+	TargetDialects []string // e.g. ["sqlite", "lionsql", "postgresql"]
+}
+
+// DefaultParseOptions returns the standard target dialects for LionSQL.
+func DefaultParseOptions() ParseOptions {
+	return ParseOptions{
+		TargetDialects: []string{"sqlite", "lionsql"},
 	}
 }
 
-// ParseFile parses an SLT test file from disk into a sequence of Records.
+// IsTargetDialect reports whether target matches any configured target dialect.
+func (opts ParseOptions) IsTargetDialect(target string) bool {
+	norm := strings.ToLower(strings.TrimSpace(target))
+	for _, d := range opts.TargetDialects {
+		if strings.EqualFold(d, norm) {
+			return true
+		}
+	}
+	return false
+}
+
+// ParseFile parses an SLT test file from disk into a sequence of Records using DefaultParseOptions.
 func ParseFile(path string) ([]Record, error) {
+	return ParseFileWithOptions(path, DefaultParseOptions())
+}
+
+// ParseFileWithOptions parses an SLT test file with custom ParseOptions.
+func ParseFileWithOptions(path string, opts ParseOptions) ([]Record, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
-	return Parse(f, path)
+	return ParseWithOptions(f, path, opts)
 }
 
-// Parse reads an SLT test stream and returns all parsed Records.
+// Parse reads an SLT test stream and returns all parsed Records using DefaultParseOptions.
 func Parse(r io.Reader, filePath string) ([]Record, error) {
+	return ParseWithOptions(r, filePath, DefaultParseOptions())
+}
+
+// ParseWithOptions reads an SLT test stream and returns all parsed Records using custom ParseOptions.
+func ParseWithOptions(r io.Reader, filePath string, opts ParseOptions) ([]Record, error) {
 	scanner := bufio.NewScanner(r)
 	// Allow large SQL statements and results (up to 4MB per line)
 	buf := make([]byte, 64*1024)
@@ -81,7 +106,36 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 
 	var records []Record
 	lineNo := 0
-	skipNext := false
+	var currentOnlyIfs []string
+	var currentSkipIfs []string
+
+	shouldSkip := func() bool {
+		if len(currentOnlyIfs) > 0 {
+			matched := false
+			for _, d := range currentOnlyIfs {
+				if opts.IsTargetDialect(d) {
+					matched = true
+					break
+				}
+			}
+			if !matched {
+				return true
+			}
+		}
+		if len(currentSkipIfs) > 0 {
+			for _, d := range currentSkipIfs {
+				if opts.IsTargetDialect(d) {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	clearDirectives := func() {
+		currentOnlyIfs = currentOnlyIfs[:0]
+		currentSkipIfs = currentSkipIfs[:0]
+	}
 
 	for scanner.Scan() {
 		lineNo++
@@ -95,22 +149,19 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 
 		// Conditional directives: onlyif <target> / skipif <target>
 		if m := reOnlyIf.FindStringSubmatch(trimmed); len(m) == 2 {
-			if !isSLTTargetDialect(m[1]) {
-				skipNext = true
-			}
+			currentOnlyIfs = append(currentOnlyIfs, m[1])
 			continue
 		}
 		if m := reSkipIf.FindStringSubmatch(trimmed); len(m) == 2 {
-			if isSLTTargetDialect(m[1]) {
-				skipNext = true
-			}
+			currentSkipIfs = append(currentSkipIfs, m[1])
 			continue
 		}
 
 		// Halt directive
 		if strings.EqualFold(trimmed, "halt") {
-			if skipNext {
-				skipNext = false
+			skip := shouldSkip()
+			clearDirectives()
+			if skip {
 				continue
 			}
 			records = append(records, Record{
@@ -121,11 +172,15 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 			break
 		}
 
-		// statement ok / statement error
-		if m := reStatement.FindStringSubmatch(trimmed); len(m) == 2 {
+		// statement ok / statement error [expected_error_pattern]
+		if m := reStatement.FindStringSubmatch(trimmed); len(m) >= 2 {
 			cmdType := CmdStatementOk
+			expectedErr := ""
 			if strings.EqualFold(m[1], "error") {
 				cmdType = CmdStatementError
+				if len(m) >= 3 {
+					expectedErr = strings.TrimSpace(m[2])
+				}
 			}
 			stmtLineNo := lineNo
 
@@ -143,15 +198,18 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 				}
 				sqlLines = append(sqlLines, subLine)
 			}
-			if !skipNext {
+
+			skip := shouldSkip()
+			clearDirectives()
+			if !skip {
 				records = append(records, Record{
-					Type:       cmdType,
-					SQL:        strings.Join(sqlLines, "\n"),
-					FilePath:   filePath,
-					LineNumber: stmtLineNo,
+					Type:          cmdType,
+					SQL:           strings.Join(sqlLines, "\n"),
+					ExpectedError: expectedErr,
+					FilePath:      filePath,
+					LineNumber:    stmtLineNo,
 				})
 			}
-			skipNext = false
 			continue
 		}
 
@@ -214,7 +272,9 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 				resLines = append(resLines, resLine)
 			}
 
-			if !skipNext {
+			skip := shouldSkip()
+			clearDirectives()
+			if !skip {
 				expectedValues := parseResultLines(resLines, len(typeSig), strings.HasSuffix(filePath, ".test"))
 				records = append(records, Record{
 					Type:           CmdQuery,
@@ -229,7 +289,6 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 					LineNumber:     queryLineNo,
 				})
 			}
-			skipNext = false
 			continue
 		}
 	}
@@ -317,38 +376,89 @@ func parseResultLines(lines []string, numCols int, isOfficialTest bool) []string
 }
 
 func splitRowFields(line string, numCols int) []string {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return nil
+	}
+	if numCols <= 1 {
+		return []string{line}
+	}
 	if strings.Contains(line, "\t") {
-		return strings.Split(line, "\t")
+		parts := strings.Split(line, "\t")
+		result := make([]string, len(parts))
+		for i, p := range parts {
+			result[i] = strings.TrimSpace(p)
+		}
+		return result
 	}
-	fields := strings.Fields(line)
-	if len(fields) <= 1 || len(fields) == numCols || numCols <= 1 {
-		if len(fields) == 0 {
-			trimmed := strings.TrimSpace(line)
-			if trimmed == "" {
-				return nil
+
+	// Tokenize line respecting quotes ("..." or '...')
+	var tokens []string
+	var cur strings.Builder
+	inSingleQuote := false
+	inDoubleQuote := false
+
+	runes := []rune(line)
+	n := len(runes)
+	for i := 0; i < n; i++ {
+		r := runes[i]
+		if inSingleQuote {
+			if r == '\'' {
+				// Check for escaped quote ''
+				if i+1 < n && runes[i+1] == '\'' {
+					cur.WriteRune('\'')
+					i++
+				} else {
+					inSingleQuote = false
+				}
+			} else {
+				cur.WriteRune(r)
 			}
-			return []string{trimmed}
-		}
-		if len(fields) == 1 {
-			return []string{fields[0]}
-		}
-		if len(fields) == numCols {
-			return fields
+		} else if inDoubleQuote {
+			if r == '"' {
+				// Check for escaped quote "" or \"
+				if i+1 < n && runes[i+1] == '"' {
+					cur.WriteRune('"')
+					i++
+				} else {
+					inDoubleQuote = false
+				}
+			} else {
+				cur.WriteRune(r)
+			}
+		} else {
+			switch r {
+			case '\'':
+				inSingleQuote = true
+			case '"':
+				inDoubleQuote = true
+			case ' ', '\t':
+				if cur.Len() > 0 {
+					tokens = append(tokens, cur.String())
+					cur.Reset()
+				}
+			default:
+				cur.WriteRune(r)
+			}
 		}
 	}
-	// If more tokens than numCols, split into exactly numCols preserving spaces in the last token
-	parts := make([]string, 0, numCols)
-	remaining := strings.TrimSpace(line)
-	for i := 0; i < numCols-1; i++ {
-		idx := strings.IndexAny(remaining, " \t")
-		if idx == -1 {
-			break
-		}
-		parts = append(parts, remaining[:idx])
-		remaining = strings.TrimSpace(remaining[idx:])
+	if cur.Len() > 0 {
+		tokens = append(tokens, cur.String())
 	}
-	if remaining != "" {
-		parts = append(parts, remaining)
+
+	if len(tokens) == numCols {
+		return tokens
 	}
-	return parts
+
+	// Fallback if token count didn't match numCols:
+	// If fewer tokens, return what was parsed
+	if len(tokens) < numCols {
+		return tokens
+	}
+
+	// If more tokens than numCols, combine remaining into the last column
+	res := make([]string, numCols)
+	copy(res, tokens[:numCols-1])
+	res[numCols-1] = strings.Join(tokens[numCols-1:], " ")
+	return res
 }
