@@ -99,16 +99,17 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 80개 이상의 XORM 마이그레이션 100% 무오류 자동 적용, 사용자 회원가입(`POST /api/v1/register`), JWT 로그인(`POST /api/v1/login`, 복합 `OR` 술어 처리), 프로젝트 및 4대 뷰(List/Gantt/Table/Kanban) 생성(`PUT /api/v1/projects`), 칸반 태스크 생성 및 상태 변경(`PUT /api/v1/projects/:id/tasks`, `POST /api/v1/tasks/:id`), 재귀 CTE(`WITH RECURSIVE`) 프로젝트 계층 탐색, 웹 UI 서빙 완벽 동작 검증 (Vikunja 순정 컨테이너 소스 수정 0줄)
 
-### [x] 2.8 `COMPAT-TABLE-DRIVEN-1` 10개 실전 서비스 호환 규칙 Table-Driven 구조 정식화 — **[완료 (Pass)]**
+### [x] 2.8 `COMPAT-TABLE-DRIVEN-1` 10개 실전 서비스 호환 규칙 Table-Driven 구조 및 안티패턴 키워드 매칭 전면 정식화 — **[완료 (Pass)]**
 - 설계 계획서: [`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)
-- 회귀 테스트: `pkg/wire/param_rules_test.go`, `pkg/wire/command_tags_test.go`, `pkg/engine/*_compat_test.go`
+- 회귀 테스트: `pkg/wire/param_rules_test.go`, `pkg/wire/command_tags_test.go`, `pkg/engine/*_compat_test.go`, `pkg/engine/pk_bypass_test.go`, `pkg/planner/planner_test.go`
 - 대상 서비스: 10개 실전 서비스 (Gitea, Vaultwarden, Casdoor, Ghost, Answer, Affine, Metabase, Umami, Woodpecker, Vikunja)
-- 엔진(`pkg/engine`), 와이어(`pkg/wire`), 가상 카탈로그(`pkg/catalog/virtual`)에 흩어진 case-by-case 분기문 및 ad-hoc 문자열 매칭을 Go 정적 구조체 테이블(Table-Driven Dispatch Table)로 전면 정식화 완료:
+- 엔진(`pkg/engine`), 와이어(`pkg/wire`), 가상 카탈로그(`pkg/catalog/virtual`), 플래너(`pkg/planner`)에 흩어진 case-by-case 분기문 및 ad-hoc 원시 문자열 매칭을 Go 정적 구조체 테이블 및 `sqlutil` SSOT 토크나이저 원형으로 전면 정식화 완료:
   1. `pkg/wire/param_rules.go`: 파라미터 OID 추론 규칙 테이블 (`defaultParamOIDRules`, `LookupParamOID`)
   2. `pkg/wire/command_tags.go`: PGWire VDBE DML 커맨드 완료 태그 테이블 (`defaultCommandTagRules`, `formatPgCommandComplete`)
   3. `pkg/catalog/virtual/sys_tables.go`: 가상 카탈로그 뷰 매핑 테이블 (`sysViewAliases`, `IsSysCatalogTable`), 기존 40줄 `switch norm` 제거
   4. `pkg/planner/bounds.go`: `HasDisjunction` 공통 술어를 통한 복합 `OR` 단일 인덱스 색인 방어 일원화
-- 10개 실전 앱 회귀 테스트 100% 통과 및 전체 25개 패키지 race detector 0 data race 검증 완료
+  5. 엔진/플래너/와이어 전반의 나이브 `strings.Contains`/`strings.Index` 키워드 매칭 안티패턴 전수 감사 및 `sqlutil.ContainsKeyword`/`FindTopLevelKeyword` 대체 완료 (PK 바이패스, DDL `IF [NOT] EXISTS`, DML `OUTPUT`/`RETURNING`, 윈도우 `OVER`/`BETWEEN...AND`, 서브쿼리 `NOT EXISTS`/`NOT IN`, `IS [NOT] NULL`)
+- 10개 실전 앱 회귀 테스트 100% 통과, 벤치마크 18.7만 TPS 유지 확인, 전체 25개 패키지 race detector 0 data race 검증 완료
 
 ### [ ] 2.9 `COMPAT-DECLARATIVE-1` 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) — **[백로그 (2단계)]**
 - 대상: `COMPAT-TABLE-DRIVEN-1`에서 정식화된 Go 구조체 테이블
