@@ -99,6 +99,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **1.3 `PLANNER-AST-2` (플래너 하위 조건식·통계·서브쿼리 정규식 완전 제거)**: `bounds.go`, `stats.go`, `pruning.go`, `planner.go`, `decorrelate.go`, `explain.go` 내 조건식 정규식(22개)을 Pratt AST `proc.Expr` 및 `proc.Lexer` 기반으로 100% 교체
 - [x] **1.4 `ENGINE-AST-3` (엔진 관리·부가 명령어 정규식 완전 제거)**: `sqlexec.go`, `sqlexec_auth.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_string_split.go`, `sqlexec_procs.go` 내 구문 정규식(40개)을 `proc.Lexer` 및 `sqlutil` 토큰 파서 기반으로 100% 교체
 
+### [ ] 1.8 1.0 GA 검증 및 잔여 정리 (다른 모델/세션 `/goal` 인수인계 대상)
+- 인수인계 계획서: [`notes/GA_VALIDATION_HANDOFF_PLAN.ko.md`](notes/GA_VALIDATION_HANDOFF_PLAN.ko.md)
+- [ ] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` SLT 스위트 편입 및 100% 통과 (Spec-Out 제외 목록 명시)
+- [ ] **`GA-VALID-2`**: `cmd/soaktest` 24h/72h 장기 소크 (OCC / WiredTiger) 및 `cmd/crashtest` 100라운드 확장
+- [ ] **`GA-VALID-3`**: 연동 앱 2~3종 1~2주 도그푸딩
+- [ ] **`GA-REGEX-DDL-1`**: `sqlexec_ddl.go` 및 `sqlexec_eval.go`/`sqlexec_explain.go` 잔여 정규식 렉서 전환 (구현 과제)
+
 ---
 
 ## Priority 2. 실전 오픈소스 앱 연동 확장 (Application Integration Expansion)
