@@ -113,7 +113,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   4. `SLT-FIX-4`: `pkg/execution/aggregate.go` `GROUP BY` 사칙연산 프로젝션 AST 파싱 및 `matchColName` 식별자 오탐 차단
   5. `SLT-RUNNER-DEBT`: `pkg/slt/` 및 `cmd/sqllogictest` 5대 기술부채 전면 해소 (`skipNext` 단일 불리언 제거, `ParseOptions`/`-target` 플래그로 타겟 방언 가변화, `FormatCell` `%.3f` SQLite SLT 표준 부동소수점 포맷팅, `statement error [pattern]` 에러 패턴 검증, `splitRowFields` 따옴표/탭/공백 안전 토크나이저 전환)
 - [x] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` 스위트 탐색 및 결함 전량 수정·검증 완료 (`test/slt/core/slt_extended_fixes.slt` 100% PASS)
-- [x] **`SLT-FULL-100`**: SQLLogicTest 107개 풀세트 (551,217 쿼리) 100% 무결점 완치 (`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`, `scripts/verify_0.90.sh`)
+- [x] **`SLT-FULL-100`**: SQLLogicTest 107개 풀세트 (551,217 쿼리) 100% 무결점 완치 (`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`, `notes/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md`, `scripts/verify_0.90.sh`)
   - [x] 1. 프로젝션 별칭과 원본 컬럼명 충돌 및 동명 컬럼 슬롯 보존 완치 (`random/select/*` 10개 파일)
   - [x] 2. `GROUP BY` 단항 부호 프로젝션 및 `HAVING NOT AVG(...) IS NULL` 중첩 집계 평가 완치 (`random/groupby/*` 14개 파일)
   - [x] 3. SQLite 관용 문법 5종 (`total()`, 빈 `IN ()`, `CREATE TEMP VIEW`, `x IN table`, `CREATE TRIGGER ... UPDATE ON`) 및 테이블리스 집계 수용 (`evidence/*`, `random/expr/*`)
