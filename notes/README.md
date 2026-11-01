@@ -38,6 +38,8 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
      - **[`METABASE_INTEGRATION_PLAN.ko.md`](METABASE_INTEGRATION_PLAN.ko.md)** (Korean): Metabase (JVM/JDBC dual-protocol) BI dashboard integration detail plan (third in order).
      - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)** (Korean): Woodpecker CI and Vikunja integration detail plan (Go + XORM stack, completed).
      - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)** (Korean): Woodpecker CI and Vikunja integration verification report (recursive CTE, composite OR index branch, DML command tag normalization).
+     - **[`ROADMAP_REORGANIZATION_PLAN.ko.md`](ROADMAP_REORGANIZATION_PLAN.ko.md)** (Korean): Global roadmap reorganization and Phase 7 / quality gate expansion design plan (DOC-ROADMAP-REORG-1).
+     - **[`TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)** (Korean): Table-driven compatibility architecture design plan for 10 production services (COMPAT-TABLE-DRIVEN-1).
      - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)** (Korean): Structural query routing refactoring architecture and verification report using symbol table and AST (eliminated 45 heuristics, 527ns verified, completed).
    - **Post-1.0 Architecture & Roadmap Plans**:
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC performance optimization history, WiredTiger beat roadmap, 104k tpmC architecture, and post-1.0 memory compaction (OCC-HYPER-2).

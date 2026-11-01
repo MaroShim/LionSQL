@@ -38,6 +38,8 @@
      - **[`METABASE_INTEGRATION_PLAN.ko.md`](METABASE_INTEGRATION_PLAN.ko.md)**: Metabase (JVM/JDBC 듀얼 프로토콜) BI 대시보드 연동 상세 계획서 (3순위).
      - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)**: Woodpecker CI 및 Vikunja 연동 상세 계획서 (Go+XORM 스택, 완료).
      - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)**: Woodpecker CI 및 Vikunja 연동 검증 보고서 (재귀 CTE, 복합 OR 인덱스 분기, DML 커맨드 태그 보정 완료).
+     - **[`ROADMAP_REORGANIZATION_PLAN.ko.md`](ROADMAP_REORGANIZATION_PLAN.ko.md)**: LionSQL 전역 로드맵(ROADMAP.md) 재정비 및 Phase 7/품질 게이트 확장 설계 계획서 (DOC-ROADMAP-REORG-1).
+     - **[`TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)**: 10개 실전 서비스 호환 규칙 Table-Driven 정식화 설계 계획서 (COMPAT-TABLE-DRIVEN-1).
      - **[`AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md)**: 심볼 테이블 및 AST 기반 구조적 쿼리 라우팅 리팩토링 설계 및 검증 보고서 (문자열 휴리스틱 45개 전면 제거, 527ns 실측, 완료).
    - **Post-1.0 아키텍처 및 장기 로드맵 계획서**:
      - **[`IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md)**: In-Memory OCC 성능 최적화 역사, WiredTiger 초격차 추월, 104만 tpmC 아키텍처 및 Post-1.0 메모리 5배 압축 로드맵 (OCC-HYPER-2).

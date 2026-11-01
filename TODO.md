@@ -99,15 +99,25 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 80개 이상의 XORM 마이그레이션 100% 무오류 자동 적용, 사용자 회원가입(`POST /api/v1/register`), JWT 로그인(`POST /api/v1/login`, 복합 `OR` 술어 처리), 프로젝트 및 4대 뷰(List/Gantt/Table/Kanban) 생성(`PUT /api/v1/projects`), 칸반 태스크 생성 및 상태 변경(`PUT /api/v1/projects/:id/tasks`, `POST /api/v1/tasks/:id`), 재귀 CTE(`WITH RECURSIVE`) 프로젝트 계층 탐색, 웹 UI 서빙 완벽 동작 검증 (Vikunja 순정 컨테이너 소스 수정 0줄)
 
-### [ ] 2.8 `COMPAT-DECLARATIVE-1` 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) — **[백로그]**
-- 대상: 기연동 8개 서비스(Gitea, Vaultwarden, Casdoor, Ghost, Answer, Affine, Metabase, Umami)
-- 목표: 와이어 프로토콜 및 엔진 내 하드코딩된 서비스별 방언/카탈로그 보정 규칙을 선언적 텍스트 파일(YAML/DSL)로 추상화하여, Go 코드 수정 없이 신규 외부 서비스 호환성을 추가/관리할 수 있는 선언적 아키텍처 수립
+### [ ] 2.8 `COMPAT-TABLE-DRIVEN-1` 10개 실전 서비스 호환 규칙 Table-Driven 구조 정식화 — **[진행 예정]**
+- 설계 계획서: [`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)
+- 대상 서비스: 10개 실전 서비스 (Gitea, Vaultwarden, Casdoor, Ghost, Answer, Affine, Metabase, Umami, Woodpecker, Vikunja)
+- 목표: 엔진(`pkg/engine`), 와이어(`pkg/wire`), 가상 카탈로그(`pkg/catalog/virtual`)에 흩어진 case-by-case 분기문 및 ad-hoc 문자열 매칭을 외부 파일 도입 없이 Go 정적 구조체 테이블(Table-Driven Dispatch Table)로 1차 정식화하여, O(1) 룩업, 제로 할당, 컴파일 타임 안전성 및 코드 다이어트(Deletion-First) 달성
+- 4대 정식화 도메인:
+  1. 가상 카탈로그 프로젝션 및 메타데이터 라우팅 테이블
+  2. 파라미터 OID 추론 및 바이너리 디코딩 규칙 테이블
+  3. PGWire VDBE DML 커맨드 완료 태그 정규화 테이블
+  4. SQL 방언 정규화 및 토큰 재작성(Rewrite) 테이블
 
-### [ ] 2.9 `INTEG-NOCODB-1` NocoDB (노코드 DB 스튜디오) — **[다음 순위]**
+### [ ] 2.9 `COMPAT-DECLARATIVE-1` 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) — **[백로그 (2단계)]**
+- 대상: `COMPAT-TABLE-DRIVEN-1`에서 정식화된 Go 구조체 테이블
+- 목표: 정식화된 구조체 테이블을 기반으로 필요 시 외부 텍스트 설정 파일(YAML/JSON 또는 embed.FS)로 분리하여 런타임 동적 규칙 주입 가능성 검토 (YAGNI 평가 후 결정)
+
+### [ ] 2.10 `INTEG-NOCODB-1` NocoDB (노코드 DB 스튜디오) — **[다음 순위]**
 - 스택: Node.js + Knex / 듀얼 프로토콜 (PGWire + TDS)
 - 메타데이터 자동 감지 및 스프레드시트 뷰 CRUD 검증
 
-### [ ] 2.7 `INTEG-MATTERMOST-1` Mattermost (팀 협업 채팅) — **[5순위]**
+### [ ] 2.11 `INTEG-MATTERMOST-1` Mattermost (팀 협업 채팅) — **[5순위]**
 - 스택: Go + `sqlx`/`squirrel` / PGWire (`TCP :5433`)
 - 대규모 팀 채널 및 메시지 인덱싱 검증
 
