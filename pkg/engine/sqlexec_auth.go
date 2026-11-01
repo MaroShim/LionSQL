@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"lionsql/pkg/auth"
+	"lionsql/pkg/sqlutil"
 )
 
 var (
@@ -106,7 +107,7 @@ func (s *Coordinator) execDropLogin(query string, start time.Time) (*QueryResult
 		return nil, fmt.Errorf("invalid syntax: expected DROP LOGIN [IF EXISTS] <login_name>")
 	}
 	loginName := cleanIdentifier(m[1])
-	ifExists := strings.Contains(strings.ToUpper(query), "IF EXISTS")
+	ifExists := sqlutil.ContainsKeyword(query, "IF EXISTS", false)
 
 	err := s.auth.DropLogin(loginName)
 	if err != nil {
@@ -176,7 +177,7 @@ func (s *Coordinator) execDropUser(query string, start time.Time) (*QueryResult,
 		return nil, fmt.Errorf("invalid syntax: expected DROP USER [IF EXISTS] <user_name>")
 	}
 	userName := cleanIdentifier(m[1])
-	ifExists := strings.Contains(strings.ToUpper(query), "IF EXISTS")
+	ifExists := sqlutil.ContainsKeyword(query, "IF EXISTS", false)
 
 	err := s.auth.DropUser(userName)
 	if err != nil {

@@ -1701,7 +1701,7 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 	rawArgs := strings.TrimSpace(funcPart[fnOpenParen+1 : fnCloseParen])
 
 	var args []string
-	if strings.Contains(strings.ToUpper(funcPart), "WITHIN GROUP") {
+	if sqlutil.ContainsKeyword(funcPart, "WITHIN GROUP", false) {
 		withinRe := regexp.MustCompile(`(?i)^\s*(PERCENTILE_CONT|PERCENTILE_DISC)\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([a-zA-Z0-9_\.]+)(?:\s+(?:ASC|DESC))?\s*\)\s*$`)
 		if m := withinRe.FindStringSubmatch(funcPart); len(m) == 4 {
 			fnName = strings.ToUpper(m[1])
@@ -1758,8 +1758,8 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 		w.Frame = parseWindowFrame(frameStr)
 	}
 
-	partIdx := strings.Index(overContentUpper, "PARTITION BY")
-	orderIdx := strings.Index(overContentUpper, "ORDER BY")
+	partIdx := sqlutil.FindTopLevelKeyword(cleanOverContent, "PARTITION BY")
+	orderIdx := sqlutil.FindTopLevelKeyword(cleanOverContent, "ORDER BY")
 
 	partStr := ""
 	orderStr := ""

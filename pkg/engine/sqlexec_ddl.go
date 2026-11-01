@@ -1059,7 +1059,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 
 	// 1. Check for IF EXISTS table clause
 	cleanedUpper := strings.ToUpper(cleaned)
-	if strings.Contains(cleanedUpper, "ALTER TABLE IF EXISTS") {
+	if sqlutil.ContainsKeyword(cleaned, "ALTER TABLE IF EXISTS", false) {
 		// Extract table name to check existence
 		fields := strings.Fields(cleaned)
 		if len(fields) >= 5 {

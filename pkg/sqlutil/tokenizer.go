@@ -518,14 +518,64 @@ func SplitAsAlias(item string) (expr string, alias string, hasAs bool) {
 	return item, "", false
 }
 
+func isWhitespaceByte(b byte) bool {
+	return b == ' ' || b == '\t' || b == '\r' || b == '\n'
+}
+
+// matchWordsAt checks if words match in sequence starting at index start in s.
+// Between consecutive words, arbitrary whitespace (spaces, tabs, newlines) is accepted.
+// Returns the index after the matched sequence and true on success.
+func matchWordsAt(s string, start int, words []string) (int, bool) {
+	n := len(s)
+	curr := start
+
+	// Check left boundary for first word
+	if curr > 0 && !isWordBoundary(s[curr-1]) {
+		return 0, false
+	}
+
+	for wIdx, word := range words {
+		if wIdx > 0 {
+			// Between words, there MUST be at least one whitespace character
+			if curr >= n || !isWhitespaceByte(s[curr]) {
+				return 0, false
+			}
+			for curr < n && isWhitespaceByte(s[curr]) {
+				curr++
+			}
+		}
+
+		wLen := len(word)
+		if curr+wLen > n {
+			return 0, false
+		}
+		if !strings.EqualFold(s[curr:curr+wLen], word) {
+			return 0, false
+		}
+		curr += wLen
+		// Right boundary of this word
+		if curr < n && !isWordBoundary(s[curr]) {
+			return 0, false
+		}
+	}
+
+	return curr, true
+}
+
 // scanKeyword scans s for standalone occurrences of keyword outside single quotes,
 // double quotes, brackets, and comments.
+// If keyword consists of multiple words (e.g. "IF EXISTS", "WITHIN GROUP"), arbitrary
+// whitespace (spaces, tabs, newlines) between the words is transparently matched.
 // If allowInsideParens is true, matches inside nested parentheses are accepted.
 // If firstOnly is true, scanning stops immediately upon the first match.
 func scanKeyword(s string, keyword string, allowInsideParens bool, firstOnly bool) []int {
-	kLen := len(keyword)
+	words := strings.Fields(keyword)
+	if len(words) == 0 {
+		return nil
+	}
 	n := len(s)
-	if n < kLen || kLen == 0 {
+	firstWordLen := len(words[0])
+	if n < firstWordLen {
 		return nil
 	}
 
@@ -537,7 +587,7 @@ func scanKeyword(s string, keyword string, allowInsideParens bool, firstOnly boo
 	inLineComment := false
 	inBlockComment := false
 
-	for i := 0; i <= n-kLen; i++ {
+	for i := 0; i <= n-firstWordLen; i++ {
 		ch := s[i]
 
 		if inLineComment {
@@ -622,16 +672,12 @@ func scanKeyword(s string, keyword string, allowInsideParens bool, firstOnly boo
 		}
 
 		if depth == 0 || allowInsideParens {
-			if strings.EqualFold(s[i:i+kLen], keyword) {
-				leftOk := (i == 0 || isWordBoundary(s[i-1]))
-				rightOk := (i+kLen == n || isWordBoundary(s[i+kLen]))
-				if leftOk && rightOk {
-					indices = append(indices, i)
-					if firstOnly {
-						return indices
-					}
-					i += kLen - 1
+			if end, ok := matchWordsAt(s, i, words); ok {
+				indices = append(indices, i)
+				if firstOnly {
+					return indices
 				}
+				i = end - 1
 			}
 		}
 	}

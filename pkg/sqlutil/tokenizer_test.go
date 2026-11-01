@@ -383,6 +383,22 @@ func TestContainsKeyword(t *testing.T) {
 		{"OR inside double quotes ignored", `"MY OR COL" = 1`, "OR", true, false},
 		{"OR inside line comment ignored", "-- comment with OR\na = 1", "OR", true, false},
 		{"Word containing or ignored", "order_by = 1", "OR", true, false},
+		{"Multi-word IF EXISTS with standard space", "DROP TABLE IF EXISTS tbl", "IF EXISTS", false, true},
+		{"Multi-word IF EXISTS with multiple spaces", "DROP TABLE IF    EXISTS tbl", "IF EXISTS", false, true},
+		{"Multi-word IF EXISTS with tab", "DROP TABLE IF\tEXISTS tbl", "IF EXISTS", false, true},
+		{"Multi-word IF EXISTS with newline", "DROP TABLE IF\nEXISTS tbl", "IF EXISTS", false, true},
+		{"Multi-word IF EXISTS with mixed whitespace", "DROP TABLE IF \t\n EXISTS tbl", "IF EXISTS", false, true},
+		{"Multi-word IF NOT EXISTS with arbitrary whitespace", "CREATE TABLE IF  NOT \t EXISTS tbl", "IF NOT EXISTS", false, true},
+		{"Multi-word WITHIN GROUP with multiple spaces", "PERCENTILE_CONT(0.5) WITHIN    GROUP (ORDER BY x)", "WITHIN GROUP", false, true},
+		{"Multi-word WITHIN GROUP with tab", "PERCENTILE_CONT(0.5) WITHIN\tGROUP (ORDER BY x)", "WITHIN GROUP", false, true},
+		{"Multi-word WITHIN GROUP with newline", "PERCENTILE_CONT(0.5) WITHIN\nGROUP (ORDER BY x)", "WITHIN GROUP", false, true},
+		{"Multi-word ORDER BY with multiple spaces", "SELECT a FROM t ORDER   BY a", "ORDER BY", false, true},
+		{"Multi-word ORDER BY with tab", "SELECT a FROM t ORDER\tBY a", "ORDER BY", false, true},
+		{"Multi-word IS NOT NULL with arbitrary whitespace", "SELECT a FROM t WHERE x IS  \t NOT \n NULL", "IS NOT NULL", false, true},
+		{"Multi-word IS NULL with tab", "SELECT a FROM t WHERE x IS\tNULL", "IS NULL", false, true},
+		{"Concatenated words without space should fail", "DROP TABLE IFEXISTS tbl", "IF EXISTS", false, false},
+		{"Multi-word inside string literal ignored", "SELECT * FROM t WHERE val = 'IF   EXISTS'", "IF EXISTS", false, false},
+		{"Multi-word inside comments ignored", "SELECT * FROM t /* IF    EXISTS */ WHERE id = 1", "IF EXISTS", false, false},
 	}
 
 	for _, tt := range tests {

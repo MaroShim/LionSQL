@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"lionsql/pkg/engine"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -65,33 +66,32 @@ func ParseCopyStmt(query string) (*CopyStmt, error) {
 
 	// Check direction: FROM STDIN vs TO STDOUT
 	var dirPart string
-	upperRest := strings.ToUpper(rest)
 
-	fromIdx := strings.Index(upperRest, " FROM STDIN")
-	toIdx := strings.Index(upperRest, " TO STDOUT")
+	fromIdx := sqlutil.FindTopLevelKeyword(rest, "FROM STDIN")
+	toIdx := sqlutil.FindTopLevelKeyword(rest, "TO STDOUT")
 
 	if fromIdx != -1 {
 		stmt.Direction = CopyIn
 		dirPart = rest[:fromIdx]
-		rest = rest[fromIdx+len(" FROM STDIN"):]
+		rest = rest[fromIdx+len("FROM STDIN"):]
 	} else if toIdx != -1 {
 		stmt.Direction = CopyOut
 		dirPart = rest[:toIdx]
-		rest = rest[toIdx+len(" TO STDOUT"):]
+		rest = rest[toIdx+len("TO STDOUT"):]
 	} else {
-		// Also support lowercase/mixed
-		if idx := strings.Index(upperRest, " FROM "); idx != -1 && strings.Contains(strings.ToUpper(rest[idx:]), "STDIN") {
+		// Also support arbitrary whitespace between FROM and STDIN / TO and STDOUT
+		if idx := sqlutil.FindTopLevelKeyword(rest, "FROM"); idx != -1 && sqlutil.ContainsKeyword(rest[idx:], "STDIN", false) {
 			stmt.Direction = CopyIn
 			dirPart = rest[:idx]
-			rest = rest[idx+6:]
-			if sIdx := strings.Index(strings.ToUpper(rest), "STDIN"); sIdx != -1 {
+			rest = rest[idx+4:]
+			if sIdx := sqlutil.FindTopLevelKeyword(rest, "STDIN"); sIdx != -1 {
 				rest = rest[sIdx+5:]
 			}
-		} else if idx := strings.Index(upperRest, " TO "); idx != -1 && strings.Contains(strings.ToUpper(rest[idx:]), "STDOUT") {
+		} else if idx := sqlutil.FindTopLevelKeyword(rest, "TO"); idx != -1 && sqlutil.ContainsKeyword(rest[idx:], "STDOUT", false) {
 			stmt.Direction = CopyOut
 			dirPart = rest[:idx]
-			rest = rest[idx+4:]
-			if sIdx := strings.Index(strings.ToUpper(rest), "STDOUT"); sIdx != -1 {
+			rest = rest[idx+2:]
+			if sIdx := sqlutil.FindTopLevelKeyword(rest, "STDOUT"); sIdx != -1 {
 				rest = rest[sIdx+6:]
 			}
 		} else {
