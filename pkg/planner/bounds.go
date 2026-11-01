@@ -1,7 +1,6 @@
 package planner
 
 import (
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -12,14 +11,80 @@ import (
 	"lionsql/pkg/storage"
 )
 
-var (
-	eqBoundRe      = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*=\s*(.+?)\s*$`)
-	gteBoundRe     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*>=\s*(.+?)\s*$`)
-	gtBoundRe      = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*>\s*(.+?)\s*$`)
-	lteBoundRe     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*<=\s*(.+?)\s*$`)
-	ltBoundRe      = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*<\s*(.+?)\s*$`)
-	betweenBoundRe = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s+BETWEEN\s+(.+?)\s+AND\s+(.+?)\s*$`)
-)
+// extractSimpleColIdent returns a clean column name if expr represents a column reference (e.g. col or t.col).
+func extractSimpleColIdent(expr proc.Expr) (string, bool) {
+	if expr == nil {
+		return "", false
+	}
+	switch e := expr.(type) {
+	case *proc.ColumnRefExpr:
+		return e.Name, true
+	case *proc.LiteralExpr:
+		return "", false
+	default:
+		s := strings.TrimSpace(e.String())
+		if s == "" || strings.ContainsAny(s, " ()+-*/=><!&|;") {
+			return "", false
+		}
+		return s, true
+	}
+}
+
+// extractExprRawVal extracts a string representation of an expression's RHS value, stripping outer quotes if present.
+func extractExprRawVal(expr proc.Expr) string {
+	if expr == nil {
+		return ""
+	}
+	if lit, ok := expr.(*proc.LiteralExpr); ok {
+		if lit.Val.IsNull {
+			return "NULL"
+		}
+		return lit.Val.String()
+	}
+	return strings.Trim(strings.TrimSpace(expr.String()), "'\"")
+}
+
+// parseASTComparison parses a single condition string using the Pratt AST parser
+// and returns (rawCol, op, rawVal, ok) if it is a binary comparison or LIKE on a column.
+func parseASTComparison(cond string) (rawCol string, op string, rawVal string, ok bool) {
+	p := proc.NewParser(proc.NewLexer(cond))
+	expr := p.ParseExpr()
+	if expr == nil || len(p.Errors()) > 0 {
+		return "", "", "", false
+	}
+	switch e := expr.(type) {
+	case *proc.BinaryExpr:
+		var opStr string
+		switch e.Op {
+		case proc.TokenEq, proc.TokenAssign:
+			opStr = "="
+		case proc.TokenNeq:
+			opStr = "!="
+		case proc.TokenLt:
+			opStr = "<"
+		case proc.TokenLte:
+			opStr = "<="
+		case proc.TokenGt:
+			opStr = ">"
+		case proc.TokenGte:
+			opStr = ">="
+		case proc.TokenLike:
+			opStr = "LIKE"
+		default:
+			return "", "", "", false
+		}
+		if col, isCol := extractSimpleColIdent(e.Left); isCol {
+			return col, opStr, strings.TrimSpace(e.Right.String()), true
+		}
+	case *proc.LikeExpr:
+		if !e.Not {
+			if col, isCol := extractSimpleColIdent(e.Expr); isCol {
+				return col, "LIKE", strings.TrimSpace(e.Pattern.String()), true
+			}
+		}
+	}
+	return "", "", "", false
+}
 
 // IndexRangeCond stores lower and upper bounds for an index range scan.
 type IndexRangeCond struct {
@@ -162,56 +227,57 @@ func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRan
 		if HasDisjunction(part) {
 			continue
 		}
-		if m := eqBoundRe.FindStringSubmatch(part); len(m) == 3 {
-			col := CleanIdentifier(m[1])
-			eqs[col] = cleanVal(m[2])
-		} else if m := betweenBoundRe.FindStringSubmatch(part); len(m) == 4 {
-			col := CleanIdentifier(m[1])
+		p := proc.NewParser(proc.NewLexer(part))
+		expr := p.ParseExpr()
+		if expr == nil || len(p.Errors()) > 0 {
+			continue
+		}
+		switch e := expr.(type) {
+		case *proc.BinaryExpr:
+			colRaw, isCol := extractSimpleColIdent(e.Left)
+			if !isCol {
+				continue
+			}
+			col := CleanIdentifier(colRaw)
+			val := cleanVal(extractExprRawVal(e.Right))
+			switch e.Op {
+			case proc.TokenEq, proc.TokenAssign:
+				eqs[col] = val
+			case proc.TokenGte, proc.TokenGt:
+				r, ok := ranges[col]
+				if !ok {
+					r = &IndexRangeCond{}
+					ranges[col] = r
+				}
+				r.HasMin = true
+				r.MinVal = val
+			case proc.TokenLte, proc.TokenLt:
+				r, ok := ranges[col]
+				if !ok {
+					r = &IndexRangeCond{}
+					ranges[col] = r
+				}
+				r.HasMax = true
+				r.MaxVal = val
+			}
+		case *proc.BetweenExpr:
+			if e.Not {
+				continue
+			}
+			colRaw, isCol := extractSimpleColIdent(e.Expr)
+			if !isCol {
+				continue
+			}
+			col := CleanIdentifier(colRaw)
 			r, ok := ranges[col]
 			if !ok {
 				r = &IndexRangeCond{}
 				ranges[col] = r
 			}
 			r.HasMin = true
-			r.MinVal = cleanVal(m[2])
+			r.MinVal = cleanVal(extractExprRawVal(e.Low))
 			r.HasMax = true
-			r.MaxVal = cleanVal(m[3])
-		} else if m := gteBoundRe.FindStringSubmatch(part); len(m) == 3 {
-			col := CleanIdentifier(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &IndexRangeCond{}
-				ranges[col] = r
-			}
-			r.HasMin = true
-			r.MinVal = cleanVal(m[2])
-		} else if m := gtBoundRe.FindStringSubmatch(part); len(m) == 3 {
-			col := CleanIdentifier(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &IndexRangeCond{}
-				ranges[col] = r
-			}
-			r.HasMin = true
-			r.MinVal = cleanVal(m[2])
-		} else if m := lteBoundRe.FindStringSubmatch(part); len(m) == 3 {
-			col := CleanIdentifier(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &IndexRangeCond{}
-				ranges[col] = r
-			}
-			r.HasMax = true
-			r.MaxVal = cleanVal(m[2])
-		} else if m := ltBoundRe.FindStringSubmatch(part); len(m) == 3 {
-			col := CleanIdentifier(m[1])
-			r, ok := ranges[col]
-			if !ok {
-				r = &IndexRangeCond{}
-				ranges[col] = r
-			}
-			r.HasMax = true
-			r.MaxVal = cleanVal(m[2])
+			r.MaxVal = cleanVal(extractExprRawVal(e.High))
 		}
 	}
 	return eqs, ranges

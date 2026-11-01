@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -1423,12 +1422,17 @@ func substituteParamOutsideQuotes(query string, paramName string, formattedVal s
 	if !strings.HasPrefix(paramName, "@") {
 		paramName = "@" + paramName
 	}
-	re := getCompiledRegexp(`(?i)^` + regexp.QuoteMeta(paramName) + `\b`)
 
 	var b strings.Builder
 	inString := false
 	var quoteChar rune
 	runes := []rune(query)
+	paramRunes := []rune(paramName)
+	paramLen := len(paramRunes)
+
+	isRuneIdentChar := func(r rune) bool {
+		return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+	}
 
 	for i := 0; i < len(runes); {
 		ch := runes[i]
@@ -1458,16 +1462,16 @@ func substituteParamOutsideQuotes(query string, paramName string, formattedVal s
 					i++
 					continue
 				}
-				remainder := string(runes[i:])
-				loc := re.FindStringIndex(remainder)
-				if len(loc) == 2 && loc[0] == 0 {
-					b.WriteString(formattedVal)
-					matchedRunes := len([]rune(remainder[:loc[1]]))
-					i += matchedRunes
-				} else {
-					b.WriteRune(ch)
-					i++
+				if i+paramLen <= len(runes) && strings.EqualFold(string(runes[i:i+paramLen]), paramName) {
+					endIdx := i + paramLen
+					if endIdx == len(runes) || !isRuneIdentChar(runes[endIdx]) {
+						b.WriteString(formattedVal)
+						i = endIdx
+						continue
+					}
 				}
+				b.WriteRune(ch)
+				i++
 			} else {
 				b.WriteRune(ch)
 				i++

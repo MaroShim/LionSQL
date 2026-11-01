@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -12,12 +11,78 @@ import (
 	"lionsql/pkg/sqlutil"
 )
 
-var (
-	reSplitLimit   = regexp.MustCompile(`(?is)\bLIMIT\s+(\d+)`)
-	reSplitOffset  = regexp.MustCompile(`(?is)\bOFFSET\s+(\d+)`)
-	reSplitOrderBy = regexp.MustCompile(`(?is)\bORDER\s+BY\s+(.*?)(?:;|$)`)
-	reSplitWhere   = regexp.MustCompile(`(?is)\bWHERE\s+(.*?)(?:;|$)`)
-)
+func extractStringSplitTailClauses(rest string) (alias, whereClause, orderByClause string, limitCount, offsetCount int) {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(rest), ";"))
+	if s == "" {
+		return "", "", "", 0, 0
+	}
+
+	whereIdx := sqlutil.FindTopLevelKeyword(s, "WHERE")
+	orderIdx := sqlutil.FindTopLevelKeyword(s, "ORDER BY")
+	limitIdx := sqlutil.FindTopLevelKeyword(s, "LIMIT")
+	offsetIdx := sqlutil.FindTopLevelKeyword(s, "OFFSET")
+
+	firstKw := len(s)
+	for _, idx := range []int{whereIdx, orderIdx, limitIdx, offsetIdx} {
+		if idx != -1 && idx < firstKw {
+			firstKw = idx
+		}
+	}
+
+	aliasRaw := strings.TrimSpace(s[:firstKw])
+	if sqlutil.HasPrefixKeyword(aliasRaw, "AS") {
+		aliasRaw = strings.TrimSpace(aliasRaw[2:])
+	}
+	alias = cleanIdentifier(aliasRaw)
+
+	clauseEnd := func(start int) int {
+		end := len(s)
+		for _, idx := range []int{whereIdx, orderIdx, limitIdx, offsetIdx} {
+			if idx != -1 && idx > start && idx < end {
+				end = idx
+			}
+		}
+		return end
+	}
+
+	if whereIdx != -1 {
+		end := clauseEnd(whereIdx)
+		whereClause = strings.TrimSpace(s[whereIdx+len("WHERE") : end])
+	}
+	if orderIdx != -1 {
+		end := clauseEnd(orderIdx)
+		rem := strings.TrimSpace(s[orderIdx+len("ORDER"):])
+		if sqlutil.HasPrefixKeyword(rem, "BY") {
+			rem = strings.TrimSpace(rem[2:])
+		}
+		// Trim to before limit/offset if present after orderIdx
+		relEnd := end - orderIdx
+		if relEnd < len(s[orderIdx:]) {
+			sub := s[orderIdx:end]
+			byIdx := sqlutil.FindTopLevelKeyword(sub, "BY")
+			if byIdx != -1 {
+				orderByClause = strings.TrimSpace(sub[byIdx+2:])
+			}
+		} else {
+			orderByClause = rem
+		}
+	}
+	if limitIdx != -1 {
+		end := clauseEnd(limitIdx)
+		fields := strings.Fields(s[limitIdx+len("LIMIT") : end])
+		if len(fields) > 0 {
+			limitCount, _ = strconv.Atoi(fields[0])
+		}
+	}
+	if offsetIdx != -1 {
+		end := clauseEnd(offsetIdx)
+		fields := strings.Fields(s[offsetIdx+len("OFFSET") : end])
+		if len(fields) > 0 {
+			offsetCount, _ = strconv.Atoi(fields[0])
+		}
+	}
+	return alias, whereClause, orderByClause, limitCount, offsetCount
+}
 
 func isStringSplitSelect(query string) bool {
 	trimmed := strings.TrimSpace(query)
@@ -77,34 +142,7 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	rest := strings.TrimSpace(cleaned[closeParen+1:])
 
 	// 3. Parse clauses in rest: [AS alias] [WHERE whereClause] [ORDER BY orderByClause] [LIMIT limit] [OFFSET offset]
-	var alias, whereClause, orderByClause string
-	var limitCount, offsetCount int
-
-	if m := reSplitLimit.FindStringSubmatch(rest); len(m) == 2 {
-		limitCount, _ = strconv.Atoi(m[1])
-		rest = reSplitLimit.ReplaceAllString(rest, "")
-	}
-
-	if m := reSplitOffset.FindStringSubmatch(rest); len(m) == 2 {
-		offsetCount, _ = strconv.Atoi(m[1])
-		rest = reSplitOffset.ReplaceAllString(rest, "")
-	}
-
-	if m := reSplitOrderBy.FindStringSubmatch(rest); len(m) == 2 {
-		orderByClause = strings.TrimSpace(m[1])
-		rest = reSplitOrderBy.ReplaceAllString(rest, "")
-	}
-
-	if m := reSplitWhere.FindStringSubmatch(rest); len(m) == 2 {
-		whereClause = strings.TrimSpace(m[1])
-		rest = reSplitWhere.ReplaceAllString(rest, "")
-	}
-
-	// Whatever remains in rest is alias (e.g. "AS s", "s", or "")
-	aliasStr := strings.TrimSpace(strings.TrimSuffix(rest, ";"))
-	aliasStr = strings.TrimPrefix(aliasStr, "AS ")
-	aliasStr = strings.TrimPrefix(aliasStr, "as ")
-	alias = cleanIdentifier(strings.TrimSpace(aliasStr))
+	alias, whereClause, orderByClause, limitCount, offsetCount := extractStringSplitTailClauses(rest)
 
 	// 4. Parse STRING_SPLIT arguments: string, separator [, enable_ordinal]
 	args := parseStringSplitArgs(argsRaw)

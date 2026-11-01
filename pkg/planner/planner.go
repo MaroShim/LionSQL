@@ -1228,8 +1228,6 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		}
 	}
 
-	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(<=|>=|!=|<>|<|>|==|=|LIKE)\s*(.+)$`)
-
 	var chosenIndex *storage.IndexSchema
 	var chosenCond string
 	var chosenCol, chosenOp, chosenVal string
@@ -1253,17 +1251,17 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 					if HasDisjunction(cond) {
 						continue
 					}
-					m := eqRe.FindStringSubmatch(cond)
-					if len(m) == 4 {
-						colName := strings.TrimSpace(m[1])
+					if rawCol, op, val, ok := parseASTComparison(cond); ok {
+						colName := strings.TrimSpace(rawCol)
 						if dotIdx := strings.Index(colName, "."); dotIdx != -1 {
 							colName = colName[dotIdx+1:]
 						}
+						colName = cleanIdent(colName)
 						if strings.EqualFold(colName, chosenIndex.Columns[0]) {
 							chosenCond = cond
 							chosenCol = colName
-							chosenOp = strings.TrimSpace(m[2])
-							chosenVal = strings.TrimSpace(m[3])
+							chosenOp = op
+							chosenVal = val
 							matchedCond = true
 							break
 						}
@@ -1283,67 +1281,61 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			// Collect all equality conditions from pushed-down predicates.
 			eqColSet := make(map[string]bool)
 			eqColVals := make(map[string]string)
-			onlyEqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
-		for _, cond := range pushdownRes.PrimaryConds {
-			if HasDisjunction(cond) {
-				continue
-			}
-			if m := onlyEqRe.FindStringSubmatch(cond); len(m) == 3 {
-				rawCol := m[1]
-				if dot := strings.Index(rawCol, "."); dot != -1 {
-					rawCol = rawCol[dot+1:]
+			for _, cond := range pushdownRes.PrimaryConds {
+				if HasDisjunction(cond) {
+					continue
 				}
-				col := strings.ToLower(cleanIdent(rawCol))
-				val := strings.TrimSpace(m[2])
-				eqColSet[col] = true
-				eqColVals[col] = val
-			}
-		}
-		if len(eqColSet) >= 2 {
-			if compIdx, prefixLen := schema.FindBestCompositeIndex(eqColSet); compIdx != nil && prefixLen >= 2 {
-				sel := math.Pow(0.1, float64(prefixLen))
-				estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
-				if estRows < 1 {
-					estRows = 1
-				}
-				indexPagesCost := (float64(estRows) / float64(RowsPerPageDefault)) * RandomPageCost
-				if indexPagesCost < 0.05 {
-					indexPagesCost = 0.05
-				}
-				compCost := 0.25 + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
-				if compCost < tableScanTotalCost {
-					// Compose a representative condition label for the plan node.
-					var condParts []string
-					for _, col := range compIdx.Columns[:prefixLen] {
-						if v, ok := eqColVals[strings.ToLower(col)]; ok {
-							condParts = append(condParts, fmt.Sprintf("%s = %s", col, v))
-						}
+				if rawCol, op, val, ok := parseASTComparison(cond); ok && op == "=" {
+					if dot := strings.Index(rawCol, "."); dot != -1 {
+						rawCol = rawCol[dot+1:]
 					}
-					chosenIndex = compIdx
-					chosenCond = strings.Join(condParts, " AND ")
-					chosenCol = strings.Join(compIdx.Columns[:prefixLen], ",")
-					chosenOp = "="
-					chosenVal = ""
-					chosenEstRows = estRows
-					chosenCost = compCost
-					chosenCovering = false
+					col := strings.ToLower(cleanIdent(rawCol))
+					eqColSet[col] = true
+					eqColVals[col] = val
 				}
 			}
-		}
+			if len(eqColSet) >= 2 {
+				if compIdx, prefixLen := schema.FindBestCompositeIndex(eqColSet); compIdx != nil && prefixLen >= 2 {
+					sel := math.Pow(0.1, float64(prefixLen))
+					estRows := int64(math.Ceil(float64(estimatedTotal) * sel))
+					if estRows < 1 {
+						estRows = 1
+					}
+					indexPagesCost := (float64(estRows) / float64(RowsPerPageDefault)) * RandomPageCost
+					if indexPagesCost < 0.05 {
+						indexPagesCost = 0.05
+					}
+					compCost := 0.25 + float64(estRows)*(CPUIndexTupleCost+CPUTupleCost) + indexPagesCost
+					if compCost < tableScanTotalCost {
+						// Compose a representative condition label for the plan node.
+						var condParts []string
+						for _, col := range compIdx.Columns[:prefixLen] {
+							if v, ok := eqColVals[strings.ToLower(col)]; ok {
+								condParts = append(condParts, fmt.Sprintf("%s = %s", col, v))
+							}
+						}
+						chosenIndex = compIdx
+						chosenCond = strings.Join(condParts, " AND ")
+						chosenCol = strings.Join(compIdx.Columns[:prefixLen], ",")
+						chosenOp = "="
+						chosenVal = ""
+						chosenEstRows = estRows
+						chosenCost = compCost
+						chosenCovering = false
+					}
+				}
+			}
 
-		// --- Single-column index match (fallback) ---
-		for _, cond := range pushdownRes.PrimaryConds {
-			if HasDisjunction(cond) {
-				continue
-			}
-			if m := eqRe.FindStringSubmatch(cond); len(m) == 4 {
-				rawCol := m[1]
-				if idxDot := strings.Index(rawCol, "."); idxDot != -1 {
-					rawCol = rawCol[idxDot+1:]
+			// --- Single-column index match (fallback) ---
+			for _, cond := range pushdownRes.PrimaryConds {
+				if HasDisjunction(cond) {
+					continue
 				}
-				colName := cleanIdent(rawCol)
-				op := m[2]
-				valStr := strings.TrimSpace(m[3])
+				if rawCol, op, valStr, ok := parseASTComparison(cond); ok {
+					if idxDot := strings.Index(rawCol, "."); idxDot != -1 {
+						rawCol = rawCol[idxDot+1:]
+					}
+					colName := cleanIdent(rawCol)
 
 				if idx, found := schema.FindIndexByColumn(colName); found {
 					// Skip if a composite index covering more columns is already chosen.
@@ -1691,13 +1683,12 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		remWhere := strings.Join(pushdownRes.RemainingConds, " AND ")
 		sel := 0.33
 		if leftStats != nil && len(pushdownRes.RemainingConds) == 1 {
-			eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(=|<|<=|>|>=|!=|<>)\s*(.+)$`)
-			if m := eqRe.FindStringSubmatch(remWhere); len(m) == 4 {
-				col := m[1]
+			if rawCol, op, val, ok := parseASTComparison(remWhere); ok {
+				col := rawCol
 				if idx := strings.Index(col, "."); idx != -1 {
 					col = col[idx+1:]
 				}
-				sel = leftStats.EstimateSelectivity(col, m[2], strings.TrimSpace(m[3]))
+				sel = leftStats.EstimateSelectivity(col, op, val)
 			}
 		}
 
@@ -2088,10 +2079,14 @@ func ParseWindowDef(item string) (*WindowDef, bool) {
 
 	var args []string
 	if sqlutil.ContainsKeyword(funcPart, "WITHIN GROUP", false) {
-		withinRe := regexp.MustCompile(`(?i)^\s*(PERCENTILE_CONT|PERCENTILE_DISC)\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([a-zA-Z0-9_\.]+)(?:\s+(?:ASC|DESC))?\s*\)\s*$`)
-		if m := withinRe.FindStringSubmatch(funcPart); len(m) == 4 {
-			fnName = strings.ToUpper(m[1])
-			args = []string{strings.Trim(m[3], "\"`[]'"), m[2]} // [targetCol, percentile]
+		pWg := proc.NewParser(proc.NewLexer(funcPart))
+		if exprWg := pWg.ParseExpr(); exprWg != nil {
+			if wg, ok := exprWg.(*proc.WithinGroupExpr); ok && wg.Function != nil && len(wg.Function.Args) > 0 && wg.OrderBy != nil {
+				fnName = strings.ToUpper(wg.Function.Name)
+				targetCol := strings.Trim(wg.OrderBy.String(), "\"`[]'")
+				pctStr := wg.Function.Args[0].String()
+				args = []string{targetCol, pctStr} // [targetCol, percentile]
+			}
 		}
 	} else if rawArgs != "" {
 		for _, arg := range strings.Split(rawArgs, ",") {

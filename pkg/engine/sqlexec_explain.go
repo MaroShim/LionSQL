@@ -815,8 +815,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 
 	for i := range ctes {
 		cte := ctes[i]
-		cteWordRe := getCompiledRegexp(`\b` + regexp.QuoteMeta(cte.Name) + `\b`)
-		isRecursive := cteWordRe.MatchString(cte.InnerSQL)
+		isRecursive := sqlutil.ContainsKeyword(cte.InnerSQL, cte.Name, false)
 
 		var res *QueryResult
 		var recSQL string
@@ -938,7 +937,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 
 		// 3. If recursive, iteratively execute recursive step and insert new rows
 		if isRecursive && recSQL != "" && len(res.Rows) > 0 {
-			recSQLWithTemp := cteWordRe.ReplaceAllString(recSQL, tempName)
+			recSQLWithTemp := replaceIdentOutsideQuotes(recSQL, cte.Name, tempName)
 			for iter := 0; iter < 100; iter++ {
 				recRes, recErr := s.execSingleStatement(cs, recSQLWithTemp)
 				if recErr != nil || recRes == nil || len(recRes.Rows) == 0 {
@@ -984,10 +983,68 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 
 		// Rewrite occurrences of cte.Name in subsequent CTEs and in mainSQL with tempName
 		for j := i + 1; j < len(ctes); j++ {
-			ctes[j].InnerSQL = cteWordRe.ReplaceAllString(ctes[j].InnerSQL, tempName)
+			ctes[j].InnerSQL = replaceIdentOutsideQuotes(ctes[j].InnerSQL, cte.Name, tempName)
 		}
-		mainSQL = cteWordRe.ReplaceAllString(mainSQL, tempName)
+		mainSQL = replaceIdentOutsideQuotes(mainSQL, cte.Name, tempName)
 	}
 
 	return s.execSingleStatement(cs, mainSQL)
+}
+
+func replaceIdentOutsideQuotes(sqlStr, oldIdent, newIdent string) string {
+	n := len(sqlStr)
+	oldLen := len(oldIdent)
+	if n == 0 || oldLen == 0 {
+		return sqlStr
+	}
+	var sb strings.Builder
+	sb.Grow(n)
+	inSingle := false
+	inDouble := false
+	for i := 0; i < n; {
+		ch := sqlStr[i]
+		if inSingle {
+			sb.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < n && sqlStr[i+1] == '\'' {
+					sb.WriteByte(sqlStr[i+1])
+					i += 2
+					continue
+				}
+				inSingle = false
+			}
+			i++
+			continue
+		}
+		if inDouble {
+			sb.WriteByte(ch)
+			if ch == '"' {
+				inDouble = false
+			}
+			i++
+			continue
+		}
+		if ch == '\'' {
+			inSingle = true
+			sb.WriteByte(ch)
+			i++
+			continue
+		}
+		if ch == '"' {
+			inDouble = true
+			sb.WriteByte(ch)
+			i++
+			continue
+		}
+		if i+oldLen <= n && (i == 0 || !isIdentChar(sqlStr[i-1])) &&
+			(i+oldLen == n || !isIdentChar(sqlStr[i+oldLen])) &&
+			strings.EqualFold(sqlStr[i:i+oldLen], oldIdent) {
+			sb.WriteString(newIdent)
+			i += oldLen
+			continue
+		}
+		sb.WriteByte(ch)
+		i++
+	}
+	return sb.String()
 }

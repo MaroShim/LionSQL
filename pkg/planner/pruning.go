@@ -1,22 +1,12 @@
 package planner
 
 import (
-	"regexp"
 	"sort"
 	"strings"
 	"time"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/storage"
-)
-
-var (
-	condEqRe      = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*['"]?([^'"]+)['"]?\s*$`)
-	condGteRe     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*>=\s*['"]?([^'"]+)['"]?\s*$`)
-	condGtRe      = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*>\s*['"]?([^'"]+)['"]?\s*$`)
-	condLteRe     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*<=\s*['"]?([^'"]+)['"]?\s*$`)
-	condLtRe      = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*<\s*['"]?([^'"]+)['"]?\s*$`)
-	condBetweenRe = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s+BETWEEN\s+['"]?([^'"]+?)['"]?\s+AND\s+['"]?([^'"]+?)['"]?\s*$`)
-	condInRe      = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s+IN\s*\(([^)]+)\)\s*$`)
 )
 
 // PrunePartitions evaluates filter conditions against a partitioned table's partition key
@@ -39,42 +29,86 @@ func PrunePartitions(schema *storage.TableSchema, conds []string, availableParti
 			continue
 		}
 
-		// 1. Equality: col = 'val'
-		if m := condEqRe.FindStringSubmatch(trimmed); len(m) == 3 {
-			col := strings.ToLower(extractCol(m[1]))
-			if col == partCol {
-				foundPartitionFilter = true
-				if pKey, err := schema.ComputePartitionKeyFromValue(storage.StringValue(strings.TrimSpace(m[2]))); err == nil {
-					exactPartitions = map[string]bool{pKey: true}
-				}
-				continue
-			}
+		p := proc.NewParser(proc.NewLexer(trimmed))
+		expr := p.ParseExpr()
+		if expr == nil || len(p.Errors()) > 0 {
+			continue
 		}
 
-		// 2. IN list: col IN ('val1', 'val2')
-		if m := condInRe.FindStringSubmatch(trimmed); len(m) == 3 {
-			col := strings.ToLower(extractCol(m[1]))
+		switch e := expr.(type) {
+		case *proc.BinaryExpr:
+			rawCol, isCol := extractSimpleColIdent(e.Left)
+			if !isCol {
+				continue
+			}
+			col := strings.ToLower(extractCol(rawCol))
+			if col != partCol {
+				continue
+			}
+			val := strings.TrimSpace(extractExprRawVal(e.Right))
+			switch e.Op {
+			case proc.TokenEq, proc.TokenAssign:
+				foundPartitionFilter = true
+				if pKey, err := schema.ComputePartitionKeyFromValue(storage.StringValue(val)); err == nil {
+					exactPartitions = map[string]bool{pKey: true}
+				}
+			case proc.TokenGte, proc.TokenGt:
+				foundPartitionFilter = true
+				if k, err := schema.ComputePartitionKeyFromValue(storage.StringValue(val)); err == nil {
+					if minPart == "" || k > minPart {
+						minPart = k
+					}
+				}
+			case proc.TokenLte:
+				foundPartitionFilter = true
+				if k, err := schema.ComputePartitionKeyFromValue(storage.StringValue(val)); err == nil {
+					if maxPart == "" || k < maxPart {
+						maxPart = k
+					}
+				}
+			case proc.TokenLt:
+				foundPartitionFilter = true
+				ceilKey := computeCeilPartitionKey(schema, val)
+				if ceilKey != "" {
+					if maxPart == "" || ceilKey < maxPart {
+						maxPart = ceilKey
+					}
+				}
+			}
+
+		case *proc.InExpr:
+			if e.Not || len(e.List) == 0 {
+				continue
+			}
+			rawCol, isCol := extractSimpleColIdent(e.Expr)
+			if !isCol {
+				continue
+			}
+			col := strings.ToLower(extractCol(rawCol))
 			if col == partCol {
 				foundPartitionFilter = true
 				exactPartitions = make(map[string]bool)
-				parts := strings.Split(m[2], ",")
-				for _, p := range parts {
-					cleaned := strings.Trim(strings.TrimSpace(p), `'" `)
+				for _, item := range e.List {
+					cleaned := strings.Trim(strings.TrimSpace(extractExprRawVal(item)), `'" `)
 					if pKey, err := schema.ComputePartitionKeyFromValue(storage.StringValue(cleaned)); err == nil {
 						exactPartitions[pKey] = true
 					}
 				}
+			}
+
+		case *proc.BetweenExpr:
+			if e.Not {
 				continue
 			}
-		}
-
-		// 3. BETWEEN: col BETWEEN 'val1' AND 'val2'
-		if m := condBetweenRe.FindStringSubmatch(trimmed); len(m) == 4 {
-			col := strings.ToLower(extractCol(m[1]))
+			rawCol, isCol := extractSimpleColIdent(e.Expr)
+			if !isCol {
+				continue
+			}
+			col := strings.ToLower(extractCol(rawCol))
 			if col == partCol {
 				foundPartitionFilter = true
-				v1 := strings.TrimSpace(m[2])
-				v2 := strings.TrimSpace(m[3])
+				v1 := strings.TrimSpace(extractExprRawVal(e.Low))
+				v2 := strings.TrimSpace(extractExprRawVal(e.High))
 				if k1, err := schema.ComputePartitionKeyFromValue(storage.StringValue(v1)); err == nil {
 					if minPart == "" || k1 > minPart {
 						minPart = k1
@@ -85,69 +119,6 @@ func PrunePartitions(schema *storage.TableSchema, conds []string, availableParti
 						maxPart = k2
 					}
 				}
-				continue
-			}
-		}
-
-		// 4. Greater than or equal: col >= 'val'
-		if m := condGteRe.FindStringSubmatch(trimmed); len(m) == 3 {
-			col := strings.ToLower(extractCol(m[1]))
-			if col == partCol {
-				foundPartitionFilter = true
-				val := strings.TrimSpace(m[2])
-				if k, err := schema.ComputePartitionKeyFromValue(storage.StringValue(val)); err == nil {
-					if minPart == "" || k > minPart {
-						minPart = k
-					}
-				}
-				continue
-			}
-		}
-
-		// 5. Greater than: col > 'val'
-		if m := condGtRe.FindStringSubmatch(trimmed); len(m) == 3 {
-			col := strings.ToLower(extractCol(m[1]))
-			if col == partCol {
-				foundPartitionFilter = true
-				val := strings.TrimSpace(m[2])
-				if k, err := schema.ComputePartitionKeyFromValue(storage.StringValue(val)); err == nil {
-					if minPart == "" || k > minPart {
-						minPart = k
-					}
-				}
-				continue
-			}
-		}
-
-		// 6. Less than or equal: col <= 'val'
-		if m := condLteRe.FindStringSubmatch(trimmed); len(m) == 3 {
-			col := strings.ToLower(extractCol(m[1]))
-			if col == partCol {
-				foundPartitionFilter = true
-				val := strings.TrimSpace(m[2])
-				if k, err := schema.ComputePartitionKeyFromValue(storage.StringValue(val)); err == nil {
-					if maxPart == "" || k < maxPart {
-						maxPart = k
-					}
-				}
-				continue
-			}
-		}
-
-		// 7. Less than: col < 'val'
-		if m := condLtRe.FindStringSubmatch(trimmed); len(m) == 3 {
-			col := strings.ToLower(extractCol(m[1]))
-			if col == partCol {
-				foundPartitionFilter = true
-				val := strings.TrimSpace(m[2])
-				// For < boundary, compute ceiling partition key
-				ceilKey := computeCeilPartitionKey(schema, val)
-				if ceilKey != "" {
-					if maxPart == "" || ceilKey < maxPart {
-						maxPart = ceilKey
-					}
-				}
-				continue
 			}
 		}
 	}

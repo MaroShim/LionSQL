@@ -370,10 +370,7 @@ func (s *Coordinator) rewriteViewsAsCTE(query string) (string, bool) {
 	// Collect all views referenced in this query (word-boundary match against view names).
 	var cteParts []string
 	for _, v := range views {
-		esc := regexp.QuoteMeta(v.Name)
-		// Match the view name as a standalone identifier (not inside quotes or parens).
-		re := getCompiledRegexp(`(?i)\b` + esc + `\b`)
-		if re.MatchString(query) {
+		if sqlutil.ContainsKeyword(query, v.Name, false) {
 			cteParts = append(cteParts, fmt.Sprintf("%s AS (%s)", v.Name, v.Query))
 		}
 	}

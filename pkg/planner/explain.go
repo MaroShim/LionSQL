@@ -3,7 +3,6 @@ package planner
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"lionsql/pkg/storage"
@@ -215,8 +214,8 @@ func (p *Planner) BuildDMLPlanNode(dmlType string, tableName string, filterClaus
 			if pk, err := schema.PrimaryKeyColumn(); err == nil && pk != nil {
 				pkCol = pk.Name
 				if filterClause != "" {
-					eqPattern := fmt.Sprintf(`(?i)\b%s\s*=\s*([^\s;]+)`, regexp.QuoteMeta(pkCol))
-					if regexp.MustCompile(eqPattern).MatchString(filterClause) {
+					eqs, _ := ParseWhereConditions(filterClause)
+					if _, ok := eqs[strings.ToLower(pkCol)]; ok {
 						useIndex = true
 					}
 				}

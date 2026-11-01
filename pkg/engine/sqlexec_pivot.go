@@ -3,7 +3,6 @@ package engine
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,25 +10,147 @@ import (
 	"unicode"
 
 	"lionsql/pkg/planner"
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
-var (
-	rePivotMatch    = regexp.MustCompile(`(?i)\bPIVOT\s*\(`)
-	rePivotBody     = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_]+)\s*\((.*?)\)\s+FOR\s+([a-zA-Z0-9_#\[\].]+)\s+IN\s*\((.*?)\)\s*$`)
-	rePivotOrder    = regexp.MustCompile(`(?is)\s+ORDER\s+BY\s+(.*)$`)
-	rePivotWhere    = regexp.MustCompile(`(?is)\s+WHERE\s+(.*)$`)
-	rePivotCond     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_#\[\].]+)\s*(=|!=|<>|>=|<=|>|<)\s*(.+?)\s*$`)
-	reUnpivotMatch  = regexp.MustCompile(`(?i)\bUNPIVOT\s*\(`)
-	reUnpivotBody   = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_#\[\].]+)\s+FOR\s+([a-zA-Z0-9_#\[\].]+)\s+IN\s*\((.*?)\)\s*$`)
-	reForJsonMatch  = regexp.MustCompile(`(?i)\bFOR\s+JSON\s+(PATH|AUTO)\b`)
-	reForJsonClause = regexp.MustCompile(`(?i)\bFOR\s+JSON\s+(PATH|AUTO)(.*)$`)
-	reForJsonRoot   = regexp.MustCompile(`(?i)^ROOT(?:\s*\(\s*['"]?([^'"]+)['"]?\s*\))?`)
-)
+func findKeywordFollowedByParen(s string, kw string) int {
+	n := len(s)
+	kwLen := len(kw)
+	inSingle := false
+	inDouble := false
+	inBracket := false
+	for i := 0; i <= n-kwLen; i++ {
+		ch := s[i]
+		if inSingle {
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingle = false
+			}
+			continue
+		}
+		if inDouble {
+			if ch == '"' {
+				inDouble = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				inBracket = false
+			}
+			continue
+		}
+		if ch == '\'' {
+			inSingle = true
+			continue
+		}
+		if ch == '"' {
+			inDouble = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+		if (i == 0 || !isIdentChar(s[i-1])) && strings.EqualFold(s[i:i+kwLen], kw) {
+			j := i + kwLen
+			if j < n && isIdentChar(s[j]) {
+				continue
+			}
+			for j < n && unicode.IsSpace(rune(s[j])) {
+				j++
+			}
+			if j < n && s[j] == '(' {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+func parsePivotInnerBody(pivotBody string) (aggFunc, aggCol, pivotCol, rawPivotVals string, ok bool) {
+	s := strings.TrimSpace(pivotBody)
+	openP := strings.IndexByte(s, '(')
+	if openP <= 0 {
+		return "", "", "", "", false
+	}
+	aggFunc = strings.ToUpper(strings.TrimSpace(s[:openP]))
+	for i := 0; i < len(aggFunc); i++ {
+		if !isIdentChar(aggFunc[i]) {
+			return "", "", "", "", false
+		}
+	}
+	closeP := findMatchingParen(s, openP)
+	if closeP == -1 {
+		return "", "", "", "", false
+	}
+	aggCol = cleanIdentifier(strings.TrimSpace(s[openP+1 : closeP]))
+	rem := strings.TrimSpace(s[closeP+1:])
+	if !sqlutil.HasPrefixKeyword(rem, "FOR") {
+		return "", "", "", "", false
+	}
+	rem = strings.TrimSpace(rem[3:])
+	inIdx := sqlutil.FindTopLevelKeyword(rem, "IN")
+	if inIdx <= 0 {
+		return "", "", "", "", false
+	}
+	pivotCol = cleanIdentifier(strings.TrimSpace(rem[:inIdx]))
+	afterIn := strings.TrimSpace(rem[inIdx+2:])
+	if !strings.HasPrefix(afterIn, "(") || !strings.HasSuffix(afterIn, ")") {
+		return "", "", "", "", false
+	}
+	rawPivotVals = strings.TrimSpace(afterIn[1 : len(afterIn)-1])
+	return aggFunc, aggCol, pivotCol, rawPivotVals, true
+}
+
+func parseUnpivotInnerBody(unpivotBody string) (valCol, nameCol, rawCols string, ok bool) {
+	s := strings.TrimSpace(unpivotBody)
+	forIdx := sqlutil.FindTopLevelKeyword(s, "FOR")
+	if forIdx <= 0 {
+		return "", "", "", false
+	}
+	valCol = cleanIdentifier(strings.TrimSpace(s[:forIdx]))
+	rem := strings.TrimSpace(s[forIdx+3:])
+	inIdx := sqlutil.FindTopLevelKeyword(rem, "IN")
+	if inIdx <= 0 {
+		return "", "", "", false
+	}
+	nameCol = cleanIdentifier(strings.TrimSpace(rem[:inIdx]))
+	afterIn := strings.TrimSpace(rem[inIdx+2:])
+	if !strings.HasPrefix(afterIn, "(") || !strings.HasSuffix(afterIn, ")") {
+		return "", "", "", false
+	}
+	rawCols = strings.TrimSpace(afterIn[1 : len(afterIn)-1])
+	return valCol, nameCol, rawCols, true
+}
+
+func parsePivotTailClauses(afterPivot string) (alias, whereClause, orderByClause string) {
+	s := strings.TrimSpace(afterPivot)
+	if orderIdx := sqlutil.FindTopLevelKeyword(s, "ORDER BY"); orderIdx != -1 {
+		rem := strings.TrimSpace(s[orderIdx+len("ORDER"):])
+		if sqlutil.HasPrefixKeyword(rem, "BY") {
+			orderByClause = strings.TrimSpace(rem[2:])
+		}
+		s = strings.TrimSpace(s[:orderIdx])
+	}
+	if whereIdx := sqlutil.FindTopLevelKeyword(s, "WHERE"); whereIdx != -1 {
+		whereClause = strings.TrimSpace(s[whereIdx+len("WHERE"):])
+		s = strings.TrimSpace(s[:whereIdx])
+	}
+	if sqlutil.HasPrefixKeyword(s, "AS") {
+		s = strings.TrimSpace(s[2:])
+	}
+	alias = cleanIdentifier(s)
+	return alias, whereClause, orderByClause
+}
 
 func hasPivot(query string) bool {
-	return rePivotMatch.MatchString(query)
+	return findKeywordFollowedByParen(query, "PIVOT") != -1
 }
 
 type pivotParsedQuery struct {
@@ -51,11 +172,10 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 		return nil, fmt.Errorf("PIVOT query must start with SELECT")
 	}
 
-	loc := rePivotMatch.FindStringIndex(trimmed)
-	if loc == nil {
+	pivotIdx := findKeywordFollowedByParen(trimmed, "PIVOT")
+	if pivotIdx == -1 {
 		return nil, fmt.Errorf("no PIVOT clause found")
 	}
-	pivotIdx := loc[0]
 
 	// Find top-level FROM keyword between SELECT and pivotIdx
 	depth := 0
@@ -147,15 +267,10 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 	afterPivot := strings.TrimSpace(trimmed[closeParen+1:])
 
 	// Parse pivot body: <agg_func>(<agg_col>) FOR <pivot_col> IN (<pivot_vals>)
-	m := rePivotBody.FindStringSubmatch(pivotBody)
-	if len(m) != 5 {
+	aggFunc, aggCol, pivotCol, rawPivotVals, ok := parsePivotInnerBody(pivotBody)
+	if !ok {
 		return nil, fmt.Errorf("malformed PIVOT clause: %s", pivotBody)
 	}
-
-	aggFunc := strings.ToUpper(strings.TrimSpace(m[1]))
-	aggCol := cleanIdentifier(strings.TrimSpace(m[2]))
-	pivotCol := cleanIdentifier(strings.TrimSpace(m[3]))
-	rawPivotVals := strings.TrimSpace(m[4])
 
 	var pivotValues []string
 	for _, val := range strings.Split(rawPivotVals, ",") {
@@ -166,16 +281,7 @@ func parsePivotQuery(query string) (*pivotParsedQuery, error) {
 	}
 
 	// Parse afterPivot: [AS] <alias> [WHERE <where>] [ORDER BY <order>]
-	var orderByClause, whereClause, pivotAlias string
-	if mOrder := rePivotOrder.FindStringSubmatch(afterPivot); len(mOrder) == 2 {
-		orderByClause = strings.TrimSpace(mOrder[1])
-		afterPivot = afterPivot[:len(afterPivot)-len(mOrder[0])]
-	}
-	if mWhere := rePivotWhere.FindStringSubmatch(afterPivot); len(mWhere) == 2 {
-		whereClause = strings.TrimSpace(mWhere[1])
-		afterPivot = afterPivot[:len(afterPivot)-len(mWhere[0])]
-	}
-	pivotAlias = cleanIdentifier(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(afterPivot), "AS ")))
+	pivotAlias, whereClause, orderByClause := parsePivotTailClauses(afterPivot)
 
 	return &pivotParsedQuery{
 		OuterProjections: outerProjs,
@@ -460,13 +566,31 @@ func (s *Coordinator) evalSimpleRowWhere(row map[string]any, where string) bool 
 	parts := splitOnAnd(where)
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		m := rePivotCond.FindStringSubmatch(part)
-		if len(m) != 4 {
+		p := proc.NewParser(proc.NewLexer(part))
+		expr := p.ParseExpr()
+		bin, ok := expr.(*proc.BinaryExpr)
+		if !ok || bin == nil || bin.Left == nil || bin.Right == nil {
 			continue
 		}
-		rawCol := cleanIdentifier(m[1])
-		op := m[2]
-		targetStr := strings.Trim(strings.TrimSpace(m[3]), "'\"")
+		var op string
+		switch bin.Op {
+		case proc.TokenEq, proc.TokenAssign:
+			op = "="
+		case proc.TokenNeq:
+			op = "!="
+		case proc.TokenGt:
+			op = ">"
+		case proc.TokenGte:
+			op = ">="
+		case proc.TokenLt:
+			op = "<"
+		case proc.TokenLte:
+			op = "<="
+		default:
+			continue
+		}
+		rawCol := cleanIdentifier(bin.Left.String())
+		targetStr := strings.Trim(strings.TrimSpace(bin.Right.String()), "'\"")
 
 		val, exists := row[rawCol]
 		if !exists {
@@ -645,7 +769,7 @@ func compareAny(a, b any) int {
 // -----------------------------------------------------------------------------
 
 func hasUnpivot(query string) bool {
-	return reUnpivotMatch.MatchString(query)
+	return findKeywordFollowedByParen(query, "UNPIVOT") != -1
 }
 
 type unpivotParsedQuery struct {
@@ -666,11 +790,10 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 		return nil, fmt.Errorf("UNPIVOT query must start with SELECT")
 	}
 
-	loc := reUnpivotMatch.FindStringIndex(trimmed)
-	if loc == nil {
+	unpivotIdx := findKeywordFollowedByParen(trimmed, "UNPIVOT")
+	if unpivotIdx == -1 {
 		return nil, fmt.Errorf("no UNPIVOT clause found")
 	}
-	unpivotIdx := loc[0]
 
 	// Find top-level FROM keyword between SELECT and unpivotIdx
 	depth := 0
@@ -760,14 +883,10 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 	afterUnpivot := strings.TrimSpace(trimmed[closeParen+1:])
 
 	// Parse unpivot body: <val_col> FOR <name_col> IN (<cols>)
-	m := reUnpivotBody.FindStringSubmatch(unpivotBody)
-	if len(m) != 4 {
+	valCol, nameCol, rawCols, ok := parseUnpivotInnerBody(unpivotBody)
+	if !ok {
 		return nil, fmt.Errorf("malformed UNPIVOT clause: %s", unpivotBody)
 	}
-
-	valCol := cleanIdentifier(strings.TrimSpace(m[1]))
-	nameCol := cleanIdentifier(strings.TrimSpace(m[2]))
-	rawCols := strings.TrimSpace(m[3])
 
 	var unpivotCols []string
 	for _, col := range strings.Split(rawCols, ",") {
@@ -777,16 +896,7 @@ func parseUnpivotQuery(query string) (*unpivotParsedQuery, error) {
 		}
 	}
 
-	var orderByClause, whereClause, unpivotAlias string
-	if mOrder := rePivotOrder.FindStringSubmatch(afterUnpivot); len(mOrder) == 2 {
-		orderByClause = strings.TrimSpace(mOrder[1])
-		afterUnpivot = afterUnpivot[:len(afterUnpivot)-len(mOrder[0])]
-	}
-	if mWhere := rePivotWhere.FindStringSubmatch(afterUnpivot); len(mWhere) == 2 {
-		whereClause = strings.TrimSpace(mWhere[1])
-		afterUnpivot = afterUnpivot[:len(afterUnpivot)-len(mWhere[0])]
-	}
-	unpivotAlias = cleanIdentifier(strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(afterUnpivot), "AS ")))
+	unpivotAlias, whereClause, orderByClause := parsePivotTailClauses(afterUnpivot)
 
 	return &unpivotParsedQuery{
 		OuterProjections: outerProjs,
@@ -974,8 +1084,36 @@ func (s *Coordinator) execUnpivotSelect(query string, start time.Time, cs *Clien
 // T-SQL FOR JSON Clause Engine (PATH, AUTO, WITHOUT_ARRAY_WRAPPER, ROOT, INCLUDE_NULL_VALUES)
 // -----------------------------------------------------------------------------
 
+func findForJSONClause(query string) (idx int, mode string, rawOptions string, ok bool) {
+	idxPath := sqlutil.FindTopLevelKeyword(query, "FOR JSON PATH")
+	idxAuto := sqlutil.FindTopLevelKeyword(query, "FOR JSON AUTO")
+	idx = -1
+	if idxPath != -1 && (idxAuto == -1 || idxPath < idxAuto) {
+		idx = idxPath
+		mode = "PATH"
+	} else if idxAuto != -1 {
+		idx = idxAuto
+		mode = "AUTO"
+	} else {
+		return -1, "", "", false
+	}
+	rem := strings.TrimSpace(query[idx:])
+	// Advance past FOR, JSON, and PATH/AUTO
+	if sqlutil.HasPrefixKeyword(rem, "FOR") {
+		rem = strings.TrimSpace(rem[3:])
+	}
+	if sqlutil.HasPrefixKeyword(rem, "JSON") {
+		rem = strings.TrimSpace(rem[4:])
+	}
+	if sqlutil.HasPrefixKeyword(rem, mode) {
+		rem = strings.TrimSpace(rem[len(mode):])
+	}
+	return idx, mode, rem, true
+}
+
 func hasForJSON(query string) bool {
-	return reForJsonMatch.MatchString(query)
+	_, _, _, ok := findForJSONClause(query)
+	return ok
 }
 
 type forJSONOptions struct {
@@ -987,17 +1125,12 @@ type forJSONOptions struct {
 }
 
 func parseForJSONQuery(query string) (*forJSONOptions, error) {
-	loc := reForJsonClause.FindStringSubmatchIndex(query)
-	if loc == nil {
+	idx, mode, rawOptions, ok := findForJSONClause(query)
+	if !ok {
 		return nil, fmt.Errorf("no FOR JSON clause found")
 	}
 
-	baseQuery := strings.TrimSpace(query[:loc[0]])
-	mode := strings.ToUpper(query[loc[2]:loc[3]])
-	rawOptions := ""
-	if len(loc) >= 6 && loc[4] != -1 {
-		rawOptions = strings.TrimSpace(query[loc[4]:loc[5]])
-	}
+	baseQuery := strings.TrimSpace(query[:idx])
 
 	opts := &forJSONOptions{
 		BaseQuery: baseQuery,
@@ -1016,8 +1149,14 @@ func parseForJSONQuery(query string) (*forJSONOptions, error) {
 				opts.IncludeNullValues = true
 			} else if strings.HasPrefix(pUpper, "ROOT") {
 				// ROOT or ROOT('name')
-				if m := reForJsonRoot.FindStringSubmatch(p); len(m) >= 2 && m[1] != "" {
-					opts.RootName = m[1]
+				afterRoot := strings.TrimSpace(p[4:])
+				if strings.HasPrefix(afterRoot, "(") && strings.HasSuffix(afterRoot, ")") {
+					inner := strings.Trim(strings.TrimSpace(afterRoot[1:len(afterRoot)-1]), "'\"")
+					if inner != "" {
+						opts.RootName = inner
+					} else {
+						opts.RootName = "root"
+					}
 				} else {
 					opts.RootName = "root"
 				}
@@ -1028,25 +1167,54 @@ func parseForJSONQuery(query string) (*forJSONOptions, error) {
 	return opts, nil
 }
 
-var reFromOrJoin = regexp.MustCompile(`(?i)\b(?:FROM|JOIN)\s+([a-zA-Z0-9_#\[\].]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_#\[\]]+))?`)
-
 func extractTableAliases(query string) map[string]bool {
 	aliases := make(map[string]bool)
-	matches := reFromOrJoin.FindAllStringSubmatch(query, -1)
 	reservedWords := map[string]bool{
 		"where": true, "on": true, "join": true, "inner": true, "left": true, "right": true,
 		"cross": true, "outer": true, "full": true, "group": true, "order": true, "having": true,
 		"for": true, "limit": true, "offset": true, "as": true, "apply": true,
 	}
-	for _, m := range matches {
-		if len(m) > 1 && m[1] != "" {
-			tbl := strings.ToLower(cleanIdentifier(m[1]))
-			aliases[tbl] = true
+	lex := proc.NewLexer(query)
+	var toks []proc.Token
+	for {
+		t := lex.NextToken()
+		if t.Type == proc.TokenEOF {
+			break
 		}
-		if len(m) > 2 && m[2] != "" {
-			aliasCandidate := strings.ToLower(cleanIdentifier(m[2]))
-			if !reservedWords[aliasCandidate] {
-				aliases[aliasCandidate] = true
+		toks = append(toks, t)
+	}
+	readQualIdent := func(pos int) (string, int) {
+		if pos >= len(toks) || toks[pos].Type != proc.TokenIdent {
+			return "", pos
+		}
+		var sb strings.Builder
+		sb.WriteString(toks[pos].Literal)
+		pos++
+		for pos+1 < len(toks) && toks[pos].Literal == "." && toks[pos+1].Type == proc.TokenIdent {
+			sb.WriteByte('.')
+			sb.WriteString(toks[pos+1].Literal)
+			pos += 2
+		}
+		return sb.String(), pos
+	}
+	for i := 0; i < len(toks); i++ {
+		if strings.EqualFold(toks[i].Literal, "FROM") || strings.EqualFold(toks[i].Literal, "JOIN") {
+			tblRaw, nextIdx := readQualIdent(i + 1)
+			if tblRaw != "" {
+				aliases[strings.ToLower(cleanIdentifier(tblRaw))] = true
+				if nextIdx < len(toks) {
+					if toks[nextIdx].Type == proc.TokenAs && nextIdx+1 < len(toks) && toks[nextIdx+1].Type == proc.TokenIdent {
+						aliasCand := strings.ToLower(cleanIdentifier(toks[nextIdx+1].Literal))
+						if !reservedWords[aliasCand] {
+							aliases[aliasCand] = true
+						}
+					} else if toks[nextIdx].Type == proc.TokenIdent {
+						aliasCand := strings.ToLower(cleanIdentifier(toks[nextIdx].Literal))
+						if !reservedWords[aliasCand] {
+							aliases[aliasCand] = true
+						}
+					}
+				}
 			}
 		}
 	}

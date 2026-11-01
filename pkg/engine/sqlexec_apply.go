@@ -2,37 +2,19 @@ package engine
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
-	"sync"
 	"time"
 	"unicode"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 )
-
-var (
-	reApplyMatch   = regexp.MustCompile(`(?i)\b(CROSS|OUTER)\s+APPLY\b`)
-	rePatternCache sync.Map // map[string]*regexp.Regexp
-)
-
-func getCompiledRegexp(pat string) *regexp.Regexp {
-	if val, ok := rePatternCache.Load(pat); ok {
-		return val.(*regexp.Regexp)
-	}
-	re := regexp.MustCompile(pat)
-	rePatternCache.Store(pat, re)
-	return re
-}
 
 // hasApply reports whether the query contains a CROSS APPLY or OUTER APPLY join.
 func hasApply(query string) bool {
-	upper := strings.ToUpper(query)
-	if !strings.Contains(upper, "APPLY") {
-		return false
-	}
-	return reApplyMatch.MatchString(query)
+	return sqlutil.ContainsKeyword(query, "CROSS APPLY", false) ||
+		sqlutil.ContainsKeyword(query, "OUTER APPLY", false)
 }
 
 // execApplySelect handles SELECT queries containing CROSS APPLY or OUTER APPLY clauses.

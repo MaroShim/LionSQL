@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"lionsql/pkg/catalog/virtual"
 	"lionsql/pkg/execution"
@@ -20,21 +20,274 @@ import (
 
 // QueryResult represents the outcome of a SQL statement execution (aliased from engine.QueryResult).
 
-var (
-	reTblVarDecl   = regexp.MustCompile(`(?is)^DECLARE\s+@[a-zA-Z0-9_]+\s+TABLE\b`)
-	reKillCmd      = regexp.MustCompile(`(?is)^KILL\s+(\d+)(?:\s+WITH\s+STATUSONLY)?$`)
-	reUseCmd       = regexp.MustCompile(`(?is)^USE\s+(?:\[([^\]]+)\]|"([^"]+)"|'([^']+)'|([a-zA-Z0-9_.-]+))\s*;?$`)
-	reSetConfig     = regexp.MustCompile(`(?is)^(?:SESSION\s+)?([a-zA-Z0-9_]+)\s*(?:TO|=)\s*(.*)$`)
-	reShowParts     = regexp.MustCompile(`(?is)^SHOW\s+PARTITIONS(?:\s+FROM)?\s+([^\s;]+)\s*;?$`)
-	reShowTables    = regexp.MustCompile(`(?is)^SHOW\s+(?:FULL\s+)?TABLES(?:\s+(?:FROM|IN)\s+([^\s;]+))?\s*;?$`)
-	reShowDatabases = regexp.MustCompile(`(?is)^SHOW\s+(?:DATABASES|SCHEMAS)\s*;?$`)
-	reDescTable     = regexp.MustCompile(`(?is)^(?:DESC|DESCRIBE)\s+([^\s;]+)\s*;?$`)
-	reShowParam     = regexp.MustCompile(`(?is)^SHOW\s+(.*?)\s*;?$`)
-	reSelectSysVar = regexp.MustCompile(`(?is)^SELECT\s+@@([a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
-	reTblVarCreate = regexp.MustCompile(`(?is)^DECLARE\s+(@[a-zA-Z0-9_]+)\s+TABLE\s*\((.*)\)\s*;?$`)
-	reSetVar       = regexp.MustCompile(`(?is)^SET\s+@([a-zA-Z0-9_]+)\s*(?::=|=)\s*(.*)$`)
-	reSelectVar    = regexp.MustCompile(`(?is)^SELECT\s+(@[a-zA-Z0-9_]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?$`)
-)
+// parseTableVarDecl parses DECLARE @var TABLE [(colDefs...)] using lexical token scanning.
+// Returns (varName, colDefs, isTableDecl, hasColDefs).
+func parseTableVarDecl(query string) (varName string, colDefs string, isTableDecl bool, hasColDefs bool) {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	if !sqlutil.HasPrefixKeyword(s, "DECLARE") {
+		return "", "", false, false
+	}
+	rest := strings.TrimSpace(s[len("DECLARE"):])
+	if !strings.HasPrefix(rest, "@") {
+		return "", "", false, false
+	}
+	idx := 1
+	for idx < len(rest) && isIdentChar(rest[idx]) {
+		idx++
+	}
+	if idx == 1 {
+		return "", "", false, false
+	}
+	varName = rest[:idx]
+	afterVar := strings.TrimSpace(rest[idx:])
+	if !sqlutil.HasPrefixKeyword(afterVar, "TABLE") {
+		return "", "", false, false
+	}
+	isTableDecl = true
+	afterTable := strings.TrimSpace(afterVar[len("TABLE"):])
+	if strings.HasPrefix(afterTable, "(") && strings.HasSuffix(afterTable, ")") {
+		colDefs = afterTable[1 : len(afterTable)-1]
+		hasColDefs = true
+	}
+	return varName, colDefs, true, hasColDefs
+}
+
+// parseKillCommand parses KILL <spid> [WITH STATUSONLY].
+func parseKillCommand(query string) (int, bool) {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	fields := strings.Fields(s)
+	if len(fields) == 0 || !strings.EqualFold(fields[0], "KILL") {
+		return 0, false
+	}
+	if len(fields) != 2 && !(len(fields) == 4 && strings.EqualFold(fields[2], "WITH") && strings.EqualFold(fields[3], "STATUSONLY")) {
+		return 0, false
+	}
+	spid, err := strconv.Atoi(fields[1])
+	if err != nil || spid < 0 {
+		return 0, false
+	}
+	return spid, true
+}
+
+// parseUseCommand parses USE <database>.
+func parseUseCommand(query string) (string, bool) {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	if !sqlutil.HasPrefixKeyword(s, "USE") {
+		return "", false
+	}
+	arg := strings.TrimSpace(s[3:])
+	if arg == "" {
+		return "", false
+	}
+	if (strings.HasPrefix(arg, "[") && strings.HasSuffix(arg, "]")) ||
+		(strings.HasPrefix(arg, "\"") && strings.HasSuffix(arg, "\"")) ||
+		(strings.HasPrefix(arg, "'") && strings.HasSuffix(arg, "'")) {
+		inner := arg[1 : len(arg)-1]
+		if strings.ContainsAny(inner, "[]\"'") {
+			return "", false
+		}
+		if inner == "" {
+			inner = "master"
+		}
+		return inner, true
+	}
+	for i := 0; i < len(arg); i++ {
+		ch := arg[i]
+		if !isIdentChar(ch) && ch != '.' && ch != '-' {
+			return "", false
+		}
+	}
+	return arg, true
+}
+
+// parseSetConfigRest parses [SESSION] <param> [= | TO] <val>.
+func parseSetConfigRest(rest string) (param string, val string, ok bool) {
+	s := strings.TrimSpace(rest)
+	if sqlutil.HasPrefixKeyword(s, "SESSION") {
+		s = strings.TrimSpace(s[len("SESSION"):])
+	}
+	idx := 0
+	for idx < len(s) && isIdentChar(s[idx]) {
+		idx++
+	}
+	if idx == 0 {
+		return "", "", false
+	}
+	param = s[:idx]
+	rem := strings.TrimSpace(s[idx:])
+	if strings.HasPrefix(rem, "=") {
+		return param, strings.TrimSpace(rem[1:]), true
+	}
+	if sqlutil.HasPrefixKeyword(rem, "TO") {
+		return param, strings.TrimSpace(rem[2:]), true
+	}
+	return "", "", false
+}
+
+// parseDescTableCommand parses (DESC|DESCRIBE) <table> [;].
+func parseDescTableCommand(query string) (string, bool) {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	var arg string
+	if sqlutil.HasPrefixKeyword(s, "DESCRIBE") {
+		arg = strings.TrimSpace(s[len("DESCRIBE"):])
+	} else if sqlutil.HasPrefixKeyword(s, "DESC") {
+		arg = strings.TrimSpace(s[len("DESC"):])
+	} else {
+		return "", false
+	}
+	if arg == "" || strings.ContainsAny(arg, " \t\n\r;") {
+		return "", false
+	}
+	return arg, true
+}
+
+// isShowTablesCommand checks SHOW [FULL] TABLES [(FROM|IN) <db>] [;].
+func isShowTablesCommand(query string) bool {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	fields := strings.Fields(s)
+	if len(fields) < 2 || !strings.EqualFold(fields[0], "SHOW") {
+		return false
+	}
+	idx := 1
+	if strings.EqualFold(fields[idx], "FULL") {
+		idx++
+	}
+	if idx >= len(fields) || !strings.EqualFold(fields[idx], "TABLES") {
+		return false
+	}
+	idx++
+	if idx == len(fields) {
+		return true
+	}
+	if idx+2 == len(fields) && (strings.EqualFold(fields[idx], "FROM") || strings.EqualFold(fields[idx], "IN")) {
+		return true
+	}
+	return false
+}
+
+// isShowDatabasesCommand checks SHOW (DATABASES|SCHEMAS) [;].
+func isShowDatabasesCommand(query string) bool {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	fields := strings.Fields(s)
+	return len(fields) == 2 && strings.EqualFold(fields[0], "SHOW") &&
+		(strings.EqualFold(fields[1], "DATABASES") || strings.EqualFold(fields[1], "SCHEMAS"))
+}
+
+// parseShowPartitionsCommand parses SHOW PARTITIONS [FROM] <table> [;].
+func parseShowPartitionsCommand(query string) (string, bool) {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	fields := strings.Fields(s)
+	if len(fields) < 3 || !strings.EqualFold(fields[0], "SHOW") || !strings.EqualFold(fields[1], "PARTITIONS") {
+		return "", false
+	}
+	if len(fields) == 3 {
+		return fields[2], true
+	}
+	if len(fields) == 4 && strings.EqualFold(fields[2], "FROM") {
+		return fields[3], true
+	}
+	return "", false
+}
+
+// parseShowParamCommand parses SHOW <param> [;].
+func parseShowParamCommand(query string) (string, bool) {
+	s := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(query), ";"))
+	if !sqlutil.HasPrefixKeyword(s, "SHOW") {
+		return "", false
+	}
+	param := strings.TrimSpace(s[len("SHOW"):])
+	if param == "" {
+		return "", false
+	}
+	return param, true
+}
+
+// parseSelectSingleVar parses SELECT (@var | @@sysvar) [[AS] alias].
+func parseSelectSingleVar(query string, isSysVar bool) (varName string, alias string, ok bool) {
+	s := strings.TrimSpace(query)
+	if !sqlutil.HasPrefixKeyword(s, "SELECT") {
+		return "", "", false
+	}
+	rest := strings.TrimSpace(s[len("SELECT"):])
+	prefix := "@"
+	if isSysVar {
+		prefix = "@@"
+	}
+	if !strings.HasPrefix(rest, prefix) {
+		return "", "", false
+	}
+	if !isSysVar && strings.HasPrefix(rest, "@@") {
+		return "", "", false
+	}
+	startIdx := len(prefix)
+	idx := startIdx
+	for idx < len(rest) && isIdentChar(rest[idx]) {
+		idx++
+	}
+	if idx == startIdx {
+		return "", "", false
+	}
+	if isSysVar {
+		varName = rest[startIdx:idx]
+	} else {
+		varName = rest[:idx]
+	}
+	rem := strings.TrimSpace(rest[idx:])
+	if rem == "" {
+		return varName, "", true
+	}
+	fields := strings.Fields(rem)
+	if len(fields) == 1 {
+		for i := 0; i < len(fields[0]); i++ {
+			if !isIdentChar(fields[0][i]) {
+				return "", "", false
+			}
+		}
+		if strings.EqualFold(fields[0], "FROM") || strings.EqualFold(fields[0], "WHERE") {
+			return "", "", false
+		}
+		return varName, fields[0], true
+	}
+	if len(fields) == 2 && strings.EqualFold(fields[0], "AS") {
+		for i := 0; i < len(fields[1]); i++ {
+			if !isIdentChar(fields[1][i]) {
+				return "", "", false
+			}
+		}
+		return varName, fields[1], true
+	}
+	return "", "", false
+}
+
+// parseSetLocalVarCommand parses SET @var (:= | =) <expr>.
+func parseSetLocalVarCommand(query string) (varName string, expr string, ok bool) {
+	s := strings.TrimSpace(query)
+	if !sqlutil.HasPrefixKeyword(s, "SET") {
+		return "", "", false
+	}
+	rest := strings.TrimSpace(s[len("SET"):])
+	if !strings.HasPrefix(rest, "@") || strings.HasPrefix(rest, "@@") {
+		return "", "", false
+	}
+	idx := 1
+	for idx < len(rest) && isIdentChar(rest[idx]) {
+		idx++
+	}
+	if idx == 1 {
+		return "", "", false
+	}
+	varName = rest[1:idx]
+	rem := strings.TrimSpace(rest[idx:])
+	if strings.HasPrefix(rem, ":=") {
+		return varName, strings.TrimSpace(rem[2:]), true
+	}
+	if strings.HasPrefix(rem, "=") {
+		return varName, strings.TrimSpace(rem[1:]), true
+	}
+	return "", "", false
+}
+
+var _ = unicode.IsSpace
 
 func parseSessionVarValue(s string) any {
 	return ParseSessionVarValue(s)
@@ -337,10 +590,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	// Rewrite table variables (@table -> physical table)
 	if cs != nil {
 		cs.Mu.Lock()
-		if len(cs.TableVars) > 0 && !reTblVarDecl.MatchString(trimmed) {
+		_, _, isTblDecl, _ := parseTableVarDecl(trimmed)
+		if len(cs.TableVars) > 0 && !isTblDecl {
 			for varName, physTable := range cs.TableVars {
-				pattern := `(?i)@` + regexp.QuoteMeta(strings.TrimPrefix(varName, "@")) + `\b`
-				trimmed = getCompiledRegexp(pattern).ReplaceAllString(trimmed, "["+physTable+"]")
+				trimmed = substituteParamOutsideQuotes(trimmed, "@"+strings.TrimPrefix(varName, "@"), "["+physTable+"]")
 			}
 			upper = strings.ToUpper(trimmed)
 		}
@@ -354,8 +607,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// Process Management: KILL <spid> [WITH STATUSONLY]
-	if m := reKillCmd.FindStringSubmatch(trimmed); len(m) == 2 {
-		spid, _ := strconv.Atoi(m[1])
+	if spid, ok := parseKillCommand(trimmed); ok {
 		canceled := s.CancelQueryBySPID(spid)
 		msg := "Command(s) completed successfully."
 		if !canceled {
@@ -370,17 +622,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.005 Database Context Switching: USE <database> (Tolerant Virtual No-Op)
-	if m := reUseCmd.FindStringSubmatch(trimmed); len(m) > 0 {
-		var dbName string
-		for i := 1; i < len(m); i++ {
-			if m[i] != "" {
-				dbName = m[i]
-				break
-			}
-		}
-		if dbName == "" {
-			dbName = "master"
-		}
+	if dbName, ok := parseUseCommand(trimmed); ok {
 		if cs != nil {
 			cs.Mu.Lock()
 			cs.Database = dbName
@@ -702,9 +944,9 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 
 		// F. Standard SET [SESSION] param [= | TO] value
-		if m := reSetConfig.FindStringSubmatch(rest); len(m) == 3 {
-			param := strings.ToLower(cleanIdentifier(m[1]))
-			valStr := strings.Trim(strings.TrimSpace(m[2]), "';\"")
+		if rawParam, rawVal, ok := parseSetConfigRest(rest); ok {
+			param := strings.ToLower(cleanIdentifier(rawParam))
+			valStr := strings.Trim(strings.TrimSpace(rawVal), "';\"")
 			if param == "work_mem" {
 				bytes, err := execution.ParseMemSize(valStr)
 				if err != nil {
@@ -733,28 +975,28 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.048 DESC / DESCRIBE <table>
-	if m := reDescTable.FindStringSubmatch(trimmed); len(m) == 2 {
-		return s.execDescTable(cleanIdentifier(m[1]), start)
+	if tblName, ok := parseDescTableCommand(trimmed); ok {
+		return s.execDescTable(cleanIdentifier(tblName), start)
 	}
 
 	// 0.049 SHOW TABLES
-	if reShowTables.MatchString(trimmed) {
+	if isShowTablesCommand(trimmed) {
 		return s.execShowTables(cs, start)
 	}
 
 	// 0.0495 SHOW DATABASES / SCHEMAS
-	if reShowDatabases.MatchString(trimmed) {
+	if isShowDatabasesCommand(trimmed) {
 		return s.execShowDatabases(start)
 	}
 
 	// 0.05 SHOW PARTITIONS [FROM] <table>
-	if m := reShowParts.FindStringSubmatch(trimmed); len(m) == 2 {
-		return s.execShowPartitions(cleanIdentifier(m[1]), start)
+	if tblName, ok := parseShowPartitionsCommand(trimmed); ok {
+		return s.execShowPartitions(cleanIdentifier(tblName), start)
 	}
 
 	// 0.06 SHOW <parameter>
-	if m := reShowParam.FindStringSubmatch(trimmed); len(m) == 2 {
-		param := strings.ToLower(strings.TrimSpace(m[1]))
+	if rawParam, ok := parseShowParamCommand(trimmed); ok {
+		param := strings.ToLower(strings.TrimSpace(rawParam))
 		paramNorm := strings.ReplaceAll(param, " ", "_")
 		cs.Mu.Lock()
 		val, exists := cs.Vars[paramNorm]
@@ -810,11 +1052,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.07 System variable query: SELECT @@var [AS alias]
-	if m := reSelectSysVar.FindStringSubmatch(trimmed); len(m) >= 2 {
-		varName := strings.ToLower(m[1])
+	if rawVar, alias, ok := parseSelectSingleVar(trimmed, true); ok {
+		varName := strings.ToLower(rawVar)
 		colHeader := "@@" + varName
-		if len(m) > 2 && m[2] != "" {
-			colHeader = m[2]
+		if alias != "" {
+			colHeader = alias
 		}
 		val, _ := s.evalScalarExpr("@@"+varName, cs)
 		return &QueryResult{
@@ -849,12 +1091,11 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 
 	// 0.08 T-SQL DECLARE variables: DECLARE @var [type] [= expr], ... or DECLARE @table TABLE (...)
 	if strings.HasPrefix(upper, "DECLARE ") {
-		if m := reTblVarCreate.FindStringSubmatch(trimmed); len(m) >= 3 {
-			varName := strings.ToLower(m[1])
+		if rawVarName, colDefs, isTbl, hasCols := parseTableVarDecl(trimmed); isTbl && hasCols {
+			varName := strings.ToLower(rawVarName)
 			if !strings.HasPrefix(varName, "@") {
 				varName = "@" + varName
 			}
-			colDefs := m[2]
 			sessID := "default"
 			if cs != nil && cs.ID != "" {
 				sessID = cs.ID
@@ -942,11 +1183,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.1 Session Variables: SET @var = expr / SET @var := expr
-	if m := reSetVar.FindStringSubmatch(trimmed); len(m) == 3 {
+	if varName, rawExpr, ok := parseSetLocalVarCommand(trimmed); ok {
 		cs.Mu.Lock()
 		defer cs.Mu.Unlock()
-		varName := m[1]
-		expr := strings.TrimSpace(m[2])
+		expr := strings.TrimSpace(rawExpr)
 		expr = strings.TrimRight(expr, ";")
 		for k, v := range cs.Vars {
 			expr = strings.ReplaceAll(expr, k, fmt.Sprintf("%v", v))
@@ -962,11 +1202,10 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 0.2 Query Session Variable: SELECT @var [AS alias]
-	if m := reSelectVar.FindStringSubmatch(trimmed); len(m) >= 2 {
-		varName := m[1]
+	if varName, alias, ok := parseSelectSingleVar(trimmed, false); ok {
 		colHeader := varName
-		if len(m) > 2 && m[2] != "" {
-			colHeader = m[2]
+		if alias != "" {
+			colHeader = alias
 		}
 		cs.Mu.Lock()
 		val := cs.Vars[varName]

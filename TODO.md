@@ -92,10 +92,12 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **제2방안 (공집합 조기 탈락 Fast-Fail)**: `1=0` 등 정적 모순 조건 감지 시 하위 10+개 테이블 스캔/해시 빌드를 바이패스하고 `EmptyIterator` 0ms 반환 (`pkg/planner`, `pkg/execution`)
 - [x] **제3방안 (Selinger DP 탐색 임계치 최적화)**: `MaxJoinDPThreshold = 6` 적용 (12 -> 6개로 축소, 4,096개 상태 공간 폭발 차단 및 7개 이상 조인은 Greedy 즉시 전환)
 
-### [x] 1.7 `PLANNER-SLIM-1` & `PLANNER-AST-1` 플래너 슬림화 및 순수 AST 전환 — **[완료 (Pass)]**
+### [x] 1.7 `PLANNER-SLIM-1` & `PLANNER-AST-1~3` 플래너·엔진 정규식 완전 제거 및 순수 AST 전환 — **[완료 (Pass)]**
 - 설계 계획서: [`notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)
 - [x] **1.1 `PLANNER-SLIM-1` (Sort-Merge Join 비용 지연 평가)**: 힌트 또는 양쪽 정렬 조건 부재 시 O(N log N) Sort-Merge 비용 수식 계산을 바이패스하여 핫패스 레이턴시 절감 (`pkg/planner/planner.go`)
 - [x] **1.2 `PLANNER-AST-1` (순수 AST 기본화 및 정규식 옵션 격리)**: Pratt AST 파서에 `OVER (...)` 윈도우 절 및 `WITH RECURSIVE` CTE 컬럼 리스트 네이티브 파싱을 완비하여 순수 AST 플래너를 디폴트(`false`)로 전환하고, 레거시 정규식 폴백은 `--enable-legacy-regex-planner` 옵션 뒤로 격리 (`pkg/proc`, `pkg/config`, `cmd/lionsql`, `pkg/planner`)
+- [x] **1.3 `PLANNER-AST-2` (플래너 하위 조건식·통계·서브쿼리 정규식 완전 제거)**: `bounds.go`, `stats.go`, `pruning.go`, `planner.go`, `decorrelate.go`, `explain.go` 내 조건식 정규식(22개)을 Pratt AST `proc.Expr` 및 `proc.Lexer` 기반으로 100% 교체
+- [x] **1.4 `ENGINE-AST-3` (엔진 관리·부가 명령어 정규식 완전 제거)**: `sqlexec.go`, `sqlexec_auth.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_string_split.go`, `sqlexec_procs.go` 내 구문 정규식(40개)을 `proc.Lexer` 및 `sqlutil` 토큰 파서 기반으로 100% 교체
 
 ---
 

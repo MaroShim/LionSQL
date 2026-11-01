@@ -1,7 +1,6 @@
 package planner
 
 import (
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
@@ -29,9 +28,8 @@ func (p *Planner) DecorrelateSubqueries(q *QueryInfo, tableExists func(string) b
 }
 
 func (p *Planner) decorrelateExists(q *QueryInfo, tableExists func(string) bool) {
-	existsRe := regexp.MustCompile("(?is)(?:NOT\\s+)?EXISTS\\s*\\(")
 	for {
-		mStart, mEnd, prefix, innerSQL, found := findSubqueryParen(q.WhereClause, existsRe)
+		mStart, mEnd, prefix, innerSQL, found := findExistsSubqueryParen(q.WhereClause)
 		if !found {
 			break
 		}
@@ -121,9 +119,8 @@ func (p *Planner) decorrelateExists(q *QueryInfo, tableExists func(string) bool)
 }
 
 func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) {
-	inRe := regexp.MustCompile("(?is)\\b([a-zA-Z0-9_\\.]+)\\s+(?:NOT\\s+)?IN\\s*\\(")
 	for {
-		mStart, mEnd, prefix, innerSQL, found := findSubqueryParen(q.WhereClause, inRe)
+		mStart, mEnd, prefix, innerSQL, found := findInSubqueryParen(q.WhereClause)
 		if !found {
 			break
 		}
@@ -172,25 +169,73 @@ func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) {
 	}
 }
 
-func findSubqueryParen(s string, prefixPattern *regexp.Regexp) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
-	loc := prefixPattern.FindStringSubmatchIndex(s)
-	if loc == nil {
-		return 0, 0, "", "", false
-	}
-	openParenIdx := -1
-	for i := loc[0]; i < len(s); i++ {
-		if s[i] == '(' {
-			openParenIdx = i
+type subqueryScannerToken struct {
+	text  string
+	start int
+	end   int
+}
+
+func tokenizeForSubqueryScan(s string) []subqueryScannerToken {
+	var tokens []subqueryScannerToken
+	i := 0
+	n := len(s)
+	for i < n {
+		for i < n && (s[i] == ' ' || s[i] == '\t' || s[i] == '\n' || s[i] == '\r') {
+			i++
+		}
+		if i >= n {
 			break
 		}
+		if s[i] == '\'' {
+			start := i
+			i++
+			for i < n {
+				if s[i] == '\'' {
+					if i+1 < n && s[i+1] == '\'' {
+						i += 2
+						continue
+					}
+					i++
+					break
+				}
+				i++
+			}
+			tokens = append(tokens, subqueryScannerToken{text: s[start:i], start: start, end: i})
+			continue
+		}
+		if s[i] == '(' || s[i] == ')' || s[i] == ',' || s[i] == '=' || s[i] == '<' || s[i] == '>' || s[i] == '!' {
+			tokens = append(tokens, subqueryScannerToken{text: s[i : i+1], start: i, end: i + 1})
+			i++
+			continue
+		}
+		start := i
+		for i < n && s[i] != ' ' && s[i] != '\t' && s[i] != '\n' && s[i] != '\r' &&
+			s[i] != '(' && s[i] != ')' && s[i] != ',' && s[i] != '=' && s[i] != '<' && s[i] != '>' && s[i] != '!' && s[i] != '\'' {
+			i++
+		}
+		if i > start {
+			tokens = append(tokens, subqueryScannerToken{text: s[start:i], start: start, end: i})
+		}
 	}
-	if openParenIdx == -1 {
-		return 0, 0, "", "", false
-	}
+	return tokens
+}
 
+func extractBalancedParen(s string, matchStart int, openParenIdx int) (int, int, string, string, bool) {
 	depth := 0
 	closeParenIdx := -1
+	inQuote := false
 	for i := openParenIdx; i < len(s); i++ {
+		if s[i] == '\'' {
+			if inQuote && i+1 < len(s) && s[i+1] == '\'' {
+				i++
+				continue
+			}
+			inQuote = !inQuote
+			continue
+		}
+		if inQuote {
+			continue
+		}
 		if s[i] == '(' {
 			depth++
 		} else if s[i] == ')' {
@@ -204,9 +249,38 @@ func findSubqueryParen(s string, prefixPattern *regexp.Regexp) (matchStart int, 
 	if closeParenIdx == -1 {
 		return 0, 0, "", "", false
 	}
-
 	inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
-	return loc[0], closeParenIdx + 1, s[loc[0]:openParenIdx], inner, true
+	return matchStart, closeParenIdx + 1, s[matchStart:openParenIdx], inner, true
+}
+
+func findExistsSubqueryParen(s string) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
+	tokens := tokenizeForSubqueryScan(s)
+	for i := 0; i < len(tokens); i++ {
+		if strings.EqualFold(tokens[i].text, "EXISTS") && i+1 < len(tokens) && tokens[i+1].text == "(" {
+			startIdx := tokens[i].start
+			if i > 0 && strings.EqualFold(tokens[i-1].text, "NOT") {
+				startIdx = tokens[i-1].start
+			}
+			return extractBalancedParen(s, startIdx, tokens[i+1].start)
+		}
+	}
+	return 0, 0, "", "", false
+}
+
+func findInSubqueryParen(s string) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
+	tokens := tokenizeForSubqueryScan(s)
+	for i := 0; i < len(tokens); i++ {
+		if strings.EqualFold(tokens[i].text, "IN") && i+1 < len(tokens) && tokens[i+1].text == "(" {
+			colTokIdx := i - 1
+			if colTokIdx >= 0 && strings.EqualFold(tokens[colTokIdx].text, "NOT") {
+				colTokIdx--
+			}
+			if colTokIdx >= 0 && isIdent(tokens[colTokIdx].text) {
+				return extractBalancedParen(s, tokens[colTokIdx].start, tokens[i+1].start)
+			}
+		}
+	}
+	return 0, 0, "", "", false
 }
 
 func parseInnerSelectWithProj(sql string) (projections, table, alias, whereClause string, ok bool) {

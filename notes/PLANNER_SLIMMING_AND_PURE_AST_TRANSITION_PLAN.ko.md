@@ -1,9 +1,9 @@
 # LionSQL 플래너 슬림화 및 순수 AST 전환 설계 계획서 (`notes/PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-01  
-> - **상태**: 완료 (Completed) — 1.1 및 1.2 구현 및 전수 회귀 테스트 통과  
-> - **과제 식별 코드**: `PLANNER-SLIM-1` (1.1: Sort-Merge Join Lazy) & `PLANNER-AST-1` (1.2: 순수 AST 기본화 및 정규식 옵션 격리)  
-> - **목표**: 1.0 정식 릴리즈 대비 플래너 핫패스 불필요 연산 완전 제거 및 레거시 정규식 의존성 영구 폐기를 위한 단계적 옵션화  
+> - **상태**: 완료 (Completed) — Phase 1 (`PLANNER-SLIM-1`), Phase 2 (`PLANNER-AST-1`), Phase 3 (`PLANNER-AST-2`), Phase 4 (`ENGINE-AST-3`) 전량 구현 및 검증 완료  
+> - **과제 식별 코드**: `PLANNER-SLIM-1` & `PLANNER-AST-1` & `PLANNER-AST-2` & `ENGINE-AST-3`  
+> - **목표**: 1.0 정식 릴리즈 대비 플래너 핫패스 불필요 연산 제거 및 플래너·엔진 전반의 정규식(`regexp`) 의존성 완전 박멸 (100% Lexer/Pratt AST 전환)  
 
 ---
 
@@ -70,6 +70,39 @@ if needMergeEval {
        - AST 파싱 실패 시, 위험한 정규식으로 땜질하지 않고 즉시 명확한 구문 분석 에러(Syntax Error)를 반환하여 예측 가능성과 정합성 보장.
      - **Opt-in (`EnableLegacyRegexFallback == true`)**:
        - AST 실패 시 기존 레거시 정규식/문자열 분해(`splitSelectClauses`, `selectRe`) 경로를 폴백으로 허용.
+
+---
+
+### 2.3. 제3과제: 플래너 하위 조건식·통계·서브쿼리 정규식 완전 제거 (`PLANNER-AST-2`)
+
+#### 현황 및 문제점
+`ParseSelect`는 이미 순수 AST(`proc.GeneralSelectStmt`)로 전환되었으나, 플래너 하위 분석 모듈들이 여전히 문자열로 역변환된 조건식(`.String()`)을 받아 정규식으로 다시 분해하고 있습니다:
+1. **`pkg/planner/bounds.go`**: `eqBoundRe`, `gteBoundRe`, `gtBoundRe`, `lteBoundRe`, `ltBoundRe`, `betweenBoundRe` (총 6개 정규식)
+2. **`pkg/planner/stats.go`**: `cboEqRe`, `cboIsNullRe` (총 2개 정규식)
+3. **`pkg/planner/pruning.go`**: `condEqRe`, `condGteRe`, `condGtRe`, `condLteRe`, `condLtRe`, `condBetweenRe`, `condInRe` (총 7개 정규식)
+4. **`pkg/planner/planner.go`**: `eqRe`, `onlyEqRe`, `withinRe` (총 4개 정규식)
+5. **`pkg/planner/decorrelate.go` & `explain.go`**: `existsRe`, `inRe`, `eqPattern` (총 3개 정규식)
+
+#### 개선 설계 (Pure AST / Lexer 전환)
+- **단일 조건식 AST 파서 헬퍼 도입**:
+  - `proc.NewParser(proc.NewLexer(cond)).ParseExpr()`를 통해 조건식을 즉시 `proc.BinaryExpr`, `proc.BetweenExpr`, `proc.InExpr`, `proc.IsNullExpr`, `proc.WithinGroupExpr`로 구조적 분석합니다.
+  - `bounds.go`, `stats.go`, `pruning.go`, `planner.go`, `explain.go`에서 `regexp.MustCompile`을 **전면 제거**하고 AST 노드 타입 스위칭으로 100% 대체합니다.
+- **서브쿼리 Decorrelation 렉서 전환 (`decorrelate.go`)**:
+  - `existsRe`, `inRe` 정규식 대신 `proc.NewLexer` 토큰 스트림을 순회하여 `[NOT] EXISTS (` 및 `col [NOT] IN (` 패턴과 괄호 경계를 정확히 추출합니다 (문자열 리터럴/주석 내 오탐 원천 차단).
+
+---
+
+### 2.4. 제4과제: 엔진 관리·부가 명령어 정규식 제거 및 렉서/AST 전환 (`ENGINE-AST-3`)
+
+#### 현황 및 문제점
+`pkg/engine` 내부의 관리 및 확장 SQL 처리기들이 입구에서 정규식 그룹 캡처에 의존하고 있습니다:
+1. **`pkg/engine/sqlexec.go`**: `reTblVarDecl`, `reKillCmd`, `reUseCmd`, `reSetConfig`, `reShowParts`, `reShowTables`, `reShowDatabases`, `reDescTable`, `reShowParam`, `reSelectSysVar`, `reTblVarCreate`, `reSetVar`, `reSelectVar` (총 14개 정규식)
+2. **`pkg/engine/sqlexec_auth.go`**: `reCreateLogin`, `reAlterLogin`, `reDropLogin`, `reCreateUser`, `reDropUser`, `reGrant`, `reRevoke`, `reDeny`, `reSetUser`, `reExecAs` (총 10개 정규식)
+3. **`pkg/engine/sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_string_split.go`**: `PIVOT`/`UNPIVOT`/`FOR JSON`/`APPLY`/`STRING_SPLIT` 정규식 (총 15개 정규식)
+
+#### 개선 설계 (Lexer 토큰 스트림 파서 전환)
+- `proc.NewLexer` 기반의 경량 토큰 소비 헬퍼를 도입하여 `SHOW`, `DESC`, `USE`, `KILL`, `SET`, `DECLARE @t TABLE`, `CREATE/ALTER/DROP LOGIN/USER`, `GRANT/REVOKE/DENY`, `PIVOT/UNPIVOT/FOR JSON`, `CROSS/OUTER APPLY`, `STRING_SPLIT` 구문을 정규식 없이 100% 렉서 토큰 단위로 파싱합니다.
+- 이를 통해 `pkg/planner`(레거시 옵션 제외)와 `pkg/engine`에서 구문 파싱용 정규식(`regexp`)을 완전히 퇴출합니다.
 
 ---
 

@@ -3,7 +3,6 @@ package planner
 import (
 	"fmt"
 	"math"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -926,14 +925,9 @@ func (ts *TableStats) estimateAndConjunctsSelectivity(conjuncts []proc.Expr, min
 	return math.Min(1.0, math.Max(minSel, totalSel))
 }
 
-var (
-	cboEqRe     = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(<=|>=|!=|<>|<|>|==|=|LIKE)\s*(.+)$`)
-	cboIsNullRe = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s+IS\s+(NOT\s+)?NULL\s*$`)
-)
-
 // EstimateCompoundSelectivity calculates the combined selectivity across multiple predicates.
 // It parses each predicate into an AST expression when possible, using boolean tree rules (AND, OR, NOT, IN, BETWEEN),
-// and falls back to regex matching or heuristic defaults. It leverages MultiColumnStats for correlated equality conditions (C-5).
+// and falls back to heuristic defaults. It leverages MultiColumnStats for correlated equality conditions (C-5).
 func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
 	if ts == nil || len(conds) == 0 {
 		return 0.33
@@ -954,7 +948,7 @@ func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
 			continue
 		}
 
-		// 1. Try AST parsing first for full boolean tree (OR, NOT, AND, BETWEEN, IN)
+		// 1. Parse predicate into an AST expression for full boolean tree (OR, NOT, AND, BETWEEN, IN, IS NULL, comparisons)
 		parser := proc.NewParser(proc.NewLexer(cond))
 		if expr := parser.ParseExpr(); expr != nil && len(parser.Errors()) == 0 {
 			if b, ok := expr.(*proc.BinaryExpr); ok && b.Op == proc.TokenEq {
@@ -980,31 +974,15 @@ func (ts *TableStats) EstimateCompoundSelectivity(conds []string) float64 {
 			continue
 		}
 
-		// 2. Fallback to regex pattern matching for simple comparisons
-		if m := cboEqRe.FindStringSubmatch(cond); len(m) == 4 {
-			rawCol := m[1]
+		// 2. Fallback to AST comparison helper or heuristic default
+		if rawCol, op, val, ok := parseASTComparison(cond); ok {
 			if idx := strings.Index(rawCol, "."); idx != -1 {
 				rawCol = rawCol[idx+1:]
 			}
 			colName := strings.ToLower(cleanIdent(rawCol))
-			op := m[2]
-			val := strings.TrimSpace(m[3])
 			sel := ts.EstimateSelectivity(colName, op, val)
 			isEq := (op == "=" || op == "==")
 			parsed = append(parsed, parsedCond{col: colName, isEq: isEq, sel: sel})
-			matchedAny = true
-		} else if m := cboIsNullRe.FindStringSubmatch(cond); len(m) >= 2 {
-			rawCol := m[1]
-			if idx := strings.Index(rawCol, "."); idx != -1 {
-				rawCol = rawCol[idx+1:]
-			}
-			colName := strings.ToLower(cleanIdent(rawCol))
-			op := "IS NULL"
-			if strings.TrimSpace(m[2]) != "" {
-				op = "IS NOT NULL"
-			}
-			sel := ts.EstimateSelectivity(colName, op, "")
-			parsed = append(parsed, parsedCond{col: colName, sel: sel})
 			matchedAny = true
 		} else {
 			parsed = append(parsed, parsedCond{sel: 0.33})
