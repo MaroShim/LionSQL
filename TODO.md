@@ -90,6 +90,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 설계 계획서: [`notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)
 - [x] **제1방안 (베이스 테이블 동적 루트 선정)**: 단일 행 필터 보유 또는 최소 카디널리티 테이블을 시작 스캔 노드로 승격하여 조인 체인 중간 튜플 증폭 차단 (`pkg/planner/planner.go`)
 - [x] **제2방안 (공집합 조기 탈락 Fast-Fail)**: `1=0` 등 정적 모순 조건 감지 시 하위 10+개 테이블 스캔/해시 빌드를 바이패스하고 `EmptyIterator` 0ms 반환 (`pkg/planner`, `pkg/execution`)
+- [x] **제3방안 (Selinger DP 탐색 임계치 최적화)**: `MaxJoinDPThreshold = 6` 적용 (12 -> 6개로 축소, 4,096개 상태 공간 폭발 차단 및 7개 이상 조인은 Greedy 즉시 전환)
 
 ---
 

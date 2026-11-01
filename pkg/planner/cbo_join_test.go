@@ -638,8 +638,8 @@ func TestCBOJoinOrderOptimization_SelingerDP_LargeChain(t *testing.T) {
 func TestCBOJoinOrderOptimization_SelingerDP_EightTables(t *testing.T) {
 	p := planner.NewPlanner()
 
-	// 8-table chain join (N=7 joins). Permutation approach would require 7! = 5,040 iterations.
-	// Selinger DP executes in O(7 * 2^6) = 448 iterations.
+	// 8-table chain join (N=7 joins). Exceeds MaxJoinDPThreshold (6),
+	// automatically falling back to Greedy Join Ordering to bound compilation time to < 1ms.
 	sql := `SELECT t1.id, t8.val FROM t1
 		JOIN t2 ON t1.id = t2.t1_id
 		JOIN t3 ON t2.id = t3.t2_id
@@ -780,5 +780,73 @@ func TestContradictionFastFail_ZeroCardinalityPruning(t *testing.T) {
 	planText := strings.Join(planner.FormatPlanText(plan, false), "\n")
 	if !strings.Contains(planText, "Empty Result") {
 		t.Fatalf("expected Empty Result in plan for contradiction 1=0, got:\n%s", planText)
+	}
+}
+
+func TestCBOJoinOrderOptimization_MaxJoinDPThreshold_Boundary(t *testing.T) {
+	p := planner.NewPlanner()
+
+	// 1. Exactly 6 joins (7 tables total: base t0 + t1..t6): Fits within MaxJoinDPThreshold (6)
+	sql6 := `SELECT t0.id, t6.val FROM t0
+		JOIN t1 ON t0.id = t1.t0_id
+		JOIN t2 ON t1.id = t2.t1_id
+		JOIN t3 ON t2.id = t3.t2_id
+		JOIN t4 ON t3.id = t4.t3_id
+		JOIN t5 ON t4.id = t5.t4_id
+		JOIN t6 ON t5.id = t6.t5_id`
+
+	q6, err := p.ParseSelect(sql6)
+	if err != nil {
+		t.Fatalf("ParseSelect failed for 7-table query: %v", err)
+	}
+
+	schemas := make(map[string]*storage.TableSchema)
+	stats := make(map[string]*planner.TableStats)
+	for i := 0; i <= 7; i++ {
+		name := fmt.Sprintf("t%d", i)
+		cols := []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "val", Type: storage.TypeVarChar},
+		}
+		if i > 0 {
+			cols = append(cols, storage.Column{Name: fmt.Sprintf("t%d_id", i-1), Type: storage.TypeInt})
+		}
+		schemas[name] = &storage.TableSchema{Name: name, Columns: cols}
+		stats[name] = planner.NewTableStats(name, int64((i+1)*1000))
+	}
+
+	start6 := time.Now()
+	plan6 := p.BuildMultiJoinPlanWithStats(q6, schemas["t0"], stats["t0"], schemas, stats)
+	dur6 := time.Since(start6)
+	if plan6 == nil {
+		t.Fatal("expected non-nil plan for 7-table join (6 joins, Selinger DP)")
+	}
+	if dur6 > 50*time.Millisecond {
+		t.Errorf("expected 6-join DP to finish in < 50ms, took %v", dur6)
+	}
+
+	// 2. Exactly 7 joins (8 tables total: base t0 + t1..t7): Exceeds MaxJoinDPThreshold (6) -> Greedy Fallback
+	sql7 := `SELECT t0.id, t7.val FROM t0
+		JOIN t1 ON t0.id = t1.t0_id
+		JOIN t2 ON t1.id = t2.t1_id
+		JOIN t3 ON t2.id = t3.t2_id
+		JOIN t4 ON t3.id = t4.t3_id
+		JOIN t5 ON t4.id = t5.t4_id
+		JOIN t6 ON t5.id = t6.t5_id
+		JOIN t7 ON t6.id = t7.t6_id`
+
+	q7, err := p.ParseSelect(sql7)
+	if err != nil {
+		t.Fatalf("ParseSelect failed for 8-table query: %v", err)
+	}
+
+	start7 := time.Now()
+	plan7 := p.BuildMultiJoinPlanWithStats(q7, schemas["t0"], stats["t0"], schemas, stats)
+	dur7 := time.Since(start7)
+	if plan7 == nil {
+		t.Fatal("expected non-nil plan for 8-table join (7 joins, Greedy fallback)")
+	}
+	if dur7 > 50*time.Millisecond {
+		t.Errorf("expected 7-join Greedy fallback to finish in < 50ms, took %v", dur7)
 	}
 }
