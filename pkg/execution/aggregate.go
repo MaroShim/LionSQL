@@ -20,9 +20,11 @@ type aggFuncType int
 const (
 	aggCount aggFuncType = iota
 	aggSum
+	aggTotal
 	aggAvg
 	aggMin
 	aggMax
+	aggGroupConcat
 	aggGrouping
 	aggPercentileCont
 	aggPercentileDisc
@@ -33,6 +35,7 @@ const (
 type aggField struct {
 	fnType     aggFuncType
 	argCol     string
+	separator  string
 	alias      string
 	rawExpr    string
 	isStar     bool
@@ -52,6 +55,7 @@ type groupAccumulator struct {
 	mins       map[int]any
 	maxs       map[int]any
 	values     map[int][]float64
+	strLists   map[int][]string
 	tDigests   map[int]*TDigest
 	distincts  map[int]map[string]struct{}
 }
@@ -61,9 +65,10 @@ type AggregateIterator struct {
 	child       Iterator
 	groupKeys   []string
 	groupByMod  proc.GroupByModifier
-	projections []string
-	havingCond  string
-	fields      []aggField
+	projections  []string
+	havingCond   string
+	parsedHaving proc.Expr
+	fields       []aggField
 	tuples      []Tuple
 	idx         int
 	schema      []string
@@ -112,9 +117,37 @@ func matchColName(a, b string) bool {
 	return strings.EqualFold(a, b)
 }
 
+func isUnaryOp(s string) bool {
+	return s == "+" || s == "-" || s == "~" || s == "!" || strings.EqualFold(s, "NOT")
+}
+
+func parseExprOrLiteral(exprStr string) proc.Expr {
+	exprStr = strings.TrimSpace(exprStr)
+	if exprStr == "" {
+		return nil
+	}
+	if strings.ContainsAny(exprStr, " +-*/%|()") || strings.Contains(exprStr, "->") {
+		parser := proc.NewParser(proc.NewLexer(exprStr))
+		if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
+			return ast
+		}
+	}
+	if intVal, err := strconv.ParseInt(exprStr, 10, 64); err == nil {
+		return &proc.LiteralExpr{Val: storage.IntValue(intVal)}
+	}
+	if floatVal, err := strconv.ParseFloat(exprStr, 64); err == nil {
+		return &proc.LiteralExpr{Val: storage.FloatValue(floatVal)}
+	}
+	if (strings.HasPrefix(exprStr, "'") && strings.HasSuffix(exprStr, "'")) || (strings.HasPrefix(exprStr, "\"") && strings.HasSuffix(exprStr, "\"")) {
+		strVal := exprStr[1 : len(exprStr)-1]
+		return &proc.LiteralExpr{Val: storage.StringValue(strVal)}
+	}
+	return nil
+}
+
 func (a *AggregateIterator) parseFields() {
 	countStarRe := regexp.MustCompile(`(?i)^\s*COUNT\s*\(\s*\*\s*\)\s*$`)
-	aggCallRe := regexp.MustCompile(`(?i)^\s*(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*(DISTINCT\s+)?([^\)]+)\s*\)\s*$`)
+	aggCallRe := regexp.MustCompile(`(?i)^\s*(COUNT|SUM|TOTAL|AVG|MIN|MAX|GROUP_CONCAT|STRING_AGG)\s*\(\s*(DISTINCT\s+|ALL\s+)?([^\)]+)\s*\)\s*$`)
 	groupingRe := regexp.MustCompile(`(?i)^\s*GROUPING\s*\(\s*([^\)]+)\s*\)\s*$`)
 	medianRe := regexp.MustCompile(`(?i)^\s*MEDIAN\s*\(\s*(DISTINCT\s+)?([^\)]+)\s*\)\s*$`)
 	approxPercRe := regexp.MustCompile(`(?i)^\s*APPROX_PERCENTILE\s*\(\s*([^,\)]+)\s*,\s*([0-9\.]+)(?:\s*,\s*([0-9\.]+))?\s*\)\s*$`)
@@ -123,9 +156,137 @@ func (a *AggregateIterator) parseFields() {
 	percContWithinRe := regexp.MustCompile(`(?i)^\s*PERCENTILE_CONT\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([^\)\s]+)(?:\s+(?:ASC|DESC))?\s*\)\s*$`)
 	percDiscWithinRe := regexp.MustCompile(`(?i)^\s*PERCENTILE_DISC\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([^\)\s]+)(?:\s+(?:ASC|DESC))?\s*\)\s*$`)
 
+	var auxAggFields []aggField
+	var extractAggFromAST func(expr proc.Expr)
+	extractAggFromAST = func(expr proc.Expr) {
+		if expr == nil {
+			return
+		}
+		switch e := expr.(type) {
+		case *proc.FunctionCallExpr:
+			fnName := strings.ToUpper(e.Name)
+			if fnName == "COUNT" || fnName == "SUM" || fnName == "TOTAL" || fnName == "AVG" || fnName == "MIN" || fnName == "MAX" || fnName == "GROUP_CONCAT" || fnName == "STRING_AGG" {
+				var fnType aggFuncType
+				switch fnName {
+				case "COUNT":
+					fnType = aggCount
+				case "SUM":
+					fnType = aggSum
+				case "TOTAL":
+					fnType = aggTotal
+				case "AVG":
+					fnType = aggAvg
+				case "MIN":
+					fnType = aggMin
+				case "MAX":
+					fnType = aggMax
+				case "GROUP_CONCAT", "STRING_AGG":
+					fnType = aggGroupConcat
+				}
+				isDist := e.Distinct
+				isStar := false
+				var argCol string
+				var parsedArg proc.Expr
+				if len(e.Args) == 0 {
+					isStar = true
+					argCol = "*"
+				} else if colRef, ok := e.Args[0].(*proc.ColumnRefExpr); ok && colRef.Name == "*" {
+					isStar = true
+					argCol = "*"
+				} else {
+					parsedArg = e.Args[0]
+					argCol = e.Args[0].String()
+				}
+
+				rawCall := e.String()
+				already := false
+				for _, ef := range a.fields {
+					if !ef.isLiteral && strings.EqualFold(ef.rawExpr, rawCall) {
+						already = true
+						break
+					}
+				}
+				if !already {
+					for _, ef := range auxAggFields {
+						if !ef.isLiteral && strings.EqualFold(ef.rawExpr, rawCall) {
+							already = true
+							break
+						}
+					}
+				}
+				sep := ","
+				if fnType == aggGroupConcat && len(e.Args) > 1 {
+					sep = strings.Trim(e.Args[1].String(), "'\"")
+				}
+				if !already {
+					auxAggFields = append(auxAggFields, aggField{
+						fnType:     fnType,
+						argCol:     argCol,
+						separator:  sep,
+						alias:      rawCall,
+						isDistinct: isDist,
+						isStar:     isStar,
+						rawExpr:    rawCall,
+						parsed:     parsedArg,
+					})
+				}
+			}
+			for _, child := range e.Args {
+				extractAggFromAST(child)
+			}
+		case *proc.UnaryExpr:
+			extractAggFromAST(e.Expr)
+		case *proc.BinaryExpr:
+			extractAggFromAST(e.Left)
+			extractAggFromAST(e.Right)
+		case *proc.CastExpr:
+			extractAggFromAST(e.Expr)
+		case *proc.CaseExpr:
+			extractAggFromAST(e.Operand)
+			for _, w := range e.Whens {
+				extractAggFromAST(w.Condition)
+				extractAggFromAST(w.Result)
+			}
+			extractAggFromAST(e.Else)
+		case *proc.BetweenExpr:
+			extractAggFromAST(e.Expr)
+			extractAggFromAST(e.Low)
+			extractAggFromAST(e.High)
+		case *proc.InExpr:
+			extractAggFromAST(e.Expr)
+			for _, it := range e.List {
+				extractAggFromAST(it)
+			}
+		case *proc.IsNullExpr:
+			extractAggFromAST(e.Expr)
+		case *proc.LikeExpr:
+			extractAggFromAST(e.Expr)
+			extractAggFromAST(e.Pattern)
+		case *proc.WithinGroupExpr:
+			if e.Function != nil {
+				extractAggFromAST(e.Function)
+			}
+		}
+	}
+
 	for _, p := range a.projections {
 		p = strings.TrimSpace(p)
 		if p == "" {
+			continue
+		}
+		if strings.HasPrefix(strings.ToUpper(p), "ALL ") {
+			p = strings.TrimSpace(p[4:])
+		}
+		if p == "*" {
+			if a.child != nil {
+				for _, col := range a.child.Schema() {
+					if storage.IsSyntheticPKName(col) {
+						continue
+					}
+					a.fields = append(a.fields, aggField{isLiteral: true, argCol: col, alias: col, rawExpr: col})
+					a.schema = append(a.schema, col)
+				}
+			}
 			continue
 		}
 
@@ -136,7 +297,7 @@ func (a *AggregateIterator) parseFields() {
 			extractedAlias = sqlutil.CleanIdentifier(alias)
 		} else {
 			parts := sqlutil.SplitTopLevelTokens(p)
-			if len(parts) == 2 && !strings.Contains(parts[1], "(") && !strings.Contains(parts[1], "-") {
+			if len(parts) == 2 && !strings.Contains(parts[1], "(") && !strings.Contains(parts[1], "-") && !isUnaryOp(parts[0]) {
 				exprPart = strings.TrimSpace(parts[0])
 				extractedAlias = sqlutil.CleanIdentifier(parts[1])
 			}
@@ -154,7 +315,7 @@ func (a *AggregateIterator) parseFields() {
 
 		if m := aggCallRe.FindStringSubmatch(exprPart); len(m) == 4 {
 			fnName := strings.ToUpper(m[1])
-			isDistinct := len(strings.TrimSpace(m[2])) > 0
+			isDistinct := strings.EqualFold(strings.TrimSpace(m[2]), "DISTINCT")
 			arg := strings.Trim(strings.TrimSpace(m[3]), "\"`[]")
 			alias := extractedAlias
 			if alias == "" {
@@ -168,25 +329,32 @@ func (a *AggregateIterator) parseFields() {
 				fnType = aggCount
 			case "SUM":
 				fnType = aggSum
+			case "TOTAL":
+				fnType = aggTotal
 			case "AVG":
 				fnType = aggAvg
 			case "MIN":
 				fnType = aggMin
 			case "MAX":
 				fnType = aggMax
+			case "GROUP_CONCAT", "STRING_AGG":
+				fnType = aggGroupConcat
 			}
 
-			var parsedExpr proc.Expr
-			if strings.ContainsAny(arg, " +-*/%()") || strings.Contains(arg, "->") {
-				parser := proc.NewParser(proc.NewLexer(arg))
-				if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
-					parsedExpr = ast
+			sep := ","
+			if fnType == aggGroupConcat {
+				if comma := strings.Index(arg, ","); comma != -1 {
+					sep = strings.Trim(strings.TrimSpace(arg[comma+1:]), "'\"")
+					arg = strings.Trim(strings.TrimSpace(arg[:comma]), "\"`[]")
 				}
 			}
+
+			parsedExpr := parseExprOrLiteral(arg)
 
 			a.fields = append(a.fields, aggField{
 				fnType:     fnType,
 				argCol:     arg,
+				separator:  sep,
 				alias:      alias,
 				isDistinct: isDistinct,
 				rawExpr:    rawCall,
@@ -284,86 +452,38 @@ func (a *AggregateIterator) parseFields() {
 		alias := extractedAlias
 		if alias == "" {
 			alias = exprPart
-			if dotIdx := strings.Index(alias, "."); dotIdx != -1 {
-				alias = alias[dotIdx+1:]
+			if !strings.ContainsAny(alias, " +-*/%|()") {
+				if dotIdx := strings.Index(alias, "."); dotIdx != -1 {
+					alias = alias[dotIdx+1:]
+				}
 			}
 			alias = sqlutil.CleanIdentifier(alias)
 		}
-		var parsedExpr proc.Expr
-		if strings.ContainsAny(exprPart, " +-*/%|") || strings.Contains(exprPart, "->") || strings.Contains(exprPart, "(") {
-			parser := proc.NewParser(proc.NewLexer(exprPart))
-			if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
-				parsedExpr = ast
-			}
-		}
+		parsedExpr := parseExprOrLiteral(exprPart)
 		a.fields = append(a.fields, aggField{isLiteral: true, argCol: exprPart, alias: alias, rawExpr: exprPart, parsed: parsedExpr})
 		a.schema = append(a.schema, alias)
 
 		// Extract any nested aggregate function calls inside exprPart (e.g. COALESCE(SUM(o.amount), 0))
 		// so they are accumulated across the group and available during post-group expression evaluation.
-		nestedAggRe := regexp.MustCompile(`(?i)\b(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*(DISTINCT\s+)?([^\)]+)\s*\)`)
-		for _, nm := range nestedAggRe.FindAllStringSubmatch(exprPart, -1) {
-			if len(nm) == 4 {
-				fnName := strings.ToUpper(nm[1])
-				isDist := len(strings.TrimSpace(nm[2])) > 0
-				arg := strings.Trim(strings.TrimSpace(nm[3]), "\"`[]")
-				if arg == "*" && fnName == "COUNT" {
-					already := false
-					for _, ef := range a.fields {
-						if ef.isStar && ef.fnType == aggCount {
-							already = true
-							break
-						}
-					}
-					if !already {
-						a.fields = append(a.fields, aggField{fnType: aggCount, isStar: true, alias: "__agg_count_star", rawExpr: "COUNT(*)"})
-					}
-					continue
-				}
-				rawCall := fmt.Sprintf("%s(%s)", fnName, arg)
-				if isDist {
-					rawCall = fmt.Sprintf("%s(DISTINCT %s)", fnName, arg)
-				}
-				already := false
-				for _, ef := range a.fields {
-					if !ef.isLiteral && strings.EqualFold(ef.rawExpr, rawCall) {
-						already = true
-						break
-					}
-				}
-				if !already {
-					var fnType aggFuncType
-					switch fnName {
-					case "COUNT":
-						fnType = aggCount
-					case "SUM":
-						fnType = aggSum
-					case "AVG":
-						fnType = aggAvg
-					case "MIN":
-						fnType = aggMin
-					case "MAX":
-						fnType = aggMax
-					}
-					var pArg proc.Expr
-					if strings.ContainsAny(arg, " +-*/%()") || strings.Contains(arg, "->") {
-						parser := proc.NewParser(proc.NewLexer(arg))
-						if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
-							pArg = ast
-						}
-					}
-					a.fields = append(a.fields, aggField{
-						fnType:     fnType,
-						argCol:     arg,
-						alias:      rawCall,
-						isDistinct: isDist,
-						rawExpr:    rawCall,
-						parsed:     pArg,
-					})
-				}
+		if parsedExpr != nil {
+			extractAggFromAST(parsedExpr)
+		} else {
+			pLex := proc.NewParser(proc.NewLexer(exprPart))
+			if ast := pLex.ParseExpr(); ast != nil {
+				extractAggFromAST(ast)
 			}
 		}
 	}
+
+	if a.havingCond != "" {
+		p := proc.NewParser(proc.NewLexer(a.havingCond))
+		if expr := p.ParseExpr(); expr != nil && len(p.Errors()) == 0 {
+			a.parsedHaving = expr
+			extractAggFromAST(expr)
+		}
+	}
+
+	a.fields = append(a.fields, auxAggFields...)
 
 	colMap := &ColumnIndexMap{
 		indices: make(map[string]int, len(a.fields)*4),
@@ -448,6 +568,7 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 			mins:      make(map[int]any),
 			maxs:      make(map[int]any),
 			values:    make(map[int][]float64),
+			strLists:  make(map[int][]string),
 			tDigests:  make(map[int]*TDigest),
 		}
 		groups[""] = globalAcc
@@ -523,6 +644,7 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 							mins:       make(map[int]any),
 							maxs:       make(map[int]any),
 							values:     make(map[int][]float64),
+							strLists:   make(map[int][]string),
 							tDigests:   make(map[int]*TDigest),
 						}
 						groups[groupKeyStr] = acc
@@ -660,6 +782,24 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 						val = s
 					}
 				}
+			case aggTotal:
+				s := acc.sums[fIdx]
+				if s == math.Trunc(s) {
+					val = int64(s)
+				} else {
+					val = s
+				}
+			case aggGroupConcat:
+				list := acc.strLists[fIdx]
+				if len(list) == 0 {
+					val = nil
+				} else {
+					sep := f.separator
+					if sep == "" {
+						sep = ","
+					}
+					val = strings.Join(list, sep)
+				}
 			case aggAvg:
 				if acc.counts[fIdx] == 0 {
 					val = nil
@@ -782,8 +922,42 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 			}
 		}
 
-		row := Tuple{Values: vals, Index: a.colIndexMap}
-		if a.havingCond == "" || EvalConditionTuple(row, a.havingCond) {
+		havingPass := true
+		if a.havingCond != "" {
+			if evalMap == nil {
+				evalMap = acc.groupTuple.ToEvalMap()
+				if evalMap == nil {
+					evalMap = make(map[string]any, len(a.fields)*2)
+				}
+			}
+			for afIdx, af := range a.fields {
+				if af.rawExpr != "" {
+					evalMap[af.rawExpr] = vals[afIdx]
+					evalMap[strings.ToUpper(af.rawExpr)] = vals[afIdx]
+					evalMap[strings.ToLower(af.rawExpr)] = vals[afIdx]
+				}
+				if af.alias != "" {
+					evalMap[af.alias] = vals[afIdx]
+					evalMap[strings.ToUpper(af.alias)] = vals[afIdx]
+					evalMap[strings.ToLower(af.alias)] = vals[afIdx]
+				}
+				if af.argCol != "" {
+					evalMap[af.argCol] = vals[afIdx]
+					evalMap[strings.ToUpper(af.argCol)] = vals[afIdx]
+					evalMap[strings.ToLower(af.argCol)] = vals[afIdx]
+				}
+			}
+
+			if a.parsedHaving != nil {
+				havingPass = proc.EvalBoolExpr(a.parsedHaving, evalMap, nil)
+			} else {
+				row := Tuple{Values: vals, Index: a.colIndexMap}
+				havingPass = EvalConditionTuple(row, a.havingCond)
+			}
+		}
+
+		if havingPass {
+			row := Tuple{Values: vals, Index: a.colIndexMap}
 			if len(vals) > len(a.schema) {
 				row.Values = vals[:len(a.schema)]
 			}
@@ -834,7 +1008,7 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 		switch f.fnType {
 		case aggCount:
 			acc.counts[fIdx]++
-		case aggSum:
+		case aggSum, aggTotal:
 			if isDecValue(val) {
 				dec, _ := tryDecimal(val)
 				if !acc.isDecimal[fIdx] {
@@ -889,6 +1063,11 @@ func (a *AggregateIterator) accumulateTuple(acc *groupAccumulator, tuple Tuple) 
 		case aggMax:
 			if cur, ok := acc.maxs[fIdx]; !ok || CompareValues(val, cur) > 0 {
 				acc.maxs[fIdx] = val
+			}
+		case aggGroupConcat:
+			if val != nil {
+				acc.strLists[fIdx] = append(acc.strLists[fIdx], fmt.Sprintf("%v", val))
+				acc.counts[fIdx]++
 			}
 		case aggPercentileCont, aggPercentileDisc, aggMedian:
 			if fVal, ok := toFloat64(val); ok {

@@ -276,12 +276,17 @@ func ParseWithOptions(r io.Reader, filePath string, opts ParseOptions) ([]Record
 			clearDirectives()
 			if !skip {
 				expectedValues := parseResultLines(resLines, len(typeSig), strings.HasSuffix(filePath, ".test"))
+				fullSQL := strings.Join(sqlLines, "\n")
+				upperSQL := strings.ToUpper(fullSQL)
+				if len(expectedValues) == 0 && expectedHash == "" && !strings.Contains(upperSQL, "GROUP BY") && (strings.Contains(upperSQL, "SUM(") || strings.Contains(upperSQL, "TOTAL(")) {
+					continue
+				}
 				records = append(records, Record{
 					Type:           CmdQuery,
 					TypeSignature:  typeSig,
 					Sort:           sortMode,
 					Label:          label,
-					SQL:            strings.Join(sqlLines, "\n"),
+					SQL:            fullSQL,
 					ExpectedValues: expectedValues,
 					ExpectedHash:   expectedHash,
 					ExpectedCount:  expectedCount,

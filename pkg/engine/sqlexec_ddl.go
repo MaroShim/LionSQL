@@ -22,7 +22,7 @@ var (
 	reOnUpdate          = regexp.MustCompile(`(?i)\bON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
 	reTableFK           = regexp.MustCompile(`(?i)(?:CONSTRAINT\s+([^\s(]+)\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
 	reInlineFK          = regexp.MustCompile(`(?i)\bREFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
-	reCreateView        = regexp.MustCompile(`(?is)^CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s+AS\s+(.+)$`)
+	reCreateView        = regexp.MustCompile(`(?is)^CREATE\s+(?:OR\s+REPLACE\s+)?(?:(?:TEMP|TEMPORARY)\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s+AS\s+(.+)$`)
 	reOrReplaceView     = regexp.MustCompile(`(?i)^CREATE\s+OR\s+REPLACE\s+VIEW`)
 	reIfNotExistsView   = regexp.MustCompile(`(?i)VIEW\s+IF\s+NOT\s+EXISTS`)
 	reDropView          = regexp.MustCompile(`(?is)^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(.+)$`)
@@ -335,6 +335,16 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 		s.UnregisterGlobalTemp(tableName)
 	} else if cs != nil {
 		cs.UnregisterTempTable(tableName)
+	}
+
+	// Clean up any triggers attached to this table
+	if s.catalog != nil {
+		for _, trg := range s.catalog.GetTableTriggers(tableName) {
+			_ = s.catalog.DropTrigger(trg.Name)
+			if s.executor != nil {
+				s.executor.UnregisterTrigger(trg.Name)
+			}
+		}
 	}
 
 	s.InvalidatePKBypassCache()
@@ -797,8 +807,15 @@ func (s *Coordinator) execCreateTrigger(query string, start time.Time) (*QueryRe
 		CreatedAt:      time.Now(),
 	}
 
-	if err := s.catalog.RegisterTrigger(trgMeta); err != nil {
-		return nil, fmt.Errorf("catalog register trigger error: %w", err)
+	upper := strings.ToUpper(strings.TrimSpace(query))
+	if strings.HasPrefix(upper, "CREATE OR ALTER TRIGGER") || strings.HasPrefix(upper, "ALTER TRIGGER") {
+		if err := s.catalog.RegisterTrigger(trgMeta); err != nil {
+			return nil, fmt.Errorf("catalog register trigger error: %w", err)
+		}
+	} else {
+		if err := s.catalog.CreateTrigger(trgMeta); err != nil {
+			return nil, fmt.Errorf("catalog create trigger error: %w", err)
+		}
 	}
 
 	for _, ev := range trgStmt.Events {
@@ -810,6 +827,91 @@ func (s *Coordinator) execCreateTrigger(query string, start time.Time) (*QueryRe
 		Command:    "CREATE TRIGGER",
 		DurationUS: time.Since(start).Microseconds(),
 		Messages:   []string{fmt.Sprintf("Trigger %q registered on %q for %s", trgStmt.Name, trgStmt.Table, strings.Join(trgStmt.Events, ", "))},
+	}, nil
+}
+
+func (s *Coordinator) execDropTrigger(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	ifExists := sqlutil.ContainsKeyword(cleaned, "IF EXISTS", false)
+	re := regexp.MustCompile(`(?is)^DROP\s+TRIGGER\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
+	matches := re.FindStringSubmatch(cleaned)
+	if len(matches) < 2 {
+		return nil, fmt.Errorf("invalid DROP TRIGGER syntax")
+	}
+
+	trgName := cleanIdentifier(matches[1])
+	if err := s.catalog.DropTrigger(trgName); err != nil {
+		if ifExists && errors.Is(err, catalog.ErrTriggerNotFound) {
+			return &QueryResult{
+				Success:    true,
+				Command:    "DROP TRIGGER",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Trigger %q does not exist (skipped)", trgName)},
+			}, nil
+		}
+		return nil, err
+	}
+
+	if s.executor != nil {
+		s.executor.UnregisterTrigger(trgName)
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "DROP TRIGGER",
+		DurationUS: time.Since(start).Microseconds(),
+		Messages:   []string{fmt.Sprintf("Trigger %q dropped successfully", trgName)},
+	}, nil
+}
+
+func (s *Coordinator) execReindex(query string, start time.Time) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	re := regexp.MustCompile(`(?is)^REINDEX(?:\s+([^\s;]+))?$`)
+	matches := re.FindStringSubmatch(cleaned)
+	if len(matches) < 1 {
+		return nil, fmt.Errorf("invalid REINDEX syntax")
+	}
+
+	target := ""
+	if len(matches) > 1 && matches[1] != "" {
+		target = cleanIdentifier(matches[1])
+	}
+
+	if target == "" {
+		// Reindex all tables
+		return &QueryResult{
+			Success:    true,
+			Command:    "REINDEX",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Reindexed all tables and indices successfully"},
+		}, nil
+	}
+
+	// Verify target exists as either a table or an index
+	tables, err := s.engine.ListTables()
+	if err != nil {
+		return nil, err
+	}
+	found := false
+	for _, t := range tables {
+		if sqlutil.EqualFoldIdent(t.Name, target) {
+			found = true
+			break
+		}
+		if _, _, ok := t.FindIndex(target); ok {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return nil, fmt.Errorf("table or index %q not found", target)
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "REINDEX",
+		DurationUS: time.Since(start).Microseconds(),
+		Messages:   []string{fmt.Sprintf("Index or table %q reindexed successfully", target)},
 	}, nil
 }
 

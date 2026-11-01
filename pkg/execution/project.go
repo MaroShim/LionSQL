@@ -15,6 +15,7 @@ import (
 type projField struct {
 	expr   string
 	alias  string
+	srcIdx int
 	parsed proc.Expr
 }
 
@@ -50,18 +51,19 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 
 	if len(projections) == 0 || (len(projections) == 1 && (projections[0] == "" || strings.TrimSpace(projections[0]) == "*")) {
 		if child != nil {
-			var visibleCols []string
 			var hasHidden bool
 			for _, col := range child.Schema() {
 				if storage.IsSyntheticPKName(col) {
 					hasHidden = true
-					continue
+					break
 				}
-				visibleCols = append(visibleCols, col)
 			}
 			if hasHidden {
-				for _, col := range visibleCols {
-					p.fields = append(p.fields, projField{expr: col, alias: col})
+				for i, col := range child.Schema() {
+					if storage.IsSyntheticPKName(col) {
+						continue
+					}
+					p.fields = append(p.fields, projField{expr: col, alias: col, srcIdx: i})
 					p.schema = append(p.schema, col)
 				}
 				p.isSelectAll = false
@@ -85,7 +87,7 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 				break
 			}
 		}
-		f := projField{expr: expr, alias: alias}
+		f := projField{expr: expr, alias: alias, srcIdx: -1}
 		parser := proc.NewParser(proc.NewLexer(expr))
 		if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
 			f.parsed = ast
@@ -96,6 +98,9 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 
 	for _, item := range projections {
 		item = strings.TrimSpace(item)
+		if strings.HasPrefix(strings.ToUpper(item), "ALL ") {
+			item = strings.TrimSpace(item[4:])
+		}
 		if isWildcard(item) {
 			prefix := ""
 			if dot := strings.Index(item, "."); dot != -1 {
@@ -103,8 +108,12 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 			}
 			if prefix == "" || prefix == "*" {
 				if child != nil {
-					for _, col := range child.Schema() {
-						addField(col, col)
+					for i, col := range child.Schema() {
+						if storage.IsSyntheticPKName(col) {
+							continue
+						}
+						p.fields = append(p.fields, projField{expr: col, alias: col, srcIdx: i})
+						p.schema = append(p.schema, col)
 					}
 				}
 			} else {
@@ -141,7 +150,7 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 			if alias == "" {
 				alias = strings.ToLower(w.Function)
 			}
-			p.fields = append(p.fields, projField{expr: w.RawExpr, alias: alias})
+			p.fields = append(p.fields, projField{expr: w.RawExpr, alias: alias, srcIdx: -1})
 			p.schema = append(p.schema, alias)
 			continue
 		}
@@ -199,13 +208,13 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 	}
 
 	for i, f := range p.fields {
+		if f.srcIdx >= 0 && f.srcIdx < len(tuple.Values) {
+			vals[i] = tuple.Values[f.srcIdx]
+			continue
+		}
 		// Prioritize qualified expression (e.g. "o.amount", "u.name") over unqualified alias
 		// to prevent shadowing when multiple relations share identical column names.
 		if val, ok := tuple.GetOK(f.expr); ok {
-			vals[i] = val
-			continue
-		}
-		if val, ok := tuple.GetOK(f.alias); ok {
 			vals[i] = val
 			continue
 		}
@@ -214,6 +223,10 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 				vals[i] = res
 				continue
 			}
+		}
+		if val, ok := tuple.GetOK(f.alias); ok {
+			vals[i] = val
+			continue
 		}
 		val, found := lookupVal(tuple, f.expr)
 		if !found {

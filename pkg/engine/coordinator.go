@@ -14,6 +14,7 @@ type QueryResult struct {
 	Command      string           `json:"command"`
 	Columns      []string         `json:"columns,omitempty"`
 	Rows         []map[string]any `json:"rows,omitempty"`
+	Values       [][]any          `json:"values,omitempty"`
 	RowsAffected int64            `json:"rows_affected"`
 	DurationUS   int64            `json:"duration_us"`
 	Messages     []string         `json:"messages,omitempty"`

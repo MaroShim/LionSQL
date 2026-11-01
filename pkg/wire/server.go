@@ -1675,6 +1675,7 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 				Command:      cmd,
 				Columns:      execRes.Columns,
 				Rows:         execRes.Rows,
+				Values:       execRes.Values,
 				RowsAffected: execRes.RowsAffected,
 				Messages:     execRes.Logs,
 			}
@@ -1764,8 +1765,12 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 	}
 
 	var batchRows []map[string]any
+	var batchVals [][]any
 	if startIdx < totalRows {
 		batchRows = res.Rows[startIdx:endIdx]
+		if len(res.Values) == totalRows {
+			batchVals = res.Values[startIdx:endIdx]
+		}
 		portal.Pos = endIdx
 	}
 
@@ -1793,7 +1798,11 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 	bw := getBufioWriter(conn)
 	defer putBufioWriter(bw)
 	scratchRowBytes := make([][]byte, len(res.Columns))
-	for _, row := range batchRows {
+	for rIdx, row := range batchRows {
+		var rowVals []any
+		if rIdx < len(batchVals) {
+			rowVals = batchVals[rIdx]
+		}
 		for i, colName := range res.Columns {
 			isBinary := false
 			if len(portal.ResultFormats) == 1 && portal.ResultFormats[0] == 1 {
@@ -1801,7 +1810,12 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 			} else if i < len(portal.ResultFormats) && portal.ResultFormats[i] == 1 {
 				isBinary = true
 			}
-			val := getRowValue(row, colName)
+			var val any
+			if i < len(rowVals) {
+				val = rowVals[i]
+			} else {
+				val = getRowValue(row, colName)
+			}
 			scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 		}
 		if s.DevMode() {
@@ -1839,7 +1853,11 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 		bw := getBufioWriter(conn)
 		defer putBufioWriter(bw)
 		scratchRowBytes := make([][]byte, len(res.Columns))
-		for _, row := range res.Rows {
+		for rIdx, row := range res.Rows {
+			var rowVals []any
+			if rIdx < len(res.Values) {
+				rowVals = res.Values[rIdx]
+			}
 			for i, colName := range res.Columns {
 				isBinary := false
 				if len(resultFormats) == 1 && resultFormats[0] == 1 {
@@ -1847,7 +1865,12 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 				} else if i < len(resultFormats) && resultFormats[i] == 1 {
 					isBinary = true
 				}
-				val := getRowValue(row, colName)
+				var val any
+				if i < len(rowVals) {
+					val = rowVals[i]
+				} else {
+					val = getRowValue(row, colName)
+				}
 				scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 			}
 			_ = WriteDataRowBytes(bw, scratchRowBytes)
@@ -1979,7 +2002,11 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 		}
 
 		scratchRowBytes := make([][]byte, len(res.Columns))
-		for _, row := range res.Rows {
+		for rIdx, row := range res.Rows {
+			var rowVals []any
+			if rIdx < len(res.Values) {
+				rowVals = res.Values[rIdx]
+			}
 			for i, colName := range res.Columns {
 				isBinary := false
 				if len(resultFormats) == 1 && resultFormats[0] == 1 {
@@ -1987,7 +2014,12 @@ func (s *Server) runAndWriteQueryWithFormats(conn net.Conn, query string, writeR
 				} else if i < len(resultFormats) && resultFormats[i] == 1 {
 					isBinary = true
 				}
-				val := getRowValue(row, colName)
+				var val any
+				if i < len(rowVals) {
+					val = rowVals[i]
+				} else {
+					val = getRowValue(row, colName)
+				}
 				scratchRowBytes[i] = formatColumnValue(val, colOIDs[i], isBinary)
 			}
 			_ = WriteDataRowBytes(bw, scratchRowBytes)

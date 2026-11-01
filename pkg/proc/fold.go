@@ -101,7 +101,7 @@ func FoldConstants(expr Expr) Expr {
 		}
 		e.Args = newArgs
 		if allConst {
-			val, err := evalRowFunction(e.Name, newArgs, nil, nil)
+			val, err := evalRowFunction(e, e.Name, newArgs, nil, nil)
 			if err == nil {
 				return anyToLiteralExpr(val)
 			}

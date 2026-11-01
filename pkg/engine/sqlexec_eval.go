@@ -352,6 +352,35 @@ func deduplicateRows(rows []map[string]any) []map[string]any {
 	return out
 }
 
+func deduplicateRowsAndValues(rows []map[string]any, values [][]any) ([]map[string]any, [][]any) {
+	if len(values) > 0 {
+		seen := make(map[string]struct{}, len(values))
+		dedupRows := make([]map[string]any, 0, len(rows))
+		dedupValues := make([][]any, 0, len(values))
+		var buf strings.Builder
+		for idx, rowVals := range values {
+			buf.Reset()
+			for _, v := range rowVals {
+				if sv, ok := v.(storage.Value); ok && sv.IsNull {
+					buf.WriteString("NULL\x00")
+				} else {
+					fmt.Fprintf(&buf, "%v\x00", v)
+				}
+			}
+			key := buf.String()
+			if _, dup := seen[key]; !dup {
+				seen[key] = struct{}{}
+				dedupValues = append(dedupValues, rowVals)
+				if idx < len(rows) {
+					dedupRows = append(dedupRows, rows[idx])
+				}
+			}
+		}
+		return dedupRows, dedupValues
+	}
+	return deduplicateRows(rows), nil
+}
+
 // rewriteViewsAsCTE detects view references in a SELECT query and rewrites the query as a CTE.
 // For example:
 //

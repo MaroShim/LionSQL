@@ -97,6 +97,7 @@ const (
 	TokenReturns
 	TokenTrigger
 	TokenOn
+	TokenBefore
 	TokenAfter
 	TokenInstead
 	TokenOf
@@ -186,6 +187,7 @@ var keywords = map[string]TokenType{
 	"RETURNS":     TokenReturns,
 	"TRIGGER":     TokenTrigger,
 	"ON":          TokenOn,
+	"BEFORE":      TokenBefore,
 	"AFTER":       TokenAfter,
 	"INSTEAD":     TokenInstead,
 	"OF":          TokenOf,

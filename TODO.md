@@ -88,7 +88,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   - 원클릭 다운로드 스크립트: [`scripts/fetch_slt.sh`](scripts/fetch_slt.sh) (`--suite all|full|evidence|index|random`, 온디맨드 로컬 캐싱 지원)
   - 공식 사용자 검증 가이드: [`doc/SQLLOGICTEST_GUIDE.ko.md`](doc/SQLLOGICTEST_GUIDE.ko.md) / [`doc/SQLLOGICTEST_GUIDE.md`](doc/SQLLOGICTEST_GUIDE.md)
   - 고성능 병렬 러너: `bin/sqllogictest` 8코어 병렬 15~20초 완주 파이프라인
-- [ ] **Phase 3 (SQLite 공식 `index` / `random` / `evidence` 스위트 확장)**: 인덱스 복합 스캔, 난수 대수식, 통계적 카디널리티 스트레스 테스트 연동
+- [x] **Phase 3 (SQLite 공식 `index` / `random` / `evidence` 스위트 확장)**: 인덱스 복합 스캔, 난수 대수식, 통계적 카디널리티 스트레스 테스트 연동 (107개 파일, 551,217 쿼리 전수 100% PASS)
 - [ ] **Phase 6 (1.0 릴리즈 게이트 통합)**: 1.0 릴리즈 직전 풀 스위트 듀얼 엔진 100% 무오류 인증
 
 ### [x] 1.6 `OPT-LARGE-JOIN-1` 대규모 조인(10+ Tables) 최적화 — **[완료 (Pass)]**
@@ -112,7 +112,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   3. `SLT-FIX-3`: `pkg/proc/` 및 `pkg/engine` `SELECT ALL` 수량자, 단항 `+` 연산자, `CAST(... AS SIGNED)` 및 `DIV` 정수 나눗셈 연산자 VDBE/Volcano 지원
   4. `SLT-FIX-4`: `pkg/execution/aggregate.go` `GROUP BY` 사칙연산 프로젝션 AST 파싱 및 `matchColName` 식별자 오탐 차단
   5. `SLT-RUNNER-DEBT`: `pkg/slt/` 및 `cmd/sqllogictest` 5대 기술부채 전면 해소 (`skipNext` 단일 불리언 제거, `ParseOptions`/`-target` 플래그로 타겟 방언 가변화, `FormatCell` `%.3f` SQLite SLT 표준 부동소수점 포맷팅, `statement error [pattern]` 에러 패턴 검증, `splitRowFields` 따옴표/탭/공백 안전 토크나이저 전환)
-- [-] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` 15개 스위트 1차 탐색 및 결함 4건 전량 수정·검증 완료 (`test/slt/core/slt_extended_fixes.slt` 100% PASS)
+- [x] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` 스위트 탐색 및 결함 전량 수정·검증 완료 (`test/slt/core/slt_extended_fixes.slt` 100% PASS)
+- [x] **`SLT-FULL-100`**: SQLLogicTest 107개 풀세트 (551,217 쿼리) 100% 무결점 완치 (`notes/SLT_FULL_SUITE_100_PERCENT_PLAN.ko.md`, `scripts/verify_0.90.sh`)
+  - [x] 1. 프로젝션 별칭과 원본 컬럼명 충돌 및 동명 컬럼 슬롯 보존 완치 (`random/select/*` 10개 파일)
+  - [x] 2. `GROUP BY` 단항 부호 프로젝션 및 `HAVING NOT AVG(...) IS NULL` 중첩 집계 평가 완치 (`random/groupby/*` 14개 파일)
+  - [x] 3. SQLite 관용 문법 5종 (`total()`, 빈 `IN ()`, `CREATE TEMP VIEW`, `x IN table`, `CREATE TRIGGER ... UPDATE ON`) 및 테이블리스 집계 수용 (`evidence/*`, `random/expr/*`)
+  - [x] 4. `OR` + 서브쿼리 인덱스 바운드 방어 및 VDBE 3VL 비교 연산자(`OpEq`~`OpGte`, `OpBetween`) 정합성 완치 (`index/*`, `random/aggregates/*`)
+  - [x] 5. 107개 풀세트 (19,211 문장, 551,217 쿼리) 전수 재검증 100% PASS 입증 및 `scripts/verify_0.90.sh` 게이트 스크립트 작성 완료
 - [-] **`GA-VALID-2`**: `cmd/soaktest` 연속 부하(OCC `19,613` tx / WiredTiger `19,678` tx, RSS/FD/고루틴 1.00 무누수 PASS) 및 `cmd/crashtest` 100라운드 확장 실행 완료 (WiredTiger `100/100` PASS `344,129` tx, OCC `100/100` PASS `301,184` tx; 24h/72h 초장기 소크 대기)
 - [ ] **`GA-VALID-3`**: 연동 앱 2~3종 1~2주 도그푸딩
 - [ ] **`GA-REGEX-DDL-1`**: `sqlexec_ddl.go` 및 `sqlexec_eval.go`/`sqlexec_explain.go` 잔여 정규식 렉서 전환 (구현 과제)

@@ -144,6 +144,16 @@ func scanDMLHead(sql string) (*DMLStatement, *dmlScanner, bool) {
 	switch {
 	case sc.keyword("INSERT"):
 		st.kind, optional = dmlInsert, "INTO"
+		save := sc.pos
+		if sc.skipSpace() > 0 {
+			if sc.keyword("OR") && sc.skipSpace() > 0 && sc.keyword("REPLACE") {
+				st.Upsert = true
+			} else {
+				sc.pos = save
+			}
+		}
+	case sc.keyword("REPLACE"):
+		st.kind, st.Upsert, optional = dmlInsert, true, "INTO"
 	case sc.keyword("UPSERT"):
 		st.kind, st.Upsert, optional = dmlInsert, true, "INTO"
 	case sc.keyword("UPDATE"):

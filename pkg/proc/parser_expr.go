@@ -68,6 +68,11 @@ func (p *Parser) parseExpression(precedence int) Expr {
 
 		case TokenNot:
 			p.nextToken() // eat NOT
+			if p.curTokenIs(TokenNull) {
+				p.nextToken() // eat NULL
+				leftExp = &IsNullExpr{Expr: leftExp, Not: true}
+				break
+			}
 			if p.curTokenIs(TokenLike) {
 				p.nextToken() // eat LIKE
 				pattern := p.parseExpression(precSum)
@@ -553,6 +558,12 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 	if p.curTokenIs(TokenDistinct) {
 		isDistinct = true
 		p.nextToken() // eat DISTINCT
+		if p.curTokenIs(TokenAsterisk) {
+			p.addError("COUNT(DISTINCT *) is not allowed")
+			return nil
+		}
+	} else if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ALL") {
+		p.nextToken() // eat ALL
 	}
 
 	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
@@ -571,6 +582,11 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 		return nil
 	}
 	p.nextToken() // eat )
+
+	if isDistinct && len(args) > 1 {
+		p.addError("DISTINCT aggregate function takes at most 1 argument")
+		return nil
+	}
 
 	fn := &FunctionCallExpr{
 		Name:     name,

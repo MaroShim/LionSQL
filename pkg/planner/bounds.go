@@ -44,6 +44,54 @@ func extractExprRawVal(expr proc.Expr) string {
 	return strings.Trim(strings.TrimSpace(expr.String()), "'\"")
 }
 
+func hasColRef(expr proc.Expr) bool {
+	if expr == nil {
+		return false
+	}
+	switch e := expr.(type) {
+	case *proc.ColumnRefExpr:
+		return true
+	case *proc.UnaryExpr:
+		return hasColRef(e.Expr)
+	case *proc.BinaryExpr:
+		return hasColRef(e.Left) || hasColRef(e.Right)
+	case *proc.FunctionCallExpr:
+		for _, a := range e.Args {
+			if hasColRef(a) {
+				return true
+			}
+		}
+		return false
+	case *proc.CastExpr:
+		return hasColRef(e.Expr)
+	case *proc.BetweenExpr:
+		return hasColRef(e.Expr) || hasColRef(e.Low) || hasColRef(e.High)
+	case *proc.InExpr:
+		if hasColRef(e.Expr) {
+			return true
+		}
+		for _, it := range e.List {
+			if hasColRef(it) {
+				return true
+			}
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+func isNullExpr(expr proc.Expr) bool {
+	if expr == nil {
+		return true
+	}
+	if lit, ok := expr.(*proc.LiteralExpr); ok && lit.Val.IsNull {
+		return true
+	}
+	s := strings.TrimSpace(expr.String())
+	return strings.EqualFold(s, "NULL")
+}
+
 // parseASTComparison parses a single condition string using the Pratt AST parser
 // and returns (rawCol, op, rawVal, ok) if it is a binary comparison or LIKE on a column.
 func parseASTComparison(cond string) (rawCol string, op string, rawVal string, ok bool) {
@@ -54,12 +102,13 @@ func parseASTComparison(cond string) (rawCol string, op string, rawVal string, o
 	}
 	switch e := expr.(type) {
 	case *proc.BinaryExpr:
+		if isNullExpr(e.Left) || isNullExpr(e.Right) {
+			return "", "", "", false
+		}
 		var opStr, flippedOp string
 		switch e.Op {
 		case proc.TokenEq, proc.TokenAssign:
 			opStr, flippedOp = "=", "="
-		case proc.TokenNeq:
-			opStr, flippedOp = "!=", "!="
 		case proc.TokenLt:
 			opStr, flippedOp = "<", ">"
 		case proc.TokenLte:
@@ -73,17 +122,17 @@ func parseASTComparison(cond string) (rawCol string, op string, rawVal string, o
 		default:
 			return "", "", "", false
 		}
-		if col, isCol := extractSimpleColIdent(e.Left); isCol {
+		if col, isCol := extractSimpleColIdent(e.Left); isCol && !hasColRef(e.Right) {
 			return col, opStr, strings.TrimSpace(e.Right.String()), true
 		}
 		if flippedOp != "" {
-			if col, isCol := extractSimpleColIdent(e.Right); isCol {
+			if col, isCol := extractSimpleColIdent(e.Right); isCol && !hasColRef(e.Left) {
 				return col, flippedOp, strings.TrimSpace(e.Left.String()), true
 			}
 		}
 	case *proc.LikeExpr:
 		if !e.Not {
-			if col, isCol := extractSimpleColIdent(e.Expr); isCol {
+			if col, isCol := extractSimpleColIdent(e.Expr); isCol && !hasColRef(e.Pattern) {
 				return col, "LIKE", strings.TrimSpace(e.Pattern.String()), true
 			}
 		}

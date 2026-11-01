@@ -30,6 +30,7 @@ type ExecutionResult struct {
 	Duration     time.Duration
 	Rows         []map[string]any // Relational result tuples for OpRelQuery
 	Columns      []string         // Result projection column names
+	Values       [][]any          // Positional values per row for duplicate column preservation
 	RowsAffected int64
 	LastIdentity int64
 	Vars         map[string]any // Final variable states after execution
@@ -318,6 +319,25 @@ func (e *Executor) RegisterTrigger(name string, tableName string, event string, 
 	}
 }
 
+// UnregisterTrigger removes all triggers registered under the specified name.
+func (e *Executor) UnregisterTrigger(name string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	sym := cleanSymbol(name)
+	for tbl, evtMap := range e.triggers {
+		for evt, entries := range evtMap {
+			filtered := entries[:0]
+			for _, entry := range entries {
+				if entry.Name != sym {
+					filtered = append(filtered, entry)
+				}
+			}
+			e.triggers[tbl][evt] = filtered
+		}
+	}
+}
+
 // GetTriggers retrieves all registered triggers for a table and event.
 func (e *Executor) GetTriggers(tableName string, event string) []*TriggerEntry {
 	e.mu.RLock()
@@ -371,6 +391,7 @@ type VMFrame struct {
 	logs            []string
 	rows            []map[string]any
 	columns         []string
+	values          [][]any
 	rowCount        int64
 	fetchStatus     int
 	tranCount       int
@@ -438,6 +459,7 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 		Duration:     time.Since(start),
 		Rows:         frame.rows,
 		Columns:      frame.columns,
+		Values:       frame.values,
 		RowsAffected: frame.rowCount,
 		LastIdentity: frame.lastIdentity,
 		Vars:         collectFrameVars(frame),
@@ -506,6 +528,7 @@ func (e *Executor) ExecuteInTxWithSessionContext(ctx context.Context, prog *proc
 		Duration:     time.Since(start),
 		Rows:         frame.rows,
 		Columns:      frame.columns,
+		Values:       frame.values,
 		RowsAffected: frame.rowCount,
 		LastIdentity: frame.lastIdentity,
 		Vars:         collectFrameVars(frame),
@@ -576,6 +599,7 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	f.ctx = nil
 	f.rows = nil
 	f.columns = nil
+	f.values = nil
 	f.rowCount = 0
 	f.tranCount = 0
 	f.lastIdentity = 0
@@ -728,7 +752,7 @@ func (f *VMFrame) bindWhereVariables(where string) string {
 	return res
 }
 
-func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, error) {
+func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[string]any, []string, [][]any, error) {
 	p := planner.NewPlanner()
 	var qInfo *planner.QueryInfo
 	if queryData != nil {
@@ -739,7 +763,7 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 	if qInfo == nil {
 		parsed, err := p.ParseSelect(sql)
 		if err != nil {
-			return nil, nil, fmt.Errorf("planner parse error in OpRelQuery: %w", err)
+			return nil, nil, nil, fmt.Errorf("planner parse error in OpRelQuery: %w", err)
 		}
 		if queryData != nil {
 			queryData.SetCachedQueryInfo(parsed.Clone())
@@ -753,13 +777,13 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 
 	getTable := f.executor.getTableGetter()
 	if getTable == nil {
-		return nil, nil, fmt.Errorf("no table getter configured for relational queries")
+		return nil, nil, nil, fmt.Errorf("no table getter configured for relational queries")
 	}
 
 	leftTable := cleanSymbol(qInfo.TableName)
 	leftSchema, err := getTable(leftTable)
 	if err != nil {
-		return nil, nil, fmt.Errorf("table %q not found: %w", leftTable, err)
+		return nil, nil, nil, fmt.Errorf("table %q not found: %w", leftTable, err)
 	}
 
 	// Fast-path Point-Lookup Shortcut: bypass Volcano CBO and iterators for single-row PK lookups
@@ -767,7 +791,15 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		!qInfo.HasAggregates && !qInfo.Distinct && len(qInfo.WindowDefs) == 0 && len(qInfo.CTEs) == 0 &&
 		qInfo.OrderByClause == "" && leftSchema.HasPrimaryKey() {
 		if rows, cols, ok := tryPointLookup(f.tx, qInfo, leftSchema); ok {
-			return rows, cols, nil
+			var vals [][]any
+			for _, r := range rows {
+				rowVals := make([]any, len(cols))
+				for ci, col := range cols {
+					rowVals[ci] = r[col]
+				}
+				vals = append(vals, rowVals)
+			}
+			return rows, cols, vals, nil
 		}
 	}
 
@@ -783,7 +815,7 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		rightTable := cleanSymbol(j.Table)
 		rSchema, err := getTable(rightTable)
 		if err != nil {
-			return nil, nil, fmt.Errorf("joined table %q not found: %w", rightTable, err)
+			return nil, nil, nil, fmt.Errorf("joined table %q not found: %w", rightTable, err)
 		}
 		rightSchemas[j.Table] = rSchema
 		rightSchemas[rightTable] = rSchema
@@ -811,24 +843,34 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 	opts := execution.DefaultExecutorOptions()
 	exec, err := execution.BuildExecutorWithOptions(plan, f.tx, getTable, opts)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to build volcano executor: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to build volcano executor: %w", err)
 	}
 
 	ctx := context.Background()
 	if err := exec.Open(ctx); err != nil {
-		return nil, nil, fmt.Errorf("volcano execution open error: %w", err)
+		return nil, nil, nil, fmt.Errorf("volcano execution open error: %w", err)
 	}
 	defer exec.Close()
 
 	var rows []map[string]any
+	var values [][]any
 	for {
 		tuple, err := exec.Next(ctx)
 		if err == io.EOF {
 			break
 		}
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
+		tuple.Materialize()
+		vals := make([]any, len(tuple.Values))
+		copy(vals, tuple.Values)
+		for vi, v := range vals {
+			if dec, ok := v.(storage.Decimal); ok {
+				vals[vi] = dec.String()
+			}
+		}
+		values = append(values, vals)
 		rows = append(rows, tuple.ToMap())
 	}
 
@@ -840,7 +882,7 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		sort.Strings(cols)
 	}
 
-	return rows, cols, nil
+	return rows, cols, values, nil
 }
 
 func (f *VMFrame) getVar(name string) (storage.Value, bool) {
@@ -942,6 +984,18 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 }
 
 func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
+	if f.executor != nil {
+		if tg := f.executor.getTableGetter(); tg != nil {
+			if schema, err := tg(data.Table); err == nil && schema != nil {
+				for _, a := range data.Assignments {
+					if _, _, ok := schema.FindColumn(a.Column); !ok {
+						return 0, fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table)
+					}
+				}
+			}
+		}
+	}
+
 	if colName, valExpr, ok := extractSimpleEq(data.WhereExpr); ok && f.isPKCol(data.Table, colName) {
 		evalCtx := f.buildRowEvalMap(nil)
 		pkAny, _ := proc.EvalRowExpr(valExpr, evalCtx, nil)
@@ -962,7 +1016,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 				}
 			}
 			for _, a := range data.Assignments {
-				vAny, err := proc.EvalRowExpr(a.Value, rowCtx, nil)
+				vAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
 				if err != nil {
 					return 0, err
 				}
@@ -1074,7 +1128,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		}
 
 		for _, assign := range data.Assignments {
-			val, err := proc.EvalRowExpr(assign.Value, rowContext, nil)
+			val, err := proc.EvalUpdateRowExpr(assign.Value, rowContext, nil)
 			if err != nil {
 				return 0, err
 			}
@@ -1733,10 +1787,16 @@ func storageDiv(a, b storage.Value) (storage.Value, error) {
 	if a.IsNull || b.IsNull {
 		return storage.NullValue(storage.TypeUnknown), nil
 	}
+	if a.Type == storage.TypeInt && b.Type == storage.TypeInt {
+		if b.IVal == 0 {
+			return storage.NullValue(storage.TypeUnknown), nil
+		}
+		return storage.IntValue(a.IVal / b.IVal), nil
+	}
 	n1, _ := toFloatNum(a)
 	n2, _ := toFloatNum(b)
 	if n2 == 0 {
-		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("division by zero")
+		return storage.NullValue(storage.TypeUnknown), nil
 	}
 	div := n1 / n2
 	if div == math.Trunc(div) {

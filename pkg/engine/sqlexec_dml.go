@@ -1111,6 +1111,12 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	updatesMap := make(map[string]string, len(setPairs))
 	for _, pair := range setPairs {
 		updatesMap[pair.Column] = pair.Value
+		if _, _, found := schema.FindColumn(pair.Column); !found {
+			if isEphemeral && tx != nil {
+				_ = tx.Rollback()
+			}
+			return nil, fmt.Errorf("column %q does not exist in table %q", pair.Column, tableName)
+		}
 	}
 
 	type updateEntry struct {

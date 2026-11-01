@@ -342,7 +342,11 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 		f.regs[inst.A] = storageNeg(f.regs[inst.B])
 
 	case proc.OpNot:
-		f.regs[inst.A] = storage.BoolValue(!isTruthy(f.regs[inst.B]))
+		if f.regs[inst.B].IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(!isTruthy(f.regs[inst.B]))
+		}
 
 	case proc.OpAnd:
 		f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) && isTruthy(f.regs[inst.C]))
@@ -350,132 +354,138 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 	case proc.OpOr:
 		f.regs[inst.A] = storage.BoolValue(isTruthy(f.regs[inst.B]) || isTruthy(f.regs[inst.C]))
 
-	case proc.OpEq:
+	case proc.OpEq, proc.OpEqInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+		if vb.IsNull || vc.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt {
 			f.regs[inst.A] = storage.BoolValue(vb.IVal == vc.IVal)
 		} else {
 			f.regs[inst.A] = storage.BoolValue(storageEq(vb, vc))
 		}
 
-	case proc.OpEqInt:
+	case proc.OpNeq, proc.OpNeqInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.BoolValue(vb.IVal == vc.IVal)
-		} else {
-			f.regs[inst.A] = storage.BoolValue(storageEq(vb, vc))
-		}
-
-	case proc.OpNeq:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+		if vb.IsNull || vc.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt {
 			f.regs[inst.A] = storage.BoolValue(vb.IVal != vc.IVal)
 		} else {
 			f.regs[inst.A] = storage.BoolValue(!storageEq(vb, vc))
 		}
 
-	case proc.OpNeqInt:
+	case proc.OpLt, proc.OpLtInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.BoolValue(vb.IVal != vc.IVal)
-		} else {
-			f.regs[inst.A] = storage.BoolValue(!storageEq(vb, vc))
-		}
-
-	case proc.OpLt:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+		if vb.IsNull || vc.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt {
 			f.regs[inst.A] = storage.BoolValue(vb.IVal < vc.IVal)
 		} else {
 			f.regs[inst.A] = storage.BoolValue(storageLt(vb, vc))
 		}
 
-	case proc.OpLtInt:
+	case proc.OpLte, proc.OpLteInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.BoolValue(vb.IVal < vc.IVal)
-		} else {
-			f.regs[inst.A] = storage.BoolValue(storageLt(vb, vc))
-		}
-
-	case proc.OpLte:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+		if vb.IsNull || vc.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt {
 			f.regs[inst.A] = storage.BoolValue(vb.IVal <= vc.IVal)
 		} else {
 			f.regs[inst.A] = storage.BoolValue(storageLte(vb, vc))
 		}
 
-	case proc.OpLteInt:
+	case proc.OpGt, proc.OpGtInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.BoolValue(vb.IVal <= vc.IVal)
-		} else {
-			f.regs[inst.A] = storage.BoolValue(storageLte(vb, vc))
-		}
-
-	case proc.OpGt:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+		if vb.IsNull || vc.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt {
 			f.regs[inst.A] = storage.BoolValue(vb.IVal > vc.IVal)
 		} else {
 			f.regs[inst.A] = storage.BoolValue(storageGt(vb, vc))
 		}
 
-	case proc.OpGtInt:
+	case proc.OpGte, proc.OpGteInt:
 		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.BoolValue(vb.IVal > vc.IVal)
-		} else {
-			f.regs[inst.A] = storage.BoolValue(storageGt(vb, vc))
-		}
-
-	case proc.OpGte:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
-			f.regs[inst.A] = storage.BoolValue(vb.IVal >= vc.IVal)
-		} else {
-			f.regs[inst.A] = storage.BoolValue(storageGte(vb, vc))
-		}
-
-	case proc.OpGteInt:
-		vb, vc := f.regs[inst.B], f.regs[inst.C]
-		if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt && !vb.IsNull && !vc.IsNull {
+		if vb.IsNull || vc.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else if vb.Type == storage.TypeInt && vc.Type == storage.TypeInt {
 			f.regs[inst.A] = storage.BoolValue(vb.IVal >= vc.IVal)
 		} else {
 			f.regs[inst.A] = storage.BoolValue(storageGte(vb, vc))
 		}
 
 	case proc.OpLike:
-		str := valToString(f.regs[inst.B])
-		pat := valToString(f.regs[inst.C])
-		matched := matchLike(str, pat)
-		if inst.Flags&1 != 0 {
-			matched = !matched
+		if f.regs[inst.B].IsNull || f.regs[inst.C].IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else {
+			str := valToString(f.regs[inst.B])
+			pat := valToString(f.regs[inst.C])
+			matched := matchLike(str, pat)
+			if inst.Flags&1 != 0 {
+				matched = !matched
+			}
+			f.regs[inst.A] = storage.BoolValue(matched)
 		}
-		f.regs[inst.A] = storage.BoolValue(matched)
 
 	case proc.OpBetween:
 		v := f.regs[inst.A]
 		low := f.regs[inst.B]
 		high := f.regs[inst.C]
-		inRange := storageGte(v, low) && storageLte(v, high)
-		if inst.Flags&1 != 0 {
-			inRange = !inRange
+		if !v.IsNull && !low.IsNull && storageLt(v, low) {
+			inRange := false
+			if inst.Flags&1 != 0 {
+				inRange = true
+			}
+			f.regs[inst.A] = storage.BoolValue(inRange)
+		} else if !v.IsNull && !high.IsNull && storageGt(v, high) {
+			inRange := false
+			if inst.Flags&1 != 0 {
+				inRange = true
+			}
+			f.regs[inst.A] = storage.BoolValue(inRange)
+		} else if v.IsNull || low.IsNull || high.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else {
+			inRange := storageGte(v, low) && storageLte(v, high)
+			if inst.Flags&1 != 0 {
+				inRange = !inRange
+			}
+			f.regs[inst.A] = storage.BoolValue(inRange)
 		}
-		f.regs[inst.A] = storage.BoolValue(inRange)
 
 	case proc.OpIn:
 		val := f.regs[inst.B]
 		callData := f.aux(inst).(*proc.CallData)
+		if len(callData.ArgRegs) == 0 {
+			f.regs[inst.A] = storage.BoolValue(false)
+			break
+		}
+		if val.IsNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+			break
+		}
 		found := false
+		hasNull := false
 		for _, regIdx := range callData.ArgRegs {
-			if int(regIdx) < len(f.regs) && storageEq(val, f.regs[regIdx]) {
-				found = true
-				break
+			if int(regIdx) < len(f.regs) {
+				regVal := f.regs[regIdx]
+				if regVal.IsNull {
+					hasNull = true
+					continue
+				}
+				if storageEq(val, regVal) {
+					found = true
+					break
+				}
 			}
 		}
-		f.regs[inst.A] = storage.BoolValue(found)
+		if found {
+			f.regs[inst.A] = storage.BoolValue(true)
+		} else if hasNull {
+			f.regs[inst.A] = storage.NullValue(storage.TypeBool)
+		} else {
+			f.regs[inst.A] = storage.BoolValue(false)
+		}
 
 	case proc.OpIsNull:
 		f.regs[inst.A] = storage.BoolValue(f.regs[inst.B].IsNull)
@@ -726,6 +736,14 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			}
 		}
 
+		if tableSchema != nil {
+			for _, a := range data.Assignments {
+				if _, _, ok := tableSchema.FindColumn(a.Column); !ok {
+					return f.handleCatch(fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table), pc)
+				}
+			}
+		}
+
 		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
 
 		// Fast-path Direct Row Update: bypass Record map allocations when no triggers exist
@@ -753,7 +771,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 				updatedRow := storage.Row{Values: make([]storage.Value, len(oldRow.Values))}
 				copy(updatedRow.Values, oldRow.Values)
 				for _, a := range data.Assignments {
-					valAny, err := proc.EvalRowExpr(a.Value, rowCtx, nil)
+					valAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
 					if err != nil {
 						return f.handleCatch(err, pc)
 					}
@@ -795,7 +813,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		rowCtx := f.buildRowEvalMap(recordToMap(oldRec))
 		rec := make(storage.Record)
 		for _, a := range data.Assignments {
-			valAny, err := proc.EvalRowExpr(a.Value, rowCtx, nil)
+			valAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
 			if err != nil {
 				return f.handleCatch(err, pc)
 			}
@@ -921,12 +939,13 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			if sql == "" {
 				sql = fmt.Sprintf("SELECT * FROM %s WHERE %s = %v", data.Table, data.WhereCol, pkVal.String())
 			}
-			rows, cols, err := f.execRelQuery(sql, nil)
+			rows, cols, vals, err := f.execRelQuery(sql, nil)
 			if err != nil {
 				return err
 			}
 			f.rows = rows
 			f.columns = cols
+			f.values = vals
 			f.rowCount = int64(len(rows))
 			if inst.A >= 0 && int(inst.A) < len(f.regs) {
 				f.regs[inst.A] = storage.IntValue(int64(len(rows)))
@@ -1233,13 +1252,14 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 			return fmt.Errorf("OpRelQuery: empty query SQL")
 		}
 
-		rows, cols, err := f.execRelQuery(sql, queryData)
+		rows, cols, vals, err := f.execRelQuery(sql, queryData)
 		if err != nil {
 			return f.handleCatch(err, pc)
 		}
 
 		f.rows = rows
 		f.columns = cols
+		f.values = vals
 		f.rowCount = int64(len(rows))
 
 		if queryData != nil && queryData.IntoVar != "" && len(rows) > 0 {
@@ -1369,6 +1389,7 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 	case proc.OpResultRow:
 		data := f.aux(inst).(*proc.ResultRowData)
 		row := make(map[string]any, data.Count)
+		vals := make([]any, data.Count)
 		cols := make([]string, len(data.Columns))
 		copy(cols, data.Columns)
 
@@ -1383,6 +1404,7 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 			if int(regIdx) < len(f.regs) {
 				val = valToAny(f.regs[regIdx])
 			}
+			vals[i] = val
 			colName := fmt.Sprintf("col%d", i+1)
 			if int(i) < len(data.Columns) && data.Columns[i] != "" {
 				colName = data.Columns[i]
@@ -1391,6 +1413,7 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 		}
 
 		f.rows = append(f.rows, row)
+		f.values = append(f.values, vals)
 		f.columns = cols
 		f.rowCount = int64(len(f.rows))
 

@@ -115,6 +115,24 @@ func (ctx *PushdownContext) ResolveTable(ref ColumnRef) (int, bool) {
 		tbl := strings.ToLower(cleanIdent(ref.TableOrAlias))
 		pName := strings.ToLower(cleanIdent(ctx.PrimaryTable))
 		pAlias := strings.ToLower(cleanIdent(ctx.PrimaryAlias))
+		if pAlias != "" {
+			if tbl == pAlias {
+				return 0, true
+			}
+		} else if pName != "" && tbl == pName {
+			return 0, true
+		}
+		for i, j := range ctx.Joins {
+			jName := strings.ToLower(cleanIdent(j.Table))
+			jAlias := strings.ToLower(cleanIdent(j.Alias))
+			if jAlias != "" {
+				if tbl == jAlias {
+					return 1 + i, true
+				}
+			} else if jName != "" && tbl == jName {
+				return 1 + i, true
+			}
+		}
 		if (pName != "" && tbl == pName) || (pAlias != "" && tbl == pAlias) {
 			return 0, true
 		}

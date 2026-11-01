@@ -166,6 +166,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	defer exec.Close()
 
 	var rows []map[string]any
+	var values [][]any
 	chunk := execution.GetChunk()
 	defer execution.PutChunk(chunk)
 	for {
@@ -180,6 +181,15 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 			break
 		}
 		for _, tuple := range chunk.Tuples {
+			tuple.Materialize()
+			vals := make([]any, len(tuple.Values))
+			copy(vals, tuple.Values)
+			for vi, v := range vals {
+				if dec, ok := v.(storage.Decimal); ok {
+					vals[vi] = dec.String()
+				}
+			}
+			values = append(values, vals)
 			rows = append(rows, tuple.ToMap())
 		}
 		if err == io.EOF {
@@ -188,7 +198,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 
 	if qInfo.Distinct {
-		rows = deduplicateRows(rows)
+		rows, values = deduplicateRowsAndValues(rows, values)
 	}
 
 	cols := exec.Schema()
@@ -204,6 +214,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		Command:      "SELECT",
 		Columns:      cols,
 		Rows:         rows,
+		Values:       values,
 		RowsAffected: int64(len(rows)),
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
@@ -823,8 +834,14 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	}
 
 	rawList := strings.TrimSpace(cleaned[6:])
-	if len(rawList) >= 4 && strings.EqualFold(rawList[:3], "ALL") && (rawList[3] == ' ' || rawList[3] == '\t' || rawList[3] == '\n' || rawList[3] == '\r') {
-		rawList = strings.TrimSpace(rawList[3:])
+	for {
+		if len(rawList) >= 4 && strings.EqualFold(rawList[:3], "ALL") && (rawList[3] == ' ' || rawList[3] == '\t' || rawList[3] == '\n' || rawList[3] == '\r') {
+			rawList = strings.TrimSpace(rawList[3:])
+		} else if len(rawList) >= 9 && strings.EqualFold(rawList[:8], "DISTINCT") && (rawList[8] == ' ' || rawList[8] == '\t' || rawList[8] == '\n' || rawList[8] == '\r') {
+			rawList = strings.TrimSpace(rawList[8:])
+		} else {
+			break
+		}
 	}
 	projItems := sqlutil.SplitTopLevel(rawList, ',')
 	if len(projItems) == 0 {
@@ -832,9 +849,8 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	}
 
 	var columns []string
+	var vals []any
 	row := make(map[string]any, len(projItems))
-
-	asRe := reSelectAs
 
 	for i, item := range projItems {
 		item = strings.TrimSpace(item)
@@ -845,14 +861,23 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 		exprStr := item
 		alias := ""
 
-		if m := asRe.FindStringSubmatch(item); len(m) == 3 {
-			exprStr = strings.TrimSpace(m[1])
-			alias = cleanIdentifier(m[2])
+		if expr, aliasPart, hasAs := sqlutil.SplitAsAlias(item); hasAs {
+			exprStr = strings.TrimSpace(expr)
+			alias = cleanIdentifier(aliasPart)
 		} else {
-			fields := strings.Fields(item)
-			if len(fields) == 2 && !strings.Contains(fields[1], "(") && !strings.Contains(fields[1], ")") {
-				exprStr = fields[0]
-				alias = cleanIdentifier(fields[1])
+			parts := sqlutil.SplitTopLevelTokens(item)
+			if len(parts) == 2 && !strings.ContainsAny(parts[0], "()+-*/%") && !strings.ContainsAny(parts[1], "()+-*/%") && len(parts[1]) > 0 && (parts[1][0] < '0' || parts[1][0] > '9') {
+				exprStr = strings.TrimSpace(parts[0])
+				alias = cleanIdentifier(parts[1])
+			}
+		}
+
+		if strings.Contains(strings.ToUpper(exprStr), "SELECT") {
+			if alias == "" && strings.HasPrefix(strings.ToUpper(strings.TrimSpace(exprStr)), "EXISTS") {
+				alias = "exists"
+			}
+			if resolved, err := s.resolveSubqueriesWithSession(exprStr, cs); err == nil && resolved != exprStr {
+				exprStr = resolved
 			}
 		}
 
@@ -869,7 +894,8 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 			colKey = fmt.Sprintf("%s_%d", alias, i+1)
 		}
 
-		columns = append(columns, colKey)
+		columns = append(columns, alias)
+		vals = append(vals, val)
 		row[colKey] = val
 	}
 
@@ -878,6 +904,7 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 		Command:      "SELECT",
 		Columns:      columns,
 		Rows:         []map[string]any{row},
+		Values:       [][]any{vals},
 		RowsAffected: 1,
 		DurationUS:   time.Since(start).Microseconds(),
 	}, nil
@@ -1213,6 +1240,7 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 		Command:      "SELECT",
 		Columns:      execRes.Columns,
 		Rows:         execRes.Rows,
+		Values:       execRes.Values,
 		RowsAffected: int64(len(execRes.Rows)),
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     execRes.Logs,
@@ -1402,6 +1430,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	}
 
 	cleaned = normalizeMSSQLPagination(cleaned)
+	cleaned = desugarBareTableIn(cleaned)
 
 	// -1. T-SQL FOR JSON clause: SELECT ... FOR JSON PATH / AUTO [,...]
 	if hasForJSON(cleaned) {
@@ -1448,7 +1477,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") {
+		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean[6:], "SELECT") {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
 				return res, nil
 			}
@@ -1541,9 +1570,15 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		}
 
 		if qInfo.WhereClause != "" {
-			if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs, tableName, qInfo.TableAlias); err == nil && resolved != qInfo.WhereClause {
-				cleaned = strings.Replace(cleaned, qInfo.WhereClause, resolved, 1)
-				qInfo.WhereClause = resolved
+			resolved, err := s.resolveSubqueriesWithSession(cleaned, cs, tableName, qInfo.TableAlias)
+			if err != nil {
+				return nil, err
+			}
+			if resolved != cleaned {
+				cleaned = resolved
+				if newQInfo, pErr := p.ParseSelect(cleaned); pErr == nil && newQInfo != nil {
+					qInfo = newQInfo
+				}
 			}
 		}
 
@@ -1558,7 +1593,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		if qInfo.WhereClause != "" && !qInfo.HasAggregates && len(qInfo.GroupByCols) == 0 {
 			if res, ok := s.execIndexSelect(qInfo, tableName, start, cs); ok {
 				if qInfo.Distinct {
-					res.Rows = deduplicateRows(res.Rows)
+					res.Rows, res.Values = deduplicateRowsAndValues(res.Rows, res.Values)
 					res.RowsAffected = int64(len(res.Rows))
 				}
 				return res, nil
@@ -1566,17 +1601,18 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		}
 
 		// Execute via unified VDBE Virtual Machine Engine (Primary Fast-Path)
-		hasSubqInProj := false
+		hasComplexInProj := false
 		for _, p := range qInfo.Projections {
-			if strings.Contains(strings.ToUpper(p), "SELECT") {
-				hasSubqInProj = true
+			pUpper := strings.ToUpper(p)
+			if strings.Contains(pUpper, "SELECT") || strings.Contains(pUpper, "OVER") {
+				hasComplexInProj = true
 				break
 			}
 		}
-		if !hasSubqInProj {
+		if !hasComplexInProj && len(qInfo.WindowDefs) == 0 && !sqlutil.ContainsKeyword(cleaned, "OVER", true) {
 			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil {
 				if qInfo.Distinct {
-					res.Rows = deduplicateRows(res.Rows)
+					res.Rows, res.Values = deduplicateRowsAndValues(res.Rows, res.Values)
 					res.RowsAffected = int64(len(res.Rows))
 				}
 				return res, nil
@@ -1587,7 +1623,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		res, err := s.execVolcanoSelect(qInfo, start, cs)
 		if err == nil && res != nil {
 			if qInfo.Distinct {
-				res.Rows = deduplicateRows(res.Rows)
+				res.Rows, res.Values = deduplicateRowsAndValues(res.Rows, res.Values)
 				res.RowsAffected = int64(len(res.Rows))
 			}
 			return res, nil
@@ -2027,4 +2063,31 @@ func isSingleQuotedLiteral(s string) bool {
 	}
 	return true
 }
+
+var reBareTableIn = regexp.MustCompile(`(?i)\b((?:NOT\s+)?IN)\s+([a-zA-Z_][a-zA-Z0-9_]*)(\s*[\(\.]?)`)
+
+func desugarBareTableIn(sql string) string {
+	upper := strings.ToUpper(sql)
+	if !strings.Contains(upper, "IN ") && !strings.Contains(upper, "IN\t") && !strings.Contains(upper, "IN\n") {
+		return sql
+	}
+	return reBareTableIn.ReplaceAllStringFunc(sql, func(match string) string {
+		sub := reBareTableIn.FindStringSubmatch(match)
+		if len(sub) < 4 {
+			return match
+		}
+		trailer := strings.TrimSpace(sub[3])
+		if trailer == "(" || trailer == "." {
+			return match
+		}
+		inWord := sub[1]
+		ident := sub[2]
+		switch strings.ToUpper(ident) {
+		case "SELECT", "WHERE", "ORDER", "GROUP", "HAVING", "LIMIT", "FROM", "JOIN", "SET", "VALUES", "CASE", "WHEN", "THEN", "ELSE", "END", "AND", "OR", "NOT", "NULL", "TRUE", "FALSE":
+			return match
+		}
+		return inWord + " (SELECT * FROM " + ident + ")" + sub[3]
+	})
+}
+
 

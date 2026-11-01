@@ -943,7 +943,7 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 	case *GeneralSelectStmt:
 		// 1. Scalar SELECT without FROM (e.g. SELECT 1 + 1 AS res, 'hello' AS msg, GETDATE())
-		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain {
+		if s.From.Name == "" && len(s.CTEs) == 0 && len(s.Joins) == 0 && len(s.GroupBy) == 0 && s.Having == nil && !s.IsExplain && !hasAggregates(s.Projections) {
 			var colNames []string
 			var projRegs []int32
 

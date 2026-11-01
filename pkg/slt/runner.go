@@ -11,6 +11,7 @@ import (
 	_ "github.com/lib/pq"
 
 	"lionsql/pkg/engine"
+	"lionsql/pkg/storage"
 )
 
 // Executor represents any database execution engine capable of running SQL and returning tabular results.
@@ -40,6 +41,30 @@ func (e *CoordinatorExecutor) Execute(sqlStr string) ([]string, []map[string]any
 			errMsg = strings.Join(res.Messages, "; ")
 		}
 		return nil, nil, fmt.Errorf("%s", errMsg)
+	}
+	if len(res.Values) > 0 {
+		// Disambiguate duplicate column names so row map does not overwrite earlier columns
+		uniqueCols := make([]string, len(res.Columns))
+		seen := make(map[string]int, len(res.Columns))
+		for i, c := range res.Columns {
+			if count, exists := seen[c]; exists {
+				uniqueCols[i] = fmt.Sprintf("%s#%d", c, count)
+			} else {
+				uniqueCols[i] = c
+			}
+			seen[c]++
+		}
+		builtRows := make([]map[string]any, len(res.Values))
+		for rIdx, rowVals := range res.Values {
+			rowMap := make(map[string]any, len(uniqueCols))
+			for cIdx, colName := range uniqueCols {
+				if cIdx < len(rowVals) {
+					rowMap[colName] = rowVals[cIdx]
+				}
+			}
+			builtRows[rIdx] = rowMap
+		}
+		return uniqueCols, builtRows, nil
 	}
 	return res.Columns, res.Rows, nil
 }
@@ -149,6 +174,23 @@ func FormatCell(val any, colType byte) string {
 	if val == nil {
 		return "NULL"
 	}
+	if sv, ok := val.(storage.Value); ok {
+		if sv.IsNull {
+			return "NULL"
+		}
+		switch sv.Type {
+		case storage.TypeInt:
+			val = sv.IVal
+		case storage.TypeFloat:
+			val = sv.FVal
+		case storage.TypeBool:
+			val = sv.BVal
+		case storage.TypeDateTime:
+			val = sv.TVal
+		default:
+			val = sv.SVal
+		}
+	}
 
 	switch v := val.(type) {
 	case bool:
@@ -163,20 +205,44 @@ func FormatCell(val any, colType byte) string {
 		}
 		return "false"
 	case int:
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", float64(v))
+		}
 		return strconv.Itoa(v)
 	case int64:
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", float64(v))
+		}
 		return strconv.FormatInt(v, 10)
 	case int32:
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", float64(v))
+		}
 		return strconv.FormatInt(int64(v), 10)
 	case int16:
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", float64(v))
+		}
 		return strconv.FormatInt(int64(v), 10)
 	case int8:
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", float64(v))
+		}
 		return strconv.FormatInt(int64(v), 10)
 	case uint:
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", float64(v))
+		}
 		return strconv.FormatUint(uint64(v), 10)
 	case uint64:
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", float64(v))
+		}
 		return strconv.FormatUint(v, 10)
 	case uint32:
+		if colType == 'R' || colType == 'r' {
+			return fmt.Sprintf("%.3f", float64(v))
+		}
 		return strconv.FormatUint(uint64(v), 10)
 	case float64:
 		if math.IsNaN(v) || math.IsInf(v, 0) {
@@ -187,7 +253,7 @@ func FormatCell(val any, colType byte) string {
 			return fmt.Sprintf("%.3f", v)
 		}
 		if colType == 'I' || colType == 'i' {
-			return fmt.Sprintf("%.0f", v)
+			return strconv.FormatInt(int64(v), 10)
 		}
 		if v == math.Trunc(v) {
 			return fmt.Sprintf("%.0f", v)
@@ -202,13 +268,31 @@ func FormatCell(val any, colType byte) string {
 			return fmt.Sprintf("%.3f", f)
 		}
 		if colType == 'I' || colType == 'i' {
-			return fmt.Sprintf("%.0f", f)
+			return strconv.FormatInt(int64(f), 10)
 		}
 		if f == math.Trunc(f) {
 			return fmt.Sprintf("%.0f", f)
 		}
 		return fmt.Sprintf("%.3f", f)
 	case string:
+		if strings.EqualFold(v, "NULL") {
+			return "NULL"
+		}
+		if colType == 'I' || colType == 'i' {
+			if iv, err := strconv.ParseInt(v, 10, 64); err == nil {
+				return strconv.FormatInt(iv, 10)
+			}
+			if fv, err := strconv.ParseFloat(v, 64); err == nil {
+				return strconv.FormatInt(int64(fv), 10)
+			}
+			return "0"
+		}
+		if colType == 'R' || colType == 'r' {
+			if fv, err := strconv.ParseFloat(v, 64); err == nil {
+				return fmt.Sprintf("%.3f", fv)
+			}
+			return "0.000"
+		}
 		return v
 	case []byte:
 		return string(v)

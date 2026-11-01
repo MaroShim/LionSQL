@@ -39,6 +39,54 @@ func EvalBoolExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) 
 	}
 }
 
+// eval3VLAnd computes the SQL 3-valued logic AND of two nullable booleans.
+func eval3VLAnd(a, b *bool) *bool {
+	if (a != nil && !*a) || (b != nil && !*b) {
+		f := false
+		return &f
+	}
+	if a != nil && *a && b != nil && *b {
+		t := true
+		return &t
+	}
+	return nil
+}
+
+// EvalUpdateRowExpr evaluates an assignment expression for UPDATE statements,
+// returning ErrDivisionByZero if any division or modulo by zero occurs.
+func EvalUpdateRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
+	if err := checkDivByZero(expr, row, execSubquery); err != nil {
+		return nil, err
+	}
+	return EvalRowExpr(expr, row, execSubquery)
+}
+
+func checkDivByZero(expr Expr, row map[string]any, execSubquery SubqueryExecutor) error {
+	if expr == nil {
+		return nil
+	}
+	switch e := expr.(type) {
+	case *BinaryExpr:
+		if err := checkDivByZero(e.Left, row, execSubquery); err != nil {
+			return err
+		}
+		if err := checkDivByZero(e.Right, row, execSubquery); err != nil {
+			return err
+		}
+		if e.Op == TokenSlash || e.Op == TokenDiv || e.Op == TokenPercent {
+			rVal, err := EvalRowExpr(e.Right, row, execSubquery)
+			if err == nil && !isNullVal(rVal) {
+				if n, ok := toArithmeticFloat(rVal); ok && n == 0 {
+					return ErrDivisionByZero
+				}
+			}
+		}
+	case *UnaryExpr:
+		return checkDivByZero(e.Expr, row, execSubquery)
+	}
+	return nil
+}
+
 // EvalRowExpr recursively evaluates an AST expression against a row map.
 func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
 	if expr == nil {
@@ -210,6 +258,9 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		}
 
 	case *InExpr:
+		if len(e.List) == 0 && e.Query == nil {
+			return e.Not, nil
+		}
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
 		if err != nil || isNullVal(val) {
 			return nil, nil
@@ -242,33 +293,49 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 	case *BetweenExpr:
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
 		if err != nil || isNullVal(val) {
-			return nil, nil
+			val = nil
 		}
 		lowVal, err := EvalRowExpr(e.Low, row, execSubquery)
 		if err != nil || isNullVal(lowVal) {
-			return nil, nil
+			lowVal = nil
 		}
 		highVal, err := EvalRowExpr(e.High, row, execSubquery)
 		if err != nil || isNullVal(highVal) {
-			return nil, nil
+			highVal = nil
 		}
 
-		vNum, isNum1 := toFloat(val)
-		lNum, isNum2 := toFloat(lowVal)
-		hNum, isNum3 := toFloat(highVal)
-		var inRange bool
-		if isNum1 && isNum2 && isNum3 {
-			inRange = vNum >= lNum && vNum <= hNum
-		} else {
-			vStr := fmt.Sprintf("%v", val)
-			lStr := fmt.Sprintf("%v", lowVal)
-			hStr := fmt.Sprintf("%v", highVal)
-			inRange = vStr >= lStr && vStr <= hStr
+		var condLow, condHigh *bool
+		if val != nil && lowVal != nil {
+			vNum, isNum1 := toFloat(val)
+			lNum, isNum2 := toFloat(lowVal)
+			if isNum1 && isNum2 {
+				res := vNum >= lNum
+				condLow = &res
+			} else {
+				res := fmt.Sprintf("%v", val) >= fmt.Sprintf("%v", lowVal)
+				condLow = &res
+			}
+		}
+		if val != nil && highVal != nil {
+			vNum, isNum1 := toFloat(val)
+			hNum, isNum3 := toFloat(highVal)
+			if isNum1 && isNum3 {
+				res := vNum <= hNum
+				condHigh = &res
+			} else {
+				res := fmt.Sprintf("%v", val) <= fmt.Sprintf("%v", highVal)
+				condHigh = &res
+			}
+		}
+
+		betweenRes := eval3VLAnd(condLow, condHigh)
+		if betweenRes == nil {
+			return nil, nil
 		}
 		if e.Not {
-			return !inRange, nil
+			return !*betweenRes, nil
 		}
-		return inRange, nil
+		return *betweenRes, nil
 
 	case *LikeExpr:
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
@@ -367,7 +434,7 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		}
 
 	case *FunctionCallExpr:
-		return evalRowFunction(e.Name, e.Args, row, execSubquery)
+		return evalRowFunction(e, e.Name, e.Args, row, execSubquery)
 
 	case *WithinGroupExpr:
 		return nil, nil
@@ -654,11 +721,19 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		if left == nil || right == nil {
 			return nil, nil
 		}
+		if i1, isInt1 := isInteger(left); isInt1 {
+			if i2, isInt2 := isInteger(right); isInt2 {
+				if i2 == 0 {
+					return nil, nil
+				}
+				return i1 / i2, nil
+			}
+		}
 		n1, isNum1 := toArithmeticFloat(left)
 		n2, isNum2 := toArithmeticFloat(right)
 		if isNum1 && isNum2 {
 			if n2 == 0 {
-				return nil, ErrDivisionByZero
+				return nil, nil
 			}
 			div := n1 / n2
 			if div == math.Trunc(div) {
@@ -751,7 +826,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 	return nil, fmt.Errorf("unsupported binary operator %v", op)
 }
 
-func evalRowFunction(name string, args []Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
+func evalRowFunction(fn *FunctionCallExpr, name string, args []Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
 	uName := strings.ToUpper(strings.TrimSpace(name))
 	isAggFn := uName == "COUNT" || uName == "SUM" || uName == "AVG" || uName == "MIN" || uName == "MAX"
 	if row != nil {
@@ -761,15 +836,56 @@ func evalRowFunction(name string, args []Expr, row map[string]any, execSubquery 
 				argStrs = append(argStrs, a.String())
 			}
 		}
-		rawCall := fmt.Sprintf("%s(%s)", name, strings.Join(argStrs, ", "))
-		if v, ok := row[rawCall]; ok && (v != nil || isAggFn) {
-			return v, nil
+		rawArgs := strings.Join(argStrs, ", ")
+		var candidates []string
+		if fn != nil && fn.Distinct {
+			candidates = append(candidates, fmt.Sprintf("%s(DISTINCT %s)", uName, rawArgs))
 		}
-		for k, v := range row {
-			if strings.EqualFold(k, rawCall) && (v != nil || isAggFn) {
+		candidates = append(candidates,
+			fmt.Sprintf("%s(%s)", uName, rawArgs),
+			fmt.Sprintf("%s(DISTINCT %s)", uName, rawArgs),
+			fmt.Sprintf("%s(ALL %s)", uName, rawArgs),
+		)
+		for _, cand := range candidates {
+			if v, ok := row[cand]; ok && (v != nil || isAggFn) {
 				return v, nil
 			}
+			for k, v := range row {
+				if strings.EqualFold(k, cand) && (v != nil || isAggFn) {
+					return v, nil
+				}
+			}
 		}
+	}
+
+	if isAggFn {
+		if uName == "COUNT" {
+			if len(args) == 0 {
+				return int64(1), nil
+			}
+			if colRef, ok := args[0].(*ColumnRefExpr); ok && colRef.Name == "*" {
+				return int64(1), nil
+			}
+			v, err := EvalRowExpr(args[0], row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			if v == nil || isNullVal(v) {
+				return int64(0), nil
+			}
+			return int64(1), nil
+		}
+		if len(args) > 0 {
+			v, err := EvalRowExpr(args[0], row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			if v == nil || isNullVal(v) {
+				return nil, nil
+			}
+			return v, nil
+		}
+		return nil, nil
 	}
 
 	if uName == "ISNULL" || uName == "COALESCE" {
@@ -859,6 +975,43 @@ func anyToStorageVal(v any) storage.Value {
 	default:
 		return storage.StringValue(fmt.Sprintf("%v", val))
 	}
+}
+
+func isInteger(v any) (int64, bool) {
+	if v == nil {
+		return 0, false
+	}
+	switch val := v.(type) {
+	case int:
+		return int64(val), true
+	case int64:
+		return val, true
+	case int32:
+		return int64(val), true
+	case int16:
+		return int64(val), true
+	case int8:
+		return int64(val), true
+	case uint:
+		return int64(val), true
+	case uint64:
+		return int64(val), true
+	case uint32:
+		return int64(val), true
+	case uint16:
+		return int64(val), true
+	case uint8:
+		return int64(val), true
+	case storage.Value:
+		if val.Type == storage.TypeInt {
+			return val.IVal, true
+		}
+	case string:
+		if iv, err := strconv.ParseInt(strings.TrimSpace(val), 10, 64); err == nil {
+			return iv, true
+		}
+	}
+	return 0, false
 }
 
 func toArithmeticFloat(v any) (float64, bool) {

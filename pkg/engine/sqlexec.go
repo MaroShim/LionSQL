@@ -1306,15 +1306,22 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 		return s.execCreateFunction(trimmed, start)
 	}
-	if strings.HasPrefix(upper, "CREATE TRIGGER") || strings.HasPrefix(upper, "CREATE OR ALTER TRIGGER") || strings.HasPrefix(upper, "ALTER TRIGGER") {
+	if strings.HasPrefix(upper, "CREATE TRIGGER") || strings.HasPrefix(upper, "CREATE OR ALTER TRIGGER") || strings.HasPrefix(upper, "ALTER TRIGGER") ||
+		strings.HasPrefix(upper, "CREATE TEMP TRIGGER") || strings.HasPrefix(upper, "CREATE TEMPORARY TRIGGER") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execCreateTrigger(trimmed, start)
 	}
+	if strings.HasPrefix(upper, "DROP TRIGGER") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
+		return s.execDropTrigger(trimmed, start)
+	}
 
-	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / DROP VIEW
-	if strings.HasPrefix(upper, "CREATE VIEW") || strings.HasPrefix(upper, "CREATE OR REPLACE VIEW") {
+	// 1.5 DDL: CREATE VIEW / CREATE OR REPLACE VIEW / CREATE TEMP VIEW / DROP VIEW
+	if strings.HasPrefix(upper, "CREATE VIEW") || strings.HasPrefix(upper, "CREATE OR REPLACE VIEW") || strings.HasPrefix(upper, "CREATE TEMP VIEW") || strings.HasPrefix(upper, "CREATE TEMPORARY VIEW") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1409,6 +1416,14 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			return nil, err
 		}
 		return s.execDropIndex(trimmed, start)
+	}
+
+	// 4.1.2 DDL/Maintenance: REINDEX
+	if sqlutil.HasPrefixKeyword(trimmed, "REINDEX") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
+		return s.execReindex(trimmed, start)
 	}
 
 	// 4.1.5 DDL: DROP STATISTICS (C-5)

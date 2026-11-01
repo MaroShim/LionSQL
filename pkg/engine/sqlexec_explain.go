@@ -22,7 +22,7 @@ var (
 	reExplainUpdate       = regexp.MustCompile(`(?i)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$`)
 	reExplainDelete       = regexp.MustCompile(`(?i)^DELETE\s+(?:FROM\s+)?([^\s]+)(?:\s+WHERE\s+(.*))?$`)
 	reExplainExists       = regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*\(?\s*SELECT\b`)
-	reExplainInSelect     = regexp.MustCompile(`(?is)\b([a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*\(?\s*SELECT\b`)
+	reExplainInSelect     = regexp.MustCompile(`(?is)(?:[xX]'[^']*'|'[^']*'|"[^"]*"|\([^)]+\)|\b[a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*\(?\s*SELECT\b`)
 	reExplainScalarSelect = regexp.MustCompile(`(?is)\(\s*SELECT\b`)
 )
 
@@ -695,13 +695,22 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			offset = mEnd
 			continue
 		}
-		tokens := strings.Fields(prefix)
-		colName := cleanIdentifier(tokens[0])
 		isNot := sqlutil.ContainsKeyword(prefix, "NOT", false)
+		inIdx := strings.LastIndex(strings.ToUpper(prefix), "IN")
+		lhs := prefix
+		if inIdx != -1 {
+			lhs = strings.TrimSpace(prefix[:inIdx])
+			if isNot && strings.HasSuffix(strings.ToUpper(lhs), "NOT") {
+				lhs = strings.TrimSpace(lhs[:len(lhs)-3])
+			}
+		}
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
 			offset = mEnd
 			continue
+		}
+		if len(innerRes.Columns) > 1 {
+			return "", fmt.Errorf("subquery must return only one column, returned %d", len(innerRes.Columns))
 		}
 		hasRows := len(innerRes.Rows) > 0
 		replacement := "1=0"
@@ -712,12 +721,16 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 				var vals []string
 				for _, r := range innerRes.Rows {
 					row := NewSQLRow(r, innerRes.Columns)
-					if rowVal, ok := row.GetFirst(); ok && rowVal != nil {
-						vals = append(vals, fmt.Sprintf("'%v'", rowVal))
+					if rowVal, ok := row.GetFirst(); ok {
+						if rowVal == nil {
+							vals = append(vals, "NULL")
+						} else {
+							vals = append(vals, fmt.Sprintf("'%v'", rowVal))
+						}
 					}
 				}
 				if len(vals) > 0 {
-					replacement = fmt.Sprintf("%s NOT IN (%s)", colName, strings.Join(vals, ", "))
+					replacement = fmt.Sprintf("%s NOT IN (%s)", lhs, strings.Join(vals, ", "))
 				}
 			}
 		} else {
@@ -725,12 +738,12 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 				var vals []string
 				for _, r := range innerRes.Rows {
 					row := NewSQLRow(r, innerRes.Columns)
-					if rowVal, ok := row.GetFirst(); ok && rowVal != nil {
+					if rowVal, ok := row.GetFirst(); ok {
 						vals = append(vals, formatSubqueryVal(rowVal))
 					}
 				}
 				if len(vals) > 0 {
-					replacement = fmt.Sprintf("%s IN (%s)", colName, strings.Join(vals, ", "))
+					replacement = fmt.Sprintf("%s IN (%s)", lhs, strings.Join(vals, ", "))
 				}
 			}
 		}
@@ -749,10 +762,13 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			offset = mEnd
 			continue
 		}
-		innerRes, err := s.ExecuteSQL(innerSQL)
+		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
 			offset = mEnd
 			continue
+		}
+		if len(innerRes.Columns) > 1 {
+			return "", fmt.Errorf("subquery must return only one column, returned %d", len(innerRes.Columns))
 		}
 		replacement := "NULL"
 		if len(innerRes.Rows) > 0 {

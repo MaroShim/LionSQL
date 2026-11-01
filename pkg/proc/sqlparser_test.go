@@ -667,6 +667,14 @@ func TestEvalRowExpr_CastBit(t *testing.T) {
 	}
 }
 
-
-
+func TestParseSQL_AggregateAllQuantifier(t *testing.T) {
+	sql := `SELECT ALL AVG ( ALL col3 ) FROM tab0 WHERE ( NULL ) NOT IN ( - 87 * + 98 )`
+	stmt, err := proc.ParseSQL(sql)
+	if err != nil {
+		t.Fatalf("ParseSQL failed for query with ALL aggregate: %v", err)
+	}
+	if stmt == nil {
+		t.Fatal("expected non-nil statement")
+	}
+}
 

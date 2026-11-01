@@ -207,10 +207,35 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 	}
 	p.nextToken()
 
+	// Optional OR ALTER
+	if p.curTokenIs(TokenOr) {
+		p.nextToken()
+		if !p.curTokenIs(TokenAlter) {
+			return nil, fmt.Errorf("expected ALTER after OR, got %s", p.curToken.Literal)
+		}
+		p.nextToken()
+	}
+
+	// Optional TEMP / TEMPORARY
+	if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "TEMP") || strings.EqualFold(p.curToken.Literal, "TEMPORARY")) {
+		p.nextToken()
+	}
+
 	if !p.curTokenIs(TokenTrigger) {
 		return nil, fmt.Errorf("expected TRIGGER, got %s", p.curToken.Literal)
 	}
 	p.nextToken()
+
+	// Optional IF NOT EXISTS
+	if p.curTokenIs(TokenIf) {
+		p.nextToken()
+		if p.curTokenIs(TokenNot) {
+			p.nextToken()
+			if p.curTokenIs(TokenExists) {
+				p.nextToken()
+			}
+		}
+	}
 
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected trigger name, got %s", p.curToken.Literal)
@@ -218,48 +243,123 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 	trgName := cleanSchemaPrefix(p.curToken.Literal)
 	p.nextToken()
 
-	if !p.curTokenIs(TokenOn) {
-		return nil, fmt.Errorf("expected ON after trigger name, got %s", p.curToken.Literal)
-	}
-	p.nextToken()
-
-	if !p.curTokenIs(TokenIdent) {
-		return nil, fmt.Errorf("expected table name in ON clause, got %s", p.curToken.Literal)
-	}
-	tableName := cleanSchemaPrefix(p.curToken.Literal)
-	p.nextToken()
-
-	timing := "AFTER"
-	if p.curTokenIs(TokenAfter) {
-		timing = "AFTER"
-		p.nextToken()
-	} else if p.curTokenIs(TokenInstead) {
-		p.nextToken()
-		if !p.curTokenIs(TokenOf) {
-			return nil, fmt.Errorf("expected OF after INSTEAD, got %s", p.curToken.Literal)
-		}
-		timing = "INSTEAD OF"
-		p.nextToken()
-	}
-
+	var tableName string
+	var timing = "AFTER"
 	events := make([]string, 0)
-	for {
-		switch p.curToken.Type {
-		case TokenInsert:
-			events = append(events, "INSERT")
+
+	if p.curTokenIs(TokenOn) {
+		// T-SQL Syntax: CREATE TRIGGER trg ON table [AFTER|INSTEAD OF] [INSERT, UPDATE, DELETE] AS BEGIN ... END
+		p.nextToken()
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected table name in ON clause, got %s", p.curToken.Literal)
+		}
+		tableName = cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+
+		if p.curTokenIs(TokenAfter) {
+			timing = "AFTER"
 			p.nextToken()
-		case TokenUpdate:
-			events = append(events, "UPDATE")
+		} else if p.curTokenIs(TokenInstead) {
 			p.nextToken()
-		case TokenDelete:
-			events = append(events, "DELETE")
+			if !p.curTokenIs(TokenOf) {
+				return nil, fmt.Errorf("expected OF after INSTEAD, got %s", p.curToken.Literal)
+			}
+			timing = "INSTEAD OF"
 			p.nextToken()
 		}
 
-		if p.curTokenIs(TokenComma) {
+		for {
+			switch p.curToken.Type {
+			case TokenInsert:
+				events = append(events, "INSERT")
+				p.nextToken()
+			case TokenUpdate:
+				events = append(events, "UPDATE")
+				p.nextToken()
+			case TokenDelete:
+				events = append(events, "DELETE")
+				p.nextToken()
+			}
+
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			} else {
+				break
+			}
+		}
+	} else {
+		// SQLite Syntax: CREATE TRIGGER trg [BEFORE | AFTER | INSTEAD OF] [INSERT | UPDATE [OF col,...] | DELETE] ON table ...
+		if p.curTokenIs(TokenBefore) {
+			timing = "BEFORE"
 			p.nextToken()
-		} else {
-			break
+		} else if p.curTokenIs(TokenAfter) {
+			timing = "AFTER"
+			p.nextToken()
+		} else if p.curTokenIs(TokenInstead) {
+			p.nextToken()
+			if !p.curTokenIs(TokenOf) {
+				return nil, fmt.Errorf("expected OF after INSTEAD, got %s", p.curToken.Literal)
+			}
+			timing = "INSTEAD OF"
+			p.nextToken()
+		}
+
+		for {
+			switch p.curToken.Type {
+			case TokenInsert:
+				events = append(events, "INSERT")
+				p.nextToken()
+			case TokenUpdate:
+				events = append(events, "UPDATE")
+				p.nextToken()
+				if p.curTokenIs(TokenOf) {
+					p.nextToken()
+					for p.curTokenIs(TokenIdent) {
+						p.nextToken()
+						if p.curTokenIs(TokenComma) {
+							p.nextToken()
+						} else {
+							break
+						}
+					}
+				}
+			case TokenDelete:
+				events = append(events, "DELETE")
+				p.nextToken()
+			}
+
+			if p.curTokenIs(TokenComma) {
+				p.nextToken()
+			} else {
+				break
+			}
+		}
+
+		if !p.curTokenIs(TokenOn) {
+			return nil, fmt.Errorf("expected ON after trigger event, got %s", p.curToken.Literal)
+		}
+		p.nextToken()
+
+		if !p.curTokenIs(TokenIdent) {
+			return nil, fmt.Errorf("expected table name in ON clause, got %s", p.curToken.Literal)
+		}
+		tableName = cleanSchemaPrefix(p.curToken.Literal)
+		p.nextToken()
+
+		// Optional: FOR EACH ROW
+		if p.curTokenIs(TokenFor) {
+			p.nextToken()
+			for !p.curTokenIs(TokenBegin) && !p.curTokenIs(TokenAs) && !p.curTokenIs(TokenWhen) && !p.curTokenIs(TokenEOF) {
+				p.nextToken()
+			}
+		}
+
+		// Optional: WHEN condition
+		if p.curTokenIs(TokenWhen) {
+			p.nextToken()
+			for !p.curTokenIs(TokenBegin) && !p.curTokenIs(TokenAs) && !p.curTokenIs(TokenEOF) {
+				p.nextToken()
+			}
 		}
 	}
 
@@ -267,10 +367,9 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 		return nil, fmt.Errorf("expected at least one event (INSERT, UPDATE, DELETE) in trigger")
 	}
 
-	if !p.curTokenIs(TokenAs) {
-		return nil, fmt.Errorf("expected AS in trigger, got %s", p.curToken.Literal)
+	if p.curTokenIs(TokenAs) {
+		p.nextToken()
 	}
-	p.nextToken()
 
 	body, err := p.parseStatement()
 	if err != nil {

@@ -37,7 +37,7 @@ SELECT id, name, ROW_NUMBER() OVER (ORDER BY salary DESC, id ASC) AS rn FROM win
 7 Grace 7
 
 # Partitioned ROW_NUMBER
-query TIT nosort
+query TTI nosort
 SELECT dept, name, ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC, id ASC) AS rn FROM win_emp ORDER BY dept, rn;
 ----
 Engineering Alice 1
@@ -49,7 +49,7 @@ HR Frank 2
 HR Grace 3
 
 # RANK vs DENSE_RANK with duplicate salary (Bob and Charlie both have 9000)
-query TITI nosort
+query TTII nosort
 SELECT dept, name, salary, RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rk FROM win_emp WHERE dept = 'Engineering' ORDER BY id;
 ----
 Engineering Alice 10000 1
@@ -57,7 +57,7 @@ Engineering Bob 9000 2
 Engineering Charlie 9000 2
 Engineering David 8000 4
 
-query TITI nosort
+query TTII nosort
 SELECT dept, name, salary, DENSE_RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS drk FROM win_emp WHERE dept = 'Engineering' ORDER BY id;
 ----
 Engineering Alice 10000 1

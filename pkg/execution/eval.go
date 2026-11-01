@@ -8,6 +8,20 @@ import (
 	"lionsql/pkg/storage"
 )
 
+// eval3VLAnd computes the SQL 3-valued logic AND of two nullable booleans.
+// A nil *bool represents NULL (unknown).
+func eval3VLAnd(a, b *bool) *bool {
+	if (a != nil && !*a) || (b != nil && !*b) {
+		f := false
+		return &f
+	}
+	if a != nil && *a && b != nil && *b {
+		t := true
+		return &t
+	}
+	return nil
+}
+
 // EvalTupleExpr recursively evaluates an AST expression directly against a Tuple
 // with zero heap allocations for standard column lookups, literals, and binary arithmetic.
 func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
@@ -96,6 +110,12 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 		}
 		switch e.Op {
 		case proc.TokenPlus:
+			if fVal, ok := val.(float64); ok {
+				return fVal, true
+			}
+			if fVal, ok := val.(float32); ok {
+				return float64(fVal), true
+			}
 			if iVal, ok := toInt64(val); ok {
 				return iVal, true
 			}
@@ -104,6 +124,12 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 			}
 			return val, true
 		case proc.TokenMinus:
+			if fVal, ok := val.(float64); ok {
+				return -fVal, true
+			}
+			if fVal, ok := val.(float32); ok {
+				return -float64(fVal), true
+			}
 			if iVal, ok := toInt64(val); ok {
 				return -iVal, true
 			}
@@ -135,37 +161,55 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 	case *proc.BetweenExpr:
 		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
 		if !ok || val == nil {
-			return false, true
+			val = nil
 		}
 		if sv, ok := val.(storage.Value); ok && sv.IsNull {
-			return false, true
+			val = nil
 		}
 		low, okL := EvalTupleExprWithSubquery(t, e.Low, execSubquery)
-		high, okH := EvalTupleExprWithSubquery(t, e.High, execSubquery)
-		if !okL || !okH || low == nil || high == nil {
-			return false, true
+		if !okL || low == nil {
+			low = nil
 		}
 		if sv, ok := low.(storage.Value); ok && sv.IsNull {
-			return false, true
+			low = nil
+		}
+		high, okH := EvalTupleExprWithSubquery(t, e.High, execSubquery)
+		if !okH || high == nil {
+			high = nil
 		}
 		if sv, ok := high.(storage.Value); ok && sv.IsNull {
-			return false, true
+			high = nil
 		}
-		cmpLow := CompareValues(val, low)
-		cmpHigh := CompareValues(val, high)
-		inRange := cmpLow >= 0 && cmpHigh <= 0
+
+		var condLow, condHigh *bool
+		if val != nil && low != nil {
+			res := CompareValues(val, low) >= 0
+			condLow = &res
+		}
+		if val != nil && high != nil {
+			res := CompareValues(val, high) <= 0
+			condHigh = &res
+		}
+
+		betweenRes := eval3VLAnd(condLow, condHigh)
+		if betweenRes == nil {
+			return nil, true
+		}
 		if e.Not {
-			return !inRange, true
+			return !*betweenRes, true
 		}
-		return inRange, true
+		return *betweenRes, true
 
 	case *proc.InExpr:
+		if len(e.List) == 0 && e.Query == nil {
+			return e.Not, true
+		}
 		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
 		if !ok || val == nil {
-			return false, true
+			return nil, true
 		}
 		if sv, ok := val.(storage.Value); ok && sv.IsNull {
-			return false, true
+			return nil, true
 		}
 		found := false
 		hasNull := false
@@ -188,7 +232,7 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 			return !e.Not, true
 		}
 		if hasNull {
-			return false, true
+			return nil, true
 		}
 		return e.Not, true
 

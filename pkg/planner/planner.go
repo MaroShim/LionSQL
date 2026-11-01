@@ -1195,6 +1195,45 @@ func optimizeRootTable(q *QueryInfo, schema *storage.TableSchema, leftStats *Tab
 
 // BuildMultiJoinPlanWithStats produces an optimized PlanNode tree supporting single or chained multi-table joins.
 func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.TableSchema, leftStats *TableStats, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats) *PlanNode {
+	var allJoins []*JoinInfo
+	if len(q.Joins) > 0 {
+		allJoins = q.Joins
+	} else if q.Join != nil {
+		allJoins = []*JoinInfo{q.Join}
+	}
+	if len(allJoins) > 0 && (len(q.Projections) == 0 || (len(q.Projections) == 1 && (q.Projections[0] == "*" || q.Projections[0] == ""))) {
+		// Expand wildcard in logical FROM order: base table, then each joined relation in order
+		var expanded []string
+		basePrefix := q.TableAlias
+		if basePrefix == "" {
+			basePrefix = q.TableName
+		}
+		if schema != nil {
+			for _, col := range schema.Columns {
+				if !storage.IsSyntheticPKName(col.Name) {
+					expanded = append(expanded, basePrefix+"."+col.Name)
+				}
+			}
+		}
+		for _, j := range allJoins {
+			rPrefix := j.Alias
+			if rPrefix == "" {
+				rPrefix = j.Table
+			}
+			rSchema := resolveRightSchema(j, rightSchemas)
+			if rSchema != nil {
+				for _, col := range rSchema.Columns {
+					if !storage.IsSyntheticPKName(col.Name) {
+						expanded = append(expanded, rPrefix+"."+col.Name)
+					}
+				}
+			}
+		}
+		if len(expanded) > 0 {
+			q.Projections = expanded
+		}
+	}
+
 	// Dynamic Root Selection (OPT-LARGE-JOIN-1):
 	// Promote table with single-table equality filter or lowest cardinality to base scan root
 	schema, leftStats = optimizeRootTable(q, schema, leftStats, rightSchemas, rightStats)
@@ -1413,6 +1452,32 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 								if !coveredCols[clean] {
 									allCovered = false
 									break
+								}
+							}
+							if allCovered {
+								for _, pc := range pushdownRes.PrimaryConds {
+									for _, ref := range ExtractColumnRefs(pc) {
+										colRef := strings.ToLower(cleanIdent(ref.Column))
+										if !coveredCols[colRef] {
+											allCovered = false
+											break
+										}
+									}
+									if !allCovered {
+										break
+									}
+								}
+							}
+							if allCovered && q.OrderByClause != "" {
+								for _, item := range sqlutil.ParseOrderBy(q.OrderByClause) {
+									colClean := strings.ToLower(cleanIdent(item.Column))
+									if _, err := strconv.Atoi(colClean); err == nil {
+										continue // positional ordinal like 1, 2
+									}
+									if !coveredCols[colClean] {
+										allCovered = false
+										break
+									}
 								}
 							}
 							isCovering = allCovered
@@ -1823,16 +1888,18 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		currentNode = sortNode
 	}
 
-	// Projection Node
-	projNode := &PlanNode{
-		Type:          NodeProjection,
-		Projections:   q.Projections,
-		StartupCost:   currentNode.StartupCost,
-		TotalCost:     currentNode.TotalCost + float64(currentNode.EstimatedRows)*0.001,
-		EstimatedRows: currentNode.EstimatedRows,
-		Children:      []*PlanNode{currentNode},
+	// Projection Node (only when not already projected by NodeAggregate without window functions)
+	if currentNode.Type != NodeAggregate || len(winDefs) > 0 {
+		projNode := &PlanNode{
+			Type:          NodeProjection,
+			Projections:   q.Projections,
+			StartupCost:   currentNode.StartupCost,
+			TotalCost:     currentNode.TotalCost + float64(currentNode.EstimatedRows)*0.001,
+			EstimatedRows: currentNode.EstimatedRows,
+			Children:      []*PlanNode{currentNode},
+		}
+		currentNode = projNode
 	}
-	currentNode = projNode
 
 	// Order By -> Sort Node (Post-projection for ordinal e.g. ORDER BY 1, 2)
 	if q.OrderByClause != "" && sortAfterProj {
@@ -2687,9 +2754,9 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 				innerIndex = idx
 			}
 		}
-		if innerIndex == nil && leftKey != "" {
+		if innerIndex == nil && leftKey != "" && join.Type != "SEMI" && join.Type != "ANTI" {
 			tblL := extractTableQualifier(leftKey)
-			if tblL == "" || tblL == strings.ToLower(rTable) || tblL == strings.ToLower(rAlias) {
+			if tblL != "" && (tblL == strings.ToLower(rTable) || tblL == strings.ToLower(rAlias)) {
 				leftCol := leftKey
 				if idx := strings.Index(leftCol, "."); idx != -1 {
 					leftCol = leftCol[idx+1:]
@@ -2947,7 +3014,7 @@ func hasTopLevelAggregateExpr(expr proc.Expr) bool {
 	case *proc.FunctionCallExpr:
 		fn := strings.ToUpper(e.Name)
 		switch fn {
-		case "COUNT", "SUM", "AVG", "MIN", "MAX", "GROUPING",
+		case "COUNT", "SUM", "TOTAL", "AVG", "MIN", "MAX", "GROUP_CONCAT", "STRING_AGG", "GROUPING",
 			"PERCENTILE_CONT", "PERCENTILE_DISC", "APPROX_PERCENTILE", "MEDIAN":
 			return true
 		}

@@ -12,6 +12,9 @@ import (
 )
 
 func runSLTFile(t *testing.T, file string) {
+	if testing.Short() {
+		t.Skip("skipping full SLT file in short mode")
+	}
 	records, err := slt.ParseFile(file)
 	if err != nil {
 		t.Fatalf("failed to parse %s: %v", file, err)

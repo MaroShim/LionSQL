@@ -1643,6 +1643,13 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 		if !ok {
 			return nil, false
 		}
+		if len(idxData.Schema.Columns) > 1 {
+			if td != nil {
+				if row, _, exists := td.getRowAndVer(pk); exists {
+					return td.Schema.RowToRecord(row), true
+				}
+			}
+		}
 		rec := make(storage.Record, len(idxData.Schema.Columns)+len(idxData.Schema.IncludeCols)+1)
 		if len(idxData.Schema.Columns) == 1 {
 			rec[idxData.Schema.Columns[0]] = payload.key

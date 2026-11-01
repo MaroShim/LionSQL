@@ -161,8 +161,8 @@ func (l *Lexer) NextToken() Token {
 		tok.Col = tokCol
 		return tok
 	default:
-		if (l.ch == 'N' || l.ch == 'n') && l.peekChar() == '\'' {
-			l.readChar() // skip 'N' or 'n'
+		if (l.ch == 'N' || l.ch == 'n' || l.ch == 'X' || l.ch == 'x') && l.peekChar() == '\'' {
+			l.readChar() // skip 'N', 'n', 'X', or 'x'
 			tok.Type = TokenString
 			tok.Literal = l.readString()
 			tok.Line = tokLine
