@@ -1,0 +1,86 @@
+# Core Window Functions: ROW_NUMBER, RANK, DENSE_RANK, LAG, LEAD, and Cumulative SUM
+
+statement ok
+CREATE TABLE win_emp (id INT PRIMARY KEY, name VARCHAR, dept VARCHAR, salary INT);
+
+statement ok
+INSERT INTO win_emp VALUES (1, 'Alice', 'Engineering', 10000);
+
+statement ok
+INSERT INTO win_emp VALUES (2, 'Bob', 'Engineering', 9000);
+
+statement ok
+INSERT INTO win_emp VALUES (3, 'Charlie', 'Engineering', 9000);
+
+statement ok
+INSERT INTO win_emp VALUES (4, 'David', 'Engineering', 8000);
+
+statement ok
+INSERT INTO win_emp VALUES (5, 'Eve', 'HR', 7000);
+
+statement ok
+INSERT INTO win_emp VALUES (6, 'Frank', 'HR', 7000);
+
+statement ok
+INSERT INTO win_emp VALUES (7, 'Grace', 'HR', 6000);
+
+# Global ROW_NUMBER by salary descending, then id
+query ITI nosort
+SELECT id, name, ROW_NUMBER() OVER (ORDER BY salary DESC, id ASC) AS rn FROM win_emp;
+----
+1 Alice 1
+2 Bob 2
+3 Charlie 3
+4 David 4
+5 Eve 5
+6 Frank 6
+7 Grace 7
+
+# Partitioned ROW_NUMBER
+query TIT nosort
+SELECT dept, name, ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC, id ASC) AS rn FROM win_emp ORDER BY dept, rn;
+----
+Engineering Alice 1
+Engineering Bob 2
+Engineering Charlie 3
+Engineering David 4
+HR Eve 1
+HR Frank 2
+HR Grace 3
+
+# RANK vs DENSE_RANK with duplicate salary (Bob and Charlie both have 9000)
+query TITI nosort
+SELECT dept, name, salary, RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS rk FROM win_emp WHERE dept = 'Engineering' ORDER BY id;
+----
+Engineering Alice 10000 1
+Engineering Bob 9000 2
+Engineering Charlie 9000 2
+Engineering David 8000 4
+
+query TITI nosort
+SELECT dept, name, salary, DENSE_RANK() OVER (PARTITION BY dept ORDER BY salary DESC) AS drk FROM win_emp WHERE dept = 'Engineering' ORDER BY id;
+----
+Engineering Alice 10000 1
+Engineering Bob 9000 2
+Engineering Charlie 9000 2
+Engineering David 8000 3
+
+# Cumulative SUM within partition
+query TII nosort
+SELECT dept, id, SUM(salary) OVER (PARTITION BY dept ORDER BY id ASC) AS running_total FROM win_emp ORDER BY dept, id;
+----
+Engineering 1 10000
+Engineering 2 19000
+Engineering 3 28000
+Engineering 4 36000
+HR 5 7000
+HR 6 14000
+HR 7 20000
+
+# LAG and LEAD
+query TII nosort
+SELECT name, salary, LAG(salary, 1, 0) OVER (PARTITION BY dept ORDER BY salary DESC, id ASC) AS prev_sal FROM win_emp WHERE dept = 'HR' ORDER BY id;
+----
+Eve 7000 0
+Frank 7000 7000
+Grace 6000 7000

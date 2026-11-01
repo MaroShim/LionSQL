@@ -106,12 +106,21 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 	case *proc.BetweenExpr:
 		val, ok := EvalTupleExpr(t, e.Expr)
 		if !ok || val == nil {
-			return e.Not, true
+			return false, true
+		}
+		if sv, ok := val.(storage.Value); ok && sv.IsNull {
+			return false, true
 		}
 		low, okL := EvalTupleExpr(t, e.Low)
 		high, okH := EvalTupleExpr(t, e.High)
 		if !okL || !okH || low == nil || high == nil {
-			return e.Not, true
+			return false, true
+		}
+		if sv, ok := low.(storage.Value); ok && sv.IsNull {
+			return false, true
+		}
+		if sv, ok := high.(storage.Value); ok && sv.IsNull {
+			return false, true
 		}
 		cmpLow := CompareValues(val, low)
 		cmpHigh := CompareValues(val, high)
@@ -124,20 +133,35 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 	case *proc.InExpr:
 		val, ok := EvalTupleExpr(t, e.Expr)
 		if !ok || val == nil {
-			return e.Not, true
+			return false, true
+		}
+		if sv, ok := val.(storage.Value); ok && sv.IsNull {
+			return false, true
 		}
 		found := false
+		hasNull := false
 		for _, item := range e.List {
 			itemVal, okItem := EvalTupleExpr(t, item)
-			if okItem && CompareValues(val, itemVal) == 0 {
+			if !okItem || itemVal == nil {
+				hasNull = true
+				continue
+			}
+			if sv, ok := itemVal.(storage.Value); ok && sv.IsNull {
+				hasNull = true
+				continue
+			}
+			if CompareValues(val, itemVal) == 0 {
 				found = true
 				break
 			}
 		}
-		if e.Not {
-			return !found, true
+		if found {
+			return !e.Not, true
 		}
-		return found, true
+		if hasNull {
+			return false, true
+		}
+		return e.Not, true
 
 	case *proc.IsNullExpr:
 		val, ok := EvalTupleExpr(t, e.Expr)

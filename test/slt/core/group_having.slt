@@ -1,0 +1,52 @@
+# Core GROUP BY and HAVING Clause Filtering
+
+statement ok
+CREATE TABLE slt_sales (id INT PRIMARY KEY, dept VARCHAR, region VARCHAR, amount INT);
+
+statement ok
+INSERT INTO slt_sales VALUES (1, 'Eng', 'APAC', 100);
+
+statement ok
+INSERT INTO slt_sales VALUES (2, 'Eng', 'APAC', 250);
+
+statement ok
+INSERT INTO slt_sales VALUES (3, 'Eng', 'EMEA', 150);
+
+statement ok
+INSERT INTO slt_sales VALUES (4, 'Sales', 'APAC', 80);
+
+statement ok
+INSERT INTO slt_sales VALUES (5, 'Sales', 'APAC', 120);
+
+statement ok
+INSERT INTO slt_sales VALUES (6, 'HR', 'AMER', 50);
+
+# GROUP BY with COUNT, SUM, MIN, MAX
+query TIIII rowsort
+SELECT dept, COUNT(*), SUM(amount), MIN(amount), MAX(amount) FROM slt_sales GROUP BY dept;
+----
+Eng 3 500 100 250
+HR 1 50 50 50
+Sales 2 200 80 120
+
+# GROUP BY with HAVING COUNT(*) >= 2
+query TI rowsort
+SELECT dept, COUNT(*) FROM slt_sales GROUP BY dept HAVING COUNT(*) >= 2;
+----
+Eng 3
+Sales 2
+
+# GROUP BY with HAVING SUM(amount) > 200
+query TI rowsort
+SELECT dept, SUM(amount) FROM slt_sales GROUP BY dept HAVING SUM(amount) > 200;
+----
+Eng 500
+
+# Multi-column GROUP BY
+query TTII rowsort
+SELECT dept, region, COUNT(*), SUM(amount) FROM slt_sales GROUP BY dept, region;
+----
+Eng APAC 2 350
+Eng EMEA 1 150
+HR AMER 1 50
+Sales APAC 2 200

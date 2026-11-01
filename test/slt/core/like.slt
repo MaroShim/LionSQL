@@ -1,0 +1,58 @@
+# Core LIKE and NOT LIKE Pattern Matching
+
+statement ok
+CREATE TABLE slt_like (id INT PRIMARY KEY, word VARCHAR);
+
+statement ok
+INSERT INTO slt_like VALUES (1, 'apple');
+
+statement ok
+INSERT INTO slt_like VALUES (2, 'application');
+
+statement ok
+INSERT INTO slt_like VALUES (3, 'banana');
+
+statement ok
+INSERT INTO slt_like VALUES (4, 'bandana');
+
+statement ok
+INSERT INTO slt_like VALUES (5, 'cat');
+
+statement ok
+INSERT INTO slt_like VALUES (6, 'cut');
+
+statement ok
+INSERT INTO slt_like VALUES (7, NULL);
+
+# Prefix wildcard %
+query IT rowsort
+SELECT id, word FROM slt_like WHERE word LIKE 'app%';
+----
+1 apple
+2 application
+
+# Suffix wildcard %
+query IT rowsort
+SELECT id, word FROM slt_like WHERE word LIKE '%ana';
+----
+3 banana
+4 bandana
+
+# Substring wildcard %...%
+query IT rowsort
+SELECT id, word FROM slt_like WHERE word LIKE '%and%';
+----
+4 bandana
+
+# Single character wildcard _
+query IT rowsort
+SELECT id, word FROM slt_like WHERE word LIKE 'c_t';
+----
+5 cat
+6 cut
+
+# NOT LIKE (must exclude NULL row 7)
+query IT rowsort
+SELECT id, word FROM slt_like WHERE word NOT LIKE '%a%';
+----
+6 cut

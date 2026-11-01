@@ -1,0 +1,56 @@
+# Core BETWEEN and NOT BETWEEN Range Predicates (Including NULL Semantics)
+
+statement ok
+CREATE TABLE slt_between (id INT PRIMARY KEY, score INT, label VARCHAR);
+
+statement ok
+INSERT INTO slt_between VALUES (1, 10, 'alpha');
+
+statement ok
+INSERT INTO slt_between VALUES (2, 20, 'beta');
+
+statement ok
+INSERT INTO slt_between VALUES (3, 30, 'gamma');
+
+statement ok
+INSERT INTO slt_between VALUES (4, 40, 'delta');
+
+statement ok
+INSERT INTO slt_between VALUES (5, NULL, 'omega');
+
+# Inclusive numeric BETWEEN
+query II rowsort
+SELECT id, score FROM slt_between WHERE score BETWEEN 10 AND 30;
+----
+1 10
+2 20
+3 30
+
+# Exact single-point BETWEEN
+query II rowsort
+SELECT id, score FROM slt_between WHERE score BETWEEN 20 AND 20;
+----
+2 20
+
+# Numeric NOT BETWEEN (must exclude NULL row per SQL 3VL)
+query II rowsort
+SELECT id, score FROM slt_between WHERE score NOT BETWEEN 20 AND 30;
+----
+1 10
+4 40
+
+# String BETWEEN
+query IT rowsort
+SELECT id, label FROM slt_between WHERE label BETWEEN 'alpha' AND 'delta';
+----
+1 alpha
+2 beta
+4 delta
+
+# Compound BETWEEN with OR IS NULL
+query I rowsort
+SELECT id FROM slt_between WHERE score NOT BETWEEN 15 AND 35 OR score IS NULL;
+----
+1
+4
+5

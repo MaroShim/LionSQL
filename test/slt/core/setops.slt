@@ -1,0 +1,54 @@
+# Core Set Operations: UNION and UNION ALL
+
+statement ok
+CREATE TABLE set_a (id INT PRIMARY KEY, val VARCHAR);
+
+statement ok
+CREATE TABLE set_b (id INT PRIMARY KEY, val VARCHAR);
+
+statement ok
+INSERT INTO set_a VALUES (1, 'apple');
+
+statement ok
+INSERT INTO set_a VALUES (2, 'banana');
+
+statement ok
+INSERT INTO set_a VALUES (3, 'cherry');
+
+statement ok
+INSERT INTO set_b VALUES (2, 'banana');
+
+statement ok
+INSERT INTO set_b VALUES (3, 'cherry');
+
+statement ok
+INSERT INTO set_b VALUES (4, 'date');
+
+# UNION ALL: keeps all 6 rows (including duplicates)
+query IT rowsort
+SELECT id, val FROM set_a UNION ALL SELECT id, val FROM set_b;
+----
+1 apple
+2 banana
+2 banana
+3 cherry
+3 cherry
+4 date
+
+# UNION: eliminates duplicates, returns 4 distinct rows
+query IT rowsort
+SELECT id, val FROM set_a UNION SELECT id, val FROM set_b;
+----
+1 apple
+2 banana
+3 cherry
+4 date
+
+# UNION with WHERE filter
+query IT rowsort
+SELECT id, val FROM set_a WHERE id <= 2 UNION SELECT id, val FROM set_b WHERE id >= 3;
+----
+1 apple
+2 banana
+3 cherry
+4 date

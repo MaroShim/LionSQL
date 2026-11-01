@@ -1,0 +1,46 @@
+# Core ORDER BY, LIMIT, OFFSET, and ANSI FETCH NEXT Pagination
+
+statement ok
+CREATE TABLE slt_page (id INT PRIMARY KEY, val INT, tag VARCHAR);
+
+statement ok
+INSERT INTO slt_page VALUES (1, 50, 'e');
+
+statement ok
+INSERT INTO slt_page VALUES (2, 10, 'a');
+
+statement ok
+INSERT INTO slt_page VALUES (3, 40, 'd');
+
+statement ok
+INSERT INTO slt_page VALUES (4, 20, 'b');
+
+statement ok
+INSERT INTO slt_page VALUES (5, 30, 'c');
+
+# ORDER BY ASC with LIMIT
+query IIT nosort
+SELECT id, val, tag FROM slt_page ORDER BY val ASC LIMIT 3;
+----
+2 10 a
+4 20 b
+5 30 c
+
+# ORDER BY DESC with LIMIT and OFFSET
+query IIT nosort
+SELECT id, val, tag FROM slt_page ORDER BY val DESC LIMIT 2 OFFSET 1;
+----
+3 40 d
+5 30 c
+
+# ANSI OFFSET ... ROWS FETCH NEXT ... ROWS ONLY
+query IIT nosort
+SELECT id, val, tag FROM slt_page ORDER BY val ASC OFFSET 2 ROWS FETCH NEXT 2 ROWS ONLY;
+----
+5 30 c
+3 40 d
+
+# OFFSET beyond row count returns empty result
+query IIT nosort
+SELECT id, val, tag FROM slt_page ORDER BY val ASC LIMIT 5 OFFSET 10;
+----

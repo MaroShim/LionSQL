@@ -169,40 +169,46 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 
 	case *InExpr:
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
-		if err != nil || val == nil {
-			if e.Not {
-				return true, nil
-			}
-			return false, nil
+		if err != nil || isNullVal(val) {
+			return nil, nil
 		}
 		strVal := fmt.Sprintf("%v", val)
 		found := false
+		hasNull := false
 		for _, item := range e.List {
 			itemVal, err := EvalRowExpr(item, row, execSubquery)
-			if err == nil && itemVal != nil {
-				if strings.EqualFold(strVal, fmt.Sprintf("%v", itemVal)) {
-					found = true
-					break
-				}
+			if err != nil {
+				continue
+			}
+			if isNullVal(itemVal) {
+				hasNull = true
+				continue
+			}
+			if strings.EqualFold(strVal, fmt.Sprintf("%v", itemVal)) {
+				found = true
+				break
 			}
 		}
-		if e.Not {
-			return !found, nil
+		if found {
+			return !e.Not, nil
 		}
-		return found, nil
+		if hasNull {
+			return nil, nil
+		}
+		return e.Not, nil
 
 	case *BetweenExpr:
 		val, err := EvalRowExpr(e.Expr, row, execSubquery)
-		if err != nil || val == nil {
-			return false, nil
+		if err != nil || isNullVal(val) {
+			return nil, nil
 		}
 		lowVal, err := EvalRowExpr(e.Low, row, execSubquery)
-		if err != nil || lowVal == nil {
-			return false, nil
+		if err != nil || isNullVal(lowVal) {
+			return nil, nil
 		}
 		highVal, err := EvalRowExpr(e.High, row, execSubquery)
-		if err != nil || highVal == nil {
-			return false, nil
+		if err != nil || isNullVal(highVal) {
+			return nil, nil
 		}
 
 		vNum, isNum1 := toFloat(val)

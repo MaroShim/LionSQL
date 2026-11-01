@@ -1,0 +1,71 @@
+# Core DML Mutations: INSERT SELECT, UPDATE with expressions, and DELETE
+
+statement ok
+CREATE TABLE src_items (id INT PRIMARY KEY, name VARCHAR, price INT, stock INT);
+
+statement ok
+CREATE TABLE dst_items (id INT PRIMARY KEY, name VARCHAR, total_val INT);
+
+statement ok
+INSERT INTO src_items VALUES (1, 'Widget', 100, 5);
+
+statement ok
+INSERT INTO src_items VALUES (2, 'Gadget', 200, 3);
+
+statement ok
+INSERT INTO src_items VALUES (3, 'Doohickey', 50, 10);
+
+statement ok
+INSERT INTO src_items VALUES (4, 'Thingamajig', 300, 0);
+
+# INSERT INTO ... SELECT with computed expression
+statement ok
+INSERT INTO dst_items SELECT id, name, price * stock FROM src_items WHERE stock > 0;
+
+query ITI rowsort
+SELECT id, name, total_val FROM dst_items;
+----
+1 Widget 500
+2 Gadget 600
+3 Doohickey 500
+
+# UPDATE with arithmetic expression
+statement ok
+UPDATE src_items SET price = price + 20 WHERE id = 1;
+
+query II nosort
+SELECT id, price FROM src_items WHERE id = 1;
+----
+1 120
+
+# UPDATE multi-row
+statement ok
+UPDATE src_items SET stock = stock + 1 WHERE stock > 0;
+
+query II rowsort
+SELECT id, stock FROM src_items;
+----
+1 6
+2 4
+3 11
+4 0
+
+# DELETE with WHERE condition
+statement ok
+DELETE FROM src_items WHERE stock = 0;
+
+query I rowsort
+SELECT id FROM src_items;
+----
+1
+2
+3
+
+# DELETE ALL
+statement ok
+DELETE FROM dst_items;
+
+query I nosort
+SELECT COUNT(*) FROM dst_items;
+----
+0

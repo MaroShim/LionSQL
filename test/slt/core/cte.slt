@@ -1,0 +1,40 @@
+# Core Common Table Expressions (WITH CTE)
+
+statement ok
+CREATE TABLE slt_cte_emp (id INT PRIMARY KEY, name VARCHAR, dept VARCHAR, salary INT);
+
+statement ok
+INSERT INTO slt_cte_emp VALUES (1, 'Alice', 'Eng', 120);
+
+statement ok
+INSERT INTO slt_cte_emp VALUES (2, 'Bob', 'Eng', 100);
+
+statement ok
+INSERT INTO slt_cte_emp VALUES (3, 'Charlie', 'Sales', 90);
+
+statement ok
+INSERT INTO slt_cte_emp VALUES (4, 'Diana', 'Sales', 110);
+
+statement ok
+INSERT INTO slt_cte_emp VALUES (5, 'Evan', 'HR', 80);
+
+# Single CTE with filtering
+query IT rowsort
+WITH high_earners AS (
+    SELECT id, name, salary FROM slt_cte_emp WHERE salary >= 100
+)
+SELECT id, name FROM high_earners;
+----
+1 Alice
+2 Bob
+4 Diana
+
+# CTE with aggregation joined back to base table
+query ITI rowsort
+WITH dept_avg AS (
+    SELECT dept, AVG(salary) AS avg_sal FROM slt_cte_emp GROUP BY dept
+)
+SELECT e.id, e.name, e.salary FROM slt_cte_emp e JOIN dept_avg d ON e.dept = d.dept WHERE e.salary > d.avg_sal;
+----
+1 Alice 120
+4 Diana 110

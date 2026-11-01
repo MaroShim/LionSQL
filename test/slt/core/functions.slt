@@ -1,0 +1,88 @@
+# Core Scalar Functions: String, Math, and NULL Handling
+
+statement ok
+CREATE TABLE test_fn (id INT PRIMARY KEY, str_val VARCHAR, num_val INT, float_val FLOAT);
+
+statement ok
+INSERT INTO test_fn VALUES (1, '  LionSQL  ', -42, 3.14159);
+
+statement ok
+INSERT INTO test_fn VALUES (2, 'database', 100, -2.718);
+
+statement ok
+INSERT INTO test_fn VALUES (3, NULL, NULL, NULL);
+
+# String functions
+query T nosort
+SELECT TRIM(str_val) FROM test_fn WHERE id = 1;
+----
+LionSQL
+
+query T nosort
+SELECT UPPER(TRIM(str_val)) FROM test_fn WHERE id = 1;
+----
+LIONSQL
+
+query T nosort
+SELECT LOWER(TRIM(str_val)) FROM test_fn WHERE id = 1;
+----
+lionsql
+
+query I nosort
+SELECT LEN(TRIM(str_val)) FROM test_fn WHERE id = 1;
+----
+7
+
+query T nosort
+SELECT SUBSTRING(str_val, 3, 4) FROM test_fn WHERE id = 1;
+----
+Lion
+
+# String NULL propagation (returns NULL for NULL input)
+query T nosort
+SELECT UPPER(str_val) FROM test_fn WHERE id = 3;
+----
+NULL
+
+# Math functions
+query I nosort
+SELECT ABS(num_val) FROM test_fn WHERE id = 1;
+----
+42
+
+query I nosort
+SELECT ABS(num_val) FROM test_fn WHERE id = 2;
+----
+100
+
+query I nosort
+SELECT FLOOR(float_val) FROM test_fn WHERE id = 1;
+----
+3
+
+query I nosort
+SELECT CEILING(float_val) FROM test_fn WHERE id = 1;
+----
+4
+
+# NULL handling: COALESCE
+query T nosort
+SELECT COALESCE(str_val, 'default_str') FROM test_fn WHERE id = 3;
+----
+default_str
+
+query I nosort
+SELECT COALESCE(num_val, 999) FROM test_fn WHERE id = 3;
+----
+999
+
+# NULLIF: returns NULL if equal, otherwise first arg
+query I nosort
+SELECT NULLIF(10, 10);
+----
+NULL
+
+query I nosort
+SELECT NULLIF(20, 10);
+----
+20
