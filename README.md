@@ -542,6 +542,13 @@ LionSQL strictly adheres to a **3-Stage Verification Pipeline** for every change
      # WiredTiger persistent B+Tree engine run
      ./scripts/verify_report.sh --engine=wiredtiger
      ```
+
+   - **SQLLogicTest (SLT) Oracle Verification**:
+     Runs full regression across official SQLite test suites (`select1.test` ~ `select5.test`, 10,706 queries) and 33 curated domain suites (see [`notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)):
+     ```bash
+     # Run official select1~select5 suites (10,706 queries, ~22s)
+     go test -tags wiredtiger -v -run "TestSQLLogicTest_Select[1-5]" ./test/slt/
+     ```
 3. **Commit Integrity**:
    - Conventional Commits format (`feat`, `fix`, `docs`, `refactor`, `test`).
    - Zero decorative emojis in code, logs, comments, and commit messages.

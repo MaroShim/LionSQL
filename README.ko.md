@@ -543,6 +543,13 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
      # 2. WiredTiger B+Tree 영속 엔진 기반 전체 검증
      ./scripts/verify_report.sh --engine=wiredtiger
      ```
+
+   - **SQLLogicTest (SLT) 대규모 블랙박스 정합성 오라클 검증**:
+     SQLite 공식 대규모 스위트(`select1.test` ~ `select5.test`, 총 10,706개 쿼리) 및 33개 LionSQL 도메인 스위트 전수 회귀 테스트를 상시 검증합니다 ([`notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md) 참조):
+     ```bash
+     # SQLLogicTest 공식 select1~select5 (10,706 쿼리, ~22초) 전수 검증
+     go test -tags wiredtiger -v -run "TestSQLLogicTest_Select[1-5]" ./test/slt/
+     ```
 3. **커밋 무결성 규약 (Commit)**:
    - Conventional Commits 형식 준수 (`feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`).
    - 모든 코드, 로그, 주석, 문서, 커밋 메시지에서 장식용 이모지를 엄격히 배제하고 엔지니어링 톤을 유지합니다.

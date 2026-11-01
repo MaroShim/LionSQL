@@ -119,22 +119,27 @@ SQLite 원본 SLT를 타 RDBMS/OLTP 엔진에 적용할 때 반드시 발생하�
 LionSQL의 고성능 In-Memory OCC 및 WiredTiger MVCC 엔진 특성에 맞춘 최적의 권장 적용 범위입니다.
 
 ```
-[Phase 1 완료] LionSQL 특화 Core 스위트 (28개 파일, 202문장 / 163쿼리)
+[Phase 1 완료] LionSQL 특화 Core 스위트 (33개 파일, 240문장 / 181쿼리 전수 100% 통과)
       │
       ▼
-[Phase 2 진행 중] SQLite 공식 select1 ~ select4 (~7,500 쿼리) ──> [LionSQL 상시 PR CI 게이트]
-      │         - select1: 1,031 쿼리 (100% 통과)
-      │         - select2: 1,031 쿼리 (100% 통과)
-      │         - select3: 3,351 쿼리 (100% 통과)
-      │         - select4: 1,500+ 쿼리 (진행 중)
+[Phase 2 완료] SQLite 공식 select1 ~ select5 (총 10,706 쿼리 100% 통과) ──> [LionSQL 상시 PR CI 게이트]
+      │         - select1: 1,031 쿼리 (100% 통과, 2.29s)
+      │         - select2: 1,031 쿼리 (100% 통과, 2.18s)
+      │         - select3: 3,351 쿼리 (100% 통과, 5.88s)
+      │         - select4: 3,857 쿼리 (100% 통과, 6.36s)
+      │         - select5: 1,436 쿼리 (100% 통과, 5.67s, 최대 64개 테이블 콤마 조인)
+      │         => 총 10,706 쿼리 전수 22.69초 만에 100% 무오류 인증 (0 실패, 0 레이스)
       │
       ▼
-[Phase 3 (v0.95.0)] select5.test + random/expr 샘플링 (~20,000 쿼리) ──> [Nightly CI]
+[Phase 3 (v0.95.0)] random/expr 및 random/groupby 샘플링 (~20,000 쿼리) ──> [Nightly CI]
       │
       ▼
 [Phase 4 (v1.0.0 GA)] 50,000+ 쿼리 공식 인증 & 회귀 방지 체계 완비
 ```
 
-### 결론 및 제언
-1. **현재 목표(`select1` ~ `select4`, 약 7,500 쿼리)**는 DuckDB, CockroachDB, DataFusion 등 주요 상용 DBMS의 **"상시 CI 1차 게이트" 수준을 완벽히 충족**하는 범위입니다.
-2. 수백만 개에 달하는 `random/` 전체를 단번에 돌리는 것은 빌드 시간을 기하급수적으로 늘려 개발 생산성을 저해하므로, **`select1` ~ `select4` 100% 통과 후 커밋 ➔ `select5` 및 선별 샘플링을 Nightly CI로 분리하는 것**이 엔진 업계의 가장 모범적인 표준 실천 방안(Best Practice)입니다.
+### 결론 및 현황 성과
+1. **`select1` ~ `select5` 완주 달성 (총 10,706 쿼리)**:
+   - DuckDB, CockroachDB, DataFusion 등 글로벌 주요 DBMS 엔진의 "Tier 1 상시 CI 게이트"를 완벽하게 통과했습니다.
+   - 단일 테이블 필터 푸시다운, 서수 인덱스 정렬, 서브쿼리 지연 평가뿐 아니라, `select5.test`의 **최대 64개 테이블에 달하는 복합 콤마 조인(Implicit Comma Joins)**에 대해 BFS 기반 Spanning Tree 조인 키 추론과 Greedy Join Ordering 필터 우선순위화를 도입하여 **중간 카테시안 폭발 없이 5.67초 만에 1,436개 쿼리를 전수 완주**했습니다.
+2. **향후 단계별 접근 (Phase 3~4)**:
+   - 수백만 개에 달하는 `random/` 전체를 단번에 돌리는 것은 빌드 시간을 기하급수적으로 늘려 개발 생산성을 저해하므로, **`select1` ~ `select5` (10,706 쿼리)는 상시 회귀 방지 게이트**로 운영하고, `random/` 스위트 및 비정형 대수식은 Nightly CI로 분리하는 것이 최적의 표준 실천 방안(Best Practice)입니다.

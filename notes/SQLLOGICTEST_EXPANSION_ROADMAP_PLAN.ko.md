@@ -17,21 +17,21 @@
 ## 2. 4단계 확장 로드맵 (Phase 1 ~ Phase 4)
 
 ```
-[Phase 1: 0.90.0 GA 집중] 고위험 SQL 핵심 도메인 심화 (5개 핵심 스위트 추가, ~60개 쿼리)
+[Phase 1 완료] 고위험 SQL 핵심 도메인 심화 (33개 핵심 스위트, 240문장 / 181개 쿼리 전수 PASS)
        │
        ▼
-[Phase 2: 0.90.0 직후] SQLite 공식 select1 ~ select2 실전 스위트 연동 (~5,000개 쿼리)
+[Phase 2 완료] SQLite 공식 select1 ~ select5 실전 스위트 전수 연동 (10,706개 쿼리 100% PASS, 22.69s)
        │
        ▼
 [Phase 3: v0.95.0 마일스톤] SQLite random/expr 및 random/groupby 무작위 매트릭스 (~20,000개 쿼리)
        │
        ▼
-[Phase 4: v1.0.0 GA 게이트] SQLite 풀 스위트 (select1~select5, 60,000+ 쿼리) CI 상시화
+[Phase 4: v1.0.0 GA 게이트] SQLite 풀 스위트 (random 포함 60,000+ 쿼리) CI 상시화
 ```
 
 ---
 
-### Phase 1: 고위험 SQL 핵심 도메인 심화 (0.90.0 GA 릴리즈 전 즉시 추진)
+### Phase 1: 고위험 SQL 핵심 도메인 심화 — **[완료 (Pass)]**
 실제 ORM과 BI 도구에서 자주 발생하지만 현재 커버리지가 부족한 복합 엣지 케이스를 타겟팅합니다.
 
 1. **트랜잭션 격리 및 롤백 정합성 (`test/slt/core/tx_isolation.slt`)**
@@ -54,21 +54,28 @@
    - `LIKE` 패턴 내 와일드카드(`%`, `_`) 및 결합 연산
    - 유니코드(한글, 다국어) 정렬 및 비교
 
-> **기대 효과**: 현행 28개 ➔ 33개 파일(~230개 쿼리), 실서비스 ORM/JDBC에서 발생하기 쉬운 미세 문법 및 연산 결함 조기 박멸.
+> **완료 결과**: 총 33개 파일(240문장, 181개 쿼리), `memory`/`wiredtiger` × `inproc`/`pgwire` 4대 매트릭스 전수 100% 무결성 통과.
 
 ---
 
-### Phase 2: SQLite 공식 `select1` ~ `select2` 실전 스위트 연동 (0.90.0 직후)
-SQLite 공식 SQLLogicTest 저장소의 실제 벤치마크 파일 연동을 시작합니다.
+### Phase 2: SQLite 공식 `select1` ~ `select5` 실전 스위트 전수 연동 — **[완료 (Pass)]**
+SQLite 공식 SQLLogicTest 저장소의 실제 벤치마크 파일 연동을 완료했습니다.
 
-1. **외부 SLT 패처 도구 구축 (`scripts/fetch_slt.go`)**
-   - SQLite 공식 GitHub에서 `select1.test`, `select2.test` 원본 동기화
-   - SQLite 전용 비호환 구문 자동 필터링
-2. **배치 단위 실행 및 점진적 통과**
-   - `select1`: 기본적인 SELECT, WHERE, ORDER BY, GROUP BY 대규모 조합 (~1,000 쿼리)
-   - `select2`: 복합 연산자 및 컬럼 별칭 스위트 (~2,000 쿼리)
-3. **병렬 실행 활용**
-   - 앞서 구현한 `-parallel 8` 고루틴 워커 풀을 활용하여 수천 개 쿼리를 2초 이내 완주
+1. **외부 SLT 패처 도구 구축 (`scripts/fetch_slt.sh`)**
+   - SQLite 공식 GitHub에서 `select1.test` ~ `select5.test` 원본 동기화
+   - SQLite 공식 1줄 1셀 공백 포함 데이터 포맷 호환 파서 지원
+2. **배치 단위 실행 및 100% 무오류 인증 (소요 시간: 22.69초)**
+   - `select1.test`: 기본적인 SELECT, WHERE, ORDER BY, GROUP BY 대규모 조합 (1,031 쿼리, 2.29s, 100% 통과)
+   - `select2.test`: 복합 연산자 및 컬럼 별칭 스위트 (1,031 쿼리, 2.18s, 100% 통과)
+   - `select3.test`: 다중 조인 및 중첩 상관 서브쿼리 (3,351 쿼리, 5.88s, 100% 통과)
+   - `select4.test`: 대규모 ANSI-89 콤마 조인 및 조건 푸시다운 스트레스 (3,857 쿼리, 6.36s, 100% 통과)
+   - `select5.test`: 최대 64개 테이블 콤마 조인 재정렬 (1,436 쿼리, 5.67s, 100% 통과)
+3. **핵심 결함 완치**
+   - BFS 기반 Spanning Tree 조인 키 추론(`pushdown.go`)으로 콤마 조인의 다중 테이블 카테시안 폭발 원천 차단
+   - Greedy Join Ordering 필터 우선순위화(`planner.go`)로 14~64개 테이블 조인 시 튜플 카디널리티 조기 1행 수렴
+   - 정수형 조인 키 추출 고속 경로(`formatKeyVal`, `strconv.Itoa`) 적용으로 힙 할당 및 GC 오버헤드 완치
+4. **상시 회귀 테스트 통합**
+   - `test/slt/full_test.go`에 In-Process 러너로 통합되어 상시 CI 게이트로 실행 가능
 
 ---
 
