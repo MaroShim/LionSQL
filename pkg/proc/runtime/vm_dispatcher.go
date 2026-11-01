@@ -331,6 +331,13 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 		}
 		f.regs[inst.A] = res
 
+	case proc.OpIntDiv:
+		res, err := storageIntDiv(f.regs[inst.B], f.regs[inst.C])
+		if err != nil {
+			return f.handleCatch(err, pc)
+		}
+		f.regs[inst.A] = res
+
 	case proc.OpNeg:
 		f.regs[inst.A] = storageNeg(f.regs[inst.B])
 

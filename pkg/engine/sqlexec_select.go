@@ -823,6 +823,9 @@ func (s *Coordinator) execScalarSelect(query string, start time.Time, cs *Client
 	}
 
 	rawList := strings.TrimSpace(cleaned[6:])
+	if len(rawList) >= 4 && strings.EqualFold(rawList[:3], "ALL") && (rawList[3] == ' ' || rawList[3] == '\t' || rawList[3] == '\n' || rawList[3] == '\r') {
+		rawList = strings.TrimSpace(rawList[3:])
+	}
 	projItems := sqlutil.SplitTopLevel(rawList, ',')
 	if len(projItems) == 0 {
 		return nil, fmt.Errorf("no projections specified in SELECT")

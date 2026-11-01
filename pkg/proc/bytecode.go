@@ -46,6 +46,7 @@ const (
 	OpSub
 	OpMul
 	OpDiv
+	OpIntDiv
 	OpNeg
 	OpNot
 	OpAnd
@@ -190,6 +191,8 @@ func (op OpCode) String() string {
 		return "MUL"
 	case OpDiv:
 		return "DIV"
+	case OpIntDiv:
+		return "INTDIV"
 	case OpNeg:
 		return "NEG"
 	case OpNot:

@@ -306,6 +306,8 @@ func evalExpr(expr Expr, ctx *ExecutionContext) (storage.Value, error) {
 			return storage.Value{}, err
 		}
 		switch e.Op {
+		case TokenPlus:
+			return val, nil
 		case TokenMinus:
 			if val.Type == storage.TypeInt {
 				return storage.IntValue(-val.IVal), nil
@@ -368,12 +370,16 @@ func evalBinary(op TokenType, left, right storage.Value) (storage.Value, error) 
 		if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat {
 			return storage.FloatValue(asFloat(left) * asFloat(right)), nil
 		}
-	case TokenSlash:
+	case TokenSlash, TokenDiv:
 		if right.IVal == 0 && right.FVal == 0 {
 			return storage.Value{}, ErrDivisionByZero
 		}
-		if left.Type == storage.TypeInt && right.Type == storage.TypeInt {
-			return storage.IntValue(left.IVal / right.IVal), nil
+		if op == TokenDiv || (left.Type == storage.TypeInt && right.Type == storage.TypeInt) {
+			rInt := int64(asFloat(right))
+			if rInt == 0 {
+				return storage.NullValue(storage.TypeInt), nil
+			}
+			return storage.IntValue(int64(asFloat(left)) / rInt), nil
 		}
 		return storage.FloatValue(asFloat(left) / asFloat(right)), nil
 

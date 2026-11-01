@@ -120,6 +120,14 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 			return nil, nil
 		}
 		switch e.Op {
+		case TokenPlus:
+			if n, ok := toFloat(val); ok {
+				if n == math.Trunc(n) {
+					return int64(n), nil
+				}
+				return n, nil
+			}
+			return val, nil
 		case TokenMinus:
 			if n, ok := toFloat(val); ok {
 				if n == math.Trunc(n) {
@@ -659,6 +667,21 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 			return div, nil
 		}
 		return nil, fmt.Errorf("cannot divide non-numeric values")
+
+	case TokenDiv:
+		if left == nil || right == nil {
+			return nil, nil
+		}
+		n1, isNum1 := toArithmeticFloat(left)
+		n2, isNum2 := toArithmeticFloat(right)
+		if isNum1 && isNum2 {
+			i2 := int64(n2)
+			if i2 == 0 {
+				return nil, nil
+			}
+			return int64(n1) / i2, nil
+		}
+		return nil, fmt.Errorf("cannot integer-divide non-numeric values")
 
 	case TokenPercent:
 		if left == nil || right == nil {

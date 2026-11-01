@@ -100,6 +100,9 @@ func matchColName(a, b string) bool {
 	if strings.EqualFold(a, b) {
 		return true
 	}
+	if strings.ContainsAny(a, " +-*/%|()") || strings.ContainsAny(b, " +-*/%|()") {
+		return false
+	}
 	if dot := strings.LastIndex(a, "."); dot != -1 {
 		a = a[dot+1:]
 	}
@@ -287,7 +290,7 @@ func (a *AggregateIterator) parseFields() {
 			alias = sqlutil.CleanIdentifier(alias)
 		}
 		var parsedExpr proc.Expr
-		if strings.Contains(exprPart, "->") || strings.Contains(exprPart, "(") {
+		if strings.ContainsAny(exprPart, " +-*/%|") || strings.Contains(exprPart, "->") || strings.Contains(exprPart, "(") {
 			parser := proc.NewParser(proc.NewLexer(exprPart))
 			if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
 				parsedExpr = ast

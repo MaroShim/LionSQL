@@ -74,7 +74,7 @@ func binaryPrecedence(op TokenType) int {
 		return 4
 	case TokenPlus, TokenMinus:
 		return 5
-	case TokenAsterisk, TokenSlash, TokenPercent:
+	case TokenAsterisk, TokenSlash, TokenDiv, TokenPercent:
 		return 6
 	default:
 		return 0
@@ -97,7 +97,7 @@ func (e *BinaryExpr) String() string {
 		if childBin, ok := e.Right.(*BinaryExpr); ok {
 			pChild := binaryPrecedence(childBin.Op)
 			pParent := binaryPrecedence(e.Op)
-			if pChild < pParent || (pChild == pParent && (e.Op == TokenMinus || e.Op == TokenSlash || e.Op == TokenPercent || childBin.Op != e.Op)) {
+			if pChild < pParent || (pChild == pParent && (e.Op == TokenMinus || e.Op == TokenSlash || e.Op == TokenDiv || e.Op == TokenPercent || childBin.Op != e.Op)) {
 				rightStr = "(" + rightStr + ")"
 			}
 		}

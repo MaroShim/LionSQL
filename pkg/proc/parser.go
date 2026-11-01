@@ -43,6 +43,7 @@ var precedences = map[TokenType]int{
 	TokenMinus:           precSum,
 	TokenAsterisk:        precProduct,
 	TokenSlash:           precProduct,
+	TokenDiv:             precProduct,
 	TokenPercent:         precProduct,
 	TokenConcat:          precSum,
 	TokenJSONExtract:     precJSON,
@@ -253,7 +254,7 @@ func isReservedAfterProjection(tok TokenType) bool {
 
 func parseDataType(s string) storage.DataType {
 	switch strings.ToUpper(s) {
-	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8":
+	case "INT", "INTEGER", "BIGINT", "SMALLINT", "TINYINT", "SERIAL", "BIGSERIAL", "SMALLSERIAL", "INT2", "INT4", "INT8", "SIGNED", "UNSIGNED":
 		return storage.TypeInt
 	case "VARCHAR", "TEXT", "NVARCHAR", "CHAR", "BPCHAR":
 		return storage.TypeVarChar

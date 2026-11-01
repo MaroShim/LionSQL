@@ -1,0 +1,41 @@
+statement ok
+CREATE TABLE tab_slt_test(pk INTEGER PRIMARY KEY, col0 INTEGER, col1 FLOAT, col2 TEXT, col3 INTEGER, col4 FLOAT)
+
+statement ok
+INSERT INTO tab_slt_test VALUES(1, 10, 5.5, 'test', 8, 3.2)
+
+statement ok
+INSERT INTO tab_slt_test VALUES(2, 20, 1.2, 'demo', 2, 8.4)
+
+# 1. SELECT ALL quantifier and unary + operator
+query I rowsort
+SELECT ALL + 39
+----
+39
+
+query I rowsort
+SELECT ALL + col0 FROM tab_slt_test WHERE pk = 1
+----
+10
+
+# 2. DIV operator and CAST AS SIGNED
+query I rowsort
+SELECT 20 DIV 4 + CAST(90 AS SIGNED)
+----
+95
+
+query I rowsort
+SELECT 20 DIV - - 96 + CAST(90 AS SIGNED)
+----
+90
+
+# 3. Contradictory range bounds on the same column in parenthesized AND
+query I rowsort
+SELECT pk FROM tab_slt_test WHERE col3 > 7 AND (col1 >= 9.96 AND col1 <= 2.20)
+----
+
+# 4. GROUP BY arithmetic expression projection
+query I rowsort
+SELECT - tab_slt_test.col0 * 2 + + 10 AS col_calc FROM tab_slt_test WHERE pk = 1 GROUP BY tab_slt_test.col0
+----
+-10

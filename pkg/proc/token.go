@@ -152,6 +152,7 @@ const (
 	TokenNolock
 	TokenReturning
 	TokenConflict
+	TokenDiv
 )
 
 var keywords = map[string]TokenType{
@@ -294,6 +295,8 @@ func (t TokenType) String() string {
 		return "*"
 	case TokenSlash:
 		return "/"
+	case TokenDiv:
+		return "DIV"
 	case TokenPercent:
 		return "%"
 	case TokenConcat:

@@ -174,8 +174,13 @@ func (p *Parser) parseExpression(precedence int) Expr {
 
 		default:
 			op := p.curToken.Type
+			opPrec := precedences[op]
+			if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "DIV") {
+				op = TokenDiv
+				opPrec = precProduct
+			}
 			p.nextToken()
-			rightExp := p.parseExpression(precedences[op])
+			rightExp := p.parseExpression(opPrec)
 			leftExp = &BinaryExpr{
 				Left:  leftExp,
 				Op:    op,
@@ -190,6 +195,9 @@ func (p *Parser) parseExpression(precedence int) Expr {
 func (p *Parser) curPrecedence() int {
 	if prec, ok := precedences[p.curToken.Type]; ok {
 		return prec
+	}
+	if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "DIV") {
+		return precProduct
 	}
 	return precLowest
 }
@@ -280,6 +288,10 @@ func (p *Parser) parsePrefix() Expr {
 			return &FunctionCallExpr{Name: upperIdent}
 		}
 		return &ColumnRefExpr{Name: ident}
+	case TokenPlus:
+		p.nextToken()
+		right := p.parseExpression(precPrefix)
+		return &UnaryExpr{Op: TokenPlus, Expr: right}
 	case TokenMinus:
 		p.nextToken()
 		right := p.parseExpression(precPrefix)
@@ -346,8 +358,13 @@ func (p *Parser) parsePrefix() Expr {
 }
 
 func (p *Parser) parseTypeSpec() (storage.DataType, int, int) {
-	dt := parseDataType(p.curToken.Literal)
+	firstLit := p.curToken.Literal
+	dt := parseDataType(firstLit)
 	p.nextToken()
+	if (strings.EqualFold(firstLit, "SIGNED") || strings.EqualFold(firstLit, "UNSIGNED")) &&
+		p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "INTEGER") || strings.EqualFold(p.curToken.Literal, "INT")) {
+		p.nextToken()
+	}
 	prec := 0
 	scale := 0
 	if p.curTokenIs(TokenLParen) {

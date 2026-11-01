@@ -1074,7 +1074,7 @@ func (c *Compiler) isIntegerExpr(e Expr) bool {
 			return c.isIntegerExpr(expr.Left) && c.isIntegerExpr(expr.Right)
 		}
 	case *UnaryExpr:
-		if expr.Op == TokenMinus {
+		if expr.Op == TokenMinus || expr.Op == TokenPlus {
 			return c.isIntegerExpr(expr.Expr)
 		}
 	}
@@ -1116,6 +1116,8 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			return 0, err
 		}
 		switch e.Op {
+		case TokenPlus:
+			// Unary + is a numeric no-op
 		case TokenMinus:
 			c.emit(OpNeg, valReg, valReg, 0, nil)
 		case TokenNot:
@@ -1156,6 +1158,8 @@ func (c *Compiler) compileExpr(expr Expr) (int32, error) {
 			}
 		case TokenSlash:
 			c.emit(OpDiv, leftReg, leftReg, rightReg, nil)
+		case TokenDiv:
+			c.emit(OpIntDiv, leftReg, leftReg, rightReg, nil)
 		case TokenEq:
 			if isInt {
 				c.emit(OpEqInt, leftReg, leftReg, rightReg, nil)

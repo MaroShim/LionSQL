@@ -101,7 +101,12 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 
 ### [-] 1.8 1.0 GA 검증 및 잔여 정리
 - 인수인계 및 실측 기록서: [`notes/GA_VALIDATION_HANDOFF_PLAN.ko.md`](notes/GA_VALIDATION_HANDOFF_PLAN.ko.md)
-- [-] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` 15개 스위트 1차 탐색 완료 (금일 변경 회귀 0건 확인, `pkg/slt/parser.go`의 `onlyif`/`skipif` `halt` 처리 및 `bounds.go` 동일 컬럼 범위 교집합 등 후속 구현 항목 4건 도출)
+- [x] **`SLT-FIX-1~4` (SQLLogicTest 확장 스위트 4대 결함 완치)**: 설계 계획서 [`notes/SLT_EXTENDED_SUITE_FIXES_PLAN.ko.md`](notes/SLT_EXTENDED_SUITE_FIXES_PLAN.ko.md)
+  1. `SLT-FIX-1`: `pkg/slt/parser.go` 조건부 `onlyif`/`skipif` 지시자 지원(`sqlite` 타겟) 및 조기 `halt` 오작동 완치
+  2. `SLT-FIX-2`: `pkg/planner/bounds.go` 및 `planner.go` 중첩 괄호 `AND` 평탄화, 동일 컬럼 다중 바운드 교집합 병합 및 인덱스 범위 잔여 필터 보존
+  3. `SLT-FIX-3`: `pkg/proc/` 및 `pkg/engine` `SELECT ALL` 수량자, 단항 `+` 연산자, `CAST(... AS SIGNED)` 및 `DIV` 정수 나눗셈 연산자 VDBE/Volcano 지원
+  4. `SLT-FIX-4`: `pkg/execution/aggregate.go` `GROUP BY` 사칙연산 프로젝션 AST 파싱 및 `matchColName` 식별자 오탐 차단
+- [-] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` 15개 스위트 1차 탐색 및 결함 4건 전량 수정·검증 완료 (`test/slt/suites/core/slt_extended_fixes.slt` 100% PASS)
 - [-] **`GA-VALID-2`**: `cmd/soaktest` 연속 부하(OCC `19,613` tx / WiredTiger `19,678` tx, RSS/FD/고루틴 1.00 무누수 PASS) 및 `cmd/crashtest` 100라운드 확장 실행 완료 (WiredTiger `100/100` PASS `344,129` tx, OCC `100/100` PASS `301,184` tx; 24h/72h 초장기 소크 대기)
 - [ ] **`GA-VALID-3`**: 연동 앱 2~3종 1~2주 도그푸딩
 - [ ] **`GA-REGEX-DDL-1`**: `sqlexec_ddl.go` 및 `sqlexec_eval.go`/`sqlexec_explain.go` 잔여 정규식 렉서 전환 (구현 과제)

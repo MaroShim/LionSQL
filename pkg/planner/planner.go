@@ -1338,6 +1338,20 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 					colName := cleanIdent(rawCol)
 
 				if idx, found := schema.FindIndexByColumn(colName); found {
+					if len(idx.Columns) > 1 && op != "=" && op != "==" {
+						var singleIdx *storage.IndexSchema
+						for i := range schema.Indexes {
+							cand := &schema.Indexes[i]
+							if len(cand.Columns) == 1 && strings.EqualFold(cand.Columns[0], colName) {
+								singleIdx = cand
+								break
+							}
+						}
+						if singleIdx == nil {
+							continue
+						}
+						idx = singleIdx
+					}
 					// Skip if a composite index covering more columns is already chosen.
 					if chosenIndex != nil && len(chosenIndex.Columns) > 1 {
 						continue
@@ -1495,19 +1509,30 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		}
 
 		var remainingPrimary []string
+		matchedPrefixCols := make(map[string]bool)
+		if chosenVal == "" && chosenCol != "" {
+			for _, pCol := range strings.Split(chosenCol, ",") {
+				matchedPrefixCols[strings.ToLower(strings.TrimSpace(pCol))] = true
+			}
+		}
+		usedEqCols := make(map[string]bool)
 		for _, c := range pushdownRes.PrimaryConds {
-			cTrimmed := strings.ToLower(cleanIdent(c))
 			isUsedInIndex := false
-			if chosenIndex != nil {
-				for _, col := range chosenIndex.Columns {
-					colLower := strings.ToLower(col)
-					if strings.Contains(cTrimmed, colLower) && (strings.Contains(c, "=") || strings.Contains(c, "==")) {
+			if chosenVal == "" {
+				if rawCol, op, _, ok := parseASTComparison(c); ok && (op == "=" || op == "==") {
+					if idxDot := strings.Index(rawCol, "."); idxDot != -1 {
+						rawCol = rawCol[idxDot+1:]
+					}
+					colLower := strings.ToLower(cleanIdent(rawCol))
+					if matchedPrefixCols[colLower] && !usedEqCols[colLower] {
+						usedEqCols[colLower] = true
 						isUsedInIndex = true
-						break
 					}
 				}
+			} else if c == chosenCond && (chosenOp == "=" || chosenOp == "==" || chosenOp == ">=" || chosenOp == "<=") {
+				isUsedInIndex = true
 			}
-			if !isUsedInIndex && c != chosenCond {
+			if !isUsedInIndex {
 				remainingPrimary = append(remainingPrimary, c)
 			}
 		}

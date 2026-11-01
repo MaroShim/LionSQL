@@ -49,7 +49,18 @@ var (
 	reStatement = regexp.MustCompile(`(?i)^statement\s+(ok|error)`)
 	reQuery     = regexp.MustCompile(`(?i)^query\s+([A-Za-z]+)(?:\s+(nosort|rowsort|valuesort))?(?:\s+([a-zA-Z0-9_\-]+))?`)
 	reHash      = regexp.MustCompile(`(?i)^(\d+)\s+values\s+hashing\s+to\s+([a-fA-F0-9]{32})`)
+	reOnlyIf    = regexp.MustCompile(`(?i)^onlyif\s+(\S+)`)
+	reSkipIf    = regexp.MustCompile(`(?i)^skipif\s+(\S+)`)
 )
+
+func isSLTTargetDialect(target string) bool {
+	switch strings.ToLower(strings.TrimSpace(target)) {
+	case "sqlite", "lionsql":
+		return true
+	default:
+		return false
+	}
+}
 
 // ParseFile parses an SLT test file from disk into a sequence of Records.
 func ParseFile(path string) ([]Record, error) {
@@ -70,6 +81,7 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 
 	var records []Record
 	lineNo := 0
+	skipNext := false
 
 	for scanner.Scan() {
 		lineNo++
@@ -81,8 +93,26 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 			continue
 		}
 
+		// Conditional directives: onlyif <target> / skipif <target>
+		if m := reOnlyIf.FindStringSubmatch(trimmed); len(m) == 2 {
+			if !isSLTTargetDialect(m[1]) {
+				skipNext = true
+			}
+			continue
+		}
+		if m := reSkipIf.FindStringSubmatch(trimmed); len(m) == 2 {
+			if isSLTTargetDialect(m[1]) {
+				skipNext = true
+			}
+			continue
+		}
+
 		// Halt directive
 		if strings.EqualFold(trimmed, "halt") {
+			if skipNext {
+				skipNext = false
+				continue
+			}
 			records = append(records, Record{
 				Type:       CmdHalt,
 				FilePath:   filePath,
@@ -113,12 +143,15 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 				}
 				sqlLines = append(sqlLines, subLine)
 			}
-			records = append(records, Record{
-				Type:       cmdType,
-				SQL:        strings.Join(sqlLines, "\n"),
-				FilePath:   filePath,
-				LineNumber: stmtLineNo,
-			})
+			if !skipNext {
+				records = append(records, Record{
+					Type:       cmdType,
+					SQL:        strings.Join(sqlLines, "\n"),
+					FilePath:   filePath,
+					LineNumber: stmtLineNo,
+				})
+			}
+			skipNext = false
 			continue
 		}
 
@@ -181,20 +214,22 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 				resLines = append(resLines, resLine)
 			}
 
-			expectedValues := parseResultLines(resLines, len(typeSig), strings.HasSuffix(filePath, ".test"))
-
-			records = append(records, Record{
-				Type:           CmdQuery,
-				TypeSignature:  typeSig,
-				Sort:           sortMode,
-				Label:          label,
-				SQL:            strings.Join(sqlLines, "\n"),
-				ExpectedValues: expectedValues,
-				ExpectedHash:   expectedHash,
-				ExpectedCount:  expectedCount,
-				FilePath:       filePath,
-				LineNumber:     queryLineNo,
-			})
+			if !skipNext {
+				expectedValues := parseResultLines(resLines, len(typeSig), strings.HasSuffix(filePath, ".test"))
+				records = append(records, Record{
+					Type:           CmdQuery,
+					TypeSignature:  typeSig,
+					Sort:           sortMode,
+					Label:          label,
+					SQL:            strings.Join(sqlLines, "\n"),
+					ExpectedValues: expectedValues,
+					ExpectedHash:   expectedHash,
+					ExpectedCount:  expectedCount,
+					FilePath:       filePath,
+					LineNumber:     queryLineNo,
+				})
+			}
+			skipNext = false
 			continue
 		}
 	}

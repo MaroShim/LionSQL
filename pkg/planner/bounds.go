@@ -54,20 +54,20 @@ func parseASTComparison(cond string) (rawCol string, op string, rawVal string, o
 	}
 	switch e := expr.(type) {
 	case *proc.BinaryExpr:
-		var opStr string
+		var opStr, flippedOp string
 		switch e.Op {
 		case proc.TokenEq, proc.TokenAssign:
-			opStr = "="
+			opStr, flippedOp = "=", "="
 		case proc.TokenNeq:
-			opStr = "!="
+			opStr, flippedOp = "!=", "!="
 		case proc.TokenLt:
-			opStr = "<"
+			opStr, flippedOp = "<", ">"
 		case proc.TokenLte:
-			opStr = "<="
+			opStr, flippedOp = "<=", ">="
 		case proc.TokenGt:
-			opStr = ">"
+			opStr, flippedOp = ">", "<"
 		case proc.TokenGte:
-			opStr = ">="
+			opStr, flippedOp = ">=", "<="
 		case proc.TokenLike:
 			opStr = "LIKE"
 		default:
@@ -75,6 +75,11 @@ func parseASTComparison(cond string) (rawCol string, op string, rawVal string, o
 		}
 		if col, isCol := extractSimpleColIdent(e.Left); isCol {
 			return col, opStr, strings.TrimSpace(e.Right.String()), true
+		}
+		if flippedOp != "" {
+			if col, isCol := extractSimpleColIdent(e.Right); isCol {
+				return col, flippedOp, strings.TrimSpace(e.Left.String()), true
+			}
 		}
 	case *proc.LikeExpr:
 		if !e.Not {
@@ -208,6 +213,21 @@ func HasDisjunction(expr string) bool {
 	return sqlutil.ContainsKeyword(expr, "OR", true)
 }
 
+func compareBoundStrings(a, b string) int {
+	if fa, errA := strconv.ParseFloat(a, 64); errA == nil {
+		if fb, errB := strconv.ParseFloat(b, 64); errB == nil {
+			if fa < fb {
+				return -1
+			}
+			if fa > fb {
+				return 1
+			}
+			return 0
+		}
+	}
+	return strings.Compare(a, b)
+}
+
 // ParseWhereConditions extracts equality conditions and range conditions from a WHERE clause.
 // Returns eqs: map[col_name]value_string, ranges: map[col_name]*IndexRangeCond.
 func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRangeCond) {
@@ -222,62 +242,88 @@ func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRan
 		return strings.Trim(strings.TrimSpace(s), "'\"")
 	}
 
+	setMinBound := func(col, val string) {
+		r, ok := ranges[col]
+		if !ok {
+			r = &IndexRangeCond{}
+			ranges[col] = r
+		}
+		if !r.HasMin || compareBoundStrings(val, r.MinVal) > 0 {
+			r.HasMin = true
+			r.MinVal = val
+		}
+	}
+
+	setMaxBound := func(col, val string) {
+		r, ok := ranges[col]
+		if !ok {
+			r = &IndexRangeCond{}
+			ranges[col] = r
+		}
+		if !r.HasMax || compareBoundStrings(val, r.MaxVal) < 0 {
+			r.HasMax = true
+			r.MaxVal = val
+		}
+	}
+
 	for _, part := range parts {
 		part = stripEnclosingParens(strings.TrimSpace(part))
 		if HasDisjunction(part) {
 			continue
 		}
 		p := proc.NewParser(proc.NewLexer(part))
-		expr := p.ParseExpr()
-		if expr == nil || len(p.Errors()) > 0 {
+		rootExpr := p.ParseExpr()
+		if rootExpr == nil || len(p.Errors()) > 0 {
 			continue
 		}
-		switch e := expr.(type) {
-		case *proc.BinaryExpr:
-			colRaw, isCol := extractSimpleColIdent(e.Left)
-			if !isCol {
-				continue
-			}
-			col := CleanIdentifier(colRaw)
-			val := cleanVal(extractExprRawVal(e.Right))
-			switch e.Op {
-			case proc.TokenEq, proc.TokenAssign:
-				eqs[col] = val
-			case proc.TokenGte, proc.TokenGt:
-				r, ok := ranges[col]
-				if !ok {
-					r = &IndexRangeCond{}
-					ranges[col] = r
+		for _, expr := range splitASTAndExpr(rootExpr) {
+			switch e := expr.(type) {
+			case *proc.BinaryExpr:
+				op := e.Op
+				colRaw, isCol := extractSimpleColIdent(e.Left)
+				rightExpr := e.Right
+				if !isCol {
+					if rCol, rIsCol := extractSimpleColIdent(e.Right); rIsCol {
+						colRaw = rCol
+						isCol = true
+						rightExpr = e.Left
+						switch op {
+						case proc.TokenLt:
+							op = proc.TokenGt
+						case proc.TokenLte:
+							op = proc.TokenGte
+						case proc.TokenGt:
+							op = proc.TokenLt
+						case proc.TokenGte:
+							op = proc.TokenLte
+						}
+					}
 				}
-				r.HasMin = true
-				r.MinVal = val
-			case proc.TokenLte, proc.TokenLt:
-				r, ok := ranges[col]
-				if !ok {
-					r = &IndexRangeCond{}
-					ranges[col] = r
+				if !isCol {
+					continue
 				}
-				r.HasMax = true
-				r.MaxVal = val
+				col := CleanIdentifier(colRaw)
+				val := cleanVal(extractExprRawVal(rightExpr))
+				switch op {
+				case proc.TokenEq, proc.TokenAssign:
+					eqs[col] = val
+				case proc.TokenGte, proc.TokenGt:
+					setMinBound(col, val)
+				case proc.TokenLte, proc.TokenLt:
+					setMaxBound(col, val)
+				}
+			case *proc.BetweenExpr:
+				if e.Not {
+					continue
+				}
+				colRaw, isCol := extractSimpleColIdent(e.Expr)
+				if !isCol {
+					continue
+				}
+				col := CleanIdentifier(colRaw)
+				setMinBound(col, cleanVal(extractExprRawVal(e.Low)))
+				setMaxBound(col, cleanVal(extractExprRawVal(e.High)))
 			}
-		case *proc.BetweenExpr:
-			if e.Not {
-				continue
-			}
-			colRaw, isCol := extractSimpleColIdent(e.Expr)
-			if !isCol {
-				continue
-			}
-			col := CleanIdentifier(colRaw)
-			r, ok := ranges[col]
-			if !ok {
-				r = &IndexRangeCond{}
-				ranges[col] = r
-			}
-			r.HasMin = true
-			r.MinVal = cleanVal(extractExprRawVal(e.Low))
-			r.HasMax = true
-			r.MaxVal = cleanVal(extractExprRawVal(e.High))
 		}
 	}
 	return eqs, ranges

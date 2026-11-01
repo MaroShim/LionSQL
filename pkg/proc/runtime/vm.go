@@ -1745,6 +1745,19 @@ func storageDiv(a, b storage.Value) (storage.Value, error) {
 	return storage.FloatValue(div), nil
 }
 
+func storageIntDiv(a, b storage.Value) (storage.Value, error) {
+	if a.IsNull || b.IsNull {
+		return storage.NullValue(storage.TypeUnknown), nil
+	}
+	n1, _ := toFloatNum(a)
+	n2, _ := toFloatNum(b)
+	i2 := int64(n2)
+	if i2 == 0 {
+		return storage.NullValue(storage.TypeUnknown), nil
+	}
+	return storage.IntValue(int64(n1) / i2), nil
+}
+
 func storageNeg(a storage.Value) storage.Value {
 	if a.IsNull {
 		return a

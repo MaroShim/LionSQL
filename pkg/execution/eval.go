@@ -95,6 +95,14 @@ func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.Subque
 			return nil, true
 		}
 		switch e.Op {
+		case proc.TokenPlus:
+			if iVal, ok := toInt64(val); ok {
+				return iVal, true
+			}
+			if fVal, ok := toFloat64(val); ok {
+				return fVal, true
+			}
+			return val, true
 		case proc.TokenMinus:
 			if iVal, ok := toInt64(val); ok {
 				return -iVal, true
@@ -332,9 +340,9 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 		return nil, true
 	}
 
-	// 1. Arithmetic Operators (+, -, *, /, %)
+	// 1. Arithmetic Operators (+, -, *, /, DIV, %)
 	switch e.Op {
-	case proc.TokenPlus, proc.TokenMinus, proc.TokenAsterisk, proc.TokenSlash, proc.TokenPercent:
+	case proc.TokenPlus, proc.TokenMinus, proc.TokenAsterisk, proc.TokenSlash, proc.TokenDiv, proc.TokenPercent:
 		// Fast-path: both operands are integer
 		lInt, lOk := toInt64(left)
 		rInt, rOk := toInt64(right)
@@ -346,7 +354,7 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 				return lInt - rInt, true
 			case proc.TokenAsterisk:
 				return lInt * rInt, true
-			case proc.TokenSlash:
+			case proc.TokenSlash, proc.TokenDiv:
 				if rInt == 0 {
 					return nil, false
 				}
@@ -357,6 +365,18 @@ func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery p
 				}
 				return lInt % rInt, true
 			}
+		}
+		if e.Op == proc.TokenDiv {
+			lF, lOkF := toFloat64(left)
+			rF, rOkF := toFloat64(right)
+			if lOkF && rOkF {
+				rI := int64(rF)
+				if rI == 0 {
+					return nil, true
+				}
+				return int64(lF) / rI, true
+			}
+			return nil, false
 		}
 
 		// Decimal support
