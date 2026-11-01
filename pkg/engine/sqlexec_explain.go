@@ -664,7 +664,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 			offset = mEnd
 			continue
 		}
-		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		isNot := sqlutil.ContainsKeyword(prefix, "NOT", false)
 		hasRows := len(innerRes.Rows) > 0
 		replacement := "1=0"
 		if isNot {
@@ -689,7 +689,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		}
 		tokens := strings.Fields(prefix)
 		colName := cleanIdentifier(tokens[0])
-		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		isNot := sqlutil.ContainsKeyword(prefix, "NOT", false)
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
 			offset = mEnd

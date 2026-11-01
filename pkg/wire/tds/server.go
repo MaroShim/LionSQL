@@ -23,6 +23,7 @@ import (
 	"lionsql/pkg/engine"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/proc/runtime"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -2822,7 +2823,7 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	}
 
 	// 2. Standard standalone single @@VERSION probe
-	if strings.Contains(upper, "@@VERSION") && !strings.Contains(upper, ",") && !strings.Contains(upper, "FROM") {
+	if strings.Contains(upper, "@@VERSION") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "version"
 		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
 			alias := strings.TrimSpace(trimmed[asIdx+4:])
@@ -2844,7 +2845,7 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 	}
 
 	// 3. Standalone single-expression SERVERPROPERTY(...) probe only
-	if strings.Contains(upper, "SERVERPROPERTY") && !strings.Contains(upper, ",") && !strings.Contains(upper, "FROM") {
+	if strings.Contains(upper, "SERVERPROPERTY") && !strings.Contains(upper, ",") && !sqlutil.ContainsKeyword(trimmed, "FROM", false) {
 		colName := "property"
 		if asIdx := strings.Index(upper, " AS "); asIdx != -1 {
 			alias := strings.TrimSpace(trimmed[asIdx+4:])

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -211,13 +212,12 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 	}
 
 	// IS NULL / IS NOT NULL
-	upper := strings.ToUpper(cond)
-	if idx := strings.Index(upper, " IS NOT NULL"); idx != -1 {
+	if idx := sqlutil.FindTopLevelKeyword(cond, "IS NOT NULL"); idx != -1 {
 		col := strings.TrimSpace(cond[:idx])
 		val, ok := lookupVal(t, col)
 		return ok && val != nil
 	}
-	if idx := strings.Index(upper, " IS NULL"); idx != -1 {
+	if idx := sqlutil.FindTopLevelKeyword(cond, "IS NULL"); idx != -1 {
 		col := strings.TrimSpace(cond[:idx])
 		val, ok := lookupVal(t, col)
 		return !ok || val == nil

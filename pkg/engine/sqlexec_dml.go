@@ -1056,8 +1056,8 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause present)
-	hasOutput := strings.Contains(strings.ToUpper(cleaned), " OUTPUT ")
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT or RETURNING clause present)
+	hasOutput := sqlutil.ContainsKeyword(cleaned, "OUTPUT", false) || sqlutil.ContainsKeyword(cleaned, "RETURNING", false)
 	if !hasOutput {
 		if res, err := s.execVBDEDML("UPDATE", cleaned, start, cs); err == nil {
 			return res, nil
@@ -1220,8 +1220,8 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		}
 	}
 
-	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT clause present)
-	hasOutput := strings.Contains(strings.ToUpper(cleaned), " OUTPUT ")
+	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT or RETURNING clause present)
+	hasOutput := sqlutil.ContainsKeyword(cleaned, "OUTPUT", false) || sqlutil.ContainsKeyword(cleaned, "RETURNING", false)
 	if !hasOutput {
 		if res, err := s.execVBDEDML("DELETE", cleaned, start, cs); err == nil {
 			return res, nil

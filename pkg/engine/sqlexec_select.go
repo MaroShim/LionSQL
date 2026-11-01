@@ -1519,7 +1519,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		}
 
 		// If query has unresolved subqueries in WHERE (e.g. correlated), execute via Volcano
-		if strings.Contains(strings.ToUpper(qInfo.WhereClause), "EXISTS") || strings.Contains(strings.ToUpper(qInfo.WhereClause), "SELECT") {
+		if sqlutil.ContainsKeyword(qInfo.WhereClause, "EXISTS", true) || sqlutil.ContainsKeyword(qInfo.WhereClause, "SELECT", true) {
 			return s.execVolcanoSelect(qInfo, start, cs)
 		}
 

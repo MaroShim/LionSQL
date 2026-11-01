@@ -1821,12 +1821,12 @@ func parseWindowFrame(frameStr string) *WindowFrame {
 
 	if strings.HasPrefix(sUpper, "BETWEEN ") {
 		rest := strings.TrimSpace(s[8:])
-		andIdx := strings.Index(strings.ToUpper(rest), " AND ")
+		andIdx := sqlutil.FindTopLevelKeyword(rest, "AND")
 		if andIdx == -1 {
 			return nil
 		}
 		startStr := strings.TrimSpace(rest[:andIdx])
-		endStr := strings.TrimSpace(rest[andIdx+5:])
+		endStr := strings.TrimSpace(rest[andIdx+3:])
 		startBound, ok1 := parseFrameBound(startStr)
 		endBound, ok2 := parseFrameBound(endStr)
 		if !ok1 || !ok2 {

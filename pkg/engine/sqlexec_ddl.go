@@ -275,7 +275,7 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 	}
 
 	if err := s.engine.CreateTable(schema); err != nil {
-		if strings.Contains(strings.ToUpper(query), "IF NOT EXISTS") && errors.Is(err, storage.ErrTableExists) {
+		if sqlutil.ContainsKeyword(query, "IF NOT EXISTS", false) && errors.Is(err, storage.ErrTableExists) {
 			return &QueryResult{
 				Success:    true,
 				Command:    "CREATE TABLE",
@@ -320,7 +320,7 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 
 	tableName := cleanIdentifier(matches[1])
 	if err := s.engine.DropTable(tableName); err != nil {
-		if strings.Contains(strings.ToUpper(query), "IF EXISTS") && errors.Is(err, storage.ErrTableNotFound) {
+		if sqlutil.ContainsKeyword(query, "IF EXISTS", false) && errors.Is(err, storage.ErrTableNotFound) {
 			return &QueryResult{
 				Success:    true,
 				Command:    "DROP TABLE",
@@ -555,7 +555,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 	}
 
 	if err := s.engine.CreateIndex(idxSchema); err != nil {
-		if strings.Contains(strings.ToUpper(cleaned), "IF NOT EXISTS") || strings.Contains(strings.ToLower(err.Error()), "already exists") {
+		if sqlutil.ContainsKeyword(cleaned, "IF NOT EXISTS", false) || strings.Contains(strings.ToLower(err.Error()), "already exists") {
 			return &QueryResult{
 				Success:    true,
 				Command:    "CREATE INDEX",
@@ -581,7 +581,7 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 
 func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	ifExists := strings.Contains(strings.ToUpper(cleaned), "IF EXISTS")
+	ifExists := sqlutil.ContainsKeyword(cleaned, "IF EXISTS", false)
 	re := regexp.MustCompile(`(?is)^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([^\s]+)(?:\s+ON\s+([^\s]+))?(?:\s+CASCADE)?$`)
 	matches := re.FindStringSubmatch(cleaned)
 	if len(matches) < 2 {

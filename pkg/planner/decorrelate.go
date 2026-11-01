@@ -39,7 +39,7 @@ func (p *Planner) decorrelateExists(q *QueryInfo, tableExists func(string) bool)
 			break
 		}
 
-		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		isNot := sqlutil.ContainsKeyword(prefix, "NOT", false)
 		_, subTbl, subAlias, subWhere, ok := parseInnerSelectWithProj(innerSQL)
 		if !ok || subTbl == "" {
 			break
@@ -131,7 +131,7 @@ func (p *Planner) decorrelateIn(q *QueryInfo, tableExists func(string) bool) {
 			break
 		}
 
-		isNot := strings.Contains(strings.ToUpper(prefix), "NOT")
+		isNot := sqlutil.ContainsKeyword(prefix, "NOT", false)
 		fields := strings.Fields(prefix)
 		if len(fields) == 0 {
 			break
