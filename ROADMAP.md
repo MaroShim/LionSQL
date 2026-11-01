@@ -12,28 +12,35 @@ This document defines the overarching architectural trajectory, versioned milest
 LionSQL follows an evolutionary roadmap designed to scale single-node hardware to its physical limits while maintaining zero-dependency single-binary distribution:
 
 ```
-[ 과거: 엔진 기능 완성기 ]
-  Phase 1~5 : Core Engine & Governance (v0.1.0 ~ v0.24.0)   [COMPLETED]
-    Dual Wire (PG/TDS) + Dual Storage (WiredTiger/OCC) + VDBE VM + Replication + RBAC
-  Phase 6   : Production Baseline & Freeze (v0.90.0)         [COMPLETED]
-    Unified CLI (lionsql) + Web Studio + Memory Governor + 2-Tier CBO/VDBE Engine
-                   │
-                   ▼
-[ 현재: 실전 신뢰성 입증기 (Active Sprint) ]
-  Phase 7   : Ecosystem & Durability Hardening (v0.95.0)     [IN PROGRESS / 90% DONE]
-    10 Production Apps OK + kill -9 Oracle (D1~D4) + 24h Soak Zero-Leak + Table-Driven Rules + 1.04M tpmC
-                   │
-                   ▼
-[ 목전: 공식 1.0 릴리즈 ]
-  Phase 8   : Official 1.0 LTS Production Release (v1.0.0)   [READY FOR SIGN-OFF]
-    6 Quality Gates Passed + Always On Failover + Lossless CDC + LTS Packaging
-                   │
-                   ▼
-[ 미래: 초격차 확장기 (Post-1.0) ]
-  Phase 9   : Scale-Up Query & Compact Storage (v1.1.0)      [PLANNED]
-    Flat Hash Join & Mini TPC-H + OCC Compact Arena (5x) + Pure-Go Engine + Immutable Audit Log
-  Phase 10  : Parallel OLAP & Extensibility (v1.2.0+)        [PLANNED]
-    Multi-Core ParallelSeqScan + Wasm UDF Sandbox + Friendly SQL + Embedded SPA Hosting
+[ Phase 1: Core Foundation ] ────────────► v0.1.0 - v0.8.0   [COMPLETED]
+  Dual Wire Protocols (PGWire/TDS) + Dual Storage (WiredTiger/OCC) + VDBE Bytecode VM
+
+[ Phase 2: SQL & Analytical Depth ] ─────► v0.9.0 - v0.10.0  [COMPLETED]
+  Window Functions + T-Digest Quantiles + Log Operators + Savepoints + Views
+
+[ Phase 3: Replication & Drivers ] ──────► v0.11.0 - v0.12.0 [COMPLETED]
+  1-Writer Multi-Reader WAL Streaming + Official Drivers + CBO Stats Persistence
+
+[ Phase 4: Ecosystem & VDBE Acceleration ] v0.13.0 - v0.15.0 [COMPLETED]
+  pgx/v5 Pipelining + Multi-Tool Interop + VDBE Opcode Specialization (21k TPS)
+
+[ Phase 5: Enterprise Governance ] ──────► v0.16.0 - v0.24.0 [COMPLETED]
+  Engine Decoupling (pkg/engine) + Group Commit + RBAC + CBO DP Join Order + Prepared LRU Cache
+
+[ Phase 6: Production Hardening & Feature Freeze ] ► v0.90.0 (Betas 0~3) [COMPLETED]
+  Unified CLI (lionsql) + Web Studio Suite + Memory Governor + OCC Tuning + TDS Positional + 2-Tier Engine
+
+[ Phase 7: Real-World Ecosystem & Durability Hardening ] ► v0.95.0 (Beta 4+) [IN PROGRESS]
+  10 Production Apps (Zero Code Change) + kill -9 Oracle (D1~D4) + 24h Soak Zero-Leak + Table-Driven Rules + 1.04M tpmC
+
+[ Phase 8: Official 1.0 LTS Production Release ] ────► v1.0.0 LTS [READY FOR SIGN-OFF]
+  6 Quality Gates Passed + Always On Failover + Lossless CDC + LTS Packaging & Sign-off
+
+[ Phase 9: Scale-Up Query & Compact Storage ] ───────► v1.1.0 [PLANNED]
+  Flat Hash Join & Mini TPC-H + OCC Compact Arena (5x) + Pure-Go Engine (CGO_ENABLED=0) + Immutable Audit Log
+
+[ Phase 10: Parallel Analytical OLAP & Extensibility ] ► v1.2.0+ [PLANNED]
+  Multi-Core ParallelSeqScan + Wasm UDF Sandbox + Friendly SQL + Embedded SPA Hosting
 ```
 
 ### High-Level Milestone Dashboard
@@ -91,9 +98,55 @@ Driver Cert   & Zero-Race   Crash Recovery    Conformance   Security      Ops & 
 
 ---
 
-## 3. Milestone Execution Status
+## 3. Milestone Execution Status & Engineering History
 
-### 3.1. Phase 6: v0.90.0 Feature Freeze & Hardening Suite (Completed)
+### 3.1. Phase 1: Core Foundation & Virtual Machine Architecture (`v0.1.0` ~ `v0.8.0`, Completed)
+* **Dual Wire Protocol Architecture (`pkg/wire`, `pkg/wire/tds`)**:
+  Simultaneous listener architecture supporting PostgreSQL Wire Protocol v3 (`TCP :5433`) and Microsoft TDS 7.x/8.0 (`TCP :1433`) in a single executable.
+* **Dual Storage Engines (`pkg/storage/memengine`, `pkg/storage/wiredtiger`)**:
+  In-Memory OCC (Optimistic Concurrency Control with WAL/AOF durability) and WiredTiger (Lock-Free disk B+Tree with hazard pointers and transaction timestamps).
+* **VDBE Bytecode Virtual Machine (`pkg/proc/runtime`)**:
+  Register-based virtual machine executing Microsoft T-SQL stored procedures and triggers with sub-microsecond latency and `sync.Pool` register recycling.
+* **Cost-Based Optimizer (CBO) & Histograms (`pkg/planner`)**:
+  Equi-depth histograms, selectivity estimation, and Volcano iterator-style query execution.
+
+### 3.2. Phase 2: SQL & Analytical Depth, Aggregations & Views (`v0.9.0` ~ `v0.10.0`, Completed)
+* **Window Functions & Partitioning (`pkg/execution`)**:
+  Standard SQL window functions (`ROW_NUMBER()`, `RANK()`, `DENSE_RANK()`, `LEAD()`, `LAG()`) over sliding windows and partitions.
+* **Streaming Tail Quantiles (`PERCENTILE_CONT`, T-Digest)**:
+  Centroid buffer approximation algorithm for tail percentile latency metrics without memory explosion.
+* **In-Engine Log & Text Operators**:
+  Embedded `GREP` and `AWK` operators for unstructured text analysis, nested transaction savepoints, and virtual relational views.
+
+### 3.3. Phase 3: Replication, Official Drivers & Zero-Allocation (`v0.11.0` ~ `v0.12.0`, Completed)
+* **1-Writer Multi-Reader WAL Streaming Replication (`pkg/replication`)**:
+  Linear transaction stream replication via LSN tracking, enabling zero-contention read scale-out on replica nodes.
+* **Official Client Driver Compatibility Certification**:
+  Conducted driver certification across `go-mssqldb`, `lib/pq`, and `psqlODBC` with 100% parameter protocol compliance.
+* **Buffer Pooling & CBO Stats Persistence**:
+  Reusable scratch buffers for query execution and persistent CBO table statistics storage across restarts.
+
+### 3.4. Phase 4: Modern Ecosystem, GUI Tool Interop & VDBE Acceleration (`v0.13.0` ~ `v0.15.0`, Completed)
+* **PostgreSQL `pgx/v5` Extended Batch Pipelining (`pkg/wire`)**:
+  Supported pipelined queries, binary parameter decoding, and high-throughput connection multiplexing.
+* **Enterprise GUI Tool Conformance**:
+  Achieved verified interoperability with SQL Server Management Studio (SSMS), Azure Data Studio, and DBeaver.
+* **IETF RFC 9562 Monotonic UUIDv7 (`NEWID7()`)**:
+  Time-ordered UUID generation guaranteeing sequential B+Tree indexing without random insertion fragmentation.
+* **VDBE Instruction Specialization (21k TPS Peak)**:
+  Specialized opcode dispatch loops achieving 21,000+ single-node transaction ops per second.
+
+### 3.5. Phase 5: Enterprise Governance, Security & Engine Decoupling (`v0.16.0` ~ `v0.24.0`, Completed)
+* **Core Engine Decoupling (`pkg/engine`)**:
+  Clean architectural boundary separating protocol listeners, catalog coordination, and transaction sessions (`Coordinator` and `ClientSession`).
+* **WAL Group Commit ($100\times$ Fsync Speedup)**:
+  Adaptive group commit batching concurrent transaction sync calls into single disk flushes.
+* **Granular SQL Object-Level RBAC (`pkg/auth`, `pkg/catalog`)**:
+  `GRANT`, `REVOKE`, `DENY` security controls across tables, schemas, and stored procedures.
+* **Dynamic Programming Join Reordering (Selinger DP)**:
+  Optimal join tree ordering for $N \le 4$ and $N > 4$ relations, and in-tree schema migration CLI (`lionsql migrate`).
+
+### 3.6. Phase 6: Production Hardening & Feature Freeze Baseline (`v0.90.0`, Completed)
 * **Single Standalone Binary & Unified CLI (`cmd/lionsql`, `UNIFY-CLI`)**:
   Consolidated database kernel and administration tools under `bin/lionsql` with 12 subcommands (`serve`, `start`, `stop`, `restart`, `status`, `doctor`, `init-config`, `migrate`, `sql`, `backup`, `restore`, `version`).
 * **Web Studio Production Feature Suite (`pkg/storage`, `pkg/engine`, `pkg/api`, `pkg/ui`)**:
@@ -105,7 +158,7 @@ Driver Cert   & Zero-Race   Crash Recovery    Conformance   Security      Ops & 
 * **TDS RPC Positional Mapping & Tool Audit (`TDS-RPC-AUDIT-1`, `TOOL-AUDIT-1`)**:
   Eliminated parameter name dependencies in `sp_prepare` / `sp_prepexec`, achieving verified compatibility with Beekeeper Studio, SSMS, DbGate, and DBeaver under 300+ concurrent connection stress tests.
 
-### 3.2. Phase 7: Real-World Ecosystem & Autonomous Durability Hardening (Active Milestone)
+### 3.7. Phase 7: Real-World Ecosystem & Autonomous Durability Hardening (`v0.95.0`, Active Milestone)
 * **10 Real-World Production App Integrations (Zero Code Change)**:
   Completed end-to-end integration and permanent hermetic regression test suites for 10 production applications:
   - **Gitea** (116 tables, XORM, dual TDS/PGWire)
@@ -129,8 +182,8 @@ Driver Cert   & Zero-Race   Crash Recovery    Conformance   Security      Ops & 
 * **In-Memory OCC Hyper-Scaling**:
   Achieved 1,040,000 tpmC throughput under monotonic versioning, lockless catalog snapshots, and 0-alloc lazy serialization.
 
-### 3.3. Phase 8: Official 1.0 LTS Production Release Readiness
-With all Phase 6 deliverables, Phase 7 ecosystem integrations, and durability harnesses verified, all 6 Production Readiness Quality Gates are fully validated. LionSQL is staged for official `v1.0.0 LTS` tagging and long-term production distribution.
+### 3.8. Phase 8: Official 1.0 LTS Production Release Readiness
+With all Phase 1~6 deliverables, Phase 7 ecosystem integrations, and durability harnesses verified, all 6 Production Readiness Quality Gates are fully validated. LionSQL is staged for official `v1.0.0 LTS` tagging and long-term production distribution.
 
 ---
 
@@ -221,7 +274,7 @@ CGO_ENABLED=0 distribution OCC compact arena (5x)    PCI-DSS v4.0 / SOC2       M
 | **Phase 7** | 10대 실전 프로덕션 앱 생태계 연동 (Gitea ~ Vikunja) | Ecosystem | `v0.95.0` | **Completed** | [`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`](notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md) |
 | **Phase 7** | `kill -9` 크래시 복구 내구성 오라클 하네스 (`DURA-KILL-1`) | Storage & WAL | `v0.95.0` | **Completed** | [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md) |
 | **Phase 7** | 24h 장기 소크 부하 안정성 및 자원 유계 검증 (`DURA-SOAK-1`) | Quality & Soak | `v0.95.0` | **Completed** | [`notes/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md) |
-| **Phase 7** | AST 심볼 테이블 기반 쿼리 라우팅 리팩토링 (`ROUTING-AST-CATALOG-1`) | Query Routing | `v0.95.0` | **Completed** | [`notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md) |
+| **Phase 7** | AST 심볼 테이블 기반 쿼리 라우팅 리팩토링 (`ROUTING-AST-CATALOG-1`) | Query Routing | `v0.95.0` | **Completed** | [`notes/AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md`](AST_CATALOG_ROUTING_REFACTORING_PLAN.ko.md) |
 | **Phase 7** | 호환성 규칙 Table-Driven 정식화 (`COMPAT-TABLE-DRIVEN-1`) | Compatibility | `v0.95.0` | **In Progress** | [`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md) |
 | **Phase 7** | In-Memory OCC 104만 tpmC 초격차 성능 달성 | Storage Engine | `v0.95.0` | **Completed** | [`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md) |
 | **Phase 8** | 공식 LionSQL v1.0.0 LTS 출시 및 6대 게이트 최종 사인오프 | Release | `v1.0.0 LTS` | **Ready for Sign-off** | [`CHANGELOG.md`](CHANGELOG.md) |
