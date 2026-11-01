@@ -1350,9 +1350,8 @@ func normalizeMSSQLPagination(sql string) string {
 		sql = mssqlOffsetOnlyRe.ReplaceAllString(sql, " OFFSET $1")
 	}
 
-	upper := strings.ToUpper(sql)
-	if strings.Contains(upper, " TOP ") || strings.Contains(upper, " TOP(") {
-		if !strings.Contains(upper, " LIMIT ") {
+	if sqlutil.ContainsKeyword(sql, "TOP", false) {
+		if !sqlutil.ContainsKeyword(sql, "LIMIT", false) {
 			if m := mssqlDistinctTopRe.FindStringSubmatch(sql); len(m) == 4 {
 				sql = fmt.Sprintf("%s%s LIMIT %s", m[1], m[3], m[2])
 			} else if m := mssqlTopRe.FindStringSubmatch(sql); len(m) == 5 {

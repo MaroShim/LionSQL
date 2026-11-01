@@ -8,8 +8,14 @@ import (
 	"time"
 
 	"lionsql/pkg/auth"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
+
+var complexPKBypassKeywords = []string{
+	"JOIN", "GROUP", "HAVING", "ORDER", "UNION", "EXCEPT", "INTERSECT",
+	"INTO", "AND", "OR", "LIKE", "IN", "BETWEEN", "APPLY", "JSON",
+}
 
 // PKLookupPlan stores compiled plan metadata for direct storage bypass.
 type PKLookupPlan struct {
@@ -146,22 +152,10 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 	}
 
 	// Disallow complex SQL clauses
-	if strings.Contains(upperQ, " JOIN ") ||
-		strings.Contains(upperQ, " GROUP ") ||
-		strings.Contains(upperQ, " HAVING ") ||
-		strings.Contains(upperQ, " ORDER ") ||
-		strings.Contains(upperQ, " UNION ") ||
-		strings.Contains(upperQ, " EXCEPT ") ||
-		strings.Contains(upperQ, " INTERSECT ") ||
-		strings.Contains(upperQ, " INTO ") ||
-		strings.Contains(upperQ, " AND ") ||
-		strings.Contains(upperQ, " OR ") ||
-		strings.Contains(upperQ, " LIKE ") ||
-		strings.Contains(upperQ, " IN ") ||
-		strings.Contains(upperQ, " BETWEEN ") ||
-		strings.Contains(upperQ, " APPLY ") ||
-		strings.Contains(upperQ, " JSON ") {
-		return nil, false
+	for _, kw := range complexPKBypassKeywords {
+		if sqlutil.ContainsKeyword(q, kw, false) {
+			return nil, false
+		}
 	}
 
 	// Strip optional LIMIT 1
@@ -172,6 +166,7 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 
 	// Check and strip optional TOP 1 after SELECT
 	selectPrefix := "SELECT"
+	_ = selectPrefix
 	afterSelect := strings.TrimSpace(q[6:])
 	upperAfter := strings.ToUpper(afterSelect)
 	if strings.HasPrefix(upperAfter, "TOP 1 ") || strings.HasPrefix(upperAfter, "TOP 1\t") {
@@ -180,23 +175,22 @@ func parsePKLookupQuery(query string) (*pkParsedQuery, bool) {
 	}
 
 	// Find FROM keyword
-	fromIdx := strings.Index(upperAfter, " FROM ")
+	fromIdx := sqlutil.FindTopLevelKeyword(afterSelect, "FROM")
 	if fromIdx == -1 {
 		return nil, false
 	}
 
 	projStr := strings.TrimSpace(afterSelect[:fromIdx])
-	restAfterFrom := strings.TrimSpace(afterSelect[fromIdx+6:])
-	upperRest := strings.ToUpper(restAfterFrom)
+	restAfterFrom := strings.TrimSpace(afterSelect[fromIdx+4:])
 
 	// Find WHERE keyword
-	whereIdx := strings.Index(upperRest, " WHERE ")
+	whereIdx := sqlutil.FindTopLevelKeyword(restAfterFrom, "WHERE")
 	if whereIdx == -1 {
 		return nil, false
 	}
 
 	tablePart := strings.TrimSpace(restAfterFrom[:whereIdx])
-	wherePart := strings.TrimSpace(restAfterFrom[whereIdx+7:])
+	wherePart := strings.TrimSpace(restAfterFrom[whereIdx+5:])
 
 	// Disallow multi-table FROM
 	if strings.Contains(tablePart, ",") || tablePart == "" || projStr == "" || wherePart == "" {

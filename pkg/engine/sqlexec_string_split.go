@@ -25,12 +25,12 @@ func isStringSplitSelect(query string) bool {
 	if !strings.HasPrefix(upper, "SELECT") {
 		return false
 	}
-	fromIdx := strings.Index(upper, " FROM ")
+	fromIdx := sqlutil.FindTopLevelKeyword(trimmed, "FROM")
 	if fromIdx == -1 {
 		return false
 	}
 	// The immediate table after the first FROM must be STRING_SPLIT
-	afterFrom := strings.TrimSpace(upper[fromIdx+6:])
+	afterFrom := strings.TrimSpace(upper[fromIdx+4:])
 	afterFrom = strings.TrimPrefix(afterFrom, "DBO.")
 	afterFrom = strings.TrimPrefix(afterFrom, "[DBO].")
 	afterFrom = strings.TrimPrefix(afterFrom, "[")
@@ -43,7 +43,7 @@ func (s *Coordinator) execStringSplitSelect(query string, start time.Time, cs *C
 	upper := strings.ToUpper(cleaned)
 
 	// 1. Find FROM STRING_SPLIT(
-	fromIdx := strings.Index(upper, "FROM")
+	fromIdx := sqlutil.FindTopLevelKeyword(cleaned, "FROM")
 	if fromIdx == -1 {
 		return nil, fmt.Errorf("invalid STRING_SPLIT query: missing FROM")
 	}

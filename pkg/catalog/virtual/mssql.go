@@ -329,18 +329,7 @@ func execFnHelpCollations(sql string) (*Result, error) {
 		{"name": "SQL_Latin1_General_CP1_CI_AS", "description": "SQL Server collation, code page 1252, case-insensitive, accent-sensitive"},
 	}
 
-	projStr := "*"
-	upper := strings.ToUpper(sql)
-	if idxFrom := strings.Index(upper, "FROM"); idxFrom != -1 {
-		idxSel := strings.Index(upper, "SELECT")
-		if idxSel != -1 && idxSel < idxFrom {
-			projStr = strings.TrimSpace(sql[idxSel+6 : idxFrom])
-		}
-	}
-	whereClause := ""
-	if idxWhere := strings.Index(upper, "WHERE"); idxWhere != -1 {
-		whereClause = strings.TrimSpace(sql[idxWhere+5:])
-	}
+	projStr, whereClause := parseVirtualSelectClauses(sql)
 	return FormatResult(columns, allRows, projStr, whereClause, "", -1)
 }
 

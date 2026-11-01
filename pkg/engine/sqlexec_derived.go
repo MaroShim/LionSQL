@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lionsql/pkg/planner"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -201,11 +202,11 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		suffixPart := currentSQL[matchEnd:]
 		if needSyntheticPK && len(innerRes.Columns) > 0 {
 			// Only rewrite SELECT * if this derived table is the solitary table (no joins or other tables)
-			fromIdx := strings.Index(strings.ToUpper(prefixPart), "FROM")
+			fromIdx := sqlutil.FindTopLevelKeyword(prefixPart, "FROM")
 			if fromIdx != -1 {
 				afterFrom := strings.TrimSpace(prefixPart[fromIdx+4:])
-				hasJoinOrComma := strings.Contains(strings.ToUpper(prefixPart), "JOIN") ||
-					strings.Contains(strings.ToUpper(suffixPart), "JOIN") ||
+				hasJoinOrComma := sqlutil.ContainsKeyword(prefixPart, "JOIN", false) ||
+					sqlutil.ContainsKeyword(suffixPart, "JOIN", false) ||
 					strings.Contains(prefixPart[fromIdx+4:], ",")
 				if afterFrom == "" && !hasJoinOrComma && reSelectStarFrom.MatchString(prefixPart) {
 					var qualifiedCols []string

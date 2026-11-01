@@ -531,3 +531,23 @@ func TestPlanner_StandardPagingAndTop(t *testing.T) {
 		t.Errorf("expected projection id, got %v", q4.Projections)
 	}
 }
+
+func TestPlanner_ColumnContainingKeyword(t *testing.T) {
+	p := planner.NewPlanner()
+
+	sql := "SELECT is_coverage, turnover FROM metrics WHERE turnover > 100"
+	q, err := p.ParseSelect(sql)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	if len(q.Projections) != 2 {
+		t.Fatalf("expected 2 projections, got %d: %v", len(q.Projections), q.Projections)
+	}
+	if q.Projections[0] != "is_coverage" || q.Projections[1] != "turnover" {
+		t.Errorf("unexpected projections: %v", q.Projections)
+	}
+	if len(q.WindowDefs) != 0 {
+		t.Errorf("expected 0 window defs for columns containing 'OVER', got %d", len(q.WindowDefs))
+	}
+}

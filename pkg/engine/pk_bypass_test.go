@@ -296,6 +296,53 @@ func TestPKLookupBypass_InvalidationOnDDL(t *testing.T) {
 	}
 }
 
+func TestPKLookupBypass_WhitespaceAndBoundaryResilience(t *testing.T) {
+	coord, _ := setupTestCoordinatorWithTable(t)
+
+	testCases := []struct {
+		name         string
+		query        string
+		expectHit    bool
+		expectedName string
+	}{
+		{
+			name:         "Newline before WHERE",
+			query:        "SELECT * FROM users\nWHERE id = 1",
+			expectHit:    true,
+			expectedName: "Alice",
+		},
+		{
+			name:         "Tabs around FROM and WHERE",
+			query:        "SELECT\tid, name\tFROM\tusers\tWHERE\tid = 2",
+			expectHit:    true,
+			expectedName: "Bob",
+		},
+		{
+			name:         "Projection with column names",
+			query:        "SELECT name, email FROM users WHERE id = 3",
+			expectHit:    true,
+			expectedName: "Charlie",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			beforeHits := coord.Metrics().PKBypassHits()
+			res, err := coord.ExecuteSQL(tc.query)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if len(res.Rows) != 1 || res.Rows[0]["name"] != tc.expectedName {
+				t.Fatalf("unexpected result: %+v", res.Rows)
+			}
+			afterHits := coord.Metrics().PKBypassHits()
+			if tc.expectHit && afterHits <= beforeHits {
+				t.Errorf("expected bypass hit for query %q, but hits did not increase", tc.query)
+			}
+		})
+	}
+}
+
 func BenchmarkPKLookupBypass(b *testing.B) {
 	eng := memengine.New()
 	cat := catalog.New(eng)

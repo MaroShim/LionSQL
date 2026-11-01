@@ -194,8 +194,8 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	}
 
 	// Primary Fast-Path: Unified VDBE Virtual Machine execution (bypass if OUTPUT/RETURNING clause or ON CONFLICT/UPSERT present)
-	hasOutput := (dml != nil && dml.Output != "") || strings.Contains(strings.ToUpper(cleaned), " OUTPUT ") || strings.Contains(strings.ToUpper(cleaned), " RETURNING ")
-	hasConflict := strings.Contains(strings.ToUpper(cleaned), "ON CONFLICT") || isUpsert
+	hasOutput := (dml != nil && dml.Output != "") || sqlutil.ContainsKeyword(cleaned, "OUTPUT", false) || sqlutil.ContainsKeyword(cleaned, "RETURNING", false)
+	hasConflict := sqlutil.ContainsKeyword(cleaned, "ON CONFLICT", false) || isUpsert
 	if !hasOutput && !hasConflict {
 		if res, err := s.execVBDEDML("INSERT", cleaned, start, cs); err == nil {
 			return res, nil

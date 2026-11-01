@@ -1989,16 +1989,21 @@ func cleanSymbol(name string) string {
 	return cleaned
 }
 
+var pointLookupDisallowedKeywords = []string{
+	"AND", "OR", "LIKE", "IN", "BETWEEN",
+}
+
 func tryPointLookup(tx storage.Transaction, qInfo *planner.QueryInfo, schema *storage.TableSchema) ([]map[string]any, []string, bool) {
 	where := strings.TrimSpace(qInfo.WhereClause)
 	if where == "" {
 		return nil, nil, false
 	}
-	upper := strings.ToUpper(where)
-	if strings.Contains(upper, " AND ") || strings.Contains(upper, " OR ") ||
-		strings.Contains(upper, " LIKE ") || strings.Contains(upper, " IN ") ||
-		strings.Contains(upper, " BETWEEN ") || strings.Contains(where, "<") ||
-		strings.Contains(where, ">") || strings.Contains(where, "!") {
+	for _, kw := range pointLookupDisallowedKeywords {
+		if sqlutil.ContainsKeyword(where, kw, true) {
+			return nil, nil, false
+		}
+	}
+	if strings.ContainsAny(where, "<>!") {
 		return nil, nil, false
 	}
 

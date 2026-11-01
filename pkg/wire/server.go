@@ -838,9 +838,11 @@ func canCompileToVDBE(query string, qc proc.QueryCharacteristics) bool {
 	if qc.HasJoin || qc.HasSubquery {
 		return false
 	}
-	upper := strings.ToUpper(query)
-	if strings.Contains(upper, "FROM (") || strings.Contains(upper, "FROM\n(") || strings.Contains(upper, "FROM\t(") {
-		return false
+	for _, fromIdx := range sqlutil.FindAllTopLevelKeyword(query, "FROM") {
+		rest := strings.TrimSpace(query[fromIdx+4:])
+		if strings.HasPrefix(rest, "(") {
+			return false
+		}
 	}
 	return true
 }

@@ -219,26 +219,12 @@ func execPgTriggerSelect(src Source, sql string) (*Result, error) {
 }
 
 func execProcSelect(src Source, sql string) (*Result, error) {
-	upper := strings.ToUpper(sql)
 	targetSchema := "public"
 	if m := reGuiNspnameEq.FindStringSubmatch(sql); len(m) == 2 {
 		targetSchema = m[1]
 	}
 
-	whereClause := ""
-	projStr := "*"
-	if whereIdx := strings.Index(upper, "WHERE"); whereIdx != -1 {
-		whereClause = sql[whereIdx+5:]
-		if orderIdx := strings.Index(strings.ToUpper(whereClause), "ORDER BY"); orderIdx != -1 {
-			whereClause = whereClause[:orderIdx]
-		}
-	}
-	if fromIdx := strings.Index(upper, "FROM"); fromIdx != -1 {
-		selectPart := sql[:fromIdx]
-		if selectIdx := strings.Index(strings.ToUpper(selectPart), "SELECT"); selectIdx != -1 {
-			projStr = strings.TrimSpace(selectPart[selectIdx+6:])
-		}
-	}
+	projStr, whereClause := parseVirtualSelectClauses(sql)
 
 	columns := []string{
 		"schema_name", "pure_name", "object_name", "table_name", "object_kind",
@@ -292,20 +278,7 @@ func execProcSelect(src Source, sql string) (*Result, error) {
 
 func execClassSelect(src Source, sql string) (*Result, error) {
 	upper := strings.ToUpper(sql)
-	whereClause := ""
-	projStr := "*"
-	if whereIdx := strings.Index(upper, "WHERE"); whereIdx != -1 {
-		whereClause = sql[whereIdx+5:]
-		if orderIdx := strings.Index(strings.ToUpper(whereClause), "ORDER BY"); orderIdx != -1 {
-			whereClause = whereClause[:orderIdx]
-		}
-	}
-	if fromIdx := strings.Index(upper, "FROM"); fromIdx != -1 {
-		selectPart := sql[:fromIdx]
-		if selectIdx := strings.Index(strings.ToUpper(selectPart), "SELECT"); selectIdx != -1 {
-			projStr = strings.TrimSpace(selectPart[selectIdx+6:])
-		}
-	}
+	projStr, whereClause := parseVirtualSelectClauses(sql)
 
 	columns := []string{
 		"oid", "relname", "relnamespace", "reltype", "reloftype",

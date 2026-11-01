@@ -243,10 +243,10 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 	for _, p := range stmt.Projections {
 		pStr := p.String()
 		projections = append(projections, pStr)
-		pUpper := strings.ToUpper(pStr)
-		if strings.Contains(pUpper, "OVER") {
+		if sqlutil.ContainsKeyword(pStr, "OVER", true) {
 			continue
 		}
+		pUpper := strings.ToUpper(pStr)
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
 			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") ||
@@ -372,7 +372,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
 	// Try AST-based parsing first (only if not containing window function OVER)
-	if !strings.Contains(strings.ToUpper(cleaned), " OVER ") && !strings.Contains(strings.ToUpper(cleaned), " OVER(") {
+	if !sqlutil.ContainsKeyword(cleaned, "OVER", true) {
 		if parsedStmt, err := proc.ParseSQL(cleaned); err == nil {
 			if sel, ok := parsedStmt.(*proc.GeneralSelectStmt); ok {
 				qInfo := FromAST(sel)
@@ -530,10 +530,10 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 
 	hasAgg := len(groupByCols) > 0 || havingClause != ""
 	for _, proj := range projections {
-		pUpper := strings.ToUpper(proj)
-		if strings.Contains(pUpper, "OVER") {
+		if sqlutil.ContainsKeyword(proj, "OVER", true) {
 			continue
 		}
+		pUpper := strings.ToUpper(proj)
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
 			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") ||
@@ -1660,8 +1660,7 @@ func FormatPlanJSON(node *PlanNode) (string, error) {
 // ParseWindowDef extracts a WindowDef from a projection item like "ROW_NUMBER() OVER (...) AS rn".
 func ParseWindowDef(item string) (*WindowDef, bool) {
 	trimmed := strings.TrimSpace(item)
-	upper := strings.ToUpper(trimmed)
-	overIdx := strings.Index(upper, "OVER")
+	overIdx := sqlutil.FindTopLevelKeyword(trimmed, "OVER")
 	if overIdx == -1 {
 		return nil, false
 	}
