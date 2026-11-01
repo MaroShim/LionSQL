@@ -532,6 +532,11 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 	}
 
 	var args []Expr
+	isDistinct := false
+	if p.curTokenIs(TokenDistinct) {
+		isDistinct = true
+		p.nextToken() // eat DISTINCT
+	}
 
 	for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
 		arg := p.parseExpression(precLowest)
@@ -551,8 +556,9 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 	p.nextToken() // eat )
 
 	fn := &FunctionCallExpr{
-		Name: name,
-		Args: args,
+		Name:     name,
+		Args:     args,
+		Distinct: isDistinct,
 	}
 
 	if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "WITHIN") {

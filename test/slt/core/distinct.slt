@@ -1,0 +1,65 @@
+# Core DISTINCT Evaluation, NULL handling, and Aggregation
+
+statement ok
+CREATE TABLE test_distinct (id INT PRIMARY KEY, cat VARCHAR, score INT);
+
+statement ok
+INSERT INTO test_distinct VALUES (1, 'math', 90);
+
+statement ok
+INSERT INTO test_distinct VALUES (2, 'math', 90);
+
+statement ok
+INSERT INTO test_distinct VALUES (3, 'science', 80);
+
+statement ok
+INSERT INTO test_distinct VALUES (4, 'science', 90);
+
+statement ok
+INSERT INTO test_distinct VALUES (5, 'english', NULL);
+
+statement ok
+INSERT INTO test_distinct VALUES (6, 'english', NULL);
+
+statement ok
+INSERT INTO test_distinct VALUES (7, NULL, 50);
+
+statement ok
+INSERT INTO test_distinct VALUES (8, NULL, 50);
+
+# Single column DISTINCT: duplicates eliminated
+query T rowsort
+SELECT DISTINCT cat FROM test_distinct;
+----
+NULL
+english
+math
+science
+
+# Multi-column DISTINCT
+query TI rowsort
+SELECT DISTINCT cat, score FROM test_distinct;
+----
+NULL 50
+english NULL
+math 90
+science 80
+science 90
+
+# COUNT(DISTINCT col): standard SQL ignores NULL in COUNT(DISTINCT)
+query I nosort
+SELECT COUNT(DISTINCT cat) FROM test_distinct;
+----
+3
+
+# COUNT(DISTINCT score)
+query I nosort
+SELECT COUNT(DISTINCT score) FROM test_distinct;
+----
+3
+
+# SUM(DISTINCT score): 50 + 80 + 90 = 220
+query I nosort
+SELECT SUM(DISTINCT score) FROM test_distinct;
+----
+220

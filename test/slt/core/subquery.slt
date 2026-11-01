@@ -1,0 +1,62 @@
+# Core Subqueries: IN, NOT IN, EXISTS, and Scalar Subqueries
+
+statement ok
+CREATE TABLE sub_emp (id INT PRIMARY KEY, name VARCHAR, dept_id INT, salary INT);
+
+statement ok
+CREATE TABLE sub_dept (dept_id INT PRIMARY KEY, dept_name VARCHAR);
+
+statement ok
+INSERT INTO sub_dept VALUES (1, 'Engineering');
+
+statement ok
+INSERT INTO sub_dept VALUES (2, 'Marketing');
+
+statement ok
+INSERT INTO sub_dept VALUES (3, 'HR');
+
+statement ok
+INSERT INTO sub_emp VALUES (101, 'Alice', 1, 90000);
+
+statement ok
+INSERT INTO sub_emp VALUES (102, 'Bob', 1, 80000);
+
+statement ok
+INSERT INTO sub_emp VALUES (103, 'Charlie', 2, 70000);
+
+statement ok
+INSERT INTO sub_emp VALUES (104, 'David', 99, 60000);
+
+# WHERE IN subquery
+query IT rowsort
+SELECT id, name FROM sub_emp WHERE dept_id IN (SELECT dept_id FROM sub_dept WHERE dept_name = 'Engineering');
+----
+101 Alice
+102 Bob
+
+# WHERE NOT IN subquery
+query IT rowsort
+SELECT id, name FROM sub_emp WHERE dept_id NOT IN (SELECT dept_id FROM sub_dept);
+----
+104 David
+
+# EXISTS subquery
+query IT rowsort
+SELECT id, name FROM sub_emp e WHERE EXISTS (SELECT 1 FROM sub_dept d WHERE d.dept_id = e.dept_id);
+----
+101 Alice
+102 Bob
+103 Charlie
+
+# NOT EXISTS subquery
+query IT rowsort
+SELECT id, name FROM sub_emp e WHERE NOT EXISTS (SELECT 1 FROM sub_dept d WHERE d.dept_id = e.dept_id);
+----
+104 David
+
+# Scalar subquery in WHERE comparison
+query IT rowsort
+SELECT id, name FROM sub_emp WHERE salary > (SELECT AVG(salary) FROM sub_emp);
+----
+101 Alice
+102 Bob

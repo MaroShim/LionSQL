@@ -541,8 +541,9 @@ func (e *CaseExpr) String() string {
 
 // FunctionCallExpr represents scalar functions like ISNULL, COALESCE, GETDATE, LEN, SUBSTRING, etc.
 type FunctionCallExpr struct {
-	Name string
-	Args []Expr
+	Name     string
+	Args     []Expr
+	Distinct bool
 }
 
 func (e *FunctionCallExpr) exprNode() {}
@@ -550,6 +551,9 @@ func (e *FunctionCallExpr) String() string {
 	argStrs := make([]string, len(e.Args))
 	for i, a := range e.Args {
 		argStrs[i] = a.String()
+	}
+	if e.Distinct {
+		return fmt.Sprintf("%s(DISTINCT %s)", e.Name, strings.Join(argStrs, ", "))
 	}
 	return fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", "))
 }

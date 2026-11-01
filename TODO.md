@@ -50,11 +50,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **SLT 러너 구현 (`cmd/sqllogictest`, `pkg/slt`)**: 순수 Go 기반 표준 SLT 파일 파서, In-Process 및 PGWire 듀얼 모드, rowsort/valuesort/nosort 정렬 및 MD5 해시 대조 엔진
 - [x] **Phase 1 (코어 로직 & 구문 스위트)**: `select1.slt`, `where.slt`, `join.slt`, `null.slt`, `aggregate.slt` (100% PASS)
 - [x] **Phase 2 (화이트스페이스 & 엣지 케이스 스위트)**: 탭/개행/다중 공백(`whitespace.slt`), 키워드 식별자 충돌 및 리터럴 포함(`boundary.slt`), 복합 키워드 변형(`IF EXISTS`, `WITHIN GROUP`) (100% PASS)
-- [x] **엔진 버그 4건 발굴 및 완치**:
+- [x] **Phase 2.5 (핵심 영역 고난도 스위트)**: 조건 분기 및 단락 평가(`case_expr.slt`), 다중 컬럼/NULL/집계 고립(`distinct.slt`), IN/EXISTS/스칼라 서브쿼리(`subquery.slt`) (총 10개 파일, 73문장, 67쿼리 100% PASS)
+- [x] **엔진 버그 5건 발굴 및 완치**:
   1. `HasPrefixKeyword` 다중 공백/탭/개행 DDL 라우팅 버그 완치
   2. SQL 3-valued logic `NULL = NULL` 및 `val = NULL` UNKNOWN(falsy) 표준 정합성 완치
   3. `BinaryExpr.String()` 연산자 우선순위 부모 괄호 탈락 (`(A OR B) AND C`) deparser 완치
   4. SLT 러너 멀티컬럼 공백 포함 셀 파서 탭/길이 정합성 완치
+  5. `FunctionCallExpr` 내 `DISTINCT` 파싱 누락으로 인한 `COUNT(DISTINCT ...)` 평가 결함 완치
 
 ### [ ] 1.5 `DURA-SLT-2` SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증
 - 설계 계획서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)

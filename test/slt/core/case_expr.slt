@@ -1,0 +1,58 @@
+# Core CASE Expressions and Conditional Evaluation
+
+statement ok
+CREATE TABLE test_case (id INT PRIMARY KEY, val INT, status VARCHAR);
+
+statement ok
+INSERT INTO test_case VALUES (1, 10, 'A');
+
+statement ok
+INSERT INTO test_case VALUES (2, 25, 'B');
+
+statement ok
+INSERT INTO test_case VALUES (3, 5, 'C');
+
+statement ok
+INSERT INTO test_case VALUES (4, NULL, 'D');
+
+# Searched CASE statement
+query IT rowsort
+SELECT id, CASE WHEN val >= 20 THEN 'high' WHEN val >= 10 THEN 'medium' ELSE 'low' END FROM test_case;
+----
+1 medium
+2 high
+3 low
+4 low
+
+# Simple CASE statement
+query IT rowsort
+SELECT id, CASE status WHEN 'A' THEN 'alpha' WHEN 'B' THEN 'beta' ELSE 'other' END FROM test_case;
+----
+1 alpha
+2 beta
+3 other
+4 other
+
+# CASE without ELSE branch returns NULL when not matched
+query IT rowsort
+SELECT id, CASE WHEN val = 10 THEN 'ten' WHEN val = 25 THEN 'twenty-five' END FROM test_case;
+----
+1 ten
+2 twenty-five
+3 NULL
+4 NULL
+
+# CASE with NULL condition evaluates to ELSE (3-valued logic: NULL condition is false/unknown)
+query T nosort
+SELECT CASE WHEN NULL THEN 'truthy' ELSE 'falsy' END;
+----
+falsy
+
+# CASE checking IS NULL
+query IT rowsort
+SELECT id, CASE WHEN val IS NULL THEN 'absent' ELSE 'present' END FROM test_case;
+----
+1 present
+2 present
+3 present
+4 absent
