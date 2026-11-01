@@ -86,6 +86,11 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [ ] **Phase 3 (SQLite 공식 `index` / `random` / `evidence` 스위트 확장)**: 인덱스 복합 스캔, 난수 대수식, 통계적 카디널리티 스트레스 테스트 연동
 - [ ] **Phase 6 (1.0 릴리즈 게이트 통합)**: 1.0 릴리즈 직전 풀 스위트 듀얼 엔진 100% 무오류 인증
 
+### [-] 1.6 `OPT-LARGE-JOIN-1` 대규모 조인(10+ Tables) 최적화 (진행 중)
+- 설계 계획서: [`notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)
+- [ ] **제1방안 (베이스 테이블 동적 루트 선정)**: 단일 행 필터 보유 또는 최소 카디널리티 테이블을 시작 스캔 노드로 승격하여 조인 체인 중간 튜플 증폭 차단 (`pkg/planner`)
+- [ ] **제2방안 (공집합 조기 탈락 Fast-Fail)**: `1=0` 등 모순 조건 또는 0행 결과 감지 시 하위 10+개 테이블 스캔/해시 빌드를 바이패스하고 `EmptyIterator` 0ms 반환 (`pkg/planner`, `pkg/execution`)
+
 ---
 
 ## Priority 2. 실전 오픈소스 앱 연동 확장 (Application Integration Expansion)

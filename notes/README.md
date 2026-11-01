@@ -31,6 +31,7 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
 
 6. **Active & Post-1.0 Architecture Plans**:
    - **Active Sprints (Priority 1 & 2)**:
+     - **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)** (Korean): Large join (10+ tables) query optimization design and implementation plan (dynamic root selection & fast-fail zero cardinality pruning, OPT-LARGE-JOIN-1).
      - **[`SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)** (Korean): Standard guidelines and recommended scopes for SQLLogicTest (SLT) across modern database engines (DuckDB, CockroachDB, TiDB, DataFusion, 3-tier hierarchy).
      - **[`SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md`](SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md)** (Korean): LionSQL SQLLogicTest (SLT) 4-phase expansion roadmap (Phase 1-4) and quality gate integration plan.
      - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean): Master plan for crash resilience, kill tests, soak stress tests, and dogfooding.
