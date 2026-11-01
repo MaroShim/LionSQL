@@ -293,6 +293,8 @@ func (t TokenType) String() string {
 		return "*"
 	case TokenSlash:
 		return "/"
+	case TokenPercent:
+		return "%"
 	case TokenComma:
 		return ","
 	case TokenSemicolon:

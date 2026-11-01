@@ -1,0 +1,70 @@
+# Core Advanced Joins: Multi-Table Join, Self-Join, Left Anti-Join, and Cross Join
+
+statement ok
+CREATE TABLE slt_loc (loc_id INT PRIMARY KEY, city VARCHAR);
+
+statement ok
+CREATE TABLE slt_dept2 (dept_id INT PRIMARY KEY, dept_name VARCHAR, loc_id INT);
+
+statement ok
+CREATE TABLE slt_emp2 (emp_id INT PRIMARY KEY, emp_name VARCHAR, dept_id INT, mgr_id INT);
+
+statement ok
+INSERT INTO slt_loc VALUES (1, 'Seoul');
+
+statement ok
+INSERT INTO slt_loc VALUES (2, 'Tokyo');
+
+statement ok
+INSERT INTO slt_dept2 VALUES (10, 'R&D', 1);
+
+statement ok
+INSERT INTO slt_dept2 VALUES (20, 'Sales', 2);
+
+statement ok
+INSERT INTO slt_dept2 VALUES (30, 'Legal', 1);
+
+statement ok
+INSERT INTO slt_emp2 VALUES (101, 'Kim', 10, NULL);
+
+statement ok
+INSERT INTO slt_emp2 VALUES (102, 'Lee', 10, 101);
+
+statement ok
+INSERT INTO slt_emp2 VALUES (103, 'Park', 20, 101);
+
+statement ok
+INSERT INTO slt_emp2 VALUES (104, 'Choi', NULL, 102);
+
+# 3-Table INNER JOIN (emp -> dept -> loc)
+query ITTT rowsort
+SELECT e.emp_id, e.emp_name, d.dept_name, l.city FROM slt_emp2 e JOIN slt_dept2 d ON e.dept_id = d.dept_id JOIN slt_loc l ON d.loc_id = l.loc_id;
+----
+101 Kim R&D Seoul
+102 Lee R&D Seoul
+103 Park Sales Tokyo
+
+# Self-Join: employee to manager name
+query ITT rowsort
+SELECT e.emp_id, e.emp_name, m.emp_name FROM slt_emp2 e JOIN slt_emp2 m ON e.mgr_id = m.emp_id;
+----
+102 Lee Kim
+103 Park Kim
+104 Choi Lee
+
+# LEFT JOIN Anti-Join idiom: departments with zero employees
+query IT rowsort
+SELECT d.dept_id, d.dept_name FROM slt_dept2 d LEFT JOIN slt_emp2 e ON d.dept_id = e.dept_id WHERE e.emp_id IS NULL;
+----
+30 Legal
+
+# CROSS JOIN cartesian product
+query TT rowsort
+SELECT l.city, d.dept_name FROM slt_loc l CROSS JOIN slt_dept2 d;
+----
+Seoul Legal
+Seoul R&D
+Seoul Sales
+Tokyo Legal
+Tokyo R&D
+Tokyo Sales

@@ -116,9 +116,15 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 		if err != nil {
 			return nil, err
 		}
+		if isNullVal(val) {
+			return nil, nil
+		}
 		switch e.Op {
 		case TokenMinus:
 			if n, ok := toFloat(val); ok {
+				if n == math.Trunc(n) {
+					return int64(-n), nil
+				}
 				return -n, nil
 			}
 			return nil, fmt.Errorf("cannot negate non-numeric value: %v", val)
@@ -129,20 +135,48 @@ func EvalRowExpr(expr Expr, row map[string]any, execSubquery SubqueryExecutor) (
 	case *BinaryExpr:
 		switch e.Op {
 		case TokenAnd:
-			leftBool := EvalBoolExpr(e.Left, row, execSubquery)
-			if !leftBool {
+			leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			leftNull := isNullVal(leftVal)
+			if !leftNull && !isTruthyValue(leftVal) {
 				return false, nil
 			}
-			rightBool := EvalBoolExpr(e.Right, row, execSubquery)
-			return rightBool, nil
+			rightVal, err := EvalRowExpr(e.Right, row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			rightNull := isNullVal(rightVal)
+			if !rightNull && !isTruthyValue(rightVal) {
+				return false, nil
+			}
+			if leftNull || rightNull {
+				return nil, nil
+			}
+			return true, nil
 
 		case TokenOr:
-			leftBool := EvalBoolExpr(e.Left, row, execSubquery)
-			if leftBool {
+			leftVal, err := EvalRowExpr(e.Left, row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			leftNull := isNullVal(leftVal)
+			if !leftNull && isTruthyValue(leftVal) {
 				return true, nil
 			}
-			rightBool := EvalBoolExpr(e.Right, row, execSubquery)
-			return rightBool, nil
+			rightVal, err := EvalRowExpr(e.Right, row, execSubquery)
+			if err != nil {
+				return nil, err
+			}
+			rightNull := isNullVal(rightVal)
+			if !rightNull && isTruthyValue(rightVal) {
+				return true, nil
+			}
+			if leftNull || rightNull {
+				return nil, nil
+			}
+			return false, nil
 
 		default:
 			if fn, ok := e.Right.(*FunctionCallExpr); ok && strings.EqualFold(fn.Name, "ANY") && len(fn.Args) == 1 {
@@ -625,6 +659,20 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 			return div, nil
 		}
 		return nil, fmt.Errorf("cannot divide non-numeric values")
+
+	case TokenPercent:
+		if left == nil || right == nil {
+			return nil, nil
+		}
+		n1, isNum1 := toArithmeticFloat(left)
+		n2, isNum2 := toArithmeticFloat(right)
+		if isNum1 && isNum2 {
+			if int64(n2) == 0 {
+				return nil, ErrDivisionByZero
+			}
+			return int64(n1) % int64(n2), nil
+		}
+		return nil, fmt.Errorf("cannot modulo non-numeric values")
 
 	case TokenJSONExtract:
 		if left == nil {

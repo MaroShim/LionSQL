@@ -1,0 +1,67 @@
+# Core Three-Valued Logic (3VL): NOT, AND, OR with NULLs and De Morgan Invariants
+
+statement ok
+CREATE TABLE slt_3vl (id INT PRIMARY KEY, x INT, y INT);
+
+statement ok
+INSERT INTO slt_3vl VALUES (1, 10, 100);
+
+statement ok
+INSERT INTO slt_3vl VALUES (2, 20, 200);
+
+statement ok
+INSERT INTO slt_3vl VALUES (3, 10, NULL);
+
+statement ok
+INSERT INTO slt_3vl VALUES (4, NULL, 100);
+
+statement ok
+INSERT INTO slt_3vl VALUES (5, NULL, NULL);
+
+# NOT (x = 10): rows where x IS NULL evaluate x = 10 to UNKNOWN, so NOT (UNKNOWN) is UNKNOWN (excluded)
+query II rowsort
+SELECT id, x FROM slt_3vl WHERE NOT (x = 10);
+----
+2 20
+
+# NOT (x = 10 AND y = 200):
+# Row 1: (T AND F) = F -> NOT F = T
+# Row 2: (F AND T) = F -> NOT F = T
+# Row 3: (T AND U) = U -> NOT U = U (excluded)
+# Row 4: (U AND F) = F -> NOT F = T (included!)
+# Row 5: (U AND U) = U -> NOT U = U (excluded)
+query I rowsort
+SELECT id FROM slt_3vl WHERE NOT (x = 10 AND y = 200);
+----
+1
+2
+4
+
+# De Morgan equivalent of above: (NOT (x = 10)) OR (NOT (y = 200))
+query I rowsort
+SELECT id FROM slt_3vl WHERE (x != 10) OR (y != 200);
+----
+1
+2
+4
+
+# (x = 10 OR y = 100): TRUE OR UNKNOWN must evaluate to TRUE
+# Row 1: T OR T = T
+# Row 2: F OR F = F
+# Row 3: T OR U = T
+# Row 4: U OR T = T
+# Row 5: U OR U = U
+query I rowsort
+SELECT id FROM slt_3vl WHERE x = 10 OR y = 100;
+----
+1
+3
+4
+
+# NOT (x = 10 OR y = 100):
+# Only Row 2 has (F OR F) = F -> NOT F = T
+# Row 5 has (U OR U) = U -> NOT U = U (excluded)
+query I rowsort
+SELECT id FROM slt_3vl WHERE NOT (x = 10 OR y = 100);
+----
+2

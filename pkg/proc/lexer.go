@@ -76,6 +76,8 @@ func (l *Lexer) NextToken() Token {
 		tok = Token{Type: TokenAsterisk, Literal: "*", Line: tokLine, Col: tokCol}
 	case '/':
 		tok = Token{Type: TokenSlash, Literal: "/", Line: tokLine, Col: tokCol}
+	case '%':
+		tok = Token{Type: TokenPercent, Literal: "%", Line: tokLine, Col: tokCol}
 	case ',':
 		tok = Token{Type: TokenComma, Literal: ",", Line: tokLine, Col: tokCol}
 	case ';':

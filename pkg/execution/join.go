@@ -178,7 +178,13 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				h.matchedRight = append(h.matchedRight, false)
 			}
 
-			kStr, found := extractTupleKey(tuple, h.rightKey, h.arena)
+			var kStr string
+			var found bool
+			if h.joinType == "CROSS" || (h.leftKey == "" && h.rightKey == "") {
+				kStr, found = "", true
+			} else {
+				kStr, found = extractTupleKey(tuple, h.rightKey, h.arena)
+			}
 			if !found {
 				continue
 			}
@@ -281,7 +287,13 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 		h.emittedAny = false
 
 		hasMatch := false
-		kStr, found := extractTupleKey(probeTuple, h.leftKey, nil)
+		var kStr string
+		var found bool
+		if h.joinType == "CROSS" || (h.leftKey == "" && h.rightKey == "") {
+			kStr, found = "", true
+		} else {
+			kStr, found = extractTupleKey(probeTuple, h.leftKey, nil)
+		}
 		if found {
 			if matches, exists := h.hashTable[kStr]; exists && len(matches) > 0 {
 				hasMatch = true

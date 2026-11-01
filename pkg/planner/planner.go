@@ -2169,10 +2169,13 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 	}
 
 	var innerIndex *storage.IndexSchema
-	if rSchema != nil {
-		if idx, found := rSchema.FindIndexByColumn(rightCol); found {
-			innerIndex = idx
-		} else {
+	if rSchema != nil && (rightCol != "" || leftKey != "") && join.Type != "CROSS" {
+		if rightCol != "" {
+			if idx, found := rSchema.FindIndexByColumn(rightCol); found {
+				innerIndex = idx
+			}
+		}
+		if innerIndex == nil && leftKey != "" {
 			tblL := extractTableQualifier(leftKey)
 			if tblL == "" || tblL == strings.ToLower(rTable) || tblL == strings.ToLower(rAlias) {
 				leftCol := leftKey
@@ -2188,7 +2191,12 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 	}
 
 	joinEstRows := currentEstimatedRows
-	if join.Type == "INNER" || join.Type == "SEMI" {
+	if join.Type == "CROSS" {
+		joinEstRows = currentEstimatedRows * rRows
+		if joinEstRows < 1 {
+			joinEstRows = 1
+		}
+	} else if join.Type == "INNER" || join.Type == "SEMI" {
 		joinEstRows = int64(math.Min(float64(currentEstimatedRows), float64(rRows)))
 		if joinEstRows < 1 {
 			joinEstRows = 1

@@ -70,8 +70,14 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 
 	case *proc.UnaryExpr:
 		val, ok := EvalTupleExpr(t, e.Expr)
-		if !ok || val == nil {
+		if !ok {
 			return nil, false
+		}
+		if val == nil {
+			return nil, true
+		}
+		if sv, ok := val.(storage.Value); ok && sv.IsNull {
+			return nil, true
 		}
 		switch e.Op {
 		case proc.TokenMinus:
@@ -197,53 +203,96 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 
 // evalTupleBinaryExpr evaluates binary operations (arithmetic, comparison, logical) with zero heap allocs.
 func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
-	// Logical AND/OR short-circuiting
+	// Logical AND/OR short-circuiting with SQL 3-Valued Logic (NULL = UNKNOWN)
 	if e.Op == proc.TokenAnd {
 		leftVal, okL := EvalTupleExpr(t, e.Left)
-		if okL && leftVal != nil {
+		if !okL {
+			return false, false
+		}
+		leftNull := leftVal == nil
+		if sv, ok := leftVal.(storage.Value); ok && sv.IsNull {
+			leftNull = true
+		}
+		if !leftNull {
 			if b, ok := leftVal.(bool); ok && !b {
 				return false, true
 			}
 		}
 		rightVal, okR := EvalTupleExpr(t, e.Right)
-		if okL && okR {
-			bL, ok1 := leftVal.(bool)
-			bR, ok2 := rightVal.(bool)
-			if ok1 && ok2 {
-				return bL && bR, true
+		if !okR {
+			return false, false
+		}
+		rightNull := rightVal == nil
+		if sv, ok := rightVal.(storage.Value); ok && sv.IsNull {
+			rightNull = true
+		}
+		if !rightNull {
+			if b, ok := rightVal.(bool); ok && !b {
+				return false, true
 			}
+		}
+		if leftNull || rightNull {
+			return nil, true
+		}
+		bL, ok1 := leftVal.(bool)
+		bR, ok2 := rightVal.(bool)
+		if ok1 && ok2 {
+			return bL && bR, true
 		}
 		return false, false
 	}
 
 	if e.Op == proc.TokenOr {
 		leftVal, okL := EvalTupleExpr(t, e.Left)
-		if okL && leftVal != nil {
+		if !okL {
+			return false, false
+		}
+		leftNull := leftVal == nil
+		if sv, ok := leftVal.(storage.Value); ok && sv.IsNull {
+			leftNull = true
+		}
+		if !leftNull {
 			if b, ok := leftVal.(bool); ok && b {
 				return true, true
 			}
 		}
 		rightVal, okR := EvalTupleExpr(t, e.Right)
-		if okL && okR {
-			bL, ok1 := leftVal.(bool)
-			bR, ok2 := rightVal.(bool)
-			if ok1 && ok2 {
-				return bL || bR, true
+		if !okR {
+			return false, false
+		}
+		rightNull := rightVal == nil
+		if sv, ok := rightVal.(storage.Value); ok && sv.IsNull {
+			rightNull = true
+		}
+		if !rightNull {
+			if b, ok := rightVal.(bool); ok && b {
+				return true, true
 			}
+		}
+		if leftNull || rightNull {
+			return nil, true
+		}
+		bL, ok1 := leftVal.(bool)
+		bR, ok2 := rightVal.(bool)
+		if ok1 && ok2 {
+			return bL || bR, true
 		}
 		return false, false
 	}
 
 	left, okL := EvalTupleExpr(t, e.Left)
 	right, okR := EvalTupleExpr(t, e.Right)
-	if !okL || !okR || left == nil || right == nil {
+	if !okL || !okR {
 		return nil, false
+	}
+	if left == nil || right == nil {
+		return nil, true
 	}
 	if sVal, ok := left.(storage.Value); ok && sVal.IsNull {
-		return nil, false
+		return nil, true
 	}
 	if sVal, ok := right.(storage.Value); ok && sVal.IsNull {
-		return nil, false
+		return nil, true
 	}
 
 	// 1. Arithmetic Operators (+, -, *, /, %)
@@ -369,8 +418,11 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 // EvalTupleBoolExpr evaluates a boolean condition directly against a Tuple with zero allocations.
 func EvalTupleBoolExpr(t Tuple, expr proc.Expr) bool {
 	res, ok := EvalTupleExpr(t, expr)
-	if !ok || res == nil {
+	if !ok {
 		return proc.EvalBoolExpr(expr, t.ToEvalMap(), nil)
+	}
+	if res == nil {
+		return false
 	}
 	if b, ok := res.(bool); ok {
 		return b

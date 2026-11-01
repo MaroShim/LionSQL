@@ -1,0 +1,72 @@
+# Core Arithmetic Precedence, Associativity, Unary Minus, and NULL Propagation
+
+statement ok
+CREATE TABLE slt_arith (id INT PRIMARY KEY, a INT, b INT, c INT);
+
+statement ok
+INSERT INTO slt_arith VALUES (1, 10, 20, 5);
+
+statement ok
+INSERT INTO slt_arith VALUES (2, -8, 4, 2);
+
+statement ok
+INSERT INTO slt_arith VALUES (3, 17, 5, 3);
+
+statement ok
+INSERT INTO slt_arith VALUES (4, 10, NULL, 0);
+
+# Multiplication before addition
+query II rowsort
+SELECT id, a + b * c FROM slt_arith WHERE id <= 3;
+----
+1 110
+2 0
+3 32
+
+# Parentheses override precedence
+query II rowsort
+SELECT id, (a + b) * c FROM slt_arith WHERE id <= 3;
+----
+1 150
+2 -8
+3 66
+
+# Left-associativity of subtraction: (a - b) - c vs a - (b - c)
+query III rowsort
+SELECT id, a - b - c, a - (b - c) FROM slt_arith WHERE id <= 3;
+----
+1 -15 -5
+2 -14 -10
+3 9 15
+
+# Integer division and modulo
+query III rowsort
+SELECT id, a / b, a % b FROM slt_arith WHERE id <= 3;
+----
+1 0 10
+2 -2 0
+3 3 2
+
+# Unary negation on columns and expressions (including NULL row 4)
+query II rowsort
+SELECT id, -a FROM slt_arith;
+----
+1 -10
+2 8
+3 -17
+4 -10
+
+# Unary negation on nullable column b (must produce NULL for row 4, not error)
+query II rowsort
+SELECT id, -b FROM slt_arith;
+----
+1 -20
+2 -4
+3 -5
+4 NULL
+
+# NULL propagation in arithmetic (NULL * 0 must be NULL, not 0)
+query III rowsort
+SELECT id, a + b, b * c FROM slt_arith WHERE id = 4;
+----
+4 NULL NULL

@@ -777,10 +777,13 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			jHints := p.parseTableHints()
 
 			var onExpr Expr
-			if !isApply {
+			if !isApply && joinType != "CROSS" {
 				if !p.curTokenIs(TokenOn) {
 					return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
 				}
+				p.nextToken() // eat ON
+				onExpr = p.parseExpression(precLowest)
+			} else if joinType == "CROSS" && p.curTokenIs(TokenOn) {
 				p.nextToken() // eat ON
 				onExpr = p.parseExpression(precLowest)
 			}
@@ -848,10 +851,13 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 			jHints := p.parseTableHints()
 
 			var onExpr Expr
-			if !isApply {
+			if !isApply && joinType != "CROSS" {
 				if !p.curTokenIs(TokenOn) {
 					return nil, fmt.Errorf("expected ON after JOIN table, got %s", p.curToken.Literal)
 				}
+				p.nextToken() // eat ON
+				onExpr = p.parseExpression(precLowest)
+			} else if joinType == "CROSS" && p.curTokenIs(TokenOn) {
 				p.nextToken() // eat ON
 				onExpr = p.parseExpression(precLowest)
 			}

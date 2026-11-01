@@ -67,13 +67,25 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 	}
 
 	addField := func(expr, alias string) {
+		schemaAlias := alias
+		for _, existing := range p.schema {
+			if strings.EqualFold(existing, schemaAlias) {
+				cleanExpr := sqlutil.CleanIdentifier(expr)
+				if cleanExpr != "" && !strings.EqualFold(cleanExpr, schemaAlias) {
+					schemaAlias = cleanExpr
+				} else {
+					schemaAlias = fmt.Sprintf("%s_%d", alias, len(p.schema)+1)
+				}
+				break
+			}
+		}
 		f := projField{expr: expr, alias: alias}
 		parser := proc.NewParser(proc.NewLexer(expr))
 		if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
 			f.parsed = ast
 		}
 		p.fields = append(p.fields, f)
-		p.schema = append(p.schema, alias)
+		p.schema = append(p.schema, schemaAlias)
 	}
 
 	for _, item := range projections {

@@ -18,7 +18,7 @@ LionSQL `v0.90.0` represents a landmark reliability milestone toward the 1.0 pro
   - Maintained the global bank ledger invariant (`SUM(balance) = 1,000,000`) throughout execution.
 - **SQLite SQLLogicTest Conformance Suite (`sqllogictest`)**:
   - Embedded pure-Go blackbox oracle test runner supporting rowsort, valuesort, and MD5 hash verification.
-  - Passed 20 core test suites (143 statements, 121 queries) across both In-Memory OCC and WiredTiger with 100% oracle match across subqueries, CASE expressions, DISTINCT, window functions, CTEs, 3VL predicates, aggregates, and whitespace boundaries.
+  - Passed 26 core test suites (182 statements, 149 queries) across both In-Memory OCC and WiredTiger with 100% oracle match across subqueries, CASE expressions, DISTINCT, window functions, CTEs, 3VL predicates, self/cross joins, JSON operators, upserts, aggregates, and whitespace boundaries.
 - **Remedied Two Latent Kernel Concurrency Defects**:
   - Eliminated WiredTiger thread-affinity cursor close `SIGSEGV` during concurrent DDL drops via thread-local lazy eviction and forced drop.
   - Eliminated In-Memory OCC `Scan()` torn reads by capturing consistent table snapshots under canonical ascending shard read locks.
@@ -39,7 +39,7 @@ LionSQL `v0.90.0` represents a landmark reliability milestone toward the 1.0 pro
   - Automated trend verdict detecting linear RSS growth, goroutine leakage, file descriptor exhaustion, or p99 latency degradation.
   - Verified on WiredTiger (1-hour soak, 393k rows durable, 28 FDs pinned) and In-Memory OCC.
 - **`cmd/sqllogictest` & `pkg/slt` (SQLite Blackbox Oracle Runner)**:
-  - Validated core relational algebra, three-valued logic (`NULL = NULL`, `val = NULL`, `NOT BETWEEN`, `NOT IN`), window functions, CTEs, operator associativity, and whitespace invariance across 20 curated test suites (143 statements, 121 queries).
+  - Validated core relational algebra, three-valued logic (`NULL = NULL`, `val = NULL`, `NOT BETWEEN`, `NOT IN`, De Morgan laws), window functions, CTEs, self/cross joins, operator associativity, and whitespace invariance across 26 curated test suites (182 statements, 149 queries).
 
 ---
 
@@ -98,5 +98,5 @@ LionSQL `v0.90.0` represents a landmark reliability milestone toward the 1.0 pro
 | **Crash Recovery** | `crashtest` (In-Memory OCC) | 50 rounds (kill -9) | 170,457 tx durable / 0 data loss | **PASS** |
 | **Soak Stability** | `soaktest` (WiredTiger) | 8 workers continuous | Invariant intact / 28 FDs pinned (0 leak) | **PASS** |
 | **Soak Stability** | `soaktest` (In-Memory OCC) | 8 workers continuous | Invariant intact / RSS ratio 1.00 (0 leak) | **PASS** |
-| **Blackbox Oracle** | `sqllogictest` | 20 files / 121 queries | 0 discrepancies / 7 kernel bugs fixed | **PASS** |
+| **Blackbox Oracle** | `sqllogictest` | 26 files / 149 queries | 0 discrepancies / 11 kernel bugs fixed | **PASS** |
 | **Data Race Freedom** | `go test -race ./...` | Full repository | 0 race conditions across all packages | **PASS** |

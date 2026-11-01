@@ -1,0 +1,34 @@
+# Core JSON Functions and Operators (ISJSON, JSON_VALUE, ->>)
+
+statement ok
+CREATE TABLE slt_json (id INT PRIMARY KEY, payload VARCHAR);
+
+statement ok
+INSERT INTO slt_json VALUES (1, '{"user":"alice","role":"admin","tier":1}');
+
+statement ok
+INSERT INTO slt_json VALUES (2, '{"user":"bob","role":"member","tier":2}');
+
+statement ok
+INSERT INTO slt_json VALUES (3, 'not-valid-json');
+
+# ISJSON validation
+query II rowsort
+SELECT id, ISJSON(payload) FROM slt_json;
+----
+1 1
+2 1
+3 0
+
+# JSON_VALUE scalar extraction
+query ITT rowsort
+SELECT id, JSON_VALUE(payload, '$.user'), JSON_VALUE(payload, '$.role') FROM slt_json WHERE ISJSON(payload) = 1;
+----
+1 alice admin
+2 bob member
+
+# PostgreSQL ->> operator extraction in SELECT and WHERE
+query IT rowsort
+SELECT id, payload->>'user' FROM slt_json WHERE payload->>'role' = 'admin';
+----
+1 alice

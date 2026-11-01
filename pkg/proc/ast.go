@@ -114,6 +114,9 @@ type UnaryExpr struct {
 func (e *UnaryExpr) exprNode() {}
 func (e *UnaryExpr) String() string {
 	if e.Expr != nil {
+		if _, isBin := e.Expr.(*BinaryExpr); isBin {
+			return fmt.Sprintf("%s (%s)", e.Op.String(), e.Expr.String())
+		}
 		return fmt.Sprintf("%s %s", e.Op.String(), e.Expr.String())
 	}
 	return e.Op.String()

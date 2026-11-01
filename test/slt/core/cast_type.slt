@@ -1,0 +1,48 @@
+# Core CAST and TRY_CAST Type Conversions
+
+statement ok
+CREATE TABLE slt_cast (id INT PRIMARY KEY, s_int VARCHAR, s_bad VARCHAR, n_val INT);
+
+statement ok
+INSERT INTO slt_cast VALUES (1, '42', 'abc', 100);
+
+statement ok
+INSERT INTO slt_cast VALUES (2, '-15', '99x', 200);
+
+statement ok
+INSERT INTO slt_cast VALUES (3, NULL, NULL, NULL);
+
+# CAST string to INT and add numeric column
+query III rowsort
+SELECT id, CAST(s_int AS INT), CAST(s_int AS INT) + n_val FROM slt_cast WHERE id <= 2;
+----
+1 42 142
+2 -15 185
+
+# CAST INT to VARCHAR
+query IT rowsort
+SELECT id, CAST(n_val AS VARCHAR) FROM slt_cast;
+----
+1 100
+2 200
+3 NULL
+
+# CAST NULL to INT returns NULL
+query II rowsort
+SELECT id, CAST(s_int AS INT) FROM slt_cast WHERE id = 3;
+----
+3 NULL
+
+# TRY_CAST invalid string to INT returns NULL gracefully without failing query
+query III rowsort
+SELECT id, TRY_CAST(s_int AS INT), TRY_CAST(s_bad AS INT) FROM slt_cast;
+----
+1 42 NULL
+2 -15 NULL
+3 NULL NULL
+
+# WHERE filtering with CAST
+query I rowsort
+SELECT id FROM slt_cast WHERE CAST(s_int AS INT) > 0;
+----
+1

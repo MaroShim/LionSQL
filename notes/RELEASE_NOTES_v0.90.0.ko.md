@@ -12,7 +12,7 @@ LionSQL `v0.90.0`은 단순한 기능 추가를 넘어, 1.0 프로덕션 릴리�
 
 - **100/100 라운드 크래시 무손실 복구 (`crashtest`)**: WiredTiger 50회 + In-Memory OCC 50회 강제 종료(`kill -9`, `DOUBLE_KILL`, `TORN_WAL_TAIL`) 환경에서 **총 340,934건의 트랜잭션 100% 무손실 복구** 입증.
 - **장시간 다중 워커 소크 테스트 완주 (`soaktest`)**: 8워커 연속 부하 환경에서 WiredTiger 및 In-Memory OCC 엔진의 **자원 누수 0(RSS/FD/고루틴 비율 1.00 유지) 및 트랜잭션 불변식(`SUM(balance)=1,000,000`) 100% 보존**.
-- **SQLLogicTest 블랙박스 오라클 스위트 편입 (`sqllogictest`)**: SQLite 호환 표준 SLT 러너를 엔진에 내장하고, 코어 대수식/서브쿼리/CASE/DISTINCT/윈도우 함수/CTE/3치 논리/공백 경계 20개 파일(143개 문장, 121개 쿼리) 100% 오라클 일치 검증.
+- **SQLLogicTest 블랙박스 오라클 스위트 편입 (`sqllogictest`)**: SQLite 호환 표준 SLT 러너를 엔진에 내장하고, 코어 대수식/서브쿼리/CASE/DISTINCT/윈도우 함수/CTE/3치 논리/셀프 및 크로스 조인/JSON/Upsert/공백 경계 26개 파일(182개 문장, 149개 쿼리) 100% 오라클 일치 검증.
 - **코어 커널 2대 잠재 동시성 결함 완치**: WiredTiger 세션 간 커서 비동기 해제 `SIGSEGV` 완치 및 In-Memory OCC `Scan()` 카노니컬 오름차순 샤드 RLock 스냅샷 도입으로 찢긴 읽기(Torn Read) 원천 차단.
 - **외부 8대 실서비스 프로덕션 연동 완성**: Grafana, Casdoor, Apache Answer, Vaultwarden, Metabase BI, Umami, Woodpecker CI, Vikunja 연동 완주.
 
@@ -31,7 +31,7 @@ LionSQL `v0.90.0`은 단순한 기능 추가를 넘어, 1.0 프로덕션 릴리�
   - WiredTiger 1시간 실측(`39.3만` 행 보존, FD 28개 완전 고정) 및 In-Memory OCC 스모크 완주.
 - **`cmd/sqllogictest` & `pkg/slt` (SQLite 호환 블랙박스 오라클 러너)**:
   - 순수 Go 기반 표준 SLT 파일 파서, In-Process 및 PGWire 듀얼 모드, rowsort/valuesort/nosort 정렬 및 MD5 해시 대조 엔진 구현.
-  - 코어 로직(`select1`, `where`, `join`, `null`, `aggregate`), 고난도 기능(`case_expr`, `distinct`, `subquery`, `window`, `setops`, `functions`, `dml_mutate`, `between`, `in_list`, `like`, `group_having`, `limit_offset`, `cte`), 공백/경계 조건(`boundary`, `whitespace`) 총 20개 파일(143개 문장, 121개 쿼리) 양쪽 스토리지 엔진 100% PASS.
+  - 코어 로직(`select1`, `where`, `join`, `null`, `aggregate`), 고난도 기능(`case_expr`, `distinct`, `subquery`, `window`, `setops`, `functions`, `dml_mutate`, `between`, `in_list`, `like`, `group_having`, `limit_offset`, `cte`, `arithmetic`, `cast_type`, `boolean_3vl`, `join_advanced`, `json_ops`, `order_upsert`), 공백/경계 조건(`boundary`, `whitespace`) 총 26개 파일(182개 문장, 149개 쿼리) 양쪽 스토리지 엔진 100% PASS.
 
 ---
 
@@ -91,5 +91,5 @@ LionSQL `v0.90.0`은 단순한 기능 추가를 넘어, 1.0 프로덕션 릴리�
 | **크래시 복구** | `crashtest` (In-Memory OCC) | 50 라운드 (kill -9) | 170,457 tx 복구 / 데이터 손실 0건 | **100% PASS** |
 | **장시간 소크** | `soaktest` (WiredTiger) | 8 워커 연속 부하 | 잔액 불변 유지 / 열린 FD 28개 고정 (누수 0) | **100% PASS** |
 | **장시간 소크** | `soaktest` (In-Memory OCC) | 8 워커 연속 부하 | 잔액 불변 유지 / RSS 비율 1.00 (누수 0) | **100% PASS** |
-| **블랙박스 오라클** | `sqllogictest` | 20개 파일 / 121개 쿼리 | 0 불일치 / 7대 엔진 결함 완치 | **100% PASS** |
+| **블랙박스 오라클** | `sqllogictest` | 26개 파일 / 149개 쿼리 | 0 불일치 / 11대 엔진 결함 완치 | **100% PASS** |
 | **데이터 레이스** | `go test -race ./...` | 전체 패키지 전수 | 데이터 레이스 0건 / 전 패키지 통과 | **100% PASS** |

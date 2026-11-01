@@ -306,7 +306,7 @@ func (p *Parser) parsePrefix() Expr {
 			p.nextToken() // eat )
 			return &ExistsExpr{Query: sel, Not: true}
 		}
-		right := p.parseExpression(precPrefix)
+		right := p.parseExpression(precNot)
 		return &UnaryExpr{Op: TokenNot, Expr: right}
 	case TokenLParen:
 		p.nextToken()
