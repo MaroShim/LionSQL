@@ -1865,72 +1865,6 @@ func (s *Server) writeExecutionResult(conn net.Conn, res *runtime.ExecutionResul
 	_ = WriteCommandComplete(conn, formatPgCommandComplete(query, rowsCount, len(res.Rows)))
 }
 
-func formatPgCommandComplete(command string, rowsAffected int64, rowsCount int) string {
-	upper := strings.ToUpper(strings.TrimSpace(command))
-	fields := strings.Fields(upper)
-	firstWord := ""
-	if len(fields) > 0 {
-		firstWord = fields[0]
-	}
-
-	switch firstWord {
-	case "INSERT":
-		return fmt.Sprintf("INSERT 0 %d", rowsAffected)
-	case "DELETE":
-		return fmt.Sprintf("DELETE %d", rowsAffected)
-	case "UPDATE":
-		return fmt.Sprintf("UPDATE %d", rowsAffected)
-	case "SELECT":
-		cnt := rowsCount
-		if cnt == 0 && rowsAffected > 0 {
-			cnt = int(rowsAffected)
-		}
-		return fmt.Sprintf("SELECT %d", cnt)
-	case "MOVE":
-		return fmt.Sprintf("MOVE %d", rowsAffected)
-	case "FETCH":
-		return fmt.Sprintf("FETCH %d", rowsAffected)
-	case "COPY":
-		return fmt.Sprintf("COPY %d", rowsAffected)
-	case "BEGIN", "START":
-		return "BEGIN"
-	case "COMMIT":
-		return "COMMIT"
-	case "ROLLBACK":
-		return "ROLLBACK"
-	case "SET":
-		return "SET"
-	case "SHOW":
-		return "SHOW"
-	case "CREATE":
-		if len(fields) > 1 {
-			return fmt.Sprintf("CREATE %s", fields[1])
-		}
-		return "CREATE"
-	case "DROP":
-		if len(fields) > 1 {
-			return fmt.Sprintf("DROP %s", fields[1])
-		}
-		return "DROP"
-	case "ALTER":
-		if len(fields) > 1 {
-			return fmt.Sprintf("ALTER %s", fields[1])
-		}
-		return "ALTER"
-	case "DECLARE":
-		return "DECLARE CURSOR"
-	case "CLOSE":
-		return "CLOSE CURSOR"
-	case "LOCK":
-		return "LOCK TABLE"
-	default:
-		if firstWord != "" {
-			return firstWord
-		}
-		return "OK"
-	}
-}
-
 func (s *Server) handleClose(conn net.Conn, payload []byte, statements *PreparedStatementCache, portals map[string]*Portal) {
 	if len(payload) >= 2 {
 		targetType := payload[0]
@@ -2301,22 +2235,8 @@ func inferParamOID(query string, paramIndex int) int32 {
 					lastToken = lastToken[dotIdx+1:]
 				}
 				lastToken = strings.Trim(lastToken, "[]\"'`")
-				switch lastToken {
-				case "OID":
-					if isAny {
-						return 1028 // _oid
-					}
-					return 26 // oid
-				case "NSPNAME", "RELNAME", "ATTNAME", "TYPNAME", "NAME":
-					if isAny {
-						return 1009 // _text
-					}
-					return 25 // text
-				case "ID":
-					if isAny {
-						return 1007 // _int4
-					}
-					return 23 // int4
+				if oid := LookupParamOID(lastToken, isAny); oid != 0 {
+					return oid
 				}
 			}
 		}

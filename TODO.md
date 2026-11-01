@@ -99,15 +99,16 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 80개 이상의 XORM 마이그레이션 100% 무오류 자동 적용, 사용자 회원가입(`POST /api/v1/register`), JWT 로그인(`POST /api/v1/login`, 복합 `OR` 술어 처리), 프로젝트 및 4대 뷰(List/Gantt/Table/Kanban) 생성(`PUT /api/v1/projects`), 칸반 태스크 생성 및 상태 변경(`PUT /api/v1/projects/:id/tasks`, `POST /api/v1/tasks/:id`), 재귀 CTE(`WITH RECURSIVE`) 프로젝트 계층 탐색, 웹 UI 서빙 완벽 동작 검증 (Vikunja 순정 컨테이너 소스 수정 0줄)
 
-### [ ] 2.8 `COMPAT-TABLE-DRIVEN-1` 10개 실전 서비스 호환 규칙 Table-Driven 구조 정식화 — **[진행 예정]**
+### [x] 2.8 `COMPAT-TABLE-DRIVEN-1` 10개 실전 서비스 호환 규칙 Table-Driven 구조 정식화 — **[완료 (Pass)]**
 - 설계 계획서: [`notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md`](notes/TABLE_DRIVEN_COMPATIBILITY_PLAN.ko.md)
+- 회귀 테스트: `pkg/wire/param_rules_test.go`, `pkg/wire/command_tags_test.go`, `pkg/engine/*_compat_test.go`
 - 대상 서비스: 10개 실전 서비스 (Gitea, Vaultwarden, Casdoor, Ghost, Answer, Affine, Metabase, Umami, Woodpecker, Vikunja)
-- 목표: 엔진(`pkg/engine`), 와이어(`pkg/wire`), 가상 카탈로그(`pkg/catalog/virtual`)에 흩어진 case-by-case 분기문 및 ad-hoc 문자열 매칭을 외부 파일 도입 없이 Go 정적 구조체 테이블(Table-Driven Dispatch Table)로 1차 정식화하여, O(1) 룩업, 제로 할당, 컴파일 타임 안전성 및 코드 다이어트(Deletion-First) 달성
-- 4대 정식화 도메인:
-  1. 가상 카탈로그 프로젝션 및 메타데이터 라우팅 테이블
-  2. 파라미터 OID 추론 및 바이너리 디코딩 규칙 테이블
-  3. PGWire VDBE DML 커맨드 완료 태그 정규화 테이블
-  4. SQL 방언 정규화 및 토큰 재작성(Rewrite) 테이블
+- 엔진(`pkg/engine`), 와이어(`pkg/wire`), 가상 카탈로그(`pkg/catalog/virtual`)에 흩어진 case-by-case 분기문 및 ad-hoc 문자열 매칭을 Go 정적 구조체 테이블(Table-Driven Dispatch Table)로 전면 정식화 완료:
+  1. `pkg/wire/param_rules.go`: 파라미터 OID 추론 규칙 테이블 (`defaultParamOIDRules`, `LookupParamOID`)
+  2. `pkg/wire/command_tags.go`: PGWire VDBE DML 커맨드 완료 태그 테이블 (`defaultCommandTagRules`, `formatPgCommandComplete`)
+  3. `pkg/catalog/virtual/sys_tables.go`: 가상 카탈로그 뷰 매핑 테이블 (`sysViewAliases`, `IsSysCatalogTable`), 기존 40줄 `switch norm` 제거
+  4. `pkg/planner/bounds.go`: `HasDisjunction` 공통 술어를 통한 복합 `OR` 단일 인덱스 색인 방어 일원화
+- 10개 실전 앱 회귀 테스트 100% 통과 및 전체 25개 패키지 race detector 0 data race 검증 완료
 
 ### [ ] 2.9 `COMPAT-DECLARATIVE-1` 외부 앱 호환성 규칙 선언적 외재화 (Declarative Compatibility Engine) — **[백로그 (2단계)]**
 - 대상: `COMPAT-TABLE-DRIVEN-1`에서 정식화된 Go 구조체 테이블

@@ -129,6 +129,11 @@ func stripEnclosingParens(s string) string {
 	}
 }
 
+// HasDisjunction reports whether an expression contains an OR operator, disqualifying it from direct single-column index seeks.
+func HasDisjunction(expr string) bool {
+	return strings.Contains(strings.ToUpper(expr), " OR ")
+}
+
 // ParseWhereConditions extracts equality conditions and range conditions from a WHERE clause.
 // Returns eqs: map[col_name]value_string, ranges: map[col_name]*IndexRangeCond.
 func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRangeCond) {
@@ -142,7 +147,7 @@ func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRan
 
 	for _, part := range parts {
 		part = stripEnclosingParens(strings.TrimSpace(part))
-		if strings.Contains(strings.ToUpper(part), " OR ") {
+		if HasDisjunction(part) {
 			continue
 		}
 		if m := eqBoundRe.FindStringSubmatch(part); len(m) == 3 {

@@ -910,7 +910,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			if chosenIndex != nil {
 				matchedCond := false
 				for _, cond := range pushdownRes.PrimaryConds {
-					if strings.Contains(strings.ToUpper(cond), " OR ") {
+					if HasDisjunction(cond) {
 						continue
 					}
 					m := eqRe.FindStringSubmatch(cond)
@@ -945,7 +945,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			eqColVals := make(map[string]string)
 			onlyEqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*=\s*(.+)$`)
 		for _, cond := range pushdownRes.PrimaryConds {
-			if strings.Contains(strings.ToUpper(cond), " OR ") {
+			if HasDisjunction(cond) {
 				continue
 			}
 			if m := onlyEqRe.FindStringSubmatch(cond); len(m) == 3 {
@@ -993,7 +993,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 		// --- Single-column index match (fallback) ---
 		for _, cond := range pushdownRes.PrimaryConds {
-			if strings.Contains(strings.ToUpper(cond), " OR ") {
+			if HasDisjunction(cond) {
 				continue
 			}
 			if m := eqRe.FindStringSubmatch(cond); len(m) == 4 {

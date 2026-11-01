@@ -2,7 +2,7 @@
 
 > - **최초 작성일**: 2026-11-01
 > - **과제 식별 코드**: `COMPAT-TABLE-DRIVEN-1`
-> - **상태**: 계획 수립 (Pending Review)
+> - **상태**: 구현 및 검증 완료 (Completed)
 > - **목표**: 10개 실전 서비스(Gitea, Vaultwarden, Casdoor, Ghost, Answer, Affine, Metabase, Umami, Woodpecker, Vikunja) 연동을 통해 축적된 ad-hoc 분기문 및 문자열 매칭 로직을 외부 파일 없이 Go 내부의 정규 테이블 구조(Table-Driven Dispatch Table)로 정식화하여, 제로 할당(Zero-Allocation), 컴파일 타임 타입 안전성, O(1) 룩업, 코드베이스 단순화(Deletion-First)를 달성합니다.
 > - **선행 조건**: 기존 10개 서비스 전용 영구 회귀 테스트 100% 통과 유지 및 0 데이터 레이스.
 

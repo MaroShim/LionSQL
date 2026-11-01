@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- formalize table-driven compatibility architecture across PGWire parameter OID inference, command completion tag formatting, and virtual catalog view routing (COMPAT-TABLE-DRIVEN-1)
 - complete Woodpecker CI integration over PGWire (:5433, Go, XORM, 19 tables, 32 migrations, UI and healthcheck) (INTEG-WOODPECKER-1)
 - complete Vikunja project Kanban and task management integration over PGWire (:5433, Go, XORM, 80+ migrations, recursive CTEs, user registration, JWT auth, and task CRUD) (INTEG-VIKUNJA-1)
 - support PostgreSQL recursive common table expressions (WITH RECURSIVE) with iterative convergence evaluation loop up to depth 100
@@ -29,6 +30,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- replace hardcoded switch statements in pkg/wire and pkg/catalog/virtual with immutable O(1) table-driven hash maps, eliminating ad-hoc branching and ensuring zero-allocation lookups (COMPAT-TABLE-DRIVEN-1)
 - normalize PGWire VDBE command completion tags from generic "DML" to "UPDATE/INSERT/DELETE <n>" so XORM and pgx accurately track RowsAffected
 - guard index seek candidate selection against conditions containing " OR " to prevent multi-predicate disjunctions from being misparsed as single-column equality bounds
 - assign globally unique sequence identifiers to CTE materialized tables and bind explicit primary keys to prevent temporary table key collision during concurrent CTE executions
