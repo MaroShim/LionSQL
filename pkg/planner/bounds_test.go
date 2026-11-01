@@ -135,3 +135,46 @@ func TestBounds_ParseIndexCond(t *testing.T) {
 		t.Fatalf("expected doc->>'status' = 'shipped', got low=%+v", low)
 	}
 }
+
+func TestHasDisjunction_LexicalBoundaries(t *testing.T) {
+	tests := []struct {
+		name string
+		expr string
+		want bool
+	}{
+		{"Standard space separated OR", "a = 1 OR b = 2", true},
+		{"Lowercase or with spaces", "a = 1 or b = 2", true},
+		{"Mixed case Or with spaces", "a = 1 Or b = 2", true},
+		{"Newline before OR", "a = 1\nOR b = 2", true},
+		{"Newline after OR", "a = 1 OR\nb = 2", true},
+		{"Newline both sides", "a = 1\nOR\nb = 2", true},
+		{"CRLF both sides", "a = 1\r\nOR\r\nb = 2", true},
+		{"Tab before OR", "a = 1\tOR b = 2", true},
+		{"Tab after OR", "a = 1 OR\tb = 2", true},
+		{"Tabs both sides", "a = 1\tOR\tb = 2", true},
+		{"Parentheses adjacent to OR", "(a = 1)OR(b = 2)", true},
+		{"Left paren adjacent to OR", "a = 1 OR(b = 2)", true},
+		{"Right paren adjacent to OR", "(a = 1)OR b = 2", true},
+		{"Inside single quotes literal", "status = 'FOO OR BAR'", false},
+		{"Inside single quotes with escaped quote", "status = 'DON''T PANIC OR QUIT'", false},
+		{"Inside double quoted identifier", `"MY OR COLUMN" = 1`, false},
+		{"Inside bracketed identifier", `[MY OR COLUMN] = 1`, false},
+		{"Identifier containing or prefix (order)", "orders = 1", false},
+		{"Identifier containing or suffix (color)", "color = 'blue'", false},
+		{"Identifier containing or middle (short)", "short_id = 'abc'", false},
+		{"Identifier containing or middle (error)", "error_count = 0", false},
+		{"OR inside line comment", "-- this is OR test\na = 1", false},
+		{"OR inside block comment", "/* this is OR test */ a = 1", false},
+		{"Real OR after line comment", "-- comment\na = 1 OR b = 2", true},
+		{"Real OR with literal containing or", "status = 'ERROR' OR code = 5", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HasDisjunction(tt.expr)
+			if got != tt.want {
+				t.Errorf("HasDisjunction(%q) = %v; want %v", tt.expr, got, tt.want)
+			}
+		})
+	}
+}
