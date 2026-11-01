@@ -723,6 +723,8 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 }
 
 func evalRowFunction(name string, args []Expr, row map[string]any, execSubquery SubqueryExecutor) (any, error) {
+	uName := strings.ToUpper(strings.TrimSpace(name))
+	isAggFn := uName == "COUNT" || uName == "SUM" || uName == "AVG" || uName == "MIN" || uName == "MAX"
 	if row != nil {
 		var argStrs []string
 		for _, a := range args {
@@ -731,17 +733,16 @@ func evalRowFunction(name string, args []Expr, row map[string]any, execSubquery 
 			}
 		}
 		rawCall := fmt.Sprintf("%s(%s)", name, strings.Join(argStrs, ", "))
-		if v, ok := row[rawCall]; ok && v != nil {
+		if v, ok := row[rawCall]; ok && (v != nil || isAggFn) {
 			return v, nil
 		}
 		for k, v := range row {
-			if strings.EqualFold(k, rawCall) && v != nil {
+			if strings.EqualFold(k, rawCall) && (v != nil || isAggFn) {
 				return v, nil
 			}
 		}
 	}
 
-	uName := strings.ToUpper(strings.TrimSpace(name))
 	if uName == "ISNULL" || uName == "COALESCE" {
 		for _, a := range args {
 			v, err := EvalRowExpr(a, row, execSubquery)

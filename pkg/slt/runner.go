@@ -1,17 +1,21 @@
 package slt
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
+
+	_ "github.com/lib/pq"
 
 	"lionsql/pkg/engine"
 )
 
 // Executor represents any database execution engine capable of running SQL and returning tabular results.
 type Executor interface {
-	Execute(sql string) (columns []string, rows []map[string]any, err error)
+	Execute(sqlStr string) (columns []string, rows []map[string]any, err error)
 }
 
 // CoordinatorExecutor wraps an in-process LionSQL Coordinator as an SLT Executor.
@@ -25,8 +29,8 @@ func NewCoordinatorExecutor(coord *engine.Coordinator) *CoordinatorExecutor {
 }
 
 // Execute runs SQL via the in-process coordinator.
-func (e *CoordinatorExecutor) Execute(sql string) ([]string, []map[string]any, error) {
-	res, err := e.coord.ExecuteSQL(sql)
+func (e *CoordinatorExecutor) Execute(sqlStr string) ([]string, []map[string]any, error) {
+	res, err := e.coord.ExecuteSQL(sqlStr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -38,6 +42,106 @@ func (e *CoordinatorExecutor) Execute(sql string) ([]string, []map[string]any, e
 		return nil, nil, fmt.Errorf("%s", errMsg)
 	}
 	return res.Columns, res.Rows, nil
+}
+
+// PGWireExecutor executes SQL statements over a real PostgreSQL Wire Protocol v3 TCP connection.
+type PGWireExecutor struct {
+	db   *sql.DB
+	conn *sql.Conn
+}
+
+// NewPGWireExecutor opens a persistent single TCP connection to the given PGWire address (e.g. "127.0.0.1:5433").
+func NewPGWireExecutor(addr string) (*PGWireExecutor, error) {
+	dsn := fmt.Sprintf("postgres://admin:admin@%s/lionsql?sslmode=disable", addr)
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, err
+	}
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	conn, err := db.Conn(context.Background())
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+	return &PGWireExecutor{db: db, conn: conn}, nil
+}
+
+// Close releases the underlying TCP connection and database handle.
+func (e *PGWireExecutor) Close() error {
+	if e.conn != nil {
+		_ = e.conn.Close()
+	}
+	if e.db != nil {
+		return e.db.Close()
+	}
+	return nil
+}
+
+// Execute runs SQL over the PGWire TCP socket and decodes tabular rows.
+func (e *PGWireExecutor) Execute(sqlStr string) ([]string, []map[string]any, error) {
+	rows, err := e.conn.QueryContext(context.Background(), sqlStr)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	cols, err := rows.Columns()
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(cols) == 0 {
+		if err := rows.Err(); err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, nil
+	}
+
+	// Disambiguate duplicate column names so row map does not overwrite earlier columns
+	uniqueCols := make([]string, len(cols))
+	seen := make(map[string]int, len(cols))
+	for i, c := range cols {
+		if count, exists := seen[c]; exists {
+			uniqueCols[i] = fmt.Sprintf("%s#%d", c, count)
+		} else {
+			uniqueCols[i] = c
+		}
+		seen[c]++
+	}
+
+	var result []map[string]any
+	for rows.Next() {
+		rawVals := make([]any, len(cols))
+		dest := make([]any, len(cols))
+		for i := range rawVals {
+			dest[i] = &rawVals[i]
+		}
+		if err := rows.Scan(dest...); err != nil {
+			return nil, nil, err
+		}
+		rowMap := make(map[string]any, len(cols))
+		for i, colName := range uniqueCols {
+			val := rawVals[i]
+			if b, ok := val.([]byte); ok {
+				s := string(b)
+				if f, ferr := strconv.ParseFloat(s, 64); ferr == nil && !strings.HasPrefix(s, "0x") {
+					if iVal, ierr := strconv.ParseInt(s, 10, 64); ierr == nil {
+						val = iVal
+					} else {
+						val = f
+					}
+				} else {
+					val = s
+				}
+			}
+			rowMap[colName] = val
+		}
+		result = append(result, rowMap)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, err
+	}
+	return uniqueCols, result, nil
 }
 
 // FormatCell formats a raw database value into a standardized SLT text string.

@@ -145,7 +145,7 @@ func NewProjectionIterator(child Iterator, projections []string) *ProjectionIter
 			addField(expr, alias)
 		} else {
 			parts := sqlutil.SplitTopLevelTokens(item)
-			if len(parts) == 2 && !strings.Contains(parts[0], "(") && !strings.Contains(parts[0], "-") {
+			if len(parts) == 2 && !strings.ContainsAny(parts[0], "()+-*/%") && !strings.ContainsAny(parts[1], "()+-*/%") {
 				addField(parts[0], sqlutil.CleanIdentifier(parts[1]))
 			} else {
 				// Bare expression / column name

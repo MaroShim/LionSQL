@@ -1,0 +1,111 @@
+# agg_stress.slt: Multi-group aggregation, HAVING, JOIN + GROUP BY, and subquery stress
+
+statement ok
+CREATE TABLE slt_sales_dept (dept_id INT PRIMARY KEY, dept_name VARCHAR(32), region VARCHAR(32))
+
+statement ok
+INSERT INTO slt_sales_dept VALUES (10, 'Cloud', 'APAC')
+
+statement ok
+INSERT INTO slt_sales_dept VALUES (20, 'AI', 'AMER')
+
+statement ok
+INSERT INTO slt_sales_dept VALUES (30, 'Security', 'EMEA')
+
+statement ok
+INSERT INTO slt_sales_dept VALUES (40, 'Legacy', 'APAC')
+
+statement ok
+CREATE TABLE slt_sales_orders (order_id INT PRIMARY KEY, dept_id INT, rep VARCHAR(32), amount INT, discount INT, status VARCHAR(16))
+
+statement ok
+INSERT INTO slt_sales_orders VALUES (1, 10, 'Kim', 500, 50, 'CLOSED')
+
+statement ok
+INSERT INTO slt_sales_orders VALUES (2, 10, 'Lee', 300, 0, 'CLOSED')
+
+statement ok
+INSERT INTO slt_sales_orders VALUES (3, 10, 'Kim', 200, NULL, 'OPEN')
+
+statement ok
+INSERT INTO slt_sales_orders VALUES (4, 20, 'Park', 1000, 100, 'CLOSED')
+
+statement ok
+INSERT INTO slt_sales_orders VALUES (5, 20, 'Park', 400, 50, 'CLOSED')
+
+statement ok
+INSERT INTO slt_sales_orders VALUES (6, 20, 'Choi', 150, NULL, 'CANCELLED')
+
+statement ok
+INSERT INTO slt_sales_orders VALUES (7, 30, 'Jung', 700, 70, 'CLOSED')
+
+statement ok
+INSERT INTO slt_sales_orders VALUES (8, 30, 'Jung', 100, 10, 'OPEN')
+
+# 1. Multi-aggregate with NULL-bearing column (COUNT(*) vs COUNT(discount) vs SUM(amount))
+query IIIII rowsort
+SELECT dept_id, COUNT(*), COUNT(discount), SUM(amount), MIN(amount)
+FROM slt_sales_orders
+GROUP BY dept_id
+----
+10 3 2 1000 200
+20 3 2 1550 150
+30 2 2 800 100
+
+# 2. Filtered aggregation via WHERE + GROUP BY + HAVING
+query III rowsort
+SELECT dept_id, COUNT(*), SUM(amount)
+FROM slt_sales_orders
+WHERE status = 'CLOSED'
+GROUP BY dept_id
+HAVING SUM(amount) >= 700
+----
+10 2 800
+20 2 1400
+30 1 700
+
+# 3. LEFT JOIN + GROUP BY (including zero-order department 40)
+query TII rowsort
+SELECT d.dept_name, COUNT(o.order_id), COALESCE(SUM(o.amount), 0)
+FROM slt_sales_dept d
+LEFT JOIN slt_sales_orders o ON d.dept_id = o.dept_id
+GROUP BY d.dept_name
+----
+AI 3 1550
+Cloud 3 1000
+Legacy 0 0
+Security 2 800
+
+# 4. Scalar subquery in WHERE comparing row amount against global AVG
+query ITI rowsort
+SELECT order_id, rep, amount
+FROM slt_sales_orders
+WHERE amount > (SELECT AVG(amount) FROM slt_sales_orders)
+----
+1 Kim 500
+4 Park 1000
+7 Jung 700
+
+# 5. IN subquery with HAVING
+query TI rowsort
+SELECT rep, SUM(amount)
+FROM slt_sales_orders
+WHERE dept_id IN (SELECT dept_id FROM slt_sales_dept WHERE region = 'APAC' OR region = 'AMER')
+GROUP BY rep
+HAVING SUM(amount) >= 300
+----
+Kim 700
+Lee 300
+Park 1400
+
+# 6. ORDER BY aggregate expression with LIMIT
+query TI nosort
+SELECT rep, SUM(amount) AS total_sales
+FROM slt_sales_orders
+GROUP BY rep
+ORDER BY total_sales DESC
+LIMIT 3
+----
+Park 1400
+Jung 800
+Kim 700

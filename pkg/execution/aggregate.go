@@ -277,7 +277,7 @@ func (a *AggregateIterator) parseFields() {
 			continue
 		}
 
-		// Group-by column or passthrough
+		// Group-by column or passthrough (or nested aggregate expression like COALESCE(SUM(col), 0))
 		alias := extractedAlias
 		if alias == "" {
 			alias = exprPart
@@ -295,6 +295,71 @@ func (a *AggregateIterator) parseFields() {
 		}
 		a.fields = append(a.fields, aggField{isLiteral: true, argCol: exprPart, alias: alias, rawExpr: exprPart, parsed: parsedExpr})
 		a.schema = append(a.schema, alias)
+
+		// Extract any nested aggregate function calls inside exprPart (e.g. COALESCE(SUM(o.amount), 0))
+		// so they are accumulated across the group and available during post-group expression evaluation.
+		nestedAggRe := regexp.MustCompile(`(?i)\b(COUNT|SUM|AVG|MIN|MAX)\s*\(\s*(DISTINCT\s+)?([^\)]+)\s*\)`)
+		for _, nm := range nestedAggRe.FindAllStringSubmatch(exprPart, -1) {
+			if len(nm) == 4 {
+				fnName := strings.ToUpper(nm[1])
+				isDist := len(strings.TrimSpace(nm[2])) > 0
+				arg := strings.Trim(strings.TrimSpace(nm[3]), "\"`[]")
+				if arg == "*" && fnName == "COUNT" {
+					already := false
+					for _, ef := range a.fields {
+						if ef.isStar && ef.fnType == aggCount {
+							already = true
+							break
+						}
+					}
+					if !already {
+						a.fields = append(a.fields, aggField{fnType: aggCount, isStar: true, alias: "__agg_count_star", rawExpr: "COUNT(*)"})
+					}
+					continue
+				}
+				rawCall := fmt.Sprintf("%s(%s)", fnName, arg)
+				if isDist {
+					rawCall = fmt.Sprintf("%s(DISTINCT %s)", fnName, arg)
+				}
+				already := false
+				for _, ef := range a.fields {
+					if !ef.isLiteral && strings.EqualFold(ef.rawExpr, rawCall) {
+						already = true
+						break
+					}
+				}
+				if !already {
+					var fnType aggFuncType
+					switch fnName {
+					case "COUNT":
+						fnType = aggCount
+					case "SUM":
+						fnType = aggSum
+					case "AVG":
+						fnType = aggAvg
+					case "MIN":
+						fnType = aggMin
+					case "MAX":
+						fnType = aggMax
+					}
+					var pArg proc.Expr
+					if strings.ContainsAny(arg, " +-*/%()") || strings.Contains(arg, "->") {
+						parser := proc.NewParser(proc.NewLexer(arg))
+						if ast := parser.ParseExpr(); ast != nil && len(parser.Errors()) == 0 {
+							pArg = ast
+						}
+					}
+					a.fields = append(a.fields, aggField{
+						fnType:     fnType,
+						argCol:     arg,
+						alias:      rawCall,
+						isDistinct: isDist,
+						rawExpr:    rawCall,
+						parsed:     pArg,
+					})
+				}
+			}
+		}
 	}
 
 	colMap := &ColumnIndexMap{
@@ -479,15 +544,40 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 		} else {
 			vals = make([]any, len(a.fields))
 		}
+		evalMap := make(map[string]any, len(a.fields)*2)
 		for fIdx, f := range a.fields {
+			if f.isLiteral {
+				continue
+			}
 			if f.isStar || f.fnType == aggCount {
 				vals[fIdx] = int64(0)
 			} else {
 				vals[fIdx] = nil
 			}
+			if f.rawExpr != "" {
+				evalMap[f.rawExpr] = vals[fIdx]
+				evalMap[strings.ToUpper(f.rawExpr)] = vals[fIdx]
+				evalMap[strings.ToLower(f.rawExpr)] = vals[fIdx]
+			}
+			if f.alias != "" {
+				evalMap[f.alias] = vals[fIdx]
+			}
+		}
+		for fIdx, f := range a.fields {
+			if !f.isLiteral {
+				continue
+			}
+			if f.parsed != nil {
+				if res, err := proc.EvalRowExpr(f.parsed, evalMap, nil); err == nil {
+					vals[fIdx] = res
+				}
+			}
 		}
 		emptyTuple := Tuple{Values: vals, Index: a.colIndexMap}
 		if a.havingCond == "" || EvalConditionTuple(emptyTuple, a.havingCond) {
+			if len(vals) > len(a.schema) {
+				emptyTuple.Values = vals[:len(a.schema)]
+			}
 			a.tuples = append(a.tuples, emptyTuple)
 		}
 		return nil
@@ -525,34 +615,10 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 			vals = make([]any, len(a.fields))
 		}
 
+		// Pass 1: Compute all aggregate fields (!f.isLiteral) first so composite expressions
+		// (like COALESCE(SUM(x), 0) or SUM(a) + SUM(b)) can reference their accumulated results.
 		for fIdx, f := range a.fields {
 			if f.isLiteral {
-				isGroupCol := false
-				var colVal any
-				for kIdx, k := range a.groupKeys {
-					if matchColName(k, f.argCol) {
-						isGroupCol = true
-						if (acc.groupMask & (1 << kIdx)) != 0 {
-							colVal, _ = lookupVal(acc.groupTuple, f.argCol)
-						} else {
-							colVal = nil
-						}
-						break
-					}
-				}
-				if isGroupCol {
-					vals[fIdx] = colVal
-				} else if f.parsed != nil {
-					res, err := proc.EvalRowExpr(f.parsed, acc.groupTuple.ToEvalMap(), nil)
-					if err == nil {
-						vals[fIdx] = res
-					} else {
-						vals[fIdx] = nil
-					}
-				} else {
-					v, _ := lookupVal(acc.groupTuple, f.argCol)
-					vals[fIdx] = v
-				}
 				continue
 			}
 
@@ -661,8 +727,63 @@ func (a *AggregateIterator) Open(ctx context.Context) error {
 			vals[fIdx] = val
 		}
 
+		// Pass 2: Compute group-by columns and literal/composite expressions (f.isLiteral).
+		var evalMap map[string]any
+		for fIdx, f := range a.fields {
+			if !f.isLiteral {
+				continue
+			}
+			isGroupCol := false
+			var colVal any
+			for kIdx, k := range a.groupKeys {
+				if matchColName(k, f.argCol) {
+					isGroupCol = true
+					if (acc.groupMask & (1 << kIdx)) != 0 {
+						colVal, _ = lookupVal(acc.groupTuple, f.argCol)
+					} else {
+						colVal = nil
+					}
+					break
+				}
+			}
+			if isGroupCol {
+				vals[fIdx] = colVal
+			} else if f.parsed != nil {
+				if evalMap == nil {
+					evalMap = acc.groupTuple.ToEvalMap()
+					if evalMap == nil {
+						evalMap = make(map[string]any, len(a.fields)*2)
+					}
+					for afIdx, af := range a.fields {
+						if !af.isLiteral {
+							if af.rawExpr != "" {
+								evalMap[af.rawExpr] = vals[afIdx]
+								evalMap[strings.ToUpper(af.rawExpr)] = vals[afIdx]
+								evalMap[strings.ToLower(af.rawExpr)] = vals[afIdx]
+							}
+							if af.alias != "" {
+								evalMap[af.alias] = vals[afIdx]
+							}
+						}
+					}
+				}
+				res, err := proc.EvalRowExpr(f.parsed, evalMap, nil)
+				if err == nil {
+					vals[fIdx] = res
+				} else {
+					vals[fIdx] = nil
+				}
+			} else {
+				v, _ := lookupVal(acc.groupTuple, f.argCol)
+				vals[fIdx] = v
+			}
+		}
+
 		row := Tuple{Values: vals, Index: a.colIndexMap}
 		if a.havingCond == "" || EvalConditionTuple(row, a.havingCond) {
+			if len(vals) > len(a.schema) {
+				row.Values = vals[:len(a.schema)]
+			}
 			a.tuples = append(a.tuples, row)
 		}
 	}
