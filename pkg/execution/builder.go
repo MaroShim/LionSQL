@@ -38,6 +38,21 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 	var err error
 
 	switch plan.Type {
+	case planner.NodeEmpty:
+		var colMap *ColumnIndexMap
+		var cols []string
+		if plan.Relation != "" {
+			schema, _ := getTable(plan.Relation)
+			if schema != nil {
+				colMap = NewColumnIndexMap(schema, plan.Alias)
+				cols = make([]string, len(schema.Columns))
+				for i, c := range schema.Columns {
+					cols[i] = c.Name
+				}
+			}
+		}
+		op = NewEmptyIterator(cols, colMap)
+
 	case planner.NodeTableScan:
 		schema, sErr := getTable(plan.Relation)
 		if sErr != nil {

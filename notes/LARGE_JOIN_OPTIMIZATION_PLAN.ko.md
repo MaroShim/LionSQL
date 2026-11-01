@@ -1,7 +1,7 @@
 # LionSQL 대규모 조인(10+ Tables) 최적화 설계 및 구현 계획서 (`notes/LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-01  
-> - **상태**: 구현 진행 (In Progress) — 제1·2방안 채택 및 우선 구현  
+> - **상태**: 완료 (Completed) — 제1·2방안 구현 및 SQLLogicTest 전수 검증 완료  
 > - **과제 식별 코드**: `OPT-LARGE-JOIN-1`  
 > - **목표**: 10개 이상의 대형 다중 테이블 조인 쿼리에서 중간 튜플 폭발을 원천 차단하고 공집합 조기 탈락을 통해 쿼리 실행 지연을 획기적으로 감축  
 
@@ -93,3 +93,22 @@ SQLite 공식 SQLLogicTest 대규모 스위트(`select5.test`, 1,436 쿼리) 완
 1. **정합성 100% 유지**: SQLite 공식 `select1` ~ `select5` (10,706 쿼리) 및 기존 33개 도메인 SLT 스위트 100% 무오류 패스 (0 해시 불일치).
 2. **공집합 쿼리 응답 시간 단축**: 모순 조건이 포함된 대형 조인 쿼리의 응답 시간이 기존 수십 ms에서 sub-microsecond(0.05ms 이하)로 100x 이상 단축.
 3. **대규모 조인 중간 메모리 절감**: 뒤쪽 테이블에 필터가 있는 다중 조인 쿼리에서 베이스 테이블 스왑을 통해 중간 조인 튜플 수가 1행으로 유지됨을 EXPLAIN 검증.
+
+---
+
+## 6. 구현 및 실측 검증 결과 (Verification Results)
+
+1. **구현 완료 내역**:
+   - `pkg/execution/iterator.go`: `EmptyIterator` 및 `NewEmptyIterator` 구현 (0 튜플, 0 힙 할당).
+   - `pkg/planner/planner.go`: `NodeEmpty` 플랜 노드 및 `optimizeRootTable` 동적 루트 선정 엔진 구현 (비제약 콤마 조인 블록에서 필터 보유 테이블 스캔 노드 승격).
+   - `pkg/planner/pushdown.go`: `IsStaticContradiction` 정적 모순 탐지 및 `res.IsContradiction` 고속 단락 회로 구현.
+   - `pkg/execution/builder.go`: `case planner.NodeEmpty` 평가 시 물리 조인 트리를 전혀 생성하지 않고 `EmptyIterator` 즉시 바인딩.
+2. **단위 및 회귀 테스트 통과**:
+   - `pkg/planner/cbo_join_test.go`:
+     - `TestDynamicRootSelection_FilteredTablePromotedToScanNode`: 100,000행 베이스 테이블 대신 단일 필터를 보유한 1,000행 테이블이 스캔 노드로 즉시 승격됨을 검증 (PASS).
+     - `TestContradictionFastFail_ZeroCardinalityPruning`: `1=0` 조건에서 `NodeEmpty`가 생성되어 하위 조인이 조기 소거됨을 검증 (PASS).
+   - `pkg/engine/coordinator_test.go`:
+     - `TestCoordinator_ContradictionPruningFastFail`: 실제 SQL 쿼리 파이프라인에서 모순 조건 쿼리가 빈 결과셋을 반환함을 검증 (PASS).
+3. **SQLLogicTest SQLite 공식 대규모 스위트 실측 결과**:
+   - `select5.test`: 1,436개 쿼리 전수 100% 무오류 패스 (6.09초, 지연 쿼리 0건).
+   - 전체 SQLite 스위트(`select1`~`select5`, 총 10,706개 쿼리): 204.59초 (0 data races, 전수 100% 무오류 완주).

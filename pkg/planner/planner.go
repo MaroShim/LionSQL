@@ -18,6 +18,7 @@ import (
 type NodeType string
 
 const (
+	NodeEmpty         NodeType = "Empty Result"
 	NodeTableScan     NodeType = "Seq Scan"
 	NodeIndexScan     NodeType = "Index Scan"
 	NodeIndexOnlyScan NodeType = "Index Only Scan"
@@ -937,8 +938,235 @@ func hasQueryHint(hints []string, target string) bool {
 	return false
 }
 
+// optimizeRootTable performs Dynamic Root Selection (OPT-LARGE-JOIN-1):
+// If the current base table has no equality filter, but one of the commutative
+// joined tables has a single-table equality filter (or significantly lower cardinality),
+// that table is promoted to become the root scan table of the query.
+func optimizeRootTable(q *QueryInfo, schema *storage.TableSchema, leftStats *TableStats, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats) (*storage.TableSchema, *TableStats) {
+	if q == nil || q.WhereClause == "" || (len(q.Joins) == 0 && q.Join == nil) {
+		return schema, leftStats
+	}
+	if hasQueryHint(q.TableHints, "FORCE ORDER") || hasQueryHint(q.QueryHints, "FORCE ORDER") {
+		return schema, leftStats
+	}
+
+	joinList := q.Joins
+	if len(joinList) == 0 && q.Join != nil {
+		joinList = []*JoinInfo{q.Join}
+	}
+
+	// 1. Only reorder unconstrained joins (implicit comma joins) where LeftKey and RightKey are empty.
+	// Explicit JOIN ... ON clauses already have dedicated bindings and fixed semantics.
+	m := 0
+	for m < len(joinList) && (joinList[m].Type == "CROSS" || joinList[m].Type == "") && joinList[m].LeftKey == "" && joinList[m].RightKey == "" {
+		m++
+	}
+	if m == 0 {
+		return schema, leftStats
+	}
+
+	type tableCandidate struct {
+		table          string
+		alias          string
+		schema         *storage.TableSchema
+		stats          *TableStats
+		hasEqFilter    bool
+		hasOtherFilter bool
+		rowCount       int64
+	}
+
+	candidates := make([]tableCandidate, m+1)
+	candidates[0] = tableCandidate{
+		table:    cleanIdent(q.TableName),
+		alias:    cleanIdent(q.TableAlias),
+		schema:   schema,
+		stats:    leftStats,
+		rowCount: 100,
+	}
+	if leftStats != nil && leftStats.RowCount > 0 {
+		candidates[0].rowCount = leftStats.RowCount
+	}
+
+	for k := 1; k <= m; k++ {
+		j := joinList[k-1]
+		t := cleanIdent(j.Table)
+		a := cleanIdent(j.Alias)
+		rSchema := resolveRightSchema(j, rightSchemas)
+		var rStat *TableStats
+		if rightStats != nil {
+			if st, ok := rightStats[j.Table]; ok && st != nil {
+				rStat = st
+			} else if st, ok := rightStats[t]; ok && st != nil {
+				rStat = st
+			} else if a != "" {
+				if st, ok := rightStats[j.Alias]; ok && st != nil {
+					rStat = st
+				} else if st, ok := rightStats[a]; ok && st != nil {
+					rStat = st
+				}
+			}
+		}
+		rRows := int64(100)
+		if rStat != nil && rStat.RowCount > 0 {
+			rRows = rStat.RowCount
+		}
+		candidates[k] = tableCandidate{
+			table:    t,
+			alias:    a,
+			schema:   rSchema,
+			stats:    rStat,
+			rowCount: rRows,
+		}
+	}
+
+	conds := splitAndConditions(q.WhereClause)
+	for _, cond := range conds {
+		cond = strings.TrimSpace(cond)
+		if cond == "" {
+			continue
+		}
+		refs := ExtractColumnRefs(cond)
+		if len(refs) == 0 {
+			continue
+		}
+
+		targetCand := -1
+		for idx, cand := range candidates {
+			candTbl := strings.ToLower(cand.table)
+			candAlias := strings.ToLower(cand.alias)
+
+			allMatch := true
+			for _, ref := range refs {
+				refTbl := strings.ToLower(ref.TableOrAlias)
+				if refTbl != "" {
+					if refTbl != candTbl && refTbl != candAlias {
+						allMatch = false
+						break
+					}
+				} else if cand.schema != nil {
+					if _, _, found := cand.schema.FindColumn(ref.Column); !found {
+						allMatch = false
+						break
+					}
+				} else {
+					allMatch = false
+					break
+				}
+			}
+			if allMatch {
+				targetCand = idx
+				break
+			}
+		}
+
+		if targetCand != -1 {
+			l, r := sqlutil.SplitJoinCond(cond)
+			if l != "" && r != "" {
+				refsL := ExtractColumnRefs(l)
+				refsR := ExtractColumnRefs(r)
+				if (len(refsL) == 1 && len(refsR) == 0) || (len(refsL) == 0 && len(refsR) == 1) {
+					candidates[targetCand].hasEqFilter = true
+				} else {
+					candidates[targetCand].hasOtherFilter = true
+				}
+			} else {
+				candidates[targetCand].hasOtherFilter = true
+			}
+		}
+	}
+
+	calcScore := func(c tableCandidate) int64 {
+		if c.hasEqFilter {
+			return 1
+		}
+		if c.hasOtherFilter {
+			s := c.rowCount / 3
+			if s < 2 {
+				s = 2
+			}
+			return s
+		}
+		return c.rowCount
+	}
+
+	bestIdx := 0
+	bestScore := calcScore(candidates[0])
+
+	if bestScore == 1 {
+		return schema, leftStats
+	}
+
+	for k := 1; k <= m; k++ {
+		s := calcScore(candidates[k])
+		if s < bestScore {
+			bestScore = s
+			bestIdx = k
+			if bestScore == 1 {
+				break
+			}
+		}
+	}
+
+	if bestIdx == 0 {
+		return schema, leftStats
+	}
+
+	tIdx := bestIdx - 1
+	targetJoin := joinList[tIdx]
+
+	oldTable := q.TableName
+	oldAlias := q.TableAlias
+	newTable := targetJoin.Table
+	newAlias := targetJoin.Alias
+
+	q.TableName = newTable
+	q.TableAlias = newAlias
+	targetJoin.Table = oldTable
+	targetJoin.Alias = oldAlias
+	targetJoin.LeftKey = ""
+	targetJoin.RightKey = ""
+	targetJoin.Filter = ""
+	targetJoin.Type = "CROSS"
+
+	if len(q.Joins) > 0 {
+		q.Joins[tIdx] = targetJoin
+	} else if q.Join != nil {
+		q.Join = targetJoin
+	}
+
+	oldSchema := schema
+	newSchema := candidates[bestIdx].schema
+	if rightSchemas != nil {
+		rightSchemas[oldTable] = oldSchema
+		rightSchemas[cleanIdent(oldTable)] = oldSchema
+		if oldAlias != "" {
+			rightSchemas[oldAlias] = oldSchema
+			rightSchemas[cleanIdent(oldAlias)] = oldSchema
+		}
+	}
+	schema = newSchema
+
+	oldStats := leftStats
+	newStats := candidates[bestIdx].stats
+	if rightStats != nil {
+		rightStats[oldTable] = oldStats
+		rightStats[cleanIdent(oldTable)] = oldStats
+		if oldAlias != "" {
+			rightStats[oldAlias] = oldStats
+			rightStats[cleanIdent(oldAlias)] = oldStats
+		}
+	}
+	leftStats = newStats
+
+	return schema, leftStats
+}
+
 // BuildMultiJoinPlanWithStats produces an optimized PlanNode tree supporting single or chained multi-table joins.
 func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.TableSchema, leftStats *TableStats, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats) *PlanNode {
+	// Dynamic Root Selection (OPT-LARGE-JOIN-1):
+	// Promote table with single-table equality filter or lowest cardinality to base scan root
+	schema, leftStats = optimizeRootTable(q, schema, leftStats, rightSchemas, rightStats)
+
 	estimatedTotal := int64(100)
 	if leftStats != nil && leftStats.RowCount > 0 {
 		estimatedTotal = leftStats.RowCount
@@ -955,6 +1183,19 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	// Analyze predicate pushdown across primary and joined relations
 	pushdownRes := PushDownPredicates(q, schema, rightSchemas)
 
+	// Fast-fail Zero Cardinality Pruning (OPT-LARGE-JOIN-1):
+	// If a static contradiction (e.g. 1=0, false) is detected, bypass all table scans and joins immediately
+	if pushdownRes.IsContradiction {
+		scanNode = &PlanNode{
+			Type:          NodeEmpty,
+			Relation:      q.TableName,
+			Alias:         q.TableAlias,
+			StartupCost:   0.0,
+			TotalCost:     0.0,
+			EstimatedRows: 0,
+		}
+	}
+
 	eqRe := regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_\.]+)\s*(<=|>=|!=|<>|<|>|==|=|LIKE)\s*(.+)$`)
 
 	var chosenIndex *storage.IndexSchema
@@ -966,7 +1207,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 
 	forceIndex, forceTableScan := parseIndexHint(q.TableHints)
 
-	if !forceTableScan && schema != nil {
+	if !pushdownRes.IsContradiction && !forceTableScan && schema != nil {
 		if forceIndex != "" {
 			for i := range schema.Indexes {
 				if strings.EqualFold(schema.Indexes[i].Name, forceIndex) {
@@ -1266,7 +1507,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				Children:      []*PlanNode{scanNode},
 			}
 		}
-	} else {
+	} else if scanNode == nil {
 		// Table Scan (Sequential Scan)
 		var prunedParts []string
 		if schema != nil && schema.IsPartitioned() {
@@ -1314,71 +1555,49 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 	currentEstimatedRows := scanNode.EstimatedRows
 
 	// Process all chained joins with CBO Join Order Optimization
-	var joinList []*JoinInfo
-	if len(q.Joins) > 0 {
-		joinList = q.Joins
-	} else if q.Join != nil {
-		joinList = []*JoinInfo{q.Join}
-	}
+	if !pushdownRes.IsContradiction {
+		var joinList []*JoinInfo
+		if len(q.Joins) > 0 {
+			joinList = q.Joins
+		} else if q.Join != nil {
+			joinList = []*JoinInfo{q.Join}
+		}
 
-	// Step 1: Pre-attach pushed down join filters
-	for idx, join := range joinList {
-		if pushed, ok := pushdownRes.JoinConds[idx]; ok && len(pushed) > 0 {
-			pStr := strings.Join(pushed, " AND ")
-			if join.Filter != "" {
-				join.Filter = "(" + join.Filter + ") AND (" + pStr + ")"
-			} else {
-				join.Filter = pStr
+		// Step 1: Pre-attach pushed down join filters
+		for idx, join := range joinList {
+			if pushed, ok := pushdownRes.JoinConds[idx]; ok && len(pushed) > 0 {
+				pStr := strings.Join(pushed, " AND ")
+				if join.Filter != "" {
+					join.Filter = "(" + join.Filter + ") AND (" + pStr + ")"
+				} else {
+					join.Filter = pStr
+				}
 			}
 		}
-	}
 
-	allSchemas := make(map[string]*storage.TableSchema, len(rightSchemas)+2)
-	for k, v := range rightSchemas {
-		allSchemas[strings.ToLower(cleanIdent(k))] = v
-	}
-	if schema != nil {
-		allSchemas[strings.ToLower(cleanIdent(q.TableName))] = schema
+		allSchemas := make(map[string]*storage.TableSchema, len(rightSchemas)+2)
+		for k, v := range rightSchemas {
+			allSchemas[strings.ToLower(cleanIdent(k))] = v
+		}
+		if schema != nil {
+			allSchemas[strings.ToLower(cleanIdent(q.TableName))] = schema
+			if q.TableAlias != "" {
+				allSchemas[strings.ToLower(cleanIdent(q.TableAlias))] = schema
+			}
+		}
+
+		availableTables := make(map[string]bool)
+		availableTables[strings.ToLower(cleanIdent(q.TableName))] = true
 		if q.TableAlias != "" {
-			allSchemas[strings.ToLower(cleanIdent(q.TableAlias))] = schema
-		}
-	}
-
-	availableTables := make(map[string]bool)
-	availableTables[strings.ToLower(cleanIdent(q.TableName))] = true
-	if q.TableAlias != "" {
-		availableTables[strings.ToLower(cleanIdent(q.TableAlias))] = true
-	}
-
-	// Step 2: Traverse and optimize join sequence (grouping contiguous INNER/CROSS joins for reordering)
-	i := 0
-	for i < len(joinList) {
-		if joinList[i].Type != "INNER" && joinList[i].Type != "CROSS" {
-			// Non-inner join (e.g., LEFT OUTER JOIN): maintain sequence to preserve NULL-extension semantics
-			join := joinList[i]
-			rSchema := resolveRightSchema(join, rightSchemas)
-			if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema, allSchemas); ok && oriented != nil {
-				join = oriented
-			}
-			currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
-			availableTables[strings.ToLower(cleanIdent(join.Table))] = true
-			if join.Alias != "" {
-				availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
-			}
-			i++
-			continue
+			availableTables[strings.ToLower(cleanIdent(q.TableAlias))] = true
 		}
 
-		// Collect contiguous slice of INNER and CROSS joins
-		j := i
-		for j < len(joinList) && (joinList[j].Type == "INNER" || joinList[j].Type == "CROSS") {
-			j++
-		}
-		innerBlock := joinList[i:j]
-
-		forceOrder := hasQueryHint(q.QueryHints, "FORCE ORDER")
-		if forceOrder || len(innerBlock) <= 1 {
-			for _, join := range innerBlock {
+		// Step 2: Traverse and optimize join sequence (grouping contiguous INNER/CROSS joins for reordering)
+		i := 0
+		for i < len(joinList) {
+			if joinList[i].Type != "INNER" && joinList[i].Type != "CROSS" {
+				// Non-inner join (e.g., LEFT OUTER JOIN): maintain sequence to preserve NULL-extension semantics
+				join := joinList[i]
 				rSchema := resolveRightSchema(join, rightSchemas)
 				if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema, allSchemas); ok && oriented != nil {
 					join = oriented
@@ -1388,32 +1607,55 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 				if join.Alias != "" {
 					availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
 				}
+				i++
+				continue
 			}
-		} else {
-			// CBO Cost-Based Join Reordering via Selinger Dynamic Programming (B-4)
-			bestNode, bestEstRows, bestTables, ok := optimizeJoinOrderDP(
-				currentNode, currentEstimatedRows, availableTables,
-				innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints,
-			)
-			if ok && bestNode != nil {
-				currentNode = bestNode
-				currentEstimatedRows = bestEstRows
-				availableTables = bestTables
+
+			// Collect contiguous slice of INNER and CROSS joins
+			j := i
+			for j < len(joinList) && (joinList[j].Type == "INNER" || joinList[j].Type == "CROSS") {
+				j++
+			}
+			innerBlock := joinList[i:j]
+
+			forceOrder := hasQueryHint(q.QueryHints, "FORCE ORDER")
+			if forceOrder || len(innerBlock) <= 1 {
+				for _, join := range innerBlock {
+					rSchema := resolveRightSchema(join, rightSchemas)
+					if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema, allSchemas); ok && oriented != nil {
+						join = oriented
+					}
+					currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
+					availableTables[strings.ToLower(cleanIdent(join.Table))] = true
+					if join.Alias != "" {
+						availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
+					}
+				}
 			} else {
-				// Fallback to Greedy Join Ordering (prevents intermediate Cartesian explosions for > 12 tables)
-				currentNode, currentEstimatedRows, availableTables = optimizeJoinOrderGreedy(
+				// CBO Cost-Based Join Reordering via Selinger Dynamic Programming (B-4)
+				bestNode, bestEstRows, bestTables, ok := optimizeJoinOrderDP(
 					currentNode, currentEstimatedRows, availableTables,
 					innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints,
 				)
+				if ok && bestNode != nil {
+					currentNode = bestNode
+					currentEstimatedRows = bestEstRows
+					availableTables = bestTables
+				} else {
+					// Fallback to Greedy Join Ordering (prevents intermediate Cartesian explosions for > 12 tables)
+					currentNode, currentEstimatedRows, availableTables = optimizeJoinOrderGreedy(
+						currentNode, currentEstimatedRows, availableTables,
+						innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints,
+					)
+				}
 			}
-		}
 
-		i = j
+			i = j
+		}
 	}
 
-
 	// Filter Node (WHERE) for remaining cross-table or outer-join conditions
-	if len(pushdownRes.RemainingConds) > 0 {
+	if !pushdownRes.IsContradiction && len(pushdownRes.RemainingConds) > 0 {
 		remWhere := strings.Join(pushdownRes.RemainingConds, " AND ")
 		sel := 0.33
 		if leftStats != nil && len(pushdownRes.RemainingConds) == 1 {

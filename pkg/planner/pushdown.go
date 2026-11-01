@@ -25,9 +25,32 @@ type PushdownContext struct {
 
 // PushDownResult holds the partitioned predicates after pushdown analysis.
 type PushDownResult struct {
-	PrimaryConds   []string         // Predicates pushed down to primary table
-	JoinConds      map[int][]string // Predicates pushed down to Joins[i]
-	RemainingConds []string         // Cross-table or non-pushable predicates
+	PrimaryConds    []string         // Predicates pushed down to primary table
+	JoinConds       map[int][]string // Predicates pushed down to Joins[i]
+	RemainingConds  []string         // Cross-table or non-pushable predicates
+	IsContradiction bool             // True if a static contradiction (e.g. 1=0, false) was detected
+}
+
+// IsStaticContradiction checks if a predicate condition is a constant contradiction (evaluates to false or null).
+func IsStaticContradiction(cond string) bool {
+	cond = strings.TrimSpace(cond)
+	if cond == "" {
+		return false
+	}
+	refs := ExtractColumnRefs(cond)
+	if len(refs) > 0 {
+		return false
+	}
+	p := proc.NewParser(proc.NewLexer(cond))
+	expr := p.ParseExpr()
+	if expr == nil {
+		u := strings.ToUpper(cond)
+		if u == "1=0" || u == "1 = 0" || u == "0=1" || u == "0 = 1" || u == "FALSE" {
+			return true
+		}
+		return false
+	}
+	return !proc.EvalBoolExpr(expr, nil, nil)
 }
 
 // ExtractColumnRefs extracts all referenced column and table names from a SQL predicate expression.
@@ -175,6 +198,10 @@ func PushDownPredicates(q *QueryInfo, schema *storage.TableSchema, rightSchemas 
 		cond = strings.TrimSpace(cond)
 		if cond == "" {
 			continue
+		}
+
+		if IsStaticContradiction(cond) {
+			res.IsContradiction = true
 		}
 
 		refs := ExtractColumnRefs(cond)

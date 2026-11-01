@@ -690,3 +690,95 @@ func TestCBOJoinOrderOptimization_SelingerDP_EightTables(t *testing.T) {
 		t.Fatalf("expected Join nodes in plan, got:\n%s", planText)
 	}
 }
+
+func TestDynamicRootSelection_FilteredTablePromotedToScanNode(t *testing.T) {
+	p := planner.NewPlanner()
+
+	// Query: large_table l, users u WHERE l.user_id = u.id AND u.id = 42
+	// In the SQL text, large_table (100,000 rows) is FROM table 0.
+	// But users u has a single-table equality filter u.id = 42 (1 row).
+	// Dynamic Root Selection should promote users u to base scan root.
+	sql := `SELECT l.data, u.name FROM large_table l, users u WHERE l.user_id = u.id AND u.id = 42`
+	q, err := p.ParseSelect(sql)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	largeSchema := &storage.TableSchema{
+		Name: "large_table",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+			{Name: "data", Type: storage.TypeVarChar},
+		},
+	}
+	userSchema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "name", Type: storage.TypeVarChar},
+		},
+	}
+
+	largeStats := planner.NewTableStats("large_table", 100000)
+	userStats := planner.NewTableStats("users", 1000)
+
+	rSchemas := map[string]*storage.TableSchema{
+		"users": userSchema,
+		"u":     userSchema,
+	}
+	rStats := map[string]*planner.TableStats{
+		"users": userStats,
+		"u":     userStats,
+	}
+
+	plan := p.BuildMultiJoinPlanWithStats(q, largeSchema, largeStats, rSchemas, rStats)
+	if plan == nil {
+		t.Fatal("expected non-nil plan")
+	}
+
+	planText := strings.Join(planner.FormatPlanText(plan, false), "\n")
+	// The innermost relation (root scan) should be users or u, not large_table
+	if !strings.Contains(planText, "users") {
+		t.Fatalf("expected users in plan, got:\n%s", planText)
+	}
+	if q.TableName != "users" {
+		t.Errorf("expected q.TableName to be promoted to users, got %q", q.TableName)
+	}
+}
+
+func TestContradictionFastFail_ZeroCardinalityPruning(t *testing.T) {
+	p := planner.NewPlanner()
+
+	// Query: large_table l, users u WHERE l.user_id = u.id AND 1 = 0
+	sql := `SELECT l.data, u.name FROM large_table l, users u WHERE l.user_id = u.id AND 1 = 0`
+	q, err := p.ParseSelect(sql)
+	if err != nil {
+		t.Fatalf("ParseSelect failed: %v", err)
+	}
+
+	largeSchema := &storage.TableSchema{
+		Name: "large_table",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+			{Name: "user_id", Type: storage.TypeInt},
+		},
+	}
+	userSchema := &storage.TableSchema{
+		Name: "users",
+		Columns: []storage.Column{
+			{Name: "id", Type: storage.TypeInt, PrimaryKey: true},
+		},
+	}
+
+	rSchemas := map[string]*storage.TableSchema{"users": userSchema}
+	plan := p.BuildMultiJoinPlanWithStats(q, largeSchema, nil, rSchemas, nil)
+	if plan == nil {
+		t.Fatal("expected non-nil plan")
+	}
+
+	planText := strings.Join(planner.FormatPlanText(plan, false), "\n")
+	if !strings.Contains(planText, "Empty Result") {
+		t.Fatalf("expected Empty Result in plan for contradiction 1=0, got:\n%s", planText)
+	}
+}

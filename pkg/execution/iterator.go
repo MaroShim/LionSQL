@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"sync"
@@ -409,6 +410,38 @@ type Iterator interface {
 	// ColIndexMap returns the column index map for O(1) resolution and join composition.
 	ColIndexMap() *ColumnIndexMap
 }
+
+// EmptyIterator represents an empty dataset producing 0 tuples (io.EOF immediately).
+type EmptyIterator struct {
+	schema []string
+	colMap *ColumnIndexMap
+}
+
+// NewEmptyIterator creates a new EmptyIterator with the given schema and column index map.
+func NewEmptyIterator(schema []string, colMap *ColumnIndexMap) *EmptyIterator {
+	if colMap == nil {
+		indices := make(map[string]int, len(schema))
+		for i, c := range schema {
+			indices[c] = i
+			indices[strings.ToLower(c)] = i
+		}
+		colMap = &ColumnIndexMap{
+			indices:   indices,
+			cols:      schema,
+			tableCols: make(map[string][]string),
+		}
+	}
+	return &EmptyIterator{
+		schema: schema,
+		colMap: colMap,
+	}
+}
+
+func (e *EmptyIterator) Open(ctx context.Context) error { return nil }
+func (e *EmptyIterator) Next(ctx context.Context) (Tuple, error) { return Tuple{}, io.EOF }
+func (e *EmptyIterator) Close() error { return nil }
+func (e *EmptyIterator) Schema() []string { return e.schema }
+func (e *EmptyIterator) ColIndexMap() *ColumnIndexMap { return e.colMap }
 
 // MergeColumnIndexMaps merges two ColumnIndexMaps side-by-side for join operations.
 func MergeColumnIndexMaps(left, right *ColumnIndexMap) *ColumnIndexMap {

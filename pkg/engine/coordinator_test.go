@@ -1442,4 +1442,33 @@ func TestCoordinator_TableVarSessionLifecycleAndCleanup(t *testing.T) {
 	}
 }
 
+func TestCoordinator_ContradictionPruningFastFail(t *testing.T) {
+	coord, _, cleanup := setupTestCoordinator(t)
+	defer cleanup()
+
+	coord.ExecuteSQL(`CREATE TABLE t_items (id INT PRIMARY KEY, name VARCHAR(50), price INT);`)
+	coord.ExecuteSQL(`INSERT INTO t_items VALUES (1, 'Item 1', 100), (2, 'Item 2', 200);`)
+
+	// 1. SELECT * with contradiction condition 1 = 0 should return 0 rows instantly
+	res, err := coord.ExecuteSQL(`SELECT * FROM t_items WHERE 1 = 0;`)
+	if err != nil {
+		t.Fatalf("query failed: %v", err)
+	}
+	if len(res.Rows) != 0 {
+		t.Fatalf("expected 0 rows for WHERE 1=0, got %d", len(res.Rows))
+	}
+
+	// 2. Aggregate query with 1 = 0 should return 1 row with COUNT = 0
+	resAgg, err := coord.ExecuteSQL(`SELECT COUNT(*) AS total_count FROM t_items WHERE 1 = 0;`)
+	if err != nil {
+		t.Fatalf("aggregate query failed: %v", err)
+	}
+	if len(resAgg.Rows) != 1 {
+		t.Fatalf("expected 1 row for aggregate with WHERE 1=0, got %d", len(resAgg.Rows))
+	}
+	if fmt.Sprintf("%v", resAgg.Rows[0]["total_count"]) != "0" {
+		t.Fatalf("expected count 0, got %v", resAgg.Rows[0]["total_count"])
+	}
+}
+
 
