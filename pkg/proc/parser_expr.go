@@ -76,12 +76,12 @@ func (p *Parser) parseExpression(precedence int) Expr {
 			}
 			if p.curTokenIs(TokenBetween) {
 				p.nextToken() // eat BETWEEN
-				low := p.parseExpression(precSum)
+				low := p.parseExpression(precAnd)
 				if !p.curTokenIs(TokenAnd) {
 					return nil
 				}
 				p.nextToken() // eat AND
-				high := p.parseExpression(precSum)
+				high := p.parseExpression(precAnd)
 				leftExp = &BetweenExpr{Expr: leftExp, Not: true, Low: low, High: high}
 				break
 			}
@@ -132,12 +132,12 @@ func (p *Parser) parseExpression(precedence int) Expr {
 
 		case TokenBetween:
 			p.nextToken() // eat BETWEEN
-			low := p.parseExpression(precSum)
+			low := p.parseExpression(precAnd)
 			if !p.curTokenIs(TokenAnd) {
 				return nil
 			}
 			p.nextToken() // eat AND
-			high := p.parseExpression(precSum)
+			high := p.parseExpression(precAnd)
 			leftExp = &BetweenExpr{Expr: leftExp, Not: false, Low: low, High: high}
 
 		case TokenLike:

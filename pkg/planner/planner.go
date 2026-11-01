@@ -702,6 +702,27 @@ func parseFromAndJoins(fromClause string) (string, string, []*JoinInfo, error) {
 		}
 	}
 
+	commaParts := splitTopLevelCommas(fromClause)
+	if len(commaParts) > 1 {
+		baseTable, baseAlias, joins, err := parseFromAndJoins(commaParts[0])
+		if err != nil {
+			return "", "", nil, err
+		}
+		for i := 1; i < len(commaParts); i++ {
+			rTable, rAlias, subJoins, err := parseFromAndJoins(commaParts[i])
+			if err != nil {
+				return "", "", nil, err
+			}
+			joins = append(joins, &JoinInfo{
+				Type:  "CROSS",
+				Table: rTable,
+				Alias: rAlias,
+			})
+			joins = append(joins, subJoins...)
+		}
+		return baseTable, baseAlias, joins, nil
+	}
+
 	joinPattern := regexp.MustCompile(`(?is)(?:(INNER|LEFT(?:\s+OUTER)?|RIGHT(?:\s+OUTER)?|FULL(?:\s+OUTER)?)\s+)?JOIN\s+([^\s]+)(?:\s+(?:AS\s+)?([a-zA-Z0-9_]+))?\s+ON\s+([^\s=]+)\s*=\s*([^\s=;]+)`)
 	matches := joinPattern.FindAllStringSubmatchIndex(fromClause, -1)
 	if len(matches) == 0 {
@@ -758,6 +779,57 @@ func parseFromAndJoins(fromClause string) (string, string, []*JoinInfo, error) {
 	}
 
 	return baseTable, baseAlias, joins, nil
+}
+
+func splitTopLevelCommas(s string) []string {
+	var parts []string
+	start := 0
+	depth := 0
+	inQuote := false
+	var qChar byte
+
+	for i := 0; i < len(s); i++ {
+		ch := s[i]
+		if inQuote {
+			if ch == qChar {
+				if i+1 < len(s) && s[i+1] == qChar {
+					i++
+					continue
+				}
+				inQuote = false
+			}
+			continue
+		}
+		if ch == '\'' || ch == '"' {
+			inQuote = true
+			qChar = ch
+			continue
+		}
+		if ch == '(' || ch == '[' {
+			depth++
+			continue
+		}
+		if ch == ')' || ch == ']' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+		if ch == ',' && depth == 0 {
+			part := strings.TrimSpace(s[start:i])
+			if part != "" {
+				parts = append(parts, part)
+			}
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		part := strings.TrimSpace(s[start:])
+		if part != "" {
+			parts = append(parts, part)
+		}
+	}
+	return parts
 }
 
 func parseFromAndJoin(fromClause string) (string, string, *JoinInfo, error) {
@@ -1261,20 +1333,31 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		}
 	}
 
+	allSchemas := make(map[string]*storage.TableSchema, len(rightSchemas)+2)
+	for k, v := range rightSchemas {
+		allSchemas[strings.ToLower(cleanIdent(k))] = v
+	}
+	if schema != nil {
+		allSchemas[strings.ToLower(cleanIdent(q.TableName))] = schema
+		if q.TableAlias != "" {
+			allSchemas[strings.ToLower(cleanIdent(q.TableAlias))] = schema
+		}
+	}
+
 	availableTables := make(map[string]bool)
 	availableTables[strings.ToLower(cleanIdent(q.TableName))] = true
 	if q.TableAlias != "" {
 		availableTables[strings.ToLower(cleanIdent(q.TableAlias))] = true
 	}
 
-	// Step 2: Traverse and optimize join sequence (grouping contiguous INNER joins for reordering)
+	// Step 2: Traverse and optimize join sequence (grouping contiguous INNER/CROSS joins for reordering)
 	i := 0
 	for i < len(joinList) {
-		if joinList[i].Type != "INNER" {
+		if joinList[i].Type != "INNER" && joinList[i].Type != "CROSS" {
 			// Non-inner join (e.g., LEFT OUTER JOIN): maintain sequence to preserve NULL-extension semantics
 			join := joinList[i]
 			rSchema := resolveRightSchema(join, rightSchemas)
-			if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema); ok && oriented != nil {
+			if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema, allSchemas); ok && oriented != nil {
 				join = oriented
 			}
 			currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
@@ -1286,9 +1369,9 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			continue
 		}
 
-		// Collect contiguous slice of INNER joins
+		// Collect contiguous slice of INNER and CROSS joins
 		j := i
-		for j < len(joinList) && joinList[j].Type == "INNER" {
+		for j < len(joinList) && (joinList[j].Type == "INNER" || joinList[j].Type == "CROSS") {
 			j++
 		}
 		innerBlock := joinList[i:j]
@@ -1297,7 +1380,7 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		if forceOrder || len(innerBlock) <= 1 {
 			for _, join := range innerBlock {
 				rSchema := resolveRightSchema(join, rightSchemas)
-				if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema); ok && oriented != nil {
+				if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema, allSchemas); ok && oriented != nil {
 					join = oriented
 				}
 				currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
@@ -1310,25 +1393,18 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 			// CBO Cost-Based Join Reordering via Selinger Dynamic Programming (B-4)
 			bestNode, bestEstRows, bestTables, ok := optimizeJoinOrderDP(
 				currentNode, currentEstimatedRows, availableTables,
-				innerBlock, rightSchemas, rightStats, q.QueryHints,
+				innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints,
 			)
 			if ok && bestNode != nil {
 				currentNode = bestNode
 				currentEstimatedRows = bestEstRows
 				availableTables = bestTables
 			} else {
-				// Fallback to original order
-				for _, join := range innerBlock {
-					rSchema := resolveRightSchema(join, rightSchemas)
-					if oriented, ok := checkAndOrientJoinKeys(join, availableTables, rSchema); ok && oriented != nil {
-						join = oriented
-					}
-					currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, q.QueryHints)
-					availableTables[strings.ToLower(cleanIdent(join.Table))] = true
-					if join.Alias != "" {
-						availableTables[strings.ToLower(cleanIdent(join.Alias))] = true
-					}
-				}
+				// Fallback to Greedy Join Ordering (prevents intermediate Cartesian explosions for > 12 tables)
+				currentNode, currentEstimatedRows, availableTables = optimizeJoinOrderGreedy(
+					currentNode, currentEstimatedRows, availableTables,
+					innerBlock, rightSchemas, rightStats, allSchemas, q.QueryHints,
+				)
 			}
 		}
 
@@ -1952,52 +2028,62 @@ func resolveRightSchema(j *JoinInfo, rightSchemas map[string]*storage.TableSchem
 	return nil
 }
 
-func checkAndOrientJoinKeys(j *JoinInfo, availableTables map[string]bool, rSchema *storage.TableSchema) (*JoinInfo, bool) {
+func checkAndOrientJoinKeys(j *JoinInfo, availableTables map[string]bool, rSchema *storage.TableSchema, allSchemas map[string]*storage.TableSchema) (*JoinInfo, bool) {
+	if j.LeftKey == "" || j.RightKey == "" {
+		copyJ := *j
+		return &copyJ, true
+	}
+
 	candTbl := strings.ToLower(cleanIdent(j.Table))
 	candAlias := strings.ToLower(cleanIdent(j.Alias))
 
 	tblL := extractTableQualifier(j.LeftKey)
 	tblR := extractTableQualifier(j.RightKey)
-
-	// Case 1: LeftKey belongs to an available (outer) table, RightKey belongs to the candidate (inner) table
-	if tblL != "" && tblR != "" {
-		if availableTables[tblL] && (tblR == candTbl || tblR == candAlias) {
-			copyJ := *j
-			return &copyJ, true
-		}
-		// Case 2: RightKey belongs to an available (outer) table, LeftKey belongs to candidate (inner) table -> Swap
-		if availableTables[tblR] && (tblL == candTbl || tblL == candAlias) {
-			copyJ := *j
-			copyJ.LeftKey = j.RightKey
-			copyJ.RightKey = j.LeftKey
-			return &copyJ, true
-		}
-		// Neither is connected directly
-		return nil, false
-	}
-
-	// Fallback for unqualified keys: check column presence in rSchema
 	colL := extractColumnName(j.LeftKey)
 	colR := extractColumnName(j.RightKey)
 
-	if rSchema != nil {
-		_, _, foundR := rSchema.FindColumn(colR)
-		_, _, foundL := rSchema.FindColumn(colL)
-		if foundR && !foundL {
-			copyJ := *j
-			return &copyJ, true
+	isInner := func(tbl, col string) bool {
+		if tbl != "" {
+			return tbl == candTbl || tbl == candAlias
 		}
-		if foundL && !foundR {
-			copyJ := *j
-			copyJ.LeftKey = j.RightKey
-			copyJ.RightKey = j.LeftKey
-			return &copyJ, true
+		if rSchema != nil {
+			_, _, found := rSchema.FindColumn(col)
+			return found
 		}
+		return false
 	}
 
-	// Default fallback: preserve as is
-	copyJ := *j
-	return &copyJ, true
+	isOuter := func(tbl, col string) bool {
+		if tbl != "" {
+			return availableTables[tbl]
+		}
+		for t := range availableTables {
+			if s, ok := allSchemas[t]; ok && s != nil {
+				if _, _, found := s.FindColumn(col); found {
+					return true
+				}
+			}
+		}
+		return false
+	}
+
+	leftOuter := isOuter(tblL, colL)
+	leftInner := isInner(tblL, colL)
+	rightOuter := isOuter(tblR, colR)
+	rightInner := isInner(tblR, colR)
+
+	if leftOuter && rightInner {
+		copyJ := *j
+		return &copyJ, true
+	}
+	if rightOuter && leftInner {
+		copyJ := *j
+		copyJ.LeftKey = j.RightKey
+		copyJ.RightKey = j.LeftKey
+		return &copyJ, true
+	}
+
+	return nil, false
 }
 
 type joinDPEntry struct {
@@ -2023,6 +2109,7 @@ func optimizeJoinOrderDP(
 	innerBlock []*JoinInfo,
 	rightSchemas map[string]*storage.TableSchema,
 	rightStats map[string]*TableStats,
+	allSchemas map[string]*storage.TableSchema,
 	queryHints []string,
 ) (*PlanNode, int64, map[string]bool, bool) {
 	n := len(innerBlock)
@@ -2079,7 +2166,7 @@ func optimizeJoinOrderDP(
 				}
 
 				cand := cands[k]
-				oriented, ok := checkAndOrientJoinKeys(cand.orig, prevEntry.tables, cand.schema)
+				oriented, ok := checkAndOrientJoinKeys(cand.orig, prevEntry.tables, cand.schema, allSchemas)
 				if !ok {
 					continue
 				}
@@ -2130,9 +2217,13 @@ func optimizeJoinOrderDP(
 				}
 
 				cand := cands[k]
-				oriented, ok := checkAndOrientJoinKeys(cand.orig, prevEntry.tables, cand.schema)
+				oriented, ok := checkAndOrientJoinKeys(cand.orig, prevEntry.tables, cand.schema, allSchemas)
 				if !ok {
-					oriented = cand.orig
+					copyJ := *cand.orig
+					copyJ.LeftKey = ""
+					copyJ.RightKey = ""
+					copyJ.Type = "CROSS"
+					oriented = &copyJ
 				}
 
 				joinedNode, joinedEstRows := buildSingleJoinNode(prevEntry.node, prevEntry.estRows, oriented, rightSchemas, rightStats, queryHints)
@@ -2162,6 +2253,77 @@ func optimizeJoinOrderDP(
 	}
 
 	return nil, 0, nil, false
+}
+
+func optimizeJoinOrderGreedy(
+	currentNode *PlanNode,
+	currentEstimatedRows int64,
+	availableTables map[string]bool,
+	innerBlock []*JoinInfo,
+	rightSchemas map[string]*storage.TableSchema,
+	rightStats map[string]*TableStats,
+	allSchemas map[string]*storage.TableSchema,
+	queryHints []string,
+) (*PlanNode, int64, map[string]bool) {
+	remaining := make([]*JoinInfo, len(innerBlock))
+	copy(remaining, innerBlock)
+
+	tables := make(map[string]bool, len(availableTables)+len(innerBlock)*2)
+	for k, v := range availableTables {
+		tables[k] = v
+	}
+
+	for len(remaining) > 0 {
+		bestIdx := -1
+		var bestOriented *JoinInfo
+
+		// 1. Priority 1: Pick table with join keys connected to availableTables (prioritizing filtered tables)
+		for idx, join := range remaining {
+			rSchema := resolveRightSchema(join, rightSchemas)
+			if oriented, ok := checkAndOrientJoinKeys(join, tables, rSchema, allSchemas); ok && oriented != nil && oriented.LeftKey != "" {
+				if bestIdx == -1 || (oriented.Filter != "" && bestOriented.Filter == "") {
+					bestIdx = idx
+					bestOriented = oriented
+					if oriented.Filter != "" {
+						break
+					}
+				}
+			}
+		}
+
+		// 2. Priority 2: Pick candidate with LeftKey == "" (cross join)
+		if bestIdx == -1 {
+			for idx, join := range remaining {
+				rSchema := resolveRightSchema(join, rightSchemas)
+				if oriented, ok := checkAndOrientJoinKeys(join, tables, rSchema, allSchemas); ok && oriented != nil {
+					bestIdx = idx
+					bestOriented = oriented
+					break
+				}
+			}
+		}
+
+		// 3. Fallback: Pick first remaining as cross join
+		if bestIdx == -1 {
+			bestIdx = 0
+			copyJ := *remaining[0]
+			copyJ.LeftKey = ""
+			copyJ.RightKey = ""
+			copyJ.Type = "CROSS"
+			bestOriented = &copyJ
+		}
+
+		join := bestOriented
+		currentNode, currentEstimatedRows = buildSingleJoinNode(currentNode, currentEstimatedRows, join, rightSchemas, rightStats, queryHints)
+		tables[strings.ToLower(cleanIdent(join.Table))] = true
+		if join.Alias != "" {
+			tables[strings.ToLower(cleanIdent(join.Alias))] = true
+		}
+
+		remaining = append(remaining[:bestIdx], remaining[bestIdx+1:]...)
+	}
+
+	return currentNode, currentEstimatedRows, tables
 }
 
 func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join *JoinInfo, rightSchemas map[string]*storage.TableSchema, rightStats map[string]*TableStats, queryHints []string) (*PlanNode, int64) {
@@ -2207,7 +2369,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 	var innerIndex *storage.IndexSchema
 	if rSchema != nil && (rightCol != "" || leftKey != "") && join.Type != "CROSS" {
 		if rightCol != "" {
-			if idx, found := rSchema.FindIndexByColumn(rightCol); found {
+			if idx, found := rSchema.FindIndexByColumn(rightCol); found && len(idx.Columns) == 1 {
 				innerIndex = idx
 			}
 		}
@@ -2218,7 +2380,7 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 				if idx := strings.Index(leftCol, "."); idx != -1 {
 					leftCol = leftCol[idx+1:]
 				}
-				if idx, found := rSchema.FindIndexByColumn(leftCol); found {
+				if idx, found := rSchema.FindIndexByColumn(leftCol); found && len(idx.Columns) == 1 {
 					innerIndex = idx
 					leftKey, rightKey = rightKey, leftKey
 				}

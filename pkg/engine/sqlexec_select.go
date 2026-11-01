@@ -27,15 +27,19 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		return err == nil
 	})
 
+	outerNames := []string{cleanIdentifier(qInfo.TableName)}
+	if qInfo.TableAlias != "" {
+		outerNames = append(outerNames, cleanIdentifier(qInfo.TableAlias))
+	}
 	if qInfo.WhereClause != "" {
-		if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs); err == nil {
+		if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs, outerNames...); err == nil {
 			qInfo.WhereClause = resolved
 		}
 	}
 
 	for i, proj := range qInfo.Projections {
 		if strings.Contains(strings.ToUpper(proj), "SELECT") {
-			if resolved, err := s.resolveSubqueriesWithSession(proj, cs); err == nil && resolved != proj {
+			if resolved, err := s.resolveSubqueriesWithSession(proj, cs, outerNames...); err == nil && resolved != proj {
 				qInfo.Projections[i] = resolved
 			}
 		}
@@ -128,6 +132,20 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 			}
 		}
 		cs.Mu.Unlock()
+	}
+
+	opts.SubqueryExecutor = func(sql string) ([]map[string]any, []string, error) {
+		var res *QueryResult
+		var err error
+		if cs != nil {
+			res, err = s.ExecuteSessionSQL(cs.ID, sql)
+		} else {
+			res, err = s.ExecuteSQL(sql)
+		}
+		if err != nil {
+			return nil, nil, err
+		}
+		return res.Rows, res.Columns, nil
 	}
 
 	exec, err := execution.BuildExecutorWithOptions(plan, tx, s.engine.GetTable, opts)
@@ -1520,7 +1538,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		}
 
 		if qInfo.WhereClause != "" {
-			if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs); err == nil && resolved != qInfo.WhereClause {
+			if resolved, err := s.resolveSubqueriesWithSession(qInfo.WhereClause, cs, tableName, qInfo.TableAlias); err == nil && resolved != qInfo.WhereClause {
 				cleaned = strings.Replace(cleaned, qInfo.WhereClause, resolved, 1)
 				qInfo.WhereClause = resolved
 			}

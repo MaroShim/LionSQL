@@ -11,6 +11,12 @@ import (
 // EvalTupleExpr recursively evaluates an AST expression directly against a Tuple
 // with zero heap allocations for standard column lookups, literals, and binary arithmetic.
 func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
+	return EvalTupleExprWithSubquery(t, expr, nil)
+}
+
+// EvalTupleExprWithSubquery recursively evaluates an AST expression directly against a Tuple
+// with optional SubqueryExecutor callback for correlated or scalar subqueries.
+func EvalTupleExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.SubqueryExecutor) (any, bool) {
 	if expr == nil {
 		return nil, false
 	}
@@ -22,10 +28,15 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 			return val, true
 		}
 		// Try bare column name if qualified (e.g. "lo.lo_extendedprice" -> "lo_extendedprice")
+		// ONLY if the tuple's relation matches the qualifier prefix or has no known table qualifiers.
 		if dotIdx := strings.Index(name, "."); dotIdx != -1 {
-			bare := name[dotIdx+1:]
-			if val, ok := t.GetOK(bare); ok {
-				return val, true
+			prefix := strings.ToLower(cleanIdentifierParts(name[:dotIdx]))
+			cmap := t.Index
+			if cmap == nil || len(cmap.tableCols) == 0 || cmap.tableCols[prefix] != nil {
+				bare := name[dotIdx+1:]
+				if val, ok := t.GetOK(bare); ok {
+					return val, true
+				}
 			}
 		}
 		// Try trimmed identifier
@@ -35,9 +46,13 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 				return val, true
 			}
 			if dotIdx := strings.Index(trimmed, "."); dotIdx != -1 {
-				bare := trimmed[dotIdx+1:]
-				if val, ok := t.GetOK(bare); ok {
-					return val, true
+				prefix := strings.ToLower(cleanIdentifierParts(trimmed[:dotIdx]))
+				cmap := t.Index
+				if cmap == nil || len(cmap.tableCols) == 0 || cmap.tableCols[prefix] != nil {
+					bare := trimmed[dotIdx+1:]
+					if val, ok := t.GetOK(bare); ok {
+						return val, true
+					}
 				}
 			}
 		}
@@ -69,7 +84,7 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		return nil, false
 
 	case *proc.UnaryExpr:
-		val, ok := EvalTupleExpr(t, e.Expr)
+		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
 		if !ok {
 			return nil, false
 		}
@@ -98,27 +113,27 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		}
 
 	case *proc.BinaryExpr:
-		res, ok := evalTupleBinaryExpr(t, e)
+		res, ok := evalTupleBinaryExprWithSubquery(t, e, execSubquery)
 		if ok {
 			return res, true
 		}
 		// Fallback for complex binary expressions (e.g. JSON operators ->, ->>, etc.)
-		res, err := proc.EvalRowExpr(e, t.ToEvalMap(), nil)
+		res, err := proc.EvalRowExpr(e, t.ToEvalMap(), execSubquery)
 		if err == nil {
 			return res, true
 		}
 		return nil, false
 
 	case *proc.BetweenExpr:
-		val, ok := EvalTupleExpr(t, e.Expr)
+		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
 		if !ok || val == nil {
 			return false, true
 		}
 		if sv, ok := val.(storage.Value); ok && sv.IsNull {
 			return false, true
 		}
-		low, okL := EvalTupleExpr(t, e.Low)
-		high, okH := EvalTupleExpr(t, e.High)
+		low, okL := EvalTupleExprWithSubquery(t, e.Low, execSubquery)
+		high, okH := EvalTupleExprWithSubquery(t, e.High, execSubquery)
 		if !okL || !okH || low == nil || high == nil {
 			return false, true
 		}
@@ -137,7 +152,7 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		return inRange, true
 
 	case *proc.InExpr:
-		val, ok := EvalTupleExpr(t, e.Expr)
+		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
 		if !ok || val == nil {
 			return false, true
 		}
@@ -147,7 +162,7 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		found := false
 		hasNull := false
 		for _, item := range e.List {
-			itemVal, okItem := EvalTupleExpr(t, item)
+			itemVal, okItem := EvalTupleExprWithSubquery(t, item, execSubquery)
 			if !okItem || itemVal == nil {
 				hasNull = true
 				continue
@@ -170,7 +185,7 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		return e.Not, true
 
 	case *proc.IsNullExpr:
-		val, ok := EvalTupleExpr(t, e.Expr)
+		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
 		if !ok || val == nil {
 			return !e.Not, true
 		}
@@ -180,7 +195,7 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		return e.Not, true
 
 	case *proc.CastExpr:
-		val, ok := EvalTupleExpr(t, e.Expr)
+		val, ok := EvalTupleExprWithSubquery(t, e.Expr, execSubquery)
 		if !ok || val == nil {
 			return nil, true
 		}
@@ -191,9 +206,26 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 		}
 		return formatStorageVal(casted), true
 
+	case *proc.ExistsExpr:
+		val, err := proc.EvalRowExpr(e, t.ToEvalMap(), execSubquery)
+		if err != nil || val == nil {
+			return false, false
+		}
+		if b, ok := val.(bool); ok {
+			return b, true
+		}
+		return false, false
+
+	case *proc.ScalarSubqueryExpr:
+		val, err := proc.EvalRowExpr(e, t.ToEvalMap(), execSubquery)
+		if err != nil {
+			return nil, false
+		}
+		return val, true
+
 	default:
 		// Fallback for complex functions or expressions: use ToEvalMap
-		res, err := proc.EvalRowExpr(expr, t.ToEvalMap(), nil)
+		res, err := proc.EvalRowExpr(expr, t.ToEvalMap(), execSubquery)
 		if err != nil {
 			return nil, false
 		}
@@ -203,9 +235,14 @@ func EvalTupleExpr(t Tuple, expr proc.Expr) (any, bool) {
 
 // evalTupleBinaryExpr evaluates binary operations (arithmetic, comparison, logical) with zero heap allocs.
 func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
+	return evalTupleBinaryExprWithSubquery(t, e, nil)
+}
+
+// evalTupleBinaryExprWithSubquery evaluates binary operations with optional SubqueryExecutor.
+func evalTupleBinaryExprWithSubquery(t Tuple, e *proc.BinaryExpr, execSubquery proc.SubqueryExecutor) (any, bool) {
 	// Logical AND/OR short-circuiting with SQL 3-Valued Logic (NULL = UNKNOWN)
 	if e.Op == proc.TokenAnd {
-		leftVal, okL := EvalTupleExpr(t, e.Left)
+		leftVal, okL := EvalTupleExprWithSubquery(t, e.Left, execSubquery)
 		if !okL {
 			return false, false
 		}
@@ -243,7 +280,7 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 	}
 
 	if e.Op == proc.TokenOr {
-		leftVal, okL := EvalTupleExpr(t, e.Left)
+		leftVal, okL := EvalTupleExprWithSubquery(t, e.Left, execSubquery)
 		if !okL {
 			return false, false
 		}
@@ -256,7 +293,7 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 				return true, true
 			}
 		}
-		rightVal, okR := EvalTupleExpr(t, e.Right)
+		rightVal, okR := EvalTupleExprWithSubquery(t, e.Right, execSubquery)
 		if !okR {
 			return false, false
 		}
@@ -280,8 +317,8 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 		return false, false
 	}
 
-	left, okL := EvalTupleExpr(t, e.Left)
-	right, okR := EvalTupleExpr(t, e.Right)
+	left, okL := EvalTupleExprWithSubquery(t, e.Left, execSubquery)
+	right, okR := EvalTupleExprWithSubquery(t, e.Right, execSubquery)
 	if !okL || !okR {
 		return nil, false
 	}
@@ -429,9 +466,14 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 
 // EvalTupleBoolExpr evaluates a boolean condition directly against a Tuple with zero allocations.
 func EvalTupleBoolExpr(t Tuple, expr proc.Expr) bool {
-	res, ok := EvalTupleExpr(t, expr)
+	return EvalTupleBoolExprWithSubquery(t, expr, nil)
+}
+
+// EvalTupleBoolExprWithSubquery evaluates a boolean condition directly against a Tuple with optional SubqueryExecutor.
+func EvalTupleBoolExprWithSubquery(t Tuple, expr proc.Expr, execSubquery proc.SubqueryExecutor) bool {
+	res, ok := EvalTupleExprWithSubquery(t, expr, execSubquery)
 	if !ok {
-		return proc.EvalBoolExpr(expr, t.ToEvalMap(), nil)
+		return proc.EvalBoolExpr(expr, t.ToEvalMap(), execSubquery)
 	}
 	if res == nil {
 		return false

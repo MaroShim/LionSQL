@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"time"
 
@@ -809,6 +810,34 @@ func toStorageValFromAny(v any) storage.Value {
 	}
 }
 
+func formatKeyVal(val any) string {
+	switch v := val.(type) {
+	case string:
+		return sqlutil.CanonicalIdent(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case int:
+		return strconv.Itoa(v)
+	case int32:
+		return strconv.Itoa(int(v))
+	case storage.Value:
+		if v.IsNull {
+			return "NULL"
+		}
+		if v.Type == storage.TypeInt {
+			return strconv.FormatInt(v.IVal, 10)
+		}
+		if v.Type == storage.TypeVarChar {
+			return sqlutil.CanonicalIdent(v.SVal)
+		}
+		return sqlutil.CanonicalIdent(fmt.Sprintf("%v", v))
+	case float64:
+		return strconv.FormatFloat(v, 'f', -1, 64)
+	default:
+		return sqlutil.CanonicalIdent(fmt.Sprintf("%v", val))
+	}
+}
+
 func extractTupleKey(t Tuple, key string, arena *storage.Arena) (string, bool) {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -819,12 +848,7 @@ func extractTupleKey(t Tuple, key string, arena *storage.Arena) (string, bool) {
 		if !found || keyVal == nil {
 			return "", false
 		}
-		var kStr string
-		if sVal, ok := keyVal.(string); ok {
-			kStr = sqlutil.CanonicalIdent(sVal)
-		} else {
-			kStr = sqlutil.CanonicalIdent(fmt.Sprintf("%v", keyVal))
-		}
+		kStr := formatKeyVal(keyVal)
 		if arena != nil {
 			return arena.AllocString(kStr), true
 		}
@@ -842,11 +866,7 @@ func extractTupleKey(t Tuple, key string, arena *storage.Arena) (string, bool) {
 		if i > 0 {
 			buf.WriteByte('\x00')
 		}
-		if sVal, ok := val.(string); ok {
-			buf.WriteString(sqlutil.CanonicalIdent(sVal))
-		} else {
-			buf.WriteString(sqlutil.CanonicalIdent(fmt.Sprintf("%v", val)))
-		}
+		buf.WriteString(formatKeyVal(val))
 	}
 	res := buf.String()
 	if arena != nil {

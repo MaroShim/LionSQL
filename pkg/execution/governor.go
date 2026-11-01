@@ -21,9 +21,10 @@ const DefaultGCPercent = 200
 
 // ExecutorOptions controls memory budgets and scratch space for query operators.
 type ExecutorOptions struct {
-	WorkMem int64          `json:"work_mem"`
-	TempDir string         `json:"temp_dir"`
-	Arena   *storage.Arena `json:"-"`
+	WorkMem          int64                                                  `json:"work_mem"`
+	TempDir          string                                                 `json:"temp_dir"`
+	Arena            *storage.Arena                                         `json:"-"`
+	SubqueryExecutor func(sql string) ([]map[string]any, []string, error) `json:"-"`
 }
 
 // DefaultExecutorOptions returns production default execution options.

@@ -67,7 +67,11 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 			it.SetArena(opts.Arena)
 		}
 		if plan.FilterCond != "" {
-			op = NewFilterIterator(it, plan.FilterCond)
+			fIter := NewFilterIterator(it, plan.FilterCond)
+			if opts.SubqueryExecutor != nil {
+				fIter.SetSubqueryExecutor(opts.SubqueryExecutor)
+			}
+			op = fIter
 		} else {
 			op = it
 		}
@@ -80,7 +84,11 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		if cErr != nil {
 			return nil, cErr
 		}
-		op = NewFilterIterator(child, plan.FilterCond)
+		fIter := NewFilterIterator(child, plan.FilterCond)
+		if opts.SubqueryExecutor != nil {
+			fIter.SetSubqueryExecutor(opts.SubqueryExecutor)
+		}
+		op = fIter
 
 	case planner.NodeProjection:
 		if len(plan.Children) == 0 {
@@ -90,7 +98,11 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 		if cErr != nil {
 			return nil, cErr
 		}
-		op = NewProjectionIterator(child, plan.Projections)
+		pIter := NewProjectionIterator(child, plan.Projections)
+		if opts.SubqueryExecutor != nil {
+			pIter.SetSubqueryExecutor(opts.SubqueryExecutor)
+		}
+		op = pIter
 
 	case planner.NodeLimit:
 		if len(plan.Children) == 0 {
@@ -253,13 +265,13 @@ func buildExecutorRecursive(plan *planner.PlanNode, tx storage.Transaction, getT
 
 		var innerIdx *storage.IndexSchema
 		if innerPlan.IndexName != "" {
-			if idx, _, found := innerSchema.FindIndex(innerPlan.IndexName); found {
+			if idx, _, found := innerSchema.FindIndex(innerPlan.IndexName); found && len(idx.Columns) == 1 {
 				innerIdx = idx
 			}
 		} else if rightKey != "" {
 			for i := range innerSchema.Indexes {
 				idx := &innerSchema.Indexes[i]
-				if len(idx.Columns) > 0 && strings.EqualFold(idx.Columns[0], rightKey) {
+				if len(idx.Columns) == 1 && strings.EqualFold(idx.Columns[0], rightKey) {
 					innerIdx = idx
 					break
 				}

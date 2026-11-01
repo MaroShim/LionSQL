@@ -31,6 +31,8 @@ This directory serves as a persistent knowledge base (Shared Brain & Handover No
 
 6. **Active & Post-1.0 Architecture Plans**:
    - **Active Sprints (Priority 1 & 2)**:
+     - **[`SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)** (Korean): Standard guidelines and recommended scopes for SQLLogicTest (SLT) across modern database engines (DuckDB, CockroachDB, TiDB, DataFusion, 3-tier hierarchy).
+     - **[`SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md`](SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md)** (Korean): LionSQL SQLLogicTest (SLT) 4-phase expansion roadmap (Phase 1-4) and quality gate integration plan.
      - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)** (Korean): Master plan for crash resilience, kill tests, soak stress tests, and dogfooding.
      - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)** (Korean): Master plan for 6 real-world app integrations (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost).
      - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)** (Korean): Woodpecker CI and Vikunja integration verification report (recursive CTE, composite OR index branch, DML command tag normalization).

@@ -634,11 +634,14 @@ func (p *Parser) parseGeneralSelect() (*GeneralSelectStmt, error) {
 	}
 
 	// 3. JOIN & APPLY clauses
-	for p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) || p.curTokenIs(TokenRight) || p.curTokenIs(TokenFull) || p.curTokenIs(TokenCross) || p.curTokenIs(TokenOuter) ||
+	for p.curTokenIs(TokenComma) || p.curTokenIs(TokenJoin) || p.curTokenIs(TokenInner) || p.curTokenIs(TokenLeft) || p.curTokenIs(TokenRight) || p.curTokenIs(TokenFull) || p.curTokenIs(TokenCross) || p.curTokenIs(TokenOuter) ||
 		(p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE"))) {
 		joinType := "INNER"
 		isApply := false
-		if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) {
+		if p.curTokenIs(TokenComma) {
+			p.nextToken() // eat ,
+			joinType = "CROSS"
+		} else if p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "HASH") || strings.EqualFold(p.curToken.Literal, "LOOP") || strings.EqualFold(p.curToken.Literal, "MERGE")) {
 			joinHint := strings.ToUpper(p.curToken.Literal)
 			p.nextToken()
 			if !p.curTokenIs(TokenJoin) {

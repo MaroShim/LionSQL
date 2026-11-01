@@ -7,7 +7,7 @@ mkdir -p "${DEST_DIR}"
 
 BASE_URL="https://raw.githubusercontent.com/cockroachdb/sqllogictest/master/test"
 
-for suite in select1.test select2.test; do
+for suite in select1.test select2.test select3.test select4.test select5.test; do
     echo "[slt] Fetching ${suite} from upstream..."
     curl -sSL "${BASE_URL}/${suite}" -o "${DEST_DIR}/${suite}"
     echo "[slt] Saved to ${DEST_DIR}/${suite} ($(wc -l < "${DEST_DIR}/${suite}") lines)"

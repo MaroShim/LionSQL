@@ -14,13 +14,14 @@ import (
 
 // FilterIterator evaluates a filter condition (WHERE or HAVING) over tuples streamed from a child iterator in row-by-row or vectorized chunk mode.
 type FilterIterator struct {
-	child     Iterator
-	condition string
-	parsed    proc.Expr
-	hasParsed bool
-	inChunk   Chunk
-	outChunk  Chunk
-	outIdx    int
+	child            Iterator
+	condition        string
+	parsed           proc.Expr
+	hasParsed        bool
+	subqueryExecutor func(sql string) ([]map[string]any, []string, error)
+	inChunk          Chunk
+	outChunk         Chunk
+	outIdx           int
 }
 
 // NewFilterIterator creates a new filter operator.
@@ -47,6 +48,11 @@ func NewFilterIterator(child Iterator, condition string) *FilterIterator {
 		}
 	}
 	return f
+}
+
+// SetSubqueryExecutor sets an optional subquery executor for evaluating correlated or scalar subqueries.
+func (f *FilterIterator) SetSubqueryExecutor(exec func(sql string) ([]map[string]any, []string, error)) {
+	f.subqueryExecutor = exec
 }
 
 func (f *FilterIterator) Open(ctx context.Context) error {
@@ -155,15 +161,29 @@ func (f *FilterIterator) evaluate(t Tuple) bool {
 		return false
 	}
 
-	if f.hasParsed && f.parsed != nil {
-		return EvalTupleBoolExpr(t, f.parsed)
+	var subExec proc.SubqueryExecutor
+	if f.subqueryExecutor != nil {
+		evalMap := t.ToEvalMap()
+		subExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
+			paramSQL := sqlutil.ParameterizeSubquery(rawSubSQL, evalMap)
+			return f.subqueryExecutor(paramSQL)
+		}
 	}
 
-	return EvalConditionTuple(t, f.condition)
+	if f.hasParsed && f.parsed != nil {
+		return EvalTupleBoolExprWithSubquery(t, f.parsed, subExec)
+	}
+
+	return EvalConditionTupleWithSubquery(t, f.condition, subExec)
 }
 
 // EvalConditionTuple evaluates a SQL condition string against a Tuple.
 func EvalConditionTuple(t Tuple, cond string) bool {
+	return EvalConditionTupleWithSubquery(t, cond, nil)
+}
+
+// EvalConditionTupleWithSubquery evaluates a SQL condition string against a Tuple with optional SubqueryExecutor.
+func EvalConditionTupleWithSubquery(t Tuple, cond string, subExec proc.SubqueryExecutor) bool {
 	cond = strings.TrimSpace(cond)
 	if cond == "" || cond == "1=1" || cond == "1 = 1" {
 		return true
@@ -176,13 +196,13 @@ func EvalConditionTuple(t Tuple, cond string) bool {
 	p := proc.NewParser(proc.NewLexer(cond))
 	expr := p.ParseExpr()
 	if expr != nil && len(p.Errors()) == 0 {
-		return proc.EvalBoolExpr(expr, t.ToEvalMap(), nil)
+		return proc.EvalBoolExpr(expr, t.ToEvalMap(), subExec)
 	}
 
 	orParts := splitLogicalParts(cond, " OR ")
 	if len(orParts) > 1 {
 		for _, part := range orParts {
-			if EvalConditionTuple(t, part) {
+			if EvalConditionTupleWithSubquery(t, part, subExec) {
 				return true
 			}
 		}
@@ -192,7 +212,7 @@ func EvalConditionTuple(t Tuple, cond string) bool {
 	andParts := splitLogicalParts(cond, " AND ")
 	if len(andParts) > 1 {
 		for _, part := range andParts {
-			if !EvalConditionTuple(t, part) {
+			if !EvalConditionTupleWithSubquery(t, part, subExec) {
 				return false
 			}
 		}
@@ -344,10 +364,15 @@ func lookupVal(t Tuple, col string) (any, bool) {
 		return v, true
 	}
 	// Bare column if table prefix present (e.g. u.data -> data)
+	// ONLY if the tuple's relation matches the qualifier prefix or has no known table qualifiers.
 	if dotIdx := strings.Index(col, "."); dotIdx != -1 {
-		bare := col[dotIdx+1:]
-		if v, ok := t.GetOK(bare); ok {
-			return v, true
+		prefix := strings.ToLower(cleanIdentifierParts(col[:dotIdx]))
+		cmap := t.Index
+		if cmap == nil || len(cmap.tableCols) == 0 || cmap.tableCols[prefix] != nil {
+			bare := col[dotIdx+1:]
+			if v, ok := t.GetOK(bare); ok {
+				return v, true
+			}
 		}
 	}
 

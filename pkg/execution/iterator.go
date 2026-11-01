@@ -53,19 +53,17 @@ func NewColumnIndexMap(schema *storage.TableSchema, alias string) *ColumnIndexMa
 				m.indices[strings.ToLower(alias+"."+c.Name)] = i
 				m.indices[cleanAlias+"."+cleanCol] = i
 				m.indices[strings.ToLower(cleanAlias+"."+cleanCol)] = i
-			}
-			if schema.Name != "" && schema.Name != alias {
+			} else if schema.Name != "" {
 				m.indices[schema.Name+"."+c.Name] = i
 				m.indices[strings.ToLower(schema.Name+"."+c.Name)] = i
 				m.indices[cleanSchema+"."+cleanCol] = i
 				m.indices[strings.ToLower(cleanSchema+"."+cleanCol)] = i
 			}
 		}
-		if cleanSchema != "" {
-			m.tableCols[strings.ToLower(cleanSchema)] = colNames
-		}
 		if cleanAlias != "" {
 			m.tableCols[strings.ToLower(cleanAlias)] = colNames
+		} else if cleanSchema != "" {
+			m.tableCols[strings.ToLower(cleanSchema)] = colNames
 		}
 	}
 	return m

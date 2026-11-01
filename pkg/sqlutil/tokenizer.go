@@ -1,7 +1,9 @@
 package sqlutil
 
 import (
+	"fmt"
 	"strings"
+	"time"
 	"unicode"
 )
 
@@ -311,10 +313,17 @@ func SplitAndConditions(where string) []string {
 		return nil
 	}
 
+	// If WHERE clause contains unparenthesized OR at depth 0,
+	// the top-level expression is a disjunction and cannot be split by AND.
+	if HasTopLevelOr(where) {
+		return []string{where}
+	}
+
 	n := len(where)
 	var conds []string
 	start := 0
 	depth := 0
+	betweenCount := 0
 	inSingleQuote := false
 	inDoubleQuote := false
 	inBracket := false
@@ -377,18 +386,37 @@ func SplitAndConditions(where string) []string {
 			continue
 		}
 
+		if depth == 0 && i+7 <= n {
+			word := where[i : i+7]
+			if strings.EqualFold(word, "BETWEEN") {
+				isLeftBoundary := (i == 0 || isWordBoundary(where[i-1]))
+				isRightBoundary := (i+7 == n || isWordBoundary(where[i+7]))
+				if isLeftBoundary && isRightBoundary {
+					betweenCount++
+					i += 6
+					continue
+				}
+			}
+		}
+
 		if depth == 0 && i+3 <= n {
 			word := where[i : i+3]
 			if strings.EqualFold(word, "AND") {
 				isLeftBoundary := (i == 0 || isWordBoundary(where[i-1]))
 				isRightBoundary := (i+3 == n || isWordBoundary(where[i+3]))
 				if isLeftBoundary && isRightBoundary {
+					if betweenCount > 0 {
+						betweenCount--
+						i += 2
+						continue
+					}
 					cond := strings.TrimSpace(where[start:i])
 					if cond != "" {
 						conds = append(conds, cond)
 					}
 					i += 2
 					start = i + 1
+					continue
 				}
 			}
 		}
@@ -402,6 +430,79 @@ func SplitAndConditions(where string) []string {
 	}
 
 	return conds
+}
+
+// HasTopLevelOr checks if a SQL expression contains an unparenthesized, unquoted OR keyword at depth 0.
+func HasTopLevelOr(s string) bool {
+	n := len(s)
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < n && s[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				inBracket = false
+			}
+			continue
+		}
+		if ch == '\'' {
+			inSingleQuote = true
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+
+		if depth == 0 && i+2 <= n {
+			word := s[i : i+2]
+			if strings.EqualFold(word, "OR") {
+				isLeftBoundary := (i == 0 || isWordBoundary(s[i-1]))
+				isRightBoundary := (i+2 == n || isWordBoundary(s[i+2]))
+				if isLeftBoundary && isRightBoundary {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 // SplitSetClauses parses comma-separated assignment expressions in an UPDATE or MERGE statement
@@ -1286,3 +1387,210 @@ func ExtractTopLevelTuples(s string) []string {
 	}
 	return tuples
 }
+
+// FormatSQLLiteral converts an arbitrary value into a valid SQL literal representation.
+func FormatSQLLiteral(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case string:
+		return "'" + strings.ReplaceAll(val, "'", "''") + "'"
+	case []byte:
+		return "'" + strings.ReplaceAll(string(val), "'", "''") + "'"
+	case time.Time:
+		return "'" + val.Format("2006-01-02 15:04:05") + "'"
+	case bool:
+		if val {
+			return "1"
+		}
+		return "0"
+	default:
+		return fmt.Sprintf("%v", val)
+	}
+}
+
+// ReplaceCorrelatedTokens tokenizes input SQL and substitutes identifier references outside string literals.
+func ReplaceCorrelatedTokens(s string, replacements map[string]string) string {
+	n := len(s)
+	if n == 0 || len(replacements) == 0 {
+		return s
+	}
+
+	var sb strings.Builder
+	sb.Grow(n + 16)
+
+	inSingleQuote := false
+
+	i := 0
+	for i < n {
+		ch := s[i]
+
+		if inSingleQuote {
+			sb.WriteByte(ch)
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					sb.WriteByte(s[i+1])
+					i += 2
+					continue
+				}
+				inSingleQuote = false
+			}
+			i++
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			sb.WriteByte(ch)
+			i++
+			continue
+		}
+
+		// Match identifier or qualified identifier (e.g. u.id, [u].[id], id, [id], "u"."id")
+		if ch == '[' || ch == '"' || ch == '`' || unicode.IsLetter(rune(ch)) || ch == '_' {
+			start := i
+			for i < n {
+				c := s[i]
+				if c == '[' {
+					i++
+					for i < n && s[i] != ']' {
+						i++
+					}
+					if i < n {
+						i++
+					}
+				} else if c == '"' || c == '`' {
+					quote := c
+					i++
+					for i < n && s[i] != quote {
+						i++
+					}
+					if i < n {
+						i++
+					}
+				} else if unicode.IsLetter(rune(c)) || unicode.IsDigit(rune(c)) || c == '_' || c == '.' {
+					i++
+				} else {
+					break
+				}
+			}
+			ident := s[start:i]
+			cleanLower := strings.ToLower(CleanIdentifierParts(ident))
+			if repl, ok := replacements[cleanLower]; ok {
+				sb.WriteString(repl)
+			} else if repl, ok := replacements[strings.ToLower(ident)]; ok {
+				sb.WriteString(repl)
+			} else {
+				sb.WriteString(ident)
+			}
+			continue
+		}
+
+		sb.WriteByte(ch)
+		i++
+	}
+
+	return sb.String()
+}
+
+// ParameterizeSubquery substitutes outer row values into a subquery string.
+func ParameterizeSubquery(subquerySQL string, row map[string]any) string {
+	if len(row) == 0 {
+		return subquerySQL
+	}
+	replacements := make(map[string]string, len(row)*2)
+	for k, v := range row {
+		lit := FormatSQLLiteral(v)
+		normKey := strings.ToLower(CleanIdentifierParts(k))
+		replacements[normKey] = lit
+		replacements[strings.ToLower(k)] = lit
+	}
+	return ReplaceCorrelatedTokens(subquerySQL, replacements)
+}
+
+// IsCorrelatedSubquery reports whether innerSQL references any of outerNames (e.g. outer.col, [outer].[col]).
+func IsCorrelatedSubquery(innerSQL string, outerNames []string) bool {
+	if len(outerNames) == 0 {
+		return false
+	}
+	normOuters := make(map[string]bool, len(outerNames))
+	for _, o := range outerNames {
+		clean := strings.ToLower(CleanIdentifier(o))
+		if clean != "" {
+			normOuters[clean] = true
+		}
+	}
+
+	n := len(innerSQL)
+	inSingleQuote := false
+	i := 0
+	for i < n {
+		ch := innerSQL[i]
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && innerSQL[i+1] == '\'' {
+					i += 2
+					continue
+				}
+				inSingleQuote = false
+			}
+			i++
+			continue
+		}
+		if ch == '\'' {
+			inSingleQuote = true
+			i++
+			continue
+		}
+
+		if ch == '[' || ch == '"' || ch == '`' || unicode.IsLetter(rune(ch)) || ch == '_' {
+			start := i
+			for i < n {
+				c := innerSQL[i]
+				if c == '[' {
+					i++
+					for i < n && innerSQL[i] != ']' {
+						i++
+					}
+					if i < n {
+						i++
+					}
+				} else if c == '"' || c == '`' {
+					quote := c
+					i++
+					for i < n && innerSQL[i] != quote {
+						i++
+					}
+					if i < n {
+						i++
+					}
+				} else if unicode.IsLetter(rune(c)) || unicode.IsDigit(rune(c)) || c == '_' || c == '.' {
+					i++
+				} else {
+					break
+				}
+			}
+			token := innerSQL[start:i]
+			if dotIdx := strings.Index(token, "."); dotIdx != -1 {
+				tblPrefix := strings.ToLower(CleanIdentifier(token[:dotIdx]))
+				if normOuters[tblPrefix] {
+					return true
+				}
+			}
+			continue
+		}
+		i++
+	}
+	return false
+}
+
+// CleanIdentifierParts strips quotes from each dot-separated segment of an identifier.
+func CleanIdentifierParts(name string) string {
+	parts := strings.Split(name, ".")
+	for i, p := range parts {
+		parts[i] = CleanIdentifier(p)
+	}
+	return strings.Join(parts, ".")
+}
+

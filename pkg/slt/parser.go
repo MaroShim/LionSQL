@@ -156,7 +156,7 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 			}
 
 			// Read expected results until blank line
-			var expectedValues []string
+			var resLines []string
 			expectedHash := ""
 			expectedCount := 0
 
@@ -178,11 +178,10 @@ func Parse(r io.Reader, filePath string) ([]Record, error) {
 					break
 				}
 
-				// Values on a line are separated by whitespace or tabs.
-				// If line contains multiple values for multiple columns, preserve spaces in string values.
-				fields := splitRowFields(resLine, len(typeSig))
-				expectedValues = append(expectedValues, fields...)
+				resLines = append(resLines, resLine)
 			}
+
+			expectedValues := parseResultLines(resLines, len(typeSig), strings.HasSuffix(filePath, ".test"))
 
 			records = append(records, Record{
 				Type:           CmdQuery,
@@ -260,6 +259,25 @@ func SortResults(values []string, numCols int, mode SortMode) []string {
 		return sorted
 	}
 
+	return values
+}
+
+func parseResultLines(lines []string, numCols int, isOfficialTest bool) []string {
+	if len(lines) == 0 {
+		return nil
+	}
+	if isOfficialTest || numCols <= 1 {
+		res := make([]string, len(lines))
+		for i, l := range lines {
+			res[i] = strings.TrimSpace(l)
+		}
+		return res
+	}
+
+	var values []string
+	for _, l := range lines {
+		values = append(values, splitRowFields(l, numCols)...)
+	}
 	return values
 }
 

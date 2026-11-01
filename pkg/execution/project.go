@@ -20,14 +20,20 @@ type projField struct {
 
 // ProjectionIterator evaluates projected expressions and renames columns in row-by-row or vectorized chunk mode.
 type ProjectionIterator struct {
-	child       Iterator
-	fields      []projField
-	isSelectAll bool
-	schema      []string
-	colIndexMap *ColumnIndexMap
-	inChunk     Chunk
-	outChunk    Chunk
-	outIdx      int
+	child            Iterator
+	fields           []projField
+	isSelectAll      bool
+	schema           []string
+	colIndexMap      *ColumnIndexMap
+	subqueryExecutor func(sql string) ([]map[string]any, []string, error)
+	inChunk          Chunk
+	outChunk         Chunk
+	outIdx           int
+}
+
+// SetSubqueryExecutor sets an optional subquery executor for evaluating scalar or correlated subqueries in projections.
+func (p *ProjectionIterator) SetSubqueryExecutor(exec func(sql string) ([]map[string]any, []string, error)) {
+	p.subqueryExecutor = exec
 }
 
 // isWildcard reports whether a projection item is an unqualified or table-qualified wildcard (* or alias.*).
@@ -182,6 +188,16 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 	}
 	tuple.Materialize()
 	vals := make([]any, len(p.fields))
+
+	var subExec proc.SubqueryExecutor
+	if p.subqueryExecutor != nil {
+		evalMap := tuple.ToEvalMap()
+		subExec = func(rawSubSQL string) ([]map[string]any, []string, error) {
+			paramSQL := sqlutil.ParameterizeSubquery(rawSubSQL, evalMap)
+			return p.subqueryExecutor(paramSQL)
+		}
+	}
+
 	for i, f := range p.fields {
 		// Prioritize qualified expression (e.g. "o.amount", "u.name") over unqualified alias
 		// to prevent shadowing when multiple relations share identical column names.
@@ -194,7 +210,7 @@ func (p *ProjectionIterator) projectTuple(tuple Tuple) Tuple {
 			continue
 		}
 		if f.parsed != nil {
-			if res, ok := EvalTupleExpr(tuple, f.parsed); ok {
+			if res, ok := EvalTupleExprWithSubquery(tuple, f.parsed, subExec); ok {
 				vals[i] = res
 				continue
 			}

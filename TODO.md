@@ -72,10 +72,18 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [-] 1.5 `DURA-SLT-2` SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 (진행 중)
 - 설계 계획서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
 - 확장 로드맵: [`notes/SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md`](notes/SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md)
+- 업계 적용 및 권장 범위: [`notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](notes/SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)
 - [x] **병렬 워커 풀(`-parallel N`) 및 4대 매트릭스 러너 완성**: `cmd/sqllogictest`에 `-engine wiredtiger` 디스크 격리 엔진, `-mode pgwire` 실제 PostgreSQL v3 TCP 소켓 실행기(`PGWireExecutor`), `-parallel N` 고루틴 워커 풀 구현 완료
 - [x] **Phase 1 (고위험 핵심 도메인 33개 스위트, 181개 쿼리 전수 인증)**: 다중 중첩 사칙연산, `COALESCE`+`NULLIF` 복합 대수식, 3VL 드모르간 항등식, `LEFT JOIN`+`GROUP BY`+`COALESCE(SUM(...), 0)`, 트랜잭션 격리, 복합 불리언 논리, 대규모 IN 및 NOT IN NULL 함정 검증 100% 완료
-- [x] **Phase 2 (SQLite 공식 대규모 `select1.test` ~ `select2.test` 연동 시작)**: `scripts/fetch_slt.sh` 동기화 도구 구축, `select1.test` (12,188행, 1,000쿼리) 및 `select2.test` (11,218행, 1,000쿼리) fetch 완료, 초기 쿼리 오라클 MD5 일치 통과
-- [ ] **Phase 3 (SQLite 공식 `select1` ~ `select5` 60,000+ 쿼리 완주)**: 비등가 상관 서브쿼리(`x.b < t1.b`) 및 서브쿼리 인라인 평가 엔진 보강 후 대용량 전수 통과
+- [x] **Phase 2 (SQLite 공식 `select1.test` ~ `select5.test` 10,706 쿼리 전수 100% PASS)**:
+  - `select1.test`: 1,031 쿼리 (2.29s)
+  - `select2.test`: 1,031 쿼리 (2.18s)
+  - `select3.test`: 3,351 쿼리 (5.88s)
+  - `select4.test`: 3,857 쿼리 (6.36s)
+  - `select5.test`: 1,436 쿼리 (5.67s, 최대 64개 테이블 콤마 조인)
+  - 총 10,706개 쿼리 전수 100% 무오류 인증 통과 (소요 시간 22.69s, 0 data races).
+  - BFS 기반 Spanning Tree 조인 키 추론(`pushdown.go`) 및 Greedy Join Ordering 필터 우선순위화(`planner.go`)로 최대 64개 테이블 조인 카테시안 폭발 완치.
+- [ ] **Phase 3 (SQLite 공식 `index` / `random` / `evidence` 스위트 확장)**: 인덱스 복합 스캔, 난수 대수식, 통계적 카디널리티 스트레스 테스트 연동
 - [ ] **Phase 6 (1.0 릴리즈 게이트 통합)**: 1.0 릴리즈 직전 풀 스위트 듀얼 엔진 100% 무오류 인증
 
 ---

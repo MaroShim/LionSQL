@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -211,8 +212,8 @@ func PushDownPredicates(q *QueryInfo, schema *storage.TableSchema, rightSchemas 
 		} else {
 			joinIdx := firstTbl - 1
 			j := joinList[joinIdx]
-			// Push down to inner, semi, or anti join
-			if strings.EqualFold(j.Type, "INNER") || strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") || j.Type == "" {
+			// Push down to inner, semi, anti, or cross join
+			if strings.EqualFold(j.Type, "INNER") || strings.EqualFold(j.Type, "SEMI") || strings.EqualFold(j.Type, "ANTI") || strings.EqualFold(j.Type, "CROSS") || j.Type == "" {
 				res.JoinConds[joinIdx] = append(res.JoinConds[joinIdx], cond)
 			} else {
 				// LEFT/RIGHT/FULL OUTER JOIN: WHERE predicates on nullable side can null-reject or alter outer join semantics
@@ -220,6 +221,119 @@ func PushDownPredicates(q *QueryInfo, schema *storage.TableSchema, rightSchemas 
 			}
 		}
 	}
+
+	// Infer equijoins from RemainingConds for unconstrained joins (e.g. ANSI-89 comma joins)
+	numTables := 1 + len(joinList)
+	type equiEdge struct {
+		cond        string
+		u, v        int
+		left, right string
+	}
+
+	var equiEdges []equiEdge
+	var nonEquiConds []string
+
+	for _, cond := range res.RemainingConds {
+		l, r := sqlutil.SplitJoinCond(cond)
+		if l == "" || r == "" {
+			nonEquiConds = append(nonEquiConds, cond)
+			continue
+		}
+		refsL := ExtractColumnRefs(l)
+		refsR := ExtractColumnRefs(r)
+		if len(refsL) != 1 || len(refsR) != 1 {
+			nonEquiConds = append(nonEquiConds, cond)
+			continue
+		}
+		idxL, okL := ctx.ResolveTable(refsL[0])
+		idxR, okR := ctx.ResolveTable(refsR[0])
+		if !okL || !okR || idxL < 0 || idxR < 0 || idxL == idxR {
+			nonEquiConds = append(nonEquiConds, cond)
+			continue
+		}
+
+		equiEdges = append(equiEdges, equiEdge{
+			cond:  cond,
+			u:     idxL,
+			v:     idxR,
+			left:  l,
+			right: r,
+		})
+	}
+
+	type adjEdge struct {
+		edgeIdx int
+		target  int
+	}
+	adj := make([][]adjEdge, numTables)
+	for i, e := range equiEdges {
+		adj[e.u] = append(adj[e.u], adjEdge{edgeIdx: i, target: e.v})
+		adj[e.v] = append(adj[e.v], adjEdge{edgeIdx: i, target: e.u})
+	}
+
+	assignedJoin := make([]bool, len(joinList))
+	for jIdx, j := range joinList {
+		if j.LeftKey != "" && j.RightKey != "" {
+			assignedJoin[jIdx] = true
+		}
+	}
+
+	visited := make([]bool, numTables)
+	usedEdge := make([]bool, len(equiEdges))
+
+	bfs := func(start int) {
+		visited[start] = true
+		queue := []int{start}
+
+		for len(queue) > 0 {
+			curr := queue[0]
+			queue = queue[1:]
+
+			for _, a := range adj[curr] {
+				neighbor := a.target
+				if !visited[neighbor] {
+					visited[neighbor] = true
+					queue = append(queue, neighbor)
+
+					if neighbor > 0 {
+						jIdx := neighbor - 1
+						if jIdx < len(joinList) && !assignedJoin[jIdx] {
+							j := joinList[jIdx]
+							if j.Type == "CROSS" || strings.EqualFold(j.Type, "INNER") || j.Type == "" {
+								j.Type = "INNER"
+								e := equiEdges[a.edgeIdx]
+								if e.u == curr {
+									j.LeftKey = e.left
+									j.RightKey = e.right
+								} else {
+									j.LeftKey = e.right
+									j.RightKey = e.left
+								}
+								assignedJoin[jIdx] = true
+								usedEdge[a.edgeIdx] = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	bfs(0)
+	for t := 1; t < numTables; t++ {
+		if !visited[t] {
+			bfs(t)
+		}
+	}
+
+	var finalRemaining []string
+	finalRemaining = append(finalRemaining, nonEquiConds...)
+	for i, e := range equiEdges {
+		if !usedEdge[i] {
+			finalRemaining = append(finalRemaining, e.cond)
+		}
+	}
+	res.RemainingConds = finalRemaining
 
 	return res
 }

@@ -41,6 +41,13 @@ func CleanIdentifier(s string) string {
 // SplitOnAnd splits a WHERE clause on top-level AND keywords,
 // respecting parentheses depth, string literals, and BETWEEN ... AND constructs.
 func SplitOnAnd(where string) []string {
+	where = strings.TrimSpace(where)
+	if where == "" {
+		return nil
+	}
+	if sqlutil.HasTopLevelOr(where) {
+		return []string{where}
+	}
 	var parts []string
 	depth := 0
 	start := 0
@@ -141,6 +148,9 @@ func HasDisjunction(expr string) bool {
 func ParseWhereConditions(where string) (map[string]string, map[string]*IndexRangeCond) {
 	eqs := make(map[string]string)
 	ranges := make(map[string]*IndexRangeCond)
+	if sqlutil.HasTopLevelOr(where) {
+		return eqs, ranges
+	}
 	parts := SplitOnAnd(where)
 
 	cleanVal := func(s string) string {
@@ -274,6 +284,9 @@ func ParseValueToType(s string, t storage.DataType) storage.Value {
 // returning the matched IndexSchema, lowVal, highVal, and ok=true if an index scan can be used.
 func FindIndexAndBounds(schema *storage.TableSchema, whereClause string) (*storage.IndexSchema, *storage.Value, *storage.Value, bool) {
 	if schema == nil || len(schema.Indexes) == 0 || whereClause == "" {
+		return nil, nil, nil, false
+	}
+	if sqlutil.HasTopLevelOr(whereClause) {
 		return nil, nil, nil, false
 	}
 	eqColVals, rangeCols := ParseWhereConditions(whereClause)

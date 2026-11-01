@@ -8,6 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- achieve 100% pass across official SQLite SQLLogicTest suites (`select1.test` through `select5.test`, 10,706 queries in 22.69s) verifying complex multi-table joins, aggregations, and subqueries with zero hash mismatches (DURA-SLT-2)
+- add BFS spanning tree join inference in predicate pushdown to eliminate Cartesian cross-join explosions in implicit comma joins (DURA-SLT-2)
+- add greedy join ordering filter prioritization in CBO planner to collapse intermediate join cardinalities early on large join trees up to 64 tables (DURA-SLT-2)
 - add PGWire TCP socket executor (`PGWireExecutor`), WiredTiger isolated disk backend (`-engine wiredtiger`), parallel worker pool (`-parallel`), and expression/aggregation stress suites (`expr_stress.slt`, `agg_stress.slt`) to SQLLogicTest harness (`cmd/sqllogictest`, `pkg/slt`) (DURA-SLT-2)
 - formalize table-driven compatibility architecture across PGWire parameter OID inference, command completion tag formatting, and virtual catalog view routing (COMPAT-TABLE-DRIVEN-1)
 - complete Woodpecker CI integration over PGWire (:5433, Go, XORM, 19 tables, 32 migrations, UI and healthcheck) (INTEG-WOODPECKER-1)
@@ -31,6 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- prevent implicit comma joins from degrading into multi-million row Cartesian cross joins via BFS spanning tree equijoin discovery in `pkg/planner/pushdown.go` (DURA-SLT-2)
+- verify unqualified outer column references against available table schemas in `checkAndOrientJoinKeys` before reordering join keys (DURA-SLT-2)
+- treat space-containing string cells in official SQLite `.test` suites as single values per line in SLT parser (DURA-SLT-2)
+- optimize join key formatting in `pkg/execution/join.go` via fast-path `strconv.Itoa`/`strconv.FormatInt` and direct `storage.Value` serialization (DURA-SLT-2)
 - distinguish subquery-internal aggregates in SELECT projections from outer group aggregates in CBO planner via hasTopLevelAggregateExpr, preventing single-row truncation of scalar subquery projections (DURA-SLT-2)
 - support 1-based ordinal position sorting (e.g. ORDER BY 1, 2) in Volcano CBO planner and SortIterator by placing SortNode post-projection and indexing tuple slots (DURA-SLT-2)
 - support standard SQL string concatenation operator (||) across T-SQL Pratt parser and Volcano/row expression evaluators (DURA-SLT-2)

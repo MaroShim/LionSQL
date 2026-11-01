@@ -637,7 +637,7 @@ func (s *Coordinator) resolveSubqueries(whereClause string) (string, error) {
 	return s.resolveSubqueriesWithSession(whereClause, nil)
 }
 
-func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *ClientSession) (string, error) {
+func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *ClientSession, outerNames ...string) (string, error) {
 	if whereClause == "" {
 		return "", nil
 	}
@@ -657,6 +657,10 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, reExplainExists, offset)
 		if !found {
 			break
+		}
+		if len(outerNames) > 0 && sqlutil.IsCorrelatedSubquery(innerSQL, outerNames) {
+			offset = mEnd
+			continue
 		}
 		innerRes, err := execSubquery(innerSQL)
 		if err != nil {
@@ -686,6 +690,10 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, reExplainInSelect, offset)
 		if !found {
 			break
+		}
+		if len(outerNames) > 0 && sqlutil.IsCorrelatedSubquery(innerSQL, outerNames) {
+			offset = mEnd
+			continue
 		}
 		tokens := strings.Fields(prefix)
 		colName := cleanIdentifier(tokens[0])
@@ -736,6 +744,10 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 		mStart, mEnd, _, innerSQL, found := findSubqueryFrom(result, reExplainScalarSelect, offset)
 		if !found {
 			break
+		}
+		if len(outerNames) > 0 && sqlutil.IsCorrelatedSubquery(innerSQL, outerNames) {
+			offset = mEnd
+			continue
 		}
 		innerRes, err := s.ExecuteSQL(innerSQL)
 		if err != nil {
