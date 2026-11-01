@@ -1,0 +1,97 @@
+# Core WHERE Predicates and Boolean Operators
+
+statement ok
+CREATE TABLE test_where (id INT PRIMARY KEY, val INT, name VARCHAR);
+
+statement ok
+INSERT INTO test_where VALUES (1, 10, 'one');
+
+statement ok
+INSERT INTO test_where VALUES (2, 20, 'two');
+
+statement ok
+INSERT INTO test_where VALUES (3, 30, 'three');
+
+statement ok
+INSERT INTO test_where VALUES (4, 40, 'four');
+
+statement ok
+INSERT INTO test_where VALUES (5, 50, 'five');
+
+# Simple equality
+query IT rowsort
+SELECT id, name FROM test_where WHERE id = 3;
+----
+3 three
+
+# Greater than
+query I rowsort
+SELECT id FROM test_where WHERE val > 25;
+----
+3
+4
+5
+
+# Inequality !=
+query I rowsort
+SELECT id FROM test_where WHERE id != 3;
+----
+1
+2
+4
+5
+
+# AND predicate
+query IT rowsort
+SELECT id, name FROM test_where WHERE id >= 2 AND val <= 40;
+----
+2 two
+3 three
+4 four
+
+# OR predicate
+query IT rowsort
+SELECT id, name FROM test_where WHERE id = 1 OR id = 5;
+----
+1 one
+5 five
+
+# Combined AND / OR with precedence
+query I rowsort
+SELECT id FROM test_where WHERE id = 1 OR id = 2 AND val = 99;
+----
+1
+
+query I rowsort
+SELECT id FROM test_where WHERE (id = 1 OR id = 2) AND val = 20;
+----
+2
+
+# IN list
+query IT rowsort
+SELECT id, name FROM test_where WHERE id IN (2, 4, 99);
+----
+2 two
+4 four
+
+# NOT IN list
+query I rowsort
+SELECT id FROM test_where WHERE id NOT IN (1, 3, 5);
+----
+2
+4
+
+# BETWEEN
+query I rowsort
+SELECT id FROM test_where WHERE val BETWEEN 20 AND 40;
+----
+2
+3
+4
+
+# LIKE
+query T rowsort
+SELECT name FROM test_where WHERE name LIKE 't%';
+----
+three
+two

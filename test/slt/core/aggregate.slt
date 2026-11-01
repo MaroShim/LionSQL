@@ -1,0 +1,52 @@
+# Core Aggregate Functions, GROUP BY, and HAVING
+
+statement ok
+CREATE TABLE sales (id INT PRIMARY KEY, region VARCHAR, amount INT);
+
+statement ok
+INSERT INTO sales VALUES (1, 'East', 100);
+
+statement ok
+INSERT INTO sales VALUES (2, 'East', 150);
+
+statement ok
+INSERT INTO sales VALUES (3, 'West', 200);
+
+statement ok
+INSERT INTO sales VALUES (4, 'West', 300);
+
+statement ok
+INSERT INTO sales VALUES (5, 'North', 50);
+
+# Global aggregates
+query II rowsort
+SELECT COUNT(*), SUM(amount) FROM sales;
+----
+5 800
+
+query II rowsort
+SELECT MIN(amount), MAX(amount) FROM sales;
+----
+50 300
+
+# GROUP BY
+query TI rowsort
+SELECT region, SUM(amount) FROM sales GROUP BY region;
+----
+East 250
+North 50
+West 500
+
+query TI rowsort
+SELECT region, COUNT(*) FROM sales GROUP BY region;
+----
+East 2
+North 1
+West 2
+
+# GROUP BY with HAVING
+query TI rowsort
+SELECT region, SUM(amount) FROM sales GROUP BY region HAVING SUM(amount) > 100;
+----
+East 250
+West 500

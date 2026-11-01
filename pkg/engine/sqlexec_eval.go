@@ -219,6 +219,14 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				return false
 			}
 
+			// In SQL three-valued logic, binary comparisons with NULL evaluate to UNKNOWN (false in WHERE filter).
+			if val == nil || (!rightIsQuoted && strings.EqualFold(rightVal, "NULL")) {
+				return false
+			}
+			if sv, ok := val.(storage.Value); ok && sv.IsNull {
+				return false
+			}
+
 			var isBool bool
 			var bVal bool
 			if b, ok := val.(bool); ok {

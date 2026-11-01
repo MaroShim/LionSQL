@@ -1,0 +1,50 @@
+# Three-Valued Logic and NULL Handling
+
+statement ok
+CREATE TABLE null_test (id INT PRIMARY KEY, val INT, note VARCHAR);
+
+statement ok
+INSERT INTO null_test VALUES (1, 10, 'present');
+
+statement ok
+INSERT INTO null_test VALUES (2, NULL, 'missing_val');
+
+statement ok
+INSERT INTO null_test VALUES (3, 30, NULL);
+
+statement ok
+INSERT INTO null_test VALUES (4, NULL, NULL);
+
+# IS NULL
+query IT rowsort
+SELECT id, note FROM null_test WHERE val IS NULL;
+----
+2 missing_val
+4 NULL
+
+# IS NOT NULL
+query IT rowsort
+SELECT id, note FROM null_test WHERE val IS NOT NULL;
+----
+1 present
+3 NULL
+
+# Multiple IS NULL predicates
+query I rowsort
+SELECT id FROM null_test WHERE val IS NULL AND note IS NULL;
+----
+4
+
+query I rowsort
+SELECT id FROM null_test WHERE val IS NOT NULL AND note IS NOT NULL;
+----
+1
+
+# NULL comparison returns false in standard equality
+query I rowsort
+SELECT id FROM null_test WHERE val = NULL;
+----
+
+query I rowsort
+SELECT id FROM null_test WHERE val != NULL;
+----

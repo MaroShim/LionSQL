@@ -410,3 +410,35 @@ func TestContainsKeyword(t *testing.T) {
 		})
 	}
 }
+
+func TestHasPrefixKeyword(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     string
+		keyword string
+		want    bool
+	}{
+		{"Exact match", "CREATE TABLE t (id INT)", "CREATE TABLE", true},
+		{"Multiple spaces", "CREATE   TABLE t (id INT)", "CREATE TABLE", true},
+		{"Tabs and newlines", "CREATE \t\n TABLE t (id INT)", "CREATE TABLE", true},
+		{"Leading spaces", "   CREATE TABLE t (id INT)", "CREATE TABLE", true},
+		{"Leading block comment", "/* comment */ CREATE TABLE t (id INT)", "CREATE TABLE", true},
+		{"Leading line comment", "-- line comment\nCREATE TABLE t (id INT)", "CREATE TABLE", true},
+		{"Single word prefix", "SELECT * FROM t", "SELECT", true},
+		{"Single word prefix with parens", "SELECT(1)", "SELECT", true},
+		{"Different keyword", "SELECT * FROM t", "CREATE TABLE", false},
+		{"Keyword later in text", "INSERT INTO tbl (id) VALUES (1); CREATE TABLE", "CREATE TABLE", false},
+		{"Prefix identifier collision", "CREATING TABLE t", "CREATE TABLE", false},
+		{"Empty sql", "", "CREATE TABLE", false},
+		{"Empty keyword", "CREATE TABLE t", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HasPrefixKeyword(tt.sql, tt.keyword)
+			if got != tt.want {
+				t.Errorf("HasPrefixKeyword(%q, %q) = %v; want %v", tt.sql, tt.keyword, got, tt.want)
+			}
+		})
+	}
+}

@@ -1,0 +1,117 @@
+# Whitespace Variations: Tabs, Newlines, Multi-spaces, and Zero-space Operators
+
+statement ok
+CREATE TABLE ws_test (id INT PRIMARY KEY, val INT, note VARCHAR);
+
+statement ok
+INSERT INTO ws_test VALUES (1, 10, 'first');
+
+statement ok
+INSERT INTO ws_test VALUES (2, 20, 'second');
+
+statement ok
+INSERT INTO ws_test VALUES (3, 30, 'third');
+
+statement ok
+INSERT INTO ws_test VALUES (4, NULL, 'fourth');
+
+# Tabs between SQL clauses
+query IT rowsort
+SELECT	id,	note	FROM	ws_test	WHERE	id	=	1;
+----
+1 first
+
+# Newlines between SQL clauses
+query IT rowsort
+SELECT
+id,
+note
+FROM
+ws_test
+WHERE
+id = 2;
+----
+2 second
+
+# Disjunction OR with tabs
+query IT rowsort
+SELECT id, note FROM ws_test WHERE id = 1	OR	id = 3;
+----
+1 first
+3 third
+
+# Disjunction OR with newlines
+query IT rowsort
+SELECT id, note FROM ws_test WHERE id = 1
+OR
+id = 2;
+----
+1 first
+2 second
+
+# Zero space around parentheses and disjunction (a=1)OR(b=2)
+query IT rowsort
+SELECT id, note FROM ws_test WHERE (id=1)OR(id=3);
+----
+1 first
+3 third
+
+query IT rowsort
+SELECT id, note FROM ws_test WHERE (id=1)AND(val=10);
+----
+1 first
+
+# Multi-word keyword: ORDER BY with multiple spaces and tabs
+query I nosort
+SELECT id FROM ws_test ORDER   BY   id   DESC;
+----
+4
+3
+2
+1
+
+query I nosort
+SELECT id FROM ws_test ORDER	BY	id	ASC;
+----
+1
+2
+3
+4
+
+# Multi-word keyword: IS NOT NULL with arbitrary whitespace
+query IT rowsort
+SELECT id, note FROM ws_test WHERE val IS   NOT   NULL;
+----
+1 first
+2 second
+3 third
+
+query IT rowsort
+SELECT id, note FROM ws_test WHERE val IS	NOT	NULL;
+----
+1 first
+2 second
+3 third
+
+query IT rowsort
+SELECT id, note FROM ws_test WHERE val IS
+NOT
+NULL;
+----
+1 first
+2 second
+3 third
+
+# Multi-word keyword: IS NULL with tab
+query IT rowsort
+SELECT id, note FROM ws_test WHERE val IS	NULL;
+----
+4 fourth
+
+# DDL IF NOT EXISTS with arbitrary whitespace
+statement ok
+CREATE   TABLE   IF   NOT   EXISTS   ws_test (id INT PRIMARY KEY);
+
+# DDL IF EXISTS with tabs
+statement ok
+DROP   TABLE   IF	EXISTS	non_existent_table_99;

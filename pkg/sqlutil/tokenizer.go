@@ -562,6 +562,61 @@ func matchWordsAt(s string, start int, words []string) (int, bool) {
 	return curr, true
 }
 
+// HasPrefixKeyword checks whether the statement starts with keyword at top level,
+// ignoring leading whitespace and SQL comments (-- ... and /* ... */).
+// Multi-word keywords (e.g. "CREATE TABLE") accept arbitrary whitespace between words.
+func HasPrefixKeyword(s string, keyword string) bool {
+	n := len(s)
+	if n == 0 {
+		return false
+	}
+	words := strings.Fields(keyword)
+	if len(words) == 0 {
+		return false
+	}
+
+	inLineComment := false
+	inBlockComment := false
+
+	for i := 0; i < n; i++ {
+		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		if isWhitespaceByte(ch) {
+			continue
+		}
+
+		// First non-whitespace, non-comment byte reached.
+		_, ok := matchWordsAt(s, i, words)
+		return ok
+	}
+	return false
+}
+
 // scanKeyword scans s for standalone occurrences of keyword outside single quotes,
 // double quotes, brackets, and comments.
 // If keyword consists of multiple words (e.g. "IF EXISTS", "WITHIN GROUP"), arbitrary

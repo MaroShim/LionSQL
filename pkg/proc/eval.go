@@ -407,6 +407,16 @@ func evalRowAnyComparison(op TokenType, leftVal, rightVal any) (any, error) {
 	return false, nil
 }
 
+func isNullVal(v any) bool {
+	if v == nil {
+		return true
+	}
+	if sv, ok := v.(storage.Value); ok && sv.IsNull {
+		return true
+	}
+	return false
+}
+
 func isStringType(v any) (string, bool) {
 	switch s := v.(type) {
 	case string:
@@ -422,11 +432,8 @@ func isStringType(v any) (string, bool) {
 func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 	switch op {
 	case TokenEq:
-		if left == nil && right == nil {
-			return true, nil
-		}
-		if left == nil || right == nil {
-			return false, nil
+		if isNullVal(left) || isNullVal(right) {
+			return nil, nil
 		}
 		if s1, ok1 := isStringType(left); ok1 {
 			if s2, ok2 := isStringType(right); ok2 {
@@ -446,7 +453,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return strings.EqualFold(fmt.Sprintf("%v", left), fmt.Sprintf("%v", right)), nil
 
 	case TokenNeq:
-		if left == nil || right == nil {
+		if isNullVal(left) || isNullVal(right) {
 			return nil, nil
 		}
 		if s1, ok1 := isStringType(left); ok1 {
@@ -467,7 +474,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return !strings.EqualFold(fmt.Sprintf("%v", left), fmt.Sprintf("%v", right)), nil
 
 	case TokenLt:
-		if left == nil || right == nil {
+		if isNullVal(left) || isNullVal(right) {
 			return nil, nil
 		}
 		if s1, ok1 := isStringType(left); ok1 {
@@ -488,7 +495,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return fmt.Sprintf("%v", left) < fmt.Sprintf("%v", right), nil
 
 	case TokenLte:
-		if left == nil || right == nil {
+		if isNullVal(left) || isNullVal(right) {
 			return nil, nil
 		}
 		if s1, ok1 := isStringType(left); ok1 {
@@ -509,7 +516,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return fmt.Sprintf("%v", left) <= fmt.Sprintf("%v", right), nil
 
 	case TokenGt:
-		if left == nil || right == nil {
+		if isNullVal(left) || isNullVal(right) {
 			return nil, nil
 		}
 		if s1, ok1 := isStringType(left); ok1 {
@@ -530,7 +537,7 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 		return fmt.Sprintf("%v", left) > fmt.Sprintf("%v", right), nil
 
 	case TokenGte:
-		if left == nil || right == nil {
+		if isNullVal(left) || isNullVal(right) {
 			return nil, nil
 		}
 		if s1, ok1 := isStringType(left); ok1 {

@@ -1,0 +1,52 @@
+# Core Joins (Inner, Left, Cross)
+
+statement ok
+CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR, dept_id INT);
+
+statement ok
+CREATE TABLE depts (id INT PRIMARY KEY, dept_name VARCHAR);
+
+statement ok
+INSERT INTO depts VALUES (10, 'Engineering');
+
+statement ok
+INSERT INTO depts VALUES (20, 'Sales');
+
+statement ok
+INSERT INTO depts VALUES (30, 'Marketing');
+
+statement ok
+INSERT INTO users VALUES (1, 'Alice', 10);
+
+statement ok
+INSERT INTO users VALUES (2, 'Bob', 20);
+
+statement ok
+INSERT INTO users VALUES (3, 'Charlie', 10);
+
+statement ok
+INSERT INTO users VALUES (4, 'David', 99);
+
+# Inner Join
+query TT rowsort
+SELECT u.name, d.dept_name FROM users u JOIN depts d ON u.dept_id = d.id;
+----
+Alice Engineering
+Bob Sales
+Charlie Engineering
+
+# Left Outer Join
+query TT rowsort
+SELECT u.name, d.dept_name FROM users u LEFT JOIN depts d ON u.dept_id = d.id;
+----
+Alice Engineering
+Bob Sales
+Charlie Engineering
+David NULL
+
+# Join with WHERE filter
+query TT rowsort
+SELECT u.name, d.dept_name FROM users u JOIN depts d ON u.dept_id = d.id WHERE d.dept_name = 'Engineering';
+----
+Alice Engineering
+Charlie Engineering

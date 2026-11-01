@@ -10,10 +10,11 @@ import (
 	"strings"
 	"time"
 
-		"lionsql/pkg/catalog/virtual"
+	"lionsql/pkg/catalog/virtual"
 	"lionsql/pkg/execution"
 	"lionsql/pkg/proc"
 	"lionsql/pkg/replication"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -1132,7 +1133,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 3. DDL: CREATE TABLE
-	if strings.HasPrefix(upper, "CREATE TABLE") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE TABLE") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1140,7 +1141,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 3.1 DDL: CREATE INDEX
-	if strings.HasPrefix(upper, "CREATE INDEX") || strings.HasPrefix(upper, "CREATE UNIQUE INDEX") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE INDEX") || sqlutil.HasPrefixKeyword(trimmed, "CREATE UNIQUE INDEX") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1148,7 +1149,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 3.2 DDL: CREATE STATISTICS (C-5)
-	if strings.HasPrefix(upper, "CREATE STATISTICS") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE STATISTICS") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1156,7 +1157,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4. DDL: DROP TABLE
-	if strings.HasPrefix(upper, "DROP TABLE") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP TABLE") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1164,7 +1165,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.1 DDL: DROP INDEX
-	if strings.HasPrefix(upper, "DROP INDEX") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP INDEX") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1172,7 +1173,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.1.5 DDL: DROP STATISTICS (C-5)
-	if strings.HasPrefix(upper, "DROP STATISTICS") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DROP STATISTICS") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1180,7 +1181,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.2 DDL/DML: TRUNCATE TABLE
-	if strings.HasPrefix(upper, "TRUNCATE TABLE") || strings.HasPrefix(upper, "TRUNCATE ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "TRUNCATE TABLE") || sqlutil.HasPrefixKeyword(trimmed, "TRUNCATE") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1188,7 +1189,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.3 DDL: ALTER TABLE
-	if strings.HasPrefix(upper, "ALTER TABLE") {
+	if sqlutil.HasPrefixKeyword(trimmed, "ALTER TABLE") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
@@ -1196,7 +1197,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.35 DDL: ALTER DATABASE (tolerant no-op for Collation/Options)
-	if strings.HasPrefix(upper, "ALTER DATABASE") {
+	if sqlutil.HasPrefixKeyword(trimmed, "ALTER DATABASE") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER DATABASE",
@@ -1206,7 +1207,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.355 DDL: ALTER DEFAULT PRIVILEGES (tolerant no-op)
-	if strings.HasPrefix(upper, "ALTER DEFAULT PRIVILEGES") {
+	if sqlutil.HasPrefixKeyword(trimmed, "ALTER DEFAULT PRIVILEGES") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER DEFAULT PRIVILEGES",
@@ -1216,7 +1217,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.36 Tolerant PG Compatibility: COMMENT ON
-	if strings.HasPrefix(upper, "COMMENT ON ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "COMMENT ON") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "COMMENT",
@@ -1226,7 +1227,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.37 Tolerant PG Compatibility: CREATE / DROP SCHEMA / EXTENSION
-	if strings.HasPrefix(upper, "CREATE SCHEMA") || strings.HasPrefix(upper, "DROP SCHEMA") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE SCHEMA") || sqlutil.HasPrefixKeyword(trimmed, "DROP SCHEMA") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "SCHEMA",
@@ -1235,7 +1236,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-	if strings.HasPrefix(upper, "CREATE EXTENSION") || strings.HasPrefix(upper, "DROP EXTENSION") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE EXTENSION") || sqlutil.HasPrefixKeyword(trimmed, "DROP EXTENSION") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "CREATE EXTENSION",
@@ -1245,7 +1246,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.38 Tolerant PG Compatibility: CREATE / DROP / ALTER ROLE
-	if strings.HasPrefix(upper, "CREATE ROLE") || strings.HasPrefix(upper, "DROP ROLE") || strings.HasPrefix(upper, "ALTER ROLE") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE ROLE") || sqlutil.HasPrefixKeyword(trimmed, "DROP ROLE") || sqlutil.HasPrefixKeyword(trimmed, "ALTER ROLE") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "ROLE",
@@ -1254,9 +1255,8 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}, nil
 	}
 
-
 	// 4.40 Tolerant PG Compatibility: DO anonymous blocks
-	if strings.HasPrefix(upper, "DO ") || strings.HasPrefix(upper, "DO\n") || strings.HasPrefix(upper, "DO\t") {
+	if sqlutil.HasPrefixKeyword(trimmed, "DO") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "DO",
@@ -1266,7 +1266,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.41 Tolerant PG Compatibility: SEQUENCE
-	if strings.HasPrefix(upper, "CREATE SEQUENCE") || strings.HasPrefix(upper, "ALTER SEQUENCE") || strings.HasPrefix(upper, "DROP SEQUENCE") {
+	if sqlutil.HasPrefixKeyword(trimmed, "CREATE SEQUENCE") || sqlutil.HasPrefixKeyword(trimmed, "ALTER SEQUENCE") || sqlutil.HasPrefixKeyword(trimmed, "DROP SEQUENCE") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "SEQUENCE",
@@ -1276,7 +1276,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 4.42 Tolerant PG Compatibility: LOCK TABLE
-	if strings.HasPrefix(upper, "LOCK TABLE ") || strings.HasPrefix(upper, "LOCK ") {
+	if sqlutil.HasPrefixKeyword(trimmed, "LOCK TABLE") || sqlutil.HasPrefixKeyword(trimmed, "LOCK") {
 		return &QueryResult{
 			Success:    true,
 			Command:    "LOCK TABLE",
@@ -1300,7 +1300,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 		return s.execCTE(trimmed, start, cs)
 	}
-	if strings.HasPrefix(upper, "SELECT") {
+	if sqlutil.HasPrefixKeyword(trimmed, "SELECT") {
 		return s.execSelect(trimmed, start, cs)
 	}
 
@@ -1321,7 +1321,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 	}
 
 	// 9. DML: MERGE INTO
-	if strings.HasPrefix(upper, "MERGE") && len(trimmed) > 5 && (trimmed[5] == ' ' || trimmed[5] == '\t' || trimmed[5] == '\n') {
+	if sqlutil.HasPrefixKeyword(trimmed, "MERGE") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}

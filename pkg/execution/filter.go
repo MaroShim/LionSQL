@@ -279,6 +279,13 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 			if !ok || val == nil {
 				return false
 			}
+			if sVal, ok := val.(storage.Value); ok && sVal.IsNull {
+				return false
+			}
+
+			if !rightIsQuoted && strings.EqualFold(rightVal, "NULL") {
+				return false
+			}
 
 			leftStr := fmt.Sprintf("%v", val)
 			var parsedRight any
@@ -286,6 +293,9 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 				parsedRight = rightVal
 			} else {
 				parsedRight = parseLiteralValue(rightVal)
+			}
+			if parsedRight == nil {
+				return false
 			}
 			cmp := CompareValues(val, parsedRight)
 

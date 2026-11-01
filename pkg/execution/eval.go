@@ -215,6 +215,12 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 	if !okL || !okR || left == nil || right == nil {
 		return nil, false
 	}
+	if sVal, ok := left.(storage.Value); ok && sVal.IsNull {
+		return nil, false
+	}
+	if sVal, ok := right.(storage.Value); ok && sVal.IsNull {
+		return nil, false
+	}
 
 	// 1. Arithmetic Operators (+, -, *, /, %)
 	switch e.Op {

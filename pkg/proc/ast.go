@@ -61,14 +61,46 @@ type BinaryExpr struct {
 }
 
 func (e *BinaryExpr) exprNode() {}
+
+func binaryPrecedence(op TokenType) int {
+	switch op {
+	case TokenOr:
+		return 1
+	case TokenAnd:
+		return 2
+	case TokenNot:
+		return 3
+	case TokenEq, TokenNeq, TokenLt, TokenLte, TokenGt, TokenGte, TokenLike:
+		return 4
+	case TokenPlus, TokenMinus:
+		return 5
+	case TokenAsterisk, TokenSlash, TokenPercent:
+		return 6
+	default:
+		return 0
+	}
+}
+
 func (e *BinaryExpr) String() string {
 	leftStr := ""
 	if e.Left != nil {
 		leftStr = e.Left.String()
+		if childBin, ok := e.Left.(*BinaryExpr); ok {
+			if binaryPrecedence(childBin.Op) < binaryPrecedence(e.Op) {
+				leftStr = "(" + leftStr + ")"
+			}
+		}
 	}
 	rightStr := ""
 	if e.Right != nil {
 		rightStr = e.Right.String()
+		if childBin, ok := e.Right.(*BinaryExpr); ok {
+			pChild := binaryPrecedence(childBin.Op)
+			pParent := binaryPrecedence(e.Op)
+			if pChild < pParent || (pChild == pParent && (e.Op == TokenMinus || e.Op == TokenSlash)) {
+				rightStr = "(" + rightStr + ")"
+			}
+		}
 	}
 	return fmt.Sprintf("%s %s %s", leftStr, e.Op.String(), rightStr)
 }

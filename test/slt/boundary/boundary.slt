@@ -1,0 +1,96 @@
+# Boundary Cases: Identifier Keyword Collisions and Literals Containing SQL Clauses
+
+statement ok
+CREATE TABLE metrics (
+    id INT PRIMARY KEY,
+    nowhere VARCHAR,
+    turnover INT,
+    is_coverage INT,
+    from_date VARCHAR,
+    whereabouts VARCHAR
+);
+
+statement ok
+INSERT INTO metrics VALUES (1, 'north', 100, 1, '2026-01-01', 'home');
+
+statement ok
+INSERT INTO metrics VALUES (2, 'south', 200, 0, '2026-01-02', 'office');
+
+statement ok
+INSERT INTO metrics VALUES (3, 'SELECT * FROM nowhere', 300, 1, '2026-01-03', 'USER RETURNING HOME');
+
+# Projection of columns with keyword substrings (turnover, is_coverage, nowhere)
+query III rowsort
+SELECT id, turnover, is_coverage FROM metrics WHERE id = 1;
+----
+1 100 1
+
+# Filter on columns with keyword substrings
+query IT rowsort
+SELECT id, nowhere FROM metrics WHERE turnover > 150;
+----
+2 south
+3 SELECT * FROM nowhere
+
+query IT rowsort
+SELECT id, whereabouts FROM metrics WHERE is_coverage = 1;
+----
+1 home
+3 USER RETURNING HOME
+
+# String literal containing full SQL statement
+query IT rowsort
+SELECT id, nowhere FROM metrics WHERE nowhere = 'SELECT * FROM nowhere';
+----
+3 SELECT * FROM nowhere
+
+# String literal containing RETURNING keyword
+query IT rowsort
+SELECT id, whereabouts FROM metrics WHERE whereabouts = 'USER RETURNING HOME';
+----
+3 USER RETURNING HOME
+
+# String literal containing OR keyword (disjunction boundary defense)
+statement ok
+CREATE TABLE logs (id INT PRIMARY KEY, msg VARCHAR);
+
+statement ok
+INSERT INTO logs VALUES (1, 'FOO OR BAR');
+
+statement ok
+INSERT INTO logs VALUES (2, 'STANDALONE');
+
+query IT rowsort
+SELECT id, msg FROM logs WHERE msg = 'FOO OR BAR';
+----
+1 FOO OR BAR
+
+# Point lookup bypass with literal containing 'AND'
+statement ok
+CREATE TABLE accounts (id VARCHAR PRIMARY KEY, balance INT);
+
+statement ok
+INSERT INTO accounts VALUES ('ALICE AND BOB', 5000);
+
+statement ok
+INSERT INTO accounts VALUES ('CHARLIE', 3000);
+
+query TI rowsort
+SELECT id, balance FROM accounts WHERE id = 'ALICE AND BOB';
+----
+ALICE AND BOB	5000
+
+# Table named after keyword (orders)
+statement ok
+CREATE TABLE orders (order_id INT PRIMARY KEY, amount INT);
+
+statement ok
+INSERT INTO orders VALUES (101, 50);
+
+statement ok
+INSERT INTO orders VALUES (102, 150);
+
+query II rowsort
+SELECT order_id, amount FROM orders WHERE order_id = 101;
+----
+101 50

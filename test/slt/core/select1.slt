@@ -1,0 +1,59 @@
+# Core SELECT Expressions and Literals
+
+statement ok
+CREATE TABLE t1(a INT, b VARCHAR, c INT);
+
+statement ok
+INSERT INTO t1 VALUES(1, 'alice', 10);
+
+statement ok
+INSERT INTO t1 VALUES(2, 'bob', 20);
+
+statement ok
+INSERT INTO t1 VALUES(3, 'charlie', 30);
+
+query I nosort
+SELECT a FROM t1 ORDER BY a;
+----
+1
+2
+3
+
+query T nosort
+SELECT b FROM t1 ORDER BY a;
+----
+alice
+bob
+charlie
+
+query IT rowsort
+SELECT a, b FROM t1;
+----
+1 alice
+2 bob
+3 charlie
+
+query I nosort
+SELECT a + c FROM t1 ORDER BY a;
+----
+11
+22
+33
+
+query I nosort
+SELECT a * 10 FROM t1 ORDER BY a;
+----
+10
+20
+30
+
+query IT rowsort
+SELECT a, 'hello' FROM t1 WHERE a <= 2;
+----
+1 hello
+2 hello
+
+query I nosort
+SELECT 100 + 200;
+----
+300
