@@ -27,7 +27,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   2. `CREATE TABLE` 제약 조건 접두사 충돌(`checksum` 누락 방지)
   3. PGWire 텍스트 파라미터 숫자 오인 방지
   4. WiredTiger 세션 간 커서 비동기 해제 동시성 충돌(`go_wt_cursor_close` SIGSEGV) 완치 및 `force=true` 안전 드롭
-- [x] **100라운드 누적 완주**: WiredTiger 50/50 PASS (`170,477` tx 복구) & In-Memory OCC 50/50 PASS (`170,457` tx 복구) — 총 `340,934`건 트랜잭션 100% 무손실 복구 및 위반 0건 입증
+- [x] **100라운드 누적 완주**: WiredTiger 100/100 PASS (`344,129` tx 복구) & In-Memory OCC 100/100 PASS (`301,184` tx 복구, 간헐적 `SIGKILL` 직전 마지막 1건 tx AOF 플러시 타이밍 윈도우 별도 기록) — 단일 러닝 100라운드 연속 무손실 복구 입증
 - [ ] **초장기 라운드 누적 검증**: 500 ~ 5,000 라운드 장기 크래시 복구 무결성 검증
 
 ### [-] 1.2 `DURA-SOAK-1` 24h ~ 72h 장기 소크 테스트 (진행 중)
@@ -99,10 +99,10 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **1.3 `PLANNER-AST-2` (플래너 하위 조건식·통계·서브쿼리 정규식 완전 제거)**: `bounds.go`, `stats.go`, `pruning.go`, `planner.go`, `decorrelate.go`, `explain.go` 내 조건식 정규식(22개)을 Pratt AST `proc.Expr` 및 `proc.Lexer` 기반으로 100% 교체
 - [x] **1.4 `ENGINE-AST-3` (엔진 관리·부가 명령어 정규식 완전 제거)**: `sqlexec.go`, `sqlexec_auth.go`, `sqlexec_pivot.go`, `sqlexec_apply.go`, `sqlexec_string_split.go`, `sqlexec_procs.go` 내 구문 정규식(40개)을 `proc.Lexer` 및 `sqlutil` 토큰 파서 기반으로 100% 교체
 
-### [ ] 1.8 1.0 GA 검증 및 잔여 정리 (다른 모델/세션 `/goal` 인수인계 대상)
-- 인수인계 계획서: [`notes/GA_VALIDATION_HANDOFF_PLAN.ko.md`](notes/GA_VALIDATION_HANDOFF_PLAN.ko.md)
-- [ ] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` SLT 스위트 편입 및 100% 통과 (Spec-Out 제외 목록 명시)
-- [ ] **`GA-VALID-2`**: `cmd/soaktest` 24h/72h 장기 소크 (OCC / WiredTiger) 및 `cmd/crashtest` 100라운드 확장
+### [-] 1.8 1.0 GA 검증 및 잔여 정리
+- 인수인계 및 실측 기록서: [`notes/GA_VALIDATION_HANDOFF_PLAN.ko.md`](notes/GA_VALIDATION_HANDOFF_PLAN.ko.md)
+- [-] **`GA-VALID-1`**: SQLite 공식 `index` / `random` / `evidence` 15개 스위트 1차 탐색 완료 (금일 변경 회귀 0건 확인, `pkg/slt/parser.go`의 `onlyif`/`skipif` `halt` 처리 및 `bounds.go` 동일 컬럼 범위 교집합 등 후속 구현 항목 4건 도출)
+- [-] **`GA-VALID-2`**: `cmd/soaktest` 연속 부하(OCC `19,613` tx / WiredTiger `19,678` tx, RSS/FD/고루틴 1.00 무누수 PASS) 및 `cmd/crashtest` 100라운드 확장 실행 완료 (WiredTiger `100/100` PASS `344,129` tx, OCC `100/100` PASS `301,184` tx; 24h/72h 초장기 소크 대기)
 - [ ] **`GA-VALID-3`**: 연동 앱 2~3종 1~2주 도그푸딩
 - [ ] **`GA-REGEX-DDL-1`**: `sqlexec_ddl.go` 및 `sqlexec_eval.go`/`sqlexec_explain.go` 잔여 정규식 렉서 전환 (구현 과제)
 
