@@ -362,6 +362,18 @@ func evalTupleBinaryExpr(t Tuple, e *proc.BinaryExpr) (any, bool) {
 		}
 		return nil, false
 
+	case proc.TokenConcat:
+		if left == nil || right == nil {
+			return nil, true
+		}
+		if sv, ok := left.(storage.Value); ok && sv.IsNull {
+			return nil, true
+		}
+		if sv, ok := right.(storage.Value); ok && sv.IsNull {
+			return nil, true
+		}
+		return fmt.Sprintf("%v%v", left, right), true
+
 	// 2. Comparison Operators (=, ==, !=, <>, <, <=, >, >=)
 	case proc.TokenEq:
 		return CompareValues(left, right) == 0, true

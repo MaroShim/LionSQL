@@ -122,6 +122,14 @@ func (l *Lexer) NextToken() Token {
 		} else {
 			tok = Token{Type: TokenGt, Literal: ">", Line: tokLine, Col: tokCol}
 		}
+	case '|':
+		if l.peekChar() == '|' {
+			ch := l.ch
+			l.readChar()
+			tok = Token{Type: TokenConcat, Literal: string(ch) + string(l.ch), Line: tokLine, Col: tokCol}
+		} else {
+			tok = Token{Type: TokenIllegal, Literal: string(l.ch), Line: tokLine, Col: tokCol}
+		}
 	case '\'':
 		tok.Type = TokenString
 		tok.Literal = l.readString()

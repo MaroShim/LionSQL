@@ -717,6 +717,12 @@ func evalRowBinaryOp(op TokenType, left, right any) (any, error) {
 			return nil, nil
 		}
 		return res, nil
+
+	case TokenConcat:
+		if isNullVal(left) || isNullVal(right) {
+			return nil, nil
+		}
+		return fmt.Sprintf("%v%v", left, right), nil
 	}
 
 	return nil, fmt.Errorf("unsupported binary operator %v", op)

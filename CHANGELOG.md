@@ -31,6 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- support standard SQL string concatenation operator (||) across T-SQL Pratt parser and Volcano/row expression evaluators (DURA-SLT-2)
+- enforce SQL 3-valued logic UNKNOWN semantics for NOT IN (SELECT ...) subqueries containing NULL keys in HashJoinIterator ANTI joins, suppressing all outer rows when inner null exists (DURA-SLT-2)
 - extract and accumulate nested aggregate calls inside composite SELECT expressions (such as COALESCE(SUM(col), 0) or SUM(a) + SUM(b)) via two-pass group materialization in AggregateIterator (DURA-SLT-2)
 - preserve right-hand parentheses for non-associative binary operators (-, /, %) in BinaryExpr.String() AST deparser
 - replace hardcoded switch statements in pkg/wire and pkg/catalog/virtual with immutable O(1) table-driven hash maps, eliminating ad-hoc branching and ensuring zero-allocation lookups (COMPAT-TABLE-DRIVEN-1)

@@ -50,8 +50,8 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **SLT 러너 구현 (`cmd/sqllogictest`, `pkg/slt`)**: 순수 Go 기반 표준 SLT 파일 파서, In-Process 및 PGWire 듀얼 모드, rowsort/valuesort/nosort 정렬 및 MD5 해시 대조 엔진
 - [x] **Phase 1 (코어 로직 & 구문 스위트)**: `select1.slt`, `where.slt`, `join.slt`, `null.slt`, `aggregate.slt` (100% PASS)
 - [x] **Phase 2 (화이트스페이스 & 엣지 케이스 스위트)**: 탭/개행/다중 공백(`whitespace.slt`), 키워드 식별자 충돌 및 리터럴 포함(`boundary.slt`), 복합 키워드 변형(`IF EXISTS`, `WITHIN GROUP`) (100% PASS)
-- [x] **Phase 2.5 (핵심 영역 고난도 스위트 1차~5차 확장)**: 조건 분기 및 단락 평가(`case_expr.slt`), 다중 컬럼/NULL/집계 고립(`distinct.slt`), IN/EXISTS/스칼라 서브쿼리(`subquery.slt`), 윈도우 함수(`window.slt`), 집합 연산(`setops.slt`), 내장 스칼라 함수(`functions.slt`), 복합 DML 변이(`dml_mutate.slt`), 범위 조건(`between.slt`), 리스트 조건(`in_list.slt`), 패턴 매칭(`like.slt`), 그룹 필터링(`group_having.slt`), 페이지네이션(`limit_offset.slt`), 공통 테이블 식(`cte.slt`), 사칙연산 우선순위/모듈로(`arithmetic.slt`), 타입 캐스팅(`cast_type.slt`), 3치 논리 및 드모르간 법칙(`boolean_3vl.slt`), 다중/셀프/안티/크로스 조인(`join_advanced.slt`), JSON 연산자(`json_ops.slt`), 다중 정렬 및 Upsert(`order_upsert.slt`), 중첩 대수식 스트레스(`expr_stress.slt`), 복합 집계 및 `COALESCE(SUM(...), 0)` 스트레스(`agg_stress.slt`) (총 28개 파일, 202문장, 163쿼리 — `memory`/`wiredtiger` × `inproc`/`pgwire` 4대 매트릭스 전수 100% PASS)
-- [x] **엔진 버그 12건 발굴 및 완치**:
+- [x] **Phase 2.5 (핵심 영역 고난도 스위트 1차~6차 확장)**: 조건 분기 및 단락 평가(`case_expr.slt`), 다중 컬럼/NULL/집계 고립(`distinct.slt`), IN/EXISTS/스칼라 서브쿼리(`subquery.slt`), 윈도우 함수(`window.slt`), 집합 연산(`setops.slt`), 내장 스칼라 함수(`functions.slt`), 복합 DML 변이(`dml_mutate.slt`), 범위 조건(`between.slt`), 리스트 조건(`in_list.slt`), 패턴 매칭(`like.slt`), 그룹 필터링(`group_having.slt`), 페이지네이션(`limit_offset.slt`), 공통 테이블 식(`cte.slt`), 사칙연산 우선순위/모듈로(`arithmetic.slt`), 타입 캐스팅(`cast_type.slt`), 3치 논리 및 드모르간 법칙(`boolean_3vl.slt`), 다중/셀프/안티/크로스 조인(`join_advanced.slt`), JSON 연산자(`json_ops.slt`), 다중 정렬 및 Upsert(`order_upsert.slt`), 중첩 대수식 스트레스(`expr_stress.slt`), 복합 집계 및 `COALESCE(SUM(...), 0)` 스트레스(`agg_stress.slt`), 파생 테이블 다중 조인(`derived_join.slt`), 트랜잭션 롤백 격리(`tx_isolation.slt`), 복합 3VL 불리언 논리(`boolean_logic_stress.slt`), 대규모 IN 및 NOT IN NULL 함정(`in_subquery_stress.slt`), 문자열 연결 및 이스케이프(`datetime_string_stress.slt`) (총 33개 파일, 240문장, 181쿼리 — `memory`/`wiredtiger` × `inproc`/`pgwire` 4대 매트릭스 전수 100% PASS)
+- [x] **엔진 버그 14건 발굴 및 완치**:
   1. `HasPrefixKeyword` 다중 공백/탭/개행 DDL 라우팅 버그 완치
   2. SQL 3-valued logic `NULL = NULL` 및 `val = NULL` UNKNOWN(falsy) 표준 정합성 완치
   3. `BinaryExpr.String()` 연산자 우선순위 부모 괄호 탈락 (`(A OR B) AND C`) 및 우측 결합성(`a - (b + c)`) deparser 완치
@@ -64,6 +64,8 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   10. Self-Join(`slt_emp2 e JOIN slt_emp2 m`) 시 동일 컬럼 별칭(`e.emp_name`, `m.emp_name`)이 `Tuple.ToMap()` 변환 중 덮어써지던 스키마 별칭 충돌 결함 완치
   11. `CROSS JOIN` (`ON` 절 없는 카티션 곱) 파서 허용 및 `HashJoinIterator` 빈 키 매칭 기반 카티션 곱 실행 완치
   12. `GROUP BY` 프로젝션 내 복합 집계 표현식(`COALESCE(SUM(o.amount), 0)`, `SUM(a) + SUM(b)`) 실행 시 내부 중첩 집계 함수를 누적하지 않고 첫 행만 참조하던 `AggregateIterator` 2-Pass 평가 결함 완치
+  13. `||` 문자열 연결 연산자(`TokenConcat`) 렉서 토큰화 및 Pratt 파서, Volcano/Row 수식 평가자 지원 완치
+  14. `NOT IN (SELECT ...)` 서브쿼리 내 `NULL` 키가 1개라도 포함된 경우 SQL 3VL UNKNOWN 규칙에 의해 모든 행이 suppress되어야 함에도 행이 반환되던 `HashJoinIterator` ANTI 조인 결함 완치
 
 ### [-] 1.5 `DURA-SLT-2` SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 (진행 중)
 - 설계 계획서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)

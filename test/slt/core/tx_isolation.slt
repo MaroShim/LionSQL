@@ -1,0 +1,57 @@
+# Transaction Boundaries & Rollback Isolation Conformance
+# Tests ACID rollback integrity, commit visibility, and isolation
+
+statement ok
+CREATE TABLE slt_account (acc_id INT PRIMARY KEY, owner VARCHAR(32), balance INT)
+
+statement ok
+INSERT INTO slt_account VALUES (1, 'Alice', 1000), (2, 'Bob', 2000)
+
+# Baseline check
+query TI rowsort
+SELECT owner, balance FROM slt_account
+----
+Alice 1000
+Bob 2000
+
+# 1. Rollback test: INSERT within uncommitted transaction must vanish on ROLLBACK
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+INSERT INTO slt_account VALUES (3, 'Charlie', 3000)
+
+statement ok
+UPDATE slt_account SET balance = balance + 500 WHERE acc_id = 1
+
+statement ok
+ROLLBACK
+
+query TI rowsort
+SELECT owner, balance FROM slt_account
+----
+Alice 1000
+Bob 2000
+
+# 2. Commit test: mutations within committed transaction must persist
+statement ok
+BEGIN TRANSACTION
+
+statement ok
+UPDATE slt_account SET balance = balance - 200 WHERE acc_id = 1
+
+statement ok
+UPDATE slt_account SET balance = balance + 200 WHERE acc_id = 2
+
+statement ok
+COMMIT
+
+query TI rowsort
+SELECT owner, balance FROM slt_account
+----
+Alice 800
+Bob 2200
+
+# 3. Cleanup
+statement ok
+DROP TABLE slt_account

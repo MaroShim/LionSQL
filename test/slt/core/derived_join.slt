@@ -1,0 +1,70 @@
+# Derived Table & Multi-Join Subquery Conformance
+# Tests inline views, multi-table derived joins, aggregate subqueries, and column disambiguation
+
+statement ok
+CREATE TABLE slt_cust (cid INT PRIMARY KEY, cname VARCHAR(32), region VARCHAR(16))
+
+statement ok
+CREATE TABLE slt_ord (oid INT PRIMARY KEY, cid INT, amount DECIMAL, status VARCHAR(16))
+
+statement ok
+INSERT INTO slt_cust VALUES (1, 'Alice', 'East'), (2, 'Bob', 'West'), (3, 'Charlie', 'East'), (4, 'David', 'North')
+
+statement ok
+INSERT INTO slt_ord VALUES (101, 1, 100, 'PAID'), (102, 1, 150, 'PAID'), (103, 2, 200, 'PENDING'), (104, 3, 50, 'CANCELLED')
+
+# 1. Derived table with GROUP BY joined to outer table
+query TTI rowsort
+SELECT c.cname, c.region, sub.tot
+FROM slt_cust c
+JOIN (
+    SELECT cid, CAST(SUM(amount) AS INT) AS tot
+    FROM slt_ord
+    WHERE status = 'PAID'
+    GROUP BY cid
+) sub ON c.cid = sub.cid
+----
+Alice East 250
+
+# 2. LEFT JOIN to derived table where some rows have NULL totals
+query TTI rowsort
+SELECT c.cname, c.region, COALESCE(sub.tot, 0)
+FROM slt_cust c
+LEFT JOIN (
+    SELECT cid, CAST(SUM(amount) AS INT) AS tot
+    FROM slt_ord
+    WHERE status = 'PAID'
+    GROUP BY cid
+) sub ON c.cid = sub.cid
+----
+Alice East 250
+Bob West 0
+Charlie East 0
+David North 0
+
+# 3. Multiple derived tables joined together with scalar filtering
+query TII rowsort
+SELECT c_info.cname, c_info.order_cnt, o_info.max_amt
+FROM (
+    SELECT c.cid, c.cname, COUNT(o.oid) AS order_cnt
+    FROM slt_cust c
+    LEFT JOIN slt_ord o ON c.cid = o.cid
+    GROUP BY c.cid, c.cname
+) c_info
+JOIN (
+    SELECT cid, CAST(MAX(amount) AS INT) AS max_amt
+    FROM slt_ord
+    GROUP BY cid
+) o_info ON c_info.cid = o_info.cid
+WHERE c_info.order_cnt > 0
+----
+Alice 2 150
+Bob 1 200
+Charlie 1 50
+
+# 4. Cleanup
+statement ok
+DROP TABLE slt_ord
+
+statement ok
+DROP TABLE slt_cust

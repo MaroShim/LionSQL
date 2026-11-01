@@ -30,6 +30,7 @@ type HashJoinIterator struct {
 	allRightTuples []Tuple
 	matchedRight   []bool
 	unmatchedIdx   int
+	rightHasNullKey bool
 	currentProbe   Tuple
 	currentMatches []hashMatch
 	matchIdx       int
@@ -186,6 +187,7 @@ func (h *HashJoinIterator) Open(ctx context.Context) error {
 				kStr, found = extractTupleKey(tuple, h.rightKey, h.arena)
 			}
 			if !found {
+				h.rightHasNullKey = true
 				continue
 			}
 			h.hashTable[kStr] = append(h.hashTable[kStr], hashMatch{tuple: tuple, idx: rIdx})
@@ -310,6 +312,10 @@ func (h *HashJoinIterator) nextTuple(ctx context.Context) (Tuple, error) {
 		}
 
 		if h.joinType == "ANTI" {
+			if h.rightHasNullKey || !found {
+				h.currentProbe = Tuple{}
+				continue
+			}
 			if !hasMatch {
 				h.currentProbe = Tuple{}
 				return probeTuple, nil

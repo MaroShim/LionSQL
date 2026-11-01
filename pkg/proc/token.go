@@ -37,6 +37,7 @@ const (
 	TokenJSONExtract     // ->
 	TokenJSONExtractText // ->>
 	TokenDoubleColon     // ::
+	TokenConcat          // ||
 
 	// Keywords
 	TokenCreate
@@ -295,6 +296,8 @@ func (t TokenType) String() string {
 		return "/"
 	case TokenPercent:
 		return "%"
+	case TokenConcat:
+		return "||"
 	case TokenComma:
 		return ","
 	case TokenSemicolon:

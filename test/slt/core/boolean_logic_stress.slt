@@ -1,0 +1,51 @@
+# Boolean Logic & 3VL Truth Table Stress Conformance
+# Tests complex disjunctions, conjunctions, parentheses, and NULL truth propagation
+
+statement ok
+CREATE TABLE slt_bool_stress (id INT PRIMARY KEY, x INT, y INT, z INT)
+
+statement ok
+INSERT INTO slt_bool_stress VALUES (1, 10, 20, 30)
+
+statement ok
+INSERT INTO slt_bool_stress VALUES (2, 10, NULL, 30)
+
+statement ok
+INSERT INTO slt_bool_stress VALUES (3, NULL, 20, NULL)
+
+statement ok
+INSERT INTO slt_bool_stress VALUES (4, NULL, NULL, NULL)
+
+statement ok
+INSERT INTO slt_bool_stress VALUES (5, 5, 25, 35)
+
+# 1. (A OR B) AND (C OR D) with NULL operands
+query I rowsort
+SELECT id FROM slt_bool_stress WHERE (x = 10 OR y = 20) AND (z = 30 OR x = 5)
+----
+1
+2
+
+# 2. Negated compound disjunction: NOT ((x = 10) OR (y = 20))
+query I rowsort
+SELECT id FROM slt_bool_stress WHERE NOT (x = 10 OR y = 20)
+----
+5
+
+# 3. De Morgan equivalence: (NOT (x = 10)) AND (NOT (y = 20))
+# Row 2 has x=10 (False), Row 3 has y=20 (False), Row 4 has NULL (Unknown), Row 1 has both 10 and 20 (False), only Row 5 has x=5, y=25 (True AND True)
+query I rowsort
+SELECT id FROM slt_bool_stress WHERE NOT (x = 10) AND NOT (y = 20)
+----
+5
+
+# 4. IS NULL mixed with comparisons
+query I rowsort
+SELECT id FROM slt_bool_stress WHERE (x IS NULL OR x > 8) AND (z IS NOT NULL)
+----
+1
+2
+
+# 5. Cleanup
+statement ok
+DROP TABLE slt_bool_stress

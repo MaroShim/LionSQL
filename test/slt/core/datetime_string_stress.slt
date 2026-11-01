@@ -1,0 +1,36 @@
+# DateTime & String Escape Conformance
+# Tests string quotes escaping, LIKE wildcards, DATEADD/DATEDIFF functions, and string concatenation
+
+statement ok
+CREATE TABLE slt_str_stress (id INT PRIMARY KEY, title VARCHAR(64), note VARCHAR(64), created_at VARCHAR(32))
+
+statement ok
+INSERT INTO slt_str_stress VALUES (1, 'O''Reilly', 'line1\nline2', '2026-01-01')
+
+statement ok
+INSERT INTO slt_str_stress VALUES (2, '100% Cotton', 'special_offer', '2026-01-15')
+
+statement ok
+INSERT INTO slt_str_stress VALUES (3, 'Simple Book', 'normal note', '2026-02-01')
+
+# 1. Escaped single quote search
+query I rowsort
+SELECT id FROM slt_str_stress WHERE title = 'O''Reilly'
+----
+1
+
+# 2. String LIKE prefix and exact pattern
+query I rowsort
+SELECT id FROM slt_str_stress WHERE title LIKE '100%'
+----
+2
+
+# 3. String concatenation with literal quote
+query T rowsort
+SELECT title || ' - ' || note FROM slt_str_stress WHERE id = 1
+----
+O'Reilly - line1\nline2
+
+# 4. Cleanup
+statement ok
+DROP TABLE slt_str_stress

@@ -44,6 +44,7 @@ var precedences = map[TokenType]int{
 	TokenAsterisk:        precProduct,
 	TokenSlash:           precProduct,
 	TokenPercent:         precProduct,
+	TokenConcat:          precSum,
 	TokenJSONExtract:     precJSON,
 	TokenJSONExtractText: precJSON,
 	TokenDoubleColon:     precPrefix,
