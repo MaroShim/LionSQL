@@ -50,6 +50,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   3. `BinaryExpr.String()` 연산자 우선순위 부모 괄호 탈락 (`(A OR B) AND C`) deparser 완치
   4. SLT 러너 멀티컬럼 공백 포함 셀 파서 탭/길이 정합성 완치
 
+### [ ] 1.5 `DURA-SLT-2` SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증
+- 설계 계획서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
+- [ ] **Phase 3 (SQLite 공식 `select1` ~ `select5` 완주)**: `scripts/fetch_slt_full.sh` 동기화 도구, `cmd/sqllogictest` 병렬 워커 풀(`-parallel`), 대용량 60,000+ 쿼리 오라클 검증
+- [ ] **Phase 4 (복합 무작위 대수식 & 집계 매트릭스)**: `random/expr/` 무작위 중첩 식, `random/groupby/` 복합 집계 및 HAVING 필터 검증
+- [ ] **Phase 5 (PGWire TCP 소켓 원격 프로토콜 검증)**: TCP `:5433` 네트워크 소켓 통신을 통한 SLT 풀 스위트 E2E 통과
+- [ ] **Phase 6 (1.0 릴리즈 게이트 통합)**: 릴리즈 직전 In-Memory OCC 및 WiredTiger MVCC 듀얼 엔진 100% 무오류 인증
+
 ---
 
 ## Priority 2. 실전 오픈소스 앱 연동 확장 (Application Integration Expansion)
