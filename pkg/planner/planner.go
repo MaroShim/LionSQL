@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
@@ -204,14 +205,39 @@ func (q *QueryInfo) Clone() *QueryInfo {
 	return &cp
 }
 
+// defaultLegacyRegexFallback controls whether new Planner instances permit
+// falling back to legacy regex-based SQL slicing when AST parsing fails (PLANNER-AST-1).
+// Default is false (Pure AST Mode). Can be toggled via --enable-legacy-regex-planner.
+var defaultLegacyRegexFallback atomic.Bool
+
+// SetDefaultLegacyRegexFallback sets the process-wide default for legacy regex planner fallback.
+func SetDefaultLegacyRegexFallback(enabled bool) {
+	defaultLegacyRegexFallback.Store(enabled)
+}
+
+// IsDefaultLegacyRegexFallbackEnabled returns true if legacy regex planner fallback is enabled by default.
+func IsDefaultLegacyRegexFallbackEnabled() bool {
+	return defaultLegacyRegexFallback.Load()
+}
+
 // Planner constructs and optimizes execution plans for SQL queries.
 type Planner struct {
-	PartitionGetter func(table string) []string
+	PartitionGetter           func(table string) []string
+	EnableLegacyRegexFallback bool
 }
 
 // NewPlanner creates a new query planner instance.
 func NewPlanner() *Planner {
-	return &Planner{}
+	return &Planner{
+		EnableLegacyRegexFallback: defaultLegacyRegexFallback.Load(),
+	}
+}
+
+func (p *Planner) isLegacyRegexEnabled() bool {
+	if p != nil && p.EnableLegacyRegexFallback {
+		return true
+	}
+	return defaultLegacyRegexFallback.Load()
 }
 
 func cleanIdent(s string) string {
@@ -235,6 +261,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 	for _, c := range stmt.CTEs {
 		ctes = append(ctes, CTEInfo{
 			Name:     c.Name,
+			Columns:  c.Columns,
 			InnerSQL: c.InnerSQL,
 		})
 	}
@@ -367,15 +394,20 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
-	// Try AST-based parsing first (only if not containing window function OVER)
-	if !sqlutil.ContainsKeyword(cleaned, "OVER", true) {
-		if parsedStmt, err := proc.ParseSQL(cleaned); err == nil {
-			if sel, ok := parsedStmt.(*proc.GeneralSelectStmt); ok {
-				qInfo := FromAST(sel)
-				qInfo.RawQuery = query
-				return qInfo, nil
-			}
+	// Pure AST-First Path (PLANNER-AST-1):
+	// Parse via Pratt AST parser (including window functions OVER and CTEs).
+	if parsedStmt, err := proc.ParseSQL(cleaned); err == nil {
+		if sel, ok := parsedStmt.(*proc.GeneralSelectStmt); ok {
+			qInfo := FromAST(sel)
+			qInfo.RawQuery = query
+			return qInfo, nil
 		}
+	}
+
+	// Default behavior disables the legacy regex fallback; it is only used when
+	// explicitly opted in via --enable-legacy-regex-planner or EnableLegacyRegexFallback.
+	if !p.isLegacyRegexEnabled() {
+		return nil, fmt.Errorf("invalid SELECT statement for AST planning (legacy regex fallback disabled): %q", cleaned)
 	}
 
 	isAnalyze := false
@@ -2698,41 +2730,53 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 		}
 	}
 
-	// Calculate Sort-Merge Join Cost
-	cleanLeftKey := leftKey
-	if idx := strings.Index(cleanLeftKey, "."); idx != -1 {
-		cleanLeftKey = cleanLeftKey[idx+1:]
-	}
-	cleanLeftKey = strings.ToLower(cleanIdent(cleanLeftKey))
+	// Sort-Merge Join Cost Lazy Evaluation (PLANNER-SLIM-1):
+	// Merge Join cost is mathematically: hashJoinTotalCost + outerSortCost + innerSortCost.
+	// Unless forceMergeJoin hint is present, or BOTH sides are pre-sorted by an index/sort node,
+	// Merge Join can NEVER beat Hash Join (O(N log N) vs O(N)). Deferring evaluation saves
+	// expensive string operations, math.Log2, and float calculations for 99.9% of queries.
+	mergeJoinTotalCost := math.MaxFloat64
+	var outerSortCost, innerSortCost float64
 
-	cleanRightKey := rightKey
-	if idx := strings.Index(cleanRightKey, "."); idx != -1 {
-		cleanRightKey = cleanRightKey[idx+1:]
-	}
-	cleanRightKey = strings.ToLower(cleanIdent(cleanRightKey))
+	isOuterCandidate := (currentNode.Type == NodeIndexScan || currentNode.Type == NodeIndexOnlyScan || currentNode.Type == NodeSort)
+	isInnerCandidate := (innerIndex != nil && len(innerIndex.Columns) > 0)
 
-	outerSortCost := 0.0
-	isOuterSorted := false
-	if (currentNode.Type == NodeIndexScan || currentNode.Type == NodeIndexOnlyScan) && strings.Contains(strings.ToLower(currentNode.IndexCond), cleanLeftKey) {
-		isOuterSorted = true
-	} else if currentNode.Type == NodeSort && strings.EqualFold(cleanIdent(currentNode.SortKey), cleanLeftKey) {
-		isOuterSorted = true
-	}
-	if !isOuterSorted {
-		outerSortCost = float64(currentEstimatedRows)*(CPUTupleCost+math.Log2(math.Max(2, float64(currentEstimatedRows)))*2.0*CPUOperatorCost) + 0.1
-	}
+	if forceMergeJoin || (isOuterCandidate && isInnerCandidate) {
+		cleanLeftKey := leftKey
+		if idx := strings.Index(cleanLeftKey, "."); idx != -1 {
+			cleanLeftKey = cleanLeftKey[idx+1:]
+		}
+		cleanLeftKey = strings.ToLower(cleanIdent(cleanLeftKey))
 
-	innerSortCost := 0.0
-	isInnerSorted := false
-	if innerIndex != nil && len(innerIndex.Columns) > 0 && strings.EqualFold(innerIndex.Columns[0], cleanRightKey) {
-		isInnerSorted = true
-	}
-	if !isInnerSorted {
-		innerSortCost = float64(rRows)*(CPUTupleCost+math.Log2(math.Max(2, float64(rRows)))*2.0*CPUOperatorCost) + 0.1
-	}
+		cleanRightKey := rightKey
+		if idx := strings.Index(cleanRightKey, "."); idx != -1 {
+			cleanRightKey = cleanRightKey[idx+1:]
+		}
+		cleanRightKey = strings.ToLower(cleanIdent(cleanRightKey))
 
-	mergeStreamingCost := (float64(currentEstimatedRows) + float64(rRows)) * CPUOperatorCost
-	mergeJoinTotalCost := currentNode.TotalCost + rScanCost + outerSortCost + innerSortCost + mergeStreamingCost
+		isOuterSorted := false
+		if (currentNode.Type == NodeIndexScan || currentNode.Type == NodeIndexOnlyScan) && strings.Contains(strings.ToLower(currentNode.IndexCond), cleanLeftKey) {
+			isOuterSorted = true
+		} else if currentNode.Type == NodeSort && strings.EqualFold(cleanIdent(currentNode.SortKey), cleanLeftKey) {
+			isOuterSorted = true
+		}
+		if !isOuterSorted {
+			outerSortCost = float64(currentEstimatedRows)*(CPUTupleCost+math.Log2(math.Max(2, float64(currentEstimatedRows)))*2.0*CPUOperatorCost) + 0.1
+		}
+
+		isInnerSorted := false
+		if innerIndex != nil && len(innerIndex.Columns) > 0 && strings.EqualFold(innerIndex.Columns[0], cleanRightKey) {
+			isInnerSorted = true
+		}
+		if !isInnerSorted {
+			innerSortCost = float64(rRows)*(CPUTupleCost+math.Log2(math.Max(2, float64(rRows)))*2.0*CPUOperatorCost) + 0.1
+		}
+
+		if forceMergeJoin || (isOuterSorted && isInnerSorted) {
+			mergeStreamingCost := (float64(currentEstimatedRows) + float64(rRows)) * CPUOperatorCost
+			mergeJoinTotalCost = currentNode.TotalCost + rScanCost + outerSortCost + innerSortCost + mergeStreamingCost
+		}
+	}
 
 	// Strategy selection
 	joinStrategy := "HASH"

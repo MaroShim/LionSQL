@@ -11,12 +11,13 @@ import (
 
 // ServerConfig defines server storage and process parameters.
 type ServerConfig struct {
-	DataDir   string `json:"data_dir"`
-	Engine    string `json:"engine"`
-	Ephemeral bool   `json:"ephemeral"`
-	AutoSeed  bool   `json:"auto_seed"`
-	PIDFile   string `json:"pid_file,omitempty"`
-	LogFile   string `json:"log_file,omitempty"`
+	DataDir                  string `json:"data_dir"`
+	Engine                   string `json:"engine"`
+	Ephemeral                bool   `json:"ephemeral"`
+	AutoSeed                 bool   `json:"auto_seed"`
+	PIDFile                  string `json:"pid_file,omitempty"`
+	LogFile                  string `json:"log_file,omitempty"`
+	EnableLegacyRegexPlanner bool   `json:"enable_legacy_regex_planner,omitempty"`
 }
 
 // TLSConfig defines encryption parameters for wire protocols.
@@ -254,6 +255,9 @@ func ApplyEnvOverrides(cfg *Config) {
 	}
 	if v := os.Getenv("LIONSQL_ADMIN_EMAIL"); v != "" {
 		cfg.Auth.AdminEmail = v
+	}
+	if v := strings.TrimSpace(strings.ToLower(os.Getenv("LIONSQL_ENABLE_LEGACY_REGEX_PLANNER"))); v == "1" || v == "true" || v == "yes" {
+		cfg.Server.EnableLegacyRegexPlanner = true
 	}
 }
 

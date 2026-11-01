@@ -582,18 +582,67 @@ func (p *Parser) parseFunctionCall(name string) Expr {
 						if p.curTokenIs(TokenRParen) {
 							p.nextToken() // eat )
 						}
-						return &WithinGroupExpr{
+						wg := &WithinGroupExpr{
 							Function: fn,
 							OrderBy:  orderExpr,
 							Desc:     isDesc,
 						}
+						if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "OVER") && p.peekTokenIs(TokenLParen) {
+							wg.HasOver = true
+							wg.OverClause = p.parseOverClause()
+						}
+						return wg
 					}
 				}
 			}
 		}
 	}
 
+	if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "OVER") && p.peekTokenIs(TokenLParen) {
+		fn.HasOver = true
+		fn.OverClause = p.parseOverClause()
+	}
+
 	return fn
+}
+
+func (p *Parser) parseOverClause() string {
+	p.nextToken() // eat OVER
+	if !p.curTokenIs(TokenLParen) {
+		return ""
+	}
+	p.nextToken() // eat (
+	depth := 1
+	var parts []string
+	for depth > 0 && !p.curTokenIs(TokenEOF) {
+		if p.curTokenIs(TokenLParen) {
+			depth++
+			parts = append(parts, "(")
+		} else if p.curTokenIs(TokenRParen) {
+			depth--
+			if depth == 0 {
+				p.nextToken() // eat closing )
+				break
+			}
+			parts = append(parts, ")")
+		} else if p.curTokenIs(TokenString) {
+			parts = append(parts, "'"+strings.ReplaceAll(p.curToken.Literal, "'", "''")+"'")
+		} else {
+			parts = append(parts, p.curToken.Literal)
+		}
+		p.nextToken()
+	}
+	var sb strings.Builder
+	for i, tok := range parts {
+		if i > 0 {
+			prev := parts[i-1]
+			if tok != "," && tok != ")" && tok != "." && prev != "(" && prev != "." {
+				sb.WriteByte(' ')
+			}
+		}
+		sb.WriteString(tok)
+	}
+	return sb.String()
 }
 
 

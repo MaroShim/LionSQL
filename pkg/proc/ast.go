@@ -544,9 +544,11 @@ func (e *CaseExpr) String() string {
 
 // FunctionCallExpr represents scalar functions like ISNULL, COALESCE, GETDATE, LEN, SUBSTRING, etc.
 type FunctionCallExpr struct {
-	Name     string
-	Args     []Expr
-	Distinct bool
+	Name       string
+	Args       []Expr
+	Distinct   bool
+	HasOver    bool
+	OverClause string
 }
 
 func (e *FunctionCallExpr) exprNode() {}
@@ -555,17 +557,23 @@ func (e *FunctionCallExpr) String() string {
 	for i, a := range e.Args {
 		argStrs[i] = a.String()
 	}
+	base := fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", "))
 	if e.Distinct {
-		return fmt.Sprintf("%s(DISTINCT %s)", e.Name, strings.Join(argStrs, ", "))
+		base = fmt.Sprintf("%s(DISTINCT %s)", e.Name, strings.Join(argStrs, ", "))
 	}
-	return fmt.Sprintf("%s(%s)", e.Name, strings.Join(argStrs, ", "))
+	if e.HasOver {
+		return fmt.Sprintf("%s OVER (%s)", base, e.OverClause)
+	}
+	return base
 }
 
 // WithinGroupExpr represents an ordered-set aggregate like PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY col [ASC|DESC])
 type WithinGroupExpr struct {
-	Function *FunctionCallExpr
-	OrderBy  Expr
-	Desc     bool
+	Function   *FunctionCallExpr
+	OrderBy    Expr
+	Desc       bool
+	HasOver    bool
+	OverClause string
 }
 
 func (e *WithinGroupExpr) exprNode() {}
@@ -574,7 +582,11 @@ func (e *WithinGroupExpr) String() string {
 	if e.Desc {
 		dir = " DESC"
 	}
-	return fmt.Sprintf("%s WITHIN GROUP (ORDER BY %s%s)", e.Function.String(), e.OrderBy.String(), dir)
+	base := fmt.Sprintf("%s WITHIN GROUP (ORDER BY %s%s)", e.Function.String(), e.OrderBy.String(), dir)
+	if e.HasOver {
+		return fmt.Sprintf("%s OVER (%s)", base, e.OverClause)
+	}
+	return base
 }
 
 // InExpr represents Expr [NOT] IN (Expr1, Expr2, ...) or Expr [NOT] IN (SELECT ...)
@@ -846,11 +858,15 @@ func (o OrderByItem) String() string {
 // CTEClause represents a Common Table Expression.
 type CTEClause struct {
 	Name     string
+	Columns  []string
 	Query    *GeneralSelectStmt
 	InnerSQL string
 }
 
 func (c CTEClause) String() string {
+	if len(c.Columns) > 0 {
+		return fmt.Sprintf("%s(%s) AS (%s)", c.Name, strings.Join(c.Columns, ", "), c.InnerSQL)
+	}
 	return fmt.Sprintf("%s AS (%s)", c.Name, c.InnerSQL)
 }
 

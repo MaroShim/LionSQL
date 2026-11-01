@@ -551,3 +551,51 @@ func TestPlanner_ColumnContainingKeyword(t *testing.T) {
 		t.Errorf("expected 0 window defs for columns containing 'OVER', got %d", len(q.WindowDefs))
 	}
 }
+
+func TestPlanner_PureASTDefault_And_LegacyRegexOption(t *testing.T) {
+	defer planner.SetDefaultLegacyRegexFallback(false)
+	planner.SetDefaultLegacyRegexFallback(false)
+
+	p := planner.NewPlanner()
+	if p.EnableLegacyRegexFallback {
+		t.Fatal("expected EnableLegacyRegexFallback to default to false (Pure AST Mode)")
+	}
+
+	// 1. Window functions (OVER) now parse natively through Pure AST Mode without legacy regex fallback
+	winSQL := "SELECT id, ROW_NUMBER() OVER (PARTITION BY dept ORDER BY salary DESC) AS rn FROM employees WHERE salary > 1000"
+	qWin, err := p.ParseSelect(winSQL)
+	if err != nil {
+		t.Fatalf("expected window function query to succeed in Pure AST mode, got err: %v", err)
+	}
+	if qWin.AST == nil {
+		t.Fatal("expected qWin.AST to be populated in Pure AST mode")
+	}
+	if len(qWin.WindowDefs) != 1 || qWin.WindowDefs[0].Function != "ROW_NUMBER" || qWin.WindowDefs[0].Alias != "rn" {
+		t.Errorf("unexpected WindowDefs in Pure AST mode: %+v", qWin.WindowDefs)
+	}
+
+	// 2. Recursive CTE with column list parses natively through Pure AST Mode
+	cteSQL := "WITH RECURSIVE org(id, parent_id) AS (SELECT id, parent_id FROM depts WHERE parent_id IS NULL UNION ALL SELECT d.id, d.parent_id FROM depts d JOIN org o ON d.parent_id = o.id) SELECT id, parent_id FROM org"
+	qCTE, err := p.ParseSelect(cteSQL)
+	if err != nil {
+		t.Fatalf("expected recursive CTE query to succeed in Pure AST mode, got err: %v", err)
+	}
+	if qCTE.AST == nil {
+		t.Fatal("expected qCTE.AST to be populated for recursive CTE in Pure AST mode")
+	}
+	if len(qCTE.CTEs) != 1 || qCTE.CTEs[0].Name != "org" || len(qCTE.CTEs[0].Columns) != 2 {
+		t.Errorf("unexpected CTE info in Pure AST mode: %+v", qCTE.CTEs)
+	}
+
+	// 3. Invalid non-AST syntax is rejected immediately when legacy regex fallback is disabled
+	_, err = p.ParseSelect("NOT_A_SELECT 123")
+	if err == nil || !strings.Contains(err.Error(), "legacy regex fallback disabled") {
+		t.Fatalf("expected Pure AST mode error mentioning 'legacy regex fallback disabled', got: %v", err)
+	}
+
+	// 4. Toggling SetDefaultLegacyRegexFallback(true) enables the opt-in flag
+	planner.SetDefaultLegacyRegexFallback(true)
+	if !planner.IsDefaultLegacyRegexFallbackEnabled() {
+		t.Fatal("expected IsDefaultLegacyRegexFallbackEnabled() to be true after toggle")
+	}
+}

@@ -1175,6 +1175,9 @@ func (p *Parser) parseGeneralInsert() (Statement, error) {
 
 func (p *Parser) parseWith() (*GeneralSelectStmt, error) {
 	p.nextToken() // eat WITH
+	if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "RECURSIVE") {
+		p.nextToken() // eat RECURSIVE
+	}
 	var ctes []CTEClause
 
 	for {
@@ -1183,6 +1186,25 @@ func (p *Parser) parseWith() (*GeneralSelectStmt, error) {
 		}
 		cteName := cleanSchemaPrefix(p.curToken.Literal)
 		p.nextToken()
+
+		var cteCols []string
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken() // eat (
+			for !p.curTokenIs(TokenRParen) && !p.curTokenIs(TokenEOF) {
+				if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenString) {
+					cteCols = append(cteCols, cleanSchemaPrefix(p.curToken.Literal))
+				}
+				p.nextToken()
+				if p.curTokenIs(TokenComma) {
+					p.nextToken()
+				} else {
+					break
+				}
+			}
+			if p.curTokenIs(TokenRParen) {
+				p.nextToken() // eat )
+			}
+		}
 
 		if !p.curTokenIs(TokenAs) {
 			return nil, fmt.Errorf("expected AS after CTE name, got %s", p.curToken.Literal)
@@ -1204,6 +1226,43 @@ func (p *Parser) parseWith() (*GeneralSelectStmt, error) {
 			return nil, err
 		}
 
+		innerSQL := innerSelect.String()
+		// If CTE body contains set operations (e.g., UNION ALL in recursive CTE), collect remaining tokens up to closing )
+		if !p.curTokenIs(TokenRParen) {
+			depth := 1
+			var extra []string
+			for depth > 0 && !p.curTokenIs(TokenEOF) {
+				if p.curTokenIs(TokenLParen) {
+					depth++
+					extra = append(extra, "(")
+				} else if p.curTokenIs(TokenRParen) {
+					depth--
+					if depth == 0 {
+						break
+					}
+					extra = append(extra, ")")
+				} else if p.curTokenIs(TokenString) {
+					extra = append(extra, "'"+strings.ReplaceAll(p.curToken.Literal, "'", "''")+"'")
+				} else {
+					extra = append(extra, p.curToken.Literal)
+				}
+				p.nextToken()
+			}
+			if len(extra) > 0 {
+				var sb strings.Builder
+				for i, tok := range extra {
+					if i > 0 {
+						prev := extra[i-1]
+						if tok != "," && tok != ")" && tok != "." && prev != "(" && prev != "." {
+							sb.WriteByte(' ')
+						}
+					}
+					sb.WriteString(tok)
+				}
+				innerSQL = innerSQL + " " + sb.String()
+			}
+		}
+
 		if !p.curTokenIs(TokenRParen) {
 			return nil, fmt.Errorf("expected ) closing CTE")
 		}
@@ -1211,8 +1270,9 @@ func (p *Parser) parseWith() (*GeneralSelectStmt, error) {
 
 		ctes = append(ctes, CTEClause{
 			Name:     cteName,
+			Columns:  cteCols,
 			Query:    innerSelect,
-			InnerSQL: innerSelect.String(),
+			InnerSQL: innerSQL,
 		})
 
 		if p.curTokenIs(TokenComma) {
