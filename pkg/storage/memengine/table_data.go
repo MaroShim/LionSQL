@@ -1,6 +1,7 @@
 package memengine
 
 import (
+	"sort"
 	"sync"
 
 	"lionsql/pkg/storage"
@@ -186,6 +187,49 @@ func (td *TableData) rowCount() int64 {
 		sh.mu.RUnlock()
 	}
 	return total
+}
+
+func (td *TableData) snapshotRowsAndKeys(filter func(pk string) bool) ([]string, []storage.Row) {
+	td.ensureShardsInit()
+	// Strict canonical order (0 to 255) to prevent deadlocks (Rule 10)
+	for i := 0; i < numTableShards; i++ {
+		td.shards[i].mu.RLock()
+	}
+	defer func() {
+		for i := numTableShards - 1; i >= 0; i-- {
+			td.shards[i].mu.RUnlock()
+		}
+	}()
+
+	var total int
+	for i := 0; i < numTableShards; i++ {
+		total += len(td.shards[i].entries)
+	}
+
+	type keyRowItem struct {
+		key string
+		row storage.Row
+	}
+	items := make([]keyRowItem, 0, total)
+	for i := 0; i < numTableShards; i++ {
+		for k, entry := range td.shards[i].entries {
+			if filter == nil || filter(k) {
+				items = append(items, keyRowItem{key: k, row: entry.row})
+			}
+		}
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].key < items[j].key
+	})
+
+	keys := make([]string, len(items))
+	rows := make([]storage.Row, len(items))
+	for i, item := range items {
+		keys[i] = item.key
+		rows[i] = item.row
+	}
+	return keys, rows
 }
 
 func (td *TableData) collectKeys(filter func(pk string) bool) []string {

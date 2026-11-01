@@ -31,7 +31,7 @@ static int go_wt_session_create(WT_SESSION *session, const char *name, const cha
 }
 
 static int go_wt_session_drop(WT_SESSION *session, const char *name) {
-    return session->drop(session, name, NULL);
+    return session->drop(session, name, "force=true");
 }
 
 static int go_wt_session_rename(WT_SESSION *session, const char *uri, const char *newuri) {
@@ -1068,6 +1068,18 @@ type WTSession struct {
 	closed     bool
 	cursorPool map[string][]*C.WT_CURSOR
 	allCursors map[*C.WT_CURSOR]struct{}
+	toClose    []*C.WT_CURSOR
+}
+
+func (s *WTSession) flushPendingClosesLocked() {
+	if s.closed || s.sess == nil || len(s.toClose) == 0 {
+		return
+	}
+	for _, cur := range s.toClose {
+		delete(s.allCursors, cur)
+		C.go_wt_cursor_close(cur)
+	}
+	s.toClose = s.toClose[:0]
 }
 
 func (s *WTSession) evictCursors(tableName string) {
@@ -1078,11 +1090,8 @@ func (s *WTSession) evictCursors(tableName string) {
 		return
 	}
 	uri := "table:" + tableName
-	if pool, ok := s.cursorPool[uri]; ok {
-		for _, cur := range pool {
-			delete(s.allCursors, cur)
-			C.go_wt_cursor_close(cur)
-		}
+	if pool, ok := s.cursorPool[uri]; ok && len(pool) > 0 {
+		s.toClose = append(s.toClose, pool...)
 		delete(s.cursorPool, uri)
 	}
 }
@@ -1100,11 +1109,14 @@ func (s *WTSession) Close() error {
 	}
 	s.closed = true
 
+	s.flushPendingClosesLocked()
+
 	for cur := range s.allCursors {
 		C.go_wt_cursor_close(cur)
 	}
 	s.allCursors = nil
 	s.cursorPool = nil
+	s.toClose = nil
 
 	// If the parent engine connection has already been closed or is being closed,
 	// bypass C.go_wt_session_close to prevent dereferencing freed connection memory (SIGSEGV).
@@ -1127,6 +1139,7 @@ func (s *WTSession) acquireCursor(uri string) (*C.WT_CURSOR, error) {
 		s.mu.Unlock()
 		return nil, fmt.Errorf("session is closed")
 	}
+	s.flushPendingClosesLocked()
 
 	if pool := s.cursorPool[uri]; len(pool) > 0 {
 		idx := len(pool) - 1
@@ -1173,6 +1186,7 @@ func (s *WTSession) releaseCursor(uri string, cur *C.WT_CURSOR) {
 		C.go_wt_cursor_close(cur)
 		return
 	}
+	s.flushPendingClosesLocked()
 
 	if s.cursorPool == nil {
 		s.cursorPool = make(map[string][]*C.WT_CURSOR)

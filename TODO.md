@@ -22,17 +22,23 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [-] 1.1 `DURA-KILL-1` kill -9 크래시 복구 장기 라운드 검증 (진행 중)
 - [x] **도구 구현 (`cmd/crashtest`)**: 다중 워커 계좌 이체 + SHA-256 커밋 장부(`crash_ledger`) + 4단계 정합성 오라클(D1 커밋 내구성, D2 원자성 `SUM(balance)=200,000`, D3 체크섬 일관성, D4 복구 가능성) 구현
 - [x] **변형 시나리오 구현**: `SIGKILL`, `SIGKILL+DOUBLE_KILL`(복구 중 재크래시 멱등성), `SIGKILL+TORN_WAL_TAIL`(로그 꼬리 절단 손상 복구), `SIGTERM` 대조군
-- [x] **크래시 결함 수정 3건**: WiredTiger 유저 버퍼 유실 방지(`transaction_sync`), `CREATE TABLE` 제약 조건 접두사 충돌(`checksum` 누락 방지), PGWire 텍스트 파라미터 숫자 오인 방지
-- [x] **1차 20라운드 완주**: In-Memory OCC 20/20 PASS (`64,214` tx 복구) & WiredTiger 20/20 PASS (`63,931` tx 복구, 위반 0건)
-- [ ] **장기 라운드 누적 검증**: 500 ~ 5,000 라운드 장기 크래시 복구 무결성 검증
+- [x] **크래시 결함 수정 4건**:
+  1. WiredTiger 유저 버퍼 유실 방지(`transaction_sync`)
+  2. `CREATE TABLE` 제약 조건 접두사 충돌(`checksum` 누락 방지)
+  3. PGWire 텍스트 파라미터 숫자 오인 방지
+  4. WiredTiger 세션 간 커서 비동기 해제 동시성 충돌(`go_wt_cursor_close` SIGSEGV) 완치 및 `force=true` 안전 드롭
+- [x] **100라운드 누적 완주**: WiredTiger 50/50 PASS (`170,477` tx 복구) & In-Memory OCC 50/50 PASS (`170,457` tx 복구) — 총 `340,934`건 트랜잭션 100% 무손실 복구 및 위반 0건 입증
+- [ ] **초장기 라운드 누적 검증**: 500 ~ 5,000 라운드 장기 크래시 복구 무결성 검증
 
 ### [-] 1.2 `DURA-SOAK-1` 24h ~ 72h 장기 소크 테스트 (진행 중)
 - [x] **소크 테스트 도구 구현 (`cmd/soaktest`)**: 8 워커 계좌 이체 + Prometheus 지표 수집 + RSS/FD/디스크/p99 추이 자동 판정 엔진
-- [x] **1시간 WiredTiger 스모크 완주 (`notes/SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`)**:
+- [x] **WiredTiger 스모크 완주**:
   - `719,970` ops 완주, 커밋 장부 일치(`393,523` 행), 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건)
   - `open_fds = 28` 완전 고정 (핸들 누수 0), `p99 = 6.23ms` 성능 열화 0
   - WiredTiger 500MB 캐시 워밍업 분석 완료 및 `/metrics` Go 힙/고루틴 수집 반영
-- [ ] **In-Memory OCC 스모크 소크 검증**: In-Memory 엔진 대상 1시간 소크 테스트 실행
+- [x] **In-Memory OCC 스모크 완주 및 스캔 스냅샷 정합성 완치**:
+  - `Scan()` 실행 중 개별 샤드 락 해제에 따른 찢긴 읽기(torn read) 결함 발굴 및 `snapshotRowsAndKeys` 카노니컬 오름차순 샤드 RLock 스냅샷 도입으로 완치
+  - 소크 테스트 완주: `16,452` commits 일치, 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건), RSS 비율 1.00, FD 비율 1.04, 고루틴 비율 1.00 (자원 누수 0)
 - [ ] **24시간 ~ 72시간 장기 소크 완주**: 장기 무중단 운영을 통한 극한의 메모리/고루틴/디스크 누수 0 검증
 
 ### [ ] 1.3 `DURA-DOGFOOD-1` 실서비스 섀도 운영 (Dogfooding)

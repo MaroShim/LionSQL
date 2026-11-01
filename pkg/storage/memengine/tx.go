@@ -1251,44 +1251,60 @@ func (tx *Transaction) Scan(tableName string) (storage.Cursor, error) {
 	tableName = td.Schema.Name
 
 	tx.engine.mu.RLock()
-
 	var keys []string
-	if tx.opts.ReadOnly {
-		keys = td.collectKeys(nil)
-	} else {
-		keys = td.collectKeys(func(k string) bool {
-			return !tx.isLocallyDeleted(tableName, k)
-		})
+	var rows []storage.Row
+	if tx.opts.ReadOnly || (len(tx.local[tableName]) == 0 && len(tx.deleted[tableName]) == 0) {
+		keys, rows = td.snapshotRowsAndKeys(nil)
+		tx.engine.mu.RUnlock()
+		return &memCursor{
+			tx:        tx,
+			tableName: tableName,
+			td:        td,
+			keys:      keys,
+			rows:      rows,
+			idx:       -1,
+		}, nil
 	}
+
+	// Non-readonly with uncommitted local mutations: snapshot base rows and overlay local changes
+	keys, rows = td.snapshotRowsAndKeys(func(k string) bool {
+		return !tx.isLocallyDeleted(tableName, k)
+	})
 	tx.engine.mu.RUnlock()
 
-	if !tx.opts.ReadOnly {
-		if localRows, ok := tx.local[tableName]; ok {
-			for k := range localRows {
-				if !tx.isLocallyDeleted(tableName, k) {
-					keys = append(keys, k)
-				}
+	itemMap := make(map[string]storage.Row, len(keys))
+	for i, k := range keys {
+		if locRow, ok := tx.getLocal(tableName, k); ok {
+			itemMap[k] = locRow
+		} else {
+			itemMap[k] = rows[i]
+		}
+	}
+	if localRows, ok := tx.local[tableName]; ok {
+		for k, r := range localRows {
+			if !tx.isLocallyDeleted(tableName, k) {
+				itemMap[k] = r
 			}
 		}
 	}
 
-	sort.Strings(keys)
-	if len(keys) > 1 {
-		w := 1
-		for r := 1; r < len(keys); r++ {
-			if keys[r] != keys[w-1] {
-				keys[w] = keys[r]
-				w++
-			}
-		}
-		keys = keys[:w]
+	mergedKeys := make([]string, 0, len(itemMap))
+	for k := range itemMap {
+		mergedKeys = append(mergedKeys, k)
+	}
+	sort.Strings(mergedKeys)
+
+	mergedRows := make([]storage.Row, len(mergedKeys))
+	for i, k := range mergedKeys {
+		mergedRows[i] = itemMap[k]
 	}
 
 	return &memCursor{
 		tx:        tx,
 		tableName: tableName,
 		td:        td,
-		keys:      keys,
+		keys:      mergedKeys,
+		rows:      mergedRows,
 		idx:       -1,
 	}, nil
 }
@@ -2285,6 +2301,7 @@ type memCursor struct {
 	tableName string
 	td        *TableData
 	keys      []string
+	rows      []storage.Row
 	idx       int
 	curRow    storage.Row
 	curRec    storage.Record
@@ -2302,6 +2319,11 @@ func (c *memCursor) Next() bool {
 			c.curRec = nil
 			c.curRow = storage.Row{}
 			return false
+		}
+		if len(c.rows) > c.idx {
+			c.curRow = c.rows[c.idx]
+			c.curRec = nil
+			return true
 		}
 		pk := c.keys[c.idx]
 		if c.tx != nil {
@@ -2359,6 +2381,7 @@ func (c *memCursor) Row() (storage.Row, error) {
 func (c *memCursor) Close() error {
 	c.closed = true
 	c.keys = nil
+	c.rows = nil
 	c.curRec = nil
 	c.curRow = storage.Row{}
 	c.resolver = nil
