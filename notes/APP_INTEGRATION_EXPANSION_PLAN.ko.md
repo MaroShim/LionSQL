@@ -4,7 +4,7 @@
 > - **과제 식별 코드**: `INTEG-ANSWER-1`, `INTEG-VAULTWARDEN-1`, `INTEG-METABASE-1`, `INTEG-UMAMI-1`, `INTEG-NOCODB-1`, `INTEG-MATTERMOST-1`
 > - **목표**: 지금까지의 연동(Gitea, IOTA ERP, Grafana, Casdoor)으로 다져진 호환성 위에서, 실제 사용자가 많이 쓰는 오픈소스 앱 6종을 소스 무수정으로 LionSQL에 붙여 "실사용 가능성"을 입증하고, 그 과정에서 남은 호환성 결함을 제거
 > - **상태**: 계획 수립 (`Pending`)
-> - **하위 계획서**: [`ANSWER_INTEGRATION_PLAN.ko.md`](ANSWER_INTEGRATION_PLAN.ko.md) (1순위 상세)
+> - **연동 보고서**: [`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md) (1순위 상세)
 > - **제외 결정**: Keycloak (후보에서 제외)
 
 ---
