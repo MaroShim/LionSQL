@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -85,7 +86,9 @@ func NewSortIterator(child Iterator, orderByClause string) *SortIterator {
 	for _, item := range sqlutil.ParseOrderBy(orderByClause) {
 		cleanKey := sqlutil.CleanIdentifier(item.Column)
 		var parsed proc.Expr
-		if strings.ContainsAny(cleanKey, " +-*/%()") || strings.Contains(cleanKey, "->") {
+		if pos, err := strconv.Atoi(cleanKey); err == nil && pos >= 1 {
+			parsed = nil
+		} else if strings.ContainsAny(cleanKey, " +-*/%()") || strings.Contains(cleanKey, "->") {
 			p := proc.NewParser(proc.NewLexer(cleanKey))
 			e := p.ParseExpr()
 			if e != nil && len(p.Errors()) == 0 {
@@ -143,8 +146,17 @@ func (s *SortIterator) compareTuples(tA, tB Tuple) int {
 			vA, _ = EvalTupleExpr(tA, item.parsed)
 			vB, _ = EvalTupleExpr(tB, item.parsed)
 		} else {
-			vA, _ = lookupVal(tA, item.key)
-			vB, _ = lookupVal(tB, item.key)
+			if pos, err := strconv.Atoi(item.key); err == nil && pos >= 1 {
+				if pos-1 < len(tA.Values) {
+					vA = tA.Values[pos-1]
+				}
+				if pos-1 < len(tB.Values) {
+					vB = tB.Values[pos-1]
+				}
+			} else {
+				vA, _ = lookupVal(tA, item.key)
+				vB, _ = lookupVal(tB, item.key)
+			}
 		}
 		cmp := CompareValues(vA, vB)
 		if cmp != 0 {

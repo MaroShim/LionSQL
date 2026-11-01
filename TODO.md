@@ -51,7 +51,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **Phase 1 (코어 로직 & 구문 스위트)**: `select1.slt`, `where.slt`, `join.slt`, `null.slt`, `aggregate.slt` (100% PASS)
 - [x] **Phase 2 (화이트스페이스 & 엣지 케이스 스위트)**: 탭/개행/다중 공백(`whitespace.slt`), 키워드 식별자 충돌 및 리터럴 포함(`boundary.slt`), 복합 키워드 변형(`IF EXISTS`, `WITHIN GROUP`) (100% PASS)
 - [x] **Phase 2.5 (핵심 영역 고난도 스위트 1차~6차 확장)**: 조건 분기 및 단락 평가(`case_expr.slt`), 다중 컬럼/NULL/집계 고립(`distinct.slt`), IN/EXISTS/스칼라 서브쿼리(`subquery.slt`), 윈도우 함수(`window.slt`), 집합 연산(`setops.slt`), 내장 스칼라 함수(`functions.slt`), 복합 DML 변이(`dml_mutate.slt`), 범위 조건(`between.slt`), 리스트 조건(`in_list.slt`), 패턴 매칭(`like.slt`), 그룹 필터링(`group_having.slt`), 페이지네이션(`limit_offset.slt`), 공통 테이블 식(`cte.slt`), 사칙연산 우선순위/모듈로(`arithmetic.slt`), 타입 캐스팅(`cast_type.slt`), 3치 논리 및 드모르간 법칙(`boolean_3vl.slt`), 다중/셀프/안티/크로스 조인(`join_advanced.slt`), JSON 연산자(`json_ops.slt`), 다중 정렬 및 Upsert(`order_upsert.slt`), 중첩 대수식 스트레스(`expr_stress.slt`), 복합 집계 및 `COALESCE(SUM(...), 0)` 스트레스(`agg_stress.slt`), 파생 테이블 다중 조인(`derived_join.slt`), 트랜잭션 롤백 격리(`tx_isolation.slt`), 복합 3VL 불리언 논리(`boolean_logic_stress.slt`), 대규모 IN 및 NOT IN NULL 함정(`in_subquery_stress.slt`), 문자열 연결 및 이스케이프(`datetime_string_stress.slt`) (총 33개 파일, 240문장, 181쿼리 — `memory`/`wiredtiger` × `inproc`/`pgwire` 4대 매트릭스 전수 100% PASS)
-- [x] **엔진 버그 14건 발굴 및 완치**:
+- [x] **엔진 버그 16건 발굴 및 완치**:
   1. `HasPrefixKeyword` 다중 공백/탭/개행 DDL 라우팅 버그 완치
   2. SQL 3-valued logic `NULL = NULL` 및 `val = NULL` UNKNOWN(falsy) 표준 정합성 완치
   3. `BinaryExpr.String()` 연산자 우선순위 부모 괄호 탈락 (`(A OR B) AND C`) 및 우측 결합성(`a - (b + c)`) deparser 완치
@@ -66,13 +66,16 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   12. `GROUP BY` 프로젝션 내 복합 집계 표현식(`COALESCE(SUM(o.amount), 0)`, `SUM(a) + SUM(b)`) 실행 시 내부 중첩 집계 함수를 누적하지 않고 첫 행만 참조하던 `AggregateIterator` 2-Pass 평가 결함 완치
   13. `||` 문자열 연결 연산자(`TokenConcat`) 렉서 토큰화 및 Pratt 파서, Volcano/Row 수식 평가자 지원 완치
   14. `NOT IN (SELECT ...)` 서브쿼리 내 `NULL` 키가 1개라도 포함된 경우 SQL 3VL UNKNOWN 규칙에 의해 모든 행이 suppress되어야 함에도 행이 반환되던 `HashJoinIterator` ANTI 조인 결함 완치
+  15. 프로젝션 내 스칼라 서브쿼리의 집계 함수(`(SELECT avg(c) FROM t1)`)가 외부 쿼리를 전역 집계 쿼리로 오인시켜 1행만 반환되던 CBO 플래너 `hasTopLevelAggregateExpr` 결함 완치
+  16. `ORDER BY 1, 2` 등 서수(Ordinal Position) 정렬 지정 시 프로젝션 이전에 실행되어 테이블 원본 컬럼으로 정렬되거나 무시되던 CBO 플래너 및 `SortIterator` 서수 인덱스 평가 결함 완치
 
 ### [-] 1.5 `DURA-SLT-2` SQLLogicTest 1.0 릴리즈 풀 스위트 (60,000+ 쿼리) 전수 인증 (진행 중)
 - 설계 계획서: [`notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md`](notes/SQLLOGICTEST_FULL_SUITE_CERTIFICATION_PLAN.ko.md)
+- 확장 로드맵: [`notes/SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md`](notes/SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md)
 - [x] **병렬 워커 풀(`-parallel N`) 및 4대 매트릭스 러너 완성**: `cmd/sqllogictest`에 `-engine wiredtiger` 디스크 격리 엔진, `-mode pgwire` 실제 PostgreSQL v3 TCP 소켓 실행기(`PGWireExecutor`), `-parallel N` 고루틴 워커 풀 구현 완료
-- [x] **Phase 4 코어 스트레스 스위트(`expr_stress.slt`, `agg_stress.slt`)**: 다중 중첩 사칙연산, `COALESCE`+`NULLIF` 복합 대수식, 3VL 드모르간 항등식, `LEFT JOIN`+`GROUP BY`+`COALESCE(SUM(...), 0)` 및 상관/비상관 집계 서브쿼리 검증 완료
-- [x] **Phase 5 (PGWire TCP 소켓 원격 프로토콜 검증)**: TCP 소켓 통신(`PGWireExecutor`)을 통한 28개 SLT 스위트(`memory` & `wiredtiger`) E2E 100% 통과 및 `go test` 통합 완료
-- [ ] **Phase 3 (외부 대용량 SQLite 공식 `select1` ~ `select5` 60,000+ 쿼리 동기화 완주)**: `scripts/fetch_slt_full.sh` 동기화 도구 및 대용량 60,000+ 쿼리 오라클 검증
+- [x] **Phase 1 (고위험 핵심 도메인 33개 스위트, 181개 쿼리 전수 인증)**: 다중 중첩 사칙연산, `COALESCE`+`NULLIF` 복합 대수식, 3VL 드모르간 항등식, `LEFT JOIN`+`GROUP BY`+`COALESCE(SUM(...), 0)`, 트랜잭션 격리, 복합 불리언 논리, 대규모 IN 및 NOT IN NULL 함정 검증 100% 완료
+- [x] **Phase 2 (SQLite 공식 대규모 `select1.test` ~ `select2.test` 연동 시작)**: `scripts/fetch_slt.sh` 동기화 도구 구축, `select1.test` (12,188행, 1,000쿼리) 및 `select2.test` (11,218행, 1,000쿼리) fetch 완료, 초기 쿼리 오라클 MD5 일치 통과
+- [ ] **Phase 3 (SQLite 공식 `select1` ~ `select5` 60,000+ 쿼리 완주)**: 비등가 상관 서브쿼리(`x.b < t1.b`) 및 서브쿼리 인라인 평가 엔진 보강 후 대용량 전수 통과
 - [ ] **Phase 6 (1.0 릴리즈 게이트 통합)**: 1.0 릴리즈 직전 풀 스위트 듀얼 엔진 100% 무오류 인증
 
 ---

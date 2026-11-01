@@ -246,12 +246,7 @@ func FromAST(stmt *proc.GeneralSelectStmt) *QueryInfo {
 		if sqlutil.ContainsKeyword(pStr, "OVER", true) {
 			continue
 		}
-		pUpper := strings.ToUpper(pStr)
-		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
-			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
-			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") ||
-			strings.Contains(pUpper, "PERCENTILE_CONT(") || strings.Contains(pUpper, "PERCENTILE_DISC(") ||
-			strings.Contains(pUpper, "APPROX_PERCENTILE(") || strings.Contains(pUpper, "MEDIAN(") {
+		if hasTopLevelAggregateExpr(p.Expr) {
 			hasAgg = true
 		}
 	}
@@ -533,7 +528,7 @@ func (p *Planner) ParseSelect(query string) (*QueryInfo, error) {
 		if sqlutil.ContainsKeyword(proj, "OVER", true) {
 			continue
 		}
-		pUpper := strings.ToUpper(proj)
+		pUpper := strings.ToUpper(maskSubqueries(proj))
 		if strings.Contains(pUpper, "COUNT(") || strings.Contains(pUpper, "SUM(") ||
 			strings.Contains(pUpper, "AVG(") || strings.Contains(pUpper, "MIN(") ||
 			strings.Contains(pUpper, "MAX(") || strings.Contains(pUpper, "GROUPING(") ||
@@ -1421,8 +1416,19 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		currentNode = winNode
 	}
 
-	// Order By -> Sort Node
+	sortAfterProj := false
 	if q.OrderByClause != "" {
+		for _, it := range sqlutil.ParseOrderBy(q.OrderByClause) {
+			clean := strings.TrimSpace(it.Column)
+			if _, err := strconv.Atoi(clean); err == nil {
+				sortAfterProj = true
+				break
+			}
+		}
+	}
+
+	// Order By -> Sort Node (Pre-projection for table column sorting)
+	if q.OrderByClause != "" && !sortAfterProj {
 		sortKey := q.OrderByClause
 		sortOrder := ""
 		orderItems := sqlutil.ParseOrderBy(q.OrderByClause)
@@ -1461,6 +1467,36 @@ func (p *Planner) BuildMultiJoinPlanWithStats(q *QueryInfo, schema *storage.Tabl
 		Children:      []*PlanNode{currentNode},
 	}
 	currentNode = projNode
+
+	// Order By -> Sort Node (Post-projection for ordinal e.g. ORDER BY 1, 2)
+	if q.OrderByClause != "" && sortAfterProj {
+		sortKey := q.OrderByClause
+		sortOrder := ""
+		orderItems := sqlutil.ParseOrderBy(q.OrderByClause)
+		if len(orderItems) == 1 {
+			sortKey = orderItems[0].Column
+			if orderItems[0].Desc {
+				sortOrder = "DESC"
+			} else {
+				sortOrder = "ASC"
+			}
+		}
+
+		n := float64(currentNode.EstimatedRows)
+		sortStartup := currentNode.TotalCost + (n * math.Log2(math.Max(2, n)) * 0.01)
+		sortTotal := sortStartup + n*0.01
+
+		sortNode := &PlanNode{
+			Type:          NodeSort,
+			SortKey:       sortKey,
+			SortOrder:     sortOrder,
+			StartupCost:   sortStartup,
+			TotalCost:     sortTotal,
+			EstimatedRows: currentNode.EstimatedRows,
+			Children:      []*PlanNode{currentNode},
+		}
+		currentNode = sortNode
+	}
 
 	// Limit Node
 	if q.LimitCount >= 0 || q.OffsetCount > 0 {
@@ -2411,4 +2447,86 @@ func buildSingleJoinNode(currentNode *PlanNode, currentEstimatedRows int64, join
 	}
 
 	return nextNode, joinEstRows
+}
+
+func hasTopLevelAggregateExpr(expr proc.Expr) bool {
+	if expr == nil {
+		return false
+	}
+	switch e := expr.(type) {
+	case *proc.ScalarSubqueryExpr:
+		return false
+	case *proc.FunctionCallExpr:
+		fn := strings.ToUpper(e.Name)
+		switch fn {
+		case "COUNT", "SUM", "AVG", "MIN", "MAX", "GROUPING",
+			"PERCENTILE_CONT", "PERCENTILE_DISC", "APPROX_PERCENTILE", "MEDIAN":
+			return true
+		}
+		for _, arg := range e.Args {
+			if hasTopLevelAggregateExpr(arg) {
+				return true
+			}
+		}
+		return false
+	case *proc.CaseExpr:
+		for _, w := range e.Whens {
+			if hasTopLevelAggregateExpr(w.Condition) || hasTopLevelAggregateExpr(w.Result) {
+				return true
+			}
+		}
+		if hasTopLevelAggregateExpr(e.Else) {
+			return true
+		}
+		return false
+	case *proc.BinaryExpr:
+		return hasTopLevelAggregateExpr(e.Left) || hasTopLevelAggregateExpr(e.Right)
+	case *proc.UnaryExpr:
+		return hasTopLevelAggregateExpr(e.Expr)
+	case *proc.CastExpr:
+		return hasTopLevelAggregateExpr(e.Expr)
+	case *proc.BetweenExpr:
+		return hasTopLevelAggregateExpr(e.Expr) || hasTopLevelAggregateExpr(e.Low) || hasTopLevelAggregateExpr(e.High)
+	case *proc.InExpr:
+		if hasTopLevelAggregateExpr(e.Expr) {
+			return true
+		}
+		for _, it := range e.List {
+			if hasTopLevelAggregateExpr(it) {
+				return true
+			}
+		}
+		return false
+	}
+	return false
+}
+
+func maskSubqueries(s string) string {
+	var buf strings.Builder
+	depth := 0
+	inSub := false
+	subDepth := 0
+	n := len(s)
+	for i := 0; i < n; i++ {
+		ch := s[i]
+		if ch == '(' {
+			depth++
+			if !inSub && i+7 <= n && strings.EqualFold(s[i+1:i+7], "SELECT") {
+				inSub = true
+				subDepth = depth
+			}
+		}
+		if inSub {
+			buf.WriteByte(' ')
+			if ch == ')' && depth == subDepth {
+				inSub = false
+			}
+		} else {
+			buf.WriteByte(ch)
+		}
+		if ch == ')' {
+			depth--
+		}
+	}
+	return buf.String()
 }

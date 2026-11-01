@@ -33,6 +33,14 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		}
 	}
 
+	for i, proj := range qInfo.Projections {
+		if strings.Contains(strings.ToUpper(proj), "SELECT") {
+			if resolved, err := s.resolveSubqueriesWithSession(proj, cs); err == nil && resolved != proj {
+				qInfo.Projections[i] = resolved
+			}
+		}
+	}
+
 	leftTable := cleanIdentifier(qInfo.TableName)
 	leftSchema, err := s.engine.GetTable(leftTable)
 	if err != nil {
@@ -1537,12 +1545,21 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		}
 
 		// Execute via unified VDBE Virtual Machine Engine (Primary Fast-Path)
-		if res, err := s.execVDBESelect(cleaned, start, cs); err == nil {
-			if qInfo.Distinct {
-				res.Rows = deduplicateRows(res.Rows)
-				res.RowsAffected = int64(len(res.Rows))
+		hasSubqInProj := false
+		for _, p := range qInfo.Projections {
+			if strings.Contains(strings.ToUpper(p), "SELECT") {
+				hasSubqInProj = true
+				break
 			}
-			return res, nil
+		}
+		if !hasSubqInProj {
+			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil {
+				if qInfo.Distinct {
+					res.Rows = deduplicateRows(res.Rows)
+					res.RowsAffected = int64(len(res.Rows))
+				}
+				return res, nil
+			}
 		}
 
 		// Secondary Execution: Direct Volcano CBO execution

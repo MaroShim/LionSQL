@@ -31,6 +31,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- distinguish subquery-internal aggregates in SELECT projections from outer group aggregates in CBO planner via hasTopLevelAggregateExpr, preventing single-row truncation of scalar subquery projections (DURA-SLT-2)
+- support 1-based ordinal position sorting (e.g. ORDER BY 1, 2) in Volcano CBO planner and SortIterator by placing SortNode post-projection and indexing tuple slots (DURA-SLT-2)
 - support standard SQL string concatenation operator (||) across T-SQL Pratt parser and Volcano/row expression evaluators (DURA-SLT-2)
 - enforce SQL 3-valued logic UNKNOWN semantics for NOT IN (SELECT ...) subqueries containing NULL keys in HashJoinIterator ANTI joins, suppressing all outer rows when inner null exists (DURA-SLT-2)
 - extract and accumulate nested aggregate calls inside composite SELECT expressions (such as COALESCE(SUM(col), 0) or SUM(a) + SUM(b)) via two-pass group materialization in AggregateIterator (DURA-SLT-2)
