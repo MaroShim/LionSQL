@@ -634,6 +634,121 @@ func FindAllTopLevelKeyword(s string, keyword string) []int {
 	return indices
 }
 
+// ContainsKeyword reports whether keyword appears as a standalone token in s
+// outside single quotes, double quotes, brackets, and comments.
+// If allowInsideParens is true, occurrences inside nested parentheses (e.g. "(a = 1 OR b = 2)")
+// are matched; otherwise only depth-0 occurrences are matched.
+func ContainsKeyword(s string, keyword string, allowInsideParens bool) bool {
+	kLen := len(keyword)
+	n := len(s)
+	if n < kLen || kLen == 0 {
+		return false
+	}
+
+	depth := 0
+	inSingleQuote := false
+	inDoubleQuote := false
+	inBracket := false
+	inLineComment := false
+	inBlockComment := false
+
+	for i := 0; i <= n-kLen; i++ {
+		ch := s[i]
+
+		if inLineComment {
+			if ch == '\n' {
+				inLineComment = false
+			}
+			continue
+		}
+		if inBlockComment {
+			if ch == '*' && i+1 < n && s[i+1] == '/' {
+				inBlockComment = false
+				i++
+			}
+			continue
+		}
+
+		if inSingleQuote {
+			if ch == '\'' {
+				if i+1 < n && s[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingleQuote = false
+			}
+			continue
+		}
+		if inDoubleQuote {
+			if ch == '"' {
+				if i+1 < n && s[i+1] == '"' {
+					i++
+					continue
+				}
+				inDoubleQuote = false
+			}
+			continue
+		}
+		if inBracket {
+			if ch == ']' {
+				if i+1 < n && s[i+1] == ']' {
+					i++
+					continue
+				}
+				inBracket = false
+			}
+			continue
+		}
+
+		if ch == '-' && i+1 < n && s[i+1] == '-' {
+			inLineComment = true
+			i++
+			continue
+		}
+		if ch == '/' && i+1 < n && s[i+1] == '*' {
+			inBlockComment = true
+			i++
+			continue
+		}
+
+		if ch == '\'' {
+			inSingleQuote = true
+			continue
+		}
+		if ch == '"' {
+			inDoubleQuote = true
+			continue
+		}
+		if ch == '[' {
+			inBracket = true
+			continue
+		}
+
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+
+		if depth == 0 || allowInsideParens {
+			if strings.EqualFold(s[i:i+kLen], keyword) {
+				leftOk := (i == 0 || isWordBoundary(s[i-1]))
+				rightOk := (i+kLen == n || isWordBoundary(s[i+kLen]))
+				if leftOk && rightOk {
+					return true
+				}
+			}
+		}
+	}
+
+	return false
+}
+
 // FindTopLevelKeyword finds the byte index of a keyword (e.g. "FROM") in s where:
 // 1. It is outside single/double quotes, brackets, and parentheses (depth == 0).
 // 2. It is flanked by word boundaries (spaces, punctuation, or string start/end).
@@ -752,7 +867,8 @@ func FindTopLevelChar(s string, target byte) int {
 }
 
 func isWordBoundary(ch byte) bool {
-	return unicode.IsSpace(rune(ch)) || ch == '(' || ch == ')' || ch == ',' || ch == ';' || ch == '\n' || ch == '\r' || ch == '\t'
+	return unicode.IsSpace(rune(ch)) || ch == '(' || ch == ')' || ch == ',' || ch == ';' || ch == '\n' || ch == '\r' || ch == '\t' ||
+		ch == '[' || ch == ']' || ch == '=' || ch == '<' || ch == '>' || ch == '!' || ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '%'
 }
 
 func isBalanced(s string) bool {

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"lionsql/pkg/proc"
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
@@ -129,98 +130,10 @@ func stripEnclosingParens(s string) string {
 	}
 }
 
-// HasDisjunction reports whether an expression contains an OR operator at the top level outside
-// string literals, comments, and identifiers. It handles any whitespace (\t, \n, \r, ' ') as well
-// as surrounding punctuation/parentheses, preventing false index seek matching on disjunctions.
+// HasDisjunction reports whether an expression contains an OR operator outside
+// string literals, comments, and identifiers.
 func HasDisjunction(expr string) bool {
-	n := len(expr)
-	inSingleQuote := false
-	inDoubleQuote := false
-	inBracket := false
-
-	for i := 0; i < n; i++ {
-		ch := expr[i]
-
-		// Handle single-quoted string literals ('...')
-		if inSingleQuote {
-			if ch == '\'' {
-				if i+1 < n && expr[i+1] == '\'' {
-					i++ // escaped quote ''
-				} else {
-					inSingleQuote = false
-				}
-			}
-			continue
-		}
-		// Handle double-quoted identifiers ("...")
-		if inDoubleQuote {
-			if ch == '"' {
-				if i+1 < n && expr[i+1] == '"' {
-					i++ // escaped quote ""
-				} else {
-					inDoubleQuote = false
-				}
-			}
-			continue
-		}
-		// Handle bracketed identifiers ([...])
-		if inBracket {
-			if ch == ']' {
-				inBracket = false
-			}
-			continue
-		}
-
-		// Handle comments
-		if ch == '-' && i+1 < n && expr[i+1] == '-' {
-			// Line comment: skip until newline
-			for i < n && expr[i] != '\n' {
-				i++
-			}
-			continue
-		}
-		if ch == '/' && i+1 < n && expr[i+1] == '*' {
-			// Block comment: skip until */
-			i += 2
-			for i+1 < n && !(expr[i] == '*' && expr[i+1] == '/') {
-				i++
-			}
-			i++
-			continue
-		}
-
-		if ch == '\'' {
-			inSingleQuote = true
-			continue
-		}
-		if ch == '"' {
-			inDoubleQuote = true
-			continue
-		}
-		if ch == '[' {
-			inBracket = true
-			continue
-		}
-
-		// Check for OR (case-insensitive) with proper token boundaries
-		if (ch == 'O' || ch == 'o') && i+1 < n && (expr[i+1] == 'R' || expr[i+1] == 'r') {
-			leftOk := (i == 0) || isDisjunctionBoundary(expr[i-1])
-			rightOk := (i+2 == n) || isDisjunctionBoundary(expr[i+2])
-			if leftOk && rightOk {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func isDisjunctionBoundary(b byte) bool {
-	switch b {
-	case ' ', '\t', '\n', '\r', '(', ')', '[', ']', ';', ',', '=', '<', '>', '!', '+', '-', '*', '/', '%':
-		return true
-	default:
-		return false
-	}
+	return sqlutil.ContainsKeyword(expr, "OR", true)
 }
 
 // ParseWhereConditions extracts equality conditions and range conditions from a WHERE clause.

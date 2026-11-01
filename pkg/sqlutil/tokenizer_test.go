@@ -363,3 +363,34 @@ func TestFindTopLevelChar(t *testing.T) {
 }
 
 
+
+func TestContainsKeyword(t *testing.T) {
+	tests := []struct {
+		name               string
+		str                string
+		keyword            string
+		allowInsideParens  bool
+		want               bool
+	}{
+		{"Top-level keyword found", "SELECT a FROM t WHERE b = 1", "FROM", false, true},
+		{"Keyword inside parens not matched when allow=false", "SELECT a FROM (SELECT 1 AS b) t", "AS", false, false},
+		{"Keyword inside parens matched when allow=true", "SELECT a FROM (SELECT 1 AS b) t", "AS", true, true},
+		{"Disjunction OR with spaces", "a = 1 OR b = 2", "OR", true, true},
+		{"Disjunction OR with tabs", "a = 1\tOR\tb = 2", "OR", true, true},
+		{"Disjunction OR with newlines", "a = 1\nOR\nb = 2", "OR", true, true},
+		{"Disjunction OR inside parens", "(a = 1 OR b = 2)", "OR", true, true},
+		{"OR inside single quotes ignored", "col = 'FOO OR BAR'", "OR", true, false},
+		{"OR inside double quotes ignored", `"MY OR COL" = 1`, "OR", true, false},
+		{"OR inside line comment ignored", "-- comment with OR\na = 1", "OR", true, false},
+		{"Word containing or ignored", "order_by = 1", "OR", true, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ContainsKeyword(tt.str, tt.keyword, tt.allowInsideParens)
+			if got != tt.want {
+				t.Errorf("ContainsKeyword(%q, %q, %v) = %v; want %v", tt.str, tt.keyword, tt.allowInsideParens, got, tt.want)
+			}
+		})
+	}
+}
