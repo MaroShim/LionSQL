@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- support PostgreSQL Writable CTEs (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) with multi-CTE chaining, post-update `RETURNING` consumption in `INSERT ... SELECT`, 0-row schema preservation, unreferenced CTE materialization, single-statement atomic rollback (`23505`), PGWire `SELECT $N` target-column parameter OID inference, and `::type[]` array cast AST parsing (`SQL-WRITABLE-CTE-1`)
 - default to pure AST planner (`proc.ParseSQL` -> `FromAST`) and isolate legacy regex planner fallback behind `--enable-legacy-regex-planner` option (default `false`) (`PLANNER-AST-1`)
 - support `OVER (...)` window clauses on `FunctionCallExpr` and `WithinGroupExpr`, as well as `WITH RECURSIVE` CTE column lists and `UNION ALL` bodies natively in the Pratt AST parser (`PLANNER-AST-1`)
 - implement dynamic root table selection (`optimizeRootTable`) and zero-cardinality fast-fail pruning (`NodeEmpty` / `EmptyIterator`) for large multi-table joins (`OPT-LARGE-JOIN-1`)

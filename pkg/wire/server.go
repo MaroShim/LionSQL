@@ -1255,62 +1255,13 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		return
 	}
 
-	if retIdx := sqlutil.FindTopLevelKeyword(query, "RETURNING"); retIdx != -1 {
-		retPart := strings.TrimSpace(query[retIdx+len("RETURNING"):])
+	if sqlutil.FindTopLevelKeyword(query, "RETURNING") != -1 {
 		if dml, err := engine.ParseDMLCommand(query); err == nil && dml != nil {
-			cleanTbl := cleanColumnIdentifier(dml.Table)
-			tbl, err := s.engine.GetTable(cleanTbl)
-			if err != nil {
-				tables, _ := s.engine.ListTables()
-				for _, t := range tables {
-					if strings.EqualFold(t.Name, cleanTbl) {
-						tbl = t
-						break
-					}
-				}
-			}
-			if tbl != nil {
-				rawCols := sqlutil.SplitTopLevel(retPart, ',')
-				var cols []ColumnMeta
-				for _, rawCol := range rawCols {
-					colName := strings.TrimSpace(rawCol)
-					if colName == "" {
-						continue
-					}
-					var outColName string
-					lookupName := colName
-					if expr, alias, hasAs := sqlutil.SplitAsAlias(colName); hasAs {
-						outColName = cleanColumnIdentifier(alias)
-						lookupName = cleanColumnIdentifier(expr)
-					} else {
-						outColName = cleanColumnIdentifier(colName)
-						lookupName = outColName
-					}
-
-					var colType storage.DataType = storage.TypeInt
-					found := false
-					for _, c := range tbl.Columns {
-						if strings.EqualFold(c.Name, lookupName) {
-							colType = c.Type
-							found = true
-							break
-						}
-					}
-					var oid int32 = 20
-					if found {
-						oid = typeToPgOID(colType)
-					}
-					cols = append(cols, ColumnMeta{
-						Name:     outColName,
-						DataType: oid,
-					})
-				}
-				if len(cols) > 0 {
-					recordCols(cols)
-					applyFormats(cols)
-					_ = WriteRowDescription(conn, cols)
-					return
-				}
+			if cols := s.describeDMLReturningColumns(dml); len(cols) > 0 {
+				recordCols(cols)
+				applyFormats(cols)
+				_ = WriteRowDescription(conn, cols)
+				return
 			}
 		}
 	}
@@ -1488,6 +1439,20 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			_ = WriteRowDescription(conn, cols)
 			return
 		}
+		if strings.HasPrefix(upper, "WITH") && isWritableWithQuery(query) {
+			cols, hasResult := s.describeWithQueryColumns(query)
+			if !hasResult || len(cols) == 0 {
+				if stmt != nil {
+					stmt.ColumnOIDs = nil
+				}
+				_ = WriteNoData(conn)
+				return
+			}
+			recordCols(cols)
+			applyFormats(cols)
+			_ = WriteRowDescription(conn, cols)
+			return
+		}
 		previewSQL := buildPreviewSQL(query, paramTypes)
 		if res, err := s.coordinator.ExecuteSessionSQL("default", previewSQL); err == nil && len(res.Columns) > 0 {
 			var sampleRow map[string]any
@@ -1503,6 +1468,14 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 			applyFormats(cols)
 			_ = WriteRowDescription(conn, cols)
 			return
+		}
+		if strings.HasPrefix(upper, "WITH") {
+			if cols, hasResult := s.describeWithQueryColumns(query); hasResult && len(cols) > 0 {
+				recordCols(cols)
+				applyFormats(cols)
+				_ = WriteRowDescription(conn, cols)
+				return
+			}
 		}
 
 		// Fallback: extract projected column names from query (or CTE main query)
@@ -2069,9 +2042,13 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 	for i, colName := range colNames {
 		var oid int32 = 0
 		cleanCol := cleanColumnIdentifier(colName)
+		bareCol := cleanCol
+		if dotIdx := strings.LastIndex(bareCol, "."); dotIdx != -1 {
+			bareCol = bareCol[dotIdx+1:]
+		}
 		for _, t := range tables {
 			for _, c := range t.Columns {
-				if strings.EqualFold(c.Name, cleanCol) || strings.EqualFold(c.Name, colName) {
+				if strings.EqualFold(c.Name, cleanCol) || strings.EqualFold(c.Name, bareCol) || strings.EqualFold(c.Name, colName) {
 					oid = typeToPgOID(c.Type)
 					break
 				}
@@ -2084,7 +2061,7 @@ func (s *Server) resolveColumnOIDs(query string, colNames []string, sampleRow ma
 			allTables, _ := s.engine.ListTables()
 			for _, t := range allTables {
 				for _, c := range t.Columns {
-					if strings.EqualFold(c.Name, cleanCol) || strings.EqualFold(c.Name, colName) {
+					if strings.EqualFold(c.Name, cleanCol) || strings.EqualFold(c.Name, bareCol) || strings.EqualFold(c.Name, colName) {
 						oid = typeToPgOID(c.Type)
 						break
 					}
@@ -2191,91 +2168,6 @@ func decodeBinaryArray(b []byte, elemOID int32) string {
 	}
 	sb.WriteString("}")
 	return sb.String()
-}
-
-func (s *Server) inferParamTypes(query string, count int) []int32 {
-	oids := make([]int32, count)
-	if s.engine == nil {
-		return oids
-	}
-
-	// 1. Try DML INSERT parameter resolution
-	if dml, err := engine.ParseDMLCommand(query); err == nil && dml != nil {
-		cleanTbl := cleanColumnIdentifier(dml.Table)
-		tbl, _ := s.engine.GetTable(cleanTbl)
-		if tbl == nil {
-			tbl, _ = s.engine.GetTable(strings.ToLower(cleanTbl))
-		}
-		if tbl == nil {
-			allTables, _ := s.engine.ListTables()
-			for _, t := range allTables {
-				if strings.EqualFold(t.Name, cleanTbl) {
-					tbl = t
-					break
-				}
-			}
-		}
-
-		if tbl != nil && dml.Columns != "" && dml.Values != "" {
-			cols := sqlutil.SplitTopLevel(dml.Columns, ',')
-			vals := sqlutil.SplitTopLevel(strings.Trim(dml.Values, "() "), ',')
-			for i, v := range vals {
-				vTrim := strings.TrimSpace(v)
-				if strings.HasPrefix(vTrim, "$") {
-					pIdx, err := strconv.Atoi(vTrim[1:])
-					if err == nil && pIdx >= 1 && pIdx <= count && i < len(cols) {
-						colName := cleanColumnIdentifier(cols[i])
-						for _, c := range tbl.Columns {
-							if strings.EqualFold(c.Name, colName) {
-								oids[pIdx-1] = typeToPgOID(c.Type)
-								break
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 2. For remaining unresolved parameters, use inferParamOID
-	for i := 0; i < count; i++ {
-		if oids[i] == 0 {
-			oids[i] = inferParamOID(query, i+1)
-		}
-	}
-	return oids
-}
-
-func inferParamOID(query string, paramIndex int) int32 {
-	upper := strings.ToUpper(query)
-	pName := fmt.Sprintf("$%d", paramIndex)
-	idx := strings.Index(upper, pName)
-	if idx != -1 {
-		prefix := strings.TrimSpace(upper[:idx])
-		isAny := false
-		if strings.HasSuffix(prefix, "(") {
-			prefix = strings.TrimSpace(strings.TrimSuffix(prefix, "("))
-		}
-		if strings.HasSuffix(prefix, "ANY") {
-			prefix = strings.TrimSpace(strings.TrimSuffix(prefix, "ANY"))
-			isAny = true
-		}
-		if strings.HasSuffix(prefix, "=") || strings.HasSuffix(prefix, "<>") {
-			prefix = strings.TrimSpace(prefix[:len(prefix)-1])
-			tokens := strings.Fields(prefix)
-			if len(tokens) > 0 {
-				lastToken := tokens[len(tokens)-1]
-				if dotIdx := strings.LastIndex(lastToken, "."); dotIdx != -1 {
-					lastToken = lastToken[dotIdx+1:]
-				}
-				lastToken = strings.Trim(lastToken, "[]\"'`")
-				if oid := LookupParamOID(lastToken, isAny); oid != 0 {
-					return oid
-				}
-			}
-		}
-	}
-	return 0
 }
 
 func getRowValue(row map[string]any, colName string) any {

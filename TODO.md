@@ -207,6 +207,16 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 스택: Go + `sqlx`/`squirrel` / PGWire (`TCP :5433`)
 - 대규모 팀 채널 및 메시지 인덱싱 검증
 
+### [x] 2.12 `SQL-WRITABLE-CTE-1` PostgreSQL Writable CTE (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) 및 `::type[]` 캐스트 지원 — **[완료 (Pass)]**
+- 회귀 테스트: `pkg/engine/writable_cte_test.go`, `pkg/wire/writable_cte_pgwire_test.go`
+- 가이드 문서: [`doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md), [`doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md`](doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md)
+- Grove 실전 서비스(`CreateWithOutbox`, `CreateJournal`, `ReserveWithTxReturning`) 5대 체크리스트 완벽 지원:
+  1. 다중 Writable CTE 나열 및 메인 `SELECT` 암묵적 크로스 조인(`FROM ins_order o, ins_item i, ins_outbox e`) 위치 기반 컬럼 매핑
+  2. 선행 `UPDATE ... RETURNING`의 갱신 후(Post-Update) 값을 후속 `INSERT ... SELECT`에서 참조
+  3. 조건 불충족(0행 매칭) 시 빈 CTE 스키마 유지(`pgx.ErrNoRows`) 및 미참조 쓰기 CTE(`ins_tx`) 무조건 실행(Materialize) 보장
+  4. 단일 문 원자적 트랜잭션 보장(Autocommit 암시적 트랜잭션 및 Savepoint 래핑, `UNIQUE` 위반 시 전체 롤백 및 SQLSTATE `23505` 반환)
+  5. 바인딩 파라미터(`$1 ~ $N`) 다중 CTE 재사용, `INSERT ... SELECT $4` 타깃 컬럼 기반 파라미터 OID 역추론, `::type` 및 `::type[]`(`ANY($1::text[])`) AST `CastExpr` 파싱 지원
+
 ---
 
 ## Priority 3. Post-0.90.0 (`v1.1.0`) 아키텍처 로드맵 (Future Engine Roadmap)

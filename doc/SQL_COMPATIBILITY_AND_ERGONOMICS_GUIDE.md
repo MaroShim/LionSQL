@@ -172,7 +172,40 @@ END;
 
 ---
 
-## 5. Cross-RDBMS Dialect Quick Reference Matrix
+## 5. PostgreSQL Data-Modifying CTEs (Writable CTE: `WITH ... INSERT/UPDATE/DELETE ... RETURNING`)
+
+LionSQL natively supports PostgreSQL **Writable (Data-Modifying) CTEs** and the `::` type cast operator. Complex multi-table OLTP workflows (such as the Transactional Outbox pattern, double-entry journal postings, and atomic inventory reservation with ledger recording) execute in a single round-trip.
+
+### 5.1 Core Guarantees
+1. **Multiple Writable CTEs & Implicit Cross Joins**: Chain two or more `INSERT`/`UPDATE`/`DELETE ... RETURNING` CTEs in a single `WITH` clause and project aliased columns (`FROM ins_order o, ins_item i, ins_outbox e`) with exact positional mapping.
+2. **Chained `RETURNING` Consumption**: Reference **post-update** rows returned by an earlier `UPDATE ... RETURNING` CTE inside a subsequent `INSERT ... SELECT ... FROM <cte>`.
+3. **Zero-Row Match & Unreferenced CTE Materialization**: When a conditional `UPDATE` matches 0 rows, dependent `INSERT` CTEs and the outer `SELECT` cleanly return 0 rows (`pgx.ErrNoRows` / `sql.ErrNoRows`) without error. Write-only CTEs not referenced in the final `SELECT` are unconditionally materialized.
+4. **Single-Statement Atomic Rollback (All-or-Nothing & `23505`)**: The entire `WITH` statement executes within an atomic transaction boundary (even in autocommit mode). If any CTE violates a `UNIQUE` constraint, all prior CTE mutations roll back and PostgreSQL SQLSTATE `23505` is returned.
+5. **Bind Parameter (`$1 ~ $N`) Reuse & `::type` / `::type[]` Casts**: Supports parameter reuse across multiple CTEs, automatic target-column OID inference for parameters inside `SELECT $4, ...` projections, and PostgreSQL `::type` / `::type[]` casts (such as `x::int4`, `$4::text`, and `ANY($1::text[])`) mapped directly to `CastExpr` AST nodes.
+
+```sql
+WITH upd_inv AS (
+    UPDATE inventories
+    SET reserved_quantity = reserved_quantity + $2,
+        updated_by = $3,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE item_id = $1
+      AND (quantity - reserved_quantity) >= $2
+    RETURNING item_id, warehouse_id, quantity, reserved_quantity, safety_stock_threshold, created_at, created_by, updated_at, updated_by
+), ins_tx AS (
+    INSERT INTO inventory_transactions (
+        id, item_id, warehouse_id, transaction_type, quantity, balance_after, reference_id, created_by, updated_by
+    )
+    SELECT $4, item_id, $5, 'RESERVE', $2, (quantity - reserved_quantity), $3, $3, $3
+    FROM upd_inv
+)
+SELECT item_id, warehouse_id, quantity, reserved_quantity, safety_stock_threshold, created_at, created_by, updated_at, updated_by
+FROM upd_inv;
+```
+
+---
+
+## 6. Cross-RDBMS Dialect Quick Reference Matrix
 
 | Operation | LionSQL Idiom | MS SQL Server (T-SQL) | MySQL / MariaDB | Oracle | PostgreSQL |
 | :--- | :--- | :--- | :--- | :--- | :--- |

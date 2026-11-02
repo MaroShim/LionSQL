@@ -337,7 +337,11 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		outputProjs = parseOutputClause(rawOutput)
 	}
 	var outputRows []map[string]any
+	var outputVals [][]any
 	var outputCols []string
+	if len(outputProjs) > 0 {
+		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
+	}
 
 	insertedCount := int64(0)
 	for _, tupleStr := range tupleStrings {
@@ -574,11 +578,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 						}
 						return nil, fmt.Errorf("update row error in ON CONFLICT: %w", err)
 					}
-					if len(outputProjs) > 0 {
-						outRow, cols := evaluateOutputRow(outputProjs, existingRec, updatedRec, schema)
-						outputRows = append(outputRows, outRow)
-						outputCols = cols
-					}
+					appendOutputRow(outputProjs, existingRec, updatedRec, schema, &outputRows, &outputVals)
 					insertedCount++
 					continue
 				}
@@ -601,11 +601,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 			return nil, fmt.Errorf("insert row error: %w", err)
 		}
 
-		if len(outputProjs) > 0 {
-			outRow, cols := evaluateOutputRow(outputProjs, nil, rec, schema)
-			outputRows = append(outputRows, outRow)
-			outputCols = cols
-		}
+		appendOutputRow(outputProjs, nil, rec, schema, &outputRows, &outputVals)
 		insertedCount++
 	}
 
@@ -625,6 +621,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		Command:      cmdName,
 		Columns:      outputCols,
 		Rows:         outputRows,
+		Values:       outputVals,
 		RowsAffected: insertedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows affected into %q", insertedCount, tableName)},
@@ -773,15 +770,24 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		outputProjs = parseOutputClause(rawOutput)
 	}
 	var outputRows []map[string]any
+	var outputVals [][]any
 	var outputCols []string
+	if len(outputProjs) > 0 {
+		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
+	}
 
 	insertedCount := int64(0)
-	for _, row := range selRes.Rows {
+	for rowIdx, row := range selRes.Rows {
 		rec := make(storage.Record, len(schema.Columns))
 		for i, colName := range targetCols {
 			colSchema, _, _ := schema.FindColumn(colName)
-			srcCol := selRes.Columns[i]
-			val := row[srcCol]
+			var val any
+			if rowIdx < len(selRes.Values) && i < len(selRes.Values[rowIdx]) {
+				val = selRes.Values[rowIdx][i]
+			} else {
+				srcCol := selRes.Columns[i]
+				val = row[srcCol]
+			}
 			rec[colName] = ConvertValue(val, colSchema.Type)
 		}
 
@@ -985,11 +991,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 						}
 						return nil, fmt.Errorf("update row error in ON CONFLICT: %w", err)
 					}
-					if len(outputProjs) > 0 {
-						outRow, cols := evaluateOutputRow(outputProjs, existingRec, updatedRec, schema)
-						outputRows = append(outputRows, outRow)
-						outputCols = cols
-					}
+					appendOutputRow(outputProjs, existingRec, updatedRec, schema, &outputRows, &outputVals)
 					insertedCount++
 					continue
 				}
@@ -1012,11 +1014,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 			return nil, fmt.Errorf("insert row error on %q: %w", tableName, err)
 		}
 
-		if len(outputProjs) > 0 {
-			outRow, cols := evaluateOutputRow(outputProjs, nil, rec, schema)
-			outputRows = append(outputRows, outRow)
-			outputCols = cols
-		}
+		appendOutputRow(outputProjs, nil, rec, schema, &outputRows, &outputVals)
 		insertedCount++
 	}
 
@@ -1040,6 +1038,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		Command:      "INSERT",
 		Columns:      outputCols,
 		Rows:         outputRows,
+		Values:       outputVals,
 		RowsAffected: insertedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows affected into %q", insertedCount, tableName)},
@@ -1173,13 +1172,20 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		outputProjs = parseOutputClause(rawOutput)
 	}
 	var outputRows []map[string]any
+	var outputVals [][]any
 	var outputCols []string
+	if len(outputProjs) > 0 {
+		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
+	}
 
 	updatedCount := int64(0)
 	for _, item := range toUpdate {
 		if err := tx.Update(tableName, item.pk, item.rec); err != nil {
 			if isEphemeral {
 				_ = tx.Rollback()
+			}
+			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
+				return nil, fmt.Errorf("duplicate key value violates unique constraint on %q: %w", tableName, err)
 			}
 			return nil, fmt.Errorf("update row error: %w", err)
 		}
@@ -1192,9 +1198,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 			for k, v := range item.rec {
 				newRec[k] = v
 			}
-			outRow, cols := evaluateOutputRow(outputProjs, item.orig, newRec, schema)
-			outputRows = append(outputRows, outRow)
-			outputCols = cols
+			appendOutputRow(outputProjs, item.orig, newRec, schema, &outputRows, &outputVals)
 		}
 		updatedCount++
 	}
@@ -1210,6 +1214,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		Command:      "UPDATE",
 		Columns:      outputCols,
 		Rows:         outputRows,
+		Values:       outputVals,
 		RowsAffected: updatedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows updated in %q", updatedCount, tableName)},
@@ -1309,7 +1314,11 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		outputProjs = parseOutputClause(rawOutput)
 	}
 	var outputRows []map[string]any
+	var outputVals [][]any
 	var outputCols []string
+	if len(outputProjs) > 0 {
+		_, outputCols = evaluateOutputRow(outputProjs, nil, nil, schema)
+	}
 
 	deletedCount := int64(0)
 	for _, item := range toDelete {
@@ -1320,11 +1329,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 			return nil, fmt.Errorf("delete error: %w", err)
 		}
 
-		if len(outputProjs) > 0 {
-			outRow, cols := evaluateOutputRow(outputProjs, item.orig, nil, schema)
-			outputRows = append(outputRows, outRow)
-			outputCols = cols
-		}
+		appendOutputRow(outputProjs, item.orig, nil, schema, &outputRows, &outputVals)
 		deletedCount++
 	}
 
@@ -1339,6 +1344,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		Command:      "DELETE",
 		Columns:      outputCols,
 		Rows:         outputRows,
+		Values:       outputVals,
 		RowsAffected: deletedCount,
 		DurationUS:   time.Since(start).Microseconds(),
 		Messages:     []string{fmt.Sprintf("%d rows deleted from %q", deletedCount, tableName)},

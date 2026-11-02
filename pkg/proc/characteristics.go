@@ -52,6 +52,7 @@ func ExtractQueryCharacteristics(sql string) QueryCharacteristics {
 			default:
 				if upper == "WITH" {
 					qc.StatementType = "SELECT"
+					qc.HasSubquery = true
 				} else if upper == "EXEC" || upper == "CALL" {
 					qc.StatementType = "EXEC"
 				} else if upper == "TRUNCATE" {

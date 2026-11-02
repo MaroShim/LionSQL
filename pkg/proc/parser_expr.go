@@ -369,6 +369,11 @@ func (p *Parser) parseTypeSpec() (storage.DataType, int, int) {
 	if (strings.EqualFold(firstLit, "SIGNED") || strings.EqualFold(firstLit, "UNSIGNED")) &&
 		p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "INTEGER") || strings.EqualFold(p.curToken.Literal, "INT")) {
 		p.nextToken()
+	} else if strings.EqualFold(firstLit, "DOUBLE") && p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "PRECISION") {
+		p.nextToken()
+	} else if (strings.EqualFold(firstLit, "CHARACTER") || strings.EqualFold(firstLit, "CHAR")) && p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "VARYING") {
+		dt = storage.TypeVarChar
+		p.nextToken()
 	}
 	prec := 0
 	scale := 0
@@ -388,6 +393,27 @@ func (p *Parser) parseTypeSpec() (storage.DataType, int, int) {
 		if p.curTokenIs(TokenRParen) {
 			p.nextToken()
 		}
+	}
+	// Optional PostgreSQL [WITH | WITHOUT] TIME ZONE suffix
+	if p.curTokenIs(TokenWith) || (p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "WITH") || strings.EqualFold(p.curToken.Literal, "WITHOUT"))) {
+		p.nextToken()
+		if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "TIME") {
+			p.nextToken()
+		}
+		if p.curTokenIs(TokenIdent) && strings.EqualFold(p.curToken.Literal, "ZONE") {
+			p.nextToken()
+		}
+	}
+	// Optional PostgreSQL array brackets: ::text[], ::int4[], ::varchar(64)[]
+	// Note: '[' in Lexer produces TokenIdent with Literal == "[]" for '[]'.
+	isArrayType := false
+	for p.curTokenIs(TokenIdent) && (p.curToken.Literal == "[]" || (strings.HasPrefix(p.curToken.Literal, "[") && strings.HasSuffix(p.curToken.Literal, "]"))) {
+		isArrayType = true
+		p.nextToken()
+	}
+	if isArrayType {
+		// Pass array literals (e.g. '{a,b}'::text[] or '{1,2}'::int4[] in ANY($2::text[])) through as string
+		dt = storage.TypeVarChar
 	}
 	return dt, prec, scale
 }

@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"lionsql/pkg/proc"
 	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
@@ -133,14 +134,18 @@ func ResolveOperand(token string, rec storage.Record) (storage.Value, bool) {
 	if token == "" {
 		return storage.NullValue(storage.TypeVarChar), false
 	}
+	if idx := strings.Index(token, "::"); idx != -1 {
+		token = strings.TrimSpace(token[:idx])
+	}
 	clean := cleanIdentifier(token)
 	if val, ok := rec.Get(clean); ok {
 		return val, true
 	}
-	if i, err := strconv.ParseInt(token, 10, 64); err == nil {
+	unquoted := strings.Trim(token, "'")
+	if i, err := strconv.ParseInt(unquoted, 10, 64); err == nil {
 		return storage.IntValue(i), true
 	}
-	if f, err := strconv.ParseFloat(token, 64); err == nil {
+	if f, err := strconv.ParseFloat(unquoted, 64); err == nil {
 		return storage.FloatValue(f), true
 	}
 	return storage.NullValue(storage.TypeVarChar), false
@@ -164,6 +169,22 @@ func EvalUpdateExpr(exprStr string, rec storage.Record, targetType storage.DataT
 	clean := cleanIdentifier(exprStr)
 	if val, ok := rec.Get(clean); ok {
 		return val, nil
+	}
+
+	// Full AST expression fallback (e.g. CURRENT_TIMESTAMP, casts ::int4/::text, parenthesized arithmetic, functions)
+	p := proc.NewParser(proc.NewLexer(exprStr))
+	if astExpr := p.ParseExpr(); astExpr != nil && len(p.Errors()) == 0 {
+		rMap := make(map[string]any, len(rec))
+		for k, v := range rec {
+			rMap[k] = formatStorageValue(v)
+		}
+		resVal, err := proc.EvalUpdateRowExpr(astExpr, rMap, nil)
+		if err != nil {
+			return storage.NullValue(targetType), err
+		}
+		if resVal != nil {
+			return ConvertValue(resVal, targetType), nil
+		}
 	}
 
 	return parseLiteralValue(exprStr, targetType), nil

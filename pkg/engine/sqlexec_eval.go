@@ -745,6 +745,15 @@ func evaluateOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema
 	return row, cols
 }
 
-// -----------------------------------------------------------------------------
-// PIVOT Execution Engine
-// -----------------------------------------------------------------------------
+func appendOutputRow(projs []outputProj, oldRec, newRec storage.Record, schema *storage.TableSchema, outputRows *[]map[string]any, outputVals *[][]any) {
+	if len(projs) == 0 {
+		return
+	}
+	outRow, cols := evaluateOutputRow(projs, oldRec, newRec, schema)
+	*outputRows = append(*outputRows, outRow)
+	vals := make([]any, len(cols))
+	for i, c := range cols {
+		vals[i] = outRow[c]
+	}
+	*outputVals = append(*outputVals, vals)
+}

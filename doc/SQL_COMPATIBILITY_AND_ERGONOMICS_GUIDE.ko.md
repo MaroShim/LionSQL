@@ -172,7 +172,40 @@ END;
 
 ---
 
-## 5. RDBMS 방언별 퀵 매핑 요약 (Quick Reference Matrix)
+## 5. PostgreSQL 데이터 변경 CTE (Writable CTE: `WITH ... INSERT/UPDATE/DELETE ... RETURNING`)
+
+LionSQL은 PostgreSQL 표준의 **데이터 변경 CTE(Writable / Data-Modifying CTE)** 및 `::` 타입 캐스트 연산자를 네이티브로 지원합니다. 단일 라운드트립으로 복합 도메인 트랜잭션(예: Transactional Outbox 패턴, 복식부기 분개장, 재고 예약 및 수불 원장 동시 기록)을 처리할 수 있습니다.
+
+### 5.1 핵심 보장 사항
+1. **다중(Multiple) Writable CTE 나열 및 암묵적 크로스 조인**: 단일 `WITH` 절 내부에 2개 이상의 `INSERT`/`UPDATE`/`DELETE ... RETURNING` CTE를 콤마(`,`)로 연결하고, 메인 `SELECT`의 `FROM a, b, c`에서 각 별칭의 `RETURNING` 컬럼을 위치 기반으로 정확히 참조합니다.
+2. **선행 CTE의 `RETURNING` 결과를 후속 DML에서 참조**: 선행 `UPDATE ... RETURNING`이 반환한 **갱신 후(Post-Update)** 값을 후속 `INSERT ... SELECT ... FROM <cte>`에서 즉시 계산에 활용할 수 있습니다.
+3. **조건 불충족(0행 매칭) 및 미참조 CTE 강제 실행**: 선행 `UPDATE`가 0건 매칭될 경우 후속 `INSERT` 및 최종 `SELECT`도 에러 없이 0행(`pgx.ErrNoRows` / `sql.ErrNoRows`)을 반환하며, 메인 `SELECT`가 참조하지 않는 쓰기 전용 CTE도 누락 없이 끝까지 실행(Materialize)됩니다.
+4. **단일 문 원자적 트랜잭션 보장 (All-or-Nothing & `23505`)**: Autocommit 모드에서도 단일 `WITH` 문 전체가 원자적 트랜잭션으로 묶여, 중간 CTE에서 `UNIQUE` 제약조건 위반 발생 시 앞선 CTE의 변경분까지 100% 롤백되고 PostgreSQL SQLSTATE `23505`를 반환합니다.
+5. **바인딩 파라미터(`$1 ~ $N`) 재사용 및 `::타입명` / `::타입명[]` 캐스트 호환**: 여러 CTE에 걸친 파라미터 재사용과 `SELECT $4, ...` 프로젝션 내 파라미터 타입 역추론을 지원하며, `x::int4`, `$4::text`, `ANY($1::text[])` 등 PostgreSQL `::` 캐스트 문법을 표준 `CAST(x AS type)` AST 노드로 동일하게 처리합니다.
+
+```sql
+WITH upd_inv AS (
+    UPDATE inventories
+    SET reserved_quantity = reserved_quantity + $2,
+        updated_by = $3,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE item_id = $1
+      AND (quantity - reserved_quantity) >= $2
+    RETURNING item_id, warehouse_id, quantity, reserved_quantity, safety_stock_threshold, created_at, created_by, updated_at, updated_by
+), ins_tx AS (
+    INSERT INTO inventory_transactions (
+        id, item_id, warehouse_id, transaction_type, quantity, balance_after, reference_id, created_by, updated_by
+    )
+    SELECT $4, item_id, $5, 'RESERVE', $2, (quantity - reserved_quantity), $3, $3, $3
+    FROM upd_inv
+)
+SELECT item_id, warehouse_id, quantity, reserved_quantity, safety_stock_threshold, created_at, created_by, updated_at, updated_by
+FROM upd_inv;
+```
+
+---
+
+## 6. RDBMS 방언별 퀵 매핑 요약 (Quick Reference Matrix)
 
 | 작업 목적 | LionSQL 권장 표기 | MS SQL Server (T-SQL) | MySQL / MariaDB | Oracle | PostgreSQL |
 | :--- | :--- | :--- | :--- | :--- | :--- |

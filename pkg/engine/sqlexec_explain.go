@@ -816,16 +816,161 @@ func formatSubqueryVal(v any) string {
 
 var cteGlobalSeq uint64
 
-func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+func isCTEWriteStmt(sqlStr string) bool {
+	trimmed := strings.TrimSpace(sqlStr)
+	if _, _, ok := dmlHead(trimmed); ok {
+		return true
+	}
+	return sqlutil.HasPrefixKeyword(trimmed, "MERGE")
+}
+
+func (s *Coordinator) insertMaterializedCTERows(cs *ClientSession, tempName string, targetColsWithID []string, srcCols []string, batchRes *QueryResult, currentTotalRows *int) (int, error) {
+	if batchRes == nil || len(batchRes.Rows) == 0 {
+		return 0, nil
+	}
+	colsHeader := strings.Join(targetColsWithID, ", ")
+	inserted := 0
+	for rIdx, row := range batchRes.Rows {
+		*currentTotalRows++
+		valStrs := make([]string, 0, len(srcCols)+1)
+		valStrs = append(valStrs, fmt.Sprintf("%d", *currentTotalRows))
+		for cIdx, srcCol := range srcCols {
+			var v any
+			if rIdx < len(batchRes.Values) && cIdx < len(batchRes.Values[rIdx]) {
+				v = batchRes.Values[rIdx][cIdx]
+			} else {
+				v = row[srcCol]
+			}
+			valStrs = append(valStrs, formatCTELiteralValue(v))
+		}
+		insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, colsHeader, strings.Join(valStrs, ", "))
+		if _, err := s.execSingleStatement(cs, insSQL); err != nil {
+			return inserted, fmt.Errorf("materialize CTE insert error: %w", err)
+		}
+		inserted++
+	}
+	return inserted, nil
+}
+
+func inferCTEColumnTypeFromStmt(eng storage.Engine, stmtSQL string, colName string) string {
+	if eng == nil {
+		return ""
+	}
+	qc := proc.ExtractQueryCharacteristics(stmtSQL)
+	cleanCol := cleanIdentifier(colName)
+	if idx := strings.LastIndex(cleanCol, "."); idx != -1 {
+		cleanCol = cleanCol[idx+1:]
+	}
+	for _, tbl := range qc.TargetTables {
+		if schema, err := eng.GetTable(cleanIdentifier(tbl)); err == nil && schema != nil {
+			if c, _, found := schema.FindColumn(cleanCol); found && c != nil {
+				switch c.Type {
+				case storage.TypeInt:
+					return "INT"
+				case storage.TypeFloat:
+					return "FLOAT"
+				case storage.TypeBool:
+					return "BOOLEAN"
+				case storage.TypeDateTime:
+					return "DATETIME"
+				case storage.TypeDecimal:
+					return "DECIMAL(18, 4)"
+				default:
+					return "VARCHAR(255)"
+				}
+			}
+		}
+	}
+	return ""
+}
+
+func formatCTELiteralValue(v any) string {
+	if v == nil {
+		return "NULL"
+	}
+	switch val := v.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%d", val)
+	case float32, float64:
+		return fmt.Sprintf("%f", val)
+	case bool:
+		if val {
+			return "1"
+		}
+		return "0"
+	case time.Time:
+		return fmt.Sprintf("'%s'", val.UTC().Format("2006-01-02 15:04:05.999999"))
+	case storage.Decimal:
+		return val.String()
+	default:
+		sVal := fmt.Sprintf("%v", v)
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(sVal, "'", "''"))
+	}
+}
+
+func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) (retRes *QueryResult, retErr error) {
 	ctes, mainSQL := planner.ParseCTEs(query)
 	if len(ctes) == 0 {
 		return s.execSelect(query, start, cs)
 	}
 
+	if cs == nil {
+		cs, _ = s.GetOrCreateSession("default")
+	}
+
+	hasWrite := isCTEWriteStmt(mainSQL)
+	if !hasWrite {
+		for _, cte := range ctes {
+			if isCTEWriteStmt(cte.InnerSQL) {
+				hasWrite = true
+				break
+			}
+		}
+	}
+
+	startedImplicitTx := false
+	usedSavepoint := false
+	const cteSavepointName = "__lionsql_cte_atomic_sp"
+
+	if hasWrite && cs != nil {
+		cs.Mu.Lock()
+		hasActiveTx := cs.Tx != nil
+		cs.Mu.Unlock()
+
+		if !hasActiveTx {
+			if err := s.BeginSessionTx(cs.ID, cs.TxOptions()); err != nil {
+				return nil, fmt.Errorf("begin implicit CTE transaction error: %w", err)
+			}
+			startedImplicitTx = true
+		} else {
+			cs.Mu.Lock()
+			if cs.Tx != nil {
+				if err := cs.Tx.Savepoint(cteSavepointName); err == nil {
+					usedSavepoint = true
+				}
+			}
+			cs.Mu.Unlock()
+		}
+	}
+
 	var tempTableNames []string
 	defer func() {
+		if retErr != nil {
+			if startedImplicitTx && cs != nil {
+				_ = s.RollbackSessionTx(cs.ID)
+				cs.Mu.Lock()
+				cs.TxFailed = false
+				cs.Mu.Unlock()
+			} else if usedSavepoint && cs != nil {
+				cs.Mu.Lock()
+				if cs.Tx != nil {
+					_ = cs.Tx.RollbackTo(cteSavepointName)
+				}
+				cs.Mu.Unlock()
+			}
+		}
 		for _, t := range tempTableNames {
-			_, _ = s.execSingleStatement(cs, fmt.Sprintf("DROP TABLE %s;", t))
+			_, _ = s.execSingleStatement(cs, fmt.Sprintf("DROP TABLE IF EXISTS %s;", t))
 		}
 	}()
 
@@ -886,7 +1031,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		colDefs = append(colDefs, "_cte_row_id INT PRIMARY KEY")
 		for idx, col := range targetCols {
 			srcCol := res.Columns[idx]
-			colType := "VARCHAR(255)"
+			colType := ""
 			if len(res.Rows) > 0 {
 				for _, row := range res.Rows {
 					v := row[srcCol]
@@ -902,10 +1047,18 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 							colType = "DATETIME"
 						case storage.Decimal:
 							colType = "DECIMAL(18, 4)"
+						default:
+							colType = "VARCHAR(255)"
 						}
 						break
 					}
 				}
+			}
+			if colType == "" {
+				colType = inferCTEColumnTypeFromStmt(s.engine, cte.InnerSQL, srcCol)
+			}
+			if colType == "" {
+				colType = "VARCHAR(255)"
 			}
 			colDefs = append(colDefs, fmt.Sprintf("%s %s", col, colType))
 		}
@@ -918,37 +1071,8 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		targetColsWithID := append([]string{"_cte_row_id"}, targetCols...)
 		currentTotalRows := 0
 
-		if len(res.Rows) > 0 {
-			for _, row := range res.Rows {
-				currentTotalRows++
-				valStrs := []string{fmt.Sprintf("%d", currentTotalRows)}
-				for _, srcCol := range res.Columns {
-					v := row[srcCol]
-					if v == nil {
-						valStrs = append(valStrs, "NULL")
-					} else {
-						switch val := v.(type) {
-						case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-							valStrs = append(valStrs, fmt.Sprintf("%d", val))
-						case float32, float64:
-							valStrs = append(valStrs, fmt.Sprintf("%f", val))
-						case bool:
-							if val {
-								valStrs = append(valStrs, "1")
-							} else {
-								valStrs = append(valStrs, "0")
-							}
-						default:
-							sVal := fmt.Sprintf("%v", v)
-							valStrs = append(valStrs, fmt.Sprintf("'%s'", strings.ReplaceAll(sVal, "'", "''")))
-						}
-					}
-				}
-				insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, strings.Join(targetColsWithID, ", "), strings.Join(valStrs, ", "))
-				if _, err := s.execSingleStatement(cs, insSQL); err != nil {
-					return nil, fmt.Errorf("materialize CTE insert error: %w", err)
-				}
-			}
+		if _, err := s.insertMaterializedCTERows(cs, tempName, targetColsWithID, res.Columns, res, &currentTotalRows); err != nil {
+			return nil, err
 		}
 
 		// 3. If recursive, iteratively execute recursive step and insert new rows
@@ -959,41 +1083,11 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 				if recErr != nil || recRes == nil || len(recRes.Rows) == 0 {
 					break
 				}
-				insertedAny := false
-				for _, row := range recRes.Rows {
-					currentTotalRows++
-					valStrs := []string{fmt.Sprintf("%d", currentTotalRows)}
-					for _, srcCol := range res.Columns {
-						v := row[srcCol]
-						if v == nil {
-							valStrs = append(valStrs, "NULL")
-						} else {
-							switch val := v.(type) {
-							case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
-								valStrs = append(valStrs, fmt.Sprintf("%d", val))
-							case float32, float64:
-								valStrs = append(valStrs, fmt.Sprintf("%f", val))
-							case bool:
-								if val {
-									valStrs = append(valStrs, "1")
-								} else {
-									valStrs = append(valStrs, "0")
-								}
-							default:
-								sVal := fmt.Sprintf("%v", v)
-								valStrs = append(valStrs, fmt.Sprintf("'%s'", strings.ReplaceAll(sVal, "'", "''")))
-							}
-						}
-					}
-					insSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s);", tempName, strings.Join(targetColsWithID, ", "), strings.Join(valStrs, ", "))
-					if _, err := s.execSingleStatement(cs, insSQL); err == nil {
-						insertedAny = true
-						res.Rows = append(res.Rows, row)
-					}
-				}
-				if !insertedAny {
+				inserted, err := s.insertMaterializedCTERows(cs, tempName, targetColsWithID, res.Columns, recRes, &currentTotalRows)
+				if err != nil || inserted == 0 {
 					break
 				}
+				res.Rows = append(res.Rows, recRes.Rows...)
 			}
 		}
 
@@ -1004,7 +1098,26 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		mainSQL = replaceIdentOutsideQuotes(mainSQL, cte.Name, tempName)
 	}
 
-	return s.execSingleStatement(cs, mainSQL)
+	mainRes, mainErr := s.execSingleStatement(cs, mainSQL)
+	if mainErr != nil {
+		return nil, mainErr
+	}
+
+	if startedImplicitTx && cs != nil {
+		if err := s.CommitSessionTx(cs.ID); err != nil {
+			return nil, fmt.Errorf("commit implicit CTE transaction error: %w", err)
+		}
+		startedImplicitTx = false
+	} else if usedSavepoint && cs != nil {
+		cs.Mu.Lock()
+		if cs.Tx != nil {
+			_ = cs.Tx.ReleaseSavepoint(cteSavepointName)
+		}
+		cs.Mu.Unlock()
+		usedSavepoint = false
+	}
+
+	return mainRes, nil
 }
 
 func replaceIdentOutsideQuotes(sqlStr, oldIdent, newIdent string) string {

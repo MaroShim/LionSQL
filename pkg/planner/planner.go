@@ -617,7 +617,7 @@ func ParseCTEs(query string) ([]CTEInfo, string) {
 
 	for {
 		cur = strings.TrimSpace(cur)
-		asIdx := strings.Index(strings.ToUpper(cur), " AS")
+		asIdx := findTopLevelCTEAs(cur)
 		if asIdx == -1 {
 			break
 		}
@@ -635,16 +635,41 @@ func ParseCTEs(query string) ([]CTEInfo, string) {
 		}
 		cteName = strings.Trim(cteName, "\"`[]")
 		afterAs := strings.TrimSpace(cur[asIdx+3:])
+		// Optional PostgreSQL [NOT] MATERIALIZED keyword before '('
+		upperAfterAs := strings.ToUpper(afterAs)
+		if strings.HasPrefix(upperAfterAs, "NOT MATERIALIZED") {
+			afterAs = strings.TrimSpace(afterAs[len("NOT MATERIALIZED"):])
+		} else if strings.HasPrefix(upperAfterAs, "MATERIALIZED") {
+			afterAs = strings.TrimSpace(afterAs[len("MATERIALIZED"):])
+		}
 		if !strings.HasPrefix(afterAs, "(") {
 			break
 		}
 
 		depth := 0
 		closeIdx := -1
+		inSingle := false
+		inDouble := false
 		for i := 0; i < len(afterAs); i++ {
-			if afterAs[i] == '(' {
+			ch := afterAs[i]
+			if ch == '\'' && !inDouble {
+				if inSingle && i+1 < len(afterAs) && afterAs[i+1] == '\'' {
+					i++
+					continue
+				}
+				inSingle = !inSingle
+				continue
+			}
+			if ch == '"' && !inSingle {
+				inDouble = !inDouble
+				continue
+			}
+			if inSingle || inDouble {
+				continue
+			}
+			if ch == '(' {
 				depth++
-			} else if afterAs[i] == ')' {
+			} else if ch == ')' {
 				depth--
 				if depth == 0 {
 					closeIdx = i
@@ -674,6 +699,48 @@ func ParseCTEs(query string) ([]CTEInfo, string) {
 	}
 
 	return nil, trimmed
+}
+
+func findTopLevelCTEAs(s string) int {
+	upper := strings.ToUpper(s)
+	depth := 0
+	inSingle := false
+	inDouble := false
+	for i := 0; i < len(upper); i++ {
+		ch := upper[i]
+		if ch == '\'' && !inDouble {
+			if inSingle && i+1 < len(upper) && upper[i+1] == '\'' {
+				i++
+				continue
+			}
+			inSingle = !inSingle
+			continue
+		}
+		if ch == '"' && !inSingle {
+			inDouble = !inDouble
+			continue
+		}
+		if inSingle || inDouble {
+			continue
+		}
+		if ch == '(' {
+			depth++
+			continue
+		}
+		if ch == ')' {
+			if depth > 0 {
+				depth--
+			}
+			continue
+		}
+		if depth == 0 && i+3 <= len(upper) && (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') && upper[i+1:i+3] == "AS" {
+			after := i + 3
+			if after == len(upper) || upper[after] == ' ' || upper[after] == '\t' || upper[after] == '\n' || upper[after] == '\r' || upper[after] == '(' {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 // SplitProjections splits projection list while respecting nested parentheses and string literals.
