@@ -331,10 +331,50 @@ func WriteDataRowBytes(w io.Writer, values [][]byte) error {
 	return err
 }
 
-// WriteCommandComplete sends CommandComplete tag.
+var (
+	tagCompleteExec    = []byte{MsgCommandComplete, 0, 0, 0, 9, 'E', 'X', 'E', 'C', 0}
+	tagCompleteCommit  = []byte{MsgCommandComplete, 0, 0, 0, 11, 'C', 'O', 'M', 'M', 'I', 'T', 0}
+	tagCompleteBegin   = []byte{MsgCommandComplete, 0, 0, 0, 10, 'B', 'E', 'G', 'I', 'N', 0}
+	tagCompleteSelect0 = []byte{MsgCommandComplete, 0, 0, 0, 13, 'S', 'E', 'L', 'E', 'C', 'T', ' ', '0', 0}
+	tagCompleteSelect1 = []byte{MsgCommandComplete, 0, 0, 0, 13, 'S', 'E', 'L', 'E', 'C', 'T', ' ', '1', 0}
+	tagCompleteUpdate1 = []byte{MsgCommandComplete, 0, 0, 0, 13, 'U', 'P', 'D', 'A', 'T', 'E', ' ', '1', 0}
+	tagCompleteInsert1 = []byte{MsgCommandComplete, 0, 0, 0, 15, 'I', 'N', 'S', 'E', 'R', 'T', ' ', '0', ' ', '1', 0}
+)
+
+// WriteCommandComplete sends CommandComplete tag with zero allocations for common tags.
 func WriteCommandComplete(w io.Writer, tag string) error {
+	switch tag {
+	case "EXEC":
+		_, err := w.Write(tagCompleteExec)
+		return err
+	case "COMMIT":
+		_, err := w.Write(tagCompleteCommit)
+		return err
+	case "BEGIN":
+		_, err := w.Write(tagCompleteBegin)
+		return err
+	case "SELECT 0":
+		_, err := w.Write(tagCompleteSelect0)
+		return err
+	case "SELECT 1":
+		_, err := w.Write(tagCompleteSelect1)
+		return err
+	case "UPDATE 1":
+		_, err := w.Write(tagCompleteUpdate1)
+		return err
+	case "INSERT 0 1":
+		_, err := w.Write(tagCompleteInsert1)
+		return err
+	}
+
 	payloadLen := 4 + len(tag) + 1
-	buf := make([]byte, 1+payloadLen)
+	var stackBuf [64]byte
+	var buf []byte
+	if 1+payloadLen <= len(stackBuf) {
+		buf = stackBuf[:1+payloadLen]
+	} else {
+		buf = make([]byte, 1+payloadLen)
+	}
 	buf[0] = MsgCommandComplete
 	binary.BigEndian.PutUint32(buf[1:5], uint32(payloadLen))
 	copy(buf[5:], tag)

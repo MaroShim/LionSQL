@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- add all-in-one comprehensive benchmark and verification suite (`scripts/run_all_benchmarks.sh`) automating multi-target compilation, banking SP, storage kernel TPC-C, VDBE runtime TPC-C, client-server PGWire/TDS TPC-C, SQLLogicTest conformance, and SIGKILL cold restart crash durability with automated markdown report generation (`BENCH-ALL-IN-ONE-1`)
+- implement zero-allocation Stored Procedure FastPath in PGWire and TDS prepared statements, statically analyzing procedure parameters at compile time to bind directly to VDBE VM bytecode without string serialization, achieving 236,399 burst tpmC (8,746 TPS) and 178,355 sustained tpmC on 16W/32Workers (TUNE-SP-FASTPATH-1)
 - establish permanent lightweight in-line performance regression gate test (`TestRegression_TransferFundsPerfGate`) in `pkg/proc/runtime`, executing 1,000 multi-worker ACID transactions in ~40ms to intercept locking convoys and latency regressions prior to commit (`PERF-REGRESSION-RECOVERY-1`)
 - implement zero-map slot indexing for local variables and parameters in T-SQL VDBE virtual machine, bypassing map lookups and string lowercasing on `OpStoreVar`/`OpLoadVar` and lazily syncing `evalCtx` only on AST row expressions, achieving 54,858 tpmC on TPC-C and 7,957 TPS on TransferFunds (`PERF-VDBE-SLOT-1`)
 - lower linear Writable CTE mutations directly into anonymous T-SQL VDBE bytecode programs with zero `#temp` tables and zero catalog locks, compressing lock hold duration from 15ms to ~60µs (250x reduction) (`PERF-CTE-LOWERING-VDBE-1`)

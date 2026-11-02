@@ -336,13 +336,14 @@ func (s *Server) acceptLoop() {
 }
 
 type PreparedStatement struct {
-	Name        string
-	Query       string
-	ParamTypes  []int32
-	Program     *proc.Program
-	ColumnNames []string
-	ColumnOIDs  []int32
-	NoData      bool
+	Name           string
+	Query          string
+	ParamTypes     []int32
+	Program        *proc.Program
+	ProcParamNames []string
+	ColumnNames    []string
+	ColumnOIDs     []int32
+	NoData         bool
 }
 
 type Portal struct {
@@ -904,6 +905,23 @@ func (s *Server) handleParse(conn net.Conn, payload []byte, statements *Prepared
 	if canCompileToVDBE(queryStr, qc) {
 		if prog, err := s.compileQueryToProgram(queryStr); err == nil && prog != nil {
 			prep.Program = prog
+		}
+	}
+
+	if prep.Program == nil && s.catalog != nil {
+		if procInfo := engine.ResolvePreparedProcedure(queryStr, s.catalog, s.BytecodePlanCache()); procInfo != nil && procInfo.Program != nil {
+			prep.Program = procInfo.Program
+			prep.ProcParamNames = procInfo.ParamNames
+			if len(procInfo.ParamTypes) > len(prep.ParamTypes) {
+				expanded := make([]int32, len(procInfo.ParamTypes))
+				copy(expanded, prep.ParamTypes)
+				prep.ParamTypes = expanded
+			}
+			for i, dt := range procInfo.ParamTypes {
+				if i < len(prep.ParamTypes) && prep.ParamTypes[i] == 0 {
+					prep.ParamTypes[i] = typeToPgOID(dt)
+				}
+			}
 		}
 	}
 
@@ -1630,6 +1648,16 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 				paramMap[pName] = anyVal
 				paramMap[atName] = anyVal
 				paramMap[dollarName] = anyVal
+
+				if portal.Statement != nil && i < len(portal.Statement.ProcParamNames) {
+					targetProcName := portal.Statement.ProcParamNames[i]
+					if targetProcName != "" {
+						clean := strings.TrimPrefix(targetProcName, "@")
+						paramMap[targetProcName] = anyVal
+						paramMap[clean] = anyVal
+						paramMap["@"+clean] = anyVal
+					}
+				}
 			}
 
 			paramMap["identity_insert_all"] = true

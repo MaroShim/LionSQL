@@ -58,10 +58,28 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [x] 1.5 `PERF-CTE-EPHEMERAL-1` 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 — **[완료 (Pass)]**
 - 설계 계획서: [`notes/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md)
 - [x] **에페머럴 인메모리 커서 표준화 (`storage.SliceCursor`)**: 순수 Go 슬라이스 기반 non-blocking 커서 제공
-- [x] **세션 저장소 확장 (`ClientSession.EphemeralTables`)**: 세션 격리 인메모리 테이블 등록 및 자동 회수
-- [x] **라우팅 계층 인터셉트 (`getTable`, `sessionTxWrapper`, `tryPKLookupBypass` 임시 테이블 가드)**: 카탈로그 전역 락 회피 및 메모리 스트리밍 바인딩
-- [x] **`execCTE` Zero-DDL 리팩토링**: `CREATE TABLE`, `INSERT INTO`, `DROP TABLE` 전역 DDL 락 100% 제거
-- [x] **동시성 벤치마크 및 회귀 검증**: Grove Writable CTE 및 동시 워커 50 처리량 검증 (In-Memory 0.10s, WiredTiger 0.96s 레이스 프리 통과)
+
+### [x] 1.6 `TUNE-SP-FASTPATH-1` TPC-C Stored Procedure Fast-Path 직결 및 고동시성 In-Memory OCC 튜닝 — **[완료 (Pass)]**
+- 설계 계획서: [`notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md`](notes/TPCC_STORED_PROCEDURE_FASTPATH_TUNING_PLAN.ko.md)
+- 목표: PGWire/TDS Prepared Statement에서 `EXEC <proc>` 구문의 정적 분석 및 파라미터 직결 바인딩을 구현하여 초당 29만 회의 문자열 직렬화/재파싱/메모리 할당을 제거하고 고동시성(100 워커) 처리량을 극대화합니다.
+- [x] **Phase 1 (`TUNE-SP-BIND-1`)**: SP 인자 매핑 헬퍼 및 메타데이터 정적 분석 구현 (`pkg/engine/proc_bind.go`, `pkg/engine/proc_bind_test.go`)
+- [x] **Phase 2 (`TUNE-SP-PGWIRE-1`)**: PGWire `handleParse` & `handleExecute` SP Fast-Path 직결 (Zero-Allocation VDBE 바인딩, `pkg/wire/server.go`, `pkg/wire/prep_sp_test.go`)
+- [x] **Phase 3 (`TUNE-SP-TDS-1`)**: TDS `handleRPCPrepare` & `handleRPCExecute` SP Fast-Path 직결 (`pkg/wire/tds/server.go`, `pkg/wire/tds/server_test.go`)
+- [x] **Phase 4 (`TUNE-TPCC-BENCH-1`)**: 32W 및 100W 조건 TPC-C 실측 및 지속 처리량 검증 (16W/32Workers 순간 피크 **236,399 tpmC / 8,746 TPS**, 10초 지속 **178,355 tpmC / 6,612 TPS**, 10W/100Workers 지속 **119,854 tpmC / 4,443 TPS**)
+- [ ] **Phase 5 (`TUNE-DOC-SYNC-1`)**: `doc/BENCHMARK.md` 일괄 갱신 보류 (사용자 방침: 1.0 GA 릴리스 직전에 전체 실측치 일괄 동기화)
+
+### [x] 1.7 `TUNE-HOTSPOT-OCC-1` 고동시성 핫스팟 OCC 경합 완화 및 와이어 버퍼 풀링 — **[완료 (Pass)]**
+- 목표: 100 워커 등 고동시성 환경에서 단일 District/Warehouse 행 경합 시 발생하는 OCC 충돌 재시도(1.5만 회)를 완화하고, PGWire/TDS 응답 버퍼 할당을 풀링하여 지속 처리량 20만+ tpmC 도달.
+- [x] **Phase 1 (`TUNE-WIRE-BUF-1`)**: PGWire `WriteCommandComplete` 정적 태그 슬라이스 및 스택 버퍼(`[64]byte`) 적용으로 힙 할당 0화 (`pkg/wire/protocol.go`, `pkg/wire/command_tags.go`)
+- [x] **Phase 2 (`TUNE-TDS-UTF16-1`)**: TDS `BuildDone`/`BuildDoneProc`/`BuildReturnStatus` 리플렉션 100% 제거 및 `WriteDoneDirect`/`WriteReturnStatusDirect`/`WriteReturnValueIntDirect` 스택 인코딩 직결 (`pkg/wire/tds/token.go`, `pkg/wire/tds/server.go`)
+- [x] **Phase 3 (`TUNE-EPHEMERAL-VERIFY-1`)**: `-ephemeral` 순수 인메모리 모드에서 32W PGWire 10초 지속 **204,472 tpmC (7,616 TPS)** 및 TDS 10초 지속 **148,968 tpmC (5,546 TPS, 피크 197k)** 달성 검증
+
+### [x] 1.8 `BENCH-ALL-IN-ONE-1` 원클릭 벤치마크 및 종합 검증 스위트 (`scripts/run_all_benchmarks.sh`) 구축 — **[완료 (Pass)]**
+- 목표: `BENCHMARK.md`를 관통하는 7대 핵심 성능 및 정합성/내구성 벤치마크를 원클릭으로 순차 실행하고 요약표와 마크다운 리포트를 자동 생성.
+- [x] **Phase 0 (자동 빌드)**: `lionsql`, `bench`, `tpcc-kernel`, `tpcc-runtime`, `tpcc-client`, `sqllogictest` 6개 바이너리 일괄 컴파일
+- [x] **Phase 1~4 (성능/와이어 실측)**: Banking SP(142k+ TPS, 100% 검증), Storage Kernel TPC-C(246만+ tpmC), VDBE Runtime TPC-C(82.7만+ tpmC), Network PGWire(21.6만+ tpmC) 및 TDS(13.9만+ tpmC) 완주
+- [x] **Phase 5~6 (정합성/크래시 복구)**: SQLLogicTest 코어 32개 파일 167 쿼리 100% PASS, `kill -9` 돌발 사살 후 콜드 재기동 50/50 무손실 복구
+- [x] **Phase 7 (리포트 자동화 & 격리)**: 시스템 하드웨어 캡처, POSIX/Bash 3.2+ 호환, 완전 무잔여 `trap` 프로세스 사살, 마크다운 리포트(`notes/benchmark_runs/`) 보존 (`scripts/run_all_benchmarks.sh`, `scripts/README.md`)
 
 ### [x] 1.6 `PERF-GROVE-CONCURRENCY-1` Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 — **[완료 (Pass)]**
 - 설계 계획서: [`notes/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md)

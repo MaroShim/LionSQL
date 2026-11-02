@@ -74,3 +74,31 @@ LionSQL 초기 기동 후 실습용 전자상거래/ERP 예제 데이터베이�
 # 2. 정식 릴리스 수행 (빌드 -> CHANGELOG/버전 갱신 -> 커밋 -> 태깅 -> GitHub 푸시)
 ./scripts/release.sh v0.90.0-beta4
 ```
+
+---
+
+## 4. 원클릭 통합 벤치마크 및 검증 스위트 (`scripts/run_all_benchmarks.sh`)
+
+[`doc/BENCHMARK.md`](../doc/BENCHMARK.md)에 기술된 7대 핵심 성능 및 정합성/내구성 벤치마크를 단일 명령으로 일괄 측정하고 터미널 및 마크다운 리포트로 자동 생성하는 올인원 스위트입니다.
+
+### 4.1 주요 기능
+1. **바이너리 자동 빌드**: `lionsql`, `bench`, `tpcc-kernel`, `tpcc-runtime`, `tpcc-client`, `sqllogictest` 전수 일괄 컴파일 (`--skip-build`로 스킵 가능).
+2. **Phase 1 (ACID 송금 저장 프로시저)**: `cmd/bench` 기반 자산 보존 법칙 검증 및 P50/P95/P99 지연 시간 측정.
+3. **Phase 2 (스토리지 커널 TPC-C)**: `cmd/tpcc_kernel` 기반 스토리지 계층 SPI CRUD 극한 처리량 측정.
+4. **Phase 3 (VDBE 런타임 TPC-C)**: `cmd/tpcc_runtime` 기반 T-SQL 저장 프로시저 바이트코드 가상머신 종합 처리량 측정.
+5. **Phase 4 (클라이언트-서버 네트워크 TPC-C)**: 백그라운드 서버 구동 후 PGWire(:5433) 및 TDS(:1433) 실측 처리량 측정 및 프로세스 무잔여 사살.
+6. **Phase 5 (SQLLogicTest 코어 호환성)**: `cmd/sqllogictest` 기반 32개 코어 SLT 파일(조인, 집계, CTE, 윈도우 함수 등) 전수 검증.
+7. **Phase 6 (크래시 내구성 & 콜드 리스타트)**: 돌발 `kill -9` 사살 후 콜드 재기동 시 데이터 무손실 검증.
+8. **Phase 7 (종합 매트릭스 & 리포트 저장)**: 시스템 메타데이터 캡처 및 터미널 요약표/마크다운 파일(`notes/benchmark_runs/`) 저장.
+
+### 4.2 실행 방법
+```bash
+# 1. 일상 개발용 고속 측정 (기본값, 약 30~60초)
+./scripts/run_all_benchmarks.sh
+
+# 2. 공식 릴리스용 10~15초 정밀 측정 + 마크다운 리포트 저장
+./scripts/run_all_benchmarks.sh --full --save-report
+
+# 3. 스토리지 엔진 상호 비교 (In-Memory OCC vs WiredTiger)
+./scripts/run_all_benchmarks.sh --engine=all
+```

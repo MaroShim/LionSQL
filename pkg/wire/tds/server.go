@@ -288,10 +288,11 @@ func (s *Server) acceptLoop() {
 
 // TdsPreparedStatement stores metadata for a prepared TDS statement.
 type TdsPreparedStatement struct {
-	Handle  int32
-	Params  string
-	Query   string
-	Program *proc.Program
+	Handle         int32
+	Params         string
+	Query          string
+	Program        *proc.Program
+	ProcParamNames []string
 }
 
 // DefaultMaxPreparedPerSession is the maximum number of prepared statements retained per connection session.
@@ -493,6 +494,7 @@ func (s *Server) executeVDBEPreparedFastPath(
 	boundParams []RPCParam,
 	sess *ConnectionSession,
 	extraTokens func(*bytes.Buffer),
+	procParamNames []string,
 ) bool {
 	paramMap := getParamMap()
 	defer putParamMap(paramMap)
@@ -507,6 +509,16 @@ func (s *Server) executeVDBEPreparedFastPath(
 		pName, atName := getParamNames(pIdx)
 		paramMap[pName] = p.Value
 		paramMap[atName] = p.Value
+
+		if procParamNames != nil && i < len(procParamNames) {
+			targetProcName := procParamNames[i]
+			if targetProcName != "" {
+				clean := strings.TrimPrefix(targetProcName, "@")
+				paramMap[targetProcName] = p.Value
+				paramMap[clean] = p.Value
+				paramMap["@"+clean] = p.Value
+			}
+		}
 	}
 
 	cs := s.getClientSession(sess)
@@ -1042,7 +1054,7 @@ func (s *Server) handleRPC(conn net.Conn, pkt *Packet, sess *ConnectionSession, 
 				if pMeta, err := s.catalog.GetProcedure(procName); err == nil && pMeta != nil && pMeta.Body != "" {
 					if cache := s.BytecodePlanCache(); cache != nil {
 						if prog, err := cache.GetOrCompile(pMeta.Body); err == nil && prog != nil {
-							if s.executeVDBEPreparedFastPath(ctx, conn, prog, rpc.Params, sess, nil) {
+							if s.executeVDBEPreparedFastPath(ctx, conn, prog, rpc.Params, sess, nil, nil) {
 								return
 							}
 						}
@@ -1128,14 +1140,20 @@ func (s *Server) handleRPCPrepare(conn net.Conn, rpc *parsedRPC, sess *Connectio
 		} else if prog, err := proc.Compile(stmt); err == nil && prog != nil {
 			prep.Program = prog
 		}
+		if prep.Program == nil && s.catalog != nil {
+			if procInfo := engine.ResolvePreparedProcedure(stmt, s.catalog, s.BytecodePlanCache()); procInfo != nil && procInfo.Program != nil {
+				prep.Program = procInfo.Program
+				prep.ProcParamNames = procInfo.ParamNames
+			}
+		}
 	}
 	sess.prepared.Put(prep)
 	sess.prepMu.Unlock()
 
 	var buf bytes.Buffer
-	buf.Write(BuildReturnValueInt(1, "@handle", handle))
-	buf.Write(BuildReturnStatus(0))
-	buf.Write(BuildDoneProc(DoneFinal, 0, 0))
+	WriteReturnValueIntDirect(&buf, 1, "@handle", handle)
+	WriteReturnStatusDirect(&buf, 0)
+	WriteDoneDirect(&buf, TokenDoneProc, DoneFinal, 0, 0)
 	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
 }
 
@@ -1163,7 +1181,7 @@ func (s *Server) handleRPCExecute(conn net.Conn, rpc *parsedRPC, sess *Connectio
 
 	// Fast-path: Execute via precompiled VDBE bytecode Program if available
 	if prep.Program != nil {
-		if s.executeVDBEPreparedFastPath(ctx, conn, prep.Program, boundParams, sess, nil) {
+		if s.executeVDBEPreparedFastPath(ctx, conn, prep.Program, boundParams, sess, nil, prep.ProcParamNames) {
 			return
 		}
 	}
@@ -1221,6 +1239,12 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 		} else if prog, err := proc.Compile(stmt); err == nil && prog != nil {
 			prep.Program = prog
 		}
+		if prep.Program == nil && s.catalog != nil {
+			if procInfo := engine.ResolvePreparedProcedure(stmt, s.catalog, s.BytecodePlanCache()); procInfo != nil && procInfo.Program != nil {
+				prep.Program = procInfo.Program
+				prep.ProcParamNames = procInfo.ParamNames
+			}
+		}
 	}
 	sess.prepared.Put(prep)
 	sess.prepMu.Unlock()
@@ -1233,15 +1257,15 @@ func (s *Server) handleRPCPrepExec(conn net.Conn, rpc *parsedRPC, sess *Connecti
 	// Fast-path: Execute via precompiled VDBE bytecode Program if available
 	if prep.Program != nil {
 		if s.executeVDBEPreparedFastPath(ctx, conn, prep.Program, boundParams, sess, func(buf *bytes.Buffer) {
-			buf.Write(BuildReturnValueInt(1, "@handle", handle))
-		}) {
+			WriteReturnValueIntDirect(buf, 1, "@handle", handle)
+		}, prep.ProcParamNames) {
 			return
 		}
 	}
 
 	execSQL := s.buildBoundSQL(stmt, paramsDecl, boundParams)
 	s.executeRPCAndRespond(conn, execSQL, sess, func(buf *bytes.Buffer) {
-		buf.Write(BuildReturnValueInt(1, "@handle", handle))
+		WriteReturnValueIntDirect(buf, 1, "@handle", handle)
 	}, ctx)
 }
 
@@ -1269,12 +1293,12 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		if sess.inTx {
 			doneStatus |= DoneInXact
 		}
-		buf.Write(BuildDone(TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows))))
+		WriteDoneDirect(&buf, TokenDoneInProc, DoneMore|DoneCount, 0xC1, uint64(len(res.Rows)))
 		if extraTokens != nil {
 			extraTokens(&buf)
 		}
-		buf.Write(BuildReturnStatus(0))
-		buf.Write(BuildDoneProc(doneStatus, 0xC1, uint64(len(res.Rows))))
+		WriteReturnStatusDirect(&buf, 0)
+		WriteDoneDirect(&buf, TokenDoneProc, doneStatus, 0xC1, uint64(len(res.Rows)))
 	} else {
 		if extraTokens != nil {
 			extraTokens(&buf)
@@ -1287,7 +1311,7 @@ func (s *Server) respondExecutionResult(conn net.Conn, res *runtime.ExecutionRes
 		if sess.inTx {
 			doneStatus |= DoneInXact
 		}
-		buf.Write(BuildDoneProc(doneStatus|DoneCount, 0xC1, rowCount))
+		WriteDoneDirect(&buf, TokenDoneProc, doneStatus|DoneCount, 0xC1, rowCount)
 	}
 
 	_ = sess.writePacket(conn, PacketTabular, buf.Bytes())
@@ -2625,7 +2649,7 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 			colType = TypeTimeN
 			colSize = 5
 			scale = 7
-		} else if strings.HasSuffix(lowerCol, "time") || lowerCol == "created" || lowerCol == "modified" {
+		} else if strings.HasSuffix(lowerCol, "time") || lowerCol == "created" || lowerCol == "modified" || strings.HasSuffix(lowerCol, "_at") {
 			colType = TypeDateTimeN
 			colSize = 8
 		} else if strings.HasSuffix(lowerCol, "guid") || strings.HasSuffix(lowerCol, "uuid") || lowerCol == "uniqueidentifier" {
@@ -2685,16 +2709,23 @@ func (s *Server) inferColumnInfos(res *engine.QueryResult) []ColumnInfo {
 					} else if lowerCol == "create_date" || lowerCol == "modify_date" || lowerCol == "createdate" || lowerCol == "modifydate" {
 						colType = TypeDateTimeN
 						colSize = 8
-					} else if isDateString(val) {
-						colType = TypeDateN
-						colSize = 3
-					} else if isTimeString(val) {
-						colType = TypeTimeN
-						colSize = 5
-						scale = 7
 					} else if (strings.Contains(lowerCol, "datetimeoffset") || strings.Contains(lowerCol, "offset")) && (strings.Contains(val, "+") || strings.Contains(val, "-")) {
 						colType = TypeDateTimeOffsetN
 						colSize = 10
+						scale = 7
+					} else if strings.Contains(lowerCol, "datetime2") {
+						colType = TypeDateTime2N
+						colSize = 8
+						scale = 7
+					} else if isDateString(val) {
+						colType = TypeDateN
+						colSize = 3
+					} else if isDateTimeString(val) || strings.HasSuffix(lowerCol, "_at") {
+						colType = TypeDateTimeN
+						colSize = 8
+					} else if isTimeString(val) {
+						colType = TypeTimeN
+						colSize = 5
 						scale = 7
 					} else if lowerCol == "type" {
 						colType = TypeVarChar
@@ -2778,6 +2809,13 @@ func isDateString(s string) bool {
 				return false
 			}
 		}
+		return true
+	}
+	return false
+}
+
+func isDateTimeString(s string) bool {
+	if len(s) >= 19 && s[4] == '-' && s[7] == '-' && (s[10] == ' ' || s[10] == 'T') && s[13] == ':' && s[16] == ':' {
 		return true
 	}
 	return false

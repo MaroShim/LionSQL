@@ -633,6 +633,62 @@ func TestTDS_PreparedStatement_BytecodeProgram(t *testing.T) {
 	}
 }
 
+func TestTDS_PreparedStatement_StoredProcedureFastPath(t *testing.T) {
+	srv := setupTestServer(t)
+	conn := connectClient(t, srv)
+	performHandshake(t, conn)
+
+	_ = sendSQLBatch(t, conn, "CREATE TABLE bank (id INT PRIMARY KEY, balance INT);")
+	_ = sendSQLBatch(t, conn, "INSERT INTO bank (id, balance) VALUES (1, 1000);")
+	_ = sendSQLBatch(t, conn, `
+CREATE PROCEDURE TransferFunds
+    @acc INT,
+    @amount INT
+AS
+BEGIN
+    UPDATE bank SET balance = balance + @amount WHERE id = @acc;
+END;
+`)
+
+	// 1. Prepare stored procedure invocation via sp_prepare (ProcID 11)
+	var prepParams bytes.Buffer
+	prepParams.Write(buildIntParam("@handle", true, 0))
+	prepParams.Write(buildNVarCharParam("@params", false, "@p1 INT, @p2 INT"))
+	prepParams.Write(buildNVarCharParam("@stmt", false, "EXEC TransferFunds @acc=@p1, @amount=@p2;"))
+
+	respPrep := sendRPC(t, conn, 11, 0, prepParams.Bytes())
+	if !bytes.Contains(respPrep, []byte{TokenReturnValue}) {
+		t.Fatalf("sp_prepare: expected TokenReturnValue (0xAC)")
+	}
+
+	rvIdx := bytes.Index(respPrep, []byte{TokenReturnValue})
+	if rvIdx < 0 {
+		t.Fatalf("sp_prepare: cannot find TokenReturnValue")
+	}
+	valOffset := rvIdx + 1 + 2 + 1 + 14 + 1 + 4 + 2 + 1
+	var handle int32 = 1
+	if len(respPrep) >= valOffset+4 {
+		handle = int32(binary.LittleEndian.Uint32(respPrep[valOffset : valOffset+4]))
+	}
+
+	// 2. Execute via sp_execute (ProcID 12) with @p1=1, @p2=50
+	var execParams bytes.Buffer
+	execParams.Write(buildIntParam("@handle", false, handle))
+	execParams.Write(buildIntParam("@p1", false, 1))
+	execParams.Write(buildIntParam("@p2", false, 50))
+
+	respExec := sendRPC(t, conn, 12, 0, execParams.Bytes())
+	if !bytes.Contains(respExec, []byte{TokenDoneProc}) {
+		t.Fatalf("sp_execute: expected TokenDoneProc (0xFE), got: %x", respExec)
+	}
+
+	// 3. Verify bank balance updated to 1050
+	respQuery := sendSQLBatch(t, conn, "SELECT balance FROM bank WHERE id = 1;")
+	if !bytes.Contains(respQuery, []byte{TokenRow}) {
+		t.Fatalf("expected TokenRow in SELECT, got: %x", respQuery)
+	}
+}
+
 func TestTDS_PlanCacheSharing(t *testing.T) {
 	eng := memengine.New()
 	cat := catalog.New(eng)

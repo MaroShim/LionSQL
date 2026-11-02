@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -942,9 +943,9 @@ func execWithRetry(maxRetries int, rng *rand.Rand, fn func() bool) (bool, int) {
 			return true, attempt
 		}
 		if attempt < maxRetries {
-			jitter := time.Duration(100+rng.Intn(200)) * time.Microsecond
-			backoff := jitter * (1 << attempt)
-			time.Sleep(backoff)
+			for k := 0; k <= attempt; k++ {
+				runtime.Gosched()
+			}
 		}
 	}
 	return false, maxRetries

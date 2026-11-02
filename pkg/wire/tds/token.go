@@ -350,14 +350,26 @@ func BuildEnvChangeRollbackTransaction(txDescriptor uint64) []byte {
 	return buf.Bytes()
 }
 
-// BuildDone builds a DONE (0xFD) or DONEINPROC (0xFF) token.
+var returnStatusZero = []byte{TokenReturnStatus, 0, 0, 0, 0}
+
+// BuildDone builds a DONE (0xFD) or DONEINPROC (0xFF) token with zero reflection.
 func BuildDone(tokenType byte, status uint16, curCmd uint16, rowCount uint64) []byte {
-	var buf bytes.Buffer
-	buf.WriteByte(tokenType)
-	_ = binary.Write(&buf, binary.LittleEndian, status)
-	_ = binary.Write(&buf, binary.LittleEndian, curCmd)
-	_ = binary.Write(&buf, binary.LittleEndian, rowCount)
-	return buf.Bytes()
+	buf := make([]byte, 13)
+	buf[0] = tokenType
+	binary.LittleEndian.PutUint16(buf[1:3], status)
+	binary.LittleEndian.PutUint16(buf[3:5], curCmd)
+	binary.LittleEndian.PutUint64(buf[5:13], rowCount)
+	return buf
+}
+
+// WriteDoneDirect writes a DONE / DONEPROC / DONEINPROC token directly into buf with zero heap allocations.
+func WriteDoneDirect(buf *bytes.Buffer, tokenType byte, status uint16, curCmd uint16, rowCount uint64) {
+	var b [13]byte
+	b[0] = tokenType
+	binary.LittleEndian.PutUint16(b[1:3], status)
+	binary.LittleEndian.PutUint16(b[3:5], curCmd)
+	binary.LittleEndian.PutUint64(b[5:13], rowCount)
+	buf.Write(b[:])
 }
 
 // BuildDoneProc builds a DONEPROC token (0xFE) indicating stored procedure or RPC completion.
@@ -367,46 +379,52 @@ func BuildDoneProc(status uint16, curCmd uint16, rowCount uint64) []byte {
 
 // BuildReturnStatus builds a RETURNSTATUS token (0x79) with 4-byte LE return value.
 func BuildReturnStatus(val int32) []byte {
+	if val == 0 {
+		return returnStatusZero
+	}
 	buf := make([]byte, 5)
 	buf[0] = TokenReturnStatus
 	binary.LittleEndian.PutUint32(buf[1:5], uint32(val))
 	return buf
 }
 
+// WriteReturnStatusDirect writes a RETURNSTATUS token directly into buf.
+func WriteReturnStatusDirect(buf *bytes.Buffer, val int32) {
+	if val == 0 {
+		buf.Write(returnStatusZero)
+		return
+	}
+	var b [5]byte
+	b[0] = TokenReturnStatus
+	binary.LittleEndian.PutUint32(b[1:5], uint32(val))
+	buf.Write(b[:])
+}
+
+// WriteReturnValueIntDirect writes a RETURNVALUE token (0xAC) for integer output parameters directly into buf.
+func WriteReturnValueIntDirect(buf *bytes.Buffer, paramOrdinal uint16, paramName string, val int32) {
+	buf.WriteByte(TokenReturnValue)
+	var hdr [2]byte
+	binary.LittleEndian.PutUint16(hdr[:], paramOrdinal)
+	buf.Write(hdr[:])
+
+	if paramName != "" {
+		buf.WriteByte(byte(len(paramName)))
+		WriteUTF16LEDirect(buf, paramName)
+	} else {
+		buf.WriteByte(0)
+	}
+
+	var tail [12]byte
+	tail[0] = 0x01 // StatusFlags: Output parameter
+	tail[7] = TypeInt4
+	binary.LittleEndian.PutUint32(tail[8:12], uint32(val))
+	buf.Write(tail[:])
+}
 
 // BuildReturnValueInt builds a RETURNVALUE token (0xAC) for integer output parameters (such as statement @handle).
 func BuildReturnValueInt(paramOrdinal uint16, paramName string, val int32) []byte {
-	var payload bytes.Buffer
-
-	// ParamOrdinal: uint16 LE
-	_ = binary.Write(&payload, binary.LittleEndian, paramOrdinal)
-
-	// ParamName: B_VARCHAR (1 byte char length + UTF-16LE characters)
-	if paramName != "" {
-		payload.WriteByte(byte(len(paramName)))
-		payload.Write(EncodeUTF16LE(paramName))
-	} else {
-		payload.WriteByte(0)
-	}
-
-	// StatusFlags (1B): 0x01 = Output parameter
-	payload.WriteByte(0x01)
-
-	// UserType (4B LE): 0
-	_ = binary.Write(&payload, binary.LittleEndian, uint32(0))
-
-	// Flags (2B LE): 0
-	_ = binary.Write(&payload, binary.LittleEndian, uint16(0))
-
-	// TypeInfo: TypeInt4 (0x38), fixed length 4 bytes
-	payload.WriteByte(TypeInt4)
-
-	// Value: int32 LE
-	_ = binary.Write(&payload, binary.LittleEndian, val)
-
 	var buf bytes.Buffer
-	buf.WriteByte(TokenReturnValue)
-	buf.Write(payload.Bytes())
+	WriteReturnValueIntDirect(&buf, paramOrdinal, paramName, val)
 	return buf.Bytes()
 }
 

@@ -97,14 +97,62 @@ func FormatPgCommandComplete(command string, rowsAffected int64, rowsCount int) 
 
 // formatPgCommandComplete resolves the completion tag for a query or command verb using the command tag table.
 func formatPgCommandComplete(command string, rowsAffected int64, rowsCount int) string {
-	upper := strings.ToUpper(strings.TrimSpace(command))
+	trimmed := strings.TrimSpace(command)
+	if trimmed == "" {
+		return "OK"
+	}
+	// Fast-path: check first word without strings.Fields allocations
+	idx := strings.IndexAny(trimmed, " \t\r\n(;")
+	firstWord := trimmed
+	if idx != -1 {
+		firstWord = trimmed[:idx]
+	}
+	upperWord := strings.ToUpper(firstWord)
+	switch upperWord {
+	case "EXEC", "EXECUTE", "CALL":
+		return "EXEC"
+	case "COMMIT":
+		return "COMMIT"
+	case "ROLLBACK":
+		return "ROLLBACK"
+	case "BEGIN":
+		return "BEGIN"
+	case "SELECT":
+		cnt := rowsCount
+		if cnt == 0 && rowsAffected > 0 {
+			cnt = int(rowsAffected)
+		}
+		if cnt == 0 {
+			return "SELECT 0"
+		}
+		if cnt == 1 {
+			return "SELECT 1"
+		}
+		return fmt.Sprintf("SELECT %d", cnt)
+	case "UPDATE":
+		if rowsAffected == 1 {
+			return "UPDATE 1"
+		}
+		return fmt.Sprintf("UPDATE %d", rowsAffected)
+	case "INSERT":
+		if rowsAffected == 1 {
+			return "INSERT 0 1"
+		}
+		return fmt.Sprintf("INSERT 0 %d", rowsAffected)
+	case "DELETE":
+		if rowsAffected == 1 {
+			return "DELETE 1"
+		}
+		return fmt.Sprintf("DELETE %d", rowsAffected)
+	}
+
+	upper := strings.ToUpper(trimmed)
 	fields := strings.Fields(upper)
 	if len(fields) == 0 {
 		return "OK"
 	}
-	firstWord := fields[0]
-	if formatter, ok := defaultCommandTagRules[firstWord]; ok {
+	if formatter, ok := defaultCommandTagRules[fields[0]]; ok {
 		return formatter(fields, rowsAffected, rowsCount)
 	}
-	return firstWord
+	return fields[0]
 }
