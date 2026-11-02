@@ -119,10 +119,11 @@ This document records subtle architectural landmines, runtime hazards, and criti
 
 ---
 
-## 13. Utility-to-Hotpath Creep & Package-Level Constant Regex
-- **Problem**: Utilities with heavy allocations (dynamic `regexp.MustCompile`, `strings.Builder` char-by-char copies) promoted to query execution paths degrade OLTP throughput from 20k to 5k TPS.
+## 13. Utility-to-Hotpath Creep & Zero-Regex Invariant in SQL Parsing
+- **Problem**: Regular expressions are structurally ill-suited for parsing complex, recursive SQL grammar (nested parens, quotes, comments, bracketed identifiers). Dynamic `regexp.MustCompile` and regex backtracking degrade OLTP throughput from 20k to 5k TPS and cause silent parsing edge-case bugs.
 - **Required Idiom**:
-  - Zero dynamic regex compilation: compile once in package-level `var (...)` blocks.
+  - **Zero Regular Expressions in Production SQL Parsing**: While regular expressions may be tolerated in early prototype phases for rapid hypothesis testing, they must be 100% eliminated prior to production GA releases.
+  - Route all SQL routing, DDL/DML compilation, and evaluation through deterministic tokenizers (`pkg/sqlutil`), recursive-descent lexers (`pkg/proc`), or AST parsers.
   - Zero-allocation query splitting: use byte index slicing (`query[start:i]`) instead of string building.
   - Track allocations via `b.ReportAllocs()` benchmarks.
 

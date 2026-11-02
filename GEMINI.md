@@ -46,6 +46,15 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
 1. **All-or-Nothing Boundaries**: Multi-statement business transactions (e.g. TPC-C New-Order) must execute strictly within a single atomic ACID boundary (`sess.BeginTx()` -> `tx.Commit()`). Splitting a logical transaction across autocommit loops is forbidden.
 2. **VDBE VM Transaction Binding**: Multi-step stored procedures in benchmarks must share an explicit transaction handle `tx` via `exec.RunInTx(prog, params, tx, nil)`. Any mid-step failure must trigger `tx.Rollback()`.
 
+### Invariant 7: Zero-Regex SQL Parsing in Production Paths (정규식 기반 SQL 파싱 금지 불변 원칙)
+1. **정규식의 SQL 파싱 부적합성**: Regular Expression(`regexp`)은 SQL과 같이 중첩 소괄호, 대괄호 식별자(`[dbo].[table]`), 따옴표 내 쉼표/이스케이프 문자, 주석, 다중 절 분기 등 문맥 자유 언어(Context-Free Grammar)의 복잡한 구조를 파싱하는 데 구조적으로 부적합하며, 미세한 엣지케이스(탐욕적 매칭, 문자열 오염)에서 치명적인 런타임 오류와 성능 저하를 유발한다.
+2. **프로토타입 허용 vs 프로덕션 퇴출 (Release Gate Invariance)**:
+   - 기능 탐색을 위한 극초기 프로토타입 단계에서는 빠른 가설 검증용으로 정규식을 임시 사용할 수 있으나,
+   - 프로덕션/라이브(Release GA) 단계에 진입하기 전에 반드시 전량 걷어내고 결정론적 렉서/토크나이저로 전환해야 한다.
+3. **표준 파싱 수단 강제**:
+   - 모든 프로덕션 SQL 쿼리 라우팅, DDL/DML 컴파일, 조건식 평가, 설명문(Explain), 서브쿼리 분기 처리는 반드시 `proc.Lexer`, `sqlutil` 결정론적 토크나이저(`HasPrefixKeyword`, `FindTopLevelKeyword`, `FindMatchingParen`), 또는 2-Tier AST 파서(Pratt / ANTLR4)만을 사용해야 한다.
+   - `sqlexec_*.go` 및 프로덕션 쿼리 핫패스에서 `regexp.Compile`, `regexp.MustCompile` 및 비결정론적 문자열 정규식 탐색을 새로 도입하는 것을 영구적으로 엄격히 금지한다.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)
