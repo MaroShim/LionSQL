@@ -1292,6 +1292,8 @@ type WTTx struct {
 	walOps            []memengine.WALOp
 	spWALIndices      map[string]int
 	tableCache        map[string]*storage.TableSchema
+	heldLatches       map[string]struct{}
+	latches           []func()
 }
 
 func (tx *WTTx) getTableLocked(tableName string) (*storage.TableSchema, error) {
@@ -2261,6 +2263,7 @@ func (c *wtFilteredIndexCursor) Close() error {
 func (tx *WTTx) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	defer tx.releaseLatchesLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
@@ -2311,6 +2314,7 @@ func (tx *WTTx) Commit() error {
 func (tx *WTTx) Rollback() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	defer tx.releaseLatchesLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
@@ -2331,6 +2335,40 @@ func (tx *WTTx) Rollback() error {
 	}
 	_ = C.go_wt_session_reset(tx.sess.sess)
 	return nil
+}
+
+// AcquireKeyLatch acquires an in-memory striped mutex for table + key (PERF-HOTSPOT-LATCH-1).
+// Reentrant calls within the same transaction are idempotent and do not deadlock.
+func (tx *WTTx) AcquireKeyLatch(tableName, key string) {
+	tx.mu.Lock()
+	if tx.closed {
+		tx.mu.Unlock()
+		return
+	}
+	latchKey := strings.ToLower(strings.Trim(tableName, "[]\"`")) + ":" + key
+	if tx.heldLatches == nil {
+		tx.heldLatches = make(map[string]struct{}, 4)
+	}
+	if _, held := tx.heldLatches[latchKey]; held {
+		tx.mu.Unlock()
+		return
+	}
+	tx.heldLatches[latchKey] = struct{}{}
+	tx.mu.Unlock()
+
+	unlock := storage.GlobalKeyLatch().LockKey(tableName, key)
+
+	tx.mu.Lock()
+	tx.latches = append(tx.latches, unlock)
+	tx.mu.Unlock()
+}
+
+func (tx *WTTx) releaseLatchesLocked() {
+	for i := len(tx.latches) - 1; i >= 0; i-- {
+		tx.latches[i]()
+	}
+	tx.latches = tx.latches[:0]
+	clear(tx.heldLatches)
 }
 
 func (tx *WTTx) Savepoint(name string) error {

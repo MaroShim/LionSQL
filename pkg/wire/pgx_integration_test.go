@@ -253,23 +253,23 @@ func TestDriverIntegration_PGX_DataTypes(t *testing.T) {
 	}
 	defer conn.Close(ctx)
 
-	if _, err := conn.Exec(ctx, "CREATE TABLE types_test (id INT PRIMARY KEY, num FLOAT, is_valid INT, note VARCHAR(50))"); err != nil {
+	if _, err := conn.Exec(ctx, "CREATE TABLE types_test (id INT PRIMARY KEY, num FLOAT, is_valid INT, note VARCHAR(50), balance NUMERIC(10, 2))"); err != nil {
 		t.Fatalf("CREATE TABLE failed: %v", err)
 	}
 
-	if _, err := conn.Exec(ctx, "INSERT INTO types_test (id, num, is_valid, note) VALUES (1, 3.14, 1, 'pi')"); err != nil {
+	if _, err := conn.Exec(ctx, "INSERT INTO types_test (id, num, is_valid, note, balance) VALUES (1, 3.14, 1, 'pi', 150.50)"); err != nil {
 		t.Fatalf("INSERT failed: %v", err)
 	}
 
 	var id, isValid int
-	var num float64
+	var num, balance float64
 	var note string
-	if err := conn.QueryRow(ctx, "SELECT id, num, is_valid, note FROM types_test WHERE id = 1").Scan(&id, &num, &isValid, &note); err != nil {
+	if err := conn.QueryRow(ctx, "SELECT id, num, is_valid, note, balance FROM types_test WHERE id = 1").Scan(&id, &num, &isValid, &note, &balance); err != nil {
 		t.Fatalf("QueryRow failed: %v", err)
 	}
 
-	if id != 1 || num != 3.14 || isValid != 1 || note != "pi" {
-		t.Fatalf("unexpected values: id=%d, num=%f, isValid=%d, note=%s", id, num, isValid, note)
+	if id != 1 || num != 3.14 || isValid != 1 || note != "pi" || balance != 150.50 {
+		t.Fatalf("unexpected values: id=%d, num=%f, isValid=%d, note=%s, balance=%f", id, num, isValid, note, balance)
 	}
 }
 

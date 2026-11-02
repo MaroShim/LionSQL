@@ -558,6 +558,29 @@ func (v Value) Bytes() []byte {
 	return []byte(v.BinVal)
 }
 
+// Interface converts a storage.Value into a standard Go any value.
+func (v Value) Interface() any {
+	if v.IsNull {
+		return nil
+	}
+	switch v.Type {
+	case TypeInt:
+		return v.IVal
+	case TypeFloat:
+		return v.FVal
+	case TypeBool:
+		return v.BVal
+	case TypeDateTime, TypeDate:
+		return v.TVal
+	case TypeDecimal:
+		return v.DVal
+	case TypeBinary:
+		return v.BinVal
+	default:
+		return v.SVal
+	}
+}
+
 func IntValue(v int64) Value {
 	return Value{Type: TypeInt, IVal: v, FVal: float64(v)}
 }
@@ -943,6 +966,7 @@ type Transaction interface {
 	SnapshotTimestamp() int64
 	CommitLSN() int64
 	CommitTimestamp() int64
+	AcquireKeyLatch(tableName, key string)
 }
 
 // Session represents an active connection/session.

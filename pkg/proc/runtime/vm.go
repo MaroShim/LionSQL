@@ -183,6 +183,7 @@ type Executor struct {
 	triggers       map[string]map[string][]*TriggerEntry // table (lower) -> event (upper) -> entries
 	framePool      sync.Pool
 	tableGetter    execution.TableGetter
+	queryExecutor  QueryExecutor
 	identProvider  IdentityProvider
 	identMu        sync.RWMutex
 	lastIdentities map[string]int64
@@ -213,6 +214,22 @@ func NewExecutor(cache *PlanCache) *Executor {
 			},
 		},
 	}
+}
+
+// QueryExecutor defines a callback to execute a full SQL SELECT statement in an existing transaction.
+type QueryExecutor func(ctx context.Context, sql string, tx storage.Transaction, vars map[string]storage.Value) ([]map[string]any, []string, error)
+
+// SetQueryExecutor registers a subquery execution callback for evaluation inside the VDBE VM.
+func (e *Executor) SetQueryExecutor(qe QueryExecutor) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.queryExecutor = qe
+}
+
+func (e *Executor) getQueryExecutor() QueryExecutor {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.queryExecutor
 }
 
 // SetIdentityProvider registers an external IdentityProvider (such as Coordinator).
@@ -1005,6 +1022,98 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 	return nil
 }
 
+func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
+	if data.Select == nil {
+		return 0, nil
+	}
+	if f.executor == nil {
+		return 0, fmt.Errorf("executor not initialized")
+	}
+	qe := f.executor.getQueryExecutor()
+	if qe == nil {
+		return 0, fmt.Errorf("query executor not configured for INSERT INTO ... SELECT in VM")
+	}
+
+	selectSQL := data.Select.String()
+	rows, cols, err := qe(f.ctx, selectSQL, f.tx, f.vars)
+	if err != nil {
+		return 0, fmt.Errorf("INSERT INTO ... SELECT query execution failed: %w", err)
+	}
+
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
+	tableSchema, err := f.getTableSchema(data.Table)
+	if err != nil {
+		return 0, fmt.Errorf("table %q not found: %w", data.Table, err)
+	}
+
+	targetCols := data.Columns
+	if len(targetCols) == 0 {
+		for _, c := range tableSchema.Columns {
+			if !c.Identity {
+				targetCols = append(targetCols, c.Name)
+			}
+		}
+	}
+
+	if len(cols) != len(targetCols) {
+		return 0, fmt.Errorf("column count mismatch: target table %q expects %d columns, but SELECT produced %d columns", data.Table, len(targetCols), len(cols))
+	}
+
+	hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "INSERT")
+	var newRows []map[string]any
+	if hasTriggers {
+		newRows = make([]map[string]any, 0, len(rows))
+	}
+
+	insertedCount := int64(0)
+	for _, row := range rows {
+		rec := make(storage.Record, len(targetCols))
+		rowMap := make(map[string]any, len(targetCols))
+
+		for i, targetCol := range targetCols {
+			srcCol := cols[i]
+			val := row[srcCol]
+			stVal := toStorageValue(val)
+			if colSchema, _, ok := tableSchema.FindColumn(targetCol); ok {
+				targetCol = colSchema.Name
+				if colSchema.Type != stVal.Type {
+					stVal = proc.ParseLiteralDefault(stVal.String(), colSchema.Type)
+				}
+			}
+			rec.Set(targetCol, stVal)
+			if hasTriggers {
+				rowMap[targetCol] = valToAny(stVal)
+			}
+		}
+
+		// Apply default values for missing columns
+		for _, col := range tableSchema.Columns {
+			if _, exists := rec[col.Name]; !exists && col.Default != "" {
+				rec[col.Name] = proc.ParseLiteralDefault(col.Default, col.Type)
+			}
+		}
+
+		if err := f.tx.Insert(data.Table, rec); err != nil {
+			return insertedCount, fmt.Errorf("insert error into %s: %w", data.Table, err)
+		}
+		insertedCount++
+		if hasTriggers {
+			newRows = append(newRows, rowMap)
+		}
+	}
+
+	if hasTriggers && len(newRows) > 0 {
+		if err := f.fireTriggers(data.Table, "INSERT", newRows, nil); err != nil {
+			return insertedCount, fmt.Errorf("trigger error on %s: %w", data.Table, err)
+		}
+	}
+
+	return insertedCount, nil
+}
+
 func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	if schema, err := f.getTableSchema(data.Table); err == nil && schema != nil {
 		for _, a := range data.Assignments {
@@ -1014,14 +1123,33 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		}
 	}
 
+	var pkValExpr proc.Expr
 	if colName, valExpr, ok := extractSimpleEq(data.WhereExpr); ok && f.isPKCol(data.Table, colName) {
+		pkValExpr = valExpr
+	} else if data.WhereExpr != nil {
+		eqs := extractAllEqConditions(data.WhereExpr)
+		for col, expr := range eqs {
+			if f.isPKCol(data.Table, col) {
+				pkValExpr = expr
+				break
+			}
+		}
+	}
+
+	if pkValExpr != nil {
 		evalCtx := f.buildRowEvalMap(nil)
-		pkAny, _ := proc.EvalRowExpr(valExpr, evalCtx, nil)
+		pkAny, _ := proc.EvalRowExpr(pkValExpr, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
+		if f.tx != nil {
+			f.tx.AcquireKeyLatch(data.Table, pkVal.String())
+		}
 		oldRec, err := f.tx.Get(data.Table, pkVal)
 		if err == nil && oldRec != nil {
 			oldRowMap := recordToMap(oldRec)
 			rowCtx := f.buildRowEvalMap(oldRowMap)
+			if data.WhereExpr != nil && !proc.EvalBoolExpr(data.WhereExpr, rowCtx, nil) {
+				return 0, nil
+			}
 			recUpdates := make(storage.Record, len(data.Assignments))
 			newRowMap := make(map[string]any, len(oldRowMap))
 			for k, v := range oldRowMap {
@@ -1182,6 +1310,9 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		newRows = make([]map[string]any, 0, len(toUpdate))
 	}
 	for _, item := range toUpdate {
+		if f.tx != nil {
+			f.tx.AcquireKeyLatch(data.Table, item.pk.String())
+		}
 		if err := f.tx.Update(data.Table, item.pk, item.updates); err == nil {
 			updatedCount++
 			if hasTriggers {

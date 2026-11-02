@@ -571,6 +571,14 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 	switch inst.Op {
 	case proc.OpInsert:
 		data := f.aux(inst).(*proc.DMLData)
+		if data.Select != nil {
+			cnt, err := f.execInsertSelect(data)
+			if err != nil {
+				return f.handleCatch(err, pc)
+			}
+			f.rowCount = cnt
+			return nil
+		}
 		rec := make(storage.Record)
 		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "INSERT")
 		var rowMap map[string]any
@@ -742,6 +750,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 					return f.handleCatch(fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table), pc)
 				}
 			}
+		}
+
+		if !isTransientTable(data.Table) && f.tx != nil {
+			f.tx.AcquireKeyLatch(data.Table, pkVal.String())
 		}
 
 		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")

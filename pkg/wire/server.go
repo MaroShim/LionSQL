@@ -342,6 +342,7 @@ type PreparedStatement struct {
 	Program     *proc.Program
 	ColumnNames []string
 	ColumnOIDs  []int32
+	NoData      bool
 }
 
 type Portal struct {
@@ -1041,6 +1042,11 @@ func decodeBinaryParamValue(b []byte, oid int32) storage.Value {
 		if len(b) == 16 {
 			return storage.UUIDValue(fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]))
 		}
+	case 1700: // NUMERIC / DECIMAL
+		if dec, err := decodePgBinaryNumeric(b); err == nil {
+			return storage.DecimalValueFromDecimal(dec)
+		}
+		return storage.BinaryValue(b)
 	case 1009, 1015, 1002, 1028, 1007, 1005, 1016: // array types: _text, _varchar, _char, _oid, _int4, _int2, _int8
 		return storage.StringValue(decodeBinaryArray(b, oid))
 	default:
@@ -1082,6 +1088,11 @@ func decodeTextParamValue(s string, oid int32) storage.Value {
 		}
 	case 2950: // UUID
 		return storage.UUIDValue(strings.TrimSpace(s))
+	case 1700: // NUMERIC / DECIMAL
+		if dec, err := storage.ParseDecimal(s); err == nil {
+			return storage.DecimalValueFromDecimal(dec)
+		}
+		return storage.StringValue(s)
 	case 0: // Untyped parameter (lib/pq default)
 		trimmed := strings.TrimSpace(s)
 		if strings.HasPrefix(trimmed, "\\x") || strings.HasPrefix(trimmed, "\\X") {
@@ -1239,6 +1250,11 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 				stmt.ColumnOIDs[i] = c.DataType
 			}
 		}
+	}
+
+	if stmt != nil && stmt.NoData {
+		_ = WriteNoData(conn)
+		return
 	}
 
 	if stmt != nil && len(stmt.ColumnOIDs) > 0 {
@@ -1565,6 +1581,9 @@ func (s *Server) writeSchemaDescription(conn net.Conn, query string, paramTypes 
 		}
 	}
 
+	if stmt != nil {
+		stmt.NoData = true
+	}
 	if s.DevMode() {
 		log.Printf("[DEV][PGWire][writeSchemaDescription] sending WriteNoData for query=%s", query)
 	}
@@ -1719,6 +1738,9 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 	}
 
 	if len(res.Columns) == 0 {
+		if portal.Statement != nil {
+			portal.Statement.NoData = true
+		}
 		cmd := res.Command
 		if cmd == "" {
 			cmd = portal.Statement.Query
@@ -1766,6 +1788,10 @@ func (s *Server) handleExecute(conn net.Conn, payload []byte, portals map[string
 		colOIDs = portal.Statement.ColumnOIDs
 	} else {
 		colOIDs = s.resolveColumnOIDs(queryForOIDs, res.Columns, sampleRow)
+		if portal.Statement != nil && len(colOIDs) > 0 {
+			portal.Statement.ColumnOIDs = colOIDs
+			portal.Statement.ColumnNames = res.Columns
+		}
 	}
 
 	bw := getBufioWriter(conn)
@@ -2451,6 +2477,8 @@ func formatColumnValue(val any, oid int32, isBinary bool) []byte {
 			}
 		}
 		return []byte(uuidStr)
+	case 1700: // NUMERIC / DECIMAL
+		return encodePgBinaryNumeric(val)
 	case 25, 1043: // TEXT, VARCHAR
 		return []byte(fmt.Sprintf("%v", val))
 	default:

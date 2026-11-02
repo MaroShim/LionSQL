@@ -178,6 +178,8 @@ type Transaction struct {
 	shardMasks        map[string]shardMask
 	tableNames        []string
 	neededShards      []shardRef
+	heldLatches       map[string]struct{}
+	latches           []func()
 	closed            bool
 	inPool            bool
 }
@@ -186,6 +188,7 @@ func (tx *Transaction) releaseToPoolLocked() {
 	if tx.inPool {
 		return
 	}
+	tx.releaseLatchesLocked()
 	tx.inPool = true
 	txPool.Put(tx)
 }
@@ -1678,6 +1681,7 @@ func (tx *Transaction) IndexOnlyScan(tableName string, indexName string, low, hi
 func (tx *Transaction) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	defer tx.releaseLatchesLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
@@ -2052,6 +2056,7 @@ func (tx *Transaction) Commit() error {
 func (tx *Transaction) Rollback() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
+	defer tx.releaseLatchesLocked()
 
 	if tx.inPool {
 		return storage.ErrTxClosed
@@ -2059,6 +2064,40 @@ func (tx *Transaction) Rollback() error {
 	tx.closed = true
 	tx.releaseToPoolLocked()
 	return nil
+}
+
+// AcquireKeyLatch acquires an in-memory striped mutex for table + key (PERF-HOTSPOT-LATCH-1).
+// Reentrant calls within the same transaction are idempotent and do not deadlock.
+func (tx *Transaction) AcquireKeyLatch(tableName, key string) {
+	tx.mu.Lock()
+	if tx.closed {
+		tx.mu.Unlock()
+		return
+	}
+	latchKey := strings.ToLower(strings.Trim(tableName, "[]\"`")) + ":" + key
+	if tx.heldLatches == nil {
+		tx.heldLatches = make(map[string]struct{}, 4)
+	}
+	if _, held := tx.heldLatches[latchKey]; held {
+		tx.mu.Unlock()
+		return
+	}
+	tx.heldLatches[latchKey] = struct{}{}
+	tx.mu.Unlock()
+
+	unlock := storage.GlobalKeyLatch().LockKey(tableName, key)
+
+	tx.mu.Lock()
+	tx.latches = append(tx.latches, unlock)
+	tx.mu.Unlock()
+}
+
+func (tx *Transaction) releaseLatchesLocked() {
+	for i := len(tx.latches) - 1; i >= 0; i-- {
+		tx.latches[i]()
+	}
+	tx.latches = tx.latches[:0]
+	clear(tx.heldLatches)
 }
 
 func (tx *Transaction) Savepoint(name string) error {

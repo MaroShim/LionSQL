@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -109,6 +110,24 @@ func NewCoordinator(cat *catalog.Catalog, eng storage.Engine, cfg Config) *Coord
 
 	coord.autoAnalyzer = NewAutoAnalyzer(coord, DefaultAutoAnalyzeConfig())
 	executor.SetIdentityProvider(coord)
+	executor.SetQueryExecutor(func(ctx context.Context, sql string, tx storage.Transaction, vars map[string]storage.Value) ([]map[string]any, []string, error) {
+		cs := &ClientSession{
+			ID:   "internal-vm-subquery",
+			Tx:   tx,
+			Vars: make(map[string]any, len(vars)*2),
+		}
+		for k, v := range vars {
+			cs.Vars[k] = v.Interface()
+			if !strings.HasPrefix(k, "@") {
+				cs.Vars["@"+k] = v.Interface()
+			}
+		}
+		res, err := coord.execSelect(sql, time.Now(), cs)
+		if err != nil {
+			return nil, nil, err
+		}
+		return res.Rows, res.Columns, nil
+	})
 	type walHookAdder interface {
 		AddWALHook(fn func(rec memengine.WALRecord))
 	}

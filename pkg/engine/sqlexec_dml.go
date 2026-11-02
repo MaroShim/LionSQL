@@ -1180,6 +1180,9 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 
 	updatedCount := int64(0)
 	for _, item := range toUpdate {
+		if tx != nil {
+			tx.AcquireKeyLatch(tableName, item.pk.String())
+		}
 		if err := tx.Update(tableName, item.pk, item.rec); err != nil {
 			if isEphemeral {
 				_ = tx.Rollback()

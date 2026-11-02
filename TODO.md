@@ -48,6 +48,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **라우팅 계층 인터셉트 (`getTable`, `sessionTxWrapper`, `tryPKLookupBypass` 임시 테이블 가드)**: 카탈로그 전역 락 회피 및 메모리 스트리밍 바인딩
 - [x] **`execCTE` Zero-DDL 리팩토링**: `CREATE TABLE`, `INSERT INTO`, `DROP TABLE` 전역 DDL 락 100% 제거
 - [x] **동시성 벤치마크 및 회귀 검증**: Grove Writable CTE 및 동시 워커 50 처리량 검증 (In-Memory 0.10s, WiredTiger 0.96s 레이스 프리 통과)
+
+### [x] 1.6 `PERF-GROVE-CONCURRENCY-1` Grove 벤치마크 기반 동시성 최적화 및 핫스팟 락 완성 — **[완료 (Pass)]**
+- 설계 계획서: [`notes/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`](notes/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md)
+- [x] **Phase 1 (`BUG-WIRE-OID-1700`)**: PGWire OID 1700 (NUMERIC/DECIMAL) 바이너리 Base-10000 인코더/디코더 구현 및 드라이버(`pgx`, `lib/pq`) 스캔 에러 완치 (`pkg/wire/numeric.go`, `numeric_test.go`)
+- [x] **Phase 2 (`PERF-HOTSPOT-LATCH-1`)**: 인-메모리 2,048-스트라이프 키 래치(Key-Striped Latch) 도입으로 핫스팟 UPDATE 경합 시 OCC Abort Storm 방지 및 50 동시 워커 16,000+ TPS 달성 (`pkg/storage/key_latch.go`, `hotspot_concurrency_test.go`)
+- [x] **Phase 3 (`PROC-SP-INSERT-SELECT-1`)**: Stored Procedure VDBE VM 내 `INSERT INTO ... SELECT` 바이트코드 브릿지(`execInsertSelect`) 지원 및 다중 테이블 복사/트랜잭션 정합성 검증 (`pkg/engine/sp_insert_select_test.go`)
+- [x] **Phase 4 (`PERF-PGWIRE-PIPELINE-1`)**: PGWire Describe 메타데이터(`ColumnOIDs`, `ColumnNames`, `NoData`) 캐싱으로 불필요한 Writable CTE 파싱/사전 실행 제거 및 파이프라인 처리량 대폭 가속 (`pkg/wire/metadata_cache_test.go`)
 - [ ] 1단계: 개인용 서비스(Vaultwarden / Umami / Answer)를 LionSQL에 연결해 섀도 모드 운영
 - [ ] 2단계: 프로젝트 자체 서비스(Gitea 등)로 확대 및 일 단위 백업/복원 리허설
 
