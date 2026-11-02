@@ -425,134 +425,231 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 	}, nil
 }
 
-func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
-	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+// parseTruncateClause parses TRUNCATE [TABLE] [ONLY] t1 [*] [, t2 ...] [RESTART IDENTITY | CONTINUE IDENTITY] [CASCADE | RESTRICT].
+func parseTruncateClause(cleaned string) (tables []string, cascade bool, restartIdentity bool, err error) {
 	if !sqlutil.HasPrefixKeyword(cleaned, "TRUNCATE") {
-		return nil, fmt.Errorf("invalid TRUNCATE TABLE syntax")
+		return nil, false, false, fmt.Errorf("invalid TRUNCATE TABLE syntax")
 	}
 	rest := strings.TrimSpace(cleaned[len("TRUNCATE"):])
 	if sqlutil.HasPrefixKeyword(rest, "TABLE") {
 		rest = strings.TrimSpace(rest[len("TABLE"):])
 	}
-	tokens := sqlutil.SplitTopLevelTokens(rest)
-	if len(tokens) == 0 {
-		return nil, fmt.Errorf("invalid TRUNCATE TABLE syntax: missing table name")
+	if rest == "" {
+		return nil, false, false, fmt.Errorf("invalid TRUNCATE TABLE syntax: missing table name")
 	}
 
-	tableName := cleanIdentifier(tokens[0])
-	if cs != nil && cs.TempTableMap != nil {
-		if realName, ok := cs.TempTableMap[tableName]; ok {
-			tableName = realName
+	// Parse trailing options: CASCADE, RESTRICT, RESTART IDENTITY, CONTINUE IDENTITY
+	cascade = false
+	restartIdentity = true // default in standard TRUNCATE
+	changed := true
+	for changed {
+		changed = false
+		trimmed := strings.TrimSpace(rest)
+		upper := strings.ToUpper(trimmed)
+		if strings.HasSuffix(upper, " CASCADE") {
+			cascade = true
+			rest = strings.TrimSpace(trimmed[:len(trimmed)-len(" CASCADE")])
+			changed = true
+		} else if strings.HasSuffix(upper, " RESTRICT") {
+			cascade = false
+			rest = strings.TrimSpace(trimmed[:len(trimmed)-len(" RESTRICT")])
+			changed = true
+		} else if strings.HasSuffix(upper, " RESTART IDENTITY") {
+			restartIdentity = true
+			rest = strings.TrimSpace(trimmed[:len(trimmed)-len(" RESTART IDENTITY")])
+			changed = true
+		} else if strings.HasSuffix(upper, " CONTINUE IDENTITY") {
+			restartIdentity = false
+			rest = strings.TrimSpace(trimmed[:len(trimmed)-len(" CONTINUE IDENTITY")])
+			changed = true
 		}
 	}
 
-	// If inside an active transaction, perform transactional truncate:
-	// Verify foreign key references, then scan and delete all rows within cs.Tx
-	// so that uncommitted writes are cleared and ROLLBACK/COMMIT semantics are preserved.
+	rawParts := sqlutil.SplitTopLevel(rest, ',')
+	if len(rawParts) == 0 {
+		return nil, false, false, fmt.Errorf("invalid TRUNCATE TABLE syntax: missing table name")
+	}
+
+	for _, p := range rawParts {
+		s := strings.TrimSpace(p)
+		if sqlutil.HasPrefixKeyword(s, "ONLY") {
+			s = strings.TrimSpace(s[len("ONLY"):])
+		}
+		s = strings.TrimPrefix(s, "(")
+		s = strings.TrimSuffix(s, ")")
+		s = strings.TrimSuffix(strings.TrimSpace(s), "*")
+		name := cleanIdentifier(s)
+		if name != "" {
+			tables = append(tables, name)
+		}
+	}
+
+	if len(tables) == 0 {
+		return nil, false, false, fmt.Errorf("invalid TRUNCATE TABLE syntax: missing table name")
+	}
+	return tables, cascade, restartIdentity, nil
+}
+
+func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
+	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
+	tableNames, isCascade, restartIdentity, err := parseTruncateClause(cleaned)
+	if err != nil {
+		return nil, err
+	}
+
+	// Resolve session temp tables
+	resolvedTables := make([]string, 0, len(tableNames))
+	for _, tableName := range tableNames {
+		if cs != nil && cs.TempTableMap != nil {
+			if realName, ok := cs.TempTableMap[tableName]; ok {
+				tableName = realName
+			}
+		}
+		resolvedTables = append(resolvedTables, tableName)
+	}
+
+	// If inside an active transaction, perform transactional truncate across all specified tables
 	if cs != nil && cs.Tx != nil {
-		tbl, err := s.engine.GetTable(tableName)
+		targetSet := make(map[string]bool, len(resolvedTables))
+		for _, t := range resolvedTables {
+			targetSet[strings.ToLower(t)] = true
+		}
+
+		allTables, err := s.engine.ListTables()
 		if err != nil {
 			return nil, err
 		}
-		tables, err := s.engine.ListTables()
-		if err != nil {
-			return nil, err
+
+		if isCascade {
+			changed := true
+			for changed {
+				changed = false
+				for _, other := range allTables {
+					if targetSet[strings.ToLower(other.Name)] {
+						continue
+					}
+					for _, fk := range other.ForeignKeys {
+						if targetSet[strings.ToLower(fk.ParentTable)] {
+							targetSet[strings.ToLower(other.Name)] = true
+							resolvedTables = append(resolvedTables, other.Name)
+							changed = true
+							break
+						}
+					}
+				}
+			}
 		}
-		for _, other := range tables {
-			if strings.EqualFold(other.Name, tableName) {
+
+		// Verify FK dependencies
+		for _, other := range allTables {
+			if targetSet[strings.ToLower(other.Name)] {
 				continue
 			}
 			for _, fk := range other.ForeignKeys {
-				if strings.EqualFold(fk.ParentTable, tableName) {
+				if targetSet[strings.ToLower(fk.ParentTable)] {
 					return nil, fmt.Errorf("%w: cannot truncate table %q because it is referenced by foreign key %q on table %q",
-						storage.ErrDependentObjectsExist, tableName, fk.Name, other.Name)
+						storage.ErrDependentObjectsExist, fk.ParentTable, fk.Name, other.Name)
 				}
 			}
 		}
 
-		cur, err := cs.Tx.Scan(tableName)
-		if err != nil {
-			return nil, err
-		}
-		defer cur.Close()
-
-		var pkColName string
-		var pkColIdx int = -1
-		isCompPK := tbl.IsCompositePK()
-		if !isCompPK {
-			if pkCol, perr := tbl.PrimaryKeyColumn(); perr == nil && pkCol != nil {
-				pkColName = pkCol.Name
-				_, pkColIdx, _ = tbl.FindColumn(pkColName)
+		for _, tableName := range resolvedTables {
+			tbl, err := s.engine.GetTable(tableName)
+			if err != nil {
+				return nil, err
 			}
-		}
 
-		var pks []storage.Value
-		for cur.Next() {
-			if isCompPK {
-				if rec, rcerr := cur.Record(); rcerr == nil {
-					if pkVal, ok := tbl.ResolveRecordPK(rec); ok {
-						pks = append(pks, pkVal)
-					}
-				}
-				continue
+			cur, err := cs.Tx.Scan(tableName)
+			if err != nil {
+				return nil, err
 			}
-			row, rerr := cur.Row()
-			if rerr == nil && len(row.Values) > 0 {
-				if pkColIdx >= 0 && pkColIdx < len(row.Values) {
-					pks = append(pks, row.Values[pkColIdx])
-				} else {
-					pks = append(pks, row.Values[0])
+
+			var pkColName string
+			var pkColIdx int = -1
+			isCompPK := tbl.IsCompositePK()
+			if !isCompPK {
+				if pkCol, perr := tbl.PrimaryKeyColumn(); perr == nil && pkCol != nil {
+					pkColName = pkCol.Name
+					_, pkColIdx, _ = tbl.FindColumn(pkColName)
 				}
-			} else {
-				rec, rcerr := cur.Record()
-				if rcerr == nil {
-					if pkColName != "" {
-						if v, ok := rec[pkColName]; ok {
-							pks = append(pks, v)
-							continue
+			}
+
+			var pks []storage.Value
+			for cur.Next() {
+				if isCompPK {
+					if rec, rcerr := cur.Record(); rcerr == nil {
+						if pkVal, ok := tbl.ResolveRecordPK(rec); ok {
+							pks = append(pks, pkVal)
 						}
-						for k, v := range rec {
-							if strings.EqualFold(k, pkColName) {
+					}
+					continue
+				}
+				row, rerr := cur.Row()
+				if rerr == nil && len(row.Values) > 0 {
+					if pkColIdx >= 0 && pkColIdx < len(row.Values) {
+						pks = append(pks, row.Values[pkColIdx])
+					} else {
+						pks = append(pks, row.Values[0])
+					}
+				} else {
+					rec, rcerr := cur.Record()
+					if rcerr == nil {
+						if pkColName != "" {
+							if v, ok := rec[pkColName]; ok {
 								pks = append(pks, v)
 								continue
 							}
+							for k, v := range rec {
+								if strings.EqualFold(k, pkColName) {
+									pks = append(pks, v)
+									continue
+								}
+							}
 						}
-					}
-					if v, ok := rec["id"]; ok {
-						pks = append(pks, v)
+						if v, ok := rec["id"]; ok {
+							pks = append(pks, v)
+						}
 					}
 				}
 			}
-		}
+			cur.Close()
 
-		for _, pk := range pks {
-			if err := cs.Tx.Delete(tableName, pk); err != nil {
-				return nil, err
+			for _, pk := range pks {
+				if err := cs.Tx.Delete(tableName, pk); err != nil {
+					return nil, err
+				}
+			}
+
+			if restartIdentity {
+				s.SetTableLastIdentity(tableName, 0)
 			}
 		}
 
 		s.InvalidatePKBypassCache()
-		s.SetTableLastIdentity(tableName, 0)
 		return &QueryResult{
 			Success:    true,
 			Command:    "TRUNCATE TABLE",
 			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Table %q truncated successfully", tableName)},
+			Messages:   []string{fmt.Sprintf("Table(s) %s truncated successfully", strings.Join(resolvedTables, ", "))},
 		}, nil
 	}
 
-	if err := s.engine.TruncateTable(tableName); err != nil {
+	if err := s.engine.TruncateTables(resolvedTables, isCascade); err != nil {
 		return nil, err
 	}
 
 	s.InvalidatePKBypassCache()
-	s.SetTableLastIdentity(tableName, 0)
+	if restartIdentity {
+		for _, tableName := range resolvedTables {
+			s.SetTableLastIdentity(tableName, 0)
+		}
+	}
 
 	return &QueryResult{
 		Success:    true,
 		Command:    "TRUNCATE TABLE",
 		DurationUS: time.Since(start).Microseconds(),
-		Messages:   []string{fmt.Sprintf("Table %q truncated successfully", tableName)},
+		Messages:   []string{fmt.Sprintf("Table(s) %s truncated successfully", strings.Join(resolvedTables, ", "))},
 	}, nil
 }
 

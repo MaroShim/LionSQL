@@ -925,6 +925,12 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		}
 		f.rowCount = cnt
 
+	case proc.OpTruncate:
+		tableName := f.prog.Constants[inst.A].String()
+		if err := f.execTruncate(tableName); err != nil {
+			return f.handleCatch(err, pc)
+		}
+
 	case proc.OpSelectInto:
 		data := f.aux(inst).(*proc.SelectIntoData)
 		val, err := f.execSelectInto(data)

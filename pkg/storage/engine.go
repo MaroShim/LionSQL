@@ -1017,6 +1017,7 @@ type Engine interface {
 	CreateIndex(index *IndexSchema) error
 	DropIndex(tableName, indexName string) error
 	TruncateTable(tableName string) error
+	TruncateTables(tableNames []string, cascade bool) error
 	DropPartition(tableName, partitionName string) error
 	GetPartitions(tableName string) ([]PartitionInfo, error)
 	AddColumn(tableName string, col *Column) error

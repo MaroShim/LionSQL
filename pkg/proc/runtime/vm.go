@@ -751,7 +751,7 @@ func (f *VMFrame) Execute(startPC int) (any, error) {
 			}
 
 		case proc.OpInsert, proc.OpUpdate, proc.OpUpdateWhere, proc.OpDelete, proc.OpDeleteWhere,
-			proc.OpSelectInto, proc.OpPointSelect:
+			proc.OpSelectInto, proc.OpPointSelect, proc.OpTruncate:
 			if err := f.execStorageOp(&inst, &pc); err != nil {
 				return nil, err
 			}
@@ -1468,6 +1468,63 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 		}
 	}
 	return deletedCount, nil
+}
+
+func (f *VMFrame) execTruncate(tableName string) error {
+	tblName := cleanSymbol(tableName)
+	if f.tx == nil {
+		return fmt.Errorf("no active transaction to truncate %s", tblName)
+	}
+
+	cursor, err := f.tx.Scan(tblName)
+	if err != nil {
+		return fmt.Errorf("truncate scan error on %s: %w", tblName, err)
+	}
+	defer cursor.Close()
+
+	tableSchema, _ := f.getTableSchema(tblName)
+	isCompPK := tableSchema != nil && tableSchema.IsCompositePK()
+	var pkColName string
+	if !isCompPK && tableSchema != nil {
+		if pkCol, perr := tableSchema.PrimaryKeyColumn(); perr == nil && pkCol != nil {
+			pkColName = pkCol.Name
+		}
+	}
+
+	var pks []storage.Value
+	for cursor.Next() {
+		rec, err := cursor.Record()
+		if err != nil || rec == nil {
+			continue
+		}
+		if isCompPK {
+			if pkVal, ok := tableSchema.ResolveRecordPK(rec); ok {
+				pks = append(pks, pkVal)
+			}
+			continue
+		}
+		if pkColName != "" {
+			if v, ok := rec[pkColName]; ok {
+				pks = append(pks, v)
+				continue
+			}
+		}
+		if v, ok := rec["id"]; ok {
+			pks = append(pks, v)
+		}
+	}
+
+	for _, pk := range pks {
+		if err := f.tx.Delete(tblName, pk); err != nil {
+			return fmt.Errorf("truncate delete error on %s: %w", tblName, err)
+		}
+	}
+
+	if f.executor != nil {
+		f.executor.SetLastIdentity(tblName, 0)
+	}
+	f.rowCount = int64(len(pks))
+	return nil
 }
 
 func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, error) {

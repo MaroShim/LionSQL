@@ -1062,6 +1062,17 @@ func (s *DropIndexStmt) String() string {
 	return fmt.Sprintf("DROP INDEX %s", s.Name)
 }
 
+// TruncateStmt represents TRUNCATE TABLE t1 [, t2 ...] [CASCADE]
+type TruncateStmt struct {
+	Tables  []string
+	Cascade bool
+}
+
+func (s *TruncateStmt) stmtNode() {}
+func (s *TruncateStmt) String() string {
+	return fmt.Sprintf("TRUNCATE TABLE %s", strings.Join(s.Tables, ", "))
+}
+
 // ExistsExpr represents [NOT] EXISTS (SELECT ...)
 type ExistsExpr struct {
 	Query *GeneralSelectStmt

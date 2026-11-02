@@ -853,6 +853,13 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		})
 		return nil
 
+	case *TruncateStmt:
+		for _, tbl := range s.Tables {
+			idx := c.internConst(storage.StringValue(tbl))
+			c.emit(OpTruncate, idx, 0, 0, nil)
+		}
+		return nil
+
 	case *SelectIntoStmt:
 		intoVar := cleanVarName(s.IntoVar)
 		c.getOrAllocSlot(intoVar)

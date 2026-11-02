@@ -56,6 +56,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **Phase 3 (`PROC-SP-INSERT-SELECT-1`)**: Stored Procedure VDBE VM 내 `INSERT INTO ... SELECT` 바이트코드 브릿지(`execInsertSelect`) 지원 및 다중 테이블 복사/트랜잭션 정합성 검증 (`pkg/engine/sp_insert_select_test.go`)
 - [x] **Phase 4 (`PERF-PGWIRE-PIPELINE-1`)**: PGWire Describe 메타데이터(`ColumnOIDs`, `ColumnNames`, `NoData`) 캐싱으로 불필요한 Writable CTE 파싱/사전 실행 제거 및 파이프라인 처리량 대폭 가속 (`pkg/wire/metadata_cache_test.go`)
 - [x] **Phase 5 (`PERF-RETRY-WT-ROLLBACK-1`)**: WiredTiger `WT_ROLLBACK`(-31800) 및 OCC 충돌 시 MongoDB 표준 아키텍처 기반 인-커널 투명 재시도 안전망(WriteConflict Retry Loop, 지수 백오프 및 랜덤 마이크로 지터) 장착 완료 (`pkg/proc/runtime/vm.go`, `pkg/engine/sqlexec.go`, `pkg/engine/write_conflict_retry_test.go`)
+- [x] **Phase 6 (`DDL-TRUNCATE-MULTI-CASCADE-1` & `PROC-SP-TRUNCATE-1`)**: 다중 테이블 `TRUNCATE TABLE t1, t2, ...`, `CASCADE`, `RESTRICT`, `RESTART IDENTITY` 지원 및 외래키 상호 참조 해소, Stored Procedure VM 내 네이티브 `OpTruncate` 바이트코드 지원 완료 (`pkg/storage`, `pkg/engine/sqlexec_ddl.go`, `pkg/proc`, `pkg/engine/truncate_test.go`)
 - [ ] 1단계: 개인용 서비스(Vaultwarden / Umami / Answer)를 LionSQL에 연결해 섀도 모드 운영
 - [ ] 2단계: 프로젝트 자체 서비스(Gitea 등)로 확대 및 일 단위 백업/복원 리허설
 

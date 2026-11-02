@@ -74,6 +74,10 @@ func (e *Engine) TruncateTable(tableName string) error {
 	return fmt.Errorf("wiredtiger storage engine not enabled")
 }
 
+func (e *Engine) TruncateTables(tableNames []string, cascade bool) error {
+	return fmt.Errorf("wiredtiger storage engine not enabled")
+}
+
 func (e *Engine) DropPartition(tableName, partitionName string) error {
 	return fmt.Errorf("wiredtiger storage engine not enabled")
 }

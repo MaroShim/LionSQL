@@ -581,30 +581,50 @@ func (e *Engine) DropTable(tableName string) error {
 	return nil
 }
 
-func (e *Engine) TruncateTable(tableName string) error {
+func (e *Engine) TruncateTables(tableNames []string, cascade bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	tbl, exists := sqlutil.MapGetFold(e.tables, tableName)
-	if !exists {
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
-	}
-	tableName = tbl.Name
-
-	// Verify no other table has a foreign key referencing this table
-	for otherName, otherSchema := range e.tables {
-		if strings.EqualFold(otherName, tableName) {
-			continue
+	targetSet := make(map[string]*storage.TableSchema, len(tableNames))
+	for _, name := range tableNames {
+		tbl, exists := sqlutil.MapGetFold(e.tables, name)
+		if !exists {
+			return fmt.Errorf("%w: %s", storage.ErrTableNotFound, name)
 		}
-		for _, fk := range otherSchema.ForeignKeys {
-			if strings.EqualFold(fk.ParentTable, tableName) {
-				return fmt.Errorf("%w: cannot truncate table %q because it is referenced by foreign key %q on table %q",
-					storage.ErrDependentObjectsExist, tableName, fk.Name, otherName)
+		targetSet[tbl.Name] = tbl
+	}
+
+	if cascade {
+		changed := true
+		for changed {
+			changed = false
+			for _, otherSchema := range e.tables {
+				if _, already := targetSet[otherSchema.Name]; already {
+					continue
+				}
+				for _, fk := range otherSchema.ForeignKeys {
+					if _, parentInSet := targetSet[fk.ParentTable]; parentInSet {
+						targetSet[otherSchema.Name] = otherSchema
+						changed = true
+						break
+					}
+				}
 			}
 		}
 	}
 
-	e.evictAllCursors(tableName)
+	// Verify no foreign keys from outside targetSet
+	for otherName, otherSchema := range e.tables {
+		if _, inSet := targetSet[otherSchema.Name]; inSet {
+			continue
+		}
+		for _, fk := range otherSchema.ForeignKeys {
+			if _, parentInSet := targetSet[fk.ParentTable]; parentInSet {
+				return fmt.Errorf("%w: cannot truncate table %q because it is referenced by foreign key %q on table %q",
+					storage.ErrDependentObjectsExist, fk.ParentTable, fk.Name, otherName)
+			}
+		}
+	}
 
 	var sess *C.WT_SESSION
 	if ret := C.go_wt_open_session(e.conn, &sess); ret != 0 {
@@ -612,26 +632,34 @@ func (e *Engine) TruncateTable(tableName string) error {
 	}
 	defer C.go_wt_session_close(sess)
 
-	uri := C.CString(tbl.TableURI())
-	defer C.free(unsafe.Pointer(uri))
+	var walOps []memengine.WALOp
+	for _, tbl := range targetSet {
+		e.evictAllCursors(tbl.Name)
+		uri := C.CString(tbl.TableURI())
+		if ret := C.go_wt_session_truncate(sess, uri); ret != 0 {
+			C.go_wt_session_drop(sess, uri)
+			config := C.CString("key_format=S,value_format=u")
+			C.go_wt_session_create(sess, uri, config)
+			C.free(unsafe.Pointer(config))
+		}
+		C.free(unsafe.Pointer(uri))
 
-	if ret := C.go_wt_session_truncate(sess, uri); ret != 0 {
-		// Fallback: drop and recreate table
-		C.go_wt_session_drop(sess, uri)
-		config := C.CString("key_format=S,value_format=u")
-		defer C.free(unsafe.Pointer(config))
-		if ret := C.go_wt_session_create(sess, uri, config); ret != 0 {
-			return fmt.Errorf("recreate table failed: code %d", ret)
+		if !storage.IsTemporaryTable(tbl.Name) {
+			walOps = append(walOps, memengine.WALOp{
+				Type:  memengine.OpTruncateTable,
+				Table: tbl.Name,
+			})
 		}
 	}
 
-	if !storage.IsTemporaryTable(tableName) {
-		e.recordWALLocked([]memengine.WALOp{{
-			Type:  memengine.OpTruncateTable,
-			Table: tableName,
-		}})
+	if len(walOps) > 0 {
+		e.recordWALLocked(walOps)
 	}
 	return nil
+}
+
+func (e *Engine) TruncateTable(tableName string) error {
+	return e.TruncateTables([]string{tableName}, false)
 }
 
 func (e *Engine) DropPartition(tableName, partitionName string) error {

@@ -117,6 +117,9 @@ const (
 	TokenDesc
 	TokenLimit
 	TokenTable
+	TokenTruncate
+	TokenCascade
+	TokenRestrict
 	TokenIndex
 	TokenUnique
 	TokenDrop
@@ -259,6 +262,9 @@ var keywords = map[string]TokenType{
 	"DESC":        TokenDesc,
 	"LIMIT":       TokenLimit,
 	"TABLE":       TokenTable,
+	"TRUNCATE":    TokenTruncate,
+	"CASCADE":     TokenCascade,
+	"RESTRICT":    TokenRestrict,
 	"INDEX":       TokenIndex,
 	"UNIQUE":      TokenUnique,
 	"DROP":        TokenDrop,

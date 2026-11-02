@@ -391,46 +391,82 @@ func (e *Engine) DropTable(tableName string) error {
 	return nil
 }
 
-func (e *Engine) TruncateTable(tableName string) error {
+func (e *Engine) TruncateTables(tableNames []string, cascade bool) error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	td, exists := sqlutil.MapGetFold(e.tables, tableName)
-	if !exists {
-		return fmt.Errorf("%w: %s", storage.ErrTableNotFound, tableName)
+	targetSet := make(map[string]*TableData, len(tableNames))
+	for _, name := range tableNames {
+		td, exists := sqlutil.MapGetFold(e.tables, name)
+		if !exists {
+			return fmt.Errorf("%w: %s", storage.ErrTableNotFound, name)
+		}
+		targetSet[td.Schema.Name] = td
 	}
 
-	// Verify no other table has a foreign key referencing this table
-	for otherName, otherTd := range e.tables {
-		if strings.EqualFold(otherName, td.Schema.Name) {
-			continue
-		}
-		for _, fk := range otherTd.Schema.ForeignKeys {
-			if strings.EqualFold(fk.ParentTable, td.Schema.Name) {
-				return fmt.Errorf("%w: cannot truncate table %q because it is referenced by foreign key %q on table %q",
-					storage.ErrDependentObjectsExist, tableName, fk.Name, otherName)
+	if cascade {
+		// Transitively find all referencing tables
+		changed := true
+		for changed {
+			changed = false
+			for _, otherTd := range e.tables {
+				if _, already := targetSet[otherTd.Schema.Name]; already {
+					continue
+				}
+				for _, fk := range otherTd.Schema.ForeignKeys {
+					if _, parentInSet := targetSet[fk.ParentTable]; parentInSet {
+						targetSet[otherTd.Schema.Name] = otherTd
+						changed = true
+						break
+					}
+				}
 			}
 		}
 	}
 
-	td.mu.Lock()
-	td.truncateShardsLocked()
-	td.Partitions = make(map[string]map[string]struct{})
-	for _, idx := range td.Indexes {
-		idx.sl = NewSkipList(idx.Schema.Unique)
-		idx.Entries = nil
+	// Verify that any FK referencing any table in targetSet also belongs to targetSet
+	for otherName, otherTd := range e.tables {
+		if _, inSet := targetSet[otherTd.Schema.Name]; inSet {
+			continue
+		}
+		for _, fk := range otherTd.Schema.ForeignKeys {
+			if _, parentInSet := targetSet[fk.ParentTable]; parentInSet {
+				return fmt.Errorf("%w: cannot truncate table %q because it is referenced by foreign key %q on table %q",
+					storage.ErrDependentObjectsExist, fk.ParentTable, fk.Name, otherName)
+			}
+		}
 	}
-	td.mu.Unlock()
 
-	if !storage.IsTemporaryTable(td.Schema.Name) {
-		if _, err := e.recordWALLocked([]WALOp{{
-			Type:  OpTruncateTable,
-			Table: td.Schema.Name,
-		}}); err != nil {
+	// Truncate all tables in targetSet
+	var walOps []WALOp
+	for _, td := range targetSet {
+		td.mu.Lock()
+		td.truncateShardsLocked()
+		td.Partitions = make(map[string]map[string]struct{})
+		for _, idx := range td.Indexes {
+			idx.sl = NewSkipList(idx.Schema.Unique)
+			idx.Entries = nil
+		}
+		td.mu.Unlock()
+
+		if !storage.IsTemporaryTable(td.Schema.Name) {
+			walOps = append(walOps, WALOp{
+				Type:  OpTruncateTable,
+				Table: td.Schema.Name,
+			})
+		}
+	}
+
+	if len(walOps) > 0 {
+		if _, err := e.recordWALLocked(walOps); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (e *Engine) TruncateTable(tableName string) error {
+	return e.TruncateTables([]string{tableName}, false)
 }
 
 func (e *Engine) DropPartition(tableName, partitionName string) error {

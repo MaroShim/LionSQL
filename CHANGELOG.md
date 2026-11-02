@@ -8,6 +8,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- support multi-table `TRUNCATE TABLE t1, t2, ...` and `TRUNCATE t1, t2`, `CASCADE`, `RESTRICT`, `RESTART IDENTITY`, and `CONTINUE IDENTITY` options across In-Memory OCC and WiredTiger storage engines, resolving mutual foreign key dependencies without false-positive dependency violations (`DDL-TRUNCATE-MULTI-CASCADE-1`)
+- support native `TRUNCATE TABLE` statements in T-SQL Stored Procedure VM (`OpTruncate`) with full ACID transactional rollback support (`PROC-SP-TRUNCATE-1`)
 - implement in-kernel transparent write-conflict retry safety net with exponential backoff and random micro-jitter (50µs~250µs) for WiredTiger `WT_ROLLBACK` (-31800) and OCC serialization failures, achieving 100% success rate under high write contention (`PERF-RETRY-WT-ROLLBACK-1`)
 - implement 2,048-stripe in-memory key latch manager (`KeyLatchManager`) in storage layer to serialize concurrent updates on identical primary keys, preventing OCC abort storms and achieving 16,000+ TPS across 50 concurrent workers (`PERF-HOTSPOT-LATCH-1`)
 - support `INSERT INTO ... SELECT` statements natively in T-SQL Stored Procedure VM via query execution coordinator bridge (`PROC-SP-INSERT-SELECT-1`)

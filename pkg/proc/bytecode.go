@@ -90,6 +90,7 @@ const (
 	OpUpdateWhere
 	OpDeleteWhere
 	OpSelectInto
+	OpTruncate
 
 	// Cursor Operations
 	OpCursorOpen
@@ -267,6 +268,8 @@ func (op OpCode) String() string {
 		return "DELETE_WHERE"
 	case OpSelectInto:
 		return "SELECT_INTO"
+	case OpTruncate:
+		return "TRUNCATE"
 	case OpCursorOpen:
 		return "CURSOR_OPEN"
 	case OpCursorFetch:
