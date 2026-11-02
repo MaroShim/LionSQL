@@ -10,6 +10,10 @@ const (
 	// DefaultKeyLatchStripes is the number of striped mutexes for in-memory key latching.
 	// 2048 stripes ensure sub-0.05% hash collision probability across concurrent transactions.
 	DefaultKeyLatchStripes = 2048
+
+	// DefaultKeyLatchTimeout is the safety timeout for key latch acquisition to prevent
+	// permanent deadlocks during cross-transaction key latch inversions (such as transfer tests).
+	DefaultKeyLatchTimeout = 250 * time.Millisecond
 )
 
 // KeyLatchManager provides in-memory key-striped mutexes to serialize concurrent updates
@@ -26,13 +30,13 @@ func GlobalKeyLatch() *KeyLatchManager {
 }
 
 // LockKey acquires the striped mutex for table + key, returning an idempotent unlock function.
-// It uses LockKeyWithTimeout with a 25ms safety timeout to prevent permanent deadlocks,
+// It uses LockKeyWithTimeout with DefaultKeyLatchTimeout to prevent permanent deadlocks,
 // falling back to a blocking Lock() if needed for backwards compatibility.
 func (m *KeyLatchManager) LockKey(tableName, key string) func() {
 	if m == nil {
 		return func() {}
 	}
-	if unlock, ok := m.LockKeyWithTimeout(tableName, key, 25*time.Millisecond); ok {
+	if unlock, ok := m.LockKeyWithTimeout(tableName, key, DefaultKeyLatchTimeout); ok {
 		return unlock
 	}
 	idx := hashKeyLatch(tableName, key)

@@ -400,6 +400,7 @@ type VMFrame struct {
 	prog            *proc.Program
 	regs            []storage.Value
 	slots           []storage.Value // Fast O(1) indexed variable slots
+	evalCtxDirty    bool            // True when f.slots or f.vars have been modified since last evalCtx sync
 	vars            map[string]storage.Value
 	evalCtx         map[string]any
 	cursors         map[string]*cursorState
@@ -417,6 +418,58 @@ type VMFrame struct {
 	lastErrorMsg    string
 	lastErrorLine   int
 	ctx             context.Context
+}
+
+func (f *VMFrame) bindParams(params map[string]any) {
+	if len(params) == 0 {
+		return
+	}
+	for k, v := range params {
+		clean := cleanSymbol(k)
+		stVal := toStorageValue(v)
+		slot := int32(-1)
+		if f.prog != nil && f.prog.VarSlots != nil {
+			if s, ok := f.prog.VarSlots[clean]; ok {
+				slot = s
+			} else if s, ok := f.prog.VarSlots[strings.ToLower(clean)]; ok {
+				slot = s
+			}
+		}
+		if slot >= 0 && int(slot) < len(f.slots) {
+			f.slots[slot] = stVal
+		} else {
+			if f.vars == nil {
+				f.vars = make(map[string]storage.Value, 8)
+			}
+			f.vars[clean] = stVal
+			f.vars[strings.ToLower(clean)] = stVal
+		}
+	}
+	f.evalCtxDirty = true
+}
+
+func (f *VMFrame) getStorageVarsMap() map[string]storage.Value {
+	varEst := len(f.vars)
+	if f.prog != nil {
+		varEst += len(f.prog.VarNames)
+	}
+	vars := make(map[string]storage.Value, varEst)
+	if f.vars != nil {
+		for k, v := range f.vars {
+			vars[k] = v
+		}
+	}
+	if f.prog != nil && len(f.prog.VarNames) > 0 {
+		for slot, varName := range f.prog.VarNames {
+			if slot < len(f.slots) {
+				stVal := f.slots[slot]
+				if !stVal.IsNull || stVal.Type != storage.TypeUnknown {
+					vars[varName] = stVal
+				}
+			}
+		}
+	}
+	return vars
 }
 
 func (f *VMFrame) getTableSchema(tableName string) (*storage.TableSchema, error) {
@@ -485,11 +538,7 @@ func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName 
 		frame.ctx = ctx
 
 		// Bind parameters
-		for k, v := range params {
-			clean := cleanSymbol(k)
-			stVal := toStorageValue(v)
-			frame.setVar(clean, stVal)
-		}
+		frame.bindParams(params)
 
 		retVal, err := frame.Execute(0)
 		if err != nil {
@@ -555,11 +604,7 @@ func (e *Executor) RunInTx(prog *proc.Program, params map[string]any, tx storage
 		}
 	}
 
-	for k, v := range params {
-		clean := cleanSymbol(k)
-		stVal := toStorageValue(v)
-		frame.setVar(clean, stVal)
-	}
+	frame.bindParams(params)
 
 	retVal, err := frame.Execute(0)
 	return retVal, frame.logs, err
@@ -589,11 +634,7 @@ func (e *Executor) ExecuteInTxWithSessionContext(ctx context.Context, prog *proc
 		}
 	}
 
-	for k, v := range params {
-		clean := cleanSymbol(k)
-		stVal := toStorageValue(v)
-		frame.setVar(clean, stVal)
-	}
+	frame.bindParams(params)
 
 	retVal, err := frame.Execute(0)
 	if err != nil {
@@ -614,18 +655,26 @@ func (e *Executor) ExecuteInTxWithSessionContext(ctx context.Context, prog *proc
 }
 
 func collectFrameVars(frame *VMFrame) map[string]any {
-	vars := make(map[string]any, len(frame.vars))
-	for k, v := range frame.vars {
-		clean := cleanSymbol(k)
-		vars[clean] = valToAny(v)
+	varEst := len(frame.vars)
+	if frame.prog != nil {
+		varEst += len(frame.prog.VarNames)
 	}
-	if frame.prog != nil && frame.prog.VarSlots != nil {
-		for varName, slot := range frame.prog.VarSlots {
-			if int(slot) >= 0 && int(slot) < len(frame.slots) {
+	if varEst == 0 {
+		return nil
+	}
+	vars := make(map[string]any, varEst)
+	if frame.vars != nil {
+		for k, v := range frame.vars {
+			clean := cleanSymbol(k)
+			vars[clean] = valToAny(v)
+		}
+	}
+	if frame.prog != nil && len(frame.prog.VarNames) > 0 {
+		for slot, varName := range frame.prog.VarNames {
+			if slot < len(frame.slots) {
 				stVal := frame.slots[slot]
 				if !stVal.IsNull || stVal.Type != storage.TypeUnknown {
-					clean := cleanSymbol(varName)
-					vars[clean] = valToAny(stVal)
+					vars[varName] = valToAny(stVal)
 				}
 			}
 		}
@@ -661,13 +710,12 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 	}
 
 	// Reset structures for clean re-execution
-	clear(f.vars)
-	clear(f.evalCtx)
+	if f.vars != nil {
+		clear(f.vars)
+	}
+	f.evalCtxDirty = true
 	clear(f.cursors)
 	clear(f.transientTables)
-	if f.evalCtx == nil {
-		f.evalCtx = make(map[string]any, 32)
-	}
 	f.catchStack = f.catchStack[:0]
 	f.logs = f.logs[:0]
 
@@ -994,6 +1042,12 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 	}
 
 	if f.prog != nil && f.prog.VarSlots != nil {
+		if slot, ok := f.prog.VarSlots[clean]; ok && int(slot) >= 0 && int(slot) < len(f.slots) {
+			val := f.slots[slot]
+			if !val.IsNull || val.Type != storage.TypeUnknown {
+				return val, true
+			}
+		}
 		lower := strings.ToLower(clean)
 		if slot, ok := f.prog.VarSlots[lower]; ok && int(slot) >= 0 && int(slot) < len(f.slots) {
 			val := f.slots[slot]
@@ -1003,36 +1057,41 @@ func (f *VMFrame) getVar(name string) (storage.Value, bool) {
 		}
 	}
 
-	if v, ok := f.vars[clean]; ok {
-		return v, true
-	}
-	if v, ok := f.vars[strings.ToLower(clean)]; ok {
-		return v, true
+	if f.vars != nil {
+		if v, ok := f.vars[clean]; ok {
+			return v, true
+		}
+		if v, ok := f.vars[strings.ToLower(clean)]; ok {
+			return v, true
+		}
 	}
 	return storage.NullValue(storage.TypeUnknown), false
 }
 
 func (f *VMFrame) setVar(name string, val storage.Value) {
 	clean := cleanSymbol(name)
-	f.vars[clean] = val
-	lower := strings.ToLower(clean)
-	f.vars[lower] = val
-
+	slot := int32(-1)
 	if f.prog != nil && f.prog.VarSlots != nil {
-		if slot, ok := f.prog.VarSlots[lower]; ok && int(slot) >= 0 && int(slot) < len(f.slots) {
-			f.slots[slot] = val
-		} else if slot, ok := f.prog.VarSlots[clean]; ok && int(slot) >= 0 && int(slot) < len(f.slots) {
-			f.slots[slot] = val
+		if s, ok := f.prog.VarSlots[clean]; ok {
+			slot = s
+		} else if s, ok := f.prog.VarSlots[strings.ToLower(clean)]; ok {
+			slot = s
 		}
 	}
 
-	if f.evalCtx != nil {
-		anyVal := valToAny(val)
-		f.evalCtx["@"+clean] = anyVal
-		f.evalCtx["@"+lower] = anyVal
-		f.evalCtx[clean] = anyVal
-		f.evalCtx[lower] = anyVal
+	if slot >= 0 && int(slot) < len(f.slots) {
+		f.slots[slot] = val
+		f.evalCtxDirty = true
+		return
 	}
+
+	if f.vars == nil {
+		f.vars = make(map[string]storage.Value, 8)
+	}
+	f.vars[clean] = val
+	lower := strings.ToLower(clean)
+	f.vars[lower] = val
+	f.evalCtxDirty = true
 }
 
 func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[string]any) error {
@@ -1074,7 +1133,7 @@ func (f *VMFrame) execInsertSelect(data *proc.DMLData) (int64, error) {
 	}
 
 	selectSQL := data.Select.String()
-	rows, cols, err := qe(f.ctx, selectSQL, f.tx, f.vars)
+	rows, cols, err := qe(f.ctx, selectSQL, f.tx, f.getStorageVarsMap())
 	if err != nil {
 		return 0, fmt.Errorf("INSERT INTO ... SELECT query execution failed: %w", err)
 	}
@@ -1892,7 +1951,49 @@ func (f *VMFrame) sortCursorRows(rows []storage.Record, orderBy []proc.OrderByIt
 	})
 }
 
+func (f *VMFrame) syncEvalCtx() {
+	if !f.evalCtxDirty {
+		return
+	}
+	f.evalCtxDirty = false
+	if f.evalCtx == nil {
+		f.evalCtx = make(map[string]any, 32)
+	} else {
+		clear(f.evalCtx)
+	}
+	// 1. Populate from slots
+	if f.prog != nil && len(f.prog.VarNames) > 0 {
+		for slot, varName := range f.prog.VarNames {
+			if slot < len(f.slots) {
+				stVal := f.slots[slot]
+				if !stVal.IsNull || stVal.Type != storage.TypeUnknown {
+					anyVal := valToAny(stVal)
+					clean := cleanSymbol(varName)
+					lower := strings.ToLower(clean)
+					f.evalCtx["@"+clean] = anyVal
+					f.evalCtx["@"+lower] = anyVal
+					f.evalCtx[clean] = anyVal
+					f.evalCtx[lower] = anyVal
+				}
+			}
+		}
+	}
+	// 2. Populate from unslotted vars
+	if f.vars != nil {
+		for k, v := range f.vars {
+			anyVal := valToAny(v)
+			clean := cleanSymbol(k)
+			lower := strings.ToLower(clean)
+			f.evalCtx["@"+clean] = anyVal
+			f.evalCtx["@"+lower] = anyVal
+			f.evalCtx[clean] = anyVal
+			f.evalCtx[lower] = anyVal
+		}
+	}
+}
+
 func (f *VMFrame) buildRowEvalMap(row map[string]any) map[string]any {
+	f.syncEvalCtx()
 	if len(row) == 0 {
 		return f.evalCtx
 	}

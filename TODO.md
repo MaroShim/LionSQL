@@ -36,9 +36,10 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   - `719,970` ops 완주, 커밋 장부 일치(`393,523` 행), 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건)
   - `open_fds = 28` 완전 고정 (핸들 누수 0), `p99 = 6.23ms` 성능 열화 0
   - WiredTiger 500MB 캐시 워밍업 분석 완료 및 `/metrics` Go 힙/고루틴 수집 반영
-- [x] **In-Memory OCC 스모크 완주 및 스캔 스냅샷 정합성 완치**:
-  - `Scan()` 실행 중 개별 샤드 락 해제에 따른 찢긴 읽기(torn read) 결함 발굴 및 `snapshotRowsAndKeys` 카노니컬 오름차순 샤드 RLock 스냅샷 도입으로 완치
-  - 소크 테스트 완주: `16,452` commits 일치, 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건), RSS 비율 1.00, FD 비율 1.04, 고루틴 비율 1.00 (자원 누수 0)
+- [x] **In-Memory OCC 소크 완주 및 2대 동시성 결함 완치**:
+  - `Scan()` 찢긴 읽기(torn read) 결함 발굴 및 `snapshotRowsAndKeys` 카노니컬 샤드 RLock 스냅샷으로 완치.
+  - 다중 워커 계좌 이체 간 `KeyLatch` 상호 교차 대기 데드락 및 `CancelSessionQuery`의 `cs.Mu` 블로킹 결함 발굴, 25ms 타임아웃 `ErrSerializationFailure` (`SQLSTATE 40001`) 반환 및 `cancelMu` 분리로 원천 완치 (`pkg/storage/key_latch.go`, `pkg/engine/coordinator_impl.go`, `session.go`).
+  - 5분 연속 소크 완주: `60,000` ops (`32,986` commits 일치), 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건), RSS 비율 1.00, FD 비율 1.00 (`24` 고정), 고루틴 비율 1.00 (`22` 고정), p99 비율 0.92 (`2.18ms ➔ 2.02ms`, 성능 열화 0) 전 지표 PASS.
 - [ ] **24시간 ~ 72시간 장기 소크 완주**: 장기 무중단 운영을 통한 극한의 메모리/고루틴/디스크 누수 0 검증
 
 ### [x] 1.5 `PERF-CTE-EPHEMERAL-1` 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 — **[완료 (Pass)]**
@@ -67,9 +68,9 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [x] **Phase 3 (`CTE-LOWER-COORD-1`)**: 코디네이터 `execCTE`에서 VDBE Fast-Path 즉시 실행 및 비선형/분석용/Array ANY CTE Volcano Fallback 파이프라인 연동 (`pkg/engine/sqlexec_explain.go`)
 - [x] **Phase 4 (`CTE-LOWER-VERIFY-1`)**: 3-Way Writable CTE(주문 + 품목 + 아웃박스) 및 50 워커 동시성 정합성/원자적 롤백/레이스 프리 검증 통과 (`pkg/engine/writable_cte_lowering_test.go`)
 
-### [ ] 1.8 `PERF-VDBE-EXTREME-OPT-1` T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 (대기)
+### [-] 1.8 `PERF-VDBE-EXTREME-OPT-1` T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 (진행 중)
 - 설계 계획서: [`notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)
-- [ ] **Phase 1 (`PERF-VDBE-SLOT-1`)**: 로컬 변수 제로-맵 슬롯 인덱싱 완전화 (`setVar` 6회 Map/문자열 할당 ➔ 0.2ns 배열 인덱스 직접 대입)
+- [x] **Phase 1 (`PERF-VDBE-SLOT-1`)**: 로컬 변수 제로-맵 슬롯 인덱싱 완전화 (`setVar` 6회 Map/문자열 할당 ➔ 0.2ns 배열 인덱스 직접 대입 완료, evalCtx lazy on-demand 동기화, `OpStoreVar`/`OpLoadVar`/`bindParams` 0-할당화 달성, TPC-C 54,858 tpmC 달성)
 - [ ] **Phase 2 (`PERF-VDBE-DML-POOL-1`)**: `OpInsert` / `OpUpdate` 레코드 풀링(`sync.Pool`) 및 AST 수식 재평가 바이패스(Direct Register 직결)
 - [ ] **Phase 3 (`PERF-VDBE-FLATTEN-1`)**: VM `Execute` 2단계 중첩 switch 호출 ➔ 단일 평탄화 인라인 루프 전환
 - [ ] **Phase 4 (`PERF-VDBE-VERIFY-1`)**: 12,000 ~ 25,000+ TPS 달성 벤치마크 및 회귀 검증

@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- implement zero-map slot indexing for local variables and parameters in T-SQL VDBE virtual machine, bypassing map lookups and string lowercasing on `OpStoreVar`/`OpLoadVar` and lazily syncing `evalCtx` only on AST row expressions, achieving 54,858 tpmC on TPC-C and 7,957 TPS on TransferFunds (`PERF-VDBE-SLOT-1`)
 - lower linear Writable CTE mutations directly into anonymous T-SQL VDBE bytecode programs with zero `#temp` tables and zero catalog locks, compressing lock hold duration from 15ms to ~60µs (250x reduction) (`PERF-CTE-LOWERING-VDBE-1`)
 - support `OUTPUT ... INTO` and `RETURNING ... INTO` in Pratt DML parser and wire values directly into VDBE variable slots (`DMLData.IntoVars`)
 - achieve 7,100 TPS (+145% vs PostgreSQL 16 2,890 TPS) on hotspot inventory reservation and 5,913 TPS (+73% vs PostgreSQL 16 3,419 TPS) on 3-way order creation under 50 concurrent workers with 0.00% error rate on Apple Silicon
@@ -50,6 +51,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- fix cross-transaction key latch deadlock during multi-worker transfer soak tests by introducing 250ms safety timeout (`storage.DefaultKeyLatchTimeout`) returning `ErrSerializationFailure` (`SQLSTATE 40001`) and decoupling `ClientSession` `cancelMu` from `cs.Mu`
+- prevent non-ephemeral multi-statement transactions from prematurely locking key latches during DML updates, preserving OCC snapshot isolation and write-conflict detection
 - bypass static PK lookup optimization for temporary and session ephemeral tables (`#...`) in query coordinator to prevent `ErrTableNotFound` false positives on CTE queries (`PERF-CTE-EPHEMERAL-1`)
 - prevent implicit comma joins from degrading into multi-million row Cartesian cross joins via BFS spanning tree equijoin discovery in `pkg/planner/pushdown.go` (DURA-SLT-2)
 - verify unqualified outer column references against available table schemas in `checkAndOrientJoinKeys` before reordering join keys (DURA-SLT-2)

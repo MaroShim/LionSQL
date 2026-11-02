@@ -910,8 +910,8 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 
 	case *SelectIntoStmt:
 		intoVar := cleanVarName(s.IntoVar)
-		c.getOrAllocSlot(intoVar)
-		c.emit(OpSelectInto, 0, 0, 0, &SelectIntoData{
+		slot := c.getOrAllocSlot(intoVar)
+		c.emit(OpSelectInto, 0, slot, 0, &SelectIntoData{
 			Column:   s.Column,
 			IntoVar:  intoVar,
 			Table:    s.Table,

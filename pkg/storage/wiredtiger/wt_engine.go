@@ -2385,7 +2385,7 @@ func (tx *WTTx) AcquireKeyLatch(tableName, key string) error {
 	tx.heldLatches[latchKey] = struct{}{}
 	tx.mu.Unlock()
 
-	unlock, ok := storage.GlobalKeyLatch().LockKeyWithTimeout(tableName, key, 25*time.Millisecond)
+	unlock, ok := storage.GlobalKeyLatch().LockKeyWithTimeout(tableName, key, storage.DefaultKeyLatchTimeout)
 	if !ok {
 		tx.mu.Lock()
 		delete(tx.heldLatches, latchKey)

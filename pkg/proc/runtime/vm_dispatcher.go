@@ -263,14 +263,14 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 	case proc.OpStoreVar:
 		val := f.regs[inst.A]
 		slot := inst.B
-		varName, _ := f.aux(inst).(string)
 		if slot >= 0 && int(slot) < len(f.slots) {
 			f.slots[slot] = val
+			f.evalCtxDirty = true
+		} else {
+			varName, _ := f.aux(inst).(string)
 			if varName != "" {
 				f.setVar(varName, val)
 			}
-		} else if varName != "" {
-			f.setVar(varName, val)
 		}
 
 	case proc.OpCopy:
@@ -814,6 +814,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			}
 
 			if len(oldRow.Values) == len(tableSchema.Columns) {
+				f.syncEvalCtx()
 				rowCtx := make(map[string]any, len(f.evalCtx)+len(tableSchema.Columns)*2)
 				for k, v := range f.evalCtx {
 					rowCtx[k] = v
@@ -1091,7 +1092,13 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return f.handleCatch(err, pc)
 		}
 		if data.IntoVar != "" {
-			f.setVar(data.IntoVar, val)
+			slot := inst.B
+			if slot >= 0 && int(slot) < len(f.slots) {
+				f.slots[slot] = val
+				f.evalCtxDirty = true
+			} else {
+				f.setVar(data.IntoVar, val)
+			}
 		}
 		if inst.A >= 0 && int(inst.A) < len(f.regs) {
 			f.regs[inst.A] = val
