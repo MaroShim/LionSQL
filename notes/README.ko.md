@@ -63,6 +63,8 @@
    - **[`CASDOOR_INTEGRATION_REPORT.ko.md`](CASDOOR_INTEGRATION_REPORT.ko.md)**: Casdoor 44개 테이블 자동 생성, 복합 PK(`PRIMARY KEY (owner, name)`) 지원, TDS `VARBINARY` JSON 직렬화 및 듀얼 프로토콜 OIDC/RBAC E2E 검증 보고서.
    - **[`SOAK_TEST_1H_VERIFICATION_REPORT.ko.md`](SOAK_TEST_1H_VERIFICATION_REPORT.ko.md)**: 1시간 장시간 부하(Soak Test, 72만 ops / 39.3만 커밋) 실측 검증, `SQLSTATE 40001` 충돌 매핑 및 WiredTiger 500MB 캐시 수렴 분석 보고서.
    - **[`ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md)**: Gitea XORM 실전 연동 중 노출된 DML/와일드카드/키워드 별칭 결함 원인 분석 및 "인간 작성 SQL vs ORM 기계 생성 SQL" 테스트 사각지대 영구 사후 분석 보고서 (Postmortem).
+   - **[`PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)**: 키 래치 및 슬립 재시도 완전 제거를 통한 108k/160k TPS 성능 회귀 정상화 및 단위 테스트 내 경량 성능 회귀 방지 게이트 설계 계획서 (`PERF-REGRESSION-RECOVERY-1`).
+   - **[`GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md`](GROVE_HOTSPOT_POSTMORTEM_AND_ASSETS.ko.md)**: Grove 핫스팟 최적화 과정에서 도출된 핵심 가치 및 4대 영구 자산(VDBE 슬롯 인덱싱, OCC vs WT 엔진별 역할 분담, 락 컨보이/OS 타이머 퀀텀 실체 규명, 회귀 방지 게이트) 심층 포스트모텀.
    - **[`TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md`](TDS_RPC_POSITIONAL_MAPPING_POSTMORTEM.ko.md)**: TDS RPC `sp_executesql` 파라미터 해석 리그레션 분석, Beekeeper Studio 접속 크래시 원인 규명 및 순수 위치 기반(Ordinal Positional) 폴백 복원 포스트모텀.
    - **[`QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md`](QUERY_EXECUTION_2TIER_ARCHITECTURE.ko.md)**: 영구 불변 2-Tier 쿼리 실행 엔진 아키텍처 확정 명세서.
    - **[`BUG_ARCHIVE.ko.md`](../BUG_ARCHIVE.ko.md)**: 데이터 무결성 107대 결함 조치 아카이브 및 중간 방법론 이력 (`BUG-PK-1` ~ `BUG-PITR-DDL-SILENT-SWALLOW-1`).
