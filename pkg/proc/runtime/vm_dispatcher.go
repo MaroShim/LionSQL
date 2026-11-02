@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"lionsql/pkg/proc"
@@ -579,13 +580,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			f.rowCount = cnt
 			return nil
 		}
-		rec := make(storage.Record)
 		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "INSERT")
-		var rowMap map[string]any
-		if hasTriggers {
-			rowMap = make(map[string]any, len(data.Columns))
-		}
-		evalCtx := f.buildRowEvalMap(nil)
 
 		cols := data.Columns
 		var tableSchema *storage.TableSchema
@@ -627,15 +622,87 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			}
 		}
 
+		// Fast-path Direct Row Insert: bypass Record map allocations when schema matches and no triggers exist
+		canDirectInsert := !isTransientTable(data.Table) && tableSchema != nil && !hasTriggers && len(cols) == len(tableSchema.Columns) && identityCol == nil
+		if canDirectInsert {
+			for i, col := range cols {
+				if !strings.EqualFold(col, tableSchema.Columns[i].Name) {
+					canDirectInsert = false
+					break
+				}
+			}
+		}
+		if canDirectInsert {
+			if cap(f.rowScratch) < len(tableSchema.Columns) {
+				f.rowScratch = make([]storage.Value, len(tableSchema.Columns))
+			} else {
+				f.rowScratch = f.rowScratch[:len(tableSchema.Columns)]
+			}
+			allFast := true
+			for i := range tableSchema.Columns {
+				stVal, ok := f.evalRowExprFast(data.ValExprs[i])
+				if !ok {
+					allFast = false
+					break
+				}
+				colSchema := tableSchema.Columns[i]
+				if colSchema.Type != stVal.Type {
+					if colSchema.Type == storage.TypeDecimal && stVal.Type == storage.TypeFloat && colSchema.Scale >= 0 {
+						stVal = proc.ParseLiteralDefault(strconv.FormatFloat(stVal.FVal, 'f', colSchema.Scale, 64), colSchema.Type)
+					} else {
+						stVal = proc.ParseLiteralDefault(stVal.String(), colSchema.Type)
+					}
+				}
+				f.rowScratch[i] = stVal
+				if (strings.EqualFold(colSchema.Name, "id") || strings.HasSuffix(strings.ToLower(colSchema.Name), "id")) && stVal.Type == storage.TypeInt && !stVal.IsNull {
+					f.lastIdentity = stVal.IVal
+				}
+			}
+			if allFast {
+				if err := f.tx.InsertRow(data.Table, storage.Row{Values: f.rowScratch}); err != nil {
+					return f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), pc)
+				}
+				f.rowCount++
+				if len(data.OutputCols) > 0 && len(data.IntoVars) > 0 {
+					for idx, outCol := range data.OutputCols {
+						if idx < len(data.IntoVars) {
+							intoVar := data.IntoVars[idx]
+							if _, colIdx, ok := tableSchema.FindColumn(outCol); ok && colIdx >= 0 && colIdx < len(f.rowScratch) {
+								f.setVar(intoVar, f.rowScratch[colIdx])
+							}
+						}
+					}
+				}
+				return nil
+			}
+		}
+
+		rec := make(storage.Record)
+		var rowMap map[string]any
+		if hasTriggers {
+			rowMap = make(map[string]any, len(data.Columns))
+		}
+		var evalCtx map[string]any
+
 		for i, col := range cols {
 			if i < len(data.ValExprs) {
-				vAny, _ := proc.EvalRowExpr(data.ValExprs[i], evalCtx, nil)
-				stVal := toStorageValue(vAny)
+				stVal, ok := f.evalRowExprFast(data.ValExprs[i])
+				if !ok {
+					if evalCtx == nil {
+						evalCtx = f.buildRowEvalMap(nil)
+					}
+					vAny, _ := proc.EvalRowExpr(data.ValExprs[i], evalCtx, nil)
+					stVal = toStorageValue(vAny)
+				}
 				if tableSchema != nil {
 					if colSchema, _, ok := tableSchema.FindColumn(col); ok {
 						col = colSchema.Name
 						if colSchema.Type != stVal.Type {
-							stVal = proc.ParseLiteralDefault(stVal.String(), colSchema.Type)
+							if colSchema.Type == storage.TypeDecimal && stVal.Type == storage.TypeFloat && colSchema.Scale >= 0 {
+								stVal = proc.ParseLiteralDefault(strconv.FormatFloat(stVal.FVal, 'f', colSchema.Scale, 64), colSchema.Type)
+							} else {
+								stVal = proc.ParseLiteralDefault(stVal.String(), colSchema.Type)
+							}
 						}
 					}
 				}
@@ -775,9 +842,14 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return nil
 		}
 
-		evalCtx := f.buildRowEvalMap(nil)
-		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
-		pkVal := toStorageValue(pkAny)
+		var pkVal storage.Value
+		if v, ok := f.evalRowExprFast(data.WhereVal); ok {
+			pkVal = v
+		} else {
+			evalCtx := f.buildRowEvalMap(nil)
+			pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+			pkVal = toStorageValue(pkAny)
+		}
 
 		var tableSchema *storage.TableSchema
 		if tg := f.executor.getTableGetter(); tg != nil {
@@ -814,26 +886,37 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			}
 
 			if len(oldRow.Values) == len(tableSchema.Columns) {
-				f.syncEvalCtx()
-				rowCtx := make(map[string]any, len(f.evalCtx)+len(tableSchema.Columns)*2)
-				for k, v := range f.evalCtx {
-					rowCtx[k] = v
+				if cap(f.rowScratch) < len(oldRow.Values) {
+					f.rowScratch = make([]storage.Value, len(oldRow.Values))
+				} else {
+					f.rowScratch = f.rowScratch[:len(oldRow.Values)]
 				}
-				for i, col := range tableSchema.Columns {
-					valAny := valToAny(oldRow.Values[i])
-					rowCtx[col.Name] = valAny
-					rowCtx[strings.ToLower(col.Name)] = valAny
-				}
+				copy(f.rowScratch, oldRow.Values)
+				updatedRow := storage.Row{Values: f.rowScratch}
 
-				updatedRow := storage.Row{Values: make([]storage.Value, len(oldRow.Values))}
-				copy(updatedRow.Values, oldRow.Values)
+				var rowCtx map[string]any
 				for _, a := range data.Assignments {
-					valAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
-					if err != nil {
-						return f.handleCatch(err, pc)
+					stVal, ok := f.evalUpdateExprFast(a.Value, tableSchema, oldRow)
+					if !ok {
+						if rowCtx == nil {
+							f.syncEvalCtx()
+							rowCtx = make(map[string]any, len(f.evalCtx)+len(tableSchema.Columns)*2)
+							for k, v := range f.evalCtx {
+								rowCtx[k] = v
+							}
+							for i, col := range tableSchema.Columns {
+								valAny := valToAny(oldRow.Values[i])
+								rowCtx[col.Name] = valAny
+								rowCtx[strings.ToLower(col.Name)] = valAny
+							}
+						}
+						valAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
+						if err != nil {
+							return f.handleCatch(err, pc)
+						}
+						stVal = toStorageValue(valAny)
 					}
 					if col, colIdx, ok := tableSchema.FindColumn(a.Column); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
-						stVal := toStorageValue(valAny)
 						if col.Type == storage.TypeFloat && stVal.Type == storage.TypeInt {
 							stVal = storage.FloatValue(float64(stVal.IVal))
 						} else if col.Type == storage.TypeInt && stVal.Type == storage.TypeFloat && stVal.FVal == float64(int64(stVal.FVal)) {
@@ -1016,12 +1099,18 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return nil
 		}
 
-		evalCtx := f.buildRowEvalMap(nil)
-		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
-		pkVal := toStorageValue(pkAny)
+		var pkVal storage.Value
+		if v, ok := f.evalRowExprFast(data.WhereVal); ok {
+			pkVal = v
+		} else {
+			evalCtx := f.buildRowEvalMap(nil)
+			pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+			pkVal = toStorageValue(pkAny)
+		}
 
+		hasTriggersDelete := f.executor != nil && f.executor.HasTriggers(data.Table, "DELETE")
 		var oldRec storage.Record
-		if !isTransientTable(data.Table) {
+		if !isTransientTable(data.Table) && (len(data.OutputCols) > 0 || hasTriggersDelete) {
 			oldRec, _ = f.tx.Get(data.Table, pkVal)
 		}
 
@@ -1106,10 +1195,14 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 
 	case proc.OpPointSelect:
 		data := f.aux(inst).(*proc.PointSelectData)
-		evalCtx := f.buildRowEvalMap(nil)
-
-		vAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
-		pkVal := toStorageValue(vAny)
+		var pkVal storage.Value
+		if v, ok := f.evalRowExprFast(data.WhereVal); ok {
+			pkVal = v
+		} else {
+			evalCtx := f.buildRowEvalMap(nil)
+			vAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+			pkVal = toStorageValue(vAny)
+		}
 
 		tableName := cleanSymbol(data.Table)
 		if !f.isPKCol(tableName, data.WhereCol) {

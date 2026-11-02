@@ -204,6 +204,7 @@ func NewExecutor(cache *PlanCache) *Executor {
 				return &VMFrame{
 					regs:            make([]storage.Value, 64),
 					slots:           make([]storage.Value, 16),
+					rowScratch:      make([]storage.Value, 32),
 					vars:            make(map[string]storage.Value, 16),
 					evalCtx:         make(map[string]any, 32),
 					cursors:         make(map[string]*cursorState),
@@ -400,6 +401,7 @@ type VMFrame struct {
 	prog            *proc.Program
 	regs            []storage.Value
 	slots           []storage.Value // Fast O(1) indexed variable slots
+	rowScratch      []storage.Value // Reusable scratch buffer for DML Row mutations (Phase 2)
 	evalCtxDirty    bool            // True when f.slots or f.vars have been modified since last evalCtx sync
 	vars            map[string]storage.Value
 	evalCtx         map[string]any
@@ -714,6 +716,7 @@ func (e *Executor) newFrame(prog *proc.Program, tx storage.Transaction) *VMFrame
 		clear(f.vars)
 	}
 	f.evalCtxDirty = true
+	f.rowScratch = f.rowScratch[:0]
 	clear(f.cursors)
 	clear(f.transientTables)
 	f.catchStack = f.catchStack[:0]
@@ -1663,11 +1666,15 @@ func (f *VMFrame) execSelectInto(data *proc.SelectIntoData) (storage.Value, erro
 		return storage.NullValue(storage.TypeUnknown), nil
 	}
 
-	evalCtx := f.buildRowEvalMap(nil)
-
 	if data.WhereCol != "" && data.WhereVal != nil {
-		pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
-		pkVal := toStorageValue(pkAny)
+		var pkVal storage.Value
+		if v, ok := f.evalRowExprFast(data.WhereVal); ok {
+			pkVal = v
+		} else {
+			evalCtx := f.buildRowEvalMap(nil)
+			pkAny, _ := proc.EvalRowExpr(data.WhereVal, evalCtx, nil)
+			pkVal = toStorageValue(pkAny)
+		}
 		if f.isPKCol(data.Table, data.WhereCol) {
 			if rec, err := f.tx.Get(data.Table, pkVal); err == nil && rec != nil {
 				if v, ok := rec[data.Column]; ok {
@@ -2006,6 +2013,130 @@ func (f *VMFrame) buildRowEvalMap(row map[string]any) map[string]any {
 		ctx[strings.ToLower(k)] = v
 	}
 	return ctx
+}
+
+// evalRowExprFast evaluates simple literal or variable expressions directly without building evalCtx map.
+func (f *VMFrame) evalRowExprFast(expr proc.Expr) (storage.Value, bool) {
+	if expr == nil {
+		return storage.NullValue(storage.TypeUnknown), false
+	}
+	switch e := expr.(type) {
+	case *proc.LiteralExpr:
+		return e.Val, true
+	case *proc.VariableExpr:
+		return f.getVar(e.Name)
+	default:
+		return storage.NullValue(storage.TypeUnknown), false
+	}
+}
+
+// evalUpdateExprFast evaluates common arithmetic assignment expressions (col = col +/- val, col = val)
+// directly against oldRow values and VM slots without allocating rowCtx maps or interface boxing.
+func (f *VMFrame) evalUpdateExprFast(expr proc.Expr, tableSchema *storage.TableSchema, oldRow storage.Row) (storage.Value, bool) {
+	if expr == nil {
+		return storage.NullValue(storage.TypeUnknown), false
+	}
+	switch e := expr.(type) {
+	case *proc.LiteralExpr:
+		return e.Val, true
+
+	case *proc.VariableExpr:
+		return f.getVar(e.Name)
+
+	case *proc.ColumnRefExpr:
+		if tableSchema != nil {
+			if _, colIdx, ok := tableSchema.FindColumn(e.Name); ok && colIdx >= 0 && colIdx < len(oldRow.Values) {
+				return oldRow.Values[colIdx], true
+			}
+		}
+		return storage.NullValue(storage.TypeUnknown), false
+
+	case *proc.BinaryExpr:
+		left, okL := f.evalUpdateExprFast(e.Left, tableSchema, oldRow)
+		if !okL {
+			return storage.NullValue(storage.TypeUnknown), false
+		}
+		right, okR := f.evalUpdateExprFast(e.Right, tableSchema, oldRow)
+		if !okR {
+			return storage.NullValue(storage.TypeUnknown), false
+		}
+
+		// Fast integer arithmetic
+		if left.Type == storage.TypeInt && right.Type == storage.TypeInt && !left.IsNull && !right.IsNull {
+			switch e.Op {
+			case proc.TokenPlus:
+				return storage.IntValue(left.IVal + right.IVal), true
+			case proc.TokenMinus:
+				return storage.IntValue(left.IVal - right.IVal), true
+			case proc.TokenAsterisk:
+				return storage.IntValue(left.IVal * right.IVal), true
+			case proc.TokenSlash, proc.TokenDiv:
+				if right.IVal == 0 {
+					return storage.NullValue(storage.TypeUnknown), false
+				}
+				return storage.IntValue(left.IVal / right.IVal), true
+			case proc.TokenPercent:
+				if right.IVal == 0 {
+					return storage.NullValue(storage.TypeUnknown), false
+				}
+				return storage.IntValue(left.IVal % right.IVal), true
+			}
+		}
+
+		// Fast float arithmetic
+		if (left.Type == storage.TypeFloat || right.Type == storage.TypeFloat || left.Type == storage.TypeInt || right.Type == storage.TypeInt) && !left.IsNull && !right.IsNull {
+			if left.Type == storage.TypeFloat || right.Type == storage.TypeFloat {
+				lVal := left.FVal
+				if left.Type == storage.TypeInt {
+					lVal = float64(left.IVal)
+				}
+				rVal := right.FVal
+				if right.Type == storage.TypeInt {
+					rVal = float64(right.IVal)
+				}
+				switch e.Op {
+				case proc.TokenPlus:
+					return storage.FloatValue(lVal + rVal), true
+				case proc.TokenMinus:
+					return storage.FloatValue(lVal - rVal), true
+				case proc.TokenAsterisk:
+					return storage.FloatValue(lVal * rVal), true
+				case proc.TokenSlash, proc.TokenDiv:
+					if rVal == 0 {
+						return storage.NullValue(storage.TypeUnknown), false
+					}
+					return storage.FloatValue(lVal / rVal), true
+				}
+			}
+		}
+
+		// Decimal arithmetic
+		if left.Type == storage.TypeDecimal || right.Type == storage.TypeDecimal {
+			lDec := left.Decimal()
+			rDec := right.Decimal()
+			switch e.Op {
+			case proc.TokenPlus:
+				return storage.DecimalValueFromDecimal(lDec.Add(rDec)), true
+			case proc.TokenMinus:
+				return storage.DecimalValueFromDecimal(lDec.Sub(rDec)), true
+			case proc.TokenAsterisk:
+				return storage.DecimalValueFromDecimal(lDec.Mul(rDec)), true
+			case proc.TokenSlash, proc.TokenDiv:
+				if rDec.IsZero() {
+					return storage.NullValue(storage.TypeUnknown), false
+				}
+				if divDec, err := lDec.Div(rDec, lDec.Scale()); err == nil {
+					return storage.DecimalValueFromDecimal(divDec), true
+				}
+				return storage.NullValue(storage.TypeUnknown), false
+			}
+		}
+
+		return storage.NullValue(storage.TypeUnknown), false
+
+	default:
+		return storage.NullValue(storage.TypeUnknown), false
+	}
 }
 
 func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error) {
