@@ -1,10 +1,11 @@
 # 실전 앱 연동 확장 마스터 플랜 (Answer / Vaultwarden / Metabase / Umami / NocoDB / Mattermost) (`notes/APP_INTEGRATION_EXPANSION_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-10-31
-> - **과제 식별 코드**: `INTEG-ANSWER-1`, `INTEG-VAULTWARDEN-1`, `INTEG-METABASE-1`, `INTEG-UMAMI-1`, `INTEG-NOCODB-1`, `INTEG-MATTERMOST-1`
+> - **과제 식별 코드**: `INTEG-ANSWER-1`, `INTEG-VAULTWARDEN-1`, `INTEG-METABASE-1`, `INTEG-UMAMI-1`, `INTEG-WOODPECKER-1`, `INTEG-VIKUNJA-1` (완료) / `INTEG-NOCODB-1`, `INTEG-MATTERMOST-1` (v1.1.0 로드맵 이관)
 > - **목표**: 지금까지의 연동(Gitea, IOTA ERP, Grafana, Casdoor)으로 다져진 호환성 위에서, 실제 사용자가 많이 쓰는 오픈소스 앱 6종을 소스 무수정으로 LionSQL에 붙여 "실사용 가능성"을 입증하고, 그 과정에서 남은 호환성 결함을 제거
-> - **상태**: 계획 수립 (`Pending`)
-> - **연동 보고서**: [`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md) (1순위 상세)
+> - **상태**: 1.0 연동 완료 및 범위 확정 (`Completed` - NocoDB/Mattermost v1.1.0 연기 확정)
+> - **연동 보고서**: [`ANSWER_INTEGRATION_REPORT.ko.md`](ANSWER_INTEGRATION_REPORT.ko.md), [`VAULTWARDEN_INTEGRATION_REPORT.ko.md`](VAULTWARDEN_INTEGRATION_REPORT.ko.md), [`METABASE_INTEGRATION_REPORT.ko.md`](METABASE_INTEGRATION_REPORT.ko.md), [`UMAMI_INTEGRATION_REPORT.ko.md`](UMAMI_INTEGRATION_REPORT.ko.md), [`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
+> - **연기 결정**: NocoDB(`INTEG-NOCODB-1`), Mattermost(`INTEG-MATTERMOST-1`) ➔ v1.1.0 로드맵 이관
 > - **제외 결정**: Keycloak (후보에서 제외)
 
 ---
@@ -39,14 +40,16 @@
 
 > 아래 프로토콜 지원 및 난이도는 각 앱의 스택에서 추정한 것이다. 각 앱의 1단계(사전 조사)에서 소스로 직접 확정하고 본 표를 갱신한다.
 
-| 순서 | 과제 | 앱 | 용도 | 스택 | 대상 프로토콜 | 난이도(추정) |
+| 순서 | 과제 | 앱 | 용도 | 스택 | 대상 프로토콜 | 진행 상태 |
 | :---: | :--- | :--- | :--- | :--- | :--- | :---: |
-| 1 | `INTEG-ANSWER-1` | Apache Answer | 사내 Q&A / 지식베이스 | Go + XORM(확인 필요) | PGWire (SQL Server 미지원) | 낮음 |
-| 2 | `INTEG-VAULTWARDEN-1` | Vaultwarden | 비밀번호 관리자 (Bitwarden 호환) | Rust + Diesel | PGWire (MSSQL 백엔드 없음) | 낮음~보통 |
-| 3 | `INTEG-METABASE-1` | Metabase | BI 대시보드 | JVM + JDBC | PGWire + TDS (데이터 소스 방식 우선) | 보통 |
-| 4 | `INTEG-UMAMI-1` | Umami | 웹 애널리틱스 | Next.js + Prisma | PGWire (SQL Server 지원 미확인) | 보통 |
-| 5 | `INTEG-NOCODB-1` | NocoDB | 노코드 DB 스튜디오 | Node.js + Knex | PGWire + TDS | 보통 |
-| 6 | `INTEG-MATTERMOST-1` | Mattermost | 팀 채팅 | Go + sqlx | PGWire (MSSQL 백엔드 없음) | 높음 |
+| 1 | `INTEG-ANSWER-1` | Apache Answer | 사내 Q&A / 지식베이스 | Go + XORM | PGWire | **완료 (Pass)** |
+| 2 | `INTEG-VAULTWARDEN-1` | Vaultwarden | 비밀번호 관리자 | Rust + Diesel | PGWire | **완료 (Pass)** |
+| 3 | `INTEG-METABASE-1` | Metabase | BI 대시보드 | JVM + JDBC | PGWire + TDS | **완료 (Pass)** |
+| 4 | `INTEG-UMAMI-1` | Umami | 웹 애널리틱스 | Next.js + Prisma | PGWire | **완료 (Pass)** |
+| 5 | `INTEG-WOODPECKER-1` | Woodpecker CI | CI/CD 파이프라인 | Go + XORM | PGWire | **완료 (Pass)** |
+| 6 | `INTEG-VIKUNJA-1` | Vikunja | 프로젝트 관리 & 칸반 | Go + XORM | PGWire | **완료 (Pass)** |
+| 7 | `INTEG-NOCODB-1` | NocoDB | 노코드 DB 스튜디오 | Node.js + Knex | PGWire + TDS | **v1.1.0 연기** |
+| 8 | `INTEG-MATTERMOST-1` | Mattermost | 팀 채팅 | Go + sqlx | PGWire | **v1.1.0 연기** |
 
 ### 2.1. 순서 근거
 1. **Answer**: Gitea/Casdoor와 동일 계열(XORM)이라 기존 경로를 재사용, 최소 비용으로 성공 사례 확보.

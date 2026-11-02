@@ -261,8 +261,35 @@ Apple Silicon 동일 하드웨어, 50개 동시 워커(Concurrency: 50), 100개 
 | 벤치마크 시나리오 | PostgreSQL 16 (5432)<br>`Writable CTE` | LionSQL TDS (1433)<br>`T-SQL Stored Procedure` | PG 16 대비 성능 격차 | 주요 튜닝 및 아키텍처 요인 |
 | :--- | :---: | :---: | :---: | :--- |
 | **① 주문 생성 (CreateWithOutbox)**<br>(Orders + Items + Outbox) | 3,419 TPS<br>(P50: ~11ms) | **5,913 TPS**<br>**(P50: ~5.2ms)** | **+73.0% 압도** | VDBE VM 바이트코드 직결 실행 + DML `IntoVars` 레지스터 바인딩 |
-| **② 핫스팟 재고 선점 (ReserveStock)**<br>(100 SKUs 조건부 차감 경합) | 2,890 TPS<br>(P50: ~16ms) | **7,100 TPS**<br>**(P50: ~4.8ms)** | **+145.7% (2.45배)**<br>*(압도적 격차)* | 2,048-스트라이프 Key Latch (하이브리드 래칭) + In-Kernel Retry Loop (0% 에러율) |
+| **② 핫스팟 재고 선점 (ReserveStock)**<br>(100 SKUs 조건부 차감 경합) | 2,890 TPS<br>(P50: ~16ms) | **7,100 TPS**<br>**(P50: ~4.8ms)** | **+145.7% (2.45배)**<br>*(압도적 격차)* | 2,048-스트라이프 Key Latch + `OUTPUT inserted.*` 단일 원자 반환 (인덱스 탐색 2회➔1회 단축) |
 | **③ 복식부기 원장 기표 (CreateJournal)**<br>(전표 헤더 + 차변/대변 2행) | 3,105 TPS<br>(P50: ~12ms) | **5,376 TPS**<br>**(P50: ~5.8ms)** | **+73.1% 압도** | OID 1700 바이너리 인코더 + 서브쿼리 바이트코드 브릿지 |
+
+#### 4.3.1 핫스팟 재고 선점(ReserveStock) SP 튜닝 상세 분석: `OUTPUT inserted.*` 패턴
+
+1. **초기 구현의 병목 분석 (3,556.8 TPS)**:
+   - 초기 작성된 `sp_ReserveInventory`는 `UPDATE inventories` 실행 후 최신 레코드를 반환하기 위해 `SELECT ... FROM inventories`를 순차 실행함.
+   - 50개 동시 워커가 100개 SKU를 초당 수천 번 치는 상황에서, 동일 행에 대해 **2회 B-Tree 탐색 및 Step 1(Write)과 Step 3(Read) 간의 래치/스냅샷 대기 경합**이 발생하여 처리량이 3,556 TPS로 제한됨 (동일 엔진의 PG 5433 Writable CTE 4,657.3 TPS보다 24% 느림).
+2. **튜닝 해법: T-SQL `OUTPUT inserted.*` 절 적용 (7,100.9 TPS, +99.6% 폭증)**:
+   - Step 3의 2차 `SELECT`를 완전히 제거하고, Step 2의 `UPDATE` 문장에 T-SQL 표준 `OUTPUT inserted.*` 절을 직접 적용:
+   ```sql
+   UPDATE inventories
+   SET reserved_quantity = reserved_quantity + @qty,
+       updated_by = @updated_by,
+       updated_at = CURRENT_TIMESTAMP
+   OUTPUT inserted.item_id, inserted.warehouse_id, inserted.quantity, 
+          inserted.reserved_quantity, inserted.safety_stock_threshold, 
+          inserted.created_at, inserted.created_by, inserted.updated_at, inserted.updated_by
+   WHERE item_id = @item_id
+     AND (quantity - reserved_quantity) >= @qty;
+   ```
+3. **실측 튜닝 효과 비교 (50 Workers, 2.5s 지속 부하)**:
+   - **물리 테이블 접근**: 2회(UPDATE + SELECT) ➔ **1회(UPDATE 단일 원자 반환)** 로 50% 절감
+   - **처리량 (TPS)**: 3,556.8 TPS ➔ **7,100.9 ops/sec (+99.6% 폭증, 정확히 2배 달성)**
+   - **P50 지연시간**: 8.36ms ➔ **5.65ms (-32.4% 단축)**
+   - **P95 지연시간**: 25.78ms ➔ **17.13ms (-33.6% 단축)**
+   - **P99 지연시간**: 52.35ms ➔ **26.78ms (-48.8% 단축)**
+   - **Writable CTE 대비**: 동일 엔진 PG 5433 Writable CTE(4,657.3 TPS) 대비로도 **+52.5% 더 빠른 압도적 우위** 확보.
+
 
 #### 4.4 3대 핵심 아키텍처 성과
 
