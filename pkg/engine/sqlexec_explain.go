@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -16,14 +15,12 @@ import (
 	"lionsql/pkg/storage"
 )
 
-var (
-	reExplainTvfCall      = regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
-	reExplainInsert       = regexp.MustCompile(`(?i)^INSERT\s+INTO\s+([^\s(]+)`)
-	reExplainUpdate       = regexp.MustCompile(`(?i)^UPDATE\s+([^\s]+)\s+SET\s+(.*?)(?:\s+WHERE\s+(.*))?$`)
-	reExplainDelete       = regexp.MustCompile(`(?i)^DELETE\s+(?:FROM\s+)?([^\s]+)(?:\s+WHERE\s+(.*))?$`)
-	reExplainExists       = regexp.MustCompile(`(?is)(?:NOT\s+)?EXISTS\s*\(\s*\(?\s*SELECT\b`)
-	reExplainInSelect     = regexp.MustCompile(`(?is)(?:[xX]'[^']*'|'[^']*'|"[^"]*"|\([^)]+\)|\b[a-zA-Z0-9_\.]+)\s+(?:NOT\s+)?IN\s*\(\s*\(?\s*SELECT\b`)
-	reExplainScalarSelect = regexp.MustCompile(`(?is)\(\s*SELECT\b`)
+type subqueryKind int
+
+const (
+	subqueryKindExists subqueryKind = iota
+	subqueryKindIn
+	subqueryKindScalar
 )
 
 func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, error) {
@@ -128,29 +125,31 @@ func (s *Coordinator) execExplain(query string, start time.Time) (*QueryResult, 
 	tableName := cleanIdentifier(rawTable)
 
 	// Check if Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
-	if m := reExplainTvfCall.FindStringSubmatch(rawTable); len(m) == 3 {
-		tvfName := cleanIdentifier(m[1])
-		argsRaw := m[2]
-		fnMeta, err := s.catalog.GetFunction(tvfName)
-		if err == nil && fnMeta != nil && fnMeta.IsTableValued {
-			var argVals []string
-			if strings.TrimSpace(argsRaw) != "" {
-				for _, arg := range strings.Split(argsRaw, ",") {
-					argVals = append(argVals, strings.TrimSpace(arg))
+	if strings.HasSuffix(rawTable, ")") {
+		if openIdx := strings.Index(rawTable, "("); openIdx != -1 {
+			tvfName := cleanIdentifier(rawTable[:openIdx])
+			argsRaw := rawTable[openIdx+1 : len(rawTable)-1]
+			fnMeta, err := s.catalog.GetFunction(tvfName)
+			if err == nil && fnMeta != nil && fnMeta.IsTableValued {
+				var argVals []string
+				if strings.TrimSpace(argsRaw) != "" {
+					for _, arg := range strings.Split(argsRaw, ",") {
+						argVals = append(argVals, strings.TrimSpace(arg))
+					}
 				}
-			}
-			innerSQL := fnMeta.Body
-			for i, p := range fnMeta.Params {
-				if i < len(argVals) {
-					innerSQL = strings.ReplaceAll(innerSQL, p.Name, argVals[i])
-					innerSQL = strings.ReplaceAll(innerSQL, strings.TrimPrefix(p.Name, "@"), argVals[i])
+				innerSQL := fnMeta.Body
+				for i, p := range fnMeta.Params {
+					if i < len(argVals) {
+						innerSQL = strings.ReplaceAll(innerSQL, p.Name, argVals[i])
+						innerSQL = strings.ReplaceAll(innerSQL, strings.TrimPrefix(p.Name, "@"), argVals[i])
+					}
 				}
+				prefix := "EXPLAIN "
+				if qInfo.IsAnalyze {
+					prefix = "EXPLAIN ANALYZE "
+				}
+				return s.execExplain(prefix+innerSQL, start)
 			}
-			prefix := "EXPLAIN "
-			if qInfo.IsAnalyze {
-				prefix = "EXPLAIN ANALYZE "
-			}
-			return s.execExplain(prefix+innerSQL, start)
 		}
 	}
 
@@ -347,26 +346,33 @@ func (s *Coordinator) execDMLExplain(dmlSQL string, opts planner.ExplainOptions,
 	p := s.newPlanner()
 
 	var dmlType, tableName, whereCond string
+	tokens := sqlutil.SplitTopLevelTokens(dmlSQL)
 	if strings.HasPrefix(upper, "INSERT ") {
 		dmlType = "INSERT"
-		if m := reExplainInsert.FindStringSubmatch(dmlSQL); len(m) > 1 {
-			tableName = cleanIdentifier(m[1])
+		if len(tokens) >= 3 && strings.EqualFold(tokens[1], "INTO") {
+			tableName = cleanIdentifier(tokens[2])
+		} else if len(tokens) >= 2 {
+			tableName = cleanIdentifier(tokens[1])
 		}
 	} else if strings.HasPrefix(upper, "UPDATE ") {
 		dmlType = "UPDATE"
-		if m := reExplainUpdate.FindStringSubmatch(dmlSQL); len(m) > 1 {
-			tableName = cleanIdentifier(m[1])
-			if len(m) > 3 {
-				whereCond = strings.TrimSpace(m[3])
-			}
+		if len(tokens) >= 2 {
+			tableName = cleanIdentifier(tokens[1])
+		}
+		if wIdx := sqlutil.FindTopLevelKeyword(dmlSQL, "WHERE"); wIdx != -1 {
+			whereCond = strings.TrimSpace(dmlSQL[wIdx+5:])
 		}
 	} else if strings.HasPrefix(upper, "DELETE ") {
 		dmlType = "DELETE"
-		if m := reExplainDelete.FindStringSubmatch(dmlSQL); len(m) > 1 {
-			tableName = cleanIdentifier(m[1])
-			if len(m) > 2 {
-				whereCond = strings.TrimSpace(m[2])
-			}
+		idx := 1
+		if len(tokens) >= 2 && strings.EqualFold(tokens[1], "FROM") {
+			idx = 2
+		}
+		if len(tokens) > idx {
+			tableName = cleanIdentifier(tokens[idx])
+		}
+		if wIdx := sqlutil.FindTopLevelKeyword(dmlSQL, "WHERE"); wIdx != -1 {
+			whereCond = strings.TrimSpace(dmlSQL[wIdx+5:])
 		}
 	}
 
@@ -417,49 +423,116 @@ func (s *Coordinator) execDMLExplain(dmlSQL string, opts planner.ExplainOptions,
 	}, nil
 }
 
-func findSubquery(s string, prefixPattern *regexp.Regexp) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
-	return findSubqueryFrom(s, prefixPattern, 0)
-}
-
-func findSubqueryFrom(s string, prefixPattern *regexp.Regexp, startOffset int) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
+func findSubqueryFromKind(s string, kind subqueryKind, startOffset int) (matchStart int, matchEnd int, prefixStr string, innerSQL string, found bool) {
 	if startOffset >= len(s) {
 		return 0, 0, "", "", false
 	}
-	loc := prefixPattern.FindStringSubmatchIndex(s[startOffset:])
-	if loc == nil {
-		return 0, 0, "", "", false
-	}
-	actualStart := loc[0] + startOffset
-	openParenIdx := -1
-	for i := actualStart; i < len(s); i++ {
-		if s[i] == '(' {
-			openParenIdx = i
-			break
-		}
-	}
-	if openParenIdx == -1 {
-		return 0, 0, "", "", false
-	}
+	sub := s[startOffset:]
 
-	depth := 0
-	closeParenIdx := -1
-	for i := openParenIdx; i < len(s); i++ {
-		if s[i] == '(' {
-			depth++
-		} else if s[i] == ')' {
-			depth--
-			if depth == 0 {
-				closeParenIdx = i
-				break
+	switch kind {
+	case subqueryKindExists:
+		indices := sqlutil.FindAllTopLevelKeyword(sub, "EXISTS")
+		for _, idx := range indices {
+			actualIdx := idx + startOffset
+			matchStart = actualIdx
+			before := strings.TrimRight(s[:actualIdx], " \t\n")
+			if strings.HasSuffix(strings.ToUpper(before), "NOT") {
+				notStart := len(before) - 3
+				if notStart == 0 || !sqlutil.IsIdentChar(before[notStart-1]) {
+					matchStart = notStart
+				}
+			}
+			afterExists := s[actualIdx+6:]
+			trimmed := strings.TrimLeft(afterExists, " \t\n")
+			if strings.HasPrefix(trimmed, "(") {
+				openParenIdx := actualIdx + 6 + (len(afterExists) - len(trimmed))
+				closeParenIdx := sqlutil.FindMatchingParen(s, openParenIdx)
+				if closeParenIdx != -1 {
+					inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
+					if sqlutil.HasPrefixKeyword(inner, "SELECT") || (strings.HasPrefix(inner, "(") && sqlutil.HasPrefixKeyword(inner[1:], "SELECT")) {
+						return matchStart, closeParenIdx + 1, s[matchStart:openParenIdx], inner, true
+					}
+				}
+			}
+		}
+
+	case subqueryKindIn:
+		indices := sqlutil.FindAllTopLevelKeyword(sub, "IN")
+		for _, idx := range indices {
+			actualIdx := idx + startOffset
+			afterIn := s[actualIdx+2:]
+			trimmed := strings.TrimLeft(afterIn, " \t\n")
+			if strings.HasPrefix(trimmed, "(") {
+				openParenIdx := actualIdx + 2 + (len(afterIn) - len(trimmed))
+				closeParenIdx := sqlutil.FindMatchingParen(s, openParenIdx)
+				if closeParenIdx != -1 {
+					inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
+					if sqlutil.HasPrefixKeyword(inner, "SELECT") || (strings.HasPrefix(inner, "(") && sqlutil.HasPrefixKeyword(inner[1:], "SELECT")) {
+						before := strings.TrimRight(s[:actualIdx], " \t\n")
+						if strings.HasSuffix(strings.ToUpper(before), "NOT") {
+							notStart := len(before) - 3
+							if notStart == 0 || !sqlutil.IsIdentChar(before[notStart-1]) {
+								before = strings.TrimRight(before[:notStart], " \t\n")
+							}
+						}
+						if len(before) == 0 {
+							continue
+						}
+						lhsEnd := len(before)
+						lhsStart := lhsEnd
+						lastChar := before[lhsEnd-1]
+						if lastChar == ')' {
+							depth := 1
+							for i := lhsEnd - 2; i >= 0; i-- {
+								if before[i] == ')' {
+									depth++
+								} else if before[i] == '(' {
+									depth--
+									if depth == 0 {
+										lhsStart = i
+										break
+									}
+								}
+							}
+						} else if lastChar == ']' {
+							if openBracket := strings.LastIndex(before, "["); openBracket != -1 {
+								lhsStart = openBracket
+							}
+						} else if lastChar == '\'' || lastChar == '"' {
+							if openQuote := strings.LastIndex(before[:lhsEnd-1], string(lastChar)); openQuote != -1 {
+								lhsStart = openQuote
+							}
+						} else {
+							for lhsStart > 0 {
+								prev := before[lhsStart-1]
+								if sqlutil.IsIdentChar(prev) || prev == '.' || prev == '@' || prev == '#' {
+									lhsStart--
+								} else {
+									break
+								}
+							}
+						}
+						return lhsStart, closeParenIdx + 1, s[lhsStart:openParenIdx], inner, true
+					}
+				}
+			}
+		}
+
+	case subqueryKindScalar:
+		for i := startOffset; i < len(s); i++ {
+			if s[i] == '(' {
+				closeParenIdx := sqlutil.FindMatchingParen(s, i)
+				if closeParenIdx != -1 {
+					inner := strings.TrimSpace(s[i+1 : closeParenIdx])
+					if sqlutil.HasPrefixKeyword(inner, "SELECT") {
+						return i, closeParenIdx + 1, "", inner, true
+					}
+				}
 			}
 		}
 	}
-	if closeParenIdx == -1 {
-		return 0, 0, "", "", false
-	}
 
-	inner := strings.TrimSpace(s[openParenIdx+1 : closeParenIdx])
-	return actualStart, closeParenIdx + 1, s[actualStart:openParenIdx], inner, true
+	return 0, 0, "", "", false
 }
 
 func (s *Coordinator) execAnalyze(query string, start time.Time) (*QueryResult, error) {
@@ -654,7 +727,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 	// 1. [NOT] EXISTS (SELECT ...)
 	offset := 0
 	for {
-		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, reExplainExists, offset)
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFromKind(result, subqueryKindExists, offset)
 		if !found {
 			break
 		}
@@ -687,7 +760,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 	// 2. [NOT] IN (SELECT ...) -> [NOT] IN (val1, val2, ...)
 	offset = 0
 	for {
-		mStart, mEnd, prefix, innerSQL, found := findSubqueryFrom(result, reExplainInSelect, offset)
+		mStart, mEnd, prefix, innerSQL, found := findSubqueryFromKind(result, subqueryKindIn, offset)
 		if !found {
 			break
 		}
@@ -754,7 +827,7 @@ func (s *Coordinator) resolveSubqueriesWithSession(whereClause string, cs *Clien
 	// 3. Scalar Subquery in comparisons: e.g. > (SELECT ...), = (SELECT ...)
 	offset = 0
 	for {
-		mStart, mEnd, _, innerSQL, found := findSubqueryFrom(result, reExplainScalarSelect, offset)
+		mStart, mEnd, _, innerSQL, found := findSubqueryFromKind(result, subqueryKindScalar, offset)
 		if !found {
 			break
 		}

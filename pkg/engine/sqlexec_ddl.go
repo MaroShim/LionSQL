@@ -3,7 +3,6 @@ package engine
 import (
 	"errors"
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,78 +15,153 @@ import (
 	"lionsql/pkg/storage"
 )
 
-var (
-	reCreateTablePrefix = regexp.MustCompile(`(?is)^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s*\(`)
-	reOnDelete          = regexp.MustCompile(`(?i)\bON\s+DELETE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
-	reOnUpdate          = regexp.MustCompile(`(?i)\bON\s+UPDATE\s+(CASCADE|SET\s+NULL|SET\s+DEFAULT|RESTRICT|NO\s+ACTION)`)
-	reTableFK           = regexp.MustCompile(`(?i)(?:CONSTRAINT\s+([^\s(]+)\s+)?FOREIGN\s+KEY\s*\(([^)]+)\)\s*REFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
-	reInlineFK          = regexp.MustCompile(`(?i)\bREFERENCES\s+([^\s(]+)(?:\s*\(([^)]+)\))?`)
-	reCreateView        = regexp.MustCompile(`(?is)^CREATE\s+(?:OR\s+REPLACE\s+)?(?:(?:TEMP|TEMPORARY)\s+)?VIEW\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s(]+)\s+AS\s+(.+)$`)
-	reOrReplaceView     = regexp.MustCompile(`(?i)^CREATE\s+OR\s+REPLACE\s+VIEW`)
-	reIfNotExistsView   = regexp.MustCompile(`(?i)VIEW\s+IF\s+NOT\s+EXISTS`)
-	reDropView          = regexp.MustCompile(`(?is)^DROP\s+VIEW\s+(?:IF\s+EXISTS\s+)?(.+)$`)
-	reIfExistsView      = regexp.MustCompile(`(?i)^DROP\s+VIEW\s+IF\s+EXISTS`)
-	reDropPartition     = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+DROP\s+PARTITION\s+['"]?([^'";\s]+)['"]?\s*$`)
-	reAddColumn         = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:COLUMN\s+)?([^\s]+)\s+([^\s,(]+(?:\s*\([^)]*\))?)(.*)$`)
-	reAlterAddUnique    = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:CONSTRAINT\s+([^\s]+)\s+)?UNIQUE\s*\((.*?)\)`)
-	reAlterAddFK        = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:CONSTRAINT\s+([^\s]+)\s+)?FOREIGN\s+KEY\s*\((.*?)\)\s*REFERENCES\s+([^\s(]+)`)
-	reAlterAddCheck     = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:CONSTRAINT\s+([^\s]+)\s+)?CHECK\s*\(.*\)`)
-	reAlterDropConstraint = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+DROP\s+CONSTRAINT\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
-	reAlterDropColumn   = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?([^\s;]+)`)
-	reAlterColumnNull   = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+(DROP\s+NOT\s+NULL|SET\s+NOT\s+NULL)`)
-	reAlterAddPK        = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ADD\s+(?:CONSTRAINT\s+([^\s]+)\s+)?PRIMARY\s+KEY\s*\((.*?)\)`)
-	reAlterColDropDef   = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+DROP\s+DEFAULT`)
-	reAlterColSetDef    = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+SET\s+DEFAULT\s+(.+)`)
-	reAlterColType      = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+ALTER\s+(?:COLUMN\s+)?([^\s]+)\s+(?:SET\s+DATA\s+TYPE|TYPE)\s+([^\s,(]+(?:\s*\([^)]*\))?)(?:\s+USING\s+.+)?`)
-	reAlterRenameTable  = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+RENAME\s+TO\s+([^\s;]+)`)
-	reAlterRenameCol    = regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+RENAME\s+(?:COLUMN\s+)?([^\s]+)\s+TO\s+([^\s;]+)`)
-	reCreateStats       = regexp.MustCompile(`(?is)^CREATE\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s(]+)\s*\((.*?)\)$`)
-	reDropStatsOn       = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
-	reDropStats         = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
-	reColDefault        = regexp.MustCompile(`(?i)\bDEFAULT\s+('(?:''|[^'])*'|\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\d+)`)
-	reGeneratedIdentity = regexp.MustCompile(`(?is)\bGENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY(?:\s*\([^)]*\))?`)
-	reLeadingAdd         = regexp.MustCompile(`(?is)^ADD\s+`)
-	reLeadingColumn      = regexp.MustCompile(`(?is)^COLUMN\s+`)
-	reLeadingIfNotExists = regexp.MustCompile(`(?is)^IF\s+NOT\s+EXISTS\s+`)
-	reAlterTablePrefix   = regexp.MustCompile(`(?is)^(ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+))\s+(.*)$`)
-	reLeadingAction      = regexp.MustCompile(`(?i)^(ADD|DROP|ALTER|RENAME)\b`)
-)
+func parseColumnDefault(cDef string) string {
+	if sqlutil.ContainsKeyword(cDef, "AS IDENTITY", false) {
+		return ""
+	}
+	defIdx := sqlutil.FindTopLevelKeyword(cDef, "DEFAULT")
+	if defIdx == -1 {
+		return ""
+	}
+	rest := strings.TrimSpace(cDef[defIdx+len("DEFAULT"):])
+	if rest == "" {
+		return ""
+	}
+
+	if rest[0] == '\'' {
+		for i := 1; i < len(rest); i++ {
+			if rest[i] == '\'' {
+				if i+1 < len(rest) && rest[i+1] == '\'' {
+					i++
+					continue
+				}
+				return cleanDefaultExpr(rest[:i+1])
+			}
+		}
+		return cleanDefaultExpr(rest)
+	}
+
+	if rest[0] == '(' {
+		closeIdx := sqlutil.FindMatchingParen(rest, 0)
+		if closeIdx != -1 {
+			return cleanDefaultExpr(rest[:closeIdx+1])
+		}
+	}
+
+	tokens := sqlutil.SplitTopLevelTokens(rest)
+	if len(tokens) > 0 {
+		tok := tokens[0]
+		upper := strings.ToUpper(tok)
+		if upper != "NOT" && upper != "NULL" && upper != "PRIMARY" && upper != "UNIQUE" && upper != "CHECK" && upper != "REFERENCES" && upper != "CONSTRAINT" {
+			return cleanDefaultExpr(tok)
+		}
+	}
+	return ""
+}
+
+func parseDecimalPrecisionScale(cDef string) (int, int) {
+	upper := strings.ToUpper(cDef)
+	idx := strings.Index(upper, "DECIMAL")
+	if idx == -1 {
+		idx = strings.Index(upper, "NUMERIC")
+	}
+	if idx == -1 {
+		return 18, 2
+	}
+	rest := cDef[idx:]
+	openIdx := strings.Index(rest, "(")
+	if openIdx == -1 {
+		return 18, 2
+	}
+	closeIdx := strings.Index(rest, ")")
+	if closeIdx == -1 || closeIdx <= openIdx {
+		return 18, 2
+	}
+	args := strings.Split(rest[openIdx+1:closeIdx], ",")
+	p := 18
+	s := 2
+	if len(args) > 0 {
+		if val, err := strconv.Atoi(strings.TrimSpace(args[0])); err == nil {
+			p = val
+		}
+	}
+	if len(args) > 1 {
+		if val, err := strconv.Atoi(strings.TrimSpace(args[1])); err == nil {
+			s = val
+		}
+	} else {
+		s = 0
+	}
+	return p, s
+}
+
+func parseCreateTablePrefix(cleaned string) (tableName string, ifNotExists bool, openParenIdx int, closeParenIdx int, remainder string, err error) {
+	if !sqlutil.HasPrefixKeyword(cleaned, "CREATE TABLE") && !sqlutil.HasPrefixKeyword(cleaned, "CREATE TEMPORARY TABLE") && !sqlutil.HasPrefixKeyword(cleaned, "CREATE TEMP TABLE") {
+		return "", false, -1, -1, "", fmt.Errorf("invalid CREATE TABLE syntax")
+	}
+	var rest string
+	if sqlutil.HasPrefixKeyword(cleaned, "CREATE TEMPORARY TABLE") {
+		rest = strings.TrimSpace(cleaned[len("CREATE TEMPORARY TABLE"):])
+	} else if sqlutil.HasPrefixKeyword(cleaned, "CREATE TEMP TABLE") {
+		rest = strings.TrimSpace(cleaned[len("CREATE TEMP TABLE"):])
+	} else {
+		rest = strings.TrimSpace(cleaned[len("CREATE TABLE"):])
+	}
+
+	if sqlutil.HasPrefixKeyword(rest, "IF NOT EXISTS") {
+		ifNotExists = true
+		rest = strings.TrimSpace(rest[len("IF NOT EXISTS"):])
+	}
+
+	openParenIdx = sqlutil.FindTopLevelChar(rest, '(')
+	if openParenIdx == -1 {
+		return "", false, -1, -1, "", fmt.Errorf("invalid CREATE TABLE syntax: missing opening parenthesis")
+	}
+
+	tableName = cleanIdentifier(strings.TrimSpace(rest[:openParenIdx]))
+	if tableName == "" {
+		return "", false, -1, -1, "", fmt.Errorf("invalid CREATE TABLE syntax: missing table name")
+	}
+
+	closeParenIdx = sqlutil.FindMatchingParen(rest, openParenIdx)
+	if closeParenIdx == -1 {
+		return "", false, -1, -1, "", fmt.Errorf("invalid CREATE TABLE syntax: unbalanced parentheses")
+	}
+
+	remainder = strings.TrimSpace(rest[closeParenIdx+1:])
+	baseOffset := len(cleaned) - len(rest)
+	return tableName, ifNotExists, baseOffset + openParenIdx, baseOffset + closeParenIdx, remainder, nil
+}
+
+func parseAlterTablePrefix(cleaned string) (tableName string, ifExists bool, actionBody string, err error) {
+	if !sqlutil.HasPrefixKeyword(cleaned, "ALTER TABLE") {
+		return "", false, "", fmt.Errorf("invalid ALTER TABLE syntax")
+	}
+	rest := strings.TrimSpace(cleaned[len("ALTER TABLE"):])
+	if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
+		ifExists = true
+		rest = strings.TrimSpace(rest[len("IF EXISTS"):])
+	}
+	tokens := sqlutil.SplitTopLevelTokens(rest)
+	if len(tokens) == 0 {
+		return "", false, "", fmt.Errorf("invalid ALTER TABLE syntax: missing table name")
+	}
+	tableName = cleanIdentifier(tokens[0])
+	actionBody = strings.TrimSpace(rest[len(tokens[0]):])
+	return tableName, ifExists, actionBody, nil
+}
 
 func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	prefixRe := reCreateTablePrefix
-	prefixLoc := prefixRe.FindStringSubmatchIndex(cleaned)
-	if prefixLoc == nil {
-		return nil, fmt.Errorf("invalid CREATE TABLE syntax")
-	}
-
-	tableName := cleanIdentifier(cleaned[prefixLoc[2]:prefixLoc[3]])
-	openParenIdx := prefixLoc[1] - 1 // the opening '('
-
-	depth := 0
-	closeParenIdx := -1
-	for i := openParenIdx; i < len(cleaned); i++ {
-		if cleaned[i] == '(' {
-			depth++
-		} else if cleaned[i] == ')' {
-			depth--
-			if depth == 0 {
-				closeParenIdx = i
-				break
-			}
-		}
-	}
-	if closeParenIdx == -1 {
-		return nil, fmt.Errorf("invalid CREATE TABLE syntax: unbalanced parentheses")
+	tableName, _, openParenIdx, closeParenIdx, remainder, err := parseCreateTablePrefix(cleaned)
+	if err != nil {
+		return nil, err
 	}
 
 	colsDef := cleaned[openParenIdx+1 : closeParenIdx]
-	remainder := strings.TrimSpace(cleaned[closeParenIdx+1:])
-
 	rawPartition := ""
-	partRe := regexp.MustCompile(`(?is)^PARTITION\s+BY\s+(.+)$`)
-	if m := partRe.FindStringSubmatch(remainder); len(m) == 2 {
-		rawPartition = strings.TrimSpace(m[1])
+	if sqlutil.HasPrefixKeyword(remainder, "PARTITION BY") {
+		rawPartition = strings.TrimSpace(remainder[len("PARTITION BY"):])
 	}
 
 	colDefs := splitColumnDefs(colsDef)
@@ -197,37 +271,18 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 				precision = 19
 				scale = 4
 			} else {
-				decRe := regexp.MustCompile(`(?i)\b(?:DECIMAL|NUMERIC)\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\)`)
-				if m := decRe.FindStringSubmatch(cDefTrimmed); len(m) > 1 {
-					if p, err := strconv.Atoi(m[1]); err == nil {
-						precision = p
-					}
-					if len(m) > 2 && m[2] != "" {
-						if sc, err := strconv.Atoi(m[2]); err == nil {
-							scale = sc
-						}
-					} else {
-						scale = 0
-					}
-				}
+				precision, scale = parseDecimalPrecisionScale(cDefTrimmed)
 			}
 		}
 
-		isGeneratedIdentity := reGeneratedIdentity.MatchString(cDefTrimmed)
+		isGeneratedIdentity := sqlutil.ContainsKeyword(cDefTrimmed, "AS IDENTITY", false) ||
+			(sqlutil.ContainsKeyword(cDefTrimmed, "GENERATED", false) && sqlutil.ContainsKeyword(cDefTrimmed, "IDENTITY", false))
 		isSerial := rawType == "SERIAL" || rawType == "BIGSERIAL" || rawType == "SMALLSERIAL"
 		isPK := strings.Contains(cUpper, "PRIMARY KEY")
 		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK || isSerial || isGeneratedIdentity
 		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT") || isSerial || isGeneratedIdentity
 
-		cDefForDefault := cDefTrimmed
-		if isGeneratedIdentity {
-			cDefForDefault = reGeneratedIdentity.ReplaceAllString(cDefTrimmed, "")
-		}
-
-		defaultExpr := ""
-		if m := reColDefault.FindStringSubmatch(cDefForDefault); len(m) > 1 {
-			defaultExpr = cleanDefaultExpr(m[1])
-		}
+		defaultExpr := parseColumnDefault(cDefTrimmed)
 
 		schema.Columns = append(schema.Columns, storage.Column{
 			Name:       colName,
@@ -254,12 +309,11 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 	}
 
 	if rawPartition != "" {
-		funcRe := regexp.MustCompile(`(?i)^([a-zA-Z0-9_]+)\s*\(\s*([a-zA-Z0-9_\[\]"]+)\s*\)$`)
 		fn := "COLUMN"
 		col := rawPartition
-		if m := funcRe.FindStringSubmatch(rawPartition); len(m) == 3 {
-			fn = strings.ToUpper(m[1])
-			col = m[2]
+		if openIdx := strings.Index(rawPartition, "("); openIdx != -1 && strings.HasSuffix(rawPartition, ")") {
+			fn = strings.ToUpper(strings.TrimSpace(rawPartition[:openIdx]))
+			col = strings.TrimSpace(rawPartition[openIdx+1 : len(rawPartition)-1])
 		}
 		col = cleanIdentifier(col)
 
@@ -319,13 +373,19 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 
 func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	re := regexp.MustCompile(`(?is)^DROP\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
-	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 2 {
+	if !sqlutil.HasPrefixKeyword(cleaned, "DROP TABLE") {
 		return nil, fmt.Errorf("invalid DROP TABLE syntax")
 	}
+	rest := strings.TrimSpace(cleaned[len("DROP TABLE"):])
+	if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
+		rest = strings.TrimSpace(rest[len("IF EXISTS"):])
+	}
+	tokens := sqlutil.SplitTopLevelTokens(rest)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("invalid DROP TABLE syntax: missing table name")
+	}
 
-	tableName := cleanIdentifier(matches[1])
+	tableName := cleanIdentifier(tokens[0])
 	if err := s.engine.DropTable(tableName); err != nil {
 		if sqlutil.ContainsKeyword(query, "IF EXISTS", false) && errors.Is(err, storage.ErrTableNotFound) {
 			return &QueryResult{
@@ -367,13 +427,19 @@ func (s *Coordinator) execDropTable(query string, start time.Time, cs *ClientSes
 
 func (s *Coordinator) execTruncateTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	re := regexp.MustCompile(`(?is)^TRUNCATE\s+(?:TABLE\s+)?([^\s;]+)`)
-	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 2 {
+	if !sqlutil.HasPrefixKeyword(cleaned, "TRUNCATE") {
 		return nil, fmt.Errorf("invalid TRUNCATE TABLE syntax")
 	}
+	rest := strings.TrimSpace(cleaned[len("TRUNCATE"):])
+	if sqlutil.HasPrefixKeyword(rest, "TABLE") {
+		rest = strings.TrimSpace(rest[len("TABLE"):])
+	}
+	tokens := sqlutil.SplitTopLevelTokens(rest)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("invalid TRUNCATE TABLE syntax: missing table name")
+	}
 
-	tableName := cleanIdentifier(matches[1])
+	tableName := cleanIdentifier(tokens[0])
 	if cs != nil && cs.TempTableMap != nil {
 		if realName, ok := cs.TempTableMap[tableName]; ok {
 			tableName = realName
@@ -529,86 +595,32 @@ func (s *Coordinator) execCreateIndex(query string, start time.Time) (*QueryResu
 		}, nil
 	}
 
-	// 2. Fallback to regex for legacy/vendor queries
-	re := regexp.MustCompile(`(?is)^CREATE\s+(UNIQUE\s+)?INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([^\s]+)\s+ON\s+([^\s(]+)(?:\s+USING\s+[^\s(]+)?\s*\((.*?)\)(?:\s+INCLUDE\s*\((.*?)\))?(?:\s+WHERE\s+.*)?$`)
-	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 5 {
-		return nil, fmt.Errorf("invalid CREATE INDEX syntax: expected CREATE [UNIQUE] INDEX [IF NOT EXISTS] <name> ON <table> (<cols>) [INCLUDE (<cols>)] [WHERE ...]")
-	}
-
-	isUnique := strings.TrimSpace(matches[1]) != ""
-	indexName := cleanIdentifier(matches[2])
-	tableName := cleanIdentifier(matches[3])
-	colsRaw := matches[4]
-
-	var cols []string
-	for _, c := range strings.Split(colsRaw, ",") {
-		cTrimmed := cleanIdentifier(strings.TrimSpace(c))
-		if cTrimmed != "" {
-			cols = append(cols, cTrimmed)
-		}
-	}
-
-	if len(cols) == 0 {
-		return nil, fmt.Errorf("no columns specified for index %q", indexName)
-	}
-
-	var includeCols []string
-	if len(matches) >= 6 && strings.TrimSpace(matches[5]) != "" {
-		for _, c := range strings.Split(matches[5], ",") {
-			cTrimmed := cleanIdentifier(strings.TrimSpace(c))
-			if cTrimmed != "" {
-				includeCols = append(includeCols, cTrimmed)
-			}
-		}
-	}
-
-	idxSchema := &storage.IndexSchema{
-		Name:        indexName,
-		TableName:   tableName,
-		Columns:     cols,
-		IncludeCols: includeCols,
-		Unique:      isUnique,
-	}
-
-	if err := s.engine.CreateIndex(idxSchema); err != nil {
-		if sqlutil.ContainsKeyword(cleaned, "IF NOT EXISTS", false) || strings.Contains(strings.ToLower(err.Error()), "already exists") {
-			return &QueryResult{
-				Success:    true,
-				Command:    "CREATE INDEX",
-				Messages:   []string{fmt.Sprintf("Index %q already exists on table %q.", indexName, tableName)},
-				DurationUS: time.Since(start).Microseconds(),
-			}, nil
-		}
-		return nil, err
-	}
-
-	msg := fmt.Sprintf("Index %q created successfully on table %q.", indexName, tableName)
-	if isUnique {
-		msg = fmt.Sprintf("Unique index %q created successfully on table %q.", indexName, tableName)
-	}
-
-	return &QueryResult{
-		Success:    true,
-		Command:    "CREATE INDEX",
-		Messages:   []string{msg},
-		DurationUS: time.Since(start).Microseconds(),
-	}, nil
+	return nil, fmt.Errorf("invalid CREATE INDEX syntax: expected CREATE [UNIQUE] INDEX [IF NOT EXISTS] <name> ON <table> (<cols>) [INCLUDE (<cols>)] [WHERE ...]")
 }
 
 func (s *Coordinator) execDropIndex(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	ifExists := sqlutil.ContainsKeyword(cleaned, "IF EXISTS", false)
-	re := regexp.MustCompile(`(?is)^DROP\s+INDEX\s+(?:IF\s+EXISTS\s+)?([^\s]+)(?:\s+ON\s+([^\s]+))?(?:\s+CASCADE)?$`)
-	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 2 {
+	if !sqlutil.HasPrefixKeyword(cleaned, "DROP INDEX") {
+		return nil, fmt.Errorf("invalid DROP INDEX syntax: expected DROP INDEX [IF EXISTS] <name> [ON <table>] [CASCADE]")
+	}
+	rest := strings.TrimSpace(cleaned[len("DROP INDEX"):])
+	ifExists := false
+	if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
+		ifExists = true
+		rest = strings.TrimSpace(rest[len("IF EXISTS"):])
+	}
+	tokens := sqlutil.SplitTopLevelTokens(rest)
+	if len(tokens) == 0 {
 		return nil, fmt.Errorf("invalid DROP INDEX syntax: expected DROP INDEX [IF EXISTS] <name> [ON <table>] [CASCADE]")
 	}
 
-	indexName := cleanIdentifier(matches[1])
+	indexName := cleanIdentifier(tokens[0])
 	tableName := ""
-	if len(matches) > 2 {
-		tableName = cleanIdentifier(matches[2])
+	for i := 1; i < len(tokens); i++ {
+		if strings.EqualFold(tokens[i], "ON") && i+1 < len(tokens) {
+			tableName = cleanIdentifier(tokens[i+1])
+			i++
+		}
 	}
 
 	if tableName == "" {
@@ -717,42 +729,57 @@ func (s *Coordinator) execCreateProcedure(query string, start time.Time) (*Query
 
 func (s *Coordinator) execCreateFunction(query string, start time.Time) (*QueryResult, error) {
 	// 1. Check if Table-Valued Function (TVF): CREATE FUNCTION ... RETURNS TABLE AS RETURN ( ... )
-	tvfRe := regexp.MustCompile(`(?is)^CREATE\s+FUNCTION\s+([^\s(]+)\s*\((.*?)\)\s*RETURNS\s+TABLE\s+AS\s+RETURN\s*\(\s*(SELECT\s+.*)\s*\)\s*;?$`)
-	if m := tvfRe.FindStringSubmatch(strings.TrimSpace(query)); len(m) == 4 {
-		fnName := cleanIdentifier(m[1])
-		rawParams := m[2]
-		innerQuery := strings.TrimSpace(m[3])
+	cleanedFunc := strings.TrimRight(strings.TrimSpace(query), ";")
+	if sqlutil.HasPrefixKeyword(cleanedFunc, "CREATE FUNCTION") && sqlutil.ContainsKeyword(cleanedFunc, "RETURNS TABLE", false) && sqlutil.ContainsKeyword(cleanedFunc, "RETURN", false) {
+		openParen := sqlutil.FindTopLevelChar(cleanedFunc, '(')
+		if openParen != -1 {
+			fnName := cleanIdentifier(strings.TrimSpace(cleanedFunc[len("CREATE FUNCTION"):openParen]))
+			closeParen := sqlutil.FindMatchingParen(cleanedFunc, openParen)
+			if closeParen != -1 {
+				rawParams := cleanedFunc[openParen+1 : closeParen]
+				afterParams := cleanedFunc[closeParen+1:]
+				returnIdx := sqlutil.FindTopLevelKeyword(afterParams, "RETURN")
+				if returnIdx != -1 {
+					bodyPart := strings.TrimSpace(afterParams[returnIdx+len("RETURN"):])
+					if strings.HasPrefix(bodyPart, "(") && strings.HasSuffix(bodyPart, ")") {
+						bodyPart = strings.TrimSpace(bodyPart[1 : len(bodyPart)-1])
+					}
+					if sqlutil.HasPrefixKeyword(bodyPart, "SELECT") {
+						innerQuery := bodyPart
+						var params []catalog.ParamDef
+						if strings.TrimSpace(rawParams) != "" {
+							for _, p := range strings.Split(rawParams, ",") {
+								pParts := strings.Fields(strings.TrimSpace(p))
+								if len(pParts) >= 2 {
+									pName := pParts[0]
+									pType := parseSQLDataType(pParts[1])
+									params = append(params, catalog.ParamDef{Name: pName, Type: pType})
+								}
+							}
+						}
 
-		var params []catalog.ParamDef
-		if strings.TrimSpace(rawParams) != "" {
-			for _, p := range strings.Split(rawParams, ",") {
-				pParts := strings.Fields(strings.TrimSpace(p))
-				if len(pParts) >= 2 {
-					pName := pParts[0]
-					pType := parseSQLDataType(pParts[1])
-					params = append(params, catalog.ParamDef{Name: pName, Type: pType})
+						fnMeta := &catalog.Function{
+							Name:          fnName,
+							Params:        params,
+							IsTableValued: true,
+							Body:          innerQuery,
+							CreatedAt:     time.Now(),
+						}
+
+						if err := s.catalog.RegisterFunction(fnMeta); err != nil {
+							return nil, fmt.Errorf("catalog register TVF error: %w", err)
+						}
+
+						return &QueryResult{
+							Success:    true,
+							Command:    "CREATE FUNCTION",
+							DurationUS: time.Since(start).Microseconds(),
+							Messages:   []string{fmt.Sprintf("Table-valued function %q registered successfully", fnName)},
+						}, nil
+					}
 				}
 			}
 		}
-
-		fnMeta := &catalog.Function{
-			Name:          fnName,
-			Params:        params,
-			IsTableValued: true,
-			Body:          innerQuery,
-			CreatedAt:     time.Now(),
-		}
-
-		if err := s.catalog.RegisterFunction(fnMeta); err != nil {
-			return nil, fmt.Errorf("catalog register TVF error: %w", err)
-		}
-
-		return &QueryResult{
-			Success:    true,
-			Command:    "CREATE FUNCTION",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Table-valued function %q registered successfully", fnName)},
-		}, nil
 	}
 
 	fnStmt, err := proc.ParseFunction(query)
@@ -839,14 +866,21 @@ func (s *Coordinator) execCreateTrigger(query string, start time.Time) (*QueryRe
 
 func (s *Coordinator) execDropTrigger(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	ifExists := sqlutil.ContainsKeyword(cleaned, "IF EXISTS", false)
-	re := regexp.MustCompile(`(?is)^DROP\s+TRIGGER\s+(?:IF\s+EXISTS\s+)?([^\s;]+)`)
-	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 2 {
+	if !sqlutil.HasPrefixKeyword(cleaned, "DROP TRIGGER") {
 		return nil, fmt.Errorf("invalid DROP TRIGGER syntax")
 	}
+	rest := strings.TrimSpace(cleaned[len("DROP TRIGGER"):])
+	ifExists := false
+	if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
+		ifExists = true
+		rest = strings.TrimSpace(rest[len("IF EXISTS"):])
+	}
+	tokens := sqlutil.SplitTopLevelTokens(rest)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("invalid DROP TRIGGER syntax: missing trigger name")
+	}
 
-	trgName := cleanIdentifier(matches[1])
+	trgName := cleanIdentifier(tokens[0])
 	if err := s.catalog.DropTrigger(trgName); err != nil {
 		if ifExists && errors.Is(err, catalog.ErrTriggerNotFound) {
 			return &QueryResult{
@@ -873,15 +907,15 @@ func (s *Coordinator) execDropTrigger(query string, start time.Time) (*QueryResu
 
 func (s *Coordinator) execReindex(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	re := regexp.MustCompile(`(?is)^REINDEX(?:\s+([^\s;]+))?$`)
-	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 1 {
+	if !sqlutil.HasPrefixKeyword(cleaned, "REINDEX") {
 		return nil, fmt.Errorf("invalid REINDEX syntax")
 	}
+	rest := strings.TrimSpace(cleaned[len("REINDEX"):])
+	tokens := sqlutil.SplitTopLevelTokens(rest)
 
 	target := ""
-	if len(matches) > 1 && matches[1] != "" {
-		target = cleanIdentifier(matches[1])
+	if len(tokens) > 0 {
+		target = cleanIdentifier(tokens[0])
 	}
 
 	if target == "" {
@@ -986,8 +1020,7 @@ func cleanDefaultExpr(s string) string {
 
 func parseForeignKeyClause(def string, defaultChildCol string, defaultName string) (*storage.ForeignKeySchema, bool) {
 	defTrimmed := strings.TrimSpace(def)
-	upper := strings.ToUpper(defTrimmed)
-	if !strings.Contains(upper, "REFERENCES") {
+	if !sqlutil.ContainsKeyword(defTrimmed, "REFERENCES", false) {
 		return nil, false
 	}
 
@@ -997,30 +1030,78 @@ func parseForeignKeyClause(def string, defaultChildCol string, defaultName strin
 		OnUpdate: storage.ActionNoAction,
 	}
 
-	if m := reOnDelete.FindStringSubmatch(defTrimmed); len(m) > 1 {
-		fk.OnDelete = storage.ParseForeignKeyAction(m[1])
-	}
-
-	if m := reOnUpdate.FindStringSubmatch(defTrimmed); len(m) > 1 {
-		fk.OnUpdate = storage.ParseForeignKeyAction(m[1])
-	}
-
-	if m := reTableFK.FindStringSubmatch(defTrimmed); len(m) > 0 {
-		if m[1] != "" {
-			fk.Name = cleanIdentifier(m[1])
-		}
-		rawChildCols := strings.Split(m[2], ",")
-		for _, c := range rawChildCols {
-			if col := cleanIdentifier(c); col != "" {
-				fk.ChildColumns = append(fk.ChildColumns, col)
+	if delIdx := sqlutil.FindTopLevelKeyword(defTrimmed, "ON DELETE"); delIdx != -1 {
+		actionStr := strings.TrimSpace(defTrimmed[delIdx+len("ON DELETE"):])
+		tokens := strings.Fields(actionStr)
+		if len(tokens) > 0 {
+			act := tokens[0]
+			if len(tokens) > 1 && (strings.EqualFold(tokens[0], "SET") || strings.EqualFold(tokens[0], "NO")) {
+				act = tokens[0] + " " + tokens[1]
 			}
+			fk.OnDelete = storage.ParseForeignKeyAction(act)
 		}
-		fk.ParentTable = cleanIdentifier(m[3])
-		if len(m) > 4 && strings.TrimSpace(m[4]) != "" {
-			rawParentCols := strings.Split(m[4], ",")
-			for _, c := range rawParentCols {
+	}
+
+	if updIdx := sqlutil.FindTopLevelKeyword(defTrimmed, "ON UPDATE"); updIdx != -1 {
+		actionStr := strings.TrimSpace(defTrimmed[updIdx+len("ON UPDATE"):])
+		tokens := strings.Fields(actionStr)
+		if len(tokens) > 0 {
+			act := tokens[0]
+			if len(tokens) > 1 && (strings.EqualFold(tokens[0], "SET") || strings.EqualFold(tokens[0], "NO")) {
+				act = tokens[0] + " " + tokens[1]
+			}
+			fk.OnUpdate = storage.ParseForeignKeyAction(act)
+		}
+	}
+
+	refIdx := sqlutil.FindTopLevelKeyword(defTrimmed, "REFERENCES")
+	if refIdx == -1 {
+		return nil, false
+	}
+
+	beforeRef := strings.TrimSpace(defTrimmed[:refIdx])
+	afterRef := strings.TrimSpace(defTrimmed[refIdx+len("REFERENCES"):])
+
+	if delIdx := sqlutil.FindTopLevelKeyword(afterRef, "ON DELETE"); delIdx != -1 {
+		afterRef = strings.TrimSpace(afterRef[:delIdx])
+	}
+	if updIdx := sqlutil.FindTopLevelKeyword(afterRef, "ON UPDATE"); updIdx != -1 {
+		afterRef = strings.TrimSpace(afterRef[:updIdx])
+	}
+
+	if openIdx := sqlutil.FindTopLevelChar(afterRef, '('); openIdx != -1 {
+		fk.ParentTable = cleanIdentifier(strings.TrimSpace(afterRef[:openIdx]))
+		closeIdx := sqlutil.FindMatchingParen(afterRef, openIdx)
+		if closeIdx != -1 {
+			for _, c := range strings.Split(afterRef[openIdx+1:closeIdx], ",") {
 				if col := cleanIdentifier(c); col != "" {
 					fk.ParentColumns = append(fk.ParentColumns, col)
+				}
+			}
+		}
+	} else {
+		tokens := sqlutil.SplitTopLevelTokens(afterRef)
+		if len(tokens) > 0 {
+			fk.ParentTable = cleanIdentifier(tokens[0])
+		}
+	}
+
+	if fkIdx := sqlutil.FindTopLevelKeyword(beforeRef, "FOREIGN KEY"); fkIdx != -1 {
+		beforeFK := strings.TrimSpace(beforeRef[:fkIdx])
+		if cIdx := sqlutil.FindTopLevelKeyword(beforeFK, "CONSTRAINT"); cIdx != -1 {
+			cTokens := sqlutil.SplitTopLevelTokens(strings.TrimSpace(beforeFK[cIdx+len("CONSTRAINT"):]))
+			if len(cTokens) > 0 {
+				fk.Name = cleanIdentifier(cTokens[0])
+			}
+		}
+		afterFK := strings.TrimSpace(beforeRef[fkIdx+len("FOREIGN KEY"):])
+		if openIdx := sqlutil.FindTopLevelChar(afterFK, '('); openIdx != -1 {
+			closeIdx := sqlutil.FindMatchingParen(afterFK, openIdx)
+			if closeIdx != -1 {
+				for _, c := range strings.Split(afterFK[openIdx+1:closeIdx], ",") {
+					if col := cleanIdentifier(c); col != "" {
+						fk.ChildColumns = append(fk.ChildColumns, col)
+					}
 				}
 			}
 		}
@@ -1030,44 +1111,46 @@ func parseForeignKeyClause(def string, defaultChildCol string, defaultName strin
 		return &fk, true
 	}
 
-	if m := reInlineFK.FindStringSubmatch(defTrimmed); len(m) > 0 {
-		fk.ParentTable = cleanIdentifier(m[1])
-		if len(m) > 2 && strings.TrimSpace(m[2]) != "" {
-			rawParentCols := strings.Split(m[2], ",")
-			for _, c := range rawParentCols {
-				if col := cleanIdentifier(c); col != "" {
-					fk.ParentColumns = append(fk.ParentColumns, col)
-				}
-			}
-		}
-		if defaultChildCol != "" {
-			fk.ChildColumns = []string{defaultChildCol}
-		}
-		if fk.Name == "" && defaultChildCol != "" {
-			fk.Name = fmt.Sprintf("fk_%s_%s", fk.ParentTable, defaultChildCol)
-		}
-		return &fk, true
+	if defaultChildCol != "" {
+		fk.ChildColumns = []string{defaultChildCol}
 	}
-
-	return nil, false
+	if fk.Name == "" && defaultChildCol != "" {
+		fk.Name = fmt.Sprintf("fk_%s_%s", fk.ParentTable, defaultChildCol)
+	}
+	return &fk, true
 }
 
-// execCreateView handles CREATE [OR REPLACE] VIEW name AS <select>.
+// execCreateView handles CREATE [OR REPLACE] [TEMP|TEMPORARY] VIEW [IF NOT EXISTS] name AS <select>.
 func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
-	// Pattern: CREATE [OR REPLACE] VIEW [IF NOT EXISTS] <name> AS <select>
-	re := reCreateView
-	m := re.FindStringSubmatch(cleaned)
-	if len(m) < 3 {
+	asIdx := sqlutil.FindTopLevelKeyword(cleaned, "AS")
+	if asIdx == -1 {
+		return nil, fmt.Errorf("invalid CREATE VIEW syntax: missing AS keyword")
+	}
+
+	beforeAS := strings.TrimSpace(cleaned[:asIdx])
+	selectQuery := strings.TrimSpace(cleaned[asIdx+2:])
+
+	orReplace := sqlutil.ContainsKeyword(beforeAS, "OR REPLACE", false)
+	ifNotExists := sqlutil.ContainsKeyword(beforeAS, "IF NOT EXISTS", false)
+
+	viewIdx := sqlutil.FindTopLevelKeyword(beforeAS, "VIEW")
+	if viewIdx == -1 {
 		return nil, fmt.Errorf("invalid CREATE VIEW syntax")
 	}
 
-	viewName := cleanIdentifier(m[1])
-	selectQuery := strings.TrimSpace(m[2])
+	afterView := strings.TrimSpace(beforeAS[viewIdx+4:])
+	if sqlutil.HasPrefixKeyword(afterView, "IF NOT EXISTS") {
+		afterView = strings.TrimSpace(afterView[len("IF NOT EXISTS"):])
+	}
 
-	orReplace := reOrReplaceView.MatchString(cleaned)
-	ifNotExists := reIfNotExistsView.MatchString(cleaned)
+	tokens := sqlutil.SplitTopLevelTokens(afterView)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("invalid CREATE VIEW syntax: missing view name")
+	}
+
+	viewName := cleanIdentifier(tokens[0])
 
 	view := &catalog.View{
 		Name:  viewName,
@@ -1104,15 +1187,23 @@ func (s *Coordinator) execCreateView(query string, start time.Time) (*QueryResul
 // execDropView handles DROP VIEW [IF EXISTS] <name>.
 func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-
-	re := reDropView
-	m := re.FindStringSubmatch(cleaned)
-	if len(m) < 2 {
+	if !sqlutil.HasPrefixKeyword(cleaned, "DROP VIEW") {
 		return nil, fmt.Errorf("invalid DROP VIEW syntax")
 	}
 
-	ifExists := reIfExistsView.MatchString(cleaned)
-	viewName := cleanIdentifier(strings.TrimSpace(m[1]))
+	rest := strings.TrimSpace(cleaned[len("DROP VIEW"):])
+	ifExists := false
+	if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
+		ifExists = true
+		rest = strings.TrimSpace(rest[len("IF EXISTS"):])
+	}
+
+	tokens := sqlutil.SplitTopLevelTokens(rest)
+	if len(tokens) == 0 {
+		return nil, fmt.Errorf("invalid DROP VIEW syntax: missing view name")
+	}
+
+	viewName := cleanIdentifier(tokens[0])
 
 	if err := s.catalog.DropView(viewName); err != nil {
 		if ifExists {
@@ -1139,14 +1230,23 @@ func (s *Coordinator) execDropView(query string, start time.Time) (*QueryResult,
 func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
 
+	tableName, ifExists, body, err := parseAlterTablePrefix(cleaned)
+	if err != nil {
+		return nil, err
+	}
+
 	// 0. Compound ALTER TABLE with multiple top-level comma-separated actions:
 	// e.g. "ALTER TABLE attachments ALTER COLUMN file_size TYPE BIGINT, ALTER COLUMN file_size SET NOT NULL;"
 	// or "ALTER TABLE sso_users DROP CONSTRAINT ..., ADD CONSTRAINT ..."
-	if m := reAlterTablePrefix.FindStringSubmatch(cleaned); len(m) >= 4 {
-		prefix := m[1]
-		body := strings.TrimSpace(m[3])
-		segments := sqlutil.SplitTopLevel(body, ',')
-		if len(segments) > 1 && reLeadingAction.MatchString(strings.TrimSpace(segments[1])) {
+	segments := sqlutil.SplitTopLevel(body, ',')
+	if len(segments) > 1 {
+		firstTok := strings.ToUpper(strings.Fields(strings.TrimSpace(segments[1]))[0])
+		if firstTok == "ADD" || firstTok == "DROP" || firstTok == "ALTER" || firstTok == "RENAME" {
+			prefix := "ALTER TABLE "
+			if ifExists {
+				prefix += "IF EXISTS "
+			}
+			prefix += tableName
 			var lastRes *QueryResult
 			for _, seg := range segments {
 				segTrimmed := strings.TrimSpace(seg)
@@ -1167,30 +1267,24 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 	}
 
 	// 1. Check for IF EXISTS table clause
-	cleanedUpper := strings.ToUpper(cleaned)
-	if sqlutil.ContainsKeyword(cleaned, "ALTER TABLE IF EXISTS", false) {
-		// Extract table name to check existence
-		fields := strings.Fields(cleaned)
-		if len(fields) >= 5 {
-			tblName := cleanIdentifier(fields[4])
-			if _, err := s.engine.GetTable(tblName); err != nil && errors.Is(err, storage.ErrTableNotFound) {
-				return &QueryResult{
-					Success:    true,
-					Command:    "ALTER TABLE",
-					DurationUS: time.Since(start).Microseconds(),
-					Messages:   []string{fmt.Sprintf("Table %q does not exist (skipped)", tblName)},
-				}, nil
-			}
+	if ifExists {
+		if _, err := s.engine.GetTable(tableName); err != nil && errors.Is(err, storage.ErrTableNotFound) {
+			return &QueryResult{
+				Success:    true,
+				Command:    "ALTER TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Table %q does not exist (skipped)", tableName)},
+			}, nil
 		}
 	}
 
-	// 2. ALTER TABLE <table> DROP PARTITION '<part>' (or without quotes)
-	dropPartRe := reDropPartition
-	if m := dropPartRe.FindStringSubmatch(cleaned); len(m) == 3 {
-		tableName := cleanIdentifier(m[1])
-		partitionName := strings.TrimSpace(m[2])
+	bodyUpper := strings.ToUpper(body)
 
-		// RBAC Check
+	// 2. ALTER TABLE <table> DROP PARTITION '<part>' (or without quotes)
+	if sqlutil.HasPrefixKeyword(body, "DROP PARTITION") {
+		partRaw := strings.TrimSpace(body[len("DROP PARTITION"):])
+		partitionName := strings.Trim(strings.TrimSpace(partRaw), "';\" ")
+
 		if err := s.checkTableAccess(cs, tableName, auth.PrivDelete); err != nil {
 			return nil, err
 		}
@@ -1210,46 +1304,63 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 	}
 
 	// 3. ALTER TABLE <table> ADD [CONSTRAINT <name>] UNIQUE (<cols>)
-	if m := reAlterAddUnique.FindStringSubmatch(cleaned); len(m) >= 4 {
-		tableName := cleanIdentifier(m[1])
-		cName := cleanIdentifier(m[2])
-		colsRaw := m[3]
+	if sqlutil.HasPrefixKeyword(body, "ADD") && (sqlutil.ContainsKeyword(body, "UNIQUE", false) || strings.Contains(bodyUpper, "UNIQUE(")) && !sqlutil.ContainsKeyword(body, "COLUMN", false) {
+		openIdx := sqlutil.FindTopLevelChar(body, '(')
+		if openIdx != -1 {
+			closeIdx := sqlutil.FindMatchingParen(body, openIdx)
+			if closeIdx != -1 {
+				colsRaw := body[openIdx+1 : closeIdx]
+				var cols []string
+				for _, c := range strings.Split(colsRaw, ",") {
+					ct := cleanIdentifier(strings.TrimSpace(c))
+					if ct != "" {
+						cols = append(cols, ct)
+					}
+				}
+				beforeOpen := strings.TrimSpace(body[:openIdx])
+				cName := ""
+				if cIdx := sqlutil.FindTopLevelKeyword(beforeOpen, "CONSTRAINT"); cIdx != -1 {
+					cTokens := sqlutil.SplitTopLevelTokens(strings.TrimSpace(beforeOpen[cIdx+len("CONSTRAINT"):]))
+					if len(cTokens) > 0 {
+						cName = cleanIdentifier(cTokens[0])
+					}
+				}
+				if cName == "" {
+					cName = fmt.Sprintf("uq_%s_%s", tableName, strings.Join(cols, "_"))
+				}
 
-		if err := s.checkTableAccess(cs, tableName, auth.PrivUpdate); err != nil {
-			return nil, err
-		}
+				if err := s.checkTableAccess(cs, tableName, auth.PrivUpdate); err != nil {
+					return nil, err
+				}
 
-		var cols []string
-		for _, c := range strings.Split(colsRaw, ",") {
-			ct := cleanIdentifier(strings.TrimSpace(c))
-			if ct != "" {
-				cols = append(cols, ct)
+				idxSchema := &storage.IndexSchema{
+					Name:      cName,
+					TableName: tableName,
+					Columns:   cols,
+					Unique:    true,
+				}
+				_ = s.engine.CreateIndex(idxSchema)
+				s.InvalidatePKBypassCache()
+
+				return &QueryResult{
+					Success:    true,
+					Command:    "ALTER TABLE",
+					DurationUS: time.Since(start).Microseconds(),
+					Messages:   []string{fmt.Sprintf("Unique constraint %q added to table %q", cName, tableName)},
+				}, nil
 			}
 		}
-		if cName == "" {
-			cName = fmt.Sprintf("uq_%s_%s", tableName, strings.Join(cols, "_"))
-		}
-		idxSchema := &storage.IndexSchema{
-			Name:      cName,
-			TableName: tableName,
-			Columns:   cols,
-			Unique:    true,
-		}
-		_ = s.engine.CreateIndex(idxSchema)
-		s.InvalidatePKBypassCache()
-
-		return &QueryResult{
-			Success:    true,
-			Command:    "ALTER TABLE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Unique constraint %q added to table %q", cName, tableName)},
-		}, nil
 	}
 
 	// 4. ALTER TABLE <table> ADD [CONSTRAINT <name>] FOREIGN KEY (<cols>) REFERENCES ...
-	if m := reAlterAddFK.FindStringSubmatch(cleaned); len(m) >= 5 {
-		tableName := cleanIdentifier(m[1])
-		cName := cleanIdentifier(m[2])
+	if sqlutil.HasPrefixKeyword(body, "ADD") && sqlutil.ContainsKeyword(body, "FOREIGN KEY", false) && sqlutil.ContainsKeyword(body, "REFERENCES", false) {
+		cName := ""
+		if cIdx := sqlutil.FindTopLevelKeyword(body, "CONSTRAINT"); cIdx != -1 {
+			cTokens := sqlutil.SplitTopLevelTokens(strings.TrimSpace(body[cIdx+len("CONSTRAINT"):]))
+			if len(cTokens) > 0 {
+				cName = cleanIdentifier(cTokens[0])
+			}
+		}
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER TABLE",
@@ -1259,8 +1370,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 	}
 
 	// 5. ALTER TABLE <table> ADD [CONSTRAINT <name>] CHECK (...)
-	if m := reAlterAddCheck.FindStringSubmatch(cleaned); len(m) >= 2 {
-		tableName := cleanIdentifier(m[1])
+	if sqlutil.HasPrefixKeyword(body, "ADD") && (sqlutil.ContainsKeyword(body, "CHECK", false) || strings.Contains(bodyUpper, "CHECK(")) && !sqlutil.ContainsKeyword(body, "COLUMN", false) {
 		return &QueryResult{
 			Success:    true,
 			Command:    "ALTER TABLE",
@@ -1270,136 +1380,182 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 	}
 
 	// 6. ALTER TABLE <table> ADD [CONSTRAINT <name>] PRIMARY KEY (<cols>)
-	if m := reAlterAddPK.FindStringSubmatch(cleaned); len(m) >= 4 {
-		tableName := cleanIdentifier(m[1])
-		cName := cleanIdentifier(m[2])
-		colsRaw := m[3]
-		var cols []string
-		for _, c := range strings.Split(colsRaw, ",") {
-			ct := cleanIdentifier(strings.TrimSpace(c))
-			if ct != "" {
-				cols = append(cols, ct)
-			}
-		}
-		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-			for i := range sch.Columns {
-				sch.Columns[i].PrimaryKey = false
-			}
-			for _, col := range cols {
-				for i := range sch.Columns {
-					if strings.EqualFold(sch.Columns[i].Name, col) {
-						sch.Columns[i].PrimaryKey = true
+	if sqlutil.HasPrefixKeyword(body, "ADD") && sqlutil.ContainsKeyword(body, "PRIMARY KEY", false) && !sqlutil.ContainsKeyword(body, "COLUMN", false) {
+		openIdx := sqlutil.FindTopLevelChar(body, '(')
+		if openIdx != -1 {
+			closeIdx := sqlutil.FindMatchingParen(body, openIdx)
+			if closeIdx != -1 {
+				colsRaw := body[openIdx+1 : closeIdx]
+				var cols []string
+				for _, c := range strings.Split(colsRaw, ",") {
+					ct := cleanIdentifier(strings.TrimSpace(c))
+					if ct != "" {
+						cols = append(cols, ct)
 					}
 				}
+				cName := ""
+				beforeOpen := strings.TrimSpace(body[:openIdx])
+				if cIdx := sqlutil.FindTopLevelKeyword(beforeOpen, "CONSTRAINT"); cIdx != -1 {
+					cTokens := sqlutil.SplitTopLevelTokens(strings.TrimSpace(beforeOpen[cIdx+len("CONSTRAINT"):]))
+					if len(cTokens) > 0 {
+						cName = cleanIdentifier(cTokens[0])
+					}
+				}
+				_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+					for i := range sch.Columns {
+						sch.Columns[i].PrimaryKey = false
+					}
+					for _, col := range cols {
+						for i := range sch.Columns {
+							if strings.EqualFold(sch.Columns[i].Name, col) {
+								sch.Columns[i].PrimaryKey = true
+							}
+						}
+					}
+					return nil
+				})
+				s.InvalidatePKBypassCache()
+				return &QueryResult{
+					Success:    true,
+					Command:    "ALTER TABLE",
+					DurationUS: time.Since(start).Microseconds(),
+					Messages:   []string{fmt.Sprintf("Primary key %q added to table %q", cName, tableName)},
+				}, nil
 			}
-			return nil
-		})
-		s.InvalidatePKBypassCache()
-		return &QueryResult{
-			Success:    true,
-			Command:    "ALTER TABLE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Primary key %q added to table %q", cName, tableName)},
-		}, nil
+		}
 	}
 
 	// 7. ALTER TABLE <table> DROP CONSTRAINT [IF EXISTS] <name>
-	if m := reAlterDropConstraint.FindStringSubmatch(cleaned); len(m) >= 3 {
-		tableName := cleanIdentifier(m[1])
-		cName := cleanIdentifier(m[2])
-		if strings.HasSuffix(strings.ToLower(cName), "_pkey") || strings.Contains(strings.ToUpper(cleaned), "PRIMARY KEY") {
-			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-				for i := range sch.Columns {
-					sch.Columns[i].PrimaryKey = false
-				}
-				return nil
-			})
+	if sqlutil.HasPrefixKeyword(body, "DROP CONSTRAINT") {
+		rest := strings.TrimSpace(body[len("DROP CONSTRAINT"):])
+		if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
+			rest = strings.TrimSpace(rest[len("IF EXISTS"):])
 		}
-		_ = s.engine.DropIndex(tableName, cName)
-		s.InvalidatePKBypassCache()
+		tokens := sqlutil.SplitTopLevelTokens(rest)
+		if len(tokens) > 0 {
+			cName := cleanIdentifier(tokens[0])
+			if strings.HasSuffix(strings.ToLower(cName), "_pkey") || strings.Contains(cleaned, "PRIMARY KEY") {
+				_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+					for i := range sch.Columns {
+						sch.Columns[i].PrimaryKey = false
+					}
+					return nil
+				})
+			}
+			_ = s.engine.DropIndex(tableName, cName)
+			s.InvalidatePKBypassCache()
 
-		return &QueryResult{
-			Success:    true,
-			Command:    "ALTER TABLE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Constraint %q dropped from table %q", cName, tableName)},
-		}, nil
+			return &QueryResult{
+				Success:    true,
+				Command:    "ALTER TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Constraint %q dropped from table %q", cName, tableName)},
+			}, nil
+		}
 	}
 
 	// 8. ALTER TABLE <table> ALTER [COLUMN] <col> DROP DEFAULT
-	if m := reAlterColDropDef.FindStringSubmatch(cleaned); len(m) >= 3 {
-		tableName := cleanIdentifier(m[1])
-		colName := cleanIdentifier(m[2])
-		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-			for i := range sch.Columns {
-				if strings.EqualFold(sch.Columns[i].Name, colName) {
-					sch.Columns[i].Default = ""
-					break
+	if sqlutil.HasPrefixKeyword(body, "ALTER") && sqlutil.ContainsKeyword(body, "DROP DEFAULT", false) {
+		afterAlter := strings.TrimSpace(body[len("ALTER"):])
+		if sqlutil.HasPrefixKeyword(afterAlter, "COLUMN") {
+			afterAlter = strings.TrimSpace(afterAlter[len("COLUMN"):])
+		}
+		ddIdx := sqlutil.FindTopLevelKeyword(afterAlter, "DROP DEFAULT")
+		if ddIdx != -1 {
+			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:ddIdx]))
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				for i := range sch.Columns {
+					if strings.EqualFold(sch.Columns[i].Name, colName) {
+						sch.Columns[i].Default = ""
+						break
+					}
 				}
-			}
-			return nil
-		})
-		return &QueryResult{
-			Success:    true,
-			Command:    "ALTER TABLE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Default dropped from column %q on table %q", colName, tableName)},
-		}, nil
+				return nil
+			})
+			return &QueryResult{
+				Success:    true,
+				Command:    "ALTER TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Default dropped from column %q on table %q", colName, tableName)},
+			}, nil
+		}
 	}
 
 	// 9. ALTER TABLE <table> ALTER [COLUMN] <col> SET DEFAULT <expr>
-	if m := reAlterColSetDef.FindStringSubmatch(cleaned); len(m) >= 4 {
-		tableName := cleanIdentifier(m[1])
-		colName := cleanIdentifier(m[2])
-		defExpr := cleanDefaultExpr(strings.TrimSpace(m[3]))
-		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-			for i := range sch.Columns {
-				if strings.EqualFold(sch.Columns[i].Name, colName) {
-					sch.Columns[i].Default = defExpr
-					break
+	if sqlutil.HasPrefixKeyword(body, "ALTER") && sqlutil.ContainsKeyword(body, "SET DEFAULT", false) {
+		afterAlter := strings.TrimSpace(body[len("ALTER"):])
+		if sqlutil.HasPrefixKeyword(afterAlter, "COLUMN") {
+			afterAlter = strings.TrimSpace(afterAlter[len("COLUMN"):])
+		}
+		sdIdx := sqlutil.FindTopLevelKeyword(afterAlter, "SET DEFAULT")
+		if sdIdx != -1 {
+			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:sdIdx]))
+			defExpr := cleanDefaultExpr(strings.TrimSpace(afterAlter[sdIdx+len("SET DEFAULT"):]))
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				for i := range sch.Columns {
+					if strings.EqualFold(sch.Columns[i].Name, colName) {
+						sch.Columns[i].Default = defExpr
+						break
+					}
 				}
-			}
-			return nil
-		})
-		return &QueryResult{
-			Success:    true,
-			Command:    "ALTER TABLE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Default set on column %q on table %q", colName, tableName)},
-		}, nil
+				return nil
+			})
+			return &QueryResult{
+				Success:    true,
+				Command:    "ALTER TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Default set on column %q on table %q", colName, tableName)},
+			}, nil
+		}
 	}
 
-	// 10. ALTER TABLE <table> ALTER [COLUMN] <col> TYPE <new_type> [USING ...]
-	if m := reAlterColType.FindStringSubmatch(cleaned); len(m) >= 4 {
-		tableName := cleanIdentifier(m[1])
-		colName := cleanIdentifier(m[2])
-		rawType := strings.ToUpper(strings.TrimSpace(m[3]))
-		baseType := rawType
-		if idx := strings.Index(baseType, "("); idx != -1 {
-			baseType = strings.TrimSpace(baseType[:idx])
+	// 10. ALTER TABLE <table> ALTER [COLUMN] <col> [SET DATA] TYPE <new_type> [USING ...]
+	if sqlutil.HasPrefixKeyword(body, "ALTER") && (sqlutil.ContainsKeyword(body, "TYPE", false) || sqlutil.ContainsKeyword(body, "SET DATA TYPE", false)) {
+		afterAlter := strings.TrimSpace(body[len("ALTER"):])
+		if sqlutil.HasPrefixKeyword(afterAlter, "COLUMN") {
+			afterAlter = strings.TrimSpace(afterAlter[len("COLUMN"):])
 		}
-		newType := parseSQLDataType(baseType)
-		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-			for i := range sch.Columns {
-				if strings.EqualFold(sch.Columns[i].Name, colName) {
-					sch.Columns[i].Type = newType
-					break
-				}
+		typeIdx := -1
+		typeKwLen := 0
+		if idx := sqlutil.FindTopLevelKeyword(afterAlter, "SET DATA TYPE"); idx != -1 {
+			typeIdx = idx
+			typeKwLen = len("SET DATA TYPE")
+		} else if idx := sqlutil.FindTopLevelKeyword(afterAlter, "TYPE"); idx != -1 {
+			typeIdx = idx
+			typeKwLen = len("TYPE")
+		}
+		if typeIdx != -1 {
+			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:typeIdx]))
+			rawTypePart := strings.TrimSpace(afterAlter[typeIdx+typeKwLen:])
+			if uIdx := sqlutil.FindTopLevelKeyword(rawTypePart, "USING"); uIdx != -1 {
+				rawTypePart = strings.TrimSpace(rawTypePart[:uIdx])
 			}
-			return nil
-		})
-		return &QueryResult{
-			Success:    true,
-			Command:    "ALTER TABLE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Column %q type changed on table %q to %s", colName, tableName, newType)},
-		}, nil
+			baseType := strings.ToUpper(rawTypePart)
+			if idx := strings.Index(baseType, "("); idx != -1 {
+				baseType = strings.TrimSpace(baseType[:idx])
+			}
+			newType := parseSQLDataType(baseType)
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				for i := range sch.Columns {
+					if strings.EqualFold(sch.Columns[i].Name, colName) {
+						sch.Columns[i].Type = newType
+						break
+					}
+				}
+				return nil
+			})
+			return &QueryResult{
+				Success:    true,
+				Command:    "ALTER TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Column %q type changed on table %q to %s", colName, tableName, newType)},
+			}, nil
+		}
 	}
 
 	// 10b. ALTER TABLE <table> RENAME TO <new>
-	if m := reAlterRenameTable.FindStringSubmatch(cleaned); len(m) >= 3 {
-		tableName := cleanIdentifier(m[1])
-		newName := cleanIdentifier(m[2])
+	if sqlutil.HasPrefixKeyword(body, "RENAME TO") {
+		newName := cleanIdentifier(strings.TrimSpace(body[len("RENAME TO"):]))
 		if err := s.engine.RenameTable(tableName, newName); err != nil {
 			return nil, err
 		}
@@ -1413,106 +1569,111 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 	}
 
 	// 11. ALTER TABLE <table> RENAME [COLUMN] <old> TO <new>
-	if m := reAlterRenameCol.FindStringSubmatch(cleaned); len(m) >= 4 {
-		tableName := cleanIdentifier(m[1])
-		oldName := cleanIdentifier(m[2])
-		newName := cleanIdentifier(m[3])
-		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-			for i := range sch.Columns {
-				if strings.EqualFold(sch.Columns[i].Name, oldName) {
-					sch.Columns[i].Name = newName
-					break
+	if sqlutil.HasPrefixKeyword(body, "RENAME") && sqlutil.ContainsKeyword(body, "TO", false) && !sqlutil.HasPrefixKeyword(body, "RENAME TO") {
+		afterRename := strings.TrimSpace(body[len("RENAME"):])
+		if sqlutil.HasPrefixKeyword(afterRename, "COLUMN") {
+			afterRename = strings.TrimSpace(afterRename[len("COLUMN"):])
+		}
+		toIdx := sqlutil.FindTopLevelKeyword(afterRename, "TO")
+		if toIdx != -1 {
+			oldName := cleanIdentifier(strings.TrimSpace(afterRename[:toIdx]))
+			newName := cleanIdentifier(strings.TrimSpace(afterRename[toIdx+len("TO"):]))
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				for i := range sch.Columns {
+					if strings.EqualFold(sch.Columns[i].Name, oldName) {
+						sch.Columns[i].Name = newName
+						break
+					}
 				}
-			}
-			return nil
-		})
-		return &QueryResult{
-			Success:    true,
-			Command:    "ALTER TABLE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Column %q renamed to %q on table %q", oldName, newName, tableName)},
-		}, nil
+				return nil
+			})
+			return &QueryResult{
+				Success:    true,
+				Command:    "ALTER TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Column %q renamed to %q on table %q", oldName, newName, tableName)},
+			}, nil
+		}
 	}
 
 	// 12. ALTER TABLE <table> ALTER [COLUMN] <col> (DROP NOT NULL | SET NOT NULL)
-	if m := reAlterColumnNull.FindStringSubmatch(cleaned); len(m) >= 4 {
-		tableName := cleanIdentifier(m[1])
-		colName := cleanIdentifier(m[2])
-		action := strings.ToUpper(strings.TrimSpace(m[3]))
-
-		_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-			for i := range sch.Columns {
-				if strings.EqualFold(sch.Columns[i].Name, colName) {
-					if strings.Contains(action, "DROP") {
-						sch.Columns[i].Nullable = true
-					} else {
-						sch.Columns[i].Nullable = false
+	if sqlutil.HasPrefixKeyword(body, "ALTER") && (sqlutil.ContainsKeyword(body, "DROP NOT NULL", false) || sqlutil.ContainsKeyword(body, "SET NOT NULL", false)) {
+		afterAlter := strings.TrimSpace(body[len("ALTER"):])
+		if sqlutil.HasPrefixKeyword(afterAlter, "COLUMN") {
+			afterAlter = strings.TrimSpace(afterAlter[len("COLUMN"):])
+		}
+		isDrop := sqlutil.ContainsKeyword(afterAlter, "DROP NOT NULL", false)
+		action := "SET NOT NULL"
+		nullIdx := sqlutil.FindTopLevelKeyword(afterAlter, "SET NOT NULL")
+		if isDrop {
+			action = "DROP NOT NULL"
+			nullIdx = sqlutil.FindTopLevelKeyword(afterAlter, "DROP NOT NULL")
+		}
+		if nullIdx != -1 {
+			colName := cleanIdentifier(strings.TrimSpace(afterAlter[:nullIdx]))
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				for i := range sch.Columns {
+					if strings.EqualFold(sch.Columns[i].Name, colName) {
+						sch.Columns[i].Nullable = isDrop
+						break
 					}
-					break
 				}
-			}
-			return nil
-		})
-
-		return &QueryResult{
-			Success:    true,
-			Command:    "ALTER TABLE",
-			DurationUS: time.Since(start).Microseconds(),
-			Messages:   []string{fmt.Sprintf("Column %q altered on table %q (%s)", colName, tableName, action)},
-		}, nil
+				return nil
+			})
+			return &QueryResult{
+				Success:    true,
+				Command:    "ALTER TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Column %q altered on table %q (%s)", colName, tableName, action)},
+			}, nil
+		}
 	}
 
 	// 13. ALTER TABLE <table> DROP [COLUMN] [IF EXISTS] <col> (including multiple comma-separated)
-	if (strings.Contains(cleanedUpper, "DROP COLUMN") || strings.Contains(cleanedUpper, "DROP ")) && !strings.Contains(cleanedUpper, "ALTER COLUMN") && !strings.Contains(cleanedUpper, "DROP DEFAULT") && !strings.Contains(cleanedUpper, "DROP CONSTRAINT") && !strings.Contains(cleanedUpper, "DROP PARTITION") {
-		dropPartRe := regexp.MustCompile(`(?is)DROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?([^\s,;]+)`)
-		dropMatches := dropPartRe.FindAllStringSubmatch(cleaned, -1)
+	if sqlutil.HasPrefixKeyword(body, "DROP") && !sqlutil.ContainsKeyword(body, "CONSTRAINT", false) && !sqlutil.ContainsKeyword(body, "PARTITION", false) && !sqlutil.ContainsKeyword(body, "DEFAULT", false) {
+		rest := strings.TrimSpace(body[len("DROP"):])
+		if sqlutil.HasPrefixKeyword(rest, "COLUMN") {
+			rest = strings.TrimSpace(rest[len("COLUMN"):])
+		}
+		if sqlutil.HasPrefixKeyword(rest, "IF EXISTS") {
+			rest = strings.TrimSpace(rest[len("IF EXISTS"):])
+		}
 		var droppedCols []string
-		for _, dm := range dropMatches {
-			c := cleanIdentifier(dm[1])
-			if c != "" && !strings.EqualFold(c, "CONSTRAINT") && !strings.EqualFold(c, "PARTITION") && !strings.EqualFold(c, "DEFAULT") && !strings.EqualFold(c, "NOT") {
+		for _, part := range strings.Split(rest, ",") {
+			c := cleanIdentifier(part)
+			if c != "" && !strings.EqualFold(c, "IF") && !strings.EqualFold(c, "EXISTS") {
 				droppedCols = append(droppedCols, c)
 			}
 		}
 		if len(droppedCols) > 0 {
-			fields := strings.Fields(cleaned)
-			tableName := ""
-			if len(fields) >= 3 {
-				tableName = cleanIdentifier(fields[2])
-			}
-			if tableName != "" {
-				_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
-					newCols := make([]storage.Column, 0, len(sch.Columns))
-					for _, col := range sch.Columns {
-						shouldDrop := false
-						for _, dc := range droppedCols {
-							if strings.EqualFold(col.Name, dc) {
-								shouldDrop = true
-								break
-							}
-						}
-						if !shouldDrop {
-							newCols = append(newCols, col)
+			_ = s.engine.AlterTable(tableName, func(sch *storage.TableSchema) error {
+				newCols := make([]storage.Column, 0, len(sch.Columns))
+				for _, col := range sch.Columns {
+					shouldDrop := false
+					for _, dc := range droppedCols {
+						if strings.EqualFold(col.Name, dc) {
+							shouldDrop = true
+							break
 						}
 					}
-					sch.Columns = newCols
-					return nil
-				})
-				return &QueryResult{
-					Success:    true,
-					Command:    "ALTER TABLE",
-					DurationUS: time.Since(start).Microseconds(),
-					Messages:   []string{fmt.Sprintf("Columns %s dropped from table %q", strings.Join(droppedCols, ", "), tableName)},
-				}, nil
-			}
+					if !shouldDrop {
+						newCols = append(newCols, col)
+					}
+				}
+				sch.Columns = newCols
+				return nil
+			})
+			return &QueryResult{
+				Success:    true,
+				Command:    "ALTER TABLE",
+				DurationUS: time.Since(start).Microseconds(),
+				Messages:   []string{fmt.Sprintf("Columns %s dropped from table %q", strings.Join(droppedCols, ", "), tableName)},
+			}, nil
 		}
 	}
 
-	// 14. ALTER TABLE <table> ADD [COLUMN] ... (supports single or multiple comma-separated ADD COLUMN clauses, with optional IF NOT EXISTS)
-	reAddPrefix := regexp.MustCompile(`(?is)^ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?([^\s]+)\s+(ADD\s+.*)$`)
-	if m := reAddPrefix.FindStringSubmatch(cleaned); len(m) >= 3 {
-		tableName := cleanIdentifier(m[1])
-		body := strings.TrimSpace(m[2])
-
+	// 14. ALTER TABLE <table> ADD [COLUMN] ...
+	if sqlutil.HasPrefixKeyword(body, "ADD") {
 		// RBAC Check
 		if err := s.checkTableAccess(cs, tableName, auth.PrivUpdate); err != nil {
 			return nil, err
@@ -1522,15 +1683,16 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		var addedCols []string
 		for _, seg := range segments {
 			segTrimmed := strings.TrimSpace(seg)
-			segTrimmed = reLeadingAdd.ReplaceAllString(segTrimmed, "")
-			segTrimmed = strings.TrimSpace(segTrimmed)
-			segTrimmed = reLeadingColumn.ReplaceAllString(segTrimmed, "")
-			segTrimmed = strings.TrimSpace(segTrimmed)
+			if sqlutil.HasPrefixKeyword(segTrimmed, "ADD") {
+				segTrimmed = strings.TrimSpace(segTrimmed[len("ADD"):])
+			}
+			if sqlutil.HasPrefixKeyword(segTrimmed, "COLUMN") {
+				segTrimmed = strings.TrimSpace(segTrimmed[len("COLUMN"):])
+			}
 			ifNotExists := false
-			if reLeadingIfNotExists.MatchString(segTrimmed) {
+			if sqlutil.HasPrefixKeyword(segTrimmed, "IF NOT EXISTS") {
 				ifNotExists = true
-				segTrimmed = reLeadingIfNotExists.ReplaceAllString(segTrimmed, "")
-				segTrimmed = strings.TrimSpace(segTrimmed)
+				segTrimmed = strings.TrimSpace(segTrimmed[len("IF NOT EXISTS"):])
 			}
 
 			fields := strings.Fields(segTrimmed)
@@ -1538,14 +1700,12 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				continue
 			}
 			colName := cleanIdentifier(fields[0])
-			rawType := strings.ToUpper(fields[1])
-
-			// Avoid misinterpreting constraints as columns
 			colUpper := strings.ToUpper(colName)
 			if colUpper == "CONSTRAINT" || colUpper == "UNIQUE" || colUpper == "CHECK" || colUpper == "FOREIGN" || colUpper == "PRIMARY" {
 				continue
 			}
 
+			rawType := strings.ToUpper(fields[1])
 			baseType := rawType
 			if idx := strings.Index(baseType, "("); idx != -1 {
 				baseType = strings.TrimSpace(baseType[:idx])
@@ -1555,37 +1715,17 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			precision := 0
 			scale := 0
 			if dataType == storage.TypeDecimal {
-				precision = 18
-				scale = 2
-				decRe := regexp.MustCompile(`(?i)\b(?:DECIMAL|NUMERIC)\s*\(\s*(\d+)(?:\s*,\s*(\d+))?\s*\)`)
-				if dm := decRe.FindStringSubmatch(segTrimmed); len(dm) > 1 {
-					if p, err := strconv.Atoi(dm[1]); err == nil {
-						precision = p
-					}
-					if len(dm) > 2 && dm[2] != "" {
-						if sc, err := strconv.Atoi(dm[2]); err == nil {
-							scale = sc
-						}
-					}
-				}
+				precision, scale = parseDecimalPrecisionScale(segTrimmed)
 			}
 
-			isGeneratedIdentity := reGeneratedIdentity.MatchString(segTrimmed)
+			isGeneratedIdentity := sqlutil.ContainsKeyword(segTrimmed, "AS IDENTITY", false) ||
+				(sqlutil.ContainsKeyword(segTrimmed, "GENERATED", false) && sqlutil.ContainsKeyword(segTrimmed, "IDENTITY", false))
 			segUpperRest := strings.ToUpper(segTrimmed)
 			isNotNull := strings.Contains(segUpperRest, "NOT NULL") || isGeneratedIdentity
 			nullable := !isNotNull
 			isIdentity := strings.Contains(segUpperRest, "IDENTITY") || strings.Contains(segUpperRest, "AUTO_INCREMENT") || isGeneratedIdentity
 
-			segForDefault := segTrimmed
-			if isGeneratedIdentity {
-				segForDefault = reGeneratedIdentity.ReplaceAllString(segTrimmed, "")
-			}
-
-			defaultExpr := ""
-			defRe := regexp.MustCompile(`(?i)\bDEFAULT\s+(\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\'[^']*\'|\d+)`)
-			if dm := defRe.FindStringSubmatch(segForDefault); len(dm) > 1 {
-				defaultExpr = cleanDefaultExpr(dm[1])
-			}
+			defaultExpr := parseColumnDefault(segTrimmed)
 
 			col := &storage.Column{
 				Name:      colName,
@@ -1598,7 +1738,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 			}
 
 			if err := s.engine.AddColumn(tableName, col); err != nil {
-				if ifNotExists && (strings.Contains(strings.ToLower(err.Error()), "already exists") || errors.Is(err, storage.ErrKeyExists)) {
+				if ifNotExists && strings.Contains(strings.ToLower(err.Error()), "already exists") {
 					continue
 				}
 				return nil, err
@@ -1620,7 +1760,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 		}, nil
 	}
 
-	return nil, fmt.Errorf("unrecognized or unsupported ALTER TABLE statement: %q", query)
+	return nil, fmt.Errorf("unsupported ALTER TABLE action: %s", body)
 }
 
 func (s *Coordinator) execShowPartitions(tableName string, start time.Time) (*QueryResult, error) {
@@ -1782,15 +1922,28 @@ func (s *Coordinator) execShowDatabases(start time.Time) (*QueryResult, error) {
 
 func (s *Coordinator) execCreateStatistics(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	re := reCreateStats
-	matches := re.FindStringSubmatch(cleaned)
-	if len(matches) < 4 {
+	if !sqlutil.HasPrefixKeyword(cleaned, "CREATE STATISTICS") {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+	onIdx := sqlutil.FindTopLevelKeyword(cleaned, "ON")
+	if onIdx == -1 {
 		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
 	}
 
-	statName := cleanIdentifier(matches[1])
-	tableName := cleanIdentifier(matches[2])
-	colsRaw := matches[3]
+	beforeON := strings.TrimSpace(cleaned[:onIdx])
+	statName := cleanIdentifier(strings.TrimSpace(beforeON[len("CREATE STATISTICS"):]))
+	afterON := strings.TrimSpace(cleaned[onIdx+2:])
+	openParen := sqlutil.FindTopLevelChar(afterON, '(')
+	if openParen == -1 {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+	closeParen := sqlutil.FindMatchingParen(afterON, openParen)
+	if closeParen == -1 {
+		return nil, fmt.Errorf("invalid CREATE STATISTICS syntax: expected CREATE STATISTICS <name> ON <table> (<cols>)")
+	}
+
+	tableName := cleanIdentifier(strings.TrimSpace(afterON[:openParen]))
+	colsRaw := afterON[openParen+1 : closeParen]
 
 	var cols []string
 	for _, c := range strings.Split(colsRaw, ",") {
@@ -1844,23 +1997,27 @@ func (s *Coordinator) execCreateStatistics(query string, start time.Time) (*Quer
 
 func (s *Coordinator) execDropStatistics(query string, start time.Time) (*QueryResult, error) {
 	cleaned := strings.TrimRight(strings.TrimSpace(query), ";")
-	reTblOn := reDropStatsOn
-	reDot := reDropStats
+	if !sqlutil.HasPrefixKeyword(cleaned, "DROP STATISTICS") {
+		return nil, fmt.Errorf("invalid DROP STATISTICS syntax: expected DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>")
+	}
+	rest := strings.TrimSpace(cleaned[len("DROP STATISTICS"):])
 
 	var statName, tableName string
-	if m := reTblOn.FindStringSubmatch(cleaned); len(m) == 3 {
-		statName = cleanIdentifier(m[1])
-		tableName = cleanIdentifier(m[2])
-	} else if m := reDot.FindStringSubmatch(cleaned); len(m) == 2 {
-		target := cleanIdentifier(m[1])
+	if onIdx := sqlutil.FindTopLevelKeyword(rest, "ON"); onIdx != -1 {
+		statName = cleanIdentifier(strings.TrimSpace(rest[:onIdx]))
+		tableName = cleanIdentifier(strings.TrimSpace(rest[onIdx+2:]))
+	} else {
+		tokens := sqlutil.SplitTopLevelTokens(rest)
+		if len(tokens) == 0 {
+			return nil, fmt.Errorf("invalid DROP STATISTICS syntax: expected DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>")
+		}
+		target := cleanIdentifier(tokens[0])
 		if idx := strings.Index(target, "."); idx != -1 {
 			tableName = target[:idx]
 			statName = target[idx+1:]
 		} else {
 			statName = target
 		}
-	} else {
-		return nil, fmt.Errorf("invalid DROP STATISTICS syntax: expected DROP STATISTICS <name> ON <table> or DROP STATISTICS <table>.<name>")
 	}
 
 	if s.catalog != nil {

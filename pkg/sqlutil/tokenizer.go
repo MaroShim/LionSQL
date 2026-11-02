@@ -953,6 +953,10 @@ func FindTopLevelChar(s string, target byte) int {
 			continue
 		}
 
+		if depth == 0 && ch == target {
+			return i
+		}
+
 		if ch == '(' {
 			depth++
 			continue
@@ -963,13 +967,19 @@ func FindTopLevelChar(s string, target byte) int {
 			}
 			continue
 		}
-
-		if depth == 0 && ch == target {
-			return i
-		}
 	}
 
 	return -1
+}
+
+// IsWordBoundary returns true if ch represents a word boundary separator in SQL.
+func IsWordBoundary(ch byte) bool {
+	return isWordBoundary(ch)
+}
+
+// IsIdentChar returns true if ch is a valid character inside an unquoted SQL identifier.
+func IsIdentChar(ch byte) bool {
+	return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_'
 }
 
 func isWordBoundary(ch byte) bool {

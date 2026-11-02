@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,10 +13,38 @@ import (
 	"lionsql/pkg/storage"
 )
 
-var (
-	reEvalInClause    = regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)
-	reEvalEqCondition = regexp.MustCompile(`(?i)^\s*([a-zA-Z0-9_.]+)\s*=\s*(.+?)\s*$`)
-)
+// parseInCondition extracts column name, isNot, and valList from a single [NOT] IN condition.
+func parseInCondition(whereStr string) (string, bool, string, bool) {
+	whereStr = strings.TrimSpace(whereStr)
+	if !strings.HasSuffix(whereStr, ")") {
+		return "", false, "", false
+	}
+	openIdx := sqlutil.FindTopLevelChar(whereStr, '(')
+	if openIdx == -1 {
+		return "", false, "", false
+	}
+	beforeParen := strings.TrimSpace(whereStr[:openIdx])
+	valList := strings.TrimSpace(whereStr[openIdx+1 : len(whereStr)-1])
+
+	if sqlutil.ContainsKeyword(beforeParen, "NOT IN", false) {
+		kwIdx := sqlutil.FindTopLevelKeyword(beforeParen, "NOT IN")
+		if kwIdx != -1 {
+			colName := cleanIdentifier(strings.TrimSpace(beforeParen[:kwIdx]))
+			if colName != "" {
+				return colName, true, valList, true
+			}
+		}
+	} else if sqlutil.ContainsKeyword(beforeParen, "IN", false) {
+		kwIdx := sqlutil.FindTopLevelKeyword(beforeParen, "IN")
+		if kwIdx != -1 {
+			colName := cleanIdentifier(strings.TrimSpace(beforeParen[:kwIdx]))
+			if colName != "" {
+				return colName, false, valList, true
+			}
+		}
+	}
+	return "", false, "", false
+}
 
 
 func splitValues(s string) []string {
@@ -134,10 +161,7 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 
 	row := NewSQLRow(rec)
 
-	if m := reEvalInClause.FindStringSubmatch(whereStr); len(m) == 4 {
-		colName := cleanIdentifier(m[1])
-		isNot := strings.TrimSpace(m[2]) != ""
-		valList := m[3]
+	if colName, isNot, valList, ok := parseInCondition(whereStr); ok {
 		val, ok := row.Get(colName)
 		if !ok || val == nil {
 			return false
@@ -299,15 +323,9 @@ func evaluateSingleConditionMap(rec map[string]any, whereStr string) bool {
 				}
 				return strVal > rightVal
 			case "LIKE", "ILIKE":
-				pat := strings.ReplaceAll(regexp.QuoteMeta(rightVal), "%", ".*")
-				pat = strings.ReplaceAll(pat, "_", ".")
-				matched, _ := regexp.MatchString("(?i)^"+pat+"$", strVal)
-				return matched
+				return sqlutil.MatchLike(rightVal, strVal, true)
 			case "NOT LIKE", "NOT ILIKE":
-				pat := strings.ReplaceAll(regexp.QuoteMeta(rightVal), "%", ".*")
-				pat = strings.ReplaceAll(pat, "_", ".")
-				matched, _ := regexp.MatchString("(?i)^"+pat+"$", strVal)
-				return !matched
+				return !sqlutil.MatchLike(rightVal, strVal, true)
 			}
 		}
 	}
@@ -421,20 +439,26 @@ func parseEqualityConditions(where string) map[string]string {
 	parts := splitOnAnd(where)
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
-		if m := reEvalEqCondition.FindStringSubmatch(part); len(m) == 3 {
-			rawCol := m[1]
-			// Strip table qualifier (tbl.col -> col)
-			if dot := strings.LastIndex(rawCol, "."); dot != -1 {
-				rawCol = rawCol[dot+1:]
+		eqIdx := sqlutil.FindTopLevelChar(part, '=')
+		if eqIdx > 0 && eqIdx < len(part)-1 {
+			prev := part[eqIdx-1]
+			next := part[eqIdx+1]
+			if prev != '!' && prev != '<' && prev != '>' && prev != '=' && next != '=' {
+				rawCol := strings.TrimSpace(part[:eqIdx])
+				if !strings.ContainsAny(rawCol, " \t\n(),") {
+					if dot := strings.LastIndex(rawCol, "."); dot != -1 {
+						rawCol = rawCol[dot+1:]
+					}
+					rawVal := strings.TrimSpace(part[eqIdx+1:])
+					var val string
+					if (strings.HasPrefix(rawVal, "N'") || strings.HasPrefix(rawVal, "n'")) && strings.HasSuffix(rawVal, "'") && len(rawVal) >= 3 {
+						val = strings.ReplaceAll(rawVal[2:len(rawVal)-1], "''", "'")
+					} else {
+						val = strings.Trim(rawVal, "'\"")
+					}
+					result[strings.ToLower(cleanIdentifier(rawCol))] = val
+				}
 			}
-			rawVal := strings.TrimSpace(m[2])
-			var val string
-			if (strings.HasPrefix(rawVal, "N'") || strings.HasPrefix(rawVal, "n'")) && strings.HasSuffix(rawVal, "'") && len(rawVal) >= 3 {
-				val = strings.ReplaceAll(rawVal[2:len(rawVal)-1], "''", "'")
-			} else {
-				val = strings.Trim(rawVal, "'\"")
-			}
-			result[strings.ToLower(rawCol)] = val
 		}
 	}
 	return result

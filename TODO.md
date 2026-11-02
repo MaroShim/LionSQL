@@ -127,7 +127,12 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   - [x] 5. 107개 풀세트 (19,211 문장, 551,217 쿼리) 전수 재검증 100% PASS 입증 및 `scripts/verify_0.90.sh` 게이트 스크립트 작성 완료
 - [-] **`GA-VALID-2`**: `cmd/soaktest` 연속 부하(OCC `19,613` tx / WiredTiger `19,678` tx, RSS/FD/고루틴 1.00 무누수 PASS) 및 `cmd/crashtest` 100라운드 확장 실행 완료 (WiredTiger `100/100` PASS `344,129` tx, OCC `100/100` PASS `301,184` tx; 24h/72h 초장기 소크 대기)
 - [ ] **`GA-VALID-3`**: 연동 앱 2~3종 1~2주 도그푸딩
-- [ ] **`GA-REGEX-DDL-1`**: `sqlexec_ddl.go` 및 `sqlexec_eval.go`/`sqlexec_explain.go` 잔여 정규식 렉서 전환 (구현 과제)
+- [x] **`GA-REGEX-DDL-1`**: `sqlexec_ddl.go` 및 `sqlexec_eval.go`/`sqlexec_explain.go` 잔여 정규식 렉서 전환 — **[완료 (Pass)]**
+  - 설계 계획서: [`notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md`](notes/GA_REGEX_DDL_REFACTORING_PLAN.ko.md)
+  - [x] 1단계: `sqlexec_eval.go` & `sqlexec_explain.go` 조건식/설명문/서브쿼리/LIKE 정규식 제거 (`sqlutil.MatchLike`, `findSubqueryFromKind`)
+  - [x] 2단계: `sqlexec_ddl.go` 단순 DDL 라우팅(View, Table, Index, Stats, Truncate, Reindex, Functions) 토크나이저 전환
+  - [x] 3단계: `sqlexec_ddl.go` `CREATE TABLE` / `ALTER TABLE` 복합 제약조건 및 컬럼 파서 정규식 완전 박멸 (정규식 35+종 전량 제거, `"regexp"` import 0건)
+  - [x] 회귀 검증: `regex_ddl_migration_test.go` E2E 및 서브쿼리 테스트, `pkg/engine` / `pkg/sqlutil` / `pkg/api` 100% PASS
 
 ---
 
