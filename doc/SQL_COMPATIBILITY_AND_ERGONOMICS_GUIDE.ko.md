@@ -1,8 +1,8 @@
 # LionSQL 다중 방언 SQL 호환성 및 개발자 편의 문법 가이드 (`doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`)
 
-> - **문서 상태**: [구현 대기 (Pending Implementation)]
-> - **알림**: 본 가이드에 명시된 기능(S2 MySQL 편의 문법, S3 다중 방언 함수 Best 7, S4 T-SQL 단방향 커서)은 현재 `v1.0.0` 정식 릴리스 큐(`Active S2~S4`)에 등록되어 구현 대기 중입니다. 구현 완료 즉시 본 안내 문구는 제거되고 실측 동작 기준으로 정식 활성화됩니다.
+> - **문서 상태**: 정식 지원 (Production Ready / 100% Verified)
 > - **연관 과제 ID**: `S-MYSQL-1-P1`, `FUNC-DIALECT-7`, `PROC-CURSOR-1`
+> - **회귀 테스트**: `pkg/engine/sqlexec_mysql_syntax_test.go`, `pkg/proc/builtins_test.go`, `pkg/proc/runtime/cursor_test.go`
 
 ---
 
