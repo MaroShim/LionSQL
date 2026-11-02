@@ -1,4 +1,4 @@
-# Official Grafana Integration & Dual Data Source Guide on LionSQL (`doc/GRAFANA_INTEGRATION_GUIDE.md`)
+# Official Grafana Integration & Dual Data Source Guide on LionSQL (`guide/GRAFANA_INTEGRATION_GUIDE.md`)
 
 > - **Document Version**: v1.0.0
 > - **Created**: 2026-10-31
@@ -10,7 +10,7 @@
 >   - Query Data Source 2: `mssql` (`github.com/microsoft/go-mssqldb`, TDS 7.x/8.0, TCP `:1433`)
 > - **Related Documents**:
 >   - Verification Report: [`notes/GRAFANA_INTEGRATION_REPORT.ko.md`](../notes/GRAFANA_INTEGRATION_REPORT.ko.md)
->   - Korean Guide: [`doc/GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md)
+>   - Korean Guide: [`guide/GRAFANA_INTEGRATION_GUIDE.ko.md`](GRAFANA_INTEGRATION_GUIDE.ko.md)
 
 ---
 

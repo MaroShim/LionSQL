@@ -1,4 +1,4 @@
-# Official Vaultwarden Integration & Deployment Guide with LionSQL (`doc/VAULTWARDEN_INTEGRATION_GUIDE.md`)
+# Official Vaultwarden Integration & Deployment Guide with LionSQL (`guide/VAULTWARDEN_INTEGRATION_GUIDE.md`)
 
 > - **Document Version**: v1.0.0
 > - **Initial Date**: 2026-11-01

@@ -1,4 +1,4 @@
-# Official LionSQL Integration & Operation Guide for IOTA-SDK Go ERP (`doc/IOTA_ERP_INTEGRATION_GUIDE.md`)
+# Official LionSQL Integration & Operation Guide for IOTA-SDK Go ERP (`guide/IOTA_ERP_INTEGRATION_GUIDE.md`)
 
 > - **Document Version**: v1.0.0
 > - **Initial Date**: 2026-10-31
@@ -8,7 +8,7 @@
 > - **Wire Protocol**: **PostgreSQL Wire Protocol v3** (default TCP `:5433`)
 > - **Related Documents**:
 >   - Verification Report: [`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`](../notes/IOTA_ERP_INTEGRATION_REPORT.ko.md)
->   - Gitea Integration Guide: [`doc/GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md)
+>   - Gitea Integration Guide: [`guide/GITEA_INTEGRATION_GUIDE.md`](GITEA_INTEGRATION_GUIDE.md)
 
 ---
 

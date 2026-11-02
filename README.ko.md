@@ -478,6 +478,9 @@ LionSQL은 아키텍처 청사진, 내부 엔진 구현 명세서, 사용자 가
 ### [기술 문서 전체 색인 디렉터리 (doc/README.ko.md)](doc/README.ko.md)
 LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 명세서에 대한 주제별 통합 색인입니다.
 
+### [공식 오픈소스 앱 연동 가이드 디렉터리 (guide/README.ko.md)](guide/README.ko.md)
+10대 실전 서비스(`Gitea`, `Grafana`, `Metabase`, `Vaultwarden`, `Casdoor`, `Umami`, `Apache Answer`, `Woodpecker CI`, `Vikunja`, `IOTA-SDK ERP`) 무수정 구축 및 운영 가이드 모음입니다.
+
 ### 아키텍처 및 핵심 엔진 명세서
 - **[초기 설계 결정 및 아키텍처 철학](doc/FOUNDATIONAL_DESIGN_DECISIONS.md)**: WiredTiger MVCC, Go 언어 선택, T-SQL VDBE 가상 머신, PGWire 호환성, Antigravity AI 협업 방법론의 기술적 배경.
 - **[Zero-Allocation 메모리 아키텍처](doc/internal/ZERO_ALLOCATION_ARCHITECTURE.md)**: 20k TPS를 달성한 무할당 버퍼 풀링, TDS 프레임 풀링, CGO 커서 재사용, 가상 카탈로그 인터셉터 최적화.

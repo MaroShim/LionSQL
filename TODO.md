@@ -132,14 +132,14 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 
 ### [x] 2.1 `INTEG-ANSWER-1` Apache Answer (Q&A 지식베이스) — **[완료 (Pass)]**
 - 연동 보고서: [`notes/ANSWER_INTEGRATION_REPORT.ko.md`](notes/ANSWER_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`doc/ANSWER_INTEGRATION_GUIDE.ko.md`](doc/ANSWER_INTEGRATION_GUIDE.ko.md) / [`doc/ANSWER_INTEGRATION_GUIDE.md`](doc/ANSWER_INTEGRATION_GUIDE.md)
+- 운영 가이드: [`guide/ANSWER_INTEGRATION_GUIDE.ko.md`](guide/ANSWER_INTEGRATION_GUIDE.ko.md) / [`guide/ANSWER_INTEGRATION_GUIDE.md`](guide/ANSWER_INTEGRATION_GUIDE.md)
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 35개 테이블 스키마 자동 생성, VDBE 다중 행 배치 Identity 키 자동 발급, 관리자 로그인, 질문/답변 E2E 100% 무오류 완료 (Answer 소스 수정 0줄)
 
 ### [x] 2.2 `INTEG-VAULTWARDEN-1` Vaultwarden (비밀번호 관리) — **[완료 (Pass)]**
 - 연동 계획서: [`notes/VAULTWARDEN_INTEGRATION_PLAN.ko.md`](notes/VAULTWARDEN_INTEGRATION_PLAN.ko.md)
 - 연동 보고서: [`notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`](notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`doc/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](doc/VAULTWARDEN_INTEGRATION_GUIDE.ko.md) / [`doc/VAULTWARDEN_INTEGRATION_GUIDE.md`](doc/VAULTWARDEN_INTEGRATION_GUIDE.md)
+- 운영 가이드: [`guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`](guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md) / [`guide/VAULTWARDEN_INTEGRATION_GUIDE.md`](guide/VAULTWARDEN_INTEGRATION_GUIDE.md)
 - 회귀 테스트: `pkg/engine/vaultwarden_compat_test.go`
 - 스택: Rust + Diesel ORM / PGWire (`TCP :5433`)
 - 47개 Diesel ORM 마이그레이션 100% 자동 완주, 29개 테이블 생성, 복합 기본 키 `ON CONFLICT DO UPDATE`, 8바이트 Timestamp OID 1114 인코딩, KDF/JWT/비밀번호 사이퍼 CRUD/동기화 E2E 무오류 통과 (Vaultwarden 소스 수정 0줄)
@@ -155,14 +155,14 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [x] 2.4 `INTEG-METABASE-1` Metabase (BI 대시보드) — **[완료 (Pass)]**
 - 연동 계획서: [`notes/METABASE_INTEGRATION_PLAN.ko.md`](notes/METABASE_INTEGRATION_PLAN.ko.md)
 - 연동 보고서: [`notes/METABASE_INTEGRATION_REPORT.ko.md`](notes/METABASE_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`doc/METABASE_INTEGRATION_GUIDE.ko.md`](doc/METABASE_INTEGRATION_GUIDE.ko.md) / [`doc/METABASE_INTEGRATION_GUIDE.md`](doc/METABASE_INTEGRATION_GUIDE.md)
+- 운영 가이드: [`guide/METABASE_INTEGRATION_GUIDE.ko.md`](guide/METABASE_INTEGRATION_GUIDE.ko.md) / [`guide/METABASE_INTEGRATION_GUIDE.md`](guide/METABASE_INTEGRATION_GUIDE.md)
 - 회귀 테스트: `pkg/engine/metabase_compat_test.go`
 - 스택: Clojure/JVM + JDBC (`pgjdbc`, `mssql-jdbc`) / 듀얼 프로토콜 (PGWire + TDS)
 - 데이터 소스 등록(PGWire `:5433` & TDS `:1433`) 100% 무오류 통과, 스키마 인트로스펙션(테이블/컬럼/외래키/인덱스 350ms 내 완료), 비주얼 쿼리 빌더(MBQL 다중 테이블 파생 조인, COUNT/SUM 집계, `date_trunc` 시계열) 및 Native SQL 완벽 동작 검증 (Metabase 순정 컨테이너 소스 수정 0줄)
 
 ### [x] 2.5 `INTEG-UMAMI-1` Umami (웹 애널리틱스) — **[완료]**
 - 상세 보고서: [`notes/UMAMI_INTEGRATION_REPORT.ko.md`](notes/UMAMI_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`doc/UMAMI_INTEGRATION_GUIDE.ko.md`](doc/UMAMI_INTEGRATION_GUIDE.ko.md) / [`doc/UMAMI_INTEGRATION_GUIDE.md`](doc/UMAMI_INTEGRATION_GUIDE.md)
+- 운영 가이드: [`guide/UMAMI_INTEGRATION_GUIDE.ko.md`](guide/UMAMI_INTEGRATION_GUIDE.ko.md) / [`guide/UMAMI_INTEGRATION_GUIDE.md`](guide/UMAMI_INTEGRATION_GUIDE.md)
 - 단위 및 회귀 테스트: `pkg/engine/umami_compat_test.go` (`TestUmami_PrismaCanConnectQuery`, `TestUmami_PrismaTableNamespaceQuery`, `TestUmami_CountDerivedTableQuery`)
 - 스택: Next.js 16.4.2 + Prisma ORM / PGWire (`TCP :5433`)
 - Prisma 초기화 26개 마이그레이션(01~26) 100% 무오류 적용, 관리자 인증(`POST /api/auth/login`), 웹사이트 등록(`POST /api/websites`), 웹사이트 목록 조회(`GET /api/websites` 파생 테이블 집계), 웹 분석 이벤트 수집(`POST /api/send`), 통계 분석 쿼리(`GET /api/websites/{id}/stats` 복합 서브쿼리, GROUP BY 1, 2, HAVING, CASE WHEN) 완벽 검증 통과 (Umami 순정 컨테이너 소스 수정 0줄)
@@ -170,7 +170,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [x] 2.6 `INTEG-WOODPECKER-1` Woodpecker CI (CI/CD 엔진) — **[완료 (Pass)]**
 - 설계 계획서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
 - 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`doc/WOODPECKER_INTEGRATION_GUIDE.ko.md`](doc/WOODPECKER_INTEGRATION_GUIDE.ko.md) / [`doc/WOODPECKER_INTEGRATION_GUIDE.md`](doc/WOODPECKER_INTEGRATION_GUIDE.md)
+- 운영 가이드: [`guide/WOODPECKER_INTEGRATION_GUIDE.ko.md`](guide/WOODPECKER_INTEGRATION_GUIDE.ko.md) / [`guide/WOODPECKER_INTEGRATION_GUIDE.md`](guide/WOODPECKER_INTEGRATION_GUIDE.md)
 - 회귀 테스트: `pkg/engine/woodpecker_compat_test.go`
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 19개 테이블, 32개 XORM 마이그레이션 100% 무오류 자동 적용, 서버 헬스체크(`/healthz` 204), 버전 조회(`/version` v3.20.1), 웹 UI 서빙 완벽 동작 검증 (Woodpecker CI 순정 컨테이너 소스 수정 0줄)
@@ -178,7 +178,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [x] 2.7 `INTEG-VIKUNJA-1` Vikunja (프로젝트 칸반 & To-Do) — **[완료 (Pass)]**
 - 설계 계획서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_PLAN.ko.md)
 - 통합 보고서: [`notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](notes/WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)
-- 운영 가이드: [`doc/VIKUNJA_INTEGRATION_GUIDE.ko.md`](doc/VIKUNJA_INTEGRATION_GUIDE.ko.md) / [`doc/VIKUNJA_INTEGRATION_GUIDE.md`](doc/VIKUNJA_INTEGRATION_GUIDE.md)
+- 운영 가이드: [`guide/VIKUNJA_INTEGRATION_GUIDE.ko.md`](guide/VIKUNJA_INTEGRATION_GUIDE.ko.md) / [`guide/VIKUNJA_INTEGRATION_GUIDE.md`](guide/VIKUNJA_INTEGRATION_GUIDE.md)
 - 회귀 테스트: `pkg/engine/vikunja_compat_test.go`
 - 스택: Go + XORM / PGWire (`TCP :5433`)
 - 80개 이상의 XORM 마이그레이션 100% 무오류 자동 적용, 사용자 회원가입(`POST /api/v1/register`), JWT 로그인(`POST /api/v1/login`, 복합 `OR` 술어 처리), 프로젝트 및 4대 뷰(List/Gantt/Table/Kanban) 생성(`PUT /api/v1/projects`), 칸반 태스크 생성 및 상태 변경(`PUT /api/v1/projects/:id/tasks`, `POST /api/v1/tasks/:id`), 재귀 CTE(`WITH RECURSIVE`) 프로젝트 계층 탐색, 웹 UI 서빙 완벽 동작 검증 (Vikunja 순정 컨테이너 소스 수정 0줄)

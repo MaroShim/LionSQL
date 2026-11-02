@@ -5,7 +5,7 @@
 > - **핵심 검증 대상**: Gitea v1.23+ (Go 풀스택 Git 호스팅 플랫폼) & XORM (Microsoft SQL Server TDS :1433 및 PostgreSQL Wire Protocol :5433)
 > - **연계 핵심 문서**:
 >   - **기술 포스트모템**: [`notes/ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md`](ORM_SQL_COMPATIBILITY_AND_TEST_BLIND_SPOTS_POSTMORTEM.ko.md) (엔터프라이즈 ORM SQL 호환성 분석 및 테스트 사각지대 심층 회고)
->   - **공식 실전 가이드**: [`doc/GITEA_INTEGRATION_GUIDE.ko.md`](../doc/GITEA_INTEGRATION_GUIDE.ko.md) (LionSQL 기반 Gitea 듀얼 프로토콜 구축 및 프로덕션 운영 매뉴얼)
+>   - **공식 실전 가이드**: [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../guide/GITEA_INTEGRATION_GUIDE.ko.md) (LionSQL 기반 Gitea 듀얼 프로토콜 구축 및 프로덕션 운영 매뉴얼)
 
 ---
 
@@ -145,7 +145,7 @@ sequenceDiagram
 | **연결 드라이버** | `com.microsoft.sqlserver`, `go-mssqldb` | `lib/pq`, `pgx` |
 | **주요 장점** | T-SQL 고유 저장 프로시저 및 VDBE 바이트코드 직접 바인딩 최적화 | 범용 오픈소스 클라이언트 호환성 및 풍부한 커넥션 풀링 생태계 |
 | **권장 스토리지 엔진** | In-Memory OCC (초고속 인스턴스) / WiredTiger (대용량 디스크) | 동일 지원 (In-Memory OCC / WiredTiger) |
-| **상세 설정 매뉴얼** | [`doc/GITEA_INTEGRATION_GUIDE.ko.md`](../doc/GITEA_INTEGRATION_GUIDE.ko.md) 2.1절 참조 | [`doc/GITEA_INTEGRATION_GUIDE.ko.md`](../doc/GITEA_INTEGRATION_GUIDE.ko.md) 2.2절 참조 |
+| **상세 설정 매뉴얼** | [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../guide/GITEA_INTEGRATION_GUIDE.ko.md) 2.1절 참조 | [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](../guide/GITEA_INTEGRATION_GUIDE.ko.md) 2.2절 참조 |
 
 ---
 

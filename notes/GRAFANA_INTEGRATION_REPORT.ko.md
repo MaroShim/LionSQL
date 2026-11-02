@@ -8,8 +8,8 @@
 >   - 채널 1 (내부 메타데이터 DB): `github.com/lib/pq` + XORM (`PostgreSQL Wire Protocol v3 :5433`)
 >   - 채널 2 (듀얼 쿼리 데이터 소스): `grafana-postgresql-datasource` (`:5433`) & `mssql` (`Microsoft SQL Server TDS :1433`)
 > - **연계 핵심 문서**:
->   - **공식 실전 가이드 (국문)**: [`doc/GRAFANA_INTEGRATION_GUIDE.ko.md`](../doc/GRAFANA_INTEGRATION_GUIDE.ko.md)
->   - **공식 실전 가이드 (영문)**: [`doc/GRAFANA_INTEGRATION_GUIDE.md`](../doc/GRAFANA_INTEGRATION_GUIDE.md)
+>   - **공식 실전 가이드 (국문)**: [`guide/GRAFANA_INTEGRATION_GUIDE.ko.md`](../guide/GRAFANA_INTEGRATION_GUIDE.ko.md)
+>   - **공식 실전 가이드 (영문)**: [`guide/GRAFANA_INTEGRATION_GUIDE.md`](../guide/GRAFANA_INTEGRATION_GUIDE.md)
 
 ---
 

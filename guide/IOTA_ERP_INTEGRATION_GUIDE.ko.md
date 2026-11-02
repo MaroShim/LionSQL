@@ -1,4 +1,4 @@
-# LionSQL 기반 IOTA-SDK Go ERP 구축 및 운영 공식 연동 가이드 (`doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md`)
+# LionSQL 기반 IOTA-SDK Go ERP 구축 및 운영 공식 연동 가이드 (`guide/IOTA_ERP_INTEGRATION_GUIDE.ko.md`)
 
 > - **문서 버전**: v1.0.0
 > - **최초 작성일**: 2026-10-31
@@ -8,7 +8,7 @@
 > - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
 > - **참조 문서**:
 >   - 실전 연동 검증 보고서: [`notes/IOTA_ERP_INTEGRATION_REPORT.ko.md`](../notes/IOTA_ERP_INTEGRATION_REPORT.ko.md)
->   - Gitea 연동 가이드: [`doc/GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md)
+>   - Gitea 연동 가이드: [`guide/GITEA_INTEGRATION_GUIDE.ko.md`](GITEA_INTEGRATION_GUIDE.ko.md)
 
 ---
 

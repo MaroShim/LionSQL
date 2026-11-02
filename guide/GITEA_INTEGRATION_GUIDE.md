@@ -1,4 +1,4 @@
-# Official LionSQL Integration & Operation Guide for Gitea (`doc/GITEA_INTEGRATION_GUIDE.md`)
+# Official LionSQL Integration & Operation Guide for Gitea (`guide/GITEA_INTEGRATION_GUIDE.md`)
 
 > - **Document Version**: v1.0.0
 > - **Initial Date**: 2026-10-30

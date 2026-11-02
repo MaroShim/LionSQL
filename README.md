@@ -478,6 +478,9 @@ LionSQL provides comprehensive documentation covering system architecture, opera
 ### [Master Technical Documentation Directory (doc/README.md)](doc/README.md)
 Start here for a complete subject-based directory of all architectural blueprints, internals, and guides.
 
+### [Official Application Integration Guides (guide/README.md)](guide/README.md)
+Step-by-step zero-modification deployment and integration guides for 10 production applications (`Gitea`, `Grafana`, `Metabase`, `Vaultwarden`, `Casdoor`, `Umami`, `Apache Answer`, `Woodpecker CI`, `Vikunja`, and `IOTA-SDK ERP`).
+
 ### Backend-as-a-Service (BaaS) & Developer APIs
 - **[Official Web SDK & HTML Embedding Guide](doc/WEB_SDK.md)**: Universal zero-dependency client library and HTML embedding patterns for Web, Node.js, Bun, and Deno.
 - **[Auto-Generated RESTful CRUD API](doc/REST_API_RECORDS_GUIDE.md)**: Zero-code `/api/records/:table` endpoints with rich boolean filter expressions.

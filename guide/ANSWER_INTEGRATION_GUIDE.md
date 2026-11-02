@@ -1,4 +1,4 @@
-# Official Deployment and Operation Guide for Apache Answer on LionSQL (`doc/ANSWER_INTEGRATION_GUIDE.md`)
+# Official Deployment and Operation Guide for Apache Answer on LionSQL (`guide/ANSWER_INTEGRATION_GUIDE.md`)
 
 > - **Document Version**: v1.0.0
 > - **Initial Date**: 2026-11-01

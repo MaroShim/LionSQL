@@ -1,4 +1,4 @@
-# LionSQL 기반 Apache Answer 구축 및 운영 공식 연동 가이드 (`doc/ANSWER_INTEGRATION_GUIDE.ko.md`)
+# LionSQL 기반 Apache Answer 구축 및 운영 공식 연동 가이드 (`guide/ANSWER_INTEGRATION_GUIDE.ko.md`)
 
 > - **문서 버전**: v1.0.0
 > - **최초 작성일**: 2026-11-01

@@ -6,7 +6,7 @@
 > - **핵심 검증 대상**: IOTA SDK Go ERP (Go 모듈형 엔터프라이즈 ERP) & `jackc/pgx/v5` (`pgxpool`), `rubenv/sql-migrate`
 > - **지원 유선 프로토콜**: **PostgreSQL Wire Protocol v3** (기본 TCP `:5433`)
 > - **연계 핵심 문서**:
->   - **공식 실전 가이드**: [`doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md`](../doc/IOTA_ERP_INTEGRATION_GUIDE.ko.md)
+>   - **공식 실전 가이드**: [`guide/IOTA_ERP_INTEGRATION_GUIDE.ko.md`](../guide/IOTA_ERP_INTEGRATION_GUIDE.ko.md)
 >   - **Gitea 연동 보고서**: [`notes/GITEA_INTEGRATION_REPORT.ko.md`](GITEA_INTEGRATION_REPORT.ko.md)
 
 ---

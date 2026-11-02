@@ -114,4 +114,4 @@ Vaultwarden의 모든 47개 PostgreSQL 마이그레이션이 단 하나의 에�
 - 단위 회귀 테스트 `pkg/engine/vaultwarden_compat_test.go`를 추가하여 지속적인 품질 유지를 보장합니다.
 - 본 검증을 통해 작성된 산출물:
   - 연동 보고서: `notes/VAULTWARDEN_INTEGRATION_REPORT.ko.md`
-  - 배포 및 가이드: `doc/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`, `doc/VAULTWARDEN_INTEGRATION_GUIDE.md`
+  - 배포 및 가이드: `guide/VAULTWARDEN_INTEGRATION_GUIDE.ko.md`, `guide/VAULTWARDEN_INTEGRATION_GUIDE.md`

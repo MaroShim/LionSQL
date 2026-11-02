@@ -1,4 +1,4 @@
-# LionSQL 기반 Grafana 구축 및 듀얼 데이터 소스 공식 연동 가이드 (`doc/GRAFANA_INTEGRATION_GUIDE.ko.md`)
+# LionSQL 기반 Grafana 구축 및 듀얼 데이터 소스 공식 연동 가이드 (`guide/GRAFANA_INTEGRATION_GUIDE.ko.md`)
 
 > - **문서 버전**: v1.0.0
 > - **최초 작성일**: 2026-10-31
@@ -11,7 +11,7 @@
 > - **참조 문서**:
 >   - 실전 연동 검증 보고서: [`notes/GRAFANA_INTEGRATION_REPORT.ko.md`](../notes/GRAFANA_INTEGRATION_REPORT.ko.md)
 >   - 아키텍처 계획서: [`notes/GRAFANA_INTEGRATION_PLAN.ko.md`](../notes/GRAFANA_INTEGRATION_PLAN.ko.md)
->   - 영문 가이드: [`doc/GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md)
+>   - 영문 가이드: [`guide/GRAFANA_INTEGRATION_GUIDE.md`](GRAFANA_INTEGRATION_GUIDE.md)
 
 ---
 
