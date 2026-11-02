@@ -67,6 +67,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [ ] **Phase 3 (`CTE-LOWER-COORD-1`)**: 코디네이터 `execCTE`에서 VDBE Fast-Path 즉시 실행 및 비선형/분석용 CTE Fallback 파이프라인 연동
 - [ ] **Phase 4 (`CTE-LOWER-VERIFY-1`)**: 3-Way Writable CTE(주문 + 품목 + 아웃박스) 및 50 워커 동시성 정합성/레이스 프리 검증 (`pkg/engine/writable_cte_lowering_test.go`)
 
+### [ ] 1.8 `PERF-VDBE-EXTREME-OPT-1` T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 (대기)
+- 설계 계획서: [`notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)
+- [ ] **Phase 1 (`PERF-VDBE-SLOT-1`)**: 로컬 변수 제로-맵 슬롯 인덱싱 완전화 (`setVar` 6회 Map/문자열 할당 ➔ 0.2ns 배열 인덱스 직접 대입)
+- [ ] **Phase 2 (`PERF-VDBE-DML-POOL-1`)**: `OpInsert` / `OpUpdate` 레코드 풀링(`sync.Pool`) 및 AST 수식 재평가 바이패스(Direct Register 직결)
+- [ ] **Phase 3 (`PERF-VDBE-FLATTEN-1`)**: VM `Execute` 2단계 중첩 switch 호출 ➔ 단일 평탄화 인라인 루프 전환
+- [ ] **Phase 4 (`PERF-VDBE-VERIFY-1`)**: 10,000 ~ 20,000+ TPS 달성 벤치마크 및 회귀 검증
+
 ### [x] 1.4 `DURA-SLT-1` SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 — **[완료 (Pass)]**
 - 설계 계획서: [`notes/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/SQLLOGICTEST_INTEGRATION_PLAN.ko.md)
 - [x] **SLT 러너 구현 (`cmd/sqllogictest`, `pkg/slt`)**: 순수 Go 기반 표준 SLT 파일 파서, In-Process 및 PGWire 듀얼 모드, rowsort/valuesort/nosort 정렬 및 MD5 해시 대조 엔진
