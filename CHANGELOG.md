@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- establish permanent lightweight in-line performance regression gate test (`TestRegression_TransferFundsPerfGate`) in `pkg/proc/runtime`, executing 1,000 multi-worker ACID transactions in ~40ms to intercept locking convoys and latency regressions prior to commit (`PERF-REGRESSION-RECOVERY-1`)
 - implement zero-map slot indexing for local variables and parameters in T-SQL VDBE virtual machine, bypassing map lookups and string lowercasing on `OpStoreVar`/`OpLoadVar` and lazily syncing `evalCtx` only on AST row expressions, achieving 54,858 tpmC on TPC-C and 7,957 TPS on TransferFunds (`PERF-VDBE-SLOT-1`)
 - lower linear Writable CTE mutations directly into anonymous T-SQL VDBE bytecode programs with zero `#temp` tables and zero catalog locks, compressing lock hold duration from 15ms to ~60µs (250x reduction) (`PERF-CTE-LOWERING-VDBE-1`)
 - support `OUTPUT ... INTO` and `RETURNING ... INTO` in Pratt DML parser and wire values directly into VDBE variable slots (`DMLData.IntoVars`)
@@ -49,6 +50,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - support SQL-standard EXTRACT(field FROM source), EPOCH datepart, and statement_timestamp() / clock_timestamp() built-ins
 - implement PostgreSQL BYTEA hex escape (\x) round-trip serialization for envelope encryption
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
+
+### Removed
+- remove `KeyLatchManager` and `RunContext` sleep-retry loops to resolve multi-key deadlock convoys and latency stalls, restoring WiredTiger throughput to 108,000+ TPS and In-Memory OCC to 160,000+ TPS (`PERF-REGRESSION-RECOVERY-1`)
 
 ### Fixed
 - fix cross-transaction key latch deadlock during multi-worker transfer soak tests by introducing 250ms safety timeout (`storage.DefaultKeyLatchTimeout`) returning `ErrSerializationFailure` (`SQLSTATE 40001`) and decoupling `ClientSession` `cancelMu` from `cs.Mu`

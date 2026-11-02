@@ -14,7 +14,20 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 
 ---
 
-## Priority 1. 신뢰성 및 내구성 자동화 검증 (Active Sprint: Durability & Reliability)
+## Priority 1. 성능 회귀 정상화 및 회귀 방지 게이트 구축 (Active Sprint: Performance Regression Recovery)
+
+> 설계 및 실측 문서: [`notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md`](notes/PERF_REGRESSION_RECOVERY_AND_GATE_PLAN.ko.md)  
+> 목표: Grove 핫스팟 대응 과정에서 유입된 키 래치 및 슬립 재시도를 완전 제거하여 186k / 120k / 690k tpmC 기준치를 복원하고, 파이프라인 내 경량 성능 회귀 게이트를 구축합니다.
+
+### [x] 1.0 `PERF-REGRESSION-RECOVERY-1` 성능 회귀 정상화 및 회귀 방지 게이트 구축 (완료)
+- [x] **Phase 1 (`CLEAN-KEY-LATCH-1`)**: `KeyLatchManager` 및 `AcquireKeyLatch` 전량 삭제 (순수 Lock-Free OCC / MVCC B+Tree 복원)
+- [x] **Phase 2 (`CLEAN-RUN-RETRY-1`)**: `RunContext` 내 `time.After` 슬립 재시도 루프 제거 및 즉시 반환 복원
+- [x] **Phase 3 (`VERIFY-BENCH-RESTORE-1`)**: 3.3.4 송금 (In-Memory 130k~160k / WiredTiger 92k~108k) 및 3.5 TPC-C (53.5만~55만 tpmC) 복원 실측
+- [x] **Phase 4 (`TEST-PERF-GATE-1`)**: `pkg/proc/runtime/perf_regression_gate_test.go` 신설하여 `go test -race` 파이프라인 내 1,000건 ACID 송금 성능 게이트 영구 구축 (0.12s 완주, 25k+ TPS 검증)
+
+---
+
+## Priority 2. 신뢰성 및 내구성 자동화 검증 (Active Sprint: Durability & Reliability)
 
 > 설계 및 실측 문서: [`notes/DURABILITY_VERIFICATION_PLAN.ko.md`](notes/DURABILITY_VERIFICATION_PLAN.ko.md)  
 > 목표: 실제 프로세스 강제 종료(`kill -9`)와 장시간 부하(`soak`) 환경에서 커밋 데이터 손실 0건 및 자원 유계를 입증합니다.

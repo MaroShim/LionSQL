@@ -486,13 +486,6 @@ func (w *sessionTxWrapper) GetRow(tableName string, pk storage.Value) (storage.R
 	return w.Transaction.GetRow(tableName, pk)
 }
 
-func (w *sessionTxWrapper) AcquireKeyLatch(tableName, key string) error {
-	if w.Transaction != nil {
-		return w.Transaction.AcquireKeyLatch(tableName, key)
-	}
-	return nil
-}
-
 // wrapSessionTx wraps a storage.Transaction with session ephemeral table interception.
 func wrapSessionTx(cs *ClientSession, tx storage.Transaction) storage.Transaction {
 	if tx == nil || cs == nil {

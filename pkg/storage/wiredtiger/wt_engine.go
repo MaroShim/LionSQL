@@ -374,7 +374,7 @@ func (e *Engine) Open(dir string) error {
 	cHome := C.CString(dir)
 	defer C.free(unsafe.Pointer(cHome))
 
-	cConfig := C.CString("create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true),transaction_sync=(enabled=true,method=none)")
+	cConfig := C.CString("create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)")
 	defer C.free(unsafe.Pointer(cConfig))
 
 	var conn *C.WT_CONNECTION
@@ -1320,8 +1320,6 @@ type WTTx struct {
 	walOps            []memengine.WALOp
 	spWALIndices      map[string]int
 	tableCache        map[string]*storage.TableSchema
-	heldLatches       map[string]struct{}
-	latches           []func()
 }
 
 func (tx *WTTx) getTableLocked(tableName string) (*storage.TableSchema, error) {
@@ -2291,7 +2289,6 @@ func (c *wtFilteredIndexCursor) Close() error {
 func (tx *WTTx) Commit() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
-	defer tx.releaseLatchesLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
@@ -2342,7 +2339,6 @@ func (tx *WTTx) Commit() error {
 func (tx *WTTx) Rollback() error {
 	tx.mu.Lock()
 	defer tx.mu.Unlock()
-	defer tx.releaseLatchesLocked()
 
 	if tx.closed {
 		return storage.ErrTxClosed
@@ -2363,54 +2359,6 @@ func (tx *WTTx) Rollback() error {
 	}
 	_ = C.go_wt_session_reset(tx.sess.sess)
 	return nil
-}
-
-// AcquireKeyLatch acquires an in-memory striped mutex for table + key (PERF-HOTSPOT-LATCH-1).
-// Reentrant calls within the same transaction are idempotent and do not deadlock.
-// A 25ms timeout prevents cross-key deadlock cycles, returning ErrSerializationFailure on contention.
-func (tx *WTTx) AcquireKeyLatch(tableName, key string) error {
-	tx.mu.Lock()
-	if tx.closed {
-		tx.mu.Unlock()
-		return storage.ErrTxClosed
-	}
-	latchKey := strings.ToLower(strings.Trim(tableName, "[]\"`")) + ":" + key
-	if tx.heldLatches == nil {
-		tx.heldLatches = make(map[string]struct{}, 4)
-	}
-	if _, held := tx.heldLatches[latchKey]; held {
-		tx.mu.Unlock()
-		return nil
-	}
-	tx.heldLatches[latchKey] = struct{}{}
-	hasOtherLatches := len(tx.latches) > 0
-	tx.mu.Unlock()
-
-	timeout := storage.DefaultKeyLatchTimeout
-	if hasOtherLatches {
-		timeout = 0 // Prevent lock inversion deadlocks when multiple keys are updated across statements
-	}
-
-	unlock, ok := storage.GlobalKeyLatch().LockKeyWithTimeout(tableName, key, timeout)
-	if !ok {
-		tx.mu.Lock()
-		delete(tx.heldLatches, latchKey)
-		tx.mu.Unlock()
-		return storage.ErrSerializationFailure
-	}
-
-	tx.mu.Lock()
-	tx.latches = append(tx.latches, unlock)
-	tx.mu.Unlock()
-	return nil
-}
-
-func (tx *WTTx) releaseLatchesLocked() {
-	for i := len(tx.latches) - 1; i >= 0; i-- {
-		tx.latches[i]()
-	}
-	tx.latches = tx.latches[:0]
-	clear(tx.heldLatches)
 }
 
 func (tx *WTTx) Savepoint(name string) error {

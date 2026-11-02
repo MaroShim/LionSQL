@@ -895,15 +895,6 @@ vmLoop:
 			}
 		}
 
-		if !isTransientTable(data.Table) && f.tx != nil {
-			if err := f.tx.AcquireKeyLatch(data.Table, pkVal.String()); err != nil {
-				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
-					return nil, catchErr
-				}
-				continue vmLoop
-			}
-		}
-
 		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
 
 		// Fast-path Direct Row Update: bypass Record map allocations when no triggers exist

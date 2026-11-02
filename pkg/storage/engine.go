@@ -994,7 +994,6 @@ type Transaction interface {
 	SnapshotTimestamp() int64
 	CommitLSN() int64
 	CommitTimestamp() int64
-	AcquireKeyLatch(tableName, key string) error
 }
 
 // Session represents an active connection/session.

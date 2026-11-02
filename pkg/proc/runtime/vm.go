@@ -513,86 +513,48 @@ func (e *Executor) Run(prog *proc.Program, procName string, params map[string]an
 }
 
 // RunContext executes a precompiled bytecode program with ambient transaction and cancellation semantics.
-// If a concurrency serialization conflict occurs (e.g. WiredTiger WT_ROLLBACK or OCC version mismatch),
-// it automatically retries with exponential backoff and random jitter up to 5 times.
 func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName string, params map[string]any, session storage.Session) (*ExecutionResult, error) {
-	const maxConflictRetries = 5
+	start := time.Now()
 
-	for attempt := 0; attempt <= maxConflictRetries; attempt++ {
-		start := time.Now()
-
-		tx, err := session.BeginTx(storage.TxOptions{})
-		if err != nil {
-			if storage.IsWriteConflict(err) && attempt < maxConflictRetries {
-				delay := time.Duration(50*(1<<attempt))*time.Microsecond + time.Duration(storage.FastRandN(50*(attempt+1)))*time.Microsecond
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				case <-time.After(delay):
-					continue
-				}
-			}
-			return nil, fmt.Errorf("failed to begin ambient transaction: %w", err)
-		}
-
-		frame := e.newFrame(prog, tx)
-		frame.session = session
-		frame.ctx = ctx
-
-		// Bind parameters
-		frame.bindParams(params)
-
-		retVal, err := frame.Execute(0)
-		if err != nil {
-			if frame.tx != nil {
-				_ = frame.tx.Rollback()
-			}
-			e.releaseFrame(frame)
-			if storage.IsWriteConflict(err) && attempt < maxConflictRetries {
-				delay := time.Duration(50*(1<<attempt))*time.Microsecond + time.Duration(storage.FastRandN(50*(attempt+1)))*time.Microsecond
-				select {
-				case <-ctx.Done():
-					return nil, ctx.Err()
-				case <-time.After(delay):
-					continue
-				}
-			}
-			return nil, fmt.Errorf("execution error (rolled back): %w", err)
-		}
-
-		if frame.tx != nil {
-			if err := frame.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
-				_ = frame.tx.Rollback()
-				e.releaseFrame(frame)
-				if storage.IsWriteConflict(err) && attempt < maxConflictRetries {
-					delay := time.Duration(50*(1<<attempt))*time.Microsecond + time.Duration(storage.FastRandN(50*(attempt+1)))*time.Microsecond
-					select {
-					case <-ctx.Done():
-						return nil, ctx.Err()
-					case <-time.After(delay):
-						continue
-					}
-				}
-				return nil, fmt.Errorf("failed to commit ambient transaction: %w", err)
-			}
-		}
-
-		res := &ExecutionResult{
-			ReturnValue:  retVal,
-			Logs:         frame.logs,
-			Duration:     time.Since(start),
-			Rows:         frame.rows,
-			Columns:      frame.columns,
-			Values:       frame.values,
-			RowsAffected: frame.rowCount,
-			LastIdentity: frame.lastIdentity,
-			Vars:         collectFrameVars(frame),
-		}
-		e.releaseFrame(frame)
-		return res, nil
+	tx, err := session.BeginTx(storage.TxOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to begin ambient transaction: %w", err)
 	}
 
-	return nil, storage.ErrSerializationFailure
+	frame := e.newFrame(prog, tx)
+	frame.session = session
+	frame.ctx = ctx
+	defer e.releaseFrame(frame)
+
+	// Bind parameters
+	frame.bindParams(params)
+
+	retVal, err := frame.Execute(0)
+	if err != nil {
+		if frame.tx != nil {
+			_ = frame.tx.Rollback()
+		}
+		return nil, fmt.Errorf("execution error (rolled back): %w", err)
+	}
+
+	if frame.tx != nil {
+		if err := frame.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
+			_ = frame.tx.Rollback()
+			return nil, fmt.Errorf("failed to commit ambient transaction: %w", err)
+		}
+	}
+
+	return &ExecutionResult{
+		ReturnValue:  retVal,
+		Logs:         frame.logs,
+		Duration:     time.Since(start),
+		Rows:         frame.rows,
+		Columns:      frame.columns,
+		Values:       frame.values,
+		RowsAffected: frame.rowCount,
+		LastIdentity: frame.lastIdentity,
+		Vars:         collectFrameVars(frame),
+	}, nil
 }
 
 // RunInTx executes a program within an existing transaction context.
@@ -1170,11 +1132,6 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		evalCtx := f.buildRowEvalMap(nil)
 		pkAny, _ := proc.EvalRowExpr(pkValExpr, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
-		if f.tx != nil {
-			if err := f.tx.AcquireKeyLatch(data.Table, pkVal.String()); err != nil {
-				return 0, err
-			}
-		}
 		oldRec, err := f.tx.Get(data.Table, pkVal)
 		if err == nil && oldRec != nil {
 			oldRowMap := recordToMap(oldRec)
@@ -1392,11 +1349,6 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		newRows = make([]map[string]any, 0, len(toUpdate))
 	}
 	for _, item := range toUpdate {
-		if f.tx != nil {
-			if err := f.tx.AcquireKeyLatch(data.Table, item.pk.String()); err != nil {
-				return 0, err
-			}
-		}
 		if err := f.tx.Update(data.Table, item.pk, item.updates); err == nil {
 			updatedCount++
 			if hasTriggers {
