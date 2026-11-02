@@ -3,6 +3,7 @@ package storage
 import (
 	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -25,9 +26,14 @@ func GlobalKeyLatch() *KeyLatchManager {
 }
 
 // LockKey acquires the striped mutex for table + key, returning an idempotent unlock function.
+// It uses LockKeyWithTimeout with a 25ms safety timeout to prevent permanent deadlocks,
+// falling back to a blocking Lock() if needed for backwards compatibility.
 func (m *KeyLatchManager) LockKey(tableName, key string) func() {
 	if m == nil {
 		return func() {}
+	}
+	if unlock, ok := m.LockKeyWithTimeout(tableName, key, 25*time.Millisecond); ok {
+		return unlock
 	}
 	idx := hashKeyLatch(tableName, key)
 	m.stripes[idx].Lock()
@@ -36,6 +42,47 @@ func (m *KeyLatchManager) LockKey(tableName, key string) func() {
 		once.Do(func() {
 			m.stripes[idx].Unlock()
 		})
+	}
+}
+
+// LockKeyWithTimeout attempts to acquire the striped mutex within timeout.
+// If the timeout expires without acquiring the latch, it returns (nil, false) to prevent deadlocks.
+func (m *KeyLatchManager) LockKeyWithTimeout(tableName, key string, timeout time.Duration) (func(), bool) {
+	if m == nil {
+		return func() {}, true
+	}
+	idx := hashKeyLatch(tableName, key)
+	if m.stripes[idx].TryLock() {
+		var once sync.Once
+		return func() {
+			once.Do(func() {
+				m.stripes[idx].Unlock()
+			})
+		}, true
+	}
+
+	if timeout <= 0 {
+		return nil, false
+	}
+
+	deadline := time.Now().Add(timeout)
+	backoff := 50 * time.Microsecond
+	for {
+		time.Sleep(backoff)
+		if m.stripes[idx].TryLock() {
+			var once sync.Once
+			return func() {
+				once.Do(func() {
+					m.stripes[idx].Unlock()
+				})
+			}, true
+		}
+		if time.Now().After(deadline) {
+			return nil, false
+		}
+		if backoff < 500*time.Microsecond {
+			backoff *= 2
+		}
 	}
 }
 

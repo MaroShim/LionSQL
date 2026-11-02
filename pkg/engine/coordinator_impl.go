@@ -482,15 +482,7 @@ func (c *Coordinator) CancelSessionQuery(sessionID string) bool {
 		return false
 	}
 
-	cs.Mu.Lock()
-	defer cs.Mu.Unlock()
-
-	if cs.CancelFunc != nil {
-		cs.CancelRequested = true
-		cs.CancelFunc()
-		return true
-	}
-	return false
+	return cs.CancelQuery()
 }
 
 // CancelQueryBySPID cancels the active query executing on spid.
@@ -509,15 +501,7 @@ func (c *Coordinator) CancelQueryBySPID(spid int) bool {
 		return false
 	}
 
-	targetCS.Mu.Lock()
-	defer targetCS.Mu.Unlock()
-
-	if targetCS.CancelFunc != nil {
-		targetCS.CancelRequested = true
-		targetCS.CancelFunc()
-		return true
-	}
-	return false
+	return targetCS.CancelQuery()
 }
 
 // GetActiveQueries returns snapshot metadata of currently running queries.

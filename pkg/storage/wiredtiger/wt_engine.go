@@ -2367,11 +2367,12 @@ func (tx *WTTx) Rollback() error {
 
 // AcquireKeyLatch acquires an in-memory striped mutex for table + key (PERF-HOTSPOT-LATCH-1).
 // Reentrant calls within the same transaction are idempotent and do not deadlock.
-func (tx *WTTx) AcquireKeyLatch(tableName, key string) {
+// A 25ms timeout prevents cross-key deadlock cycles, returning ErrSerializationFailure on contention.
+func (tx *WTTx) AcquireKeyLatch(tableName, key string) error {
 	tx.mu.Lock()
 	if tx.closed {
 		tx.mu.Unlock()
-		return
+		return storage.ErrTxClosed
 	}
 	latchKey := strings.ToLower(strings.Trim(tableName, "[]\"`")) + ":" + key
 	if tx.heldLatches == nil {
@@ -2379,16 +2380,23 @@ func (tx *WTTx) AcquireKeyLatch(tableName, key string) {
 	}
 	if _, held := tx.heldLatches[latchKey]; held {
 		tx.mu.Unlock()
-		return
+		return nil
 	}
 	tx.heldLatches[latchKey] = struct{}{}
 	tx.mu.Unlock()
 
-	unlock := storage.GlobalKeyLatch().LockKey(tableName, key)
+	unlock, ok := storage.GlobalKeyLatch().LockKeyWithTimeout(tableName, key, 25*time.Millisecond)
+	if !ok {
+		tx.mu.Lock()
+		delete(tx.heldLatches, latchKey)
+		tx.mu.Unlock()
+		return storage.ErrSerializationFailure
+	}
 
 	tx.mu.Lock()
 	tx.latches = append(tx.latches, unlock)
 	tx.mu.Unlock()
+	return nil
 }
 
 func (tx *WTTx) releaseLatchesLocked() {

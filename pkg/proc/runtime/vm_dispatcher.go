@@ -795,7 +795,9 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		}
 
 		if !isTransientTable(data.Table) && f.tx != nil {
-			f.tx.AcquireKeyLatch(data.Table, pkVal.String())
+			if err := f.tx.AcquireKeyLatch(data.Table, pkVal.String()); err != nil {
+				return f.handleCatch(err, pc)
+			}
 		}
 
 		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")

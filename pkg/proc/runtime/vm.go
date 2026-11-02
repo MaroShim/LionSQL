@@ -1180,7 +1180,9 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 		pkAny, _ := proc.EvalRowExpr(pkValExpr, evalCtx, nil)
 		pkVal := toStorageValue(pkAny)
 		if f.tx != nil {
-			f.tx.AcquireKeyLatch(data.Table, pkVal.String())
+			if err := f.tx.AcquireKeyLatch(data.Table, pkVal.String()); err != nil {
+				return 0, err
+			}
 		}
 		oldRec, err := f.tx.Get(data.Table, pkVal)
 		if err == nil && oldRec != nil {
@@ -1400,7 +1402,9 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	}
 	for _, item := range toUpdate {
 		if f.tx != nil {
-			f.tx.AcquireKeyLatch(data.Table, item.pk.String())
+			if err := f.tx.AcquireKeyLatch(data.Table, item.pk.String()); err != nil {
+				return 0, err
+			}
 		}
 		if err := f.tx.Update(data.Table, item.pk, item.updates); err == nil {
 			updatedCount++

@@ -339,11 +339,10 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 
 	cs.Mu.Lock()
 	cs.QueryCtx = queryCtx
-	cs.CancelFunc = cancel
 	cs.RunningQuery = query
 	cs.QueryStartTime = overallStart
-	cs.CancelRequested = false
 	cs.Mu.Unlock()
+	cs.SetCancel(cancel)
 
 	stmts := splitStatements(query)
 	var lastRes *QueryResult
@@ -377,9 +376,9 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			s.Metrics().RecordQuery(cmd, dur, isErr, isSlow)
 		}
 
+		cs.ClearCancel()
 		cs.Mu.Lock()
 		cs.QueryCtx = nil
-		cs.CancelFunc = nil
 		cs.RunningQuery = ""
 		cs.Mu.Unlock()
 	}()

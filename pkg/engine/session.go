@@ -63,7 +63,44 @@ type ClientSession struct {
 	QueryStartTime  time.Time
 	CancelRequested bool
 	IsReadOnlyFn    func() bool // reports whether the engine/host is running in read-only replica mode
+	cancelMu        sync.Mutex  // dedicated lock for cooperative cancellation to avoid deadlocks with cs.Mu
 	Mu              sync.Mutex
+}
+
+// SetCancel sets the active statement cancellation function under cancelMu.
+func (cs *ClientSession) SetCancel(cancel context.CancelFunc) {
+	if cs == nil {
+		return
+	}
+	cs.cancelMu.Lock()
+	cs.CancelFunc = cancel
+	cs.CancelRequested = false
+	cs.cancelMu.Unlock()
+}
+
+// ClearCancel resets the active cancellation function under cancelMu.
+func (cs *ClientSession) ClearCancel() {
+	if cs == nil {
+		return
+	}
+	cs.cancelMu.Lock()
+	cs.CancelFunc = nil
+	cs.cancelMu.Unlock()
+}
+
+// CancelQuery invokes the active statement cancelFunc without holding cs.Mu.
+func (cs *ClientSession) CancelQuery() bool {
+	if cs == nil {
+		return false
+	}
+	cs.cancelMu.Lock()
+	defer cs.cancelMu.Unlock()
+	if cs.CancelFunc != nil {
+		cs.CancelRequested = true
+		cs.CancelFunc()
+		return true
+	}
+	return false
 }
 
 // IsReadOnly returns true if the session or host node was configured as read-only.
@@ -449,10 +486,11 @@ func (w *sessionTxWrapper) GetRow(tableName string, pk storage.Value) (storage.R
 	return w.Transaction.GetRow(tableName, pk)
 }
 
-func (w *sessionTxWrapper) AcquireKeyLatch(tableName, key string) {
+func (w *sessionTxWrapper) AcquireKeyLatch(tableName, key string) error {
 	if w.Transaction != nil {
-		w.Transaction.AcquireKeyLatch(tableName, key)
+		return w.Transaction.AcquireKeyLatch(tableName, key)
 	}
+	return nil
 }
 
 // wrapSessionTx wraps a storage.Transaction with session ephemeral table interception.
