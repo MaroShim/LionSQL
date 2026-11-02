@@ -72,7 +72,7 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - 설계 계획서: [`notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)
 - [x] **Phase 1 (`PERF-VDBE-SLOT-1`)**: 로컬 변수 제로-맵 슬롯 인덱싱 완전화 (`setVar` 6회 Map/문자열 할당 ➔ 0.2ns 배열 인덱스 직접 대입 완료, evalCtx lazy on-demand 동기화, `OpStoreVar`/`OpLoadVar`/`bindParams` 0-할당화 달성, TPC-C 54,858 tpmC 달성)
 - [x] **Phase 2 (`PERF-VDBE-DML-POOL-1`)**: DML 제로-맵 레코드 풀링(`rowScratch`), AST 산술 수식 직접 계산(`evalUpdateExprFast`), `canDirectInsert` 직결(`InsertRow`), 다중 키 교차 래치 무대기 데드락 방지(`timeout=0` fail-fast) 적용 (TransferFunds 165,187 TPS, TPC-C 636,434 tpmC / 23,576 TPS 달성)
-- [ ] **Phase 3 (`PERF-VDBE-FLATTEN-1`)**: VM `Execute` 2단계 중첩 switch 호출 ➔ 단일 평탄화 인라인 루프 전환
+- [x] **Phase 3 (`PERF-VDBE-FLATTEN-1`)**: VM `Execute` 2단계 중첩 switch 호출 ➔ 단일 평탄화 인라인 루프 전환 (`execFlowOp`/`execComputeOp`/`execTxOp`/`execStorageOp`/`execCursorAndCallOp`/`execRelOp` 6개 중간 헬퍼 호출 제거, pc 하드웨어 레지스터 고정, 163,499 TPS 유지)
 - [ ] **Phase 4 (`PERF-VDBE-VERIFY-1`)**: 12,000 ~ 25,000+ TPS 달성 벤치마크 및 회귀 검증
 
 ### [x] 1.4 `DURA-SLT-1` SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 — **[완료 (Pass)]**

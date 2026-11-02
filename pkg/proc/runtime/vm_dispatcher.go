@@ -40,147 +40,169 @@ func (f *VMFrame) aux(inst *proc.Instruction) any {
 }
 
 // execFlowOp handles control flow, exception handling, and diagnostic logging opcodes.
-func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal any, err error) {
-	switch inst.Op {
+// Execute runs the VM instruction loop starting at startPC.
+// It executes via a single flattened direct dispatch loop (PERF-VDBE-FLATTEN-1),
+// eliminating intermediate function calls and keeping pc in a hardware CPU register.
+func (f *VMFrame) Execute(startPC int) (any, error) {
+	instructions := f.prog.Instructions
+	pc := startPC
+	iterCount := 0
+
+vmLoop:
+	for pc < len(instructions) {
+		iterCount++
+		if (iterCount&63 == 0) && f.ctx != nil {
+			select {
+			case <-f.ctx.Done():
+				return nil, f.ctx.Err()
+			default:
+			}
+		}
+		inst := instructions[pc]
+		pc++
+
+		switch inst.Op {
+
+// --- Flow Control ---
 	case proc.OpHalt:
-		return true, nil, nil
+		return nil, nil
 
 	case proc.OpNop:
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpReturn:
 		if inst.A >= 0 && int(inst.A) < len(f.regs) {
-			return true, valToAny(f.regs[inst.A]), nil
+			return valToAny(f.regs[inst.A]), nil
 		}
-		return true, nil, nil
+		return nil, nil
 
 	case proc.OpJump:
-		*pc = int(inst.B)
-		return false, nil, nil
+		pc = int(inst.B)
+		continue vmLoop
 
 	case proc.OpJumpIfFalse:
 		if !isTruthy(f.regs[inst.A]) {
-			*pc = int(inst.B)
+			pc = int(inst.B)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfTrue:
 		if isTruthy(f.regs[inst.A]) {
-			*pc = int(inst.B)
+			pc = int(inst.B)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfEqInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
 		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
 			if va.IVal == vb.IVal {
-				*pc = int(inst.C)
+				pc = int(inst.C)
 			}
 		} else if storageEq(va, vb) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfNeqInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
 		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
 			if va.IVal != vb.IVal {
-				*pc = int(inst.C)
+				pc = int(inst.C)
 			}
 		} else if !storageEq(va, vb) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfLtInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
 		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
 			if va.IVal < vb.IVal {
-				*pc = int(inst.C)
+				pc = int(inst.C)
 			}
 		} else if storageLt(va, vb) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfLteInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
 		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
 			if va.IVal <= vb.IVal {
-				*pc = int(inst.C)
+				pc = int(inst.C)
 			}
 		} else if storageLte(va, vb) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfGtInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
 		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
 			if va.IVal > vb.IVal {
-				*pc = int(inst.C)
+				pc = int(inst.C)
 			}
 		} else if storageGt(va, vb) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfGteInt:
 		va, vb := f.regs[inst.A], f.regs[inst.B]
 		if va.Type == storage.TypeInt && vb.Type == storage.TypeInt && !va.IsNull && !vb.IsNull {
 			if va.IVal >= vb.IVal {
-				*pc = int(inst.C)
+				pc = int(inst.C)
 			}
 		} else if storageGte(va, vb) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfEq:
 		if storageEq(f.regs[inst.A], f.regs[inst.B]) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfNeq:
 		if !storageEq(f.regs[inst.A], f.regs[inst.B]) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfLt:
 		if storageLt(f.regs[inst.A], f.regs[inst.B]) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfLte:
 		if storageLte(f.regs[inst.A], f.regs[inst.B]) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfGt:
 		if storageGt(f.regs[inst.A], f.regs[inst.B]) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpJumpIfGte:
 		if storageGte(f.regs[inst.A], f.regs[inst.B]) {
-			*pc = int(inst.C)
+			pc = int(inst.C)
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpPushCatch:
 		f.catchStack = append(f.catchStack, int(inst.B))
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpPopCatch:
 		if len(f.catchStack) > 0 {
 			f.catchStack = f.catchStack[:len(f.catchStack)-1]
 		}
-		return false, nil, nil
+		continue vmLoop
 
 	case proc.OpThrow, proc.OpRaiserror:
 		sev := 16
@@ -206,24 +228,24 @@ func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal
 			}
 			// If severity <= 10, it is informational
 			if sev <= 10 {
-				f.logs = append(f.logs, fmt.Sprintf("%v", f.aux(inst)))
-				return false, nil, nil
+				f.logs = append(f.logs, fmt.Sprintf("%v", f.aux(&inst)))
+				continue vmLoop
 			}
 		}
 
 		f.lastError = errNum
-		msg := fmt.Sprintf("%v", f.aux(inst))
+		msg := fmt.Sprintf("%v", f.aux(&inst))
 		f.lastErrorMsg = msg
-		if pc != nil {
-			f.lastErrorLine = *pc
+		if true {
+			f.lastErrorLine = pc
 		}
 		if len(f.catchStack) > 0 {
 			catchPC := f.catchStack[len(f.catchStack)-1]
 			f.catchStack = f.catchStack[:len(f.catchStack)-1]
-			*pc = catchPC
-			return false, nil, nil
+			pc = catchPC
+			continue vmLoop
 		}
-		return false, nil, &proc.ProcError{
+		return nil, &proc.ProcError{
 			Number:   int32(errNum),
 			Severity: byte(sev),
 			State:    state,
@@ -233,16 +255,10 @@ func (f *VMFrame) execFlowOp(inst *proc.Instruction, pc *int) (halt bool, retVal
 	case proc.OpPrint:
 		v := f.regs[inst.A]
 		f.logs = append(f.logs, valToString(v))
-		return false, nil, nil
+		continue vmLoop
 
-	default:
-		return false, nil, fmt.Errorf("unexpected flow opcode: %v", inst.Op)
-	}
-}
 
-// execComputeOp handles constants, variables, arithmetic, comparisons, and boolean logic.
-func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
-	switch inst.Op {
+// --- Compute, Variables, Registers ---
 	case proc.OpLoadConst:
 		if int(inst.B) < len(f.prog.Constants) {
 			f.regs[inst.A] = f.prog.Constants[inst.B]
@@ -253,7 +269,7 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 		if slot >= 0 && int(slot) < len(f.slots) {
 			f.regs[inst.A] = f.slots[slot]
 		} else {
-			varName, _ := f.aux(inst).(string)
+			varName, _ := f.aux(&inst).(string)
 			v, found := f.getVar(varName)
 			if !found {
 				v = storage.StringValue(varName)
@@ -268,7 +284,7 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 			f.slots[slot] = val
 			f.evalCtxDirty = true
 		} else {
-			varName, _ := f.aux(inst).(string)
+			varName, _ := f.aux(&inst).(string)
 			if varName != "" {
 				f.setVar(varName, val)
 			}
@@ -328,14 +344,20 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 	case proc.OpDiv:
 		res, err := storageDiv(f.regs[inst.B], f.regs[inst.C])
 		if err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.regs[inst.A] = res
 
 	case proc.OpIntDiv:
 		res, err := storageIntDiv(f.regs[inst.B], f.regs[inst.C])
 		if err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.regs[inst.A] = res
 
@@ -456,7 +478,7 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 
 	case proc.OpIn:
 		val := f.regs[inst.B]
-		callData := f.aux(inst).(*proc.CallData)
+		callData := f.aux(&inst).(*proc.CallData)
 		if len(callData.ArgRegs) == 0 {
 			f.regs[inst.A] = storage.BoolValue(false)
 			break
@@ -496,22 +518,18 @@ func (f *VMFrame) execComputeOp(inst *proc.Instruction, pc *int) error {
 
 	case proc.OpCast:
 		srcVal := f.regs[inst.B]
-		castData := f.aux(inst).(*proc.CastData)
+		castData := f.aux(&inst).(*proc.CastData)
 		resVal, err := proc.EvalCast(srcVal, castData.TargetType, castData.Precision, castData.Scale, castData.Style, castData.Try)
 		if err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.regs[inst.A] = resVal
 
-	default:
-		return fmt.Errorf("unexpected compute opcode: %v", inst.Op)
-	}
-	return nil
-}
 
-// execTxOp handles transaction demarcation, savepoints, and rollbacks.
-func (f *VMFrame) execTxOp(inst *proc.Instruction) error {
-	switch inst.Op {
+// --- Transactions ---
 	case proc.OpTxBegin:
 		f.tranCount++
 
@@ -521,13 +539,13 @@ func (f *VMFrame) execTxOp(inst *proc.Instruction) error {
 		}
 		if f.tx != nil {
 			if err := f.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
-				return err
+				return nil, err
 			}
 		}
 		if f.session != nil {
 			newTx, err := f.session.BeginTx(storage.TxOptions{})
 			if err != nil {
-				return err
+				return nil, err
 			}
 			f.tx = newTx
 		}
@@ -538,47 +556,43 @@ func (f *VMFrame) execTxOp(inst *proc.Instruction) error {
 		}
 		if f.tx != nil {
 			if err := f.tx.Rollback(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
-				return err
+				return nil, err
 			}
 		}
 		if f.session != nil {
 			newTx, err := f.session.BeginTx(storage.TxOptions{})
 			if err != nil {
-				return err
+				return nil, err
 			}
 			f.tx = newTx
 		}
 
 	case proc.OpTxSavepoint:
-		spName, _ := f.aux(inst).(string)
+		spName, _ := f.aux(&inst).(string)
 		if err := f.tx.Savepoint(spName); err != nil {
-			return err
+			return nil, err
 		}
 
 	case proc.OpTxRollbackTo:
-		spName, _ := f.aux(inst).(string)
+		spName, _ := f.aux(&inst).(string)
 		if err := f.tx.RollbackTo(spName); err != nil {
-			return err
+			return nil, err
 		}
 
-	default:
-		return fmt.Errorf("unexpected tx opcode: %v", inst.Op)
-	}
-	return nil
-}
 
-// execStorageOp handles table DML, single-table point lookups, and SELECT INTO.
-func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
-	switch inst.Op {
+// --- Storage DML ---
 	case proc.OpInsert:
-		data := f.aux(inst).(*proc.DMLData)
+		data := f.aux(&inst).(*proc.DMLData)
 		if data.Select != nil {
 			cnt, err := f.execInsertSelect(data)
 			if err != nil {
-				return f.handleCatch(err, pc)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 			f.rowCount = cnt
-			return nil
+			continue vmLoop
 		}
 		hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "INSERT")
 
@@ -615,7 +629,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 				} else if identityCol != nil && !identityInsertAllowed {
 					for _, c := range cols {
 						if strings.EqualFold(c, identityCol.Name) {
-							return fmt.Errorf("Cannot insert explicit value for identity column in table %q when IDENTITY_INSERT is set to OFF", data.Table)
+							return nil, fmt.Errorf("Cannot insert explicit value for identity column in table %q when IDENTITY_INSERT is set to OFF", data.Table)
 						}
 					}
 				}
@@ -660,7 +674,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			}
 			if allFast {
 				if err := f.tx.InsertRow(data.Table, storage.Row{Values: f.rowScratch}); err != nil {
-					return f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), pc)
+					if catchErr := f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
 				}
 				f.rowCount++
 				if len(data.OutputCols) > 0 && len(data.IntoVars) > 0 {
@@ -673,7 +690,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 						}
 					}
 				}
-				return nil
+				continue vmLoop
 			}
 		}
 
@@ -773,9 +790,15 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 
 		if err := f.tx.Insert(data.Table, rec); err != nil {
 			if errors.Is(err, storage.ErrKeyExists) || errors.Is(err, storage.ErrUniqueViolation) {
-				return f.handleCatch(fmt.Errorf("duplicate key value violates unique constraint on %q: %w", data.Table, err), pc)
+				if catchErr := f.handleCatch(fmt.Errorf("duplicate key value violates unique constraint on %q: %w", data.Table, err), &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
-			return f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), pc)
+			if catchErr := f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.rowCount++
 		if len(data.OutputCols) > 0 {
@@ -822,12 +845,12 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		}
 		if hasTriggers {
 			if err := f.fireTriggers(data.Table, "INSERT", []map[string]any{rowMap}, nil); err != nil {
-				return err
+				return nil, err
 			}
 		}
 
 	case proc.OpUpdate:
-		data := f.aux(inst).(*proc.DMLData)
+		data := f.aux(&inst).(*proc.DMLData)
 		if data.WhereCol != "" && !f.isPKCol(data.Table, data.WhereCol) {
 			data.WhereExpr = &proc.BinaryExpr{
 				Left:  &proc.ColumnRefExpr{Name: data.WhereCol},
@@ -836,10 +859,13 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			}
 			cnt, err := f.execUpdateWhere(data)
 			if err != nil {
-				return f.handleCatch(err, pc)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 			f.rowCount = cnt
-			return nil
+			continue vmLoop
 		}
 
 		var pkVal storage.Value
@@ -861,14 +887,20 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		if tableSchema != nil {
 			for _, a := range data.Assignments {
 				if _, _, ok := tableSchema.FindColumn(a.Column); !ok {
-					return f.handleCatch(fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table), pc)
+					if catchErr := f.handleCatch(fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table), &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
 				}
 			}
 		}
 
 		if !isTransientTable(data.Table) && f.tx != nil {
 			if err := f.tx.AcquireKeyLatch(data.Table, pkVal.String()); err != nil {
-				return f.handleCatch(err, pc)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 		}
 
@@ -880,9 +912,12 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			if err != nil {
 				if errors.Is(err, storage.ErrKeyNotFound) {
 					f.rowCount = 0
-					return nil
+					continue vmLoop
 				}
-				return f.handleCatch(err, pc)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 
 			if len(oldRow.Values) == len(tableSchema.Columns) {
@@ -912,7 +947,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 						}
 						valAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
 						if err != nil {
-							return f.handleCatch(err, pc)
+							if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+								return nil, catchErr
+							}
+							continue vmLoop
 						}
 						stVal = toStorageValue(valAny)
 					}
@@ -936,9 +974,12 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 				if err := f.tx.UpdateRow(data.Table, pkVal, updatedRow); err != nil {
 					if errors.Is(err, storage.ErrKeyNotFound) {
 						f.rowCount = 0
-						return nil
+						continue vmLoop
 					}
-					return f.handleCatch(err, pc)
+					if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+						return nil, catchErr
+					}
+					continue vmLoop
 				}
 				f.rowCount = 1
 				if len(data.OutputCols) > 0 {
@@ -971,7 +1012,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 						f.rowCount = int64(len(f.rows))
 					}
 				}
-				return nil
+				continue vmLoop
 			}
 		}
 
@@ -985,7 +1026,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		for _, a := range data.Assignments {
 			valAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
 			if err != nil {
-				return f.handleCatch(err, pc)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 			colName := a.Column
 			stVal := toStorageValue(valAny)
@@ -1010,9 +1054,12 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		if err := f.tx.Update(data.Table, pkVal, rec); err != nil {
 			if errors.Is(err, storage.ErrKeyNotFound) {
 				f.rowCount = 0
-				return nil
+				continue vmLoop
 			}
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.rowCount = 1
 		if len(data.OutputCols) > 0 {
@@ -1071,20 +1118,23 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 				newRow[k] = valToAny(v)
 			}
 			if err := f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRow}, []map[string]any{oldRow}); err != nil {
-				return err
+				return nil, err
 			}
 		}
 
 	case proc.OpUpdateWhere:
-		data := f.aux(inst).(*proc.DMLData)
+		data := f.aux(&inst).(*proc.DMLData)
 		cnt, err := f.execUpdateWhere(data)
 		if err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.rowCount = cnt
 
 	case proc.OpDelete:
-		data := f.aux(inst).(*proc.DMLData)
+		data := f.aux(&inst).(*proc.DMLData)
 		if data.WhereCol != "" && !f.isPKCol(data.Table, data.WhereCol) {
 			data.WhereExpr = &proc.BinaryExpr{
 				Left:  &proc.ColumnRefExpr{Name: data.WhereCol},
@@ -1093,10 +1143,13 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			}
 			cnt, err := f.execDeleteWhere(data)
 			if err != nil {
-				return f.handleCatch(err, pc)
+				if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 			f.rowCount = cnt
-			return nil
+			continue vmLoop
 		}
 
 		var pkVal storage.Value
@@ -1117,9 +1170,12 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		if err := f.tx.Delete(data.Table, pkVal); err != nil {
 			if errors.Is(err, storage.ErrKeyNotFound) {
 				f.rowCount = 0
-				return nil
+				continue vmLoop
 			}
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.rowCount = 1
 		if len(data.OutputCols) > 0 && oldRec != nil {
@@ -1156,29 +1212,38 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		if oldRec != nil && hasTriggersDel {
 			oldRow := recordToMap(oldRec)
 			if err := f.fireTriggers(data.Table, "DELETE", nil, []map[string]any{oldRow}); err != nil {
-				return err
+				return nil, err
 			}
 		}
 
 	case proc.OpDeleteWhere:
-		data := f.aux(inst).(*proc.DMLData)
+		data := f.aux(&inst).(*proc.DMLData)
 		cnt, err := f.execDeleteWhere(data)
 		if err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.rowCount = cnt
 
 	case proc.OpTruncate:
 		tableName := f.prog.Constants[inst.A].String()
 		if err := f.execTruncate(tableName); err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 
 	case proc.OpSelectInto:
-		data := f.aux(inst).(*proc.SelectIntoData)
+		data := f.aux(&inst).(*proc.SelectIntoData)
 		val, err := f.execSelectInto(data)
 		if err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		if data.IntoVar != "" {
 			slot := inst.B
@@ -1194,7 +1259,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 		}
 
 	case proc.OpPointSelect:
-		data := f.aux(inst).(*proc.PointSelectData)
+		data := f.aux(&inst).(*proc.PointSelectData)
 		var pkVal storage.Value
 		if v, ok := f.evalRowExprFast(data.WhereVal); ok {
 			pkVal = v
@@ -1212,7 +1277,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			}
 			rows, cols, vals, err := f.execRelQuery(sql, nil)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			f.rows = rows
 			f.columns = cols
@@ -1231,7 +1296,7 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 					}
 				}
 			}
-			return nil
+			continue vmLoop
 		}
 
 		var rowMap map[string]any
@@ -1312,17 +1377,10 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			f.regs[inst.A] = storage.IntValue(f.rowCount)
 		}
 
-	default:
-		return fmt.Errorf("unexpected storage opcode: %v", inst.Op)
-	}
-	return nil
-}
 
-// execCursorAndCallOp handles cursors, built-in calls, UDFs, stored procedures, and dynamic SQL.
-func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
-	switch inst.Op {
+// --- Cursors and Calls ---
 	case proc.OpCursorOpen:
-		switch data := f.aux(inst).(type) {
+		switch data := f.aux(&inst).(type) {
 		case *proc.CursorData:
 			f.cursors[cleanSymbol(data.Name)] = &cursorState{
 				name:      cleanSymbol(data.Name),
@@ -1337,11 +1395,11 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 			curName := cleanSymbol(data)
 			cur, exists := f.cursors[curName]
 			if !exists {
-				return fmt.Errorf("cursor %s does not exist", curName)
+				return nil, fmt.Errorf("cursor %s does not exist", curName)
 			}
 			rows, cols, err := f.scanCursorRows(cur.table, cur.whereExpr, cur.columns)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			if len(cur.orderBy) > 0 && len(rows) > 1 {
 				f.sortCursorRows(rows, cur.orderBy)
@@ -1355,7 +1413,7 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 		}
 
 	case proc.OpCursorFetch:
-		data := f.aux(inst).(*proc.CursorData)
+		data := f.aux(&inst).(*proc.CursorData)
 		curName := cleanSymbol(data.Name)
 		cur, exists := f.cursors[curName]
 		if !exists || !cur.isOpen || cur.idx >= len(cur.rows) {
@@ -1388,24 +1446,24 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 		}
 
 	case proc.OpCursorClose:
-		curName := cleanSymbol(f.aux(inst).(string))
+		curName := cleanSymbol(f.aux(&inst).(string))
 		if cur, exists := f.cursors[curName]; exists {
 			cur.isOpen = false
 			cur.rows = nil // immediately release row buffer memory (Golden Rule 20, 23)
 			cur.idx = 0
 		} else {
-			return fmt.Errorf("cursor %s does not exist", curName)
+			return nil, fmt.Errorf("cursor %s does not exist", curName)
 		}
 
 	case proc.OpCursorDealloc:
-		curName := cleanSymbol(f.aux(inst).(string))
+		curName := cleanSymbol(f.aux(&inst).(string))
 		if cur, exists := f.cursors[curName]; exists {
 			cur.rows = nil
 			delete(f.cursors, curName)
 		}
 
 	case proc.OpCallBuiltin:
-		callData := f.aux(inst).(*proc.CallData)
+		callData := f.aux(&inst).(*proc.CallData)
 		var args []storage.Value
 		for _, regIdx := range callData.ArgRegs {
 			if int(regIdx) < len(f.regs) {
@@ -1451,17 +1509,23 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 		}
 
 	case proc.OpCallUDF:
-		callData := f.aux(inst).(*proc.CallData)
+		callData := f.aux(&inst).(*proc.CallData)
 		res, err := f.callUDF(callData.Name, callData.ArgRegs)
 		if err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		f.regs[inst.A] = res
 
 	case proc.OpCallProc:
-		callData := f.aux(inst).(*proc.CallData)
+		callData := f.aux(&inst).(*proc.CallData)
 		if err := f.callProc(callData.Name, callData.ArgRegs); err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 
 	case proc.OpExecDynamic:
@@ -1472,20 +1536,26 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 		}
 		sqlStr = strings.TrimSpace(sqlStr)
 		if sqlStr == "" {
-			return nil
+			continue vmLoop
 		}
 
 		prog, err := f.executor.Cache().GetOrCompile(sqlStr)
 		if err != nil {
 			prog, err = proc.Compile(sqlStr)
 			if err != nil {
-				return f.handleCatch(fmt.Errorf("dynamic SQL compile error: %w", err), pc)
+				if catchErr := f.handleCatch(fmt.Errorf("dynamic SQL compile error: %w", err), &pc); catchErr != nil {
+					return nil, catchErr
+				}
+				continue vmLoop
 			}
 		}
 
 		res, err := f.executor.ExecuteInTx(prog, nil, f.tx, f.transientTables)
 		if err != nil {
-			return f.handleCatch(fmt.Errorf("dynamic SQL execution error: %w", err), pc)
+			if catchErr := f.handleCatch(fmt.Errorf("dynamic SQL execution error: %w", err), &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		if res != nil {
 			if len(res.Logs) > 0 {
@@ -1498,18 +1568,11 @@ func (f *VMFrame) execCursorAndCallOp(inst *proc.Instruction, pc *int) error {
 			}
 		}
 
-	default:
-		return fmt.Errorf("unexpected cursor/call opcode: %v", inst.Op)
-	}
-	return nil
-}
 
-// execRelOp handles relational queries (Volcano engine), secondary index scans, and result row emission.
-func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
-	switch inst.Op {
+// --- Relational and Results ---
 	case proc.OpRelQuery:
 		var queryData *proc.RelQueryData
-		if data, ok := f.aux(inst).(*proc.RelQueryData); ok {
+		if data, ok := f.aux(&inst).(*proc.RelQueryData); ok {
 			queryData = data
 		}
 		sql := ""
@@ -1520,12 +1583,15 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 			sql = f.prog.QuerySQL
 		}
 		if sql == "" {
-			return fmt.Errorf("OpRelQuery: empty query SQL")
+			return nil, fmt.Errorf("OpRelQuery: empty query SQL")
 		}
 
 		rows, cols, vals, err := f.execRelQuery(sql, queryData)
 		if err != nil {
-			return f.handleCatch(err, pc)
+			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 
 		f.rows = rows
@@ -1560,7 +1626,7 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 		}
 
 	case proc.OpIndexScan:
-		data := f.aux(inst).(*proc.IndexScanData)
+		data := f.aux(&inst).(*proc.IndexScanData)
 		evalCtx := f.buildRowEvalMap(nil)
 
 		var lowVal *storage.Value
@@ -1585,7 +1651,10 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 			cursor, err = f.tx.IndexScan(data.Table, data.IndexName, lowVal, highVal)
 		}
 		if err != nil {
-			return f.handleCatch(fmt.Errorf("OpIndexScan on %s (%s) error: %w", data.Table, data.IndexName, err), pc)
+			if catchErr := f.handleCatch(fmt.Errorf("OpIndexScan on %s (%s) error: %w", data.Table, data.IndexName, err), &pc); catchErr != nil {
+				return nil, catchErr
+			}
+			continue vmLoop
 		}
 		defer cursor.Close()
 
@@ -1658,7 +1727,7 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 		}
 
 	case proc.OpResultRow:
-		data := f.aux(inst).(*proc.ResultRowData)
+		data := f.aux(&inst).(*proc.ResultRowData)
 		row := make(map[string]any, data.Count)
 		vals := make([]any, data.Count)
 		cols := make([]string, len(data.Columns))
@@ -1688,8 +1757,10 @@ func (f *VMFrame) execRelOp(inst *proc.Instruction, pc *int) error {
 		f.columns = cols
 		f.rowCount = int64(len(f.rows))
 
-	default:
-		return fmt.Errorf("unexpected rel opcode: %v", inst.Op)
+		default:
+			return nil, fmt.Errorf("unsupported opcode: %v", inst.Op)
+		}
 	}
-	return nil
+	return nil, nil
 }
+

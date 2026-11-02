@@ -753,78 +753,7 @@ func (e *Executor) releaseFrame(frame *VMFrame) {
 	e.framePool.Put(frame)
 }
 
-// Execute runs the VM instruction loop starting at startPC.
-func (f *VMFrame) Execute(startPC int) (any, error) {
-	instructions := f.prog.Instructions
-	pc := startPC
-	iterCount := 0
-
-	for pc < len(instructions) {
-		iterCount++
-		if (iterCount&63 == 0) && f.ctx != nil {
-			select {
-			case <-f.ctx.Done():
-				return nil, f.ctx.Err()
-			default:
-			}
-		}
-		inst := instructions[pc]
-		pc++
-
-		switch inst.Op {
-		case proc.OpHalt, proc.OpNop, proc.OpReturn, proc.OpJump, proc.OpJumpIfFalse, proc.OpJumpIfTrue,
-			proc.OpJumpIfEq, proc.OpJumpIfNeq, proc.OpJumpIfLt, proc.OpJumpIfLte, proc.OpJumpIfGt, proc.OpJumpIfGte,
-			proc.OpJumpIfEqInt, proc.OpJumpIfNeqInt, proc.OpJumpIfLtInt, proc.OpJumpIfLteInt, proc.OpJumpIfGtInt, proc.OpJumpIfGteInt,
-			proc.OpPushCatch, proc.OpPopCatch, proc.OpThrow, proc.OpRaiserror, proc.OpPrint:
-			halt, retVal, err := f.execFlowOp(&inst, &pc)
-			if err != nil {
-				return nil, err
-			}
-			if halt {
-				return retVal, nil
-			}
-
-		case proc.OpLoadConst, proc.OpLoadVar, proc.OpStoreVar, proc.OpCopy,
-			proc.OpAdd, proc.OpSub, proc.OpMul, proc.OpDiv, proc.OpNeg, proc.OpNot,
-			proc.OpAnd, proc.OpOr,
-			proc.OpEq, proc.OpNeq, proc.OpLt, proc.OpLte, proc.OpGt, proc.OpGte,
-			proc.OpAddInt, proc.OpSubInt, proc.OpMulInt,
-			proc.OpEqInt, proc.OpNeqInt, proc.OpLtInt, proc.OpLteInt, proc.OpGtInt, proc.OpGteInt,
-			proc.OpLike, proc.OpBetween, proc.OpIn, proc.OpIsNull, proc.OpIsNotNull,
-			proc.OpCast:
-			if err := f.execComputeOp(&inst, &pc); err != nil {
-				return nil, err
-			}
-
-		case proc.OpTxBegin, proc.OpTxCommit, proc.OpTxRollback, proc.OpTxSavepoint, proc.OpTxRollbackTo:
-			if err := f.execTxOp(&inst); err != nil {
-				return nil, err
-			}
-
-		case proc.OpInsert, proc.OpUpdate, proc.OpUpdateWhere, proc.OpDelete, proc.OpDeleteWhere,
-			proc.OpSelectInto, proc.OpPointSelect, proc.OpTruncate:
-			if err := f.execStorageOp(&inst, &pc); err != nil {
-				return nil, err
-			}
-
-		case proc.OpCursorOpen, proc.OpCursorFetch, proc.OpCursorClose, proc.OpCursorDealloc,
-			proc.OpCallBuiltin, proc.OpCallUDF, proc.OpCallProc, proc.OpExecDynamic:
-			if err := f.execCursorAndCallOp(&inst, &pc); err != nil {
-				return nil, err
-			}
-
-		case proc.OpRelQuery, proc.OpIndexScan, proc.OpResultRow:
-			if err := f.execRelOp(&inst, &pc); err != nil {
-				return nil, err
-			}
-
-		default:
-			return nil, fmt.Errorf("unsupported opcode: %v", inst.Op)
-		}
-	}
-
-	return nil, nil
-}
+// (VMFrame.Execute is implemented in vm_dispatcher.go as a single flattened direct dispatch loop)
 
 func (f *VMFrame) bindWhereVariables(where string) string {
 	if where == "" || len(f.vars) == 0 {
