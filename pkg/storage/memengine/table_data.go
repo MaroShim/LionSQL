@@ -18,15 +18,19 @@ type IndexData struct {
 	Schema  storage.IndexSchema `json:"schema"`
 	Entries []IndexEntry        `json:"entries,omitempty"` // For JSON/MessagePack persistence
 	sl      *SkipList           `json:"-"`
+	once    sync.Once           `json:"-"`
 }
 
 func (idx *IndexData) getSkipList() *SkipList {
-	if idx.sl == nil {
-		idx.sl = NewSkipList(idx.Schema.Unique)
-		if len(idx.Entries) > 0 {
-			_ = idx.sl.FromEntries(idx.Entries)
+	idx.once.Do(func() {
+		if idx.sl == nil {
+			sl := NewSkipList(idx.Schema.Unique)
+			if len(idx.Entries) > 0 {
+				_ = sl.FromEntries(idx.Entries)
+			}
+			idx.sl = sl
 		}
-	}
+	})
 	return idx.sl
 }
 

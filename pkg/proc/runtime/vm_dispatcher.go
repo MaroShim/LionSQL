@@ -711,6 +711,48 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return f.handleCatch(fmt.Errorf("insert error on %s: %w", data.Table, err), pc)
 		}
 		f.rowCount++
+		if len(data.OutputCols) > 0 {
+			if len(data.IntoVars) > 0 {
+				for idx, outCol := range data.OutputCols {
+					if idx < len(data.IntoVars) {
+						intoVar := data.IntoVars[idx]
+						if val, ok := rec.Get(outCol); ok {
+							f.setVar(intoVar, val)
+						} else if tableSchema != nil {
+							if colSchema, _, found := tableSchema.FindColumn(outCol); found {
+								if val, ok := rec.Get(colSchema.Name); ok {
+									f.setVar(intoVar, val)
+								}
+							}
+						}
+					}
+				}
+			} else {
+				row := make(map[string]any, len(data.OutputCols))
+				vals := make([]any, len(data.OutputCols))
+				cols := make([]string, len(data.OutputCols))
+				for idx, outCol := range data.OutputCols {
+					cols[idx] = outCol
+					var val storage.Value
+					if v, ok := rec.Get(outCol); ok {
+						val = v
+					} else if tableSchema != nil {
+						if colSchema, _, found := tableSchema.FindColumn(outCol); found {
+							if v, ok := rec.Get(colSchema.Name); ok {
+								val = v
+							}
+						}
+					}
+					anyVal := valToAny(val)
+					row[outCol] = anyVal
+					vals[idx] = anyVal
+				}
+				f.rows = append(f.rows, row)
+				f.values = append(f.values, vals)
+				f.columns = cols
+				f.rowCount = int64(len(f.rows))
+			}
+		}
 		if hasTriggers {
 			if err := f.fireTriggers(data.Table, "INSERT", []map[string]any{rowMap}, nil); err != nil {
 				return err
@@ -813,6 +855,36 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 					return f.handleCatch(err, pc)
 				}
 				f.rowCount = 1
+				if len(data.OutputCols) > 0 {
+					if len(data.IntoVars) > 0 {
+						for idx, outCol := range data.OutputCols {
+							if idx < len(data.IntoVars) {
+								intoVar := data.IntoVars[idx]
+								if _, colIdx, ok := tableSchema.FindColumn(outCol); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
+									f.setVar(intoVar, updatedRow.Values[colIdx])
+								}
+							}
+						}
+					} else {
+						row := make(map[string]any, len(data.OutputCols))
+						vals := make([]any, len(data.OutputCols))
+						cols := make([]string, len(data.OutputCols))
+						for idx, outCol := range data.OutputCols {
+							cols[idx] = outCol
+							var stVal storage.Value
+							if _, colIdx, ok := tableSchema.FindColumn(outCol); ok && colIdx >= 0 && colIdx < len(updatedRow.Values) {
+								stVal = updatedRow.Values[colIdx]
+							}
+							anyVal := valToAny(stVal)
+							row[outCol] = anyVal
+							vals[idx] = anyVal
+						}
+						f.rows = append(f.rows, row)
+						f.values = append(f.values, vals)
+						f.columns = cols
+						f.rowCount = int64(len(f.rows))
+					}
+				}
 				return nil
 			}
 		}
@@ -857,6 +929,55 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return f.handleCatch(err, pc)
 		}
 		f.rowCount = 1
+		if len(data.OutputCols) > 0 {
+			merged := make(storage.Record, len(oldRec)+len(rec))
+			for k, v := range oldRec {
+				merged[k] = v
+			}
+			for k, v := range rec {
+				merged[k] = v
+			}
+			if len(data.IntoVars) > 0 {
+				for idx, outCol := range data.OutputCols {
+					if idx < len(data.IntoVars) {
+						intoVar := data.IntoVars[idx]
+						if v, ok := merged.Get(outCol); ok {
+							f.setVar(intoVar, v)
+						} else if tableSchema != nil {
+							if colSchema, _, found := tableSchema.FindColumn(outCol); found {
+								if v, ok := merged.Get(colSchema.Name); ok {
+									f.setVar(intoVar, v)
+								}
+							}
+						}
+					}
+				}
+			} else {
+				row := make(map[string]any, len(data.OutputCols))
+				vals := make([]any, len(data.OutputCols))
+				cols := make([]string, len(data.OutputCols))
+				for idx, outCol := range data.OutputCols {
+					cols[idx] = outCol
+					var stVal storage.Value
+					if v, ok := merged.Get(outCol); ok {
+						stVal = v
+					} else if tableSchema != nil {
+						if colSchema, _, found := tableSchema.FindColumn(outCol); found {
+							if v, ok := merged.Get(colSchema.Name); ok {
+								stVal = v
+							}
+						}
+					}
+					anyVal := valToAny(stVal)
+					row[outCol] = anyVal
+					vals[idx] = anyVal
+				}
+				f.rows = append(f.rows, row)
+				f.values = append(f.values, vals)
+				f.columns = cols
+				f.rowCount = int64(len(f.rows))
+			}
+		}
 		if oldRec != nil && hasTriggers {
 			oldRow := recordToMap(oldRec)
 			newRow := recordToMap(oldRec)
@@ -909,6 +1030,36 @@ func (f *VMFrame) execStorageOp(inst *proc.Instruction, pc *int) error {
 			return f.handleCatch(err, pc)
 		}
 		f.rowCount = 1
+		if len(data.OutputCols) > 0 && oldRec != nil {
+			if len(data.IntoVars) > 0 {
+				for idx, outCol := range data.OutputCols {
+					if idx < len(data.IntoVars) {
+						intoVar := data.IntoVars[idx]
+						if v, ok := oldRec.Get(outCol); ok {
+							f.setVar(intoVar, v)
+						}
+					}
+				}
+			} else {
+				row := make(map[string]any, len(data.OutputCols))
+				vals := make([]any, len(data.OutputCols))
+				cols := make([]string, len(data.OutputCols))
+				for idx, outCol := range data.OutputCols {
+					cols[idx] = outCol
+					var stVal storage.Value
+					if v, ok := oldRec.Get(outCol); ok {
+						stVal = v
+					}
+					anyVal := valToAny(stVal)
+					row[outCol] = anyVal
+					vals[idx] = anyVal
+				}
+				f.rows = append(f.rows, row)
+				f.values = append(f.values, vals)
+				f.columns = cols
+				f.rowCount = int64(len(f.rows))
+			}
+		}
 		hasTriggersDel := f.executor != nil && f.executor.HasTriggers(data.Table, "DELETE")
 		if oldRec != nil && hasTriggersDel {
 			oldRow := recordToMap(oldRec)

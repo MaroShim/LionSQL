@@ -338,6 +338,8 @@ type DMLData struct {
 	WhereVal    Expr
 	WhereExpr   Expr
 	Select      *GeneralSelectStmt
+	OutputCols  []string
+	IntoVars    []string
 }
 
 // SelectIntoData holds metadata for SELECT INTO operations.

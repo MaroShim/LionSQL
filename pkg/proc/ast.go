@@ -384,6 +384,7 @@ type InsertStmt struct {
 	Columns    []string
 	Values     []Expr
 	OutputCols []string
+	IntoVars   []string
 }
 
 func (s *InsertStmt) stmtNode() {}
@@ -409,6 +410,7 @@ type UpdateStmt struct {
 	WhereCol    string
 	WhereVal    Expr
 	OutputCols  []string
+	IntoVars    []string
 }
 
 func (s *UpdateStmt) stmtNode() {}
@@ -427,6 +429,7 @@ type DeleteStmt struct {
 	WhereCol   string
 	WhereVal   Expr
 	OutputCols []string
+	IntoVars   []string
 }
 
 func (s *DeleteStmt) stmtNode() {}
@@ -687,6 +690,7 @@ type UpdateWhereStmt struct {
 	Table       string
 	Assignments []UpdateAssignment
 	OutputCols  []string
+	IntoVars    []string
 	Where       Expr
 }
 
@@ -710,6 +714,7 @@ func (s *UpdateWhereStmt) String() string {
 type DeleteWhereStmt struct {
 	Table      string
 	OutputCols []string
+	IntoVars   []string
 	Where      Expr
 }
 
@@ -1092,6 +1097,7 @@ type GeneralInsertStmt struct {
 	Table      string
 	Columns    []string
 	OutputCols []string
+	IntoVars   []string
 	Tuples     [][]Expr
 	Select     *GeneralSelectStmt
 }

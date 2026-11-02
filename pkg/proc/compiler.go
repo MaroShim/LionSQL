@@ -179,6 +179,22 @@ func CompileStatement(sql string) (*Program, error) {
 	return c.finalizeProgram(), nil
 }
 
+// CompileStatements compiles an ordered slice of statements into a single batch VDBE Program.
+func CompileStatements(name string, stmts []Statement) (*Program, error) {
+	c := NewCompiler()
+	c.prog.Name = name
+	c.prog.Type = "BATCH"
+	for _, stmt := range stmts {
+		if err := c.compileStatement(stmt); err != nil {
+			return nil, err
+		}
+	}
+	if err := c.resolveGotos(); err != nil {
+		return nil, err
+	}
+	return c.finalizeProgram(), nil
+}
+
 // CompileQuery compiles an interactive / standalone SELECT or relational query into a VDBE Program containing OpRelQuery.
 func CompileQuery(sql string) (*Program, error) {
 	trimmed := strings.TrimSpace(sql)
@@ -796,60 +812,92 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		return nil
 
 	case *InsertStmt:
+		for _, v := range s.IntoVars {
+			c.getOrAllocSlot(cleanVarName(v))
+		}
 		c.emit(OpInsert, 0, 0, 0, &DMLData{
-			Table:    s.Table,
-			Columns:  s.Columns,
-			ValExprs: s.Values,
+			Table:      s.Table,
+			Columns:    s.Columns,
+			ValExprs:   s.Values,
+			OutputCols: s.OutputCols,
+			IntoVars:   s.IntoVars,
 		})
 		return nil
 
 	case *GeneralInsertStmt:
+		for _, v := range s.IntoVars {
+			c.getOrAllocSlot(cleanVarName(v))
+		}
 		if s.Select != nil {
 			c.emit(OpInsert, 0, 0, 0, &DMLData{
-				Table:   s.Table,
-				Columns: s.Columns,
-				Select:  s.Select,
+				Table:      s.Table,
+				Columns:    s.Columns,
+				Select:     s.Select,
+				OutputCols: s.OutputCols,
+				IntoVars:   s.IntoVars,
 			})
 			return nil
 		}
 		for _, tuple := range s.Tuples {
 			c.emit(OpInsert, 0, 0, 0, &DMLData{
-				Table:    s.Table,
-				Columns:  s.Columns,
-				ValExprs: tuple,
+				Table:      s.Table,
+				Columns:    s.Columns,
+				ValExprs:   tuple,
+				OutputCols: s.OutputCols,
+				IntoVars:   s.IntoVars,
 			})
 		}
 		return nil
 
 	case *UpdateStmt:
+		for _, v := range s.IntoVars {
+			c.getOrAllocSlot(cleanVarName(v))
+		}
 		c.emit(OpUpdate, 0, 0, 0, &DMLData{
 			Table:       s.Table,
 			Assignments: s.Assignments,
 			WhereCol:    s.WhereCol,
 			WhereVal:    s.WhereVal,
+			OutputCols:  s.OutputCols,
+			IntoVars:    s.IntoVars,
 		})
 		return nil
 
 	case *UpdateWhereStmt:
+		for _, v := range s.IntoVars {
+			c.getOrAllocSlot(cleanVarName(v))
+		}
 		c.emit(OpUpdateWhere, 0, 0, 0, &DMLData{
 			Table:       s.Table,
 			Assignments: s.Assignments,
 			WhereExpr:   s.Where,
+			OutputCols:  s.OutputCols,
+			IntoVars:    s.IntoVars,
 		})
 		return nil
 
 	case *DeleteStmt:
+		for _, v := range s.IntoVars {
+			c.getOrAllocSlot(cleanVarName(v))
+		}
 		c.emit(OpDelete, 0, 0, 0, &DMLData{
-			Table:    s.Table,
-			WhereCol: s.WhereCol,
-			WhereVal: s.WhereVal,
+			Table:      s.Table,
+			WhereCol:   s.WhereCol,
+			WhereVal:   s.WhereVal,
+			OutputCols: s.OutputCols,
+			IntoVars:   s.IntoVars,
 		})
 		return nil
 
 	case *DeleteWhereStmt:
+		for _, v := range s.IntoVars {
+			c.getOrAllocSlot(cleanVarName(v))
+		}
 		c.emit(OpDeleteWhere, 0, 0, 0, &DMLData{
-			Table:     s.Table,
-			WhereExpr: s.Where,
+			Table:      s.Table,
+			WhereExpr:  s.Where,
+			OutputCols: s.OutputCols,
+			IntoVars:   s.IntoVars,
 		})
 		return nil
 

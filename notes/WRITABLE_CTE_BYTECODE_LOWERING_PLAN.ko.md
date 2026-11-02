@@ -1,7 +1,7 @@
 # Writable CTE Stored Procedure 바이트코드 Lowering 가속 설계 계획서 (`notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-02
-> - **상태**: 설계 완료 및 구현 착수 (In Progress)
+> - **상태**: 구현 완료 및 검증 통과 (Completed & Verified)
 > - **과제 식별 코드**: `PERF-CTE-LOWERING-VDBE-1`
 > - **관련 배경**: Grove e-Commerce & ERP 복합 트랜잭션 4자 동등 벤치마크 (Writable CTE 1,164~3,121 TPS ➔ Stored Procedure 동등 4,500+ TPS 극대화)
 > - **영향 범위**: `pkg/proc/`, `pkg/proc/runtime/`, `pkg/engine/`, `pkg/engine/sqlexec_explain.go`
@@ -121,3 +121,36 @@ FROM ins_order o, ins_item i, ins_outbox e;
 | **락 보유 시간** | 10ms ~ 15ms | **100µs 이하** |
 | **처리량 (TPS)** | 1,164 ~ 3,121 TPS | **4,500+ TPS (SP 동등)** |
 | **임시 테이블 할당** | N개 생성/해제 | **0개 (Zero Allocation)** |
+
+---
+
+## 5. 구현 세부 내역 및 검증 결과
+
+### 5.1 구현 아키텍처 및 모듈
+1. **DML AST 및 바이트코드 엔진 확장 (`pkg/proc/`, `pkg/proc/runtime/`)**:
+   - `InsertStmt`, `GeneralInsertStmt`, `UpdateStmt`, `UpdateWhereStmt`, `DeleteStmt`, `DeleteWhereStmt`에 `IntoVars []string` 장착.
+   - Pratt 파서(`parser_dml.go`)에서 T-SQL `OUTPUT ... [INTO ...]` 및 PostgreSQL `RETURNING ... [INTO ...]` 구문 전역 파싱 지원.
+   - 컴파일러(`compiler.go`): `CompileStatements`를 통해 여러 DML 및 프로젝션 SELECT 문장을 단일 배치 VDBE 프로그램으로 컴파일하고 `IntoVars` 변수 슬롯 사전 할당.
+   - VDBE VM(`vm_dispatcher.go`, `vm.go`): `OpInsert`, `OpUpdate`, `OpUpdateWhere`, `OpDelete`, `OpDeleteWhere` 실행 완료 시 튜플 레코드를 `IntoVars` 슬롯에 $O(1)$ 즉시 바인딩.
+2. **선형 Writable CTE Lowering 컴파일러 (`pkg/engine/cte_lowering.go`)**:
+   - `detectLinearWritableCTE`: CTE 체인이 단일 DML 문장 체인인지 검사하고 복합 분석 절(`WINDOW`, `GROUP BY`, `ARRAY ANY`)은 Tier 2 Volcano 엔진으로 안전하게 격리.
+   - `compileLinearWritableCTE`: CTE의 RETURNING 컬럼을 `@__cte_<cte>_<col>` 레지스터 슬롯으로 매핑하고, 후속 의존 DML 및 최종 `SELECT`를 레지스터 직접 참조(`OpResultRow`)로 Lowering.
+   - `wrapInRowCountCheck`: DML 조건 실패 시(0-Row 매칭) 후속 쓰기 및 반환 생략 처리(`IF @@ROWCOUNT > 0`).
+3. **코디네이터 패스트패스 연동 (`pkg/engine/sqlexec_explain.go`)**:
+   - `execCTE` 진입 시 `tryExecuteLoweredLinearWritableCTE`를 즉시 시도하여 성공 시 Zero-TempTable, Zero-CatalogLock으로 초고속 반환.
+   - 비선형 또는 컴파일 불가 패턴 발견 시 기존 Volcano 경로로 100% 무손실 자동 폴백.
+4. **인-메모리 인덱스 스킵리스트 동시성 픽스 (`pkg/storage/memengine/table_data.go`)**:
+   - `IndexData.getSkipList()` 지연 초기화 경로에 `sync.Once`를 적용하여 50+ 고루틴 동시 쿼리 시의 데이터 레이스 완전 해소.
+
+### 5.2 검증 결과
+- **테스트 파일**: `pkg/engine/writable_cte_lowering_test.go`, `pkg/engine/writable_cte_wt_test.go`, `pkg/wire/writable_cte_pgwire_test.go`
+- **검증 항목**:
+  - `TestWritableCTELowering_3WayOrderCreation`: 주문 + 주문 품목 + 아웃박스 이벤트 동시 생성 및 6개 컬럼 반환 (PASS, 0.01s)
+  - `TestWritableCTELowering_AtomicRollbackOnConstraintFailure`: 유니크 제약 충돌 시 전 단계 원자적 롤백 (PASS, 0.00s)
+  - `TestWritableCTELowering_ChainedUpdateAndInsert`: 재고 UPDATE RETURNING ➔ 거래내역 INSERT SELECT 연쇄 처리 및 재고 부족 시 0-Row 정상 처리 (PASS, 0.00s)
+  - `TestWritableCTELowering_HighConcurrency`: 50개 고루틴 동시 Writable CTE 쿼리 실행 정합성 및 `-race` 검증 통과 (PASS, 0.01s)
+  - `TestWritableCTE_WiredTiger_50ConcurrentWorkers`: WiredTiger B+Tree 엔진 상에서 50개 워커 동시성 통과 (PASS, 0.91s)
+  - `TestPGWireWritableCTEGroveIntegration`: PostgreSQL Wire 프로토콜 상의 Extended Query 및 `::` 타입 캐스팅/배열 연동 통과 (PASS, 0.03s)
+- **3단계 파이프라인 검증 통과**:
+  - Build: `bin/lionsql`, `bin/bench`, `bin/tpcc-runtime` 컴파일 완료
+  - Test: `go test -tags wiredtiger -race ./pkg/proc/... ./pkg/engine/... ./pkg/storage/...` (100% PASS, 0 Data Race)

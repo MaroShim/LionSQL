@@ -1223,6 +1223,56 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			if err := f.tx.Update(data.Table, pkVal, recUpdates); err != nil {
 				return 0, fmt.Errorf("update error on %s: %w", data.Table, err)
 			}
+			if len(data.OutputCols) > 0 {
+				if len(data.IntoVars) > 0 {
+					for idx, outCol := range data.OutputCols {
+						if idx < len(data.IntoVars) {
+							intoVar := data.IntoVars[idx]
+							if v, ok := recUpdates.Get(outCol); ok {
+								f.setVar(intoVar, v)
+							} else if v, ok := oldRec.Get(outCol); ok {
+								f.setVar(intoVar, v)
+							} else if tableSchema != nil {
+								if colSchema, _, found := tableSchema.FindColumn(outCol); found {
+									if v, ok := recUpdates.Get(colSchema.Name); ok {
+										f.setVar(intoVar, v)
+									} else if v, ok := oldRec.Get(colSchema.Name); ok {
+										f.setVar(intoVar, v)
+									}
+								}
+							}
+						}
+					}
+				} else {
+					row := make(map[string]any, len(data.OutputCols))
+					vals := make([]any, len(data.OutputCols))
+					cols := make([]string, len(data.OutputCols))
+					for idx, outCol := range data.OutputCols {
+						cols[idx] = outCol
+						var stVal storage.Value
+						if v, ok := recUpdates.Get(outCol); ok {
+							stVal = v
+						} else if v, ok := oldRec.Get(outCol); ok {
+							stVal = v
+						} else if tableSchema != nil {
+							if colSchema, _, found := tableSchema.FindColumn(outCol); found {
+								if v, ok := recUpdates.Get(colSchema.Name); ok {
+									stVal = v
+								} else if v, ok := oldRec.Get(colSchema.Name); ok {
+									stVal = v
+								}
+							}
+						}
+						anyVal := valToAny(stVal)
+						row[outCol] = anyVal
+						vals[idx] = anyVal
+					}
+					f.rows = append(f.rows, row)
+					f.values = append(f.values, vals)
+					f.columns = cols
+					f.rowCount = int64(len(f.rows))
+				}
+			}
 			if err := f.fireTriggers(data.Table, "UPDATE", []map[string]any{newRowMap}, []map[string]any{oldRowMap}); err != nil {
 				return 0, fmt.Errorf("trigger error on %s: %w", data.Table, err)
 			}

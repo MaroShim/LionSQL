@@ -60,12 +60,12 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [ ] 1단계: 개인용 서비스(Vaultwarden / Umami / Answer)를 LionSQL에 연결해 섀도 모드 운영
 - [ ] 2단계: 프로젝트 자체 서비스(Gitea 등)로 확대 및 일 단위 백업/복원 리허설
 
-### [-] 1.7 `PERF-CTE-LOWERING-VDBE-1` Writable CTE Stored Procedure 바이트코드 Lowering 가속 (진행 중)
+### [x] 1.7 `PERF-CTE-LOWERING-VDBE-1` Writable CTE Stored Procedure 바이트코드 Lowering 가속 — **[완료 (Pass)]**
 - 설계 계획서: [`notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)
-- [ ] **Phase 1 (`CTE-LOWER-DETECT-1`)**: 선형 Writable CTE 쓰기 체인 패턴 판별기(`detectLinearWritableCTE`) 구현
-- [ ] **Phase 2 (`CTE-LOWER-COMPILE-1`)**: Writable CTE 절을 VDBE 바이트코드 프로그램(`proc.Program`)으로 Lowering하는 컴파일러(`CompileWritableCTE`) 구현
-- [ ] **Phase 3 (`CTE-LOWER-COORD-1`)**: 코디네이터 `execCTE`에서 VDBE Fast-Path 즉시 실행 및 비선형/분석용 CTE Fallback 파이프라인 연동
-- [ ] **Phase 4 (`CTE-LOWER-VERIFY-1`)**: 3-Way Writable CTE(주문 + 품목 + 아웃박스) 및 50 워커 동시성 정합성/레이스 프리 검증 (`pkg/engine/writable_cte_lowering_test.go`)
+- [x] **Phase 1 (`CTE-LOWER-DETECT-1`)**: 선형 Writable CTE 쓰기 체인 패턴 판별기(`detectLinearWritableCTE`) 구현 (`pkg/engine/cte_lowering.go`)
+- [x] **Phase 2 (`CTE-LOWER-COMPILE-1`)**: Writable CTE 절을 VDBE 바이트코드 프로그램(`proc.Program`)으로 Lowering하는 컴파일러(`compileLinearWritableCTE`) 구현 및 T-SQL `OUTPUT ... INTO` / PostgreSQL `RETURNING ... INTO` 전역 바이트코드 엔진 확장 (`pkg/proc/`, `pkg/proc/runtime/`, `pkg/engine/cte_lowering.go`)
+- [x] **Phase 3 (`CTE-LOWER-COORD-1`)**: 코디네이터 `execCTE`에서 VDBE Fast-Path 즉시 실행 및 비선형/분석용/Array ANY CTE Volcano Fallback 파이프라인 연동 (`pkg/engine/sqlexec_explain.go`)
+- [x] **Phase 4 (`CTE-LOWER-VERIFY-1`)**: 3-Way Writable CTE(주문 + 품목 + 아웃박스) 및 50 워커 동시성 정합성/원자적 롤백/레이스 프리 검증 통과 (`pkg/engine/writable_cte_lowering_test.go`)
 
 ### [ ] 1.8 `PERF-VDBE-EXTREME-OPT-1` T-SQL VDBE 바이트코드 VM 극강의 성능 쥐어짜기 5대 혁신 (대기)
 - 설계 계획서: [`notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md`](notes/VDBE_VM_EXTREME_OPTIMIZATION_PLAN.ko.md)

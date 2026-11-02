@@ -1119,6 +1119,17 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		cs, _ = s.GetOrCreateSession("default")
 	}
 
+	// Fast-Path: Lower linear mutation CTEs directly to VDBE bytecode VM (PERF-CTE-LOWERING-VDBE-1)
+	if detectLinearWritableCTE(ctes, mainSQL) {
+		res, err := s.tryExecuteLoweredLinearWritableCTE(context.Background(), ctes, mainSQL, cs, start)
+		if err != nil {
+			return nil, err
+		}
+		if res != nil {
+			return res, nil
+		}
+	}
+
 	hasWrite := isCTEWriteStmt(mainSQL)
 	if !hasWrite {
 		for _, cte := range ctes {
