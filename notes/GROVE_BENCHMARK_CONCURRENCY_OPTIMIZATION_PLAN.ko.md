@@ -1,9 +1,9 @@
 # Grove 벤치마크 기반 동시성 최적화 및 고난도 엔진 완성 설계 계획서 (`notes/GROVE_BENCHMARK_CONCURRENCY_OPTIMIZATION_PLAN.ko.md`)
 
 > - **최초 작성일**: 2026-11-02
-> - **상태**: 완료 및 전 단계 검증 통과 (Completed)
-> - **과제 식별 코드**: `PERF-GROVE-CONCURRENCY-1` (세부 과제: `BUG-WIRE-OID-1700`, `PERF-HOTSPOT-LATCH-1`, `PROC-SP-INSERT-SELECT-1`, `PERF-PGWIRE-PIPELINE-1`)
-> - **관련 배경 리포트**: Grove e-Commerce & ERP 복합 트랜잭션 4자 동등 비교 벤치마크 실측치
+> - **상태**: Phase 1~4 완료, Phase 5 설계 반영 및 구현 착수 (In Progress)
+> - **과제 식별 코드**: `PERF-GROVE-CONCURRENCY-1` (세부 과제: `BUG-WIRE-OID-1700`, `PERF-HOTSPOT-LATCH-1`, `PROC-SP-INSERT-SELECT-1`, `PERF-PGWIRE-PIPELINE-1`, `PERF-RETRY-WT-ROLLBACK-1`)
+> - **관련 배경 리포트**: Grove e-Commerce & ERP 복합 트랜잭션 4자 동등 비교 벤치마크 실측치 및 WiredTiger WriteConflictException 아키텍처
 > - **영향 범위**: `pkg/wire/`, `pkg/engine/`, `pkg/proc/`, `pkg/storage/`
 
 ---
@@ -154,6 +154,59 @@ func (m *KeyLatchManager) Acquire(table string, key string) func() {
   - `Statement` 객체에 한 번 분석된 `ColumnMeta` 및 OID 목록을 캐싱하여, 동일 세션 내 반복 실행 시 `proc.ExtractQueryCharacteristics` 및 심볼 테이블 조회를 제로(Zero-overhead)화.
 - **불필요한 사전 실행(`buildPreviewSQL`) 제거**:
   - CTE 구조에서 프로젝션 컬럼명을 정적으로 추론하여 `ExecuteSessionSQL` 사전 호출 없이 즉시 `RowDescription`을 반환.
+
+---
+
+### Phase 5: `PERF-RETRY-WT-ROLLBACK-1` WiredTiger WT_ROLLBACK(-31800) 인-커널 투명 재시도 안전망 (In-Kernel WriteConflict Retry Loop)
+
+#### 5.1 문제 진단 및 MongoDB 표준 아키텍처 배경
+- **현상**:
+  - 다중 워커가 동일 행/페이지를 집중 갱신할 때 WiredTiger는 즉시 `-31800 (WT_ROLLBACK)` 동시성 쓰기 충돌을 반환함.
+  - 기존 LionSQL은 이 에러를 엔진 내부에서 수습하지 않고 클라이언트로 즉시 던져버림(`ErrSerializationFailure`).
+  - 클라이언트는 충돌 에러를 받고 지수 백오프로 재시도해야 하므로, 네트워크 왕복 오버헤드와 연쇄 충돌(Abort Storm)로 인해 TPS가 급락함.
+- **MongoDB 표준 아키텍처 (`WriteConflictException Retry Loop`)**:
+  - WiredTiger를 개발한 MongoDB는 스토리지 엔진 레이어에서 `WT_ROLLBACK`이 발생해도 이를 **클라이언트로 절대 전파하지 않음**.
+  - `writeConflictRetry(opCtx, ...)` 루프를 통해 엔진 메모리 내부에서 즉시 트랜잭션을 롤백하고, 마이크로 지터(Micro-jitter, 50~250µs) 후 새 스냅샷을 열어 무비용으로 투명 재시도(Transparent Retry)를 완결함.
+  - 클라이언트는 충돌 발생 여부조차 인지하지 못하며, 100% 성공 응답을 수신함.
+
+#### 5.2 LionSQL 심층 방어(Defense-in-Depth) 2단계 구조
+Key Latch(선제적 예방)와 In-Kernel Retry Loop(사후 안전망)를 결합하여 완벽한 동시성 처리 파이프라인을 구축함:
+
+```
+[클라이언트 UPDATE / SP 요청]
+            │
+            ▼
+┌────────────────────────────────────────────────────────┐
+│ [1차 방어선: Key-Striped Latch (선제적 예방)]          │
+│ • PK 식별 가능 갱신: Go 메모리 20µs 큐잉               │
+│ • 충돌 자체를 사전에 원천 차단 (CPU 낭비 0, 16,000+ TPS) │
+└────────────────────────────────────────────────────────┘
+            │ (락을 타지 못하는 범위 조건 WHERE, 복잡한 조인 갱신 등)
+            ▼
+┌────────────────────────────────────────────────────────┐
+│ [스토리지 엔진 트랜잭션 실행 (WiredTiger / In-Memory)] │
+└────────────────────────────────────────────────────────┘
+            │
+            ├── 성공 ➔ 커밋 완료 후 응답
+            │
+            └── WT_ROLLBACK (-31800) 발생 시!
+                    │
+                    ▼
+┌────────────────────────────────────────────────────────┐
+│ [2차 방어선: In-Kernel WriteConflict Retry Loop (안전망)]│
+│ • 클라이언트로 에러를 던지지 않음!                    │
+│ • 엔진 메모리에서 마이크로 지터 후 즉시 재시도 (최대 5회)│
+│ • 최신 스냅샷으로 성공 시 클라이언트엔 100% 정상 응답! │
+└────────────────────────────────────────────────────────┘
+```
+
+#### 5.3 시나리오별 재시도 정책
+1. **단일 쿼리 자동 커밋 (Single Statement Autocommit & Writable CTE)**:
+   - 클라이언트에게 아직 어떠한 네트워크 패킷도 전달되지 않은 상태이므로, `Coordinator` 및 `sqlexec_dml` 레벨에서 `executeWithWriteConflictRetry`로 감싸 최대 5회 투명 재시도.
+2. **T-SQL Stored Procedure VM (`EXEC sp_...`)**:
+   - 모든 파라미터와 로컬 변수가 VDBE VM 내에 온전히 보존되어 있으므로, 프로시저 도중 또는 커밋 시점 `WT_ROLLBACK` 발생 시 트랜잭션 롤백 ➔ 레지스터 초기화 ➔ `PC = 0`부터 엔진 내부 무비용 재시도.
+3. **대화형 명시적 트랜잭션 (`BEGIN; ... COMMIT;`)**:
+   - 클라이언트가 다중 라운드트립으로 이전 `SELECT` 기반 비즈니스 결정을 내렸을 수 있으므로, ANSI SQL 표준에 따라 `40001 Serialization Failure` 반환 (단, 선행 Key Latch가 핫스팟 충돌을 1차로 예방).
 
 ---
 
