@@ -1,4 +1,6 @@
-# LionSQL 트랜잭션 성능 및 워크로드별 옵션 튜닝 가이드
+# LionSQL 트랜잭션 성능 및 워크로드별 옵션 튜닝 가이드 (`doc/TRANSACTION_PERFORMANCE_GUIDE.ko.md`)
+
+> [English Version](TRANSACTION_PERFORMANCE_GUIDE.md)
 
 본 문서는 LionSQL 데이터베이스 엔진의 스토리지 백엔드, WAL 동기화 정책, 메모리 거버너 및 워커 풀 설정 옵션이 트랜잭션 처리량(TPS), 지연 시간(Latency), 데이터 내구성(Durability/RPO)에 미치는 영향을 분석하고, 워크로드 유형에 따른 최적의 옵션 조합 가이드를 제공합니다.
 

@@ -1,5 +1,7 @@
 # LionSQL 다중 방언 SQL 호환성 및 개발자 편의 문법 가이드 (`doc/SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`)
 
+> [English Version](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md)
+>
 > - **문서 상태**: 정식 지원 (Production Ready / 100% Verified)
 > - **연관 과제 ID**: `S-MYSQL-1-P1`, `FUNC-DIALECT-7`, `PROC-CURSOR-1`
 > - **회귀 테스트**: `pkg/engine/sqlexec_mysql_syntax_test.go`, `pkg/proc/builtins_test.go`, `pkg/proc/runtime/cursor_test.go`

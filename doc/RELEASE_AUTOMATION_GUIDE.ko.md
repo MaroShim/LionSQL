@@ -1,5 +1,7 @@
 # LionSQL 릴리스 자동화 파이프라인 가이드 (`doc/RELEASE_AUTOMATION_GUIDE.ko.md`)
 
+> [English Version](RELEASE_AUTOMATION_GUIDE.md)
+
 ## 1. 개요 및 목적 (Overview & Motivation)
 
 데이터베이스 엔진의 배포와 릴리스는 단순한 Git 태그 생성을 넘어 다음의 4가지 핵심 무결성을 엄격하게 보장해야 합니다:

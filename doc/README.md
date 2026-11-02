@@ -93,7 +93,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * Complete Microsoft T-SQL syntax compatibility guide.
   * Stored procedures, user-defined functions (scalar & TVF), and triggers (`INSERTED`/`DELETED` delta tables).
   * Control flow statements (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, cursors).
-* [`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md) (Korean)
+* [`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md) ([Korean](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md))
   * Multi-dialect SQL compatibility and developer ergonomics guide.
   * MySQL-style developer ergonomics (backticks, `DESC`, `SHOW TABLES`), multi-dialect built-in functions Best 7 (`IFNULL`, `CURDATE`, `MOD`, `TRUNC`, `INSTR`, etc.), and T-SQL Fast Forward-Only Read-Only Cursors (`PROC-CURSOR-1`).
 * [`EXTENSIONS.md`](EXTENSIONS.md)
@@ -155,7 +155,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 ---
 
 ### 2.5. Operations, Security & Benchmarks
-* [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md)
+* [`TRANSACTION_PERFORMANCE_GUIDE.md`](TRANSACTION_PERFORMANCE_GUIDE.md) ([Korean](TRANSACTION_PERFORMANCE_GUIDE.ko.md))
   * Transaction performance, latency-durability trade-offs, and workload-specific parameter tuning guide (Ultra low-latency in-memory cache to zero-loss financial ledger).
 * [`OPERATIONS.md`](OPERATIONS.md)
   * Production deployment guidelines, CLI flags, configuration parameters, and graceful shutdown.
@@ -178,7 +178,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
   * One-click dataset fetcher (`scripts/fetch_slt.sh`), parallel runner (`bin/sqllogictest`), In-Memory OCC vs WiredTiger Disk MVCC, In-Process vs PGWire TCP mode ~15-20s ultra-fast verification.
 * [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
-* [`RELEASE_AUTOMATION_GUIDE.ko.md`](RELEASE_AUTOMATION_GUIDE.ko.md)
+* [`RELEASE_AUTOMATION_GUIDE.md`](RELEASE_AUTOMATION_GUIDE.md) ([Korean](RELEASE_AUTOMATION_GUIDE.ko.md))
   * One-click release automation pipeline (`scripts/release.sh`), 4-location SSOT version sync, Keep a Changelog classification, Windows .exe cross-compilation, and tagging guide.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * Common operational errors, connection diagnostics, and debugging techniques.

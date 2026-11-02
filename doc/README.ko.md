@@ -95,7 +95,7 @@
   * 완전한 Microsoft T-SQL 문법 호환성 가이드.
   * 저장 프로시저, 사용자 정의 함수(스칼라 및 TVF), 트리거(`INSERTED`/`DELETED` 델타 테이블).
   * 제어 흐름문 (`IF...ELSE`, `WHILE`, `TRY...CATCH`, `GOTO`, 커서).
-* [`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md)
+* [`SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md`](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.ko.md) ([English](SQL_COMPATIBILITY_AND_ERGONOMICS_GUIDE.md))
   * LionSQL 다중 방언 SQL 호환성 및 개발자 편의 문법 가이드.
   * MySQL 스타일 손끝 편의 문법(백틱 ` ` `, `DESC`, `SHOW TABLES`), 다중 방언 내장 함수 Best 7(`IFNULL`, `CURDATE`, `MOD`, `TRUNC`, `INSTR` 등), T-SQL 단방향 읽기 전용 커서(`PROC-CURSOR-1`).
 * [`EXTENSIONS.md`](EXTENSIONS.md)
@@ -157,7 +157,7 @@
 ---
 
 ### 2.5. 운영, 보안 및 벤치마크 (Operations, Security & Performance)
-* [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md)
+* [`TRANSACTION_PERFORMANCE_GUIDE.ko.md`](TRANSACTION_PERFORMANCE_GUIDE.ko.md) ([English](TRANSACTION_PERFORMANCE_GUIDE.md))
   * 트랜잭션 성능, 지연시간-내구성 트레이드오프 및 워크로드별 옵션 튜닝 가이드 (초저지연 인메모리 캐시부터 무손실 금융 원장까지).
 * [`OPERATIONS.md`](OPERATIONS.md)
   * 프로덕션 배포 가이드라인, CLI 플래그, 환경 설정 파라미터 및 안전한 정상 종료(Graceful Shutdown).
@@ -180,7 +180,7 @@
   * 원클릭 다운로드(`scripts/fetch_slt.sh`), 병렬 러너(`bin/sqllogictest`), 인메모리 OCC vs WiredTiger 디스크 MVCC, In-Process vs PGWire TCP 모드 15~20초 고속 검증 절차.
 * [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
   * PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 LionSQL로의 데이터베이스 이전 절차.
-* [`RELEASE_AUTOMATION_GUIDE.ko.md`](RELEASE_AUTOMATION_GUIDE.ko.md)
+* [`RELEASE_AUTOMATION_GUIDE.ko.md`](RELEASE_AUTOMATION_GUIDE.ko.md) ([English](RELEASE_AUTOMATION_GUIDE.md))
   * 원클릭 릴리스 자동화 파이프라인(`scripts/release.sh`), 4대 SSOT 버전 동기화, Keep a Changelog 분류, Windows .exe 크로스 컴파일 및 태깅 가이드.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * 일반적인 운영 에러, 연결 진단 기법 및 장애 디버깅 가이드.
