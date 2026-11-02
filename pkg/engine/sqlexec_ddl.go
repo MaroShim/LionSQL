@@ -45,6 +45,7 @@ var (
 	reDropStatsOn       = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)\s+ON\s+([^\s]+)$`)
 	reDropStats         = regexp.MustCompile(`(?is)^DROP\s+STATISTICS\s+([^\s]+)$`)
 	reColDefault        = regexp.MustCompile(`(?i)\bDEFAULT\s+('(?:''|[^'])*'|\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\d+)`)
+	reGeneratedIdentity = regexp.MustCompile(`(?is)\bGENERATED\s+(?:ALWAYS|BY\s+DEFAULT)\s+AS\s+IDENTITY(?:\s*\([^)]*\))?`)
 	reLeadingAdd         = regexp.MustCompile(`(?is)^ADD\s+`)
 	reLeadingColumn      = regexp.MustCompile(`(?is)^COLUMN\s+`)
 	reLeadingIfNotExists = regexp.MustCompile(`(?is)^IF\s+NOT\s+EXISTS\s+`)
@@ -212,13 +213,19 @@ func (s *Coordinator) execCreateTable(query string, start time.Time, cs *ClientS
 			}
 		}
 
+		isGeneratedIdentity := reGeneratedIdentity.MatchString(cDefTrimmed)
 		isSerial := rawType == "SERIAL" || rawType == "BIGSERIAL" || rawType == "SMALLSERIAL"
 		isPK := strings.Contains(cUpper, "PRIMARY KEY")
-		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK || isSerial
-		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT") || isSerial
+		isNotNull := strings.Contains(cUpper, "NOT NULL") || isPK || isSerial || isGeneratedIdentity
+		isIdentity := strings.Contains(cUpper, "IDENTITY") || strings.Contains(cUpper, "AUTO_INCREMENT") || isSerial || isGeneratedIdentity
+
+		cDefForDefault := cDefTrimmed
+		if isGeneratedIdentity {
+			cDefForDefault = reGeneratedIdentity.ReplaceAllString(cDefTrimmed, "")
+		}
 
 		defaultExpr := ""
-		if m := reColDefault.FindStringSubmatch(cDefTrimmed); len(m) > 1 {
+		if m := reColDefault.FindStringSubmatch(cDefForDefault); len(m) > 1 {
 			defaultExpr = cleanDefaultExpr(m[1])
 		}
 
@@ -1563,13 +1570,20 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				}
 			}
 
+			isGeneratedIdentity := reGeneratedIdentity.MatchString(segTrimmed)
 			segUpperRest := strings.ToUpper(segTrimmed)
-			isNotNull := strings.Contains(segUpperRest, "NOT NULL")
+			isNotNull := strings.Contains(segUpperRest, "NOT NULL") || isGeneratedIdentity
 			nullable := !isNotNull
+			isIdentity := strings.Contains(segUpperRest, "IDENTITY") || strings.Contains(segUpperRest, "AUTO_INCREMENT") || isGeneratedIdentity
+
+			segForDefault := segTrimmed
+			if isGeneratedIdentity {
+				segForDefault = reGeneratedIdentity.ReplaceAllString(segTrimmed, "")
+			}
 
 			defaultExpr := ""
 			defRe := regexp.MustCompile(`(?i)\bDEFAULT\s+(\([^)]*(?:\([^)]*\))?[^)]*\)|[^\s,()]+(?:\([^)]*\))?|\'[^']*\'|\d+)`)
-			if dm := defRe.FindStringSubmatch(segTrimmed); len(dm) > 1 {
+			if dm := defRe.FindStringSubmatch(segForDefault); len(dm) > 1 {
 				defaultExpr = cleanDefaultExpr(dm[1])
 			}
 
@@ -1577,6 +1591,7 @@ func (s *Coordinator) execAlterTable(query string, start time.Time, cs *ClientSe
 				Name:      colName,
 				Type:      dataType,
 				Nullable:  nullable,
+				Identity:  isIdentity,
 				Precision: precision,
 				Scale:     scale,
 				Default:   defaultExpr,
