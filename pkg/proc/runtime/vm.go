@@ -906,35 +906,45 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 }
 
 func (f *VMFrame) getVar(name string) (storage.Value, bool) {
-	clean := cleanSymbol(name)
-	if strings.EqualFold(name, "@@ROWCOUNT") || strings.EqualFold(clean, "ROWCOUNT") || strings.EqualFold(clean, "@ROWCOUNT") {
-		return storage.IntValue(f.rowCount), true
-	}
-	if strings.EqualFold(name, "@@FETCH_STATUS") || strings.EqualFold(clean, "FETCH_STATUS") || strings.EqualFold(clean, "@FETCH_STATUS") {
-		return storage.IntValue(int64(f.fetchStatus)), true
-	}
-	if strings.EqualFold(name, "@@TRANCOUNT") || strings.EqualFold(clean, "TRANCOUNT") || strings.EqualFold(clean, "@TRANCOUNT") {
-		return storage.IntValue(int64(f.tranCount)), true
-	}
-	if strings.EqualFold(name, "@@SPID") || strings.EqualFold(clean, "SPID") || strings.EqualFold(clean, "@SPID") {
-		return storage.IntValue(50), true
-	}
-	if strings.EqualFold(name, "@@ERROR") || strings.EqualFold(clean, "ERROR") || strings.EqualFold(clean, "@ERROR") || strings.EqualFold(name, "ERROR_NUMBER()") || strings.EqualFold(clean, "ERROR_NUMBER") {
-		return storage.IntValue(int64(f.lastError)), true
-	}
-	if strings.EqualFold(name, "@@SERVERNAME") || strings.EqualFold(clean, "SERVERNAME") || strings.EqualFold(clean, "@SERVERNAME") {
-		return storage.StringValue("LIONSQL"), true
-	}
-	if strings.EqualFold(name, "@@VERSION") || strings.EqualFold(clean, "VERSION") || strings.EqualFold(clean, "@VERSION") {
-		return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - LionSQL Engine"), true
-	}
-	if strings.EqualFold(name, "@@IDENTITY") || strings.EqualFold(clean, "IDENTITY") || strings.EqualFold(clean, "@IDENTITY") || strings.EqualFold(name, "SCOPE_IDENTITY") || strings.EqualFold(clean, "SCOPE_IDENTITY") {
+	if strings.HasPrefix(name, "@@") {
+		clean := cleanSymbol(name)
+		if strings.EqualFold(name, "@@ROWCOUNT") || strings.EqualFold(clean, "ROWCOUNT") || strings.EqualFold(clean, "@ROWCOUNT") {
+			return storage.IntValue(f.rowCount), true
+		}
+		if strings.EqualFold(name, "@@FETCH_STATUS") || strings.EqualFold(clean, "FETCH_STATUS") || strings.EqualFold(clean, "@FETCH_STATUS") {
+			return storage.IntValue(int64(f.fetchStatus)), true
+		}
+		if strings.EqualFold(name, "@@TRANCOUNT") || strings.EqualFold(clean, "TRANCOUNT") || strings.EqualFold(clean, "@TRANCOUNT") {
+			return storage.IntValue(int64(f.tranCount)), true
+		}
+		if strings.EqualFold(name, "@@SPID") || strings.EqualFold(clean, "SPID") || strings.EqualFold(clean, "@SPID") {
+			return storage.IntValue(50), true
+		}
+		if strings.EqualFold(name, "@@ERROR") || strings.EqualFold(clean, "ERROR") || strings.EqualFold(clean, "@ERROR") {
+			return storage.IntValue(int64(f.lastError)), true
+		}
+		if strings.EqualFold(name, "@@SERVERNAME") || strings.EqualFold(clean, "SERVERNAME") || strings.EqualFold(clean, "@SERVERNAME") {
+			return storage.StringValue("LIONSQL"), true
+		}
+		if strings.EqualFold(name, "@@VERSION") || strings.EqualFold(clean, "VERSION") || strings.EqualFold(clean, "@VERSION") {
+			return storage.StringValue("Microsoft SQL Server 2019 (RTM) - 15.0.2000.5 (X64) - LionSQL Engine"), true
+		}
+		if strings.EqualFold(name, "@@IDENTITY") || strings.EqualFold(clean, "IDENTITY") || strings.EqualFold(clean, "@IDENTITY") {
+			if f.lastIdentity > 0 {
+				return storage.IntValue(f.lastIdentity), true
+			}
+			return storage.NullValue(storage.TypeInt), true
+		}
+	} else if strings.EqualFold(name, "SCOPE_IDENTITY") || strings.EqualFold(name, "SCOPE_IDENTITY()") {
 		if f.lastIdentity > 0 {
 			return storage.IntValue(f.lastIdentity), true
 		}
 		return storage.NullValue(storage.TypeInt), true
+	} else if strings.EqualFold(name, "ERROR_NUMBER()") || strings.EqualFold(name, "ERROR_NUMBER") {
+		return storage.IntValue(int64(f.lastError)), true
 	}
 
+	clean := cleanSymbol(name)
 	if f.prog != nil && f.prog.VarSlots != nil {
 		if slot, ok := f.prog.VarSlots[clean]; ok && int(slot) >= 0 && int(slot) < len(f.slots) {
 			val := f.slots[slot]
@@ -2443,14 +2453,16 @@ func cleanSymbol(name string) string {
 		return name
 	}
 	name = strings.TrimPrefix(name, "@")
-	cleaned := proc.CleanSchemaPrefix(name)
-	// If it is a system schema like sys.tables, preserve it
-	lower := strings.ToLower(cleaned)
-	if strings.HasPrefix(lower, "sys.") || strings.HasPrefix(lower, "information_schema.") || strings.HasPrefix(lower, "pg_catalog.") || strings.HasPrefix(lower, "system.") {
-		return cleaned
+	if strings.IndexByte(name, '.') == -1 && strings.IndexByte(name, '[') == -1 && strings.IndexByte(name, '"') == -1 && strings.IndexByte(name, '`') == -1 {
+		return name
 	}
-	if dot := strings.LastIndex(cleaned, "."); dot != -1 {
-		return cleaned[dot+1:]
+	cleaned := proc.CleanSchemaPrefix(name)
+	if dot := strings.IndexByte(cleaned, '.'); dot != -1 {
+		lower := strings.ToLower(cleaned[:dot+1])
+		if lower == "sys." || lower == "information_schema." || lower == "pg_catalog." || lower == "system." {
+			return cleaned
+		}
+		return cleaned[strings.LastIndexByte(cleaned, '.')+1:]
 	}
 	return cleaned
 }
