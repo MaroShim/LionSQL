@@ -458,51 +458,90 @@ func (e *Executor) Run(prog *proc.Program, procName string, params map[string]an
 }
 
 // RunContext executes a precompiled bytecode program with ambient transaction and cancellation semantics.
+// If a concurrency serialization conflict occurs (e.g. WiredTiger WT_ROLLBACK or OCC version mismatch),
+// it automatically retries with exponential backoff and random jitter up to 5 times.
 func (e *Executor) RunContext(ctx context.Context, prog *proc.Program, procName string, params map[string]any, session storage.Session) (*ExecutionResult, error) {
-	start := time.Now()
+	const maxConflictRetries = 5
 
-	tx, err := session.BeginTx(storage.TxOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("failed to begin ambient transaction: %w", err)
-	}
+	for attempt := 0; attempt <= maxConflictRetries; attempt++ {
+		start := time.Now()
 
-	frame := e.newFrame(prog, tx)
-	frame.session = session
-	frame.ctx = ctx
-	defer e.releaseFrame(frame)
+		tx, err := session.BeginTx(storage.TxOptions{})
+		if err != nil {
+			if storage.IsWriteConflict(err) && attempt < maxConflictRetries {
+				delay := time.Duration(50*(1<<attempt))*time.Microsecond + time.Duration(storage.FastRandN(50*(attempt+1)))*time.Microsecond
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(delay):
+					continue
+				}
+			}
+			return nil, fmt.Errorf("failed to begin ambient transaction: %w", err)
+		}
 
-	// Bind parameters
-	for k, v := range params {
-		clean := cleanSymbol(k)
-		stVal := toStorageValue(v)
-		frame.setVar(clean, stVal)
-	}
+		frame := e.newFrame(prog, tx)
+		frame.session = session
+		frame.ctx = ctx
 
-	retVal, err := frame.Execute(0)
-	if err != nil {
+		// Bind parameters
+		for k, v := range params {
+			clean := cleanSymbol(k)
+			stVal := toStorageValue(v)
+			frame.setVar(clean, stVal)
+		}
+
+		retVal, err := frame.Execute(0)
+		if err != nil {
+			if frame.tx != nil {
+				_ = frame.tx.Rollback()
+			}
+			e.releaseFrame(frame)
+			if storage.IsWriteConflict(err) && attempt < maxConflictRetries {
+				delay := time.Duration(50*(1<<attempt))*time.Microsecond + time.Duration(storage.FastRandN(50*(attempt+1)))*time.Microsecond
+				select {
+				case <-ctx.Done():
+					return nil, ctx.Err()
+				case <-time.After(delay):
+					continue
+				}
+			}
+			return nil, fmt.Errorf("execution error (rolled back): %w", err)
+		}
+
 		if frame.tx != nil {
-			_ = frame.tx.Rollback()
+			if err := frame.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
+				_ = frame.tx.Rollback()
+				e.releaseFrame(frame)
+				if storage.IsWriteConflict(err) && attempt < maxConflictRetries {
+					delay := time.Duration(50*(1<<attempt))*time.Microsecond + time.Duration(storage.FastRandN(50*(attempt+1)))*time.Microsecond
+					select {
+					case <-ctx.Done():
+						return nil, ctx.Err()
+					case <-time.After(delay):
+						continue
+					}
+				}
+				return nil, fmt.Errorf("failed to commit ambient transaction: %w", err)
+			}
 		}
-		return nil, fmt.Errorf("execution error (rolled back): %w", err)
+
+		res := &ExecutionResult{
+			ReturnValue:  retVal,
+			Logs:         frame.logs,
+			Duration:     time.Since(start),
+			Rows:         frame.rows,
+			Columns:      frame.columns,
+			Values:       frame.values,
+			RowsAffected: frame.rowCount,
+			LastIdentity: frame.lastIdentity,
+			Vars:         collectFrameVars(frame),
+		}
+		e.releaseFrame(frame)
+		return res, nil
 	}
 
-	if frame.tx != nil {
-		if err := frame.tx.Commit(); err != nil && !errors.Is(err, storage.ErrTxClosed) {
-			return nil, fmt.Errorf("failed to commit ambient transaction: %w", err)
-		}
-	}
-
-	return &ExecutionResult{
-		ReturnValue:  retVal,
-		Logs:         frame.logs,
-		Duration:     time.Since(start),
-		Rows:         frame.rows,
-		Columns:      frame.columns,
-		Values:       frame.values,
-		RowsAffected: frame.rowCount,
-		LastIdentity: frame.lastIdentity,
-		Vars:         collectFrameVars(frame),
-	}, nil
+	return nil, storage.ErrSerializationFailure
 }
 
 // RunInTx executes a program within an existing transaction context.

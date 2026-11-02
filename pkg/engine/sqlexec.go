@@ -420,7 +420,35 @@ func (s *Coordinator) ExecuteSessionSQLContext(ctx context.Context, sessionID st
 			}
 		}
 
-		res, err := s.execSingleStatement(cs, stmt)
+		var inTx bool
+		if cs != nil {
+			cs.Mu.Lock()
+			inTx = (cs.Tx != nil)
+			cs.Mu.Unlock()
+		}
+
+		var res *QueryResult
+		var err error
+
+		if inTx {
+			res, err = s.execSingleStatement(cs, stmt)
+		} else {
+			const maxConflictRetries = 5
+			for attempt := 0; attempt <= maxConflictRetries; attempt++ {
+				res, err = s.execSingleStatement(cs, stmt)
+				if err == nil || !storage.IsWriteConflict(err) || attempt == maxConflictRetries {
+					break
+				}
+				delay := time.Duration(50*(1<<attempt))*time.Microsecond + time.Duration(storage.FastRandN(50*(attempt+1)))*time.Microsecond
+				select {
+				case <-queryCtx.Done():
+					err = queryCtx.Err()
+					goto doneRetry
+				case <-time.After(delay):
+				}
+			}
+		doneRetry:
+		}
 		if err != nil {
 			if cs != nil {
 				cs.Mu.Lock()

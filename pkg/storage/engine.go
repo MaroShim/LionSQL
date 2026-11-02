@@ -36,6 +36,34 @@ var (
 	ErrTableFull            = errors.New("table data limit exceeded (SQLSTATE 53200)")
 )
 
+// IsWriteConflict checks whether an error is a concurrency write-write conflict
+// or serialization failure (e.g., OCC version mismatch, WiredTiger WT_ROLLBACK / -31800).
+func IsWriteConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, ErrSerializationFailure) {
+		return true
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "WT_ROLLBACK") ||
+		strings.Contains(msg, "-31800") ||
+		strings.Contains(msg, "concurrent update conflict") ||
+		strings.Contains(msg, "serialization failure")
+}
+
+// FastRandN returns a non-negative pseudo-random integer in [0, n) using UnixNano.
+func FastRandN(n int) int {
+	if n <= 0 {
+		return 0
+	}
+	v := time.Now().UnixNano() % int64(n)
+	if v < 0 {
+		v = -v
+	}
+	return int(v)
+}
+
 // DataType represents the column data type.
 type DataType int
 
