@@ -60,6 +60,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 - [ ] 1단계: 개인용 서비스(Vaultwarden / Umami / Answer)를 LionSQL에 연결해 섀도 모드 운영
 - [ ] 2단계: 프로젝트 자체 서비스(Gitea 등)로 확대 및 일 단위 백업/복원 리허설
 
+### [-] 1.7 `PERF-CTE-LOWERING-VDBE-1` Writable CTE Stored Procedure 바이트코드 Lowering 가속 (진행 중)
+- 설계 계획서: [`notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md`](notes/WRITABLE_CTE_BYTECODE_LOWERING_PLAN.ko.md)
+- [ ] **Phase 1 (`CTE-LOWER-DETECT-1`)**: 선형 Writable CTE 쓰기 체인 패턴 판별기(`detectLinearWritableCTE`) 구현
+- [ ] **Phase 2 (`CTE-LOWER-COMPILE-1`)**: Writable CTE 절을 VDBE 바이트코드 프로그램(`proc.Program`)으로 Lowering하는 컴파일러(`CompileWritableCTE`) 구현
+- [ ] **Phase 3 (`CTE-LOWER-COORD-1`)**: 코디네이터 `execCTE`에서 VDBE Fast-Path 즉시 실행 및 비선형/분석용 CTE Fallback 파이프라인 연동
+- [ ] **Phase 4 (`CTE-LOWER-VERIFY-1`)**: 3-Way Writable CTE(주문 + 품목 + 아웃박스) 및 50 워커 동시성 정합성/레이스 프리 검증 (`pkg/engine/writable_cte_lowering_test.go`)
+
 ### [x] 1.4 `DURA-SLT-1` SQLLogicTest (SLT) 블랙박스 정합성 오라클 검증 — **[완료 (Pass)]**
 - 설계 계획서: [`notes/SQLLOGICTEST_INTEGRATION_PLAN.ko.md`](notes/SQLLOGICTEST_INTEGRATION_PLAN.ko.md)
 - [x] **SLT 러너 구현 (`cmd/sqllogictest`, `pkg/slt`)**: 순수 Go 기반 표준 SLT 파일 파서, In-Process 및 PGWire 듀얼 모드, rowsort/valuesort/nosort 정렬 및 MD5 해시 대조 엔진
