@@ -23,7 +23,7 @@ import (
 func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Time, cs *ClientSession) (*QueryResult, error) {
 	p := s.newPlanner()
 	_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
-		_, err := s.engine.GetTable(cleanIdentifier(tbl))
+		_, err := s.getTable(cs, cleanIdentifier(tbl))
 		return err == nil
 	})
 
@@ -46,7 +46,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 	}
 
 	leftTable := cleanIdentifier(qInfo.TableName)
-	leftSchema, err := s.engine.GetTable(leftTable)
+	leftSchema, err := s.getTable(cs, leftTable)
 	if err != nil {
 		return nil, fmt.Errorf("table %q not found: %w", leftTable, err)
 	}
@@ -61,7 +61,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 
 	for _, j := range joins {
 		rightTable := cleanIdentifier(j.Table)
-		rSchema, err := s.engine.GetTable(rightTable)
+		rSchema, err := s.getTable(cs, rightTable)
 		if err != nil {
 			return nil, fmt.Errorf("table %q not found: %w", rightTable, err)
 		}
@@ -75,7 +75,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 
 	var tx storage.Transaction
 	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+		tx = wrapSessionTx(cs, cs.Tx)
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -87,7 +87,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		if err != nil {
 			return nil, err
 		}
-		tx = t
+		tx = wrapSessionTx(cs, t)
 		defer tx.Rollback()
 	}
 
@@ -148,7 +148,7 @@ func (s *Coordinator) execVolcanoSelect(qInfo *planner.QueryInfo, start time.Tim
 		return res.Rows, res.Columns, nil
 	}
 
-	exec, err := execution.BuildExecutorWithOptions(plan, tx, s.engine.GetTable, opts)
+	exec, err := execution.BuildExecutorWithOptions(plan, tx, s.getTableGetter(cs), opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build volcano executor: %w", err)
 	}
@@ -1200,7 +1200,7 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 
 	var tx storage.Transaction
 	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+		tx = wrapSessionTx(cs, cs.Tx)
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
 		if err != nil {
@@ -1212,7 +1212,7 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 		if err != nil {
 			return nil, err
 		}
-		tx = t
+		tx = wrapSessionTx(cs, t)
 		defer tx.Rollback()
 	}
 
@@ -1513,7 +1513,7 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	qInfo, parseErr := p.ParseSelect(cleaned)
 	if parseErr == nil && qInfo != nil {
 		_ = p.DecorrelateSubqueries(qInfo, func(tbl string) bool {
-			_, err := s.engine.GetTable(cleanIdentifier(tbl))
+			_, err := s.getTable(cs, cleanIdentifier(tbl))
 			return err == nil
 		})
 

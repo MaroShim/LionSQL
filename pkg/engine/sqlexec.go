@@ -779,6 +779,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 			cs.TableVars = nil
 			cs.TempTables = nil
 			cs.TempTableMap = nil
+			cs.EphemeralTables = nil
 			if strings.HasPrefix(upper, "DISCARD ALL") || upper == "RESET ALL" || strings.HasPrefix(upper, "DEALLOCATE ALL") {
 				cs.PreparedStmts = nil
 			}

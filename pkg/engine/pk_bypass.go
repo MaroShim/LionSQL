@@ -322,6 +322,11 @@ func (s *Coordinator) tryPKLookupBypass(query string, start time.Time, cs *Clien
 		return nil, nil, false
 	}
 
+	cleanTable := cleanIdentifier(pq.tableName)
+	if strings.HasPrefix(cleanTable, "#") || (cs != nil && cs.GetEphemeralTable(cleanTable) != nil) {
+		return nil, nil, false
+	}
+
 	currSchemaVer := s.schemaVersion.Load()
 
 	s.pkBypassMu.RLock()

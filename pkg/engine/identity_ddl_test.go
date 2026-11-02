@@ -107,3 +107,43 @@ func TestGeneratedAlwaysIdentityVariants(t *testing.T) {
 		t.Fatalf("expected name column default 'test', got %q", nameCol.Default)
 	}
 }
+
+func TestInsertDefaultOmittedColumn(t *testing.T) {
+	eng := memengine.New()
+	_ = eng.Open("")
+	defer eng.Close()
+
+	cat := catalog.New(eng)
+	coord := NewCoordinator(cat, eng, Config{})
+
+	ddl := `
+	CREATE TABLE inventories_test (
+		item_id VARCHAR(64) PRIMARY KEY,
+		warehouse_id VARCHAR(64) NOT NULL DEFAULT 'wh_default',
+		quantity INT
+	);`
+	if _, err := coord.ExecuteSQL(ddl); err != nil {
+		t.Fatalf("failed to create inventories_test table: %v", err)
+	}
+
+	ins := `INSERT INTO inventories_test (item_id, quantity) VALUES ('item-1', 100);`
+	if res, err := coord.ExecuteSQL(ins); err != nil {
+		t.Fatalf("insert failed: %v", err)
+	} else if res.RowsAffected != 1 {
+		t.Fatalf("expected 1 row affected, got %d", res.RowsAffected)
+	}
+
+	sel := `SELECT item_id, warehouse_id, quantity FROM inventories_test WHERE item_id = 'item-1';`
+	res, err := coord.ExecuteSQL(sel)
+	if err != nil {
+		t.Fatalf("select failed: %v", err)
+	}
+	if len(res.Rows) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(res.Rows))
+	}
+	t.Logf("Result row: %+v", res.Rows[0])
+	whID := fmt.Sprintf("%v", res.Rows[0]["warehouse_id"])
+	if whID != "wh_default" {
+		t.Errorf("expected warehouse_id 'wh_default', got %q", whID)
+	}
+}

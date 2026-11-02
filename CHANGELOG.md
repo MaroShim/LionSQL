@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 ## [Unreleased]
 
 ### Added
+- implement session-local ephemeral in-memory CTE buffer and `SliceCursor` to eliminate storage DDL and catalog lock serialization, achieving linear scale under 50+ concurrent workers (`PERF-CTE-EPHEMERAL-1`)
 - support PostgreSQL standard `GENERATED { ALWAYS | BY DEFAULT } AS IDENTITY` clauses in DDL parser and prevent `reColDefault` from mistakenly extracting `"AS"` as column default, fixing goose migration history table PK duplication errors (`SQL-GOOSE-IDENTITY-1`)
 - support PostgreSQL Writable CTEs (`WITH ... INSERT/UPDATE/DELETE ... RETURNING`) with multi-CTE chaining, post-update `RETURNING` consumption in `INSERT ... SELECT`, 0-row schema preservation, unreferenced CTE materialization, single-statement atomic rollback (`23505`), PGWire `SELECT $N` target-column parameter OID inference, and `::type[]` array cast AST parsing (`SQL-WRITABLE-CTE-1`)
 - default to pure AST planner (`proc.ParseSQL` -> `FromAST`) and isolate legacy regex planner fallback behind `--enable-legacy-regex-planner` option (default `false`) (`PLANNER-AST-1`)
@@ -39,6 +40,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - complete IOTA-SDK Go ERP integration over PGWire (:5433, 47 schema migrations, pgx/v5 binary UUID & TIMESTAMPTZ encoding) (IOTA-ERP-1)
 
 ### Fixed
+- bypass static PK lookup optimization for temporary and session ephemeral tables (`#...`) in query coordinator to prevent `ErrTableNotFound` false positives on CTE queries (`PERF-CTE-EPHEMERAL-1`)
 - prevent implicit comma joins from degrading into multi-million row Cartesian cross joins via BFS spanning tree equijoin discovery in `pkg/planner/pushdown.go` (DURA-SLT-2)
 - verify unqualified outer column references against available table schemas in `checkAndOrientJoinKeys` before reordering join keys (DURA-SLT-2)
 - treat space-containing string cells in official SQLite `.test` suites as single values per line in SLT parser (DURA-SLT-2)

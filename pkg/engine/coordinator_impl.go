@@ -311,10 +311,11 @@ func (c *Coordinator) GetOrCreateSession(id string) (*ClientSession, error) {
 		SPID:          c.spidCounter,
 		Session:       sess,
 		Database:      defaultDB,
-		Vars:          make(map[string]any),
-		TableVars:     make(map[string]string),
-		TempTableMap:  make(map[string]string),
-		PreparedStmts: make(map[string]*PreparedStatement),
+		Vars:            make(map[string]any),
+		TableVars:       make(map[string]string),
+		TempTableMap:    make(map[string]string),
+		EphemeralTables: make(map[string]*EphemeralTable),
+		PreparedStmts:   make(map[string]*PreparedStatement),
 		Cursors:       make(map[string]*SessionCursor),
 		User:          "dbo",
 		OriginalUser:  "dbo",
@@ -379,6 +380,7 @@ func (c *Coordinator) CloseSession(id string) {
 		cs.TableVars = nil
 		cs.TempTables = nil
 		cs.TempTableMap = nil
+		cs.EphemeralTables = nil
 		cs.PreparedStmts = nil
 
 		if cs.CancelFunc != nil {
@@ -581,3 +583,24 @@ func (c *Coordinator) Close() error {
 	}
 	return nil
 }
+
+// getTable retrieves a table schema, prioritizing session-local ephemeral tables before falling back to the engine catalog.
+func (c *Coordinator) getTable(cs *ClientSession, name string) (*storage.TableSchema, error) {
+	if cs != nil {
+		if eph := cs.GetEphemeralTable(name); eph != nil {
+			return eph.Schema, nil
+		}
+	}
+	if c.engine == nil {
+		return nil, storage.ErrTableNotFound
+	}
+	return c.engine.GetTable(name)
+}
+
+// getTableGetter returns an execution.TableGetter closure scoped to the provided ClientSession.
+func (c *Coordinator) getTableGetter(cs *ClientSession) execution.TableGetter {
+	return func(name string) (*storage.TableSchema, error) {
+		return c.getTable(cs, name)
+	}
+}
+

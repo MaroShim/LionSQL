@@ -33,6 +33,13 @@ type SessionCursor struct {
 	DeclaredAt time.Time
 }
 
+// EphemeralTable represents an in-memory session-isolated table (such as a materialized CTE result).
+type EphemeralTable struct {
+	Schema *storage.TableSchema
+	Rows   []storage.Row
+	Recs   []storage.Record
+}
+
 // ClientSession maintains interactive connection state: open transaction, session variables, and query cancellation context.
 type ClientSession struct {
 	ID              string
@@ -44,6 +51,7 @@ type ClientSession struct {
 	TableVars       map[string]string // @table_var -> physical table name
 	TempTables      []string          // session-scoped #temp_tables
 	TempTableMap    map[string]string // user #temp_table name -> physical __temp_<sessionID>_tableName
+	EphemeralTables map[string]*EphemeralTable // session-local in-memory ephemeral tables (e.g. materialized CTEs)
 	PreparedStmts   map[string]*PreparedStatement
 	Cursors         map[string]*SessionCursor // server-side cursor state
 	User            string                    // active database user principal for RBAC
@@ -312,5 +320,145 @@ func (cs *ClientSession) ExecuteProgram(
 
 	return nil, false, fmt.Errorf("no active storage session")
 }
+
+// RegisterEphemeralTable registers or replaces an in-memory session-isolated table.
+func (cs *ClientSession) RegisterEphemeralTable(name string, schema *storage.TableSchema, rows []storage.Row, recs []storage.Record) {
+	if cs == nil {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.EphemeralTables == nil {
+		cs.EphemeralTables = make(map[string]*EphemeralTable)
+	}
+	cs.EphemeralTables[strings.ToLower(name)] = &EphemeralTable{
+		Schema: schema,
+		Rows:   rows,
+		Recs:   recs,
+	}
+}
+
+// AppendEphemeralRows appends additional rows/records to an existing ephemeral table (used by recursive CTEs).
+func (cs *ClientSession) AppendEphemeralRows(name string, rows []storage.Row, recs []storage.Record) {
+	if cs == nil {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.EphemeralTables == nil {
+		return
+	}
+	tbl, ok := cs.EphemeralTables[strings.ToLower(name)]
+	if !ok {
+		return
+	}
+	if len(rows) > 0 {
+		tbl.Rows = append(tbl.Rows, rows...)
+	}
+	if len(recs) > 0 {
+		tbl.Recs = append(tbl.Recs, recs...)
+	}
+}
+
+// GetEphemeralTable retrieves an in-memory session-isolated table by name if present.
+func (cs *ClientSession) GetEphemeralTable(name string) *EphemeralTable {
+	if cs == nil {
+		return nil
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.EphemeralTables == nil {
+		return nil
+	}
+	return cs.EphemeralTables[strings.ToLower(name)]
+}
+
+// UnregisterEphemeralTable removes an in-memory ephemeral table by name.
+func (cs *ClientSession) UnregisterEphemeralTable(name string) {
+	if cs == nil {
+		return
+	}
+	cs.Mu.Lock()
+	defer cs.Mu.Unlock()
+	if cs.EphemeralTables == nil {
+		return
+	}
+	delete(cs.EphemeralTables, strings.ToLower(name))
+}
+
+// sessionTxWrapper intercepts table scans and lookups for in-memory session ephemeral tables.
+type sessionTxWrapper struct {
+	storage.Transaction
+	cs *ClientSession
+}
+
+func (w *sessionTxWrapper) GetTable(name string) (*storage.TableSchema, error) {
+	if w.cs != nil {
+		if eph := w.cs.GetEphemeralTable(name); eph != nil {
+			return eph.Schema, nil
+		}
+	}
+	return nil, storage.ErrTableNotFound
+}
+
+func (w *sessionTxWrapper) Scan(tableName string) (storage.Cursor, error) {
+	if w.cs != nil {
+		if eph := w.cs.GetEphemeralTable(tableName); eph != nil {
+			return storage.NewSliceCursor(eph.Schema, eph.Rows, eph.Recs), nil
+		}
+	}
+	return w.Transaction.Scan(tableName)
+}
+
+func (w *sessionTxWrapper) ScanPartitions(tableName string, partitions []string) (storage.Cursor, error) {
+	if w.cs != nil {
+		if eph := w.cs.GetEphemeralTable(tableName); eph != nil {
+			return storage.NewSliceCursor(eph.Schema, eph.Rows, eph.Recs), nil
+		}
+	}
+	return w.Transaction.ScanPartitions(tableName, partitions)
+}
+
+func (w *sessionTxWrapper) Get(tableName string, pk storage.Value) (storage.Record, error) {
+	if w.cs != nil {
+		if eph := w.cs.GetEphemeralTable(tableName); eph != nil {
+			pkStr := pk.String()
+			for _, r := range eph.Recs {
+				if val, ok := r.FirstValue(); ok && val.String() == pkStr {
+					return r, nil
+				}
+			}
+			return nil, storage.ErrKeyNotFound
+		}
+	}
+	return w.Transaction.Get(tableName, pk)
+}
+
+func (w *sessionTxWrapper) GetRow(tableName string, pk storage.Value) (storage.Row, error) {
+	if w.cs != nil {
+		if eph := w.cs.GetEphemeralTable(tableName); eph != nil {
+			pkStr := pk.String()
+			for _, r := range eph.Rows {
+				if len(r.Values) > 0 && r.Values[0].String() == pkStr {
+					return r, nil
+				}
+			}
+			return storage.Row{}, storage.ErrKeyNotFound
+		}
+	}
+	return w.Transaction.GetRow(tableName, pk)
+}
+
+// wrapSessionTx wraps a storage.Transaction with session ephemeral table interception.
+func wrapSessionTx(cs *ClientSession, tx storage.Transaction) storage.Transaction {
+	if tx == nil || cs == nil {
+		return tx
+	}
+	if _, already := tx.(*sessionTxWrapper); already {
+		return tx
+	}
+	return &sessionTxWrapper{Transaction: tx, cs: cs}
+}
+
 
 

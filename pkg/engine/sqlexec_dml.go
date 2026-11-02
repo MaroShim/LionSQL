@@ -296,7 +296,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 	var tx storage.Transaction
 	var isEphemeral bool
 	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+		tx = wrapSessionTx(cs, cs.Tx)
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -309,7 +309,7 @@ func (s *Coordinator) execInsert(query string, start time.Time, cs *ClientSessio
 		if err != nil {
 			return nil, err
 		}
-		tx = t
+		tx = wrapSessionTx(cs, t)
 		isEphemeral = true
 	}
 
@@ -728,7 +728,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 	var tx storage.Transaction
 	var isEphemeral bool
 	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+		tx = wrapSessionTx(cs, cs.Tx)
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -741,7 +741,7 @@ func (s *Coordinator) execInsertSelect(rawTable, rawCols, rawOutput, rawSelect s
 		if err != nil {
 			return nil, err
 		}
-		tx = t
+		tx = wrapSessionTx(cs, t)
 		isEphemeral = true
 	}
 
@@ -1080,7 +1080,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 	var tx storage.Transaction
 	var isEphemeral bool
 	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+		tx = wrapSessionTx(cs, cs.Tx)
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -1093,7 +1093,7 @@ func (s *Coordinator) execUpdate(query string, start time.Time, cs *ClientSessio
 		if err != nil {
 			return nil, err
 		}
-		tx = t
+		tx = wrapSessionTx(cs, t)
 		isEphemeral = true
 	}
 
@@ -1255,7 +1255,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 	var tx storage.Transaction
 	var isEphemeral bool
 	if cs != nil && cs.Tx != nil {
-		tx = cs.Tx
+		tx = wrapSessionTx(cs, cs.Tx)
 		isEphemeral = false
 	} else {
 		session, closeFn, err := s.acquireSessionForQuery(cs)
@@ -1268,7 +1268,7 @@ func (s *Coordinator) execDelete(query string, start time.Time, cs *ClientSessio
 		if err != nil {
 			return nil, err
 		}
-		tx = t
+		tx = wrapSessionTx(cs, t)
 		isEphemeral = true
 	}
 

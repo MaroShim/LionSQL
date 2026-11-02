@@ -402,6 +402,28 @@ type VMFrame struct {
 	ctx             context.Context
 }
 
+func (f *VMFrame) getTableSchema(tableName string) (*storage.TableSchema, error) {
+	if f.tx != nil {
+		if tg, ok := f.tx.(interface{ GetTable(string) (*storage.TableSchema, error) }); ok {
+			if schema, err := tg.GetTable(tableName); err == nil && schema != nil {
+				return schema, nil
+			}
+		}
+	}
+	if f.executor != nil {
+		if tg := f.executor.getTableGetter(); tg != nil {
+			return tg(tableName)
+		}
+	}
+	return nil, storage.ErrTableNotFound
+}
+
+func (f *VMFrame) getTableGetter() execution.TableGetter {
+	return func(name string) (*storage.TableSchema, error) {
+		return f.getTableSchema(name)
+	}
+}
+
 type cursorState struct {
 	name      string
 	table     string
@@ -775,7 +797,7 @@ func (f *VMFrame) execRelQuery(sql string, queryData *proc.RelQueryData) ([]map[
 		qInfo.WhereClause = f.bindWhereVariables(qInfo.WhereClause)
 	}
 
-	getTable := f.executor.getTableGetter()
+	getTable := f.getTableGetter()
 	if getTable == nil {
 		return nil, nil, nil, fmt.Errorf("no table getter configured for relational queries")
 	}
@@ -984,14 +1006,10 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 }
 
 func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
-	if f.executor != nil {
-		if tg := f.executor.getTableGetter(); tg != nil {
-			if schema, err := tg(data.Table); err == nil && schema != nil {
-				for _, a := range data.Assignments {
-					if _, _, ok := schema.FindColumn(a.Column); !ok {
-						return 0, fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table)
-					}
-				}
+	if schema, err := f.getTableSchema(data.Table); err == nil && schema != nil {
+		for _, a := range data.Assignments {
+			if _, _, ok := schema.FindColumn(a.Column); !ok {
+				return 0, fmt.Errorf("column %q does not exist in table %q", a.Column, data.Table)
 			}
 		}
 	}
@@ -1009,12 +1027,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 			for k, v := range oldRowMap {
 				newRowMap[k] = v
 			}
-			var tableSchema *storage.TableSchema
-			if tg := f.executor.getTableGetter(); tg != nil {
-				if schema, err := tg(data.Table); err == nil && schema != nil {
-					tableSchema = schema
-				}
-			}
+			tableSchema, _ := f.getTableSchema(data.Table)
 			for _, a := range data.Assignments {
 				vAny, err := proc.EvalUpdateRowExpr(a.Value, rowCtx, nil)
 				if err != nil {
@@ -1066,14 +1079,7 @@ func (f *VMFrame) execUpdateWhere(data *proc.DMLData) (int64, error) {
 	}
 	defer cursor.Close()
 
-	var tableSchema *storage.TableSchema
-	if f.executor != nil {
-		if tg := f.executor.getTableGetter(); tg != nil {
-			if schema, err := tg(data.Table); err == nil && schema != nil {
-				tableSchema = schema
-			}
-		}
-	}
+	tableSchema, _ := f.getTableSchema(data.Table)
 	hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "UPDATE")
 
 	type updateItem struct {
@@ -1226,14 +1232,7 @@ func (f *VMFrame) execDeleteWhere(data *proc.DMLData) (int64, error) {
 	}
 	defer cursor.Close()
 
-	var tableSchema *storage.TableSchema
-	if f.executor != nil {
-		if tg := f.executor.getTableGetter(); tg != nil {
-			if schema, err := tg(data.Table); err == nil && schema != nil {
-				tableSchema = schema
-			}
-		}
-	}
+	tableSchema, _ := f.getTableSchema(data.Table)
 	hasTriggers := f.executor != nil && f.executor.HasTriggers(data.Table, "DELETE")
 
 	type delItem struct {

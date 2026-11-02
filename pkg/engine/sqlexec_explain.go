@@ -852,6 +852,134 @@ func (s *Coordinator) insertMaterializedCTERows(cs *ClientSession, tempName stri
 	return inserted, nil
 }
 
+func buildCTEEphemeralTable(tempName string, targetCols []string, srcCols []string, res *QueryResult, eng storage.Engine, innerSQL string) (*storage.TableSchema, []storage.Row, []storage.Record) {
+	schema := &storage.TableSchema{
+		Name: tempName,
+	}
+	schema.Columns = append(schema.Columns, storage.Column{
+		Name:       "_cte_row_id",
+		Type:       storage.TypeInt,
+		PrimaryKey: true,
+		Nullable:   false,
+	})
+
+	for idx, col := range targetCols {
+		srcCol := col
+		if idx < len(srcCols) {
+			srcCol = srcCols[idx]
+		}
+		var dataType storage.DataType
+		foundType := false
+
+		if res != nil && len(res.Rows) > 0 {
+			for _, row := range res.Rows {
+				if v := row[srcCol]; v != nil {
+					switch v.(type) {
+					case int, int32, int64:
+						dataType = storage.TypeInt
+					case float32, float64:
+						dataType = storage.TypeFloat
+					case bool:
+						dataType = storage.TypeBool
+					case time.Time:
+						dataType = storage.TypeDateTime
+					case storage.Decimal:
+						dataType = storage.TypeDecimal
+					default:
+						dataType = storage.TypeVarChar
+					}
+					foundType = true
+					break
+				}
+			}
+		}
+		if !foundType {
+			typeStr := inferCTEColumnTypeFromStmt(eng, innerSQL, srcCol)
+			switch typeStr {
+			case "INT":
+				dataType = storage.TypeInt
+			case "FLOAT":
+				dataType = storage.TypeFloat
+			case "BOOLEAN":
+				dataType = storage.TypeBool
+			case "DATETIME":
+				dataType = storage.TypeDateTime
+			case "DECIMAL(18, 4)":
+				dataType = storage.TypeDecimal
+			default:
+				dataType = storage.TypeVarChar
+			}
+		}
+		schema.Columns = append(schema.Columns, storage.Column{
+			Name:     col,
+			Type:     dataType,
+			Nullable: true,
+		})
+	}
+
+	if res == nil || len(res.Rows) == 0 {
+		return schema, nil, nil
+	}
+
+	rows := make([]storage.Row, 0, len(res.Rows))
+	recs := make([]storage.Record, 0, len(res.Rows))
+
+	for rIdx, rMap := range res.Rows {
+		rec := make(storage.Record, len(schema.Columns))
+		rec["_cte_row_id"] = storage.IntValue(int64(rIdx + 1))
+		for cIdx, col := range targetCols {
+			srcCol := col
+			if cIdx < len(srcCols) {
+				srcCol = srcCols[cIdx]
+			}
+			var val any
+			if rIdx < len(res.Values) && cIdx < len(res.Values[rIdx]) {
+				val = res.Values[rIdx][cIdx]
+			} else {
+				val = rMap[srcCol]
+			}
+			colDef := schema.Columns[cIdx+1]
+			rec[col] = storage.ValueFromAny(val, colDef.Type)
+		}
+		row := schema.RecordToRow(rec)
+		rows = append(rows, row)
+		recs = append(recs, rec)
+	}
+
+	return schema, rows, recs
+}
+
+func convertBatchToRows(schema *storage.TableSchema, targetCols []string, srcCols []string, batchRes *QueryResult, baseRowOffset int) ([]storage.Row, []storage.Record) {
+	if batchRes == nil || len(batchRes.Rows) == 0 {
+		return nil, nil
+	}
+	rows := make([]storage.Row, 0, len(batchRes.Rows))
+	recs := make([]storage.Record, 0, len(batchRes.Rows))
+	for rIdx, rMap := range batchRes.Rows {
+		rec := make(storage.Record, len(schema.Columns))
+		rec["_cte_row_id"] = storage.IntValue(int64(baseRowOffset + rIdx + 1))
+		for cIdx, col := range targetCols {
+			srcCol := col
+			if cIdx < len(srcCols) {
+				srcCol = srcCols[cIdx]
+			}
+			var val any
+			if rIdx < len(batchRes.Values) && cIdx < len(batchRes.Values[rIdx]) {
+				val = batchRes.Values[rIdx][cIdx]
+			} else {
+				val = rMap[srcCol]
+			}
+			colDef := schema.Columns[cIdx+1]
+			rec[col] = storage.ValueFromAny(val, colDef.Type)
+		}
+		row := schema.RecordToRow(rec)
+		rows = append(rows, row)
+		recs = append(recs, rec)
+	}
+	return rows, recs
+}
+
+
 func inferCTEColumnTypeFromStmt(eng storage.Engine, stmtSQL string, colName string) string {
 	if eng == nil {
 		return ""
@@ -970,7 +1098,9 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 			}
 		}
 		for _, t := range tempTableNames {
-			_, _ = s.execSingleStatement(cs, fmt.Sprintf("DROP TABLE IF EXISTS %s;", t))
+			if cs != nil {
+				cs.UnregisterEphemeralTable(t)
+			}
 		}
 	}()
 
@@ -1012,7 +1142,7 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 			}
 		}
 
-		// 2. Materialize into #temp table
+		// 2. Materialize into session-local in-memory ephemeral table (Zero-DDL)
 		tempName := fmt.Sprintf("#__cte_%s_%d", cte.Name, atomic.AddUint64(&cteGlobalSeq, 1))
 		tempTableNames = append(tempTableNames, tempName)
 
@@ -1027,55 +1157,12 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 			targetCols = res.Columns
 		}
 
-		var colDefs []string
-		colDefs = append(colDefs, "_cte_row_id INT PRIMARY KEY")
-		for idx, col := range targetCols {
-			srcCol := res.Columns[idx]
-			colType := ""
-			if len(res.Rows) > 0 {
-				for _, row := range res.Rows {
-					v := row[srcCol]
-					if v != nil {
-						switch v.(type) {
-						case int, int32, int64:
-							colType = "INT"
-						case float32, float64:
-							colType = "FLOAT"
-						case bool:
-							colType = "BOOLEAN"
-						case time.Time:
-							colType = "DATETIME"
-						case storage.Decimal:
-							colType = "DECIMAL(18, 4)"
-						default:
-							colType = "VARCHAR(255)"
-						}
-						break
-					}
-				}
-			}
-			if colType == "" {
-				colType = inferCTEColumnTypeFromStmt(s.engine, cte.InnerSQL, srcCol)
-			}
-			if colType == "" {
-				colType = "VARCHAR(255)"
-			}
-			colDefs = append(colDefs, fmt.Sprintf("%s %s", col, colType))
-		}
-		createSQL := fmt.Sprintf("CREATE TABLE %s (%s);", tempName, strings.Join(colDefs, ", "))
-		_, _ = s.execSingleStatement(cs, fmt.Sprintf("DROP TABLE IF EXISTS %s;", tempName))
-		if _, err := s.execSingleStatement(cs, createSQL); err != nil {
-			return nil, fmt.Errorf("materialize CTE %q table error: %w", cte.Name, err)
+		schema, rows, recs := buildCTEEphemeralTable(tempName, targetCols, res.Columns, res, s.engine, cte.InnerSQL)
+		if cs != nil {
+			cs.RegisterEphemeralTable(tempName, schema, rows, recs)
 		}
 
-		targetColsWithID := append([]string{"_cte_row_id"}, targetCols...)
-		currentTotalRows := 0
-
-		if _, err := s.insertMaterializedCTERows(cs, tempName, targetColsWithID, res.Columns, res, &currentTotalRows); err != nil {
-			return nil, err
-		}
-
-		// 3. If recursive, iteratively execute recursive step and insert new rows
+		// 3. If recursive, iteratively execute recursive step and append new rows
 		if isRecursive && recSQL != "" && len(res.Rows) > 0 {
 			recSQLWithTemp := replaceIdentOutsideQuotes(recSQL, cte.Name, tempName)
 			for iter := 0; iter < 100; iter++ {
@@ -1083,9 +1170,12 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 				if recErr != nil || recRes == nil || len(recRes.Rows) == 0 {
 					break
 				}
-				inserted, err := s.insertMaterializedCTERows(cs, tempName, targetColsWithID, res.Columns, recRes, &currentTotalRows)
-				if err != nil || inserted == 0 {
+				newRows, newRecs := convertBatchToRows(schema, targetCols, res.Columns, recRes, len(res.Rows))
+				if len(newRows) == 0 {
 					break
+				}
+				if cs != nil {
+					cs.AppendEphemeralRows(tempName, newRows, newRecs)
 				}
 				res.Rows = append(res.Rows, recRes.Rows...)
 			}

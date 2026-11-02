@@ -41,7 +41,13 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   - 소크 테스트 완주: `16,452` commits 일치, 잔액 불변(`SUM(balance)=1,000,000`, 위반 0건), RSS 비율 1.00, FD 비율 1.04, 고루틴 비율 1.00 (자원 누수 0)
 - [ ] **24시간 ~ 72시간 장기 소크 완주**: 장기 무중단 운영을 통한 극한의 메모리/고루틴/디스크 누수 0 검증
 
-### [ ] 1.3 `DURA-DOGFOOD-1` 실서비스 섀도 운영 (Dogfooding)
+### [x] 1.5 `PERF-CTE-EPHEMERAL-1` 세션 로컬 에페머럴 CTE 버퍼 및 Zero-DDL 최적화 — **[완료 (Pass)]**
+- 설계 계획서: [`notes/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md`](notes/SESSION_EPHEMERAL_CTE_BUFFER_PLAN.ko.md)
+- [x] **에페머럴 인메모리 커서 표준화 (`storage.SliceCursor`)**: 순수 Go 슬라이스 기반 non-blocking 커서 제공
+- [x] **세션 저장소 확장 (`ClientSession.EphemeralTables`)**: 세션 격리 인메모리 테이블 등록 및 자동 회수
+- [x] **라우팅 계층 인터셉트 (`getTable`, `sessionTxWrapper`, `tryPKLookupBypass` 임시 테이블 가드)**: 카탈로그 전역 락 회피 및 메모리 스트리밍 바인딩
+- [x] **`execCTE` Zero-DDL 리팩토링**: `CREATE TABLE`, `INSERT INTO`, `DROP TABLE` 전역 DDL 락 100% 제거
+- [x] **동시성 벤치마크 및 회귀 검증**: Grove Writable CTE 및 동시 워커 50 처리량 검증 (In-Memory 0.10s, WiredTiger 0.96s 레이스 프리 통과)
 - [ ] 1단계: 개인용 서비스(Vaultwarden / Umami / Answer)를 LionSQL에 연결해 섀도 모드 운영
 - [ ] 2단계: 프로젝트 자체 서비스(Gitea 등)로 확대 및 일 단위 백업/복원 리허설
 
