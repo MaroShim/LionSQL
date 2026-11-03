@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -107,14 +106,21 @@ func (s *Coordinator) execDBCC(query string, start time.Time, cs *ClientSession)
 
 	// 2. DBCC CHECKTABLE ( 'table_name' )
 	if strings.HasPrefix(upperRest, "CHECKTABLE") {
-		re := regexp.MustCompile(`(?is)^CHECKTABLE\s*(?:\(\s*['"]?([^'")\s]+)['"]?\s*\)|([^\s;]+))`)
-		m := re.FindStringSubmatch(rest)
-		if len(m) < 2 {
-			return nil, fmt.Errorf("invalid DBCC CHECKTABLE syntax. Expected: DBCC CHECKTABLE ('table_name')")
+		sub := strings.TrimSpace(rest[10:])
+		var rawTbl string
+		if strings.HasPrefix(sub, "(") {
+			closeParen := sqlutil.FindMatchingParen(sub, 0)
+			if closeParen != -1 {
+				rawTbl = strings.Trim(strings.TrimSpace(sub[1:closeParen]), "'\"")
+			}
+		} else {
+			fields := strings.Fields(sub)
+			if len(fields) > 0 {
+				rawTbl = strings.Trim(fields[0], ";, '\"")
+			}
 		}
-		rawTbl := m[1]
-		if rawTbl == "" && len(m) > 2 {
-			rawTbl = m[2]
+		if rawTbl == "" {
+			return nil, fmt.Errorf("invalid DBCC CHECKTABLE syntax. Expected: DBCC CHECKTABLE ('table_name')")
 		}
 		targetTable := cleanIdentifier(rawTbl)
 
@@ -342,7 +348,6 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 			colSourceMap[col] = col
 		}
 	} else {
-		asRe := regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
 		for _, c := range sqlutil.SplitTopLevel(projStr, ',') {
 			cTrimmed := strings.TrimSpace(c)
 			if cTrimmed == "" {
@@ -357,9 +362,9 @@ func buildVirtualCatalogResult(columns []string, allRows []map[string]any, projS
 			}
 			alias := ""
 			colExpr := cTrimmed
-			if m := asRe.FindStringSubmatch(cTrimmed); len(m) == 3 {
-				colExpr = strings.TrimSpace(m[1])
-				alias = cleanIdentifier(m[2])
+			if asIdx := sqlutil.FindTopLevelKeyword(cTrimmed, "AS"); asIdx != -1 {
+				colExpr = strings.TrimSpace(cTrimmed[:asIdx])
+				alias = cleanIdentifier(strings.TrimSpace(cTrimmed[asIdx+2:]))
 			} else {
 				fields := strings.Fields(cTrimmed)
 				if len(fields) == 2 && !strings.Contains(fields[1], "(") {

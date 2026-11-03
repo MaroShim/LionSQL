@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 
@@ -351,28 +350,30 @@ func (s *Coordinator) loadMergeSourceRows(parsed *parsedMerge, tx storage.Transa
 	raw := strings.TrimSpace(parsed.sourceRaw)
 
 	// Case 1: (VALUES (...), (...))
-	valuesRe := regexp.MustCompile(`(?is)^\(\s*VALUES\s*(.*)\)$`)
-	if m := valuesRe.FindStringSubmatch(raw); len(m) > 1 {
-		tuples := sqlutil.ExtractTopLevelTuples(m[1])
-		cols := parsed.sourceCols
-		var rows []map[string]any
-		for _, tuple := range tuples {
-			vals := splitValues(tuple)
-			r := make(map[string]any)
-			for i, v := range vals {
-				vStr := strings.TrimSpace(v)
-				vStr = strings.Trim(vStr, "'\"")
-				var colName string
-				if i < len(cols) {
-					colName = cols[i]
-				} else {
-					colName = fmt.Sprintf("col%d", i+1)
+	if inner, ok := sqlutil.StripParentheses(raw); ok {
+		if strings.HasPrefix(strings.ToUpper(inner), "VALUES") {
+			afterValues := strings.TrimSpace(inner[6:])
+			tuples := sqlutil.ExtractTopLevelTuples(afterValues)
+			cols := parsed.sourceCols
+			var rows []map[string]any
+			for _, tuple := range tuples {
+				vals := splitValues(tuple)
+				r := make(map[string]any)
+				for i, v := range vals {
+					vStr := strings.TrimSpace(v)
+					vStr = strings.Trim(vStr, "'\"")
+					var colName string
+					if i < len(cols) {
+						colName = cols[i]
+					} else {
+						colName = fmt.Sprintf("col%d", i+1)
+					}
+					r[colName] = vStr
 				}
-				r[colName] = vStr
+				rows = append(rows, r)
 			}
-			rows = append(rows, r)
+			return rows, nil
 		}
-		return rows, nil
 	}
 
 	// Case 2: (SELECT ...)
@@ -593,14 +594,22 @@ func parseSourcePart(s string) (sourceRaw, sourceAlias string, sourceCols []stri
 			sourceRaw = s[:endIdx+1]
 			rem := strings.TrimSpace(s[endIdx+1:])
 			// Check optional alias and col list
-			re := regexp.MustCompile(`(?is)^(?:AS\s+)?([a-zA-Z0-9_]+)(?:\s*\((.*?)\))?`)
-			if m := re.FindStringSubmatch(rem); len(m) > 1 {
-				sourceAlias = cleanIdentifier(m[1])
-				if len(m) > 2 && strings.TrimSpace(m[2]) != "" {
-					colParts := sqlutil.SplitTopLevel(m[2], ',')
-					for _, c := range colParts {
+			if strings.HasPrefix(strings.ToUpper(rem), "AS") && (len(rem) == 2 || rem[2] == ' ' || rem[2] == '\t') {
+				rem = strings.TrimSpace(rem[2:])
+			}
+			if parenIdx := strings.Index(rem, "("); parenIdx != -1 {
+				sourceAlias = cleanIdentifier(strings.TrimSpace(rem[:parenIdx]))
+				afterParen := rem[parenIdx:]
+				if pEnd := sqlutil.FindMatchingParen(afterParen, 0); pEnd != -1 {
+					colsStr := afterParen[1:pEnd]
+					for _, c := range sqlutil.SplitTopLevel(colsStr, ',') {
 						sourceCols = append(sourceCols, cleanIdentifier(c))
 					}
+				}
+			} else {
+				fields := strings.Fields(rem)
+				if len(fields) > 0 {
+					sourceAlias = cleanIdentifier(fields[0])
 				}
 			}
 			return sourceRaw, sourceAlias, sourceCols
@@ -703,19 +712,24 @@ func parseSingleWhenClause(s string) (mergeClause, error) {
 		cl.setPairs = pairs
 	} else if strings.HasPrefix(upperAction, "INSERT") {
 		cl.clauseType = mergeNotMatchedInsert
-		re := regexp.MustCompile(`(?is)^INSERT(?:\s*\((.*?)\))?\s*VALUES\s*\((.*?)\)$`)
-		m := re.FindStringSubmatch(actionPart)
-		if len(m) < 3 {
+		valIdx := sqlutil.FindTopLevelKeyword(actionPart, "VALUES")
+		if valIdx == -1 {
 			return cl, fmt.Errorf("invalid INSERT clause in MERGE: %s", actionPart)
 		}
-		if strings.TrimSpace(m[1]) != "" {
-			for _, c := range strings.Split(m[1], ",") {
+		insPart := strings.TrimSpace(actionPart[len("INSERT"):valIdx])
+		if inner, ok := sqlutil.StripParentheses(insPart); ok {
+			for _, c := range strings.Split(inner, ",") {
 				cl.insertCols = append(cl.insertCols, cleanIdentifier(c))
 			}
 		}
-		vals := splitValues(m[2])
-		for _, v := range vals {
-			cl.insertVals = append(cl.insertVals, strings.TrimSpace(v))
+		afterValues := strings.TrimSpace(actionPart[valIdx+len("VALUES"):])
+		if inner, ok := sqlutil.StripParentheses(afterValues); ok {
+			vals := splitValues(inner)
+			for _, v := range vals {
+				cl.insertVals = append(cl.insertVals, strings.TrimSpace(v))
+			}
+		} else {
+			return cl, fmt.Errorf("invalid INSERT clause in MERGE: %s", actionPart)
 		}
 	} else {
 		return cl, fmt.Errorf("unsupported MERGE action: %s", actionPart)

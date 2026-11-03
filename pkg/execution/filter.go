@@ -232,37 +232,30 @@ func evalSinglePredicate(t Tuple, cond string) bool {
 	}
 
 	// IS NULL / IS NOT NULL
-	if idx := sqlutil.FindTopLevelKeyword(cond, "IS NOT NULL"); idx != -1 {
-		col := strings.TrimSpace(cond[:idx])
-		val, ok := lookupVal(t, col)
-		return ok && val != nil
-	}
-	if idx := sqlutil.FindTopLevelKeyword(cond, "IS NULL"); idx != -1 {
-		col := strings.TrimSpace(cond[:idx])
-		val, ok := lookupVal(t, col)
+	if pred, ok := sqlutil.ParseIsNullPredicate(cond); ok {
+		val, ok := lookupVal(t, pred.Column)
+		if pred.IsNot {
+			return ok && val != nil
+		}
 		return !ok || val == nil
 	}
 
 	// IN / NOT IN
-	inRe := regexp.MustCompile(`(?is)^\s*([a-zA-Z0-9_\.]+)\s+(NOT\s+)?IN\s*\((.*?)\)\s*$`)
-	if m := inRe.FindStringSubmatch(cond); len(m) == 4 {
-		colName := m[1]
-		isNot := strings.TrimSpace(m[2]) != ""
-		valList := m[3]
-		val, ok := lookupVal(t, colName)
+	if pred, ok := sqlutil.ParseInPredicate(cond); ok {
+		val, ok := lookupVal(t, pred.Column)
 		if !ok || val == nil {
 			return false
 		}
 		strVal := fmt.Sprintf("%v", val)
 		found := false
-		for _, rawItem := range strings.Split(valList, ",") {
+		for _, rawItem := range pred.Items {
 			item := strings.Trim(strings.TrimSpace(rawItem), "'\"")
 			if strings.EqualFold(strVal, item) {
 				found = true
 				break
 			}
 		}
-		if isNot {
+		if pred.IsNot {
 			return !found
 		}
 		return found

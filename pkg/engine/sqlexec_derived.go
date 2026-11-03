@@ -2,7 +2,6 @@ package engine
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -14,10 +13,6 @@ import (
 
 var (
 	derivedTableCounter int64
-	reDerivedCheck      = regexp.MustCompile(`(?is)\b(?:FROM|JOIN)\s*\(\s*SELECT\b`)
-	reDerivedMatch      = regexp.MustCompile(`(?is)\b(FROM|JOIN|INNER\s+JOIN|LEFT\s+JOIN|LEFT\s+OUTER\s+JOIN|RIGHT\s+JOIN|RIGHT\s+OUTER\s+JOIN|CROSS\s+JOIN|FULL\s+JOIN|FULL\s+OUTER\s+JOIN)\s*\(\s*SELECT\b`)
-	reDerivedAlias      = regexp.MustCompile(`(?is)^\s*(?:AS\s+)?([a-zA-Z0-9_#]+|"[^"]+"|\` + "`" + `[^` + "`" + `]+` + "`" + `|\[[^\]]+\])`)
-	reSelectStarFrom    = regexp.MustCompile(`(?i)\bSELECT\s+\*\s+FROM\b`)
 )
 
 func hasDerivedTables(sql string) bool {
@@ -25,7 +20,122 @@ func hasDerivedTables(sql string) bool {
 	if !strings.Contains(upper, "SELECT") {
 		return false
 	}
-	return reDerivedCheck.MatchString(sql)
+	openParen, _ := findNextDerivedTable(sql)
+	return openParen != -1
+}
+
+func findNextDerivedTable(sql string) (openParenIdx int, closeParenIdx int) {
+	upper := strings.ToUpper(sql)
+	i := 0
+	n := len(sql)
+	for i < n {
+		ch := upper[i]
+		if ch == 'F' || ch == 'J' {
+			isFrom := strings.HasPrefix(upper[i:], "FROM") && (i == 0 || isSep(upper[i-1])) && (i+4 == n || isSep(upper[i+4]))
+			isJoin := strings.HasPrefix(upper[i:], "JOIN") && (i == 0 || isSep(upper[i-1])) && (i+4 == n || isSep(upper[i+4]))
+			if isFrom || isJoin {
+				kwLen := 4
+				pos := i + kwLen
+				for pos < n && (sql[pos] == ' ' || sql[pos] == '\t' || sql[pos] == '\r' || sql[pos] == '\n') {
+					pos++
+				}
+				if pos < n && sql[pos] == '(' {
+					innerPos := pos + 1
+					for innerPos < n && (sql[innerPos] == ' ' || sql[innerPos] == '\t' || sql[innerPos] == '\r' || sql[innerPos] == '\n') {
+						innerPos++
+					}
+					if strings.HasPrefix(upper[innerPos:], "SELECT") && (innerPos+6 == n || isSep(upper[innerPos+6])) {
+						cIdx := sqlutil.FindMatchingParen(sql, pos)
+						if cIdx != -1 {
+							return pos, cIdx
+						}
+					}
+				}
+			}
+		}
+		// Skip single-quoted string literals safely
+		if ch == '\'' {
+			i++
+			for i < n && sql[i] != '\'' {
+				if sql[i] == '\\' && i+1 < n {
+					i++
+				}
+				i++
+			}
+			if i < n {
+				i++
+			}
+			continue
+		}
+		i++
+	}
+	return -1, -1
+}
+
+func isSep(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n' || ch == '(' || ch == ')' || ch == ',' || ch == ';'
+}
+
+func parseDerivedTableAlias(afterClose string) (string, int) {
+	trimmed := strings.TrimLeft(afterClose, " \t\r\n")
+	leadingWs := len(afterClose) - len(trimmed)
+	if trimmed == "" {
+		return "", 0
+	}
+	// Check optional "AS "
+	if len(trimmed) >= 3 && strings.EqualFold(trimmed[:2], "AS") && (trimmed[2] == ' ' || trimmed[2] == '\t' || trimmed[2] == '\r' || trimmed[2] == '\n') {
+		afterAs := strings.TrimLeft(trimmed[2:], " \t\r\n")
+		asWs := len(trimmed) - 2 - len(afterAs)
+		ident, idLen := parseIdentifierToken(afterAs)
+		if ident != "" {
+			return ident, leadingWs + 2 + asWs + idLen
+		}
+	} else {
+		ident, idLen := parseIdentifierToken(trimmed)
+		if ident != "" {
+			upperIdent := strings.ToUpper(ident)
+			switch upperIdent {
+			case "WHERE", "GROUP", "ORDER", "LIMIT", "OFFSET", "JOIN", "INNER", "LEFT", "RIGHT", "FULL", "CROSS", "ON", "UNION", "HAVING":
+				return "", 0
+			}
+			return ident, leadingWs + idLen
+		}
+	}
+	return "", 0
+}
+
+func parseIdentifierToken(s string) (string, int) {
+	if s == "" {
+		return "", 0
+	}
+	first := s[0]
+	if first == '"' || first == '`' {
+		end := strings.IndexByte(s[1:], first)
+		if end != -1 {
+			return cleanIdentifier(s[:end+2]), end + 2
+		}
+		return "", 0
+	}
+	if first == '[' {
+		end := strings.IndexByte(s[1:], ']')
+		if end != -1 {
+			return cleanIdentifier(s[:end+2]), end + 2
+		}
+		return "", 0
+	}
+	i := 0
+	for i < len(s) {
+		ch := s[i]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_' || ch == '#' || ch == '$' {
+			i++
+		} else {
+			break
+		}
+	}
+	if i > 0 {
+		return s[:i], i
+	}
+	return "", 0
 }
 
 func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *ClientSession) (string, []string, error) {
@@ -33,48 +143,15 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 	var createdTables []string
 
 	for {
-		loc := reDerivedMatch.FindStringIndex(currentSQL)
-		if loc == nil {
-			break
-		}
-
-		openParenIdx := -1
-		for i := loc[0]; i < len(currentSQL); i++ {
-			if currentSQL[i] == '(' {
-				openParenIdx = i
-				break
-			}
-		}
-		if openParenIdx == -1 {
-			break
-		}
-
-		depth := 0
-		closeParenIdx := -1
-		for i := openParenIdx; i < len(currentSQL); i++ {
-			if currentSQL[i] == '(' {
-				depth++
-			} else if currentSQL[i] == ')' {
-				depth--
-				if depth == 0 {
-					closeParenIdx = i
-					break
-				}
-			}
-		}
-		if closeParenIdx == -1 {
+		openParenIdx, closeParenIdx := findNextDerivedTable(currentSQL)
+		if openParenIdx == -1 || closeParenIdx == -1 {
 			break
 		}
 
 		innerSQL := strings.TrimSpace(currentSQL[openParenIdx+1 : closeParenIdx])
 		afterClose := currentSQL[closeParenIdx+1:]
-		alias := ""
-		matchEnd := closeParenIdx + 1
-
-		if m := reDerivedAlias.FindStringSubmatch(afterClose); len(m) >= 2 {
-			alias = cleanIdentifier(m[1])
-			matchEnd = closeParenIdx + 1 + len(m[0])
-		}
+		alias, consumed := parseDerivedTableAlias(afterClose)
+		matchEnd := closeParenIdx + 1 + consumed
 
 		counterVal := atomic.AddInt64(&derivedTableCounter, 1)
 		if alias == "" {
@@ -201,19 +278,22 @@ func (s *Coordinator) resolveDerivedTables(query string, start time.Time, cs *Cl
 		prefixPart := currentSQL[:openParenIdx]
 		suffixPart := currentSQL[matchEnd:]
 		if needSyntheticPK && len(innerRes.Columns) > 0 {
-			// Only rewrite SELECT * if this derived table is the solitary table (no joins or other tables)
 			fromIdx := sqlutil.FindTopLevelKeyword(prefixPart, "FROM")
 			if fromIdx != -1 {
 				afterFrom := strings.TrimSpace(prefixPart[fromIdx+4:])
 				hasJoinOrComma := sqlutil.ContainsKeyword(prefixPart, "JOIN", false) ||
 					sqlutil.ContainsKeyword(suffixPart, "JOIN", false) ||
 					strings.Contains(prefixPart[fromIdx+4:], ",")
-				if afterFrom == "" && !hasJoinOrComma && reSelectStarFrom.MatchString(prefixPart) {
-					var qualifiedCols []string
-					for _, col := range innerRes.Columns {
-						qualifiedCols = append(qualifiedCols, fmt.Sprintf("%s.%s", alias, col))
+				if afterFrom == "" && !hasJoinOrComma {
+					trimmedPrefix := strings.TrimSpace(prefixPart[:fromIdx])
+					upperPrefix := strings.ToUpper(trimmedPrefix)
+					if strings.HasPrefix(upperPrefix, "SELECT") && strings.TrimSpace(trimmedPrefix[6:]) == "*" {
+						var qualifiedCols []string
+						for _, col := range innerRes.Columns {
+							qualifiedCols = append(qualifiedCols, fmt.Sprintf("%s.%s", alias, col))
+						}
+						prefixPart = "SELECT " + strings.Join(qualifiedCols, ", ") + " FROM "
 					}
-					prefixPart = reSelectStarFrom.ReplaceAllString(prefixPart, "SELECT "+strings.Join(qualifiedCols, ", ")+" FROM ")
 				}
 			}
 		}

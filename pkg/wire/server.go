@@ -1934,22 +1934,51 @@ func (s *Server) runAndWriteQuery(conn net.Conn, query string, writeRowDesc bool
 	s.runAndWriteQueryWithFormats(conn, query, writeRowDesc, sessID, nil)
 }
 
-var blockCommentRe = regexp.MustCompile(`(?s)/\*.*?\*/`)
-
 func stripSQLComments(query string) string {
-	noBlock := blockCommentRe.ReplaceAllString(query, "")
-	lines := strings.Split(noBlock, "\n")
 	var sb strings.Builder
-	for _, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmedLine, "--") {
+	sb.Grow(len(query))
+	i := 0
+	n := len(query)
+	for i < n {
+		if query[i] == '\'' {
+			// Skip string literals without touching comments inside quotes
+			sb.WriteByte('\'')
+			i++
+			for i < n && query[i] != '\'' {
+				if query[i] == '\\' && i+1 < n {
+					sb.WriteByte('\\')
+					i++
+				}
+				sb.WriteByte(query[i])
+				i++
+			}
+			if i < n {
+				sb.WriteByte('\'')
+				i++
+			}
 			continue
 		}
-		if idx := strings.Index(line, "--"); idx != -1 {
-			line = line[:idx]
+		if i+1 < n && query[i] == '/' && query[i+1] == '*' {
+			end := strings.Index(query[i+2:], "*/")
+			if end != -1 {
+				i += end + 4
+			} else {
+				break
+			}
+			continue
 		}
-		sb.WriteString(line)
-		sb.WriteByte('\n')
+		if i+1 < n && query[i] == '-' && query[i+1] == '-' {
+			end := strings.IndexByte(query[i+2:], '\n')
+			if end != -1 {
+				i += end + 3
+				sb.WriteByte('\n')
+			} else {
+				break
+			}
+			continue
+		}
+		sb.WriteByte(query[i])
+		i++
 	}
 	return strings.TrimSpace(sb.String())
 }

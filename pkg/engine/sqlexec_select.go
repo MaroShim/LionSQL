@@ -1382,22 +1382,47 @@ var mssqlOffsetOnlyRe = regexp.MustCompile(`(?is)\s+OFFSET\s+(\d+)\s+ROWS?(?:\s*
 var mssqlFetchOnlyRe = regexp.MustCompile(`(?is)\s+FETCH\s+(?:NEXT|FIRST)\s+(\d+)\s+ROWS?\s+ONLY`)
 var mssqlTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+)TOP\s*\(?\s*(\d+)\s*\)?\s+(DISTINCT\s+)?(.*)$`)
 var mssqlDistinctTopRe = regexp.MustCompile(`(?is)^(\s*SELECT\s+DISTINCT\s+)TOP\s*\(?\s*(\d+)\s*\)?\s+(.*)$`)
-var mssqlNolockRe = regexp.MustCompile(`(?is)\bWITH\s*\(\s*(?:NOLOCK|READUNCOMMITTED)\s*\)`)
-var mssqlOptionRe = regexp.MustCompile(`(?is)\s+OPTION\s*\(.*?\)\s*$`)
+func stripMSSQLOption(sql string) string {
+	trimmed := strings.TrimRight(sql, "; \t\r\n")
+	optIdx := sqlutil.FindTopLevelKeyword(trimmed, "OPTION")
+	if optIdx != -1 {
+		rest := strings.TrimSpace(trimmed[optIdx+6:])
+		if strings.HasPrefix(rest, "(") && strings.HasSuffix(rest, ")") {
+			return trimmed[:optIdx]
+		}
+	}
+	return sql
+}
 
-var (
-	reSelectInto = regexp.MustCompile(`(?is)^SELECT\s+(.*?)\s+INTO\s+([^\s,;]+)\s+FROM\s+(.*)$`)
-	reSelectAs   = regexp.MustCompile(`(?is)^(.*?)\s+AS\s+([a-zA-Z0-9_#$]+|"[^"]+")$`)
-	reSelectTvf  = regexp.MustCompile(`(?is)^([a-zA-Z0-9_#]+)\s*\((.*?)\)$`)
-)
+func stripMSSQLNolock(sql string) string {
+	for {
+		upper := strings.ToUpper(sql)
+		idx := strings.Index(upper, "WITH")
+		if idx == -1 {
+			break
+		}
+		if idx > 0 && !isSep(upper[idx-1]) {
+			break
+		}
+		rest := strings.TrimLeft(sql[idx+4:], " \t\r\n")
+		if strings.HasPrefix(rest, "(") {
+			closeP := sqlutil.FindMatchingParen(rest, 0)
+			if closeP != -1 {
+				inside := strings.ToUpper(strings.TrimSpace(rest[1:closeP]))
+				if inside == "NOLOCK" || inside == "READUNCOMMITTED" {
+					sql = sql[:idx] + rest[closeP+1:]
+					continue
+				}
+			}
+		}
+		break
+	}
+	return sql
+}
 
 func normalizeMSSQLPagination(sql string) string {
-	if mssqlNolockRe.MatchString(sql) {
-		sql = mssqlNolockRe.ReplaceAllString(sql, "")
-	}
-	if mssqlOptionRe.MatchString(sql) {
-		sql = mssqlOptionRe.ReplaceAllString(sql, "")
-	}
+	sql = stripMSSQLNolock(sql)
+	sql = stripMSSQLOption(sql)
 
 	if mssqlOffsetFetchRe.MatchString(sql) {
 		sql = mssqlOffsetFetchRe.ReplaceAllString(sql, " LIMIT $2 OFFSET $1")
@@ -1466,12 +1491,17 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	}
 
 	// 0. SELECT ... INTO <target_table> FROM ...
-	selectIntoRe := reSelectInto
-	if m := selectIntoRe.FindStringSubmatch(cleaned); len(m) == 4 {
-		projections := strings.TrimSpace(m[1])
-		targetTable := cleanIdentifier(m[2])
-		fromClause := strings.TrimSpace(m[3])
-		return s.execSelectInto(targetTable, projections, fromClause, start, cs)
+	if strings.HasPrefix(strings.ToUpper(cleaned), "SELECT") {
+		intoIdx := sqlutil.FindTopLevelKeyword(cleaned, "INTO")
+		fromIdx := sqlutil.FindTopLevelKeyword(cleaned, "FROM")
+		if intoIdx != -1 && fromIdx != -1 && intoIdx < fromIdx {
+			projections := strings.TrimSpace(cleaned[6:intoIdx])
+			targetTable := cleanIdentifier(strings.TrimSpace(cleaned[intoIdx+4 : fromIdx]))
+			fromClause := strings.TrimSpace(cleaned[fromIdx+4:])
+			if projections != "" && targetTable != "" && fromClause != "" {
+				return s.execSelectInto(targetTable, projections, fromClause, start, cs)
+			}
+		}
 	}
 
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
@@ -1521,10 +1551,10 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 		tableName := cleanIdentifier(rawTable)
 
 		// Check for Table-Valued Function (TVF) invocation: e.g. FROM GetTopAccounts(100)
-		tvfCallRe := reSelectTvf
-		if m := tvfCallRe.FindStringSubmatch(rawTable); len(m) == 3 {
-			tvfName := cleanIdentifier(m[1])
-			argsRaw := m[2]
+		trimmedRaw := strings.TrimSpace(rawTable)
+		if openP := strings.IndexByte(trimmedRaw, '('); openP != -1 && strings.HasSuffix(trimmedRaw, ")") {
+			tvfName := cleanIdentifier(strings.TrimSpace(trimmedRaw[:openP]))
+			argsRaw := trimmedRaw[openP+1 : len(trimmedRaw)-1]
 			fnMeta, err := s.catalog.GetFunction(tvfName)
 			if err == nil && fnMeta != nil && fnMeta.IsTableValued {
 				var argVals []string

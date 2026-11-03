@@ -188,6 +188,18 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
   - [x] 2단계: `sqlexec_ddl.go` 단순 DDL 라우팅(View, Table, Index, Stats, Truncate, Reindex, Functions) 토크나이저 전환
   - [x] 3단계: `sqlexec_ddl.go` `CREATE TABLE` / `ALTER TABLE` 복합 제약조건 및 컬럼 파서 정규식 완전 박멸 (정규식 35+종 전량 제거, `"regexp"` import 0건)
   - [x] 회귀 검증: `regex_ddl_migration_test.go` E2E 및 서브쿼리 테스트, `pkg/engine` / `pkg/sqlutil` / `pkg/api` 100% PASS
+- [x] **`GA-REGEX-NESTED-1`**: SQL 중첩/괄호/조건식 잔여 정규식 제거 및 sqlutil 추상화 모듈화 (`Invariant 7` 준수) — **[완료 (Pass)]**
+  - [x] **아키텍처 불변식 명문화**: `GEMINI.md` (Invariant 7 영어 요약) 및 `notes/ENGINEERING_CONTEXT.ko.md` (제1절 ⑮) 촘스키 계층론(Type 3 정규 언어 vs Type 2 CFG) 기반 SQL 구문 정규식 금지 및 선형 포맷 허용 경계 정의
+  - [x] **`pkg/sqlutil/predicate.go` 조건식 모듈 신설**: `ParseInPredicate`, `ParseIsNullPredicate`, `ParseAnyPredicate`, `ParseBetweenPredicate`, `StripParentheses` 추상화 및 단위 테스트(`predicate_test.go`) 100% PASS
+  - [x] **엔진·실행기·가상 카탈로그 정규식 일괄 박멸**:
+    - `pkg/execution/aggregate.go`: 9개 집계함수 정규식 제거 및 Pratt AST 기반 파싱 전환 (`"regexp"` 제거)
+    - `pkg/execution/filter.go`: `inRe` 제거 및 `sqlutil.ParseInPredicate`/`ParseIsNullPredicate` 적용
+    - `pkg/catalog/virtual/result.go`: `reEvalInClause`, `reEvalAnyClause`, `reEvalIsNull`, `reEvalIsNotNull` 제거 및 `sqlutil` 조건식 파서 전환
+    - `pkg/catalog/virtual/mssql.go`: `reMssqlObjectIdIn`, `reMssqlParentObjectIdIn` 제거
+    - `pkg/engine/sqlexec_merge.go`: `VALUES`, `AS alias(cols)`, `INSERT...VALUES` 정규식 제거 및 `StripParentheses` 전환 (`"regexp"` 제거)
+    - `pkg/engine/sqlexec_derived.go`, `sqlexec_dbcc.go`, `sqlexec_select.go`: 인라인 파렌/토크나이저 전환
+    - `pkg/wire/server.go`, `pkg/wire/tds/server.go`: 문자열/주석 스캐너 및 인덱스 슬라이싱 전환
+  - [x] **회귀 검증**: 3-Stage Pipeline (Build, Test `-race`) 100% PASS (0 data race)
 
 ---
 

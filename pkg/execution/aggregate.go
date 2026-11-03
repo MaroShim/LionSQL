@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -146,16 +145,6 @@ func parseExprOrLiteral(exprStr string) proc.Expr {
 }
 
 func (a *AggregateIterator) parseFields() {
-	countStarRe := regexp.MustCompile(`(?i)^\s*COUNT\s*\(\s*\*\s*\)\s*$`)
-	aggCallRe := regexp.MustCompile(`(?i)^\s*(COUNT|SUM|TOTAL|AVG|MIN|MAX|GROUP_CONCAT|STRING_AGG)\s*\(\s*(DISTINCT\s+|ALL\s+)?([^\)]+)\s*\)\s*$`)
-	groupingRe := regexp.MustCompile(`(?i)^\s*GROUPING\s*\(\s*([^\)]+)\s*\)\s*$`)
-	medianRe := regexp.MustCompile(`(?i)^\s*MEDIAN\s*\(\s*(DISTINCT\s+)?([^\)]+)\s*\)\s*$`)
-	approxPercRe := regexp.MustCompile(`(?i)^\s*APPROX_PERCENTILE\s*\(\s*([^,\)]+)\s*,\s*([0-9\.]+)(?:\s*,\s*([0-9\.]+))?\s*\)\s*$`)
-	percCont2Re := regexp.MustCompile(`(?i)^\s*PERCENTILE_CONT\s*\(\s*([^,\)]+)\s*,\s*([0-9\.]+)\s*\)\s*$`)
-	percDisc2Re := regexp.MustCompile(`(?i)^\s*PERCENTILE_DISC\s*\(\s*([^,\)]+)\s*,\s*([0-9\.]+)\s*\)\s*$`)
-	percContWithinRe := regexp.MustCompile(`(?i)^\s*PERCENTILE_CONT\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([^\)\s]+)(?:\s+(?:ASC|DESC))?\s*\)\s*$`)
-	percDiscWithinRe := regexp.MustCompile(`(?i)^\s*PERCENTILE_DISC\s*\(\s*([0-9\.]+)\s*\)\s*WITHIN\s+GROUP\s*\(\s*ORDER\s+BY\s+([^\)\s]+)(?:\s+(?:ASC|DESC))?\s*\)\s*$`)
-
 	var auxAggFields []aggField
 	var extractAggFromAST func(expr proc.Expr)
 	extractAggFromAST = func(expr proc.Expr) {
@@ -303,149 +292,153 @@ func (a *AggregateIterator) parseFields() {
 			}
 		}
 
-		if countStarRe.MatchString(exprPart) {
-			alias := extractedAlias
-			if alias == "" {
-				alias = "count"
-			}
-			a.fields = append(a.fields, aggField{fnType: aggCount, isStar: true, alias: alias, rawExpr: "COUNT(*)"})
-			a.schema = append(a.schema, alias)
-			continue
-		}
+		pLex := proc.NewParser(proc.NewLexer(exprPart))
+		ast := pLex.ParseExpr()
+		hasAST := ast != nil && len(pLex.Errors()) == 0
 
-		if m := aggCallRe.FindStringSubmatch(exprPart); len(m) == 4 {
-			fnName := strings.ToUpper(m[1])
-			isDistinct := strings.EqualFold(strings.TrimSpace(m[2]), "DISTINCT")
-			arg := strings.Trim(strings.TrimSpace(m[3]), "\"`[]")
-			alias := extractedAlias
-			if alias == "" {
-				alias = strings.ToLower(fnName)
-			}
-			rawCall := fmt.Sprintf("%s(%s)", fnName, arg)
+		if hasAST {
+			if fn, ok := ast.(*proc.FunctionCallExpr); ok {
+				fnName := strings.ToUpper(fn.Name)
+				if fnName == "COUNT" {
+					isStar := len(fn.Args) == 0
+					if len(fn.Args) == 1 {
+						if colRef, isCol := fn.Args[0].(*proc.ColumnRefExpr); isCol && colRef.Name == "*" {
+							isStar = true
+						}
+					}
+					if isStar {
+						alias := extractedAlias
+						if alias == "" {
+							alias = "count"
+						}
+						a.fields = append(a.fields, aggField{fnType: aggCount, isStar: true, alias: alias, rawExpr: "COUNT(*)"})
+						a.schema = append(a.schema, alias)
+						continue
+					}
+				}
 
-			var fnType aggFuncType
-			switch fnName {
-			case "COUNT":
-				fnType = aggCount
-			case "SUM":
-				fnType = aggSum
-			case "TOTAL":
-				fnType = aggTotal
-			case "AVG":
-				fnType = aggAvg
-			case "MIN":
-				fnType = aggMin
-			case "MAX":
-				fnType = aggMax
-			case "GROUP_CONCAT", "STRING_AGG":
-				fnType = aggGroupConcat
-			}
+				if fnName == "COUNT" || fnName == "SUM" || fnName == "TOTAL" || fnName == "AVG" || fnName == "MIN" || fnName == "MAX" || fnName == "GROUP_CONCAT" || fnName == "STRING_AGG" {
+					var fnType aggFuncType
+					switch fnName {
+					case "COUNT":
+						fnType = aggCount
+					case "SUM":
+						fnType = aggSum
+					case "TOTAL":
+						fnType = aggTotal
+					case "AVG":
+						fnType = aggAvg
+					case "MIN":
+						fnType = aggMin
+					case "MAX":
+						fnType = aggMax
+					case "GROUP_CONCAT", "STRING_AGG":
+						fnType = aggGroupConcat
+					}
 
-			sep := ","
-			if fnType == aggGroupConcat {
-				if comma := strings.Index(arg, ","); comma != -1 {
-					sep = strings.Trim(strings.TrimSpace(arg[comma+1:]), "'\"")
-					arg = strings.Trim(strings.TrimSpace(arg[:comma]), "\"`[]")
+					alias := extractedAlias
+					if alias == "" {
+						alias = strings.ToLower(fnName)
+					}
+					isDistinct := fn.Distinct
+					arg := ""
+					sep := ","
+					var parsedArg proc.Expr
+					if len(fn.Args) > 0 {
+						parsedArg = fn.Args[0]
+						arg = strings.Trim(strings.TrimSpace(fn.Args[0].String()), "\"`[]")
+						if fnType == aggGroupConcat && len(fn.Args) > 1 {
+							sep = strings.Trim(fn.Args[1].String(), "'\"")
+						}
+					}
+					rawCall := fmt.Sprintf("%s(%s)", fnName, arg)
+
+					a.fields = append(a.fields, aggField{
+						fnType:     fnType,
+						argCol:     arg,
+						separator:  sep,
+						alias:      alias,
+						isDistinct: isDistinct,
+						rawExpr:    rawCall,
+						parsed:     parsedArg,
+					})
+					a.schema = append(a.schema, alias)
+					continue
+				}
+
+				if fnName == "GROUPING" && len(fn.Args) == 1 {
+					arg := strings.Trim(strings.TrimSpace(fn.Args[0].String()), "\"`[]")
+					alias := extractedAlias
+					if alias == "" {
+						alias = fmt.Sprintf("grouping_%s", arg)
+					}
+					rawCall := fmt.Sprintf("GROUPING(%s)", arg)
+					a.fields = append(a.fields, aggField{fnType: aggGrouping, argCol: arg, alias: alias, rawExpr: rawCall})
+					a.schema = append(a.schema, alias)
+					continue
+				}
+
+				if fnName == "MEDIAN" && len(fn.Args) == 1 {
+					arg := strings.Trim(strings.TrimSpace(fn.Args[0].String()), "\"`[]")
+					alias := extractedAlias
+					if alias == "" {
+						alias = "median"
+					}
+					a.fields = append(a.fields, aggField{fnType: aggMedian, argCol: arg, alias: alias, isDistinct: fn.Distinct, percentile: 0.5, rawExpr: exprPart})
+					a.schema = append(a.schema, alias)
+					continue
+				}
+
+				if fnName == "APPROX_PERCENTILE" && len(fn.Args) >= 2 {
+					arg := strings.Trim(strings.TrimSpace(fn.Args[0].String()), "\"`[]")
+					pVal, _ := strconv.ParseFloat(fn.Args[1].String(), 64)
+					alias := extractedAlias
+					if alias == "" {
+						alias = "approx_percentile"
+					}
+					a.fields = append(a.fields, aggField{fnType: aggApproxPercentile, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
+					a.schema = append(a.schema, alias)
+					continue
+				}
+
+				if (fnName == "PERCENTILE_CONT" || fnName == "PERCENTILE_DISC") && len(fn.Args) == 2 {
+					arg := strings.Trim(strings.TrimSpace(fn.Args[0].String()), "\"`[]")
+					pVal, _ := strconv.ParseFloat(fn.Args[1].String(), 64)
+					alias := extractedAlias
+					tType := aggPercentileCont
+					if fnName == "PERCENTILE_DISC" {
+						tType = aggPercentileDisc
+					}
+					if alias == "" {
+						alias = strings.ToLower(fnName)
+					}
+					a.fields = append(a.fields, aggField{fnType: tType, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
+					a.schema = append(a.schema, alias)
+					continue
 				}
 			}
 
-			parsedExpr := parseExprOrLiteral(arg)
-
-			a.fields = append(a.fields, aggField{
-				fnType:     fnType,
-				argCol:     arg,
-				separator:  sep,
-				alias:      alias,
-				isDistinct: isDistinct,
-				rawExpr:    rawCall,
-				parsed:     parsedExpr,
-			})
-			a.schema = append(a.schema, alias)
-			continue
-		}
-
-		if m := groupingRe.FindStringSubmatch(exprPart); len(m) == 2 {
-			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
-			alias := extractedAlias
-			if alias == "" {
-				alias = fmt.Sprintf("grouping_%s", arg)
+			if wg, ok := ast.(*proc.WithinGroupExpr); ok && wg.Function != nil {
+				fnName := strings.ToUpper(wg.Function.Name)
+				if (fnName == "PERCENTILE_CONT" || fnName == "PERCENTILE_DISC") && len(wg.Function.Args) == 1 {
+					pVal, _ := strconv.ParseFloat(wg.Function.Args[0].String(), 64)
+					arg := ""
+					if wg.OrderBy != nil {
+						arg = strings.Trim(strings.TrimSpace(wg.OrderBy.String()), "\"`[]")
+					}
+					alias := extractedAlias
+					tType := aggPercentileCont
+					if fnName == "PERCENTILE_DISC" {
+						tType = aggPercentileDisc
+					}
+					if alias == "" {
+						alias = strings.ToLower(fnName)
+					}
+					a.fields = append(a.fields, aggField{fnType: tType, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
+					a.schema = append(a.schema, alias)
+					continue
+				}
 			}
-			rawCall := fmt.Sprintf("GROUPING(%s)", arg)
-			a.fields = append(a.fields, aggField{fnType: aggGrouping, argCol: arg, alias: alias, rawExpr: rawCall})
-			a.schema = append(a.schema, alias)
-			continue
-		}
-
-		if m := medianRe.FindStringSubmatch(exprPart); len(m) == 3 {
-			isDistinct := len(strings.TrimSpace(m[1])) > 0
-			arg := strings.Trim(strings.TrimSpace(m[2]), "\"`[]")
-			alias := extractedAlias
-			if alias == "" {
-				alias = "median"
-			}
-			a.fields = append(a.fields, aggField{fnType: aggMedian, argCol: arg, alias: alias, isDistinct: isDistinct, percentile: 0.5, rawExpr: exprPart})
-			a.schema = append(a.schema, alias)
-			continue
-		}
-
-		if m := approxPercRe.FindStringSubmatch(exprPart); len(m) == 4 {
-			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
-			pVal, _ := strconv.ParseFloat(m[2], 64)
-			alias := extractedAlias
-			if alias == "" {
-				alias = "approx_percentile"
-			}
-			a.fields = append(a.fields, aggField{fnType: aggApproxPercentile, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
-			a.schema = append(a.schema, alias)
-			continue
-		}
-
-		if m := percCont2Re.FindStringSubmatch(exprPart); len(m) == 3 {
-			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
-			pVal, _ := strconv.ParseFloat(m[2], 64)
-			alias := extractedAlias
-			if alias == "" {
-				alias = "percentile_cont"
-			}
-			a.fields = append(a.fields, aggField{fnType: aggPercentileCont, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
-			a.schema = append(a.schema, alias)
-			continue
-		}
-
-		if m := percDisc2Re.FindStringSubmatch(exprPart); len(m) == 3 {
-			arg := strings.Trim(strings.TrimSpace(m[1]), "\"`[]")
-			pVal, _ := strconv.ParseFloat(m[2], 64)
-			alias := extractedAlias
-			if alias == "" {
-				alias = "percentile_disc"
-			}
-			a.fields = append(a.fields, aggField{fnType: aggPercentileDisc, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
-			a.schema = append(a.schema, alias)
-			continue
-		}
-
-		if m := percContWithinRe.FindStringSubmatch(exprPart); len(m) == 3 {
-			pVal, _ := strconv.ParseFloat(m[1], 64)
-			arg := strings.Trim(strings.TrimSpace(m[2]), "\"`[]")
-			alias := extractedAlias
-			if alias == "" {
-				alias = "percentile_cont"
-			}
-			a.fields = append(a.fields, aggField{fnType: aggPercentileCont, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
-			a.schema = append(a.schema, alias)
-			continue
-		}
-
-		if m := percDiscWithinRe.FindStringSubmatch(exprPart); len(m) == 3 {
-			pVal, _ := strconv.ParseFloat(m[1], 64)
-			arg := strings.Trim(strings.TrimSpace(m[2]), "\"`[]")
-			alias := extractedAlias
-			if alias == "" {
-				alias = "percentile_disc"
-			}
-			a.fields = append(a.fields, aggField{fnType: aggPercentileDisc, argCol: arg, alias: alias, percentile: pVal, rawExpr: exprPart})
-			a.schema = append(a.schema, alias)
-			continue
 		}
 
 		// Group-by column or passthrough (or nested aggregate expression like COALESCE(SUM(col), 0))
@@ -459,7 +452,10 @@ func (a *AggregateIterator) parseFields() {
 			}
 			alias = sqlutil.CleanIdentifier(alias)
 		}
-		parsedExpr := parseExprOrLiteral(exprPart)
+		parsedExpr := ast
+		if parsedExpr == nil {
+			parsedExpr = parseExprOrLiteral(exprPart)
+		}
 		a.fields = append(a.fields, aggField{isLiteral: true, argCol: exprPart, alias: alias, rawExpr: exprPart, parsed: parsedExpr})
 		a.schema = append(a.schema, alias)
 
@@ -467,11 +463,6 @@ func (a *AggregateIterator) parseFields() {
 		// so they are accumulated across the group and available during post-group expression evaluation.
 		if parsedExpr != nil {
 			extractAggFromAST(parsedExpr)
-		} else {
-			pLex := proc.NewParser(proc.NewLexer(exprPart))
-			if ast := pLex.ParseExpr(); ast != nil {
-				extractAggFromAST(ast)
-			}
 		}
 	}
 

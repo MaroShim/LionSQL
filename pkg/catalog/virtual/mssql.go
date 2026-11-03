@@ -7,16 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"lionsql/pkg/sqlutil"
 	"lionsql/pkg/storage"
 )
 
 var (
-	reMssqlObjectIdIn       = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s+in\s*\(([^)]+)\)`)
-	reMssqlObjectIDEq       = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
-	reMssqlObjectIdCallEq   = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*(?:[a-z0-9_]+\.)*object_id\s*\(\s*N?'([^']+)'(?:\s*,\s*N?'[^']+')?\s*\)`)
-	reMssqlParentObjectIdIn = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?parent_object_id\s+in\s*\(([^)]+)\)`)
-	reMssqlTableNameEq      = regexp.MustCompile(`(?is)(?:table_name|c\.name|t\.name|ic\.table_name|\[?t\]?\.\[?name\]?|\[?c\]?\.\[?name\]?|\[?table_name\]?)\s*=\s*N?'([^']+)'`)
-	reMssqlSchemaNameEq     = regexp.MustCompile(`(?is)(?:table_schema|s\.name|ic\.table_schema|\[?s\]?\.\[?name\]?|\[?table_schema\]?)\s*=\s*N?'([^']+)'`)
+	reMssqlObjectIDEq     = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*['"]?(\d+)['"]?`)
+	reMssqlObjectIdCallEq = regexp.MustCompile(`(?is)(?:[a-z0-9_]+\.)?object_id\s*=\s*(?:[a-z0-9_]+\.)*object_id\s*\(\s*N?'([^']+)'(?:\s*,\s*N?'[^']+')?\s*\)`)
+	reMssqlTableNameEq    = regexp.MustCompile(`(?is)(?:table_name|c\.name|t\.name|ic\.table_name|\[?t\]?\.\[?name\]?|\[?c\]?\.\[?name\]?|\[?table_name\]?)\s*=\s*N?'([^']+)'`)
+	reMssqlSchemaNameEq   = regexp.MustCompile(`(?is)(?:table_schema|s\.name|ic\.table_schema|\[?s\]?\.\[?name\]?|\[?table_schema\]?)\s*=\s*N?'([^']+)'`)
 )
 
 func cleanTargetTableName(raw string) string {
@@ -29,9 +28,9 @@ func cleanTargetTableName(raw string) string {
 }
 
 func parseTargetObjectIDs(sql string, src Source) map[int]bool {
-	if m := reMssqlObjectIdIn.FindStringSubmatch(sql); len(m) == 2 {
-		res := make(map[int]bool)
-		for _, part := range strings.Split(m[1], ",") {
+	if pred, ok := sqlutil.ParseInPredicate(sql); ok && strings.HasSuffix(strings.ToUpper(pred.Column), "OBJECT_ID") {
+		res := make(map[int]bool, len(pred.Items))
+		for _, part := range pred.Items {
 			cleaned := strings.Trim(strings.TrimSpace(part), "'\" ")
 			if id, err := strconv.Atoi(cleaned); err == nil {
 				res[id] = true

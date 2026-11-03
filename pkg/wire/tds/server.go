@@ -13,7 +13,6 @@ import (
 	"io"
 	"log"
 	"net"
-	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -2894,8 +2893,16 @@ func matchVersionQuery(trimmed string) ([]ColumnInfo, []any, bool) {
 			if alias != "" {
 				colName = alias
 			}
-		} else if m := regexp.MustCompile(`(?i)SERVERPROPERTY\s*\(\s*['"]?([a-zA-Z0-9_]+)['"]?\s*\)`).FindStringSubmatch(trimmed); len(m) == 2 {
-			colName = m[1]
+		} else if spIdx := strings.Index(upper, "SERVERPROPERTY"); spIdx != -1 {
+			if openParen := strings.Index(trimmed[spIdx:], "("); openParen != -1 {
+				argStr := trimmed[spIdx+openParen+1:]
+				if closeParen := strings.Index(argStr, ")"); closeParen != -1 {
+					arg := strings.Trim(strings.TrimSpace(argStr[:closeParen]), "'\" ")
+					if arg != "" {
+						colName = arg
+					}
+				}
+			}
 		}
 		var val any = "15.0.2000.5"
 		colType := TypeNVarChar
