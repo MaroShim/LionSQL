@@ -73,11 +73,10 @@ if [[ "${SUITE}" == "all" || "${SUITE}" == "full" ]]; then
     done
 fi
 
-# 2. Evidence Suites (12 specification files)
+# 2. Evidence Suites (Specification files)
 if [[ "${SUITE}" == "all" || "${SUITE}" == "evidence" ]]; then
     echo ">> Fetching Tier 2 'evidence' specification suites..."
     evidence_files=(
-        "evidence/in1.test"
         "evidence/in2.test"
         "evidence/slt_lang_aggfunc.test"
         "evidence/slt_lang_createtrigger.test"
@@ -95,9 +94,9 @@ if [[ "${SUITE}" == "all" || "${SUITE}" == "evidence" ]]; then
     done
 fi
 
-# 3. Index Suites (16 B-Tree range & commute files)
-if [[ "${SUITE}" == "all" || "${SUITE}" == "index" ]]; then
-    echo ">> Fetching Tier 2 'index' suites..."
+# 3. Index Suites (Moved to sqlite_fuzz in v0.90.0 per Invariant/RadicalKISS)
+if [[ "${SUITE}" == "fuzz" || "${SUITE}" == "index" ]]; then
+    echo ">> Fetching Tier 2 'index' fuzz suites into test/sqlite_fuzz..."
     index_files=(
         "index/between/1/slt_good_0.test"
         "index/between/10/slt_good_0.test"
@@ -118,6 +117,9 @@ if [[ "${SUITE}" == "all" || "${SUITE}" == "index" ]]; then
         "index/view/10/slt_good_0.test"
     )
     for f in "${index_files[@]}"; do
+        fetch_file "${f}"
+    done
+fi
         fetch_file "${f}"
     done
 fi

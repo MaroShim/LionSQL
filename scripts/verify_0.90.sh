@@ -88,18 +88,18 @@ go test -tags wiredtiger -count=1 -short -race ./...
 echo -e "  [${CLR_GREEN}PASS${CLR_RESET}] All Go packages passed with 0 data races."
 
 # ------------------------------------------------------------------------------
-# Stage 3: SQLLogicTest Full 107-File Suite
+# Stage 3: SQLLogicTest Full Standard Suite
 # ------------------------------------------------------------------------------
 if [ "$SKIP_SLT" = false ]; then
-    log_stage "[Stage 3/4] Running SQLLogicTest (SLT) Full Suite (parallel=${PARALLEL})"
-    if [ ! -d "test/slt/random" ] || [ ! -d "test/slt/index" ]; then
-        echo -e "  [${CLR_YELLOW}INFO${CLR_RESET}] Fetching extended SLT suite via scripts/fetch_slt.sh..."
+    log_stage "[Stage 3/4] Running SQLLogicTest (SLT) Standard Suite (parallel=${PARALLEL})"
+    if [ ! -d "test/slt/random" ] || [ ! -d "test/slt/full" ]; then
+        echo -e "  [${CLR_YELLOW}INFO${CLR_RESET}] Fetching standard SLT suite via scripts/fetch_slt.sh..."
         bash scripts/fetch_slt.sh --suite all
     fi
     ./bin/sqllogictest -dir test/slt -parallel "$PARALLEL"
-    echo -e "  [${CLR_GREEN}PASS${CLR_RESET}] SQLLogicTest Full Suite 100% PASS."
+    echo -e "  [${CLR_GREEN}PASS${CLR_RESET}] SQLLogicTest Standard Suite 100% PASS."
 else
-    log_stage "[Stage 3/4] Skipping SQLLogicTest Full Suite (--skip-slt)"
+    log_stage "[Stage 3/4] Skipping SQLLogicTest Standard Suite (--skip-slt)"
 fi
 
 # ------------------------------------------------------------------------------

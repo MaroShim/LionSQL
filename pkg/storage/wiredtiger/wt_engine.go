@@ -374,7 +374,7 @@ func (e *Engine) Open(dir string) error {
 	cHome := C.CString(dir)
 	defer C.free(unsafe.Pointer(cHome))
 
-	cConfig := C.CString("create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true)")
+	cConfig := C.CString("create,cache_size=500M,session_max=2000,eviction=(threads_min=4,threads_max=8),checkpoint=(wait=60),log=(enabled=true),transaction_sync=(enabled=true,method=none)")
 	defer C.free(unsafe.Pointer(cConfig))
 
 	var conn *C.WT_CONNECTION
