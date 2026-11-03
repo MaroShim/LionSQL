@@ -63,6 +63,11 @@ Prioritizes vertical single-node hardware saturation (20,000+ TPS) over distribu
 3. **Mandatory Deterministic Parsers**:
    - All production SQL query routing, clause compilation, condition evaluation, and subquery branching must exclusively utilize deterministic tokenizers (`proc.Lexer`, `sqlutil.FindMatchingParen`, `sqlutil.HasPrefixKeyword`, `sqlutil.FindTopLevelKeyword`) or 2-Tier AST parsers (Pratt / ANTLR4). Deep theoretical and architectural rationales are documented in [`notes/ENGINEERING_CONTEXT.ko.md`](notes/ENGINEERING_CONTEXT.ko.md).
 
+### Invariant 8: Proactive Modular Abstraction over Ad-Hoc Inlining (Rule of Two)
+1. **Zero Ad-Hoc Heuristic Duplication**: Never copy-paste or write ad-hoc inline parsing, condition evaluation, or data transformation logic across multiple call sites.
+2. **Canonical Domain Package Primacy**: Whenever a pattern or domain concept appears or is needed in 2 or more locations (e.g. SQL predicate parsing, identifier cleanup, paren extraction, data type formatting), immediately externalize and factor it into a cohesive, modular abstraction within the canonical domain package (`pkg/sqlutil`, `pkg/proc`, etc.) accompanied by isolated unit tests.
+3. **KISS Call Sites through Encapsulated Complexity**: KISS and YAGNI mean simplifying caller call sites through clean, single-responsibility modules—not bloating multiple caller functions with copy-pasted inline string manipulation heuristics.
+
 ---
 
 ## 3. Explicit Spec-Out Decisions (Engine Simplicity & KISS)
