@@ -309,8 +309,8 @@ This dashboard tracks active engineering sprint tasks, domain backlog matrices, 
 ### [ ] 3.2 `BENCH-TPCH-1` Mini TPC-H Benchmark Suite & CBO 서브쿼리 Decorrelation
 - TPC-H Q1, Q3, Q4, Q6, Q9 스위트 및 `EXISTS`/`IN` -> Semi-Join 자동 변환 ([`notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md`](notes/COMPLEX_QUERY_BENCHMARK_PLAN.ko.md))
 
-### [ ] 3.3 `OCC-HYPER-2` In-Memory OCC Compact Arena Memory Compaction
-- 인메모리 컴팩트 아레나 메모리 압축을 통한 5배 고밀도화 ([`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md))
+### [ ] 3.3 `OCC-HYPER-2` In-Memory OCC Pointer-Free Flat Record & Memory Compaction
+- [우선 구현 옵션] 포인터리스 플랫 레코드(Pointer-Free Flat Record) 도입: 복잡한 Varint 압축 해제 오버헤드 없이 고정 오프셋 O(1) 직접 접근(0.5ns)을 유지하면서 Go GC 힙 포인터를 100% 제거하고 4~5배 메모리 압축 달성 ([`notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md`](notes/IN_MEMORY_OCC_OPTIMIZATION_PLAN.ko.md))
 
 ### [ ] 3.4 `PERF-SERVER-PIPELINE-P3-P4` 서버 파이프라인 Phase 3/4
 - Generic LRU 커서 및 ReadOnly Auto-Bypass, 적응형 그룹 커밋 ([`notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md`](notes/SERVER_PIPELINE_PERFORMANCE_OPTIMIZATION_PLAN.ko.md))
