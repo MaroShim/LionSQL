@@ -637,7 +637,7 @@ vmLoop:
 		}
 
 		// Fast-path Direct Row Insert: bypass Record map allocations when schema matches and no triggers exist
-		canDirectInsert := !isTransientTable(data.Table) && tableSchema != nil && !hasTriggers && len(cols) == len(tableSchema.Columns) && identityCol == nil
+		canDirectInsert := !isTransientTable(data.Table) && tableSchema != nil && !hasTriggers && len(cols) == len(tableSchema.Columns) && len(data.ValExprs) == len(tableSchema.Columns) && identityCol == nil
 		if canDirectInsert {
 			for i, col := range cols {
 				if !strings.EqualFold(col, tableSchema.Columns[i].Name) {
@@ -1543,11 +1543,16 @@ vmLoop:
 
 	case proc.OpCallProc:
 		callData := f.aux(&inst).(*proc.CallData)
-		if err := f.callProc(callData.Name, callData.ArgRegs); err != nil {
+		retVal, err := f.callProc(callData.Name, callData.ArgRegs)
+		if err != nil {
 			if catchErr := f.handleCatch(err, &pc); catchErr != nil {
 				return nil, catchErr
 			}
 			continue vmLoop
+		}
+		if inst.A >= 0 && int(inst.A) < len(f.slots) {
+			f.slots[inst.A] = retVal
+			f.evalCtxDirty = true
 		}
 
 	case proc.OpExecDynamic:

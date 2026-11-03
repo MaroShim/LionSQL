@@ -1,0 +1,165 @@
+
+DROP TRIGGER IF EXISTS forjsonauto_trg_insert;
+GO
+DROP TRIGGER IF EXISTS forjsonauto_trg_delete;
+GO
+DROP TRIGGER IF EXISTS forjsonauto_trg_insert_subset;
+GO
+DROP TRIGGER IF EXISTS forjsonauto_trg_insert_join;
+GO
+DROP TRIGGER IF EXISTS forjsonauto_trg_update_both;
+GO
+DROP TRIGGER IF EXISTS forjsonauto_trg_update_join;
+GO
+DROP TRIGGER IF EXISTS forjsonauto_trg_insert_null;
+GO
+DROP TRIGGER IF EXISTS forjsonauto_trg_delete_join;
+GO
+DROP TABLE IF EXISTS forjsonauto_t_trigger_json_result;
+GO
+DROP TABLE IF EXISTS forjsonauto_t_trigger_test;
+GO
+DROP VIEW forjson_vu_v_1
+GO
+
+DROP VIEW forjson_vu_v_2
+GO
+
+DROP VIEW forjson_vu_v_3
+GO
+
+DROP VIEW forjson_vu_v_4
+GO
+
+DROP VIEW forjson_vu_v_5
+GO
+
+DROP VIEW forjson_vu_v_6
+GO
+
+DROP VIEW forjson_vu_v_7
+GO
+
+DROP VIEW forjson_vu_v_8
+GO
+
+DROP VIEW forjson_vu_v_9
+GO
+
+DROP VIEW forjson_vu_v_10
+GO
+
+DROP VIEW forjson_vu_v_11
+GO
+
+DROP VIEW forjson_vu_v_12
+GO
+
+DROP VIEW forjson_vu_v_13
+GO
+
+DROP VIEW forjson_vu_v_14
+GO
+
+DROP PROCEDURE forjson_vu_v_resjunk_orderby_groupby
+GO
+
+DROP PROCEDURE forjson_vu_v_resjunk_window_functions
+GO
+
+DROP PROCEDURE forjson_vu_p_resjunk_groupby_having_orderby
+GO
+
+DROP PROCEDURE forjson_vu_p_1
+GO
+
+DROP PROCEDURE forjson_vu_p_2
+GO
+
+DROP PROCEDURE forjson_vu_p_3
+GO
+
+DROP PROCEDURE forjson_vu_p_4
+GO
+
+DROP PROCEDURE forjson_vu_p_5
+GO
+
+DROP PROCEDURE forjson_vu_p_6
+GO
+
+DROP PROCEDURE forjson_vu_p_7
+GO
+
+DROP PROCEDURE forjson_vu_p_8
+GO
+
+DROP PROCEDURE forjson_vu_p_9
+GO
+
+DROP PROCEDURE forjson_vu_p_10
+GO
+
+DROP PROCEDURE forjson_vu_p_11
+GO
+
+DROP PROCEDURE forjson_vu_p_12
+GO
+
+DROP PROCEDURE forjson_vu_p_13
+GO
+
+DROP PROCEDURE forjson_vu_p_14
+GO
+
+DROP PROCEDURE forjson_vu_p_15
+GO
+
+DROP FUNCTION forjson_vu_f_2()
+GO
+
+drop trigger forjson_vu_trigger_1;
+go
+
+drop trigger forjson_vu_trigger_2;
+go
+ 
+DROP FUNCTION dbo.forjson_auto_test_diff_cases_fn;
+GO
+
+DROP TABLE forjson_auto_vu_t_users
+GO
+
+DROP TABLE forjson_auto_vu_t_orders
+GO
+
+DROP TABLE forjson_auto_vu_t_products
+GO
+
+DROP TABLE forjson_auto_vu_t_sales
+GO
+
+DROP TABLE forjson_auto_vu_t_times
+GO
+
+DROP TABLE t50
+GO
+
+DROP TABLE forjson_auto_test_diff_cases;
+DROP TABLE forjson_test_nested_1;
+DROP TABLE forjson_test_nested_2;
+DROP TABLE forjson_test_unicode;
+DROP TABLE forjson_test_orderby;
+DROP TABLE forjson_test_groupby;
+GO
+
+DROP TABLE IF EXISTS forjsonauto_t_categories;
+DROP TABLE IF EXISTS forjsonauto_t_customers;
+DROP TABLE IF EXISTS forjsonauto_t_orders;
+DROP TABLE IF EXISTS forjsonauto_t_products;
+DROP TABLE IF EXISTS forjsonauto_t_order_details;
+DROP TABLE IF EXISTS forjsonauto_t_inventory_schema.forjsonauto_t_warehouses;
+DROP TABLE IF EXISTS forjsonauto_t_inventory_schema.forjsonauto_t_suppliers;
+DROP SCHEMA IF EXISTS forjsonauto_t_inventory_schema;
+DROP TABLE IF EXISTS JsonTable;
+GO

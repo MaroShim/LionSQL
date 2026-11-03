@@ -275,7 +275,12 @@ func ParseWithOptions(r io.Reader, filePath string, opts ParseOptions) ([]Record
 			skip := shouldSkip()
 			clearDirectives()
 			if !skip {
-				expectedValues := parseResultLines(resLines, len(typeSig), strings.HasSuffix(filePath, ".test"))
+				isOfficialTest := strings.HasSuffix(filePath, ".test") ||
+					strings.Contains(filePath, "evidence") ||
+					strings.Contains(filePath, "full") ||
+					strings.Contains(filePath, "random") ||
+					strings.Contains(filePath, "sqlite_fuzz")
+				expectedValues := parseResultLines(resLines, len(typeSig), isOfficialTest)
 				fullSQL := strings.Join(sqlLines, "\n")
 				upperSQL := strings.ToUpper(fullSQL)
 				if len(expectedValues) == 0 && expectedHash == "" && !strings.Contains(upperSQL, "GROUP BY") && (strings.Contains(upperSQL, "SUM(") || strings.Contains(upperSQL, "TOTAL(")) {

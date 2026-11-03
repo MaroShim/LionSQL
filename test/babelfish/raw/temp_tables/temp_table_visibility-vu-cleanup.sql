@@ -1,0 +1,53 @@
+drop procedure babel_4122_proc
+go
+
+drop procedure enr_list_outer_outer_proc
+go
+
+drop procedure enr_list_outer_proc
+go
+
+drop procedure enr_list_inner_proc
+go
+
+drop procedure object_id_outer_proc
+go
+
+drop procedure object_id_inner_proc
+go
+
+drop procedure p_truncate
+go
+
+drop procedure p_nested
+go
+
+drop procedure p_insert
+go
+
+drop procedure p_alter_add_col
+go
+
+drop procedure p_nested_2
+go
+
+drop procedure p_index_create
+go
+
+drop procedure p_drop
+go
+
+drop view enr_view
+go
+
+drop function custom_adder;
+GO
+
+drop procedure p_def_cons;
+GO
+
+drop procedure p_sp_executesql_index;
+GO
+
+drop procedure p_sp_executesql_toast;
+GO

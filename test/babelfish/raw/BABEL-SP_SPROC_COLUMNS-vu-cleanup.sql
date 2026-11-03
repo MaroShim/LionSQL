@@ -1,0 +1,65 @@
+USE babel_sp_sproc_columns_vu_prepare_db1
+GO
+
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_table_value_func
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_no_param_name
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_net
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_PhoneNum_func
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_eyedees_func
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_s1.positive_or_negative
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_select_all
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_select_all_with_parameter
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_mp_select_all
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_eyedees_proc
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_Phone_num_proc
+GO
+DROP TYPE babel_sp_sproc_columns_vu_prepare_eyedees
+GO
+DROP TYPE babel_sp_sproc_columns_vu_prepare_Phone_Num
+GO
+DROP TABLE babel_sp_sproc_columns_vu_prepare_t1
+GO
+DROP SCHEMA babel_sp_sproc_columns_vu_prepare_s1
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_addTwo
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_complexProc
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_scalFunc
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_tableFunc
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_InlineTableFunc
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_tableFunc2
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_InlineTableFunc2
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_tvpProc
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_myDecFunc
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_typeModifier
+GO
+DROP PROCEDURE babel_sp_sproc_columns_vu_prepare_DataTypeExamples
+GO
+DROP TYPE babel_sp_sproc_columns_vu_prepare_myDec
+GO
+DROP TYPE babel_sp_sproc_columns_vu_prepare_myTableParam
+GO
+USE master
+GO
+DROP FUNCTION babel_sp_sproc_columns_vu_prepare_net
+GO
+DROP DATABASE babel_sp_sproc_columns_vu_prepare_db1
+GO

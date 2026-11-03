@@ -824,6 +824,98 @@ func (s *Coordinator) execCreateProcedure(query string, start time.Time) (*Query
 	}, nil
 }
 
+func (s *Coordinator) execDropProcedure(query string, start time.Time) (*QueryResult, error) {
+	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
+	upper := strings.ToUpper(trimmed)
+
+	var rest string
+	if strings.HasPrefix(upper, "DROP PROCEDURE") {
+		rest = strings.TrimSpace(trimmed[len("DROP PROCEDURE"):])
+	} else if strings.HasPrefix(upper, "DROP PROC") {
+		rest = strings.TrimSpace(trimmed[len("DROP PROC"):])
+	} else {
+		return nil, errors.New("invalid DROP PROCEDURE syntax")
+	}
+
+	ifExists := false
+	if strings.HasPrefix(strings.ToUpper(rest), "IF EXISTS") {
+		ifExists = true
+		rest = strings.TrimSpace(rest[len("IF EXISTS"):])
+	}
+
+	// Support comma-separated multiple procedures e.g. DROP PROCEDURE p1, p2
+	parts := strings.Split(rest, ",")
+	for _, p := range parts {
+		name := cleanIdentifier(strings.TrimSpace(p))
+		if name == "" {
+			continue
+		}
+		err := s.catalog.DropProcedure(name)
+		if err != nil && !ifExists {
+			return nil, err
+		}
+		if s.executor != nil && s.executor.Cache() != nil {
+			s.executor.Cache().Invalidate(name)
+		}
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "DROP PROCEDURE",
+		DurationUS: time.Since(start).Microseconds(),
+		Messages:   []string{"Procedure(s) dropped successfully"},
+	}, nil
+}
+
+func (s *Coordinator) execDropFunction(query string, start time.Time) (*QueryResult, error) {
+	trimmed := strings.TrimRight(strings.TrimSpace(query), ";")
+	upper := strings.ToUpper(trimmed)
+
+	var rest string
+	if strings.HasPrefix(upper, "DROP FUNCTION") {
+		rest = strings.TrimSpace(trimmed[len("DROP FUNCTION"):])
+	} else {
+		return nil, errors.New("invalid DROP FUNCTION syntax")
+	}
+
+	ifExists := false
+	if strings.HasPrefix(strings.ToUpper(rest), "IF EXISTS") {
+		ifExists = true
+		rest = strings.TrimSpace(rest[len("IF EXISTS"):])
+	}
+
+	// Support comma-separated multiple functions e.g. DROP FUNCTION f1(), f2() or f1, f2
+	parts := strings.Split(rest, ",")
+	for _, p := range parts {
+		name := strings.TrimSpace(p)
+		// Strip parameter parentheses e.g. f1() or f1(INT)
+		if idx := strings.Index(name, "("); idx != -1 {
+			name = strings.TrimSpace(name[:idx])
+		}
+		name = cleanIdentifier(name)
+		if name == "" {
+			continue
+		}
+		err := s.catalog.DropFunction(name)
+		if err != nil && !ifExists {
+			return nil, err
+		}
+		if s.executor != nil {
+			s.executor.UnregisterUDF(name)
+			if s.executor.Cache() != nil {
+				s.executor.Cache().Invalidate(name)
+			}
+		}
+	}
+
+	return &QueryResult{
+		Success:    true,
+		Command:    "DROP FUNCTION",
+		DurationUS: time.Since(start).Microseconds(),
+		Messages:   []string{"Function(s) dropped successfully"},
+	}, nil
+}
+
 func (s *Coordinator) execCreateFunction(query string, start time.Time) (*QueryResult, error) {
 	// 1. Check if Table-Valued Function (TVF): CREATE FUNCTION ... RETURNS TABLE AS RETURN ( ... )
 	cleanedFunc := strings.TrimRight(strings.TrimSpace(query), ";")

@@ -1,0 +1,702 @@
+--- Simple SP_PREPARE
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'SELECT ''OK'''
+EXEC SP_EXECUTE @handle
+EXEC SP_EXECUTE @handle
+EXEC SP_EXECUTE @handle
+EXEC SP_UNPREPARE @handle
+GO
+
+--- Simple SP_PREPEXEC
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle OUT, NULL, 'SELECT ''OK'''
+EXEC SP_EXECUTE @handle
+EXEC SP_EXECUTE @handle
+EXEC SP_EXECUTE @handle
+EXEC SP_UNPREPARE @handle
+GO
+
+--- Basic SP_PREPARE with args
+DECLARE @handle int;
+EXEC SP_PREPARE @handle out, N'@a int, @b int', N'select @a, @b', 10;
+EXEC SP_EXECUTE @handle, 1, 2
+EXEC SP_EXECUTE @handle, 1, 2
+EXEC SP_EXECUTE @handle, 1, 2
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- Basic SP_PREPARE with args
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle out, N'@a int, @b int', N'select @a, @b', 1, 2;
+EXEC SP_EXECUTE @handle, 1, 2
+EXEC SP_EXECUTE @handle, 1, 2
+EXEC SP_EXECUTE @handle, 1, 2
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- SP_PREPARE Batch Support
+DECLARE @handle int;
+DECLARE @batch nvarchar(500);
+DECLARE @paramdef nvarchar(500);
+DECLARE @var int;
+SET @batch = 'IF (@cond > 0) SELECT @o = @a ELSE SELECT @o = @b'
+SET @paramdef = '@cond int, @a int, @b int, @o int OUTPUT'
+EXEC SP_PREPARE @handle OUT, @paramdef, @batch
+EXEC SP_EXECUTE @handle, -1, 10, 20, @var OUTPUT
+SELECT @var
+EXEC SP_EXECUTE @handle, 1, 10, 20, @var OUTPUT
+SELECT @var
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- SP_PREPEXEC Batch Support
+DECLARE @handle int;
+DECLARE @batch nvarchar(500);
+DECLARE @paramdef nvarchar(500);
+DECLARE @var int;
+SET @batch = 'IF (@cond > 0) SELECT @o = @a ELSE SELECT @o = @b'
+SET @paramdef = '@cond int, @a int, @b int, @o int OUTPUT'
+EXEC SP_PREPEXEC @handle out, @paramdef, @batch, 1, 30, 40, @var OUTPUT
+SELECT @var
+EXEC SP_EXECUTE @handle, -1, 10, 20, @var OUTPUT
+SELECT @var
+EXEC SP_EXECUTE @handle, 1, 10, 20, @var OUTPUT
+SELECT @var
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- Parsing specific 
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle + 1 OUTPUT, NULL, 'SELECT 1'
+GO
+
+DECLARE @handle VARCHAR(20)
+EXEC SP_PREPEXEC @handle OUTPUT, NULL, 'SELECT 1'
+GO
+
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle, NULL, 'SELECT 1'
+GO
+
+--- Corner case 1: empty batch
+DECLARE @handle int;
+EXEC SP_PREPARE @handle out, NULL, NULL
+EXEC SP_EXECUTE @handle
+EXEC SP_UNPREPARE @handle
+GO
+
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle out, NULL, NULL
+EXEC SP_EXECUTE @handle
+EXEC SP_UNPREPARE @handle
+GO
+
+--- Corner case 2: nested prepare
+DECLARE @handle int;
+DECLARE @inner_handle int;
+DECLARE @batch VARCHAR(500);
+SET @batch = 'EXEC SP_PREPARE @inner_handle OUT, NULL, ''SELECT 1'' '
+EXEC SP_PREPARE @handle out, '@inner_handle int OUT', @batch
+EXEC SP_EXECUTE @handle, @inner_handle OUT
+EXEC SP_EXECUTE @inner_handle
+EXEC SP_UNPREPARE @inner_handle  -- unprepare inner first
+EXEC SP_UNPREPARE @handle
+GO
+
+DECLARE @handle int;
+DECLARE @inner_handle int;
+DECLARE @batch VARCHAR(500);
+SET @batch = 'EXEC SP_PREPARE @inner_handle OUT, NULL, ''SELECT 1'' '
+EXEC SP_PREPARE @handle out, '@inner_handle int OUT', @batch
+EXEC SP_EXECUTE @handle, @inner_handle OUT
+EXEC SP_EXECUTE @inner_handle
+EXEC SP_UNPREPARE @handle            --unprepare outer first
+EXEC SP_EXECUTE @inner_handle
+EXEC SP_UNPREPARE @inner_handle
+GO
+
+--- Corner case 3: mismatch paramdef and params
+DECLARE @handle int;
+DECLARE @var int;
+DECLARE @batch VARCHAR(500);
+DECLARE @paramdef VARCHAR(500);
+SET @batch = 'SELECT @a';
+SET @paramdef = '@a int';
+EXEC SP_PREPARE @handle OUT, @paramdef, @batch
+EXEC SP_EXECUTE @handle, 100
+EXEC SP_EXECUTE @handle, @var OUT
+EXEC SP_UNPREPARE @handle
+GO
+
+--- Prepare DML statement
+CREATE TABLE t1 (a int, b int); 
+GO
+
+DECLARE @handle int;
+DECLARE @batch VARCHAR(500);
+DECLARE @paramdef VARCHAR(500);
+SET @batch = '
+INSERT INTO t1 VALUES (@v1, @v2)
+INSERT INTO t1 VALUES (@v3, @v4)
+'
+SET @paramdef = '@v1 int, @v2 int, @v3 int, @v4 int'
+EXEC SP_PREPARE @handle OUT, @paramdef, @batch
+EXEC SP_EXECUTE @handle, 1, 2, 2, 3
+EXEC SP_EXECUTE @handle, 3, 4, 4, 5
+SELECT * FROM t1 ORDER BY 1, 2;
+GO
+
+DECLARE @handle int;
+DECLARE @batch VARCHAR(500);
+DECLARE @paramdef VARCHAR(500);
+SET @batch = '
+UPDATE t1 SET a = a * 10, b = b *10 where a = @var1;
+UPDATE t1 SET a = a * 10, b = b *10 where a = @var2;
+'
+SET @paramdef = '@var1 int, @var2 int'
+EXEC SP_PREPARE @handle OUT, @paramdef, @batch
+EXEC SP_EXECUTE @handle, 1, 2
+EXEC SP_EXECUTE @handle, 3, 4
+SELECT * FROM t1 ORDER BY 1, 2;
+
+EXEC SP_UNPREPARE @handle
+DROP TABLE t1;
+GO
+
+--- Transaction with SP_EXECUTE
+CREATE TABLE t1 (a int, b int); 
+GO
+
+DECLARE @handle int;
+DECLARE @batch VARCHAR(500);
+DECLARE @paramdef VARCHAR(500);
+SET @batch = '
+INSERT INTO t1 VALUES (@v1, @v2);
+INSERT INTO t1 VALUES (@v3, @v4);
+'
+SET @paramdef = '@v1 int, @v2 int, @v3 int, @v4 int'
+
+EXEC SP_PREPARE @handle OUT, @paramdef, @batch
+
+BEGIN TRANSACTION;
+EXEC SP_EXECUTE @handle, 1, 2, 2, 3
+SELECT * FROM t1 ORDER BY 1, 2;
+COMMIT;
+SELECT * FROM t1 ORDER BY 1, 2;
+
+BEGIN TRANSACTION;
+EXEC SP_EXECUTE @handle, 3, 4, 4, 5
+SELECT * FROM t1 ORDER BY 1, 2;
+ROLLBACK;
+SELECT * FROM t1 ORDER BY 1, 2;
+
+EXEC SP_UNPREPARE @handle
+GO
+
+DROP TABLE t1;
+GO
+
+--- PREPARE Batch with Transaction 
+CREATE TABLE t1 (a int, b int); 
+GO
+
+DECLARE @handle int;
+DECLARE @batch VARCHAR(500);
+DECLARE @paramdef VARCHAR(500);
+SET @batch = '
+BEGIN TRANSACTION
+INSERT INTO t1 VALUES (@v1, @v2);
+INSERT INTO t1 VALUES (@v3, @v4);
+SELECT * FROM t1 ORDER BY 1, 2;
+IF (@v1 = 10)
+  	COMMIT;
+ELSE
+	ROLLBACK;
+'
+SET @paramdef = '@v1 int, @v2 int, @v3 int, @v4 int'
+EXEC SP_PREPARE @handle OUT, @paramdef, @batch
+EXEC SP_EXECUTE @handle, 10, 20, 30, 40
+SELECT * FROM t1 ORDER BY 1, 2;
+EXEC SP_EXECUTE @handle, 50, 60, 70, 80
+SELECT * FROM t1 ORDER BY 1, 2;
+
+EXEC SP_UNPREPARE @handle
+GO
+
+DROP TABLE t1;
+GO
+
+-- Test Save Point
+CREATE TABLE t1 ( a int, b int);
+GO
+
+DECLARE @handle int;
+DECLARE @batch VARCHAR(500);
+SET @batch = '
+DECLARE @handle int;
+BEGIN TRANSACTION;
+INSERT INTO t1 VALUES (1, 2);
+SAVE TRANSACTION my_savept;
+EXEC SP_PREPEXEC @handle OUT, NULL, 
+''INSERT INTO t1 VALUES (3, 4);
+  SELECT * FROM t1 ORDER BY 1, 2;
+  ROLLBACK TRANSACTION my_savept;
+  SELECT * FROM t1 ORDER BY 1, 2;
+'';
+SELECT * FROM t1 ORDER BY 1, 2;
+ROLLBACK;
+SELECT * FROM t1 ORDER BY 1, 2;
+EXEC SP_UNPREPARE @handle;
+'
+EXEC SP_PREPARE @handle OUT, NULL, @batch;
+PRINT @handle
+EXEC SP_EXECUTE @handle;
+EXEC SP_UNPREPARE @handle;
+GO
+
+DROP TABLE t1;
+GO
+
+--- Test string type
+CREATE TABLE t1 ( a VARCHAR(10), b VARCHAR(10));
+GO
+
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle OUT, '@v1 VARCHAR(10), @v2 VARCHAR(10)', 'INSERT INTO t1 VALUES (@v1,@v2)', 'abc', 'efg'
+EXEC SP_EXECUTE @handle, 'lmn', 'opq'
+EXEC SP_UNPREPARE @handle
+SELECT * FROM t1 ORDER BY 1, 2;
+GO
+
+DROP TABLE t1;
+GO
+
+-- Test transaction begins outside the batch and commited/rollbacked inside the batch
+CREATE TABLE t1 (a INT);
+GO
+
+BEGIN TRAN;
+GO
+DECLARE @handle INT;
+DECLARE @batch VARCHAR(500);
+SET @batch = 'insert into t1 values(1); commit; begin tran;'
+EXEC sp_prepare @handle OUT, NULL, @batch
+EXEC sp_execute @handle
+EXEC sp_execute @handle
+EXEC SP_UNPREPARE @handle;
+COMMIT;
+SELECT COUNT(*) FROM t1;
+GO
+
+BEGIN TRAN;
+GO
+DECLARE @handle INT;
+DECLARE @batch VARCHAR(500);
+SET @batch = 'insert into t1 values(1); rollback tran; begin tran;'
+EXEC sp_prepare @handle OUT, NULL, @batch
+EXEC sp_execute @handle
+EXEC sp_execute @handle
+EXEC SP_UNPREPARE @handle;
+COMMIT;
+SELECT COUNT(*) FROM t1;
+GO
+
+DROP TABLE t1;
+GO
+
+-- prepare time error 1
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'SELECT * FROM t1'
+SELECT (case when @handle IS NOT NULL then 'true' else 'false' end) as 'Prepared'
+GO
+
+-- prepare time error 1-2
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'DECLARE @var int; SELECT * FROM t1 WHERE c = @var'
+SELECT (case when @handle IS NOT NULL then 'true' else 'false' end) as 'Prepared'
+GO
+
+-- prepare time error 2
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'EXEC my_proc'
+SELECT (case when @handle IS NOT NULL then 'true' else 'false' end) as 'Prepared'
+GO
+
+-- prepare time error 2-2
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'DECLARE @var int; EXEC my_proc @var'
+SELECT (case when @handle IS NOT NULL then 'true' else 'false' end) as 'Prepared'
+GO
+
+-- runtime error 1
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'SELECT * FROM t1; SELECT * FROM t1;'
+SELECT (case when @handle IS NOT NULL then 'true' else 'false' end) as 'Prepared'
+EXEC SP_EXECUTE @handle
+GO
+
+-- runtime error 2
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'EXEC my_proc; EXEC my_proc;'
+SELECT (case when @handle IS NOT NULL then 'true' else 'false' end) as 'Prepared'
+EXEC SP_EXECUTE @handle
+GO
+
+-- runtime error 3
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'IF (1=1) SELECT * FROM t1;'
+SELECT (case when @handle IS NOT NULL then 'true' else 'false' end) as 'Prepared'
+EXEC SP_EXECUTE @handle
+GO
+
+-- runtime error 4
+DECLARE @handle int;
+EXEC SP_PREPARE @handle OUT, NULL, 'DECLARE @var int; SET @var = 1; select * from t1 where c = @var'
+SELECT (case when @handle IS NOT NULL then 'true' else 'false' end) as 'Prepared'
+EXEC SP_EXECUTE @handle
+GO
+
+-- BABEL-2948: sp_execute is expecting more arguments but we supply only handle.
+CREATE TABLE dbo.tnullvarcharmaxblob (
+ data_type_test CHAR(50) NULL
+, test_scenario CHAR(60) NULL
+, value_test VARCHAR(MAX) NULL
+, inserted_dt DATETIME DEFAULT GETDATE()
+, user_login CHAR(255) DEFAULT CURRENT_USER
+)
+GO
+
+declare @p1 int
+set @p1=1
+exec sp_prepare @p1 output,N'@P1 char(50),@P2 char(60),@P3 varchar(max),@P4 datetime2,@P5 char(255)',N'INSERT INTO [dbo].[tnullvarcharmaxblob]([data_type_test],[test_scenario],[value_test],[inserted_dt],[user_login]) values (@P1,@P2,@P3,@P4,@P5)',1
+select @p1
+exec sp_execute @p1
+exec sp_unprepare @p1
+GO
+
+Drop table dbo.tnullvarcharmaxblob
+GO
+
+
+-- Testing With More than 100 bind params
+create table sp_prepare_table (
+c0 int,  c1 int,  c2 int,  c3 int,  c4 int,  c5 int,  c6 int,  c7 int,  c8 int,  c9 int,
+c10 int,  c11 int,  c12 int,  c13 int,  c14 int,  c15 int,  c16 int,  c17 int,  c18 int,  c19 int,
+c20 int,  c21 int,  c22 int,  c23 int,  c24 int,  c25 int,  c26 int,  c27 int,  c28 int,  c29 int,
+c30 int,  c31 int,  c32 int,  c33 int,  c34 int,  c35 int,  c36 int,  c37 int,  c38 int,  c39 int,
+c40 int,  c41 int,  c42 int,  c43 int,  c44 int,  c45 int,  c46 int,  c47 int,  c48 int,  c49 int,
+c50 int,  c51 int,  c52 int,  c53 int,  c54 int,  c55 int,  c56 int,  c57 int,  c58 int,  c59 int,
+c60 int,  c61 int,  c62 int,  c63 int,  c64 int,  c65 int,  c66 int,  c67 int,  c68 int,  c69 int,
+c70 int,  c71 int,  c72 int,  c73 int,  c74 int,  c75 int,  c76 int,  c77 int,  c78 int,  c79 int,
+c80 int,  c81 int,  c82 int,  c83 int,  c84 int,  c85 int,  c86 int,  c87 int,  c88 int,  c89 int,
+c90 int,  c91 int,  c92 int,  c93 int,  c94 int,  c95 int,  c96 int,  c97 int,  c98 int,  c99 int,
+c100 int,  c101 int,  c102 int,  c103 int,  c104 int,  c105 int,  c106 int,  c107 int,  c108 int,  c109 int);
+GO
+
+declare @handle int;
+EXEC sp_prepare @handle output,
+N'
+@c0  int, @c1  int, @c2  int, @c3  int, @c4  int, @c5  int, @c6  int, @c7  int, @c8  int, @c9  int,
+@c10  int, @c11  int, @c12  int, @c13  int, @c14  int, @c15  int, @c16  int, @c17  int, @c18  int, @c19  int,
+@c20  int, @c21  int, @c22  int, @c23  int, @c24  int, @c25  int, @c26  int, @c27  int, @c28  int, @c29  int,
+@c30  int, @c31  int, @c32  int, @c33  int, @c34  int, @c35  int, @c36  int, @c37  int, @c38  int, @c39  int,
+@c40  int, @c41  int, @c42  int, @c43  int, @c44  int, @c45  int, @c46  int, @c47  int, @c48  int, @c49  int,
+@c50  int, @c51  int, @c52  int, @c53  int, @c54  int, @c55  int, @c56  int, @c57  int, @c58  int, @c59  int,
+@c60  int, @c61  int, @c62  int, @c63  int, @c64  int, @c65  int, @c66  int, @c67  int, @c68  int, @c69  int,
+@c70  int, @c71  int, @c72  int, @c73  int, @c74  int, @c75  int, @c76  int, @c77  int, @c78  int, @c79  int,
+@c80  int, @c81  int, @c82  int, @c83  int, @c84  int, @c85  int, @c86  int, @c87  int, @c88  int, @c89  int,
+@c90  int, @c91  int, @c92  int, @c93  int, @c94  int, @c95  int, @c96  int, @c97  int, @c98  int, @c99  int,
+@c100  int, @c101  int, @c102  int, @c103  int, @c104  int, @c105  int, @c106  int, @c107  int, @c108  int, @c109 int
+',
+N'
+insert into sp_prepare_table (
+c0 ,  c1 ,  c2 ,  c3 ,  c4 ,  c5 ,  c6 ,  c7 ,  c8 ,  c9 ,
+c10 ,  c11 ,  c12 ,  c13 ,  c14 ,  c15 ,  c16 ,  c17 ,  c18 ,  c19 ,
+c20 ,  c21 ,  c22 ,  c23 ,  c24 ,  c25 ,  c26 ,  c27 ,  c28 ,  c29 ,
+c30 ,  c31 ,  c32 ,  c33 ,  c34 ,  c35 ,  c36 ,  c37 ,  c38 ,  c39 ,
+c40 ,  c41 ,  c42 ,  c43 ,  c44 ,  c45 ,  c46 ,  c47 ,  c48 ,  c49 ,
+c50 ,  c51 ,  c52 ,  c53 ,  c54 ,  c55 ,  c56 ,  c57 ,  c58 ,  c59 ,
+c60 ,  c61 ,  c62 ,  c63 ,  c64 ,  c65 ,  c66 ,  c67 ,  c68 ,  c69 ,
+c70 ,  c71 ,  c72 ,  c73 ,  c74 ,  c75 ,  c76 ,  c77 ,  c78 ,  c79 ,
+c80 ,  c81 ,  c82 ,  c83 ,  c84 ,  c85 ,  c86 ,  c87 ,  c88 ,  c89 ,
+c90 ,  c91 ,  c92 ,  c93 ,  c94 ,  c95 ,  c96 ,  c97 ,  c98 ,  c99 ,
+c100 ,  c101 ,  c102 ,  c103 ,  c104 ,  c105 ,  c106 ,  c107 ,  c108 ,  c109
+) values (
+@c0 ,  @c1 ,  @c2 ,  @c3 ,  @c4 ,  @c5 ,  @c6 ,  @c7 ,  @c8 ,  @c9 ,
+@c10 ,  @c11 ,  @c12 ,  @c13 ,  @c14 ,  @c15 ,  @c16 ,  @c17 ,  @c18 ,  @c19 ,
+@c20 ,  @c21 ,  @c22 ,  @c23 ,  @c24 ,  @c25 ,  @c26 ,  @c27 ,  @c28 ,  @c29 ,
+@c30 ,  @c31 ,  @c32 ,  @c33 ,  @c34 ,  @c35 ,  @c36 ,  @c37 ,  @c38 ,  @c39 ,
+@c40 ,  @c41 ,  @c42 ,  @c43 ,  @c44 ,  @c45 ,  @c46 ,  @c47 ,  @c48 ,  @c49 ,
+@c50 ,  @c51 ,  @c52 ,  @c53 ,  @c54 ,  @c55 ,  @c56 ,  @c57 ,  @c58 ,  @c59 ,
+@c60 ,  @c61 ,  @c62 ,  @c63 ,  @c64 ,  @c65 ,  @c66 ,  @c67 ,  @c68 ,  @c69 ,
+@c70 ,  @c71 ,  @c72 ,  @c73 ,  @c74 ,  @c75 ,  @c76 ,  @c77 ,  @c78 ,  @c79 ,
+@c80 ,  @c81 ,  @c82 ,  @c83 ,  @c84 ,  @c85 ,  @c86 ,  @c87 ,  @c88 ,  @c89 ,
+@c90 ,  @c91 ,  @c92 ,  @c93 ,  @c94 ,  @c95 ,  @c96 ,  @c97 ,  @c98 ,  @c99 ,
+@c100 ,  @c101 ,  @c102 ,  @c103 ,  @c104 ,  @c105 ,  @c106 ,  @c107 ,  @c108 ,  @c109
+)'
+GO
+
+DROP Table sp_prepare_table
+GO
+
+-- testing with Schema.User_Defined_Types
+Create schema udt_schema
+GO
+create type udt_schema.int_udt from int
+GO
+
+CREATE PROCEDURE udt_schema.udt_proc
+(
+    @TypeId udt_schema.int_udt,
+	@createdBy VARCHAR(100)
+)
+AS
+BEGIN
+		SET NOCOUNT ON;
+	IF @TypeId IS NULL
+	BEGIN
+		RAISERROR('mandatory field TypeId missing', 16, 1);
+		RETURN
+	END
+
+	IF 1=1
+	BEGIN
+		SELECT 1
+	END
+END
+GO
+
+declare @p0 udt_schema.int_udt
+set @p0 = 1
+exec sp_executesql N'EXEC udt_schema.udt_proc @TypeId = @P0, @CreatedBy = @p1',
+N'@P0 udt_schema.int_udt, @P1 VARCHAR(100)',
+@p0=@p0,@p1=N'abc@xyz1.com'
+GO
+
+-- testing with Table varaibles
+CREATE TYPE udt_schema.tvp_type AS TABLE (TypeId bigINT, createdBy VARCHAR(100))
+GO
+
+CREATE PROCEDURE udt_schema.tvp_proc
+(
+    @TypeId BIGINT,
+	@createdBy VARCHAR(100),
+	@TVPTypeData udt_schema.tvp_type READONLY -- tvp with schema.type_name
+)
+AS
+BEGIN 
+		SET NOCOUNT ON;
+	IF @TypeId IS NULL
+	BEGIN
+		RAISERROR('mandatory field TypeId missing', 16, 1);
+		RETURN
+	END
+
+	IF 1=1
+	BEGIN
+		SELECT 1
+	END
+END
+GO
+
+declare @p2 udt_schema.tvp_type
+insert into @p2 values(307,N'abc@xyz.com ')
+
+exec sp_executesql N'EXEC udt_schema.tvp_proc @TypeId = @P0, @CreatedBy = @p1, @TVPTypeData = @P2',
+N'@P0 bigint, @P1 VARCHAR(100), @P2 [udt_schema].[tvp_type] READONLY',
+8,N'abc@xyz1.com ', @P2=@p2
+GO
+
+
+
+DROP PROCEDURE udt_schema.udt_proc;
+DROP PROCEDURE udt_schema.tvp_proc;
+DROP TYPE udt_schema.tvp_type;
+DROP TYPE udt_schema.int_udt;
+DROP SCHEMA udt_schema;
+GO
+
+
+CREATE TABLE [tblEmployees](
+      [fldEmployeeID] [int] NULL,
+      [fldResource] [bit] NOT NULL)
+GO
+
+insert into tblEmployees values (1, 0)
+insert into tblEmployees values (1, 1)
+GO
+
+declare  @DSICoreSpecificationEqualsAndOperator1EmpMapIsResource bit
+
+EXECUTE sp_executesql N'
+SELECT DISTINCT _EmpMap.fldEmployeeID
+FROM tblEmployees AS _EmpMap
+WHERE  ( _EmpMap.fldResource = @DSICoreSpecificationEqualsAndOperator1EmpMapIsResource );'
+,N'@DSICoreSpecificationEqualsAndOperator1EmpMapIsResource Bit'
+,@DSICoreSpecificationEqualsAndOperator1EmpMapIsResource = 0;
+GO
+
+declare  @dsicorespecificationequalsandoperator1empmapisresource  bit
+
+EXECUTE sp_executesql N'
+SELECT DISTINCT _EmpMap.fldEmployeeID
+FROM tblEmployees AS _EmpMap
+WHERE  ( _EmpMap.fldResource = @dsicorespecificationequalsandoperator1empmapisresource  );'
+,N'@dsicorespecificationequalsandoperator1empmapisresource  Bit'
+,@dsicorespecificationequalsandoperator1empmapisresource  = 0;
+GO
+
+Drop table tblEmployees
+GO
+
+--- SP_PREPARE with named args
+CREATE TABLE handle (h int);
+DECLARE @handle int;
+EXEC SP_PREPARE @handle out, N'@a int, @b int', N'select @a, @b';
+INSERT INTO handle VALUES (@handle);
+EXEC SP_EXECUTE @handle, 1, 2;
+EXEC SP_EXECUTE @handle, @a = 1, @b = 2;
+EXEC SP_EXECUTE @handle, @b = 2, @a = 1;
+EXEC SP_EXECUTE @handle, 1, @b = 2;
+EXEC SP_EXECUTE @handle, 2, @a = 1; -- should error
+GO
+
+-- reuse handle
+DECLARE @handle int;
+SELECT @handle = h FROM handle;
+EXEC SP_EXECUTE @handle, 1, 2;
+EXEC SP_EXECUTE @handle, @a = 1, @b = 2;
+EXEC SP_EXECUTE @handle, @b = 2, @a = 1;
+EXEC SP_EXECUTE @handle, 1, @b = 2;
+EXEC SP_EXECUTE @handle, 2, @a = 1; -- should error
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- SP_PREPARE with named args (reverse param order)
+DELETE FROM handle;
+DECLARE @handle int;
+EXEC SP_PREPARE @handle out, N'@b int, @a int', N'select @a, @b';
+INSERT INTO handle VALUES (@handle);
+EXEC SP_EXECUTE @handle, 2, 1;
+EXEC SP_EXECUTE @handle, @a = 1, @b = 2;
+EXEC SP_EXECUTE @handle, @b = 2, @a = 1;
+EXEC SP_EXECUTE @handle, 2, @a = 1;
+EXEC SP_EXECUTE @handle, 1, @b = 2; -- should error
+GO
+
+-- reuse handle
+DECLARE @handle int;
+SELECT @handle = h FROM handle;
+EXEC SP_EXECUTE @handle, 2, 1;
+EXEC SP_EXECUTE @handle, @a = 1, @b = 2;
+EXEC SP_EXECUTE @handle, @b = 2, @a = 1;
+EXEC SP_EXECUTE @handle, 2, @a = 1;
+EXEC SP_EXECUTE @handle, 1, @b = 2; -- should error
+EXEC SP_UNPREPARE @handle;
+GO
+
+-- mix order and types
+DECLARE @handle int;
+EXEC SP_PREPARE @handle out, N'@x int, @y varchar(20)', N'select @x, @y';
+EXEC SP_EXECUTE @handle, @x = 1, @y = 'first';
+EXEC SP_EXECUTE @handle, @y = 'second', @x = 2;
+EXEC SP_EXECUTE @handle, @x = 3, @y = 'third';
+EXEC SP_EXECUTE @handle, @y = 'fourth', @x = 4;
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- case-insensitive matching
+DECLARE @handle int;
+EXEC SP_PREPARE @handle out, N'@Param1 int, @Param2 int', N'select @Param1, @Param2';
+EXEC SP_EXECUTE @handle, @param1 = 1, @PARAM2 = 2;
+EXEC SP_EXECUTE @handle, @param2 = 2, @PARAM1 = 1;
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- SP_PREPARE with named OUTPUT params
+DECLARE @handle int;
+DECLARE @out_val int;
+EXEC SP_PREPARE @handle out, N'@a int, @b int output', N'set @b = @a * 2';
+EXEC SP_EXECUTE @handle, @a = 5, @b = @out_val output;
+SELECT @out_val;
+EXEC SP_EXECUTE @handle, @a = 7, @b = @out_val output;
+SELECT @out_val;
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- SP_PREPEXEC with named args
+DELETE FROM handle;
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle out, N'@a int, @b int', N'select @a, @b', 1, 2;
+INSERT INTO handle VALUES (@handle);
+EXEC SP_EXECUTE @handle, 1, 2;
+EXEC SP_EXECUTE @handle, @a = 1, @b = 2;
+EXEC SP_EXECUTE @handle, @b = 2, @a = 1;
+EXEC SP_EXECUTE @handle, 1, @b = 2;
+EXEC SP_EXECUTE @handle, 2, @a = 1; -- should error
+GO
+
+-- reuse handle
+DECLARE @handle int;
+SELECT @handle = h FROM handle;
+EXEC SP_EXECUTE @handle, 1, 2;
+EXEC SP_EXECUTE @handle, @a = 1, @b = 2;
+EXEC SP_EXECUTE @handle, @b = 2, @a = 1;
+EXEC SP_EXECUTE @handle, 1, @b = 2;
+EXEC SP_EXECUTE @handle, 2, @a = 1; -- should error
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- SP_PREPEXEC with named args (reverse param order)
+DELETE FROM handle;
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle out, N'@b int, @a int', N'select @a, @b', 2, 1;
+INSERT INTO handle VALUES (@handle);
+EXEC SP_EXECUTE @handle, 2, 1;
+EXEC SP_EXECUTE @handle, @a = 1, @b = 2;
+EXEC SP_EXECUTE @handle, @b = 2, @a = 1;
+EXEC SP_EXECUTE @handle, 2, @a = 1;
+EXEC SP_EXECUTE @handle, 1, @b = 2; -- should error
+GO
+
+-- reuse handle
+DECLARE @handle int;
+SELECT @handle = h FROM handle;
+EXEC SP_EXECUTE @handle, 2, 1;
+EXEC SP_EXECUTE @handle, @a = 1, @b = 2;
+EXEC SP_EXECUTE @handle, @b = 2, @a = 1;
+EXEC SP_EXECUTE @handle, 2, @a = 1;
+EXEC SP_EXECUTE @handle, 1, @b = 2; -- should error
+EXEC SP_UNPREPARE @handle;
+GO
+
+-- mix order and types
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle out, N'@x int, @y varchar(20)', N'select @x, @y', @y = 'zeroth', @x = 0;
+EXEC SP_EXECUTE @handle, @x = 1, @y = 'first';
+EXEC SP_EXECUTE @handle, @y = 'second', @x = 2;
+EXEC SP_EXECUTE @handle, @x = 3, @y = 'third';
+EXEC SP_EXECUTE @handle, @y = 'fourth', @x = 4;
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- case-insensitive matching
+DECLARE @handle int;
+EXEC SP_PREPEXEC @handle out, N'@Param1 int, @Param2 int', N'select @Param1, @Param2', @pArAm1 = 1, @PaRaM2 = 2;
+EXEC SP_EXECUTE @handle, @param1 = 1, @PARAM2 = 2;
+EXEC SP_EXECUTE @handle, @param2 = 2, @PARAM1 = 1;
+EXEC SP_UNPREPARE @handle;
+GO
+
+--- SP_PREPEXEC with named OUTPUT params
+DECLARE @handle int;
+DECLARE @out_val int;
+EXEC SP_PREPEXEC @handle out, N'@a int, @b int output', N'set @b = @a * 2', @a = 5, @b = @out_val output;
+SELECT @out_val;
+EXEC SP_EXECUTE @handle, @a = 7, @b = @out_val output;
+SELECT @out_val;
+EXEC SP_UNPREPARE @handle;
+GO
+
+DROP TABLE handle;
+GO

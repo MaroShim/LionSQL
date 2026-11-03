@@ -52,6 +52,11 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 		paramName := p.curToken.Literal
 		p.nextToken()
 
+		// Optional 'AS' keyword e.g. @param AS VARCHAR(40)
+		if p.curTokenIs(TokenAs) {
+			p.nextToken()
+		}
+
 		if !p.curTokenIs(TokenIdent) {
 			return nil, fmt.Errorf("expected type for parameter %s, got %s", paramName, p.curToken.Literal)
 		}
@@ -68,6 +73,24 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 			if p.curTokenIs(TokenRParen) {
 				p.nextToken()
 			}
+		}
+
+		// Skip optional default value e.g. = NULL, = 0
+		if p.curTokenIs(TokenAssign) || p.curTokenIs(TokenEq) {
+			p.nextToken()
+			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) || p.curTokenIs(TokenFloat) || p.curTokenIs(TokenString) || p.curTokenIs(TokenNull) {
+				p.nextToken()
+			}
+		}
+
+		// Skip optional NULL keyword e.g. @p INT NULL
+		if p.curTokenIs(TokenNull) {
+			p.nextToken()
+		}
+
+		// Skip optional OUTPUT / OUT keyword
+		if p.curTokenIs(TokenOutput) || (p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "OUTPUT") || strings.EqualFold(p.curToken.Literal, "OUT"))) {
+			p.nextToken()
 		}
 
 		if p.curTokenIs(TokenComma) {
@@ -87,9 +110,44 @@ func (p *Parser) ParseProcedure() (*CreateProcStmt, error) {
 	}
 	p.nextToken()
 
-	body, err := p.parseStatement()
-	if err != nil {
-		return nil, err
+	var body Statement
+	if p.curTokenIs(TokenLParen) {
+		// Single paren-enclosed statement e.g. CREATE PROCEDURE p AS (SELECT ...)
+		p.nextToken() // eat '('
+		var err error
+		body, err = p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken() // eat ')'
+		}
+	} else if p.curTokenIs(TokenBegin) {
+		var err error
+		body, err = p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Multi-statement procedure body without explicit BEGIN ... END
+		var stmts []Statement
+		for !p.curTokenIs(TokenEOF) {
+			s, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			if s != nil {
+				stmts = append(stmts, s)
+			}
+			if p.curTokenIs(TokenSemicolon) {
+				p.nextToken()
+			}
+		}
+		if len(stmts) == 1 {
+			body = stmts[0]
+		} else {
+			body = &BlockStmt{Statements: stmts}
+		}
 	}
 
 	return &CreateProcStmt{
@@ -130,6 +188,11 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 		paramName := p.curToken.Literal
 		p.nextToken()
 
+		// Optional 'AS' keyword e.g. @param AS VARCHAR(40)
+		if p.curTokenIs(TokenAs) {
+			p.nextToken()
+		}
+
 		if !p.curTokenIs(TokenIdent) {
 			return nil, fmt.Errorf("expected type for parameter %s, got %s", paramName, p.curToken.Literal)
 		}
@@ -146,6 +209,24 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 			if p.curTokenIs(TokenRParen) {
 				p.nextToken()
 			}
+		}
+
+		// Skip optional default value e.g. = NULL, = 0
+		if p.curTokenIs(TokenAssign) || p.curTokenIs(TokenEq) {
+			p.nextToken()
+			if p.curTokenIs(TokenIdent) || p.curTokenIs(TokenInt) || p.curTokenIs(TokenFloat) || p.curTokenIs(TokenString) || p.curTokenIs(TokenNull) {
+				p.nextToken()
+			}
+		}
+
+		// Skip optional NULL keyword e.g. @p INT NULL
+		if p.curTokenIs(TokenNull) {
+			p.nextToken()
+		}
+
+		// Skip optional OUTPUT / OUT keyword
+		if p.curTokenIs(TokenOutput) || (p.curTokenIs(TokenIdent) && (strings.EqualFold(p.curToken.Literal, "OUTPUT") || strings.EqualFold(p.curToken.Literal, "OUT"))) {
+			p.nextToken()
 		}
 
 		if p.curTokenIs(TokenComma) {
@@ -187,9 +268,44 @@ func (p *Parser) ParseFunction() (*CreateFunctionStmt, error) {
 	}
 	p.nextToken()
 
-	body, err := p.parseStatement()
-	if err != nil {
-		return nil, err
+	var body Statement
+	if p.curTokenIs(TokenLParen) {
+		// Single paren-enclosed statement e.g. CREATE PROCEDURE p AS (SELECT ...)
+		p.nextToken() // eat '('
+		var err error
+		body, err = p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken() // eat ')'
+		}
+	} else if p.curTokenIs(TokenBegin) {
+		var err error
+		body, err = p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Multi-statement procedure body without explicit BEGIN ... END
+		var stmts []Statement
+		for !p.curTokenIs(TokenEOF) {
+			s, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			if s != nil {
+				stmts = append(stmts, s)
+			}
+			if p.curTokenIs(TokenSemicolon) {
+				p.nextToken()
+			}
+		}
+		if len(stmts) == 1 {
+			body = stmts[0]
+		} else {
+			body = &BlockStmt{Statements: stmts}
+		}
 	}
 
 	return &CreateFunctionStmt{
@@ -371,9 +487,44 @@ func (p *Parser) ParseTrigger() (*CreateTriggerStmt, error) {
 		p.nextToken()
 	}
 
-	body, err := p.parseStatement()
-	if err != nil {
-		return nil, err
+	var body Statement
+	if p.curTokenIs(TokenLParen) {
+		// Single paren-enclosed statement e.g. CREATE PROCEDURE p AS (SELECT ...)
+		p.nextToken() // eat '('
+		var err error
+		body, err = p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+		if p.curTokenIs(TokenRParen) {
+			p.nextToken() // eat ')'
+		}
+	} else if p.curTokenIs(TokenBegin) {
+		var err error
+		body, err = p.parseStatement()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		// Multi-statement procedure body without explicit BEGIN ... END
+		var stmts []Statement
+		for !p.curTokenIs(TokenEOF) {
+			s, err := p.parseStatement()
+			if err != nil {
+				return nil, err
+			}
+			if s != nil {
+				stmts = append(stmts, s)
+			}
+			if p.curTokenIs(TokenSemicolon) {
+				p.nextToken()
+			}
+		}
+		if len(stmts) == 1 {
+			body = stmts[0]
+		} else {
+			body = &BlockStmt{Statements: stmts}
+		}
 	}
 
 	return &CreateTriggerStmt{

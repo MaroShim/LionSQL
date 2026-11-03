@@ -1,0 +1,488 @@
+CREATE TABLE forjson_auto_vu_t_users ([Id] int, [firstname] varchar(50), [lastname] varchar(50), [email] varchar(50));
+CREATE TABLE forjson_auto_vu_t_orders ([Id] int, [userid] int, [productid] int, [quantity] int, [orderdate] Date);
+CREATE TABLE forjson_auto_vu_t_products ([Id] int, [name] varchar(50), [price] varchar (25));
+CREATE TABLE forjson_auto_vu_t_sales ([Id] int, [price] varchar(25), [totalSales] int);
+CREATE TABLE forjson_auto_vu_t_times ([Id] int, [date] Date);
+CREATE TABLE forjson_test_nested_1 (id int, [data] varchar(50));
+CREATE TABLE forjson_test_nested_2 (id int, [ref_id] int);
+CREATE TABLE forjson_test_unicode (id int, [column_标] varchar(50));
+CREATE TABLE forjson_test_orderby (id int, value int, name varchar(50));
+CREATE TABLE forjson_test_groupby (category varchar(20), product varchar(50), quantity int, price decimal(10,2));
+
+INSERT INTO forjson_auto_vu_t_users VALUES (1, 'j', 'o', 'testemail'), (1, 'e', 'l', 'testemail2');
+INSERT INTO forjson_auto_vu_t_orders VALUES (1, 1, 1, 5, '2023-06-25'), (2, 1, 1, 6, '2023-06-25');
+INSERT INTO forjson_auto_vu_t_products VALUES (1, 'A', 20), (1, 'B', 30);
+INSERT INTO forjson_auto_vu_t_sales VALUES (1, 20, 50), (2, 30, 100);
+INSERT INTO forjson_auto_vu_t_times VALUES (1, '2023-11-26'), (2, '2023-11-27');
+INSERT INTO forjson_test_nested_1 VALUES (1, NULL), (2, 'test');
+INSERT INTO forjson_test_nested_2 VALUES (1, 1), (2, NULL);
+INSERT INTO forjson_test_unicode VALUES (1, 'unicode data');
+INSERT INTO forjson_test_orderby VALUES (1, 20, 'Apple'), (2, 10, 'Banana'), (3, 30, 'Cherry'), (4, 15, 'Date'), (5, 25, 'Elderberry');
+INSERT INTO forjson_test_groupby VALUES ('Fruit', 'Apple', 10, 2.50), ('Fruit', 'Banana', 15, 1.75);
+GO
+
+CREATE VIEW forjson_vu_v_1 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_2 AS
+SELECT (
+    select U.Id AS "users.userid",
+           U.firstname as "firstname"
+    FROM forjson_auto_vu_t_users U FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_3 AS
+SELECT (
+    select U.Id AS "users.userid",
+           U.firstname as "firstname",
+           O.productId AS "order.productId"
+    FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_4 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_5 AS
+SELECT (
+    select forjson_auto_vu_t_users.Id,
+           firstname,
+           productId
+    FROM forjson_auto_vu_t_users JOIN forjson_auto_vu_t_orders ON (forjson_auto_vu_t_users.id = userid) FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_6 AS
+SELECT (
+    select Id,
+           firstname,
+           lastname
+    FROM forjson_auto_vu_t_users FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_7 AS
+SELECT (
+    select U.Id,
+           name,
+           price
+    FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_products P ON (U.Id = P.Id) FOR JSON AUTO
+) c1
+GO
+
+CREATE PROCEDURE forjson_vu_p_1 AS
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+GO
+
+INSERT INTO forjson_auto_vu_t_sales VALUES (1, NULL, NULL), (2, NULL, NULL);
+GO
+
+CREATE VIEW forjson_vu_v_8 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_9 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales", T.date as "date" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) JOIN forjson_auto_vu_t_times T ON (S.Id = T.Id) FOR JSON AUTO
+) c1
+GO
+
+-- tests unique characters
+CREATE VIEW forjson_vu_v_10 AS 
+SELECT (
+    select U.Id AS "users.userid", O.productId AS "өглөө", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_11 AS
+SELECT (
+    select U.Id AS "users.ελπίδα",
+           U.firstname as "爱",
+           U.lastname as "كلب"
+    FROM forjson_auto_vu_t_users U FOR JSON AUTO
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_12 AS 
+SELECT (
+    select totalSales FROM forjson_auto_vu_t_sales FOR JSON AUTO, INCLUDE_NULL_VALUES
+) c1
+GO
+
+create table t50 (x nvarchar(20))
+insert into t50 values ('some string')
+go
+
+CREATE VIEW forjson_vu_v_13 AS 
+SELECT (
+    select json_modify('{"a":"b"}', '$.a', x) from (select * from t50 for json auto) a ([x])
+) c1
+GO
+
+CREATE VIEW forjson_vu_v_14 AS 
+SELECT (
+    select json_query((select U.Id AS "users.userid", O.productId AS "order.productId", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) JOIN forjson_auto_vu_t_times T ON (S.Id = T.Id) FOR JSON AUTO)) AS [data]
+) c1
+GO
+
+CREATE PROCEDURE forjson_vu_p_2 AS
+BEGIN
+    CREATE TABLE users ([Id] int, [firstname] varchar(50));
+    CREATE TABLE orders ([Id] int, [productid] int, [quantity] int, [orderdate] Date);
+    INSERT INTO users VALUES (1, 'j'), (2, 'k'), (3, 'l')
+    INSERT INTO orders VALUES (1, 1, 100, '01-01-2024'), (2, 2, 500, '01-01-2024')
+    select U.Id AS "users.userid", U.firstname as "firstname" FROM users U JOIN orders O ON (U.id = O.Id) FOR JSON AUTO
+    DROP TABLE users
+    DROP TABLE orders
+END
+GO
+
+CREATE FUNCTION forjson_vu_f_1()
+RETURNS sys.NVARCHAR(5000) AS
+BEGIN
+RETURN (select U.Id AS "users.userid", O.productId AS "өглөө", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO)
+END
+GO
+
+CREATE FUNCTION forjson_vu_f_2()
+RETURNS sys.NVARCHAR(4000) AS
+BEGIN
+RETURN (select U.Id AS "users.userid", O.productId AS "өглөө", O.Id AS "product.oid", P.price AS "product.price", S.totalSales AS "totalsales" FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) JOIN forjson_auto_vu_t_sales S ON (P.price = S.price) FOR JSON AUTO)
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_3 AS
+BEGIN
+    with cte as (select 1 as Id), cte2 as (select 1 as Id) select U.Id, O.Id from cte U JOIN cte2 O on (U.Id = O.Id) for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_4 AS
+BEGIN
+    with cte as (select Id, firstname from forjson_auto_vu_t_users), cte2 as (select Id, productid from forjson_auto_vu_t_orders) 
+    select U.Id, O.productId from cte U JOIN cte2 O ON (U.Id = O.Id) for JSON AUTO
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_5 AS
+BEGIN
+    SELECT  x.Val, y.Val ValY FROM (VALUES (1)) AS x(Val) JOIN (SELECT  Val FROM (VALUES (1)) AS _(Val)) y ON y.Val = x.Val for json auto
+END
+GO
+
+CREATE TRIGGER forjson_vu_trigger_1 on forjson_auto_vu_t_users for insert as
+BEGIN
+    with cte (Id, firstname) as (select Id, firstname from forjson_auto_vu_t_users), cte2 (Id, firstname) as (select Id, firstname from cte) 
+    select * from cte2 for JSON AUTO
+END
+GO
+
+CREATE TRIGGER forjson_vu_trigger_2 on forjson_auto_vu_t_users for insert as
+begin
+    select U.Id AS "users.userid",
+           U.firstname as "firstname",
+           U.lastname as "lastname",
+           O.productId AS "order.productId"
+    FROM forjson_auto_vu_t_users U JOIN forjson_auto_vu_t_orders O ON (U.id = O.userid) FOR JSON AUTO
+end;
+go
+
+CREATE PROCEDURE forjson_vu_p_6 AS
+BEGIN
+    select top 10 U.id, U.firstname, (select O.productId from forjson_auto_vu_t_orders O where O.userid = U.id for json auto) as details from forjson_auto_vu_t_users U for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_7 AS
+BEGIN
+    select * from forjson_auto_vu_t_users U where
+    U.id = (SELECT MAX(O.userid) from forjson_auto_vu_t_orders O)
+    for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_8 AS
+BEGIN
+    select * from forjson_auto_vu_t_users U where
+    U.id = (SELECT MAX(O.userid) from forjson_auto_vu_t_orders O for json auto)
+    for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_9 AS
+BEGIN
+    select distinct top 10
+        U.id,
+        (select distinct O.productId from forjson_auto_vu_t_orders O where O.userid = U.id)
+        as details
+        from forjson_auto_vu_t_users U 
+        group by U.id
+        for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_10 AS
+BEGIN
+    select distinct top 2
+        U.Id,
+        O.orderdate
+        from forjson_auto_vu_t_users U INNER JOIN
+            forjson_auto_vu_t_orders O ON U.Id = O.Id
+        for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_11 AS
+BEGIN
+    select distinct top 10 U.id, (select distinct O.productId from forjson_auto_vu_t_orders O where O.userid = U.id for json auto) as details from forjson_auto_vu_t_users U group by U.id for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_12 AS
+BEGIN
+    select U.id, U.firstname, (select U.lastname, O.productId from forjson_auto_vu_t_orders O where O.userid = U.id for json auto) as details from forjson_auto_vu_t_users U for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_13 AS
+BEGIN
+    select * from forjson_auto_vu_t_users U where U.Id = (SELECT MAX(O.userid) from forjson_auto_vu_t_orders O) for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_14 AS
+BEGIN
+    select U.id, U.firstname, (select P.price, O.productId from forjson_auto_vu_t_orders O JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) for json auto) as "details" from forjson_auto_vu_t_users U for json auto
+END
+GO
+
+CREATE PROCEDURE forjson_vu_p_15 AS 
+    BEGIN 
+        DECLARE @json_string NVARCHAR(2000) 
+        SET @json_string = (select P.price, O.productId from forjson_auto_vu_t_orders O JOIN forjson_auto_vu_t_products P ON (P.id = O.productid) for json auto) 
+        select U.id, U.firstname, @json_string as details from forjson_auto_vu_t_users U for json auto
+END
+GO
+
+-- FOR JSON AUTO + orderby + groupby
+CREATE PROCEDURE forjson_vu_v_resjunk_orderby_groupby AS
+SELECT (
+    SELECT P.price, 
+           COUNT(*) as product_count, 
+           SUM(O.quantity) as total_quantity
+    FROM forjson_auto_vu_t_orders O
+    JOIN forjson_auto_vu_t_products P ON P.Id = O.productid
+    GROUP BY P.price
+    ORDER BY SUM(O.quantity) DESC
+    FOR JSON AUTO
+) AS json_data;
+GO
+
+-- FOR JSON AUTO + window function
+CREATE PROCEDURE forjson_vu_v_resjunk_window_functions AS
+SELECT (
+    SELECT U.Id, U.firstname, P.name, P.price,
+           ROW_NUMBER() OVER(PARTITION BY P.price ORDER BY O.quantity DESC) as quantity_rank
+    FROM forjson_auto_vu_t_users U
+    JOIN forjson_auto_vu_t_orders O ON U.Id = O.userid
+    JOIN forjson_auto_vu_t_products P ON P.Id = O.productid
+    ORDER BY P.price, quantity_rank
+    FOR JSON AUTO
+) AS json_data;
+GO
+
+-- Stored procedure with GROUP BY, HAVING and ORDER BY
+CREATE PROCEDURE forjson_vu_p_resjunk_groupby_having_orderby AS
+BEGIN
+    SELECT P.price,
+           COUNT(*) as product_count,
+           SUM(O.quantity) as total_quantity
+    FROM forjson_auto_vu_t_orders O
+    JOIN forjson_auto_vu_t_products P ON P.Id = O.productid
+    GROUP BY P.price
+    HAVING COUNT(*) >= 1
+    ORDER BY SUM(O.quantity) DESC
+    FOR JSON AUTO;
+END;
+GO
+
+
+/*--------------- Found some incorrect cases which needs to be handled in future ------------------- */
+
+/*
+* CASE 1: FOR JSON AUTO + Function
+*/
+CREATE TABLE forjson_auto_test_diff_cases ( EmployeeId INT, Salary INT);
+INSERT INTO forjson_auto_test_diff_cases (EmployeeId, Salary) VALUES(1, 75000),(2, 85000)
+GO
+
+CREATE FUNCTION dbo.forjson_auto_test_diff_cases_fn(@DepartmentId INT)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT  e.EmployeeId FROM forjson_auto_test_diff_cases e
+);
+GO
+
+
+CREATE TABLE forjsonauto_t_categories (CategoryID INT PRIMARY KEY, CategoryName NVARCHAR(50), Description NVARCHAR(200), ParentCategoryID INT, CreatedDate DATETIME DEFAULT GETDATE());
+GO
+
+CREATE TABLE forjsonauto_t_customers (CustomerID NCHAR(5) PRIMARY KEY, CompanyName NVARCHAR(100), ContactName NVARCHAR(100), ContactTitle NVARCHAR(50), Region NVARCHAR(50), Country NVARCHAR(50), Phone NVARCHAR(20), IsActive BIT DEFAULT 1);
+GO
+
+CREATE TABLE forjsonauto_t_orders (OrderID INT PRIMARY KEY, CustomerID NCHAR(5), OrderDate DATETIME, ShipAddress NVARCHAR(100), ShipCity NVARCHAR(50), ShipCountry NVARCHAR(50), TotalAmount MONEY, Status NVARCHAR(20));
+GO
+
+CREATE TABLE forjsonauto_t_products (ProductID INT PRIMARY KEY, ProductName NVARCHAR(100), UnitPrice MONEY, CategoryID INT, UnitsInStock INT, Discontinued BIT DEFAULT 0, LastUpdated DATETIME DEFAULT GETDATE());
+GO
+
+CREATE TABLE forjsonauto_t_order_details (OrderDetailID INT PRIMARY KEY, OrderID INT, ProductID INT, Quantity INT, UnitPrice MONEY, Discount DECIMAL(3,2) DEFAULT 0.00);
+GO
+
+CREATE SCHEMA forjsonauto_t_inventory_schema;
+GO
+
+CREATE TABLE forjsonauto_t_inventory_schema.forjsonauto_t_suppliers (SupplierID INT PRIMARY KEY, SupplierName NVARCHAR(100), ContactPerson NVARCHAR(50), Phone NVARCHAR(20), Country NVARCHAR(50), Rating INT, CreatedDate DATETIME DEFAULT GETDATE());
+GO
+
+CREATE TABLE forjsonauto_t_inventory_schema.forjsonauto_t_warehouses (WarehouseID INT PRIMARY KEY, WarehouseName NVARCHAR(100), Location NVARCHAR(100), Capacity INT, SupplierID INT, OperationalStatus NVARCHAR(20), LastInspectionDate DATETIME);
+GO
+
+CREATE TABLE JsonTable (ID INT IDENTITY(1,1) PRIMARY KEY, JsonData NVARCHAR(MAX));
+GO
+
+INSERT INTO forjsonauto_t_categories (CategoryID, CategoryName, Description, ParentCategoryID) VALUES (1, 'Beverages', 'Soft drinks, coffees, teas', NULL), (2, 'Coffee', 'Various coffee brands', 1), (3, 'Tea', 'Various tea brands', 1), (4, 'Electronics', 'Electronic equipment', NULL), (5, 'Computers', 'Computer equipment', 4);
+GO
+
+INSERT INTO forjsonauto_t_customers (CustomerID, CompanyName, ContactName, ContactTitle, Region, Country, Phone) VALUES ('ALFKI', 'Alfreds Inc', 'Maria Anders', 'Sales Rep', 'WA', 'USA', '030-0074321'), ('BERGS', 'Berglunds snabbköp', 'Christina Berglund', 'Administrator', NULL, 'Sweden', '0921-12 34 65'), ('CONSH', 'Consolidated Holdings', 'Elizabeth Brown', 'Sales Manager', 'LA', 'USA', '(171) 555-2282');
+GO
+
+INSERT INTO forjsonauto_t_orders (OrderID, CustomerID, OrderDate, ShipAddress, ShipCity, ShipCountry, TotalAmount, Status) VALUES (10248, 'ALFKI', '2023-07-04', '23 Tsawassen Blvd.', 'Seattle', 'USA', 440.00, 'Shipped'), (10249, 'BERGS', '2023-07-05', 'Luisenstr. 48', 'Mannheim', 'Germany', 1863.40, 'Pending'), (10250, 'CONSH', '2023-07-06', 'Berkeley Gardens', 'London', 'UK', 1552.60, 'Delivered');
+GO
+
+INSERT INTO forjsonauto_t_products (ProductID, ProductName, UnitPrice, CategoryID, UnitsInStock) VALUES (1, 'Chai', 18.00, 3, 39), (2, 'Coffee Beans', 19.00, 2, 17), (3, 'Laptop', 1200.00, 5, 10), (4, 'Green Tea', 10.00, 3, 25);
+GO
+
+INSERT INTO forjsonauto_t_order_details (OrderDetailID, OrderID, ProductID, Quantity, UnitPrice, Discount) VALUES (1, 10248, 1, 12, 18.00, 0.00), (2, 10248, 2, 10, 19.00, 0.05), (3, 10249, 3, 5, 1200.00, 0.00), (4, 10250, 1, 20, 18.00, 0.10), (5, 10250, 4, 15, 10.00, 0.00);
+GO
+
+INSERT INTO forjsonauto_t_inventory_schema.forjsonauto_t_suppliers (SupplierID, SupplierName, ContactPerson, Phone, Country, Rating) VALUES (1, 'Global Supply Co', 'John Smith', '+1-555-1234', 'USA', 5), (2, 'Euro Logistics', 'Maria Garcia', '+34-612-345678', 'Spain', 4), (3, 'Asia Trade Ltd', 'Chen Wei', '+86-138-12345678', 'China', 3), (4, 'Nordic Solutions', 'Erik Larsson', '+46-70-1234567', 'Sweden', 5);
+GO
+
+INSERT INTO forjsonauto_t_inventory_schema.forjsonauto_t_warehouses (WarehouseID, WarehouseName, Location, Capacity, SupplierID, OperationalStatus, LastInspectionDate) VALUES (101, 'Seattle Distribution Center', 'Seattle, WA', 50000, 1, 'Active', '2023-06-15'), (102, 'Madrid Storage Facility', 'Madrid, Spain', 35000, 2, 'Active', '2023-07-01'), (103, 'Shanghai Warehouse', 'Shanghai, China', 75000, 3, 'Maintenance', '2023-05-20'), (104, 'Stockholm Hub', 'Stockholm, Sweden', 40000, 4, 'Active', '2023-07-10'), (105, 'Backup Seattle Facility', 'Tacoma, WA', 25000, 1, 'Inactive', '2023-04-30');
+GO
+
+INSERT INTO JsonTable (JsonData)
+VALUES 
+    ((SELECT CustomerID, CompanyName, ContactName, Country, Phone 
+      FROM forjsonauto_t_customers 
+      WHERE CustomerID = 'ALFKI' 
+      FOR JSON AUTO));
+GO
+
+-- Trigger test tables (RTE_NAMEDTUPLESTORE)
+CREATE TABLE forjsonauto_t_trigger_test (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT
+);
+GO
+
+CREATE TABLE forjsonauto_t_trigger_json_result (
+    ResultJson NVARCHAR(MAX)
+);
+GO
+
+CREATE TRIGGER forjsonauto_trg_insert ON forjsonauto_t_trigger_test AFTER INSERT AS
+BEGIN
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT * FROM inserted FOR JSON AUTO)
+END;
+GO
+
+CREATE TRIGGER forjsonauto_trg_delete ON forjsonauto_t_trigger_test AFTER DELETE AS
+BEGIN
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT * FROM deleted FOR JSON AUTO)
+END;
+GO
+
+CREATE TRIGGER forjsonauto_trg_insert_subset ON forjsonauto_t_trigger_test AFTER INSERT AS
+BEGIN
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT Name, Value FROM inserted FOR JSON AUTO)
+END;
+GO
+
+CREATE TRIGGER forjsonauto_trg_insert_join ON forjsonauto_t_trigger_test AFTER INSERT AS
+BEGIN
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT i.ID, i.Name, t.Value
+            FROM inserted i
+            JOIN forjsonauto_t_trigger_test t ON i.ID = t.ID
+            FOR JSON AUTO)
+END;
+GO
+
+CREATE TRIGGER forjsonauto_trg_update_both ON forjsonauto_t_trigger_test AFTER UPDATE AS
+BEGIN
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT * FROM inserted FOR JSON AUTO)
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT * FROM deleted FOR JSON AUTO)
+END;
+GO
+
+CREATE TRIGGER forjsonauto_trg_update_join ON forjsonauto_t_trigger_test AFTER UPDATE AS
+BEGIN
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT i.ID, i.Name AS NewName, i.Value AS NewValue, d.Value AS OldValue
+            FROM inserted i
+            JOIN deleted d ON i.ID = d.ID
+            FOR JSON AUTO)
+END;
+GO
+
+CREATE TRIGGER forjsonauto_trg_insert_null ON forjsonauto_t_trigger_test AFTER INSERT AS
+BEGIN
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT * FROM inserted FOR JSON AUTO)
+END;
+GO
+
+CREATE TRIGGER forjsonauto_trg_delete_join ON forjsonauto_t_trigger_test AFTER DELETE AS
+BEGIN
+    INSERT INTO forjsonauto_t_trigger_json_result(ResultJson)
+    SELECT (SELECT d.ID, d.Name, t.Value AS RemainingValue
+            FROM deleted d
+            JOIN forjsonauto_t_trigger_test t ON t.ID = 5
+            FOR JSON AUTO)
+END;
+GO
+
+-- Disable triggers not needed initially
+DISABLE TRIGGER forjsonauto_trg_insert_subset ON forjsonauto_t_trigger_test;
+GO
+DISABLE TRIGGER forjsonauto_trg_insert_join ON forjsonauto_t_trigger_test;
+GO
+DISABLE TRIGGER forjsonauto_trg_update_both ON forjsonauto_t_trigger_test;
+GO
+DISABLE TRIGGER forjsonauto_trg_update_join ON forjsonauto_t_trigger_test;
+GO
+DISABLE TRIGGER forjsonauto_trg_insert_null ON forjsonauto_t_trigger_test;
+GO
+DISABLE TRIGGER forjsonauto_trg_delete_join ON forjsonauto_t_trigger_test;
+GO

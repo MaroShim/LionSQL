@@ -1,0 +1,2368 @@
+-- T_Var (Variable reference)
+DECLARE @num1 NUMERIC(10,4) = 1234.5678;
+DECLARE @dec1 DECIMAL(12,2) = 9876.54;
+
+SELECT CASE 
+    WHEN 1 = 1 THEN @num1 
+    ELSE @dec1 
+END AS result;
+GO
+
+-- T_Const (Constant value)
+SELECT CASE 1
+    WHEN 1 THEN CAST(1234.5678 AS NUMERIC(10,4))
+    WHEN 2 THEN CAST(9876.54 AS DECIMAL(12,2))
+    ELSE CAST(0 AS DECIMAL(9,4))
+END AS result;
+GO
+
+-- T_SubscriptingRef (Array or json subscripting)
+DECLARE @jsonVar NVARCHAR(MAX) = N'{"a": 123.45, "b": 678.90}';
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(JSON_VALUE(@jsonVar, '$.a') AS NUMERIC(10,2))
+    ELSE CAST(JSON_VALUE(@jsonVar, '$.b') AS DECIMAL(10,2))
+END AS result;
+GO
+
+-- T_NamedArgExpr (Named argument in a function call)
+CREATE FUNCTION dbo.TestNamedArg (@param1 NUMERIC(10,4) = 0, @param2 DECIMAL(12,2) = 0)
+RETURNS DECIMAL(15,4)
+AS
+BEGIN
+    RETURN CASE 
+        WHEN 1 = 1 THEN @param1 
+        ELSE @param2 
+    END;
+END;
+GO
+
+SELECT dbo.TestNamedArg(1234.56, 7890.1234) AS result;
+GO
+
+DROP FUNCTION dbo.TestNamedArg
+GO
+
+-- T_NullIfExpr (NULLIF expression)
+SELECT CASE 
+    WHEN 1 = 1 THEN NULLIF(CAST(1234.56 AS NUMERIC(10,2)), CAST(1234.56 AS DECIMAL(12,2)))
+    ELSE CAST(9999.99 AS DECIMAL(10,2))
+END AS result;
+GO
+
+-- T_SubLink (Subquery expressions)
+SELECT CASE 
+    WHEN 1 = 1 THEN (SELECT AVG(CAST(1234.56 AS NUMERIC(10,2))))
+    ELSE CAST(9876.54 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- T_SubPlan (Subplan expression)
+SELECT CASE 
+    WHEN 1 = 1 THEN (SELECT TOP 1 CAST(1234.56 AS NUMERIC(10,2)) WHERE 1=1)
+    ELSE CAST(9876.54 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- T_AlternativeSubPlan (Alternative subplan)
+SELECT CASE 
+    WHEN 1 = 1 THEN (
+        SELECT CAST(1234.56 AS NUMERIC(10,2)) WHERE 1=1
+        UNION ALL
+        SELECT CAST(9876.54 AS DECIMAL(12,2)) WHERE 1=0
+    )
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- T_FieldSelect (Field selection)
+DECLARE @myTable TABLE (id INT, num_col NUMERIC(10,2), dec_col DECIMAL(12,2));
+INSERT INTO @myTable VALUES (1, 1234.56, 7890.12);
+SELECT CASE 
+    WHEN 1 = 1 THEN t.num_col 
+    ELSE t.dec_col 
+END AS result
+FROM @myTable t;
+GO
+
+-- T_RelabelType (Relabel Type)
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(CAST(1234.56 AS NUMERIC(10,2)) AS DECIMAL(12,2))
+    ELSE CAST(9876.54 AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- T_ArrayCoerceExpr (Array Coerce Expression)
+DECLARE @myArray TABLE (val NUMERIC(10,2));
+INSERT INTO @myArray VALUES (1234.56), (7890.12), (5678.90);
+
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(val AS DECIMAL(12,2))
+    ELSE val
+END AS result
+FROM @myArray;
+GO
+
+-- T_CollateExpr (Collate Expression)
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(1234.56 AS NUMERIC(10,2)) COLLATE Latin1_General_CI_AS
+    ELSE CAST(9876.54 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- T_CaseExpr (Nested CASE expression)
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN 9876.54 > 5000 THEN CAST(9876.54 AS DECIMAL(12,2))
+            ELSE CAST(1234.56 AS NUMERIC(10,2))
+        END
+    ELSE CAST(5678.90 AS DECIMAL(10,2))
+END AS result;
+GO
+
+-- T_CaseTestExpr (CASE test expression)
+SELECT CASE 3
+   WHEN 1 THEN CAST(99999.9999 AS DECIMAL(9,4))
+   WHEN 2 THEN CAST(999999.999 AS NUMERIC(9,3))
+   WHEN 3 THEN CAST(9999999.99 AS DECIMAL(9,2))
+   ELSE CAST(0 AS DECIMAL(9,4))
+END AS RESULT;
+GO
+
+-- T_CoalesceExpr (COALESCE expression)
+SELECT CASE 
+    WHEN 1 = 1 THEN COALESCE(CAST(NULL AS NUMERIC(10,2)), CAST(1234.56 AS DECIMAL(12,2)), CAST(7890.12 AS NUMERIC(10,2)))
+    ELSE CAST(1111.11 AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- T_MinMaxExpr (GREATEST and LEAST expressions)
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN CAST(1234.56 AS NUMERIC(10,2)) > CAST(7890.12 AS DECIMAL(12,2)) 
+            THEN CAST(1234.56 AS NUMERIC(10,2))
+            ELSE CAST(7890.12 AS DECIMAL(12,2))
+        END
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS greatest_result;
+GO
+
+-- T_JsonValueExpr (JSON Value Expression)
+DECLARE @json NVARCHAR(MAX) = N'{"value": 1234.56}';
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(JSON_VALUE(@json, '$.value') AS DECIMAL(10,2))
+    ELSE CAST(1111.11 AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- T_JsonConstructorExpr (JSON Constructor Expression)
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(JSON_VALUE(JSON_MODIFY('{}', '$.num', CAST(1234.56 AS NUMERIC(10,2))), '$.num') AS DECIMAL(10,3))
+    ELSE CAST(1111.11 AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- T_CoerceToDomain (Coerce to Domain)
+CREATE TABLE dbo.MyDomainTable (
+    id INT PRIMARY KEY,
+    value DECIMAL(10,2) CHECK (value BETWEEN 0 AND 10000)
+);
+
+INSERT INTO dbo.MyDomainTable (id, value) 
+SELECT 1, CASE 
+    WHEN 1 = 1 THEN CAST(1234.56 AS NUMERIC(10,2))
+    ELSE CAST(9999.99 AS DECIMAL(10,2))
+END;
+
+SELECT * FROM dbo.MyDomainTable;
+GO
+
+DROP TABLE dbo.MyDomainTable;
+GO
+
+-- T_CoerceToDomainValue (Coerce to Domain Value)
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(1234.56 AS NUMERIC(10,2))
+    ELSE CAST(9999.99 AS DECIMAL(10,2))
+END AS result;
+GO
+
+-- T_SetToDefault (Set to Default)
+CREATE TABLE dbo.DefaultTable (
+    id INT PRIMARY KEY,
+    num_col NUMERIC(10,2) DEFAULT 100.00,
+    dec_col DECIMAL(12,2) DEFAULT 200.00
+);
+
+INSERT INTO dbo.DefaultTable (id, num_col, dec_col)
+VALUES (1, DEFAULT, DEFAULT);
+
+SELECT CASE 
+    WHEN 1 = 1 THEN num_col
+    ELSE dec_col
+END AS result
+FROM dbo.DefaultTable;
+GO
+
+DROP TABLE dbo.DefaultTable;
+GO
+
+-- T_PlaceHolderVar (Placeholder Variable)
+WITH cte AS (
+    SELECT CAST(1234.56 AS NUMERIC(10,2)) AS num_val, CAST(7890.12 AS DECIMAL(12,2)) AS dec_val
+)
+SELECT CASE 
+    WHEN 1 = 1 THEN num_val 
+    ELSE dec_val 
+END AS result
+FROM cte;
+GO
+
+-- For union
+-- T_Var (Variable reference)
+DECLARE @num1 NUMERIC(10,4) = 1234.5678;
+DECLARE @dec1 DECIMAL(12,2) = 9876.54;
+SELECT @num1 AS result
+UNION ALL
+SELECT @dec1
+ORDER BY result;
+GO
+
+-- T_Const (Constant value)
+SELECT CAST(1234.5678 AS NUMERIC(10,4)) AS result
+UNION ALL
+SELECT CAST(9876.54 AS DECIMAL(12,2))
+UNION ALL
+SELECT CAST(0 AS DECIMAL(9,4))
+ORDER BY result;
+GO
+
+-- T_SubscriptingRef (Array or json subscripting)
+DECLARE @jsonVar NVARCHAR(MAX) = N'{"a": 123.45, "b": 678.90}';
+SELECT CAST(JSON_VALUE(@jsonVar, '$.a') AS NUMERIC(10,2)) AS result
+UNION ALL
+SELECT CAST(JSON_VALUE(@jsonVar, '$.b') AS DECIMAL(10,2))
+ORDER BY result;
+GO
+
+-- T_NullIfExpr (NULLIF expression)
+SELECT NULLIF(CAST(1234.56 AS NUMERIC(10,2)), CAST(1234.56 AS DECIMAL(12,2))) AS result
+UNION ALL
+SELECT CAST(9999.99 AS DECIMAL(10,2))
+ORDER BY result;
+GO
+
+-- T_SubLink (Subquery expressions)
+SELECT (SELECT AVG(CAST(1234.56 AS NUMERIC(10,2)))) AS result
+UNION ALL
+SELECT CAST(9876.54 AS DECIMAL(12,2))
+ORDER BY result;
+GO
+
+-- T_SubPlan (Subplan expression)
+SELECT (SELECT TOP 1 CAST(1234.56 AS NUMERIC(10,2)) WHERE 1=1) AS result
+UNION ALL
+SELECT CAST(9876.54 AS DECIMAL(12,2))
+ORDER BY result;
+GO
+
+-- T_AlternativeSubPlan (Alternative subplan)
+SELECT CAST(1234.56 AS NUMERIC(10,2)) AS result WHERE 1=1
+UNION ALL
+SELECT CAST(9876.54 AS DECIMAL(12,2)) WHERE 1=1
+UNION ALL
+SELECT CAST(0 AS DECIMAL(12,2))
+ORDER BY result;
+GO
+
+-- T_FieldSelect (Field selection)
+DECLARE @myTable TABLE (id INT, num_col NUMERIC(10,2), dec_col DECIMAL(12,2));
+INSERT INTO @myTable VALUES (1, 1234.56, 7890.12);
+SELECT t.num_col AS result
+FROM @myTable t
+UNION ALL
+SELECT t.dec_col
+FROM @myTable t
+ORDER BY result;
+GO
+
+
+
+-- T_RelabelType (Relabel Type)
+SELECT CAST(CAST(1234.56 AS NUMERIC(10,2)) AS DECIMAL(12,2)) AS result
+UNION ALL
+SELECT CAST(9876.54 AS NUMERIC(10,2))
+ORDER BY result;
+GO
+
+-- T_ArrayCoerceExpr (Array Coerce Expression)
+DECLARE @myArray TABLE (val NUMERIC(10,2));
+INSERT INTO @myArray VALUES (1234.56), (7890.12), (5678.90);
+SELECT CAST(val AS DECIMAL(12,2)) AS result
+FROM @myArray
+UNION ALL
+SELECT val
+FROM @myArray
+ORDER BY result;
+GO
+
+-- T_CollateExpr (Collate Expression)
+SELECT CAST(1234.56 AS NUMERIC(10,2)) COLLATE Latin1_General_CI_AS AS result
+UNION ALL
+SELECT CAST(9876.54 AS DECIMAL(12,2))
+ORDER BY result;
+GO
+
+-- T_CaseExpr (Nested CASE expression)
+SELECT CASE 
+    WHEN 9876.54 > 5000 THEN CAST(9876.54 AS DECIMAL(12,2))
+    ELSE CAST(1234.56 AS NUMERIC(10,2))
+END AS result
+UNION ALL
+SELECT CAST(5678.90 AS DECIMAL(10,2))
+ORDER BY result;
+GO
+
+-- T_CaseTestExpr (CASE test expression)
+SELECT CAST(99999.9999 AS DECIMAL(9,4)) AS result
+UNION ALL
+SELECT CAST(999999.999 AS NUMERIC(9,3))
+UNION ALL
+SELECT CAST(9999999.99 AS DECIMAL(9,2))
+UNION ALL
+SELECT CAST(0 AS DECIMAL(9,4))
+ORDER BY result;
+GO
+
+-- T_ArrayExpr (Array constructor)
+SELECT v
+FROM (VALUES (CAST(1234.56 AS DECIMAL(12,2))), (CAST(7890.12 AS NUMERIC(10,2)))) AS t(v)
+UNION ALL
+SELECT CAST(1111.11 AS NUMERIC(10,2))
+ORDER BY v;
+GO
+
+-- T_CoalesceExpr (COALESCE expression)
+SELECT COALESCE(CAST(NULL AS NUMERIC(10,2)), CAST(1234.56 AS DECIMAL(12,2)), CAST(7890.12 AS NUMERIC(10,2))) AS result
+UNION ALL
+SELECT CAST(1111.11 AS NUMERIC(10,2))
+ORDER BY result;
+GO
+
+-- T_MinMaxExpr (GREATEST and LEAST expressions)
+SELECT CASE 
+    WHEN CAST(1234.56 AS NUMERIC(10,2)) > CAST(7890.12 AS DECIMAL(12,2)) 
+    THEN CAST(1234.56 AS NUMERIC(10,2))
+    ELSE CAST(7890.12 AS DECIMAL(12,2))
+END AS result
+UNION ALL
+SELECT CAST(0 AS DECIMAL(12,2))
+ORDER BY result;
+GO
+
+-- T_JsonValueExpr (JSON Value Expression)
+DECLARE @json NVARCHAR(MAX) = N'{"value": 1234.56}';
+SELECT CAST(JSON_VALUE(@json, '$.value') AS DECIMAL(10,2)) AS result
+UNION ALL
+SELECT CAST(1111.11 AS NUMERIC(10,2))
+ORDER BY result;
+GO
+
+-- T_JsonConstructorExpr (JSON Constructor Expression)
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(JSON_VALUE(JSON_MODIFY('{}', '$.num', CAST(1234.56 AS NUMERIC(10,2))), '$.num') AS DECIMAL(10,2))
+    ELSE CAST(1111.11 AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- T_CoerceToDomain (Coerce to Domain)
+CREATE TABLE dbo.MyDomainTable (
+    id INT PRIMARY KEY,
+    value DECIMAL(10,2) CHECK (value BETWEEN 0 AND 10000)
+);
+
+INSERT INTO dbo.MyDomainTable (id, value) 
+VALUES (1, CAST(1234.56 AS NUMERIC(10,2)));
+
+SELECT value AS result FROM dbo.MyDomainTable
+UNION ALL
+SELECT CAST(9999.99 AS DECIMAL(10,2))
+ORDER BY result;
+GO
+
+DROP TABLE dbo.MyDomainTable;
+GO
+
+-- T_CoerceToDomainValue (Coerce to Domain Value)
+SELECT CAST(1234.56 AS NUMERIC(10,2)) AS result
+UNION ALL
+SELECT CAST(9999.99 AS DECIMAL(10,2))
+ORDER BY result;
+GO
+
+-- T_SetToDefault (Set to Default)
+CREATE TABLE dbo.DefaultTable (
+    id INT PRIMARY KEY,
+    num_col NUMERIC(10,2) DEFAULT 100.00,
+    dec_col DECIMAL(12,2) DEFAULT 200.00
+);
+
+INSERT INTO dbo.DefaultTable (id, num_col, dec_col)
+VALUES (1, DEFAULT, DEFAULT);
+
+SELECT num_col AS result
+FROM dbo.DefaultTable
+UNION ALL
+SELECT dec_col
+FROM dbo.DefaultTable
+ORDER BY result;
+GO
+
+DROP TABLE dbo.DefaultTable;
+GO
+
+-- T_PlaceHolderVar (Placeholder Variable)
+WITH cte AS (
+    SELECT CAST(1234.56 AS NUMERIC(10,2)) AS num_val, CAST(7890.12 AS DECIMAL(12,2)) AS dec_val
+)
+SELECT num_val AS result
+FROM cte
+UNION ALL
+SELECT dec_val
+FROM cte
+ORDER BY result;
+GO
+
+-- Test Case 1: Basic T_SubPlan in CASE
+SELECT CASE 
+    WHEN 1 = 1 THEN (SELECT CAST(1234.5678 AS NUMERIC(10,4)))
+    ELSE (SELECT CAST(9876.54 AS DECIMAL(12,2)))
+END AS result;
+GO
+
+-- Test Case 2: T_SubPlan with different precisions and scales
+SELECT CASE 
+    WHEN (SELECT value FROM (VALUES (1), (2), (3)) AS t(value) WHERE value = 2) = 2 
+    THEN (SELECT CAST(123456.789 AS NUMERIC(9,3)))
+    ELSE (SELECT CAST(987.654321 AS DECIMAL(12,6)))
+END AS result;
+GO
+
+-- Test Case 3: T_SubPlan with aggregation
+SELECT CASE 
+    WHEN (SELECT AVG(value) FROM (VALUES (1), (2), (3)) AS t(value)) > 1
+    THEN (SELECT SUM(value) FROM (VALUES (10.1), (20.2), (30.3)) AS t(value))
+    ELSE (SELECT AVG(value) FROM (VALUES (1.1), (2.2), (3.3)) AS t(value))
+END AS result;
+GO
+
+-- Test Case 4: Multiple T_SubPlans in one CASE
+SELECT CASE 
+    WHEN (SELECT CAST(1000.00 AS NUMERIC(10,2))) > 
+         (SELECT CAST(999.99 AS DECIMAL(10,2)))
+    THEN (SELECT MAX(value) FROM (VALUES (1), (2), (3)) AS t(value))
+    ELSE (SELECT MIN(value) FROM (VALUES (4), (5), (6)) AS t(value))
+END AS result;
+GO
+
+-- Test Case 5: Nested CASE with T_SubPlan
+SELECT CASE 
+    WHEN (SELECT CAST(100 AS NUMERIC(10,0))) > 50
+    THEN 
+        CASE
+            WHEN (SELECT CAST(5.25 AS DECIMAL(5,2))) < 10
+            THEN (SELECT AVG(value) FROM (VALUES (1.1111), (2.2222), (3.3333)) AS t(value))
+            ELSE (SELECT AVG(value) FROM (VALUES (4.444444), (5.555555), (6.666666)) AS t(value))
+        END
+    ELSE (SELECT CAST(1000.00 AS NUMERIC(12,2)))
+END AS result;
+GO
+
+-- Test Case 6: T_SubPlan with arithmetic operations
+SELECT CASE 
+    WHEN 1 = 1 
+    THEN (SELECT CAST(1000.00 AS NUMERIC(10,2)) / 2)
+    ELSE (SELECT CAST(500.5555 AS DECIMAL(8,4)) * 3)
+END AS result;
+GO
+
+-- Test Case 8: T_SubPlan with multiple values
+SELECT CASE 
+    WHEN (SELECT value FROM (VALUES (1.23), (4.56), (7.89)) AS t(value) WHERE value = 4.56) = 4.56
+    THEN (SELECT CAST(123.456 AS NUMERIC(10,3)))
+    ELSE (SELECT CAST(789.012 AS DECIMAL(10,3)))
+END AS result;
+GO
+
+-- Test Case 10: T_SubPlan with conditional aggregation
+SELECT CASE 
+    WHEN EXISTS (
+        SELECT 1 FROM (VALUES (1), (2), (3)) AS t(value)
+        WHERE value > 2
+    )
+    THEN (
+        SELECT AVG(CAST(value AS DECIMAL(10,4)))
+        FROM (VALUES (10.1111), (20.2222), (30.3333)) AS t(value)
+        WHERE value > 15
+    )
+    ELSE CAST(0 AS DECIMAL(10,4))
+END AS result;
+GO
+
+-- Test Case 1: Basic GREATEST simulation in CASE
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN CAST(1234.5678 AS NUMERIC(10,4)) > CAST(9876.54 AS DECIMAL(12,2))
+            THEN CAST(1234.5678 AS NUMERIC(10,4))
+            ELSE CAST(9876.54 AS DECIMAL(12,2))
+        END
+    ELSE CAST(0 AS DECIMAL(12,4))
+END AS result;
+GO
+
+-- Test Case 2: LEAST simulation with different precisions and scales
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN CAST(123.456 AS NUMERIC(6,3)) < CAST(789.12 AS DECIMAL(8,2))
+            THEN CAST(123.456 AS NUMERIC(6,3))
+            ELSE CAST(789.12 AS DECIMAL(8,2))
+        END
+    ELSE CAST(999.999 AS DECIMAL(6,3))
+END AS result;
+GO
+
+-- Test Case 3: GREATEST with multiple values
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        (SELECT MAX(v) FROM (VALUES 
+            (CAST(1234.56 AS NUMERIC(10,2))),
+            (CAST(7890.12 AS DECIMAL(12,2))),
+            (CAST(4567.89 AS NUMERIC(8,2)))
+        ) AS value(v))
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 4: LEAST with multiple values and different scales
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        (SELECT MIN(v) FROM (VALUES 
+            (CAST(123.4567 AS NUMERIC(10,4))),
+            (CAST(789.12 AS DECIMAL(8,2))),
+            (CAST(456.789 AS NUMERIC(6,3)))
+        ) AS value(v))
+    ELSE CAST(999.9999 AS DECIMAL(10,4))
+END AS result;
+GO
+
+-- Test Case 5: GREATEST with arithmetic operations
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN CAST(1234.56 AS NUMERIC(10,2)) * 2 > CAST(9876.54 AS DECIMAL(12,2)) / 2
+            THEN CAST(1234.56 AS NUMERIC(10,2)) * 2
+            ELSE CAST(9876.54 AS DECIMAL(12,2)) / 2
+        END
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 6: LEAST with NULL values
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        (SELECT MIN(v) FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(NULL AS DECIMAL(12,2))),
+            (CAST(789.12 AS NUMERIC(8,2)))
+        ) AS value(v))
+    ELSE CAST(999.99 AS DECIMAL(10,2))
+END AS result;
+GO
+
+-- Test Case 7: GREATEST with all NULL values
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        (SELECT MAX(v) FROM (VALUES 
+            (CAST(NULL AS NUMERIC(10,2))),
+            (CAST(NULL AS DECIMAL(12,2))),
+            (CAST(NULL AS NUMERIC(8,2)))
+        ) AS value(v))
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 8: LEAST with very small and very large numbers
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN CAST(0.00000001 AS NUMERIC(16,8)) < CAST(99999999.99 AS DECIMAL(10,2))
+            THEN CAST(0.00000001 AS NUMERIC(16,8))
+            ELSE CAST(99999999.99 AS DECIMAL(10,2))
+        END
+    ELSE CAST(1 AS DECIMAL(16,8))
+END AS result;
+GO
+
+-- Test Case 9: GREATEST with negative numbers
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        (SELECT MAX(v) FROM (VALUES 
+            (CAST(-1234.56 AS NUMERIC(10,2))),
+            (CAST(-7890.12 AS DECIMAL(12,2))),
+            (CAST(-4567.89 AS NUMERIC(8,2)))
+        ) AS value(v))
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 10: Complex CASE with multiple GREATEST/LEAST simulations
+SELECT CASE 
+    WHEN (SELECT MAX(v) FROM (VALUES 
+            (CAST(1234.56 AS NUMERIC(10,2))),
+            (CAST(7890.12 AS DECIMAL(12,2)))
+        ) AS value(v)) > 5000 
+    THEN 
+        (SELECT MIN(v) FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(789.12 AS DECIMAL(12,2)))
+        ) AS value(v))
+    ELSE 
+        (SELECT MAX(v) FROM (VALUES 
+            (CAST(4567.89 AS NUMERIC(10,2))),
+            (CAST(9876.54 AS DECIMAL(12,2)))
+        ) AS value(v))
+END AS result;
+GO
+
+-- T_CoerceToDomainValue:
+-- Setup
+CREATE TYPE NumericDomain FROM NUMERIC(10,4);
+CREATE TYPE DecimalDomain FROM DECIMAL(12,2);
+GO
+
+-- Test Case 1
+SELECT CASE WHEN 1=1 THEN CAST(123.4567 AS NumericDomain) ELSE CAST(9876.54 AS DecimalDomain) END AS result;
+GO
+
+-- Test Case 2
+SELECT CASE WHEN 1=0 THEN CAST(123.4567 AS NumericDomain) ELSE CAST(9876.54 AS DecimalDomain) END AS result;
+GO
+
+-- Test Case 3
+DECLARE @n NumericDomain = 123.4567;
+DECLARE @d DecimalDomain = 9876.54;
+SELECT CASE WHEN @n > 100 THEN @n ELSE @d END AS result;
+GO
+
+-- Test Case 4
+SELECT CASE 
+    WHEN CAST(123.4567 AS NumericDomain) > CAST(100 AS NumericDomain) THEN CAST(123.4567 AS NumericDomain)
+    ELSE CAST(9876.54 AS DecimalDomain)
+END AS result;
+GO
+
+-- Test Case 5
+SELECT CASE 
+    WHEN 1=1 THEN CAST(CAST(123.4567 AS NUMERIC(10,4)) AS NumericDomain)
+    ELSE CAST(CAST(9876.54 AS DECIMAL(12,2)) AS DecimalDomain)
+END AS result;
+GO
+
+DROP TYPE NumericDomain
+GO
+
+DROP TYPE DecimalDomain
+GO
+
+-- T_SQLValueFunction:
+-- Test Case 1
+SELECT CASE 
+    WHEN SERVERPROPERTY('Edition') = 'Express Edition' THEN CAST(1 AS NUMERIC(1,0))
+    ELSE CAST(0 AS DECIMAL(1,0))
+END AS result;
+GO
+
+
+-- T_MinMaxExpr:
+-- Test Case 1
+SELECT CASE 
+    WHEN 1=1 THEN 
+        (SELECT MAX(v) FR FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(678.90 AS DECIMAL(12,2)))
+        ) AS value(v))
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 2
+SELECT CASE 
+    WHEN 1=1 THEN 
+        (SELECT MIN(v) FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(678.90 AS DECIMAL(12,2))),
+            (CAST(456.78 AS NUMERIC(8,2)))
+        ) AS value(v))
+    ELSE CAST(999.99 AS DECIMAL(10,2))
+END AS result;
+GO
+
+-- Test Case 3
+DECLARE @num1 NUMERIC(10,4) = 123.4567;
+DECLARE @num2 DECIMAL(12,2) = 9876.54;
+SELECT CASE 
+    WHEN @num1 > @num2 THEN @num1
+    ELSE @num2
+END AS result;
+GO
+
+-- Test Case 4
+SELECT CASE 
+    WHEN 1=1 THEN 
+        (SELECT MAX(v) FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2)) * 2),
+            (CAST(678.90 AS DECIMAL(12,2)) / 2)
+        ) AS value(v))
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 5
+SELECT CASE 
+    WHEN (SELECT MAX(v) FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(678.90 AS DECIMAL(12,2)))
+        ) AS value(v)) > 500 
+    THEN CAST(1 AS NUMERIC(1,0))
+    ELSE CAST(0 AS DECIMAL(1,0))
+END AS result;
+GO
+
+-- T_ArrayExpr:
+-- Test Case 1
+SELECT CASE 
+    WHEN 1=1 THEN 
+        (SELECT v FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(678.90 AS DECIMAL(12,2)))
+        ) AS value(v) WHERE v > 500)
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 2
+SELECT CASE 
+    WHEN EXISTS(SELECT 1 FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(678.90 AS DECIMAL(12,2)))
+        ) AS value(v) WHERE v > 500)
+    THEN CAST(1 AS NUMERIC(1,0))
+    ELSE CAST(0 AS DECIMAL(1,0))
+END AS result;
+GO
+
+-- Test Case 3
+DECLARE @values TABLE (v NUMERIC(10,2));
+INSERT INTO @values VALUES (123.45), (678.90), (456.78);
+SELECT CASE 
+    WHEN EXISTS(SELECT 1 FROM @values WHERE v > 500)
+    THEN (SELECT MAX(v) FROM @values)
+    ELSE (SELECT MIN(v) FROM @values)
+END AS result;
+GO
+
+-- Test Case 4
+SELECT CASE 
+    WHEN 1=1 THEN 
+        (SELECT AVG(v) FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(678.90 AS DECIMAL(12,2))),
+            (CAST(456.78 AS NUMERIC(10,2)))
+        ) AS value(v))
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 5
+SELECT CASE 
+    WHEN (SELECT COUNT(*) FROM (VALUES 
+            (CAST(123.45 AS NUMERIC(10,2))),
+            (CAST(678.90 AS DECIMAL(12,2))),
+            (CAST(456.78 AS NUMERIC(10,2)))
+        ) AS value(v) WHERE v > 500) > 1
+    THEN CAST(1 AS NUMERIC(1,0))
+    ELSE CAST(0 AS DECIMAL(1,0))
+END AS result;
+GO
+
+-- T_CaseTestExpr
+-- Test Case 1
+SELECT CASE CAST(2 AS NUMERIC(1,0)) 
+    WHEN 1 THEN CAST(100.00 AS NUMERIC(10,2))
+    WHEN 2 THEN CAST(200.00 AS DECIMAL(12,2)) 
+    ELSE CAST(0 AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- Test Case 2
+DECLARE @test DECIMAL(2,0) = 3;
+SELECT CASE @test
+    WHEN 1 THEN CAST(100.00 AS NUMERIC(10,2))
+    WHEN 2 THEN CAST(200.00 AS DECIMAL(12,2))
+    WHEN 3 THEN CAST(300.00 AS NUMERIC(10,2))
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 3
+DECLARE @value NUMERIC(3,1) = 10.5;
+SELECT CASE CAST(@value AS NUMERIC(3,0))
+    WHEN 9 THEN CAST(90.00 AS NUMERIC(10,2))
+    WHEN 10 THEN CAST(100.00 AS DECIMAL(10,2))
+    ELSE CAST(0 AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- T_ArrayCoerceExpr:
+-- Test Case 1
+DECLARE @values TABLE (val NUMERIC(10,2));
+INSERT INTO @values VALUES (123.45), (678.90), (456.78);
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(val AS DECIMAL(12,2))
+    ELSE val
+END AS result
+FROM @values;
+GO
+
+-- Test Case 2
+DECLARE @values TABLE (val DECIMAL(12,2));
+INSERT INTO @values VALUES (123.45), (678.90), (456.78);
+SELECT CASE 
+    WHEN 1 = 1 THEN CAST(val AS NUMERIC(10,2))
+    ELSE val
+END AS result
+FROM @values;
+GO
+
+-- Test Case 3
+DECLARE @values TABLE (val NUMERIC(10,2));
+INSERT INTO @values VALUES (123.45), (678.90), (456.78);
+SELECT CASE 
+    WHEN val > 500 THEN CAST(val AS DECIMAL(12,2))
+    ELSE val
+END AS result
+FROM @values;
+GO
+
+-- Test Case 4
+DECLARE @values TABLE (val DECIMAL(12,2));
+INSERT INTO @values VALUES (123.45), (678.90), (456.78);
+SELECT CASE 
+    WHEN val < 500 THEN CAST(val AS NUMERIC(10,2))
+    ELSE val
+END AS result
+FROM @values;
+GO
+
+-- T_FieldSelect:
+-- Setup
+CREATE TABLE MyTable (
+    id INT PRIMARY KEY,
+    num_col NUMERIC(10,2),
+    dec_col DECIMAL(12,2)
+);
+GO
+
+INSERT INTO MyTable (id, num_col, dec_col) VALUES 
+(1, 1234.56, 9876.54),
+(2, 2345.67, 8765.43),
+(3, 3456.78, 7654.32);
+GO
+
+-- Test Case 1
+SELECT CASE 
+    WHEN t.num_col > 2000 THEN t.num_col
+    ELSE t.dec_col
+END AS result
+FROM MyTable t;
+GO
+
+-- Test Case 2
+SELECT CASE 
+    WHEN t.dec_col < 8000 THEN t.num_col
+    ELSE t.dec_col
+END AS result
+FROM MyTable t
+WHERE t.id = 2;
+GO
+
+-- Test Case 3
+DECLARE @id INT = 3;
+SELECT CASE 
+    WHEN (SELECT num_col FROM MyTable WHERE id = @id) > 3000 THEN (SELECT num_col FROM MyTable WHERE id = @id)
+    ELSE (SELECT dec_col FROM MyTable WHERE id = @id)
+END AS result;
+GO
+
+-- Test Case 4
+SELECT CASE 
+    WHEN (SELECT AVG(num_col) FROM MyTable) > 2500 THEN (SELECT MAX(num_col) FROM MyTable)
+    ELSE (SELECT MIN(dec_col) FROM MyTable)
+END AS result;
+GO
+
+-- Test Case 5
+SELECT CASE 
+    WHEN (SELECT COUNT(*) FROM MyTable WHERE num_col > 3000) > 1 THEN (SELECT SUM(num_col) FROM MyTable)
+    ELSE (SELECT AVG(dec_col) FROM MyTable)
+END AS result;
+GO
+
+-- T_AlternativeSubPlan:
+-- This is typically an internal optimization structure, but we can simulate with a UNION ALL.
+
+-- Test Case 1
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        (SELECT CAST(123.45 AS NUMERIC(10,2)) WHERE 1 = 1
+         UNION ALL
+         SELECT CAST(678.90 AS DECIMAL(12,2)) WHERE 1 = 0)
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 2
+DECLARE @flag BIT = 1;
+SELECT CASE 
+    WHEN @flag = 1 THEN 
+        (SELECT CAST(123.45 AS NUMERIC(10,2)) WHERE @flag = 1
+         UNION ALL
+         SELECT CAST(678.90 AS DECIMAL(12,2)) WHERE @flag = 0)
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 3
+SELECT CASE 
+    WHEN (SELECT COUNT(*) FROM (
+        SELECT CAST(123.45 AS NUMERIC(10,2)) WHERE 1 = 1
+        UNION ALL
+        SELECT CAST(678.90 AS DECIMAL(12,2)) WHERE 1 = 0
+    ) t) > 0 THEN CAST(1 AS NUMERIC(1,0))
+    ELSE CAST(0 AS DECIMAL(1,0))
+END AS result;
+GO
+
+-- Test Case 4
+DECLARE @condition BIT = 1;
+SELECT CASE 
+    WHEN @condition = 1 THEN 
+        (SELECT CAST(123.45 AS NUMERIC(10,2)) WHERE @condition = 1
+         UNION ALL
+         SELECT CAST(678.90 AS DECIMAL(12,2)) WHERE @condition = 0)
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- T_SubPlan:
+-- Test Case 1
+SELECT CASE 
+    WHEN 1 = 1 THEN (SELECT TOP 1 CAST(123.45 AS NUMERIC(10,2)) FROM MyTable)
+    ELSE (SELECT TOP 1 CAST(678.90 AS DECIMAL(12,2)) FROM MyTable)
+END AS result;
+GO
+
+-- Test Case 2
+SELECT CASE 
+    WHEN (SELECT COUNT(*) FROM MyTable WHERE num_col > 2000) > 0 
+    THEN (SELECT AVG(CAST(num_col AS NUMERIC(10,2))) FROM MyTable)
+    ELSE (SELECT AVG(CAST(dec_col AS DECIMAL(12,2))) FROM MyTable)
+END AS result;
+GO
+
+-- Test Case 3
+SELECT CASE 
+    WHEN (SELECT MAX(num_col) FROM MyTable) > (SELECT MIN(dec_col) FROM MyTable)
+    THEN (SELECT SUM(CAST(num_col AS NUMERIC(15,2))) FROM MyTable)
+    ELSE (SELECT SUM(CAST(dec_col AS DECIMAL(15,2))) FROM MyTable)
+END AS result;
+GO
+
+-- Test Case 4
+SELECT CASE 
+    WHEN EXISTS (SELECT 1 FROM MyTable WHERE num_col > 3000) 
+    THEN (SELECT CAST(num_col AS NUMERIC(10,2)) FROM MyTable WHERE id = 1)
+    ELSE (SELECT CAST(dec_col AS DECIMAL(12,2)) FROM MyTable WHERE id = 2)
+END AS result;
+GO
+
+-- Test Case 5
+SELECT CASE 
+    WHEN (SELECT COUNT(*) FROM MyTable WHERE num_col > (SELECT AVG(num_col) FROM MyTable)) > 1
+    THEN (SELECT CAST(SUM(num_col) AS NUMERIC(18,2)) FROM MyTable)
+    ELSE (SELECT CAST(SUM(dec_col) AS DECIMAL(18,2)) FROM MyTable)
+END AS result;
+GO
+
+DROP TABLE MyTable
+GO
+
+-- T_SubscriptingRef:
+-- Test Case 1
+DECLARE @json NVARCHAR(MAX) = N'{"num": 123.45, "dec": 678.90}';
+SELECT CASE 
+    WHEN CAST(JSON_VALUE(@json, '$.num') AS NUMERIC(10,2)) > 100 
+    THEN CAST(JSON_VALUE(@json, '$.num') AS NUMERIC(10,2))
+    ELSE CAST(JSON_VALUE(@json, '$.dec') AS DECIMAL(12,2))
+END AS result;
+GO
+
+-- Test Case 2
+DECLARE @data TABLE (id INT, num_col NUMERIC(10,2), dec_col DECIMAL(12,2));
+INSERT INTO @data VALUES (1, 123.45, 678.90), (2, 234.56, 567.89);
+SELECT CASE 
+    WHEN @data.num_col > 200 THEN @data.num_col
+    ELSE @data.dec_col
+END AS result
+FROM @data
+WHERE id = 2;
+GO
+
+-- Test Case 3
+DECLARE @json NVARCHAR(MAX) = N'{"values": [123.45, 678.90, 456.78]}';
+SELECT CASE 
+    WHEN CAST(JSON_VALUE(@json, '$.values[0]') AS NUMERIC(10,2)) > 500
+    THEN CAST(JSON_VALUE(@json, '$.values[1]') AS DECIMAL(12,2))
+    ELSE CAST(JSON_VALUE(@json, '$.values[2]') AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- Test Case 4
+DECLARE @data TABLE (id INT, num_col NUMERIC(10,2), dec_col DECIMAL(12,2));
+INSERT INTO @data VALUES (1, 123.45, 678.90), (2, 234.56, 567.89);
+SELECT CASE 
+    WHEN (SELECT num_col FROM @data WHERE id = 2) > 200
+    THEN (SELECT num_col FROM @data WHERE id = 2)
+    ELSE (SELECT dec_col FROM @data WHERE id = 2)
+END AS result;
+GO
+
+-- Test Case 5
+DECLARE @json NVARCHAR(MAX) = N'{"nums": [123.45, 234.56, 345.67], "decs": [678.90, 567.89, 456.78]}';
+SELECT CASE 
+    WHEN CAST(JSON_VALUE(@json, '$.nums[0]') AS NUMERIC(10,2)) > 200
+    THEN CAST(JSON_VALUE(@json, '$.decs[1]') AS DECIMAL(12,2))
+    ELSE CAST(JSON_VALUE(@json, '$.nums[2]') AS NUMERIC(10,2))
+END AS result;
+GO
+
+-- Money datatypes testing
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN 1=1
+            THEN CAST(1234.56 AS NUMERIC(10,2)) * cast(5.5 as smallmoney)
+            ELSE CAST(9876.54 AS DECIMAL(12,2)) / cast(6.43 as smallmoney)
+        END
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN 1=1
+            THEN CAST(1234.56 AS NUMERIC(10,2)) * cast(5.5 as money)
+            ELSE CAST(9876.54 AS DECIMAL(12,2)) / cast(6.43 as smallmoney)
+        END
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN 1=1
+            THEN CAST(1234.56 AS NUMERIC(10,2)) * cast(5.5 as money)
+            ELSE CAST(9876.54 AS DECIMAL(12,2)) / cast(6.43 as money)
+        END
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+SELECT CASE 
+    WHEN 1 = 1 THEN 
+        CASE 
+            WHEN 1=1
+            THEN CAST(1234.56 AS NUMERIC(10,2)) * cast(5.5 as smallmoney)
+            ELSE CAST(9876.54 AS DECIMAL(12,2)) / cast(6.43 as money)
+        END
+    ELSE CAST(0 AS DECIMAL(12,2))
+END AS result;
+GO
+
+
+-- TODO FIX: Output diff between TSQL and BBF.
+-- T_Param (Function parameter)
+DROP FUNCTION IF EXISTS dbo.TestParam
+GO
+
+CREATE FUNCTION dbo.TestParam (@param1 NUMERIC(10,4), @param2 DECIMAL(12,2))
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT CASE 
+        WHEN 1 = 1 THEN @param1 
+        ELSE @param2 
+    END AS result
+);
+GO
+
+SELECT * FROM dbo.TestParam(1234.5678, 9876.54);
+GO
+
+DROP FUNCTION dbo.TestParam
+GO
+
+-- T_Param (Function parameter)
+DROP FUNCTION IF EXISTS dbo.TestParam
+GO
+
+CREATE FUNCTION dbo.TestParam (@param1 NUMERIC(10,4), @param2 DECIMAL(12,2))
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT @param1 AS result
+    UNION ALL
+    SELECT @param2
+    ORDER BY result
+);
+GO
+
+SELECT * FROM dbo.TestParam(1234.5678, 9876.54);
+GO
+
+DROP FUNCTION dbo.TestParam
+GO
+
+-- T_NamedArgExpr (Named argument in a function call)
+DROP FUNCTION IF EXISTS dbo.TestNamedArg
+GO
+
+CREATE FUNCTION dbo.TestNamedArg (@param1 NUMERIC(10,4) = 0, @param2 DECIMAL(12,2) = 0)
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT @param1 AS result
+    UNION ALL
+    SELECT @param2
+    ORDER BY result
+);
+GO
+
+SELECT * FROM dbo.TestNamedArg(1234.56, 7890.1234);
+GO
+
+DROP FUNCTION dbo.TestNamedArg;
+GO
+
+-- Setup
+DROP FUNCTION IF EXISTS dbo.TestFunction;
+GO
+
+CREATE FUNCTION dbo.TestFunction (@num NUMERIC(10,2), @dec DECIMAL(12,2))
+RETURNS TABLE
+AS
+RETURN
+(
+    SELECT CASE 
+        WHEN @num > @dec THEN @num
+        ELSE @dec
+    END AS result
+);
+GO
+
+-- T_NamedArgExpr:
+-- Test Case 1
+SELECT * FROM dbo.TestFunction(123.45, 678.90);
+GO
+
+-- Test Case 2
+SELECT * FROM dbo.TestFunction(678.90, 123.45);
+GO
+
+-- Test Case 3
+DECLARE @n NUMERIC(10,2) = 123.45;
+DECLARE @d DECIMAL(12,2) = 678.90;
+SELECT * FROM dbo.TestFunction(@n, @d);
+GO
+
+-- Test Case 4
+SELECT * FROM dbo.TestFunction(678.90, CAST(123.45 AS NUMERIC(10,2)));
+GO
+
+-- Test Case 5
+SELECT * FROM dbo.TestFunction(CAST(123.45 AS NUMERIC(10,2)), CAST(678.90 AS DECIMAL(12,2)));
+GO
+
+DROP FUNCTION dbo.TestFunction;
+go
+
+
+
+-- Test Case: T_SubPlan with different numeric operations
+SELECT CASE 
+    WHEN (SELECT POWER(CAST(2 AS NUMERIC(5,2)), 3)) > 7
+    THEN (SELECT SQRT(CAST(100 AS NUMERIC(10,4))))
+    ELSE (SELECT CAST(PI() AS DECIMAL(10,8)))
+END AS result;
+GO
+
+SELECT CASE 
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE 9223372036854775807 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE CAST(2147483647 as int) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE CAST(9223372036854775807 as bigint) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE CAST(32767 as smallint) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE CAST(255 as tinyint) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE 123 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE CAST(123 as int) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE CAST(123 as bigint) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.0001 
+   ELSE CAST(123 as smallint) 
+END AS RESULT
+GO
+
+SELECT CASE 
+   WHEN 1 = 0 THEN 0.00000000000000000000000000000000000001 
+   ELSE 9223372036854775807 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.00000000000000000000000000000000000001 
+   ELSE CAST(2147483647 as int) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.00000000000000000000000000000000000001 
+   ELSE CAST(9223372036854775807 as bigint) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.00000000000000000000000000000000000001 
+   ELSE CAST(32767 as smallint) 
+END AS RESULT
+GO
+
+SELECT CASE
+   WHEN 1 = 0 THEN 0.00000000000000000000000000000000000001
+   ELSE CAST(255 as tinyint) 
+END AS RESULT
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT 9223372036854775807 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT CAST(2147483647 as int) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT CAST(9223372036854775807 as bigint) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT CAST(32767 as smallint) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT CAST(255 as tinyint) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT 123 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT CAST(123 as int) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT CAST(123 as bigint) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.0001 AS RESULT 
+UNION 
+SELECT CAST(123 as smallint) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.00000000000000000000000000000000000001 AS RESULT 
+UNION 
+SELECT 9223372036854775807 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.00000000000000000000000000000000000001 AS RESULT 
+UNION 
+SELECT CAST(2147483647 as int) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.00000000000000000000000000000000000001 AS RESULT 
+UNION 
+SELECT CAST(9223372036854775807 as bigint) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.00000000000000000000000000000000000001 AS RESULT 
+UNION 
+SELECT CAST(32767 as smallint) 
+ORDER BY RESULT DESC 
+GO
+
+SELECT 0.00000000000000000000000000000000000001 AS RESULT 
+UNION 
+SELECT CAST(255 as tinyint) 
+ORDER BY RESULT DESC 
+GO
+
+CREATE TYPE TestUDT FROM decimal(10,4); 
+GO
+
+CREATE TABLE TestTypes (
+    IntCol int,
+    FloatCol float,
+    SmallIntCol smallint,
+    NumericCol numeric(10,5),
+    UDTCol TestUDT
+);
+GO
+
+INSERT INTO TestTypes VALUES(100, 100.5, 10, 100.12345, 100.1234),(200, 200.5, 20, 200.12345, 200.1234); 
+GO
+
+SELECT UDTCol * cast(10.12 as decimal(4,2))  from TestTypes
+GO
+
+SELECT UDTCol * cast(10.123456789 as decimal(11, 9)) from TestTypes
+GO
+
+DROP TABLE TestTypes;
+GO
+
+DROP TYPE TestUDT;
+GO
+
+-- Test Case: T_Case with different numeric operations
+CREATE TABLE BABEL_5890_T1 (
+    COL1 NUMERIC(20,2),
+    COL2 DECIMAL(20,2),
+    COL3 NUMERIC(38,0),
+    COL4 DECIMAL(38,0),
+    COL5 NUMERIC(2,0),
+    COL6 DECIMAL(2,0)
+);
+GO
+
+INSERT INTO BABEL_5890_T1 (COL1, COL2, COL3, COL4, COL5, COL6)
+VALUES (12345.67, 54321.98, 1234567890123456789, 9876543210987654321, 42, 99);
+GO
+
+INSERT INTO BABEL_5890_T1 (COL1, COL2, COL3, COL4, COL5, COL6)
+VALUES (98765.43, 12345.67, 9876543210987654321, 1234567890123456789, 10, 50);
+GO
+
+INSERT INTO BABEL_5890_T1 (COL1, COL2, COL3, COL4, COL5, COL6)
+VALUES (11111.11, 22222.22, 1111111111111111111, 2222222222222222222, 11, 22);
+GO
+
+INSERT INTO BABEL_5890_T1 (COL1, COL2, COL3, COL4, COL5, COL6)
+VALUES (33333.33, 44444.44, 3333333333333333333, 4444444444444444444, 33, 44);
+GO
+
+INSERT INTO BABEL_5890_T1 (COL1, COL2, COL3, COL4, COL5, COL6)
+VALUES (55555.55, 66666.66, 5555555555555555555, 6666666666666666666, 55, 66);
+GO
+
+-- Test Case 1: Basic CASE with 6 columns and ELSE
+select 1.00 * CASE 3
+   WHEN 1 THEN COL1 
+   WHEN 2 THEN COL2
+   WHEN 3 THEN COL3
+   WHEN 4 THEN COL4
+   WHEN 5 THEN COL5
+   WHEN 6 THEN COL6
+   ELSE 0
+END AS RESULT 
+FROM BABEL_5890_T1;
+GO
+
+-- Test Case 2: CASE with 5 columns and ELSE
+select 1.00 * CASE 6
+   WHEN 1 THEN COL1 
+   WHEN 2 THEN COL2
+   WHEN 3 THEN COL3
+   WHEN 4 THEN COL4
+   WHEN 5 THEN COL5
+   ELSE COL6
+END AS RESULT 
+FROM BABEL_5890_T1;
+GO
+
+-- Test Case 3: CASE with 4 columns and ELSE
+select 1.00 * CASE 5
+   WHEN 1 THEN COL1 
+   WHEN 2 THEN COL2
+   WHEN 3 THEN COL3
+   WHEN 4 THEN COL4
+   ELSE COL5
+END AS RESULT 
+FROM BABEL_5890_T1;
+GO
+
+-- Test Case 4: CASE with 3 columns and ELSE
+select 1.00 * CASE 4
+   WHEN 1 THEN COL1 
+   WHEN 2 THEN COL2
+   WHEN 3 THEN COL3
+   ELSE COL4
+END AS RESULT 
+FROM BABEL_5890_T1;
+GO
+
+-- Test Case 5: CASE with 2 columns and ELSE
+select 1.00 * CASE 3
+   WHEN 1 THEN COL1 
+   WHEN 2 THEN COL2
+   ELSE COL3
+END AS RESULT 
+FROM BABEL_5890_T1;
+GO
+
+-- Test Case 6: CASE with 1 column and ELSE
+select 1.00 * CASE 2
+   WHEN 1 THEN COL1 
+   ELSE COL2
+END AS RESULT 
+FROM BABEL_5890_T1;
+GO
+
+-- Test Case 7: CASE with all columns returning a constant value
+select 1.00 * CASE 7
+   WHEN 1 THEN COL1 
+   WHEN 2 THEN COL2
+   WHEN 3 THEN COL3
+   WHEN 4 THEN COL4
+   WHEN 5 THEN COL5
+   WHEN 6 THEN COL6
+   ELSE 999.99
+END AS RESULT 
+FROM BABEL_5890_T1;
+GO
+
+-- Test Case 8: CASE with mixed constant and column values
+select 1.00 * CASE 4
+   WHEN 1 THEN 100 
+   WHEN 2 THEN COL2
+   WHEN 3 THEN 300
+   WHEN 4 THEN COL4
+   WHEN 5 THEN 500
+   ELSE COL6
+END AS RESULT 
+FROM BABEL_5890_T1;
+GO
+
+-- Test Case 9: Basic DECIMAL and NUMERIC usage
+select 1.00 * CASE 3
+   WHEN 1 THEN CAST(12345.6789 AS DECIMAL(10,4))
+   WHEN 2 THEN CAST(98765.4321 AS NUMERIC(10,4))
+   WHEN 3 THEN CAST(1234567.89 AS DECIMAL(12,2))
+   WHEN 4 THEN CAST(9.87654321 AS NUMERIC(9,8))
+   ELSE CAST(0 AS DECIMAL(5,2))
+END AS RESULT
+GO
+
+-- Test Case 10: Different scales within the same precision
+select 1.00 * CASE 2
+   WHEN 1 THEN CAST(12345.6789 AS DECIMAL(10,4))
+   WHEN 2 THEN CAST(98765.43 AS DECIMAL(10,2))
+   WHEN 3 THEN CAST(123456.7 AS DECIMAL(10,1))
+   WHEN 4 THEN CAST(1234567 AS DECIMAL(10,0))
+   ELSE CAST(0 AS DECIMAL(10,4))
+END AS RESULT
+GO
+
+-- Test Case 11: Mixing DECIMAL and NUMERIC with different precisions
+select 1.00 * CASE 4
+   WHEN 1 THEN CAST(12345.6789 AS DECIMAL(10,4))
+   WHEN 2 THEN CAST(98765.4321 AS NUMERIC(12,4))
+   WHEN 3 THEN CAST(1234567.89 AS DECIMAL(15,2))
+   WHEN 4 THEN CAST(9.87654321 AS NUMERIC(9,8))
+   ELSE CAST(0 AS DECIMAL(5,2))
+END AS RESULT
+GO
+
+-- Test Case 12: Large precisions and scales
+select 1.00 * CASE 2
+   WHEN 1 THEN CAST(12345678901234567890.1234567890 AS DECIMAL(30,10))
+   WHEN 2 THEN CAST(98765432109876543210.9876543210 AS NUMERIC(30,10))
+   WHEN 3 THEN CAST(1234567890123456.7890123456 AS DECIMAL(25,10))
+   WHEN 4 THEN CAST(9.8765432109876543210 AS NUMERIC(20,19))
+   ELSE CAST(0 AS DECIMAL(30,10))
+END AS RESULT
+GO
+
+-- Test Case 13: Small fractional parts
+select 1.00 * CASE 3
+   WHEN 1 THEN CAST(12345.000001 AS DECIMAL(12,6))
+   WHEN 2 THEN CAST(98765.0000001 AS NUMERIC(14,7))
+   WHEN 3 THEN CAST(1234567.0000000001 AS DECIMAL(18,10))
+   WHEN 4 THEN CAST(9.000000000000001 AS NUMERIC(17,15))
+   ELSE CAST(0.00000001 AS DECIMAL(10,8))
+END AS RESULT
+GO
+
+-- Test Case 14: Negative numbers
+select 1.00 * CASE 2
+   WHEN 1 THEN CAST(-12345.6789 AS DECIMAL(10,4))
+   WHEN 2 THEN CAST(-98765.4321 AS NUMERIC(10,4))
+   WHEN 3 THEN CAST(-1234567.89 AS DECIMAL(12,2))
+   WHEN 4 THEN CAST(-9.87654321 AS NUMERIC(9,8))
+   ELSE CAST(-0.01 AS DECIMAL(5,2))
+END AS RESULT
+GO
+
+-- Test Case 15: Potential overflow scenarios
+select 1.00 * CASE 3 
+   WHEN 1 THEN CAST(99999.9999 AS DECIMAL(9,4)) 
+   WHEN 2 THEN CAST(999999.999 AS NUMERIC(9,3)) 
+   WHEN 3 THEN CAST(9999999.99 AS DECIMAL(9,2)) 
+   WHEN 4 THEN CAST(99999999.9 AS NUMERIC(9,1)) 
+   ELSE CAST(0 AS DECIMAL(9,4)) 
+END AS RESULT 
+GO
+
+-- Test Case 16: Mixing with other numeric types
+select 1.00 * CASE 4
+   WHEN 1 THEN CAST(12345.6789 AS DECIMAL(10,4))
+   WHEN 2 THEN CAST(98765 AS INT)
+   WHEN 3 THEN CAST(1234567.89 AS FLOAT)
+   WHEN 4 THEN CAST(9 AS BIGINT)
+   ELSE CAST(0 AS NUMERIC(5,2))
+END AS RESULT
+GO
+
+-- Test Case 17: Numeric branch with time
+select 1.00 * CASE 1
+   when 1 then cast(1.23 as numeric(20,2))
+   when 2 then cast(1900-01-01 as datetime)
+END
+go
+
+select 1.00 * CASE 1
+   WHEN 1 THEN CAST(1.23 AS NUMERIC(20,2))
+   WHEN 2 THEN CAST('1900-01-01 12:34:00' AS SMALLDATETIME)
+END AS Result
+GO
+
+select 1.00 * CASE 2
+   WHEN 1 THEN CAST(1.23 AS NUMERIC(20,2))
+   WHEN 2 THEN CAST('1900-01-01' AS DATE)
+   WHEN 3 THEN CAST('12:34:56' AS TIME)
+   WHEN 4 THEN CAST('1900-01-01 12:34:56.1234567' AS DATETIME2(7))
+   WHEN 5 THEN CAST('1900-01-01 12:34:56 +01:00' AS DATETIMEOFFSET)
+   WHEN 6 THEN CAST('1900-01-01 12:34:00' AS SMALLDATETIME)
+END AS Result
+GO
+
+-- Test Case 18: NUMERIC and TINYINT
+select 1.00 * CASE 1
+   WHEN 1 THEN CAST(1.23 AS NUMERIC(20,2))
+   WHEN 2 THEN CAST(255 AS TINYINT)
+END AS Result
+GO
+
+-- Test Case 19: NUMERIC and REAL
+select 1.00 * CASE 1
+   WHEN 1 THEN CAST(1.23 AS NUMERIC(20,2))
+   WHEN 2 THEN CAST(3.14 AS REAL)
+END AS Result
+GO
+
+-- Test Case 20: NUMERIC and NCHAR
+select 1.00 * CASE 1 
+   WHEN 1 THEN CAST(1.23 AS NUMERIC(20,2)) 
+   WHEN 2 THEN CAST(N'A' AS NCHAR(1)) 
+END AS Result 
+GO
+
+-- Create UDTs
+CREATE TYPE NumericType_BABEL_5890 FROM NUMERIC(20,2);
+GO
+
+CREATE TYPE DecimalType_BABEL_5890 FROM DECIMAL(18,4);
+GO
+
+CREATE TYPE BigNumericType_BABEL_5890 FROM NUMERIC(38,10);
+GO
+
+CREATE TYPE SmallDecimalType_BABEL_5890 FROM DECIMAL(5,2);
+GO
+
+-- Test Case 21: Basic CASE with all UDTs
+select 1.00 * CASE 4
+   WHEN 1 THEN CAST(12345.6789 AS NumericType_BABEL_5890)
+   WHEN 2 THEN CAST(98765.4321 AS DecimalType_BABEL_5890)
+   WHEN 3 THEN CAST(1234567.8901234567890 AS BigNumericType_BABEL_5890)
+   WHEN 4 THEN CAST(99.99 AS SmallDecimalType_BABEL_5890)
+   ELSE CAST(0 AS NumericType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 22: CASE with UDTs and different precisions
+select 1.00 * CASE 3
+   WHEN 1 THEN CAST(12345.6789 AS NumericType_BABEL_5890)
+   WHEN 2 THEN CAST(98765.4321 AS DecimalType_BABEL_5890)
+   WHEN 3 THEN CAST(1234567890123456.7890123456 AS BigNumericType_BABEL_5890)
+   WHEN 4 THEN CAST(99.99 AS SmallDecimalType_BABEL_5890)
+   ELSE CAST(0 AS DecimalType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 23: CASE with UDTs and mathematical operations
+select 1.00 * CASE 2
+   WHEN 1 THEN CAST(12345.6789 * 2 AS NumericType_BABEL_5890)
+   WHEN 2 THEN CAST(98765.4321 / 2 AS DecimalType_BABEL_5890)
+   WHEN 3 THEN CAST(1234567.8901234567890 + 1000 AS BigNumericType_BABEL_5890)
+   WHEN 4 THEN CAST(99.99 - 50 AS SmallDecimalType_BABEL_5890)
+   ELSE CAST(0 AS BigNumericType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 24: CASE with UDTs and rounding
+select 1.00 * CASE 1
+   WHEN 1 THEN CAST(ROUND(12345.6789, 2) AS NumericType_BABEL_5890)
+   WHEN 2 THEN CAST(ROUND(98765.4321, 4) AS DecimalType_BABEL_5890)
+   WHEN 3 THEN CAST(ROUND(1234567.8901234567890, 10) AS BigNumericType_BABEL_5890)
+   WHEN 4 THEN CAST(ROUND(99.99, 1) AS SmallDecimalType_BABEL_5890)
+   ELSE CAST(0 AS SmallDecimalType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 25: CASE with UDTs and type conversion
+select 1.00 * CASE 4
+   WHEN 1 THEN CAST(CAST(12345.6789 AS NumericType_BABEL_5890) AS BigNumericType_BABEL_5890)
+   WHEN 2 THEN CAST(CAST(98765.4321 AS DecimalType_BABEL_5890) AS SmallDecimalType_BABEL_5890)
+   WHEN 3 THEN CAST(CAST(1234567.8901234567890 AS BigNumericType_BABEL_5890) AS NumericType_BABEL_5890)
+   WHEN 4 THEN CAST(CAST(99.99 AS SmallDecimalType_BABEL_5890) AS DecimalType_BABEL_5890)
+   ELSE CAST(0 AS NumericType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 26: CASE with UDTs and potential overflow
+select 1.00 * CASE 3
+   WHEN 1 THEN CAST(9999999999999999.99 AS NumericType_BABEL_5890)
+   WHEN 2 THEN CAST(99999999999999.9999 AS DecimalType_BABEL_5890)
+   WHEN 3 THEN CAST(12345678901234567890.1234567890 AS BigNumericType_BABEL_5890)
+   WHEN 4 THEN CAST(999.99 AS SmallDecimalType_BABEL_5890)
+   ELSE CAST(0 AS BigNumericType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 27: CASE with UDTs and aggregate functions
+select 1.00 * CASE 2
+   WHEN 1 THEN CAST(AVG(CAST(COLUMN_VALUE AS NumericType_BABEL_5890)) AS NumericType_BABEL_5890)
+   WHEN 2 THEN CAST(SUM(CAST(COLUMN_VALUE AS DecimalType_BABEL_5890)) AS DecimalType_BABEL_5890)
+   WHEN 3 THEN CAST(MAX(CAST(COLUMN_VALUE AS BigNumericType_BABEL_5890)) AS BigNumericType_BABEL_5890)
+   WHEN 4 THEN CAST(MIN(CAST(COLUMN_VALUE AS SmallDecimalType_BABEL_5890)) AS SmallDecimalType_BABEL_5890)
+   ELSE CAST(0 AS NumericType_BABEL_5890)
+END AS RESULT
+FROM (VALUES (100), (200), (300)) AS T(COLUMN_VALUE)
+GO
+
+-- Test Case 28: UDTs with INT and BIGINT
+select 1.00 * CASE 3
+   WHEN 1 THEN CAST(12345 AS NumericType_BABEL_5890)
+   WHEN 2 THEN CAST(9876543210 AS BigNumericType_BABEL_5890)
+   WHEN 3 THEN CAST(1000 AS INT)
+   WHEN 4 THEN CAST(9223372036854775807 AS BIGINT)
+   ELSE CAST(0 AS SmallDecimalType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 29: UDTs with FLOAT and REAL
+select 1.00 * CASE 2
+   WHEN 1 THEN CAST(123.45 AS DecimalType_BABEL_5890)
+   WHEN 2 THEN CAST(98765.4321 AS FLOAT)
+   WHEN 3 THEN CAST(1234.56 AS REAL)
+   WHEN 4 THEN CAST(9.87654321 AS NumericType_BABEL_5890)
+   ELSE CAST(0 AS BigNumericType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 30: UDTs with MONEY and SMALLMONEY
+select 1.00 * CASE 4
+   WHEN 1 THEN CAST(12345.67 AS MONEY)
+   WHEN 2 THEN CAST(98.76 AS SMALLMONEY)
+   WHEN 3 THEN CAST(1234.5678 AS DecimalType_BABEL_5890)
+   WHEN 4 THEN CAST(9876.54 AS NumericType_BABEL_5890)
+   ELSE CAST(0 AS SmallDecimalType_BABEL_5890)
+END AS RESULT
+GO
+
+-- Test Case 31: UDTs with VARCHAR and NVARCHAR
+select 1.00 * CASE 3
+   WHEN 1 THEN CAST(CAST('12345.67' AS VARCHAR(20)) AS NumericType_BABEL_5890)
+   WHEN 2 THEN CAST(CAST(N'98765.4321' AS NVARCHAR(20)) AS DecimalType_BABEL_5890)
+   WHEN 3 THEN CAST('1234567.8901' AS BigNumericType_BABEL_5890)
+   WHEN 4 THEN CAST(N'99.99' AS SmallDecimalType_BABEL_5890)
+   ELSE CAST(0 AS NumericType_BABEL_5890)
+END AS RESULT
+GO
+
+DROP TYPE NumericType_BABEL_5890;
+GO
+
+DROP TYPE DecimalType_BABEL_5890;
+GO
+
+DROP TYPE BigNumericType_BABEL_5890;
+GO
+
+DROP TYPE SmallDecimalType_BABEL_5890;
+GO
+
+DROP TABLE BABEL_5890_T1;
+GO
+
+-- Test Case 1: Basic DECIMAL types with same precision, different scales
+SELECT 1.00 * CASE 1
+   WHEN 1 THEN CAST(123.45 AS DECIMAL(5,2))
+   WHEN 2 THEN CAST(123.4 AS DECIMAL(5,1))
+   WHEN 3 THEN CAST(123 AS DECIMAL(5,0))
+   ELSE CAST(0 AS DECIMAL(5,2))
+END AS RESULT
+INTO test_case_babel_5890_1;
+GO
+
+-- Test Case 2: Different precisions, same scale
+SELECT 1.00 * CASE 2
+   WHEN 1 THEN CAST(12.34 AS DECIMAL(4,2))
+   WHEN 2 THEN CAST(123.45 AS DECIMAL(5,2))
+   WHEN 3 THEN CAST(1234.56 AS DECIMAL(6,2))
+   WHEN 4 THEN CAST(12345.67 AS DECIMAL(7,2))
+   ELSE CAST(0.00 AS DECIMAL(4,2))
+END AS RESULT
+INTO test_case_babel_5890_2;
+GO
+
+-- Test Case 3: NUMERIC vs DECIMAL comparison
+SELECT 1.00 * CASE 1
+   WHEN 1 THEN CAST(123.456 AS NUMERIC(6,3))
+   WHEN 2 THEN CAST(123.456 AS DECIMAL(6,3))
+   WHEN 3 THEN CAST(123.45 AS NUMERIC(5,2))
+   WHEN 4 THEN CAST(123.45 AS DECIMAL(5,2))
+   ELSE CAST(0 AS NUMERIC(6,3))
+END AS RESULT
+INTO test_case_babel_5890_3;
+GO
+
+-- Test Case 4: Zero and NULL handling
+SELECT 1.00 / CASE 3
+   WHEN 1 THEN CAST(123.45 AS DECIMAL(8,2))
+   WHEN 2 THEN CAST(0.00 AS DECIMAL(8,2))
+   WHEN 3 THEN NULL
+   WHEN 4 THEN CAST(-123.45 AS DECIMAL(8,2))
+   ELSE CAST(999.99 AS DECIMAL(8,2))
+END AS RESULT
+INTO test_case_babel_5890_4;
+GO
+
+-- Test Case 5: Zero and NULL handling
+SELECT 1.00 * CASE 3
+   WHEN 1 THEN CAST(123.45 AS DECIMAL(8,2))
+   WHEN 2 THEN CAST(0.00 AS DECIMAL(8,2))
+   WHEN 3 THEN NULL
+   WHEN 4 THEN CAST(-123.45 AS DECIMAL(8,2))
+   ELSE CAST(999.99 AS DECIMAL(8,2))
+END AS RESULT
+INTO test_case_babel_5890_5;
+GO
+
+-- Test Case 6: High precision numbers
+SELECT 1.00 * CASE 1
+   WHEN 1 THEN CAST(123456789.123456789 AS DECIMAL(18,9))
+   WHEN 2 THEN CAST(987654321.987654321 AS NUMERIC(18,9))
+   WHEN 3 THEN CAST(555555555.555555555 AS DECIMAL(18,9))
+   ELSE CAST(0.000000001 AS DECIMAL(18,9))
+END AS RESULT
+INTO test_case_babel_5890_6;
+GO
+
+-- Test Case 7: Small scale variations
+SELECT 1.00 * CASE 2
+   WHEN 1 THEN CAST(12345.6 AS DECIMAL(6,1))
+   WHEN 2 THEN CAST(12345.67 AS DECIMAL(7,2))
+   WHEN 3 THEN CAST(12345.678 AS DECIMAL(8,3))
+   WHEN 4 THEN CAST(12345.6789 AS DECIMAL(9,4))
+   ELSE CAST(0.0 AS DECIMAL(6,1))
+END AS RESULT
+INTO test_case_babel_5890_7;
+GO
+
+-- Test Case 8: Edge case - Maximum SQL Server precision
+SELECT 1.00 / CASE 1
+   WHEN 1 THEN CAST(12345678901234567890123456789012345678.0 AS DECIMAL(38,1))
+   WHEN 2 THEN CAST(1234567890123456789012345678901234567.89 AS DECIMAL(38,2))
+   ELSE CAST(0.0 AS DECIMAL(38,1))
+END AS RESULT
+INTO test_case_babel_5890_8;
+GO
+
+-- Test Case 9: Negative numbers with different scales
+SELECT 1.00 / CASE 4
+   WHEN 1 THEN CAST(-123.4 AS DECIMAL(4,1))
+   WHEN 2 THEN CAST(-123.45 AS DECIMAL(5,2))
+   WHEN 3 THEN CAST(-123.456 AS DECIMAL(6,3))
+   WHEN 4 THEN CAST(-123.4567 AS DECIMAL(7,4))
+   ELSE CAST(-0.1 AS DECIMAL(4,1))
+END AS RESULT
+INTO test_case_babel_5890_9;
+GO
+
+-- Test Case 10: Different scales within the same precision
+SELECT 1.00 / CASE 2
+   WHEN 1 THEN CAST(12345.6789 AS DECIMAL(10,4))
+   WHEN 2 THEN CAST(98765.43 AS DECIMAL(10,2))
+   WHEN 3 THEN CAST(123456.7 AS DECIMAL(10,1))
+   WHEN 4 THEN CAST(1234567 AS DECIMAL(10,0))
+   ELSE CAST(0 AS DECIMAL(10,4))
+END AS RESULT
+INTO test_case_babel_5890_10;
+GO
+
+-- Query INFORMATION_SCHEMA for all test cases
+SELECT 
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME LIKE 'test_case_babel_5890_%'
+ORDER BY TABLE_NAME;
+GO
+
+-- Clean up all test tables
+DROP TABLE IF EXISTS test_case_babel_5890_1;
+DROP TABLE IF EXISTS test_case_babel_5890_2;
+DROP TABLE IF EXISTS test_case_babel_5890_3;
+DROP TABLE IF EXISTS test_case_babel_5890_4;
+DROP TABLE IF EXISTS test_case_babel_5890_5;
+DROP TABLE IF EXISTS test_case_babel_5890_6;
+DROP TABLE IF EXISTS test_case_babel_5890_7;
+DROP TABLE IF EXISTS test_case_babel_5890_8;
+DROP TABLE IF EXISTS test_case_babel_5890_9;
+DROP TABLE IF EXISTS test_case_babel_5890_10;
+GO
+
+CREATE FUNCTION GetNumericValue_BABEL_5980()
+RETURNS NUMERIC(24,6)
+AS
+BEGIN
+    DECLARE @result NUMERIC(24,6)
+    SET @result = 123456.123456
+    RETURN @result
+END
+GO
+
+SELECT CAST(
+    GetNumericValue_BABEL_5980() 
+    /
+    (CASE WHEN 1<0
+       THEN 1
+       ELSE datediff(dd, '2000-01-01', '2023-12-31')
+    END)
+    AS DECIMAL(24,6)) AS datediff_col,
+    CAST(
+        GetNumericValue_BABEL_5980() 
+        /
+        (CASE WHEN 1<0
+            THEN 1
+            ELSE ISNUMERIC(356.87)
+        END)
+        AS NUMERIC(24,6)) AS isnumeric_col,
+    CAST(
+        GetNumericValue_BABEL_5980() 
+        /
+        (CASE WHEN 1<0
+            THEN 1
+            ELSE UNICODE(N'Test String 1')
+        END)
+        AS NUMERIC(24,6)) AS UNICODE_col,
+    CAST(
+        GetNumericValue_BABEL_5980() 
+        /
+        (CASE WHEN 1<0
+            THEN 1
+            ELSE FLOOR(4)
+        END)
+        AS NUMERIC(24,6)) AS floor_col,
+    CAST(
+        GetNumericValue_BABEL_5980() 
+        /
+        (CASE WHEN 1<0
+            THEN 1
+            ELSE CEILING(46)
+        END)
+        AS NUMERIC(24,6)) AS ceiling_col
+INTO test_case_babel_5980_function_1;
+GO
+
+SELECT 
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME LIKE 'test_case_babel_5980_function_1'
+ORDER BY COLUMN_NAME;
+GO
+
+SELECT
+    1.00 * CEILING(46) AS ceiling_col_2,
+    1.00 * FLOOR(4) AS floor_col_2,
+    1.00 * UNICODE(N'Test String 1') AS UNICODE_col_2,
+    1.00 * ISNUMERIC(356.87) AS isnumeric_col_2,
+    1.00 * DATEDIFF(dd, '2000-01-01', '2023-12-31') AS datediff_col_2,
+    1.00 / CEILING(46) AS ceiling_col_3,
+    1.00 / FLOOR(4) AS floor_col_3,
+    1.00 / UNICODE(N'Test String 1') AS UNICODE_col_3,
+    1.00 / ISNUMERIC(356.87) AS isnumeric_col_3,
+    1.00 / DATEDIFF(dd, '2000-01-01', '2023-12-31') AS datediff_col_3
+INTO test_case_babel_5980_function_2;
+GO
+
+SELECT 
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME LIKE 'test_case_babel_5980_function_2'
+ORDER BY COLUMN_NAME;
+GO
+
+DROP FUNCTION GetNumericValue_BABEL_5980;
+GO
+
+DROP TABLE IF EXISTS test_case_babel_5980_function_1;
+GO
+
+DROP TABLE IF EXISTS test_case_babel_5980_function_2;
+GO
+
+SELECT CAST(CAST(12.34 AS DECIMAL(5,2)) AS DECIMAL(5,4));
+GO
+
+SELECT CAST(CAST(12.34 AS NUMERIC(5,2)) AS NUMERIC(5,4));
+GO
+
+SELECT CAST(CAST(1.34 AS DECIMAL(5,2)) AS DECIMAL(5,4));
+GO
+
+SELECT CAST(CAST(1.34 AS NUMERIC(5,2)) AS NUMERIC(5,4));
+GO
+
+SELECT CAST(CAST(123456789.123456789 AS DECIMAL(18,9)) AS DECIMAL(18,6));
+GO
+
+SELECT CAST(CAST(123456789.123456789 AS NUMERIC(18,9)) AS NUMERIC(18,6));
+GO
+
+SELECT CAST(CAST(CAST(12.34 AS DECIMAL(5,2)) AS DECIMAL(5,4)) AS DECIMAL(5,2));
+GO
+
+SELECT CAST(CAST(CAST(12.34 AS NUMERIC(5,2)) AS NUMERIC(5,4)) AS NUMERIC(5,2));
+GO
+
+SELECT CAST(CAST(CAST(1.34 AS DECIMAL(5,2)) AS DECIMAL(5,4)) AS DECIMAL(5,1));
+GO
+
+SELECT CAST(CAST(CAST(1.34 AS NUMERIC(5,2)) AS NUMERIC(5,4)) AS NUMERIC(5,1));
+GO
+
+SELECT CAST(CAST(CAST(123456789.123456789 AS DECIMAL(18,9)) AS DECIMAL(18,6)) AS DECIMAL(18,3));
+GO
+
+SELECT CAST(CAST(CAST(123456789.123456789 AS NUMERIC(18,9)) AS NUMERIC(18,6)) AS NUMERIC(18,3));
+GO
+
+SELECT CAST(CAST(CAST(CAST(12.34 AS DECIMAL(5,2)) AS DECIMAL(5,4)) AS DECIMAL(5,2)) AS DECIMAL(5,1));
+GO
+
+SELECT CAST(CAST(CAST(CAST(12.34 AS NUMERIC(5,2)) AS NUMERIC(5,4)) AS NUMERIC(5,2)) AS NUMERIC(5,1));
+GO
+
+SELECT CAST(CAST(CAST(CAST(1.34 AS DECIMAL(5,2)) AS DECIMAL(5,4)) AS DECIMAL(5,1)) AS DECIMAL(5,3));
+GO
+
+SELECT CAST(CAST(CAST(CAST(1.34 AS NUMERIC(5,2)) AS NUMERIC(5,4)) AS NUMERIC(5,1)) AS NUMERIC(5,3));
+GO
+
+SELECT CAST(CAST(CAST(CAST(123456789.123456789 AS DECIMAL(18,9)) AS DECIMAL(18,6)) AS DECIMAL(18,3)) AS DECIMAL(18,1));
+GO
+
+SELECT CAST(CAST(CAST(CAST(123456789.123456789 AS NUMERIC(18,9)) AS NUMERIC(18,6)) AS NUMERIC(18,3)) AS NUMERIC(18,1));
+GO
+
+-- Test ROUND function
+SELECT ROUND(123.456, 2) * 1.00;
+GO
+
+SELECT ROUND(123.456, 0) * 1.00;
+GO
+
+SELECT ROUND(123.456, -1) * 1.00;
+GO
+
+SELECT ROUND(1.2, 2) * CAST(1 AS DECIMAL(5,2));
+GO
+
+SELECT ROUND(1.2, 2) * CAST(1 AS DECIMAL(10,4));
+GO
+
+SELECT ROUND(cast(12 as int), 2);
+GO
+
+SELECT ROUND(cast(12 as smallint), 2);
+GO
+
+SELECT ROUND(cast(12 as bigint), 2);
+GO
+
+SELECT ROUND(cast(12 as tinyint), 2);
+GO
+
+SELECT ROUND(cast(12 as money), 2);
+GO
+
+SELECT ROUND(cast(12 as smallmoney), 2);
+GO
+
+SELECT 'INT' as Type, ROUND(CAST(123 AS INT), 2) * 1.00;
+GO
+SELECT 'BIGINT' as Type, ROUND(CAST(123 AS BIGINT), 2) * 1.00;
+GO
+SELECT 'TINYINT' as Type, ROUND(CAST(123 AS TINYINT), 2) * 1.00;
+GO
+SELECT 'SMALLINT' as Type, ROUND(CAST(123 AS SMALLINT), 2) * 1.00;
+GO
+
+SELECT 'INT' as Type, ROUND(CAST(123 AS INT), 2);
+GO
+SELECT 'BIGINT' as Type, ROUND(CAST(123 AS BIGINT), 2);
+GO
+SELECT 'TINYINT' as Type, ROUND(CAST(123 AS TINYINT), 2);
+GO
+SELECT 'SMALLINT' as Type, ROUND(CAST(123 AS SMALLINT), 2);
+GO
+
+-- Money types
+SELECT 'MONEY' as Type, ROUND(CAST(123.456 AS MONEY), 2) * 1.00;
+GO
+SELECT 'SMALLMONEY' as Type, ROUND(CAST(123.456 AS SMALLMONEY), 2) * 1.00;
+GO
+
+SELECT 'MONEY' as Type, ROUND(CAST(123.456 AS MONEY), 2);
+GO
+SELECT 'SMALLMONEY' as Type, ROUND(CAST(123.456 AS SMALLMONEY), 2);
+GO
+
+-- Bit type
+SELECT 'BIT' as Type, ROUND(CAST(1 AS BIT), 2) * 1.00;
+GO
+SELECT 'BIT' as Type, ROUND(CAST(0 AS BIT), 2) * 1.00;
+GO
+
+SELECT 'BIT' as Type, ROUND(CAST(1 AS BIT), 2);
+GO
+SELECT 'BIT' as Type, ROUND(CAST(0 AS BIT), 2);
+GO
+
+-- Testing different decimal places
+SELECT 'INT with -1' as Type, ROUND(CAST(123 AS INT), -1) * 1.00;
+GO
+SELECT 'MONEY with -1' as Type, ROUND(CAST(123.456 AS MONEY), -1) * 1.00;
+GO
+SELECT 'INT with -1' as Type, ROUND(CAST(123 AS INT), -1);
+GO
+SELECT 'MONEY with -1' as Type, ROUND(CAST(123.456 AS MONEY), -1);
+GO
+
+-- Testing with larger numbers
+SELECT 'BIGINT Large' as Type, ROUND(CAST(9223372036854775807 AS BIGINT), 2) * 1.00;
+GO
+SELECT 'BIGINT Large' as Type, ROUND(CAST(9223372036854775807 AS BIGINT), 2);
+GO
+
+-- Testing with different multipliers
+SELECT 'INT' as Type, ROUND(CAST(123 AS INT), 2) * CAST(1 AS DECIMAL(5,2));
+GO
+SELECT 'MONEY' as Type, ROUND(CAST(123.456 AS MONEY), 2) * CAST(1 AS DECIMAL(10,4));
+GO
+
+-- Testing negative numbers
+SELECT 'INT Negative' as Type, ROUND(CAST(-123 AS INT), 2) * 1.00;
+GO
+SELECT 'MONEY Negative' as Type, ROUND(CAST(-123.456 AS MONEY), 2) * 1.00;
+GO
+
+-- Testing NULL values
+SELECT 'NULL' as Type, ROUND(CAST(NULL AS INT), 2) * 1.00;
+GO
+SELECT 'NULL' as Type, ROUND(CAST(NULL AS MONEY), 2) * 1.00;
+GO
+
+-- Testing edge cases
+SELECT 'TINYINT Max' as Type, ROUND(CAST(255 AS TINYINT), 2) * 1.00;
+GO
+SELECT 'SMALLINT Max' as Type, ROUND(CAST(32767 AS SMALLINT), 2) * 1.00;
+GO
+SELECT 'INT Max' as Type, ROUND(CAST(2147483647 AS INT), 2) * 1.00;
+GO
+
+SELECT 'TINYINT Max' as Type, ROUND(CAST(255 AS TINYINT), 2);
+GO
+SELECT 'SMALLINT Max' as Type, ROUND(CAST(32767 AS SMALLINT), 2);
+GO
+SELECT 'INT Max' as Type, ROUND(CAST(2147483647 AS INT), 2);
+GO
+
+-- Testing different rounding positions
+SELECT 'MONEY Different Positions' as Type, 
+    ROUND(CAST(123.456 AS MONEY), 3) * 1.00 as [3_decimals],
+    ROUND(CAST(123.456 AS MONEY), 1) * 1.00 as [1_decimal],
+    ROUND(CAST(123.456 AS MONEY), 0) * 1.00 as [0_decimals],
+    ROUND(CAST(123.456 AS MONEY), -2) * 1.00 as [minus_2];
+GO
+
+GO
+-- Create source data with ROUND results
+SELECT 
+    ROUND(CAST(123.456 AS DECIMAL(10,4)), 2) * 1.00 as decimal_round,
+    ROUND(CAST(123.456 AS NUMERIC(10,4)), 2) * 1.00 as numeric_round,
+    ROUND(CAST(123.456 AS MONEY), 2) * 1.00 as money_round,
+    ROUND(CAST(123.456 AS FLOAT), 2) * 1.00 as float_round,
+    ROUND(CAST(123.456 AS REAL), 2) * 1.00 as real_round,
+    ROUND(CAST(123 AS INT), 2) * 1.00 as int_round,
+    ROUND(CAST(123 AS BIGINT), 2) * 1.00 as bigint_round,
+    ROUND(CAST(123 AS SMALLINT), 2) * 1.00 as smallint_round,
+    ROUND(CAST(123 AS TINYINT), 2) * 1.00 as tinyint_round
+INTO RoundResults;
+GO
+
+-- Query INFORMATION_SCHEMA.COLUMNS for the results
+SELECT 
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'RoundResults'
+ORDER BY ORDINAL_POSITION;
+GO
+
+-- Clean up
+DROP TABLE RoundResults;
+GO
+
+-- Test with different multipliers
+SELECT 
+    ROUND(CAST(123.456 AS DECIMAL(10,4)), 2) * CAST(1 AS DECIMAL(5,2)) as decimal_round,
+    ROUND(CAST(123.456 AS NUMERIC(10,4)), 2) * CAST(1 AS DECIMAL(10,4)) as numeric_round,
+    ROUND(CAST(123.456 AS MONEY), 2) * CAST(1 AS DECIMAL(15,6)) as money_round
+INTO RoundResultsWithMultipliers;
+GO
+
+-- Query INFORMATION_SCHEMA.COLUMNS for the results with multipliers
+SELECT 
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'RoundResultsWithMultipliers'
+ORDER BY ORDINAL_POSITION;
+GO
+
+-- Clean up
+DROP TABLE RoundResultsWithMultipliers;
+GO
+
+-- Test with different rounding positions
+SELECT 
+    ROUND(CAST(123.456 AS DECIMAL(10,4)), 3) * 1.00 as decimal_round_3,
+    ROUND(CAST(123.456 AS DECIMAL(10,4)), 1) * 1.00 as decimal_round_1,
+    ROUND(CAST(123.456 AS DECIMAL(10,4)), 0) * 1.00 as decimal_round_0,
+    ROUND(CAST(123.456 AS DECIMAL(10,4)), -1) * 1.00 as decimal_round_minus_1
+INTO RoundResultsPositions;
+GO
+
+-- Query INFORMATION_SCHEMA.COLUMNS for different rounding positions
+SELECT 
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'RoundResultsPositions'
+ORDER BY ORDINAL_POSITION;
+GO
+
+-- Clean up
+DROP TABLE RoundResultsPositions;
+GO
+
+-- Test with NULL values and extreme numbers
+SELECT 
+    ROUND(CAST(NULL AS DECIMAL(10,4)), 2) * 1.00 as null_round,
+    ROUND(CAST(9999999.999999 AS NUMERIC(15,6)), 2) * 1.00 as large_decimal_round,
+    ROUND(CAST(-9999999.999999 AS NUMERIC(15,6)), 2) * 1.00 as negative_large_decimal_round
+INTO RoundResultsEdgeCases;
+GO
+
+-- Query INFORMATION_SCHEMA.COLUMNS for edge cases
+SELECT 
+    TABLE_NAME,
+    COLUMN_NAME,
+    DATA_TYPE,
+    NUMERIC_PRECISION,
+    NUMERIC_SCALE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'RoundResultsEdgeCases'
+ORDER BY ORDINAL_POSITION;
+GO
+
+-- Clean up
+DROP TABLE RoundResultsEdgeCases;
+GO
+
+-- cx query
+DROP TABLE IF EXISTS #Smr_97deeb4d15ea4fb4a1d44eeac24573c9_Averages
+GO
+
+CREATE TABLE #Smr_97deeb4d15ea4fb4a1d44eeac24573c9_Averages  (
+    [accid] VARCHAR(50) NOT NULL,
+    [acctyp] VARCHAR(10) NOT NULL,
+    [avgatminamo] MONEY NOT NULL,
+    [avgatmincnt] FLOAT NOT NULL,
+    [avgatmoutamo] MONEY NOT NULL,
+    [avgatmoutcnt] FLOAT NOT NULL,
+    [avgatmamo] MONEY NOT NULL,
+    [avgatmcnt] FLOAT NOT NULL,
+    [insnum] INT NOT NULL DEFAULT (0)
+);
+
+INSERT INTO #Smr_97deeb4d15ea4fb4a1d44eeac24573c9_Averages (accid, acctyp, avgatminamo, avgatmincnt, avgatmoutamo, avgatmoutcnt, avgatmamo, avgatmcnt, insnum)
+VALUES 
+('1', 'DDA', 60.00, 3, 60.00, 3, 120.00, 6, 0),
+('2', 'DDA', 20.00, 1, 20.00, 1, 40.00, 2, 0),
+('3', 'DDA', 20.00, 1, 20.00, 1, 40.00, 2, 0),
+('5', 'DDA', 20.00, 1, 20.00, 1, 40.00, 2, 0);
+GO
+
+DROP TABLE IF EXISTS #Smr_3c004f142d4d4e1b8754530db0a35a07_ParamCnt
+GO
+CREATE TABLE #Smr_3c004f142d4d4e1b8754530db0a35a07_ParamCnt ([StDevFldCnt] [decimal](11, 2) NULL);
+GO
+	
+INSERT INTO #Smr_3c004f142d4d4e1b8754530db0a35a07_ParamCnt (StDevFldCnt) 
+SELECT 
+case when round(stdevp([avgatmcnt]),2) is null 
+	then 0.00 else round(stdevp([avgatmcnt]),2) 
+	end
+FROM #Smr_97deeb4d15ea4fb4a1d44eeac24573c9_Averages
+GO
+
+Select 
+	case when round(StDevFldCnt,0) is null then 0.00 else round(StDevFldCnt,0) end
+From #Smr_3c004f142d4d4e1b8754530db0a35a07_ParamCnt
+GO
+
+DROP TABLE IF EXISTS #Smr_97deeb4d15ea4fb4a1d44eeac24573c9_Averages
+GO
+
+DROP TABLE IF EXISTS #Smr_3c004f142d4d4e1b8754530db0a35a07_ParamCnt
+GO

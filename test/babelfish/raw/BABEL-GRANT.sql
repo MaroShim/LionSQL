@@ -1,0 +1,514 @@
+DROP VIEW IF EXISTS my_view;
+GO
+
+DROP TABLE IF EXISTS t1;
+GO
+
+DROP SEQUENCE IF EXISTS seq_tinyint;
+GO
+
+DROP FUNCTION IF EXISTS my_func;
+GO
+
+DROP PROCEDURE IF EXISTS my_proc;
+GO
+
+DROP TYPE IF EXISTS type_int;
+GO
+
+DROP USER IF EXISTS [babel-6067-u1];
+GO
+
+IF EXISTS (SELECT * FROM sys.server_principals WHERE name = 'babel-6067-l1')
+BEGIN
+    DROP LOGIN [babel-6067-l1];
+END
+GO
+
+---
+---  Prepare Objects
+---
+
+---- SCHEMA
+CREATE SCHEMA scm;
+GO
+
+create SCHEMA scm2;
+GO
+
+CREATE LOGIN [babel-6067-l1] WITH PASSWORD = '12345678'
+GO
+
+CREATE USER [babel-6067-u1] FOR LOGIN [babel-6067-l1]
+GO
+
+---- TABLE
+CREATE TABLE t1 ( a int, b int);
+GO
+
+INSERT INTO t1 VALUES (1,2);
+GO
+
+---- SEQUENCE
+CREATE SEQUENCE seq_tinyint
+AS [tinyint]
+START WITH 1
+INCREMENT BY 1
+CACHE  50
+GO
+
+---- VIEW
+CREATE VIEW my_view AS SELECT * FROM t1;
+GO
+
+--- FUNCTION
+CREATE FUNCTION my_func() RETURNS INT AS BEGIN RETURN 1; END;
+GO
+
+--- STORED PROCEDURE
+CREATE PROCEDURE my_proc AS BEGIN SELECT 111; END;
+GO
+
+--- TYPE
+CREATE TYPE type_int FROM INT NOT NULL;
+GO
+
+---
+---  Basic Grant / Revoke
+---
+
+GRANT SELECT ON SCHEMA::scm TO guest;
+GO
+
+GRANT SELECT ON SCHEMA::scm TO PUBLIC;
+GO
+
+REVOKE SELECT ON SCHEMA::scm FROM PUBLIC;
+GO
+
+GRANT INSERT ON SCHEMA::scm TO guest;
+GO
+
+GRANT ALL ON OBJECT::t1 TO guest WITH GRANT OPTION;
+GO
+
+GRANT ALL ON OBJECT::t1 TO PUBLIC;
+GO
+
+REVOKE ALL ON OBJECT::t1 FROM PUBLIC;
+GO
+
+GRANT ALL ON OBJECT::seq_tinyint TO guest WITH GRANT OPTION;
+GO
+
+GRANT ALL ON OBJECT::my_view TO guest WITH GRANT OPTION;
+GO
+
+GRANT ALL ON OBJECT::my_func TO guest WITH GRANT OPTION;
+GO
+
+GRANT EXECUTE ON OBJECT::my_func TO PUBLIC;
+GO
+
+REVOKE EXECUTE ON OBJECT::my_func FROM PUBLIC;
+GO
+
+GRANT ALL ON OBJECT::my_proc TO guest WITH GRANT OPTION;
+GO
+
+GRANT ALL ON OBJECT::type_int TO guest WITH GRANT OPTION;
+GO
+
+REVOKE ALL ON OBJECT::t1 TO guest;
+GO
+
+REVOKE ALL ON OBJECT::seq_tinyint TO guest;
+GO
+
+REVOKE ALL ON OBJECT::my_view TO guest;
+GO
+
+REVOKE ALL ON OBJECT::my_func TO guest;
+GO
+
+REVOKE ALL ON OBJECT::my_proc TO guest;
+GO
+
+REVOKE ALL ON OBJECT::type_int TO guest;
+GO
+
+REVOKE ALL ON OBJECT::my_func FROM PUBLIC;
+GO
+
+REVOKE ALL ON OBJECT::my_proc FROM PUBLIC;
+GO
+
+REVOKE ALL ON OBJECT::type_int FROM PUBLIC;
+GO
+
+GRANT SELECT ON t1 (a) TO guest;
+GO
+
+REVOKE SELECT ON t1 (a) TO guest;
+GO
+
+GRANT SELECT (a) ON t1 TO guest WITH GRANT OPTION;
+GO
+
+REVOKE GRANT OPTION FOR SELECT (a) ON t1 FROM guest;
+GO
+
+GRANT UPDATE ON t1 (a) TO guest;
+GO
+
+REVOKE UPDATE ON t1 (a) TO guest;
+GO
+
+GRANT UPDATE (a) ON t1 TO guest WITH GRANT OPTION;
+GO
+
+REVOKE GRANT OPTION FOR UPDATE (a) ON t1 FROM guest;
+GO
+
+GRANT SELECT,INSERT,UPDATE,DELETE,EXECUTE ON SCHEMA::scm2 TO [babel-6067-u1];
+GO
+
+-- Validate create procedure grants proc permission to username having hypens like babel-6067-u1
+CREATE PROCEDURE scm2.babel_6067_p1 AS SELECT 'Hello';
+GO
+
+--- 
+---  Unsupported cases
+---
+GRANT ALL TO alogin;  -- database permission
+GO
+
+REVOKE ALL TO alogin; -- database permission
+GO
+
+REVOKE SELECT ON SCHEMA::scm FROM guest;
+GO
+
+GRANT showplan ON OBJECT::t1 TO guest;  -- unsupported permission
+GO
+
+REVOKE SHOWPLAN ON OBJECT::t2 TO alogin;  -- unsupported permission
+GO
+
+GRANT ALL ON SCHEMA::scm TO guest;
+GO
+
+REVOKE ALL ON SCHEMA::scm TO guest;
+GO
+
+GRANT create table ON OBJECT::t1 TO guest;  -- unsupported permission
+GO
+
+REVOKE create table ON OBJECT::t2 FROM alogin;  -- unsupported permission
+GO
+
+GRANT SELECT ON table::t1 TO guest; -- unsupported object
+GO
+
+REVOKE SELECT ON table::t1 FROM guest; -- unsupported object
+GO
+
+GRANT ALL ON OBJECT::t1 TO guest WITH GRANT OPTION AS superuser;
+GO
+
+GRANT SELECT ON t1 TO PUBLIC;
+GO
+
+REVOKE SELECT ON t1 FROM PUBLIC;
+GO
+
+GRANT EXECUTE ON my_func TO PUBLIC;
+GO
+
+REVOKE EXECUTE ON my_func FROM PUBLIC;
+GO
+
+REVOKE ALL ON OBJECT::t1 TO guest AS superuser;
+GO
+
+---
+---  Check for supported and unsupported GRANT syntax
+---
+
+GRANT EXECUTE ON APPLICATION ROLE::test TO public;
+GO
+
+GRANT EXECUTE ON ASSEMBLY::test TO public;
+GO
+
+GRANT EXECUTE ON ASYMMETRIC KEY::test TO public;
+GO
+
+GRANT EXECUTE ON AVAILABILITY GROUP::test TO public;
+GO
+
+GRANT EXECUTE ON CERTIFICATE::test TO public;
+GO
+
+GRANT EXECUTE ON CONTRACT::test TO public;
+GO
+
+GRANT EXECUTE ON DATABASE::test TO public;
+GO
+
+GRANT EXECUTE ON DATABASE SCOPED CREDENTIAL::test TO public;
+GO
+
+GRANT EXECUTE ON ENDPOINT::test TO public;
+GO
+
+GRANT EXECUTE ON FULLTEXT CATALOG::test TO public;
+GO
+
+GRANT EXECUTE ON FULLTEXT STOPLIST::test TO public;
+GO
+
+GRANT EXECUTE ON LOGIN::test TO public;
+GO
+
+GRANT EXECUTE ON MESSAGE TYPE::test TO public;
+GO
+
+GRANT SELECT ON OBJECT::t1 TO public;
+GO
+
+GRANT EXECUTE ON REMOTE SERVICE BINDING::test TO public;
+GO
+
+GRANT EXECUTE ON ROLE::test TO public;
+GO
+
+GRANT EXECUTE ON ROUTE::test TO public;
+GO
+
+GRANT EXECUTE ON SCHEMA::scm TO public;
+GO
+
+GRANT EXECUTE ON SEARCH PROPERTY LIST::test TO public;
+GO
+
+GRANT EXECUTE ON SERVER ROLE::test TO public;
+GO
+
+GRANT EXECUTE ON SERVICE::test TO public;
+GO
+
+GRANT EXECUTE ON SYMMETRIC KEY::test TO public;
+GO
+
+GRANT EXECUTE ON TYPE::test TO public;
+GO
+
+GRANT EXECUTE ON USER::test TO public;
+GO
+
+GRANT EXECUTE ON XML SCHEMA COLLECTION::scm TO public;
+GO
+
+GRANT EXECUTE ON scm2.babel_6067_p1 TO [babel-6067-u1];
+GO
+
+---
+---  Check for supported and unsupported REVOKE syntax
+---
+
+REVOKE EXECUTE ON APPLICATION ROLE::test TO public;
+GO
+
+REVOKE EXECUTE ON ASSEMBLY::test TO public;
+GO
+
+REVOKE EXECUTE ON ASYMMETRIC KEY::test TO public;
+GO
+
+REVOKE EXECUTE ON AVAILABILITY GROUP::test TO public;
+GO
+
+REVOKE EXECUTE ON CERTIFICATE::test TO public;
+GO
+
+REVOKE EXECUTE ON CONTRACT::test TO public;
+GO
+
+REVOKE EXECUTE ON DATABASE::test TO public;
+GO
+
+REVOKE EXECUTE ON DATABASE SCOPED CREDENTIAL::test TO public;
+GO
+
+REVOKE EXECUTE ON ENDPOINT::test TO public;
+GO
+
+REVOKE EXECUTE ON FULLTEXT CATALOG::test TO public;
+GO
+
+REVOKE EXECUTE ON FULLTEXT STOPLIST::test TO public;
+GO
+
+REVOKE EXECUTE ON LOGIN::test TO public;
+GO
+
+REVOKE EXECUTE ON MESSAGE TYPE::test TO public;
+GO
+
+REVOKE SELECT ON OBJECT::t1 TO public;
+GO
+
+REVOKE EXECUTE ON REMOTE SERVICE BINDING::test TO public;
+GO
+
+REVOKE EXECUTE ON ROLE::test TO public;
+GO
+
+REVOKE EXECUTE ON ROUTE::test TO public;
+GO
+
+REVOKE EXECUTE ON SCHEMA::scm TO public;
+GO
+
+REVOKE EXECUTE ON SEARCH PROPERTY LIST::test TO public;
+GO
+
+REVOKE EXECUTE ON SERVER ROLE::test TO public;
+GO
+
+REVOKE EXECUTE ON SERVICE::test TO public;
+GO
+
+REVOKE EXECUTE ON SYMMETRIC KEY::test TO public;
+GO
+
+REVOKE EXECUTE ON TYPE::test TO public;
+GO
+
+REVOKE EXECUTE ON USER::test TO public;
+GO
+
+REVOKE EXECUTE ON XML SCHEMA COLLECTION::scm TO public;
+GO
+
+REVOKE EXECUTE ON SCHEMA::scm2 TO [babel-6067-u1];
+GO
+
+---
+---  Check for supported and unsupported DENY syntax
+---
+
+DENY EXECUTE ON APPLICATION ROLE::test TO public;
+GO
+
+DENY EXECUTE ON ASSEMBLY::test TO public;
+GO
+
+DENY EXECUTE ON ASYMMETRIC KEY::test TO public;
+GO
+
+DENY EXECUTE ON AVAILABILITY GROUP::test TO public;
+GO
+
+DENY EXECUTE ON CERTIFICATE::test TO public;
+GO
+
+DENY EXECUTE ON CONTRACT::test TO public;
+GO
+
+DENY EXECUTE ON DATABASE::test TO public;
+GO
+
+DENY EXECUTE ON DATABASE SCOPED CREDENTIAL::test TO public;
+GO
+
+DENY EXECUTE ON ENDPOINT::test TO public;
+GO
+
+DENY EXECUTE ON FULLTEXT CATALOG::test TO public;
+GO
+
+DENY EXECUTE ON FULLTEXT STOPLIST::test TO public;
+GO
+
+DENY EXECUTE ON LOGIN::test TO public;
+GO
+
+DENY EXECUTE ON MESSAGE TYPE::test TO public;
+GO
+
+DENY SELECT ON OBJECT::t1 TO public;
+GO
+
+DENY EXECUTE ON REMOTE SERVICE BINDING::test TO public;
+GO
+
+DENY EXECUTE ON ROLE::test TO public;
+GO
+
+DENY EXECUTE ON ROUTE::test TO public;
+GO
+
+DENY EXECUTE ON SCHEMA::scm TO public;
+GO
+
+DENY EXECUTE ON SEARCH PROPERTY LIST::test TO public;
+GO
+
+DENY EXECUTE ON SERVER ROLE::test TO public;
+GO
+
+DENY EXECUTE ON SERVICE::test TO public;
+GO
+
+DENY EXECUTE ON SYMMETRIC KEY::test TO public;
+GO
+
+DENY EXECUTE ON TYPE::test TO public;
+GO
+
+DENY EXECUTE ON USER::test TO public;
+GO
+
+DENY EXECUTE ON XML SCHEMA COLLECTION::scm TO public;
+GO
+
+---
+---  Clean Up
+---
+DROP PROCEDURE IF EXISTS scm2.babel_6067_p1;
+GO
+
+DROP SCHEMA scm;
+GO
+
+DROP SCHEMA scm2;
+GO
+
+DROP VIEW IF EXISTS my_view;
+GO
+
+DROP TABLE IF EXISTS t1;
+GO
+
+DROP SEQUENCE IF EXISTS seq_tinyint;
+GO
+
+DROP FUNCTION IF EXISTS my_func;
+GO
+
+DROP PROCEDURE IF EXISTS my_proc;
+GO
+
+DROP TYPE IF EXISTS type_int;
+GO
+
+DROP USER IF EXISTS [babel-6067-u1];
+GO
+
+IF EXISTS (SELECT * FROM sys.server_principals WHERE name = 'babel-6067-l1')
+BEGIN
+    DROP LOGIN [babel-6067-l1];
+END
+GO

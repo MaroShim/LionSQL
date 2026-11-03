@@ -1247,19 +1247,32 @@ func (s *Coordinator) execCTE(query string, start time.Time, cs *ClientSession) 
 		}
 
 		// 3. If recursive, iteratively execute recursive step and append new rows
+		// Standard SQL semantics: The recursive query references only the delta (working table) of the previous step.
 		if isRecursive && recSQL != "" && len(res.Rows) > 0 {
-			recSQLWithTemp := replaceIdentOutsideQuotes(recSQL, cte.Name, tempName)
+			workTempName := fmt.Sprintf("%s_work", tempName)
+			tempTableNames = append(tempTableNames, workTempName)
+
+			// Initialize working table with initial base query rows
+			if cs != nil {
+				wSchema, wRows, wRecs := buildCTEEphemeralTable(workTempName, targetCols, res.Columns, res, s.engine, cte.InnerSQL)
+				cs.RegisterEphemeralTable(workTempName, wSchema, wRows, wRecs)
+			}
+
+			recSQLWithWork := replaceIdentOutsideQuotes(recSQL, cte.Name, workTempName)
 			for iter := 0; iter < 100; iter++ {
-				recRes, recErr := s.execSingleStatement(cs, recSQLWithTemp)
+				recRes, recErr := s.execSingleStatement(cs, recSQLWithWork)
 				if recErr != nil || recRes == nil || len(recRes.Rows) == 0 {
 					break
 				}
-				newRows, newRecs := convertBatchToRows(schema, targetCols, res.Columns, recRes, len(res.Rows))
+				newRows, newRecs := convertBatchToRows(schema, targetCols, recRes.Columns, recRes, len(res.Rows))
 				if len(newRows) == 0 {
 					break
 				}
 				if cs != nil {
 					cs.AppendEphemeralRows(tempName, newRows, newRecs)
+					// Update working table to hold ONLY the newly produced delta rows for the next recursive step
+					wSchema, wRows, wRecs := buildCTEEphemeralTable(workTempName, targetCols, recRes.Columns, recRes, s.engine, "")
+					cs.RegisterEphemeralTable(workTempName, wSchema, wRows, wRecs)
 				}
 				res.Rows = append(res.Rows, recRes.Rows...)
 			}

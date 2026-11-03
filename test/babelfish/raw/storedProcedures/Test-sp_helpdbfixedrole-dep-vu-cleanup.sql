@@ -1,0 +1,2 @@
+DROP PROC test_sp_helpdbfixedrole_proc
+GO

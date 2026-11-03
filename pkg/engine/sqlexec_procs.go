@@ -49,6 +49,18 @@ func ParseProcArgs(raw string) (string, []string) {
 		raw = "(" + raw
 	}
 
+	// Strip optional return variable: EXEC @ret = procName or EXEC @ret = sp_executesql
+	if strings.HasPrefix(raw, "@") {
+		eqIdx := strings.Index(raw, "=")
+		if eqIdx != -1 {
+			// Ensure it's not a parameter name assignment like @p = 1
+			candidate := strings.TrimSpace(raw[:eqIdx])
+			if !strings.ContainsAny(candidate, " \t,()") {
+				raw = strings.TrimSpace(raw[eqIdx+1:])
+			}
+		}
+	}
+
 	// Dynamic SQL invocation with parentheses: EXEC ('SELECT ...') or EXEC (@sqlVar)
 	if strings.HasPrefix(raw, "(") && strings.HasSuffix(raw, ")") {
 		inner := strings.TrimSpace(raw[1 : len(raw)-1])
@@ -1010,6 +1022,14 @@ func (s *Coordinator) execProcedureCall(query string, start time.Time, cs *Clien
 	switch procLower {
 	case "sp_executesql":
 		return s.execSpExecuteSQL(args, start, cs, ctx)
+	case "sp_babelfish_configure":
+		// Tolerant virtual No-Op for Babelfish environment configuration
+		return &QueryResult{
+			Success:    true,
+			Command:    "EXEC",
+			DurationUS: time.Since(start).Microseconds(),
+			Messages:   []string{"Babelfish configuration synchronized"},
+		}, nil
 	case "sp_help", "sp_spaceused", "sp_who", "sp_who2", "sp_lock", "sp_rename", "sp_tables", "sp_columns", "sp_pkeys", "sp_fkeys":
 		return s.execBuiltinSystemProc(procLower, args, start, cs)
 	}

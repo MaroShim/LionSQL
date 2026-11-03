@@ -1216,9 +1216,13 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 		defer tx.Rollback()
 	}
 
+	ctx := context.Background()
 	var params map[string]any
 	if cs != nil {
 		cs.Mu.Lock()
+		if cs.QueryCtx != nil {
+			ctx = cs.QueryCtx
+		}
 		params = make(map[string]any, len(cs.Vars)+2)
 		for k, v := range cs.Vars {
 			params[k] = v
@@ -1230,7 +1234,7 @@ func (s *Coordinator) execVDBESelect(cleaned string, start time.Time, cs *Client
 		cs.Mu.Unlock()
 	}
 
-	execRes, err := s.executor.ExecuteInTx(prog, params, tx, nil)
+	execRes, err := s.executor.ExecuteInTxContext(ctx, prog, params, tx, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -1507,8 +1511,12 @@ func (s *Coordinator) execSelect(query string, start time.Time, cs *ClientSessio
 	// 0. Table-less scalar SELECT: e.g. SELECT 1, SELECT current_database(), SELECT @@VERSION
 	if sqlutil.FindTopLevelKeyword(cleaned, "FROM") == -1 {
 		upperClean := strings.ToUpper(cleaned)
-		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean[6:], "SELECT") {
-			if res, err := s.execVDBESelect(cleaned, start, cs); err == nil && res != nil {
+		if !strings.Contains(upperClean, "@@") && !strings.Contains(upperClean, "SCOPE_IDENTITY") && !strings.Contains(upperClean, "OBJECT_ID") && !strings.Contains(upperClean, "OBJECT_NAME") && !strings.Contains(upperClean, "DB_NAME") && !strings.Contains(upperClean, "CURRENT_DATABASE") && !strings.Contains(upperClean[6:], "SELECT") && !strings.Contains(cleaned, "->") {
+			res, err := s.execVDBESelect(cleaned, start, cs)
+			if err != nil {
+				return nil, err
+			}
+			if res != nil {
 				return res, nil
 			}
 		}

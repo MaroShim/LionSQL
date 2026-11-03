@@ -65,10 +65,10 @@ echo "  Selected Suite:   ${SUITE}"
 echo "  Force Overwrite:  ${FORCE}"
 echo "--------------------------------------------------------------------------------"
 
-# 1. Full Suites (select1.test ~ select5.test)
+# 1. Full Suites (select1.slt ~ select5.slt)
 if [[ "${SUITE}" == "all" || "${SUITE}" == "full" ]]; then
-    echo ">> Fetching Tier 1 'full' suites (select1.test ~ select5.test)..."
-    for s in select1.test select2.test select3.test select4.test select5.test; do
+    echo ">> Fetching Tier 1 'full' suites (select1.slt ~ select5.slt)..."
+    for s in select1.slt select2.slt select3.slt select4.slt select5.slt; do
         fetch_file "full/${s}"
     done
 fi
@@ -77,17 +77,17 @@ fi
 if [[ "${SUITE}" == "all" || "${SUITE}" == "evidence" ]]; then
     echo ">> Fetching Tier 2 'evidence' specification suites..."
     evidence_files=(
-        "evidence/in2.test"
-        "evidence/slt_lang_aggfunc.test"
-        "evidence/slt_lang_createtrigger.test"
-        "evidence/slt_lang_createview.test"
-        "evidence/slt_lang_dropindex.test"
-        "evidence/slt_lang_droptable.test"
-        "evidence/slt_lang_droptrigger.test"
-        "evidence/slt_lang_dropview.test"
-        "evidence/slt_lang_reindex.test"
-        "evidence/slt_lang_replace.test"
-        "evidence/slt_lang_update.test"
+        "evidence/in2.slt"
+        "evidence/slt_lang_aggfunc.slt"
+        "evidence/slt_lang_createtrigger.slt"
+        "evidence/slt_lang_createview.slt"
+        "evidence/slt_lang_dropindex.slt"
+        "evidence/slt_lang_droptable.slt"
+        "evidence/slt_lang_droptrigger.slt"
+        "evidence/slt_lang_dropview.slt"
+        "evidence/slt_lang_reindex.slt"
+        "evidence/slt_lang_replace.slt"
+        "evidence/slt_lang_update.slt"
     )
     for f in "${evidence_files[@]}"; do
         fetch_file "${f}"
@@ -98,23 +98,23 @@ fi
 if [[ "${SUITE}" == "fuzz" || "${SUITE}" == "index" ]]; then
     echo ">> Fetching Tier 2 'index' fuzz suites into test/sqlite_fuzz..."
     index_files=(
-        "index/between/1/slt_good_0.test"
-        "index/between/10/slt_good_0.test"
-        "index/between/100/slt_good_0.test"
-        "index/commute/10/slt_good_0.test"
-        "index/commute/100/slt_good_0.test"
-        "index/commute/1000/slt_good_0.test"
-        "index/in/10/slt_good_0.test"
-        "index/in/100/slt_good_0.test"
-        "index/in/1000/slt_good_0.test"
-        "index/orderby/10/slt_good_0.test"
-        "index/orderby/100/slt_good_0.test"
-        "index/orderby_nosort/10/slt_good_0.test"
-        "index/orderby_nosort/100/slt_good_0.test"
-        "index/delete/1/slt_good_0.test"
-        "index/delete/10/slt_good_0.test"
-        "index/random/10/slt_good_0.test"
-        "index/view/10/slt_good_0.test"
+        "index/between/1/slt_good_0.slt"
+        "index/between/10/slt_good_0.slt"
+        "index/between/100/slt_good_0.slt"
+        "index/commute/10/slt_good_0.slt"
+        "index/commute/100/slt_good_0.slt"
+        "index/commute/1000/slt_good_0.slt"
+        "index/in/10/slt_good_0.slt"
+        "index/in/100/slt_good_0.slt"
+        "index/in/1000/slt_good_0.slt"
+        "index/orderby/10/slt_good_0.slt"
+        "index/orderby/100/slt_good_0.slt"
+        "index/orderby_nosort/10/slt_good_0.slt"
+        "index/orderby_nosort/100/slt_good_0.slt"
+        "index/delete/1/slt_good_0.slt"
+        "index/delete/10/slt_good_0.slt"
+        "index/random/10/slt_good_0.slt"
+        "index/view/10/slt_good_0.slt"
     )
     for f in "${index_files[@]}"; do
         fetch_file "${f}"
@@ -129,7 +129,7 @@ if [[ "${SUITE}" == "all" || "${SUITE}" == "random" ]]; then
     echo ">> Fetching Tier 2 'random' representative suites (40 test files)..."
     for category in expr groupby aggregates select; do
         for i in {0..9}; do
-            fetch_file "random/${category}/slt_good_${i}.test"
+            fetch_file "random/${category}/slt_good_${i}.slt"
         done
     done
 fi

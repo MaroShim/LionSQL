@@ -49,7 +49,8 @@ LionSQL의 SLT 스위트는 업계 표준(DuckDB/CockroachDB Tier 1 & 2)에 맞�
 | **Evidence** | `test/slt/evidence/`| 12개 | ~5,000건 | SQL 표준 명세(Grammar Specification) 조항 전수 (`in1`, `aggfunc`, `update` 등) |
 | **Index** | `test/slt/index/` | 16개 | ~15,000건 | B-Tree 인덱스 유무별 결과 일치성, `BETWEEN` 다중 하한/상한 교집합, `ORDER BY` 비용 생략 |
 | **Random** | `test/slt/random/` | 40개 | ~15,000건 | BNF 기계식 난수 퍼징: `expr`(수식 중첩), `groupby`, `aggregates`, `select` |
-| **합계** | **전체 풀세트** | **107개**| **40,000+건**| **SQL 표준 엔진 완전 무결성 100% 검증** |
+| **Procedural (T-SQL)** | `test/slt_proc/` | 14개 | ~300건 | T-SQL Stored Procedure, 재귀 CTE 델타, 리턴 변수, UDF 라이프사이클 ([상세 보고서](notes/BABELFISH_INTEGRATION_REPORT.ko.md)) |
+| **합계** | **전체 풀세트** | **121개**| **40,000+건**| **SQL 표준 엔진 및 T-SQL 절차형 무결성 100% 검증** |
 
 ---
 

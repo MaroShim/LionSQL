@@ -437,10 +437,11 @@ func (s *DeleteStmt) String() string {
 	return fmt.Sprintf("DELETE FROM %s WHERE %s = %s", s.Table, s.WhereCol, s.WhereVal.String())
 }
 
-// ExecStmt represents EXEC ProcName @arg1, @arg2
+// ExecStmt represents EXEC [@return_var =] ProcName @arg1, @arg2
 type ExecStmt struct {
-	ProcName string
-	Args     []Expr
+	ProcName  string
+	Args      []Expr
+	ReturnVar string
 }
 
 func (s *ExecStmt) stmtNode() {}
@@ -449,12 +450,17 @@ func (s *ExecStmt) String() string {
 	for i, a := range s.Args {
 		argStrs[i] = a.String()
 	}
-	return fmt.Sprintf("EXEC %s %s", s.ProcName, strings.Join(argStrs, ", "))
+	prefix := ""
+	if s.ReturnVar != "" {
+		prefix = s.ReturnVar + " = "
+	}
+	return fmt.Sprintf("EXEC %s%s %s", prefix, s.ProcName, strings.Join(argStrs, ", "))
 }
 
-// DynamicExecStmt represents dynamic SQL execution: EXEC ( string_expression )
+// DynamicExecStmt represents dynamic SQL execution: EXEC [@return_var =] ( string_expression )
 type DynamicExecStmt struct {
-	Expr Expr
+	Expr      Expr
+	ReturnVar string
 }
 
 func (s *DynamicExecStmt) stmtNode() {}
@@ -646,7 +652,15 @@ func (e *LikeExpr) String() string {
 	if e.Not {
 		notStr = "NOT "
 	}
-	return fmt.Sprintf("%s %sLIKE %s", e.Expr.String(), notStr, e.Pattern.String())
+	exprStr := ""
+	if e.Expr != nil {
+		exprStr = e.Expr.String()
+	}
+	patStr := ""
+	if e.Pattern != nil {
+		patStr = e.Pattern.String()
+	}
+	return fmt.Sprintf("%s %sLIKE %s", exprStr, notStr, patStr)
 }
 
 // IsNullExpr represents Expr IS [NOT] NULL

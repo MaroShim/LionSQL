@@ -964,7 +964,11 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 			}
 			argRegs = append(argRegs, r)
 		}
-		c.emit(OpCallProc, 0, 0, 0, &CallData{
+		destSlot := int32(-1)
+		if s.ReturnVar != "" {
+			destSlot = c.getOrAllocSlot(s.ReturnVar)
+		}
+		c.emit(OpCallProc, destSlot, 0, 0, &CallData{
 			Name:    s.ProcName,
 			ArgRegs: argRegs,
 		})
@@ -976,7 +980,11 @@ func (c *Compiler) compileStatement(stmt Statement) error {
 		if err != nil {
 			return err
 		}
-		c.emit(OpExecDynamic, reg, 0, 0, nil)
+		destSlot := int32(-1)
+		if s.ReturnVar != "" {
+			destSlot = c.getOrAllocSlot(s.ReturnVar)
+		}
+		c.emit(OpExecDynamic, reg, destSlot, 0, nil)
 		c.freeReg(1)
 		return nil
 

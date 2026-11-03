@@ -446,6 +446,27 @@ func (p *Parser) parseDeclare() (Statement, error) {
 		}, nil
 	}
 
+	// Check for table variable declaration: DECLARE @var TABLE (...)
+	if p.curTokenIs(TokenTable) {
+		p.nextToken() // eat TABLE
+		if p.curTokenIs(TokenLParen) {
+			p.nextToken()
+			depth := 1
+			for depth > 0 && !p.curTokenIs(TokenEOF) {
+				if p.curTokenIs(TokenLParen) {
+					depth++
+				} else if p.curTokenIs(TokenRParen) {
+					depth--
+				}
+				p.nextToken()
+			}
+		}
+		if p.curTokenIs(TokenSemicolon) {
+			p.nextToken()
+		}
+		return &DeclareStmt{Name: name, Type: parseDataType("VARCHAR")}, nil
+	}
+
 	// Normal variable declaration
 	var stmts []Statement
 	varName := name
@@ -765,6 +786,16 @@ func (p *Parser) parseTx() (Statement, error) {
 
 func (p *Parser) parseExec() (Statement, error) {
 	p.nextToken() // eat EXEC
+	var returnVar string
+	if p.curTokenIs(TokenVariable) {
+		returnVar = p.curToken.Literal
+		p.nextToken() // eat @var
+		if !p.curTokenIs(TokenAssign) && !p.curTokenIs(TokenEq) {
+			return nil, fmt.Errorf("expected '=' after return variable in EXEC, got %s", p.curToken.Literal)
+		}
+		p.nextToken() // eat '='
+	}
+
 	if p.curTokenIs(TokenLParen) {
 		p.nextToken() // eat '('
 		expr := p.parseExpression(precLowest)
@@ -778,7 +809,7 @@ func (p *Parser) parseExec() (Statement, error) {
 		if p.curTokenIs(TokenSemicolon) {
 			p.nextToken()
 		}
-		return &DynamicExecStmt{Expr: expr}, nil
+		return &DynamicExecStmt{Expr: expr, ReturnVar: returnVar}, nil
 	}
 	if !p.curTokenIs(TokenIdent) {
 		return nil, fmt.Errorf("expected procedure name in EXEC, got %s", p.curToken.Literal)
@@ -803,6 +834,6 @@ func (p *Parser) parseExec() (Statement, error) {
 		p.nextToken()
 	}
 
-	return &ExecStmt{ProcName: name, Args: args}, nil
+	return &ExecStmt{ProcName: name, Args: args, ReturnVar: returnVar}, nil
 }
 

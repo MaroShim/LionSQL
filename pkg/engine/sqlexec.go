@@ -1291,7 +1291,7 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		return s.execDBCC(trimmed, start, cs)
 	}
 
-	// 1. Procedural DDL: CREATE PROCEDURE / ALTER PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
+	// 1. Procedural DDL: CREATE PROCEDURE / ALTER PROCEDURE / DROP PROCEDURE / CREATE FUNCTION / CREATE TRIGGER
 	if strings.HasPrefix(upper, "CREATE PROCEDURE") || strings.HasPrefix(upper, "CREATE PROC") ||
 		strings.HasPrefix(upper, "CREATE OR ALTER PROCEDURE") || strings.HasPrefix(upper, "CREATE OR ALTER PROC") ||
 		strings.HasPrefix(upper, "ALTER PROCEDURE") || strings.HasPrefix(upper, "ALTER PROC") {
@@ -1300,11 +1300,23 @@ func (s *Coordinator) execSingleStatement(cs *ClientSession, query string) (*Que
 		}
 		return s.execCreateProcedure(trimmed, start)
 	}
+	if strings.HasPrefix(upper, "DROP PROCEDURE") || strings.HasPrefix(upper, "DROP PROC") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
+		return s.execDropProcedure(trimmed, start)
+	}
 	if strings.HasPrefix(upper, "CREATE FUNCTION") || strings.HasPrefix(upper, "CREATE OR ALTER FUNCTION") || strings.HasPrefix(upper, "ALTER FUNCTION") {
 		if err := s.checkWriteAllowed(); err != nil {
 			return nil, err
 		}
 		return s.execCreateFunction(trimmed, start)
+	}
+	if strings.HasPrefix(upper, "DROP FUNCTION") {
+		if err := s.checkWriteAllowed(); err != nil {
+			return nil, err
+		}
+		return s.execDropFunction(trimmed, start)
 	}
 	if strings.HasPrefix(upper, "CREATE TRIGGER") || strings.HasPrefix(upper, "CREATE OR ALTER TRIGGER") || strings.HasPrefix(upper, "ALTER TRIGGER") ||
 		strings.HasPrefix(upper, "CREATE TEMP TRIGGER") || strings.HasPrefix(upper, "CREATE TEMPORARY TRIGGER") {

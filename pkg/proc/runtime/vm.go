@@ -140,6 +140,13 @@ func (c *PlanCache) PutByName(name string, prog *proc.Program) {
 	c.byName[strings.ToLower(cleanSymbol(name))] = prog
 }
 
+// Invalidate removes a compiled bytecode program by procedure or function name.
+func (c *PlanCache) Invalidate(name string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	delete(c.byName, strings.ToLower(cleanSymbol(name)))
+}
+
 // GetByName retrieves a compiled bytecode program by procedure or function name.
 func (c *PlanCache) GetByName(name string) (*proc.Program, bool) {
 	c.mu.RLock()
@@ -303,6 +310,14 @@ func (e *Executor) RegisterUDF(name string, prog *proc.Program) {
 	}
 }
 
+// UnregisterUDF removes a user-defined function from execution runtimes.
+func (e *Executor) UnregisterUDF(name string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	sym := cleanSymbol(name)
+	delete(e.udfs, sym)
+}
+
 // RegisterTrigger registers a trigger for the specified table and event.
 func (e *Executor) RegisterTrigger(name string, tableName string, event string, prog *proc.Program) {
 	e.mu.Lock()
@@ -419,6 +434,7 @@ type VMFrame struct {
 	lastError       int
 	lastErrorMsg    string
 	lastErrorLine   int
+	callDepth       int
 	ctx             context.Context
 }
 
@@ -1002,6 +1018,9 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 	if isTransientTable(tableName) {
 		return nil
 	}
+	if f.callDepth >= 32 {
+		return nil
+	}
 	trgs := f.executor.GetTriggers(tableName, event)
 	if len(trgs) == 0 {
 		return nil
@@ -1013,7 +1032,15 @@ func (f *VMFrame) fireTriggers(tableName, event string, inserted, deleted []map[
 	}
 
 	for _, trg := range trgs {
-		_, logs, err := f.executor.RunInTx(trg.Program, nil, f.tx, transients)
+		subFrame := f.executor.newFrame(trg.Program, f.tx)
+		subFrame.callDepth = f.callDepth + 1
+		for k, v := range transients {
+			subFrame.transientTables[k] = v
+		}
+		_, err := subFrame.Execute(0)
+		logs := subFrame.logs
+		f.executor.releaseFrame(subFrame)
+
 		if len(logs) > 0 {
 			f.logs = append(f.logs, logs...)
 		}
@@ -2059,14 +2086,19 @@ func (f *VMFrame) callUDF(fnName string, argRegs []int32) (storage.Value, error)
 	return toStorageValue(retVal), nil
 }
 
-func (f *VMFrame) callProc(procName string, argRegs []int32) error {
+func (f *VMFrame) callProc(procName string, argRegs []int32) (storage.Value, error) {
+	if f.callDepth >= 64 {
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("maximum stored procedure call depth (64) exceeded (possible infinite recursion)")
+	}
+
 	if strings.EqualFold(procName, "sp_executesql") {
-		return f.callSpExecuteSql(argRegs)
+		err := f.callSpExecuteSql(argRegs)
+		return storage.Value{Type: storage.TypeInt, IVal: 0}, err
 	}
 
 	prog, found := f.executor.Cache().GetByName(procName)
 	if !found {
-		return fmt.Errorf("procedure %s not found", procName)
+		return storage.NullValue(storage.TypeUnknown), fmt.Errorf("procedure %s not found", procName)
 	}
 
 	params := make(map[string]any)
@@ -2079,12 +2111,22 @@ func (f *VMFrame) callProc(procName string, argRegs []int32) error {
 		}
 	}
 
-	retVal, logs, err := f.executor.RunInTx(prog, params, f.tx, f.transientTables)
+	subFrame := f.executor.newFrame(prog, f.tx)
+	subFrame.callDepth = f.callDepth + 1
+	if f.transientTables != nil {
+		for k, v := range f.transientTables {
+			subFrame.transientTables[k] = v
+		}
+	}
+	subFrame.bindParams(params)
+	retVal, err := subFrame.Execute(0)
+	logs := subFrame.logs
+	f.executor.releaseFrame(subFrame)
+
 	if len(logs) > 0 {
 		f.logs = append(f.logs, logs...)
 	}
-	_ = retVal
-	return err
+	return toStorageValue(retVal), err
 }
 
 func (f *VMFrame) callSpExecuteSql(argRegs []int32) error {

@@ -47,7 +47,8 @@
      - **[`DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md`](DUCKDB_STYLE_FRIENDLY_SQL_ERGONOMICS_PLAN.ko.md)**: DuckDB 스타일의 친화적 SQL 손끝 편의 문법(`SELECT * EXCLUDE`, `FROM <table>;`, `GROUP BY ALL`) 도입 마스터 플랜 (Post-1.0 / v1.1.0).
      - **[`EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md`](EMPTY_IN_PREDICATE_EVALUATION_PLAN.ko.md)**: `WHERE col IN ()` 빈 괄호 평가 허용 여부에 대한 역사적 배경, 아키텍처 분석 및 옵션 플래그 배제 원칙 계획서 (Post-1.0 대기).
     - **[`BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md`](BABELFISH_STORED_PROCEDURE_SLT_PLAN.ko.md)**: AWS Babelfish 기반 T-SQL Stored Procedure 전용 SLT 로직 테스트 스위트 구축 계획서 (1.0 릴리즈 게이트).
-     - **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)**: 모듈러 아키텍처 및 세션 캡슐화 리팩토링 계획서.
+    - **[`BABELFISH_INTEGRATION_REPORT.ko.md`](BABELFISH_INTEGRATION_REPORT.ko.md)**: Babelfish T-SQL 2,900-Suite 도입, 엣지 케이스 장애 추적(우여곡절), 코어 버그 수정 및 종합 호환성 검증 보고서.
+    - **[`MODULAR_ARCHITECTURE_PLAN.ko.md`](MODULAR_ARCHITECTURE_PLAN.ko.md)**: 모듈러 아키텍처 및 세션 캡슐화 리팩토링 계획서.
      - **[`SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md`](SINGLE_PAGE_HTML_WEB_SERVER_PLAN.ko.md)**: 내장 SPA 정적 웹 파일 서빙 엔진 설계 계획서.
      - **[`IMMUTABLE_AUDIT_LOG_PLAN.md`](IMMUTABLE_AUDIT_LOG_PLAN.md)**: PCI-DSS v4.0 / SOC 2 규제 대응 SHA-256 해시 체이닝 불변 감사 로그 서브시스템 설계 (Post-1.0 / v1.1.0).
      - **[`COLLATION_AND_LOCALE_PLAN.md`](COLLATION_AND_LOCALE_PLAN.md)**: Microsoft SQL Server Collation 및 로케일 지원 설계 (Post-1.0 / v1.1.0).

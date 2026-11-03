@@ -546,13 +546,16 @@ LionSQL은 모든 코드 변경, 리팩토링, 기능 추가 시 엄격한 **3�
      ```
 
    - **SQLLogicTest (SLT) 107개 풀세트 (551,217 쿼리) 블랙박스 정합성 오라클 검증 (100% PASS)**:
-     SQLite 공식 대규모 스위트(`select1~5.test`), 표준 명세(`evidence/*`), B-Tree 인덱스 경로(`index/*`), 난수 대수식/집계(`random/*`) 및 LionSQL 정선 엣지 케이스를 원클릭으로 일괄 검증합니다 (상세 실측 보고서: [검증 보고서](notes/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md), [운영 가이드](doc/SQLLOGICTEST_GUIDE.ko.md)):
+     SQLite 공식 대규모 스위트(`select1~5.test`), 표준 명세(`evidence/*`), B-Tree 인덱스 경로(`index/*`), 난수 대수식/집계(`random/*`) 및 LionSQL 정선 엣지 케이스를 원클릭으로 일괄 검증합니다 (상세 실측 보고서: [검증 보고서](notes/SLT_FULL_SUITE_100_PERCENT_REPORT.ko.md), [운영 가이드](doc/SQLLOGICTEST_GUIDE.ko.md), [Babelfish T-SQL 통합 보고서](notes/BABELFISH_INTEGRATION_REPORT.ko.md)):
      ```bash
      # 1. 1.0 GA 공식 풀세트 다운로드 (온디맨드 캐싱)
      ./scripts/fetch_slt.sh
 
      # 2. 8코어 병렬 초고속 검증 (107개 파일, 551,217 쿼리 47.2초 완주)
      ./bin/sqllogictest -dir test/slt -parallel 8
+
+     # 3. 절차형(T-SQL/Babelfish) 스위트 검증 (14개 스위트 100% PASS)
+     go test -tags wiredtiger -v -race ./test/slt_proc/...
      ```
 3. **커밋 무결성 규약 (Commit)**:
    - Conventional Commits 형식 준수 (`feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`).

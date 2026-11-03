@@ -27,24 +27,25 @@ func hasDerivedTables(sql string) bool {
 func findNextDerivedTable(sql string) (openParenIdx int, closeParenIdx int) {
 	upper := strings.ToUpper(sql)
 	i := 0
-	n := len(sql)
+	n := len(upper)
+	sqlLen := len(sql)
 	for i < n {
 		ch := upper[i]
 		if ch == 'F' || ch == 'J' {
-			isFrom := strings.HasPrefix(upper[i:], "FROM") && (i == 0 || isSep(upper[i-1])) && (i+4 == n || isSep(upper[i+4]))
-			isJoin := strings.HasPrefix(upper[i:], "JOIN") && (i == 0 || isSep(upper[i-1])) && (i+4 == n || isSep(upper[i+4]))
+			isFrom := strings.HasPrefix(upper[i:], "FROM") && (i == 0 || isSep(upper[i-1])) && (i+4 == n || (i+4 < n && isSep(upper[i+4])))
+			isJoin := strings.HasPrefix(upper[i:], "JOIN") && (i == 0 || isSep(upper[i-1])) && (i+4 == n || (i+4 < n && isSep(upper[i+4])))
 			if isFrom || isJoin {
 				kwLen := 4
 				pos := i + kwLen
-				for pos < n && (sql[pos] == ' ' || sql[pos] == '\t' || sql[pos] == '\r' || sql[pos] == '\n') {
+				for pos < n && (upper[pos] == ' ' || upper[pos] == '\t' || upper[pos] == '\r' || upper[pos] == '\n') {
 					pos++
 				}
-				if pos < n && sql[pos] == '(' {
+				if pos < n && upper[pos] == '(' && pos < sqlLen {
 					innerPos := pos + 1
-					for innerPos < n && (sql[innerPos] == ' ' || sql[innerPos] == '\t' || sql[innerPos] == '\r' || sql[innerPos] == '\n') {
+					for innerPos < n && (upper[innerPos] == ' ' || upper[innerPos] == '\t' || upper[innerPos] == '\r' || upper[innerPos] == '\n') {
 						innerPos++
 					}
-					if strings.HasPrefix(upper[innerPos:], "SELECT") && (innerPos+6 == n || isSep(upper[innerPos+6])) {
+					if strings.HasPrefix(upper[innerPos:], "SELECT") && (innerPos+6 == n || (innerPos+6 < n && isSep(upper[innerPos+6]))) {
 						cIdx := sqlutil.FindMatchingParen(sql, pos)
 						if cIdx != -1 {
 							return pos, cIdx
@@ -56,14 +57,17 @@ func findNextDerivedTable(sql string) (openParenIdx int, closeParenIdx int) {
 		// Skip single-quoted string literals safely
 		if ch == '\'' {
 			i++
-			for i < n && sql[i] != '\'' {
-				if sql[i] == '\\' && i+1 < n {
+			for i < n && upper[i] != '\'' {
+				if upper[i] == '\\' && i+1 < n {
 					i++
 				}
 				i++
 			}
 			if i < n {
 				i++
+			}
+			if i >= n {
+				break
 			}
 			continue
 		}

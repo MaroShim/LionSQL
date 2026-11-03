@@ -1,0 +1,90 @@
+-- sla 75000
+-- Test for system function
+SELECT
+    definition,
+    uses_ansi_nulls,
+    uses_quoted_identifier,
+    is_schema_bound,
+    uses_database_collation,
+    is_recompiled,
+    null_on_null_input,
+    execute_as_principal_id,
+    uses_native_compilation
+FROM sys.system_sql_modules
+WHERE object_id = OBJECT_ID('sys.fn_listextendedproperty')
+GO
+
+-- Test for system views
+SELECT
+    definition,
+    uses_ansi_nulls,
+    uses_quoted_identifier,
+    is_schema_bound,
+    uses_database_collation,
+    is_recompiled,
+    null_on_null_input,
+    execute_as_principal_id,
+    uses_native_compilation
+FROM sys.system_sql_modules
+WHERE object_id = OBJECT_ID('sys.tables')
+GO
+
+-- Test for system proc
+-- SELECT
+--     definition,
+--     uses_ansi_nulls,
+--     uses_quoted_identifier,
+--     is_schema_bound,
+--     uses_database_collation,
+--     is_recompiled,
+--     null_on_null_input,
+--     execute_as_principal_id,
+--     uses_native_compilation
+-- FROM sys.system_sql_modules
+-- WHERE definition LIKE 'CREATE PROCEDURE sp_helpdbfixedrole%'
+-- GO
+
+-- Test for system function written in c 
+SELECT
+    definition,
+    uses_ansi_nulls,
+    uses_quoted_identifier,
+    is_schema_bound,
+    uses_database_collation,
+    is_recompiled,
+    null_on_null_input,
+    execute_as_principal_id,
+    uses_native_compilation
+FROM sys.system_sql_modules
+WHERE object_id = OBJECT_ID('sys.user_name')
+GO
+
+/* 
+ * Query to check whether an object is interpreted as both,
+ * a system object and a user defined object
+ *
+ * For such cases, there will be multiple rows for the same object
+ * name where the "is_ms_shipped" column is 0 (for user defined
+ * objects) and 1 (for system objects) which is incorrect.
+ * 
+ * Ideally, for the same object name, either all the rows should have
+ * "is_ms_shipped" 0 or 1 but never both.
+ *
+ * To catch this, we check both the min and max value of "is_ms_shipped"
+ * over partitions by object name. If they are 0 and 1 respectively,
+ * then we show the same.
+ *
+ * Thus, this query should NEVER return any rows. 
+ */
+SELECT
+    DISTINCT o.name
+FROM
+    (SELECT
+        name,
+        min_val = MIN(is_ms_shipped + 0) OVER(PARTITION BY name),
+        max_val = MAX(is_ms_shipped + 0) OVER(PARTITION BY name)
+    FROM
+        sys.all_objects
+    ) o
+WHERE o.min_val = 0 AND o.max_val = 1
+GO

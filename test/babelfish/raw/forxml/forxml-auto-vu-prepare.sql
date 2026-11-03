@@ -1,0 +1,534 @@
+-- ============================================
+-- SECTION: Base Tables
+-- ============================================
+
+CREATE TABLE forxmlauto_t_categories (
+    CategoryID INT PRIMARY KEY,
+    CategoryName NVARCHAR(100),
+    Description NVARCHAR(200),
+    ParentCategoryID INT
+);
+GO
+
+CREATE TABLE forxmlauto_t_customers (
+    CustomerID NCHAR(5) PRIMARY KEY,
+    CompanyName NVARCHAR(100),
+    ContactName NVARCHAR(100),
+    ContactTitle NVARCHAR(50),
+    Region NVARCHAR(50),
+    Country NVARCHAR(50),
+    Phone NVARCHAR(20),
+    IsActive BIT DEFAULT 1
+);
+GO
+
+CREATE TABLE forxmlauto_t_orders (
+    OrderID INT PRIMARY KEY,
+    CustomerID NCHAR(5),
+    OrderDate DATETIME,
+    ShipAddress NVARCHAR(100),
+    ShipCity NVARCHAR(50),
+    ShipCountry NVARCHAR(50),
+    TotalAmount MONEY,
+    Status NVARCHAR(20)
+);
+GO
+
+CREATE TABLE forxmlauto_t_products (
+    ProductID INT PRIMARY KEY,
+    ProductName NVARCHAR(100),
+    UnitPrice MONEY,
+    CategoryID INT,
+    UnitsInStock INT,
+    Discontinued BIT DEFAULT 0,
+    LastUpdated DATETIME DEFAULT GETDATE()
+);
+GO
+
+CREATE TABLE forxmlauto_t_order_details (
+    OrderDetailID INT PRIMARY KEY,
+    OrderID INT,
+    ProductID INT,
+    Quantity INT,
+    UnitPrice MONEY,
+    Discount DECIMAL(3,2) DEFAULT 0.00
+);
+GO
+
+CREATE TABLE forxmlauto_t_multibyte (
+    ID INT PRIMARY KEY,
+    JapaneseName NVARCHAR(100),
+    ChineseName NVARCHAR(100),
+    KoreanName NVARCHAR(100),
+    EmojiCol NVARCHAR(100),
+    MixedContent NVARCHAR(200)
+);
+GO
+
+CREATE TABLE forxmlauto_t_longnames (
+    ThisIsAnExtremelyLongColumnNameThatGoesOnAndOnToTestTheLimitsOfNameLength INT,
+    ShortCol INT,
+    AnotherVeryLongColumnNameThatExceedsSixtyThreeCharactersForTesting NVARCHAR(50)
+);
+GO
+
+-- ============================================
+-- SECTION: Special Character Tables
+-- ============================================
+
+CREATE TABLE [forxmlauto_t_comma,table] (
+    ID INT PRIMARY KEY,
+    Val VARCHAR(20)
+);
+GO
+
+CREATE TABLE [forxmlauto_t_dot.table] (
+    ID INT PRIMARY KEY,
+    Val VARCHAR(20)
+);
+GO
+
+CREATE TABLE forxmlauto_t_comma_cols (
+    [col,one] INT PRIMARY KEY,
+    [col,two] VARCHAR(20)
+);
+GO
+
+CREATE TABLE forxmlauto_t_dot_cols (
+    [col.one] INT PRIMARY KEY,
+    [col.two] VARCHAR(20)
+);
+GO
+
+CREATE TABLE [_x002E_tbl] (id INT, val VARCHAR(20));
+GO
+
+CREATE TABLE forxmlauto_t_x002E_col (id INT, [a_x002E_b] VARCHAR(20));
+GO
+
+CREATE TABLE forxmlauto_t_space_cols (
+    [first name] VARCHAR(20),
+    [last name] VARCHAR(20)
+);
+GO
+
+CREATE TABLE [forxmlauto_t_mixed,special.table] (
+    [col.one] INT PRIMARY KEY,
+    [val,two] VARCHAR(20)
+);
+GO
+
+-- ============================================
+-- SECTION: Data
+-- ============================================
+
+INSERT INTO forxmlauto_t_categories (CategoryID, CategoryName, Description, ParentCategoryID) VALUES
+(1, 'Beverages', 'Soft drinks, coffees, teas', NULL),
+(2, 'Coffee', 'Various coffee brands', 1),
+(3, 'Tea', 'Various tea brands', 1),
+(4, 'Electronics', 'Electronic equipment', NULL),
+(5, 'Computers', 'Computer equipment', 4);
+GO
+
+INSERT INTO forxmlauto_t_customers (CustomerID, CompanyName, ContactName, ContactTitle, Region, Country, Phone) VALUES
+('ALFKI', 'Alfreds Inc', 'Maria Anders', 'Sales Rep', 'WA', 'USA', '030-0074321'),
+('BERGS', N'Berglunds snabbköp', N'Christina Berglund', 'Administrator', NULL, 'Sweden', '0921-12 34 65'),
+('CONSH', 'Consolidated Holdings', 'Elizabeth Brown', 'Sales Manager', 'LA', 'USA', '(171) 555-2282');
+GO
+
+INSERT INTO forxmlauto_t_orders (OrderID, CustomerID, OrderDate, ShipAddress, ShipCity, ShipCountry, TotalAmount, Status) VALUES
+(10248, 'ALFKI', '2023-07-04', '23 Tsawassen Blvd.', 'Seattle', 'USA', 440.00, 'Shipped'),
+(10249, 'BERGS', '2023-07-05', N'Luisenstr. 48', 'Mannheim', 'Germany', 1863.40, 'Pending'),
+(10250, 'CONSH', '2023-07-06', 'Berkeley Gardens', 'London', 'UK', 1552.60, 'Delivered');
+GO
+
+INSERT INTO forxmlauto_t_products (ProductID, ProductName, UnitPrice, CategoryID, UnitsInStock) VALUES
+(1, 'Chai', 18.00, 3, 39),
+(2, 'Coffee Beans', 19.00, 2, 17),
+(3, 'Laptop', 1200.00, 5, 10),
+(4, 'Green Tea', 10.00, 3, 25);
+GO
+
+INSERT INTO forxmlauto_t_order_details (OrderDetailID, OrderID, ProductID, Quantity, UnitPrice, Discount) VALUES
+(1, 10248, 1, 12, 18.00, 0.00),
+(2, 10248, 2, 10, 19.00, 0.05),
+(3, 10249, 3, 5, 1200.00, 0.00),
+(4, 10250, 1, 20, 18.00, 0.10),
+(5, 10250, 4, 15, 10.00, 0.00);
+GO
+
+INSERT INTO forxmlauto_t_multibyte (ID, JapaneseName, ChineseName, KoreanName, EmojiCol, MixedContent) VALUES
+(1, N'東京タワー', N'北京市', N'서울시', N'🎉🌟', N'Hello世界Мир'),
+(2, N'大阪城', N'上海市', N'부산시', N'🚀💡', N'Café résumé naïve'),
+(3, N'富士山', N'広州市', N'인천시', N'❤️🎵', N'Ñoño über straße');
+GO
+
+INSERT INTO forxmlauto_t_longnames VALUES (1, 100, 'Hello');
+INSERT INTO forxmlauto_t_longnames VALUES (2, 200, 'World');
+GO
+
+INSERT INTO [forxmlauto_t_comma,table] VALUES (1, 'hello');
+INSERT INTO [forxmlauto_t_comma,table] VALUES (2, 'world');
+GO
+
+INSERT INTO [forxmlauto_t_dot.table] VALUES (1, 'Alpha');
+INSERT INTO [forxmlauto_t_dot.table] VALUES (2, 'Beta');
+GO
+
+INSERT INTO forxmlauto_t_comma_cols VALUES (1, 'Gamma');
+INSERT INTO forxmlauto_t_comma_cols VALUES (2, NULL);
+GO
+
+INSERT INTO forxmlauto_t_dot_cols VALUES (1, 'Delta');
+INSERT INTO forxmlauto_t_dot_cols VALUES (2, NULL);
+GO
+
+INSERT INTO [_x002E_tbl] VALUES (1, 'hello');
+GO
+
+INSERT INTO forxmlauto_t_x002E_col VALUES (1, 'world');
+GO
+
+INSERT INTO forxmlauto_t_space_cols VALUES ('John', 'Doe');
+INSERT INTO forxmlauto_t_space_cols VALUES ('Jane', NULL);
+GO
+
+INSERT INTO [forxmlauto_t_mixed,special.table] VALUES (1, 'Test');
+INSERT INTO [forxmlauto_t_mixed,special.table] VALUES (2, NULL);
+GO
+
+-- ============================================
+-- SECTION: Views
+-- ============================================
+
+CREATE VIEW forxmlauto_v_customer_orders AS
+SELECT
+    c.CustomerID,
+    c.CompanyName,
+    c.Country,
+    o.OrderID,
+    o.OrderDate,
+    o.TotalAmount
+FROM forxmlauto_t_customers c
+INNER JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID;
+GO
+
+CREATE VIEW forxmlauto_v_order_summary AS
+SELECT
+    v.CompanyName,
+    v.OrderID,
+    v.TotalAmount,
+    od.ProductID,
+    od.Quantity
+FROM forxmlauto_v_customer_orders v
+JOIN forxmlauto_t_order_details od ON v.OrderID = od.OrderID;
+GO
+
+-- View with FOR XML AUTO, TYPE (dependent on tsql_select_for_xml_agg)
+CREATE VIEW forxmlauto_v_xml_type AS
+SELECT (SELECT c.CustomerID, c.CompanyName, o.OrderID
+        FROM forxmlauto_t_customers c
+        JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID
+        WHERE c.CustomerID = 'ALFKI'
+        FOR XML AUTO, TYPE) AS xml_result;
+GO
+
+-- View with FOR XML AUTO without TYPE (dependent on tsql_select_for_xml_text_agg)
+CREATE VIEW forxmlauto_v_xml_text AS
+SELECT (SELECT c.CustomerID, c.CompanyName, o.OrderID
+        FROM forxmlauto_t_customers c
+        JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID
+        WHERE c.CustomerID = 'ALFKI'
+        FOR XML AUTO) AS xml_result;
+GO
+
+-- ============================================
+-- SECTION: Functions
+-- ============================================
+
+CREATE FUNCTION dbo.GetXmlCustomerOrders()
+RETURNS TABLE
+AS RETURN (
+    SELECT c.CustomerID, c.CompanyName, o.OrderID, o.TotalAmount
+    FROM forxmlauto_t_customers c
+    JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID
+);
+GO
+
+CREATE FUNCTION dbo.GetXmlSingleCustomerOrders(@CustID NCHAR(5))
+RETURNS TABLE
+AS RETURN (
+    SELECT c.CustomerID, c.CompanyName, o.OrderID, o.TotalAmount
+    FROM forxmlauto_t_customers c
+    JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID
+    WHERE c.CustomerID = @CustID
+);
+GO
+
+-- ============================================
+-- SECTION: Procedures
+-- ============================================
+
+CREATE PROCEDURE dbo.GetXmlAutoResult @CustID NCHAR(5)
+AS
+BEGIN
+    SELECT c.CustomerID, c.CompanyName, o.OrderID, o.TotalAmount
+    FROM forxmlauto_t_customers c
+    JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID
+    WHERE c.CustomerID = @CustID
+    FOR XML AUTO, ROOT('CustomerOrders');
+END;
+GO
+
+CREATE PROCEDURE dbo.GetXmlAutoJoin
+AS
+BEGIN
+    SELECT c.CustomerID, c.CompanyName, o.OrderID, od.ProductID, od.Quantity
+    FROM forxmlauto_t_customers c
+    JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID
+    JOIN forxmlauto_t_order_details od ON o.OrderID = od.OrderID
+    WHERE c.CustomerID = 'ALFKI'
+    FOR XML AUTO;
+END;
+GO
+
+CREATE PROCEDURE dbo.GetXmlAutoElements
+AS
+BEGIN
+    SELECT c.CustomerID, c.CompanyName, o.OrderID, o.TotalAmount
+    FROM forxmlauto_t_customers c
+    JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID
+    WHERE c.CustomerID = 'ALFKI'
+    FOR XML AUTO, ELEMENTS;
+END;
+GO
+
+CREATE FUNCTION dbo.GetXmlAutoScalar(@CustID NCHAR(5))
+RETURNS XML
+AS
+BEGIN
+    DECLARE @result XML;
+    SET @result = (
+        SELECT c.CustomerID, c.CompanyName, o.OrderID, o.TotalAmount
+        FROM forxmlauto_t_customers c
+        JOIN forxmlauto_t_orders o ON c.CustomerID = o.CustomerID
+        WHERE c.CustomerID = @CustID
+        FOR XML AUTO, TYPE
+    );
+    RETURN @result;
+END;
+GO
+
+-- ============================================
+-- SECTION: Case-Insensitive Collation Tables
+-- ============================================
+CREATE TABLE forxmlauto_t_ci_parent (
+    pid VARCHAR(10) COLLATE SQL_Latin1_General_CP1_CI_AS,
+    pname NVARCHAR(50)
+);
+GO
+
+CREATE TABLE forxmlauto_t_ci_child (
+    cid INT,
+    seq INT
+);
+GO
+
+INSERT INTO forxmlauto_t_ci_parent VALUES ('ABC', 'P1'), ('abc', 'P2');
+GO
+
+INSERT INTO forxmlauto_t_ci_child VALUES (10, 1), (20, 2);
+GO
+
+-- ============================================
+-- SECTION: Triggers (RTE_NAMEDTUPLESTORE)
+-- ============================================
+
+CREATE TABLE forxmlauto_t_trigger_test (
+    ID INT PRIMARY KEY,
+    Name NVARCHAR(50),
+    Value INT
+);
+GO
+
+CREATE TABLE forxmlauto_t_trigger_xml_result (
+    ResultXml NVARCHAR(MAX)
+);
+GO
+
+-- Used by tests 21.1, 21.2
+CREATE TRIGGER forxmlauto_trg_insert ON forxmlauto_t_trigger_test AFTER INSERT AS
+BEGIN
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT * FROM inserted FOR XML AUTO)
+END;
+GO
+
+-- Used by tests 21.3, 21.4
+CREATE TRIGGER forxmlauto_trg_delete ON forxmlauto_t_trigger_test AFTER DELETE AS
+BEGIN
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT * FROM deleted FOR XML AUTO)
+END;
+GO
+
+-- Used by test 21.5 (column subset)
+CREATE TRIGGER forxmlauto_trg_insert_subset ON forxmlauto_t_trigger_test AFTER INSERT AS
+BEGIN
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT Name, Value FROM inserted FOR XML AUTO)
+END;
+GO
+
+-- Used by test 21.6 (inserted joined with base table)
+CREATE TRIGGER forxmlauto_trg_insert_join ON forxmlauto_t_trigger_test AFTER INSERT AS
+BEGIN
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT i.ID, i.Name, t.Value
+            FROM inserted i
+            JOIN forxmlauto_t_trigger_test t ON i.ID = t.ID
+            FOR XML AUTO)
+END;
+GO
+
+-- Used by test 21.7 (update trigger - both inserted and deleted)
+CREATE TRIGGER forxmlauto_trg_update_both ON forxmlauto_t_trigger_test AFTER UPDATE AS
+BEGIN
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT * FROM inserted FOR XML AUTO)
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT * FROM deleted FOR XML AUTO)
+END;
+GO
+
+-- Used by test 21.8 (inserted JOIN deleted in update trigger)
+CREATE TRIGGER forxmlauto_trg_update_join ON forxmlauto_t_trigger_test AFTER UPDATE AS
+BEGIN
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT i.ID, i.Name AS NewName, i.Value AS NewValue, d.Value AS OldValue
+            FROM inserted i
+            JOIN deleted d ON i.ID = d.ID
+            FOR XML AUTO)
+END;
+GO
+
+-- Used by test 21.9 (NULL values)
+CREATE TRIGGER forxmlauto_trg_insert_null ON forxmlauto_t_trigger_test AFTER INSERT AS
+BEGIN
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT * FROM inserted FOR XML AUTO)
+END;
+GO
+
+-- Used by test 21.10 (deleted joined with base table)
+CREATE TRIGGER forxmlauto_trg_delete_join ON forxmlauto_t_trigger_test AFTER DELETE AS
+BEGIN
+    INSERT INTO forxmlauto_t_trigger_xml_result(ResultXml)
+    SELECT (SELECT d.ID, d.Name, t.Value AS RemainingValue
+            FROM deleted d
+            JOIN forxmlauto_t_trigger_test t ON t.ID = 5
+            FOR XML AUTO)
+END;
+GO
+
+-- Disable triggers that are not needed initially (will be enabled per-test in verify)
+DISABLE TRIGGER forxmlauto_trg_insert_subset ON forxmlauto_t_trigger_test;
+GO
+DISABLE TRIGGER forxmlauto_trg_insert_join ON forxmlauto_t_trigger_test;
+GO
+DISABLE TRIGGER forxmlauto_trg_update_both ON forxmlauto_t_trigger_test;
+GO
+DISABLE TRIGGER forxmlauto_trg_update_join ON forxmlauto_t_trigger_test;
+GO
+DISABLE TRIGGER forxmlauto_trg_insert_null ON forxmlauto_t_trigger_test;
+GO
+DISABLE TRIGGER forxmlauto_trg_delete_join ON forxmlauto_t_trigger_test;
+GO
+
+
+-- ============================================
+-- SECTION: Recursive CTE + Trigger (fallback alias tests)
+-- ============================================
+
+CREATE TABLE forxmlauto_t_rcte (id int, parent_id int, val varchar(50));
+GO
+INSERT INTO forxmlauto_t_rcte VALUES (1, NULL, 'Root'), (2, 1, 'Child');
+GO
+
+CREATE TABLE forxmlauto_t_rcte_base (id int, col varchar(50));
+GO
+INSERT INTO forxmlauto_t_rcte_base VALUES (1, 'X'), (2, 'Y');
+GO
+
+CREATE TABLE forxmlauto_t_rcte_result (result_xml nvarchar(max));
+GO
+
+-- Test: recursive CTE only with base table (no trigger)
+CREATE TRIGGER forxmlauto_trg_rcte_base_only ON forxmlauto_t_rcte AFTER INSERT AS
+BEGIN
+    ;WITH rcte AS (
+        SELECT id, val FROM forxmlauto_t_rcte WHERE parent_id IS NULL
+        UNION ALL
+        SELECT t.id, t.val FROM forxmlauto_t_rcte t JOIN rcte r ON t.parent_id = r.id
+    )
+    INSERT INTO forxmlauto_t_rcte_result(result_xml)
+    SELECT (SELECT r.val, t.col FROM forxmlauto_t_rcte_base t JOIN rcte r ON t.id = r.id FOR XML AUTO)
+END;
+GO
+
+-- Test: recursive CTE with inserted only (RTE_NAMEDTUPLESTORE as fallback)
+CREATE TRIGGER forxmlauto_trg_rcte_ins_only ON forxmlauto_t_rcte AFTER INSERT AS
+BEGIN
+    ;WITH rcte AS (
+        SELECT id, val FROM forxmlauto_t_rcte WHERE parent_id IS NULL
+        UNION ALL
+        SELECT t.id, t.val FROM forxmlauto_t_rcte t JOIN rcte r ON t.parent_id = r.id
+    )
+    INSERT INTO forxmlauto_t_rcte_result(result_xml)
+    SELECT (SELECT r.val, i.val AS ins_val FROM inserted i JOIN rcte r ON i.id = r.id FOR XML AUTO)
+END;
+GO
+
+-- Test: recursive CTE with base table FIRST, then inserted
+CREATE TRIGGER forxmlauto_trg_rcte_base_first ON forxmlauto_t_rcte AFTER INSERT AS
+BEGIN
+    ;WITH rcte AS (
+        SELECT id, val FROM forxmlauto_t_rcte WHERE parent_id IS NULL
+        UNION ALL
+        SELECT t.id, t.val FROM forxmlauto_t_rcte t JOIN rcte r ON t.parent_id = r.id
+    )
+    INSERT INTO forxmlauto_t_rcte_result(result_xml)
+    SELECT (SELECT b.col, i.val AS ins_val, r.val
+            FROM forxmlauto_t_rcte_base b
+            JOIN inserted i ON b.id = i.id
+            JOIN rcte r ON i.id = r.id
+            FOR XML AUTO)
+END;
+GO
+
+-- Test: recursive CTE with inserted FIRST, then base table
+CREATE TRIGGER forxmlauto_trg_rcte_ins_first ON forxmlauto_t_rcte AFTER INSERT AS
+BEGIN
+    ;WITH rcte AS (
+        SELECT id, val FROM forxmlauto_t_rcte WHERE parent_id IS NULL
+        UNION ALL
+        SELECT t.id, t.val FROM forxmlauto_t_rcte t JOIN rcte r ON t.parent_id = r.id
+    )
+    INSERT INTO forxmlauto_t_rcte_result(result_xml)
+    SELECT (SELECT i.val AS ins_val, b.col, r.val
+            FROM inserted i
+            JOIN forxmlauto_t_rcte_base b ON i.id = b.id
+            JOIN rcte r ON i.id = r.id
+            FOR XML AUTO)
+END;
+GO
+
+-- Disable all, will enable one at a time in verify
+DISABLE TRIGGER forxmlauto_trg_rcte_base_only ON forxmlauto_t_rcte;
+GO
+DISABLE TRIGGER forxmlauto_trg_rcte_ins_only ON forxmlauto_t_rcte;
+GO
+DISABLE TRIGGER forxmlauto_trg_rcte_base_first ON forxmlauto_t_rcte;
+GO
+DISABLE TRIGGER forxmlauto_trg_rcte_ins_first ON forxmlauto_t_rcte;
+GO
