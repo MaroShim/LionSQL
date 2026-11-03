@@ -195,12 +195,12 @@ LionSQL 개발 시 아래의 원칙은 **절대적인 우선순위**를 가집�
      go build -tags wiredtiger -buildvcs=false -o bin/tpcc-runtime ./cmd/tpcc_runtime
      go test -tags wiredtiger -count=1 -race <modified_packages>
      ```
-2. **이모지 절대 배제 (Golden Rule 19)**:
+2. **이모지 절대 배제 [RULE:StyleIntegrity]**:
    - 커밋 메시지, 소스코드 주석, 로그 출력, 문서 등에 장식용 이모지(🎉, 🚀, 💡 등)를 일체 사용하지 않으며, 단정한 엔지니어링 톤을 유지합니다.
-3. **Radical KISS & Deletion-First (Golden Rule 15 & 21)**:
+3. **Radical KISS & Deletion-First [RULE:RadicalKISS]**:
    - 복잡한 추상화나 불필요한 번역 계층을 새로 짜기 전에, **안 쓰는 레거시 코드를 삭제(Pruning)**하고 OS/Go 표준 라이브러리 프리미티브를 활용하는 해결책을 최우선합니다.
    - 복잡한 에뮬레이션이나 새로운 플래그를 도입하기 전에는 반드시 트레이드오프를 사용자에게 먼저 제안하고 합의를 거칩니다.
-4. **비파괴적 원자적 파일 I/O (Golden Rule 1 & 5)**:
+4. **비파괴적 원자적 파일 I/O [RULE:AtomicSaves] & [RULE:PathSecurity]**:
    - 데이터나 설정 파일을 쓸 때는 직접 덮어쓰지 않고, 반드시 `filepath.Clean` 후 임시 파일(`*.tmp`)에 쓰고 `os.Rename`으로 원자적 커밋을 수행합니다 (권한: `0644`, 디렉토리: `0755`).
 5. **모놀리식 파일 리팩토링 기준**:
    - 단순히 기계적으로 라인 수만 보고 자르는 것이 아니라, **도메인 책임(Responsibility)별로 묶어서 분할**합니다.
