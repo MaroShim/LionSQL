@@ -34,7 +34,6 @@
      - **[`LARGE_JOIN_OPTIMIZATION_PLAN.ko.md`](LARGE_JOIN_OPTIMIZATION_PLAN.ko.md)**: 대규모 조인(10+ Tables) 최적화 설계 및 구현 계획서 (베이스 테이블 동적 루트 선정 및 공집합 조기 탈락, OPT-LARGE-JOIN-1).
      - **[`PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md`](PLANNER_SLIMMING_AND_PURE_AST_TRANSITION_PLAN.ko.md)**: 플래너 슬림화 및 순수 AST 전환 설계 계획서 (Sort-Merge Join 지연 평가 및 정규식 폴백 옵션 격리, PLANNER-SLIM-1 & PLANNER-AST-1).
      - **[`SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md`](SQLLOGICTEST_INDUSTRY_PRACTICES_AND_SCOPE.ko.md)**: 데이터베이스 엔진 업계(DuckDB, CockroachDB, TiDB, DataFusion 등) SQLLogicTest 실전 적용 기준, 3단계 계층화(Tier 1~3) 및 권장 범위 표준 가이드.
-     - **[`SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md`](SQLLOGICTEST_EXPANSION_ROADMAP_PLAN.ko.md)**: LionSQL SQLLogicTest (SLT) 4단계 점진적 확장 로드맵 (Phase 1~4) 및 품질 게이트 연동 계획서.
      - **[`DURABILITY_VERIFICATION_PLAN.ko.md`](DURABILITY_VERIFICATION_PLAN.ko.md)**: 킬 테스트(크래시 복구), 소크 테스트(장시간 부하), 개밥 먹기 기반 내구성/운영 신뢰성 검증 계획서.
      - **[`APP_INTEGRATION_EXPANSION_PLAN.ko.md`](APP_INTEGRATION_EXPANSION_PLAN.ko.md)**: 실전 앱 연동 확장 마스터 플랜 (Answer, Vaultwarden, Metabase, Umami, NocoDB, Mattermost 6종).
      - **[`WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md`](WOODPECKER_AND_VIKUNJA_INTEGRATION_REPORT.ko.md)**: Woodpecker CI 및 Vikunja 연동 검증 보고서 (재귀 CTE, 복합 OR 인덱스 분기, DML 커맨드 태그 보정 완료).

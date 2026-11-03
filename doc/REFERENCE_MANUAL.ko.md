@@ -1803,7 +1803,7 @@ TDS는 모든 패킷 상단에 **8바이트 공통 헤더(Common Header)**를 �
   * **보안 아키텍처 및 권한 제어**: 내장 관리자 계정, JWT 수명 주기, API 키 기반 역할 스코핑, TLS/SSL 전송 계층 암호화.
 * [`BENCHMARK.md`](BENCHMARK.md)
   * **성능 벤치마크 및 검증 방법론**: TPC-C 벤치마크 측정 결과, pgbench 및 T-SQL 저장 프로시저 마이크로 벤치마크 처리량(TPS)과 지연 시간 프로파일.
-* [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
+* [`DATA_IMPORT_AND_MIGRATION.md`](DATA_IMPORT_AND_MIGRATION.md)
   * **이기종 데이터베이스 마이그레이션 가이드**: PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 데이터 스키마 및 레코드를 LionSQL으로 이전하는 절차.
 * [`TROUBLESHOOTING.md`](TROUBLESHOOTING.md)
   * **장애 진단 및 문제 해결 가이드**: 포트 충돌, 권한 오류, 와이어 패킷 협상 실패, 트랜잭션 직렬화 충돌(`40001`), 클라이언트 캐시 무효화 등 빈발 오류 해결 방법.

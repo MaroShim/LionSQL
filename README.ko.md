@@ -507,7 +507,7 @@ LionSQL의 모든 내부 문서, 아키텍처 결정 기록(ADR), 프로토콜 �
 - **[T-SQL 및 SQL 구문 레퍼런스 가이드](doc/TSQL_REFERENCE.md)**: 프로시저, 함수, 트리거, 제어 흐름문 전체 언어 레퍼런스.
 - **[클라이언트 도구 연동 가이드](doc/CLIENT_TOOL_INTEGRATION.md)**: DBeaver, SSMS, Azure Data Studio, Beekeeper, JDBC, ODBC 연동 가이드.
 - **[성능 튜닝 및 벤치마크 가이드](doc/BENCHMARK.md)**: 고동시성 뱅킹 벤치마크, TPS 측정치, 메모리 튜닝 가이드.
-- **[데이터베이스 마이그레이션 가이드](doc/DATABASE_MIGRATION_GUIDE.md)**: PostgreSQL, Microsoft SQL Server, SQLite, MySQL로부터의 데이터 이전 절차.
+- **[데이터 임포트 및 마이그레이션 가이드](doc/DATA_IMPORT_AND_MIGRATION.md)**: PostgreSQL, Microsoft SQL Server, SQLite, MySQL로부터의 데이터 이전 절차.
 - **[보안 정책 및 위협 모델](doc/SECURITY.md)**: RBAC 접근 제어, SQL 인젝션 방어, 취약점 대응 정책.
 - **[프로덕션 운영 및 배포 런북](doc/OPERATIONS.md)**: Systemd 서비스 등록, Docker 배포, 고가용성 복제 운용.
 - **[모니터링 및 메트릭 가이드](doc/METRICS.md)**: Prometheus 시계열 메트릭, 슬로우 쿼리 추적, Grafana 대시보드 연동.

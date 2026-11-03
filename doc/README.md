@@ -26,11 +26,11 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 
 ## 2. Directory of Documents
 
-### 2.0. Official Manuals (공식 매뉴얼)
-* [`USER_MANUAL.ko.md`](USER_MANUAL.ko.md)
-  * 설치, 기동, 클라이언트 도구 연동, 데이터베이스 개발 및 운영 유지보수 전 과정을 안내하는 공식 사용자 매뉴얼.
-* [`REFERENCE_MANUAL.ko.md`](REFERENCE_MANUAL.ko.md)
-  * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
+### 2.0. Official Manuals
+* [`USER_MANUAL.md`](USER_MANUAL.md) ([한국어 (Korean)](USER_MANUAL.ko.md))
+  * Official user manual guiding through installation, startup, client tool connections, database application development, operations, and troubleshooting.
+* [`REFERENCE_MANUAL.md`](REFERENCE_MANUAL.md) ([한국어 (Korean)](REFERENCE_MANUAL.ko.md))
+  * Comprehensive technical reference manual covering CLI flags, configuration parameters, SQL syntax, data types, built-in functions, system catalogs, REST APIs, and wire protocol specifications.
 
 ### 2.1. Architecture & Core Database Engine
 * [`WHY_TSQL_GO_WIREDTIGER.md`](WHY_TSQL_GO_WIREDTIGER.md)
@@ -176,7 +176,7 @@ Welcome to the comprehensive technical documentation for **LionSQL**—a high-co
 * [`SQLLOGICTEST_GUIDE.md`](SQLLOGICTEST_GUIDE.md) ([Korean](SQLLOGICTEST_GUIDE.ko.md))
   * SQLLogicTest (SLT) 1.0 GA Full Suite (40,000+ queries) official user verification guide.
   * One-click dataset fetcher (`scripts/fetch_slt.sh`), parallel runner (`bin/sqllogictest`), In-Memory OCC vs WiredTiger Disk MVCC, In-Process vs PGWire TCP mode ~15-20s ultra-fast verification.
-* [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
+* [`DATA_IMPORT_AND_MIGRATION.md`](DATA_IMPORT_AND_MIGRATION.md)
   * Migration guides from PostgreSQL, Microsoft SQL Server, SQLite, and PocketBase.
 * [`RELEASE_AUTOMATION_GUIDE.md`](RELEASE_AUTOMATION_GUIDE.md) ([Korean](RELEASE_AUTOMATION_GUIDE.ko.md))
   * One-click release automation pipeline (`scripts/release.sh`), 4-location SSOT version sync, Keep a Changelog classification, Windows .exe cross-compilation, and tagging guide.

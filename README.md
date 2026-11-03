@@ -507,7 +507,7 @@ Step-by-step zero-modification deployment and integration guides for 10 producti
 - **[Production Deployment & Operations Runbook](doc/OPERATIONS.md)**: Systemd services, Docker deployment, 1-writer replication failover, and security hardening.
 - **[Performance Tuning & Benchmark Guide](doc/BENCHMARK.md)**: High-concurrency banking benchmark harness, TPS measurement, and memory tuning.
 - **[Local Testing & Regression Guide](doc/TESTING.md)**: Build and test pipeline, running single tests, build tags, regression test map, and TPC-C performance regression procedure.
-- **[Database Migration Guide](doc/DATABASE_MIGRATION_GUIDE.md)**: Procedures for migrating from PostgreSQL, MSSQL, SQLite, and MySQL.
+- **[Data Import & Migration Guide](doc/DATA_IMPORT_AND_MIGRATION.md)**: Procedures for migrating from PostgreSQL, MSSQL, SQLite, and MySQL.
 - **[Security Policy & Threat Model](doc/SECURITY.md)**: RBAC access control, SQL injection immunity, and vulnerability disclosure.
 - **[Engineering Roadmap & Milestones](ROADMAP.md)**: Versioned engineering milestones from single-node OLTP to Always On HA and decoupled HTAP.
 - **[Actionable Engineering Backlog (TODO.md)](TODO.md)**: Immediate, daily task backlog and prioritized operational execution tracker.

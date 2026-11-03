@@ -27,9 +27,9 @@
 ## 2. 문서 상세 색인 (Directory of Documents)
 
 ### 2.0. 공식 매뉴얼 (Official Manuals)
-* [`USER_MANUAL.ko.md`](USER_MANUAL.ko.md)
+* [`USER_MANUAL.ko.md`](USER_MANUAL.ko.md) ([English](USER_MANUAL.md))
   * 설치, 기동, 클라이언트 도구 연동, 데이터베이스 개발 및 운영 유지보수 전 과정을 안내하는 공식 사용자 매뉴얼.
-* [`REFERENCE_MANUAL.ko.md`](REFERENCE_MANUAL.ko.md)
+* [`REFERENCE_MANUAL.ko.md`](REFERENCE_MANUAL.ko.md) ([English](REFERENCE_MANUAL.md))
   * CLI 플래그, 설정 파일, SQL 문법 및 구문, 데이터 타입, 내장 함수, 가상 카탈로그 뷰, REST API 및 와이어 프로토콜 기술 사양을 총망라하는 공식 레퍼런스 매뉴얼.
 
 ---
@@ -178,7 +178,7 @@
 * [`SQLLOGICTEST_GUIDE.ko.md`](SQLLOGICTEST_GUIDE.ko.md) ([English](SQLLOGICTEST_GUIDE.md))
   * SQLLogicTest (SLT) 1.0 GA 풀세트(40,000+ 쿼리) 공식 사용자 검증 가이드.
   * 원클릭 다운로드(`scripts/fetch_slt.sh`), 병렬 러너(`bin/sqllogictest`), 인메모리 OCC vs WiredTiger 디스크 MVCC, In-Process vs PGWire TCP 모드 15~20초 고속 검증 절차.
-* [`DATABASE_MIGRATION_GUIDE.md`](DATABASE_MIGRATION_GUIDE.md)
+* [`DATA_IMPORT_AND_MIGRATION.md`](DATA_IMPORT_AND_MIGRATION.md)
   * PostgreSQL, Microsoft SQL Server, SQLite, PocketBase로부터 LionSQL로의 데이터베이스 이전 절차.
 * [`RELEASE_AUTOMATION_GUIDE.ko.md`](RELEASE_AUTOMATION_GUIDE.ko.md) ([English](RELEASE_AUTOMATION_GUIDE.md))
   * 원클릭 릴리스 자동화 파이프라인(`scripts/release.sh`), 4대 SSOT 버전 동기화, Keep a Changelog 분류, Windows .exe 크로스 컴파일 및 태깅 가이드.
