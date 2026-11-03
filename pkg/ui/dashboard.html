@@ -1205,7 +1205,7 @@
             <button id="btn-batch-export-json" class="btn btn-secondary" style="display: none; padding: 6px 10px; font-size: 0.8rem;" onclick="exportSelectedRecords('json')">
               Export Selected (JSON)
             </button>
-            <button id="btn-add-row" class="btn" style="background: var(--success); padding: 6px 14px; font-size: 0.8rem;" onclick="openCreateRecordModal()">+ Add Row</button>
+            <button id="btn-add-row" class="btn" style="background: var(--success); padding: 6px 14px; font-size: 0.8rem;" onclick="startInlineNewRow()">+ Add Row</button>
           </div>
         </div>
 
@@ -1227,7 +1227,7 @@
           </div>
         </div>
 
-        <div style="overflow-x: auto; max-height: 520px;">
+        <div id="records-table-container" style="overflow-x: auto; max-height: 520px;">
           <table id="records-table">
             <thead><tr><th>No records loaded</th></tr></thead>
             <tbody></tbody>
@@ -4376,6 +4376,171 @@ lionsql serve --http=127.0.0.1:8091 --pg=127.0.0.1:5434 --tds=127.0.0.1:1434 --r
         }
       } catch (err) {
         showToast(`Network error: ${err}`, 'error');
+      }
+    }
+
+    // --- Excel-Style Inline Add New Row Logic ---
+    function startInlineNewRow() {
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl) {
+        showToast('Please select a table first', 'error');
+        return;
+      }
+      const tableSchema = tablesList.find(t => t.name === tbl);
+      if (!tableSchema) return;
+
+      const tbody = document.querySelector('#records-table tbody');
+      if (!tbody) return;
+
+      // If already adding an inline row, focus its first input
+      const existingRow = document.getElementById('inline-new-row');
+      if (existingRow) {
+        const firstInp = existingRow.querySelector('.inline-cell-input');
+        if (firstInp) firstInp.focus();
+        return;
+      }
+
+      // If empty table placeholder is currently shown, remove it
+      if (tbody.children.length === 1 && tbody.children[0].innerText.includes('No records found')) {
+        tbody.innerHTML = '';
+      }
+
+      const cols = tableSchema.columns || [];
+      const tr = document.createElement('tr');
+      tr.id = 'inline-new-row';
+      tr.style.background = 'rgba(59, 130, 246, 0.08)';
+      tr.style.borderBottom = '2px solid var(--primary)';
+
+      // Checkbox / Action Cell (Save / Cancel buttons)
+      let rowHtml = `<td style="text-align: center; white-space: nowrap; padding: 4px;">
+        <button type="button" class="btn" style="background: var(--success); padding: 2px 6px; font-size: 0.72rem; margin-right: 2px;" onclick="saveInlineNewRow()" title="Save (Enter)">✓</button>
+        <button type="button" class="btn btn-secondary" style="padding: 2px 6px; font-size: 0.72rem;" onclick="cancelInlineNewRow()" title="Cancel (Esc)">✕</button>
+      </td>`;
+
+      cols.forEach((col, idx) => {
+        const isPK = col.primary_key;
+        const ph = isPK ? '(auto/PK)' : (col.nullable ? 'NULL' : '*required');
+        const reqAttr = (!col.nullable && !isPK) ? 'required' : '';
+        
+        let cellInputHtml = '';
+        if (col.type === 'BOOL') {
+          cellInputHtml = `<div style="display:flex; align-items:center; justify-content:center; gap:4px;">
+            <input type="checkbox" class="inline-cell-input" data-col="${escapeHtml(col.name)}" data-type="BOOL" style="width:16px; height:16px; margin:0; cursor:pointer;" />
+          </div>`;
+        } else {
+          const stepAttr = col.type === 'FLOAT' ? 'step="any"' : '';
+          const typeAttr = (col.type === 'INT' || col.type === 'FLOAT') ? 'number' : 'text';
+          cellInputHtml = `<input type="${typeAttr}" ${stepAttr} class="cell-input inline-cell-input" data-col="${escapeHtml(col.name)}" data-type="${escapeHtml(col.type)}" placeholder="${ph}" ${reqAttr} style="padding: 4px 6px; font-size: 0.8rem; background: var(--bg);" />`;
+        }
+        rowHtml += `<td style="padding: 4px;">${cellInputHtml}</td>`;
+      });
+
+      tr.innerHTML = rowHtml;
+      tbody.appendChild(tr);
+
+      // Keyboard navigation for inline new row (Enter = Save, Escape = Cancel, Tab = Next Field)
+      const inputs = tr.querySelectorAll('.inline-cell-input');
+      inputs.forEach((inp, idx) => {
+        inp.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            saveInlineNewRow();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelInlineNewRow();
+          }
+        });
+      });
+
+      // Smooth scroll table container to bottom to view the new row
+      const container = document.getElementById('records-table-container');
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+      tr.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+      // Auto-focus first inputable field
+      if (inputs.length > 0) {
+        // If first column is PK and auto-increment/int, focus second column if available
+        if (cols.length > 1 && cols[0].primary_key) {
+          inputs[1].focus();
+        } else {
+          inputs[0].focus();
+        }
+      }
+    }
+
+    function cancelInlineNewRow() {
+      const row = document.getElementById('inline-new-row');
+      if (row) {
+        row.remove();
+      }
+      const tbody = document.querySelector('#records-table tbody');
+      if (tbody && tbody.children.length === 0) {
+        loadRecords();
+      }
+    }
+
+    async function saveInlineNewRow() {
+      const row = document.getElementById('inline-new-row');
+      if (!row) return;
+
+      const tbl = document.getElementById('table-select').value;
+      if (!tbl) return;
+
+      const inputs = row.querySelectorAll('.inline-cell-input');
+      const record = {};
+      let hasMissingRequired = false;
+
+      inputs.forEach(inp => {
+        const colName = inp.dataset.col;
+        const colType = inp.dataset.type;
+
+        if (colType === 'BOOL') {
+          record[colName] = inp.checked;
+        } else {
+          const val = inp.value.trim();
+          if (val !== '') {
+            if (colType === 'INT') {
+              record[colName] = parseInt(val, 10);
+            } else if (colType === 'FLOAT') {
+              record[colName] = parseFloat(val);
+            } else {
+              record[colName] = val;
+            }
+          } else if (inp.hasAttribute('required')) {
+            inp.style.borderColor = 'var(--danger)';
+            hasMissingRequired = true;
+          }
+        }
+      });
+
+      if (hasMissingRequired) {
+        showToast('Please fill in required fields', 'error');
+        return;
+      }
+
+      try {
+        const res = await authFetch(`/api/tables/${tbl}/records`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record)
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Record added successfully!');
+          row.remove();
+          await loadRecords();
+          // Scroll container to bottom to observe newly created record
+          const container = document.getElementById('records-table-container');
+          if (container) {
+            container.scrollTop = container.scrollHeight;
+          }
+        } else {
+          showToast(`Failed to add record: ${data.error || 'unknown error'}`, true);
+        }
+      } catch (err) {
+        showToast('Network error: ' + err, true);
       }
     }
 
