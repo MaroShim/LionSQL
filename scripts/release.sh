@@ -21,11 +21,13 @@
 #   ./scripts/release.sh v0.90.0-beta4
 #   ./scripts/release.sh 0.90.0-beta4 --dry-run
 #   ./scripts/release.sh v0.90.0-beta4 --skip-tests --no-push
+#   ./scripts/release.sh v0.90.0 --push-only
 #
 # Flags:
 #   --dry-run      Preview actions and changelog output without modifying files
 #   --skip-tests   Bypass 'go test' verification step (fast path)
 #   --no-push      Commit and tag locally without pushing to remote origin
+#   --push-only    Push an existing local release commit/tag and create GitHub release
 # ==============================================================================
 
 set -euo pipefail
@@ -47,6 +49,7 @@ cd "${ROOT_DIR}"
 DRY_RUN=false
 SKIP_TESTS=false
 NO_PUSH=false
+PUSH_ONLY=false
 SKIP_GH_RELEASE=false
 TARGET_INPUT=""
 
@@ -62,6 +65,9 @@ for arg in "$@"; do
         --no-push)
             NO_PUSH=true
             ;;
+        --push-only)
+            PUSH_ONLY=true
+            ;;
         --skip-github-release|--no-gh-release)
             SKIP_GH_RELEASE=true
             ;;
@@ -72,6 +78,7 @@ for arg in "$@"; do
             echo "  --dry-run              Preview changelog and version updates without applying"
             echo "  --skip-tests           Skip build and test verification pipeline"
             echo "  --no-push              Create commit and tag locally without pushing to origin"
+            echo "  --push-only            Push existing local release commit/tag and publish release"
             echo "  --skip-github-release  Do not create GitHub Release via gh CLI"
             exit 0
             ;;
@@ -120,8 +127,8 @@ echo ""
 # ------------------------------------------------------------------------------
 echo -e "${CLR_BLUE}[1/5] Running Pre-flight Git Checks...${CLR_RESET}"
 
-# Check working tree cleanliness (unless dry-run)
-if [ "${DRY_RUN}" = false ]; then
+# Check working tree cleanliness (unless dry-run or push-only)
+if [ "${DRY_RUN}" = false ] && [ "${PUSH_ONLY}" = false ]; then
     if ! git diff-index --quiet HEAD --; then
         echo -e "${CLR_RED}Error: Working tree has uncommitted modifications.${CLR_RESET}" >&2
         echo "Please commit or stash your changes before triggering a release."
@@ -130,7 +137,51 @@ if [ "${DRY_RUN}" = false ]; then
     fi
 fi
 
-# Check if tag already exists
+# In push-only mode, the tag MUST exist locally
+if [ "${PUSH_ONLY}" = true ]; then
+    if ! git rev-parse "${TAG}" >/dev/null 2>&1; then
+        echo -e "${CLR_RED}Error: Local git tag '${TAG}' does not exist for --push-only mode.${CLR_RESET}" >&2
+        exit 1
+    fi
+
+    echo -e "${CLR_GREEN}Found local release tag '${TAG}'. Proceeding directly to remote push...${CLR_RESET}"
+    echo -e "Pushing commit and tag to remote origin..."
+    git push origin HEAD
+    git push origin "${TAG}"
+    echo -e "${CLR_GREEN}Pushed successfully to origin (branch + ${TAG})${CLR_RESET}"
+
+    if [ "${SKIP_GH_RELEASE}" = false ]; then
+        if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
+            echo -e "Creating/Updating GitHub Release via gh CLI..."
+            PRERELEASE_OPT=""
+            if [[ "${TAG}" =~ (beta|alpha|rc) ]]; then
+                PRERELEASE_OPT="--prerelease"
+            fi
+
+            ASSETS=()
+            [ -f "bin/lionsql-darwin-arm64" ] && ASSETS+=("bin/lionsql-darwin-arm64")
+            [ -f "bin/lionsql-linux-amd64" ] && ASSETS+=("bin/lionsql-linux-amd64")
+            [ -f "bin/lionsql-windows-amd64.exe" ] && ASSETS+=("bin/lionsql-windows-amd64.exe")
+
+            gh release create "${TAG}" \
+                --title "LionSQL ${TAG}" \
+                --generate-notes \
+                ${PRERELEASE_OPT} \
+                "${ASSETS[@]}" || gh release upload "${TAG}" "${ASSETS[@]}" --clobber
+            echo -e "${CLR_GREEN}GitHub Release published: https://github.com/MaroShim/LionSQL/releases/tag/${TAG}${CLR_RESET}"
+        else
+            echo -e "${CLR_YELLOW}Note: GitHub CLI (gh) not logged in. Skipped GitHub Release creation.${CLR_RESET}"
+        fi
+    fi
+
+    echo ""
+    echo -e "${CLR_CYAN}======================================================================${CLR_RESET}"
+    echo -e "${CLR_GREEN}${CLR_BOLD}Push Only for ${TAG} Successfully Completed!${CLR_RESET}"
+    echo -e "${CLR_CYAN}======================================================================${CLR_RESET}"
+    exit 0
+fi
+
+# Check if tag already exists (for standard release)
 if git rev-parse "${TAG}" >/dev/null 2>&1; then
     echo -e "${CLR_RED}Error: Git tag '${TAG}' already exists locally.${CLR_RESET}" >&2
     exit 1
